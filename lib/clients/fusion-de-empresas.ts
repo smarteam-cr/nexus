@@ -79,6 +79,9 @@ export const SE_MUDAN = [
   /* Los leads de HubSpot (B3 etapa 1, 2026-10-25): `onDelete: Cascade`. Su único es el id de HubSpot, sin la ficha: no
      chocan. La copia de la hora siguiente los vuelve a resolver por la empresa viva. */
   ["leadDeHubspot", "clientId"],
+  /* Los tests del diagnóstico hechos en Nexus (área O, 2026-10-26): `onDelete: SetNull`, así que sin mudarlos dejarían
+     de llegar a la preventa de la ficha que sigue. Su único es el token, sin la ficha: no chocan. */
+  ["intentoDelTest", "clientId"],
   ["importacionFila", "aplicadoClientId"],
   ["escalaComentario", "clienteId"],
   /* Tareas internas (2026-10-09): `onDelete: SetNull`, así que sin mudarlas perderían el cliente en silencio. */

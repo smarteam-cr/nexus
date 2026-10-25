@@ -325,6 +325,7 @@ model Client {
   perfil                   PerfilDeLaEmpresa?        @relation("PerfilDeLaEmpresa") // R13: el perfil de la empresa que usa Nexus (hoy Smarteam)
   clienteIdeal             IcpItem[]                 @relation("ClienteIdealDeLaEmpresa") // R13 (SET NULL)
   buyerPersonas            BuyerPersona[]            @relation("BuyerPersonasDeLaEmpresa") // R13 (SET NULL)
+  intentosDelTest          IntentoDelTest[]          @relation("IntentosDelTestDeLaEmpresa") // Área O: los tests de su gente (SET NULL)
 
   @@unique([source, sourceExternalId]) // NULLs no colisionan en Postgres — los legacy conviven
 }
@@ -8499,4 +8500,76 @@ model LeadDeHubspot {
   createdAt           DateTime  @default(now())
 
   @@index([clientId, vigente])
+}
+
+// ─── Los tests del Diagnóstico de Rendimiento (área O, 2026-10-26) ────────────
+// El test público de cada departamento dentro de Nexus (docs/tests-diagnostico-plan.md). Los escribe y los lee SOLO
+// lib/tests-diagnostico/repositorio-server.ts. SQL: scripts/sql/2026-10-26-tests-diagnostico.sql.
+
+/// El banco de preguntas de una (área, versión, edición): el borrador que se edita y la versión aprobada que ve el público.
+model PreguntasDelTest {
+  id            String    @id @default(cuid())
+  /// `1` Ventas · `2` Marketing · `3` Servicio (las áreas de la escala).
+  area          String
+  /// `marketing` (4 preguntas) · `web` (8). La completa vive en la exploración y el cuestionario de la escala.
+  version       String
+  /// La edición de la escala por industria; `general` para la escala general (no es nula: es parte de la llave).
+  edicion       String    @default("general")
+  escalaVersion String
+  /// El borrador (lib/tests-diagnostico/tipos.ts › PreguntaDelBanco[]).
+  preguntas     Json      @default("[]")
+  /// La versión aprobada, la que ve el público. null = todavía sin aprobar.
+  aprobadas     Json?
+  editadoPor    String?
+  aprobadoPor   String?
+  aprobadoAt    DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@unique([area, version, edicion])
+}
+
+/// Un intento del test: quién, su empresa, lo que vio y eligió, el resultado que calculó Nexus y qué llegó a HubSpot.
+model IntentoDelTest {
+  id              String    @id @default(cuid())
+  /// La dirección pública del intento y de su resultado (256 bits).
+  token           String    @unique
+  area            String
+  version         String
+  edicion         String?
+  escalaVersion   String
+  /// Las preguntas que vio, con su nivel (solo del lado nuestro) y sus ids opacos.
+  preguntas       Json      @default("[]")
+  respuestas      Json      @default("{}")
+  /// En qué pregunta va (para medir dónde abandonan).
+  paso            Int       @default(0)
+  /// `en_curso` · `terminado` · `abandonado`.
+  estado          String    @default("en_curso")
+  nombre          String
+  email           String
+  telefono        String?
+  puesto          String?
+  empresa         String?
+  dominio         String?
+  industria       String?
+  /// nullable porque el prospecto puede no tener empresa en Nexus todavía (se une por su dominio).
+  clientId        String?
+  client          Client?   @relation("IntentosDelTestDeLaEmpresa", fields: [clientId], references: [id], onDelete: SetNull)
+  /// El resultado que calculó Nexus (lib/tests-diagnostico/resultado.ts › ResultadoDelTest).
+  resultado       Json?
+  /// La dirección del resultado que se deja en HubSpot (con los datos después del `#`).
+  url             String?
+  /// De dónde llegó (utm, página).
+  origen          Json?
+  hubspotFormAt   DateTime?
+  hubspotNotaAt   DateTime?
+  hubspotIntentos Int       @default(0)
+  hubspotError    String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  terminadoAt     DateTime?
+
+  @@index([clientId])
+  @@index([dominio])
+  @@index([estado, createdAt])
 }

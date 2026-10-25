@@ -32,9 +32,12 @@ const sinEtiquetas = (html: string) =>
 
 const sinTildes = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 
-/** La dirección del resultado que trae la nota (`…/resultado.html#…`), o null. */
+/** La dirección del resultado que trae la nota (`…/resultado.html#…`, o la del test de Nexus `…/external/test/resultado/<token>#…`), o null. */
 export function enlaceDelResultado(html: string): string | null {
-  const m = html.replace(/&amp;/g, "&").match(/https?:\/\/[^\s"'<>]*resultado\.html#[^\s"'<>]+/i);
+  const limpio = html.replace(/&amp;/g, "&");
+  const m =
+    limpio.match(/https?:\/\/[^\s"'<>]*resultado\.html#[^\s"'<>]+/i) ??
+    limpio.match(/https?:\/\/[^\s"'<>]*\/external\/test\/resultado\/[A-Za-z0-9_-]+#[^\s"'<>]+/i);
   return m ? m[0] : null;
 }
 

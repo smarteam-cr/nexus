@@ -22,6 +22,7 @@ import {
 } from "./index";
 import { INV49, INV53 } from "./google";
 import { INV55, INV55_BLOQUEA } from "./smartloop";
+import { INV58, INV58_BLOQUEA } from "./tests-diagnostico";
 import { INV51 } from "./empresa";
 import { InvariantesVioladosError, JOB_INVARIANTES, correrJobDeInvariantes, mensajeDeViolaciones } from "./job";
 import { invariantesOkDesde, leerInvariantesOk } from "./salud";
@@ -812,7 +813,7 @@ describe("hechos: INV45 (memoria de la cuenta, etapa 6)", () => {
 
 describe("el registro y el consumidor", () => {
 
-  it("el registro tiene los 43 solo-base, con ids únicos y en el orden del gate", () => {
+  it("el registro tiene los 44 solo-base, con ids únicos y en el orden del gate", () => {
     /* Del 28 salta al 30: INV29 lo reserva docs/database-refactoring-plan.md. 31 y 32 son las frescuras (espejo y corte);
        33 y 34, el número de factura (etapa 7); 35, la plata que no es venta (etapa 10); 36, a quién se facturó (etapa 12); 37, dos clientes con un dominio (2026-10-02). */
     expect(INVARIANTES_SOLO_BASE.map((i) => i.id)).toEqual([
@@ -829,6 +830,8 @@ describe("el registro y el consumidor", () => {
       // parte 2); 55, ningún proyecto de SmartLoop dice ser «proyecto_temporal» (M1). Todas del 2026-10-25.
       "49", "50", "51", "52", "53", "54",
       "55",
+      // 58: todo intento del test del diagnóstico llegó a HubSpot (área O, 2026-10-26).
+      "58",
       // 52: cada reunión con empresa que terminó sin texto tiene su motivo guardado (T4); 53: ninguna reunión de 3 a 25
       // días sin revisar su conferencia de Meet (U3). Del 2026-10-25.
       // 49: la frescura de la copia de Google Meet (U1, 2026-10-25).
@@ -880,7 +883,7 @@ describe("el job invariants-daily (B-08)", () => {
    */
   it("con todo en verde devuelve el resumen; con algo en rojo LANZA con los ids y el mensaje acotado", async () => {
     /* La edición que lo pone en rojo: cambiar el throw por un console.error «para no ensuciar Sentry». */
-    await expect(correrJobDeInvariantes(baseFalsa({}), AHORA)).resolves.toBe("43 invariantes solo-base en verde");
+    await expect(correrJobDeInvariantes(baseFalsa({}), AHORA)).resolves.toBe("44 invariantes solo-base en verde");
     const promesa = correrJobDeInvariantes(baseFalsa({ cobro: 2 }), AHORA); // INV3 e INV5 cuentan cobros
     await expect(promesa).rejects.toBeInstanceOf(InvariantesVioladosError);
     const e = (await promesa.catch((x: unknown) => x)) as InvariantesVioladosError;
@@ -1030,6 +1033,35 @@ describe("SmartLoop: INV55 (2026-10-25, M1)", () => {
     expect(r.ok).toBe(!INV55_BLOQUEA);
     expect(r.lineas[0]).toContain("1 proyecto de SmartLoop dice");
     expect(r.lineas[1]).toContain("RC Inmobiliaria › CONTINUIDAD CRM");
+  });
+});
+
+describe("el test del diagnóstico: INV58 (2026-10-26, área O)", () => {
+  const atascado = { id: "t1", email: "ana@acme.com", area: "1", estado: "terminado", hubspotError: "El contacto todavía no está en HubSpot", createdAt: AHORA };
+
+  it("sin intentos atascados cumple; mira solo los de más de 3 horas a los que les falta el formulario o la nota", async () => {
+    const llamadas: Llamada[] = [];
+    expect((await INV58.correr(baseFalsa({ intentoDelTest: [] }, llamadas), AHORA)).ok).toBe(true);
+    const w = where(llamadas, "intentoDelTest") as { createdAt: { lt: Date }; OR: unknown[] };
+    expect(w.createdAt.lt.getTime()).toBe(AHORA.getTime() - 3 * 3_600_000);
+    expect(w.OR).toEqual([{ hubspotFormAt: null }, { hubspotNotaAt: null, estado: { in: ["terminado", "abandonado"] } }]);
+  });
+
+  it("con el envío apagado avisa sin fallar; prendido, lista el error y no bloquea hasta su primer verde", async () => {
+    const antes = process.env.TESTS_HUBSPOT_ENABLED;
+    try {
+      delete process.env.TESTS_HUBSPOT_ENABLED;
+      const apagado = await INV58.correr(baseFalsa({ intentoDelTest: [atascado] }), AHORA);
+      expect(apagado.ok).toBe(true);
+      expect(apagado.lineas[0]).toContain("apagado");
+      process.env.TESTS_HUBSPOT_ENABLED = "1";
+      const prendido = await INV58.correr(baseFalsa({ intentoDelTest: [atascado] }), AHORA);
+      expect(prendido.ok).toBe(!INV58_BLOQUEA);
+      expect(prendido.lineas.join("\n")).toContain("ana@acme.com · área 1 · terminado — El contacto todavía no está en HubSpot");
+    } finally {
+      if (antes === undefined) delete process.env.TESTS_HUBSPOT_ENABLED;
+      else process.env.TESTS_HUBSPOT_ENABLED = antes;
+    }
   });
 });
 

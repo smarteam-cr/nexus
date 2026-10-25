@@ -140,6 +140,7 @@ export const SKELETON_COVERAGE: Record<string, Cobertura> = {
   "escala/[area]": { modo: "own" },
   "escala/borrador": { modo: "own" },
   "escala/borrador/[area]": { modo: "own" },
+  "escala/tests": { modo: "own" },
   "escala/comentarios": { modo: "exempt", razon: "redirect puro a /feedback: los comentarios de la escala se deciden ahí (2026-10-05)" },
   // Feedback (2026-10-04): la bandeja abre por defecto; su skeleton tiene sus tres columnas.
   feedback: { modo: "own" },

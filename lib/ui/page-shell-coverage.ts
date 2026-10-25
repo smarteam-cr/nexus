@@ -83,6 +83,7 @@ export const PAGE_SHELL_COVERAGE: Record<string, ShellDecl> = {
   "escala/[area]": { shell: "SHELL_DEFAULT" },
   "escala/borrador": { shell: "SHELL_DEFAULT" },
   "escala/borrador/[area]": { shell: "SHELL_DEFAULT" },
+  "escala/tests": { shell: "SHELL_DEFAULT" },
   "escala/comentarios": { custom: "redirect a /feedback: los comentarios de la escala se deciden ahí (2026-10-05)" },
   feedback: { shell: "SHELL_DEFAULT" },
 
