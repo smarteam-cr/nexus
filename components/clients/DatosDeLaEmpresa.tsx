@@ -12,8 +12,10 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Alert, Input, Select, Skeleton } from "@/components/ui";
-import { BotonAzul, BotonBlanco, BotonTexto, IconoDeSugerencia, ROTULO_DEL_SISTEMA } from "@/components/ui/sistema";
+import { BotonAzul, BotonBlanco, BotonEnlace, BotonTexto, BotonUsar, IconoDeSugerencia, ROTULO_DEL_SISTEMA } from "@/components/ui/sistema";
 import {
+  CATALOGO_DE_DATOS,
+  cierraElEditor,
   datoDeLaEmpresa,
   esFuenteDeIA,
   ETIQUETA_DE_LA_FUENTE,
@@ -26,7 +28,7 @@ import {
   type ValorDeDato,
 } from "@/lib/clients/datos-de-la-empresa";
 import type { CalculoDelTam } from "@/lib/clients/tam-v1";
-import type { LoQueLeFalta, LoQueYaPaga } from "@/lib/clients/lo-que-ya-paga";
+import { deDondeSale, montoConMoneda, type LoQueLeFalta, type LoQueYaPaga } from "@/lib/clients/lo-que-ya-paga";
 
 interface Dato {
   clave: ClaveDeDato;
@@ -73,11 +75,20 @@ interface Respuesta {
   puedeDecidir: boolean;
 }
 
-const GRUPOS: { rotulo: string; titulo: string; claves: ClaveDeDato[] }[] = [
-  { rotulo: "La empresa", titulo: "Quién es", claves: ["pais", "sitioWeb", "industriaSmarteam", "industry", "segmento"] },
-  { rotulo: "El tamaño", titulo: "Cuánta empresa es", claves: ["empleados", "estructura", "filiales", "facturacionAnualUsd"] },
-  { rotulo: "Cómo vende", titulo: "Su modelo de negocio", claves: ["aQuienVende", "perfilCierre", "perfilDespues", "trafico", "baseConsentimiento"] },
-];
+/** Los datos que la pantalla pinta en otro lugar: la edición, debajo de la industria; el TAM, en la tarjeta del potencial. */
+const EN_OTRO_LUGAR: ReadonlySet<ClaveDeDato> = new Set(["edicionEscala", "tamUsd"]);
+
+/** Las tarjetas de la izquierda, con los datos que el CATÁLOGO pone en cada grupo: un dato nuevo aparece solo. */
+const GRUPOS: { rotulo: string; titulo: string; claves: ClaveDeDato[] }[] = (
+  [
+    { grupo: "quien", rotulo: "La empresa", titulo: "Quién es" },
+    { grupo: "tamano", rotulo: "El tamaño", titulo: "Cuánta empresa es" },
+    { grupo: "vende", rotulo: "Cómo vende", titulo: "Su modelo de negocio" },
+  ] as const
+).map((g) => ({ rotulo: g.rotulo, titulo: g.titulo, claves: CATALOGO_DE_DATOS.filter((d) => d.grupo === g.grupo && !EN_OTRO_LUGAR.has(d.clave)).map((d) => d.clave) }));
+
+/** Lo del grupo «potencial» que no es el TAM (hoy, Insider): va en la tarjeta del potencial, debajo del monto. */
+const DEL_POTENCIAL: ClaveDeDato[] = CATALOGO_DE_DATOS.filter((d) => d.grupo === "potencial" && !EN_OTRO_LUGAR.has(d.clave)).map((d) => d.clave);
 
 /** «24 oct». Una fecha sin hora («2026-10-24») es ese día: leída como medianoche UTC, en Costa Rica saldría el 23. */
 const fecha = (iso: string | null | undefined) => {
@@ -86,7 +97,7 @@ const fecha = (iso: string | null | undefined) => {
   if (/^\d{4}-\d{2}$/.test(iso)) {
     return new Date(`${iso}-15T12:00:00`).toLocaleDateString("es-CR", { month: "short", year: "numeric", timeZone: "America/Costa_Rica" }).replace(".", "");
   }
-  const d =/^\d{4}-\d{2}-\d{2}$/.test(iso) ? new Date(`${iso}T12:00:00`) : new Date(iso);
+  const d = /^\d{4}-\d{2}-\d{2}$/.test(iso) ? new Date(`${iso}T12:00:00`) : new Date(iso);
   return d.toLocaleDateString("es-CR", { day: "numeric", month: "short", timeZone: "America/Costa_Rica" }).replace(".", "");
 };
 const usd = (n: number) => `US$ ${n.toLocaleString("es-CR", { maximumFractionDigits: 0 })}`;
@@ -268,14 +279,7 @@ function Sugerencia({
       )}
       {puedeDecidir ? (
         <div className="flex gap-1.5">
-          <button
-            type="button"
-            disabled={ocupado}
-            onClick={onUsar}
-            className="rounded-[10px] border border-info-line bg-info-surface px-[11px] py-1.5 text-[13px] font-semibold text-info-ink transition-colors hover:bg-surface disabled:opacity-50"
-          >
-            Usar
-          </button>
+          <BotonUsar onClick={onUsar} disabled={ocupado} />
           <BotonBlanco onClick={onEditar} disabled={ocupado} className="rounded-[10px] px-3 py-1.5 text-[13px]">
             Editar
           </BotonBlanco>
@@ -295,25 +299,29 @@ function Sugerencia({
 export default function DatosDeLaEmpresa({ clientId }: { clientId: string }) {
   const [r, setR] = useState<Respuesta | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [aviso, setAviso] = useState<string | null>(null);
+  /** Lo que pasó al guardar: al lado del dato que se tocó (`clave`), o arriba si no es de un dato. */
+  const [aviso, setAviso] = useState<{ texto: string; tono: "info" | "danger"; clave?: ClaveDeDato } | null>(null);
   const [editando, setEditando] = useState<{ clave: ClaveDeDato; propuestaId?: string } | null>(null);
   const [ocupado, setOcupado] = useState(false);
   const [soloPorRevisar, setSoloPorRevisar] = useState(false);
   const montado = useRef(true);
 
-  const cargar = useCallback(async () => {
+  /** Trae los datos. Devuelve si pudo: después de guardar, quien llama avisa si la pantalla quedó vieja. */
+  const cargar = useCallback(async (): Promise<boolean> => {
     try {
       const res = await fetch(`/api/clients/${clientId}/datos`, { cache: "no-store" });
       const j = await res.json().catch(() => ({}));
-      if (!montado.current) return;
+      if (!montado.current) return false;
       if (!res.ok) {
         setError(j.error ?? "No se pudieron cargar los datos de la empresa.");
-        return;
+        return false;
       }
       setError(null);
       setR(j as Respuesta);
+      return true;
     } catch {
       if (montado.current) setError("No se pudieron cargar los datos de la empresa.");
+      return false;
     }
   }, [clientId]);
 
@@ -350,29 +358,47 @@ export default function DatosDeLaEmpresa({ clientId }: { clientId: string }) {
   }, [porRevisar]);
   const propuestasDe = useCallback((clave: ClaveDeDato) => (r?.propuestas ?? []).filter((p) => p.clave === clave), [r]);
 
-  async function enviar(url: string, method: "POST" | "PATCH", body: unknown, exito?: string) {
+  /**
+   * Manda un cambio. `cierra`: si cierra el editor abierto (solo lo hace guardar lo que se estaba editando; usar o
+   * descartar una propuesta de OTRO dato, o lanzar la investigación, no se lleva lo que la persona estaba escribiendo).
+   * `clave`: el dato al lado del cual se dice si falló.
+   */
+  async function enviar(url: string, method: "POST" | "PATCH", body: unknown, o: { exito?: string; cierra?: boolean; clave?: ClaveDeDato } = {}) {
     setOcupado(true);
     setAviso(null);
     try {
       const res = await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
       const j = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setAviso(j.error ?? "No se pudo guardar.");
+        setAviso({ texto: j.error ?? "No se pudo guardar.", tono: "danger", clave: o.clave });
         return false;
       }
-      if (exito) setAviso(exito);
-      setEditando(null);
-      await cargar();
+      if (o.cierra) setEditando(null);
+      const recargo = await cargar();
+      if (!recargo) setAviso({ texto: "Se guardó, pero la pantalla no se pudo poner al día: recárgala para ver cómo quedó.", tono: "danger" });
+      else if (o.exito) setAviso({ texto: o.exito, tono: "info", clave: o.clave });
       return true;
+    } catch {
+      // Sin red, el fetch ni llega: que se diga, en vez de que parezca que no pasó nada.
+      if (montado.current) setAviso({ texto: "No se pudo conectar con Nexus. Revisa tu conexión y vuelve a intentarlo: no se guardó nada.", tono: "danger", clave: o.clave });
+      return false;
     } finally {
       if (montado.current) setOcupado(false);
     }
   }
 
   const guardar = (clave: ClaveDeDato, valor: string, cita: string) =>
-    enviar(`/api/clients/${clientId}/datos`, "POST", { clave, valor: valor.trim() === "" ? null : valor, ...(cita.trim() ? { cita: cita.trim() } : {}) }, r?.puedeDecidir ? undefined : "Listo: tu propuesta quedó para que la decida el CSE, la CSL o Ventas.");
+    enviar(
+      `/api/clients/${clientId}/datos`,
+      "POST",
+      { clave, valor: valor.trim() === "" ? null : valor, ...(cita.trim() ? { cita: cita.trim() } : {}) },
+      { cierra: true, clave, exito: r?.puedeDecidir ? undefined : "Listo: tu propuesta quedó para que la decida el CSE, la CSL o Ventas." },
+    );
   const decidir = (p: Propuesta, cuerpo: { accion: "usar" } | { accion: "descartar" } | { accion: "editar"; valor: string | null }) =>
-    enviar(`/api/clients/${clientId}/datos/propuestas/${p.id}`, "PATCH", cuerpo);
+    enviar(`/api/clients/${clientId}/datos/propuestas/${p.id}`, "PATCH", cuerpo, {
+      clave: p.clave,
+      cierra: cierraElEditor(cuerpo.accion, p.id, editando),
+    });
   const investigar = () => enviar(`/api/clients/${clientId}/investigacion`, "POST", {});
 
   if (error && !r) return <Alert variant="danger">{error}</Alert>;
@@ -429,6 +455,11 @@ export default function DatosDeLaEmpresa({ clientId }: { clientId: string }) {
               ))}
             </>
           )}
+          {aviso?.clave === clave && (
+            <div className="mt-2">
+              <Alert variant={aviso.tono}>{aviso.texto}</Alert>
+            </div>
+          )}
         </div>
         {!editandoEste && (ps.length === 0 || !r!.puedeDecidir) ? (
           <BotonTexto onClick={() => setEditando({ clave })} className="text-[13px]" title={`${d.valor === null ? "Agregar" : "Editar"}: ${def.etiqueta}`}>
@@ -464,13 +495,13 @@ export default function DatosDeLaEmpresa({ clientId }: { clientId: string }) {
         </span>
         <span className="flex-1" />
         {r.porRevisar > 0 && (
-          <button type="button" onClick={() => setSoloPorRevisar((x) => !x)} className="text-[13px] font-medium text-brand hover:text-brand-light">
+          <BotonEnlace onClick={() => setSoloPorRevisar((x) => !x)} className="text-[13px] font-medium">
             {soloPorRevisar ? "Ver todos los datos" : "Ver solo los que faltan revisar"}
-          </button>
+          </BotonEnlace>
         )}
       </div>
 
-      {aviso && <Alert variant={aviso.startsWith("Listo") ? "info" : "danger"}>{aviso}</Alert>}
+      {aviso && !aviso.clave && <Alert variant={aviso.tono}>{aviso.texto}</Alert>}
 
       <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(0,1.45fr)_minmax(0,1fr)]">
         <div className="flex flex-col gap-4">
@@ -514,6 +545,12 @@ export default function DatosDeLaEmpresa({ clientId }: { clientId: string }) {
               decidir={decidir}
               onEditar={(p) => setEditando({ clave: "tamUsd", propuestaId: p.id })}
             />
+            {/* El TAM no tiene fila a la vista (solo al editarlo): lo que pasó al usar o descartar su propuesta se dice acá. */}
+            {aviso?.clave === "tamUsd" && editando?.clave !== "tamUsd" && (
+              <div className="mt-2">
+                <Alert variant={aviso.tono}>{aviso.texto}</Alert>
+              </div>
+            )}
             {editando?.clave === "tamUsd" ? (
               <div className="mt-3">{fila("tamUsd")}</div>
             ) : (
@@ -524,7 +561,7 @@ export default function DatosDeLaEmpresa({ clientId }: { clientId: string }) {
                 </BotonTexto>
               )
             )}
-            <div className="mt-3">{fila("calificaInsider")}</div>
+            <div className="mt-3">{DEL_POTENCIAL.map((clave) => fila(clave))}</div>
             <LoQuePaga yaPaga={r.yaPaga} leFalta={r.leFalta} />
           </Tarjeta>
 
@@ -639,19 +676,17 @@ function LoQuePaga({ yaPaga, leFalta }: { yaPaga: LoQueYaPaga | null; leFalta: L
                   {h.nombre}
                   {h.plan ? ` ${h.plan}` : ""}
                 </span>
-                {h.montoMensual !== null && <span className="tabular-nums">{`${yaPaga.moneda === "USD" || !yaPaga.moneda ? "US$" : yaPaga.moneda} ${h.montoMensual.toLocaleString("es-CR", { maximumFractionDigits: 0 })} al mes`}</span>}
+                {/* Cada monto con SU moneda: lo cargado a mano puede estar en colones aunque Partner esté en dólares. */}
+                {h.montoMensual !== null && <span className="tabular-nums">{`${montoConMoneda(h.montoMensual, h.moneda)} al mes`}</span>}
               </div>
             ))}
-            {yaPaga.fuente === "vendida" && yaPaga.totalMensual !== null && (
+            {yaPaga.totalMensual !== null && yaPaga.hubs.every((h) => h.montoMensual === null) && (
               <div className="flex justify-between gap-3 border-t border-line py-1.5 text-[13px] leading-[19px] text-fg-secondary">
-                <span>Lo vendido, en total</span>
-                <span className="tabular-nums">{`US$ ${yaPaga.totalMensual.toLocaleString("es-CR", { maximumFractionDigits: 0 })} al mes`}</span>
+                <span>En total</span>
+                <span className="tabular-nums">{`${montoConMoneda(yaPaga.totalMensual, yaPaga.moneda)} al mes`}</span>
               </div>
             )}
-            <div className="mt-0.5 text-xs leading-4 text-fg-muted">
-              Del registro de HubSpot Partner{yaPaga.copiadaAt ? ` · ${fecha(yaPaga.copiadaAt)}` : ""}
-              {yaPaga.fuente === "vendida" ? " · Smarteam no la gestiona: se sabe qué compró, no cuánto paga cada hub" : ""}
-            </div>
+            <div className="mt-0.5 text-xs leading-4 text-fg-muted">{deDondeSale(yaPaga, fecha)}</div>
           </>
         ) : (
           <p className="mt-1.5 text-[13px] text-fg-muted">HubSpot Partner no dice que pague licencias.</p>
@@ -763,9 +798,9 @@ function LaInvestigacion({ inv, corrida, puedeDecidir, ocupado, onInvestigar }: 
                 ))}
                 {!todas && inv.fuentes.length > 3 && (
                   <li className="-ml-[18px] list-none">
-                    <button type="button" onClick={() => setTodas(true)} className="text-fg-muted hover:text-fg">
+                    <BotonEnlace onClick={() => setTodas(true)} className="text-[13px]">
                       y {inv.fuentes.length - 3} más
-                    </button>
+                    </BotonEnlace>
                   </li>
                 )}
               </ul>
@@ -792,7 +827,7 @@ function Esqueleto() {
               <p className={ROTULO_DEL_SISTEMA}>{g.rotulo}</p>
               <h3 className="mb-1.5 mt-1 text-base font-semibold leading-[22px] text-fg">{g.titulo}</h3>
               {g.claves.slice(0, 3).map((c) => (
-                <div key={c} className="grid grid-cols-[200px_minmax(0,1fr)] gap-4 border-t border-line py-3">
+                <div key={c} className="grid grid-cols-1 gap-x-4 gap-y-1 border-t border-line py-3 sm:grid-cols-[200px_minmax(0,1fr)]">
                   <span className="text-[13px] text-fg-secondary">{datoDeLaEmpresa(c).etiqueta}</span>
                   <Skeleton className="h-9 w-40" />
                 </div>

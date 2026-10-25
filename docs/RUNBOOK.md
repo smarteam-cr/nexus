@@ -92,7 +92,8 @@ primero `git pull --ff-only` a mano y después `bash scripts/deploy.sh`.
 builder, 6 GB desde el 2026-10-16, cuando el chequeo ya pedía 4,2 GB); no es el de 2 GB del contenedor que
 corre. Medir cuánto pide hoy con `npx tsc --noEmit -p . --incremental false --extendedDiagnostics`
 («Memory used») y, si hace falta, subirlo mirando la memoria libre del VPS (`free -m`). Mientras tanto el
-contenedor viejo sigue arriba: no hay nada que revertir.
+contenedor viejo sigue arriba: no hay nada que revertir. En la PC pasa lo mismo con `npx tsc --noEmit` (el tope de Node 24 ronda los 4 GB):
+`NODE_OPTIONS=--max-old-space-size=8192 npx tsc --noEmit -p .` (PowerShell: `$env:NODE_OPTIONS="--max-old-space-size=8192"`).
 
 ⚠️ **NUNCA `docker compose up -d` a mano sin `--build` después de un pull.**
 Eso re-levanta la imagen VIEJA contra la base con schema nuevo = el "deploy
@@ -283,7 +284,7 @@ toma el turno del día no anota nada, así que un rojo queda rojo hasta la corri
 |---|---|---|---|
 | `marketing-weekly` | cada tick; ventana propia (viernes 6:00 CR) + claim propio en `MarketingSettings` | — | delega a `tickMarketingCron` tal cual |
 | `cs-signals-daily` | L–V ≥ 6:00 CR, una vez al día | `CS_WATCHDOG_ENABLED=1` | refresca las señales HubSpot de Éxito del cliente |
-| `cs-partner-daily` | L–V ≥ 6:00 CR, una vez al día | `CS_PARTNER_SYNC_ENABLED=1` o `CS_WATCHDOG_ENABLED=1` | espeja Partner Clients (uso, licencias, MRR); degrada sin scope. NO crea clientes nuevos salvo con `CS_PARTNER_CREA_CLIENTES=1` (separada del vigilante el 2026-10-24) |
+| `cs-partner-daily` | L–V ≥ 6:00 CR, una vez al día | `CS_PARTNER_SYNC_ENABLED=1` o `CS_WATCHDOG_ENABLED=1` | espeja Partner Clients (uso, licencias, MRR); degrada sin scope. NO crea clientes nuevos salvo con `CS_PARTNER_CREA_CLIENTES=1` (separada del vigilante el 2026-10-24). La bandera es solo del job: el botón «Traer HubSpot Partner» del panel y `scripts/run-partner-sync.ts --apply` sí crean, a propósito, porque los aprieta una persona |
 | `cs-watchdog-daily` | L–V ≥ 7:00 CR (después de las señales) | `CS_WATCHDOG_ENABLED=1` + `CsSettings.watchdogEnabled` | sweep del watchdog con pre-filtro determinístico |
 | `cs-watchdog-debounce` | cada tick | `CS_WATCHDOG_ENABLED=1` | triage de eventos «quiesced» (>15 min), hasta 5 proyectos por tick |
 | `maintenance-daily` | una vez al día, a cualquier hora (en la práctica, pasada la medianoche CR) | — | barre `PrintJobToken` expirados y `ExternalVerifyAttempt` sin actividad en 24 h, y refresca las alertas de cobranza: abre vencidos y promesas incumplidas, pone al día las filas vivas y cierra las que ya no aplican (`lib/cobranza/alertas-refresco.ts`). No guarda corte. Si el refresco falla, el job queda en rojo y no reintenta hasta el día siguiente |

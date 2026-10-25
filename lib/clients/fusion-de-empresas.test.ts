@@ -11,6 +11,7 @@
 import { describe, it, expect } from "vitest";
 import {
   DATOS_DE_LA_CLASIFICACION,
+  DE_LA_FICHA_SI_FALTAN,
   destinoUnoAUno,
   dominioDeCompany,
   idDeHubspotFinal,
@@ -25,6 +26,7 @@ import {
   type FichaParaFusionar,
 } from "./fusion-de-empresas";
 import type { VeredictoDeFusion } from "@/lib/hubspot/empresa-fusionada";
+import { CATALOGO_DE_DATOS, plegarDatosDeLaEmpresa } from "./datos-de-la-empresa";
 import { DATOS_DE_CLASIFICACION } from "@/lib/cs/clasificacion";
 
 const ficha = (p: Partial<FichaParaFusionar>): FichaParaFusionar => ({
@@ -84,6 +86,19 @@ describe("la ficha que sigue", () => {
     expect(p.cambios.logoUrl).toBe("https://x/logo.png");
     expect(p.cambios).not.toHaveProperty("industry");
     expect(p.cambios).not.toHaveProperty("company");
+  });
+
+  /* La juntura del 24 oct: la regla vieja copiaba el TAM y la industria sin mirar su fuente, al lado de
+     plegarDatosDeLaEmpresa, y un dato vaciado a propósito volvía al fusionar. Los datos del catálogo los pliega SOLO la
+     regla nueva. */
+  it("⛔ ningún dato del catálogo de la empresa lo pliega la regla vieja: un TAM vaciado a propósito no vuelve", () => {
+    for (const d of CATALOGO_DE_DATOS) expect(DE_LA_FICHA_SI_FALTAN as readonly string[], d.clave).not.toContain(d.clave);
+    const p = plegarFicha({ ...SIGUE, tamUsd: null, industry: null }, { ...ABSORBIDA, tamUsd: 41760, industry: "Retail" }, "2026-10-01");
+    expect(p.cambios).not.toHaveProperty("tamUsd");
+    expect(p.cambios).not.toHaveProperty("industry");
+    // Y la regla nueva, con la fuente: lo vaciado por una persona se queda vacío; lo que solo faltaba, se toma.
+    expect(plegarDatosDeLaEmpresa({ tamUsd: null, tamFuente: "persona" }, { tamUsd: 41760, tamFuente: "nexus" })).toEqual({});
+    expect(plegarDatosDeLaEmpresa({ industry: null }, { industry: "Retail", industryFuente: "hubspot" })).toMatchObject({ industry: "Retail", industryFuente: "hubspot" });
   });
 
   it("⭐ las notas se juntan: un texto libre que se pierde no se recupera", () => {

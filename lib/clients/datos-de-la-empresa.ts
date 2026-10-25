@@ -143,6 +143,9 @@ export const EDICIONES_DE_LA_ESCALA: readonly OpcionDeDato[] = [
   { valor: "automotriz", etiqueta: "Automotriz" },
 ];
 
+/** Techo de cordura del TAM: 100M USD (DECISIONS «Qué ES una empresa»). Lo usan el catálogo y `parseTamUsd`. */
+export const TAM_MAX_USD = 100_000_000;
+
 const op = (pares: readonly (readonly [string, string])[]): OpcionDeDato[] => pares.map(([valor, etiqueta]) => ({ valor, etiqueta }));
 
 export const CATALOGO_DE_DATOS: readonly DatoDeLaEmpresa[] = [
@@ -344,7 +347,7 @@ export const CATALOGO_DE_DATOS: readonly DatoDeLaEmpresa[] = [
     grupo: "potencial",
     tipo: "dinero",
     min: 0,
-    max: 100_000_000,
+    max: TAM_MAX_USD,
     manda: "nexus",
     hubspot: { propiedad: "tam__potencial", existe: true, sentido: "escribe" },
     ayuda: "Cuánto le podría vender Smarteam en un año. Lo ve solo el equipo.",
@@ -547,6 +550,14 @@ export function quienManda({ dato, actual, propuesta, puedeDecidir }: EntradaDeQ
 }
 
 // ── Las propuestas ───────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Al decidir una propuesta, ¿se cierra el editor que está abierto? Solo al editarla (cierra su propio editor) o si lo
+ * abierto era ESA misma propuesta. Usar o descartar la de otro dato no se lleva lo que la persona estaba escribiendo.
+ */
+export function cierraElEditor(accion: "usar" | "editar" | "descartar", propuestaId: string, enEdicion: { propuestaId?: string } | null): boolean {
+  return accion === "editar" || enEdicion?.propuestaId === propuestaId;
+}
 
 export const ESTADOS_DE_PROPUESTA = ["pendiente", "usada", "editada", "descartada", "aplicada", "reemplazada"] as const;
 export type EstadoDePropuesta = (typeof ESTADOS_DE_PROPUESTA)[number];

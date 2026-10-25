@@ -149,7 +149,3 @@ No tropezar dos veces. Si pisás uno nuevo, agregalo acá.
   DECISIONS, el GLOSSARY y el RUNBOOK: 411.000 tokens (41 % de la ventana) cargados antes del primer mensaje, medido el
   2026-10-20. *Guarda:* esos tres son punteros con su condición; con `@` solo van ARCHITECTURE y este archivo. Antes de
   sumar un `@` a `CLAUDE.md`, medir el archivo (`wc -c`).
-- **`npx tsc --noEmit` muere con «JavaScript heap out of memory» en la PC** (2026-10-24). *Causa:* el chequeo de tipos ya
-  pide más de 4 GB (RUNBOOK › «BUILD FALLO»), y Node 24 arranca con un tope cercano a ese. No es un error del código:
-  no dice nada de los tipos. *Guarda:* `NODE_OPTIONS=--max-old-space-size=8192 npx tsc --noEmit -p .` (PowerShell:
-  `$env:NODE_OPTIONS="--max-old-space-size=8192"`).

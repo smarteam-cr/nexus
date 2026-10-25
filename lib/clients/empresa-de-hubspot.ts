@@ -12,13 +12,14 @@
  * ⚠ Dentro de una transacción interactiva un P2002 la deja abortada: no se puede releer adentro. Por eso
  * `crearOReusarFicha` y `asignarEmpresaDeHubspot` reciben el cliente de base y releen con `prisma`, afuera.
  *
+ * Sin `server-only` a propósito: lo usan también la copia de proyectos y la de Partner, que corren en scripts. El 409
+ * para una persona (que depende de a qué fichas tiene acceso) vive aparte, en `empresa-de-hubspot-aviso.ts`.
+ *
  * Decisión: DECISIONS › «Las llaves de la empresa» (punto 3, R7b).
  */
-import "server-only";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { esUnicoViolado } from "@/lib/db/unico-violado";
-import { requireAccessToClient } from "@/lib/auth/access";
 
 export interface FichaDeLaEmpresa {
   id: string;
@@ -36,21 +37,6 @@ export async function fichaConLaEmpresa(companyId: string, db: Lector = prisma):
 /** Lo que se le dice a quien intentó ponerle a una ficha una empresa que ya es de otra. */
 export function mensajeDeEmpresaRepetida(ficha: Pick<FichaDeLaEmpresa, "name">): string {
   return `Esa empresa de HubSpot ya es la ficha «${ficha.name}» en Nexus. Ábrela a ella, o fusiona las dos fichas.`;
-}
-
-/**
- * El cuerpo del 409: el mensaje y la ficha que ya la tiene, para que la pantalla pueda llevar a ella. Solo con el nombre
- * si quien pregunta tiene acceso a esa ficha: si no, un CSE podría probar ids de HubSpot y enterarse de qué empresas son
- * clientes de otro.
- */
-export async function cuerpoDeEmpresaRepetida(ficha: FichaDeLaEmpresa) {
-  const puedeVerla = await requireAccessToClient(ficha.id).then(
-    () => true,
-    () => false,
-  );
-  return puedeVerla
-    ? { error: mensajeDeEmpresaRepetida(ficha), clientIdExistente: ficha.id, nombreExistente: ficha.name }
-    : { error: "Esa empresa de HubSpot ya es otra ficha en Nexus, a la que no tienes acceso. Pídele a la CSL que la revise." };
 }
 
 export type ResultadoDeAsignar = { ok: true } | { ok: false; ficha: FichaDeLaEmpresa };

@@ -3,7 +3,7 @@
  */
 import { describe, expect, it } from "vitest";
 import { calcularTamV1, citaDelTam, edicionDelTam, hubsDelTam, PRECIOS_DE_LISTA, type EntradaDelTam } from "./tam-v1";
-import { loQueLeFalta, loQueYaPaga } from "./lo-que-ya-paga";
+import { deDondeSale, loQueLeFalta, loQueYaPaga, montoConMoneda } from "./lo-que-ya-paga";
 
 const base: EntradaDelTam = {
   empleados: 310,
@@ -150,5 +150,27 @@ describe("loQueLeFalta", () => {
   it("sin nada pagado le falta todo; sin TAM no se dice nada", () => {
     expect(loQueLeFalta({ hubs: ["marketing"], edicion: "starter" }, null)).toHaveLength(1);
     expect(loQueLeFalta({ hubs: [], edicion: null }, null)).toEqual([]);
+  });
+});
+
+describe("cómo se dice lo que ya paga", () => {
+  const dia = (iso: string) => (iso === "2026-10-24" ? "24 oct" : iso);
+
+  it("cada monto con su moneda", () => {
+    // es-CR separa los miles con un espacio (el que sea, según la versión de ICU): se mira la moneda y las cifras.
+    const plano = (t: string) => t.replace(/[\s\u00a0\u202f.]/g, "");
+    expect(plano(montoConMoneda(1280, "USD"))).toBe("US$1280");
+    expect(montoConMoneda(1280, "USD").startsWith("US$ ")).toBe(true);
+    expect(plano(montoConMoneda(450000, "CRC"))).toBe("CRC450000");
+    expect(montoConMoneda(90, null)).toBe("US$ 90");
+  });
+
+  it("de dónde sale, en una frase entera (sin una «y» suelta)", () => {
+    const manual = { hub: "sales", plan: "Professional", fechaCompra: null, fechaRenovacion: null, montoMensual: 450000, moneda: "CRC", nota: null };
+    const ambos = loQueYaPaga({ properties: { hs_marketing_hub_edition: "professional", hs_marketing_hub_mrr: "900" }, fetchedAt: "2026-10-24T15:00:00Z" }, [manual])!;
+    expect(deDondeSale(ambos, dia)).toBe("Del registro de HubSpot Partner (24 oct) y de lo cargado a mano en Licencias.");
+    expect(deDondeSale(loQueYaPaga(null, [manual])!, dia)).toBe("De lo cargado a mano en Licencias.");
+    const vendida = loQueYaPaga({ properties: { hs_sold_product_lines: "marketing_hub" }, fetchedAt: "2026-10-24T15:00:00Z" })!;
+    expect(deDondeSale(vendida, dia)).toBe("Del registro de HubSpot Partner (24 oct). Smarteam no la gestiona: se sabe qué compró, no cuánto paga cada hub.");
   });
 });

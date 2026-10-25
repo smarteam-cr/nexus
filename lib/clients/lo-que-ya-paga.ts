@@ -99,6 +99,25 @@ export function loQueYaPaga(
   return { fuente, hubs, totalMensual, moneda, copiadaAt: saleDePartner && snapshot?.fetchedAt ? diaDeCostaRica(snapshot.fetchedAt) : null };
 }
 
+/** «US$ 1.280» o «CRC 450.000»: un monto con SU moneda, nunca con la de otro hub. */
+export function montoConMoneda(n: number, moneda: string | null): string {
+  return `${!moneda || moneda === "USD" ? "US$" : moneda} ${n.toLocaleString("es-CR", { maximumFractionDigits: 0 })}`;
+}
+
+/**
+ * De dónde sale lo que ya paga, en una frase: el registro de Partner (con su fecha), lo cargado a mano en Licencias, o
+ * los dos. `fecha` formatea el día de la copia como lo muestra la pantalla.
+ */
+export function deDondeSale(y: LoQueYaPaga, fecha: (iso: string) => string | null): string {
+  const dePartner = y.hubs.some((h) => h.origen !== "a_mano");
+  const aMano = y.hubs.some((h) => h.origen === "a_mano");
+  const dia = y.copiadaAt ? fecha(y.copiadaAt) : null;
+  const partner = `del registro de HubSpot Partner${dia ? ` (${dia})` : ""}`;
+  const origen = dePartner && aMano ? `${partner} y de lo cargado a mano en Licencias` : dePartner ? partner : "de lo cargado a mano en Licencias";
+  const frase = origen.charAt(0).toUpperCase() + origen.slice(1);
+  return y.fuente === "vendida" ? `${frase}. Smarteam no la gestiona: se sabe qué compró, no cuánto paga cada hub.` : `${frase}.`;
+}
+
 const ORDEN: Record<Edicion, number> = { starter: 1, professional: 2, enterprise: 3 };
 const edicionDelPlan = (plan: string | null): Edicion | null => {
   const t = (plan ?? "").toLowerCase();

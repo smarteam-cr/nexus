@@ -2,7 +2,8 @@ import { withClientAccess } from "@/lib/api";
 import { prisma } from "@/lib/db/prisma";
 import { getSystemHubspotClient } from "@/lib/hubspot/client";
 import { NextResponse } from "next/server";
-import { asignarEmpresaDeHubspot, cuerpoDeEmpresaRepetida } from "@/lib/clients/empresa-de-hubspot";
+import { asignarEmpresaDeHubspot } from "@/lib/clients/empresa-de-hubspot";
+import { cuerpoDeEmpresaRepetida } from "@/lib/clients/empresa-de-hubspot-aviso";
 
 /**
  * PUT — guarda el hubspotCompanyId elegido por el usuario.

@@ -5,7 +5,7 @@ import type { Prisma } from "@prisma/client";
 import { describirDestino, resolverApply } from "./lib/guard";
 import { SENTINEL_SERVICE_TYPE } from "@/lib/projects/kind";
 import { prisma } from "@/lib/db/prisma";
-import { plegarDatosDeLaEmpresa, SELECT_DE_LOS_DATOS } from "@/lib/clients/datos-de-la-empresa";
+import { CLAVES_DE_DATO, columnasDelDato, plegarDatosDeLaEmpresa, SELECT_DE_LOS_DATOS } from "@/lib/clients/datos-de-la-empresa";
 import { getSystemHubspotClient } from "@/lib/hubspot/client";
 import { detectarFusion, type VeredictoDeFusion } from "@/lib/hubspot/empresa-fusionada";
 import { crDateParts } from "@/lib/jobs/time";
@@ -399,6 +399,10 @@ async function processPair(p: (typeof PAIRS)[number], opciones: { nombre: string
   if (pliegue.dominiosNuevos.length) console.log(`    dominios: + ${pliegue.dominiosNuevos.join(", ")}`);
   const otros = Object.keys(pliegue.cambios).filter((k) => k !== "emailDomains");
   if (otros.length) console.log(`    toma de la otra: ${otros.join(", ")}`);
+  // Los datos de la empresa los pliega la regla nueva (con su fuente): el simulacro los muestra igual que lo escribirá.
+  const datosPlegados = plegarDatosDeLaEmpresa(canon.datos, dup.datos);
+  const datosQueToma = CLAVES_DE_DATO.filter((c) => c in datosPlegados).map((c) => `${c} = ${String(datosPlegados[c])} (${String(datosPlegados[columnasDelDato(c).fuente] ?? "sin fuente")})`);
+  if (datosQueToma.length) console.log(`    datos de la empresa que toma de la otra: ${datosQueToma.join(" · ")}`);
   console.log(`    HubSpot: ${canon.hubspotCompanyId ?? "—"} → ${hub.id ?? "—"} · ${hub.motivo}`);
   if (copiasDelIdViejo.businessCases || copiasDelIdViejo.ventas) {
     console.log(`    y el id viejo se cambia en ${copiasDelIdViejo.businessCases} business case(s) y ${copiasDelIdViejo.ventas} venta(s)`);

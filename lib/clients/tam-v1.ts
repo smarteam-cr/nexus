@@ -90,6 +90,25 @@ export interface LineaDelTam {
   detalle: string;
 }
 
+/**
+ * Los datos de la empresa que lee el TAM v1: cambiar cualquiera lo recalcula (lib/clients/datos-de-la-empresa-server.ts).
+ * Una sola lista, atada a `EntradaDelTam`: si la entrada suma un campo y la lista no, tsc no compila.
+ */
+export const DATOS_QUE_LEE_EL_TAM = [
+  "empleados",
+  "estructura",
+  "filiales",
+  "industriaSmarteam",
+  "aQuienVende",
+  "perfilCierre",
+  "perfilDespues",
+  "baseConsentimiento",
+  "calificaInsider",
+] as const satisfies readonly (keyof EntradaDelTam)[];
+type FaltaEnLaLista = Exclude<keyof EntradaDelTam, (typeof DATOS_QUE_LEE_EL_TAM)[number]>;
+/** Si esto deja de compilar, a `DATOS_QUE_LEE_EL_TAM` le falta un campo de `EntradaDelTam`. */
+export const LA_LISTA_DEL_TAM_ESTA_COMPLETA: [FaltaEnLaLista] extends [never] ? true : never = true;
+
 export interface CalculoDelTam {
   version: typeof VERSION_DEL_TAM;
   /** El TAM en USD al año, o null si falta lo mínimo (los empleados). */
