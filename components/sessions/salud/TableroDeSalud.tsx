@@ -4,17 +4,20 @@
  * los motivos de las que no dejaron texto y las que esperan empresa. Solo tokens del tema; son hechos, no IA.
  */
 import Link from "next/link";
-import { EmptyState } from "@/components/ui";
+import { EmptyState, buttonVariants } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import {
   HORAS_SIN_EMPRESA,
   META_DE_TEXTO,
   cuantoEspera,
+  direccionDeLaSalud,
   type Conteo,
   type EstadoDeLaReunion,
   type FilaDeLaSalud,
   type GrupoDeMotivos,
+  type PeriodoDeLaSalud,
   type ReunionVista,
+  type VistaDeLaSalud,
   type SinEmpresaVista,
 } from "@/lib/sessions/salud-de-las-reuniones";
 import type { DuenoDelArreglo } from "@/lib/google/por-que-falta";
@@ -119,6 +122,39 @@ export function ChipDeEstado({ estado }: { estado: EstadoDeLaReunion }) {
   return <span className={cn("inline-flex items-center whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] font-semibold leading-[14px]", c.clase)}>{c.texto}</span>;
 }
 
+/** El título de una reunión: enlace a su página si quien mira la puede abrir. */
+function Titulo({ r }: { r: ReunionVista }) {
+  if (!r.enlace) {
+    return (
+      <span className="truncate font-semibold text-fg" title="Es de una empresa que no tienes asignada: su página no se abre.">
+        {r.titulo}
+      </span>
+    );
+  }
+  return (
+    <Link href={`/sessions/${r.id}`} className="truncate font-semibold text-fg hover:text-brand">
+      {r.titulo}
+    </Link>
+  );
+}
+
+/** El pie de una lista recortada: cuántas hay y, si se puede, «Ver todas». */
+function Pie({ mostradas, total, verTodas }: { mostradas: number; total: number; verTodas?: string | null }) {
+  if (total <= mostradas) return null;
+  return (
+    <div className="flex items-center justify-between gap-3 border-t border-line px-4 py-2.5 text-xs text-fg-muted">
+      <span>
+        Mostrando las {miles(mostradas)} más recientes de {miles(total)}.
+      </span>
+      {verTodas && (
+        <Link href={verTodas} scroll={false} className="whitespace-nowrap font-semibold text-brand hover:text-brand-dark">
+          Ver las {miles(total)} →
+        </Link>
+      )}
+    </div>
+  );
+}
+
 function Lectura({ leida }: { leida: boolean | null }) {
   if (leida === null) return <span className="text-xs text-fg-muted">—</span>;
   return leida ? <span className="text-xs font-semibold text-success-ink">✓ Leída</span> : <span className="text-xs font-semibold text-fg-muted">○ Sin leer</span>;
@@ -128,7 +164,17 @@ function Lectura({ leida }: { leida: boolean | null }) {
 
 const COLUMNAS_DE_REUNION = "grid grid-cols-[64px_minmax(180px,1.4fr)_minmax(140px,1fr)_176px_84px_minmax(220px,1.6fr)] gap-3";
 
-export function ListaDeReuniones({ reuniones, columna = "empresa", total }: { reuniones: readonly ReunionVista[]; columna?: "empresa" | "organizo"; total?: number }) {
+export function ListaDeReuniones({
+  reuniones,
+  columna = "empresa",
+  total,
+  verTodas,
+}: {
+  reuniones: readonly ReunionVista[];
+  columna?: "empresa" | "organizo";
+  total?: number;
+  verTodas?: string | null;
+}) {
   if (!reuniones.length) return <p className="px-4 py-3 text-xs text-fg-muted">No hay reuniones para mostrar.</p>;
   return (
     <div className="overflow-x-auto">
@@ -144,9 +190,7 @@ export function ListaDeReuniones({ reuniones, columna = "empresa", total }: { re
         {reuniones.map((m) => (
           <div key={m.id} className={cn(COLUMNAS_DE_REUNION, "items-center border-t border-line px-4 py-2 text-[13px] leading-[19px] first:border-t-0")}>
             <span className="text-xs text-fg-muted">{fechaCorta(m.fecha)}</span>
-            <Link href={`/sessions/${m.id}`} className="truncate font-semibold text-fg hover:text-brand">
-              {m.titulo}
-            </Link>
+            <Titulo r={m} />
             <span className={columna === "empresa" && !m.empresa ? "text-fg-muted" : "text-fg"}>{(columna === "empresa" ? m.empresa : m.organizo) ?? "—"}</span>
             <span>
               <ChipDeEstado estado={m.estado} />
@@ -155,11 +199,7 @@ export function ListaDeReuniones({ reuniones, columna = "empresa", total }: { re
             <span className="text-xs leading-4 text-fg-secondary">{m.motivo ?? ""}</span>
           </div>
         ))}
-        {total !== undefined && total > reuniones.length && (
-          <p className="border-t border-line px-4 py-2.5 text-xs text-fg-muted">
-            Mostrando las {reuniones.length} más recientes de {miles(total)}.
-          </p>
-        )}
+        {total !== undefined && <Pie mostradas={reuniones.length} total={total} verTodas={verTodas} />}
       </div>
     </div>
   );
@@ -183,11 +223,13 @@ export function TablaDeGrupos({
   ayuda,
   filas,
   tipo,
+  nav,
 }: {
   titulo: string;
   ayuda: string;
   filas: readonly FilaDeLaSalud[];
   tipo: "persona" | "empresa";
+  nav: { vista: VistaDeLaSalud; dias: PeriodoDeLaSalud };
 }) {
   return (
     <section aria-label={titulo} className="overflow-hidden rounded-2xl border border-line bg-surface">
@@ -200,7 +242,7 @@ export function TablaDeGrupos({
       </div>
       {filas.length === 0 ? (
         <div className="border-t border-line p-6">
-          <EmptyState title="No hay reuniones con gente de fuera en este periodo" description="Prueba con un periodo más largo." />
+          <VacioDelPeriodo dias={nav.dias} vista={nav.vista} />
         </div>
       ) : (
         <div className="overflow-x-auto">
@@ -217,7 +259,7 @@ export function TablaDeGrupos({
               <span />
             </div>
             {filas.map((f) => (
-              <details key={f.clave} className="group border-t border-line">
+              <details key={f.clave} className="group border-t border-line" open={f.reuniones.length > 20}>
                 <summary className={cn(COLUMNAS_DE_FILA, "cursor-pointer list-none items-center px-5 py-2.5 hover:bg-surface-hover group-open:bg-surface-muted [&::-webkit-details-marker]:hidden")}>
                   <span className="flex min-w-0 items-center gap-2.5">
                     {tipo === "persona" && (
@@ -245,7 +287,12 @@ export function TablaDeGrupos({
                 </summary>
                 <div className="bg-surface-muted px-5 pb-4 pt-1 sm:pl-14">
                   <div className="overflow-hidden rounded-xl border border-line bg-surface">
-                    <ListaDeReuniones reuniones={f.reuniones} columna={tipo === "persona" ? "empresa" : "organizo"} total={f.total} />
+                    <ListaDeReuniones
+                      reuniones={f.reuniones}
+                      columna={tipo === "persona" ? "empresa" : "organizo"}
+                      total={f.total}
+                      verTodas={direccionDeLaSalud(nav.vista, nav.dias, f.clave)}
+                    />
                   </div>
                 </div>
               </details>
@@ -307,7 +354,7 @@ const DEL_DUENO: Record<DuenoDelArreglo, { nombre: string; rotulo: string; ayuda
   nada: { nombre: "Nada que hacer todavía", rotulo: "Se resuelve solo", ayuda: "Son reuniones recientes o canceladas. No hace falta hacer nada: vuelve a mirar en dos días." },
 };
 
-export function MotivosSinTexto({ grupos, total }: { grupos: readonly GrupoDeMotivos[]; total: number }) {
+export function MotivosSinTexto({ grupos, total, nav }: { grupos: readonly GrupoDeMotivos[]; total: number; nav: { vista: VistaDeLaSalud; dias: PeriodoDeLaSalud } }) {
   if (!grupos.length) {
     return <EmptyState title="Todas las reuniones con empresa dejaron texto" description="En este periodo no hay ninguna sin transcripción ni notas." />;
   }
@@ -333,8 +380,8 @@ export function MotivosSinTexto({ grupos, total }: { grupos: readonly GrupoDeMot
               </div>
             </div>
             {g.motivos.map((m) => (
-              <details key={m.motivo} className="group border-t border-line">
-                <summary className="grid cursor-pointer list-none grid-cols-[minmax(260px,1fr)_minmax(120px,280px)_48px_20px] items-center gap-4 px-5 py-3 hover:bg-surface-hover group-open:bg-surface-muted [&::-webkit-details-marker]:hidden">
+              <details key={m.motivo} className="group border-t border-line" open={m.reuniones.length > 20}>
+                <summary className="grid cursor-pointer list-none grid-cols-[minmax(0,1fr)_minmax(60px,280px)_48px_20px] items-center gap-4 px-5 py-3 hover:bg-surface-hover group-open:bg-surface-muted [&::-webkit-details-marker]:hidden">
                   <span className="text-[13px] font-semibold text-fg">{m.texto}</span>
                   <span aria-hidden className="flex h-1.5 overflow-hidden rounded-full bg-surface-muted">
                     <span className="rounded-full bg-warning" style={{ width: `${pct(m.cuantas, mayor)}%` }} />
@@ -346,7 +393,7 @@ export function MotivosSinTexto({ grupos, total }: { grupos: readonly GrupoDeMot
                 </summary>
                 <div className="bg-surface-muted px-5 pb-4 pt-1">
                   <div className="overflow-hidden rounded-xl border border-line bg-surface">
-                    <ReunionesDelMotivo reuniones={m.reuniones} total={m.cuantas} />
+                    <ReunionesDelMotivo reuniones={m.reuniones} total={m.cuantas} verTodas={direccionDeLaSalud(nav.vista, nav.dias, m.motivo)} />
                   </div>
                 </div>
               </details>
@@ -360,7 +407,7 @@ export function MotivosSinTexto({ grupos, total }: { grupos: readonly GrupoDeMot
 
 const COLUMNAS_DEL_MOTIVO = "grid grid-cols-[64px_minmax(200px,1.4fr)_minmax(150px,1fr)_minmax(150px,1fr)_minmax(200px,1.3fr)] gap-3";
 
-function ReunionesDelMotivo({ reuniones, total }: { reuniones: readonly ReunionVista[]; total: number }) {
+function ReunionesDelMotivo({ reuniones, total, verTodas }: { reuniones: readonly ReunionVista[]; total: number; verTodas: string }) {
   return (
     <div className="overflow-x-auto">
       <div className="min-w-[880px]">
@@ -374,15 +421,13 @@ function ReunionesDelMotivo({ reuniones, total }: { reuniones: readonly ReunionV
         {reuniones.map((r) => (
           <div key={r.id} className={cn(COLUMNAS_DEL_MOTIVO, "items-center border-t border-line px-4 py-2 text-[13px] first:border-t-0")}>
             <span className="text-xs text-fg-muted">{fechaCorta(r.fecha)}</span>
-            <Link href={`/sessions/${r.id}`} className="truncate font-semibold text-fg hover:text-brand">
-              {r.titulo}
-            </Link>
+            <Titulo r={r} />
             <span className="text-fg">{r.empresa ?? "—"}</span>
             <span className="text-fg-secondary">{r.organizo ?? "—"}</span>
             <span className="text-xs text-fg-secondary">{r.delEquipo.join(", ") || "—"}</span>
           </div>
         ))}
-        {total > reuniones.length && <p className="border-t border-line px-4 py-2.5 text-xs text-fg-muted">Mostrando las {reuniones.length} más recientes de {miles(total)}.</p>}
+        <Pie mostradas={reuniones.length} total={total} verTodas={verTodas} />
       </div>
     </div>
   );
@@ -431,9 +476,7 @@ export function ReunionesSinEmpresa({ reuniones }: { reuniones: readonly SinEmpr
                     )}
                   </span>
                   <span className="text-xs text-fg-muted">{fechaCorta(r.fecha)}</span>
-                  <Link href={`/sessions/${r.id}`} className="truncate font-semibold text-fg hover:text-brand">
-                    {r.titulo}
-                  </Link>
+                  <Titulo r={r} />
                   <span className="flex min-w-0 flex-col">
                     <span className="truncate text-fg">
                       {r.deFuera.primero}
@@ -458,5 +501,23 @@ export function ReunionesSinEmpresa({ reuniones }: { reuniones: readonly SinEmpr
         <span>Nexus te propondrá la empresa de cada reunión para que la confirmes con un clic. Por ahora, se decide desde la página de la reunión.</span>
       </div>
     </div>
+  );
+}
+
+/** Sin reuniones en el periodo: lo dice, y ofrece uno más largo si lo hay. */
+export function VacioDelPeriodo({ dias, vista, tuyas }: { dias: PeriodoDeLaSalud; vista: VistaDeLaSalud; tuyas?: boolean }) {
+  const siguiente = dias === 14 ? 30 : dias === 30 ? 90 : null;
+  return (
+    <EmptyState
+      title={`${tuyas ? "No tuviste" : "No hubo"} reuniones con gente de fuera en ${dias === 14 ? "estos 14 días" : `los últimos ${dias} días`}`}
+      description={siguiente ? undefined : "Es el periodo más largo del tablero."}
+      action={
+        siguiente ? (
+          <Link href={direccionDeLaSalud(vista, siguiente)} className={buttonVariants({ variant: "secondary", size: "sm" })}>
+            Ver los últimos {siguiente} días
+          </Link>
+        ) : undefined
+      }
+    />
   );
 }

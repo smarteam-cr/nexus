@@ -4,16 +4,17 @@
  *
  * Una sola consulta, sin traer los textos: la clase de texto sale de `sqlClaseDeTexto` (el predicado único), y si tiene
  * minuta, de un EXISTS. Las canceladas sin nada no entran (`noEsCanceladaSinTextoSql`, U1): no ocurrieron. Con `soloDe`,
- * solo las que esa persona organizó o en las que estuvo invitada.
+ * el armado se queda con las que esa persona organizó o en las que estuvo invitada (la regla vive en un solo lugar, el
+ * armado), y de las MISMAS filas sale el porcentaje del equipo para comparar: nada se lee dos veces.
  *
  * No arma contexto para ningún agente (es un tablero de conteos, invariante 1 de CLAUDE.md): por eso lee
  * `FirefliesSession` directo, con la dueña de siempre (`resolvedClientId`, la manual solo si no hay).
  */
 import "server-only";
-import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { ROLE_LABEL } from "@/lib/auth/roles";
 import { encargadosDeLasCuentas } from "@/lib/cuentas/encargado-server";
+import { clientesQueNoAbre } from "@/lib/auth/access";
 import { dominiosDeLaCasa } from "@/lib/sessions/reuniones-para-seguimiento";
 import { noEsCanceladaSinTextoSql } from "@/lib/sessions/canceladas";
 import { sqlClaseDeTexto, type ClaseDeTexto } from "@/lib/sessions/tiene-texto";
@@ -21,13 +22,25 @@ import { armarSaludDeLasReuniones, type PeriodoDeLaSalud, type PersonaDelEquipo,
 
 const DIA_MS = 86_400_000;
 
-export async function saludDeLasReuniones(o: { dias: PeriodoDeLaSalud; soloDe?: string | null; ahora?: Date }): Promise<SaludDeLasReuniones> {
+export interface TableroDeLaSalud {
+  salud: SaludDeLasReuniones;
+  /** Con `soloDe`: el porcentaje de todo el equipo (solo el número). null sin `soloDe`. */
+  delEquipo: number | null;
+}
+
+export async function saludDeLasReuniones(o: {
+  dias: PeriodoDeLaSalud;
+  /** Solo las reuniones de esta persona (quien no es la líder de CS ni dirección). */
+  soloDe?: string | null;
+  /** Quien mira: sus reuniones de una empresa que no puede abrir van sin enlace. */
+  teamMemberId?: string | null;
+  /** La fila abierta con «Ver todas». */
+  verTodas?: string | null;
+  ahora?: Date;
+}): Promise<TableroDeLaSalud> {
   const ahora = o.ahora ?? new Date();
   const desde = new Date(+ahora - o.dias * DIA_MS);
   const soloDe = o.soloDe?.trim().toLowerCase() || null;
-  const filtroDeQuien = soloDe
-    ? Prisma.sql`AND (lower(s."organizerEmail") = ${soloDe} OR EXISTS (SELECT 1 FROM unnest(s."participants") p WHERE lower(p) = ${soloDe}))`
-    : Prisma.empty;
   const [filas, equipo, propios] = await Promise.all([
     prisma.$queryRaw<
       {
@@ -60,7 +73,6 @@ export async function saludDeLasReuniones(o: { dias: PeriodoDeLaSalud; soloDe?: 
       LEFT JOIN "Client" c ON c."id" = coalesce(s."resolvedClientId", s."manualClientId")
       WHERE s."date" >= ${desde} AND s."date" <= ${ahora}
         AND ${noEsCanceladaSinTextoSql("s")}
-        ${filtroDeQuien}
       ORDER BY s."date" DESC`,
     prisma.teamMember.findMany({ where: { deactivatedAt: null }, select: { email: true, name: true, area: true, roleEnum: true } }),
     dominiosDeLaCasa(),
@@ -87,6 +99,13 @@ export async function saludDeLasReuniones(o: { dias: PeriodoDeLaSalud; soloDe?: 
     canceladaEn: f.canceladaEn,
   }));
   const empresas = [...new Set(reuniones.map((r) => r.empresaId).filter((x): x is string => !!x))];
-  const encargadas = new Map([...(await encargadosDeLasCuentas(empresas))].map(([id, e]) => [id, e.nombre ?? (e.deBaja ? `${e.deBaja} (de baja)` : null)]));
-  return armarSaludDeLasReuniones(reuniones, { ahora, propios, equipo: personas, encargadas, soloDe });
+  const [porEmpresa, noAbre] = await Promise.all([
+    encargadosDeLasCuentas(empresas),
+    o.teamMemberId ? clientesQueNoAbre(o.teamMemberId, empresas) : Promise.resolve(new Set<string>()),
+  ]);
+  const encargadas = new Map([...porEmpresa].map(([id, e]) => [id, e.nombre ?? (e.deBaja ? `${e.deBaja} (de baja)` : null)]));
+  const ctx = { ahora, propios, equipo: personas, encargadas, empresasQueNoAbre: noAbre, verTodas: o.verTodas ?? null };
+  const salud = armarSaludDeLasReuniones(reuniones, { ...ctx, soloDe });
+  const delEquipo = soloDe ? armarSaludDeLasReuniones(reuniones, ctx).totales.porcentaje : null;
+  return { salud, delEquipo };
 }

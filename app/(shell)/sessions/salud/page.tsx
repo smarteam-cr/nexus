@@ -7,7 +7,8 @@
  *
  * Quién ve qué (el gate): la líder de Customer Success y dirección (`esLiderDeCs`, lib/cs/acceso.ts, por rol y fuera de
  * la matriz, como el resto del área) ven a todo el equipo; cada persona del equipo ve solo las suyas (las que organizó o
- * a las que la invitaron), también en los números. Son hechos: ninguna IA en esta pantalla.
+ * a las que la invitaron), también en los números. Una reunión de una empresa que quien mira no puede abrir se ve sin
+ * enlace (su página daría «no encontrada»). `?todas=<fila>` abre todas las reuniones de esa fila. Son hechos: ninguna IA.
  */
 import Link from "next/link";
 import { redirect } from "next/navigation";
@@ -36,10 +37,12 @@ export default async function SaludDeLasReunionesPage({ searchParams }: { search
   const email = ctx.teamMember.email.toLowerCase();
   const ahora = new Date();
 
-  const salud = await saludDeLasReuniones({ dias, soloDe: veTodo ? null : email, ahora });
-  // Quien ve solo las suyas, contra el equipo: el porcentaje de todos (solo el número, nada por persona).
-  const delEquipo = veTodo ? null : (await saludDeLasReuniones({ dias, ahora })).totales.porcentaje;
+  const verTodas = primero(sp.todas) ?? null;
+  // Quien ve solo las suyas tiene, para comparar, el porcentaje de todo el equipo (solo el número, nada por persona).
+  const { salud, delEquipo } = await saludDeLasReuniones({ dias, soloDe: veTodo ? null : email, teamMemberId: ctx.teamMember.id, verTodas, ahora });
   const t = salud.totales;
+  const vencidas = t.sinEmpresaVencidas;
+  const nav = { vista, dias };
 
   return (
     <div className={cn(SHELL_DEFAULT, "space-y-6")}>
@@ -57,11 +60,18 @@ export default async function SaludDeLasReunionesPage({ searchParams }: { search
       />
 
       {t.sinEmpresaVencidas > 0 && (
-        <Alert variant="warning" title={`${t.sinEmpresaVencidas} ${veTodo ? "" : "de tus "}reuniones con texto llevan más de ${HORAS_SIN_EMPRESA} horas sin empresa.`}>
+        <Alert
+          variant="warning"
+          title={
+            vencidas === 1
+              ? `${veTodo ? "Una reunión" : "Una de tus reuniones"} con texto lleva más de ${HORAS_SIN_EMPRESA} horas sin empresa.`
+              : `${vencidas} ${veTodo ? "" : "de tus "}reuniones con texto llevan más de ${HORAS_SIN_EMPRESA} horas sin empresa.`
+          }
+        >
           Hasta que alguien decida de quién son, lo que se habló no entra al contexto de ningún cliente.{" "}
           {vista !== "sin-empresa" && (
             <Link href={direccionDeLaSalud("sin-empresa", dias)} className="font-semibold underline">
-              Ver las {t.sinEmpresaVencidas} →
+              {vencidas === 1 ? "Verla →" : `Verlas (primero las de más de ${HORAS_SIN_EMPRESA} horas) →`}
             </Link>
           )}
         </Alert>
@@ -78,9 +88,10 @@ export default async function SaludDeLasReunionesPage({ searchParams }: { search
             titulo="Reuniones de cada persona"
             ayuda="Cuenta las que organizó o a las que la invitaron. Primero, quien dejó menos texto."
             filas={salud.personas}
+            nav={nav}
           />
         ) : (
-          <TusReuniones reuniones={salud.reuniones} />
+          <TusReuniones reuniones={salud.reuniones} dias={dias} />
         ))}
       {vista === "empresas" && (
         <TablaDeGrupos
@@ -88,9 +99,10 @@ export default async function SaludDeLasReunionesPage({ searchParams }: { search
           titulo="Reuniones de cada empresa"
           ayuda={`${salud.empresas.length} ${salud.empresas.length === 1 ? "empresa tuvo" : "empresas tuvieron"} reuniones en estos ${dias} días. Primero, las que dejaron menos texto.`}
           filas={salud.empresas}
+          nav={nav}
         />
       )}
-      {vista === "motivos" && <MotivosSinTexto grupos={salud.motivos} total={t.sinNada} />}
+      {vista === "motivos" && <MotivosSinTexto grupos={salud.motivos} total={t.sinNada} nav={nav} />}
       {vista === "sin-empresa" && <ReunionesSinEmpresa reuniones={salud.sinEmpresa} />}
     </div>
   );

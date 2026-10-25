@@ -12,12 +12,13 @@ import { esReunionDePuertasAdentro } from "@/lib/sessions/candidatas-internas";
 import { esRecursoDeCalendario } from "@/lib/sessions/dominio-propio";
 import { DONDE_PUEDE_TENER_TEXTO, claseDeTexto } from "@/lib/sessions/tiene-texto";
 import { DIAS_DE_FRESCURA } from "@/lib/lecturas/reglas";
+import { HORAS_SIN_EMPRESA, vencioSinEmpresa } from "@/lib/sessions/salud-de-las-reuniones";
 import { cumple, viola, type Invariante } from "./contrato";
 import type { PrismaClient } from "@prisma/client";
 
 const DIA_MS = 86_400_000;
-/** Cuánto puede esperar una reunión con texto a que alguien le ponga empresa. */
-export const HORAS_SIN_EMPRESA = 48;
+/** Cuánto puede esperar una reunión con texto a que alguien le ponga empresa: la regla del tablero de salud (T1). */
+export { HORAS_SIN_EMPRESA };
 
 /**
  * ⚠ INV47 nació «no bloquea» (2026-10-24): el día que se escribió contaba reuniones de FACO (facocr.com, de Honda Costa
@@ -59,7 +60,7 @@ export async function reunionesConTextoSinEmpresa(db: PrismaClient, ahora: Date)
       select: { id: true, title: true, date: true, enrichedAt: true, participants: true, organizerEmail: true },
       orderBy: { date: "desc" },
     })
-  ).filter((s) => +s.date >= +desde && +s.date <= +ahora && !!s.enrichedAt && +s.enrichedAt <= +llegoAntesDe);
+  ).filter((s) => +s.date >= +desde && +s.date <= +ahora && vencioSinEmpresa(s, ahora));
   if (!candidatas.length) return [];
 
   const propios = buildInternalDomainsSet(await db.sessionCategory.findMany({ select: { domains: true, kind: true } }));

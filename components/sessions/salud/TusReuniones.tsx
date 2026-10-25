@@ -6,8 +6,8 @@
  */
 import { useState } from "react";
 import { Segmentado } from "@/components/ui";
-import type { ReunionVista } from "@/lib/sessions/salud-de-las-reuniones";
-import { ListaDeReuniones } from "./TableroDeSalud";
+import type { PeriodoDeLaSalud, ReunionVista } from "@/lib/sessions/salud-de-las-reuniones";
+import { ListaDeReuniones, VacioDelPeriodo } from "./TableroDeSalud";
 
 type Filtro = "todas" | "nada" | "sin_empresa" | "sin_leer";
 
@@ -18,10 +18,17 @@ const PASA: Record<Filtro, (r: ReunionVista) => boolean> = {
   sin_leer: (r) => r.leida === false,
 };
 
-const TOPE = 100;
+const TOPE = 500;
 
-export default function TusReuniones({ reuniones }: { reuniones: readonly ReunionVista[] }) {
+export default function TusReuniones({ reuniones, dias }: { reuniones: readonly ReunionVista[]; dias: PeriodoDeLaSalud }) {
   const [filtro, setFiltro] = useState<Filtro>("todas");
+  if (!reuniones.length) {
+    return (
+      <section aria-label="Tus reuniones" className="rounded-2xl border border-line bg-surface p-6">
+        <VacioDelPeriodo dias={dias} vista="personas" tuyas />
+      </section>
+    );
+  }
   const cuenta = (f: Filtro) => reuniones.filter(PASA[f]).length;
   const vistas = reuniones.filter(PASA[filtro]);
   return (

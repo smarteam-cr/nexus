@@ -19,12 +19,25 @@ import type { ClaseDeTexto } from "@/lib/sessions/tiene-texto";
 export const PERIODOS_DE_LA_SALUD = [14, 30, 90] as const;
 export type PeriodoDeLaSalud = (typeof PERIODOS_DE_LA_SALUD)[number];
 
-/** La meta del equipo: el 90 % de las reuniones con empresa deja texto (el indicador 4 del roadmap). */
+/**
+ * La meta del equipo: el 90 % de las reuniones con empresa deja texto. Es la meta del indicador 4 del roadmap, pero el
+ * número del tablero NO es el indicador 4: este cuenta toda reunión con alguien de fuera y su empresa (también aliados y
+ * las de hoy); el indicador lo mide scripts/medir-transcripciones-faltantes.ts con el criterio de «Uso de Nexus».
+ */
 export const META_DE_TEXTO = 90;
-/** A las 48 horas sin empresa, una reunión con texto ya es un problema (INV47). */
+/**
+ * A las 48 horas sin empresa, una reunión con texto ya es un problema. LA regla de INV47 (lib/invariantes/reuniones.ts
+ * la usa tal cual): se cuenta desde que llegó su texto (`enrichedAt`) y vence al cumplir las 48 horas. Una sin
+ * `enrichedAt` no tiene texto que haya llegado: no vence.
+ */
 export const HORAS_SIN_EMPRESA = 48;
+export function vencioSinEmpresa(r: { enrichedAt: Date | null }, ahora: Date): boolean {
+  return !!r.enrichedAt && +ahora - +r.enrichedAt >= HORAS_SIN_EMPRESA * 3_600_000;
+}
 /** Cuántas reuniones se muestran al abrir una fila (las más recientes). */
 export const REUNIONES_POR_FILA = 20;
+/** Con «Ver todas», hasta cuántas (las de una persona en 90 días pueden ser cientos). */
+export const REUNIONES_CON_VER_TODAS = 500;
 
 export const VISTAS_DE_LA_SALUD = ["personas", "empresas", "motivos", "sin-empresa"] as const;
 export type VistaDeLaSalud = (typeof VISTAS_DE_LA_SALUD)[number];
@@ -74,6 +87,8 @@ export interface ReunionVista {
   motivo: string | null;
   organizo: string | null;
   delEquipo: string[];
+  /** Quien mira puede abrir su página (la de un cliente que no le toca da «no encontrada»). */
+  enlace: boolean;
 }
 
 export interface Conteo {
@@ -205,6 +220,10 @@ export function armarSaludDeLasReuniones(
     equipo: ReadonlyMap<string, PersonaDelEquipo>;
     encargadas?: ReadonlyMap<string, string | null>;
     soloDe?: string | null;
+    /** Las empresas cuyas reuniones quien mira no puede abrir: su fila va sin enlace. */
+    empresasQueNoAbre?: ReadonlySet<string>;
+    /** La clave de la fila (persona, empresa o motivo) que se abrió con «Ver todas». */
+    verTodas?: string | null;
   },
 ): SaludDeLasReuniones {
   const soloDe = norm(ctx.soloDe);
@@ -218,7 +237,8 @@ export function armarSaludDeLasReuniones(
     .sort((a, b) => +b.fecha - +a.fecha);
 
   const nombreDe = (e: string | null) => (e ? (ctx.equipo.get(norm(e))?.nombre ?? e) : null);
-  const vencidaDe = (r: ReunionParaLaSalud) => !r.empresaId && horasEsperando(r, ctx.ahora) > HORAS_SIN_EMPRESA;
+  const vencidaDe = (r: ReunionParaLaSalud) => !r.empresaId && vencioSinEmpresa(r, ctx.ahora);
+  const tope = (clave: string) => (ctx.verTodas === clave ? REUNIONES_CON_VER_TODAS : REUNIONES_POR_FILA);
   const vista = (r: ReunionParaLaSalud): ReunionVista => {
     const estado = estadoDe(r);
     const motivo =
@@ -237,6 +257,7 @@ export function armarSaludDeLasReuniones(
       motivo,
       organizo: nombreDe(r.organizador),
       delEquipo: deQuien(r).map((e) => ctx.equipo.get(e)!.nombre),
+      enlace: !r.empresaId || !ctx.empresasQueNoAbre?.has(r.empresaId),
     };
   };
 
@@ -274,7 +295,7 @@ export function armarSaludDeLasReuniones(
     nombre,
     detalle,
     total: g.c.conEmpresa + g.c.sinEmpresa,
-    reuniones: g.rs.slice(0, REUNIONES_POR_FILA).map(vista),
+    reuniones: g.rs.slice(0, tope(clave)).map(vista),
   });
 
   const personas = [...porPersona].map(([e, g]) => fila(e, ctx.equipo.get(e)!.nombre, ctx.equipo.get(e)!.detalle, g)).sort(ordenar);
@@ -285,7 +306,7 @@ export function armarSaludDeLasReuniones(
     return {
       dueno,
       cuantas: de.reduce((s, [, rs]) => s + rs.length, 0),
-      motivos: de.map(([m, rs]) => ({ motivo: m, texto: DE_QUIEN_ES[m].texto, cuantas: rs.length, reuniones: rs.slice(0, REUNIONES_POR_FILA).map(vista) })),
+      motivos: de.map(([m, rs]) => ({ motivo: m, texto: DE_QUIEN_ES[m].texto, cuantas: rs.length, reuniones: rs.slice(0, tope(m)).map(vista) })),
     };
   }).filter((g) => g.cuantas > 0);
 
@@ -297,7 +318,7 @@ export function armarSaludDeLasReuniones(
       return {
         ...vista(r),
         horasEsperando: horas,
-        vencida: horas > HORAS_SIN_EMPRESA,
+        vencida: vencioSinEmpresa(r, ctx.ahora),
         texto: r.clase === "solo_notas" ? ("solo_notas" as const) : ("transcripcion" as const),
         deFuera: { primero: fuera[0] ?? "", cuantos: fuera.length, dominios: [...new Set(fuera.map(dominioDe))] },
       };
@@ -308,16 +329,18 @@ export function armarSaludDeLasReuniones(
 }
 
 /** La dirección de una vista y un periodo del tablero (las pestañas y el periodo viven en la URL). */
-export function direccionDeLaSalud(vista: VistaDeLaSalud, dias: PeriodoDeLaSalud): string {
+export function direccionDeLaSalud(vista: VistaDeLaSalud, dias: PeriodoDeLaSalud, verTodas?: string | null): string {
   const q = new URLSearchParams();
   if (vista !== "personas") q.set("vista", vista);
   if (dias !== 14) q.set("dias", String(dias));
+  if (verTodas) q.set("todas", verTodas);
   const s = q.toString();
   return `/sessions/salud${s ? `?${s}` : ""}`;
 }
 
 /** Lee la vista y el periodo de la URL; lo que no es válido cae al de siempre. */
 export function leerVistaDeLaSalud(p: { vista?: string | null; dias?: string | null }): { vista: VistaDeLaSalud; dias: PeriodoDeLaSalud } {
+  // (`?todas=` lo lee la página aparte: es la clave de una fila, sin validar contra nada que no sea la fila misma.)
   const vista = (VISTAS_DE_LA_SALUD as readonly string[]).includes(p.vista ?? "") ? (p.vista as VistaDeLaSalud) : "personas";
   const n = Number(p.dias);
   const dias = (PERIODOS_DE_LA_SALUD as readonly number[]).includes(n) ? (n as PeriodoDeLaSalud) : 14;

@@ -1,10 +1,13 @@
 import { describe, expect, it } from "vitest";
+import fs from "node:fs";
+import path from "node:path";
 import {
   armarSaludDeLasReuniones,
   conAlguienDeFuera,
   cuantoEspera,
   direccionDeLaSalud,
   leerVistaDeLaSalud,
+  vencioSinEmpresa,
   type PersonaDelEquipo,
   type ReunionParaLaSalud,
 } from "./salud-de-las-reuniones";
@@ -157,5 +160,57 @@ describe("la dirección de cada vista", () => {
     expect(direccionDeLaSalud("motivos", 30)).toBe("/sessions/salud?vista=motivos&dias=30");
     expect(leerVistaDeLaSalud({ vista: "sin-empresa", dias: "90" })).toEqual({ vista: "sin-empresa", dias: 90 });
     expect(leerVistaDeLaSalud({ vista: "otra", dias: "7" })).toEqual({ vista: "personas", dias: 14 });
+  });
+});
+
+describe("lo que la revisión pidió cuidar", () => {
+  it("«solo las tuyas» incluye las reuniones a las que te invitaron sin organizarlas", () => {
+    const s = armar([reunion({ organizador: MARCO, participantes: [MARCO, LIZ, "ana@cliente.test"] })], LIZ);
+    expect(s.reuniones).toHaveLength(1);
+    expect(s.totales.conEmpresa).toBe(1);
+  });
+
+  it("una reunión de puertas adentro no entra a los números aunque tenga empresa y texto", () => {
+    const s = armar([reunion({ organizador: LIZ, participantes: [LIZ, MARCO] }), reunion()]);
+    expect(s.totales.conEmpresa).toBe(1);
+    expect(s.reuniones).toHaveLength(1);
+  });
+
+  it("sin reuniones con empresa, la persona va al final; los motivos, del más común al menos", () => {
+    const s = armar([
+      reunion({ organizador: MARCO, participantes: [MARCO, "ana@cliente.test"], empresaId: null, empresa: null }),
+      reunion({ organizador: LIZ, participantes: [LIZ, "ana@cliente.test"], clase: "nada", googleDocId: "doc" }),
+      reunion({ organizador: LIZ, participantes: [LIZ, "ana@cliente.test"], clase: "nada", googleDocId: null }),
+      reunion({ organizador: LIZ, participantes: [LIZ, "ana@cliente.test"], clase: "nada", googleDocId: null }),
+    ]);
+    expect(s.personas.map((p) => p.nombre)).toEqual(["Liz Navarro", "Marco Rojas"]);
+    expect(s.motivos[0].motivos.map((m) => [m.motivo, m.cuantas])).toEqual([
+      ["no_se_grabo", 2],
+      ["documento_vacio", 1],
+    ]);
+  });
+
+  it("las 48 horas: la MISMA regla que INV47 (desde que llegó el texto; a las 48 en punto ya vence)", () => {
+    expect(vencioSinEmpresa({ enrichedAt: hace(48) }, AHORA)).toBe(true);
+    expect(vencioSinEmpresa({ enrichedAt: hace(47.9) }, AHORA)).toBe(false);
+    expect(vencioSinEmpresa({ enrichedAt: null }, AHORA)).toBe(false);
+    const inv47 = fs.readFileSync(path.resolve(__dirname, "../invariantes/reuniones.ts"), "utf8");
+    expect(inv47).toContain('import { HORAS_SIN_EMPRESA, vencioSinEmpresa } from "@/lib/sessions/salud-de-las-reuniones";');
+    expect(inv47).toContain("vencioSinEmpresa(s, ahora)");
+  });
+
+  it("una reunión de una empresa que quien mira no abre va sin enlace; con «Ver todas» se abre la fila entera", () => {
+    const filas = Array.from({ length: 25 }, () => reunion());
+    const s = armarSaludDeLasReuniones(filas, { ahora: AHORA, propios: PROPIOS, equipo: EQUIPO, empresasQueNoAbre: new Set(["c1"]), verTodas: LIZ });
+    expect(s.reuniones.every((r) => r.enlace === false)).toBe(true);
+    expect(s.personas.find((p) => p.clave === LIZ)?.reuniones).toHaveLength(25);
+    expect(s.empresas[0].reuniones).toHaveLength(20);
+  });
+
+  it("⛔ la página: solo la líder de CS y dirección ven a todo el equipo; el resto, solo las suyas", () => {
+    const pagina = fs.readFileSync(path.resolve(__dirname, "../../app/(shell)/sessions/salud/page.tsx"), "utf8");
+    expect(pagina).toContain("const veTodo = esLiderDeCs(ctx.role);");
+    expect(pagina).toContain("soloDe: veTodo ? null : email");
+    expect(pagina).toContain("teamMemberId: ctx.teamMember.id");
   });
 });
