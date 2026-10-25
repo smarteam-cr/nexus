@@ -22,6 +22,7 @@ import {
 } from "./index";
 import { INV49 } from "./google";
 import { INV55, INV55_BLOQUEA } from "./smartloop";
+import { INV51 } from "./empresa";
 import { InvariantesVioladosError, JOB_INVARIANTES, correrJobDeInvariantes, mensajeDeViolaciones } from "./job";
 import { invariantesOkDesde, leerInvariantesOk } from "./salud";
 import { DONDE_PUEDE_TENER_TEXTO } from "@/lib/sessions/tiene-texto";
@@ -824,9 +825,9 @@ describe("el registro y el consumidor", () => {
       // texto sin empresa (T1, 2026-10-24). 48 vive en el script.
       "44", "45", "46", "47",
       // 49: la frescura de la copia de Google Meet (U1, 2026-10-25); 50, el historial de Partner y la comisión de
-      // HubSpot (U25 y U29, 2026-10-25).
-      "49", "50",
-      // 55: ningún proyecto de SmartLoop dice ser «proyecto_temporal» (M1, 2026-10-25). 51–54, de otras sesiones.
+      // HubSpot (U25 y U29); 51, cada documento tiene un dueño y ninguna persona del cliente es del equipo (la empresa,
+      // parte 2); 55, ningún proyecto de SmartLoop dice ser «proyecto_temporal» (M1). Todas del 2026-10-25.
+      "49", "50", "51",
       "55",
     ]);
     expect(new Set(INVARIANTES_SOLO_BASE.map((i) => i.id)).size).toBe(INVARIANTES_SOLO_BASE.length);
@@ -955,6 +956,34 @@ describe("/api/health expone UN booleano de invariantes, y nada más (B-09)", ()
     expect((src.match(/ok = false/g) ?? []).length, "solo los tres checks de infraestructura apagan el ok").toBe(3);
     expect(src).not.toMatch(/invariantesOk\s*(&&|\|\||\?)/);
     expect(src).not.toMatch(/\.(lineas|error|resultados)\b/);
+  });
+});
+
+describe("INV51 (la empresa, parte 2)", () => {
+  it("un documento sin dueño o una persona del cliente que es del equipo lo ponen en rojo", async () => {
+    const equipo = [{ email: "Eli@Smarteamcr.com" }];
+    expect((await INV51.correr(baseFalsa({ teamMember: equipo, projectCanvas: 0, personaDeLaEmpresa: 0 }), AHORA)).ok).toBe(true);
+    expect((await INV51.correr(baseFalsa({ teamMember: equipo, projectCanvas: 2, personaDeLaEmpresa: 0 }), AHORA)).lineas[0]).toContain("2 documento(s) sin dueño");
+    const llamadas: Llamada[] = [];
+    const r = await INV51.correr(baseFalsa({ teamMember: equipo, projectCanvas: 0, personaDeLaEmpresa: 1 }, llamadas), AHORA);
+    expect(r.ok).toBe(false);
+    expect(where(llamadas, "personaDeLaEmpresa", "count")).toEqual({ correo: { in: ["eli@smarteamcr.com"] }, vigente: true });
+  });
+
+  it("sin el SQL de la parte 2 dice qué archivo falta, en vez de cortar el gate", async () => {
+    const sinTabla = Object.assign(new Error("The table `public.PersonaDeLaEmpresa` does not exist in the current database."), { code: "P2021" });
+    const base = new Proxy({}, {
+      get: (_, modelo) => ({
+        findMany: async () => [{ email: "a@b.com" }],
+        count: async () => {
+          if (modelo === "personaDeLaEmpresa") throw sinTabla;
+          return 0;
+        },
+      }),
+    }) as unknown as Parameters<typeof INV51.correr>[0];
+    const r = await INV51.correr(base, AHORA);
+    expect(r.ok).toBe(false);
+    expect(r.lineas[0]).toContain("2026-10-25-empresa-parte-2.sql");
   });
 });
 

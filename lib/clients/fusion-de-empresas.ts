@@ -109,6 +109,12 @@ export const SE_MUDAN = [
      sus datos, sus propuestas y sus investigaciones. Sin único con la ficha: las dos historias conviven. */
   ["propuestaDeDato", "clientId"],
   ["investigacionDeEmpresa", "clientId"],
+  /* La empresa, parte 2 (2026-10-25). Los documentos de la empresa sin proyecto (R3): `onDelete: Cascade`. ⚠ Si las dos
+     fichas tienen el mismo documento de la empresa (la misma pieza), el único parcial (clientId, slug) frena la fusión:
+     se archiva uno antes. El cliente ideal y las buyer personas de la empresa que usa Nexus (R13): `onDelete: SetNull`. */
+  ["projectCanvas", "clientId"],
+  ["icpItem", "clientId"],
+  ["buyerPersona", "clientId"],
   /* Sin relación en el esquema: la base no las cascadea ni las protege (lib/db/punteros-al-borrar.test.ts). */
   ["firefliesSession", "resolvedClientId"],
   ["firefliesSession", "manualClientId"],
@@ -130,6 +136,9 @@ export const SIN_CHOCAR = [
      queda la fila de la que sigue y la copia de la hora siguiente la pone al día. */
   { modelo: "contactoDeHubspot", clave: ["hubspotId"], etiqueta: "contactos de HubSpot" },
   { modelo: "ticketDeHubspot", clave: ["hubspotId"], etiqueta: "tickets de HubSpot" },
+  /* Una persona del cliente (R6, 2026-10-25): la misma persona en las dos fichas queda la de la que sigue; la copia la
+     vuelve a armar desde las fuentes. */
+  { modelo: "personaDeLaEmpresa", clave: ["correo"], etiqueta: "personas de la empresa" },
 ] as const;
 
 /**
@@ -138,7 +147,7 @@ export const SIN_CHOCAR = [
  * cartera NO es una copia: la confirmó una persona, así que la que sigue toma de la otra lo que no tiene confirmado
  * (`plegarClasificacion`).
  */
-export const UNO_A_UNO = ["hubspotAccount", "clientCsSignals", "clientPartnerSnapshot", "csAccountBrief", "clasificacionDeCuenta"] as const;
+export const UNO_A_UNO = ["hubspotAccount", "clientCsSignals", "clientPartnerSnapshot", "csAccountBrief", "clasificacionDeCuenta", "perfilDeLaEmpresa"] as const;
 
 /** Lo que cuelga de la cuenta de cobro (por `cuentaId`): se muda a la cuenta de la que sigue cuando las dos tienen. */
 export const DE_LA_CUENTA = [

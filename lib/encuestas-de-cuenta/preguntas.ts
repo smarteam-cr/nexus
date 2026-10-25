@@ -7,7 +7,11 @@
  * Sumar una pregunta = una entrada acá (la burbuja, los resultados y la exportación salen solos). Cambiar lo que
  * pregunta = subir `version`: a quien ya respondió se le vuelve a preguntar, y cada respuesta guarda la versión y el
  * texto con que se hizo (RespuestaDeCuenta), así lo viejo se sigue leyendo bien.
+ *
+ * Desde el 2026-10-25 hay un segundo tipo: lo que falta de los DATOS de la empresa, con opciones y una propuesta de Nexus
+ * (preguntas-de-datos.ts). Esas no van en este registro ni en los resultados de Feedback: su resultado es el dato mismo.
  */
+import type { PropuestaDeNexus } from "./preguntas-de-datos";
 
 export const VALORES_DE_RESPUESTA = ["si", "no", "no_se"] as const;
 export type ValorDeRespuesta = (typeof VALORES_DE_RESPUESTA)[number];
@@ -57,7 +61,12 @@ export interface PreguntaParaMostrar {
   version: number;
   pregunta: string;
   descripcion: string;
-  respuestas: { valor: ValorDeRespuesta; rotulo: string }[];
+  /** En una de Sí o No, si · no · no_se; en una de datos, las opciones del dato y no_se. */
+  respuestas: { valor: string; rotulo: string }[];
+  /** si-no = la de Customer Success (este registro); dato = lo que falta de la empresa (preguntas-de-datos.ts). */
+  tipo: "si-no" | "dato";
+  /** Solo en las de datos: lo que Nexus propone responder, para que la persona solo confirme. */
+  propuesta: PropuestaDeNexus | null;
   /** Por qué se pregunta otra vez (para decirlo en la burbuja). */
   motivo: "nunca" | "no-sabia" | "despues" | "version-nueva";
   /** El nombre del cliente, para la burbuja. */

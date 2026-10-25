@@ -34,8 +34,11 @@ export interface ClientInfoProjectRef {
  * tabs de proyectos.
  */
 export async function ensureClientInfoProject(clientId: string): Promise<ClientInfoProjectRef> {
+  // Siempre el MISMO, el más viejo (R4, 2026-10-25): tres empresas tenían más de uno y, sin orden, cada búsqueda tomaba
+  // el que daba la base. scripts/unir-informacion-del-cliente-repetida.ts deja uno solo, y es este.
   const existing = await prisma.project.findFirst({
     where: { clientId, serviceType: SENTINEL_SERVICE_TYPE },
+    orderBy: [{ createdAt: "asc" }, { id: "asc" }],
     select: { id: true },
   });
 

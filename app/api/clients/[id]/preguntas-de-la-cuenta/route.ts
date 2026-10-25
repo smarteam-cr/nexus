@@ -3,13 +3,16 @@
  *
  * GET  → { pregunta } la que le toca a quien entra, o null (el servidor decide: rol, cliente de cartera, activa, y
  *        cuándo volver a preguntar). Nunca falla por falta de tablas: sin ellas, null.
- * POST → guarda un evento (mostrada · respondida · ahora_no). APPEND-ONLY.
+ * POST → guarda un evento (mostrada · respondida · ahora_no). APPEND-ONLY. Una respuesta a una pregunta de datos
+ *        (`dato:<dato>`, R2 etapa 3) además deja el dato y lo escribe en HubSpot con la bandera (`hubspot`).
  * Pide acceso al cliente. Ver lib/encuestas-de-cuenta/.
  */
 import { NextRequest, NextResponse } from "next/server";
 import { guardAccessToClient } from "@/lib/auth/api-guards";
 import { eventoDePreguntaSchema } from "@/lib/encuestas-de-cuenta/schema";
 import { ErrorDePreguntas, preguntaPendiente, registrarEvento } from "@/lib/encuestas-de-cuenta/servidor";
+import { can } from "@/lib/auth/permissions/engine";
+import { ErrorDeDato } from "@/lib/clients/datos-de-la-empresa-server";
 
 type Params = Promise<{ id: string }>;
 
@@ -18,7 +21,9 @@ export async function GET(_req: NextRequest, { params }: { params: Params }) {
   const guard = await guardAccessToClient(id);
   if (guard instanceof NextResponse) return guard;
   try {
-    const pregunta = await preguntaPendiente({ clientId: id, email: guard.user.email, rol: guard.user.teamMember?.roleEnum ?? null });
+    const tm = guard.user.teamMember;
+    const puedeDecidirDatos = tm ? await can(tm, "clientes", "decidirDatos") : false;
+    const pregunta = await preguntaPendiente({ clientId: id, email: guard.user.email, rol: tm?.roleEnum ?? null, puedeDecidirDatos });
     return NextResponse.json({ pregunta }, { headers: { "Cache-Control": "no-store" } });
   } catch (e) {
     console.error("[clients/preguntas-de-la-cuenta]", e);
@@ -39,16 +44,19 @@ export async function POST(req: NextRequest, { params }: { params: Params }) {
   const parsed = eventoDePreguntaSchema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Datos inválidos." }, { status: 400 });
   try {
+    const tm = guard.user.teamMember;
     const r = await registrarEvento({
       clientId: id,
       email: guard.user.email,
-      rol: guard.user.teamMember?.roleEnum ?? null,
+      rol: tm?.roleEnum ?? null,
       motivoDeAcceso: guard.reason,
+      teamMemberId: tm?.id ?? null,
+      puedeDecidirDatos: tm ? await can(tm, "clientes", "decidirDatos") : false,
       ...parsed.data,
     });
     return NextResponse.json(r);
   } catch (e) {
-    if (e instanceof ErrorDePreguntas) return NextResponse.json({ error: e.message }, { status: e.status });
+    if (e instanceof ErrorDePreguntas || e instanceof ErrorDeDato) return NextResponse.json({ error: e.message }, { status: e.status });
     console.error("[clients/preguntas-de-la-cuenta]", e);
     return NextResponse.json({ error: "No se pudo guardar la respuesta." }, { status: 500 });
   }

@@ -3,19 +3,22 @@
  *
  * Escrituras Prisma del módulo Marketing + Contenido (server-only). Los
  * endpoints validan el input con Zod (lib/marketing/schema.ts) ANTES de llamar
- * acá. Single-tenant: nada cuelga de Client.
+ * acá. Casi todo es single-tenant; el cliente ideal y las buyer personas, desde el 2026-10-25 (R13), cuelgan de la
+ * ficha de la empresa que usa Nexus (lib/smarteam/contexto.ts › empresaQueUsaNexus): lo nuevo nace con ella.
  */
 import { prisma } from "@/lib/db/prisma";
 import type { IcpSection, Prisma, TeamRole } from "@prisma/client";
 import { resolveUsageTarget, type MarketingUsageTargetValue } from "./schema";
+import { empresaQueUsaNexus } from "@/lib/smarteam/contexto";
 
 // ── ICP ────────────────────────────────────────────────────────────────────────
 
 export async function createIcpItem(section: IcpSection, label: string) {
   // order = al final de su sección
   const max = await prisma.icpItem.aggregate({ where: { section }, _max: { order: true } });
+  const empresa = await empresaQueUsaNexus();
   return prisma.icpItem.create({
-    data: { section, label, order: (max._max.order ?? -1) + 1 },
+    data: { section, label, order: (max._max.order ?? -1) + 1, clientId: empresa?.id ?? null },
   });
 }
 
@@ -29,8 +32,9 @@ export async function deleteIcpItem(id: string) {
 
 // ── Buyer personas ─────────────────────────────────────────────────────────────
 
-export async function createPersona(data: Prisma.BuyerPersonaCreateInput) {
-  return prisma.buyerPersona.create({ data });
+export async function createPersona(data: Omit<Prisma.BuyerPersonaUncheckedCreateInput, "clientId">) {
+  const empresa = await empresaQueUsaNexus();
+  return prisma.buyerPersona.create({ data: { ...data, clientId: empresa?.id ?? null } });
 }
 export async function updatePersona(id: string, data: Prisma.BuyerPersonaUpdateInput) {
   return prisma.buyerPersona.update({ where: { id }, data });

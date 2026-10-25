@@ -22,7 +22,8 @@ import type { Prisma } from "@prisma/client";
 import { revalidateClientsSidebar } from "@/lib/cache/clients";
 import { guardAccessToClient, guardPermission } from "@/lib/auth/api-guards";
 import { parseClientKind, parseTamUsd } from "@/lib/clients/kind";
-import { ErrorDeDato, proponerDatoEnTx } from "@/lib/clients/datos-de-la-empresa-server";
+import { ErrorDeDato, proponerDatoEnTx, type ResultadoDelDato } from "@/lib/clients/datos-de-la-empresa-server";
+import { escribirEnHubspot } from "@/lib/clients/escritura-en-hubspot-server";
 
 export async function PATCH(
   request: NextRequest,
@@ -70,10 +71,11 @@ export async function PATCH(
   }
 
   let updated;
+  let delTam: ResultadoDelDato[] = [];
   try {
     updated = await prisma.$transaction(async (tx) => {
       if (tamUsd !== undefined) {
-        await proponerDatoEnTx(tx, {
+        delTam = await proponerDatoEnTx(tx, {
           clientId: id,
           clave: "tamUsd",
           valor: tamUsd,
@@ -93,11 +95,15 @@ export async function PATCH(
   // pero re-clasificar cambia quién es cliente: se invalida igual, como el resto de las
   // mutaciones de Client, para que el día que vuelva a leerse no nazca desfasado.
   revalidateClientsSidebar();
+  // El TAM que corrigió una persona va a HubSpot (R2, con la bandera), después de la transacción.
+  const hubspot = delTam.length ? await escribirEnHubspot(id, delTam) : undefined;
 
   return NextResponse.json({
     id: updated.id,
     kind: updated.kind,
     // Prisma.Decimal no es serializable: se cruza a number en la frontera, acá.
     tamUsd: updated.tamUsd === null ? null : Number(updated.tamUsd),
+    // Cómo le fue a HubSpot con el TAM (R2): `fallo` = quedó en Nexus y HubSpot sigue con el de antes.
+    ...(hubspot ? { hubspot } : {}),
   });
 }

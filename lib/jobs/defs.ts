@@ -25,6 +25,8 @@
  *     muestra los cierres más cerca y la cartera desde esta copia.
  *   - contactos-y-tickets → la copia de los contactos y los tickets de HubSpot de las empresas de Nexus
  *     (lib/contactos/copia-server.ts), cada hora de 6:00 a 20:00 CR, todos los días (etapa 6a de docs/mi-dia-plan.md).
+ *   - empresa-copia-de-hubspot → lo que cambió en la empresa de HubSpot vuelve a los datos de la empresa en Nexus
+ *     (lib/clients/copia-de-hubspot-server.ts, R2), cada hora de 6:00 a 20:00 CR. Gated por EMPRESA_HUBSPOT_COPIA=1.
  *   - comunicaciones-hubspot → la copia de los correos, las notas y las llamadas de HubSpot de las empresas de Nexus
  *     (lib/comunicaciones/copia-server.ts), cada hora de 6:00 a 20:00 CR, y después la lectura de los compromisos de los
  *     correos enviados (lib/comunicaciones/compromisos-server.ts, contra el presupuesto automático). Iniciativa B.
@@ -925,6 +927,44 @@ const contactosYTickets: JobDef = {
 };
 
 /**
+ * La copia de los datos de las empresas desde HubSpot (R2, 2026-10-25, lib/clients/copia-de-hubspot-server.ts): lo que
+ * alguien cambió allá vuelve a Nexus y la regla de quién manda decide si se aplica o queda como propuesta. Lee HubSpot y,
+ * con EMPRESA_HUBSPOT_ESCRITURA=1, escribe allá lo que recalculó (el TAM). Una corrida por hora de 6:00 a 20:00 CR, con EMPRESA_HUBSPOT_COPIA=1; con el candado ajeno, suelta el turno.
+ * Sin el SQL de la empresa, lo dice y no falla.
+ */
+const empresaCopiaDeHubspot: JobDef = {
+  key: "empresa-copia-de-hubspot",
+  shouldRun: (_now, parts) => encendido("empresa-copia-de-hubspot") && parts.hour >= 6 && parts.hour <= 20,
+  run: async (now) => {
+    const { crDateParts } = await import("./time");
+    const p = crDateParts(now);
+    const turno = `${p.dateKey}T${String(p.hour).padStart(2, "0")}`;
+    if (!(await claimDateKey("empresa-copia-de-hubspot", turno, now))) return SIN_TURNO;
+    const { copiarEmpresasDeHubspot } = await import("@/lib/clients/copia-de-hubspot-server");
+    let r: Awaited<ReturnType<typeof copiarEmpresasDeHubspot>>;
+    try {
+      r = await copiarEmpresasDeHubspot({ apply: true, ahora: now });
+    } catch (e) {
+      if (esquemaDesactualizado(e)) {
+        console.log(`[jobs/empresa-copia-de-hubspot] ${turno} — falta el SQL 2026-10-25-empresa-parte-2.sql`);
+        return;
+      }
+      throw e;
+    }
+    if (r.locked) {
+      await prisma.cronJobState
+        .updateMany({ where: { id: "empresa-copia-de-hubspot", lastRunDateKey: turno }, data: { lastRunDateKey: null } })
+        .catch(() => {});
+      console.log(`[jobs/empresa-copia-de-hubspot] ${turno} — lock ajeno; turno liberado para reintentar`);
+      return;
+    }
+    console.log(
+      `[jobs/empresa-copia-de-hubspot] ${turno} — ${r.cambiaron} de ${r.empresas} empresas cambiaron en HubSpot · ${r.aplicados} datos aplicados · ${r.propuestas} propuestas${r.errores.length ? ` · ${r.errores.length} con error` : ""}`,
+    );
+  },
+};
+
+/**
  * Las comunicaciones de HubSpot (iniciativa B, docs/correos-en-el-contexto-plan.md): la copia de los correos, las notas
  * y las llamadas (solo lee HubSpot) y, si queda presupuesto automático, los compromisos de hasta 10 correos enviados. Una
  * corrida por hora; con el candado ajeno, suelta el turno. Sin el SQL, lo dice y no falla.
@@ -1039,5 +1079,5 @@ const titulosCortos: JobDef = {
 };
 
 export function allJobs(): JobDef[] {
-  return [marketingWeekly, csSignalsDaily, csPartnerDaily, comisionesHubspotEstimado, csWatchdogDaily, csWatchdogDebounce, maintenanceDaily, cobranzaQuincenal, googleMeetSync, googleEnrichRetry, tareasSprint, seguimientoReuniones, ventasGanadasDaily, negociosAbiertos, contactosYTickets, comunicacionesHubspot, indiceDeReuniones, tareasHubspot, odooEspejoDaily, mercuryEspejoDaily, tipoCambioDaily, planillaQuincenaDaily, licenciasRenovacionDaily, adopcionRecordatoriosDaily, tareasSemanaLunes, rentabilidadFotoMensual, rentabilidadLecturaMensual, iaLotes, titulosCortos, loPagadoDaily, invariantsDaily];
+  return [marketingWeekly, csSignalsDaily, csPartnerDaily, comisionesHubspotEstimado, csWatchdogDaily, csWatchdogDebounce, maintenanceDaily, cobranzaQuincenal, googleMeetSync, googleEnrichRetry, tareasSprint, seguimientoReuniones, ventasGanadasDaily, negociosAbiertos, contactosYTickets, empresaCopiaDeHubspot, comunicacionesHubspot, indiceDeReuniones, tareasHubspot, odooEspejoDaily, mercuryEspejoDaily, tipoCambioDaily, planillaQuincenaDaily, licenciasRenovacionDaily, adopcionRecordatoriosDaily, tareasSemanaLunes, rentabilidadFotoMensual, rentabilidadLecturaMensual, iaLotes, titulosCortos, loPagadoDaily, invariantsDaily];
 }
