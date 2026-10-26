@@ -31,6 +31,8 @@ import { useLienzo } from "./contexto";
 import { BotonAzul, BotonTexto, IconoDeSugerencia } from "./FranjaDeSugerencias";
 import { FilaSugerida } from "./Propuestas";
 import { useCorrida } from "./useCorrida";
+import { AbrirLaPuerta, ComoLlego, type PresentacionDeSmarteam } from "./ComoLlego";
+import LoQueSabes from "./LoQueSabes";
 
 interface DatosDePreparacion {
   empresa: {
@@ -47,6 +49,8 @@ interface DatosDePreparacion {
   principalId: string | null;
   tests: { contacto: string; areaId: string; fecha: string | null }[];
   agenda: { id: string; titulo: string; inicio: string }[];
+  /** K2: cómo presentar a Smarteam en la primera sesión en frío (el position statement o la propuesta de valor). */
+  presentacion?: PresentacionDeSmarteam | null;
 }
 
 type Pestana = "identificacion" | "conexion";
@@ -445,7 +449,7 @@ export default function PasoPreparacion() {
         if (!vivo) return;
         if (!res.ok) {
           setError(data.error ?? "No se pudo leer HubSpot.");
-          setDatos({ empresa: null, contactos: [], principalId: null, tests: [], agenda: [] });
+          setDatos({ empresa: null, contactos: [], principalId: null, tests: [], agenda: [], presentacion: null });
           return;
         }
         setDatos({
@@ -454,6 +458,7 @@ export default function PasoPreparacion() {
           principalId: data.principalId ?? null,
           tests: data.tests ?? [],
           agenda: data.agenda ?? [],
+          presentacion: data.presentacion ?? null,
         });
       } catch {
         if (vivo) setError("No se pudo leer HubSpot. Revisa tu conexión.");
@@ -479,6 +484,8 @@ export default function PasoPreparacion() {
     <div className="space-y-6">
       <BarraDelAgente />
       {error && <Alert variant="warning">{error} Lo demás se puede llenar igual.</Alert>}
+      {/* K2 (2026-10-27): la primera sesión de un prospecto en frío o referido abre la puerta. */}
+      <AbrirLaPuerta presentacion={datos?.presentacion ?? null} />
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
         <Segmentado<Pestana>
           etiqueta="Qué parte de la preparación"
@@ -492,6 +499,11 @@ export default function PasoPreparacion() {
       {pestana === "identificacion" ? (
         <div className="space-y-4">
           <ResumenDeLaIdentificacion porQueAhoraDeHubspot={porQueAhoraDeHubspot} />
+          <div className="grid items-start gap-4 lg:grid-cols-2">
+            <ComoLlego contactos={datos ? datos.contactos : null} />
+            {/* K6 (2026-10-27): lo que alguien del equipo sabe y no quedó en ninguna reunión. */}
+            <LoQueSabes />
+          </div>
           <SenalesDeHubspot datos={datos} senales={senales} />
           <div className="grid items-start gap-4 lg:grid-cols-2">
             <Contacto datos={datos} />

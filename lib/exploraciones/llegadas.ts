@@ -12,6 +12,7 @@
  * deben hacer».
  */
 import { DOMINIO_PROPIO } from "@/lib/sessions/dominio-propio";
+import { DOMINIOS_GENERICOS } from "./agendadas";
 import { leerResultadoDelTest, type ResultadoDelTest } from "./test-de-marketing";
 
 /** Desde cuándo existe el test que deja estas notas. */
@@ -151,6 +152,39 @@ export interface LlegadaAgrupada {
   fecha: string;
   /** Cuántas veces lo intentó la empresa (terminado o no). */
   intentos: number;
+  /**
+   * K10 (2026-10-27): quién llenó el test de cada área, una por área (la del último terminado o, si no hay, la del último
+   * intento), en el orden de la escala. «Ventas: Sonia · Marketing: Pedro».
+   */
+  porArea: AreaDelTest[];
+}
+
+/** Quién llenó el test de un área, en una empresa (o en un dominio sin empresa). */
+export interface AreaDelTest {
+  /** `1` Ventas, `2` Marketing, `3` Servicio; null = no se supo. */
+  areaId: string | null;
+  contacto: string | null;
+  terminado: boolean;
+  /** `AAAA-MM-DD`. */
+  fecha: string;
+}
+
+/** Una por área: el último terminado o, sin terminados, el último intento. Ordenadas por el número del área. */
+export function areasDelTest(notas: readonly Pick<NotaDeLlegada, "ts" | "nota">[]): AreaDelTest[] {
+  const porArea = new Map<string, Pick<NotaDeLlegada, "ts" | "nota">>();
+  for (const n of [...notas].sort((a, b) => b.ts - a.ts)) {
+    const k = n.nota.areaId ?? "?";
+    const actual = porArea.get(k);
+    if (!actual || (n.nota.estado === "terminado" && actual.nota.estado !== "terminado")) porArea.set(k, n);
+  }
+  return [...porArea.values()]
+    .map((n) => ({
+      areaId: n.nota.areaId,
+      contacto: n.nota.contacto,
+      terminado: n.nota.estado === "terminado",
+      fecha: n.nota.resultado?.fecha ?? new Date(n.ts).toISOString().slice(0, 10),
+    }))
+    .sort((a, b) => (a.areaId ?? "9").localeCompare(b.areaId ?? "9"));
 }
 
 /** Una por empresa, la más reciente arriba. Las pruebas ya vienen afuera (`esDePrueba`). */
@@ -175,7 +209,67 @@ export function agruparLlegadas(notas: readonly NotaDeLlegada[]): LlegadaAgrupad
       areaId: manda.nota.areaId,
       fecha: manda.nota.resultado?.fecha ?? new Date(manda.ts).toISOString().slice(0, 10),
       intentos: lista.length,
+      porArea: areasDelTest(lista),
     });
   }
   return salida.sort((a, b) => b.ts - a.ts);
+}
+
+// ── Los intentos sin empresa en HubSpot (K10 etapa 2) ─────────────────────────
+
+/** Un intento del test sin empresa en HubSpot. */
+export interface NotaSinEmpresa {
+  ts: number;
+  nota: NotaDelTest;
+}
+
+/** Los intentos sin empresa de un mismo dominio (o de un mismo correo, si el dominio es de correo personal). */
+export interface LlegadaSinEmpresa {
+  /** El dominio del correo (`acme.com`) o, con uno de correo personal, el correo entero. */
+  clave: string;
+  /** El dominio que se le pondría a la empresa en HubSpot; null con un correo personal (gmail). */
+  dominio: string | null;
+  /** Quiénes lo hicieron, sin repetir. */
+  contactos: string[];
+  porArea: AreaDelTest[];
+  terminado: boolean;
+  intentos: number;
+  /** El último intento (ms). */
+  ts: number;
+}
+
+const dominioDelCorreo = (email: string | null) => (email?.split("@")[1] ?? "").trim().toLowerCase();
+
+/**
+ * Los intentos sin empresa, agrupados por el dominio del correo (con un correo personal, por el correo: dos personas con
+ * gmail no son la misma empresa). Sin correo ni dominio escrito, no se agrupa (no hay con qué crear la empresa). El último
+ * arriba. Las pruebas ya vienen afuera (`esDePrueba`).
+ */
+export function agruparSinEmpresa(notas: readonly NotaSinEmpresa[], genericos: ReadonlySet<string> = DOMINIOS_GENERICOS): LlegadaSinEmpresa[] {
+  const grupos = new Map<string, { dominio: string | null; notas: NotaSinEmpresa[] }>();
+  for (const n of notas) {
+    const delCorreo = dominioDelCorreo(n.nota.email);
+    const dominio = delCorreo && !genericos.has(delCorreo) ? delCorreo : n.nota.dominio && !genericos.has(n.nota.dominio) ? n.nota.dominio : null;
+    const clave = dominio ?? n.nota.email?.trim().toLowerCase() ?? null;
+    if (!clave) continue;
+    const g = grupos.get(clave) ?? { dominio, notas: [] };
+    g.notas.push(n);
+    grupos.set(clave, g);
+  }
+  return [...grupos.entries()]
+    .map(([clave, g]) => ({
+      clave,
+      dominio: g.dominio,
+      contactos: [...new Set(g.notas.map((n) => n.nota.contacto?.trim()).filter((c): c is string => !!c))],
+      porArea: areasDelTest(g.notas),
+      terminado: g.notas.some((n) => n.nota.estado === "terminado"),
+      intentos: g.notas.length,
+      ts: Math.max(...g.notas.map((n) => n.ts)),
+    }))
+    .sort((a, b) => b.ts - a.ts);
+}
+
+/** «Ventas: Sonia · Marketing: Pedro». `nombreDelArea` da el nombre de cada área de la escala. */
+export function quienesPorArea(areas: readonly AreaDelTest[], nombreDelArea: (id: string) => string): string {
+  return areas.map((a) => `${a.areaId ? nombreDelArea(a.areaId) : "Sin área"}: ${a.contacto ?? "sin nombre"}${a.terminado ? "" : " (a medias)"}`).join(" · ");
 }

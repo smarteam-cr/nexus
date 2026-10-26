@@ -51,6 +51,7 @@ import Segmentos from "./Segmentos";
 import { lineasDe } from "./Resumen";
 import { useCorrida } from "./useCorrida";
 import { useSesiones } from "./useSesiones";
+import { abreLaPuerta, TRAMOS_DE_ABRIR_LA_PUERTA } from "@/lib/exploraciones/como-llego";
 
 type Vista = "orden" | "seccion";
 
@@ -571,7 +572,9 @@ function LaGuia({ pestana, esLaProxima }: { pestana: PestanaDeSesion; esLaProxim
   const conTest = exp.leido.tests.length > 0;
   const conEvidencia = Object.values(e.contenido.chequeo).some((x) => !esFuenteDeHipotesis(x.fuente)) || e.propuesta.leidas.sesiones.length > 0;
   // En un proyecto el cliente ya compró: nunca se arranca «desde cero».
-  const desdeCero = !enProyecto && esLaProxima && !conTest && !conEvidencia && pestana.numero === 1;
+  // K2 (2026-10-27): la primera sesión de un prospecto en frío o referido abre la puerta (como-llego.ts).
+  const abrirLaPuerta = esLaProxima && abreLaPuerta(e, pestana.sesion?.id ?? null, { marco: marco.clave });
+  const desdeCero = !enProyecto && !abrirLaPuerta && esLaProxima && !conTest && !conEvidencia && pestana.numero === 1;
   const apertura = guia?.apertura ?? [];
   /* «Por sección» agrupa por sección y, dentro de cada una, sigue el orden de «En orden» (el que eligió la persona
      arrastrando, si lo eligió): arrastrar se hace solo en «En orden», donde se ve la conversación entera. */
@@ -666,6 +669,12 @@ function LaGuia({ pestana, esLaProxima }: { pestana: PestanaDeSesion; esLaProxim
         <div className="space-y-2">
           {conTest && pestana.numero === 1 && <p className="text-[13px] text-fg-muted">{REUNIONES[0].promesa}</p>}
           {desdeCero && <p className="text-[13px] text-fg-muted">No hizo el test: empieza conectando, y después explícale la escala en simple.</p>}
+          {abrirLaPuerta && (
+            <p className="text-[13px] text-fg-muted">
+              Esta sesión abre la puerta: presenta a Smarteam (minutos {TRAMOS_DE_ABRIR_LA_PUERTA.presentar.join("–")}; cómo, en la Preparación), deja que
+              el cliente cuente lo que le pasa (minutos {TRAMOS_DE_ABRIR_LA_PUERTA.escuchar.join("–")}) y al final haz estas pocas preguntas. Sin diagnóstico.
+            </p>
+          )}
           {apertura.map((a, i) => (
             <p key={`a-${i}`} className="text-[14.5px] leading-[21px] text-fg">
               «{a.replace(/^«|»$/g, "")}»

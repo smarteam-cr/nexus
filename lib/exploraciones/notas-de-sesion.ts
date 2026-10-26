@@ -9,6 +9,7 @@
  */
 import type { SesionPlaneada } from "./guia";
 import { diaCorto } from "./fechas";
+import { esClaveDeLoQueSabes, ROTULO_DE_LO_QUE_SABES } from "./lo-que-sabes";
 
 const PREFIJO = "sesion:";
 
@@ -40,6 +41,8 @@ export function rotuloDeLaNota(
   rotuloDePaso: (id: string) => string | null,
   preguntaDe: (sesionId: string, para: string) => string | null = () => null,
 ): string | null {
+  // K6 (2026-10-27): «Agregar algo que sabes», una nota de la exploración que no es de una sesión.
+  if (esClaveDeLoQueSabes(clave)) return ROTULO_DE_LO_QUE_SABES;
   if (!clave.startsWith(PREFIJO)) return rotuloDePaso(clave);
   const [id, ...resto] = clave.slice(PREFIJO.length).split(":");
   const para = resto.join(":");

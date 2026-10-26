@@ -21,6 +21,7 @@ import type { Cierre, Despues, Letra } from "@/lib/escala/documento/tipos";
 import { aFecha, hoyEnCostaRica } from "./fechas";
 import { MAX_SESIONES, type GuiaDeLaSesion, type SesionPlaneada } from "./guia";
 import { aplicarCambioDeLaGuia, hayAjustes, type CambioDeLaGuia } from "./ajustes-de-la-guia";
+import type { ComoLlego } from "./como-llego";
 import {
   definicionDe,
   esDeLista,
@@ -211,6 +212,17 @@ export interface ContenidoDeExploracion {
   /** Lápidas: ids de lo propuesto que el vendedor descartó. */
   descartadas: string[];
   alProponer: FotoAlProponer[];
+  /**
+   * K2 (2026-10-27, como-llego.ts): cómo llegó el prospecto (el test, en frío, referido, un evento o la web), confirmado
+   * por quien lleva la preventa. Nexus lo propone desde HubSpot; sin confirmar no se guarda. Opcional: las exploraciones
+   * de antes no lo tienen.
+   */
+  comoLlego?: ComoLlego;
+  /**
+   * K5 (2026-10-27, asociar.ts): las reuniones (`meet:<id>`) que alguien dijo que NO son una sesión de la exploración
+   * cuando Nexus lo preguntó. No se vuelven a sugerir ni se asocian solas. Es una lápida: no sube la versión.
+   */
+  asociacionesDescartadas?: string[];
 }
 
 /** Cuántas reuniones se pueden elegir a mano en el buscador de la preventa. */
@@ -835,6 +847,16 @@ export type Operacion =
   | { op: "responsable"; email: string | null }
   /** «Entendido» en el aviso de que la última reunión se puso técnica. */
   | { op: "alertaTecnicaVista" }
+  /** K2: cómo llegó el prospecto, confirmado por una persona (null = volver a «sin confirmar»). */
+  | { op: "comoLlego"; valor: ComoLlego | null }
+  /** K5: «No» a la pregunta «¿Es la sesión 2 con Marketing?»: esa reunión no se vuelve a sugerir. */
+  | { op: "descartarAsociacion"; claves: string[] }
+  /**
+   * K5, SOLO del servidor (el job `exploraciones-asociar`): une la sesión a su reunión de Meet sobre la fila de AHORA. No
+   * hace nada si entretanto la sesión ya tiene reunión o resultado, si la reunión ya es de otra sesión, o si alguien la
+   * descartó o la sacó: un «No» que llegó mientras el job calculaba manda. `fecha`: el día de la reunión en Costa Rica.
+   */
+  | { op: "asociarSola"; sesionId: string; reunionId: string; fecha: string; en: string }
   /** El correo de seguimiento de una reunión, cambiado a mano (el asunto, el cuerpo o los dos). */
   | { op: "correo"; clave: string; asunto?: string; cuerpo?: string }
   | { op: "archivar" };
@@ -1129,8 +1151,36 @@ function aplicarUna(estado: EstadoDeExploracion, op: Operacion, validez: Validez
     }
     case "archivar":
       return { ok: true, estado: { ...estado, archivada: true } };
+    case "comoLlego": {
+      const { comoLlego: _antes, ...resto } = estado.contenido;
+      void _antes;
+      return { ok: true, estado: { ...estado, contenido: op.valor ? { ...resto, comoLlego: op.valor } : resto } };
+    }
+    case "asociarSola": {
+      const c = estado.contenido;
+      const clave = `meet:${op.reunionId}`;
+      const i = c.sesiones.findIndex((s) => s.id === op.sesionId);
+      const s = c.sesiones[i];
+      const yaEsDeOtra = c.sesiones.some((x) => x.reunion?.origen === "meet" && x.reunion.id === op.reunionId);
+      if (!s || s.reunion || s.resultado || s.hecha || yaEsDeOtra || (c.asociacionesDescartadas ?? []).includes(clave) || c.fuera.includes(clave)) {
+        return { ok: true, estado };
+      }
+      // El evento (cancelado: uno vivo no deja la sesión libre) se queda: la reunión elegida manda, y si se desune vuelve a estar.
+      const unida: SesionPlaneada = { ...s, reunion: { origen: "meet", id: op.reunionId }, fecha: op.fecha, asociadaSola: op.en };
+      return { ok: true, estado: { ...estado, contenido: { ...c, sesiones: c.sesiones.map((x, k) => (k === i ? unida : x)) } } };
+    }
+    case "descartarAsociacion": {
+      const c = estado.contenido;
+      const antes = c.asociacionesDescartadas ?? [];
+      const nuevas = op.claves.filter((k) => !antes.includes(k));
+      if (!nuevas.length) return { ok: true, estado };
+      return { ok: true, estado: { ...estado, contenido: { ...c, asociacionesDescartadas: [...antes, ...nuevas].slice(-MAX_ASOCIACIONES_DESCARTADAS) } } };
+    }
   }
 }
+
+/** Cuántas reuniones descartadas como sesión se recuerdan (las más viejas se caen primero). */
+export const MAX_ASOCIACIONES_DESCARTADAS = 200;
 
 /**
  * Lo que manda la PANTALLA (el PATCH de la exploración) no fija el evento del calendario de una sesión:
@@ -1161,6 +1211,7 @@ export function operacionesDeLaPantalla(
   const salida: Operacion[] = [];
   for (const op of ops) {
     if (op.op === "evento") return { ok: false, error: "El evento del calendario de una sesión lo cambia solo Nexus, al mirar el calendario." };
+    if (op.op === "asociarSola") return { ok: false, error: "Unir sola una sesión a su reunión lo hace solo Nexus." };
     if (op.op === "sesiones") salida.push({ op: "sesiones", sesiones: op.sesiones.map((s) => conLoDelServidor(s, guardadas.get(s.id), !guardadas.has(s.id))) });
     else if (op.op === "agregarSesion") salida.push({ op: "agregarSesion", sesion: conLoDelServidor(op.sesion, guardadas.get(op.sesion.id), !guardadas.has(op.sesion.id)) });
     else salida.push(op);
@@ -1187,7 +1238,7 @@ export function aplicarOperaciones(
 /** ¿Lo que cambió es lo confirmado (sube la versión) o solo lo pendiente? */
 export function cambioLoConfirmado(antes: EstadoDeExploracion, despues: EstadoDeExploracion): boolean {
   // Las lápidas (y los títulos de los casos descartados) son de lo propuesto: no suben la versión.
-  const sinLapidas = (c: ContenidoDeExploracion) => exacto({ ...c, descartadas: [], casosDescartados: [] });
+  const sinLapidas = (c: ContenidoDeExploracion) => exacto({ ...c, descartadas: [], casosDescartados: [], asociacionesDescartadas: undefined });
   return (
     sinLapidas(antes.contenido) !== sinLapidas(despues.contenido) ||
     exacto(antes.areas) !== exacto(despues.areas) ||

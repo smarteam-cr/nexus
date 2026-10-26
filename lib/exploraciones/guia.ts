@@ -121,6 +121,11 @@ export interface SesionPlaneada {
    * por las dimensiones de su área. Sin él, la sesión es con la empresa entera. Lo elige una persona (Nexus lo sugiere).
    */
   equipo?: ClaveDeEquipo;
+  /**
+   * K5 (2026-10-27, asociar.ts): cuándo Nexus unió SOLO esta sesión a su reunión (sin duda: el job `exploraciones-asociar`).
+   * La pantalla lo dice («Nexus la unió») para que se pueda deshacer. Sin esto, la unió una persona.
+   */
+  asociadaSola?: string;
 }
 
 /** Hasta cuántas sesiones tiene una exploración (subió de 12 a 20 en la etapa A: ahora se materializan más). */
@@ -713,6 +718,8 @@ export interface ContextoDelPlan {
   equipo?: ClaveDeEquipo;
   /** La conversación se puso técnica: entra una pregunta de sistemas y datos. */
   tecnica?: boolean;
+  /** K2 (2026-10-27, como-llego.ts): la primera sesión de un prospecto en frío o referido; abre la puerta, sin diagnóstico. */
+  abrirLaPuerta?: boolean;
 }
 
 /**

@@ -66,6 +66,7 @@ import PasoPreparacion from "./PasoPreparacion";
 import ContextoDeLaPreventa, { type ModoDelContexto } from "./ContextoDeLaPreventa";
 import BuscarReunionesDeLaPreventa from "./BuscarReunionesDeLaPreventa";
 import { MirarCalendario } from "./MirarCalendario";
+import SugerenciasDeAsociacion from "./SugerenciasDeAsociacion";
 
 /**
  * El «Contexto adicional» de cada pieza de la preventa (2026-10-09): Preparación (sus fuentes y sus
@@ -528,6 +529,8 @@ export default function LienzoDeExploracion({
           )}
         {proyecto.slotDelPanel && createPortal(<PanelDeContexto sigue={sigue} nombreDelPaso={(p) => NOMBRE_DEL_PASO[p]} paso="exploracion" />, proyecto.slotDelPanel)}
         <div className="space-y-6">
+          {/* K5 (2026-10-27): «¿Es la sesión 2 con Marketing?», y el lienzo que se pone al día solo. */}
+          <SugerenciasDeAsociacion />
           <div hidden={vista !== "sesiones"}>
             <PasoExploracion />
           </div>
@@ -553,6 +556,8 @@ export default function LienzoDeExploracion({
         </aside>
 
         <main className="min-w-0 px-6 pb-10 pt-6 xl:px-8">
+          {/* K5 (2026-10-27): «¿Es la sesión 2 con Marketing?», en cualquier pieza, y el lienzo que se pone al día solo. */}
+          <SugerenciasDeAsociacion />
           {paso !== "exploracion" && paso !== "informacion" && paso !== "procesos" && (
             <header className="mb-5">
               <h2 className="text-lg font-semibold text-fg">{NOMBRE_DEL_PASO[paso]}</h2>

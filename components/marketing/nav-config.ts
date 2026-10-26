@@ -16,11 +16,16 @@ export interface MarketingNavItem {
   section?: string;
   /** Prefijos que la marcan activa (default: [href]). */
   match?: readonly string[];
+  /** La entrada pide este permiso (el menú; la seguridad está en la página). */
+  permiso?: { section: string; action: string };
 }
 
 export const MARKETING_NAV: readonly MarketingNavItem[] = [
   { href: "/marketing/contenido", label: "Publicaciones", section: "Revisar" },
   { href: "/marketing/ideas-de-campana", label: "Ideas de SEM", section: "Revisar" },
+  // K10 (2026-10-27): las empresas que llegaron por el test, con cuántas áreas y cuántas pasaron a preventa.
+  // Pide `preventa.read`: muestra a los contactos de cada prospecto, lo mismo que «Llegaron por el test» de Ventas.
+  { href: "/marketing/leads-del-test", label: "Leads del test", section: "Resultados", permiso: { section: "preventa", action: "read" } },
   { href: "/marketing/temas", label: "Temas", section: "Lo que lee el agente" },
   {
     href: "/marketing/icp",

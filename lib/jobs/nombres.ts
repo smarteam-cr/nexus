@@ -48,6 +48,7 @@ export const NOMBRE_DE_JOB: Readonly<Record<string, string>> = {
   "ia-lotes": "Los pedidos a Claude por lote",
   "titulos-cortos": "El nombre corto de las tareas",
   "reuniones-motivos": "El motivo de las reuniones sin texto",
+  "exploraciones-asociar": "Las sesiones de la exploración que se asocian solas",
   "reuniones-propuestas": "La empresa que propone Nexus para las reuniones sin empresa",
   "reuniones-audio": "La transcripción del audio de las reuniones presenciales",
   "analizador-venta": "El analizador de reuniones de venta",

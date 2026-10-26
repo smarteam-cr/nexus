@@ -64,6 +64,12 @@ interface FeedingSession {
    * que una llena de material, y el documento se escribe sobre un hueco sin que nadie lo sepa.
    */
   sinContenido?: boolean;
+  /**
+   * Solo en el diagnóstico (noche 2, 2026-10-27): el equipo del cliente de la reunión elegida a mano. `equipoDeLaSesion`:
+   * sale de su sesión de la exploración y se cambia allá. Sin el campo, la fila no lleva selector.
+   */
+  equipo?: ClaveDeEquipo | null;
+  equipoDeLaSesion?: boolean;
 }
 interface ExcludedSession {
   sessionId: string;
@@ -1005,6 +1011,21 @@ export default function SessionSelectionReview({
           escribir={escribirReuniones}
           restaurar={restaurarReuniones}
           onBuscar={() => setShowModal(true)}
+          /* En el diagnóstico, el equipo del cliente también de las elegidas a mano (noche 2, 2026-10-27). */
+          acciones={
+            destino === "diagnostico"
+              ? (r) => {
+                  const f = feeding.find((x) => x.sessionId === r.id);
+                  return f && f.equipo !== undefined ? (
+                    <EquipoDeLaReunion
+                      equipo={f.equipo}
+                      editable={!readOnly && !f.equipoDeLaSesion}
+                      onCambiar={(equipo) => void cambiarEquipo(f.sessionId, equipo)}
+                    />
+                  ) : null;
+                }
+              : undefined
+          }
           vacio={
             errorDeCarga
               ? `No se pudo cargar la lista de reuniones ${delDocumento}: recarga la página. Lo que elegiste sigue elegido.`

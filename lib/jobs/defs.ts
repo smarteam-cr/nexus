@@ -67,6 +67,9 @@
  *     tiene avisos y hasta hoy solo se copiaba al abrir la ficha), ≥ 6:00 CR. Gated por HUBSPOT_PROYECTOS_JOB_ENABLED≠0.
  *   - jobs-vigia → U24: cada hora, si un job que ya corrió lleva más de lo esperado sin correr (lib/jobs/cadencias.ts),
  *     LANZA: rojo en Integraciones, Sentry y «Para ti» de quien ve el sistema. Gated por JOBS_VIGIA_ENABLED≠0.
+ *   - exploraciones-asociar → K5: une a su sesión planeada las reuniones recientes de la empresa que calzan SIN duda
+ *     (lib/exploraciones/asociar-server.ts), cada 10 minutos. Sin IA ni red: lee por el chokepoint y escribe con la fila
+ *     bloqueada. Gated por EXPLORACIONES_ASOCIAR_ENABLED=1 (apagado por defecto: primero el simulacro del script).
  *   - reuniones-motivos → POR QUÉ cada reunión de los últimos 90 días no dejó texto, guardado en la reunión
  *     (lib/sessions/motivo-sin-texto-server.ts, T4), cada 10 minutos. Sin IA ni red: una consulta y lo que cambió.
  *   - reuniones-propuestas → a qué empresa propone Nexus cada reunión con texto sin dueña (lib/sessions/
@@ -1224,6 +1227,28 @@ const reunionesMotivos: JobDef = {
 };
 
 /**
+ * Las sesiones que se asocian solas (K5, 2026-10-27; lib/exploraciones/asociar-server.ts): cada 10 minutos, en las
+ * exploraciones vivas con alguna sesión planeada sin reunión, une la reunión reciente de la empresa que calza sin duda.
+ * Lo que tiene duda queda como pregunta arriba del lienzo. Sin IA ni red. APAGADO por defecto: se prende con
+ * EXPLORACIONES_ASOCIAR_ENABLED=1 después de revisar el simulacro de scripts/exploraciones-asociar.ts.
+ */
+const exploracionesAsociar: JobDef = {
+  key: "exploraciones-asociar",
+  shouldRun: () => encendido("exploraciones-asociar"),
+  run: async (now) => {
+    const turno = await turnoDeDiezMinutos(now);
+    if (!(await claimDateKey("exploraciones-asociar", turno, now))) return SIN_TURNO;
+    const { asociarEnLasExploraciones } = await import("@/lib/exploraciones/asociar-server");
+    const r = await asociarEnLasExploraciones(now);
+    if (r.asociadas > 0 || r.errores.length) {
+      console.log(`[jobs/exploraciones-asociar] ${turno} — ${r.miradas} miradas, ${r.asociadas} sesiones unidas solas${r.errores.length ? `, ${r.errores.length} con error` : ""}`);
+    }
+    if (r.errores.length) console.warn(`[jobs/exploraciones-asociar] ${r.errores.slice(0, 5).join(" · ")}`);
+    if (r.errores.length && r.errores.length === r.miradas) throw new Error(`Ninguna exploración se pudo mirar: ${r.errores[0]}`);
+  },
+};
+
+/**
  * La empresa que propone Nexus para cada reunión con texto sin dueña (T3, 2026-10-25;
  * lib/sessions/propuesta-de-empresa-server.ts), una vez por hora. Lo decide una persona en el tablero de salud o en la
  * reunión. Sin el SQL avisa y no hace nada. HubSpot caído no rompe: las de empresas que Nexus no tiene esperan.
@@ -1465,5 +1490,5 @@ const jobsVigia: JobDef = {
 };
 
 export function allJobs(): JobDef[] {
-  return [marketingWeekly, csSignalsDaily, csPartnerDaily, comisionesHubspotEstimado, csWatchdogDaily, csWatchdogDebounce, maintenanceDaily, cobranzaQuincenal, googleMeetSync, googleMeetConferencias, googleMeetEventos, googleMeetSuscripciones, googleEnrichRetry, tareasSprint, seguimientoReuniones, ventasGanadasDaily, negociosAbiertos, contactosYTickets, empresaCopiaDeHubspot, comunicacionesHubspot, hubspotEventos, hubspotLeads, hubspotFusiones, hubspotProyectos, indiceDeReuniones, tareasHubspot, odooEspejoDaily, mercuryEspejoDaily, tipoCambioDaily, planillaQuincenaDaily, licenciasRenovacionDaily, adopcionRecordatoriosDaily, tareasSemanaLunes, rentabilidadFotoMensual, rentabilidadLecturaMensual, iaLotes, titulosCortos, reunionesMotivos, reunionesPropuestas, reunionesAudio, analizadorVenta, loPagadoDaily, invariantsDaily, jobsVigia, testsHubspot];
+  return [marketingWeekly, csSignalsDaily, csPartnerDaily, comisionesHubspotEstimado, csWatchdogDaily, csWatchdogDebounce, maintenanceDaily, cobranzaQuincenal, googleMeetSync, googleMeetConferencias, googleMeetEventos, googleMeetSuscripciones, googleEnrichRetry, tareasSprint, seguimientoReuniones, ventasGanadasDaily, negociosAbiertos, contactosYTickets, empresaCopiaDeHubspot, comunicacionesHubspot, hubspotEventos, hubspotLeads, hubspotFusiones, hubspotProyectos, indiceDeReuniones, tareasHubspot, odooEspejoDaily, mercuryEspejoDaily, tipoCambioDaily, planillaQuincenaDaily, licenciasRenovacionDaily, adopcionRecordatoriosDaily, tareasSemanaLunes, rentabilidadFotoMensual, rentabilidadLecturaMensual, iaLotes, titulosCortos, reunionesMotivos, exploracionesAsociar, reunionesPropuestas, reunionesAudio, analizadorVenta, loPagadoDaily, invariantsDaily, jobsVigia, testsHubspot];
 }

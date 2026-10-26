@@ -322,6 +322,10 @@ const CENSO: Record<string, { clase: Clase; motivo: string; indirecto?: true }> 
     clase: "plomeria",
     motivo: "T7: hidrata quién del equipo estuvo en reuniones ya elegidas por el chokepoint (recibe sus ids). No elige reuniones.",
   },
+  "lib/invariantes/exploraciones.ts": {
+    clase: "plomeria",
+    motivo: "INV61 (K5, 2026-10-27): mira de qué empresa es la reunión de cada sesión de una exploración. Un control, no le habla a un modelo.",
+  },
   "lib/invariantes/google.ts": { clase: "plomeria", motivo: "INV53: cuenta reuniones de 3 a 25 días sin revisar su conferencia. Es un control, no le habla a un modelo." },
   "lib/sessions/reclassify.ts": { clase: "plomeria", motivo: "Re-atribuye dueño. La fecha no cambia de quién es una reunión." },
   "lib/sessions/resolve-client.ts": { clase: "plomeria", motivo: "La cascada de dueño, sobre el corpus entero a propósito." },

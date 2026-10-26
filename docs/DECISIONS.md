@@ -11559,3 +11559,58 @@ protección de las propiedades vive en el editor: restaurar una versión o escri
 cuenta de licencias no se compara todavía con lo vendido, las fechas de la ficha no se leen del Cronograma (se dice que
 viven ahí), y las etapas 5 a 7 del plan (estado y enlace por cosa
 construida, lista de construcción en Tareas, que el cliente edite en el enlace, las dos plantillas) siguen pendientes.
+
+## Las exploraciones por equipo: asociar sesiones solas, lo que sabes, la puerta en frío y los leads del test (2026-10-27, noche 2 pieza 1: K5, K6, K2, K10)
+
+**Contexto.** Roadmap › «Próxima tanda: la noche 2», pieza 1, y el área K (`docs/exploracion-mejoras-plan.md`). El norte
+de Ventas: explorar a fondo y alejarse de la venta transaccional.
+
+- **K5 · Asociar sesiones solas, y preguntar cuando hay duda** (`lib/exploraciones/asociar.ts`, puro; `asociar-server.ts`).
+  Las candidatas son las reuniones de los últimos 21 días de la empresa, SOLO del chokepoint (`getClientSessions`), con
+  alguien de afuera de Smarteam y que no son ya la reunión de una sesión planeada, ni sacadas, ni descartadas. Una
+  reunión calza con una sesión libre (sin reunión, sin resultado, no marcada hecha y sin un evento del calendario vivo)
+  por el título (el equipo de la sesión, su nombre o «exploración / diagnóstico» para una sesión sin datos) o por la fecha
+  planeada (±3 días). Una de un equipo nunca calza con una reunión que nombra a otro equipo. *Sin duda* = una sola sesión
+  y una sola reunión, título de exploración o el nombre/equipo de la sesión, alguien de un dominio registrado de la
+  empresa, sin reuniones de Customer Success de las últimas 4 semanas que no sean de la exploración, y no es ya sesión de
+  otra exploración de la empresa (las dudas se cuentan con TODAS las sesiones que calzan, también las ya tomadas por otra
+  reunión). Sin duda, la une el job `exploraciones-asociar` (cada 10 min), **apagado por defecto**
+  (`EXPLORACIONES_ASOCIAR_ENABLED=1` lo prende después de revisar con Elías el simulacro de
+  `scripts/exploraciones-asociar.ts`; el 27 oct uniría 1 y preguntaría 6), con la operación `asociarSola` (solo del
+  servidor), que se vuelve a mirar con la fila bloqueada: un «No», una unión a mano o una reunión sacada entretanto mandan.
+  Deja la marca `SesionPlaneada.asociadaSola`, y el lienzo dice «Nexus la unió sola» con «Deshacer» durante una semana
+  (deshacer = soltar la reunión y no volver a sugerirla); unirla a mano borra la marca. Con duda, el lienzo pregunta «¿Es la sesión 2 con Marketing?» (Sí = la
+  puerta de «+ Agregar sesión»; No = `contenido.asociacionesDescartadas`, una lápida que no sube la versión). Sin sesión
+  planeada y con título de exploración: «¿Es una sesión de la exploración?», nunca sola. *Por qué se sacó «es la única
+  sesión que espera»:* medido en producción (solo lectura, 38 exploraciones vivas) proponía sesiones quincenales y
+  aterrizajes. La regla de CS vale también en la exploración de un proyecto (la lleva CS): ahí casi siempre pregunta, y
+  está bien (conservador). INV61 vigila en la base que ninguna sesión esté unida a una reunión de otra empresa.
+  **Etapa 3:** el lienzo pide `GET …/asociar` cada minuto con la pestaña a la vista (y al volver a ella): si la huella
+  (versión, `updatedAt` y las reuniones de la exploración con su estado) cambió, se vuelve a leer solo.
+- **K6 · «Agregar algo que sabes»** (`lib/exploraciones/lo-que-sabes.ts`): notas de la exploración `sabido:<id>` en
+  `contenido.notas` (sin SQL). Entran ENTERAS a la guía hasta 1.500 caracteres cada una (6.000 el bloque), en un bloque
+  propio que dice que NO es palabra del cliente; como nota también es fuente N0 al leer. En la Preparación de la preventa
+  y en la página de inicio de Exploración (también la de un proyecto).
+- **K2 · Cómo llegó y la primera sesión que abre la puerta** (`lib/exploraciones/como-llego.ts`). `contenido.comoLlego`
+  (sin SQL), solo confirmado por una persona. Lo propone Nexus: el test (un contacto lo hizo o su nota llegó), la propiedad
+  propia `fuente_de_lead` del contacto (medido el 27 oct: solo 53 contactos la tienen, todos del test), el origen del
+  tráfico (la web) o «cargado a mano» (`OFFLINE` → en frío, a confirmar). `REFERRALS` de HubSpot es otro sitio que nos
+  enlaza, nunca «referido por una persona». *Decisión conservadora, pendiente de Elías:* se sumó una quinta vía «Por la web
+  o un anuncio» (el roadmap nombra cuatro); sin ella, un lead de Google Ads quedaba mal clasificado. Con «en frío» o
+  «referido», nada leído todavía y ninguna otra sesión hecha, la primera sesión abre la puerta: el plan no trae el
+  diagnóstico (hasta 3 preguntas de tarjeta: retos, metas, consecuencias, tiempos), el pedido al agente lleva los tramos
+  0–10 presentar · 10–45 escuchar · 45–60 preguntar (solo en la PRIMERA de las sesiones que esperan: la de un equipo
+  que sigue trae su guía), y la Preparación lo dice arriba con cómo presentar a Smarteam: el
+  `positionStatement` del perfil (lib/smarteam) o, mientras no esté escrito (K3, con Marco), la propuesta de valor; si
+  tampoco hay, lo dice. Nunca inventado. Reemplaza a «desde cero» en esa sesión.
+- **K10 · Los leads del test, por empresa** (`lib/exploraciones/llegadas.ts`, `llegadas-server.ts`). Cada empresa trae
+  quién llenó cada área (el último terminado de cada una). Los intentos sin empresa se agrupan por el dominio del correo
+  (con un correo personal, cada correo aparte: dos personas con gmail no son una empresa). *«Crear la empresa en HubSpot»
+  abre el listado de empresas de HubSpot* (`hubspotCompanyListUrl`): Nexus no crea empresas en HubSpot (escribir allá no
+  entra en esta tanda; pendiente si Elías lo quiere desde Nexus). El reporte de Marketing es una página nueva,
+  `/marketing/leads-del-test` («Resultados › Leads del test»), que pide `preventa.read` (muestra los contactos de cada
+  prospecto, como «Llegaron por el test»), con la misma lectura de HubSpot (3 minutos de memoria):
+  empresas que llegaron, que lo terminaron, con dos o más áreas y que pasaron a preventa (tienen o tuvieron una).
+- **El equipo en las reuniones elegidas a mano** (Contexto del diagnóstico): las elegidas también llevan el selector
+  «Equipo del cliente» (`equiposDeLasElegidasDelDiagnostico`); el de una sesión de la exploración se muestra y se cambia
+  en la sesión. La escritura es la de siempre (`SessionProject.equipoDeLaReunion`, solo en la membresía del proyecto).

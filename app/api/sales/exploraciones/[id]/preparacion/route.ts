@@ -6,6 +6,10 @@
  * guardar nada: son datos de HubSpot y se muestran como están ahí. Lo que interpreta (el «por qué
  * ahora», la radiografía, la hipótesis de valor) lo propone el agente en sus casillas.
  * Pide `ventas.read`. Solo lee HubSpot.
+ *
+ * K2 (2026-10-27): también `presentacion`, cómo presentar a Smarteam en la primera sesión de un prospecto en frío o
+ * referido: el position statement del perfil de Smarteam o, mientras no esté escrito, su propuesta de valor (nunca
+ * inventado: lib/exploraciones/como-llego.ts › presentacionDeSmarteam). Si el perfil no se puede leer, null.
  */
 import { NextRequest, NextResponse } from "next/server";
 import { guardDeLaExploracion } from "@/lib/exploraciones/guardia";
@@ -13,6 +17,8 @@ import { leerContactos, leerEmpresa } from "@/lib/exploraciones/hubspot";
 import { leerLoLeido } from "@/lib/exploraciones/lo-leido";
 import { contactoPrincipal, type ContactoConRastro } from "@/lib/exploraciones/senales";
 import { leerExploracion, loQueVieneDeLaAgenda } from "@/lib/exploraciones/servidor";
+import { presentacionDeSmarteam } from "@/lib/exploraciones/como-llego";
+import { empresaQueUsaNexus, perfilDe } from "@/lib/smarteam/contexto";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -26,7 +32,12 @@ export async function GET(_req: NextRequest, { params }: Ctx) {
   const companyId = lectura.fila.client.hubspotCompanyId;
   // Solo lo que viene: la foto también guarda las reuniones que ya pasaron, y «Ya agendó» no es por una de esas.
   const leido = loQueVieneDeLaAgenda(leerLoLeido(lectura.fila.test));
-  if (!companyId) return NextResponse.json({ empresa: null, contactos: [], principalId: null, tests: [], agenda: leido.agenda });
+  const presentacion = lectura.fila.projectId
+    ? null
+    : await empresaQueUsaNexus()
+        .then(async (e) => presentacionDeSmarteam(e ? await perfilDe(e.id) : null))
+        .catch(() => null);
+  if (!companyId) return NextResponse.json({ empresa: null, contactos: [], principalId: null, tests: [], agenda: leido.agenda, presentacion });
 
   const [empresa, crudos] = await Promise.all([leerEmpresa(companyId), leerContactos(companyId)]);
   if (!empresa) return NextResponse.json({ error: "No se pudo consultar HubSpot. Prueba de nuevo en un rato." }, { status: 502 });
@@ -59,5 +70,6 @@ export async function GET(_req: NextRequest, { params }: Ctx) {
     principalId: contactoPrincipal(contactos)?.id ?? null,
     tests: leido.tests.map((t) => ({ contacto: t.contacto, areaId: t.resultado.areaId, fecha: t.resultado.fecha })),
     agenda: leido.agenda,
+    presentacion,
   });
 }
