@@ -130,3 +130,15 @@ analizador atribuye la reunión a todos los de Smarteam que estuvieron, con su p
 de cada vendedor cuenta las suyas. Va con T7 del plan de las reuniones. Quién estuvo sale del calendario y de quién habló
 en la transcripción, nunca de la asistencia ni de los minutos de la API de Meet: Google pide no usarla para medir
 desempeño.
+
+## El rediseño de Elías (2026-10-26)
+
+Después de ver lo construido el 26 oct (S1 a S3, en Sesiones › «Ver la salud de las reuniones» › «Reuniones de venta»):
+
+- **El norte:** el principal problema es que Ventas no explora lo suficiente y va directo a la solución. Queremos alejarnos de la venta transaccional y diagnosticar de forma profunda al cliente.
+- **El análisis vive en la preventa, no en Sesiones.** Sesiones no es, por ahora, el lugar para analizar el manejo de un cliente ni de una sesión: lo que hay allá se muda o se quita (S6).
+- **Una pieza «Análisis» del prospecto** en la preventa, junto a Exploración, La escala, Casos de uso y Propuesta (S5, antes «el analizador por cliente»): por cada sesión que se tuvo, cómo se trabajó al cliente; entran todas las sesiones de exploración y también las de propuesta.
+- **La autoevaluación del vendedor en cada sesión** (S4): en Exploración › la sesión › «Análisis», un apartado APARTE de lo que ya está (siguiente paso, cuánto avanzó, quedó abierto), con un resumen específico de cómo se trabajó esa sesión.
+- **La tendencia por vendedor se queda** (S7), como se decidió el 24 oct.
+
+La numeración del roadmap cambió: S4 la autoevaluación, S5 la pieza «Análisis», S6 sacarlo de Sesiones, S7 la tendencia y S8 la prueba con Andrés.
