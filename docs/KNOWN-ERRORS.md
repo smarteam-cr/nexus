@@ -145,6 +145,11 @@ No tropezar dos veces. Si pisás uno nuevo, agregalo acá.
   el MISMO evento del calendario a una fecha nueva después de la reunión; la sync de Meet le pisa `date` a la fila y
   conserva el transcript viejo (`cambiosDeSesion`). Si la reunión nueva trae otro Doc de Gemini, el reset por Doc nuevo
   borra el transcript viejo. Visto el 2026-10-16 (kickoff de Spectrum, seguimiento CS + RevOps). Sin guarda todavía.
+  *Variante sin texto (2026-10-26, tres filas):* la reunión se leyó en su fecha vieja, sin material, y quedó sellada vacía;
+  después la movieron al futuro y la fila sigue «leída», así que nunca se vuelve a leer. Ni el rescate ni la revisión de
+  conferencias escriben `date`: solo `cambiosDeSesion`. *Señal:* `sequence` mayor que 0 en el evento de Calendar.
+  *Arreglo:* antes de la fecha nueva, `recuperar-transcripts-meet.ts --solo-futuras` (bucket B); después,
+  `--solo-antes-de-terminar --dias 7` (bucket D).
 - **Una sesión de Claude Code se queda sin contexto a las pocas horas.** *Causa:* `CLAUDE.md` importaba con `@` el
   DECISIONS, el GLOSSARY y el RUNBOOK: 411.000 tokens (41 % de la ventana) cargados antes del primer mensaje, medido el
   2026-10-20. *Guarda:* esos tres son punteros con su condición; con `@` solo van ARCHITECTURE y este archivo. Antes de
