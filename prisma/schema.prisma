@@ -2737,7 +2737,7 @@ enum DecisionDeLaPropuesta {
 }
 
 /// S3 (2026-10-26) · El análisis de UNA reunión de venta (docs/analizador-reuniones-venta-plan.md): qué tan consultiva
-/// fue, con cada juicio citado de la transcripción. Es una PROPUESTA de coaching, no una evaluación (S4 suma los
+/// fue, con cada juicio citado de la transcripción. Es una PROPUESTA de coaching, no una evaluación (S4 suma
 /// la confirmación). Lo escribe SOLO lib/analizador-venta/analizar-server.ts. `clientId` es la dueña de la
 /// reunión al analizarla; INV57 vigila que siga siéndolo (invariante 1).
 model AnalisisDeVenta {
