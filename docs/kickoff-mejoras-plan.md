@@ -1,6 +1,9 @@
 # Dos mejoras al kickoff — plan
 
-> Pedido de Elías del 2026-10-23. **Nada construido.** En el roadmap es el área Q. El kickoff es un documento que ve el
+> Pedido de Elías del 2026-10-23. **Construido el 2026-10-27 (rama `claude/n2-kickoff-planificacion`): Q1 etapas 1 y 2,
+> Q2 etapas 1 y 2** (DECISIONS «El kickoff, la Planificación y los documentos de la empresa»). Pendiente: Q1 etapa 3 (la
+> adopción mira quién terminó), Q2 etapa 3 (la comprobación automática), que Elías revise el texto de la tarjeta del
+> acceso y que la CSL llene el catálogo. En el roadmap es el área Q. El kickoff es un documento que ve el
 > cliente: sigue el contrato §1-WEB de ARCHITECTURE.md (motor de documentos, tema claro, vista externa y PDF), y una
 > sección nueva entra al registro congelado (`lib/landing/registry.test.ts`) como decisión de producto.
 

@@ -40,6 +40,8 @@ import { fichaParaPrompt, leerFicha } from "@/lib/clients/ficha";
 import { Prisma } from "@prisma/client";
 import { PLANIFICACION_CANVAS, planificacionSectionSequence } from "@/lib/canvas/canvas-defs";
 import { createOnDemandCanvas, reconcileOnDemandCanvasSections } from "@/lib/canvas/default-canvases";
+import type { CanvasDefinition } from "@/lib/canvas/canvas-defs";
+import { ajustarALaPlantilla } from "@/lib/canvas/diagnostico-generate";
 import { loadCanvasContext, loadHandoffContext, loadTimelineContext } from "@/lib/canvas/load-canvas-context";
 import { serializeProcesosForPrompt } from "@/lib/canvas/read-procesos";
 import { loadDesarrolloContext } from "@/lib/canvas/desarrollo-context";
@@ -59,14 +61,35 @@ import { canvasOfNested } from "@/lib/pieces/canvas-query";
 import { fusionarFilas, type FilaPropiedad } from "@/lib/planificacion/propiedades";
 import { memoriaDelDocumento } from "@/lib/memoria";
 
-/** Asegura el canvas "Planificación" del proyecto + reconcilia. Idempotente. */
-export async function ensurePlanificacionCanvas(projectId: string): Promise<string> {
+/**
+ * Asegura el canvas "Planificación" del proyecto + reconcilia. Idempotente. Con `plantilla`, reconcilia SOLO a las
+ * secciones de esa plantilla (I2, 2026-10-27): la planificación esencial no gana las de la completa.
+ */
+export async function ensurePlanificacionCanvas(projectId: string, plantilla?: BcTemplateDef): Promise<string> {
   const existing = await prisma.projectCanvas.findFirst({
     where: canvasOfNested(PLANIFICACION_CANVAS.slug, { projectId }),
     select: { id: true },
   });
-  const canvasId = existing?.id ?? (await createOnDemandCanvas(projectId, PLANIFICACION_CANVAS));
-  await reconcileOnDemandCanvasSections(canvasId, PLANIFICACION_CANVAS, planificacionSectionSequence);
+  const def = planificacionDeLaPlantilla(plantilla);
+  const canvasId = existing?.id ?? (await createOnDemandCanvas(projectId, def));
+  await reconcileOnDemandCanvasSections(canvasId, def, planificacionSectionSequence);
+  return canvasId;
+}
+
+/** El canvas de la planificación con solo las secciones de la plantilla (todas, sin plantilla o con la completa). */
+function planificacionDeLaPlantilla(plantilla?: BcTemplateDef): CanvasDefinition {
+  if (!plantilla) return PLANIFICACION_CANVAS;
+  const keys = new Set(plantilla.sections.map((d) => d.key));
+  return { ...PLANIFICACION_CANVAS, sections: PLANIFICACION_CANVAS.sections.filter((s) => keys.has(s.key)) };
+}
+
+/**
+ * EMPEZAR EN BLANCO (I2, 2026-10-27): la planificación con las secciones de la plantilla elegida, sin la IA. La plantilla
+ * la anota quien llama (lib/entregables/generar-server.ts). Lo que la plantilla no tiene: vacío se borra, con algo se oculta.
+ */
+export async function prepararPlanificacionEnBlanco(projectId: string, plantilla: BcTemplateDef): Promise<string> {
+  const canvasId = await ensurePlanificacionCanvas(projectId, plantilla);
+  await ajustarALaPlantilla(canvasId, planificacionDeLaPlantilla(plantilla), PLANIFICACION_CANVAS);
   return canvasId;
 }
 
@@ -118,7 +141,7 @@ export async function runPlanificacionGeneration(opts: {
 
   const [canvasId, handoffCtx, diagnosticoCtx, exploracionCtx, desarrolloCtx, timelineCtx, project, cuestionarioCtx] =
     await Promise.all([
-      opts.canvasId ?? ensurePlanificacionCanvas(projectId),
+      opts.canvasId ?? ensurePlanificacionCanvas(projectId, opts.plantilla),
       loadHandoffContext(projectId, { onlyConfirmed: false, includeKeys: PLANIFICACION_HANDOFF_KEYS }),
       loadCanvasContext(projectId, "diagnosis", { onlyConfirmed: false }),
       loadCanvasContext(projectId, "exploration", { onlyConfirmed: false }),
@@ -264,6 +287,8 @@ export async function runPlanificacionGeneration(opts: {
      un plan regenerado ya no lo muestra (se OCULTA, no se borra — lib/canvas/retirar-secciones.ts). */
   if (sectionCount > 0) {
     await ocultarSeccionesRetiradas(canvasId, prevSecs.map((s) => s.key), SECCIONES_RETIRADAS_DE_PLANIFICACION);
+    // El documento queda con las secciones de su plantilla (I2): lo de la completa, oculto o borrado si está vacío.
+    await ajustarALaPlantilla(canvasId, planificacionDeLaPlantilla(opts.plantilla), PLANIFICACION_CANVAS);
   }
   return { canvasId, sectionCount };
 }

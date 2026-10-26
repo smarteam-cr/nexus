@@ -13,6 +13,9 @@ import type { FC } from "react";
 import type { KickoffTimelineData, KickoffProceso, KickoffPortadaCongelada } from "@/lib/external/kickoff-view-types";
 import type { LandingStringKey } from "./i18n";
 import type { FilaPropiedad } from "@/lib/planificacion/propiedades";
+import type { ListaDelCatalogo, ListaEnElKickoff } from "@/lib/kickoff/academy";
+import type { OperacionDelCliente } from "@/lib/planificacion/lo-del-cliente";
+import type { AsientosComprados } from "@/lib/planificacion/brief";
 
 // ── Datos estructurados por sección (lo que llena el agente) ─────────────────
 
@@ -382,7 +385,20 @@ export interface LandingContext {
    * que un formulario elija sus campos de ahí y avise si uno ya no existe. Ausente en el PDF y en el
    * enlace del cliente: ahí el formulario muestra los nombres que guardó.
    */
-  planificacion?: { propiedades?: FilaPropiedad[]; /** Las etiquetas del proyecto: los hubs vendidos, que la ficha ofrece marcar. */ etiquetasDelProyecto?: string[] };
+  planificacion?: {
+    propiedades?: FilaPropiedad[];
+    /** Las etiquetas del proyecto: los hubs vendidos, que la ficha ofrece marcar. */
+    etiquetasDelProyecto?: string[];
+    /**
+     * Solo el ENLACE del cliente (L4 etapa 6, 2026-10-27): guardar lo que el cliente escribe en una sección que el CSE le
+     * abrió. Es la server action de app/external/planificacion/actions.ts, atada al acceso de la página.
+     */
+    cliente?: { guardar: (op: OperacionDelCliente) => Promise<{ ok: boolean; error?: string }> };
+    /** Solo el editor (2026-10-27): los asientos de HubSpot comprados (Partner, interno), para la cuenta de licencias. */
+    asientos?: AsientosComprados | null;
+    /** Solo el editor (2026-10-27): el arranque y el cierre estimado, leídos del Cronograma para la ficha del proyecto. */
+    fechas?: { inicio: string | null; cierre: string | null } | null;
+  };
   kickoff?: {
     timeline?: KickoffTimelineData | null;
     /**
@@ -418,6 +434,14 @@ export interface LandingContext {
      * Ausente en la vista del cliente y en el PDF. Lanza si el servidor la rechaza.
      */
     onSetArranque?: (ymd: string | null) => Promise<void>;
+    /**
+     * El acceso al portal de HubSpot del cliente (Q2, 2026-10-27), VIVO como los horarios: lo leen el editor y la vista
+     * del cliente (kickoff-view.ts), así la tarjeta fija dice «gracias» apenas el CSE lo marca. Ausente = no se sabe
+     * (el PDF): la tarjeta pide el acceso.
+     */
+    accesoAlPortal?: { dadoEn: string | null } | null;
+    /** Solo el editor: el catálogo de HubSpot Academy y la ruta que sugiere Nexus para este proyecto (Q1). */
+    academia?: { sugerida: ListaEnElKickoff[]; catalogo: ListaDelCatalogo[] } | null;
   };
   /**
    * Solo DESARROLLO: la estimación de esfuerzo, que vive en la tabla `DevEstimate` y NO en

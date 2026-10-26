@@ -38,6 +38,9 @@ export const SKELETON_COVERAGE: Record<string, Cobertura> = {
   clients: { modo: "own" },
   "clients/[id]": { modo: "own" },
   "clients/[id]/settings": { modo: "inherits", de: "clients/[id]" },
+  // R3 (2026-10-27): los documentos de la empresa, dentro de la ficha.
+  "clients/[id]/documentos": { modo: "inherits", de: "clients/[id]" },
+  "clients/[id]/documentos/[canvasId]": { modo: "inherits", de: "clients/[id]" },
 
   // ── Sesiones ────────────────────────────────────────────────────────────────
   sessions: { modo: "own" },
@@ -92,6 +95,7 @@ export const SKELETON_COVERAGE: Record<string, Cobertura> = {
   "customer-success/[clientId]": { modo: "own" },
   "customer-success/carga": { modo: "own" },
   "customer-success/limpieza": { modo: "own" },
+  "customer-success/academy": { modo: "own" },
   "customer-success/propuestas": { modo: "own" },
   "customer-success/seguimiento": { modo: "own" },
   "customer-success/carga/persona/[id]": { modo: "own" },

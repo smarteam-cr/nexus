@@ -201,6 +201,13 @@ Generá la landing de kickoff de cara al cliente siguiendo tus instrucciones: es
   if (sinEscala) {
     await prisma.canvasBlock.deleteMany({ where: { section: { canvasId: targetCanvasId, key: SECCION_DE_ESCALA.kickoff } } });
   }
+  /* Q2 (2026-10-27): todo kickoff que se genera trae la tarjeta fija del acceso al portal arriba de «Lo que necesitamos de
+     tu equipo» (`acceso`, fuera del esquema). Lo que el CSE ya ajustó viene de la corrida anterior y no se toca. */
+  for (const s of gen.sections) {
+    if (s.key !== "tu_rol" || !s.data || typeof s.data !== "object") continue;
+    const d = s.data as Record<string, unknown>;
+    if (!d.acceso || typeof d.acceso !== "object") s.data = { ...d, acceso: { desde: new Date().toISOString() } };
+  }
   const salida = { sections: gen.sections.map((s) => ({ key: s.key, blocks: [{ type: "card", data: s.data as unknown }] })) };
   // Auto-poblar las sesiones de "horarios" desde los hubs del handoff. Best-effort; preserva lo previo.
   await syncHorariosSessionsFromHubs(targetCanvasId, proyecto.tags);

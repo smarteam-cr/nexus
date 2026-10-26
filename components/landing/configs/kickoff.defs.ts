@@ -22,6 +22,8 @@ import type { BCSectionDef } from "./business-case.defs";
 import type { BcTemplateDef } from "./templates.defs";
 import { KICKOFF_CANALES_DEFAULT, KICKOFF_CIERRE_DEFAULT } from "@/lib/canvas/canvas-defs";
 import { heroTitleBrief } from "@/lib/landing/hero-title";
+import { tuRolVacia } from "@/lib/kickoff/acceso-al-portal";
+import { rutaDeAcademyVacia } from "@/lib/kickoff/academy";
 import {
   PROSA_SCHEMA,
   PROSA_EMPTY,
@@ -210,12 +212,16 @@ export const KICKOFF_SECTION_DEFS: BCSectionDef[] = [
     label: "Lo que necesitamos de tu equipo",
     eyebrow: "Tu parte",
     theme: "soft",
-    sectionType: "kickoff_prose",
+    /* 2026-10-27 (Q2): la prosa de siempre con la TARJETA FIJA del acceso al portal arriba (`data.acceso`, fuera del
+       esquema: regenerar no la toca). Con la tarjeta, la sección nunca está vacía para el cliente. */
+    sectionType: "kickoff_tu_rol",
+    vacia: tuRolVacia,
     agentGenerated: true,
     empty: proseEmpty,
     agentHint: "3-5 pedidos accionables al equipo del cliente (disponibilidad, accesos, decisores, datos).",
     brief:
-      "3-5 cards accionables de lo que necesitás del equipo del cliente. `title` = el pedido en 3-6 palabras (disponibilidad, accesos, decisores, datos); `detail` = UNA línea con de quién o para cuándo. Fuente: `stakeholders_handoff` + `desarrollo` + el cronograma.",
+      "3-5 cards accionables de lo que necesitás del equipo del cliente. `title` = el pedido en 3-6 palabras (disponibilidad, decisores, datos); `detail` = UNA línea con de quién o para cuándo. Fuente: `stakeholders_handoff` + `desarrollo` + el cronograma. " +
+      "El ACCESO AL PORTAL DE HUBSPOT ya va en una tarjeta fija arriba de la sección: no lo repitas como card.",
     schema: proseSchema,
     schemaDelChat: PROSA_SCHEMA_DEL_CHAT,
   },
@@ -309,6 +315,24 @@ export const KICKOFF_SECTION_DEFS: BCSectionDef[] = [
       type: "object",
       properties: { horario: str, canales: strArray, soporteEmail: str },
     },
+  },
+  {
+    /* 2026-10-27 (Q1, docs/kickoff-mejoras-plan.md): las listas de HubSpot Academy por rol. CURADA: la sugiere Nexus desde
+       el catálogo (lib/kickoff/academy.ts, por los hubs vendidos) y el CSE ajusta; el agente no la escribe. Cada lista se
+       guarda COPIADA (nombre, enlace, hub, rol, duración): archivar una del catálogo no cambia un kickoff publicado. */
+    key: "ruta_academy",
+    label: "Tu ruta en HubSpot Academy",
+    eyebrow: "Para que tu equipo aprenda",
+    theme: "light",
+    sectionType: "kickoff_academy",
+    agentGenerated: false,
+    vacia: rutaDeAcademyVacia,
+    empty: { intro: "", listas: [] },
+    agentHint: "",
+    brief: "Curada por el CSE: las listas de reproducción de HubSpot Academy que le asignamos al cliente por rol (líderes, Ventas, Marketing, Servicio), del catálogo de Smarteam. El agente NO la genera.",
+    schema: {},
+    /* ⛔ Sin `catalogoId` ni `id`: los pone la app al elegir del catálogo. El chat puede escribir la frase de arriba. */
+    schemaDelChat: { type: "object", properties: { intro: str } },
   },
   {
     key: "proximos_pasos",
@@ -447,6 +471,8 @@ const SECCIONES_DEL_KICKOFF_RECURRENTE_DEFS = [
   "solicitudes",
   "punto_de_partida",
   "canales",
+  // 2026-10-27 (Q1): todo kickoff nuevo trae la ruta de HubSpot Academy, también el del servicio.
+  "ruta_academy",
   "cierre",
 ] as const;
 

@@ -24,6 +24,7 @@ import { INV49, INV53 } from "./google";
 import { INV59 } from "./escala";
 import { INV55, INV55_BLOQUEA } from "./smartloop";
 import { INV51, INV56 } from "./empresa";
+import { INV64 } from "./documentos-de-la-empresa";
 import { INV58, INV58_BLOQUEA } from "./tests-diagnostico";
 import { INV61 } from "./exploraciones";
 import { INV62 } from "./analizador-venta";
@@ -830,7 +831,7 @@ describe("el registro y el consumidor", () => {
       "44", "45", "46", "47",
       // Del 49 en adelante (2026-10-25 en adelante): qué vigila cada una está en su archivo de lib/invariantes/ y en
       // la fila invariants-daily del RUNBOOK.
-      "49", "50", "51", "52", "53", "54", "55", "56", "57", "58", "59", "60", "61", "62",
+      "49", "50", "51", "52", "53", "54", "55", "56", "57", "58", "59", "60", "61", "62", "64",
     ]);
     expect(new Set(INVARIANTES_SOLO_BASE.map((i) => i.id)).size).toBe(INVARIANTES_SOLO_BASE.length);
   });
@@ -989,6 +990,19 @@ describe("INV56 (la investigación de una preventa)", () => {
     const r = await INV56.correr(baseFalsa({ investigacionDeEmpresa: [propia, cruzada] }), AHORA);
     expect(r.ok).toBe(false);
     expect(r.lineas[0]).toContain("i2");
+  });
+});
+
+describe("INV64 (el enlace de un documento de la empresa)", () => {
+  it("un enlace que abre el documento de otra empresa, o uno de un proyecto, lo pone en rojo", async () => {
+    const propio = { id: "a1", clientId: "c1", canvas: { clientId: "c1", projectId: null, businessCaseId: null } };
+    const ajeno = { id: "a2", clientId: "c1", canvas: { clientId: "c2", projectId: null, businessCaseId: null } };
+    const deProyecto = { id: "a3", clientId: "c1", canvas: { clientId: null, projectId: "p1", businessCaseId: null } };
+    expect((await INV64.correr(baseFalsa({ accesoAlDocumento: [propio] }), AHORA)).ok).toBe(true);
+    const r = await INV64.correr(baseFalsa({ accesoAlDocumento: [propio, ajeno, deProyecto] }), AHORA);
+    expect(r.ok).toBe(false);
+    expect(r.lineas[0]).toContain("2 enlace(s)");
+    expect(r.lineas[0]).toContain("a2, a3");
   });
 });
 

@@ -322,6 +322,7 @@ model Client {
   propuestasDeDatos        PropuestaDeDato[]         @relation("PropuestasDeDatosDeLaEmpresa") // R1: propuestas e historia de sus datos (CASCADE)
   investigaciones          InvestigacionDeEmpresa[]  @relation("InvestigacionesDeLaEmpresa") // R5: lo que Nexus encontró en la web (CASCADE)
   documentosDeLaEmpresa    ProjectCanvas[]           @relation("DocumentosDeLaEmpresa") // R3: los documentos sin proyecto ni propuesta (CASCADE)
+  accesosADocumentos       AccesoAlDocumento[] // R3 etapa 3: los enlaces de esos documentos (CASCADE)
   personas                 PersonaDeLaEmpresa[]      @relation("PersonasDeLaEmpresa") // R6: una persona del cliente con su rol (CASCADE)
   perfil                   PerfilDeLaEmpresa?        @relation("PerfilDeLaEmpresa") // R13: el perfil de la empresa que usa Nexus (hoy Smarteam)
   clienteIdeal             IcpItem[]                 @relation("ClienteIdealDeLaEmpresa") // R13 (SET NULL)
@@ -526,6 +527,11 @@ model Project {
   // (append-only); lo que quedó acá lo pasa scripts/migrar-presentacion-del-diagnostico.ts. Sin lectores.
   diagnosticoPresentacion  Json?
   planificacionPublishedAt DateTime?
+  // EL ACCESO A SU PORTAL DE HUBSPOT (Q2 del roadmap, 2026-10-27): cuándo el cliente nos lo dio, marcado a mano por el
+  // equipo en el kickoff. null = pendiente: «Para ti» se lo recuerda al CSE mientras el kickoff esté publicado. Más
+  // adelante lo comprobará Nexus al conectar el portal (Q2 etapa 3). SQL: scripts/sql/2026-10-27-kickoff-planificacion.sql.
+  accesoAlPortalDadoEn     DateTime?
+  accesoAlPortalMarcadoPor String? // el correo de quien lo marcó
   // La RUTA DEL SERVICIO para el cliente (SmartLoop, etapa 7 de docs/smartloop-plan.md): los ciclos del servicio y
   // sus casos de uso como Gantt, en /external/ciclos/[acceso]. Mismo mecanismo que la Entrega: el chokepoint
   // (lib/external/ciclos-view.ts) exige NO-null en cada lectura y sirve la FOTO congelada al «Subir al cliente»
@@ -1400,6 +1406,8 @@ model ProjectCanvas {
   canvasSections CanvasSection[]
   versiones      VersionDeDocumento[]
   hitos          HitoDeDocumento[]
+  // R3 (2026-10-27): el enlace con que la empresa ve este documento, si es de la empresa (sin proyecto).
+  accesoDeLaEmpresa AccesoAlDocumento?
   // OJO — en la base hay además un índice ÚNICO PARCIAL que Prisma no sabe declarar:
   //   ProjectCanvas_projectId_slug_key ON ("projectId", slug)
   //   WHERE "projectId" IS NOT NULL AND slug IS NOT NULL
@@ -2122,6 +2130,49 @@ model BusinessCaseTranscript {
   createdAt      DateTime                     @default(now())
 
   @@index([businessCaseId])
+}
+
+// El enlace con que una EMPRESA ve un documento suyo sin proyecto (R3 etapas 2 y 3, 2026-10-27): un diagnóstico para un
+// prospecto, por ejemplo. Mismo modelo que la propuesta: la URL es el secreto (/external/documento/[token], 256 bits),
+// sin contraseña; se revoca y se vuelve a crear. Lo que ve es la FOTO publicada del documento (publishedSnapshot), con
+// lo oculto filtrado contra el documento vivo. INV64: el enlace es de la misma empresa que el documento, y el documento
+// no tiene proyecto ni propuesta. SQL: scripts/sql/2026-10-27-kickoff-planificacion.sql.
+model AccesoAlDocumento {
+  id          String        @id @default(cuid())
+  canvasId    String        @unique
+  canvas      ProjectCanvas @relation(fields: [canvasId], references: [id], onDelete: Cascade)
+  clientId    String
+  client      Client        @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  accessToken String        @unique // 64 hex (crypto.randomBytes(32))
+  enabledAt   DateTime      @default(now())
+  revokedAt   DateTime? // != null → el enlace no abre nada
+  lastUsedAt  DateTime?
+  creadoPor   String? // el correo de quien lo creó (auditoría)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@index([clientId])
+}
+
+// El catálogo de listas de reproducción de HubSpot Academy que mantiene Smarteam (Q1, 2026-10-27). La sección «Tu ruta
+// en HubSpot Academy» del kickoff sugiere las de los hubs vendidos y los roles que tocan (lib/kickoff/academy.ts); el
+// CSE ajusta. Se edita en Éxito del cliente › HubSpot Academy. Archivar = `activa: false` (un kickoff publicado guarda
+// su copia y no se rompe). SQL: scripts/sql/2026-10-27-kickoff-planificacion.sql.
+model ListaDeAcademy {
+  id              String   @id @default(cuid())
+  nombre          String
+  enlace          String
+  hub             String   @default("general") // slug del catálogo de etiquetas (sales_hub…) o "general"
+  rol             String // lideres | ventas | marketing | servicio
+  duracionMinutos Int?
+  descripcion     String?
+  orden           Int      @default(0)
+  activa          Boolean  @default(true)
+  creadaPor       String? // el correo de quien la sumó
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([activa, orden])
 }
 
 model BusinessCaseExternalAccess {

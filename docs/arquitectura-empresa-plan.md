@@ -3,7 +3,9 @@
 > Pedido de Elías del 2026-10-23: que la empresa sea el centro de Nexus, como en un CRM profesional. Enriquecida con la
 > investigación, el tamaño, la industria, el TAM, el perfil y la escala; sincronizada con HubSpot en los dos sentidos; con
 > documentos que existan sin proyecto, y lista para vender, atender con IA y hacer venta cruzada. Revisado contra el
-> esquema y la base de producción en solo lectura el mismo día. **Nada construido.** En el roadmap es el área R. El plano
+> esquema y la base de producción en solo lectura el mismo día. **Construido después, por partes (ver el estado de cada
+> ítem en el área R del roadmap); R3 etapas 2 y 3, el 2026-10-27** (DECISIONS «El kickoff, la Planificación y los
+> documentos de la empresa»). En el roadmap es el área R. El plano
 > de hoy está en el artefacto «Lo que Nexus sabe de una empresa».
 
 ## Lo que se encontró

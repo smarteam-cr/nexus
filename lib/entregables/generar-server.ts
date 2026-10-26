@@ -20,7 +20,7 @@ import { canvasOf, canvasOfNested } from "@/lib/pieces/canvas-query";
 import { piezaAplica, pieceReadiness } from "@/lib/flow/piece-readiness";
 import { runKickoffGeneration } from "@/lib/canvas/kickoff-generate";
 import { prepararDiagnosticoEnBlanco, runDiagnosticoGeneration } from "@/lib/canvas/diagnostico-generate";
-import { runPlanificacionGeneration } from "@/lib/canvas/planificacion-generate";
+import { prepararPlanificacionEnBlanco, runPlanificacionGeneration } from "@/lib/canvas/planificacion-generate";
 import { runDesarrolloGeneration } from "@/lib/canvas/desarrollo-generate";
 import { runEntregaGeneration } from "@/lib/canvas/entrega-generate";
 import {
@@ -159,13 +159,16 @@ export async function generarEntregable(pedido: PedidoDeEntregable): Promise<Ent
 
 /**
  * EMPEZAR EN BLANCO (2026-10-23): el documento con las secciones de la plantilla elegida, sin la IA, y la plantilla
- * anotada (así regenerar después usa la misma). Hoy solo el diagnóstico tiene más de una plantilla; los demás se escriben
- * a mano como siempre, sin pasar por acá.
+ * anotada (así regenerar después usa la misma). El diagnóstico y la planificación tienen más de una plantilla; los demás
+ * se escriben a mano como siempre, sin pasar por acá.
  */
 export async function empezarEnBlanco(o: { projectId: string; slug: string; plantillaId: string; porEmail: string | null }): Promise<{ canvasId: string }> {
   const plantilla = resolverPlantilla(o.slug, o.plantillaId);
-  if (o.slug !== "diagnosis") throw new ErrorDelEntregable(400, `${nombreDelEntregable(o.slug)} se escribe a mano sin elegir plantilla.`);
-  const canvasId = await prepararDiagnosticoEnBlanco(o.projectId, templateDeLaPlantilla(plantilla.id));
+  // La Planificación tiene dos plantillas desde el 2026-10-27 (I2).
+  const preparar =
+    o.slug === "diagnosis" ? prepararDiagnosticoEnBlanco : o.slug === "planning" ? prepararPlanificacionEnBlanco : null;
+  if (!preparar) throw new ErrorDelEntregable(400, `${nombreDelEntregable(o.slug)} se escribe a mano sin elegir plantilla.`);
+  const canvasId = await preparar(o.projectId, templateDeLaPlantilla(plantilla.id));
   await anotarPlantilla(canvasId, plantilla, o.porEmail);
   return { canvasId };
 }

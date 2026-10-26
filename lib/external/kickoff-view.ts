@@ -68,6 +68,8 @@ export async function getPublishedKickoffForToken(
       clientId: true,
       hiddenKickoffKeys: true,
       kickoffHorarioAssignments: true,
+      // El acceso a su portal (Q2), vivo como los horarios: no viaja en la foto.
+      accesoAlPortalDadoEn: true,
       tags: true,
       client: { select: { name: true } },
     },
@@ -186,6 +188,7 @@ export async function getPublishedKickoffForToken(
     brandLogos,
     platformLogos: platformLogosFor(proj?.tags ?? [], logos),
     recurrent: (proj?.tags ?? []).includes(RECURRENTE_TAG),
+    accesoAlPortalDadoEn: proj?.accesoAlPortalDadoEn?.toISOString() ?? null,
     procesos,
     // Los números de la portada al «Subir»: el hero los usa si `timeline` no aporta nada.
     portada: normalizarPortadaCongelada(snap.portada),

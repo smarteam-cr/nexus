@@ -41,6 +41,7 @@ export const PAGE_SHELL_COVERAGE: Record<string, ShellDecl> = {
   "customer-success/[clientId]": { shell: "SHELL_FULL" },
   "customer-success/carga": { shell: "SHELL_DEFAULT" },
   "customer-success/limpieza": { shell: "SHELL_DEFAULT" },
+  "customer-success/academy": { shell: "SHELL_DEFAULT" },
   "customer-success/propuestas": { shell: "SHELL_DEFAULT" },
   "customer-success/seguimiento": { shell: "SHELL_DEFAULT" },
   "customer-success/carga/persona/[id]": { shell: "SHELL_DEFAULT" },
@@ -91,6 +92,8 @@ export const PAGE_SHELL_COVERAGE: Record<string, ShellDecl> = {
   // ── Contenedor propio legítimo ──────────────────────────────────────────────
   "clients/[id]": { custom: "workspace full-viewport con scroll interno y tab bar sticky" },
   "clients/[id]/settings": { custom: "client component con contenedor angosto propio (candidato a SHELL_NARROW)" },
+  "clients/[id]/documentos": { shell: "SHELL_DEFAULT" },
+  "clients/[id]/documentos/[canvasId]": { custom: "editor de documento a todo el ancho, como el del proyecto (motor de documentos)" },
   "roles/[id]": { custom: "página web del rol renderizada por el motor de landing (.stl)" },
   "business-cases/[id]": { custom: "workspace del BC (header propio + canvas)" },
   "business-cases/new": { custom: "formulario de creación con contenedor propio (candidato a SHELL_NARROW)" },

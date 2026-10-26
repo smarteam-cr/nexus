@@ -98,4 +98,6 @@ export interface KickoffLandingData {
   /** Servicio recurrente (tag `recurrente` del handoff) — badge sutil client-facing.
    *  El CSE lo quita sacando el tag del proyecto en el editor. */
   recurrent: boolean;
+  /** Cuándo nos dio acceso a su portal de HubSpot (Q2, 2026-10-27), VIVO: la tarjeta fija dice «gracias». null = pendiente. */
+  accesoAlPortalDadoEn?: string | null;
 }

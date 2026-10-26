@@ -119,6 +119,9 @@ export const SE_MUDAN = [
      fichas tienen el mismo documento de la empresa (la misma pieza), el único parcial (clientId, slug) frena la fusión:
      se archiva uno antes. El cliente ideal y las buyer personas de la empresa que usa Nexus (R13): `onDelete: SetNull`. */
   ["projectCanvas", "clientId"],
+  /* El enlace de un documento de la empresa (R3 etapa 3, 2026-10-27): `onDelete: Cascade`. Se muda con su documento: si
+     quedara en la ficha borrada, la vista lo compararía con la empresa del documento y no abriría nada (e INV64 en rojo). */
+  ["accesoAlDocumento", "clientId"],
   ["icpItem", "clientId"],
   ["buyerPersona", "clientId"],
   /* La empresa que Nexus propone para una reunión sin empresa (T3, 2026-10-25): `onDelete: SetNull`; sin mudarla, la

@@ -496,6 +496,10 @@ describe("un renderer, un contrato de datos", () => {
     ciclo_servicio: "modulo",
     nivel_servicio: "modulo",
     cards_icono: "modulo",
+    /* El kickoff con HubSpot Academy y el acceso al portal (área Q, 2026-10-27): la prosa de «Lo que necesitamos de tu
+       equipo» con la tarjeta fija arriba, y la ruta de Academy. Solo el kickoff las usa. */
+    kickoff_tu_rol: "modulo",
+    kickoff_academy: "modulo",
   };
 
   it("⭐ nada queda sin clasificar, y nada cambia de clase en silencio", () => {
@@ -642,12 +646,14 @@ describe("Kickoff: registry completo + keys congeladas", () => {
   });
 
   it("snapshot de keys: bienvenida abre, cierre cierra", () => {
+    /* 2026-10-27 (área Q, decisión de producto: la noche 2 aprobada por Elías el 26 oct): «Tu ruta en HubSpot Academy»
+       después de los canales, en el kickoff de siempre y en el del servicio. */
     /* 2026-10-24 (M1, decisión de producto: Elías aprobó el paso dos): el kickoff de un SERVICIO RECURRENTE suma cuatro
        secciones —cómo trabajamos cada ciclo, el primer ciclo, la cadencia y cómo nos pides cosas—. Las crea solo su
        plantilla (lib/entregables/registro.ts); un kickoff de implementación no las ve (`KICKOFF_CANVAS` no las tiene). */
     expect(KICKOFF_SECTION_DEFS.map((d) => d.key)).toEqual([
       "bienvenida", "objetivos", "como_trabajamos", "primer_ciclo", "cadencia_del_servicio", "hoy_vs_sistema", "alcance", "equipo", "tu_rol",
-      "solicitudes", "metricas_exito", "punto_de_partida", "horarios", "canales", "proximos_pasos", "cronograma", "procesos", "cierre",
+      "solicitudes", "metricas_exito", "punto_de_partida", "horarios", "canales", "ruta_academy", "proximos_pasos", "cronograma", "procesos", "cierre",
     ]);
   });
 

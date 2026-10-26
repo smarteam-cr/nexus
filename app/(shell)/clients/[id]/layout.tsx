@@ -212,6 +212,10 @@ export default async function ClientLayout({
             <BotonAgregarReunion clienteFijo={{ id, nombre: client.name }} etiqueta="+ Reunión" />
             {/* El chat de Nexus sobre esta cuenta y lo que te sugiere (lib/nexus-chat). */}
             {puedeChat && <ChatDeNexus clientId={id} nombre={client.name} />}
+            {/* R3 (2026-10-27): los documentos de la empresa sin proyecto (un diagnóstico para un prospecto). */}
+            <AccionDeCabecera href={`/clients/${id}/documentos`} title="Los documentos de la empresa que no son de un proyecto">
+              📄 Documentos de la empresa
+            </AccionDeCabecera>
             {canSeeCs && (
               <AccionDeCabecera href={`/customer-success/${id}`} title="Estado de la cuenta en Customer Success">
                 🧭 Ver portal del cliente

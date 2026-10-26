@@ -108,6 +108,12 @@ export const SCOPE_COVERAGE: Record<string, Cobertura> = {
       "diagnóstico que Nexus dejó guardadas en CUALQUIER proyecto. Filtrar por un criterio escondería propuestas que " +
       "existieron (de un proyecto cerrado después) y el uso saldría más bajo de lo que fue.",
   },
+  "lib/para-ti/fuentes/acceso-al-portal.ts": {
+    modo: "exento",
+    razon:
+      "no pregunta «¿qué proyectos cuentan?»: mira el acceso al portal de los proyectos del ALCANCE de la persona " +
+      "(`a.proyectos`, los que lleva como encargada), que ya salieron de `proyectosAbiertos` en alcance-server.ts.",
+  },
   "lib/para-ti/fuentes/etapa.ts": {
     modo: "exento",
     razon:

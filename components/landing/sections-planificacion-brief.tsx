@@ -21,6 +21,7 @@ import { Editable, InlineCheck, InlineSelect, RemoveBtn, AddBtn, replaceAt, remo
 import { ConIntro } from "./partes";
 import { partesDe } from "@/lib/landing/partes";
 import { OrigenChip, Mover, Campo } from "./sections-planificacion";
+import { ControlDelCse, PanelDelCliente } from "./lo-del-cliente";
 import { mover } from "@/lib/planificacion/secciones";
 import { nuevoIdDeFila, normalizarObjeto, OBJETOS_ESTANDAR } from "@/lib/planificacion/propiedades";
 import {
@@ -41,6 +42,7 @@ import {
   ajustarPermiso,
   resumenDeLicencias,
   avisosDeUsuarios,
+  licenciasContraLoComprado,
   camposContraPropiedades,
   propiedadesParaFormulario,
   conIds,
@@ -76,6 +78,13 @@ import {
   type Informe,
 } from "@/lib/planificacion/brief";
 
+const fechaCorta = (iso: string) => new Date(`${iso.slice(0, 10)}T12:00:00Z`).toLocaleDateString("es-CR", { day: "numeric", month: "long", year: "numeric" });
+/** La línea de las fechas de la ficha: las del Cronograma si las hay, o dónde viven. */
+function fraseDeFechas(f: { inicio: string | null; cierre: string | null } | null | undefined): string {
+  if (!f?.inicio) return "Las fechas del kickoff, del inicio y del cierre estimado están en el Cronograma.";
+  return `Según el Cronograma: arranca el ${fechaCorta(f.inicio)}${f.cierre ? ` y el cierre estimado es el ${fechaCorta(f.cierre)}` : ""}.`;
+}
+
 const etiquetaDe = (opciones: readonly { value: string; label: string }[], v?: string) => opciones.find((o) => o.value === v)?.label ?? v ?? "";
 const lleno = (v?: string) => !!(v ?? "").trim();
 const OBJETOS_DE_FORMULARIO = OBJETOS_ESTANDAR.map((o) => ({ value: o, label: o }));
@@ -105,6 +114,9 @@ export const FichaDelProyectoSection: FC<SectionProps<FichaDelProyectoData>> = (
   const personas = editable ? participantes : participantes.filter(participanteVisible);
 
   return (
+    <>
+    {/* L4 etapa 6: el CSE abre la sección al cliente; el cliente escribe en el enlace (sus personas). */}
+    {editable && <ControlDelCse seccion="ficha_proyecto" data={data} onChange={(x) => onChange?.(x as unknown as FichaDelProyectoData)} />}
     <ConIntro data={{ ...(data as object), intro: d.intro }} editable={editable} onCambios={(c) => set(c as unknown as Partial<FichaDelProyectoData>)} placeholder="Una frase que presenta el proyecto…">
       {hubsVisibles.length > 0 && (
         <div className="stl-props-scroll">
@@ -204,14 +216,18 @@ export const FichaDelProyectoSection: FC<SectionProps<FichaDelProyectoData>> = (
           <Campo rotulo="A considerar" value={d.consideraciones} editable={editable} placeholder="Lo que hay que tener en cuenta…" onCommit={(v) => set({ consideraciones: v })} />
         </dl>
       )}
-      {editable && <p className="stl-plan-aviso">Las fechas del kickoff, del inicio y del cierre estimado están en el Cronograma.</p>}
+      {/* Las fechas se LEEN del Cronograma, no se escriben acá (2026-10-27). Solo en el editor: el cliente las ve en su
+          cronograma. */}
+      {editable && <p className="stl-plan-aviso">{fraseDeFechas(ctx.planificacion?.fechas)}</p>}
     </ConIntro>
+    {!editable && <PanelDelCliente seccion="ficha_proyecto" data={data} ctx={ctx} />}
+    </>
   );
 };
 
 /* ── Usuarios y permisos ────────────────────────────────────────────────────── */
 
-export const UsuariosPermisosSection: FC<SectionProps<UsuariosPermisosData>> = ({ data, editable, onChange }) => {
+export const UsuariosPermisosSection: FC<SectionProps<UsuariosPermisosData>> = ({ data, ctx, editable, onChange }) => {
   const d = adoptarUsuariosPermisos(data);
   const set = (next: Partial<UsuariosPermisosData>) => onChange?.({ ...partesDe(data), intro: d.intro, equipos: conIds(d.equipos), usuarios: conIds(d.usuarios), ...next });
   const equipos = d.equipos;
@@ -228,7 +244,8 @@ export const UsuariosPermisosSection: FC<SectionProps<UsuariosPermisosData>> = (
   const equiposVisibles = editable ? equipos : equipos.filter(equipoVisible);
   const usuariosVisibles = editable ? usuarios : usuarios.filter(usuarioVisible);
   const licencias = resumenDeLicencias(usuarios);
-  const avisos = editable ? avisosDeUsuarios(d) : [];
+  /* La cuenta de licencias contra lo comprado en HubSpot (2026-10-27): solo el editor, porque lo comprado es interno. */
+  const avisos = editable ? [...avisosDeUsuarios(d), ...licenciasContraLoComprado(usuarios, ctx.planificacion?.asientos).avisos] : [];
 
   const matriz = (e: EquipoDeHubspot, i: number) => (
     <div key={e.id ?? i} className="stl-plan-bloque stl-item">
@@ -279,6 +296,8 @@ export const UsuariosPermisosSection: FC<SectionProps<UsuariosPermisosData>> = (
   );
 
   return (
+    <>
+    {editable && <ControlDelCse seccion="usuarios_permisos" data={data} onChange={(x) => onChange?.(x as unknown as UsuariosPermisosData)} />}
     <ConIntro data={{ ...(data as object), intro: d.intro }} editable={editable} onCambios={(c) => set(c as unknown as Partial<UsuariosPermisosData>)} placeholder="Quién va a trabajar en HubSpot y qué puede hacer cada equipo…">
       {(editable || equiposVisibles.length > 0) && <h3 className="stl-plan-objeto">Equipos y sus permisos</h3>}
       {equiposVisibles.map(matriz)}
@@ -340,12 +359,14 @@ export const UsuariosPermisosSection: FC<SectionProps<UsuariosPermisosData>> = (
         <ul className="stl-plan-avisos">{avisos.map((a) => <li key={a}>{a}</li>)}</ul>
       )}
     </ConIntro>
+    {!editable && <PanelDelCliente seccion="usuarios_permisos" data={data} ctx={ctx} />}
+    </>
   );
 };
 
 /* ── Por dónde entran los leads ─────────────────────────────────────────────── */
 
-export const CanalesDeEntradaSection: FC<SectionProps<CanalesDeEntradaData>> = ({ data, editable, onChange }) => {
+export const CanalesDeEntradaSection: FC<SectionProps<CanalesDeEntradaData>> = ({ data, ctx, editable, onChange }) => {
   const d = adoptarCanales(data);
   const canales = d.canales;
   const set = (next: Partial<CanalesDeEntradaData>) => onChange?.({ ...partesDe(data), intro: d.intro, canales: conIds(canales), ...next });
@@ -354,6 +375,8 @@ export const CanalesDeEntradaSection: FC<SectionProps<CanalesDeEntradaData>> = (
   const visibles = editable ? canales : canales.filter(canalVisible);
   const nuevo = (canal: string): CanalDeEntrada => ({ id: nuevoIdDeFila(), canal, responsable: "", atencion: "", pasaA: "", origen: "" });
   return (
+    <>
+    {editable && <ControlDelCse seccion="canales_entrada" data={data} onChange={(x) => onChange?.(x as unknown as CanalesDeEntradaData)} />}
     <ConIntro data={{ ...(data as object), intro: d.intro }} editable={editable} onCambios={(c) => set(c as unknown as Partial<CanalesDeEntradaData>)} placeholder="Por dónde llegan los leads y qué pasa con cada uno…">
       {visibles.length > 0 && (
         <div className="stl-props-scroll">
@@ -401,6 +424,8 @@ export const CanalesDeEntradaSection: FC<SectionProps<CanalesDeEntradaData>> = (
         </div>
       )}
     </ConIntro>
+    {!editable && <PanelDelCliente seccion="canales_entrada" data={data} ctx={ctx} />}
+    </>
   );
 };
 

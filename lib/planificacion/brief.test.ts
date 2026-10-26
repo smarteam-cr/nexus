@@ -157,12 +157,15 @@ describe("los permisos que escribió el chat se leen sin contradicciones", () =>
 describe("las protecciones viven en el editor, y una prueba lo vigila", () => {
   const src = readFileSync("components/canvas/PlanificacionWorkspace.tsx", "utf-8").replace(/\r\n/g, "\n");
   it("toda escritura de propiedades pasa por conservarLoDeFuera, y el chat usa ese mismo camino", () => {
-    expect(src).toMatch(/upsertCardData: \(sectionId[\s\S]*?conservarLoDeFuera\(previo, data\)/);
+    // 2026-10-27: el mismo punto de escritura recupera también las marcas de fuera (construcción, abierta al cliente).
+    expect(src).toMatch(/upsertCardData: \(sectionId[\s\S]*?conservarMarcas\(previo, data\)[\s\S]*?conservarLoDeFuera\(previo, siguiente\)/);
     expect(src).toMatch(/useEjecutarOperacionesDelChat\(cs,/);
     expect(src).toMatch(/onApplySection=\{[\s\S]*?cs\.upsertCardData\(/);
   });
   it("un documento viejo recibe las secciones nuevas al abrirse, una sola vez", () => {
-    expect(src).toMatch(/PLANIFICACION_CANVAS\.sections\.some/);
+    // Contra las secciones de SU plantilla (I2, 2026-10-27): la esencial no gana las de la completa.
+    expect(src).toMatch(/canonDeLaPlantilla\.some/);
+    expect(src).toMatch(/seccionesDeLaPlantilla\([\s\S]*?PLANIFICACION_CANVAS\.sections\)/);
     expect(src).toMatch(/fetch\(`\/api\/projects\/\$\{projectId\}\/pieces\/\$\{PIECE_SLUG\}`, \{ method: "POST" \}\)/);
     expect(src).toMatch(/yaReconciliado\.current = true/);
   });

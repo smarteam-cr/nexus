@@ -218,9 +218,9 @@ export async function runDiagnosticoGeneration(opts: {
  * las que ocultó la plantilla se vuelven a mostrar; las que ocultó una persona, no (su ojo borra la marca). Las creadas
  * por una persona (`custom:*`) y las retiradas no se tocan.
  */
-export async function ajustarALaPlantilla(canvasId: string, def: CanvasDefinition): Promise<void> {
+export async function ajustarALaPlantilla(canvasId: string, def: CanvasDefinition, canon: CanvasDefinition = DIAGNOSTICO_CANVAS): Promise<void> {
   const deLaPlantilla = new Set(def.sections.map((s) => s.key));
-  const queNoTiene = DIAGNOSTICO_CANVAS.sections.map((s) => s.key).filter((k) => !deLaPlantilla.has(k));
+  const queNoTiene = canon.sections.map((s) => s.key).filter((k) => !deLaPlantilla.has(k));
   const c0 = await prisma.projectCanvas.findUnique({ where: { id: canvasId }, select: { sections: true } });
   const hayQueMostrar = parseSectionEntries(c0?.sections).some((e) => deLaPlantilla.has(e.key) && e.ocultaPorLaPlantilla === true);
   const fuera = queNoTiene.length

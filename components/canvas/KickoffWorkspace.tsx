@@ -22,7 +22,7 @@ import { useEjecutarOperacionesDelChat } from "@/components/asistente/ejecutar-o
 /* ⚠ La MISMA tabla que usa el servidor para correr el ejecutor en seco antes de acordar. Con
    dos literales, el chat podía acordar algo que este editor rechaza al aplicar. */
 import { CAPACIDADES_POR_PIEZA } from "@/lib/canvas/capacidades-de-documento";
-import { useCallback, useMemo } from "react";
+import { useCallback, useMemo, useState } from "react";
 import LandingView, { type LandingSectionData } from "@/components/landing/LandingView";
 import type { LandingContext } from "@/components/landing/types";
 import SectionTools from "@/components/business-cases/SectionTools";
@@ -43,11 +43,29 @@ import { completadorDeEquipo, completadorDeHorarios } from "@/lib/kickoff/comple
 import { useDirectorioDelEquipo } from "@/components/canvas/kickoff-sections/useDirectorioDelEquipo";
 import { newId } from "./kickoff-sections/types";
 import { AvisoDeContinuidad } from "./kickoff-sections/AvisoDeContinuidad";
+import AccesoAlPortalStrip, { useAccesoYAcademy } from "./kickoff-sections/AccesoAlPortalStrip";
+import { AddBtn } from "@/components/landing/inline";
 
 const MAXW = 760;
 
 export default function KickoffWorkspace({ projectId, canvasId }: { projectId: string; canvasId: string }) {
   const k = useKickoffData(projectId, canvasId);
+  // Q (2026-10-27): el acceso al portal (vivo) y el catálogo de HubSpot Academy, para las dos secciones nuevas.
+  const { acceso, setAcceso, academia } = useAccesoYAcademy(projectId);
+  /* Un kickoff de antes de la ruta de Academy no tiene la sección: se suma solo si el CSE la pide (no al abrir, para no
+     cambiarle el documento a un kickoff publicado sin que nadie lo decida). `POST /pieces/kickoff` crea las que faltan y
+     nunca borra. */
+  const [sumandoAcademy, setSumandoAcademy] = useState(false);
+  const sinRutaDeAcademy = !k.loading && k.sections.length > 0 && !k.sections.some((s) => s.key === "ruta_academy");
+  const sumarRutaDeAcademy = useCallback(async () => {
+    setSumandoAcademy(true);
+    try {
+      const r = await fetch(`/api/projects/${projectId}/pieces/kickoff`, { method: "POST" });
+      if (r.ok) await k.refetch();
+    } finally {
+      setSumandoAcademy(false);
+    }
+  }, [projectId, k]);
 
   /**
    * El chat de este documento ejecuta acá.
@@ -154,6 +172,8 @@ export default function KickoffWorkspace({ projectId, canvasId }: { projectId: s
         onSetArranque: k.cambiarArranque,
         // Sin arranque, el calendario de la portada propone la reunión de kickoff (no la escribe).
         arranqueDeLaReunion: k.arranqueDeLaReunion,
+        accesoAlPortal: acceso ? { dadoEn: acceso.dadoEn } : null,
+        academia,
       },
     }),
     [
@@ -161,6 +181,7 @@ export default function KickoffWorkspace({ projectId, canvasId }: { projectId: s
       k.smarteamLogoUrl, k.brandLogos, k.clientId,
       onClientLogoChange, k.timeline, k.procesos, k.platformLogos, k.confirmProceso,
       k.hiddenKeys, k.toggleHidden, k.assignSession, k.cambiarArranque, k.arranqueDeLaReunion,
+      acceso, academia,
     ],
   );
 
@@ -219,6 +240,13 @@ export default function KickoffWorkspace({ projectId, canvasId }: { projectId: s
             return k.upsertCardData(s.id, card?.id ?? null, data);
           }}
         />
+      {/* El acceso al portal del cliente (Q2): del equipo, arriba del documento. */}
+      <AccesoAlPortalStrip projectId={projectId} acceso={acceso} onCambio={setAcceso} />
+      {sinRutaDeAcademy && (
+        <div style={{ maxWidth: MAXW, margin: "0 auto", padding: "8px 24px 0" }}>
+          <AddBtn onClick={() => void (sumandoAcademy ? null : sumarRutaDeAcademy())} label={sumandoAcademy ? "Sumando…" : "Sumar la sección «Tu ruta en HubSpot Academy»"} />
+        </div>
+      )}
       {/* La misma píldora que ve el cliente (servicio recurrente): el CSE ve lo que se publica. */}
       <div style={{ position: "relative" }}>
       {k.recurrent && <AvisoDeContinuidad />}

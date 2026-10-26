@@ -22,7 +22,26 @@ import { canvasDefForSlug } from "@/lib/canvas/canvas-defs";
 import { entregableDe, seccionesDeLaPlantilla, type PlantillaDeEntregable } from "@/lib/entregables/registro";
 
 /** El rótulo de una sección en la lista: la portada se llama por lo que es. */
-const ROTULO: Record<string, string> = { diagnostico: "Portada" };
+const ROTULO: Record<string, string> = { diagnostico: "Portada", planificacion: "Portada" };
+
+/**
+ * Lo que cambia por documento (la Planificación tiene dos plantillas desde el 2026-10-27, I2): el texto de arriba, a dónde
+ * va «Escribirlo yo» y cómo se llama la corrida en el aviso.
+ */
+const POR_DOCUMENTO: Record<string, { titulo: string; bajada: string; ruta: string; corrida: string }> = {
+  diagnosis: {
+    titulo: "Elige cómo armar el diagnóstico",
+    bajada: "Los dos le explican al cliente por qué tiene los resultados que tiene y qué vamos a hacer.",
+    ruta: "diagnostico/plantilla",
+    corrida: "diagnóstico",
+  },
+  planning: {
+    titulo: "Elige cómo armar la planificación",
+    bajada: "Las dos dicen lo que va a quedar configurado en HubSpot; la esencial deja lo justo para configurar el portal.",
+    ruta: "planificacion/plantilla",
+    corrida: "planificación",
+  },
+};
 
 /** El dibujo de la tarjeta: una hoja con la portada y una raya por sección (más rayas, más largo el documento). */
 function Dibujo({ secciones }: { secciones: number }) {
@@ -55,16 +74,17 @@ export default function ElegirPlantilla({
   onGenerado?: () => void;
 }) {
   const plantillas: readonly PlantillaDeEntregable[] = entregableDe(slug)?.plantillas ?? [];
+  const textos = POR_DOCUMENTO[slug] ?? POR_DOCUMENTO.diagnosis;
   const canon = canvasDefForSlug(slug)?.sections ?? [];
   const [elegida, setElegida] = useState<string>(() => (plantillas.find((p) => p.recomendada) ?? plantillas[0])?.id ?? "");
   const [abriendo, setAbriendo] = useState(false);
   const toast = useToast();
-  if (plantillas.length < 2) return null;
+  if (plantillas.length < 2 || !POR_DOCUMENTO[slug]) return null;
 
   const escribirloYo = async () => {
     setAbriendo(true);
     try {
-      const r = await fetch(`/api/projects/${projectId}/diagnostico/plantilla`, {
+      const r = await fetch(`/api/projects/${projectId}/${textos.ruta}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ plantilla: elegida }),
@@ -93,14 +113,11 @@ export default function ElegirPlantilla({
     <section className="mx-auto flex max-w-[960px] flex-col gap-4 px-4 py-6">
       <div className="space-y-1">
         <p className={ROTULO_DEL_SISTEMA}>Antes de generar</p>
-        <h2 className="text-sm font-semibold text-fg">Elige cómo armar el diagnóstico</h2>
-        <p className="text-xs text-fg-muted">
-          Los dos le explican al cliente por qué tiene los resultados que tiene y qué vamos a hacer. Después puedes ocultar,
-          mover o quitar cualquier parte.
-        </p>
+        <h2 className="text-sm font-semibold text-fg">{textos.titulo}</h2>
+        <p className="text-xs text-fg-muted">{textos.bajada} Después puedes ocultar, mover o quitar cualquier parte.</p>
       </div>
 
-      <div role="radiogroup" aria-label="Plantilla del diagnóstico" className="grid gap-4 sm:grid-cols-2">
+      <div role="radiogroup" aria-label="Plantillas del documento" className="grid gap-4 sm:grid-cols-2">
         {plantillas.map((p) => {
           const secciones = seccionesDeLaPlantilla(p, canon);
           const activa = p.id === elegida;
@@ -163,7 +180,7 @@ export default function ElegirPlantilla({
           async
           plantilla={elegida}
           label="Generar con esta plantilla"
-          notifyLabel="diagnóstico"
+          notifyLabel={textos.corrida}
           alreadyGenerated={false}
           onDone={onGenerado}
         />

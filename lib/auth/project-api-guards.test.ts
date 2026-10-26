@@ -380,6 +380,23 @@ describe("⛔ ninguna ruta bajo app/api/clients/[id] queda sin guarda de cliente
       motivo: "ídem, y cruza la asignación con el cliente de la URL",
       exige: ['guardCapability("shareClients")', "existing.clientId !== id"],
     },
+    // Los documentos de la empresa (R3 etapas 2 y 3, 2026-10-27): una sola puerta que llama a guardAccessToClient y
+    // además exige que el documento sea de ESA empresa, sin proyecto ni propuesta.
+    ...Object.fromEntries(
+      [
+        ["app/api/clients/[id]/documentos/[canvasId]/canvas-sections/route.ts", ["GET", "PATCH"]],
+        ["app/api/clients/[id]/documentos/[canvasId]/canvas-sections/[sectionId]/route.ts", ["PATCH"]],
+        ["app/api/clients/[id]/documentos/[canvasId]/canvas-sections/[sectionId]/blocks/route.ts", ["POST", "PUT", "DELETE"]],
+        ["app/api/clients/[id]/documentos/[canvasId]/publicar/route.ts", ["GET", "POST", "DELETE"]],
+      ].map(([rel, metodos]) => [
+        rel as string,
+        {
+          metodos: metodos as string[],
+          motivo: "la puerta de los documentos de la empresa (lib/clients/documento-de-la-empresa-guard.ts): acceso a la empresa y documento de ella",
+          exige: ["guardDocumentoDeLaEmpresa("],
+        },
+      ]),
+    ),
     "app/api/clients/[id]/business-cases/route.ts": {
       metodos: ["GET", "POST"],
       motivo: "las propuestas comerciales son de Ventas/CSL/SA, que ven todos los clientes (ventas.read)",

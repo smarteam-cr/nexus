@@ -733,11 +733,12 @@ export default function ProjectCanvasPanel({
   /* El diagnóstico sin generar y sin plantilla elegida se genera desde su selector (2026-10-23,
      components/canvas/ElegirPlantilla.tsx): el botón de arriba generaría con la plantilla de siempre sin que nadie la
      eligiera. Con la plantilla anotada («Escribirlo yo», o ya generado), el botón vuelve y genera con la suya. */
+  // La planificación también, desde el 2026-10-27 (I2: la completa y la esencial).
   const diagnosticoSinGenerar =
-    activeSlug === "diagnosis" &&
+    (activeSlug === "diagnosis" || activeSlug === "planning") &&
     !!filaActiva &&
     filaActiva.state !== "generada" &&
-    !plantillaDelDocumento("diagnosis", activeCanvas?.sections)?.guardada;
+    !plantillaDelDocumento(activeSlug, activeCanvas?.sections)?.guardada;
   const botonDelAgente =
     activeCanvas && CANVAS_PRIMARY_AGENT[activeSlug ?? ""] && activeSlug !== "exploration" && !diagnosticoSinGenerar ? (
       <CanvasAgentButton
@@ -1194,7 +1195,18 @@ export default function ProjectCanvasPanel({
       {activeSlug === "planning" && activeCanvasId && (
         <MarcoDelDocumento loVeElCliente={loVeElCliente}>
           <CanvasBoundary label="la planificación">
-            <PlanificacionWorkspace key={`planificacion-${activeCanvasId}-${agentNonce}`} projectId={projectId} canvasId={activeCanvasId} etiquetas={tags} />
+            <PlanificacionWorkspace
+              key={`planificacion-${activeCanvasId}-${agentNonce}`}
+              projectId={projectId}
+              canvasId={activeCanvasId}
+              clientId={clientId}
+              etiquetas={tags}
+              onGenerado={() => {
+                setAgentNonce((n) => n + 1);
+                bumpGpsRefresh();
+                void refetchCanvases();
+              }}
+            />
           </CanvasBoundary>
         </MarcoDelDocumento>
       )}

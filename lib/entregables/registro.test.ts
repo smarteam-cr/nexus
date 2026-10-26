@@ -24,6 +24,8 @@ import {
   plantillaDe,
   seccionesDeLaPlantilla,
   SECCIONES_DEL_DIAGNOSTICO_ESENCIAL,
+  SECCIONES_DE_LA_PLANIFICACION_ESENCIAL,
+  PLANTILLA_DE_LA_PLANIFICACION_ESENCIAL,
   SECCIONES_DEL_KICKOFF_RECURRENTE,
   PLANTILLA_DEL_KICKOFF_RECURRENTE,
   plantillaDelDocumento,
@@ -32,8 +34,8 @@ import { TEMPLATE_DE_LA_PLANTILLA } from "./plantillas";
 import { DOC } from "@/lib/canvas/assist-de-documento";
 import { KICKOFF_RECURRENTE_TEMPLATE, KICKOFF_TEMPLATE } from "@/components/landing/configs/kickoff.defs";
 import { DIAGNOSTICO_ESENCIAL_TEMPLATE, DIAGNOSTICO_TEMPLATE } from "@/components/landing/configs/diagnostico.defs";
-import { canonDelKickoff, DIAGNOSTICO_CANVAS, KICKOFF_CANVAS, KICKOFF_SECCIONES_DEL_SERVICIO } from "@/lib/canvas/canvas-defs";
-import { PLANIFICACION_TEMPLATE } from "@/components/landing/configs/planificacion.defs";
+import { canonDelKickoff, DIAGNOSTICO_CANVAS, KICKOFF_CANVAS, KICKOFF_SECCIONES_DEL_SERVICIO, PLANIFICACION_CANVAS } from "@/lib/canvas/canvas-defs";
+import { PLANIFICACION_ESENCIAL_TEMPLATE, PLANIFICACION_TEMPLATE } from "@/components/landing/configs/planificacion.defs";
 import { DESARROLLO_TEMPLATE } from "@/components/landing/configs/desarrollo.defs";
 import { ENTREGA_TEMPLATE } from "@/components/landing/configs/entrega.defs";
 import { parseSectionEntries } from "@/lib/business-cases/section-briefs";
@@ -49,7 +51,8 @@ describe("el registro de entregables", () => {
       ["kickoff", ["kickoff", "kickoff-recurrente"]],
       // 2026-10-23 (Elías): dos plantillas del diagnóstico, la completa (la de siempre) y la esencial.
       ["diagnosis", ["diagnostico-estrategico", "diagnostico-esencial"]],
-      ["planning", ["planificacion"]],
+      // 2026-10-27 (I2 · L4 etapa 7): la planificación completa (la de siempre) y la esencial.
+      ["planning", ["planificacion", "planificacion-esencial"]],
       ["tech-requirements", ["integraciones"]],
       ["delivery", ["entrega"]],
     ]);
@@ -121,6 +124,22 @@ describe("el registro de entregables", () => {
     // La portada del recurrente no dice «Inicio de proyecto».
     expect(KICKOFF_RECURRENTE_TEMPLATE.sections[0].brief).not.toMatch(/Inicio de proyecto/);
     expect(KICKOFF_RECURRENTE_TEMPLATE.agentIntro).toMatch(/SERVICIO RECURRENTE/);
+  });
+
+  it("I2 (2026-10-27): la planificación esencial tiene solo sus secciones; la de siempre es la completa", () => {
+    const esencial = plantillaDe("planning", PLANTILLA_DE_LA_PLANIFICACION_ESENCIAL)!;
+    // El orden del canon: la portada primero y la aprobación al final.
+    expect(seccionesDeLaPlantilla(esencial, PLANIFICACION_CANVAS.sections).map((s) => s.key)).toEqual([...SECCIONES_DE_LA_PLANIFICACION_ESENCIAL]);
+    // Cada sección existe en el canvas: una key mal escrita desaparecería sin aviso.
+    const canon = new Set(PLANIFICACION_CANVAS.sections.map((s) => s.key));
+    expect(SECCIONES_DE_LA_PLANIFICACION_ESENCIAL.filter((k) => !canon.has(k))).toEqual([]);
+    // Su template tiene exactamente esas; el agente escribe solo las generadas (las curadas no gastan tokens).
+    expect(PLANIFICACION_ESENCIAL_TEMPLATE.sections.map((d) => d.key)).toEqual([...SECCIONES_DE_LA_PLANIFICACION_ESENCIAL]);
+    expect(PLANIFICACION_ESENCIAL_TEMPLATE.maxTokens).toBeLessThanOrEqual(PLANIFICACION_TEMPLATE.maxTokens!);
+    // La de siempre sigue siendo la completa, con el id de antes y sin recorte: un documento viejo no cambia.
+    expect(plantillaDe("planning")?.id).toBe("planificacion");
+    expect(plantillaDe("planning")?.secciones).toBeUndefined();
+    expect(plantillaDelDocumento("planning", [{ key: "propiedades", label: "Propiedades" }])).toMatchObject({ guardada: false, plantilla: { id: "planificacion" } });
   });
 
   it("todo entregable lo ve el cliente y vive en un canvas de proyecto", () => {
