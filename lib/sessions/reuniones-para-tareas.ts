@@ -209,6 +209,9 @@ export interface SalaDeLaReunion {
   clienteVisible: boolean;
   /** La reunión tiene un dueño resuelto (un cliente o Smarteam). Sin dueño, no se sabe de quién es lo que se habló. */
   conDueno: boolean;
+  /** Quiénes de la casa estuvieron (correos, en minúscula) y cuántos de afuera: la tarea los muestra (P5, 2026-10-27). */
+  deLaCasa?: string[];
+  deAfuera?: number;
 }
 
 /**
@@ -239,6 +242,8 @@ export async function salasDeReuniones(quien: QuienLeeReuniones, ids: readonly s
       estuvo: participantes.includes(yo),
       clienteVisible: quien.esSuperAdmin || !dueno || duenoInterno || quien.clientes.ids.has(dueno),
       conDueno: !!dueno,
+      deLaCasa: [...new Set(participantes.filter((p) => dominios.has(p.split("@")[1] ?? "")))],
+      deAfuera: new Set(participantes.filter((p) => p.includes("@") && !dominios.has(p.split("@")[1] ?? ""))).size,
     });
   }
   return salida;

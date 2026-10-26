@@ -12,8 +12,10 @@ export const DIAS_PARA_VENCER_UNA_PROPUESTA = 14;
  * Cuántas sugerencias de las reuniones (sin decidir) puede tener una persona a la vez (2026-10-16, fase 1.4 de
  * docs/nexus-sistema-de-trabajo-plan.md). Con más, las más viejas vencen solas: quedan las más nuevas. Lo que pidió una
  * persona no cuenta ni vence por esto.
+ * Bajó de 10 a 5 el 2026-10-27 (roadmap D2 etapa 1): medido el 26 oct, los cinco CSE tenían exactamente 10 cada uno
+ * (el tope era lo único que las frenaba) y en 45 días no aceptaron ninguna de 105. Cinco es lo que entra en «Hoy».
  */
-export const MAX_SUGERENCIAS_POR_PERSONA = 10;
+export const MAX_SUGERENCIAS_POR_PERSONA = 5;
 
 /**
  * Cuántas tareas le propone UNA reunión a una persona (ficha A del roadmap, 2026-10-17, decisión de Elías). Cuenta

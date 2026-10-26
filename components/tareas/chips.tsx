@@ -46,7 +46,7 @@ export function ChipsDeTarea({ t, sinPara = false, sinPedida = false }: { t: Tar
   // De dónde viene (etapa 3 de docs/mi-dia-plan.md): una tarea de HubSpot lo dice siempre.
   if (t.hubspot) {
     chips.push(
-      <Chip key="hubspot" tono={t.hubspot.error ? "ambar" : "neutro"} title={t.hubspot.error ?? "Viene de HubSpot: lo que cambies acá se escribe allá"}>
+      <Chip key="hubspot" tono={t.hubspot.error ? "ambar" : "neutro"} title={t.hubspot.error ?? (t.hubspot.nacioEnNexus ? "También está en HubSpot: lo que cambies acá se escribe allá" : "Viene de HubSpot: lo que cambies acá se escribe allá")}>
         {t.hubspot.rotulo}
         {t.hubspot.error ? " · sin escribir allá" : ""}
       </Chip>,

@@ -111,9 +111,12 @@ export async function crearBloques(o: {
   }
 }
 
-/** Quita los bloques de una tarea. Solo los del calendario de quien pide (cada bloque guarda el suyo). */
-export async function quitarBloques(email: string, bloques: readonly { calendario: string; eventoId: string | null }[]): Promise<number> {
-  const propios = bloques.filter((b) => b.calendario.toLowerCase() === email.toLowerCase() && b.eventoId);
+/**
+ * Quita los bloques de una tarea. Solo los del calendario de quien pide (cada bloque guarda el suyo), y nunca un evento
+ * que ya existía y la persona unió a la tarea (`asociado`, P3): ese no lo creó Nexus, así que no lo borra.
+ */
+export async function quitarBloques(email: string, bloques: readonly { calendario: string; eventoId: string | null; asociado?: boolean }[]): Promise<number> {
+  const propios = bloques.filter((b) => b.calendario.toLowerCase() === email.toLowerCase() && b.eventoId && !b.asociado);
   if (!propios.length) return 0;
   if (!googleConfigurado()) throw new AgendaSinPermiso("Google no está configurado en este servidor.");
   const cal = apiCalendar({ version: "v3", auth: getAgendaWriteAuth(email) });
@@ -133,4 +136,23 @@ export async function quitarBloques(email: string, bloques: readonly { calendari
     }
   }
   return quitados;
+}
+
+/**
+ * Un evento del calendario de una persona, por su id (P3, «Asociar a una tarea»), con el `calendar.readonly` de siempre.
+ * null si no está, se canceló o es de todo el día (no tiene horario para la tarea).
+ */
+export async function leerEventoDelCalendario(email: string, eventoId: string): Promise<{ id: string; titulo: string; inicio: string; fin: string } | null> {
+  if (!googleConfigurado()) return null;
+  const cal = apiCalendar({ version: "v3", auth: getImpersonatedAuth(email) });
+  try {
+    const res = await cal.events.get({ calendarId: "primary", eventId: eventoId, fields: "id,summary,start,end,status,visibility" });
+    const e = res.data;
+    if (!e?.id || e.status === "cancelled" || !e.start?.dateTime || !e.end?.dateTime) return null;
+    return { id: e.id, titulo: e.summary?.trim() || "(Sin título)", inicio: new Date(e.start.dateTime).toISOString(), fin: new Date(e.end.dateTime).toISOString() };
+  } catch (e) {
+    const status = (e as { code?: number })?.code;
+    if (status === 404 || status === 410) return null;
+    throw e;
+  }
 }

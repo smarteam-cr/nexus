@@ -19,6 +19,7 @@ import { archivarComentario, asignar, cerrarSemanaPasadaComoSistema, decidirProy
 import { INV40 } from "@/lib/invariantes/tareas";
 import { estadoDeLectura, pedirLectura } from "./lectura";
 import { normalizar } from "./texto";
+import { MAX_SUGERENCIAS_POR_PERSONA } from "./reglas";
 import { cargarLoQueDelegaste, cargarComentarios, cargarMetricasDelEquipo, cargarMisTareas, cargarVinculos, cargarVinculosDe, cargarEspacio, cargarMisEspacios, cargarPorCliente, cargarSemanaDePersona, cargarSemanaDelEquipo, cargarTarea, cargarTareasDeLaCuenta } from "./consultas";
 import { aDate, lunesDeHoy, sumarSemanas } from "./semana";
 import type { ClientesQueVes } from "./clientes";
@@ -386,7 +387,7 @@ describe("métricas del equipo", () => {
 });
 
 describe("el tope de sugerencias por persona (fase 1.4, 2026-10-16)", () => {
-  it("con más de 10 sugerencias de las reuniones sin decidir, las más viejas vencen solas; lo que pidió una persona no", async () => {
+  it("con más de MAX_SUGERENCIAS_POR_PERSONA sugerencias de las reuniones sin decidir, las más viejas vencen solas; lo que pidió una persona no", async () => {
     await equipo();
     const cliente = await prisma.client.create({ data: { name: "Wherex" } });
     // Tres reuniones: cada una le propone como mucho 5 a una persona (ficha A, 2026-10-17).
@@ -422,8 +423,10 @@ describe("el tope de sugerencias por persona (fase 1.4, 2026-10-16)", () => {
       await prisma.$transaction((tx) => escribirPropuestasDeLectura(tx, { id: lectura.id, sessionId: sesion.id, tituloReunion: "Seguimiento Wherex", pedidaPorEmail: ALE }, lineas));
     }
     const deLidia = await prisma.tarea.findMany({ where: { responsableEmail: LIDIA }, select: { titulo: true, estado: true } });
-    expect(deLidia.filter((t) => t.estado === "propuesta" && t.titulo.startsWith("Compromiso"))).toHaveLength(10);
-    expect(deLidia.filter((t) => t.estado === "vencida").map((t) => t.titulo).sort()).toEqual(["Compromiso 1", "Compromiso 2"]);
+    // 12 compromisos (5 + 5 + 2): quedan las MAX más nuevas, vencen las más viejas.
+    const vivas = deLidia.filter((t) => t.estado === "propuesta" && t.titulo.startsWith("Compromiso")).map((t) => Number(t.titulo.split(" ")[1]));
+    expect(vivas.sort((a, b) => a - b)).toEqual(Array.from({ length: MAX_SUGERENCIAS_POR_PERSONA }, (_, i) => 12 - MAX_SUGERENCIAS_POR_PERSONA + 1 + i));
+    expect(deLidia.filter((t) => t.estado === "vencida")).toHaveLength(12 - MAX_SUGERENCIAS_POR_PERSONA);
     expect(deLidia.find((t) => t.titulo === "Pedido de Elías")?.estado).toBe("propuesta");
   });
 

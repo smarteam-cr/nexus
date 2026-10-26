@@ -1,7 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
   comparar,
+  cuerpoParaHubspot,
   datosDeHubspot,
+  faltaParaHubspot,
+  pedidoParaCrear,
+  seCreaEnHubspot,
+  type TareaParaCrearEnHubspot,
   diaYMinutoCR,
   estadoDeHubspot,
   leerAcordado,
@@ -95,5 +100,87 @@ describe("lo que se escribe en HubSpot", () => {
     const r = propiedadesParaHubspot({ estado: "hecha", vence: "2026-10-20", prioridad: "alta", responsable: "nadie@smarteamcr.com" }, datos, () => null);
     expect(r.properties).toEqual({ hs_task_status: "COMPLETED", hs_timestamp: "2026-10-20T13:00:00.000Z", hs_task_priority: "HIGH" });
     expect(r.sinOwner).toBe(true);
+  });
+});
+
+describe("el seguimiento comercial se crea en HubSpot (D4)", () => {
+  const base: TareaParaCrearEnHubspot = {
+    origen: "mano",
+    estado: "pendiente",
+    privada: false,
+    clase: "accion",
+    archivadaAt: null,
+    hubspotTaskId: null,
+    hubspotContactId: "501",
+    hubspotDealId: null,
+    responsableEmail: "apinzon@smarteamcr.com",
+    venceEl: "2026-10-29",
+  };
+
+  it("una tarea abierta con contacto o negocio, con fecha y con dueño en HubSpot, se crea allá", () => {
+    expect(seCreaEnHubspot(base, "84937900")).toBe(true);
+    expect(seCreaEnHubspot({ ...base, hubspotContactId: null, hubspotDealId: "9001" }, "84937900")).toBe(true);
+    expect(seCreaEnHubspot({ ...base, estado: "en_curso", origen: "pedido" }, "84937900")).toBe(true);
+  });
+
+  it("lo interno, lo privado, lo que ya está allá, las propuestas y las reuniones no", () => {
+    expect(seCreaEnHubspot({ ...base, hubspotContactId: null }, "84937900")).toBe(false);
+    expect(seCreaEnHubspot({ ...base, privada: true }, "84937900")).toBe(false);
+    expect(seCreaEnHubspot({ ...base, hubspotTaskId: "777" }, "84937900")).toBe(false);
+    expect(seCreaEnHubspot({ ...base, estado: "propuesta" }, "84937900")).toBe(false);
+    expect(seCreaEnHubspot({ ...base, estado: "hecha" }, "84937900")).toBe(false);
+    expect(seCreaEnHubspot({ ...base, clase: "reunion" }, "84937900")).toBe(false);
+    expect(seCreaEnHubspot({ ...base, archivadaAt: new Date() }, "84937900")).toBe(false);
+  });
+
+  it("ni lo que vino de HubSpot, ni el siguiente paso, ni una rutina", () => {
+    for (const origen of ["hubspot", "paso", "plantilla"]) expect(seCreaEnHubspot({ ...base, origen }, "84937900")).toBe(false);
+  });
+
+  it("sin fecha o sin dueño en HubSpot, espera y dice qué le falta", () => {
+    expect(seCreaEnHubspot({ ...base, venceEl: null }, "84937900")).toBe(false);
+    expect(faltaParaHubspot({ ...base, venceEl: null }, "84937900")).toBe("sin_fecha");
+    expect(seCreaEnHubspot(base, null)).toBe(false);
+    expect(faltaParaHubspot(base, null)).toBe("sin_responsable");
+    expect(faltaParaHubspot(base, "84937900")).toBeNull();
+  });
+
+  it("el pedido lleva los cinco campos, el dueño, el cuerpo y las asociaciones; lo acordado es lo que se escribió", () => {
+    const p = pedidoParaCrear(
+      { numero: 128, titulo: " Llamar a Luis por la propuesta ", notas: "Quedó en responder el lunes.\nSi no, insistir.", estado: "pendiente", prioridad: "alta", venceEl: "2026-10-29", hubspotContactId: "501", hubspotDealId: "9001", hubspotCompanyId: "300" },
+      "84937900",
+      "apinzon@smarteamcr.com",
+    );
+    expect(p.body.properties).toEqual({
+      hs_task_subject: "Llamar a Luis por la propuesta",
+      hs_task_body: "<p>Quedó en responder el lunes.<br>Si no, insistir.</p><p>Creada desde Nexus (T-128).</p>",
+      hs_task_status: "NOT_STARTED",
+      hs_task_priority: "HIGH",
+      hs_timestamp: "2026-10-29T13:00:00.000Z",
+      hs_task_type: "TODO",
+      hubspot_owner_id: "84937900",
+    });
+    expect(p.body.associations.map((a) => [a.to.id, a.types[0]!.associationTypeId])).toEqual([
+      ["501", 204],
+      ["9001", 216],
+      ["300", 192],
+    ]);
+    expect(p.acordado).toEqual({ titulo: "Llamar a Luis por la propuesta", estado: "pendiente", vence: "2026-10-29", prioridad: "alta", responsable: "apinzon@smarteamcr.com" });
+    expect(p.datos.registro).toEqual({ objeto: "deal", id: "9001" });
+  });
+
+  it("después de crearla, la comparación no ve cambios: lo acordado es igual a los dos lados", () => {
+    const p = pedidoParaCrear({ numero: 1, titulo: "Seguimiento a Luis", notas: null, estado: "pendiente", prioridad: "media", venceEl: "2026-10-29", hubspotContactId: "501", hubspotDealId: null, hubspotCompanyId: null }, "84937900", "apinzon@smarteamcr.com");
+    const deHubspot = valoresDeHubspot(
+      { hs_task_subject: p.body.properties.hs_task_subject, hs_task_status: p.body.properties.hs_task_status, hs_timestamp: p.body.properties.hs_timestamp, hs_task_priority: p.body.properties.hs_task_priority, hubspot_owner_id: "84937900" },
+      () => "apinzon@smarteamcr.com",
+    );
+    const c = comparar(p.acordado, p.acordado, deHubspot, ANTES, DESPUES);
+    expect(c.aNexus).toEqual({});
+    expect(c.aHubspot).toEqual({});
+  });
+
+  it("el cuerpo escapa lo que parece HTML", () => {
+    expect(cuerpoParaHubspot({ numero: 3, notas: "<b>ojo</b> & más" })).toBe("<p>&lt;b&gt;ojo&lt;/b&gt; &amp; más</p><p>Creada desde Nexus (T-3).</p>");
   });
 });

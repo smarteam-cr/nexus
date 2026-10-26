@@ -63,3 +63,15 @@ function claveDeOrigen(t: { origen: string; sessionId: string | null }, sala: { 
       return "mano";
   }
 }
+
+/**
+ * «Estuvieron Lidia, Andrés y 2 de afuera» (P5, 2026-10-27): quiénes estuvieron en la reunión de la que salió la tarea.
+ * Solo los nombres de la casa; de afuera, cuántos (sus correos no salen de la reunión).
+ */
+export function textoDeQuienesEstuvieron(e: { nombres: readonly string[]; deAfuera: number }): string {
+  const afuera = e.deAfuera === 1 ? "1 de afuera" : e.deAfuera > 1 ? `${e.deAfuera} de afuera` : null;
+  const partes = [...e.nombres.slice(0, 4), ...(e.nombres.length > 4 ? [`${e.nombres.length - 4} más de la casa`] : []), ...(afuera ? [afuera] : [])];
+  if (!partes.length) return "";
+  const lista = partes.length === 1 ? partes[0]! : `${partes.slice(0, -1).join(", ")} y ${partes[partes.length - 1]}`;
+  return `Estuvieron ${lista}`;
+}

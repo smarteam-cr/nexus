@@ -18,7 +18,7 @@ import {
   INV31, INV32, INV33, INV34, INV35, INV36, INV37, INV38, INV39, INV40, INV41, INV42, INV43, INV44, INV45, INV46, INV47,
   type Invariante,
 } from "@/lib/invariantes";
-import { INV49, INV50, INV51, INV52, INV53, INV54, INV55, INV56, INV57, INV58, INV59, INV60, INV61, INV62, INV64 } from "@/lib/invariantes";
+import { INV49, INV50, INV51, INV52, INV53, INV54, INV55, INV56, INV57, INV58, INV59, INV60, INV61, INV62, INV63, INV64 } from "@/lib/invariantes";
 
 /**
  * Imprime un invariante extraído a `lib/invariantes/` exactamente como se imprimía acá adentro
@@ -860,6 +860,8 @@ async function main(): Promise<number> {
   violations += await reportar(INV59, prisma);
   // ── Inv 61 → lib/invariantes/exploraciones.ts (2026-10-27, K5: ninguna sesión de una exploración unida a una reunión de otra empresa) ──
   violations += await reportar(INV61, prisma);
+  // ── Inv 63 → lib/invariantes/tareas.ts (2026-10-27, D4: lo que nació en Nexus y está en HubSpot es seguimiento comercial) ──
+  violations += await reportar(INV63, prisma);
 
   return violations;
 }

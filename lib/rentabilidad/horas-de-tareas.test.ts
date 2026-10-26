@@ -71,4 +71,8 @@ describe("horasDeTareas: las tareas internas hechas de una cuenta", () => {
       { calendario: "x@y.com", inicio: "2026-10-08T12:00:00Z", fin: "2026-10-08T13:00:00Z" },
     ]);
   });
+
+  it("un evento que ya existía y se unió a la tarea no cuenta: ya cuenta como reunión del calendario (P3)", () => {
+    expect(leerBloques([{ calendario: "x@y.com", inicio: "2026-10-08T12:00:00Z", fin: "2026-10-08T13:00:00Z", eventoId: null, asociado: true, eventoUnido: "ev1" }])).toEqual([]);
+  });
 });

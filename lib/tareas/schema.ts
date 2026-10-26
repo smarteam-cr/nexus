@@ -51,6 +51,9 @@ const Cambios = z.object({
   privada: z.boolean().optional(),
   seccion: z.string().max(60).nullish(),
   etiquetas: etiquetas.optional(),
+  /** El contacto y el negocio de HubSpot (ids externos), entre los de su cliente: seguimiento comercial (D4). */
+  hubspotContactId: z.string().regex(/^\d{1,20}$/, "Ese contacto no es válido.").nullish(),
+  hubspotDealId: z.string().regex(/^\d{1,20}$/, "Ese negocio no es válido.").nullish(),
 });
 
 export const PatchTarea = z.discriminatedUnion("accion", [
@@ -93,6 +96,8 @@ export const Agendar = z.discriminatedUnion("modo", [
   z.object({ modo: z.literal("ya_la_agende"), bloques: z.array(Bloque).min(1).max(8), minutos: minutos.optional() }),
   /** Quitar los bloques (de tu calendario) y dejarla sin agendar. */
   z.object({ modo: z.literal("quitar") }),
+  /** Unirla a un evento que YA está en tu calendario (P3): Nexus lo verifica allá y nunca lo mueve ni lo borra. */
+  z.object({ modo: z.literal("asociar"), eventoId: z.string().trim().min(1).max(300) }),
 ]);
 
 export const LeerReunion = z.object({

@@ -393,6 +393,9 @@ const SELECT_PARA_ESCRIBIR = {
   agendaBloques: true,
   huella: true,
   lecturaId: true,
+  hubspotTaskId: true,
+  hubspotContactId: true,
+  hubspotDealId: true,
   proyecto: { select: { espacio: { select: { tipo: true, visibilidad: true, equipo: true, miembros: { select: { email: true } } } } } },
 } satisfies Prisma.TareaSelect;
 
@@ -510,6 +513,9 @@ export interface CambiosDeTarea {
   privada?: boolean;
   seccion?: string | null;
   etiquetas?: string[];
+  /** El contacto y el negocio de HubSpot (ids externos), entre los de su cliente. Con uno, es seguimiento comercial (D4). */
+  hubspotContactId?: string | null;
+  hubspotDealId?: string | null;
 }
 
 /** Lo que sugirió Nexus al proponerla (cliente, proyecto): vive en su evento `propuesta`. */
@@ -711,12 +717,52 @@ export async function decidirTarea(ctx: ContextoDeTareas, clientes: ClientesQueV
 
 /* ── Editar ──────────────────────────────────────────────────────────────────────── */
 
+/**
+ * El contacto y el negocio de HubSpot de una edición (D4, 2026-10-27). Solo de SU cliente (invariante 1): un contacto
+ * vigente de `ContactoDeHubspot` y un negocio de `NegocioAbierto` de ese cliente. Cambiar el cliente los borra (salvo
+ * que la misma edición traiga los del nuevo). Una tarea que ya está en HubSpot los cambia allá: acá quedan fijos.
+ */
+async function contactoYNegocio(
+  t: Pick<TareaParaEscribir, "clientId" | "origen" | "hubspotTaskId" | "hubspotContactId" | "hubspotDealId">,
+  c: Pick<CambiosDeTarea, "hubspotContactId" | "hubspotDealId">,
+  clientId: string | null,
+): Promise<Pick<Prisma.TareaUncheckedUpdateInput, "hubspotContactId" | "hubspotDealId">> {
+  const tocaCrm = c.hubspotContactId !== undefined || c.hubspotDealId !== undefined;
+  const cambiaCliente = clientId !== t.clientId;
+  if (t.hubspotTaskId) {
+    // La que nació en Nexus está allá asociada al contacto, al negocio y a la empresa de SU cliente: cambiarle el cliente
+    // acá dejaría cada edición escribiéndose en la ficha del cliente anterior (invariante 1).
+    if (cambiaCliente && t.origen !== "hubspot") throw new ErrorDeTareas(409, "Esta tarea también está en HubSpot, asociada a su cliente: no se le puede cambiar el cliente.");
+    const distinto = (c.hubspotContactId !== undefined && (c.hubspotContactId || null) !== t.hubspotContactId) || (c.hubspotDealId !== undefined && (c.hubspotDealId || null) !== t.hubspotDealId);
+    if (distinto) throw new ErrorDeTareas(409, "Esta tarea ya está en HubSpot: el contacto y el negocio se cambian allá.");
+    return {};
+  }
+  if (!tocaCrm && !cambiaCliente) return {};
+  const contacto = c.hubspotContactId !== undefined ? c.hubspotContactId?.trim() || null : cambiaCliente ? null : t.hubspotContactId;
+  const negocio = c.hubspotDealId !== undefined ? c.hubspotDealId?.trim() || null : cambiaCliente ? null : t.hubspotDealId;
+  if ((contacto || negocio) && !clientId) throw new ErrorDeTareas(400, "Elige primero el cliente de la tarea.");
+  if (contacto && contacto !== t.hubspotContactId) {
+    const ok = await prisma.contactoDeHubspot.findFirst({ where: { clientId: clientId!, hubspotId: contacto, vigente: true }, select: { id: true } });
+    if (!ok) throw new ErrorDeTareas(400, "Ese contacto no es de este cliente en HubSpot.");
+  }
+  if (negocio && negocio !== t.hubspotDealId) {
+    const ok = await prisma.negocioAbierto.findFirst({ where: { clientId: clientId!, hubspotDealId: negocio }, select: { id: true } });
+    if (!ok) throw new ErrorDeTareas(400, "Ese negocio no es de este cliente en HubSpot.");
+  }
+  const out: Pick<Prisma.TareaUncheckedUpdateInput, "hubspotContactId" | "hubspotDealId"> = {};
+  if (contacto !== t.hubspotContactId) out.hubspotContactId = contacto;
+  if (negocio !== t.hubspotDealId) out.hubspotDealId = negocio;
+  return out;
+}
+
 export async function editarTarea(ctx: ContextoDeTareas, clientes: ClientesQueVes, id: string, version: number, c: CambiosDeTarea, ahora = new Date()) {
   const t = await cargar(prisma, id, ctx);
   if (t.version !== version) throw new ErrorDeTareas(409, "Otra persona cambió esta tarea. Recarga para ver lo último.");
   const acc = accionesPara(t, ctx, ahora);
   if (!acc.editar) throw new ErrorDeTareas(403, "No puedes editar esta tarea.");
   if (c.privada !== undefined && c.privada !== t.privada && !acc.cambiarPrivada) throw new ErrorDeTareas(403, "Solo quien la tiene puede marcarla «Solo para mí».");
+  // Lo que nació en Nexus y está en HubSpot es seguimiento comercial: no puede ser privado (D4; el CHECK de la base lo exige).
+  if (c.privada === true && !t.privada && t.hubspotTaskId && t.origen !== "hubspot") throw new ErrorDeTareas(409, "Esta tarea también está en HubSpot: no puede ser «Solo para mí».");
   const tocaParaQuien = c.clientId !== undefined || c.projectId !== undefined || c.proyectoId !== undefined;
   const para = tocaParaQuien
     ? await resolverParaQuien(
@@ -736,6 +782,7 @@ export async function editarTarea(ctx: ContextoDeTareas, clientes: ClientesQueVe
   // Sin responsable ni sprint, una tarea solo existe dentro de un proyecto (lo exige la base): sacarla pide asignarla antes.
   if (para && !para.proyectoId && !t.equipo) throw new ErrorDeTareas(400, "Esta tarea no tiene sprint: asígnala a alguien antes de sacarla del proyecto.");
   if (c.seccion && c.seccion.length > 60) throw new ErrorDeTareas(400, "El nombre de la sección es muy largo.");
+  const crm = await contactoYNegocio(t, c, para?.clientId ?? t.clientId);
   const data: Prisma.TareaUncheckedUpdateInput = {
     ...(c.titulo !== undefined ? { titulo: c.titulo.trim(), huella: huellaDeTexto(c.titulo) } : {}),
     ...(c.notas !== undefined ? { notas: c.notas?.trim() || null } : {}),
@@ -746,6 +793,7 @@ export async function editarTarea(ctx: ContextoDeTareas, clientes: ClientesQueVe
     ...(c.seccion !== undefined ? { seccion: c.seccion } : {}),
     ...(c.etiquetas !== undefined ? { etiquetas: c.etiquetas.slice(0, 5) } : {}),
     ...(para ? { clientId: para.clientId, projectId: para.projectId, proyectoId: para.proyectoId } : {}),
+    ...crm,
   };
   if (c.titulo !== undefined && !c.titulo.trim()) throw new ErrorDeTareas(400, "El título no puede quedar vacío.");
   // Un pedido sin cambios no sube la versión ni deja una edición vacía (contaría como «usar con cambios»).
@@ -1850,6 +1898,20 @@ export async function soltarMisBloques(ctx: ContextoDeTareas, id: string, ahora 
   });
 }
 
+/**
+ * Une una reunión planeada (tarea de clase «reunion») con la reunión de Meet que la cumplió (P3 etapa 2,
+ * lib/tareas/reunion-hecha-server.ts). Solo si todavía no tenía una. No sube la versión (no es un cambio de la persona) y
+ * deja su evento firmado por el sistema. false = ya estaba unida.
+ */
+export async function unirReunionHecha(tareaId: string, sessionId: string, ahora = new Date()): Promise<boolean> {
+  return prisma.$transaction(async (tx) => {
+    const r = await tx.tarea.updateMany({ where: { id: tareaId, clase: "reunion", reunionHechaId: null }, data: { reunionHechaId: sessionId } });
+    if (!r.count) return false;
+    await evento(tx, { tareaId, tipo: "reunion_hecha", porEmail: SISTEMA, sessionId, datos: { en: ahora.toISOString() } });
+    return true;
+  }, OPCIONES_DE_TX);
+}
+
 /* ── Proyectos ───────────────────────────────────────────────────────────────────── */
 
 export interface NuevoProyecto {
@@ -2309,6 +2371,57 @@ async function podarSugerencias(tx: Tx, email: string): Promise<number> {
     if (r.count) await evento(tx, { tareaId: t.id, tipo: "decidida", porEmail: SISTEMA, datos: { decision: "vencida", porTope: MAX_SUGERENCIAS_POR_PERSONA } });
   }
   return sobran.length;
+}
+
+/** Lo que Nexus propuso de una reunión o un correo: lo único que la limpieza de «Por decidir» puede vencer. */
+export const ORIGENES_DE_SUGERENCIA = ["reunion", "notas", "correo"] as const;
+
+/**
+ * Las tareas que una PERSONA tocó (un evento suyo, el pase de cuenta incluido, un comentario, una dependencia o un
+ * vínculo): la limpieza de «Por decidir» no las vence. La misma consulta para el simulacro (scripts/aligerar-tareas.ts) y
+ * para aplicar, así el número que se revisa es el que se aplica.
+ */
+export async function sugerenciasTocadas(db: Db, ids: readonly string[]): Promise<Set<string>> {
+  if (!ids.length) return new Set();
+  const lista = [...ids];
+  const [eventos, comentarios, relaciones, vinculos] = await Promise.all([
+    db.tareaEvento.findMany({ where: { tareaId: { in: lista }, porEmail: { notIn: NO_SON_PERSONAS } }, select: { tareaId: true } }),
+    db.tareaComentario.findMany({ where: { tareaId: { in: lista } }, select: { tareaId: true } }),
+    db.tareaRelacion.findMany({ where: { OR: [{ desdeId: { in: lista } }, { haciaId: { in: lista } }] }, select: { desdeId: true, haciaId: true } }),
+    db.tareaVinculo.findMany({ where: { tareaId: { in: lista } }, select: { tareaId: true } }),
+  ]);
+  return new Set<string>([
+    ...eventos.flatMap((e) => (e.tareaId ? [e.tareaId] : [])),
+    ...comentarios.map((c) => c.tareaId),
+    ...relaciones.flatMap((r) => [r.desdeId, r.haciaId]),
+    ...vinculos.flatMap((v) => (v.tareaId ? [v.tareaId] : [])),
+  ]);
+}
+
+/**
+ * La limpieza de «Por decidir» (roadmap D2 etapa 1, 2026-10-27; scripts/aligerar-tareas.ts › C): vence como `sistema`
+ * las sugerencias de Nexus que nadie decidió ni tocó, con su motivo. Es lo mismo que hace el tope o el job del lunes
+ * (vencer no es una lápida: si se vuelve a hablar del tema, se vuelve a proponer) y nada se borra. Dentro de la
+ * transacción se vuelve a mirar cada una: si una persona la tocó (un evento, un comentario, una dependencia o un
+ * vínculo) o cambió de versión, queda como está. Devuelve cuántas venció.
+ */
+export async function vencerSugerenciasSinDecidir(lote: readonly { id: string; version: number; motivo: string; regla: string }[], ahora = new Date()): Promise<number> {
+  if (!lote.length) return 0;
+  return prisma.$transaction(async (tx) => {
+    const tocadas = await sugerenciasTocadas(tx, lote.map((x) => x.id));
+    let vencidas = 0;
+    for (const t of lote) {
+      if (tocadas.has(t.id)) continue;
+      const r = await tx.tarea.updateMany({
+        where: { id: t.id, version: t.version, estado: "propuesta", archivadaAt: null, creadaPorEmail: null, origen: { in: [...ORIGENES_DE_SUGERENCIA] } },
+        data: { estado: "vencida", decision: "vencida", decididaPorEmail: SISTEMA, decididaAt: ahora, motivo: t.motivo.slice(0, 500), version: { increment: 1 } },
+      });
+      if (!r.count) continue;
+      await evento(tx, { tareaId: t.id, tipo: "decidida", porEmail: SISTEMA, datos: { decision: "vencida", limpieza: t.regla } });
+      vencidas++;
+    }
+    return vencidas;
+  }, OPCIONES_DE_TX);
 }
 
 /**
@@ -3059,6 +3172,61 @@ export async function anotarSincronizacionConHubspot(
   }, OPCIONES_DE_TX);
 }
 
+/* ── El seguimiento comercial que nace en Nexus y se crea en HubSpot (2026-10-27, roadmap D4) ──────────────────────
+   lib/tareas-hubspot lo crea allá; acá se reserva la tarea antes de llamar (una sola creación por tarea, aunque la ruta
+   y el job lleguen a la vez) y se anota el id que devolvió HubSpot. */
+
+/**
+ * Reserva la tarea para crearla en HubSpot: solo si todavía no tiene su tarea allá y nadie la reservó en los últimos
+ * `minutos` (una corrida que se cayó a mitad se retoma). Usa `hubspotSincronizadaAt` como la marca del intento: en una
+ * tarea sin `hubspotTaskId` no significa otra cosa. true = la tomaste tú.
+ */
+export async function reservarCreacionEnHubspot(id: string, minutos: number, ahora = new Date()): Promise<{ tomada: boolean; intentoAnterior: Date | null }> {
+  const t = await prisma.tarea.findUnique({ where: { id }, select: { updatedAt: true, hubspotSincronizadaAt: true } });
+  if (!t) return { tomada: false, intentoAnterior: null };
+  const r = await prisma.tarea.updateMany({
+    where: { id, hubspotTaskId: null, archivadaAt: null, OR: [{ hubspotSincronizadaAt: null }, { hubspotSincronizadaAt: { lt: new Date(+ahora - minutos * 60_000) } }] },
+    // `updatedAt` queda como estaba: un intento no es un cambio de la tarea (el job mira lo que cambió hace poco).
+    data: { hubspotSincronizadaAt: ahora, updatedAt: t.updatedAt },
+  });
+  return { tomada: r.count === 1, intentoAnterior: t.hubspotSincronizadaAt };
+}
+
+/**
+ * Anota la tarea que se creó en HubSpot: su id, lo acordado (lo que se escribió allá) y lo que se muestra. No sube la
+ * versión (la persona que la tiene abierta no choca), y deja su evento firmado como `agente` (no es un toque de una
+ * persona). false = otra corrida la anotó primero.
+ */
+export async function anotarCreadaEnHubspot(
+  id: string,
+  d: { hubspotTaskId: string; acordado: Prisma.InputJsonValue; datos: Prisma.InputJsonValue },
+  ahora = new Date(),
+): Promise<boolean> {
+  try {
+    return await prisma.$transaction(async (tx) => {
+      const antes = await tx.tarea.findUnique({ where: { id }, select: { updatedAt: true } });
+      const r = await tx.tarea.updateMany({
+        where: { id, hubspotTaskId: null },
+        data: { hubspotTaskId: d.hubspotTaskId, hubspotAcordado: d.acordado, hubspotDatos: d.datos, hubspotError: null, hubspotSincronizadaAt: ahora, ...(antes ? { updatedAt: antes.updatedAt } : {}) },
+      });
+      if (!r.count) return false;
+      await evento(tx, { tareaId: id, tipo: "a_hubspot", porEmail: "agente", datos: { creada: d.hubspotTaskId } });
+      return true;
+    }, OPCIONES_DE_TX);
+  } catch (e) {
+    if (esUnicoDuplicado(e)) return false;
+    throw e;
+  }
+}
+
+/** Por qué no se pudo crear en HubSpot (o null, ya no falta nada). No sube la versión ni toca la reserva. */
+export async function anotarErrorDeCreacionEnHubspot(id: string, error: string | null): Promise<void> {
+  const t = await prisma.tarea.findUnique({ where: { id }, select: { updatedAt: true } });
+  if (!t) return;
+  // Sin tocar `updatedAt`: si cada intento fallido lo moviera, la ventana de 7 días del job no la soltaría nunca.
+  await prisma.tarea.updateMany({ where: { id, hubspotTaskId: null }, data: { hubspotError: error ? error.slice(0, 400) : null, updatedAt: t.updatedAt } });
+}
+
 export { etiquetaT, claveDeEquipo };
 
 /* ── El sprint de cada equipo: las series que se leen solas (ficha A, 2026-10-17) ─────────────── */
@@ -3073,6 +3241,21 @@ export interface FilaNuevaDeFuente {
   diaSemana: number;
   finHora: string;
   personas: string[];
+}
+
+/**
+ * La fuente PERSONAL de una persona del piloto (roadmap H1, lib/tareas/lectura-personal.ts): «todas mis reuniones
+ * internas», sin equipo. La crea la primera vez (idempotente: la busca por dueña y serie). Si alguien la pausó, la
+ * devuelve pausada: prender la bandera no la vuelve a prender.
+ */
+export async function asegurarFuentePersonal(email: string, serie: string, titulo: string): Promise<{ id: string; activa: boolean; createdAt: Date }> {
+  const duenoEmail = email.trim().toLowerCase();
+  const ya = await prisma.fuenteDeTareas.findFirst({ where: { equipo: null, duenoEmail, serie }, select: { id: true, activa: true, createdAt: true }, orderBy: { createdAt: "asc" } });
+  if (ya) return ya;
+  return prisma.fuenteDeTareas.create({
+    data: { equipo: null, duenoEmail, serie, titulo, rol: "planning", personas: [duenoEmail], activa: true },
+    select: { id: true, activa: true, createdAt: true },
+  });
 }
 
 export async function escribirFuente(n: FilaNuevaDeFuente): Promise<{ id: string }> {

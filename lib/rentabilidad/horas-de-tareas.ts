@@ -55,7 +55,10 @@ export function leerBloques(json: unknown): BloqueDeTarea[] {
   const out: BloqueDeTarea[] = [];
   for (const b of json) {
     if (!b || typeof b !== "object") continue;
-    const { calendario, inicio, fin } = b as Record<string, unknown>;
+    const { calendario, inicio, fin, asociado } = b as Record<string, unknown>;
+    // Un evento que ya existía y se unió a la tarea (P3, 2026-10-27) es una reunión: ya cuenta como reunión del
+    // calendario. Contarlo también como tiempo de la tarea pondría la misma hora dos veces.
+    if (asociado === true) continue;
     if (typeof calendario === "string" && typeof inicio === "string" && typeof fin === "string" && !Number.isNaN(Date.parse(inicio)) && !Number.isNaN(Date.parse(fin))) {
       out.push({ calendario: calendario.trim().toLowerCase(), inicio, fin });
     }

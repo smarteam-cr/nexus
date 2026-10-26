@@ -42,6 +42,7 @@ import { esLapida, SISTEMA } from "./estados";
 import { sinLoDescartado, temasDescartados } from "./descartadas";
 import type { Tema } from "./tema";
 import { personasPorDefecto } from "./fuentes";
+import { esFuentePersonal, soloParaElPiloto, type Piloto } from "./lectura-personal";
 import { ABIERTAS_WHERE, candidatasWhere } from "./donde";
 import { lasQueQuedaronFuera } from "./cupo";
 import type { FueraDelTope } from "./tipos";
@@ -103,7 +104,10 @@ export async function pedirLectura(ctx: ContextoDeTareas, clientes: ClientesQueV
     if (hoyPedidas >= LECTURAS_POR_PERSONA_POR_DIA) throw new ErrorDeTareas(429, `Hoy ya pediste ${LECTURAS_POR_PERSONA_POR_DIA} lecturas. Mañana puedes pedir más.`);
   };
 
-  const ya = await prisma.lecturaDeReunion.findUnique({ where: { sessionId: reunion.id }, select: { id: true, estado: true, leyendoDesde: true, pedidaPorEmail: true } });
+  const ya = await prisma.lecturaDeReunion.findUnique({
+    where: { sessionId: reunion.id },
+    select: { id: true, estado: true, leyendoDesde: true, pedidaPorEmail: true, fuenteId: true, fuente: { select: { equipo: true, serie: true, duenoEmail: true } } },
+  });
   if (ya) {
     // La fila espera a la lectura de seguimiento (la creó su cola: `en_espera` y nadie la pidió para tareas). Si se está
     // leyendo, se espera; si está en la cola, se pide YA por lib/lecturas (quien llama). Con la bandera apagada, o sin
@@ -119,7 +123,10 @@ export async function pedirLectura(ctx: ContextoDeTareas, clientes: ClientesQueV
     const colgadaDesde = new Date(+ahora - MINUTOS_PARA_DAR_POR_COLGADA * 60_000);
     const colgada = ya.estado === "leyendo" && (!ya.leyendoDesde || ya.leyendoDesde < colgadaDesde);
     const llegaronLasNotas = ya.estado === "sin_texto" && tieneLineas(reunion);
-    if (ya.estado !== "error" && !colgada && !llegaronLasNotas && !esperaFila) return { id: ya.id, estado: ya.estado, yaLeida: true };
+    // La lectura PERSONAL de otra persona (H1) solo le propuso a ella: quien la pide ahora la vuelve a leer, ya como
+    // lectura de siempre (lo que ya salió para la dueña no se duplica: la misma línea tiene el mismo `origenId`).
+    const personalAjena = !p.fuenteId && !!ya.fuente && esFuentePersonal(ya.fuente) && ya.fuente.duenoEmail.toLowerCase() !== ctx.email && ya.estado !== "leyendo";
+    if (ya.estado !== "error" && !colgada && !llegaronLasNotas && !esperaFila && !personalAjena) return { id: ya.id, estado: ya.estado, yaLeida: true };
     await topeDelDia();
     // Condicionada: dos reintentos a la vez retoman una sola vez. Con lo elegido ahora, a nombre de quien reintenta.
     const r = await prisma.lecturaDeReunion.updateMany({
@@ -130,6 +137,7 @@ export async function pedirLectura(ctx: ContextoDeTareas, clientes: ClientesQueV
           { estado: "sin_texto" },
           { estado: "leyendo", OR: [{ leyendoDesde: null }, { leyendoDesde: { lt: colgadaDesde } }] },
           ...(esperaFila ? [{ estado: "en_espera", pedidaPorEmail: null }] : []),
+          ...(personalAjena ? [{ fuenteId: ya.fuenteId, estado: { not: "leyendo" } }] : []),
         ],
       },
       data: {
@@ -142,7 +150,7 @@ export async function pedirLectura(ctx: ContextoDeTareas, clientes: ClientesQueV
         semanaQueCierra: rol === "planning" ? null : aDate(semanaQueCierra(reunion.inicio)),
         avisar: p.avisarIgual ? true : !vieja,
         pedidaPorEmail: ctx.email,
-        ...(p.fuenteId ? { fuenteId: p.fuenteId } : {}),
+        ...(p.fuenteId ? { fuenteId: p.fuenteId } : personalAjena ? { fuenteId: null } : {}),
       },
     });
     return { id: ya.id, estado: "leyendo", yaLeida: r.count === 0 };
@@ -318,13 +326,26 @@ export async function procesarLectura(lecturaId: string, ahora = new Date()): Pr
  * Quiénes están en el sprint de la serie que pidió la lectura. «Quiénes están» vacío = los del área y quienes lo
  * lideran (`personasPorDefecto`), igual que en la pantalla del sprint. Una lectura que no viene de una serie: nadie.
  */
-function personasDeLaFuente(fuente: { personas: string[]; equipo: string | null } | null, equipoDeLaLectura: string, ctx: ContextoDeTareas): string[] {
-  if (!fuente) return [];
+function personasDeLaFuente(fuente: { personas: string[]; equipo: string | null; serie?: string } | null, equipoDeLaLectura: string, ctx: ContextoDeTareas): string[] {
+  if (!fuente || esFuentePersonal({ equipo: fuente.equipo, serie: fuente.serie ?? "" })) return [];
   return fuente.personas.length ? fuente.personas : personasPorDefecto(fuente.equipo ?? equipoDeLaLectura, ctx.miembros);
 }
 
+/**
+ * La persona de la lectura PERSONAL (roadmap H1; lib/tareas/lectura-personal.ts): la dueña de la fuente, su sprint de
+ * casa y si organizó la reunión. null si la lectura no es personal (la de un sprint, la que pidió alguien a mano).
+ */
+function pilotoDeLaLectura(fuente: { equipo: string | null; serie: string; duenoEmail: string } | null, reunion: Pick<ReunionParaTareas, "organizador">, ctx: ContextoDeTareas): Piloto | null {
+  if (!fuente || !esFuentePersonal(fuente)) return null;
+  const email = fuente.duenoEmail.toLowerCase();
+  const m = ctx.miembros.find((x) => x.email === email);
+  return { email, equipo: m ? claveDeEquipo(m.area, m.email) : ctx.equipo, organiza: (reunion.organizador ?? "").toLowerCase() === email };
+}
+
+const nombreEn = (ctx: ContextoDeTareas) => (email: string) => ctx.miembros.find((m) => m.email === email)?.nombre ?? email;
+
 async function procesar(lecturaId: string, ahora: Date) {
-  const l = await prisma.lecturaDeReunion.findUnique({ where: { id: lecturaId }, include: { fuente: { select: { personas: true, equipo: true } } } });
+  const l = await prisma.lecturaDeReunion.findUnique({ where: { id: lecturaId }, include: { fuente: { select: { personas: true, equipo: true, serie: true, duenoEmail: true } } } });
   if (!l || l.estado !== "leyendo" || !l.sessionId || !l.pedidaPorEmail) return;
   const tm = await prisma.teamMember.findFirst({ where: { email: { equals: l.pedidaPorEmail, mode: "insensitive" } } });
   if (!tm) throw new Error("Quien pidió la lectura ya no está en el equipo.");
@@ -333,6 +354,7 @@ async function procesar(lecturaId: string, ahora: Date) {
   const enElSprint = personasDeLaFuente(l.fuente, l.equipo, ctx);
   const [reunion] = await getReunionesParaTareas({ quien: quienLee(ctx, clientes), ids: [l.sessionId] });
   if (!reunion) throw new Error("La reunión ya no se puede leer.");
+  const piloto = pilotoDeLaLectura(l.fuente, reunion, ctx);
   // Releer (llegaron las notas, o un reintento) no borra lo que ya salió de la conversación.
   const conversacionAnterior = ((l.resumen ?? null) as ResumenDeLectura | null)?.conversacion;
   const conLaAnterior = conversacionAnterior ? { conversacion: conversacionAnterior } : {};
@@ -343,7 +365,7 @@ async function procesar(lecturaId: string, ahora: Date) {
     // Nivel 2, en automático: sin «Próximos pasos» ni tareas anotadas, se lee la conversación (si hay, si hay cupo y si
     // no se leyó ya).
     if (reunion.largoTranscript >= MIN_CARACTERES_DE_CONVERSACION && conversacionAnterior?.estado !== "lista" && (await hayCupoAutomatico(ahora))) {
-      const conv = await leerLaConversacion({ id: l.id, sessionId: l.sessionId, equipo: l.equipo, semana: comoFecha(l.semana)!, avisar: l.avisar, pedidaPorEmail: l.pedidaPorEmail, enElSprint }, ctx, clientes, "automatica", null, ahora, {
+      const conv = await leerLaConversacion({ id: l.id, sessionId: l.sessionId, equipo: l.equipo, semana: comoFecha(l.semana)!, avisar: l.avisar, pedidaPorEmail: l.pedidaPorEmail, enElSprint, piloto }, ctx, clientes, "automatica", null, ahora, {
         base: resumen,
         datos: { modo: "transcript", leidaAt: ahora },
       });
@@ -476,6 +498,10 @@ async function procesar(lecturaId: string, ahora: Date) {
   const ctxDeLasPropuestas = await contextosDeLasNotas(armado.propuestas, lineas, reunion, l.pedidaPorEmail, clientes, ahora);
   const ubicacion = contextoDeLaReunion({ reunion: reunion.titulo, fecha: diaCortoConSemana(horaDeCostaRica(reunion.inicio).fecha) });
   for (const p of armado.propuestas) p.contexto = ctxDeLasPropuestas.porLinea.get(p.lineaId) ?? ubicacion;
+  // La lectura personal (H1): solo lo de esa persona, y la revisión de lo que se le encargó a otra si organizó la reunión.
+  // Sin proyectos sugeridos: el piloto mide tareas sueltas.
+  const propuestasFinales = piloto ? soloParaElPiloto(armado.propuestas, piloto, nombreEn(ctx)) : armado.propuestas;
+  const gruposFinales = piloto ? [] : armado.grupos;
   if (ctxDeLasPropuestas.costo) {
     costo = { entrada: (costo?.entrada ?? 0) + ctxDeLasPropuestas.costo.entrada, salida: (costo?.salida ?? 0) + ctxDeLasPropuestas.costo.salida };
   }
@@ -486,19 +512,19 @@ async function procesar(lecturaId: string, ahora: Date) {
     async (tx) => {
       const proyectos: ResumenDeLectura["proyectos"] = [];
       const proyectoDeLinea = new Map<string, string>();
-      for (const g of armado.grupos) {
+      for (const g of gruposFinales) {
         if (g.mismoQue) {
           // Ya existe: las líneas salen con «¿Va dentro de…?» (sugerido), no adentro.
-          for (const p of armado.propuestas) if (g.lineas.includes(p.lineaId)) p.sugerido = { ...p.sugerido, proyectoSugeridoId: g.mismoQue };
+          for (const p of propuestasFinales) if (g.lineas.includes(p.lineaId)) p.sugerido = { ...p.sugerido, proyectoSugeridoId: g.mismoQue };
           continue;
         }
-        const citas = armado.propuestas.filter((p) => g.lineas.includes(p.lineaId)).map((p) => p.cita).join("\n");
+        const citas = propuestasFinales.filter((p) => g.lineas.includes(p.lineaId)).map((p) => p.cita).join("\n");
         const proy = await escribirProyectoSugerido(tx, { id: l.id, sessionId: reunion.id }, espacio.id, { clave: g.clave, nombre: g.nombre, cita: citas, clientId: clienteDeLaReunion });
         if (!proy) continue; // ya hay uno propuesto con ese nombre, de otro cliente: las líneas quedan sueltas
         proyectos.push({ id: proy.id, nombre: g.nombre, nuevo: proy.nuevo });
         for (const lineaId of g.lineas) proyectoDeLinea.set(lineaId, proy.id);
       }
-      const propuestas = armado.propuestas.map((p) => ({ ...p, proyectoId: proyectoDeLinea.get(p.lineaId) ?? null }));
+      const propuestas = propuestasFinales.map((p) => ({ ...p, proyectoId: proyectoDeLinea.get(p.lineaId) ?? null }));
       const escritas = await escribirPropuestasDeLectura(tx, { id: l.id, sessionId: reunion.id, tituloReunion: reunion.titulo, pedidaPorEmail: l.pedidaPorEmail }, propuestas, { tope: topeDeLaReunion(clienteDeLaReunion) });
 
       let cierres = 0;
@@ -792,15 +818,18 @@ export async function pedirConversacion(ctx: ContextoDeTareas, clientes: Cliente
 /** Lee la conversación pedida con «¿Faltó algo?». NUNCA lanza: un error queda en `resumen.conversacion`. */
 export async function procesarConversacion(lecturaId: string, ahora = new Date()): Promise<void> {
   try {
-    const l = await prisma.lecturaDeReunion.findUnique({ where: { id: lecturaId }, include: { fuente: { select: { personas: true, equipo: true } } } });
+    const l = await prisma.lecturaDeReunion.findUnique({ where: { id: lecturaId }, include: { fuente: { select: { personas: true, equipo: true, serie: true, duenoEmail: true } } } });
     const conv = ((l?.resumen ?? null) as ResumenDeLectura | null)?.conversacion;
     if (!l || !l.sessionId || conv?.estado !== "leyendo" || !conv.pedidaPorEmail) return;
     const tm = await prisma.teamMember.findFirst({ where: { email: { equals: conv.pedidaPorEmail, mode: "insensitive" } } });
     if (!tm) throw new Error("Quien pidió la lectura ya no está en el equipo.");
     const ctx = await contextoDeTareas({ teamMember: tm });
     const clientes = await clientesQueVesParaTareas(tm);
+    // La personal se lee con la regla de su dueña, la pida quien la pida («¿Faltó algo?»).
+    const [reunion] = esFuentePersonal(l.fuente) ? await getReunionesParaTareas({ quien: quienLee(ctx, clientes), ids: [l.sessionId] }) : [];
+    const piloto = reunion ? pilotoDeLaLectura(l.fuente, reunion, ctx) : null;
     const leida = await leerLaConversacion(
-      { id: l.id, sessionId: l.sessionId, equipo: l.equipo, semana: comoFecha(l.semana)!, avisar: l.avisar, pedidaPorEmail: l.pedidaPorEmail, enElSprint: personasDeLaFuente(l.fuente, l.equipo, ctx) },
+      { id: l.id, sessionId: l.sessionId, equipo: l.equipo, semana: comoFecha(l.semana)!, avisar: l.avisar, pedidaPorEmail: l.pedidaPorEmail, enElSprint: personasDeLaFuente(l.fuente, l.equipo, ctx), piloto },
       ctx,
       clientes,
       "pedida",
@@ -835,7 +864,7 @@ async function guardarConversacion(db: Pick<typeof prisma, "lecturaDeReunion">, 
  * persona. `null` si no hay conversación que leer. `automatica` además cierra la lectura (`base` + `datos`).
  */
 async function leerLaConversacion(
-  l: { id: string; sessionId: string; equipo: string; semana: string; avisar: boolean; pedidaPorEmail: string | null; enElSprint?: readonly string[] },
+  l: { id: string; sessionId: string; equipo: string; semana: string; avisar: boolean; pedidaPorEmail: string | null; enElSprint?: readonly string[]; piloto?: Piloto | null },
   ctx: ContextoDeTareas,
   clientes: ClientesQueVes,
   como: ConversacionDeLaLectura["como"],
@@ -960,25 +989,28 @@ async function leerLaConversacion(
   // Lo que el modelo y la línea no explican: al menos de qué conversación salió.
   const ubicacionConv = contextoDeLaReunion({ reunion: reunion.titulo, fecha: diaCortoConSemana(horaDeCostaRica(reunion.inicio).fecha), deLaConversacion: true });
   for (const p of armado.propuestas) p.contexto ??= ubicacionConv;
+  // La lectura personal (H1): la misma regla que en las notas.
+  const propuestasFinales = l.piloto ? soloParaElPiloto(armado.propuestas, l.piloto, nombreEn(ctx)) : armado.propuestas;
+  const gruposFinales = l.piloto ? [] : armado.grupos;
 
   const espacio = await asegurarEspacio(prisma, l.equipo);
   const conv = await prisma.$transaction(
     async (tx) => {
       const proyectosEscritos: ConversacionDeLaLectura["proyectos"] = [];
       const proyectoDeLinea = new Map<string, string>();
-      for (const g of armado.grupos) {
+      for (const g of gruposFinales) {
         if (g.mismoQue) {
-          for (const p of armado.propuestas) if (g.lineas.includes(p.lineaId)) p.sugerido = { ...p.sugerido, proyectoSugeridoId: g.mismoQue };
+          for (const p of propuestasFinales) if (g.lineas.includes(p.lineaId)) p.sugerido = { ...p.sugerido, proyectoSugeridoId: g.mismoQue };
           continue;
         }
-        const citas = armado.propuestas.filter((p) => g.lineas.includes(p.lineaId)).map((p) => p.cita).join("\n");
+        const citas = propuestasFinales.filter((p) => g.lineas.includes(p.lineaId)).map((p) => p.cita).join("\n");
         // `c` delante: el G1 de la conversación no es el G1 de las notas de la misma lectura.
         const proy = await escribirProyectoSugerido(tx, { id: l.id, sessionId: reunion.id }, espacio.id, { clave: `c${g.clave}`, nombre: g.nombre, cita: citas, clientId: clienteDeLaReunion });
         if (!proy) continue;
         proyectosEscritos.push({ id: proy.id, nombre: g.nombre, nuevo: proy.nuevo });
         for (const lineaId of g.lineas) proyectoDeLinea.set(lineaId, proy.id);
       }
-      const propuestas = armado.propuestas.map((p) => ({ ...p, proyectoId: proyectoDeLinea.get(p.lineaId) ?? null }));
+      const propuestas = propuestasFinales.map((p) => ({ ...p, proyectoId: proyectoDeLinea.get(p.lineaId) ?? null }));
       const escritas = await escribirPropuestasDeLectura(tx, { id: l.id, sessionId: reunion.id, tituloReunion: reunion.titulo, pedidaPorEmail: pedidaPorEmail ?? l.pedidaPorEmail }, propuestas, { tope: topeDeLaReunion(clienteDeLaReunion) });
       const porPersona = new Map<string, number>();
       for (const c of escritas.creadas) if (c.responsableEmail) porPersona.set(c.responsableEmail, (porPersona.get(c.responsableEmail) ?? 0) + 1);

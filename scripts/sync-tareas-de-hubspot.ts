@@ -28,6 +28,7 @@ async function main() {
   console.log(`  traídas de HubSpot: ${r.traidas}`);
   console.log(`  nuevas en Nexus: ${r.nuevas} · cambios de HubSpot aplicados: ${r.aplicadasEnNexus} · escritas en HubSpot: ${r.escritasEnHubspot}`);
   console.log(`  pasaron a «Ya no se hará» (borradas o de alguien de afuera): ${r.cerradas} · sin cambios: ${r.sinCambios}`);
+  console.log(`  seguimientos de Nexus creados en HubSpot: ${r.creadasEnHubspot} (con TAREAS_SEGUIMIENTO_EN_HUBSPOT=1)`);
   for (const e of r.errores) console.log(`  ⚠ ${e}`);
   if (!apply) console.log("\n(simulacro: no se escribió nada. Con --apply se guarda.)");
 }

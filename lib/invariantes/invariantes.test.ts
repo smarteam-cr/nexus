@@ -22,6 +22,7 @@ import {
 } from "./index";
 import { INV49, INV53 } from "./google";
 import { INV59 } from "./escala";
+import { INV63 } from "./tareas";
 import { INV55, INV55_BLOQUEA } from "./smartloop";
 import { INV51, INV56 } from "./empresa";
 import { INV64 } from "./documentos-de-la-empresa";
@@ -646,6 +647,24 @@ describe("tareas: INV38–INV43 (2026-10-09)", () => {
     expect(r.ok).toBe(false);
     expect(r.lineas[0]).toContain("2 tarea(s)");
   });
+
+  it("INV63 · el contacto o el negocio de HubSpot de otro cliente viola; un negocio que ya no está en la copia no cuenta (D4)", async () => {
+    const contactos = [{ clientId: "c1", hubspotId: "501" }];
+    const negocios = [{ clientId: "c1", hubspotDealId: "9001" }];
+    const ok = await INV63.correr(
+      baseFalsa({ tarea: [{ numero: 1, clientId: "c1", hubspotContactId: "501", hubspotDealId: "9001" }, { numero: 2, clientId: "c1", hubspotContactId: null, hubspotDealId: "cerrado" }], contactoDeHubspot: contactos, negocioAbierto: negocios }),
+      AHORA,
+    );
+    expect(ok.ok).toBe(true);
+    const r = await INV63.correr(
+      baseFalsa({ tarea: [{ numero: 3, clientId: "c2", hubspotContactId: "501", hubspotDealId: null }, { numero: 4, clientId: "c2", hubspotContactId: null, hubspotDealId: "9001" }], contactoDeHubspot: contactos, negocioAbierto: negocios }),
+      AHORA,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.lineas[0]).toContain("2 tarea(s)");
+    expect(r.lineas[0]).toContain("T-3: su contacto de HubSpot no es de su cliente");
+    expect(r.lineas[0]).toContain("T-4: su negocio de HubSpot es de otro cliente");
+  });
 });
 
 describe("la lectura de cada reunión: INV44 (memoria de la cuenta, etapa 2)", () => {
@@ -831,7 +850,7 @@ describe("el registro y el consumidor", () => {
       "44", "45", "46", "47",
       // Del 49 en adelante (2026-10-25 en adelante): qué vigila cada una está en su archivo de lib/invariantes/ y en
       // la fila invariants-daily del RUNBOOK.
-      "49", "50", "51", "52", "53", "54", "55", "56", "57", "58", "59", "60", "61", "62", "64",
+      "49", "50", "51", "52", "53", "54", "55", "56", "57", "58", "59", "60", "61", "62", "63", "64",
     ]);
     expect(new Set(INVARIANTES_SOLO_BASE.map((i) => i.id)).size).toBe(INVARIANTES_SOLO_BASE.length);
   });

@@ -18,7 +18,7 @@ import { INV10, INV11, INV14, INV8, INV8c } from "./proyectos";
 import { INV18, INV20, INV25, INV26, INV27, INV28, INV3, INV32, INV33, INV34, INV35, INV36, INV5 } from "./cobranza";
 import { INV22 } from "./cronograma";
 import { INV23, INV24, INV30, INV31 } from "./odoo";
-import { INV38, INV39, INV40, INV41, INV42, INV43 } from "./tareas";
+import { INV38, INV39, INV40, INV41, INV42, INV43, INV63 } from "./tareas";
 import { INV44, INV46 } from "./lecturas";
 import { INV45 } from "./hechos";
 import { INV47, INV52 } from "./reuniones";
@@ -35,13 +35,13 @@ import { INV61 } from "./exploraciones";
 import { INV64 } from "./documentos-de-la-empresa";
 export type { Invariante, ResultadoDeInvariante } from "./contrato";
 export { INV1, INV3, INV5, INV8, INV8c, INV10, INV11, INV14, INV18, INV20, INV21, INV22, INV23, INV24, INV25, INV26, INV27, INV28, INV30, INV31, INV32, INV33, INV34, INV35, INV36, INV37, INV38, INV39, INV40, INV41, INV42, INV43, INV44, INV45, INV46, INV47 };
-export { INV49, INV50, INV51, INV52, INV53, INV54, INV55, INV56, INV57, INV58, INV59, INV60, INV61, INV62, INV64 };
+export { INV49, INV50, INV51, INV52, INV53, INV54, INV55, INV56, INV57, INV58, INV59, INV60, INV61, INV62, INV63, INV64 };
 
 /** En el orden en que el gate los imprime. Sumar uno acá es lo que lo pone en el job y en /api/health. */
 export const INVARIANTES_SOLO_BASE: readonly Invariante[] = [
   INV1, INV3, INV5, INV8, INV8c, INV10, INV11, INV14, INV18, INV20, INV21, INV22, INV23, INV24, INV25, INV26, INV27, INV28, INV30,
   INV31, INV32, INV33, INV34, INV35, INV36, INV37, INV38, INV39, INV40, INV41, INV42, INV43, INV44, INV45, INV46, INV47,
-  INV49, INV50, INV51, INV52, INV53, INV54, INV55, INV56, INV57, INV58, INV59, INV60, INV61, INV62, INV64,
+  INV49, INV50, INV51, INV52, INV53, INV54, INV55, INV56, INV57, INV58, INV59, INV60, INV61, INV62, INV63, INV64,
 ];
 
 export type CorridaDeInvariantes = {
