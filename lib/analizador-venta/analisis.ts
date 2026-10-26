@@ -214,6 +214,8 @@ export interface LoQueHabia {
   guia: boolean;
   escala: boolean;
   posicionamiento: boolean;
+  /** Había algo que explorar en el alcance de la sesión (lib/analizador-venta/alcance.ts). Sin el dato, `escala`. */
+  dimensiones?: boolean;
 }
 
 /** ¿El valor contradice lo que tenía el material? */
@@ -221,7 +223,8 @@ function contradiceElMaterial(punto: PuntoJuzgado, valor: string, habia: LoQueHa
   if (punto === "guia") return habia.guia === (valor === "sin_guia");
   if (punto === "escala") return habia.escala === (valor === "sin_escala");
   if (punto === "posicionamiento") return habia.posicionamiento === (valor === "sin_posicionamiento");
-  if (punto === "exploracion") return !habia.escala;
+  if (punto === "exploracion") return !(habia.dimensiones ?? habia.escala);
+
   return false;
 }
 

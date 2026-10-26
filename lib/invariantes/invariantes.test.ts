@@ -25,6 +25,8 @@ import { INV59 } from "./escala";
 import { INV55, INV55_BLOQUEA } from "./smartloop";
 import { INV51, INV56 } from "./empresa";
 import { INV58, INV58_BLOQUEA } from "./tests-diagnostico";
+import { INV62 } from "./analizador-venta";
+
 import { InvariantesVioladosError, JOB_INVARIANTES, correrJobDeInvariantes, mensajeDeViolaciones } from "./job";
 import { invariantesOkDesde, leerInvariantesOk } from "./salud";
 import { DONDE_PUEDE_TENER_TEXTO } from "@/lib/sessions/tiene-texto";
@@ -814,7 +816,7 @@ describe("hechos: INV45 (memoria de la cuenta, etapa 6)", () => {
 
 describe("el registro y el consumidor", () => {
 
-  it("el registro tiene los 48 solo-base, con ids únicos y en el orden del gate", () => {
+  it("el registro tiene los 49 solo-base, con ids únicos y en el orden del gate", () => {
     /* Del 28 salta al 30: INV29 lo reserva docs/database-refactoring-plan.md. 31 y 32 son las frescuras (espejo y corte);
        33 y 34, el número de factura (etapa 7); 35, la plata que no es venta (etapa 10); 36, a quién se facturó (etapa 12); 37, dos clientes con un dominio (2026-10-02). */
     expect(INVARIANTES_SOLO_BASE.map((i) => i.id)).toEqual([
@@ -833,6 +835,8 @@ describe("el registro y el consumidor", () => {
       // preventa (R5); 57, cada análisis de venta de la empresa de su reunión (S3); 58, los tests llegan a HubSpot (área
       // O); 59, ninguna escala publicada con preguntas abiertas (N); 60, la copia del banco de Odoo al día (U15).
       "49", "50", "51", "52", "53", "54", "55", "56", "57", "58", "59", "60",
+      // 62 (2026-10-27): cada análisis de venta confirmado, entero y posterior a su análisis (S4). 61 no es de esta rama.
+      "62",
     ]);
     expect(new Set(INVARIANTES_SOLO_BASE.map((i) => i.id)).size).toBe(INVARIANTES_SOLO_BASE.length);
   });
@@ -880,7 +884,8 @@ describe("el job invariants-daily (B-08)", () => {
    */
   it("con todo en verde devuelve el resumen; con algo en rojo LANZA con los ids y el mensaje acotado", async () => {
     /* La edición que lo pone en rojo: cambiar el throw por un console.error «para no ensuciar Sentry». */
-    await expect(correrJobDeInvariantes(baseFalsa({}), AHORA)).resolves.toBe("48 invariantes solo-base en verde");
+    await expect(correrJobDeInvariantes(baseFalsa({}), AHORA)).resolves.toBe("49 invariantes solo-base en verde");
+
     const promesa = correrJobDeInvariantes(baseFalsa({ cobro: 2 }), AHORA); // INV3 e INV5 cuentan cobros
     await expect(promesa).rejects.toBeInstanceOf(InvariantesVioladosError);
     const e = (await promesa.catch((x: unknown) => x)) as InvariantesVioladosError;
@@ -1111,5 +1116,35 @@ describe("la escala: INV59 (ninguna publicada trae «Lo que falta decidir»)", (
     const mal = await INV59.correr(baseFalsa({ escalaVersion: [version("9.0.0", ["Cómo leer este documento", "Borrador 9.0.0 — Lo que falta decidir"])] }), AHORA);
     expect(mal.ok).toBe(false);
     expect(mal.lineas[0]).toContain("9.0.0");
+  });
+});
+
+describe("el análisis de la venta: INV62 (cada confirmación entera y posterior al análisis, S4)", () => {
+  const analizado = new Date("2026-10-27T15:00:00Z");
+  const fila = (o: Record<string, unknown>) => ({
+    sessionId: "s1",
+    estado: "PROPUESTO",
+    resultado: { resumen: "x", juicios: [], recomendaciones: [] },
+    analizadoAt: analizado,
+    confirmadoPor: "andres@smarteamcr.com",
+    confirmadoAt: new Date("2026-10-27T16:00:00Z"),
+    session: { title: "Camosa l Exploración" },
+    ...o,
+  });
+
+  it("una confirmación entera cumple; sin quién, de un análisis fallido o anterior al análisis viola", async () => {
+    const llamadas: Llamada[] = [];
+    expect((await INV62.correr(baseFalsa({ analisisDeVenta: [fila({})] }, llamadas), AHORA)).ok).toBe(true);
+    expect(where(llamadas, "analisisDeVenta")).toEqual({ OR: [{ confirmadoPor: { not: null } }, { confirmadoAt: { not: null } }] });
+    for (const mala of [
+      fila({ confirmadoPor: null }),
+      fila({ estado: "ERROR", resultado: null }),
+      // Se volvió a analizar después de confirmar y la confirmación quedó: diría «confirmado» sobre algo que nadie leyó.
+      fila({ confirmadoAt: new Date("2026-10-27T14:00:00Z") }),
+    ]) {
+      const r = await INV62.correr(baseFalsa({ analisisDeVenta: [mala] }), AHORA);
+      expect(r.ok).toBe(false);
+      expect(r.lineas.join("\n")).toContain("Camosa");
+    }
   });
 });

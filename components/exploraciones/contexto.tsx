@@ -64,6 +64,11 @@ export interface Lienzo {
   puedeProponer: boolean;
   /** El chat de la cuenta está en la pantalla y quien mira puede usarlo: «Mejorar con el asistente» en la guía. */
   conAsistente: boolean;
+  /**
+   * Quien mira ve el análisis de la venta consultiva (la pieza «Análisis» y «Cómo trabajaste esta sesión»,
+   * components/analizador-venta): los super admin mientras se prueba. Nunca en la exploración de un proyecto.
+   */
+  veAnalisisDeVenta?: boolean;
   guardando: boolean;
   cambiar: (ops: Operacion[], opciones?: OpcionesDeCambio) => Promise<boolean>;
   /** Vuelve a pedir la exploración (el agente terminó y dejó propuestas nuevas). Sale en la misma
@@ -118,7 +123,8 @@ export type MomentoDeLaSesion = "antes" | "durante" | "despues";
  * «Traspaso» se retiró el 2026-10-01: era la explicación de qué recibe el CSE, no algo que hacer; en
  * su lugar está la Propuesta, que es el paso que sigue.
  */
-export type PasoDelLienzoUI = "resumen" | "preparacion" | "exploracion" | "informacion" | "procesos" | "escala" | "casos" | "propuesta";
+export type PasoDelLienzoUI = "resumen" | "preparacion" | "exploracion" | "informacion" | "procesos" | "escala" | "casos" | "propuesta" | "analisis";
+
 
 export const LienzoContexto = createContext<Lienzo | null>(null);
 

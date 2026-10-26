@@ -35,7 +35,11 @@ import { AGENTE_DEL_ANALIZADOR, MODELO_DEL_ANALIZADOR, SLUG_DEL_ANALIZADOR } fro
 import { quienHablo, quienHabloEnPalabras, type QuienHablo } from "./quien-hablo";
 import { TEXTO_DE_POR_QUE_NO, delEquipoEnLaReunion, porQueNoEsDeVenta, seAnalizaAMano, vendedoresDeLaReunion, type PorQueNoEsDeVenta } from "./reglas";
 
+/** Lo que borra la confirmación de S4 (lib/analizador-venta/revision-server.ts) cuando el análisis cambia. */
+const SIN_CONFIRMAR = { confirmadoPor: null, confirmadoAt: null, notaDeConfirmacion: null, paraLaProxima: Prisma.DbNull };
+
 /** El tope de la conversación que se le manda al modelo (unas dos horas de reunión). */
+
 const TOPE_DE_LA_CONVERSACION = 90_000;
 const MAX_TOKENS = 8000;
 
@@ -100,7 +104,29 @@ export async function quienHabloEnLaReunion(sessionId: string, transcript?: stri
   return quienHablo({ frases, transcripcion: texto, propios, equipo: equipo.map((m) => ({ email: m.email, nombre: m.name })) });
 }
 
+/**
+ * Quién habló en varias reuniones a la vez (la pieza «Análisis» y la tendencia, S5 y S7): las frases de Meet y las
+ * transcripciones en una consulta cada una. Recibe ids que ya salieron del chokepoint o de la lista de reuniones de venta.
+ */
+export async function quienHabloEnLasReuniones(sessionIds: readonly string[]): Promise<Map<string, QuienHablo>> {
+  const out = new Map<string, QuienHablo>();
+  if (!sessionIds.length) return out;
+  const ids = [...new Set(sessionIds)];
+  const [frases, equipo, propios, textos] = await Promise.all([
+    prisma.fraseDeReunion.findMany({ where: { sessionId: { in: ids } }, orderBy: [{ sessionId: "asc" }, { orden: "asc" }], select: { sessionId: true, hablante: true, correo: true, texto: true } }).catch(() => []),
+    prisma.teamMember.findMany({ select: { email: true, name: true } }),
+    dominiosDeLaCasa(),
+    prisma.firefliesSession.findMany({ where: { id: { in: ids } }, select: { id: true, transcript: true } }),
+  ]);
+  const frasesDe = new Map<string, { hablante: string; correo: string | null; texto: string }[]>();
+  for (const f of frases) frasesDe.set(f.sessionId, [...(frasesDe.get(f.sessionId) ?? []), f]);
+  const delEquipo = equipo.map((m) => ({ email: m.email, nombre: m.name }));
+  for (const t of textos) out.set(t.id, quienHablo({ frases: frasesDe.get(t.id) ?? null, transcripcion: t.transcript, propios, equipo: delEquipo }));
+  return out;
+}
+
 export type ResultadoDeAnalizar =
+
   | { ok: true; analisis: ResultadoDelAnalisis; descartados: number; runId: string }
   | { ok: false; status: number; error: string };
 
@@ -118,9 +144,12 @@ export function materialDelAnalisis(o: {
   const guia = o.guia?.preguntas.length
     ? `LA GUÍA DE LA PREVENTA QUE SE LLEVÓ${o.guia.objetivo ? ` (objetivo: ${o.guia.objetivo})` : ""}:\n${o.guia.preguntas.map((p) => `- ${p}`).join("\n")}`
     : "LA GUÍA DE LA PREVENTA: no había una guía armada antes de esta reunión (juzga guia = sin_guia).";
+  // Acotadas al área de la sesión (alcance.ts): juzga exploracion SOLO sobre estas, no sobre toda la escala.
   const dimensiones = o.guia?.dimensiones.length
-    ? `LAS DIMENSIONES DE LA ESCALA DEL ÁREA EN JUEGO:\n${o.guia.dimensiones.map((d) => `- ${d.nombre} (${d.area})${d.nivel ? `, nivel que se cree hoy: ${d.nivel}` : ""}`).join("\n")}`
-    : "LAS DIMENSIONES DE LA ESCALA: no hay una preventa con escala para esta empresa (juzga escala = sin_escala y no hagas juicios de exploracion por dimensión).";
+    ? `LO QUE SE ESPERABA EXPLORAR EN ESTA SESIÓN (${o.guia.alcance} Haz un juicio de exploracion por cada una y por ninguna otra):\n${o.guia.dimensiones.map((d) => `- ${d.nombre} (${d.area})${d.nivel ? `, nivel que se cree hoy: ${d.nivel}` : ""}`).join("\n")}`
+    : o.guia?.conEscala
+      ? "LO QUE SE ESPERABA EXPLORAR: la sesión no tiene un área definida (no hagas juicios de exploracion por dimensión)."
+      : "LAS DIMENSIONES DE LA ESCALA: no hay una preventa con escala para esta empresa (juzga escala = sin_escala y no hagas juicios de exploracion por dimensión).";
   const quien = `QUIÉN HABLÓ (calculado por Nexus, no lo recalcules): ${quienHabloEnPalabras(o.quien)}\n${o.quien.personas
     .slice(0, 12)
     .map((p) => `- ${p.nombre} (${p.lado === "smarteam" ? "Smarteam" : "cliente"}): ${p.porcentaje} %`)
@@ -197,8 +226,9 @@ export async function analizarReunionDeVenta(sessionId: string, o: { pedidoPor: 
     );
     const { resultado, descartados } = leerElAnalisis(crudo, turnos, {
       guia: !!guia?.preguntas.length,
-      escala: !!guia?.dimensiones.length,
+      escala: !!guia?.conEscala,
       posicionamiento: !!perfil?.positionStatement?.trim(),
+      dimensiones: !!guia?.dimensiones.length,
     });
     const datos = {
       clientId: r.dueno.id,
@@ -211,6 +241,8 @@ export async function analizarReunionDeVenta(sessionId: string, o: { pedidoPor: 
       agentRunId: run.id,
       pedidoPor: o.pedidoPor,
       analizadoAt: new Date(),
+      // Un análisis nuevo es otro: la confirmación del anterior no vale para él (S4). Los comentarios se quedan, con su fecha.
+      ...SIN_CONFIRMAR,
     };
     await prisma.analisisDeVenta.upsert({ where: { sessionId }, create: { sessionId, ...datos }, update: datos });
     await prisma.agentRun.update({
@@ -231,7 +263,7 @@ export async function analizarReunionDeVenta(sessionId: string, o: { pedidoPor: 
  * BUENO de la misma empresa no se pisa; uno de otra empresa (la reunión cambió de dueña) sí: ya no vale.
  */
 export async function anotarElError(sessionId: string, clientId: string, error: string, o: { agentRunId?: string | null; pedidoPor?: string | null } = {}): Promise<void> {
-  const datos = { clientId, estado: "ERROR" as const, criterio: VERSION_DEL_CRITERIO, error: error.slice(0, 500), agentRunId: o.agentRunId ?? null, pedidoPor: o.pedidoPor ?? null, resultado: Prisma.DbNull, quienHablo: Prisma.DbNull, descartados: 0, analizadoAt: new Date() };
+  const datos = { clientId, estado: "ERROR" as const, criterio: VERSION_DEL_CRITERIO, error: error.slice(0, 500), agentRunId: o.agentRunId ?? null, pedidoPor: o.pedidoPor ?? null, resultado: Prisma.DbNull, quienHablo: Prisma.DbNull, descartados: 0, analizadoAt: new Date(), ...SIN_CONFIRMAR };
   const previo = await prisma.analisisDeVenta.findUnique({ where: { sessionId }, select: { clientId: true, estado: true } }).catch(() => null);
   if (previo && previo.clientId === clientId && previo.estado === "PROPUESTO") return;
   await prisma.analisisDeVenta.upsert({ where: { sessionId }, create: { sessionId, ...datos }, update: datos }).catch(() => {});

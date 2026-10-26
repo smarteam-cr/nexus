@@ -350,7 +350,12 @@ const CENSO: Record<string, { clase: Clase; motivo: string; indirecto?: true }> 
     clase: "plomeria",
     motivo: "T3: propone la empresa de las reuniones con texto sin dueña, con el resolver único. Corta por `date <= ahora`; una persona decide.",
   },
+  "lib/analizador-venta/analizar-server.ts": {
+    clase: "plomeria",
+    motivo: "S5/S7 (2026-10-27): cuenta quién habló en reuniones que ya eligieron el chokepoint o la lista de venta (por id), sin IA. El análisis mismo trae su reunión por el chokepoint (`getClientSessions`).",
+  },
   "lib/analizador-venta/reuniones-de-venta-server.ts": {
+
     clase: "agenda",
     motivo: "S2: las reuniones de venta de cada empresa, para una PERSONA (y para elegir cuál analiza el job, que trae la reunión por el chokepoint). Corta por `date <= ahora`.",
   },

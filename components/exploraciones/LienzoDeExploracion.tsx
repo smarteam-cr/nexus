@@ -63,6 +63,8 @@ import { PasoInformacion, PasoProcesos, type InfoDeLaEmpresa } from "./PasoDeLaE
 import PasoEscala from "./PasoEscala";
 import PasoExploracion from "./PasoExploracion";
 import PasoPreparacion from "./PasoPreparacion";
+import PasoAnalisis from "@/components/analizador-venta/PasoAnalisis";
+import { useAnalisisDeLaVenta } from "@/components/analizador-venta/useAnalisisDeLaVenta";
 import ContextoDeLaPreventa, { type ModoDelContexto } from "./ContextoDeLaPreventa";
 import BuscarReunionesDeLaPreventa from "./BuscarReunionesDeLaPreventa";
 import { MirarCalendario } from "./MirarCalendario";
@@ -91,10 +93,14 @@ const DE_QUE_VA: Record<Exclude<PasoDelLienzoUI, "exploracion" | "informacion" |
   escala: "Dónde parece estar cada equipo, con hipótesis y evidencia.",
   casos: "Lo que se le puede proponer, según dónde está cada equipo.",
   propuesta: "La propuesta comercial, armada con lo confirmado.",
+  analisis: "Cómo se ha trabajado a este prospecto, sesión por sesión, y qué falta diagnosticar antes de proponer.",
 };
 
-/** Las piezas del recorrido, en orden (el Resumen va aparte, arriba de todas). */
-const PIEZAS = ["preparacion", "exploracion", "escala", "casos", "propuesta"] as const;
+/**
+ * Las piezas del recorrido, en orden (el Resumen va aparte, arriba de todas). «Análisis» (S5, 2026-10-27) va al final y
+ * solo para quien ve el análisis de la venta (los super admin mientras se prueba).
+ */
+const PIEZAS = ["preparacion", "exploracion", "escala", "casos", "propuesta", "analisis"] as const;
 
 /** Lo que dice el punto de cada pieza en el title de la fila. */
 const AYUDA_DEL_ESTADO: Record<EstadoDePieza, string> = {
@@ -126,6 +132,7 @@ export default function LienzoDeExploracion({
   piezaInicial,
   proyecto,
   conAsistente = false,
+  veAnalisisDeVenta = false,
 }: {
   inicial: ExploracionParaLaPantalla;
   escala: EscalaDelLienzo;
@@ -139,6 +146,8 @@ export default function LienzoDeExploracion({
   proyecto?: EnElProyecto;
   /** El chat de la cuenta está en la pantalla: la guía ofrece «Mejorar con el asistente» (validación 71). */
   conAsistente?: boolean;
+  /** Quien mira ve el análisis de la venta (S4 y S5): los super admin mientras se prueba. Nunca en un proyecto. */
+  veAnalisisDeVenta?: boolean;
 }) {
   const router = useRouter();
   const toast = useToast();
@@ -152,7 +161,10 @@ export default function LienzoDeExploracion({
   const [reuniones, setReuniones] = useState(inicial.reuniones ?? []);
   const [escalaAnterior, setEscalaAnterior] = useState(inicial.escalaAnterior ?? null);
   const [guardando, setGuardando] = useState(false);
-  const [paso, setPasoCrudo] = useState<PasoDelLienzoUI>(proyecto ? "exploracion" : esPieza(piezaInicial) ? piezaInicial : "resumen");
+  const conAnalisis = veAnalisisDeVenta && !proyecto;
+  const [paso, setPasoCrudo] = useState<PasoDelLienzoUI>(
+    proyecto ? "exploracion" : esPieza(piezaInicial) && (piezaInicial !== "analisis" || conAnalisis) ? piezaInicial : "resumen",
+  );
   const [vista, setVista] = useState<VistaDelProyecto>("sesiones");
   const [sesionElegida, setSesionElegida] = useState<string | null>(sesionDeLaDireccion);
   const [enInicio, setEnInicio] = useState(!sesionDeLaDireccion);
@@ -366,6 +378,7 @@ export default function LienzoDeExploracion({
     puedeEditar,
     puedeProponer: puedeEditar && puedeProponer,
     conAsistente: puedeEditar && conAsistente,
+    veAnalisisDeVenta: conAnalisis,
     guardando,
     cambiar,
     recargar,
@@ -454,6 +467,8 @@ export default function LienzoDeExploracion({
   /* El punto de cada pieza: verde si ya tiene contenido, ámbar si hay algo para revisar o hacer,
      hueco si todavía nada. Lo calcula la pantalla con lo que ya tiene. */
   const lista = listaParaProponer(exp.estado, chequeo).every((p) => p.cumplido);
+  // El punto de «Análisis»: verde con alguna sesión analizada, ámbar si hay alguna con transcripción sin analizar.
+  const analisisDeVenta = useAnalisisDeLaVenta(exp.id, conAnalisis);
   const conHipotesis = Object.values(mapa.posiciones).some((p) => p.clase === "hipotesis");
   const filaDe = (p: (typeof PIEZAS)[number]): FilaDelRiel => {
     const porRevisar = deCadaPaso(p);
@@ -482,6 +497,13 @@ export default function LienzoDeExploracion({
         estado = propuestas.length > 0 ? "generada" : lista ? "pendiente" : "vacia";
         if (propuestas.length === 0 && lista) aviso = { corto: "Lista", largo: "Lista para proponer" };
         break;
+      case "analisis": {
+        const rs = analisisDeVenta.datos?.reuniones ?? [];
+        const sinAnalizar = rs.filter((r) => r.texto === "transcripcion" && !r.detalle?.resultado).length;
+        estado = sinAnalizar > 0 ? "pendiente" : rs.some((r) => r.detalle?.resultado) ? "generada" : "vacia";
+        if (sinAnalizar > 0) aviso = { corto: `${sinAnalizar} sin analizar`, largo: "Reuniones de venta con transcripción que nadie analizó" };
+        break;
+      }
     }
     return { clave: p, etiqueta: NOMBRE_DEL_PASO[p], estado, ayuda: AYUDA_DEL_ESTADO[estado], aviso, sugeridas: porRevisar };
   };
@@ -547,7 +569,7 @@ export default function LienzoDeExploracion({
             paso={paso}
             onElegir={setPaso}
             resumen={{ sugeridas: delResumen, confirmadas, estado: confirmadas > 0 ? "generada" : "vacia" }}
-            filas={PIEZAS.map(filaDe)}
+            filas={PIEZAS.filter((p) => p !== "analisis" || conAnalisis).map(filaDe)}
             clientId={exp.empresa.clientId}
           />
         </aside>
@@ -574,6 +596,8 @@ export default function LienzoDeExploracion({
           {paso === "escala" && <PasoEscala />}
           {paso === "casos" && <PasoCasosDeUso />}
           {paso === "propuesta" && <PasoPropuesta />}
+          {paso === "analisis" && conAnalisis && <PasoAnalisis />}
+
         </main>
 
         <aside className="border-t border-line bg-surface-muted p-5 lg:col-span-2 xl:sticky xl:top-0 xl:col-span-1 xl:h-[calc(100vh-3.5rem)] xl:self-start xl:overflow-y-auto xl:border-l xl:border-t-0">

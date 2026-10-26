@@ -25,7 +25,6 @@ import { MotivosSinTexto, NumerosDelPeriodo, ReunionesSinEmpresa, TablaDeGrupos 
 import TusReuniones from "@/components/sessions/salud/TusReuniones";
 import { ProveedorDeEmpresas } from "@/components/sessions/ElegirEmpresa";
 import { empresasParaElegir } from "@/lib/sessions/empresa-de-la-reunion-server";
-import { veElAnalizador } from "@/lib/analizador-venta/reglas";
 
 export const dynamic = "force-dynamic";
 
@@ -65,15 +64,6 @@ export default async function SaludDeLasReunionesPage({ searchParams }: { search
         }
         action={<PeriodoDeLaSalud vista={vista} dias={dias} />}
       />
-      {veElAnalizador(ctx.role) && (
-        <p className="-mt-3 text-xs text-fg-muted">
-          En prueba:{" "}
-          <Link href="/sessions/venta" className="font-semibold text-brand hover:text-brand-dark">
-            Reuniones de venta →
-          </Link>{" "}
-          (qué tan consultiva fue cada reunión con un prospecto).
-        </p>
-      )}
 
       {t.sinEmpresaVencidas > 0 && (
         <Alert

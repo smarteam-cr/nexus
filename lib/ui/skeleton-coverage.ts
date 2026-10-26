@@ -43,7 +43,6 @@ export const SKELETON_COVERAGE: Record<string, Cobertura> = {
   sessions: { modo: "own" },
   "sessions/[id]": { modo: "own" },
   "sessions/salud": { modo: "own" },
-  "sessions/venta": { modo: "own" },
   "sessions/categories": { modo: "inherits", de: "sessions" },
 
   // ── Cobranza y Finanzas ─────────────────────────────────────────────────────
@@ -126,6 +125,8 @@ export const SKELETON_COVERAGE: Record<string, Cobertura> = {
   "sales/sicop": { modo: "own" },
   // La lista es una tabla; el lienzo, un cartel + la barra de pasos + tarjetas: formas propias.
   "sales/exploraciones": { modo: "own" },
+  // El análisis de la venta (S7, 2026-10-27): una tarjeta por vendedor con su tabla mes a mes. No se parece a la Preventa.
+  "sales/analisis": { modo: "own" },
   "sales/exploraciones/[id]": { modo: "own" },
   "business-cases": { modo: "own" },
   "business-cases/[id]": { modo: "inherits", de: "business-cases" },
