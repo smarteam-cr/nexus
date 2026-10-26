@@ -223,7 +223,7 @@ export default function PasoAnalisis() {
                           Analizar
                         </Button>
                       )}
-                      {!p && <span className="text-xs text-fg-muted">No es una sesión de Exploración: comenta y confirma desde la sesión cuando la sumes.</span>}
+                      {!p && <span className="text-xs text-fg-muted">No es una sesión de Exploración: confírmala desde la sesión cuando la sumes.</span>}
                     </div>
                   </div>
                 </div>

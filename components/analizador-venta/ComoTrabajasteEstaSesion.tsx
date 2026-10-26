@@ -5,46 +5,30 @@
  * venta-plan.md › «El rediseño de Elías (2026-10-26)»). Vive en Exploración › la sesión › Análisis, en un apartado APARTE
  * de lo que ya estaba ahí (siguiente paso acordado, cuánto avanzó, quedó abierto), que no se toca.
  *
- * El análisis de la reunión (S3) resumido para ESTA sesión: cómo fue, quién habló, lo que faltó explorar con su cita, la
- * etapa que se saltó, el siguiente paso, y dos o tres cosas para la próxima. Es coaching, no evaluación: el vendedor lo
- * comenta o discrepa, y una persona lo confirma eligiendo qué va «para la próxima». Lo confirmado se lleva a la guía de la
- * siguiente sesión por el mismo camino que «Quedó abierto» (`llevar`), y cuenta en la tendencia de cada vendedor (S7).
+ * Es FEEDBACK de cómo se trabajó esta sesión, no la planificación de la que sigue (Elías, 27 oct): arriba y en grande la
+ * lectura general, después quién habló, lo que faltó explorar en tarjetas, el proceso consultivo en una fila y las
+ * recomendaciones como «Para mejorar». Una persona lo confirma y lo confirmado cuenta en la tendencia de cada vendedor
+ * (S7). Se fueron los comentarios del vendedor, el siguiente paso y las casillas de «para la próxima».
  *
  * Solo lo ven los super admin mientras se prueba (`veAnalisisDeVenta` del lienzo). Solo tokens del tema.
  */
 import { useMemo, useState } from "react";
-import { Alert, Button, Field, Select, Textarea, useToast } from "@/components/ui";
+import { Alert, Button, Field, Textarea, useToast } from "@/components/ui";
 import { BotonTexto } from "@/components/ui/sistema";
 import { cn } from "@/lib/cn";
-import { PUNTOS_DEL_ANALISIS } from "@/lib/analizador-venta/criterio";
-import {
-  candidatasParaLaProxima,
-  continuidadDelSiguientePaso,
-  loDeLaSesion,
-  MAX_LETRAS_DEL_COMENTARIO,
-  MAX_PARA_LA_PROXIMA,
-  type PuntoDelComentario,
-  type TipoDeComentario,
-} from "@/lib/analizador-venta/revision";
+import { equipoDeLaDimension, loDeLaSesion, loQueFaltoPorEquipo, MAX_LETRAS_DE_LA_NOTA, type FaltaExplorar, type LoDeLaSesion } from "@/lib/analizador-venta/revision";
 import type { ReunionDeVentaVista } from "@/lib/analizador-venta/reuniones-de-venta-server";
 import type { PestanaDeSesion } from "@/lib/exploraciones/guia";
 import { useLienzo } from "@/components/exploraciones/contexto";
-import type { Llevar } from "@/components/exploraciones/DespuesDeLaSesion";
-import { useSesiones } from "@/components/exploraciones/useSesiones";
-import { AnalisisCompleto, BarraDeQuienHablo, ChipDelValor, Citas, fechaDelAnalisis, textoDeLaContinuidad } from "./piezas";
+import { AnalisisCompleto, BarraDeQuienHablo, ChipDelValor, Citas, fechaDelAnalisis } from "./piezas";
 import { useAnalisisDeLaVenta } from "./useAnalisisDeLaVenta";
-
-const PUNTOS_PARA_COMENTAR = PUNTOS_DEL_ANALISIS.filter((p) => p.id !== "quien_hablo");
 
 function Encabezado() {
   return (
     <header className="flex flex-wrap items-start justify-between gap-3 border-b border-line px-[18px] py-3.5">
       <div className="min-w-0">
         <h3 className="text-[15px] font-semibold text-fg">Cómo trabajaste esta sesión</h3>
-        <p className="mt-0.5 text-[12.5px] text-fg-muted">
-          Coaching, no evaluación: lo propone Nexus con citas de la reunión, lo comentas o discrepas, y una persona lo confirma. Lo confirmado va a la guía de la próxima
-          sesión.
-        </p>
+        <p className="mt-0.5 text-[12.5px] text-fg-muted">Feedback, no evaluación: lo propone Nexus con citas de la reunión y una persona lo confirma.</p>
       </div>
       <span className="rounded-full border border-line bg-surface-muted px-2.5 py-0.5 text-[11px] font-semibold text-fg-secondary">En prueba: solo super admin</span>
     </header>
@@ -55,17 +39,11 @@ function Aviso({ children }: { children: React.ReactNode }) {
   return <p className="px-[18px] py-4 text-[13px] text-fg-muted">{children}</p>;
 }
 
-export default function ComoTrabajasteEstaSesion({
-  pestana,
-  numeroSiguiente,
-  llevar,
-  soltar,
-}: {
-  pestana: PestanaDeSesion;
-  numeroSiguiente: number;
-  llevar: (l: Llevar) => void;
-  soltar: (texto: string) => void;
-}) {
+function Subtitulo({ children }: { children: React.ReactNode }) {
+  return <h4 className="text-xs font-semibold uppercase tracking-wide text-fg-muted">{children}</h4>;
+}
+
+export default function ComoTrabajasteEstaSesion({ pestana }: { pestana: PestanaDeSesion }) {
   const { exp, puedeEditar, veAnalisisDeVenta } = useLienzo();
   const analisis = useAnalisisDeLaVenta(exp.id, !!veAnalisisDeVenta);
   if (!veAnalisisDeVenta) return null;
@@ -75,7 +53,6 @@ export default function ComoTrabajasteEstaSesion({
   let cuerpo: React.ReactNode;
   if (!analisis.datos && !analisis.error) cuerpo = <Aviso>Leyendo el análisis…</Aviso>;
   else if (!analisis.datos && analisis.error)
-
     cuerpo = (
       <div className="px-[18px] py-4">
         <Alert variant="danger">{analisis.error}</Alert>
@@ -84,7 +61,7 @@ export default function ComoTrabajasteEstaSesion({
   else if (!r || r.origen !== "meet") cuerpo = <Aviso>Esta sesión no tiene una reunión de Meet: no hay una transcripción que analizar.</Aviso>;
   else if (!vista)
     cuerpo = <Aviso>Esta reunión no cuenta como de venta (fue solo con gente de Smarteam, o de entrega con un cliente sin nadie de Ventas): no se analiza.</Aviso>;
-  else cuerpo = <ElAnalisis vista={vista} numeroSiguiente={numeroSiguiente} llevar={llevar} soltar={soltar} puedeEditar={puedeEditar} />;
+  else cuerpo = <ElAnalisis vista={vista} pestana={pestana} puedeEditar={puedeEditar} />;
 
   return (
     <section aria-label="Cómo trabajaste esta sesión" data-recorrido="preventa.sesion.como-trabajaste" className="overflow-hidden rounded-xl border border-line bg-surface">
@@ -94,21 +71,8 @@ export default function ComoTrabajasteEstaSesion({
   );
 }
 
-function ElAnalisis({
-  vista,
-  numeroSiguiente,
-  llevar,
-  soltar,
-  puedeEditar,
-}: {
-  vista: ReunionDeVentaVista;
-  numeroSiguiente: number;
-  llevar: (l: Llevar) => void;
-  soltar: (texto: string) => void;
-  puedeEditar: boolean;
-}) {
-  const { exp } = useLienzo();
-  const { todas } = useSesiones();
+function ElAnalisis({ vista, pestana, puedeEditar }: { vista: ReunionDeVentaVista; pestana: PestanaDeSesion; puedeEditar: boolean }) {
+  const { exp, escala } = useLienzo();
   const { datos, analizar, revisar } = useAnalisisDeLaVenta(exp.id, true);
   const toast = useToast();
   const [ocupado, setOcupado] = useState<string | null>(null);
@@ -116,7 +80,8 @@ function ElAnalisis({
   const d = vista.detalle ?? null;
   const res = d?.resultado ?? null;
   const lo = useMemo(() => (res ? loDeLaSesion(res) : null), [res]);
-  const despues = (datos?.reuniones ?? []).map((x) => x.fecha);
+  const equipo = pestana.sesion?.equipo ?? null;
+  const faltas = useMemo(() => (lo ? loQueFaltoPorEquipo(lo, (dim) => equipoDeLaDimension(dim, { equipo, areas: escala.areas })) : []), [lo, equipo, escala.areas]);
   const nombre = (correo: string) => datos?.nombres[correo] ?? correo;
 
   /** Corre una acción con su botón ocupado; devuelve si salió bien. */
@@ -162,14 +127,8 @@ function ElAnalisis({
   }
 
   return (
-    <div className="space-y-5 px-[18px] py-4">
+    <div className="space-y-6 px-[18px] py-4">
       {error && <Alert variant="danger">{error}</Alert>}
-      {vista.quienHablo && (
-        <div className="space-y-1">
-          <p className="text-xs font-semibold text-fg-secondary">Quién habló</p>
-          <BarraDeQuienHablo q={vista.quienHablo} />
-        </div>
-      )}
 
       {!d && (
         <div className="flex flex-wrap items-center gap-3">
@@ -186,117 +145,61 @@ function ElAnalisis({
         </div>
       )}
 
-      {d && res && lo && (
+      {d && res && lo ? (
         <>
-          <div className="space-y-2">
+          {/* Lo principal: la lectura general, arriba y en grande (Elías, 27 oct). */}
+          <div className="rounded-xl border border-line border-l-4 border-l-brand bg-surface-muted px-5 py-4">
             <div className="flex flex-wrap items-center gap-2">
               <ChipDelValor j={lo.consultiva} />
               <ChipDelValor j={lo.posicion} />
-              <span
-                className={cn(
-                  "rounded-full px-2 py-0.5 text-[11px] font-semibold",
-                  d.confirmado ? "bg-success-surface text-success-ink" : "bg-info-surface text-brand",
-                )}
-              >
+              <span className={cn("rounded-full px-2 py-0.5 text-[11px] font-semibold", d.confirmado ? "bg-success-surface text-success-ink" : "bg-info-surface text-brand")}>
                 {d.confirmado ? `Confirmado por ${nombre(d.confirmado.por)}` : "Propuesta de Nexus: falta confirmarla"}
               </span>
             </div>
-            <p className="text-[13px] leading-[20px] text-fg">{lo.resumen}</p>
-            <p className="text-xs text-fg-muted">
+            <p className="mt-3 text-[17px] leading-[27px] text-fg">{lo.resumen}</p>
+            <p className="mt-2.5 text-xs text-fg-muted">
               Analizada el {fechaDelAnalisis(d.analizadoAt)}
               {d.descartados ? ` · ${d.descartados} juicios sin una cita que esté en la transcripción se descartaron` : ""}.
             </p>
           </div>
 
-          <div className="grid gap-5 md:grid-cols-2">
-            <div className="space-y-2">
-              <p className="text-xs font-semibold text-fg-secondary">Lo que faltó explorar</p>
-              {!lo.tocadas.length && !lo.sinExplorar.length ? (
-                <p className="text-[13px] text-fg-muted">
-                  {lo.exploradas.length ? `Se exploró a fondo lo que se esperaba: ${lo.exploradas.join(", ")}.` : "El análisis no juzgó qué se exploró en esta sesión."}
-                </p>
-              ) : (
-                <ul className="space-y-2.5">
-                  {lo.tocadas.map((t) => (
-                    <li key={`t-${t.dimension}`}>
-                      <p className="text-[13px] font-semibold text-fg">
-                        {t.dimension} <span className="font-normal text-warn-ink">· se tocó sin profundizar</span>
-                      </p>
-                      <p className="text-[13px] leading-[19px] text-fg-secondary">{t.lectura}</p>
-                      <Citas citas={t.citas} />
-                    </li>
-                  ))}
-                  {lo.sinExplorar.map((t) => (
-                    <li key={`s-${t.dimension}`}>
-                      <p className="text-[13px] font-semibold text-fg">
-                        {t.dimension} <span className="font-normal text-warn-ink">· no se tocó</span>
-                      </p>
-                      <p className="text-[13px] leading-[19px] text-fg-secondary">{t.lectura}</p>
-                    </li>
-                  ))}
-                </ul>
-              )}
-              {lo.etapasFlojas.length > 0 && (
-                <div className="space-y-2 pt-2">
-                  <p className="text-xs font-semibold text-fg-secondary">Del proceso consultivo</p>
-                  {lo.etapasFlojas.map((e) => (
-                    <div key={e.etapa}>
-                      <p className="text-[13px] font-semibold text-fg">
-                        {e.nombre} <span className="font-normal text-warn-ink">· {e.valor === "se_salto" ? "se saltó" : "en parte"}</span>
-                      </p>
-                      <p className="text-[13px] leading-[19px] text-fg-secondary">{e.lectura}</p>
-                      <Citas citas={e.citas} />
-                    </div>
-                  ))}
-                </div>
-              )}
+          {vista.quienHablo && (
+            <div className="space-y-1.5">
+              <Subtitulo>Quién habló</Subtitulo>
+              <BarraDeQuienHablo q={vista.quienHablo} />
             </div>
-            <div className="space-y-4">
-              <div className="space-y-1">
-                <p className="text-xs font-semibold text-fg-secondary">El siguiente paso</p>
-                {lo.siguientePaso ? (
-                  <>
-                    <ChipDelValor j={lo.siguientePaso} />
-                    <p className="text-[13px] leading-[19px] text-fg">{lo.siguientePaso.lectura}</p>
-                    <Citas citas={lo.siguientePaso.citas} />
-                  </>
-                ) : (
-                  <p className="text-[13px] text-fg-muted">El análisis no lo juzgó.</p>
-                )}
-                {(() => {
-                  const c = textoDeLaContinuidad(continuidadDelSiguientePaso({ siguientePaso: lo.siguientePaso, fecha: vista.fecha, despues, ahora: new Date() }));
-                  return <p className={cn("text-xs", c.aviso ? "text-warn-ink" : "text-fg-muted")}>{c.texto}</p>;
-                })()}
-              </div>
-              <ParaLaProxima
-                key={d.analizadoAt}
-                vista={vista}
-                candidatas={candidatasParaLaProxima(res)}
-                numeroSiguiente={numeroSiguiente}
-                todas={todas}
-                llevar={llevar}
-                soltar={soltar}
-                puedeEditar={puedeEditar}
-                ocupado={ocupado}
-                confirmar={(paraLaProxima, nota) =>
-                  void hacer(
-                    "confirmar",
-                    () => revisar({ accion: "confirmar", sessionId: vista.id, analizadoAt: d.analizadoAt, paraLaProxima, nota }),
-                    "Confirmado: ya cuenta para la próxima sesión.",
-                  )
-                }
-                desconfirmar={() => void hacer("desconfirmar", () => revisar({ accion: "desconfirmar", sessionId: vista.id }))}
-                nombre={nombre}
-              />
-            </div>
-          </div>
+          )}
 
-          <Comentarios
+          <LoQueFalto lo={lo} faltas={faltas} />
+          <ElProcesoConsultivo lo={lo} juzgado={res.juicios.some((j) => j.punto === "etapa")} />
+
+          {lo.recomendaciones.length > 0 && (
+            <div className="space-y-2.5">
+              <Subtitulo>Para mejorar</Subtitulo>
+              <ul className="space-y-2.5">
+                {lo.recomendaciones.map((x, i) => (
+                  <li key={i} className="flex gap-2.5">
+                    <span aria-hidden className="mt-[7px] h-1.5 w-1.5 flex-shrink-0 rounded-full bg-brand" />
+                    <div className="min-w-0">
+                      <p className="text-[13px] leading-[19px] text-fg">{x.texto}</p>
+                      <Citas citas={x.citas.slice(0, 1)} />
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          <Confirmacion
+            key={d.analizadoAt}
             vista={vista}
             puedeEditar={puedeEditar}
             ocupado={ocupado}
             nombre={nombre}
-            comentar={(tipo, punto, texto) => hacer("comentar", () => revisar({ accion: "comentar", sessionId: vista.id, tipo, punto, texto }), "Comentario guardado.")}
+            confirmar={(nota) =>
+              void hacer("confirmar", () => revisar({ accion: "confirmar", sessionId: vista.id, analizadoAt: d.analizadoAt, nota }), "Confirmado: ya cuenta en la tendencia del vendedor.")
+            }
+            desconfirmar={() => void hacer("desconfirmar", () => revisar({ accion: "desconfirmar", sessionId: vista.id }))}
           />
 
           <details className="rounded-lg border border-line">
@@ -329,74 +232,124 @@ function ElAnalisis({
             </span>
           </div>
         </>
+      ) : (
+        vista.quienHablo && (
+          <div className="space-y-1.5">
+            <Subtitulo>Quién habló</Subtitulo>
+            <BarraDeQuienHablo q={vista.quienHablo} />
+          </div>
+        )
       )}
     </div>
   );
 }
 
-function ParaLaProxima({
+/** Una tarjeta chica: título, etiqueta, una línea y la cita. */
+function Tarjeta({ titulo, rotulo, etiqueta, tono, lectura, cita }: { titulo: string; rotulo?: string | null; etiqueta: string; tono: "aviso" | "info" | "neutro"; lectura: string; cita: FaltaExplorar["cita"] }) {
+  return (
+    <li className="flex min-w-0 flex-col gap-1.5 rounded-lg border border-line bg-surface p-3">
+      <div className="min-w-0">
+        <p className="text-[13px] font-semibold leading-[18px] text-fg">{titulo}</p>
+        {rotulo && <p className="text-[11.5px] text-fg-muted">{rotulo}</p>}
+      </div>
+      <span
+        className={cn(
+          "self-start rounded-full px-2 py-0.5 text-[11px] font-semibold",
+          tono === "aviso" ? "bg-warn-surface text-warn-ink" : tono === "info" ? "bg-info-surface text-brand" : "bg-surface-muted text-fg-secondary",
+        )}
+      >
+        {etiqueta}
+      </span>
+      <p className="line-clamp-2 text-[12.5px] leading-[18px] text-fg-secondary" title={lectura}>
+        {lectura}
+      </p>
+      {cita && <Citas citas={[cita]} />}
+    </li>
+  );
+}
+
+function LoQueFalto({ lo, faltas }: { lo: LoDeLaSesion; faltas: ReturnType<typeof loQueFaltoPorEquipo> }) {
+  const agrupado = faltas.length > 1;
+  return (
+    <div className="space-y-2.5">
+      <Subtitulo>Lo que faltó explorar</Subtitulo>
+      {!faltas.length ? (
+        <p className="text-[13px] text-fg-muted">
+          {lo.exploradas.length ? `Se exploró a fondo lo que se esperaba: ${lo.exploradas.join(", ")}.` : "El análisis no juzgó qué se exploró en esta sesión."}
+        </p>
+      ) : (
+        faltas.map((g) => (
+          <div key={g.equipo ?? "sin-equipo"} className="space-y-2">
+            {agrupado && <p className="text-[12.5px] font-semibold text-fg-secondary">{g.equipo ?? "Otras"}</p>}
+            <ul className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-3">
+              {g.items.map((f, i) => (
+                <Tarjeta
+                  key={`${f.estado}-${i}-${f.dimension}`}
+                  titulo={f.dimension}
+                  rotulo={agrupado ? null : f.equipo}
+                  etiqueta={f.estado === "tocado" ? "Se tocó sin profundizar" : "No se tocó"}
+                  tono={f.estado === "tocado" ? "info" : "aviso"}
+                  lectura={f.lectura}
+                  cita={f.cita}
+                />
+              ))}
+            </ul>
+          </div>
+        ))
+      )}
+    </div>
+  );
+}
+
+function ElProcesoConsultivo({ lo, juzgado }: { lo: LoDeLaSesion; juzgado: boolean }) {
+  if (!juzgado) return null;
+  return (
+    <div className="space-y-2.5">
+      <Subtitulo>Del proceso consultivo</Subtitulo>
+      {!lo.etapasFlojas.length ? (
+        <p className="text-[13px] text-fg-muted">Se hicieron todas las etapas del proceso consultivo.</p>
+      ) : (
+        // En pantalla ancha, todas en una fila.
+        <ul className="grid gap-2.5 sm:grid-cols-2 lg:grid-flow-col lg:grid-cols-none lg:auto-cols-fr">
+          {lo.etapasFlojas.map((e) => (
+            <Tarjeta
+              key={e.etapa}
+              titulo={e.nombre}
+              etiqueta={e.valor === "se_salto" ? "Se saltó" : "En parte"}
+              tono={e.valor === "se_salto" ? "aviso" : "neutro"}
+              lectura={e.lectura}
+              cita={e.citas[0] ?? null}
+            />
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function Confirmacion({
   vista,
-  candidatas,
-  numeroSiguiente,
-  todas,
-  llevar,
-  soltar,
   puedeEditar,
   ocupado,
+  nombre,
   confirmar,
   desconfirmar,
-  nombre,
 }: {
   vista: ReunionDeVentaVista;
-  candidatas: string[];
-  numeroSiguiente: number;
-  todas: readonly PestanaDeSesion[];
-  llevar: (l: Llevar) => void;
-  soltar: (texto: string) => void;
   puedeEditar: boolean;
   ocupado: string | null;
-  confirmar: (paraLaProxima: string[], nota: string) => void;
-  desconfirmar: () => void;
   nombre: (correo: string) => string;
+  confirmar: (nota: string) => void;
+  desconfirmar: () => void;
 }) {
   const d = vista.detalle!;
-  const recomendaciones = new Set((d.resultado?.recomendaciones ?? []).map((x) => x.texto.trim()));
-  const [elegidas, setElegidas] = useState<Set<string>>(() => new Set(candidatas.filter((c) => recomendaciones.has(c)).slice(0, MAX_PARA_LA_PROXIMA)));
-  const lleno = elegidas.size >= MAX_PARA_LA_PROXIMA;
   const [nota, setNota] = useState("");
-  const enQue = (texto: string) => todas.find((p) => p.sesion?.explorar?.includes(texto));
 
   if (d.confirmado) {
     return (
-      <div className="space-y-2">
-        <p className="text-xs font-semibold text-fg-secondary">Para la próxima</p>
-        {d.paraLaProxima.length ? (
-          <ul className="space-y-1.5">
-            {d.paraLaProxima.map((t) => {
-              const en = enQue(t);
-              return (
-                <li key={t} className="flex items-start gap-2.5">
-                  <input
-                    type="checkbox"
-                    checked={!!en}
-                    disabled={!puedeEditar}
-                    aria-label={`Llevar «${t}» a la sesión ${numeroSiguiente}`}
-                    onChange={() => (en ? soltar(t) : llevar({ texto: t, item: null }))}
-                    className="mt-[3px] h-4 w-4 flex-shrink-0 accent-brand"
-                  />
-                  <span className="min-w-0 text-[13px] leading-[19px] text-fg">
-                    {t}
-                    {en && !en.noSeHizo && <span className="text-xs text-fg-muted"> · en la sesión {en.numero}</span>}
-                  </span>
-                </li>
-              );
-            })}
-          </ul>
-        ) : (
-          <p className="text-[13px] text-fg-muted">Se confirmó sin nada para la próxima.</p>
-        )}
-        <p className="text-xs text-fg-muted">
-          Marca lo que entra en la guía de la sesión {numeroSiguiente}. Confirmado por {nombre(d.confirmado.por)} el {fechaDelAnalisis(d.confirmado.en)}
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg bg-surface-muted px-3.5 py-2.5">
+        <p className="min-w-0 flex-1 text-[13px] text-fg-secondary">
+          Confirmado por {nombre(d.confirmado.por)} el {fechaDelAnalisis(d.confirmado.en)}
           {d.confirmado.nota ? `: «${d.confirmado.nota}»` : "."}
         </p>
         {puedeEditar && (
@@ -407,134 +360,18 @@ function ParaLaProxima({
       </div>
     );
   }
-
+  if (!puedeEditar) return null;
   return (
-    <div className="space-y-2">
-      <p className="text-xs font-semibold text-fg-secondary">Para la próxima</p>
-      {candidatas.length ? (
-        <ul className="space-y-1.5">
-          {candidatas.map((t) => (
-            <li key={t} className="flex items-start gap-2.5">
-              <input
-                type="checkbox"
-                checked={elegidas.has(t)}
-                disabled={!puedeEditar || (lleno && !elegidas.has(t))}
-                aria-label={`Confirmar «${t}» para la próxima sesión`}
-                onChange={() =>
-                  setElegidas((x) => {
-                    const y = new Set(x);
-                    if (y.has(t)) y.delete(t);
-                    else y.add(t);
-                    return y;
-                  })
-                }
-                className="mt-[3px] h-4 w-4 flex-shrink-0 accent-brand"
-              />
-              <span className="min-w-0 text-[13px] leading-[19px] text-fg">{t}</span>
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <p className="text-[13px] text-fg-muted">El análisis no dejó recomendaciones.</p>
-      )}
-      {candidatas.length > MAX_PARA_LA_PROXIMA && (
-        <p className="text-xs text-fg-muted">
-          Elige hasta {MAX_PARA_LA_PROXIMA}: una sesión no alcanza para más{lleno ? ". Ya elegiste el máximo." : "."}
-        </p>
-      )}
-      {puedeEditar && (
-        <div className="space-y-2 rounded-lg bg-surface-muted p-3">
-          <Field label="¿Algo que decir al confirmar? (opcional)">
-            <Textarea rows={2} value={nota} maxLength={MAX_LETRAS_DEL_COMENTARIO} onChange={(e) => setNota(e.target.value)} />
-          </Field>
-          <Button size="sm" variant="primary" loading={ocupado === "confirmar"} disabled={!!ocupado} onClick={() => confirmar([...elegidas], nota)}>
-            Confirmar el análisis
-          </Button>
-          <p className="text-xs text-fg-muted">Confírmalo cuando el vendedor ya lo leyó. Lo que marques queda listo para llevarlo a la guía de la sesión {numeroSiguiente}.</p>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function Comentarios({
-  vista,
-  puedeEditar,
-  ocupado,
-  nombre,
-  comentar,
-}: {
-  vista: ReunionDeVentaVista;
-  puedeEditar: boolean;
-  ocupado: string | null;
-  nombre: (correo: string) => string;
-  comentar: (tipo: TipoDeComentario, punto: PuntoDelComentario, texto: string) => Promise<boolean>;
-}) {
-  const d = vista.detalle!;
-  const [tipo, setTipo] = useState<TipoDeComentario>("comenta");
-  const [punto, setPunto] = useState<string>("");
-  const [texto, setTexto] = useState("");
-  const tituloDe = (p: PuntoDelComentario) => (p ? (PUNTOS_DEL_ANALISIS.find((x) => x.id === p)?.titulo ?? p) : "Todo el análisis");
-  return (
-    <div className="space-y-2.5">
-      <p className="text-xs font-semibold text-fg-secondary">Comentarios del vendedor</p>
-      {d.comentarios.length === 0 ? (
-        <p className="text-[13px] text-fg-muted">Nadie comentó todavía. Si no estás de acuerdo con algo, dilo: es una propuesta, no una evaluación.</p>
-      ) : (
-        <ul className="space-y-2">
-          {d.comentarios.map((c) => (
-            <li key={c.id} className="rounded-lg border border-line px-3 py-2">
-              <p className="text-xs text-fg-muted">
-                <span className="font-semibold text-fg-secondary">{nombre(c.por)}</span> · {c.tipo === "discrepa" ? "no está de acuerdo" : "comenta"} · {tituloDe(c.punto)} ·{" "}
-                {fechaDelAnalisis(c.en)}
-                {c.en < d.analizadoAt && " · sobre un análisis anterior"}
-              </p>
-              <p className="mt-0.5 whitespace-pre-wrap text-[13px] leading-[19px] text-fg">{c.texto}</p>
-            </li>
-          ))}
-        </ul>
-      )}
-      {puedeEditar && (
-        <div className="space-y-2">
-          <div className="grid gap-2 sm:grid-cols-2">
-            <Field label="Qué haces">
-              <Select value={tipo} onChange={(e) => setTipo(e.target.value as TipoDeComentario)}>
-                <option value="comenta">Comento</option>
-                <option value="discrepa">No estoy de acuerdo</option>
-              </Select>
-            </Field>
-            <Field label="Sobre qué">
-              <Select value={punto} onChange={(e) => setPunto(e.target.value)}>
-                <option value="">Todo el análisis</option>
-                {PUNTOS_PARA_COMENTAR.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.titulo}
-                  </option>
-                ))}
-              </Select>
-            </Field>
-          </div>
-          <Field label={tipo === "discrepa" ? "No estoy de acuerdo porque…" : "Tu comentario"}>
-            <Textarea rows={2} value={texto} maxLength={MAX_LETRAS_DEL_COMENTARIO} onChange={(e) => setTexto(e.target.value)} />
-          </Field>
-          <Button
-            size="sm"
-            variant="secondary"
-            loading={ocupado === "comentar"}
-            disabled={!!ocupado || !texto.trim()}
-            onClick={() =>
-              void comentar(tipo, (punto || null) as PuntoDelComentario, texto.trim()).then((ok) => {
-                if (!ok) return;
-                setTexto("");
-                setPunto("");
-              })
-
-            }
-          >
-            Guardar el comentario
-          </Button>
-        </div>
-      )}
+    <div className="space-y-2 rounded-lg bg-surface-muted p-3.5">
+      <Field label="¿Algo que decir al confirmar? (opcional)">
+        <Textarea rows={2} value={nota} maxLength={MAX_LETRAS_DE_LA_NOTA} onChange={(e) => setNota(e.target.value)} />
+      </Field>
+      <div className="flex flex-wrap items-center gap-3">
+        <Button size="sm" variant="primary" loading={ocupado === "confirmar"} disabled={!!ocupado} onClick={() => confirmar(nota)}>
+          Confirmar el análisis
+        </Button>
+        <p className="min-w-0 flex-1 text-xs text-fg-muted">Confírmalo cuando el vendedor ya lo leyó: lo confirmado cuenta en su tendencia.</p>
+      </div>
     </div>
   );
 }

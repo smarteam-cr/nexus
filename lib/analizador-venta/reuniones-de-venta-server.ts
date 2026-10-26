@@ -10,7 +10,7 @@
  * Las canceladas sin nada no entran (`noEsCanceladaSinTextoSql`).
  *
  * Con `completo` (la pieza «Análisis» de la preventa y la tendencia, S5 y S7, 2026-10-27) trae además quién habló (el del
- * análisis o, sin él, calculado), el análisis entero con sus comentarios y su confirmación (S4), y atribuye cada reunión
+ * análisis o, sin él, calculado), el análisis entero con su confirmación (S4), y atribuye cada reunión
  * por el calendario y por quién habló (lib/analizador-venta/tendencia.ts › `atribuirLaReunion`), nunca por la asistencia.
  */
 import "server-only";
@@ -28,7 +28,6 @@ import { esquemaDesactualizado } from "@/lib/db/esquema";
 import { leerResultadoGuardado, type Juicio, type ResultadoDelAnalisis } from "./analisis";
 import type { QuienHablo } from "./quien-hablo";
 import { empresasConPreventaAbierta, quienHabloEnLasReuniones } from "./analizar-server";
-import { leerComentarios, leerParaLaProxima, type ComentarioDelAnalisis } from "./revision";
 import { atribuirLaReunion, delEquipoQueHablo } from "./tendencia";
 import { DIAS_PARA_ANALIZAR_SOLA, delEquipoEnLaReunion, porQueNoEsDeVenta, seAnalizaAMano, vendedoresDeLaReunion } from "./reglas";
 
@@ -66,9 +65,7 @@ export interface DetalleDelAnalisis {
   descartados: number;
   error: string | null;
   analizadoAt: string;
-  comentarios: ComentarioDelAnalisis[];
   confirmado: { por: string; en: string; nota: string | null } | null;
-  paraLaProxima: string[];
 }
 
 export interface EmpresaConReunionesDeVenta {
@@ -153,7 +150,7 @@ export async function reunionesDeVenta(o: { dias: number; ahora?: Date; clientId
           resultado: true,
           quienHablo: true,
           error: true,
-          ...(o.completo ? { descartados: true, analizadoAt: true, comentarios: true, confirmadoPor: true, confirmadoAt: true, notaDeConfirmacion: true, paraLaProxima: true } : {}),
+          ...(o.completo ? { descartados: true, analizadoAt: true, confirmadoPor: true, confirmadoAt: true, notaDeConfirmacion: true } : {}),
         },
       })
       .catch((e: unknown) => {
@@ -240,11 +237,9 @@ function detalleDe(
     error: string | null;
     descartados?: number;
     analizadoAt?: Date;
-    comentarios?: unknown;
     confirmadoPor?: string | null;
     confirmadoAt?: Date | null;
     notaDeConfirmacion?: string | null;
-    paraLaProxima?: unknown;
   },
   resultado: ResultadoDelAnalisis | null,
 ): DetalleDelAnalisis {
@@ -254,9 +249,7 @@ function detalleDe(
     descartados: a.descartados ?? 0,
     error: a.error,
     analizadoAt: (a.analizadoAt ?? new Date(0)).toISOString(),
-    comentarios: leerComentarios(a.comentarios),
     confirmado: a.confirmadoPor && a.confirmadoAt ? { por: a.confirmadoPor, en: a.confirmadoAt.toISOString(), nota: a.notaDeConfirmacion ?? null } : null,
-    paraLaProxima: leerParaLaProxima(a.paraLaProxima),
   };
 }
 

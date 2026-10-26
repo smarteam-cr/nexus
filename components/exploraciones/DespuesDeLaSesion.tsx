@@ -608,7 +608,7 @@ export default function DespuesDeLaSesion({
       <PasoYAvance pestana={pestana} lectura={lectura} />
       <QuedoAbierto pestana={pestana} lectura={lectura} numeroSiguiente={numeroSiguiente} llevar={(l) => armarLaSiguiente(l)} soltar={soltar} />
       {/* S4 (2026-10-27): la autoevaluación de la sesión, APARTE de lo de arriba. Solo con el análisis de la venta a la vista. */}
-      {!enProyecto && <ComoTrabajasteEstaSesion pestana={pestana} numeroSiguiente={numeroSiguiente} llevar={(l) => armarLaSiguiente(l)} soltar={soltar} />}
+      {!enProyecto && <ComoTrabajasteEstaSesion pestana={pestana} />}
 
       <CorreoDeSeguimiento pestana={pestana} />
 

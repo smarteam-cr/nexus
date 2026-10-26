@@ -2738,7 +2738,7 @@ enum DecisionDeLaPropuesta {
 
 /// S3 (2026-10-26) · El análisis de UNA reunión de venta (docs/analizador-reuniones-venta-plan.md): qué tan consultiva
 /// fue, con cada juicio citado de la transcripción. Es una PROPUESTA de coaching, no una evaluación (S4 suma los
-/// comentarios y la confirmación). Lo escribe SOLO lib/analizador-venta/analizar-server.ts. `clientId` es la dueña de la
+/// la confirmación). Lo escribe SOLO lib/analizador-venta/analizar-server.ts. `clientId` es la dueña de la
 /// reunión al analizarla; INV57 vigila que siga siéndolo (invariante 1).
 model AnalisisDeVenta {
   id          String                   @id @default(cuid())
@@ -2761,13 +2761,16 @@ model AnalisisDeVenta {
   /// Quién lo pidió; null = lo analizó el job.
   pedidoPor   String?
   analizadoAt DateTime                 @default(now())
-  /// S4 (2026-10-27): `ComentarioDelAnalisis[]` (lib/analizador-venta/revision.ts): el vendedor comenta o discrepa.
+  /// DEPRECATED — eliminar después de 2027-01-31. S4 (2026-10-27): los comentarios del vendedor; Elías los quitó el mismo
+  /// día y nadie los lee ni los escribe.
   comentarios        Json?
   /// S4: quién lo confirmó (una persona); null = sigue siendo propuesta. Volver a analizar lo borra.
   confirmadoPor      String?
   confirmadoAt       DateTime?
   notaDeConfirmacion String?
-  /// S4: `string[]`, lo que la persona confirmó para la próxima sesión (sale de las recomendaciones y de lo sin explorar).
+  /// DEPRECATED — eliminar después de 2027-01-31. S4: lo confirmado «para la próxima» (Elías lo quitó el 27 oct: es
+  /// planificación, no feedback). Solo lo vacían quitar la confirmación y volver a
+  /// analizar: sacar esas dos escrituras antes de borrar la columna.
   paraLaProxima      Json?
   createdAt   DateTime                 @default(now())
   updatedAt   DateTime                 @updatedAt

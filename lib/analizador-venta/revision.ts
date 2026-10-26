@@ -3,71 +3,23 @@
  * › «El rediseño de Elías (2026-10-26)»). PURO y client-safe.
  *
  * El análisis de una reunión (S3) es una PROPUESTA de coaching. En la preventa, en «Cómo trabajaste esta sesión»
- * (Exploración › la sesión › Análisis), el vendedor lo comenta o discrepa, y una persona lo confirma. Nada cuenta como
- * evaluación sin esa confirmación: la tendencia de cada vendedor (S7) solo suma lo confirmado, y lo que se confirmó «para
- * la próxima» es lo que se ofrece llevar a la guía de la siguiente sesión (por el mismo camino que «Quedó abierto»).
+ * (Exploración › la sesión › Análisis), una persona lo confirma. Nada cuenta como evaluación sin esa confirmación: la
+ * tendencia de cada vendedor (S7) solo suma lo confirmado. Es feedback de cómo se trabajó ESA sesión, no la planificación
+ * de la que sigue (Elías, 27 oct: se fueron los comentarios del vendedor, el siguiente paso y «para la próxima»).
  *
  * Acá vive, una sola vez:
- *   · el comentario y su forma guardada (`AnalisisDeVenta.comentarios`), leída tolerante;
  *   · lo que el análisis dice de UNA sesión, resumido (`loDeLaSesion`): qué se exploró, qué quedó tocado o sin explorar,
  *     qué etapa se saltó, el siguiente paso y las recomendaciones;
- *   · lo que se puede llevar a la próxima sesión (`candidatasParaLaProxima`);
+ *   · lo que faltó explorar, con el equipo de cada dimensión y agrupado por equipo (`loQueFaltoPorEquipo`);
  *   · si el siguiente paso tuvo continuidad (`continuidadDelSiguientePaso`), sin IA: hubo otra reunión de venta con la
- *     empresa en los días que siguieron.
+ *     empresa en los días que siguieron. Lo usa la pieza «Análisis» del prospecto (S5), no la sesión.
  */
-import { PUNTOS_JUZGADOS, type Cita, type Juicio, type PuntoJuzgado, type ResultadoDelAnalisis } from "./analisis";
+import { EQUIPOS, type ClaveDeEquipo } from "@/lib/exploraciones/equipos";
+import { paraComparar, type Cita, type Juicio, type PuntoJuzgado, type ResultadoDelAnalisis } from "./analisis";
 import { PROCESO_CONSULTIVO, type EtapaDelProceso } from "./criterio";
 
-/* ── Los comentarios ───────────────────────────────────────────────────────────── */
-
-export const TIPOS_DE_COMENTARIO = ["comenta", "discrepa"] as const;
-export type TipoDeComentario = (typeof TIPOS_DE_COMENTARIO)[number];
-
-/** Sobre qué punto del análisis es el comentario; null = sobre el análisis entero. */
-export type PuntoDelComentario = PuntoJuzgado | "recomendaciones" | null;
-
-export interface ComentarioDelAnalisis {
-  id: string;
-  /** El correo de quien comentó. */
-  por: string;
-  tipo: TipoDeComentario;
-  punto: PuntoDelComentario;
-  texto: string;
-  /** ISO. Si es anterior a `analizadoAt`, habla de un análisis anterior. */
-  en: string;
-}
-
-export const MAX_COMENTARIOS = 60;
-export const MAX_LETRAS_DEL_COMENTARIO = 1000;
-export const MAX_PARA_LA_PROXIMA = 6;
-export const MAX_LETRAS_PARA_LA_PROXIMA = 300;
-
-export const PUNTOS_DEL_COMENTARIO = [...PUNTOS_JUZGADOS, "recomendaciones"] as const;
-
-/** Los comentarios guardados, leídos tolerante: lo que no tiene forma se deja afuera. */
-export function leerComentarios(v: unknown): ComentarioDelAnalisis[] {
-  if (!Array.isArray(v)) return [];
-  const out: ComentarioDelAnalisis[] = [];
-  for (const x of v) {
-    if (!x || typeof x !== "object") continue;
-    const c = x as Record<string, unknown>;
-    if (typeof c.id !== "string" || typeof c.por !== "string" || typeof c.texto !== "string" || typeof c.en !== "string") continue;
-    if (!(TIPOS_DE_COMENTARIO as readonly string[]).includes(c.tipo as string)) continue;
-    const punto = (PUNTOS_DEL_COMENTARIO as readonly string[]).includes(c.punto as string) ? (c.punto as PuntoDelComentario) : null;
-    out.push({ id: c.id, por: c.por, tipo: c.tipo as TipoDeComentario, punto, texto: c.texto, en: c.en });
-  }
-  return out;
-}
-
-/** Lo confirmado para la próxima sesión, leído tolerante. */
-export function leerParaLaProxima(v: unknown): string[] {
-  return Array.isArray(v) ? v.filter((x): x is string => typeof x === "string" && !!x.trim()).slice(0, MAX_PARA_LA_PROXIMA) : [];
-}
-
-/** Suma un comentario a la lista (el más nuevo al final). Si ya hay demasiados, se van los más viejos. */
-export function sumarComentario(lista: readonly ComentarioDelAnalisis[], nuevo: ComentarioDelAnalisis): ComentarioDelAnalisis[] {
-  return [...lista, nuevo].slice(-MAX_COMENTARIOS);
-}
+/** Lo más largo que puede ser la nota de quien confirma. */
+export const MAX_LETRAS_DE_LA_NOTA = 1000;
 
 /* ── Lo que el análisis dice de UNA sesión ─────────────────────────────────────── */
 
@@ -108,18 +60,56 @@ export function loDeLaSesion(r: ResultadoDelAnalisis): LoDeLaSesion {
   };
 }
 
+/* ── Lo que faltó explorar, por equipo ─────────────────────────────────────────── */
+
+export interface FaltaExplorar {
+  dimension: string;
+  /** El equipo (o el área de la escala) de la dimensión; null si no se reconoce. */
+  equipo: string | null;
+  estado: "tocado" | "sin_explorar";
+  lectura: string;
+  /** La cita del momento en que se tocó (lo no tocado no la tiene: no pasó). */
+  cita: Cita | null;
+}
+
 /**
- * Lo que se puede llevar a la próxima sesión: las recomendaciones primero, después lo que quedó sin explorar y lo que solo
- * se tocó. Sin repetir. La persona elige cuáles confirma.
+ * De qué equipo es una dimensión, por su nombre (el modelo la nombra como se la pasó el material): primero los temas del
+ * equipo de la sesión, después las dimensiones de la escala (con su nombre de la edición o el general). Un equipo con área
+ * en la escala se nombra como su área («Servicio», no «Servicio al cliente»): si no, el mismo equipo saldría en dos grupos.
  */
-export function candidatasParaLaProxima(r: ResultadoDelAnalisis): string[] {
-  const s = loDeLaSesion(r);
-  const out = [
-    ...s.recomendaciones.map((x) => x.texto),
-    ...s.sinExplorar.map((x) => `Explorar ${x.dimension}: quedó sin tocar.`),
-    ...s.tocadas.map((x) => `Profundizar en ${x.dimension}: se mencionó y no se exploró a fondo.`),
-  ].map((t) => t.trim().slice(0, MAX_LETRAS_PARA_LA_PROXIMA));
-  return [...new Set(out.filter(Boolean))];
+export function equipoDeLaDimension(
+  dimension: string,
+  o: {
+    equipo: ClaveDeEquipo | null | undefined;
+    areas: readonly { id: string; nombre: string; dimensiones: readonly { nombre: string; nombreGeneral?: string | null }[] }[];
+  },
+): string | null {
+  const k = paraComparar(dimension);
+  const eq = o.equipo ? EQUIPOS[o.equipo] : null;
+  const nombreDelEquipo = eq ? (o.areas.find((a) => a.id === eq.area)?.nombre ?? eq.nombre) : null;
+  if (eq?.temas.some((t) => paraComparar(t.nombre) === k)) return nombreDelEquipo;
+  const area = o.areas.find((a) => a.dimensiones.some((d) => paraComparar(d.nombre) === k || (!!d.nombreGeneral && paraComparar(d.nombreGeneral) === k)));
+  return area?.nombre ?? nombreDelEquipo;
+}
+
+/**
+ * Lo que faltó explorar, agrupado por equipo en el orden en que aparece; en cada grupo, lo que se tocó va primero. Una
+ * dimensión juzgada dos veces sale una sola vez (gana «se tocó»: hay una cita).
+ */
+export function loQueFaltoPorEquipo(lo: Pick<LoDeLaSesion, "tocadas" | "sinExplorar">, equipoDe: (dimension: string) => string | null): { equipo: string | null; items: FaltaExplorar[] }[] {
+  const todas: FaltaExplorar[] = [
+    ...lo.tocadas.map((t) => ({ dimension: t.dimension, equipo: equipoDe(t.dimension), estado: "tocado" as const, lectura: t.lectura, cita: t.citas[0] ?? null })),
+    ...lo.sinExplorar.map((t) => ({ dimension: t.dimension, equipo: equipoDe(t.dimension), estado: "sin_explorar" as const, lectura: t.lectura, cita: null })),
+  ];
+  const vistas = new Set<string>();
+  const grupos = new Map<string | null, FaltaExplorar[]>();
+  for (const f of todas) {
+    const k = paraComparar(f.dimension);
+    if (vistas.has(k)) continue;
+    vistas.add(k);
+    grupos.set(f.equipo, [...(grupos.get(f.equipo) ?? []), f]);
+  }
+  return [...grupos].map(([equipo, items]) => ({ equipo, items }));
 }
 
 /* ── Si el siguiente paso tuvo continuidad ─────────────────────────────────────── */
