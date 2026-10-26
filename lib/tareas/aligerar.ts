@@ -217,6 +217,8 @@ export interface TareaParaCerrar {
   creadaAt: string;
   /** La última vez que una PERSONA hizo algo con ella (un evento que no es de Nexus, del sistema ni de HubSpot). */
   ultimoToque: string | null;
+  /** Tiene su tarea en HubSpot (vino de allá o es un seguimiento comercial que se creó allá, D4). */
+  enHubspot?: boolean;
 }
 
 const diasEntre = (desde: string, hasta: string) => Math.round((Date.parse(`${hasta.slice(0, 10)}T12:00:00Z`) - Date.parse(`${desde.slice(0, 10)}T12:00:00Z`)) / 86_400_000);
@@ -234,7 +236,7 @@ const enDias = (n: number) => (n === 1 ? "1 día" : `${n} días`);
  * El job del lunes ya vence las propuestas de 14 días sin mirar fechas; esto llega antes, y pregunta.
  */
 export function sugerenciaDeCierre(t: TareaParaCerrar, hoy: string): SugerenciaDeCierre | null {
-  if (t.origen === "hubspot") return null;
+  if (t.origen === "hubspot" || t.enHubspot) return null;
   const propuesta = t.estado === "propuesta";
   if (!propuesta && t.estado !== "pendiente" && t.estado !== "en_curso") return null;
   const clase = claseDeTrabajo(t);
@@ -279,4 +281,50 @@ export function sugerenciaDeCierre(t: TareaParaCerrar, hoy: string): SugerenciaD
     motivo: `Nadie la tomó en ${enDias(sinTocar)}.`,
     porQue: `${Math.floor(sinTocar / 7)} semanas sin que nadie la tome`,
   };
+}
+
+/* ── La limpieza de «Por decidir» (roadmap D2 etapa 1) ────────────────────────────── */
+
+export interface SugerenciaSinDecidir {
+  id: string;
+  responsableEmail: string;
+  venceEl: string | null;
+  creadaAt: string;
+  numero: number;
+}
+
+export interface SugerenciaQueVence {
+  id: string;
+  /** `fecha`: su fecha ya pasó. `tope`: la persona tiene más de las que caben (quedan las más nuevas). */
+  regla: "fecha" | "tope";
+  motivo: string;
+}
+
+/**
+ * Qué sugerencias de Nexus (sin decidir y sin que nadie las tocara: lo filtra quien llama) vence la limpieza
+ * (2026-10-27). `hoy` en hora CR (AAAA-MM-DD). Dos reglas, en este orden:
+ *  · su fecha pasó (antes de hoy): habla de algo que ya fue, sea rápida, seguimiento o trabajo. Una propuesta no es
+ *    trabajo de nadie todavía, así que no hay nada «atrasado» que cuidar (a diferencia de una abierta: `sugerenciaDeCierre`);
+ *  · de lo que queda, a cada persona le quedan sus `tope` más nuevas (la misma regla que `podarSugerencias`).
+ */
+export function limpiezaDePorDecidir(filas: readonly SugerenciaSinDecidir[], hoy: string, tope: number): SugerenciaQueVence[] {
+  const salida: SugerenciaQueVence[] = [];
+  const quedan: SugerenciaSinDecidir[] = [];
+  for (const f of filas) {
+    if (f.venceEl && f.venceEl.slice(0, 10) < hoy) {
+      salida.push({ id: f.id, regla: "fecha", motivo: `Su fecha (${diaCortoConSemana(f.venceEl.slice(0, 10))}) pasó sin que nadie la decidiera.` });
+    } else quedan.push(f);
+  }
+  const porPersona = new Map<string, SugerenciaSinDecidir[]>();
+  for (const f of quedan) {
+    const k = f.responsableEmail.toLowerCase();
+    porPersona.set(k, [...(porPersona.get(k) ?? []), f]);
+  }
+  for (const lista of porPersona.values()) {
+    const orden = [...lista].sort((a, b) => b.creadaAt.localeCompare(a.creadaAt) || b.numero - a.numero);
+    for (const f of orden.slice(tope)) {
+      salida.push({ id: f.id, regla: "tope", motivo: `Había más de ${tope} sugerencias de las reuniones sin decidir: quedaron las más nuevas.` });
+    }
+  }
+  return salida;
 }

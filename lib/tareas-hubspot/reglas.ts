@@ -4,7 +4,9 @@
  *
  * Decisiones de Elías (2026-10-14): las tareas de HubSpot se leen y se escriben (todas, también las de las secuencias), y
  * cada una dice que viene de HubSpot. Viven en la misma lista, semana y agenda que las de Nexus (`Tarea` con
- * `origen = "hubspot"`). Las que nacen en Nexus NO se crean en HubSpot.
+ * `origen = "hubspot"`). Las que nacen en Nexus NO se crean en HubSpot, salvo el SEGUIMIENTO COMERCIAL (2026-10-27,
+ * roadmap D4; `seCreaEnHubspot`): una tarea abierta con un contacto o un negocio de HubSpot. Desde que se crea allá,
+ * viaja con las mismas reglas que las que nacieron allá.
  *
  * Se sincronizan cinco campos: título, estado, vencimiento, prioridad y responsable. Cada tarea guarda lo ÚLTIMO EN QUE
  * NEXUS Y HUBSPOT ESTUVIERON DE ACUERDO (`hubspotAcordado`), y cada corrida compara los tres, campo por campo:
@@ -277,3 +279,128 @@ export function rotuloDeHubspot(d: DatosDeHubspot): string {
 export const MINUTOS_ENTRE_COPIAS = 15;
 /** Las completadas que se traen: las de esta semana para atrás. */
 export const DIAS_DE_COMPLETADAS = 7;
+
+/* ── El seguimiento comercial: lo que nace en Nexus y se crea en HubSpot (2026-10-27, roadmap D4) ─────────────────── */
+
+/** `TAREAS_SEGUIMIENTO_EN_HUBSPOT=1` lo prende. Apagado, el contacto y el negocio se guardan igual y nada se crea allá. */
+export function seguimientoEnHubspotPrendido(env: Record<string, string | undefined> = process.env): boolean {
+  return env.TAREAS_SEGUIMIENTO_EN_HUBSPOT === "1";
+}
+
+/**
+ * Lo que no se crea en HubSpot aunque tenga contacto o negocio: lo que ya vino de allá, el siguiente paso de un equipo
+ * (ya escribe `siguiente_paso_*` en el negocio) y las rutinas de un servicio.
+ */
+export const ORIGENES_QUE_NO_SE_CREAN_EN_HUBSPOT = ["hubspot", "paso", "plantilla"] as const;
+
+/** Lo que el job mira para crear: lo que cambió en estos días (lo de antes de prender la bandera no se sube solo). */
+export const DIAS_PARA_CREAR_EN_HUBSPOT = 7;
+
+/** Una reserva de creación vive esto: si la corrida se cayó a mitad, la siguiente la retoma. */
+export const MINUTOS_DE_RESERVA = 10;
+
+export interface TareaParaCrearEnHubspot {
+  origen: string;
+  estado: string;
+  privada: boolean;
+  clase: string;
+  archivadaAt: Date | string | null;
+  hubspotTaskId: string | null;
+  hubspotContactId: string | null;
+  hubspotDealId: string | null;
+  responsableEmail: string | null;
+  venceEl: string | null;
+}
+
+/** Lo que le falta a un seguimiento comercial para crearse en HubSpot (para el cajón); null = nada. */
+export type FaltaParaHubspot = "sin_fecha" | "sin_responsable" | null;
+
+/**
+ * ¿Es seguimiento comercial (tiene que vivir también en HubSpot)? Abierta, no «Solo para mí», de clase acción, con un
+ * contacto o un negocio, que no vino de HubSpot ni es un siguiente paso o una rutina. Una propuesta no: entra recién
+ * cuando la persona la acepta.
+ */
+export function esSeguimientoComercial(t: Pick<TareaParaCrearEnHubspot, "origen" | "estado" | "privada" | "clase" | "archivadaAt" | "hubspotContactId" | "hubspotDealId">): boolean {
+  if (t.archivadaAt || t.privada || t.clase !== "accion") return false;
+  if ((ORIGENES_QUE_NO_SE_CREAN_EN_HUBSPOT as readonly string[]).includes(t.origen)) return false;
+  if (t.estado !== "pendiente" && t.estado !== "en_curso") return false;
+  return !!(t.hubspotContactId || t.hubspotDealId);
+}
+
+/** Lo que le falta para crearse allá: HubSpot pide una fecha, y un dueño con usuario allá. */
+export function faltaParaHubspot(t: Pick<TareaParaCrearEnHubspot, "venceEl" | "responsableEmail">, ownerId: string | null): FaltaParaHubspot {
+  if (!t.venceEl) return "sin_fecha";
+  if (!t.responsableEmail || !ownerId) return "sin_responsable";
+  return null;
+}
+
+/** ¿Se crea ya en HubSpot? Seguimiento comercial, todavía sin su tarea allá, con fecha y con dueño en HubSpot. */
+export function seCreaEnHubspot(t: TareaParaCrearEnHubspot, ownerId: string | null): boolean {
+  return !t.hubspotTaskId && esSeguimientoComercial(t) && faltaParaHubspot(t, ownerId) === null;
+}
+
+/** Los tipos de asociación de HubSpot (HUBSPOT_DEFINED) de una tarea hacia cada objeto. */
+export const ASOCIACION_DE_LA_TAREA = { contacto: 204, empresa: 192, negocio: 216 } as const;
+
+export interface TareaQueSeCrea {
+  numero: number;
+  titulo: string;
+  notas: string | null;
+  estado: "pendiente" | "en_curso";
+  prioridad: Prioridad;
+  venceEl: string;
+  hubspotContactId: string | null;
+  hubspotDealId: string | null;
+  /** La empresa de HubSpot del cliente de la tarea, si tiene. */
+  hubspotCompanyId: string | null;
+}
+
+/** El cuerpo de la tarea en HubSpot: sus notas y de dónde viene. HTML simple, como lo guarda HubSpot. */
+export function cuerpoParaHubspot(t: Pick<TareaQueSeCrea, "numero" | "notas">): string {
+  const escapar = (x: string) => x.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const notas = (t.notas ?? "").trim();
+  const parrafos = notas ? notas.split(/\n{2,}/).map((p) => `<p>${escapar(p).replace(/\n/g, "<br>")}</p>`) : [];
+  return [...parrafos, `<p>Creada desde Nexus (T-${t.numero}).</p>`].join("");
+}
+
+export interface PedidoParaCrear {
+  body: {
+    properties: Record<string, string>;
+    associations: Array<{ to: { id: string }; types: Array<{ associationCategory: "HUBSPOT_DEFINED"; associationTypeId: number }> }>;
+  };
+  acordado: ValoresSincronizados;
+  datos: DatosDeHubspot;
+}
+
+/**
+ * El pedido para crearla (`POST /crm/v3/objects/tasks`) y lo acordado desde ese momento: lo que se escribió allá es lo
+ * que los dos lados tienen igual. La hora del vencimiento, la de siempre (7:00 de Costa Rica).
+ */
+export function pedidoParaCrear(t: TareaQueSeCrea, ownerId: string, responsable: string): PedidoParaCrear {
+  const tipo = (id: number) => [{ associationCategory: "HUBSPOT_DEFINED" as const, associationTypeId: id }];
+  const associations = [
+    ...(t.hubspotContactId ? [{ to: { id: t.hubspotContactId }, types: tipo(ASOCIACION_DE_LA_TAREA.contacto) }] : []),
+    ...(t.hubspotDealId ? [{ to: { id: t.hubspotDealId }, types: tipo(ASOCIACION_DE_LA_TAREA.negocio) }] : []),
+    ...(t.hubspotCompanyId ? [{ to: { id: t.hubspotCompanyId }, types: tipo(ASOCIACION_DE_LA_TAREA.empresa) }] : []),
+  ];
+  const titulo = t.titulo.trim().slice(0, 300);
+  const properties: Record<string, string> = {
+    hs_task_subject: titulo,
+    hs_task_body: cuerpoParaHubspot(t),
+    hs_task_status: estadoParaHubspot(t.estado),
+    hs_task_priority: prioridadParaHubspot(t.prioridad),
+    hs_timestamp: venceParaHubspot(t.venceEl, null),
+    hs_task_type: "TODO",
+    hubspot_owner_id: ownerId,
+  };
+  const registro: DatosDeHubspot["registro"] = t.hubspotDealId
+    ? { objeto: "deal", id: t.hubspotDealId }
+    : t.hubspotCompanyId
+      ? { objeto: "company", id: t.hubspotCompanyId }
+      : null;
+  return {
+    body: { properties, associations },
+    acordado: { titulo, estado: t.estado, vence: t.venceEl, prioridad: t.prioridad, responsable },
+    datos: { tipo: "TODO", secuencia: null, venceMinutoCR: 7 * 60, registro },
+  };
+}

@@ -25,9 +25,10 @@ import { DURACIONES_DE_AGENDA } from "@/lib/tareas/reglas";
 import { ESPERA_AL_ESCRIBIR_MS, TEXTO_DEL_GUARDADO, estadoDelGuardado } from "@/lib/tareas/guardado";
 import { conEstadoAlInstante } from "@/lib/tareas/fila-de-cambios";
 import { NOMBRE_DEL_ESTADO, NOMBRE_DEL_ORIGEN, type OrigenDeTarea } from "@/lib/tareas/estados";
+import { textoDeQuienesEstuvieron } from "@/lib/tareas/origen";
 import { diaYHora, rangoDeLaSemana, sumarSemanas } from "@/lib/tareas/semana";
 import { tareaParaUnaPersona } from "@/lib/tareas/titulo-corto";
-import type { OpcionesDeTareas, TareaVista } from "@/lib/tareas/tipos";
+import type { CrmDelCliente, OpcionesDeTareas, TareaVista } from "@/lib/tareas/tipos";
 import { apiTareas, ErrorDeApi } from "./api";
 import { ChipDeAgenda, horas } from "./chips";
 import { ComentariosDeLaTarea } from "./ComentariosDeLaTarea";
@@ -39,6 +40,13 @@ import { useAsistenteDeTareas } from "./AsistenteDeTareas";
 const MESES = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
 /** «16 oct» de un AAAA-MM-DD. */
 const diaCorto = (ymd: string) => `${Number(ymd.slice(8, 10))} ${MESES[Number(ymd.slice(5, 7)) - 1]}`;
+
+/** Las opciones de un contacto o un negocio de HubSpot; el elegido sigue aunque ya no esté en la lista (se cerró, se fue). */
+function opcionesDelCrm(lista: CrmDelCliente["contactos"], elegido: string | null, vacio: string): OpcionDeCelda[] {
+  const opciones: OpcionDeCelda[] = [{ value: "", label: vacio }, ...lista.map((x) => ({ value: x.id, label: x.nombre, hint: x.detalle ?? undefined }))];
+  if (elegido && !lista.some((x) => x.id === elegido)) opciones.push({ value: elegido, label: "El que está en HubSpot", hint: "Ya no está en la copia de Nexus" });
+  return opciones;
+}
 
 type Historia = { id: string; tipo: string; texto: string; quien: string; cuando: string; detalle: string | null }[];
 
@@ -68,6 +76,8 @@ export function CajonDeTarea({
   const [titulo, setTitulo] = useState("");
   const [notas, setNotas] = useState("");
   const [proyectosHubspot, setProyectosHubspot] = useState<{ id: string; nombre: string; interno: boolean }[]>([]);
+  // Los contactos y negocios de HubSpot del cliente de la tarea: el seguimiento comercial se asocia a uno (D4).
+  const [crm, setCrm] = useState<CrmDelCliente>({ contactos: [], negocios: [] });
   const [noSeHara, setNoSeHara] = useState<string | null>(null);
   // Una propuesta abre corta; «Cambiar otros detalles» muestra el formulario entero.
   const [detalles, setDetalles] = useState(false);
@@ -118,13 +128,22 @@ export function CajonDeTarea({
     const clientId = tarea?.cliente?.id;
     if (!clientId) {
       setProyectosHubspot([]);
+      setCrm({ contactos: [], negocios: [] });
       return;
     }
     let vivo = true;
     apiTareas
       .opciones(clientId)
-      .then((o) => vivo && setProyectosHubspot(o.proyectosHubspot ?? []))
-      .catch(() => vivo && setProyectosHubspot([]));
+      .then((o) => {
+        if (!vivo) return;
+        setProyectosHubspot(o.proyectosHubspot ?? []);
+        setCrm(o.crm ?? { contactos: [], negocios: [] });
+      })
+      .catch(() => {
+        if (!vivo) return;
+        setProyectosHubspot([]);
+        setCrm({ contactos: [], negocios: [] });
+      });
     return () => {
       vivo = false;
     };
@@ -274,7 +293,9 @@ export function CajonDeTarea({
       const r = (await apiTareas.agendar(tarea.id, { modo: "quitar" })) as { tarea: TareaVista; quitados?: number; sinPermiso?: boolean };
       ponerTarea(r.tarea);
       onCambio();
-      if (r.sinPermiso || !r.quitados) toast.info("Lo sacamos de la tarea. Si sigue en tu calendario, bórralo a mano en Google Calendar.");
+      // Un evento que ya existía y se unió a la tarea no se borra: sigue en tu calendario, como debe (P3).
+      if (soloUnido) toast.success("La tarea ya no está unida a ese evento. El evento sigue en tu calendario.");
+      else if (r.sinPermiso || !r.quitados) toast.info("Lo sacamos de la tarea. Si sigue en tu calendario, bórralo a mano en Google Calendar.");
       else toast.success("Quitamos el bloque de tu calendario.");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "No se pudo quitar el bloque.");
@@ -289,6 +310,8 @@ export function CajonDeTarea({
   const corta = esPropuesta && !detalles;
   // No se deshabilita mientras guarda: los pedidos van en fila y escribir no tiene que perder el foco.
   const puedeEditar = !!acc?.editar;
+  // Lo tuyo en el calendario es un evento que ya existía y se unió a la tarea (P3): quitarlo solo lo desune, no lo borra.
+  const soloUnido = !!t && t.agenda.bloques.length > 0 && t.agenda.bloques.every((b) => b.asociado);
   const personas: OpcionDeCelda[] = (opciones?.personas ?? []).map((p) => ({ value: p.email, label: p.nombre, hint: p.email }));
   const empresas: OpcionDeCelda[] = [{ value: "", label: "Sin cliente" }, ...(opciones?.empresas ?? []).map((e) => ({ value: e.id, label: e.nombre, hint: e.kind === "INTERNO" ? "Interno" : e.kind === "PROSPECTO" ? "Prospecto" : e.kind === "ALIADO" ? "Aliado" : undefined }))];
   const proyectos: OpcionDeCelda[] = [{ value: "", label: "Sin proyecto" }, ...(opciones?.proyectos ?? []).map((p) => ({ value: p.id, label: p.nombre, hint: p.espacio }))];
@@ -405,7 +428,9 @@ export function CajonDeTarea({
           {t.hubspot && (
             <div className="space-y-1 rounded-lg border border-line bg-surface px-3 py-2.5 text-[13px]">
               <p className="text-fg-secondary">
-                {t.hubspot.rotulo}: el título, el estado, el vencimiento, la prioridad y el responsable se escriben allá.
+                {t.hubspot.nacioEnNexus
+                  ? "También está en HubSpot: el título, el estado, el vencimiento, la prioridad y el responsable viajan en los dos sentidos. «Ya no se hará» no existe allá: si ya no va, ciérrala también en HubSpot."
+                  : `${t.hubspot.rotulo}: el título, el estado, el vencimiento, la prioridad y el responsable se escriben allá.`}
               </p>
               <p className="flex flex-wrap gap-x-3 gap-y-1">
                 {t.hubspot.url && (
@@ -427,8 +452,8 @@ export function CajonDeTarea({
           {(t.contexto || t.contextoOculto) && (
             <div className="rounded-lg border border-line bg-surface-muted px-3 py-2.5">
               <p className={cn(ROTULO_DEL_SISTEMA, "flex items-center gap-1.5")}>
-                {!t.hubspot && <IconoDeSugerencia className="h-3.5 w-3.5 text-brand" />}
-                {t.hubspot ? "Notas de la tarea en HubSpot" : "Contexto · lo escribió Nexus"}
+                {!(t.hubspot && !t.hubspot.nacioEnNexus) && <IconoDeSugerencia className="h-3.5 w-3.5 text-brand" />}
+                {t.hubspot && !t.hubspot.nacioEnNexus ? "Notas de la tarea en HubSpot" : "Contexto · lo escribió Nexus"}
               </p>
               {t.contexto ? (
                 <p className="mt-1 whitespace-pre-line text-[13px] leading-relaxed text-fg-secondary">{t.contexto}</p>
@@ -561,6 +586,44 @@ export function CajonDeTarea({
                 onElegir={(v) => editar({ projectId: v || null })}
               />
             </Field>
+            {/* El seguimiento comercial (D4): con un contacto o un negocio de HubSpot, la tarea vive también allá. */}
+            {t.origen !== "hubspot" && t.clase !== "reunion" && (
+              <>
+                <Field label="Contacto de HubSpot">
+                  <CeldaSelect
+                    etiqueta="Contacto de HubSpot"
+                    opciones={opcionesDelCrm(crm.contactos, t.crm?.contactoId ?? null, "Ninguno")}
+                    seleccion={t.crm?.contactoId ? [t.crm.contactoId] : []}
+                    vacio={t.cliente ? "Ninguno" : "Elige primero el cliente"}
+                    puedeEditar={puedeEditar && !!t.cliente && !t.hubspot}
+                    onElegir={(v) => editar({ hubspotContactId: v || null })}
+                  />
+                </Field>
+                <Field label="Negocio de HubSpot">
+                  <CeldaSelect
+                    etiqueta="Negocio de HubSpot"
+                    opciones={opcionesDelCrm(crm.negocios, t.crm?.negocioId ?? null, "Ninguno")}
+                    seleccion={t.crm?.negocioId ? [t.crm.negocioId] : []}
+                    vacio={t.cliente ? "Ninguno" : "Elige primero el cliente"}
+                    puedeEditar={puedeEditar && !!t.cliente && !t.hubspot}
+                    onElegir={(v) => editar({ hubspotDealId: v || null })}
+                  />
+                </Field>
+                {(t.crm?.contactoId || t.crm?.negocioId) && !t.hubspot && (t.crm.aviso || (acc.agendar && t.agenda.estado !== "agendada")) && (
+                  <div className="space-y-1.5 sm:col-span-2">
+                    {t.crm.aviso && <p className="text-xs text-warn-ink">{t.crm.aviso}</p>}
+                    {acc.agendar && t.agenda.estado !== "agendada" && (
+                      <div className="flex flex-wrap items-center gap-2 text-[13px] text-fg-secondary">
+                        <span>Es un seguimiento: ¿le reservas un rato en tu calendario?</span>
+                        <BotonBlanco onClick={() => onAgendar(t)} disabled={guardando}>
+                          Agendar
+                        </BotonBlanco>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </>
+            )}
             <Field label="Proyecto">
               <CeldaSelect
                 etiqueta="Proyecto de tareas"
@@ -594,7 +657,7 @@ export function CajonDeTarea({
                 )}
                 {t.agenda.tienesBloque && acc.agendar && (
                   <BotonTexto onClick={() => void quitarBloque()} disabled={guardando}>
-                    Quitar el bloque
+                    {soloUnido ? "Desunir el evento" : "Quitar el bloque"}
                   </BotonTexto>
                 )}
               </div>
@@ -609,10 +672,20 @@ export function CajonDeTarea({
           {/* Un bloque en TU calendario se quita aunque la tarea ya no sea tuya o esté en «Más adelante». */}
           {t.agenda.tienesBloque && !((t.estado === "pendiente" || t.estado === "en_curso") && t.semana && acc.agendar) && (
             <div className="flex items-center justify-between gap-2 rounded-lg border border-line px-3 py-2 text-[13px] text-fg-secondary">
-              <span>Esta tarea tiene un bloque en tu calendario.</span>
+              <span>{soloUnido ? "Esta tarea está unida a un evento de tu calendario." : "Esta tarea tiene un bloque en tu calendario."}</span>
               <BotonTexto onClick={() => void quitarBloque()} disabled={guardando}>
-                Quitar el bloque
+                {soloUnido ? "Desunir el evento" : "Quitar el bloque"}
               </BotonTexto>
+            </div>
+          )}
+
+          {/* Una reunión planeada que ya se hizo (P3 etapa 2): su sesión de Meet, con lo que dejó. */}
+          {t.reunionHechaId && (
+            <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-line px-3 py-2 text-[13px] text-fg-secondary">
+              <span>La reunión ya se hizo.</span>
+              <a href={`/sessions/${encodeURIComponent(t.reunionHechaId)}#lo-que-dejo`} className="text-xs text-brand hover:text-brand-light">
+                Ver lo que dejó
+              </a>
             </div>
           )}
 
@@ -622,6 +695,7 @@ export function CajonDeTarea({
               {t.salioDe.visible ? (
                 <div className="rounded-lg border border-line bg-surface-muted px-3 py-2.5 text-[13px]">
                   <p className="font-medium text-fg">{t.salioDe.titulo}</p>
+                  {t.salioDe.estuvieron && <p className="mt-0.5 text-xs text-fg-muted">{textoDeQuienesEstuvieron(t.salioDe.estuvieron)}</p>}
                   {t.salioDe.cita && <p className="mt-1 italic text-fg-secondary">«{t.salioDe.cita}»</p>}
                 </div>
               ) : (

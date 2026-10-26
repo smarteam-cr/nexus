@@ -28,6 +28,8 @@ export type SalioDe =
       titulo: string;
       fecha: string | null;
       cita: string | null;
+      /** Quiénes estuvieron (P5): los nombres de la casa y cuántos de afuera, sin sus correos. */
+      estuvieron?: { nombres: string[]; deAfuera: number };
     }
   | { visible: false; texto: string };
 
@@ -110,6 +112,10 @@ export interface TareaVista {
   sugeridoCierre?: { resultado: "hecha" | "no_hecha"; cita: string | null; semana: string };
   /** Una tarea de HubSpot (etapa 3 de docs/mi-dia-plan.md): de dónde viene y dónde abrirla. */
   hubspot?: HubspotDeTarea | null;
+  /** El contacto y el negocio de HubSpot (D4): con uno, es seguimiento comercial y se crea también allá. */
+  crm?: CrmDeTarea;
+  /** Una reunión planeada que ya se hizo: la sesión de Meet que la cumplió (P3 etapa 2). */
+  reunionHechaId?: string;
   /** «Ya pasó»: Nexus propone cerrarla (lib/tareas/aligerar.ts). Solo si quien mira la puede cerrar; nunca se cierra sola. */
   cerrar?: SugerenciaDeCierre;
 }
@@ -117,6 +123,8 @@ export interface TareaVista {
 export interface HubspotDeTarea {
   /** «HubSpot» o «HubSpot · secuencia (paso 2)». */
   rotulo: string;
+  /** Nació en Nexus y se creó allá (el seguimiento comercial, D4): «también está en HubSpot», no «viene de HubSpot». */
+  nacioEnNexus: boolean;
   /** La tarea en HubSpot. */
   url: string | null;
   /** El negocio, la empresa o el proyecto al que está asociada en HubSpot. */
@@ -286,6 +294,19 @@ export interface OpcionesDeTareas {
   empresas: EmpresaVista[];
   equiposConLider: { clave: string; nombre: string }[];
   proyectos: { id: string; nombre: string; espacio: string; clientId: string | null }[];
+}
+
+export interface CrmDeTarea {
+  contactoId: string | null;
+  negocioId: string | null;
+  /** Lo que le falta para crearse en HubSpot, o por qué falló; null = nada que decir. */
+  aviso: string | null;
+}
+
+/** Los contactos y los negocios de HubSpot de UN cliente, para el seguimiento comercial de una tarea (D4). */
+export interface CrmDelCliente {
+  contactos: { id: string; nombre: string; detalle: string | null }[];
+  negocios: { id: string; nombre: string; detalle: string | null }[];
 }
 
 /** Un comentario en una tarea, como lo ve quien ve la tarea. */

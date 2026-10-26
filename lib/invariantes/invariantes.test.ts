@@ -22,6 +22,7 @@ import {
 } from "./index";
 import { INV49, INV53 } from "./google";
 import { INV59 } from "./escala";
+import { INV63 } from "./tareas";
 import { INV55, INV55_BLOQUEA } from "./smartloop";
 import { INV51, INV56 } from "./empresa";
 import { INV58, INV58_BLOQUEA } from "./tests-diagnostico";
@@ -643,6 +644,24 @@ describe("tareas: INV38–INV43 (2026-10-09)", () => {
     expect(r.ok).toBe(false);
     expect(r.lineas[0]).toContain("2 tarea(s)");
   });
+
+  it("INV63 · el contacto o el negocio de HubSpot de otro cliente viola; un negocio que ya no está en la copia no cuenta (D4)", async () => {
+    const contactos = [{ clientId: "c1", hubspotId: "501" }];
+    const negocios = [{ clientId: "c1", hubspotDealId: "9001" }];
+    const ok = await INV63.correr(
+      baseFalsa({ tarea: [{ numero: 1, clientId: "c1", hubspotContactId: "501", hubspotDealId: "9001" }, { numero: 2, clientId: "c1", hubspotContactId: null, hubspotDealId: "cerrado" }], contactoDeHubspot: contactos, negocioAbierto: negocios }),
+      AHORA,
+    );
+    expect(ok.ok).toBe(true);
+    const r = await INV63.correr(
+      baseFalsa({ tarea: [{ numero: 3, clientId: "c2", hubspotContactId: "501", hubspotDealId: null }, { numero: 4, clientId: "c2", hubspotContactId: null, hubspotDealId: "9001" }], contactoDeHubspot: contactos, negocioAbierto: negocios }),
+      AHORA,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.lineas[0]).toContain("2 tarea(s)");
+    expect(r.lineas[0]).toContain("T-3: su contacto de HubSpot no es de su cliente");
+    expect(r.lineas[0]).toContain("T-4: su negocio de HubSpot es de otro cliente");
+  });
 });
 
 describe("la lectura de cada reunión: INV44 (memoria de la cuenta, etapa 2)", () => {
@@ -814,7 +833,7 @@ describe("hechos: INV45 (memoria de la cuenta, etapa 6)", () => {
 
 describe("el registro y el consumidor", () => {
 
-  it("el registro tiene los 48 solo-base, con ids únicos y en el orden del gate", () => {
+  it("el registro tiene los 49 solo-base, con ids únicos y en el orden del gate", () => {
     /* Del 28 salta al 30: INV29 lo reserva docs/database-refactoring-plan.md. 31 y 32 son las frescuras (espejo y corte);
        33 y 34, el número de factura (etapa 7); 35, la plata que no es venta (etapa 10); 36, a quién se facturó (etapa 12); 37, dos clientes con un dominio (2026-10-02). */
     expect(INVARIANTES_SOLO_BASE.map((i) => i.id)).toEqual([
@@ -833,6 +852,8 @@ describe("el registro y el consumidor", () => {
       // preventa (R5); 57, cada análisis de venta de la empresa de su reunión (S3); 58, los tests llegan a HubSpot (área
       // O); 59, ninguna escala publicada con preguntas abiertas (N); 60, la copia del banco de Odoo al día (U15).
       "49", "50", "51", "52", "53", "54", "55", "56", "57", "58", "59", "60",
+      // 63 (2026-10-27): lo que nació en Nexus y está en HubSpot es seguimiento comercial (D4).
+      "63",
     ]);
     expect(new Set(INVARIANTES_SOLO_BASE.map((i) => i.id)).size).toBe(INVARIANTES_SOLO_BASE.length);
   });
@@ -880,7 +901,7 @@ describe("el job invariants-daily (B-08)", () => {
    */
   it("con todo en verde devuelve el resumen; con algo en rojo LANZA con los ids y el mensaje acotado", async () => {
     /* La edición que lo pone en rojo: cambiar el throw por un console.error «para no ensuciar Sentry». */
-    await expect(correrJobDeInvariantes(baseFalsa({}), AHORA)).resolves.toBe("48 invariantes solo-base en verde");
+    await expect(correrJobDeInvariantes(baseFalsa({}), AHORA)).resolves.toBe("49 invariantes solo-base en verde");
     const promesa = correrJobDeInvariantes(baseFalsa({ cobro: 2 }), AHORA); // INV3 e INV5 cuentan cobros
     await expect(promesa).rejects.toBeInstanceOf(InvariantesVioladosError);
     const e = (await promesa.catch((x: unknown) => x)) as InvariantesVioladosError;

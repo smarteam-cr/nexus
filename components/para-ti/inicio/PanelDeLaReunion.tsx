@@ -17,6 +17,9 @@
  * empresasDelEventoPropio), suma lo de esa cuenta: la próxima reunión, el siguiente paso, lo pendiente, la última vez y
  * el negocio. Si no se sabe de qué cuenta es, no se inventa.
  *
+ * «Asociar a una tarea» (P3, 2026-10-27; components/tareas/AsociarATarea.tsx): el evento, reunión o propio, se une a una de
+ * tus tareas abiertas sin moverlo ni borrarlo.
+ *
  * Una reunión interna (solo gente de Smarteam) que nombra entera a UNA empresa (2026-10-19, prueba 151: «Preparar demo
  * para Accesos Automáticos» con Andrés y Liz; lib/mi-dia/agenda.ts › empresasDeLaReunionInterna) suma lo mismo, sin
  * perder lo de reunión interna (Meet, el texto del sprint, la sesión si ya pasó).
@@ -44,6 +47,7 @@ import { crearBorrador } from "./borradores";
 import PendientesDelPanel from "./PendientesDelPanel";
 import BuscarEnReuniones from "@/components/busqueda/BuscarEnReuniones";
 import { tituloDelBloque } from "@/lib/tareas/titulo-corto";
+import AsociarATarea from "@/components/tareas/AsociarATarea";
 
 const DIAS = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
 const MESES = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
@@ -168,6 +172,9 @@ export default function PanelDeLaReunion({
             onDescartar={onDescartarHueco}
           />
         )}
+
+        {/* P3 (2026-10-27): un evento que ya existe se une a una de tus tareas; un espacio vacío la sigue creando. */}
+        {evento && <AsociarATarea eventoId={evento.id} correo={correo} />}
 
         {r && r.empresas.length > 1 && !empresa && (
           <div className="flex flex-col gap-2">

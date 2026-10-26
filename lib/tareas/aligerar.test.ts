@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { agruparRapidas, claseDeTrabajo, sugerenciaDeCierre, temasRepetidos, type TareaParaCerrar } from "./aligerar";
+import { agruparRapidas, claseDeTrabajo, limpiezaDePorDecidir, sugerenciaDeCierre, temasRepetidos, type TareaParaCerrar } from "./aligerar";
 
 describe("claseDeTrabajo", () => {
   it("un recordatorio al cliente es seguimiento", () => {
@@ -128,5 +128,32 @@ describe("sugerenciaDeCierre", () => {
     expect(sugerenciaDeCierre({ ...base, estado: "hecha", venceEl: "2026-09-01" }, hoy)).toBeNull();
     expect(sugerenciaDeCierre({ ...base, estado: "no_se_hara", venceEl: "2026-09-01" }, hoy)).toBeNull();
     expect(sugerenciaDeCierre({ ...base, creadaAt: "2026-08-01T00:00:00Z" }, hoy)).toBeNull();
+  });
+});
+
+describe("limpiezaDePorDecidir (D2 etapa 1)", () => {
+  const hoy = "2026-10-27";
+  const s = (id: string, email: string, creadaAt: string, venceEl: string | null = null, numero = 1) => ({ id, responsableEmail: email, creadaAt, venceEl, numero });
+
+  it("vence lo que ya pasó, sea de la clase que sea, y deja lo de hoy en adelante", () => {
+    const r = limpiezaDePorDecidir([s("a", "ana@x", "2026-10-20T10:00:00Z", "2026-10-26"), s("b", "ana@x", "2026-10-20T10:00:00Z", "2026-10-27"), s("c", "ana@x", "2026-10-20T10:00:00Z")], hoy, 5);
+    expect(r).toEqual([{ id: "a", regla: "fecha", motivo: expect.stringContaining("pasó sin que nadie la decidiera") }]);
+  });
+
+  it("a cada persona le quedan sus N más nuevas; lo vencido por fecha no ocupa lugar", () => {
+    const filas = [
+      ...Array.from({ length: 7 }, (_, i) => s(`ana${i}`, "ana@x", `2026-10-${String(10 + i).padStart(2, "0")}T10:00:00Z`, null, i)),
+      s("viejaConFecha", "ana@x", "2026-10-01T10:00:00Z", "2026-10-02"),
+      s("leo", "leo@x", "2026-10-01T10:00:00Z"),
+    ];
+    const r = limpiezaDePorDecidir(filas, hoy, 5);
+    expect(r.filter((x) => x.regla === "tope").map((x) => x.id).sort()).toEqual(["ana0", "ana1"]);
+    expect(r.filter((x) => x.regla === "fecha").map((x) => x.id)).toEqual(["viejaConFecha"]);
+    expect(r.some((x) => x.id === "leo")).toBe(false);
+  });
+
+  it("el mismo día, gana el número más alto (la última que nació)", () => {
+    const r = limpiezaDePorDecidir([s("x", "ana@x", "2026-10-20T10:00:00Z", null, 1), s("y", "ana@x", "2026-10-20T10:00:00Z", null, 2)], hoy, 1);
+    expect(r.map((x) => x.id)).toEqual(["x"]);
   });
 });

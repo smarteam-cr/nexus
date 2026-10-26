@@ -2,10 +2,11 @@ import "dotenv/config";
 import "./lib/permitir-server-only";
 import { imprimirDestino, resolverApply } from "./lib/guard";
 import { prisma } from "@/lib/db/prisma";
-import { sugerenciaDeCierre } from "@/lib/tareas/aligerar";
+import { limpiezaDePorDecidir, sugerenciaDeCierre } from "@/lib/tareas/aligerar";
 import { ultimosToquesDePersonas } from "@/lib/tareas/toques";
 import { esSeguimientoSueltoDelCliente, lineaDelSeguimientoAgrupado, pendienteDesdeLaTarea, seguimientoAgrupado } from "@/lib/tareas/seguimiento";
-import { agruparSeguimientosPorAsignar, cambiarEstado, decidirTarea } from "@/lib/tareas/mutaciones";
+import { ORIGENES_DE_SUGERENCIA, agruparSeguimientosPorAsignar, cambiarEstado, decidirTarea, sugerenciasTocadas, vencerSugerenciasSinDecidir } from "@/lib/tareas/mutaciones";
+import { MAX_SUGERENCIAS_POR_PERSONA } from "@/lib/tareas/reglas";
 import { contextoDeTareas } from "@/lib/tareas/servidor";
 import { clientesQueVesParaTareas } from "@/lib/tareas/clientes";
 import { accionesDe } from "@/lib/tareas/estados";
@@ -23,10 +24,16 @@ import { comoFecha, hoyEnCostaRica, lunesDeHoy } from "@/lib/tareas/semana";
  *      reunión y cuenta: se juntan en UNO («Seguimiento con TEC: 4 cosas que prometió Andrea»), como ya se hace con las
  *      propuestas (scripts/agrupar-seguimientos-propuestos.ts). Solo los que ninguna persona tocó. Las sueltas quedan
  *      «Era otra tarea» en la nueva, firmadas por el sistema. Nada se borra.
+ *  C · «Por decidir» (roadmap D2 etapa 1, 2026-10-27): las sugerencias de Nexus que nadie decidió ni tocó vencen, como
+ *      `sistema` y con su motivo, si su fecha ya pasó o si la persona tiene más de MAX_SUGERENCIAS_POR_PERSONA (quedan las
+ *      más nuevas). Es lo que haría el tope nuevo con la próxima reunión de cada uno, de una vez. Vencer no es una
+ *      lápida: si se vuelve a hablar del tema, se vuelve a proponer. No pide `--firma`: lo propuso Nexus y lo vence Nexus.
+ *      Lo que pidió una persona (o lo que una persona tocó: un evento, el pase incluido, un comentario, una dependencia, un
+ *      vínculo) no.
  *
  *   npx tsx scripts/aligerar-tareas.ts                                                        (simulacro: solo lee)
  *   ALLOW_PROD_WRITE=1 npx tsx scripts/aligerar-tareas.ts --apply --firma=avanegas@smarteamcr.com
- *   … --solo=cerrar | --solo=juntar                                                           (una de las dos partes)
+ *   … --solo=cerrar | --solo=juntar | --solo=por-decidir                                      (una de las tres partes)
  */
 const APPLY = resolverApply({ tablas: ["Tarea", "TareaEvento", "ResultadoDeSemana"] });
 const arg = (n: string) => process.argv.find((a) => a.startsWith(`--${n}=`))?.slice(n.length + 3) ?? null;
@@ -36,7 +43,7 @@ const SOLO = arg("solo");
 async function cerrar() {
   const hoy = hoyEnCostaRica();
   const filas = await prisma.tarea.findMany({
-    where: { archivadaAt: null, estado: { in: ["propuesta", "pendiente", "en_curso"] }, origen: { not: "hubspot" } },
+    where: { archivadaAt: null, estado: { in: ["propuesta", "pendiente", "en_curso"] }, origen: { not: "hubspot" }, hubspotTaskId: null },
     select: { id: true, numero: true, titulo: true, minutosEstimados: true, estado: true, origen: true, venceEl: true, semana: true, createdAt: true, version: true, responsableEmail: true, equipo: true, creadaPorEmail: true, pedidaPorEmail: true },
     orderBy: { numero: "asc" },
   });
@@ -124,11 +131,48 @@ async function juntar() {
   if (APPLY) console.log(`  ✓ Juntadas: ${hechas} de ${aJuntar.length}.`);
 }
 
+async function porDecidir() {
+  const hoy = hoyEnCostaRica();
+  const filas = await prisma.tarea.findMany({
+    where: { estado: "propuesta", archivadaAt: null, creadaPorEmail: null, responsableEmail: { not: null }, origen: { in: [...ORIGENES_DE_SUGERENCIA] } },
+    select: { id: true, numero: true, version: true, responsableEmail: true, venceEl: true, createdAt: true },
+    orderBy: { numero: "asc" },
+  });
+  // La misma regla que al aplicar (`sugerenciasTocadas`): el número del simulacro es el que se aplica.
+  const tocadas = await sugerenciasTocadas(prisma, filas.map((f) => f.id));
+  const sinTocar = filas.filter((f) => !tocadas.has(f.id));
+  const vencen = limpiezaDePorDecidir(
+    sinTocar.map((f) => ({ id: f.id, numero: f.numero, responsableEmail: f.responsableEmail!, venceEl: comoFecha(f.venceEl), creadaAt: f.createdAt.toISOString() })),
+    hoy,
+    MAX_SUGERENCIAS_POR_PERSONA,
+  );
+  const porId = new Map(filas.map((f) => [f.id, f]));
+  console.log(
+    `
+C · «Por decidir»: ${filas.length} sugerencias de Nexus sin decidir (${filas.length - sinTocar.length} las tocó una persona y no se miran). ` +
+      `Vencen ${vencen.length}: ${vencen.filter((v) => v.regla === "fecha").length} porque su fecha pasó y ${vencen.filter((v) => v.regla === "tope").length} por el tope de ${MAX_SUGERENCIAS_POR_PERSONA} por persona.`,
+  );
+  const porQuien = new Map<string, { antes: number; vencen: number }>();
+  for (const f of filas) {
+    const k = f.responsableEmail!;
+    const x = porQuien.get(k) ?? { antes: 0, vencen: 0 };
+    x.antes++;
+    porQuien.set(k, x);
+  }
+  for (const v of vencen) porQuien.get(porId.get(v.id)!.responsableEmail!)!.vencen++;
+  for (const [q, x] of [...porQuien].sort((a, b) => b[1].antes - a[1].antes)) console.log(`  ${q}: tenía ${x.antes} · vencen ${x.vencen} · le quedan ${x.antes - x.vencen}`);
+  for (const v of vencen) console.log(`  T-${porId.get(v.id)!.numero} · ${v.regla === "fecha" ? "fecha" : "tope"} · ${v.motivo}`);
+  if (!APPLY || !vencen.length) return;
+  const n = await vencerSugerenciasSinDecidir(vencen.map((v) => ({ id: v.id, version: porId.get(v.id)!.version, motivo: v.motivo, regla: v.regla })));
+  console.log(`  ✓ Vencidas: ${n} de ${vencen.length} (las demás cambiaron mientras tanto, o alguien las tocó).`);
+}
+
 async function main() {
   imprimirDestino();
   console.log(APPLY ? `=== APPLY (escribe${FIRMA ? `, firma ${FIRMA}` : ""}) ===` : "=== SIMULACRO (no escribe) ===");
-  if (SOLO !== "juntar") await cerrar();
-  if (SOLO !== "cerrar") await juntar();
+  if (!SOLO || SOLO === "cerrar") await cerrar();
+  if (!SOLO || SOLO === "juntar") await juntar();
+  if (!SOLO || SOLO === "por-decidir") await porDecidir();
   if (!APPLY) console.log("\nSimulacro: no se escribió nada. Correrlo de nuevo con --apply no duplica nada.");
 }
 

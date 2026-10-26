@@ -22,7 +22,7 @@ import { datosDeAmbito, ambitoConDatos, type DatosDeAmbito } from "./ambito-serv
 import { administraElProyecto, veLaTarea } from "./visibilidad";
 import { equipoDe, type ContextoDeTareas } from "./servidor";
 import type { ClientesQueVes } from "./clientes";
-import type { EmpresaVista, HubspotDeTarea, PersonaVista, ProyectoVista, SalioDe, SugerenciasDeTarea, TareaVista, RelacionVista } from "./tipos";
+import type { CrmDeTarea, EmpresaVista, HubspotDeTarea, PersonaVista, ProyectoVista, SalioDe, SugerenciasDeTarea, TareaVista, RelacionVista } from "./tipos";
 import { portalDelSistema } from "@/lib/hubspot/registro-para-vincular";
 import { hubspotCompanyUrl, hubspotDealUrl, hubspotProjectUrl } from "@/lib/hubspot/urls";
 import { leerDatosDeHubspot, rotuloDeHubspot } from "@/lib/tareas-hubspot/reglas";
@@ -93,6 +93,9 @@ export const SELECT_TAREA = {
   hubspotTaskId: true,
   hubspotDatos: true,
   hubspotError: true,
+  hubspotContactId: true,
+  hubspotDealId: true,
+  reunionHechaId: true,
   proyecto: { select: { id: true, nombre: true, estado: true, espacio: { select: ESPACIO_SELECT } } },
   mismaQue: {
     select: {
@@ -144,7 +147,7 @@ export async function prepararSerializacion(ctx: ContextoDeTareas, clientes: Cli
   const vivas = filas.filter((f) => (f.estado === "propuesta" || estaAbierta(f.estado)) && f.origen !== "hubspot").map((f) => f.id);
   const [ambito, salas, eventos, cierres, toques] = await Promise.all([
     datosDeAmbito(filas.map((f) => f.clientId), filas.map((f) => f.projectId)),
-    salasDeReuniones({ email: ctx.email, esSuperAdmin: ctx.esSuperAdmin, clientes }, filas.map((f) => f.sessionId).filter((x): x is string => !!x)),
+    salasDeReuniones({ email: ctx.email, esSuperAdmin: ctx.esSuperAdmin, clientes }, filas.flatMap((f) => [f.sessionId, f.reunionHechaId]).filter((x): x is string => !!x)),
     propuestas.length ? prisma.tareaEvento.findMany({ where: { tareaId: { in: propuestas }, tipo: "propuesta" }, select: { tareaId: true, datos: true } }) : [],
     abiertasPasadas.length
       ? prisma.tareaEvento.findMany({ where: { tareaId: { in: abiertasPasadas }, tipo: "sugerido_cierre" }, select: { tareaId: true, datos: true, cita: true, sessionId: true }, orderBy: { createdAt: "desc" } })
@@ -205,11 +208,20 @@ function hubspotDe(f: FilaDeTarea, s: ContextoDeSerializar): HubspotDeTarea | nu
   const reg = d.registro;
   const regUrl = !reg ? null : reg.objeto === "deal" ? hubspotDealUrl(portal, reg.id) : reg.objeto === "company" ? hubspotCompanyUrl(portal, reg.id) : hubspotProjectUrl(portal, reg.id);
   return {
-    rotulo: rotuloDeHubspot(d),
+    rotulo: f.origen === "hubspot" ? rotuloDeHubspot(d) : "HubSpot",
+    nacioEnNexus: f.origen !== "hubspot",
     url: portal ? `https://app.hubspot.com/tasks/${portal}/view/all/task/${f.hubspotTaskId}` : null,
     registro: reg && regUrl ? { texto: `Abrir ${NOMBRE_DEL_REGISTRO[reg.objeto]} en HubSpot`, url: regUrl } : null,
     error: f.hubspotError,
   };
+}
+
+/**
+ * El contacto y el negocio de HubSpot de una tarea (D4): con uno, es seguimiento comercial. `aviso` = lo que le falta
+ * para crearse allá (la fecha, el usuario del responsable) o por qué falló, mientras todavía no está allá.
+ */
+function crmDe(f: FilaDeTarea): CrmDeTarea {
+  return { contactoId: f.hubspotContactId, negocioId: f.hubspotDealId, aviso: f.hubspotTaskId ? null : f.hubspotError };
 }
 
 function persona(email: string | null | undefined, s: ContextoDeSerializar): PersonaVista | null {
@@ -234,7 +246,15 @@ function salioDe(sessionId: string | null, cita: string | null, t: { responsable
   const sala = s.salas.get(sessionId);
   if (!sala) return { visible: false, texto: "Salió de una reunión" };
   if (!veLaCita(sala, t, s)) return { visible: false, texto: sala.puertasAdentro ? "Salió de una reunión del equipo" : "Salió de una reunión con un cliente" };
-  return { visible: true, sesionId: sessionId, titulo: sala.titulo, fecha: sala.inicio.toISOString(), cita };
+  const nombres = (sala.deLaCasa ?? []).map((e) => s.ctx.miembros.find((m) => m.email === e)?.nombre ?? e.split("@")[0]!);
+  return {
+    visible: true,
+    sesionId: sessionId,
+    titulo: sala.titulo,
+    fecha: sala.inicio.toISOString(),
+    cita,
+    ...(nombres.length || sala.deAfuera ? { estuvieron: { nombres, deAfuera: sala.deAfuera ?? 0 } } : {}),
+  };
 }
 
 /** Quién mira, para las reglas de la cita y del contexto (la pantalla y el chat usan la misma). */
@@ -367,7 +387,7 @@ export function serializarTarea(f: FilaDeTarea, s: ContextoDeSerializar): TareaV
   // «Ya pasó»: solo a quien la puede cerrar (su responsable, quien lidera el sprint, dirección). Nunca se cierra sola.
   const cerrar = s.toques
     ? sugerenciaDeCierre(
-        { titulo: f.titulo, minutosEstimados: f.minutosEstimados, estado, origen: f.origen, venceEl, semana, creadaAt: f.createdAt.toISOString(), ultimoToque: s.toques.get(f.id)?.toISOString() ?? null },
+        { titulo: f.titulo, minutosEstimados: f.minutosEstimados, estado, origen: f.origen, venceEl, semana, creadaAt: f.createdAt.toISOString(), ultimoToque: s.toques.get(f.id)?.toISOString() ?? null, enHubspot: !!f.hubspotTaskId },
         hoyEnCostaRica(s.ahora),
       )
     : null;
@@ -424,6 +444,9 @@ export function serializarTarea(f: FilaDeTarea, s: ContextoDeSerializar): TareaV
     ...(sugerencias && Object.keys(sugerencias).length ? { sugerencias } : {}),
     ...(sugeridoCierre ? { sugeridoCierre } : {}),
     hubspot: hubspotDe(f, s),
+    crm: crmDe(f),
+    // La reunión que cumplió la planeada, con la regla de la cita: quien no ve a ese cliente no sabe ni que existió.
+    ...(f.reunionHechaId && s.salas.get(f.reunionHechaId) && veLaCita(s.salas.get(f.reunionHechaId)!, f, s) ? { reunionHechaId: f.reunionHechaId } : {}),
   };
 }
 

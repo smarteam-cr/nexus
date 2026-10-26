@@ -9,7 +9,9 @@
  *     se completaron esta semana. Las completadas en los últimos 7 días se miran para cerrar las que Nexus ya tiene. Una tarea que ya no es de nadie del equipo, o que se borró en HubSpot, pasa a
  *     «Ya no se hará» con el motivo.
  *   · Lo que cambia en HubSpot se aplica en Nexus por el escritor único de Tareas (lib/tareas/mutaciones.ts); lo que
- *     cambia en Nexus se escribe en HubSpot desde acá. Nada que nazca en Nexus se crea en HubSpot.
+ *     cambia en Nexus se escribe en HubSpot desde acá. Lo que nace en Nexus no se crea en HubSpot, salvo el seguimiento
+ *     comercial (2026-10-27, roadmap D4; `crearSeguimientos`): una tarea abierta con un contacto o un negocio, con la
+ *     bandera `TAREAS_SEGUIMIENTO_EN_HUBSPOT=1`. Desde que se crea allá, viaja como las demás.
  *   · Un candado en la base: una copia a la vez entre el servidor y las dos PCs.
  */
 import "server-only";
@@ -20,12 +22,28 @@ import { leerDuenos } from "@/lib/hubspot/duenos";
 import { OBJETO_PROYECTOS } from "@/lib/hubspot/asociaciones-proyecto";
 import { proyectoClasificableWhere } from "@/lib/projects/scope";
 import { claveDeEquipo } from "@/lib/tareas/equipos";
-import { aplicarDesdeHubspot, anotarSincronizacionConHubspot, crearTareaDeHubspot, type CambiosDesdeHubspot } from "@/lib/tareas/mutaciones";
+import {
+  anotarCreadaEnHubspot,
+  anotarErrorDeCreacionEnHubspot,
+  aplicarDesdeHubspot,
+  anotarSincronizacionConHubspot,
+  crearTareaDeHubspot,
+  reservarCreacionEnHubspot,
+  type CambiosDesdeHubspot,
+} from "@/lib/tareas/mutaciones";
 import { comoFecha, hoyEnCostaRica, lunesDeHoy } from "@/lib/tareas/semana";
 import {
   DIAS_DE_COMPLETADAS,
+  DIAS_PARA_CREAR_EN_HUBSPOT,
+  MINUTOS_DE_RESERVA,
+  ORIGENES_QUE_NO_SE_CREAN_EN_HUBSPOT,
   PROPIEDADES_DE_LA_TAREA,
   comparar,
+  esSeguimientoComercial,
+  faltaParaHubspot,
+  pedidoParaCrear,
+  seCreaEnHubspot,
+  seguimientoEnHubspotPrendido,
   datosDeHubspot,
   leerAcordado,
   leerDatosDeHubspot,
@@ -47,6 +65,8 @@ export interface ResultadoDeTareasDeHubspot {
   locked?: true;
   traidas: number;
   nuevas: number;
+  /** El seguimiento comercial que nació en Nexus y se creó allá en esta corrida (D4). */
+  creadasEnHubspot: number;
   aplicadasEnNexus: number;
   escritasEnHubspot: number;
   cerradas: number;
@@ -218,6 +238,7 @@ async function paraQuien(asoc: Map<string, Asociadas>) {
 const SELECT = {
   id: true,
   version: true,
+  origen: true,
   titulo: true,
   estado: true,
   venceEl: true,
@@ -268,7 +289,10 @@ async function sincronizarUna(
   const hub = valoresDeHubspot(crudo.p, eq.correoDe);
   const datosPrevios = t ? leerDatosDeHubspot(t.hubspotDatos) : null;
   const datos = datosDeHubspot(crudo.p, donde?.registro ?? datosPrevios?.registro ?? null);
-  const contexto = textoDelCuerpo(crudo.p.hs_task_body);
+  // Las notas de HubSpot son el contexto de lo que nació allá. Lo que nació en Nexus tiene el suyo (lo escribió Nexus al
+  // generarla, o nada): el cuerpo que se mandó allá no vuelve a pisarlo.
+  const deHubspot = !t || t.origen === "hubspot";
+  const contexto = deHubspot ? textoDelCuerpo(crudo.p.hs_task_body) : (t.contexto ?? null);
 
   // Nueva. Una completada entra solo si se completó esta semana: es trabajo de la semana que se revisa; lo de antes ya
   // se revisó (y una limpieza de HubSpot no llena la historia de nadie).
@@ -394,10 +418,190 @@ async function sincronizarUna(
   return { desenlace: escritos.length ? "hubspot" : "nada", ...(error ? { error } : {}) };
 }
 
+/* ── El seguimiento comercial que nace en Nexus (2026-10-27, roadmap D4) ─────────────────────────────────────────── */
+
+const SELECT_PARA_CREAR = {
+  id: true,
+  numero: true,
+  titulo: true,
+  notas: true,
+  estado: true,
+  prioridad: true,
+  venceEl: true,
+  origen: true,
+  privada: true,
+  clase: true,
+  archivadaAt: true,
+  responsableEmail: true,
+  clientId: true,
+  hubspotTaskId: true,
+  hubspotContactId: true,
+  hubspotDealId: true,
+  hubspotError: true,
+  client: { select: { hubspotCompanyId: true } },
+} satisfies Prisma.TareaSelect;
+
+const TEXTO_DE_LO_QUE_FALTA = {
+  sin_fecha: "Para crearla en HubSpot le falta una fecha.",
+  sin_responsable: "Para crearla en HubSpot, su responsable necesita un usuario en HubSpot.",
+} as const;
+
+/**
+ * ¿La base deja guardar el id de HubSpot en una tarea que nació en Nexus? Lo dice el CHECK "Tarea_hubspot_con_id" de
+ * scripts/sql/2026-10-27-tareas-noche-2.sql. Sin él, crear allá dejaría la tarea de HubSpot sin anotar en Nexus (y la
+ * corrida siguiente la volvería a crear): no se crea nada. En verde no se vuelve a preguntar.
+ */
+let creacionLista = false;
+async function creacionDisponible(): Promise<boolean> {
+  if (creacionLista) return true;
+  const filas = await prisma.$queryRaw<{ n: number }[]>`
+    SELECT count(*)::int AS n FROM pg_constraint
+    WHERE conname = 'Tarea_hubspot_con_id' AND pg_get_constraintdef(oid) ILIKE '%privada%'`.catch(() => [{ n: 0 }]);
+  creacionLista = Number(filas[0]?.n ?? 0) > 0;
+  return creacionLista;
+}
+
+const PREFIJO_DEL_FALLO = "No se pudo crear en HubSpot:";
+const TEXTO_DE_OTRO_CLIENTE = "Para crearla en HubSpot, el contacto y el negocio tienen que ser de su cliente: elígelos de nuevo.";
+/** Después de un intento que falló, la tarea espera esto antes del siguiente (como mucho unos 80 intentos en 7 días). */
+const MINUTOS_TRAS_UN_FALLO = 120;
+
+/**
+ * Una tarea que un intento anterior pudo haber creado en HubSpot sin que Nexus la anotara (se cayó la red al volver):
+ * la del mismo dueño y el mismo título, creada desde ese intento, con «T-<número>» en el cuerpo. null si no hay.
+ */
+async function buscarLaYaCreada(hs: Pick<Hs, "apiRequest">, ownerId: string, titulo: string, numero: number, desde: Date): Promise<string | null> {
+  const r = await hs.apiRequest({
+    method: "POST",
+    path: "/crm/v3/objects/tasks/search",
+    body: {
+      filterGroups: [
+        {
+          filters: [
+            { propertyName: "hubspot_owner_id", operator: "EQ", value: ownerId },
+            { propertyName: "hs_task_subject", operator: "EQ", value: titulo },
+            { propertyName: "hs_createdate", operator: "GTE", value: String(+desde - 60_000) },
+          ],
+        },
+      ],
+      properties: ["hs_task_body"],
+      limit: 10,
+    },
+  });
+  if (!r.ok) throw new Error(`HubSpot ${r.status}: ${(await r.text()).slice(0, 200)}`);
+  const data = (await r.json()) as { results?: Array<{ id: string; properties?: { hs_task_body?: string | null } }> };
+  const suya = (data.results ?? []).find((x) => (x.properties?.hs_task_body ?? "").includes(`(T-${numero})`));
+  return suya ? String(suya.id) : null;
+}
+
+/**
+ * Crea en HubSpot el seguimiento comercial que todavía no está allá (`seCreaEnHubspot`): con `ids`, solo esas tareas
+ * (la ruta, al guardar); sin ellas, lo que cambió en los últimos `DIAS_PARA_CREAR_EN_HUBSPOT` días (el job). Cada una se
+ * reserva antes de llamar (una sola creación aunque la ruta y el job lleguen a la vez) y se anota con su id. Lo que le
+ * falta (la fecha, el usuario de HubSpot del responsable, un contacto de otro cliente) queda escrito en la tarea para el
+ * cajón. Exportada para su prueba de integración (con un HubSpot falso): fuera de este archivo la llaman la copia y la ruta.
+ */
+export async function crearSeguimientos(hs: Pick<Hs, "apiRequest">, eq: Pick<EquipoEnHubspot, "ownerDe">, ids: readonly string[] | null, ahora: Date, dryRun: boolean): Promise<{ creadas: number; errores: string[] }> {
+  const out = { creadas: 0, errores: [] as string[] };
+  if (!(await creacionDisponible())) {
+    out.errores.push("Falta el SQL scripts/sql/2026-10-27-tareas-noche-2.sql: el seguimiento comercial no se crea en HubSpot.");
+    return out;
+  }
+  const filas = await prisma.tarea.findMany({
+    where: {
+      hubspotTaskId: null,
+      archivadaAt: null,
+      privada: false,
+      clase: "accion",
+      estado: { in: ["pendiente", "en_curso"] },
+      origen: { notIn: [...ORIGENES_QUE_NO_SE_CREAN_EN_HUBSPOT] },
+      OR: [{ hubspotContactId: { not: null } }, { hubspotDealId: { not: null } }],
+      ...(ids ? { id: { in: [...ids] } } : { updatedAt: { gte: new Date(+ahora - DIAS_PARA_CREAR_EN_HUBSPOT * 86_400_000) } }),
+    },
+    select: SELECT_PARA_CREAR,
+    take: 100,
+  });
+  // El contacto y el negocio, de NUEVO contra el cliente de la tarea, justo antes de crear: el cliente pudo cambiar por un
+  // camino que no es el cajón (el chat, una propuesta aceptada, el proyecto de tareas) y allá quedaría la tarea de un
+  // cliente colgada de la ficha de otro (invariante 1). Un negocio que ya no está entre los abiertos tampoco se usa.
+  const [contactos, negocios] = filas.length
+    ? await Promise.all([
+        prisma.contactoDeHubspot.findMany({
+          where: { vigente: true, hubspotId: { in: filas.flatMap((t) => (t.hubspotContactId ? [t.hubspotContactId] : [])) } },
+          select: { clientId: true, hubspotId: true },
+        }),
+        prisma.negocioAbierto.findMany({ where: { hubspotDealId: { in: filas.flatMap((t) => (t.hubspotDealId ? [t.hubspotDealId] : [])) } }, select: { clientId: true, hubspotDealId: true } }),
+      ])
+    : [[], []];
+  const delCliente = (t: (typeof filas)[number]) =>
+    !!t.clientId &&
+    (!t.hubspotContactId || contactos.some((c) => c.hubspotId === t.hubspotContactId && c.clientId === t.clientId)) &&
+    (!t.hubspotDealId || negocios.some((n) => n.hubspotDealId === t.hubspotDealId && n.clientId === t.clientId));
+
+  for (const t of filas) {
+    const vence = comoFecha(t.venceEl);
+    const ownerId = eq.ownerDe(t.responsableEmail);
+    const tarea = { ...t, venceEl: vence };
+    if (!seCreaEnHubspot(tarea, ownerId)) {
+      const falta = faltaParaHubspot(tarea, ownerId);
+      const texto = falta ? TEXTO_DE_LO_QUE_FALTA[falta] : null;
+      if (!dryRun && texto !== t.hubspotError) await anotarErrorDeCreacionEnHubspot(t.id, texto);
+      continue;
+    }
+    if (!delCliente(t)) {
+      if (!dryRun && t.hubspotError !== TEXTO_DE_OTRO_CLIENTE) await anotarErrorDeCreacionEnHubspot(t.id, TEXTO_DE_OTRO_CLIENTE);
+      continue;
+    }
+    if (dryRun) {
+      out.creadas++;
+      continue;
+    }
+    // Después de un intento que falló, se espera más: un rechazo que no se arregla solo no se reintenta cada 15 minutos.
+    const fallo = (t.hubspotError ?? "").startsWith(PREFIJO_DEL_FALLO);
+    const reserva = await reservarCreacionEnHubspot(t.id, fallo ? MINUTOS_TRAS_UN_FALLO : MINUTOS_DE_RESERVA, ahora);
+    if (!reserva.tomada) continue;
+    const pedido = pedidoParaCrear(
+      {
+        numero: t.numero,
+        titulo: t.titulo,
+        notas: t.notas,
+        estado: t.estado === "en_curso" ? "en_curso" : "pendiente",
+        prioridad: t.prioridad === "alta" || t.prioridad === "baja" ? t.prioridad : "media",
+        venceEl: vence!,
+        hubspotContactId: t.hubspotContactId,
+        hubspotDealId: t.hubspotDealId,
+        hubspotCompanyId: t.client?.hubspotCompanyId ?? null,
+      },
+      ownerId!,
+      t.responsableEmail!,
+    );
+    try {
+      // Si ya hubo un intento, HubSpot pudo haberla creado sin que Nexus alcanzara a anotarlo: se busca antes de crear otra.
+      const yaEstaba = reserva.intentoAnterior ? await buscarLaYaCreada(hs, ownerId!, pedido.body.properties.hs_task_subject!, t.numero, reserva.intentoAnterior) : null;
+      let id = yaEstaba;
+      if (!id) {
+        const r = await hs.apiRequest({ method: "POST", path: "/crm/v3/objects/tasks", body: pedido.body });
+        if (!r.ok) throw new Error(`HubSpot ${r.status}: ${(await r.text()).slice(0, 200)}`);
+        const creada = (await r.json()) as { id?: string | number };
+        if (!creada.id) throw new Error("HubSpot no devolvió el id de la tarea.");
+        id = String(creada.id);
+      }
+      await anotarCreadaEnHubspot(t.id, { hubspotTaskId: id, acordado: pedido.acordado as unknown as object, datos: pedido.datos as unknown as object }, ahora);
+      out.creadas++;
+    } catch (e) {
+      // La reserva queda: la corrida siguiente, pasada la espera, lo vuelve a intentar.
+      const error = `${PREFIJO_DEL_FALLO} ${e instanceof Error ? e.message : String(e)}`;
+      await anotarErrorDeCreacionEnHubspot(t.id, error);
+      out.errores.push(`T-${t.numero}: ${error}`);
+    }
+  }
+  return out;
+}
+
 /* ── La copia ────────────────────────────────────────────────────────────────────────── */
 
 export async function copiarTareasDeHubspot(opciones: { dryRun?: boolean } = {}, ahora = new Date()): Promise<ResultadoDeTareasDeHubspot> {
-  const res: ResultadoDeTareasDeHubspot = { traidas: 0, nuevas: 0, aplicadasEnNexus: 0, escritasEnHubspot: 0, cerradas: 0, sinCambios: 0, errores: [] };
+  const res: ResultadoDeTareasDeHubspot = { traidas: 0, nuevas: 0, creadasEnHubspot: 0, aplicadasEnNexus: 0, escritasEnHubspot: 0, cerradas: 0, sinCambios: 0, errores: [] };
   const dryRun = !!opciones.dryRun;
   if (!dryRun && !(await tomarLock(ahora))) return { ...res, locked: true };
   try {
@@ -408,6 +612,13 @@ export async function copiarTareasDeHubspot(opciones: { dryRun?: boolean } = {},
       res.errores.push("Nadie del equipo tiene usuario en HubSpot.");
       return res;
     }
+    // Primero, el seguimiento comercial que nació en Nexus y todavía no está allá: así la búsqueda de abajo ya lo trae.
+    if (seguimientoEnHubspotPrendido()) {
+      const c = await crearSeguimientos(hs, eq, null, ahora, dryRun);
+      res.creadasEnHubspot = c.creadas;
+      res.errores.push(...c.errores);
+    }
+
     const desde = new Date(ahora.getTime() - DIAS_DE_COMPLETADAS * 86_400_000).toISOString();
     const [abiertas, completadas] = await Promise.all([
       buscar(hs, owners, [{ propertyName: "hs_task_status", operator: "NEQ", value: "COMPLETED" }]),
@@ -421,7 +632,8 @@ export async function copiarTareasDeHubspot(opciones: { dryRun?: boolean } = {},
     for (const c of [...completadas, ...abiertas]) crudos.set(c.id, c);
 
     // Lo que Nexus tiene abierto y no volvió: se pregunta por id (se completó hace más de 7 días, cambió de dueño o se borró).
-    const conocidas = await prisma.tarea.findMany({ where: { origen: "hubspot", archivadaAt: null, hubspotTaskId: { not: null } }, select: SELECT });
+    // Todas las que tienen su tarea allá: las que vinieron de HubSpot y el seguimiento comercial que nació en Nexus.
+    const conocidas = await prisma.tarea.findMany({ where: { archivadaAt: null, hubspotTaskId: { not: null } }, select: SELECT });
     const faltan = conocidas.filter((t) => !crudos.has(t.hubspotTaskId!) && (t.estado === "pendiente" || t.estado === "en_curso")).map((t) => t.hubspotTaskId!);
     if (faltan.length) for (const c of await leerPorId(hs, faltan)) crudos.set(c.id, c);
     res.traidas = crudos.size;
@@ -476,7 +688,21 @@ export function reflejarTareaEnHubspot(tareaId: string): Promise<void> {
 async function reflejarUna(tareaId: string, ahora: Date): Promise<void> {
   try {
     const t = await prisma.tarea.findUnique({ where: { id: tareaId }, select: SELECT });
-    if (!t?.hubspotTaskId) return;
+    if (!t) return;
+    if (!t.hubspotTaskId) {
+      // Un seguimiento comercial que todavía no está allá (D4): se crea ya, sin esperar al job.
+      if (!seguimientoEnHubspotPrendido() || t.origen === "hubspot") return;
+      // Antes de hablar con HubSpot: casi toda edición es de una tarea que no es seguimiento comercial.
+      const c = await prisma.tarea.findUnique({
+        where: { id: tareaId },
+        select: { origen: true, estado: true, privada: true, clase: true, archivadaAt: true, hubspotContactId: true, hubspotDealId: true },
+      });
+      if (!c || !esSeguimientoComercial(c)) return;
+      const hs = await getSystemHubspotClient();
+      const r = await crearSeguimientos(hs, await equipoEnHubspot(hs), [tareaId], ahora, false);
+      if (r.errores.length) console.error(`[tareas-hubspot] no se pudo crear ${tareaId} en HubSpot:`, r.errores.join(" · "));
+      return;
+    }
     const hs = await getSystemHubspotClient();
     const [eq, crudos] = await Promise.all([equipoEnHubspot(hs), leerPorId(hs, [t.hubspotTaskId])]);
     await sincronizarUna(hs, eq, t, crudos[0] ?? null, null, ahora, false);

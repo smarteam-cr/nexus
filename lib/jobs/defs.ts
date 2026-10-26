@@ -426,6 +426,44 @@ const tareasSprint: JobDef = {
 };
 
 /**
+ * La lectura personal (roadmap H1, 2026-10-27; lib/tareas/lectura-personal-server.ts): las reuniones internas de cada
+ * persona del piloto (`TAREAS_LECTURA_PERSONAL`, hoy solo Elías) le proponen tareas a ella. Como el sprint: cada tick,
+ * con su espera de 10 minutos por proceso, lee lo que ya llegó de Meet y mira el presupuesto automático. Sin piloto o
+ * sin nada que pedir devuelve SIN_TURNO.
+ */
+/**
+ * La reunión planeada y la que se hizo (P3 etapa 2, 2026-10-27; lib/tareas/reunion-hecha-server.ts): cada hora une cada
+ * tarea de clase «reunion» de los últimos 3 días con la reunión de Meet que la cumplió (la del evento elegido, o la única
+ * de la misma cuenta a esa hora con alguno de los invitados). Sin IA. Sin nada que unir devuelve SIN_TURNO.
+ */
+const tareasReunionHecha: JobDef = {
+  key: "tareas-n2-reunion-hecha",
+  shouldRun: () => true,
+  run: async (now) => {
+    const { crDateParts } = await import("./time");
+    const p = crDateParts(now);
+    const turno = `${p.dateKey}T${String(p.hour).padStart(2, "0")}`;
+    if (!(await claimDateKey("tareas-n2-reunion-hecha", turno, now))) return SIN_TURNO;
+    const { unirReunionesHechas } = await import("@/lib/tareas/reunion-hecha-server");
+    const r = await unirReunionesHechas(now);
+    if (r.unidas === 0) return;
+    console.log(`[jobs/tareas-reunion-hecha] ${turno} — ${r.unidas} de ${r.planeadas} reuniones planeadas unidas a su reunión de Meet`);
+  },
+};
+
+const tareasLecturaPersonal: JobDef = {
+  key: "tareas-n2-lectura-personal",
+  shouldRun: () => true,
+  run: async (now) => {
+    if (!(await quedaPresupuesto(now))) return SIN_TURNO;
+    const { mirarLasReunionesPersonales } = await import("@/lib/tareas/lectura-personal-server");
+    const r = await mirarLasReunionesPersonales(now);
+    if (r.omitida || r.pedidas === 0) return SIN_TURNO;
+    console.log(`[jobs/tareas-lectura-personal] ${r.personas} persona(s), ${r.pedidas} lectura(s) pedidas`);
+  },
+};
+
+/**
  * La lectura de cada reunión (memoria de la cuenta, etapa 2, lib/lecturas/leer.ts). Cada tick: si está el SQL de las
  * columnas `seguimiento*` y queda presupuesto automático, toma 2 reuniones de la cola (`LecturaDeReunion`) con un
  * update condicional, las lee en paralelo con 420 s de tope cada una (el tope CORTA la lectura) y después vincula a su
@@ -503,7 +541,7 @@ const tareasHubspot: JobDef = {
       return;
     }
     console.log(
-      `[jobs/tareas-hubspot] ${turno} — ${r.traidas} de HubSpot: ${r.nuevas} nuevas, ${r.aplicadasEnNexus} cambiaron allá, ${r.escritasEnHubspot} escritas allá, ${r.cerradas} cerradas${r.errores.length ? `, ${r.errores.length} errores` : ""}`,
+      `[jobs/tareas-hubspot] ${turno} — ${r.traidas} de HubSpot: ${r.nuevas} nuevas, ${r.aplicadasEnNexus} cambiaron allá, ${r.escritasEnHubspot} escritas allá, ${r.cerradas} cerradas${r.creadasEnHubspot ? `, ${r.creadasEnHubspot} seguimientos de Nexus creados allá` : ""}${r.errores.length ? `, ${r.errores.length} errores` : ""}`,
     );
     if (r.errores.length) console.warn(`[jobs/tareas-hubspot] ${r.errores.slice(0, 5).join(" · ")}`);
   },
@@ -1465,5 +1503,5 @@ const jobsVigia: JobDef = {
 };
 
 export function allJobs(): JobDef[] {
-  return [marketingWeekly, csSignalsDaily, csPartnerDaily, comisionesHubspotEstimado, csWatchdogDaily, csWatchdogDebounce, maintenanceDaily, cobranzaQuincenal, googleMeetSync, googleMeetConferencias, googleMeetEventos, googleMeetSuscripciones, googleEnrichRetry, tareasSprint, seguimientoReuniones, ventasGanadasDaily, negociosAbiertos, contactosYTickets, empresaCopiaDeHubspot, comunicacionesHubspot, hubspotEventos, hubspotLeads, hubspotFusiones, hubspotProyectos, indiceDeReuniones, tareasHubspot, odooEspejoDaily, mercuryEspejoDaily, tipoCambioDaily, planillaQuincenaDaily, licenciasRenovacionDaily, adopcionRecordatoriosDaily, tareasSemanaLunes, rentabilidadFotoMensual, rentabilidadLecturaMensual, iaLotes, titulosCortos, reunionesMotivos, reunionesPropuestas, reunionesAudio, analizadorVenta, loPagadoDaily, invariantsDaily, jobsVigia, testsHubspot];
+  return [marketingWeekly, csSignalsDaily, csPartnerDaily, comisionesHubspotEstimado, csWatchdogDaily, csWatchdogDebounce, maintenanceDaily, cobranzaQuincenal, googleMeetSync, googleMeetConferencias, googleMeetEventos, googleMeetSuscripciones, googleEnrichRetry, tareasSprint, tareasLecturaPersonal, tareasReunionHecha, seguimientoReuniones, ventasGanadasDaily, negociosAbiertos, contactosYTickets, empresaCopiaDeHubspot, comunicacionesHubspot, hubspotEventos, hubspotLeads, hubspotFusiones, hubspotProyectos, indiceDeReuniones, tareasHubspot, odooEspejoDaily, mercuryEspejoDaily, tipoCambioDaily, planillaQuincenaDaily, licenciasRenovacionDaily, adopcionRecordatoriosDaily, tareasSemanaLunes, rentabilidadFotoMensual, rentabilidadLecturaMensual, iaLotes, titulosCortos, reunionesMotivos, reunionesPropuestas, reunionesAudio, analizadorVenta, loPagadoDaily, invariantsDaily, jobsVigia, testsHubspot];
 }

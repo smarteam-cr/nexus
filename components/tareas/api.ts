@@ -6,7 +6,7 @@
  */
 import type { MetricasDeLaSemana } from "@/lib/tareas/metricas";
 import { crearFilaDeCambios } from "@/lib/tareas/fila-de-cambios";
-import type { ComentarioVista, DatosDelEspacio, DuenoDelVinculo, EspacioEnLista, FueraDelTope, LoQueDelegasteDatos, MisTareasDatos, RegistroParaVincular, VinculoVista, OpcionesDeTareas, SemanaDelEquipoDatos, SprintDelEquipoDatos, TareasDeLaCuentaDatos, TareaVista, ProyectoVista } from "@/lib/tareas/tipos";
+import type { ComentarioVista, CrmDelCliente, DatosDelEspacio, DuenoDelVinculo, EspacioEnLista, FueraDelTope, LoQueDelegasteDatos, MisTareasDatos, RegistroParaVincular, VinculoVista, OpcionesDeTareas, SemanaDelEquipoDatos, SprintDelEquipoDatos, TareasDeLaCuentaDatos, TareaVista, ProyectoVista } from "@/lib/tareas/tipos";
 
 export class ErrorDeApi extends Error {
   constructor(
@@ -73,6 +73,8 @@ export const apiTareas = {
       return r;
     }),
   agendar: (id: string, body: Record<string, unknown>) => filaDeTareas.enFila(id, () => conVersion(id, pedir<{ tarea: TareaVista }>(`/api/tareas/${id}/agenda`, json(body)))),
+  /** Las tareas tuyas unidas a un evento de tu calendario (P3). */
+  delEvento: (eventoId: string) => pedir<{ tareas: TareaVista[] }>(`/api/tareas/agenda/evento?id=${encodeURIComponent(eventoId)}`),
   comentarios: (id: string) => pedir<{ comentarios: ComentarioVista[] }>(`/api/tareas/${id}/comentarios`),
   comentar: (id: string, cuerpo: string) => pedir<{ id: string }>(`/api/tareas/${id}/comentarios`, json({ cuerpo })),
   cambiarComentario: (id: string, body: { accion: "editar"; cuerpo: string } | { accion: "archivar" }) =>
@@ -93,7 +95,7 @@ export const apiTareas = {
     pedir<MetricasDeLaSemana & { equipo: string; semana: string }>(`/api/tareas/equipo/metricas?equipo=${encodeURIComponent(equipo)}&semana=${semana}`),
   buscar: (q: string) => pedir<{ tareas: TareaVista[] }>(`/api/tareas/buscar?q=${encodeURIComponent(q)}`),
   opciones: (clientId?: string | null) =>
-    pedir<OpcionesDeTareas & { proyectosHubspot?: { id: string; nombre: string; interno: boolean }[] }>(`/api/tareas/opciones${clientId ? `?clientId=${encodeURIComponent(clientId)}` : ""}`),
+    pedir<OpcionesDeTareas & { proyectosHubspot?: { id: string; nombre: string; interno: boolean }[]; crm?: CrmDelCliente }>(`/api/tareas/opciones${clientId ? `?clientId=${encodeURIComponent(clientId)}` : ""}`),
   semana: (semana: string, persona?: string) =>
     pedir<{
       persona: { email: string; nombre: string; equipo: string };

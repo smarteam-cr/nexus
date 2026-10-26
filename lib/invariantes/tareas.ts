@@ -196,3 +196,46 @@ export const INV43: Invariante = conLasTablas({
     return cumple(`✓ INV43: ninguna tarea abierta en un sprint sin personas (${abiertas.length} abiertas de sprint).`);
   },
 });
+
+/**
+ * INV63 · El contacto y el negocio de HubSpot de una tarea son de SU cliente (2026-10-27, roadmap D4). Con uno de ellos
+ * la tarea es seguimiento comercial y se crea en HubSpot asociada a ese contacto o negocio: si son de otra empresa, la
+ * tarea de un cliente queda colgada de la ficha de otro en HubSpot (invariante 1). El cajón solo ofrece los del cliente y
+ * el escritor lo rechaza; esto vigila lo que entra por otro lado (una fusión de fichas, un cambio de cliente a mano en la
+ * base). Que una tarea de Nexus atada a HubSpot no sea privada ni interna lo garantiza el CHECK "Tarea_hubspot_con_id"
+ * (scripts/sql/2026-10-27-tareas-noche-2.sql): no se repite acá. Un negocio que ya no está en la copia de los abiertos
+ * no se puede mirar y no cuenta. Remedio: corregir el cliente, o el contacto y el negocio, desde el cajón de la tarea.
+ */
+export const INV63: Invariante = conLasTablas({
+  id: "63",
+  nombre: "el contacto y el negocio de una tarea son de su cliente",
+  async correr(db) {
+    const filas = await db.tarea.findMany({
+      where: { archivadaAt: null, origen: { not: "hubspot" }, OR: [{ hubspotContactId: { not: null } }, { hubspotDealId: { not: null } }] },
+      select: { numero: true, clientId: true, hubspotContactId: true, hubspotDealId: true },
+    });
+    if (!filas.length) return cumple("✓ INV63: ninguna tarea tiene contacto ni negocio de HubSpot todavía.");
+    const [contactos, negocios] = await Promise.all([
+      db.contactoDeHubspot.findMany({
+        where: { hubspotId: { in: filas.flatMap((t) => (t.hubspotContactId ? [t.hubspotContactId] : [])) } },
+        select: { clientId: true, hubspotId: true },
+      }),
+      db.negocioAbierto.findMany({
+        where: { hubspotDealId: { in: filas.flatMap((t) => (t.hubspotDealId ? [t.hubspotDealId] : [])) } },
+        select: { clientId: true, hubspotDealId: true },
+      }),
+    ]);
+    const malas: string[] = [];
+    for (const t of filas) {
+      if (t.hubspotContactId && !contactos.some((c) => c.hubspotId === t.hubspotContactId && c.clientId === t.clientId)) {
+        malas.push(`T-${t.numero}: su contacto de HubSpot no es de su cliente`);
+      }
+      const negocio = t.hubspotDealId ? negocios.find((n) => n.hubspotDealId === t.hubspotDealId) : null;
+      if (negocio && negocio.clientId !== t.clientId) malas.push(`T-${t.numero}: su negocio de HubSpot es de otro cliente`);
+    }
+    if (malas.length) {
+      return viola(`✗ INV63 VIOLADO: ${malas.length} tarea(s) con un contacto o un negocio de HubSpot de otro cliente.\n${lista(malas)}\n    Remedio: corregir el cliente, o el contacto y el negocio, desde su cajón en /tareas.`);
+    }
+    return cumple(`✓ INV63: el contacto y el negocio de HubSpot de cada tarea son de su cliente (${filas.length} tareas).`);
+  },
+});

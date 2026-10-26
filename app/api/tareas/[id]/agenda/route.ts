@@ -5,7 +5,10 @@
  *                       Sin el permiso responde 409 con `sinPermiso`, y la pantalla ofrece el enlace de plantilla.
  *   · `ya_la_agende` → la guardaste tú con el enlace: queda agendada, sin id de evento.
  *   · `quitar`       → quita los bloques de TU calendario. Lo puede hacer quien tiene el bloque aunque la tarea ya no
- *                       sea suya; si es la responsable, la deja sin agendar.
+ *                       sea suya; si es la responsable, la deja sin agendar. Un evento asociado solo se desune: no se borra.
+ *   · `asociar`      → une la tarea a un evento que YA está en tu calendario (P3, 2026-10-27): Nexus lo lee allá antes de
+ *                       contarlo (404 si no está) y lo guarda como `asociado`: nunca lo mueve ni lo borra. Solo la
+ *                       responsable, con la tarea abierta (no hace falta que tenga semana: el evento ya tiene su día).
  * Agendar: solo la dueña de la tarea, y solo en la semana de hoy o una futura. Al reagendar, sus bloques que todavía no
  * terminaron se borran de Calendar después de crear los nuevos (si no se pueden borrar, se conservan en la lista).
  */
@@ -16,7 +19,7 @@ import { cargarTarea } from "@/lib/tareas/consultas";
 import { anotarAgenda, soltarMisBloques, urlDeLaTarea } from "@/lib/tareas/mutaciones";
 import { repartirBloques, type BloqueDeAgenda } from "@/lib/tareas/estados";
 import { Agendar } from "@/lib/tareas/schema";
-import { AgendaSinPermiso, crearBloques, quitarBloques } from "@/lib/google/agenda";
+import { AgendaSinPermiso, crearBloques, leerEventoDelCalendario, quitarBloques } from "@/lib/google/agenda";
 
 /** Borra de Calendar los bloques propios que todavía no terminaron. Devuelve los que NO se pudieron borrar (se conservan). */
 async function moverMisBloques(email: string, bloques: readonly BloqueDeAgenda[]): Promise<BloqueDeAgenda[]> {
@@ -64,6 +67,18 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       }
       await soltarMisBloques(p.ctx, id);
       return NextResponse.json({ ...(await cargarTarea(p.ctx, p.clientes, id)), quitados, sinPermiso });
+    }
+    if (d.modo === "asociar") {
+      if (tarea.responsable?.email !== p.ctx.email || !(tarea.estado === "pendiente" || tarea.estado === "en_curso")) {
+        return NextResponse.json({ error: "Solo la responsable une su tarea abierta a un evento de su calendario." }, { status: 403 });
+      }
+      const ev = await leerEventoDelCalendario(p.ctx.email, d.eventoId);
+      if (!ev) return NextResponse.json({ error: "No encuentro ese evento en tu calendario (o no tiene hora)." }, { status: 404 });
+      // Una tarea, su bloque: los bloques que había creado Nexus y todavía no pasaron se borran (el asociado los reemplaza).
+      const conservar = await moverMisBloques(p.ctx.email, tarea.agenda.bloques);
+      // `eventoId` vacío a propósito: lo que borra eventos mira ese campo (lib/tareas/estados.ts › BloqueDeAgenda).
+      await anotarAgenda(p.ctx, id, [{ calendario: p.ctx.email, eventoId: null, inicio: ev.inicio, fin: ev.fin, asociado: true, eventoUnido: ev.id }], null, new Date(), conservar);
+      return NextResponse.json(await cargarTarea(p.ctx, p.clientes, id));
     }
     if (!tarea.acciones.agendar) return NextResponse.json({ error: "Solo la dueña agenda la tarea, y en la semana de hoy o una futura." }, { status: 403 });
     if (d.modo === "ya_la_agende") {

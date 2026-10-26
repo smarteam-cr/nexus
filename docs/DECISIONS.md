@@ -8607,7 +8607,7 @@ hacerlo**. El plan, por fases, está en `docs/nexus-sistema-de-trabajo-plan.md`.
   `documentacion.comentario` y `alcance.confirmado` (cada uno ya era un pendiente en «Para ti»), y los tipos que nadie
   escribía. Quedan los mensajes, las buenas noticias y las asignaciones directas. Los avisos viejos de esos tipos se
   siguen mostrando.
-- **Las tareas de las reuniones**: cada persona tiene como mucho 10 sugerencias de las reuniones sin decidir
+- **Las tareas de las reuniones**: cada persona tiene como mucho 5 sugerencias de las reuniones sin decidir (eran 10; bajó el 2026-10-27, ver «Tareas, noche 2»)
   (`MAX_SUGERENCIAS_POR_PERSONA`); con más, las más viejas vencen solas (no son lápidas: se vuelven a proponer si se vuelve
   a hablar del tema). Lo que pidió una persona no cuenta. En «Para ti», «Lo que dejaron tus reuniones» es UNA LÍNEA POR
   REUNIÓN (como mucho 8), con su cuenta, y cuenta también tus tareas propuestas de esa reunión (también de un
@@ -11559,3 +11559,117 @@ protección de las propiedades vive en el editor: restaurar una versión o escri
 cuenta de licencias no se compara todavía con lo vendido, las fechas de la ficha no se leen del Cronograma (se dice que
 viven ahí), y las etapas 5 a 7 del plan (estado y enlace por cosa
 construida, lista de construcción en Tareas, que el cliente edite en el enlace, las dos plantillas) siguen pendientes.
+
+## Tareas, noche 2: la limpieza de «Por decidir» y el seguimiento comercial en HubSpot (2026-10-27, D2 etapa 1 y D4)
+
+**Contexto.** Medido en producción el 26 oct (solo lectura): en 45 días a los cinco CSE les llegaron 105 tareas de las
+reuniones y no aceptaron ninguna; 150 ya las había vencido el sistema y cada CSE tenía exactamente 10 sin decidir (el
+tope era lo único que las frenaba). En todo el equipo había 125 sugerencias de Nexus sin decidir, 29 con una fecha que ya
+había pasado. Ventas pidió el 23 oct que el seguimiento con un cliente «quede en el calendario y en HubSpot, y que al
+marcarlo hecho en un lado se marque en el otro»; hasta hoy, lo que nacía en Nexus no se creaba en HubSpot (sección «Las
+tareas de HubSpot viven en Tareas internas…»).
+
+- **El tope de «Por decidir» baja de 10 a 5 por persona** (`MAX_SUGERENCIAS_POR_PERSONA`). Con más, las más viejas vencen
+  solas, como antes. Cinco es lo que entra en «Hoy». *Pendiente de que Elías lo confirme:* 5 o 6.
+- **La limpieza de una vez es la parte C de `scripts/aligerar-tareas.ts`** (`--solo=por-decidir`, simulacro por
+  defecto): vence como `sistema` las sugerencias de Nexus que nadie decidió ni tocó si su fecha ya pasó (sea rápida,
+  seguimiento o trabajo: una propuesta todavía no es trabajo de nadie, no hay nada «atrasado» que cuidar) y, de lo que
+  queda, deja a cada persona sus 5 más nuevas (`limpiezaDePorDecidir`, por `vencerSugerenciasSinDecidir`). No pide
+  `--firma`: lo propuso Nexus y lo vence Nexus. *Por qué vencer y no descartar:* vencer no es una lápida; si se vuelve a
+  hablar del tema, se vuelve a proponer. Nada se borra. Lo que pidió una persona, o lo que una persona tocó (un evento, un
+  comentario, una dependencia, un vínculo), no se mira. El simulacro del 27 oct vence 59 de 125. Las partes A (lo
+  abierto que ya pasó, con `--firma`) y B (juntar los seguimientos sueltos de «Por asignar») siguen como estaban.
+  *Pendiente:* la pregunta del roadmap «¿las cerramos en bloque o cada CSE revisa las suyas?» quedó contestada con la
+  opción conservadora: en bloque solo lo que nadie tocó, y vencido (vuelve si se vuelve a hablar), no descartado.
+- **Excepción a «nada que nazca en Nexus se crea en HubSpot»: el seguimiento comercial.** Una tarea de Nexus abierta
+  (pendiente o en curso), que no es «Solo para mí», de clase acción, con un **contacto o un negocio de HubSpot** y cuyo
+  responsable tiene usuario en HubSpot, se crea también en HubSpot, asociada a ese contacto, a ese negocio y a la empresa
+  de la tarea, y guarda su `hubspotTaskId` (`lib/tareas-hubspot/reglas.ts › seCreaEnHubspot`). Desde ahí viaja sola, con
+  las mismas reglas de las que nacen en HubSpot: los cinco campos, lo acordado y «gana el último» (`comparar`). Las tareas
+  internas (sin contacto ni negocio) siguen solo en Nexus; la vigila INV63 (nada privado ni sin contacto ni negocio pasa a
+  HubSpot desde Nexus).
+  - *Qué no entra todavía:* el siguiente paso de un equipo (`origen = "paso"`, ya escribe `siguiente_paso_*` en el
+    negocio) y las rutinas de un servicio (`plantilla`). Una tarea que se propuso a otra persona entra recién cuando esa
+    persona la acepta. Las que ya existían antes de prender la bandera no se suben solas: el job solo mira lo que
+    cambió en los últimos 7 días (y un intento no cuenta como cambio: no mueve `updatedAt`).
+  - *Cuándo:* al guardarla (la ruta la crea allá después de responder, con `after()`) y, si HubSpot no respondió, en la
+    corrida siguiente del job `tareas-hubspot`, que mira lo que cambió en los últimos 7 días (lo de antes de prender la
+    bandera no se sube solo). Una sola creación por tarea: antes de llamar a HubSpot se reserva la tarea en la base
+    (`reservarCreacionEnHubspot`, con 10 minutos de vida); dos pedidos a la vez crean una. Si un intento anterior pudo
+    haberla creado allá sin que Nexus lo anotara (se cayó la red al volver), primero se busca la del mismo dueño y
+    título con «T-N» en el cuerpo y se adopta esa. Después de un intento que falló se esperan 2 horas (como mucho unos
+    80 intentos en los 7 días). HubSpot pide una fecha: sin fecha, o si el responsable no tiene usuario allá, el cajón
+    dice qué le falta y no se crea.
+  - *Lo que nació en Nexus conserva su contexto:* el cuerpo que se manda a HubSpot (sus notas y «Creada desde Nexus
+    (T-N)») no vuelve a pisar el contexto de la tarea; en las que nacen allá, las notas de HubSpot siguen siendo el
+    contexto.
+  - *El contacto y el negocio se eligen en el cajón de la tarea*, entre los de su cliente (`ContactoDeHubspot` vigentes y
+    `NegocioAbierto`); otro cliente, no (invariante 1). Cambiar el cliente desde el cajón los borra. Como el cliente
+    también cambia por otros caminos (el chat, una propuesta aceptada, el proyecto de tareas), justo antes de crear en
+    HubSpot se vuelve a mirar que el contacto y el negocio sean de su cliente; si no, no se crea y el cajón pide
+    elegirlos de nuevo. INV63 vigila lo que quede así. Una vez creada en HubSpot, el contacto, el negocio y el cliente
+    quedan fijos (cambiar el cliente responde 409: allá está asociada a ese cliente), y no puede pasar a «Solo para mí».
+  - *«Ya no se hará» no existe en HubSpot*, igual que con las que nacen allá: no se escribe, y el cajón lo dice («En
+    HubSpot sigue abierta: ciérrala allá si ya no va»). *Por qué no borrarla allá:* borrar es la única escritura que no
+    se deshace desde Nexus.
+  - *Bandera:* `TAREAS_SEGUIMIENTO_EN_HUBSPOT=1` la prende (apagada por defecto). Sin ella, el contacto y el negocio se
+    guardan igual (sirven al siguiente paso y a la ficha), pero nada se crea en HubSpot.
+- **Al elegir el contacto o el negocio, el cajón ofrece «Agendar»** (D4 etapa 2): el bloque en el calendario del
+  responsable, con el mismo componente de siempre. No se agenda solo.
+
+## Tareas, noche 2: tus reuniones internas te proponen tareas, y el calendario se une a la tarea (2026-10-27, H1, P3 y P5)
+
+**Contexto.** Hasta hoy Nexus proponía tareas de las reuniones con un cliente o un prospecto (la cola de seguimiento) y de
+las series de sprint que configura quien lidera cada equipo; las reuniones internas sueltas no las leía nadie. Y en el
+calendario, «Agendar» solo creaba un bloque nuevo: una tarea no se podía unir con un evento que ya existía, y nada
+escribía `Tarea.reunionHechaId` (0 tareas de clase reunión en producción el 26 oct, 3 tareas agendadas).
+
+- **La lectura personal (H1, la primera entrega de P5).** Las reuniones de puertas adentro de cada persona del piloto
+  (`TAREAS_LECTURA_PERSONAL`, correos separados por coma; por ahora solo egonzalez@smarteamcr.com) que terminaron hace
+  entre 15 minutos y 24 horas se leen solas con la MISMA lectura de siempre (`lib/tareas/lectura.ts`), por el job
+  `tareas-n2-lectura-personal`. Lee como la persona, por el chokepoint (`getReunionesParaTareas`). Como mucho 4 reuniones
+  por pasada, el tope de 10 lecturas por día y el presupuesto automático.
+  - *Solo para ella* (`soloParaElPiloto`): lo que le quedó a ella sale tal cual; lo que le quedó a otra persona del equipo
+    no se le propone a esa persona (el piloto es de una sola) y, si quien lee organizó la reunión, le deja una tarea de
+    REVISIÓN («Revisar con Lidia: …»). Es la tercera puerta de D2: lo dicho puertas adentro deja una tarea para quien la
+    hace y una de revisión para quien la pidió. *Por qué «organizó» y no «pidió»:* las notas de Gemini dicen quién se
+    comprometió, no quién lo pidió; en una reunión interna, quien la convoca es quien reparte. *Pendiente:* medirlo con
+    Elías una semana y ver si la regla sobra o falta. Lo que no tiene dueño («Por asignar») no sale, y tampoco los
+    proyectos sugeridos: el piloto mide tareas sueltas.
+  - *No se queda con la reunión:* la lectura es una por reunión. Si otra persona que estuvo pide «Leer una reunión» de
+    una que leyó la lectura personal, se vuelve a leer como la de siempre, a su nombre (`pedirLectura`): le propone a
+    cada uno lo suyo y lo que ya salió para Elías no se duplica (la misma línea tiene el mismo `origenId`). Al revés, la
+    lectura personal no retoma la lectura de otra persona. *Pendiente:* si esa reunión ya tenía su conversación leída,
+    «¿Faltó algo?» no se vuelve a ofrecer.
+  - *Qué reuniones no:* las que tienen a alguien de afuera (las lee la cola de seguimiento) y las de una serie que ya
+    lee un sprint (la fila de la lectura es una sola por reunión: la lee el sprint). Una reunión interna que nombra a
+    un cliente en el título no le deja tareas a ese cliente: el cliente de cada tarea sale de su propia línea, como
+    siempre en una reunión interna.
+  - *La marca:* una `FuenteDeTareas` sin equipo con la serie `personal:reuniones-internas` (el modelo ya describía la
+    «fuente personal»). La crea el job la primera vez (`asegurarFuentePersonal`); se pausa con `activa = false`, y prender
+    la bandera no la vuelve a prender. Ninguna pantalla del sprint la ve: todas piden `equipo` no nulo.
+  - *Cómo se mide:* `scripts/medir-lectura-personal.ts` (solo lectura): las lecturas personales, lo que propusieron, qué
+    se aceptó, se descartó o venció, y lo que costó. El criterio de H: menos de una de cada tres descartada por ruido.
+  - *Pendiente (H1 etapas 3 y 4):* las reuniones con aliados y las que no tienen dueño; abrirlo al resto del equipo
+    después de la semana de medición.
+- **«Asociar a una tarea» (P3 etapa 1).** En el panel de un evento de la agenda de «Para ti» (una reunión o un evento
+  tuyo), «Asociar a una tarea» busca entre tus tareas abiertas y une la elegida a ese evento
+  (`POST /api/tareas/[id]/agenda` con `asociar`). Nexus lo lee en tu calendario antes de contarlo (404 si no está) y lo
+  guarda como un bloque `asociado`: nunca lo mueve ni lo borra (`quitarBloques` se los salta; una prueba lo vigila), y
+  en el cajón «Quitar el bloque» pasa a ser «Desunir el evento». *El id del evento va en `eventoUnido`, con `eventoId`
+  vacío a propósito:* todo lo que borra eventos mira `eventoId`, así ni un código de antes (un deploy revertido, la otra
+  PC con un main viejo) puede borrar una reunión real con un cliente. *Rentabilidad no cuenta el bloque asociado como
+  tiempo de la tarea* (lib/rentabilidad/horas-de-tareas.ts): esa hora ya cuenta como reunión del calendario. Una tarea, su bloque: si tenía un bloque que creó
+  Nexus y todavía no pasó, el asociado lo reemplaza. Tocar un espacio vacío sigue creando, como siempre. *Por qué no se
+  mueve la semana de la tarea al día del evento:* unir no es replanificar; la persona la mueve si quiere.
+- **La reunión planeada y la que se hizo (P3 etapa 2).** El job `tareas-n2-reunion-hecha` (cada hora, sin IA) une cada
+  tarea de clase «reunion» de los últimos 3 días con la reunión de Meet que la cumplió (`reunionHechaDe`): la del evento
+  elegido con «Ya la agendé» o, si no, la ÚNICA de la misma cuenta que empezó a ±45 minutos con alguno de los
+  invitados. Una de otra cuenta nunca (invariante 1); ante la duda, ninguna. El cajón muestra «La reunión ya se hizo ·
+  Ver lo que dejó». La reunión se lee con IA como cualquier otra: la cola de seguimiento no cambia.
+- *Pendiente de P3:* las fotos de las personas en la tarea y en la agenda (etapa 3) y la vista de calendario de Tareas
+  (la unión vive por ahora en la agenda de «Para ti»).
+- **Quiénes estuvieron (P5 etapa 2).** El «Salió de» de una tarea dice quiénes estuvieron en la reunión: los nombres de
+  la casa y cuántos de afuera («Estuvieron Lidia, Andrés y 2 de afuera»), con la misma regla de la cita (quien no ve la
+  cita no lo ve). Los correos de afuera no salen de la reunión. La sesión, el contexto, el encargado y quién la pidió ya
+  se guardaban y se veían.

@@ -20,7 +20,7 @@ import { datosDeAmbito } from "./ambito-server";
 import { salasDeReuniones } from "@/lib/sessions/reuniones-para-tareas";
 import { proyectoClasificableWhere } from "@/lib/projects/scope";
 import type { ClientesQueVes } from "./clientes";
-import type { ComentarioVista, DatosDelEspacio, DuenoDelVinculo, PermisosDeVinculo, RegistroParaVincular, VinculoVista, EspacioEnLista, GrupoPorCliente, LoQueDelegasteDatos, MisTareasDatos, MovimientoDeTarea, OpcionesDeTareas, PeriodoPorCliente, PersonaDeLaSemana, PorClienteDatos, ProyectoVista, SemanaDelEquipoDatos, TareaDeLaReunion, TareasDeLaCuentaDatos, TareasDelProyectoDatos, TareaVista } from "./tipos";
+import type { ComentarioVista, CrmDelCliente, DatosDelEspacio, DuenoDelVinculo, PermisosDeVinculo, RegistroParaVincular, VinculoVista, EspacioEnLista, GrupoPorCliente, LoQueDelegasteDatos, MisTareasDatos, MovimientoDeTarea, OpcionesDeTareas, PeriodoPorCliente, PersonaDeLaSemana, PorClienteDatos, ProyectoVista, SemanaDelEquipoDatos, TareaDeLaReunion, TareasDeLaCuentaDatos, TareasDelProyectoDatos, TareaVista } from "./tipos";
 import { NOMBRE_DEL_AMBITO, type Ambito } from "./ambito";
 import { metricasDeLaSemana, type MetricasDeLaSemana } from "./metricas";
 import { instanteCR } from "./agenda";
@@ -330,6 +330,7 @@ const NOMBRE_DEL_EVENTO: Record<string, string> = {
   repartida: "Se repartió al activar el plan",
   hubspot: "Cambió en HubSpot",
   a_hubspot: "Lo escribió en HubSpot",
+  reunion_hecha: "Se unió a la reunión que se hizo",
 };
 
 /** Los campos que se sincronizan con HubSpot, dichos para la historia (lib/tareas-hubspot/reglas.ts). */
@@ -373,6 +374,7 @@ function textoDelEvento(
     e.tipo === "asignada" && d.motivo === "baja" ? "pasó a «Por asignar»: su responsable se dio de baja" :
     e.tipo === "pase" && typeof d.texto === "string" ? d.texto :
     e.tipo === "revisada" ? (REVISION[String(d.resultado)] ?? null) :
+    e.tipo === "a_hubspot" && typeof d.creada === "string" ? "la creó también en HubSpot (seguimiento comercial)" :
     (e.tipo === "hubspot" || e.tipo === "a_hubspot") && camposDeHubspot.length ? `${camposDeHubspot.join(", ")}${conflicto}` : null;
   // «Nexus la propuso» solo si la propuso Nexus: la que sugiere una persona dice eso.
   const texto = e.tipo === "propuesta" && e.porEmail !== "agente" ? "La sugirió" : (NOMBRE_DEL_EVENTO[e.tipo] ?? e.tipo);
@@ -707,7 +709,11 @@ export async function cargarProyecto(ctx: ContextoDeTareas, clientes: ClientesQu
 
 /* ── Opciones de los selectores ──────────────────────────────────────────────────── */
 
-export async function cargarOpciones(ctx: ContextoDeTareas, clientes: ClientesQueVes, clientId?: string | null): Promise<OpcionesDeTareas & { proyectosHubspot?: { id: string; nombre: string; interno: boolean }[] }> {
+export async function cargarOpciones(
+  ctx: ContextoDeTareas,
+  clientes: ClientesQueVes,
+  clientId?: string | null,
+): Promise<OpcionesDeTareas & { proyectosHubspot?: { id: string; nombre: string; interno: boolean }[]; crm?: CrmDelCliente }> {
   const proyectos = await prisma.proyectoDeTareas.findMany({
     where: { AND: [proyectosVisiblesWhere(ctx), { estado: { in: ["activo", "en_pausa"] }, archivadoAt: null }, clientId ? { clientId } : {}] },
     select: { id: true, nombre: true, clientId: true, espacio: { select: { nombre: true } } },
@@ -715,10 +721,22 @@ export async function cargarOpciones(ctx: ContextoDeTareas, clientes: ClientesQu
     take: 200,
   });
   let proyectosHubspot: { id: string; nombre: string; interno: boolean }[] | undefined;
+  let crm: CrmDelCliente | undefined;
   if (clientId) {
     if (!clientes.ids.has(clientId)) throw new ErrorDeTareas(404, "No puedes elegir esa empresa.");
-    const ps = await prisma.project.findMany({ where: proyectoClasificableWhere({ clientId }), select: { id: true, name: true, proyectoInterno: true }, orderBy: { name: "asc" } });
+    const [ps, contactos, negocios] = await Promise.all([
+      prisma.project.findMany({ where: proyectoClasificableWhere({ clientId }), select: { id: true, name: true, proyectoInterno: true }, orderBy: { name: "asc" } }),
+      // Los contactos y los negocios de HubSpot de ESE cliente (D4): el seguimiento comercial se asocia a uno de ellos.
+      prisma.contactoDeHubspot.findMany({ where: { clientId, vigente: true }, select: { hubspotId: true, nombre: true, cargo: true, email: true }, orderBy: { nombre: "asc" }, take: 200 }),
+      prisma.negocioAbierto
+        .findMany({ where: { clientId }, select: { hubspotDealId: true, nombre: true, etapaLabel: true }, orderBy: { nombre: "asc" }, take: 100 })
+        .catch(() => []),
+    ]);
     proyectosHubspot = ps.map((p) => ({ id: p.id, nombre: p.name, interno: p.proyectoInterno }));
+    crm = {
+      contactos: contactos.map((c) => ({ id: c.hubspotId, nombre: c.nombre, detalle: c.cargo ?? c.email ?? null })),
+      negocios: negocios.map((n) => ({ id: n.hubspotDealId, nombre: n.nombre, detalle: n.etapaLabel ?? null })),
+    };
   }
   return {
     personas: ctx.miembros.map((m) => ({ email: m.email, nombre: m.nombre, equipo: claveDeEquipo(m.area, m.email) })),
@@ -726,6 +744,7 @@ export async function cargarOpciones(ctx: ContextoDeTareas, clientes: ClientesQu
     equiposConLider: EQUIPOS.filter((e) => lideresDe(e.clave, ctx.miembros).length > 0).map((e) => ({ clave: e.clave, nombre: e.nombre })),
     proyectos: proyectos.map((p) => ({ id: p.id, nombre: p.nombre, espacio: p.espacio.nombre, clientId: p.clientId })),
     ...(proyectosHubspot ? { proyectosHubspot } : {}),
+    ...(crm ? { crm } : {}),
   };
 }
 
@@ -890,4 +909,25 @@ export async function cargarTareasDeLaReunion(ctx: ContextoDeTareas, sessionId: 
       estado: leerEstado(f.estado),
     };
   });
+}
+
+/* ── El evento del calendario y su tarea (P3, 2026-10-27) ─────────────────────────────────────────────────────────── */
+
+/**
+ * Las tareas TUYAS unidas a un evento de tu calendario con «Asociar a una tarea» (el bloque que crea Nexus abre su tarea
+ * directo): la agenda de «Para ti» las muestra en el panel del evento. Solo las tuyas: el calendario es tuyo.
+ */
+export async function tareasDelEvento(ctx: ContextoDeTareas, clientes: ClientesQueVes, eventoId: string, ahora = new Date()): Promise<TareaVista[]> {
+  const filas = await prisma.tarea.findMany({
+    where: {
+      AND: [
+        tareasVisiblesWhere(ctx),
+        { responsableEmail: ctx.email, archivadaAt: null, agendaBloques: { array_contains: [{ eventoUnido: eventoId, calendario: ctx.email }] } },
+      ],
+    },
+    select: SELECT_TAREA,
+    orderBy: { updatedAt: "desc" },
+    take: 5,
+  });
+  return serializarTareas(filas, ctx, clientes, ahora);
 }

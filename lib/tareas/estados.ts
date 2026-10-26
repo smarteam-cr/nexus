@@ -120,6 +120,16 @@ export interface BloqueDeAgenda {
   eventoId: string | null;
   inicio: string;
   fin: string;
+  /**
+   * Un evento que ya existía en el calendario y la persona unió a la tarea (P3, 2026-10-27: «Asociar a una tarea»). No
+   * lo creó Nexus: nunca lo mueve ni lo borra; quitarlo solo lo desune de la tarea.
+   */
+  asociado?: boolean;
+  /**
+   * El id de ese evento. Va aparte y con `eventoId` vacío A PROPÓSITO: todo lo que borra eventos mira `eventoId`, así ni
+   * un código de antes (un deploy revertido, la otra PC) puede borrar una reunión real que se unió a una tarea.
+   */
+  eventoUnido?: string;
 }
 
 /** Lee `agendaBloques` (Json) con tolerancia: lo que no tiene forma de bloque se descarta. */
@@ -127,8 +137,10 @@ export function leerBloques(v: unknown): BloqueDeAgenda[] {
   if (!Array.isArray(v)) return [];
   return v.flatMap((b) => {
     if (!b || typeof b !== "object") return [];
-    const { calendario, eventoId, inicio, fin } = b as Record<string, unknown>;
+    const { calendario, eventoId, inicio, fin, asociado, eventoUnido } = b as Record<string, unknown>;
     if (typeof calendario !== "string" || typeof inicio !== "string" || typeof fin !== "string") return [];
+    // Un evento unido nunca lleva `eventoId`, aunque el dato venga con uno.
+    if (asociado === true) return [{ calendario, eventoId: null, inicio, fin, asociado: true, ...(typeof eventoUnido === "string" ? { eventoUnido } : {}) }];
     return [{ calendario, eventoId: typeof eventoId === "string" ? eventoId : null, inicio, fin }];
   });
 }
