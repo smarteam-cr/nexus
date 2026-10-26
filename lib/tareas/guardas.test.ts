@@ -235,6 +235,8 @@ describe("⛔ Tareas internas: quién las lee (censo)", () => {
       "components/para-ti/inicio/PanelDeLaReunion.tsx": "«Bloquear en Calendar» del espacio libre: solo el título del bloque (titulo-corto.ts, puro); no lee tareas",
       "components/para-ti/inicio/PendientesDelPanel.tsx": "lo pendiente con la cuenta en el panel de la reunión: el tipo de /api/tareas/del-cliente y el título del bloque (titulo-corto.ts); no consulta, los cambios van por las rutas de Tareas",
       "app/api/para-ti/ya-la-agende/route.ts": "«Ya la agendé»: deja la reunión elegida del calendario como reunión planeada por el único escritor (planearReunion); no lee tareas",
+      // La lista de construcción de la Planificación (L4 etapa 5, 2026-10-27).
+      "app/api/projects/[projectId]/planificacion/construccion/route.ts": "la lista de construcción de la Planificación a Tareas: crea UNA tarea por grupo por el escritor único (crearTarea, origen «plantilla», con origenId por grupo) y lee solo el número y el estado de esas tareas por su origenId",
       "lib/tareas-hubspot/sync-server.ts": "la copia de las tareas de HubSpot: escribe Tareas SOLO por el escritor único (crearTareaDeHubspot, aplicarDesdeHubspot, anotarSincronizacionConHubspot); lo que va a HubSpot lo escribe acá, nunca lib/tareas",
     };
     const afuera = TODO.filter((rel) => !/^(lib\/tareas|components\/tareas|app\/api\/tareas|app\/\(shell\)\/tareas)\//.test(rel)).filter((rel) => /@\/lib\/tareas\//.test(soloCodigo(leer(rel))));

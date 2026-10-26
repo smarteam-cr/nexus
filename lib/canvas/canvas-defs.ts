@@ -226,6 +226,9 @@ export const DEFAULT_PROJECT_CANVASES: CanvasDefinition[] = [
       { key: "punto_de_partida", label: "Desde dónde arrancamos" },
       { key: "horarios",       label: "Sesiones y horarios",       defaultData: { intro: "", options: [], sessions: [] } },
       { key: "canales",        label: "Canales de atención",       defaultData: { ...KICKOFF_CANALES_DEFAULT } },
+      // 2026-10-27 (Q1): las listas de HubSpot Academy por rol. Curada, sin `defaultData`: nace sin bloque y no se ve
+      // hasta que el CSE suma listas del catálogo.
+      { key: "ruta_academy",   label: "Tu ruta en HubSpot Academy" },
       // Cronograma y procesos NO llevan bloque: su contenido sale de ProjectTimeline y de
       // los flowcharts del cliente (`ctxDriven` en kickoff.defs). Existen como CanvasSection
       // solo para tener un `order` propio → el CSE puede arrastrarlas como a cualquier otra.

@@ -7,6 +7,7 @@ import { cuerpoInvalido } from "@/lib/api/cuerpo-invalido";
 import { datosDelBloqueRestaurado } from "@/lib/canvas/restaurar-bloque";
 import { restaurarBloqueSchema } from "@/lib/canvas/restaurar-bloque-schema";
 import { z } from "zod";
+import { esSeccionDelCliente, reconciliarConElCliente } from "@/lib/planificacion/lo-del-cliente";
 
 type Params = Promise<{ projectId: string; sectionId: string }>;
 
@@ -45,13 +46,13 @@ const jsonInput = (v: Prisma.JsonValue | null | undefined): Prisma.InputJsonValu
    URL, y sin este cruce alguien con acceso a un proyecto podía crear, editar o borrar bloques de una
    sección de otro pasando su id (la ruta hermana de secciones ya lo cruzaba). Devuelve además el nombre
    del canvas, para gatear la edición del «Handoff». */
-async function seccionDelProyecto(sectionId: string, projectId: string): Promise<{ canvasName: string } | null> {
+async function seccionDelProyecto(sectionId: string, projectId: string): Promise<{ canvasName: string; key: string; slug: string | null } | null> {
   const s = await prisma.canvasSection.findUnique({
     where: { id: sectionId },
-    select: { canvas: { select: { name: true, projectId: true } } },
+    select: { key: true, canvas: { select: { name: true, projectId: true, slug: true } } },
   });
   if (!s || s.canvas.projectId !== projectId) return null;
-  return { canvasName: s.canvas.name };
+  return { canvasName: s.canvas.name, key: s.key, slug: s.canvas.slug };
 }
 
 // POST: create a block manually — o, con `restaurar`, devolver uno borrado como estaba (deshacer)
@@ -180,6 +181,24 @@ export async function PUT(req: NextRequest, { params }: { params: Params }) {
   // status (aceptar/rechazar) NO tocan source.
   if (("content" in body || "data" in body) && block.source === "AGENT") {
     updateData.source = "MODIFIED";
+  }
+
+  /* L4 etapa 6 (2026-10-27): una sección de la Planificación que el CLIENTE llena en su enlace puede haber cambiado desde
+     que el editor del CSE la cargó. Se reconcilia acá, contra lo guardado y bajo el mismo candado que usa la escritura
+     del cliente (app/external/planificacion/actions.ts): lo que el cliente sumó o corrigió no se pisa con una versión
+     vieja, y lo que quitó no vuelve. La regla, pura: lib/planificacion/lo-del-cliente.ts › reconciliarConElCliente. */
+  if ("data" in body && seccion.slug === "planning" && esSeccionDelCliente(seccion.key)) {
+    const key = seccion.key;
+    const updated = await prisma.$transaction(async (tx) => {
+      const vigente = await tx.$queryRaw<Array<{ data: unknown }>>`SELECT data FROM "CanvasBlock" WHERE id = ${body.blockId} FOR UPDATE`;
+      const datos = reconciliarConElCliente(vigente[0]?.data ?? null, body.data, key);
+      return tx.canvasBlock.update({
+        where: { id: body.blockId },
+        data: { ...updateData, data: jsonInput(datos as Prisma.JsonValue | null | undefined) },
+      });
+    });
+    await touchCanvasContent(sectionId);
+    return NextResponse.json(updated);
   }
 
   const updated = await prisma.canvasBlock.update({

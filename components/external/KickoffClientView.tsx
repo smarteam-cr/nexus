@@ -73,6 +73,8 @@ export default function KickoffClientView({
             platformLogos: data.platformLogos,
             // Única escritura habilitada para el cliente: elegir su franja horaria.
             onAssignSession,
+            // La tarjeta del acceso al portal dice «gracias» apenas el equipo lo marca (Q2).
+            accesoAlPortal: { dadoEn: data.accesoAlPortalDadoEn ?? null },
           },
         }}
         sections={sections}

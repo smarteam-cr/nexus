@@ -6,7 +6,8 @@
  * `getPlanificacionForToken`, que re-chequea el acceso —y que sea ESE acceso— y exige
  * `planificacionPublishedAt != null` en CADA render — despublicar corta al instante.
  *
- * Read-only. `force-dynamic`: lee cookies por request.
+ * Lectura, salvo las secciones que el CSE le abrió al cliente (L4 etapa 6, 2026-10-27): ahí escribe por la server action
+ * `guardarLoDelClienteAction`, atada a ESTE acceso. `force-dynamic`: lee cookies por request.
  */
 import type { Metadata } from "next";
 import PlanificacionClientView from "@/components/external/PlanificacionClientView";
@@ -22,6 +23,7 @@ import {
   tituloDeLaPestana,
 } from "@/lib/external/selector-de-proyectos";
 import { getSmarteamLogoUrl } from "@/lib/external/smarteam-logo";
+import { guardarLoDelClienteAction } from "../actions";
 
 export const dynamic = "force-dynamic";
 
@@ -56,7 +58,7 @@ export default async function ExternalPlanificacionPage({ params }: Props) {
       }
     >
       {data ? (
-        <PlanificacionClientView data={data} />
+        <PlanificacionClientView data={data} guardar={guardarLoDelClienteAction.bind(null, acceso)} />
       ) : (
         // Sin callejón: si el navegador tiene otros proyectos abiertos, se ofrece elegirlos.
         <NoAccess elegirHref={hayProyectosAbiertos(accesos, "planificacion") ? "/external/planificacion" : undefined} />

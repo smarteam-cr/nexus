@@ -71,6 +71,26 @@ export const SECCIONES_DEL_KICKOFF_RECURRENTE = [
   "solicitudes",
   "punto_de_partida",
   "canales",
+  // 2026-10-27 (Q1): la ruta de HubSpot Academy, como en el kickoff de siempre.
+  "ruta_academy",
+  "cierre",
+] as const;
+
+/**
+ * La «Planificación esencial» (I2 del roadmap, L4 etapa 7, 2026-10-27, docs/planificacion-brief-plan.md): lo que el equipo
+ * necesita para configurar el portal, en el orden del canon. La portada y la aprobación van siempre. Ninguna recomendada:
+ * el plan no la eligió, así que el selector propone la de siempre (la completa).
+ */
+export const PLANTILLA_DE_LA_PLANIFICACION_ESENCIAL = "planificacion-esencial";
+export const SECCIONES_DE_LA_PLANIFICACION_ESENCIAL = [
+  "planificacion",
+  "ficha_proyecto",
+  "usuarios_permisos",
+  "ciclo_vida_crm",
+  "propiedades",
+  "formularios",
+  "pipelines",
+  "automatizaciones",
   "cierre",
 ] as const;
 
@@ -121,7 +141,22 @@ export const ENTREGABLES: readonly Entregable[] = [
   {
     slug: "planning",
     agentId: "agent-planificacion-canvas",
-    plantillas: [{ id: "planificacion", nombre: "Planificación", paraQue: "Lo que va a quedar configurado en HubSpot: procesos, propiedades, pipelines, automatizaciones y conversaciones." }],
+    plantillas: [
+      // 2026-10-27 (I2 · L4 etapa 7): el id de siempre es la completa; un documento sin plantilla anotada la tiene.
+      {
+        id: "planificacion",
+        nombre: "Planificación completa",
+        paraQue:
+          "Todo lo que va a quedar configurado en HubSpot: además de lo esencial, cómo van a funcionar los procesos, la arquitectura, por dónde entran los leads, las conversaciones, las cotizaciones, los informes, las rutinas y las olas.",
+      },
+      {
+        id: PLANTILLA_DE_LA_PLANIFICACION_ESENCIAL,
+        nombre: "Planificación esencial",
+        paraQue:
+          "Lo justo para configurar el portal: la ficha del proyecto, los usuarios y sus permisos, el ciclo de vida y el estado del lead, las propiedades, los pipelines, los formularios y las automatizaciones.",
+        secciones: SECCIONES_DE_LA_PLANIFICACION_ESENCIAL,
+      },
+    ],
   },
   {
     slug: "tech-requirements",

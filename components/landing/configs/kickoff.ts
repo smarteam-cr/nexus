@@ -21,6 +21,7 @@ import {
   KickoffCtaSection,
 } from "@/components/canvas/kickoff-sections/KickoffSections";
 import { EscalaPosicionSection } from "../sections-escala";
+import { TuRolSection, RutaDeAcademySection } from "@/components/canvas/kickoff-sections/AccesoYAcademy";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const KICKOFF_SECTION_COMPONENTS: Record<string, FC<SectionProps<any>>> = {
@@ -38,6 +39,9 @@ export const KICKOFF_SECTION_COMPONENTS: Record<string, FC<SectionProps<any>>> =
   kickoff_timeline: KickoffTimelineSection,
   kickoff_procesos: KickoffProcesosSection,
   kickoff_cta: KickoffCtaSection,
+  // 2026-10-27 (Q): «Lo que necesitamos de tu equipo» con la tarjeta del acceso al portal, y la ruta de Academy.
+  kickoff_tu_rol: TuRolSection,
+  kickoff_academy: RutaDeAcademySection,
 };
 
 const KICKOFF_LANDING_CONFIG: LandingConfig = {

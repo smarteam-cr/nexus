@@ -61,8 +61,10 @@ describe("una sola forma de prosa, y con subtítulo para el chat", () => {
        fortalezas y quiénes participan) y Planificación su política rectora, todas con la MISMA
        constante. 24 desde el 2026-10-02: las etapas del ciclo de vida de la Planificación pasaron
        a tabla (`ciclo_vida_tabla`). 28 desde el 2026-10-24: el kickoff de un servicio recurrente suma cuatro (cómo
-       trabajamos cada ciclo, el primer ciclo, la cadencia y cómo nos pides cosas), con la misma constante. */
-    expect(PROSA.length, "se movió el sectionType de las secciones de prosa").toBe(28);
+       trabajamos cada ciclo, el primer ciclo, la cadencia y cómo nos pides cosas), con la misma constante. 27 desde el
+       2026-10-27 (Q2): «Lo que necesitamos de tu equipo» pasó a `kickoff_tu_rol` (la prosa con la tarjeta fija del acceso
+       al portal arriba); su esquema sigue siendo la misma constante. */
+    expect(PROSA.length, "se movió el sectionType de las secciones de prosa").toBe(27);
   });
 
   it("⭐ las VEINTE comparten la MISMA constante — cero copias inline", () => {

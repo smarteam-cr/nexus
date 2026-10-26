@@ -29,6 +29,7 @@ import { CARTERA_DEL_DIA, CUENTAS_SIN_ACCION } from "./fuentes/servicio";
 import { COMPROMISOS_SIN_AGENDAR, COMPROMISOS_SIN_AGENDAR_CS } from "./fuentes/compromisos";
 import { RECURRENCIA_SUGERIDA } from "./fuentes/recurrencia";
 import { LIMPIEZA_DE_HUBSPOT } from "./fuentes/limpieza";
+import { ACCESO_AL_PORTAL } from "./fuentes/acceso-al-portal";
 import {
   COMENTARIOS_DE_LA_DOCUMENTACION,
   COMENTARIOS_DE_LA_ESCALA,
@@ -58,6 +59,7 @@ export const FUENTES: readonly Fuente[] = [
   COMPROMISOS_SIN_AGENDAR,
   RECURRENCIA_SUGERIDA,
   LIMPIEZA_DE_HUBSPOT,
+  ACCESO_AL_PORTAL,
   // Por frente: lo que es tuyo porque lo llevas.
   VIGIA,
   RELACIONES_DE_LA_CARTERA,

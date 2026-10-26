@@ -12,6 +12,7 @@
  * hace cumplir (los permisos no se contradicen). Lo usan las secciones y las pruebas.
  */
 import { nuevoIdDeFila, normalizarObjeto, type FilaPropiedad } from "./propiedades";
+import { elClienteEdita } from "./lo-del-cliente";
 
 const txt = (v: unknown): string => (typeof v === "string" ? v : "");
 const arr = <T>(v: unknown): T[] => (Array.isArray(v) ? (v.filter((x) => x && typeof x === "object") as T[]) : []);
@@ -390,15 +391,20 @@ export const canalVisible = (c: CanalDeEntrada) => lleno(c.canal);
 export const formularioVisible = (f: Formulario) => lleno(f.nombre) || f.campos.some((c) => lleno(c.etiqueta));
 export const informeVisible = (i: Informe) => lleno(i.nombre);
 
+/* En el enlace, una sección abierta al cliente nunca está vacía (L4 etapa 6): tiene que ver dónde escribir. La marca la
+   pone solo la vista del enlace (lib/planificacion/lo-del-cliente.ts); el PDF y el editor no la tienen. */
 export function fichaVacia(data: unknown): boolean {
+  if (elClienteEdita(data)) return false;
   const d = adoptarFichaDelProyecto(data);
   return !lleno(d.intro) && !lleno(d.alcance) && !lleno(d.consideraciones) && !d.hubs.some(hubVisible) && !d.participantes.some(participanteVisible);
 }
 export function usuariosVacia(data: unknown): boolean {
+  if (elClienteEdita(data)) return false;
   const d = adoptarUsuariosPermisos(data);
   return !lleno(d.intro) && !d.equipos.some(equipoVisible) && !d.usuarios.some(usuarioVisible);
 }
 export function canalesVacia(data: unknown): boolean {
+  if (elClienteEdita(data)) return false;
   const d = adoptarCanales(data);
   return !lleno(d.intro) && !d.canales.some(canalVisible);
 }
@@ -413,4 +419,53 @@ export function cotizacionesVacia(data: unknown): boolean {
 export function informesVacia(data: unknown): boolean {
   const d = adoptarInformes(data);
   return !lleno(d.intro) && !d.items.some(informeVisible);
+}
+
+/* ── Lo que la Planificación lee de afuera (2026-10-27, L4 etapa 5 «si cabe») ──────────────────────────────────
+   Solo el EDITOR: los asientos que la empresa tiene comprados vienen de HubSpot Partner (interno: nunca van a un
+   documento del cliente), y las fechas, del Cronograma (que el cliente ve en su propio enlace). */
+
+/** El tipo de asiento de HubSpot que pide una licencia escrita a mano («Sales Hub Pro» → sales). */
+export function asientoDeLaLicencia(licencia: unknown): "sales" | "service" | "core" | null {
+  const t = txt(licencia).toLowerCase();
+  if (!t.trim()) return null;
+  if (/sales|ventas/.test(t)) return "sales";
+  if (/service|servicio/.test(t)) return "service";
+  if (/core|b[aá]sic/.test(t)) return "core";
+  return null;
+}
+
+const NOMBRE_DEL_ASIENTO = { sales: "Sales Hub", service: "Service Hub", core: "Core" } as const;
+
+export type AsientosComprados = Partial<Record<"sales" | "service" | "core", { limit?: number | null } | null>>;
+
+/**
+ * La cuenta de licencias contra lo comprado: por tipo de asiento, cuántos usuarios de la planificación lo piden y
+ * cuántos tiene comprados la empresa en HubSpot. Avisa solo cuando se planificaron más de los que hay.
+ */
+export function licenciasContraLoComprado(
+  usuarios: readonly UsuarioDeHubspot[],
+  asientos: AsientosComprados | null | undefined,
+): { filas: Array<{ asiento: string; planificados: number; comprados: number | null }>; avisos: string[] } {
+  const cuenta = new Map<"sales" | "service" | "core", number>();
+  for (const u of usuarios.filter(usuarioVisible)) {
+    const a = asientoDeLaLicencia(u.licencia);
+    if (a) cuenta.set(a, (cuenta.get(a) ?? 0) + 1);
+  }
+  const tipos = (["sales", "service", "core"] as const).filter((t) => cuenta.has(t) || asientos?.[t]?.limit != null);
+  const filas = tipos.map((t) => ({ asiento: NOMBRE_DEL_ASIENTO[t], planificados: cuenta.get(t) ?? 0, comprados: asientos?.[t]?.limit ?? null }));
+  const avisos = filas
+    .filter((f) => f.comprados != null && f.planificados > f.comprados)
+    .map((f) => `Planificaste ${f.planificados} ${f.planificados === 1 ? "asiento" : "asientos"} de ${f.asiento}; en HubSpot hay ${f.comprados} ${f.comprados === 1 ? "comprado" : "comprados"}.`);
+  return { filas, avisos };
+}
+
+/** Las fechas del proyecto desde el Cronograma: el arranque y el cierre estimado (arranque + semanas). */
+export function fechasDelCronograma(c: { arranqueISO: string | null; semanas: number | null } | null | undefined): { inicio: string | null; cierre: string | null } {
+  const inicio = c?.arranqueISO ?? null;
+  if (!inicio || !c?.semanas) return { inicio, cierre: null };
+  const d = new Date(inicio);
+  if (Number.isNaN(d.getTime())) return { inicio: null, cierre: null };
+  d.setUTCDate(d.getUTCDate() + c.semanas * 7);
+  return { inicio, cierre: d.toISOString().slice(0, 10) };
 }

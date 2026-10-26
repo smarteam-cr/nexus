@@ -72,7 +72,9 @@ describe("⭐ todo documento que la IA reescribe guarda la foto ANTES de escribi
     const ajuste = src.slice(src.indexOf("async function ajustarALaPlantilla"), src.indexOf("async function ponerAlDiaLosRotulos"));
     expect(ajuste).toContain("canvasSection.deleteMany");
     expect(ajuste).toContain("_count.blocks === 0");
-    expect(ajuste).toContain("DIAGNOSTICO_CANVAS.sections");
+    // El canon es el del diagnóstico salvo que quien llama pase otro (la Planificación desde el 2026-10-27, I2).
+    expect(ajuste).toContain("canon: CanvasDefinition = DIAGNOSTICO_CANVAS");
+    expect(ajuste).toContain("canon.sections");
     // Desde el 2026-10-02 lo hace un ayudante compartido con Planificación y Ejecución.
     expect(src).toContain("ocultarSeccionesRetiradas(");
     const ayudante = leer("lib/canvas/retirar-secciones.ts").replace(/\/\*[\s\S]*?\*\//g, "");

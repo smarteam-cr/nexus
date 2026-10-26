@@ -38,6 +38,7 @@ import {
 } from "./shared-sections.defs";
 import { PLANIFICACION_CIERRE_DEFAULT } from "@/lib/canvas/canvas-defs";
 import { heroTitleBrief } from "@/lib/landing/hero-title";
+import { SECCIONES_DE_LA_PLANIFICACION_ESENCIAL } from "@/lib/entregables/registro";
 import {
   fichaVacia,
   usuariosVacia,
@@ -551,6 +552,25 @@ export const PLANIFICACION_TEMPLATE: BcTemplateDef = {
     "DISCIPLINA ANTI-ALUCINACIÓN: NUNCA inventes sistemas, integraciones, personas, nombres internos de propiedades ni procesos. Lo no definido va con `⚠️ Por definir` (en `falta` donde exista) y `pending: 'si'` en la arquitectura. Si el contexto es delgado, el plan sale más corto — corto y cierto gana a largo e inventado.\n\n" +
     "FORMATO: cada sección tiene su PROPIO shape (su `schema` y su guía) — NO es prosa libre. Las líneas, cortas. Español, tuteo. Arrays vacíos donde no haya respaldo.",
   sections: PLANIFICACION_SECTION_DEFS,
+};
+
+/**
+ * La «Planificación esencial» (I2, L4 etapa 7, 2026-10-27): el mismo agente con las secciones de
+ * `SECCIONES_DE_LA_PLANIFICACION_ESENCIAL` (lib/entregables/registro.ts). De esas, el agente escribe la portada, el ciclo
+ * de vida, las propiedades, los pipelines y las automatizaciones; la ficha, los usuarios y los formularios son curados.
+ * Las defs son las mismas: cambiar de plantilla no cambia cómo se ve ni cómo se edita.
+ */
+const ESENCIAL = new Set<string>(SECCIONES_DE_LA_PLANIFICACION_ESENCIAL);
+export const PLANIFICACION_ESENCIAL_TEMPLATE: BcTemplateDef = {
+  ...PLANIFICACION_TEMPLATE,
+  id: "planificacion_esencial_v1",
+  caseLabel: "Planificación esencial",
+  // Cinco secciones generadas en vez de diez.
+  maxTokens: 14000,
+  agentIntro:
+    PLANIFICACION_TEMPLATE.agentIntro +
+    "\n\nESTA ES LA VERSIÓN ESENCIAL: lo justo para configurar el portal. Escribe SOLO las secciones de tu formato (no hay procesos, arquitectura, conversaciones, rutinas ni olas): la portada, las etapas del ciclo de vida, las propiedades, los pipelines y las automatizaciones. Prefiere lo acordado y lo que un pipeline o un formulario necesita para funcionar; lo demás queda para la completa.",
+  sections: PLANIFICACION_SECTION_DEFS.filter((d) => ESENCIAL.has(d.key)),
 };
 
 /** Lookup key → def. */

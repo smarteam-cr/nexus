@@ -2,9 +2,11 @@
 
 > Escrito el 2026-10-24 contra el código y contra la hoja «BRIEF DE IMPLEMENTACIÓN» de Smarteam (Google Sheets, 20
 > pestañas). **Construido el 2026-10-25 (rama `claude/planificacion-brief`): etapas 1 a 4 y, de la 5, la plantilla
-> de importación** (DECISIONS «La Planificación con lo que pide el Brief de implementación»). Pendiente: el resto de la
-> 5 (estado y enlace por cosa construida, la lista de construcción en Tareas), la 6, la 7, la cuenta de licencias contra
-> lo vendido y las fechas leídas del Cronograma. Amplía L4 («La Planificación como el siguiente entregable») e I2 («Dos plantillas de
+> de importación** (DECISIONS «La Planificación con lo que pide el Brief de implementación»). **El 2026-10-27 (rama
+> `claude/n2-kickoff-planificacion`), el resto: la 5 (estado y enlace por cosa, la lista de construcción en Tareas), la 6
+> (el cliente llena usuarios, canales y sus personas en el enlace), la 7 (completa y esencial), la cuenta de licencias
+> contra lo comprado y las fechas del Cronograma en la ficha** (DECISIONS «El kickoff, la Planificación y los documentos
+> de la empresa»). Amplía L4 («La Planificación como el siguiente entregable») e I2 («Dos plantillas de
 > Planificación») del roadmap, y trae al frente «Las tareas que salen de la Planificación», que estaba en «Más
 > adelante».
 

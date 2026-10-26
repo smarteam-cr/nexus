@@ -11559,3 +11559,90 @@ protección de las propiedades vive en el editor: restaurar una versión o escri
 cuenta de licencias no se compara todavía con lo vendido, las fechas de la ficha no se leen del Cronograma (se dice que
 viven ahí), y las etapas 5 a 7 del plan (estado y enlace por cosa
 construida, lista de construcción en Tareas, que el cliente edite en el enlace, las dos plantillas) siguen pendientes.
+
+## El kickoff, la Planificación y los documentos de la empresa (2026-10-27, noche 2 pieza 5: Q, L4 etapas 5 a 7, R3 etapas 2 y 3)
+
+> Aprobado por Elías el 26 oct como la pieza 5 de la noche 2. Planes: `docs/kickoff-mejoras-plan.md` (Q),
+> `docs/planificacion-brief-plan.md` (L4) y `docs/arquitectura-empresa-plan.md` (R3). SQL:
+> `scripts/sql/2026-10-27-kickoff-planificacion.sql` (aditivo, se corre dos veces, RLS en las tablas nuevas). INV64.
+
+**Q · El kickoff: HubSpot Academy y el acceso al portal.**
+- **Q1 · La ruta de HubSpot Academy.** Un catálogo de listas (`ListaDeAcademy`: nombre, enlace https, hub, rol, duración)
+  que mantienen la CSL y dirección en Éxito del cliente › HubSpot Academy (`/customer-success/academy`); el resto del
+  equipo lo consulta. Nace VACÍO: no se inventaron enlaces de Academy. El kickoff suma «Tu ruta en HubSpot Academy»
+  (`ruta_academy`, curada, después de los canales, también en el kickoff del servicio): Nexus SUGIERE las listas de los
+  hubs vendidos (las etiquetas del proyecto) y de los roles que piden (líderes siempre; Ventas con Sales Hub, Marketing con
+  Marketing Hub, Servicio con Service Hub; regla en `lib/kickoff/academy.ts`), sin IA, y el CSE suma o quita. El kickoff
+  guarda una COPIA de cada lista, no un puntero: archivar una del catálogo no cambia un kickoff publicado. Un kickoff de
+  antes no gana la sección al abrirse (no se le cambia el documento a uno publicado sin que nadie lo decida): el editor
+  ofrece «Sumar la sección».
+- **Q2 etapa 1 · La tarjeta fija.** «Lo que necesitamos de tu equipo» pasó a `kickoff_tu_rol`: la prosa de siempre con la
+  tarjeta del acceso al portal ARRIBA, pintada por la sección (no depende del agente). Va en todo kickoff que la TIENE
+  (`tu_rol.acceso`, fuera del esquema): los que se generan desde hoy, o uno viejo donde el CSE la sumó. Así un cliente que
+  dio el acceso hace meses no ve un pedido nuevo al día siguiente del deploy. El CSE ajusta a quién invitar, con qué
+  permisos y para cuándo; el texto de los pasos vive en `lib/kickoff/acceso-al-portal.ts` y **está por revisar con
+  Elías** (lo pide el plan). El brief del agente dice que no repita el acceso como tarjeta.
+- **Q2 etapa 2 · El estado.** `Project.accesoAlPortalDadoEn` (+ quién lo marcó), a mano desde la franja del editor del
+  kickoff. Es VIVO como los horarios: la tarjeta del cliente dice «gracias» apenas se marca. «Para ti» se lo recuerda al
+  encargado (`acceso-al-portal`) cuando el kickoff está publicado CON la tarjeta y el acceso pendiente; pasados 10 días
+  hábiles sube a «hoy» (el criterio de éxito). Los días cuentan desde la tarjeta (`acceso.desde`), no desde
+  `kickoffPublishedAt`, que se mueve con cada «Subir»; un kickoff sin la tarjeta no avisa. El editor dice en cuántos días
+  hábiles se dio.
+
+**L4 · La Planificación, etapas 5 a 7.**
+- **Etapa 7 (es I2) · Dos plantillas.** La de siempre (`planificacion`) es la COMPLETA; la «Planificación esencial»
+  (`planificacion-esencial`) tiene la portada, la ficha, usuarios y permisos, el ciclo de vida, las propiedades, los
+  formularios, los pipelines, las automatizaciones y la aprobación. Mismo mecanismo que el diagnóstico (`__plantilla`, el
+  selector antes de generar, «Escribirlo yo», lo de la otra plantilla oculto si tiene algo). `ajustarALaPlantilla` recibe
+  su canon (antes era solo el del diagnóstico). Ninguna recomendada: el plan no eligió (pendiente para Elías). Un documento
+  viejo, sin plantilla anotada, es la completa: no cambia.
+- **Etapa 5 · De planificado a construido.** Cada cosa que se construye (equipos, usuarios, el ciclo de vida, propiedades
+  nuevas o por ajustar, formularios, pipelines, automatizaciones, conversaciones, cotizaciones, informes) lleva su estado
+  y su enlace a HubSpot en `construccion` de su sección (fuera del esquema: regenerar, «Mejorar con IA» y el chat lo
+  conservan). Sin SQL, como pide el plan. La «Lista de construcción» es una franja del editor (no va al cliente ni al
+  PDF) que agrupa como va a Tareas: una tarea por objeto con sus propiedades, una por pipeline, por formulario…; cada
+  grupo se manda con `crearTarea` (la función pública de Tareas, sin cambiarle la firma), para quien la pide, en el
+  proyecto y sin semana, con `origenId = planificacion:<documento>:<grupo>`: mandarla dos veces no la duplica. La clave de
+  una cosa sin `id` es su nombre: renombrar un pipeline le pierde la marca.
+- **Etapa 6 · El cliente llena su parte en el enlace.** Tres secciones y en cada una solo su lista: los usuarios (no los
+  equipos ni la matriz de permisos), los canales de entrada, y las personas del lado del cliente en la ficha. Se abren
+  UNA POR UNA: el CSE marca «El cliente puede llenarla en el enlace» (`clienteLaLlena`); ninguna nace abierta. En el
+  enlace, una sección abierta se lee EN VIVO (no de la foto) con un panel para agregar, editar y quitar lo suyo; escribe
+  por una server action (`app/external/planificacion/actions.ts`: el acceso de la página, la Planificación publicada, el
+  límite de escrituras, la sección abierta en la base, `FOR UPDATE` del bloque) y la regla pura
+  (`lib/planificacion/lo-del-cliente.ts`): solo los campos permitidos, lo nuevo con `autor: "cliente"`, todo lo que toca
+  `porRevisar` hasta que el CSE lo marca revisado, y solo quita lo que escribió él (y lo que quita queda anotado). La
+  escritura del CSE sobre una sección abierta se RECONCILIA EN EL SERVIDOR, en la ruta de los bloques y bajo el mismo
+  `FOR UPDATE` (`reconciliarConElCliente`): una fila que el cliente tocó y que el editor trae con otra marca de tiempo es
+  una versión vieja y queda la del cliente; una fila suya que el editor no conocía se agrega; lo que el cliente quitó no
+  vuelve; lo que el CSE quitó en esa escritura (el editor lo anota, sin red) no vuelve. Antes el editor consultaba la base
+  antes de guardar y un segundo cambio seguido pisaba al primero (lo encontró la revisión). El editor también recupera
+  las marcas de fuera (`conservarMarcas`): los editores de cada sección guardan solo sus campos y las perdían. Lo que el
+  cliente escribió y nadie revisó no entra a la lista de construcción.
+- **Si cabía:** la cuenta de licencias contra lo comprado en HubSpot (los asientos de Partner: Sales, Service, Core; solo
+  el editor, porque lo comprado es interno) y las fechas de la ficha leídas del Cronograma (arranque y cierre estimado;
+  solo el editor: el cliente las ve en su cronograma).
+
+**R3 etapas 2 y 3 · Los documentos de la empresa, sin proyecto.**
+- **Etapa 2 · Un diagnóstico de la empresa.** En la ficha, «📄 Documentos de la empresa» (`/clients/[id]/documentos`):
+  armar el diagnóstico (esencial por defecto, o completo) de una empresa sin proyecto, para un prospecto por ejemplo. Uno
+  por pieza y empresa. Se escribe A MANO: generar y «Mejorar con IA» leen el handoff y las reuniones de un proyecto, y un
+  prospecto no los tiene (pendiente: generarlo desde la preventa). El documento de resultados de la preventa (C5) espera
+  el formato que define Ventas.
+- **Etapa 3 · Las rutas y la vista de la empresa.** El editor usa el mismo motor y el mismo adaptador que el diagnóstico de
+  un proyecto, por rutas propias (`/api/clients/[id]/documentos/[canvasId]/…`) con UNA puerta
+  (`lib/clients/documento-de-la-empresa-guard.ts`: acceso a la empresa y un documento de ESA empresa sin proyecto ni
+  propuesta). Se comparte con un enlace propio (`AccesoAlDocumento`, `/external/documento/[token]`), como la propuesta: la
+  URL es el secreto, sin contraseña. La vista sirve la FOTO publicada con lo oculto filtrado en vivo; publicar otra vez la
+  actualiza y conserva el enlace; dejar de compartir lo revoca; volver a compartir crea uno NUEVO. **INV64** vigila que
+  ningún enlace vigente abra un documento de otra empresa, ni uno de un proyecto o una propuesta. Al fusionar dos fichas
+  el enlace se muda con su documento. Quien ve la ficha edita y comparte sus documentos, sin una celda propia: es la
+  misma vara que los documentos de un proyecto (acceso al proyecto); si hace falta una celda, se decide aparte.
+
+*Lo que no garantiza esta tanda:* nada se probó con sesión en el navegador (el preview no está logueado): la prueba es de
+Elías o del equipo. El texto de la tarjeta del acceso no lo revisó Elías. El catálogo de Academy está vacío hasta que la
+CSL lo llene. La etapa 6 se probó con su regla pura y la server action no tiene prueba de integración (el enlace exige las
+cookies del acceso): la frontera la sostienen `puedeEscribirElCliente` y `aplicarLoDelCliente`, con su prueba. El deshacer
+de un nivel del editor (`undo`) no pasa por la reconciliación: deshacer justo después de que el cliente escribió puede
+devolver la versión anterior. Si el CSE quita una fila que el cliente corrigió después de que él la vio, gana el CSE.
+El diagnóstico de la empresa no tiene PDF ni presentación ni aprobación, y no se genera con IA.

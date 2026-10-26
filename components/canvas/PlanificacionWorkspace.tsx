@@ -7,8 +7,9 @@
  * el CRM) sobre el motor `LandingView`. Su agente se dispara desde el HEADER del canvas
  * (`CANVAS_PRIMARY_AGENT`, asíncrono: la corrida se ve en el centro de corridas).
  *
- * Documento de TRABAJO interno (paleta `stl-internal`): se presenta y discute con el
- * cliente en sesión, pero no tiene superficie externa propia.
+ * Documento de TRABAJO (paleta `stl-internal`): se presenta y discute con el cliente en sesión y se
+ * le comparte por enlace (publish-planificacion). Desde el 2026-10-27 el cliente llena ahí las secciones
+ * que el CSE le abre (lib/planificacion/lo-del-cliente.ts).
  */
 import { useEjecutarOperacionesDelChat } from "@/components/asistente/ejecutar-operaciones";
 import { rotuloVigente, PLANIFICACION_CANVAS } from "@/lib/canvas/canvas-defs";
@@ -23,6 +24,13 @@ import { useCanvasSections } from "./useCanvasSections";
 import { buildPlanificacionConfig, buildPlanificacionSections } from "./planificacion-landing-adapter";
 import DocumentAssist from "@/components/ai/DocumentAssist";
 import { conservarLoDeFuera, type FilaPropiedad } from "@/lib/planificacion/propiedades";
+import ElegirPlantilla from "./ElegirPlantilla";
+import ListaDeConstruccion from "./ListaDeConstruccion";
+import { fechasDelCronograma, type AsientosComprados } from "@/lib/planificacion/brief";
+import { cronogramaParaLaFila } from "@/lib/kickoff/datos-de-la-portada";
+import { CANVAS_PRIMARY_AGENT } from "@/lib/agents/canvas-agents";
+import { plantillaDe, seccionesDeLaPlantilla } from "@/lib/entregables/registro";
+import { conservarMarcas, esSeccionDelCliente, marcarQuitadasPorElEquipo } from "@/lib/planificacion/lo-del-cliente";
 
 const MAXW = 860;
 
@@ -43,12 +51,18 @@ const SIN_SECCION =
 export default function PlanificacionWorkspace({
   projectId,
   canvasId,
+  clientId,
   etiquetas,
+  onGenerado,
 }: {
   projectId: string;
   canvasId: string;
+  /** Sin él (un montaje viejo), el documento de siempre, sin el selector de plantillas. */
+  clientId?: string;
   /** Las etiquetas del proyecto (lo vendido): la ficha del proyecto ofrece marcar esos hubs. */
   etiquetas?: string[];
+  /** El selector de plantillas genera desde adentro del documento: el mismo cierre que el botón de arriba. */
+  onGenerado?: () => void;
 }) {
   // poll:false — el runner persiste CONFIRMED; tras generar, el remonte lo fuerza el
   // padre (`key` con su `agentNonce` al terminar el agente del header).
@@ -64,9 +78,16 @@ export default function PlanificacionWorkspace({
       ...crudo,
       upsertCardData: (sectionId: string, cardBlockId: string | null, data: unknown) => {
         const s = crudo.sections.find((x) => x.id === sectionId);
-        if (s?.key !== "propiedades") return crudo.upsertCardData(sectionId, cardBlockId, data);
-        const previo = s.blocks.find((b) => b.blockType === "CARD")?.data;
-        return crudo.upsertCardData(sectionId, cardBlockId, conservarLoDeFuera(previo, data));
+        const previo = s?.blocks.find((b) => b.blockType === "CARD")?.data;
+        /* 2026-10-27 — las marcas de fuera (la lista de construcción y la sección abierta al cliente) tampoco las conoce
+           el editor de cada sección: se recuperan de la versión anterior (`conservarMarcas`). */
+        let siguiente = conservarMarcas(previo, data);
+        if (s?.key === "propiedades") siguiente = conservarLoDeFuera(previo, siguiente);
+        /* Una sección que el cliente llena en el enlace puede haber cambiado en la base mientras este editor estaba abierto.
+           La reconciliación la hace el SERVIDOR en la misma escritura (ruta de los bloques); acá solo se anota qué filas
+           quitó el CSE, sin red: consultar antes de guardar demoraba la escritura y un segundo cambio pisaba al primero. */
+        if (s && esSeccionDelCliente(s.key)) siguiente = marcarQuitadasPorElEquipo(previo, siguiente, s.key);
+        return crudo.upsertCardData(sectionId, cardBlockId, siguiente);
       },
     }),
     [crudo],
@@ -103,9 +124,34 @@ export default function PlanificacionWorkspace({
     return Array.isArray(d?.filas) ? d.filas : [];
   }, [cs.sections]);
   const etiquetasClave = (etiquetas ?? []).join(",");
+  /* Lo que el editor lee de afuera (2026-10-27): los asientos comprados en HubSpot (Partner, para la cuenta de
+     licencias) y las fechas del Cronograma (para la ficha). Solo el editor: el enlace y el PDF no los traen. */
+  const [asientos, setAsientos] = useState<AsientosComprados | null>(null);
+  const [fechas, setFechas] = useState<{ inicio: string | null; cierre: string | null } | null>(null);
+  useEffect(() => {
+    let vivo = true;
+    fetch(`/api/projects/${projectId}/planificacion/asientos`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j: { asientos?: AsientosComprados | null } | null) => {
+        if (vivo) setAsientos(j?.asientos ?? null);
+      })
+      .catch(() => {});
+    fetch(`/api/projects/${projectId}/timeline`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j: { exists?: boolean; anchorStartDate?: string | null; phases?: Array<{ durationWeeks: number; startWeek?: number | null }> } | null) => {
+        if (vivo && j?.exists) setFechas(fechasDelCronograma(cronogramaParaLaFila({ anchorStartDate: j.anchorStartDate ?? null, phases: j.phases ?? [] })));
+      })
+      .catch(() => {});
+    return () => {
+      vivo = false;
+    };
+  }, [projectId]);
   const ctx: LandingContext = useMemo(
-    () => ({ clientName: "", planificacion: { propiedades: propiedadesDelPlan, etiquetasDelProyecto: etiquetasClave ? etiquetasClave.split(",") : [] } }),
-    [propiedadesDelPlan, etiquetasClave],
+    () => ({
+      clientName: "",
+      planificacion: { propiedades: propiedadesDelPlan, etiquetasDelProyecto: etiquetasClave ? etiquetasClave.split(",") : [], asientos, fechas },
+    }),
+    [propiedadesDelPlan, etiquetasClave, asientos, fechas],
   );
 
   /* Un documento anterior a las secciones del Brief (2026-10-25) no las tiene, y el motor solo pinta las que
@@ -113,8 +159,34 @@ export default function PlanificacionWorkspace({
      usuarios. Al abrirlo se materializan una vez (`POST /pieces/[slug]`: idempotente, crea las que faltan y
      nunca borra) y se vuelve a leer. Las nuevas nacen vacías: en la vista del cliente no se ven hasta tener algo. */
   const yaReconciliado = useRef(false);
+  /* La plantilla del documento (I2, 2026-10-27): la esencial no tiene las secciones de la completa, así que lo que «falta»
+     se mide contra las suyas. null = todavía no se sabe (no se reconcilia nada hasta saberlo). */
+  const [plantilla, setPlantilla] = useState<{ id: string | null; guardada: boolean } | null>(null);
+  useEffect(() => {
+    let vivo = true;
+    fetch(`/api/projects/${projectId}/planificacion/plantilla`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j: { plantilla?: string | null; guardada?: boolean } | null) => {
+        if (vivo) setPlantilla({ id: j?.plantilla ?? null, guardada: j?.guardada === true });
+      })
+      .catch(() => {
+        // Sin saberlo, el documento: nunca dejar a alguien sin poder escribir.
+        if (vivo) setPlantilla({ id: null, guardada: true });
+      });
+    return () => {
+      vivo = false;
+    };
+  }, [projectId]);
+  const idDeLaPlantilla = plantilla?.id ?? null;
+  const canonDeLaPlantilla = useMemo(
+    () => (idDeLaPlantilla ? seccionesDeLaPlantilla(plantillaDe("planning", idDeLaPlantilla) ?? {}, PLANIFICACION_CANVAS.sections) : PLANIFICACION_CANVAS.sections),
+    [idDeLaPlantilla],
+  );
+  /* El selector: sin contenido y sin plantilla elegida. Con la plantilla anotada («Escribirlo yo», o ya generada), el
+     documento. Sin `clientId` (un montaje viejo), el documento de siempre. */
+  const verSelector = !hasGeneratedContent && !!clientId && plantilla?.guardada === false;
   const faltanSecciones =
-    !cs.loading && cs.sections.length > 0 && PLANIFICACION_CANVAS.sections.some((c) => !cs.sections.some((s) => s.key === c.key));
+    !cs.loading && plantilla !== null && cs.sections.length > 0 && canonDeLaPlantilla.some((c) => !cs.sections.some((s) => s.key === c.key));
   useEffect(() => {
     if (!faltanSecciones || yaReconciliado.current) return;
     yaReconciliado.current = true;
@@ -204,6 +276,31 @@ export default function PlanificacionWorkspace({
     <>
     {/* El «Contexto» de este documento (sus reuniones y notas) lo monta el panel del proyecto ARRIBA
         del marco del documento (ProjectCanvasPanel, 2026-10-05). */}
+    {/* Sin generar y sin plantilla elegida: las dos plantillas en vez del documento vacío (I2, 2026-10-27). Fuera de
+        `.stl`: es del equipo, con la UI de Nexus. */}
+    {verSelector && clientId && (
+      <ElegirPlantilla
+        slug={PIECE_SLUG}
+        clientId={clientId}
+        projectId={projectId}
+        canvasId={canvasId}
+        agentId={CANVAS_PRIMARY_AGENT[PIECE_SLUG].agentId}
+        onGenerado={onGenerado}
+      />
+    )}
+    {/* La lista de construcción (L4 etapa 5): el estado y el enlace de cada cosa, y el paso a Tareas. Del equipo: no va
+        al cliente ni al PDF. */}
+    {!verSelector && hasGeneratedContent && (
+      <ListaDeConstruccion
+        projectId={projectId}
+        canvasId={canvasId}
+        secciones={cs.sections.map((s) => {
+          const card = s.blocks.find((b) => b.blockType === "CARD");
+          return { id: s.id, key: s.key, hidden: s.hidden === true, data: card?.data ?? null, cardBlockId: card?.id ?? null };
+        })}
+        onMarcar={(sectionId, cardBlockId, data) => cs.upsertCardData(sectionId, cardBlockId, data)}
+      />
+    )}
     <div className="stl stl-internal">
       {cs.error && (
         <div style={{ position: "sticky", top: 0, zIndex: 50, display: "flex", alignItems: "center", gap: 10, padding: "10px 16px", background: "#fef2f2", borderBottom: "1px solid #fecaca", color: "#b91c1c", fontSize: 13 }}>
@@ -220,7 +317,7 @@ export default function PlanificacionWorkspace({
       )}
 
       {/* Estado IDLE: abrir la pieza recién activada sin generar es lo normal. */}
-      {!hasGeneratedContent && (
+      {!hasGeneratedContent && !verSelector && (
         <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 16px", background: "var(--bg-soft)", borderBottom: "1px solid var(--border)", fontSize: 13, color: "var(--text-2)" }}>
           <span>
             Todavía sin generar. Usá <strong>Generar planificación</strong> arriba, junto al nombre
@@ -248,6 +345,7 @@ export default function PlanificacionWorkspace({
           className="px-4 pt-3"
         />
       )}
+      {!verSelector && (
       <LandingView
         config={config}
         ctx={ctx}
@@ -295,6 +393,7 @@ export default function PlanificacionWorkspace({
           if (ordered.length) cs.reorderSections(ordered);
         }}
       />
+      )}
     </div>
     </>
   );
