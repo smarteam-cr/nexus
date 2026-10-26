@@ -10,16 +10,7 @@ import { alcanceDeLaSesion, type AreaParaElAlcance } from "./alcance";
 import { lecturaDeConjunto, type SesionParaElConjunto } from "./conjunto";
 import type { QuienHablo } from "./quien-hablo";
 import { RevisionSchema } from "./schema";
-import {
-  candidatasParaLaProxima,
-  continuidadDelSiguientePaso,
-  leerComentarios,
-  leerParaLaProxima,
-  loDeLaSesion,
-  siguientePasoConFecha,
-  sumarComentario,
-  MAX_COMENTARIOS,
-} from "./revision";
+import { continuidadDelSiguientePaso, equipoDeLaDimension, loDeLaSesion, loQueFaltoPorEquipo, siguientePasoConFecha } from "./revision";
 import { atribuirLaReunion, delEquipoQueHablo, mesEnCostaRica, tendenciaPorVendedor, vendedoresAtribuidos, type ReunionParaLaTendencia } from "./tendencia";
 
 const cita = { turno: 3, hablante: "Andrés Pinzón", texto: "¿cuánto les cuesta hoy ese reporte?" };
@@ -60,35 +51,46 @@ describe("S4 · la autoevaluación de la sesión", () => {
     expect(siguientePasoConFecha({ valor: "sin_fecha" })).toBe(false);
   });
 
-  it("lo que se puede llevar a la próxima: las recomendaciones primero, después lo sin explorar y lo solo tocado, sin repetir", () => {
-    const c = candidatasParaLaProxima(RESULTADO);
-    expect(c[0]).toBe("Pregunta cuánto les cuesta hoy no tener el pronóstico.");
-    expect(c).toContain("Explorar Pronóstico de ventas: quedó sin tocar.");
-    expect(c).toContain("Profundizar en Seguimiento de oportunidades: se mencionó y no se exploró a fondo.");
-    expect(new Set(c).size).toBe(c.length);
+  it("lo que faltó explorar va con su equipo y agrupado por equipo; en cada grupo, lo tocado primero", () => {
+    const areas = [
+      { id: "1", nombre: "Ventas", dimensiones: [{ nombre: "Seguimiento de oportunidades" }, { nombre: "Pronóstico", nombreGeneral: "Pronóstico de ventas" }] },
+      { id: "2", nombre: "Marketing", dimensiones: [{ nombre: "Medición de campañas" }] },
+      { id: "3", nombre: "Servicio", dimensiones: [{ nombre: "Tiempo de respuesta" }] },
+    ];
+    expect(equipoDeLaDimension("pronostico de VENTAS", { equipo: null, areas })).toBe("Ventas");
+    expect(equipoDeLaDimension("Medición de campañas", { equipo: "ventas", areas })).toBe("Marketing");
+    // Un tema del equipo de la sesión es de ese equipo; lo que no se reconoce cae en el equipo de la sesión, o en ninguno.
+    expect(equipoDeLaDimension("Cómo está armado", { equipo: "ventas", areas: [] })).toBe("Ventas");
+    expect(equipoDeLaDimension("Algo raro", { equipo: null, areas })).toBeNull();
+    // El equipo de servicio se nombra como su área de la escala: sus temas y sus dimensiones quedan en el mismo grupo.
+    expect(equipoDeLaDimension("Cómo está armado", { equipo: "servicio", areas })).toBe("Servicio");
+    expect(equipoDeLaDimension("Tiempo de respuesta", { equipo: "servicio", areas })).toBe("Servicio");
+    const lo = {
+      tocadas: [
+        { dimension: "Medición de campañas", lectura: "Se mencionó.", citas: [cita] },
+        { dimension: "Seguimiento de oportunidades", lectura: "Se mencionó.", citas: [] },
+      ],
+      // Juzgada dos veces: sale una sola, la tocada.
+      sinExplorar: [{ dimension: "Pronóstico de ventas", lectura: "No se tocó." }, { dimension: "medicion de campañas", lectura: "Otra vez." }],
+    };
+    const g = loQueFaltoPorEquipo(lo, (d) => equipoDeLaDimension(d, { equipo: null, areas }));
+    expect(g.map((x) => [x.equipo, x.items.map((i) => [i.dimension, i.estado])])).toEqual([
+      ["Marketing", [["Medición de campañas", "tocado"]]],
+      ["Ventas", [["Seguimiento de oportunidades", "tocado"], ["Pronóstico de ventas", "sin_explorar"]]],
+    ]);
+    expect(g[0].items[0].cita).toEqual(cita);
+    expect(g[1].items[1].cita).toBeNull();
   });
 
-  it("los comentarios se leen tolerantes y la lista no crece sin fin", () => {
-    const bueno = { id: "1", por: "a@smarteamcr.com", tipo: "discrepa", punto: "exploracion", texto: "Sí lo exploré", en: "2026-10-27T10:00:00Z" };
-    expect(leerComentarios([bueno, { id: "2", tipo: "insulta" }, null, "x"])).toEqual([bueno]);
-    expect(leerComentarios({})).toEqual([]);
-    expect(leerComentarios([{ ...bueno, punto: "inventado" }])[0].punto).toBeNull();
-    let lista = leerComentarios([bueno]);
-    for (let i = 0; i < MAX_COMENTARIOS + 5; i++) lista = sumarComentario(lista, { ...lista[0], id: `n${i}` });
-    expect(lista).toHaveLength(MAX_COMENTARIOS);
-    expect(lista.at(-1)!.id).toBe(`n${MAX_COMENTARIOS + 4}`);
-    expect(leerParaLaProxima(["a", "", 3, "b"])).toEqual(["a", "b"]);
-  });
-
-  it("las rutas validan el cuerpo: un comentario vacío o una acción que no existe no pasan", () => {
-    expect(RevisionSchema.safeParse({ accion: "comentar", sessionId: "s1", tipo: "discrepa", texto: "No estoy de acuerdo" }).success).toBe(true);
-    expect(RevisionSchema.safeParse({ accion: "comentar", sessionId: "s1", tipo: "discrepa", texto: "   " }).success).toBe(false);
+  it("las rutas validan el cuerpo: los comentarios se fueron y confirmar pide el análisis que se leyó", () => {
+    // Elías quitó los comentarios del vendedor (27 oct): la acción ya no existe.
+    expect(RevisionSchema.safeParse({ accion: "comentar", sessionId: "s1", tipo: "discrepa", texto: "No estoy de acuerdo" }).success).toBe(false);
     const leido = "2026-10-27T15:00:00.000Z";
-    expect(RevisionSchema.safeParse({ accion: "confirmar", sessionId: "s1", analizadoAt: leido, paraLaProxima: ["Preguntar por el pronóstico"] }).success).toBe(true);
+    expect(RevisionSchema.safeParse({ accion: "confirmar", sessionId: "s1", analizadoAt: leido, nota: "Bien" }).success).toBe(true);
+    expect(RevisionSchema.safeParse({ accion: "confirmar", sessionId: "s1", analizadoAt: leido }).success).toBe(true);
     // Sin la fecha del análisis que se leyó no se confirma: podría caer sobre uno que nadie leyó.
-    expect(RevisionSchema.safeParse({ accion: "confirmar", sessionId: "s1", paraLaProxima: [] }).success).toBe(false);
-    expect(RevisionSchema.safeParse({ accion: "confirmar", sessionId: "s1", analizadoAt: leido }).success).toBe(false);
-    expect(RevisionSchema.safeParse({ accion: "confirmar", sessionId: "s1", analizadoAt: leido, paraLaProxima: Array(7).fill("x") }).success).toBe(false);
+    expect(RevisionSchema.safeParse({ accion: "confirmar", sessionId: "s1" }).success).toBe(false);
+    expect(RevisionSchema.safeParse({ accion: "confirmar", sessionId: "s1", analizadoAt: leido, nota: "x".repeat(1001) }).success).toBe(false);
 
     expect(RevisionSchema.safeParse({ accion: "borrar", sessionId: "s1" }).success).toBe(false);
   });

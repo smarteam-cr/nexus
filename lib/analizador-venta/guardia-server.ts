@@ -3,7 +3,7 @@
  * 2026-10-27). SERVIDOR.
  *
  * El análisis vive en la preventa (`/api/sales/exploraciones/[id]/analisis-de-venta`): mirar pide `preventa.read` y
- * analizar, comentar o confirmar, `preventa.write`; además, mientras se prueba, ser super admin (`veElAnalizador`). Solo la
+ * analizar o confirmar, `preventa.write`; además, mientras se prueba, ser super admin (`veElAnalizador`). Solo la
  * preventa de un prospecto (una exploración sin proyecto): la exploración de un proyecto es de Customer Success y no se
  * analiza como venta. Devuelve la empresa de la preventa: toda reunión que se toque tiene que ser de ella (invariante 1).
  */

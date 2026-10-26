@@ -11627,15 +11627,20 @@ el manejo de un cliente ni de una sesión: el análisis vive en la preventa (doc
 
 **Decisiones.**
 1. **S4 · «Cómo trabajaste esta sesión»** va en Exploración › la sesión › Análisis, como un apartado APARTE debajo de
-   «Quedó abierto» (lo de arriba no se toca). Es el análisis de S3 resumido para esa sesión: cómo fue, quién habló, lo que
-   faltó explorar (lo solo tocado con su cita; lo no tocado, sin cita porque no pasó), la etapa que se saltó, el siguiente
-   paso y lo que va «para la próxima». El vendedor comenta o discrepa (sobre un punto o sobre todo); una persona confirma
-   y elige qué va para la próxima. Se guarda en la misma fila (`AnalisisDeVenta`: `comentarios`, `confirmadoPor`,
-   `confirmadoAt`, `notaDeConfirmacion`, `paraLaProxima`). Volver a analizar borra la confirmación y deja los comentarios
-   con su fecha; INV62 vigila que ninguna confirmación quede sobre un análisis que nadie leyó.
-2. **Lo confirmado alimenta la guía de la siguiente sesión por el camino de «Quedó abierto»:** cada punto confirmado tiene
-   su casilla «Llevar a la sesión N», que lo suma a `SesionPlaneada.explorar` y la guía lo pregunta primero. No se escribe
-   solo: lo decide una persona, y el analizador no toca `lib/exploraciones/` (otra sesión trabaja la guía).
+   «Quedó abierto» (lo de arriba no se toca). Es FEEDBACK de cómo se trabajó esa sesión, no la planificación de la que
+   sigue. Arriba y en grande, en un bloque destacado, la lectura general del análisis (lo principal de la sección); después
+   quién habló, lo que faltó explorar en tarjetas chicas (dimensión y equipo, «se tocó sin profundizar» o «no se tocó», una
+   línea y la cita; agrupadas por equipo cuando hay más de uno), las etapas del proceso consultivo que se saltaron o se
+   hicieron en parte, en tarjetas en una fila, y las recomendaciones escritas como «Para mejorar». Una persona confirma
+   (con una nota opcional); volver a analizar borra la confirmación e INV62 vigila que ninguna quede sobre un análisis
+   que nadie leyó.
+2. **Lo que se fue el 27 oct (Elías revisó la primera versión):** los comentarios del vendedor (comentar o discrepar), el
+   siguiente paso (con fecha y dueño, sus citas y si tuvo continuidad) y «Para la próxima» (las casillas, los ítems
+   automáticos «Explorar X» y «Profundizar en X», que repetían lo que faltó explorar, y el camino para llevarlo a la guía
+   de la siguiente sesión). El siguiente paso SIGUE en la pieza «Análisis» del prospecto (S5) y en la tendencia (S7): solo
+   sale de la sesión. Las columnas `AnalisisDeVenta.comentarios` y `paraLaProxima` quedan DEPRECATED en el schema:
+   nadie las lee ni escribe contenido nuevo. ⚠ Volver a analizar (`SIN_CONFIRMAR`, analizar-server.ts) y quitar la
+   confirmación (revision-server.ts) todavía VACÍAN `paraLaProxima`: antes de borrar la columna, sacar esas dos escrituras.
 3. **Quién confirma:** cualquiera que ve el análisis y puede trabajar la preventa (hoy, los super admin). No se le prohíbe
    al vendedor confirmar el suyo. ⚠ Pendiente para Elías: si la confirmación tiene que ser del líder (Andrés) y no del
    vendedor.

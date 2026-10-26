@@ -1,8 +1,7 @@
 /**
  * POST /api/sales/exploraciones/[id]/analisis-de-venta/revision — la revisión del análisis de una sesión (S4, 2026-10-27).
  *
- *   { accion: "comentar", sessionId, tipo: "comenta" | "discrepa", punto?, texto }
- *   { accion: "confirmar", sessionId, analizadoAt, nota?, paraLaProxima: string[] }   → 409 si el análisis cambió
+ *   { accion: "confirmar", sessionId, analizadoAt, nota? }   → 409 si el análisis cambió
  *   { accion: "desconfirmar", sessionId }
  *   { accion: "referencia", sessionId, nota? }       → la marca como reunión de referencia (S1)
  *   { accion: "quitar-referencia", sessionId }
@@ -17,7 +16,7 @@ import { esquemaDesactualizado } from "@/lib/db/esquema";
 import { esReunionDeLaEmpresa, guardDelAnalisisDeVenta } from "@/lib/analizador-venta/guardia-server";
 import { marcarReferencia, quitarReferencia } from "@/lib/analizador-venta/referencia-server";
 import { RevisionSchema } from "@/lib/analizador-venta/schema";
-import { comentarAnalisis, confirmarAnalisis, desconfirmarAnalisis, type ResultadoDeRevisar } from "@/lib/analizador-venta/revision-server";
+import { confirmarAnalisis, desconfirmarAnalisis, type ResultadoDeRevisar } from "@/lib/analizador-venta/revision-server";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -32,12 +31,8 @@ export async function POST(req: NextRequest, { params }: Ctx) {
   try {
     let r: ResultadoDeRevisar;
     switch (b.accion) {
-      case "comentar":
-        r = await comentarAnalisis(b.sessionId, { por: g.email, tipo: b.tipo, punto: b.punto ?? null, texto: b.texto });
-        break;
       case "confirmar":
-        r = await confirmarAnalisis(b.sessionId, { por: g.email, nota: b.nota ?? null, paraLaProxima: b.paraLaProxima, analizadoAt: b.analizadoAt });
-
+        r = await confirmarAnalisis(b.sessionId, { por: g.email, nota: b.nota ?? null, analizadoAt: b.analizadoAt });
         break;
       case "desconfirmar":
         r = await desconfirmarAnalisis(b.sessionId);

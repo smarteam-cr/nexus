@@ -241,7 +241,7 @@ export async function analizarReunionDeVenta(sessionId: string, o: { pedidoPor: 
       agentRunId: run.id,
       pedidoPor: o.pedidoPor,
       analizadoAt: new Date(),
-      // Un análisis nuevo es otro: la confirmación del anterior no vale para él (S4). Los comentarios se quedan, con su fecha.
+      // Un análisis nuevo es otro: la confirmación del anterior no vale para él (S4).
       ...SIN_CONFIRMAR,
     };
     await prisma.analisisDeVenta.upsert({ where: { sessionId }, create: { sessionId, ...datos }, update: datos });

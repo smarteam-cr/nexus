@@ -3,8 +3,8 @@
  * S7, 2026-10-27), con Claude simulado.
  *
  * Lo que tiene que sostenerse escribiendo de verdad: la pieza de un prospecto trae solo SUS reuniones de venta (el
- * chokepoint), atribuidas a quien habló; el vendedor comenta, una persona confirma con lo que va «para la próxima»; volver a
- * analizar borra la confirmación y deja los comentarios; la tendencia cuenta lo confirmado; e INV62 cuida la confirmación.
+ * chokepoint), atribuidas a quien habló; una persona confirma; volver a analizar borra la confirmación; la tendencia cuenta
+ * lo confirmado; e INV62 cuida la confirmación.
  * Correr con la base local: `npm run test:int`.
  */
 import { describe, expect, it, vi } from "vitest";
@@ -16,7 +16,7 @@ vi.mock("@/lib/anthropic", () => ({ anthropic: { messages: { create: crear } } }
 
 import { analizarReunionDeVenta } from "./analizar-server";
 import { analisisDelProspecto } from "./pieza-server";
-import { comentarAnalisis, confirmarAnalisis, desconfirmarAnalisis } from "./revision-server";
+import { confirmarAnalisis, desconfirmarAnalisis } from "./revision-server";
 import { tendenciaDelEquipo } from "./tendencia-server";
 import { AGENTE_DEL_ANALIZADOR, PROMPT_DEL_ANALIZADOR } from "./prompt";
 import { INV62 } from "@/lib/invariantes/analizador-venta";
@@ -55,7 +55,7 @@ const respuesta = (resumen: string) => ({
 });
 
 describe("el análisis de la venta en la preventa — DB real", { timeout: 30_000 }, () => {
-  it("la pieza trae solo las reuniones de la empresa; comentar, confirmar, volver a analizar; la tendencia e INV62", async () => {
+  it("la pieza trae solo las reuniones de la empresa; confirmar, volver a analizar; la tendencia e INV62", async () => {
     const ahora = new Date();
     await prisma.sessionCategory.create({ data: { name: "Smarteam (test)", slug: "smarteam-test", kind: "internal", domains: ["smarteamcr.com"] } });
     await prisma.teamMember.create({ data: { name: "Andrés Pinzón", email: ANDRES, area: "Ventas", roleEnum: "VENTAS" } });
@@ -91,26 +91,17 @@ describe("el análisis de la venta en la preventa — DB real", { timeout: 30_00
     expect(pieza.reuniones[1]).toMatchObject({ texto: "nada", quienHablo: null, detalle: null });
     expect(pieza.nombres[ANDRES]).toBe("Andrés Pinzón");
 
-    // S4: se analiza, el vendedor discrepa y una persona confirma con lo que va para la próxima.
+    // S4: se analiza y una persona confirma.
     crear.mockResolvedValue(respuesta("Exploraste el impacto antes de la solución."));
     expect((await analizarReunionDeVenta("camosa-1", { pedidoPor: "elias@smarteamcr.com" })).ok).toBe(true);
-    expect(await confirmarAnalisis("sin-analisis", { por: ANDRES, paraLaProxima: [], analizadoAt: ahora.toISOString() })).toMatchObject({ ok: false, status: 404 });
-    // Dos comentarios a la vez: los dos quedan (la fila se bloquea).
-    const [c1, c2] = await Promise.all([
-      comentarAnalisis("camosa-1", { por: ANDRES, tipo: "discrepa", punto: "siguiente_paso", texto: "La demo era el jueves." }),
-      comentarAnalisis("camosa-1", { por: LIZ, tipo: "comenta", punto: null, texto: "De acuerdo con lo del impacto." }),
-    ]);
-    expect(c1.ok && c2.ok).toBe(true);
+    expect(await confirmarAnalisis("sin-analisis", { por: ANDRES, analizadoAt: ahora.toISOString() })).toMatchObject({ ok: false, status: 404 });
     const leido = (await prisma.analisisDeVenta.findUniqueOrThrow({ where: { sessionId: "camosa-1" } })).analizadoAt.toISOString();
     expect(
-      (await confirmarAnalisis("camosa-1", { por: "Elias@smarteamcr.com", nota: "Bien", analizadoAt: leido, paraLaProxima: ["Pregunta quién más decide en la junta.", "Pregunta quién más decide en la junta."] })).ok,
+      (await confirmarAnalisis("camosa-1", { por: "Elias@smarteamcr.com", nota: "Bien", analizadoAt: leido })).ok,
     ).toBe(true);
     pieza = await analisisDelProspecto(camosa.id, ahora);
     const d = pieza.reuniones[0].detalle!;
-    expect(d.comentarios).toHaveLength(2);
-    expect(d.comentarios).toContainEqual(expect.objectContaining({ por: ANDRES, tipo: "discrepa", punto: "siguiente_paso", texto: "La demo era el jueves." }));
     expect(d.confirmado).toMatchObject({ por: "elias@smarteamcr.com", nota: "Bien" });
-    expect(d.paraLaProxima).toEqual(["Pregunta quién más decide en la junta."]);
     expect((await INV62.correr(prisma, ahora)).ok).toBe(true);
 
     // S7: lo confirmado cuenta en la tendencia de Andrés; la reunión de otro prospecto también es suya (es de todo el equipo).
@@ -119,14 +110,13 @@ describe("el análisis de la venta en la preventa — DB real", { timeout: 30_00
     expect(andres).toMatchObject({ nombre: "Andrés Pinzón", reuniones: 3, conTranscripcion: 2, confirmadas: 1, conFecha: { con: 1, de: 1 } });
     expect(t.vendedores.find((v) => v.correo === LIZ)).toMatchObject({ reuniones: 2, conTranscripcion: 1 });
 
-    // Volver a analizar: la confirmación se va (el análisis es otro), los comentarios se quedan.
+    // Volver a analizar: la confirmación se va (el análisis es otro).
     crear.mockResolvedValue(respuesta("Segunda lectura."));
     expect((await analizarReunionDeVenta("camosa-1", { pedidoPor: "elias@smarteamcr.com" })).ok).toBe(true);
     const fila = await prisma.analisisDeVenta.findUniqueOrThrow({ where: { sessionId: "camosa-1" } });
-    expect(fila).toMatchObject({ confirmadoPor: null, confirmadoAt: null, notaDeConfirmacion: null, paraLaProxima: null });
-    expect(fila.comentarios).toHaveLength(2);
+    expect(fila).toMatchObject({ confirmadoPor: null, confirmadoAt: null, notaDeConfirmacion: null });
     // Quien tenía abierto el análisis viejo no puede confirmar el nuevo, que no leyó.
-    expect(await confirmarAnalisis("camosa-1", { por: ANDRES, paraLaProxima: [], analizadoAt: leido })).toMatchObject({ ok: false, status: 409 });
+    expect(await confirmarAnalisis("camosa-1", { por: ANDRES, analizadoAt: leido })).toMatchObject({ ok: false, status: 409 });
     expect((await prisma.analisisDeVenta.findUniqueOrThrow({ where: { sessionId: "camosa-1" } })).confirmadoPor).toBeNull();
     t = await tendenciaDelEquipo({ dias: 90, ahora });
     expect(t.vendedores.find((v) => v.correo === ANDRES)!.confirmadas).toBe(0);
@@ -141,7 +131,7 @@ describe("el análisis de la venta en la preventa — DB real", { timeout: 30_00
 
     // Si la reunión cambió de dueña, su análisis ya no se revisa (invariante 1; INV57 lo reclama).
     await prisma.firefliesSession.update({ where: { id: "camosa-1" }, data: { resolvedClientId: otro.id } });
-    expect(await confirmarAnalisis("camosa-1", { por: ANDRES, paraLaProxima: [], analizadoAt: fila.analizadoAt.toISOString() })).toMatchObject({ ok: false, status: 409 });
+    expect(await confirmarAnalisis("camosa-1", { por: ANDRES, analizadoAt: fila.analizadoAt.toISOString() })).toMatchObject({ ok: false, status: 409 });
 
     expect((await analisisDelProspecto(camosa.id, ahora)).reuniones.map((r) => r.id)).toEqual(["camosa-2"]);
   });
