@@ -6,7 +6,7 @@
 
 **Nexus en una frase:** el sistema donde Smarteam vende por resultados (casos de uso), los entrega con Customer Success y sabe cuánto le cuesta cada uno; cada persona entra y ve qué le toca hoy.
 
-**Dónde vamos (26 oct):** el contexto inicial (la empresa, sus reuniones y las integraciones) y el paso dos ya están en producción. Sigue lo que te toca a ti y la segunda noche de construcción.
+**Dónde vamos (26 oct):** el contexto inicial (la empresa, sus reuniones y las integraciones) y el paso dos ya están en producción. Sigue lo que te toca a ti y la noche 2 (pestaña «Roadmap» › «Próxima tanda»).
 
 **Lo que te toca:** configurar el servidor, aprobar las preguntas del test, contestar las del borrador 9.0 y decidir los puntos 32 a 40 (pestaña «Roadmap» › «Lo que configuras tú» y «Lo que decides tú»); la CSL revisa los 83 cambios de potencial.
 
@@ -390,6 +390,18 @@ Sale de lo que decidiste el 22 oct sobre cómo vende y entrega Smarteam («resul
 - `docs/expansion-y-adopcion-plan.md`: fuera de alcance y solicitudes, el agente de cada cliente y la auditoría de adopción. Sirve a E y F.
 - `docs/rentabilidad-por-caso-plan.md`: el tiempo estimado y real por tarea, la rentabilidad por caso y la capacidad con las horas de las actividades. Sirve a G.
 - `docs/entregables-cs-plan.md`: las plantillas de cada entregable y qué necesita Customer Success para cada uno. Sirve a I y J.
+
+**Próxima tanda: la noche 2 (propuesta del 26 oct, por aprobar).** Cinco piezas que no esperan a nadie, cada una con su deploy:
+
+| # | Pieza | Resultado de negocio |
+|---|---|---|
+| 1 | El analizador de venta, segunda parte (S4, S5, S7) | El vendedor comenta y una persona confirma; tú ves la tendencia de cada vendedor y cómo se ha tratado a cada cliente en todas sus reuniones. (La primera parte, S1 a S3, ya está en producción: Sesiones › «Ver la salud de las reuniones» › «Reuniones de venta», solo para super admin.) |
+| 2 | Tareas que se ordenan solas (D2 etapa 1, D4) | Se limpian las tareas que nadie decidió, y las de seguimiento comercial quedan también en HubSpot, sincronizadas en los dos sentidos |
+| 3 | Tu piloto de tareas y el calendario (H1, P3, P5) | Nexus lee tus reuniones internas y te propone tareas; una tarea se puede unir a un evento que ya existe |
+| 4 | Kickoff y sesiones solas (Q, K5, K6) | El kickoff trae HubSpot Academy y el acceso al portal; las sesiones se asocian solas a cliente y proyecto, y pregunta solo cuando duda |
+| 5 | Lo que falta de la Planificación y de la empresa (L4 etapas 5 a 7, R3 etapas 2 y 3) | La Planificación genera la lista de construcción en Tareas y el cliente llena su parte; los documentos de la empresa sin proyecto se ven y se comparten |
+
+Fuera de la noche 2, porque necesitan a una persona: el ejercicio de las actividades contigo (A0), el position statement y los clientes de referencia con Marco (K3, K4), el primer ciclo con cada CSE (M3) y validar el analizador con Andrés (S6).
 
 **Orden sugerido, por dependencias** (el foco es que Ventas y Customer Success queden funcionando):
 
