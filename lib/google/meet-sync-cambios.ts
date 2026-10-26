@@ -96,6 +96,10 @@ export interface SesionGuardada {
   descripcionDelEvento: string | null;
   conferenceId: string | null;
   canceladaEn: Date | null;
+  /** Si ya se leyó: una fila leída que mueven al futuro vuelve a «no leída» (`reunion-movida.ts`). */
+  enrichedAt: Date | null;
+  /** Los reintentos de lectura gastados: una que espera material también cuenta como ya intentada. */
+  enrichAttempts: number;
 }
 
 /** El `select` de Prisma que arma una `SesionGuardada`: la sync no necesita más que esto. */
@@ -114,6 +118,8 @@ export const SELECT_SESION_GUARDADA = {
   descripcionDelEvento: true,
   conferenceId: true,
   canceladaEn: true,
+  enrichedAt: true,
+  enrichAttempts: true,
 } as const;
 
 /** Solo los campos que cambiaron. Si el Doc es nuevo, además se reinicia el enriquecimiento. */

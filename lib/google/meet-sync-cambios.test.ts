@@ -62,6 +62,8 @@ function guardada(extra: Partial<SesionGuardada> = {}): SesionGuardada {
     descripcionDelEvento: null,
     conferenceId: null,
     canceladaEn: null,
+    enrichedAt: null,
+    enrichAttempts: 0,
     ...extra,
   };
 }

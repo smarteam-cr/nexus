@@ -37,6 +37,7 @@ import { getImpersonatedAuth, listDomainUsers } from "@/lib/google/auth";
 import { buildCategorizeCtx, resolveSessionClientId } from "@/lib/sessions/resolve-client";
 import { DOMINIO_PROPIO } from "@/lib/sessions/dominio-propio";
 import { esquemaDesactualizado } from "@/lib/db/esquema";
+import { devolverANoLeidaSiSeMovio } from "./reunion-movida";
 import {
   cambiosDeInvitados,
   cambiosDeSesion,
@@ -394,6 +395,10 @@ async function correrSync(daysBack: number, marcarLasCanceladas: boolean): Promi
           // resumen incluidos) por cada UPDATE — eran ~221 MB armados en memoria por corrida.
           await prisma.firefliesSession.update({ where: { id: existing.id }, data: cambios, select: { id: true } });
           actualizadas++;
+          // Leída sin nada y reprogramada al futuro: vuelve a «no leída» para leerse en su fecha nueva (KNOWN-ERRORS, INV16 a).
+          if (await devolverANoLeidaSiSeMovio(prisma, existing, cambios, new Date())) {
+            console.log(`[google/sync] «${event.title}» se movió al futuro después de leerse sin nada: vuelve a «no leída».`);
+          }
           if (docNuevo) {
             docDiscovered++;
             console.log(`[google/sync] Doc descubierto post-sync para ${event.eventId} (${event.title}). enrichedAt reset.`);
