@@ -11176,6 +11176,9 @@ tan consultiva fue su reunión y cómo mejorar. Es coaching, no control (docs/an
    lib/agents/retirados.ts). Costo medido con Camosa: unos US$0,16 por reunión de una hora con Sonnet 4.6.
 7. **Pendiente:** con una preventa de las tres áreas, el análisis juzga las 24 dimensiones (muchas «sin explorar» que
    quizá no tocaban); conviene acotarlas al área de la sesión cuando la guía la dice.
+   ⚠ Resuelto el 2026-10-27 (abajo, «El análisis de la venta se muda a la preventa»): se acota al área de la sesión.
+   ⚠ Enmendado el 2026-10-27: el punto 5 «se analiza a mano» ya no tiene botón fuera de la preventa (Sesiones no analiza).
+
 
 ## Un solo transporte para HubSpot: el token, el 401 y el 429 (2026-10-24, U6)
 
@@ -11614,3 +11617,51 @@ de Ventas: explorar a fondo y alejarse de la venta transaccional.
 - **El equipo en las reuniones elegidas a mano** (Contexto del diagnóstico): las elegidas también llevan el selector
   «Equipo del cliente» (`equiposDeLasElegidasDelDiagnostico`); el de una sesión de la exploración se muestra y se cambia
   en la sesión. La escritura es la de siempre (`SessionProject.equipoDeLaReunion`, solo en la membresía del proyecto).
+
+## El análisis de la venta se muda a la preventa: la autoevaluación, la pieza «Análisis» y la tendencia (2026-10-27, S4 a S7)
+
+**Contexto.** Elías, 26 oct, después de ver S1 a S3 en Sesiones: el problema es que Ventas no explora lo suficiente y va
+directo a la solución; queremos diagnosticar a fondo y dejar la venta transaccional. Sesiones no es el lugar para analizar
+el manejo de un cliente ni de una sesión: el análisis vive en la preventa (docs/analizador-reuniones-venta-plan.md ›
+«El rediseño de Elías»).
+
+**Decisiones.**
+1. **S4 · «Cómo trabajaste esta sesión»** va en Exploración › la sesión › Análisis, como un apartado APARTE debajo de
+   «Quedó abierto» (lo de arriba no se toca). Es el análisis de S3 resumido para esa sesión: cómo fue, quién habló, lo que
+   faltó explorar (lo solo tocado con su cita; lo no tocado, sin cita porque no pasó), la etapa que se saltó, el siguiente
+   paso y lo que va «para la próxima». El vendedor comenta o discrepa (sobre un punto o sobre todo); una persona confirma
+   y elige qué va para la próxima. Se guarda en la misma fila (`AnalisisDeVenta`: `comentarios`, `confirmadoPor`,
+   `confirmadoAt`, `notaDeConfirmacion`, `paraLaProxima`). Volver a analizar borra la confirmación y deja los comentarios
+   con su fecha; INV62 vigila que ninguna confirmación quede sobre un análisis que nadie leyó.
+2. **Lo confirmado alimenta la guía de la siguiente sesión por el camino de «Quedó abierto»:** cada punto confirmado tiene
+   su casilla «Llevar a la sesión N», que lo suma a `SesionPlaneada.explorar` y la guía lo pregunta primero. No se escribe
+   solo: lo decide una persona, y el analizador no toca `lib/exploraciones/` (otra sesión trabaja la guía).
+3. **Quién confirma:** cualquiera que ve el análisis y puede trabajar la preventa (hoy, los super admin). No se le prohíbe
+   al vendedor confirmar el suyo. ⚠ Pendiente para Elías: si la confirmación tiene que ser del líder (Andrés) y no del
+   vendedor.
+4. **S5 · la pieza «Análisis»** va última en la lista de piezas (después de Propuesta) y solo la ven los super admin. Trae
+   TODAS las reuniones de venta con la empresa, del chokepoint (`getClientSessions`) y la regla de «de venta»: las de
+   exploración y también las de propuesta (las posteriores a la primera propuesta armada se rotulan «de propuesta»).
+   Arriba, la lectura de conjunto, SIN IA (lib/analizador-venta/conjunto.ts): cómo se ha trabajado (cuántas, cuántas con
+   transcripción, cuánto habló el cliente, si fue consultiva) y qué falta diagnosticar antes de proponer: las dimensiones
+   de las áreas en juego que ninguna sesión exploró a fondo y la escala no tiene confirmadas con evidencia, separando las
+   que solo se tocaron, y las etapas del proceso consultivo que no se hicieron. Sin IA porque junta juicios que ya traen
+   su cita: otro agente resumiendo resúmenes no agregaría verdad y costaría.
+5. **«Si se cumplió» el siguiente paso es «si tuvo continuidad»:** hubo otra reunión de venta con la empresa en los 21
+   días que siguieron. Nexus no sabe si se mandó la propuesta o la info prometida; lo que sí sabe es si la conversación
+   siguió. Se dice así en pantalla.
+6. **S6 · Sesiones no analiza:** se retiraron «Reuniones de venta» (/sessions/venta), el bloque de la reunión y sus rutas.
+   El tablero de salud sigue. El criterio y la tendencia viven en Ventas › Preventa › «Análisis de la venta»
+   (/sales/analisis); «Marcar como referencia» vive en «Cómo trabajaste esta sesión». La expansión de un cliente SIN
+   preventa (antes «a mano» desde la reunión) queda sin botón: se le abre una preventa. ⚠ Pendiente para Elías.
+7. **S7 · la tendencia por vendedor** vive en /sales/analisis, solo para super admin. Por vendedor y mes a mes: reuniones,
+   cuántas con transcripción, cuánto habló él y el cliente, cuánto exploró a fondo y cuántas dejaron siguiente paso con
+   fecha. **La reunión se atribuye a quien habló** (reconocido por correo o nombre en la transcripción); sin transcripción,
+   a los de la invitación que no la rechazaron (la respuesta del calendario que guarda T7). Nunca por la asistencia ni los
+   minutos de la API de Meet (Google pide no usarlos para medir desempeño). De esos, el vendedor es el de Ventas; sin nadie
+   de Ventas, todos. **Lo que juzga el análisis cuenta solo confirmado**; quién habló y la transcripción cuentan siempre.
+   No hay ranking: cada uno con sus propios meses.
+8. **Acotar al área de la sesión** (lib/analizador-venta/alcance.ts): el equipo de la sesión (con área, sus dimensiones;
+   sin área en la escala —Dirección, Operaciones, Finanzas, Tecnología—, los temas de su guía), si no la guía enfocada en
+   dimensiones, y solo al final las áreas en juego. El agente juzga «exploración» sobre esa lista y ninguna otra.
+9. **El análisis automático sigue apagado** (`ANALIZADOR_VENTA`) hasta que lo apruebe Andrés (S8).

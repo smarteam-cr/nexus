@@ -91,7 +91,12 @@ type Destino =
 
 const CENSO: Record<string, { destino: Destino; motivo: string }> = {
   "lib/analizador-venta/analizar-server.ts": { destino: "analizador-de-venta", motivo: "Qué empresa tiene una preventa de venta abierta (solo el clientId), para decidir si una reunión es de venta." },
+  "lib/analizador-venta/guardia-server.ts": { destino: "analizador-de-venta", motivo: "S4/S5 (2026-10-27): de qué empresa es la preventa (solo clientId y projectId), para que el análisis toque solo sus reuniones." },
+  "lib/analizador-venta/alcance.ts": { destino: "equipos-del-cliente", motivo: "Qué se esperaba explorar en una sesión: el área o los temas del equipo del cliente (EQUIPOS)." },
+  "components/analizador-venta/ComoTrabajasteEstaSesion.tsx": { destino: "ventas", motivo: "S4: «Cómo trabajaste esta sesión», dentro del lienzo de la preventa (las sesiones, para llevar lo confirmado a la próxima)." },
+  "components/analizador-venta/PasoAnalisis.tsx": { destino: "ventas", motivo: "S5: la pieza «Análisis» del lienzo (las sesiones y el mapa de la escala, para saber qué falta diagnosticar)." },
   "lib/analizador-venta/guia-de-la-reunion-server.ts": {
+
     destino: "analizador-de-venta",
     motivo: "La guía que se llevó a la reunión (la de antes de la reunión, como la lectura de la preventa) y las dimensiones de la escala, de la preventa de la empresa dueña de la reunión.",
   },

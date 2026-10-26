@@ -8,6 +8,10 @@
  * invitación del calendario), si tiene transcripción o por qué no (el motivo de T4), y su análisis si lo tiene. No arma
  * contexto para ningún agente: el análisis trae su reunión por el chokepoint (analizar-server.ts).
  * Las canceladas sin nada no entran (`noEsCanceladaSinTextoSql`).
+ *
+ * Con `completo` (la pieza «Análisis» de la preventa y la tendencia, S5 y S7, 2026-10-27) trae además quién habló (el del
+ * análisis o, sin él, calculado), el análisis entero con sus comentarios y su confirmación (S4), y atribuye cada reunión
+ * por el calendario y por quién habló (lib/analizador-venta/tendencia.ts › `atribuirLaReunion`), nunca por la asistencia.
  */
 import "server-only";
 import { prisma } from "@/lib/db/prisma";
@@ -18,9 +22,14 @@ import { DE_QUIEN_ES } from "@/lib/google/por-que-falta";
 import { motivoParaMostrar } from "@/lib/sessions/motivo-sin-texto";
 import { dominiosDeLaCasa } from "@/lib/sessions/reuniones-para-seguimiento";
 import { sqlClaseDeTexto, type ClaseDeTexto } from "@/lib/sessions/tiene-texto";
-import { leerResultadoGuardado, type Juicio } from "./analisis";
+import { equipoEnLasReuniones } from "@/lib/google/equipo-en-la-reunion";
+import { esquemaDesactualizado } from "@/lib/db/esquema";
+
+import { leerResultadoGuardado, type Juicio, type ResultadoDelAnalisis } from "./analisis";
 import type { QuienHablo } from "./quien-hablo";
-import { empresasConPreventaAbierta } from "./analizar-server";
+import { empresasConPreventaAbierta, quienHabloEnLasReuniones } from "./analizar-server";
+import { leerComentarios, leerParaLaProxima, type ComentarioDelAnalisis } from "./revision";
+import { atribuirLaReunion, delEquipoQueHablo } from "./tendencia";
 import { DIAS_PARA_ANALIZAR_SOLA, delEquipoEnLaReunion, porQueNoEsDeVenta, seAnalizaAMano, vendedoresDeLaReunion } from "./reglas";
 
 const DIA_MS = 86_400_000;
@@ -42,6 +51,24 @@ export interface ReunionDeVentaVista {
     error: string | null;
   } | null;
   referencia: boolean;
+  /** Solo con `completo`: los correos de los vendedores atribuidos. */
+  correos?: string[];
+  /** Solo con `completo`: quién habló (el del análisis o calculado); null = sin transcripción. */
+  quienHablo?: QuienHablo | null;
+  /** Solo con `completo`: el análisis vigente entero, con la revisión de S4. */
+  detalle?: DetalleDelAnalisis | null;
+}
+
+/** El análisis de una reunión, con lo que le sumó la revisión (S4). */
+export interface DetalleDelAnalisis {
+  estado: "PROPUESTO" | "ERROR";
+  resultado: ResultadoDelAnalisis | null;
+  descartados: number;
+  error: string | null;
+  analizadoAt: string;
+  comentarios: ComentarioDelAnalisis[];
+  confirmado: { por: string; en: string; nota: string | null } | null;
+  paraLaProxima: string[];
 }
 
 export interface EmpresaConReunionesDeVenta {
@@ -53,7 +80,7 @@ export interface EmpresaConReunionesDeVenta {
   analizadas: number;
 }
 
-export async function reunionesDeVenta(o: { dias: number; ahora?: Date; clientId?: string | null }): Promise<EmpresaConReunionesDeVenta[]> {
+export async function reunionesDeVenta(o: { dias: number; ahora?: Date; clientId?: string | null; completo?: boolean }): Promise<EmpresaConReunionesDeVenta[]> {
   const ahora = o.ahora ?? new Date();
   const desde = new Date(+ahora - o.dias * DIA_MS);
   const [filas, propios, ventas, equipo] = await Promise.all([
@@ -117,18 +144,42 @@ export async function reunionesDeVenta(o: { dias: number; ahora?: Date; clientId
   const ids = deVenta.map((x) => x.f.id);
   const [analisis, referencias] = await Promise.all([
     prisma.analisisDeVenta
-      .findMany({ where: { sessionId: { in: ids } }, select: { sessionId: true, clientId: true, estado: true, resultado: true, quienHablo: true, error: true } })
-      .catch(() => []),
+      .findMany({
+        where: { sessionId: { in: ids } },
+        select: {
+          sessionId: true,
+          clientId: true,
+          estado: true,
+          resultado: true,
+          quienHablo: true,
+          error: true,
+          ...(o.completo ? { descartados: true, analizadoAt: true, comentarios: true, confirmadoPor: true, confirmadoAt: true, notaDeConfirmacion: true, paraLaProxima: true } : {}),
+        },
+      })
+      .catch((e: unknown) => {
+        // La pantalla (completo) dice «falta el SQL» en vez de mostrar todo «sin analizar» y ofrecer gastar IA de más.
+        if (o.completo && esquemaDesactualizado(e)) throw e;
+        return [];
+      }),
     prisma.reunionDeReferenciaDeVenta.findMany({ where: { sessionId: { in: ids } }, select: { sessionId: true } }).catch(() => []),
   ]);
   const analisisDe = new Map(analisis.map((a) => [a.sessionId, a]));
   const esReferencia = new Set(referencias.map((r) => r.sessionId));
 
+  // Con `completo`: quién habló donde no lo guardó un análisis, y quién de la invitación la rechazó (T7, del calendario).
+  const vigenteDe = (id: string, empresaId: string) => {
+    const a = analisisDe.get(id);
+    return a && a.clientId === empresaId ? a : null;
+  };
+  const sinQuien = o.completo ? deVenta.filter((x) => x.f.clase === "transcripcion" && !vigenteDe(x.f.id, x.f.empresaId)?.quienHablo).map((x) => x.f.id) : [];
+  const [calculado, equipoT7] = o.completo
+    ? await Promise.all([quienHabloEnLasReuniones(sinQuien), equipoEnLasReuniones(ids, (c) => propios.has(c.split("@")[1] ?? ""))])
+    : [new Map<string, QuienHablo>(), new Map<string, { correo: string; respuesta: string | null }[]>()];
+
   const porEmpresa = new Map<string, EmpresaConReunionesDeVenta>();
   for (const { f, delEquipo } of deVenta) {
-    const a = analisisDe.get(f.id);
     // Un análisis hecho cuando la reunión era de otra empresa no se muestra (INV57 lo reclama).
-    const vigente = a && a.clientId === f.empresaId ? a : null;
+    const vigente = vigenteDe(f.id, f.empresaId);
     const resultado = vigente ? leerResultadoGuardado(vigente.resultado) : null;
     const exploracion = (resultado?.juicios ?? []).filter((j: Juicio) => j.punto === "exploracion" && j.dimension);
     const motivo =
@@ -141,11 +192,22 @@ export async function reunionesDeVenta(o: { dias: number; ahora?: Date; clientId
             )
           ].texto
         : null;
+    const quien = o.completo ? ((vigente?.quienHablo as unknown as QuienHablo | null) ?? calculado.get(f.id) ?? null) : undefined;
+    const correos = o.completo
+      ? vendedoresDeLaReunion(
+          atribuirLaReunion({
+            calendario: delEquipo,
+            rechazaron: new Set((equipoT7.get(f.id) ?? []).filter((x) => x.respuesta === "RECHAZO").map((x) => x.correo)),
+            hablaron: delEquipoQueHablo(quien ?? null),
+          }),
+          ventas,
+        )
+      : vendedoresDeLaReunion(delEquipo, ventas);
     const vista: ReunionDeVentaVista = {
       id: f.id,
       titulo: f.title,
       fecha: f.date.toISOString(),
-      vendedores: vendedoresDeLaReunion(delEquipo, ventas).map((e) => nombreDe.get(e) ?? e),
+      vendedores: correos.map((e) => nombreDe.get(e) ?? e),
       texto: f.clase,
       motivo,
       analisis: vigente
@@ -159,6 +221,7 @@ export async function reunionesDeVenta(o: { dias: number; ahora?: Date; clientId
           }
         : null,
       referencia: esReferencia.has(f.id),
+      ...(o.completo ? { correos, quienHablo: quien ?? null, detalle: vigente ? detalleDe(vigente, resultado) : null } : {}),
     };
     const g = porEmpresa.get(f.empresaId) ?? { id: f.empresaId, nombre: f.empresa, kind: f.kind, reuniones: [], conTranscripcion: 0, analizadas: 0 };
     g.reuniones.push(vista);
@@ -170,8 +233,36 @@ export async function reunionesDeVenta(o: { dias: number; ahora?: Date; clientId
   return [...porEmpresa.values()].sort((a, b) => b.reuniones[0].fecha.localeCompare(a.reuniones[0].fecha));
 }
 
+/** El análisis guardado, con su revisión, leído tolerante (sin las columnas de S4, como si no tuviera revisión). */
+function detalleDe(
+  a: {
+    estado: "PROPUESTO" | "ERROR";
+    error: string | null;
+    descartados?: number;
+    analizadoAt?: Date;
+    comentarios?: unknown;
+    confirmadoPor?: string | null;
+    confirmadoAt?: Date | null;
+    notaDeConfirmacion?: string | null;
+    paraLaProxima?: unknown;
+  },
+  resultado: ResultadoDelAnalisis | null,
+): DetalleDelAnalisis {
+  return {
+    estado: a.estado,
+    resultado,
+    descartados: a.descartados ?? 0,
+    error: a.error,
+    analizadoAt: (a.analizadoAt ?? new Date(0)).toISOString(),
+    comentarios: leerComentarios(a.comentarios),
+    confirmado: a.confirmadoPor && a.confirmadoAt ? { por: a.confirmadoPor, en: a.confirmadoAt.toISOString(), nota: a.notaDeConfirmacion ?? null } : null,
+    paraLaProxima: leerParaLaProxima(a.paraLaProxima),
+  };
+}
+
 /**
  * Las reuniones de venta de los últimos `DIAS_PARA_ANALIZAR_SOLA` días con transcripción y sin análisis, de la más
+
  * vieja a la más nueva: las que el job `analizador-venta` analiza solo. Una que terminó en error no se reintenta sola
  * (se reintenta a mano).
  */

@@ -170,16 +170,25 @@ describe("⛔ el analizador corre por su camino, con una sola empresa", () => {
     expect(AGENTES_CON_CAMINO_PROPIO).toContain(AGENTE_DEL_ANALIZADOR);
     expect(esAgenteRetirado(AGENTE_DEL_ANALIZADOR)).toBe(true);
   });
-  it("⛔ solo lo ven quienes ven el analizador: las rutas, la página y el bloque de la reunión preguntan", () => {
-    for (const f of [
-      "app/api/sessions/[id]/analisis-de-venta/route.ts",
-      "app/api/sessions/[id]/referencia-de-venta/route.ts",
-      "app/(shell)/sessions/venta/page.tsx",
-      "app/(shell)/sessions/[id]/page.tsx",
-    ]) {
-      expect(leer(f), f).toMatch(/veElAnalizador\(/);
+  it("⛔ solo lo ven quienes ven el analizador: la guarda de las rutas, la preventa y la página del análisis preguntan", () => {
+    expect(leer("lib/analizador-venta/guardia-server.ts")).toMatch(/veElAnalizador\(g\.role\)/);
+    for (const f of ["app/api/sales/exploraciones/[id]/analisis-de-venta/route.ts", "app/api/sales/exploraciones/[id]/analisis-de-venta/revision/route.ts"]) {
+      const src = leer(f);
+      // Cada método empieza por la guarda, y la reunión tiene que ser de la empresa de la preventa (el chokepoint).
+      expect(src.match(/export async function (GET|POST)/g)?.length, f).toBe(src.match(/await guardDelAnalisisDeVenta\(id, "(read|write)"\)/g)?.length);
+      if (src.includes("sessionId")) expect(src, f).toMatch(/esReunionDeLaEmpresa\(g\.clientId/);
+    }
+    for (const f of ["app/(shell)/sales/exploraciones/[id]/page.tsx", "app/(shell)/sales/analisis/page.tsx"]) expect(leer(f), f).toMatch(/veElAnalizador\(ctx\.role\)/);
+  });
+  it("⛔ S6: en Sesiones no queda nada de analizar el manejo de un cliente ni de una sesión", () => {
+    for (const f of ["app/(shell)/sessions/[id]/page.tsx", "app/(shell)/sessions/salud/page.tsx", "app/(shell)/sessions/page.tsx"]) {
+      expect(leer(f), f).not.toMatch(/analizador-venta|AnalisisDeVenta|sessions\/venta/);
+    }
+    for (const f of ["app/(shell)/sessions/venta/page.tsx", "app/api/sessions/[id]/analisis-de-venta/route.ts", "app/api/sessions/[id]/referencia-de-venta/route.ts"]) {
+      expect(fs.existsSync(path.join(RAIZ, f)), f).toBe(false);
     }
   });
+
   it("la reunión que se analiza sale del chokepoint, y la de referencia no entra al contexto", () => {
     const src = leer("lib/analizador-venta/analizar-server.ts");
     expect(src).toContain("getClientSessions(r.dueno.id, { ids: [sessionId] })");

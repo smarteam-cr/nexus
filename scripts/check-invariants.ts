@@ -18,7 +18,7 @@ import {
   INV31, INV32, INV33, INV34, INV35, INV36, INV37, INV38, INV39, INV40, INV41, INV42, INV43, INV44, INV45, INV46, INV47,
   type Invariante,
 } from "@/lib/invariantes";
-import { INV49, INV50, INV51, INV52, INV53, INV54, INV55, INV56, INV57, INV58, INV59, INV60, INV61 } from "@/lib/invariantes";
+import { INV49, INV50, INV51, INV52, INV53, INV54, INV55, INV56, INV57, INV58, INV59, INV60, INV61, INV62 } from "@/lib/invariantes";
 
 /**
  * Imprime un invariante extraído a `lib/invariantes/` exactamente como se imprimía acá adentro
@@ -822,6 +822,10 @@ async function main(): Promise<number> {
   // ── Inv 57 → lib/invariantes/analizador-venta.ts (2026-10-25, S3: cada análisis de venta es de la empresa dueña de
   //    su reunión; invariante 1) ──
   violations += await reportar(INV57, prisma);
+  // ── Inv 62 → lib/invariantes/analizador-venta.ts (2026-10-27, S4: cada análisis de venta confirmado tiene quién, cuándo
+  //    y resultado, y es posterior al análisis) ──
+  violations += await reportar(INV62, prisma);
+
   // ── Inv 58 → lib/invariantes/tests-diagnostico.ts (2026-10-26, área O: todo intento del test llegó a HubSpot; nace «no
   //    bloquea» y con el envío apagado solo avisa) ──
   violations += await reportar(INV58, prisma);

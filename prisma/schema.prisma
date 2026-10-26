@@ -2709,6 +2709,14 @@ model AnalisisDeVenta {
   /// Quién lo pidió; null = lo analizó el job.
   pedidoPor   String?
   analizadoAt DateTime                 @default(now())
+  /// S4 (2026-10-27): `ComentarioDelAnalisis[]` (lib/analizador-venta/revision.ts): el vendedor comenta o discrepa.
+  comentarios        Json?
+  /// S4: quién lo confirmó (una persona); null = sigue siendo propuesta. Volver a analizar lo borra.
+  confirmadoPor      String?
+  confirmadoAt       DateTime?
+  notaDeConfirmacion String?
+  /// S4: `string[]`, lo que la persona confirmó para la próxima sesión (sale de las recomendaciones y de lo sin explorar).
+  paraLaProxima      Json?
   createdAt   DateTime                 @default(now())
   updatedAt   DateTime                 @updatedAt
 

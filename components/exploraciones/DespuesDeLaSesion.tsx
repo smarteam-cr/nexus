@@ -24,6 +24,7 @@ import { definicionEnElMarco, type Marco } from "@/lib/exploraciones/marco";
 import { claveDeLaReunion, type DestinoDePropuesta, type ItemPropuesto, type LecturaDeReunion } from "@/lib/exploraciones/contenido";
 import { MAX_SESIONES, separarPregunta, type PestanaDeSesion, type PreguntaParaMostrar, type ResultadoDeLaSesion } from "@/lib/exploraciones/guia";
 import { claveDeNotaDeSesion } from "@/lib/exploraciones/notas-de-sesion";
+import ComoTrabajasteEstaSesion from "@/components/analizador-venta/ComoTrabajasteEstaSesion";
 import { Casilla } from "./Casilla";
 import { CorreoDeSeguimiento } from "./CorreoDeSeguimiento";
 import { useLienzo } from "./contexto";
@@ -606,6 +607,9 @@ export default function DespuesDeLaSesion({
       <LoQueSugiere pestana={pestana} lectura={lectura} />
       <PasoYAvance pestana={pestana} lectura={lectura} />
       <QuedoAbierto pestana={pestana} lectura={lectura} numeroSiguiente={numeroSiguiente} llevar={(l) => armarLaSiguiente(l)} soltar={soltar} />
+      {/* S4 (2026-10-27): la autoevaluación de la sesión, APARTE de lo de arriba. Solo con el análisis de la venta a la vista. */}
+      {!enProyecto && <ComoTrabajasteEstaSesion pestana={pestana} numeroSiguiente={numeroSiguiente} llevar={(l) => armarLaSiguiente(l)} soltar={soltar} />}
+
       <CorreoDeSeguimiento pestana={pestana} />
 
       <details className="rounded-xl border border-line bg-surface">

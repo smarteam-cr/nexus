@@ -142,3 +142,8 @@ Después de ver lo construido el 26 oct (S1 a S3, en Sesiones › «Ver la salud
 - **La tendencia por vendedor se queda** (S7), como se decidió el 24 oct.
 
 La numeración del roadmap cambió: S4 la autoevaluación, S5 la pieza «Análisis», S6 sacarlo de Sesiones, S7 la tendencia y S8 la prueba con Andrés.
+
+**Construido el 27 oct (S4 a S7, rama de la noche 2):** «Cómo trabajaste esta sesión» en Exploración › la sesión ›
+Análisis; la pieza «Análisis» en la preventa; Sesiones ya no analiza; la tendencia por vendedor y el criterio en Ventas ›
+Preventa › «Análisis de la venta» (/sales/analisis); el juicio de exploración acotado al área de la sesión. El porqué y
+lo pendiente para Elías: DECISIONS › «El análisis de la venta se muda a la preventa».
