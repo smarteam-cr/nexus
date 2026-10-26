@@ -1,12 +1,12 @@
 # Roadmap de Nexus
 
-**Corte:** 2026-10-26
+**Corte:** 2026-10-27
 
 ## Resumen
 
 **Nexus en una frase:** el sistema donde Smarteam vende por resultados (casos de uso), los entrega con Customer Success y sabe cuánto le cuesta cada uno; cada persona entra y ve qué le toca hoy.
 
-**Dónde vamos (26 oct):** el contexto inicial (la empresa, sus reuniones y las integraciones) y el paso dos ya están en producción. Sigue lo que te toca a ti y la noche 2 (pestaña «Roadmap» › «Próxima tanda»).
+**Dónde vamos (27 oct):** el contexto inicial, el paso dos y la noche 2 están en producción: el análisis de la venta ya vive en la preventa, las exploraciones por equipo se asocian solas, las tareas se limpian y van a HubSpot, y la Planificación tiene las siete etapas del Brief. Sigue lo que te toca a ti.
 
 **Lo que te toca:** configurar el servidor, aprobar las preguntas del test, contestar las del borrador 9.0 y decidir los puntos 32 a 40 (pestaña «Roadmap» › «Lo que configuras tú» y «Lo que decides tú»); la CSL revisa los 83 cambios de potencial.
 
@@ -33,8 +33,8 @@ El detalle de cada tarjeta (lo de hoy, el plan, el criterio de éxito y tus resp
 ### 4 · El análisis de la venta consultiva <span class="estado">En curso</span>
 
 - **Resultado:** Ventas explora a fondo y diagnostica al cliente en vez de vender transaccional: cada vendedor se autoevalúa sesión por sesión, y la ficha de cada prospecto muestra cómo se lo ha trabajado.
-- **Va:** el criterio consultivo, quién habló y el análisis con citas verificadas, en producción para super admin (26 oct), todavía en Sesiones.
-- **Sigue:** llevarlo a la preventa (la pieza «Análisis» del prospecto y la autoevaluación en cada sesión), sacarlo de Sesiones, la tendencia por vendedor y la prueba con Andrés.
+- **Va:** en la preventa desde el 27 oct: «Cómo trabajaste esta sesión» en el Análisis de cada sesión, la pieza «Análisis» del prospecto y la tendencia por vendedor (Ventas › Preventa › «Análisis de la venta»); salió de Sesiones. Solo super admin.
+- **Sigue:** la prueba con Andrés (cinco sesiones reales) y, con su visto bueno, prender el análisis automático y abrirlo a Ventas.
 
 ### 5 · La escala de rendimiento <span class="estado">En curso</span>
 
@@ -335,6 +335,11 @@ Sin esto, algo sigue mal o no se puede validar:
 38. **El borrador de la escala 9.0:** 39 preguntas en Escala › Borrador › «Lo que falta decidir» (las principales: si los cambios de Insider conservan su número, el grupo de control de 2.8.O3, «tráfico suficiente» y su umbral, y qué ejecuta la IA en los Óptimos que hoy se cumplen sin ella). Mientras haya preguntas abiertas, no se puede publicar.
 39. **Los tests en HubSpot:** el formulario de HubSpot pisa los datos de un contacto que ya existe (la app vieja también). ¿Se acepta, o mandamos solo los correos que todavía no son contactos?
 40. **El analizador de venta:** entran solas las reuniones de prospectos y las de clientes con una preventa abierta y alguien de Ventas (95 en 90 días); «Fase 2: Marketing» de CEMACO se analiza a mano. Y la reunión de referencia no entra al análisis (es de otra empresa), se muestra al lado. ¿De acuerdo?
+41. **Quién confirma el análisis de una sesión de venta:** hoy cualquier super admin, incluso el vendedor. ¿Tiene que confirmar el líder (Andrés)?
+42. **Las expansiones de un cliente sin preventa** (como la Fase 2 de CEMACO): antes se analizaban a mano desde la reunión; ahora hay que abrirles una preventa. ¿Está bien así?
+43. **«Por decidir» en Tareas:** el tope quedó en 5 sugerencias por persona (antes 10), y 59 que nadie tocó se vencieron. ¿5 o 6?
+44. **La plantilla recomendada de la Planificación:** hoy el selector propone la completa. ¿Recomendamos una?
+45. **«Cómo llegó» un prospecto:** sumé una quinta vía, «Por la web o un anuncio». ¿La dejamos?
 
 ## Propuesta por aprobar: vender y entregar por casos de uso
 
@@ -405,7 +410,7 @@ Sale de lo que decidiste el 22 oct sobre cómo vende y entrega Smarteam («resul
 - `docs/rentabilidad-por-caso-plan.md`: el tiempo estimado y real por tarea, la rentabilidad por caso y la capacidad con las horas de las actividades. Sirve a G.
 - `docs/entregables-cs-plan.md`: las plantillas de cada entregable y qué necesita Customer Success para cada uno. Sirve a I y J.
 
-**Próxima tanda: la noche 2 (propuesta del 26 oct, por aprobar).** Cinco piezas que no esperan a nadie, cada una con su deploy:
+**La noche 2: en producción el 27 oct (`08442a43`).** Aprobada el 26 oct; las cinco piezas quedaron así (la unión automática de sesiones, la escritura en HubSpot de las tareas y tu piloto se prenden con su bandera: «Lo que configuras tú»): Cinco piezas que no esperan a nadie, cada una con su deploy:
 
 | # | Pieza | Resultado de negocio |
 |---|---|---|
@@ -565,7 +570,7 @@ Plan: `docs/entrega-por-casos-plan.md`. Lo que mostró el diagnóstico del 22 oc
    - Etapa 2 · El diseño en Claude Design: lo que ve el cliente es un resumen, como se vendió (los casos con sus etapas y las sesiones); las tareas del equipo van aparte.
    - Etapa 3 · El corte limpio: los proyectos nuevos nacen con el modelo nuevo; los de hoy siguen como están. Para tener un cronograma nuevo sin tocar el viejo se usa lo que ya existe: otro proyecto del mismo cliente (un cliente ya puede tener varios). No se cambia la regla de un cronograma por proyecto.
    - Etapa 4 · Nada cambia en un cronograma publicado sin una propuesta que el CSE apruebe, como hoy.
-3. **D2 · Las tareas del equipo salen de las actividades, por tres puertas.** *Sale de:* «cada caso de uso genera tareas para Customer Success», «cada tarea guarda tiempo estimado y real» y tus respuestas del 22 oct. *Depende de:* A0, A2 y C2 para la etapa 2; la etapa 1 va ya.
+3. [en curso: la etapa 1, en producción el 27 oct (59 sugerencias vencidas)] **D2 · Las tareas del equipo salen de las actividades, por tres puertas.** *Sale de:* «cada caso de uso genera tareas para Customer Success», «cada tarea guarda tiempo estimado y real» y tus respuestas del 22 oct. *Depende de:* A0, A2 y C2 para la etapa 2; la etapa 1 va ya.
    - Etapa 1 · Limpiar antes de sumar: cerrar lo vencido, juntar los seguimientos sueltos y bajar el tope de «Por decidir». Hoy, en 45 días, a los cinco CSE les llegaron 105 tareas: ninguna aceptada ni hecha, 37 vencidas sin decidir, y hay 26 seguimientos que nadie tomó.
    - Etapa 2 · Las tres puertas (`docs/tareas-plan.md` § 17):
      - **El plan del proyecto:** nace en el handoff, una tarea por actividad vendida, con su responsable y su tiempo. Ya está vendido, así que no pasa por «Por decidir».
@@ -579,7 +584,7 @@ Plan: `docs/entrega-por-casos-plan.md`. Lo que mostró el diagnóstico del 22 oc
    - Etapa 1 · La lectura de cada reunión compara lo pedido contra las actividades de lo vendido: dentro, propuesta de tarea; fuera, pedido (ver E1).
    - Etapa 2 · Que no duplique una tarea que ya está en el cronograma (hoy no lo detecta).
 
-5. **D4 · Las tareas de seguimiento comercial, también en HubSpot.** *Sale de:* el feedback de Ventas del 23 oct («que quede en el calendario y en HubSpot, y que al marcarla hecha en un lado se marque en el otro»). *Depende de:* nada. Plan: `docs/tareas-plan.md` § 17.
+5. [hecho, 27 oct; se prende con su bandera] **D4 · Las tareas de seguimiento comercial, también en HubSpot.** *Sale de:* el feedback de Ventas del 23 oct («que quede en el calendario y en HubSpot, y que al marcarla hecha en un lado se marque en el otro»). *Depende de:* nada. Plan: `docs/tareas-plan.md` § 17.
    - Hoy existe a medias: lo que nace en HubSpot se sincroniza en los dos sentidos (hecha incluida) cada 15 minutos, y una tarea a mano con fecha se agenda en Calendar con un clic. Lo que nace en Nexus no se crea en HubSpot.
    - Etapa 1 · Una tarea de seguimiento con un contacto o negocio («el cliente no responde hace 3 días») se crea también en HubSpot y guarda su id: desde ahí, el estado viaja solo.
    - Etapa 2 · Al crearla, «Agendar» propone el bloque en el calendario del consultor.
@@ -634,7 +639,7 @@ Plan: `docs/rentabilidad-por-caso-plan.md`.
 
 Plan: `docs/tareas-organizacion-plan.md` (P5) y `docs/reuniones-pieza-angular-plan.md`. Lo que mostró el diagnóstico del 22 oct: Nexus guarda las reuniones de Meet de todo el equipo, pero solo propone tareas en reuniones con un cliente o prospecto (y ahí solo lo que cada uno se comprometió) y en las reuniones de sprint configuradas. Las reuniones internas sueltas no se leen solas, y la copia de Meet corre solo cuando alguien abre Nexus.
 
-1. **H1 · Tu piloto: todas tus sesiones proponen tareas** (se construye dentro de P5, con la fuente, el contexto y las personas de cada propuesta). *Sale de:* tu respuesta 4 («Nexus debería proponerme tareas a mí, y a cada persona con sus sesiones»). *Depende de:* nada.
+1. [hecho, 27 oct; se prende con su bandera, solo para ti] **H1 · Tu piloto: todas tus sesiones proponen tareas** (se construye dentro de P5, con la fuente, el contexto y las personas de cada propuesta). *Sale de:* tu respuesta 4 («Nexus debería proponerme tareas a mí, y a cada persona con sus sesiones»). *Depende de:* nada.
    - Etapa 1 · Que la copia de Meet corra sola cada 10 minutos (es U1), sin depender de que alguien abra Nexus.
    - Etapa 2 · La lectura personal: las reuniones internas de una persona le proponen tareas, empezando por ti, en tu equipo y no en el de Customer Success. Incluye la tercera puerta de D2: lo dicho puertas adentro deja una tarea para quien la hace y una de revisión para quien la pidió (no depende de A0).
    - Etapa 3 · Leer también las reuniones con aliados y las que no tienen dueño, que hoy no lee nadie.
@@ -649,7 +654,7 @@ Plan: `docs/entregables-cs-plan.md`.
 1. **I1 · Elegir la plantilla de cada entregable.** *Sale de:* «es importante que pronto haya varias plantillas de diagnóstico o planificación» y «cada caso lleva su propio diagnóstico corto». *Depende de:* A1.
    - Etapa 1 · Un selector de plantilla en cada entregable. El diagnóstico ya lo tiene desde el 23 oct (esencial y completa); falta en los demás, con la misma forma: una entrada en el registro, su definición y el registro congelado por prueba.
    - Etapa 2 · Las plantillas de hoy siguen igual y son las que salen por defecto.
-2. **I2 · Dos plantillas de Planificación** (con L4). *Depende de:* J1.
+2. [hecho, 27 oct, en producción] **I2 · Dos plantillas de Planificación** (con L4). *Depende de:* J1.
    - Una esencial y una completa, como el diagnóstico.
    - La sección «Sesiones y entrenamientos» sale de las actividades vendidas cuando existan.
 3. **I3 · Plantillas por caso de uso.** *Depende de:* A0 y J1.
@@ -677,7 +682,7 @@ Sale del feedback de Ventas (Marco, Andrés y Liz) y de Customer Success (Lilian
    - Etapa 3 · Cada tema apunta a las dimensiones de la escala de su área, y la guía elige la pregunta que más ubica al cliente.
    - Etapa 4 · Las preguntas de base que faltan: telefonía, ERP y WhatsApp con sus fallas; retención, tiempos de respuesta y rotación.
    - Etapa 5 · Contrastar con el banco de preguntas de Andrés cuando llegue.
-2. **K2 · Prospectos sin contexto: la primera sesión abre la puerta.** *Existe a medias* (un modo «desde cero» automático). *Solo preventa.*
+2. [hecho, 27 oct, en producción] **K2 · Prospectos sin contexto: la primera sesión abre la puerta.** *Existe a medias* (un modo «desde cero» automático). *Solo preventa.*
    - Etapa 1 · «Cómo llegó»: test, en frío, referido (por quién) o evento; lo propone Nexus desde HubSpot y lo confirma el consultor.
    - Etapa 2 · En frío o referido, la primera sesión: 10 minutos para presentar a Smarteam con el position statement, 35 para que el cliente cuente y unas 3 preguntas al final.
    - Etapa 3 · Desde la segunda sesión, la guía de siempre.
@@ -688,11 +693,11 @@ Sale del feedback de Ventas (Marco, Andrés y Liz) y de Customer Success (Lilian
 4. **K4 · Clientes similares para presentarse.** *No existe.* *Solo preventa.*
    - Etapa 1 · Desde HubSpot y Nexus, los clientes de la misma industria y qué se les hizo.
    - Etapa 2 · En «Conexión», solo para el consultor y con el aviso de confirmar antes de nombrarlo.
-5. **K5 · Asociar sesiones solas, y sugerir cuando hay duda.** *Existe a medias:* en un prospecto ya entran solas; en un cliente o un proyecto, solo a mano. *Los dos lugares.*
+5. [hecho, 27 oct; la unión automática espera tu visto bueno] **K5 · Asociar sesiones solas, y sugerir cuando hay duda.** *Existe a medias:* en un prospecto ya entran solas; en un cliente o un proyecto, solo a mano. *Los dos lugares.*
    - Etapa 1 · Una reunión con invitados de la empresa que calza con una sesión planeada se sugiere arriba del lienzo: «¿Es la sesión 2 con Marketing?».
    - Etapa 2 · Se asocia sola solo sin duda (sin reuniones recientes de Customer Success y con un título de exploración); con duda, sugerencia. Nunca cruza clientes.
    - Etapa 3 · El lienzo se pone al día solo cuando entra una sesión, sin recargar.
-6. **K6 · Contexto a mano.** *Existe* (documentos, notas por sesión e instrucciones adicionales llegan a la guía). *Los dos lugares.*
+6. [hecho, 27 oct, en producción] **K6 · Contexto a mano.** *Existe* (documentos, notas por sesión e instrucciones adicionales llegan a la guía). *Los dos lugares.*
    - Etapa única · Un botón visible «Agregar algo que sabes» que entra entero a la guía cuando es corto (hoy un documento llega resumido y una nota suelta no entra).
 7. [hecho, 26 oct, en producción; falta revisar cinco guías con Marco] **K7 · La siguiente pregunta lógica, de calidad.** *Existe a medias:* la guía tomaba lo marcado en el test como si el cliente lo hubiera dicho y no buscaba la causa. *Solo preventa.*
    - Etapa 1 · Lo del test se valida («En el diagnóstico marcaste…; ¿cómo se ve en el día a día?»).
@@ -704,7 +709,7 @@ Sale del feedback de Ventas (Marco, Andrés y Liz) y de Customer Success (Lilian
    - Etapa 1 · Guardar cada ajuste con su fecha y la guía de antes.
    - Etapa 2 · Con volumen, un informe mensual de qué se quita y qué se suma, por equipo.
    - Etapa 3 · Ajustar los temas y las instrucciones del agente con eso.
-10. **K10 · Los leads del test, por empresa.** *Existe a medias:* «Llegaron por el test» agrupa por empresa, pero muestra un solo contacto y un área, descarta los intentos sin empresa y Marketing no lo ve en sus reportes.
+10. [hecho, 27 oct, en producción] **K10 · Los leads del test, por empresa.** *Existe a medias:* «Llegaron por el test» agrupa por empresa, pero muestra un solo contacto y un área, descarta los intentos sin empresa y Marketing no lo ve en sus reportes.
    - Etapa 1 · En la fila de la empresa, quién llenó el test de cada área, con el nombre junto a la empresa.
    - Etapa 2 · Los intentos sin empresa, agrupados por el dominio del correo, con «Crear la empresa en HubSpot».
    - Etapa 3 · Un reporte de marketing por empresa: cuántas llegaron, con cuántas áreas y cuántas pasaron a preventa.
@@ -726,7 +731,7 @@ Sale del feedback de Customer Success y Ventas del 23 oct, validado contra el di
    - Etapa 2 · Las tarjetas que todavía no se mueven: «Consecuencias positivas», la escala, los objetivos, los ítems de un grupo del alcance y las filas de las tablas.
    - Etapa 3 · El asistente sí puede quitar ítems, pero no sabe que «Consecuencias positivas» se arma con las Acciones coherentes: enseñárselo.
    - Etapa 4 · El contexto adicional abre cerrado siempre que ya tenga algo, y recuerda lo que eligió cada persona.
-4. **L4 · La Planificación como el siguiente entregable.** *Existe a medias:* tiene propiedades, pilotos y rutinas de adopción, y lee las Acciones coherentes del diagnóstico; no tiene sesiones, con quiénes ni entrenamientos.
+4. [hecho, 27 oct, en producción: las siete etapas del Brief] **L4 · La Planificación como el siguiente entregable.** *Existe a medias:* tiene propiedades, pilotos y rutinas de adopción, y lee las Acciones coherentes del diagnóstico; no tiene sesiones, con quiénes ni entrenamientos.
    - Etapa 1 · Una sección «Sesiones y entrenamientos», que sale de las actividades vendidas cuando existan.
    - Etapa 2 · Decidir dónde viven las Acciones coherentes (ver «Lo que decides tú»).
    - Etapa 3 · Dos plantillas de Planificación, como el diagnóstico (es I2).
@@ -841,14 +846,14 @@ Pedido del 23 oct, con la tarjeta de Trello y la barra de clientes de ClickUp co
    - Etapa 3 · Los nombres: «Cuánto toma» → «Estimación de tiempo», «Notas» → «Descripción», «Para quién» → «Cliente asociado», «Para» → «Responsable».
    - Etapa 4 · La casilla «Es una sesión» o «Asociada a una sesión», con los invitados y la hora.
    - Etapa 5 · Subtareas: tareas hijas con su responsable y su fecha (decidido el 24 oct; SQL aditivo), y el checklist simple para lo demás (el campo ya existe y nadie lo usa).
-3. **P3 · El calendario y las sesiones.** *Existe a medias:* «Agendar» crea un bloque nuevo; no se puede unir una tarea con un evento que ya existe.
+3. [hecho, 27 oct, en producción] **P3 · El calendario y las sesiones.** *Existe a medias:* «Agendar» crea un bloque nuevo; no se puede unir una tarea con un evento que ya existe.
    - Etapa 1 · En la agenda, tocar un evento existente ofrece «Asociar a una tarea»; tocar un espacio vacío la crea, como hoy.
    - Etapa 2 · Una tarea que es una sesión queda unida a su reunión de Meet cuando llega, y la reunión se lee con IA como cualquier otra.
    - Etapa 3 · Las fotos de las personas en la tarea y en la agenda, en una versión chica (64 px) que no pesa; iniciales para quien no tiene.
 4. **P4 · Listo para generar tareas desde lo vendido.** *No existe:* las plantillas de tareas están en el modelo, sin uso. *Depende de:* A2.
    - Etapa 1 · Plantillas con subtareas: una tarea por actividad de cada caso vendido, con el cliente asociado y su fuente («propuesta X · caso Y»).
    - Etapa 2 · El disparo desde el handoff es D2.
-5. **P5 · Leer todas las sesiones de cada persona.** *Existe a medias:* hoy se leen las reuniones con clientes de los últimos 14 días y los sprints; las internas sueltas no.
+5. [en curso: la etapa 2, en producción el 27 oct] **P5 · Leer todas las sesiones de cada persona.** *Existe a medias:* hoy se leen las reuniones con clientes de los últimos 14 días y los sprints; las internas sueltas no.
    - Etapa 1 · La copia de Meet cada 10 minutos (es U1), y leer las reuniones internas de cada persona (tu piloto, H1, primero).
    - Etapa 2 · Cada propuesta guarda y muestra su sesión, el contexto, las personas que estuvieron, el encargado y quién la pidió.
    - Etapa 3 · Con tope, y después de limpiar lo que nadie decidió (D2 etapa 1).
@@ -859,11 +864,11 @@ Pedido del 23 oct, con la tarjeta de Trello y la barra de clientes de ClickUp co
 
 Pedido del 23 oct. El kickoff es un documento que ve el cliente: una sección nueva sigue el contrato de los documentos y entra a su registro. Plan: `docs/kickoff-mejoras-plan.md`.
 
-1. **Q1 · La ruta de HubSpot Academy.** *No existe.*
+1. [en curso: etapas 1 y 2, en producción el 27 oct] **Q1 · La ruta de HubSpot Academy.** *No existe.*
    - Etapa 1 · Un catálogo de listas de reproducción de Academy que mantiene Smarteam: nombre, enlace, hub, rol y duración.
    - Etapa 2 · Una sección nueva del kickoff, «Tu ruta en HubSpot Academy»: las listas asignadas por rol (líderes, Ventas, Marketing, Servicio) según los hubs contratados y el equipo del cliente; el CSE ajusta.
    - Etapa 3 · Más adelante, la adopción (F) mira quién terminó su lista.
-2. **Q2 · El acceso a su portal.** *Existe a medias:* «Lo que necesitamos de tu equipo» pide «accesos» en general, sin garantía de que aparezca y sin seguimiento.
+2. [en curso: etapas 1 y 2, en producción el 27 oct] **Q2 · El acceso a su portal.** *Existe a medias:* «Lo que necesitamos de tu equipo» pide «accesos» en general, sin garantía de que aparezca y sin seguimiento.
    - Etapa 1 · Una tarjeta fija, siempre la primera de esa sección: darnos acceso a su portal de HubSpot, con los pasos y para cuándo.
    - Etapa 2 · El estado del acceso en el proyecto (dado o pendiente, con la fecha en que se dio), con un aviso al CSE mientras falte.
    - Etapa 3 · La comprobación automática cuando los portales de los clientes estén conectados (la auditoría del portal).
@@ -890,7 +895,7 @@ Pedido del 23 oct: que la empresa sea el centro, enriquecida y sincronizada con 
    - Etapa 2 · Escribir en HubSpot lo que Nexus enriquece como propiedades `nexus_*`. En el paso uno se crean el grupo «Nexus · Empresa» y, ya como listas, números y fechas, solo las propiedades que algo llena ahora: `nexus_tam_fuente`, `nexus_tam_fecha`, `nexus_investigacion_fecha`, `nexus_a_quien_vende`, `nexus_perfil_cierre`, `nexus_perfil_despues`, `nexus_trafico` y `nexus_base_consentimiento`, con simulacro y tu sí (molde: `scripts/hubspot-crear-propiedades-ficha.ts`). `nexus_nivel_*` y `nexus_escala_fecha` (B2 o N2), `nexus_califica_insider` (N6) y `nexus_siguiente_caso` (R12) se crean cuando exista su fuente.
    - Etapa 3 · Las propiedades estándar (industria, empleados) solo si en HubSpot están vacías, o cuando el usuario de Nexus que lo está usando, según su rol, usa o edita la propuesta (24 oct).
    - Etapa 4 (después, 24 oct: primero que el usuario escriba en HubSpot con la sugerencia del agente) · Tres o cuatro reportes base y el tablero «Cartera por potencial».
-3. [hecho, 25 oct, en producción: etapa 1] **R3 · Los documentos de la empresa, con o sin proyecto.** *No existe:* cada documento es de un proyecto o de una propuesta.
+3. [hecho, 27 oct, en producción: etapas 1 a 3] **R3 · Los documentos de la empresa, con o sin proyecto.** *No existe:* cada documento es de un proyecto o de una propuesta.
    - Etapa 1 · La empresa como dueña de cada documento; el proyecto y la propuesta, opcionales.
    - Etapa 2 · Un diagnóstico personalizado para un prospecto, y el documento de resultados de la preventa (C5).
    - Etapa 3 · Los permisos y la vista del cliente, probados con un diagnóstico de un prospecto y uno de un proyecto.
@@ -922,10 +927,10 @@ Pedido del 23 oct: Ventas va muy directo a la solución y explora poco. Queremos
 1. [hecho, 26 oct, en producción] **S1 · El criterio escrito.** El proceso consultivo como lista (identificar, investigar, conectar, explorar, asesorar), con lo que se espera en cada etapa, y «Marcar como referencia».
 2. [hecho, 26 oct, en producción] **S2 · Quién habló.** El reparto de palabras entre Smarteam y el cliente, sin IA, desde las frases de Meet o la transcripción.
 3. [hecho, 26 oct, en producción, todavía en Sesiones] **S3 · El análisis de cada sesión, con citas.** Qué tan consultiva fue (problemas y resultados frente a licencias y precio), la guía, la escala, el posicionamiento, lo que quedó sin explorar, asesor o vendedor de licencias, el siguiente paso y dos o tres recomendaciones; cada juicio con una cita que Nexus verifica en la transcripción. Prueba con Camosa: 28 juicios con cita válida, 8 descartados, Smarteam habló el 62 %, US$0,16.
-4. **S4 · La autoevaluación en cada sesión de exploración** (26 oct). En Preventa › Exploración › la sesión › «Análisis», un apartado aparte de lo que ya está (siguiente paso, cuánto avanzó, quedó abierto): «Cómo trabajaste esta sesión», con el análisis de S3 resumido para esa sesión, quién habló, lo que faltó explorar con su cita y dos o tres cosas para la próxima. El vendedor comenta o discrepa y una persona lo confirma; lo que confirma alimenta la guía de la siguiente sesión.
-5. **S5 · La pieza «Análisis» del prospecto** (26 oct; antes S7, «el analizador por cliente»). Una pieza nueva de la preventa, junto a Exploración, La escala, Casos de uso y Propuesta: todas las sesiones de exploración y también las de propuesta, una debajo de la otra, con cómo se trabajó cada una (qué tan consultiva fue, quién habló, qué se exploró y qué quedó sin explorar, el siguiente paso y si se cumplió), y arriba la lectura de conjunto: cómo se ha trabajado a este prospecto y qué falta diagnosticar antes de proponer.
-6. **S6 · Sacar el analizador de Sesiones** (26 oct). La vista «Reuniones de venta» de la salud de las reuniones, el criterio y el análisis por reunión se mudan a la preventa (S4 y S5) o se quitan; en Sesiones no queda nada de analizar el manejo de un cliente ni de una sesión.
-7. **S7 · La tendencia por vendedor,** primero solo para los super admin y después para todo Ventas, cada uno con lo suyo (24 oct): cuánto explora, cuánto habla, cuántas sesiones dejan siguiente paso con fecha y cuántas tienen transcripción. Cuenta las sesiones de cada vendedor que estuvo (T7), atribuidas por el calendario y por quién habló, nunca por la asistencia ni los minutos de Meet.
+4. [hecho, 27 oct, en producción] **S4 · La autoevaluación en cada sesión de exploración** (26 oct). En Preventa › Exploración › la sesión › «Análisis», un apartado aparte de lo que ya está (siguiente paso, cuánto avanzó, quedó abierto): «Cómo trabajaste esta sesión», con el análisis de S3 resumido para esa sesión, quién habló, lo que faltó explorar con su cita y dos o tres cosas para la próxima. El vendedor comenta o discrepa y una persona lo confirma; lo que confirma alimenta la guía de la siguiente sesión.
+5. [hecho, 27 oct, en producción] **S5 · La pieza «Análisis» del prospecto** (26 oct; antes S7, «el analizador por cliente»). Una pieza nueva de la preventa, junto a Exploración, La escala, Casos de uso y Propuesta: todas las sesiones de exploración y también las de propuesta, una debajo de la otra, con cómo se trabajó cada una (qué tan consultiva fue, quién habló, qué se exploró y qué quedó sin explorar, el siguiente paso y si se cumplió), y arriba la lectura de conjunto: cómo se ha trabajado a este prospecto y qué falta diagnosticar antes de proponer.
+6. [hecho, 27 oct, en producción] **S6 · Sacar el analizador de Sesiones** (26 oct). La vista «Reuniones de venta» de la salud de las reuniones, el criterio y el análisis por reunión se mudan a la preventa (S4 y S5) o se quitan; en Sesiones no queda nada de analizar el manejo de un cliente ni de una sesión.
+7. [hecho, 27 oct, en producción: Ventas › Preventa › «Análisis de la venta»] **S7 · La tendencia por vendedor,** primero solo para los super admin y después para todo Ventas, cada uno con lo suyo (24 oct): cuánto explora, cuánto habla, cuántas sesiones dejan siguiente paso con fecha y cuántas tienen transcripción. Cuenta las sesiones de cada vendedor que estuvo (T7), atribuidas por el calendario y por quién habló, nunca por la asistencia ni los minutos de Meet.
 8. **S8 · Probar con Andrés** cinco sesiones reales, entre ellas la de Camosa del 23 oct, antes de abrirlo al resto de Ventas y de prender el análisis automático.
 
 **Criterio de éxito:** Andrés revisa 5 análisis y está de acuerdo con la mayoría; cada juicio trae su cita; y, con el tiempo, el cliente habla más que Smarteam en las exploraciones y más sesiones cierran con un siguiente paso con fecha.
@@ -1063,6 +1068,8 @@ Pasaron a otro lugar: unir los contenedores «Información del cliente» repetid
 5. **Sentry:** con `SENTRY_DSN`, una alerta de Crons para los monitores `nexus-*` (los jobs que dejan de correr).
 6. **En Admin › Meet:** prender la toma de notas automática y «Transcribir» en las reuniones con clientes (lo que más texto gana).
 7. **Los tests del diagnóstico:** aprobar las preguntas en Escala › Tests; en el servidor, `TESTS_HUBSPOT_PORTAL_ID`, `TESTS_HUBSPOT_FORM_GUID` y `TESTS_ENLACE_DE_AGENDA`, y cuando el test esté probado, `TESTS_HUBSPOT_ENABLED=1`. Después, el corte de la aplicación vieja (DECISIONS › área O, O6).
+8. **La noche 2 (27 oct), en el servidor:** `EXPLORACIONES_ASOCIAR_ENABLED=1` (la unión automática de sesiones; el simulacro de hoy uniría 1 y preguntaría 6), `TAREAS_LECTURA_PERSONAL=egonzalez@smarteamcr.com` (tu piloto) y `TAREAS_SEGUIMIENTO_EN_HUBSPOT=1` (probar primero con una tarea de Smarteam).
+9. **En Nexus:** que la líder de Customer Success llene el catálogo de HubSpot Academy (Éxito del cliente › HubSpot Academy; nace vacío) y revisar el texto de la tarjeta del acceso al portal en el kickoff.
 
 **En el servidor, para prender el vigía** (pendiente, 24 oct): agregar `CS_WATCHDOG_ENABLED=1` al `.env` del servidor y desplegar. Prende el barrido diario del vigía (hasta 10 proyectos por día, gasta IA dentro del presupuesto automático), las señales de HubSpot y el triage cada minuto. Desde el 24 oct ya no hace que Partner cree empresas solas: eso pide `CS_PARTNER_CREA_CLIENTES=1`, que no se pone. Los comandos, en la conversación del 24 oct; se apaga sin deploy desde Éxito del cliente › Ajustes.
 
