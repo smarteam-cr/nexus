@@ -2588,7 +2588,8 @@ model FirefliesSession {
   canceladaEn          DateTime?
   // T4 (2026-10-25): POR QUÉ no dejó texto (un `MotivoDeLaFalta` de lib/google/por-que-falta.ts) y cuándo se calculó.
   // Lo escribe SOLO el job `reuniones-motivos` (lib/sessions/motivo-sin-texto-server.ts) y lo borra cuando la reunión
-  // tiene texto. TEXT y no enum a propósito: la lista vive en el código y crece (ver el .sql). null = tiene texto o no
+  // tiene texto (también la sync, si la reprograman al futuro sin nada leído: lib/google/reunion-movida.ts). TEXT y
+  // no enum a propósito: la lista vive en el código y crece (ver el .sql). null = tiene texto o no
   // se calculó todavía.
   motivoSinTexto       String?
   motivoSinTextoAt     DateTime?

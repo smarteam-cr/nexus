@@ -320,7 +320,7 @@ describe("candados de la auditoría 2026-08-08", () => {
       id: "gmeet_ev1", title: "T", date: new Date("2026-08-01T15:00:00Z"), duration: 60,
       participants: ["a@smarteamcr.com"], googleEventId: "ev1", googleDocId: null,
       organizerEmail: "a@smarteamcr.com", source: "google_meet", manualClientId: null, resolvedClientId: null, descripcionDelEvento: null,
-      conferenceId: null, canceladaEn: null,
+      conferenceId: null, canceladaEn: null, enrichedAt: null, enrichAttempts: 0,
     };
     const conDoc = { eventId: "ev1", title: "T", date: sellada.date, durationMinutes: 60, participants: ["a@smarteamcr.com"], googleDocId: "doc1", organizerEmail: "a@smarteamcr.com" };
     const r = cambiosDeSesion(sellada, conDoc, ["a@smarteamcr.com"], null);

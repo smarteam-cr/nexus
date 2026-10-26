@@ -66,6 +66,8 @@ describe("la sync de Meet copia la agenda", () => {
     descripcionDelEvento: null,
     conferenceId: null,
     canceladaEn: null,
+    enrichedAt: null,
+    enrichAttempts: 0,
     ...extra,
   });
   const part = ["ana@acme.com", "eli@smarteamcr.com"];
