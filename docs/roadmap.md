@@ -492,7 +492,7 @@ Fuera de la noche 2, porque necesitan a una persona: el ejercicio de las activid
 
 **Criterio de éxito:** un vendedor arma una propuesta con casos y actividades de la biblioteca sin abrir el cotizador externo; en 5 propuestas reales ninguna se firma bajo su precio mínimo, y el precio mínimo de Nexus difiere menos de un 10 % del precio por horas que daba el cotizador para lo mismo; la diferencia se explica, no solo se mide.
 
-### B · Los datos de la empresa, de la preventa al cliente <span class="estado">Propuesta</span>
+### B · Los datos de la empresa, de la preventa al cliente <span class="estado">En curso</span>
 
 1. **B1 · Una sola ficha con los datos de la empresa.** *Sale de:* «el tamaño de un caso se califica solo según los datos del cliente» y tu comentario de que aplica a todo Nexus. *Depende de:* nada para la etapa 1. **Las etapas 1 a 3 se construyen dentro de R1, R2 y R5, en el paso uno, y ahí manda `docs/empresa-datos-hubspot-plan.md`. A B1 le quedan las etapas 4 y 5.**
    - Etapa 1 · Diagnóstico: qué datos hay y dónde (la ficha del cliente, las personas de la exploración, la empresa, los contactos y los asientos de HubSpot). Sale la lista: vendedores, gente de marketing y de servicio, líderes y cómo está organizada, modelo de negocio y herramientas.
@@ -653,7 +653,7 @@ Plan: `docs/entregables-cs-plan.md`.
 
 **Criterio de éxito:** cada entregable principal tiene escrito qué necesita, de dónde sale y qué escribe Nexus solo, aprobado por ti.
 
-### K · Explorar mejor, en la preventa y con los clientes <span class="estado">Propuesta</span>
+### K · Explorar mejor, en la preventa y con los clientes <span class="estado">En curso</span>
 
 Sale del feedback de Ventas (Marco, Andrés y Liz) y de Customer Success (Liliana) del 23 oct, validado contra el código y la base ese día. Casi todo vale para los dos lugares donde se explora: la preventa y la exploración de un proyecto (implementación o SmartLoop). El plan entero, con lo que sirve del método de Andrés: `docs/exploracion-mejoras-plan.md`.
 
@@ -697,7 +697,7 @@ Sale del feedback de Ventas (Marco, Andrés y Liz) y de Customer Success (Lilian
 
 **Criterio de éxito:** Marco revisa 5 guías reales y en 4 la siguiente pregunta es la que él haría; 8 de cada 10 sesiones quedan asociadas (solas o con la sugerencia aceptada), e INV1 sigue en verde.
 
-### L · El diagnóstico y la planificación, después de usarlos <span class="estado">Propuesta</span>
+### L · El diagnóstico y la planificación, después de usarlos <span class="estado">En curso</span>
 
 Sale del feedback de Customer Success y Ventas del 23 oct, validado contra el diagnóstico que entró ese día. Plan: `docs/diagnostico-plantillas-plan.md` § «Lo que salió de usarlo».
 
@@ -751,7 +751,7 @@ Sale de Liliana con RC Inmobiliaria (23 oct). Es la prioridad 1 del Resumen. Pla
 
 **Criterio de éxito:** RC Inmobiliaria, Honda y kölbi cierran su primer ciclo en Nexus con exploración, diagnóstico y la tarea de cada actividad que se repite.
 
-### N · La escala de rendimiento <span class="estado">Propuesta</span>
+### N · La escala de rendimiento <span class="estado">En curso</span>
 
 La escala ubica a cada empresa en Ventas, Marketing y Servicio. Corre la 8.9.1 desde el 24 oct (tu tarea #285). Planes: lo pendiente para la 9.0 en `docs/escala/pendiente-9-0.md` (17 temas y 124 puntos, con el orden acordado: probar antes de cambiar) y lo de Insider en `docs/escala-engagement-avanzado-plan.md` (tres capas: la escala general sin herramientas, las ediciones por industria y el mapa de herramientas, que dice qué habilita HubSpot y qué Insider criterio por criterio).
 
@@ -780,7 +780,7 @@ La escala ubica a cada empresa en Ventas, Marketing y Servicio. Corre la 8.9.1 d
 
 **Criterio de éxito:** la 9.0 publicada y probada con 5 a 8 clientes; por empresa y área se guardan el nivel que da la escala y el que cree su CSE, y coinciden en al menos 4 de cada 5.
 
-### O · Los tests del diagnóstico de rendimiento <span class="estado">Propuesta</span>
+### O · Los tests del diagnóstico de rendimiento <span class="estado">En curso</span>
 
 Pedido del 23 oct: migrar a Nexus el test público de cada departamento, con mejores preguntas por industria y una página de resultados atinada. Hoy es una aplicación aparte con la escala vieja (v4); Nexus ya tiene el motor (el cuestionario de la escala y su cálculo). Plan, con el diagnóstico de la aplicación: `docs/tests-diagnostico-plan.md`.
 
@@ -856,7 +856,7 @@ Pedido del 23 oct. El kickoff es un documento que ve el cliente: una sección nu
 
 **Criterio de éxito:** todo kickoff nuevo trae la ruta de Academy por rol y la tarjeta del acceso al portal, y el acceso queda «dado» en menos de 10 días hábiles en 8 de cada 10 proyectos nuevos (Q2 etapa 2 guarda la fecha).
 
-### R · La empresa como objeto central <span class="estado">Propuesta</span>
+### R · La empresa como objeto central <span class="estado">En curso</span>
 
 Pedido del 23 oct: que la empresa sea el centro, enriquecida y sincronizada con HubSpot en los dos sentidos, con documentos sin proyecto, para vender, atender con IA y hacer venta cruzada. Revisado contra el esquema y la base ese día. Plan: `docs/arquitectura-empresa-plan.md`; el plano de hoy, en «Cómo funciona Nexus».
 
@@ -901,7 +901,7 @@ Pedido del 23 oct: que la empresa sea el centro, enriquecida y sincronizada con 
 
 **Criterio de éxito:** en el paso uno (R1, R2, R5 y R7), el de la tarjeta 1; por ítem, el de su plan (`docs/arquitectura-empresa-plan.md` y `docs/empresa-datos-hubspot-plan.md`). Después (R3, R4 y R11): un documento vive en la empresa sin proyecto, «Información del cliente» baja de 94 a 0, y un agente lee la empresa desde un solo lugar.
 
-### S · El analizador de reuniones de venta <span class="estado">Propuesta</span>
+### S · El analizador de reuniones de venta <span class="estado">En curso</span>
 
 Pedido del 23 oct: Ventas va muy directo a la solución y explora poco. Un analizador de reuniones con prospectos que le dice a cada vendedor qué tan consultiva fue su reunión y cómo mejorar, empezando por Andrés Pinzón. Es coaching, no control: el análisis es una propuesta que el vendedor comenta y una persona confirma, cada juicio trae su cita y no hay ranking. Plan: `docs/analizador-reuniones-venta-plan.md`.
 
@@ -922,7 +922,7 @@ Pedido del 23 oct: Ventas va muy directo a la solución y explora poco. Un anali
 
 **Criterio de éxito:** Andrés revisa 5 análisis y está de acuerdo con la mayoría; cada juicio trae su cita.
 
-### T · Las reuniones, la pieza angular del contexto <span class="estado">Propuesta</span>
+### T · Las reuniones, la pieza angular del contexto <span class="estado">En producción</span>
 
 Elías, 23 oct: el módulo que obtiene las sesiones es el creador del contexto de cada empresa. Medido en 90 días: de 1.264 reuniones con empresa, 545 con transcripción, 301 solo con notas (tratadas como sin texto) y 404 sin nada; y 67 reuniones con texto sin empresa. El caso de Camosa está bien en todo el camino. El de Liliana quedó resuelto el 24 oct: era «Cemaco | Data Hub» del 22 oct, que ocurrió sin transcripción ni notas (por eso nace T9). Plan: `docs/reuniones-pieza-angular-plan.md`.
 
@@ -946,7 +946,7 @@ Elías, 23 oct: el módulo que obtiene las sesiones es el creador del contexto d
 
 **Criterio de éxito:** el de la tarjeta 2; por ítem, el de su plan (`docs/reuniones-pieza-angular-plan.md` › «Criterio de éxito»).
 
-### U · Las integraciones, aprovechando lo que cada API permite <span class="estado">Propuesta</span>
+### U · Las integraciones, aprovechando lo que cada API permite <span class="estado">En producción</span>
 
 Pedido del 23 oct: que no vuelva a pasar lo de Mercury (no usábamos lo que la API daba). Investigado el 24 oct contra el código, los servicios en solo lectura y la documentación oficial. Tres planes: `docs/integracion-google-plan.md`, `docs/integracion-hubspot-plan.md` y `docs/integraciones-finanzas-ia-plan.md`.
 
