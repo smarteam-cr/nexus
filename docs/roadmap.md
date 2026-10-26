@@ -395,13 +395,13 @@ Sale de lo que decidiste el 22 oct sobre cómo vende y entrega Smarteam («resul
 
 | # | Pieza | Resultado de negocio |
 |---|---|---|
-| 1 | El analizador de venta, segunda parte (S4, S5, S7) | El vendedor comenta y una persona confirma; tú ves la tendencia de cada vendedor y cómo se ha tratado a cada cliente en todas sus reuniones. (La primera parte, S1 a S3, ya está en producción: Sesiones › «Ver la salud de las reuniones» › «Reuniones de venta», solo para super admin.) |
-| 2 | Tareas que se ordenan solas (D2 etapa 1, D4) | Se limpian las tareas que nadie decidió, y las de seguimiento comercial quedan también en HubSpot, sincronizadas en los dos sentidos |
-| 3 | Tu piloto de tareas y el calendario (H1, P3, P5) | Nexus lee tus reuniones internas y te propone tareas; una tarea se puede unir a un evento que ya existe |
-| 4 | Kickoff y sesiones solas (Q, K5, K6) | El kickoff trae HubSpot Academy y el acceso al portal; las sesiones se asocian solas a cliente y proyecto, y pregunta solo cuando duda |
-| 5 | Lo que falta de la Planificación y de la empresa (L4 etapas 5 a 7, R3 etapas 2 y 3) | La Planificación genera la lista de construcción en Tareas y el cliente llena su parte; los documentos de la empresa sin proyecto se ven y se comparten |
+| 1 | **Primero, las exploraciones por equipo** (K5, K6, K2, K10 y el equipo en las reuniones elegidas a mano) | La reunión con un equipo del cliente se asocia sola a su sesión planeada, y Nexus pregunta solo cuando duda; un botón «Agregar algo que sabes» que entra entero a la guía; la primera sesión de un prospecto en frío abre la puerta; ves quién llenó el test de cada área de una empresa; y el diagnóstico sabe de qué equipo es cada reunión, también en las elegidas a mano |
+| 2 | El analizador de venta, segunda parte (S4, S5, S7) | El vendedor comenta y una persona confirma; tú ves la tendencia de cada vendedor y cómo se ha tratado a cada cliente en todas sus reuniones. (La primera parte, S1 a S3, ya está en producción: Sesiones › «Ver la salud de las reuniones» › «Reuniones de venta», solo para super admin.) |
+| 3 | Tareas que se ordenan solas (D2 etapa 1, D4) | Se limpian las tareas que nadie decidió, y las de seguimiento comercial quedan también en HubSpot, sincronizadas en los dos sentidos |
+| 4 | Tu piloto de tareas y el calendario (H1, P3, P5) | Nexus lee tus reuniones internas y te propone tareas; una tarea se puede unir a un evento que ya existe |
+| 5 | El kickoff y lo que falta de la Planificación y de la empresa (Q, L4 etapas 5 a 7, R3 etapas 2 y 3) | El kickoff trae HubSpot Academy y el acceso al portal; la Planificación genera la lista de construcción en Tareas y el cliente llena su parte; los documentos de la empresa sin proyecto se ven y se comparten |
 
-Fuera de la noche 2, porque necesitan a una persona: el ejercicio de las actividades contigo (A0), el position statement y los clientes de referencia con Marco (K3, K4), el primer ciclo con cada CSE (M3) y validar el analizador con Andrés (S6).
+Fuera de la noche 2, porque necesitan a una persona: el ejercicio de las actividades contigo (A0), el position statement y los clientes de referencia con Marco (K3, K4; de las exploraciones, lo único que espera a alguien, junto con revisar cinco guías con Marco y el banco de preguntas de Andrés), el primer ciclo con cada CSE (M3) y validar el analizador con Andrés (S6).
 
 **Orden sugerido, por dependencias** (el foco es que Ventas y Customer Success queden funcionando):
 
