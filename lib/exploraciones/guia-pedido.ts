@@ -38,6 +38,8 @@ import {
 } from "./guia";
 import { diaConAnio, diaYHora } from "./fechas";
 import { bloqueDeInstrucciones } from "./notas-de-sesion";
+import { loQueSabesParaLaGuia } from "./lo-que-sabes";
+import { bloqueDeAbrirLaPuerta } from "./como-llego";
 import { historiaDeLasSesiones, textoDeLaProxima, textoDeLasSesiones, type AcuerdosDeLaReunion, type HistoriaDeLasSesiones } from "./historia-de-las-sesiones";
 import type { PosicionEnElMapa } from "./mapa";
 import type { LoLeidoDeHubspot } from "./lo-leido";
@@ -125,6 +127,13 @@ export interface ContextoDeLaGuia {
   memoriaDelProyecto?: string;
   /** Las instrucciones adicionales del vendedor (contexto de la preventa), ya como bloque, o "". */
   instrucciones?: string;
+  /**
+   * K6 (2026-10-27, lo-que-sabes.ts): lo que el equipo agregó con «Agregar algo que sabes», cada una entera si es corta. No
+   * es palabra del cliente: contexto para la guía, que lo valida.
+   */
+  loQueSabeElEquipo?: string[];
+  /** K2 (2026-10-27, como-llego.ts): la primera sesión de un prospecto en frío o referido abre la puerta; el bloque, o nada. */
+  abrirLaPuerta?: string;
   /**
    * Lo que el cliente ya respondió, tema por tema, con sus palabras y de dónde sale (lo-que-ya-sabemos.ts). No se vuelve
    * a preguntar. La preventa desde el 2026-10-18 (iniciativa A) y un proyecto desde el 2026-10-19.
@@ -415,6 +424,7 @@ function cuerpoDeLaGuia(ctx: ContextoDeLaGuia): string {
     `Empresa: ${ctx.empresa}${ctx.industria ? ` · Industria en HubSpot: ${ctx.industria}` : ""}${ctx.perfil ? ` · Perfil: ${ctx.perfil}` : ""} · Edición de la escala: ${ctx.edicion}`,
   );
   if (ctx.instrucciones) lineas.push(ctx.instrucciones.trim());
+  if (ctx.abrirLaPuerta) lineas.push("", ctx.abrirLaPuerta);
   if (ctx.conTest) lineas.push("Hizo el test de marketing: si es la primera reunión, arranca validándolo (qué tan real lo sintió).");
   if (ctx.desdeCero) {
     lineas.push(
@@ -442,6 +452,13 @@ function cuerpoDeLaGuia(ctx: ContextoDeLaGuia): string {
   if (ctx.smarteam) lineas.push("", "=== SMARTEAM (para la apertura y para «Contarle»; nunca nombres a otros clientes) ===", ctx.smarteam);
   if (ctx.suIndustria) lineas.push("", "=== SU INDUSTRIA (investigación en internet: NO lo dijo el cliente; solo para «retosDeLaIndustria») ===", ctx.suIndustria);
   lineas.push("", "=== LO QUE YA ESTÁ CONFIRMADO (no lo preguntes) ===", ...(ctx.confirmado.length ? ctx.confirmado : ["(todavía nada)"]));
+  if (ctx.loQueSabeElEquipo?.length) {
+    lineas.push(
+      "",
+      `=== LO QUE SABE EL EQUIPO (lo agregó alguien de ${cs ? "Smarteam" : "Ventas"} a mano: NO lo dijo el cliente en una sesión. Úsalo para preguntar mejor y valídalo; no lo cites como palabra del cliente ni lo vuelvas a preguntar como si no se supiera) ===`,
+      ...ctx.loQueSabeElEquipo.map((t) => `- ${t}`),
+    );
+  }
   if (ctx.loQueYaSabemos?.length) {
     lineas.push("", "=== LO QUE YA SABEMOS: lo que respondió el cliente, con sus palabras (NO lo vuelvas a preguntar: parte de ahí) ===", ...ctx.loQueYaSabemos.map((t) => `- ${t}`));
   }
@@ -821,8 +838,14 @@ export function contextoDeLaGuia(o: {
     proxima: (({ inicio, ...p }) => ({ ...p, fecha: inicio ?? p.fecha }))(proximaReunion(c.sesiones, o.agenda, o.hoy, { pasadasSinSesion: o.pasadasSinSesion ?? 0 })),
     conTest: o.conTest,
     instrucciones: bloqueDeInstrucciones(c.notas, "exploracion"),
+    ...(() => {
+      const sabe = loQueSabesParaLaGuia(c.notas);
+      return sabe.length ? { loQueSabeElEquipo: sabe } : {};
+    })(),
     // En un proyecto el cliente ya compró: nunca se arranca «desde cero».
-    desdeCero: !cs && !o.conTest && !conEvidencia && huecosDelResumen(c.casillas, marco).length === marco.tarjetas.length,
+    // Abrir la puerta (K2) reemplaza a «desde cero»: no se explica la escala en la primera sesión en frío.
+    desdeCero: !cs && !delPlan.abrirLaPuerta && !o.conTest && !conEvidencia && huecosDelResumen(c.casillas, marco).length === marco.tarjetas.length,
+    ...(delPlan.abrirLaPuerta && c.comoLlego ? { abrirLaPuerta: bloqueDeAbrirLaPuerta(c.comoLlego) } : {}),
     nivelesDeLaEscala: escala.niveles.map((n) => n.nombre),
     paraConectar: textoDe("contexto", estado, o.pendientes)[0] ?? null,
     hubspotActual: textoDe("hubspotActual", estado, o.pendientes)[0] ?? null,
@@ -920,7 +943,7 @@ export function contextoDeLaGuia(o: {
           })),
           /* En un proyecto, lo que falta de la estrategia (avance-del-proyecto.ts); en la preventa, lo que falta para
              proponer. Con un equipo que no es Dirección, nada: no es con quien se habla de quién firma ni del presupuesto. */
-          faltanAlCerrar: sinLoDeLaVenta
+          faltanAlCerrar: sinLoDeLaVenta || delPlan.abrirLaPuerta
             ? []
             : cs
               ? faltanDeLaEstrategia(avanceDeLaEstrategia(estado), new Set(plan.map((pl) => pl.para))).map((t) => t.charAt(0).toLowerCase() + t.slice(1))

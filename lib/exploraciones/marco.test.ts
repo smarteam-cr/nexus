@@ -264,6 +264,11 @@ describe("⛔ una exploración de proyecto no es una preventa", () => {
     /* La primera versión de la escala de cada exploración viva (ficha B): las dos clases a propósito, como la escala de
        la empresa. */
     "scripts/guardar-primera-version-de-la-escala.ts",
+    /* K5 (2026-10-27): las sesiones que se asocian solas, en la preventa Y en la exploración de cada proyecto (las dos
+       esperan sus reuniones); y las de OTRAS exploraciones de la misma empresa, para dudar si una reunión ya es de otra. */
+    "lib/exploraciones/asociar-server.ts",
+    /* INV61 (2026-10-27): ninguna sesión de NINGUNA exploración (preventa o proyecto) unida a una reunión de otra empresa. */
+    "lib/invariantes/exploraciones.ts",
   ]);
   function archivos(dir: string): string[] {
     const abs = path.join(RAIZ, dir);

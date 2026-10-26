@@ -154,6 +154,13 @@ const REQUISITOS: Readonly<Record<string, (env: Entorno) => string | null>> = {
   },
   "empresa-copia-de-hubspot": (env) =>
     env.EMPRESA_HUBSPOT_COPIA === "1" ? null : "Apagado: EMPRESA_HUBSPOT_COPIA no es 1 en el .env del servidor (se prende después de crear las propiedades «Nexus · Empresa»).",
+  /* Las sesiones que se asocian solas (K5, 2026-10-27). APAGADA por defecto: se prende con "1" después de revisar con
+     Elías el simulacro de `scripts/exploraciones-asociar.ts` (qué uniría sola en producción). Apagada, nada se une solo;
+     el lienzo sigue preguntando «¿Es la sesión 2 con Marketing?». */
+  "exploraciones-asociar": (env) =>
+    env.EXPLORACIONES_ASOCIAR_ENABLED === "1"
+      ? null
+      : "Apagado: EXPLORACIONES_ASOCIAR_ENABLED no es 1 en el .env del servidor (se prende después de revisar el simulacro de scripts/exploraciones-asociar.ts).",
   "tareas-hubspot": (env) =>
     env.TAREAS_HUBSPOT_ENABLED === "0" ? "Apagado a propósito: TAREAS_HUBSPOT_ENABLED=0 en el .env del servidor." : null,
   /* Los leads, la sincronización diaria de los proyectos y el vigía de los jobs (2026-10-25: B3, U10 y U24). Prendidos

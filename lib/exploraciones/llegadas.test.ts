@@ -4,7 +4,7 @@
  */
 import { compressToEncodedURIComponent } from "lz-string";
 import { describe, expect, it } from "vitest";
-import { agruparLlegadas, enlaceDelResultado, esDePrueba, leerNotaDelTest, type NotaDeLlegada } from "./llegadas";
+import { agruparLlegadas, agruparSinEmpresa, areasDelTest, enlaceDelResultado, esDePrueba, leerNotaDelTest, quienesPorArea, type NotaDeLlegada, type NotaDelTest } from "./llegadas";
 
 const enlace = (area: string, fecha: string) =>
   `https://dev.smarteamcr.com/diagnostico-rendimiento/resultado.html#${compressToEncodedURIComponent(JSON.stringify({ v: 1, area, fecha, dims: { procesos: { nivel: 2 } } }))}`;
@@ -89,5 +89,50 @@ describe("una llegada por empresa", () => {
     expect(r.map((l) => l.companyId)).toEqual(["B", "A"]);
     expect(r[1]).toMatchObject({ terminado: true, contacto: "Ana", intentos: 2, fecha: "2026-08-01" });
     expect(r[0]).toMatchObject({ terminado: false, contacto: "Caro", intentos: 1 });
+  });
+});
+
+describe("K10 · los leads del test, por empresa (2026-10-27)", () => {
+  const nota = (estado: "terminado" | "sinTerminar", areaId: string | null, contacto: string, email: string | null = null, dominio: string | null = null): NotaDelTest => ({
+    estado,
+    areaId,
+    contacto,
+    email,
+    dominio,
+    resultado: null,
+  });
+
+  it("quién llenó cada área: el último terminado de cada una (o el último intento), en el orden de la escala", () => {
+    const areas = areasDelTest([
+      { ts: 3, nota: nota("sinTerminar", "2", "Pedro") },
+      { ts: 2, nota: nota("terminado", "1", "Sonia") },
+      { ts: 4, nota: nota("sinTerminar", "1", "Luis") },
+      { ts: 1, nota: nota("terminado", "2", "Marta") },
+    ]);
+    expect(areas.map((a) => `${a.areaId}:${a.contacto}:${a.terminado}`)).toEqual(["1:Sonia:true", "2:Marta:true"]);
+    expect(quienesPorArea(areas, (id) => ({ "1": "Ventas", "2": "Marketing" })[id] ?? id)).toBe("Ventas: Sonia · Marketing: Marta");
+  });
+
+  it("la fila de la empresa trae todas sus áreas", () => {
+    const [l] = agruparLlegadas([
+      { ts: 1, companyId: "A", contactoId: null, nota: nota("terminado", "1", "Sonia") },
+      { ts: 2, companyId: "A", contactoId: null, nota: nota("terminado", "3", "Pedro") },
+    ]);
+    expect(l.porArea.map((a) => a.contacto)).toEqual(["Sonia", "Pedro"]);
+  });
+
+  it("los intentos sin empresa se agrupan por el dominio del correo; con un correo personal, cada correo aparte", () => {
+    const g = agruparSinEmpresa([
+      { ts: 1, nota: nota("terminado", "1", "Ana", "ana@acme.com") },
+      { ts: 3, nota: nota("sinTerminar", "2", "Beto", "beto@acme.com") },
+      { ts: 2, nota: nota("terminado", "1", "Caro", "caro@gmail.com") },
+      { ts: 4, nota: nota("terminado", "1", "Dani", "dani@gmail.com") },
+      { ts: 5, nota: nota("terminado", "1", "Sin nada") },
+      { ts: 6, nota: nota("terminado", "1", "Eva", "eva@gmail.com", "evaempresa.com") },
+    ]);
+    expect(g.map((x) => x.clave)).toEqual(["evaempresa.com", "dani@gmail.com", "acme.com", "caro@gmail.com"]);
+    const acme = g.find((x) => x.clave === "acme.com")!;
+    expect(acme).toMatchObject({ dominio: "acme.com", contactos: ["Ana", "Beto"], intentos: 2, terminado: true });
+    expect(g.find((x) => x.clave === "caro@gmail.com")?.dominio).toBeNull();
   });
 });

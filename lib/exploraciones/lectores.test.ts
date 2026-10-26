@@ -72,6 +72,11 @@ type Destino =
   /** INV56 (2026-10-26): solo de qué empresa es la preventa de la que salió una investigación. Nada de su contenido. */
   | "invariante-de-la-empresa"
   /**
+   * INV61 (K5, 2026-10-27): de cada exploración, solo los ids de las reuniones de Meet unidas a sus sesiones, para mirar
+   * que sean de su empresa. Nada de lo confirmado, lo propuesto ni lo interno.
+   */
+  | "invariante-de-las-sesiones"
+  /**
    * El EQUIPO DEL CLIENTE de una reunión del proyecto (L5 etapa 2, 2026-10-25): el catálogo de los seis equipos
    * (lib/exploraciones/equipos.ts › EQUIPOS) para elegirlo en el Contexto del diagnóstico y guardarlo en el vínculo de la
    * reunión con el proyecto. No lee ninguna exploración.
@@ -95,6 +100,26 @@ const CENSO: Record<string, { destino: Destino; motivo: string }> = {
   "lib/clients/lo-que-le-falta-comprar-server.ts": {
     destino: "escala-de-la-empresa",
     motivo: "Lo que le falta comprar (R12): lee solo los niveles de la foto más reciente (escalaParaLaPropuesta), interno, para la ficha y el siguiente caso en HubSpot.",
+  },
+  "lib/invariantes/exploraciones.ts": {
+    destino: "invariante-de-las-sesiones",
+    motivo: "INV61 (K5, 2026-10-27): compara la empresa de cada exploración con la de la reunión unida a cada sesión. Solo los ids de las reuniones.",
+  },
+  "app/api/sales/exploraciones/[id]/asociar/route.ts": {
+    destino: "ventas",
+    motivo: "K5 (2026-10-27): lo que pregunta el lienzo («¿Es la sesión 2 con Marketing?») y su huella, por la guarda de la exploración. Solo lee.",
+  },
+  "lib/jobs/defs.ts": {
+    destino: "ventas",
+    motivo: "El job exploraciones-asociar (K5) llama a asociarEnLasExploraciones: une a su sesión la reunión sin duda, por la puerta de siempre.",
+  },
+  "app/(shell)/marketing/leads-del-test/page.tsx": {
+    destino: "ventas",
+    motivo: "K10 (2026-10-27): el reporte de Marketing de los leads del test, por empresa. Solo si la empresa pasó a preventa (id y si está archivada), nunca su contenido.",
+  },
+  "components/marketing/LeadsDelTest.tsx": {
+    destino: "ventas",
+    motivo: "K10: pinta el reporte (tipos y textos de lib/exploraciones/llegadas). Nada de una exploración.",
   },
   "lib/invariantes/empresa.ts": {
     destino: "invariante-de-la-empresa",
@@ -390,6 +415,11 @@ const PUERTAS: Record<Exclude<Destino, "ventas">, { permitidas: RegExp; prohibid
     // Solo de qué empresa es la preventa: `exploracion: { select: { clientId: true } }`.
     permitidas: /\bexploracion\s*:\s*\{\s*select\s*:\s*\{\s*clientId\s*:\s*true\s*\}\s*\}/,
     prohibidas: /@\/lib\/exploraciones\/|\bparaLaPropuesta\b|bloqueParaLaPropuesta|exploracionParaElHandoff|internoParaElCse|bloqueParaElHandoff|leerContenido|leerExploracion\b|\.exploracionDeVenta\b|\bexploracionesDeVenta\b|contenido\s*:\s*true/,
+  },
+  "invariante-de-las-sesiones": {
+    // Solo la fila con su empresa y su contenido, del que se sacan los ids de las reuniones de las sesiones.
+    permitidas: /\.exploracionDeVenta\.findMany\(\{\s*select:\s*\{\s*id:\s*true,\s*clientId:\s*true,\s*contenido:\s*true\s*\}\s*\}\)/,
+    prohibidas: /@\/lib\/exploraciones\/|\bparaLaPropuesta\b|bloqueParaLaPropuesta|exploracionParaElHandoff|internoParaElCse|bloqueParaElHandoff|leerContenido|leerExploracion\b|propuesta\s*:\s*true/,
   },
   "analizador-de-venta": {
     // La guía de antes de la reunión y la escala (las mismas piezas que la lectura de la preventa), o solo saber si hay preventa.

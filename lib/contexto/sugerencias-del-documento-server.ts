@@ -159,6 +159,32 @@ async function equiposDelDiagnostico(
 }
 
 /**
+ * EL EQUIPO DE LAS REUNIONES ELEGIDAS A MANO en el Contexto del diagnóstico (noche 2, pieza 1, 2026-10-27). Hasta acá el
+ * selector solo aparecía en las que entran solas; una elegida a mano entraba sin equipo aunque el diagnóstico la leyera
+ * por equipo. `deLaSesion`: el equipo sale de su sesión de la exploración y se cambia allá (no acá). Vacío si falla.
+ */
+export async function equiposDeLasElegidasDelDiagnostico(
+  projectId: string,
+  ids: readonly string[],
+  ahora: Date = new Date(),
+): Promise<Map<string, { equipo: ClaveDeEquipo | null; deLaSesion: boolean }>> {
+  if (!ids.length) return new Map();
+  const [miembros, sesiones, categorias] = await Promise.all([
+    getProjectMemberSessions(projectId),
+    seguro("la exploración", () => sesionesDeLaExploracionDelProyecto(projectId), []),
+    seguro("las categorías", () => getSessionCategories(), null),
+  ]);
+  const reuniones = miembros.sessions.map((s) => ({ id: s.id, titulo: s.title, fecha: s.date, participantes: s.participants }));
+  const deLaSesion = new Map<string, ClaveDeEquipo>();
+  for (const r of reunionesDeLasSesiones(sesiones, reuniones, ahora.getTime(), categorias ? buildInternalDomainsSet(categorias) : undefined)) {
+    if (r.equipo) deLaSesion.set(r.sessionId, r.equipo);
+  }
+  const resto = ids.filter((id) => !deLaSesion.has(id));
+  const delVinculo = await seguro("los equipos", () => equiposDeLasReuniones(projectId, resto), new Map<string, ClaveDeEquipo>());
+  return new Map(ids.map((id) => [id, deLaSesion.has(id) ? { equipo: deLaSesion.get(id)!, deLaSesion: true } : { equipo: delVinculo.get(id) ?? null, deLaSesion: false }]));
+}
+
+/**
  * EL EQUIPO DE CADA REUNIÓN DEL PROYECTO, para que el documento de diagnóstico lea por equipo (L5 etapa 1). Las reuniones
  * salen de la membresía (el chokepoint); el equipo, de la sesión de la exploración o del Contexto. Vacío si falla.
  */

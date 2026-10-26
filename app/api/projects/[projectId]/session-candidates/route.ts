@@ -22,7 +22,7 @@ import {
   usaReglaDeRelevancia,
 } from "@/lib/sessions/destinos-de-contexto";
 import { etiquetaDeSala } from "@/lib/sessions/etiqueta-de-sala";
-import { sugerenciasParaElDocumento, type SugerenciaParaElPanel } from "@/lib/contexto/sugerencias-del-documento-server";
+import { equiposDeLasElegidasDelDiagnostico, sugerenciasParaElDocumento, type SugerenciaParaElPanel } from "@/lib/contexto/sugerencias-del-documento-server";
 import { MIN_BUSQUEDA_EN_LA_EMPRESA } from "@/lib/sessions/buscar-en-la-empresa";
 import { idsDeLaEmpresaQueCoinciden } from "@/lib/sessions/buscar-en-la-empresa-server";
 
@@ -423,6 +423,22 @@ export async function GET(
      falta nada, y meterlas volvería el aviso ruido permanente en cualquier proyecto con agenda. */
   for (const f of feeding) f.sinContenido = !f.futura && !conContenido.has(f.sessionId);
 
+  /* En el DIAGNÓSTICO, el equipo del cliente también de las elegidas a mano (noche 2, 2026-10-27): el de su sesión de la
+     exploración (se muestra) o el del vínculo con el proyecto (se elige en el panel). Si falla, sin equipo. */
+  const equiposDeLasElegidas =
+    destino === "diagnostico"
+      ? await equiposDeLasElegidasDelDiagnostico(projectId, feeding.map((f) => f.sessionId)).catch((e: unknown) => {
+          console.warn(`[session-candidates] project=${projectId}: los equipos de las elegidas fallaron (no bloqueante):`, e instanceof Error ? e.message : e);
+          return new Map() as Awaited<ReturnType<typeof equiposDeLasElegidasDelDiagnostico>>;
+        })
+      : null;
+  const feedingConEquipo = equiposDeLasElegidas
+    ? feeding.map((f) => {
+        const e = equiposDeLasElegidas.get(f.sessionId);
+        return { ...f, equipo: e?.equipo ?? null, equipoDeLaSesion: !!e?.deLaSesion };
+      })
+    : feeding;
+
   /* Las sugeridas, como las pinta el panel. Ya ocurrieron todas (la regla saca las futuras), así que
      `sinContenido` dice si de verdad no dejó nada. */
   const sugeridas = sugeridasCrudas.map((s) => ({
@@ -438,5 +454,5 @@ export async function GET(
     ...(s.equipo !== undefined ? { equipo: s.equipo } : {}),
   }));
 
-  return NextResponse.json({ feeding, excluded, candidates, unreviewedCount, sugeridas });
+  return NextResponse.json({ feeding: feedingConEquipo, excluded, candidates, unreviewedCount, sugeridas });
 }

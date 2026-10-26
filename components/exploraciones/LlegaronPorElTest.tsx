@@ -12,12 +12,18 @@
  * lista sigue funcionando.
  *
  * Arriba va «Qué sigue»: cuántos hicieron el test y no tienen reunión, o el próximo que la tiene.
+ *
+ * K10 (2026-10-27): cada empresa dice quién llenó el test de cada área («Ventas: Sonia · Marketing: Pedro»), y los
+ * intentos de alguien sin empresa en HubSpot se agrupan por el dominio de su correo, con «Crear la empresa en HubSpot»
+ * (abre el listado de empresas de HubSpot: la crea una persona allá; Nexus no crea empresas en HubSpot).
  */
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Skeleton } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import { diaConSemana, diaCorto } from "@/lib/exploraciones/fechas";
+import { quienesPorArea, type AreaDelTest, type LlegadaSinEmpresa } from "@/lib/exploraciones/llegadas";
+import { hubspotCompanyListUrl } from "@/lib/hubspot/urls";
 import { BotonBlanco } from "./FranjaDeSugerencias";
 
 interface Llegada {
@@ -31,6 +37,8 @@ interface Llegada {
   agendo: boolean;
   proxima: string | null;
   esCliente: boolean;
+  /** K10: quién llenó el test de cada área. Opcional por si responde un servidor de antes. */
+  porArea?: AreaDelTest[];
 }
 
 /** Cuántas se ven antes de «Ver las N». */
@@ -65,6 +73,9 @@ export default function LlegaronPorElTest({ nombresDeAreas, puedeEditar }: { nom
   const router = useRouter();
   const [llegadas, setLlegadas] = useState<Llegada[] | null>(null);
   const [sinEmpresa, setSinEmpresa] = useState(0);
+  const [porDominio, setPorDominio] = useState<LlegadaSinEmpresa[]>([]);
+  const [portalId, setPortalId] = useState<string | null>(null);
+  const [verSinEmpresa, setVerSinEmpresa] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [abriendo, setAbriendo] = useState<string | null>(null);
   const [todas, setTodas] = useState(false);
@@ -75,12 +86,20 @@ export default function LlegaronPorElTest({ nombresDeAreas, puedeEditar }: { nom
     void (async () => {
       try {
         const res = await fetch("/api/sales/exploraciones/sugerencias");
-        const data = (await res.json().catch(() => ({}))) as { llegadas?: Llegada[]; sinEmpresa?: number; error?: string };
+        const data = (await res.json().catch(() => ({}))) as {
+          llegadas?: Llegada[];
+          sinEmpresa?: number;
+          sinEmpresaPorDominio?: LlegadaSinEmpresa[];
+          portalId?: string | null;
+          error?: string;
+        };
         if (!vivo) return;
         if (!res.ok) setError(data.error ?? "No se pudo consultar HubSpot.");
         else {
           setLlegadas(data.llegadas ?? []);
           setSinEmpresa(data.sinEmpresa ?? 0);
+          setPorDominio(data.sinEmpresaPorDominio ?? []);
+          setPortalId(data.portalId ?? null);
         }
       } catch {
         if (vivo) setError("No se pudo consultar HubSpot. Revisa tu conexión.");
@@ -117,10 +136,17 @@ export default function LlegaronPorElTest({ nombresDeAreas, puedeEditar }: { nom
   const aMedias = (llegadas ?? []).filter((l) => !l.terminado);
   const visibles = todas ? terminaron : terminaron.slice(0, A_LA_VISTA);
 
+  const nombreDelArea = (id: string) => nombresDeAreas[id] ?? "Un área";
+  // Quién llenó el test de cada área («Ventas: Sonia · Marketing: Pedro»); sin ese dato, el último intento como antes.
   const detalle = (l: Llegada) =>
-    [l.contacto ?? "Sin nombre", l.areaId ? `test de ${nombresDeAreas[l.areaId] ?? "un área"}` : null, diaCorto(l.fecha), l.intentos > 1 ? `${l.intentos} intentos` : null]
+    [
+      l.porArea?.length ? quienesPorArea(l.porArea, nombreDelArea) : [l.contacto ?? "Sin nombre", l.areaId ? `test de ${nombreDelArea(l.areaId)}` : null].filter(Boolean).join(" · "),
+      diaCorto(l.fecha),
+      l.intentos > 1 ? `${l.intentos} intentos` : null,
+    ]
       .filter(Boolean)
       .join(" · ");
+  const crearEnHubspot = hubspotCompanyListUrl(portalId);
 
   const boton = (l: Llegada) =>
     puedeEditar && (
@@ -217,10 +243,50 @@ export default function LlegaronPorElTest({ nombresDeAreas, puedeEditar }: { nom
         </>
       )}
 
-      {sinEmpresa > 0 && (
+      {porDominio.length > 0 && (
+        <>
+          <button
+            type="button"
+            onClick={() => setVerSinEmpresa((x) => !x)}
+            aria-expanded={verSinEmpresa}
+            className="flex w-full items-center justify-between rounded-lg border border-line bg-surface px-3 py-[9px] text-[13px] text-fg-secondary transition-colors hover:bg-surface-hover"
+          >
+            <span>Sin empresa en HubSpot · {porDominio.length}</span>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={cn("h-3.5 w-3.5 transition-transform", verSinEmpresa && "rotate-180")} aria-hidden="true">
+              <path d="M6 9l6 6 6-6" />
+            </svg>
+          </button>
+          {verSinEmpresa && (
+            <div className="flex flex-col gap-1.5">
+              <p className="text-xs text-fg-muted">Hicieron el test y su contacto no tiene empresa en HubSpot. Créala allá con su dominio y el contacto aparece arriba.</p>
+              {porDominio.map((g) => (
+                <div key={g.clave} className="flex flex-col gap-1 rounded-lg border border-dashed border-line bg-surface px-3 py-2.5">
+                  <span className="truncate text-[13px] font-semibold text-fg">{g.dominio ?? g.clave}</span>
+                  <span className="text-xs text-fg-muted">
+                    {[quienesPorArea(g.porArea, nombreDelArea), diaCorto(new Date(g.ts).toISOString()), g.intentos > 1 ? `${g.intentos} intentos` : null].filter(Boolean).join(" · ")}
+                  </span>
+                  {g.dominio && crearEnHubspot && puedeEditar && (
+                    <a
+                      href={crearEnHubspot}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="self-start text-xs font-medium text-brand hover:underline"
+                      title={`Abre el listado de empresas de HubSpot: crea «${g.dominio}» con ese dominio`}
+                    >
+                      Crear la empresa en HubSpot ↗
+                    </a>
+                  )}
+                  {!g.dominio && <span className="text-2xs text-fg-muted">Usó un correo personal: pregúntale de qué empresa es.</span>}
+                </div>
+              ))}
+            </div>
+          )}
+        </>
+      )}
+      {sinEmpresa > 0 && porDominio.length === 0 && (
         <p className="text-[11px] text-fg-muted">
-          {sinEmpresa === 1 ? "Un intento no se muestra" : `${sinEmpresa} intentos no se muestran`} porque el contacto no tiene empresa en HubSpot: asócialo a su
-          empresa para verlo acá.
+          {sinEmpresa === 1 ? "Un intento no se muestra" : `${sinEmpresa} intentos no se muestran`} porque el contacto no tiene empresa en HubSpot ni un correo con
+          qué buscarla.
         </p>
       )}
     </div>

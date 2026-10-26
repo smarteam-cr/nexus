@@ -25,6 +25,7 @@ import { INV59 } from "./escala";
 import { INV55, INV55_BLOQUEA } from "./smartloop";
 import { INV51, INV56 } from "./empresa";
 import { INV58, INV58_BLOQUEA } from "./tests-diagnostico";
+import { INV61 } from "./exploraciones";
 import { InvariantesVioladosError, JOB_INVARIANTES, correrJobDeInvariantes, mensajeDeViolaciones } from "./job";
 import { invariantesOkDesde, leerInvariantesOk } from "./salud";
 import { DONDE_PUEDE_TENER_TEXTO } from "@/lib/sessions/tiene-texto";
@@ -814,7 +815,7 @@ describe("hechos: INV45 (memoria de la cuenta, etapa 6)", () => {
 
 describe("el registro y el consumidor", () => {
 
-  it("el registro tiene los 48 solo-base, con ids únicos y en el orden del gate", () => {
+  it("el registro tiene los 49 solo-base, con ids únicos y en el orden del gate", () => {
     /* Del 28 salta al 30: INV29 lo reserva docs/database-refactoring-plan.md. 31 y 32 son las frescuras (espejo y corte);
        33 y 34, el número de factura (etapa 7); 35, la plata que no es venta (etapa 10); 36, a quién se facturó (etapa 12); 37, dos clientes con un dominio (2026-10-02). */
     expect(INVARIANTES_SOLO_BASE.map((i) => i.id)).toEqual([
@@ -831,8 +832,9 @@ describe("el registro y el consumidor", () => {
       // cada reunión sin texto (T4); 53, las conferencias de Meet revisadas (U3); 54, ninguna ficha con una empresa de
       // HubSpot fusionada (U9); 55, SmartLoop sin «proyecto_temporal» (M1); 56, cada investigación de la empresa de su
       // preventa (R5); 57, cada análisis de venta de la empresa de su reunión (S3); 58, los tests llegan a HubSpot (área
-      // O); 59, ninguna escala publicada con preguntas abiertas (N); 60, la copia del banco de Odoo al día (U15).
-      "49", "50", "51", "52", "53", "54", "55", "56", "57", "58", "59", "60",
+      // O); 59, ninguna escala publicada con preguntas abiertas (N); 60, la copia del banco de Odoo al día (U15); 61, ninguna
+      // sesión de una exploración unida a una reunión de otra empresa (K5, 2026-10-27).
+      "49", "50", "51", "52", "53", "54", "55", "56", "57", "58", "59", "60", "61",
     ]);
     expect(new Set(INVARIANTES_SOLO_BASE.map((i) => i.id)).size).toBe(INVARIANTES_SOLO_BASE.length);
   });
@@ -880,7 +882,7 @@ describe("el job invariants-daily (B-08)", () => {
    */
   it("con todo en verde devuelve el resumen; con algo en rojo LANZA con los ids y el mensaje acotado", async () => {
     /* La edición que lo pone en rojo: cambiar el throw por un console.error «para no ensuciar Sentry». */
-    await expect(correrJobDeInvariantes(baseFalsa({}), AHORA)).resolves.toBe("48 invariantes solo-base en verde");
+    await expect(correrJobDeInvariantes(baseFalsa({}), AHORA)).resolves.toBe("49 invariantes solo-base en verde");
     const promesa = correrJobDeInvariantes(baseFalsa({ cobro: 2 }), AHORA); // INV3 e INV5 cuentan cobros
     await expect(promesa).rejects.toBeInstanceOf(InvariantesVioladosError);
     const e = (await promesa.catch((x: unknown) => x)) as InvariantesVioladosError;
@@ -960,6 +962,25 @@ describe("/api/health expone UN booleano de invariantes, y nada más (B-09)", ()
     expect((src.match(/ok = false/g) ?? []).length, "solo los tres checks de infraestructura apagan el ok").toBe(3);
     expect(src).not.toMatch(/invariantesOk\s*(&&|\|\||\?)/);
     expect(src).not.toMatch(/\.(lineas|error|resultados)\b/);
+  });
+});
+
+describe("INV61 (las sesiones de una exploración y su empresa, K5)", () => {
+  it("verde si cada reunión de una sesión es de la empresa (o sin dueña); rojo si es de otra", async () => {
+    const exploracion = (sessionId: string) => ({ id: "e1", clientId: "c1", contenido: { sesiones: [{ id: "s-1", reunion: { origen: "meet", id: sessionId } }, { id: "s-2" }] } });
+    expect((await INV61.correr(baseFalsa({ exploracionDeVenta: [] }), AHORA)).ok).toBe(true);
+    const propia = { id: "m1", title: "Exploración Marketing", resolvedClientId: "c1", manualClientId: null };
+    const sinDuena = { id: "m1", title: "Exploración", resolvedClientId: null, manualClientId: null };
+    const aMano = { id: "m1", title: "Kickoff", resolvedClientId: "c2", manualClientId: "c1" };
+    for (const r of [propia, sinDuena, aMano]) {
+      expect((await INV61.correr(baseFalsa({ exploracionDeVenta: [exploracion("m1")], firefliesSession: [r] }), AHORA)).ok).toBe(true);
+    }
+    const soloAMano = { id: "m1", title: "Puesta a mano en otra", resolvedClientId: null, manualClientId: "c2" };
+    expect((await INV61.correr(baseFalsa({ exploracionDeVenta: [exploracion("m1")], firefliesSession: [soloAMano] }), AHORA)).ok).toBe(false);
+    const ajena = { id: "m1", title: "Exploración de OTRA", resolvedClientId: "c2", manualClientId: null };
+    const r = await INV61.correr(baseFalsa({ exploracionDeVenta: [exploracion("m1")], firefliesSession: [ajena] }), AHORA);
+    expect(r.ok).toBe(false);
+    expect(r.lineas.join(" ")).toContain("Exploración de OTRA");
   });
 });
 

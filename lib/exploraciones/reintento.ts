@@ -117,8 +117,14 @@ function operacionSegura(op: Operacion, antes: EstadoDeExploracion, ahora: Estad
     case "correo":
       // Se reintenta solo sobre el MISMO correo: si entretanto se volvió a armar, el cambio era sobre otro.
       return antes.propuesta.correos[op.clave]?.corridaId === ahora.propuesta.correos[op.clave]?.corridaId;
+    case "comoLlego":
+      // K2: se confirma sobre lo que se veía; si otra persona lo confirmó distinto entretanto, se recarga.
+      return igual(ca.comoLlego, cb.comoLlego);
     case "sinPortal":
     case "descartar":
+    // K5: suma lápidas, una por una: no pisa lo que hizo otro. Y la del job se fija sobre lo de ahora (no hace nada si cambió).
+    case "descartarAsociacion":
+    case "asociarSola":
     case "alertaTecnicaVista":
     case "archivar":
       return true;

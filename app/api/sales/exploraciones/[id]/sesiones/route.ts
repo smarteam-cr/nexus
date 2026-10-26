@@ -117,9 +117,11 @@ function operaciones(estado: EstadoDeExploracion, c: CuerpoDeAgregar, union: Uni
   if (!c.paraSesionId) return { ok: true, ops: [{ op: "agregarSesion", sesion: { id: sesionId, ...union } }, ...sacarDeFuera] };
   const actual = estado.contenido.sesiones.find((s) => s.id === c.paraSesionId);
   if (!actual) return { ok: false, error: "Esa sesión ya no está." };
-  const { reunion: _r, evento: _e, ...resto } = actual;
+  // `asociadaSola` (K5): una persona la vuelve a unir, así que ya no es «la unió Nexus».
+  const { reunion: _r, evento: _e, asociadaSola: _a, ...resto } = actual;
   void _r;
   void _e;
+  void _a;
   const unida: SesionPlaneada = {
     ...resto,
     ...(union.reunion ? { reunion: union.reunion } : {}),

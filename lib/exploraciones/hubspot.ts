@@ -9,7 +9,7 @@ import "server-only";
 import { esNotaDeLaFicha } from "@/lib/clients/ficha";
 import { getSystemHubspotClient } from "@/lib/hubspot/client";
 import { PROPIEDADES_DEL_RASTRO, rastroDe, type RastroDelContacto } from "./senales";
-import { agruparLlegadas, esDePrueba, leerNotaDelTest, type LlegadaAgrupada, type NotaDeLlegada } from "./llegadas";
+import { agruparLlegadas, agruparSinEmpresa, esDePrueba, leerNotaDelTest, type LlegadaAgrupada, type LlegadaSinEmpresa, type NotaDeLlegada, type NotaSinEmpresa } from "./llegadas";
 import { leerResultadoDelTest, PROPIEDADES_DEL_TEST, type ResultadoDelTest } from "./test-de-marketing";
 import { reunionQueNoOcurrio } from "./lectura";
 import { grabacionesDeReuniones } from "@/lib/hubspot/grabaciones-de-reuniones";
@@ -558,6 +558,8 @@ export interface LlegadasPorElTest {
   llegadas: LlegadaPorElTest[];
   /** Notas del test de alguien sin empresa en HubSpot: sin empresa no hay exploración que abrir. */
   sinEmpresa: number;
+  /** K10 (2026-10-27): esos intentos, agrupados por el dominio del correo, para crear la empresa en HubSpot. */
+  sinEmpresaPorDominio: LlegadaSinEmpresa[];
 }
 
 /** Fecha de HubSpot (ISO o milisegundos) → milisegundos, o null. */
@@ -619,7 +621,7 @@ export async function llegadasPorElTest(desde: Date, ahora = new Date()): Promis
     const nota = leerNotaDelTest(n.properties.hs_note_body ?? "");
     return nota ? [{ id: n.id, ts: enMs(n.properties.hs_timestamp) ?? 0, nota }] : [];
   });
-  if (delTest.length === 0) return { llegadas: [], sinEmpresa: 0 };
+  if (delTest.length === 0) return { llegadas: [], sinEmpresa: 0, sinEmpresaPorDominio: [] };
 
   const ids = delTest.map((n) => n.id);
   const [empresasDe, contactosDe] = await Promise.all([asociacionesDeNotas(ids, "companies"), asociacionesDeNotas(ids, "contacts")]);
@@ -639,14 +641,14 @@ export async function llegadasPorElTest(desde: Date, ahora = new Date()): Promis
     for (const f of data?.results ?? []) contactos.set(f.id, f.properties);
   }
 
-  let sinEmpresa = 0;
+  const sinEmpresaNotas: NotaSinEmpresa[] = [];
   const conEmpresa: NotaDeLlegada[] = [];
   for (const n of delTest) {
     if (esDePrueba({ contacto: n.nota.contacto, email: n.nota.email, dominio: n.nota.dominio })) continue;
     const contactoId = contactosDe.get(n.id)?.[0] ?? null;
     const companyId = empresasDe.get(n.id)?.[0] ?? (contactoId ? contactos.get(contactoId)?.associatedcompanyid : null) ?? null;
     if (!companyId) {
-      sinEmpresa++;
+      sinEmpresaNotas.push({ ts: n.ts, nota: n.nota });
       continue;
     }
     conEmpresa.push({ ts: n.ts, companyId, contactoId, nota: n.nota });
@@ -684,5 +686,5 @@ export async function llegadasPorElTest(desde: Date, ahora = new Date()): Promis
       proxima: proxima !== null && proxima >= ahora.getTime() ? new Date(proxima).toISOString() : null,
     });
   }
-  return { llegadas, sinEmpresa };
+  return { llegadas, sinEmpresa: sinEmpresaNotas.length, sinEmpresaPorDominio: agruparSinEmpresa(sinEmpresaNotas) };
 }

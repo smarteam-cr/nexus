@@ -37,6 +37,7 @@ import {
   FUENTES_DEL_NIVEL,
   MAX_CASOS_DESCARTADOS,
   MAX_CORREOS,
+  MAX_ASOCIACIONES_DESCARTADAS,
   MAX_DESCARTADAS,
   MAX_FUERA,
   MAX_ID_DE_REUNION,
@@ -94,6 +95,7 @@ import {
   type CambioDeLaGuia,
 } from "./ajustes-de-la-guia";
 import { MAX_CLAVE_DE_NOTA } from "./notas-de-sesion";
+import { MAX_REFERIDO_POR, VIAS_DE_LLEGADA, type ComoLlego } from "./como-llego";
 import { MAX_ASUNTO_DEL_CORREO, MAX_CUERPO_DEL_CORREO, MAX_DESTINATARIOS } from "./correo-de-seguimiento";
 
 const texto = (max: number) => z.string().trim().max(max);
@@ -419,7 +421,17 @@ export const SesionPlaneadaSchema: z.ZodType<SesionPlaneada> = z.object({
   hechas: z.array(z.string().min(1).max(40)).max(30).optional(),
   ajustesDeLaGuia: AjustesDeLaGuiaSchema.optional(),
   equipo: z.enum(EQUIPOS_DEL_CLIENTE).optional(),
+  asociadaSola: FECHA_ISO.optional(),
 });
+
+/** K2: cómo llegó el prospecto (como-llego.ts). «referidoPor» solo con «referido». */
+export const ComoLlegoSchema: z.ZodType<ComoLlego> = z
+  .object({
+    via: z.enum(VIAS_DE_LLEGADA),
+    referidoPor: texto(MAX_REFERIDO_POR).optional(),
+    en: FECHA_ISO,
+  })
+  .transform(({ referidoPor, ...resto }) => (resto.via === "referido" && referidoPor ? { ...resto, referidoPor } : resto));
 
 export const OperacionSchema = z.discriminatedUnion("op", [
   z.object({ op: z.literal("casilla"), clave: z.enum(CLAVES_DE_CASILLA), valor: z.unknown() }),
@@ -456,6 +468,8 @@ export const OperacionSchema = z.discriminatedUnion("op", [
   z.object({ op: z.literal("descartar"), itemIds: z.array(z.string().min(1).max(120)).min(1).max(250) }),
   z.object({ op: z.literal("responsable"), email: z.string().email().max(200).nullable() }),
   z.object({ op: z.literal("alertaTecnicaVista") }),
+  z.object({ op: z.literal("comoLlego"), valor: ComoLlegoSchema.nullable() }),
+  z.object({ op: z.literal("descartarAsociacion"), claves: z.array(CLAVE_DE_REUNION).min(1).max(20) }),
   z.object({
     op: z.literal("correo"),
     clave: CLAVE_DE_REUNION,
@@ -646,6 +660,13 @@ export function leerContenido(raw: unknown): ContenidoDeExploracion {
   const elegida = EdicionElegidaSchema.safeParse(raw.edicionElegida);
   c.edicionElegida = elegida.success ? elegida.data : null;
   c.descartadas = listaDeTextos(raw.descartadas, MAX_DESCARTADAS);
+  const llego = ComoLlegoSchema.safeParse(raw.comoLlego);
+  if (llego.success) c.comoLlego = llego.data;
+  if (Array.isArray(raw.asociacionesDescartadas)) {
+    c.asociacionesDescartadas = raw.asociacionesDescartadas
+      .filter((k): k is string => typeof k === "string" && CLAVE_DE_REUNION.safeParse(k).success)
+      .slice(-MAX_ASOCIACIONES_DESCARTADAS);
+  }
   if (Array.isArray(raw.alProponer)) {
     c.alProponer = raw.alProponer.filter(
       (f): f is FotoAlProponer =>

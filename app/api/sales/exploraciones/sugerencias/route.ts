@@ -9,30 +9,29 @@
  *
  * Lo de HubSpot se guarda 3 minutos en memoria (son ~10 pedidos): abrir la página varias veces no
  * vuelve a leerlo. Pide `ventas.read`. Solo lee HubSpot.
+ *
+ * K10 (2026-10-27): cada empresa trae quién llenó el test de cada área (`porArea`), y los intentos sin empresa en
+ * HubSpot llegan agrupados por el dominio del correo (`sinEmpresaPorDominio`), con el portal (`portalId`) para abrir el
+ * listado de empresas de HubSpot y crearla allá (Nexus no crea empresas en HubSpot).
  */
 import { NextResponse } from "next/server";
 import { guardPermission } from "@/lib/auth/api-guards";
 import { modeloDisponible } from "@/lib/db/esquema";
 import { prisma } from "@/lib/db/prisma";
-import { llegadasPorElTest, type LlegadasPorElTest } from "@/lib/exploraciones/hubspot";
-import { INICIO_DEL_TEST } from "@/lib/exploraciones/llegadas";
-
-const VIGENCIA_MS = 3 * 60 * 1000;
-let guardado: { en: number; datos: LlegadasPorElTest } | null = null;
+import { llegadasDelTest } from "@/lib/exploraciones/llegadas-server";
+import { portalDelSistema } from "@/lib/hubspot/registro-para-vincular";
 
 export async function GET() {
   const guard = await guardPermission("preventa", "read");
   if (guard instanceof NextResponse) return guard;
 
-  let datos = guardado && Date.now() - guardado.en < VIGENCIA_MS ? guardado.datos : null;
-  if (!datos) {
-    datos = await llegadasPorElTest(new Date(`${INICIO_DEL_TEST}T00:00:00-06:00`));
-    if (datos === null) {
-      return NextResponse.json({ error: "No se pudo consultar HubSpot. Revisa la conexión del sistema." }, { status: 502 });
-    }
-    guardado = { en: Date.now(), datos };
+  const datos = await llegadasDelTest();
+  if (datos === null) {
+    return NextResponse.json({ error: "No se pudo consultar HubSpot. Revisa la conexión del sistema." }, { status: 502 });
   }
-  if (datos.llegadas.length === 0) return NextResponse.json({ llegadas: [], sinEmpresa: datos.sinEmpresa });
+  const portalId = await portalDelSistema().catch(() => null);
+  const sinEmpresa = { sinEmpresa: datos.sinEmpresa, sinEmpresaPorDominio: datos.sinEmpresaPorDominio, portalId };
+  if (datos.llegadas.length === 0) return NextResponse.json({ llegadas: [], ...sinEmpresa });
 
   const ids = datos.llegadas.map((l) => l.companyId);
   const clientes = await prisma.client.findMany({
@@ -55,6 +54,6 @@ export async function GET() {
     llegadas: datos.llegadas
       .filter((l) => !fuera.has(l.companyId))
       .map((l) => ({ ...l, esCliente: kindDe.get(l.companyId) === "CLIENTE" })),
-    sinEmpresa: datos.sinEmpresa,
+    ...sinEmpresa,
   });
 }

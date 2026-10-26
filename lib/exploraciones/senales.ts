@@ -23,6 +23,11 @@ export interface RastroDelContacto {
   ultimaVisita: string | null;
   /** La última reunión que agendó con la herramienta de reuniones de HubSpot. */
   agendo: string | null;
+  /**
+   * `fuente_de_lead` (propiedad propia de Smarteam: «Diagnóstico de rendimiento», «Referidos», «Prospección Linkedin»…).
+   * Con ella Nexus propone cómo llegó el prospecto (K2, como-llego.ts). Opcional: los rastros guardados antes no la tienen.
+   */
+  fuenteDeLead?: string | null;
 }
 
 /** Las propiedades de HubSpot de las que sale el rastro. */
@@ -38,6 +43,7 @@ export const PROPIEDADES_DEL_RASTRO = [
   "hs_analytics_num_page_views",
   "hs_analytics_last_visit_timestamp",
   "engagements_last_meeting_booked",
+  "fuente_de_lead",
 ] as const;
 
 const texto = (v: string | null | undefined) => (v && v.trim() ? v.trim() : null);
@@ -55,6 +61,7 @@ export function rastroDe(p: Record<string, string | null | undefined>): RastroDe
     visitas: Number.isFinite(visitas) && visitas > 0 ? visitas : null,
     ultimaVisita: texto(p.hs_analytics_last_visit_timestamp),
     agendo: texto(p.engagements_last_meeting_booked),
+    fuenteDeLead: texto(p.fuente_de_lead),
   };
 }
 

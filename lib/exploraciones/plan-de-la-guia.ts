@@ -39,6 +39,7 @@ import type { EstadoDeExploracion, LecturaDeReunion } from "./contenido";
 import { conAlgoQueSirve } from "./estado-de-las-tarjetas";
 import { sesionDeLaLectura } from "./sesion-de-la-lectura";
 import { EQUIPOS, equiposQueNombra, leerTemaDeEquipo, TEMA_DE_SISTEMAS_DE_LA_EMPRESA, temaDeEquipo, type ClaveDeEquipo } from "./equipos";
+import { abreLaPuerta, PREGUNTAS_DE_ABRIR_LA_PUERTA } from "./como-llego";
 import { fuentesDistintas, loQueYaSabemos, type DatoDelCliente, type EntradaDelSaber, type SaberDelCliente } from "./lo-que-ya-sabemos";
 
 export const PASOS_DE_LA_PREGUNTA = ["situacion", "impacto", "solucion", "cuando", "conQue"] as const;
@@ -102,6 +103,11 @@ export interface EntradaDelPlan {
   equipo?: ClaveDeEquipo | null;
   /** La conversación se puso técnica (o el objetivo habla de sistemas): la empresa suma una pregunta de sistemas y datos. */
   tecnica?: boolean;
+  /**
+   * K2 (2026-10-27): la primera sesión de un prospecto que llegó en frío o referido. No trae el plan de diagnóstico: unas
+   * pocas preguntas abiertas para el final (qué le pasa, adónde quiere llegar), después de presentar y de escuchar.
+   */
+  abrirLaPuerta?: boolean;
 }
 
 const vacia = (v: unknown) => v === undefined || v === null || v === "" || (Array.isArray(v) && v.length === 0);
@@ -265,6 +271,7 @@ export function contextoDelPlan(o: EntradaDelSaber & { sesionId: string | null; 
   // La última reunión se puso técnica y nadie cerró el aviso, o el objetivo habla de sistemas.
   const alerta = o.estado.propuesta.alertaTecnica;
   const tecnica = (!!alerta && !alerta.vista) || (!!sesion?.objetivo && equiposQueNombra(sesion.objetivo).includes("tecnologia"));
+  const abrirLaPuerta = abreLaPuerta(o.estado, o.sesionId, { marco: o.marco });
   return {
     saber: loQueYaSabemos(o),
     yaPreguntado: yaPreguntadoEnLaExploracion(o.estado, { hasta: o.hasta ?? null, ...(o.automaticas !== undefined ? { automaticas: o.automaticas } : {}) }),
@@ -273,6 +280,7 @@ export function contextoDelPlan(o: EntradaDelSaber & { sesionId: string | null; 
     ...(o.marco ? { marco: o.marco } : {}),
     ...(equipo ? { equipo } : {}),
     ...(tecnica ? { tecnica } : {}),
+    ...(abrirLaPuerta ? { abrirLaPuerta } : {}),
   };
 }
 
@@ -363,6 +371,11 @@ export function planDeLaGuia(o: EntradaDelPlan): PreguntaPlaneada[] {
     return [...dolores, ...sinDato].filter((p) => p.para === para);
   });
 
+  // K2: abrir la puerta. Solo unas preguntas abiertas para el final, sin dimensiones, sin quién firma ni presupuesto.
+  if (o.abrirLaPuerta && !cs) {
+    const abiertas = (["retos", "metas", "consecuencias", "tiempos"] as const).filter(falta).map(tarjeta);
+    return enOrdenDeConversacion(elegir(abiertas, PREGUNTAS_DE_ABRIR_LA_PUERTA), new Set());
+  }
   if (o.equipo) return planDelEquipo(o.equipo, { ...o, lugar, ya, dolores, falta, tarjeta, pasaron });
 
   const sinDolores = dolores.length === 0;

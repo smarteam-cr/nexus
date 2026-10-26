@@ -55,6 +55,7 @@ import { useLienzo } from "./contexto";
 import { useCambiosDesdeLaGuia } from "./piezas-de-la-sesion";
 import { useCorrida } from "./useCorrida";
 import { useSesiones } from "./useSesiones";
+import LoQueSabes from "./LoQueSabes";
 
 const ORIGEN = { meet: "Google Meet", hubspot: "HubSpot", documento: "Sumada a mano" } as const;
 
@@ -525,6 +526,8 @@ export default function InicioDeLaExploracion() {
         <FuentesManuales />
         <Instrucciones />
       </div>
+      {/* K6 (2026-10-27): lo que alguien del equipo sabe y no quedó en ninguna reunión; entra entero a la guía. */}
+      <LoQueSabes />
       <LoQueSabeLaIA />
     </div>
   );
