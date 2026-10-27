@@ -119,6 +119,50 @@ main { max-width: 1040px; margin: 0 auto; padding-block: 32px 64px;
 #doc .ini.tarjeta li strong { display: block; font-size: 11.5px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; color: var(--fg-muted); }
 #panel-resumen > p, #panel-resumen > ol { max-width: 760px; }
 #panel-resumen > ol li { margin: 6px 0; }
+/* El resumen nuevo (27 oct): sale del bloque «temas» de roadmap.md. Arriba lo que te toca; después lo que está en
+   marcha, lo que falta arrancar y, en segundo plano, lo que ya funciona. */
+.rs { max-width: 1080px; }
+.rs-donde { font-size: 15px; color: var(--fg-2); margin: 4px 0 18px; }
+.rs-h { font-size: 12px; font-weight: 650; letter-spacing: .06em; text-transform: uppercase; color: var(--fg-muted); margin: 26px 0 10px; border: 0; padding: 0; }
+.rs-atencion { background: var(--warn-bg); border: 1px solid var(--warn-line); border-radius: 14px; padding: 16px 18px; }
+.rs-atencion .rs-h { margin-top: 0; color: var(--warn-ink); }
+.rs-numeros { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 12px; }
+.rs-num-tile { font: inherit; text-align: left; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; cursor: pointer; color: var(--fg); }
+.rs-num-tile b { display: block; font-size: 26px; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.rs-num-tile span { font-size: 13px; color: var(--fg-muted); }
+.rs-toca { list-style: none; margin: 0; padding: 0; }
+.rs-toca li { padding: 7px 0; border-top: 1px solid var(--warn-line); font-size: 14px; color: var(--fg); }
+.rs-toca li:first-child { border-top: 0; }
+.rs-toca li b { font-weight: 650; }
+.rs-pq { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--warn-line); }
+.rs-pq-t { font-size: 13px; color: var(--warn-ink); margin-right: 4px; }
+.rs-pq button.chip { font-family: inherit; cursor: pointer; }
+.rs-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 12px; }
+.rs-card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; display: flex; flex-direction: column; gap: 6px; }
+.rs-card header { display: flex; align-items: flex-start; gap: 8px; }
+.rs-card h3 { font-size: 15.5px; font-weight: 650; margin: 0; flex: 1; color: var(--fg); }
+.rs-n { font-size: 12px; font-weight: 600; color: var(--fg-muted); font-variant-numeric: tabular-nums; padding-top: 2px; }
+.rs-res { font-size: 13px; color: var(--fg-muted); margin: 0; }
+.rs-et { font-size: 11px; font-weight: 650; letter-spacing: .06em; text-transform: uppercase; color: var(--fg-muted); margin-top: 6px; }
+.rs-hecho { list-style: none; margin: 0; padding: 0; }
+.rs-hecho li { font-size: 13.5px; padding: 3px 0; color: var(--fg-2); }
+.rs-f { display: inline-block; min-width: 46px; font-size: 12px; color: var(--fg-muted); font-variant-numeric: tabular-nums; }
+.rs-mas { font: inherit; font-size: 12.5px; color: var(--info-ink); background: none; border: 0; padding: 2px 0; cursor: pointer; }
+.rs-sigue { font-size: 14px; font-weight: 600; color: var(--fg); margin: 0; }
+.rs-card footer { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin-top: auto; padding-top: 8px; border-top: 1px solid var(--line); font-size: 12.5px; color: var(--fg-muted); }
+.rs-card footer .rs-ver, .rs-fila .rs-ver { margin-left: auto; font: inherit; font-size: 12.5px; color: var(--info-ink); background: none; border: 0; padding: 0; cursor: pointer; }
+.rs-lista { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; }
+.rs-fila { display: grid; grid-template-columns: minmax(180px, 1.1fr) 2fr auto; gap: 4px 16px; align-items: baseline; padding: 10px 16px; border-top: 1px solid var(--line); font-size: 13.5px; }
+.rs-fila:first-child { border-top: 0; }
+.rs-fila .rs-nom { font-weight: 600; color: var(--fg); }
+.rs-fila .rs-falta { color: var(--fg-2); }
+.rs-fila .rs-falta i { font-style: normal; color: var(--fg-muted); }
+.rs-fila .rs-ult { grid-column: 2; font-size: 12.5px; color: var(--fg-muted); }
+.rs-fila .rs-der { grid-row: 1; grid-column: 3; display: flex; gap: 8px; align-items: baseline; white-space: nowrap; }
+@media (max-width: 640px) {
+  .rs-fila { grid-template-columns: 1fr; }
+  .rs-fila .rs-ult, .rs-fila .rs-der { grid-column: 1; grid-row: auto; }
+}
 </style>
 
 <main>
@@ -262,6 +306,7 @@ main { max-width: 1040px; margin: 0 auto; padding-block: 32px 64px;
   });
   PESTANAS.forEach(function (p) { doc.appendChild(paneles[p.id]); });
   var faltan = paneles.validar.querySelectorAll('table.pruebas tbody tr:not(.listo):not(.arreglo)').length;
+  pintarResumen();
   // Las pestañas de pruebas van por tema (agrupadas por prioridad si la tienen): una tarjeta a la vez, con cuántas faltan; abre en la primera con algo pendiente.
   [paneles.validar, paneles.claude].forEach(function (panel) {
     var cards = Array.prototype.slice.call(panel.querySelectorAll('.ini'));
@@ -308,6 +353,142 @@ main { max-width: 1040px; margin: 0 auto; padding-block: 32px 64px;
     b.addEventListener('click', function () { elegir(p.id, true); window.scrollTo(0, 0); });
     tabs.appendChild(b);
   });
+  // El resumen sale del bloque «temas» (JSON) de roadmap.md; scripts/roadmap-vista.mjs lo valida antes de armar la vista.
+  function pintarResumen() {
+    var code = paneles.resumen.querySelector('code.language-temas');
+    if (!code) return;
+    var datos;
+    try { datos = JSON.parse(code.textContent); } catch (e) { return; }
+    // Las preguntas: «Lo que decides tú», con ✓ las respondidas.
+    function seccion(re) {
+      var h = Array.prototype.filter.call(paneles.roadmap.querySelectorAll('h2'), function (x) { return re.test(x.textContent); })[0];
+      var els = []; var el = h ? h.nextElementSibling : null;
+      while (el && el.tagName !== 'H2') { els.push(el); el = el.nextElementSibling; }
+      return { h: h, els: els };
+    }
+    var dec = seccion(/^\s*Lo que decides tú/i), respondida = {};
+    dec.els.filter(function (e) { return e.tagName === 'OL'; }).forEach(function (ol) {
+      var ini = Number(ol.getAttribute('start') || 1);
+      Array.prototype.forEach.call(ol.children, function (li, i) { respondida[ini + i] = /^\s*✓/.test(li.textContent); });
+    });
+    var conf = seccion(/^\s*Lo que configuras tú/i), configurar = 0;
+    conf.els.forEach(function (e) {
+      if (e.tagName === 'OL') Array.prototype.forEach.call(e.children, function (li) { if (!/^\s*✓/.test(li.textContent)) configurar++; });
+    });
+    function ir(panel, destino) {
+      elegir(panel, true);
+      if (!destino) { window.scrollTo(0, 0); return; }
+      var card = destino.closest('.ini'); if (card) { card.classList.add('abierta'); var h3 = card.querySelector('h3'); if (h3) h3.setAttribute('aria-expanded', 'true'); }
+      destino.scrollIntoView({ block: 'start' });
+    }
+    function detalle(n) {
+      var h = Array.prototype.filter.call(paneles.roadmap.querySelectorAll('h3'), function (x) { return new RegExp('^\\s*' + n + '\\s*·').test(x.textContent); })[0];
+      ir('roadmap', h);
+    }
+    function nodo(tag, cls, txt) { var x = document.createElement(tag); if (cls) x.className = cls; if (txt != null) x.textContent = txt; return x; }
+    function preguntas(t) {
+      var p = 0, r = 0; (t.decisiones || []).forEach(function (n) { if (respondida[n]) r++; else if (n in respondida) p++; });
+      return { p: p, r: r };
+    }
+    var ESTADO = { 'en-curso': ['En curso', 's-info'], 'propuesta': ['Por arrancar', 's-idle'], 'funciona': ['Funciona', 's-ok'], 'terminado': ['Terminado', 's-ok'] };
+    var temas = datos.temas.slice();
+    var raiz = nodo('div', 'rs');
+    if (datos.dondeVamos) raiz.appendChild(nodo('p', 'rs-donde', datos.dondeVamos));
+
+    // 1 · Te toca a ti.
+    var porResponder = Object.keys(respondida).filter(function (n) { return !respondida[n]; }).length;
+    var at = nodo('section', 'rs-atencion'); at.appendChild(nodo('h2', 'rs-h', 'Te toca a ti'));
+    var nums = nodo('div', 'rs-numeros');
+    [[porResponder, 'preguntas por responder', function () { ir('roadmap', dec.h); }],
+     [configurar, 'cosas por configurar', function () { ir('roadmap', conf.h); }],
+     [faltan, 'pruebas para ti', function () { ir('validar'); }]].forEach(function (x) {
+      var b = nodo('button', 'rs-num-tile'); b.type = 'button';
+      b.appendChild(nodo('b', null, String(x[0]))); b.appendChild(nodo('span', null, x[1]));
+      b.addEventListener('click', x[2]); nums.appendChild(b);
+    });
+    at.appendChild(nums);
+    function corto(t) { return t.corto || t.nombre.split(":")[0]; }
+    var porPrioridad = function (a, b) { return (a.prioridad || 99) - (b.prioridad || 99); };
+    // Lo que tienes que HACER, una línea por tema; las preguntas, aparte y por tema.
+    var toca = nodo('ul', 'rs-toca');
+    temas.filter(function (t) { return t.teToca; }).sort(porPrioridad).forEach(function (t) {
+      var li = nodo('li'); li.appendChild(nodo('b', null, corto(t) + ': ')); li.appendChild(document.createTextNode(t.teToca));
+      toca.appendChild(li);
+    });
+    at.appendChild(toca);
+    var conPreguntas = temas.filter(function (t) { return preguntas(t).p; }).sort(porPrioridad);
+    if (conPreguntas.length) {
+      var pq = nodo('div', 'rs-pq'); pq.appendChild(nodo('span', 'rs-pq-t', 'Preguntas por responder, por tema:'));
+      conPreguntas.forEach(function (t) {
+        var b = nodo('button', 'chip s-warn', corto(t) + ' · ' + preguntas(t).p); b.type = 'button';
+        b.addEventListener('click', function () { ir('roadmap', dec.h); }); pq.appendChild(b);
+      });
+      at.appendChild(pq);
+    }
+    raiz.appendChild(at);
+
+    // 2 y 3 · En marcha y por arrancar, en tarjetas por prioridad.
+    function tarjeta(t) {
+      var c = nodo('article', 'rs-card'), hd = nodo('header');
+      hd.appendChild(nodo('span', 'rs-n', '#' + t.n)); hd.appendChild(nodo('h3', null, t.nombre));
+      var e = ESTADO[t.estado] || ['', 's-idle']; hd.appendChild(nodo('span', 'chip ' + e[1], e[0]));
+      c.appendChild(hd);
+      if (t.resultado) c.appendChild(nodo('p', 'rs-res', t.resultado));
+      var hecho = (t.hecho || []).slice().reverse();
+      if (hecho.length) {
+        c.appendChild(nodo('div', 'rs-et', 'Hecho'));
+        var ul = nodo('ul', 'rs-hecho');
+        hecho.forEach(function (h, i) {
+          var li = nodo('li'); li.appendChild(nodo('span', 'rs-f', h.fecha)); li.appendChild(document.createTextNode(h.texto));
+          if (i >= 3) li.hidden = true; ul.appendChild(li);
+        });
+        c.appendChild(ul);
+        if (hecho.length > 3) {
+          var mas = nodo('button', 'rs-mas', 'y ' + (hecho.length - 3) + ' más'); mas.type = 'button';
+          mas.addEventListener('click', function () { Array.prototype.forEach.call(ul.children, function (li) { li.hidden = false; }); mas.remove(); });
+          c.appendChild(mas);
+        }
+      }
+      if (t.sigue) { c.appendChild(nodo('div', 'rs-et', 'Sigue')); c.appendChild(nodo('p', 'rs-sigue', t.sigue)); }
+      var ft = nodo('footer'), q = preguntas(t);
+      if (q.p) ft.appendChild(nodo('span', 'chip s-warn', q.p + ' por responder'));
+      ft.appendChild(nodo('span', null, q.r + (q.r === 1 ? ' pregunta respondida' : ' preguntas respondidas')));
+      var ver = nodo('button', 'rs-ver', 'Ver detalle'); ver.type = 'button'; ver.addEventListener('click', function () { detalle(t.n); });
+      ft.appendChild(ver); c.appendChild(ft);
+      return c;
+    }
+    [['en-curso', 'En marcha'], ['propuesta', 'Por arrancar']].forEach(function (g) {
+      var lista = temas.filter(function (t) { return t.estado === g[0]; }).sort(function (a, b) { return a.prioridad - b.prioridad; });
+      if (!lista.length) return;
+      raiz.appendChild(nodo('h2', 'rs-h', g[1]));
+      var grid = nodo('div', 'rs-grid'); lista.forEach(function (t) { grid.appendChild(tarjeta(t)); }); raiz.appendChild(grid);
+    });
+
+    // 4 · Lo que ya funciona, en segundo plano: una fila por tema, con lo último y lo que falta.
+    var ya = temas.filter(function (t) { return t.estado === 'funciona' || t.estado === 'terminado'; });
+    if (ya.length) {
+      raiz.appendChild(nodo('h2', 'rs-h', 'Ya funcionan'));
+      var lista = nodo('div', 'rs-lista');
+      ya.forEach(function (t) {
+        var f = nodo('div', 'rs-fila');
+        f.appendChild(nodo('div', 'rs-nom', t.nombre));
+        var falta = nodo('div', 'rs-falta');
+        if (t.sigue) { falta.appendChild(nodo('i', null, 'Falta: ')); falta.appendChild(document.createTextNode(t.sigue)); }
+        else falta.textContent = 'Nada pendiente.';
+        f.appendChild(falta);
+        var der = nodo('div', 'rs-der'), q = preguntas(t);
+        if (q.p) der.appendChild(nodo('span', 'chip s-warn', q.p + ' por responder'));
+        var ver = nodo('button', 'rs-ver', 'Ver detalle'); ver.type = 'button'; ver.addEventListener('click', function () { detalle(t.n); });
+        der.appendChild(ver); f.appendChild(der);
+        var u = (t.hecho || [])[t.hecho.length - 1];
+        if (u) f.appendChild(nodo('div', 'rs-ult', 'Lo último: ' + u.fecha + ' · ' + u.texto));
+        lista.appendChild(f);
+      });
+      raiz.appendChild(lista);
+    }
+    var pre = code.closest('pre') || code; pre.parentNode.replaceChild(raiz, pre);
+  }
+
   var inicial = (location.hash || '').slice(1);
   elegir(PESTANAS.some(function (p) { return p.id === inicial; }) ? inicial : 'resumen', false);
 })();
