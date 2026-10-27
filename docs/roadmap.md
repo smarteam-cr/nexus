@@ -9,7 +9,7 @@
 <!-- El resumen se arma con este bloque. Cómo se regenera: «Cómo se mantiene este roadmap» y la skill regenerar-roadmap. -->
 ```temas
 {
- "dondeVamos": "La noche 3 está en producción: ya se puede probar la escala con cualquier empresa, el borrador 9.0 tiene lo de Insider y el test está listo para el corte. Lo que sigue en la escala y el test depende sobre todo de ti.",
+ "dondeVamos": "La escala 9.0 está publicada y el test nuevo ya funciona en producción, con área, industria y preguntas aprobadas. Todavía no reemplaza al test viejo: primero lo revisas tú.",
  "temas": [
   {
    "n": 4,
@@ -67,10 +67,14 @@
     {
      "fecha": "27 oct",
      "texto": "El borrador 9.0 suma lo de Insider: tráfico suficiente, la lectura de preparación y el mapa de herramientas."
+    },
+    {
+     "fecha": "27 oct",
+     "texto": "La escala 9.0 publicada, con 52 decisiones provisionales. Ninguna empresa cambió de nivel."
     }
    ],
-   "sigue": "Probarla con 5 a 8 empresas de al menos 3 industrias y, con tus respuestas, publicar la 9.0. Falta el umbral de tráfico de Insider (lo usa provisional).",
-   "teToca": "Contestar las 36 preguntas del borrador 9.0 y probar la escala con 2 o 3 empresas que conozcas (Escala › Probar).",
+   "sigue": "Probarla con 5 a 8 empresas de al menos 3 industrias (Escala › Probar). Falta el umbral de tráfico de Insider (se usa uno provisional).",
+   "teToca": "Revisar las 52 decisiones provisionales de la 9.0 (en el manual 1.4.0); empieza por el grupo de control y los Óptimos sin IA.",
    "decisiones": [
     8,
     18,
@@ -92,14 +96,19 @@
     {
      "fecha": "27 oct",
      "texto": "Los enlaces viejos del test abren en Nexus, y se mide cuántos abren, empiezan y terminan (Escala › Tests › Medición)."
+    },
+    {
+     "fecha": "27 oct",
+     "texto": "El test nuevo funciona en producción: área e industria al entrar, y 42 bancos de preguntas aprobados."
     }
    ],
-   "sigue": "El corte: un formulario nuevo de HubSpot (el viejo rechaza lo que manda Nexus), cambiar la dirección y apagar la aplicación vieja. Los pasos están escritos.",
-   "teToca": "Aprobar las preguntas (Escala › Tests). Para el corte te armo un asistente paso a paso con HubSpot, Vercel y los anuncios.",
+   "sigue": "Tu revisión de las preguntas. Después, el corte: un formulario nuevo de HubSpot, cambiar la dirección y apagar la aplicación vieja.",
+   "teToca": "Recorrer el test (nexus.smarteamcr.com/external/test) y corregir lo que quieras en Escala › Tests › Preguntas.",
    "decisiones": [
     15,
     29,
-    39
+    39,
+    46
    ]
   },
   {
@@ -133,9 +142,13 @@
     {
      "fecha": "27 oct",
      "texto": "Tu piloto (Nexus lee tus reuniones internas) y unir una tarea a un evento del calendario; los dos, apagados."
+    },
+    {
+     "fecha": "27 oct",
+     "texto": "La reunión del sprint deja todas sus tareas, lee la conversación y no se vence por el tope de «Por decidir»."
     }
    ],
-   "sigue": "En curso: la reunión del sprint sin el tope de 5 tareas y leyendo su conversación. Después, prender tu piloto y medirlo, y el diseño de la barra por cliente.",
+   "sigue": "Prender tu piloto y medirlo. Después, el diseño de la barra por cliente y la tarea en grande.",
    "teToca": "Prender tu piloto y la escritura de tareas en HubSpot («Lo que configuras tú», punto 8).",
    "decisiones": [
     7,
@@ -528,7 +541,7 @@ Que Nexus amarre los puntos: entrar a un cliente y ver todo lo que Smarteam est�
 
 | Qué | Cómo está |
 |---|---|
-| Producción | Corre `40397282` desde el 27 oct: lo de antes más la noche 2 y la noche 3 (probar la escala, lo de Insider en el borrador 9.0, el corte del test preparado y el análisis automático de la venta, prendido solo para las exploraciones). Todos los SQL aplicados. |
+| Producción | Corre `efb08623` desde el 27 oct: lo de antes, la noche 3, la escala 9.0 publicada (con el manual 1.4.0 y el mapa 2.0.0), el test nuevo con sus 42 bancos aprobados y el sprint sin tope. Todos los SQL aplicados. |
 | Por desplegar | Nada. **Sin aplicar, a propósito:** la carga inicial de los datos de la empresa (espera a la CSL), unir las 6 «Información del cliente» repetidas (borra copias: «Lo que decides tú» 36), y las banderas `EMPRESA_HUBSPOT_ESCRITURA` y `EMPRESA_HUBSPOT_COPIA` («Lo que configuras tú»). |
 | En rojo en producción | 4 invariantes: el pipeline de Secure Title, «TEC- AE» fusionada en HubSpot y el corte de cobranza apagado (con su decisión abajo), y desde el 21 oct INV16(a): 2 reuniones de Meet leídas antes de ocurrir (un evento movido de fecha después de leerse, el caso conocido de KNOWN-ERRORS). |
 | Pruebas | 25 para ti (pestaña «Pruebas para personas»; desde el 20 oct solo las que piden tu criterio), 81 que valida el equipo al usarlas, 77 con IA sobre los datos y 48 ya validadas por ti. |
@@ -596,6 +609,7 @@ Sin esto, algo sigue mal o no se puede validar:
 43. **«Por decidir» en Tareas:** el tope quedó en 5 sugerencias por persona (antes 10), y 59 que nadie tocó se vencieron. ¿5 o 6?
 44. **La plantilla recomendada de la Planificación:** hoy el selector propone la completa. ¿Recomendamos una?
 45. **«Cómo llegó» un prospecto:** sumé una quinta vía, «Por la web o un anuncio». ¿La dejamos?
+46. **La industria «Banca y servicios financieros» en el test:** la escala tiene su edición, pero la lista de industrias de Smarteam no trae Banca, así que nadie llega a esas preguntas. ¿Sumo «Banca y servicios financieros» a la lista de industrias (también la de los datos de la empresa)?
 
 ## Propuesta por aprobar: vender y entregar por casos de uso
 
