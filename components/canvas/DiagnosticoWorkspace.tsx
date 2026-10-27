@@ -397,7 +397,7 @@ export default function DiagnosticoWorkspace({
           </button>
           <span>
             {cabos.length
-              ? " — así no se puede presentar. Puedes corregirlo a mano o pedírselo al 💬 Asistente."
+              ? " — conviene corregirlo antes de presentar (no es obligatorio): a mano o con el 💬 Asistente."
               : " — se puede presentar; los avisos conviene mirarlos."}
           </span>
           {verCabos && (

@@ -70,7 +70,7 @@ async function publicarDiagnosticoPresentado(projectId: string) {
     // Los motivos de «Presentar», con el enlace a su sección. Si no se pueden leer, el mensaje de siempre.
     const estado = await estadoDelDocumento(canvas.id).catch(() => null);
     const base = canvas.project ? urlDeProyecto(canvas.project.clientId, projectId, canvas.id) : null;
-    const motivos = (estado?.motivosConSeccion ?? []).map((m) => ({
+    const motivos = (estado?.motivosConSeccion ?? []).filter((m) => m.bloquea).map((m) => ({
       texto: m.texto,
       seccion: m.seccion,
       href: base && m.seccion ? `${base}&seccion=${encodeURIComponent(m.seccion)}` : base,

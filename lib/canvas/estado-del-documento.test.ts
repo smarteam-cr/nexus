@@ -62,13 +62,17 @@ describe("estado del documento: borrador, presentado y aprobado", () => {
     expect(revisarParaPresentar({ estado: "borrador", tieneContenido: true, cabos: [aviso], politica: POLITICA_REVISADA })).toEqual({ ok: true, motivos: [], detalle: [] });
   });
 
-  it("no se presenta con un cabo suelto, con la política sin revisar, ni sin política: junta TODOS los motivos", () => {
+  it("2026-10-28: un cabo suelto, la política sin revisar o sin política son AVISOS: se juntan todos y no frenan", () => {
     const r = revisarParaPresentar({ estado: "borrador", tieneContenido: true, cabos: [roto], politica: { ...POLITICA_REVISADA, revisadaAt: "" } });
-    expect(r.ok).toBe(false);
-    expect(r.motivos).toHaveLength(2);
-    expect(r.motivos[0]).toContain("La causa F2 no tiene ninguna acción");
-    expect(r.motivos[1]).toContain("sugerencia de la IA");
-    expect(revisarParaPresentar({ estado: "borrador", tieneContenido: true, cabos: [], politica: undefined }).motivos[0]).toContain("Falta el enfoque de la solución");
+    expect(r.ok).toBe(true);
+    expect(r.motivos).toEqual([]);
+    expect(r.detalle).toHaveLength(2);
+    expect(r.detalle[0].texto).toContain("La causa F2 no tiene ninguna acción");
+    expect(r.detalle[1].texto).toContain("sugerencia de la IA");
+    expect(r.detalle.some((m) => m.bloquea)).toBe(false);
+    const sinPolitica = revisarParaPresentar({ estado: "borrador", tieneContenido: true, cabos: [], politica: undefined });
+    expect(sinPolitica.ok).toBe(true);
+    expect(sinPolitica.detalle[0].texto).toContain("Falta el enfoque de la solución");
   });
 
   it("un enfoque OCULTO a propósito no frena la presentación (2026-10-23: toda sección se puede ocultar)", () => {
@@ -78,7 +82,7 @@ describe("estado del documento: borrador, presentado y aprobado", () => {
   it("L2 (2026-10-24): el desafío principal con algo escrito también se revisa; oculto o vacío no frena", () => {
     const desafio = { intro: "¿Por qué invertimos en pauta y no sabemos cuántas matrículas trae?", items: [{ title: "Le hablan igual a todos" }] };
     const r = revisarParaPresentar({ estado: "borrador", tieneContenido: true, cabos: [], politica: POLITICA_REVISADA, desafio });
-    expect(r.ok).toBe(false);
+    expect(r.ok).toBe(true); // aviso, no frena (2026-10-28)
     expect(r.detalle).toEqual([{ texto: expect.stringContaining("desafío principal"), seccion: "desafio" }]);
     const revisado = { ...desafio, revisadaAt: "2026-10-24T10:00:00.000Z" };
     expect(revisarParaPresentar({ estado: "borrador", tieneContenido: true, cabos: [], politica: POLITICA_REVISADA, desafio: revisado }).ok).toBe(true);
@@ -89,12 +93,16 @@ describe("estado del documento: borrador, presentado y aprobado", () => {
   it("L2: cada motivo dice en qué sección se arregla (para el enlace de «Presentar» y de «Publicar»)", () => {
     const r = revisarParaPresentar({ estado: "borrador", tieneContenido: true, cabos: [roto], politica: { ...POLITICA_REVISADA, revisadaAt: "" } });
     expect(r.detalle.map((m) => m.seccion)).toEqual(["acciones", "politica_rectora"]);
-    expect(r.detalle.map((m) => m.texto)).toEqual(r.motivos);
+    expect(r.motivos).toEqual([]);
   });
 
   it("aprobado no se presenta (está cerrado), y sin contenido no hay nada que presentar", () => {
-    expect(revisarParaPresentar({ estado: "aprobado", tieneContenido: true, cabos: [], politica: POLITICA_REVISADA }).motivos[0]).toContain("reábrelo");
-    expect(revisarParaPresentar({ estado: "borrador", tieneContenido: false, cabos: [], politica: POLITICA_REVISADA }).motivos[0]).toContain("genera el diagnóstico");
+    const aprobado = revisarParaPresentar({ estado: "aprobado", tieneContenido: true, cabos: [], politica: POLITICA_REVISADA });
+    expect(aprobado.ok).toBe(false);
+    expect(aprobado.motivos[0]).toContain("reábrelo");
+    const vacio = revisarParaPresentar({ estado: "borrador", tieneContenido: false, cabos: [], politica: POLITICA_REVISADA });
+    expect(vacio.ok).toBe(false);
+    expect(vacio.motivos[0]).toContain("genera el diagnóstico");
   });
 
   it("la aprobación pide quién, cuándo (no futuro) y la evidencia", () => {

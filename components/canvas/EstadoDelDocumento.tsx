@@ -133,7 +133,8 @@ export default function EstadoDelDocumento({
   if (!estado) return null;
 
   const motivos = motivosLocales;
-  const puedePresentar = estado.estado !== "aprobado" && motivos.length === 0;
+  // Solo bloquea lo marcado así (aprobado, sin contenido); el resto es aviso (2026-10-28).
+  const puedePresentar = estado.estado !== "aprobado" && !motivos.some((m) => m.bloquea);
   const aprobado = estado.hitos.find((h) => h.tipo === "aprobado" && h.version === estado.version);
 
   return (
@@ -149,7 +150,9 @@ export default function EstadoDelDocumento({
               ? estado.cambiosDesdeLaPresentacion
                 ? "Cambió desde que se presentó: preséntalo de nuevo (será la versión siguiente) antes de registrar la aprobación."
                 : "Presentado al cliente. Si le compartiste el enlace, puede aprobarlo ahí; si te llega por correo, regístrala aquí."
-              : "Borrador: se presenta cuando el hilo está cerrado y el enfoque de la solución, revisado."}
+              : motivos.length
+                ? "Borrador. Antes de presentarlo, conviene revisar lo de abajo (no es obligatorio)."
+                : "Borrador: listo para presentar."}
         </span>
         <div className="flex flex-wrap gap-2">
           {estado.estado !== "aprobado" && (estado.estado === "borrador" || estado.cambiosDesdeLaPresentacion) && (

@@ -76,24 +76,30 @@ export interface EstadoVista {
   cliente: string;
   /** Lo que impide presentar hoy (vacío = se puede). Solo informativo: el servidor revisa al presentar. */
   motivosParaNoPresentar: string[];
-  /** Los mismos motivos con la sección donde se arreglan (L2, 2026-10-24). Opcional: una respuesta vieja no lo trae. */
+  /** Todos los motivos (los que bloquean y los avisos) con la sección donde se arreglan. Opcional: una respuesta vieja no lo trae. */
   motivosConSeccion?: MotivoParaPresentar[];
   /** Cambió desde que se presentó (no se puede registrar la aprobación sin volver a presentar). */
   cambiosDesdeLaPresentacion: boolean;
   hitos: HitoVista[];
 }
 
-/** Un motivo para no presentar y la sección donde se arregla (null = del documento entero). */
+/**
+ * Un motivo y la sección donde se arregla (null = del documento entero). `bloquea`: impide presentar. Desde el
+ * 2026-10-28 (Elías, por el diagnóstico de Cemaco que había que presentar ese día) solo bloquean «ya aprobado» y «sin
+ * contenido»; el hilo con cabos sueltos y lo que sigue siendo de la IA quedan como AVISO: se muestran, no frenan.
+ */
 export interface MotivoParaPresentar {
   texto: string;
   seccion: string | null;
+  bloquea?: boolean;
 }
 
 export interface RevisionParaPresentar {
+  /** Se puede presentar: ningún motivo bloquea (puede haber avisos). */
   ok: boolean;
-  /** Por qué no se puede, en frases para la persona. Vacío si `ok`. */
+  /** Lo que IMPIDE presentar, en frases para la persona. Vacío si `ok`. */
   motivos: string[];
-  /** Los mismos, con su sección (en el mismo orden). */
+  /** Todos los motivos, los que bloquean y los avisos, con su sección. */
   detalle: MotivoParaPresentar[];
 }
 
@@ -132,13 +138,16 @@ export function revisarParaPresentar(opts: {
   desafioOculto?: boolean;
 }): RevisionParaPresentar {
   const detalle: MotivoParaPresentar[] = [];
-  const fin = (): RevisionParaPresentar => ({ ok: detalle.length === 0, motivos: detalle.map((m) => m.texto), detalle });
+  const fin = (): RevisionParaPresentar => {
+    const bloquean = detalle.filter((m) => m.bloquea);
+    return { ok: bloquean.length === 0, motivos: bloquean.map((m) => m.texto), detalle };
+  };
   if (opts.estado === "aprobado") {
-    detalle.push({ texto: "Ya está aprobado por el cliente: para cambiarlo, reábrelo.", seccion: null });
+    detalle.push({ texto: "Ya está aprobado por el cliente: para cambiarlo, reábrelo.", seccion: null, bloquea: true });
     return fin();
   }
   if (!opts.tieneContenido) {
-    detalle.push({ texto: "Todavía no hay nada que presentar: genera el diagnóstico primero.", seccion: null });
+    detalle.push({ texto: "Todavía no hay nada que presentar: genera el diagnóstico primero.", seccion: null, bloquea: true });
     return fin();
   }
   const rotos = opts.cabos.filter((c) => c.bloquea);

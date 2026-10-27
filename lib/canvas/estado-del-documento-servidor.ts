@@ -125,7 +125,7 @@ export async function estadoDelDocumento(canvasId: string): Promise<EstadoVista 
     fecha: fecha ? fecha.toISOString() : null,
     cliente: doc.project?.client?.name ?? "",
     motivosParaNoPresentar: revision.ok ? [] : revision.motivos,
-    motivosConSeccion: revision.ok ? [] : revision.detalle,
+    motivosConSeccion: revision.detalle,
     cambiosDesdeLaPresentacion: cambios,
     hitos: hitos.map((h) => ({
       id: h.id,
@@ -152,7 +152,8 @@ async function devolver(canvasId: string): Promise<ResultadoDeEstado> {
 }
 
 /**
- * PRESENTAR: exige el hilo cerrado y la política revisada; deja la foto protegida de lo presentado.
+ * PRESENTAR: exige contenido y que no esté aprobado (el hilo y lo revisado son avisos desde el 2026-10-28); deja la
+ * foto protegida de lo presentado.
  *
  * El documento se TOMA al escribir (2026-10-05, como la aprobación): el cambio a «presentado» es
  * condicional al estado y la versión que se leyeron, en la misma transacción que el hito. Dos
