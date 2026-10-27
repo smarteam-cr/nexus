@@ -6,7 +6,15 @@
 
 **Nexus en una frase:** el sistema donde Smarteam vende por resultados (casos de uso), los entrega con Customer Success y sabe cuánto le cuesta cada uno; cada persona entra y ve qué le toca hoy.
 
-**Dónde vamos (27 oct):** el contexto inicial, el paso dos y la noche 2 están en producción: el análisis de la venta ya vive en la preventa, las exploraciones por equipo se asocian solas, las tareas se limpian y van a HubSpot, y la Planificación tiene las siete etapas del Brief. Sigue lo que te toca a ti.
+**Dónde vamos (27 oct):** el contexto inicial, el paso dos y la noche 2 están en producción: el análisis de la venta ya vive en la preventa, las exploraciones por equipo se asocian solas, las tareas se limpian y van a HubSpot, y la Planificación tiene las siete etapas del Brief.
+
+**Lo que sigue (propuesta del 27 oct, por aprobar): la noche 3, para terminar las tarjetas 4, 5 y 6,** que son la prioridad. Tres sesiones trabajan solas:
+
+- **Probar la escala con cualquier empresa.** Eliges una empresa desde su ficha o su preventa y ves qué nivel le da la escala, para compararlo con lo que cree el equipo. Así juntamos los 5 a 8 clientes que hacen falta para publicar la 9.0.
+- **Lo que falta de Insider en la escala.** Una pregunta nueva sobre si la empresa tiene tráfico suficiente, una lectura de si está lista para herramientas avanzadas como Insider (sin cambiar su nivel) y el mapa que dice qué habilita cada herramienta.
+- **El corte de la aplicación vieja del test, preparado.** Los enlaces viejos se siguen leyendo y Nexus mide cuántos empiezan, abandonan y terminan. El cambio de dirección y el apagado esperan a que apruebes las preguntas.
+
+La tarjeta 4 ya está en curso: el análisis automático solo para las sesiones de las exploraciones, y se quita «Marcar como referencia». Las actividades de los casos de uso quedan para cuando tengas energía; Odoo y Mercury funcionan, y sus mejoras esperan.
 
 **Lo que te toca:** configurar el servidor, aprobar las preguntas del test, contestar las del borrador 9.0 y decidir los puntos 32 a 40 (pestaña «Roadmap» › «Lo que configuras tú» y «Lo que decides tú»); la CSL revisa los 83 cambios de potencial.
 
@@ -34,19 +42,19 @@ El detalle de cada tarjeta (lo de hoy, el plan, el criterio de éxito y tus resp
 
 - **Resultado:** Ventas explora a fondo y diagnostica al cliente en vez de vender transaccional: cada vendedor se autoevalúa sesión por sesión, y la ficha de cada prospecto muestra cómo se lo ha trabajado.
 - **Va:** en la preventa desde el 27 oct: «Cómo trabajaste esta sesión» en el Análisis de cada sesión, la pieza «Análisis» del prospecto y la tendencia por vendedor (Ventas › Preventa › «Análisis de la venta»); salió de Sesiones. Solo super admin.
-- **Sigue:** la prueba con Andrés (cinco sesiones reales) y, con su visto bueno, prender el análisis automático y abrirlo a Ventas.
+- **Sigue:** en curso, el análisis automático solo para las sesiones de las exploraciones (tu decisión del 27 oct) y quitar «Marcar como referencia». Después, la prueba con Andrés (cinco sesiones reales) y abrirlo a Ventas.
 
 ### 5 · La escala de rendimiento <span class="estado">En curso</span>
 
 - **Resultado:** la escala ubica bien a cada empresa y muestra el camino hacia arriba.
 - **Va:** la 8.9.1 publicada; el borrador 9.0, con lo de Insider, en Escala › Borrador.
-- **Sigue:** contestar sus 39 preguntas, probarla con 5 a 8 clientes y publicarla.
+- **Sigue:** la noche 3 hace que se pueda probar con cualquier empresa y suma lo que falta de Insider. Tú contestas las 39 preguntas; con 5 a 8 clientes probados, se publica.
 
 ### 6 · Los tests del diagnóstico de rendimiento <span class="estado">En curso</span>
 
 - **Resultado:** el test de cada área vive en Nexus y llega a la preventa y a HubSpot.
 - **Va:** construido: las tres versiones, la página de resultados nueva y la unión con la preventa (26 oct).
-- **Sigue:** aprobar las preguntas, prender el envío a HubSpot y apagar la aplicación vieja.
+- **Sigue:** la noche 3 deja listo el corte de la aplicación vieja. Tú apruebas las preguntas y prendes el envío a HubSpot; después se cambia la dirección y se apaga la vieja.
 
 ### 7 · Vender por resultados <span class="estado">Propuesta</span>
 
@@ -409,6 +417,16 @@ Sale de lo que decidiste el 22 oct sobre cómo vende y entrega Smarteam («resul
 - `docs/expansion-y-adopcion-plan.md`: fuera de alcance y solicitudes, el agente de cada cliente y la auditoría de adopción. Sirve a E y F.
 - `docs/rentabilidad-por-caso-plan.md`: el tiempo estimado y real por tarea, la rentabilidad por caso y la capacidad con las horas de las actividades. Sirve a G.
 - `docs/entregables-cs-plan.md`: las plantillas de cada entregable y qué necesita Customer Success para cada uno. Sirve a I y J.
+
+**La noche 3 (propuesta del 27 oct, por aprobar):** terminar las tarjetas 4, 5 y 6, que son la prioridad acordada.
+
+| # | Pieza | Resultado de negocio |
+|---|---|---|
+| 1 | Probar la escala con cualquier empresa (N2) | Cualquiera del equipo prueba la escala con la empresa que elija y compara lo que da con lo que cree; así se juntan los 5 a 8 clientes para publicar la 9.0 |
+| 2 | Lo que falta de Insider (N4, N6, N7) | La escala pregunta si hay tráfico suficiente, dice si la empresa está lista para herramientas avanzadas sin cambiar su nivel, y el mapa dice qué habilita cada herramienta |
+| 3 | El corte de la aplicación vieja, preparado (O6 etapas 1 y 3) | Los enlaces viejos siguen funcionando y se mide el abandono por pregunta; el cambio de dirección espera tu aprobación de las preguntas |
+
+Ya en curso, fuera de la noche: el análisis automático de la venta solo para las exploraciones y quitar «Marcar como referencia» (S). Fuera, a propósito: las actividades de los casos de uso (A0, cuando tengas energía) y las mejoras de Odoo y Mercury (U16 a U18: funciona, solo se afina).
 
 **La noche 2: en producción el 27 oct (`08442a43`).** Aprobada el 26 oct; las cinco piezas quedaron así (la unión automática de sesiones, la escritura en HubSpot de las tareas y tu piloto se prenden con su bandera: «Lo que configuras tú»): Cinco piezas que no esperan a nadie, cada una con su deploy:
 
@@ -775,25 +793,25 @@ Sale de Liliana con RC Inmobiliaria (23 oct). Es la prioridad 1 del Resumen. Pla
 La escala ubica a cada empresa en Ventas, Marketing y Servicio. Corre la 8.9.1 desde el 24 oct (tu tarea #285). Planes: lo pendiente para la 9.0 en `docs/escala/pendiente-9-0.md` (17 temas y 124 puntos, con el orden acordado: probar antes de cambiar) y lo de Insider en `docs/escala-engagement-avanzado-plan.md` (tres capas: la escala general sin herramientas, las ediciones por industria y el mapa de herramientas, que dice qué habilita HubSpot y qué Insider criterio por criterio).
 
 1. [hecho] **N1 · Publicar la 8.9.1.** Publicada el 24 oct (`scripts/publicar-escala.ts`, todas las pruebas en verde). Tu tarea #285: revisarla en producción.
-2. **N2 · Probar la escala con cualquier empresa.** *No existe todavía.* Es el orden acordado para la 9.0 (decisión 13 de `pendiente-9-0.md`). Desde el 24 oct: el usuario elige la empresa que quiera, desde su preventa o su ficha, y la prueba en el artefacto de la escala; lo que da la escala se compara con lo que cree el equipo. Nunca con Wherex.
+2. [noche 3, por aprobar] **N2 · Probar la escala con cualquier empresa.** *No existe todavía.* Es el orden acordado para la 9.0 (decisión 13 de `pendiente-9-0.md`). Desde el 24 oct: el usuario elige la empresa que quiera, desde su preventa o su ficha, y la prueba en el artefacto de la escala; lo que da la escala se compara con lo que cree el equipo. Nunca con Wherex.
    - Etapa 1 · Cada usuario prueba con la empresa que elija, hasta juntar 5 a 8 de varias industrias (nunca Wherex).
    - Etapa 2 · Comparar lo que da la escala con lo que cree el equipo; eso decide sobre todo las celdas desbalanceadas y si se muestra el avance («cumple 27 de 30»).
 3. [en curso: el borrador 9.0.0 está en Escala › Borrador, con 39 preguntas para ti; se publica después de probarlo con 5 a 8 clientes] **N3 · La 9.0 con lo pendiente.** *Existe a medias:* los 17 temas (124 puntos) están escritos, con su propuesta.
    - Etapa 1 · Primero lo que hoy ubica mal a una empresa (igualdad entre áreas, criterios compuestos, repetidos), después lo que ordena la expansión, y al final lo que depende de la prueba.
    - Etapa 2 · Se escribe junto con lo de Insider (N4 a N7), en un solo borrador, revisado por ti; se publica la 9.0.0.
    - Etapa 3 · Los casos de la biblioteca que citan criterios que cambian de identificador se actualizan en el mismo paso.
-4. **N4 · La condición «tráfico suficiente»** (de aquí a N7, lo de Insider: la sesión del 21 oct y tu documento del 23 oct). *No existe.* Personalizar al visitante anónimo y medir contra un grupo de control solo funcionan con volumen (HubSpot no personaliza al anónimo por lo que hace; Insider sí, y califica a sus clientes por tráfico).
+4. [noche 3, por aprobar] **N4 · La condición «tráfico suficiente»** (de aquí a N7, lo de Insider: la sesión del 21 oct y tu documento del 23 oct). *No existe.* Personalizar al visitante anónimo y medir contra un grupo de control solo funcionan con volumen (HubSpot no personaliza al anónimo por lo que hace; Insider sí, y califica a sus clientes por tráfico).
    - Etapa 1 · Una tercera pregunta del perfil de la escala, con el umbral de la calificación de Insider, editable. Lo demás reusa la marca «venta sin vendedor», que ya existe: ningún criterio lleva dos condiciones.
 5. [en curso: los 16 cambios de Insider están en el borrador 9.0.0] **N5 · Los 16 cambios de la versión 9.0.** *Existe a medias:* buena parte de lo que mostró Insider ya está en las ediciones (el catálogo, los carritos y las solicitudes a medias, las recomendaciones, la búsqueda).
    - Etapa 1 · La escala general, 11 cambios: el permiso por canal (sigue de riesgo), lo que hacen en el sitio o la app unido a la ficha, segmentos que se actualizan solos, tres canales en un recorrido, A/B con hipótesis, el ingreso que agrega el marketing contra un grupo de control (con tráfico suficiente; el más importante), los agentes que alimentan la ficha, operar con agentes de IA (nuevo), priorizar con comportamiento digital, segmentos de valor y lealtad, y avisos disparados por el evento.
    - Etapa 2 · Las ediciones, 5 cambios: en Ecommerce y retail, personalizar también al anónimo (con tráfico suficiente) y el aviso de disponibilidad o de baja de precio; en Turismo, personalizar el motor de reservas (con tráfico suficiente), recuperar búsquedas y reservas a medias, y el aviso de un cambio de vuelo.
    - Etapa 3 · Cuatro de los cambios se escriben junto con temas que la 9.0 ya tenía abiertos (permiso de contacto, partir 2.7.E1, mover 1.6.O1, 3.6.E2), sin duplicar.
    - Etapa 4 · En un borrador de la escala, revisado por ti; se publica la 9.0.0 después de la 8.9.1.
-6. **N6 · La lectura «Preparación para engagement avanzado».** *No existe.* No cambia el nivel.
+6. [noche 3, por aprobar] **N6 · La lectura «Preparación para engagement avanzado».** *No existe.* No cambia el nivel.
    - Etapa 1 · «Lista», «Casi lista» (dice qué cimientos faltan: es lo que vende Smarteam antes de la plataforma) o «Todavía no» (su camino es HubSpot y SmartLoop).
    - Etapa 2 · Los umbrales editables: tráfico (el de Insider) y base con consentimiento (5.000 para empezar).
    - Etapa 3 · Se ve en la exploración de la preventa y en el diagnóstico del CSE. No nombra a Insider.
-7. **N7 · El mapa de herramientas para la 9.0.** *Existe* (versión 1.0.1, para la 8.8.0): ya dice, criterio por criterio, qué habilita Insider, HubSpot o Smarteam.
+7. [noche 3, por aprobar] **N7 · El mapa de herramientas para la 9.0.** *Existe* (versión 1.0.1, para la 8.8.0): ya dice, criterio por criterio, qué habilita Insider, HubSpot o Smarteam.
    - Etapa 1 · Sumar los 16 cambios con quién los habilita.
    - Etapa 2 · La ficha de Insider con el umbral de tráfico de su calificación, y la de HubSpot con lo que no hace (personalizar al anónimo por su comportamiento).
 
@@ -826,7 +844,7 @@ Pedido del 23 oct: migrar a Nexus el test público de cada departamento, con mej
    - La web: 8 preguntas, una por dimensión; la usan Marketing y Ventas para conseguir la primera reunión.
    - La completa: la llena el consultor de Customer Success en la exploración profunda, según el caso de uso o en una exploración general. Va por equipo, porque la escala ubica a un equipo: una empresa puede tener varias (Ventas, servicio, Customer Success, sus clientes).
    - Las preguntas las revisas tú, y el equipo opina al usarlas.
-6. [listo para hacer: los pasos están en DECISIONS › área O] **O6 · El corte de la aplicación vieja.**
+6. [noche 3, por aprobar: las etapas 1 y 3; la 2 espera tu aprobación de las preguntas] **O6 · El corte de la aplicación vieja.**
    - Etapa 1 · Los enlaces viejos del resultado se siguen leyendo.
    - Etapa 2 · La dirección pública pasa a Nexus, con los píxeles de anuncios y el formulario de HubSpot intactos.
    - Etapa 3 · Se mide cuántos empiezan, abandonan (y en qué pregunta) y terminan; se apagan el backend de Vercel y la página estática.
@@ -924,7 +942,7 @@ Pedido del 23 oct: que la empresa sea el centro, enriquecida y sincronizada con 
 
 Pedido del 23 oct: Ventas va muy directo a la solución y explora poco. Queremos alejarnos de la venta transaccional y diagnosticar de forma profunda al cliente. Es coaching, no control: cada juicio trae su cita y no hay ranking. **Rediseño del 26 oct:** el análisis vive en la preventa y no en Sesiones; el de cada sesión (la autoevaluación del vendedor) va separado del análisis de lo que se exploró. Plan: `docs/analizador-reuniones-venta-plan.md`.
 
-1. [hecho, 26 oct, en producción] **S1 · El criterio escrito.** El proceso consultivo como lista (identificar, investigar, conectar, explorar, asesorar), con lo que se espera en cada etapa, y «Marcar como referencia».
+1. [hecho, 26 oct, en producción] **S1 · El criterio escrito.** El proceso consultivo como lista (identificar, investigar, conectar, explorar, asesorar), con lo que se espera en cada etapa, . «Marcar como referencia» se quita (27 oct): el agente no la leía, por la regla de no mezclar clientes, y no aportaba.
 2. [hecho, 26 oct, en producción] **S2 · Quién habló.** El reparto de palabras entre Smarteam y el cliente, sin IA, desde las frases de Meet o la transcripción.
 3. [hecho, 26 oct, en producción, todavía en Sesiones] **S3 · El análisis de cada sesión, con citas.** Qué tan consultiva fue (problemas y resultados frente a licencias y precio), la guía, la escala, el posicionamiento, lo que quedó sin explorar, asesor o vendedor de licencias, el siguiente paso y dos o tres recomendaciones; cada juicio con una cita que Nexus verifica en la transcripción. Prueba con Camosa: 28 juicios con cita válida, 8 descartados, Smarteam habló el 62 %, US$0,16.
 4. [hecho, 27 oct, en producción] **S4 · La autoevaluación en cada sesión de exploración** (26 oct). En Preventa › Exploración › la sesión › «Análisis», un apartado aparte de lo que ya está (siguiente paso, cuánto avanzó, quedó abierto): «Cómo trabajaste esta sesión», con el análisis de S3 resumido para esa sesión. Ajuste de Elías del 27 oct (en producción, `a9df93e2`): es feedback de cómo se trabajó la sesión, no planificación de la siguiente. Arriba y en grande va la lectura general; el proceso consultivo, en 4 tarjetas; lo que faltó explorar, en tarjetas chicas por equipo; y dos o tres cosas «Para mejorar». Se quitaron los comentarios del vendedor y el siguiente paso. Una persona lo confirma.
