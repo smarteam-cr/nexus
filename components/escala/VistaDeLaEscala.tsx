@@ -398,6 +398,9 @@ export default function VistaDeLaEscala({
               <Link href="/escala/tests" className={BOTON_CLARO} title="El test público de cada área: sus preguntas, quién lo llenó y cuántos lo terminan.">
                 Tests
               </Link>
+              <Link href="/escala/probar" className={BOTON_CLARO} title="Prueba la escala con la empresa que elijas y anota dónde crees que está.">
+                Probar
+              </Link>
               {borrador && (
                 <Link
                   href="/escala/borrador"

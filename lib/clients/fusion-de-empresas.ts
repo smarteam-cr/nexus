@@ -102,6 +102,9 @@ export const SE_MUDAN = [
   /* La escala de la empresa en el tiempo (ficha B, 2026-10-17): `onDelete: Cascade`, así que sin mudarlas se BORRARÍAN
      las versiones de la absorbida. Se mudan enteras: son fotos con su fecha, sin único con la ficha. */
   ["versionDeLaEscala", "clientId"],
+  /* La prueba de la escala (N2, 2026-10-26): `onDelete: Cascade`, así que sin mudarlas se BORRARÍAN las comparaciones de
+     la absorbida. Se mudan enteras: cada fila es una comparación con su fecha, sin único con la ficha. */
+  ["pruebaDeLaEscala", "clientId"],
   /* Los hechos de las reuniones (memoria de la cuenta, etapa 6): `onDelete: Cascade`, así que sin mudarlos se BORRARÍAN
      con la ficha absorbida. Se mudan enteros: las reuniones también pasan a la que sigue (más abajo), así que INV45
      (todo hecho es del cliente de su reunión) sigue en verde. Sin único con la ficha: dos hechos iguales de las dos

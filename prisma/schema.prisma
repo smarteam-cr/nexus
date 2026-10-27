@@ -276,6 +276,7 @@ model Client {
   projects                 Project[]
   casosDeUso               CasoDeUso[] // el camino de crecimiento de la empresa (docs/smartloop-plan.md)
   versionesDeLaEscala      VersionDeLaEscala[] // la escala de la empresa en el tiempo (ficha B, 2026-10-17)
+  pruebasDeLaEscala        PruebaDeLaEscala[] // N2: el nivel que da la escala y el que cree el equipo (2026-10-26)
   canvasSuggestions        CanvasSuggestion[]
   actionItems              ActionItem[]
   pedidosFueraDeAlcance    PedidoFueraDeAlcance[]
@@ -2013,6 +2014,7 @@ model ExploracionDeVenta {
   vinculosDeTareas           TareaVinculo[]           @relation("VinculosDeTareasDeLaPreventa") // Tareas internas (CASCADE)
   /// Las fotos de la escala que salieron de esta exploración (VersionDeLaEscala).
   versionesDeLaEscala        VersionDeLaEscala[]
+  pruebasDeLaEscala          PruebaDeLaEscala[]
   /// R5: las investigaciones que se mudaron de esta preventa a su empresa.
   investigacionesDeLaEmpresa InvestigacionDeEmpresa[] @relation("InvestigacionesDeLaPreventa")
 
@@ -8472,6 +8474,43 @@ model VersionDeLaEscala {
   @@index([clientId, createdAt])
   @@index([exploracionId, createdAt])
   @@index([ventaGanadaId])
+}
+
+// ─── Probar la escala con cualquier empresa · N2 (2026-10-26) ─────────────────
+// SQL: scripts/sql/2026-10-26-prueba-de-la-escala.sql (ANTES del deploy).
+
+/// Una comparación de la prueba de la escala (N2): por empresa y área, el nivel que dio la escala (con la versión
+/// publicada o el borrador) y el que cree el equipo, con quién lo dijo y cuándo. La escribe SOLO
+/// lib/escala/prueba/servidor.ts. Cada fila queda: volver a probar suma otra y el resumen cuenta la última. Interno.
+model PruebaDeLaEscala {
+  id                 String              @id @default(cuid())
+  clientId           String
+  client             Client              @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  /// nullable porque la prueba sobrevive a que se borre la exploración de la que salieron los niveles.
+  exploracionId      String?
+  exploracion        ExploracionDeVenta? @relation(fields: [exploracionId], references: [id], onDelete: SetNull)
+  /// El área de la escala ("1" Ventas, "2" Marketing, "3" Servicio) y su nombre cuando se probó.
+  areaId             String
+  areaNombre         String
+  /// Con qué versión de la escala se midió, y si era el borrador (la 9.0 antes de publicarse).
+  escalaVersion      String
+  esBorrador         Boolean             @default(false)
+  /// nullable porque solo el borrador la lleva: un borrador editado sigue llamándose igual y sus reglas cambian.
+  revisionDelBorrador Int?
+  edicion            String?
+  /// D | I | F | E | O (CHECK en el SQL): el que dio la escala y el que cree la persona.
+  nivelDeLaEscala    String
+  nivelQueCree       String
+  /// Quién cree ese nivel (quien prueba o el CSE de la cuenta) y quién lo anotó.
+  creePorEmail       String
+  registradoPorEmail String
+  /// De qué salió el nivel de la escala (lib/escala/prueba/calculo.ts › AreaDeLaPrueba, más la fuente).
+  detalle            Json
+  nota               String?             @db.Text
+  createdAt          DateTime            @default(now())
+
+  @@index([clientId, createdAt])
+  @@index([escalaVersion, createdAt])
 }
 
 // ─── Un solo libro financiero · ficha F (2026-10-17) ───────────────────────────

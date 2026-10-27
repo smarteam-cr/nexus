@@ -25,6 +25,7 @@ import { guardAccessToClient, guardContextoDelDocumento, guardPermission } from 
 import { can } from "@/lib/auth/permissions/engine";
 import { ensureClientInfoProject } from "@/lib/canvas/strategy-project";
 import { prisma } from "@/lib/db/prisma";
+import { empresaExcluida } from "@/lib/escala/prueba/calculo";
 import { lanzarCorrida } from "@/lib/exploraciones/agente";
 import { asegurarExploracionDelProyecto } from "@/lib/exploraciones/del-proyecto";
 import { diaDelMomento, escalaDeLaEmpresa, esDeLaEmpresa } from "@/lib/exploraciones/escala-de-la-empresa";
@@ -45,7 +46,9 @@ export async function GET(_req: NextRequest, { params }: { params: Params }) {
     const puede = tm
       ? { preventa: await can(tm, "preventa", "write"), exploracion: await can(tm, "exploracion", "generate") }
       : { preventa: false, exploracion: false };
-    return NextResponse.json({ ...(await escalaDeLaEmpresa(id)), puede });
+    // «Probar la escala» (N2) no se ofrece con Wherex: nunca entra a la prueba.
+    const empresa = await prisma.client.findUnique({ where: { id }, select: { name: true } });
+    return NextResponse.json({ ...(await escalaDeLaEmpresa(id)), puede, sePuedeProbar: !empresaExcluida(empresa?.name) });
   } catch (e) {
     console.error("[clients/escala]", e);
     return NextResponse.json({ error: "No se pudo cargar la escala de la empresa." }, { status: 500 });
