@@ -11166,6 +11166,8 @@ tan consultiva fue su reunión y cómo mejorar. Es coaching, no control (docs/an
    empresa (la que se armó antes de la reunión, como la lectura de la preventa) y la reunión de REFERENCIA no entra al
    contexto: es de otra empresa. Se muestra al lado para que una persona compare. INV57 vigila que cada análisis sea de la
    empresa dueña de su reunión. Es un cambio contra el plan («el analizador la usa como ejemplo»): queda para Elías.
+   ⚠ Enmendado el 2026-10-27 (Elías): la referencia se quitó; ver el punto 11 de «El análisis de la venta se muda a la
+   preventa».
 5. **Qué reunión es de venta:** la de un prospecto, y la de un cliente con preventa abierta y alguien de Ventas. La
    expansión de un cliente sin preventa (la «Fase 2: Marketing» de CEMACO es un negocio abierto de HubSpot) se analiza a
    mano y desde ahí cuenta: medido el 25 oct, ninguna señal automática la separa de la entrega (con los negocios abiertos
@@ -11178,6 +11180,8 @@ tan consultiva fue su reunión y cómo mejorar. Es coaching, no control (docs/an
    quizá no tocaban); conviene acotarlas al área de la sesión cuando la guía la dice.
    ⚠ Resuelto el 2026-10-27 (abajo, «El análisis de la venta se muda a la preventa»): se acota al área de la sesión.
    ⚠ Enmendado el 2026-10-27: el punto 5 «se analiza a mano» ya no tiene botón fuera de la preventa (Sesiones no analiza).
+   ⚠ Enmendado el 2026-10-27 (Elías): el job analiza solo las reuniones que son la sesión de una exploración de la
+   preventa; ver el punto 10 de «El análisis de la venta se muda a la preventa».
 
 
 ## Un solo transporte para HubSpot: el token, el 401 y el 429 (2026-10-24, U6)
@@ -11657,7 +11661,7 @@ el manejo de un cliente ni de una sesión: el análisis vive en la preventa (doc
    siguió. Se dice así en pantalla.
 6. **S6 · Sesiones no analiza:** se retiraron «Reuniones de venta» (/sessions/venta), el bloque de la reunión y sus rutas.
    El tablero de salud sigue. El criterio y la tendencia viven en Ventas › Preventa › «Análisis de la venta»
-   (/sales/analisis); «Marcar como referencia» vive en «Cómo trabajaste esta sesión». La expansión de un cliente SIN
+   (/sales/analisis); «Marcar como referencia» vivía en «Cómo trabajaste esta sesión» (se quitó: punto 11). La expansión de un cliente SIN
    preventa (antes «a mano» desde la reunión) queda sin botón: se le abre una preventa. ⚠ Pendiente para Elías.
 7. **S7 · la tendencia por vendedor** vive en /sales/analisis, solo para super admin. Por vendedor y mes a mes: reuniones,
    cuántas con transcripción, cuánto habló él y el cliente, cuánto exploró a fondo y cuántas dejaron siguiente paso con
@@ -11670,6 +11674,18 @@ el manejo de un cliente ni de una sesión: el análisis vive en la preventa (doc
    sin área en la escala —Dirección, Operaciones, Finanzas, Tecnología—, los temas de su guía), si no la guía enfocada en
    dimensiones, y solo al final las áreas en juego. El agente juzga «exploración» sobre esa lista y ninguna otra.
 9. **El análisis automático sigue apagado** (`ANALIZADOR_VENTA`) hasta que lo apruebe Andrés (S8).
+10. **El automático cubre solo las exploraciones de la preventa** (Elías, 27 oct): el job `analizador-venta` toma una
+    reunión de venta solo si es la sesión de una exploración abierta de la preventa de su empresa. Es el mismo vínculo con
+    que la pieza «Análisis» nombra la sesión de cada reunión (lib/exploraciones/fuentes.ts ›
+    `reunionesDeLasSesionesDeLaPreventa`, que sale de `armarReuniones`). En un prospecto cuentan también las que entraron
+    solas y nadie sacó. Lo demás no cambia: 14 días, con transcripción, sin análisis previo, una por tick, el presupuesto
+    automático y el chokepoint. *Por qué:* el análisis sirve para trabajar la preventa; una reunión de venta fuera de toda
+    exploración no tiene dónde verse y sería gasto sin lector. Esa se analiza a mano, después de sumarla como sesión.
+11. **Sin reuniones de referencia** (Elías, 27 oct): la referencia no aportaba. El agente no la lee (invariante 1: es de
+    otra empresa), así que solo era una lista al lado del análisis. Se quitan «Marcar como referencia», la lista en «El
+    criterio», las acciones `referencia` y `quitar-referencia` de la revisión y `referencia-server.ts`. La tabla
+    `ReunionDeReferenciaDeVenta` queda en la base sin escritores ni lectores, DEPRECATED hasta el 2027-01-31; no va SQL
+    de borrado.
 
 ## El kickoff, la Planificación y los documentos de la empresa (2026-10-27, noche 2 pieza 5: Q, L4 etapas 5 a 7, R3 etapas 2 y 3)
 

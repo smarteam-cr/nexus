@@ -3,18 +3,15 @@
  *
  *   { accion: "confirmar", sessionId, analizadoAt, nota? }   → 409 si el análisis cambió
  *   { accion: "desconfirmar", sessionId }
- *   { accion: "referencia", sessionId, nota? }       → la marca como reunión de referencia (S1)
- *   { accion: "quitar-referencia", sessionId }
+ * (La referencia se quitó el 2026-10-27: Elías.)
  *
  * Pide `preventa.write` y, mientras se prueba, ser super admin (lib/analizador-venta/guardia-server.ts). La reunión tiene
- * que ser de la empresa de la preventa (el chokepoint, invariante 1). Lo demás: lib/analizador-venta/revision-server.ts y
- * referencia-server.ts.
+ * que ser de la empresa de la preventa (el chokepoint, invariante 1). Lo demás: lib/analizador-venta/revision-server.ts.
  */
 import { NextRequest, NextResponse } from "next/server";
 import { cuerpoInvalido } from "@/lib/api/cuerpo-invalido";
 import { esquemaDesactualizado } from "@/lib/db/esquema";
 import { esReunionDeLaEmpresa, guardDelAnalisisDeVenta } from "@/lib/analizador-venta/guardia-server";
-import { marcarReferencia, quitarReferencia } from "@/lib/analizador-venta/referencia-server";
 import { RevisionSchema } from "@/lib/analizador-venta/schema";
 import { confirmarAnalisis, desconfirmarAnalisis, type ResultadoDeRevisar } from "@/lib/analizador-venta/revision-server";
 
@@ -36,13 +33,6 @@ export async function POST(req: NextRequest, { params }: Ctx) {
         break;
       case "desconfirmar":
         r = await desconfirmarAnalisis(b.sessionId);
-        break;
-      case "referencia":
-        r = await marcarReferencia(b.sessionId, { por: g.email, nota: b.nota ?? null });
-        break;
-      case "quitar-referencia":
-        await quitarReferencia(b.sessionId);
-        r = { ok: true };
         break;
     }
     if (!r.ok) return NextResponse.json({ error: r.error }, { status: r.status });

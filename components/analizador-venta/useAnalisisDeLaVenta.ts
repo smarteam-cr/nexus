@@ -73,7 +73,7 @@ export function useAnalisisDeLaVenta(exploracionId: string, activo: boolean) {
     [exploracionId],
   );
 
-  /** Comenta, confirma, desconfirma o marca la referencia. */
+  /** Confirma o desconfirma un análisis. */
   const revisar = useCallback(
     async (cuerpo: Revision) => {
       await fetchJson(`${base(exploracionId)}/revision`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(cuerpo) });

@@ -209,28 +209,7 @@ function ElAnalisis({ vista, pestana, puedeEditar }: { vista: ReunionDeVentaVist
             </div>
           </details>
 
-          <div className="flex flex-wrap items-center gap-2 border-t border-line pt-3.5">
-            {botonAnalizar}
-            {puedeEditar && (
-              <Button
-                variant="secondary"
-                size="sm"
-                loading={ocupado === "referencia"}
-                disabled={!!ocupado}
-                onClick={() => void hacer("referencia", () => revisar({ accion: vista.referencia ? "quitar-referencia" : "referencia", sessionId: vista.id }))}
-              >
-                {vista.referencia ? "Quitar como referencia" : "Marcar como referencia"}
-              </Button>
-            )}
-            <span className="min-w-0 flex-1 text-xs text-fg-muted">
-              {vista.referencia ? "Esta reunión es una referencia de lo que sí es una reunión consultiva." : ""}
-              {(datos?.referencias ?? []).filter((x) => x.sessionId !== vista.id).length > 0 &&
-                ` Para comparar: ${(datos?.referencias ?? [])
-                  .filter((x) => x.sessionId !== vista.id)
-                  .map((x) => `«${x.titulo}» (${fechaDelAnalisis(x.fecha)})`)
-                  .join(" · ")}. Nexus no las usa al analizar: son de otra empresa.`}
-            </span>
-          </div>
+          {botonAnalizar && <div className="flex flex-wrap items-center gap-2 border-t border-line pt-3.5">{botonAnalizar}</div>}
         </>
       ) : (
         vista.quienHablo && (

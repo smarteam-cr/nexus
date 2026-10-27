@@ -2646,7 +2646,7 @@ model FirefliesSession {
   propuestaDeEmpresa    PropuestaDeEmpresa?    @relation("PropuestaDeLaReunion") // T3: a qué empresa la propone Nexus (CASCADE)
   audio                 AudioDeReunion?        @relation("AudioDeLaReunion") // T5: el audio de la reunión presencial (CASCADE)
   analisisDeVenta       AnalisisDeVenta?       @relation("AnalisisDeVentaDeLaReunion") // S3: el análisis de la reunión de venta (CASCADE)
-  referenciaDeVenta     ReunionDeReferenciaDeVenta? @relation("ReferenciaDeVenta") // S1: marcada como ejemplo de lo consultivo (CASCADE)
+  referenciaDeVenta     ReunionDeReferenciaDeVenta? @relation("ReferenciaDeVenta") // DEPRECATED — eliminar después de 2027-01-31: la referencia se quitó el 2026-10-27 (CASCADE)
   frases                FraseDeReunion[]       @relation("FrasesDeLaReunion") // U3: la transcripción por frases de la API de Meet (CASCADE)
 
   // Índices para los queries principales:
@@ -2783,8 +2783,9 @@ enum EstadoDelAnalisisDeVenta {
   ERROR
 }
 
-/// S1 (2026-10-26) · Una reunión marcada a mano como ejemplo de una reunión de venta consultiva. Se muestra al lado del
-/// análisis para comparar; el agente NO la lee (es de otra empresa: invariante 1).
+/// S1 (2026-10-26) · Una reunión marcada a mano como ejemplo de una reunión de venta consultiva. El agente nunca la leyó
+/// (es de otra empresa: invariante 1). Elías la quitó el 2026-10-27: no aportaba. Sin escritores ni lectores.
+// DEPRECATED — eliminar después de 2027-01-31 (tabla y relación; antes, un .sql de DROP revisado aparte).
 model ReunionDeReferenciaDeVenta {
   id         String           @id @default(cuid())
   sessionId  String           @unique

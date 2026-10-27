@@ -16,8 +16,6 @@ export const RevisionSchema = z.discriminatedUnion("accion", [
     nota: z.string().trim().max(MAX_LETRAS_DE_LA_NOTA).optional(),
   }),
   z.object({ accion: z.literal("desconfirmar"), sessionId: sesion }),
-  z.object({ accion: z.literal("referencia"), sessionId: sesion, nota: z.string().trim().max(500).optional() }),
-  z.object({ accion: z.literal("quitar-referencia"), sessionId: sesion }),
 ]);
 export type Revision = z.infer<typeof RevisionSchema>;
 

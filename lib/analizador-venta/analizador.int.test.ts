@@ -4,7 +4,7 @@
  *
  * Lo que tiene que sostenerse escribiendo de verdad: una reunión con un prospecto se analiza y queda como propuesta con
  * sus juicios citados (el que cita algo que no se dijo se descarta) y quién habló calculado; una de entrega con un cliente
- * no se analiza; la vista por empresa las separa; e INV57 se pone en rojo si la reunión cambia de dueña después.
+ * no se analiza; el job solo toma las que son la sesión de una exploración de la preventa; la vista por empresa las separa; e INV57 se pone en rojo si la reunión cambia de dueña después.
  * Correr con la base local: `npm run test:int`.
  */
 import { describe, expect, it, vi } from "vitest";
@@ -19,6 +19,7 @@ import { reunionesDeVenta, reunionesPorAnalizar } from "./reuniones-de-venta-ser
 import { soltarAnalisisDeVentaAjenos } from "./ajenos";
 import { AGENTE_DEL_ANALIZADOR, PROMPT_DEL_ANALIZADOR } from "./prompt";
 import { INV57 } from "@/lib/invariantes/analizador-venta";
+import { contenidoVacio, propuestaVacia } from "@/lib/exploraciones/contenido";
 
 const DIA = 86_400_000;
 const ANDRES = "andres@smarteamcr.com";
@@ -66,7 +67,28 @@ describe("el analizador de reuniones de venta — DB real", { timeout: 30_000 },
       ],
     });
 
-    // El job la elige: es de venta, reciente, con transcripción y sin análisis.
+    // Sin exploración de la preventa, el job no la toma (Elías, 2026-10-27): solo analiza las sesiones de una exploración.
+    expect(await reunionesPorAnalizar(ahora, 5)).toEqual([]);
+    // En la exploración de un prospecto, sacada («Fuera de la exploración»): tampoco.
+    const exp = await prisma.exploracionDeVenta.create({
+      data: {
+        clientId: camosa.id,
+        creadaPor: ANDRES,
+        areas: ["1"],
+        perfilCierre: "con equipo",
+        perfilDespues: "continua",
+        contenido: { ...contenidoVacio(), fuera: ["meet:venta-camosa"] } as never,
+        propuesta: propuestaVacia() as never,
+      },
+      select: { id: true },
+    });
+    expect(await reunionesPorAnalizar(ahora, 5)).toEqual([]);
+    await prisma.exploracionDeVenta.update({
+      where: { id: exp.id },
+      data: { contenido: { ...contenidoVacio(), sesiones: [{ id: "s-1", reunion: { id: "venta-camosa", origen: "meet" } }] } as never },
+    });
+
+    // Ahora sí la elige: es la sesión de la exploración, de venta, reciente, con transcripción y sin análisis.
     expect(await reunionesPorAnalizar(ahora, 5)).toEqual(["venta-camosa"]);
     const r = await analizarReunionDeVenta("venta-camosa", { pedidoPor: "elias@smarteamcr.com" });
     expect(r.ok).toBe(true);
@@ -119,5 +141,35 @@ describe("el analizador de reuniones de venta — DB real", { timeout: 30_000 },
     // Lo que hace la re-atribución al cambiar la dueña (y el script de remedio): suelta el análisis ajeno.
     expect(await soltarAnalisisDeVentaAjenos(["venta-camosa", "fase2-cemaco"])).toBe(1);
     expect((await INV57.correr(prisma, ahora)).ok).toBe(true);
+  });
+
+  it("en un cliente con preventa, solo la reunión ligada a una sesión de su exploración abierta", async () => {
+    const ahora = new Date();
+    await prisma.sessionCategory.create({ data: { name: "Smarteam (test)", slug: "smarteam-test", kind: "internal", domains: ["smarteamcr.com"] } });
+    await prisma.teamMember.create({ data: { name: "Andrés Pinzón", email: ANDRES, area: "Ventas", roleEnum: "VENTAS" } });
+    const larce = await prisma.client.create({ data: { name: "Larce (test)", kind: "CLIENTE" } });
+    const otra = await prisma.client.create({ data: { name: "Otra (test)", kind: "PROSPECTO" } });
+    await prisma.firefliesSession.create({
+      data: { id: "venta-larce", title: "Larce | Fase 2", date: new Date(+ahora - 2 * DIA), participants: [ANDRES, "x@larce.test"], organizerEmail: ANDRES, transcript: TRANSCRIPCION, resolvedClientId: larce.id },
+    });
+    const ligada = { ...contenidoVacio(), sesiones: [{ id: "s-1", reunion: { id: "venta-larce", origen: "meet" } }] };
+    const exploracion = (clientId: string, contenido: object) =>
+      prisma.exploracionDeVenta.create({
+        data: { clientId, creadaPor: ANDRES, areas: ["1"], perfilCierre: "con equipo", perfilDespues: "continua", contenido: contenido as never, propuesta: propuestaVacia() as never },
+        select: { id: true },
+      });
+
+    // Preventa abierta sin sesiones: en un cliente nada entra solo.
+    const deLarce = await exploracion(larce.id, contenidoVacio());
+    expect(await reunionesPorAnalizar(ahora, 5)).toEqual([]);
+    // La exploración de OTRA empresa que nombra la reunión no cuenta (cada reunión, contra las de su empresa).
+    await exploracion(otra.id, ligada);
+    expect(await reunionesPorAnalizar(ahora, 5)).toEqual([]);
+    // Ligada a una sesión de la exploración de Larce: sí.
+    await prisma.exploracionDeVenta.update({ where: { id: deLarce.id }, data: { contenido: ligada as never } });
+    expect(await reunionesPorAnalizar(ahora, 5)).toEqual(["venta-larce"]);
+    // Archivada, ya no (una empresa tiene una sola exploración de preventa: sin ella, la reunión deja también de ser de venta).
+    await prisma.exploracionDeVenta.update({ where: { id: deLarce.id }, data: { archivadaEn: ahora } });
+    expect(await reunionesPorAnalizar(ahora, 5)).toEqual([]);
   });
 });

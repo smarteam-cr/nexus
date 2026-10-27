@@ -57,7 +57,8 @@ import {
 } from "./guia";
 import type { ClaveDeCasilla } from "./casillas";
 import { fuentesDelProyecto, sesionesDelProyecto } from "./fuentes-del-proyecto";
-import { marcoDe } from "./marco";
+import { DE_LA_PREVENTA, marcoDe } from "./marco";
+import { leerContenido, leerPropuesta } from "./esquemas";
 import { enlacesDelTestEnNexus } from "@/lib/tests-diagnostico/preventa-server";
 import { esClaveDeInstrucciones, rotuloDeLaNota } from "./notas-de-sesion";
 import { etiquetaDeLaFuente } from "./senales";
@@ -74,7 +75,7 @@ import {
   textoDeLasNotasDeGemini,
   type ReunionSinLeer,
 } from "./lectura";
-import type { LoLeidoDeHubspot } from "./lo-leido";
+import { leerLoLeido, type LoLeidoDeHubspot } from "./lo-leido";
 import { REUNIONES } from "./sesion";
 import { leerSitioWeb } from "./sitio-web";
 import { hostDelSitio } from "./sitio-web-reglas";
@@ -800,6 +801,56 @@ export async function reunionesDeLaExploracion(
   ahora = new Date(),
 ): Promise<ReunionDeLaExploracion[]> {
   return (await armarReuniones(opts, 30, ahora)).todas;
+}
+
+/** Cuánto se recuerda la respuesta de `reunionesDeLasSesionesDeLaPreventa` si no cambió nada. */
+const MEMORIA_DE_LAS_SESIONES_MS = 30 * 60 * 1000;
+const memoriaDeLasSesiones = new Map<string, { firma: string; ids: Set<string>; en: number }>();
+
+/**
+ * De `candidatas` (reuniones de Meet de ESTA empresa), las que son sesión de una exploración ABIERTA de su preventa: las
+ * que se ligan a una pestaña (`armarReuniones` › `deSesiones`, el mismo vínculo con que la pieza «Análisis» nombra la
+ * sesión de cada reunión). En un prospecto cuentan también las que entraron solas y nadie sacó. Una reunión solo se
+ * compara con las exploraciones de su empresa. El job `analizador-venta` analiza solo estas (Elías, 2026-10-27).
+ * Solo lee la base, por el chokepoint.
+ * La respuesta se recuerda media hora mientras no cambien las exploraciones ni las candidatas: el job pregunta cada
+ * minuto, y una reunión de venta que no es sesión sigue candidata sus 14 días.
+ */
+export async function reunionesDeLasSesionesDeLaPreventa(clientId: string, candidatas: readonly string[], ahora = new Date()): Promise<Set<string>> {
+  if (!candidatas.length) return new Set();
+  const vivas = await prisma.exploracionDeVenta.findMany({ where: { clientId, archivadaEn: null, ...DE_LA_PREVENTA }, select: { id: true, updatedAt: true } });
+  if (!vivas.length) return new Set();
+  const firma = [...vivas.map((f) => `${f.id}@${f.updatedAt.toISOString()}`).sort(), "|", ...[...candidatas].sort()].join(",");
+  const guardada = memoriaDeLasSesiones.get(clientId);
+  if (guardada && guardada.firma === firma && +ahora - guardada.en < MEMORIA_DE_LAS_SESIONES_MS) return new Set(guardada.ids);
+
+  const filas = await prisma.exploracionDeVenta.findMany({
+    where: { clientId, archivadaEn: null, ...DE_LA_PREVENTA },
+    select: { id: true, clientId: true, projectId: true, createdAt: true, contenido: true, propuesta: true, test: true },
+  });
+  const deMeet = new Set<string>();
+  for (const f of filas) {
+    const c = leerContenido(f.contenido);
+    const { deSesiones } = await armarReuniones(
+      {
+        exploracionId: f.id,
+        clientId: f.clientId,
+        projectId: f.projectId,
+        creadaEn: f.createdAt,
+        propuesta: leerPropuesta(f.propuesta),
+        leido: leerLoLeido(f.test),
+        sesiones: c.sesiones,
+        fuera: c.fuera,
+        elegidas: c.reunionesElegidas,
+      },
+      30,
+      ahora,
+    );
+    for (const k of deSesiones) if (k.startsWith("meet:")) deMeet.add(k.slice(5));
+  }
+  const ids = new Set(candidatas.filter((id) => deMeet.has(id)));
+  memoriaDeLasSesiones.set(clientId, { firma, ids, en: +ahora });
+  return new Set(ids);
 }
 
 /**

@@ -34,7 +34,7 @@ export function seAnalizaAMano(porQueNo: PorQueNoEsDeVenta | null): boolean {
 
 /** Por qué el job `analizador-venta` no corre en este servidor, o null. */
 export function motivoAnalizadorApagado(env: Entorno): string | null {
-  return analizadorAutomaticoPrendido(env) ? null : "Apagado: falta ANALIZADOR_VENTA=1 en el .env del servidor. Se puede analizar a mano desde cada reunión.";
+  return analizadorAutomaticoPrendido(env) ? null : "Apagado: falta ANALIZADOR_VENTA=1 en el .env del servidor. Se puede analizar a mano desde la preventa.";
 }
 
 /** Cuántos días después de la reunión la analiza el job solo (como la lectura de cada reunión). */

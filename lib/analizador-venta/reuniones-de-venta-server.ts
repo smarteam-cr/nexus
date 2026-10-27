@@ -24,6 +24,7 @@ import { dominiosDeLaCasa } from "@/lib/sessions/reuniones-para-seguimiento";
 import { sqlClaseDeTexto, type ClaseDeTexto } from "@/lib/sessions/tiene-texto";
 import { equipoEnLasReuniones } from "@/lib/google/equipo-en-la-reunion";
 import { esquemaDesactualizado } from "@/lib/db/esquema";
+import { reunionesDeLasSesionesDeLaPreventa } from "@/lib/exploraciones/fuentes";
 
 import { leerResultadoGuardado, type Juicio, type ResultadoDelAnalisis } from "./analisis";
 import type { QuienHablo } from "./quien-hablo";
@@ -49,7 +50,6 @@ export interface ReunionDeVentaVista {
     sinExplorar: string[];
     error: string | null;
   } | null;
-  referencia: boolean;
   /** Solo con `completo`: los correos de los vendedores atribuidos. */
   correos?: string[];
   /** Solo con `completo`: quién habló (el del análisis o calculado); null = sin transcripción. */
@@ -139,29 +139,25 @@ export async function reunionesDeVenta(o: { dias: number; ahora?: Date; clientId
   if (!deVenta.length) return [];
 
   const ids = deVenta.map((x) => x.f.id);
-  const [analisis, referencias] = await Promise.all([
-    prisma.analisisDeVenta
-      .findMany({
-        where: { sessionId: { in: ids } },
-        select: {
-          sessionId: true,
-          clientId: true,
-          estado: true,
-          resultado: true,
-          quienHablo: true,
-          error: true,
-          ...(o.completo ? { descartados: true, analizadoAt: true, confirmadoPor: true, confirmadoAt: true, notaDeConfirmacion: true } : {}),
-        },
-      })
-      .catch((e: unknown) => {
-        // La pantalla (completo) dice «falta el SQL» en vez de mostrar todo «sin analizar» y ofrecer gastar IA de más.
-        if (o.completo && esquemaDesactualizado(e)) throw e;
-        return [];
-      }),
-    prisma.reunionDeReferenciaDeVenta.findMany({ where: { sessionId: { in: ids } }, select: { sessionId: true } }).catch(() => []),
-  ]);
+  const analisis = await prisma.analisisDeVenta
+    .findMany({
+      where: { sessionId: { in: ids } },
+      select: {
+        sessionId: true,
+        clientId: true,
+        estado: true,
+        resultado: true,
+        quienHablo: true,
+        error: true,
+        ...(o.completo ? { descartados: true, analizadoAt: true, confirmadoPor: true, confirmadoAt: true, notaDeConfirmacion: true } : {}),
+      },
+    })
+    .catch((e: unknown) => {
+      // La pantalla (completo) dice «falta el SQL» en vez de mostrar todo «sin analizar» y ofrecer gastar IA de más.
+      if (o.completo && esquemaDesactualizado(e)) throw e;
+      return [];
+    });
   const analisisDe = new Map(analisis.map((a) => [a.sessionId, a]));
-  const esReferencia = new Set(referencias.map((r) => r.sessionId));
 
   // Con `completo`: quién habló donde no lo guardó un análisis, y quién de la invitación la rechazó (T7, del calendario).
   const vigenteDe = (id: string, empresaId: string) => {
@@ -217,7 +213,6 @@ export async function reunionesDeVenta(o: { dias: number; ahora?: Date; clientId
             error: vigente.error,
           }
         : null,
-      referencia: esReferencia.has(f.id),
       ...(o.completo ? { correos, quienHablo: quien ?? null, detalle: vigente ? detalleDe(vigente, resultado) : null } : {}),
     };
     const g = porEmpresa.get(f.empresaId) ?? { id: f.empresaId, nombre: f.empresa, kind: f.kind, reuniones: [], conTranscripcion: 0, analizadas: 0 };
@@ -254,16 +249,24 @@ function detalleDe(
 }
 
 /**
- * Las reuniones de venta de los últimos `DIAS_PARA_ANALIZAR_SOLA` días con transcripción y sin análisis, de la más
-
- * vieja a la más nueva: las que el job `analizador-venta` analiza solo. Una que terminó en error no se reintenta sola
- * (se reintenta a mano).
+ * Las reuniones de venta de los últimos `DIAS_PARA_ANALIZAR_SOLA` días con transcripción y sin análisis que son la sesión
+ * de una exploración abierta de la preventa, de la más vieja a la más nueva: las que el job `analizador-venta` analiza
+ * solo. Una reunión de venta que no está en ninguna exploración no se analiza sola (Elías, 2026-10-27): se analiza a
+ * mano. Una que terminó en error no se reintenta sola (se reintenta a mano).
  */
 export async function reunionesPorAnalizar(ahora: Date, limite: number): Promise<string[]> {
-  const empresas = await reunionesDeVenta({ dias: DIAS_PARA_ANALIZAR_SOLA, ahora });
+  const empresas = (await reunionesDeVenta({ dias: DIAS_PARA_ANALIZAR_SOLA, ahora }))
+    .map((e) => ({ id: e.id, reuniones: e.reuniones.filter((r) => r.texto === "transcripcion" && !r.analisis) }))
+    .filter((e) => e.reuniones.length);
+  if (!empresas.length) return [];
+  // Cada reunión, contra las exploraciones de SU empresa.
+  const deLaPreventa = new Set<string>();
+  for (const e of empresas) {
+    for (const id of await reunionesDeLasSesionesDeLaPreventa(e.id, e.reuniones.map((r) => r.id), ahora)) deLaPreventa.add(id);
+  }
   return empresas
     .flatMap((e) => e.reuniones)
-    .filter((r) => r.texto === "transcripcion" && !r.analisis)
+    .filter((r) => deLaPreventa.has(r.id))
     .sort((a, b) => a.fecha.localeCompare(b.fecha))
     .slice(0, limite)
     .map((r) => r.id);

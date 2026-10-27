@@ -11,6 +11,7 @@ import { analizadorAutomaticoPrendido, delEquipoEnLaReunion, motivoAnalizadorApa
 import { HERRAMIENTA_DEL_ANALISIS, extraerDelTurno, leerElAnalisis, paraComparar, verificarCita, type TurnoNumerado } from "./analisis";
 import { AGENTES_CON_CAMINO_PROPIO, esAgenteRetirado } from "@/lib/agents/retirados";
 import { AGENTE_DEL_ANALIZADOR } from "./prompt";
+import { RevisionSchema } from "./schema";
 
 const PROPIOS = new Set(["smarteamcr.com"]);
 const EQUIPO = [
@@ -189,9 +190,24 @@ describe("⛔ el analizador corre por su camino, con una sola empresa", () => {
     }
   });
 
-  it("la reunión que se analiza sale del chokepoint, y la de referencia no entra al contexto", () => {
+  it("la reunión que se analiza sale del chokepoint", () => {
     const src = leer("lib/analizador-venta/analizar-server.ts");
     expect(src).toContain("getClientSessions(r.dueno.id, { ids: [sessionId] })");
-    expect(src).not.toMatch(/reunionDeReferenciaDeVenta|reunionesDeReferencia/);
+  });
+
+  it("⛔ la referencia se quitó (Elías, 2026-10-27): ni escritores, ni lectores, ni la acción", () => {
+    expect(fs.existsSync(path.join(RAIZ, "lib/analizador-venta/referencia-server.ts"))).toBe(false);
+    // Nadie en el código nombra la tabla (sigue en la base y en el cliente de Prisma hasta el 2027-01-31).
+    const archivos = (dir: string): string[] =>
+      fs.readdirSync(path.join(RAIZ, dir), { withFileTypes: true }).flatMap((e) => {
+        const rel = `${dir}/${e.name}`;
+        if (e.isDirectory()) return e.name === "node_modules" || rel === "scripts/archive" ? [] : archivos(rel);
+        return /\.tsx?$/.test(e.name) && !/\.test\.tsx?$/.test(e.name) ? [rel] : [];
+      });
+    const conLaTabla = ["app", "lib", "components", "scripts"].flatMap(archivos).filter((f) => /reunionDeReferenciaDeVenta|reunionesDeReferencia|referencia-server/.test(leer(f)));
+    expect(conLaTabla).toEqual([]);
+    expect(leer("components/analizador-venta/ComoTrabajasteEstaSesion.tsx")).not.toMatch(/referencia/i);
+    expect(RevisionSchema.safeParse({ accion: "referencia", sessionId: "s-1" }).success).toBe(false);
+    expect(RevisionSchema.safeParse({ accion: "quitar-referencia", sessionId: "s-1" }).success).toBe(false);
   });
 });
