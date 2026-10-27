@@ -197,12 +197,20 @@ function losEjemplosCuadran(escala: Escala, especificacion: string | null | unde
   const dimension = optimo.length ? puntaje("E", 1, optimo.length) : null;
   if (capa !== 38) fallas.push(`la capa del ejemplo del puntaje da ${capa}, no 38.`);
   if (chequeo !== 35) fallas.push(`la capa del ejemplo del chequeo da ${chequeo}, no 35.`);
-  if (dimension !== 65) {
-    fallas.push(`la dimensión del ejemplo de la salida da ${dimension ?? "nada (la 1.6 no tiene criterios de Óptimo)"}, no 65: tiene ${optimo.length} criterios de Óptimo.`);
-  }
-  const textos = ["Saca 38.", "saca 35.", "Eficiente, 65, cumple 1 de 4 para Óptimo"];
   if (!especificacion) fallas.push("no hay especificación contra la cual mirar los ejemplos.");
-  else for (const t of textos) if (!especificacion.includes(t)) fallas.push(`la especificación no dice «${t}».`);
+  else {
+    for (const t of ["Saca 38.", "saca 35."]) if (!especificacion.includes(t)) fallas.push(`la especificación no dice «${t}».`);
+    // El ejemplo de la salida dice el puntaje y de cuántos criterios de Óptimo: los dos tienen que salir de la escala
+    // (la 9.0.0 cambió los de la 1.6, y el ejemplo se rehízo con ellos: 65 con 4, 66 con 3). Solo cuenta la cita del
+    // ejemplo («> Ventas — 1.6 …»): lo que diga el historial no lo reemplaza.
+    const dice = /^> .*Eficiente, (\d+), cumple 1 de (\d+) para Óptimo/m.exec(especificacion);
+    if (!dice) fallas.push("la especificación no trae el ejemplo de la salida del diagnóstico («Eficiente, N, cumple 1 de M para Óptimo»).");
+    else if (Number(dice[1]) !== dimension || Number(dice[2]) !== optimo.length) {
+      fallas.push(
+        `el ejemplo de la salida dice ${dice[1]} con ${dice[2]} criterios de Óptimo, y la dimensión da ${dimension ?? "nada (la 1.6 no tiene criterios de Óptimo)"} con ${optimo.length}.`,
+      );
+    }
+  }
   return prueba("3 · Los ejemplos cuadran", fallas);
 }
 

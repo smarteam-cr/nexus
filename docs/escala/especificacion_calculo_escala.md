@@ -1,8 +1,8 @@
 ---
 documento: Escala de Rendimiento Smarteam — Especificación del cálculo
-version: 1.3.8
-escala: 8.8.0
-fecha: 2026-10-09
+version: 1.4.0
+escala: 9.0.0
+fecha: 2026-10-27
 ---
 
 # Especificación del cálculo de la Escala de Rendimiento
@@ -15,11 +15,11 @@ Precisa las reglas de la escala, `escala_rendimiento_smarteam.md`, donde ella no
 
 Cada criterio de la matriz tiene un identificador con la forma dimensión, letra del nivel y número. La letra es D para Deficiente, I para Inicial, F para Funcional, E para Eficiente y O para Óptimo. Así, `1.7.F1` es el primer criterio de Funcional en Tracción del Negocio. Sin número, `1.7.F` se refiere al nivel completo.
 
-Junto al identificador va la forma de verificación: comprobable, declarado o evaluado. Si el criterio es de riesgo, lleva además la marca riesgo: no decide el nivel en que está, pero es requisito para pasar a Eficiente. Si describe un hábito, lleva la marca hábito: no se confirma el día que se entrega, solo después de que el equipo operó un tiempo. Y si solo aplica a ciertos perfiles de negocio, lleva la marca de ese perfil: venta con equipo, venta sin vendedor, cliente recurrente, recompra o relación continua. Un criterio lleva una sola marca de perfil. Los identificadores son para los sistemas y el equipo: ningún texto que ve el cliente —criterios, resultados, costos o mensajes— los cita.
+Junto al identificador va la forma de verificación: comprobable, declarado o evaluado. Si el criterio es de riesgo, lleva además la marca riesgo: no decide el nivel en que está, pero es requisito para pasar a Eficiente. Si describe un hábito, lleva la marca hábito: no se confirma el día que se entrega, solo después de que el equipo operó un tiempo. Y si solo aplica a ciertos perfiles de negocio, lleva la marca de ese perfil: venta con equipo, venta sin vendedor, cliente recurrente, recompra, relación continua o tráfico suficiente. Un criterio lleva una sola marca de perfil. Los identificadores son para los sistemas y el equipo: ningún texto que ve el cliente —criterios, resultados, costos o mensajes— los cita.
 
 Los identificadores son estables. Se asignaron desde cero en la versión 6.0.0, y desde entonces no se reasignan ni se renumeran. Si un criterio se retira, su número queda vacío y no se reutiliza; si se agrega uno, toma el siguiente número libre de su nivel. Eso permite que el chequeo, el cotizador y los agentes apunten siempre al mismo criterio, aunque cambie su redacción.
 
-Identificadores retirados, que no se vuelven a usar: `1.1.E4`, `1.1.F3`, `1.2.F1`, `1.2.F5`, `1.4.E1`, `1.5.E1`, `1.8.F4`, `2.1.E1`, `2.1.E3`, `2.1.O2`, `2.1.O3`, `2.2.F1`, `2.2.F6`, `2.2.F7`, `2.2.F8`, `2.3.F4`, `2.3.O2`, `2.4.E1`, `2.4.O3`, `2.5.O3`, `2.6.F2`, `2.6.O2`, `2.7.O3`, `2.8.F1`, `2.8.F2`, `2.8.F4`, `2.8.O1`, `3.1.E2`, `3.1.O2`, `3.2.F1`, `3.2.F2`, `3.2.F3`, `3.2.F7`, `3.2.I1`, `3.2.O2`, `3.2.O3`, `3.4.E3`, `3.5.O2` y `3.6.E3`.
+Identificadores retirados, que no se vuelven a usar: `1.1.E4`, `1.1.F3`, `1.1.O1`, `1.2.F1`, `1.2.F5`, `1.2.I101`, `1.3.E2`, `1.3.F5`, `1.3.F6`, `1.3.F7`, `1.3.O5`, `1.4.E1`, `1.4.F1`, `1.4.F5`, `1.4.O1`, `1.5.E1`, `1.6.E1`, `1.6.E2`, `1.6.O1`, `1.6.O2`, `1.6.O101`, `1.6.O201`, `1.7.F5`, `1.7.F301`, `1.7.F401`, `1.7.I101`, `1.7.O1`, `1.8.F4`, `1.8.O2`, `1.8.O3`, `1.8.O201`, `2.1.E1`, `2.1.E2`, `2.1.E3`, `2.1.O1`, `2.1.O2`, `2.1.O3`, `2.2.F1`, `2.2.F6`, `2.2.F7`, `2.2.F8`, `2.2.O2`, `2.3.E3`, `2.3.E4`, `2.3.F4`, `2.3.F7`, `2.3.O2`, `2.3.O3`, `2.3.O4`, `2.4.E1`, `2.4.E3`, `2.4.E4`, `2.4.F1`, `2.4.F6`, `2.4.O3`, `2.4.O4`, `2.5.E1`, `2.5.E5`, `2.5.O1`, `2.5.O3`, `2.6.E4`, `2.6.F1`, `2.6.F2`, `2.6.O2`, `2.7.E1`, `2.7.F3`, `2.7.O1`, `2.7.O3`, `2.8.E1`, `2.8.E2`, `2.8.F1`, `2.8.F2`, `2.8.F4`, `2.8.O1`, `3.1.E2`, `3.1.O1`, `3.1.O2`, `3.2.F1`, `3.2.F2`, `3.2.F3`, `3.2.F7`, `3.2.I1`, `3.2.O2`, `3.2.O3`, `3.3.E3`, `3.3.F3`, `3.3.O4`, `3.4.E3`, `3.4.F1`, `3.4.O3`, `3.4.O4`, `3.5.E1`, `3.5.O2`, `3.6.E2`, `3.6.E3`, `3.7.E2`, `3.7.E5`, `3.7.E501`, `3.7.O1`, `3.7.O4` y `3.8.E3`.
 
 Un criterio que cambia de dimensión se retira y entra con el siguiente número libre de su nueva dimensión: `1.2.F1` es hoy `1.1.F6`, `2.2.F1` es `2.1.F6`, `3.2.F1` es `3.1.F6` y `2.8.F2` es `2.4.F6`. Lo mismo vale para el que cambia de nivel o de lo que mide: deja su identificador y entra con otro. Conserva su identificador el criterio que se acota o se precisa, también cuando suma lo que pedía otro que se retira en la misma versión o lo que ya decía la descripción de su nivel; si con eso cambia a qué perfiles aplica, lo dice el historial de la escala.
 
@@ -35,7 +35,7 @@ La escala se aplica de dos formas, como dice su Parte 2, y cada una tiene su cá
 
 ### El cálculo del chequeo
 
-1. **Unidad y perfil.** Antes de las preguntas de dimensión, se registran el equipo que contesta, la industria, el país, cuántas personas tienen la empresa y el equipo, y el perfil de negocio: cómo se cierra la venta —con equipo, transaccional o mixta— y qué pasa después —relación única, recompra o continua—. Una dimensión que se queda sin criterios que apliquen en Funcional no aplica a ese perfil y no se pregunta; hoy es el caso de Priorización de Leads en la venta transaccional, en la escala general. Si la industria de la unidad tiene una edición y esa edición la cubre —lo dice su encabezado: una tienda solo física o una aseguradora quedan fuera—, el chequeo se hace con ella: con sus nombres, sus preguntas y sus criterios; si no, con la escala general.
+1. **Unidad y perfil.** Antes de las preguntas de dimensión, se registran el equipo que contesta, la industria, el país, cuántas personas tienen la empresa y el equipo, y el perfil de negocio: cómo se cierra la venta —con equipo, transaccional o mixta— qué pasa después —relación única, recompra o continua— y si el sitio o la app tiene tráfico suficiente, con el umbral que dice la tercera pregunta del perfil de la escala. Una dimensión que se queda sin criterios que apliquen en Funcional no aplica a ese perfil y no se pregunta; hoy es el caso de Priorización de Leads en la venta transaccional, en la escala general. Si la industria de la unidad tiene una edición y esa edición la cubre —lo dice su encabezado: una tienda solo física o una aseguradora quedan fuera—, el chequeo se hace con ella: con sus nombres, sus preguntas y sus criterios; si no, con la escala general.
 2. **Nivel estimado de cada dimensión.** Con las respuestas de la dimensión se elige el nivel cuya descripción en la matriz —la frase que abre el nivel y sus criterios, leídos en conjunto— calza mejor con lo que contó el prospecto. Es mejor ajuste en los cinco niveles, también de Funcional para arriba: no se marca cada criterio. Lo puede hacer la IA, leyendo las respuestas contra la matriz, o una tabla que asigna un nivel a cada respuesta. Si las respuestas apuntan a niveles distintos, o hay duda entre dos, se toma el más bajo. Las preguntas de dimensión son obligatorias, y «no sé» cuenta como la respuesta del nivel más bajo.
 3. **Nivel de la capa y del departamento.** Como en el diagnóstico: la capa está en el nivel de su dimensión más débil, y el departamento, en el de su capa más baja.
 4. **Puntaje estimado.** Cada dimensión va a mitad del tramo de su nivel: Deficiente 10, Inicial 30, Funcional 50 y Eficiente 70; Óptimo vale 100. Es decir, se supone que cada dimensión cumple la mitad de los criterios del nivel siguiente. La capa y el departamento se calculan con ese supuesto, como en el paso 7 del diagnóstico: las dimensiones que ya llegaron al nivel siguiente cuentan completas, y las demás, a mitad de camino. Como en el diagnóstico, debajo de Funcional el nivel siguiente es Funcional. Por ejemplo, una base operativa con dos dimensiones en Funcional y dos en Inicial está en Inicial, y su avance hacia Funcional es el promedio de 1, 1, 0,5 y 0,5, un 75%: saca 35.
@@ -78,9 +78,13 @@ Por ejemplo, una base operativa con tres dimensiones en Funcional y una en Inici
 
 Cada dimensión diagnosticada se emite como: área, ID y nombre de dimensión, nivel, puntaje y la evidencia que lo sustenta. Si se midió con una edición, el área y la dimensión llevan el nombre que tienen en esa edición, y el informe dice con cuál se midió; el ID es el mismo en todas. El puntaje va con lo que lo explica: en una dimensión, cuántos criterios del nivel siguiente cumple —«cumple 2 de 4 para Eficiente»— y cuáles le faltan; en una capa o un departamento, cuántas de sus dimensiones ya están en el nivel siguiente. Si el CSE ajustó el nivel, se emiten los dos —el calculado y el ajustado— con la justificación. Y si quedan criterios de riesgo pendientes, se emiten como riesgos activos, con su mensaje. Un nivel por confirmar se emite con esa marca y con los hábitos que faltan confirmar. Si la dimensión está debajo de Funcional, se emite su costo de quedarse. Cada departamento se emite junto a su nivel objetivo, cuando lo hay: «Ventas: Inicial, 38; objetivo Eficiente». Y el informe cierra con una sola recomendación: el siguiente paso que sale de la regla de prioridad, planteado como un paso chico —un caso de uso—, no como un menú de opciones, y con la razón de por qué va primero. Si quedaron criterios sin información, dice cuántos.
 
-> Ventas — 1.6 Priorización de Leads — Eficiente, 65, cumple 1 de 4 para Óptimo — "puntaje de leads por reglas activo, cuentas objetivo identificadas"
+> Ventas — 1.6 Priorización de Leads — Eficiente, 66, cumple 1 de 3 para Óptimo — "trabajan primero los leads con más puntaje, cuentas objetivo con responsable y plan"
 
 Una dimensión que toque dos áreas se emite una vez por área. La evidencia puede citar por su identificador los criterios que la sustentan.
+
+### Lectura de preparación para engagement avanzado
+
+Si la escala trae la lectura de preparación para engagement avanzado —en la Parte 2, desde la 9.0.0—, el diagnóstico y la exploración la emiten aparte del nivel: Lista, Casi lista con los cimientos que faltan, Todavía no o Falta saber. Sale del perfil de negocio, del tráfico y de la base de la empresa, del nivel de Marketing y de los cimientos que la escala nombra por su identificador. Los dos umbrales se leen del texto de la escala —el del tráfico, de la tercera pregunta del perfil; el de la base, de «Lista»—: una versión que no los trae legibles no se publica. Un cimiento sin marcar cuenta como cumplido si su dimensión está confirmada en su nivel o más arriba, salvo que sea de riesgo, y un rango de datos que contiene el umbral da Falta saber. No cambia el nivel ni el puntaje.
 
 ### Salida del chequeo
 
@@ -112,7 +116,7 @@ Cada versión de la escala y de esta especificación, y cada sistema que las imp
 
 1. **Ningún nivel vacío.** Todo nivel de Funcional para arriba tiene al menos un criterio que decide el nivel para cada perfil de negocio en que su dimensión aplica. Si en alguna versión queda uno vacío, ese nivel no se alcanza hasta que se corrija.
 2. **Nada se regala.** En todos los perfiles, una dimensión que no cumple ningún criterio queda debajo de Funcional, y ningún nivel queda por confirmar si le falta un hábito que no se hace.
-3. **Los ejemplos cuadran.** Los ejemplos de este documento dan el resultado que dicen: la base operativa del ejemplo del puntaje da 38; la del ejemplo del chequeo, 35; y la dimensión del ejemplo de la salida del diagnóstico, 65.
+3. **Los ejemplos cuadran.** Los ejemplos de este documento dan el resultado que dicen: la base operativa del ejemplo del puntaje da 38; la del ejemplo del chequeo, 35; y la dimensión del ejemplo de la salida del diagnóstico, 66.
 4. **Sin identificadores a la vista.** Ningún texto que ve el cliente —criterios, resultados, costos o mensajes— cita un identificador.
 5. **Identificadores estables.** Ninguno se repite, ninguno retirado se reusa, y ninguno existente cambia de dimensión ni de nivel.
 6. **Casos de referencia.** En espera, igual que la calibración: cuando existan los casos de referencia validados, el cálculo reproduce el diagnóstico correcto de cada uno.
@@ -132,6 +136,8 @@ python3 pruebas_escala.py escala_rendimiento_smarteam.md especificacion_calculo_
 La prueba 5 compara contra la versión anterior de la escala, si se le pasa. La 7 revisa también el manual, si está en la misma carpeta que la especificación. Nexus corre las mismas antes de publicar una versión desde su pantalla.
 
 ## Historial de versiones
+
+**1.4.0 (2026-10-27).** Acompaña a la escala 9.0.0: quedan retirados 62 identificadores, los que salen o cambian de nivel, de dimensión o de lo que miden. El perfil de negocio suma la tercera pregunta, el tráfico del sitio o la app, y su marca, «tráfico suficiente». Se dice cómo se emite la lectura de preparación para engagement avanzado. El ejemplo de la salida del diagnóstico se rehace con la Priorización de Leads de la 9.0.0, que tiene tres criterios de Óptimo para la venta con equipo y la relación continua: con uno de los tres, da 66. No cambia el cálculo. Vale desde la escala 9.0.0.
 
 **1.3.8 (2026-10-09).** El ejemplo de identificador nombra la dimensión 1.7 como la escala 8.8.0: «Tracción del Negocio». El chequeo usa la edición de la industria solo si esa edición cubre a la unidad, como dice la escala 8.8.0, y el ejemplo de la salida del diagnóstico dice «puntaje de leads». No cambia el cálculo. Vale desde la escala 8.8.0.
 

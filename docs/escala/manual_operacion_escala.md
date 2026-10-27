@@ -1,8 +1,8 @@
 ---
 documento: Escala de Rendimiento Smarteam — Manual de operación
-version: 1.3.7
-escala: 8.8.0
-fecha: 2026-10-09
+version: 1.4.0
+escala: 9.0.0
+fecha: 2026-10-27
 ---
 
 # Manual de operación de la Escala de Rendimiento
@@ -69,7 +69,7 @@ Esa comprobación se hace con clientes, no con prospectos, y con datos que ya ex
 
 Lo que salga de ese cruce se anota en Cambios pendientes, y es la mejor evidencia para decidir qué cambia en la escala.
 
-**Antes del test, una prueba con clientes reales.** Antes de construir el test de diagnóstico se miden entre 5 y 8 clientes que el equipo conoce bien —nunca Wherex, que es el cliente de prueba de Nexus—, con el diagnóstico y con el chequeo, y se compara dónde quedan con dónde el equipo cree que están. Si casi todos quedan en Inicial, la vara de Funcional se mantiene y el informe pasa a mostrar cuántos criterios de Funcional ya cumple el departamento («cumple 27 de 30»), algo que hoy la especificación no emite y que entra con la 9.0, junto con el balance de las celdas desbalanceadas. Los que el equipo valide son los primeros casos de referencia.
+**Antes del test, una prueba con clientes reales.** Antes de construir el test de diagnóstico se miden entre 5 y 8 clientes que el equipo conoce bien —nunca Wherex, que es el cliente de prueba de Nexus—, con el diagnóstico y con el chequeo, y se compara dónde quedan con dónde el equipo cree que están. Si casi todos quedan en Inicial, la vara de Funcional se mantiene y el informe pasa a mostrar cuántos criterios de Funcional ya cumple el departamento («cumple 27 de 30»), algo que hoy la especificación no emite y que entra en la versión que siga a la prueba, junto con el balance de las celdas desbalanceadas. Los que el equipo valide son los primeros casos de referencia. La 9.0.0 se publicó antes de esa prueba, a pedido de su responsable: lo que esperaba la prueba sigue esperándola.
 
 ## Reglas en espera
 
@@ -124,9 +124,79 @@ Aquí se anota lo que se aprobó y todavía no entró en una versión: lo que un
 | Fecha | Qué cambiaría | Quién lo propone | Caso que lo originó | Qué decisión cambiaría |
 |:--|:--|:--|:--|:--|
 
-Lo que quedó para la 9.0 —lo que sí cambia qué se mide, de la revisión de la 8.7 y del feedback F-5, F-6 y F-7, cada punto con su propuesta— está en `pendiente-9-0.md`. Aquí se anota lo que se apruebe desde ahora.
+Lo que quedó para la 9.0 —lo que sí cambia qué se mide, de la revisión de la 8.7 y del feedback F-5, F-6 y F-7, cada punto con su propuesta— está en `pendiente-9-0.md`, y lo que hizo el borrador con cada punto, en `borrador-9-0.md`. Aquí se anota lo que se apruebe desde ahora.
+
+### Decisiones provisionales de la 9.0
+
+La 9.0.0 se publicó el 27 de octubre de 2026 con todo lo que su borrador dejaba abierto ya decidido, para no frenarla. Cada decisión es provisional: la propuso Claude, con la opción que el borrador recomendaba o, si no recomendaba ninguna, con la más conservadora —dejar la escala como estaba, sin mover criterios—, y la revisa su responsable. Las que cambian el texto están en la bitácora del borrador, cada una con su nota. Cambiar una es un cambio de la versión siguiente, con su borrador, como cualquier otro.
+
+**Las preguntas.**
+
+- **§1 · 2.4.F4 · 2.4.F5.** Decidir con datos y operar el sistema sin ayuda externa siguen pidiéndose solo en Marketing, en Funcional. No se mueve nada.
+- **§1 · 1.3.O3 · 3.3.E3.** La ficha completa queda como en el borrador: en Óptimo de Ventas y, el dato de lo prometido, en Eficiente de Datos de Servicio. Que el equipo la use no se mide aparte.
+- **§1 · 2.6.F3 · 1.6.E3.** Hablarle distinto a cada segmento sigue en Funcional de Marketing y en Eficiente de Ventas. Ninguno cambia de nivel.
+- **§2 · 3.1.F2.** El contacto de seguimiento de Funcional y el acompañamiento de uno a muchos de Eficiente siguen los dos, como están.
+- **§3 · 1.6.E1 · 2.6.E3 (puntaje de leads).** Va así: el puntaje de leads es de Segmentación de Marketing, en Eficiente, y Ventas lo usa para priorizar, también en Eficiente. Se escribe en la regla de asignación.
+- **§3 · 1.6.F4 · 2.3.F2.** Los rasgos del cliente ideal en el CRM quedan en Ventas y en Marketing, como están. Ninguno se retira ni cambia de lo que mide.
+- **§4 · 3.7.E2 · 1.6.O2 · 1.7.E · 3.4.O3 (la expansión).** Así: ofrecerle el siguiente producto a un cliente actual es de Ventas, en Eficiente, con la señal que le pasa Servicio. Se escribe en «La próxima compra» y en la regla de asignación. En Educación no entra todavía un criterio propio de Admisiones: se lee como la general.
+- **§4 · 3.4.E4 · Banca 3.4.E4.** Lo prometido en la venta queda en los dos lugares, como está: el dato en la ficha (Datos de Servicio) y su traspaso en lo que trae cada cliente nuevo (Equipo y Gobierno). No se acota ninguno.
+- **§5 · 1.4.O2.** 1.4.O2 se queda como está: ni se retira ni se reescribe.
+- **§5 · 3.6.O1 · 3.6.O2.** 3.6.O1 y 3.6.O2 siguen separados, como están. No se juntan hasta decidir qué hace la IA ahí.
+- **§6 · 1.2.O2 · Ecommerce 1.2.O2.** Ecommerce sigue reescribiendo 1.2.O2 para la tienda; el criterio nuevo de la venta sin vendedor se lee en Ecommerce como en la general.
+- **§6 · 1.8.O1 · 1.8.O2 · Banca 1.8.O201.** 1.8.O1 queda como está (el análisis de las llamadas). No se amplía a reuniones y chats ni se le escribe qué ejecuta la IA en esta versión.
+- **§6 · 3.3.O3.** 3.3.O3 queda en Óptimo, como está. No baja a Eficiente ni se reescribe.
+- **§6 · 2.7.O1 · 2.4.O4 · 1.4.O1 · 3.4.O4.** Los Óptimos de la lista quedan como están. Qué ejecuta la IA en cada uno se escribe en la versión siguiente.
+- **§6 · 2.1.O1 · 3.1.O1.** En Servicio, la IA de las rutinas sigue aparte del agente que resuelve casos, como entró.
+- **§7 · 2.7.F (plan de canales).** No: Funcional no pide un mínimo de canales. La decisión 1 sigue: la empresa elige sus canales.
+- **§7 · 2.5.F (mensaje central).** El mensaje central no entra en esta versión: la escala queda como está, sin pedirlo en un lugar nuevo.
+- **§7 · 3.7.F2 · Inmobiliaria 3.7.F2.** Inmobiliaria lee el criterio nuevo de Funcional como la general, junto a sus dos de Eficiente.
+- **§8 · Ecommerce 2.4.E3.** Ecommerce queda como está: preparar el calendario de promociones con quien opera la venta y con la posventa sigue contando, también sin vendedores.
+- **§9 · 3.4.I.** No se retira ninguna señal de Inicial de Servicio: quedan las dos de números y la nueva de los roles de palabra.
+- **§9 · 3.3.D1 · Educación 3.3.D1.** La señal de que no hay medición fiable de tiempos ni de satisfacción no vuelve. Datos de Servicio queda como está.
+- **§12 · 2.5 (suplantación).** No entra en la escala general en esta versión: sigue solo en las ediciones que la piden, y la regla de asignación lo dice así.
+- **§12 · Banca 1.2.F · 3.2.** Sí sirve: el mensaje de riesgo del contacto desde canales verificados queda como lo redactó Claude.
+- **§13 · Educación 2.3.F301 · 3.7.F.** Queda como está: en Banca no decide un criterio de permiso nuevo; en Educación, el permiso de Admisiones se queda con su redacción de hoy.
+- **§15 · Ecommerce 3.8 · Banca 3.8.** En Ecommerce y Banca, la dimensión 8 de Servicio conserva el nombre que tiene hoy en cada edición.
+- **§16 · Regla nueva: cambiar solo para un perfil.** No por ahora: las ediciones no dicen «No aplica en tal perfil». El lector y la especificación no cambian.
+- **§16 · 2.3.E1 en las cuatro.** Completar los datos con terceros queda como está, en Datos. No suma los sistemas propios ni cambia en las ediciones.
+- **§16 · Ecommerce 1.5.E102 · 1.8.F2 · 1.8.F101.** En Ecommerce, la razón de una devolución queda donde está hoy, en sus varias dimensiones.
+- **§16 · Banca 1.7.F201.** En Banca, la solicitud a medias en un canal digital se queda como criterio propio. No se retira.
+- **§16 · Educación 1.3.E1.** En Educación, el ±10% del pronóstico se lee como en la general. El ejemplo de los cierres de matrícula no entra todavía.
+- **§16 · Inmobiliaria 1.8 · 3.4.E4 (promesa y desistimiento).** Inmobiliaria queda como está: no entran todavía la razón de cada promesa desistida ni las señales de que un comprador puede desistir.
+- **§16 · Inmobiliaria: encabezado y alquileres.** Las administradoras de alquileres no entran todavía en la edición de Inmobiliaria.
+- **Insider 6 · 2.8.O3 (tráfico suficiente).** Medir cada recorrido y cada campaña contra un grupo de control no entra en esta versión: el Óptimo de Aprendizaje de Marketing queda como está.
+- **Insider · los «Ajuste» que suben la vara.** Conservan el número nuevo con que entraron: piden más que antes, y esa es la regla de la escala.
+- **Insider · N6 · la base dentro de un rango.** El umbral de la base queda en 5.000 y el rango de HubSpot no se parte: una empresa de mil a 10 mil contactos queda «por confirmar» en la lectura.
+- **Insider · N6 · qué es una relación digital recurrente.** Una empresa que vende con equipo puede estar «Lista»: la lectura no pide venta sin vendedor.
+
+**Lo que faltaba escribir.**
+
+- **§3 · 1.4.E3 · 2.4.E3 · 3.4.E4 (acuerdos entre dos áreas).** Se escribe en la regla de asignación: cada acuerdo entre dos áreas se cuenta una sola vez, en Equipo y Gobierno del área que recibe.
+- **§4 · 3.7.O4 · regla de asignación (lealtad).** Se escribe en la regla de asignación: lo que se gana comprando va en Tracción del Negocio; lo que se da sin pedir una compra, en Proactividad; premiar al que trae otro cliente, en Canales. Sale «promociones de fidelización» de los detalles para deleitar.
+- **§5 · 1.5.F4 · 1.7.F4.** Se escribe en la regla de asignación: la plantilla de la propuesta es de Propuesta y Coherencia; el material de apoyo para mover un negocio, de Tracción del Negocio.
+- **§5 · 2.6.O3.** Se escribe en la regla de asignación: lo que cambia en la tienda o en el sitio de venta para cada comprador es de Priorización de Ventas.
+- **§8 · 2.7.F3 · las cuatro ediciones.** Las ediciones leen el criterio nuevo de la pauta como la general («en el último trimestre»). Reescribirlo en Educación («en el último período de admisión») queda para la versión siguiente.
+- **§11 · 3.3.F (duplicados).** Las ediciones leen el control de duplicados de Servicio como la general. Reescribirlo en cada una queda para la versión siguiente.
+- **§12 · 3.1.F (verificar la identidad).** Ecommerce, Educación e Inmobiliaria leen la verificación de identidad como la general; Banca, con su criterio propio. Reescribirla queda para la versión siguiente.
+- **§15 · x.6.** La dimensión 6 se llama «Priorización» como nombre general, en «Las ocho dimensiones» y en la tabla de la Parte 4. Las semillas de documentación que la nombran se cambian con la próxima tanda de Nexus.
+- **§16 · Registro de equivalencias · Banca 3.7.E5.** El registro de qué práctica va en qué dimensión en cada edición queda para la versión siguiente. Nada sube a la general todavía.
+- **§16 · Regla nueva: el aprendizaje vive en x.8.** Revisar las seis ediciones con esa regla queda para la versión siguiente. Las ediciones quedan como están.
+- **§16 · Educación 1.7.F301 · 1.7.F302.** En Educación, la solicitud a medias en línea sigue como criterio propio, porque otro criterio lo requiere.
+- **Insider · N4 · la tercera pregunta del perfil (tráfico suficiente).** El umbral de tráfico queda en 50.000 visitas al mes, provisional, hasta que Insider mande su calificación de clientes.
+- **Insider · N6 · la lectura de preparación, con sus umbrales y sus cimientos.** Los umbrales quedan escritos donde Nexus los lee: el del tráfico, en la tercera pregunta del perfil; el de la base, en «Lista».
+- **Insider · N7 · el mapa de herramientas para la 9.0.** El mapa de herramientas 2.0.0 se publica con la 9.0 y reemplaza al 1.0.1.
+- **§3 · 1.4.E3 · 2.4.E3 · 3.4.E4 (acuerdos entre dos áreas), corregida.** Corrección del cierre: cada acuerdo entre dos áreas se cuenta en Equipo y Gobierno de una sola de las dos, la que lo mide, y la regla los nombra. Decía «del área que recibe», y la señal del siguiente producto la mide Servicio, que es quien la manda.
+
+**Lo que esperaba la prueba con clientes.**
+
+- **§14 · 1.1.E · 1.2.F · 1.5.E · 1.7.E · 1.3.F · 1.5.O · 2.8.F · 2.1.E · 2.2.E · 2.6.F · 2.3.F · 3.5.O · 3.6.E · 3.7.F · 3.7.E · 3.8.F.** Sigue esperando la prueba con clientes: las celdas se balancean después, y los dos criterios propuestos no entran todavía.
+- **§17 · especificación (pasos 3 y 6, el chequeo, el salto final, «Qué se emite», el ejemplo de 1.6).** La especificación 1.4.0 rehace el ejemplo de Priorización de Leads (Eficiente, 66, cumple 1 de 3 para Óptimo) para que la prueba 3 cuadre. Lo demás del cálculo sigue esperando la prueba con clientes.
+
+**Las ediciones.** Cuando un criterio general cambió de texto o salió, lo que cada edición decía de él con sus palabras se soltó: la edición lo lee como el general hasta reescribirlo. Son 287 textos en las seis ediciones; la lista, edición por edición, está en `borrador-9-0.md`. Reescribirlos es de la versión siguiente.
 
 ## Historial de versiones
+
+**1.4.0 (2026-10-27).** Acompaña a la escala 9.0.0, que se publicó antes de la prueba con clientes. En «Cambios pendientes», las decisiones provisionales con que se publicó: cada pregunta, cada texto por escribir y cada cosa que esperaba la prueba, con lo que se decidió y que su responsable revisa, y lo que las ediciones todavía leen como la general. En «Cómo se sabe que la escala funciona», lo que esperaba la prueba entra en la versión que la siga. Vale desde la escala 9.0.0.
 
 **1.3.7 (2026-10-09).** Lo que el equipo dice de la escala se manda como feedback desde la escala misma y lo decide un super admin: el manual deja de hablar de los comentarios, que se retiraron. La escala se cambia en el borrador de la versión siguiente, en Nexus, donde cada cambio queda anotado con su porqué. La especificación y el manual dicen desde qué versión de la escala valen. En «Las ediciones por industria», una unidad se mide con la edición de su industria solo si esa edición la cubre. En «Cómo se sabe que la escala funciona», la prueba con 5 a 8 clientes reales antes del test. En «Cambios pendientes», lo que quedó para la 9.0. Vale desde la escala 8.8.0.
 

@@ -75,7 +75,18 @@ export type Operacion =
    * El primer bloque de esa parte cuyo texto empieza con `empieza` (en una lista, su primer punto) se
    * reemplaza por `bloques`. Mismos alias.
    */
-  | { op: "prosa-cambiar"; parte: string; empieza: string; bloques: Bloque[] };
+  | { op: "prosa-cambiar"; parte: string; empieza: string; bloques: Bloque[] }
+  /**
+   * Un punto de una lista de esa parte (la regla de asignación es una sola lista): el primero que empieza con
+   * `empieza` pasa a decir `texto`. Mismos alias.
+   */
+  | { op: "prosa-punto"; parte: string; empieza: string; texto: string }
+  /** Un punto nuevo en una lista de esa parte, justo después del primero que empieza con `despuesDe`. Mismos alias. */
+  | { op: "prosa-punto-despues"; parte: string; despuesDe: string; texto: string }
+  /** Una celda de una tabla de esa parte: en la fila cuya primera celda es `fila`, la columna `columna` (desde 0). */
+  | { op: "prosa-celda"; parte: string; fila: string; columna: number; texto: string }
+  /** Un campo del encabezado del documento (`fecha`, `estado`…) que ya existe. */
+  | { op: "encabezado"; clave: string; valor: string };
 
 export type EstadoDeLaEntrada = "aplicada" | "aplicada-con-redaccion" | "parcial" | "pregunta" | "despues-de-la-prueba" | "texto-pendiente";
 

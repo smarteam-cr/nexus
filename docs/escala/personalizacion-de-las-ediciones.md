@@ -26,7 +26,9 @@ El caso que lo disparó: en Turismo, Inicial de «Seguimiento de cotizaciones y 
 
 ## Lo que sigue con el texto general, a propósito
 
-Ninguna celda. Dentro de las celdas, quedan criterios que se leen igual porque no ganan nada con palabras de la industria: por ejemplo, en Ecommerce y retail y en Educación, que el proceso de Marketing se cumpla sin que nadie lo vigile (`2.1.O5`). La celda igual queda personalizada por otro criterio del mismo nivel.
+Desde la 9.0.0 (27 oct), 83 celdas: Automotriz 21, Turismo 20, Inmobiliaria 14, Banca y servicios financieros 11, Ecommerce y retail 10, Educación 7. La 9.0 cambió o sacó criterios generales, y lo que cada edición decía de ellos con sus palabras se soltó; se publicó así, con la decisión provisional de reescribirlas en la versión siguiente (manual de operación 1.4.0, «Decisiones provisionales de la 9.0»). Están en `GENERALES_A_PROPOSITO`, y la lista solo encoge.
+
+Hasta la 8.9.1, ninguna celda. Dentro de las celdas, quedan criterios que se leen igual porque no ganan nada con palabras de la industria: por ejemplo, en Ecommerce y retail y en Educación, que el proceso de Marketing se cumpla sin que nadie lo vigile (`2.1.O5`). La celda igual queda personalizada por otro criterio del mismo nivel.
 
 Si una versión futura deja una celda entera con el texto general, se anota en `GENERALES_A_PROPOSITO` con su porqué, o se reescribe uno de sus criterios.
 

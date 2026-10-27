@@ -12036,3 +12036,70 @@ publica.
 - Las dos preguntas nuevas del borrador: el rango de la base y si «Lista» pide venta sin vendedor.
 - Escribir la lectura en el dato `calificaInsider` y en HubSpot (`nexus_califica_insider`).
 - La pregunta del tráfico en el cuestionario de escala y en el test.
+
+## La 9.0 se publica con decisiones provisionales: el cierre del borrador (2026-10-27)
+
+**Qué pasó.** Elías pidió publicar la 9.0 ya: «revisa y publica la escala nueva… si hay alguna duda me lo dejas claro,
+pero publica». El borrador traía «Lo que falta decidir» (36 preguntas, 14 textos por escribir y 2 cosas que esperaban la
+prueba con clientes), y con esa parte no se publica.
+
+**Lo que se decidió.**
+
+- **Cada pendiente se cierra con una decisión provisional.** Va la opción que el borrador recomendaba; si no
+  recomendaba ninguna, la más conservadora: dejar la escala como está, sin mover criterios. Las propuso Claude y las
+  revisa Elías. Viven como datos en `lib/escala/nueve/cierre.ts`, una por cada `punto` del catálogo (`nueve.test.ts`
+  exige una y solo una por pendiente). La lista entera está en el manual de operación 1.4.0, «Decisiones provisionales
+  de la 9.0». *Por qué:* así se publica sin inventar criterios, y cambiar una después es un cambio normal de la versión
+  siguiente.
+- **Solo 7 de las 52 cambian el texto, y ninguna saca o suma criterios.** Las 7 son prosa: la regla de asignación (el
+  puntaje de leads, los acuerdos entre dos áreas, la renovación y el siguiente producto, la lealtad, la plantilla de la
+  propuesta y lo que cambia en la tienda), «La próxima compra» y el nombre general «Priorización» de la dimensión 6. Más
+  la fecha (2026-10-27) y la entrada 9.0.0 del historial.
+- **Una corrección después de cerrar.** La regla de los acuerdos decía que cada uno se cuenta en el área que
+  recibe, y la señal del siguiente producto la mide Servicio, que es quien la manda (3.4). Ahora la regla nombra los
+  cuatro acuerdos. Va en `CORRECCIONES`, al final del cierre, sin reescribir lo aplicado, como el catálogo, y quedó
+  en la revisión 118.
+- **Por el camino del borrador.** `scripts/escala-borrador-9-0.ts --cerrar --apply` aplica el cierre después del
+  catálogo, cada decisión que cambia el texto con su nota en la bitácora («9.0 · cierre · …», con la marca de
+  provisional), y al final saca «Lo que falta decidir» con su propia nota. Un borrador ya cerrado no se vuelve a abrir:
+  sin `--cerrar`, el script frena. Las cuatro operaciones nuevas del aplicador (`prosa-punto`, `prosa-punto-despues`,
+  `prosa-celda`, `encabezado`) existen porque la regla de asignación es una sola lista y la tabla de la Parte 4, una
+  sola tabla.
+- **La prueba 3 lee el ejemplo de la especificación.** La 9.0 dejó la Priorización de Leads con 3 criterios de Óptimo
+  para la venta con equipo y la relación continua (antes 4), y el ejemplo pasa de 65 a 66. La prueba ya no tiene el 65
+  escrito: comprueba que el puntaje y el «cumple 1 de N» que dice la especificación salgan de la escala. Igual en
+  `validar.ts` y en `pruebas_escala.py`. *Por qué:* «Los ejemplos cuadran» es que el ejemplo diga lo que la escala da;
+  con el número fijo, cada versión que toque la 1.6 obligaría a tocar la prueba.
+- **La especificación 1.4.0 y el manual 1.4.0 valen desde la 9.0.0.** La especificación anota los 62 retirados (la
+  prueba 5), la marca «tráfico suficiente», la tercera pregunta del perfil y cómo se emite la lectura de preparación.
+  No cambia el cálculo.
+- **El repo pasa a la 9.0.0 entera.** La escala del repo es la misma 9.0.0 cerrada que se publica (`nueve.test.ts` lo
+  comprueba), el mapa de herramientas 2.0.0 reemplaza al 1.0.1 y la 8.9.1 queda como fixture del borrador
+  (`lib/escala/nueve/__fixtures__/`). *Por qué:* las pruebas del repo leen la escala del repo, y con ella en la 8.9.1 el
+  mapa 2.0.0 y la especificación 1.4.0 no cuadraban.
+- **Lo que la 9.0 soltó en las ediciones queda anotado.** 83 celdas de las ediciones se leen enteras con la escala general
+  porque su criterio general cambió o salió. Van a `GENERALES_A_PROPOSITO` con ese porqué, y reescribirlas es de la
+  versión siguiente.
+- **El catálogo de casos de uso pasa a los números de la 9.0.** Tenía 19 criterios retirados. Cada uno va a su
+  reemplazo, y donde el reemplazo cambió de nivel o de dimensión, cambia lo que mueve el caso: Power BI mueve Equipo y
+  Gobierno de Funcional a Eficiente; Breeze, Tecnología de Marketing hasta Óptimo; Customer Success, Tracción del
+  Negocio; prospección con IA lleva Priorización de Leads hasta Eficiente; y alinear Marketing con Ventas ya no mueve el
+  Equipo de Marketing. La prueba del catálogo exige ahora que cada caso llegue hasta el nivel más alto que cita.
+- **Publicar y desplegar van seguidos.** El catálogo de casos de uso del código y la escala publicada tienen que
+  hablar de los mismos números. Con uno sin el otro, la ficha del caso dice «No está en la escala publicada» donde
+  falta un criterio: 19 criterios si se publica antes del deploy, y 9 si se despliega antes de publicar. Lo ve
+  Ventas, no el cliente, y no se pierde nada.
+
+**El impacto, medido solo leyendo producción el 27 oct** (`scripts/medir-impacto-escala-9-0.ts`). De 38 exploraciones
+vivas, una sola tiene un nivel, y no cambia. El nivel confirmado se guarda por dimensión, y los identificadores de
+dimensión no cambiaron. Quedan 4 marcas de «Lo que pide Funcional» sobre criterios que la 9.0 retira: `1.4.F5` en
+CreditForce y en Grupo Monge, y `1.7.F5` en Cicadex y en Grupo Monge. No se migran porque el criterio nuevo pide otra
+cosa. Las 9 fotos guardadas y los 2 cuestionarios de escala quedan congelados con su versión. Los 42 bancos del test
+están armados con la 8.9.1 y ninguno está aprobado.
+
+**Pendiente.**
+
+- Que Elías revise las decisiones provisionales.
+- Las semillas de documentación que nombran la dimensión 6.
+- Las 83 celdas de las ediciones.
+- Los bancos del test, con la 9.0.

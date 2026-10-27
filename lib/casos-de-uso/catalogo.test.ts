@@ -54,6 +54,12 @@ describe("el catálogo de casos de uso", () => {
     }
     // Toda dimensión que dice mover tiene al menos un criterio que lo respalde.
     for (const m of c.mueve) expect(c.criterios.some((id) => id.startsWith(`${m.dimension}.`)), `${c.id}: mueve ${m.dimension} sin citar un criterio`).toBe(true);
+    // Y lleva la dimensión hasta el nivel más alto que cita, no más: un caso que promete Óptimo sin un criterio de Óptimo
+    // no le suma nada a quien ya está en Eficiente (pasó al reapuntar a la 9.0).
+    for (const m of c.mueve) {
+      const tope = Math.max(...c.criterios.filter((id) => id.startsWith(`${m.dimension}.`)).map((id) => orden(id.split(".")[2][0])));
+      expect(orden(m.hasta), `${c.id}: ${m.dimension} llega hasta ${m.hasta}, pero lo más alto que cita es de otro nivel`).toBe(tope);
+    }
   });
 
   it("el tipo calza con lo que mueve", () => {

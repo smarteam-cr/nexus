@@ -444,6 +444,33 @@ class Aplicador {
         parte.bloques.splice(i, 1, ...this.conIds(op.bloques));
         return;
       }
+      case "prosa-punto":
+      case "prosa-punto-despues": {
+        const parte = this.parteDeProsa(op.parte);
+        const inicio = op.op === "prosa-punto" ? op.empieza : op.despuesDe;
+        const lista = parte.bloques.find((x) => (x.tipo === "lista" || x.tipo === "numerada") && x.items.some((it) => it.startsWith(inicio)));
+        if (!lista || (lista.tipo !== "lista" && lista.tipo !== "numerada")) this.falla(`«${op.parte}» no tiene un punto que empiece con «${inicio}».`);
+        const i = lista.items.findIndex((it) => it.startsWith(inicio));
+        const texto = (this.conIds([{ tipo: "parrafo", texto: op.texto }])[0] as { texto: string }).texto;
+        if (op.op === "prosa-punto") lista.items.splice(i, 1, texto);
+        else lista.items.splice(i + 1, 0, texto);
+        return;
+      }
+      case "prosa-celda": {
+        const parte = this.parteDeProsa(op.parte);
+        const tabla = parte.bloques.find((x) => x.tipo === "tabla" && x.filas.some((f) => f[0] === op.fila));
+        if (!tabla || tabla.tipo !== "tabla") this.falla(`«${op.parte}» no tiene una tabla con la fila «${op.fila}».`);
+        const fila = tabla.filas.find((f) => f[0] === op.fila)!;
+        if (op.columna < 0 || op.columna >= fila.length) this.falla(`la fila «${op.fila}» no tiene la columna ${op.columna}.`);
+        fila[op.columna] = op.texto;
+        return;
+      }
+      case "encabezado": {
+        const campo = this.s.datos.encabezado.find((c) => c.clave === op.clave);
+        if (!campo) this.falla(`el encabezado no tiene «${op.clave}».`);
+        campo.valor = op.valor;
+        return;
+      }
     }
   }
 

@@ -1,8 +1,9 @@
 /**
- * lib/escala/nueve/nueve.test.ts — el borrador 9.0.0 de la escala, armado sobre la 8.9.1 real del repo
- * (docs/escala/escala_rendimiento_smarteam.md, que es su exportación). Mira lo que importa: que se lea, que pase las
- * pruebas de publicar (salvo la 3, hasta rehacer el ejemplo de la especificación), que cada cambio diga de qué punto
- * sale, que lo dudoso no entre y que no se pueda publicar con «Lo que falta decidir».
+ * lib/escala/nueve/nueve.test.ts — el borrador 9.0.0 de la escala, armado sobre la 8.9.1 real (su exportación,
+ * guardada en `__fixtures__/escala-8.9.1.md` desde que el repo pasó a la 9.0.0, con los retirados de la
+ * especificación 1.3.8, que son los que tenía el catálogo al numerar). Mira lo que importa: que se lea, que pase las
+ * pruebas de publicar, que cada cambio diga de qué punto sale, que lo dudoso no entre, que no se pueda publicar con
+ * «Lo que falta decidir» y que el cierre (cierre.ts) decida cada pendiente y deje lo mismo que está en el repo.
  *
  * Correr: `npx vitest run lib/escala/nueve --project unit`.
  */
@@ -18,16 +19,20 @@ import { datosConLoQueFaltaDecidir, tieneLoQueFaltaDecidir } from "@/lib/escala/
 import { revisarParaPublicar } from "@/lib/escala/datos/publicar";
 import { aplicarEntrada, comprobarQueSeLee, estadoInicial, ErrorDelCatalogo } from "./aplicar";
 import { CATALOGO, UMBRAL_DE_TRAFICO } from "./catalogo";
-import { aplicarConDetalle, conLoQueFaltaDecidir, notaDeLaBitacora, parteLoQueFaltaDecidir } from "./informe";
+import { aplicarConDetalle, conLoQueFaltaDecidir, notaDeLaBitacora, parteLoQueFaltaDecidir, sinLoQueFaltaDecidir } from "./informe";
+import { CIERRE, CORRECCIONES, entradasDelCierre, FECHA_DE_LA_9_0, MARCA_PROVISIONAL, NOTA_DE_LA_SALIDA, notaDelCierre } from "./cierre";
 import { aplicarEdicion } from "@/lib/escala/documento/edicion";
 import { parsearMapaDeHerramientas } from "@/lib/escala/herramientas/parsear";
 import { problemasDelMapa } from "@/lib/escala/herramientas/validar";
 import { leerPreparacion, preparacionDeLaVista } from "@/lib/escala/preparacion";
 
 const RAIZ = path.resolve(__dirname, "../../..");
-const BASE = importarEscala(fs.readFileSync(path.join(RAIZ, "docs/escala/escala_rendimiento_smarteam.md"), "utf8"));
+const FIXTURES = path.join(RAIZ, "lib/escala/nueve/__fixtures__");
+const BASE = importarEscala(fs.readFileSync(path.join(FIXTURES, "escala-8.9.1.md"), "utf8"));
+/** La especificación de hoy (1.4.0, con los retirados de la 9.0 y el ejemplo de Priorización de Leads rehecho). */
 const ESPEC = fs.readFileSync(path.join(RAIZ, "docs/escala/especificacion_calculo_escala.md"), "utf8");
-const RETIRADOS = leerRetirados(ESPEC);
+/** Los retirados con que el catálogo numeró: los de la 1.3.8, la publicada cuando se armó el borrador. */
+const RETIRADOS = leerRetirados(fs.readFileSync(path.join(FIXTURES, "especificacion-1.3.8.md"), "utf8"));
 
 const armado = (() => {
   const { estado, detalle } = aplicarConDetalle(conVersion(BASE, "9.0.0"), RETIRADOS, CATALOGO);
@@ -41,16 +46,16 @@ const idsDeLaMatriz = (d: typeof BASE) =>
 describe("el borrador 9.0.0 sobre la 8.9.1", { timeout: 120_000 }, () => {
   it("parte de la 8.9.1 publicada y no la toca", () => {
     expect(BASE.encabezado.find((c) => c.clave === "version")?.valor).toBe("8.9.1");
-    const otra = importarEscala(fs.readFileSync(path.join(RAIZ, "docs/escala/escala_rendimiento_smarteam.md"), "utf8"));
+    const otra = importarEscala(fs.readFileSync(path.join(FIXTURES, "escala-8.9.1.md"), "utf8"));
     expect(generarMarkdown(BASE)).toBe(generarMarkdown(otra));
   });
 
-  it("se lee y vuelve igual, y pasa las pruebas de publicar salvo la 3 (el ejemplo de Priorización de Leads de la especificación)", () => {
+  it("se lee y vuelve igual, y pasa las pruebas de publicar con la especificación 1.4.0", () => {
     comprobarQueSeLee(armado.final);
-    const espec = ESPEC.replace(/(Identificadores retirados, que no se vuelven a usar: )/, `$1${armado.estado.retirados.map((x) => "`" + x + "`").join(", ")}, `);
-    const pruebas = validarEscala(escalaDeLosDatos(armado.final), { anterior: escalaDeLosDatos(BASE), especificacion: espec, calculo: { texto: armado.md } });
-    const fallan = pruebas.filter((p) => !p.ok).map((p) => p.nombre);
-    expect(fallan).toEqual(["3 · Los ejemplos cuadran"]);
+    const pruebas = validarEscala(escalaDeLosDatos(armado.final), { anterior: escalaDeLosDatos(BASE), especificacion: ESPEC, calculo: { texto: armado.md } });
+    expect(pruebas.filter((p) => !p.ok).map((p) => `${p.nombre}: ${p.detalle.join("; ")}`)).toEqual([]);
+    // La especificación 1.4.0 anota como retirados los mismos que sacó el borrador.
+    for (const id of armado.estado.retirados) expect(leerRetirados(ESPEC), id).toContain(id);
   });
 
   it("ningún número nuevo reusa un retirado, y todo lo retirado queda fuera de la escala", () => {
@@ -121,7 +126,7 @@ describe("el borrador 9.0.0 sobre la 8.9.1", { timeout: 120_000 }, () => {
   });
 
   it("el mapa de herramientas 2.0.0 nombra solo criterios del borrador y trae los 16 cambios con quién los habilita (N7)", () => {
-    const mapa = parsearMapaDeHerramientas(fs.readFileSync(path.join(RAIZ, "docs/escala/mapa_de_herramientas-9-0.md"), "utf8"));
+    const mapa = parsearMapaDeHerramientas(fs.readFileSync(path.join(RAIZ, "docs/escala/mapa_de_herramientas.md"), "utf8"));
     const escala = escalaDeLosDatos(armado.final);
     expect(mapa.version).toBe("2.0.0");
     expect(mapa.escala).toBe("9.0.0");
@@ -194,5 +199,89 @@ describe("el borrador 9.0.0 sobre la 8.9.1", { timeout: 120_000 }, () => {
     const s = estadoInicial(conVersion(BASE, "9.0.0"), RETIRADOS);
     expect(() => aplicarEntrada(s, { punto: "§X", fuente: "pendiente-9-0", tema: "x", resumen: "x", estado: "aplicada", ops: [{ op: "editar", id: "@nada", cambios: {} }] })).toThrow(ErrorDelCatalogo);
     expect(() => aplicarEntrada(s, { punto: "§X", fuente: "pendiente-9-0", tema: "x", resumen: "x", estado: "aplicada", ops: [{ op: "retirar", id: "9.9.F9" }] })).toThrow(/§X/);
+  });
+
+  it("las operaciones del cierre frenan con el punto si no encuentran lo que buscan", () => {
+    const s = estadoInicial(conVersion(BASE, "9.0.0"), RETIRADOS);
+    const con = (op: Parameters<typeof aplicarEntrada>[1]["ops"][number]) => () => aplicarEntrada(s, { punto: "§X", fuente: "pendiente-9-0", tema: "x", resumen: "x", estado: "aplicada", ops: [op] });
+    expect(con({ op: "prosa-punto", parte: "Parte 2", empieza: "No existe este punto", texto: "x" })).toThrow(/§X.*No existe este punto/);
+    expect(con({ op: "prosa-punto-despues", parte: "Parte 2", despuesDe: "Tampoco este", texto: "x" })).toThrow(/Tampoco este/);
+    expect(con({ op: "prosa-punto", parte: "Parte 9", empieza: "x", texto: "x" })).toThrow(/Parte 9/);
+    expect(con({ op: "prosa-celda", parte: "Parte 4", fila: "x.9", columna: 1, texto: "x" })).toThrow(/x\.9/);
+    expect(con({ op: "prosa-celda", parte: "Parte 4", fila: "x.6", columna: 9, texto: "x" })).toThrow(/columna 9/);
+    expect(con({ op: "encabezado", clave: "no-existe", valor: "x" })).toThrow(/no-existe/);
+    // Y lo que sí encuentran, lo cambian donde está.
+    const r = aplicarEntrada(s, { punto: "§X", fuente: "pendiente-9-0", tema: "x", resumen: "x", estado: "aplicada", ops: [{ op: "prosa-celda", parte: "Parte 4", fila: "x.6", columna: 1, texto: "Otra" }, { op: "encabezado", clave: "fecha", valor: "2030-01-01" }] });
+    expect(generarMarkdown(r.datos)).toContain("| x.6 | Otra |");
+    expect(r.datos.encabezado.find((c) => c.clave === "fecha")?.valor).toBe("2030-01-01");
+  });
+});
+
+describe("el cierre del borrador (27 oct): una decisión por cada pendiente", { timeout: 120_000 }, () => {
+  const pendientes = CATALOGO.filter((e) => e.estado === "despues-de-la-prueba" || e.pregunta || e.estado === "texto-pendiente");
+  const cerrado = (() => {
+    const { estado, pasos } = aplicarConDetalle(conVersion(BASE, "9.0.0"), RETIRADOS, [...CATALOGO, ...entradasDelCierre()]);
+    const final = sinLoQueFaltaDecidir(estado.datos, parteLoQueFaltaDecidir("9.0.0", estado, CATALOGO));
+    return { estado, pasos, final, md: generarMarkdown(final) };
+  })();
+
+  it("cada pregunta, cada texto por escribir y cada cosa que esperaba la prueba tiene una decisión, y solo una", () => {
+    expect(pendientes.length).toBe(52);
+    expect(CIERRE.map((d) => d.punto).sort()).toEqual(pendientes.map((e) => e.punto).sort());
+    expect(new Set(CIERRE.map((d) => d.punto)).size).toBe(CIERRE.length);
+  });
+
+  it("cada nota de la bitácora empieza como las del catálogo y dice que es provisional", () => {
+    for (const d of [...CIERRE, ...CORRECCIONES]) {
+      const nota = notaDelCierre(d);
+      expect(nota.startsWith("9.0 · cierre · "), d.punto).toBe(true);
+      expect(nota.toLowerCase()).toContain(MARCA_PROVISIONAL.toLowerCase());
+    }
+    expect(NOTA_DE_LA_SALIDA.startsWith("9.0 · ")).toBe(true);
+  });
+
+  it("el cierre no saca ni suma criterios: lo que decide sin texto no cambia nada", () => {
+    expect(cerrado.estado.retirados).toEqual(armado.estado.retirados);
+    expect(Object.keys(cerrado.estado.alias)).toEqual(Object.keys(armado.estado.alias));
+    const antes = idsDeLaMatriz(armado.final).map((c) => c.id);
+    expect(idsDeLaMatriz(cerrado.final).map((c) => c.id)).toEqual(antes);
+    for (const [i, d] of CIERRE.entries()) {
+      if (d.ops.length) continue;
+      const k = CATALOGO.length + i;
+      expect(generarMarkdown(cerrado.pasos[k]), d.punto).toBe(generarMarkdown(cerrado.pasos[k - 1]));
+    }
+  });
+
+  it("queda sin «Lo que falta decidir», con su fecha y su historial, y pasa todo lo de publicar", () => {
+    comprobarQueSeLee(cerrado.final);
+    expect(tieneLoQueFaltaDecidir(cerrado.md)).toBe(false);
+    expect(cerrado.final.encabezado.find((c) => c.clave === "fecha")?.valor).toBe(FECHA_DE_LA_9_0);
+    expect(cerrado.md).toContain(`**9.0.0 (${FECHA_DE_LA_9_0}).**`);
+    expect(cerrado.md).toContain("| x.6 | Priorización |");
+    expect(cerrado.md).toContain("El **puntaje de leads por reglas** se asigna a **Segmentación (2.6)**");
+    expect(cerrado.md).not.toContain("promociones de fidelización");
+    // La regla de los acuerdos entre dos áreas no se contradice con el criterio de Servicio que mide la señal a Ventas.
+    expect(cerrado.md).not.toContain("del área que recibe");
+    expect(cerrado.md).toContain("y la señal de Servicio a Ventas de los clientes listos para el siguiente producto, en **3.4**");
+    const r = revisarParaPublicar({
+      escala: escalaDeLosDatos(cerrado.final),
+      texto: cerrado.md,
+      anterior: escalaDeLosDatos(BASE),
+      especificacion: ESPEC,
+      manual: fs.readFileSync(path.join(RAIZ, "docs/escala/manual_operacion_escala.md"), "utf8"),
+      mapa: parsearMapaDeHerramientas(fs.readFileSync(path.join(RAIZ, "docs/escala/mapa_de_herramientas.md"), "utf8")),
+      publicadas: ["8.9.1"],
+      edicionesRevisadas: false,
+    });
+    expect(r.bloqueos).toEqual([]);
+  });
+
+  it("la escala del repo es la 9.0.0 cerrada, la misma que se publica", () => {
+    expect(fs.readFileSync(path.join(RAIZ, "docs/escala/escala_rendimiento_smarteam.md"), "utf8").replace(/\r\n?/g, "\n")).toBe(cerrado.md);
+  });
+
+  it("el manual 1.4.0 lista cada decisión provisional", () => {
+    const manual = fs.readFileSync(path.join(RAIZ, "docs/escala/manual_operacion_escala.md"), "utf8").replace(/\r\n?/g, "\n");
+    for (const d of [...CIERRE, ...CORRECCIONES]) expect(manual, d.punto).toContain(d.decision);
   });
 });
