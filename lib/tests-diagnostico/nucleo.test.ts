@@ -3,11 +3,12 @@
  * resultado y la nota de HubSpot (área O del roadmap, 2026-10-26). Con la mini-escala de los tests del lector.
  */
 import { describe, expect, it } from "vitest";
+import { aplicarEdicion } from "@/lib/escala/documento/edicion";
 import { parsearEscala } from "@/lib/escala/documento/parsear";
-import { MINI_ESCALA } from "@/lib/escala/documento/mini-escala.fixture";
+import { MINI_ESCALA, MINI_ESCALA_CON_EDICION } from "@/lib/escala/documento/mini-escala.fixture";
 import { leerResultadoDelTest } from "@/lib/exploraciones/test-de-marketing";
 import { leerNotaDelTest } from "@/lib/exploraciones/llegadas";
-import { borradorDesdeLaEscala, problemasDelBanco } from "./banco";
+import { borradorDesdeLaEscala, borradoresDeLaEscala, codigoDeLaEscala, planDeLosBancos, problemasDelBanco, type BancoParaElPlan } from "./banco";
 import { resultadoDelTest } from "./resultado";
 import { urlDelResultado } from "./enlace";
 import { notaDelTestSinTerminar, notaDelTestTerminado } from "./nota";
@@ -41,6 +42,76 @@ describe("el borrador sale de la escala y se revisa antes de aprobar", () => {
     expect(problemasDelBanco(escala, area.id, "web", nombra).join(" ")).toMatch(/nombra un nivel/);
     expect(problemasDelBanco(escala, area.id, "web", web.slice(0, 1)).join(" ")).toMatch(/Falta preguntar/);
     expect(problemasDelBanco(escala, area.id, "web", [web[0], web[0]]).join(" ")).toMatch(/repite una dimensión/);
+  });
+
+  it("ningún texto muestra un código de la escala; un número suelto sí se puede", () => {
+    const conCodigo = web.map((p, i) => (i === 0 ? { ...p, opciones: p.opciones.map((o, k) => (k === 0 ? { ...o, texto: "Cumple 1.2.F1 a medias" } : o)) } : p));
+    expect(problemasDelBanco(escala, area.id, "web", conCodigo).join(" ")).toMatch(/muestra un código de la escala \(«1\.2\.F1»\)/);
+    expect(codigoDeLaEscala("Lo que pide la dimensión (1.3)")).toBe("(1.3)");
+    expect(codigoDeLaEscala("El nivel 2.4.E")).toBe("2.4.E");
+    expect(codigoDeLaEscala("Facturan 2.5 millones al año")).toBeNull();
+    expect(codigoDeLaEscala("La versión 1.2.0 del sistema")).toBeNull();
+    // Al final de una oración, con su punto, también.
+    expect(codigoDeLaEscala("Lo que pide la dimensión (1.3).")).toBe("(1.3)");
+    expect(codigoDeLaEscala("Cumple 1.2.F1.")).toBe("1.2.F1");
+  });
+
+  it("los borradores de toda la escala: cada área × versión, para la general y cada edición, sin bancos vacíos", () => {
+    const conEdicion = parsearEscala(MINI_ESCALA_CON_EDICION);
+    const slug = conEdicion.ediciones[0].slug;
+    const todos = borradoresDeLaEscala(conEdicion);
+    expect(new Set(todos.map((b) => b.edicion))).toEqual(new Set(["general", slug]));
+    expect(todos.every((b) => b.preguntas.length > 0)).toBe(true);
+    const claves = todos.map((b) => `${b.area}:${b.version}:${b.edicion}`);
+    expect(new Set(claves).size).toBe(claves.length);
+    expect(todos.find((b) => b.area === area.id && b.version === "web" && b.edicion === "general")?.preguntas).toEqual(web);
+    // La de la edición se arma con la escala vista por ella (sus palabras), no con la general.
+    const deLaEdicion = todos.find((b) => b.area === area.id && b.version === "web" && b.edicion === slug)!;
+    expect(deLaEdicion.preguntas).toEqual(borradorDesdeLaEscala(aplicarEdicion(conEdicion, slug), area.id, "web"));
+    expect(deLaEdicion.preguntas).not.toEqual(web);
+  });
+
+  describe("el plan del script que genera y aprueba los bancos de una vez", () => {
+    const POR = "scripts/tests-preguntas.ts";
+    const borradores = borradoresDeLaEscala(escala).map((b) => ({ ...b, preguntas: leerPreguntasDelBanco(b.preguntas) }));
+    const b0 = borradores.find((b) => b.version === "web")!;
+    const guardado = (o: Partial<BancoParaElPlan>): BancoParaElPlan => ({
+      area: b0.area,
+      version: b0.version,
+      edicion: b0.edicion,
+      escalaVersion: escala.version,
+      preguntas: b0.preguntas,
+      aprobadas: null,
+      editadoPor: POR,
+      ...o,
+    });
+    const accionDe = (bancos: BancoParaElPlan[]) => planDeLosBancos(escala, [b0], bancos, POR)[0].accion;
+    const editado = b0.preguntas.map((p, i) => (i === 0 ? { ...p, texto: "Una pregunta escrita por Elías" } : p));
+
+    it("lo que falta se crea; lo que ya está aprobado igual y con esta escala no se toca", () => {
+      expect(accionDe([])).toEqual({ tipo: "crear" });
+      expect(accionDe([guardado({ aprobadas: b0.preguntas })])).toEqual({ tipo: "al-dia" });
+    });
+
+    it("un borrador igual al generado se aprueba, lo haya generado quien sea", () => {
+      expect(accionDe([guardado({})])).toEqual({ tipo: "aprobar" });
+      expect(accionDe([guardado({ editadoPor: "elias@smarteamcr.com" })])).toEqual({ tipo: "aprobar" });
+      expect(accionDe([guardado({ aprobadas: b0.preguntas, escalaVersion: "0.1.0" })])).toEqual({ tipo: "aprobar" });
+    });
+
+    it("⛔ lo que editó una persona no se toca, aprobado o no", () => {
+      expect(accionDe([guardado({ preguntas: editado, editadoPor: "elias@smarteamcr.com" })])).toEqual({ tipo: "de-una-persona", aprobado: false });
+      expect(accionDe([guardado({ preguntas: editado, aprobadas: editado, editadoPor: "elias@smarteamcr.com" })])).toEqual({ tipo: "de-una-persona", aprobado: true });
+    });
+
+    it("lo que armó el script con otra escala se rearma", () => {
+      expect(accionDe([guardado({ preguntas: editado, escalaVersion: "0.1.0" })])).toEqual({ tipo: "rearmar", desde: "0.1.0" });
+    });
+
+    it("⛔ con problemas no se aprueba (el plan los trae)", () => {
+      const malo = { ...b0, preguntas: b0.preguntas.slice(0, 1) };
+      expect(planDeLosBancos(escala, [malo], [], POR)[0].problemas.join(" ")).toMatch(/Falta preguntar/);
+    });
   });
 
   it("el banco guardado se lee tolerante", () => {

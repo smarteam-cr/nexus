@@ -815,7 +815,9 @@ tocar HubSpot y el job `tests-hubspot` lo reintenta.
   `scripts/sql/2026-10-26-visitas-del-test.sql` aplicados. Verificar: `npm run check:esquema` sin faltantes, y en Escala ›
   Tests › Medición no aparece el aviso amarillo de las visitas.
 - Elías aprobó las preguntas (Escala › Tests › Preguntas) de las tres áreas, versiones web y Marketing, al menos en la
-  escala general. Verificar: `/external/test/ventas` y `/external/test/ventas?v=marketing` (y lo mismo con `marketing` y
+  escala general. Para aprobarlas todas tal como salen de la escala publicada: `npx tsx scripts/tests-preguntas.ts
+  --escala <versión>` (simulacro) y después con `ALLOW_PROD_WRITE=1` y `--apply` (sin `pg_dump` en el PATH, agregar
+  `SIN_RESPALDO=1`). Verificar: `/external/test/ventas` y `/external/test/ventas?v=marketing` (y lo mismo con `marketing` y
   `servicio`) muestran el formulario, no «Este test todavía no está abierto».
 
 Quién hace cada paso: **[Elías]** = un panel de un tercero o una decisión suya; **[VPS]** = la sesión principal por SSH,

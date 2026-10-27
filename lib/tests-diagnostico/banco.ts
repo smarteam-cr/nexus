@@ -11,11 +11,29 @@
  *   · la web pregunta TODAS las dimensiones del área; la de Marketing, exactamente 4 de ellas (salen de las 8);
  *   · cada pregunta tiene una opción por cada nivel, los cinco: NUNCA se veta un nivel (la app vieja no dejaba elegir
  *     Funcional en tres dimensiones);
- *   · ningún texto nombra un nivel de la escala («Funcional», «Óptimo»…): quien responde no ve niveles.
+ *   · ningún texto nombra un nivel de la escala («Funcional», «Óptimo»…): quien responde no ve niveles;
+ *   · ningún texto muestra un código de la escala (`1.7.F`, `1.7.F2`, `(1.7)`): quien responde no ve códigos.
  */
+import { aplicarEdicion } from "@/lib/escala/documento/edicion";
 import type { Escala, Letra } from "@/lib/escala/documento/tipos";
 import { LETRAS } from "@/lib/escala/documento/tipos";
-import type { PreguntaDelBanco, VersionDelTest } from "./tipos";
+import { EDICION_GENERAL, VERSIONES_DEL_TEST, type PreguntaDelBanco, type VersionDelTest } from "./tipos";
+
+/** Las áreas que mide la escala y tienen test. */
+export const AREAS_DEL_TEST = ["1", "2", "3"] as const;
+
+/** La escala vista por la edición de un banco (`general` = sin edición). */
+export const escalaDelBanco = (escala: Escala, edicion: string) => aplicarEdicion(escala, edicion === EDICION_GENERAL ? null : edicion);
+
+/** Un borrador por cada área × versión, para la escala general y cada edición. Los que quedan sin preguntas no van. */
+export function borradoresDeLaEscala(escala: Escala): { area: string; version: VersionDelTest; edicion: string; preguntas: PreguntaDelBanco[] }[] {
+  const ediciones = [EDICION_GENERAL, ...escala.ediciones.map((e) => e.slug)];
+  return AREAS_DEL_TEST.flatMap((area) =>
+    VERSIONES_DEL_TEST.flatMap((version) =>
+      ediciones.map((edicion) => ({ area, version, edicion, preguntas: borradorDesdeLaEscala(escalaDelBanco(escala, edicion), area, version) })),
+    ),
+  ).filter((f) => f.preguntas.length > 0);
+}
 
 /** Cuántas preguntas tiene cada versión. */
 export const PREGUNTAS_POR_VERSION: Record<VersionDelTest, number> = { marketing: 4, web: 8 };
@@ -84,6 +102,8 @@ export function problemasDelBanco(escala: Escala, areaId: string, version: Versi
     const textos = [p.texto, p.ayuda ?? "", ...p.opciones.map((o) => o.texto)].map(sinTildes);
     const nombra = nombresDeNivel.find((nom) => textos.some((t) => new RegExp(`(^|[^a-z])${nom}([^a-z]|$)`).test(t)));
     if (nombra) problemas.push(`La pregunta ${n} nombra un nivel de la escala («${nombra}»): quien responde no ve niveles.`);
+    const codigo = [p.texto, p.ayuda ?? "", ...p.opciones.map((o) => o.texto)].map(codigoDeLaEscala).find(Boolean);
+    if (codigo) problemas.push(`La pregunta ${n} muestra un código de la escala («${codigo}»): quien responde no ve códigos.`);
   });
   if (version === "web") {
     const sinPregunta = [...dims.values()].filter((d) => !vistas.has(d.id));
@@ -92,6 +112,73 @@ export function problemasDelBanco(escala: Escala, areaId: string, version: Versi
   return problemas;
 }
 
+/**
+ * El código de la escala que asoma en un texto, si hay: el de un nivel (`1.7.F`) o un criterio (`1.7.F2`), o el de una
+ * dimensión entre paréntesis (`(1.7)`). Un número suelto («2.5 millones») no cuenta: se parece a una dimensión.
+ */
+export function codigoDeLaEscala(texto: string): string | null {
+  // Después del código puede venir el punto final de la oración; no otro número («1.2.0» es una versión).
+  const m = texto.match(/(?:^|[^\w.])([1-3]\.\d{1,2}\.[DIFEO]\d{0,2}|\([1-3]\.\d{1,2}\))(?!\w|\.\d)/);
+  return m ? m[1] : null;
+}
+
 function nombreDe(escala: Escala, l: Letra): string {
   return escala.niveles.find((n) => n.letra === l)?.nombre ?? l;
+}
+
+// ── Qué hacer con cada banco al generarlos y aprobarlos de una vez (scripts/tests-preguntas.ts) ─────────────────────────
+
+/** Lo que el plan necesita de un banco guardado. */
+export interface BancoParaElPlan {
+  area: string;
+  version: VersionDelTest;
+  edicion: string;
+  escalaVersion: string;
+  preguntas: PreguntaDelBanco[];
+  aprobadas: PreguntaDelBanco[] | null;
+  editadoPor: string | null;
+}
+
+export type AccionDelPlan =
+  | { tipo: "crear" }
+  | { tipo: "rearmar"; desde: string }
+  | { tipo: "aprobar" }
+  | { tipo: "al-dia" }
+  | { tipo: "de-una-persona"; aprobado: boolean };
+
+export interface PlanDelBanco {
+  area: string;
+  version: VersionDelTest;
+  edicion: string;
+  preguntas: PreguntaDelBanco[];
+  accion: AccionDelPlan;
+  problemas: string[];
+}
+
+const firma = (p: readonly PreguntaDelBanco[] | null) => JSON.stringify(p ?? []);
+
+/**
+ * Qué hacer con cada banco de la escala. `por` es el autor que pone el script: un banco suyo armado con otra versión de la
+ * escala se rearma; uno distinto del borrador que guardó otra persona no se toca (lo editó). Uno igual al borrador se
+ * aprueba aunque lo haya generado otra persona: nadie lo cambió. Lo que tiene problemas no se aprueba.
+ * `preguntas` deben venir ya leídas (`leerPreguntasDelBanco`): así se comparan igual que lo guardado.
+ */
+export function planDeLosBancos(
+  escala: Escala,
+  borradores: readonly { area: string; version: VersionDelTest; edicion: string; preguntas: PreguntaDelBanco[] }[],
+  bancos: readonly BancoParaElPlan[],
+  por: string,
+): PlanDelBanco[] {
+  return borradores.map((f) => {
+    const existente = bancos.find((b) => b.area === f.area && b.version === f.version && b.edicion === f.edicion) ?? null;
+    const igualAlGenerado = !!existente && firma(existente.preguntas) === firma(f.preguntas);
+    let accion: AccionDelPlan;
+    if (!existente) accion = { tipo: "crear" };
+    else if (existente.editadoPor !== por && !igualAlGenerado) accion = { tipo: "de-una-persona", aprobado: !!existente.aprobadas?.length };
+    else if (!igualAlGenerado) accion = { tipo: "rearmar", desde: existente.escalaVersion };
+    else if (firma(existente.aprobadas) === firma(f.preguntas) && existente.escalaVersion === escala.version) accion = { tipo: "al-dia" };
+    else accion = { tipo: "aprobar" };
+    const problemas = accion.tipo === "de-una-persona" ? [] : problemasDelBanco(escalaDelBanco(escala, f.edicion), f.area, f.version, f.preguntas);
+    return { area: f.area, version: f.version, edicion: f.edicion, preguntas: f.preguntas, accion, problemas };
+  });
 }

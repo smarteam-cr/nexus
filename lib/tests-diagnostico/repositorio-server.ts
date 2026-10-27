@@ -131,6 +131,19 @@ export function guardarBorrador(id: string, preguntas: PreguntaDelBanco[], por: 
 }
 
 /**
+ * Reemplaza el borrador SOLO si sigue siendo `antes` (el que se leyó): si una persona lo editó en el medio, no lo pisa
+ * (false). Lo usa el script que rearma los bancos de una escala nueva.
+ */
+export function reemplazarBorrador(id: string, antes: readonly PreguntaDelBanco[], nuevas: readonly PreguntaDelBanco[], por: string): Promise<boolean> {
+  return conTablas(async () => {
+    const n = await prisma.$executeRaw`
+      UPDATE "PreguntasDelTest" SET "preguntas" = ${json(leerPreguntasDelBanco(nuevas))}::jsonb, "editadoPor" = ${por}, "updatedAt" = NOW()
+      WHERE "id" = ${id} AND "preguntas" = ${json(antes)}::jsonb`;
+    return n > 0;
+  });
+}
+
+/**
  * Aprueba el borrador que se revisó: pasa a ser lo que ve el público. Solo si el borrador sigue siendo ese (si alguien lo
  * editó entre la revisión y la aprobación, no se aprueba nada: false).
  */

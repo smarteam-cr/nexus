@@ -13,10 +13,9 @@
  */
 import "server-only";
 import { prisma } from "@/lib/db/prisma";
-import { aplicarEdicion } from "@/lib/escala/documento/edicion";
 import { leerEscalaVigente } from "@/lib/escala/documento/vigente";
 import type { Escala, Letra } from "@/lib/escala/documento/tipos";
-import { borradorDesdeLaEscala, problemasDelBanco } from "./banco";
+import { borradoresDeLaEscala, escalaDelBanco, problemasDelBanco } from "./banco";
 import { MINUTOS_PARA_ABANDONO } from "./hubspot-server";
 import { dominioDelCorreo } from "./servicio-server";
 import {
@@ -38,34 +37,18 @@ import {
   visitasDesde,
   type BancoGuardado,
 } from "./repositorio-server";
-import { EDICION_GENERAL, leerPreguntasDelBanco, VERSIONES_DEL_TEST, type PreguntaDelBanco } from "./tipos";
-
-/** Las áreas que mide la escala y tienen test. */
-const AREAS = ["1", "2", "3"] as const;
+import { leerPreguntasDelBanco, type PreguntaDelBanco } from "./tipos";
 
 async function escalaVigente(): Promise<Escala | null> {
   const v = await leerEscalaVigente();
   return "escala" in v ? v.escala : null;
 }
 
-const escalaDelBanco = (escala: Escala, edicion: string) => aplicarEdicion(escala, edicion === EDICION_GENERAL ? null : edicion);
-
 /** Crea los borradores que falten. Devuelve cuántos creó, o null si no hay escala publicada. */
 export async function generarBorradores(por: string): Promise<number | null> {
   const escala = await escalaVigente();
   if (!escala) return null;
-  const ediciones = [EDICION_GENERAL, ...escala.ediciones.map((e) => e.slug)];
-  const filas = AREAS.flatMap((area) =>
-    VERSIONES_DEL_TEST.flatMap((version) =>
-      ediciones.map((edicion) => ({
-        area,
-        version,
-        edicion,
-        escalaVersion: escala.version,
-        preguntas: borradorDesdeLaEscala(escalaDelBanco(escala, edicion), area, version),
-      })),
-    ),
-  ).filter((f) => f.preguntas.length > 0);
+  const filas = borradoresDeLaEscala(escala).map((f) => ({ ...f, escalaVersion: escala.version }));
   return crearBorradores(filas, por);
 }
 
