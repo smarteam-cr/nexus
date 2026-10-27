@@ -34,9 +34,13 @@
     {
      "fecha": "27 oct",
      "texto": "El análisis automático, prendido solo para las sesiones de las exploraciones; se quitó «Marcar como referencia»."
+    },
+    {
+     "fecha": "28 oct",
+     "texto": "El análisis de la venta lo ve todo el que entra a una preventa; la tendencia por vendedor sigue solo para super admin."
     }
    ],
-   "sigue": "La prueba con Andrés (cinco sesiones reales) y, con su visto bueno, abrirlo a Ventas.",
+   "sigue": "La prueba con Andrés (cinco sesiones reales), ahora que Ventas ya lo ve en cada preventa.",
    "decisiones": [
     20,
     40,
