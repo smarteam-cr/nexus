@@ -10,7 +10,6 @@
 import "server-only";
 import { prisma } from "@/lib/db/prisma";
 import { getClientSessions } from "@/lib/sessions/project-sources";
-import { reunionesDeReferencia } from "./referencia-server";
 import { reunionesDeVenta, type ReunionDeVentaVista } from "./reuniones-de-venta-server";
 
 /** Hasta cuánto atrás se mira (dos años): una preventa no dura más. */
@@ -20,15 +19,13 @@ const MAX_REUNIONES = 500;
 
 export interface AnalisisDelProspecto {
   reuniones: ReunionDeVentaVista[];
-  referencias: { sessionId: string; titulo: string; fecha: string; nota: string | null }[];
   /** El nombre de cada persona del equipo, por su correo (quién comentó, quién confirmó). */
   nombres: Record<string, string>;
 }
 
 export async function analisisDelProspecto(clientId: string, ahora = new Date()): Promise<AnalisisDelProspecto> {
-  const [empresas, referencias, equipo] = await Promise.all([
+  const [empresas, equipo] = await Promise.all([
     reunionesDeVenta({ dias: DIAS_DE_LA_HISTORIA, ahora, clientId, completo: true }),
-    reunionesDeReferencia(),
     prisma.teamMember.findMany({ select: { email: true, name: true } }),
   ]);
   const deVenta = empresas
@@ -40,6 +37,6 @@ export async function analisisDelProspecto(clientId: string, ahora = new Date())
   const deLaEmpresa = new Set(propias.map((s) => s.id));
   const reuniones = deVenta.filter((r) => deLaEmpresa.has(r.id)).sort((a, b) => a.fecha.localeCompare(b.fecha));
 
-  return { reuniones, referencias, nombres: Object.fromEntries(equipo.map((m) => [m.email.toLowerCase(), m.name])) };
+  return { reuniones, nombres: Object.fromEntries(equipo.map((m) => [m.email.toLowerCase(), m.name])) };
 
 }

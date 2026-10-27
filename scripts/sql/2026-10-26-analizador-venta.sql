@@ -9,7 +9,8 @@
 --     reunión cuando se analizó: INV57 vigila que siga siéndolo.
 --   · "ReunionDeReferenciaDeVenta" (S1) — una reunión marcada a mano como ejemplo de lo que sí es consultivo (hoy la de
 --     Camosa, hasta que llegue la de Grupo Avis por T5).
--- Las escribe SOLO lib/analizador-venta/ (analizar-server.ts y referencia-server.ts). Se borran en cascada con su
+--     ⚠ Se quitó el 2026-10-27 (Elías): referencia-server.ts se borró y la tabla quedó sin escritores ni lectores.
+-- Las escribe SOLO lib/analizador-venta/ (analizar-server.ts; referencia-server.ts hasta el 2026-10-27). Se borran en cascada con su
 -- reunión; el análisis, también con su empresa (y la fusión de dos fichas lo muda: lib/clients/fusion-de-empresas.ts).
 --
 -- ADITIVO: 1 tipo y 2 tablas nuevas. Nada se dropea, nada se renombra. Inocuo con el código viejo corriendo. Se puede

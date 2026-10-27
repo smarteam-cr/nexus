@@ -3,8 +3,8 @@
  * `AnalisisDeVenta`.
  *
  * ⛔ Un solo cliente por análisis (invariante 1): la reunión se trae por el chokepoint (`getClientSessions` con su id y
- * su dueña), la guía es la de la preventa de ESA empresa, y la reunión de referencia (de otra empresa) NO entra al
- * contexto: se muestra al lado en la pantalla, para que una persona compare. Lo que se le manda al modelo:
+ * su dueña), la guía es la de la preventa de ESA empresa, y ninguna reunión de otra empresa entra al contexto. Lo que se
+ * le manda al modelo:
  *   · el criterio (lib/analizador-venta/criterio.ts) con el posicionamiento de Smarteam si existe (lib/smarteam);
  *   · la guía que se llevó y las dimensiones de la escala (guia-de-la-reunion-server.ts), si hay;
  *   · quién habló, calculado (quien-hablo.ts, con las frases de la API de Meet o la transcripción);

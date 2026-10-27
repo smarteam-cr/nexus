@@ -50,7 +50,6 @@ export interface ReunionDeVentaVista {
     sinExplorar: string[];
     error: string | null;
   } | null;
-  referencia: boolean;
   /** Solo con `completo`: los correos de los vendedores atribuidos. */
   correos?: string[];
   /** Solo con `completo`: quién habló (el del análisis o calculado); null = sin transcripción. */
@@ -140,29 +139,25 @@ export async function reunionesDeVenta(o: { dias: number; ahora?: Date; clientId
   if (!deVenta.length) return [];
 
   const ids = deVenta.map((x) => x.f.id);
-  const [analisis, referencias] = await Promise.all([
-    prisma.analisisDeVenta
-      .findMany({
-        where: { sessionId: { in: ids } },
-        select: {
-          sessionId: true,
-          clientId: true,
-          estado: true,
-          resultado: true,
-          quienHablo: true,
-          error: true,
-          ...(o.completo ? { descartados: true, analizadoAt: true, confirmadoPor: true, confirmadoAt: true, notaDeConfirmacion: true } : {}),
-        },
-      })
-      .catch((e: unknown) => {
-        // La pantalla (completo) dice «falta el SQL» en vez de mostrar todo «sin analizar» y ofrecer gastar IA de más.
-        if (o.completo && esquemaDesactualizado(e)) throw e;
-        return [];
-      }),
-    prisma.reunionDeReferenciaDeVenta.findMany({ where: { sessionId: { in: ids } }, select: { sessionId: true } }).catch(() => []),
-  ]);
+  const analisis = await prisma.analisisDeVenta
+    .findMany({
+      where: { sessionId: { in: ids } },
+      select: {
+        sessionId: true,
+        clientId: true,
+        estado: true,
+        resultado: true,
+        quienHablo: true,
+        error: true,
+        ...(o.completo ? { descartados: true, analizadoAt: true, confirmadoPor: true, confirmadoAt: true, notaDeConfirmacion: true } : {}),
+      },
+    })
+    .catch((e: unknown) => {
+      // La pantalla (completo) dice «falta el SQL» en vez de mostrar todo «sin analizar» y ofrecer gastar IA de más.
+      if (o.completo && esquemaDesactualizado(e)) throw e;
+      return [];
+    });
   const analisisDe = new Map(analisis.map((a) => [a.sessionId, a]));
-  const esReferencia = new Set(referencias.map((r) => r.sessionId));
 
   // Con `completo`: quién habló donde no lo guardó un análisis, y quién de la invitación la rechazó (T7, del calendario).
   const vigenteDe = (id: string, empresaId: string) => {
@@ -218,7 +213,6 @@ export async function reunionesDeVenta(o: { dias: number; ahora?: Date; clientId
             error: vigente.error,
           }
         : null,
-      referencia: esReferencia.has(f.id),
       ...(o.completo ? { correos, quienHablo: quien ?? null, detalle: vigente ? detalleDe(vigente, resultado) : null } : {}),
     };
     const g = porEmpresa.get(f.empresaId) ?? { id: f.empresaId, nombre: f.empresa, kind: f.kind, reuniones: [], conTranscripcion: 0, analizadas: 0 };

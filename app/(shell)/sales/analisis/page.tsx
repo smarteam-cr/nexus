@@ -4,8 +4,8 @@
  * «Análisis» y «Cómo trabajaste esta sesión»), y acá queda lo que es de todo el equipo.
  *
  *   · «Por vendedor»: la tendencia de cada vendedor en los últimos 90 días, mes a mes (lib/analizador-venta/tendencia.ts).
- *   · «El criterio»: el proceso consultivo escrito que mira el analizador, el posicionamiento y las reuniones de
- *     referencia, para que Elías y Andrés lo revisen.
+ *   · «El criterio»: el proceso consultivo escrito que mira el analizador y el posicionamiento, para que Elías y Andrés
+ *     lo revisen.
  * Antes era Sesiones › «Reuniones de venta» (/sessions/venta), que se retiró (S6): la lista por empresa la reemplaza la
  * pieza «Análisis» de cada preventa.
  *
@@ -18,7 +18,6 @@ import { ChipDeCabecera } from "@/components/cs/piezas";
 import { SHELL_DEFAULT } from "@/lib/ui/page-shell";
 import { cn } from "@/lib/cn";
 import { veElAnalizador } from "@/lib/analizador-venta/reglas";
-import { reunionesDeReferencia } from "@/lib/analizador-venta/referencia-server";
 import { tendenciaDelEquipo } from "@/lib/analizador-venta/tendencia-server";
 import { empresaQueUsaNexus, perfilDe } from "@/lib/smarteam/contexto";
 import { ElCriterio } from "@/components/analizador-venta/ElCriterio";
@@ -58,7 +57,7 @@ async function PorVendedor() {
 }
 
 async function Criterio() {
-  const [nuestra, referencias] = await Promise.all([empresaQueUsaNexus(), reunionesDeReferencia()]);
+  const nuestra = await empresaQueUsaNexus();
   const perfil = nuestra ? await perfilDe(nuestra.id) : null;
-  return <ElCriterio positionStatement={perfil?.positionStatement ?? null} referencias={referencias} />;
+  return <ElCriterio positionStatement={perfil?.positionStatement ?? null} />;
 }
