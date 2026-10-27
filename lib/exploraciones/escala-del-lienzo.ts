@@ -10,6 +10,7 @@
 import { areaParaChequeo, type AreaParaChequeo } from "@/lib/escala/chequeo";
 import { aplicarEdicion } from "@/lib/escala/documento/edicion";
 import { aplica, type Perfil } from "@/lib/escala/documento/perfil";
+import { preparacionDeLaVista, type PreparacionDeLaVista } from "@/lib/escala/preparacion";
 import type {
   Cierre,
   ClaveDeCapa,
@@ -68,6 +69,11 @@ export interface EscalaDelLienzo {
   edicion: { slug: string; nombre: string } | null;
   perfil: { cierre: PreguntaDelPerfil | null; despues: PreguntaDelPerfil | null };
   areas: AreaDelLienzo[];
+  /**
+   * La lectura «Preparación para engagement avanzado» (N6), con la edición y el perfil de la exploración. null si
+   * la versión publicada no la trae (hasta la 9.0): entonces la pieza no la muestra.
+   */
+  preparacion?: PreparacionDeLaVista | null;
 }
 
 /** Las tres áreas, vistas con la edición y el perfil de la exploración. */
@@ -80,6 +86,7 @@ export function escalaParaElLienzo(general: Escala, edicion: string | null, perf
     ediciones: general.ediciones.map((e) => ({ slug: e.slug, nombre: e.nombre, descripcion: e.descripcion, perfilHabitual: e.perfilHabitual })),
     edicion: vista.edicion ? { slug: vista.edicion.slug, nombre: vista.edicion.nombre } : null,
     perfil: { cierre: vista.perfilDeNegocio.cierre, despues: vista.perfilDeNegocio.despues },
+    preparacion: preparacionDeLaVista(vista, perfil),
     areas: vista.areas.map((a) => ({
       id: a.id,
       nombre: a.nombre,
@@ -118,6 +125,11 @@ export function escalaParaElLienzo(general: Escala, edicion: string | null, perf
 export function idsDeLaEscala(escala: EscalaDelLienzo): { dimensiones: Set<string>; criterios: Set<string> } {
   return {
     dimensiones: new Set(escala.areas.flatMap((a) => a.dimensiones.map((d) => d.id))),
-    criterios: new Set(escala.areas.flatMap((a) => a.dimensiones.flatMap((d) => d.funcional.map((c) => c.id)))),
+    // Los cimientos de la lectura de preparación también se marcan (uno es de riesgo y otro de Eficiente: lo que
+    // pide Funcional no los trae). Quien lee `falta` recorre lo que pide Funcional, así que no se mezclan.
+    criterios: new Set([
+      ...escala.areas.flatMap((a) => a.dimensiones.flatMap((d) => d.funcional.map((c) => c.id))),
+      ...(escala.preparacion?.cimientos.map((c) => c.id) ?? []),
+    ]),
   };
 }

@@ -149,7 +149,7 @@ describe("la escala de juguete", () => {
     const x = parsearEscala(sinProsa);
     expect(x.palabrasConValorFijo).toEqual([]);
     expect(x.casosDeLectura).toEqual([]);
-    expect(x.perfilDeNegocio).toEqual({ introduccion: null, cierre: null, despues: null, notas: [] });
+    expect(x.perfilDeNegocio).toEqual({ introduccion: null, cierre: null, despues: null, trafico: null, notas: [] });
     expect(x.automatizacion).toEqual([]);
     expect(x.asignacion).toEqual([]);
     expect(todosLosCriterios(x)).toHaveLength(todosLosCriterios(e).length);
@@ -165,6 +165,51 @@ describe("la escala de juguete", () => {
       "¿La operación sigue\nsin la persona clave?",
     );
     expect(parsearEscala(partido).areas[0].dimensiones[0].pregunta).toBe("¿La operación sigue sin la persona clave?");
+  });
+});
+
+describe("la tercera pregunta del perfil y la lectura de preparación (desde el borrador 9.0.0)", () => {
+  const TRAFICO = "**El tráfico del sitio o la app.** Suficiente, cuando recibe 50.000 visitas al mes o más; o insuficiente, cuando recibe menos.";
+  const PREPARACION = [
+    "## Preparación para engagement avanzado",
+    "",
+    "Una lectura aparte.",
+    "",
+    "- **Lista.** Tiene tráfico suficiente y una base de al menos 5.000 contactos con permiso.",
+    "- **Casi lista.** Le faltan cimientos.",
+    "- **Todavía no.** Su camino es otro.",
+    "",
+    "Los cimientos son dos: lo de Funcional (`1.1.F1`) y lo otro (`1.1.F2`).",
+    "",
+  ].join("\n");
+  const con = (trafico: string, preparacion: string) =>
+    MINI_ESCALA.replace("**Qué pasa después de la venta.**", `${trafico}\n\n**Qué pasa después de la venta.**`).replace("## Qué se trabaja primero", `${preparacion}\n## Qué se trabaja primero`);
+
+  it("lee la pregunta, los umbrales, los estados y los cimientos, sin avisos", () => {
+    const e = parsearEscala(con(TRAFICO, PREPARACION));
+    expect(e.perfilDeNegocio.trafico?.opciones.map((o) => o.nombre)).toEqual(["Suficiente", "insuficiente"]);
+    expect(e.perfilDeNegocio.notas.some((n) => n.startsWith("**El tráfico"))).toBe(false);
+    expect(e.preparacion).toEqual({
+      umbralDeTrafico: 50_000,
+      umbralDeBase: 5_000,
+      cimientos: ["1.1.F1", "1.1.F2"],
+      estados: { lista: "Tiene tráfico suficiente y una base de al menos 5.000 contactos con permiso.", casiLista: "Le faltan cimientos.", todaviaNo: "Su camino es otro." },
+    });
+    expect(e.avisosDeLectura).toEqual([]);
+  });
+
+  it("una versión sin la lectura se lee igual que antes", () => {
+    expect(parsearEscala(MINI_ESCALA).preparacion).toBeNull();
+    expect(parsearEscala(MINI_ESCALA).perfilDeNegocio.trafico).toBeNull();
+  });
+
+  it("lo que no se lee queda en los avisos (y frena la publicación): un cimiento que no existe, un umbral sin número, un estado que falta", () => {
+    const avisos = (md: string) => parsearEscala(md).avisosDeLectura.join(" ");
+    expect(avisos(con(TRAFICO, PREPARACION.replace("`1.1.F2`", "`1.1.F99`")))).toMatch(/nombra como cimiento lo que la escala no tiene: 1\.1\.F99/);
+    expect(avisos(con(TRAFICO.replace("50.000 visitas al mes o más", "mucho tráfico"), PREPARACION))).toMatch(/umbral del tráfico/);
+    expect(avisos(con(TRAFICO, PREPARACION.replace("5.000 contactos", "muchos contactos")))).toMatch(/de cuántos «contactos»/);
+    expect(avisos(con(TRAFICO, PREPARACION.replace("- **Casi lista.** Le faltan cimientos.\n", "")))).toMatch(/«Casi lista»/);
+    expect(avisos(con(TRAFICO, PREPARACION.replace(/`1\.1\.F\d`/g, "algo")))).toMatch(/nombrar cada cimiento por su identificador/);
   });
 });
 

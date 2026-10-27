@@ -20,7 +20,7 @@ import { importarEscala } from "./importar";
 import type { CriterioDeLaEscala, DimensionDeLaMatriz, EscalaDatos, NivelDeLaMatriz } from "./tipos";
 import { ErrorDelBorrador } from "./versiones";
 
-export const MARCAS_DE_PERFIL: readonly MarcaDePerfil[] = ["venta con equipo", "venta sin vendedor", "cliente recurrente", "recompra", "relación continua"];
+export const MARCAS_DE_PERFIL: readonly MarcaDePerfil[] = ["venta con equipo", "venta sin vendedor", "cliente recurrente", "recompra", "relación continua", "tráfico suficiente"];
 
 interface CamposDelCriterio {
   texto: string;

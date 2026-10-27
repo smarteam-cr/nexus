@@ -23,9 +23,10 @@ import { Segmentado } from "../piezas";
 type PropsDeLaVista = React.ComponentProps<typeof VistaDeLaEscala>;
 
 /**
- * La marca de perfil, dicha como las dos preguntas del perfil de negocio. Cada marca limita el criterio
- * por UNA de las dos (la etiqueta admite una sola): cómo se cierra la venta, o qué pasa después. Lo que
- * dice cada opción es la regla de `aplica` (lib/escala/documento/perfil.ts): si cambia la regla, cambia esto.
+ * La marca de perfil, dicha como las preguntas del perfil de negocio. Cada marca limita el criterio por UNA
+ * de ellas (la etiqueta admite una sola): cómo se cierra la venta, qué pasa después o, desde el borrador
+ * 9.0.0, el tráfico del sitio o la app. Lo que dice cada opción es la regla de `aplica`
+ * (lib/escala/documento/perfil.ts): si cambia la regla, cambia esto.
  */
 type MarcaDeCierre = "todas" | "venta con equipo" | "venta sin vendedor";
 type MarcaDeDespues = "todas" | "cliente recurrente" | "recompra" | "relación continua";
@@ -47,8 +48,17 @@ const EFECTO_DE_LA_MARCA: Record<MarcaDePerfil | "ninguna", string> = {
   "cliente recurrente": "Vale cuando el cliente vuelve (recompra o contrato); se esconde en la relación única.",
   recompra: "Vale solo cuando el cliente vuelve a comprar sin contrato.",
   "relación continua": "Vale solo cuando hay contrato (relación continua).",
+  "tráfico suficiente": "Vale solo si el sitio o la app tiene el tráfico de la tercera pregunta del perfil; se esconde donde hay poco tráfico.",
 };
+type MarcaDeTrafico = "todas" | "tráfico suficiente";
+const DEL_TRAFICO: { clave: MarcaDeTrafico; etiqueta: string }[] = [
+  { clave: "todas", etiqueta: "Todas" },
+  { clave: "tráfico suficiente", etiqueta: "Con tráfico suficiente" },
+];
 const ES_DEL_CIERRE = (m: MarcaDePerfil | null): m is "venta con equipo" | "venta sin vendedor" => m === "venta con equipo" || m === "venta sin vendedor";
+const ES_DEL_TRAFICO = (m: MarcaDePerfil | null): m is "tráfico suficiente" => m === "tráfico suficiente";
+/** La marca, si es de «qué pasa después» (ni del cierre ni del tráfico). */
+const DEL_DESPUES_O_NULL = (m: MarcaDePerfil | null): Exclude<MarcaDeDespues, "todas"> | null => (m && !ES_DEL_CIERRE(m) && !ES_DEL_TRAFICO(m) ? m : null);
 const ETIQUETA_DE_VERIFICACION: Record<Verificacion, string> = { comprobable: "Comprobable", declarado: "Declarado", evaluado: "Evaluado" };
 
 type Pedido<T> = { ok: true; datos: T } | { ok: false; error: string };
@@ -134,7 +144,7 @@ function FormularioDelCriterio({ valor, onCambio }: { valor: CamposDelCriterio; 
           Es un hábito
         </label>
       </div>
-      <Field label="A qué perfil aplica" hint={`${EFECTO_DE_LA_MARCA[valor.perfil ?? "ninguna"]} Un criterio se limita por una sola de las dos preguntas.`}>
+      <Field label="A qué perfil aplica" hint={`${EFECTO_DE_LA_MARCA[valor.perfil ?? "ninguna"]} Un criterio se limita por una sola de las preguntas.`}>
         <div className="flex flex-col gap-2">
           <span className="text-xs text-fg-muted">Cómo se cierra la venta</span>
           <Segmentado
@@ -147,8 +157,15 @@ function FormularioDelCriterio({ valor, onCambio }: { valor: CamposDelCriterio; 
           <Segmentado
             etiqueta="Qué pasa después de la venta"
             opciones={DEL_DESPUES}
-            valor={valor.perfil && !ES_DEL_CIERRE(valor.perfil) ? valor.perfil : "todas"}
-            onCambio={(m) => poner({ perfil: m === "todas" ? (ES_DEL_CIERRE(valor.perfil) ? valor.perfil : null) : m })}
+            valor={DEL_DESPUES_O_NULL(valor.perfil) ?? "todas"}
+            onCambio={(m) => poner({ perfil: m === "todas" ? (DEL_DESPUES_O_NULL(valor.perfil) ? null : valor.perfil) : m })}
+          />
+          <span className="text-xs text-fg-muted">El tráfico del sitio o la app</span>
+          <Segmentado
+            etiqueta="El tráfico del sitio o la app"
+            opciones={DEL_TRAFICO}
+            valor={ES_DEL_TRAFICO(valor.perfil) ? valor.perfil : "todas"}
+            onCambio={(m) => poner({ perfil: m === "todas" ? (ES_DEL_TRAFICO(valor.perfil) ? null : valor.perfil) : m })}
           />
         </div>
       </Field>

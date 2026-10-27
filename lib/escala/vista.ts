@@ -6,7 +6,7 @@
  */
 import { resumenDeLaEdicion, type ResumenDeLaEdicion } from "./documento/edicion";
 import { sinTildes } from "./documento/parsear";
-import { perfilParaUrl, type Cierre, type Despues, type Perfil } from "./documento/perfil";
+import { perfilParaUrl, type Cierre, type Despues, type Perfil, type Trafico } from "./documento/perfil";
 import { enlacesQueAplican, requeridosDe, type EnlaceDeCriterio } from "./documento/requeridos";
 import type { ComoCambiaLaEscala } from "./documento/manual";
 import { DOCUMENTOS_DE_LA_ESCALA, type DocumentoDeLaEscala } from "./documento/documentos";
@@ -272,9 +272,11 @@ export function notaDelCierre(perfil: Pick<Escala["perfilDeNegocio"], "notas">, 
  * se cierra sin que nadie la trabaje…». La escala las nombra con otras palabras («Relación única»
  * para `única`), así que se busca la que TERMINA en el valor, sin tildes ni mayúsculas.
  */
-export function definicionDeOpcion(pregunta: PreguntaDelPerfil | null, valor: Cierre | Despues): string | null {
+export function definicionDeOpcion(pregunta: PreguntaDelPerfil | null, valor: Cierre | Despues | Trafico): string | null {
   const norm = (s: string) => sinTildes(s).toLowerCase().trim();
-  return pregunta?.opciones.find((o) => norm(o.nombre).endsWith(norm(valor)))?.definicion ?? null;
+  // Primero la que se llama igual: «insuficiente» también termina en «suficiente».
+  const opciones = pregunta?.opciones ?? [];
+  return (opciones.find((o) => norm(o.nombre) === norm(valor)) ?? opciones.find((o) => norm(o.nombre).endsWith(norm(valor))))?.definicion ?? null;
 }
 
 /**
@@ -409,6 +411,7 @@ export function consultaDeLaEscala(e: EstadoEnLaUrl): string {
   const u = perfilParaUrl(e.perfil);
   if (u.cierre) p.set("cierre", u.cierre);
   if (u.despues) p.set("despues", u.despues);
+  if (u.trafico) p.set("trafico", u.trafico);
   if (e.vista === "dimension" && e.dimension) p.set("dim", e.dimension);
   if (e.vista === "mapa" && e.celda) p.set("celda", e.celda);
   if (e.herramientas?.length) p.set("h", e.herramientas.join(","));

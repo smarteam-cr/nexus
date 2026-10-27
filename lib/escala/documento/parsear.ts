@@ -43,6 +43,7 @@ import {
   type MarcaDePerfil,
   type Nivel,
   type NivelDeLaEscala,
+  type PreguntaDelPerfil,
   type Verificacion,
 } from "./tipos";
 
@@ -51,7 +52,7 @@ import {
  * 8.3.0, son los criterios que requiere: `· requiere 1.5.F1, 1.6.F2`.
  */
 export const ETIQUETA_DE_CRITERIO =
-  /^- (.*) `\[(\d+\.\d+\.[DIFEO]\d+) · (\w+)((?: · riesgo)?)((?: · hábito)?)((?: · venta con equipo| · venta sin vendedor| · cliente recurrente| · recompra| · relación continua)?)((?: · requiere \d+\.\d+\.[DIFEO]\d+(?:, \d+\.\d+\.[DIFEO]\d+)*)?)\]`$/;
+  /^- (.*) `\[(\d+\.\d+\.[DIFEO]\d+) · (\w+)((?: · riesgo)?)((?: · hábito)?)((?: · venta con equipo| · venta sin vendedor| · cliente recurrente| · recompra| · relación continua| · tráfico suficiente)?)((?: · requiere \d+\.\d+\.[DIFEO]\d+(?:, \d+\.\d+\.[DIFEO]\d+)*)?)\]`$/;
 
 /** «· requiere 1.5.F1, 1.6.F2» → los ids, en el orden en que están escritos. Sin requeridos, nada. */
 function requeridosDeLaEtiqueta(grupo: string): { requiere?: string[] } {
@@ -1002,16 +1003,64 @@ function leerPreguntaDelPerfil(parrafo: string | undefined): Escala["perfilDeNeg
   return opciones.length ? { pregunta: m[1].trim(), opciones } : null;
 }
 
+/** «50.000» o «5000» → el número. Los miles van con punto, como los escribe la escala. */
+function numeroEscrito(texto: string): number {
+  return Number(texto.replace(/\./g, ""));
+}
+
+/** El número que va antes de `unidad` («50.000 visitas al mes» → 50000), o null. */
+export function umbralEnElTexto(texto: string | null | undefined, unidad: string): number | null {
+  const m = texto ? new RegExp(`(\\d{1,3}(?:\\.\\d{3})+|\\d+) ${unidad}`).exec(texto) : null;
+  return m ? numeroEscrito(m[1]) : null;
+}
+
+export const TITULO_DE_LA_PREPARACION = "Preparación para engagement avanzado";
+
+/**
+ * «Preparación para engagement avanzado»: los estados (los puntos «**Lista.** …»), el umbral de la base
+ * («5.000 contactos» en «Lista») y los cimientos (los identificadores entre comillas invertidas del párrafo
+ * «Los cimientos…»). El umbral del tráfico sale de la tercera pregunta del perfil. Lo que no se lee se
+ * avisa: no frena la lectura, frena la publicación.
+ */
+function leerPreparacion(lineas: string[], trafico: PreguntaDelPerfil | null, avisos: string[]): Escala["preparacion"] {
+  const sec = seccion(lineas, new RegExp(`^## ${TITULO_DE_LA_PREPARACION}\\s*$`));
+  if (!sec.length) return null;
+  const punto = (nombre: string) => {
+    const l = sec.find((x) => x.startsWith(`- **${nombre}.**`));
+    return l ? l.slice(`- **${nombre}.**`.length).trim() : null;
+  };
+  const estados = { lista: punto("Lista"), casiLista: punto("Casi lista"), todaviaNo: punto("Todavía no") };
+  const suficiente = trafico?.opciones.find((o) => /^suficiente$/i.test(o.nombre))?.definicion ?? null;
+  const umbralDeTrafico = umbralEnElTexto(suficiente, "visitas al mes");
+  const umbralDeBase = umbralEnElTexto(estados.lista, "contactos");
+  const cimientos = [...(parrafos(sec).find((p) => p.startsWith("Los cimientos")) ?? "").matchAll(/`(\d+\.\d+\.[DIFEO]\d+)`/g)].map((m) => m[1]);
+  const t = `«${TITULO_DE_LA_PREPARACION}»`;
+  if (!estados.lista || !estados.casiLista || !estados.todaviaNo) avisos.push(`${t} tiene que decir qué es «Lista», «Casi lista» y «Todavía no», cada uno en un punto que empieza con su nombre en negrita.`);
+  if (umbralDeTrafico === null) avisos.push(`${t} lee el umbral del tráfico de la tercera pregunta del perfil («${PREGUNTA_DEL_TRAFICO}»): su respuesta «Suficiente» tiene que decir cuántas «visitas al mes».`);
+  if (umbralDeBase === null) avisos.push(`${t}: «Lista» tiene que decir de cuántos «contactos» es la base que alcanza.`);
+  if (!cimientos.length) avisos.push(`${t}: el párrafo «Los cimientos…» tiene que nombrar cada cimiento por su identificador, entre comillas invertidas.`);
+  return { umbralDeTrafico, umbralDeBase, cimientos, estados };
+}
+
+/**
+ * El título de la tercera pregunta del perfil (desde el borrador 9.0.0), como `**Cómo se cierra la venta.**`
+ * para las otras dos: `**El tráfico del sitio o la app.** Suficiente, cuando …; o insuficiente, cuando …`.
+ */
+export const PREGUNTA_DEL_TRAFICO = "El tráfico del sitio o la app";
+
 function leerPerfilDeNegocio(lineas: string[]): Escala["perfilDeNegocio"] {
   const ps = parrafos(seccion(lineas, /^## El perfil de negocio\s*$/));
   const introduccion = ps[0] && !ps[0].startsWith("**") ? ps[0] : null;
   const cierre = ps.find((p) => p.startsWith("**Cómo se cierra la venta.**"));
   const despues = ps.find((p) => p.startsWith("**Qué pasa después de la venta.**"));
+  // La tercera, desde el borrador 9.0.0: una versión que no la trae se lee igual que antes.
+  const trafico = ps.find((p) => p.startsWith(`**${PREGUNTA_DEL_TRAFICO}.**`));
   return {
     introduccion,
     cierre: leerPreguntaDelPerfil(cierre),
     despues: leerPreguntaDelPerfil(despues),
-    notas: ps.filter((p) => p !== introduccion && p !== cierre && p !== despues),
+    trafico: leerPreguntaDelPerfil(trafico),
+    notas: ps.filter((p) => p !== introduccion && p !== cierre && p !== despues && p !== trafico),
   };
 }
 
@@ -1096,6 +1145,16 @@ export function parsearEscala(texto: string): Escala {
   const perfil = parrafos(seccion(lineas, /^## El perfil de negocio\s*$/));
   const requeridos = parrafos(seccion(lineas, /^## Criterios requeridos\s*$/));
   const valorFijo = leerPalabrasConValorFijo(lineas);
+  const perfilDeNegocio = leerPerfilDeNegocio(lineas);
+  const avisosDeLaPreparacion: string[] = [];
+  const preparacion = leerPreparacion(lineas, perfilDeNegocio.trafico, avisosDeLaPreparacion);
+  if (preparacion) {
+    // Un cimiento tiene que ser un criterio de la escala: de la matriz o propio de alguna edición.
+    const existen = new Set(areas.flatMap((a) => a.dimensiones.flatMap((d) => d.niveles.flatMap((n) => n.criterios.map((c) => c.id)))));
+    for (const ed of ediciones) for (const a of ed.areas) for (const d of a.dimensiones) for (const c of d.propios) existen.add(c.id);
+    const faltan = preparacion.cimientos.filter((id) => !existen.has(id));
+    if (faltan.length) avisosDeLaPreparacion.push(`«${TITULO_DE_LA_PREPARACION}» nombra como cimiento lo que la escala no tiene: ${faltan.join(", ")}.`);
+  }
 
   return {
     version,
@@ -1117,11 +1176,15 @@ export function parsearEscala(texto: string): Escala {
     dependencias: leerDependencias(lineas),
     historial: leerHistorial(lineas),
     palabrasConValorFijo: valorFijo.palabras,
-    avisosDeLectura: valorFijo.sinValor.map(
-      (t) => `«${t}» está entre comillas en «Cómo se leen los criterios» y no se le encuentra su valor: la oración tiene que decir «quiere decir …», como las demás.`,
-    ),
+    avisosDeLectura: [
+      ...valorFijo.sinValor.map(
+        (t) => `«${t}» está entre comillas en «Cómo se leen los criterios» y no se le encuentra su valor: la oración tiene que decir «quiere decir …», como las demás.`,
+      ),
+      ...avisosDeLaPreparacion,
+    ],
     casosDeLectura: leerCasosDeLectura(lineas),
-    perfilDeNegocio: leerPerfilDeNegocio(lineas),
+    perfilDeNegocio,
+    preparacion,
     automatizacion: bloquesDe(seccion(lineas, /^## Regla de automatización\s*$/)),
     asignacion: leerAsignacion(lineas, areas),
     ediciones,

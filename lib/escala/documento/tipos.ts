@@ -19,14 +19,18 @@ export const LETRAS_CON_RESULTADO: readonly Letra[] = ["F", "E", "O"];
 export type Verificacion = "comprobable" | "declarado" | "evaluado";
 export const VERIFICACIONES: readonly Verificacion[] = ["comprobable", "declarado", "evaluado"];
 
-/** Las marcas de perfil que admite la etiqueta de un criterio («venta sin vendedor» y «recompra», desde la 7.7.0). */
-export type MarcaDePerfil = "venta con equipo" | "venta sin vendedor" | "cliente recurrente" | "recompra" | "relación continua";
+/**
+ * Las marcas de perfil que admite la etiqueta de un criterio («venta sin vendedor» y «recompra», desde la 7.7.0;
+ * «tráfico suficiente», desde el borrador 9.0.0: la tercera pregunta del perfil).
+ */
+export type MarcaDePerfil = "venta con equipo" | "venta sin vendedor" | "cliente recurrente" | "recompra" | "relación continua" | "tráfico suficiente";
 export const MARCAS_DE_PERFIL: readonly MarcaDePerfil[] = [
   "venta con equipo",
   "venta sin vendedor",
   "cliente recurrente",
   "recompra",
   "relación continua",
+  "tráfico suficiente",
 ];
 
 /** Las respuestas del perfil de negocio (Parte 2): cómo se cierra la venta y qué pasa después. */
@@ -34,6 +38,9 @@ export type Cierre = "con equipo" | "transaccional" | "mixta";
 export type Despues = "única" | "recompra" | "continua";
 export const CIERRES: readonly Cierre[] = ["con equipo", "transaccional", "mixta"];
 export const DESPUES: readonly Despues[] = ["única", "recompra", "continua"];
+/** La tercera pregunta (desde el borrador 9.0.0): si el sitio o la app tiene el tráfico que pide la escala. */
+export type Trafico = "suficiente" | "insuficiente";
+export const TRAFICOS: readonly Trafico[] = ["suficiente", "insuficiente"];
 
 /** Las dos capas de cada área, por su lugar en la matriz: la primera es la base. */
 export type ClaveDeCapa = "base" | "produccion";
@@ -144,6 +151,18 @@ export interface PreguntaDelPerfil {
   opciones: { nombre: string; definicion: string }[];
 }
 
+/** La lectura «Preparación para engagement avanzado», tal como la escribe la escala. */
+export interface PreparacionDeLaEscala {
+  /** Las visitas al mes desde las que el tráfico es suficiente. null si no se pudo leer. */
+  umbralDeTrafico: number | null;
+  /** Los contactos con permiso desde los que la base alcanza. null si no se pudo leer. */
+  umbralDeBase: number | null;
+  /** Los criterios que son cimientos, por su identificador, en el orden en que la escala los nombra. */
+  cimientos: string[];
+  /** Lo que la escala dice de cada estado (sin la negrita del nombre). */
+  estados: { lista: string | null; casiLista: string | null; todaviaNo: string | null };
+}
+
 /** Un párrafo o un punto de lista de la prosa de la escala, con sus negritas de markdown. */
 export interface BloqueDeTexto {
   tipo: "parrafo" | "punto";
@@ -200,8 +219,17 @@ export interface Escala {
     introduccion: string | null;
     cierre: PreguntaDelPerfil | null;
     despues: PreguntaDelPerfil | null;
+    /** La tercera pregunta, si la versión la trae (desde el borrador 9.0.0). Su umbral vive en su texto. */
+    trafico: PreguntaDelPerfil | null;
     notas: string[];
   };
+  /**
+   * «Preparación para engagement avanzado» (Parte 2, desde el borrador 9.0.0): una lectura aparte, que no
+   * cambia el nivel. null si la versión no la trae. Sus umbrales y sus cimientos salen del TEXTO de la
+   * escala, para que se editen ahí: el del tráfico, de la tercera pregunta del perfil; el de la base y los
+   * cimientos, de esta sección. Lo que no se pudo leer queda en `avisosDeLectura` y frena la publicación.
+   */
+  preparacion: PreparacionDeLaEscala | null;
   /** «Regla de automatización»: manual → con lógica → autónomo, el desempate entre niveles. */
   automatizacion: BloqueDeTexto[];
   /** «Regla de asignación»: dónde se cuenta cada evidencia dudosa. */

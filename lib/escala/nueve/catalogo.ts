@@ -13,6 +13,7 @@
  *
  * El orden importa: una entrada puede requerir un criterio que creó una anterior, por su alias.
  */
+import { PREGUNTA_DEL_TRAFICO } from "@/lib/escala/documento/parsear";
 import type { Verificacion } from "@/lib/escala/documento/tipos";
 import type { Campos, Entrada, Operacion, Ref } from "./tipos";
 
@@ -22,6 +23,13 @@ export const UMBRAL_DE_TRAFICO = "más de 50.000 visitas al mes en el sitio o la
 /** La base con permiso que pide la lectura de preparación (el plan de Insider: 5.000 para empezar). */
 export const UMBRAL_DE_BASE = "5.000 contactos con permiso para recibir mensajes";
 const SI_HAY_TRAFICO = `Si el sitio o la app tiene tráfico suficiente —por ahora, ${UMBRAL_DE_TRAFICO}; umbral por validar—,`;
+// Desde N4 (noche 3, 2026-10-26) la condición es una marca de perfil con su pregunta. Las tres constantes de arriba
+// quedan porque las entradas de antes las usan tal cual: el borrador de producción se armó con ellas.
+/** Lo que dice de «Suficiente» la tercera pregunta del perfil. Su número es el umbral que lee Nexus. */
+export const TRAFICO_SUFICIENTE =
+  "el sitio o la app recibe 50.000 visitas al mes o más —umbral provisional, hasta tener la calificación con que las plataformas de personalización aceptan a un cliente—";
+/** Lo que pide «Lista» de la base. Su número es el umbral que lee Nexus. */
+export const BASE_SUFICIENTE = "5.000 contactos con permiso para recibir mensajes";
 
 // ── Atajos ────────────────────────────────────────────────────────────────────
 const c = (texto: string, verificacion: Verificacion, extra: Omit<Partial<Campos>, "texto" | "verificacion"> = {}): Campos => ({ texto, verificacion, ...extra });
@@ -1695,9 +1703,7 @@ export const CATALOGO: readonly Entrada[] = [
     pregunta:
       "Medir cada recorrido y cada campaña contra un grupo de control (" +
       `«${SI_HAY_TRAFICO} cada recorrido y cada campaña se miden por el ingreso que agregan contra un grupo de control que no los recibe, por recorrido y en general, y con eso se decide qué escalar y qué apagar»` +
-      ") hoy reemplazaría al Óptimo de Aprendizaje de Marketing, que mide contra un grupo de control lo que decide la IA. Así redactado se cumple sin IA (decisión 9). ¿Entra en Eficiente con número nuevo, o se le escribe qué hace la IA y quién valida? Y la condición «tráfico suficiente» va como «Si…» en el texto, como las demás condiciones, con el umbral provisional que propuso Claude (" +
-      UMBRAL_DE_TRAFICO +
-      ", por validar con la calificación de Insider): ¿queda así, o pasa a ser una marca de perfil con su pregunta (la tercera del perfil), lo que toca el lector, el generador, el editor y el port de Python?",
+      ") hoy reemplazaría al Óptimo de Aprendizaje de Marketing, que mide contra un grupo de control lo que decide la IA. Así redactado se cumple sin IA (decisión 9). ¿Entra en Eficiente con número nuevo, o se le escribe qué hace la IA y quién valida? Entre donde entre, lleva la marca «tráfico suficiente» (la tercera pregunta del perfil, N4) en vez del «Si…» del texto.",
   },
   {
     punto: "Insider 7 · 2.2.O2",
@@ -1872,5 +1878,149 @@ export const CATALOGO: readonly Entrada[] = [
         ],
       },
     ],
+  },
+
+  // ════════════════════════ Noche 3 (2026-10-26): N4, N6 y N7 ════════════════════════
+  // Van AL FINAL a propósito: el borrador de producción ya tiene todo lo anterior, y
+  // `scripts/escala-borrador-9-0.ts --apply` le suma solo lo que le falta, sin rehacer ni pisar lo de antes.
+  {
+    punto: "Insider · N4 · la tercera pregunta del perfil (tráfico suficiente)",
+    fuente: "insider",
+    tema: TI,
+    estado: "aplicada-con-redaccion",
+    resumen:
+      "«Tráfico suficiente» pasa de un «Si…» en el texto a una marca de perfil con su pregunta, la tercera del perfil. Los dos criterios de las ediciones que la pedían la llevan como marca; ninguno queda con dos condiciones.",
+    habilita: "El umbral es el de la calificación de clientes de Insider (pedido); HubSpot no personaliza al anónimo por su comportamiento.",
+    ops: [
+      {
+        op: "prosa-cambiar",
+        parte: "Parte 2",
+        empieza: "No todas las empresas venden igual",
+        bloques: [
+          {
+            tipo: "parrafo",
+            texto:
+              "No todas las empresas venden igual, y la escala no cambia de estructura por eso: cambia qué criterios aplican. Cada unidad que se diagnostica tiene un perfil de negocio, que responde tres preguntas.",
+          },
+        ],
+      },
+      {
+        op: "prosa-insertar",
+        parte: "Parte 2",
+        despuesDe: "**Qué pasa después de la venta.**",
+        bloques: [{ tipo: "parrafo", texto: `**${PREGUNTA_DEL_TRAFICO}.** Suficiente, cuando ${TRAFICO_SUFICIENTE}; o insuficiente, cuando recibe menos.` }],
+      },
+      {
+        op: "prosa-cambiar",
+        parte: "Parte 2",
+        empieza: "Los criterios que dependen del perfil llevan una marca:",
+        bloques: [
+          {
+            tipo: "parrafo",
+            texto:
+              "Los criterios que dependen del perfil llevan una marca: venta con equipo; venta sin vendedor, que vale para la venta transaccional y la mixta; cliente recurrente, que vale para recompra y relación continua; recompra; relación continua; o tráfico suficiente, que vale cuando el sitio o la app tiene el tráfico de la tercera pregunta, porque personalizar a quien todavía no dejó sus datos y medir contra un grupo de control solo funcionan con volumen. Si la marca no corresponde al perfil de la unidad, el criterio no aplica y sale de la cuenta. Un criterio lleva una sola marca. En la venta mixta aplican todos los que dependen de cómo se cierra la venta: los de venta con equipo se evalúan sobre el canal que vende con personas, y los de venta sin vendedor, sobre el que vende solo.",
+          },
+        ],
+      },
+      {
+        op: "edicion-editar-propio",
+        edicion: "ecommerce-retail",
+        id: "@ecommerce.1.6.O.anonimo",
+        cambios: {
+          perfil: "tráfico suficiente",
+          texto:
+            "La IA decide qué mostrarle a cada comprador —productos, orden y oferta— en tiempo real, según su comportamiento y también a quien todavía no dejó sus datos, dentro de las reglas que fijó el equipo; lo que decide queda registrado en el sistema y el equipo lo revisa.",
+        },
+      },
+      {
+        op: "edicion-editar-propio",
+        edicion: "turismo",
+        id: "@turismo.1.6.O.motor",
+        cambios: {
+          perfil: "tráfico suficiente",
+          texto:
+            "La IA decide qué mostrarle a cada viajero en el sitio y el motor de reservas, aunque no haya dejado sus datos —destinos, fechas y tarifas, según lo que buscó—, dentro de las reglas que fijó el equipo; lo que decide queda registrado en el sistema y el equipo lo revisa.",
+        },
+      },
+    ],
+    pregunta: `El umbral de tráfico (${TRAFICO_SUFICIENTE.replace(/ —.*—$/, "")}) es provisional: lo propuso Claude, en el borde de un rango de los datos de la empresa. Cuando Insider mande su calificación de clientes, se cambia en la tercera pregunta del perfil, que es de donde lo leen los criterios y la lectura de preparación.`,
+  },
+  {
+    punto: "Insider · N6 · la lectura de preparación, con sus umbrales y sus cimientos",
+    fuente: "insider",
+    tema: TI,
+    estado: "aplicada-con-redaccion",
+    resumen:
+      "La lectura dice qué pide cada estado, con el umbral de la base (5.000 contactos con permiso, por validar) y los cimientos por su número, para que Nexus la calcule en la escala de la exploración sin cambiar el nivel.",
+    habilita: "La calcula Nexus en la escala de la exploración (la preventa y la del proyecto); no nombra a Insider.",
+    ops: [
+      {
+        op: "prosa-cambiar",
+        parte: "Parte 2",
+        empieza: "**Lista.**",
+        bloques: [
+          {
+            tipo: "lista",
+            items: [
+              `**Lista.** Le vende a personas, o a personas y a empresas; el cliente vuelve (recompra o relación continua); tiene tráfico suficiente (la tercera pregunta del perfil); su base tiene al menos ${BASE_SUFICIENTE} (umbral por validar); cumple los cimientos; y Marketing está en Funcional o más.`,
+              "**Casi lista.** Cumple lo demás, pero le faltan cimientos: la lectura dice cuáles. Es lo que se trabaja antes de una plataforma de personalización.",
+              "**Todavía no.** No cumple el perfil, el tráfico, la base o el nivel de Marketing. Su camino es ordenar primero sus datos, sus canales y sus procesos.",
+            ],
+          },
+        ],
+      },
+      {
+        op: "prosa-cambiar",
+        parte: "Parte 2",
+        empieza: "Los cimientos son tres:",
+        bloques: [
+          {
+            tipo: "parrafo",
+            texto:
+              "Los cimientos son tres: el permiso de cada contacto registrado por canal y respetado en cada envío (`@2.3.F.permiso`); lo que la persona hace en el sitio o la app unido a su ficha, también lo de antes de dejar sus datos (`@2.3.E.comportamiento`); y, donde la edición lo pide, el catálogo al día en un solo lugar (`1.2.F102` en Ecommerce y retail, `1.2.F501` en Turismo).",
+          },
+          {
+            tipo: "parrafo",
+            texto:
+              "Cuando falta un dato —el perfil, el tráfico, la base, el nivel de Marketing o si se cumple un cimiento—, la lectura no adivina: dice qué falta saber. El tráfico y la base se cuentan por rangos, así que un rango que contiene el umbral queda por confirmar.",
+          },
+        ],
+      },
+    ],
+    pregunta:
+      "Los umbrales se editan en el texto de la escala: el del tráfico, en la tercera pregunta del perfil; el de la base, en «Lista». Nexus los lee de ahí, y una versión que no los trae legibles no se publica.",
+  },
+  {
+    punto: "Insider · N6 · la base dentro de un rango",
+    fuente: "insider",
+    tema: TI,
+    estado: "pregunta",
+    resumen: "El umbral de la base (5.000) cae dentro del rango «de mil a 10 mil» de los datos de la empresa.",
+    habilita: "—",
+    ops: [],
+    pregunta:
+      "El umbral de la base (5.000 contactos con permiso) cae dentro de un rango de los datos de la empresa, «de mil a 10 mil», que ya existe en HubSpot y que todavía ninguna empresa tiene llenado. Mientras tanto, una empresa en ese rango queda «por confirmar» en la lectura. ¿Partimos ese rango en dos («de mil a 5 mil» y «de 5 mil a 10 mil»), o el umbral pasa a 10.000?",
+  },
+  {
+    punto: "Insider · N6 · qué es una relación digital recurrente",
+    fuente: "insider",
+    tema: TI,
+    estado: "pregunta",
+    resumen: "La lectura pide que le venda a personas y que el cliente vuelva; no mira cómo se cierra la venta.",
+    habilita: "—",
+    ops: [],
+    pregunta:
+      "Para estar «Lista», la lectura pide que la empresa le venda a personas (o a personas y a empresas) y que el cliente vuelva (recompra o relación continua); no mira cómo se cierra la venta. ¿Una empresa que vende con equipo, sin venta en su sitio, puede estar «Lista» si tiene el tráfico y la base, o la lectura pide además venta sin vendedor (transaccional o mixta)?",
+  },
+  {
+    punto: "Insider · N7 · el mapa de herramientas para la 9.0",
+    fuente: "insider",
+    tema: TI,
+    estado: "texto-pendiente",
+    resumen: "El mapa de herramientas 2.0.0 está escrito para este borrador, con los 16 cambios y quién los habilita.",
+    habilita: "Insider, HubSpot y Smarteam, criterio por criterio.",
+    ops: [],
+    pregunta:
+      "El mapa de herramientas 2.0.0 (docs/escala/mapa_de_herramientas-9-0.md) está escrito para este borrador: suma los 16 cambios con quién los habilita, lleva cada criterio que cambió de número a su número nuevo, la ficha de Insider dice cuándo conviene con el umbral de tráfico y la de HubSpot, lo que no hace. Al publicar la 9.0 reemplaza al 1.0.1 (docs/escala/mapa_de_herramientas.md).",
   },
 ];

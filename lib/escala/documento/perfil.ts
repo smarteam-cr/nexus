@@ -7,32 +7,41 @@
  * real, perfil por perfil. Hasta la 7.6.1 «vende sin vendedor» era una regla de TEXTO; desde la
  * 7.7.0 es una marca más («venta sin vendedor»), como «recompra».
  *
+ * Desde el borrador 9.0.0 hay una tercera pregunta, el tráfico del sitio o la app, con su marca
+ * «tráfico suficiente» (N4, docs/escala-engagement-avanzado-plan.md). Es OPCIONAL en el tipo: una
+ * versión que no la trae, y quien no la responde, no filtra por ella. Un criterio lleva una sola
+ * marca, así que ninguno queda con dos condiciones.
+ *
  * En la pantalla cada pregunta puede quedar SIN elegir («Todas»): esa pregunta no filtra. Con las
  * dos elegidas el resultado es idéntico al del Python.
  */
-import { CIERRES, DESPUES, type Cierre, type Criterio, type Despues, type Dimension, type Nivel } from "./tipos";
+import { CIERRES, DESPUES, TRAFICOS, type Cierre, type Criterio, type Despues, type Dimension, type Nivel, type Trafico } from "./tipos";
 
 // Las respuestas del perfil son gramática del documento (una edición trae su «perfil habitual»):
 // viven en `tipos.ts` y se reexportan acá, que es de donde las importa la pantalla.
-export { CIERRES, DESPUES };
-export type { Cierre, Despues };
+export { CIERRES, DESPUES, TRAFICOS };
+export type { Cierre, Despues, Trafico };
 
 /** Un perfil, con cada pregunta opcional: `null` = «Todas», no filtra. */
 export interface Perfil {
   cierre: Cierre | null;
   despues: Despues | null;
+  /** La tercera pregunta (desde el borrador 9.0.0). Sin ella, o `null`, no filtra. */
+  trafico?: Trafico | null;
 }
 
 export const SIN_PERFIL: Perfil = { cierre: null, despues: null };
 
-/** ¿Este criterio cuenta para este perfil? Port de `aplica(c, venta, rel)`. */
+/** ¿Este criterio cuenta para este perfil? Port de `aplica(c, venta, rel, trafico)`. */
 export function aplica(c: Pick<Criterio, "perfil">, perfil: Perfil): boolean {
   const { cierre, despues } = perfil;
+  const trafico = perfil.trafico ?? null;
   if (c.perfil === "venta con equipo" && cierre === "transaccional") return false;
   if (c.perfil === "venta sin vendedor" && cierre === "con equipo") return false;
   if (c.perfil === "cliente recurrente" && despues === "única") return false;
   if (c.perfil === "recompra" && despues !== null && despues !== "recompra") return false;
   if (c.perfil === "relación continua" && despues !== null && despues !== "continua") return false;
+  if (c.perfil === "tráfico suficiente" && trafico === "insuficiente") return false;
   return true;
 }
 
@@ -53,21 +62,23 @@ export function dimensionAplica(dim: Dimension, perfil: Perfil): boolean {
 }
 
 // ── En la URL ─────────────────────────────────────────────────────────────────
-// Sin tildes ni espacios: `?cierre=equipo&despues=unica`.
+// Sin tildes ni espacios: `?cierre=equipo&despues=unica&trafico=suficiente`.
 
 const CIERRE_EN_URL: Record<Cierre, string> = { "con equipo": "equipo", transaccional: "transaccional", mixta: "mixta" };
 const DESPUES_EN_URL: Record<Despues, string> = { única: "unica", recompra: "recompra", continua: "continua" };
 
-export function perfilDesdeUrl(params: { cierre?: string | null; despues?: string | null }): Perfil {
+export function perfilDesdeUrl(params: { cierre?: string | null; despues?: string | null; trafico?: string | null }): Perfil {
   const cierre = (Object.keys(CIERRE_EN_URL) as Cierre[]).find((k) => CIERRE_EN_URL[k] === params.cierre) ?? null;
   const despues = (Object.keys(DESPUES_EN_URL) as Despues[]).find((k) => DESPUES_EN_URL[k] === params.despues) ?? null;
-  return { cierre, despues };
+  const trafico = TRAFICOS.find((t) => t === params.trafico) ?? null;
+  return trafico ? { cierre, despues, trafico } : { cierre, despues };
 }
 
-export function perfilParaUrl(perfil: Perfil): { cierre?: string; despues?: string } {
+export function perfilParaUrl(perfil: Perfil): { cierre?: string; despues?: string; trafico?: string } {
   return {
     ...(perfil.cierre ? { cierre: CIERRE_EN_URL[perfil.cierre] } : {}),
     ...(perfil.despues ? { despues: DESPUES_EN_URL[perfil.despues] } : {}),
+    ...(perfil.trafico ? { trafico: perfil.trafico } : {}),
   };
 }
 
@@ -85,11 +96,17 @@ export const ETIQUETA_DE_DESPUES: Record<Despues, string> = {
   continua: "Relación continua",
 };
 
+export const ETIQUETA_DE_TRAFICO: Record<Trafico, string> = {
+  suficiente: "Tráfico suficiente",
+  insuficiente: "Poco tráfico",
+};
+
 /** «Con equipo · Recompra», o null si no hay perfil elegido. */
 export function describirPerfil(perfil: Perfil): string | null {
   const partes = [
     perfil.cierre ? ETIQUETA_DE_CIERRE[perfil.cierre] : null,
     perfil.despues ? ETIQUETA_DE_DESPUES[perfil.despues] : null,
+    perfil.trafico ? ETIQUETA_DE_TRAFICO[perfil.trafico] : null,
   ].filter(Boolean);
   return partes.length ? partes.join(" · ") : null;
 }
@@ -107,6 +124,8 @@ export function explicarMarca(marca: Criterio["perfil"]): string | null {
       return "Solo aplica si el cliente vuelve a comprar sin contrato: no cuenta en la relación única ni en la continua.";
     case "relación continua":
       return "Solo aplica a la relación continua: suscripción, contrato o servicio.";
+    case "tráfico suficiente":
+      return "Solo aplica si el sitio o la app tiene el tráfico que pide la escala: no cuenta donde hay poco tráfico.";
     default:
       return null;
   }

@@ -53,7 +53,7 @@ export default async function EditarElBorrador({ params, searchParams }: { param
         esRevisor
         inicial={{
           vista: vistaDesdeUrl(uno(sp, "vista")),
-          perfil: perfilDesdeUrl({ cierre: uno(sp, "cierre"), despues: uno(sp, "despues") }),
+          perfil: perfilDesdeUrl({ cierre: uno(sp, "cierre"), despues: uno(sp, "despues"), trafico: uno(sp, "trafico") }),
           dimension: uno(sp, "dim"),
           celda: uno(sp, "celda"),
           ancla: uno(sp, "c"),
