@@ -12,7 +12,8 @@ const caso = (id: string): CasoDelCatalogo => casoPorId(id)!;
 
 describe("el salto de nivel de cada área", () => {
   it("va del nivel más bajo de partida al más alto de llegada, por área", () => {
-    expect(saltosPorArea(caso("prospeccion-ia"))).toEqual([{ area: "1", desde: "F", hasta: "O", dimensiones: 3 }]);
+    // Desde la 9.0, prospección con IA lleva Priorización de Leads hasta Eficiente: su criterio de Óptimo bajó a Eficiente.
+    expect(saltosPorArea(caso("prospeccion-ia"))).toEqual([{ area: "1", desde: "F", hasta: "E", dimensiones: 3 }]);
     expect(saltosPorArea(caso("cobranza"))).toEqual([
       { area: "1", desde: "F", hasta: "E", dimensiones: 1 },
       { area: "3", desde: "I", hasta: "E", dimensiones: 2 },

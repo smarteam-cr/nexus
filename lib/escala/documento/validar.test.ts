@@ -531,4 +531,17 @@ describe("las pruebas del cálculo (2 y 3), las mismas de pruebas_escala.py", ()
     const r = validarEscala(real, { especificacion: especificacion.replace("Saca 38.", "Saca 39."), calculo: { texto } });
     expect(r.find((x) => x.nombre === "3 · Los ejemplos cuadran")!.detalle).toEqual(["la especificación no dice «Saca 38.»."]);
   });
+
+  it("3 · el ejemplo de la salida tiene que salir de la escala: otro puntaje, otra cuenta o ningún ejemplo, frena", () => {
+    const tres = (espec: string) => validarEscala(real, { especificacion: espec, calculo: { texto } }).find((x) => x.nombre === "3 · Los ejemplos cuadran")!;
+    const ejemplo = "Eficiente, 66, cumple 1 de 3 para Óptimo";
+    expect(especificacion).toContain(`> Ventas — 1.6 Priorización de Leads — ${ejemplo}`);
+    expect(tres(especificacion.replace(ejemplo, "Eficiente, 65, cumple 1 de 3 para Óptimo")).detalle).toEqual([
+      "el ejemplo de la salida dice 65 con 3 criterios de Óptimo, y la dimensión da 66 con 3.",
+    ]);
+    expect(tres(especificacion.replace(ejemplo, "Eficiente, 66, cumple 1 de 4 para Óptimo")).ok).toBe(false);
+    // Sin la cita del ejemplo no basta con que el número aparezca en otro lado (el historial, por ejemplo).
+    const sinCita = especificacion.replace(`> Ventas — 1.6 Priorización de Leads — ${ejemplo}`, "> Ventas — 1.6 Priorización de Leads — (sin ejemplo)");
+    expect(tres(`${sinCita}\n\n${ejemplo}\n`).detalle[0]).toMatch(/no trae el ejemplo de la salida/);
+  });
 });

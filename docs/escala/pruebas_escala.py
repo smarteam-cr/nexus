@@ -339,12 +339,17 @@ prueba("2 · Nada se regala", not regalos, "; ".join(regalos[:6]))
 capa = puntaje("I", (1 + 1 + 1 + Fraction(3, 5)) / 4)          # diagnóstico: tres en Funcional y una en Inicial con 3 de 5
 chequeo = puntaje("I", (1 + 1 + Fraction(1, 2) + Fraction(1, 2)) / 4)       # chequeo: dos en Funcional y dos en Inicial, a mitad de tramo
 optimo_16 = [c for c in crit if c["dim"] == "1.6" and c["lv"] == "O" and not c["riesgo"] and aplica(c, "con equipo", "continua")]
-dim_65 = puntaje("E", Fraction(1, len(optimo_16)))
-textos = ["Saca 38.", "saca 35.", "Eficiente, 65, cumple 1 de 4 para Óptimo"]
+dim_ejemplo = puntaje("E", Fraction(1, len(optimo_16))) if optimo_16 else None
+textos = ["Saca 38.", "saca 35."]
+# El ejemplo de la salida dice el puntaje y de cuántos criterios de Óptimo: los dos tienen que salir de la escala
+# (la 9.0.0 cambió los de la 1.6, y el ejemplo se rehízo con ellos: 65 con 4, 66 con 3).
+# Solo cuenta la cita del ejemplo («> Ventas — 1.6 …»): lo que diga el historial no lo reemplaza.
+_dice = re.search(r"(?m)^> .*Eficiente, (\d+), cumple 1 de (\d+) para Óptimo", espec)
+dice = (int(_dice.group(1)), int(_dice.group(2))) if _dice else None
 prueba("3 · Los ejemplos cuadran",
-       capa == 38 and chequeo == 35 and dim_65 == 65 and all(t in espec for t in textos),
-       f"capa={capa}, chequeo={chequeo}, dimensión={dim_65}, criterios de Óptimo={len(optimo_16)}, "
-       f"textos que faltan en la especificación={[t for t in textos if t not in espec]}")
+       capa == 38 and chequeo == 35 and dice == (dim_ejemplo, len(optimo_16)) and all(t in espec for t in textos),
+       f"capa={capa}, chequeo={chequeo}, dimensión={dim_ejemplo}, criterios de Óptimo={len(optimo_16)}, "
+       f"el ejemplo dice={dice}, textos que faltan en la especificación={[t for t in textos if t not in espec]}")
 
 # 4 · Sin identificadores a la vista (criterios, resultados, costos y mensajes de riesgo; también en las ediciones)
 VISIBLE = ("- ", "*Resultado", "*Costo", "*Descripción", "**")

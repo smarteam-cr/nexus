@@ -255,6 +255,9 @@ describe("⛔ una exploración de proyecto no es una preventa", () => {
     /* Solo lectura, antes del deploy de la etapa 7: lee las exploraciones de PROYECTO (el filtro contrario) para medir
        cuántas reuniones sugeriría el diagnóstico. Nunca una preventa. */
     "scripts/medir-contexto-de-documentos.ts",
+    /* Solo lectura (2026-10-27): mide el impacto de publicar la 9.0 en TODAS las exploraciones, la preventa y las de
+       cada proyecto, y las cuenta por separado. */
+    "scripts/medir-impacto-escala-9-0.ts",
     /* La escala de la EMPRESA (La cuenta › La escala, 2026-10-12): lee a propósito las DOS, la preventa y las de cada
        proyecto, porque todas posicionan a la empresa. Pantalla interna; solo lo confirmado. */
     "lib/exploraciones/escala-de-la-empresa.ts",

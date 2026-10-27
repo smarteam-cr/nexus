@@ -23,6 +23,14 @@
  * ese código, y con el de antes Escala › Borrador no abre para nadie. El script lo mira solo: pide el commit que corre
  * en producción (/api/health) y frena si ese código no la lee. Si no lo puede mirar (sin red, o sin ese commit en el
  * repo local: `git fetch`), pide `--desplegado` para seguir, como confirmación de quien lo corre.
+ *
+ * Con --cerrar (2026-10-27, Elías: «publica»): después del catálogo aplica el CIERRE (lib/escala/nueve/cierre.ts), una
+ * decisión provisional por cada pendiente, cada una con su nota en la bitácora, y al final saca «Lo que falta decidir».
+ * Las pruebas del simulacro corren entonces contra la especificación del repo (la 1.4.0, con los retirados de la 9.0).
+ * Un borrador ya cerrado no se vuelve a abrir: sin --cerrar, frena; con --cerrar, suma solo las correcciones del cierre
+ * (`CORRECCIONES`) que todavía no tiene, sin volver a poner «Lo que falta decidir».
+ *
+ *   $env:ALLOW_PROD_WRITE="1"; $env:SIN_RESPALDO="1"; npx tsx scripts/escala-borrador-9-0.ts --cerrar --apply --por correo@smarteamcr.com
  */
 import "dotenv/config";
 import { spawnSync } from "node:child_process";
@@ -35,14 +43,22 @@ import { validarEscala } from "@/lib/escala/documento/validar";
 import { cambiosEntre } from "@/lib/escala/datos/diferencias";
 import { escalaDeLosDatos, generarMarkdown } from "@/lib/escala/datos/generar";
 import { conVersion, crearBorrador, guardarEnElBorrador, huellaDeLosDatos, leerBorrador, ultimaPublicada } from "@/lib/escala/datos/versiones";
+import type { EscalaDatos } from "@/lib/escala/datos/tipos";
 import { comprobarQueSeLee } from "@/lib/escala/nueve/aplicar";
 import { CATALOGO } from "@/lib/escala/nueve/catalogo";
 import { aplicarConDetalle, conLoQueFaltaDecidir, informeEnMarkdown, notaDeLaBitacora, parteLoQueFaltaDecidir, sinLoQueFaltaDecidir } from "@/lib/escala/nueve/informe";
+import { CIERRE, CORRECCIONES, entradasDelCierre, FINAL, NOTA_DE_LA_SALIDA, notaDelCierre } from "@/lib/escala/nueve/cierre";
+import { tieneLoQueFaltaDecidir } from "@/lib/escala/datos/reglas";
 
 const VERSION = "9.0.0";
 const DESDE = "8.9.1";
 const APPLY = resolverApply({ tablas: ["EscalaVersion", "EscalaCambio"] });
 const INFORME = process.argv.includes("--informe");
+const CERRAR = process.argv.includes("--cerrar");
+/** Lo que se aplica: el catálogo y, con --cerrar, las decisiones del cierre. */
+const ENTRADAS = CERRAR ? [...CATALOGO, ...entradasDelCierre()] : [...CATALOGO];
+const DECISIONES = [...CIERRE, FINAL, ...CORRECCIONES];
+const notaDe = (i: number) => (i < CATALOGO.length ? notaDeLaBitacora(CATALOGO[i]) : notaDelCierre(DECISIONES[i - CATALOGO.length]));
 const URL_DE_SALUD = process.env.NEXUS_HEALTH_URL ?? "https://nexus.smarteamcr.com/api/health";
 /** Lo que tiene que leer el código de producción antes de escribir el borrador (la etiqueta de la marca de N4). */
 const LO_QUE_TIENE_QUE_LEER = { archivo: "lib/escala/documento/parsear.ts", texto: "· tráfico suficiente" };
@@ -84,13 +100,16 @@ async function main() {
     const retiradosPrevios = leerRetirados(textoEspec);
 
     const datosBase = conVersion(base.datos, VERSION);
-    const { estado, detalle, pasos } = aplicarConDetalle(datosBase, retiradosPrevios, CATALOGO);
+    const { estado, detalle, pasos } = aplicarConDetalle(datosBase, retiradosPrevios, ENTRADAS);
     const parte = parteLoQueFaltaDecidir(VERSION, estado, CATALOGO);
-    const final = conLoQueFaltaDecidir(estado.datos, parte);
+    const final = CERRAR ? sinLoQueFaltaDecidir(estado.datos, parte) : conLoQueFaltaDecidir(estado.datos, parte);
     comprobarQueSeLee(final);
 
     // Las pruebas de publicar, con los retirados de este borrador ya anotados en la especificación (como al publicar).
-    const espec = textoEspec.replace(/(Identificadores retirados, que no se vuelven a usar: )/, `$1${estado.retirados.map((x) => "`" + x + "`").join(", ")}, `);
+    // Al cerrar, contra la especificación del repo, que ya los trae (y el ejemplo de Priorización de Leads rehecho).
+    const espec = CERRAR
+      ? fs.readFileSync(path.join(process.cwd(), "docs/escala/especificacion_calculo_escala.md"), "utf8").replace(/\r\n?/g, "\n")
+      : textoEspec.replace(/(Identificadores retirados, que no se vuelven a usar: )/, `$1${estado.retirados.map((x) => "`" + x + "`").join(", ")}, `);
     const md = generarMarkdown(final);
     const pruebas = validarEscala(escalaDeLosDatos(final), { anterior: escalaDeLosDatos(base.datos), especificacion: espec, calculo: { texto: md } });
 
@@ -98,14 +117,21 @@ async function main() {
     for (const e of CATALOGO) porEstado.set(e.estado, (porEstado.get(e.estado) ?? 0) + 1);
     console.log(`${APPLY ? "APLICANDO" : "SIMULACRO (sin --apply no se escribe nada)"} · borrador ${VERSION} desde la ${base.version}\n`);
     console.log(`${CATALOGO.length} puntos: ${[...porEstado].map(([k, n]) => `${n} ${k}`).join(", ")}`);
+    if (CERRAR) console.log(`Cierre: ${CIERRE.length} decisiones provisionales (${CIERRE.filter((d) => d.ops.length).length} cambian el texto) y la entrada del historial; sale «Lo que falta decidir».`);
     console.log(`${Object.keys(estado.alias).length} criterios nuevos · ${estado.retirados.length} retirados · ${estado.consecuencias.length} cosas que las ediciones tienen que reescribir`);
     console.log("Pruebas (con los retirados anotados en la especificación):");
     for (const p of pruebas) {
       console.log(`  ${p.ok ? "PASA " : "FALLA"} ${p.nombre}`);
       for (const d of p.detalle.slice(0, 5)) console.log(`        ${d}`);
     }
-    console.log("  (la 3 falla hasta rehacer el ejemplo de Priorización de Leads de la especificación: está en «Lo que falta decidir»)");
+    if (!CERRAR) console.log("  (la 3 falla hasta rehacer el ejemplo de Priorización de Leads de la especificación: está en «Lo que falta decidir»)");
 
+    // El `.md` que quedaría, para leerlo antes de escribir nada (no toca el repo salvo que se le pida esa ruta).
+    const salida = argumento("--md");
+    if (salida) {
+      fs.writeFileSync(salida, md);
+      console.log(`\n✓ El .md del simulacro: ${salida}`);
+    }
     if (INFORME) {
       const ruta = path.join(process.cwd(), "docs/escala/borrador-9-0.md");
       fs.writeFileSync(ruta, informeEnMarkdown(VERSION, estado, detalle));
@@ -135,6 +161,9 @@ async function main() {
       );
     }
     if (!borrador) borrador = await crearBorrador(prisma, { version: VERSION, desde: DESDE, por });
+    // Un borrador ya cerrado (sin «Lo que falta decidir») no se vuelve a abrir.
+    const cerrado = borrador.revision > 0 && !tieneLoQueFaltaDecidir(generarMarkdown(borrador.datos));
+    if (cerrado && !CERRAR) throw new Error(`El borrador ${borrador.version} ya está cerrado (no tiene «Lo que falta decidir»): sin --cerrar se volvería a abrir.`);
     // Desde dónde sigue: la última entrada con la que el borrador queda igual (0 = recién abierto, nada aplicado).
     const huellaDelBorrador = huellaDeLosDatos(sinLoQueFaltaDecidir(borrador.datos, parte));
     const desde = [datosBase, ...pasos].map((d) => huellaDeLosDatos(sinLoQueFaltaDecidir(d, parte))).lastIndexOf(huellaDelBorrador);
@@ -157,11 +186,17 @@ async function main() {
     console.log(
       desde === 0
         ? `\nBorrador ${borrador.version} abierto. Guardando punto por punto…`
-        : `\nEl borrador ${borrador.version} ya tiene ${desde} de los ${CATALOGO.length} puntos (revisión ${borrador.revision}). Se suman los que siguen…`,
+        : `\nEl borrador ${borrador.version} ya tiene ${desde} de los ${ENTRADAS.length} puntos (revisión ${borrador.revision}). Se suman los que siguen…`,
     );
 
+    if (cerrado && huellaDeLosDatos(borrador.datos) === huellaDeLosDatos(final)) {
+      console.log(`✓ El borrador ${borrador.version} ya está cerrado e igual al del simulacro (revisión ${borrador.revision}). Nada que guardar.`);
+      return;
+    }
     // «Lo que falta decidir» va PRIMERO: si la corrida se corta a la mitad, el borrador ya no se puede publicar.
-    const conParte = conLoQueFaltaDecidir(borrador.datos, parte);
+    // Un borrador ya cerrado sigue cerrado: las correcciones del cierre se guardan sin volver a poner la parte.
+    const conLa = (d: EscalaDatos) => (cerrado ? sinLoQueFaltaDecidir(d, parte) : conLoQueFaltaDecidir(d, parte));
+    const conParte = conLa(borrador.datos);
     const cambiosDeLaParte = cambiosEntre(borrador.datos, conParte);
     let r = cambiosDeLaParte.length === 0 ? { revision: borrador.revision } : await guardarEnElBorrador(prisma, {
       borrador,
@@ -174,17 +209,28 @@ async function main() {
     borrador = { ...borrador, revision: r.revision, datos: conParte };
     let antes = conParte;
     let guardados = 0;
-    for (let i = desde; i < CATALOGO.length; i++) {
-      const despues = conLoQueFaltaDecidir(pasos[i], parte);
+    for (let i = desde; i < ENTRADAS.length; i++) {
+      const despues = conLa(pasos[i]);
       const cambios = cambiosEntre(antes, despues);
       if (cambios.length === 0) continue;
-      r = await guardarEnElBorrador(prisma, { borrador, datos: despues, cambios, origen: "importacion", por, nota: notaDeLaBitacora(CATALOGO[i]) });
+      r = await guardarEnElBorrador(prisma, { borrador, datos: despues, cambios, origen: "importacion", por, nota: notaDe(i) });
       borrador = { ...borrador, revision: r.revision, datos: despues };
       antes = despues;
       guardados++;
     }
+    // Al cerrar, lo último: sale «Lo que falta decidir» (con eso el borrador se puede publicar).
+    if (CERRAR && !cerrado) {
+      const sinParte = sinLoQueFaltaDecidir(antes, parte);
+      r = await guardarEnElBorrador(prisma, { borrador, datos: sinParte, cambios: cambiosEntre(antes, sinParte), origen: "importacion", por, nota: NOTA_DE_LA_SALIDA });
+      borrador = { ...borrador, revision: r.revision, datos: sinParte };
+      antes = sinParte;
+    }
     if (huellaDeLosDatos(antes) !== huellaDeLosDatos(final)) throw new Error("El borrador guardado no quedó igual al del simulacro: revísalo antes de seguir.");
-    console.log(`✓ «Lo que falta decidir» y ${guardados} puntos guardados en la bitácora. Revisión ${r.revision}. Se ve en /escala/borrador.`);
+    console.log(
+      CERRAR
+        ? `✓ ${guardados} puntos guardados en la bitácora y «Lo que falta decidir» afuera. Revisión ${r.revision}. Sigue: npx tsx scripts/publicar-escala.ts (en seco).`
+        : `✓ «Lo que falta decidir» y ${guardados} puntos guardados en la bitácora. Revisión ${r.revision}. Se ve en /escala/borrador.`,
+    );
   } finally {
     await close();
   }

@@ -48,7 +48,7 @@ describe("el mapa de herramientas del repo", () => {
 
   it("los propios de una edición también cuentan como criterios de la escala", () => {
     const ids = criteriosDeLaEscala(escala);
-    expect(ids.has("1.6.O101")).toBe(true);
+    expect(ids.has("1.6.O102")).toBe(true);
     expect(ids.has("2.7.F202")).toBe(true);
   });
 });
