@@ -6,8 +6,8 @@
  *
  * En el panel de la Semana del equipo: qué reuniones lee Nexus solas y lo último que leyó. Quien lidera el sprint lo
  * configura en un diálogo: elige la serie de su reunión (una reunión recurrente de su calendario, del equipo), si es
- * planning o cierre, y quiénes están. Desde ahí, cada reunión nueva de esa serie se lee sola cuando termina y propone
- * como mucho 5 tareas por persona.
+ * planning o cierre, y quiénes están. Desde ahí, cada reunión nueva de esa serie se lee sola cuando termina, las notas y
+ * la conversación, sin el tope de 5 por persona (2026-10-27, lib/tareas/sprint.ts).
  *
  * Datos: /api/tareas/fuentes (lib/tareas/fuentes-server.ts). Al montarse le pide a Nexus que mire las series
  * (POST /api/tareas/fuentes/mirar, como mucho cada 10 minutos en el servidor).
@@ -19,7 +19,6 @@ import { BotonAzul, BotonBlanco, BotonTexto, ROTULO_DEL_SISTEMA } from "@/compon
 import { useToast } from "@/components/ui/Toast";
 import { cn } from "@/lib/cn";
 import { NOMBRE_DEL_ROL } from "@/lib/tareas/fuentes";
-import { MAX_PROPUESTAS_POR_PERSONA_POR_REUNION } from "@/lib/tareas/reglas";
 import { diaYHora } from "@/lib/tareas/semana";
 import type { FuenteVista, SprintDelEquipoDatos } from "@/lib/tareas/tipos";
 import { apiTareas } from "./api";
@@ -164,7 +163,7 @@ function ConfigurarSprint({
       onClose={onCerrar}
       size="lg"
       title={`El sprint de ${datos.nombre}`}
-      description={`Nexus lee sola cada reunión de estas series cuando termina, y le propone a cada persona como mucho ${MAX_PROPUESTAS_POR_PERSONA_POR_REUNION} tareas por reunión. Nada entra solo: cada persona decide.`}
+      description="Nexus lee sola cada reunión de estas series cuando termina, las notas y la conversación, y le propone a cada persona todo lo que le quedó. Nada entra solo: cada persona decide."
       footer={<BotonBlanco onClick={onCerrar}>Listo</BotonBlanco>}
     >
       <div className="space-y-6">

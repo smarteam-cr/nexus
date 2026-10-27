@@ -11950,6 +11950,44 @@ escribía `Tarea.reunionHechaId` (0 tareas de clase reunión en producción el 2
   cita no lo ve). Los correos de afuera no salen de la reunión. La sesión, el contexto, el encargado y quién la pidió ya
   se guardaban y se veían.
 
+## Tareas: la reunión del sprint sin el tope de 5, con su conversación, y fuera del tope de «Por decidir» (2026-10-27)
+
+**Contexto.** Decisión de Elías del 27 oct (pregunta 7 del roadmap): «sacar el tope de 5 tareas por persona y leer
+también su conversación». Hasta hoy la lectura de la reunión del sprint (la serie que configura quien lidera cada
+equipo, `FuenteDeTareas` con `equipo`) proponía como mucho 5 por persona y solo leía las notas; la conversación, solo si
+las notas no traían «Próximos pasos» o con «¿Faltó algo?». Medido en producción el 26 oct: el planning de Marketing del
+19 oct dejó 5 fuera por el tope, y de las 10 que dejó el de Desarrollo ese día, 9 las venció el tope de sugerencias de
+«Por decidir» (8 con el viejo de 10, 1 con la limpieza de 5) antes de que nadie las decidiera.
+
+- **Sin el corte de 5 (`lib/tareas/sprint.ts`).** El sprint usa `MAX_PROPUESTAS_POR_PERSONA_EN_EL_SPRINT` (20), que no es
+  un criterio sino un tope de seguridad contra una lectura desbordada; se cuenta sobre todo lo que deja la reunión a esa
+  persona, notas y conversación juntas. Una reunión con un cliente sigue con 3, y cualquier otra del equipo (una pedida
+  a mano con «Leer una reunión», la lectura personal) sigue con 5. El resumen de la lectura guarda el `tope` con que se
+  leyó, para que «N quedaron sin proponer» diga el número cierto.
+- **También la conversación.** Después de las notas, la lectura del sprint lee la conversación sola con el nivel 2 de
+  siempre (`leerLaConversacion`: Haiku, la transcripción comprimida «[n] Nombre: texto», sin repetir lo que salió de las
+  notas), con el cupo automático del día (40 llamadas) y el presupuesto automático. Sin cupo, o si falla, queda «¿Faltó
+  algo?» como siempre. Una reunión ya leída no se paga dos veces: la lectura de las notas se cierra con la conversación
+  ya en «leyendo», así nadie la pide a la vez con «¿Faltó algo?». Si la conversación falla, el error es de la
+  conversación y no de la lectura: lo de las notas queda y «¿Faltó algo?» se ofrece.
+  - *Costo medido* el 27 oct con las dos reuniones del sprint que tienen la conversación grabada (Marketing, 19 y 26 oct;
+    `scripts/medir-conversacion-del-sprint.ts --llamar`, sin escribir): US$0,017 y US$0,021, **US$0,019 por reunión**,
+    no los US$0,014 estimados. La entrada fue la prevista (8.158 y 12.620 tokens); la salida casi el doble (unos 1.750
+    tokens: 12 y 13 compromisos, cada uno con su contexto). Con dos sprints por semana son unos US$0,16 al mes. El
+    estimado del botón «¿Faltó algo?» se corrigió con lo medido (`CARACTERES_POR_TOKEN_DE_LA_CONVERSACION`,
+    `SALIDA_ESTIMADA_DE_LA_CONVERSACION`): estimaba US$0,010.
+- **Fuera del tope de «Por decidir».** Lo que deja el sprint no cuenta para el tope de 5 sugerencias por persona ni lo
+  vence ese tope (`tareasDelSprint` en `podarSugerencias` y en `vencerSugerenciasSinDecidir`, y la limpieza de
+  `scripts/aligerar-tareas.ts`): es trabajo acordado en el sprint, y sin esto sacar el corte de 5 no servía (lo que
+  pasaba de 5 se vencía en el acto). La lectura guarda la marca `delSprint` en su resumen al leer: si la líder borra la
+  serie (la fuente queda en null), lo que salió de ella sigue fuera del tope. Se decide en código, no con un filtro de la
+  base: negar un filtro por una clave del Json da NULL donde la clave no está, y dejaba fuera del tope también lo demás. Sigue
+  naciendo como propuesta en «Por decidir», decide cada persona, y vence a los 14 días como todo; la regla de la fecha
+  pasada de la limpieza también le aplica. Lo de clientes y correos sigue con su tope de 5. *Por qué no nace aceptado
+  en la semana:* cambia cómo nace una tarea y Elías pidió que el sprint no pierda tareas, no que entren solas.
+- *Pendiente:* revivir las 9 del planning de Desarrollo del 19 oct que venció el tope. No se tocaron: son de una semana
+  que ya pasó y el planning del 26 oct no las repite; si se reviven, vencen igual el 2 nov.
+
 ## La escala 9.0 con lo de Insider: «tráfico suficiente», la lectura de preparación y el mapa 2.0.0 (2026-10-26, N4, N6 y N7)
 
 **Contexto.** Lo que faltaba de Insider en la escala (plan: `docs/escala-engagement-avanzado-plan.md`). El borrador

@@ -34,6 +34,7 @@ import {
   type Prioridad,
 } from "./estados";
 import { DIAS_PARA_CORREGIR_UNA_REVISION, DIAS_PARA_VENCER_UNA_PROPUESTA, MAX_PROPUESTAS_POR_PERSONA_POR_REUNION_CON_CLIENTE, MAX_SECCIONES, MAX_SUGERENCIAS_POR_PERSONA } from "./reglas";
+import { esLecturaDelSprint } from "./sprint";
 import { cupoPorPersona } from "./cupo";
 import {
   aDate,
@@ -2344,17 +2345,37 @@ export async function escribirPropuestasDeComunicacion(
 }
 
 /**
+ * De estas tareas, las que salieron de la reunión del sprint (lib/tareas/sprint.ts › `esLecturaDelSprint`). Es trabajo
+ * acordado: no cuenta para el tope de sugerencias ni lo vence ese tope (2026-10-27, Elías). Sigue en «Por decidir» y
+ * vence a los 14 días como todo. Mira la fuente o la marca que la lectura guarda al leer (`resumen.delSprint`): si la
+ * fuente se borra (`borrarFuente`, SET NULL), lo que salió de ella no vuelve a contar para el tope. Se decide en código y
+ * no con un filtro de la base a propósito: negar un filtro por una clave del Json da NULL donde la clave no está, y
+ * dejaba fuera del tope también lo que no es del sprint.
+ */
+export async function tareasDelSprint(db: Pick<Tx, "tarea" | "lecturaDeReunion">, ids: readonly string[]): Promise<Set<string>> {
+  if (!ids.length) return new Set();
+  const tareas = await db.tarea.findMany({ where: { id: { in: [...ids] }, lecturaId: { not: null } }, select: { id: true, lecturaId: true } });
+  const lecturaIds = [...new Set(tareas.map((t) => t.lecturaId!))];
+  if (!lecturaIds.length) return new Set();
+  const lecturas = await db.lecturaDeReunion.findMany({ where: { id: { in: lecturaIds } }, select: { id: true, resumen: true, fuente: { select: { equipo: true } } } });
+  const delSprint = new Set(lecturas.filter((l) => esLecturaDelSprint(l.fuente, l.resumen)).map((l) => l.id));
+  return new Set(tareas.filter((t) => delSprint.has(t.lecturaId!)).map((t) => t.id));
+}
+
+/**
  * Con más de `MAX_SUGERENCIAS_POR_PERSONA` sugerencias de las reuniones sin decidir, las más viejas vencen solas (fase
- * 1.4): quedan las más nuevas. Solo lo que propuso Nexus de una reunión; lo que pidió una persona no se toca. Vencer no
- * es una lápida: si se vuelve a hablar del tema, se vuelve a proponer.
+ * 1.4): quedan las más nuevas. Solo lo que propuso Nexus de una reunión; lo que pidió una persona no se toca, y lo del
+ * sprint no cuenta ni se vence (`tareasDelSprint`). Vencer no es una lápida: si se vuelve a hablar del tema, se vuelve
+ * a proponer.
  */
 async function podarSugerencias(tx: Tx, email: string): Promise<number> {
-  const sobran = await tx.tarea.findMany({
+  const abiertas = await tx.tarea.findMany({
     where: { estado: "propuesta", archivadaAt: null, responsableEmail: email, creadaPorEmail: null, origen: { in: ["reunion", "notas", "correo"] } },
     orderBy: [{ createdAt: "desc" }, { numero: "desc" }],
-    skip: MAX_SUGERENCIAS_POR_PERSONA,
     select: { id: true, version: true },
   });
+  const delSprint = await tareasDelSprint(tx, abiertas.map((t) => t.id));
+  const sobran = abiertas.filter((t) => !delSprint.has(t.id)).slice(MAX_SUGERENCIAS_POR_PERSONA);
   const ahora = new Date();
   for (const t of sobran) {
     const r = await tx.tarea.updateMany({
@@ -2409,9 +2430,11 @@ export async function vencerSugerenciasSinDecidir(lote: readonly { id: string; v
   if (!lote.length) return 0;
   return prisma.$transaction(async (tx) => {
     const tocadas = await sugerenciasTocadas(tx, lote.map((x) => x.id));
+    // Lo del sprint no lo vence el tope (`tareasDelSprint`), aunque venga en el lote; por la fecha, sí.
+    const delSprint = await tareasDelSprint(tx, lote.filter((x) => x.regla === "tope").map((x) => x.id));
     let vencidas = 0;
     for (const t of lote) {
-      if (tocadas.has(t.id)) continue;
+      if (tocadas.has(t.id) || delSprint.has(t.id)) continue;
       const r = await tx.tarea.updateMany({
         where: { id: t.id, version: t.version, estado: "propuesta", archivadaAt: null, creadaPorEmail: null, origen: { in: [...ORIGENES_DE_SUGERENCIA] } },
         data: { estado: "vencida", decision: "vencida", decididaPorEmail: SISTEMA, decididaAt: ahora, motivo: t.motivo.slice(0, 500), version: { increment: 1 } },

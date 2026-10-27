@@ -4,7 +4,7 @@
  *
  * Quien lidera un sprint (Customer Success, Marketing, Desarrollo…) elige la serie de su reunión de sprint desde su
  * calendario y quiénes están. Desde ahí, cada reunión nueva de esa serie se lee sola cuando termina (lib/tareas/
- * fuentes-server.ts) y propone como mucho 5 tareas por persona (lib/tareas/cupo.ts). Las tablas ya existían
+ * fuentes-server.ts), las notas y la conversación, sin el tope de 5 por persona (2026-10-27, lib/tareas/sprint.ts). Las tablas ya existían
  * (`FuenteDeTareas`, docs/tareas-plan.md §5.4, la fase 1C); acá viven sus reglas.
  */
 import { horaDeCostaRica, type RolDeReunion } from "./semana";

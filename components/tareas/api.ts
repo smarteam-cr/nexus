@@ -173,8 +173,9 @@ export interface EstadoDeLectura {
     proyectos: { id: string; nombre: string; nuevo: boolean }[];
     porPersona: { email: string; nombre: string; propuestas: number }[];
     cierres: number;
-    /** Las que no se propusieron porque esa persona ya tenía 5 de esta reunión. */
+    /** Las que no se propusieron porque esa persona ya tenía `tope` de esta reunión. */
     sinLugar?: number;
+    tope?: number;
     /** `seguimiento`: la escribió la lectura de seguimiento de la reunión (una reunión con un cliente o un prospecto). */
     modelo: "codigo" | "haiku" | "sin_ia" | "seguimiento";
     motivosDelModelo: string[];
@@ -197,6 +198,9 @@ export interface ConversacionDeLaLectura {
   proyectos: { id: string; nombre: string; nuevo: boolean }[];
   porPersona: { email: string; nombre: string; propuestas: number }[];
   sinLugar?: number;
+  tope?: number;
+  /** La leyó sola la reunión del sprint, después de las notas. */
+  delSprint?: boolean;
   turnos: number;
   recortada: boolean;
   costo: { entrada: number; salida: number } | null;

@@ -22,7 +22,7 @@ import { conversacionComoTexto } from "@/lib/sessions/conversacion";
 import { costoDeLlamada } from "@/lib/ai/precios";
 import { clientesDeUnTexto, indiceDeClientes, type ClientesDeUnTexto } from "@/lib/sessions/clientes-por-texto";
 import { effectiveDomainsForClient } from "@/lib/sessions/categorize";
-import { CANDIDATAS_POR_DUENO, DIAS_DE_LAPIDA, DIAS_PARA_AVISAR_UNA_LECTURA, LECTURAS_POR_PERSONA_POR_DIA, LLAMADAS_AUTOMATICAS_POR_DIA, MAX_PROPUESTAS_POR_PERSONA_POR_REUNION, MAX_PROPUESTAS_POR_PERSONA_POR_REUNION_CON_CLIENTE, MIN_CARACTERES_DE_CONVERSACION, MINUTOS_PARA_DAR_POR_COLGADA } from "./reglas";
+import { CANDIDATAS_POR_DUENO, DIAS_DE_LAPIDA, DIAS_PARA_AVISAR_UNA_LECTURA, LECTURAS_POR_PERSONA_POR_DIA, LLAMADAS_AUTOMATICAS_POR_DIA, MAX_PROPUESTAS_POR_PERSONA_POR_REUNION_CON_CLIENTE, MIN_CARACTERES_DE_CONVERSACION, MINUTOS_PARA_DAR_POR_COLGADA } from "./reglas";
 import { aDate, comoFecha, hoyEnCostaRica, rolPorDefecto, semanaDeLaReunion, semanaQueCierra, diaCortoConSemana, horaDeCostaRica, type RolDeReunion } from "./semana";
 import { EQUIPOS, claveDeEquipo, equipoDeLaMayoria, nombreDelEquipo } from "./equipos";
 import { itemsDeActionItems, itemsDeProximosPasos, parrafosDeDetalles, resumenDeLasNotas, type LineaDeProximosPasos } from "./proximos-pasos";
@@ -31,7 +31,7 @@ import { pedidoDeLectura } from "./ia/pedido";
 import { leerContextos, LINEAS_POR_LLAMADA, pedidoDeContextos, SEGUNDOS_DEL_CONTEXTO } from "./ia/contexto";
 import { contextoDeLaReunion, contextoDeRespaldo } from "./contexto-de-tarea";
 import { leerSalida, type SalidaDeLaLectura } from "./ia/salida";
-import { MODELO_DE_LA_CONVERSACION, SEGUNDOS_DE_LA_CONVERSACION, leerSalidaDeConversacion, pedidoDeConversacion, type SalidaDeLaConversacion } from "./ia/conversacion";
+import { CARACTERES_POR_TOKEN_DE_LA_CONVERSACION, MODELO_DE_LA_CONVERSACION, SALIDA_ESTIMADA_DE_LA_CONVERSACION, SEGUNDOS_DE_LA_CONVERSACION, leerSalidaDeConversacion, pedidoDeConversacion, type SalidaDeLaConversacion } from "./ia/conversacion";
 import { huellaDeTexto } from "./texto";
 import { ErrorDeTareas, contextoDeTareas, lideresDe, miembrosActivos, type ContextoDeTareas } from "./servidor";
 import { esquemaDesactualizado } from "@/lib/db/esquema";
@@ -45,6 +45,7 @@ import { personasPorDefecto } from "./fuentes";
 import { esFuentePersonal, soloParaElPiloto, type Piloto } from "./lectura-personal";
 import { ABIERTAS_WHERE, candidatasWhere } from "./donde";
 import { lasQueQuedaronFuera } from "./cupo";
+import { esLecturaDelSprint, leerTambienLaConversacion, topeDeLaReunion } from "./sprint";
 import type { FueraDelTope } from "./tipos";
 
 export const SLUG_DE_LA_LECTURA = "tareas-lectura";
@@ -229,8 +230,15 @@ export interface ResumenDeLectura {
   porPersona: { email: string; nombre: string; propuestas: number }[];
   /** Cuántas sugerencias de cierre dejó (en un cierre). */
   cierres: number;
-  /** Las que no se propusieron porque esa persona ya tenía 5 de esta reunión (lib/tareas/cupo.ts). */
+  /** Las que no se propusieron porque esa persona ya tenía `tope` de esta reunión (lib/tareas/cupo.ts). */
   sinLugar?: number;
+  /** El tope por persona con que se leyó (lib/tareas/sprint.ts). Sin él (lecturas viejas), 5. */
+  tope?: number;
+  /**
+   * La leyó la serie del sprint de un equipo. Se guarda al leer porque la fuente se puede borrar (`borrarFuente` deja
+   * `fuenteId` en null) y lo que salió del sprint sigue fuera del tope de «Por decidir» (`tareasDelSprint`, lib/tareas/mutaciones.ts).
+   */
+  delSprint?: boolean;
   /** `seguimiento`: la escribió la lectura de seguimiento de la reunión (memoria de la cuenta, etapa 2), no Tareas. */
   modelo: "codigo" | "haiku" | "sin_ia" | "seguimiento";
   motivosDelModelo: string[];
@@ -253,8 +261,11 @@ export interface ConversacionDeLaLectura {
   omitidas: { lapida: number };
   proyectos: { id: string; nombre: string; nuevo: boolean }[];
   porPersona: { email: string; nombre: string; propuestas: number }[];
-  /** Las que no se propusieron porque esa persona ya tenía 5 de esta reunión (lib/tareas/cupo.ts). */
+  /** Las que no se propusieron porque esa persona ya tenía `tope` de esta reunión (lib/tareas/cupo.ts). */
   sinLugar?: number;
+  tope?: number;
+  /** La leyó sola la reunión del sprint, después de las notas (lib/tareas/sprint.ts). */
+  delSprint?: boolean;
   turnos: number;
   /** La conversación no entró entera en el tope: faltan los últimos turnos. */
   recortada: boolean;
@@ -355,17 +366,18 @@ async function procesar(lecturaId: string, ahora: Date) {
   const [reunion] = await getReunionesParaTareas({ quien: quienLee(ctx, clientes), ids: [l.sessionId] });
   if (!reunion) throw new Error("La reunión ya no se puede leer.");
   const piloto = pilotoDeLaLectura(l.fuente, reunion, ctx);
+  const delSprint = esLecturaDelSprint(l.fuente, l.resumen);
   // Releer (llegaron las notas, o un reintento) no borra lo que ya salió de la conversación.
   const conversacionAnterior = ((l.resumen ?? null) as ResumenDeLectura | null)?.conversacion;
   const conLaAnterior = conversacionAnterior ? { conversacion: conversacionAnterior } : {};
 
   const lineas = reunion.actionItems.length ? itemsDeActionItems(reunion.actionItems) : itemsDeProximosPasos(reunion.notas ?? "");
   if (lineas.length === 0) {
-    const resumen: ResumenDeLectura = { lineas: 0, propuestas: 0, porAsignar: 0, yaEstaban: 0, sumadas: 0, omitidas: { lapida: 0 }, proyectos: [], porPersona: [], cierres: 0, modelo: "codigo", motivosDelModelo: [], costo: null, sinNotas: !reunion.notas, ...conLaAnterior };
+    const resumen: ResumenDeLectura = { lineas: 0, propuestas: 0, porAsignar: 0, yaEstaban: 0, sumadas: 0, omitidas: { lapida: 0 }, proyectos: [], porPersona: [], cierres: 0, modelo: "codigo", motivosDelModelo: [], costo: null, sinNotas: !reunion.notas, ...(delSprint ? { delSprint: true } : {}), ...conLaAnterior };
     // Nivel 2, en automático: sin «Próximos pasos» ni tareas anotadas, se lee la conversación (si hay, si hay cupo y si
     // no se leyó ya).
     if (reunion.largoTranscript >= MIN_CARACTERES_DE_CONVERSACION && conversacionAnterior?.estado !== "lista" && (await hayCupoAutomatico(ahora))) {
-      const conv = await leerLaConversacion({ id: l.id, sessionId: l.sessionId, equipo: l.equipo, semana: comoFecha(l.semana)!, avisar: l.avisar, pedidaPorEmail: l.pedidaPorEmail, enElSprint, piloto }, ctx, clientes, "automatica", null, ahora, {
+      const conv = await leerLaConversacion({ id: l.id, sessionId: l.sessionId, equipo: l.equipo, semana: comoFecha(l.semana)!, avisar: l.avisar, pedidaPorEmail: l.pedidaPorEmail, enElSprint, piloto, delSprint }, ctx, clientes, "automatica", null, ahora, {
         base: resumen,
         datos: { modo: "transcript", leidaAt: ahora },
       });
@@ -506,6 +518,13 @@ async function procesar(lecturaId: string, ahora: Date) {
     costo = { entrada: (costo?.entrada ?? 0) + ctxDeLasPropuestas.costo.entrada, salida: (costo?.salida ?? 0) + ctxDeLasPropuestas.costo.salida };
   }
 
+  // La reunión del sprint lee también la conversación (abajo): se decide ANTES de cerrar la lectura, para que la fila
+  // nazca con la conversación «leyendo» y nadie la pida a la vez con «¿Faltó algo?» (se pagaría dos veces).
+  const tambienLaConversacion = leerTambienLaConversacion({ delSprint, largoTranscript: reunion.largoTranscript, conversacion: conversacionAnterior }) && (await hayCupoAutomatico(ahora));
+  const conversacionDelResumen = tambienLaConversacion
+    ? { conversacion: { ...CONVERSACION_VACIA, estado: "leyendo" as const, como: "automatica" as const, pedidaPorEmail: null, delSprint: true } }
+    : conLaAnterior;
+
   // Escribir todo junto: proyectos sugeridos, propuestas, sugerencias de cierre y el resumen.
   const espacio = await asegurarEspacio(prisma, l.equipo);
   const resultado = await prisma.$transaction(
@@ -525,7 +544,7 @@ async function procesar(lecturaId: string, ahora: Date) {
         for (const lineaId of g.lineas) proyectoDeLinea.set(lineaId, proy.id);
       }
       const propuestas = propuestasFinales.map((p) => ({ ...p, proyectoId: proyectoDeLinea.get(p.lineaId) ?? null }));
-      const escritas = await escribirPropuestasDeLectura(tx, { id: l.id, sessionId: reunion.id, tituloReunion: reunion.titulo, pedidaPorEmail: l.pedidaPorEmail }, propuestas, { tope: topeDeLaReunion(clienteDeLaReunion) });
+      const escritas = await escribirPropuestasDeLectura(tx, { id: l.id, sessionId: reunion.id, tituloReunion: reunion.titulo, pedidaPorEmail: l.pedidaPorEmail }, propuestas, { tope: topeDeLaReunion(clienteDeLaReunion, delSprint) });
 
       let cierres = 0;
       if (salida && semanaCerrada) {
@@ -551,14 +570,16 @@ async function procesar(lecturaId: string, ahora: Date) {
         porPersona: [...porPersona.entries()].map(([email, n]) => ({ email, nombre: ctx.miembros.find((m) => m.email === email)?.nombre ?? email, propuestas: n })),
         cierres,
         sinLugar: totalSinLugar(escritas.sinLugar),
+        tope: topeDeLaReunion(clienteDeLaReunion, delSprint),
         modelo: modo,
         motivosDelModelo: motivos,
         costo,
-        ...conLaAnterior,
+        ...(delSprint ? { delSprint: true } : {}),
+        ...conversacionDelResumen,
       };
       await tx.lecturaDeReunion.update({
         where: { id: l.id },
-        data: { estado: modo === "sin_ia" ? "sin_ia" : "lista", modo, resumen: resumen as unknown as Prisma.InputJsonValue, leidaAt: ahora, leyendoDesde: null, agentRunId },
+        data: { estado: modo === "sin_ia" ? "sin_ia" : "lista", modo, resumen: resumen as unknown as Prisma.InputJsonValue, leidaAt: ahora, leyendoDesde: tambienLaConversacion ? ahora : null, agentRunId },
       });
       return { resumen, creadas: escritas.creadas };
     },
@@ -566,6 +587,27 @@ async function procesar(lecturaId: string, ahora: Date) {
   );
 
   await avisarDeLasPropuestas({ id: l.id, equipo: l.equipo, avisar: l.avisar, pedidaPorEmail: l.pedidaPorEmail }, reunion, ctx, resultado.resumen, "");
+
+  // La reunión del sprint (2026-10-27, Elías): además de las notas se lee la conversación, sin repetir lo que salió de
+  // ellas. Sola y con el cupo automático del día; sin cupo, o si falla, queda «¿Faltó algo?» como siempre: un error acá
+  // es de la conversación, no de la lectura (las notas ya quedaron escritas).
+  if (tambienLaConversacion) {
+    const fallo = { ...CONVERSACION_VACIA, como: "automatica" as const, pedidaPorEmail: null, delSprint: true };
+    try {
+      const conv = await leerLaConversacion(
+        { id: l.id, sessionId: l.sessionId, equipo: l.equipo, semana, avisar: l.avisar, pedidaPorEmail: l.pedidaPorEmail, enElSprint, piloto, delSprint },
+        ctx,
+        clientes,
+        "automatica",
+        null,
+        ahora,
+      );
+      if (!conv) await guardarConversacion(prisma, l.id, { ...fallo, estado: "error", motivo: "sin_turnos" });
+    } catch (e) {
+      console.error(`[tareas] la conversación del sprint de la lectura ${l.id} falló: ${e instanceof Error ? e.message : e}`);
+      await guardarConversacion(prisma, l.id, { ...fallo, estado: "error", motivo: "error" }).catch(() => undefined);
+    }
+  }
 }
 
 const SLUG_DEL_CONTEXTO = "tareas-contexto";
@@ -778,7 +820,7 @@ async function hayCupoAutomatico(ahora: Date): Promise<boolean> {
 /** Lo que cuesta, más o menos, leer una conversación de ese largo (para el botón). */
 export function costoEstimadoDeLaConversacion(largoTranscript: number): number | null {
   const caracteres = Math.min(largoTranscript, MAX_CONVERSACION_PARA_TAREAS);
-  return costoDeLlamada(MODELO_DE_LA_CONVERSACION, { inputTokens: Math.ceil(caracteres / 3.5) + 1_500, outputTokens: 800 });
+  return costoDeLlamada(MODELO_DE_LA_CONVERSACION, { inputTokens: Math.ceil(caracteres / CARACTERES_POR_TOKEN_DE_LA_CONVERSACION) + 1_500, outputTokens: SALIDA_ESTIMADA_DE_LA_CONVERSACION });
 }
 
 /**
@@ -829,7 +871,7 @@ export async function procesarConversacion(lecturaId: string, ahora = new Date()
     const [reunion] = esFuentePersonal(l.fuente) ? await getReunionesParaTareas({ quien: quienLee(ctx, clientes), ids: [l.sessionId] }) : [];
     const piloto = reunion ? pilotoDeLaLectura(l.fuente, reunion, ctx) : null;
     const leida = await leerLaConversacion(
-      { id: l.id, sessionId: l.sessionId, equipo: l.equipo, semana: comoFecha(l.semana)!, avisar: l.avisar, pedidaPorEmail: l.pedidaPorEmail, enElSprint: personasDeLaFuente(l.fuente, l.equipo, ctx), piloto },
+      { id: l.id, sessionId: l.sessionId, equipo: l.equipo, semana: comoFecha(l.semana)!, avisar: l.avisar, pedidaPorEmail: l.pedidaPorEmail, enElSprint: personasDeLaFuente(l.fuente, l.equipo, ctx), piloto, delSprint: esLecturaDelSprint(l.fuente, l.resumen) },
       ctx,
       clientes,
       "pedida",
@@ -859,19 +901,11 @@ async function guardarConversacion(db: Pick<typeof prisma, "lecturaDeReunion">, 
 }
 
 /**
- * Lee la conversación y escribe lo que salió: las mismas reglas que el nivel 1 (dueño solo del equipo que estuvo, la
- * cita es el turno, «¿Es T-12?» contra las candidatas de ese dueño, lápidas, proyectos sugeridos) y UN aviso por
- * persona. `null` si no hay conversación que leer. `automatica` además cierra la lectura (`base` + `datos`).
+ * El pedido a Haiku para leer la conversación de una lectura, con sus listas cerradas (M#, T#, R#) y lo que ya salió de
+ * las notas. Sin escribir nada: lo usa `leerLaConversacion` y el simulacro que mide su costo
+ * (scripts/medir-conversacion-del-sprint.ts). `null` si no hay conversación que leer.
  */
-async function leerLaConversacion(
-  l: { id: string; sessionId: string; equipo: string; semana: string; avisar: boolean; pedidaPorEmail: string | null; enElSprint?: readonly string[]; piloto?: Piloto | null },
-  ctx: ContextoDeTareas,
-  clientes: ClientesQueVes,
-  como: ConversacionDeLaLectura["como"],
-  pedidaPorEmail: string | null,
-  ahora: Date,
-  automatica?: { base: ResumenDeLectura; datos: Prisma.LecturaDeReunionUncheckedUpdateInput },
-): Promise<ConversacionDeLaLectura | null> {
+async function armarElPedidoDeLaConversacion(l: { id: string; sessionId: string; equipo: string }, ctx: ContextoDeTareas, clientes: ClientesQueVes, ahora: Date) {
   const leida = await conversacionParaTareas(quienLee(ctx, clientes), l.sessionId);
   if (!leida) return null;
   const { reunion, conversacion } = leida;
@@ -920,6 +954,41 @@ async function leerLaConversacion(
     proyectos: proyectos.map((p) => ({ ref: [...refs.R.entries()].find(([, v]) => v === p.id)![0], nombre: p.nombre, estado: p.estado })),
     yaSalieron,
   });
+  return { reunion, conversacion, clienteDeLaReunion, personas, refs, por, lapidas, empresa, huellasQueYaSalieron, pedido };
+}
+
+/**
+ * SIMULACRO: el pedido que la lectura le haría a Haiku con la conversación de esta lectura, leída como quien la pidió.
+ * No llama al modelo ni escribe nada. Para medir el costo (scripts/medir-conversacion-del-sprint.ts).
+ */
+export async function pedidoDeLaConversacionParaMedir(lecturaId: string, ahora = new Date()) {
+  const l = await prisma.lecturaDeReunion.findUnique({ where: { id: lecturaId }, select: { id: true, sessionId: true, equipo: true, pedidaPorEmail: true } });
+  if (!l?.sessionId || !l.pedidaPorEmail) return null;
+  const tm = await prisma.teamMember.findFirst({ where: { email: { equals: l.pedidaPorEmail, mode: "insensitive" } } });
+  if (!tm) return null;
+  const ctx = await contextoDeTareas({ teamMember: tm });
+  const clientes = await clientesQueVesParaTareas(tm);
+  const armado = await armarElPedidoDeLaConversacion({ id: l.id, sessionId: l.sessionId, equipo: l.equipo }, ctx, clientes, ahora);
+  return armado ? { pedido: armado.pedido, turnos: armado.conversacion.turnos.length, recortada: armado.conversacion.recortada, largo: armado.reunion.largoTranscript } : null;
+}
+
+/**
+ * Lee la conversación y escribe lo que salió: las mismas reglas que el nivel 1 (dueño solo del equipo que estuvo, la
+ * cita es el turno, «¿Es T-12?» contra las candidatas de ese dueño, lápidas, proyectos sugeridos) y UN aviso por
+ * persona. `null` si no hay conversación que leer. `automatica` además cierra la lectura (`base` + `datos`).
+ */
+async function leerLaConversacion(
+  l: { id: string; sessionId: string; equipo: string; semana: string; avisar: boolean; pedidaPorEmail: string | null; enElSprint?: readonly string[]; piloto?: Piloto | null; delSprint?: boolean },
+  ctx: ContextoDeTareas,
+  clientes: ClientesQueVes,
+  como: ConversacionDeLaLectura["como"],
+  pedidaPorEmail: string | null,
+  ahora: Date,
+  automatica?: { base: ResumenDeLectura; datos: Prisma.LecturaDeReunionUncheckedUpdateInput },
+): Promise<ConversacionDeLaLectura | null> {
+  const elPedido = await armarElPedidoDeLaConversacion(l, ctx, clientes, ahora);
+  if (!elPedido) return null;
+  const { reunion, conversacion, clienteDeLaReunion, refs, por, lapidas, empresa, huellasQueYaSalieron, pedido } = elPedido;
 
   // La llamada. Lo automático no tiene persona detrás: se cobra al presupuesto del sistema.
   const run = await prisma.agentRun.create({
@@ -958,7 +1027,10 @@ async function leerLaConversacion(
     await prisma.agentRun.update({ where: { id: run.id }, data: { status: "ERROR", output: (e instanceof Error ? e.message : String(e)).slice(0, 2_000), currentPhase: null } });
   }
 
-  const base = { como, pedidaPorEmail, turnos: conversacion.turnos.length, recortada: conversacion.recortada, costo };
+  const tope = topeDeLaReunion(clienteDeLaReunion, !!l.delSprint);
+  // `delSprint` en la conversación = la leyó sola el sprint DESPUÉS de las notas (sin `automatica`: esa es la que lee
+  // cuando las notas no traen pasos). La pantalla lo dice así.
+  const base = { como, pedidaPorEmail, turnos: conversacion.turnos.length, recortada: conversacion.recortada, costo, ...(l.delSprint && como === "automatica" && !automatica ? { delSprint: true } : {}) };
   if (!salida) {
     const conv: ConversacionDeLaLectura = { ...CONVERSACION_VACIA, ...base, estado: "sin_ia", motivo };
     await guardarConversacion(prisma, l.id, conv, automatica ? { ...automatica.datos, estado: "sin_ia" } : {}, automatica?.base);
@@ -1011,7 +1083,7 @@ async function leerLaConversacion(
         for (const lineaId of g.lineas) proyectoDeLinea.set(lineaId, proy.id);
       }
       const propuestas = propuestasFinales.map((p) => ({ ...p, proyectoId: proyectoDeLinea.get(p.lineaId) ?? null }));
-      const escritas = await escribirPropuestasDeLectura(tx, { id: l.id, sessionId: reunion.id, tituloReunion: reunion.titulo, pedidaPorEmail: pedidaPorEmail ?? l.pedidaPorEmail }, propuestas, { tope: topeDeLaReunion(clienteDeLaReunion) });
+      const escritas = await escribirPropuestasDeLectura(tx, { id: l.id, sessionId: reunion.id, tituloReunion: reunion.titulo, pedidaPorEmail: pedidaPorEmail ?? l.pedidaPorEmail }, propuestas, { tope });
       const porPersona = new Map<string, number>();
       for (const c of escritas.creadas) if (c.responsableEmail) porPersona.set(c.responsableEmail, (porPersona.get(c.responsableEmail) ?? 0) + 1);
       const lista: ConversacionDeLaLectura = {
@@ -1025,6 +1097,7 @@ async function leerLaConversacion(
         proyectos: proyectosEscritos,
         porPersona: [...porPersona.entries()].map(([email, n]) => ({ email, nombre: ctx.miembros.find((m) => m.email === email)?.nombre ?? email, propuestas: n })),
         sinLugar: totalSinLugar(escritas.sinLugar),
+        tope,
       };
       await guardarConversacion(tx, l.id, lista, automatica ? { ...automatica.datos, estado: "lista", agentRunId: run.id } : {}, automatica?.base);
       return lista;
@@ -1093,11 +1166,6 @@ async function reunionVistaPorElSistema(sessionId: string): Promise<ReunionParaT
   const porId = new Map(cliente ? [[cliente.id, { kind: cliente.kind as string, nombre: cliente.name }]] : []);
   const [r] = await getReunionesParaTareas({ quien: { email: "sistema", esSuperAdmin: true, clientes: { todos: true, ids: new Set(porId.keys()), porId } }, ids: [sessionId] });
   return r ?? null;
-}
-
-/** El tope por persona de una reunión: 3 con un cliente o un prospecto (pocos y esenciales), 5 en una del equipo. */
-function topeDeLaReunion(clienteDeLaReunion: string | null): number {
-  return clienteDeLaReunion ? MAX_PROPUESTAS_POR_PERSONA_POR_REUNION_CON_CLIENTE : MAX_PROPUESTAS_POR_PERSONA_POR_REUNION;
 }
 
 /**

@@ -291,6 +291,8 @@ export interface SugerenciaSinDecidir {
   venceEl: string | null;
   creadaAt: string;
   numero: number;
+  /** Salió de la reunión del sprint (lib/tareas/sprint.ts): no cuenta para el tope ni lo vence el tope. */
+  delSprint?: boolean;
 }
 
 export interface SugerenciaQueVence {
@@ -305,7 +307,8 @@ export interface SugerenciaQueVence {
  * (2026-10-27). `hoy` en hora CR (AAAA-MM-DD). Dos reglas, en este orden:
  *  · su fecha pasó (antes de hoy): habla de algo que ya fue, sea rápida, seguimiento o trabajo. Una propuesta no es
  *    trabajo de nadie todavía, así que no hay nada «atrasado» que cuidar (a diferencia de una abierta: `sugerenciaDeCierre`);
- *  · de lo que queda, a cada persona le quedan sus `tope` más nuevas (la misma regla que `podarSugerencias`).
+ *  · de lo que queda, a cada persona le quedan sus `tope` más nuevas (la misma regla que `podarSugerencias`). Lo que
+ *    salió de la reunión del sprint no cuenta ni lo vence el tope (2026-10-27, Elías): es trabajo acordado.
  */
 export function limpiezaDePorDecidir(filas: readonly SugerenciaSinDecidir[], hoy: string, tope: number): SugerenciaQueVence[] {
   const salida: SugerenciaQueVence[] = [];
@@ -313,7 +316,7 @@ export function limpiezaDePorDecidir(filas: readonly SugerenciaSinDecidir[], hoy
   for (const f of filas) {
     if (f.venceEl && f.venceEl.slice(0, 10) < hoy) {
       salida.push({ id: f.id, regla: "fecha", motivo: `Su fecha (${diaCortoConSemana(f.venceEl.slice(0, 10))}) pasó sin que nadie la decidiera.` });
-    } else quedan.push(f);
+    } else if (!f.delSprint) quedan.push(f);
   }
   const porPersona = new Map<string, SugerenciaSinDecidir[]>();
   for (const f of quedan) {
