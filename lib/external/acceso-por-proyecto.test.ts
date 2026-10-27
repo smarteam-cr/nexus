@@ -496,25 +496,11 @@ describe("6 · cada superficie tiene su página por proyecto, y la franja se esc
     expect(accion).toContain("assignKickoffHorario(actual.project.id,");
   });
 
-  it("la aprobación del diagnóstico queda atada al proyecto de la página, a la versión que ve, a su flag y al límite de escrituras", () => {
-    /* 2026-10-04: el cliente aprueba el diagnóstico desde su enlace. Las ediciones que lo ponen en
-       rojo: pasar la acción sin `.bind`, resolver «la cookie que haya», aprobar con el diagnóstico
-       despublicado, sacar el límite de escrituras o aprobar por otra puerta que no sea
-       `registrarAprobacion` (la que exige que esté presentado y sin cambios desde entonces).
-       2026-10-05: y atada a la VERSIÓN que el cliente tiene en pantalla —si el equipo presenta otra
-       mientras tanto, no se aprueba la nueva sin verla—; la acción se la pasa a `registrarAprobacion`. */
+  it("el enlace del diagnóstico es solo lectura: la aprobación del cliente se quitó (2026-10-28)", () => {
+    /* Elías la quitó entera. Lo que lo pone en rojo: volver a darle al cliente una acción que escriba desde el enlace. */
     const pagina = sinComentarios(leer("app/external/diagnostico/[acceso]/page.tsx"));
-    expect(pagina).toContain("aprobarDiagnosticoAction.bind(null, acceso, data.versionPresentada)");
-    const accion = sinComentarios(leer("app/external/diagnostico/actions.ts"));
-    expect(accion).toMatch(/export async function aprobarDiagnosticoAction\(\s*acceso: string,\s*versionVista: number,/);
-    expect(accion).toContain("elegirAcceso(await accesosDelNavegador(), acceso)");
-    expect(accion).toContain("if (!actual.project.diagnosticoPublishedAt)");
-    expect(accion).toContain("checkExternalWriteRate(actual.credencial)");
-    expect(accion).toContain("where: { projectId: actual.project.id, ...canvasOf(\"diagnosis\") }");
-    expect(accion).toMatch(/registrarAprobacion\([^;]*versionVista,?\s*\)/);
-    expect(accion).not.toMatch(/hitoDeDocumento\.(create|update)|estadoDocumento:/);
-    expect(sinComentarios(leer("lib/external/diagnostico-view.ts")), "la versión atada es la de la foto que se muestra").toContain(
-      "versionPresentada: presentada.version",
-    );
+    expect(pagina).toContain("<DiagnosticoClientView data={data} />");
+    expect(pagina).not.toMatch(/Action\.bind/);
+    expect(fs.existsSync(path.join(process.cwd(), "app/external/diagnostico/actions.ts"))).toBe(false);
   });
 });

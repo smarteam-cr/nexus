@@ -1,12 +1,12 @@
 "use client";
 
 /**
- * components/canvas/EstadoDelDocumento.tsx — borrador, presentado y aprobado (2026-10-02).
+ * components/canvas/EstadoDelDocumento.tsx — borrador y presentado (2026-10-02).
  *
  * La franja del equipo sobre el diagnóstico (fuera de `.stl`: tokens del tema, no la marca del
- * cliente). Sigue el flujo real: se PRESENTA (con el hilo cerrado y la política revisada), el cliente
- * agrega cosas y se regenera (eso abre la versión siguiente), y se REGISTRA LA APROBACIÓN que Caroline
- * pidió por correo — quién, cuándo y la evidencia. Aprobado = cerrado hasta reabrirlo con motivo.
+ * cliente). Se PRESENTA (lo que falta revisar es aviso, no frena) y lo que cambia después abre la
+ * versión siguiente. La aprobación se quitó entera el 2026-10-28 (Elías): ni el equipo la registra
+ * ni el cliente la da desde su enlace.
  *
  * Las reglas viven en lib/canvas/estado-del-documento.ts; el servidor las vuelve a revisar siempre.
  * `motivosLocales` es lo que la pantalla ya sabe (el hilo, el desafío y el enfoque, en vivo) para no tener que
@@ -20,7 +20,6 @@ function irALaSeccion(key: string): void {
   const destino = document.querySelector(`[data-seccion="${CSS.escape(key)}"]`);
   destino?.scrollIntoView({ behavior: "smooth", block: "start" });
 }
-import { subirDirecto } from "@/lib/storage/subir-directo";
 
 function fecha(iso: string | null): string {
   if (!iso) return "";
@@ -28,12 +27,6 @@ function fecha(iso: string | null): string {
   return Number.isNaN(d.getTime())
     ? ""
     : d.toLocaleDateString("es-CR", { day: "numeric", month: "long", year: "numeric", timeZone: "America/Costa_Rica" });
-}
-
-function hoyLocal(): string {
-  const d = new Date();
-  const p = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 }
 
 const CHIP: Record<EstadoVista["estado"], string> = {
@@ -45,7 +38,7 @@ const CHIP: Record<EstadoVista["estado"], string> = {
 function textoDelHito(h: HitoVista): string {
   if (h.tipo === "presentado") return `Se presentó la v${h.version}${h.porEmail ? ` (${h.porEmail})` : ""}.`;
   if (h.tipo === "aprobado") {
-    // Sin quién lo registró = lo aprobó el cliente desde su enlace (app/external/diagnostico/actions.ts).
+    // Registros anteriores al 2026-10-28: sin quién lo registró = lo aprobó el cliente desde su enlace.
     const como = h.porEmail ? ` (lo registró ${h.porEmail})` : " desde su enlace";
     return `El cliente aprobó la v${h.version}${como}: ${h.aprobadoPorNombre ?? "—"}${h.aprobadoPorEmail ? ` (${h.aprobadoPorEmail})` : ""}, el ${fecha(h.aprobadoEl)}.`;
   }
@@ -69,7 +62,7 @@ export default function EstadoDelDocumento({
   const [error, setError] = useState<string | null>(null);
   const [motivosDelServidor, setMotivosDelServidor] = useState<string[]>([]);
   const [ocupado, setOcupado] = useState(false);
-  const [form, setForm] = useState<"aprobar" | "reabrir" | null>(null);
+  const [form, setForm] = useState<"reabrir" | null>(null);
   const [verHistorial, setVerHistorial] = useState(false);
   const [sinTabla, setSinTabla] = useState(false);
 
@@ -126,7 +119,7 @@ export default function EstadoDelDocumento({
   if (sinTabla) {
     return (
       <div className="rounded-xl border border-warn-line bg-warn-surface text-warn-ink mx-4 mt-3 px-4 py-2.5 text-xs">
-        El estado del documento (presentado y aprobado) todavía no está disponible: falta aplicar su migración en la base.
+        El estado del documento (borrador y presentado) todavía no está disponible: falta aplicar su migración en la base.
       </div>
     );
   }
@@ -135,7 +128,6 @@ export default function EstadoDelDocumento({
   const motivos = motivosLocales;
   // Solo bloquea lo marcado así (aprobado, sin contenido); el resto es aviso (2026-10-28).
   const puedePresentar = estado.estado !== "aprobado" && !motivos.some((m) => m.bloquea);
-  const aprobado = estado.hitos.find((h) => h.tipo === "aprobado" && h.version === estado.version);
 
   return (
     <div className="rounded-xl border border-line bg-surface mx-4 mt-3 px-4 py-3">
@@ -144,12 +136,12 @@ export default function EstadoDelDocumento({
           {ETIQUETA_DEL_ESTADO[estado.estado]} · v{estado.version}
         </span>
         <span className="text-xs text-fg-secondary flex-1 min-w-[200px]">
-          {estado.estado === "aprobado" && aprobado
-            ? `Aprobado por ${aprobado.aprobadoPorNombre ?? "el cliente"} el ${fecha(aprobado.aprobadoEl)}. Está cerrado: para cambiarlo, reábrelo.`
+          {estado.estado === "aprobado"
+            ? "Aprobado (registro anterior). Para cambiarlo, reábrelo."
             : estado.estado === "presentado"
               ? estado.cambiosDesdeLaPresentacion
-                ? "Cambió desde que se presentó: preséntalo de nuevo (será la versión siguiente) antes de registrar la aprobación."
-                : "Presentado al cliente. Si le compartiste el enlace, puede aprobarlo ahí; si te llega por correo, regístrala aquí."
+                ? "Cambió desde que se presentó: preséntalo de nuevo para que el enlace muestre la versión nueva."
+                : "Presentado al cliente. Ya puedes compartirle el enlace."
               : motivos.length
                 ? "Borrador. Antes de presentarlo, conviene revisar lo de abajo (no es obligatorio)."
                 : "Borrador: listo para presentar."}
@@ -164,16 +156,6 @@ export default function EstadoDelDocumento({
               className="text-xs font-semibold text-primary-fg bg-brand hover:bg-brand-dark disabled:opacity-50 px-3 py-1.5 rounded-lg transition-colors"
             >
               {estado.estado === "presentado" ? `Presentar la v${estado.version + 1}` : "Presentar al cliente"}
-            </button>
-          )}
-          {estado.estado === "presentado" && !estado.cambiosDesdeLaPresentacion && (
-            <button
-              type="button"
-              disabled={ocupado}
-              onClick={() => setForm(form === "aprobar" ? null : "aprobar")}
-              className="text-xs font-semibold text-primary-fg bg-brand hover:bg-brand-dark disabled:opacity-50 px-3 py-1.5 rounded-lg transition-colors"
-            >
-              Registrar aprobación
             </button>
           )}
           {estado.estado !== "borrador" && (
@@ -229,7 +211,6 @@ export default function EstadoDelDocumento({
         </div>
       )}
 
-      {form === "aprobar" && <FormularioDeAprobacion projectId={projectId} ocupado={ocupado} onEnviar={(d) => pedir({ accion: "aprobar", ...d })} />}
       {form === "reabrir" && <FormularioDeReapertura ocupado={ocupado} onEnviar={(motivo) => pedir({ accion: "reabrir", motivo })} />}
 
       {verHistorial && (
@@ -238,90 +219,10 @@ export default function EstadoDelDocumento({
             <li key={h.id} className="text-[11px] text-fg-secondary">
               <span className="text-fg-muted">{fecha(h.createdAt)} · </span>
               {textoDelHito(h)}
-              {h.tipo === "aprobado" && h.hubspotError && <span className="text-warn-ink"> ({h.hubspotError})</span>}
-              {h.tipo === "aprobado" && h.hubspotNotaId && <span className="text-fg-muted"> · Nota en HubSpot</span>}
-              {h.tipo === "aprobado" && h.evidencia && (
-                <details className="mt-1">
-                  <summary className="cursor-pointer text-fg-muted">Ver la evidencia</summary>
-                  <p className="whitespace-pre-wrap mt-1 text-fg-secondary">{h.evidencia}</p>
-                </details>
-              )}
             </li>
           ))}
         </ul>
       )}
-    </div>
-  );
-}
-
-function FormularioDeAprobacion({
-  projectId,
-  ocupado,
-  onEnviar,
-}: {
-  projectId: string;
-  ocupado: boolean;
-  onEnviar: (d: { nombre: string; email: string; fecha: string; evidencia: string; evidenciaDocumentoId: string | null }) => Promise<boolean>;
-}) {
-  const [nombre, setNombre] = useState("");
-  const [email, setEmail] = useState("");
-  const [dia, setDia] = useState(hoyLocal());
-  const [evidencia, setEvidencia] = useState("");
-  const [adjunto, setAdjunto] = useState<{ id: string; nombre: string } | null>(null);
-  const [subiendo, setSubiendo] = useState(false);
-  const [errorAdjunto, setErrorAdjunto] = useState<string | null>(null);
-
-  const adjuntar = async (archivo: File) => {
-    setSubiendo(true);
-    setErrorAdjunto(null);
-    // Queda como documento del proyecto: la misma subida directa que el resto de los documentos.
-    const r = await subirDirecto<{ id?: string; title?: string }>({ ruta: `/api/projects/${projectId}/documents/upload`, archivo });
-    setSubiendo(false);
-    if (!r.ok || !r.data.id) setErrorAdjunto(r.ok ? "No se pudo registrar el archivo." : r.error);
-    else setAdjunto({ id: r.data.id, nombre: r.data.title ?? archivo.name });
-  };
-
-  const campo = "w-full px-2.5 py-1.5 text-xs bg-surface border border-line rounded-lg text-fg focus:outline-none focus:border-brand";
-  return (
-    <div className="mt-3 border-t border-line pt-3 grid gap-2">
-      <p className="text-[11px] text-fg-muted">
-        Registra la aprobación formal que pidió el equipo por correo. Queda en el historial y como nota en la empresa en HubSpot.
-      </p>
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-        <input className={campo} placeholder="Quién aprobó (nombre)" value={nombre} onChange={(e) => setNombre(e.target.value)} />
-        <input className={campo} placeholder="Su correo (opcional)" value={email} onChange={(e) => setEmail(e.target.value)} />
-        <input className={campo} type="date" value={dia} onChange={(e) => setDia(e.target.value)} />
-      </div>
-      <textarea
-        className={`${campo} min-h-[90px] resize-y`}
-        placeholder="Pega acá el correo de aprobación (o describe la evidencia adjunta)…"
-        value={evidencia}
-        onChange={(e) => setEvidencia(e.target.value)}
-      />
-      <div className="flex flex-wrap items-center gap-2">
-        <label className="text-xs font-medium text-fg-secondary border border-line hover:bg-surface-hover px-3 py-1.5 rounded-lg cursor-pointer">
-          {subiendo ? "Subiendo…" : adjunto ? `Adjunto: ${adjunto.nombre}` : "Adjuntar el correo (PDF, .eml…)"}
-          <input
-            type="file"
-            className="hidden"
-            disabled={subiendo}
-            onChange={(e) => {
-              const f = e.target.files?.[0];
-              if (f) void adjuntar(f);
-              e.target.value = "";
-            }}
-          />
-        </label>
-        {errorAdjunto && <span className="text-xs text-danger-ink">{errorAdjunto}</span>}
-        <button
-          type="button"
-          disabled={ocupado || subiendo}
-          onClick={() => void onEnviar({ nombre, email, fecha: dia, evidencia, evidenciaDocumentoId: adjunto?.id ?? null })}
-          className="ml-auto text-xs font-semibold text-primary-fg bg-brand hover:bg-brand-dark disabled:opacity-50 px-3 py-1.5 rounded-lg transition-colors"
-        >
-          {ocupado ? "Guardando…" : "Registrar aprobación"}
-        </button>
-      </div>
     </div>
   );
 }

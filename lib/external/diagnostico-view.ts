@@ -18,17 +18,14 @@
  * La línea base y la meta de los objetivos salen de la lista de resultados VIVA (como el PDF): se
  * capturan una sola vez, en el handoff. Solo los campos aptos para el cliente.
  *
- * 2026-10-04 · `aprobacion`: si el cliente puede aprobar lo que ve (es lo vigente: presentado, la misma
- * versión y sin cambios), si ya está aprobado (quién y cuándo) o si el equipo está ajustando. La
- * escritura va por app/external/diagnostico/actions.ts.
+ * La aprobación desde el enlace (2026-10-04) se quitó el 2026-10-28 (Elías): el enlace es solo lectura.
  */
 import { prisma } from "@/lib/db/prisma";
 import { resolveActiveAccess, touchAccess } from "./access";
 import { getBrandLogos } from "./smarteam-logo";
 import { canvasOf } from "@/lib/pieces/canvas-query";
 import { hiddenKeysFrom } from "@/lib/business-cases/section-briefs";
-import { aprobacionEnElEnlace, lineaDelDocumento, type AprobacionEnElEnlace } from "@/lib/canvas/estado-del-documento";
-import { estadoDelDocumento } from "@/lib/canvas/estado-del-documento-servidor";
+import { lineaDelDocumento } from "@/lib/canvas/estado-del-documento";
 import { resultadosDelProyecto } from "@/lib/handoff/resultados";
 import type { DocumentoPublicadoViewData } from "./snapshot-de-documento";
 import type { LandingSectionRow } from "@/components/landing/build-landing";
@@ -38,12 +35,7 @@ export interface DiagnosticoViewData extends DocumentoPublicadoViewData {
   lineaDelDocumento: string | null;
   /** Lo apto para el cliente de cada resultado (sin quién lo necesita ni retos). */
   resultados: Array<{ id: string; resultado: string; metrica: string; lineaBase: string; meta: string; plazo: string; confirmadoAt?: string }>;
-  /** 2026-10-04: si el cliente puede aprobar lo que ve, si ya lo aprobó (quién y cuándo) o si el equipo está ajustando. */
-  aprobacion: AprobacionEnElEnlace;
-  /**
-   * La versión de la foto que el cliente está viendo (2026-10-05). La página la ata a la acción de
-   * aprobar: si el equipo presenta otra mientras tanto, la aprobación no pasa a la versión nueva.
-   */
+  /** La versión de la foto que el cliente está viendo. */
   versionPresentada: number;
 }
 
@@ -88,11 +80,7 @@ export async function getDiagnosticoForToken(credencial: string, accesoId: strin
 
   await touchAccess(access.accessId);
 
-  const [logos, lista, vivo] = await Promise.all([
-    getBrandLogos(),
-    resultadosDelProyecto(access.project.id).catch(() => null),
-    estadoDelDocumento(canvas.id).catch(() => null),
-  ]);
+  const [logos, lista] = await Promise.all([getBrandLogos(), resultadosDelProyecto(access.project.id).catch(() => null)]);
   const brandLogos: Record<string, string> = Object.fromEntries(
     Object.entries(logos).filter((e): e is [string, string] => typeof e[1] === "string" && !!e[1]),
   );
@@ -122,11 +110,6 @@ export async function getDiagnosticoForToken(credencial: string, accesoId: strin
       plazo: r.plazo,
       ...(r.confirmadoAt ? { confirmadoAt: r.confirmadoAt } : {}),
     })),
-    // Solo quién del cliente aprobó y cuándo: ni el correo ni la evidencia ni quién lo registró.
-    aprobacion: aprobacionEnElEnlace({
-      vista: presentada,
-      vivo: vivo && { estado: vivo.estado, version: vivo.version, cambiosDesdeLaPresentacion: vivo.cambiosDesdeLaPresentacion },
-    }),
     versionPresentada: presentada.version,
     rows: secciones
       .filter((s) => !ocultas.has(s.key))

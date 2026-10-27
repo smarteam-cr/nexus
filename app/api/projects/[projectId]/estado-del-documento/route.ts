@@ -1,12 +1,11 @@
 /**
- * /api/projects/[projectId]/estado-del-documento — borrador, presentado y aprobado (2026-10-02).
+ * /api/projects/[projectId]/estado-del-documento — borrador y presentado (2026-10-02; la aprobación se quitó el 2026-10-28).
  *
  * Hoy solo el DIAGNÓSTICO tiene estado. Las reglas: lib/canvas/estado-del-documento.ts.
  *
  *   GET  ?canvasId=…                              → el estado, la versión, el historial y lo que
  *                                                   hoy impide presentarlo
- *   POST { canvasId, accion: "presentar" }         → exige el hilo cerrado y la política revisada
- *   POST { canvasId, accion: "aprobar", nombre, email, fecha, evidencia, evidenciaDocumentoId? }
+ *   POST { canvasId, accion: "presentar" }         → exige contenido (lo que falta revisar es aviso)
  *   POST { canvasId, accion: "reabrir", motivo }
  *
  * Escribir pide lo mismo que generar el diagnóstico (acceso al proyecto + diagnostico.generate).
@@ -22,7 +21,6 @@ import {
   estadoDelDocumento,
   presentarDocumento,
   reabrirDocumento,
-  registrarAprobacion,
 } from "@/lib/canvas/estado-del-documento-servidor";
 
 type Params = { params: Promise<{ projectId: string }> };
@@ -57,15 +55,6 @@ export async function GET(req: NextRequest, { params }: Params) {
 
 const PedidoSchema = z.discriminatedUnion("accion", [
   z.object({ canvasId: z.string().min(1).max(64), accion: z.literal("presentar") }),
-  z.object({
-    canvasId: z.string().min(1).max(64),
-    accion: z.literal("aprobar"),
-    nombre: z.string().max(200),
-    email: z.string().max(200).default(""),
-    fecha: z.string().max(20),
-    evidencia: z.string().max(20_000).default(""),
-    evidenciaDocumentoId: z.string().max(64).nullable().optional(),
-  }),
   z.object({ canvasId: z.string().min(1).max(64), accion: z.literal("reabrir"), motivo: z.string().max(1000) }),
 ]);
 
@@ -82,23 +71,7 @@ export async function POST(req: NextRequest, { params }: Params) {
     if (!(await diagnosticoDelProyecto(projectId, p.canvasId))) {
       return NextResponse.json({ error: "Documento no encontrado." }, { status: 404 });
     }
-    // El documento de evidencia, si viene, tiene que ser de este proyecto.
-    if (p.accion === "aprobar" && p.evidenciaDocumentoId) {
-      const doc = await prisma.clientDocument.findFirst({ where: { id: p.evidenciaDocumentoId, projectId }, select: { id: true } });
-      if (!doc) return NextResponse.json({ error: "El documento de evidencia no es de este proyecto." }, { status: 400 });
-    }
-    const r =
-      p.accion === "presentar"
-        ? await presentarDocumento(p.canvasId, por)
-        : p.accion === "aprobar"
-          ? await registrarAprobacion(
-              p.canvasId,
-              { nombre: p.nombre, email: p.email, fecha: p.fecha, evidencia: p.evidencia, evidenciaDocumentoId: p.evidenciaDocumentoId ?? null },
-              por,
-              // El equipo registra sobre el documento vivo que tiene abierto (la huella cuida los cambios).
-              null,
-            )
-          : await reabrirDocumento(p.canvasId, p.motivo, por);
+    const r = p.accion === "presentar" ? await presentarDocumento(p.canvasId, por) : await reabrirDocumento(p.canvasId, p.motivo, por);
     if (!r.ok) return NextResponse.json({ error: r.error, motivos: r.motivos ?? [] }, { status: r.status });
     /* Ficha B (2026-10-17): presentar el diagnóstico deja la foto de la escala de la exploración del proyecto, con el
        ciclo abierto si es un servicio recurrente (lib/exploraciones/versiones-de-la-escala.ts). Nunca frena la respuesta. */

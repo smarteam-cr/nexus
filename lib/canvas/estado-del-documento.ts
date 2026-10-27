@@ -3,25 +3,20 @@
  *
  * ── EL FLUJO REAL (Caroline Bersot, Alex Vanegas y Elías) ────────────────────────────────────
  * El diagnóstico se presenta; el cliente agrega cosas que no había contado; esa sesión se suma al
- * contexto y se regenera conservando el historial; y Caroline pide la aprobación formal por correo
- * antes de pasar a planificación. Tres estados:
+ * contexto y se regenera conservando el historial. Dos estados en uso:
  *
- *   borrador ──Presentar──▶ presentado ──Registrar aprobación──▶ aprobado
- *      ▲                       │  regenerar o reabrir                │ reabrir (con motivo)
- *      └───────── v+1 ─────────┴─────────────────────────────────────┘
+ *   borrador ──Presentar──▶ presentado
+ *      ▲                       │  regenerar o reabrir
+ *      └───────── v+1 ─────────┘
  *
- *  · PRESENTAR exige el hilo cerrado (lib/canvas/revisar-hilo.ts: ninguna acción sin causa ni
- *    objetivo, ningún problema sin acción), el enfoque de la solución revisado por el ejecutivo y, desde el
- *    2026-10-24 (L2 etapa 2 del roadmap), el desafío principal revisado. Deja una FOTO PROTEGIDA de lo que vio
- *    el cliente (lib/canvas/versiones.ts). Cada motivo dice en qué sección se arregla (`detalle`): «Presentar»
- *    y «Publicar el enlace» los listan con un enlace a esa sección.
+ *  · PRESENTAR exige contenido. El hilo (lib/canvas/revisar-hilo.ts), el enfoque de la solución y el desafío
+ *    principal sin revisar son AVISOS desde el 2026-10-28: se listan con su sección y no frenan. Deja una FOTO
+ *    PROTEGIDA de lo que vio el cliente (lib/canvas/versiones.ts).
  *  · Lo que pasa después de presentar abre la versión siguiente: la vN presentada queda en el
  *    historial, intacta.
- *  · APROBAR solo se registra sobre lo presentado y sin cambios desde entonces: el cliente aprobó lo
- *    que vio. Pide quién, cuándo y la evidencia (el correo).
- *  · APROBADO = cerrado: no se regenera ni se edita hasta reabrirlo, con motivo.
- *
- * Nexus no manda el correo (lo pide Caroline, como siempre) ni mueve la etapa en HubSpot: registra.
+ *  · La APROBACIÓN (registrarla el equipo o darla el cliente desde su enlace) se quitó entera el 2026-10-28
+ *    (Elías, por Cemaco). «aprobado» sigue en el tipo solo para leer registros viejos: no hay ninguno y nada
+ *    lo escribe; un documento así quedaría cerrado hasta reabrirlo.
  *
  * Este módulo es la parte pura (qué se puede y por qué no); la que escribe vive en
  * `estado-del-documento-servidor.ts`.
@@ -179,37 +174,6 @@ export function revisarParaPresentar(opts: {
   return fin();
 }
 
-export interface DatosDeAprobacion {
-  /** Quién del cliente aprobó. */
-  nombre: string;
-  /** Su correo (opcional, pero si viene tiene que ser un correo). */
-  email: string;
-  /** Cuándo (AAAA-MM-DD). */
-  fecha: string;
-  /** El correo de aprobación pegado (o una descripción de la evidencia adjunta). */
-  evidencia: string;
-  /** Un documento del proyecto con la evidencia (el correo en PDF, por ejemplo). */
-  evidenciaDocumentoId?: string | null;
-}
-
-const CORREO = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-/** Valida lo que se registra como aprobación. `hoy` se pasa para poder probarlo. */
-export function validarAprobacion(d: DatosDeAprobacion, hoy: Date): { ok: true; fecha: Date } | { ok: false; error: string } {
-  if (!d.nombre.trim()) return { ok: false, error: "Falta quién aprobó del lado del cliente." };
-  if (d.email.trim() && !CORREO.test(d.email.trim())) return { ok: false, error: "El correo de quien aprobó no es válido." };
-  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(d.fecha.trim());
-  if (!m) return { ok: false, error: "Falta la fecha de la aprobación." };
-  const fecha = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]), 12));
-  if (Number.isNaN(fecha.getTime())) return { ok: false, error: "La fecha de la aprobación no es válida." };
-  const manana = new Date(hoy.getTime() + 36 * 3600 * 1000);
-  if (fecha.getTime() > manana.getTime()) return { ok: false, error: "La fecha de la aprobación no puede ser futura." };
-  if (!d.evidencia.trim() && !d.evidenciaDocumentoId) {
-    return { ok: false, error: "Falta la evidencia: pega el correo de aprobación o adjúntalo." };
-  }
-  return { ok: true, fecha };
-}
-
 function fechaLarga(d: Date): string {
   return d.toLocaleDateString("es-CR", { day: "numeric", month: "long", year: "numeric", timeZone: "America/Costa_Rica" });
 }
@@ -224,68 +188,4 @@ export function lineaDelDocumento(d: { cliente: string; fecha: Date | null; vers
   ]
     .filter(Boolean)
     .join(" · ");
-}
-
-/** El cuerpo de la nota que queda en la empresa en HubSpot al registrar la aprobación. */
-export function notaDeAprobacion(d: {
-  documento: string;
-  version: number;
-  nombre: string;
-  email: string;
-  fecha: Date;
-  evidencia: string;
-  registradoPor: string | null;
-}): string {
-  const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-  const evidencia = d.evidencia.trim().slice(0, 3000);
-  return [
-    `<p><strong>${esc(d.documento)} v${d.version} aprobado por el cliente.</strong></p>`,
-    `<p>Aprobó: ${esc(d.nombre)}${d.email ? ` (${esc(d.email)})` : ""}, el ${esc(fechaLarga(d.fecha))}.</p>`,
-    d.registradoPor ? `<p>Registrado en Nexus por ${esc(d.registradoPor)}.</p>` : "",
-    evidencia ? `<p>Evidencia:</p><blockquote>${esc(evidencia).replace(/\n/g, "<br>")}</blockquote>` : "",
-  ]
-    .filter(Boolean)
-    .join("");
-}
-
-// ── El cliente aprueba desde su enlace (2026-10-04) ──────────────────────────────────────────────
-
-/** Lo que el cliente declara al aprobar desde su enlace. Va tal cual a la evidencia y a la nota de HubSpot. */
-export const TEXTO_DE_APROBACION_DEL_CLIENTE = "Leí este diagnóstico y lo apruebo como base para la planificación.";
-
-/** Lo que el cliente puede hacer con la versión que VE en su enlace. */
-export type AprobacionEnElEnlace =
-  | { estado: "por-aprobar" }
-  | { estado: "aprobado"; nombre: string | null; fecha: string | null }
-  | { estado: "en-revision" };
-
-/**
- * El enlace muestra la última versión presentada o aprobada (`vista`); el equipo puede estar ya en
- * otra (`vivo`). El cliente aprueba SOLO lo que está viendo, y solo si es lo vigente: presentado, la
- * misma versión y sin cambios desde que se presentó. Si el equipo ya está ajustando (regeneró, editó o
- * reabrió), espera la versión nueva. Una versión aprobada se muestra como aprobada aunque después se
- * haya reabierto: es lo que el cliente aprobó.
- */
-export function aprobacionEnElEnlace(d: {
-  vista: { tipo: string; version: number; aprobadoPorNombre: string | null; aprobadoEl: Date | string | null };
-  vivo: { estado: EstadoDocumento; version: number; cambiosDesdeLaPresentacion: boolean } | null;
-}): AprobacionEnElEnlace {
-  if (d.vista.tipo === "aprobado") {
-    const fecha = d.vista.aprobadoEl ? new Date(d.vista.aprobadoEl) : null;
-    return {
-      estado: "aprobado",
-      nombre: d.vista.aprobadoPorNombre?.trim() || null,
-      fecha: fecha && !Number.isNaN(fecha.getTime()) ? fecha.toISOString() : null,
-    };
-  }
-  const v = d.vivo;
-  if (v && v.estado === "presentado" && v.version === d.vista.version && !v.cambiosDesdeLaPresentacion) {
-    return { estado: "por-aprobar" };
-  }
-  return { estado: "en-revision" };
-}
-
-/** La evidencia que queda cuando aprueba el cliente desde su enlace (no hay correo que pegar). */
-export function evidenciaDelEnlace(nombre: string, email: string): string {
-  return `Aprobado por el cliente desde su enlace de Nexus: ${nombre.trim()}${email.trim() ? ` (${email.trim()})` : ""} marcó «${TEXTO_DE_APROBACION_DEL_CLIENTE}»`;
 }
