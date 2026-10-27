@@ -5,7 +5,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { consultaLimpia, estaLimpia, sufijo } from "./direccion-publica";
+import { consultaConIndustria, consultaLimpia, estaLimpia, industriaDelTest, sufijo } from "./direccion-publica";
 
 describe("lo que se queda en la dirección", () => {
   it("lo de campaña y la versión pasan; los datos de la persona no", () => {
@@ -32,11 +32,26 @@ describe("lo que se queda en la dirección", () => {
     expect(sufijo(consultaLimpia({ utm_source: "li" }))).toBe("?utm_source=li");
   });
 
+  it("la industria se queda solo si es de la lista de Smarteam (u «Otra»)", () => {
+    expect(industriaDelTest("Agrícola")).toBe("Agrícola");
+    expect(industriaDelTest("Otra")).toBe("Otra");
+    expect(industriaDelTest("<script>")).toBeNull();
+    expect(industriaDelTest(undefined)).toBeNull();
+    const buena = consultaConIndustria({ industria: "Agrícola", utm_source: "li" });
+    expect(buena.limpia).toBe(true);
+    expect(Object.fromEntries(buena.pasa)).toEqual({ utm_source: "li", industria: "Agrícola" });
+    const mala = consultaConIndustria({ industria: "Inventada", email: "ana@acme.com" });
+    expect(mala.limpia).toBe(false);
+    expect(mala.industria).toBeNull();
+    expect(sufijo(mala.pasa)).toBe("");
+    expect(consultaConIndustria({}).limpia).toBe(true);
+  });
+
   it("⛔ las dos páginas que cargan píxeles redirigen a la dirección limpia antes de armarse", () => {
     const raiz = process.cwd();
     for (const f of ["app/external/test/page.tsx", "app/external/test/[area]/page.tsx"]) {
       const fuente = fs.readFileSync(path.join(raiz, f), "utf8");
-      expect(fuente, f).toMatch(/if \(!estaLimpia\(/);
+      expect(fuente, f).toMatch(/if \(!(consultaConIndustria\(q\)\.)?limpia\)/);
       expect(fuente, f).toMatch(/redirect\(/);
     }
   });

@@ -11459,8 +11459,13 @@ veta Funcional en tres dimensiones. Se construyó con la escala vigente (8.9.1) 
   descripción de cada nivel) para que Elías los reescriba en palabras del cliente; se generan desde `/escala/tests` y nunca
   pisan uno existente. Aprobar revisa las reglas (`problemasDelBanco`): una pregunta por dimensión, **nunca se veta un
   nivel** (las cinco opciones siempre), sin nombres de nivel en el texto, y la web cubre todas las dimensiones. Aprueba
-  solo lo que se revisó: si el borrador cambió entre la revisión y la aprobación, no aprueba nada. Sin aprobadas para un
-  área, el test de esa área no se abre. Una edición sin aprobadas usa las de la escala general (el resultado sí se lee con
+  solo lo que se revisó: si el borrador cambió entre la revisión y la aprobación, no aprueba nada. Tampoco aprueba un
+  texto que muestre un código de la escala (`1.7.F`, `1.7.F2`, `(1.7)`; 27 oct). Sin aprobadas para un
+  área, el test de esa área no se abre. **Para abrirlo en producción tal como sale de la escala** (Elías, 27 oct: verlo ya y
+  revisar las preguntas ahí), `scripts/tests-preguntas.ts` genera y aprueba todos los bancos con el mismo código de la
+  pantalla, contra la escala PUBLICADA (`--escala 9.0` aborta si es otra), con simulacro que lista los bancos y muestra 3
+  preguntas por área; se puede volver a correr (rearma solo lo que armó él con otra versión de la escala y nunca toca lo
+  que editó una persona). Una edición sin aprobadas usa las de la escala general (el resultado sí se lee con
   la edición). Lo aprueban los super admin (`puedeEditarLaEscala`).
 - **Las tres versiones (O5).** `marketing` (4 preguntas: las dimensiones de la capa BASE, que salen de las 8 de la web),
   `web` (8, una por dimensión) y la **completa**, que NO vive acá: es la exploración del proyecto por equipo más el
@@ -11478,7 +11483,10 @@ veta Funcional en tres dimensiones. Se construyó con la escala vigente (8.9.1) 
   para la preventa. Las dos tablas nacen con RLS y sin policies: la página las lee por el servidor, nunca con la clave
   pública.
 - **La experiencia de hoy se conserva (O1):** el formulario primero, una pregunta por pantalla, el matiz, el guardado al
-  avanzar (se retoma en el mismo navegador) y el aviso de abandono. Un intento quieto una hora es «abandonado».
+  avanzar (se retoma en el mismo navegador) y el aviso de abandono. **El área y la industria van antes que el formulario**
+  (Elías, 27 oct): la entrada `/external/test` pide las dos y la página del área abre con el banco de esa edición (cuántas
+  preguntas y con qué palabras); un enlace directo al área sin industria la pregunta primero. Viaja en la dirección
+  (`?industria=…`) porque no es un dato de la persona, y solo si es de la lista (`industriaDelTest`). Un intento quieto una hora es «abandonado».
 - **El resultado (O3)** es nuevo: nivel con «Estimado», la curva de cinco niveles, el radar y las barras, UNA sola
   recomendación con su razón y el costo de quedarse, los riesgos activos (hasta 3), los casos de uso que lo mueven sin
   precio y la invitación a la sesión (`TESTS_ENLACE_DE_AGENDA`). La síntesis la arma Nexus con los datos, sin IA.

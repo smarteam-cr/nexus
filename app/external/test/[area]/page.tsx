@@ -5,6 +5,10 @@
  * cualquiera la abre desde la web de Smarteam o un enlace de campaña. Sin preguntas APROBADAS para esa área y versión, la
  * página dice que el test todavía no está abierto: nadie llena preguntas que Elías no revisó.
  *
+ * La INDUSTRIA llega en la dirección (`?industria=…`, la eligió en la entrada) y decide el banco: el de su edición o, si no
+ * tiene, el de la general. Sin ella (un enlace directo de campaña), lo primero que ve la persona es la pregunta de la
+ * industria, y con la respuesta la página se vuelve a armar con su banco (Elías, 27 oct).
+ *
  * Página del cliente (§1-WEB): tema claro con hex literal, tuteo, sin el chrome de un proyecto. Carga los píxeles de
  * anuncios de la página vieja, cada uno solo si su variable está puesta (O6 etapa 2, lib/tests-diagnostico/pixeles.ts).
  */
@@ -13,9 +17,9 @@ import { notFound, redirect } from "next/navigation";
 import ExternalShell from "@/components/external/ExternalShell";
 import PixelesDelTest from "@/components/external/test/PixelesDelTest";
 import TestDelDiagnostico from "@/components/external/test/TestDelDiagnostico";
-import { INDUSTRIAS_DE_SMARTEAM } from "@/lib/clients/datos-de-la-empresa";
+import { edicionDeLaIndustria } from "@/lib/clients/datos-de-la-empresa";
 import { getBrandLogos } from "@/lib/external/smarteam-logo";
-import { consultaLimpia, estaLimpia, sufijo, type Consulta } from "@/lib/tests-diagnostico/direccion-publica";
+import { consultaConIndustria, sufijo, type Consulta } from "@/lib/tests-diagnostico/direccion-publica";
 import { pixelesDelTest } from "@/lib/tests-diagnostico/pixeles";
 import { aprobadasPara } from "@/lib/tests-diagnostico/repositorio-server";
 import { AREA_POR_SLUG, NOMBRE_DEL_AREA, esVersionDelTest } from "@/lib/tests-diagnostico/tipos";
@@ -34,9 +38,11 @@ export default async function TestPage({ params, searchParams }: { params: Promi
   const areaId = Object.hasOwn(AREA_POR_SLUG, area) ? AREA_POR_SLUG[area] : undefined;
   if (!areaId) notFound();
   // Con el correo o el nombre en la dirección, primero se limpia: esta página carga píxeles (direccion-publica.ts).
-  if (!estaLimpia(q)) redirect(`/external/test/${area}${sufijo(consultaLimpia(q))}`);
+  const { pasa, industria, limpia } = consultaConIndustria(q);
+  if (!limpia) redirect(`/external/test/${area}${sufijo(pasa)}`);
   const version = esVersionDelTest(v) ? v : "web";
-  const [aprobadas, logos] = await Promise.all([aprobadasPara(areaId, version, null).catch(() => null), getBrandLogos()]);
+  // Sin industria todavía, el banco de la general: solo decide si el test está abierto (el de la edición cae a ella).
+  const [aprobadas, logos] = await Promise.all([aprobadasPara(areaId, version, edicionDeLaIndustria(industria)).catch(() => null), getBrandLogos()]);
   const pixeles = pixelesDelTest(process.env);
 
   return (
@@ -45,7 +51,8 @@ export default async function TestPage({ params, searchParams }: { params: Promi
       {aprobadas ? (
         <TestDelDiagnostico area={area} areaNombre={NOMBRE_DEL_AREA[areaId]} version={version} total={aprobadas.preguntas.length}
           conversionGoogleAds={pixeles.conversionGoogleAds}
-          industrias={INDUSTRIAS_DE_SMARTEAM.map(({ valor, etiqueta }) => ({ valor, etiqueta }))}
+          industria={industria}
+          consulta={[...pasa.entries()].filter(([k]) => k !== "industria")}
         />
       ) : (
         <div style={{ maxWidth: 640, margin: "0 auto", padding: "64px 20px", fontFamily: "var(--font-jakarta), system-ui, sans-serif", color: "#0f1b3d" }}>

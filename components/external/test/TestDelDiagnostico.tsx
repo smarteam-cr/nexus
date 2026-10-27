@@ -4,11 +4,18 @@
  * components/external/test/TestDelDiagnostico.tsx — EL TEST PÚBLICO del diagnóstico de rendimiento, del lado del
  * prospecto (área O, 2026-10-26). Página del cliente: tema claro con hex literal (§1-WEB de ARCHITECTURE.md), en tuteo.
  *
- * La experiencia de la app de hoy (O1 etapa 3): el formulario primero, una pregunta por pantalla con su «matiz»
+ * La experiencia de la app de hoy (O1 etapa 3): la industria y el formulario primero, una pregunta por pantalla con su «matiz»
  * opcional, el avance guardado en cada paso (si cierra la pestaña, al volver retoma donde quedó: el token vive en este
  * navegador) y el aviso de que todavía no terminó si intenta irse. Quien responde nunca ve niveles ni nombres de la
  * escala: las opciones son las del banco aprobado, con ids que solo sirven para este intento.
+ *
+ * La INDUSTRIA va antes que todo (Elías, 27 oct): decide la edición de las preguntas. Llega elegida desde la entrada
+ * (`?industria=…`); si no, el primer paso es elegirla, y con un formulario GET la página se vuelve a armar con el banco de
+ * esa edición. Ya elegida, el formulario la muestra con un «Cambiar».
  */
+import Link from "next/link";
+import { etiquetaDeIndustria } from "@/lib/tests-diagnostico/direccion-publica";
+import SelectorDeIndustria from "./SelectorDeIndustria";
 import { useCallback, useEffect, useMemo, useState, type CSSProperties, type FormEvent } from "react";
 
 const ACENTO = "#E8481C";
@@ -81,15 +88,18 @@ export default function TestDelDiagnostico({
   areaNombre,
   version,
   total,
-  industrias,
+  industria,
+  consulta,
   conversionGoogleAds = null,
 }: {
   area: string;
   areaNombre: string;
   version: "marketing" | "web";
   total: number;
-  /** Las industrias de Smarteam (la misma lista de «Datos de la empresa»): la industria elige la edición de la escala. */
-  industrias: { valor: string; etiqueta: string }[];
+  /** La industria elegida (una de la lista de Smarteam u «Otra»); null = todavía no la eligió: es el primer paso. */
+  industria: string | null;
+  /** Lo que mide la campaña y la versión, para no perderlos al elegir o cambiar la industria. */
+  consulta: [string, string][];
   /** La conversión de Google Ads que se dispara al empezar (O6 etapa 2: como la página vieja). Null = no hay etiqueta. */
   conversionGoogleAds?: string | null;
 }) {
@@ -172,7 +182,7 @@ export default function TestDelDiagnostico({
       puesto: String(f.get("puesto") ?? ""),
       empresa: String(f.get("empresa") ?? ""),
       dominio: String(f.get("dominio") ?? ""),
-      industria: String(f.get("industria") ?? ""),
+      industria: industria ?? "",
       sitio: String(f.get("sitio") ?? ""),
       origen,
     };
@@ -271,6 +281,36 @@ export default function TestDelDiagnostico({
     }
   };
 
+  const sinIndustria = `/external/test/${area}${consulta.length ? `?${new URLSearchParams(consulta).toString()}` : ""}`;
+
+  if (!vista && !industria) {
+    return (
+      <div style={caja}>
+        <p style={{ margin: 0, fontSize: 12, fontWeight: 700, letterSpacing: 0.6, textTransform: "uppercase", color: ACENTO }}>Diagnóstico de Rendimiento</p>
+        <h1 style={{ margin: "8px 0 10px", fontSize: 30, lineHeight: 1.2 }}>¿Qué tan bien funciona tu área de {areaNombre}?</h1>
+        <p style={{ margin: "0 0 28px", fontSize: 16, color: TINTA_SUAVE, lineHeight: 1.6 }}>
+          Primero, ¿en qué industria está tu empresa? Con ella te hacemos las preguntas con las palabras de tu sector.
+        </p>
+        <form method="get" action={`/external/test/${area}`} style={{ display: "grid", gap: 16 }}>
+          {consulta.map(([k, v]) => (
+            <input key={k} type="hidden" name={k} value={v} />
+          ))}
+          <div>
+            <label style={etiqueta} htmlFor="t-industria">
+              Tu industria
+            </label>
+            <SelectorDeIndustria id="t-industria" valor={null} />
+          </div>
+          <div>
+            <button type="submit" style={botonPrincipal(true)}>
+              Seguir
+            </button>
+          </div>
+        </form>
+      </div>
+    );
+  }
+
   if (!vista) {
     return (
       <div style={caja}>
@@ -309,18 +349,13 @@ export default function TestDelDiagnostico({
               <input id="t-telefono" name="telefono" maxLength={40} autoComplete="tel" style={campo} />
             </div>
             <div>
-              <label style={etiqueta} htmlFor="t-industria">Tu industria</label>
-              <select id="t-industria" name="industria" defaultValue="" required style={campo}>
-                <option value="" disabled>
-                  Elige una
-                </option>
-                {industrias.map((i) => (
-                  <option key={i.valor} value={i.valor}>
-                    {i.etiqueta}
-                  </option>
-                ))}
-                <option value="Otra">Otra</option>
-              </select>
+              <span style={etiqueta}>Tu industria</span>
+              <span style={{ display: "flex", gap: 10, alignItems: "baseline", padding: "11px 0", fontSize: 15 }}>
+                {etiquetaDeIndustria(industria ?? "")}
+                <Link href={sinIndustria} style={{ fontSize: 13, color: ROYAL }}>
+                  Cambiar
+                </Link>
+              </span>
             </div>
           </div>
           {/* El campo trampa: una persona no lo ve ni lo alcanza con el teclado. */}
