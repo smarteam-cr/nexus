@@ -112,12 +112,15 @@ export interface DatoDeLaEmpresa {
 }
 
 /** «Industria (Smarteam)» de HubSpot (`industria__smarteam_`, 17 opciones, leídas del portal el 2026-10-24). El valor es
- *  el de HubSpot, tal cual. `edicion` es la edición de la escala que le corresponde (null = la escala general). */
+ *  el de HubSpot, tal cual. `edicion` es la edición de la escala que le corresponde (null = la escala general).
+ *  «Banca y servicios financieros» la sumó Elías el 2026-10-27 para que su edición tenga por dónde llegar; en el portal
+ *  todavía NO existe: hay que crearla allá con ese mismo valor antes de prender `EMPRESA_HUBSPOT_ESCRITURA`. */
 export const INDUSTRIAS_DE_SMARTEAM: readonly (OpcionDeDato & { edicion: string | null })[] = [
   { valor: "Agrícola", etiqueta: "Agrícola", edicion: null },
   { valor: "Agroindustria", etiqueta: "Agroindustria", edicion: null },
   { valor: "Alimentos y bebidas", etiqueta: "Alimentos y bebidas", edicion: null },
   { valor: "Automotriz", etiqueta: "Automotriz", edicion: "automotriz" },
+  { valor: "Banca y servicios financieros", etiqueta: "Banca y servicios financieros", edicion: "banca" },
   { valor: "Construcción", etiqueta: "Construcción", edicion: null },
   { valor: "Consultoria", etiqueta: "Consultoría", edicion: null },
   { valor: "Educación", etiqueta: "Educación", edicion: "educacion" },

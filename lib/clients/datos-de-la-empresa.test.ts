@@ -62,11 +62,12 @@ describe("el catálogo", () => {
     }
   });
 
-  it("las 17 industrias de Smarteam apuntan a una edición que existe o a la general", () => {
-    expect(INDUSTRIAS_DE_SMARTEAM).toHaveLength(17);
+  it("las 18 industrias de Smarteam apuntan a una edición que existe o a la general", () => {
+    expect(INDUSTRIAS_DE_SMARTEAM).toHaveLength(18);
     const ediciones = new Set(EDICIONES_DE_LA_ESCALA.map((e) => e.valor));
     for (const i of INDUSTRIAS_DE_SMARTEAM) if (i.edicion) expect(ediciones.has(i.edicion), i.valor).toBe(true);
     expect(edicionDeLaIndustria("Turismo")).toBe("turismo");
+    expect(edicionDeLaIndustria("Banca y servicios financieros")).toBe("banca");
     expect(edicionDeLaIndustria("Software")).toBeNull();
     expect(edicionDeLaIndustria("no existe")).toBeNull();
   });

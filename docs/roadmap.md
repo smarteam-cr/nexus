@@ -100,6 +100,10 @@
     {
      "fecha": "27 oct",
      "texto": "El test nuevo funciona en producción: área e industria al entrar, y 42 bancos de preguntas aprobados."
+    },
+    {
+     "fecha": "27 oct",
+     "texto": "«Banca y servicios financieros» ya es una industria: el test llega a sus preguntas."
     }
    ],
    "sigue": "Tu revisión de las preguntas. Después, el corte: un formulario nuevo de HubSpot, cambiar la dirección y apagar la aplicación vieja.",
@@ -609,7 +613,7 @@ Sin esto, algo sigue mal o no se puede validar:
 43. **«Por decidir» en Tareas:** el tope quedó en 5 sugerencias por persona (antes 10), y 59 que nadie tocó se vencieron. ¿5 o 6?
 44. **La plantilla recomendada de la Planificación:** hoy el selector propone la completa. ¿Recomendamos una?
 45. **«Cómo llegó» un prospecto:** sumé una quinta vía, «Por la web o un anuncio». ¿La dejamos?
-46. **La industria «Banca y servicios financieros» en el test:** la escala tiene su edición, pero la lista de industrias de Smarteam no trae Banca, así que nadie llega a esas preguntas. ¿Sumo «Banca y servicios financieros» a la lista de industrias (también la de los datos de la empresa)?
+46. ✓ **La industria «Banca y servicios financieros» en el test:** la escala tiene su edición, pero la lista de industrias de Smarteam no trae Banca, así que nadie llega a esas preguntas. ¿Sumo «Banca y servicios financieros» a la lista de industrias (también la de los datos de la empresa)? **Tu respuesta (27 oct):** Sí, súmala. (Hecha el 27 oct: ya aparece en el test y en los datos de la empresa. En HubSpot la opción todavía no existe; hay que crearla antes de que Nexus escriba la industria allá.)
 
 ## Propuesta por aprobar: vender y entregar por casos de uso
 
@@ -1342,7 +1346,7 @@ Pasaron a otro lugar: unir los contenedores «Información del cliente» repetid
 
 **Para lo de la noche del 25 oct** (en el servidor salvo lo que dice otra cosa):
 1. **HubSpot, los avisos:** en la app de HubSpot, la URL `https://nexus.smarteamcr.com/api/hubspot/webhooks` y las suscripciones de empresa, contacto, negocio y ticket (RUNBOOK › «Los avisos de HubSpot»). Revisar que `APP_URL` del servidor sea esa dirección.
-2. **Que Nexus escriba en HubSpot lo que decide la persona:** `EMPRESA_HUBSPOT_ESCRITURA=1` (yo lo pruebo después con 5 empresas) y, tras revisar el simulacro, `EMPRESA_HUBSPOT_COPIA=1`.
+2. **Que Nexus escriba en HubSpot lo que decide la persona:** `EMPRESA_HUBSPOT_ESCRITURA=1` (yo lo pruebo después con 5 empresas) y, tras revisar el simulacro, `EMPRESA_HUBSPOT_COPIA=1`. Antes, en HubSpot, sumar la opción «Banca y servicios financieros» (con ese mismo valor) a la propiedad «Industria (Smarteam)» de las empresas: Nexus ya la ofrece desde el 27 oct.
 3. **Los avisos de Meet al momento:** `GOOGLE_MEET_EVENTOS_ENABLED=1`.
 4. ✓ No por ahora (decidiste dejar Speech-to-Text apagado, 24 oct). **El audio de las reuniones presenciales:** en Google Cloud, habilitar «Cloud Speech-to-Text», un bucket con CORS y dos roles para la cuenta de servicio (RUNBOOK); en el servidor, `REUNIONES_AUDIO=1` y `GOOGLE_SPEECH_BUCKET`.
 5. **Sentry:** con `SENTRY_DSN`, una alerta de Crons para los monitores `nexus-*` (los jobs que dejan de correr).
