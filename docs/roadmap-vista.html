@@ -136,6 +136,13 @@ main { max-width: 1040px; margin: 0 auto; padding-block: 32px 64px;
 .rs-toca li b { font-weight: 650; }
 .rs-pq { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--warn-line); }
 .rs-pq-t { font-size: 13px; color: var(--warn-ink); margin-right: 4px; }
+/* «Lo que decides tú», por tema. */
+.dg-tema { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 12px 16px; margin: 0 0 10px; }
+.dg-h { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; font-size: 15px; font-weight: 650; margin: 0 0 6px; color: var(--fg); }
+.dg-tema ol { margin: 0; padding-left: 26px; }
+.dg-tema ol li { margin: 6px 0; font-size: 14px; }
+.dg-tema details { margin-top: 6px; color: var(--fg-muted); }
+.dg-tema summary { cursor: pointer; font-size: 13px; }
 .rs-pq button.chip { font-family: inherit; cursor: pointer; }
 .rs-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 12px; }
 .rs-card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; display: flex; flex-direction: column; gap: 6px; }
@@ -371,6 +378,40 @@ main { max-width: 1040px; margin: 0 auto; padding-block: 32px 64px;
       var ini = Number(ol.getAttribute('start') || 1);
       Array.prototype.forEach.call(ol.children, function (li, i) { respondida[ini + i] = /^\s*✓/.test(li.textContent); });
     });
+    // «Lo que decides tú», agrupado por tema (el mismo orden del resumen): lo que falta arriba y lo respondido plegado.
+    var liPorNumero = {};
+    dec.els.filter(function (e) { return e.tagName === 'OL'; }).forEach(function (ol) {
+      var ini = Number(ol.getAttribute('start') || 1);
+      Array.prototype.slice.call(ol.children).forEach(function (li, i) { liPorNumero[ini + i] = li; li.value = ini + i; });
+    });
+    var ordenTemas = datos.temas.slice().sort(function (a, b) {
+      var g = function (t) { return t.estado === 'en-curso' ? 0 : t.estado === 'propuesta' ? 1 : 2; };
+      return g(a) - g(b) || (a.prioridad || 99) - (b.prioridad || 99);
+    });
+    var dg = document.createElement('div'); dg.className = 'dg';
+    ordenTemas.forEach(function (t) {
+      var nums = (t.decisiones || []).filter(function (n) { return liPorNumero[n]; });
+      if (!nums.length) return;
+      var falta = nums.filter(function (n) { return !respondida[n]; }), listas = nums.filter(function (n) { return respondida[n]; });
+      var sec = document.createElement('section'); sec.className = 'dg-tema'; sec.id = 'preguntas-' + t.n;
+      var h = document.createElement('h3'); h.className = 'dg-h'; h.textContent = t.nombre;
+      var c = document.createElement('span'); c.className = 'chip ' + (falta.length ? 's-warn' : 's-ok');
+      c.textContent = falta.length ? falta.length + ' por responder' : 'todo respondido'; h.appendChild(c);
+      sec.appendChild(h);
+      if (falta.length) { var ol = document.createElement('ol'); falta.forEach(function (n) { ol.appendChild(liPorNumero[n]); }); sec.appendChild(ol); }
+      if (listas.length) {
+        var d = document.createElement('details'), sm = document.createElement('summary');
+        sm.textContent = listas.length + (listas.length === 1 ? ' respondida' : ' respondidas'); d.appendChild(sm);
+        var ol2 = document.createElement('ol'); listas.forEach(function (n) { ol2.appendChild(liPorNumero[n]); }); d.appendChild(ol2);
+        sec.appendChild(d);
+      }
+      dg.appendChild(sec);
+    });
+    var primeraOl = dec.els.filter(function (e) { return e.tagName === 'OL'; })[0];
+    if (primeraOl) {
+      primeraOl.parentNode.insertBefore(dg, primeraOl);
+      dec.els.filter(function (e) { return e.tagName === 'OL'; }).forEach(function (ol) { ol.remove(); });
+    }
     var conf = seccion(/^\s*Lo que configuras tú/i), configurar = 0;
     conf.els.forEach(function (e) {
       if (e.tagName === 'OL') Array.prototype.forEach.call(e.children, function (li) { if (!/^\s*✓/.test(li.textContent)) configurar++; });
@@ -421,7 +462,7 @@ main { max-width: 1040px; margin: 0 auto; padding-block: 32px 64px;
       var pq = nodo('div', 'rs-pq'); pq.appendChild(nodo('span', 'rs-pq-t', 'Preguntas por responder, por tema:'));
       conPreguntas.forEach(function (t) {
         var b = nodo('button', 'chip s-warn', corto(t) + ' · ' + preguntas(t).p); b.type = 'button';
-        b.addEventListener('click', function () { ir('roadmap', dec.h); }); pq.appendChild(b);
+        b.addEventListener('click', function () { ir('roadmap', document.getElementById('preguntas-' + t.n) || dec.h); }); pq.appendChild(b);
       });
       at.appendChild(pq);
     }
