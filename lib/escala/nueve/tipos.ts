@@ -64,8 +64,18 @@ export type Operacion =
    * cumple. Si ya hay una fila con ese `criterio`, los identificadores se suman a ella.
    */
   | { op: "riesgo"; ids: Ref[]; criterio: string; mensaje?: string }
-  /** Bloques que se suman al final de una parte de prosa (la que empieza con ese título). */
-  | { op: "prosa-agregar"; parte: string; bloques: Bloque[] };
+  /**
+   * Bloques que se suman al final de una parte de prosa (la que empieza con ese título). En los textos,
+   * un alias entre comillas invertidas (`` `@2.3.F.permiso` ``) se escribe con el identificador que le tocó.
+   */
+  | { op: "prosa-agregar"; parte: string; bloques: Bloque[] }
+  /** Bloques que entran justo después del primero de esa parte cuyo texto empieza con `despuesDe`. Mismos alias. */
+  | { op: "prosa-insertar"; parte: string; despuesDe: string; bloques: Bloque[] }
+  /**
+   * El primer bloque de esa parte cuyo texto empieza con `empieza` (en una lista, su primer punto) se
+   * reemplaza por `bloques`. Mismos alias.
+   */
+  | { op: "prosa-cambiar"; parte: string; empieza: string; bloques: Bloque[] };
 
 export type EstadoDeLaEntrada = "aplicada" | "aplicada-con-redaccion" | "parcial" | "pregunta" | "despues-de-la-prueba" | "texto-pendiente";
 

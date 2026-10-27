@@ -27,9 +27,12 @@ import {
   dimensionAplica,
   ETIQUETA_DE_CIERRE,
   ETIQUETA_DE_DESPUES,
+  ETIQUETA_DE_TRAFICO,
+  TRAFICOS,
   type Cierre,
   type Despues,
   type Perfil,
+  type Trafico,
 } from "@/lib/escala/documento/perfil";
 import { LETRAS, type Letra, type PreguntaDelPerfil } from "@/lib/escala/documento/tipos";
 import { resolverAncla } from "@/lib/escala/documento/anclas";
@@ -61,8 +64,13 @@ const EFECTO_DEL_DESPUES: Record<Despues, string> = {
   continua: "Esconde los criterios marcados «recompra».",
 };
 
+const EFECTO_DEL_TRAFICO: Record<Trafico, string> = {
+  suficiente: "No esconde ninguno.",
+  insuficiente: "Esconde los criterios marcados «tráfico suficiente».",
+};
+
 /** «Transaccional: cuando la venta se cierra sin que nadie la trabaje… Esconde…» (la definición sale de la escala). */
-function tituloDeOpcion(pregunta: PreguntaDelPerfil | null, valor: Cierre | Despues, etiqueta: string, efecto: string): string {
+function tituloDeOpcion(pregunta: PreguntaDelPerfil | null, valor: Cierre | Despues | Trafico, etiqueta: string, efecto: string): string {
   const def = definicionDeOpcion(pregunta, valor);
   return `${etiqueta}: ${def ? `${def}. ` : ""}${efecto}`;
 }
@@ -307,7 +315,8 @@ export default function VistaDeLaEscala({
     if (nueva === industria) return;
     const habitual = datos.ediciones.find((e) => e.slug === nueva)?.perfilHabitual ?? null;
     router.push(
-      `${hrefDeArea(area.slug)}${consultaDeLaEscala({ vista, perfil: habitual ?? perfil, industria: nueva, dimension, celda: seleccionHacia(seleccion), herramientas })}`,
+      // El perfil habitual responde cómo se cierra y qué pasa después; el tráfico es de la empresa y se conserva.
+      `${hrefDeArea(area.slug)}${consultaDeLaEscala({ vista, perfil: habitual ? { ...habitual, trafico: perfil.trafico ?? null } : perfil, industria: nueva, dimension, celda: seleccionHacia(seleccion), herramientas })}`,
     );
   };
 
@@ -573,10 +582,29 @@ export default function VistaDeLaEscala({
               />
             </GrupoDeControl>
 
+            {/* La tercera pregunta solo existe desde el borrador 9.0.0: una versión que no la trae no la muestra. */}
+            {datos.perfilDeNegocio.trafico && (
+              <GrupoDeControl nombre={datos.perfilDeNegocio.trafico.pregunta}>
+                <Segmentado<"todas" | Trafico>
+                  etiqueta={datos.perfilDeNegocio.trafico.pregunta}
+                  valor={perfil.trafico ?? "todas"}
+                  onCambio={(k) => setPerfil((p) => ({ ...p, trafico: k === "todas" ? null : k }))}
+                  opciones={[
+                    { clave: "todas", etiqueta: "Sin filtrar", title: "Sin filtrar: se ven los criterios que piden tráfico suficiente, con su marca." },
+                    ...TRAFICOS.map((t) => ({
+                      clave: t,
+                      etiqueta: ETIQUETA_DE_TRAFICO[t],
+                      title: tituloDeOpcion(datos.perfilDeNegocio.trafico, t, ETIQUETA_DE_TRAFICO[t], EFECTO_DEL_TRAFICO[t]),
+                    })),
+                  ]}
+                />
+              </GrupoDeControl>
+            )}
+
             <FiltroDeHerramientas datos={datos} perfil={perfil} activas={herramientas} onCambio={setHerramientas} />
           </div>
           {datos.edicion && <ResumenDeLaEdicion datos={datos} />}
-          {(perfil.cierre || perfil.despues) && <ResumenDelPerfil datos={datos} perfil={perfil} />}
+          {(perfil.cierre || perfil.despues || perfil.trafico) && <ResumenDelPerfil datos={datos} perfil={perfil} />}
           <ResumenDeHerramientas datos={datos} activas={herramientas} />
         </section>
 

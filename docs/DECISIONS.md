@@ -11871,3 +11871,90 @@ escribía `Tarea.reunionHechaId` (0 tareas de clase reunión en producción el 2
   la casa y cuántos de afuera («Estuvieron Lidia, Andrés y 2 de afuera»), con la misma regla de la cita (quien no ve la
   cita no lo ve). Los correos de afuera no salen de la reunión. La sesión, el contexto, el encargado y quién la pidió ya
   se guardaban y se veían.
+
+## La escala 9.0 con lo de Insider: «tráfico suficiente», la lectura de preparación y el mapa 2.0.0 (2026-10-26, N4, N6 y N7)
+
+**Contexto.** Lo que faltaba de Insider en la escala (plan: `docs/escala-engagement-avanzado-plan.md`). El borrador
+9.0.0 traía «tráfico suficiente» como un «Si…» en el texto de dos criterios y la lectura de preparación como prosa sin
+números legibles. Elías dejó a criterio de Claude los rangos de tráfico y de base. Todo va al borrador 9.0.0: nada se
+publica.
+
+**Decisiones.**
+
+- **«Tráfico suficiente» es una marca de perfil con su pregunta (N4).** Es la tercera pregunta del perfil, «El tráfico
+  del sitio o la app» (`PREGUNTA_DEL_TRAFICO`): Suficiente o insuficiente. *Por qué marca y no «Si…»:* un «Si…» no se
+  puede elegir en la pantalla ni preguntar en el cuestionario, y la lectura de preparación tendría que adivinar el
+  umbral. Con la marca, el perfil filtra, y el umbral se escribe una sola vez. La etiqueta admite UNA marca, así que
+  ningún criterio queda con dos condiciones. Turismo 1.7.F503 sigue con «venta sin vendedor». En el tipo la pregunta es
+  opcional (`Perfil.trafico?`): una versión que no la trae, o alguien que no la responde, no filtra. El port de Python:
+  `aplica(c, venta, rel, trafico=None)`; `PERFILES` siguen siendo 9, porque el tráfico sin responder no filtra. La rama
+  nueva se compara contra el Python marca por marca (`perfil.test.ts`).
+- **Los umbrales viven en el texto de la escala, y Nexus los lee de ahí.** El del tráfico está en la definición de
+  «Suficiente» de la tercera pregunta. El de la base y los cimientos, en «Preparación para engagement avanzado»: los
+  cimientos van por su identificador, entre comillas invertidas (`Escala.preparacion`, `parsear.ts`). Se editan en
+  Escala › Borrador. Si no se leen, quedan en `avisosDeLectura` y frenan la publicación. *Por qué no una tabla o un
+  ajuste:* van versionados con la escala, la marca y la lectura usan el mismo número, y no hace falta SQL.
+- **Los umbrales y los rangos que propone Claude.**
+  - **Tráfico: 50.000 visitas al mes o más, provisional.** Es el borde de un rango que ya existe («de 50 mil a 200
+    mil»), así que el rango decide sin confirmar nada. Calza con lo que decía la ficha de Insider («decenas de miles de
+    personas activas al mes»). Se cambia cuando Insider mande su calificación de clientes.
+  - **Base: 5.000 contactos con permiso**, el número del plan. Cae dentro del rango «de mil a 10 mil», así que una
+    empresa ahí queda «por confirmar». Queda una pregunta en el borrador: partir ese rango o subir el umbral a 10.000.
+  - **Los rangos son los cinco del 24 oct**, que ya existen en HubSpot y todavía sin ninguna empresa llenada:
+    - tráfico al mes: menos de 10 mil, 10 a 50 mil, 50 a 200 mil, 200 mil a 1 millón, más de 1 millón;
+    - base: menos de mil, 1 a 10 mil, 10 a 50 mil, 50 a 200 mil, más de 200 mil.
+  - **Por qué esos bordes.** Los rangos crecen de a cinco veces, que es como cambia lo que se puede hacer. Por debajo
+    de 10 mil visitas, una prueba A/B tarda meses. Entre 10 y 50 mil, se personaliza por segmento, no a cada persona.
+    Desde 50 mil empieza la personalización en la sesión. Desde 200 mil se puede medir contra un grupo de control por
+    recorrido. Y más de 1 millón es escala empresarial. En la base, con menos de mil no hay audiencia para dividir; los
+    demás bordes siguen al tráfico. Los rangos están en `RANGOS_DE_TRAFICO` y `RANGOS_DE_BASE`
+    (`lib/escala/preparacion.ts`), y una prueba los ata a las opciones de los datos de la empresa.
+- **La lectura de preparación (N6).** No cambia el nivel. La regla es pura (`lib/escala/preparacion.ts`):
+  - **«Todavía no»:** no cumple el perfil, el tráfico, la base o Marketing en Funcional. El perfil es que le venda a
+    personas o a ambos, y que el cliente vuelva (recompra o relación continua).
+  - **«Falta saber»:** falta un dato, o un rango contiene el umbral. Dice cuál.
+  - **«Casi lista»:** cumple todo lo de arriba y le falta un cimiento.
+  - **«Lista»:** cumple todo.
+  - **El orden:** lo que no cumple pesa más que lo que falta saber.
+  - **Lo que no mira:** cómo se cierra la venta. Queda una pregunta en el borrador.
+  - **Los cimientos:** el permiso por canal, lo que hace en el sitio unido a su ficha y el catálogo de su edición
+    (Ecommerce 1.2.F102, Turismo 1.2.F501). Cuentan solo los que existen en la vista de su edición.
+- **Dónde se ve: la escala de la exploración** (`PreparacionParaEngagement`, en `PasoEscala`). La montan la preventa y
+  la exploración del proyecto del CSE, que es el mismo lienzo. *Por qué no en el documento Diagnóstico:* su escala son
+  nombres de nivel por área, sin criterios, y no se podría decir qué cimiento falta.
+  - **Los cimientos se marcan en la misma tarjeta**, con la operación `falta`. Se sumaron a la lista de criterios que
+    se pueden marcar; quien lee `falta` recorre solo lo que pide Funcional, así que no se mezclan.
+  - **Sin marca:** uno de Funcional o de Eficiente se da por cumplido si su dimensión está confirmada en ese nivel o
+    más arriba. Uno de riesgo cuenta solo si se marca.
+  - **Hasta que se publique la 9.0, la tarjeta no aparece:** la 8.9.1 no trae la lectura.
+  - **No nombra herramientas.**
+- **La página de resultados del test (O3) no la muestra todavía.** El test no pregunta el perfil ni el tráfico, no
+  marca criterios y guarda el resultado congelado. Conectarla pide la pregunta del tráfico en el test (O2 ya la prevé)
+  y una versión nueva del resultado.
+- **El mapa de herramientas 2.0.0 (N7), en `docs/escala/mapa_de_herramientas-9-0.md`.**
+  - **Lo que suma:** los 16 cambios con quién los habilita (2.8.O3 todavía no tiene criterio nuevo). La ficha de Insider
+    dice cuándo conviene con el umbral de tráfico; la de HubSpot, que no personaliza al anónimo por su comportamiento.
+  - **Lo que lleva del 1.0.1:** lo de cada criterio que cambió de número pasa a su número nuevo, y lo de los 13 que se
+    retiran sin reemplazo sale.
+  - *Por qué un archivo aparte:* `mapa.test.ts` valida el oficial contra la escala del repo, que es la 8.9.1. Al
+    publicar la 9.0, el 2.0.0 reemplaza a `mapa_de_herramientas.md`; está en «Lo que falta escribir».
+- **El borrador de producción se completa sin rehacerse.** Las entradas de la noche 3 van al final del catálogo.
+  `scripts/escala-borrador-9-0.ts --apply` busca la última entrada con la que el borrador queda igual (sin «Lo que falta
+  decidir») y guarda solo las que siguen. Frena en tres casos:
+  - el borrador no es igual a ningún punto;
+  - su bitácora tiene un cambio que no hizo el script (el editor o una importación a mano): reescribiría entera «Lo que
+    falta decidir»;
+  - el código que corre en producción (`/api/health`) no lee la marca «tráfico suficiente». *Por qué:* con el código de
+    antes, Escala › Borrador no abre para nadie. Si no puede mirarlo, pide `--desplegado`.
+
+  Medido el 26 oct, solo leyendo: el de producción (revisión 105, sin cambios a mano) tiene 129 de 134 puntos y se suman
+  5; producción corre a9df93e2, que todavía no lee la marca, así que hoy el script frena. **El orden: deploy de esta rama,
+  después el `--apply`.**
+
+**Pendiente.**
+
+- Correr el `--apply` (la sesión principal).
+- La calificación de clientes de Insider, con su umbral de tráfico.
+- Las dos preguntas nuevas del borrador: el rango de la base y si «Lista» pide venta sin vendedor.
+- Escribir la lectura en el dato `calificaInsider` y en HubSpot (`nexus_califica_insider`).
+- La pregunta del tráfico en el cuestionario de escala y en el test.

@@ -33,6 +33,7 @@ import { ConQueSeMide } from "./Identificacion";
 import PanelDelAgente from "./PanelDelAgente";
 import { piezaDelDestino } from "./piezas";
 import { FilaSugerida } from "./Propuestas";
+import PreparacionParaEngagement from "./PreparacionParaEngagement";
 import { QueVaPrimero } from "./QueVaPrimero";
 import RuedaDelEquipo from "./RuedaDelEquipo";
 
@@ -654,6 +655,7 @@ export default function PasoEscala() {
       <QueExplorarEnLaProxima />
       <ConQueSeMide />
       <DondeEstaHoy />
+      <PreparacionParaEngagement />
       {hayAreas && (
         <div data-recorrido="preventa.escala.primero">
           <QueVaPrimero />

@@ -12,8 +12,17 @@
  *   npx tsx scripts/escala-borrador-9-0.ts --informe        # además reescribe docs/escala/borrador-9-0.md
  *   $env:ALLOW_PROD_WRITE="1"; npx tsx scripts/escala-borrador-9-0.ts --apply [--por correo@smarteamcr.com]
  *
- * Con --apply: si no hay borrador, lo abre (9.0.0 desde la 8.9.1); si ya hay uno que no es el 9.0.0 o que ya tiene
- * cambios, frena (no pisa el trabajo de nadie: `scripts/escala-datos.ts descartar` lo saca, a sabiendas).
+ * Con --apply: si no hay borrador, lo abre (9.0.0 desde la 8.9.1); si ya hay uno que no es el 9.0.0, frena.
+ * Si el 9.0.0 ya tiene cambios, CONTINÚA desde donde quedó (2026-10-26, noche 3: N4, N6 y N7 se sumaron al final del
+ * catálogo): busca la última entrada del catálogo con la que el borrador queda igual —sin «Lo que falta decidir»— y
+ * guarda solo las que siguen, cada una con su nota, más «Lo que falta decidir» al día. Si el borrador no es igual a
+ * ningún punto del catálogo, o si su bitácora tiene un cambio que no hizo este script (alguien lo cambió a mano, también
+ * en «Lo que falta decidir»), frena: no pisa el trabajo de nadie (`scripts/escala-datos.ts descartar` lo saca, a sabiendas).
+ *
+ * ⚠ El --apply va DESPUÉS del deploy de la rama que trae lo que escribe: la marca «tráfico suficiente» (N4) solo la lee
+ * ese código, y con el de antes Escala › Borrador no abre para nadie. El script lo mira solo: pide el commit que corre
+ * en producción (/api/health) y frena si ese código no la lee. Si no lo puede mirar (sin red, o sin ese commit en el
+ * repo local: `git fetch`), pide `--desplegado` para seguir, como confirmación de quien lo corre.
  */
 import "dotenv/config";
 import { spawnSync } from "node:child_process";
@@ -28,12 +37,30 @@ import { escalaDeLosDatos, generarMarkdown } from "@/lib/escala/datos/generar";
 import { conVersion, crearBorrador, guardarEnElBorrador, huellaDeLosDatos, leerBorrador, ultimaPublicada } from "@/lib/escala/datos/versiones";
 import { comprobarQueSeLee } from "@/lib/escala/nueve/aplicar";
 import { CATALOGO } from "@/lib/escala/nueve/catalogo";
-import { aplicarConDetalle, conLoQueFaltaDecidir, informeEnMarkdown, notaDeLaBitacora, parteLoQueFaltaDecidir } from "@/lib/escala/nueve/informe";
+import { aplicarConDetalle, conLoQueFaltaDecidir, informeEnMarkdown, notaDeLaBitacora, parteLoQueFaltaDecidir, sinLoQueFaltaDecidir } from "@/lib/escala/nueve/informe";
 
 const VERSION = "9.0.0";
 const DESDE = "8.9.1";
 const APPLY = resolverApply({ tablas: ["EscalaVersion", "EscalaCambio"] });
 const INFORME = process.argv.includes("--informe");
+const URL_DE_SALUD = process.env.NEXUS_HEALTH_URL ?? "https://nexus.smarteamcr.com/api/health";
+/** Lo que tiene que leer el código de producción antes de escribir el borrador (la etiqueta de la marca de N4). */
+const LO_QUE_TIENE_QUE_LEER = { archivo: "lib/escala/documento/parsear.ts", texto: "· tráfico suficiente" };
+
+/** ¿El código que corre en producción lee lo que se va a escribir? true / false, o null si no se pudo mirar. */
+async function produccionLoLee(): Promise<{ lee: boolean | null; detalle: string }> {
+  let sha: string | null = null;
+  try {
+    const r = await fetch(URL_DE_SALUD, { signal: AbortSignal.timeout(10_000) });
+    sha = ((await r.json()) as { sha?: string }).sha ?? null;
+  } catch (e) {
+    return { lee: null, detalle: `no se pudo pedir ${URL_DE_SALUD}: ${e instanceof Error ? e.message : String(e)}` };
+  }
+  if (!sha || !/^[0-9a-f]{7,40}$/i.test(sha)) return { lee: null, detalle: `${URL_DE_SALUD} no dijo qué commit corre` };
+  const r = spawnSync("git", ["show", `${sha}:${LO_QUE_TIENE_QUE_LEER.archivo}`], { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
+  if (r.status !== 0) return { lee: null, detalle: `el commit de producción (${sha.slice(0, 8)}) no está en este repo: corre git fetch` };
+  return { lee: r.stdout.includes(LO_QUE_TIENE_QUE_LEER.texto), detalle: `producción corre ${sha.slice(0, 8)}` };
+}
 
 function argumento(nombre: string): string | null {
   const i = process.argv.indexOf(nombre);
@@ -91,21 +118,55 @@ async function main() {
     const miembro = candidato ? await prisma.teamMember.findFirst({ where: { email: { equals: candidato, mode: "insensitive" } }, select: { email: true } }) : null;
     if (!miembro) throw new Error(`${candidato ? `«${candidato}» no es del equipo en Nexus.` : "Falta quién escribe."} Usa --por tu@smarteamcr.com.`);
     const por = miembro.email;
+    const prod = await produccionLoLee();
+    if (prod.lee === false) {
+      throw new Error(
+        `${prod.detalle}, y ese código no lee la marca «tráfico suficiente»: con el borrador escrito, Escala › Borrador no abriría. Despliega primero la rama que la trae.`,
+      );
+    }
+    if (prod.lee === null && !process.argv.includes("--desplegado")) {
+      throw new Error(`No se pudo mirar qué corre en producción (${prod.detalle}). Si ya está desplegada la rama que trae la marca «tráfico suficiente», vuelve a correrlo con --desplegado.`);
+    }
+    console.log(prod.lee ? `✓ ${prod.detalle}, que lee lo que se escribe.` : "⚠ No se pudo mirar producción: sigue por --desplegado.");
     let borrador = await leerBorrador(prisma);
-    if (borrador && (borrador.version !== VERSION || borrador.revision > 0 || borrador.basadaEn !== DESDE)) {
+    if (borrador && (borrador.version !== VERSION || borrador.basadaEn !== DESDE)) {
       throw new Error(
         `Ya hay un borrador abierto (la ${borrador.version}, desde la ${borrador.basadaEn ?? "—"}, revisión ${borrador.revision}). No se pisa: revísalo o descártalo con scripts/escala-datos.ts.`,
       );
     }
     if (!borrador) borrador = await crearBorrador(prisma, { version: VERSION, desde: DESDE, por });
-    console.log(`\nBorrador ${borrador.version} abierto. Guardando punto por punto…`);
+    // Desde dónde sigue: la última entrada con la que el borrador queda igual (0 = recién abierto, nada aplicado).
+    const huellaDelBorrador = huellaDeLosDatos(sinLoQueFaltaDecidir(borrador.datos, parte));
+    const desde = [datosBase, ...pasos].map((d) => huellaDeLosDatos(sinLoQueFaltaDecidir(d, parte))).lastIndexOf(huellaDelBorrador);
+    if (desde === -1) {
+      throw new Error(
+        `El borrador ${borrador.version} (revisión ${borrador.revision}) no es igual a ningún punto del catálogo: alguien lo cambió a mano. No se pisa: revísalo antes de seguir.`,
+      );
+    }
+    // La comparación deja afuera «Lo que falta decidir», que este script reescribe entera. Lo que alguien haya cambiado
+    // ahí (o en cualquier parte) queda en la bitácora con otro origen u otra nota: con eso, frena.
+    const ajenos = await prisma.escalaCambio.count({
+      // Con OR y el nulo a la vista: un NOT sobre una nota vacía no cuenta la fila en SQL.
+      where: { versionId: borrador.id, OR: [{ origen: { not: "importacion" } }, { nota: null }, { NOT: { nota: { startsWith: "9.0 · " } } }] },
+    });
+    if (ajenos > 0) {
+      throw new Error(
+        `El borrador ${borrador.version} tiene ${ajenos} cambio(s) en la bitácora que no hizo este script (el editor o una importación a mano): «Lo que falta decidir» se reescribiría entera. No se pisa: revísalo antes de seguir.`,
+      );
+    }
+    console.log(
+      desde === 0
+        ? `\nBorrador ${borrador.version} abierto. Guardando punto por punto…`
+        : `\nEl borrador ${borrador.version} ya tiene ${desde} de los ${CATALOGO.length} puntos (revisión ${borrador.revision}). Se suman los que siguen…`,
+    );
 
     // «Lo que falta decidir» va PRIMERO: si la corrida se corta a la mitad, el borrador ya no se puede publicar.
     const conParte = conLoQueFaltaDecidir(borrador.datos, parte);
-    let r = await guardarEnElBorrador(prisma, {
+    const cambiosDeLaParte = cambiosEntre(borrador.datos, conParte);
+    let r = cambiosDeLaParte.length === 0 ? { revision: borrador.revision } : await guardarEnElBorrador(prisma, {
       borrador,
       datos: conParte,
-      cambios: cambiosEntre(borrador.datos, conParte),
+      cambios: cambiosDeLaParte,
       origen: "importacion",
       por,
       nota: "9.0 · Lo que falta decidir: las preguntas para Elías, lo que falta escribir y lo que espera la prueba. Sale antes de publicar.",
@@ -113,7 +174,7 @@ async function main() {
     borrador = { ...borrador, revision: r.revision, datos: conParte };
     let antes = conParte;
     let guardados = 0;
-    for (let i = 0; i < CATALOGO.length; i++) {
+    for (let i = desde; i < CATALOGO.length; i++) {
       const despues = conLoQueFaltaDecidir(pasos[i], parte);
       const cambios = cambiosEntre(antes, despues);
       if (cambios.length === 0) continue;

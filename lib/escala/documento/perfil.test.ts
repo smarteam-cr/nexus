@@ -62,6 +62,17 @@ describe("aplica — cada rama", () => {
     expect(aplica(criterio("recompra"), P("transaccional", "continua"))).toBe(false);
   });
 
+  it("«tráfico suficiente» no cuenta donde hay poco tráfico; sin responder la tercera pregunta, no filtra", () => {
+    expect(aplica(criterio("tráfico suficiente"), { ...P("mixta", "recompra"), trafico: "insuficiente" })).toBe(false);
+    expect(aplica(criterio("tráfico suficiente"), { ...P("mixta", "recompra"), trafico: "suficiente" })).toBe(true);
+    expect(aplica(criterio("tráfico suficiente"), P("mixta", "recompra"))).toBe(true);
+    expect(aplica(criterio("tráfico suficiente"), { ...P("con equipo", "única"), trafico: null })).toBe(true);
+    // La tercera pregunta solo mira su marca: un criterio de otra marca no cambia con el tráfico.
+    for (const marca of MARCAS_DE_PERFIL.filter((m) => m !== "tráfico suficiente")) {
+      expect(aplica(criterio(marca), { ...P("mixta", "continua"), trafico: "insuficiente" })).toBe(aplica(criterio(marca), P("mixta", "continua")));
+    }
+  });
+
   it("sin perfil elegido todo aplica; con una sola pregunta, filtra solo esa", () => {
     for (const marca of [...MARCAS_DE_PERFIL, null]) {
       expect(aplica(criterio(marca), SIN_PERFIL)).toBe(true);
@@ -77,7 +88,7 @@ describe("aplica — cada rama", () => {
 
 describe("el perfil en la URL y en palabras", () => {
   it("ida y vuelta, sin tildes en la URL", () => {
-    for (const p of [...PERFILES_COMPLETOS, SIN_PERFIL, P("mixta", null), P(null, "única")]) {
+    for (const p of [...PERFILES_COMPLETOS, SIN_PERFIL, P("mixta", null), P(null, "única"), { ...P("transaccional", "recompra"), trafico: "suficiente" as const }, { ...P(null, null), trafico: "insuficiente" as const }]) {
       const url = perfilParaUrl(p);
       expect(JSON.stringify(url)).not.toMatch(/[áéíóú ]/);
       expect(perfilDesdeUrl(url)).toEqual(p);
@@ -91,6 +102,7 @@ describe("el perfil en la URL y en palabras", () => {
   it("se describe corto", () => {
     expect(describirPerfil(P("transaccional", "recompra"))).toBe("Transaccional · Recompra");
     expect(describirPerfil(SIN_PERFIL)).toBeNull();
+    expect(describirPerfil({ ...P("mixta", null), trafico: "insuficiente" })).toBe("Mixta · Poco tráfico");
   });
 });
 
@@ -170,5 +182,36 @@ describe.skipIf(!PYTHON)("aplica es la misma regla que pruebas_escala.py (sobre 
         expect(dimensionAplica(d, perfil), `${d.id} ${perfil.cierre}/${perfil.despues}`).toBe(esperado);
       }
     }
+  });
+});
+
+/** La rama del tráfico, que la escala publicada todavía no usa: se compara con criterios sueltos, marca por marca. */
+const PUENTE_DE_LAS_MARCAS = `
+import ast, json, sys
+src = open(sys.argv[1], encoding="utf-8").read()
+arbol = ast.parse(src)
+ns = {}
+exec(compile(ast.Module(body=[n for n in arbol.body if isinstance(n, ast.FunctionDef) and n.name == "aplica"], type_ignores=[]), "pruebas_escala.py", "exec"), ns)
+salida = {}
+for marca in json.loads(sys.argv[2]):
+    for venta in ["con equipo", "transaccional", "mixta"]:
+        for rel in ["única", "recompra", "continua"]:
+            for trafico in [None, "suficiente", "insuficiente"]:
+                salida["|".join(["null" if x is None else x for x in (marca, venta, rel, trafico)])] = ns["aplica"]({"perfil": marca}, venta, rel, trafico)
+print(json.dumps(salida))
+`;
+
+describe.skipIf(!PYTHON)("aplica es la misma regla que pruebas_escala.py (cada marca, con la tercera pregunta)", () => {
+  it("con y sin tráfico, en los 9 perfiles, da lo mismo que el Python", () => {
+    const marcas = [...MARCAS_DE_PERFIL, null];
+    const r = spawnSync(PYTHON!, ["-c", PUENTE_DE_LAS_MARCAS, RUTA_DE_LAS_PRUEBAS, JSON.stringify(marcas)], { encoding: "utf8" });
+    expect(r.status, r.stderr).toBe(0);
+    const python = JSON.parse(r.stdout) as Record<string, boolean>;
+    for (const marca of marcas)
+      for (const p of PERFILES_COMPLETOS)
+        for (const trafico of [null, "suficiente", "insuficiente"] as const) {
+          const clave = [String(marca), p.cierre, p.despues, String(trafico)].join("|");
+          expect(aplica(criterio(marca), { ...p, trafico }), clave).toBe(python[clave]);
+        }
   });
 });

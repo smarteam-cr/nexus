@@ -429,12 +429,48 @@ class Aplicador {
         return;
       }
       case "prosa-agregar": {
-        const parte = datos.partes.find((p) => p.tipo === "prosa" && p.bloques[0]?.tipo === "titulo" && p.bloques[0].texto.startsWith(op.parte));
-        if (!parte) this.falla(`no hay una parte de prosa que empiece con «${op.parte}».`);
-        parte.bloques.push(...structuredClone(op.bloques));
+        this.parteDeProsa(op.parte).bloques.push(...this.conIds(op.bloques));
+        return;
+      }
+      case "prosa-insertar": {
+        const parte = this.parteDeProsa(op.parte);
+        const i = this.bloqueQueEmpieza(parte.bloques, op.despuesDe, op.parte);
+        parte.bloques.splice(i + 1, 0, ...this.conIds(op.bloques));
+        return;
+      }
+      case "prosa-cambiar": {
+        const parte = this.parteDeProsa(op.parte);
+        const i = this.bloqueQueEmpieza(parte.bloques, op.empieza, op.parte);
+        parte.bloques.splice(i, 1, ...this.conIds(op.bloques));
         return;
       }
     }
+  }
+
+  private parteDeProsa(titulo: string): Extract<EscalaDatos["partes"][number], { tipo: "prosa" }> {
+    const parte = this.s.datos.partes.find((p) => p.tipo === "prosa" && p.bloques[0]?.tipo === "titulo" && p.bloques[0].texto.startsWith(titulo));
+    if (!parte || parte.tipo !== "prosa") this.falla(`no hay una parte de prosa que empiece con «${titulo}».`);
+    return parte;
+  }
+
+  /** El índice del primer bloque cuyo texto (o el primer punto, en una lista) empieza con `inicio`. */
+  private bloqueQueEmpieza(bloques: Bloque[], inicio: string, parte: string): number {
+    const i = bloques.findIndex((b) =>
+      b.tipo === "titulo" || b.tipo === "parrafo" ? b.texto.startsWith(inicio) : b.tipo === "lista" || b.tipo === "numerada" ? (b.items[0] ?? "").startsWith(inicio) : false,
+    );
+    if (i === -1) this.falla(`«${parte}» no tiene un bloque que empiece con «${inicio}».`);
+    return i;
+  }
+
+  /** Los bloques con cada `` `@alias` `` escrito con su identificador. */
+  private conIds(bloques: Bloque[]): Bloque[] {
+    const t = (s: string) => s.replace(/`(@[^`]+)`/g, (_, alias: string) => "`" + this.ref(alias) + "`");
+    return structuredClone(bloques).map((b) => {
+      if (b.tipo === "titulo" || b.tipo === "parrafo") return { ...b, texto: t(b.texto) };
+      if (b.tipo === "lista" || b.tipo === "numerada") return { ...b, items: b.items.map(t) };
+      if (b.tipo === "tabla") return { ...b, filas: b.filas.map((f) => f.map(t)) };
+      return b;
+    });
   }
 
   private idPropio(e: EdicionDeLaEscala, nivelId: string): string {

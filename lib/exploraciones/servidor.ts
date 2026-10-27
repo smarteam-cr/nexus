@@ -50,7 +50,20 @@ const SELECT_FILA = {
   archivadaEn: true,
   createdAt: true,
   updatedAt: true,
-  client: { select: { id: true, name: true, hubspotCompanyId: true, industry: true, kind: true } },
+  client: {
+    select: {
+      id: true,
+      name: true,
+      hubspotCompanyId: true,
+      industry: true,
+      kind: true,
+      // Lo que lee la lectura de preparación (N6), de los datos de la empresa.
+      aQuienVende: true,
+      perfilDespues: true,
+      trafico: true,
+      baseConsentimiento: true,
+    },
+  },
 } satisfies Prisma.ExploracionDeVentaSelect;
 
 export type FilaDeExploracion = Prisma.ExploracionDeVentaGetPayload<{ select: typeof SELECT_FILA }>;
@@ -356,7 +369,15 @@ export interface ExploracionParaLaPantalla {
   projectId: string | null;
   /** Qué se explora: la venta o la estrategia del cliente (lib/exploraciones/marco.ts). */
   marco: ClaveDeMarco;
-  empresa: { clientId: string; nombre: string; hubspotCompanyId: string | null; industria: string | null; kind: string };
+  empresa: {
+    clientId: string;
+    nombre: string;
+    hubspotCompanyId: string | null;
+    industria: string | null;
+    kind: string;
+    /** De los datos de la empresa, para la lectura de preparación (N6). Cada uno puede faltar. */
+    vende?: { aQuienVende: string | null; despues: string | null; trafico: string | null; base: string | null };
+  };
   estado: EstadoDeExploracion;
   /** Lo que el agente leyó de HubSpot: el test, la agenda, los correos que no pudo leer. */
   leido: LoLeidoDeHubspot;
@@ -401,6 +422,12 @@ export function paraLaPantalla(fila: FilaDeExploracion): ExploracionParaLaPantal
       hubspotCompanyId: fila.client.hubspotCompanyId,
       industria: fila.client.industry,
       kind: fila.client.kind,
+      vende: {
+        aQuienVende: fila.client.aQuienVende ?? null,
+        despues: fila.client.perfilDespues ?? null,
+        trafico: fila.client.trafico ?? null,
+        base: fila.client.baseConsentimiento ?? null,
+      },
     },
     estado: estadoDesdeFila(fila),
     leido: loQueVieneDeLaAgenda(leerLoLeido(fila.test)),

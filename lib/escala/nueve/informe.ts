@@ -114,6 +114,12 @@ export function parteLoQueFaltaDecidir(version: string, estado: EstadoDelBorrado
   return { tipo: "prosa", bloques: bloques.filter((b) => !(b.tipo === "numerada" && b.items.length === 0) && !(b.tipo === "lista" && b.items.length === 0)) };
 }
 
+/** Los datos sin «Lo que falta decidir» (la parte con ese título): para comparar lo que importa de dos borradores. */
+export function sinLoQueFaltaDecidir(datos: EscalaDatos, parte: ParteDeProsa): EscalaDatos {
+  const titulo = parte.bloques[0]?.tipo === "titulo" ? parte.bloques[0].texto : "";
+  return { ...datos, partes: datos.partes.filter((p) => !(p.tipo === "prosa" && p.bloques[0]?.tipo === "titulo" && p.bloques[0].texto === titulo)) };
+}
+
 /** Los datos del borrador con «Lo que falta decidir» como segunda parte (la reemplaza si ya estaba). */
 export function conLoQueFaltaDecidir(datos: EscalaDatos, parte: ParteDeProsa): EscalaDatos {
   const nuevos = structuredClone(datos);
