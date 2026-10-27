@@ -26,5 +26,5 @@ describe("fin de línea", () => {
     expect(archivos.length).toBeGreaterThan(500);
     const conDobleCr = archivos.filter((rel) => fs.readFileSync(path.join(RAIZ, rel)).includes("\r\r"));
     expect(conDobleCr.map((f) => f.split(path.sep).join("/"))).toEqual([]);
-  });
+  }, 30_000); // recorre el repo entero: con la máquina cargada pasa de los 5 s por defecto
 });

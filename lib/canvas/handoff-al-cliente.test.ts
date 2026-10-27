@@ -416,7 +416,7 @@ describe("⭐ el censo está completo", () => {
       sinLlamada.map((l) => `${l.archivo}${l.ancla ? ` (ancla: ${l.ancla})` : ""}`),
       "El censo declara llamadas que ya no existen, o cuya ancla dejó de matchear.",
     ).toEqual([]);
-  });
+  }, 30_000); // recorre el repo entero: con la máquina cargada pasa de los 5 s por defecto
 
   it("⛔ ningún ancla es lo que la guarda verifica", () => {
     /* Ver el docblock de `ancla`. Si un ancla vuelve a ser el nombre de una allowlist, sacar esa

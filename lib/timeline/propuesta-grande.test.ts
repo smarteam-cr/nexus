@@ -156,7 +156,7 @@ describe("L3 P3b · el fixture grande no trae nada real", () => {
       if (fs.existsSync(path.join(raiz, dir))) recorrer(dir);
     }
     expect(culpables).toEqual([]);
-  });
+  }, 30_000); // recorre el repo entero: con la máquina cargada pasa de los 5 s por defecto
 });
 
 describe("L3 P3b · el fixture grande sigue siendo el caso que miden las guardas", () => {

@@ -39,5 +39,5 @@ describe("sin el carácter de retroceso", () => {
       }
     }
     expect(conRetroceso, "cambia el retroceso por \\b (o escríbelo como \\x08 si de verdad hace falta)").toEqual([]);
-  });
+  }, 30_000); // recorre el repo entero: con la máquina cargada pasa de los 5 s por defecto
 });
