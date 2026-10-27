@@ -74,9 +74,10 @@
  *     (lib/sessions/motivo-sin-texto-server.ts, T4), cada 10 minutos. Sin IA ni red: una consulta y lo que cambió.
  *   - reuniones-propuestas → a qué empresa propone Nexus cada reunión con texto sin dueña (lib/sessions/
  *     propuesta-de-empresa-server.ts, T3), una vez por hora. El resolver único y una consulta de solo lectura a HubSpot.
- *   - analizador-venta → analiza sola cada reunión de venta reciente con transcripción (lib/analizador-venta/, S3), de a
- *     una por tick y si queda presupuesto automático. Gated por ANALIZADOR_VENTA=1 (apagado: primero la prueban los super
- *     admin con Andrés); a mano, desde cada reunión.
+ *   - analizador-venta → analiza sola cada reunión de venta reciente con transcripción que es la sesión de una
+ *     exploración de la preventa (lib/analizador-venta/, S3; Elías, 2026-10-27), de a una por tick y si queda presupuesto
+ *     automático. Gated por ANALIZADOR_VENTA=1 (apagado: primero la prueban los super admin con Andrés); a mano, desde
+ *     la preventa.
  *   - reuniones-audio → mira las transcripciones de audio en curso (lib/sessions/audio-de-reunion-server.ts, T5), cada
  *     tick. Gated por REUNIONES_AUDIO=1 y el bucket; sin audios en curso devuelve SIN_TURNO.
  *   - tests-hubspot → los tests del diagnóstico de rendimiento en HubSpot (área O, lib/tests-diagnostico/hubspot-server.ts):
@@ -1337,7 +1338,8 @@ const reunionesAudio: JobDef = {
 
 /**
  * El analizador de reuniones de venta (S3, 2026-10-25; lib/analizador-venta/analizar-server.ts): cada tick, la reunión de
- * venta más vieja de los últimos 14 días con transcripción y sin análisis, si queda presupuesto automático. Gated por
+ * venta más vieja de los últimos 14 días con transcripción y sin análisis que es la sesión de una exploración de la
+ * preventa (Elías, 2026-10-27), si queda presupuesto automático. Gated por
  * ANALIZADOR_VENTA=1. Sin nada que analizar devuelve SIN_TURNO. Un análisis que falla queda guardado con su error (no se
  * reintenta solo) y el job LANZA.
  */

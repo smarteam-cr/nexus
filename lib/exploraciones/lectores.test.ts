@@ -92,6 +92,7 @@ type Destino =
 const CENSO: Record<string, { destino: Destino; motivo: string }> = {
   "lib/analizador-venta/analizar-server.ts": { destino: "analizador-de-venta", motivo: "Qué empresa tiene una preventa de venta abierta (solo el clientId), para decidir si una reunión es de venta." },
   "lib/analizador-venta/guardia-server.ts": { destino: "analizador-de-venta", motivo: "S4/S5 (2026-10-27): de qué empresa es la preventa (solo clientId y projectId), para que el análisis toque solo sus reuniones." },
+  "lib/analizador-venta/reuniones-de-venta-server.ts": { destino: "analizador-de-venta", motivo: "2026-10-27: qué reuniones son la sesión de una exploración abierta de la preventa (solo sus ids), para que el job analice solo esas." },
   "lib/analizador-venta/alcance.ts": { destino: "equipos-del-cliente", motivo: "Qué se esperaba explorar en una sesión: el área o los temas del equipo del cliente (EQUIPOS)." },
   "lib/analizador-venta/revision.ts": { destino: "equipos-del-cliente", motivo: "De qué equipo es cada dimensión que faltó explorar (los temas de EQUIPOS), para agruparlas en «Cómo trabajaste esta sesión»." },
   "components/analizador-venta/ComoTrabajasteEstaSesion.tsx": { destino: "ventas", motivo: "S4: «Cómo trabajaste esta sesión», dentro del lienzo de la preventa (el equipo de la sesión y la escala, para saber de qué equipo es lo que faltó explorar)." },
@@ -428,8 +429,9 @@ const PUERTAS: Record<Exclude<Destino, "ventas">, { permitidas: RegExp; prohibid
     prohibidas: /@\/lib\/exploraciones\/|\bparaLaPropuesta\b|bloqueParaLaPropuesta|exploracionParaElHandoff|internoParaElCse|bloqueParaElHandoff|leerContenido|leerExploracion\b|propuesta\s*:\s*true/,
   },
   "analizador-de-venta": {
-    // La guía de antes de la reunión y la escala (las mismas piezas que la lectura de la preventa), o solo saber si hay preventa.
-    permitidas: /guiaDeAntesDeLaReunion|\.exploracionDeVenta\b/,
+    // La guía de antes de la reunión y la escala (las mismas piezas que la lectura de la preventa), o solo saber si hay preventa,
+    // o qué reuniones son la sesión de una exploración de la preventa (solo sus ids, para el job).
+    permitidas: /guiaDeAntesDeLaReunion|\.exploracionDeVenta\b|\breunionesDeLasSesionesDeLaPreventa\b/,
     // Nada que vaya al cliente ni al handoff: el análisis es interno.
     prohibidas: /\bparaLaPropuesta\b|bloqueParaLaPropuesta|exploracionParaElHandoff|bloqueParaElHandoff|internoParaElCse/,
   },
