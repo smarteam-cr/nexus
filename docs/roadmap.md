@@ -69,7 +69,7 @@
      "texto": "El borrador 9.0 suma lo de Insider: tráfico suficiente, la lectura de preparación y el mapa de herramientas."
     }
    ],
-   "sigue": "Probarla con 5 a 8 empresas de al menos 3 industrias y, con tus respuestas, publicar la 9.0.",
+   "sigue": "Probarla con 5 a 8 empresas de al menos 3 industrias y, con tus respuestas, publicar la 9.0. Falta el umbral de tráfico de Insider (lo usa provisional).",
    "teToca": "Contestar las 36 preguntas del borrador 9.0 y probar la escala con 2 o 3 empresas que conozcas (Escala › Probar).",
    "decisiones": [
     8,
@@ -135,7 +135,7 @@
      "texto": "Tu piloto (Nexus lee tus reuniones internas) y unir una tarea a un evento del calendario; los dos, apagados."
     }
    ],
-   "sigue": "Prender tu piloto y medirlo. Después, el diseño de la barra por cliente y la tarea en grande.",
+   "sigue": "En curso: la reunión del sprint sin el tope de 5 tareas y leyendo su conversación. Después, prender tu piloto y medirlo, y el diseño de la barra por cliente.",
    "teToca": "Prender tu piloto y la escritura de tareas en HubSpot («Lo que configuras tú», punto 8).",
    "decisiones": [
     7,
@@ -557,7 +557,7 @@ Sin esto, algo sigue mal o no se puede validar:
 4. **Las tareas de seguimiento en «Por asignar · Customer Success»** de una cuenta sin CSE (4 en Secure Title): ¿pasan solas al encargado nuevo?
 5. **«Fomento Urbano» y «Fomento Urbano S.A.»** parecen la misma empresa: ¿las fusiono?
 6. **«TEC- AE»** apunta a una empresa fusionada en HubSpot: ¿la reapunto (`scripts/reapuntar-empresa-fusionada.ts`)?
-7. **La reunión del sprint:** sacar el tope de 5 tareas por persona y leer también su conversación (unos US$0,014 por reunión).
+7. ✓ **La reunión del sprint:** sacar el tope de 5 tareas por persona y leer también su conversación (unos US$0,014 por reunión). **Tu respuesta (27 oct): sí.**
 8. ✓ **La escala 8.9.1:** publicada el 24 oct. Queda tu tarea #285 para revisarla en producción.
 9. **El correo de la mañana:** mandarlo por Gmail o por un proveedor.
 10. **La página de la sesión:** la minuta, la ficha y las novedades todavía se deciden en «Lo que dejó esta reunión». ¿Pasan también a Tareas (o a la agenda), para salir del todo de esa página? (Los pedidos fuera de alcance no: el 22 oct decidiste que siguen como avisos, ver la propuesta E1. La salvedad, del 24 oct: cuando el CSE acepta uno, a la CSL le nace una tarea de revisión.)
@@ -568,9 +568,9 @@ Sin esto, algo sigue mal o no se puede validar:
 15. ✓ **«Diagnóstico virtual»** (K7): confirmar con Marco que es el test en línea que deja la nota «Diagnóstico de Rendimiento» en HubSpot. **Tu respuesta (24 oct): sí, «Diagnóstico de Rendimiento» es la nota del test.**
 16. **Las Acciones coherentes** (L4): ¿se quedan en el diagnóstico o pasan a la Planificación? Te propongo dejar en el diagnóstico el enfoque con tres o cuatro acciones en una línea, y pasar el detalle a la Planificación.
 17. **El formato del documento de resultados de la preventa** (C5): lo define Ventas el lunes 27 oct.
-18. **La calificación de clientes de Insider** (N4): pedirles el umbral de tráfico con que califican a un cliente; es el de la condición «tráfico suficiente».
+18. **La calificación de clientes de Insider** (N4): pedirles el umbral de tráfico con que califican a un cliente; es el de la condición «tráfico suficiente». *(27 oct: todavía no tienes el dato; el borrador usa 50.000 visitas al mes, provisional.)*
 19. **«Capacitación» en las tareas** (P1): ¿es la formación del equipo de Smarteam, la que se le da a un cliente, o las dos? Te propongo una categoría propia para la del equipo; la de un cliente va con su cliente asociado.
-20. **Las reuniones de expansión con clientes** (S3): las conversaciones de venta con quien ya es cliente (como «Fase 2: Marketing» con CEMACO). Te propongo que entren al analizador desde el principio, porque la venta cruzada también se explora.
+20. ✓ **Las reuniones de expansión con clientes** (S3): las conversaciones de venta con quien ya es cliente (como «Fase 2: Marketing» con CEMACO). Te propongo que entren al analizador desde el principio, porque la venta cruzada también se explora. **Tu respuesta (27 oct): ya se hizo, por ahora solo para las preventas.**
 21. ✓ **El servicio para transcribir audio** (T5): para las reuniones presenciales grabadas con un teléfono, como la de Grupo Avis. Hoy Nexus no transcribe audio; hay que elegir un servicio (por ejemplo, el de Google, que ya usamos para Workspace). **Tu respuesta (24 oct): Speech-to-Text queda apagado por ahora.**
 22. **El acceso externo de Wherex:** es excliente, su acceso al cronograma sigue activo (se usó por última vez el 5 oct) y su foto publicada trae 4 tareas «por validar» de antes de D0. Te propongo revocar el acceso; la otra salida es que alguien vuelva a subir su cronograma.
 23. ✓ **Areyas y Areyá:** fusionadas el 24 oct; queda Areyá, con sus 3 proyectos y 31 reuniones (INV1 e INV2 en verde después).
@@ -588,11 +588,11 @@ Sin esto, algo sigue mal o no se puede validar:
 35. **kölbi y «TEC- AE»:** la búsqueda de fusiones confirma que kölbi apunta a su empresa vieja de HubSpot y que «TEC- AE» es la misma que «TEC». ¿Reapunto kölbi y fusiono las dos TEC?
 36. **Las 6 «Información del cliente» repetidas:** son copias exactas; el script las une (borra las copias y muda 4 documentos de Librería). ¿Lo aplico?
 37. **La comisión de HubSpot:** cuenta cada venta solo por los meses en que ya existía (reconstruye los pagos pasados con menos de 9 % de diferencia). ¿Te parece bien la regla?
-38. **El borrador de la escala 9.0:** 36 preguntas en Escala › Borrador › «Lo que falta decidir» (las principales: si los cambios de Insider conservan su número, el grupo de control de 2.8.O3, «tráfico suficiente» y su umbral, y qué ejecuta la IA en los Óptimos que hoy se cumplen sin ella). Mientras haya preguntas abiertas, no se puede publicar.
-39. **Los tests en HubSpot:** el formulario de HubSpot pisa los datos de un contacto que ya existe (la app vieja también). ¿Se acepta, o mandamos solo los correos que todavía no son contactos?
+38. ✓ **El borrador de la escala 9.0:** 36 preguntas en Escala › Borrador › «Lo que falta decidir» (las principales: si los cambios de Insider conservan su número, el grupo de control de 2.8.O3, «tráfico suficiente» y su umbral, y qué ejecuta la IA en los Óptimos que hoy se cumplen sin ella). Mientras haya preguntas abiertas, no se puede publicar. **No era una pregunta (27 oct): son las 36 preguntas que viven dentro del borrador; quedaron en «Te toca» de la escala.**
+39. **Cuando alguien que ya está en HubSpot llena el test:** el test le manda a HubSpot el nombre, la empresa y el puesto que la persona escribió. Si su correo ya es un contacto (por ejemplo, alguien de un cliente), HubSpot reemplaza lo que tenía por lo que escribió en el test; la aplicación vieja hace lo mismo. ¿Lo dejamos así, o a los que ya son contactos solo les sumamos la nota del resultado, sin tocar sus datos?
 40. ✓ **El analizador de venta:** entran solas las reuniones de prospectos y las de clientes con una preventa abierta y alguien de Ventas (95 en 90 días); «Fase 2: Marketing» de CEMACO se analiza a mano. Y la reunión de referencia no entra al análisis (es de otra empresa), se muestra al lado. ¿De acuerdo? **Tu respuesta (27 oct): el análisis automático, solo para las sesiones de las exploraciones de la preventa; «Marcar como referencia» se quita.**
-41. **Quién confirma el análisis de una sesión de venta:** hoy cualquier super admin, incluso el vendedor. ¿Tiene que confirmar el líder (Andrés)?
-42. **Las expansiones de un cliente sin preventa** (como la Fase 2 de CEMACO): antes se analizaban a mano desde la reunión; ahora hay que abrirles una preventa. ¿Está bien así?
+41. ✓ **Quién confirma el análisis de una sesión de venta:** hoy cualquier super admin, incluso el vendedor. ¿Tiene que confirmar el líder (Andrés)? **Tu respuesta (27 oct): no; puede confirmar cualquier super admin.**
+42. ✓ **Las expansiones de un cliente sin preventa** (como la Fase 2 de CEMACO): antes se analizaban a mano desde la reunión; ahora hay que abrirles una preventa. ¿Está bien así? **Tu respuesta (27 oct): sí.**
 43. **«Por decidir» en Tareas:** el tope quedó en 5 sugerencias por persona (antes 10), y 59 que nadie tocó se vencieron. ¿5 o 6?
 44. **La plantilla recomendada de la Planificación:** hoy el selector propone la completa. ¿Recomendamos una?
 45. **«Cómo llegó» un prospecto:** sumé una quinta vía, «Por la web o un anuncio». ¿La dejamos?
