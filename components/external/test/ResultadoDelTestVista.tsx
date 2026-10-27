@@ -7,6 +7,7 @@
  * niveles, el radar y las barras de cada dimensión, UNA sola recomendación con su razón y lo que cuesta quedarse, los
  * riesgos activos, los casos de uso que lo mueven (sin precio) y la invitación a conversarlo.
  */
+import Link from "next/link";
 import type { CSSProperties } from "react";
 import type { ResultadoDelTest } from "@/lib/tests-diagnostico/resultado";
 
@@ -136,12 +137,19 @@ export default function ResultadoDelTestVista({
   nombre,
   empresa,
   agenda,
+  sinCorreo = false,
 }: {
   r: ResultadoDelTest;
-  nombre: string;
+  /** Null en un resultado reabierto de la aplicación vieja (O6): su dirección no se usa para escribir un nombre. */
+  nombre: string | null;
   empresa: string | null;
   /** El enlace para agendar la sesión (`TESTS_ENLACE_DE_AGENDA`); sin él, se le dice que le escribimos. */
   agenda: string | null;
+  /**
+   * Un resultado reabierto de la app vieja (O6): Nexus no tiene el correo de quien lo mira, así que sin agenda no se le
+   * promete escribirle; se le ofrece hacer el test de nuevo.
+   */
+  sinCorreo?: boolean;
 }) {
   const parcial = r.preguntadas < r.total;
   return (
@@ -151,7 +159,7 @@ export default function ResultadoDelTestVista({
           Diagnóstico de Rendimiento · {r.areaNombre}
         </p>
         <h1 style={{ margin: "8px 0 6px", fontSize: 30, lineHeight: 1.2 }}>
-          {nombre.split(" ")[0]}, tu área de {r.areaNombre} está en {r.nivelNombre ?? "un punto que todavía no podemos ubicar"}
+          {nombre ? `${nombre.split(" ")[0]}, tu área` : "Tu área"} de {r.areaNombre} está en {r.nivelNombre ?? "un punto que todavía no podemos ubicar"}
         </h1>
         <p style={{ margin: 0, fontSize: 13, color: TINTA_SUAVE }}>
           <span style={{ display: "inline-block", padding: "2px 8px", borderRadius: 999, background: "#fff4ef", color: ACENTO, fontWeight: 700, marginRight: 8 }}>
@@ -247,6 +255,14 @@ export default function ResultadoDelTestVista({
           >
             Agendar la sesión
           </a>
+        ) : sinCorreo ? (
+          <p style={{ margin: 0, fontSize: 15, color: "#fff", fontWeight: 600 }}>
+            Para coordinarla,{" "}
+            <Link href="/external/test" style={{ color: "#fff", textDecoration: "underline" }}>
+              haz el test de nuevo
+            </Link>{" "}
+            y te escribimos al correo que dejes.
+          </p>
         ) : (
           <p style={{ margin: 0, fontSize: 15, color: "#fff", fontWeight: 600 }}>Te escribimos al correo que dejaste para coordinarla.</p>
         )}

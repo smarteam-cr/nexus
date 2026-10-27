@@ -82,6 +82,7 @@ export default function TestDelDiagnostico({
   version,
   total,
   industrias,
+  conversionGoogleAds = null,
 }: {
   area: string;
   areaNombre: string;
@@ -89,6 +90,8 @@ export default function TestDelDiagnostico({
   total: number;
   /** Las industrias de Smarteam (la misma lista de «Datos de la empresa»): la industria elige la edición de la escala. */
   industrias: { valor: string; etiqueta: string }[];
+  /** La conversión de Google Ads que se dispara al empezar (O6 etapa 2: como la página vieja). Null = no hay etiqueta. */
+  conversionGoogleAds?: string | null;
 }) {
   const clave = `nexus:test-diagnostico:${area}:${version}`;
   const [vista, setVista] = useState<Vista | null>(null);
@@ -120,6 +123,22 @@ export default function TestDelDiagnostico({
       vivo = false;
     };
   }, [clave]);
+
+  // Contar la visita (O6 etapa 3): una vez por pestaña, para medir cuántos de los que abren el test lo terminan.
+  useEffect(() => {
+    try {
+      if (window.sessionStorage.getItem(`${clave}:visita`)) return;
+      window.sessionStorage.setItem(`${clave}:visita`, "1");
+    } catch {
+      // Sin almacenamiento (modo privado estricto): se cuenta igual; el servidor no deja que una recarga sume dos.
+    }
+    void fetch("/api/external/test/visita", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ area, version }),
+      keepalive: true,
+    }).catch(() => undefined);
+  }, [clave, area, version]);
 
   // El aviso de abandono: con el test empezado y sin terminar, el navegador pregunta antes de irse.
   const enCurso = !!vista && vista.estado !== "terminado";
@@ -169,6 +188,15 @@ export default function TestDelDiagnostico({
         window.localStorage.setItem(clave, j.token);
       } catch {
         // Sin almacenamiento (navegación privada): el test funciona igual, solo que no se retoma.
+      }
+      // La conversión de Google Ads: el lead se gana aquí, cuando deja sus datos (igual que la página vieja).
+      const gtag = (window as { gtag?: (...a: unknown[]) => void }).gtag;
+      if (conversionGoogleAds && typeof gtag === "function") {
+        try {
+          gtag("event", "conversion", { send_to: conversionGoogleAds });
+        } catch {
+          // El seguimiento nunca rompe el test.
+        }
       }
       setVista(j);
       setRespuestas({});
@@ -252,7 +280,9 @@ export default function TestDelDiagnostico({
           {total} preguntas sobre cómo funciona hoy tu equipo, unos {Math.max(3, Math.round(total * 0.75))} minutos. Al terminar ves tu resultado: dónde
           está hoy tu área, lo que más la frena y por dónde empezar.
         </p>
-        <form onSubmit={empezar} style={{ display: "grid", gap: 16 }}>
+        {/* `data-hs-do-not-collect`: con el seguimiento de HubSpot prendido (O6), su «recoger formularios que no son de
+            HubSpot» mandaría este formulario por su cuenta, saltándose el job y la decisión de qué correos van. */}
+        <form onSubmit={empezar} data-hs-do-not-collect="true" style={{ display: "grid", gap: 16 }}>
           <div style={{ display: "grid", gap: 16, gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))" }}>
             <div>
               <label style={etiqueta} htmlFor="t-nombre">Tu nombre</label>

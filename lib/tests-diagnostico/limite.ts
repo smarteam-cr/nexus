@@ -59,6 +59,39 @@ export function permitirGuardar(token: string, ahora: number = Date.now()): bool
   return true;
 }
 
+// ── Las visitas (O6 etapa 3) ──────────────────────────────────────────────────
+// Contar una visita no crea nada de nadie, pero un script que recarga la página inflaría la medición del corte. La
+// página ya cuenta una vez por pestaña; acá, una dirección suma hasta `VISITAS_POR_DIRECCION` por test cada
+// `VENTANA_DE_VISITAS_MIN` minutos, y entre todas hasta `VISITAS_POR_HORA`. *Por qué no una sola por dirección:* una
+// oficina, o los teléfonos de un mismo operador, salen a internet con la misma dirección; con una sola, cinco personas
+// distintas contaban como una y «terminan de los que abren» pasaba de 100 % (revisión del 26 oct).
+
+export const VISITAS_POR_DIRECCION = 10;
+export const VENTANA_DE_VISITAS_MIN = 30;
+export const VISITAS_POR_HORA = 3000;
+
+const visitasDe = new Map<string, number[]>();
+let visitas: number[] = [];
+
+/** ¿Cuenta esta visita? Si cuenta, la anota. Sin dirección, solo cuenta para el tope total. */
+export function permitirVisita(ipHash: string | null, test: string, ahora: number = Date.now()): boolean {
+  visitas = dentro(visitas, HORA, ahora);
+  if (visitas.length >= VISITAS_POR_HORA) return false;
+  if (ipHash !== null) {
+    const clave = `${ipHash}:${test}`;
+    const recientes = dentro(visitasDe.get(clave) ?? [], VENTANA_DE_VISITAS_MIN * MINUTO, ahora);
+    if (recientes.length >= VISITAS_POR_DIRECCION) {
+      visitasDe.set(clave, recientes);
+      return false;
+    }
+    recientes.push(ahora);
+    visitasDe.set(clave, recientes);
+    if (visitasDe.size > 20000) for (const [k, v] of visitasDe) if (!v.some((t) => t > ahora - VENTANA_DE_VISITAS_MIN * MINUTO)) visitasDe.delete(k);
+  }
+  visitas.push(ahora);
+  return true;
+}
+
 /**
  * La dirección del visitante para contarlo. La toma de lo que agrega el proxy de entrada (nginx): la ÚLTIMA de
  * `X-Forwarded-For` (las anteriores las puede escribir el propio visitante, y con la primera un script cambiaba de
@@ -76,4 +109,6 @@ export function reiniciarLimites(): void {
   porIp.clear();
   total = [];
   porIntento.clear();
+  visitasDe.clear();
+  visitas = [];
 }

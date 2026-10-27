@@ -8,6 +8,10 @@
 > **Avance (2026-10-26):** O1 a O5 construidos en Nexus (sin deploy) y O6 listo y descrito, sin hacer: DECISIONS ›
 > «Los tests del Diagnóstico de Rendimiento, dentro de Nexus». Falta: que Elías apruebe las preguntas, la síntesis con IA,
 > la lectura N6 (con la 9.0), los píxeles de anuncios en la página nueva y el corte.
+>
+> **Avance (2026-10-26, noche 3):** O6 etapas 1 y 3 construidas (los enlaces viejos abren en Nexus; la medición con
+> visitas y semana a semana) y los píxeles listos y apagados. El cambio de dirección y el apagado, paso a paso, en
+> `docs/RUNBOOK.md` › «El corte de la aplicación vieja del test».
 
 ## Lo que hay hoy
 

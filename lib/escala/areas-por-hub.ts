@@ -2,7 +2,7 @@
  * lib/escala/areas-por-hub.ts — qué área de la escala corresponde a cada hub contratado.
  *
  * Las áreas de la escala se identifican por número estable (`1` Ventas, `2` Marketing, `3` Servicio:
- * el mismo mapa que usa el test en línea, lib/exploraciones/test-de-marketing.ts). Los nombres NO
+ * el mismo mapa que usa el test en línea, lib/tests-diagnostico/enlace-leido.ts). Los nombres NO
  * se escriben acá: salen de la escala publicada. Lo único fijo es qué hub enciende qué número.
  *
  * Módulo PURO (lo usan el servidor y la pantalla).

@@ -7,13 +7,25 @@
  *     aprobado es lo que ve el público, y un borrador con cambios no cambia nada hasta aprobarse. Acá SÍ se ve a qué nivel
  *     apunta cada opción (el público nunca lo ve).
  *   · Intentos: por empresa, quién hizo qué área, con qué nivel y si ya llegó a HubSpot (K10).
- *   · Medición: cuántos empiezan, terminan y lo dejan, y en qué pregunta (O4 y O6).
+ *   · Medición: cuántos abren la página, empiezan, terminan y lo dejan, y en qué pregunta, por test y semana a semana
+ *     (O4 y O6 etapa 3: la base para comparar antes y después del corte de la aplicación vieja), y la versión completa
+ *     (el cuestionario de la escala que llena Customer Success).
  */
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
-import { Alert, Badge, Button, Card, ConfirmDialog, EmptyState, Field, Input, PageHeader, Tabs, Textarea } from "@/components/ui";
+import { Alert, Badge, Button, Card, ConfirmDialog, EmptyState, Field, Input, PageHeader, Table, Tabs, Textarea, type TableColumn } from "@/components/ui";
 import type { BancoEnPantalla, DatosDeLaPantalla } from "@/lib/tests-diagnostico/admin-server";
-import { empresasConTests, estadoEnHubspot, ETIQUETA_DEL_ESTADO, medicionDelTest, type EstadoEnHubspot } from "@/lib/tests-diagnostico/pantalla";
+import {
+  empresasConTests,
+  estadoEnHubspot,
+  ETIQUETA_DEL_ESTADO,
+  medicionDelTest,
+  medicionPorSemana,
+  porcentaje,
+  SQL_DE_LAS_VISITAS,
+  type EstadoEnHubspot,
+  type SemanaDelTest,
+} from "@/lib/tests-diagnostico/pantalla";
 import { ETIQUETA_DE_LA_VERSION, NOMBRE_DEL_AREA, SLUG_POR_AREA, type PreguntaDelBanco } from "@/lib/tests-diagnostico/tipos";
 
 type Pestana = "preguntas" | "intentos" | "medicion";
@@ -320,52 +332,130 @@ function Intentos({ datos, hubspotEncendido, puedeReintentar }: { datos: DatosDe
 
 // ── La medición ───────────────────────────────────────────────────────────────
 
+const conPorcentaje = (n: number | null) => (n === null ? "—" : `${n} %`);
+const diaCorto = (dia: string) => new Date(`${dia}T12:00:00Z`).toLocaleDateString("es-CR", { day: "numeric", month: "short", timeZone: "UTC" });
+
+const COLUMNAS_POR_SEMANA: TableColumn<SemanaDelTest>[] = [
+  { key: "semana", header: "Semana del", render: (f) => diaCorto(f.semana), sortValue: (f) => f.semana, width: "w-28" },
+  { key: "test", header: "Test", render: (f) => `${NOMBRE_DEL_AREA[f.area]} · ${ETIQUETA_DE_LA_VERSION[f.version]}` },
+  { key: "visitas", header: "Abrieron", align: "right", width: "w-24", render: (f) => f.visitas ?? "—", sortValue: (f) => f.visitas },
+  { key: "empezados", header: "Empezaron", align: "right", width: "w-24", render: (f) => f.empezados, sortValue: (f) => f.empezados },
+  { key: "terminados", header: "Terminaron", align: "right", width: "w-24", render: (f) => f.terminados, sortValue: (f) => f.terminados },
+  { key: "abandonados", header: "Lo dejaron", align: "right", width: "w-24", render: (f) => f.abandonados, hideOnMobile: true },
+  {
+    key: "deLosQueEmpiezan",
+    header: "Terminan de los que empiezan",
+    align: "right",
+    width: "w-48",
+    headerHint: "Terminaron entre los que llenaron el formulario. Es el número que se compara antes y después del corte: la app vieja lo mide igual (envíos del formulario de HubSpot y notas del test).",
+    render: (f) => conPorcentaje(porcentaje(f.terminados, f.empezados)),
+    sortValue: (f) => porcentaje(f.terminados, f.empezados),
+  },
+  {
+    key: "tasa",
+    header: "Terminan de los que abren",
+    align: "right",
+    width: "w-48",
+    hideOnMobile: true,
+    headerHint: "Terminaron entre los que abrieron la página. Las visitas de la app vieja salen del registro del servidor y se cuentan distinto: compáralo con cuidado.",
+    render: (f) => conPorcentaje(porcentaje(f.terminados, f.visitas)),
+    sortValue: (f) => porcentaje(f.terminados, f.visitas),
+  },
+];
+
 function Medicion({ datos }: { datos: DatosDeLaPantalla }) {
-  const medicion = useMemo(() => medicionDelTest(datos.intentos), [datos.intentos]);
-  if (!medicion.length) return <EmptyState variant="dashed" title="Sin intentos que medir" description="Cuando alguien empiece el test, aquí ves cuántos terminan y dónde lo dejan." />;
+  const medicion = useMemo(() => medicionDelTest(datos.intentos, datos.visitas), [datos.intentos, datos.visitas]);
+  const semanas = useMemo(() => medicionPorSemana(datos.intentos, datos.visitas), [datos.intentos, datos.visitas]);
+  const c = datos.completa;
   return (
-    <div className="grid gap-4 md:grid-cols-2">
-      {medicion.map((m) => {
-        const tope = Math.max(1, ...m.dejadosEn);
-        return (
-          <Card key={`${m.area}:${m.version}`} className="flex flex-col gap-3 p-4">
-            <h2 className="text-sm font-semibold text-fg">
-              {NOMBRE_DEL_AREA[m.area]} · {ETIQUETA_DE_LA_VERSION[m.version]}
-            </h2>
-            <div className="grid grid-cols-4 gap-2 text-center">
-              {[
-                ["Empezaron", m.empezados],
-                ["Terminaron", m.terminados],
-                ["Lo dejaron", m.abandonados],
-                ["Contestando", m.enCurso],
-              ].map(([rotulo, n]) => (
-                <div key={rotulo} className="flex flex-col">
-                  <span className="text-xl font-semibold text-fg">{n}</span>
-                  <span className="text-xs text-fg-muted">{rotulo}</span>
-                </div>
-              ))}
-            </div>
-            <span className="text-xs text-fg-muted">
-              {m.empezados ? `Termina el ${Math.round((m.terminados / m.empezados) * 100)} %.` : ""} Dónde lo dejan:
-            </span>
-            {m.dejadosEn.length ? (
-              <div className="flex flex-col gap-1">
-                {m.dejadosEn.map((n, k) => (
-                  <div key={k} className="grid grid-cols-[6rem_minmax(0,1fr)_2rem] items-center gap-2 text-xs text-fg-secondary">
-                    <span>Pregunta {k + 1}</span>
-                    <div className="h-2 rounded-full bg-surface-hover">
-                      <div className="h-2 rounded-full bg-brand" style={{ width: `${(n / tope) * 100}%` }} />
+    <div className="space-y-6">
+      <p className="text-xs text-fg-muted">Desde el {diaCorto(datos.desde)} (los últimos 90 días). Los días son los de Costa Rica.</p>
+      {!datos.sinTablas && datos.visitas === null && (
+        <Alert variant="warning">
+          Todavía no se cuentan las visitas a la página del test: falta aplicar {SQL_DE_LAS_VISITAS}. Lo demás se mide igual.
+        </Alert>
+      )}
+      {medicion.length ? (
+        <div className="grid gap-4 md:grid-cols-2">
+          {medicion.map((m) => {
+            const tope = Math.max(1, ...m.dejadosEn);
+            const deLosQueEmpiezan = porcentaje(m.terminados, m.empezados);
+            const deLosQueAbren = porcentaje(m.terminados, m.visitas);
+            return (
+              <Card key={`${m.area}:${m.version}`} className="flex flex-col gap-3 p-4">
+                <h2 className="text-sm font-semibold text-fg">
+                  {NOMBRE_DEL_AREA[m.area]} · {ETIQUETA_DE_LA_VERSION[m.version]}
+                </h2>
+                <div className="grid grid-cols-5 gap-2 text-center">
+                  {[
+                    ["Abrieron", m.visitas ?? "—"],
+                    ["Empezaron", m.empezados],
+                    ["Terminaron", m.terminados],
+                    ["Lo dejaron", m.abandonados],
+                    ["Contestando", m.enCurso],
+                  ].map(([rotulo, n]) => (
+                    <div key={rotulo} className="flex flex-col">
+                      <span className="text-xl font-semibold text-fg">{n}</span>
+                      <span className="text-xs text-fg-muted">{rotulo}</span>
                     </div>
-                    <span className="text-right">{n}</span>
+                  ))}
+                </div>
+                <span className="text-xs text-fg-muted">
+                  {deLosQueEmpiezan !== null ? `Termina el ${deLosQueEmpiezan} % de los que empiezan` : "Nadie lo empezó todavía"}
+                  {deLosQueAbren !== null ? ` y el ${deLosQueAbren} % de los que abren la página.` : "."} Dónde lo dejan:
+                </span>
+                {m.dejadosEn.length ? (
+                  <div className="flex flex-col gap-1">
+                    {m.dejadosEn.map((n, k) => (
+                      <div key={k} className="grid grid-cols-[6rem_minmax(0,1fr)_2rem] items-center gap-2 text-xs text-fg-secondary">
+                        <span>Pregunta {k + 1}</span>
+                        <div className="h-2 rounded-full bg-surface-hover">
+                          <div className="h-2 rounded-full bg-brand" style={{ width: `${(n / tope) * 100}%` }} />
+                        </div>
+                        <span className="text-right">{n}</span>
+                      </div>
+                    ))}
                   </div>
-                ))}
+                ) : (
+                  <span className="text-xs text-fg-muted">Nadie lo dejó a medias.</span>
+                )}
+              </Card>
+            );
+          })}
+        </div>
+      ) : (
+        <EmptyState variant="dashed" title="Sin intentos que medir" description="Cuando alguien abra o empiece el test, aquí ves cuántos terminan y dónde lo dejan." />
+      )}
+
+      {semanas.length > 0 && (
+        <section className="space-y-2">
+          <h2 className="text-sm font-semibold text-fg">Semana a semana</h2>
+          <p className="text-xs text-fg-muted">Cada intento cuenta en la semana en que empezó. Es la tabla para comparar antes y después del corte.</p>
+          <Table columns={COLUMNAS_POR_SEMANA} rows={semanas} rowKey={(f) => `${f.semana}:${f.area}:${f.version}`} />
+        </section>
+      )}
+
+      <Card className="flex flex-col gap-3 p-4">
+        <h2 className="text-sm font-semibold text-fg">Versión completa · el cuestionario de la escala</h2>
+        <p className="text-xs text-fg-muted">La llena Customer Success con el cliente, en la exploración del proyecto. Se cuenta por cuestionario, no por pregunta.</p>
+        {c ? (
+          <div className="grid grid-cols-4 gap-2 text-center">
+            {[
+              ["Se armaron", c.armados],
+              ["Se mandaron al cliente", c.enviadosAlCliente],
+              ["El cliente contestó", c.contestados],
+              ["Se cerraron", c.cerrados],
+            ].map(([rotulo, n]) => (
+              <div key={rotulo} className="flex flex-col">
+                <span className="text-xl font-semibold text-fg">{n}</span>
+                <span className="text-xs text-fg-muted">{rotulo}</span>
               </div>
-            ) : (
-              <span className="text-xs text-fg-muted">Nadie lo dejó a medias.</span>
-            )}
-          </Card>
-        );
-      })}
+            ))}
+          </div>
+        ) : (
+          <span className="text-xs text-fg-muted">No se pudo contar ahora. Vuelve a cargar la página.</span>
+        )}
+      </Card>
     </div>
   );
 }

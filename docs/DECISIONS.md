@@ -11476,33 +11476,61 @@ veta Funcional en tres dimensiones. Se construyó con la escala vigente (8.9.1) 
   Prisma: el cliente compartido entre las ramas de trabajo no tiene los modelos hasta el deploy. Los modelos están en el
   schema (para el diff de Prisma y el día que se pase al cliente tipado).
 
-### O6 · El corte de la aplicación vieja: listo y descrito, sin hacer
+### O6 · El corte de la aplicación vieja: etapas 1 y 3 hechas, el cambio de dirección descrito (2026-10-26, noche 3)
 
 Lo apaga Elías cuando el test nuevo esté probado. Ningún lead se pierde porque cada intento queda en Nexus antes de
-tocar HubSpot y el job lo reintenta. En orden:
+tocar HubSpot y el job lo reintenta. **El checklist exacto** (qué se toca, dónde, en qué orden y cómo se vuelve atrás)
+vive en el RUNBOOK › «El corte de la aplicación vieja del test»; acá va el porqué.
 
-1. **Antes:** aplicar `scripts/sql/2026-10-26-tests-diagnostico.sql`, desplegar, generar y aprobar las preguntas
-   (`/escala/tests`) de las tres áreas, al menos la web y la de Marketing de la escala general.
-2. **Configurar HubSpot:** en el `.env` del servidor, `TESTS_HUBSPOT_PORTAL_ID` y `TESTS_HUBSPOT_FORM_GUID` (el mismo
-   formulario nativo que usa la app vieja, o uno nuevo con email, nombre, apellido, teléfono, cargo, empresa y sitio) y
-   `TESTS_ENLACE_DE_AGENDA`. Las propiedades `url_ultimo_diag_*` ya existen en el contacto.
-3. **Probar en paralelo:** con la app vieja todavía arriba, hacer un test por área en Nexus y prender
-   `TESTS_HUBSPOT_ENABLED=1`. Comprobar en HubSpot el contacto, la nota y la dirección; en Nexus, «Llegaron por el test»
-   y la preventa de una empresa conocida. INV58 en verde un día entero → `INV58_BLOQUEA = true`.
-4. **Mover la dirección pública:** que los botones de la web y las campañas apunten a
-   `https://nexus.smarteamcr.com/external/test/<área>` (`?v=marketing` en las campañas de Marketing). En el VPS, un
-   `301` de `dev.smarteamcr.com/diagnostico-rendimiento*` a la página nueva del área, para los enlaces que ya circulan.
-   Los píxeles de anuncios de la página vieja hay que sumarlos a la nueva antes de mover el tráfico (hoy la página
-   nueva no carga ninguno).
-5. **Apagar:** el backend de Vercel (`escala-diagnostico.vercel.app`) y la carpeta estática
-   (`/var/www/dev.smarteamcr.com/diagnostico-rendimiento`) **después** de una semana sin intentos nuevos en la vieja.
-   Los enlaces viejos (`resultado.html#…`, `v: 1`) se siguen leyendo en Nexus aunque la página ya no exista.
+- **Etapa 1 · Los enlaces viejos se siguen abriendo.** Cuando se apague la página vieja, nginx manda
+  `…/diagnostico-rendimiento/resultado.html#…` a `/external/test/resultado/anterior`, y el navegador conserva el `#`.
+  Ahí el navegador lee el `#` con el mismo lector de la preventa y se queda solo con el área, la letra de cada dimensión y
+  la fecha (`?a=1&n=IFDIIFID&f=…`); el servidor arma el resultado con la escala de HOY y el mismo cálculo del test nuevo
+  (`lib/tests-diagnostico/resultado-anterior.ts`), y la página dice que es un test de otra fecha leído con la escala de
+  hoy. *Por qué solo las letras:* la dirección vieja la puede escribir cualquiera, y mostrar en nexus.smarteamcr.com el
+  nombre, la empresa o un texto suyo sería prestarle la página a quien la arme; además la dirección nueva queda en los
+  registros de nginx y no lleva datos personales. *Por qué con la escala de hoy y no la v4:* un solo motor; el nivel
+  puede no ser idéntico al que vio la persona, y la página lo dice. No lee la base: no hay de dónde filtrar a otra empresa.
+  El lector de la dirección pasó de `lib/exploraciones/test-de-marketing.ts` a `lib/tests-diagnostico/enlace-leido.ts`
+  (la exploración lo reexporta): una página del cliente no puede importar la exploración (`lectores.test.ts`).
+- **La entrada única `/external/test`**: la app vieja tenía una sola dirección y el área se elegía adentro. Esta página
+  elige el área, recibe la redirección de la dirección vieja y pasa a la página del área solo lo que mide la campaña
+  (`utm_*`, `gclid`, `fbclid`, `v`). Con `?area=ventas` (la app vieja lo recibía de otros formularios, junto con el
+  correo y el nombre) va directo al área, sin los datos de la persona.
+- **Etapa 3 · La medición** (Escala › Tests › Medición): por test, cuántos ABREN la página, empiezan (llenan el
+  formulario), terminan, lo dejan y en qué pregunta, y una tabla semana a semana con «Terminan de los que abren», el
+  número del criterio de éxito. Más la versión completa (el cuestionario de la escala de Customer Success), contada por
+  cuestionario: armados, mandados al cliente, contestados y cerrados. *Las visitas* van en su tabla
+  (`VisitaDelTest`, SQL `2026-10-26-visitas-del-test.sql`): una cuenta por día, área y versión, sin personas ni
+  direcciones. Las cuenta la página al abrirse, no el servidor al armarla, para que el robot que arma la vista previa de
+  un enlace o de un anuncio no sume. La página cuenta una vez por pestaña; una dirección suma hasta 10 por test cada 30
+  minutos y entre todas hasta 3.000 por hora (`permitirVisita`): un script que recarga no infla el número del corte, y
+  una oficina o los teléfonos de un mismo operador, que salen con la misma dirección, sí cuentan (con una sola por
+  dirección, cinco personas distintas eran una y la tasa pasaba de 100 %; revisión del 26 oct). Un intento cuenta en la
+  semana en que empezó. La medición de «antes» vive en la app vieja (los envíos del formulario de HubSpot, las notas y
+  el log de nginx): se saca a mano la semana anterior al corte (RUNBOOK, paso 0). **El número que se compara es
+  «terminan de los que empiezan»**, que los dos lados miden igual; «terminan de los que abren» queda de referencia,
+  porque las visitas de antes salen del log y las de después del contador, y no cuentan lo mismo.
+- **Los píxeles de anuncios, listos y apagados** (`lib/tests-diagnostico/pixeles.ts`): los mismos que carga la página
+  vieja, medidos sobre lo publicado el 26 oct (Google Ads con la conversión al dejar los datos, Meta y el seguimiento de
+  HubSpot sin el chat). Cada uno se prende con su variable; sin ella, Nexus no le habla a nadie. ⛔ **Nunca en el
+  resultado**: su dirección lleva el token del intento, y un píxel manda la dirección entera a Meta o a Google
+  (`pixeles.test.ts` lo vigila). ⛔ **Y nunca con los datos de la persona en la dirección**: las dos páginas que los
+  cargan redirigen primero a la dirección limpia, con solo lo de campaña y la versión
+  (`lib/tests-diagnostico/direccion-publica.ts`), porque la app vieja recibía enlaces con `email` y `nombre`. El
+  formulario lleva `data-hs-do-not-collect`: con el seguimiento de HubSpot prendido, su «recoger formularios que no son
+  de HubSpot» lo mandaría por su cuenta, sin pasar por el job ni por la decisión de qué correos van.
+- ⚠ **El formulario de HubSpot de la app vieja no sirve para Nexus**: exige `puesto_actual` y usa otros nombres de campo,
+  y Nexus manda `phone`, `jobtitle`, `company` y `website`. El corte pide uno nuevo (RUNBOOK, paso 1). Esto corrige el
+  «el mismo formulario nativo que usa la app vieja» que decía esta sección.
 
-*Lo que no garantiza esta tanda:* el formulario de HubSpot no se probó contra el HubSpot real (el envío nace apagado), y
-los píxeles de anuncios no están en la página nueva. El tope de 400 intentos por hora es uno solo para todos: un ataque
-grande lo agota y deja fuera a los prospectos reales esa hora (se eligió así para que HubSpot no se llene de leads
-falsos). La regla de la dirección del visitante de verify-access (`lib/external/verify-rate-limit.ts › claveDeIp`) todavía
-toma la PRIMERA de `X-Forwarded-For`: queda como seguimiento.
+*Lo que no garantiza esta tanda:* la página `/external/test/resultado/anterior` y la entrada no se probaron en un
+navegador contra producción (los cálculos sí, con pruebas); los píxeles no se probaron contra Meta ni Google (nacen
+apagados); y el formulario de HubSpot sigue sin probarse contra el HubSpot real. El tope de 400 intentos por hora es uno
+solo para todos: un ataque grande lo agota y deja fuera a los prospectos reales esa hora (se eligió así para que HubSpot
+no se llene de leads falsos); el de las visitas igual, y ahí lo que se pierde es solo la cuenta. La regla de la dirección
+del visitante de verify-access (`lib/external/verify-rate-limit.ts › claveDeIp`) todavía toma la PRIMERA de
+`X-Forwarded-For`: queda como seguimiento.
 
 ## La Planificación con lo que pide el Brief de implementación (2026-10-25, L4 ampliada: etapas 1 a 4)
 
