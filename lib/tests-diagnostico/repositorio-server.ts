@@ -378,3 +378,45 @@ export function reintentarHubspot(id: string): Promise<void> {
   });
 }
 
+
+// ── Las visitas (O6 etapa 3) ──────────────────────────────────────────────────
+// Su propio SQL (scripts/sql/2026-10-26-visitas-del-test.sql): sin él, el test funciona igual y la medición dice que
+// falta, en vez de tumbar la página o la pantalla interna.
+
+const faltaLaTablaDeVisitas = (e: unknown) =>
+  esquemaDesactualizado(e) || /42P01|relation "VisitaDelTest" does not exist/i.test(e instanceof Error ? e.message : String(e));
+
+/** Suma una visita a la página del test, en el día de Costa Rica. Sin la tabla, no cuenta y no falla. */
+export async function contarVisita(area: string, version: VersionDelTest): Promise<boolean> {
+  try {
+    await prisma.$executeRaw`
+      INSERT INTO "VisitaDelTest" ("dia", "area", "version", "visitas", "updatedAt")
+      VALUES ((NOW() AT TIME ZONE 'America/Costa_Rica')::date, ${area}, ${version}, 1, NOW())
+      ON CONFLICT ("dia", "area", "version") DO UPDATE SET "visitas" = "VisitaDelTest"."visitas" + 1, "updatedAt" = NOW()`;
+    return true;
+  } catch (e) {
+    if (faltaLaTablaDeVisitas(e)) return false;
+    throw e;
+  }
+}
+
+export interface VisitasDelDia {
+  /** AAAA-MM-DD, el día en Costa Rica. */
+  dia: string;
+  area: string;
+  version: VersionDelTest;
+  visitas: number;
+}
+
+/** Las visitas desde ese día (AAAA-MM-DD). Null si la tabla todavía no existe. */
+export async function visitasDesde(dia: string): Promise<VisitasDelDia[] | null> {
+  try {
+    const filas = await prisma.$queryRaw<{ dia: string; area: string; version: string; visitas: number }[]>`
+      SELECT to_char("dia", 'YYYY-MM-DD') AS "dia", "area", "version", "visitas" FROM "VisitaDelTest"
+      WHERE "dia" >= ${dia}::date ORDER BY "dia" ASC`;
+    return filas.map((f) => ({ dia: f.dia, area: f.area, version: f.version as VersionDelTest, visitas: Number(f.visitas) }));
+  } catch (e) {
+    if (faltaLaTablaDeVisitas(e)) return null;
+    throw e;
+  }
+}

@@ -8766,3 +8766,16 @@ model IntentoDelTest {
   @@index([dominio])
   @@index([estado, createdAt])
 }
+
+/// Cuántas veces se abrió la página de cada test, por día (O6 etapa 3): la base de «terminan entre los que la abren».
+/// Solo cuentas: ni personas ni direcciones. SQL: scripts/sql/2026-10-26-visitas-del-test.sql.
+model VisitaDelTest {
+  /// El día en Costa Rica.
+  dia       DateTime @db.Date
+  area      String
+  version   String
+  visitas   Int      @default(0)
+  updatedAt DateTime @default(now())
+
+  @@id([dia, area, version])
+}

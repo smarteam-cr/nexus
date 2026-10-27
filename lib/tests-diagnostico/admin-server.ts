@@ -5,17 +5,28 @@
  *     cada edición. Los que ya existen no se tocan (lo editado no se pisa).
  *   · Guardar un borrador y APROBARLO. Aprobar revisa las reglas del banco (./banco.ts › `problemasDelBanco`) contra la
  *     escala vista por la edición del banco, y solo aprueba lo que se revisó: si alguien lo cambió en el medio, no.
- *   · Lo que muestra la pantalla: los bancos con su estado y sus problemas, y los intentos de los últimos 90 días.
+ *   · Lo que muestra la pantalla: los bancos con su estado y sus problemas, los intentos de los últimos 90 días y, para
+ *     la medición (O6 etapa 3), las visitas a cada test y cuántos cuestionarios de la escala (la versión completa) se
+ *     armaron, mandaron, contestaron y cerraron en el mismo período. Solo cuentas: la versión completa es de proyectos
+ *     de clientes y de ella no sale ningún nombre.
  * Quién: aprobar y editar, los super admin (`puedeEditarLaEscala`); mirar, lo decide cada ruta.
  */
 import "server-only";
+import { prisma } from "@/lib/db/prisma";
 import { aplicarEdicion } from "@/lib/escala/documento/edicion";
 import { leerEscalaVigente } from "@/lib/escala/documento/vigente";
 import type { Escala, Letra } from "@/lib/escala/documento/tipos";
 import { borradorDesdeLaEscala, problemasDelBanco } from "./banco";
 import { MINUTOS_PARA_ABANDONO } from "./hubspot-server";
 import { dominioDelCorreo } from "./servicio-server";
-import { estadoDelBanco, type EstadoDelBancoEnPantalla, type IntentoEnPantalla } from "./pantalla";
+import {
+  diaEnCostaRica,
+  estadoDelBanco,
+  type EstadoDelBancoEnPantalla,
+  type IntentoEnPantalla,
+  type MedicionDeLaCompleta,
+  type VisitasEnPantalla,
+} from "./pantalla";
 import {
   aprobarBanco,
   crearBorradores,
@@ -24,6 +35,7 @@ import {
   intentosRecientes,
   leerBanco,
   listarBancos,
+  visitasDesde,
   type BancoGuardado,
 } from "./repositorio-server";
 import { EDICION_GENERAL, leerPreguntasDelBanco, VERSIONES_DEL_TEST, type PreguntaDelBanco } from "./tipos";
@@ -116,6 +128,31 @@ export interface DatosDeLaPantalla {
   } | null;
   bancos: BancoEnPantalla[];
   intentos: IntentoEnPantalla[];
+  /** Null = falta el SQL de las visitas (todavía no se cuentan). */
+  visitas: VisitasEnPantalla[] | null;
+  /** Null = no se pudo contar. */
+  completa: MedicionDeLaCompleta | null;
+  /** Desde qué día cuenta la medición (AAAA-MM-DD, Costa Rica). */
+  desde: string;
+}
+
+/** Los cuestionarios de la escala (la versión completa del test) armados desde `desde`: solo cuántos. */
+async function medicionDeLaCompleta(desde: Date): Promise<MedicionDeLaCompleta | null> {
+  try {
+    const filas = await prisma.cuestionario.findMany({
+      where: { tipo: "escala", createdAt: { gte: desde } },
+      select: { publicadoAt: true, cerradoAt: true, pestanas: { select: { enviadaAt: true } } },
+    });
+    return {
+      armados: filas.length,
+      enviadosAlCliente: filas.filter((f) => f.publicadoAt).length,
+      contestados: filas.filter((f) => f.pestanas.some((p) => p.enviadaAt)).length,
+      cerrados: filas.filter((f) => f.cerradoAt).length,
+    };
+  } catch (e) {
+    console.error("[tests-diagnostico] no se pudo contar la versión completa", e);
+    return null;
+  }
 }
 
 export async function datosDeLaPantalla(ahora: Date = new Date()): Promise<DatosDeLaPantalla> {
@@ -128,13 +165,22 @@ export async function datosDeLaPantalla(ahora: Date = new Date()): Promise<Datos
         dimensiones: Object.fromEntries(escala.areas.flatMap((a) => a.dimensiones.map((d) => [d.id, d.nombre]))),
       }
     : null;
+  const desde = new Date(ahora.getTime() - 90 * 86_400_000);
+  const diaDesde = diaEnCostaRica(desde.toISOString());
   try {
-    const desde = new Date(ahora.getTime() - 90 * 86_400_000);
-    const [bancos, intentos] = await Promise.all([listarBancos(), intentosRecientes(desde)]);
+    const [bancos, intentos, visitas, completa] = await Promise.all([
+      listarBancos(),
+      intentosRecientes(desde),
+      visitasDesde(diaDesde),
+      medicionDeLaCompleta(desde),
+    ]);
     const dejadoAntes = ahora.getTime() - MINUTOS_PARA_ABANDONO * 60_000;
     return {
       sinTablas: false,
       escala: datosDeLaEscala,
+      visitas,
+      completa,
+      desde: diaDesde,
       bancos: bancos.map((b) => ({
         ...b,
         estado: estadoDelBanco(b),
@@ -167,7 +213,7 @@ export async function datosDeLaPantalla(ahora: Date = new Date()): Promise<Datos
       })),
     };
   } catch (e) {
-    if (e instanceof ErrorSinTablas) return { sinTablas: true, escala: datosDeLaEscala, bancos: [], intentos: [] };
+    if (e instanceof ErrorSinTablas) return { sinTablas: true, escala: datosDeLaEscala, bancos: [], intentos: [], visitas: null, completa: null, desde: diaDesde };
     throw e;
   }
 }

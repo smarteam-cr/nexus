@@ -1,5 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { empresasConTests, estadoDelBanco, estadoEnHubspot, medicionDelTest, type IntentoEnPantalla } from "./pantalla";
+import {
+  diaEnCostaRica,
+  empresasConTests,
+  estadoDelBanco,
+  estadoEnHubspot,
+  lunesDeLaSemana,
+  medicionDelTest,
+  medicionPorSemana,
+  porcentaje,
+  type IntentoEnPantalla,
+} from "./pantalla";
 import type { PreguntaDelBanco } from "./tipos";
 
 const intento = (o: Partial<IntentoEnPantalla>): IntentoEnPantalla => ({
@@ -47,9 +57,58 @@ describe("la medición", () => {
       intento({ id: "c5", version: "marketing", estado: "abandonado", paso: 9, totalDePreguntas: 4 }),
     ]);
     expect(m).toEqual([
-      { area: "1", version: "marketing", empezados: 1, terminados: 0, abandonados: 1, enCurso: 0, dejadosEn: [0, 0, 0, 1] },
-      { area: "1", version: "web", empezados: 4, terminados: 1, abandonados: 2, enCurso: 1, dejadosEn: [0, 0, 2] },
+      { area: "1", version: "marketing", visitas: null, empezados: 1, terminados: 0, abandonados: 1, enCurso: 0, dejadosEn: [0, 0, 0, 1] },
+      { area: "1", version: "web", visitas: null, empezados: 4, terminados: 1, abandonados: 2, enCurso: 1, dejadosEn: [0, 0, 2] },
     ]);
+  });
+
+  it("con las visitas, suma los que abrieron la página; un test que se abrió y nadie empezó aparece con cero", () => {
+    const m = medicionDelTest(
+      [intento({})],
+      [
+        { dia: "2026-10-19", area: "1", version: "web", visitas: 7 },
+        { dia: "2026-10-20", area: "1", version: "web", visitas: 3 },
+        { dia: "2026-10-20", area: "3", version: "marketing", visitas: 2 },
+      ],
+    );
+    expect(m.map((x) => [x.area, x.version, x.visitas, x.empezados])).toEqual([
+      ["1", "web", 10, 1],
+      ["3", "marketing", 2, 0],
+    ]);
+    expect(porcentaje(1, 10)).toBe(10);
+    expect(porcentaje(1, 0)).toBeNull();
+    expect(porcentaje(1, null)).toBeNull();
+  });
+});
+
+describe("semana a semana (antes y después del corte)", () => {
+  it("el día es el de Costa Rica y la semana empieza el lunes", () => {
+    expect(diaEnCostaRica("2026-10-27T03:00:00.000Z")).toBe("2026-10-26");
+    expect(lunesDeLaSemana("2026-10-26")).toBe("2026-10-26");
+    expect(lunesDeLaSemana("2026-11-01")).toBe("2026-10-26");
+    expect(lunesDeLaSemana("2026-10-25")).toBe("2026-10-19");
+  });
+
+  it("cada intento cuenta en la semana en que empezó, con las visitas de esa semana; la más reciente primero", () => {
+    const filas = medicionPorSemana(
+      [
+        intento({ createdAt: "2026-10-20T10:00:00.000Z" }),
+        intento({ id: "c2", estado: "abandonado", createdAt: "2026-10-26T05:00:00.000Z" }), // el lunes en UTC, el domingo 25 en Costa Rica
+        intento({ id: "c3", createdAt: "2026-10-28T15:00:00.000Z" }),
+      ],
+      [
+        { dia: "2026-10-21", area: "1", version: "web", visitas: 5 },
+        { dia: "2026-10-28", area: "1", version: "web", visitas: 4 },
+      ],
+    );
+    expect(filas.map((f) => [f.semana, f.visitas, f.empezados, f.terminados, f.abandonados])).toEqual([
+      ["2026-10-26", 4, 1, 1, 0],
+      ["2026-10-19", 5, 2, 1, 1],
+    ]);
+  });
+
+  it("sin la tabla de visitas, las visitas son null y no cero", () => {
+    expect(medicionPorSemana([intento({})], null)[0].visitas).toBeNull();
   });
 });
 

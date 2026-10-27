@@ -55,6 +55,9 @@ const RespuestasPublicasSchema = z.record(
   z.object({ opcion: z.string().min(1).max(60), matiz: z.string().max(1000).optional() }).strict(),
 );
 
+/** Contar una visita a la página de un test (O6 etapa 3): el área y la versión, nada más. */
+export const VisitaSchema = z.object({ area: z.enum(["ventas", "marketing", "servicio"]), version: z.enum(VERSIONES_DEL_TEST) }).strict();
+
 export const GuardarAvanceSchema = z.object({ respuestas: RespuestasPublicasSchema, paso: z.number().int().min(0).max(50) }).strict();
 export const TerminarTestSchema = z.object({ respuestas: RespuestasPublicasSchema }).strict();
 

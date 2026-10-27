@@ -802,6 +802,138 @@ se ve en la hora»). Integraciones › Jobs del servidor dice si está **apagado
 6. **Si cobró algo que no entró:** abrir el cobro en Cobranza y «Sacar de Cobrado» con el motivo. El sistema no lo vuelve
    a cobrar solo. INV25 avisa si un cobro firmado por el sistema ya no tiene su factura pagada en la copia.
 
+## El corte de la aplicación vieja del test (O6, preparado el 2026-10-26)
+
+El test público del Diagnóstico de Rendimiento pasa de la aplicación vieja (`dev.smarteamcr.com/diagnostico-rendimiento`:
+una página estática en este VPS, `/var/www/dev.smarteamcr.com/diagnostico-rendimiento`, más un backend en Vercel,
+`escala-diagnostico.vercel.app`) a Nexus (`/external/test/<ventas|marketing|servicio>`). El porqué: DECISIONS › «Los
+tests del Diagnóstico de Rendimiento, dentro de Nexus» › O6. Ningún lead se pierde: cada intento queda en Nexus antes de
+tocar HubSpot y el job `tests-hubspot` lo reintenta.
+
+**Qué tiene que estar antes de empezar** (si falta uno, no se sigue):
+- El código de O6 desplegado, con `scripts/sql/2026-10-26-tests-diagnostico.sql` y
+  `scripts/sql/2026-10-26-visitas-del-test.sql` aplicados. Verificar: `npm run check:esquema` sin faltantes, y en Escala ›
+  Tests › Medición no aparece el aviso amarillo de las visitas.
+- Elías aprobó las preguntas (Escala › Tests › Preguntas) de las tres áreas, versiones web y Marketing, al menos en la
+  escala general. Verificar: `/external/test/ventas` y `/external/test/ventas?v=marketing` (y lo mismo con `marketing` y
+  `servicio`) muestran el formulario, no «Este test todavía no está abierto».
+
+Quién hace cada paso: **[Elías]** = un panel de un tercero o una decisión suya; **[VPS]** = la sesión principal por SSH,
+con el visto bueno de Elías.
+
+### Paso 0 · La foto de «antes» (la semana anterior al corte)
+
+La medición de Nexus empieza a contar el día del corte; lo de antes vive en la app vieja. Sin esta foto no hay con qué
+comparar.
+1. **[Elías]** HubSpot › Marketing › Formularios › el formulario de la app vieja (`3ffd2d83-6f8c-40d5-95ad-21c44a00e34e`)
+   › Análisis: los envíos por semana de las últimas 4 semanas. Los envíos son «Empezaron» (la app vieja manda el
+   formulario al empezar). Las vistas de ese formulario no sirven: la app lo manda por la API y HubSpot no lo ve.
+2. **[Elías]** En HubSpot, cuántas notas «📊 Diagnóstico de Rendimiento» (terminados) y «⏳ Diagnóstico SIN TERMINAR»
+   (dejados) por semana, en las mismas 4 semanas.
+3. **[VPS]** Las visitas a la página vieja, del access log de nginx de `dev.smarteamcr.com` (el archivo lo dice su
+   `access_log`: `grep -rn "dev.smarteamcr.com" /etc/nginx/`), sin robots ni vistas previas y una por dirección y día:
+   `zgrep -hE '"GET /diagnostico-rendimiento/(index\.html)?(\?[^ ]*)? ' <access_log>* | grep -viE 'bot|crawl|spider|preview|facebookexternalhit|whatsapp|slack|headless' | awk '{print substr($4,2,11), $1}' | sort -u | awk '{print $1}' | uniq -c`
+4. Anotar las tres series en la tarjeta O6 del roadmap. Después del corte se comparan con Escala › Tests › Medición ›
+   «Semana a semana». **El número que se compara es «Terminan de los que empiezan»** (notas 📊 entre envíos del
+   formulario, antes; terminados entre empezados, después): los dos lados lo miden igual. «Terminan de los que abren» es
+   de referencia: las visitas de la app vieja salen del log y las de Nexus del contador de la página (una por pestaña),
+   y no cuentan lo mismo.
+
+### Paso 1 · HubSpot y el envío
+
+1. **[Elías]** Decidir el riesgo del formulario (DECISIONS › área O, O4): el formulario nativo de HubSpot actualiza el
+   contacto que ya existe con ese correo, y nadie confirma que el correo sea de quien responde. Aceptarlo como hoy, o
+   pedir que solo se manden los correos que todavía no son contactos. Sin esta decisión no se prende el envío.
+2. **[Elías · HubSpot]** Crear un formulario NUEVO (Marketing › Formularios › Crear formulario › integrado), por ejemplo
+   «Diagnóstico de Rendimiento (Nexus)», con estos campos de contacto: correo (obligatorio), nombre, apellido, teléfono,
+   cargo, empresa y sitio web. Ninguno más obligatorio. Copiar su GUID (está en la dirección del editor del formulario).
+   ⚠ **El formulario de la app vieja NO sirve:** exige `puesto_actual` y usa otros nombres (`hs_whatsapp_phone_number`,
+   `domain` e `industry` de empresa), y Nexus manda `phone`, `jobtitle`, `company` y `website`
+   (`lib/hubspot/test-del-diagnostico.ts › cuerpoDelFormulario`): HubSpot rechazaría cada envío.
+   De paso, mirar en HubSpot › Configuración › Marketing › Formularios si está prendido «recoger datos de formularios
+   que no son de HubSpot»: el formulario del test lleva `data-hs-do-not-collect`, pero si esa opción recoge igual, cada
+   lead entraría dos veces y sin pasar por la decisión del punto 1.
+3. **[VPS]** En el `.env` de `/opt/smartflow/Nexus`: `TESTS_HUBSPOT_PORTAL_ID=6553628`, `TESTS_HUBSPOT_FORM_GUID=<el
+   nuevo>`, `TESTS_ENLACE_DE_AGENDA=<https://… de la agenda de 30 minutos>` y `TESTS_HUBSPOT_ENABLED=1`. Después,
+   `bash scripts/deploy.sh` (el contenedor lee el `.env` al arrancar).
+4. **Probar en paralelo**, con la app vieja todavía arriba: un test por área en Nexus con un correo de Smarteam (nunca el
+   de un cliente). En unos 10 minutos, en HubSpot: el contacto, la nota y la propiedad `url_ultimo_diag_*`. En Escala ›
+   Tests › Intentos: «En HubSpot» en los tres. En la preventa de una empresa conocida: su test en «Llegaron por el test».
+5. **Reabrir un resultado viejo:** copiar la `url_ultimo_diag_sales` de un contacto real, cambiar
+   `https://dev.smarteamcr.com/diagnostico-rendimiento/resultado.html#` por
+   `https://nexus.smarteamcr.com/external/test/resultado/anterior#` y abrirla: se ve el resultado con el aviso «Hiciste
+   este test el …».
+6. Con INV58 en verde un día entero, `INV58_BLOQUEA = true` (`lib/invariantes/tests-diagnostico.ts`), en un commit.
+
+*Volver atrás:* `TESTS_HUBSPOT_ENABLED=` (vacío) y `bash scripts/deploy.sh`. Lo que quedó sin mandar espera en Nexus.
+
+### Paso 2 · Los píxeles de anuncios
+
+La página vieja carga tres (medido el 2026-10-26); Nexus los carga solo en `/external/test` y `/external/test/<área>`,
+nunca en el resultado, y solo los que tienen su variable (`lib/tests-diagnostico/pixeles.ts`).
+1. **[VPS]** En el `.env`: `TESTS_PIXEL_GOOGLE_ADS=AW-18355922702`,
+   `TESTS_PIXEL_GOOGLE_ADS_CONVERSION=AW-18355922702/9SvvCKjmp9kcEI7O5LBE` (se dispara cuando la persona deja sus
+   datos, como hoy), `TESTS_PIXEL_META=1206241703610274` y `TESTS_PIXEL_HUBSPOT=6553628` (la cookie de atribución, sin
+   el chat). `bash scripts/deploy.sh`.
+2. **[Elías]** Comprobar con la extensión Meta Pixel Helper y con Google Tag Assistant en `/external/test/ventas`: la
+   vista de página de Meta, la etiqueta `AW-18355922702` y, al empezar el test, la conversión. En HubSpot › Informes de
+   tráfico deben empezar a aparecer visitas a `nexus.smarteamcr.com/external/test`. Abrir también
+   `/external/test/ventas?utm_source=prueba&email=yo@smarteamcr.com`: la dirección tiene que quedar sin el correo antes
+   de que cargue la página (los píxeles mandan la dirección entera). Y terminar un test con la pestaña Red abierta:
+   ninguna llamada a Facebook, Google o HubSpot lleva la dirección `/external/test/resultado/…`.
+3. La CSP de Nexus está en modo solo-reporte: estos tres dominios van a aparecer en los reportes de Sentry. Es esperado;
+   el día que se endurezca la CSP hay que permitirlos en `/external/test` (`lib/observability/csp.ts`).
+
+*Volver atrás:* vaciar las cuatro variables y `bash scripts/deploy.sh`.
+
+### Paso 3 · Mover la dirección pública
+
+1. **[Elías]** Cambiar los enlaces que llevan al test: los botones de smarteamcr.com y de las páginas de HubSpot, los
+   correos y CTA de HubSpot, la URL final de los anuncios de Google Ads, Meta y LinkedIn. Destino:
+   `https://nexus.smarteamcr.com/external/test/<ventas|marketing|servicio>`, con `?v=marketing` en las campañas de la
+   versión corta, y las mismas `utm_*` de hoy (se guardan en el intento y llegan a HubSpot con la página). Si un
+   enlace no sabe el área: `https://nexus.smarteamcr.com/external/test` (ahí se elige; también acepta `?area=ventas`).
+2. **[VPS]** En el server block de `dev.smarteamcr.com`, antes de la `location` que sirve la carpeta estática:
+   ```nginx
+   # O6 · el test vive en Nexus (DECISIONS › área O). El navegador conserva el «#» del resultado en la redirección.
+   location = /diagnostico-rendimiento/resultado.html { return 302 https://nexus.smarteamcr.com/external/test/resultado/anterior; }
+   location = /diagnostico-rendimiento { return 302 https://nexus.smarteamcr.com/external/test$is_args$args; }
+   location ^~ /diagnostico-rendimiento/ { return 302 https://nexus.smarteamcr.com/external/test$is_args$args; }
+   ```
+   `nginx -t && systemctl reload nginx`. Verificar:
+   `curl -sI "https://dev.smarteamcr.com/diagnostico-rendimiento/?area=ventas&utm_source=prueba" | grep -i location`
+   (va a `/external/test?area=…` y de ahí al área) y abrir en el navegador una dirección vieja de resultado (paso 1.5)
+   sin cambiarla. **302 y no 301 hasta el paso 5:** un 301 se queda guardado en el navegador de cada visitante y
+   volver atrás ya no le llegaría.
+3. Desde ese día, revisar Escala › Tests › Medición una vez por semana contra la foto del paso 0. Criterio de éxito del
+   área O: cada intento en Nexus y en HubSpot (diferencia 0: en Intentos, todos «En HubSpot»; INV58 en verde), y
+   «Terminan de los que empiezan» igual o mejor que antes. A la semana, comparar «Abrieron» de Nexus con las visitas del
+   log de nginx de Nexus filtradas igual que en el paso 0.3: si difieren más de 20 %, el contador cuenta mal.
+
+*Volver atrás:* borrar las tres `location` y `nginx -t && systemctl reload nginx`: la página vieja vuelve tal cual (los
+archivos y el backend siguen arriba hasta el paso 4). Los enlaces del paso 3.1 pueden quedarse: Nexus sigue
+funcionando.
+
+### Paso 4 · Apagar la app vieja (una semana después del paso 3, sin intentos nuevos en ella)
+
+Cómo se sabe que no hay intentos nuevos: en Vercel › proyecto `escala-diagnostico` › Logs, cero llamadas a
+`/api/diag-inicio` en 7 días, y en HubSpot ninguna nota nueva del test que no venga de Nexus (las de Nexus llevan la
+dirección `nexus.smarteamcr.com/external/test/resultado/…`).
+1. **[Elías · Vercel]** Apagar el proyecto `escala-diagnostico`: primero pausarlo o quitarle el dominio de producción
+   (Settings), y borrarlo después de 30 días sin reclamos (Settings › General › Delete Project). Antes de borrarlo,
+   anotar los NOMBRES de sus variables de entorno (Settings › Environment Variables): dicen qué credenciales tenía.
+2. **[Elías · HubSpot y Anthropic]** Revocar las credenciales que usaba ese backend, si son solo suyas: la app privada de
+   HubSpot con la que escribía las notas (Settings › Integraciones › Apps privadas) y la clave de la IA (consola de
+   Anthropic). Si otra cosa usa la misma app o la misma clave, no se revoca: se anota.
+3. **[VPS]** Retirar la carpeta sin borrarla:
+   `mv /var/www/dev.smarteamcr.com/diagnostico-rendimiento /var/www/dev.smarteamcr.com/_retirado-diagnostico-rendimiento-AAAAMMDD`.
+   Cambiar las tres redirecciones del paso 3.2 de `302` a `301` y `nginx -t && systemctl reload nginx`.
+4. Borrar la carpeta retirada a los 30 días. Los enlaces viejos del resultado siguen abriendo en Nexus para siempre
+   (`/external/test/resultado/anterior`: no lee la base, rearma el resultado con lo que trae la dirección).
+
+*Volver atrás* (antes de los 30 días): mover la carpeta de vuelta, reactivar el proyecto de Vercel y volver las
+redirecciones a `302` o quitarlas.
+
 ## La reunión presencial (audio, T5)
 
 Subir la grabación de una reunión presencial y que Google la transcriba. **Apagada** hasta que se configure (la
