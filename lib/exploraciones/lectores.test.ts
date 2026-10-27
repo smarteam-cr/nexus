@@ -87,9 +87,23 @@ type Destino =
    * reunión y las dimensiones de la escala del área, de la preventa de la MISMA empresa dueña de la reunión, para juzgar
    * qué tan consultiva fue. Interno (coaching para Ventas): nunca llega a un documento del cliente.
    */
-  | "analizador-de-venta";
+  | "analizador-de-venta"
+  /**
+   * PROBAR LA ESCALA (N2, 2026-10-26, lib/escala/prueba): el nivel de cada área de UNA exploración viva de la empresa,
+   * con el mismo chequeo del mapa (lo confirmado y lo propuesto), para compararlo con el que cree el equipo. Interno
+   * (Escala › Probar): nunca llega a un documento del cliente.
+   */
+  | "prueba-de-la-escala";
 
 const CENSO: Record<string, { destino: Destino; motivo: string }> = {
+  "lib/escala/prueba/calculo.ts": {
+    destino: "prueba-de-la-escala",
+    motivo: "N2: el nivel de cada área con el chequeo del mapa (posicionesDelMapa + chequeoDelMapa), para compararlo con el que cree el equipo.",
+  },
+  "lib/escala/prueba/servidor.ts": {
+    destino: "prueba-de-la-escala",
+    motivo: "N2: las exploraciones vivas de ESA empresa (where clientId) y sus niveles, para Escala › Probar. Interno.",
+  },
   "lib/analizador-venta/analizar-server.ts": { destino: "analizador-de-venta", motivo: "Qué empresa tiene una preventa de venta abierta (solo el clientId), para decidir si una reunión es de venta." },
   "lib/analizador-venta/guardia-server.ts": { destino: "analizador-de-venta", motivo: "S4/S5 (2026-10-27): de qué empresa es la preventa (solo clientId y projectId), para que el análisis toque solo sus reuniones." },
   "lib/analizador-venta/reuniones-de-venta-server.ts": { destino: "analizador-de-venta", motivo: "2026-10-27: qué reuniones son la sesión de una exploración abierta de la preventa (solo sus ids), para que el job analice solo esas." },
@@ -439,6 +453,11 @@ const PUERTAS: Record<Exclude<Destino, "ventas">, { permitidas: RegExp; prohibid
     permitidas: /\bEQUIPOS\b|\bEQUIPOS_DEL_CLIENTE\b|\besEquipo\b/,
     // Solo el catálogo de los equipos: ninguna exploración, ni la propuesta, ni el handoff, ni lo interno.
     prohibidas: /\bparaLaPropuesta\b|bloqueParaLaPropuesta|exploracionParaElHandoff|internoParaElCse|bloqueParaElHandoff|leerContenido|leerExploracion\b|\.exploracionDeVenta\b|\bexploracionesDeVenta\b/,
+  },
+  "prueba-de-la-escala": {
+    permitidas: /\bchequeoDelMapa\b|\bnivelesDeLaPrueba\b/,
+    // Solo los niveles del mapa: ni la propuesta al cliente, ni el handoff, ni lo interno de la preventa.
+    prohibidas: /\bparaLaPropuesta\b|bloqueParaLaPropuesta|exploracionParaElHandoff|internoParaElCse|bloqueParaElHandoff|leerExploracion\b/,
   },
   "memoria-interna": {
     permitidas: /\bloAprendidoEnLaPreventa\b/,

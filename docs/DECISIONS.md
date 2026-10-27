@@ -8701,6 +8701,40 @@ misma con su histórico.
 - **El siguiente paso de la preventa**: sin sesión agendada, arma el evento en Google Calendar por enlace (Nexus no
   escribe en el calendario); con una agendada, lleva a planificarla.
 
+## Probar la escala con cualquier empresa (2026-10-26, N2)
+
+**Contexto.** La decisión 13 de `docs/escala/pendiente-9-0.md`: antes de publicar la 9.0 se prueba la escala con 5 a 8
+empresas reales de varias industrias y se compara con lo que cree el equipo. La tarjeta pide guardar, por empresa y
+área, el nivel que da la escala y el que cree la persona, y que coincidan en al menos 4 de cada 5. Nunca con Wherex.
+
+- **Una pantalla nueva, Escala › Probar (`/escala/probar`), y no otro cálculo.** El nivel de cada área sale del mismo
+  chequeo que dibuja el mapa de la preventa y de la ficha (`posicionesDelMapa` + `chequeoDelMapa`) sobre UNA
+  exploración viva de la empresa (la preventa, la de un proyecto o la de la cuenta entera). Se llega eligiendo la
+  empresa ahí, o con «Probar la escala» desde la preventa o desde La escala de la ficha. La empresa sin exploración se
+  ubica primero con «Actualizar escala»: la prueba no lanza al agente.
+- **Lo propuesto por el agente cuenta**, igual que en el mapa: la prueba mide la lectura de la escala sobre lo que Nexus
+  sabe. Cada comparación guarda cuántas dimensiones salieron con evidencia, cuántas son hipótesis y cuántas propuso el
+  agente sin que nadie las confirmara, para poder separarlas al leer el resultado.
+- **Por defecto, la versión publicada; el borrador se elige.** Con el borrador cada dimensión conserva su nivel (se
+  estimó con la publicada) y cambia cómo se juntan: qué dimensiones hay y aplican al perfil, las capas y el orden. Volver
+  a estimar con los criterios del borrador exigiría correr el agente con él y escribiría propuestas de una escala sin
+  publicar en la exploración real del cliente; no se hace. Las dos se guardan aparte (`escalaVersion` + `esBorrador`) y
+  el resumen las separa. Primero se junta la prueba con la 8.9.1 (lo que decide las celdas desbalanceadas, sección 14);
+  el borrador sirve para ver si la 9.0 mueve a alguien.
+- **El borrador solo lo elige quien ya lo ve** en Escala › Borrador (`puedeEditarLaEscala`: los super admin), porque el
+  editor promete que nadie lo ve hasta que se publica. Al resto del equipo se le prueba con la publicada y no ve la
+  opción. Cada comparación con el borrador guarda también su revisión (`revisionDelBorrador`): un borrador editado
+  sigue llamándose 9.0.0 y sus reglas cambian, así que el resumen no junta revisiones distintas.
+- **El nivel de la escala lo recalcula el servidor**: la ruta solo recibe el que cree la persona. «Quién lo cree» es
+  quien prueba o el CSE de la cuenta (`encargadoDe`); se guarda también quién lo anotó.
+- **Cada prueba suma una fila** (`PruebaDeLaEscala`, un solo escritor: `lib/escala/prueba/servidor.ts`); el resumen
+  cuenta la última de cada empresa y área por versión, porque quien vuelve a probar corrige.
+- **El resumen es solo para los super admin**: empresas, industrias, coincidencias (por área y en qué dirección falla:
+  la escala más arriba o más abajo) contra el criterio. «Varias industrias» se lee como al menos tres distintas
+  (`META_DE_LA_PRUEBA`); las empresas sin industria en Nexus no suman.
+- **⛔ Wherex**: se reconoce por el nombre (`empresaExcluida`). No sale en el buscador, la pantalla lo dice, la ruta
+  responde 422 y el resumen la ignora aunque se cuele una fila. Lo congela `lib/escala/prueba/calculo.test.ts`.
+
 ## El texto de una reunión tiene que ser el de ESA reunión, y llegar después de que termina (2026-10-05 y 2026-10-17, ficha C)
 
 **Contexto.** Medido en producción el 2026-10-05: sin documento adjunto al evento, el enriquecimiento buscaba en Drive

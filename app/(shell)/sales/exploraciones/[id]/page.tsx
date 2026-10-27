@@ -27,6 +27,7 @@ import {
 } from "@/lib/exploraciones/servidor";
 import { paraLaPantallaCompleta } from "@/lib/exploraciones/pantalla";
 import { veElAnalizador } from "@/lib/analizador-venta/reglas";
+import { empresaExcluida } from "@/lib/escala/prueba/calculo";
 
 export const dynamic = "force-dynamic";
 
@@ -117,6 +118,14 @@ export default async function ExploracionPage({
               </span>
             </span>
             {puedeChat && <ChatDeNexus clientId={exp.empresa.clientId} nombre={exp.empresa.nombre} sinSugerencias />}
+            {!empresaExcluida(exp.empresa.nombre) && (
+              <AccionDeCabecera
+                href={`/escala/probar?cliente=${exp.empresa.clientId}&exploracion=${exp.id}`}
+                title="Compara el nivel que da la escala con el que crees tú. Así se prueba la escala antes de publicar la próxima versión."
+              >
+                Probar la escala
+              </AccionDeCabecera>
+            )}
             {exp.empresa.kind === "CLIENTE" && (
               <AccionDeCabecera href={`/clients/${exp.empresa.clientId}`} title="La ficha del cliente, con sus proyectos">
                 Ver ficha del cliente

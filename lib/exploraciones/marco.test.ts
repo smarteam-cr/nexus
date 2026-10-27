@@ -269,6 +269,9 @@ describe("⛔ una exploración de proyecto no es una preventa", () => {
     "lib/exploraciones/asociar-server.ts",
     /* INV61 (2026-10-27): ninguna sesión de NINGUNA exploración (preventa o proyecto) unida a una reunión de otra empresa. */
     "lib/invariantes/exploraciones.ts",
+    /* Probar la escala (N2, 2026-10-26): como la escala de la empresa, las dos clases a propósito (la preventa y la de
+       cada proyecto posicionan a la empresa); el buscador solo pregunta si la empresa tiene alguna viva. */
+    "lib/escala/prueba/servidor.ts",
   ]);
   function archivos(dir: string): string[] {
     const abs = path.join(RAIZ, dir);

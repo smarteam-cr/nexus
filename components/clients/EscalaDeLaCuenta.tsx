@@ -40,7 +40,7 @@ import {
 import type { VersionGuardada } from "@/lib/exploraciones/versiones-de-la-escala";
 import { CIERRES, DESPUES, type Cierre, type Despues, type Letra } from "@/lib/escala/documento/tipos";
 
-type Datos = EscalaDeLaEmpresa & { puede?: { preventa: boolean; exploracion: boolean } };
+type Datos = EscalaDeLaEmpresa & { puede?: { preventa: boolean; exploracion: boolean }; sePuedeProbar?: boolean };
 type Ok = Extract<Datos, { estado: "ok" }>;
 type Niveles = { letra: Letra; nombre: string }[];
 
@@ -662,6 +662,15 @@ export default function EscalaDeLaCuenta({
         <BotonAzul disabled={ocupado || !!corrida} onClick={() => setActualizando(true)} title="El agente lee todo lo que Nexus sabe de la empresa y propone niveles. Nada se confirma solo.">
           Actualizar escala
         </BotonAzul>
+      )}
+      {datos.exploraciones.length > 0 && datos.sePuedeProbar && (
+        <Link
+          href={`/escala/probar?cliente=${clientId}`}
+          className="text-[13px] font-medium text-brand hover:underline"
+          title="Compara el nivel que da la escala con el que crees tú o su CSE. Así se prueba la escala antes de publicar la próxima versión."
+        >
+          Probar la escala
+        </Link>
       )}
     </>
   );
