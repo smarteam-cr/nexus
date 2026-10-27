@@ -3,6 +3,7 @@ import "./lib/permitir-server-only";
 import { imprimirDestino, resolverApply } from "./lib/guard";
 import { prisma } from "@/lib/db/prisma";
 import { limpiezaDePorDecidir, sugerenciaDeCierre } from "@/lib/tareas/aligerar";
+import { esLecturaDelSprint } from "@/lib/tareas/sprint";
 import { ultimosToquesDePersonas } from "@/lib/tareas/toques";
 import { esSeguimientoSueltoDelCliente, lineaDelSeguimientoAgrupado, pendienteDesdeLaTarea, seguimientoAgrupado } from "@/lib/tareas/seguimiento";
 import { ORIGENES_DE_SUGERENCIA, agruparSeguimientosPorAsignar, cambiarEstado, decidirTarea, sugerenciasTocadas, vencerSugerenciasSinDecidir } from "@/lib/tareas/mutaciones";
@@ -135,14 +136,14 @@ async function porDecidir() {
   const hoy = hoyEnCostaRica();
   const filas = await prisma.tarea.findMany({
     where: { estado: "propuesta", archivadaAt: null, creadaPorEmail: null, responsableEmail: { not: null }, origen: { in: [...ORIGENES_DE_SUGERENCIA] } },
-    select: { id: true, numero: true, version: true, responsableEmail: true, venceEl: true, createdAt: true },
+    select: { id: true, numero: true, version: true, responsableEmail: true, venceEl: true, createdAt: true, lectura: { select: { resumen: true, fuente: { select: { equipo: true } } } } },
     orderBy: { numero: "asc" },
   });
   // La misma regla que al aplicar (`sugerenciasTocadas`): el número del simulacro es el que se aplica.
   const tocadas = await sugerenciasTocadas(prisma, filas.map((f) => f.id));
   const sinTocar = filas.filter((f) => !tocadas.has(f.id));
   const vencen = limpiezaDePorDecidir(
-    sinTocar.map((f) => ({ id: f.id, numero: f.numero, responsableEmail: f.responsableEmail!, venceEl: comoFecha(f.venceEl), creadaAt: f.createdAt.toISOString() })),
+    sinTocar.map((f) => ({ id: f.id, numero: f.numero, responsableEmail: f.responsableEmail!, venceEl: comoFecha(f.venceEl), creadaAt: f.createdAt.toISOString(), delSprint: !!f.lectura && esLecturaDelSprint(f.lectura.fuente, f.lectura.resumen) })),
     hoy,
     MAX_SUGERENCIAS_POR_PERSONA,
   );

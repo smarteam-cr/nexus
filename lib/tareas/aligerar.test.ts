@@ -152,6 +152,17 @@ describe("limpiezaDePorDecidir (D2 etapa 1)", () => {
     expect(r.some((x) => x.id === "leo")).toBe(false);
   });
 
+  it("lo del sprint no ocupa lugar ni lo vence el tope (2026-10-27); su fecha sí cuenta", () => {
+    const filas = [
+      ...Array.from({ length: 7 }, (_, i) => ({ ...s(`sprint${i}`, "ana@x", `2026-10-${String(10 + i).padStart(2, "0")}T10:00:00Z`, null, i), delSprint: true })),
+      ...Array.from({ length: 5 }, (_, i) => s(`cliente${i}`, "ana@x", `2026-10-0${1 + i}T10:00:00Z`, null, 20 + i)),
+      { ...s("sprintConFecha", "ana@x", "2026-10-01T10:00:00Z", "2026-10-02"), delSprint: true },
+    ];
+    const r = limpiezaDePorDecidir(filas, hoy, 5);
+    expect(r.filter((x) => x.regla === "tope")).toEqual([]);
+    expect(r.map((x) => x.id)).toEqual(["sprintConFecha"]);
+  });
+
   it("el mismo día, gana el número más alto (la última que nació)", () => {
     const r = limpiezaDePorDecidir([s("x", "ana@x", "2026-10-20T10:00:00Z", null, 1), s("y", "ana@x", "2026-10-20T10:00:00Z", null, 2)], hoy, 1);
     expect(r.map((x) => x.id)).toEqual(["x"]);

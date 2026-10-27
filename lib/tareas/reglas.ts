@@ -30,9 +30,17 @@ export const MAX_PROPUESTAS_POR_PERSONA_POR_REUNION = 5;
  * 128 propuestas una persona usó 1, descartó 8 y dejó vencer 17; 58 seguían por decidir y 24 en «Por asignar». Con 3
  * entra lo esencial de casi todas, y lo menor (coordinación interna, un ajuste chico) ya lo saca la lectura
  * (`elegirLoEsencial`, lib/tareas/seguimiento.ts).
- * Las reuniones internas del sprint siguen con 5.
+ * La reunión del sprint no usa ninguno de los dos: `MAX_PROPUESTAS_POR_PERSONA_EN_EL_SPRINT`.
  */
 export const MAX_PROPUESTAS_POR_PERSONA_POR_REUNION_CON_CLIENTE = 3;
+
+/**
+ * La reunión del SPRINT (la serie de un equipo, lib/tareas/fuentes.ts) ya no corta en 5 por persona (2026-10-27,
+ * decisión de Elías, pregunta 7 del roadmap): lo que se acuerda en el sprint es trabajo de la semana, y el 19 oct el
+ * planning de Marketing dejó 5 fuera. Esto es solo un tope de seguridad contra un desborde (una lectura que se vuelve
+ * loca), no un criterio: se cuenta sobre todo lo que deja la reunión a esa persona, las notas y la conversación juntas.
+ */
+export const MAX_PROPUESTAS_POR_PERSONA_EN_EL_SPRINT = 20;
 
 /**
  * Un texto idéntico a una lápida (rechazada o fusionada por una persona) no se vuelve a proponer por 28 días. Lo que una

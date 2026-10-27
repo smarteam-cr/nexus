@@ -25,6 +25,14 @@ export const SEGUNDOS_DE_LA_CONVERSACION = 60;
 /** Como mucho, cuántas tareas saca de una conversación. */
 export const TAREAS_DE_UNA_CONVERSACION = 15;
 export const LARGO_DE_UN_TITULO = 60;
+/**
+ * Para estimar el costo antes de leer (el botón «¿Faltó algo?»). Medido el 2026-10-27 sobre las dos reuniones del sprint
+ * de Marketing con conversación (scripts/medir-conversacion-del-sprint.ts --llamar): unos 2,5 caracteres por token de
+ * entrada más 1.500 de instrucciones y listas, y 1.750 de salida (12 y 13 compromisos, cada uno con su contexto).
+ * Antes eran 3,5 y 800: estimaba US$0,010 y costaba US$0,019.
+ */
+export const CARACTERES_POR_TOKEN_DE_LA_CONVERSACION = 2.5;
+export const SALIDA_ESTIMADA_DE_LA_CONVERSACION = 1_750;
 
 export interface PedidoDeConversacion {
   titulo: string;
