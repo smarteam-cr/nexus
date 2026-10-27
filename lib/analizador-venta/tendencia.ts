@@ -1,7 +1,7 @@
 /**
  * lib/analizador-venta/tendencia.ts — LA TENDENCIA DE CADA VENDEDOR (S7, 2026-10-27; decidida el 24 oct y confirmada en el
  * rediseño del 26): cuánto explora, cuánto habla, cuántas sesiones dejan un siguiente paso con fecha y cuántas tienen
- * transcripción, mes a mes. PURO y client-safe. Solo la ven los super admin por ahora (`veElAnalizador`).
+ * transcripción, mes a mes. PURO y client-safe. Solo la ven los super admin (`veLaTendenciaDelEquipo`).
  *
  * ── A QUIÉN SE LE CUENTA UNA REUNIÓN ───────────────────────────────────────────
  * Por el calendario y por quién habló, NUNCA por la asistencia ni los minutos de la API de Meet (Google pide no usarlos

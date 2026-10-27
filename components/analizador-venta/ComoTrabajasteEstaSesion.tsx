@@ -10,7 +10,7 @@
  * recomendaciones como «Para mejorar». Una persona lo confirma y lo confirmado cuenta en la tendencia de cada vendedor
  * (S7). Se fueron los comentarios del vendedor, el siguiente paso y las casillas de «para la próxima».
  *
- * Solo lo ven los super admin mientras se prueba (`veAnalisisDeVenta` del lienzo). Solo tokens del tema.
+ * Lo ve quien entra a la preventa (`veAnalisisDeVenta` del lienzo, abierto el 2026-10-28). Solo tokens del tema.
  */
 import { useMemo, useState } from "react";
 import { Alert, Button, Field, Textarea, useToast } from "@/components/ui";
@@ -30,7 +30,6 @@ function Encabezado() {
         <h3 className="text-[15px] font-semibold text-fg">Cómo trabajaste esta sesión</h3>
         <p className="mt-0.5 text-[12.5px] text-fg-muted">Feedback, no evaluación: lo propone Nexus con citas de la reunión y una persona lo confirma.</p>
       </div>
-      <span className="rounded-full border border-line bg-surface-muted px-2.5 py-0.5 text-[11px] font-semibold text-fg-secondary">En prueba: solo super admin</span>
     </header>
   );
 }

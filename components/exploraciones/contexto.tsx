@@ -66,9 +66,11 @@ export interface Lienzo {
   conAsistente: boolean;
   /**
    * Quien mira ve el análisis de la venta consultiva (la pieza «Análisis» y «Cómo trabajaste esta sesión»,
-   * components/analizador-venta): los super admin mientras se prueba. Nunca en la exploración de un proyecto.
+   * components/analizador-venta): quien entra a la preventa (2026-10-28). Nunca en la exploración de un proyecto.
    */
   veAnalisisDeVenta?: boolean;
+  /** Ve el enlace a la tendencia de cada vendedor (solo los super admin). */
+  veTendenciaDelEquipo?: boolean;
   guardando: boolean;
   cambiar: (ops: Operacion[], opciones?: OpcionesDeCambio) => Promise<boolean>;
   /** Vuelve a pedir la exploración (el agente terminó y dejó propuestas nuevas). Sale en la misma

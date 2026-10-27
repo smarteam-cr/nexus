@@ -5,7 +5,7 @@
  *   GET                  → todas las reuniones de venta con la empresa, cada una con quién habló, su análisis y su revisión
  *   POST { sessionId }   → analiza (o vuelve a analizar) una de ellas. Gasta IA (unos diez centavos de dólar).
  *
- * Mirar pide `preventa.read`; analizar, `preventa.write`; y mientras se prueba, ser super admin
+ * Mirar pide `preventa.read`; analizar, `preventa.write` (abierto a quien entra a la preventa desde el 2026-10-28)
  * (lib/analizador-venta/guardia-server.ts). La reunión tiene que ser de la empresa de la preventa (el chokepoint,
  * invariante 1). Lo demás: lib/analizador-venta/pieza-server.ts y analizar-server.ts.
  */

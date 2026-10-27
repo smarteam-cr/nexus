@@ -5,7 +5,7 @@
  *   { accion: "desconfirmar", sessionId }
  * (La referencia se quitó el 2026-10-27: Elías.)
  *
- * Pide `preventa.write` y, mientras se prueba, ser super admin (lib/analizador-venta/guardia-server.ts). La reunión tiene
+ * Pide `preventa.write` (lib/analizador-venta/guardia-server.ts). La reunión tiene
  * que ser de la empresa de la preventa (el chokepoint, invariante 1). Lo demás: lib/analizador-venta/revision-server.ts.
  */
 import { NextRequest, NextResponse } from "next/server";

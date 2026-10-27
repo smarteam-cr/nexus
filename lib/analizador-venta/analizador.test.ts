@@ -7,7 +7,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { ETAPAS, PROCESO_CONSULTIVO, PUNTOS_DEL_ANALISIS, SIN_POSICIONAMIENTO, criterioComoTexto } from "./criterio";
 import { palabrasDe, quienHablo, reconocerAlEquipo } from "./quien-hablo";
-import { analizadorAutomaticoPrendido, delEquipoEnLaReunion, motivoAnalizadorApagado, porQueNoEsDeVenta, vendedoresDeLaReunion, veElAnalizador } from "./reglas";
+import { analizadorAutomaticoPrendido, delEquipoEnLaReunion, motivoAnalizadorApagado, porQueNoEsDeVenta, vendedoresDeLaReunion, veElAnalizador, veLaTendenciaDelEquipo } from "./reglas";
 import { HERRAMIENTA_DEL_ANALISIS, extraerDelTurno, leerElAnalisis, paraComparar, verificarCita, type TurnoNumerado } from "./analisis";
 import { AGENTES_CON_CAMINO_PROPIO, esAgenteRetirado } from "@/lib/agents/retirados";
 import { AGENTE_DEL_ANALIZADOR } from "./prompt";
@@ -94,12 +94,15 @@ describe("qué reunión es de venta", () => {
     expect(vendedoresDeLaReunion(delEquipo, new Set(["andres@smarteamcr.com"]))).toEqual(["andres@smarteamcr.com"]);
     expect(vendedoresDeLaReunion(delEquipo, new Set())).toEqual(delEquipo);
   });
-  it("el automático nace apagado, y lo ven solo los super admin", () => {
+  it("el automático nace apagado; la preventa lo muestra a quien entra y la tendencia del equipo, solo a los super admin", () => {
     expect(analizadorAutomaticoPrendido({})).toBe(false);
     expect(motivoAnalizadorApagado({})).toMatch(/ANALIZADOR_VENTA=1/);
     expect(motivoAnalizadorApagado({ ANALIZADOR_VENTA: "1" })).toBeNull();
     expect(veElAnalizador("SUPER_ADMIN")).toBe(true);
-    expect(veElAnalizador("VENTAS")).toBe(false);
+    expect(veElAnalizador("VENTAS")).toBe(true);
+    expect(veElAnalizador(null)).toBe(false);
+    expect(veLaTendenciaDelEquipo("SUPER_ADMIN")).toBe(true);
+    expect(veLaTendenciaDelEquipo("VENTAS")).toBe(false);
   });
 });
 
@@ -179,7 +182,8 @@ describe("⛔ el analizador corre por su camino, con una sola empresa", () => {
       expect(src.match(/export async function (GET|POST)/g)?.length, f).toBe(src.match(/await guardDelAnalisisDeVenta\(id, "(read|write)"\)/g)?.length);
       if (src.includes("sessionId")) expect(src, f).toMatch(/esReunionDeLaEmpresa\(g\.clientId/);
     }
-    for (const f of ["app/(shell)/sales/exploraciones/[id]/page.tsx", "app/(shell)/sales/analisis/page.tsx"]) expect(leer(f), f).toMatch(/veElAnalizador\(ctx\.role\)/);
+    expect(leer("app/(shell)/sales/exploraciones/[id]/page.tsx")).toMatch(/veElAnalizador\(ctx\.role\)/);
+    expect(leer("app/(shell)/sales/analisis/page.tsx")).toMatch(/veLaTendenciaDelEquipo\(ctx\.role\)/);
   });
   it("⛔ S6: en Sesiones no queda nada de analizar el manejo de un cliente ni de una sesión", () => {
     for (const f of ["app/(shell)/sessions/[id]/page.tsx", "app/(shell)/sessions/salud/page.tsx", "app/(shell)/sessions/page.tsx"]) {

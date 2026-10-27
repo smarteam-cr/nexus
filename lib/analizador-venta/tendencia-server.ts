@@ -3,7 +3,7 @@
  *
  * Las reuniones de venta del periodo, de todas las empresas, con quién habló y su análisis (reuniones-de-venta-server.ts
  * con `completo`), atribuidas por el calendario y por quién habló; la cuenta, en tendencia.ts. No arma contexto para
- * ningún agente: cuenta. Solo la ven los super admin (`veElAnalizador`) en Ventas › Preventa › «Análisis de la venta».
+ * ningún agente: cuenta. Solo la ven los super admin (`veLaTendenciaDelEquipo`) en Ventas › Preventa › «Análisis de la venta».
  */
 import "server-only";
 import { prisma } from "@/lib/db/prisma";

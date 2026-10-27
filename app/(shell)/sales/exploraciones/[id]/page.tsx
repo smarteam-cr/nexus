@@ -26,7 +26,7 @@ import {
   SQL_DE_EXPLORACIONES,
 } from "@/lib/exploraciones/servidor";
 import { paraLaPantallaCompleta } from "@/lib/exploraciones/pantalla";
-import { veElAnalizador } from "@/lib/analizador-venta/reglas";
+import { veElAnalizador, veLaTendenciaDelEquipo } from "@/lib/analizador-venta/reglas";
 import { empresaExcluida } from "@/lib/escala/prueba/calculo";
 
 export const dynamic = "force-dynamic";
@@ -161,6 +161,7 @@ export default async function ExploracionPage({
             puedeProponer={puedeProponer}
             conAsistente={puedeChat}
             veAnalisisDeVenta={veElAnalizador(ctx.role)}
+            veTendenciaDelEquipo={veLaTendenciaDelEquipo(ctx.role)}
 
             infoDeLaEmpresa={infoDeLaEmpresa}
             piezaInicial={pieza ?? null}

@@ -71,9 +71,18 @@ export function vendedoresDeLaReunion(delEquipo: readonly string[], ventas: Read
 }
 
 /**
- * ¿Ve el analizador? Primero solo los super admin, para probarlo (Elías, 24 oct); después todo Ventas, cada uno con sus
- * análisis (S5). Es por rol y fuera de la matriz de permisos a propósito mientras se prueba: abrirlo es cambiar esta línea.
+ * ¿Ve el analizador en la preventa (la pieza «Análisis» y «Cómo trabajaste esta sesión»)? Primero solo los super admin,
+ * para probarlo (Elías, 24 oct). Desde el 2026-10-28 (Elías) lo ve quien entra a una preventa: quién entra lo decide la
+ * matriz de permisos (`preventa.read`, y `preventa.write` para analizar o confirmar), que la guarda pide aparte.
  */
 export function veElAnalizador(rol: string | null | undefined): boolean {
+  return !!rol;
+}
+
+/**
+ * ¿Ve la tendencia de cada vendedor (Ventas › Preventa › «Análisis de la venta»)? Solo los super admin: compara a los
+ * vendedores entre sí. Abrirlo es una decisión de Elías aparte (el 2026-10-28 abrió solo lo de la preventa).
+ */
+export function veLaTendenciaDelEquipo(rol: string | null | undefined): boolean {
   return rol === "SUPER_ADMIN";
 }

@@ -3,7 +3,7 @@
 /**
  * PasoAnalisis — la pieza «Análisis» del prospecto, en la preventa (S5, 2026-10-27; antes «el analizador por cliente»,
  * docs/analizador-reuniones-venta-plan.md › «El rediseño de Elías (2026-10-26)»). Va en la lista junto a Exploración, La
- * escala, Casos de uso y Propuesta, y solo la ven los super admin mientras se prueba.
+ * escala, Casos de uso y Propuesta, y la ve quien entra a la preventa (abierto el 2026-10-28).
  *
  * Arriba, la lectura de conjunto (lib/analizador-venta/conjunto.ts, sin IA): cómo se ha trabajado a este prospecto y qué
  * falta diagnosticar antes de proponer, cruzado con el mapa de la escala de la preventa. Debajo, todas las reuniones de
@@ -40,7 +40,7 @@ function Cifra({ valor, rotulo }: { valor: string; rotulo: string }) {
 }
 
 export default function PasoAnalisis() {
-  const { exp, escala, mapa, propuestas, puedeEditar, veAnalisisDeVenta, irA, sesion } = useLienzo();
+  const { exp, escala, mapa, propuestas, puedeEditar, veAnalisisDeVenta, veTendenciaDelEquipo, irA, sesion } = useLienzo();
   const { todas } = useSesiones();
   const { datos, error, analizar } = useAnalisisDeLaVenta(exp.id, !!veAnalisisDeVenta);
 
@@ -104,7 +104,6 @@ export default function PasoAnalisis() {
       <section aria-label="Cómo se ha trabajado a este prospecto" className="space-y-4 rounded-xl border border-line bg-surface px-[18px] py-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <h3 className="text-[15px] font-semibold text-fg">Cómo se ha trabajado a este prospecto</h3>
-          <span className="rounded-full border border-line bg-surface-muted px-2.5 py-0.5 text-[11px] font-semibold text-fg-secondary">En prueba: solo super admin</span>
         </div>
         <p className="text-[13.5px] leading-[20px] text-fg">{conjunto.frase}</p>
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
@@ -233,13 +232,15 @@ export default function PasoAnalisis() {
         </ol>
       </section>
 
-      <p className="text-xs text-fg-muted">
-        El criterio con que se analiza cada sesión y la tendencia de cada vendedor:{" "}
-        <Link href="/sales/analisis" className="font-semibold text-brand hover:text-brand-dark">
-          Análisis de la venta
-        </Link>
-        .
-      </p>
+      {veTendenciaDelEquipo && (
+        <p className="text-xs text-fg-muted">
+          El criterio con que se analiza cada sesión y la tendencia de cada vendedor:{" "}
+          <Link href="/sales/analisis" className="font-semibold text-brand hover:text-brand-dark">
+            Análisis de la venta
+          </Link>
+          .
+        </p>
+      )}
     </div>
   );
 }

@@ -3,7 +3,7 @@
  * 2026-10-27). SERVIDOR.
  *
  * El análisis vive en la preventa (`/api/sales/exploraciones/[id]/analisis-de-venta`): mirar pide `preventa.read` y
- * analizar o confirmar, `preventa.write`; además, mientras se prueba, ser super admin (`veElAnalizador`). Solo la
+ * analizar o confirmar, `preventa.write` (`veElAnalizador`, abierto a quien entra a la preventa desde el 2026-10-28). Solo la
  * preventa de un prospecto (una exploración sin proyecto): la exploración de un proyecto es de Customer Success y no se
  * analiza como venta. Devuelve la empresa de la preventa: toda reunión que se toque tiene que ser de ella (invariante 1).
  */
@@ -23,7 +23,7 @@ export interface QuienAnaliza {
 export async function guardDelAnalisisDeVenta(exploracionId: string, accion: "read" | "write"): Promise<QuienAnaliza | NextResponse> {
   const g = await guardPermission("preventa", accion);
   if (g instanceof NextResponse) return g;
-  if (!veElAnalizador(g.role)) return NextResponse.json({ error: "El análisis de la venta todavía está en prueba: solo lo ven los super admin." }, { status: 403 });
+  if (!veElAnalizador(g.role)) return NextResponse.json({ error: "No puedes ver el análisis de la venta." }, { status: 403 });
   let exp: { clientId: string; projectId: string | null } | null;
   try {
     exp = await prisma.exploracionDeVenta.findUnique({ where: { id: exploracionId }, select: { clientId: true, projectId: true } });

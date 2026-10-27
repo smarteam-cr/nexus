@@ -5,7 +5,7 @@
  * trabajaste esta sesión» (S4) y el punto de la pieza en el riel (2026-10-27). Una sola lectura por preventa: lo guarda un
  * almacén de módulo y cada pantalla se suscribe; analizar o revisar vuelve a leer para todas.
  *
- * Solo se pide si quien mira ve el análisis (`activo`: los super admin mientras se prueba, lo mismo que pide la ruta).
+ * Solo se pide si quien mira ve el análisis (`activo`: quien entra a la preventa, lo mismo que pide la ruta).
  */
 import { useCallback, useEffect, useSyncExternalStore } from "react";
 import { fetchJson } from "@/lib/api/fetch-json";

@@ -134,6 +134,7 @@ export default function LienzoDeExploracion({
   proyecto,
   conAsistente = false,
   veAnalisisDeVenta = false,
+  veTendenciaDelEquipo = false,
 }: {
   inicial: ExploracionParaLaPantalla;
   escala: EscalaDelLienzo;
@@ -147,8 +148,10 @@ export default function LienzoDeExploracion({
   proyecto?: EnElProyecto;
   /** El chat de la cuenta está en la pantalla: la guía ofrece «Mejorar con el asistente» (validación 71). */
   conAsistente?: boolean;
-  /** Quien mira ve el análisis de la venta (S4 y S5): los super admin mientras se prueba. Nunca en un proyecto. */
+  /** Quien mira ve el análisis de la venta (S4 y S5): quien entra a la preventa (2026-10-28). Nunca en un proyecto. */
   veAnalisisDeVenta?: boolean;
+  /** Ve el enlace a la tendencia de cada vendedor («Análisis de la venta»): solo los super admin. */
+  veTendenciaDelEquipo?: boolean;
 }) {
   const router = useRouter();
   const toast = useToast();
@@ -380,6 +383,7 @@ export default function LienzoDeExploracion({
     puedeProponer: puedeEditar && puedeProponer,
     conAsistente: puedeEditar && conAsistente,
     veAnalisisDeVenta: conAnalisis,
+    veTendenciaDelEquipo,
     guardando,
     cambiar,
     recargar,
