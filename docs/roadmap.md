@@ -78,6 +78,10 @@
     {
      "fecha": "27 oct",
      "texto": "La escala 9.0 publicada, con 52 decisiones provisionales. Ninguna empresa cambió de nivel."
+    },
+    {
+     "fecha": "28 oct",
+     "texto": "La edición «Maquinaria y equipo pesado» (escala 9.1.1) y la vista Radar, por puntos."
     }
    ],
    "sigue": "Probarla con 5 a 8 empresas de al menos 3 industrias (Escala › Probar). Falta el umbral de tráfico de Insider (se usa uno provisional).",
@@ -85,7 +89,8 @@
    "decisiones": [
     8,
     18,
-    38
+    38,
+    47
    ]
   },
   {
@@ -111,6 +116,10 @@
     {
      "fecha": "27 oct",
      "texto": "«Banca y servicios financieros» ya es una industria: el test llega a sus preguntas."
+    },
+    {
+     "fecha": "28 oct",
+     "texto": "Los tests de Maquinaria y equipo pesado, publicados en las tres áreas."
     }
    ],
    "sigue": "Tu revisión de las preguntas. Después, el corte: un formulario nuevo de HubSpot, cambiar la dirección y apagar la aplicación vieja.",
@@ -625,6 +634,7 @@ Sin esto, algo sigue mal o no se puede validar:
 44. **La plantilla recomendada de la Planificación:** hoy el selector propone la completa. ¿Recomendamos una?
 45. **«Cómo llegó» un prospecto:** sumé una quinta vía, «Por la web o un anuncio». ¿La dejamos?
 46. ✓ **La industria «Banca y servicios financieros» en el test:** la escala tiene su edición, pero la lista de industrias de Smarteam no trae Banca, así que nadie llega a esas preguntas. ¿Sumo «Banca y servicios financieros» a la lista de industrias (también la de los datos de la empresa)? **Tu respuesta (27 oct):** Sí, súmala. (Hecha el 27 oct: ya aparece en el test y en los datos de la empresa. En HubSpot la opción todavía no existe; hay que crearla antes de que Nexus escriba la industria allá.)
+47. **CAMOSA y la industria Maquinaria:** desde el 28 oct existe la edición «Maquinaria y equipo pesado» de la escala, y CAMOSA sigue en «Automotriz». ¿La paso a Maquinaria? Su próxima medición sería un punto de partida nuevo, sin comparar con la anterior.
 
 ## Propuesta por aprobar: vender y entregar por casos de uso
 
@@ -1014,7 +1024,7 @@ Sale del feedback de Ventas (Marco, Andrés y Liz) y de Customer Success (Lilian
    - Etapa 2 · La lectura y la escala reciben el equipo: lo que dice Marketing no se atribuye a dimensiones de Ventas. Cambiar el equipo de una sesión ya leída ofrece «Volver a leer con este equipo».
    - Etapa 3 · La historia de las sesiones que recibe la guía dice qué equipo dijo qué, para que el contraste entre equipos no se invente.
    - Etapa 4 · «Qué explorar en la próxima sesión» filtra por el equipo de esa sesión, y las sesiones por equipo se siguen sugiriendo aunque ya haya una con equipo.
-12. [hecho, 28 oct, en producción (`3fa7bf2b`), con Ctrl+Z, en todas las piezas del lienzo; falta probarlo en pantalla] **K12 · «Usar» en las sugerencias, sin sorpresas** (pedido del 28 oct, con Camosa). *Existe a medias:* «Usar» y «Usar las N» aplican sin decir qué cambian, la sugerencia desaparece sin rastro y no hay Deshacer. En Camosa no se perdió nada: el 27 oct entró un nivel (Ventas · Procesos y Rutinas) y la industria sigue la que eligió la IA. *Los dos lugares.*
+12. [hecho, 28 oct, en producción (`3fa7bf2b`), con Ctrl+Z, en todas las piezas del lienzo; el 28 oct (`2f76dff5`), deshacer devuelve la sugerencia a su mismo lugar, con todas sus fuentes; falta probarlo en pantalla] **K12 · «Usar» en las sugerencias, sin sorpresas** (pedido del 28 oct, con Camosa). *Existe a medias:* «Usar» y «Usar las N» aplican sin decir qué cambian, la sugerencia desaparece sin rastro y no hay Deshacer. En Camosa no se perdió nada: el 27 oct entró un nivel (Ventas · Procesos y Rutinas) y la industria sigue la que eligió la IA. *Los dos lugares.*
    - Etapa 1 · Cada «Usar» dice lo que va a escribir («Poner Ventas · Datos en Inicial»); al usar una industria, avisa que también cambia el perfil.
    - Etapa 2 · Después de usar, un aviso con «Deshacer», y un bloque «Usadas hoy» con cada una y cómo revertirla.
    - Etapa 3 · «Usar las N» pide confirmación y se llama «Pasar las N al mapa».
@@ -1367,7 +1377,7 @@ Pasaron a otro lugar: unir los contenedores «Información del cliente» repetid
 
 **Para lo de la noche del 25 oct** (en el servidor salvo lo que dice otra cosa):
 1. **HubSpot, los avisos:** en la app de HubSpot, la URL `https://nexus.smarteamcr.com/api/hubspot/webhooks` y las suscripciones de empresa, contacto, negocio y ticket (RUNBOOK › «Los avisos de HubSpot»). Revisar que `APP_URL` del servidor sea esa dirección.
-2. **Que Nexus escriba en HubSpot lo que decide la persona:** `EMPRESA_HUBSPOT_ESCRITURA=1` (yo lo pruebo después con 5 empresas) y, tras revisar el simulacro, `EMPRESA_HUBSPOT_COPIA=1`. Antes, en HubSpot, sumar la opción «Banca y servicios financieros» (con ese mismo valor) a la propiedad «Industria (Smarteam)» de las empresas: Nexus ya la ofrece desde el 27 oct.
+2. **Que Nexus escriba en HubSpot lo que decide la persona:** `EMPRESA_HUBSPOT_ESCRITURA=1` (yo lo pruebo después con 5 empresas) y, tras revisar el simulacro, `EMPRESA_HUBSPOT_COPIA=1`. Antes, en HubSpot, sumar las opciones «Banca y servicios financieros» y «Maquinaria y equipo pesado» (con esos mismos valores) a la propiedad «Industria (Smarteam)» de las empresas: Nexus ya las ofrece desde el 27 y el 28 oct.
 3. **Los avisos de Meet al momento:** `GOOGLE_MEET_EVENTOS_ENABLED=1`.
 4. ✓ No por ahora (decidiste dejar Speech-to-Text apagado, 24 oct). **El audio de las reuniones presenciales:** en Google Cloud, habilitar «Cloud Speech-to-Text», un bucket con CORS y dos roles para la cuenta de servicio (RUNBOOK); en el servidor, `REUNIONES_AUDIO=1` y `GOOGLE_SPEECH_BUCKET`.
 5. **Sentry:** con `SENTRY_DSN`, una alerta de Crons para los monitores `nexus-*` (los jobs que dejan de correr).
