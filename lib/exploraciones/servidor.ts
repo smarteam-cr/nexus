@@ -279,7 +279,10 @@ export async function aplicarCambios(
     // algunos criterios, y la pantalla cambia la edición sola, en un pedido aparte.
     const deLaPantalla = o.eventosDeConfianza ? ({ ok: true, ops: [...operaciones] } as const) : operacionesDeLaPantalla(antes, operaciones, { quienPide: o.quienPide });
     if (!deLaPantalla.ok) return { estado: "invalido", error: deLaPantalla.error } as const;
-    const r = aplicarOperaciones(antes, deLaPantalla.ops, validezPara(general, escalaDeLaExploracion(general, antes)), VALIDADOR_ESTRICTO);
+    const r = aplicarOperaciones(antes, deLaPantalla.ops, validezPara(general, escalaDeLaExploracion(general, antes)), VALIDADOR_ESTRICTO, {
+      por: o.quienPide ?? null,
+      en: new Date().toISOString(),
+    });
     if (!r.ok) return { estado: "invalido", error: r.error } as const;
 
     const confirmado = cambioLoConfirmado(antes, r.estado);

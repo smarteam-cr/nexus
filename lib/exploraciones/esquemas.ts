@@ -39,6 +39,7 @@ import {
   MAX_CORREOS,
   MAX_ASOCIACIONES_DESCARTADAS,
   MAX_DESCARTADAS,
+  MAX_USADAS,
   MAX_FUERA,
   MAX_ID_DE_REUNION,
   MAX_LECTURAS,
@@ -58,6 +59,7 @@ import {
   type EstimadoGuardado,
   type FotoAlProponer,
   type ItemPropuesto,
+  type UsoDeSugerencia,
   type LecturaDeReunion,
   type Medicion,
   type Operacion,
@@ -465,6 +467,7 @@ export const OperacionSchema = z.discriminatedUnion("op", [
     op: z.literal("usarVarias"),
     items: z.array(z.object({ itemId: z.string().min(1).max(120), valor: z.unknown().optional() })).min(1).max(250),
   }),
+  z.object({ op: z.literal("deshacerUso"), ids: z.array(z.string().min(1).max(120)).min(1).max(250) }),
   z.object({ op: z.literal("descartar"), itemIds: z.array(z.string().min(1).max(120)).min(1).max(250) }),
   z.object({ op: z.literal("responsable"), email: z.string().email().max(200).nullable() }),
   z.object({ op: z.literal("alertaTecnicaVista") }),
@@ -667,6 +670,8 @@ export function leerContenido(raw: unknown): ContenidoDeExploracion {
       .filter((k): k is string => typeof k === "string" && CLAVE_DE_REUNION.safeParse(k).success)
       .slice(-MAX_ASOCIACIONES_DESCARTADAS);
   }
+  const usadas = leerUsadas(raw.usadas);
+  if (usadas?.length) c.usadas = usadas;
   if (Array.isArray(raw.alProponer)) {
     c.alProponer = raw.alProponer.filter(
       (f): f is FotoAlProponer =>
@@ -753,25 +758,51 @@ export function leerPropuesta(raw: unknown): PropuestaDeExploracion {
   p.lecturas = Object.fromEntries(Object.entries(registroValido(raw.lecturas, CLAVE_DE_LECTURA, LecturaDeReunionSchema)).slice(-MAX_LECTURAS));
   p.correos = Object.fromEntries(Object.entries(registroValido(raw.correos, CLAVE_DE_LECTURA, CorreoDeSeguimientoSchema)).slice(-MAX_CORREOS));
   if (!Array.isArray(raw.items)) return p;
-  const items: ItemPropuesto[] = [];
-  for (const it of raw.items) {
-    if (!esObjeto(it) || typeof it.id !== "string") continue;
-    const destino = DestinoSchema.safeParse(it.destino);
-    if (!destino.success) continue;
-    const valor = esquemaDelDestino(destino.data).safeParse(it.valor);
-    if (!valor.success) continue;
-    const fuentes = Array.isArray(it.fuentes)
-      ? it.fuentes.map((f) => FuenteSchema.safeParse(f)).filter((r) => r.success).map((r) => r.data)
-      : [];
-    items.push({
-      id: it.id,
-      destino: destino.data,
-      valor: valor.data,
-      razon: typeof it.razon === "string" ? it.razon.slice(0, 300) : undefined,
-      fuentes,
-      corridaId: typeof it.corridaId === "string" ? it.corridaId : null,
-      en: typeof it.en === "string" ? it.en : new Date(0).toISOString(),
+  const items = raw.items.map(leerItem).filter((it): it is ItemPropuesto => it !== null);
+  return { ...p, items };
+}
+
+/** Un ítem de lo propuesto (también el que guarda cada sugerencia usada). Sin la forma, null. */
+function leerItem(it: unknown): ItemPropuesto | null {
+  if (!esObjeto(it) || typeof it.id !== "string") return null;
+  const destino = DestinoSchema.safeParse(it.destino);
+  if (!destino.success) return null;
+  const valor = esquemaDelDestino(destino.data).safeParse(it.valor);
+  if (!valor.success) return null;
+  const fuentes = Array.isArray(it.fuentes)
+    ? it.fuentes.map((f) => FuenteSchema.safeParse(f)).filter((r) => r.success).map((r) => r.data)
+    : [];
+  return {
+    id: it.id,
+    destino: destino.data,
+    valor: valor.data,
+    razon: typeof it.razon === "string" ? it.razon.slice(0, 300) : undefined,
+    fuentes,
+    corridaId: typeof it.corridaId === "string" ? it.corridaId : null,
+    en: typeof it.en === "string" ? it.en : new Date(0).toISOString(),
+  };
+}
+
+/**
+ * K12: las sugerencias usadas. `antes` y `despues` los escribió el servidor con lo que había en la fila (contenido.ts ›
+ * `lugarDe`): se guardan como vinieron, y deshacer vuelve a mirar la forma de la industria y el perfil antes de escribirlos.
+ */
+function leerUsadas(raw: unknown): UsoDeSugerencia[] | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  const usadas: UsoDeSugerencia[] = [];
+  for (const u of raw) {
+    if (!esObjeto(u) || typeof u.id !== "string" || u.id.length > 120 || typeof u.en !== "string") continue;
+    const item = leerItem(u.item);
+    if (!item || item.id !== u.id) continue;
+    usadas.push({
+      id: u.id,
+      item,
+      antes: u.antes ?? null,
+      despues: u.despues ?? null,
+      en: u.en.slice(0, 40),
+      por: typeof u.por === "string" ? u.por.slice(0, 200) : null,
+      ...(u.lote === true ? { lote: true } : {}),
     });
   }
-  return { ...p, items };
+  return usadas.slice(-MAX_USADAS);
 }

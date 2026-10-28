@@ -29,6 +29,8 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { Drawer, useToast } from "@/components/ui";
+import { useUndo, useUndoScope } from "@/components/ui/UndoProvider";
+import { useMe } from "@/hooks/useMe";
 import type { EstadoDePieza } from "@/components/canvas/SelectorDePiezas";
 import type { Letra } from "@/lib/escala/documento/tipos";
 import { CASILLAS_DEL_RESUMEN, type ClaveDeCasilla } from "@/lib/exploraciones/casillas";
@@ -40,9 +42,11 @@ import {
   propuestaVigente,
   VALIDADOR_LIBRE,
   type DestinoDePropuesta,
+  type ItemPropuesto,
   type Operacion,
   type Validez,
 } from "@/lib/exploraciones/contenido";
+import { avisoDelLote, queHaceUsar, usadasDeHoy, type LugarDelLote } from "@/lib/exploraciones/usar-sugerencias";
 import { idsDeLaEscala, type EscalaDelLienzo } from "@/lib/exploraciones/escala-del-lienzo";
 import { chequeoConfirmado, chequeoDelMapa, posicionesDelMapa } from "@/lib/exploraciones/mapa";
 import { definicionEnElMarco, marcoDe } from "@/lib/exploraciones/marco";
@@ -290,11 +294,13 @@ export default function LienzoDeExploracion({
     [router, toast],
   );
 
+  const me = useMe();
+  const miCorreo = me?.email ?? null;
   const cambiar = useCallback(
     (ops: Operacion[], opciones?: OpcionesDeCambio): Promise<boolean> => {
-      // En pantalla primero, con la misma regla que aplica el servidor.
+      // En pantalla primero, con la misma regla que aplica el servidor (que anota quién y cuándo de verdad).
       setExp((actual) => {
-        const r = aplicarOperaciones(actual.estado, ops, validez, VALIDADOR_LIBRE);
+        const r = aplicarOperaciones(actual.estado, ops, validez, VALIDADOR_LIBRE, { por: miCorreo, en: new Date().toISOString() });
         return r.ok ? { ...actual, estado: r.estado } : actual;
       });
       const deLaEpoca = epoca.current;
@@ -302,7 +308,70 @@ export default function LienzoDeExploracion({
       cola.current = p.catch(() => undefined);
       return p;
     },
-    [enviar, validez],
+    [enviar, validez, miCorreo],
+  );
+
+  /* K12 (2026-10-28): usar una sugerencia dice qué hizo y se puede deshacer —con el aviso o con Ctrl+Z fuera de un campo
+     de texto (components/ui/UndoProvider.tsx)—. La pila vive en la página: se pierde al recargar, y lo usado hoy queda
+     en «Usadas hoy» (contenido.usadas) para revertirlo desde ahí. */
+  const { pushUndo } = useUndo();
+  const raiz = useRef<HTMLDivElement>(null);
+  const scopeDelDeshacer = `exploracion:${inicial.id}`;
+  useUndoScope(scopeDelDeshacer, raiz);
+
+  const deshacer = useCallback(
+    async (ids: string[]): Promise<boolean> => {
+      const pedidas = (confirmada.current.estado.contenido.usadas ?? []).filter((u) => ids.includes(u.id));
+      if (!pedidas.length) {
+        toast.info("Eso ya se deshizo.");
+        return false;
+      }
+      const refrescar = pedidas.some((u) => u.item.destino.tipo === "edicion" || u.item.destino.tipo === "perfil");
+      const ok = await cambiar([{ op: "deshacerUso", ids: pedidas.map((u) => u.id) }], { refrescar });
+      if (!ok) return false;
+      const quedan = (confirmada.current.estado.contenido.usadas ?? []).filter((u) => ids.includes(u.id)).length;
+      if (quedan > 0) {
+        const hechas = pedidas.length - quedan;
+        toast.info(
+          `${hechas === 1 ? "Se deshizo 1" : `Se deshicieron ${hechas}`} de ${pedidas.length}: ${
+            quedan === 1 ? "una cambió después de usarla y quedó como está" : `${quedan} cambiaron después de usarlas y quedaron como están`
+          }.`,
+        );
+      } else {
+        toast.success(pedidas.length === 1 ? "Listo: la sugerencia volvió a la lista." : "Listo: las sugerencias volvieron a la lista.");
+      }
+      return true;
+    },
+    [cambiar, toast],
+  );
+
+  const usar = useCallback(
+    async (items: ItemPropuesto[], o: { lugar?: LugarDelLote } = {}): Promise<boolean> => {
+      if (!items.length) return false;
+      // Lo que va a escribir, dicho ANTES de usarla (después ya no hay «antes» con que comparar).
+      const nivel = (l: Letra) => escala.niveles.find((n) => n.letra === l)?.nombre ?? l;
+      const efecto = items.length === 1 ? queHaceUsar(items[0], confirmada.current.estado, escala, nivel, marcoDe(inicial.marco)) : null;
+      const refrescar = items.some((it) => it.destino.tipo === "edicion" || it.destino.tipo === "perfil");
+      const ops: Operacion[] =
+        items.length === 1
+          ? [{ op: "usar", itemId: items[0].id, valor: items[0].valor }]
+          : [{ op: "usarVarias", items: items.map((it) => ({ itemId: it.id, valor: it.valor })) }];
+      const ok = await cambiar(ops, { refrescar });
+      if (!ok) return false;
+      // Solo lo que de verdad quedó anotado: un ítem que ya estaba igual no tiene nada que deshacer.
+      const anotadas = new Set((confirmada.current.estado.contenido.usadas ?? []).map((u) => u.id));
+      const ids = items.map((it) => it.id).filter((id) => anotadas.has(id));
+      if (!ids.length) return true;
+      pushUndo({
+        scope: scopeDelDeshacer,
+        label: efecto ? `Usaste: ${efecto.texto}` : avisoDelLote(o.lugar ?? "otro", ids.length),
+        undo: async () => {
+          await deshacer(ids);
+        },
+      });
+      return true;
+    },
+    [cambiar, deshacer, escala, inicial.marco, pushUndo, scopeDelDeshacer],
   );
 
   /** Espera a que salgan los cambios en fila (antes de armar la propuesta, por ejemplo). */
@@ -386,6 +455,10 @@ export default function LienzoDeExploracion({
     veTendenciaDelEquipo,
     guardando,
     cambiar,
+    usar,
+    deshacer,
+    queHace: (it) => queHaceUsar(it, exp.estado, escala, nombreDeNivel, marco),
+    usadasHoy: usadasDeHoy(exp.estado.contenido.usadas),
     recargar,
     alDia,
     nombreDeNivel,
@@ -554,7 +627,7 @@ export default function LienzoDeExploracion({
             proyecto.slotDeSesiones,
           )}
         {proyecto.slotDelPanel && createPortal(<PanelDeContexto sigue={sigue} nombreDelPaso={(p) => NOMBRE_DEL_PASO[p]} paso="exploracion" />, proyecto.slotDelPanel)}
-        <div className="space-y-6">
+        <div ref={raiz} className="space-y-6">
           {/* K5 (2026-10-27): «¿Es la sesión 2 con Marketing?», y el lienzo que se pone al día solo. */}
           <SugerenciasDeAsociacion />
           <div hidden={vista !== "sesiones"}>
@@ -570,7 +643,7 @@ export default function LienzoDeExploracion({
   return (
     <LienzoContexto.Provider value={lienzo}>
       <MirarHubspot />
-      <div className="flex-1 bg-surface-muted lg:grid lg:grid-cols-[14.5rem_minmax(0,1fr)] xl:grid-cols-[14.5rem_minmax(0,1fr)_18.75rem]">
+      <div ref={raiz} className="flex-1 bg-surface-muted lg:grid lg:grid-cols-[14.5rem_minmax(0,1fr)] xl:grid-cols-[14.5rem_minmax(0,1fr)_18.75rem]">
         <aside className="border-b border-line bg-surface px-3 py-4 lg:sticky lg:top-0 lg:h-[calc(100vh-3.5rem)] lg:self-start lg:overflow-y-auto lg:border-b-0 lg:border-r lg:py-4">
           <RielDePiezas
             paso={paso}

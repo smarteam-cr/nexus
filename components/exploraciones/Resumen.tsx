@@ -28,11 +28,11 @@ import {
   type Persona,
   type Reto,
 } from "@/lib/exploraciones/casillas";
-import type { ItemPropuesto } from "@/lib/exploraciones/contenido";
+import type { DestinoDePropuesta, ItemPropuesto } from "@/lib/exploraciones/contenido";
 import { cn } from "@/lib/cn";
 import { Casilla } from "./Casilla";
-import FranjaDeSugerencias, { BotonAzul, BotonBlanco, IconoDeSugerencia } from "./FranjaDeSugerencias";
-import { describirPropuesta } from "./Propuestas";
+import FranjaDeSugerencias, { BotonBlanco, IconoDeSugerencia } from "./FranjaDeSugerencias";
+import { BotonUsarTodas, describirPropuesta, UsadasHoy } from "./Propuestas";
 import { useLienzo } from "./contexto";
 
 /** La letra del marco de cada tarjeta (GPCT, presupuesto y autoridad, C&I), con su nombre en inglés. */
@@ -183,32 +183,33 @@ function AvisoTecnico() {
   );
 }
 
+const esDelResumen = (d: DestinoDePropuesta) => d.tipo === "casilla" && definicionDe(d.clave).paso === "resumen";
+
 export default function Resumen() {
-  const { pendientesPara, puedeEditar, guardando, cambiar, abrirCasilla, abrirRevision } = useLienzo();
+  const { pendientesPara, abrirCasilla, abrirRevision } = useLienzo();
   const deLaCasilla = (clave: ClaveDeCasilla) => pendientesPara((d) => d.tipo === "casilla" && d.clave === clave);
   // Lo sugerido para las tarjetas y lo que sale de cada reunión: lo que se revisa en esta pieza.
-  const delResumen = pendientesPara((d) => d.tipo === "casilla" && definicionDe(d.clave).paso === "resumen");
+  const delResumen = pendientesPara(esDelResumen);
 
   return (
     <div className="space-y-6">
       <AvisoTecnico />
-      {delResumen.length > 0 && (
-        <div data-recorrido="preventa.resumen.sugerencias">
+      {delResumen.length > 0 ? (
+        <div data-recorrido="preventa.resumen.sugerencias" className="space-y-1.5">
         <FranjaDeSugerencias
           acciones={
             <>
               <BotonBlanco onClick={() => abrirRevision("resumen")}>Revisar una por una</BotonBlanco>
-              {puedeEditar && (
-                <BotonAzul disabled={guardando} onClick={() => void cambiar([{ op: "usarVarias", items: delResumen.map((it) => ({ itemId: it.id, valor: it.valor })) }])}>
-                  Usar {delResumen.length === 1 ? "la sugerida" : `las ${delResumen.length}`}
-                </BotonAzul>
-              )}
+              <BotonUsarTodas items={delResumen} lugar="resumen" />
             </>
           }
         >
           <strong>El agente sugiere {delResumen.length === 1 ? "una cosa" : `${delResumen.length} cosas`}</strong> para estas tarjetas. Nada se confirma solo.
         </FranjaDeSugerencias>
+        <UsadasHoy filtro={esDelResumen} />
         </div>
+      ) : (
+        <UsadasHoy filtro={esDelResumen} sinPendientes />
       )}
 
       <div data-recorrido="preventa.resumen.marco" className="space-y-5">

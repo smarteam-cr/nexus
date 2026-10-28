@@ -32,7 +32,7 @@ import FranjaDeSugerencias, { BotonAzul, IconoDeSugerencia } from "./FranjaDeSug
 import { ConQueSeMide } from "./Identificacion";
 import PanelDelAgente from "./PanelDelAgente";
 import { piezaDelDestino } from "./piezas";
-import { FilaSugerida } from "./Propuestas";
+import { BotonUsarTodas, FilaSugerida, UsadasHoy } from "./Propuestas";
 import PreparacionParaEngagement from "./PreparacionParaEngagement";
 import { QueVaPrimero } from "./QueVaPrimero";
 import RuedaDelEquipo from "./RuedaDelEquipo";
@@ -81,22 +81,22 @@ function dondeCae(d: DestinoDePropuesta, escala: EscalaDelLienzo): string {
 
 // ── 1 · Lo que sugiere el agente, arriba y una vez ──────────────────────────
 
+const deLaEscala = (d: DestinoDePropuesta) => piezaDelDestino(d) === "escala";
+
 function SugerenciasDeLaEscala() {
-  const { revisables, escala, cambiar, puedeEditar, guardando } = useLienzo();
-  const items = revisables.filter((it) => piezaDelDestino(it.destino) === "escala");
-  if (items.length === 0) return null;
-  const refrescar = items.some((it) => it.destino.tipo === "edicion" || it.destino.tipo === "perfil");
+  const { revisables, escala } = useLienzo();
+  const items = revisables.filter((it) => deLaEscala(it.destino));
+  // K12: al usar la última no desaparece de golpe: dice que no quedan y deja a la vista lo usado hoy.
+  if (items.length === 0) {
+    return (
+      <section aria-label="Lo que sugiere el agente">
+        <UsadasHoy filtro={deLaEscala} sinPendientes />
+      </section>
+    );
+  }
   return (
     <section aria-label="Lo que sugiere el agente" className="space-y-1.5">
-      <FranjaDeSugerencias
-        acciones={
-          puedeEditar && (
-            <BotonAzul disabled={guardando} onClick={() => void cambiar([{ op: "usarVarias", items: items.map((it) => ({ itemId: it.id, valor: it.valor })) }], { refrescar })}>
-              {items.length === 1 ? "Usar la sugerida" : `Usar las ${items.length}`}
-            </BotonAzul>
-          )
-        }
-      >
+      <FranjaDeSugerencias acciones={<BotonUsarTodas items={items} lugar="escala" />}>
         El agente sugiere {items.length === 1 ? "una cosa" : `${items.length} cosas`} en La escala. Nada se confirma solo.
       </FranjaDeSugerencias>
       <ul className="space-y-1.5">
@@ -104,6 +104,7 @@ function SugerenciasDeLaEscala() {
           <FilaSugerida key={it.id} item={it} destino={dondeCae(it.destino, escala)} />
         ))}
       </ul>
+      <UsadasHoy filtro={deLaEscala} />
     </section>
   );
 }
@@ -238,7 +239,7 @@ function PestanaDeArea({ area, activa, orden, onElegir }: { area: AreaDelLienzo;
 
 /** Una dimensión abierta: cómo está hoy, la pregunta, los cinco niveles y lo que pide Funcional. */
 function DetalleDeDimension({ d, onCerrar }: { d: DimensionDelLienzo; onCerrar: () => void }) {
-  const { exp, escala, mapa, cambiar, puedeEditar, guardando, nombreDeNivel, pendientesPara } = useLienzo();
+  const { exp, escala, mapa, cambiar, usar, puedeEditar, guardando, nombreDeNivel, pendientesPara } = useLienzo();
   const p = mapa.posiciones[d.id];
   const confirmado = exp.estado.contenido.chequeo[d.id];
   const marcada = exp.estado.contenido.aExplorar[d.id];
@@ -252,7 +253,8 @@ function DetalleDeDimension({ d, onCerrar }: { d: DimensionDelLienzo; onCerrar: 
     const v = pend?.valor as EstimadoGuardado | undefined;
     if (pend && v?.nivel === nivel) {
       const valor: EstimadoGuardado = esHipotesisDeNivel(pend) ? { ...v, fuente: "vendedor" } : v;
-      return void cambiar([{ op: "usar", itemId: pend.id, valor }]);
+      // Por el «Usar» del lienzo (K12): con su aviso, Ctrl+Z y su lugar en «Usadas hoy».
+      return void usar([{ ...pend, valor }]);
     }
     // Ya está en ese nivel y es lo que se ve: no se toca (se perdería la frase que lo respalda).
     if (confirmado?.nivel === nivel && p?.origen === "confirmado") return;
@@ -269,7 +271,7 @@ function DetalleDeDimension({ d, onCerrar }: { d: DimensionDelLienzo; onCerrar: 
   const sugerida = pendientesPara((x) => x.tipo === "aExplorar" && x.dimensionId === d.id)[0];
   const explorar = () =>
     !marcada && sugerida
-      ? void cambiar([{ op: "usar", itemId: sugerida.id, valor: sugerida.valor }])
+      ? void usar([sugerida])
       : void cambiar([
           {
             op: "aExplorar",
