@@ -11602,8 +11602,9 @@ vive en el RUNBOOK › «El corte de la aplicación vieja del test»; acá va el
 - **El resultado, como el de la app vieja, con lo de Nexus al frente (Elías, 28 oct).** La cabecera celeste con el
   nivel, el **radar de la empresa arriba** (reemplaza la curva de niveles, que salió), después «Por dónde empezar», «Lo
   que hoy pone en riesgo a tu área» y «Lo que lo mueve», y recién ahí las barras con su puntaje sobre 100, compactas y
-  sin la explicación de cada una. El radar es provisional (`RadarDelResultado.tsx`) hasta que llegue el de una empresa de
-  la vista Radar de la escala. Sin aviso del navegador al irse: salía también al pasar al resultado y no protegía nada
+  sin la explicación de cada una. El radar es la rueda de la escala (`RadarDeUnaEmpresa`, la del Mapa) en escritorio y en
+  el PDF; en el celular, donde sus textos quedan de 5 px, va un radar simple que se lee (`RadarDelResultado.tsx`) y el
+  detalle está en las barras. Sin aviso del navegador al irse: salía también al pasar al resultado y no protegía nada
   (el avance se guarda en cada pregunta).
 - **La agenda de HubSpot va incrustada, pero SIN su script** (`CalendarioDeHubspot.tsx`). El script oficial
   (MeetingsEmbedCode.js) le manda a HubSpot la dirección de la página, que en el resultado ES el token, y correría código

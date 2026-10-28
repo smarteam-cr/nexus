@@ -21,8 +21,8 @@
 .dr .rd .btn-ghost:hover { background: var(--surface-2); }
 .dr .rd-pdf-error { flex-basis: 100%; text-align: right; font-size: 13px; color: var(--accent-dark); }
 
-/* La cabecera: el nivel en grande a la izquierda y el radar a la derecha (en el celular, uno debajo del otro). */
-.dr .rd-head { display: grid; grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.25fr); gap: 8px 16px; align-items: center; background: linear-gradient(180deg, #E4F2FF 0%, #CFE8FF 100%); border: 1px solid #AFD3F3; border-radius: var(--r-lg); padding: clamp(22px, 4vw, 40px); box-shadow: var(--sh-md); }
+/* La cabecera: el nivel en grande y las dos capas arriba, y el radar de la empresa a todo el ancho debajo. */
+.dr .rd-head { display: grid; grid-template-columns: minmax(0, 1fr) minmax(200px, 280px); gap: 8px 24px; align-items: end; background: linear-gradient(180deg, #E4F2FF 0%, #CFE8FF 100%); border: 1px solid #AFD3F3; border-radius: var(--r-lg); padding: clamp(22px, 4vw, 40px); box-shadow: var(--sh-md); }
 .dr .rd-head-texto { display: grid; gap: 6px; justify-items: start; }
 .dr .rd-empresa { display: inline-flex; align-items: center; gap: 10px; padding: 6px 14px 6px 6px; background: #fff; border: 1px solid #C9DDF5; border-radius: var(--r-pill); margin-bottom: 8px; max-width: 100%; }
 .dr .rd-empresa-logo { flex: none; width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; background: var(--text); color: #fff; font-family: var(--font-display); font-weight: 700; font-size: 14px; }
@@ -36,12 +36,15 @@
 .dr .rd-saludo { font-size: 15.5px; color: var(--text-secondary); line-height: 1.55; max-width: 36ch; }
 .dr .rd-estimado { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; font-size: 13px; color: var(--text-secondary); margin-top: 4px; }
 .dr .rd-pill { display: inline-block; padding: 2px 10px; border-radius: var(--r-pill); background: #fff4ef; color: var(--accent); font-weight: 700; font-size: 12px; }
-.dr .rd-capas { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; width: 100%; margin-top: 14px; }
+.dr .rd-capas { display: grid; grid-template-columns: 1fr; gap: 8px; width: 100%; }
 .dr .rd-capa { background: rgba(255, 255, 255, .75); border: 1px solid #C9DDF5; border-radius: var(--r-sm); padding: 10px 12px; }
 .dr .rd-capa-k { font-size: 11.5px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: #5A6E92; }
 .dr .rd-capa-v { font-family: var(--font-display); font-weight: 700; font-size: 17px; color: var(--nc, var(--text)); }
-.dr .rd-head-radar { display: flex; justify-content: center; }
-.dr .rd-head-radar svg { width: 100%; max-width: 540px; height: auto; overflow: visible; }
+/* El radar: la rueda en escritorio y en el PDF; el radar simple solo en el celular (ver la regla de 700 px). */
+.dr .rd-head-radar { grid-column: 1 / -1; margin-top: 16px; background: #fff; border: 1px solid #C9DDF5; border-radius: var(--r-md); padding: 8px; }
+.dr .rd-rueda svg { display: block; width: 100%; height: auto; }
+.dr .rd-radar-simple { display: none; }
+.dr .rd-radar-simple svg { display: block; width: 100%; max-width: 460px; height: auto; margin: 0 auto; overflow: visible; }
 
 /* Los niveles: el mismo color en el texto, la barra y la etiqueta (los de la aplicación vieja). */
 .dr [data-nivel="D"] { --nc: #DC2626; --nf: #F87171; --ns: #FEECEC; }
@@ -109,12 +112,14 @@
 /* Solo en pantalla: al imprimir, Chromium mide estas reglas contra el papel por defecto (816 px) y el PDF salía con el
    diseño del celular y cortado, porque su alto se mide antes en la pantalla de 1000 px. */
 @media screen and (max-width: 820px) {
-  /* En una columna, el radar sube justo debajo del nivel: lo demás de la cabecera va después. */
-  .dr .rd-head { grid-template-columns: 1fr; gap: 6px; justify-items: start; }
-  .dr .rd-head-texto { display: contents; }
-  .dr .rd-head-radar { order: 1; justify-self: stretch; margin: 4px 0; }
-  .dr .rd-saludo, .dr .rd-estimado, .dr .rd-capas { order: 2; }
-  .dr .rd-head-radar svg { max-width: 460px; }
+  .dr .rd-head { grid-template-columns: 1fr; }
+  .dr .rd-capas { grid-template-columns: 1fr 1fr; margin-top: 6px; }
+}
+/* En el teléfono los textos de la rueda quedan de 5 px: va el radar simple, y el detalle está en las barras. */
+@media screen and (max-width: 700px) {
+  .dr .rd-rueda { display: none; }
+  .dr .rd-radar-simple { display: block; }
+  .dr .rd-head-radar { background: rgba(255, 255, 255, .7); padding: 4px 0; }
 }
 @media screen and (max-width: 640px) {
   .dr .rd { padding-top: 16px; gap: 16px; }

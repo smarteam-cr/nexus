@@ -6,7 +6,8 @@
  * Se ve como el resultado de la aplicación vieja (Elías, 28 oct; el aspecto vive en resultado.css): los botones arriba,
  * la cabecera celeste con el nivel en grande, las barras con su puntaje sobre 100 y el calendario de HubSpot para agendar.
  * Cambios a propósito contra la vieja:
- *   · arriba de todo va el RADAR de la empresa, junto al nivel (reemplaza la curva de niveles, que ya no está);
+ *   · arriba de todo va el RADAR de la empresa, debajo del nivel: la rueda de la escala (RadarDeUnaEmpresa, la del Mapa)
+ *     en escritorio y en el PDF, y el radar simple (RadarDelResultado) en el celular; reemplaza la curva de niveles;
  *   · el foco son las tres piezas de Nexus: «Por dónde empezar» (UNA recomendación, su razón y lo que cuesta quedarse),
  *     «Lo que hoy pone en riesgo a tu área» y «Lo que lo mueve» (sin precio);
  *   · las barras van después y compactas: nombre, barra, puntaje y nivel en una línea, sin la explicación de cada una;
@@ -21,6 +22,7 @@ import { puntajeDeLaDimension } from "@/lib/tests-diagnostico/pagina-del-resulta
 import type { ResultadoDelTest } from "@/lib/tests-diagnostico/resultado";
 import CalendarioDeHubspot from "./CalendarioDeHubspot";
 import DescargarPdfDelResultado from "./DescargarPdfDelResultado";
+import RadarDeUnaEmpresa from "@/components/escala/RadarDeUnaEmpresa";
 import RadarDelResultado from "./RadarDelResultado";
 import "./diagnostico.css";
 import "./resultado.css";
@@ -165,19 +167,32 @@ export default function ResultadoDelTestVista({
               <span className="rd-pill">Estimado</span>
               con lo que respondiste{r.preguntadas < r.total ? ` (${r.preguntadas} de ${r.total} partes)` : ""}
             </p>
-            <div className="rd-capas">
-              {r.capas.map((c) => (
-                <div key={c.clave} className="rd-capa" data-nivel={c.nivel ?? undefined}>
-                  <p className="rd-capa-k">{c.nombre}</p>
-                  <p className="rd-capa-v">
-                    {c.nivelNombre ?? (r.dimensiones.some((d) => d.capa === c.clave && d.preguntada) ? "Sin ubicar" : "No se midió")}
-                  </p>
-                </div>
-              ))}
-            </div>
+          </div>
+          <div className="rd-capas">
+            {r.capas.map((c) => (
+              <div key={c.clave} className="rd-capa" data-nivel={c.nivel ?? undefined}>
+                <p className="rd-capa-k">{c.nombre}</p>
+                <p className="rd-capa-v">
+                  {c.nivelNombre ?? (r.dimensiones.some((d) => d.capa === c.clave && d.preguntada) ? "Sin ubicar" : "No se midió")}
+                </p>
+              </div>
+            ))}
           </div>
           <div className="rd-head-radar">
-            <RadarDelResultado r={r} />
+            {/* La rueda de la escala (la del Mapa interno) en escritorio y en el PDF; en el celular sus textos quedan de
+                5 px, así que ahí va el radar simple, que se lee (resultado.css decide cuál se ve). */}
+            <div className="rd-rueda">
+              <RadarDeUnaEmpresa
+                area={r.areaNombre}
+                dimensiones={r.dimensiones.map((d) => ({ clave: d.id, nombre: d.nombre, capa: d.capa, puntaje: d.puntaje, nivel: d.nivel, noLoSe: d.noLoSe }))}
+                capas={r.capas.map((c) => ({ clave: c.clave, nombre: c.nombre, descripcion: DESCRIPCION_DE_LA_CAPA[c.clave] ?? null }))}
+                niveles={r.niveles}
+                subtitulo={r.nivelNombre ? `${r.nivelNombre}${r.puntaje != null ? ` · ${Math.round(r.puntaje)}/100` : ""}` : null}
+              />
+            </div>
+            <div className="rd-radar-simple">
+              <RadarDelResultado r={r} />
+            </div>
           </div>
         </section>
 

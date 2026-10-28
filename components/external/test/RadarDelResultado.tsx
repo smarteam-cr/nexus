@@ -1,13 +1,12 @@
 /**
- * components/external/test/RadarDelResultado.tsx — EL RADAR de la empresa en la página de resultado del test (y en su
- * PDF). SVG estático, sin JS: sirve igual en pantalla y en papel. Hex literal (página del cliente).
+ * components/external/test/RadarDelResultado.tsx — EL RADAR SIMPLE de la empresa en la página de resultado del test, el
+ * que se ve en el CELULAR. SVG estático, sin JS. Hex literal (página del cliente).
  *
- * Cada eje es una dimensión que se preguntó y cada anillo un nivel, de Deficiente al centro a Óptimo en el borde; el
- * anillo punteado verde es Funcional, la base. El punto de cada dimensión cae SOBRE el anillo de su nivel (como el radar de
- * la aplicación vieja). La dimensión que más frena va con el punto naranja.
- *
- * ⚠ PROVISIONAL (28 oct): otra sesión rediseña el radar de la Escala y deja un componente para pintar el de UNA empresa
- * en páginas públicas y PDF. Cuando esté en main, este archivo se reemplaza por ese (la página solo usa `<RadarDelResultado r />`).
+ * En escritorio y en el PDF va la rueda de la escala (components/escala/RadarDeUnaEmpresa.tsx, la del Mapa interno),
+ * pero sus textos se leen desde unos 700 px de ancho: en un teléfono quedan de 5 px. Este radar sí se lee ahí: cada eje
+ * es una dimensión que se preguntó y cada anillo un nivel, de Deficiente al centro a Óptimo en el borde; el anillo
+ * punteado verde es Funcional, la base, y el punto de cada dimensión cae sobre el anillo de su nivel. La dimensión que
+ * más frena va con el punto naranja. resultado.css decide cuál de los dos se ve.
  */
 import { lineasDelNombre, radioDelNivel } from "@/lib/tests-diagnostico/pagina-del-resultado";
 import type { ResultadoDelTest } from "@/lib/tests-diagnostico/resultado";
