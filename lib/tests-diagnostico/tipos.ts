@@ -21,10 +21,20 @@ import type { Letra } from "@/lib/escala/documento/tipos";
 export const VERSIONES_DEL_TEST = ["marketing", "web"] as const;
 export type VersionDelTest = (typeof VERSIONES_DEL_TEST)[number];
 
+/**
+ * Cómo se llama cada versión. La de 4 preguntas se llama `marketing` en el código y en la dirección (`?v=marketing`)
+ * porque nació para las campañas de Marketing, pero existe para las tres áreas: decirle «Test de Marketing» hacía leer
+ * un test de Ventas como si fuera de Marketing (Elías, 28 oct). Es el test CORTO.
+ */
 export const ETIQUETA_DE_LA_VERSION: Record<VersionDelTest, string> = {
-  marketing: "Test de Marketing (4 preguntas)",
+  marketing: "Test corto (4 preguntas)",
   web: "Test web (8 preguntas)",
 };
+
+/** El nombre de un test con su área: «Test web de Ventas (8 preguntas)», «Test corto de Servicio (4 preguntas)». */
+export function nombreDelTest(area: string, version: VersionDelTest): string {
+  return `Test ${version === "web" ? "web" : "corto"} de ${NOMBRE_DEL_AREA[area] ?? area} (${version === "web" ? 8 : 4} preguntas)`;
+}
 
 export function esVersionDelTest(v: unknown): v is VersionDelTest {
   return typeof v === "string" && (VERSIONES_DEL_TEST as readonly string[]).includes(v);

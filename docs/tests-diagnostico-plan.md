@@ -12,6 +12,10 @@
 > **Avance (2026-10-27):** el área y la industria se eligen al entrar (`/external/test`), y
 > `scripts/tests-preguntas.ts` genera y aprueba los bancos desde la escala publicada para abrir el test ya en producción.
 >
+> **Avance (2026-10-28):** el test se ve igual que la aplicación vieja (la portada con las tarjetas y el formulario, y las
+> preguntas con la barra de avance que nombra cada paso); la industria y el área son campos del mismo formulario. En
+> Escala › Tests › Preguntas, una subpestaña por área y el test corto ya no se llama «de Marketing».
+>
 > **Avance (2026-10-26, noche 3):** O6 etapas 1 y 3 construidas (los enlaces viejos abren en Nexus; la medición con
 > visitas y semana a semana) y los píxeles listos y apagados. El cambio de dirección y el apagado, paso a paso, en
 > `docs/RUNBOOK.md` › «El corte de la aplicación vieja del test».

@@ -3,9 +3,10 @@
 /**
  * components/escala/tests/PantallaDeLosTests.tsx — los tests del diagnóstico de rendimiento, del lado de Smarteam (área O,
  * 2026-10-26). Tres pestañas:
- *   · Preguntas: cada banco (área × versión × edición) con su estado. El super admin edita el borrador y lo aprueba; lo
- *     aprobado es lo que ve el público, y un borrador con cambios no cambia nada hasta aprobarse. Acá SÍ se ve a qué nivel
- *     apunta cada opción (el público nunca lo ve).
+ *   · Preguntas: una subpestaña por área (Ventas, Marketing, Servicio al cliente) y, dentro, el test web (8 preguntas) y
+ *     después el corto (4), cada uno con su título y un banco por edición con su estado. El super admin edita el borrador
+ *     y lo aprueba; lo aprobado es lo que ve el público, y un borrador con cambios no cambia nada hasta aprobarse. Acá SÍ
+ *     se ve a qué nivel apunta cada opción (el público nunca lo ve).
  *   · Intentos: por empresa, quién hizo qué área, con qué nivel y si ya llegó a HubSpot (K10).
  *   · Medición: cuántos abren la página, empiezan, terminan y lo dejan, y en qué pregunta, por test y semana a semana
  *     (O4 y O6 etapa 3: la base para comparar antes y después del corte de la aplicación vieja), y la versión completa
@@ -26,9 +27,15 @@ import {
   type EstadoEnHubspot,
   type SemanaDelTest,
 } from "@/lib/tests-diagnostico/pantalla";
-import { ETIQUETA_DE_LA_VERSION, NOMBRE_DEL_AREA, SLUG_POR_AREA, type PreguntaDelBanco } from "@/lib/tests-diagnostico/tipos";
+import { ETIQUETA_DE_LA_VERSION, NOMBRE_DEL_AREA, nombreDelTest, SLUG_POR_AREA, type PreguntaDelBanco, type VersionDelTest } from "@/lib/tests-diagnostico/tipos";
 
 type Pestana = "preguntas" | "intentos" | "medicion";
+type AreaDelTest = "1" | "2" | "3";
+
+/** Las subpestañas de Preguntas: el nombre del área como lo dice el equipo. */
+const PESTANA_DEL_AREA: Record<AreaDelTest, string> = { "1": "Ventas", "2": "Marketing", "3": "Servicio al cliente" };
+/** Primero el test web y después el corto. */
+const VERSIONES_EN_ORDEN: readonly VersionDelTest[] = ["web", "marketing"];
 
 async function pedir(url: string, init?: RequestInit): Promise<{ ok: true; datos: unknown } | { ok: false; error: string }> {
   let r: Response;
@@ -170,6 +177,7 @@ function EditorDelBanco({ banco, datos, editor, alCerrar }: { banco: BancoEnPant
 function Preguntas({ datos, editor }: { datos: DatosDeLaPantalla; editor: boolean }) {
   const router = useRouter();
   const [abierto, setAbierto] = useState<string | null>(null);
+  const [area, setArea] = useState<AreaDelTest>("1");
   const [aviso, setAviso] = useState<{ variante: "success" | "danger"; texto: string } | null>(null);
   const [ocupado, setOcupado] = useState(false);
   const nombreDeEdicion = (slug: string) => (slug === "general" ? "Escala general" : (datos.escala?.ediciones.find((e) => e.slug === slug)?.nombre ?? slug));
@@ -206,25 +214,43 @@ function Preguntas({ datos, editor }: { datos: DatosDeLaPantalla; editor: boolea
           description={editor ? "Genera los borradores desde la escala publicada, revísalos y apruébalos." : "Las prepara y las aprueba un super admin."}
         />
       ) : (
-        (["1", "2", "3"] as const).map((area) => {
-          const bancos = datos.bancos.filter((b) => b.area === area);
-          if (!bancos.length) return null;
-          return (
-            <section key={area} className="flex flex-col gap-3">
-              <div className="flex flex-wrap items-baseline gap-3">
-                <h2 className="text-sm font-semibold text-fg">{NOMBRE_DEL_AREA[area]}</h2>
-                <a className="text-xs text-brand hover:underline" href={`/external/test/${SLUG_POR_AREA[area]}`} target="_blank" rel="noreferrer">
-                  Abrir el test web
-                </a>
-                <a className="text-xs text-brand hover:underline" href={`/external/test/${SLUG_POR_AREA[area]}?v=marketing`} target="_blank" rel="noreferrer">
-                  Abrir el de Marketing
-                </a>
-              </div>
-              {bancos.map((b) => (
+        <div className="flex flex-col gap-6">
+          <Tabs<AreaDelTest>
+            aria-label="Área de los tests"
+            variant="pill"
+            size="sm"
+            value={area}
+            onChange={(a) => {
+              setArea(a);
+              setAbierto(null);
+            }}
+            items={(["1", "2", "3"] as const).map((a) => ({
+              key: a,
+              label: PESTANA_DEL_AREA[a],
+              count: datos.bancos.filter((b) => b.area === a && b.estado !== "aprobado").length || undefined,
+            }))}
+          />
+          {VERSIONES_EN_ORDEN.map((version) => {
+            // Solo los bancos de ESTA área y esta versión: cada test queda bajo el área que le corresponde.
+            const bancos = datos.bancos.filter((b) => b.area === area && b.version === version);
+            return (
+              <section key={version} className="flex flex-col gap-3">
+                <div className="flex flex-wrap items-baseline gap-3">
+                  <h2 className="text-sm font-semibold text-fg">{nombreDelTest(area, version)}</h2>
+                  <a
+                    className="text-xs text-brand hover:underline"
+                    href={`/external/test/${SLUG_POR_AREA[area]}${version === "web" ? "" : "?v=marketing"}`}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    Abrir el test
+                  </a>
+                </div>
+                {!bancos.length && <p className="text-xs text-fg-muted">Todavía no tiene preguntas: genera los borradores desde la escala.</p>}
+                {bancos.map((b) => (
                 <Card key={b.id} className="flex flex-col gap-2 p-4">
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-sm font-medium text-fg">{ETIQUETA_DE_LA_VERSION[b.version]}</span>
-                    <span className="text-xs text-fg-muted">· {nombreDeEdicion(b.edicion)}</span>
+                    <span className="text-sm font-medium text-fg">{nombreDeEdicion(b.edicion)}</span>
                     <Badge variant={VARIANTE_DEL_ESTADO[b.estado]}>{ETIQUETA_DEL_ESTADO[b.estado]}</Badge>
                     {b.problemas.length > 0 && <Badge variant="warning">{b.problemas.length} por resolver</Badge>}
                     <span className="ml-auto text-xs text-fg-muted">
@@ -236,10 +262,11 @@ function Preguntas({ datos, editor }: { datos: DatosDeLaPantalla; editor: boolea
                   </div>
                   {abierto === b.id && <EditorDelBanco banco={b} datos={datos} editor={editor} alCerrar={() => setAbierto(null)} />}
                 </Card>
-              ))}
-            </section>
-          );
-        })
+                ))}
+              </section>
+            );
+          })}
+        </div>
       )}
     </div>
   );
@@ -300,7 +327,7 @@ function Intentos({ datos, hubspotEncendido, puedeReintentar }: { datos: DatosDe
               return (
                 <div key={area} className="flex flex-col gap-1.5 rounded-lg border border-line bg-surface-muted p-3">
                   <span className="text-xs text-fg-muted">
-                    {NOMBRE_DEL_AREA[area]} · {i.version === "marketing" ? "Marketing" : "Web"} · {fecha(i.createdAt)}
+                    {NOMBRE_DEL_AREA[area]} · {i.version === "marketing" ? "Corto" : "Web"} · {fecha(i.createdAt)}
                   </span>
                   <span className="text-sm text-fg">
                     {i.estado === "terminado" ? (i.nivelNombre ?? "Sin nivel") : i.estado === "abandonado" ? `Lo dejó en la pregunta ${Math.min(i.paso + 1, i.totalDePreguntas)} de ${i.totalDePreguntas}` : "Contestando"}

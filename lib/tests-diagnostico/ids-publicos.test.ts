@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { conIdsPublicos, respuestasDelBanco, vistaDelIntento } from "./ids-publicos";
+import { MINI_ESCALA } from "@/lib/escala/documento/mini-escala.fixture";
+import { parsearEscala } from "@/lib/escala/documento/parsear";
+import { conIdsPublicos, nombresDeLosPasos, respuestasDelBanco, vistaDelIntento } from "./ids-publicos";
 import type { Intento } from "./repositorio-server";
 import type { PreguntaDelBanco } from "./tipos";
 
@@ -71,6 +73,20 @@ describe("⛔ quien responde nunca ve el banco", () => {
     expect(r).toEqual({ "p-1.1": { opcion: "o-1.1-F", matiz: "Usamos Excel" }, "p-1.2": { opcion: "no-se" } });
     // Una opción de OTRA pregunta (o de otro intento) no cuenta.
     expect(respuestasDelBanco(i, { [p1.id]: { opcion: p2.opciones[4].id } })).toEqual({});
+  });
+
+  it("la barra de avance lleva el nombre de cada paso y su capa, sin decir nada del nivel", () => {
+    const escala = parsearEscala(MINI_ESCALA);
+    const area = escala.areas[0];
+    const nombres = nombresDeLosPasos(escala, area.id);
+    const d = area.dimensiones[0];
+    expect(nombres[d.id]).toEqual({ paso: d.nombre, capa: escala.capas.find((c) => c.clave === d.capa)!.nombre });
+    expect(nombresDeLosPasos(escala, "9")).toEqual({});
+    const i = intento();
+    i.preguntas = conIdsPublicos(banco, { "1.1": { paso: "Procesos y Rutinas", capa: "Base operativa" } });
+    const v = vistaDelIntento(i);
+    expect(v.preguntas.map((p) => [p.paso, p.capa])).toEqual([["Procesos y Rutinas", "Base operativa"], [null, null]]);
+    expect(JSON.stringify(v)).not.toMatch(/dimensionId|"nivel"|"1\.1"/);
   });
 
   it("la vista devuelve lo ya elegido con los ids públicos", () => {

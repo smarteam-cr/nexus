@@ -11483,10 +11483,39 @@ veta Funcional en tres dimensiones. Se construyó con la escala vigente (8.9.1) 
   para la preventa. Las dos tablas nacen con RLS y sin policies: la página las lee por el servidor, nunca con la clave
   pública.
 - **La experiencia de hoy se conserva (O1):** el formulario primero, una pregunta por pantalla, el matiz, el guardado al
-  avanzar (se retoma en el mismo navegador) y el aviso de abandono. **El área y la industria van antes que el formulario**
-  (Elías, 27 oct): la entrada `/external/test` pide las dos y la página del área abre con el banco de esa edición (cuántas
-  preguntas y con qué palabras); un enlace directo al área sin industria la pregunta primero. Viaja en la dirección
-  (`?industria=…`) porque no es un dato de la persona, y solo si es de la lista (`industriaDelTest`). Un intento quieto una hora es «abandonado».
+  avanzar (se retoma en el mismo navegador) y el aviso de abandono. Un intento quieto una hora es «abandonado».
+- **Se ve igual que la aplicación vieja (Elías, 28 oct: el test nuevo no la reemplaza hasta que se vea igual).** La hoja
+  de la vieja (tokens, base y stepper) se calcó medida por medida en `components/external/test/diagnostico.css`, acotada a
+  `.dr`: la portada navy con las tres tarjetas (Diagnóstico con IA, El cuello de botella, Plan de acción) a la izquierda y
+  «Dinos quién eres y arrancamos» a la derecha, las preguntas frecuentes al pie, y cada pregunta en blanco con la barra de
+  avance que nombra cada paso. Se calca también lo que la vieja hacía sin querer: la lupa de los buscadores no se veía.
+  Los campos llevan sus colores con `!important` porque el remapeo de modo claro de `globals.css` pinta todo input de
+  gris con `!important`. El test no usa `ExternalShell`: tiene la topbar navy de la vieja.
+  - **La industria y el área son campos del formulario**, en la misma pantalla que nombre, apellido, correo de trabajo,
+    dominio, teléfono (país + número), puesto (las opciones de `puesto_actual` de HubSpot), todos obligatorios y con los
+    mensajes de la vieja (`lib/tests-diagnostico/formulario.ts`, que también rechaza los correos personales). Corrige el
+    paso aparte del 27 oct (la industria antes del formulario, con formularios GET): no hacía falta, porque el banco lo
+    elige el servidor al empezar (`empezarTest`). La industria es la lista de Smarteam con buscador (decide la edición);
+    la de la vieja era de texto libre. La dirección del área solo deja marcada esa área; `?industria=` (de la lista) solo
+    la deja elegida.
+  - **La barra de avance nombra cada paso** con el nombre de la dimensión y de su capa como los dice la escala de la
+    edición, guardados en el intento al crearlo (`nombresDeLosPasos`; un intento de antes cae a «Pregunta N»). El nombre no
+    dice nada del nivel de ninguna opción: los ids siguen opacos.
+  - **La visita se cuenta una vez por pestaña:** al abrir la dirección de un área, o con la PRIMERA área que elige en la
+    entrada (que no la sabe hasta entonces); tocar las otras tarjetas para leerlas no suma. Quien abre la entrada y se va
+    sin elegir área no cuenta.
+  - **Un área sin preguntas aprobadas se ve apagada** («Todavía no está abierto», `areasAbiertas`): antes de esto, la
+    persona llenaba los nueve campos para enterarse al final. El servidor también rechaza el correo personal (no confía
+    en la portada), y el token del avance se guarda por área y versión: dos tests a medias no se pisan.
+  - **«Volver a iniciar» y el logo preguntan** si ya hay respuestas: un clic sin querer en el logo borraba el avance.
+  - *Pendiente a propósito:* el nombre y el apellido se guardan juntos en `nombre` (no hay columna para el apellido) y
+    el envío a HubSpot los parte en el primer espacio, como antes: «María José» + «Pérez» llega como «María» + «José
+    Pérez». Arreglarlo pide una columna nueva (SQL aditivo). La empresa ya no se pregunta, como en la vieja: HubSpot la
+    saca del dominio.
+  - **El test corto no se llama «de Marketing».** La versión `marketing` (4 preguntas) existe para las tres áreas; con ese
+    nombre, el test corto de Ventas aparecía bajo «Ventas» como «Test de Marketing» y parecía de otra área. Ahora es «Test
+    corto» (`nombreDelTest`: «Test corto de Ventas (4 preguntas)»). La pestaña Preguntas tiene una subpestaña por área y,
+    dentro, el web y después el corto, cada uno con su título.
 - **El resultado (O3)** es nuevo: nivel con «Estimado», la curva de cinco niveles, el radar y las barras, UNA sola
   recomendación con su razón y el costo de quedarse, los riesgos activos (hasta 3), los casos de uso que lo mueven sin
   precio y la invitación a la sesión (`TESTS_ENLACE_DE_AGENDA`). La síntesis la arma Nexus con los datos, sin IA.

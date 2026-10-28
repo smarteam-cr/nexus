@@ -10,7 +10,7 @@ import "server-only";
 import { randomBytes } from "node:crypto";
 import { prisma } from "@/lib/db/prisma";
 import { esquemaDesactualizado } from "@/lib/db/esquema";
-import { EDICION_GENERAL, leerPreguntasDelBanco, leerRespuestasDelTest, type PreguntaDelBanco, type RespuestasDelTest, type VersionDelTest } from "./tipos";
+import { EDICION_GENERAL, leerPreguntasDelBanco, leerRespuestasDelTest, SLUG_POR_AREA, type PreguntaDelBanco, type RespuestasDelTest, type VersionDelTest } from "./tipos";
 import type { ResultadoDelTest } from "./resultado";
 
 export const SQL_DE_LOS_TESTS = "scripts/sql/2026-10-26-tests-diagnostico.sql";
@@ -173,6 +173,13 @@ export function aprobadasPara(area: string, version: VersionDelTest, edicion: st
   });
 }
 
+/** Los slugs de las áreas con preguntas aprobadas de la general para esta versión: las que la portada deja elegir. */
+export async function areasAbiertas(version: VersionDelTest): Promise<string[]> {
+  const ids = Object.keys(SLUG_POR_AREA);
+  const abiertas = await Promise.all(ids.map((id) => aprobadasPara(id, version, null).catch(() => null)));
+  return ids.filter((_, i) => abiertas[i]).map((id) => SLUG_POR_AREA[id]);
+}
+
 // ── Los intentos ──────────────────────────────────────────────────────────────
 
 /** Una pregunta tal como la vio la persona: la del banco, con ids opacos para ella. */
@@ -180,6 +187,9 @@ export interface PreguntaDelIntento extends PreguntaDelBanco {
   /** El id opaco que vio la persona (el `id` del banco nunca sale). */
   publico: string;
   opcionesPublicas: Record<string, string>;
+  /** El nombre del paso y de su capa en la barra de avance (desde el 2026-10-28; los de antes no lo traen). */
+  paso?: string;
+  capa?: string | null;
 }
 
 export interface Persona {
@@ -240,7 +250,9 @@ function leerPreguntasDelIntento(raw: unknown): PreguntaDelIntento[] {
     const op = c?.opcionesPublicas && typeof c.opcionesPublicas === "object" ? (c.opcionesPublicas as Record<string, unknown>) : null;
     if (!publico || !op) return [];
     const opcionesPublicas = Object.fromEntries(Object.entries(op).filter(([, v]) => typeof v === "string")) as Record<string, string>;
-    return [{ ...p, publico, opcionesPublicas }];
+    const paso = typeof c?.paso === "string" ? c.paso.slice(0, 120) : undefined;
+    const capa = typeof c?.capa === "string" ? c.capa.slice(0, 120) : undefined;
+    return [{ ...p, publico, opcionesPublicas, ...(paso ? { paso, capa: capa ?? null } : {}) }];
   });
 }
 
