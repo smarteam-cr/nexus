@@ -15,8 +15,7 @@
    "n": 4,
    "nombre": "El análisis de la venta consultiva",
    "corto": "Análisis de la venta",
-   "estado": "en-curso",
-   "prioridad": 1,
+   "estado": "funciona",
    "resultado": "Ventas explora a fondo antes de proponer: cada vendedor ve cómo trabajó cada sesión.",
    "hecho": [
     {
@@ -38,9 +37,13 @@
     {
      "fecha": "28 oct",
      "texto": "El análisis de la venta lo ve todo el que entra a una preventa; la tendencia por vendedor sigue solo para super admin."
+    },
+    {
+     "fecha": "28 oct",
+     "texto": "Se lo presentaste a Ventas y ya lo usa en cada preventa."
     }
    ],
-   "sigue": "La prueba con Andrés (cinco sesiones reales), ahora que Ventas ya lo ve en cada preventa.",
+   "sigue": "Tu revisión de cinco análisis reales, ya agendada; lo que salga se ajusta.",
    "decisiones": [
     20,
     40,
@@ -53,7 +56,7 @@
    "nombre": "La escala de rendimiento",
    "corto": "Escala",
    "estado": "en-curso",
-   "prioridad": 2,
+   "prioridad": 1,
    "resultado": "La escala ubica bien a cada empresa y muestra el camino hacia arriba.",
    "hecho": [
     {
@@ -90,7 +93,7 @@
    "nombre": "Los tests del diagnóstico de rendimiento",
    "corto": "Tests",
    "estado": "en-curso",
-   "prioridad": 3,
+   "prioridad": 2,
    "resultado": "El test de cada área vive en Nexus y llega a la preventa y a HubSpot.",
    "hecho": [
     {
@@ -124,7 +127,7 @@
    "nombre": "El servicio recurrente funcionando",
    "corto": "Servicio recurrente",
    "estado": "en-curso",
-   "prioridad": 4,
+   "prioridad": 3,
    "resultado": "Lo que pide el cliente se vuelve su siguiente caso, con su cadencia de entrega y reportes.",
    "hecho": [
     {
@@ -140,7 +143,7 @@
    "nombre": "El módulo de Tareas",
    "corto": "Tareas",
    "estado": "en-curso",
-   "prioridad": 5,
+   "prioridad": 4,
    "resultado": "Un sistema de tareas sencillo, con sus fuentes claras y unido al calendario.",
    "hecho": [
     {
@@ -170,7 +173,7 @@
    "nombre": "Que el equipo use Nexus",
    "corto": "Uso de Nexus",
    "estado": "en-curso",
-   "prioridad": 6,
+   "prioridad": 5,
    "resultado": "10 de las 14 personas operativas entran 3 días o más por semana.",
    "hecho": [
     {
@@ -186,7 +189,7 @@
    "nombre": "Vender por resultados",
    "corto": "Vender por resultados",
    "estado": "propuesta",
-   "prioridad": 7,
+   "prioridad": 6,
    "resultado": "El vendedor arma la propuesta con casos de uso y actividades; Nexus calcula el precio mínimo y el precio se pone por valor.",
    "hecho": [
     {
@@ -194,7 +197,7 @@
      "texto": "La preventa pregunta por departamento, con la investigación de la empresa."
     }
    ],
-   "sigue": "El ejercicio de las actividades contigo; después, el catálogo y el cotizador. Antes, los clientes similares en la preparación de la sesión y tu position statement base.",
+   "sigue": "Que el equipo de cada sesión guíe también la lectura y la escala, y «Usar» con Deshacer. Después, los clientes similares, tu position statement y el ejercicio de las actividades.",
    "teToca": "El ejercicio de las actividades de los casos de uso, cuando tengas energía: destraba el cotizador, las tareas desde lo vendido y la rentabilidad.",
    "decisiones": [
     11,
@@ -210,7 +213,7 @@
    "nombre": "Entregar: cronograma y tareas",
    "corto": "Entregar",
    "estado": "propuesta",
-   "prioridad": 8,
+   "prioridad": 7,
    "resultado": "El cliente ve cómo va su proyecto y cada CSE sabe qué le toca hoy, sin 20 tareas de golpe.",
    "hecho": [
     {
@@ -230,7 +233,7 @@
    "nombre": "Rentabilidad y capacidad",
    "corto": "Rentabilidad",
    "estado": "propuesta",
-   "prioridad": 9,
+   "prioridad": 8,
    "resultado": "Saber cuánto cuesta entregar cada caso y cuánto tiempo gana Nexus.",
    "hecho": [
     {
@@ -422,7 +425,7 @@ Lo que dice «Hoy» en cada tarjeta es del 24 oct, antes de construir: dónde va
   2. **La dirección de producción en HubSpot: sin decidir.** Te recomiendo registrarla, para que reconectar no dependa de tu PC; queda en «Lo que configuras tú».
   3. **El aviso de un job que deja de correr te llega a ti,** por ahora.
 
-### 4 · El análisis de la venta consultiva <span class="estado">En curso</span>
+### 4 · El análisis de la venta consultiva <span class="estado">En producción</span>
 
 - **Resultado esperado:** el principal problema de Ventas es que explora poco y va directo a la solución; el objetivo es alejarse de la venta transaccional y diagnosticar de forma profunda al cliente. Cada vendedor ve, en cada sesión, cómo la trabajó y qué le faltó explorar (es coaching, no control), y la ficha de cada prospecto muestra cómo se lo ha trabajado a lo largo de todas sus sesiones.
 - **Hoy:** el criterio consultivo, quién habló y el análisis con citas verificadas están en producción desde el 26 oct, solo para super admin y con el análisis automático apagado, pero viven en Sesiones › «Ver la salud de las reuniones» › «Reuniones de venta», lejos de la preventa.
@@ -1002,6 +1005,16 @@ Sale del feedback de Ventas (Marco, Andrés y Liz) y de Customer Success (Lilian
    - Etapa 2 · Los intentos sin empresa, agrupados por el dominio del correo, con «Crear la empresa en HubSpot».
    - Etapa 3 · Un reporte de marketing por empresa: cuántas llegaron, con cuántas áreas y cuántas pasaron a preventa.
 
+11. **K11 · El equipo de cada sesión, de punta a punta** (validado el 28 oct). *Existe a medias:* el equipo ya cambia la guía de preparación, el analizador de la venta, el diagnóstico y el panel «Por equipo», igual en la preventa y en un proyecto. Pero la lectura de la reunión y la ubicación en la escala no lo reciben, y la sugerencia «¿Es con…?» se equivoca. En producción, 1 de 35 sesiones tiene equipo elegido. *Los dos lugares.*
+   - Etapa 1 · La sugerencia mira primero el título del calendario y el objetivo solo si lo escribió una persona (hoy toma el que redactó la IA: «operación comercial» la manda a Ventas).
+   - Etapa 2 · La lectura y la escala reciben el equipo: lo que dice Marketing no se atribuye a dimensiones de Ventas. Cambiar el equipo de una sesión ya leída ofrece «Volver a leer con este equipo».
+   - Etapa 3 · La historia de las sesiones que recibe la guía dice qué equipo dijo qué, para que el contraste entre equipos no se invente.
+   - Etapa 4 · «Qué explorar en la próxima sesión» filtra por el equipo de esa sesión, y las sesiones por equipo se siguen sugiriendo aunque ya haya una con equipo.
+12. **K12 · «Usar» en las sugerencias, sin sorpresas** (pedido del 28 oct, con Camosa). *Existe a medias:* «Usar» y «Usar las N» aplican sin decir qué cambian, la sugerencia desaparece sin rastro y no hay Deshacer. En Camosa no se perdió nada: el 27 oct entró un nivel (Ventas · Procesos y Rutinas) y la industria sigue la que eligió la IA. *Los dos lugares.*
+   - Etapa 1 · Cada «Usar» dice lo que va a escribir («Poner Ventas · Datos en Inicial»); al usar una industria, avisa que también cambia el perfil.
+   - Etapa 2 · Después de usar, un aviso con «Deshacer», y un bloque «Usadas hoy» con cada una y cómo revertirla.
+   - Etapa 3 · «Usar las N» pide confirmación y se llama «Pasar las N al mapa».
+
 **Criterio de éxito:** Marco revisa 5 guías reales y en 4 la siguiente pregunta es la que él haría; 8 de cada 10 sesiones quedan asociadas (solas o con la sugerencia aceptada), e INV1 sigue en verde.
 
 ### L · El diagnóstico y la planificación, después de usarlos <span class="estado">En curso</span>
@@ -1219,7 +1232,7 @@ Pedido del 23 oct: Ventas va muy directo a la solución y explora poco. Queremos
 5. [hecho, 27 oct, en producción] **S5 · La pieza «Análisis» del prospecto** (26 oct; antes S7, «el analizador por cliente»). Una pieza nueva de la preventa, junto a Exploración, La escala, Casos de uso y Propuesta: todas las sesiones de exploración y también las de propuesta, una debajo de la otra, con cómo se trabajó cada una (qué tan consultiva fue, quién habló, qué se exploró y qué quedó sin explorar, el siguiente paso y si se cumplió), y arriba la lectura de conjunto: cómo se ha trabajado a este prospecto y qué falta diagnosticar antes de proponer.
 6. [hecho, 27 oct, en producción] **S6 · Sacar el analizador de Sesiones** (26 oct). La vista «Reuniones de venta» de la salud de las reuniones, el criterio y el análisis por reunión se mudan a la preventa (S4 y S5) o se quitan; en Sesiones no queda nada de analizar el manejo de un cliente ni de una sesión.
 7. [hecho, 27 oct, en producción: Ventas › Preventa › «Análisis de la venta»] **S7 · La tendencia por vendedor,** primero solo para los super admin y después para todo Ventas, cada uno con lo suyo (24 oct): cuánto explora, cuánto habla, cuántas sesiones dejan siguiente paso con fecha y cuántas tienen transcripción. Cuenta las sesiones de cada vendedor que estuvo (T7), atribuidas por el calendario y por quién habló, nunca por la asistencia ni los minutos de Meet.
-8. **S8 · Probar con Andrés** cinco sesiones reales, entre ellas la de Camosa del 23 oct, antes de abrirlo al resto de Ventas. El análisis automático ya está prendido desde el 27 oct, solo para las sesiones de las exploraciones de la preventa (tu decisión).
+8. **S8 · Revisar cinco análisis reales,** entre ellas la sesión de Camosa del 23 oct. Ventas ya lo conoce (se lo presentaste el 28 oct) y lo ve en cada preventa; la revisión la haces tú, ya agendada. El análisis automático ya está prendido desde el 27 oct, solo para las sesiones de las exploraciones de la preventa (tu decisión).
 
 **Criterio de éxito:** Andrés revisa 5 análisis y está de acuerdo con la mayoría; cada juicio trae su cita; y, con el tiempo, el cliente habla más que Smarteam en las exploraciones y más sesiones cierran con un siguiente paso con fecha.
 
