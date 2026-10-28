@@ -194,7 +194,7 @@
      "texto": "La preventa pregunta por departamento, con la investigación de la empresa."
     }
    ],
-   "sigue": "El ejercicio de las actividades contigo; después, el catálogo y el cotizador.",
+   "sigue": "El ejercicio de las actividades contigo; después, el catálogo y el cotizador. Antes, los clientes similares en la preparación de la sesión y tu position statement base.",
    "teToca": "El ejercicio de las actividades de los casos de uso, cuando tengas energía: destraba el cotizador, las tareas desde lo vendido y la rentabilidad.",
    "decisiones": [
     11,
@@ -264,7 +264,7 @@
      "texto": "La Planificación con las siete etapas del Brief."
     }
    ],
-   "sigue": "Definir contigo los entregables de Customer Success.",
+   "sigue": "Pasar el detalle de las Acciones coherentes a la Planificación (en el diagnóstico queda el enfoque en una línea). Definir contigo los entregables de Customer Success.",
    "decisiones": [
     16,
     32,
@@ -583,8 +583,8 @@ Sin esto, algo sigue mal o no se puede validar:
 9. **El correo de la mañana:** mandarlo por Gmail o por un proveedor.
 10. **La página de la sesión:** la minuta, la ficha y las novedades todavía se deciden en «Lo que dejó esta reunión». ¿Pasan también a Tareas (o a la agenda), para salir del todo de esa página? (Los pedidos fuera de alcance no: el 22 oct decidiste que siguen como avisos, ver la propuesta E1. La salvedad, del 24 oct: cuando el CSE acepta uno, a la CSL le nace una tarea de revisión.)
 11. **Las tareas de gestión del cliente** (el seguimiento de 15 minutos, planear una sesión, la gestión del cambio que no es de un caso): ¿se cobran o solo se miden? Mi recomendación: se miden siempre, porque son el costo de servir la cuenta, y en el precio mínimo entran como un bloque fijo de horas al mes según la escala, sin detallarlas en la propuesta (`docs/actividades-plan.md`).
-12. **El position statement base de Smarteam** (K3): ¿quién lo escribe? Te propongo un borrador con Marco a partir de las propuestas, y tú lo apruebas.
-13. **Los clientes similares** (K4): ¿se pueden nombrar todos los clientes al presentarse, o hay algunos que no? La lista sería solo para el consultor.
+12. ✓ **El position statement base de Smarteam** (K3): ¿quién lo escribe? Te propongo un borrador con Marco a partir de las propuestas, y tú lo apruebas. **Tu respuesta (28 oct):** lo escribes tú; Nexus lo carga y lo personaliza con dos o tres hechos de cada empresa.
+13. ✓ **Los clientes similares** (K4): ¿se pueden nombrar todos los clientes al presentarse, o hay algunos que no? La lista sería solo para el consultor. **Tu respuesta (28 oct):** todos, sin aviso: es para que el vendedor sepa, al preparar la sesión de exploración, con qué empresas parecidas hemos trabajado.
 14. **El banco de preguntas por departamento y los aprendizajes de Andrés** (K1 y K8): pedírselos para contrastarlos con lo que tiene Nexus.
 15. ✓ **«Diagnóstico virtual»** (K7): confirmar con Marco que es el test en línea que deja la nota «Diagnóstico de Rendimiento» en HubSpot. **Tu respuesta (24 oct): sí, «Diagnóstico de Rendimiento» es la nota del test.**
 16. **Las Acciones coherentes** (L4): ¿se quedan en el diagnóstico o pasan a la Planificación? Te propongo dejar en el diagnóstico el enfoque con tres o cuatro acciones en una línea, y pasar el detalle a la Planificación.
@@ -975,13 +975,13 @@ Sale del feedback de Ventas (Marco, Andrés y Liz) y de Customer Success (Lilian
    - Etapa 2 · En frío o referido, la primera sesión: 10 minutos para presentar a Smarteam con el position statement, 35 para que el cliente cuente y unas 3 preguntas al final.
    - Etapa 3 · Desde la segunda sesión, la guía de siempre.
 3. **K3 · La investigación arma el position statement.** *Existe a medias:* la investigación web sí corre (sitio, noticias, industria, hitos como rondas de inversión); no busca contrataciones y no hay position statement. *Solo preventa.*
-   - Etapa 1 · El position statement base de Smarteam (ver «Lo que decides tú»).
+   - Etapa 1 · El position statement base de Smarteam: lo escribes tú (decisión 12) y Nexus lo carga.
    - Etapa 2 · Correr la investigación de la empresa (R5) también sin empresa en HubSpot, cuando hay dominio.
    - Etapa 3 · En «Conexión», el position statement personalizado con dos o tres hechos de la empresa, cada uno con su fuente.
 4. **K4 · Clientes similares para presentarse.** *No existe.* *Solo preventa.*
    - Etapa 1 · Desde HubSpot y Nexus, los clientes de la misma industria y qué se les hizo.
-   - Etapa 2 · En «Conexión», solo para el consultor y con el aviso de confirmar antes de nombrarlo.
-5. [hecho, 27 oct; la unión automática espera tu visto bueno] **K5 · Asociar sesiones solas, y sugerir cuando hay duda.** *Existe a medias:* en un prospecto ya entran solas; en un cliente o un proyecto, solo a mano. *Los dos lugares.*
+   - Etapa 2 · En la preparación de la sesión («Conexión»), solo para el consultor y sin aviso: se pueden nombrar todos (decisión 13).
+5. [hecho, 27 oct, en producción; la unión automática prendida el 28 oct] **K5 · Asociar sesiones solas, y sugerir cuando hay duda.** *Existe a medias:* en un prospecto ya entran solas; en un cliente o un proyecto, solo a mano. *Los dos lugares.*
    - Etapa 1 · Una reunión con invitados de la empresa que calza con una sesión planeada se sugiere arriba del lienzo: «¿Es la sesión 2 con Marketing?».
    - Etapa 2 · Se asocia sola solo sin duda (sin reuniones recientes de Customer Success y con un título de exploración); con duda, sugerencia. Nunca cruza clientes.
    - Etapa 3 · El lienzo se pone al día solo cuando entra una sesión, sin recargar.
@@ -1021,7 +1021,7 @@ Sale del feedback de Customer Success y Ventas del 23 oct, validado contra el di
    - Etapa 4 · El contexto adicional abre cerrado siempre que ya tenga algo, y recuerda lo que eligió cada persona.
 4. [hecho, 27 oct, en producción: las siete etapas del Brief] **L4 · La Planificación como el siguiente entregable.** *Existe a medias:* tiene propiedades, pilotos y rutinas de adopción, y lee las Acciones coherentes del diagnóstico; no tiene sesiones, con quiénes ni entrenamientos.
    - Etapa 1 · Una sección «Sesiones y entrenamientos», que sale de las actividades vendidas cuando existan.
-   - Etapa 2 · Decidir dónde viven las Acciones coherentes (ver «Lo que decides tú»).
+   - Etapa 2 · Las Acciones coherentes: en el diagnóstico queda el enfoque con tres o cuatro acciones en una línea; el detalle pasa a la Planificación (decisión 16).
    - Etapa 3 · Dos plantillas de Planificación, como el diagnóstico (es I2).
    - [en producción el 26 oct (`cc8d6b92`): etapas 1 a 4 y la plantilla de importación de la 5; faltan de la 5 el estado y el enlace a HubSpot de cada cosa y la lista de construcción en Tareas, la 6, la 7, la cuenta de licencias contra lo vendido y las fechas del Cronograma] **Ampliada el 24 oct con el Brief de implementación** (`docs/planificacion-brief-plan.md`): la Planificación trae las 20 pestañas de la hoja «BRIEF DE IMPLEMENTACIÓN» (la «Historia de proceso de ventas» se queda en el Diagnóstico). Decidido: usuarios y permisos van DENTRO de la Planificación, la que ve el cliente. Siete etapas, ninguna con SQL:
      1. las propiedades por grupos (con orden, «Aparece en la ficha», «Viene con HubSpot», la vista previa de la ficha e importar la plantilla de Caroline; antes, «Mejorar con IA» y el chat pasan por `fusionarFilas`);
@@ -1356,7 +1356,7 @@ Pasaron a otro lugar: unir los contenedores «Información del cliente» repetid
 5. **Sentry:** con `SENTRY_DSN`, una alerta de Crons para los monitores `nexus-*` (los jobs que dejan de correr).
 6. **En Admin › Meet:** prender la toma de notas automática y «Transcribir» en las reuniones con clientes (lo que más texto gana).
 7. **Los tests del diagnóstico:** aprobar las preguntas en Escala › Tests; en el servidor, `TESTS_HUBSPOT_PORTAL_ID`, `TESTS_HUBSPOT_FORM_GUID` y `TESTS_ENLACE_DE_AGENDA`, y cuando el test esté probado, `TESTS_HUBSPOT_ENABLED=1`. Después, el corte de la aplicación vieja (DECISIONS › área O, O6).
-8. **La noche 2 (27 oct), en el servidor:** `EXPLORACIONES_ASOCIAR_ENABLED=1` (la unión automática de sesiones; el simulacro de hoy uniría 1 y preguntaría 6), `TAREAS_LECTURA_PERSONAL=egonzalez@smarteamcr.com` (tu piloto) y `TAREAS_SEGUIMIENTO_EN_HUBSPOT=1` (probar primero con una tarea de Smarteam).
+8. **La noche 2 (27 oct), en el servidor:** ✓ `EXPLORACIONES_ASOCIAR_ENABLED=1` (la unión automática de sesiones; prendida el 28 oct, cuando el simulacro unía 0 y preguntaba 8), `TAREAS_LECTURA_PERSONAL=egonzalez@smarteamcr.com` (tu piloto) y `TAREAS_SEGUIMIENTO_EN_HUBSPOT=1` (probar primero con una tarea de Smarteam).
 9. **En Nexus:** que la líder de Customer Success llene el catálogo de HubSpot Academy (Éxito del cliente › HubSpot Academy; nace vacío) y revisar el texto de la tarjeta del acceso al portal en el kickoff.
 
 **En el servidor, para prender el vigía** (pendiente, 24 oct): agregar `CS_WATCHDOG_ENABLED=1` al `.env` del servidor y desplegar. Prende el barrido diario del vigía (hasta 10 proyectos por día, gasta IA dentro del presupuesto automático), las señales de HubSpot y el triage cada minuto. Desde el 24 oct ya no hace que Partner cree empresas solas: eso pide `CS_PARTNER_CREA_CLIENTES=1`, que no se pone. Los comandos, en la conversación del 24 oct; se apaga sin deploy desde Éxito del cliente › Ajustes.
