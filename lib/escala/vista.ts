@@ -374,9 +374,9 @@ export function partirPorPalabras(texto: string, palabras: TerminoSubrayado[]): 
 
 // ── El estado de la pantalla en la URL ───────────────────────────────────────
 
-export type Vista = "matriz" | "dimension" | "mapa";
-/** En el orden en que se ofrecen; la primera es la de entrada (el mapa, desde el 2026-10-04). */
-export const VISTAS: readonly Vista[] = ["mapa", "matriz", "dimension"];
+export type Vista = "matriz" | "dimension" | "mapa" | "radar";
+/** En el orden en que se ofrecen; la primera es la de entrada (el mapa, desde el 2026-10-04). El radar, desde el 2026-10-28. */
+export const VISTAS: readonly Vista[] = ["mapa", "matriz", "dimension", "radar"];
 export const VISTA_DE_ENTRADA: Vista = "mapa";
 
 /** Sin `?vista`, o con una que ya no existe (`?vista=guia`, de un enlace viejo), abre el mapa. */
