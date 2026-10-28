@@ -12185,3 +12185,28 @@ regenerar.
    tienen sesión (planeada o hecha, sin contar las que no se hicieron) no se repiten (`equiposYaConSesion`).
 
 Todo en el Json de la exploración: sin SQL.
+
+## La escala se ve también como radar de puntos (2026-10-28)
+
+**Contexto.** Elías pidió una cuarta vista, «Radar», con un ejemplo de 8 ejes, anillos por nivel, la línea punteada de
+Funcional y un punto por dimensión: «por puntos, no por áreas». La página es la escala de REFERENCIA, sin empresa: no hay
+un «nivel de la dimensión» que dibujar.
+
+**Decisiones.**
+1. **Cada punto es dónde se concentra algo, no dónde está alguien.** El valor de una serie en un eje es el nivel promedio
+   (1 = Deficiente … 5 = Óptimo) de los criterios de esa clase en la dimensión (`ejesDelRadar`, `lib/escala/radar.ts`). Es
+   lo que el mapa dice con la intensidad de cada sector, dicho con puntos. El título y la línea de abajo lo aclaran: «Es la
+   escala misma, no una empresa».
+2. **Las series son las capas del mapa**: Criterios, Hábitos, Riesgos, Requeridos y, con un perfil elegido, Escondidos por
+   el perfil. Entran Criterios y Hábitos (Riesgos no: sus criterios son los que hay que cumplir para pasar a Eficiente, y
+   su punto cae siempre en Funcional); cada una se prende y se apaga desde la leyenda. Color fijo por serie, nunca por
+   cuántas están prendidas, y una forma por serie, para que no dependa solo del color. Como conviven en el dibujo, se
+   validó cada par en claro y oscuro: azul (Criterios), magenta (Hábitos) y amarillo (Riesgos) pasan; el naranja se
+   confunde con los dos, y el aqua y el verde con la línea de Funcional, que sigue verde como en el mapa. Requeridos va en
+   tinta y los escondidos en gris y huecos.
+3. **El perfil y la industria filtran igual que en las otras vistas**: cuentan solo los criterios que `aplica` deja, una
+   dimensión que no aplica queda sin punto (y la línea no salta por encima de ella), y la edición elegida trae sus criterios.
+4. **Un promedio entre dos anillos se dice «cerca de»** (`nombreDelPromedio`): un 3,7 puede salir de dos criterios en
+   Funcional y uno en Óptimo, sin ninguno en Eficiente. El panel muestra además cuántos hay en cada nivel, y describe el
+   nivel donde la serie tiene más criterios (`nivelConMas`), nunca uno donde no tiene ninguno.
+5. Solo la vista viaja en la URL (`?vista=radar`), como las demás; las series prendidas no.

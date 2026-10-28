@@ -1,13 +1,14 @@
 "use client";
 
 /**
- * components/escala/VistaDeLaEscala.tsx — la sección de la escala: un área, tres formas de verla.
+ * components/escala/VistaDeLaEscala.tsx — la sección de la escala: un área, cuatro formas de verla.
  *
  *   · Matriz: las dimensiones frente a los cinco niveles (para comparar).
  *   · Por dimensión: una dimensión como escalera (para leer e interiorizar).
  *   · Mapa: el área como rueda (para recorrerla nivel por nivel y ver dónde se concentra cada cosa).
+ *   · Radar: lo mismo que el mapa con puntos: en qué nivel se concentra cada cosa en cada dimensión.
  *
- * El perfil de negocio filtra las tres igual (la regla de `pruebas_escala.py`). La escala es de
+ * El perfil de negocio filtra las cuatro igual (la regla de `pruebas_escala.py`). La escala es de
  * SOLO LECTURA: lo que alguien quiera decir de un criterio, un nivel o una dimensión lo manda como
  * feedback, con el panel de Feedback de siempre ya anclado ahí (2026-10-05: la escala no tiene un
  * sistema de comentarios propio, lib/feedback/escala.ts). Lo que se mira queda en la URL (vista,
@@ -46,6 +47,7 @@ import Leyenda from "./Leyenda";
 import Mapa, { type SeleccionDelMapa } from "./Mapa";
 import { EVENTO_DEL_RECORRIDO, type AccionDelRecorrido } from "@/lib/recorridos/tipos";
 import Matriz from "./Matriz";
+import Radar from "./Radar";
 import { BOTON_CLARO, CHIP_DE_CABECERA, GrupoDeControl, IconoChevron, IconoComentario, ParrafoDeLaEscala, Segmentado } from "./piezas";
 
 /**
@@ -504,7 +506,7 @@ export default function VistaDeLaEscala({
             <div data-recorrido="escala.vista">
             <GrupoDeControl
               nombre="Vista"
-              ayuda="Tres formas de recorrer el área que elegiste arriba: el mapa para ver dónde se concentran los criterios, los hábitos o los riesgos, la matriz para comparar y una dimensión como escalera para leerla entera."
+              ayuda="Cuatro formas de recorrer el área que elegiste arriba: el mapa para ver dónde se concentran los criterios, los hábitos o los riesgos, la matriz para comparar, una dimensión como escalera para leerla entera y el radar para ver con puntos en qué nivel se concentra cada cosa de cada dimensión."
             >
               <Segmentado<Vista>
                 etiqueta="Vista"
@@ -514,6 +516,7 @@ export default function VistaDeLaEscala({
                   { clave: "mapa", etiqueta: "Mapa", title: "El área como rueda: cada porción una dimensión, cada anillo un nivel. Para subirla de Deficiente a Óptimo y ver dónde se concentran criterios, hábitos o riesgos." },
                   { clave: "matriz", etiqueta: "Matriz", title: "Las ocho dimensiones del área frente a los cinco niveles, con todos sus criterios: para comparar." },
                   { clave: "dimension", etiqueta: "Por dimensión", title: "Una dimensión a la vez, sus cinco niveles como escalera: para leerla de punta a punta." },
+                  { clave: "radar", etiqueta: "Radar", title: "Un eje por dimensión y un anillo por nivel: cada punto dice en qué nivel se concentran sus criterios, hábitos, riesgos o requeridos, para compararlos." },
                 ]}
               />
             </GrupoDeControl>
@@ -625,6 +628,7 @@ export default function VistaDeLaEscala({
             onVerEnLaMatriz={() => setVista("matriz")}
           />
         )}
+        {vista === "radar" && <Radar datos={datos} perfil={perfil} onLeerDimension={leerDimension} />}
 
         <p className="text-xs text-fg-muted">
           Todo lo que ves sale de la escala publicada en Nexus. Ningún criterio está escrito a mano en la aplicación: cuando se publica una
