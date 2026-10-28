@@ -75,6 +75,7 @@ const PISTAS: Record<string, readonly string[]> = {
     "agencia de viajes",
   ],
   automotriz: ["automotive", "automotriz", "concesionario", "vehiculos", "autos"],
+  maquinaria: ["machinery", "maquinaria", "equipo pesado", "heavy equipment", "construction equipment"],
 };
 
 /**

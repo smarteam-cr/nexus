@@ -114,7 +114,9 @@ export interface DatoDeLaEmpresa {
 /** «Industria (Smarteam)» de HubSpot (`industria__smarteam_`, 17 opciones, leídas del portal el 2026-10-24). El valor es
  *  el de HubSpot, tal cual. `edicion` es la edición de la escala que le corresponde (null = la escala general).
  *  «Banca y servicios financieros» la sumó Elías el 2026-10-27 para que su edición tenga por dónde llegar; en el portal
- *  todavía NO existe: hay que crearla allá con ese mismo valor antes de prender `EMPRESA_HUBSPOT_ESCRITURA`. */
+ *  todavía NO existe: hay que crearla allá con ese mismo valor antes de prender `EMPRESA_HUBSPOT_ESCRITURA`.
+ *  «Maquinaria y equipo pesado» la pidió Elías el 2026-10-28 (Aditec JCB, CAMOSA) junto con su edición de la escala, y
+ *  tampoco existe en el portal: misma condición. */
 export const INDUSTRIAS_DE_SMARTEAM: readonly (OpcionDeDato & { edicion: string | null })[] = [
   { valor: "Agrícola", etiqueta: "Agrícola", edicion: null },
   { valor: "Agroindustria", etiqueta: "Agroindustria", edicion: null },
@@ -127,6 +129,7 @@ export const INDUSTRIAS_DE_SMARTEAM: readonly (OpcionDeDato & { edicion: string 
   { valor: "Inmobiliaria", etiqueta: "Inmobiliaria", edicion: "inmobiliaria" },
   { valor: "Institución de gobierno", etiqueta: "Institución de gobierno", edicion: null },
   { valor: "Logística y Transporte", etiqueta: "Logística y transporte", edicion: null },
+  { valor: "Maquinaria y equipo pesado", etiqueta: "Maquinaria y equipo pesado", edicion: "maquinaria" },
   { valor: "Municipalidad", etiqueta: "Municipalidad", edicion: null },
   { valor: "Retail Especializado", etiqueta: "Retail especializado", edicion: "ecommerce-retail" },
   { valor: "Salud", etiqueta: "Salud", edicion: null },
@@ -144,6 +147,7 @@ export const EDICIONES_DE_LA_ESCALA: readonly OpcionDeDato[] = [
   { valor: "inmobiliaria", etiqueta: "Inmobiliaria" },
   { valor: "turismo", etiqueta: "Turismo" },
   { valor: "automotriz", etiqueta: "Automotriz" },
+  { valor: "maquinaria", etiqueta: "Maquinaria y equipo pesado" },
 ];
 
 /** Techo de cordura del TAM: 100M USD (DECISIONS «Qué ES una empresa»). Lo usan el catálogo y `parseTamUsd`. */

@@ -5,6 +5,8 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
+import { leerArchivoDeLaEscala } from "@/lib/escala/documento/archivos";
+import { parsearEscala } from "@/lib/escala/documento/parsear";
 import {
   CATALOGO_DE_DATOS,
   CLAVES_DE_DATO,
@@ -62,14 +64,21 @@ describe("el catálogo", () => {
     }
   });
 
-  it("las 18 industrias de Smarteam apuntan a una edición que existe o a la general", () => {
-    expect(INDUSTRIAS_DE_SMARTEAM).toHaveLength(18);
+  it("las 19 industrias de Smarteam apuntan a una edición que existe o a la general", () => {
+    expect(INDUSTRIAS_DE_SMARTEAM).toHaveLength(19);
     const ediciones = new Set(EDICIONES_DE_LA_ESCALA.map((e) => e.valor));
     for (const i of INDUSTRIAS_DE_SMARTEAM) if (i.edicion) expect(ediciones.has(i.edicion), i.valor).toBe(true);
     expect(edicionDeLaIndustria("Turismo")).toBe("turismo");
     expect(edicionDeLaIndustria("Banca y servicios financieros")).toBe("banca");
+    expect(edicionDeLaIndustria("Maquinaria y equipo pesado")).toBe("maquinaria");
     expect(edicionDeLaIndustria("Software")).toBeNull();
     expect(edicionDeLaIndustria("no existe")).toBeNull();
+  });
+
+  it("las ediciones del catálogo son las que trae la escala del repo, con la misma clave y el mismo nombre", () => {
+    const escala = parsearEscala(leerArchivoDeLaEscala("escala"));
+    const porClave = (xs: { valor: string; etiqueta: string }[]) => [...xs].sort((x, y) => x.valor.localeCompare(y.valor));
+    expect(porClave([...EDICIONES_DE_LA_ESCALA])).toEqual(porClave(escala.ediciones.map((e) => ({ valor: e.slug, etiqueta: e.nombre }))));
   });
 
   it("el TAM conserva el techo de 100 millones y el null distinto de 0", () => {

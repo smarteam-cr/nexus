@@ -276,8 +276,21 @@ describe("el cierre del borrador (27 oct): una decisión por cada pendiente", { 
     expect(r.bloqueos).toEqual([]);
   });
 
-  it("la escala del repo es la 9.0.0 cerrada, la misma que se publica", () => {
-    expect(fs.readFileSync(path.join(RAIZ, "docs/escala/escala_rendimiento_smarteam.md"), "utf8").replace(/\r\n?/g, "\n")).toBe(cerrado.md);
+  // Mientras el repo diga 9.0.0, es la cerrada, byte por byte. La 9.1 (28 oct) solo suma la edición de Maquinaria: su
+  // matriz y las seis ediciones de la 9.0 tienen que seguir iguales a la cerrada. Desde la 9.2 el repo puede cambiarlas
+  // (la 9.0.0 queda congelada en la base, `EscalaVersion`), y lo único que se exige es que no vuelva atrás.
+  it("la escala del repo es la 9.0.0 cerrada, la misma que se publica, o una versión posterior que parte de ella", () => {
+    const repo = fs.readFileSync(path.join(RAIZ, "docs/escala/escala_rendimiento_smarteam.md"), "utf8").replace(/\r\n?/g, "\n");
+    const [mayor, menor, parche] = (/^version: (\d+)\.(\d+)\.(\d+)$/m.exec(repo) ?? []).slice(1).map(Number);
+    if (mayor === 9 && menor === 0 && parche === 0) return expect(repo).toBe(cerrado.md);
+    expect(mayor > 9 || (mayor === 9 && menor > 0), `la versión del repo (${mayor}.${menor}.${parche})`).toBe(true);
+    if (mayor === 9 && menor === 1) {
+      const matriz = (md: string) => md.slice(md.indexOf("\n# Parte 3"), md.indexOf("\n# Parte 4"));
+      expect(matriz(repo)).toBe(matriz(cerrado.md));
+      const ediciones = cerrado.md.slice(cerrado.md.indexOf("\n# Parte 5")).split("\n## Edición — ").slice(1);
+      expect(ediciones).toHaveLength(6);
+      for (const e of ediciones) expect(repo.includes(`\n## Edición — ${e}`), e.slice(0, 40)).toBe(true);
+    }
   });
 
   it("el manual 1.4.0 lista cada decisión provisional", () => {

@@ -65,7 +65,7 @@ describe("el guion", () => {
 });
 
 describe("la industria sugerida", () => {
-  const todas = ["ecommerce-retail", "banca", "educacion", "inmobiliaria", "turismo", "automotriz"];
+  const todas = ["ecommerce-retail", "banca", "educacion", "inmobiliaria", "turismo", "automotriz", "maquinaria"];
 
   it("los códigos de HubSpot, viejos y nuevos, y la etiqueta en español del test", () => {
     expect(sugerirEdicion("RETAIL", todas)).toBe("ecommerce-retail");
@@ -79,6 +79,8 @@ describe("la industria sugerida", () => {
     expect(sugerirEdicion("HOSPITALITY", todas)).toBe("turismo");
     expect(sugerirEdicion("AUTOMOTIVE", todas)).toBe("automotriz");
     expect(sugerirEdicion("Concesionario de vehículos", todas)).toBe("automotriz");
+    expect(sugerirEdicion("MACHINERY", todas)).toBe("maquinaria");
+    expect(sugerirEdicion("Maquinaria y equipo pesado", todas)).toBe("maquinaria");
   });
 
   it("el software es software: escala general", () => {

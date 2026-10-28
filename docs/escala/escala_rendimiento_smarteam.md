@@ -1,7 +1,7 @@
 ---
 documento: Escala de Rendimiento Smarteam — Escalas departamentales
-version: 9.0.0
-fecha: 2026-10-27
+version: 9.1.1
+fecha: 2026-10-28
 estado: En revisión: cambia con el criterio de su responsable y con el feedback que el equipo manda desde Nexus; cada feedback lo decide un super admin
 relacionados: especificacion_calculo_escala.md, manual_operacion_escala.md
 ---
@@ -1713,6 +1713,10 @@ Términos que aparecen en la escala, la especificación o el manual, o que el eq
 
 ## Historial de versiones
 
+**9.1.1 (2026-10-28).** En la edición de Maquinaria y equipo pesado, ocho criterios reescritos vuelven a pedir lo mismo que la matriz: lo que sumaban —la máquina de interés en cada negocio, las horas de uso en la ficha del cliente, la proyección por modelo, los datos fijos de la cotización y de la entrega técnica, entre otros— queda como ejemplo. No cambia ningún criterio de la matriz ni su cálculo.
+
+**9.1.0 (2026-10-28).** Una edición nueva, con sus tres áreas enteras: Maquinaria y equipo pesado. Es para el distribuidor de maquinaria —de construcción, agrícola, de minería o industrial— y de camiones que vende máquinas nuevas y usadas con un asesor y atiende su posventa en el taller y en el lugar de trabajo del cliente; en Ventas sus dimensiones de producción son Líneas de máquinas y cotización, Priorización de interesados, Seguimiento de demostraciones y cotizaciones, y Ventas ganadas y perdidas; y en Servicio, Consistencia de la posventa, Priorización de la posventa, Seguimiento de la máquina y Escalabilidad de la posventa. Pide, entre otras cosas, que cada demostración deje su siguiente paso, un proceso escrito para recibir la máquina usada, que apartar una máquina la marque en el inventario, una sola lista de precios, que en las ventas de más valor la cotización compare el costo de operación, la entrega técnica con la capacitación al operador, ver si hay repuesto antes de prometer una fecha, el recordatorio del mantenimiento por horas de uso, el aviso de cada boletín de servicio de la marca y, donde la máquina trae telemetría, que sus alertas abran el aviso solas. Recordarle al cliente el mantenimiento de su máquina es de Servicio, y ofrecerle renovarla o sumar otra a su flota, de Ventas. No cambia ningún criterio de la matriz ni su cálculo.
+
 **9.0.0 (2026-10-27).** La revisión de la 8.9 y el engagement avanzado. Cada cosa se mide en un solo lugar: lo que compartían Ventas y Marketing, o Ventas y Servicio, queda en el área que lo ejecuta, y la regla de asignación suma los acuerdos entre dos áreas, la renovación y el siguiente producto, la lealtad, la plantilla de la propuesta y lo que cambia en la tienda para cada comprador. Los criterios que pedían dos cosas se parten; los Óptimos que se cumplían con una persona y datos bajan a Eficiente, con la misma vara en las tres áreas; entran criterios para lo que ningún criterio pedía —el plan de canales, el contacto antes de cada entrega, los duplicados de Servicio, la identidad del cliente y el permiso de contacto—, y las señales de Deficiente e Inicial se completan. El perfil de negocio suma una tercera pregunta, el tráfico del sitio o la app, con su marca, «tráfico suficiente», y la Parte 2 suma la lectura de preparación para engagement avanzado, que no cambia el nivel. La dimensión 6 se llama «Priorización» como nombre general. Entran 112 criterios en la matriz y salen 54; los que cambian de nivel o de lo que mide dejan su identificador y entran con otro, y la especificación 1.4.0 los anota como retirados. Las ediciones leen como la general lo que su texto propio todavía no dice. Cambia lo que piden todos los niveles. Se publica con decisiones provisionales que su responsable revisa: están en el manual de operación.
 
 **8.9.1 (2026-10-18).** Las seis ediciones dicen cada nivel de cada dimensión con las palabras de su industria: en cada uno, al menos un criterio de la matriz va reescrito. Hasta esta versión, 244 niveles se leían enteros con el texto general —71 en Automotriz, 64 en Turismo, 47 en Banca, 44 en Inmobiliaria, 10 en Educación y 8 en Ecommerce y retail—, como Inicial de Seguimiento de cotizaciones y reservas en Turismo. Se reescriben 322 criterios: ninguno cambia lo que mide, sus marcas ni lo que requiere, y no entra ningún criterio propio. Cómo se escribe una edición lo dice. No cambia ningún criterio de la matriz ni su cálculo.
@@ -1799,7 +1803,7 @@ Términos que aparecen en la escala, la especificación o el manual, o que el eq
 
 Una edición es la misma escala dicha para una industria: comparte las áreas, las ocho preguntas de fondo de cada área, los cinco niveles, las reglas y el cálculo, y cambia lo que ve quien la lee.
 
-La matriz de la Parte 3 es la escala general, escrita para cualquier empresa. Una tienda, un banco, una universidad, una inmobiliaria, un hotel o un concesionario se reconocen mejor en una escala que habla de lo suyo: por eso cada edición les pone a las dimensiones de producción el nombre que tienen en esa industria, hace las preguntas y dice los costos con sus palabras, y suma los criterios que solo tienen sentido ahí.
+La matriz de la Parte 3 es la escala general, escrita para cualquier empresa. Una tienda, un banco, una universidad, una inmobiliaria, un hotel, un concesionario o un distribuidor de maquinaria se reconocen mejor en una escala que habla de lo suyo: por eso cada edición les pone a las dimensiones de producción el nombre que tienen en esa industria, hace las preguntas y dice los costos con sus palabras, y suma los criterios que solo tienen sentido ahí.
 
 ## Qué cambia una edición y qué no
 
@@ -1816,7 +1820,7 @@ Una unidad se mide con la escala general o con una sola edición, la de su indus
 
 Una edición puede darle criterios a una dimensión que en la escala general no aplica a un perfil. Pasa en la de ecommerce y retail: en la venta transaccional, la dimensión de personalización de Ventas no aplica en la escala general, y en la edición mide la oferta que la tienda le hace a cada comprador. Y pasa en la de banca, donde esa dimensión mide también a quién se le ofrece cada producto cuando el cliente lo contrata solo.
 
-Una edición se escribe por áreas, y un área que la edición no escribe se mide con la escala general. Las seis ediciones de hoy —Ecommerce y retail, Banca y servicios financieros, Educación, Inmobiliaria, Turismo y Automotriz— traen las tres áreas enteras.
+Una edición se escribe por áreas, y un área que la edición no escribe se mide con la escala general. Las siete ediciones de hoy —Ecommerce y retail, Banca y servicios financieros, Educación, Inmobiliaria, Turismo, Automotriz y Maquinaria y equipo pesado— traen las tres áreas enteras.
 
 ## Cómo se escribe una edición
 
@@ -7510,5 +7514,875 @@ Mide el rendimiento de la posventa del concesionario, que recibe al dueño desde
 **Óptimo.**
 
 - Los picos de demanda —como la temporada de mantenimientos o un llamado a revisión— los absorben la IA y el autoservicio: el equipo no crece cuando crece la cartera de vehículos que atiende, y el líder ve en los tableros del área qué parte de la demanda resolvieron la IA y el autoservicio y qué pasó a una persona. `[3.8.O2]`
+
+*Se leen igual:* `3.8.D1`, `3.8.I1`, `3.8.F2`, `3.8.E1`, `3.8.E2`, `3.8.E4`, `3.8.E5`, `3.8.O1`, `3.8.O3`, `3.8.O4`.
+
+## Edición — Maquinaria y equipo pesado
+
+Para el distribuidor de maquinaria —de construcción, agrícola, de minería o industrial— y de camiones que vende máquinas nuevas y usadas a empresas, contratistas, productores e instituciones, y que atiende su posventa en el taller y en el lugar de trabajo del cliente: un asesor trabaja cada venta, de la primera consulta a la visita a la obra o a la finca, la demostración, la cotización, el financiamiento, el recibo de la máquina usada como parte de pago y la entrega técnica, y la posventa atiende después el mantenimiento, las reparaciones en el taller y en campo, la garantía y los repuestos que instala. La venta de la máquina, también la de una flota o la de una licitación, se mide en Ventas; el taller, el servicio en campo y la garantía, en Servicio. Recordarle al cliente el mantenimiento de su máquina es de Servicio; ofrecerle renovarla o sumar otra a su flota, de Ventas. Donde el distribuidor vende solo usados, lo que toca a la marca —sus campañas, sus boletines de servicio, sus garantías— no aplica. La venta de repuestos al público en mostrador o en línea, el fabricante que no le vende al cliente final y la empresa que solo alquila maquinaria se miden con la escala general.
+
+*Clave:* maquinaria
+
+*Perfil habitual:* con equipo · recompra.
+
+*Criterios propios:* desde el 701.
+
+### Palabras de esta edición
+
+| En la escala general | En esta edición |
+|:--|:--|
+| Prospecto | Interesado en una máquina |
+| Negocio | Negocio: la venta de una máquina o de un lote de máquinas, de la primera consulta a la entrega técnica |
+| Lead | Interesado en una máquina |
+| Pipeline | El recorrido de la venta: consulta, visita a la obra o a la finca, demostración, cotización, financiamiento, cierre y entrega técnica |
+| Revisión del pipeline | Reunión de seguimiento de ventas |
+| Vendedor | Asesor de ventas |
+| Propuesta | La cotización de la máquina: modelo y configuración, implementos, precio, valor de la usada que se recibe, financiamiento, garantía, plan de mantenimiento y fecha de entrega |
+| Material de venta | Fichas técnicas, comparativos de modelos, cálculos de rendimiento y de costo de operación, fotos y videos de la máquina trabajando |
+| Razón de pérdida | Por qué el interesado no compró: el precio, el financiamiento que no salió, el valor de su usada, el plazo de entrega, el respaldo de posventa o porque compró otra marca |
+| Cliente ideal | El comprador objetivo de cada línea de máquinas |
+| Pronóstico | Proyección de ventas por línea y por modelo |
+| Cliente | El dueño de la máquina: una constructora, un contratista, un productor, una institución o una empresa con su flota |
+| Caso | Caso de posventa: una cita de taller, una visita de servicio en campo, una reparación, un reclamo de garantía, un pedido de repuestos o una consulta |
+| Agente | Asesor de servicio |
+| Buyer persona | Perfil de comprador: quién es, qué trabajo hace la máquina y cómo decide, como el contratista que compra su primera retroexcavadora o la empresa que renueva su flota |
+| Traspaso | El de un interesado de Marketing a un asesor, o el de un comprador de Ventas a la posventa |
+
+### Área 1 — Ventas
+
+Mide el rendimiento de la venta de maquinaria del distribuidor: cómo está montada por dentro y qué produce en demostraciones, ventas y entregas técnicas, y en clientes que vuelven a renovar o a sumar máquinas a su flota. Vale igual si la venta la trabaja un equipo de asesores o uno solo.
+
+**Deficiente.** Tus ventas dependen de quién atienda. Cada asesor lleva a sus clientes en su teléfono, los precios y las condiciones viven en una hoja que no siempre está al día, y nadie sabe cuántas consultas y cuántas demostraciones se quedaron sin seguimiento.
+
+**Inicial.** Tienes un CRM y un proceso a medias. Los interesados se registran cuando el asesor se acuerda, cada quien cotiza a su manera y el financiamiento y la máquina usada se negocian por fuera del sistema.
+
+**Funcional.** Tu equipo comercial opera como una maquinaria base. Cada interesado entra al mismo recorrido, todos venden con la misma lista de precios y el mismo inventario, cada demostración deja su siguiente paso y ninguna cotización se enfría sin que alguien reaccione.
+
+**Eficiente.** La venta deja de depender del empuje de cada asesor. Mides cuántas consultas llegan a una demostración y cuántas demostraciones a una venta, conoces la capacidad de pago antes de apartar una máquina o pedirla a la marca, acompañas cada venta hasta la entrega técnica y proyectas las ventas de cada línea con confianza.
+
+**Óptimo.** La IA hace el trabajo pesado y tu equipo valida donde importa. Si atiendes por WhatsApp o chat, agentes de IA responden, califican y agendan visitas y demostraciones a toda hora; los modelos dicen qué interesado está listo, qué máquina ofrecerle y qué cliente ya está por renovar o ampliar su flota.
+
+#### 1.1 Procesos y Rutinas
+
+¿Qué tan parecido trabajan tus asesores cada venta, desde la primera consulta hasta la entrega técnica de la máquina?
+
+*Descripción:* Mide si la venta sigue un proceso escrito, de la consulta a la entrega técnica, que no depende de cada asesor.
+
+*Costo de quedarse:* Si se va un asesor, se lleva a sus clientes en el teléfono: nadie sabe a quién se le hizo una demostración, a quién se le cotizó ni qué máquina usada se le avaluó.
+
+**Deficiente.**
+
+- No hay nada escrito sobre el recorrido de la venta ni sus etapas —consulta, visita, demostración, cotización, financiamiento, cierre y entrega técnica—: cada asesor usa su criterio. `[1.1.D1]`
+
+**Inicial.**
+
+- Las etapas de la venta —consulta, visita, demostración, cotización, cierre y entrega técnica— existen de palabra o en un borrador, pero cada asesor las interpreta distinto. `[1.1.I1]`
+
+**Funcional.** Todo el equipo sigue el mismo recorrido escrito en el CRM, de la consulta a la entrega técnica, con una cadencia de contacto, un proceso escrito para recibir la máquina usada y una revisión fija de los negocios.
+
+*Resultado:* Si rota un asesor, el siguiente sabe en qué va cada cliente, porque todo el equipo trabaja la venta igual en el CRM: los negocios avanzan con los mismos criterios, cada demostración deja su siguiente paso, la máquina usada se recibe siempre de la misma forma, cada interesado se contacta con la cadencia acordada y los negocios se repasan en cada reunión de seguimiento.
+
+- Cualquier asesor explica igual las etapas de la venta —consulta, visita, demostración, cotización, financiamiento, cierre y entrega técnica— y qué tiene que cumplirse para avanzar. `[1.1.F1]`
+- Cada tipo de venta —máquinas nuevas, usadas, flotas para empresas y licitaciones públicas— tiene su propio recorrido en el CRM, con lo que el negocio tiene que cumplir para pasar de cada etapa a la siguiente. `[1.1.F2]`
+- Toda demostración —en la obra, en la finca o en el patio del distribuidor— queda registrada con la máquina que se mostró, su resultado y el siguiente paso acordado. `[1.1.F701 · comprobable · hábito · venta con equipo]`
+- El proceso para recibir una máquina usada como parte de pago está escrito: quién la inspecciona, con qué criterios —las horas de uso, el estado y el historial de mantenimiento—, cuánto tiempo vale la oferta y cómo se le explica al cliente. `[1.1.F702 · declarado]`
+
+**Eficiente.**
+
+- Hay playbooks escritos de descubrimiento, calificación y manejo de objeciones, por ejemplo para saber qué trabajo va a hacer la máquina, cómo la va a pagar el cliente y qué respaldo de posventa espera. `[1.1.E2]`
+
+**Óptimo.**
+
+- La IA corrige sola lo que se sale del proceso —crea el seguimiento de una demostración que falta, completa la máquina de interés, reasigna el negocio— y el líder revisa en el CRM lo que no pudo resolver. `[1.1.O4]`
+
+*Se leen igual:* `1.1.D2`, `1.1.D3`, `1.1.D4`, `1.1.I2`, `1.1.I3`, `1.1.I4`, `1.1.F4`, `1.1.F5`, `1.1.F6`, `1.1.F7`, `1.1.F8`, `1.1.E1`, `1.1.E3`, `1.1.E5`, `1.1.E6`, `1.1.O2`, `1.1.O3`.
+
+#### 1.2 Tecnología y Automatización
+
+¿Qué pasa en tu sistema, sin que nadie lo haga a mano, cuando entra una consulta o se aparta una máquina?
+
+*Descripción:* Mide cuánto del trabajo repetitivo hace el sistema —repartir las consultas, avisar qué toca, mostrar el inventario, apartar la máquina que se vende y registrar las conversaciones— y cómo usa el equipo la automatización y la IA.
+
+*Costo de quedarse:* Tus asesores copian a mano las consultas de la web, de la marca y de las ferias, dependen de su memoria para dar seguimiento y descubren que la máquina ya estaba apartada cuando el cliente ya se había decidido.
+
+**Deficiente.**
+
+- No hay un CRM donde montar una automatización: las consultas y las ventas de máquinas se pasan por correo, por chat o WhatsApp o de palabra, y ningún asesor recibe avisos del sistema. `[1.2.D2]`
+
+**Inicial.**
+
+- Hay un CRM, pero nada pasa solo: las consultas de la web, la marca y las ferias se reparten a mano y cada asesor tiene que acordarse de sus seguimientos, como el de cada demostración y cada cotización. `[1.2.I1]`
+
+**Funcional.** Lo básico pasa solo —las consultas de todos los canales entran al sistema y se reparten por una regla, el sistema avisa qué toca y la máquina que se aparta queda marcada— y, si se usa IA, trabaja con los datos de cada cliente.
+
+*Resultado:* Ninguna consulta se pierde por no saber a quién le toca: la que llega por la web, por la marca o por una feria entra sola, el asesor recibe el aviso y deja de depender de su memoria, ve qué máquinas están disponibles antes de ofrecerlas, y una que ya se apartó no se le ofrece a nadie más.
+
+- Las consultas que entran —de la web, la marca, las redes, las ferias y la sucursal— llegan a una bandeja o cola y se asignan por una regla simple: por turnos, por zona, por línea de máquinas o según la fuente de donde llegan. `[1.2.F2]`
+- El asesor puede ver qué máquinas están en inventario, en tránsito o por pedir a la marca, con su modelo y su configuración, antes de ofrecer una, en el CRM o en el sistema donde se lleva el inventario, sin preguntarle a otra persona. `[1.2.F8]`
+- Apartar o vender una máquina la marca en el inventario en el momento: no se le ofrece a otro cliente ni se aparta dos veces. `[1.2.F701 · comprobable]`
+
+**Eficiente.** Las cotizaciones salen del sistema, la solicitud de financiamiento viaja sola a los bancos y las arrendadoras, el CRM se conecta con el sistema del distribuidor y el equipo usa la IA en su trabajo diario.
+
+*Resultado:* El asesor recupera el tiempo que se le iba en tareas repetitivas, y el líder ve en tiempo real en qué etapa se caen los negocios.
+
+- Las cotizaciones de las máquinas se generan desde el sistema —por ejemplo, con el modelo, la configuración y el precio vigentes—, no como documentos sueltos. `[1.2.E1]`
+- Si el distribuidor lleva su inventario, sus pedidos a la marca, su facturación, sus repuestos o su taller en otro sistema —un ERP o el sistema de gestión del distribuidor—, el CRM está conectado con él. `[1.2.E3]`
+- La solicitud de financiamiento sale del sistema hacia los bancos, las financieras o las arrendadoras con los datos del cliente, y su respuesta vuelve al negocio, sin pasarla a mano. `[1.2.E701 · comprobable · venta con equipo]`
+
+**Óptimo.** La IA responde, califica, agenda visitas y demostraciones y calcula qué negocios van a cerrar; el asesor valida y se queda con las conversaciones que deciden la venta.
+
+- Si el equipo atiende por un canal conversacional, agentes de IA califican ahí a los interesados con la definición de interesado calificado y agendan visitas y demostraciones a cualquier hora; le pasan al asesor, con el contexto, a quien está listo, y el equipo revisa en el CRM lo que calificaron. `[1.2.O2]`
+
+*Se leen igual:* `1.2.D1`, `1.2.I2`, `1.2.F3`, `1.2.F4`, `1.2.F6`, `1.2.F7`, `1.2.F9`, `1.2.E2`, `1.2.E4`, `1.2.E5`, `1.2.E6`, `1.2.E7`, `1.2.E8`, `1.2.O1`, `1.2.O3`, `1.2.O4`, `1.2.O5`.
+
+#### 1.3 Datos
+
+¿Qué tienes que hacer con el reporte de tus negocios y de tu inventario de máquinas antes de usarlo para decidir?
+
+*Descripción:* Mide si los datos de ventas son confiables para decidir: negocios completos, el origen de cada uno, el inventario al día y reportes que salen del sistema sin armarlos a mano.
+
+*Costo de quedarse:* Decides con números que no cuadran: el reporte de ventas se arma a mano cruzando el CRM con el inventario, y no sabes qué feria o qué campaña te trae compradores y cuál solo consultas.
+
+**Deficiente.**
+
+- Las ventas de máquinas no quedan registradas con su monto y su fecha: no se sabe cuántas máquinas se vendieron, por cuánto ni cuándo. `[1.3.D4]`
+
+**Inicial.**
+
+- Los negocios que se crean hoy se registran, pero a algunos les falta la fecha esperada de cierre, el monto o el asesor responsable. `[1.3.I3]`
+
+**Funcional.** El reporte de negocios sale del sistema, sin armarlo a mano, y el estado de cada máquina está al día: a los dos se les puede creer.
+
+*Resultado:* El líder ve el estado real de los negocios y del inventario cuando lo necesita, sin armar el reporte a mano, y sabe de dónde llegó cada interesado.
+
+- Todo negocio creado desde la puesta en marcha del recorrido actual —la venta de una máquina, de una flota o una licitación— tiene la fecha esperada de cierre, el monto y el asesor responsable. `[1.3.F1]`
+- Todo negocio creado desde la puesta en marcha del recorrido actual dice por dónde llegó el interesado: la sucursal, la web, la marca, las redes, una feria, una licitación o un referido. `[1.3.F3]`
+- El estado de cada máquina del inventario —disponible, apartada, vendida o entregada— está al día en el sistema y coincide con lo que se facturó. `[1.3.F701 · comprobable · requiere 1.2.F8]`
+
+**Eficiente.** Aparece una proyección de ventas confiable, se mide cuánto tarda en venderse cada máquina y la ficha del cliente reúne sus compras, su financiamiento, su flota y su posventa.
+
+*Resultado:* El distribuidor puede comprometer un número de ventas con confianza y planear con ese número sus pedidos a la marca y su inventario de usadas.
+
+- Hay una proyección de las ventas de máquinas que se actualiza cada semana o cada quince días, y en al menos cinco de los últimos seis meses lo vendido quedó dentro de ±10% de lo proyectado. `[1.3.E1]`
+- La ficha de cada cliente reúne lo comercial con su historial de conversaciones y, si el distribuidor lleva en otros sistemas la facturación, el financiamiento, los repuestos o el taller, con lo que viene de ellos: la vista 360° empieza a tomar forma. `[1.3.E3]`
+- Se mide cuánto tarda en venderse cada modelo nuevo y cada máquina usada en inventario, y ese número se revisa cada mes. `[1.3.E701 · comprobable · hábito]`
+
+**Óptimo.**
+
+- La vista 360° está operativa: la ficha de cada cliente reúne lo comercial, la facturación, su flota, sus visitas al taller, sus servicios en campo, sus reclamos y las conversaciones. `[1.3.O3]`
+
+*Se leen igual:* `1.3.D1`, `1.3.D2`, `1.3.D3`, `1.3.I1`, `1.3.I2`, `1.3.F2`, `1.3.F4`, `1.3.F8`, `1.3.F9`, `1.3.F10`, `1.3.E4`, `1.3.E5`, `1.3.O1`, `1.3.O2`, `1.3.O4`, `1.3.O6`.
+
+#### 1.4 Equipo y Gobierno
+
+¿Cómo sabe el líder, cada semana, qué asesores van bien y cuáles necesitan ayuda?
+
+*Descripción:* Mide si cada asesor tiene un rol, una zona y una meta por escrito, y si el líder sigue los números de la venta y pide cuentas con datos.
+
+*Costo de quedarse:* El líder se entera al cierre del mes o del trimestre de que no llegó a la meta de la marca: no vio antes qué asesor se quedó atrás ni en qué etapa se cayeron los negocios.
+
+**Deficiente.**
+
+- El líder apaga incendios: no hay métricas —ni de consultas, ni de demostraciones, ni de ventas— ni rendición de cuentas. `[1.4.D2]`
+
+**Inicial.**
+
+- El líder revisa algunos números —las ventas del mes, las máquinas en inventario— en hojas de cálculo, cuando tiene tiempo. `[1.4.I1]`
+
+**Funcional.**
+
+- El líder tiene un tablero con 4 a 6 métricas clave —consultas, demostraciones, cotizaciones, ventas, entregas y máquinas en inventario— y lo consulta al menos una vez por semana. `[1.4.F2]`
+
+**Eficiente.** El líder prepara a quien entra, escucha al equipo y acuerda reglas con las áreas que cierran la venta y, si Marketing pasa interesados, también las del traspaso.
+
+*Resultado:* Un asesor nuevo produce más rápido, el financiamiento, el avalúo de la usada y la entrega técnica no se traban entre áreas, lo que el equipo ve que no funciona llega a quien puede cambiarlo y, si Marketing pasa interesados, el traspaso tiene reglas que se cumplen.
+
+- Cuando entra un asesor nuevo, hay un plan de inducción con sus pasos y materiales —las líneas de máquinas, los precios, el financiamiento y los sistemas—; no se le entrena de memoria. `[1.4.E2]`
+- El acuerdo con las áreas que cierran la venta —financiamiento, el avalúo de usadas, la importación y la preparación de la máquina y la entrega técnica— está escrito y se mide: qué recibe cada una y en cuánto tiempo responde. `[1.4.E701 · comprobable]`
+- Las decisiones de la dirección usan números de fondo: cuánto deja cada cliente en el tiempo —por ejemplo, entre sus máquinas, su financiamiento, sus repuestos y su taller—, cuánto margen deja cada canal y cuánto aporta cada asesor. `[1.4.E6]`
+
+**Óptimo.**
+
+*Resultado:* La dirección decide dónde invertir con números de fondo: qué línea y qué canal dejan más margen, qué máquina se vende más rápido y cuánto deja cada cliente entre sus compras y su posventa.
+
+- Hay responsables de validar lo que hace la IA en la venta de máquinas, y lo que puede decidir sola —por ejemplo, agendar una demostración o mandar una ficha técnica— está por escrito. `[1.4.O3]`
+
+*Se leen igual:* `1.4.D1`, `1.4.I2`, `1.4.F3`, `1.4.F4`, `1.4.F6`, `1.4.F7`, `1.4.E3`, `1.4.E4`, `1.4.E5`, `1.4.O2`, `1.4.O4`.
+
+#### 1.5 Líneas de máquinas y cotización
+
+¿Cómo sabe un asesor que entra a tu equipo a quién le vende cada línea de máquinas y con qué precios y condiciones?
+
+*Descripción:* Mide si el equipo sabe para quién es cada línea de máquinas, si la cotización llega igual con cualquier asesor y, si se vende por más de un canal, si los precios y las condiciones son coherentes en todos.
+
+*Costo de quedarse:* Cada asesor cotiza con su propia hoja y sus propias condiciones: el cliente recibe dos precios para la misma máquina, desconfía y se va a cotizar con el distribuidor de otra marca.
+
+**Deficiente.** Nadie puede decir con claridad para quién es cada línea de máquinas, no hay una lista de precios y condiciones que todos usen y cada asesor cotiza a su manera: el cliente recibe precios distintos según quién lo atienda.
+
+- Hay más de una lista de precios o de condiciones circulando, y no se sabe cuál es la vigente. `[1.5.D701 · comprobable]`
+
+**Inicial.** Hay una lista de precios y fichas de cada modelo, pero cada asesor arma la cotización por su cuenta.
+
+- Hay una plantilla de cotización, pero cada asesor la cambia o la usa a su manera. `[1.5.I2]`
+
+**Funcional.** El comprador objetivo de cada línea está escrito, y todos venden con los mismos precios, las mismas condiciones y la misma cotización.
+
+*Resultado:* Dos clientes parecidos reciben la misma información de la máquina y una cotización igual de clara —modelo, configuración, implementos, precio, financiamiento, valor de la usada, garantía y fecha de entrega—, sin importar qué asesor los atienda.
+
+- Existe un documento con el comprador objetivo de cada línea de máquinas —a quién va dirigida, qué trabajo hace y cómo paga—, consultable por cualquier asesor. `[1.5.F1]`
+- El líder puede explicar quién es el comprador objetivo de cada línea de máquinas sin consultar su documentación. `[1.5.F2]`
+- Las cotizaciones están estandarizadas: tienen una estructura común reconocible —por ejemplo, modelo y configuración, implementos, precio, financiamiento, valor de la usada, garantía y fecha de entrega—, no armada desde cero cada vez. `[1.5.F4]`
+- Hay una sola lista vigente de precios, implementos y promociones por modelo y configuración, y todas las cotizaciones salen de ella. `[1.5.F701 · comprobable]`
+
+**Eficiente.** La propuesta se distingue de la de otros distribuidores y otras marcas, y solo promete lo que se va a entregar.
+
+*Resultado:* Los interesados ven qué distingue al distribuidor —la máquina, el financiamiento y el respaldo de posventa—: la propuesta dice lo mismo en el sitio, en la sucursal y en boca de cada asesor, y lo que se le prometió al cliente —la fecha de entrega, los implementos, las condiciones del financiamiento— es lo que recibe.
+
+- Las cotizaciones solo prometen lo que se va a entregar: la fecha de entrega, los implementos y las condiciones del financiamiento se validan antes de enviarlas. `[1.5.E3]`
+- Los cambios de precio, de condiciones y de promociones les llegan el mismo día a todos los asesores y a todos los canales. `[1.5.E701 · comprobable · hábito]`
+- En las ventas de más valor y en las de flota, la cotización compara el costo de operación de la máquina en el trabajo del cliente —su rendimiento, su consumo y su mantenimiento—, no solo su precio. `[1.5.E702 · comprobable · venta con equipo]`
+
+**Óptimo.**
+
+- La IA revisa en tiempo real, contra la propuesta de valor vigente del distribuidor, lo que se les dice a los interesados —en la sucursal, por WhatsApp o en la cotización—, lo escriba ella o el asesor; lo que se sale queda marcado en el sistema y el equipo lo valida. `[1.5.O1]`
+
+*Se leen igual:* `1.5.D1`, `1.5.D2`, `1.5.I1`, `1.5.I3`, `1.5.F3`, `1.5.F5`, `1.5.F6`, `1.5.E2`, `1.5.E4`.
+
+#### 1.6 Priorización de interesados
+
+¿Cómo decide tu equipo a qué interesados dedicarles tiempo, visitas y demostraciones primero?
+
+*Descripción:* Mide si el equipo decide a qué interesados dedicar su tiempo con criterios escritos, según el comprador objetivo de cada línea de máquinas.
+
+*Costo de quedarse:* Tus asesores le hacen una demostración a todo el que la pide: mueven una máquina a la obra de quien no puede financiarla, y los compradores listos esperan su turno.
+
+**Deficiente.**
+
+- No hay criterios para distinguir a un interesado que va a comprar de uno que solo pregunta precios: se pierden tiempo, visitas y demostraciones con interesados que nunca van a comprar. `[1.6.D1]`
+
+**Inicial.**
+
+- El líder sabe quién es el comprador objetivo de cada línea de máquinas, pero el CRM no tiene los campos —máquina de interés, trabajo que va a hacer, presupuesto, forma de pago— para separar a los interesados que encajan. `[1.6.I2]`
+
+**Funcional.** Los interesados se separan por los rasgos del comprador objetivo —máquina, trabajo que va a hacer, presupuesto, forma de pago, si entrega una usada— y hay una definición escrita de interesado calificado que el equipo aplica.
+
+*Resultado:* El equipo deja de dedicarle visitas y demostraciones a quien no encaja con el comprador objetivo y concentra el esfuerzo en quien sí encaja y cumple la definición de interesado calificado, con su presupuesto, su forma de pago y su plazo de compra.
+
+- El equipo segmenta a los interesados por los atributos del comprador objetivo antes de trabajarlos: la máquina que busca, el trabajo que va a hacer, el presupuesto, la forma de pago, si entrega una usada o si compra para una flota. `[1.6.F1]`
+- Los rasgos del comprador objetivo —máquina de interés, trabajo que va a hacer, presupuesto, forma de pago y si entrega una usada— son campos del CRM y de los formularios de consulta. `[1.6.F4]`
+
+**Eficiente.**
+
+- La capacidad de pago del interesado o la precalificación de su financiamiento se conoce antes de apartar una máquina o de pedirla a la marca. `[1.6.E701 · comprobable · venta con equipo]`
+
+**Óptimo.**
+
+- Si en la decisión de compra participan varias personas —el dueño, el jefe de operaciones o de mantenimiento, el de compras o el de finanzas—, la IA adapta en tiempo real el mensaje a cada una, dentro de los límites que fijó el equipo; el asesor revisa lo que se envió, y en el CRM queda qué recibió cada persona. `[1.6.O3]`
+
+*Se leen igual:* `1.6.I1`, `1.6.F2`, `1.6.F3`, `1.6.E3`, `1.6.E4`, `1.6.E5`, `1.6.E6`, `1.6.E7`, `1.6.O4`, `1.6.O5`.
+
+#### 1.7 Seguimiento de demostraciones y cotizaciones
+
+¿Qué pasa con quien vio la demostración y no volvió a contestar, o con la venta que no avanza hacia la entrega?
+
+*Descripción:* Mide si alguien detecta cuando un negocio deja de avanzar —después de la demostración, de la cotización o mientras se espera el financiamiento— y si hay un paso acordado para retomarlo; y, donde el cliente vuelve a comprar, si se le busca cuando ya le toca renovar o ampliar su flota.
+
+*Costo de quedarse:* Los interesados se enfrían después de la demostración y las cotizaciones quedan sin respuesta sin que nadie llame: el cliente termina comprando con el distribuidor de otra marca que sí le dio seguimiento.
+
+**Deficiente.** El asesor está solo con sus clientes: después de la demostración o de la cotización, nadie da seguimiento.
+
+- No hay material de venta —fichas técnicas, comparativos de modelos, cálculos de rendimiento, fotos o videos— para mostrarles a los interesados. `[1.7.D4]`
+
+**Inicial.**
+
+- Cuando un negocio se detiene —por ejemplo, después de la demostración o de la cotización—, cada asesor decide si insiste y cómo: no hay un paso acordado. `[1.7.I1]`
+- Todos los intentos de hacer avanzar un negocio se hacen por el mismo canal: por ejemplo, el asesor solo llama, o solo escribe por WhatsApp. `[1.7.I4]`
+
+**Funcional.** Ningún negocio se enfría en silencio después de la demostración o de la cotización: se detecta y hay un paso acordado para retomarlo.
+
+*Resultado:* Los negocios que se traban se detectan y se retoman por más de un canal; donde se vende con equipo, con material de venta común y con el líder actuando mientras todavía hay margen. Cada demostración y cada cotización reciben su seguimiento, y el cliente que ya debería renovar su máquina no se deja al azar.
+
+- Hay material de venta estandarizado —fichas técnicas, comparativos de modelos, cálculos de rendimiento y de costo de operación, fotos y videos de la máquina trabajando— que ayuda a cerrar la venta. `[1.7.F4]`
+- Toda demostración y toda cotización reciben seguimiento dentro del plazo acordado. `[1.7.F701 · comprobable · hábito · venta con equipo · requiere 1.1.F701]`
+
+**Eficiente.**
+
+- Los interesados que todavía no están listos para comprar no se abandonan: pasan a nutrición —la de Marketing o una secuencia del propio equipo— y vuelven a un asesor cuando muestran interés, llega la máquina que buscaban o se acerca su temporada de compra. `[1.7.E2]`
+- Entre el cierre y la entrega, el comprador recibe cómo va su máquina —el pedido a la marca, la importación, la aprobación del financiamiento y la preparación para la entrega técnica— sin tener que pedirlo. `[1.7.E701 · comprobable · hábito]`
+
+**Óptimo.**
+
+- Con las reglas que fijó el líder, la IA actúa sola en los negocios de más valor que se traban —por ejemplo, la renovación de una flota que no avanza después de la demostración: envía el contenido o avisa a quien corresponde— y el líder revisa en el CRM lo que hizo. `[1.7.O3]`
+
+*Se leen igual:* `1.7.D1`, `1.7.D2`, `1.7.D3`, `1.7.I2`, `1.7.I3`, `1.7.F1`, `1.7.F2`, `1.7.F3`, `1.7.F6`, `1.7.F7`, `1.7.E1`, `1.7.E3`, `1.7.E4`, `1.7.E5`, `1.7.E6`, `1.7.E7`, `1.7.O2`.
+
+#### 1.8 Ventas ganadas y perdidas
+
+¿Qué queda registrado cuando un interesado no compra o una venta se cae antes de la entrega?
+
+*Descripción:* Mide si queda registrado por qué no compra un interesado o por qué se cae una venta antes de la entrega, y si el equipo revisa lo que gana y lo que pierde para mejorar su proceso.
+
+*Costo de quedarse:* No sabes por qué pierdes ventas —el precio, el financiamiento que no salió, el valor de la usada, el plazo de entrega, la otra marca—: cada asesor tiene su explicación, y sin un registro no hay cómo ver qué se repite.
+
+**Deficiente.**
+
+- Los negocios perdidos se cierran sin anotar por qué el interesado no compró: ni el precio, ni el financiamiento, ni el valor de su usada, ni el plazo de entrega, ni la otra marca. `[1.8.D2]`
+
+**Inicial.**
+
+- Por qué el interesado no compró se anota a veces y en texto libre, a criterio de cada asesor, así que no se puede sumar. `[1.8.I1]`
+
+**Funcional.** Cada negocio perdido y cada venta que se cae quedan con su razón, elegida de una lista fija, y el líder saca del sistema el reporte del trimestre.
+
+*Resultado:* El líder sabe por qué no compran los interesados y por qué se caen las ventas antes de la entrega, con datos del trimestre y no con impresiones.
+
+- Todo negocio creado desde la puesta en marcha del recorrido actual que se dio por perdido tiene registrada su razón. `[1.8.F1]`
+- Cada venta que se cae después del cierre —porque no salió el financiamiento, el cliente desistió, se cayó la licitación o la máquina no llegó— deja registrada su razón. `[1.8.F701 · comprobable]`
+
+**Eficiente.**
+
+- Al menos una vez por trimestre se revisan las ventas ganadas, los negocios perdidos y las ventas que se cayeron para encontrar lo que se repite. `[1.8.E1]`
+- Cuando el cliente compró otra marca o con otro distribuidor, queda registrado cuál y por qué. `[1.8.E701 · comprobable]`
+
+**Óptimo.**
+
+- La IA analiza las llamadas con los interesados —también las de video— y le deja a cada asesor recomendaciones que quedan registradas; el líder las revisa con él. `[1.8.O1]`
+
+*Se leen igual:* `1.8.D1`, `1.8.F2`, `1.8.F3`, `1.8.E2`, `1.8.E3`, `1.8.E4`, `1.8.O4`.
+
+### Área 2 — Marketing
+
+Mide el rendimiento del área de marketing del distribuidor: cómo está montada por dentro y qué produce en presencia, interesados y demostraciones para cada línea de máquinas, y en clientes que vuelven por repuestos y servicio. Vale igual si el marketing lo hace un equipo propio, una sola persona o una agencia que el distribuidor dirige, también cuando parte de las campañas las pone la marca.
+
+**Deficiente.** Tus máquinas no las presentas tú: las presenta la marca o la feria. Cada anuncio dice algo distinto, las herramientas están sueltas y la pauta corre hasta agotar el presupuesto sin que nadie mida qué dejó. Los interesados llegan por accidente.
+
+**Inicial.** Tienes logo, fotos de las máquinas y redes, pero no hay una estrategia detrás. Publicas cuando llega un modelo o una promoción de la marca, y los resultados de cada campaña se miden tarde y a mano. Llegan consultas, pero no siempre sabes de dónde vienen.
+
+**Funcional.** Tu marketing dejó de depender de una persona. La marca y los perfiles de comprador están escritos, cada modelo tiene su página, el calendario sigue los lanzamientos, las ferias y las temporadas de tus clientes, y los canales que elegiste en tu plan salen con regularidad y anuncian solo lo que está disponible. Sabes de dónde llega cada interesado y cuánto te cuesta en cada canal.
+
+**Eficiente.** Probar y ajustar ya es rutina. Sabes qué aportó cada canal a cada venta y cuánto te cuesta cada demostración y cada venta en cada canal y en cada línea, el mensaje se adapta solo a cada tipo de comprador, la IA asiste a tu equipo en su trabajo diario y tu distribuidora aparece cuando alguien busca una máquina en tu país, en buscadores y en asistentes de IA.
+
+**Óptimo.** La IA produce y ajusta; tu equipo dirige. El contenido de cada línea se genera y se ajusta de forma continua; la IA adapta el mensaje a lo que hizo cada interesado y mueve la pauta entre canales dentro de los límites que fija el equipo; y los clientes satisfechos que identifica Servicio traen compradores nuevos. El equipo define la estrategia y valida lo que sale.
+
+#### 2.1 Procesos y Rutinas
+
+¿Cómo se arma una campaña en tu equipo, desde que se decide hasta que sale en la pauta, en las redes o en una feria?
+
+*Descripción:* Mide si la promoción de cada línea de máquinas y de la posventa sale de un plan y un calendario compartidos, sin depender de nadie.
+
+*Costo de quedarse:* Cada lanzamiento depende de quien lo arma: si esa persona se va, la campaña del modelo nuevo o de la próxima feria sale tarde o sin plan.
+
+**Deficiente.**
+
+- No hay calendario de campañas: cada lanzamiento, cada feria y cada promoción se improvisan. `[2.1.D1]`
+
+**Inicial.**
+
+- Las campañas dependen de quien las arma —una persona del equipo, la agencia o la marca—: el calendario, los accesos a la pauta y a las redes y los pasos a seguir están en sus manos. `[2.1.I3]`
+
+**Funcional.** Las campañas salen con un calendario y un proceso que el equipo sigue, sin depender de una persona, y el calendario sigue el año del distribuidor y de sus clientes.
+
+*Resultado:* Todo el equipo trabaja en el mismo sistema, y la promoción de cada línea sigue saliendo aunque cambie una persona: el calendario y el proceso no viven en la cabeza de nadie, y el líder sabe en qué va cada campaña sin tener que preguntar.
+
+- Si una agencia —o la marca, con sus campañas— ejecuta todo o parte del trabajo, el equipo es dueño del calendario, del brief, de la aprobación y de los accesos, y las campañas no se detienen si cambia la agencia. `[2.1.F5]`
+- El calendario de campañas sigue el año del distribuidor y de sus clientes: el lanzamiento de cada modelo, las ferias de construcción y agropecuarias, las temporadas de siembra y de cosecha, los presupuestos de obra pública y las campañas de la marca y de posventa. `[2.1.F701 · declarado]`
+
+**Eficiente.**
+
+- Cada pieza —el anuncio de una máquina, la invitación a una demostración o a una feria— pasa por una revisión con lista escrita y una aprobación registrada. `[2.1.E5]`
+
+**Óptimo.**
+
+- El sistema detecta por sí mismo cuando una campaña se sale del proceso —un paso que se saltó, una fecha que venció antes de una feria o de una temporada— y se lo avisa al líder y al responsable; el líder decide el ajuste, y cada aviso queda en el sistema. `[2.1.O4]`
+
+*Se leen igual:* `2.1.D2`, `2.1.D3`, `2.1.I1`, `2.1.I2`, `2.1.F1`, `2.1.F2`, `2.1.F3`, `2.1.F4`, `2.1.F6`, `2.1.E4`, `2.1.O5`.
+
+#### 2.2 Tecnología y Automatización
+
+¿Qué pasa en tu sistema, sin que nadie lo haga a mano, cuando alguien pide una cotización o una demostración en tu sitio, o te escribe por WhatsApp?
+
+*Descripción:* Mide si las herramientas que se pagan se usan, si cada interesado que deja sus datos o escribe llega solo al sistema y cuánto trabajo repetitivo hacen las automatizaciones y la IA.
+
+*Costo de quedarse:* Quien pide una cotización en tu sitio o te escribe por WhatsApp espera a que alguien lo cargue y le conteste, o se va con otro distribuidor, y si pagas herramientas, parte de lo que pagas no se usa.
+
+**Deficiente.**
+
+- Lo que llega por el sitio, las redes o WhatsApp —una solicitud de cotización, una pregunta por una máquina usada— cae en el correo o el teléfono de alguien, y no queda registrado en ningún lado. `[2.2.D2]`
+
+**Inicial.**
+
+- Hay alguna automatización, pero quedó a medias: por ejemplo, el formulario de demostración responde solo y el de cotización no le avisa a nadie. `[2.2.I3]`
+
+**Funcional.**
+
+*Resultado:* Todo lo que entra por el sitio, por la marca, por las ferias y, si se usa, por WhatsApp o el chat llega al sistema y recibe respuesta, y no se paga por herramientas que nadie usa.
+
+- Si el sitio tiene formularios para pedir una cotización o una demostración, están conectados al CRM: lo que una persona llena entra solo como contacto. `[2.2.F3]`
+
+**Eficiente.**
+
+- El traspaso de interesados a los asesores es automático: cuando un interesado cumple los criterios para pasar a un asesor, le llega con su historial al asesor que corresponde, sin que nadie lo pase a mano. `[2.2.E3]`
+
+**Óptimo.**
+
+- Si el distribuidor atiende por un canal conversacional, agentes de IA responden lo que generan las campañas y mantienen la conversación con quien todavía no está listo para hablar con un asesor —por ejemplo, el productor que piensa comprar después de la cosecha—, y lo que la persona responde alimenta su ficha; lo que no pueden resolver pasa a una persona con la conversación completa, y en el sistema queda cada conversación que atendió la IA. `[2.2.O5]`
+
+*Se leen igual:* `2.2.D1`, `2.2.D3`, `2.2.I1`, `2.2.I2`, `2.2.F2`, `2.2.F4`, `2.2.F5`, `2.2.F9`, `2.2.F10`, `2.2.F11`, `2.2.E1`, `2.2.E2`, `2.2.E4`, `2.2.E5`, `2.2.E6`, `2.2.E7`, `2.2.E8`, `2.2.O1`, `2.2.O3`, `2.2.O4`, `2.2.O6`.
+
+#### 2.3 Datos
+
+¿Cómo sabes cuántos interesados entran, de dónde vienen y cuántos llegan a una demostración?
+
+*Descripción:* Mide si los datos de marketing son confiables: de dónde llega cada interesado, en qué etapa está y si los reportes salen del sistema sin rehacerlos.
+
+*Costo de quedarse:* No sabes de qué feria o de qué anuncio llega cada interesado ni cuántos terminan en una demostración: cada reporte hay que rehacerlo o revisarlo a mano antes de creerle.
+
+**Deficiente.**
+
+- No se registra de dónde llegó cada interesado: nadie sabe si vino por el sitio, una feria, la marca o una recomendación. `[2.3.D1]`
+
+**Inicial.**
+
+- Hay reportes, pero se arman a mano en una hoja cada vez, y a una parte de los interesados le falta el origen, como la feria, la pauta o la marca de donde llegaron. `[2.3.I2]`
+
+**Funcional.**
+
+*Resultado:* El líder sabe de dónde llega cada interesado —la pauta, las redes, la marca, una feria o un referido—, con reportes que salen del sistema y no de una hoja de cálculo armada a mano.
+
+- Cada contacto creado desde la puesta en marcha del sistema —entre por un formulario, WhatsApp, la marca, una feria o la sucursal— tiene su etapa del ciclo de vida y su origen. `[2.3.F1]`
+- Los reportes básicos —cuántos interesados entran por línea de máquinas, de dónde vienen y cuántos llegan a una demostración— salen del sistema sin armarlos a mano. `[2.3.F5]`
+
+**Eficiente.**
+
+- Se sabe cuánto ingreso deja cada canal —la pauta, las ferias, la marca o los referidos—, también el conversacional si se usa. `[2.3.E5]`
+
+**Óptimo.**
+
+- Cada persona tiene una sola ficha que junta al momento lo que hace en todos los canales —por ejemplo, el sitio, WhatsApp, el correo y lo que se registra en las ferias—. `[2.3.O5]`
+
+*Se leen igual:* `2.3.D2`, `2.3.I1`, `2.3.F2`, `2.3.F3`, `2.3.F6`, `2.3.F8`, `2.3.F9`, `2.3.E1`, `2.3.E2`, `2.3.E6`, `2.3.E7`, `2.3.O1`, `2.3.O6`.
+
+#### 2.4 Equipo y Gobierno
+
+¿Cómo rinde cuentas tu equipo de marketing por los interesados y las demostraciones de cada línea de máquinas?
+
+*Descripción:* Mide si cada persona sabe qué le toca en la promoción de las máquinas y de la posventa, si el equipo tiene metas y si decide y rinde cuentas con números del sistema.
+
+*Costo de quedarse:* Qué línea se promociona se decide por costumbre, por lo que pide la marca o por quien insiste más, y nadie responde por una meta: el equipo no sabe qué se espera de él.
+
+**Deficiente.**
+
+- Nadie revisa los resultados de marketing —lo que dejan las campañas de las máquinas y de la posventa—: ni el equipo ni la dirección. `[2.4.D3]`
+
+**Inicial.**
+
+- Los roles no están escritos, así que hasta lo del día a día —qué máquina usada publicar, qué anuncio de un modelo aprobar— espera a que lo resuelva la gerencia general del distribuidor. `[2.4.I1]`
+
+**Funcional.**
+
+- El líder tiene un tablero con 4 a 6 métricas clave —interesados nuevos por línea, de dónde llegan, cuántos pasan a un asesor y cuántos llegan a una demostración— y lo consulta al menos una vez por semana. `[2.4.F2]`
+- Las decisiones sobre qué promocionar y en qué enfocarse —qué línea, qué usadas, qué servicio de posventa— citan datos del sistema, no opiniones. `[2.4.F4]`
+
+**Eficiente.**
+
+- Las decisiones se toman con lo que deja cada canal a lo largo del tiempo —el valor de vida de los clientes que trae, entre las máquinas que compran y sus repuestos y servicio— frente a lo que cuesta. `[2.4.E8]`
+
+**Óptimo.**
+
+- Lo que la IA puede decidir sola en marketing —por ejemplo, mover la pauta entre las líneas de máquinas o responder una consulta de una campaña— está por escrito. `[2.4.O6]`
+
+*Se leen igual:* `2.4.D1`, `2.4.D2`, `2.4.I2`, `2.4.F3`, `2.4.F5`, `2.4.F7`, `2.4.E2`, `2.4.E5`, `2.4.E6`, `2.4.E7`, `2.4.O1`, `2.4.O2`, `2.4.O5`.
+
+#### 2.5 Marca y Presencia
+
+¿Qué guía a tu equipo cuando arma una pieza para publicar, y qué encuentra un interesado cuando busca una máquina en tu sitio?
+
+*Descripción:* Mide si la marca del distribuidor se ve y suena igual en todo lo que sale, si está escrito a qué comprador le habla, si cada modelo tiene dónde mostrarse completo y si el sitio aparece en buscadores.
+
+*Costo de quedarse:* Cada anuncio se ve distinto al anterior y, cuando alguien busca una máquina en tu país, encuentra el sitio de otro distribuidor, o encuentra el tuyo sin ficha técnica ni forma de pedir una cotización.
+
+**Deficiente.**
+
+- No está escrito a quién le habla el distribuidor: no hay perfiles de comprador. `[2.5.D2]`
+
+**Inicial.**
+
+- Hay logo, colores y plantillas, pero el perfil de comprador es uno solo y tan general que sirve para cualquiera: no distingue al contratista que compra su primera máquina de la empresa que renueva su flota. `[2.5.I1]`
+
+**Funcional.** La marca, la voz y los perfiles de comprador están escritos y se usan, cada modelo tiene su página, el sitio cumple lo básico para buscadores y se publica contenido propio cada mes.
+
+*Resultado:* La marca se ve y suena igual en todo lo que sale, cada modelo tiene dónde mostrarse completo, y el sitio es encontrable en buscadores con lo básico bien resuelto.
+
+- Cada modelo en venta tiene su página en el sitio, con su configuración, sus implementos, la ficha técnica, fotos o videos trabajando y cómo pedir una cotización o una demostración. `[2.5.F701 · comprobable]`
+
+**Eficiente.**
+
+- El recorrido de compra está dibujado de punta a punta —de la primera búsqueda a la demostración, la cotización, la entrega técnica y la primera visita de servicio—, con los puntos de contacto de cada etapa. `[2.5.E4]`
+
+**Óptimo.**
+
+- La IA produce y ajusta el contenido de cada línea de máquinas de forma continua —también para la búsqueda conversacional y los asistentes de IA—; el equipo valida cada pieza antes de publicarla, y en el sistema se ve qué produjo o cambió la IA y quién lo aprobó. `[2.5.O2]`
+
+*Se leen igual:* `2.5.D1`, `2.5.D3`, `2.5.I2`, `2.5.I3`, `2.5.F1`, `2.5.F2`, `2.5.F3`, `2.5.F4`, `2.5.F5`, `2.5.F6`, `2.5.F7`, `2.5.E2`, `2.5.E3`, `2.5.E6`.
+
+#### 2.6 Segmentación
+
+¿Qué cambia en lo que recibe un interesado según el tipo de comprador que es y la máquina que busca?
+
+*Descripción:* Mide si cada interesado recibe un mensaje pensado para su tipo de comprador y la máquina que busca, y si cada cliente recibe lo que corresponde a las máquinas que ya tiene.
+
+*Costo de quedarse:* Le mandas la misma promoción a todos: el productor agrícola recibe la oferta pensada para la constructora, y quien acaba de comprar recibe la publicidad de la máquina que ya tiene.
+
+**Deficiente.**
+
+- No hay segmentos: las campañas salen a toda la base con el mismo mensaje, a quien busca su primera máquina igual que al cliente que acaba de comprar. `[2.6.D1]`
+
+**Inicial.**
+
+- La base se separa solo por datos generales —país, zona o tamaño de la empresa—, no por lo que cada grupo necesita, como el trabajo que hace o las máquinas que ya tiene. `[2.6.I1]`
+
+**Funcional.**
+
+- La mayoría de las campañas del último trimestre tienen piezas distintas para cada segmento: no le hablan igual a la constructora que al productor agrícola o a la empresa de transporte. `[2.6.F3]`
+
+**Eficiente.**
+
+- Hay secuencias distintas por segmento o por etapa del recorrido de compra: no recibe lo mismo el contratista que cotiza su primera máquina que la empresa que renueva su flota. `[2.6.E1]`
+- Cada segmento prioritario —por ejemplo, las constructoras, los contratistas, los productores agrícolas y las flotas de transporte— tiene su buyer persona escrito. `[2.6.E6]`
+
+**Óptimo.**
+
+- La IA predice quién va a comprar una máquina —o renovar las que tiene— y quién va a perder interés en los mensajes, y arma los segmentos con eso; el equipo revisa los segmentos antes de usarlos en una campaña, y en la ficha de cada persona se ve su predicción. `[2.6.O1]`
+
+*Se leen igual:* `2.6.D2`, `2.6.I2`, `2.6.F4`, `2.6.F5`, `2.6.E2`, `2.6.E3`, `2.6.E5`, `2.6.E7`, `2.6.O3`, `2.6.O4`.
+
+#### 2.7 Canales y Alcance
+
+¿Cómo salen tus campañas por los canales que usas, como la pauta, las redes, las ferias, el correo o WhatsApp?
+
+*Descripción:* Mide si los canales que el distribuidor eligió salen con regularidad y bajo un mismo plan, si anuncian solo lo que está disponible y si se conoce lo que cuesta cada interesado.
+
+*Costo de quedarse:* Tus máquinas llegan al mercado a ratos, o no llegan, sin un plan que coordine tus canales; cuando anuncias, ofreces usadas que ya se vendieron, y no sabes cuánto te cuesta cada interesado.
+
+**Deficiente.**
+
+- No hay un plan que diga por qué canales sale el distribuidor: la pauta, las redes, las ferias o las demostraciones en campo. `[2.7.D2]`
+
+**Inicial.**
+
+- La pauta y los correos salen cuando hay algo que promocionar —un modelo que llega, una promoción de la marca—, sin presupuesto ni fechas fijados de antemano. `[2.7.I2]`
+
+**Funcional.** Los canales que el distribuidor eligió salen con regularidad y bajo un mismo plan, y anuncian solo lo que está disponible.
+
+*Resultado:* Una campaña sale coordinada por todos los canales del plan en vez de esfuerzos sueltos, lo que se anuncia está disponible, y el líder ve cuánto le cuesta cada interesado según el canal del que venga.
+
+- La pauta, las redes y el sitio anuncian solo las máquinas disponibles y las promociones vigentes: la usada que se aparta o se vende deja de promocionarse dentro del plazo acordado. `[2.7.F701 · comprobable · hábito]`
+
+**Eficiente.**
+
+- Si las ferias, las exhibiciones o los días de demostración en campo son parte del plan de canales, se hacen como un canal recurrente, con fechas en el calendario. `[2.7.E2]`
+- En el sistema se ve cuánto cuesta cada demostración y cada venta en cada canal y en cada línea de máquinas, no solo cada interesado. `[2.7.E701 · comprobable · requiere 1.3.F3]`
+
+**Óptimo.**
+
+- Los clientes que Servicio identifica como promotores —por ejemplo, después de una buena entrega técnica o de una reparación resuelta en el plazo prometido— se vuelven un canal de referidos y casos de éxito sin pedirlos a mano: el sistema los invita solo, el equipo elige qué casos se publican, y en el sistema se ve quién trajo a quién. `[2.7.O4]`
+
+*Se leen igual:* `2.7.D1`, `2.7.I1`, `2.7.I3`, `2.7.F1`, `2.7.F2`, `2.7.F4`, `2.7.F5`, `2.7.F6`, `2.7.F7`, `2.7.F8`, `2.7.E3`, `2.7.E4`, `2.7.E5`, `2.7.E6`, `2.7.E7`, `2.7.E8`, `2.7.E9`, `2.7.O2`.
+
+#### 2.8 Medición y Aprendizaje
+
+¿Qué te queda de cada lanzamiento, de cada feria o de cada campaña cuando termina?
+
+*Descripción:* Mide si cada campaña se evalúa por los interesados, las demostraciones y las ventas que trajo, y deja un aprendizaje.
+
+*Costo de quedarse:* Repites la pauta, las ferias y los mensajes de siempre porque nadie anota cuáles trajeron demostraciones y ventas: cada lanzamiento empieza de cero.
+
+**Deficiente.**
+
+- No se mide qué trajo cada campaña —consultas, demostraciones o ventas—: solo se sabe lo que se gastó, o ni eso. `[2.8.D2]`
+
+**Inicial.**
+
+- Se miran clics, alcance y me gusta, no los interesados ni las ventas de máquinas que trajo cada campaña. `[2.8.I1]`
+
+**Funcional.**
+
+- Los resultados de cada campaña —los interesados, las demostraciones o las ventas que trajo, no solo los clics— se ven en el sistema sin armarlos a mano. `[2.8.F5]`
+
+**Eficiente.**
+
+- La planificación de las campañas siguientes se ajusta con lo aprendido: la del próximo lanzamiento, la próxima feria o la próxima temporada se arma con lo que mostraron las pruebas y las revisiones de cierre. `[2.8.E4]`
+
+**Óptimo.**
+
+- La IA ajusta las campañas mientras corren —deja de mostrar la versión del anuncio que no funciona y le da más espacio a la que sí—, dentro de los límites que fijó el equipo; el equipo revisa los cambios, y cada uno queda en el sistema con su razón. `[2.8.O2]`
+
+*Se leen igual:* `2.8.D1`, `2.8.D3`, `2.8.I2`, `2.8.F3`, `2.8.E3`, `2.8.E5`, `2.8.O3`.
+
+### Área 3 — Servicio
+
+Mide el rendimiento de la posventa del distribuidor, que recibe al cliente desde la entrega técnica de su máquina y la atiende en el taller y en el lugar de trabajo: el mantenimiento, las reparaciones, la garantía y los repuestos que se instalan. Mira cómo está montada por dentro y qué produce en máquinas reparadas en el plazo prometido, reclamos resueltos y clientes que vuelven y recomiendan.
+
+**Deficiente.** La posventa se improvisa máquina por máquina. Las citas y las visitas en campo se piden por teléfono y quedan en un cuaderno, cada asesor de servicio presupuesta a su manera y el cliente se entera de que su máquina no estará lista cuando ya la necesita en la obra.
+
+**Inicial.** Lo que pasa con cada máquina lo sabe el asesor que la recibió o el técnico que fue a verla. Hay un sistema de órdenes de trabajo, pero el cliente tiene que llamar para saber cómo va, y nadie le recuerda su próximo mantenimiento.
+
+**Funcional.** Tu posventa es consistente y ya no depende de una persona. Sabes qué tipos de cliente atiendes y qué espera cada uno. Cada máquina entra con su orden y sigue las mismas etapas, del recibo a la entrega; el cliente aprueba el presupuesto antes de que se repare, recibe cada cambio de estado sin llamar y recibe el recordatorio de su próximo mantenimiento. Atiendes primero la máquina parada y tienes respuestas guardadas para lo repetitivo.
+
+**Eficiente.** La posventa empieza a adelantarse al cliente. Tienes plazos por tipo de servicio que se vigilan solos, el cliente agenda y aprueba en línea, y la IA asiste a tu equipo en su trabajo diario; mides tiempos, satisfacción y las máquinas que vuelven por la misma falla. Ningún caso se pierde entre el taller, repuestos y la marca, y cada cliente recibe el aviso de un boletín de servicio sin buscarlo.
+
+**Óptimo.** Un agente de IA atiende a los clientes a toda hora —agenda, responde y da el estado de su máquina— y le pasa a una persona, con todo el contexto, lo que no puede resolver. Las rutinas corren solas mientras el equipo supervisa y atiende las excepciones; casi todas las fallas que detecta el sistema, también por la telemetría de la máquina, se resuelven antes de que el cliente las note, y cada cliente se atiende sabiendo lo que compró y lo que se le prometió.
+
+#### 3.1 Procesos y Rutinas
+
+¿Cómo se atiende una máquina en tu posventa, desde que entra al taller o se pide la visita hasta que vuelve a trabajar?
+
+*Descripción:* Mide si el taller y el servicio en campo siguen un proceso y rutinas definidas, para que la atención de la máquina no dependa de quién la recibe.
+
+*Costo de quedarse:* La posventa depende del asesor de servicio o del técnico que conoce cada caso: si esa persona falta, nadie sabe qué se le prometió al cliente ni cuándo vuelve a trabajar su máquina.
+
+**Deficiente.**
+
+- Cada asesor de servicio recibe y atiende cada máquina y cada reclamo a su manera. `[3.1.D1]`
+
+**Inicial.**
+
+- Todavía se depende de héroes: cuando falta el asesor de servicio o el técnico que sabe, las máquinas y los reclamos se traban. `[3.1.I2]`
+
+**Funcional.**
+
+- El recorrido de las órdenes de posventa está configurado en el sistema con sus etapas y cubre la atención de cada máquina —una cita de taller, una visita en campo, una reparación o un reclamo de garantía—, del recibo a la entrega. `[3.1.F1]`
+- Existe un proceso escrito para escalar los reclamos graves y los casos que el asesor de servicio no puede resolver —por ejemplo, una máquina que vuelve por la misma falla o una garantía que la marca rechaza—: dice cuáles se escalan y a quién. `[3.1.F4]`
+- Toda orden de trabajo sigue un proceso escrito: el recibo de la máquina con su inspección, sus horas de uso y la firma del cliente, el diagnóstico, la aprobación del presupuesto antes de reparar, el control de calidad y la entrega. `[3.1.F701 · declarado]`
+
+**Eficiente.**
+
+- Hay guías escritas para los momentos difíciles de la posventa: una máquina parada en la obra o en plena cosecha, un repuesto que hay que importar o un reclamo de garantía que la marca rechaza. `[3.1.E701 · declarado]`
+
+**Óptimo.**
+
+- El sistema detecta, sin que nadie lo revise a mano, cuando una orden de taller o una visita en campo se sale de las etapas o los pasos del proceso, y se lo señala al asesor de servicio y al líder, que deciden cómo corregirlo; el aviso queda registrado en el caso. `[3.1.O3]`
+
+*Se leen igual:* `3.1.D2`, `3.1.I1`, `3.1.I3`, `3.1.I4`, `3.1.F2`, `3.1.F3`, `3.1.F5`, `3.1.F6`, `3.1.F7`, `3.1.F8`, `3.1.E1`, `3.1.E3`, `3.1.E4`, `3.1.E5`, `3.1.E6`, `3.1.O4`.
+
+#### 3.2 Tecnología y Automatización
+
+¿Cómo llega una cita, un pedido de servicio en campo o un reclamo al sistema y al asesor de servicio que lo tiene que atender?
+
+*Descripción:* Mide si cada cita y cada caso llegan solos al sistema y a quien los atiende, y cuánto de la posventa se automatiza.
+
+*Costo de quedarse:* Las citas y los pedidos de visita se pierden entre el teléfono del taller y el WhatsApp de cada técnico, y el cliente tiene que llamar varias veces para saber cuándo vuelve a trabajar su máquina.
+
+**Deficiente.**
+
+- Las citas, los pedidos de visita y los reclamos se manejan en los celulares personales o el WhatsApp de cada asesor de servicio o de cada técnico, o en correos individuales. `[3.2.D2]`
+
+**Inicial.**
+
+- Hay un sistema de casos de posventa, pero lo que entra se reparte a mano, o la posventa atiende por WhatsApp o chat y ninguno de esos canales llega al sistema. `[3.2.I2]`
+
+**Funcional.**
+
+- Las citas del taller y las visitas en campo se agendan en el sistema con la máquina, el servicio, el lugar y la hora, y el cliente recibe, sin que nadie lo escriba a mano, la confirmación de su cita y cada cambio en el estado de su máquina: en diagnóstico, con presupuesto por aprobar, esperando un repuesto o lista. `[3.2.F701 · comprobable]`
+- Antes de prometerle una fecha al cliente, el asesor de servicio ve en el sistema si los repuestos de la reparación están en bodega, en tránsito o por pedir a la marca. `[3.2.F702 · comprobable]`
+
+**Eficiente.**
+
+- El cliente puede agendar su cita o su visita, aprobar el presupuesto y ver el estado de su máquina en línea, sin llamar al taller. `[3.2.E701 · comprobable]`
+
+**Óptimo.**
+
+- Un agente de IA resuelve casos de posventa —agenda citas y visitas, da el estado de la máquina, responde sobre la garantía y los repuestos— en todos los canales donde atiende la posventa, sin que intervenga una persona, y le pasa a un asesor de servicio, con el contexto completo, lo que no puede resolver; el equipo revisa una muestra de sus respuestas y corrige lo que hace falta, y en el sistema se ve qué casos resolvió la IA y cuáles pasó. `[3.2.O1]`
+
+*Se leen igual:* `3.2.D1`, `3.2.F4`, `3.2.F5`, `3.2.F6`, `3.2.F8`, `3.2.F9`, `3.2.F10`, `3.2.F11`, `3.2.E1`, `3.2.E2`, `3.2.E3`, `3.2.E4`, `3.2.E5`, `3.2.E6`, `3.2.E7`, `3.2.E8`, `3.2.O4`, `3.2.O5`.
+
+#### 3.3 Datos
+
+¿De dónde sacas qué trabajos y reclamos te llegan, cuántos y de qué máquinas?
+
+*Descripción:* Mide si los datos de cada cliente —sus máquinas, sus servicios y sus casos— están completos y ordenados para atender y decidir sin reconstruirlos.
+
+*Costo de quedarse:* Cada vez que el cliente pide un servicio tiene que decir qué se le hizo a su máquina la última vez, porque nadie ve su historia.
+
+**Deficiente.**
+
+- No se puede reconstruir qué le pasó a un cliente ni qué se le hizo a su máquina: su historia no queda registrada en ningún lado. `[3.3.D2]`
+
+**Inicial.**
+
+- Las órdenes y los casos están en un solo sistema, pero la ficha del cliente sale incompleta: la máquina que compró, su garantía o su contrato de mantenimiento hay que buscarlos en otro sistema. `[3.3.I1]`
+
+**Funcional.**
+
+- La ficha del cliente muestra las máquinas que compró —por ejemplo, con su modelo y su número de serie— o lo que tiene contratado, como un plan de mantenimiento, y su valor económico, no solo sus casos. `[3.3.F2]`
+- Cada caso tiene su tipo y su motivo, elegidos de una lista definida: por ejemplo, un mantenimiento, una reparación por una falla, un reclamo de garantía o un pedido de repuestos. `[3.3.F4]`
+
+**Eficiente.**
+
+- Se mide la satisfacción del cliente —con el NPS o el CSAT— con una cadencia definida, por ejemplo después de cada servicio y después de la entrega técnica de una máquina. `[3.3.E2]`
+- Se mide cuántas máquinas vuelven por la misma falla dentro del plazo que fija el proceso, y ese número se revisa cada mes. `[3.3.E701 · comprobable · hábito]`
+
+**Óptimo.**
+
+- Modelos con IA predicen lo que viene —por ejemplo, cuántas máquinas van a necesitar servicio y qué repuestos van a hacer falta— y proponen qué hacer; lo que predicen se ve en los tableros del área y el líder decide con eso. `[3.3.O3]`
+
+*Se leen igual:* `3.3.D1`, `3.3.I2`, `3.3.I3`, `3.3.F1`, `3.3.F5`, `3.3.F6`, `3.3.F7`, `3.3.F8`, `3.3.F9`, `3.3.E1`, `3.3.E4`, `3.3.E5`, `3.3.E6`, `3.3.E7`, `3.3.E8`, `3.3.O1`, `3.3.O2`, `3.3.O5`.
+
+#### 3.4 Equipo y Gobierno
+
+¿Cómo sabe el líder si la posventa va al día con sus máquinas y sus clientes?
+
+*Descripción:* Mide si cada persona de la posventa sabe qué le toca, y si el líder sigue el avance con datos y pide cuentas.
+
+*Costo de quedarse:* Nadie sabe bien a quién le toca avisarle al cliente o pedir el repuesto, y el líder se entera de los atrasos cuando el cliente ya tiene la obra parada esperando su máquina.
+
+**Deficiente.**
+
+- Nadie tiene claro qué le toca: entre la entrega técnica, la recepción en el taller, las visitas en campo y el seguimiento al cliente, las tareas se pisan o quedan sin responsable. `[3.4.D1]`
+
+**Inicial.**
+
+- El líder mira los números de la posventa de vez en cuando, sobre todo cuando algo sale mal, como una máquina que no está lista cuando el cliente la necesita. `[3.4.I2]`
+
+**Funcional.**
+
+- El líder tiene un tablero con 4 a 6 métricas clave —máquinas en el taller, visitas en campo pendientes, órdenes abiertas, trabajos atrasados, reclamos de garantía y casos por tipo— y lo consulta al menos una vez por semana. `[3.4.F2]`
+
+**Eficiente.**
+
+- El acuerdo con repuestos, con la marca —por las garantías— y con los talleres externos que se subcontratan está escrito y se mide: qué recibe cada uno y en cuánto tiempo responde. `[3.4.E701 · comprobable]`
+- El sistema calcula cuánto cuesta atender a cada tipo de cliente —el contratista con una máquina, la empresa con flota, la institución— frente a lo que deja en la posventa, y el líder usa ese dato para decidir cómo atenderlo. `[3.4.E8]`
+
+**Óptimo.**
+
+- El líder ya no reparte órdenes ni visitas ni apaga incendios: dedica su tiempo a decidir qué se automatiza, qué se mide y qué se mejora. `[3.4.O2]`
+
+*Se leen igual:* `3.4.D2`, `3.4.I1`, `3.4.I3`, `3.4.F3`, `3.4.F4`, `3.4.F5`, `3.4.E1`, `3.4.E2`, `3.4.E4`, `3.4.E5`, `3.4.E6`, `3.4.E7`, `3.4.O1`, `3.4.O5`, `3.4.O6`.
+
+#### 3.5 Consistencia de la posventa
+
+¿En qué se apoya tu equipo para que el presupuesto, la explicación y la entrega no cambien según quién atienda al cliente?
+
+*Descripción:* Mide si el equipo conoce a sus tipos de cliente y si cada cliente recibe las mismas respuestas, el mismo precio y la misma entrega, lo atienda quien lo atienda.
+
+*Costo de quedarse:* El mismo trabajo cuesta distinto según el asesor de servicio que te toque, y el cliente lo nota y se va con un taller independiente.
+
+**Deficiente.**
+
+- No hay respuestas guardadas: cada asesor de servicio escribe desde cero, a su manera, cada respuesta, como la de la garantía, el presupuesto o el estado de la máquina. `[3.5.D1]`
+
+**Inicial.**
+
+- Hay algunas respuestas guardadas —sobre la garantía o el mantenimiento—, pero cada asesor de servicio tiene las suyas: no están al alcance de todo el equipo. `[3.5.I1]`
+
+**Funcional.** Los tipos de cliente están escritos, cada máquina nueva se entrega con una entrega técnica definida, el mismo trabajo cuesta lo mismo y el equipo tiene respuestas guardadas para lo frecuente.
+
+*Resultado:* El equipo sabe qué tipos de cliente atiende y qué espera cada uno, cada máquina se entrega con la misma entrega técnica, el mismo trabajo cuesta lo mismo con cualquier asesor de servicio y todo el equipo tiene a mano las mismas respuestas para lo frecuente.
+
+- Existe un proceso escrito de entrega técnica de la máquina nueva —por ejemplo, su revisión previa, la puesta en marcha, la capacitación al operador y la explicación de la garantía y del plan de mantenimiento—, con un resultado definido que el cliente debe alcanzar al terminarlo, como saber operar y cuidar su máquina y a quién acudir. `[3.5.F2]`
+- Existe un documento simple con los tipos de cliente que atiende la posventa —por ejemplo, el contratista con una máquina, la empresa con flota y el productor agrícola en temporada—, qué necesita cada uno, qué espera del servicio y cuáles se consideran clientes clave, consultable por cualquier asesor de servicio. `[3.5.F4]`
+- Los presupuestos de la posventa salen de una lista vigente de precios de mano de obra, de traslado al lugar de trabajo y de repuestos: el mismo trabajo cuesta lo mismo con cualquier asesor de servicio. `[3.5.F701 · comprobable]`
+
+**Eficiente.**
+
+- Existe una guía de estilo de servicio documentada: cómo se le habla al cliente cuando su máquina está parada, cuando un repuesto se atrasa o cuando la garantía no cubre una falla. `[3.5.E3]`
+
+**Óptimo.**
+
+- Lo que la IA responde o escribe sola a los clientes —la confirmación de una cita o de una visita, el estado de su máquina— sigue la guía de tono y estilo de la marca; el equipo revisa una muestra de sus respuestas y corrige a la IA cuando se sale de la guía, y cada respuesta queda en el sistema. `[3.5.O1]`
+
+*Se leen igual:* `3.5.F1`, `3.5.F3`, `3.5.F5`, `3.5.E2`.
+
+#### 3.6 Priorización de la posventa
+
+¿Cómo decide tu posventa qué máquina o qué caso se atiende primero?
+
+*Descripción:* Mide si los casos se atienden según su gravedad y el tipo de cliente, y no según quién insiste más.
+
+*Costo de quedarse:* La máquina parada en la obra o en plena cosecha espera en la misma fila que un mantenimiento de rutina, y la empresa que te confía su flota recibe la misma atención que todos.
+
+**Deficiente.**
+
+- Las máquinas y los casos se atienden por orden de llegada o como prefiere cada asesor de servicio, sin mirar su gravedad ni quién es el cliente. `[3.6.D1]`
+
+**Inicial.**
+
+- Se intenta atender primero lo urgente —una máquina parada, una falla de seguridad—, pero los casos no tienen una prioridad asignada: cada asesor de servicio decide a ojo, o se adelanta el cliente que más insiste. `[3.6.I1]`
+
+**Funcional.**
+
+- Cada caso tiene una prioridad asignada —urgente, alta, normal o baja— y el equipo la respeta: una máquina parada o con una falla de seguridad va antes que un mantenimiento. `[3.6.F1]`
+
+**Eficiente.**
+
+- Cada cliente clave —por ejemplo, la constructora o la empresa con una flota grande— tiene un responsable dedicado que lo conoce. `[3.6.E1]`
+
+**Óptimo.**
+
+- Cada cliente se atiende con el contexto de cómo llegó —lo que se le prometió en la venta de la máquina, como un plan de mantenimiento o una garantía extendida, y el segmento del que viene—, que quien lo atiende, asesor de servicio o IA, ve en su ficha sin volver a preguntarlo. `[3.6.O3]`
+
+*Se leen igual:* `3.6.F2`, `3.6.F3`, `3.6.F4`, `3.6.F5`, `3.6.E4`, `3.6.E5`, `3.6.O1`, `3.6.O2`.
+
+#### 3.7 Seguimiento de la máquina
+
+¿Cómo te enteras de que un cliente tiene un problema con su máquina, o de que le toca su mantenimiento?
+
+*Descripción:* Mide si la posventa se adelanta a lo que necesita cada máquina —el mantenimiento, la garantía, un boletín de servicio de la marca— o solo reacciona cuando el cliente llama.
+
+*Costo de quedarse:* El cliente se acuerda del mantenimiento cuando la máquina ya pasó sus horas, lo hace en otro taller y pierde la garantía, y te enteras de que quedó mal cuando la máquina se para en la obra.
+
+**Deficiente.**
+
+- La posventa nunca contacta al cliente por iniciativa propia: ni para el mantenimiento de su máquina ni para avisarle de un boletín de servicio. `[3.7.D2]`
+
+**Inicial.**
+
+- Cuando un cliente tiene problemas repetidos con su máquina —por ejemplo, vuelve una y otra vez por la misma falla—, a veces alguien lo contacta, pero depende de que lo note. `[3.7.I1]`
+
+**Funcional.** Los reclamos que se repiten y las quejas se detectan, aunque sea a mano, los clientes clave reciben contacto antes de sus fechas críticas y cada cliente recibe el recordatorio del próximo mantenimiento de su máquina.
+
+*Resultado:* Los reclamos que se repiten, las quejas y las fechas críticas de cada máquina ya no toman a la posventa por sorpresa: el cliente hace el mantenimiento cuando le toca y los problemas se atienden antes de que la máquina se pare.
+
+- Los clientes clave —por ejemplo, la empresa con flota— reciben contacto antes de sus fechas críticas —el fin de la garantía, el vencimiento de un contrato de mantenimiento o, si la hay, una renovación—, no después. `[3.7.F2]`
+- Cada cliente recibe el recordatorio del próximo mantenimiento de su máquina según las horas de uso o la fecha que fija su plan, sin tener que acordarse él. `[3.7.F701 · comprobable · hábito]`
+
+**Eficiente.**
+
+- Cuando la marca publica un boletín de servicio o una campaña de revisión que afecta a una máquina vendida o atendida, su dueño recibe el aviso y una cita o una visita propuesta sin tener que buscarla. `[3.7.E701 · comprobable · hábito]`
+- Si las máquinas traen telemetría y el cliente autorizó compartirla, sus alertas —una falla, las horas para el mantenimiento— llegan al sistema y abren el aviso o la visita sin que nadie las revise a mano. `[3.7.E702 · comprobable]`
+
+**Óptimo.**
+
+- La mayoría de los problemas que detecta el sistema —por ejemplo, por una alerta de la telemetría de la máquina— se resuelven antes de que el cliente los note: el equipo valida la solución y en el sistema se ve que el cliente no tuvo que abrir un caso. `[3.7.O2]`
+
+*Se leen igual:* `3.7.D1`, `3.7.F1`, `3.7.F3`, `3.7.F4`, `3.7.E1`, `3.7.E3`, `3.7.E4`, `3.7.E6`, `3.7.E7`, `3.7.E8`, `3.7.O3`, `3.7.O5`, `3.7.O6`.
+
+#### 3.8 Escalabilidad de la posventa
+
+¿Qué pasa con las preguntas que tus clientes hacen una y otra vez sobre la garantía, el mantenimiento, los repuestos o lo que cuesta un servicio?
+
+*Descripción:* Mide si la posventa puede atender a más máquinas sin crecer al mismo ritmo, gracias al autoservicio y al conocimiento documentado.
+
+*Costo de quedarse:* Tu equipo responde a mano las mismas preguntas cada día, y cada máquina que vendes suma más de esas preguntas a la fila de la posventa.
+
+**Deficiente.**
+
+- Hasta las preguntas que más se repiten —qué cubre la garantía, cuánto cuesta un mantenimiento, si hay un repuesto— se responden a mano, una por una, cada vez que llegan. `[3.8.D2]`
+
+**Inicial.**
+
+- Hay algunas respuestas publicadas, pero sueltas: no cubren lo que más preguntan los clientes —la garantía, el plan de mantenimiento, los repuestos, el costo de un servicio—, que se sigue respondiendo a mano. `[3.8.I2]`
+
+**Funcional.**
+
+- Las diez preguntas que más repitieron los clientes en el último trimestre —o todas, si son menos—, por ejemplo qué cubre la garantía, cada cuántas horas se hace el mantenimiento o cuánto cuesta un servicio en campo, tienen una respuesta publicada que el cliente puede consultar por su cuenta. `[3.8.F1]`
+
+**Eficiente.**
+
+- Los patrones de las fallas que se repiten en un modelo se comparten con la marca y con los técnicos, para atenderlas antes y documentar su solución. `[3.8.E701 · declarado · hábito]`
+
+**Óptimo.**
+
+- Los picos de demanda —como la temporada de cosecha, el arranque de las obras o un boletín de servicio de la marca— los absorben la IA y el autoservicio: el equipo no crece cuando crece el parque de máquinas que atiende, y el líder ve en los tableros del área qué parte de la demanda resolvieron la IA y el autoservicio y qué pasó a una persona. `[3.8.O2]`
 
 *Se leen igual:* `3.8.D1`, `3.8.I1`, `3.8.F2`, `3.8.E1`, `3.8.E2`, `3.8.E4`, `3.8.E5`, `3.8.O1`, `3.8.O3`, `3.8.O4`.
