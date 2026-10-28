@@ -320,7 +320,7 @@ export default function LienzoDeExploracion({
   useUndoScope(scopeDelDeshacer, raiz);
 
   const deshacer = useCallback(
-    async (ids: string[]): Promise<boolean> => {
+    async (ids: string[], que?: string): Promise<boolean> => {
       const pedidas = (confirmada.current.estado.contenido.usadas ?? []).filter((u) => ids.includes(u.id));
       if (!pedidas.length) {
         toast.info("Eso ya se deshizo.");
@@ -337,12 +337,17 @@ export default function LienzoDeExploracion({
             quedan === 1 ? "una cambió después de usarla y quedó como está" : `${quedan} cambiaron después de usarlas y quedaron como están`
           }.`,
         );
+      } else if (pedidas.length === 1) {
+        // Qué se deshizo, con las mismas palabras del «Usar» (sobre lo de ahora, que ya es lo de antes de usarla).
+        const nivel = (l: Letra) => escala.niveles.find((n) => n.letra === l)?.nombre ?? l;
+        const dicho = que ?? queHaceUsar(pedidas[0].item, confirmada.current.estado, escala, nivel, marcoDe(inicial.marco)).texto;
+        toast.success(`Deshiciste: ${dicho}. La sugerencia volvió a la lista.`);
       } else {
-        toast.success(pedidas.length === 1 ? "Listo: la sugerencia volvió a la lista." : "Listo: las sugerencias volvieron a la lista.");
+        toast.success(`Deshiciste las ${pedidas.length} sugerencias: volvieron a la lista.`);
       }
       return true;
     },
-    [cambiar, toast],
+    [cambiar, toast, escala, inicial.marco],
   );
 
   const usar = useCallback(
@@ -366,7 +371,7 @@ export default function LienzoDeExploracion({
         scope: scopeDelDeshacer,
         label: efecto ? `Usaste: ${efecto.texto}` : avisoDelLote(o.lugar ?? "otro", ids.length),
         undo: async () => {
-          await deshacer(ids);
+          await deshacer(ids, efecto?.texto);
         },
       });
       return true;

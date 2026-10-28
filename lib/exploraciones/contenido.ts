@@ -248,15 +248,23 @@ export interface UsoDeSugerencia {
   por: string | null;
   /** Se usó junto con otras («Pasar las N al mapa»): las del mismo lote comparten `en`. */
   lote?: boolean;
+  /**
+   * Entre qué sugerencias estaba (sus ids; null = era la primera o la última), contando las que se usaron antes que ella:
+   * deshacer la devuelve a ese lugar. Al final de la lista quedaba escondida detrás de «Ver las N restantes» (Camosa,
+   * 28 oct). `posicion`: su índice, por si ya no queda ninguna de las dos al lado. Opcionales: los usos de antes no lo tienen.
+   */
+  previo?: string | null;
+  siguiente?: string | null;
+  posicion?: number;
 }
 
 /**
  * Cuántas usadas se recuerdan, y por cuánto tiempo: «Usadas hoy» solo mira las de hoy. El tope es el de un lote
  * («usarVarias» acepta hasta 250): con uno menor, lo primero de un lote grande se aplicaba sin poder deshacerse. Cada
- * una guarda su sugerencia con hasta `FUENTES_DE_LA_USADA` fuentes, para que el registro no pese de más.
+ * una guarda su sugerencia ENTERA, con todas sus fuentes: el panel de una reunión elige las suyas por las fuentes, y con
+ * menos la sugerencia devuelta ya no aparecía ahí (Camosa, 28 oct).
  */
 export const MAX_USADAS = 250;
-const FUENTES_DE_LA_USADA = 4;
 const HORAS_DE_LAS_USADAS = 36;
 
 /** Cuántas reuniones se pueden elegir a mano en el buscador de la preventa. */
@@ -1115,6 +1123,26 @@ export function sePuedeDeshacer(estado: EstadoDeExploracion, uso: UsoDeSugerenci
   return exacto(lugarDe(estado, uso.item)) === exacto(uso.despues);
 }
 
+/**
+ * Sugerencias que salen de la lista SIN quedar anotadas (descartadas, o usadas cuando ya estaban igual): las usadas que
+ * las tenían de vecina pasan a tener de vecina a la que seguía. Sin esto la cadena se cortaba y deshacer las dejaba en
+ * otro orden (revisión del 28 oct: usar A, descartar B, usar C y deshacer las dos dejaba C arriba de A).
+ */
+function soltarDeLaCadena(usadas: readonly UsoDeSugerencia[] | undefined, items: readonly ItemPropuesto[], ids: readonly string[]): UsoDeSugerencia[] | undefined {
+  if (!usadas?.length) return usadas ? [...usadas] : undefined;
+  let lista = [...items];
+  let out = [...usadas];
+  for (const id of ids) {
+    const i = lista.findIndex((it) => it.id === id);
+    if (i < 0) continue;
+    const previo = out.find((u) => u.siguiente === id)?.id ?? lista[i - 1]?.id ?? null;
+    const siguiente = out.find((u) => u.previo === id)?.id ?? lista[i + 1]?.id ?? null;
+    out = out.map((u) => (u.siguiente === id ? { ...u, siguiente } : u.previo === id ? { ...u, previo } : u));
+    lista = lista.filter((it) => it.id !== id);
+  }
+  return out;
+}
+
 function usarUna(
   estado: EstadoDeExploracion,
   x: { itemId: string; valor?: unknown },
@@ -1123,20 +1151,67 @@ function usarUna(
   quien: QuienCambia,
   lote: boolean,
 ): ResultadoDeOperaciones {
-  const item = estado.propuesta.items.find((it) => it.id === x.itemId);
+  const lista = estado.propuesta.items;
+  const posicion = lista.findIndex((it) => it.id === x.itemId);
+  const item = lista[posicion];
   if (!item) return { ok: false, error: "Esa propuesta ya no está: la usó o la descartó alguien más." };
+  /* Sus vecinas en la lista como era antes de usar NADA: una usada antes que ella que estaba pegada le gana a la de la
+     lista de ahora (así deshacer en cualquier orden deja la lista como era). */
+  const usadasAntes = estado.contenido.usadas ?? [];
+  const previo = usadasAntes.find((u) => u.siguiente === item.id)?.id ?? lista[posicion - 1]?.id ?? null;
+  const siguiente = usadasAntes.find((u) => u.previo === item.id)?.id ?? lista[posicion + 1]?.id ?? null;
   const antes = lugarDe(estado, item);
   const r = aplicarAlDestino(estado, item.destino, x.valor === undefined ? item.valor : x.valor, validez, validador);
   if (!r.ok) return r;
   const quedo: EstadoDeExploracion = { ...r.estado, propuesta: { ...r.estado.propuesta, items: r.estado.propuesta.items.filter((it) => it.id !== x.itemId) } };
   const despues = lugarDe(quedo, item);
   // Ya estaba igual (un ítem repetido de una lista): no hay nada que deshacer.
-  if (exacto(antes) === exacto(despues)) return { ok: true, estado: quedo };
+  if (exacto(antes) === exacto(despues)) {
+    const usadas = soltarDeLaCadena(quedo.contenido.usadas, lista, [item.id]);
+    return { ok: true, estado: usadas ? { ...quedo, contenido: { ...quedo.contenido, usadas } } : quedo };
+  }
   const desde = Date.parse(quien.en) - HORAS_DE_LAS_USADAS * 3600_000;
   const viejas = (quedo.contenido.usadas ?? []).filter((u) => u.id !== item.id && !(Date.parse(u.en) < desde));
-  const guardado: ItemPropuesto = { ...item, fuentes: item.fuentes.slice(0, FUENTES_DE_LA_USADA) };
-  const uso: UsoDeSugerencia = { id: item.id, item: guardado, antes, despues, en: quien.en, por: quien.por, ...(lote ? { lote: true } : {}) };
+  const uso: UsoDeSugerencia = { id: item.id, item, antes, despues, en: quien.en, por: quien.por, ...(lote ? { lote: true } : {}), previo, siguiente, posicion };
   return { ok: true, estado: { ...quedo, contenido: { ...quedo.contenido, usadas: [...viejas, uso].slice(-MAX_USADAS) } } };
+}
+
+/**
+ * La lista con la sugerencia devuelta donde estaba. Si su vecina de antes también está usada, se mira la vecina de esa,
+ * y así hasta dar con una que está en la lista (o con el principio): va después de ella. Si la cadena se corta (una
+ * vecina descartada o que ya se olvidó), se prueba igual con la de después, y si no, con su índice. Un uso de antes de
+ * que se anotara el lugar vuelve al final, como antes.
+ */
+function enSuLugar(items: readonly ItemPropuesto[], uso: UsoDeSugerencia, usadas: readonly UsoDeSugerencia[]): ItemPropuesto[] {
+  const en = (i: number) => [...items.slice(0, i), uso.item, ...items.slice(i)];
+  if (uso.previo === undefined && uso.siguiente === undefined && uso.posicion === undefined) return [...items, uso.item];
+  const porId = new Map(usadas.map((u) => [u.id, u]));
+  /** La vecina que está en la lista, siguiendo la cadena: su índice, -1 si es el borde, o null si la cadena se corta. */
+  const vecina = (desde: string | null | undefined, lado: "previo" | "siguiente"): number | null => {
+    const vistas = new Set<string>();
+    let id = desde;
+    while (id) {
+      const i = items.findIndex((it) => it.id === id);
+      if (i >= 0) return i;
+      const u = porId.get(id);
+      if (!u || vistas.has(id)) return null;
+      vistas.add(id);
+      id = u[lado];
+    }
+    return id === null ? -1 : null;
+  };
+  const antes = vecina(uso.previo, "previo");
+  if (antes !== null) return en(antes + 1);
+  const despues = vecina(uso.siguiente, "siguiente");
+  if (despues !== null) return en(despues < 0 ? items.length : despues);
+  return en(Math.min(Math.max(uso.posicion ?? items.length, 0), items.length));
+}
+
+/** El tope de lo pendiente, sin tocar la recién devuelta: con la lista llena, se cae la más vieja de las demás. */
+function recortarSinElla(items: ItemPropuesto[], id: string): ItemPropuesto[] {
+  let sobran = items.length - MAX_ITEMS;
+  if (sobran <= 0) return items;
+  return items.filter((it) => it.id === id || sobran-- <= 0);
 }
 
 /** Deshace las usadas pedidas, de la última a la primera, y devuelve cada una a la lista de pendientes. */
@@ -1168,7 +1243,7 @@ function deshacerUsos(estado: EstadoDeExploracion, ids: readonly string[], valid
     actual = {
       ...r.estado,
       contenido: { ...c, usadas: (c.usadas ?? []).filter((u) => u.id !== uso.id) },
-      propuesta: yaEsta ? r.estado.propuesta : { ...r.estado.propuesta, items: [...items, uso.item].slice(-MAX_ITEMS) },
+      propuesta: yaEsta ? r.estado.propuesta : { ...r.estado.propuesta, items: recortarSinElla(enSuLugar(items, uso, c.usadas ?? []), uso.id) },
     };
     deshechas++;
   }
@@ -1341,6 +1416,7 @@ function aplicarUna(estado: EstadoDeExploracion, op: Operacion, validez: Validez
           propuesta: { ...estado.propuesta, items: estado.propuesta.items.filter((x) => !ids.has(x.id)) },
           contenido: {
             ...c,
+            ...(c.usadas ? { usadas: soltarDeLaCadena(c.usadas, estado.propuesta.items, [...ids]) } : {}),
             descartadas: [...c.descartadas.filter((d) => !ids.has(d)), ...ids].slice(-MAX_DESCARTADAS),
             ...(titulos.length ? { casosDescartados: [...c.casosDescartados.filter((t) => !titulos.includes(t)), ...titulos].slice(-MAX_CASOS_DESCARTADOS) } : {}),
           },

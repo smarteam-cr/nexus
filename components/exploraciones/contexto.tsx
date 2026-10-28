@@ -82,8 +82,11 @@ export interface Lienzo {
    * en UN pedido, y eso no se parte. Igual queda anotada en `contenido.usadas`.
    */
   usar: (items: ItemPropuesto[], o?: { lugar?: LugarDelLote }) => Promise<boolean>;
-  /** K12: deshace sugerencias usadas, por su id (las de `usadasHoy`). Vuelven a la lista de pendientes. */
-  deshacer: (ids: string[]) => Promise<boolean>;
+  /**
+   * K12: deshace sugerencias usadas, por su id (las de `usadasHoy`). Vuelven a la lista de pendientes, en su lugar, y el
+   * aviso dice qué se deshizo (`que`: con qué palabras; sin él, las del «Usar»).
+   */
+  deshacer: (ids: string[], que?: string) => Promise<boolean>;
   /** K12: lo que va a escribir «Usar», en una línea, y el aviso si además cambia otra cosa (la industria trae su perfil). */
   queHace: (item: ItemPropuesto) => LoQueHaceUsar;
   /** K12: las sugerencias usadas hoy, la más nueva primero (sobreviven al recargar: viven en `contenido.usadas`). */
