@@ -804,6 +804,9 @@ function leerUsadas(raw: unknown): UsoDeSugerencia[] | undefined {
       en: u.en.slice(0, 40),
       por: typeof u.por === "string" ? u.por.slice(0, 200) : null,
       ...(u.lote === true ? { lote: true } : {}),
+      ...(u.previo === null || (typeof u.previo === "string" && u.previo.length <= 120) ? { previo: u.previo } : {}),
+      ...(u.siguiente === null || (typeof u.siguiente === "string" && u.siguiente.length <= 120) ? { siguiente: u.siguiente } : {}),
+      ...(Number.isInteger(u.posicion) && (u.posicion as number) >= 0 ? { posicion: u.posicion as number } : {}),
     });
   }
   return usadas.slice(-MAX_USADAS);

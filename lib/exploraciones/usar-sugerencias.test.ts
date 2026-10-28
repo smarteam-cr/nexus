@@ -205,6 +205,140 @@ describe("el lote", () => {
   });
 });
 
+describe("la sugerencia vuelve donde estaba (Camosa, 28 oct)", () => {
+  /* El panel de una reunión muestra las 6 primeras y esconde el resto en «Ver las 10 restantes»; y decide cuáles son de
+     esa reunión por sus fuentes. Deshacer la devolvía al final de la lista y con 4 fuentes: no volvía a verse. */
+  const fuentes = Array.from({ length: 7 }, (_, i) => ({ id: `S${i + 1}`, etiqueta: `Reunión ${i + 1}`, cita: `dijo ${i}` }));
+  const lista = Array.from({ length: 8 }, (_, i) => ({ ...item({ tipo: "casilla", clave: "metas" }, { que: `Meta ${i}` }), fuentes }));
+  const e = conItems(estado(), ...lista);
+  const orden = (x: EstadoDeExploracion) => x.propuesta.items.map((it) => it.id);
+
+  it("deshacer una la devuelve en su lugar, con todas sus fuentes", () => {
+    const { deshecho } = usarYDeshacer(e, lista[0]);
+    expect(orden(deshecho)).toEqual(orden(e));
+    expect(deshecho.propuesta.items[0].fuentes).toEqual(fuentes);
+  });
+
+  it("deshacer un lote salteado deja la lista en el orden de antes", () => {
+    const ids = [lista[1].id, lista[4].id, lista[6].id];
+    const usado = aplicarOperaciones(e, [{ op: "usarVarias", items: ids.map((itemId) => ({ itemId })) }]);
+    if (!usado.ok) throw new Error(usado.error);
+    // Deshacer en otro orden que el del lote (como llegan desde «Usadas hoy»).
+    const deshecho = aplicarOperaciones(usado.estado, [{ op: "deshacerUso", ids: [ids[2], ids[0], ids[1]] }]);
+    if (!deshecho.ok) throw new Error(deshecho.error);
+    expect(orden(deshecho.estado)).toEqual(orden(e));
+  });
+
+  it("usar tres pegadas y salteadas en cualquier orden y deshacerlas en cualquier orden deja la lista como era", () => {
+    const permutaciones = <T,>(xs: T[]): T[][] => (xs.length <= 1 ? [xs] : xs.flatMap((x, i) => permutaciones([...xs.slice(0, i), ...xs.slice(i + 1)]).map((p) => [x, ...p])));
+    for (const elegidas of [[0, 1, 2], [3, 4, 7], [0, 5, 7]]) {
+      for (const alUsar of permutaciones(elegidas)) {
+        for (const alDeshacer of permutaciones(elegidas)) {
+          let x = e;
+          for (const i of alUsar) {
+            const r = aplicarOperaciones(x, [{ op: "usar", itemId: lista[i].id }]);
+            if (!r.ok) throw new Error(r.error);
+            x = r.estado;
+          }
+          for (const i of alDeshacer) {
+            const r = aplicarOperaciones(x, [{ op: "deshacerUso", ids: [lista[i].id] }]);
+            if (!r.ok) throw new Error(r.error);
+            x = r.estado;
+          }
+          expect(orden(x), `usar ${alUsar} · deshacer ${alDeshacer}`).toEqual(orden(e));
+        }
+      }
+    }
+  });
+
+  const paso = (x: EstadoDeExploracion, op: Operacion) => {
+    const r = aplicarOperaciones(x, [op]);
+    if (!r.ok) throw new Error(r.error);
+    return r.estado;
+  };
+
+  it("descartar una vecina no corta la cadena (usar A, descartar B, usar C)", () => {
+    const [a, b, c2] = lista;
+    for (const alDeshacer of [[a.id, c2.id], [c2.id, a.id]]) {
+      let x = paso(e, { op: "usar", itemId: a.id });
+      x = paso(x, { op: "descartar", itemIds: [b.id] });
+      x = paso(x, { op: "usar", itemId: c2.id });
+      for (const id of alDeshacer) x = paso(x, { op: "deshacerUso", ids: [id] });
+      expect(orden(x)).toEqual(orden(e).filter((id) => id !== b.id));
+    }
+  });
+
+  it("usar, descartar y deshacer mezclados al azar (400 veces) deja la lista como era, sin las descartadas", () => {
+    let semilla = 7;
+    const azar = (n: number) => {
+      semilla = (semilla * 1103515245 + 12345) % 2147483648;
+      return semilla % n;
+    };
+    for (let vuelta = 0; vuelta < 400; vuelta++) {
+      let x = e;
+      const usadas: string[] = [];
+      const descartadas = new Set<string>();
+      for (let paso_ = 0; paso_ < 6; paso_++) {
+        const pendientes = x.propuesta.items.map((it) => it.id);
+        const accion = azar(3);
+        if (accion === 0 && pendientes.length) {
+          const id = pendientes[azar(pendientes.length)];
+          x = paso(x, { op: "usar", itemId: id });
+          usadas.push(id);
+        } else if (accion === 1 && pendientes.length) {
+          const id = pendientes[azar(pendientes.length)];
+          x = paso(x, { op: "descartar", itemIds: [id] });
+          descartadas.add(id);
+        } else if (usadas.length) {
+          const [id] = usadas.splice(azar(usadas.length), 1);
+          x = paso(x, { op: "deshacerUso", ids: [id] });
+        }
+      }
+      while (usadas.length) x = paso(x, { op: "deshacerUso", ids: usadas.splice(azar(usadas.length), 1) });
+      expect(orden(x), `vuelta ${vuelta}`).toEqual(orden(e).filter((id) => !descartadas.has(id)));
+    }
+  });
+
+  it("el lugar sobrevive a guardar y volver a leer", () => {
+    let x = paso(e, { op: "usar", itemId: lista[3].id });
+    x = paso(x, { op: "usar", itemId: lista[2].id });
+    x = { ...x, contenido: leerContenido(JSON.parse(JSON.stringify(x.contenido))) };
+    x = paso(x, { op: "deshacerUso", ids: [lista[3].id] });
+    x = paso(x, { op: "deshacerUso", ids: [lista[2].id] });
+    expect(orden(x)).toEqual(orden(e));
+  });
+
+  it("un uso de antes de que se anotara el lugar vuelve al final, como antes", () => {
+    const usado = paso(e, { op: "usar", itemId: lista[0].id });
+    const viejo: EstadoDeExploracion = {
+      ...usado,
+      contenido: { ...usado.contenido, usadas: usado.contenido.usadas!.map(({ previo: _p, siguiente: _s, posicion: _i, ...u }) => (void [_p, _s, _i], u)) },
+    };
+    expect(orden(paso(viejo, { op: "deshacerUso", ids: [lista[0].id] }))).toEqual([...orden(e).slice(1), lista[0].id]);
+  });
+
+  it("con la lista llena, la devuelta no se recorta: se cae la más vieja de las demás", () => {
+    const llena = Array.from({ length: 250 }, (_, i) => item({ tipo: "casilla", clave: "metas" }, { que: `Llena ${i}` }));
+    let x = paso(conItems(estado(), ...llena), { op: "usar", itemId: llena[0].id });
+    const nueva = item({ tipo: "casilla", clave: "metas" }, { que: "Llegó después" });
+    x = { ...x, propuesta: { ...x.propuesta, items: [...x.propuesta.items, nueva] } };
+    x = paso(x, { op: "deshacerUso", ids: [llena[0].id] });
+    expect(x.propuesta.items).toHaveLength(250);
+    expect(x.propuesta.items[0].id).toBe(llena[0].id);
+    expect(x.propuesta.items.some((it) => it.id === llena[1].id)).toBe(false);
+  });
+
+  it("deshacer de a una, en cualquier orden, también", () => {
+    const usado = aplicarOperaciones(e, [{ op: "usar", itemId: lista[2].id }, { op: "usar", itemId: lista[5].id }]);
+    if (!usado.ok) throw new Error(usado.error);
+    const una = aplicarOperaciones(usado.estado, [{ op: "deshacerUso", ids: [lista[2].id] }]);
+    if (!una.ok) throw new Error(una.error);
+    const otra = aplicarOperaciones(una.estado, [{ op: "deshacerUso", ids: [lista[5].id] }]);
+    if (!otra.ok) throw new Error(otra.error);
+    expect(orden(otra.estado)).toEqual(orden(e));
+  });
+});
+
 describe("el lote grande", () => {
   it("un lote de 130 queda anotado entero y se deshace entero", () => {
     const casos = Array.from({ length: 130 }, (_, i) => item({ tipo: "casoDeUso", useCaseId: `ia-${i}` }, { titulo: `Caso ${i}`, areaId: null }));
