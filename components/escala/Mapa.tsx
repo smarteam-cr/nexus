@@ -37,6 +37,30 @@ import { cn } from "@/lib/cn";
 import { aplica, describirPerfil, dimensionAplica, type Perfil } from "@/lib/escala/documento/perfil";
 import { LETRAS, type ClaveDeCapa, type Dimension, type Letra, type Nivel } from "@/lib/escala/documento/tipos";
 import type { Herramienta } from "@/lib/escala/herramientas/tipos";
+import {
+  aRadianes,
+  AIRE_ANGULAR,
+  AIRE_RADIAL,
+  anillo,
+  arco,
+  CX,
+  CY,
+  f,
+  H,
+  MITAD,
+  polar,
+  porciones,
+  R_BANDA,
+  R_BASE,
+  R_CENTRO,
+  R_DENTRO,
+  R_FUERA,
+  rotuloDeCapa,
+  rotuloDeDimension,
+  sectorDeAnillo,
+  W,
+  yDelNombreDeNivel,
+} from "@/lib/escala/rueda";
 import { lugarEnElOrden, ordenDeDependencias, type DatosDeLaVista } from "@/lib/escala/vista";
 import { conteoDe, conteoDeCelda, conteoDeDimension, useEscala } from "./contexto";
 import { COLOR_DE_HERRAMIENTA, HerramientasDelCriterio, MarcaDeHerramienta, useHerramientas } from "./herramientas";
@@ -75,20 +99,6 @@ function mismaSeleccion(a: SeleccionDelMapa, b: SeleccionDelMapa): boolean {
   if (a.tipo === "celda") return b.tipo === "celda" && a.dim === b.dim && a.letra === b.letra;
   if (a.tipo === "dimension") return b.tipo === "dimension" && a.dim === b.dim;
   return b.tipo === "nivel" && a.letra === b.letra;
-}
-
-/** Un texto partido en líneas de hasta `max` caracteres, sin cortar palabras (el SVG no parte solo). */
-function partirEnLineas(texto: string, max: number): string[] {
-  const out: string[] = [];
-  let linea = "";
-  for (const palabra of texto.split(/\s+/).filter(Boolean)) {
-    if (linea && `${linea} ${palabra}`.length > max) {
-      out.push(linea);
-      linea = palabra;
-    } else linea = linea ? `${linea} ${palabra}` : palabra;
-  }
-  if (linea) out.push(linea);
-  return out;
 }
 
 /** Lo que dice la escala primero (criterios, por defecto); lo que dice el equipo, al final. */
@@ -151,27 +161,7 @@ const OPACIDAD: Record<Luz, number> = { entera: 1, media: 0.6, apagada: 0.3 };
 /** «1 criterio», «3 criterios». */
 const cuantos = (n: number, uno: string, varios: string) => `${n} ${n === 1 ? uno : varios}`;
 
-// ── Geometría (unidades del viewBox) ──────────────────────────────────────────
-const W = 1300;
-const H = 900;
-const CX = 650;
-const CY = 450;
-/** El círculo del centro, donde se cuenta lo que se mira. */
-const R_CENTRO = 104;
-/** Donde empieza Deficiente y cuánto mide cada anillo. */
-const R_DENTRO = 114;
-const ANCHO = 52;
-const R_FUERA = R_DENTRO + ANCHO * 5;
-/** La línea de la base: el borde de adentro de Funcional. */
-const R_BASE = R_DENTRO + ANCHO * 2;
-/** La banda de cada capa, con el orden en que se trabaja. */
-const R_BANDA = R_FUERA + 16;
-const R_ETIQUETA = R_FUERA + 50;
-/** Grados libres arriba y abajo: separan las dos capas, y arriba van los nombres de los niveles. */
-const HUECO = 34;
-/** Aire entre celdas: grados entre porciones y unidades entre anillos. */
-const AIRE_ANGULAR = 1.4;
-const AIRE_RADIAL = 3;
+// ── Geometría: la de la rueda, compartida con el radar (lib/escala/rueda.ts) ──
 /** Cuánto dura cada nivel en «Recorrer». */
 const PASO_DEL_RECORRIDO_MS = 3200;
 
@@ -184,51 +174,6 @@ const ESTILOS = `
 @media (prefers-reduced-motion: reduce) { .escala-rueda-celda, .escala-rueda-pulso { animation: none; } }
 `;
 
-const f = (v: number) => v.toFixed(1);
-const aRadianes = (g: number) => (g * Math.PI) / 180;
-
-/** Grados de reloj (0 = arriba, en el sentido de las agujas) → coordenadas. */
-function polar(grados: number, r: number): [number, number] {
-  return [CX + r * Math.sin(aRadianes(grados)), CY - r * Math.cos(aRadianes(grados))];
-}
-
-/** Un sector de anillo: entre dos radios y dos ángulos. */
-function sectorDeAnillo(r0: number, r1: number, g0: number, g1: number): string {
-  const [ax, ay] = polar(g0, r1);
-  const [bx, by] = polar(g1, r1);
-  const [cx, cy] = polar(g1, r0);
-  const [dx, dy] = polar(g0, r0);
-  const grande = g1 - g0 > 180 ? 1 : 0;
-  return `M${f(ax)} ${f(ay)}A${r1} ${r1} 0 ${grande} 1 ${f(bx)} ${f(by)}L${f(cx)} ${f(cy)}A${r0} ${r0} 0 ${grande} 0 ${f(dx)} ${f(dy)}Z`;
-}
-
-/** Un arco suelto (la banda de una capa). */
-function arco(r: number, g0: number, g1: number): string {
-  const [ax, ay] = polar(g0, r);
-  const [bx, by] = polar(g1, r);
-  return `M${f(ax)} ${f(ay)}A${r} ${r} 0 ${g1 - g0 > 180 ? 1 : 0} 1 ${f(bx)} ${f(by)}`;
-}
-
-/** Los radios de un anillo (k = 0 es Deficiente), con aire entre anillos. */
-const anillo = (k: number): [number, number] => [R_DENTRO + ANCHO * k + AIRE_RADIAL / 2, R_DENTRO + ANCHO * (k + 1) - AIRE_RADIAL / 2];
-
-/** La mitad de cada capa: la base a la derecha, la producción a la izquierda. */
-const MITAD: Record<ClaveDeCapa, [number, number]> = {
-  base: [HUECO / 2, 180 - HUECO / 2],
-  produccion: [180 + HUECO / 2, 360 - HUECO / 2],
-};
-
-/** Los ángulos de la porción de cada dimensión, repartidos dentro de la mitad de su capa. */
-function porciones(dims: Dimension[]): Map<string, [number, number]> {
-  const out = new Map<string, [number, number]>();
-  for (const clave of Object.keys(MITAD) as ClaveDeCapa[]) {
-    const [inicio, fin] = MITAD[clave];
-    const deLaCapa = dims.filter((d) => d.capa === clave);
-    const paso = (fin - inicio) / Math.max(1, deLaCapa.length);
-    deLaCapa.forEach((d, j) => out.set(d.id, [inicio + paso * j + AIRE_ANGULAR / 2, inicio + paso * (j + 1) - AIRE_ANGULAR / 2]));
-  }
-  return out;
-}
 
 /**
  * Un `<g>` con `title`: los tipos de React no lo admiten en SVG, pero el navegador sí y la capa
@@ -704,13 +649,7 @@ export default function Mapa({ datos, perfil, seleccion, onSeleccion, onLeerDime
             {/* Las dos capas, bien a la vista: su nombre al costado de su mitad y una banda en el borde, con el
                 orden en que se trabajan. Pasar el cursor por el nombre enciende sus dimensiones. */}
             {capas.map((c) => {
-              const derecha = c.clave === "base";
-              const x = derecha ? CX + R_BANDA + 26 : CX - R_BANDA - 26;
-              const ancla = derecha ? "start" : "end";
-              const nombre = partirEnLineas(c.nombre.toUpperCase(), 10);
-              const descripcion = c.descripcion ? partirEnLineas(c.descripcion, 25) : [];
-              const alto = nombre.length * 34 + descripcion.length * 21;
-              const y0 = CY - alto / 2 + 24;
+              const r = rotuloDeCapa(c.clave, c.nombre, c.descripcion);
               const activa = focoCapa === c.clave;
               return (
                 <g
@@ -719,27 +658,27 @@ export default function Mapa({ datos, perfil, seleccion, onSeleccion, onLeerDime
                   onMouseLeave={soltarEncima}
                   onMouseDown={(e) => e.preventDefault()}
                 >
-                  <rect x={derecha ? x - 8 : x - 232} y={y0 - 32} width={240} height={alto + 22} style={{ fill: "transparent" }} />
-                  {nombre.map((linea, j) => (
+                  <rect {...r.caja} style={{ fill: "transparent" }} />
+                  {r.nombre.map((linea) => (
                     <text
-                      key={linea}
-                      x={x}
-                      y={y0 + j * 34}
+                      key={linea.texto}
+                      x={r.x}
+                      y={linea.y}
                       style={{
                         fill: focoCapa && !activa ? "var(--color-fg-muted)" : "var(--color-fg)",
                         fontSize: 30,
                         fontWeight: 800,
                         letterSpacing: "0.02em",
-                        textAnchor: ancla,
+                        textAnchor: r.ancla,
                         transition: "fill 160ms",
                       }}
                     >
-                      {linea}
+                      {linea.texto}
                     </text>
                   ))}
-                  {descripcion.map((linea, j) => (
-                    <text key={linea} x={x} y={y0 + nombre.length * 34 - 6 + j * 21} style={{ fill: "var(--color-fg-muted)", fontSize: 16, textAnchor: ancla }}>
-                      {linea}
+                  {r.descripcion.map((linea) => (
+                    <text key={linea.texto} x={r.x} y={linea.y} style={{ fill: "var(--color-fg-muted)", fontSize: 16, textAnchor: r.ancla }}>
+                      {linea.texto}
                     </text>
                   ))}
                 </g>
@@ -967,8 +906,7 @@ export default function Mapa({ datos, perfil, seleccion, onSeleccion, onLeerDime
 
             {/* Los nombres de los niveles, en el hueco de arriba: tocarlos enciende la escala hasta ahí */}
             {niveles.map((nv, k) => {
-              const [r0, r1] = anillo(k);
-              const y = CY - (r0 + r1) / 2 + 5;
+              const y = yDelNombreDeNivel(k);
               const activo = focoNivel === nv.letra;
               return (
                 <g data-recorrido={nv.letra === "F" ? "escala.nivel" : undefined}
@@ -1008,17 +946,8 @@ export default function Mapa({ datos, perfil, seleccion, onSeleccion, onLeerDime
             {/* Los nombres de las dimensiones, afuera: tocarlos abre la dimensión */}
             {dims.map((d) => {
               const [g0, g1] = angulos.get(d.id)!;
-              const medio = (g0 + g1) / 2;
-              const [x, y] = polar(medio, R_ETIQUETA);
-              const s = Math.sin(aRadianes(medio));
-              const c = Math.cos(aRadianes(medio));
-              const ancla = s > 0.15 ? "start" : s < -0.15 ? "end" : "middle";
-              // A los costados hay poco ancho: un nombre largo (los de una edición suelen serlo) va en dos
-              // líneas, para que no se salga del dibujo.
-              const nombre = Math.abs(s) > 0.8 ? partirEnLineas(d.nombre, 27) : [d.nombre];
-              const extra = (nombre.length - 1) * 21;
-              // Arriba el bloque crece hacia arriba; abajo, hacia abajo; a los costados, centrado.
-              const y0 = c > 0.35 ? y - 24 - extra : c < -0.35 ? y + 10 : y - 8 - extra / 2;
+              // A los costados un nombre largo (los de una edición suelen serlo) va en dos líneas.
+              const r = rotuloDeDimension((g0 + g1) / 2, d.nombre);
               const aplicaD = dimensionAplica(d, perfil);
               const activo = focoDim?.id === d.id;
               const comentarios = conteoDeDimension(conteos, d.id).total;
@@ -1034,17 +963,17 @@ export default function Mapa({ datos, perfil, seleccion, onSeleccion, onLeerDime
                   onMouseLeave={soltarEncima}
                   onClick={() => alternar({ tipo: "dimension", dim: d.id })}
                 >
-                  <text x={f(x)} y={f(y0)} style={{ textAnchor: ancla, fontSize: 14, fill: "var(--color-fg-muted)", fontVariantNumeric: "tabular-nums" }}>
+                  <text x={f(r.x)} y={f(r.yNumero)} style={{ textAnchor: r.ancla, fontSize: 14, fill: "var(--color-fg-muted)", fontVariantNumeric: "tabular-nums" }}>
                     {d.id}
                     {comentarios > 0 ? ` · ${cuantos(comentarios, "reporte", "reportes")}` : ""}
                   </text>
-                  {nombre.map((linea, j) => (
+                  {r.nombre.map((linea) => (
                     <text
-                      key={linea}
-                      x={f(x)}
-                      y={f(y0 + 22 + j * 21)}
+                      key={linea.texto}
+                      x={f(r.x)}
+                      y={f(linea.y)}
                       style={{
-                        textAnchor: ancla,
+                        textAnchor: r.ancla,
                         fontSize: 18,
                         fontWeight: activo ? 700 : 600,
                         fill: activo ? "var(--color-fg)" : aplicaD && !nombreApagado(d) ? "var(--color-fg)" : "var(--color-fg-muted)",
@@ -1052,11 +981,11 @@ export default function Mapa({ datos, perfil, seleccion, onSeleccion, onLeerDime
                         transition: "fill 160ms, opacity 160ms",
                       }}
                     >
-                      {linea}
+                      {linea.texto}
                     </text>
                   ))}
                   {!aplicaD && (
-                    <text x={f(x)} y={f(y0 + 42 + extra)} style={{ textAnchor: ancla, fontSize: 13, fill: "var(--color-fg-muted)" }}>
+                    <text x={f(r.x)} y={f(r.yNota)} style={{ textAnchor: r.ancla, fontSize: 13, fill: "var(--color-fg-muted)" }}>
                       no aplica a este perfil
                     </text>
                   )}
