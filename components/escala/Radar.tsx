@@ -3,51 +3,61 @@
 /**
  * components/escala/Radar.tsx — un área de la escala como radar de PUNTOS (pedido de Elías, 2026-10-28).
  *
- * Un eje por dimensión, un anillo por nivel (Deficiente adentro, Óptimo en el borde) y la línea punteada
- * de Funcional, «la base». En cada eje, un punto por serie: el nivel donde se concentran, en promedio, los
- * criterios de esa clase en la dimensión (`lib/escala/radar.ts`). Los puntos mandan: la línea que los une
- * es fina y el relleno apenas se ve. Cada serie tiene su color (`--color-serie-*`) y su forma, para que no
- * dependa solo del color; la leyenda es también el interruptor de cada una.
+ * Es la MISMA rueda que el Mapa (lib/escala/rueda.ts + components/escala/rueda.tsx): mismo tamaño, la base operativa
+ * a la derecha y la producción a la izquierda con su nombre y su banda gris, el número y el nombre de cada dimensión
+ * en el mismo lugar, los niveles en el hueco de arriba, la línea punteada de «la base» y el centro con el área. Solo
+ * cambia lo de adentro (Elías: «básicamente solo debería cambiar lo del centro»): en vez de celdas con conteos, los
+ * anillos apenas teñidos y, sobre el eje de cada dimensión, un punto por serie: el nivel donde se concentran, en
+ * promedio, los criterios de esa clase (`lib/escala/radar.ts`). Un nivel entero cae en el medio de su anillo.
  *
- * Pasar el cursor por un eje (o tocarlo) lo cuenta en el panel del costado: cada serie con su nivel, cuántos
- * criterios hay en cada nivel y lo que dice la escala de ese nivel en esa dimensión. Tocarlo lo deja fijo.
- * Los nombres de las dimensiones van en HTML encima del SVG (se parten solos y son botones), como en la
- * rueda de la exploración.
+ * Cada serie tiene su color (`--color-serie-*`) y su forma, para que no dependa solo del color; los chips de arriba
+ * son también el interruptor de cada una. Pasar el cursor por una dimensión (su porción, su nombre o un punto) la
+ * cuenta en el centro y en el panel del costado; tocarla la deja fija, y el panel lleva a leerla entera.
  */
-import { useMemo, useState } from "react";
+import { useMemo, useState, type KeyboardEvent } from "react";
 import { cn } from "@/lib/cn";
 import { describirPerfil, type Perfil } from "@/lib/escala/documento/perfil";
 import { LETRAS, type Letra } from "@/lib/escala/documento/tipos";
 import {
-  aCoordenadas,
-  anguloDelEje,
   ejesDelRadar,
   nivelConMas,
   nombreDelPromedio,
-  radioDelNivel,
   SERIES_DE_ENTRADA,
   SERIES_DEL_RADAR,
   seriesDisponibles,
-  tramosDelRadar,
   type EjeDelRadar,
   type SerieDelRadar,
 } from "@/lib/escala/radar";
-import type { DatosDeLaVista } from "@/lib/escala/vista";
+import { AIRE_ANGULAR, f, H, polar, porciones, posicionDelPromedio, R_BANDA, R_CENTRO, radioEnAnillos, sectorDeAnillo, W } from "@/lib/escala/rueda";
+import { lugarEnElOrden, ordenDeDependencias, type DatosDeLaVista } from "@/lib/escala/vista";
+import { conteoDeDimension, useEscala } from "./contexto";
+import { COLOR_DE_NIVEL } from "./niveles";
 import { BOTON_CLARO, GrupoDeControl, ParrafoDeLaEscala, ROTULO } from "./piezas";
+import {
+  AnillosDeLaRueda,
+  CentroDeLaRueda,
+  LineaDeLaBase,
+  LineaDeUnaSerie,
+  MitadesDeLaRueda,
+  NombresDeNiveles,
+  RotuloDeDimension,
+  type PaletaDeLaRueda,
+} from "./rueda";
 
-// ── Geometría (unidades del viewBox) ──────────────────────────────────────────
-const W = 720;
-const H = 440;
-const CX = W / 2;
-const CY = H / 2;
-/** Óptimo, el anillo de afuera. */
-const R_MAX = 160;
-/** Donde van los nombres de las dimensiones. */
-const R_ETIQUETA = 176;
+/** La rueda con los tokens del tema: flipea sola en claro y oscuro. */
+const PALETA: PaletaDeLaRueda = {
+  fg: "var(--color-fg)",
+  fgSecundario: "var(--color-fg-secondary)",
+  fgApagado: "var(--color-fg-muted)",
+  linea: "var(--color-line)",
+  superficie: "var(--color-surface)",
+  base: "var(--color-nivel-funcional)",
+  niveles: COLOR_DE_NIVEL,
+};
 
-const f = (v: number) => v.toFixed(1);
-const pctX = (x: number) => `${(x / W) * 100}%`;
-const pctY = (y: number) => `${(y / H) * 100}%`;
+/** El tamaño de una marca (la mitad de su ancho, en unidades del viewBox): con la rueda a ~900 px se ve de ~15 px. */
+const MARCA = 11;
+const MARCA_EN_FOCO = 14;
 
 /** La forma de cada serie: el color no carga la identidad solo. */
 const FORMA: Record<SerieDelRadar, "circulo" | "cuadrado" | "rombo" | "triangulo" | "anillo"> = {
@@ -58,20 +68,20 @@ const FORMA: Record<SerieDelRadar, "circulo" | "cuadrado" | "rombo" | "triangulo
   escondidos: "anillo",
 };
 
-/** Una marca de serie centrada en (x, y). `s` es la mitad de su ancho. */
-function Marca({ serie, x, y, s = 6, color }: { serie: SerieDelRadar; x: number; y: number; s?: number; color: string }) {
+/** Una marca de serie centrada en (x, y). `s` es la mitad de su ancho; `borde`, el anillo que la separa del fondo. */
+function Marca({ serie, x, y, s = MARCA, color, borde = 3 }: { serie: SerieDelRadar; x: number; y: number; s?: number; color: string; borde?: number }) {
   // El anillo de superficie separa marcas que se tocan (sin bordes oscuros).
   const estilo = {
     fill: color,
     stroke: "var(--color-surface)",
-    strokeWidth: 2,
+    strokeWidth: borde,
     paintOrder: "stroke" as const,
   };
   switch (FORMA[serie]) {
     case "circulo":
       return <circle cx={x} cy={y} r={s} style={estilo} />;
     case "cuadrado":
-      return <rect x={x - s * 0.9} y={y - s * 0.9} width={s * 1.8} height={s * 1.8} rx={1.5} style={estilo} />;
+      return <rect x={x - s * 0.9} y={y - s * 0.9} width={s * 1.8} height={s * 1.8} rx={s * 0.25} style={estilo} />;
     case "rombo":
       return <polygon points={`${f(x)},${f(y - s * 1.2)} ${f(x + s * 1.2)},${f(y)} ${f(x)},${f(y + s * 1.2)} ${f(x - s * 1.2)},${f(y)}`} style={estilo} />;
     case "triangulo":
@@ -85,18 +95,18 @@ function Marca({ serie, x, y, s = 6, color }: { serie: SerieDelRadar; x: number;
           style={{
             fill: "var(--color-surface)",
             stroke: color,
-            strokeWidth: 2.5,
+            strokeWidth: Math.max(2.5, s * 0.36),
           }}
         />
       );
   }
 }
 
-/** La misma marca, chica, para la leyenda y el panel. */
+/** La misma marca, chica, para los chips y el panel. */
 function MarcaSuelta({ serie, color }: { serie: SerieDelRadar; color: string }) {
   return (
     <svg viewBox="0 0 16 16" className="h-3.5 w-3.5 flex-shrink-0" aria-hidden>
-      <Marca serie={serie} x={8} y={8} s={5} color={color} />
+      <Marca serie={serie} x={8} y={8} s={5} color={color} borde={2} />
     </svg>
   );
 }
@@ -108,23 +118,37 @@ const decimal = (v: number) =>
     maximumFractionDigits: 1,
   });
 
-/** Qué está bajo el cursor (o fijo): un eje y, si se apuntó a una marca, su serie. */
+/** «1 criterio», «3 criterios». */
+const cuantos = (n: number, uno: string, varios: string) => `${n} ${n === 1 ? uno : varios}`;
+
+/** Qué está bajo el cursor (o fijo): una dimensión y, si se apuntó a una marca, su serie. */
 type Foco = { dim: string; serie: SerieDelRadar | null } | null;
 
 export default function Radar({ datos, perfil, onLeerDimension }: { datos: DatosDeLaVista; perfil: Perfil; onLeerDimension: (dimensionId: string) => void }) {
-  const { area, niveles } = datos;
+  const { conteos } = useEscala();
+  const { area, niveles, capas } = datos;
+  const dims = area.dimensiones;
   const ejes = useMemo(() => ejesDelRadar(area, perfil, datos.requeridos), [area, perfil, datos.requeridos]);
+  const angulos = useMemo(() => porciones(dims), [dims]);
   const disponibles = seriesDisponibles(perfil);
   const [prendidas, setPrendidas] = useState<SerieDelRadar[]>([...SERIES_DE_ENTRADA]);
   /** Las que se dibujan: prendidas Y disponibles, siempre en el orden de la escala (el color sigue a la serie). */
   const visibles = SERIES_DEL_RADAR.filter((s) => prendidas.includes(s.clave) && disponibles.includes(s.clave));
   const [encima, setEncima] = useState<Foco>(null);
   const [fijo, setFijo] = useState<Foco>(null);
-  const foco = encima ?? fijo;
+  /** Una serie apagada (o que el perfil ya no ofrece) deja de estar en foco: no puede apagar a las que se ven. */
+  const sinSerieOculta = (f: Foco): Foco => (f && f.serie && !visibles.some((s) => s.clave === f.serie) ? { ...f, serie: null } : f);
+  const foco = sinSerieOculta(encima ?? fijo);
 
   const nombreNivel = (l: Letra) => niveles.find((n) => n.letra === l)?.nombre ?? l;
-  const n = ejes.length;
   const conPerfil = describirPerfil(perfil) !== null;
+  const noAplican = useMemo(() => new Set(ejes.filter((e) => !e.aplica).map((e) => e.dimensionId)), [ejes]);
+
+  /** «Qué se trabaja primero», como en el mapa: el número en la banda de cada capa, si hay un orden solo. */
+  const ordenes = useMemo(
+    () => new Map(capas.map((c) => [c.clave, ordenDeDependencias(datos.dependencias, area.nombre, c.nombre, perfil.cierre)])),
+    [capas, datos.dependencias, area.nombre, perfil.cierre],
+  );
 
   const alternar = (s: SerieDelRadar) => setPrendidas((p) => (p.includes(s) ? p.filter((x) => x !== s) : [...p, s]));
   // Al tocar, se olvida el «por encima»: en una pantalla táctil el toque también lo pone, y taparía lo fijo.
@@ -132,258 +156,205 @@ export default function Radar({ datos, perfil, onLeerDimension }: { datos: Datos
     setEncima(null);
     setFijo((f) => (f && f.dim === dim && f.serie === serie ? null : { dim, serie }));
   };
+  const alTecladoDelRotulo = (dim: string) => (e: KeyboardEvent) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      tocarEje(dim);
+    } else if (e.key === "Escape") setFijo(null);
+  };
 
-  const anillo = (valor: number) => ejes.map((_, i) => aCoordenadas(CX, CY, anguloDelEje(i, n), radioDelNivel(valor, R_MAX)).map(f).join(",")).join(" ");
+  /** Dónde cae la marca de una serie en una dimensión (null si no tiene punto). */
+  const puntoDe = (e: EjeDelRadar, s: SerieDelRadar): [number, number] | null => {
+    const v = e.series[s].valor;
+    const ang = angulos.get(e.dimensionId);
+    if (v === null || !ang) return null;
+    return polar((ang[0] + ang[1]) / 2, radioEnAnillos(posicionDelPromedio(v)));
+  };
+
+  const capaDe = (dim: string) => dims.find((d) => d.id === dim)?.capa ?? "base";
 
   const ejeEnFoco = foco ? (ejes.find((e) => e.dimensionId === foco.dim) ?? null) : null;
+  const dimEnFoco = ejeEnFoco ? dims.find((d) => d.id === ejeEnFoco.dimensionId) : undefined;
+
+  /** El centro: el área o, con una dimensión en foco, su número, su nombre y lo que se apunta. */
+  const centro = (() => {
+    if (!ejeEnFoco) return { titulo: area.nombre, subtitulo: `${dims.length} dimensiones · ${niveles.length} niveles`, antetitulo: null };
+    const serie = foco?.serie ? ejeEnFoco.series[foco.serie] : null;
+    const subtitulo =
+      serie && serie.valor !== null
+        ? nombreDelPromedio(serie.valor, nombreNivel)
+        : ejeEnFoco.aplica
+          ? cuantos(ejeEnFoco.series.criterios.cuantos, "criterio", "criterios")
+          : "no aplica a este perfil";
+    return { titulo: ejeEnFoco.nombre, subtitulo, antetitulo: ejeEnFoco.dimensionId };
+  })();
 
   return (
     <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_380px]">
-      <section aria-label={`Radar de ${area.nombre}`} className="flex min-w-0 flex-col gap-4 rounded-xl border border-line bg-surface p-4 sm:p-5">
-        <div className="min-w-0 max-w-[640px]">
-          <h2 className="text-lg font-semibold leading-[26px] text-fg">Radar de {area.nombre}</h2>
-          <p className="mt-0.5 text-[13px] text-fg-muted">
-            Cada eje es una dimensión y cada anillo un nivel, de {nombreNivel("D")} al centro a {nombreNivel("O")} en el borde. Cada punto dice en qué nivel se
-            concentran, en promedio, los criterios de esa clase en la dimensión
-            {conPerfil ? ` (solo los que aplican con el perfil «${describirPerfil(perfil)}»)` : ""}. Es la escala misma, no una empresa.
-          </p>
+      <section aria-label={`Radar de ${area.nombre}`} className="flex min-w-0 flex-col gap-4 rounded-xl border border-line bg-surface p-5">
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <div className="min-w-0 max-w-[560px]">
+            <h2 className="text-lg font-semibold leading-[26px] text-fg">Radar de {area.nombre}</h2>
+            <p className="mt-0.5 text-[13px] text-fg-muted">
+              La misma rueda del mapa, con puntos: cada punto dice en qué nivel se concentran, en promedio, los criterios de esa clase en la dimensión
+              {conPerfil ? ` (solo los que aplican con el perfil «${describirPerfil(perfil)}»)` : ""}. Es la escala misma, no una empresa.
+            </p>
+          </div>
+          <GrupoDeControl
+            nombre="Qué se compara"
+            ayuda="Prende y apaga cada serie. Criterios: dónde pesa cada dimensión. Hábitos: dónde se pide repetir algo hasta que sea costumbre. Riesgos: dónde están los criterios que hay que cumplir para pasar a Eficiente. Requeridos: dónde están los cimientos que otros criterios necesitan. Escondidos por el perfil: lo que el perfil de negocio elegido saca, y solo aparece con un perfil elegido."
+          >
+            <div role="group" aria-label="Series del radar" className="flex flex-wrap items-center gap-1.5">
+              {SERIES_DEL_RADAR.filter((s) => disponibles.includes(s.clave)).map((s) => {
+                const prendida = prendidas.includes(s.clave);
+                return (
+                  <button
+                    key={s.clave}
+                    type="button"
+                    aria-pressed={prendida}
+                    onClick={() => alternar(s.clave)}
+                    title={`${prendida ? "Apagar" : "Prender"} «${s.etiqueta}»: dónde se concentran los ${s.queCuenta} de cada dimensión.`}
+                    className={cn(
+                      "inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border py-[7px] pl-2.5 pr-3 text-[13px] leading-tight transition-colors",
+                      prendida ? "border-line bg-surface font-semibold text-fg" : "border-line bg-surface-muted text-fg-muted hover:bg-surface-hover",
+                    )}
+                  >
+                    <span className={cn(!prendida && "opacity-40")}>
+                      <MarcaSuelta serie={s.clave} color={s.color} />
+                    </span>
+                    {s.etiqueta}
+                  </button>
+                );
+              })}
+            </div>
+          </GrupoDeControl>
         </div>
 
-        <GrupoDeControl
-          nombre="Qué se compara"
-          ayuda="Prende y apaga cada serie. Criterios: dónde pesa cada dimensión. Hábitos: dónde se pide repetir algo hasta que sea costumbre. Riesgos: dónde están los criterios que hay que cumplir para pasar a Eficiente. Requeridos: dónde están los cimientos que otros criterios necesitan. Escondidos por el perfil: lo que el perfil de negocio elegido saca, y solo aparece con un perfil elegido."
-        >
-          <div role="group" aria-label="Series del radar" className="flex flex-wrap items-center gap-1.5">
-            {SERIES_DEL_RADAR.filter((s) => disponibles.includes(s.clave)).map((s) => {
-              const prendida = prendidas.includes(s.clave);
-              return (
-                <button
-                  key={s.clave}
-                  type="button"
-                  aria-pressed={prendida}
-                  onClick={() => alternar(s.clave)}
-                  title={`${prendida ? "Apagar" : "Prender"} «${s.etiqueta}»: dónde se concentran los ${s.queCuenta} de cada dimensión.`}
-                  className={cn(
-                    "inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border py-[5px] pl-2 pr-2.5 text-[13px] leading-tight transition-colors",
-                    prendida ? "border-line bg-surface font-semibold text-fg" : "border-line bg-surface-muted text-fg-muted hover:bg-surface-hover",
-                  )}
-                >
-                  <span className={cn(!prendida && "opacity-40")}>
-                    <MarcaSuelta serie={s.clave} color={s.color} />
-                  </span>
-                  {s.etiqueta}
-                </button>
-              );
-            })}
-            <span className="ml-1 inline-flex items-center gap-1.5 text-[13px] text-fg-secondary">
-              <svg viewBox="0 0 22 8" className="h-2 w-[22px]" aria-hidden>
-                <line
-                  x1={1}
-                  y1={4}
-                  x2={21}
-                  y2={4}
-                  style={{
-                    stroke: "var(--color-nivel-funcional)",
-                    strokeWidth: 2,
-                    strokeDasharray: "4 3",
-                  }}
-                />
-              </svg>
-              {nombreNivel("F")}, la base
-            </span>
-          </div>
-        </GrupoDeControl>
-
-        <div className="relative mx-auto w-full max-w-[760px]" style={{ aspectRatio: `${W} / ${H}` }} onMouseLeave={() => setEncima(null)}>
+        <div className="relative" onMouseLeave={() => setEncima(null)}>
           <svg
             viewBox={`0 0 ${W} ${H}`}
-            className="absolute inset-0 block h-full w-full"
-            role="img"
-            aria-label={`Radar de las ${n} dimensiones de ${area.nombre} por nivel`}
+            className="mx-auto block h-auto max-h-[calc(100vh-11rem)] w-full"
+            role="group"
+            aria-label={`Radar de las ${dims.length} dimensiones de ${area.nombre} por nivel`}
           >
-            {/* Los anillos: uno por nivel, líneas finas. Funcional, punteado y en su color. */}
-            {LETRAS.map((l, i) =>
-              l === "F" ? null : (
-                <polygon
-                  key={l}
-                  points={anillo(i + 1)}
-                  style={{
-                    fill: "none",
-                    stroke: "var(--color-line)",
-                    strokeWidth: 1,
-                  }}
-                />
-              ),
-            )}
-            {ejes.map((e, i) => {
-              const [x, y] = aCoordenadas(CX, CY, anguloDelEje(i, n), R_MAX);
-              const enFoco = foco?.dim === e.dimensionId;
-              return (
-                <line
-                  key={e.dimensionId}
-                  x1={CX}
-                  y1={CY}
-                  x2={f(x)}
-                  y2={f(y)}
-                  style={{
-                    stroke: enFoco ? "var(--color-fg-muted)" : "var(--color-line)",
-                    strokeWidth: enFoco ? 1.5 : 1,
-                  }}
-                />
-              );
-            })}
-            <polygon
-              points={anillo(3)}
-              style={{
-                fill: "none",
-                stroke: "var(--color-nivel-funcional)",
-                strokeWidth: 2,
-                strokeDasharray: "7 6",
-              }}
-            />
-            {/* Las zonas de cada eje: pasar el cursor por cualquier parte de la porción lo enfoca. */}
-            {ejes.map((e, i) => {
-              const g = anguloDelEje(i, n);
-              const medio = 180 / n;
-              const [ax, ay] = aCoordenadas(CX, CY, g - medio, R_ETIQUETA);
-              const [bx, by] = aCoordenadas(CX, CY, g + medio, R_ETIQUETA);
+            <MitadesDeLaRueda capas={capas} paleta={PALETA} enFoco={dimEnFoco?.capa ?? null} />
+            <AnillosDeLaRueda dims={dims} angulos={angulos} paleta={PALETA} enFoco={foco?.dim ?? null} noAplican={noAplican} />
+            <LineaDeLaBase paleta={PALETA} />
+
+            {/* La porción de cada dimensión: pasar el cursor por cualquier parte la enfoca; tocarla la deja fija. */}
+            {dims.map((d) => {
+              const [g0, g1] = angulos.get(d.id)!;
               return (
                 <path
-                  key={e.dimensionId}
-                  d={`M${CX},${CY}L${f(ax)},${f(ay)}A${R_ETIQUETA},${R_ETIQUETA} 0 0 1 ${f(bx)},${f(by)}Z`}
+                  key={d.id}
+                  d={sectorDeAnillo(R_CENTRO, R_BANDA, g0 - AIRE_ANGULAR / 2, g1 + AIRE_ANGULAR / 2)}
                   style={{ fill: "transparent", cursor: "pointer" }}
-                  onMouseEnter={() => setEncima({ dim: e.dimensionId, serie: null })}
-                  onClick={() => tocarEje(e.dimensionId)}
+                  onMouseEnter={() => setEncima({ dim: d.id, serie: null })}
+                  onMouseLeave={() => setEncima(null)}
+                  onClick={() => tocarEje(d.id)}
                 />
               );
             })}
 
+            {/* «Qué se trabaja primero»: encima de las porciones, para que su explicación aparezca en toda la burbuja. */}
+            {capas.map((c) => {
+              const filas = ordenes.get(c.clave) ?? [];
+              const orden = filas.length === 1 ? filas[0] : null;
+              if (!orden) return null;
+              return dims
+                .filter((d) => d.capa === c.clave)
+                .map((d) => {
+                  const lugar = lugarEnElOrden(orden, d);
+                  const [a0, a1] = angulos.get(d.id)!;
+                  if (!lugar) return null;
+                  const [x, y] = polar((a0 + a1) / 2, R_BANDA);
+                  return (
+                    <g key={d.id} transform={`translate(${f(x)} ${f(y)})`} className="cursor-help">
+                      <title>{`${lugar}.º en el orden de ${c.nombre.toLowerCase()}: ${orden.orden.join(" → ")}. ${orden.porQue}`}</title>
+                      <circle r={14} style={{ fill: "var(--color-surface)", stroke: "var(--color-fg-muted)", strokeWidth: 1.5 }} />
+                      <text y={5} style={{ fill: "var(--color-fg)", fontSize: 14, fontWeight: 700, textAnchor: "middle" }}>
+                        {lugar}
+                      </text>
+                    </g>
+                  );
+                });
+            })}
             {visibles.map((s) => {
-              const puntos = ejes.map((e, i) => {
-                const v = e.series[s.clave].valor;
-                return v === null ? null : aCoordenadas(CX, CY, anguloDelEje(i, n), radioDelNivel(v, R_MAX));
-              });
+              const puntos = ejes.map((e) => puntoDe(e, s.clave));
               const apagada = foco?.serie != null && foco.serie !== s.clave;
               return (
-                <g
-                  key={s.clave}
-                  style={{
-                    opacity: apagada ? 0.3 : 1,
-                    transition: "opacity 150ms",
-                    pointerEvents: "none",
-                  }}
-                >
-                  {tramosDelRadar(puntos).map((t, k) => {
-                    const pts = t.puntos.map((p) => p.map(f).join(",")).join(" ");
-                    return t.cerrado ? (
-                      <polygon
-                        key={k}
-                        points={pts}
-                        style={{
-                          fill: s.color,
-                          fillOpacity: 0.06,
-                          stroke: s.color,
-                          strokeWidth: 1.5,
-                          strokeLinejoin: "round",
-                        }}
-                      />
-                    ) : (
-                      <polyline
-                        key={k}
-                        points={pts}
-                        style={{
-                          fill: "none",
-                          stroke: s.color,
-                          strokeWidth: 1.5,
-                          strokeLinejoin: "round",
-                        }}
-                      />
-                    );
-                  })}
+                <g key={s.clave} style={{ opacity: apagada ? 0.25 : 1, transition: "opacity 150ms", pointerEvents: "none" }}>
+                  <LineaDeUnaSerie
+                    ejes={ejes.map((e, i) => {
+                      const [g0, g1] = angulos.get(e.dimensionId)!;
+                      return { medio: (g0 + g1) / 2, capa: capaDe(e.dimensionId), punto: puntos[i] };
+                    })}
+                    color={s.color}
+                    relleno={0}
+                  />
                   {puntos.map((p, i) =>
-                    p ? (
-                      <Marca key={ejes[i].dimensionId} serie={s.clave} x={p[0]} y={p[1]} s={foco?.dim === ejes[i].dimensionId ? 7.5 : 6} color={s.color} />
-                    ) : null,
+                    p ? <Marca key={ejes[i].dimensionId} serie={s.clave} x={p[0]} y={p[1]} s={foco?.dim === ejes[i].dimensionId ? MARCA_EN_FOCO : MARCA} color={s.color} /> : null,
                   )}
                 </g>
               );
             })}
 
-            {/* Encima de todo, la zona de cada marca: más grande que la marca, para el cursor y el dedo. */}
+            {/* Encima de las series, la zona de cada marca: más grande que la marca, para el cursor y el dedo. */}
             {visibles.map((s) =>
-              ejes.map((e, i) => {
-                const v = e.series[s.clave].valor;
-                if (v === null) return null;
-                const [x, y] = aCoordenadas(CX, CY, anguloDelEje(i, n), radioDelNivel(v, R_MAX));
+              ejes.map((e) => {
+                const p = puntoDe(e, s.clave);
+                if (!p) return null;
                 return (
                   <circle
                     key={`${s.clave}-${e.dimensionId}`}
-                    cx={f(x)}
-                    cy={f(y)}
-                    r={12}
+                    cx={f(p[0])}
+                    cy={f(p[1])}
+                    r={20}
                     style={{ fill: "transparent", cursor: "pointer" }}
                     onMouseEnter={() => setEncima({ dim: e.dimensionId, serie: s.clave })}
+                    onMouseLeave={() => setEncima(null)}
                     onClick={() => tocarEje(e.dimensionId, s.clave)}
                   />
                 );
               }),
             )}
-          </svg>
 
-          {/* Los nombres de las dimensiones: botones encima del dibujo, partidos solos. */}
-          {ejes.map((e, i) => {
-            const g = anguloDelEje(i, n);
-            const [x, y] = aCoordenadas(CX, CY, g, R_ETIQUETA);
-            const seno = Math.sin((g * Math.PI) / 180);
-            const coseno = Math.cos((g * Math.PI) / 180);
-            const tx = seno > 0.3 ? "0" : seno < -0.3 ? "-100%" : "-50%";
-            const ty = coseno > 0.3 ? "-100%" : coseno < -0.3 ? "0" : "-50%";
-            const enFoco = foco?.dim === e.dimensionId;
-            return (
-              <button
-                key={e.dimensionId}
-                type="button"
-                lang="es"
-                onMouseEnter={() => setEncima({ dim: e.dimensionId, serie: null })}
-                onFocus={() => setEncima({ dim: e.dimensionId, serie: null })}
-                onBlur={() => setEncima(null)}
-                onClick={() => tocarEje(e.dimensionId)}
-                aria-pressed={fijo?.dim === e.dimensionId}
-                title={e.aplica ? `${e.nombre}: toca para dejarla fija en el panel.` : `${e.nombre}: no aplica con este perfil.`}
-                className={cn(
-                  "absolute max-w-[26%] rounded px-1 py-0.5 text-[11px] leading-tight transition-colors sm:text-xs",
-                  seno > 0.3 ? "text-left" : seno < -0.3 ? "text-right" : "text-center",
-                  enFoco ? "font-semibold text-fg" : e.aplica ? "text-fg-secondary hover:text-fg" : "text-fg-muted",
-                )}
-                style={{
-                  left: pctX(x),
-                  top: pctY(y),
-                  transform: `translate(${tx}, ${ty})`,
-                }}
-              >
-                {e.nombre}
-                {!e.aplica && <span className="block text-[10px] font-normal text-fg-muted">no aplica</span>}
-              </button>
-            );
-          })}
-          {/* El nombre de cada nivel, entre los dos primeros ejes (ningún punto cae ahí). En HTML, para que se lea al
-              ancho de un teléfono; sin cursor, para no tapar las zonas del dibujo. */}
-          {LETRAS.map((l, i) => {
-            const [x, y] = aCoordenadas(CX, CY, anguloDelEje(1, n) / 2, radioDelNivel(i + 1, R_MAX));
-            return (
-              <span
-                key={l}
-                aria-hidden
-                className={cn(
-                  "pointer-events-none absolute -translate-x-1/2 -translate-y-1/2 whitespace-nowrap rounded bg-surface/80 px-0.5 text-[10px] leading-none sm:text-[11px]",
-                  l === "F" ? "font-semibold text-fg-secondary" : "text-fg-muted",
-                )}
-                style={{ left: pctX(x), top: pctY(y) }}
-              >
-                {nombreNivel(l)}
-              </span>
-            );
-          })}
+            <NombresDeNiveles niveles={niveles} paleta={PALETA} />
+
+            {/* El rótulo de cada dimensión, donde está en el mapa: un botón que la deja fija en el panel. */}
+            {ejes.map((e) => {
+              const [g0, g1] = angulos.get(e.dimensionId)!;
+              const reportes = conteoDeDimension(conteos, e.dimensionId).total;
+              const enFoco = foco?.dim === e.dimensionId;
+              return (
+                <RotuloDeDimension
+                  key={e.dimensionId}
+                  medio={(g0 + g1) / 2}
+                  nombre={e.nombre}
+                  numero={`${e.dimensionId}${reportes > 0 ? ` · ${cuantos(reportes, "reporte", "reportes")}` : ""}`}
+                  nota={e.aplica ? null : "no aplica a este perfil"}
+                  paleta={PALETA}
+                  destacado={enFoco}
+                  apagado={!e.aplica || (!!foco && !enFoco)}
+                  props={{
+                    role: "button",
+                    tabIndex: 0,
+                    "aria-label": `${e.dimensionId} ${e.nombre}${e.aplica ? "" : ", no aplica a este perfil"}: tócala para dejarla fija en el panel`,
+                    "aria-pressed": fijo?.dim === e.dimensionId,
+                    className: "cursor-pointer outline-none focus-visible:outline-2 focus-visible:outline-brand",
+                    onMouseEnter: () => setEncima({ dim: e.dimensionId, serie: null }),
+                    onMouseLeave: () => setEncima(null),
+                    onFocus: () => setEncima({ dim: e.dimensionId, serie: null }),
+                    onBlur: () => setEncima(null),
+                    onClick: () => tocarEje(e.dimensionId),
+                    onKeyDown: alTecladoDelRotulo(e.dimensionId),
+                  }}
+                />
+              );
+            })}
+
+            <CentroDeLaRueda paleta={PALETA} titulo={centro.titulo} subtitulo={centro.subtitulo} antetitulo={centro.antetitulo} />
+          </svg>
         </div>
 
         {visibles.length === 0 && <p className="text-center text-[13px] text-fg-muted">Prende una serie arriba para ver sus puntos.</p>}
@@ -433,8 +404,8 @@ function PanelDelRadar({
       <aside aria-label="Detalle del radar" className={caja}>
         <p className={ROTULO}>Cómo se lee</p>
         <p className="mt-2 text-[13px] leading-relaxed text-fg-secondary">
-          Pasa el cursor por una dimensión, o tócala, para ver en qué nivel se concentra cada serie y lo que dice la escala de ese nivel. Un punto más afuera de
-          la línea punteada quiere decir que eso se pide sobre todo por encima de {nombreNivel("F")}; más adentro, antes de llegar a la base.
+          Pasa el cursor por una dimensión, o tócala, para ver en qué nivel se concentra cada serie y lo que dice la escala de ese nivel. Un punto pasada la
+          línea punteada quiere decir que eso se pide sobre todo desde {nombreNivel("F")}, la base; más adentro, antes de llegar a ella.
         </p>
       </aside>
     );

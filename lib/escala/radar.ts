@@ -2,8 +2,8 @@
  * lib/escala/radar.ts — la vista «Radar» de la escala: de cada dimensión, dónde se concentra cada cosa. PURO.
  *
  * El mapa pinta cada celda (dimensión × nivel) como un sector de la rueda; el radar dice lo mismo con
- * PUNTOS (pedido de Elías, 2026-10-28: «por puntos, no por áreas»). Un eje por dimensión, un anillo por
- * nivel, y en cada eje un punto por serie: el nivel promedio de los criterios de esa clase en esa
+ * PUNTOS (pedido de Elías, 2026-10-28: «por puntos, no por áreas»), sobre la MISMA rueda (lib/escala/rueda.ts):
+ * el eje de cada dimensión va por el medio de su porción, y en cada eje hay un punto por serie: el nivel promedio de los criterios de esa clase en esa
  * dimensión. «Criterios» dice dónde pesa la dimensión; «Riesgos», dónde están sus riesgos; «Hábitos»,
  * desde dónde se pide repetir… La página es la escala de referencia, sin empresa: ningún punto es «dónde
  * está» alguien.
@@ -153,47 +153,4 @@ export function nivelConMas(p: PuntoDelRadar): Letra | null {
 export function nombreDelPromedio(valor: number, nombreNivel: (l: Letra) => string): string {
   const nombre = nombreNivel(nivelMasCercano(valor));
   return Math.abs(valor - Math.round(valor)) < 0.15 ? nombre : `cerca de ${nombre}`;
-}
-
-// ── Geometría ────────────────────────────────────────────────────────────────
-// Grados de reloj: 0 = arriba, en el sentido de las agujas (como el mapa). La primera dimensión, arriba.
-
-/** El ángulo del eje `i` de `n`. */
-export function anguloDelEje(i: number, n: number): number {
-  return (i * 360) / n;
-}
-
-/** De un nivel (1 = Deficiente … 5 = Óptimo, o un promedio entre ellos) al radio: cada anillo a la misma distancia. */
-export function radioDelNivel(valor: number, radioMaximo: number): number {
-  const v = Math.min(LETRAS.length, Math.max(0, valor));
-  return (v / LETRAS.length) * radioMaximo;
-}
-
-/** Grados de reloj y radio → coordenadas del SVG (la y crece hacia abajo). */
-export function aCoordenadas(cx: number, cy: number, grados: number, r: number): [number, number] {
-  const rad = (grados * Math.PI) / 180;
-  return [cx + r * Math.sin(rad), cy - r * Math.cos(rad)];
-}
-
-/**
- * Por dónde va la línea de una serie: los puntos que existen, unidos con sus vecinos. Con todos, un
- * polígono cerrado; si a alguno le falta, tramos abiertos (la línea no salta por encima de un eje sin
- * punto). Un punto sin vecinos queda solo, sin línea.
- */
-export function tramosDelRadar<T>(puntos: (T | null)[]): { cerrado: boolean; puntos: T[] }[] {
-  const n = puntos.length;
-  if (n === 0) return [];
-  if (puntos.every((p) => p !== null)) return [{ cerrado: true, puntos: puntos as T[] }];
-  const primerHueco = puntos.findIndex((p) => p === null);
-  const tramos: { cerrado: boolean; puntos: T[] }[] = [];
-  let actual: T[] = [];
-  // Se recorre desde el primer hueco para que un tramo que cruza el final del arreglo quede entero.
-  for (let k = 1; k <= n; k++) {
-    const p = puntos[(primerHueco + k) % n];
-    if (p === null) {
-      if (actual.length >= 2) tramos.push({ cerrado: false, puntos: actual });
-      actual = [];
-    } else actual.push(p);
-  }
-  return tramos;
 }
