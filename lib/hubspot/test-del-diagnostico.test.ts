@@ -6,7 +6,17 @@ vi.mock("./contacto-por-correo", () => ({ buscarContactoPorCorreo: vi.fn() }));
 import { leerNotaDelTest } from "@/lib/exploraciones/llegadas";
 import type { Intento } from "@/lib/tests-diagnostico/repositorio-server";
 import type { ResultadoDelTest } from "@/lib/tests-diagnostico/resultado";
-import { configDelFormulario, cuerpoDelFormulario, notaDelIntento, partirElNombre, PROPIEDAD_DEL_RESULTADO } from "./test-del-diagnostico";
+import { getSystemHubspotClient } from "./client";
+import { buscarContactoPorCorreo } from "./contacto-por-correo";
+import {
+  configDelFormulario,
+  cuerpoDelFormulario,
+  dejarNotaYResultado,
+  notaDelIntento,
+  partirElNombre,
+  propiedadesDelContacto,
+  PROPIEDAD_DEL_RESULTADO,
+} from "./test-del-diagnostico";
 
 const base: Intento = {
   id: "c1",
@@ -34,6 +44,7 @@ const base: Intento = {
   email: "ana@acme.com",
   telefono: null,
   puesto: "Gerente comercial",
+  usoDeCrm: null,
   empresa: "Acme",
   dominio: "acme.com",
   industria: "Manufactura",
@@ -61,7 +72,34 @@ describe("el formulario de HubSpot", () => {
   });
 });
 
+describe("lo que se escribe en el contacto", () => {
+  const url = "https://nexus.smarteamcr.com/external/test/resultado/" + "a".repeat(43);
+
+  it("cómo gestionan a sus clientes va en la propiedad que ya existe, con el valor exacto", () => {
+    expect(propiedadesDelContacto({ ...base, usoDeCrm: "Salesforce" })).toEqual({ como_gestionan_actualmente_a_sus_clientes: "Salesforce" });
+    expect(propiedadesDelContacto({ ...base, estado: "terminado", url, usoDeCrm: "No lo sé" })).toEqual({
+      url_ultimo_diag_sales: url,
+      como_gestionan_actualmente_a_sus_clientes: "No lo sé",
+    });
+  });
+
+  it("⛔ ni por el formulario (que lo rechazaría entero) ni con un texto que no es de la propiedad", () => {
+    const conCrm: Intento = { ...base, puesto: null, usoDeCrm: "HubSpot" };
+    expect(cuerpoDelFormulario(conCrm).fields.map((f) => f.name)).not.toContain(
+      "como_gestionan_actualmente_a_sus_clientes",
+    );
+    expect(propiedadesDelContacto({ ...base, usoDeCrm: "Excel" })).toEqual({});
+    expect(propiedadesDelContacto(base)).toEqual({});
+  });
+});
+
 describe("la nota del intento", () => {
+  it("dice cómo gestionan a sus clientes sin romper lo que lee la preventa", () => {
+    const nota = notaDelIntento({ ...base, puesto: null, usoDeCrm: "Aún no usamos ninguna herramienta", estado: "abandonado", preguntas: new Array(8).fill(null) as Intento["preguntas"] })!;
+    expect(nota).toContain("Cómo gestionan hoy a sus clientes: Aún no usamos ninguna herramienta");
+    expect(leerNotaDelTest(nota)).toMatchObject({ estado: "sinTerminar", contacto: "Ana María Pérez", email: "ana@acme.com", dominio: "acme.com" });
+  });
+
   it("en curso no lleva nota; dejado y terminado, la que lee la preventa", () => {
     expect(notaDelIntento(base)).toBeNull();
     const dejada = leerNotaDelTest(notaDelIntento({ ...base, estado: "abandonado", preguntas: new Array(8).fill(null) as Intento["preguntas"] })!);
@@ -71,5 +109,41 @@ describe("la nota del intento", () => {
     const terminada = notaDelIntento({ ...base, estado: "terminado", resultado, url })!;
     expect(terminada).toContain("Funcional");
     expect(leerNotaDelTest(terminada)).toMatchObject({ estado: "terminado", areaId: "1" });
+  });
+});
+
+describe("el uso de CRM en el contacto, si HubSpot falla", () => {
+  const llamadas: { path: string; body: unknown }[] = [];
+  const conRespuestas = (statusDelPatch: number[]) => {
+    llamadas.length = 0;
+    const cola = [...statusDelPatch];
+    vi.mocked(buscarContactoPorCorreo).mockResolvedValue({ estado: "encontrado", contacto: { id: "77" } } as never);
+    vi.mocked(getSystemHubspotClient).mockResolvedValue({
+      apiRequest: vi.fn(async (o: { path: string; body: unknown; method: string }) => {
+        llamadas.push({ path: o.path, body: o.body });
+        return { status: o.method === "PATCH" ? (cola.shift() ?? 200) : 201, text: async () => "" };
+      }),
+    } as never);
+  };
+  const dejado: Intento = { ...base, puesto: null, usoDeCrm: "HubSpot", estado: "abandonado", preguntas: new Array(8).fill(null) as Intento["preguntas"] };
+
+  it("⛔ una falla pasajera (5xx) NO descarta el dato: lanza, no deja la nota, y el job lo reintenta todo", async () => {
+    conRespuestas([503]);
+    await expect(dejarNotaYResultado(dejado)).rejects.toThrow();
+    expect(llamadas.map((l) => l.path)).toEqual(["/crm/v3/objects/contacts/77"]);
+  });
+
+  it("si HubSpot rechaza el VALOR (400), la nota sale igual, sin el dato", async () => {
+    conRespuestas([400]);
+    vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    await dejarNotaYResultado(dejado);
+    expect(llamadas.map((l) => l.path)).toEqual(["/crm/v3/objects/contacts/77", "/crm/v3/objects/notes"]);
+  });
+
+  it("con el valor bueno, va en el contacto y después la nota", async () => {
+    conRespuestas([200]);
+    await dejarNotaYResultado(dejado);
+    expect(llamadas[0].body).toEqual({ properties: { como_gestionan_actualmente_a_sus_clientes: "HubSpot" } });
+    expect(llamadas[1].path).toBe("/crm/v3/objects/notes");
   });
 });

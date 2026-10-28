@@ -39,6 +39,7 @@ export interface IntentoEnPantalla {
   totalDePreguntas: number;
   nombre: string;
   email: string;
+  /** Lo que se ve junto al nombre: «CRM: HubSpot» desde el 2026-10-28; en los intentos de antes, el puesto. */
   puesto: string | null;
   empresa: string | null;
   dominio: string | null;

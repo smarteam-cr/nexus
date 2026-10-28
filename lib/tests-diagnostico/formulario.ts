@@ -3,21 +3,29 @@
  * campo. PURO (lo usa la página, del lado del navegador).
  *
  * Es el formulario de la aplicación vieja (Elías, 28 oct: «que se vea igual»): nombre y apellido, correo de trabajo,
- * dominio, teléfono con su país, puesto, industria y el área, todos obligatorios, con los mismos mensajes. Dos cambios a
+ * dominio, teléfono con su país, cómo gestionan hoy a sus clientes, industria y el área, todos obligatorios, con los mismos mensajes. Dos cambios a
  * propósito: la industria es la lista de Smarteam (decide la edición de las preguntas; la vieja tenía 52 de texto libre),
  * y el área la eligen las tarjetas del mismo formulario. Las pruebas: formulario.test.ts.
  */
 
-/** Las opciones de «Puesto»: las de la propiedad `puesto_actual` de HubSpot, como en la aplicación vieja. */
-export const PUESTOS = [
-  "Gerente general",
-  "Propietario",
-  "Gerente mercadeo",
-  "Gerente ventas",
-  "Ejecutivo de marketing",
-  "Ejecutivo de ventas",
-  "Otro",
+/**
+ * Las opciones de «¿Cómo gestionan actualmente a sus clientes?»: los valores EXACTOS, en su orden, de la propiedad de
+ * contacto `como_gestionan_actualmente_a_sus_clientes` de HubSpot (en ella el valor y la etiqueta son el mismo texto). Desde
+ * el 2026-10-28 reemplaza al «Puesto» de la aplicación vieja (Elías: dice más del prospecto que su cargo).
+ */
+export const USOS_DE_CRM = [
+  "HubSpot",
+  "Salesforce",
+  "Otro CRM (Zoho, Pipedrive, RD Station, Monday, Odoo)",
+  "Hojas de cálculo (Excel, Google Sheets)",
+  "En proceso de buscar un CRM",
+  "Aún no usamos ninguna herramienta",
+  "No lo sé",
 ] as const;
+export type UsoDeCrm = (typeof USOS_DE_CRM)[number];
+
+/** La propiedad del contacto en HubSpot donde viaja (ya existe allá; no se crea). */
+export const PROPIEDAD_DEL_USO_DE_CRM = "como_gestionan_actualmente_a_sus_clientes";
 
 /** Los códigos de país del teléfono (Costa Rica primero, la de por defecto). */
 export const PAISES: readonly { codigo: string; etiqueta: string }[] = [
@@ -97,7 +105,8 @@ export interface ValoresDelFormulario {
   dominio: string;
   pais: string;
   telefono: string;
-  puesto: string;
+  /** Cómo gestionan hoy a sus clientes (una de `USOS_DE_CRM`). */
+  crm: string;
   /** Lo que se ve en el campo: la etiqueta de la industria. */
   industria: string;
   /** El slug del área (`ventas`, `marketing`, `servicio`), o vacío. */
@@ -111,7 +120,7 @@ export const VALORES_VACIOS: ValoresDelFormulario = {
   dominio: "",
   pais: PAIS_POR_DEFECTO,
   telefono: "",
-  puesto: "",
+  crm: "",
   industria: "",
   area: "",
 };
@@ -141,8 +150,8 @@ export function erroresDelFormulario(v: ValoresDelFormulario, industrias: readon
   const telefono = telefonoE164(v.pais, v.telefono);
   if (!v.telefono.replace(/\D/g, "")) e.telefono = "Escribe tu número de teléfono.";
   else if (!/^\+\d{8,16}$/.test(telefono)) e.telefono = "Ese teléfono no parece válido. Revisa el código de país y el número (solo dígitos).";
-  if (!v.puesto.trim()) e.puesto = "Selecciona tu puesto.";
-  else if (!opcionExacta(PUESTOS, v.puesto)) e.puesto = "Elige tu puesto de la lista.";
+  if (!v.crm.trim()) e.crm = "Elige cómo gestionan hoy a sus clientes.";
+  else if (!opcionExacta(USOS_DE_CRM, v.crm)) e.crm = "Elige una opción de la lista.";
   if (!v.industria.trim()) e.industria = "Selecciona tu industria.";
   else if (!opcionExacta(industrias, v.industria)) e.industria = "Elige tu industria de la lista.";
   if (!areas.includes(v.area)) e.area = "Elige el área a diagnosticar.";

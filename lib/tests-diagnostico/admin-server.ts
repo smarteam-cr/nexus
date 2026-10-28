@@ -179,7 +179,8 @@ export async function datosDeLaPantalla(ahora: Date = new Date()): Promise<Datos
         totalDePreguntas: i.preguntas.length,
         nombre: i.nombre,
         email: i.email,
-        puesto: i.puesto,
+        // Lo que se ve junto al nombre: cómo gestionan a sus clientes (desde el 28 oct) o, en los de antes, el puesto.
+        puesto: i.usoDeCrm ? `CRM: ${i.usoDeCrm}` : i.puesto,
         empresa: i.empresa,
         // Para agrupar por empresa: el dominio del correo (el sitio lo escribe cualquiera); con un correo genérico, el sitio.
         dominio: dominioDelCorreo(i.email) ?? i.dominio,

@@ -2,7 +2,7 @@
  * lib/tests-diagnostico/schema.ts — lo que entra por las rutas del test (públicas e internas), validado con Zod. PURO.
  */
 import { z } from "zod";
-import { DOMINIOS_PERSONALES } from "./formulario";
+import { DOMINIOS_PERSONALES, USOS_DE_CRM } from "./formulario";
 import { VERSIONES_DEL_TEST } from "./tipos";
 
 /** Las claves de origen que se guardan. */
@@ -34,7 +34,13 @@ export const EmpezarTestSchema = z
       // La misma regla que la portada: el servidor no confía en que el navegador la haya aplicado.
       .refine((e) => !DOMINIOS_PERSONALES.has(e.split("@")[1] ?? ""), "Necesitamos tu correo corporativo (el de tu empresa)."),
     telefono: opcional(40),
+    /** Lo mandaba la portada hasta el 2026-10-28; se sigue aceptando (una pestaña abierta desde antes del deploy). */
     puesto: opcional(120),
+    /** Cómo gestionan hoy a sus clientes: un valor EXACTO de la propiedad de HubSpot (lo demás se rechaza). */
+    usoDeCrm: z
+      .enum(USOS_DE_CRM)
+      .optional()
+      .transform((v) => v ?? null),
     empresa: opcional(160),
     dominio: opcional(160).transform((v) => (v ? v.toLowerCase().replace(/^https?:\/\//, "").replace(/^www\./, "").replace(/\/.*$/, "") : null)),
     industria: opcional(120),

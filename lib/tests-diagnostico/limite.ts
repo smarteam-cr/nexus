@@ -92,6 +92,42 @@ export function permitirVisita(ipHash: string | null, test: string, ahora: numbe
   return true;
 }
 
+// ── El PDF del resultado (28 oct) ─────────────────────────────────────────────
+// Cada PDF levanta un Chromium en el servidor (lib/print/pdf-runner.ts, que ya limita a 2 a la vez con cola de 4 para
+// TODO Nexus). Como la página es pública, además: una dirección pide hasta `PDF_POR_DIRECCION` cada `VENTANA_DE_PDF_MIN`
+// minutos (cuentan también los pedidos con un token inventado), y entre todas se arman hasta `PDF_POR_HORA`. El tope
+// total cuenta solo los PDF de un resultado que existe: con tokens inventados un script no puede dejar sin PDF a los
+// prospectos de verdad (revisión del 28 oct).
+
+export const PDF_POR_DIRECCION = 6;
+export const VENTANA_DE_PDF_MIN = 10;
+export const PDF_POR_HORA = 120;
+
+const pdfDe = new Map<string, number[]>();
+let pdfs: number[] = [];
+
+/** ¿Puede esta dirección pedir un PDF ahora? Si puede, lo cuenta. Sin dirección, pasa (la cuida el tope total). */
+export function permitirPdfDeLaDireccion(ipHash: string | null, ahora: number = Date.now()): boolean {
+  if (ipHash === null) return true;
+  const recientes = dentro(pdfDe.get(ipHash) ?? [], VENTANA_DE_PDF_MIN * MINUTO, ahora);
+  if (recientes.length >= PDF_POR_DIRECCION) {
+    pdfDe.set(ipHash, recientes);
+    return false;
+  }
+  recientes.push(ahora);
+  pdfDe.set(ipHash, recientes);
+  if (pdfDe.size > 5000) for (const [k, v] of pdfDe) if (!v.some((t) => t > ahora - VENTANA_DE_PDF_MIN * MINUTO)) pdfDe.delete(k);
+  return true;
+}
+
+/** ¿Se puede armar un PDF más esta hora, entre todos? Si se puede, lo cuenta. Va DESPUÉS de saber que el resultado existe. */
+export function permitirPdfEnTotal(ahora: number = Date.now()): boolean {
+  pdfs = dentro(pdfs, HORA, ahora);
+  if (pdfs.length >= PDF_POR_HORA) return false;
+  pdfs.push(ahora);
+  return true;
+}
+
 /**
  * La dirección del visitante para contarlo. La toma de lo que agrega el proxy de entrada (nginx): la ÚLTIMA de
  * `X-Forwarded-For` (las anteriores las puede escribir el propio visitante, y con la primera un script cambiaba de
@@ -111,4 +147,6 @@ export function reiniciarLimites(): void {
   porIntento.clear();
   visitasDe.clear();
   visitas = [];
+  pdfDe.clear();
+  pdfs = [];
 }

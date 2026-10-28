@@ -7,7 +7,10 @@
  *      un lead, lo termine o no;
  *   2. al terminar o dejarlo, una NOTA en el contacto con el mismo formato de siempre («📊 Diagnóstico de Rendimiento —
  *      Área · nivel» / «⏳ Diagnóstico SIN TERMINAR — Área»), que lee `lib/exploraciones/test-de-marketing.ts`;
- *   3. al terminar, la dirección del resultado en la propiedad del contacto `url_ultimo_diag_sales|marketing|service`.
+ *   3. al terminar, la dirección del resultado en la propiedad del contacto `url_ultimo_diag_sales|marketing|service`;
+ *   4. con la nota, cómo gestionan hoy a sus clientes en la propiedad del contacto que ya existe
+ *      (`como_gestionan_actualmente_a_sus_clientes`). Va por la API del CRM y no por el formulario: el envío público
+ *      rechaza ENTERO (400 FIELD_NOT_IN_FORM_DEFINITION) un campo que el formulario de HubSpot no tiene.
  *
  * Lo corre el job `tests-hubspot` (lib/jobs/defs.ts), APAGADO por defecto (`TESTS_HUBSPOT_ENABLED=1` lo prende): nada
  * escribe en el HubSpot real hasta que Elías lo decida. El formulario es un envío público (sin token, como el de la
@@ -15,6 +18,7 @@
  */
 import type { Intento } from "@/lib/tests-diagnostico/repositorio-server";
 import { notaDelTestSinTerminar, notaDelTestTerminado } from "@/lib/tests-diagnostico/nota";
+import { PROPIEDAD_DEL_USO_DE_CRM, USOS_DE_CRM } from "@/lib/tests-diagnostico/formulario";
 import { ETIQUETA_DE_LA_VERSION, NOMBRE_DEL_AREA } from "@/lib/tests-diagnostico/tipos";
 import { getSystemHubspotClient } from "./client";
 import { buscarContactoPorCorreo } from "./contacto-por-correo";
@@ -100,6 +104,7 @@ export function notaDelIntento(i: Intento): string | null {
     dominio: i.dominio,
     industria: i.industria,
     puesto: i.puesto,
+    usoDeCrm: i.usoDeCrm,
     version: ETIQUETA_DE_LA_VERSION[i.version],
   };
   if (i.estado === "terminado" && i.resultado && i.url) {
@@ -116,6 +121,18 @@ export function notaDelIntento(i: Intento): string | null {
 }
 
 /**
+ * Lo que se escribe en el contacto (PURO): la dirección del resultado si terminó y cómo gestionan hoy a sus clientes, si
+ * es un valor de la propiedad (otro texto, HubSpot lo rechazaría). Vacío = no hay nada que escribir.
+ */
+export function propiedadesDelContacto(i: Pick<Intento, "area" | "estado" | "url" | "usoDeCrm">): Record<string, string> {
+  const props: Record<string, string> = {};
+  const propiedad = PROPIEDAD_DEL_RESULTADO[i.area];
+  if (i.estado === "terminado" && i.url && propiedad) props[propiedad] = i.url;
+  if (i.usoDeCrm && (USOS_DE_CRM as readonly string[]).includes(i.usoDeCrm)) props[PROPIEDAD_DEL_USO_DE_CRM] = i.usoDeCrm;
+  return props;
+}
+
+/**
  * Deja la nota en el contacto y, si terminó, la dirección del resultado en su propiedad. Lanza si el contacto todavía no
  * está (el formulario tarda en procesarse: el job lo reintenta) o si HubSpot no aceptó algo.
  */
@@ -128,10 +145,20 @@ export async function dejarNotaYResultado(i: Intento): Promise<void> {
   }
   const contactoId = busqueda.contacto.id;
   const hs = await getSystemHubspotClient();
-  const propiedad = PROPIEDAD_DEL_RESULTADO[i.area];
-  if (i.estado === "terminado" && i.url && propiedad) {
-    const r = await hs.apiRequest({ method: "PATCH", path: `/crm/v3/objects/contacts/${contactoId}`, body: { properties: { [propiedad]: i.url } } });
-    if (r.status >= 300) throw new Error(`HubSpot no guardó la dirección del resultado (${await textoDe(r as unknown as Response)}).`);
+  const props = propiedadesDelContacto(i);
+  if (Object.keys(props).length) {
+    const patch = (properties: Record<string, string>) =>
+      hs.apiRequest({ method: "PATCH", path: `/crm/v3/objects/contacts/${contactoId}`, body: { properties } });
+    let r: Awaited<ReturnType<typeof patch>> | null = await patch(props);
+    // Si HubSpot RECHAZA el valor (400: alguien cambió las opciones de la propiedad), la dirección y la nota igual salen:
+    // se avisa en el log y se reintenta sin él. Cualquier otra falla (un 5xx, un 429) lanza y el job lo reintenta todo
+    // después: descartar el dato por una falla pasajera lo perdía para siempre (revisión del 28 oct).
+    if (r.status === 400 && PROPIEDAD_DEL_USO_DE_CRM in props) {
+      console.warn(`[tests-hubspot] HubSpot no aceptó ${PROPIEDAD_DEL_USO_DE_CRM} (${await textoDe(r as unknown as Response)}).`);
+      const sinCrm = Object.fromEntries(Object.entries(props).filter(([k]) => k !== PROPIEDAD_DEL_USO_DE_CRM));
+      r = Object.keys(sinCrm).length ? await patch(sinCrm) : null;
+    }
+    if (r && r.status >= 300) throw new Error(`HubSpot no guardó la dirección del resultado (${await textoDe(r as unknown as Response)}).`);
   }
   const n = await hs.apiRequest({
     method: "POST",
