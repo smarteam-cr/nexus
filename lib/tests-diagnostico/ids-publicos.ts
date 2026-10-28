@@ -7,17 +7,35 @@
  * (`respuestasDelBanco`), descartando lo que no corresponde a ese intento. Las pruebas: ids-publicos.test.ts.
  */
 import { randomBytes } from "node:crypto";
+import type { Escala } from "@/lib/escala/documento/tipos";
 import type { Intento, PreguntaDelIntento } from "./repositorio-server";
 import { NO_LO_SE, type PreguntaDelBanco, type RespuestasDelTest, type VersionDelTest } from "./tipos";
 
-/** Las preguntas del banco con ids opacos para la persona (el `id` y el nivel de cada opción quedan del lado nuestro). */
-export function conIdsPublicos(preguntas: readonly PreguntaDelBanco[]): PreguntaDelIntento[] {
+/**
+ * Las preguntas del banco con ids opacos para la persona (el `id` y el nivel de cada opción quedan del lado nuestro).
+ * `nombres` da, por dimensión, el nombre del paso y de su capa como los dice la escala de la edición: es lo que muestra la
+ * barra de avance (Elías, 28 oct: «con el nombre de cada paso», como la aplicación vieja). El nombre no dice nada del
+ * nivel de ninguna opción.
+ */
+export function conIdsPublicos(
+  preguntas: readonly PreguntaDelBanco[],
+  nombres: Readonly<Record<string, { paso: string; capa: string | null }>> = {},
+): PreguntaDelIntento[] {
   const opaco = () => randomBytes(6).toString("hex");
   return preguntas.map((p) => ({
     ...p,
     publico: `q${opaco()}`,
     opcionesPublicas: Object.fromEntries(p.opciones.map((o) => [o.id, `o${opaco()}`])),
+    ...(nombres[p.dimensionId] ? { paso: nombres[p.dimensionId].paso, capa: nombres[p.dimensionId].capa } : {}),
   }));
+}
+
+/** Por dimensión del área, el nombre del paso y el de su capa, con las palabras de la escala que recibe (la de la edición). */
+export function nombresDeLosPasos(escala: Escala, areaId: string): Record<string, { paso: string; capa: string | null }> {
+  const area = escala.areas.find((a) => a.id === areaId);
+  return Object.fromEntries(
+    (area?.dimensiones ?? []).map((d) => [d.id, { paso: d.nombre, capa: escala.capas.find((c) => c.clave === d.capa)?.nombre ?? null }]),
+  );
 }
 
 /** Lo que ve la persona de una pregunta: sin ids del banco, dimensiones ni niveles. */
@@ -26,6 +44,9 @@ export interface PreguntaPublica {
   texto: string;
   ayuda: string | null;
   opciones: { id: string; texto: string }[];
+  /** El nombre del paso en la barra de avance («Procesos y Rutinas») y el de su capa; null en un intento de antes. */
+  paso: string | null;
+  capa: string | null;
 }
 
 export interface VistaDelIntento {
@@ -58,6 +79,8 @@ export function vistaDelIntento(i: Intento): VistaDelIntento {
       texto: p.texto,
       ayuda: p.ayuda,
       opciones: p.opciones.map((o) => ({ id: p.opcionesPublicas[o.id], texto: o.texto })),
+      paso: p.paso ?? null,
+      capa: p.capa ?? null,
     })),
     respuestas,
   };

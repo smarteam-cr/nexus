@@ -24,7 +24,7 @@ import { esDominioGenerico } from "@/lib/clients/personas-de-la-empresa";
 import { resultadoDelTest, type ResultadoDelTest } from "./resultado";
 import { urlDelResultado } from "./enlace";
 import { NO_LO_SE, type VersionDelTest } from "./tipos";
-import { conIdsPublicos, respuestasDelBanco, vistaDelIntento, type VistaDelIntento } from "./ids-publicos";
+import { conIdsPublicos, nombresDeLosPasos, respuestasDelBanco, vistaDelIntento, type VistaDelIntento } from "./ids-publicos";
 import {
   aprobadasPara,
   crearIntento,
@@ -87,7 +87,7 @@ export async function empezarTest(o: {
     // La edición de las preguntas que se usaron (la de la industria o la general).
     edicion: aprobadas.banco.edicion === "general" ? null : edicion,
     escalaVersion: escala.version,
-    preguntas: conIdsPublicos(aprobadas.preguntas),
+    preguntas: conIdsPublicos(aprobadas.preguntas, nombresDeLosPasos(escala, o.area)),
     persona,
     clientId,
     origen: o.origen,

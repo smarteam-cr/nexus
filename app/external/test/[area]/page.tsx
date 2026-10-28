@@ -2,34 +2,37 @@
  * /external/test/[area] — EL TEST PÚBLICO del diagnóstico de rendimiento de un departamento (área O, 2026-10-26).
  *
  * `ventas`, `marketing` o `servicio`; `?v=marketing` abre la versión de 4 preguntas (sin `v`, la web de 8). Sin login:
- * cualquiera la abre desde la web de Smarteam o un enlace de campaña. Sin preguntas APROBADAS para esa área y versión, la
- * página dice que el test todavía no está abierto: nadie llena preguntas que Elías no revisó.
+ * cualquiera la abre desde la web de Smarteam o un enlace de campaña. Es la misma portada de la entrada (la de la
+ * aplicación vieja, 2026-10-28) con esta área ya marcada; la persona puede cambiarla en el formulario. Sin preguntas
+ * APROBADAS para esa área y versión, la página dice que el test todavía no está abierto: nadie llena preguntas que Elías
+ * no revisó.
  *
- * La INDUSTRIA llega en la dirección (`?industria=…`, la eligió en la entrada) y decide el banco: el de su edición o, si no
- * tiene, el de la general. Sin ella (un enlace directo de campaña), lo primero que ve la persona es la pregunta de la
- * industria, y con la respuesta la página se vuelve a armar con su banco (Elías, 27 oct).
+ * La INDUSTRIA es un campo del formulario y decide el banco al empezar (el de su edición o, si no tiene, el de la
+ * general). Si la dirección la trae (`?industria=…`, de la lista), llega elegida.
  *
  * Página del cliente (§1-WEB): tema claro con hex literal, tuteo, sin el chrome de un proyecto. Carga los píxeles de
  * anuncios de la página vieja, cada uno solo si su variable está puesta (O6 etapa 2, lib/tests-diagnostico/pixeles.ts).
  */
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
-import ExternalShell from "@/components/external/ExternalShell";
 import PixelesDelTest from "@/components/external/test/PixelesDelTest";
 import TestDelDiagnostico from "@/components/external/test/TestDelDiagnostico";
-import { edicionDeLaIndustria } from "@/lib/clients/datos-de-la-empresa";
-import { getBrandLogos } from "@/lib/external/smarteam-logo";
-import { consultaConIndustria, sufijo, type Consulta } from "@/lib/tests-diagnostico/direccion-publica";
+import "@/components/external/test/diagnostico.css";
+import { PREGUNTAS_POR_VERSION } from "@/lib/tests-diagnostico/banco";
+import { consultaConIndustria, industriasDelFormulario, sufijo, type Consulta } from "@/lib/tests-diagnostico/direccion-publica";
 import { pixelesDelTest } from "@/lib/tests-diagnostico/pixeles";
-import { aprobadasPara } from "@/lib/tests-diagnostico/repositorio-server";
+import { areasAbiertas } from "@/lib/tests-diagnostico/repositorio-server";
 import { AREA_POR_SLUG, NOMBRE_DEL_AREA, esVersionDelTest } from "@/lib/tests-diagnostico/tipos";
 
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   title: "Diagnóstico de Rendimiento · Smarteam",
+  description: "Diagnóstico con IA de la Escala de Rendimiento Smarteam: descubre el nivel real de tu departamento.",
   robots: { index: false, follow: false },
 };
+
+const LOGO = "/logo-smarteam-blanco.png";
 
 export default async function TestPage({ params, searchParams }: { params: Promise<{ area: string }>; searchParams: Promise<Consulta> }) {
   const [{ area }, q] = await Promise.all([params, searchParams]);
@@ -41,27 +44,43 @@ export default async function TestPage({ params, searchParams }: { params: Promi
   const { pasa, industria, limpia } = consultaConIndustria(q);
   if (!limpia) redirect(`/external/test/${area}${sufijo(pasa)}`);
   const version = esVersionDelTest(v) ? v : "web";
-  // Sin industria todavía, el banco de la general: solo decide si el test está abierto (el de la edición cae a ella).
-  const [aprobadas, logos] = await Promise.all([aprobadasPara(areaId, version, edicionDeLaIndustria(industria)).catch(() => null), getBrandLogos()]);
+  // El banco de la general decide si un test está abierto (el de una edición cae a ella); las otras áreas cerradas se ven
+  // apagadas en el formulario.
+  const abiertas = await areasAbiertas(version);
   const pixeles = pixelesDelTest(process.env);
 
   return (
-    <ExternalShell smarteamLogoUrl={logos.smarteam}>
+    <>
       <PixelesDelTest pixeles={pixeles} />
-      {aprobadas ? (
-        <TestDelDiagnostico area={area} areaNombre={NOMBRE_DEL_AREA[areaId]} version={version} total={aprobadas.preguntas.length}
+      {abiertas.includes(area) ? (
+        <TestDelDiagnostico
+          areaInicial={area}
+          version={version}
+          total={PREGUNTAS_POR_VERSION[version]}
+          industriaInicial={industria}
+          industrias={industriasDelFormulario()}
+          logo={LOGO}
+          abiertas={abiertas}
           conversionGoogleAds={pixeles.conversionGoogleAds}
-          industria={industria}
-          consulta={[...pasa.entries()].filter(([k]) => k !== "industria")}
         />
       ) : (
-        <div style={{ maxWidth: 640, margin: "0 auto", padding: "64px 20px", fontFamily: "var(--font-jakarta), system-ui, sans-serif", color: "#0f1b3d" }}>
-          <h1 style={{ fontSize: 26, margin: "0 0 10px" }}>Este test todavía no está abierto</h1>
-          <p style={{ fontSize: 16, color: "#5b6a8a", lineHeight: 1.6, margin: 0 }}>
-            Estamos terminando de prepararlo. Vuelve a intentarlo en unos días o escríbenos para conversar sobre tu área de {NOMBRE_DEL_AREA[areaId]}.
-          </p>
+        <div className="dr dr-pasos">
+          <header className="topbar">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <span className="brand"><img src={LOGO} alt="Smarteam" height={28} /></span>
+          </header>
+          <main className="app">
+            <div className="step-wrap">
+              <article className="step-card cerrado">
+                <h2>Este test todavía no está abierto</h2>
+                <p>
+                  Estamos terminando de prepararlo. Vuelve a intentarlo en unos días o escríbenos para conversar sobre tu área de {NOMBRE_DEL_AREA[areaId]}.
+                </p>
+              </article>
+            </div>
+          </main>
         </div>
       )}
-    </ExternalShell>
+    </>
   );
 }

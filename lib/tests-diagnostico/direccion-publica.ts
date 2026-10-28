@@ -58,6 +58,16 @@ export function industriaDelTest(v: string | string[] | undefined): string | nul
   return INDUSTRIAS_DE_SMARTEAM.some((i) => i.valor === valor) ? valor : null;
 }
 
+/** La lista del campo «Industria» del formulario: la de Smarteam y «Otra» al final (se ve la etiqueta, se guarda el valor). */
+export function industriasDelFormulario(): { valor: string; etiqueta: string }[] {
+  return [...INDUSTRIAS_DE_SMARTEAM.map(({ valor, etiqueta }) => ({ valor, etiqueta })), { valor: OTRA_INDUSTRIA, etiqueta: OTRA_INDUSTRIA }];
+}
+
+/** Lo que se guarda («Consultoria») de lo que eligió la persona en el campo («Consultoría»); vacío si no es de la lista. */
+export function valorDeLaIndustria(etiqueta: string): string {
+  return industriasDelFormulario().find((i) => i.etiqueta === etiqueta)?.valor ?? "";
+}
+
 /** El nombre que se le muestra a la persona («Consultoría»), no el valor que se guarda («Consultoria»). */
 export function etiquetaDeIndustria(valor: string): string {
   return INDUSTRIAS_DE_SMARTEAM.find((i) => i.valor === valor)?.etiqueta ?? valor;

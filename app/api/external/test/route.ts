@@ -1,8 +1,9 @@
 /**
  * POST /api/external/test — EMPEZAR el test del diagnóstico de rendimiento (área O, 2026-10-26).
  *
- * Pública (sin login): la persona llena el formulario de hoy (nombre, correo de trabajo, empresa, dominio, teléfono,
- * puesto e industria) y recibe su intento: un token de 256 bits y las preguntas, sin ids del banco ni niveles.
+ * Pública (sin login): la persona llena el formulario de la portada (nombre y apellido, correo de trabajo, dominio,
+ * teléfono, puesto, industria y área) y recibe su intento: un token de 256 bits y las preguntas, sin ids del banco ni
+ * niveles. El banco lo decide la industria (el de su edición o el de la general).
  * Protección contra abuso (lib/tests-diagnostico/limite.ts): tope por dirección y en total, y un campo trampa.
  * Sin preguntas aprobadas para esa área, 409: el test no se abre con preguntas que nadie revisó.
  */
@@ -37,7 +38,8 @@ export async function POST(req: NextRequest) {
       area: AREA_POR_SLUG[d.area],
       version: d.version,
       persona: {
-        nombre: d.nombre,
+        // El intento guarda una sola persona con su nombre entero: el apellido va detrás.
+        nombre: [d.nombre, d.apellido].filter(Boolean).join(" ").slice(0, 160),
         email: d.email,
         telefono: d.telefono,
         puesto: d.puesto,

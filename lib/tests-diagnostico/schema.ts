@@ -2,6 +2,7 @@
  * lib/tests-diagnostico/schema.ts — lo que entra por las rutas del test (públicas e internas), validado con Zod. PURO.
  */
 import { z } from "zod";
+import { DOMINIOS_PERSONALES } from "./formulario";
 import { VERSIONES_DEL_TEST } from "./tipos";
 
 /** Las claves de origen que se guardan. */
@@ -22,7 +23,16 @@ export const EmpezarTestSchema = z
     area: z.enum(["ventas", "marketing", "servicio"]),
     version: z.enum(VERSIONES_DEL_TEST).default("web"),
     nombre: corto(120).min(2, "Escribe tu nombre."),
-    email: z.string().trim().toLowerCase().email("Escribe un correo válido.").max(200),
+    /** Desde el 2026-10-28 el formulario lo pide aparte (como la aplicación vieja); se guarda junto al nombre. */
+    apellido: opcional(120),
+    email: z
+      .string()
+      .trim()
+      .toLowerCase()
+      .email("Escribe un correo válido.")
+      .max(200)
+      // La misma regla que la portada: el servidor no confía en que el navegador la haya aplicado.
+      .refine((e) => !DOMINIOS_PERSONALES.has(e.split("@")[1] ?? ""), "Necesitamos tu correo corporativo (el de tu empresa)."),
     telefono: opcional(40),
     puesto: opcional(120),
     empresa: opcional(160),
