@@ -82,6 +82,10 @@
     {
      "fecha": "28 oct",
      "texto": "La edición «Maquinaria y equipo pesado» (escala 9.1.1) y la vista Radar, por puntos."
+    },
+    {
+     "fecha": "28 oct",
+     "texto": "La vista Radar rediseñada con la misma rueda que el Mapa: mismas mitades y rótulos, con puntos por serie."
     }
    ],
    "sigue": "Probarla con 5 a 8 empresas de al menos 3 industrias (Escala › Probar). Falta el umbral de tráfico de Insider (se usa uno provisional).",
@@ -124,6 +128,14 @@
     {
      "fecha": "28 oct",
      "texto": "El test público con el aspecto de la aplicación vieja, la industria en el formulario y Preguntas separadas por área."
+    },
+    {
+     "fecha": "28 oct",
+     "texto": "El resultado nuevo: la rueda de la empresa arriba, barras cortas, el calendario para agendar y «Descargar PDF»."
+    },
+    {
+     "fecha": "28 oct",
+     "texto": "El formulario pregunta cómo gestionan hoy a sus clientes (en vez del puesto) y ya no sale el aviso al terminar."
     }
    ],
    "sigue": "Tu revisión de las preguntas. Después, el corte: un formulario nuevo de HubSpot, cambiar la dirección y apagar la aplicación vieja.",
@@ -569,7 +581,7 @@ Que Nexus amarre los puntos: entrar a un cliente y ver todo lo que Smarteam est�
 
 | Qué | Cómo está |
 |---|---|
-| Producción | Corre `7a71fedb` desde el 28 oct: el equipo de cada sesión, «Usar» con Deshacer, la vista Radar, la edición Maquinaria y el test público con el aspecto de la aplicación vieja. Antes, desde el 27 oct: la noche 3, la escala 9.0 publicada (con el manual 1.4.0 y el mapa 2.0.0), el test nuevo con sus 42 bancos aprobados y el sprint sin tope. Todos los SQL aplicados. |
+| Producción | Corre `e63217a3` desde el 28 oct: el equipo de cada sesión, «Usar» con Deshacer, la vista Radar con la forma del Mapa, la edición Maquinaria y el test público con el aspecto de la aplicación vieja, su resultado nuevo con la rueda y el PDF, y la pregunta del CRM (SQL 2026-10-28-uso-de-crm-del-test aplicado). Antes, desde el 27 oct: la noche 3, la escala 9.0 publicada (con el manual 1.4.0 y el mapa 2.0.0), el test nuevo con sus 42 bancos aprobados y el sprint sin tope. Todos los SQL aplicados. |
 | Por desplegar | Nada. **Sin aplicar, a propósito:** la carga inicial de los datos de la empresa (espera a la CSL), unir las 6 «Información del cliente» repetidas (borra copias: «Lo que decides tú» 36), y las banderas `EMPRESA_HUBSPOT_ESCRITURA` y `EMPRESA_HUBSPOT_COPIA` («Lo que configuras tú»). |
 | En rojo en producción | 4 invariantes: el pipeline de Secure Title, «TEC- AE» fusionada en HubSpot y el corte de cobranza apagado (con su decisión abajo), y desde el 21 oct INV16(a): 2 reuniones de Meet leídas antes de ocurrir (un evento movido de fecha después de leerse, el caso conocido de KNOWN-ERRORS). |
 | Pruebas | 25 para ti (pestaña «Pruebas para personas»; desde el 20 oct solo las que piden tu criterio), 81 que valida el equipo al usarlas, 77 con IA sobre los datos y 48 ya validadas por ti. |
