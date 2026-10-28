@@ -11,7 +11,7 @@
  * dirección del área (`/external/test/ventas`) solo la deja marcada.
  *
  * Lo demás sigue igual: el avance se guarda en cada paso (si cierra la pestaña, al volver retoma donde quedó: el token
- * vive en este navegador), el aviso de que todavía no terminó si intenta irse, y quien responde nunca ve niveles ni
+ * vive en este navegador; por eso no hay aviso del navegador al irse), y quien responde nunca ve niveles ni
  * ids del banco: las opciones traen ids que solo sirven para este intento. El token se guarda por área y versión: dos
  * tests a medio hacer no se pisan. La visita se cuenta UNA vez por pestaña: al abrir, si la dirección ya trae el área; si
  * no, con la primera que elige (tocar las otras tarjetas para leerlas no suma visitas).
@@ -22,7 +22,7 @@ import {
   erroresDelFormulario,
   limpiarDominio,
   opcionExacta,
-  PUESTOS,
+  USOS_DE_CRM,
   telefonoE164,
   VALORES_VACIOS,
   type CampoDelFormulario,
@@ -148,17 +148,8 @@ export default function TestDelDiagnostico({
     if (areaInicial) contarVisita(areaInicial);
   }, [areaInicial, contarVisita]);
 
-  // El aviso de abandono: con el test empezado y sin terminar, el navegador pregunta antes de irse.
-  const enCurso = !!vista && vista.estado !== "terminado";
-  useEffect(() => {
-    if (!enCurso) return;
-    const avisar = (e: BeforeUnloadEvent) => {
-      e.preventDefault();
-      e.returnValue = "";
-    };
-    window.addEventListener("beforeunload", avisar);
-    return () => window.removeEventListener("beforeunload", avisar);
-  }, [enCurso]);
+  // Sin aviso del navegador al irse (Elías, 28 oct): salía también al terminar, justo al pasar al resultado («¿Deseas
+  // abandonar el sitio?»), y no protegía nada: el avance se guarda en cada pregunta y, al volver, retoma donde quedó.
 
   const cambiar = (campo: CampoDelFormulario, valor: string) => {
     setValores((v) => ({ ...v, [campo]: valor }));
@@ -195,7 +186,7 @@ export default function TestDelDiagnostico({
       apellido: valores.apellido.trim(),
       email: valores.email.trim(),
       telefono: telefonoE164(valores.pais, valores.telefono),
-      puesto: opcionExacta(PUESTOS, valores.puesto) ?? "",
+      usoDeCrm: opcionExacta(USOS_DE_CRM, valores.crm) ?? "",
       dominio: limpiarDominio(valores.dominio),
       industria: etiqueta ? valorDeLaIndustria(etiqueta) : "",
       sitio: String(f.get("sitio") ?? ""),

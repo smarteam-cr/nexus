@@ -6,6 +6,7 @@ import {
   opcionExacta,
   PAIS_POR_DEFECTO,
   telefonoE164,
+  USOS_DE_CRM,
   VALORES_VACIOS,
   type ValoresDelFormulario,
 } from "./formulario";
@@ -21,7 +22,7 @@ const bueno: ValoresDelFormulario = {
   dominio: "https://www.acme.com/contacto",
   pais: PAIS_POR_DEFECTO,
   telefono: "8888 7777",
-  puesto: "gerente VENTAS",
+  crm: "hojas de calculo (excel, google sheets)",
   industria: INDUSTRIAS[0],
   area: "ventas",
 };
@@ -33,7 +34,7 @@ describe("el formulario de la portada del test (como la aplicación vieja)", () 
 
   it("vacío, cada campo dice qué le falta, el área incluida", () => {
     const e = erroresDelFormulario(VALORES_VACIOS, INDUSTRIAS, AREAS);
-    expect(Object.keys(e).sort()).toEqual(["apellido", "area", "dominio", "email", "industria", "nombre", "puesto", "telefono"]);
+    expect(Object.keys(e).sort()).toEqual(["apellido", "area", "crm", "dominio", "email", "industria", "nombre", "telefono"]);
     expect(e.area).toBe("Elige el área a diagnosticar.");
   });
 
@@ -43,8 +44,9 @@ describe("el formulario de la portada del test (como la aplicación vieja)", () 
     expect(erroresDelFormulario({ ...bueno, dominio: "hotmail.com" }, INDUSTRIAS, AREAS).dominio).toMatch(/correo personal/);
   });
 
-  it("⛔ el puesto y la industria tienen que ser de la lista", () => {
-    expect(erroresDelFormulario({ ...bueno, puesto: "Astronauta" }, INDUSTRIAS, AREAS).puesto).toBe("Elige tu puesto de la lista.");
+  it("⛔ el uso de CRM y la industria tienen que ser de la lista", () => {
+    expect(erroresDelFormulario({ ...bueno, crm: "Excel" }, INDUSTRIAS, AREAS).crm).toBe("Elige una opción de la lista.");
+    expect(erroresDelFormulario({ ...bueno, crm: "" }, INDUSTRIAS, AREAS).crm).toBe("Elige cómo gestionan hoy a sus clientes.");
     expect(erroresDelFormulario({ ...bueno, industria: "Inventada" }, INDUSTRIAS, AREAS).industria).toBe("Elige tu industria de la lista.");
     expect(erroresDelFormulario({ ...bueno, industria: "Otra" }, INDUSTRIAS, AREAS)).toEqual({});
   });
@@ -69,6 +71,35 @@ describe("el formulario de la portada del test (como la aplicación vieja)", () 
     expect(nombreDelTest("1", "web")).toBe("Test web de Ventas (8 preguntas)");
     expect(nombreDelTest("1", "marketing")).toBe("Test corto de Ventas (4 preguntas)");
     expect(nombreDelTest("2", "marketing")).toBe("Test corto de Marketing (4 preguntas)");
+  });
+});
+
+describe("«¿Cómo gestionan actualmente a sus clientes?» es la propiedad de HubSpot tal cual", () => {
+  it("⛔ las siete opciones, con el texto exacto y en el orden de HubSpot (otro texto, HubSpot lo rechaza)", () => {
+    expect(USOS_DE_CRM).toEqual([
+      "HubSpot",
+      "Salesforce",
+      "Otro CRM (Zoho, Pipedrive, RD Station, Monday, Odoo)",
+      "Hojas de cálculo (Excel, Google Sheets)",
+      "En proceso de buscar un CRM",
+      "Aún no usamos ninguna herramienta",
+      "No lo sé",
+    ]);
+  });
+
+  it("lo escrito sin tildes ni mayúsculas viaja con el valor exacto", () => {
+    expect(opcionExacta(USOS_DE_CRM, "aun no usamos ninguna herramienta")).toBe("Aún no usamos ninguna herramienta");
+  });
+
+  it("⛔ el servidor solo acepta un valor de la lista; el puesto de una pestaña vieja sigue entrando", async () => {
+    const { EmpezarTestSchema } = await import("./schema");
+    const base = { area: "ventas", version: "web", nombre: "Ana", email: "ana@acme.com" };
+    const ok = EmpezarTestSchema.safeParse({ ...base, usoDeCrm: "HubSpot" });
+    expect(ok.success && ok.data.usoDeCrm).toBe("HubSpot");
+    expect(EmpezarTestSchema.safeParse({ ...base, usoDeCrm: "hubspot" }).success).toBe(false);
+    const sin = EmpezarTestSchema.safeParse(base);
+    expect(sin.success && sin.data.usoDeCrm).toBeNull();
+    expect(EmpezarTestSchema.safeParse({ ...base, puesto: "Gerente general" }).success).toBe(true);
   });
 });
 

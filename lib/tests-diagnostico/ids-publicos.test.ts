@@ -40,6 +40,7 @@ function intento(): Intento {
     email: "ana@acme.com",
     telefono: null,
     puesto: null,
+    usoDeCrm: null,
     empresa: null,
     dominio: null,
     industria: null,

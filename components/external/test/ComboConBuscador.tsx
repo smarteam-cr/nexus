@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * components/external/test/ComboConBuscador.tsx — un campo con buscador para elegir de una lista (puesto, industria y
+ * components/external/test/ComboConBuscador.tsx — un campo con buscador para elegir de una lista (cómo gestionan a sus clientes, industria y
  * país del teléfono en la portada del test). Calca el de la aplicación vieja: al entrar se vacía y muestra toda la lista,
  * lo escrito la filtra sin importar tildes, se navega con ↑ ↓ Enter y Esc, y al salir sin elegir vuelve lo que estaba.
  * Solo acepta una opción de la lista: si lo escrito no es una, se borra. Página del cliente: las clases de diagnostico.css.

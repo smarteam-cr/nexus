@@ -1,133 +1,81 @@
 /**
  * components/external/test/ResultadoDelTestVista.tsx — LA PÁGINA DE RESULTADOS del test del diagnóstico (área O,
- * 2026-10-26). Server component, sin JS: la curva, el radar y las barras son SVG estático (§1-WEB: también sirve para
- * PDF). Tema claro con hex literal, en tuteo.
+ * 2026-10-26). Server component: el radar y las barras son SVG y CSS estáticos, así que la misma vista sirve para el PDF
+ * (`modo="pdf"`, lib/print/pdf-runner.ts). Tema claro con hex literal, en tuteo.
  *
- * Lo que dice, en este orden: dónde está el área (marcado como ESTIMADO: lo dijo quien respondió), la curva de los cinco
- * niveles, el radar y las barras de cada dimensión, UNA sola recomendación con su razón y lo que cuesta quedarse, los
- * riesgos activos, los casos de uso que lo mueven (sin precio) y la invitación a conversarlo.
+ * Se ve como el resultado de la aplicación vieja (Elías, 28 oct; el aspecto vive en resultado.css): los botones arriba,
+ * la cabecera celeste con el nivel en grande, las barras con su puntaje sobre 100 y el calendario de HubSpot para agendar.
+ * Cambios a propósito contra la vieja:
+ *   · arriba de todo va el RADAR de la empresa, debajo del nivel: la rueda de la escala (RadarDeUnaEmpresa, la del Mapa)
+ *     en escritorio y en el PDF, y el radar simple (RadarDelResultado) en el celular; reemplaza la curva de niveles;
+ *   · el foco son las tres piezas de Nexus: «Por dónde empezar» (UNA recomendación, su razón y lo que cuesta quedarse),
+ *     «Lo que hoy pone en riesgo a tu área» y «Lo que lo mueve» (sin precio);
+ *   · las barras van después y compactas: nombre, barra, puntaje y nivel en una línea, sin la explicación de cada una;
+ *   · los mensajes son los de la vieja, más cortos. El nivel va marcado como ESTIMADO: lo dijo quien respondió.
+ * En el PDF no van los botones ni el calendario (se deja el enlace para agendar). Las salidas a la portada son enlaces
+ * comunes y no `<Link>`: al volver con «Atrás», Next revivía la página en el navegador y la agenda de HubSpot quedaba en
+ * blanco; con una carga completa vuelve bien (probado el 28 oct).
  */
-import Link from "next/link";
-import type { CSSProperties } from "react";
+/* eslint-disable @next/next/no-html-link-for-pages -- las salidas a la portada recargan la página a propósito: con
+   `<Link>`, al volver con «Atrás» la agenda de HubSpot quedaba en blanco (ver el encabezado). */
+import { puntajeDeLaDimension } from "@/lib/tests-diagnostico/pagina-del-resultado";
 import type { ResultadoDelTest } from "@/lib/tests-diagnostico/resultado";
+import CalendarioDeHubspot from "./CalendarioDeHubspot";
+import DescargarPdfDelResultado from "./DescargarPdfDelResultado";
+import RadarDeUnaEmpresa from "@/components/escala/RadarDeUnaEmpresa";
+import RadarDelResultado from "./RadarDelResultado";
+import "./diagnostico.css";
+import "./resultado.css";
 
-const ACENTO = "#E8481C";
-const ROYAL = "#0B58D3";
-const TINTA = "#0f1b3d";
-const TINTA_SUAVE = "#5b6a8a";
-const BORDE = "#dfe5f1";
-const FONDO_SUAVE = "#f6f8fc";
-const fuente = "var(--font-jakarta), system-ui, sans-serif";
-const LETRAS = ["D", "I", "F", "E", "O"] as const;
+const LOGO = "/logo-smarteam-blanco.png";
+const DESCRIPCION_DE_LA_CAPA: Record<string, string> = {
+  base: "cómo está montado el departamento por dentro",
+  produccion: "qué entrega el departamento hacia afuera",
+};
 
-const tarjeta: CSSProperties = { border: `1px solid ${BORDE}`, borderRadius: 16, padding: 24, background: "#fff" };
-const titulo2: CSSProperties = { fontSize: 18, margin: "0 0 14px", color: TINTA };
-
-/** La posición 0..1 de un nivel con su puntaje (0..100). Sin puntaje, la mitad de su tramo. */
-function posicion(letra: string | null, puntaje: number | null): number {
-  if (puntaje != null) return Math.max(0, Math.min(1, puntaje / 100));
-  const i = letra ? LETRAS.indexOf(letra as (typeof LETRAS)[number]) : -1;
-  return i < 0 ? 0 : (i + 0.5) / LETRAS.length;
-}
-
-function Curva({ r }: { r: ResultadoDelTest }) {
-  const w = 640;
-  const h = 170;
-  const x = (t: number) => 20 + t * (w - 40);
-  const y = (t: number) => h - 40 - Math.pow(t, 1.6) * (h - 70);
-  const puntos = Array.from({ length: 41 }, (_, k) => k / 40);
-  const d = puntos.map((t, k) => `${k ? "L" : "M"}${x(t).toFixed(1)},${y(t).toFixed(1)}`).join(" ");
-  const p = posicion(r.nivel, r.puntaje);
-  return (
-    <svg viewBox={`0 0 ${w} ${h}`} width="100%" role="img" aria-label={`Curva de madurez: ${r.areaNombre} en ${r.nivelNombre ?? "sin ubicar"}`}>
-      <defs>
-        <linearGradient id="curva-grad" x1="0" x2="1" y1="0" y2="0">
-          <stop offset="0" stopColor={ACENTO} />
-          <stop offset="1" stopColor={ROYAL} />
-        </linearGradient>
-      </defs>
-      {r.niveles.map((n, i) => (
-        <g key={n.letra}>
-          <line x1={x(i / 5)} x2={x(i / 5)} y1={20} y2={h - 30} stroke={BORDE} strokeDasharray="3 4" />
-          <text
-            x={x((i + 0.5) / 5)}
-            y={h - 10}
-            textAnchor="middle"
-            fontSize="12"
-            fill={r.nivel === n.letra ? TINTA : TINTA_SUAVE}
-            fontWeight={r.nivel === n.letra ? 700 : 400}
-          >
-            {n.nombre}
-          </text>
-        </g>
-      ))}
-      <path d={d} fill="none" stroke="url(#curva-grad)" strokeWidth="4" strokeLinecap="round" />
-      {r.nivel && (
-        <g>
-          <circle cx={x(p)} cy={y(p)} r="10" fill="#fff" stroke={ACENTO} strokeWidth="4" />
-          <text x={x(p)} y={y(p) - 18} textAnchor="middle" fontSize="12" fontWeight="700" fill={ACENTO}>
-            Tú, hoy
-          </text>
-        </g>
-      )}
-    </svg>
-  );
-}
-
-function Radar({ r }: { r: ResultadoDelTest }) {
-  const dims = r.dimensiones.filter((d) => d.preguntada);
-  if (dims.length < 3) return null;
-  const c = 150;
-  const radio = 100;
-  const ang = (i: number) => -Math.PI / 2 + (i * 2 * Math.PI) / dims.length;
-  const pt = (i: number, t: number) => [c + Math.cos(ang(i)) * radio * t, c + Math.sin(ang(i)) * radio * t] as const;
-  const poligono = dims.map((d, i) => pt(i, Math.max(0.06, posicion(d.nivel, d.puntaje))).join(",")).join(" ");
-  return (
-    <svg viewBox="0 0 300 300" width="100%" style={{ maxWidth: 340 }} role="img" aria-label="Radar de las dimensiones">
-      {[0.2, 0.4, 0.6, 0.8, 1].map((t) => (
-        <polygon key={t} points={dims.map((_, i) => pt(i, t).join(",")).join(" ")} fill="none" stroke={BORDE} />
-      ))}
-      {dims.map((_, i) => {
-        const [px, py] = pt(i, 1);
-        return <line key={i} x1={c} y1={c} x2={px} y2={py} stroke={BORDE} />;
-      })}
-      <polygon points={poligono} fill="rgba(11,88,211,0.16)" stroke={ROYAL} strokeWidth="2" />
-      {dims.map((d, i) => {
-        const [px, py] = pt(i, 1.18);
-        return (
-          <text key={d.id} x={px} y={py} fontSize="9" textAnchor="middle" dominantBaseline="middle" fill={TINTA_SUAVE}>
-            {d.nombre.length > 22 ? `${d.nombre.slice(0, 21)}…` : d.nombre}
-          </text>
-        );
-      })}
-    </svg>
-  );
-}
+const fechaLarga = (iso: string) =>
+  new Intl.DateTimeFormat("es-CR", { day: "numeric", month: "long", year: "numeric", timeZone: "America/Costa_Rica" }).format(new Date(iso));
 
 function Barras({ r }: { r: ResultadoDelTest }) {
+  const frena = r.recomendacion?.tipo === "trabajar" ? r.recomendacion.dimensionId : null;
   return (
-    <div style={{ display: "grid", gap: 12 }}>
-      {r.dimensiones
-        .filter((d) => d.preguntada)
-        .map((d) => {
-          const p = posicion(d.nivel, d.puntaje);
-          const frena = r.recomendacion?.tipo === "trabajar" && r.recomendacion.dimensionId === d.id;
-          return (
-            <div key={d.id}>
-              <div style={{ display: "flex", justifyContent: "space-between", gap: 12, fontSize: 14 }}>
-                <span style={{ color: TINTA, fontWeight: frena ? 700 : 500 }}>
-                  {d.nombre}
-                  {frena && <span style={{ marginLeft: 8, fontSize: 11, color: ACENTO, fontWeight: 700 }}>LO QUE MÁS FRENA</span>}
-                </span>
-                <span style={{ color: TINTA_SUAVE, whiteSpace: "nowrap" }}>{d.noLoSe ? "No lo sabías" : (d.nivelNombre ?? "—")}</span>
-              </div>
-              <svg viewBox="0 0 100 6" width="100%" height="8" preserveAspectRatio="none" aria-hidden="true" style={{ display: "block", marginTop: 6 }}>
-                <rect x="0" y="0" width="100" height="6" rx="3" fill={FONDO_SUAVE} />
-                <rect x="0" y="0" width={Math.max(3, p * 100)} height="6" rx="3" fill={frena ? ACENTO : ROYAL} />
-              </svg>
+    <div className="rd-barras">
+      {r.capas.map((c) => {
+        const dims = r.dimensiones.filter((d) => d.capa === c.clave && d.preguntada);
+        if (!dims.length) return null;
+        return (
+          <div key={c.clave}>
+            <div className="rd-grupo-head">
+              <h3>{c.nombre}</h3>
+              {DESCRIPCION_DE_LA_CAPA[c.clave] && <span>{DESCRIPCION_DE_LA_CAPA[c.clave]}</span>}
             </div>
-          );
-        })}
+            {dims.map((d) => {
+              const p = puntajeDeLaDimension(d.nivel, d.puntaje);
+              return (
+                <div key={d.id} className="rd-fila" data-nivel={d.nivel ?? undefined}>
+                  <span className="rd-fila-nombre">
+                    {d.nombre}
+                    {d.id === frena && <span className="rd-frena">LO QUE MÁS FRENA</span>}
+                  </span>
+                  <span className="rd-barra" aria-hidden="true">
+                    <span className="rd-barra-fill" style={{ width: `${Math.max(3, p)}%` }} />
+                  </span>
+                  <span className="rd-num">
+                    {p}
+                    <small>/100</small>
+                  </span>
+                  <span className="rd-chip">{d.noLoSe ? "No lo sabías" : (d.nivelNombre ?? "Sin ubicar")}</span>
+                </div>
+              );
+            })}
+          </div>
+        );
+      })}
+      {r.preguntadas < r.total && (
+        <p className="rd-nota">
+          Este test mira {r.preguntadas} de las {r.total} partes del área; las otras las vemos juntos en la sesión.
+        </p>
+      )}
     </div>
   );
 }
@@ -136,13 +84,21 @@ export default function ResultadoDelTestVista({
   r,
   nombre,
   empresa,
+  dominio = null,
+  fecha = null,
   agenda,
   sinCorreo = false,
+  pdf = null,
+  modo = "pantalla",
+  aviso = null,
 }: {
   r: ResultadoDelTest;
   /** Null en un resultado reabierto de la aplicación vieja (O6): su dirección no se usa para escribir un nombre. */
   nombre: string | null;
   empresa: string | null;
+  dominio?: string | null;
+  /** Cuándo lo terminó (ISO). */
+  fecha?: string | null;
   /** El enlace para agendar la sesión (`TESTS_ENLACE_DE_AGENDA`); sin él, se le dice que le escribimos. */
   agenda: string | null;
   /**
@@ -150,123 +106,180 @@ export default function ResultadoDelTestVista({
    * promete escribirle; se le ofrece hacer el test de nuevo.
    */
   sinCorreo?: boolean;
+  /** La dirección que arma el PDF. Null = sin botón (el resultado viejo no está guardado en Nexus). */
+  pdf?: string | null;
+  /** `pdf`: lo que abre el navegador que imprime (sin botones ni calendario). */
+  modo?: "pantalla" | "pdf";
+  /** Una línea arriba de todo (el resultado viejo dice cuándo se hizo y con qué escala se lee). */
+  aviso?: string | null;
 }) {
-  const parcial = r.preguntadas < r.total;
+  const enPdf = modo === "pdf";
+  const nombreDeLaEmpresa = empresa || dominio || "";
+  const rec = r.recomendacion;
+  const primerNombre = nombre?.trim().split(/\s+/)[0] ?? "";
+
   return (
-    <div style={{ maxWidth: 900, margin: "0 auto", padding: "40px 20px 72px", fontFamily: fuente, color: TINTA, display: "grid", gap: 24 }}>
-      <div>
-        <p style={{ margin: 0, fontSize: 12, fontWeight: 700, letterSpacing: 0.6, textTransform: "uppercase", color: ACENTO }}>
-          Diagnóstico de Rendimiento · {r.areaNombre}
-        </p>
-        <h1 style={{ margin: "8px 0 6px", fontSize: 30, lineHeight: 1.2 }}>
-          {nombre ? `${nombre.split(" ")[0]}, tu área` : "Tu área"} de {r.areaNombre} está en {r.nivelNombre ?? "un punto que todavía no podemos ubicar"}
-        </h1>
-        <p style={{ margin: 0, fontSize: 13, color: TINTA_SUAVE }}>
-          <span style={{ display: "inline-block", padding: "2px 8px", borderRadius: 999, background: "#fff4ef", color: ACENTO, fontWeight: 700, marginRight: 8 }}>
-            Estimado
-          </span>
-          {empresa ? `${empresa} · ` : ""}con lo que respondiste{parcial ? ` (${r.preguntadas} de ${r.total} dimensiones)` : ""}
-        </p>
-        <p style={{ margin: "16px 0 0", fontSize: 16, lineHeight: 1.65, color: TINTA }}>{r.sintesis}</p>
-      </div>
-
-      <section style={tarjeta}>
-        <h2 style={titulo2}>Dónde estás en el camino</h2>
-        <Curva r={r} />
-        <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginTop: 8 }}>
-          {r.capas.map((c) => (
-            <div key={c.clave} style={{ flex: "1 1 220px", background: FONDO_SUAVE, borderRadius: 12, padding: "12px 14px" }}>
-              <div style={{ fontSize: 12, color: TINTA_SUAVE }}>{c.nombre}</div>
-              <div style={{ fontSize: 16, fontWeight: 700 }}>{c.nivelNombre ?? "Sin ubicar"}</div>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      <section style={tarjeta}>
-        <h2 style={titulo2}>Cómo está cada parte de tu área</h2>
-        <div style={{ display: "grid", gap: 24, gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", alignItems: "center" }}>
-          <div style={{ display: "flex", justifyContent: "center" }}>
-            <Radar r={r} />
+    <div className={`dr dr-pasos${enPdf ? " rd-pdf" : ""}`}>
+      <header className="topbar">
+        {enPdf ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <span className="brand"><img src={LOGO} alt="Smarteam" height={28} /></span>
+        ) : (
+          <a className="brand" href="/external/test" title="Hacer otro diagnóstico">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={LOGO} alt="Smarteam" height={28} />
+          </a>
+        )}
+      </header>
+      <main className="rd">
+        {!enPdf && (
+          <div className="rd-acciones">
+            <a className="btn btn-ghost" href="/external/test">
+              ↻ Hacer otro test
+            </a>
+            {pdf && <DescargarPdfDelResultado href={pdf} />}
           </div>
-          <Barras r={r} />
-        </div>
-      </section>
+        )}
 
-      {r.recomendacion && (
-        <section style={{ ...tarjeta, border: `2px solid ${ACENTO}` }}>
-          <h2 style={titulo2}>Por dónde empezar</h2>
-          {r.recomendacion.tipo === "trabajar" ? (
-            <>
-              <p style={{ margin: "0 0 8px", fontSize: 18, fontWeight: 700 }}>
-                Llevar {r.recomendacion.dimensionNombre.toLowerCase()} a {r.recomendacion.objetivoNombre}
-              </p>
-              <p style={{ margin: "0 0 12px", fontSize: 15, lineHeight: 1.6, color: TINTA }}>{r.recomendacion.razon}</p>
-              {r.recomendacion.costoDeQuedarse && (
-                <p style={{ margin: 0, fontSize: 15, lineHeight: 1.6, color: TINTA_SUAVE }}>
-                  <strong style={{ color: TINTA }}>Lo que cuesta quedarse así: </strong>
-                  {r.recomendacion.costoDeQuedarse}
+        {aviso && <p className="rd-nota">{aviso}</p>}
+
+        <section className="rd-head">
+          <div className="rd-head-texto">
+            {nombreDeLaEmpresa && (
+              <span className="rd-empresa">
+                <span className="rd-empresa-logo" aria-hidden="true">{nombreDeLaEmpresa.trim().charAt(0).toUpperCase()}</span>
+                <span className="rd-empresa-txt">
+                  <b>{nombreDeLaEmpresa}</b>
+                  {dominio && dominio !== nombreDeLaEmpresa && <small>{dominio}</small>}
+                </span>
+              </span>
+            )}
+            <p className="rd-eyebrow">Diagnóstico de rendimiento · {r.areaNombre}</p>
+            {fecha && <p className="rd-fecha">{fechaLarga(fecha)}</p>}
+            <p className="rd-label">Resultado general</p>
+            <h1 className="rd-nivel" data-nivel={r.nivel ?? undefined}>
+              {r.nivelNombre ?? "Sin determinar"}
+            </h1>
+            <p className="rd-saludo">
+              {primerNombre ? `${primerNombre}, así` : "Así"} está hoy tu área de {r.areaNombre}, parte por parte.
+            </p>
+            <p className="rd-estimado">
+              <span className="rd-pill">Estimado</span>
+              con lo que respondiste{r.preguntadas < r.total ? ` (${r.preguntadas} de ${r.total} partes)` : ""}
+            </p>
+          </div>
+          <div className="rd-capas">
+            {r.capas.map((c) => (
+              <div key={c.clave} className="rd-capa" data-nivel={c.nivel ?? undefined}>
+                <p className="rd-capa-k">{c.nombre}</p>
+                <p className="rd-capa-v">
+                  {c.nivelNombre ?? (r.dimensiones.some((d) => d.capa === c.clave && d.preguntada) ? "Sin ubicar" : "No se midió")}
                 </p>
-              )}
-            </>
-          ) : (
-            <p style={{ margin: 0, fontSize: 15, lineHeight: 1.6 }}>{r.recomendacion.razon}</p>
-          )}
-        </section>
-      )}
-
-      {r.riesgos.length > 0 && (
-        <section style={tarjeta}>
-          <h2 style={titulo2}>Lo que hoy pone en riesgo a tu área</h2>
-          <ul style={{ margin: 0, paddingLeft: 20, display: "grid", gap: 8, fontSize: 15, lineHeight: 1.55 }}>
-            {r.riesgos.map((x) => (
-              <li key={x}>{x}</li>
-            ))}
-          </ul>
-        </section>
-      )}
-
-      {r.casos.length > 0 && (
-        <section style={tarjeta}>
-          <h2 style={titulo2}>Lo que lo mueve</h2>
-          <div style={{ display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))" }}>
-            {r.casos.map((c) => (
-              <div key={c.id} style={{ background: FONDO_SUAVE, borderRadius: 12, padding: 16 }}>
-                <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 6 }}>{c.titulo}</div>
-                <div style={{ fontSize: 14, lineHeight: 1.55, color: TINTA }}>{c.promesa}</div>
-                {c.razon && <div style={{ fontSize: 13, lineHeight: 1.5, color: TINTA_SUAVE, marginTop: 8 }}>{c.razon}</div>}
               </div>
             ))}
           </div>
+          <div className="rd-head-radar">
+            {/* La rueda de la escala (la del Mapa interno) en escritorio y en el PDF; en el celular sus textos quedan de
+                5 px, así que ahí va el radar simple, que se lee (resultado.css decide cuál se ve). */}
+            <div className="rd-rueda">
+              <RadarDeUnaEmpresa
+                area={r.areaNombre}
+                dimensiones={r.dimensiones.map((d) => ({ clave: d.id, nombre: d.nombre, capa: d.capa, puntaje: d.puntaje, nivel: d.nivel, noLoSe: d.noLoSe }))}
+                capas={r.capas.map((c) => ({ clave: c.clave, nombre: c.nombre, descripcion: DESCRIPCION_DE_LA_CAPA[c.clave] ?? null }))}
+                niveles={r.niveles}
+                subtitulo={r.nivelNombre ? `${r.nivelNombre}${r.puntaje != null ? ` · ${Math.round(r.puntaje)}/100` : ""}` : null}
+              />
+            </div>
+            <div className="rd-radar-simple">
+              <RadarDelResultado r={r} />
+            </div>
+          </div>
         </section>
-      )}
 
-      <section style={{ ...tarjeta, background: TINTA, border: `1px solid ${TINTA}`, color: "#fff" }}>
-        <h2 style={{ ...titulo2, color: "#fff" }}>Conversémoslo</h2>
-        <p style={{ margin: "0 0 16px", fontSize: 15, lineHeight: 1.6, color: "#d7def0" }}>
-          En una sesión de 30 minutos confirmamos este resultado con tu equipo y armamos el primer paso. Sin costo.
-        </p>
-        {agenda ? (
-          <a
-            href={agenda}
-            target="_blank"
-            rel="noopener noreferrer"
-            style={{ display: "inline-block", padding: "12px 22px", borderRadius: 10, background: ACENTO, color: "#fff", fontWeight: 700, textDecoration: "none" }}
-          >
-            Agendar la sesión
-          </a>
-        ) : sinCorreo ? (
-          <p style={{ margin: 0, fontSize: 15, color: "#fff", fontWeight: 600 }}>
-            Para coordinarla,{" "}
-            <Link href="/external/test" style={{ color: "#fff", textDecoration: "underline" }}>
-              haz el test de nuevo
-            </Link>{" "}
-            y te escribimos al correo que dejes.
-          </p>
-        ) : (
-          <p style={{ margin: 0, fontSize: 15, color: "#fff", fontWeight: 600 }}>Te escribimos al correo que dejaste para coordinarla.</p>
+        {rec && (
+          <section className="rd-panel rd-empezar">
+            <p className="rd-panel-titulo">Por dónde empezar</p>
+            {rec.tipo === "trabajar" ? (
+              <>
+                <h2>
+                  Llevar {rec.dimensionNombre.toLowerCase()} a {rec.objetivoNombre}
+                </h2>
+                <p>{rec.razon}</p>
+                {rec.costoDeQuedarse && (
+                  <p className="rd-costo">
+                    <b>Lo que cuesta quedarse así: </b>
+                    {rec.costoDeQuedarse}
+                  </p>
+                )}
+              </>
+            ) : (
+              <p>{rec.razon}</p>
+            )}
+          </section>
         )}
-      </section>
+
+        {r.riesgos.length > 0 && (
+          <section className="rd-panel">
+            <p className="rd-panel-titulo">Lo que hoy pone en riesgo a tu área</p>
+            <ul className="rd-riesgos">
+              {r.riesgos.map((x) => (
+                <li key={x}>{x}</li>
+              ))}
+            </ul>
+          </section>
+        )}
+
+        {r.casos.length > 0 && (
+          <section className="rd-panel">
+            <p className="rd-panel-titulo">Lo que lo mueve</p>
+            <div className="rd-casos">
+              {r.casos.map((c) => (
+                <div key={c.id} className="rd-caso">
+                  <p className="rd-caso-titulo">{c.titulo}</p>
+                  <p className="rd-caso-promesa">{c.promesa}</p>
+                  {c.razon && <p className="rd-caso-razon">{c.razon}</p>}
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
+        <section className="rd-panel">
+          <p className="rd-panel-titulo">Cómo está cada parte</p>
+          <Barras r={r} />
+        </section>
+
+        {enPdf ? (
+          agenda && (
+            <p className="rd-pie-texto">
+              ¿Lo revisamos juntos? Agenda una sesión de 30 minutos, sin costo: <a href={agenda}>{agenda}</a>
+            </p>
+          )
+        ) : (
+          <>
+            <section className="rd-agenda">
+              <p className="rd-eyebrow">El siguiente paso</p>
+              <h2>Revisemos juntos tu resultado, sin costo</h2>
+              <p>En 30 minutos lo leemos contigo y armamos el primer paso. Te llevas el plan aunque no trabajemos juntos.</p>
+              {agenda ? (
+                <CalendarioDeHubspot agenda={agenda} />
+              ) : sinCorreo ? (
+                <p className="rd-agenda-aviso">
+                  Para coordinarla, <a href="/external/test">haz el test de nuevo</a> y te escribimos al correo que dejes.
+                </p>
+              ) : (
+                <p className="rd-agenda-aviso">Te escribimos al correo que dejaste para coordinarla.</p>
+              )}
+            </section>
+            <div className="rd-pie">
+              <a className="btn btn-ghost" href="/external/test">
+                Diagnosticar otra área
+              </a>
+            </div>
+          </>
+        )}
+        <p className="rd-pie-texto">Diagnóstico hecho con la Escala de Rendimiento de Smarteam.</p>
+      </main>
     </div>
   );
 }

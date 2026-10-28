@@ -196,7 +196,10 @@ export interface Persona {
   nombre: string;
   email: string;
   telefono: string | null;
+  /** Hasta el 2026-10-28 (la portada lo pedía); los intentos nuevos traen `usoDeCrm` en su lugar. */
   puesto: string | null;
+  /** Cómo gestionan hoy a sus clientes (lib/tests-diagnostico/formulario.ts › USOS_DE_CRM). */
+  usoDeCrm: string | null;
   empresa: string | null;
   dominio: string | null;
   industria: string | null;
@@ -258,6 +261,8 @@ function leerPreguntasDelIntento(raw: unknown): PreguntaDelIntento[] {
 
 const aIntento = (f: FilaDelIntento): Intento => ({
   ...f,
+  // Antes del SQL 2026-10-28-uso-de-crm-del-test la columna no viene en el SELECT *.
+  usoDeCrm: f.usoDeCrm ?? null,
   version: f.version as VersionDelTest,
   estado: (["en_curso", "terminado", "abandonado"].includes(f.estado) ? f.estado : "en_curso") as Intento["estado"],
   preguntas: leerPreguntasDelIntento(f.preguntas),
@@ -287,9 +292,9 @@ export function crearIntento(d: {
     const p = d.persona;
     await prisma.$executeRaw`
       INSERT INTO "IntentoDelTest" ("id", "token", "area", "version", "edicion", "escalaVersion", "preguntas",
-        "nombre", "email", "telefono", "puesto", "empresa", "dominio", "industria", "clientId", "origen")
+        "nombre", "email", "telefono", "puesto", "usoDeCrm", "empresa", "dominio", "industria", "clientId", "origen")
       VALUES (${id}, ${token}, ${d.area}, ${d.version}, ${d.edicion}, ${d.escalaVersion}, ${json(d.preguntas)}::jsonb,
-        ${p.nombre}, ${p.email}, ${p.telefono}, ${p.puesto}, ${p.empresa}, ${p.dominio}, ${p.industria}, ${d.clientId},
+        ${p.nombre}, ${p.email}, ${p.telefono}, ${p.puesto}, ${p.usoDeCrm}, ${p.empresa}, ${p.dominio}, ${p.industria}, ${d.clientId},
         ${d.origen ? json(d.origen) : null}::jsonb)`;
     return { id, token };
   });

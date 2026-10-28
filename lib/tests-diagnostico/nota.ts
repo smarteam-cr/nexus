@@ -18,15 +18,20 @@ export interface DatosDeLaNota {
   dominio: string | null;
   industria: string | null;
   puesto: string | null;
+  /** Cómo gestionan hoy a sus clientes (desde el 2026-10-28; va en su propia línea, después de «Quién:»). */
+  usoDeCrm?: string | null;
   /** «Test web (8 preguntas)». */
   version: string;
 }
+
+const lineaDelCrm = (d: DatosDeLaNota) => (d.usoDeCrm ? `<p>Cómo gestionan hoy a sus clientes: ${esc(d.usoDeCrm)}</p>` : "");
 
 /** La nota de un test TERMINADO, con el nivel estimado y el enlace al resultado. */
 export function notaDelTestTerminado(d: DatosDeLaNota & { nivelNombre: string | null; recomendacion: string | null; url: string }): string {
   return [
     `<p><strong>📊 Diagnóstico de Rendimiento — ${esc(d.areaNombre)} · ${esc(d.nivelNombre ?? "sin nivel")} (estimado)</strong></p>`,
     `<p>Quién: ${esc(d.nombre)}, ${esc(d.email)}${d.puesto ? ` — ${esc(d.puesto)}` : ""}</p>`,
+    lineaDelCrm(d),
     `<p>Empresa: ${[d.empresa, d.dominio, d.industria].filter(Boolean).map((x) => esc(x!)).join(" · ")}</p>`,
     `<p>Versión: ${esc(d.version)}</p>`,
     d.recomendacion ? `<p>Lo que más lo frena: ${esc(d.recomendacion)}</p>` : "",
@@ -41,8 +46,11 @@ export function notaDelTestSinTerminar(d: DatosDeLaNota & { paso: number; total:
   return [
     `<p><strong>⏳ Diagnóstico SIN TERMINAR — ${esc(d.areaNombre)}</strong></p>`,
     `<p>Quién: ${esc(d.nombre)}, ${esc(d.email)}${d.puesto ? ` — ${esc(d.puesto)}` : ""}</p>`,
+    lineaDelCrm(d),
     `<p>Empresa: ${[d.empresa, d.dominio, d.industria].filter(Boolean).map((x) => esc(x!)).join(" · ")}</p>`,
     `<p>Versión: ${esc(d.version)}</p>`,
     `<p>Llegó a la pregunta ${d.paso} de ${d.total}.</p>`,
-  ].join("");
+  ]
+    .filter(Boolean)
+    .join("");
 }

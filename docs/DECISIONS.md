@@ -11597,7 +11597,35 @@ vive en el RUNBOOK › «El corte de la aplicación vieja del test»; acá va el
   de HubSpot» lo mandaría por su cuenta, sin pasar por el job ni por la decisión de qué correos van.
 - ⚠ **El formulario de HubSpot de la app vieja no sirve para Nexus**: exige `puesto_actual` y usa otros nombres de campo,
   y Nexus manda `phone`, `jobtitle`, `company` y `website`. El corte pide uno nuevo (RUNBOOK, paso 1). Esto corrige el
-  «el mismo formulario nativo que usa la app vieja» que decía esta sección.
+  «el mismo formulario nativo que usa la app vieja» que decía esta sección. Desde el 28 oct, `jobtitle` ya no va (ver
+  abajo, el uso de CRM).
+- **El resultado, como el de la app vieja, con lo de Nexus al frente (Elías, 28 oct).** La cabecera celeste con el
+  nivel, el **radar de la empresa arriba** (reemplaza la curva de niveles, que salió), después «Por dónde empezar», «Lo
+  que hoy pone en riesgo a tu área» y «Lo que lo mueve», y recién ahí las barras con su puntaje sobre 100, compactas y
+  sin la explicación de cada una. El radar es la rueda de la escala (`RadarDeUnaEmpresa`, la del Mapa) en escritorio y en
+  el PDF; en el celular, donde sus textos quedan de 5 px, va un radar simple que se lee (`RadarDelResultado.tsx`) y el
+  detalle está en las barras. Sin aviso del navegador al irse: salía también al pasar al resultado y no protegía nada
+  (el avance se guarda en cada pregunta).
+- **La agenda de HubSpot va incrustada, pero SIN su script** (`CalendarioDeHubspot.tsx`). El script oficial
+  (MeetingsEmbedCode.js) le manda a HubSpot la dirección de la página, que en el resultado ES el token, y correría código
+  de un tercero junto a la llave del prospecto: la misma razón por la que los píxeles no van en el resultado. El iframe
+  se arma a mano con la página sin token (`parentPageUrl=/external/test/resultado`), la cookie `hubspotutk` si existe (o
+  una al azar, como el script), y la respuesta de consentimiento con la analítica apagada, que la agenda necesita para
+  dibujarse. El iframe lleva un nombre nuevo en cada carga: con «Atrás», Chrome reponía el anterior y quedaba en blanco.
+  La CSP (report-only) suma `frame-src` de meetings.hubspot.com.
+- **El PDF del resultado usa el motor de siempre, desde una ruta pública** (`GET /api/external/test/[token]/pdf`, que
+  imprime `/external/test/resultado/imprimir?t=`): el token va en la consulta para que el log del motor no lo escriba, y
+  `sinElToken` lo tapa en los errores. Como abre un Chromium sin login, además del semáforo único hay tope por dirección
+  (6 cada 10 min, cuentan los tokens inventados) y uno total por hora (120) que cuenta SOLO resultados que existen: con
+  tokens inventados nadie deja sin PDF a los prospectos. El PDF lleva el radar, las piezas y las barras; no el calendario.
+  ⚠ Chromium evalúa las `@media (max-width)` contra el papel por defecto (816 px) y no contra los 1000 px medidos: las
+  reglas responsivas del resultado van con `screen`.
+- **«Puesto» se reemplaza por cómo gestionan hoy a sus clientes** (Elías, 28 oct): las siete opciones EXACTAS de la
+  propiedad de contacto `como_gestionan_actualmente_a_sus_clientes` que ya existe en HubSpot (`USOS_DE_CRM`), en la
+  columna `IntentoDelTest.usoDeCrm` (SQL `2026-10-28-uso-de-crm-del-test.sql`; `puesto` queda con lo de antes). A HubSpot
+  viaja por la API del CRM, junto con la nota, y NO por el formulario: el envío público rechaza entero (400
+  FIELD_NOT_IN_FORM_DEFINITION) un campo que el formulario no tiene. Si HubSpot rechaza el VALOR (400) la nota sale sin
+  él; cualquier otra falla reintenta todo, para no perder el dato por un error pasajero.
 
 *Lo que no garantiza esta tanda:* la página `/external/test/resultado/anterior` y la entrada no se probaron en un
 navegador contra producción (los cálculos sí, con pruebas); los píxeles no se probaron contra Meta ni Google (nacen

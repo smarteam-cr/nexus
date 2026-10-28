@@ -27,8 +27,10 @@ export interface OpcionesCsp {
 /**
  * Lo que la app carga hoy, medido: scripts y estilos inline de Next (y `eval` en dev), logos de
  * clientes en Supabase Storage y `data:` de los diagramas, Sentry y Supabase por fetch, los
- * iframes `srcdoc` del motor de landing y los PDFs en `blob:`. Ningún script ni fuente externos
- * (`next/font` sirve las fuentes desde el propio origen).
+ * iframes `srcdoc` del motor de landing, los PDFs en `blob:` y la agenda de HubSpot incrustada en el resultado del test
+ * público (un iframe a meetings.hubspot.com, sin su script: components/external/test/CalendarioDeHubspot.tsx). Ningún
+ * script ni fuente externos en la app (`next/font` sirve las fuentes desde el propio origen; los píxeles de anuncios del
+ * test público son la excepción y todavía no están en la lista).
  */
 export const DIRECTIVAS_CSP: readonly string[] = [
   "default-src 'self'",
@@ -37,7 +39,7 @@ export const DIRECTIVAS_CSP: readonly string[] = [
   "img-src 'self' data: blob: https:",
   "font-src 'self' data:",
   "connect-src 'self' https:",
-  "frame-src 'self' blob: data:",
+  "frame-src 'self' blob: data: https://meetings.hubspot.com https://meetings-eu1.hubspot.com",
   "worker-src 'self' blob:",
   "object-src 'none'",
   "base-uri 'self'",

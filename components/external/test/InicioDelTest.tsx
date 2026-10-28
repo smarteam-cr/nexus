@@ -4,12 +4,12 @@
  * components/external/test/InicioDelTest.tsx — LA PORTADA del test público (Elías, 28 oct: igual a la aplicación vieja).
  *
  * El título con su subrayado y «N preguntas · N minutos»; a la izquierda las tres tarjetas que explican el diagnóstico y a
- * la derecha «Dinos quién eres y arrancamos»: nombre, apellido, correo de trabajo, dominio, teléfono con su país, puesto,
+ * la derecha «Dinos quién eres y arrancamos»: nombre, apellido, correo de trabajo, dominio, teléfono con su país, cómo gestionan hoy a sus clientes,
  * industria (con buscador) y el área, en una sola pantalla y con un solo botón. Al pie, las preguntas frecuentes. Solo
  * pinta: el estado y el envío los lleva TestDelDiagnostico. Página del cliente: las clases de diagnostico.css.
  */
 import type { FormEvent } from "react";
-import { PAISES, PUESTOS, type CampoDelFormulario, type ErroresDelFormulario, type ValoresDelFormulario } from "@/lib/tests-diagnostico/formulario";
+import { PAISES, USOS_DE_CRM, type CampoDelFormulario, type ErroresDelFormulario, type ValoresDelFormulario } from "@/lib/tests-diagnostico/formulario";
 import ComboConBuscador from "./ComboConBuscador";
 
 /** Las tres áreas, en el orden y con las palabras de la aplicación vieja. */
@@ -142,8 +142,8 @@ export default function InicioDelTest({
       {errores[id] && <p className="field-err">{errores[id]}</p>}
     </div>
   );
-  const combo = (id: "puesto" | "industria", etiqueta: string, opciones: readonly string[], placeholder: string) => (
-    <div className="form-campo" data-campo={id}>
+  const combo = (id: "crm" | "industria", etiqueta: string, opciones: readonly string[], placeholder: string, completo = false) => (
+    <div className={`form-campo${completo ? " form-campo-full" : ""}`} data-campo={id}>
       <label className="field-lbl" htmlFor={`f-${id}`}>
         {etiqueta}
         <span className="req" aria-hidden="true">*</span>
@@ -236,8 +236,8 @@ export default function InicioDelTest({
                   </div>
                   {errores.telefono && <p className="field-err">{errores.telefono}</p>}
                 </div>
-                {combo("puesto", "Puesto", PUESTOS, "Busca o elige tu puesto…")}
-                {combo("industria", "Industria", industrias, "Busca o escribe tu industria…")}
+                {combo("industria", "Industria", industrias, "Busca o escribe tu industria…", true)}
+                {combo("crm", "¿Cómo gestionan actualmente a sus clientes?", USOS_DE_CRM, "Elige una opción…", true)}
               </div>
               <div className="form-campo form-campo-full campo-area" data-campo="area">
                 <span className="field-lbl" id="lbl-area">
@@ -278,7 +278,7 @@ export default function InicioDelTest({
                 </button>
               </div>
             </form>
-            <p className="inicio-form-nota">Usamos estos datos para personalizar tu diagnóstico a tu empresa, tu industria y tu rol.</p>
+            <p className="inicio-form-nota">Usamos estos datos para personalizar tu diagnóstico a tu empresa, tu industria y a cómo trabajas hoy.</p>
           </div>
         </div>
         <section className="inicio-faq">

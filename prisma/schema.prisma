@@ -8741,7 +8741,11 @@ model IntentoDelTest {
   nombre          String
   email           String
   telefono        String?
+  /// Lo pedía la portada hasta el 2026-10-28; los intentos nuevos guardan `usoDeCrm` en su lugar.
   puesto          String?
+  /// «¿Cómo gestionan actualmente a sus clientes?»: un valor exacto de la propiedad de HubSpot
+  /// `como_gestionan_actualmente_a_sus_clientes`. SQL: scripts/sql/2026-10-28-uso-de-crm-del-test.sql.
+  usoDeCrm        String?
   empresa         String?
   dominio         String?
   industria       String?

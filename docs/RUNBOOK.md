@@ -851,7 +851,10 @@ comparar.
    cargo, empresa y sitio web. Ninguno más obligatorio. Copiar su GUID (está en la dirección del editor del formulario).
    ⚠ **El formulario de la app vieja NO sirve:** exige `puesto_actual` y usa otros nombres (`hs_whatsapp_phone_number`,
    `domain` e `industry` de empresa), y Nexus manda `phone`, `jobtitle`, `company` y `website`
-   (`lib/hubspot/test-del-diagnostico.ts › cuerpoDelFormulario`): HubSpot rechazaría cada envío.
+   (`lib/hubspot/test-del-diagnostico.ts › cuerpoDelFormulario`): HubSpot rechazaría cada envío. Desde el 28 oct el test
+   ya no pide el cargo (`jobtitle` solo va en los intentos de antes; puede quedar en el formulario, no obligatorio). «¿Cómo
+   gestionan actualmente a sus clientes?» NO va en el formulario: Nexus la escribe en el contacto por la API, con la nota.
+   Si se agrega al formulario, nunca como obligatoria (HubSpot rechazaría todo envío, porque Nexus no la manda ahí).
    De paso, mirar en HubSpot › Configuración › Marketing › Formularios si está prendido «recoger datos de formularios
    que no son de HubSpot»: el formulario del test lleva `data-hs-do-not-collect`, pero si esa opción recoge igual, cada
    lead entraría dos veces y sin pasar por la decisión del punto 1.
