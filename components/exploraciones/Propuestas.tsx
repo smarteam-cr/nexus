@@ -10,8 +10,12 @@
  * está confirmado al lado. Lo descartado no vuelve (queda su lápida).
  */
 import { useState } from "react";
-import { BotonTexto } from "./FranjaDeSugerencias";
+import { BotonAzul, BotonTexto } from "./FranjaDeSugerencias";
+import { ConfirmDialog } from "@/components/ui";
+import CollapsibleSection from "@/components/ui/CollapsibleSection";
 import { BotonUsar, FilaSugerida as FilaSugeridaDelSistema } from "@/components/ui/sistema";
+import { useMe } from "@/hooks/useMe";
+import { etiquetaDelLote, horaDelUso, loQueVaAPasar, type LugarDelLote } from "@/lib/exploraciones/usar-sugerencias";
 import {
   ETIQUETA_DE_LA_OBJECION,
   ETIQUETA_DEL_CANAL,
@@ -29,7 +33,9 @@ import {
 import {
   esFuenteDeHipotesis,
   ETIQUETA_DEL_MOTIVO,
+  sePuedeDeshacer,
   type AExplorar,
+  type DestinoDePropuesta,
   type CasoDeUsoElegido,
   type EstadoDeCriterio,
   type EstimadoGuardado,
@@ -165,9 +171,25 @@ export function DeDondeSale({ item }: { item: ItemPropuesto }) {
   );
 }
 
+/**
+ * K12 (2026-10-28): lo que va a escribir «Usar», en azul debajo del origen («Al usarla: Poner Ventas · Datos en
+ * Inicial»), y el aviso si cambia algo más (la industria trae su perfil habitual).
+ */
+export function LoQueHaceUsar({ item }: { item: ItemPropuesto }) {
+  const { queHace } = useLienzo();
+  const q = queHace(item);
+  return (
+    <p className="mt-1 text-xs text-fg-secondary">
+      <span className="font-medium text-brand">Al usarla: </span>
+      {q.texto}
+      {q.aviso && <span className="mt-0.5 block font-medium text-warn-ink">{q.aviso}</span>}
+    </p>
+  );
+}
+
 /** Una sugerencia: una fila azul con su texto, su origen en una línea, «Descartar» y «Usar» (la forma vive en el sistema). */
 export function FilaSugerida({ item, texto, destino }: { item: ItemPropuesto; texto?: React.ReactNode; destino?: string }) {
-  const { escala, nombreDeNivel, cambiar, puedeEditar, guardando } = useLienzo();
+  const { escala, nombreDeNivel, cambiar, usar, queHace, puedeEditar, guardando } = useLienzo();
   const [abierta, setAbierta] = useState(false);
   const origen = origenEnUnaLinea(item);
   const hayMas = !!item.razon || item.fuentes.length > 1 || (origen.cita?.length ?? 0) > 70;
@@ -190,17 +212,19 @@ export function FilaSugerida({ item, texto, destino }: { item: ItemPropuesto; te
           </>
         ) : undefined
       }
-      debajo={abierta ? <DeDondeSale item={item} /> : undefined}
+      debajo={
+        <>
+          {puedeEditar && <LoQueHaceUsar item={item} />}
+          {abierta && <DeDondeSale item={item} />}
+        </>
+      }
       acciones={
         puedeEditar ? (
           <>
             <BotonTexto disabled={guardando} onClick={() => void cambiar([{ op: "descartar", itemIds: [item.id] }])}>
               Descartar
             </BotonTexto>
-            <BotonUsar
-              disabled={guardando}
-              onClick={() => void cambiar([{ op: "usar", itemId: item.id, valor: item.valor }], { refrescar: item.destino.tipo === "edicion" || item.destino.tipo === "perfil" })}
-            />
+            <BotonUsar disabled={guardando} title={queHace(item).texto} onClick={() => void usar([item])} />
           </>
         ) : undefined
       }
@@ -210,9 +234,120 @@ export function FilaSugerida({ item, texto, destino }: { item: ItemPropuesto; te
   );
 }
 
-/** Las sugerencias de un lugar, con su rótulo azul arriba. */
-export function Propuestas({ items }: { items: ItemPropuesto[]; compacto?: boolean }) {
-  if (items.length === 0) return null;
+/**
+ * K12: el botón que usa todas juntas («Pasar las N al mapa» en La escala). Con más de una pide confirmación con la lista
+ * corta de lo que va a pasar; el aviso de después deshace el lote entero.
+ */
+export function BotonUsarTodas({ items, lugar }: { items: ItemPropuesto[]; lugar: LugarDelLote }) {
+  const { usar, queHace, puedeEditar, guardando } = useLienzo();
+  const [abierto, setAbierto] = useState(false);
+  if (!puedeEditar || items.length === 0) return null;
+  const etiqueta = etiquetaDelLote(lugar, items.length);
+  if (items.length === 1) {
+    return (
+      <BotonAzul disabled={guardando} title={queHace(items[0]).texto} onClick={() => void usar(items, { lugar })}>
+        {etiqueta}
+      </BotonAzul>
+    );
+  }
+  return (
+    <>
+      <BotonAzul disabled={guardando} onClick={() => setAbierto(true)}>
+        {etiqueta}
+      </BotonAzul>
+      <ConfirmDialog
+        open={abierto}
+        variant="default"
+        title={`¿${etiqueta}?`}
+        confirmLabel={etiqueta}
+        onCancel={() => setAbierto(false)}
+        onConfirm={async () => {
+          setAbierto(false);
+          await usar(items, { lugar });
+        }}
+        description={<LoQueVaAPasar items={items} />}
+      />
+    </>
+  );
+}
+
+/** K12: la lista corta de la confirmación de un lote (va dentro del párrafo de ConfirmDialog: solo `span`). */
+export function LoQueVaAPasar({ items }: { items: ItemPropuesto[] }) {
+  const { queHace } = useLienzo();
+  const plan = loQueVaAPasar(items.map(queHace));
+  return (
+    <>
+      {plan.lineas.map((l, i) => (
+        <span key={i} className="block">
+          · {l}
+        </span>
+      ))}
+      {plan.mas > 0 && <span className="block">· y {plan.mas} más</span>}
+      {plan.avisos.map((a) => (
+        <span key={a} className="mt-1 block font-medium text-warn-ink">
+          {a}
+        </span>
+      ))}
+      <span className="mt-2 block">Después puedes deshacerlo todo junto con el aviso o con Ctrl+Z.</span>
+    </>
+  );
+}
+
+/** «Tú», o el nombre del correo («marco.perez» → «marco.perez»): el registro guarda el correo. */
+function quienLaUso(por: string | null, miCorreo: string | null): string {
+  if (!por) return "Nexus";
+  if (miCorreo && por.toLowerCase() === miCorreo.toLowerCase()) return "Tú";
+  return por.split("@")[0];
+}
+
+/**
+ * K12: «Usadas hoy (N)», plegable: cada sugerencia usada hoy en este lugar —qué era, quién y a qué hora— y «Revertir»,
+ * que la deshace y la devuelve a la lista. Si alguien cambió ese lugar después, no se revierte (lo dice). Con
+ * `sinPendientes`, arriba dice «No quedan sugerencias»: la sección no desaparece de golpe al usar la última.
+ */
+export function UsadasHoy({ filtro, sinPendientes = false }: { filtro: (d: DestinoDePropuesta, item: ItemPropuesto) => boolean; sinPendientes?: boolean }) {
+  const { usadasHoy, deshacer, exp, escala, nombreDeNivel, puedeEditar, guardando } = useLienzo();
+  const me = useMe();
+  const usadas = usadasHoy.filter((u) => filtro(u.item.destino, u.item));
+  if (usadas.length === 0) return null;
+  return (
+    <div className="space-y-1.5">
+      {sinPendientes && <p className="text-sm text-fg-muted">No quedan sugerencias por revisar acá.</p>}
+      <CollapsibleSection title="Usadas hoy" count={usadas.length} defaultOpen={false}>
+        <ul className="divide-y divide-line rounded-lg border border-line bg-surface">
+          {usadas.map((u) => {
+            const puede = sePuedeDeshacer(exp.estado, u);
+            return (
+              <li key={`${u.id}-${u.en}`} className="flex items-start gap-3 px-3 py-2">
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm text-fg">{describirPropuesta(u.item, escala, nombreDeNivel)}</p>
+                  <p className="text-xs text-fg-muted">
+                    {quienLaUso(u.por, me?.email ?? null)} · {horaDelUso(u.en)}
+                    {u.lote ? " · junto con otras" : ""}
+                  </p>
+                </div>
+                {puedeEditar &&
+                  (puede ? (
+                    <BotonTexto disabled={guardando} title="Vuelve a dejar lo que había y devuelve la sugerencia a la lista" onClick={() => void deshacer([u.id])}>
+                      Revertir
+                    </BotonTexto>
+                  ) : (
+                    <span className="flex-shrink-0 py-[5px] text-xs text-fg-muted" title="Alguien lo cambió después de usarla: revertir pisaría ese cambio">
+                      Cambió después
+                    </span>
+                  ))}
+              </li>
+            );
+          })}
+        </ul>
+      </CollapsibleSection>
+    </div>
+  );
+}
+
+/** Las sugerencias de un lugar, con su rótulo azul arriba (y lo usado hoy ahí, para revertirlo). */
+export function Propuestas({ items, filtro }: { items: ItemPropuesto[]; compacto?: boolean; filtro?: (d: DestinoDePropuesta) => boolean }) {
+  if (items.length === 0) return filtro ? <UsadasHoy filtro={filtro} sinPendientes /> : null;
   return (
     <div className="space-y-1.5">
       <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-brand">
@@ -223,6 +358,7 @@ export function Propuestas({ items }: { items: ItemPropuesto[]; compacto?: boole
           <FilaSugerida key={it.id} item={it} />
         ))}
       </ul>
+      {filtro && <UsadasHoy filtro={filtro} />}
     </div>
   );
 }

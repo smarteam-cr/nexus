@@ -114,6 +114,9 @@ function operacionSegura(op: Operacion, antes: EstadoDeExploracion, ahora: Estad
       return usoSeguro(op.itemId, antes, ahora);
     case "usarVarias":
       return op.items.every((x) => usoSeguro(x.itemId, antes, ahora));
+    case "deshacerUso":
+      // K12: lo que había antes sale de lo guardado, y no se deshace lo que cambió después de usarlo (contenido.ts).
+      return true;
     case "correo":
       // Se reintenta solo sobre el MISMO correo: si entretanto se volvió a armar, el cambio era sobre otro.
       return antes.propuesta.correos[op.clave]?.corridaId === ahora.propuesta.correos[op.clave]?.corridaId;

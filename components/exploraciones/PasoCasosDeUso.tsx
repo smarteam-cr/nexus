@@ -25,13 +25,14 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Alert, Badge, Select } from "@/components/ui";
 import { cn } from "@/lib/cn";
-import { esCasoLibre, laEscalaTieneBase, type CasoDeUsoElegido, type ItemPropuesto } from "@/lib/exploraciones/contenido";
+import { esCasoLibre, laEscalaTieneBase, type CasoDeUsoElegido, type DestinoDePropuesta, type ItemPropuesto } from "@/lib/exploraciones/contenido";
 import { useRecorridos } from "@/components/recorridos/contexto";
 import { useLienzo } from "./contexto";
 import { casosParaElArea, type AreaParaElCamino } from "@/lib/casos-de-uso/camino";
 import { loQueLaFrena } from "@/lib/exploraciones/mapa";
 import FranjaDeSugerencias, { BotonAzul, BotonBlanco, BotonTexto, IconoDeSugerencia } from "./FranjaDeSugerencias";
 import { useCorrida } from "./useCorrida";
+import { BotonUsarTodas, UsadasHoy } from "./Propuestas";
 
 /** Las exploraciones en las que esta pestaña ya lanzó la primera tanda (un montaje doble no lanza dos). */
 const yaLanzadas = new Set<string>();
@@ -85,7 +86,7 @@ function FilaElegida({ id, caso, onQuitar }: { id: string; caso: CasoDeUsoElegid
 
 /** Un caso sugerido: tarjeta compacta con el porqué plegado, «Descartar» en texto y «Usar». */
 function TarjetaSugerida({ item }: { item: ItemPropuesto }) {
-  const { escala, cambiar, puedeEditar, guardando } = useLienzo();
+  const { escala, cambiar, usar, queHace, puedeEditar, guardando } = useLienzo();
   const [abierta, setAbierta] = useState(false);
   const caso = item.valor as CasoDeUsoElegido;
   const mueve = useMueve(caso);
@@ -143,7 +144,7 @@ function TarjetaSugerida({ item }: { item: ItemPropuesto }) {
             <BotonTexto disabled={guardando} onClick={() => void cambiar([{ op: "descartar", itemIds: [item.id] }])}>
               Descartar
             </BotonTexto>
-            <BotonAzul disabled={guardando} onClick={() => void cambiar([{ op: "usar", itemId: item.id, valor: item.valor }])}>
+            <BotonAzul disabled={guardando} title={queHace(item).texto} onClick={() => void usar([item])}>
               Usar
             </BotonAzul>
           </>
@@ -152,6 +153,8 @@ function TarjetaSugerida({ item }: { item: ItemPropuesto }) {
     </li>
   );
 }
+
+const esCaso = (d: DestinoDePropuesta) => d.tipo === "casoDeUso";
 
 function CasosDeUso({ catalogo }: { catalogo: Caso[] }) {
   const { exp, escala, cambiar, puedeEditar, guardando, pendientesPara, mapa, nombreDeNivel } = useLienzo();
@@ -223,11 +226,7 @@ function CasosDeUso({ catalogo }: { catalogo: Caso[] }) {
                 <BotonBlanco disabled={lanzando || corriendo || areas.length === 0 || !conBase} onClick={() => void lanzar("casos")}>
                   {lanzando ? "Pidiendo…" : yaPropuso || propuestos.length > 0 ? "Proponer otra tanda" : "Proponer casos de uso"}
                 </BotonBlanco>
-                {propuestos.length > 1 && (
-                  <BotonAzul disabled={guardando} onClick={() => void cambiar([{ op: "usarVarias", items: propuestos.map((it) => ({ itemId: it.id, valor: it.valor })) }])}>
-                    Usar los {propuestos.length}
-                  </BotonAzul>
-                )}
+                {propuestos.length > 1 && <BotonUsarTodas items={propuestos} lugar="casos" />}
               </>
             )
           }
@@ -266,7 +265,7 @@ function CasosDeUso({ catalogo }: { catalogo: Caso[] }) {
         </section>
       )}
 
-      {propuestos.length > 0 && (
+      {propuestos.length > 0 ? (
         <section className="space-y-2">
           <h2 className="text-[11px] font-semibold uppercase tracking-[0.08em] text-fg-muted">Sugeridos por el agente · {propuestos.length}</h2>
           <ul className="grid items-start gap-3 xl:grid-cols-2">
@@ -274,7 +273,10 @@ function CasosDeUso({ catalogo }: { catalogo: Caso[] }) {
               <TarjetaSugerida key={it.id} item={it} />
             ))}
           </ul>
+          <UsadasHoy filtro={esCaso} />
         </section>
+      ) : (
+        <UsadasHoy filtro={esCaso} sinPendientes />
       )}
 
       {porLaEscala.length > 0 && (

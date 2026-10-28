@@ -841,11 +841,10 @@ export function Casilla({
         <p className="text-sm text-fg-muted">Sin completar.</p>
       )}
 
-      {pendientes.length > 0 && (
-        <div className="space-y-2">
-          <Propuestas items={pendientes} />
-        </div>
-      )}
+      {/* K12: con lo usado hoy en esta casilla, para revertirlo (y «No quedan» al usar la última). */}
+      <div className="space-y-2">
+        <Propuestas items={pendientes} filtro={(d) => d.tipo === "casilla" && d.clave === clave} />
+      </div>
 
       {pie &&
         editando &&

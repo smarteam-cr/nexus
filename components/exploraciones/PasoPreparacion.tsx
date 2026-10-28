@@ -29,7 +29,7 @@ import { useRecorridos } from "@/components/recorridos/contexto";
 import { Casilla, Vista } from "./Casilla";
 import { useLienzo } from "./contexto";
 import { BotonAzul, BotonTexto, IconoDeSugerencia } from "./FranjaDeSugerencias";
-import { FilaSugerida } from "./Propuestas";
+import { FilaSugerida, UsadasHoy } from "./Propuestas";
 import { useCorrida } from "./useCorrida";
 import { AbrirLaPuerta, ComoLlego, type PresentacionDeSmarteam } from "./ComoLlego";
 import LoQueSabes from "./LoQueSabes";
@@ -204,6 +204,7 @@ function ResumenDeLaIdentificacion({ porQueAhoraDeHubspot }: { porQueAhoraDeHubs
                   ))}
                 </ul>
               )}
+              <UsadasHoy filtro={(d) => d.tipo === "casilla" && d.clave === clave} />
               {deHubspot && (
                 <div className="flex items-start gap-2.5 rounded-lg border border-info-line bg-info-surface py-2.5 pl-3 pr-2.5">
                   <div className="min-w-0 flex-1">

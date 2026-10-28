@@ -14,7 +14,8 @@ import { createContext, useContext } from "react";
 import type { ResultadoDelChequeo } from "@/lib/escala/chequeo";
 import type { Letra } from "@/lib/escala/documento/tipos";
 import type { ClaveDeCasilla } from "@/lib/exploraciones/casillas";
-import type { DestinoDePropuesta, ItemPropuesto, Operacion } from "@/lib/exploraciones/contenido";
+import type { DestinoDePropuesta, ItemPropuesto, Operacion, UsoDeSugerencia } from "@/lib/exploraciones/contenido";
+import type { LoQueHaceUsar, LugarDelLote } from "@/lib/exploraciones/usar-sugerencias";
 import type { EscalaDelLienzo } from "@/lib/exploraciones/escala-del-lienzo";
 import type { ReunionSinLeer } from "@/lib/exploraciones/lectura";
 import type { PosicionEnElMapa } from "@/lib/exploraciones/mapa";
@@ -73,6 +74,20 @@ export interface Lienzo {
   veTendenciaDelEquipo?: boolean;
   guardando: boolean;
   cambiar: (ops: Operacion[], opciones?: OpcionesDeCambio) => Promise<boolean>;
+  /**
+   * K12 (2026-10-28): usar sugerencias —una, o un lote con «Pasar las N al mapa»—. Al terminar muestra «Usaste: … ·
+   * Deshacer», y Ctrl+Z (fuera de un campo de texto) deshace la última usada en esta página. Es el ÚNICO camino del
+   * «Usar»: no mandes `usar` ni `usarVarias` con `cambiar`, o se quedan sin aviso ni deshacer. La única excepción es
+   * llevar lo que «Quedó abierto» a la próxima sesión (SesionesDeExploracion): usa la sugerencia y cambia las sesiones
+   * en UN pedido, y eso no se parte. Igual queda anotada en `contenido.usadas`.
+   */
+  usar: (items: ItemPropuesto[], o?: { lugar?: LugarDelLote }) => Promise<boolean>;
+  /** K12: deshace sugerencias usadas, por su id (las de `usadasHoy`). Vuelven a la lista de pendientes. */
+  deshacer: (ids: string[]) => Promise<boolean>;
+  /** K12: lo que va a escribir «Usar», en una línea, y el aviso si además cambia otra cosa (la industria trae su perfil). */
+  queHace: (item: ItemPropuesto) => LoQueHaceUsar;
+  /** K12: las sugerencias usadas hoy, la más nueva primero (sobreviven al recargar: viven en `contenido.usadas`). */
+  usadasHoy: UsoDeSugerencia[];
   /** Vuelve a pedir la exploración (el agente terminó y dejó propuestas nuevas). Sale en la misma
    *  fila que los cambios: no pisa uno que todavía no volvió. */
   recargar: () => Promise<void>;

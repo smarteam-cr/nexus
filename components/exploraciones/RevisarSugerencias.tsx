@@ -12,10 +12,10 @@ import { useState, type KeyboardEvent } from "react";
 import { Button, ConfirmDialog, Drawer, IconButton } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import { definicionDe } from "@/lib/exploraciones/casillas";
-import type { CasoDeUsoElegido, EstimadoGuardado, ItemPropuesto } from "@/lib/exploraciones/contenido";
+import type { CasoDeUsoElegido, DestinoDePropuesta, EstimadoGuardado, ItemPropuesto } from "@/lib/exploraciones/contenido";
 import { useLienzo, type PasoDelLienzoUI } from "./contexto";
 import { NOMBRE_DEL_PASO, ORDEN_DE_PIEZAS, piezaDelDestino } from "./piezas";
-import { DeDondeSale, describirPropuesta, origenEnUnaLinea } from "./Propuestas";
+import { DeDondeSale, describirPropuesta, LoQueHaceUsar, LoQueVaAPasar, origenEnUnaLinea, UsadasHoy } from "./Propuestas";
 import { NivelChip } from "./QueVaPrimero";
 import Segmentos from "./Segmentos";
 import { definicionEnElMarco } from "@/lib/exploraciones/marco";
@@ -29,13 +29,15 @@ interface Grupo {
 }
 
 export default function RevisarSugerencias({ abierto, filtroInicial, onCerrar }: { abierto: boolean; filtroInicial: Filtro; onCerrar: () => void }) {
-  const { revisables, escala, marco, nombreDeNivel, cambiar, puedeEditar, guardando } = useLienzo();
+  const { revisables, escala, marco, nombreDeNivel, cambiar, usar: usarSugerencias, queHace, puedeEditar, guardando } = useLienzo();
   const [filtro, setFiltro] = useState<Filtro>(filtroInicial);
   const [visto, setVisto] = useState({ abierto, filtroInicial });
   const [foco, setFoco] = useState(0);
   const [abiertas, setAbiertas] = useState<Set<string>>(new Set());
   const [revisadas, setRevisadas] = useState(0);
   const [confirmarDescarte, setConfirmarDescarte] = useState(false);
+  // K12: usar varias juntas pide confirmación con la lista corta de lo que va a pasar.
+  const [confirmarUso, setConfirmarUso] = useState<ItemPropuesto[] | null>(null);
   // Al abrir, arranca en el filtro con que se pidió y con la cuenta en cero.
   if (visto.abierto !== abierto || visto.filtroInicial !== filtroInicial) {
     setVisto({ abierto, filtroInicial });
@@ -92,6 +94,7 @@ export default function RevisarSugerencias({ abierto, filtroInicial, onCerrar }:
   };
 
   const porPieza = ORDEN_DE_PIEZAS.map((p) => ({ paso: p, cuantas: revisables.filter((it) => piezaDelDestino(it.destino) === p).length })).filter((p) => p.cuantas > 0);
+  const deLaVista = (d: DestinoDePropuesta) => filtro === "todo" || piezaDelDestino(d) === filtro;
   const visibles = filtro === "todo" ? revisables : revisables.filter((it) => piezaDelDestino(it.destino) === filtro);
 
   // Agrupadas en el orden del recorrido; dentro de cada grupo, en el orden en que llegaron.
@@ -108,15 +111,13 @@ export default function RevisarSugerencias({ abierto, filtroInicial, onCerrar }:
   const enOrden = grupos.flatMap((g) => g.items);
   const focoReal = Math.min(foco, Math.max(0, enOrden.length - 1));
 
-  const refrescar = (its: ItemPropuesto[]) => its.some((it) => it.destino.tipo === "edicion" || it.destino.tipo === "perfil");
+  // Por el lienzo: dice qué hizo y se puede deshacer (K12).
   const usar = (its: ItemPropuesto[]) => {
     if (its.length === 0) return;
     setRevisadas((n) => n + its.length);
-    void cambiar(
-      its.length === 1 ? [{ op: "usar", itemId: its[0].id, valor: its[0].valor }] : [{ op: "usarVarias", items: its.map((it) => ({ itemId: it.id, valor: it.valor })) }],
-      { refrescar: refrescar(its) },
-    );
+    void usarSugerencias(its);
   };
+  const pedirUso = (its: ItemPropuesto[]) => (its.length > 1 ? setConfirmarUso(its) : usar(its));
   const descartar = (its: ItemPropuesto[]) => {
     if (its.length === 0) return;
     setRevisadas((n) => n + its.length);
@@ -159,7 +160,7 @@ export default function RevisarSugerencias({ abierto, filtroInicial, onCerrar }:
             <Button size="sm" variant="secondary" disabled={guardando} onClick={() => setConfirmarDescarte(true)}>
               Descartar las {enOrden.length}
             </Button>
-            <Button size="sm" variant="primary" disabled={guardando} onClick={() => usar(enOrden)}>
+            <Button size="sm" variant="primary" disabled={guardando} onClick={() => pedirUso(enOrden)}>
               Usar las {enOrden.length}
             </Button>
           </div>
@@ -182,7 +183,10 @@ export default function RevisarSugerencias({ abierto, filtroInicial, onCerrar }:
         )}
 
         {enOrden.length === 0 ? (
-          <p className="px-5 py-8 text-center text-sm text-fg-muted">Todo revisado. Lo que sugiera el agente después aparece acá.</p>
+          <div className="px-5 py-8">
+            <p className="text-center text-sm text-fg-muted">Todo revisado. Lo que sugiera el agente después aparece acá.</p>
+            <UsadasHoy filtro={deLaVista} />
+          </div>
         ) : (
           grupos.map((g) => (
             <section key={g.clave}>
@@ -191,7 +195,7 @@ export default function RevisarSugerencias({ abierto, filtroInicial, onCerrar }:
                 <span className="text-2xs text-fg-muted">{g.items.length}</span>
                 <span className="flex-1" />
                 {puedeEditar && g.items.length > 1 && (
-                  <Button size="xs" variant="secondary" disabled={guardando} onClick={() => usar(g.items)}>
+                  <Button size="xs" variant="secondary" disabled={guardando} onClick={() => pedirUso(g.items)}>
                     Usar las {g.items.length}
                   </Button>
                 )}
@@ -209,6 +213,7 @@ export default function RevisarSugerencias({ abierto, filtroInicial, onCerrar }:
                     >
                       <div className="min-w-0 flex-1">
                         <p className="text-sm leading-snug text-fg">{textoDe(it)}</p>
+                        {puedeEditar && <LoQueHaceUsar item={it} />}
                         <p className="mt-0.5 flex min-w-0 items-baseline gap-1 text-xs text-fg-muted">
                           <span className="min-w-0 truncate">
                             {origen.etiqueta}
@@ -236,7 +241,7 @@ export default function RevisarSugerencias({ abierto, filtroInicial, onCerrar }:
                       {puedeEditar && (
                         <div className="flex flex-shrink-0 items-center gap-1.5">
                           <IconButton variant="subtle" aria-label="Descartar" title="Descartar (D)" disabled={guardando} icon={<span aria-hidden="true">✕</span>} onClick={() => descartar([it])} />
-                          <Button size="xs" variant="primary" aria-label="Usar" title="Usar (U)" className="h-7 w-7 px-0" disabled={guardando} onClick={() => usar([it])}>
+                          <Button size="xs" variant="primary" aria-label="Usar" title={`Usar (U): ${queHace(it).texto}`} className="h-7 w-7 px-0" disabled={guardando} onClick={() => usar([it])}>
                             ✓
                           </Button>
                         </div>
@@ -249,6 +254,26 @@ export default function RevisarSugerencias({ abierto, filtroInicial, onCerrar }:
           ))
         )}
       </div>
+
+      {enOrden.length > 0 && (
+        <div className="mt-4">
+          <UsadasHoy filtro={deLaVista} />
+        </div>
+      )}
+
+      <ConfirmDialog
+        open={confirmarUso !== null}
+        z="z-[60]"
+        variant="default"
+        title={`¿Usar las ${confirmarUso?.length ?? 0}?`}
+        description={confirmarUso ? <LoQueVaAPasar items={confirmarUso} /> : undefined}
+        confirmLabel={`Usar las ${confirmarUso?.length ?? 0}`}
+        onCancel={() => setConfirmarUso(null)}
+        onConfirm={() => {
+          if (confirmarUso) usar(confirmarUso);
+          setConfirmarUso(null);
+        }}
+      />
 
       <ConfirmDialog
         open={confirmarDescarte}

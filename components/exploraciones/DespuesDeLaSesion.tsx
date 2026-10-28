@@ -30,7 +30,7 @@ import { CorreoDeSeguimiento } from "./CorreoDeSeguimiento";
 import { useLienzo } from "./contexto";
 import SumarAMano from "./SumarAMano";
 import { diaLargo, EtiquetaDePregunta, nombreDelPara, Rotulo, useEditarLaSesion, useFocoDeLaGuia } from "./piezas-de-la-sesion";
-import { FilaSugerida } from "./Propuestas";
+import { BotonUsarTodas, FilaSugerida, UsadasHoy } from "./Propuestas";
 import { useCorrida } from "./useCorrida";
 import { useSesiones } from "./useSesiones";
 
@@ -161,15 +161,15 @@ function LoQueSugiere({ pestana, lectura }: { pestana: PestanaDeSesion; lectura:
   const { exp, revisables, escala, marco, cambiar, puedeEditar, guardando, abrirRevision } = useLienzo();
   const [todas, setTodas] = useState(false);
   const r = pestana.reunion;
-  const items = revisables.filter(
-    (it) => it.destino.tipo !== "casoDeUso" && !(it.destino.tipo === "casilla" && it.destino.clave === "noExplorado") && deEstaReunion(it, lectura, r?.titulo ?? null),
-  );
+  const deEsta = (d: DestinoDePropuesta, it: ItemPropuesto) =>
+    d.tipo !== "casoDeUso" && !(d.tipo === "casilla" && d.clave === "noExplorado") && deEstaReunion(it, lectura, r?.titulo ?? null);
+  const items = revisables.filter((it) => deEsta(it.destino, it));
   const visibles = todas ? items : items.slice(0, 6);
   const nombreDeDimension = (id: string) => escala.areas.flatMap((a) => a.dimensiones).find((d) => d.id === id)?.nombre ?? id;
-  const refrescar = items.some((it) => it.destino.tipo === "edicion" || it.destino.tipo === "perfil");
   const t = exp.estado.propuesta.alertaTecnica;
   const tecnica = t && !t.vista && r && t.reunion.includes(r.titulo) ? t : null;
-  if (!items.length && !tecnica) return null;
+  // K12: sin pendientes no desaparece de golpe: lo usado hoy de esta reunión queda a la vista.
+  if (!items.length && !tecnica) return <UsadasHoy filtro={deEsta} sinPendientes />;
   return (
     <section className="flex flex-col gap-1.5">
       {items.length > 0 && (
@@ -181,14 +181,7 @@ function LoQueSugiere({ pestana, lectura }: { pestana: PestanaDeSesion; lectura:
           {puedeEditar && (
             <>
               <BotonBlanco onClick={() => abrirRevision()}>Revisar una por una</BotonBlanco>
-              {items.length > 1 && (
-                <BotonAzul
-                  disabled={guardando}
-                  onClick={() => void cambiar([{ op: "usarVarias", items: items.map((it) => ({ itemId: it.id, valor: it.valor })) }], { refrescar })}
-                >
-                  Usar las {items.length}
-                </BotonAzul>
-              )}
+              {items.length > 1 && <BotonUsarTodas items={items} lugar="sesion" />}
             </>
           )}
         </div>
@@ -205,6 +198,7 @@ function LoQueSugiere({ pestana, lectura }: { pestana: PestanaDeSesion; lectura:
           Ver las {items.length - visibles.length} restantes
         </button>
       )}
+      {items.length > 0 && <UsadasHoy filtro={deEsta} />}
       {tecnica && (
         <div className="flex items-start gap-2.5 rounded-lg border border-warn-line bg-warn-surface px-3.5 py-2.5">
           <span className="text-sm leading-5 text-warn-ink" aria-hidden="true">

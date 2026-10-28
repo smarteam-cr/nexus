@@ -17,7 +17,7 @@
  * valor se pasa como parámetro: el servidor pasa el estricto (`esquemas.ts`); la pantalla, el libre
  * —el servidor vuelve a validar todo, y su respuesta es la que queda—.
  */
-import type { Cierre, Despues, Letra } from "@/lib/escala/documento/tipos";
+import { CIERRES, DESPUES, type Cierre, type Despues, type Letra } from "@/lib/escala/documento/tipos";
 import { aFecha, hoyEnCostaRica } from "./fechas";
 import { MAX_SESIONES, type GuiaDeLaSesion, type SesionPlaneada } from "./guia";
 import { aplicarCambioDeLaGuia, hayAjustes, type CambioDeLaGuia } from "./ajustes-de-la-guia";
@@ -224,7 +224,40 @@ export interface ContenidoDeExploracion {
    * cuando Nexus lo preguntó. No se vuelven a sugerir ni se asocian solas. Es una lápida: no sube la versión.
    */
   asociacionesDescartadas?: string[];
+  /**
+   * K12 (2026-10-28): las sugerencias usadas en los últimos días, con lo que había en su lugar antes y lo que quedó. Es
+   * lo que muestra «Usadas hoy» y lo que lee `deshacerUso`. Como las lápidas, no sube la versión. Opcional: las
+   * exploraciones de antes no lo tienen.
+   */
+  usadas?: UsoDeSugerencia[];
 }
+
+/**
+ * Una sugerencia usada. `antes` y `despues` son su LUGAR (`lugarDe`): la casilla, el nivel de la dimensión, el área
+ * con su razón, o la industria con el perfil. Deshacer escribe `antes` solo si el lugar sigue como lo dejó (`despues`):
+ * así no pisa lo que alguien cambió después.
+ */
+export interface UsoDeSugerencia {
+  /** El id del ítem usado: al deshacer, el ítem vuelve a la lista de pendientes. */
+  id: string;
+  item: ItemPropuesto;
+  antes: unknown;
+  despues: unknown;
+  en: string;
+  /** El correo de quien la usó (null: un script). */
+  por: string | null;
+  /** Se usó junto con otras («Pasar las N al mapa»): las del mismo lote comparten `en`. */
+  lote?: boolean;
+}
+
+/**
+ * Cuántas usadas se recuerdan, y por cuánto tiempo: «Usadas hoy» solo mira las de hoy. El tope es el de un lote
+ * («usarVarias» acepta hasta 250): con uno menor, lo primero de un lote grande se aplicaba sin poder deshacerse. Cada
+ * una guarda su sugerencia con hasta `FUENTES_DE_LA_USADA` fuentes, para que el registro no pese de más.
+ */
+export const MAX_USADAS = 250;
+const FUENTES_DE_LA_USADA = 4;
+const HORAS_DE_LAS_USADAS = 36;
 
 /** Cuántas reuniones se pueden elegir a mano en el buscador de la preventa. */
 export const MAX_REUNIONES_ELEGIDAS = 20;
@@ -850,6 +883,11 @@ export type Operacion =
   | { op: "usar"; itemId: string; valor?: unknown }
   /** «Usar todas»: cada una por su cuenta; la que ya no está o ya no corresponde se salta. */
   | { op: "usarVarias"; items: { itemId: string; valor?: unknown }[] }
+  /**
+   * K12: deshacer sugerencias usadas, por el id de su uso (`contenido.usadas`). Lo que había antes sale de lo guardado,
+   * no de la pantalla. Se deshacen de la última a la primera; la que cambió después de usarla se queda como está.
+   */
+  | { op: "deshacerUso"; ids: string[] }
   | { op: "descartar"; itemIds: string[] }
   | { op: "responsable"; email: string | null }
   /** «Entendido» en el aviso de que la última reunión se puso técnica. */
@@ -972,7 +1010,176 @@ function aplicarAlDestino(
   }
 }
 
-function aplicarUna(estado: EstadoDeExploracion, op: Operacion, validez: Validez, validador: Validador): ResultadoDeOperaciones {
+// ── Usar y deshacer (K12) ─────────────────────────────────────────────────────
+
+/** Quién cambia y cuándo: queda en cada sugerencia usada. */
+export interface QuienCambia {
+  por: string | null;
+  en: string;
+}
+
+interface LugarDeLaEscala {
+  edicion: string | null;
+  perfilCierre: Cierre | null;
+  perfilDespues: Despues | null;
+  edicionElegida: EdicionElegida | null;
+}
+
+/**
+ * Lo que hay hoy en el lugar al que va una sugerencia: lo que «usar» reemplaza y lo que «deshacer» devuelve. En una
+ * lista, el ítem igual al sugerido (o null). La industria va con el perfil y con quién la eligió: usarla cambia los tres.
+ */
+export function lugarDe(estado: EstadoDeExploracion, item: Pick<ItemPropuesto, "destino" | "valor">): unknown {
+  const c = estado.contenido;
+  const d = item.destino;
+  switch (d.tipo) {
+    case "casilla": {
+      const actual = c.casillas[d.clave];
+      if (!destinoDeLista(d)) return actual ?? null;
+      const k = claveDeItemDeLista(d.clave, item.valor);
+      return ((actual as unknown[] | undefined) ?? []).find((x) => claveDeItemDeLista(d.clave, x) === k) ?? null;
+    }
+    case "nivel":
+      return c.chequeo[d.dimensionId] ?? null;
+    case "falta":
+      return c.falta[d.criterioId] ?? null;
+    case "aExplorar":
+      return c.aExplorar[d.dimensionId] ?? null;
+    case "area":
+      return { enJuego: estado.areas.includes(d.areaId), razon: c.razonesDeAreas[d.areaId] ?? null };
+    case "edicion":
+      return { edicion: estado.edicion, perfilCierre: estado.perfilCierre, perfilDespues: estado.perfilDespues, edicionElegida: c.edicionElegida } satisfies LugarDeLaEscala;
+    case "perfil":
+      return { perfilCierre: estado.perfilCierre, perfilDespues: estado.perfilDespues };
+    case "casoDeUso":
+      return c.casosDeUso[d.useCaseId] ?? null;
+  }
+}
+
+const sinEntrada = <T>(r: Record<string, T>, k: string, v: T | null): Record<string, T> => {
+  const out = { ...r };
+  if (v === null || v === undefined) delete out[k];
+  else out[k] = v;
+  return out;
+};
+
+const perfilValido = (p: { perfilCierre?: unknown; perfilDespues?: unknown }) =>
+  (p.perfilCierre === null || CIERRES.includes(p.perfilCierre as Cierre)) && (p.perfilDespues === null || DESPUES.includes(p.perfilDespues as Despues));
+
+/** Vuelve a poner en su lugar lo que había (`valor` sale de `lugarDe`, guardado al usar). */
+function conLugar(estado: EstadoDeExploracion, item: ItemPropuesto, valor: unknown, validez: Validez): ResultadoDeOperaciones {
+  const c = estado.contenido;
+  const d = item.destino;
+  switch (d.tipo) {
+    case "casilla": {
+      if (!destinoDeLista(d)) return { ok: true, estado: { ...estado, contenido: conCasilla(c, d.clave, (valor ?? undefined) as ValoresDeCasillas[ClaveDeCasilla]) } };
+      const k = claveDeItemDeLista(d.clave, item.valor);
+      const actual = (c.casillas[d.clave] as unknown[] | undefined) ?? [];
+      const sin = actual.filter((x) => claveDeItemDeLista(d.clave, x) !== k);
+      const lista = valor === null || valor === undefined ? sin : actual.length === sin.length ? [...actual, valor] : actual.map((x) => (claveDeItemDeLista(d.clave, x) === k ? valor : x));
+      return { ok: true, estado: { ...estado, contenido: conCasilla(c, d.clave, lista as ValoresDeCasillas[ClaveDeCasilla]) } };
+    }
+    case "nivel":
+      return { ok: true, estado: { ...estado, contenido: { ...c, chequeo: sinEntrada(c.chequeo, d.dimensionId, valor as EstimadoGuardado | null) } } };
+    case "falta":
+      return { ok: true, estado: { ...estado, contenido: { ...c, falta: sinEntrada(c.falta, d.criterioId, valor as EstadoDeCriterio | null) } } };
+    case "aExplorar":
+      return { ok: true, estado: { ...estado, contenido: { ...c, aExplorar: sinEntrada(c.aExplorar, d.dimensionId, valor as AExplorar | null) } } };
+    case "area": {
+      const v = (esObjeto(valor) ? valor : {}) as { enJuego?: boolean; razon?: string | null };
+      const areas = v.enJuego ? (estado.areas.includes(d.areaId) ? estado.areas : [...estado.areas, d.areaId]) : estado.areas.filter((a) => a !== d.areaId);
+      return { ok: true, estado: { ...estado, areas, contenido: { ...c, razonesDeAreas: sinEntrada(c.razonesDeAreas, d.areaId, v.razon ?? null) } } };
+    }
+    case "edicion": {
+      if (!esObjeto(valor)) return { ok: false, error: "No se sabe qué industria había antes." };
+      const v = valor as unknown as LugarDeLaEscala;
+      if (v.edicion !== null && !validez.ediciones.has(v.edicion)) return { ok: false, error: "La industria de antes ya no tiene edición en la escala." };
+      if (!perfilValido(v)) return { ok: false, error: "No se sabe qué perfil había antes." };
+      return {
+        ok: true,
+        estado: { ...estado, edicion: v.edicion, perfilCierre: v.perfilCierre, perfilDespues: v.perfilDespues, contenido: { ...c, edicionElegida: v.edicionElegida ?? null } },
+      };
+    }
+    case "perfil": {
+      if (!esObjeto(valor) || !perfilValido(valor)) return { ok: false, error: "No se sabe qué perfil había antes." };
+      const v = valor as { perfilCierre: Cierre | null; perfilDespues: Despues | null };
+      return { ok: true, estado: { ...estado, perfilCierre: v.perfilCierre, perfilDespues: v.perfilDespues } };
+    }
+    case "casoDeUso":
+      return { ok: true, estado: { ...estado, contenido: { ...c, casosDeUso: sinEntrada(c.casosDeUso, d.useCaseId, valor as CasoDeUsoElegido | null) } } };
+  }
+}
+
+/** ¿Se puede deshacer? Su lugar sigue como lo dejó: si alguien lo cambió después, deshacer pisaría ese cambio. */
+export function sePuedeDeshacer(estado: EstadoDeExploracion, uso: UsoDeSugerencia): boolean {
+  return exacto(lugarDe(estado, uso.item)) === exacto(uso.despues);
+}
+
+function usarUna(
+  estado: EstadoDeExploracion,
+  x: { itemId: string; valor?: unknown },
+  validez: Validez,
+  validador: Validador,
+  quien: QuienCambia,
+  lote: boolean,
+): ResultadoDeOperaciones {
+  const item = estado.propuesta.items.find((it) => it.id === x.itemId);
+  if (!item) return { ok: false, error: "Esa propuesta ya no está: la usó o la descartó alguien más." };
+  const antes = lugarDe(estado, item);
+  const r = aplicarAlDestino(estado, item.destino, x.valor === undefined ? item.valor : x.valor, validez, validador);
+  if (!r.ok) return r;
+  const quedo: EstadoDeExploracion = { ...r.estado, propuesta: { ...r.estado.propuesta, items: r.estado.propuesta.items.filter((it) => it.id !== x.itemId) } };
+  const despues = lugarDe(quedo, item);
+  // Ya estaba igual (un ítem repetido de una lista): no hay nada que deshacer.
+  if (exacto(antes) === exacto(despues)) return { ok: true, estado: quedo };
+  const desde = Date.parse(quien.en) - HORAS_DE_LAS_USADAS * 3600_000;
+  const viejas = (quedo.contenido.usadas ?? []).filter((u) => u.id !== item.id && !(Date.parse(u.en) < desde));
+  const guardado: ItemPropuesto = { ...item, fuentes: item.fuentes.slice(0, FUENTES_DE_LA_USADA) };
+  const uso: UsoDeSugerencia = { id: item.id, item: guardado, antes, despues, en: quien.en, por: quien.por, ...(lote ? { lote: true } : {}) };
+  return { ok: true, estado: { ...quedo, contenido: { ...quedo.contenido, usadas: [...viejas, uso].slice(-MAX_USADAS) } } };
+}
+
+/** Deshace las usadas pedidas, de la última a la primera, y devuelve cada una a la lista de pendientes. */
+function deshacerUsos(estado: EstadoDeExploracion, ids: readonly string[], validez: Validez): ResultadoDeOperaciones {
+  const pedidos = new Set(ids);
+  let actual = estado;
+  let deshechas = 0;
+  let cambiaron = 0;
+  // Lo de antes no se puede volver a poner (una industria que ya no está en la escala): se dice eso, no «cambió».
+  let noSePuede: string | null = null;
+  for (const uso of [...(estado.contenido.usadas ?? [])].reverse()) {
+    if (!pedidos.has(uso.id)) continue;
+    if (!sePuedeDeshacer(actual, uso)) {
+      cambiaron++;
+      continue;
+    }
+    const r = conLugar(actual, uso.item, uso.antes, validez);
+    if (!r.ok) {
+      noSePuede = r.error;
+      continue;
+    }
+    const c = r.estado.contenido;
+    const items = r.estado.propuesta.items;
+    /* Vuelve a la lista, salvo que ya esté, que alguien la haya descartado o que el agente haya propuesto otra para el
+       mismo lugar entretanto (un lugar con un solo valor tiene una sola propuesta). */
+    const clave = claveDelDestino(uso.item.destino);
+    const yaEsta =
+      items.some((it) => it.id === uso.id) || c.descartadas.includes(uso.id) || (!destinoDeLista(uso.item.destino) && items.some((it) => claveDelDestino(it.destino) === clave));
+    actual = {
+      ...r.estado,
+      contenido: { ...c, usadas: (c.usadas ?? []).filter((u) => u.id !== uso.id) },
+      propuesta: yaEsta ? r.estado.propuesta : { ...r.estado.propuesta, items: [...items, uso.item].slice(-MAX_ITEMS) },
+    };
+    deshechas++;
+  }
+  if (deshechas > 0) return { ok: true, estado: actual };
+  return {
+    ok: false,
+    error: noSePuede ?? (cambiaron > 0 ? "Eso cambió después de usar la sugerencia: no se deshace para no pisar ese cambio." : "Eso ya se deshizo."),
+  };
+}
+
+function aplicarUna(estado: EstadoDeExploracion, op: Operacion, validez: Validez, validador: Validador, quien: QuienCambia): ResultadoDeOperaciones {
   const c = estado.contenido;
   switch (op.op) {
     case "casilla": {
@@ -1109,21 +1316,18 @@ function aplicarUna(estado: EstadoDeExploracion, op: Operacion, validez: Validez
       delete casosDeUso[op.useCaseId];
       return { ok: true, estado: { ...estado, contenido: { ...c, casosDeUso } } };
     }
-    case "usar": {
-      const item = estado.propuesta.items.find((x) => x.id === op.itemId);
-      if (!item) return { ok: false, error: "Esa propuesta ya no está: la usó o la descartó alguien más." };
-      const r = aplicarAlDestino(estado, item.destino, op.valor === undefined ? item.valor : op.valor, validez, validador);
-      if (!r.ok) return r;
-      return { ok: true, estado: { ...r.estado, propuesta: { ...r.estado.propuesta, items: r.estado.propuesta.items.filter((x) => x.id !== op.itemId) } } };
-    }
+    case "usar":
+      return usarUna(estado, op, validez, validador, quien, false);
     case "usarVarias": {
       let actual = estado;
       for (const x of op.items) {
-        const r = aplicarUna(actual, { op: "usar", itemId: x.itemId, valor: x.valor }, validez, validador);
+        const r = usarUna(actual, x, validez, validador, quien, op.items.length > 1);
         if (r.ok) actual = r.estado;
       }
       return { ok: true, estado: actual };
     }
+    case "deshacerUso":
+      return deshacerUsos(estado, op.ids, validez);
     case "descartar": {
       const ids = new Set(op.itemIds);
       // El título de un caso de uso descartado queda anotado: la próxima tanda del agente no lo repite.
@@ -1232,10 +1436,12 @@ export function aplicarOperaciones(
   ops: readonly Operacion[],
   validez: Validez,
   validador: Validador,
+  /** Queda en cada sugerencia usada (K12). Sin él: nadie, ahora. */
+  quien: QuienCambia = { por: null, en: new Date().toISOString() },
 ): ResultadoDeOperaciones {
   let actual = estado;
   for (const op of ops) {
-    const r = aplicarUna(actual, op, validez, validador);
+    const r = aplicarUna(actual, op, validez, validador, quien);
     if (!r.ok) return r;
     actual = r.estado;
   }
@@ -1244,8 +1450,8 @@ export function aplicarOperaciones(
 
 /** ¿Lo que cambió es lo confirmado (sube la versión) o solo lo pendiente? */
 export function cambioLoConfirmado(antes: EstadoDeExploracion, despues: EstadoDeExploracion): boolean {
-  // Las lápidas (y los títulos de los casos descartados) son de lo propuesto: no suben la versión.
-  const sinLapidas = (c: ContenidoDeExploracion) => exacto({ ...c, descartadas: [], casosDescartados: [], asociacionesDescartadas: undefined });
+  // Las lápidas (y los títulos de los casos descartados) son de lo propuesto: no suben la versión. Tampoco el registro de las usadas.
+  const sinLapidas = (c: ContenidoDeExploracion) => exacto({ ...c, descartadas: [], casosDescartados: [], asociacionesDescartadas: undefined, usadas: undefined });
   return (
     sinLapidas(antes.contenido) !== sinLapidas(despues.contenido) ||
     exacto(antes.areas) !== exacto(despues.areas) ||
