@@ -12239,3 +12239,19 @@ un «nivel de la dimensión» que dibujar.
    Funcional y uno en Óptimo, sin ninguno en Eficiente. El panel muestra además cuántos hay en cada nivel, y describe el
    nivel donde la serie tiene más criterios (`nivelConMas`), nunca uno donde no tiene ninguno.
 5. Solo la vista viaja en la URL (`?vista=radar`), como las demás; las series prendidas no.
+6. **El radar es la MISMA rueda que el mapa; solo cambia lo de adentro** (Elías, el mismo día, al ver la primera versión:
+   «comparado al otro está muy por debajo, no solo en el diseño sino en la estructura… solo debería cambiar lo del
+   centro»). La geometría vive en un solo lugar (`lib/escala/rueda.ts`: medidas, mitades, porciones, dónde va cada rótulo)
+   y las piezas fijas en SVG en `components/escala/rueda.tsx`: las mitades con su nombre y su banda gris, el número y el
+   nombre de cada dimensión, los niveles en el hueco de arriba, «la base» y el centro. Adentro, los anillos apenas
+   teñidos con el color de su nivel y un eje por el medio de cada porción. Un nivel entero cae en el MEDIO de su anillo (no
+   en su borde), así que un punto en Funcional queda por fuera de la línea de la base, como la celda de Funcional en el
+   mapa. La línea de cada serie va entera dentro de cada mitad y fina y punteada al cruzar el hueco, para no tachar los
+   nombres de los niveles ni «la base»; sin relleno (puntos, no áreas).
+7. **El radar de UNA empresa es la misma rueda** (`components/escala/RadarDeUnaEmpresa.tsx`), para la página pública del
+   resultado del test y su PDF: hex literal, SVG estático sin JavaScript, un punto por dimensión con su puntaje adentro y
+   el borde del color de su nivel. El NIVEL elige el anillo y el puntaje dice cuánto avanzó dentro de él
+   (`posicionDelPuntaje`, con los tramos del chequeo): un punto nunca cae en un anillo que contradiga el nivel que se le
+   dice a la empresa. Una dimensión sin nivel no lleva punto y su número dice «no se preguntó»; una que contestó «No lo
+   sé» va con el borde punteado, «?» en vez del puntaje y «no lo sabías», como las barras. Con una sola serie, la línea
+   lleva un relleno apenas visible (7 %) para que se lea la forma; el radar interno, con varias superpuestas, no.
