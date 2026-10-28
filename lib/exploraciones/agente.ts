@@ -1032,8 +1032,9 @@ function planDeLaLectura(
     .filter((p) => p.tipo !== "abierto")
     .slice(0, 16)
     .map((p) => ({ para: p.para, pregunta: (p.tema ? `${p.tema}: ${p.pregunta}` : p.pregunta).slice(0, 400) }));
+  // K11: con qué equipo fue cada reunión (el de su sesión, como la liga la pantalla: fuentes.ts › `leerFuentes`).
   return {
-    reuniones: reuniones.map((r) => ({ fuente: r.fuente, etiqueta: r.etiqueta })),
+    reuniones: reuniones.map((r) => ({ fuente: r.fuente, etiqueta: r.etiqueta, ...(r.equipo ? { equipo: r.equipo } : {}) })),
     planeado: { objetivo: sesion?.objetivo ?? guia?.objetivo ?? null, preguntas },
   };
 }
@@ -1045,7 +1046,7 @@ function lecturasDeLaCorrida(
     estado: EstadoDeExploracion;
     escala: EscalaDelLienzo;
     leido: LoQueSeLeyo;
-    ctx: Pick<ContextoDelPedido, "planeado" | "marco">;
+    ctx: Pick<ContextoDelPedido, "planeado" | "marco" | "reuniones">;
     runId: string;
     /** El resumen de una reunión leída hace tiempo: lo listo de hoy no es lo que había antes de ella. */
     sinListosAntes?: boolean;
@@ -1069,6 +1070,8 @@ function lecturasDeLaCorrida(
     const r = reuniones.find((x) => x.fuente === d.fuente);
     if (!r) continue;
     const esLaUltima = deLaUltima.has(r.fuente);
+    // K11: con qué equipo se leyó; si la sesión cambia de equipo, la pantalla sugiere volver a leerla.
+    const equipo = o.ctx.reuniones?.find((x) => x.fuente === r.fuente)?.equipo;
     out[r.clave] = {
       etiqueta: r.etiqueta.slice(0, 300),
       resumen: d.resumen,
@@ -1077,6 +1080,7 @@ function lecturasDeLaCorrida(
       ...(listosAntes ? { listosAntes } : {}),
       fecha: r.fecha,
       titulo: r.titulo.slice(0, 300),
+      ...(equipo ? { equipo } : {}),
       en,
       corridaId: o.runId,
     };

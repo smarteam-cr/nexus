@@ -103,6 +103,11 @@ export interface SesionPlaneada {
   explorarPara?: Record<string, string>;
   /** El objetivo de la sesión, confirmado por el vendedor (lo sugiere el agente con la guía). */
   objetivo?: string;
+  /**
+   * K11 (2026-10-28): el objetivo lo escribió (o lo reescribió) una persona; no es el que sugirió el agente y se usó tal
+   * cual. Solo así cuenta para sugerir el equipo de la sesión (equipos.ts › `sugerirEquipoDeLaSesion`).
+   */
+  objetivoPropio?: boolean;
   /** El objetivo que sugirió el agente y el vendedor descartó: no se vuelve a ofrecer el mismo. */
   objetivoDescartado?: string;
   /** Qué pasó con ella, cuando su reunión no dejó qué leer. */
@@ -1384,6 +1389,43 @@ export function loQueTraes(
       aviso: resultado === "cortada",
       lineas,
     });
+  }
+  return out;
+}
+
+/**
+ * K11 (2026-10-28): con qué equipo del cliente fue cada reunión que se lee (por su fuente: S1, H2, M1), el de la sesión
+ * a la que la liga la PANTALLA (`pestanasDeSesiones`, que recibe acá): así la lectura y la cabecera de la sesión hablan
+ * de la misma reunión. Cuenta la reunión que muestra la pestaña y la que eligió la persona (una de HubSpot cuya gemela
+ * de Meet es la que se ve). Una reunión que no es de ninguna pestaña hereda el equipo solo si es la otra cara de la misma
+ * reunión (Meet y HubSpot a menos de dos horas) y hay una sola así: nunca de otra sesión del mismo día. Sin equipo, no va.
+ */
+export function equiposDeLasReuniones(
+  reuniones: readonly { fuente: string; clave: string; origen: string; fecha: string }[],
+  pestanas: readonly PestanaDeSesion[],
+): Record<string, ClaveDeEquipo> {
+  const porClave = new Map<string, ClaveDeEquipo>();
+  const deUnaPestana = new Set<string>();
+  const caras: { origen: string; fecha: string; equipo: ClaveDeEquipo }[] = [];
+  for (const p of pestanas) {
+    const claves = [p.reunion ? claveDeReunion(p.reunion) : null, p.sesion?.reunion ? claveDeReunion(p.sesion.reunion) : null].filter((k): k is string => !!k);
+    for (const k of claves) deUnaPestana.add(k);
+    const equipo = p.sesion?.equipo;
+    if (!equipo) continue;
+    for (const k of claves) porClave.set(k, equipo);
+    if (p.reunion) caras.push({ origen: p.reunion.origen, fecha: p.reunion.fecha, equipo });
+  }
+  const out: Record<string, ClaveDeEquipo> = {};
+  const deReunion = (o: string) => o === "meet" || o === "hubspot";
+  for (const r of reuniones) {
+    const equipo = porClave.get(r.clave);
+    if (equipo) {
+      out[r.fuente] = equipo;
+      continue;
+    }
+    if (deUnaPestana.has(r.clave) || !deReunion(r.origen)) continue;
+    const gemelas = caras.filter((c) => deReunion(c.origen) && c.origen !== r.origen && mismaReunion(c.fecha, r.fecha));
+    if (gemelas.length === 1) out[r.fuente] = gemelas[0].equipo;
   }
   return out;
 }

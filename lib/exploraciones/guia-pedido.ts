@@ -148,8 +148,12 @@ export interface ContextoDeLaGuia {
   notasDeHubspot?: { fecha: string; autor: string | null; texto: string }[];
   /** Lo que Smarteam dice de sí mismo (lib/smarteam/contexto.ts): para la apertura y «Contarle», corto. Solo la preventa. */
   smarteam?: string | null;
-  /** K8: una sesión con la empresa entera, sin sesiones por equipo todavía: la guía sugiere qué sesiones por equipo siguen. */
+  /**
+   * K8: una sesión con la empresa entera: la guía sugiere qué sesiones por equipo siguen. K11 (2026-10-28): también si ya
+   * hay sesiones por equipo; esas (`equiposYaConSesion`, planeadas o hechas) no se vuelven a sugerir.
+   */
   sugerirSesionesPorEquipo?: boolean;
+  equiposYaConSesion?: ClaveDeEquipo[];
   /** K8: los equipos que ya tuvieron su sesión (sus nombres): con dos o más, las repreguntas contrastan lo que dijo cada uno. */
   equiposConSesion?: string[];
   /** Lo que falta para proponer (en un proyecto, de la estrategia) y ninguna pregunta cubre: el cierre lo pide. */
@@ -298,7 +302,7 @@ export function herramientaDeLaGuia(ctx: ContextoDeLaGuia): Anthropic.Messages.T
                 description: "Las sesiones por equipo que conviene agendar después de esta (de 2 a 4), por lo que sabemos de la empresa: el equipo y por qué, en 20 palabras como mucho.",
                 items: {
                   type: "object",
-                  properties: { equipo: { type: "string", enum: [...EQUIPOS_DEL_CLIENTE] }, porque: { type: "string" } },
+                  properties: { equipo: { type: "string", enum: equiposPorSugerir(ctx) }, porque: { type: "string" } },
                   required: ["equipo", "porque"],
                 },
               },
@@ -513,6 +517,9 @@ function cuerpoDeLaGuia(ctx: ContextoDeLaGuia): string {
   }
   if (ctx.sugerirSesionesPorEquipo) {
     lineas.push("", "=== ESTA SESIÓN ES CON LA EMPRESA ENTERA: en «sesionesPorEquipo», qué sesiones por equipo conviene agendar después ===");
+    if (ctx.equiposYaConSesion?.length) {
+      lineas.push(`Ya tienen su sesión (planeada o hecha): ${ctx.equiposYaConSesion.map((e) => EQUIPOS[e].nombre).join(", ")}. No las sugieras de nuevo.`);
+    }
   }
   if (ctx.plan) {
     lineas.push("", `=== LAS PREGUNTAS DE ESTA SESIÓN: una por línea, en este orden (${ctx.plan.length} en total) ===`);
@@ -674,7 +681,7 @@ export function leerLaGuiaDelAgente(respuesta: Anthropic.Messages.Message, ctx: 
           const porque = textoLimpio(x.porque, 200);
           return esEquipo(x.equipo) && porque ? [{ equipo: x.equipo, porque }] : [];
         })
-        .filter((x, i, todas) => todas.findIndex((y) => y.equipo === x.equipo) === i)
+        .filter((x, i, todas) => todas.findIndex((y) => y.equipo === x.equipo) === i && !ctx.equiposYaConSesion?.includes(x.equipo))
         .slice(0, 4)
     : [];
 
@@ -912,8 +919,14 @@ export function contextoDeLaGuia(o: {
     ...(cs && o.memoriaDelProyecto?.trim() ? { memoriaDelProyecto: o.memoriaDelProyecto.trim() } : {}),
     ...(!cs && o.notasDeHubspot?.length ? { notasDeHubspot: o.notasDeHubspot } : {}),
     ...(!cs && o.smarteam?.trim() ? { smarteam: o.smarteam.trim() } : {}),
-    // K8: sin equipo y sin ninguna sesión por equipo planeada, la guía sugiere cuáles siguen.
-    ...(!equipo && !c.sesiones.some((x) => x.equipo) ? { sugerirSesionesPorEquipo: true } : {}),
+    /* K8: una sesión con la empresa entera sugiere qué sesiones por equipo siguen. K11 (2026-10-28): también con alguna
+       sesión por equipo ya planeada o hecha (antes, con una sola se dejaba de sugerir): esas no se repiten. */
+    ...(() => {
+      if (equipo) return {};
+      const ya = EQUIPOS_DEL_CLIENTE.filter((e) => c.sesiones.some((x) => x.equipo === e && x.id !== proximaId && x.resultado !== "noSeHizo"));
+      if (ya.length === EQUIPOS_DEL_CLIENTE.length) return {};
+      return { sugerirSesionesPorEquipo: true, ...(ya.length ? { equiposYaConSesion: ya } : {}) };
+    })(),
     ...(() => {
       const nombres = [
         // Hecha (marcada, o con la fecha pasada) y sin un resultado que diga que su reunión no dejó qué leer.
@@ -954,6 +967,11 @@ export function contextoDeLaGuia(o: {
         }
       : {}),
   };
+}
+
+/** Los equipos que la guía puede sugerir para una sesión propia: los que todavía no la tienen. */
+function equiposPorSugerir(ctx: Pick<ContextoDeLaGuia, "equiposYaConSesion">): ClaveDeEquipo[] {
+  return EQUIPOS_DEL_CLIENTE.filter((e) => !ctx.equiposYaConSesion?.includes(e));
 }
 
 /** Las objeciones confirmadas y las que propuso el agente, sin repetir, con su clase y si se respondió. */

@@ -26,7 +26,8 @@ import type { AreaDelLienzo, DimensionDelLienzo, EscalaDelLienzo } from "@/lib/e
 import { cuentaDelArea, loQueLaFrena, type PosicionEnElMapa } from "@/lib/exploraciones/mapa";
 import { diaCorto } from "@/lib/exploraciones/fechas";
 import { fotoDeLaExploracion } from "@/lib/exploraciones/foto-de-la-escala";
-import { queExplorar } from "@/lib/exploraciones/que-explorar";
+import { areasDeLaProxima, queExplorar } from "@/lib/exploraciones/que-explorar";
+import { EQUIPOS } from "@/lib/exploraciones/equipos";
 import { useLienzo } from "./contexto";
 import FranjaDeSugerencias, { BotonAzul, IconoDeSugerencia } from "./FranjaDeSugerencias";
 import { ConQueSeMide } from "./Identificacion";
@@ -36,6 +37,7 @@ import { FilaSugerida } from "./Propuestas";
 import PreparacionParaEngagement from "./PreparacionParaEngagement";
 import { QueVaPrimero } from "./QueVaPrimero";
 import RuedaDelEquipo from "./RuedaDelEquipo";
+import { useSesiones } from "./useSesiones";
 
 const LETRAS: Letra[] = ["D", "I", "F", "E", "O"];
 
@@ -118,11 +120,16 @@ const elDia = (d: string) => diaCorto(`${d}T12:00:00-06:00`);
 /**
  * Ficha B (2026-10-17): qué conviene llevar a la próxima sesión y por qué, según lo que cambió en la escala desde la
  * última versión guardada (lib/exploraciones/que-explorar.ts). Llevarla es marcarla «Explorarla a fondo»: la guía la
- * pregunta primero.
+ * pregunta primero. K11 (2026-10-28): con la próxima sesión con un equipo que tiene área, solo lo de su área.
  */
 function QueExplorarEnLaProxima() {
   const { exp, escala, mapa, escalaAnterior, cambiar, puedeEditar, guardando, nombreDeNivel } = useLienzo();
+  const { sesiones, proxima } = useSesiones();
   if (!exp.estado.areas.length) return null;
+  const equipo = sesiones.find((s) => s.id === proxima.sesionId)?.equipo ?? null;
+  // La misma regla que filtra la lista (que-explorar.ts): la frase dice el filtro solo si de verdad quedó un área.
+  const areas = areasDeLaProxima(escala, exp.estado.areas, equipo);
+  const areaDelEquipo = equipo && areas.length === 1 && areas[0].id === EQUIPOS[equipo].area ? areas[0] : undefined;
   const sugerencias = queExplorar({
     escala,
     areas: exp.estado.areas,
@@ -133,6 +140,7 @@ function QueExplorarEnLaProxima() {
     aExplorar: exp.estado.contenido.aExplorar,
     nombreDeNivel,
     diaCorto: elDia,
+    equipo,
   });
   if (!sugerencias.length) return null;
   const sinLlevar = sugerencias.filter((x) => !x.marcada);
@@ -150,6 +158,7 @@ function QueExplorarEnLaProxima() {
             {escalaAnterior
               ? "Según lo que cambió desde el " + elDia(escalaAnterior.dia) + " y lo que todavía no tiene evidencia."
               : "Según lo que todavía no tiene evidencia y lo que frena a cada área."}
+            {equipo && areaDelEquipo ? ` La próxima sesión es con ${EQUIPOS[equipo].nombre}: solo lo de ${areaDelEquipo.nombre}.` : ""}
           </p>
         </div>
         {puedeEditar && sinLlevar.length > 1 && (

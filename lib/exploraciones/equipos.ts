@@ -597,29 +597,37 @@ const sinTildes = (t: string) =>
 
 /**
  * Las palabras que delatan a cada equipo en el título o el objetivo de una sesión. Sin «marca» (los gerentes de marca
- * son Ventas, y «la marca» también es de Marketing) ni «datos» u «operación» sueltos (todo equipo habla de eso).
+ * son Ventas, y «la marca» también es de Marketing) ni «datos», «operación» u «operativos» sueltos (todo equipo habla de
+ * eso: «Camosa | Exploración de retos operativos» no es con Operaciones).
  */
 const PALABRAS: Readonly<Record<ClaveDeEquipo, RegExp>> = {
   direccion: /\b(direccion|gerencia general|gerente general|ceo|junta directiva|duenos?|estrategia del negocio)\b/,
-  ventas: /\b(ventas|comercial(es)?|sales hub|vendedor(es|as)?|gerentes? de marca|pipeline|cotizacion(es)?)\b/,
-  marketing: /\b(marketing|mercadeo|marketing hub|pauta|campanas?|redes sociales|email marketing|agencias?)\b/,
-  servicio: /\b(servicio al cliente|atencion al cliente|sac|soporte|service hub|postventa|posventa|tickets?)\b/,
-  operaciones: /\b(operaciones|operativ[oa]s?|logistica|entregas?|bodega|inventarios?|despachos?|devoluciones|talleres?|anticipos?)\b/,
+  ventas: /\b(ventas|comercial(es)?|vendedor(es|as)?|gerentes? de marca|pipeline|cotizacion(es)?)\b/,
+  marketing: /\b(marketing|mercadeo|pauta|campanas?|redes sociales|email marketing|agencias?)\b/,
+  servicio: /\b(servicio al cliente|atencion al cliente|sac|soporte|postventa|posventa|tickets?)\b/,
+  operaciones: /\b(operaciones|area operativa|equipo operativo|logistica|entregas?|bodega|inventarios?|despachos?|devoluciones|talleres?|anticipos?)\b/,
   financiero: /\b(finanzas|financier[oa]s?|contabilidad|contador(a|es)?|facturacion|cobros?|cobranza|tesoreria|cuentas por cobrar)\b/,
   // Sin «ti» (es «para ti») ni «desarrollo» suelto (el del negocio).
-  tecnologia: /\b(tecnologia|sistemas|data hub|integracion(es)?|erp|api|arquitectura tecnica|desarrollo a la medida)\b/,
+  tecnologia: /\b(tecnologia|sistemas|integracion(es)?|erp|api|arquitectura tecnica|desarrollo a la medida)\b/,
 };
+
+/**
+ * Lo que se borra antes de buscar un equipo (K11, 2026-10-28). Los productos de HubSpot no son equipos: «Cemaco | Sales
+ * Hub» fue la sesión con Marketing, y un diagnóstico de Service Hub se hace con quien decide, no con el soporte. «La
+ * operación comercial» es la de la empresa entera (lo escribía el agente en casi todos los objetivos).
+ */
+const NO_SON_EQUIPOS = /\b(?:(?:sales|marketing|service|data|operations|content|commerce|cms)\s+hub|smart\s*crm|operacion(?:es)? comercial(?:es)?)\b/g;
 
 /** Los equipos que nombra un texto, en el orden de `EQUIPOS_DEL_CLIENTE`. */
 export function equiposQueNombra(texto: string): ClaveDeEquipo[] {
-  const t = sinTildes(texto);
+  const t = sinTildes(texto).replace(NO_SON_EQUIPOS, " ");
   return EQUIPOS_DEL_CLIENTE.filter((e) => PALABRAS[e].test(t));
 }
 
 /**
- * El equipo que sugiere Nexus para una sesión: el primer texto (el objetivo, que escribió la persona para ESTA sesión,
- * antes que el título del calendario) que nombra UN solo equipo. Si un texto nombra dos («ventas y marketing»), no
- * decide: se mira el siguiente. null = no se sabe; nunca se guarda solo.
+ * El equipo que sugiere Nexus: el primer texto que nombra UN solo equipo. Si un texto nombra dos («ventas y marketing»),
+ * no decide: se mira el siguiente. null = no se sabe; nunca se guarda solo. El orden de los textos lo pone quien llama:
+ * para una sesión, `sugerirEquipoDeLaSesion`.
  */
 export function sugerirEquipo(textos: readonly (string | null | undefined)[]): ClaveDeEquipo | null {
   for (const t of textos) {
@@ -629,3 +637,48 @@ export function sugerirEquipo(textos: readonly (string | null | undefined)[]): C
   }
   return null;
 }
+
+/** De dónde sale la sugerencia, para decirlo junto a ella. */
+export type DeDondeSaleElEquipo = "titulo" | "calendario" | "objetivo";
+
+export interface EquipoSugerido {
+  equipo: ClaveDeEquipo;
+  de: DeDondeSaleElEquipo;
+  /** El texto que lo nombra, tal cual (el título o el objetivo). */
+  texto: string;
+}
+
+/** Lo que hace falta de una sesión para sugerir su equipo (la forma de `PestanaDeSesion`, sin importarla). */
+export interface PistasDeLaSesion {
+  sesion?: { titulo?: string; objetivo?: string; objetivoPropio?: boolean; evento?: { titulo?: string } | null } | null;
+  reunion?: { titulo?: string | null } | null;
+}
+
+/**
+ * El equipo que sugiere Nexus para una sesión (K11, 2026-10-28). Primero los títulos: el que le puso una persona a la
+ * sesión y el del calendario (el de su reunión o su evento), que dicen con quién es. El objetivo, solo si lo escribió
+ * una persona (`objetivoPropio`): el que redactó el agente con la guía y la persona usó tal cual habla de «la operación
+ * comercial» o de «la junta directiva» en casi todas las preventas, y mandaba la sesión a Ventas o a Dirección. Medido el
+ * 28 oct en producción: «qué frena su operación comercial» en Leasein, Tecnosagot y CAMOSA (CAMOSA quedó con Ventas), y
+ * «la junta directiva» en la Universidad de Monterrey, todos del agente.
+ */
+export function sugerirEquipoDeLaSesion(p: PistasDeLaSesion): EquipoSugerido | null {
+  const pistas: { texto: string | null | undefined; de: DeDondeSaleElEquipo }[] = [
+    { texto: p.sesion?.titulo, de: "titulo" },
+    { texto: p.reunion?.titulo, de: "calendario" },
+    { texto: p.sesion?.evento?.titulo, de: "calendario" },
+    { texto: p.sesion?.objetivoPropio ? p.sesion.objetivo : null, de: "objetivo" },
+  ];
+  for (const x of pistas) {
+    const equipo = x.texto ? sugerirEquipo([x.texto]) : null;
+    if (equipo) return { equipo, de: x.de, texto: x.texto!.trim() };
+  }
+  return null;
+}
+
+/** «por el título del calendario», para decir de dónde sale la sugerencia. */
+export const DE_DONDE_SALE_EL_EQUIPO: Readonly<Record<DeDondeSaleElEquipo, string>> = {
+  titulo: "por el nombre de la sesión",
+  calendario: "por el título del calendario",
+  objetivo: "por el objetivo que escribiste",
+};

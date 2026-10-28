@@ -113,11 +113,12 @@ describe("los equipos del cliente", () => {
     expect(letraDelTemaDeEquipo("tecnologia.datos")).toBe("TI");
   });
 
-  it("Nexus sugiere el equipo por el objetivo antes que por el título (las sesiones de CEMACO)", () => {
-    // 20 oct: el título del calendario dice Sales Hub, el objetivo de Liliana dice Marketing.
+  it("Nexus sugiere el equipo por el primer texto que nombra uno solo (las sesiones de CEMACO)", () => {
+    // 20 oct: el título del calendario dice Sales Hub (un producto, no un equipo), el objetivo de Liliana dice Marketing.
     expect(sugerirEquipo(["Entender cómo va a operar el equipo de Marketing de Cemaco dentro de la operación", "Cemaco | Sales Hub"])).toBe("marketing");
-    expect(sugerirEquipo([null, "Cemaco | Data Hub"])).toBe("tecnologia");
-    expect(sugerirEquipo([undefined, "Cemaco | Sales Hub"])).toBe("ventas");
+    // K11: los productos de HubSpot no son equipos.
+    expect(sugerirEquipo([null, "Cemaco | Data Hub"])).toBeNull();
+    expect(sugerirEquipo([undefined, "Cemaco | Sales Hub"])).toBeNull();
     // Dos equipos en el mismo texto no deciden; sin nada, no se sabe.
     expect(sugerirEquipo(["Integrar ventas y marketing"])).toBeNull();
     expect(sugerirEquipo(["Inicio de diagnóstico | CEMACO INTERNACIONAL + HUBSPOT + SMARTEAM"])).toBeNull();

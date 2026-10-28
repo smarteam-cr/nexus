@@ -10,6 +10,10 @@
  *   5. el resto de las hipótesis.
  * Como mucho `MAX_PARA_EXPLORAR`. Llevar una a la próxima sesión es la operación `aExplorar` de siempre (la guía la
  * pregunta primero, también si ya tiene evidencia: guia.ts › `enfoqueDeLaGuia`).
+ *
+ * K11 (2026-10-28): si la próxima sesión es con un equipo que tiene área en la escala (Ventas, Marketing, Servicio),
+ * solo se sugiere lo de esa área: a Marketing no se le lleva lo que frena a Ventas. Con Dirección, con un equipo sin área
+ * o con la empresa entera, todas las áreas en juego.
  */
 import { loQueLaFrena, type PosicionEnElMapa } from "./mapa";
 import type { ResultadoDelChequeo } from "@/lib/escala/chequeo";
@@ -17,6 +21,7 @@ import type { Letra } from "@/lib/escala/documento/tipos";
 import type { MotivoParaExplorar } from "./contenido";
 import type { EscalaDelLienzo } from "./escala-del-lienzo";
 import { cambiosEntreFotos, type FotoDeLaEscala } from "./foto-de-la-escala";
+import { EQUIPOS, type ClaveDeEquipo } from "./equipos";
 
 export const MAX_PARA_EXPLORAR = 4;
 
@@ -48,11 +53,13 @@ export function queExplorar(o: {
   nombreDeNivel: (l: Letra) => string;
   diaCorto?: (dia: string) => string;
   max?: number;
+  /** El equipo de la próxima sesión (K11): con uno que tiene área, solo lo de su área. */
+  equipo?: ClaveDeEquipo | null;
 }): SugerenciaParaExplorar[] {
   const nivel = o.nombreDeNivel;
   const out: SugerenciaParaExplorar[] = [];
   const vistas = new Set<string>();
-  const enJuego = o.escala.areas.filter((a) => o.areas.includes(a.id));
+  const enJuego = areasDeLaProxima(o.escala, o.areas, o.equipo ?? null);
   const dimDe = (id: string) => {
     for (const a of enJuego) {
       const d = a.dimensiones.find((x) => x.id === id);
@@ -116,4 +123,14 @@ export function queExplorar(o: {
   for (const { d, p } of hipotesis) sumar(d.id, "hipotesis", `Es hipótesis (${nivel(p!.nivel)}): pregúntalo para tener evidencia.`, debajoDeF(p!.nivel) ? "indicio" : "otro");
 
   return out.slice(0, o.max ?? MAX_PARA_EXPLORAR);
+}
+
+/**
+ * Las áreas que entran en «Qué explorar» para la próxima sesión: la del equipo si la tiene y está en juego; si no, todas
+ * las en juego (un equipo sin área, Dirección o la empresa entera).
+ */
+export function areasDeLaProxima(escala: EscalaDelLienzo, areas: readonly string[], equipo: ClaveDeEquipo | null) {
+  const enJuego = escala.areas.filter((a) => areas.includes(a.id));
+  const delEquipo = equipo ? EQUIPOS[equipo].area : null;
+  return delEquipo && enJuego.some((a) => a.id === delEquipo) ? enJuego.filter((a) => a.id === delEquipo) : enJuego;
 }

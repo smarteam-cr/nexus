@@ -35,9 +35,12 @@ export function useCorrida() {
   const vistaAlMontar = useRef(exp.actualizadaEn);
   useEffect(() => s.montar(vistaAlMontar.current), [s]);
 
-  /** `sesionId`: para leer una reunión de Meet puntual (la de una pestaña de sesión). `hubspotId`: para resumir una de HubSpot ya leída. */
+  /**
+   * `sesionId`: para leer una reunión de Meet puntual (la de una pestaña de sesión). `hubspotId`: para resumir una de HubSpot ya leída.
+   * Devuelve si el agente arrancó con este pedido (no si ya corría otro, ni si falló).
+   */
   const lanzar = useCallback(
-    async (modo: ModoDeLaCorrida, opciones: { sesionId?: string; hubspotId?: string } = {}) => {
+    async (modo: ModoDeLaCorrida, opciones: { sesionId?: string; hubspotId?: string } = {}): Promise<boolean> => {
       s.ponerLanzando(true);
       try {
         const res = await fetch(`/api/sales/exploraciones/${exp.id}/agente`, {
@@ -48,10 +51,14 @@ export function useCorrida() {
         const data = (await res.json().catch(() => ({}))) as { error?: string; yaCorria?: boolean };
         if (!res.ok) {
           toast.error(data.error ?? "No se pudo lanzar el agente.");
-          return;
+          return false;
         }
         if (data.yaCorria) toast.info("El agente ya está trabajando en esta preventa: cuando termine, lánzalo de nuevo si hace falta.");
         void s.seguir();
+        return !data.yaCorria;
+      } catch {
+        toast.error("No se pudo lanzar el agente.");
+        return false;
       } finally {
         s.ponerLanzando(false);
       }

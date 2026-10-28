@@ -415,6 +415,7 @@ export const SesionPlaneadaSchema: z.ZodType<SesionPlaneada> = z.object({
     .refine((r) => Object.keys(r).length <= MAX_PARA_EXPLORAR)
     .optional(),
   objetivo: textoLleno(400).optional(),
+  objetivoPropio: z.boolean().optional(),
   objetivoDescartado: textoLleno(400).optional(),
   resultado: z.enum(RESULTADOS_DE_LA_SESION).optional(),
   pasaron: z.array(z.string().min(1).max(40)).max(20).optional(),
@@ -702,6 +703,7 @@ const LecturaDeReunionSchema: z.ZodType<LecturaDeReunion> = z.object({
   listosAntes: z.array(z.string().max(40)).max(12).optional(),
   fecha: z.string().max(40).optional(),
   titulo: z.string().max(300).optional(),
+  equipo: z.enum(EQUIPOS_DEL_CLIENTE).optional(),
   en: z.string().max(40),
   corridaId: z.string().max(60),
 });

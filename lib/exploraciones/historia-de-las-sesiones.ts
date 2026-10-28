@@ -15,6 +15,7 @@ import type { CoberturaDeLaPregunta, LecturaDeReunion } from "./contenido";
 import { lecturasDeLaExploracion, type SesionPlaneada } from "./guia";
 import { claveDeNotaDeSesion } from "./notas-de-sesion";
 import { diaConAnio } from "./fechas";
+import { EQUIPOS, type ClaveDeEquipo } from "./equipos";
 // La sesión de una lectura (por su reunión, su evento o el día): vive aparte porque también la usa el plan de la guía.
 import { sesionDeLaLectura } from "./sesion-de-la-lectura";
 
@@ -48,6 +49,11 @@ export interface SesionDeLaHistoria {
   claves: string[];
   fecha: string | null;
   titulo: string;
+  /**
+   * K11 (2026-10-28): con qué equipo del cliente fue (el de su sesión). null = con la empresa entera, o nadie lo eligió.
+   * La guía contrasta lo que dijo cada equipo: sin esto, el agente adivinaba quién lo había dicho.
+   */
+  equipo: ClaveDeEquipo | null;
   texto: string;
   /** Los acuerdos y las decisiones de su minuta, enteros (para encontrar lo pedido para la próxima). */
   acuerdos: string[];
@@ -121,7 +127,7 @@ export function historiaDeLasSesiones(o: {
   const T = TOPES_DE_LA_HISTORIA;
   const delaExploracion = lecturasDeLaExploracion(o.lecturas, o.sesiones, { automaticas: o.automaticas, fuera: o.fuera });
   const usadas = new Set<string>();
-  type Entrada = { claves: string[]; fecha: string | null; titulo: string; lineas: string[]; acuerdos: string[] };
+  type Entrada = { claves: string[]; fecha: string | null; titulo: string; equipo: ClaveDeEquipo | null; lineas: string[]; acuerdos: string[] };
   const entradas: Entrada[] = [];
 
   for (const [clave, l] of Object.entries(delaExploracion)) {
@@ -136,14 +142,28 @@ export function historiaDeLasSesiones(o: {
     const notas = s ? notasDeLaSesion(o.notas, s.id) : null;
     if (notas) lineas.push(`- Lo que anotó quien la llevó: ${notas}`);
     const a = o.acuerdos?.[clave];
-    entradas.push({ claves: [clave], fecha: l.fecha ?? null, titulo: l.titulo ?? l.etiqueta, lineas: lineas.filter(Boolean), acuerdos: a ? [...a.acuerdos, ...a.decisiones] : [] });
+    entradas.push({
+      claves: [clave],
+      fecha: l.fecha ?? null,
+      titulo: l.titulo ?? l.etiqueta,
+      equipo: s?.equipo ?? null,
+      lineas: lineas.filter(Boolean),
+      acuerdos: a ? [...a.acuerdos, ...a.decisiones] : [],
+    });
   }
   // Una sesión que ya pasó sin lectura (sin grabación, o cortada) cuenta si quien la llevó escribió algo.
   for (const s of o.sesiones) {
     if (usadas.has(s.id) || s.id === o.proximaId) continue;
     const notas = notasDeLaSesion(o.notas, s.id);
     if (!notas) continue;
-    entradas.push({ claves: [], fecha: s.fecha ?? null, titulo: s.titulo ?? s.evento?.titulo ?? "Sesión sin reunión", lineas: [`- Lo que anotó quien la llevó: ${notas}`], acuerdos: [] });
+    entradas.push({
+      claves: [],
+      fecha: s.fecha ?? null,
+      titulo: s.titulo ?? s.evento?.titulo ?? "Sesión sin reunión",
+      equipo: s.equipo ?? null,
+      lineas: [`- Lo que anotó quien la llevó: ${notas}`],
+      acuerdos: [],
+    });
   }
 
   entradas.sort((a, b) => (a.fecha ?? "").localeCompare(b.fecha ?? ""));
@@ -154,16 +174,25 @@ export function historiaDeLasSesiones(o: {
     const prev = juntas[juntas.length - 1];
     if (prev && prev.claves.length && e.claves.length && prev.fecha && e.fecha && Math.abs(Date.parse(prev.fecha) - Date.parse(e.fecha)) < MISMA_REUNION_MS) {
       prev.claves.push(...e.claves);
+      prev.equipo ??= e.equipo;
       prev.lineas = [...new Set([...prev.lineas, ...e.lineas])];
       prev.acuerdos = [...new Set([...prev.acuerdos, ...e.acuerdos])];
       continue;
     }
     juntas.push({ ...e, claves: [...e.claves], lineas: [...e.lineas], acuerdos: [...e.acuerdos] });
   }
-  const salida: SesionDeLaHistoria[] = juntas.map((e) => ({ clave: e.claves[0] ?? null, claves: e.claves, fecha: e.fecha, titulo: e.titulo, texto: e.lineas.join("\n"), acuerdos: e.acuerdos }));
+  const salida: SesionDeLaHistoria[] = juntas.map((e) => ({
+    clave: e.claves[0] ?? null,
+    claves: e.claves,
+    fecha: e.fecha,
+    titulo: e.titulo,
+    equipo: e.equipo,
+    texto: e.lineas.join("\n"),
+    acuerdos: e.acuerdos,
+  }));
   // Las más nuevas pesan más: si no entran todas, se van las más viejas.
   let sesiones = salida.slice(-T.sesiones);
-  while (sesiones.length > 1 && sesiones.reduce((n, x) => n + x.texto.length + x.titulo.length + 30, 0) > T.total) sesiones = sesiones.slice(1);
+  while (sesiones.length > 1 && sesiones.reduce((n, x) => n + x.texto.length + x.titulo.length + 60, 0) > T.total) sesiones = sesiones.slice(1);
 
   const proxima = o.sesiones.find((s) => s.id === o.proximaId);
   return {
@@ -205,15 +234,20 @@ function cuantasAfuera(h: HistoriaDeLasSesiones, total?: number): number {
   return total && total > h.sesiones.length ? total - h.sesiones.length : 0;
 }
 
+/** «con Marketing» o «con la empresa entera (sin equipo elegido)»: con quién fue cada sesión, en la línea de su título. */
+export function conQuienFueLaSesion(equipo: ClaveDeEquipo | null): string {
+  return equipo ? `con ${EQUIPOS[equipo].nombre}` : "con la empresa entera (sin equipo elegido)";
+}
+
 /**
  * Las sesiones que ya pasaron, en texto. «Ya respondido» no se vuelve a preguntar; «se llevó y no salió» sigue abierto.
- * Vacío si no hay ninguna.
+ * Cada una dice con qué equipo fue (K11): el contraste entre equipos sale de ahí, no se deduce. Vacío si no hay ninguna.
  */
 export function textoDeLasSesiones(h: HistoriaDeLasSesiones, o: { totalDeSesiones?: number } = {}): string {
   if (!h.sesiones.length) return "";
   const afuera = cuantasAfuera(h, o.totalDeSesiones);
   return [
-    ...h.sesiones.map((s) => `### ${s.fecha ? diaConAnio(s.fecha) : "sin fecha"} · «${s.titulo}»\n${s.texto}`),
+    ...h.sesiones.map((s) => `### ${s.fecha ? diaConAnio(s.fecha) : "sin fecha"} · «${s.titulo}» · ${conQuienFueLaSesion(s.equipo)}\n${s.texto}`),
     ...(afuera ? [`(${afuera} sesiones más viejas no entran acá.)`] : []),
   ].join("\n\n");
 }

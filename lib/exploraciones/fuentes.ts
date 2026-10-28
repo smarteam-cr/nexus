@@ -46,8 +46,10 @@ import {
   type ResultadoDeReunion,
 } from "./hubspot";
 import { documentosParaLeer, listarDocumentos } from "./documentos";
+import type { ClaveDeEquipo } from "./equipos";
 import {
   claveDeReunion,
+  equiposDeLasReuniones,
   LARGO_DE_UNA_TRANSCRIPCION_CORTA,
   pestanasDeSesiones,
   transcripcionCorta,
@@ -133,6 +135,8 @@ export interface ReunionLeida {
   /** ISO. */
   fecha: string;
   titulo: string;
+  /** K11: con qué equipo del cliente fue, el de su sesión en la pantalla (guia.ts › `equiposDeLasReuniones`). */
+  equipo?: ClaveDeEquipo;
 }
 
 const fecha = diaConAnio;
@@ -764,6 +768,14 @@ export async function leerFuentes(opts: {
   const notas = releer ? "" : textoDeLasNotas(opts.notas, opts.sesiones ?? [], preguntaDe);
   const quien = opts.projectId ? "del CSE" : "del vendedor";
   if (notas) fuentes.push({ id: "N0", etiqueta: `Notas ${quien} (su contexto y su interpretación, no palabras del cliente)`, texto: notas.slice(0, MAX) });
+
+  /* K11: cada reunión que se lee, con el equipo de su sesión, ligada como la liga la pantalla (las mismas reuniones de la
+     exploración y las mismas pestañas). Al releer no se arman las reuniones: el resumen solo va sin equipo. */
+  if (armadas && reunionesLeidas.length) {
+    const pestanas = pestanasDeSesiones(opts.sesiones ?? [], armadas.todas, hoyEnCostaRica(ahora), { automaticas: armadas.automaticas, fuera: new Set(opts.fuera ?? []) });
+    const equipos = equiposDeLasReuniones(reunionesLeidas, pestanas);
+    for (const r of reunionesLeidas) if (equipos[r.fuente]) r.equipo = equipos[r.fuente];
+  }
 
   return {
     fuentes,
