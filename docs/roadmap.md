@@ -195,9 +195,13 @@
     {
      "fecha": "26 oct",
      "texto": "La preventa pregunta por departamento, con la investigación de la empresa."
+    },
+    {
+     "fecha": "28 oct",
+     "texto": "El equipo de cada sesión guía la lectura y la escala; «Usar» dice qué cambia, con Deshacer y Ctrl+Z."
     }
    ],
-   "sigue": "Que el equipo de cada sesión guíe también la lectura y la escala, y «Usar» con Deshacer. Después, los clientes similares, tu position statement y el ejercicio de las actividades.",
+   "sigue": "Los clientes similares en la preparación de la sesión y tu position statement base. Después, el ejercicio de las actividades contigo, el catálogo y el cotizador.",
    "teToca": "El ejercicio de las actividades de los casos de uso, cuando tengas energía: destraba el cotizador, las tareas desde lo vendido y la rentabilidad.",
    "decisiones": [
     11,
@@ -1005,12 +1009,12 @@ Sale del feedback de Ventas (Marco, Andrés y Liz) y de Customer Success (Lilian
    - Etapa 2 · Los intentos sin empresa, agrupados por el dominio del correo, con «Crear la empresa en HubSpot».
    - Etapa 3 · Un reporte de marketing por empresa: cuántas llegaron, con cuántas áreas y cuántas pasaron a preventa.
 
-11. **K11 · El equipo de cada sesión, de punta a punta** (validado el 28 oct). *Existe a medias:* el equipo ya cambia la guía de preparación, el analizador de la venta, el diagnóstico y el panel «Por equipo», igual en la preventa y en un proyecto. Pero la lectura de la reunión y la ubicación en la escala no lo reciben, y la sugerencia «¿Es con…?» se equivoca. En producción, 1 de 35 sesiones tiene equipo elegido. *Los dos lugares.*
+11. [hecho, 28 oct, en producción (`3fa7bf2b`), con la (i) y la sugerencia de rehacer al cambiar el equipo; falta probarlo en pantalla] **K11 · El equipo de cada sesión, de punta a punta** (validado el 28 oct). *Existe a medias:* el equipo ya cambia la guía de preparación, el analizador de la venta, el diagnóstico y el panel «Por equipo», igual en la preventa y en un proyecto. Pero la lectura de la reunión y la ubicación en la escala no lo reciben, y la sugerencia «¿Es con…?» se equivoca. En producción, 1 de 35 sesiones tiene equipo elegido. *Los dos lugares.*
    - Etapa 1 · La sugerencia mira primero el título del calendario y el objetivo solo si lo escribió una persona (hoy toma el que redactó la IA: «operación comercial» la manda a Ventas).
    - Etapa 2 · La lectura y la escala reciben el equipo: lo que dice Marketing no se atribuye a dimensiones de Ventas. Cambiar el equipo de una sesión ya leída ofrece «Volver a leer con este equipo».
    - Etapa 3 · La historia de las sesiones que recibe la guía dice qué equipo dijo qué, para que el contraste entre equipos no se invente.
    - Etapa 4 · «Qué explorar en la próxima sesión» filtra por el equipo de esa sesión, y las sesiones por equipo se siguen sugiriendo aunque ya haya una con equipo.
-12. **K12 · «Usar» en las sugerencias, sin sorpresas** (pedido del 28 oct, con Camosa). *Existe a medias:* «Usar» y «Usar las N» aplican sin decir qué cambian, la sugerencia desaparece sin rastro y no hay Deshacer. En Camosa no se perdió nada: el 27 oct entró un nivel (Ventas · Procesos y Rutinas) y la industria sigue la que eligió la IA. *Los dos lugares.*
+12. [hecho, 28 oct, en producción (`3fa7bf2b`), con Ctrl+Z, en todas las piezas del lienzo; falta probarlo en pantalla] **K12 · «Usar» en las sugerencias, sin sorpresas** (pedido del 28 oct, con Camosa). *Existe a medias:* «Usar» y «Usar las N» aplican sin decir qué cambian, la sugerencia desaparece sin rastro y no hay Deshacer. En Camosa no se perdió nada: el 27 oct entró un nivel (Ventas · Procesos y Rutinas) y la industria sigue la que eligió la IA. *Los dos lugares.*
    - Etapa 1 · Cada «Usar» dice lo que va a escribir («Poner Ventas · Datos en Inicial»); al usar una industria, avisa que también cambia el perfil.
    - Etapa 2 · Después de usar, un aviso con «Deshacer», y un bloque «Usadas hoy» con cada una y cómo revertirla.
    - Etapa 3 · «Usar las N» pide confirmación y se llama «Pasar las N al mapa».
