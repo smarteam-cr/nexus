@@ -120,6 +120,10 @@
     {
      "fecha": "28 oct",
      "texto": "Los tests de Maquinaria y equipo pesado, publicados en las tres áreas."
+    },
+    {
+     "fecha": "28 oct",
+     "texto": "El test público con el aspecto de la aplicación vieja, la industria en el formulario y Preguntas separadas por área."
     }
    ],
    "sigue": "Tu revisión de las preguntas. Después, el corte: un formulario nuevo de HubSpot, cambiar la dirección y apagar la aplicación vieja.",
@@ -565,7 +569,7 @@ Que Nexus amarre los puntos: entrar a un cliente y ver todo lo que Smarteam est�
 
 | Qué | Cómo está |
 |---|---|
-| Producción | Corre `efb08623` desde el 27 oct: lo de antes, la noche 3, la escala 9.0 publicada (con el manual 1.4.0 y el mapa 2.0.0), el test nuevo con sus 42 bancos aprobados y el sprint sin tope. Todos los SQL aplicados. |
+| Producción | Corre `7a71fedb` desde el 28 oct: el equipo de cada sesión, «Usar» con Deshacer, la vista Radar, la edición Maquinaria y el test público con el aspecto de la aplicación vieja. Antes, desde el 27 oct: la noche 3, la escala 9.0 publicada (con el manual 1.4.0 y el mapa 2.0.0), el test nuevo con sus 42 bancos aprobados y el sprint sin tope. Todos los SQL aplicados. |
 | Por desplegar | Nada. **Sin aplicar, a propósito:** la carga inicial de los datos de la empresa (espera a la CSL), unir las 6 «Información del cliente» repetidas (borra copias: «Lo que decides tú» 36), y las banderas `EMPRESA_HUBSPOT_ESCRITURA` y `EMPRESA_HUBSPOT_COPIA` («Lo que configuras tú»). |
 | En rojo en producción | 4 invariantes: el pipeline de Secure Title, «TEC- AE» fusionada en HubSpot y el corte de cobranza apagado (con su decisión abajo), y desde el 21 oct INV16(a): 2 reuniones de Meet leídas antes de ocurrir (un evento movido de fecha después de leerse, el caso conocido de KNOWN-ERRORS). |
 | Pruebas | 25 para ti (pestaña «Pruebas para personas»; desde el 20 oct solo las que piden tu criterio), 81 que valida el equipo al usarlas, 77 con IA sobre los datos y 48 ya validadas por ti. |
