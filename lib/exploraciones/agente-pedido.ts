@@ -60,6 +60,7 @@ import type { EscalaDelLienzo } from "./escala-del-lienzo";
 import { VALIDADOR_ESTRICTO } from "./esquemas";
 import { diaConAnio, diaYHora } from "./fechas";
 import { bloqueDeInstrucciones } from "./notas-de-sesion";
+import { EQUIPOS, type ClaveDeEquipo } from "./equipos";
 import type { Fuente } from "./fuentes-tipos";
 
 export const MODELO_DE_LA_EXPLORACION = "claude-sonnet-4-6";
@@ -106,9 +107,10 @@ export interface ContextoDelPedido {
   yaHablaron?: boolean;
   /**
    * Al leer: las reuniones que van como fuente (S1, M1, una reunión de HubSpot), para resumir cada una,
-   * y lo que se planeó preguntar en la más reciente (rediseño de las sesiones, 2026-10-07).
+   * y lo que se planeó preguntar en la más reciente (rediseño de las sesiones, 2026-10-07). `equipo` (K11, 2026-10-28):
+   * con qué equipo del cliente fue, el de su sesión. Lo que dice ese equipo va a las dimensiones de su área.
    */
-  reuniones?: { fuente: string; etiqueta: string }[];
+  reuniones?: { fuente: string; etiqueta: string; equipo?: ClaveDeEquipo }[];
   planeado?: { objetivo: string | null; preguntas: { para: string; pregunta: string }[] };
   /**
    * Los nombres del equipo de Smarteam (TeamMember): el pedido se los dice al agente y lo que proponga
@@ -599,10 +601,57 @@ export function pedidoDeLaExploracion(ctx: ContextoDelPedido): Anthropic.Message
   };
 }
 
+/** «con el equipo de Marketing del cliente (su área de la escala: Marketing)». */
+function conQuienFue(equipo: ClaveDeEquipo, escala: EscalaDelLienzo | undefined): string {
+  const area = escala ? areaDelEquipo(equipo, escala) : null;
+  return `con el equipo de ${EQUIPOS[equipo].nombre} del cliente${area ? ` (su área de la escala: ${area.nombre})` : ""}`;
+}
+
+/** El área de la escala de un equipo, si la escala la trae. */
+function areaDelEquipo(equipo: ClaveDeEquipo, escala: EscalaDelLienzo) {
+  const id = EQUIPOS[equipo].area;
+  return id ? (escala.areas.find((a) => a.id === id) ?? null) : null;
+}
+
+/**
+ * K11 (2026-10-28): lo que se le dice al agente cuando alguna reunión fue con un equipo del cliente. Lo que dice Marketing
+ * se ubica en dimensiones de Marketing, no de Ventas (pasó en CEMACO: lo de marketing quedó atado a dimensiones de Ventas).
+ */
+export const REGLA_DEL_EQUIPO_DE_LA_REUNION =
+  "Si una reunión dice con qué equipo del cliente fue, lo que cuenta ese equipo va a las dimensiones de SU área: un nivel, un reto o un obstáculo que cuenta Marketing es de Marketing, no de Ventas. Lo que ese equipo dice de cómo trabaja otra área no ubica a esa otra área en la escala (no estuvo en la sala): va como reto sin dimensión o en lo no explorado, para preguntárselo a ella. Un equipo sin área en la escala (Dirección, Operaciones, Financiero, Tecnología) habla de lo suyo: no lo conviertas en el nivel de un área que no estuvo en la sala.";
+
+/**
+ * K11: ¿la dimensión es de otra área que la del equipo que lo dijo? Sí cuando TODAS las fuentes con cita son reuniones con
+ * un equipo cuya área está en la escala y ninguna es el área de la dimensión. Con una fuente que no es de un equipo (una
+ * nota, el test, una reunión con la empresa entera) no se descarta: ahí sí puede haber hablado de cualquier área.
+ */
+export function dimensionDeOtroEquipo(ctx: Pick<ContextoDelPedido, "reuniones" | "escala">): (dimensionId: string, fuentes: readonly FuenteCitada[]) => boolean {
+  const areaDeLaFuente = new Map<string, string>();
+  for (const r of ctx.reuniones ?? []) {
+    const area = r.equipo ? areaDelEquipo(r.equipo, ctx.escala) : null;
+    if (area) areaDeLaFuente.set(r.fuente, area.id);
+  }
+  if (!areaDeLaFuente.size) return () => false;
+  return (dimensionId, fuentes) => {
+    const areaDeLaDimension = ctx.escala.areas.find((a) => a.dimensiones.some((d) => d.id === dimensionId))?.id;
+    const conCita = fuentes.filter((f) => f.cita);
+    const base = conCita.length ? conCita : fuentes;
+    if (!areaDeLaDimension || !base.length) return false;
+    return base.every((f) => {
+      const area = areaDeLaFuente.get(f.id);
+      return !!area && area !== areaDeLaDimension;
+    });
+  };
+}
+
 /** Las reuniones que se leen y lo que se planeó preguntar en la más reciente (solo si había una guía de antes). */
-function bloqueDeLasReuniones(ctx: Pick<ContextoDelPedido, "reuniones" | "planeado">): string {
+function bloqueDeLasReuniones(ctx: Pick<ContextoDelPedido, "reuniones" | "planeado"> & { escala?: EscalaDelLienzo }): string {
+  // La regla es de lo que se propone (niveles, retos): el resumen solo no la necesita, le basta con quién fue.
+  const conEquipo = !!ctx.escala && ctx.reuniones?.some((r) => r.equipo);
   return (
-    (ctx.reuniones?.length ? `=== REUNIONES QUE LEES ===\n${ctx.reuniones.map((r) => `${r.fuente}: ${r.etiqueta}`).join("\n")}\n\n` : "") +
+    (ctx.reuniones?.length
+      ? `=== REUNIONES QUE LEES ===\n${ctx.reuniones.map((r) => `${r.fuente}: ${r.etiqueta}${r.equipo ? ` · fue ${conQuienFue(r.equipo, ctx.escala)}` : ""}`).join("\n")}\n${conEquipo ? `${REGLA_DEL_EQUIPO_DE_LA_REUNION}\n` : ""}\n`
+      : "") +
     (ctx.planeado?.preguntas.length
       ? `=== LO QUE SE PLANEÓ PREGUNTAR EN LA REUNIÓN MÁS RECIENTE ===\n${ctx.planeado.objetivo ? `Objetivo: ${ctx.planeado.objetivo}\n` : ""}${ctx.planeado.preguntas
           .map((p) => `- ${p.para}: ${p.pregunta}`)
@@ -710,6 +759,7 @@ export function leerLaRespuesta(respuesta: Anthropic.Messages.Message, ctx: Cont
   const areas = new Set(ctx.escala.areas.map((a) => a.id));
   const items: ItemPropuesto[] = [];
   let descartadas = 0;
+  const deOtraArea = dimensionDeOtroEquipo(ctx);
 
   /** Las fuentes válidas, con la cita solo si aparece en su fuente. */
   const citar = (x: unknown): FuenteCitada[] =>
@@ -777,12 +827,17 @@ export function leerLaRespuesta(respuesta: Anthropic.Messages.Message, ctx: Cont
   }
   for (const r of lista(input.retos)) {
     const dimensionId = str(r.dimensionId);
-    agregar({ tipo: "casilla", clave: "retos" }, { texto: str(r.texto), ...(dimensionId && dims.has(dimensionId) ? { dimensionId } : {}) }, citar(r.fuentes));
+    const fuentes = citar(r.fuentes);
+    // K11: el reto queda; su dimensión, solo si es del área del equipo que lo contó.
+    const conDimension = !!dimensionId && dims.has(dimensionId) && !deOtraArea(dimensionId, fuentes);
+    agregar({ tipo: "casilla", clave: "retos" }, { texto: str(r.texto), ...(conDimension ? { dimensionId } : {}) }, fuentes);
   }
   // Los obstáculos, solo en la exploración de un proyecto (la preventa no los tiene).
   for (const r of ctx.marco === "cs" ? lista(input.obstaculos) : []) {
     const dimensionId = str(r.dimensionId);
-    agregar({ tipo: "casilla", clave: "obstaculos" }, { texto: str(r.texto), ...(dimensionId && dims.has(dimensionId) ? { dimensionId } : {}) }, citar(r.fuentes));
+    const fuentes = citar(r.fuentes);
+    const conDimension = !!dimensionId && dims.has(dimensionId) && !deOtraArea(dimensionId, fuentes);
+    agregar({ tipo: "casilla", clave: "obstaculos" }, { texto: str(r.texto), ...(conDimension ? { dimensionId } : {}) }, fuentes);
   }
   // En un proyecto, lo que es de la venta no entra aunque el modelo lo mande.
   const deLaVenta = ctx.marco === "cs";
@@ -842,6 +897,11 @@ export function leerLaRespuesta(respuesta: Anthropic.Messages.Message, ctx: Cont
         continue;
       }
       agregar({ tipo: "nivel", dimensionId }, { nivel: str(n.nivel), fuente: "hipotesis", porQue }, fuentes, { razon: porQue });
+      continue;
+    }
+    // K11: lo que dijo un equipo con área no es el nivel de otra área.
+    if (deOtraArea(dimensionId, fuentes)) {
+      descartadas++;
       continue;
     }
     const evidencia = fuentes.find((f) => f.cita)?.cita;

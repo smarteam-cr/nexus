@@ -10719,8 +10719,8 @@ determinado por el momento».
 - **Seis equipos fijos** (`lib/exploraciones/equipos.ts`): Dirección, Ventas, Marketing, Servicio al cliente, Operaciones y
   Tecnología. Ventas, Marketing y Servicio son las áreas 1, 2 y 3 de la escala. *Por qué fijos y no por cliente:* lo que
   cambia es qué se le pregunta a cada uno, y eso es el método de Smarteam, no un dato del cliente.
-- **Se elige en la cabecera de la sesión** («Equipo del cliente», `EquipoDeLaSesion.tsx`). Nexus sugiere uno por el
-  objetivo y después el título (`sugerirEquipo`: el primer texto que nombra un solo equipo); nunca lo guarda solo.
+- **Se elige en la cabecera de la sesión** («Equipo del cliente», `EquipoDeLaSesion.tsx`). Nexus sugiere uno por los
+  títulos y el objetivo que escribió una persona (desde K11, 2026-10-28: `sugerirEquipoDeLaSesion`); nunca lo guarda solo.
   Elegir un equipo cuya área no está en juego la suma en el mismo cambio, con un aviso: así lo que diga ese equipo llega a
   su área de la escala.
 - **La guía de una sesión con equipo es la del equipo** (`planDelEquipo`): unas 5 preguntas, en el orden de la nota de
@@ -12149,3 +12149,39 @@ están armados con la 8.9.1 y ninguno está aprobado.
 - Las semillas de documentación que nombran la dimensión 6.
 - Las 83 celdas de las ediciones.
 - Los bancos del test, con la 9.0.
+
+## El equipo de cada sesión, de punta a punta (2026-10-28, K11)
+
+**Contexto.** Validado el 28 oct: el equipo de la sesión ya cambiaba la guía, el analizador de la venta, el diagnóstico y
+el panel «Por equipo», en la preventa y en la exploración de un proyecto. Pero la lectura de la reunión y la escala no lo
+recibían, cambiarlo en una sesión ya leída era solo una etiqueta, y la sugerencia «¿Es con…?» se equivocaba: en
+producción, 1 de 35 sesiones tenía equipo elegido (CAMOSA, Ventas, por un objetivo que decía «operación comercial»).
+Elías aprobó los arreglos y pidió además una ⓘ que explique qué cambia, y que al cambiar el equipo Nexus sugiera
+regenerar.
+
+**Decisiones.** Corrige el punto «Se elige en la cabecera de la sesión» de «La preventa por área» (2026-10-23) y el
+«sin sesiones por equipo planeadas» del punto 3 de K8:
+1. **La sugerencia mira primero los títulos** (`sugerirEquipoDeLaSesion`, equipos.ts): el que le puso una persona a la
+   sesión y el del calendario. El objetivo, solo si lo escribió una persona (`SesionPlaneada.objetivoPropio`, que guarda
+   la Preparación al escribirlo o cambiarlo; el del agente usado tal cual no lo lleva). Los objetivos de antes no lo
+   tienen y no cuentan: casi todos los redactó el agente. Los productos de HubSpot («Sales Hub», «Marketing Hub»,
+   «Service Hub», «Data Hub»…) y «la operación comercial» se borran antes de buscar; «operativos» suelto ya no es
+   Operaciones. La sugerencia dice de dónde sale y se usa con un clic.
+2. **La lectura recibe el equipo de cada reunión** (`equiposDeLasReuniones`, el de su sesión, también su gemela de
+   HubSpot) y el pedido le dice al agente que lo de un equipo va a las dimensiones de su área. El código lo hace cumplir
+   (`dimensionDeOtroEquipo`, agente-pedido.ts): un nivel de otra área citado SOLO desde reuniones de un equipo con área
+   se descarta, y un reto o un obstáculo queda sin esa dimensión. Con otra fuente que no es de un equipo (las notas, el
+   test, una reunión con la empresa entera), no. «Actualizar escala» (posicionar) no cambia: lee todas las reuniones de
+   la cuenta, no las de las sesiones.
+3. **La lectura guarda con qué equipo se leyó** (`LecturaDeReunion.equipo`). Sin él, se leyó con la empresa entera o
+   antes de esto. Al cambiar el equipo, la cabecera de la sesión sugiere (al-cambiar-el-equipo.ts) «Actualizar la guía»
+   si es la próxima y su guía se armó para otro equipo, «Volver a leer con este equipo» mientras la lectura sea de otro, y
+   en la preventa «Volver a analizar la sesión» si ya tenía análisis. Son los botones de siempre: nada corre solo.
+4. **La historia que recibe la guía dice con qué equipo fue cada sesión** («· con Marketing», «· con la empresa entera
+   (sin equipo elegido)»): el contraste entre equipos sale de ahí, no se deduce.
+5. **«Qué explorar en la próxima sesión» filtra por el equipo de esa sesión** cuando el equipo tiene área y está en
+   juego; con Dirección, un equipo sin área o la empresa entera, todas las áreas.
+6. **La guía de una sesión con la empresa entera sigue sugiriendo sesiones por equipo** aunque ya haya una; las que ya
+   tienen sesión (planeada o hecha, sin contar las que no se hicieron) no se repiten (`equiposYaConSesion`).
+
+Todo en el Json de la exploración: sin SQL.

@@ -220,7 +220,14 @@ function Objetivo({
   const guardar = (valor: string, { proponer = true }: { proponer?: boolean } = {}) => {
     const t = valor.trim().slice(0, 400);
     const cambio = !!t && t !== (confirmado ?? "");
-    void editar((x) => ({ ...x, ...(t ? { objetivo: t } : { objetivo: undefined }) })).then((ok) => {
+    /* K11: el objetivo es propio si la persona lo escribió o lo cambió; el del agente usado tal cual, no (no cuenta para
+       sugerir el equipo). Guardar sin cambios deja lo que había. */
+    const propio = cambio ? t !== (sugerido ?? "").trim() : !!s?.objetivoPropio;
+    void editar((x) => {
+      const { objetivoPropio: _antes, ...resto } = x;
+      void _antes;
+      return t ? { ...resto, objetivo: t, ...(propio ? { objetivoPropio: true } : {}) } : { ...resto, objetivo: undefined };
+    }).then((ok) => {
       if (!ok) return;
       setEditando(false);
       if (proponer && cambio && conPropuestas) alCambiarElObjetivo();

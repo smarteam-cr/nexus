@@ -22,6 +22,7 @@ import { aFecha, hoyEnCostaRica } from "./fechas";
 import { MAX_SESIONES, type GuiaDeLaSesion, type SesionPlaneada } from "./guia";
 import { aplicarCambioDeLaGuia, hayAjustes, type CambioDeLaGuia } from "./ajustes-de-la-guia";
 import type { ComoLlego } from "./como-llego";
+import type { ClaveDeEquipo } from "./equipos";
 import {
   definicionDe,
   esDeLista,
@@ -423,6 +424,12 @@ export interface LecturaDeReunion {
   /** Cuándo fue (ISO) y cómo se llama: con eso una reunión de HubSpot que no estaba en la agenda aparece en Exploración. */
   fecha?: string;
   titulo?: string;
+  /**
+   * K11 (2026-10-28): con qué equipo del cliente era la sesión cuando se leyó (la lectura lo recibe). Sin él, se leyó
+   * como sesión con la empresa entera, o antes de que la lectura recibiera el equipo: si la sesión ahora tiene uno,
+   * Nexus sugiere volver a leerla (al-cambiar-el-equipo.ts).
+   */
+  equipo?: ClaveDeEquipo;
   en: string;
   corridaId: string;
 }

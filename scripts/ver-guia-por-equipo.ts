@@ -54,7 +54,7 @@ async function main() {
   const { preguntasDeLaProxima } = await import("@/lib/exploraciones/guia-ajustes-server");
   const { QUE_BUSCA_CADA_PASO, yaPreguntadoEnLaExploracion } = await import("@/lib/exploraciones/plan-de-la-guia");
   const { ordenDeLaConversacion, preguntasParaMostrar, pestanasDeSesiones } = await import("@/lib/exploraciones/guia");
-  const { EQUIPOS, esEquipo, sugerirEquipo, nombreDelTemaDeEquipo } = await import("@/lib/exploraciones/equipos");
+  const { EQUIPOS, esEquipo, sugerirEquipoDeLaSesion, nombreDelTemaDeEquipo } = await import("@/lib/exploraciones/equipos");
   const { estadoDeLaTarjeta } = await import("@/lib/exploraciones/estado-de-las-tarjetas");
   const { listaParaProponer } = await import("@/lib/exploraciones/calidad");
   const { chequeoDe } = await import("@/lib/exploraciones/servidor");
@@ -91,7 +91,7 @@ async function main() {
     // ── Las sesiones y su equipo sugerido ──
     console.log("\nLas sesiones (equipo guardado · sugerido por Nexus):");
     for (const s of estado.contenido.sesiones) {
-      const sugerido = sugerirEquipo([s.objetivo, s.titulo, s.evento?.titulo]);
+      const sugerido = sugerirEquipoDeLaSesion({ sesion: s })?.equipo;
       console.log(`  · ${s.id} ${s.fecha ?? "sin fecha"} «${s.titulo ?? s.evento?.titulo ?? ""}» · ${s.equipo ?? "-"} · ${sugerido ?? "-"}`);
     }
 

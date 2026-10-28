@@ -119,7 +119,7 @@ describe("historiaDeLasSesiones", () => {
 });
 
 describe("acordadoParaLaProxima", () => {
-  const conAcuerdos = (acuerdos: string[]) => [{ clave: "meet:a", claves: ["meet:a"], fecha: "2026-10-19T20:00:00.000Z", titulo: "Una", texto: "", acuerdos }];
+  const conAcuerdos = (acuerdos: string[]) => [{ clave: "meet:a", claves: ["meet:a"], fecha: "2026-10-19T20:00:00.000Z", titulo: "Una", equipo: null, texto: "", acuerdos }];
   it("reconoce «la próxima sesión», «mañana» y el día de la próxima; deja lo demás", () => {
     const r = acordadoParaLaProxima(
       conAcuerdos([
