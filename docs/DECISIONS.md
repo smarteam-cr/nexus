@@ -5131,15 +5131,18 @@ Alexander Vanegas (CSL) y dirección.
 - **Quitarle a un cliente el registro que ya tiene pide más que vincular a uno que no tiene ninguno.** Un
   candidato asociado en HubSpot a una empresa que es de OTRA ficha (un prospecto, un aliado: los índices
   del sync no los ven) no se lleva al cliente aunque coincida por dominio: sería el portal de otra empresa
-  con el mismo dominio (un grupo, un dominio de agencia), y la ficha mostraría su MRR y su uso.
+  con el mismo dominio (un grupo, un dominio de agencia), y la ficha mostraría su MRR y su uso. Y por
+  dominio solo pasa un candidato SIN empresa asociada: si tiene una y no es la del cliente, es otra
+  empresa aunque no tenga ficha en Nexus.
 - **El registro viejo, ya suelto, sigue la regla de siempre.** Si su evidencia apunta a otro cliente sin
   registro, el sync lo vincula a ese: es lo que HubSpot dice de ese portal, y «Inactiva en HubSpot» ahí es
   cierto (no tiene otro registro). El simulacro lo muestra antes; no se frena a propósito.
 - **Lo que se corre «para ver» no mueve a nadie.** `scripts/run-partner-sync.ts` sin `--apply` escribe
   los registros pero no cambia vínculos (`cambiarRegistros: false`, imprime cuáles pasarían). El cambio,
   solo, sin crear fichas y con el guard de producción: `scripts/partner-cambios-de-registro.ts --apply`.
-  Cada cambio queda en la línea del job (`cliente desde→hacia`) y en el estado de la última corrida, para
-  poder deshacerlo a mano.
+  Cada cambio queda en el log del servidor (`[partner-sync] cambio de registro`, venga del job, del botón
+  o del script), en la línea del job y en el estado de la última corrida, para poder deshacerlo a mano; el
+  `--apply` respalda antes las tablas que escribe. Un cambio que no se pudo hacer sale en rojo en el panel.
 - **El historial semanal de uso pasa con el registro.** En la misma transacción, las semanas del registro
   viejo dejan de ser del cliente y las del nuevo que no eran de nadie pasan a serlo. Así la ficha y el
   vigía, que leen el historial por cliente, y el último puntaje conocido, que lo lee por registro, ven la

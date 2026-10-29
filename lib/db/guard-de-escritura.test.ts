@@ -252,11 +252,13 @@ const SIN_TABLAS: string[] = [
   "scripts/seed-propuesta-cse.ts",
   "scripts/seed-role-permissions.ts",
   "scripts/sellar-pipeline-del-alta.ts",
+  // Se escapaba del escaneo por `if (!resolverApply())` hasta el 2026-10-29: deuda vieja, no nueva.
+  "scripts/traer-tipo-de-cambio.ts",
   "scripts/unignore-hubspot-service.ts",
 ];
 
 /** `resolverApply()` pelado, como llamada real (no la mencion en una cadena de check-invariants). */
-const APPLY_SIN_TABLAS = /\bresolverApply\(\s*\)\s*;/;
+const APPLY_SIN_TABLAS = /\bresolverApply\(\s*\)\s*[;)]/; // también dentro de un if: `if (resolverApply())`
 
 function applySinTablas(): string[] {
   const encontrados: string[] = [];

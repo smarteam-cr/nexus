@@ -149,6 +149,9 @@ export function planearCambiosDeRegistro(entrada: {
       return dueno !== undefined && dueno !== m.clientId;
     });
     if (deOtraFicha) continue;
+    // Por dominio, solo un registro sin empresa asociada: si tiene una y no es la del cliente (por eso no coincidió
+    // por company), es el portal de otra empresa con el mismo dominio, aunque esa empresa no tenga ficha en Nexus.
+    if (m.via === "domain" && r.associatedCompanyIds.length > 0) continue;
     const lista = candidatos.get(m.clientId) ?? [];
     lista.push({ id: r.id, via: m.via });
     candidatos.set(m.clientId, lista);

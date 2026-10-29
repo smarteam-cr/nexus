@@ -99,15 +99,24 @@ describe("planearCambiosDeRegistro", () => {
     expect(plan.cambios).toEqual([{ clientId: KAIZEN, desde: "viejo", hacia: "nuevo", via: "domain" }]);
   });
 
-  it("por dominio no se lleva al cliente a un registro cuya empresa de HubSpot es de otra ficha", () => {
+  it("por dominio no se lleva al cliente a un registro asociado a otra empresa de HubSpot, tenga ficha o no", () => {
     const registros = [reg("viejo", false), reg("nuevo", true, ["999"], "kaizenkapital.com")];
     const vinculos = new Map([["viejo", KAIZEN]]);
-    // La company 999 es de un prospecto (fuera de `porCompany`): el portal es de otra empresa con el mismo dominio.
-    const plan = planearCambiosDeRegistro({ ...base, registros, vinculos, duenoDeLaEmpresa: new Map([["999", "cl-prospecto"]]) });
+    // La company 999 no es del cliente: el portal es de otra empresa con el mismo dominio (un grupo, una agencia).
+    expect(planearCambiosDeRegistro({ ...base, registros, vinculos })).toEqual({ cambios: [], sinElegir: [] });
+    // Tampoco si esa empresa es un prospecto con ficha (fuera de `porCompany`).
+    const conFicha = planearCambiosDeRegistro({ ...base, registros, vinculos, duenoDeLaEmpresa: new Map([["999", "cl-prospecto"]]) });
+    expect(conFicha).toEqual({ cambios: [], sinElegir: [] });
+  });
+
+  it("por company, una segunda empresa asociada que es de otra ficha frena el cambio", () => {
+    const plan = planearCambiosDeRegistro({
+      ...base,
+      registros: [reg("viejo", false), reg("nuevo", true, ["58556731410", "999"])],
+      vinculos: new Map([["viejo", KAIZEN]]),
+      duenoDeLaEmpresa: new Map([["58556731410", KAIZEN], ["999", "cl-prospecto"]]),
+    });
     expect(plan).toEqual({ cambios: [], sinElegir: [] });
-    // Si la company es del mismo cliente, sí pasa.
-    const delMismo = planearCambiosDeRegistro({ ...base, registros, vinculos, duenoDeLaEmpresa: new Map([["999", KAIZEN]]) });
-    expect(delMismo.cambios).toEqual([{ clientId: KAIZEN, desde: "viejo", hacia: "nuevo", via: "domain" }]);
   });
 
   it("corrida «partial» (asociaciones no confiables): no se re-matchea nada", () => {

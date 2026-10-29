@@ -73,6 +73,8 @@ export interface PartnerSyncResult {
   cambiosDeRegistro: CambioDeRegistroHecho[];
   /** Con `cambiarRegistros: false`: los cambios que la corrida habría hecho y no hizo. */
   cambiosPendientes: Array<CambioDeRegistro & { cliente: string | null }>;
+  /** Los que tocaba pasar y no se pudo (el vínculo cambió en el medio): siguen en el registro viejo. */
+  cambiosFallidos: Array<CambioDeRegistro & { cliente: string | null; motivo: string }>;
   /** Clientes con un registro activo suelto que coincide y que NO se movieron: los mira una persona. */
   cambiosSinElegir: Array<{ clientId: string; cliente: string | null; motivo: MotivoSinElegir; actual: string; candidatos: string[] }>;
   errors: string[];
@@ -341,7 +343,7 @@ export async function syncPartnerClients(
   const result: PartnerSyncResult = {
     supported: true, total: 0, matchedByCompany: 0, matchedByDomain: 0, alreadyLinked: 0,
     unmatched: 0, createdClients: [], wouldCreateClients: [], briefsMarkedStale: 0,
-    unlinkedGone: 0, cambiosDeRegistro: [], cambiosPendientes: [], cambiosSinElegir: [], errors: [],
+    unlinkedGone: 0, cambiosDeRegistro: [], cambiosPendientes: [], cambiosFallidos: [], cambiosSinElegir: [], errors: [],
   };
 
   const now = new Date();
@@ -447,8 +449,12 @@ export async function syncPartnerClients(
         linkOwner.set(c.clientId, c.hacia);
         result.briefsMarkedStale += hecho.briefsMarcados;
         result.cambiosDeRegistro.push({ ...c, cliente, semanasDeHistorial: hecho.semanasDeHistorial });
+        // El rastro para deshacerlo a mano, venga de donde venga la corrida (job, botón o script): el estado
+        // guardado se pisa en la corrida siguiente, el log del servidor no.
+        console.log(`[partner-sync] cambio de registro: ${cliente ?? "?"} (${c.clientId}) ${c.desde}→${c.hacia} por ${c.via}`);
       } catch (e) {
         const motivo = e instanceof Error ? e.message : "error";
+        result.cambiosFallidos.push({ ...c, cliente, motivo });
         result.errors.push(
           `no se pudo pasar a ${cliente ?? c.clientId} del registro ${c.desde} al ${c.hacia} (${motivo}): sigue con ${c.desde}`,
         );

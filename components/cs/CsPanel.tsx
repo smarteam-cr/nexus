@@ -431,6 +431,7 @@ function Fuentes({ data, puedeCurar }: { data: CarteraDeLaCsl; puedeCurar: boole
         createdClients: unknown[];
         cambiosDeRegistro?: Array<{ cliente: string | null }>;
         cambiosSinElegir?: Array<{ cliente: string | null; motivo: "dos-activos" | "varios-activos" | "actual-sin-dato" }>;
+        cambiosFallidos?: Array<{ cliente: string | null }>;
       }>("/api/cs/partner/refresh", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -455,6 +456,13 @@ function Fuentes({ data, puedeCurar }: { data: CarteraDeLaCsl; puedeCurar: boole
         if (duplicados.length) {
           toast.info(
             `${nombres(duplicados)} ${duplicados.length === 1 ? "tiene" : "tienen"} más de un registro activo en HubSpot Partner que coincide: no se eligió ninguno. Revísalo en HubSpot.`,
+            { duration: 0 },
+          );
+        }
+        const fallidos = r.cambiosFallidos ?? [];
+        if (fallidos.length) {
+          toast.error(
+            `${nombres(fallidos)} no ${fallidos.length === 1 ? "pudo pasar" : "pudieron pasar"} a su registro activo de HubSpot Partner (otro cambio se cruzó): ${fallidos.length === 1 ? "sigue" : "siguen"} en el viejo. Vuelve a actualizar en unos minutos.`,
             { duration: 0 },
           );
         }

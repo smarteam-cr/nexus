@@ -176,6 +176,21 @@ describe("cambio de registro de Partner Clients", () => {
   });
 });
 
+describe("el registro viejo, ya suelto, sigue la regla de siempre (decisión del 2026-10-29, DECISIONS)", () => {
+  it("si su evidencia apunta a otro cliente sin registro, queda con ese cliente en la misma corrida", async () => {
+    const c = await cliente();
+    const otro = await prisma.client.create({ data: { name: "Otra", kind: "CLIENTE", emailDomains: ["otra.com"] }, select: { id: true } });
+    await snapshot(VIEJO, c.id, false);
+    hubspot([{ ...registro(VIEJO, false, []), resolved: { clientName: "Otra", domain: "otra.com" } }, registro(NUEVO, true)]);
+
+    const r = await syncPartnerClients({ createClients: false });
+
+    expect(r.cambiosDeRegistro).toEqual([expect.objectContaining({ clientId: c.id, desde: VIEJO, hacia: NUEVO })]);
+    expect(await vinculo(NUEVO)).toBe(c.id);
+    expect(await vinculo(VIEJO)).toBe(otro.id);
+  });
+});
+
 describe("aplicarCambioDeRegistro: todo o nada", () => {
   const cambio = (clientId: string) => ({ clientId, desde: VIEJO, hacia: NUEVO, via: "company" as const });
   const sinDatos = {} as Parameters<typeof aplicarCambioDeRegistro>[1];

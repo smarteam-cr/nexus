@@ -62,7 +62,8 @@ async function aplicar() {
 }
 
 async function main() {
-  if (resolverApply()) return aplicar();
+  // Las tablas que escribe el sync: con respaldo antes de tocarlas (B-06).
+  if (resolverApply({ tablas: ["ClientPartnerSnapshot", "PartnerUsageSnapshot", "CsAccountBrief", "CronJobState"] })) return aplicar();
   console.log(`Base: ${describirDestino(process.env.DATABASE_URL ?? "")} (solo lectura)`);
   const fetched = await fetchAllPartnerClients();
   if (!fetched.supported) {

@@ -615,8 +615,10 @@ uno solo que coincide con ella (DECISIONS › Éxito del cliente). Para ver ante
 cuáles quedan con aviso, sin escribir nada: `npx tsx scripts/partner-cambios-de-registro.ts`. Para no
 esperar al job, y SOLO después del deploy: `ALLOW_PROD_WRITE=1 npx tsx scripts/partner-cambios-de-registro.ts --apply`
 (corre el sync como el job diario, sin crear fichas). Las que quedan con aviso (dos registros activos, o
-varios que coinciden) se resuelven en HubSpot. Cada cambio queda en el log del job
-(`[jobs/cs-partner] … pasados a su registro activo (Cliente viejo→nuevo)`): con eso se deshace a mano.
+varios que coinciden) se resuelven en HubSpot. Cada cambio queda en el log del servidor, venga del job,
+del botón o del script (`[partner-sync] cambio de registro: Cliente (id) viejo→nuevo`): con eso se deshace
+a mano. ⚠ Ni el botón «Actualizar partner» del 3004 ni el `--apply` antes de que `/api/health` muestre el
+commit: el sync viejo de producción todavía deja que un registro inactivo cree una ficha.
 
 ### Cerrar las alertas sueltas (fase 1.2, una vez, 2026-10-16)
 
