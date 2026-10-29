@@ -4,19 +4,25 @@
 > Lo pidió Elías ese día: el TEC y la AE «usan el mismo dominio, pero son casi empresas distintas, son escuelas
 > dentro del TEC que funcionan como empresas separadas»; lo mismo con Grupo INVE y AnalisaLab. «Es importante que no
 > se mezcle el contexto de un proyecto en otro […] que un diagnóstico salga solamente del TEC- AE y no del TAE».
+>
+> **Corregido el mismo 28 oct con la respuesta de Elías** a la primera versión (que proponía una ficha por entidad):
+> «con la separación de proyectos debería bastar. Ahí el tema está en que Nexus y el analizador de sesiones entienda
+> bien la diferencia de sesiones entre proyectos […] lo que más pesa debería ser el nombre de la sesión». Y para
+> compartir algo entre entidades: **cada documento tiene su propia área para hacerlo**, sin una vista de grupo.
 
 ## En una frase
 
-Hoy la única pared que Nexus sabe levantar es la **ficha** (`Client`): todo lo de una ficha (sus reuniones, su
-memoria, su ficha de datos, sus procesos, sus tareas) se comparte entre sus proyectos. Cuando dos entidades viven en
-una sola ficha, se mezclan; cuando viven en dos fichas con el mismo dominio, **la ficha más antigua se queda con todas
-las reuniones** y la otra queda vacía. El plan es que cada entidad sea su propia ficha, con un **grupo** arriba que
-junta a las del mismo dominio solo para la reportería y para decidir de quién es una reunión.
+La pared pasa a ser el **proyecto**. AE y TAE siguen en la ficha «TEC». En las fichas marcadas como **«contexto por
+proyecto»**, el clasificador decide el proyecto de cada reunión primero por su **nombre** y después por **la gente
+de cada proyecto**. Cuando no puede decidir, la reunión queda **por decidir** y no alimenta a ningún proyecto.
+Además, todo lo que hoy se lee «de la cuenta» (la memoria y las lecturas de la cuenta entera) se lee solo del
+proyecto. Las fichas sin la marca siguen como hoy.
 
 No se re-litiga lo decidido (DECISIONS «Sesión → cliente → proyecto»): que una reunión de una entidad del mismo grupo
 caiga en la otra **no es un leak de seguridad** (es el mismo cliente, con el mismo acceso). Lo nuevo es otra cosa: para
-los grupos que Elías declare «de contexto separado», esa misma reunión **sí es mezcla de contexto** para los documentos.
-Los grupos que nadie declara siguen como hoy (Distribuidora Larce → DISTELSA por título sigue estando bien).
+las fichas que Elías marque, esa reunión **sí es mezcla de contexto** para los documentos. El resolver de cliente
+(`categorize.ts`, invariante 2) **no se toca**: la reunión sigue siendo de la ficha «TEC», y lo nuevo vive un paso más
+abajo, en la elección del proyecto.
 
 ---
 
@@ -24,26 +30,22 @@ Los grupos que nadie declara siguen como hoy (Distribuidora Larce → DISTELSA p
 
 ### 1.1 Cómo decide Nexus de quién es una reunión, y dónde se mezcla un caso como el del TEC
 
-| # | Lugar | Qué hace hoy | Qué pasa con dos entidades del mismo dominio |
+| # | Lugar | Qué hace hoy | Qué pasa con dos entidades en una ficha |
 |---|---|---|---|
-| 1 | `categorize.ts`, paso 3 (dominio) | Recorre las fichas en orden de creación (`ORDEN_DE_CLIENTES_PARA_ATRIBUIR`) y se queda con **la primera** que tenga un dominio de la reunión. | Gana siempre la ficha más vieja. «TEC- AE» (creada el 22 jul, sin dominio) nunca recibe una reunión; si le pusieras `itcr.ac.cr`, igual seguiría ganando «TEC» (19 may). |
-| 2 | `categorize.ts`, paso 5 (HubSpot) | Dominio → empresa de HubSpot → la ficha que la tiene. | Un dominio es UNA empresa de HubSpot, y una empresa es de UNA ficha (índice único de R7b). No hay forma de que lleve a dos. |
-| 3 | `categorize.ts`, paso 6 (título) y `siglas` | Solo corre si los pasos de dominio no encontraron nada. | Las siglas («AE», «TAE») existen pero **llegan tarde**: el dominio ya decidió. |
-| 4 | `computeAmbiguousNameTokens` | Ignora en el título palabras que están en dos empresas distintas («grupo»). | No ayuda aquí: el problema no es el título sino el dominio. |
-| 5 | Clasificador de proyecto (`classify-session-project.ts`, IA) | Dentro de la ficha, vincula la reunión a un proyecto principal y a otros como secundarios (confianza ≥ 0,4). | Las reuniones de AE quedan como secundarias en el proyecto de TAE y al revés. **No hay pared entre proyectos de una ficha.** |
-| 6 | Chokepoint (`project-sources.ts`) | Filtra por ficha: deja pasar toda reunión cuya dueña sea la ficha del proyecto. | Una reunión de AE vinculada al proyecto de TAE pasa el filtro: es de la misma ficha. |
-| 7 | Lo que lee cada vínculo | Handoff: principal, o secundario ≥ 0,4 si aplica la relevancia de venta. Avance del cronograma y hechos: principal o secundario ≥ 0,4. La lectura después de la reunión (minuta, tareas, pedidos fuera de alcance, etapa): el principal. | Todo lo que cruzó por el punto 5 alimenta al otro proyecto. |
-| 8 | Documentos «solo elegidas» (diagnóstico, planificación, ejecución, kickoff, integraciones, entrega) | Solo leen reuniones que una persona eligió para ese documento. | Las reuniones están a salvo si la persona elige bien, **pero su memoria de la cuenta es de toda la ficha** (punto 9). |
-| 9 | Memoria de la cuenta (`lib/memoria/cargar.ts`) | Ficha de datos, procesos, hechos de la cuenta, compromisos de la cuenta, correos y timeline de HubSpot, personas y tickets, lo aprendido en la preventa, lo fuera de alcance, la auditoría del portal. | Todo es por ficha: el diagnóstico de AE leería los procesos, hechos y compromisos de TAE. |
-| 10 | Lecturas de la cuenta entera (`getClientSessions`) | 21 archivos fuera de pruebas: preventa, análisis de la venta, agente de procesos, ficha propuesta, exploración, preguntas de contexto, servicio recurrente, `analyze`. | Igual que el punto 9: leen todas las reuniones de la ficha. |
-| 11 | Copia de proyectos de HubSpot (`sync-projects.ts`) | Trae a la ficha los proyectos asociados a su empresa. Al actualizar un proyecto que ya existe **no le cambia la ficha**. | Los proyectos de AE llegan a «TEC» porque en HubSpot cuelgan del ITCR. Moverlos a mano a otra ficha sí dura. `resolverHermanos` (desarrollo ↔ implementación, define qué se factura) solo mira dentro de una ficha. |
+| 1 | `categorize.ts`, paso 3 (dominio) | Recorre las fichas en orden de creación (`ORDEN_DE_CLIENTES_PARA_ATRIBUIR`) y se queda con **la primera** que tenga un dominio de la reunión. | Gana siempre la ficha más vieja. Por eso «TEC- AE» (creada el 22 jul, sin dominio) nunca recibió una reunión. Con el plan da igual: AE vive en «TEC». |
+| 2 | `categorize.ts`, paso 5 (HubSpot) | Dominio → empresa de HubSpot → la ficha que la tiene. | Un dominio es UNA empresa de HubSpot, y una empresa es de UNA ficha (índice único de R7b). |
+| 3 | Clasificador de proyecto (`classify-session-project.ts`, IA) | Con 2+ proyectos, le pasa a la IA el título, los correos de los participantes, los nombres de los proyectos y el texto. Vincula un proyecto principal y otros como secundarios (confianza ≥ 0,4). | La IA **ve** «AE |» y «TEC TAE |» en los nombres y aun así cruza: las reuniones de AE quedan como secundarias en TAE y al revés. Las personas le llegan como correos sueltos, sin saber de qué proyecto es cada una. |
+| 4 | Chokepoint (`project-sources.ts`) | Filtra por ficha: deja pasar toda reunión cuya dueña sea la ficha del proyecto. | Una reunión de AE vinculada al proyecto de TAE pasa el filtro: es de la misma ficha. |
+| 5 | Lo que lee cada vínculo | Handoff: principal, o secundario ≥ 0,4 si aplica la relevancia de venta. Avance del cronograma y hechos: principal o secundario ≥ 0,4. La lectura después de la reunión (minuta, tareas, pedidos fuera de alcance, etapa): el principal. | Todo lo que cruzó por el punto 3 alimenta al otro proyecto. |
+| 6 | Documentos «solo elegidas» (diagnóstico, planificación, ejecución, kickoff, integraciones, entrega) | Solo leen las reuniones que una persona eligió para ese documento. | Las reuniones están a salvo si la persona elige bien, **pero su memoria de la cuenta es de toda la ficha** (punto 7). |
+| 7 | Memoria de la cuenta (`lib/memoria/cargar.ts`, `memoriaDeLaCuenta`) | Ficha de datos, procesos, hechos y compromisos de la cuenta, correos y timeline de HubSpot, personas y tickets, notas del equipo, lo aprendido en la preventa, lo fuera de alcance, la entrega publicada de otro proyecto, la auditoría del portal. | Todo es por ficha: el diagnóstico de AE leería los hechos y compromisos de TAE, sus correos de HubSpot y la entrega publicada del otro proyecto. |
+| 8 | Lecturas de la cuenta entera (`getClientSessions`) | 21 archivos fuera de pruebas: preventa, análisis de la venta, agente de procesos, ficha propuesta, exploración, preguntas de contexto, servicio recurrente, `analyze`… | Leen todas las reuniones de la ficha, de los dos proyectos. |
+| 9 | Copia de proyectos de HubSpot (`sync-projects.ts`) | Trae a la ficha los proyectos asociados a su empresa. | Los dos proyectos del TEC cuelgan del ITCR en HubSpot y llegan a «TEC». Con el plan, eso **está bien**: HubSpot no cambia. |
 
-Conclusión del código: **la ficha es la unidad de aislamiento**, y la defienden el chokepoint, INV1, la frontera de la
-memoria y los permisos por ficha. Dentro de una ficha, el aislamiento entre proyectos es blando (lo decide la IA y se
-cruza en secundarios), y todo lo que se lee «de la cuenta» es compartido.
-
-No hay hoy dos fichas con el mismo dominio declarado (0 en `emailDomains` y en `company`): el problema se ve como
-**una ficha que se queda con todo** o **una ficha vacía**.
+Conclusión del código: la ficha es la única pared que existe hoy. Para que el proyecto sea pared hacen falta **dos
+cosas**: que el clasificador no cruce (puntos 3 y 5), y que lo que se lee «de la cuenta» se lea del proyecto
+(puntos 7 y 8). La primera sola no alcanza: con una clasificación perfecta, el diagnóstico de AE igual leería los
+hechos, compromisos y correos de TAE por la memoria de la cuenta.
 
 ### 1.2 Los casos
 
@@ -52,18 +54,17 @@ Medido el 2026-10-28. «Reuniones con los dos» = reuniones con gente de los dom
 **TEC (Instituto Tecnológico de Costa Rica): AE y TAE**
 
 - **En Nexus:** ficha «TEC» (`tec.ac.cr`, `itcr.ac.cr`; empresa de HubSpot 59180429929) con dos proyectos, los dos de
-  Heiver en SmartLoop: «TEC TAE | RE-IMPLEMENTACIÓN CRM» y «AE | RE-IMPLEMENTACION HUBSPOT». Ficha aparte «TEC- AE»
-  (creada el 22 jul, sin dominio, empresa 56463266574) con solo «Información del cliente», **0 reuniones**.
+  Heiver en SmartLoop: «TEC TAE | RE-IMPLEMENTACIÓN CRM» y «AE | RE-IMPLEMENTACION HUBSPOT». Además está la ficha
+  «TEC- AE» (creada el 22 jul, sin dominio, empresa 56463266574). No tiene reuniones, ni bloques en «Información del
+  cliente», ni proyectos de trabajo.
 - **En HubSpot:** «INSTITUTO TECNOLOGICO DE COSTA RICA» (`itcr.ac.cr`) absorbió **seis** empresas, entre ellas la
   56463266574 de «TEC- AE». No usa empresas madre e hija. FUNDATEC (`fundatec.ac.cr`) es una empresa aparte.
-- **Reuniones:** 185 de «TEC» (+ 4 a mano); 691 con gente de `itcr.ac.cr` y 159 con `tec.ac.cr`, todas de «TEC». Las
-  de FUNDATEC: 8 a «TEC» y 3 sin dueña.
-- **Mezcla, ya:** de 77 reuniones vinculadas a los dos proyectos, **25 están en los dos**. 2 reuniones de AE son la
-  principal del proyecto de TAE; 8 de AE alimentan a TAE como secundarias (≥ 0,4) y 8 de TAE alimentan a AE. Escrito
-  en el proyecto de TAE con reuniones de AE: **18 hechos** («AE | Limpieza BBDD», «AE | Reportes de Ventas» y «Revisión
-  conexión Fundatec - Hubspot | AE») y **3 tareas** (de la última); la lectura del 27 oct de esa reunión corrió en el
-  proyecto de TAE. Los dos handoff tienen 18 bloques de IA cada uno; el de TAE salió de una reunión de TAE. Ningún
-  diagnóstico, planificación ni kickoff tiene reuniones elegidas todavía.
+- **Reuniones:** 185 de «TEC» (+ 4 a mano). Las de FUNDATEC: 8 a «TEC» y 3 sin dueña.
+- **Mezcla, ya:** de 77 reuniones vinculadas a los dos proyectos, **25 están en los dos**: 9 tienen «AE» en el
+  nombre, 8 «TAE» y 8 no dicen ninguno. 2 reuniones de AE son la principal del proyecto de TAE. Escrito en el
+  proyecto de TAE con reuniones de AE: **18 hechos** («AE | Limpieza BBDD», «AE | Reportes de Ventas» y «Revisión
+  conexión Fundatec - Hubspot | AE») y **3 tareas** (de la última). Los dos handoff tienen 18 bloques de IA cada uno;
+  el de TAE salió de una reunión de TAE. Ningún diagnóstico, planificación ni kickoff tiene reuniones elegidas todavía.
 
 **Grupo INVE y AnalisaLab**
 
@@ -75,10 +76,9 @@ Medido el 2026-10-28. «Reuniones con los dos» = reuniones con gente de los dom
   `grupoinve.com`, y **las 23 son de «Grupo Inve»** (la ficha más vieja). «Analisalab» tiene 11, todas por título.
 - **Mezcla:** el contexto de AnalisaLab está **partido en dos fichas**: sus dos proyectos principales y sus reuniones
   con el cliente en «Grupo Inve»; su integración con SAP en «Analisalab», que solo ve 11 reuniones. Dentro de «Grupo
-  Inve», 9 reuniones de AnalisaLab alimentan como secundarias a «Éxito de cliente (add on)». Hechos y tareas: cada
-  proyecto tiene solo los de su entidad.
+  Inve», 9 reuniones de AnalisaLab alimentan como secundarias a «Éxito de cliente (add on)».
 
-**Honda Costa Rica y Faco** (cambió hoy)
+**Honda Costa Rica y Faco** (cambió hoy, urgente)
 
 - **En Nexus:** «Honda Costa Rica» (`hondafaco.com`, `company` hondacostarica.com) y **«Faco», creada hoy 28 oct a las
   18:35** (`facocr.com`), con dos proyectos de HubSpot nuevos («FACO» y «FACO - Integración Intelisis»). En Honda queda
@@ -86,7 +86,7 @@ Medido el 2026-10-28. «Reuniones con los dos» = reuniones con gente de los dom
 - **Reuniones:** 53 con gente de las dos → «Honda Costa Rica» (la más vieja); 50 solo con `facocr.com` → «Faco».
 - **Mezcla, ya:** **15 reuniones que ahora son de Faco siguen vinculadas a proyectos de Honda** (9 al plan de
   continuidad, 6 al de prueba). El chokepoint las deja afuera, así que esos dos proyectos de Honda perdieron esas
-  reuniones de golpe, y es probable que INV1 esté en rojo por eso. Hay que decidir si Honda y Faco son la misma empresa.
+  reuniones de golpe, y es probable que INV1 esté en rojo por eso.
 
 **Otros con gente de dos fichas en la misma reunión** (los decide la ficha más vieja):
 
@@ -99,139 +99,215 @@ Medido el 2026-10-28. «Reuniones con los dos» = reuniones con gente de los dom
 
 Y «STLA TRUST SERVICES S.A.» (ficha manual del 5 oct, sin dominio, 2 reuniones), del grupo de Secure Title.
 DISTELSA y Distribuidora Larce tienen fichas y dominios propios y no comparten reuniones: siguen bien como están.
-Ninguna ficha tiene declarado si es casa matriz o filial (`estructura` vacía en las 202).
 
----
+### 1.3 ¿Alcanza el nombre de la reunión? Medido en el TEC
+
+Elías propuso que pese primero el nombre y después las personas (Ivania en AE, Marco en el otro). Medido sobre las 185
+reuniones de «TEC»:
+
+- **El nombre decide 159 de 185** (86 %): 91 dicen «TAE», 68 dicen «AE», 1 dice los dos y 25 no dicen ninguno.
+- **La gente separa perfecto.** De las 41 personas del TEC que estuvieron en una reunión con nombre, **ninguna**
+  aparece en reuniones de los dos proyectos: 26 solo en las de AE y 15 solo en las de TAE. Ivania Brenes está en 14 de
+  AE y 0 de TAE. Marco Martínez está en 56 de **TAE** y 0 de AE.
+- **De las 25 sin nombre, la gente decide 22**: 13 van a AE («Kick Off | TEC & Smarteam», «ANTEPROYECTO |
+  EVALUACIONES»…) y 9 a TAE («Cena | Marco Martinez + Smarteam», «Lanzamiento de Workflow | RESCATE»…).
+- **Quedan 3 con gente de los dos**: «Visita FUNDATEC», «Conversemos I Fundatec» y «Charlas I Unbound 2026». Son de
+  verdad de los dos (FUNDATEC y un evento), y no hay regla que las reparta bien.
+- **Lo que no sirve:** la gente de Smarteam. Heiver lleva los dos proyectos.
+
+Con la regla «nombre → gente → por decidir», **las 25 reuniones que hoy están en los dos proyectos habrían quedado
+en uno solo**: 17 por el nombre y 8 por la gente.
 
 ## 2. Las formas de modelarlo
 
-### A · Cada entidad es su propia ficha, con un grupo arriba (recomendada)
+### A · Una ficha, con el proyecto como pared (recomendada, la que eligió Elías)
 
-Una tabla de grupos (o `Client.grupoId`), con la marca «contexto separado». AE, TAE y AnalisaLab son fichas; el TEC y
-Grupo INVE son el grupo. El resolver aprende una sola regla nueva: si el dominio de una reunión es de un grupo, decide
-**entre las fichas de ese grupo** (a mano → persona → siglas o título → proyecto), y si no puede, la deja «por decidir
-en el grupo», nunca en la ficha más vieja.
+AE y TAE siguen en «TEC». La ficha lleva la marca «contexto por proyecto», y cada proyecto, los nombres con que el
+equipo lo llama en los títulos («AE», «TAE»). Con la marca:
 
-- **Gana:** el aislamiento sale **gratis en todos lados**, porque todo lo de los puntos 5 a 11 ya se separa por ficha:
-  el chokepoint, la memoria, los hechos, las tareas, la cobranza, los permisos y el acceso externo. INV1 vigila la
-  mezcla sin una invariante nueva. La reportería del grupo se arma a propósito, sumando fichas.
-- **Cuesta:** HubSpot tiene una empresa para varias fichas (el ITCR), y el índice único dice una empresa = una ficha.
-  La ficha «titular» del grupo se queda con la empresa; las demás quedan sin empresa (o con una empresa hija, si se
-  crea en HubSpot). Un proyecto nuevo del ITCR llega al titular y alguien dice de qué entidad es. `resolverHermanos`
-  tiene que mirar dentro del grupo. Hay que mover proyectos y re-resolver reuniones (con simulacro).
+1. El clasificador decide un solo proyecto por reunión, sin secundarios automáticos.
+2. Los lectores «de la cuenta» leen solo el proyecto que les toca.
+3. Para compartir algo entre proyectos, una persona lo trae a propósito al área de contexto de ese documento.
 
-### B · Una ficha, con proyectos amurallados
+- **Gana:**
+  - HubSpot no cambia: una empresa, la del ITCR, y los proyectos colgando de ella como hoy.
+  - No se mueve ninguna reunión de ficha. El resolver de cliente no se toca.
+  - La cobranza y los hermanos (`resolverHermanos`) siguen dentro de una ficha.
+  - Es lo que el equipo ya hace: los títulos dicen «AE |» y «TAE |».
+- **Cuesta:**
+  - Hay que enseñarle la pared a los lectores de la cuenta: las 11 partes de la memoria y los 21 archivos que usan
+    `getClientSessions`.
+  - Un lector nuevo nace leyendo la cuenta entera. Por eso la pared necesita una guarda que obligue a cada lector a
+    declarar qué hace con la marca (como ya pasa con `lib/memoria/consumidores.ts`). Si no, se repite el problema
+    de DISTELSA: la regla copiada en varios lugares.
 
-Se quedan en «TEC» los dos proyectos, y se marca cada uno como «contexto aparte»: el clasificador no cruza vínculos, la
-lectura después de la reunión y los hechos se quedan en uno, y la memoria del proyecto deja de leer lo de la cuenta.
+### B · Cada entidad es su propia ficha, con un grupo arriba (la recomendación anterior)
 
-- **Gana:** HubSpot no cambia; no se mueve nada.
-- **Cuesta:** hay que enseñarle la pared a **todo** lo que hoy lee por ficha: la memoria (9 partes), los 21 archivos
-  que leen la cuenta entera, la ficha de datos, los procesos, Tareas, la cobranza y la reportería. Cada lector nuevo
-  nace mezclando, porque lo compartido es el default. Es el mismo problema que causó el leak de DISTELSA (la regla
-  repetida en varios lugares), ahora un nivel más abajo.
+- **Gana:** el aislamiento sale gratis, porque todo ya se separa por ficha.
+- **Cuesta:**
+  - Una empresa de HubSpot sirve a varias fichas.
+  - Hay que mover proyectos, re-resolver reuniones y cambiar el resolver de cliente.
+  - Hay que decidir de qué entidad es un proyecto nuevo del ITCR.
 
-### C · Unidades dentro de la ficha
-
-Un modelo nuevo de unidad (con sus dominios, siglas y personas) debajo de la ficha; la reunión gana una unidad dueña
-además de la ficha.
-
-- **Gana:** la ficha sigue siendo la empresa de HubSpot y la cuenta de cobro.
-- **Cuesta:** lo mismo que B (todo lector tiene que aprender la unidad), más un segundo resolver. Es A con más trabajo.
+Elías la descartó: el TEC trabaja como **una** cuenta con proyectos distintos, y la separación que importa es la de
+los documentos.
 
 ## 3. Recomendación
 
-**La A.** Nexus ya tiene una pared que funciona y está vigilada; el plan es usarla en lugar de construir otra. Lo único
-nuevo de verdad es cómo se decide la dueña de una reunión cuando el dominio es compartido, y eso vive en un solo lugar
-(`categorize.ts`, como exige la invariante 2). La reportería a la junta se hace mirando el grupo a propósito, nunca
-porque un documento de una entidad lea lo de otra.
+**La A.** El nombre de la reunión y la gente ya separan al TEC casi solos (sección 1.3): el clasificador solo tiene
+que dejar de adivinar cuando hay una pista firme. El trabajo grande no está en el clasificador sino en la sección 4:
+lo que hoy se lee «de la cuenta».
 
-## 4. Qué pasa con «TEC- AE» y su empresa fusionada
+### 3.1 Cómo decide el clasificador, con la marca
+
+Va **antes** de la IA, en `classify-session-project.ts`, y solo en fichas con la marca:
+
+1. **Lo que decidió una persona** gana siempre, como hoy (los vínculos tocados a mano no se tocan).
+2. **El nombre de la reunión.** Si el título dice el nombre de **un solo** proyecto (sus «nombres en los títulos»,
+   como `Client.siglas` pero por proyecto), va a ese, como principal y **sin secundarios**. No se llama a la IA, así
+   que también ahorra.
+3. **La gente del proyecto.** Si el título no dice ninguno, se miran los participantes del cliente (los que no son de
+   Smarteam). La gente de un proyecto se toma de dos lados:
+   - las reuniones de ese proyecto que decidió el nombre o una persona. Nunca las que decidió la IA, para que un
+     error no se alimente a sí mismo;
+   - los contactos que HubSpot asocia al trato o al proyecto. Hoy Nexus no los copia: solo copia los contactos de la
+     empresa, que en el TEC son de los dos.
+
+   Si **todas** las personas conocidas apuntan al mismo proyecto, va a ese. Una persona que ya estuvo en los dos no
+   cuenta.
+4. **Si nada decide** (título con los dos nombres, gente de los dos o nadie conocido), la reunión queda **por
+   decidir**. La IA puede proponer un proyecto, pero hasta que una persona lo confirme no alimenta a ninguno. Aparece
+   en el panel de reuniones de los proyectos de la ficha con «¿De qué proyecto es?». En el TEC serían 3 de 185.
+
+Secundarios: con la marca, **solo los pone una persona**. Así una reunión de verdad compartida (FUNDATEC) puede ir a
+los dos, y el que la puso sabe que lo hizo.
+
+### 3.2 Lo que Elías preguntó si se le escapa
+
+- **El nombre pesa, pero no es todo:** sin la gente, 25 reuniones del TEC (14 %) quedarían en manos de la IA. Con la
+  gente bajan a 3.
+- **Algunas reuniones son de verdad de los dos** (FUNDATEC, eventos, un kickoff general). Necesitan un lugar: por
+  decidir, o en los dos si una persona lo dice.
+- **Lo que más pesa no es el clasificador.** Con las reuniones bien separadas, el diagnóstico de AE igual leería los
+  hechos, compromisos y correos de TAE por la memoria de la cuenta. Eso se cierra en la sección 4.
+- **HubSpot sigue con una empresa para los dos.** Sus correos, tickets y contactos llegan juntos. Se filtran por la
+  gente de cada proyecto (sección 4).
+
+## 4. Lo que separar por proyecto todavía no cubre, y qué lo cierra
+
+Todo esto aplica solo a fichas con la marca. Sin la marca, todo sigue igual.
+
+| Lo que hoy se lee de toda la ficha | Qué lo cierra con la marca |
+|---|---|
+| **Vínculos secundarios del clasificador** (25 reuniones del TEC en los dos proyectos) | Sin secundarios automáticos: solo los pone una persona (sección 3.1). |
+| **Hechos y compromisos de la cuenta** (memoria) | `memoriaDeLaCuenta` con `projectId` lee los del proyecto (`leerHechos(clientId, projectId)` ya existe y lo usa la memoria del proyecto). |
+| **Personas, tickets y correos de HubSpot** (memoria) | Solo los de la gente del proyecto (sección 3.1, paso 3). Un correo o ticket sin nadie del proyecto no entra. |
+| **Entrega publicada de otro proyecto** (memoria) | No se lee. |
+| **Lo aprendido en la preventa** (memoria) | Solo la del trato del proyecto. |
+| **Lo fuera de alcance** (memoria) | Solo los pedidos del proyecto. Los que no tienen proyecto quedan fuera. |
+| **Notas del equipo** (memoria) | Solo las del proyecto, si la nota lo tiene; las de la cuenta, no. |
+| **Procesos y ficha de datos** (memoria) | Se comparten. Son de la institución, y en el TEC están vacíos hoy. Si Elías quiere separarlos, ver la pregunta 4. |
+| **Auditoría del portal** (memoria) | Se comparte: es el mismo portal de HubSpot. |
+| **`getClientSessions`** (21 archivos) | Los lectores que corren para un proyecto pasan a `getProjectMemberSessions`. Los que son de verdad de la cuenta (ficha propuesta, preguntas de contexto, exploración de la cuenta) piden el proyecto o leen solo las reuniones por decidir. Cada uno lo declara en un registro con prueba, como `consumidores.ts`. |
+| **Compartir entre proyectos** (la junta) | En el área de contexto de cada documento: una persona elige una reunión o un hecho del otro proyecto y queda rotulado «de otro proyecto». No hay vista de grupo. |
+
+## 5. Qué pasa con «TEC- AE» y su empresa fusionada
 
 - La empresa 56463266574 **ya no existe por sí sola**: HubSpot la fusionó en el ITCR (59180429929), y una fusión de
-  empresas no se deshace.
-- **Reapuntarla no se puede**: el ITCR ya es de la ficha «TEC», y desde R7b un reapunte que choca con otra ficha
-  responde 409. Lo que Elías aprobó en la pregunta 6 del roadmap queda sin efecto, y la pregunta 35 («¿fusiono las dos
-  TEC?») es justo lo contrario de este plan: **no hay que fusionarlas**.
-- Con la forma A: «TEC- AE» **es** la ficha de la AE. En la etapa 1 se le quita la empresa fusionada (queda sin
-  empresa, o con una empresa hija nueva si Elías elige separarla también en HubSpot). Eso pone verde INV13 para este
-  caso. Su proyecto «AE | RE-IMPLEMENTACION HUBSPOT» se muda de «TEC» a ella en la etapa 3.
+  empresas no se deshace. **Reapuntarla no se puede**: el ITCR ya es de «TEC», y un reapunte que choca con otra ficha
+  responde 409 (R7b).
+- Con el plan, AE vive en «TEC», así que la ficha «TEC- AE» sobra. Está vacía: 0 reuniones, 0 bloques, 0 proyectos de
+  trabajo. **Recomendación: fusionarla en «TEC»** con `scripts/merge-duplicate-clients.ts`, en simulacro primero. No
+  arrastra nada y pone verde INV13 para este caso.
+- En el roadmap: la **pregunta 35** («¿fusiono las dos TEC?») pasa a **sí**, y la **6** (reapuntar «TEC- AE») se
+  retira porque ya no se puede ni hace falta.
 
-## 5. Etapas
+## 6. Etapas
 
-Cada etapa se cierra con `tsc`, `eslint`, la suite, `/revisar` y, como toca de quién es una reunión,
+Cada etapa se cierra con `tsc`, `eslint`, la suite, `/revisar` y, como toca el contexto de las reuniones,
 `check:invariants`. Las escrituras masivas van en simulacro primero.
 
 ### E0 · Contener lo que ya se mezcló (sin código)
 
-- En «TEC», sacar a mano (la «X» del panel de reuniones del proyecto) las 16 reuniones que cruzan como secundarias y
-  cambiar la principal de las 2 de AE que están en TAE. El clasificador respeta lo que tocó una persona.
-- Decidir Honda / Faco (pregunta 4) antes de que esos dos proyectos de Honda generen algo sin las 15 reuniones.
-- **Terminado cuando:** 0 reuniones de AE vinculadas a TAE y al revés (consulta de solo lectura); INV1 sin Faco ↔ Honda.
+- En el proyecto de TAE, quitar las reuniones de AE con la «X» del panel, y al revés: las 25 en los dos proyectos.
+  17 se reparten por el nombre y 8 por la gente (sección 1.3). Las 2 de AE que son principal en TAE pasan a AE. El
+  clasificador respeta lo que tocó una persona.
+- Honda / Faco (pregunta 2) antes de que esos dos proyectos de Honda generen algo sin las 15 reuniones.
+- **Terminado cuando:** una consulta de solo lectura no encuentra reuniones con «AE» en el nombre vinculadas a TAE,
+  ni al revés, y INV1 no marca nada entre Faco y Honda.
 
-### E1 · El grupo y sus fichas
+### E1 · La marca y los nombres del proyecto
 
-- SQL aditivo: el grupo (nombre, marca «contexto separado», dominios compartidos, ficha titular) y `Client.grupoId`
-  nullable, con RLS. Pantalla mínima en la ficha: «Es parte del grupo X» y, para quien tenga permiso, armar un grupo.
-- «TEC- AE» suelta la empresa fusionada; las fichas que faltan se crean (TAE, si Elías confirma que es otra entidad).
-- **Terminado cuando:** existen los grupos TEC e INVE con sus fichas; INV13 ya no marca «TEC- AE».
-- **Pruebas:** `check:esquema` ve la tabla; una invariante nueva: dos fichas con el mismo dominio efectivo tienen que
-  estar en el mismo grupo (hoy da 0; protege el futuro); prueba unitaria del catálogo del grupo.
+- SQL aditivo:
+  - `Client.contextoPorProyecto Boolean @default(false)`;
+  - `Project.nombresEnTitulos String[] @default([])`, que escribe una persona; la pantalla sugiere lo que va antes
+    de la «|» en el nombre de HubSpot («AE», «TEC TAE»).
+- Pantalla: en la ficha, el interruptor «Cada proyecto tiene su propio contexto» (solo con permiso de configurar la
+  ficha); en cada proyecto, sus nombres en los títulos.
+- Fusionar «TEC- AE» en «TEC» (sección 5).
+- **Terminado cuando:** «TEC» y «Grupo Inve» tienen la marca y sus proyectos tienen nombres; INV13 ya no marca
+  «TEC- AE».
+- **Pruebas:** `check:esquema` ve las columnas; prueba unitaria del matching de nombres de proyecto en títulos, que
+  reusa `match-por-titulo.ts` sin copiarlo, incluido «TAE» que contiene «AE».
 
-### E2 · El resolver con dominio compartido
+### E2 · El clasificador con nombre y gente
 
-- En `categorize.ts`, el paso 3 deja de quedarse con la primera ficha: si el dominio es de un grupo «contexto
-  separado», decide entre sus fichas en este orden: a mano → la persona (un correo que se asignó a una entidad) →
-  siglas o nombre en el título → si la reunión ya está elegida en un proyecto de una de ellas; si nada decide, queda
-  sin dueña con la marca «por decidir en el grupo X» y aparece para asignar. Sin grupo, todo sigue como hoy.
-- Se mide antes de prender: el simulacro de `resolveAllSessions` (deltas por ficha) se le muestra a Elías.
-- **Terminado cuando:** el simulacro reparte las reuniones del TEC y de INVE como Elías espera, y el resto de las
-  fichas no se mueve (delta 0 fuera de los grupos).
-- **Pruebas:** casos unitarios de `categorize` (dominio de grupo con siglas, con persona, sin pista → por decidir; sin
-  grupo → igual que hoy); integración del chokepoint con dos fichas del mismo grupo.
+- El pre-paso de la sección 3.1 en `classify-session-project.ts`: lo decidido por una persona, después el nombre,
+  después la gente, y si no, por decidir. Sin secundarios automáticos con la marca. Las fichas sin marca no cambian.
+- La gente del proyecto sale de las reuniones decididas por nombre o por una persona. Los contactos de HubSpot
+  asociados al trato o al proyecto entran en una segunda vuelta: hay que leer las asociaciones del objeto 0-970 y del
+  trato a contactos, que hoy no se copian.
+- «Por decidir»: un estado visible en el panel de reuniones de la ficha, con la propuesta de la IA y un botón por
+  proyecto.
+- **Terminado cuando:** el simulacro sobre «TEC» da unas 159 por nombre, 22 por gente y 3 por decidir, y en «Grupo
+  Inve» reparte lo de AnalisaLab como Elías espera. Delta 0 en las fichas sin marca.
+- **Pruebas:** casos unitarios: nombre de un proyecto; los dos nombres → por decidir; sin nombre con gente de uno;
+  gente de los dos → por decidir; lo decidido por una persona no se toca; sin marca → igual que hoy. Una prueba que
+  impida que la gente se aprenda de vínculos puestos por la IA.
 
-### E3 · Proyectos y HubSpot
+### E3 · La memoria y las lecturas de la cuenta, con la marca
 
-- Mover «AE | RE-IMPLEMENTACION HUBSPOT» a «TEC- AE» y los dos proyectos de AnalisaLab a «Analisalab» (script en
-  simulacro, `--apply` después). La copia de HubSpot ya no les cambia la ficha.
-- Un proyecto nuevo de HubSpot que llega a la ficha titular de un grupo pregunta de qué entidad es (o, si Elías eligió
-  empresas hijas en HubSpot, llega solo a la suya).
-- `resolverHermanos` busca hermanos dentro del grupo, para que la cobranza del desarrollo no cambie al mover.
-- **Terminado cuando:** cada proyecto está en la ficha de su entidad, la cobranza de esos proyectos da el mismo número
-  antes y después, y una corrida completa de la copia de HubSpot no los devuelve ni los apaga.
-- **Pruebas:** prueba de la copia (un proyecto movido no vuelve); prueba de hermanos dentro del grupo; simulacro de
-  cobranza antes y después.
+- `memoriaDeLaCuenta` con `projectId` y la marca: cada parte se lee según la tabla de la sección 4. `consumidores.ts`
+  ya declara a cada lector; se le suma qué hace con la marca.
+- Los 21 lectores de `getClientSessions` se reparten entre los que pasan a leer el proyecto y los que son de la
+  cuenta. Un registro con prueba estructural obliga a todo lector nuevo a declararse.
+- **Terminado cuando:** el diagnóstico de AE no cambia si se le agrega una reunión, un hecho o un compromiso de TAE.
+- **Pruebas:** integración con una ficha con la marca y dos proyectos (memoria, chokepoint y lecturas de la cuenta);
+  escaneo estructural de los lectores de `getClientSessions`; `frontera.test.ts` sigue verde.
 
 ### E4 · Limpiar lo mezclado
 
-- Re-resolver con el resolver nuevo (simulacro → `--apply`), re-clasificar las fichas que ganaron reuniones, y dejar
-  que los hechos que cambian de dueña se desestimen solos (`alCambiarDeDueno`). Las 3 tareas de AE en TAE se mueven a
+- Reclasificar «TEC» y «Grupo Inve» con el clasificador nuevo (simulacro → `--apply`).
+- Los hechos que quedan en el proyecto equivocado se mueven o se desestiman. Las 3 tareas de AE en TAE se mueven a
   mano o con INV42.
-- Los handoff ya generados no se rehacen solos: la lista de los que leyeron reuniones de otra entidad se le muestra al
-  CSE para que decida.
-- **Terminado cuando:** 0 hechos, tareas y vínculos de una entidad en un proyecto de otra del mismo grupo; INV1 verde.
+- Los handoff ya generados no se rehacen solos: se le muestra al CSE la lista de los que leyeron reuniones del otro
+  proyecto, y él decide.
+- Invariante nueva: en una ficha con la marca, ninguna reunión cuyo nombre dice un proyecto alimenta a otro, ni le
+  deja hechos o tareas.
+- **Terminado cuando:** esa invariante y INV1 están verdes.
 
-### E5 · La vista del grupo para la junta
+### E5 · Compartir a propósito, en cada documento
 
-- En la ficha del grupo, un resumen que suma sus entidades (proyectos, avance, lo pendiente, lo cobrado), marcado como
-  «del grupo». Un documento de una entidad nunca lo lee solo; si algún día hace falta, es un botón explícito con rótulo.
-- **Terminado cuando:** Elías ve el TEC y Grupo INVE enteros en un lugar, y el diagnóstico de AE no cambia si se
-  agrega una reunión de TAE.
-- **Pruebas:** la frontera de la memoria (`frontera.test.ts`) impide que la vista del grupo entre a un documento.
+- En el área de contexto de cada documento (la que ya existe por documento), una persona puede traer una reunión o un
+  hecho de otro proyecto de la misma ficha. Se ve rotulado «de otro proyecto», y queda guardado quién lo trajo.
+- **Terminado cuando:** Elías arma un documento de AE con una reunión de TAE elegida a mano y la ve rotulada; sin
+  elegirla, no aparece.
 
-## 6. Preguntas que solo Elías puede responder
+## 7. Preguntas que siguen abiertas
 
-1. **El TEC:** ¿cuántas entidades se trabajan aparte? ¿AE y TAE, y algo más (FUNDATEC)? ¿La ficha «TEC» de hoy es la
-   de TAE, o es el grupo y TAE necesita su propia ficha?
-2. **HubSpot:** ¿quieres que HubSpot también las separe (una empresa hija por escuela debajo del ITCR, y cada proyecto
-   colgado de la suya) o que la separación viva solo en Nexus?
-3. **Grupo INVE:** las 23 reuniones donde están las dos empresas, ¿son de AnalisaLab o del grupo? ¿Muevo los dos
-   proyectos de AnalisaLab a la ficha «Analisalab»?
-4. **Honda y Faco:** ¿son la misma empresa (las fusiono en una) o dos que se trabajan aparte? Hoy se creó «Faco» y 15
-   reuniones quedaron colgando de proyectos de Honda.
+Ya no preguntamos lo que la respuesta del 28 oct dejó claro:
+- si HubSpot separa las escuelas: no, queda como está;
+- qué ve la junta: cada documento comparte lo suyo;
+- si el TEC son fichas aparte: no, son proyectos de una ficha.
+
+1. **El TEC:** ¿hay un tercer proyecto aparte, FUNDATEC por ejemplo? Las 3 reuniones que no se pueden repartir son de
+   FUNDATEC y de un evento. ¿Van a los dos proyectos o quedan por decidir?
+2. **Honda y Faco (urgente):** ¿son la misma cuenta con proyectos aparte, o dos cuentas? Hoy se creó «Faco» y 15
+   reuniones quedaron colgando de proyectos de Honda. Con este plan, lo natural sería una ficha con la marca.
+3. **Grupo INVE y AnalisaLab:** ¿la integración con SAP de AnalisaLab pasa a «Grupo Inve» como un proyecto más, con
+   la marca, y la ficha «Analisalab» se fusiona? Sus 23 reuniones con el cliente ya están en «Grupo Inve».
+4. **Lo que se comparte en la ficha:** ¿los procesos y la ficha de datos del TEC son uno solo para la institución, o
+   AE y TAE tienen procesos distintos? Hoy los dos están vacíos.
 5. **Otros pares:** Clínica Oceánica y Grupo Petroil (30 reuniones juntas), Real Shipping y Logistics Plus (10),
-   Secure Title y Seguro Global (8): ¿son del mismo grupo? ¿alguno necesita el contexto aparte?
-6. **Una reunión sin pista** (gente de las dos escuelas y un título que no dice cuál): ¿prefieres que quede «por
-   decidir» hasta que alguien la asigne, o que vaya a la entidad principal del grupo?
-7. **La junta:** ¿qué necesita ver del grupo entero (avance, horas, cobro, riesgos) y quién lo ve?
-8. **El roadmap:** ¿retiro la pregunta 35 (fusionar las dos TEC) y cambio la 6 por este plan?
+   Secure Title y Seguro Global (8). ¿Alguno es una sola cuenta con proyectos que hay que separar?
+6. **«TEC- AE»:** ¿la fusiono en «TEC»? Está vacía, así que no se pierde nada.
