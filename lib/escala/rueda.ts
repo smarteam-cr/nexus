@@ -1,11 +1,12 @@
 /**
  * lib/escala/rueda.ts — la geometría de la rueda de un área. PURO: sin React ni colores.
  *
- * La comparten el Mapa (components/escala/Mapa.tsx: celdas con conteos), el Radar (components/escala/Radar.tsx:
- * puntos por serie) y el radar de una empresa (components/escala/RadarDeUnaEmpresa.tsx, para la página pública
- * del test y su PDF). Las tres dibujan la MISMA rueda —mismo tamaño, mismas mitades, mismos rótulos en el mismo
- * lugar— y solo cambia lo de adentro (pedido de Elías, 2026-10-28: «básicamente solo debería cambiar lo del
- * centro»). Un número que se mueve acá se mueve en las tres.
+ * La comparten el Mapa (components/escala/Mapa.tsx: celdas con conteos) y el radar de una empresa
+ * (components/escala/RadarDeUnaEmpresa.tsx, para la página pública del test y su PDF). Las dos dibujan la MISMA
+ * rueda —mismo tamaño, mismas mitades, mismos rótulos en el mismo lugar— y solo cambia lo de adentro (pedido de
+ * Elías, 2026-10-28: «básicamente solo debería cambiar lo del centro»). Un número que se mueve acá se mueve en las
+ * dos. El Radar de la escala (components/escala/Radar.tsx) dejó la rueda el mismo día por un radar clásico
+ * (lib/escala/radar-dibujo.ts); de acá solo toma `lineaDeLaSerie` y `partirEnLineas`.
  *
  * Grados de reloj: 0 = arriba, en el sentido de las agujas. La base operativa ocupa la mitad derecha y la
  * producción la izquierda, separadas por un hueco arriba y abajo; arriba, en ese hueco, van los nombres de los
@@ -156,14 +157,6 @@ export function yDelNombreDeNivel(k: number): number {
  */
 export function radioEnAnillos(posicion: number): number {
   return R_DENTRO + ANCHO * Math.min(LETRAS.length, Math.max(0, posicion));
-}
-
-/**
- * Un promedio de niveles (1 = Deficiente … 5 = Óptimo) a su posición: un nivel entero cae en el MEDIO de su
- * anillo (3 = el medio de Funcional), y un promedio entre dos, entre sus medios.
- */
-export function posicionDelPromedio(valor: number): number {
-  return Math.min(LETRAS.length, Math.max(1, valor)) - 0.5;
 }
 
 /**

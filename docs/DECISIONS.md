@@ -12267,19 +12267,24 @@ un «nivel de la dimensión» que dibujar.
    Funcional y uno en Óptimo, sin ninguno en Eficiente. El panel muestra además cuántos hay en cada nivel, y describe el
    nivel donde la serie tiene más criterios (`nivelConMas`), nunca uno donde no tiene ninguno.
 5. Solo la vista viaja en la URL (`?vista=radar`), como las demás; las series prendidas no.
-6. **El radar es la MISMA rueda que el mapa; solo cambia lo de adentro** (Elías, el mismo día, al ver la primera versión:
-   «comparado al otro está muy por debajo, no solo en el diseño sino en la estructura… solo debería cambiar lo del
-   centro»). La geometría vive en un solo lugar (`lib/escala/rueda.ts`: medidas, mitades, porciones, dónde va cada rótulo)
-   y las piezas fijas en SVG en `components/escala/rueda.tsx`: las mitades con su nombre y su banda gris, el número y el
-   nombre de cada dimensión, los niveles en el hueco de arriba, «la base» y el centro. Adentro, los anillos apenas
-   teñidos con el color de su nivel y un eje por el medio de cada porción. Un nivel entero cae en el MEDIO de su anillo (no
-   en su borde), así que un punto en Funcional queda por fuera de la línea de la base, como la celda de Funcional en el
-   mapa. La línea de cada serie va entera dentro de cada mitad y fina y punteada al cruzar el hueco, para no tachar los
-   nombres de los niveles ni «la base»; sin relleno (puntos, no áreas).
+6. **El radar es un radar clásico, con una regla de 0 a 100** (Elías, 2026-10-28, al ver la versión sobre la rueda del
+   mapa: «no es un radar de verdad»; diseño aprobado en Claude Design, pantallas `Main` y `Dimension`). Un eje por
+   dimensión, la base operativa a la derecha y la producción a la izquierda con su nombre al costado; cada eje va por el
+   medio de su tramo, así que ninguno queda vertical (con cuatro por mitad, 22,5° + 45°·k). El centro vale 0 y el borde
+   100, con anillos poligonales en 20, 40, 60 y 80 y sus números en el hueco de arriba: son las franjas del cálculo
+   (Deficiente 0–19, Inicial 20–39, Funcional 40–59, Eficiente 60–79, Óptimo 100; especificación del cálculo, pasos 6 y
+   7 del diagnóstico). «La base» es el anillo punteado de 40. Sin zonas ni rellenos de color por nivel. Un promedio va a
+   la regla con `enLaRegla` (`lib/escala/radar-dibujo.ts`): cada nivel entero a la mitad de su franja (1→10, 2→30,
+   3→50, 4→70, 5→100) y en línea recta entre dos niveles; así un punto en Funcional queda por fuera de la base. Cada
+   serie es un polígono con relleno muy tenue (10 %), trazo de 2,5 y sus marcas en los vértices; un eje sin punto corta la
+   línea y la deja sin relleno. La dimensión en foco resalta su eje y su nombre en el color de marca y agranda sus marcas.
+   El área y «8 dimensiones · 5 niveles» van al título de la tarjeta (el centro ahora es el 0), el número de «qué se
+   trabaja primero» va junto al rótulo de cada dimensión, y «Cómo se lee» suma las franjas. La geometría es solo del
+   Radar: el Mapa y el radar de una empresa siguen en la rueda (`lib/escala/rueda.ts`).
 7. **El radar de UNA empresa es la misma rueda** (`components/escala/RadarDeUnaEmpresa.tsx`), para la página pública del
    resultado del test y su PDF: hex literal, SVG estático sin JavaScript, un punto por dimensión con su puntaje adentro y
    el borde del color de su nivel. El NIVEL elige el anillo y el puntaje dice cuánto avanzó dentro de él
    (`posicionDelPuntaje`, con los tramos del chequeo): un punto nunca cae en un anillo que contradiga el nivel que se le
    dice a la empresa. Una dimensión sin nivel no lleva punto y su número dice «no se preguntó»; una que contestó «No lo
    sé» va con el borde punteado, «?» en vez del puntaje y «no lo sabías», como las barras. Con una sola serie, la línea
-   lleva un relleno apenas visible (7 %) para que se lea la forma; el radar interno, con varias superpuestas, no.
+   lleva un relleno apenas visible (7 %) para que se lea la forma. (El radar interno ya no es esta rueda: su dibujo y su relleno de 10 % están en la decisión 6.)

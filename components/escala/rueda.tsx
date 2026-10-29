@@ -3,10 +3,10 @@
  * banda gris, los anillos de nivel, la línea de la base, los nombres de los niveles, el rótulo de cada dimensión y
  * el centro. Sin estado ni efectos: se dibujan igual en el servidor, en el navegador y en el PDF.
  *
- * Las usan el Radar de la escala (components/escala/Radar.tsx, con los tokens del tema) y el radar de una empresa
- * (RadarDeUnaEmpresa.tsx, con hex literal para la página del cliente). La geometría es la del Mapa
- * (lib/escala/rueda.ts): las tres vistas comparten tamaño y rótulos, y solo cambia lo de adentro. El color entra
- * por la `paleta`, nunca escrito en una pieza.
+ * Las usa el radar de una empresa (RadarDeUnaEmpresa.tsx, con hex literal para la página del cliente). La geometría
+ * es la del Mapa (lib/escala/rueda.ts): comparten tamaño y rótulos, y solo cambia lo de adentro. El color entra por
+ * la `paleta`, nunca escrito en una pieza. (El Radar de la escala las usó hasta el 2026-10-28; ahora es un radar
+ * clásico, lib/escala/radar-dibujo.ts.)
  */
 import type { SVGProps } from "react";
 import { LETRAS, type ClaveDeCapa, type Letra } from "@/lib/escala/documento/tipos";
