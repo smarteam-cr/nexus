@@ -116,7 +116,9 @@ export interface DatoDeLaEmpresa {
  *  «Banca y servicios financieros» la sumó Elías el 2026-10-27 para que su edición tenga por dónde llegar; en el portal
  *  todavía NO existe: hay que crearla allá con ese mismo valor antes de prender `EMPRESA_HUBSPOT_ESCRITURA`.
  *  «Maquinaria y equipo pesado» la pidió Elías el 2026-10-28 (Aditec JCB, CAMOSA) junto con su edición de la escala, y
- *  tampoco existe en el portal: misma condición. */
+ *  tampoco existe en el portal: misma condición.
+ *  «Telecomunicaciones» la pidió Elías el 2026-10-28 junto con su edición de la escala (kölbi; en HubSpot hoy está en
+ *  «Retail Especializado»), y tampoco existe en el portal: misma condición. */
 export const INDUSTRIAS_DE_SMARTEAM: readonly (OpcionDeDato & { edicion: string | null })[] = [
   { valor: "Agrícola", etiqueta: "Agrícola", edicion: null },
   { valor: "Agroindustria", etiqueta: "Agroindustria", edicion: null },
@@ -136,6 +138,7 @@ export const INDUSTRIAS_DE_SMARTEAM: readonly (OpcionDeDato & { edicion: string 
   { valor: "Servicios", etiqueta: "Servicios", edicion: null },
   { valor: "Software", etiqueta: "Software", edicion: null },
   { valor: "Tecnologia", etiqueta: "Tecnología", edicion: null },
+  { valor: "Telecomunicaciones", etiqueta: "Telecomunicaciones", edicion: "telecom" },
   { valor: "Turismo", etiqueta: "Turismo", edicion: "turismo" },
 ];
 
@@ -148,6 +151,7 @@ export const EDICIONES_DE_LA_ESCALA: readonly OpcionDeDato[] = [
   { valor: "turismo", etiqueta: "Turismo" },
   { valor: "automotriz", etiqueta: "Automotriz" },
   { valor: "maquinaria", etiqueta: "Maquinaria y equipo pesado" },
+  { valor: "telecom", etiqueta: "Telecomunicaciones" },
 ];
 
 /** Techo de cordura del TAM: 100M USD (DECISIONS «Qué ES una empresa»). Lo usan el catálogo y `parseTamUsd`. */
