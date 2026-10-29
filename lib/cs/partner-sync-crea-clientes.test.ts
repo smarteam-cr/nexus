@@ -26,6 +26,6 @@ describe("la copia de Partner y la creación de clientes", () => {
 
   it("el botón del panel y el script lo piden explícito", () => {
     expect(leer("app/api/cs/partner/refresh/route.ts")).toMatch(/syncPartnerClients\(\{ createClients \}\)/);
-    expect(leer("scripts/run-partner-sync.ts")).toMatch(/syncPartnerClients\(\{ createClients: apply \}\)/);
+    expect(leer("scripts/run-partner-sync.ts")).toMatch(/syncPartnerClients\(\{ createClients: apply(, cambiarRegistros: apply)? \}\)/);
   });
 });

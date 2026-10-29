@@ -425,7 +425,14 @@ function Fuentes({ data, puedeCurar }: { data: CarteraDeLaCsl; puedeCurar: boole
     setCorriendo("partner");
     toast.info("Trayendo HubSpot Partner… puede tardar un minuto.");
     try {
-      const r = await fetchJson<{ supported: boolean; total: number; createdClients: unknown[] }>("/api/cs/partner/refresh", {
+      const r = await fetchJson<{
+        supported: boolean;
+        total: number;
+        createdClients: unknown[];
+        cambiosDeRegistro?: Array<{ cliente: string | null }>;
+        cambiosSinElegir?: Array<{ cliente: string | null; motivo: "dos-activos" | "varios-activos" | "actual-sin-dato" }>;
+        cambiosFallidos?: Array<{ cliente: string | null }>;
+      }>("/api/cs/partner/refresh", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         // createClients EXPLÍCITO: el endpoint defaultea a false (defensivo) y crear Clients para
@@ -434,7 +441,37 @@ function Fuentes({ data, puedeCurar }: { data: CarteraDeLaCsl; puedeCurar: boole
       });
       if (!r.supported) toast.error("La app de HubSpot no tiene el permiso de Partner Clients: hay que volver a autorizarla.", { duration: 0 });
       else {
-        toast.success(`HubSpot Partner: ${plural(r.total, "cuenta actualizada", "cuentas actualizadas")}.`);
+        // Una cuenta que estaba en un registro inactivo pasa al activo que coincide con ella
+        // (lib/cs/partner-cambio-de-registro.ts); si hay dos activos, no se elige y se avisa.
+        const nombres = (l: Array<{ cliente: string | null }>) => l.map((c) => c.cliente ?? "una cuenta").join(", ");
+        const pasaron = r.cambiosDeRegistro ?? [];
+        const sinElegir = r.cambiosSinElegir ?? [];
+        toast.success(
+          `HubSpot Partner: ${plural(r.total, "cuenta actualizada", "cuentas actualizadas")}.` +
+            (pasaron.length ? ` ${nombres(pasaron)} ${pasaron.length === 1 ? "pasó" : "pasaron"} a su registro activo en HubSpot.` : ""),
+        );
+        // Un aviso por motivo: «sin dato» tiene un solo candidato y no hay duplicado que buscar en HubSpot.
+        const duplicados = sinElegir.filter((c) => c.motivo !== "actual-sin-dato");
+        const sinDato = sinElegir.filter((c) => c.motivo === "actual-sin-dato");
+        if (duplicados.length) {
+          toast.info(
+            `${nombres(duplicados)} ${duplicados.length === 1 ? "tiene" : "tienen"} más de un registro activo en HubSpot Partner que coincide: no se eligió ninguno. Revísalo en HubSpot.`,
+            { duration: 0 },
+          );
+        }
+        const fallidos = r.cambiosFallidos ?? [];
+        if (fallidos.length) {
+          toast.error(
+            `${nombres(fallidos)} no ${fallidos.length === 1 ? "pudo pasar" : "pudieron pasar"} a su registro activo de HubSpot Partner (otro cambio se cruzó): ${fallidos.length === 1 ? "sigue" : "siguen"} en el viejo. Vuelve a actualizar en unos minutos.`,
+            { duration: 0 },
+          );
+        }
+        if (sinDato.length) {
+          toast.info(
+            `HubSpot no dice si el registro de Partner de ${nombres(sinDato)} sigue activo, y hay otro activo que coincide: no se cambió. Mira en HubSpot cuál es el vigente.`,
+            { duration: 0 },
+          );
+        }
         router.refresh();
       }
     } catch (e) {
