@@ -22,9 +22,37 @@ export interface DatosDeLaNota {
   usoDeCrm?: string | null;
   /** «Test web (8 preguntas)». */
   version: string;
+  /** Lo que contestó, en el orden del test (desde el 2026-10-28). Solo las preguntas contestadas. */
+  respuestas?: readonly RespuestaDeLaNota[];
+}
+
+/** Una respuesta, legible: la pregunta, la opción que eligió (o «No lo sé») y su matiz, si escribió uno. */
+export interface RespuestaDeLaNota {
+  pregunta: string;
+  respuesta: string;
+  matiz?: string | null;
 }
 
 const lineaDelCrm = (d: DatosDeLaNota) => (d.usoDeCrm ? `<p>Cómo gestionan hoy a sus clientes: ${esc(d.usoDeCrm)}</p>` : "");
+
+/**
+ * Las respuestas, al FINAL de la nota: `leerNotaDelTest` toma el primer «Quién:» y el primer «Empresa:», y un matiz
+ * escrito por la persona puede traer cualquiera de los dos. El enlace al resultado lo busca en TODA la nota (y el de la
+ * app vieja antes que el de Nexus): al matiz se le corta cada `://` (queda `: //`), así un enlace que pegó nunca pasa por
+ * el suyo. Cortar y no quitar: quitar `http://` una vez arma otro enlace con «hthttp://tp://…».
+ */
+const matizSinEnlaces = (m: string) => m.replace(/:\/\//g, ": //");
+
+const bloqueDeRespuestas = (d: DatosDeLaNota) =>
+  d.respuestas?.length
+    ? [
+        "<p><strong>Respuestas</strong></p>",
+        ...d.respuestas.map(
+          (r, n) =>
+            `<p>${n + 1}. ${esc(r.pregunta)}<br>→ ${esc(r.respuesta)}${r.matiz ? `<br>Matiz: «${esc(matizSinEnlaces(r.matiz))}»` : ""}</p>`,
+        ),
+      ].join("")
+    : "";
 
 /** La nota de un test TERMINADO, con el nivel estimado y el enlace al resultado. */
 export function notaDelTestTerminado(d: DatosDeLaNota & { nivelNombre: string | null; recomendacion: string | null; url: string }): string {
@@ -36,6 +64,7 @@ export function notaDelTestTerminado(d: DatosDeLaNota & { nivelNombre: string | 
     `<p>Versión: ${esc(d.version)}</p>`,
     d.recomendacion ? `<p>Lo que más lo frena: ${esc(d.recomendacion)}</p>` : "",
     `<p>Resultado: <a href="${esc(d.url)}">${esc(d.url)}</a></p>`,
+    bloqueDeRespuestas(d),
   ]
     .filter(Boolean)
     .join("");
@@ -50,6 +79,7 @@ export function notaDelTestSinTerminar(d: DatosDeLaNota & { paso: number; total:
     `<p>Empresa: ${[d.empresa, d.dominio, d.industria].filter(Boolean).map((x) => esc(x!)).join(" · ")}</p>`,
     `<p>Versión: ${esc(d.version)}</p>`,
     `<p>Llegó a la pregunta ${d.paso} de ${d.total}.</p>`,
+    bloqueDeRespuestas(d),
   ]
     .filter(Boolean)
     .join("");

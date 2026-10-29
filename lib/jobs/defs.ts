@@ -1230,7 +1230,7 @@ const testsHubspot: JobDef = {
     }
     if (!r.abandonados && !r.formularios && !r.notas && !r.errores.length) return SIN_TURNO;
     console.log(
-      `[jobs/tests-hubspot] ${turno} — ${r.formularios} formularios, ${r.notas} notas, ${r.abandonados} dejados a medias${r.errores.length ? `, ${r.errores.length} errores` : ""}`,
+      `[jobs/tests-hubspot] ${turno} — ${r.formularios} formularios${r.soloCorreo ? ` (${r.soloCorreo} solo con el correo)` : ""}, ${r.notas} notas, ${r.abandonados} dejados a medias${r.errores.length ? `, ${r.errores.length} errores` : ""}`,
     );
     if (r.errores.length) console.warn(`[jobs/tests-hubspot] ${r.errores.slice(0, 5).join(" · ")}`);
     if (r.errores.length && !r.formularios && !r.notas) throw new Error(`Ningún test llegó a HubSpot: ${r.errores[0]}`);

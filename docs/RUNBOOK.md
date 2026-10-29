@@ -843,12 +843,13 @@ comparar.
 
 ### Paso 1 · HubSpot y el envío
 
-1. **[Elías]** Decidir el riesgo del formulario (DECISIONS › área O, O4): el formulario nativo de HubSpot actualiza el
-   contacto que ya existe con ese correo, y nadie confirma que el correo sea de quien responde. Aceptarlo como hoy, o
-   pedir que solo se manden los correos que todavía no son contactos. Sin esta decisión no se prende el envío.
+1. ~~Decidir el riesgo del formulario~~ Decidido el 28 oct (DECISIONS › área O, O4): a un correo que ya es contacto, el
+   formulario le llega solo con el correo y no le pisa los datos; la nota y las respuestas sí.
 2. **[Elías · HubSpot]** Crear un formulario NUEVO (Marketing › Formularios › Crear formulario › integrado), por ejemplo
    «Diagnóstico de Rendimiento (Nexus)», con estos campos de contacto: correo (obligatorio), nombre, apellido, teléfono,
-   cargo, empresa y sitio web. Ninguno más obligatorio. Copiar su GUID (está en la dirección del editor del formulario).
+   cargo, empresa y sitio web. Ninguno más obligatorio: el envío de un contacto que ya existe lleva solo el correo, y
+   con otro campo obligatorio HubSpot lo rechaza (Escala › Tests › Intentos lo dice: «El formulario exige campos además
+   del correo»). Copiar su GUID (está en la dirección del editor del formulario).
    ⚠ **El formulario de la app vieja NO sirve:** exige `puesto_actual` y usa otros nombres (`hs_whatsapp_phone_number`,
    `domain` e `industry` de empresa), y Nexus manda `phone`, `jobtitle`, `company` y `website`
    (`lib/hubspot/test-del-diagnostico.ts › cuerpoDelFormulario`): HubSpot rechazaría cada envío. Desde el 28 oct el test
