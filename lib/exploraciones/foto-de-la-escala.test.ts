@@ -3,7 +3,7 @@
  * qué cambió entre dos fotos. Correr: `npx vitest run lib/exploraciones/foto-de-la-escala.test.ts --project unit`.
  */
 import { describe, expect, it } from "vitest";
-import { cambiosEntreFotos, fotoDeLaExploracion, fraseDelCambio, huellaDeLaFoto, leerFoto } from "./foto-de-la-escala";
+import { anteriorDeLaMismaVara, cambiosEntreFotos, fotoDeLaExploracion, fraseDelCambio, huellaDeLaFoto, leerFoto, mismaVara } from "./foto-de-la-escala";
 import { ESCALA_DE_PRUEBA, estadoDePrueba, propuestoDePrueba, todasEn } from "./escala-de-prueba.test-helpers";
 
 describe("la foto de la escala", () => {
@@ -67,5 +67,29 @@ describe("qué cambió", () => {
   it("sin foto anterior todo lo ubicado es nuevo", () => {
     const ahora = fotoDeLaExploracion(ESCALA_DE_PRUEBA, estadoDePrueba({ "1.1": { nivel: "F", fuente: "reunion" } }));
     expect(cambiosEntreFotos(null, ahora).map((c) => c.tipo)).toEqual(["nuevo"]);
+  });
+});
+
+describe("una edición no se compara con otra", () => {
+  const foto = (edicion: string | null) => ({ foto: { edicion } });
+
+  it("la misma vara: la misma edición, o las dos con la escala general", () => {
+    expect(mismaVara({ edicion: "Banca" }, { edicion: "Banca" })).toBe(true);
+    expect(mismaVara({ edicion: null }, { edicion: null })).toBe(true);
+    expect(mismaVara({ edicion: "Banca" }, { edicion: null })).toBe(false);
+  });
+
+  it("se compara con la anterior si es de la misma edición", () => {
+    const previas = [foto("Banca"), foto("Retail")];
+    expect(anteriorDeLaMismaVara({ edicion: "Banca" }, previas)).toEqual({ anterior: previas[0], puntoDePartida: null });
+  });
+
+  it("si la anterior es de otra edición, es un punto de partida nuevo aunque más atrás haya una de la misma", () => {
+    const previas = [foto(null), foto("Banca")];
+    expect(anteriorDeLaMismaVara({ edicion: "Banca" }, previas)).toEqual({ anterior: null, puntoDePartida: { desdeEdicion: null } });
+  });
+
+  it("sin nada antes no hay con qué comparar ni línea que se corte", () => {
+    expect(anteriorDeLaMismaVara({ edicion: "Banca" }, [])).toEqual({ anterior: null, puntoDePartida: null });
   });
 });

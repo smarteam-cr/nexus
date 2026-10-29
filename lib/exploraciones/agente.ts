@@ -102,6 +102,7 @@ import { avanceDeLaEstrategia } from "./avance-del-proyecto";
 import { fuentesDelProyecto, loVendidoDelProyecto } from "./fuentes-del-proyecto";
 import { acuerdosDeLasReuniones } from "./historia-de-las-sesiones-server";
 import { memoriaDelProyecto } from "@/lib/memoria";
+import { proyectoDeContextoDeLaEmpresa } from "./escala-de-la-cuenta";
 import { fuentesParaPosicionar } from "./posicionar-fuentes";
 import { SENTINEL_SERVICE_TYPE } from "@/lib/projects/kind";
 import {
@@ -186,6 +187,11 @@ interface OpcionesDeLaCorrida {
    */
   ventaId?: string | null;
   objetivo?: string | null;
+  /**
+   * Para «posicionar» sobre la escala de la cuenta (escala única, 2026-10-28): un proyecto de la empresa cuyo handoff,
+   * cuestionarios, cronograma y memoria se leen como contexto. Lo propuesto queda igual en la escala de la cuenta.
+   */
+  proyectoDeContexto?: string | null;
 }
 
 /**
@@ -237,7 +243,7 @@ export async function lanzarCorrida(exploracionId: string, modo: ModoDelAgente, 
           opts.releer && !opts.completa ? "Preventa: resumir las reuniones ya leídas" : ((delProyecto ? ETIQUETA_DEL_PROYECTO[modo] : null) ?? ETIQUETA[modo]),
         currentPhase: "Empezando…",
         triggeredByEmail: opts.triggeredByEmail,
-        filters: { exploracionId, modo, ...(opts.automatica ? { automatica: true } : {}), ...(opts.releer && !opts.completa ? { soloResumen: true } : {}), ...(modo === "posicionar" ? { ventaId: opts.ventaId ?? null } : {}) } as Prisma.InputJsonValue,
+        filters: { exploracionId, modo, ...(opts.automatica ? { automatica: true } : {}), ...(opts.releer && !opts.completa ? { soloResumen: true } : {}), ...(modo === "posicionar" ? { ventaId: opts.ventaId ?? null, ...(opts.proyectoDeContexto ? { proyectoDeContexto: opts.proyectoDeContexto } : {}) } : {}) } as Prisma.InputJsonValue,
       },
       select: { id: true },
     });
@@ -476,10 +482,12 @@ async function posicionarLaEscala(
   const esContenedor = fila.projectId
     ? (await prisma.project.findUnique({ where: { id: fila.projectId }, select: { serviceType: true } }))?.serviceType === SENTINEL_SERVICE_TYPE
     : false;
+  // En la cuenta, el proyecto de contexto (si se eligió uno) se lee como si fuera el suyo. Solo uno de esta empresa.
+  const contexto = esContenedor ? await proyectoDeContextoDeLaEmpresa(fila.clientId, opts.proyectoDeContexto) : null;
   const leido = await fuentesParaPosicionar({
     clientId: fila.clientId,
-    projectId: fila.projectId,
-    esContenedor,
+    projectId: contexto ?? fila.projectId,
+    esContenedor: esContenedor && !contexto,
     companyId: fila.client.hubspotCompanyId,
     ventaId: opts.ventaId ?? null,
     escala,
@@ -510,7 +518,10 @@ async function posicionarLaEscala(
         triggeredByEmail: opts.triggeredByEmail,
         origen: "exploraciones/agente:posicionar",
       },
-      () => getAnthropic().messages.create(pedidoDePosicionar({ ...ctx, objetivo: opts.objetivo ?? (fila.projectId ? "el proyecto" : "la preventa") })),
+      () =>
+        getAnthropic().messages.create(
+          pedidoDePosicionar({ ...ctx, objetivo: opts.objetivo ?? (esContenedor ? "la cuenta entera (sin un proyecto en particular)" : fila.projectId ? "el proyecto" : "la preventa") }),
+        ),
     );
     const r = leerLaRespuesta(respuesta, ctx, runId);
     // Solo niveles: el pedido no pide otra cosa, y si llega, no se guarda.

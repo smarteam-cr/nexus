@@ -36,6 +36,12 @@ export interface Lienzo {
    * nombres y sus preguntas; todo lo demás es el mismo lienzo.
    */
   marco: Marco;
+  /**
+   * Dónde vive esta escala (escala única, 2026-10-28): la preventa, la Exploración de un proyecto o la escala de la
+   * cuenta (La cuenta › La escala). Es la misma pieza; cambian las palabras («Sacar Ventas de la preventa» / «… de la
+   * cuenta») y lo que no tiene sentido fuera de la preventa (la próxima sesión, preparar).
+   */
+  lugar: LugarDelLienzo;
   escala: EscalaDelLienzo;
   /** El chequeo de lo confirmado CON EVIDENCIA: lo que leen la propuesta, el handoff y «lista para proponer». */
   chequeo: ResultadoDelChequeo;
@@ -128,6 +134,13 @@ export interface Lienzo {
     buscarReunion: (modo: ModoDelSelector) => void;
   };
 }
+
+export type LugarDelLienzo = "preventa" | "proyecto" | "cuenta";
+
+/** «de la preventa», «del proyecto», «de la cuenta»: cómo nombra cada pieza el lugar donde está (con la contracción). */
+export const DEL_LUGAR: Record<LugarDelLienzo, string> = { preventa: "de la preventa", proyecto: "del proyecto", cuenta: "de la cuenta" };
+/** «a la preventa», «al proyecto», «a la cuenta». */
+export const AL_LUGAR: Record<LugarDelLienzo, string> = { preventa: "a la preventa", proyecto: "al proyecto", cuenta: "a la cuenta" };
 
 /**
  * Para qué se abre el selector de reuniones: agregar una sesión nueva (las agendadas, las que ya pasaron

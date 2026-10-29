@@ -12336,3 +12336,45 @@ recomendación: en el diagnóstico, el enfoque con tres o cuatro acciones de una
   (load-canvas-context) y en el `SKIP_KEYS` del PDF (print-vocab).
 - **Sin SQL ni script.** El prompt de los dos agentes vive en el código (las defs), no en `Agent.systemPrompt`. Una
   Planificación ya generada gana la sección vacía al reconciliarse (vacía no se ve) y se llena al regenerarla.
+
+
+## Una sola escala: la de la preventa, también en la ficha del cliente (2026-10-28)
+
+**Contexto.** Elías: «Debería ser la misma escala, donde yo pudiera seleccionar la industria, el departamento, y según
+toda la información se agregue… que la escala sea un artefacto y que se comparta realmente entre módulos de preventa o
+de clientes». La preventa tenía un mapa (industria, áreas como pestañas, la rueda, elegir el nivel de cada dimensión con
+su evidencia, lo que pide Funcional) y La cuenta › La escala otra pantalla para el mismo dato (tarjetas de solo lectura,
+«Corregir» la edición en un formulario aparte, el agente en un panel propio). Es la primera etapa del cambio a
+artefactos. Plan: docs/escala-unica-plan.md.
+
+- **El artefacto es la exploración, sin tabla nueva.** Una fila de `ExploracionDeVenta` ya es una escala entera: edición,
+  perfil, áreas, nivel de cada dimensión con su evidencia, lo propuesto y su historia (`VersionDeLaEscala`). La preventa
+  es una copia; la de un cliente es la del contenedor «Información del cliente» (la que ya ubicaba «Actualizar escala»
+  con «La cuenta entera», ver «Actualizar escala» más arriba); cada proyecto tiene la suya. *Se descartó* un modelo propio
+  ahora: no agregaba nada que la fila no tenga, y el tipo y la plantilla son de la etapa de artefactos.
+- **La misma pieza, no una copia.** La ficha monta `LienzoDeExploracion` en modo `cuenta` (solo `PasoEscala`). El
+  lienzo sabe en qué lugar está (`lugar`: preventa, proyecto o cuenta) y cambia las palabras («Sacar Ventas de la
+  cuenta»). En la cuenta no van «Qué explorar en la próxima sesión» ni «Explorarla a fondo» (la cuenta no tiene
+  sesiones), ni preparar ni leer la última reunión; el agente es «Actualizar escala». Cuando cambia la edición, la escala
+  la vuelve a pedir la ficha (`alRefrescar`), no `router.refresh()`.
+- **Lo medido en la preventa es el punto de partida** (`lib/exploraciones/punto-de-partida.ts`, puro). Al abrir la
+  escala de la cuenta (o si existía sin haber medido nunca nada: sin niveles ni versiones), toma de la preventa más
+  reciente que midió algo la edición y el perfil (con quién los eligió), las áreas, cada nivel con su frase y su porqué,
+  y lo que pide Funcional. Lo propuesto y no usado no viaja. Entra por el escritor de siempre (`aplicarCambios`, en dos
+  tandas: la edición primero, porque los criterios se validan contra ella) y deja la versión del día. Solo viaja lo que
+  existe en la escala con que queda la cuenta: un criterio de otra edición (cambiar de edición en la preventa no lo
+  borra) o una dimensión retirada se queda afuera y se avisa, porque una sola operación inválida tumbaba la tanda entera
+  sin decir nada. Una cuenta que ya midió algo (niveles o versiones) no se toca. La pantalla la abre sola solo si hay
+  algo de la preventa que traer; sin preventa, con un botón: abrirla escribe (la exploración y, si falta, el contenedor).
+- **El agente lee el contexto del cliente.** `posicionar` lee primero las reuniones que alguien unió a una sesión de
+  cualquier exploración de la empresa (`reunionesElegidas`, por el chokepoint con `ids`), hasta la mitad de los lugares,
+  y después las más recientes (son las que dicen dónde está HOY), y la memoria de la cuenta como antes. «Elegida» es solo
+  la unida a mano a una sesión: la que el calendario le asocia sin unirla entra igual como reciente. Con un proyecto elegido como contexto (`proyectoDeContexto`), lee su handoff, sus
+  cuestionarios, su cronograma y su memoria, y lo propuesto queda igual en la escala de la cuenta.
+- **Una edición no se compara con otra** (`mismaVara`, `anteriorDeLaMismaVara` en foto-de-la-escala.ts). «Qué cambió» en
+  la historia y «Qué explorar» en la preventa solo comparan con la anterior de la misma edición; si la anterior es de
+  otra, la de ahora es un punto de partida nuevo y se dice.
+- **Lo que era solo de la ficha sigue**: «Guardar esta versión» con su momento y su venta, el camino de crecimiento, la
+  historia de toda la empresa (la de hoy de la preventa y de cada proyecto, en solo lectura, con cuántos niveles
+  propuestos tienen sin revisar y un botón para ir a revisarlos) y «Probar la escala». Ya no se usan desde la ficha los
+  niveles propuestos en la preventa o en un proyecto: se revisan en su pantalla.

@@ -64,6 +64,12 @@ const CADA_MS = 3000;
 /** El aviso al terminar bien, según lo que hizo la corrida. */
 export function avisoAlTerminar(c: CorridaEnCurso): string {
   if (c.modo === "guia") return "La guía de la próxima reunión está lista.";
+  // «Actualizar escala» no lee reuniones nuevas: sin nada del cliente, no ubica nada (escala única, 2026-10-28).
+  if (c.modo === "posicionar" && c.nadaNuevo) return "No hay nada que haya dicho o hecho el cliente para respaldar un nivel: la escala queda como está.";
+  if (c.modo === "posicionar")
+    return c.propuestos
+      ? `El agente propuso ${c.propuestos === 1 ? "un nivel" : `${c.propuestos} niveles`}: revísalos en la escala, arriba y en el mapa.`
+      : "El agente terminó sin nada nuevo: lo que dijo el cliente ya está en la escala.";
   if (c.nadaNuevo) return "No había reuniones nuevas para leer.";
   return c.propuestos
     ? `El agente propuso ${c.propuestos} ${c.propuestos === 1 ? "cosa" : "cosas"}: están en su lugar.`

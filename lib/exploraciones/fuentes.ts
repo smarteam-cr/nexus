@@ -1004,11 +1004,22 @@ export async function fuentesDeHubspotSinMarcar(o: { clientId: string; companyId
  * Las reuniones con el cliente que YA se leyeron, en resumen (su minuta y sus notas, nunca la transcripción), la más
  * nueva primero, por el chokepoint (invariante #1): solo las de esta empresa y que ya ocurrieron. Las de puertas adentro
  * no van: lo dicho entre el equipo no es palabra del cliente. Van como S1…Sn: cuentan como lo que dijo el cliente.
+ * `elegidas` (escala única, 2026-10-28): las que una persona unió a una sesión van primero, aunque no estén entre las más
+ * recientes; también por el chokepoint (una de otra empresa no sale). Ocupan como mucho la mitad de los lugares: el resto
+ * es para lo más reciente, que es lo que dice dónde está la empresa HOY.
  */
-export async function reunionesEnResumen(clientId: string, o: { cuantas?: number; caracteres?: number } = {}): Promise<{ fuentes: Fuente[]; sesiones: string[] }> {
+export async function reunionesEnResumen(
+  clientId: string,
+  o: { cuantas?: number; caracteres?: number; elegidas?: readonly string[] } = {},
+): Promise<{ fuentes: Fuente[]; sesiones: string[] }> {
   const cuantas = o.cuantas ?? 8;
   const caracteres = o.caracteres ?? 3_000;
-  const candidatas = await getClientSessions(clientId, { take: 40 });
+  const [deLasElegidas, recientes] = await Promise.all([
+    o.elegidas?.length ? getClientSessions(clientId, { ids: o.elegidas.slice(0, 40) }) : Promise.resolve([]),
+    getClientSessions(clientId, { take: 40 }),
+  ]);
+  const yaEstan = new Set(deLasElegidas.map((s) => s.id));
+  const candidatas = [...deLasElegidas, ...recientes.filter((s) => !yaEstan.has(s.id))];
   if (!candidatas.length) return { fuentes: [], sesiones: [] };
   const internos = await dominiosInternos();
   const deAfuera = candidatas.filter((s) => !esReunionDePuertasAdentro({ participants: s.participants }, internos));
@@ -1019,9 +1030,12 @@ export async function reunionesEnResumen(clientId: string, o: { cuantas?: number
     select: { id: true, title: true, date: true, summary: true, minute: { select: { summary: true, decisions: true, agreements: true, risks: true, status: true } } },
     orderBy: { date: "desc" },
   });
+  // Las elegidas primero (la más nueva primero entre ellas, hasta la mitad de los lugares), después las demás por fecha.
+  const primero = filas.filter((f) => yaEstan.has(f.id)).slice(0, Math.ceil(cuantas / 2));
+  const enOrden = [...primero, ...filas.filter((f) => !primero.includes(f))];
   const fuentes: Fuente[] = [];
   const sesiones: string[] = [];
-  for (const f of filas) {
+  for (const f of enOrden) {
     if (fuentes.length >= cuantas) break;
     const texto = resumenDeReunion({ title: f.title, summary: f.summary, minuta: f.minute }).texto.trim();
     if (!texto) continue;

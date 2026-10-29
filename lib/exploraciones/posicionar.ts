@@ -7,14 +7,15 @@
  *   · `objetivosParaUbicar`: sobre qué se ubica la empresa (un proyecto, la preventa o la cuenta entera) y con qué venta;
  *   · `fechaDelMomento`: el día de una versión «al vender», «al arrancar» o «hoy»;
  *   · `nivelesPropuestos`: lo que propuso el agente, como lo lee la ficha (con su porqué y su fuente), para usarlo ahí;
- *   · `modeloDeNegocio`: «Se mide con la edición X y el perfil Y, porque…», con lo que cambia frente a la general.
+ *   · `modeloDeNegocio`: «Se mide con la edición X y el perfil Y, porque…», con lo que cambia frente a la general;
+ *   · `reunionesElegidas`: las reuniones que alguien eligió (escala única, 2026-10-28): el agente las lee primero.
  *
  * La cuenta entera (un cliente sin proyecto ni preventa: 93 de 165 clientes el 2026-10-18) se ubica en la exploración
  * del proyecto «Información del cliente» (el contenedor de cada empresa, lib/canvas/strategy-project.ts): la misma
  * exploración de proyecto de siempre, con su guarda y su «una viva por proyecto». Ver DECISIONS «Actualizar escala».
  */
 import type { Cierre, Despues, Edicion, Letra } from "@/lib/escala/documento/tipos";
-import { esHipotesisDeNivel, propuestaVigente, type EdicionElegida, type EstadoDeExploracion, type EstimadoGuardado } from "./contenido";
+import { esHipotesisDeNivel, propuestaVigente, type ContenidoDeExploracion, type EdicionElegida, type EstadoDeExploracion, type EstimadoGuardado } from "./contenido";
 import type { EscalaDelLienzo } from "./escala-del-lienzo";
 import { esLineaActiva, gruposDeInversion, type InversionData, type LineaInversion } from "@/lib/landing/inversion";
 
@@ -360,4 +361,19 @@ export function textoDeLasTareas(tareas: readonly { titulo: string; venceEl: str
 export function ordenarVersiones<V extends { dia: string; diaDeLaPosicion: string | null; fecha: string }>(vs: readonly V[]): V[] {
   const cuando = (v: V) => v.diaDeLaPosicion ?? v.dia;
   return [...vs].sort((a, b) => cuando(b).localeCompare(cuando(a)) || b.fecha.localeCompare(a.fecha));
+}
+
+/**
+ * Las reuniones de Meet que una persona eligió en las exploraciones de la empresa (escala única, 2026-10-28): la de cada
+ * sesión y las del buscador viejo (`reunionesElegidas`, deprecado pero se lee). «Actualizar escala» las lee primero, antes
+ * que las más recientes. Sin repetir, en el orden en que aparecen (la exploración más reciente primero). Solo ids: el
+ * chokepoint descarta las que no son de la empresa.
+ */
+export function reunionesElegidas(contenidos: readonly Pick<ContenidoDeExploracion, "sesiones" | "reunionesElegidas">[]): string[] {
+  const ids: string[] = [];
+  for (const c of contenidos) {
+    for (const s of c.sesiones) if (s.reunion?.origen === "meet") ids.push(s.reunion.id);
+    ids.push(...c.reunionesElegidas);
+  }
+  return [...new Set(ids)];
 }

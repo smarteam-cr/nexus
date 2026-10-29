@@ -193,6 +193,8 @@ export const SCOPE_COVERAGE: Record<string, Cobertura> = {
   "lib/canvas/sync-procesos-blocks.ts": { modo: "sentinel" },
   "app/api/projects/[projectId]/procesos/route.ts": { modo: "sentinel" },
   "app/print/canvas/[clientId]/[canvasId]/page.tsx": { modo: "sentinel" },
+  // Escala única (2026-10-28): la escala de la cuenta vive en la exploración del contenedor de la empresa.
+  "lib/exploraciones/escala-de-la-cuenta.ts": { modo: "sentinel" },
 
   // ── El espejo ──────────────────────────────────────────────────────────────
   "lib/hubspot/sync-projects.ts": {

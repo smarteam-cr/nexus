@@ -286,3 +286,17 @@ export async function versionAnteriorDeLaExploracion(exploracionId: string, hoy 
     throw e;
   }
 }
+
+/**
+ * ¿La exploración ya guardó alguna versión? (escala única, 2026-10-28). La escala de la cuenta parte de la preventa solo
+ * si nunca midió nada: una que tuvo niveles y alguien se los sacó no se vuelve a llenar sola.
+ */
+export async function tieneVersiones(exploracionId: string): Promise<boolean> {
+  if (!hayTabla()) return false;
+  try {
+    return !!(await prisma.versionDeLaEscala.findFirst({ where: { exploracionId }, select: { id: true } }));
+  } catch (e) {
+    if (esquemaDesactualizado(e)) return false;
+    throw e;
+  }
+}

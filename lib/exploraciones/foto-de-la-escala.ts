@@ -199,6 +199,30 @@ export function leerFoto(v: unknown): FotoDeLaEscala | null {
 
 // ── Qué cambió entre dos fotos ────────────────────────────────────────────────
 
+/**
+ * ¿Se midieron con la misma vara? Una edición de la escala no se compara con otra (escala única, 2026-10-28): cambiar de
+ * edición fija un punto de partida nuevo, y «qué cambió» no cruza esa línea. La foto guarda el NOMBRE de la edición
+ * (null = la escala general).
+ */
+export function mismaVara(a: Pick<FotoDeLaEscala, "edicion">, b: Pick<FotoDeLaEscala, "edicion">): boolean {
+  return (a.edicion ?? null) === (b.edicion ?? null);
+}
+
+/**
+ * Con qué foto se compara una: la inmediatamente anterior (`previas`, de la más nueva a la más vieja), si es de la MISMA
+ * edición. Si es de otra, la de ahora es un punto de partida nuevo (`desdeEdicion`: con qué se medía), aunque más atrás
+ * haya una de la misma: la línea se cortó en el cambio.
+ */
+export function anteriorDeLaMismaVara<T extends { foto: Pick<FotoDeLaEscala, "edicion"> }>(
+  ahora: Pick<FotoDeLaEscala, "edicion">,
+  previas: readonly T[],
+): { anterior: T | null; puntoDePartida: { desdeEdicion: string | null } | null } {
+  const inmediata = previas[0] ?? null;
+  if (!inmediata) return { anterior: null, puntoDePartida: null };
+  if (!mismaVara(inmediata.foto, ahora)) return { anterior: null, puntoDePartida: { desdeEdicion: inmediata.foto.edicion ?? null } };
+  return { anterior: inmediata, puntoDePartida: null };
+}
+
 export type TipoDeCambio = "subio" | "bajo" | "nuevo" | "confirmado" | "quitado";
 
 export interface CambioDeNivel {

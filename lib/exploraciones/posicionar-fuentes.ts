@@ -6,7 +6,7 @@ import "server-only";
  * Todo lo que Nexus sabe de la cuenta, cada cosa con su id (2026-10-18, iniciativa 2 de «La siguiente serie»):
  *   · lo que dijo o hizo el cliente — respalda un nivel (`esFuenteDelCliente`):
  *       T (el test) y H (su actividad en HubSpot), V0 (el handoff), Q0 (los cuestionarios) y S (las reuniones que ya se
- *       leyeron, en resumen: su minuta y sus notas, por el chokepoint);
+ *       leyeron, en resumen: su minuta y sus notas, por el chokepoint; primero las que alguien unió a una sesión);
  *   · lo que sirve para entender — nunca respalda un nivel:
  *       G (las ventas ganadas), B (las propuestas, con servicios y licencias aparte), J0 (las tareas abiertas, por la
  *       puerta de Tareas), R0 (el cronograma), A0 y A1 (la memoria de la cuenta y del proyecto, por el cargador de
@@ -20,6 +20,7 @@ import { inversionDelDocumento } from "@/lib/landing/forma-de-pago";
 import { memoriaDeLaCuenta, memoriaDelProyecto } from "@/lib/memoria";
 import { tareasDeLaCuentaParaAgentes } from "@/lib/tareas/para-agentes";
 import { FUENTES_DE_POSICIONAR } from "./agente-pedido";
+import { reunionesElegidasDeLaEmpresa } from "./escala-de-la-cuenta";
 import type { EscalaDelLienzo } from "./escala-del-lienzo";
 import { fuentesDeHubspotSinMarcar, reunionesEnResumen } from "./fuentes";
 import { fuentesDelProyecto } from "./fuentes-del-proyecto";
@@ -122,7 +123,12 @@ export async function fuentesParaPosicionar(o: {
     seguro(propuestasDeLaEmpresa(o.clientId), [] as string[], "las propuestas"),
     seguro(tareasDeLaCuentaParaAgentes(o.clientId), [], "las tareas"),
     real ? seguro(cronogramaDelProyecto(real), "", "el cronograma") : Promise.resolve(""),
-    seguro(reunionesEnResumen(o.clientId), { fuentes: [] as Fuente[], sesiones: [] as string[] }, "las reuniones"),
+    // Primero las que alguien eligió en una sesión de cualquier exploración de la empresa (escala única, 2026-10-28).
+    seguro(
+      reunionesElegidasDeLaEmpresa(o.clientId).then((elegidas) => reunionesEnResumen(o.clientId, { elegidas })),
+      { fuentes: [] as Fuente[], sesiones: [] as string[] },
+      "las reuniones",
+    ),
   ]);
 
   const f = FUENTES_DE_POSICIONAR;
