@@ -11560,8 +11560,8 @@ veta Funcional en tres dimensiones. Se construyó con la escala vigente (8.9.1) 
 - **El resultado (O3)** es nuevo: nivel con «Estimado», la curva de cinco niveles, el radar y las barras, UNA sola
   recomendación con su razón y el costo de quedarse, los riesgos activos (hasta 3), los casos de uso que lo mueven sin
   precio y la invitación a la sesión (`TESTS_ENLACE_DE_AGENDA`). La síntesis la arma Nexus con los datos, sin IA.
-  *Pendiente a propósito:* la síntesis redactada por la IA y la lectura «Preparación para engagement avanzado» (N6), que
-  depende de la 9.0.
+  *Pendiente a propósito:* la síntesis redactada por la IA (hecha el 29 oct: «Los ajustes del resultado», abajo) y la
+  lectura «Preparación para engagement avanzado» (N6), que depende de la 9.0.
 - **Todo queda unido a la preventa y a HubSpot (O4).**
   - La empresa de Nexus se une **solo por el dominio del correo**, si UNA empresa lo tiene registrado; un dominio genérico
     no une nada (`esDominioGenerico`). *Por qué no por el sitio que escribe la persona:* con él, cualquiera metía un test
@@ -11688,6 +11688,61 @@ vive en el RUNBOOK › «El corte de la aplicación vieja del test»; acá va el
   debajo de la pantalla al abrir, para que nada parpadee; con «reducir movimiento», nada. Arriba, el logo de color sin la
   barra azul; la cabecera sin contenedor; la letra más grande solo en pantalla. El PDF no cambia, salvo que ahora lleva
   el enlace de la agenda en la hoja 3.
+- **Los ajustes del resultado (29 oct, segunda vuelta, Elías mirando la vieja otra vez).**
+  - **Arriba, un resumen del resultado y no el saludo con el nombre.** Una o dos frases con el nivel, las capas, lo que
+    más frena y la industria. Lo redacta la IA UNA vez, al terminar el test, y queda en el resultado guardado
+    (`ResultadoDelTest.redaccion`, en el mismo Json: sin SQL); una visita no lo recalcula. *Por qué IA y no solo los
+    datos:* el de los datos (`resumenSinIa`) dice lo mismo pero no puede leer lo que respondió la persona ni qué significa
+    para su industria, que es lo que tenía el de la vieja. **La IA no mueve ningún número:** no ve un solo puntaje, y lo
+    que devuelve pasa por `leerLaRedaccion` — un texto con cifras, con cantidades en letras («cuatro a seis métricas»,
+    visto en la primera prueba; también plazos como «en dos semanas» o «la mitad»), con el nombre de un nivel que no es
+    de LO SUYO (el resumen: el del área, sus capas y lo que más frena con su objetivo; una dimensión: el suyo y el
+    siguiente) o más largo que su tope se descarta y en su lugar va el de los datos. *Por qué por objeto y no una sola
+    lista:* con una sola lista de todos los niveles del resultado, «el área está en Eficiente» pasaba si alguna dimensión
+    tenía Eficiente como siguiente (revisión del 29 oct). Sin IA (falla, tarda más de 10 s, sin clave), la página sale completa con
+    los textos de los datos; los resultados de antes del 29 oct también.
+  - **Haiku, en tres pedidos en paralelo** (`lib/tests-diagnostico/redaccion.ts` y `redaccion-server.ts`): el resumen y
+    las dimensiones de cada capa por separado. Uno solo con todo tardaba 11 s (casi mil palabras de salida) y la persona
+    lo espera con «Preparando tu resultado…»; en tres tarda unos 5 s y, si uno falla, los otros se quedan. Cuesta
+    **US$ 0,010 por resultado** (medido el 29 oct: 1.163 + 2.182 + 2.061 tokens de entrada, 109 + 432 + 421 de salida).
+    Queda medido en `LlmCall` con el slug `resultado-del-test` (proceso «La venta» en Uso de Nexus › IA) y el `origen`
+    `tests-diagnostico/terminar › <parte>`. Tiene **su propio tope: 30 redacciones por hora** (`una-sola-vez.ts`): el
+    test es público y sin sesión, y su gasto cae en el presupuesto del día de los procesos automáticos; sin el tope, una
+    campaña grande o un script podían gastarlo y frenar la lectura de reuniones. Pasado el tope, los textos de los datos.
+    Y **una sola corrida por test**: un doble clic o un reintento esperan la misma (candado en la memoria del proceso;
+    PROD es un contenedor). Mientras se prepara, el test no deja volver ni cambiar respuestas.
+  - **Cada dimensión se cuenta en dos lugares con fines distintos** (`lib/tests-diagnostico/detalle-de-la-dimension.ts`).
+    La **tarjeta del radar** (al pasar el cursor o tocar, como la de la vieja) dice CÓMO ESTÁ: qué mide, el puntaje, el
+    nivel en un chip, un resumen corto (el de la IA o la descripción del nivel) y «En la escala, este nivel es:» con hasta
+    cuatro criterios de su nivel, más que faltan preguntas para ubicar mejor el puntaje. **«Ver detalles»** de la barra
+    dice QUÉ HACER: qué priorizar para llegar al nivel siguiente (el de la IA o la descripción de ese nivel) y que falta
+    información por corroborar. Lo que salió de «Ver detalles»: lo que respondió, los criterios del nivel siguiente y los
+    riesgos (los riesgos ya tienen su sección). La tarjeta va del lado contrario del radar, a la altura del puntero: el
+    radar ocupa todo el ancho y al costado, como en la vieja, no hay lugar; así nunca tapa la dimensión que se mira. En
+    pantallas de menos de 1.100 px (tablet, teléfono) va en la otra mitad de la pantalla, con el alto que queda hasta el
+    dedo, y se desplaza por dentro (`lib/tests-diagnostico/tarjeta-del-radar.ts`). Cada rótulo recibe el foco del
+    teclado y muestra su tarjeta (`role="status"`): «cómo está» no queda solo para el cursor. «Qué priorizar» sin IA es
+    la primera oración del nivel siguiente (hasta 220 caracteres): la descripción entera llegaba a 900 y cortaba la hoja
+    3 del PDF. La `sintesis` guardada en el resultado es ahora el mismo `resumenSinIa` (sin la industria): un solo
+    resumen sin IA.
+  - **El radar, como la vieja:** las etapas donde no cae ningún vértice (ni el objetivo de lo que más frena) casi
+    transparentes, las que sí, suaves, y la base siempre punteada; el resalte va del rótulo al VÉRTICE de la dimensión,
+    no al centro; los vértices más chicos, sin el borde blanco grueso, y apenas crecen (×1,3) al acercarse el puntero.
+    Las etapas suaves también en el PDF.
+  - **Las barras y el movimiento:** más gruesas (14 px en pantalla); la barra y su número los mueve el mismo cuadro y
+    llegan juntos (antes la barra iba por una transición de CSS y el número por su cuenta); un brillo pasa al llenarse;
+    cada fila aparece al llegar a ella, y la cabecera entra por partes al abrir (con CSS, para que no parpadee).
+  - **Al final, «Diagnosticar otra área» y «Diagnosticar otra empresa»** (los de la vieja, `?rehacer=1` y `?nueva=1`).
+    Otra área: la portada con el mismo contacto ya escrito, la misma industria y versión, y el área por elegir; otra
+    empresa: la portada vacía, y el contacto y lo que quedó a medias se borran. El contacto lo guarda el navegador al
+    empezar un test (vence a los 30 días) y la señal va después del `#`. *Por qué no en la dirección:* la portada carga
+    píxeles de anuncios y redirige toda consulta que no conoce (DECISIONS «Test público», direccion-publica.ts); el
+    contacto nunca sale del navegador. Con el logo de Smarteam en el pie.
+  - **«El siguiente paso»** con tres viñetas de lo que se lleva la persona, sacadas de lo que la página y la vieja ya
+    prometían (sin ofertas nuevas), y sin el hueco antes de «¿No ves el calendario?»: el recorte del primer paso de la
+    agenda pasó de 560 a 500 px, lo que mide ese paso.
+  - **El PDF:** el resumen nuevo en la hoja 1 y, en la hoja 3, qué priorizar debajo de cada barra. Sin tarjetas ni
+    movimiento.
 - **El PDF del resultado usa el motor de siempre, desde una ruta pública** (`GET /api/external/test/[token]/pdf`, que
   imprime `/external/test/resultado/imprimir?t=`): el token va en la consulta para que el log del motor no lo escriba, y
   `sinElToken` lo tapa en los errores. Como abre un Chromium sin login, además del semáforo único hay tope por dirección

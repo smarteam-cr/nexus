@@ -185,7 +185,8 @@ const REGLAS: readonly [RegExp, ClaveDeProceso][] = [
   [/^agent-timeline|^(explicacion-de-la-propuesta|hechas-fuera-de-lugar)$/, "cronograma"],
   [/-canvas$|^agent-kickoff$|^agent-roles-assist$/, "documentos"],
   // El analizador de reuniones de venta (S3, 2026-10-25) es del proceso de la venta.
-  [/^(exploracion-de-venta|business-case|propuesta-de-cierre|agent-entrevistas-prep|analizador-venta)$|sales-analysis/, "venta"],
+  // El resultado del test público (29 oct) lo lee un prospecto: es de la venta.
+  [/^(exploracion-de-venta|business-case|propuesta-de-cierre|agent-entrevistas-prep|analizador-venta|resultado-del-test)$|sales-analysis/, "venta"],
   [/^(procesos-mapeo|procesos-lectura|agent-mapeo-inicial)$/, "procesos"],
   // La investigación de la empresa (R5, 2026-10-24) llena los datos de la ficha de la empresa.
   [/^(ficha-del-cliente|etapa-desde-reunion|investigacion-de-empresa)$/, "ficha"],

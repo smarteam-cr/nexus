@@ -14,23 +14,31 @@
  *
  * El pulido del 29 oct (pedido de Elías, mirando la aplicación vieja): arriba, el logo de color sobre el fondo claro con
  * los dos botones al lado (ya no la barra azul); la cabecera sin su contenedor, para que el radar gane ancho; toda la
- * letra un poco más grande; el movimiento de la vieja (AnimacionesDelResultado: las secciones que aparecen al bajar, las
- * barras que se llenan con el puntaje que cuenta y el resalte del radar); «Ver detalles» en cada barra (lo que sale de
- * la escala y de lo que respondió: lib/tests-diagnostico/detalle-de-la-dimension.ts), y la agenda de HubSpot siempre
+ * letra un poco más grande; el movimiento de la vieja (AnimacionesDelResultado), y la agenda de HubSpot siempre
  * incrustada (la de la vieja si el servidor no trae otra).
  *
- * El PDF va en hojas horizontales (carta, 1056 × 816): la 1 con la cabecera y el radar grande, la 2 con las tres piezas
- * y la 3 con las barras y el enlace para agendar. Sin botones, sin calendario, sin puntajes en el radar, sin «Ver
- * detalles» y sin movimiento: el pulido del 29 oct no lo cambia.
+ * Los ajustes del 29 oct (segunda vuelta, mirando la vieja otra vez):
+ *   · debajo del nivel, el RESUMEN del resultado en una o dos frases (el que redactó la IA al terminar, o el de los datos:
+ *     lib/tests-diagnostico/redaccion.ts), en lugar del saludo con el nombre;
+ *   · al pasar el cursor (o tocar) una dimensión del radar, su TARJETA (`TarjetaDeLaDimension`): qué mide, su puntaje y
+ *     su nivel, cómo está y «En la escala, este nivel es:». Dice cómo estás; «Ver detalles» de su barra dice QUÉ HACER
+ *     (qué priorizar para el nivel siguiente). Los dos salen de lib/tests-diagnostico/detalle-de-la-dimension.ts y
+ *     no repiten lo mismo;
+ *   · al final, «Diagnosticar otra área» y «Diagnosticar otra empresa» (como en la vieja) y el logo de Smarteam;
+ *   · «El siguiente paso» con tres viñetas de lo que se lleva la persona.
+ *
+ * El PDF va en hojas horizontales (carta, 1056 × 816): la 1 con la cabecera (y el resumen) y el radar grande, la 2 con
+ * las tres piezas y la 3 con las barras (cada una con qué priorizar) y el enlace para agendar. Sin botones, sin
+ * calendario, sin puntajes en el radar, sin tarjetas y sin movimiento.
  * Las salidas a la portada son enlaces comunes y no `<Link>`: al volver con «Atrás», Next revivía la página en el
  * navegador y la agenda de HubSpot quedaba en blanco; con una carga completa vuelve bien (probado el 28 oct).
  */
-/* eslint-disable @next/next/no-html-link-for-pages -- las salidas a la portada recargan la página a propósito: con
-   `<Link>`, al volver con «Atrás» la agenda de HubSpot quedaba en blanco (ver el encabezado). */
 import type { ReactNode } from "react";
 import type { DetalleDeLaDimension } from "@/lib/tests-diagnostico/detalle-de-la-dimension";
-import { puntajeDeLaDimension } from "@/lib/tests-diagnostico/pagina-del-resultado";
-import type { ResultadoDelTest } from "@/lib/tests-diagnostico/resultado";
+import { etiquetaDeIndustria } from "@/lib/tests-diagnostico/direccion-publica";
+import { ENLACE_DE_OTRA_EMPRESA, enlaceDeOtraArea, puntajeDeLaDimension } from "@/lib/tests-diagnostico/pagina-del-resultado";
+import { resumenDelResultado } from "@/lib/tests-diagnostico/redaccion";
+import type { DimensionDelResultado, ResultadoDelTest } from "@/lib/tests-diagnostico/resultado";
 import RadarDeUnaEmpresa from "@/components/escala/RadarDeUnaEmpresa";
 import AnimacionesDelResultado from "./AnimacionesDelResultado";
 import CalendarioDeHubspot from "./CalendarioDeHubspot";
@@ -46,6 +54,9 @@ const DESCRIPCION_DE_LA_CAPA: Record<string, string> = {
   base: "cómo está montado el departamento por dentro",
   produccion: "qué entrega el departamento hacia afuera",
 };
+/** El test es una estimación: lo dice cada tarjeta del radar y cada «Ver detalles». */
+const FALTAN_PREGUNTAS = "Faltan preguntas por responder para ubicar mejor este puntaje: el test lo estima y el diagnóstico lo ubica con precisión.";
+const FALTA_CORROBORAR = "Falta información por corroborar: en la sesión lo revisamos contigo con evidencia.";
 
 const fechaLarga = (iso: string) =>
   new Intl.DateTimeFormat("es-CR", { day: "numeric", month: "long", year: "numeric", timeZone: "America/Costa_Rica" }).format(new Date(iso));
@@ -54,6 +65,11 @@ const IconoAlerta = () => (
   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
     <path d="M12 8v5" />
     <path d="M12 17h.01" />
+  </svg>
+);
+const IconoCheck = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="m5 12.5 4.5 4.5L19 7.5" />
   </svg>
 );
 
@@ -122,51 +138,29 @@ function Casos({ casos }: { casos: ResultadoDelTest["casos"] }) {
   );
 }
 
-/** «Ver detalles» de una barra: lo que respondió, su nivel en la escala, lo que pide el siguiente y lo que pone en riesgo. */
+/** Qué priorizar para el nivel siguiente: «Ver detalles» de la barra y, en el PDF, el renglón debajo de ella. */
+function textoDeLaPrioridad(d: DetalleDeLaDimension): { titulo: string; texto: string } {
+  return d.siguiente
+    ? { titulo: `Qué priorizar para llegar a ${d.siguiente.nombre}`, texto: d.siguiente.prioridad }
+    : { titulo: "Qué priorizar", texto: "Ya está en el nivel más alto de la escala: lo que sigue es sostenerlo y volver a medir." };
+}
+
+/** «Ver detalles» de una barra: qué hacer (no cómo está: eso lo dice la tarjeta del radar). */
 function VerDetalles({ d }: { d: DetalleDeLaDimension }) {
+  const p = textoDeLaPrioridad(d);
   return (
     <details className="rd-detalles">
       <summary>Ver detalles</summary>
       <div className="rd-detalles-cuerpo">
-        {d.queMide && <p className="rd-detalles-mide">{d.queMide}</p>}
-        {d.respondiste && (
-          <div className="rd-detalles-bloque">
-            <p className="rd-detalles-k">Lo que respondiste</p>
-            <p className="rd-detalles-respuesta">«{d.respondiste}»</p>
-          </div>
-        )}
-        {d.esteNivel && (
-          <div className="rd-detalles-bloque">
-            <p className="rd-detalles-k">En la escala, {d.esteNivel.nombre} es</p>
-            <p>{d.esteNivel.descripcion}</p>
-          </div>
-        )}
-        {d.siguiente && (
-          <div className="rd-detalles-bloque rd-detalles-falta">
-            <p className="rd-detalles-k">Para llegar a {d.siguiente.nombre}</p>
-            <ul className="rd-detalles-lista">
-              {d.siguiente.criterios.map((c) => (
-                <li key={c}>{c}</li>
-              ))}
-            </ul>
-          </div>
-        )}
-        {d.riesgos.length > 0 && (
-          <div className="rd-detalles-bloque rd-detalles-riesgo">
-            <p className="rd-detalles-k">Lo que hoy pone en riesgo</p>
-            <ul className="rd-detalles-lista">
-              {d.riesgos.map((x) => (
-                <li key={x}>{x}</li>
-              ))}
-            </ul>
-          </div>
-        )}
+        <p className="rd-detalles-k">{p.titulo}</p>
+        <p className="rd-detalles-prioridad">{p.texto}</p>
+        <p className="rd-detalles-corroborar">{FALTA_CORROBORAR}</p>
       </div>
     </details>
   );
 }
 
-function Barras({ r, detalles = null }: { r: ResultadoDelTest; detalles?: Record<string, DetalleDeLaDimension> | null }) {
+function Barras({ r, detalles = null, enPdf = false }: { r: ResultadoDelTest; detalles?: Record<string, DetalleDeLaDimension> | null; enPdf?: boolean }) {
   const frena = r.recomendacion?.tipo === "trabajar" ? r.recomendacion.dimensionId : null;
   return (
     <Tarjeta titulo="Cómo está cada parte">
@@ -176,7 +170,7 @@ function Barras({ r, detalles = null }: { r: ResultadoDelTest; detalles?: Record
           if (!dims.length) return null;
           return (
             <div key={c.clave} className="rd-grupo">
-              <div className="rd-grupo-head">
+              <div className="rd-grupo-head" data-revela="">
                 <h3>{c.nombre}</h3>
                 {DESCRIPCION_DE_LA_CAPA[c.clave] && <span>{DESCRIPCION_DE_LA_CAPA[c.clave]}</span>}
               </div>
@@ -203,7 +197,8 @@ function Barras({ r, detalles = null }: { r: ResultadoDelTest; detalles?: Record
                     <span className="rd-chip" data-no-lo-se={d.noLoSe || undefined}>
                       {d.noLoSe ? "No lo sabías" : (d.nivelNombre ?? "Sin ubicar")}
                     </span>
-                    {det && <VerDetalles d={det} />}
+                    {det && !enPdf && <VerDetalles d={det} />}
+                    {det && enPdf && <p className="rd-fila-prioridad">{`${textoDeLaPrioridad(det).titulo}: ${textoDeLaPrioridad(det).texto}`}</p>}
                   </div>
                 );
               })}
@@ -217,6 +212,56 @@ function Barras({ r, detalles = null }: { r: ResultadoDelTest; detalles?: Record
         </p>
       )}
     </Tarjeta>
+  );
+}
+
+/**
+ * La tarjeta de una dimensión del radar (como la de la aplicación vieja): la página trae una por dimensión, escondida, y
+ * AnimacionesDelResultado muestra la de la dimensión bajo el cursor (o el dedo), al lado del puntero.
+ */
+function TarjetaDeLaDimension({ d, det }: { d: DimensionDelResultado; det: DetalleDeLaDimension | undefined }) {
+  const p = puntajeDeLaDimension(d.nivel, d.puntaje);
+  return (
+    <div className="rd-tip" data-tarjeta={d.id} data-nivel={d.preguntada ? (d.nivel ?? undefined) : undefined} role="status" hidden>
+      <div className="rd-tip-cabeza">
+        <div className="rd-tip-id">
+          <p className="rd-tip-nombre">{d.nombre}</p>
+          {det?.queMide && <p className="rd-tip-mide">{det.queMide}</p>}
+        </div>
+        {d.preguntada && d.nivel && (
+          <div className="rd-tip-puntaje">
+            <span className="rd-tip-num">
+              {p}
+              <small>/100</small>
+            </span>
+            <span className="rd-tip-chip">{d.noLoSe ? "No lo sabías" : d.nivelNombre}</span>
+          </div>
+        )}
+      </div>
+      {!d.preguntada ? (
+        <p className="rd-tip-lectura">Esta parte no se preguntó en este test: la vemos juntos en la sesión.</p>
+      ) : (
+        <>
+          {(d.noLoSe || det?.lectura) && (
+            <p className="rd-tip-lectura">
+              {d.noLoSe ? `Contestaste «No lo sé», así que cuenta como ${d.nivelNombre}. ` : ""}
+              {det?.lectura}
+            </p>
+          )}
+          {det?.esteNivel && (
+            <div className="rd-tip-escala">
+              <p className="rd-tip-k">En la escala, este nivel es:</p>
+              <ul>
+                {det.esteNivel.criterios.map((c) => (
+                  <li key={c}>{c}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+          <p className="rd-tip-estimado">{FALTAN_PREGUNTAS}</p>
+        </>
+      )}
+    </div>
   );
 }
 
@@ -237,12 +282,21 @@ function Capas({ r }: { r: ResultadoDelTest }) {
   );
 }
 
+/** Lo que se lleva quien agenda: lo que la página y el test ya prometen, sin ofertas nuevas. */
+function vinetasDeLaSesion(area: string): string[] {
+  return [
+    `Lo que de verdad dice tu resultado: lo leemos contigo y corroboramos lo que el test solo estima de tu área de ${area}.`,
+    "Por dónde empezar: qué atacar primero en tu operación y qué esperar de cada paso.",
+    "Un primer paso claro, por escrito: te lo llevas aunque no trabajemos juntos.",
+  ];
+}
+
 export default function ResultadoDelTestVista({
   r,
-  nombre,
   empresa,
   dominio = null,
   fecha = null,
+  industria = null,
   agenda,
   pdf = null,
   modo = "pantalla",
@@ -250,12 +304,12 @@ export default function ResultadoDelTestVista({
   detalles = null,
 }: {
   r: ResultadoDelTest;
-  /** Null en un resultado reabierto de la aplicación vieja (O6): su dirección no se usa para escribir un nombre. */
-  nombre: string | null;
   empresa: string | null;
   dominio?: string | null;
   /** Cuándo lo terminó (ISO). */
   fecha?: string | null;
+  /** La industria que eligió (el VALOR de la lista): va en el resumen sin IA y en «Diagnosticar otra área». */
+  industria?: string | null;
   /** El enlace de la agenda que va incrustada (`enlaceDeLaAgenda`: el del servidor o el de la aplicación vieja). */
   agenda: string;
   /** La dirección que arma el PDF. Null = sin botón (el resultado viejo no está guardado en Nexus). */
@@ -264,15 +318,15 @@ export default function ResultadoDelTestVista({
   modo?: "pantalla" | "pdf";
   /** Una línea arriba de todo (el resultado viejo dice cuándo se hizo y con qué escala se lee). */
   aviso?: string | null;
-  /** «Ver detalles» de cada barra, por dimensión (solo en la página; el PDF no los lleva). */
+  /** Lo que se dice de cada dimensión: la tarjeta del radar y «Ver detalles» de su barra (en el PDF, qué priorizar). */
   detalles?: Record<string, DetalleDeLaDimension> | null;
 }) {
   const enPdf = modo === "pdf";
   const nombreDeLaEmpresa = empresa || dominio || "";
   const rec = r.recomendacion;
-  const primerNombre = nombre?.trim().split(/\s+/)[0] ?? "";
-  const saludo = `${primerNombre ? `${primerNombre}, así` : "Así"} está hoy tu área de ${r.areaNombre}, parte por parte.`;
+  const resumen = resumenDelResultado(r, industria ? etiquetaDeIndustria(industria) : null);
   const parcial = r.preguntadas < r.total ? ` (${r.preguntadas} de ${r.total} partes)` : "";
+  const otraArea = enlaceDeOtraArea({ version: r.version, industria });
 
   const radar = (
     <RadarDeUnaEmpresa
@@ -303,7 +357,7 @@ export default function ResultadoDelTestVista({
               <span className="rd-pill">Estimado</span>
               <span className="rd-parcial">con lo que respondiste{parcial}</span>
             </div>
-            <p className="rd-saludo">{saludo}</p>
+            <p className="rd-resumen">{resumen}</p>
           </div>
           <Capas r={r} />
         </section>
@@ -315,7 +369,7 @@ export default function ResultadoDelTestVista({
         {r.casos.length > 0 && <Casos casos={r.casos} />}
       </>,
       <>
-        <Barras r={r} />
+        <Barras r={r} detalles={detalles} enPdf />
         {agenda && (
           <section className="rd-tarjeta rd-agenda-pdf">
             <p className="rd-eyebrow">El siguiente paso</p>
@@ -355,12 +409,12 @@ export default function ResultadoDelTestVista({
     <div className="dr rd-v3">
       <AnimacionesDelResultado className="rd">
         <header className="rd-arriba">
-          <a className="rd-logo" href="/external/test" title="Hacer otro diagnóstico">
+          <a className="rd-logo" href={otraArea} title="Hacer otro diagnóstico">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={LOGO_DE_COLOR} alt="Smarteam" height={34} />
           </a>
           <div className="rd-acciones">
-            <a className="rd-btn rd-btn-ghost" href="/external/test">
+            <a className="rd-btn rd-btn-ghost" href={otraArea}>
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <path d="M3 12a9 9 0 1 0 3-6.7" />
                 <path d="M3 4v5h5" />
@@ -377,7 +431,7 @@ export default function ResultadoDelTestVista({
           <div className="rd-head-arriba">
             <div className="rd-head-texto">
               {nombreDeLaEmpresa && (
-                <span className="rd-empresa">
+                <span className="rd-empresa rd-entra">
                   <span className="rd-empresa-logo" aria-hidden="true">
                     {nombreDeLaEmpresa.trim().charAt(0).toUpperCase()}
                   </span>
@@ -387,19 +441,24 @@ export default function ResultadoDelTestVista({
                   </span>
                 </span>
               )}
-              <p className="rd-eyebrow">Diagnóstico de rendimiento · {r.areaNombre}</p>
-              {fecha && <p className="rd-fecha">{fechaLarga(fecha)}</p>}
-              <p className="rd-label">Resultado general</p>
-              {nivelGrande}
-              <p className="rd-saludo">{saludo}</p>
-              <p className="rd-estimado">
+              <p className="rd-eyebrow rd-entra">Diagnóstico de rendimiento · {r.areaNombre}</p>
+              {fecha && <p className="rd-fecha rd-entra">{fechaLarga(fecha)}</p>}
+              <p className="rd-label rd-entra">Resultado general</p>
+              <div className="rd-entra">{nivelGrande}</div>
+              <p className="rd-resumen rd-entra">{resumen}</p>
+              <p className="rd-estimado rd-entra">
                 <span className="rd-pill">Estimado</span>
                 con lo que respondiste{parcial}
               </p>
             </div>
-            <Capas r={r} />
+            <div className="rd-entra">
+              <Capas r={r} />
+            </div>
           </div>
-          <div className="rd-radar">{radar}</div>
+          <div className="rd-radar rd-entra">
+            {radar}
+            <p className="rd-radar-ayuda">Pasa el cursor (o toca) una parte del radar para ver por qué está en ese nivel.</p>
+          </div>
         </section>
 
         {rec && <PorDondeEmpezar rec={rec} />}
@@ -411,17 +470,41 @@ export default function ResultadoDelTestVista({
           <div className="rd-agenda-texto">
             <p className="rd-eyebrow">El siguiente paso</p>
             <h2>Revisemos juntos tu resultado, sin costo</h2>
-            <p>En 30 minutos lo leemos contigo y armamos el primer paso. Te llevas el plan aunque no trabajemos juntos.</p>
+            <p>Son 30 minutos de trabajo, no una llamada de ventas. Te llevas:</p>
+            <ul className="rd-agenda-vinetas">
+              {vinetasDeLaSesion(r.areaNombre).map((x) => (
+                <li key={x}>
+                  <span className="rd-agenda-check">
+                    <IconoCheck />
+                  </span>
+                  <span>{x}</span>
+                </li>
+              ))}
+            </ul>
           </div>
           <div className="rd-agenda-caja">
             <CalendarioDeHubspot agenda={agenda} />
           </div>
         </section>
-        <div className="rd-pie">
-          <a className="rd-btn rd-btn-ghost" href="/external/test">
-            Diagnosticar otra área
-          </a>
+        <footer className="rd-pie" data-revela="">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img className="rd-pie-logo" src={LOGO_DE_COLOR} alt="Smarteam" height={30} />
+          <div className="rd-pie-botones">
+            <a className="rd-btn rd-btn-primary" href={otraArea}>
+              Diagnosticar otra área
+            </a>
+            <a className="rd-btn rd-btn-ghost" href={ENLACE_DE_OTRA_EMPRESA}>
+              Diagnosticar otra empresa
+            </a>
+          </div>
           <p className="rd-pie-texto">Diagnóstico hecho con la Escala de Rendimiento de Smarteam.</p>
+        </footer>
+        {/* Las tarjetas del radar: escondidas, una por dimensión. Fuera de las secciones que se mueven, para que su
+            posición fija no dependa de una animación. */}
+        <div className="rd-tips">
+          {r.dimensiones.map((d) => (
+            <TarjetaDeLaDimension key={d.id} d={d} det={detalles?.[d.id]} />
+          ))}
         </div>
       </AnimacionesDelResultado>
     </div>

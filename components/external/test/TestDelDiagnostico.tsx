@@ -29,6 +29,8 @@ import {
   type ErroresDelFormulario,
   type ValoresDelFormulario,
 } from "@/lib/tests-diagnostico/formulario";
+import { claveDelTestAMedias, guardarContacto, leerContacto, olvidarLaEmpresa } from "@/lib/tests-diagnostico/contacto";
+import { SENAL_OTRA_AREA, SENAL_OTRA_EMPRESA } from "@/lib/tests-diagnostico/pagina-del-resultado";
 import InicioDelTest, { AREAS_DE_LA_PORTADA } from "./InicioDelTest";
 import PasoDelTest, { type PreguntaEnPantalla } from "./PasoDelTest";
 import "./diagnostico.css";
@@ -77,7 +79,7 @@ export default function TestDelDiagnostico({
   conversionGoogleAds?: string | null;
 }) {
   /** Dónde vive el token de este navegador: uno por área y versión. */
-  const claveDe = useCallback((area: string) => `nexus:test-diagnostico:${area}:${version}`, [version]);
+  const claveDe = useCallback((area: string) => claveDelTestAMedias(area, version), [version]);
   const etiquetas = useMemo(() => industrias.map((i) => i.etiqueta), [industrias]);
   const [valores, setValores] = useState<ValoresDelFormulario>(() => ({
     ...VALORES_VACIOS,
@@ -96,6 +98,9 @@ export default function TestDelDiagnostico({
   // Retomar donde quedó: el token de este navegador, si el intento sigue sin terminar. Con el área en la dirección, solo el
   // de esa área; en la entrada, el primero que siga abierto.
   useEffect(() => {
+    // Desde los botones del final del resultado se empieza de nuevo: no se retoma lo que quedó a medias.
+    const senal = window.location.hash.slice(1);
+    if (senal === SENAL_OTRA_AREA || senal === SENAL_OTRA_EMPRESA) return;
     const areas = areaInicial ? [areaInicial] : SLUGS;
     const tokens = areas.flatMap((a) => {
       try {
@@ -124,6 +129,34 @@ export default function TestDelDiagnostico({
       vivo = false;
     };
   }, [claveDe, areaInicial]);
+
+  // Los botones del final del resultado (lib/tests-diagnostico/pagina-del-resultado.ts): «Diagnosticar otra área» llega con
+  // `#otra-area` y el formulario sale con el mismo contacto (el que este navegador guardó al empezar el test), con el área
+  // por elegir; «Diagnosticar otra empresa» llega con `#otra-empresa` y borra ese contacto. La señal se quita de la
+  // dirección para que recargar no la repita.
+  useEffect(() => {
+    const senal = window.location.hash.slice(1);
+    if (senal !== SENAL_OTRA_AREA && senal !== SENAL_OTRA_EMPRESA) return;
+    window.history.replaceState(null, "", window.location.pathname + window.location.search);
+    if (senal === SENAL_OTRA_EMPRESA) {
+      // Como el reinicio total de la vieja: el contacto y lo que quedó a medias de la empresa anterior, en las dos
+      // versiones (el enlace no dice con cuál se hizo el test).
+      try {
+        olvidarLaEmpresa(window.localStorage, SLUGS);
+      } catch {
+        // Sin almacenamiento: no hay nada que olvidar.
+      }
+      return;
+    }
+    let contacto: ReturnType<typeof leerContacto> = null;
+    try {
+      contacto = leerContacto(window.localStorage, Date.now());
+    } catch {
+      // Sin almacenamiento: el formulario sale vacío.
+    }
+    if (!contacto) return;
+    setValores((v) => ({ ...v, ...contacto, industria: v.industria || contacto.industria, area: "" }));
+  }, [claveDe]);
 
   // Contar la visita (O6 etapa 3), UNA vez por pestaña: para medir cuántos de los que abren el test lo terminan.
   const contarVisita = useCallback(
@@ -204,6 +237,11 @@ export default function TestDelDiagnostico({
         window.localStorage.setItem(claveDe(valores.area), j.token);
       } catch {
         // Sin almacenamiento (navegación privada): el test funciona igual, solo que no se retoma.
+      }
+      try {
+        guardarContacto(window.localStorage, valores, Date.now());
+      } catch {
+        // Sin almacenamiento: «otra área» sale con el formulario vacío.
       }
       // La conversión de Google Ads: el lead se gana aquí, cuando deja sus datos (igual que la página vieja).
       const gtag = (window as { gtag?: (...a: unknown[]) => void }).gtag;
@@ -312,7 +350,7 @@ export default function TestDelDiagnostico({
   return (
     <div className={`dr ${enPreguntas ? "dr-pasos" : "dr-inicio"}`} data-dir={direccion}>
       <header className="topbar">
-        <button type="button" className="brand" title={enPreguntas ? "Volver al inicio (reinicia el test)" : "Smarteam"} onClick={enPreguntas ? reiniciar : undefined}>
+        <button type="button" className="brand" title={enPreguntas ? "Volver al inicio (reinicia el test)" : "Smarteam"} onClick={enPreguntas && !ocupado ? reiniciar : undefined}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={logo} alt="Smarteam" height={28} />
         </button>

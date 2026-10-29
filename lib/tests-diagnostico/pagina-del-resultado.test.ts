@@ -7,7 +7,9 @@ import { afterEach, describe, expect, it } from "vitest";
 import { PDF_POR_DIRECCION, PDF_POR_HORA, permitirPdfDeLaDireccion, permitirPdfEnTotal, reiniciarLimites, VENTANA_DE_PDF_MIN } from "./limite";
 import {
   AGENDA_DE_LA_APLICACION_VIEJA,
+  ENLACE_DE_OTRA_EMPRESA,
   enlaceDeLaAgenda,
+  enlaceDeOtraArea,
   puntajeDeLaDimension,
   rutaDeImpresion,
   rutaDelPdf,
@@ -93,5 +95,18 @@ describe("las barras y el radar dicen lo mismo que el cálculo", () => {
     expect(enlaceDeLaAgenda("")).toBe(AGENDA_DE_LA_APLICACION_VIEJA);
     expect(enlaceDeLaAgenda("http://meetings.hubspot.com/x")).toBe(AGENDA_DE_LA_APLICACION_VIEJA);
     expect(new URL(AGENDA_DE_LA_APLICACION_VIEJA).origin).toBe("https://meetings.hubspot.com");
+  });
+});
+
+describe("los botones del final: otra área y otra empresa", () => {
+  it("otra área: la portada con la misma versión e industria, y la señal después del #", () => {
+    expect(enlaceDeOtraArea({ version: "web", industria: null })).toBe("/external/test#otra-area");
+    expect(enlaceDeOtraArea({ version: "marketing", industria: "Maquinaria y equipo pesado" })).toBe("/external/test?v=marketing&industria=Maquinaria+y+equipo+pesado#otra-area");
+  });
+
+  it("⛔ ningún dato de la persona viaja en la dirección (la portada carga píxeles)", () => {
+    const x = enlaceDeOtraArea({ version: "web", industria: "Turismo" });
+    expect([...new URL(x, "https://x").searchParams.keys()]).toEqual(["industria"]);
+    expect(ENLACE_DE_OTRA_EMPRESA).toBe("/external/test#otra-empresa");
   });
 });

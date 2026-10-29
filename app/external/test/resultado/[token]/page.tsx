@@ -29,14 +29,14 @@ export default async function ResultadoPage({ params }: { params: Promise<{ toke
   if (!res) notFound();
   const agenda = enlaceDeLaAgenda(process.env.TESTS_ENLACE_DE_AGENDA);
   const { intento: i, resultado: r } = res;
-  const detalles = await detallesParaLaPagina(r, { preguntas: i.preguntas, respuestas: i.respuestas });
+  const detalles = await detallesParaLaPagina(r);
   return (
     <ResultadoDelTestVista
       r={r}
-      nombre={i.nombre}
       empresa={i.empresa}
       dominio={i.dominio}
       fecha={i.terminadoAt}
+      industria={i.industria}
       agenda={agenda}
       pdf={rutaDelPdf(token)}
       detalles={detalles}

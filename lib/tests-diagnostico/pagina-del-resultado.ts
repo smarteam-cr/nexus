@@ -44,6 +44,24 @@ export function puntajeDeLaDimension(letra: string | null, puntaje: number | nul
 }
 
 /**
+ * Los dos botones del final (como los de la aplicación vieja, `index.html?rehacer=1` y `?nueva=1`; 29 oct). La señal va
+ * después del `#`: la portada carga píxeles y redirige toda consulta que no conoce, y el `#` no llega al servidor.
+ *   · «Diagnosticar otra área»: la portada con el mismo contacto ya escrito (lo guarda este navegador al empezar un
+ *     test: components/external/test/TestDelDiagnostico.tsx) y la misma industria y versión; el área, para elegir.
+ *   · «Diagnosticar otra empresa»: la portada vacía, y el contacto guardado se borra.
+ */
+export const SENAL_OTRA_AREA = "otra-area";
+export const SENAL_OTRA_EMPRESA = "otra-empresa";
+
+export function enlaceDeOtraArea(o: { version: "marketing" | "web"; industria: string | null }): string {
+  const q = new URLSearchParams();
+  if (o.version === "marketing") q.set("v", "marketing");
+  if (o.industria) q.set("industria", o.industria);
+  return `/external/test${q.size ? `?${q.toString()}` : ""}#${SENAL_OTRA_AREA}`;
+}
+export const ENLACE_DE_OTRA_EMPRESA = `/external/test#${SENAL_OTRA_EMPRESA}`;
+
+/**
  * La agenda de 30 minutos de la aplicación vieja (`resultado.js › montarCalendario`, medido el 29 oct): la misma para
  * todos, no la de cada vendedor. Es la que se incrusta si el servidor no trae `TESTS_ENLACE_DE_AGENDA`.
  */

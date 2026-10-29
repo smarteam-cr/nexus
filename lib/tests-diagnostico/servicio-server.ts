@@ -23,6 +23,9 @@ import { edicionDeLaIndustria } from "@/lib/clients/datos-de-la-empresa";
 import { esDominioGenerico } from "@/lib/clients/personas-de-la-empresa";
 import { resultadoDelTest, type ResultadoDelTest } from "./resultado";
 import { detallesDelResultado, type DetalleDeLaDimension } from "./detalle-de-la-dimension";
+import { etiquetaDeIndustria } from "./direccion-publica";
+import { redactarElResultado } from "./redaccion-server";
+import { unaSolaVez } from "./una-sola-vez";
 import { urlDelResultado } from "./enlace";
 import { textoDeLaRespuesta, type VersionDelTest } from "./tipos";
 import { conIdsPublicos, nombresDeLosPasos, respuestasDelBanco, vistaDelIntento, type VistaDelIntento } from "./ids-publicos";
@@ -105,8 +108,20 @@ export async function guardarElAvance(token: string, publicas: Record<string, { 
   await guardarAvance(i.id, respuestasDelBanco(i, publicas), Math.max(0, Math.min(paso, i.preguntas.length)));
 }
 
+/**
+ * Los tests que se están terminando en este proceso, por token. Terminar espera a la IA unos segundos antes de marcar el
+ * test como terminado: sin esto, un doble clic, un reintento del navegador o un script que repite el pedido volvía a
+ * pagar las tres llamadas en cada uno (revisión del 29 oct). Los que llegan mientras tanto esperan la misma corrida.
+ * PROD es un solo contenedor (RUNBOOK), así que alcanza con la memoria del proceso.
+ */
+const terminandose = new Map<string, Promise<string>>();
+
 /** Termina el test: calcula el resultado, arma la dirección y lo guarda. Devuelve la dirección pública del resultado. */
-export async function terminarTest(token: string, publicas: Record<string, { opcion: string; matiz?: string }>, baseUrl: string): Promise<string> {
+export function terminarTest(token: string, publicas: Record<string, { opcion: string; matiz?: string }>, baseUrl: string): Promise<string> {
+  return unaSolaVez(terminandose, token, () => terminarUnaVez(token, publicas, baseUrl));
+}
+
+async function terminarUnaVez(token: string, publicas: Record<string, { opcion: string; matiz?: string }>, baseUrl: string): Promise<string> {
   const i = await intentoPorToken(token);
   if (!i) throw new ErrorDelTest("Ese test no existe.", 404);
   if (i.estado === "terminado" && i.url) return i.url;
@@ -114,8 +129,19 @@ export async function terminarTest(token: string, publicas: Record<string, { opc
   const faltan = i.preguntas.filter((p) => !respuestas[p.id]).length;
   if (faltan) throw new ErrorDelTest(`Falta${faltan === 1 ? "" : "n"} ${faltan} ${faltan === 1 ? "pregunta" : "preguntas"} por responder.`, 400);
   const { escala } = await escalaParaLaIndustria(i.industria);
-  const resultado = resultadoDelTest({ escala, areaId: i.area, version: i.version, preguntas: i.preguntas, respuestas });
-  if (!resultado) throw new ErrorDelTest("La escala publicada ya no tiene esta área.", 503);
+  const calculado = resultadoDelTest({ escala, areaId: i.area, version: i.version, preguntas: i.preguntas, respuestas });
+  if (!calculado) throw new ErrorDelTest("La escala publicada ya no tiene esta área.", 503);
+  // Los textos de la IA (./redaccion.ts), una sola vez y guardados con el resultado. Sin ellos (falló o tardó), la página
+  // usa los de los datos. La IA no toca ningún número: solo redacta lo calculado.
+  const redaccion = await redactarElResultado({
+    escala,
+    r: calculado,
+    industria: i.industria ? etiquetaDeIndustria(i.industria) : null,
+    preguntas: i.preguntas,
+    respuestas,
+    clientId: i.clientId,
+  });
+  const resultado: ResultadoDelTest = redaccion ? { ...calculado, redaccion } : calculado;
   const url = urlDelResultado(baseUrl, i.token, {
     areaId: i.area,
     // El día en Costa Rica: un test terminado a las 19:00 no queda con la fecha de mañana.
@@ -139,17 +165,15 @@ export async function resultadoPublico(token: string): Promise<{ intento: Intent
 }
 
 /**
- * «Ver detalles» de cada barra (./detalle-de-la-dimension.ts), con la escala vigente vista por la edición del resultado.
- * Es un extra: sin escala publicada, o si algo falla, la página sale sin detalles y nunca se rompe.
+ * Lo que se dice de cada dimensión (./detalle-de-la-dimension.ts: la tarjeta del radar y «Ver detalles» de su barra), con
+ * la escala vigente vista por la edición del resultado. Es un extra: sin escala publicada, o si algo falla, la página sale
+ * sin tarjetas ni detalles y nunca se rompe.
  */
-export async function detallesParaLaPagina(
-  r: ResultadoDelTest,
-  lo?: { preguntas: Intento["preguntas"]; respuestas: Intento["respuestas"] } | null,
-): Promise<Record<string, DetalleDeLaDimension>> {
+export async function detallesParaLaPagina(r: ResultadoDelTest): Promise<Record<string, DetalleDeLaDimension>> {
   try {
     const vigente = await leerEscalaVigente();
     if (!("escala" in vigente)) return {};
-    return detallesDelResultado(aplicarEdicion(vigente.escala, r.edicion), r, lo);
+    return detallesDelResultado(aplicarEdicion(vigente.escala, r.edicion), r);
   } catch {
     return {};
   }

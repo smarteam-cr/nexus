@@ -10,6 +10,7 @@ import { leerResultadoDelTest } from "@/lib/exploraciones/test-de-marketing";
 import { leerNotaDelTest } from "@/lib/exploraciones/llegadas";
 import { borradorDesdeLaEscala, borradoresDeLaEscala, codigoDeLaEscala, planDeLosBancos, problemasDelBanco, type BancoParaElPlan } from "./banco";
 import { resultadoDelTest } from "./resultado";
+import { resumenSinIa } from "./redaccion";
 import { urlDelResultado } from "./enlace";
 import { notaDelTestSinTerminar, notaDelTestTerminado } from "./nota";
 import { leerPreguntasDelBanco, NO_LO_SE } from "./tipos";
@@ -133,7 +134,8 @@ describe("el resultado lo calcula Nexus con el chequeo", () => {
       expect(r.recomendacion.dimensionId).toBe(area.dimensiones[1].id);
       expect(r.recomendacion.razon.length).toBeGreaterThan(10);
     }
-    expect(r.sintesis).toMatch(/estimado/);
+    // La síntesis es la misma que la página muestra sin IA (redaccion.ts › resumenSinIa).
+    expect(r.sintesis).toBe(resumenSinIa(r, null));
     expect(r.preguntadas).toBe(area.dimensiones.length);
   });
 
@@ -147,7 +149,7 @@ describe("el resultado lo calcula Nexus con el chequeo", () => {
     const r = resultadoDelTest({ escala, areaId: area.id, version: "marketing", preguntas: mk, respuestas: { [mk[0].id]: { opcion: mk[0].opciones[2].id } } })!;
     expect(r.preguntadas).toBe(mk.length);
     expect(r.dimensiones.filter((d) => !d.preguntada).every((d) => d.nivel === null)).toBe(true);
-    if (r.preguntadas < r.total) expect(r.sintesis).toMatch(/de las \d+ dimensiones/);
+    expect(r.sintesis).toBe(resumenSinIa(r, null));
   });
 });
 

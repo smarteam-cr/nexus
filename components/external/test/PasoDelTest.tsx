@@ -56,7 +56,9 @@ export default function PasoDelTest({
     <div className="step-wrap">
       <div className="step-topline">
         <span className="diag-badge">Diagnóstico de rendimiento · {areaNombre}</span>
-        <button type="button" className="btn-cancelar" onClick={alReiniciar}>
+        {/* Mientras se prepara el resultado (la IA lo redacta: unos segundos) no se puede volver ni cambiar nada: el resultado
+            saldría con las respuestas de antes, sin aviso (revisión del 29 oct). */}
+        <button type="button" className="btn-cancelar" onClick={alReiniciar} disabled={ocupado}>
           ↺ Volver a iniciar
         </button>
       </div>
@@ -79,7 +81,7 @@ export default function PasoDelTest({
                 key={p.id}
                 type="button"
                 className={`prog-node ${estado}${separa ? " prog-split" : ""}`}
-                disabled={!visitable || actual}
+                disabled={!visitable || actual || ocupado}
                 title={nombre}
                 aria-current={actual ? "step" : undefined}
                 onClick={() => alIrA(i)}
@@ -106,7 +108,7 @@ export default function PasoDelTest({
           {[...pregunta.opciones, { id: NO_LO_SE, texto: TEXTO_DE_NO_LO_SE }].map((o) => {
             const activa = elegida === o.id;
             return (
-              <button key={o.id} type="button" role="radio" aria-checked={activa} className={`opt-item${activa ? " is-active" : ""}`} onClick={() => alElegir(o.id)}>
+              <button key={o.id} type="button" role="radio" aria-checked={activa} className={`opt-item${activa ? " is-active" : ""}`} disabled={ocupado} onClick={() => alElegir(o.id)}>
                 <span className="opt-dot" aria-hidden="true" />
                 <span className="opt-txt">{o.texto}</span>
               </button>
@@ -124,6 +126,7 @@ export default function PasoDelTest({
             maxLength={500}
             placeholder="Si tu caso tiene un matiz importante, cuéntalo en una línea…"
             value={respuestas[pregunta.id]?.matiz ?? ""}
+            disabled={ocupado}
             onChange={(e) => alEscribirMatiz(e.target.value)}
           />
         </div>
@@ -131,11 +134,11 @@ export default function PasoDelTest({
 
       {error && <p className="form-err">{error}</p>}
       <nav className="step-nav">
-        <button type="button" className={`btn btn-ghost${indice === 0 ? " oculto" : ""}`} onClick={alVolver} disabled={indice === 0}>
+        <button type="button" className={`btn btn-ghost${indice === 0 ? " oculto" : ""}`} onClick={alVolver} disabled={indice === 0 || ocupado}>
           ← Volver
         </button>
         <button type="button" className="btn btn-primary" disabled={!elegida || ocupado} onClick={alSeguir}>
-          {ocupado ? "Un momento…" : esLaUltima ? "Ver resultado →" : "Siguiente →"}
+          {ocupado ? (esLaUltima ? "Preparando tu resultado…" : "Un momento…") : esLaUltima ? "Ver resultado →" : "Siguiente →"}
         </button>
       </nav>
     </div>
