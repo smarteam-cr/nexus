@@ -9,7 +9,7 @@
  * que calza, condición por condición. Si calza a medias, lo dice y nombra lo que falta confirmar. Material de
  * preparación: se lee, no se «usa».
  */
-import { Badge } from "@/components/ui";
+import { Alert, Badge } from "@/components/ui";
 import {
   condicionesPendientes,
   NOMBRE_DEL_ESTADO,
@@ -42,10 +42,10 @@ export function PositionStatementDelProspecto() {
   const { exp } = useLienzo();
   const ps = exp.estado.propuesta.posicionamiento;
   if (!ps || exp.projectId) return null;
-  return <Contenido ps={ps} empresa={exp.empresa.nombre} />;
+  return <Contenido ps={ps} empresa={exp.empresa.nombre} anterior={!!exp.posicionamientoAnterior} />;
 }
 
-function Contenido({ ps, empresa }: { ps: PosicionamientoDelProspecto; empresa: string }) {
+function Contenido({ ps, empresa, anterior }: { ps: PosicionamientoDelProspecto; empresa: string; anterior: boolean }) {
   const f = ps.frente;
   const { faltan, noSeCumplen } = f ? condicionesPendientes(f) : { faltan: [], noSeCumplen: [] };
   return (
@@ -54,6 +54,12 @@ function Contenido({ ps, empresa }: { ps: PosicionamientoDelProspecto; empresa: 
         <h3 className="text-sm font-semibold text-fg">Position statement para {empresa}</h3>
         <p className="text-xs text-fg-muted">Lo arma Nexus desde el de Smarteam (Marketing › Audiencia) y lo valida contra él: no promete nada que no diga.</p>
       </div>
+      {anterior && (
+        <Alert variant="warning" title="Se armó con un position statement anterior">
+          El de Smarteam cambió en Marketing › Audiencia después de preparar esta sesión, así que esto ya no está validado
+          contra el de hoy y la guía no lo usa. Vuelve a preparar para actualizarlo.
+        </Alert>
+      )}
       <blockquote className="border-l-4 border-l-brand pl-3 text-[13px] italic leading-[20px] text-fg">«{ps.frase}»</blockquote>
 
       {ps.hechos.length > 0 && (

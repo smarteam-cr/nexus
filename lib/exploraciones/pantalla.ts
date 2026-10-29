@@ -19,6 +19,8 @@ import { reunionesDeLaExploracion, reunionesSinLeer } from "./fuentes";
 import { proyectosQueLaReciben } from "./handoff";
 import { leerLoLeido } from "./lo-leido";
 import { propuestasDeLaExploracion } from "./propuesta";
+import { contextoDeSmarteam } from "@/lib/smarteam/contexto";
+import { armadoConOtraBase } from "./posicionamiento";
 import { versionAnteriorDeLaExploracion } from "./versiones-de-la-escala";
 import { paraLaPantalla, type ExploracionParaLaPantalla, type FilaDeExploracion, type LoQueSabeLaIA } from "./servidor";
 
@@ -26,7 +28,8 @@ export async function paraLaPantallaCompleta(fila: FilaDeExploracion): Promise<E
   const exp = paraLaPantalla(fila);
   // La exploración de un proyecto no le llega a otro handoff ni arma propuestas: eso es de la preventa.
   const delProyecto = !!fila.projectId;
-  const [sinLeer, proyectos, documentos, propuestas, reuniones, sabe, escalaAnterior] = await Promise.all([
+  const ps = delProyecto ? null : exp.estado.propuesta.posicionamiento;
+  const [sinLeer, proyectos, documentos, propuestas, reuniones, sabe, escalaAnterior, posicionamientoAnterior] = await Promise.all([
     reunionesSinLeer({
       exploracionId: fila.id,
       clientId: fila.client.id,
@@ -76,6 +79,11 @@ export async function paraLaPantallaCompleta(fila: FilaDeExploracion): Promise<E
       console.error("[exploraciones] no se pudo leer la versión anterior de la escala", e);
       return null;
     }),
+    // K3: el position statement del prospecto, ¿se armó con el de Smarteam de hoy?
+    (ps ? contextoDeSmarteam().then((c) => armadoConOtraBase(ps, { frase: c.perfil.positionStatement, frentes: c.perfil.frentes })) : Promise.resolve(false)).catch((e) => {
+      console.error("[exploraciones] no se pudo comparar el position statement con el de hoy", e);
+      return false;
+    }),
   ]);
   const loQueSabeLaIA: LoQueSabeLaIA | undefined = sabe
     ? {
@@ -89,5 +97,5 @@ export async function paraLaPantallaCompleta(fila: FilaDeExploracion): Promise<E
         memoriaUrl: null,
       }
     : undefined;
-  return { ...exp, sinLeer, proyectos, documentos, propuestas, reuniones, escalaAnterior, ...(loQueSabeLaIA ? { loQueSabeLaIA } : {}) };
+  return { ...exp, sinLeer, proyectos, documentos, propuestas, reuniones, escalaAnterior, posicionamientoAnterior, ...(loQueSabeLaIA ? { loQueSabeLaIA } : {}) };
 }

@@ -747,6 +747,7 @@ const PosicionamientoDelProspectoSchema: z.ZodType<PosicionamientoDelProspecto> 
     .nullable(),
   sinFrente: z.string().max(TOPES.sinFrente).nullable(),
   descartes: z.array(z.string().max(TOPES.descarte)).max(TOPES.descartes),
+  huella: z.string().max(40).optional(),
 });
 
 const CorreoDeSeguimientoSchema: z.ZodType<CorreoDeSeguimiento> = z.object({

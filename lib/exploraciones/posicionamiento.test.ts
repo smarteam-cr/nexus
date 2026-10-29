@@ -6,8 +6,10 @@ import { describe, expect, it } from "vitest";
 import type Anthropic from "@anthropic-ai/sdk";
 import type { Posicionamiento } from "@/lib/smarteam/posicionamiento";
 import {
+  armadoConOtraBase,
   calceDe,
   entradaDeLaRespuesta,
+  huellaDeLaBase,
   hayQuePedirlo,
   hechosDisponibles,
   pedidoDelPosicionamiento,
@@ -81,6 +83,8 @@ describe("los hechos que se ofrecen", () => {
   it("sin frase o sin hechos no se pide nada", () => {
     expect(hayQuePedirlo(CTX)).toBe(true);
     expect(hayQuePedirlo({ ...CTX, base: { ...BASE, frase: "  " } })).toBe(false);
+    // Una frase más larga que lo que acepta la lectura no se pide: se pagaría y se descartaría al leerla.
+    expect(hayQuePedirlo({ ...CTX, base: { ...BASE, frase: "a".repeat(1001) } })).toBe(false);
     expect(hayQuePedirlo({ ...CTX, hechos: [] })).toBe(false);
     expect(validarElPosicionamiento({}, { ...CTX, base: { ...BASE, frase: null } }, { corridaId: "x" })).toBeNull();
   });
@@ -230,6 +234,18 @@ describe("lo que encontró la revisión (2026-10-28)", () => {
     expect(prometeDeMas("Venden 3 veces más en 6 meses.", permitido)).toBe(true);
     expect(prometeDeMas("Con Insider recuperarán los carritos.", permitido)).toBe(true);
     expect(prometeDeMas("Abrió en 2026 y tiene más de 1 millón de visitas.", permitido)).toBe(false);
+    // En futuro singular y sin cifras (la revisión de lo juntado, 28 oct): la tilde final no lo deja pasar.
+    for (const t of [
+      "Con HubSpot, Acme venderá más y recuperará a los clientes que hoy pierde.",
+      "Aumentará sus ventas.",
+      "Con Insider recuperará los carritos abandonados.",
+      "Mejorará la conversión.",
+      "Su equipo logrará cerrar antes.",
+    ])
+      expect(prometeDeMas(t, permitido), t).toBe(true);
+    // Lo que describe sin prometer sigue pasando.
+    expect(prometeDeMas("Vende a personas y tiene mucho tráfico en su sitio.", permitido)).toBe(false);
+    expect(prometeDeMas("Quiere mejorar su seguimiento de prospectos.", permitido)).toBe(false);
     const r = validar({
       hechos: [id("tienda en línea")],
       frente: "estructura",
@@ -311,5 +327,26 @@ describe("las reglas sueltas", () => {
     ] as unknown as Anthropic.Messages.ContentBlock[];
     expect(entradaDeLaRespuesta(contenido)).toEqual({ hechos: ["P1"] });
     expect(entradaDeLaRespuesta([])).toBeNull();
+  });
+});
+
+describe("armado con un position statement anterior (la revisión de lo juntado, 28 oct)", () => {
+  it("guarda la huella de la base con que se armó, y deja de valer si la base cambia", () => {
+    const r = validar({ hechos: [id("tienda en línea")] });
+    expect(r.huella).toBe(huellaDeLaBase(BASE));
+    expect(armadoConOtraBase(r, BASE)).toBe(false);
+    // Cambiar un «qué logra», un «cuándo cabe» o la frase en Audiencia cambia la huella.
+    const sinUnLogro: Posicionamiento = { ...BASE, frentes: BASE.frentes.map((f, i) => (i === 0 ? { ...f, queLogra: f.queLogra.slice(1) } : f)) };
+    expect(armadoConOtraBase(r, sinUnLogro)).toBe(true);
+    expect(armadoConOtraBase(r, { ...BASE, frase: `${BASE.frase} Y algo más.` })).toBe(true);
+    // Espacios de más en la frase no cuentan como cambio.
+    expect(armadoConOtraBase(r, { ...BASE, frase: `  ${BASE.frase}  ` })).toBe(false);
+    // Uno armado antes de que existiera la huella cuenta como armado con otra base.
+    expect(armadoConOtraBase({}, BASE)).toBe(true);
+  });
+
+  it("la huella sobrevive a la lectura de lo guardado", () => {
+    const r = validar({ hechos: [id("tienda en línea")] });
+    expect(leerPropuesta({ posicionamiento: r }).posicionamiento?.huella).toBe(r.huella);
   });
 });

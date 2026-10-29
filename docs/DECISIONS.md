@@ -12385,15 +12385,15 @@ artefactos. Plan: docs/escala-unica-plan.md.
   cuenta»). En la cuenta no van «Qué explorar en la próxima sesión» ni «Explorarla a fondo» (la cuenta no tiene
   sesiones), ni preparar ni leer la última reunión; el agente es «Actualizar escala». Cuando cambia la edición, la escala
   la vuelve a pedir la ficha (`alRefrescar`), no `router.refresh()`.
-- **Lo medido en la preventa es el punto de partida** (`lib/exploraciones/punto-de-partida.ts`, puro). Al abrir la
-  escala de la cuenta (o si existía sin haber medido nunca nada: sin niveles ni versiones), toma de la preventa más
-  reciente que midió algo la edición y el perfil (con quién los eligió), las áreas, cada nivel con su frase y su porqué,
+- **Lo medido antes es el punto de partida** (`lib/exploraciones/punto-de-partida.ts`, puro). Al abrir la
+  escala de la cuenta (o si existía sin haber medido nunca nada: sin niveles ni versiones), toma de la exploración de la
+  empresa que midió algo más recientemente —la preventa o la de un proyecto, ver el punto siguiente— la edición y el perfil (con quién los eligió), las áreas, cada nivel con su frase y su porqué,
   y lo que pide Funcional. Lo propuesto y no usado no viaja. Entra por el escritor de siempre (`aplicarCambios`, en dos
   tandas: la edición primero, porque los criterios se validan contra ella) y deja la versión del día. Solo viaja lo que
   existe en la escala con que queda la cuenta: un criterio de otra edición (cambiar de edición en la preventa no lo
   borra) o una dimensión retirada se queda afuera y se avisa, porque una sola operación inválida tumbaba la tanda entera
   sin decir nada. Una cuenta que ya midió algo (niveles o versiones) no se toca. La pantalla la abre sola solo si hay
-  algo de la preventa que traer; sin preventa, con un botón: abrirla escribe (la exploración y, si falta, el contenedor).
+  algo que traer; si no, con un botón: abrirla escribe (la exploración y, si falta, el contenedor).
 - **El agente lee el contexto del cliente.** `posicionar` lee primero las reuniones que alguien unió a una sesión de
   cualquier exploración de la empresa (`reunionesElegidas`, por el chokepoint con `ids`), hasta la mitad de los lugares,
   y después las más recientes (son las que dicen dónde está HOY), y la memoria de la cuenta como antes. «Elegida» es solo

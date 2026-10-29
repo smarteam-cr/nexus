@@ -8,7 +8,7 @@ import { claveDelFrente, type Posicionamiento } from "./posicionamiento";
 const textoOpcional = (max: number) =>
   z
     .string()
-    .max(max)
+    .max(max, `Este texto pasa de ${max} caracteres: acórtalo.`)
     .transform((s) => s.trim() || null)
     .nullable();
 

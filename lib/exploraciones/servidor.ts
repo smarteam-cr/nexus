@@ -408,6 +408,11 @@ export interface ExploracionParaLaPantalla {
    * «Qué explorar» dice lo que cambió. Igual que `sinLeer`: solo al abrir y al recargar. null = no hay.
    */
   escalaAnterior?: { dia: string; foto: FotoDeLaEscala } | null;
+  /**
+   * El position statement del prospecto se armó con uno de Smarteam que ya cambió en Marketing › Audiencia (K3): la
+   * pantalla pide volver a preparar. Igual que `sinLeer`: solo al abrir y al recargar.
+   */
+  posicionamientoAnterior?: boolean;
   creadaPor: string;
   creadaEn: string;
   actualizadaEn: string;

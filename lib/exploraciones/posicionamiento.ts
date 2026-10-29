@@ -90,6 +90,28 @@ export interface PosicionamientoDelProspecto {
   sinFrente: string | null;
   /** Lo que la validación sacó, para quien quiera saber por qué no está. */
   descartes: string[];
+  /**
+   * La huella del position statement de Smarteam con que se armó (`huellaDeLaBase`). Si la base cambió en Audiencia,
+   * ya no está validado contra la de hoy: la guía no lo usa y la pantalla pide volver a preparar. Sin huella (armado
+   * antes de existir), cuenta como armado con otra base.
+   */
+  huella?: string;
+}
+
+/** Una huella corta y estable del position statement (FNV-1a sobre la frase y los frentes). PURO, sirve en el navegador. */
+export function huellaDeLaBase(base: Posicionamiento): string {
+  const texto = JSON.stringify({ frase: base.frase?.trim() ?? null, frentes: base.frentes });
+  let h = 0x811c9dc5;
+  for (let i = 0; i < texto.length; i++) {
+    h ^= texto.charCodeAt(i);
+    h = Math.imul(h, 0x01000193) >>> 0;
+  }
+  return `${texto.length.toString(36)}-${h.toString(36)}`;
+}
+
+/** ¿Se armó con un position statement distinto del de hoy? */
+export function armadoConOtraBase(ps: Pick<PosicionamientoDelProspecto, "huella">, base: Posicionamiento): boolean {
+  return ps.huella !== huellaDeLaBase(base);
 }
 
 // ── Los hechos que se ofrecen ─────────────────────────────────────────────────────────────────
@@ -190,9 +212,16 @@ export interface ContextoDelPosicionamiento {
   hechos: readonly HechoDelProspecto[];
 }
 
-/** Se pide solo si hay frase y algún hecho: sin frase no hay qué personalizar; sin hechos, no hay con qué. */
+/** El largo máximo de la frase: el mismo que acepta el editor (posicionamiento-esquema.ts) y la lectura (esquemas.ts). */
+export const MAX_FRASE = 1000;
+
+/**
+ * Se pide solo si hay frase y algún hecho: sin frase no hay qué personalizar; sin hechos, no hay con qué. Una frase más
+ * larga que lo que acepta la lectura tampoco: se pagaría la corrida y el resultado se descartaría al leerlo.
+ */
 export function hayQuePedirlo(ctx: Pick<ContextoDelPosicionamiento, "base" | "hechos">): boolean {
-  return !!ctx.base.frase?.trim() && ctx.hechos.length > 0;
+  const frase = ctx.base.frase?.trim();
+  return !!frase && frase.length <= MAX_FRASE && ctx.hechos.length > 0;
 }
 
 function herramienta(): Anthropic.Messages.Tool {
@@ -303,9 +332,12 @@ const sinId = (h: HechoDelProspecto): HechoCitado => ({
   ...(h.fecha ? { fecha: h.fecha } : {}),
 });
 
-/** Palabras que prometen un resultado. */
+/**
+ * Palabras que prometen un resultado, también en futuro singular («venderá», «aumentará»). Los bordes de palabra son
+ * `(?<!\p{L})` / `(?!\p{L})` con la bandera `u`, no `\b`: sin `u`, `\b` no ve la «á» como letra y «venderá más» pasaba.
+ */
 const PROMESA =
-  /\bgarantiz|\baseguramos\b|\bduplic|\btriplic|\bmultiplic|\bsin falta\b|\bcon certeza\b|\bvamos a (lograr|aumentar|subir|duplicar|crecer|vender)|\bveces m[aá]s\b|\b(aumentar|subir|crecer|vender|mejorar|ahorrar|recuperar|ganar)[aá]n?\b/i;
+  /(?<!\p{L})(garantiz|aseguramos(?!\p{L})|duplic|triplic|multiplic|sin falta(?!\p{L})|con certeza(?!\p{L})|vamos a (lograr|aumentar|subir|duplicar|crecer|vender|incrementar|reducir)|veces m[aá]s(?!\p{L})|(aumentar|subir|crecer|vender|mejorar|ahorrar|recuperar|ganar|lograr|incrementar|elevar|impulsar|potenciar|duplicar|reducir|optimizar|multiplicar)[aá]n?(?!\p{L}))/iu;
 
 /** Las cifras de un texto, enteras («2026-03» son 2026 y 03; «20 %» es 20%). */
 function cifrasDe(texto: string): string[] {
@@ -373,6 +405,7 @@ export function validarElPosicionamiento(
     version: 1 as const,
     frase,
     hechos,
+    huella: huellaDeLaBase(ctx.base),
   };
   const permitidoDeLaBase = [frase, ...ctx.base.frentes.flatMap((x) => [x.promesa, ...x.cuandoCabe, ...x.queLogra.flatMap((l) => [l.titulo, l.detalle ?? ""])]), ...ctx.hechos.map((h) => `${h.texto} ${h.fecha ?? ""}`)];
   let sinFrenteDelAgente = str(input.sinFrente, TOPES.sinFrente);
