@@ -1,4 +1,4 @@
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, type Prisma } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
 import { readFileSync } from "fs";
@@ -10,7 +10,7 @@ const pool = new Pool({
   ssl: { rejectUnauthorized: false },
 });
 const adapter = new PrismaPg(pool);
-const prisma = new PrismaClient({ adapter });
+const prisma = new PrismaClient<Prisma.PrismaClientOptions>({ adapter });
 
 async function main() {
   const promptPath = resolve(__dirname, "diagnostico-prompt.txt");

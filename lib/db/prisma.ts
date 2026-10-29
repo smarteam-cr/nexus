@@ -1,4 +1,4 @@
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, type Prisma } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
 import { sslParaConexion } from "./ssl";
@@ -42,7 +42,11 @@ function createPrismaClient() {
   });
   globalForPrisma.pgPool = pool;
   const adapter = new PrismaPg(pool);
-  return new PrismaClient({
+  // El tipo va EXPLÍCITO (`<Prisma.PrismaClientOptions>`) a propósito: inferido desde estas
+  // opciones daba OTRA instancia del cliente (con `log` y el adaptador en el tipo), y el `??`
+  // de abajo la comparaba entera contra `PrismaClient`: 14 s del chequeo de tipos de `next build`.
+  // Con el tipo de siempre no hay nada que comparar. Lo vigila lib/db/tsconfig-del-build.test.ts.
+  return new PrismaClient<Prisma.PrismaClientOptions>({
     adapter,
     log:
       process.env.NODE_ENV === "development" ? ["error", "warn"] : ["error"],

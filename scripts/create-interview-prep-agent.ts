@@ -1,4 +1,4 @@
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, type Prisma } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
 import "dotenv/config";
@@ -8,7 +8,7 @@ const pool = new Pool({
   ssl: { rejectUnauthorized: false },
 });
 const adapter = new PrismaPg(pool);
-const prisma = new PrismaClient({ adapter });
+const prisma = new PrismaClient<Prisma.PrismaClientOptions>({ adapter });
 
 const SYSTEM_PROMPT = `ROL: Eres un Consultor Estratégico Senior especializado en diagnóstico organizacional. Tu objetivo es planificar las entrevistas de profundización con los trabajadores del cliente, basándote en las sesiones que ya ocurrieron después del Kick-off.
 

@@ -75,7 +75,9 @@ RUN npx prisma generate
 # corre vive en docker-compose.yml). `next build` chequea los tipos de todo el repo, y el
 # 2026-10-16 ese chequeo pedía 4,2 GB (`tsc --noEmit --incremental false --extendedDiagnostics`):
 # con el tope de fábrica de Node (unos 4 GB) el build murió con «heap out of memory». El VPS
-# tiene 16 GB y el build corre con el contenedor viejo arriba, así que 6 GB entra.
+# tiene 16 GB y el build corre con el contenedor viejo arriba, así que 6 GB entra. Desde el
+# 2026-10-29 el chequeo del build pide unos 4,3 GB de pico (tsconfig.build.json, sin los tests, y
+# el cliente Prisma con su tipo explícito): el tope queda con margen. Ver RUNBOOK › Deploy.
 ENV NODE_OPTIONS=--max-old-space-size=6144
 RUN npm run build
 

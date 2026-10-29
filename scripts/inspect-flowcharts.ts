@@ -6,13 +6,13 @@
  * Agrupa por cliente y marca si el diagrama tiene nodos (no vacío).
  * Uso: npx tsx scripts/inspect-flowcharts.ts [filtroNombreCliente]
  */
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, type Prisma } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
 import "dotenv/config";
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL!, ssl: { rejectUnauthorized: false } });
-const prisma = new PrismaClient({ adapter: new PrismaPg(pool) });
+const prisma = new PrismaClient<Prisma.PrismaClientOptions>({ adapter: new PrismaPg(pool) });
 
 function nodeCount(d: unknown): number {
   if (d && typeof d === "object" && Array.isArray((d as { nodes?: unknown[] }).nodes)) {

@@ -28,7 +28,7 @@ const APPLY = resolverApply();
 const CLIENT_TERM = args[0] ?? "";
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL!, ssl: { rejectUnauthorized: false } });
-const prisma = new PrismaClient({ adapter: new PrismaPg(pool) });
+const prisma = new PrismaClient<Prisma.PrismaClientOptions>({ adapter: new PrismaPg(pool) });
 
 async function main() {
   if (!CLIENT_TERM) {

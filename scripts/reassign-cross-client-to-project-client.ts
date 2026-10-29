@@ -13,7 +13,7 @@
  * Dry-run por default:  npx tsx scripts/reassign-cross-client-to-project-client.ts
  * Aplicar:              npx tsx scripts/reassign-cross-client-to-project-client.ts --apply
  */
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, type Prisma } from "@prisma/client";
 import { resolverApply } from "./lib/guard";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
@@ -25,7 +25,7 @@ const pool = new Pool({
   connectionString: process.env.DATABASE_URL!,
   ssl: { rejectUnauthorized: false },
 });
-const prisma = new PrismaClient({ adapter: new PrismaPg(pool) });
+const prisma = new PrismaClient<Prisma.PrismaClientOptions>({ adapter: new PrismaPg(pool) });
 
 async function main() {
   console.log(APPLY ? "APLICANDO reasignaciones…\n" : "DRY-RUN (usá --apply para escribir)\n");

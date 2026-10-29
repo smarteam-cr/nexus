@@ -14,7 +14,7 @@
  */
 import "dotenv/config";
 import "./lib/permitir-server-only";
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, type Prisma } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { createScriptPool } from "./lib/db";
 
@@ -48,7 +48,7 @@ async function main() {
   // ⛔ Ni por error: cada conexión nace de solo lectura y con tope de tiempo (pg lee PGOPTIONS al abrir cada conexión).
   process.env.PGOPTIONS = [process.env.PGOPTIONS, "-c default_transaction_read_only=on -c statement_timeout=60000"].filter(Boolean).join(" ");
   const { pool, close } = createScriptPool();
-  const db = new PrismaClient({ adapter: new PrismaPg(pool) });
+  const db = new PrismaClient<Prisma.PrismaClientOptions>({ adapter: new PrismaPg(pool) });
   try {
     const prueba = await pool.connect();
     try {

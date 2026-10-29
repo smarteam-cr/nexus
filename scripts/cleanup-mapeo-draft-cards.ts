@@ -11,7 +11,7 @@
  *   npx tsx scripts/cleanup-mapeo-draft-cards.ts           # dry-run
  *   npx tsx scripts/cleanup-mapeo-draft-cards.ts --apply   # BORRA
  */
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, type Prisma } from "@prisma/client";
 import { resolverApply } from "./lib/guard";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
@@ -19,7 +19,7 @@ import "dotenv/config";
 
 const APPLY = resolverApply();
 const pool = new Pool({ connectionString: process.env.DATABASE_URL!, ssl: { rejectUnauthorized: false } });
-const prisma = new PrismaClient({ adapter: new PrismaPg(pool) });
+const prisma = new PrismaClient<Prisma.PrismaClientOptions>({ adapter: new PrismaPg(pool) });
 
 async function main() {
   console.log(APPLY ? "⚠ APLICANDO — borrar cards DRAFT del mapeo (PROD)\n" : "DRY-RUN — cards DRAFT del mapeo (usá --apply para borrar)\n");

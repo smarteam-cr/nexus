@@ -1,7 +1,7 @@
 import * as dotenv from "dotenv";
 dotenv.config();
 
-import { PrismaClient, AgentStatus, AgentOutputType, AgentScope, AgentType } from "@prisma/client";
+import { PrismaClient, type Prisma, AgentStatus, AgentOutputType, AgentScope, AgentType } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import {
   MAPEO_SYSTEM_PROMPT,
@@ -15,7 +15,7 @@ import { createScriptPool } from "../scripts/lib/db";
 assertProdWriteAllowed("prisma/seed.ts");
 const { pool } = createScriptPool();
 const adapter = new PrismaPg(pool);
-const prisma = new PrismaClient({ adapter });
+const prisma = new PrismaClient<Prisma.PrismaClientOptions>({ adapter });
 
 async function seedAgents() {
   const agents = [

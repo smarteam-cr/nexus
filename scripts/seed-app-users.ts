@@ -11,7 +11,7 @@
  *   npx tsx scripts/seed-app-users.ts          # dry-run
  *   npx tsx scripts/seed-app-users.ts --apply  # ejecuta
  */
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, type Prisma } from "@prisma/client";
 import { sslParaConexion } from "@/lib/db/ssl";
 import { resolverApply } from "./lib/guard";
 import { PrismaPg } from "@prisma/adapter-pg";
@@ -22,7 +22,7 @@ const pool = new Pool({
   connectionString: process.env.DATABASE_URL!,
   ssl: sslParaConexion(process.env.DATABASE_URL),
 });
-const prisma = new PrismaClient({ adapter: new PrismaPg(pool) });
+const prisma = new PrismaClient<Prisma.PrismaClientOptions>({ adapter: new PrismaPg(pool) });
 
 async function main() {
   const apply = resolverApply();

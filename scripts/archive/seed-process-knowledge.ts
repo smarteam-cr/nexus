@@ -10,7 +10,7 @@
  */
 import "dotenv/config";
 import { readFileSync } from "fs";
-import { PrismaClient, type KnowledgeType, type KnowledgeStatus, type TagCategory } from "@prisma/client";
+import { PrismaClient, type Prisma, type KnowledgeType, type KnowledgeStatus, type TagCategory } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
 
@@ -21,7 +21,7 @@ import { assertProdWriteAllowed } from "../lib/guard";
 assertProdWriteAllowed("scripts/archive/seed-process-knowledge.ts");
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL!, ssl: { rejectUnauthorized: false } });
-const prisma = new PrismaClient({ adapter: new PrismaPg(pool) });
+const prisma = new PrismaClient<Prisma.PrismaClientOptions>({ adapter: new PrismaPg(pool) });
 
 const AUTHOR = "egonzalez@smarteamcr.com";
 

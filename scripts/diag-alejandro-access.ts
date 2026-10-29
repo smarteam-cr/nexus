@@ -4,13 +4,13 @@
  * cadena requireUser() → requireAccessToClient(). Muestra AppUser (vínculo a
  * TeamMember), roleEnum, deactivatedAt y qué haría el gate de acceso.
  */
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, type Prisma } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
 import "dotenv/config";
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL!, ssl: { rejectUnauthorized: false } });
-const prisma = new PrismaClient({ adapter: new PrismaPg(pool) });
+const prisma = new PrismaClient<Prisma.PrismaClientOptions>({ adapter: new PrismaPg(pool) });
 
 const EMAILS = [
   "arodriguez@smarteamcr.com",
