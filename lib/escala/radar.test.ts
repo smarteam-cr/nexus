@@ -10,7 +10,6 @@ import { MINI_ESCALA } from "./documento/mini-escala.fixture";
 import { parsearEscala } from "./documento/parsear";
 import { conPerfil, criteriosDelCruce, cuentaDeLaCelda, ejesDeLaTeoria, enPalabras, opcionesDeQueSeCuenta, QUE_SE_CUENTA, type QueSeCuenta } from "./radar";
 import {
-  ANCHO,
   CX,
   CY,
   H,
@@ -18,15 +17,8 @@ import {
   MITAD,
   polar,
   porciones,
-  posicionDelPuntaje,
-  puntosDeUnaEmpresa,
-  R_DENTRO,
-  R_FUERA,
-  radioEnAnillos,
   rotuloDeCapa,
   rotuloDeDimension,
-  lineaDeLaSerie,
-  type DimensionDeUnaEmpresa,
 } from "./rueda";
 import * as dibujo from "./radar-dibujo";
 import { aplicarEdicion } from "./documento/edicion";
@@ -41,10 +33,6 @@ const area = mini.areas[0];
 const req = requeridosDelArea(mini, area);
 const SIN_PERFIL = { cierre: null, despues: null };
 
-/** La distancia de un punto al centro de la rueda. */
-const radio = (p: { x: number; y: number }) => Math.hypot(p.x - CX, p.y - CY);
-/** En qué anillo cae un radio (0 = Deficiente … 4 = Óptimo). */
-const anilloDe = (r: number) => Math.floor((r - R_DENTRO) / ANCHO);
 
 /** Todos los perfiles que se pueden elegir con las dos primeras preguntas, más ninguno. */
 const PERFILES: Perfil[] = [SIN_PERFIL, ...CIERRES.flatMap((cierre) => [null, ...DESPUES].map((despues) => ({ cierre, despues })))];
@@ -54,12 +42,7 @@ const AREAS_QUE_SE_VEN = [real, ...real.ediciones.map((e) => aplicarEdicion(real
   esc.areas.map((a) => ({ ...a, nombre: `${a.nombre}${esc.edicion ? ` (${esc.edicion.nombre})` : ""}` })),
 );
 
-describe("geometría de la rueda (la del mapa y la de una empresa)", () => {
-  it("un valor fuera de la escala no se sale de la rueda", () => {
-    expect(radioEnAnillos(-3)).toBe(R_DENTRO);
-    expect(radioEnAnillos(12)).toBe(R_FUERA);
-  });
-
+describe("geometría de la rueda (la del Mapa)", () => {
   it("de ángulo y radio a coordenadas: 0° arriba, 90° a la derecha, 180° abajo", () => {
     const cerca = (p: [number, number]) => p.map((v) => Math.round(v * 1000) / 1000);
     expect(cerca(polar(0, 50))).toEqual([CX, CY - 50]);
@@ -297,117 +280,6 @@ describe("el dibujo del radar de la teoría: un eje por dimensión y un anillo p
         expect(Math.hypot(esta[2][0] - dibujo.CX, esta[2][1] - dibujo.CY)).toBeGreaterThan(dibujo.radioDeLaEtapa(4) + dibujo.CRUCE);
       }
     }
-  });
-});
-
-describe("el radar de una empresa", () => {
-  const VENTAS: DimensionDeUnaEmpresa[] = [
-    { clave: "1.1", numero: "1.1", nombre: "Procesos y Rutinas", capa: "base", puntaje: 28, nivel: "I" },
-    { clave: "1.2", numero: "1.2", nombre: "Tecnología y Automatización", capa: "base", puntaje: 8, nivel: "D" },
-    { clave: "1.3", numero: "1.3", nombre: "Datos", capa: "base", puntaje: 55, nivel: "F" },
-    { clave: "1.4", numero: "1.4", nombre: "Equipo y Gobierno", capa: "base", puntaje: 70, nivel: "E" },
-    { clave: "1.5", numero: "1.5", nombre: "Propuesta y Coherencia", capa: "produccion", puntaje: 100, nivel: "O" },
-    { clave: "1.6", numero: "1.6", nombre: "Priorización de Leads", capa: "produccion", puntaje: null, nivel: null },
-    { clave: "1.7", numero: "1.7", nombre: "Tracción del Negocio", capa: "produccion", puntaje: 20, nivel: "I" },
-    { clave: "1.8", numero: "1.8", nombre: "Aprendizaje de Ganadas y Perdidas", capa: "produccion", puntaje: 0, nivel: "D" },
-  ];
-
-  it("cada punto cae en el anillo de SU nivel, más afuera cuanto más avanzó dentro de él", () => {
-    const puntos = puntosDeUnaEmpresa(VENTAS);
-    VENTAS.forEach((d, i) => {
-      if (!d.nivel) return;
-      expect(anilloDe(radio(puntos[i]!)), d.nombre).toBe(LETRAS.indexOf(d.nivel));
-    });
-    // 28 y 20 son los dos Inicial: 28 avanzó más.
-    expect(radio(puntos[0]!)).toBeGreaterThan(radio(puntos[6]!));
-  });
-
-  it("el nivel manda: un puntaje que no calza con su nivel no saca el punto de su anillo", () => {
-    expect(posicionDelPuntaje(90, "I")).toBeLessThan(2);
-    expect(posicionDelPuntaje(90, "I")).toBeGreaterThan(1);
-    expect(posicionDelPuntaje(5, "E")).toBeGreaterThan(3);
-    expect(posicionDelPuntaje(Number.NaN, "F")).toBeCloseTo(2.5);
-    // Óptimo es un solo puntaje (100): al medio de su anillo.
-    expect(posicionDelPuntaje(100, "O")).toBe(4.5);
-  });
-
-  it("los extremos de un tramo quedan lejos de la raya entre anillos", () => {
-    for (const nivel of ["D", "I", "F", "E"] as const) {
-      const k = LETRAS.indexOf(nivel);
-      expect(posicionDelPuntaje(20 * k, nivel) - k).toBeGreaterThanOrEqual(0.15 - 1e-9);
-      expect(k + 1 - posicionDelPuntaje(20 * k + 19, nivel)).toBeGreaterThanOrEqual(0.15 - 1e-9);
-    }
-  });
-
-  /** Los ejes de la línea de una empresa, como los arma el componente. */
-  const ejesDe = (dims: DimensionDeUnaEmpresa[]) => puntosDeUnaEmpresa(dims).map((p, i) => ({ medio: p?.medio ?? -1, capa: dims[i].capa, punto: p }));
-
-  it("sin nivel no hay punto, y la línea se corta en ese eje", () => {
-    const puntos = puntosDeUnaEmpresa(VENTAS);
-    expect(puntos[5]).toBeNull();
-    // El eje sin punto conserva su lugar en la rueda (entre 1.5 y 1.7): sus dos lados no se dibujan.
-    const angulos = porciones(VENTAS.map((d) => ({ id: d.clave, capa: d.capa })));
-    const ejes = VENTAS.map((d, i) => ({ medio: (angulos.get(d.clave)![0] + angulos.get(d.clave)![1]) / 2, capa: d.capa, punto: puntos[i] }));
-    const { lados, relleno } = lineaDeLaSerie(ejes);
-    expect(relleno).toBeNull();
-    expect(lados).toHaveLength(6);
-  });
-
-  it("con todo contestado, un polígono cerrado; cada punto en la mitad de su capa", () => {
-    const todas = VENTAS.map((d) => (d.nivel ? d : { ...d, puntaje: 50, nivel: "F" as const }));
-    const puntos = puntosDeUnaEmpresa(todas);
-    const { lados, relleno } = lineaDeLaSerie(ejesDe(todas));
-    expect(relleno).toEqual(puntos);
-    // Dos lados cruzan el hueco: arriba y abajo, entre la base y la producción.
-    expect(lados.filter((l) => l.cruzaElHueco)).toHaveLength(2);
-    todas.forEach((d, i) => {
-      if (d.capa === "base") expect(puntos[i]!.x).toBeGreaterThan(CX);
-      else expect(puntos[i]!.x).toBeLessThan(CX);
-    });
-  });
-
-  it("los ejes son los mismos que los del mapa de la escala", () => {
-    const ventas = real.areas[0];
-    const empresa = ventas.dimensiones.map((d) => ({ clave: d.id, numero: d.id, nombre: d.nombre, capa: d.capa, puntaje: 50, nivel: "F" as const }));
-    const angulos = porciones(ventas.dimensiones);
-    puntosDeUnaEmpresa(empresa).forEach((p, i) => {
-      const [g0, g1] = angulos.get(ventas.dimensiones[i].id)!;
-      expect(p!.medio).toBeCloseTo((g0 + g1) / 2);
-    });
-  });
-});
-
-describe("lineaDeLaSerie: por dónde va la línea", () => {
-  /** Cuatro ejes como en la rueda: dos de la base (derecha) y dos de la producción (izquierda), desordenados. */
-  const eje = (medio: number, punto: string | null) => ({ medio, capa: medio < 180 ? ("base" as const) : ("produccion" as const), punto });
-
-  it("con todos los puntos, cada uno unido con su vecino en el sentido de las agujas, y relleno", () => {
-    const { lados, relleno } = lineaDeLaSerie([eje(300, "d"), eje(40, "a"), eje(140, "b"), eje(220, "c")]);
-    expect(relleno).toEqual(["a", "b", "c", "d"]);
-    expect(lados.map((l) => `${l.de}${l.a}`)).toEqual(["ab", "bc", "cd", "da"]);
-  });
-
-  it("los lados que unen las dos mitades cruzan el hueco (se dibujan tenues); los de adentro, no", () => {
-    const { lados } = lineaDeLaSerie([eje(40, "a"), eje(140, "b"), eje(220, "c"), eje(300, "d")]);
-    expect(lados.filter((l) => l.cruzaElHueco).map((l) => `${l.de}${l.a}`)).toEqual(["bc", "da"]);
-  });
-
-  it("con todas las dimensiones en una sola capa, el lado que cierra la vuelta igual cruza el hueco", () => {
-    const base = (medio: number, punto: string) => ({ medio, capa: "base" as const, punto });
-    const { lados } = lineaDeLaSerie([base(30, "a"), base(90, "b"), base(150, "c")]);
-    expect(lados.filter((l) => l.cruzaElHueco).map((l) => `${l.de}${l.a}`)).toEqual(["ca"]);
-  });
-
-  it("un eje sin punto corta la línea y se queda sin relleno", () => {
-    const { lados, relleno } = lineaDeLaSerie([eje(40, "a"), eje(140, null), eje(220, "c"), eje(300, "d")]);
-    expect(relleno).toBeNull();
-    expect(lados.map((l) => `${l.de}${l.a}`)).toEqual(["cd", "da"]);
-  });
-
-  it("un punto sin vecinos no lleva línea; con dos ejes, un solo lado", () => {
-    expect(lineaDeLaSerie([eje(40, "a"), eje(140, null), eje(220, "c"), eje(300, null)]).lados).toEqual([]);
-    expect(lineaDeLaSerie([eje(40, "a"), eje(220, "c")]).lados).toHaveLength(1);
-    expect(lineaDeLaSerie([eje(40, "a")]).lados).toEqual([]);
   });
 });
 

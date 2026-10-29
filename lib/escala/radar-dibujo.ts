@@ -44,9 +44,14 @@ const AIRE_DEL_ORDEN = 9;
 export const f = (v: number) => v.toFixed(1);
 const aRadianes = (g: number) => (g * Math.PI) / 180;
 
-/** Grados de reloj y radio → coordenadas del SVG (la y crece hacia abajo). */
+/** Grados de reloj y radio → coordenadas del SVG (la y crece hacia abajo), desde un centro cualquiera. */
+export function polarDesde(cx: number, cy: number, grados: number, r: number): [number, number] {
+  return [cx + r * Math.sin(aRadianes(grados)), cy - r * Math.cos(aRadianes(grados))];
+}
+
+/** Grados de reloj y radio → coordenadas del SVG, desde el centro de este radar. */
 export function polar(grados: number, r: number): [number, number] {
-  return [CX + r * Math.sin(aRadianes(grados)), CY - r * Math.cos(aRadianes(grados))];
+  return polarDesde(CX, CY, grados, r);
 }
 
 /** El radio del anillo de una etapa (k = 0 es Deficiente). */
@@ -84,13 +89,21 @@ export const puntosSvg = (ps: readonly [number, number][]) => ps.map((p) => `${f
  * todas sus dimensiones en una mitad), el radio a secas.
  */
 export function yEnElCentro(angulos: readonly number[], radio: number, lado: "arriba" | "abajo"): number {
+  return yEnElCentroDesde(CX, CY, angulos, radio, lado);
+}
+
+/**
+ * Lo mismo, desde un centro cualquiera: lo usa también el radar de UNA empresa (lib/escala/radar-de-una-empresa.ts),
+ * que es este radar a otra escala. Un arreglo acá llega a los dos.
+ */
+export function yEnElCentroDesde(cx: number, cy: number, angulos: readonly number[], radio: number, lado: "arriba" | "abajo"): number {
   const derecha = angulos.filter((g) => g < 180);
   const izquierda = angulos.filter((g) => g >= 180);
-  if (!derecha.length || !izquierda.length) return lado === "arriba" ? CY - radio : CY + radio;
+  if (!derecha.length || !izquierda.length) return lado === "arriba" ? cy - radio : cy + radio;
   // Arriba: del último eje de la izquierda al primero de la derecha. Abajo: del último de la derecha al primero de la izquierda.
-  const [px, py] = polar(lado === "arriba" ? Math.max(...izquierda) : Math.max(...derecha), radio);
-  const [qx, qy] = polar(lado === "arriba" ? Math.min(...derecha) : Math.min(...izquierda), radio);
-  const t = (CX - px) / (qx - px);
+  const [px, py] = polarDesde(cx, cy, lado === "arriba" ? Math.max(...izquierda) : Math.max(...derecha), radio);
+  const [qx, qy] = polarDesde(cx, cy, lado === "arriba" ? Math.min(...derecha) : Math.min(...izquierda), radio);
+  const t = (cx - px) / (qx - px);
   return py + (qy - py) * t;
 }
 

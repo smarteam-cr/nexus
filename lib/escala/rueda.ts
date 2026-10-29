@@ -1,18 +1,16 @@
 /**
  * lib/escala/rueda.ts — la geometría de la rueda de un área. PURO: sin React ni colores.
  *
- * La comparten el Mapa (components/escala/Mapa.tsx: celdas con conteos) y el radar de una empresa
- * (components/escala/RadarDeUnaEmpresa.tsx, para la página pública del test y su PDF). Las dos dibujan la MISMA
- * rueda —mismo tamaño, mismas mitades, mismos rótulos en el mismo lugar— y solo cambia lo de adentro (pedido de
- * Elías, 2026-10-28: «básicamente solo debería cambiar lo del centro»). Un número que se mueve acá se mueve en las
- * dos. El radar de la teoría (components/escala/Radar.tsx) tiene su propia geometría (lib/escala/radar-dibujo.ts); de
- * acá solo toma `partirEnLineas`.
+ * La usa el Mapa (components/escala/Mapa.tsx: celdas con conteos). El radar de la teoría (components/escala/Radar.tsx)
+ * tiene su propia geometría (lib/escala/radar-dibujo.ts) y de acá solo toma `partirEnLineas`; el radar de UNA empresa
+ * (la página pública del test y su PDF) dejó de ser esta rueda el 2026-10-29: es el de la teoría con la empresa como
+ * figura (lib/escala/radar-de-una-empresa.ts).
  *
  * Grados de reloj: 0 = arriba, en el sentido de las agujas. La base operativa ocupa la mitad derecha y la
  * producción la izquierda, separadas por un hueco arriba y abajo; arriba, en ese hueco, van los nombres de los
  * niveles. Cada anillo es un nivel: Deficiente adentro, Óptimo en el borde.
  */
-import { LETRAS, type ClaveDeCapa, type Letra } from "./documento/tipos";
+import type { ClaveDeCapa } from "./documento/tipos";
 
 // ── Medidas (unidades del viewBox) ────────────────────────────────────────────
 export const W = 1300;
@@ -147,90 +145,4 @@ export function rotuloDeDimension(medio: number, nombre: string) {
 export function yDelNombreDeNivel(k: number): number {
   const [r0, r1] = anillo(k);
   return CY - (r0 + r1) / 2 + 5;
-}
-
-// ── Dónde cae un punto ────────────────────────────────────────────────────────
-
-/**
- * De una posición medida en anillos (0 = el borde de adentro de Deficiente, 5 = el borde de afuera de Óptimo) al
- * radio. Fuera de la escala, al borde: un punto nunca se sale de la rueda.
- */
-export function radioEnAnillos(posicion: number): number {
-  return R_DENTRO + ANCHO * Math.min(LETRAS.length, Math.max(0, posicion));
-}
-
-/**
- * Un puntaje del chequeo (0–100) a su posición, siempre DENTRO del anillo de su nivel: el nivel manda (es el que se
- * le dice a la empresa) y el puntaje dice cuánto avanzó dentro de él. Los tramos son los del chequeo
- * (lib/escala/chequeo.ts): Deficiente 0–19, Inicial 20–39, Funcional 40–59, Eficiente 60–79 y Óptimo 100, que va
- * al medio de su anillo. Un margen deja el punto lejos de la raya entre anillos, para que no se lea en el vecino.
- */
-export function posicionDelPuntaje(puntaje: number, nivel: Letra): number {
-  const k = LETRAS.indexOf(nivel);
-  if (nivel === "O") return k + 0.5;
-  const avance = (puntaje - 20 * k) / 20;
-  return k + Math.min(0.85, Math.max(0.15, Number.isFinite(avance) ? avance : 0.5));
-}
-
-// ── La línea de una serie ─────────────────────────────────────────────────────
-
-/**
- * Por dónde va la línea de una serie: cada punto unido con el del eje vecino, en el sentido de las agujas. Un eje sin
- * punto corta la línea (no salta por encima de él). El lado que une las dos mitades cruza el hueco, donde van los
- * nombres de los niveles y «la base»: se marca (`cruzaElHueco`) para dibujarlo tenue y no tapar esos rótulos. El
- * relleno existe solo si todos los ejes tienen punto.
- */
-export function lineaDeLaSerie<P>(ejes: readonly { medio: number; capa: ClaveDeCapa; punto: P | null }[]): {
-  lados: { de: P; a: P; cruzaElHueco: boolean }[];
-  relleno: P[] | null;
-} {
-  const orden = [...ejes].sort((x, y) => x.medio - y.medio);
-  const n = orden.length;
-  const lados: { de: P; a: P; cruzaElHueco: boolean }[] = [];
-  // Con dos ejes hay un solo lado; con más, el último se cierra con el primero.
-  const cuantos = n < 2 ? 0 : n === 2 ? 1 : n;
-  for (let i = 0; i < cuantos; i++) {
-    const x = orden[i];
-    const y = orden[(i + 1) % n];
-    // El lado que cierra la vuelta (del último eje al primero) siempre pasa por el hueco de arriba, aunque un área
-    // tenga todas sus dimensiones en una sola capa.
-    const cierra = n > 2 && i === n - 1;
-    if (x.punto !== null && y.punto !== null) lados.push({ de: x.punto, a: y.punto, cruzaElHueco: cierra || x.capa !== y.capa });
-  }
-  const relleno = n >= 3 && orden.every((e) => e.punto !== null) ? orden.map((e) => e.punto as P) : null;
-  return { lados, relleno };
-}
-
-// ── El radar de una empresa ───────────────────────────────────────────────────
-
-/** Una dimensión con el resultado de UNA empresa (la interfaz de components/escala/RadarDeUnaEmpresa.tsx). */
-export interface DimensionDeUnaEmpresa {
-  /** Única en el área: el id de la dimensión («1.3»). */
-  clave: string;
-  /** Lo que se lee arriba del nombre, como en el mapa. Por defecto, la clave. */
-  numero?: string;
-  nombre: string;
-  capa: ClaveDeCapa;
-  /** 0–100, el del chequeo. null: sin dato (no aplica, o no se contestó). */
-  puntaje: number | null;
-  /** El nivel que se le dice a la empresa. null: sin dato. */
-  nivel: Letra | null;
-  /** Contestó «No lo sé» (cuenta como el nivel más bajo): el punto se marca distinto. */
-  noLoSe?: boolean;
-}
-
-/**
- * Dónde va cada punto de una empresa: el ángulo del medio de la porción de su dimensión y el radio de su puntaje
- * dentro del anillo de su nivel. Sin nivel no hay punto (null). Sin puntaje, el medio del anillo de su nivel.
- */
-export function puntosDeUnaEmpresa(dims: readonly DimensionDeUnaEmpresa[]): ({ x: number; y: number; medio: number } | null)[] {
-  const angulos = porciones(dims.map((d) => ({ id: d.clave, capa: d.capa })));
-  return dims.map((d) => {
-    const ang = angulos.get(d.clave);
-    if (!d.nivel || !ang) return null;
-    const medio = (ang[0] + ang[1]) / 2;
-    const posicion = d.puntaje === null ? LETRAS.indexOf(d.nivel) + 0.5 : posicionDelPuntaje(d.puntaje, d.nivel);
-    const [x, y] = polar(medio, radioEnAnillos(posicion));
-    return { x, y, medio };
-  });
 }

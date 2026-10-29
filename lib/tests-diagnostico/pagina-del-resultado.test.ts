@@ -6,9 +6,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { PDF_POR_DIRECCION, PDF_POR_HORA, permitirPdfDeLaDireccion, permitirPdfEnTotal, reiniciarLimites, VENTANA_DE_PDF_MIN } from "./limite";
 import {
-  lineasDelNombre,
   puntajeDeLaDimension,
-  radioDelNivel,
   rutaDeImpresion,
   rutaDelPdf,
   sinElToken,
@@ -69,20 +67,6 @@ describe("las barras y el radar dicen lo mismo que el cálculo", () => {
     expect(puntajeDeLaDimension("D", null)).toBe(10);
     expect(puntajeDeLaDimension("F", null)).toBe(50);
     expect(puntajeDeLaDimension(null, null)).toBe(0);
-  });
-
-  it("en el radar, cada punto cae sobre el anillo de su nivel: Funcional sobre la línea de la base", () => {
-    expect(radioDelNivel("D")).toBeCloseTo(0.2);
-    expect(radioDelNivel("F")).toBeCloseTo(0.6);
-    expect(radioDelNivel("O")).toBe(1);
-    expect(radioDelNivel(null)).toBe(0);
-  });
-
-  it("los nombres largos se parten en dos líneas por palabras, sin perder ninguna", () => {
-    expect(lineasDelNombre("Datos")).toEqual(["Datos"]);
-    expect(lineasDelNombre("Tecnología y Automatización")).toEqual(["Tecnología y", "Automatización"]);
-    expect(lineasDelNombre("Aprendizaje de Ganadas y Perdidas").join(" ")).toBe("Aprendizaje de Ganadas y Perdidas");
-    expect(lineasDelNombre("Aprendizaje de Ganadas y Perdidas")).toHaveLength(2);
   });
 
   it("⛔ la agenda incrustada le dice a HubSpot la página del resultado SIN el token", () => {

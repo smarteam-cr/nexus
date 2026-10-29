@@ -3,27 +3,28 @@
  * 2026-10-26). Server component: el radar y las barras son SVG y CSS estáticos, así que la misma vista sirve para el PDF
  * (`modo="pdf"`, lib/print/pdf-runner.ts). Tema claro con hex literal, en tuteo.
  *
- * Se ve como el resultado de la aplicación vieja (Elías, 28 oct; el aspecto vive en resultado.css): los botones arriba,
- * la cabecera celeste con el nivel en grande, las barras con su puntaje sobre 100 y el calendario de HubSpot para agendar.
- * Cambios a propósito contra la vieja:
- *   · arriba de todo va el RADAR de la empresa, debajo del nivel: la rueda de la escala (RadarDeUnaEmpresa, la del Mapa)
- *     en escritorio y en el PDF, y el radar simple (RadarDelResultado) en el celular; reemplaza la curva de niveles;
- *   · el foco son las tres piezas de Nexus: «Por dónde empezar» (UNA recomendación, su razón y lo que cuesta quedarse),
- *     «Lo que hoy pone en riesgo a tu área» y «Lo que lo mueve» (sin precio);
- *   · las barras van después y compactas: nombre, barra, puntaje y nivel en una línea, sin la explicación de cada una;
- *   · los mensajes son los de la vieja, más cortos. El nivel va marcado como ESTIMADO: lo dijo quien respondió.
- * En el PDF no van los botones ni el calendario (se deja el enlace para agendar). Las salidas a la portada son enlaces
- * comunes y no `<Link>`: al volver con «Atrás», Next revivía la página en el navegador y la agenda de HubSpot quedaba en
- * blanco; con una carga completa vuelve bien (probado el 28 oct).
+ * Rediseño aprobado por Elías el 29 oct (Claude Design, tableros `Main`, `Movil` y `PdfHoja1`): la estructura, el orden
+ * y los textos de antes, con tres cambios — el radar es el de la teoría con la empresa como figura (RadarDeUnaEmpresa,
+ * a todo el ancho de su tarjeta y con «Ver puntajes» apagado al abrir), cada sección usa el ancho (columnas lado a lado)
+ * y la línea visual V3 de Nexus (Geist, tarjetas de 20 px, sombra suave, chips pastel, degradado en la cabecera; el
+ * aspecto vive en resultado.css). El orden: los botones, la cabecera con el nivel y el radar, «Por dónde empezar» (UNA
+ * recomendación, su razón y lo que cuesta quedarse), «Lo que hoy pone en riesgo a tu área», «Lo que lo mueve» (sin
+ * precio), «Cómo está cada parte» (las barras con su puntaje sobre 100) y el calendario de HubSpot para agendar. El
+ * nivel va marcado como ESTIMADO: lo dijo quien respondió.
+ *
+ * El PDF va en hojas horizontales (carta, 1056 × 816): la 1 con la cabecera y el radar grande, la 2 con las tres piezas
+ * y la 3 con las barras y el enlace para agendar. Sin botones, sin calendario y sin puntajes en el radar.
+ * Las salidas a la portada son enlaces comunes y no `<Link>`: al volver con «Atrás», Next revivía la página en el
+ * navegador y la agenda de HubSpot quedaba en blanco; con una carga completa vuelve bien (probado el 28 oct).
  */
 /* eslint-disable @next/next/no-html-link-for-pages -- las salidas a la portada recargan la página a propósito: con
    `<Link>`, al volver con «Atrás» la agenda de HubSpot quedaba en blanco (ver el encabezado). */
+import type { ReactNode } from "react";
 import { puntajeDeLaDimension } from "@/lib/tests-diagnostico/pagina-del-resultado";
 import type { ResultadoDelTest } from "@/lib/tests-diagnostico/resultado";
+import RadarDeUnaEmpresa from "@/components/escala/RadarDeUnaEmpresa";
 import CalendarioDeHubspot from "./CalendarioDeHubspot";
 import DescargarPdfDelResultado from "./DescargarPdfDelResultado";
-import RadarDeUnaEmpresa from "@/components/escala/RadarDeUnaEmpresa";
-import RadarDelResultado from "./RadarDelResultado";
 import "./diagnostico.css";
 import "./resultado.css";
 
@@ -36,46 +37,139 @@ const DESCRIPCION_DE_LA_CAPA: Record<string, string> = {
 const fechaLarga = (iso: string) =>
   new Intl.DateTimeFormat("es-CR", { day: "numeric", month: "long", year: "numeric", timeZone: "America/Costa_Rica" }).format(new Date(iso));
 
+const IconoAlerta = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M12 8v5" />
+    <path d="M12 17h.01" />
+  </svg>
+);
+
+/** Una sección blanca con su título chico arriba. */
+function Tarjeta({ titulo, className = "", children }: { titulo?: string; className?: string; children: ReactNode }) {
+  return (
+    <section className={`rd-tarjeta ${className}`}>
+      {titulo && <p className="rd-eyebrow">{titulo}</p>}
+      {children}
+    </section>
+  );
+}
+
+function PorDondeEmpezar({ rec }: { rec: NonNullable<ResultadoDelTest["recomendacion"]> }) {
+  return (
+    <Tarjeta className={`rd-empezar${rec.tipo === "trabajar" && rec.costoDeQuedarse ? " con-costo" : ""}`}>
+      <div className="rd-empezar-texto">
+        <p className="rd-eyebrow">Por dónde empezar</p>
+        {rec.tipo === "trabajar" && (
+          <h2>
+            Llevar {rec.dimensionNombre.toLowerCase()} a {rec.objetivoNombre}
+          </h2>
+        )}
+        <p className="rd-empezar-razon">{rec.razon}</p>
+      </div>
+      {rec.tipo === "trabajar" && rec.costoDeQuedarse && (
+        <div className="rd-costo">
+          <p className="rd-costo-titulo">Lo que cuesta quedarse así</p>
+          <p>{rec.costoDeQuedarse}</p>
+        </div>
+      )}
+    </Tarjeta>
+  );
+}
+
+function Riesgos({ riesgos }: { riesgos: readonly string[] }) {
+  return (
+    <Tarjeta titulo="Lo que hoy pone en riesgo a tu área">
+      <ul className="rd-riesgos">
+        {riesgos.map((x) => (
+          <li key={x}>
+            <span className="rd-riesgo-icono">
+              <IconoAlerta />
+            </span>
+            <span>{x}</span>
+          </li>
+        ))}
+      </ul>
+    </Tarjeta>
+  );
+}
+
+function Casos({ casos }: { casos: ResultadoDelTest["casos"] }) {
+  return (
+    <Tarjeta titulo="Lo que lo mueve">
+      <div className="rd-casos">
+        {casos.map((c) => (
+          <div key={c.id} className="rd-caso">
+            <p className="rd-caso-titulo">{c.titulo}</p>
+            <p className="rd-caso-promesa">{c.promesa}</p>
+            {c.razon && <p className="rd-caso-razon">{c.razon}</p>}
+          </div>
+        ))}
+      </div>
+    </Tarjeta>
+  );
+}
+
 function Barras({ r }: { r: ResultadoDelTest }) {
   const frena = r.recomendacion?.tipo === "trabajar" ? r.recomendacion.dimensionId : null;
   return (
-    <div className="rd-barras">
-      {r.capas.map((c) => {
-        const dims = r.dimensiones.filter((d) => d.capa === c.clave && d.preguntada);
-        if (!dims.length) return null;
-        return (
-          <div key={c.clave}>
-            <div className="rd-grupo-head">
-              <h3>{c.nombre}</h3>
-              {DESCRIPCION_DE_LA_CAPA[c.clave] && <span>{DESCRIPCION_DE_LA_CAPA[c.clave]}</span>}
+    <Tarjeta titulo="Cómo está cada parte">
+      <div className="rd-barras">
+        {r.capas.map((c) => {
+          const dims = r.dimensiones.filter((d) => d.capa === c.clave && d.preguntada);
+          if (!dims.length) return null;
+          return (
+            <div key={c.clave} className="rd-grupo">
+              <div className="rd-grupo-head">
+                <h3>{c.nombre}</h3>
+                {DESCRIPCION_DE_LA_CAPA[c.clave] && <span>{DESCRIPCION_DE_LA_CAPA[c.clave]}</span>}
+              </div>
+              {dims.map((d) => {
+                const p = puntajeDeLaDimension(d.nivel, d.puntaje);
+                return (
+                  <div key={d.id} className="rd-fila" data-nivel={d.nivel ?? undefined}>
+                    <span className="rd-fila-nombre">
+                      {d.nombre}
+                      {d.id === frena && <span className="rd-frena">LO QUE MÁS FRENA</span>}
+                    </span>
+                    <span className="rd-barra" aria-hidden="true">
+                      <span className="rd-barra-fill" style={{ width: `${Math.max(3, p)}%` }} />
+                    </span>
+                    <span className="rd-num">
+                      {p}
+                      <small>/100</small>
+                    </span>
+                    <span className="rd-chip" data-no-lo-se={d.noLoSe || undefined}>
+                      {d.noLoSe ? "No lo sabías" : (d.nivelNombre ?? "Sin ubicar")}
+                    </span>
+                  </div>
+                );
+              })}
             </div>
-            {dims.map((d) => {
-              const p = puntajeDeLaDimension(d.nivel, d.puntaje);
-              return (
-                <div key={d.id} className="rd-fila" data-nivel={d.nivel ?? undefined}>
-                  <span className="rd-fila-nombre">
-                    {d.nombre}
-                    {d.id === frena && <span className="rd-frena">LO QUE MÁS FRENA</span>}
-                  </span>
-                  <span className="rd-barra" aria-hidden="true">
-                    <span className="rd-barra-fill" style={{ width: `${Math.max(3, p)}%` }} />
-                  </span>
-                  <span className="rd-num">
-                    {p}
-                    <small>/100</small>
-                  </span>
-                  <span className="rd-chip">{d.noLoSe ? "No lo sabías" : (d.nivelNombre ?? "Sin ubicar")}</span>
-                </div>
-              );
-            })}
-          </div>
-        );
-      })}
+          );
+        })}
+      </div>
       {r.preguntadas < r.total && (
         <p className="rd-nota">
           Este test mira {r.preguntadas} de las {r.total} partes del área; las otras las vemos juntos en la sesión.
         </p>
       )}
+    </Tarjeta>
+  );
+}
+
+/** Las dos capas, con su nivel (o que no se midió). */
+function Capas({ r }: { r: ResultadoDelTest }) {
+  return (
+    <div className="rd-capas">
+      {r.capas.map((c) => (
+        <div key={c.clave} className="rd-capa" data-nivel={c.nivel ?? undefined}>
+          <p className="rd-capa-k">{c.nombre}</p>
+          <p className="rd-capa-v">
+            <span className="rd-punto" aria-hidden="true" />
+            {c.nivelNombre ?? (r.dimensiones.some((d) => d.capa === c.clave && d.preguntada) ? "Sin ubicar" : "No se midió")}
+          </p>
+        </div>
+      ))}
     </div>
   );
 }
@@ -108,7 +202,7 @@ export default function ResultadoDelTestVista({
   sinCorreo?: boolean;
   /** La dirección que arma el PDF. Null = sin botón (el resultado viejo no está guardado en Nexus). */
   pdf?: string | null;
-  /** `pdf`: lo que abre el navegador que imprime (sin botones ni calendario). */
+  /** `pdf`: lo que abre el navegador que imprime (en hojas, sin botones ni calendario). */
   modo?: "pantalla" | "pdf";
   /** Una línea arriba de todo (el resultado viejo dice cuándo se hizo y con qué escala se lee). */
   aviso?: string | null;
@@ -117,168 +211,176 @@ export default function ResultadoDelTestVista({
   const nombreDeLaEmpresa = empresa || dominio || "";
   const rec = r.recomendacion;
   const primerNombre = nombre?.trim().split(/\s+/)[0] ?? "";
+  const saludo = `${primerNombre ? `${primerNombre}, así` : "Así"} está hoy tu área de ${r.areaNombre}, parte por parte.`;
+  const parcial = r.preguntadas < r.total ? ` (${r.preguntadas} de ${r.total} partes)` : "";
 
-  return (
-    <div className={`dr dr-pasos${enPdf ? " rd-pdf" : ""}`}>
-      <header className="topbar">
-        {enPdf ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <span className="brand"><img src={LOGO} alt="Smarteam" height={28} /></span>
-        ) : (
-          <a className="brand" href="/external/test" title="Hacer otro diagnóstico">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={LOGO} alt="Smarteam" height={28} />
-          </a>
-        )}
-      </header>
-      <main className="rd">
-        {!enPdf && (
-          <div className="rd-acciones">
-            <a className="btn btn-ghost" href="/external/test">
-              ↻ Hacer otro test
-            </a>
-            {pdf && <DescargarPdfDelResultado href={pdf} />}
-          </div>
-        )}
+  const radar = (
+    <RadarDeUnaEmpresa
+      area={r.areaNombre}
+      dimensiones={r.dimensiones.map((d) => ({ clave: d.id, nombre: d.nombre, capa: d.capa, preguntada: d.preguntada, nivel: d.nivel, noLoSe: d.noLoSe, puntaje: d.puntaje }))}
+      capas={r.capas.map((c) => ({ clave: c.clave, nombre: c.nombre, descripcion: DESCRIPCION_DE_LA_CAPA[c.clave] ?? null, nivel: c.nivel, puntaje: c.puntaje }))}
+      niveles={r.niveles}
+      resultado={{ nivel: r.nivel, puntaje: r.puntaje }}
+      frena={rec?.tipo === "trabajar" ? { clave: rec.dimensionId, objetivo: rec.objetivo } : null}
+      formato={modo}
+    />
+  );
+  const nivelGrande = (
+    <h1 className="rd-nivel" data-nivel={r.nivel ?? undefined}>
+      <span className="rd-punto" aria-hidden="true" />
+      {r.nivelNombre ?? "Sin determinar"}
+    </h1>
+  );
 
-        {aviso && <p className="rd-nota">{aviso}</p>}
-
+  if (enPdf) {
+    const hojas = [
+      <>
         <section className="rd-head">
           <div className="rd-head-texto">
-            {nombreDeLaEmpresa && (
-              <span className="rd-empresa">
-                <span className="rd-empresa-logo" aria-hidden="true">{nombreDeLaEmpresa.trim().charAt(0).toUpperCase()}</span>
-                <span className="rd-empresa-txt">
-                  <b>{nombreDeLaEmpresa}</b>
-                  {dominio && dominio !== nombreDeLaEmpresa && <small>{dominio}</small>}
-                </span>
-              </span>
-            )}
-            <p className="rd-eyebrow">Diagnóstico de rendimiento · {r.areaNombre}</p>
-            {fecha && <p className="rd-fecha">{fechaLarga(fecha)}</p>}
             <p className="rd-label">Resultado general</p>
-            <h1 className="rd-nivel" data-nivel={r.nivel ?? undefined}>
-              {r.nivelNombre ?? "Sin determinar"}
-            </h1>
-            <p className="rd-saludo">
-              {primerNombre ? `${primerNombre}, así` : "Así"} está hoy tu área de {r.areaNombre}, parte por parte.
-            </p>
-            <p className="rd-estimado">
+            <div className="rd-nivel-fila">
+              {nivelGrande}
               <span className="rd-pill">Estimado</span>
-              con lo que respondiste{r.preguntadas < r.total ? ` (${r.preguntadas} de ${r.total} partes)` : ""}
-            </p>
-          </div>
-          <div className="rd-capas">
-            {r.capas.map((c) => (
-              <div key={c.clave} className="rd-capa" data-nivel={c.nivel ?? undefined}>
-                <p className="rd-capa-k">{c.nombre}</p>
-                <p className="rd-capa-v">
-                  {c.nivelNombre ?? (r.dimensiones.some((d) => d.capa === c.clave && d.preguntada) ? "Sin ubicar" : "No se midió")}
-                </p>
-              </div>
-            ))}
-          </div>
-          <div className="rd-head-radar">
-            {/* La rueda de la escala (la del Mapa interno) en escritorio y en el PDF; en el celular sus textos quedan de
-                5 px, así que ahí va el radar simple, que se lee (resultado.css decide cuál se ve). */}
-            <div className="rd-rueda">
-              <RadarDeUnaEmpresa
-                area={r.areaNombre}
-                dimensiones={r.dimensiones.map((d) => ({ clave: d.id, nombre: d.nombre, capa: d.capa, puntaje: d.puntaje, nivel: d.nivel, noLoSe: d.noLoSe }))}
-                capas={r.capas.map((c) => ({ clave: c.clave, nombre: c.nombre, descripcion: DESCRIPCION_DE_LA_CAPA[c.clave] ?? null }))}
-                niveles={r.niveles}
-                subtitulo={r.nivelNombre ? `${r.nivelNombre}${r.puntaje != null ? ` · ${Math.round(r.puntaje)}/100` : ""}` : null}
-              />
+              <span className="rd-parcial">con lo que respondiste{parcial}</span>
             </div>
-            <div className="rd-radar-simple">
-              <RadarDelResultado r={r} />
-            </div>
+            <p className="rd-saludo">{saludo}</p>
           </div>
+          <Capas r={r} />
         </section>
-
-        {rec && (
-          <section className="rd-panel rd-empezar">
-            <p className="rd-panel-titulo">Por dónde empezar</p>
-            {rec.tipo === "trabajar" ? (
-              <>
-                <h2>
-                  Llevar {rec.dimensionNombre.toLowerCase()} a {rec.objetivoNombre}
-                </h2>
-                <p>{rec.razon}</p>
-                {rec.costoDeQuedarse && (
-                  <p className="rd-costo">
-                    <b>Lo que cuesta quedarse así: </b>
-                    {rec.costoDeQuedarse}
-                  </p>
-                )}
-              </>
-            ) : (
-              <p>{rec.razon}</p>
-            )}
-          </section>
-        )}
-
-        {r.riesgos.length > 0 && (
-          <section className="rd-panel">
-            <p className="rd-panel-titulo">Lo que hoy pone en riesgo a tu área</p>
-            <ul className="rd-riesgos">
-              {r.riesgos.map((x) => (
-                <li key={x}>{x}</li>
-              ))}
-            </ul>
-          </section>
-        )}
-
-        {r.casos.length > 0 && (
-          <section className="rd-panel">
-            <p className="rd-panel-titulo">Lo que lo mueve</p>
-            <div className="rd-casos">
-              {r.casos.map((c) => (
-                <div key={c.id} className="rd-caso">
-                  <p className="rd-caso-titulo">{c.titulo}</p>
-                  <p className="rd-caso-promesa">{c.promesa}</p>
-                  {c.razon && <p className="rd-caso-razon">{c.razon}</p>}
-                </div>
-              ))}
-            </div>
-          </section>
-        )}
-
-        <section className="rd-panel">
-          <p className="rd-panel-titulo">Cómo está cada parte</p>
-          <Barras r={r} />
-        </section>
-
-        {enPdf ? (
-          agenda && (
-            <p className="rd-pie-texto">
+        <div className="rd-radar">{radar}</div>
+      </>,
+      <>
+        {rec && <PorDondeEmpezar rec={rec} />}
+        {r.riesgos.length > 0 && <Riesgos riesgos={r.riesgos} />}
+        {r.casos.length > 0 && <Casos casos={r.casos} />}
+      </>,
+      <>
+        <Barras r={r} />
+        {agenda && (
+          <section className="rd-tarjeta rd-agenda-pdf">
+            <p className="rd-eyebrow">El siguiente paso</p>
+            <h2>Revisemos juntos tu resultado, sin costo</h2>
+            <p>
               ¿Lo revisamos juntos? Agenda una sesión de 30 minutos, sin costo: <a href={agenda}>{agenda}</a>
             </p>
-          )
-        ) : (
-          <>
-            <section className="rd-agenda">
-              <p className="rd-eyebrow">El siguiente paso</p>
-              <h2>Revisemos juntos tu resultado, sin costo</h2>
-              <p>En 30 minutos lo leemos contigo y armamos el primer paso. Te llevas el plan aunque no trabajemos juntos.</p>
-              {agenda ? (
-                <CalendarioDeHubspot agenda={agenda} />
-              ) : sinCorreo ? (
-                <p className="rd-agenda-aviso">
-                  Para coordinarla, <a href="/external/test">haz el test de nuevo</a> y te escribimos al correo que dejes.
-                </p>
-              ) : (
-                <p className="rd-agenda-aviso">Te escribimos al correo que dejaste para coordinarla.</p>
-              )}
-            </section>
-            <div className="rd-pie">
-              <a className="btn btn-ghost" href="/external/test">
-                Diagnosticar otra área
-              </a>
-            </div>
-          </>
+          </section>
         )}
-        <p className="rd-pie-texto">Diagnóstico hecho con la Escala de Rendimiento de Smarteam.</p>
+      </>,
+    ];
+    return (
+      <div className="dr rd-v3 rd-pdf">
+        {hojas.map((contenido, i) => (
+          <section key={i} className={`rd-hoja${i === 0 ? " rd-hoja-1" : ""}`}>
+            <header className="rd-hoja-barra">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={LOGO} alt="Smarteam" height={20} />
+              <span>
+                {[nombreDeLaEmpresa, dominio && dominio !== nombreDeLaEmpresa ? dominio : null, `Diagnóstico de rendimiento · ${r.areaNombre}`, fecha ? fechaLarga(fecha) : null]
+                  .filter(Boolean)
+                  .join(" · ")}
+              </span>
+            </header>
+            <div className="rd-hoja-cuerpo">{contenido}</div>
+            <footer className="rd-hoja-pie">
+              <span>Diagnóstico hecho con la Escala de Rendimiento de Smarteam.</span>
+              <span className="rd-hoja-numero">{i + 1}</span>
+            </footer>
+          </section>
+        ))}
+      </div>
+    );
+  }
+
+  return (
+    <div className="dr rd-v3">
+      <header className="topbar">
+        <a className="brand" href="/external/test" title="Hacer otro diagnóstico">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={LOGO} alt="Smarteam" height={28} />
+        </a>
+      </header>
+      <main className="rd">
+        <div className="rd-acciones">
+          <a className="rd-btn rd-btn-ghost" href="/external/test">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M3 12a9 9 0 1 0 3-6.7" />
+              <path d="M3 4v5h5" />
+            </svg>
+            Hacer otro test
+          </a>
+          {pdf && <DescargarPdfDelResultado href={pdf} />}
+        </div>
+
+        {aviso && <p className="rd-aviso">{aviso}</p>}
+
+        <section className="rd-head">
+          <div className="rd-head-arriba">
+            <div className="rd-head-texto">
+              {nombreDeLaEmpresa && (
+                <span className="rd-empresa">
+                  <span className="rd-empresa-logo" aria-hidden="true">
+                    {nombreDeLaEmpresa.trim().charAt(0).toUpperCase()}
+                  </span>
+                  <span className="rd-empresa-txt">
+                    <b>{nombreDeLaEmpresa}</b>
+                    {dominio && dominio !== nombreDeLaEmpresa && <small>{dominio}</small>}
+                  </span>
+                </span>
+              )}
+              <p className="rd-eyebrow">Diagnóstico de rendimiento · {r.areaNombre}</p>
+              {fecha && <p className="rd-fecha">{fechaLarga(fecha)}</p>}
+              <p className="rd-label">Resultado general</p>
+              {nivelGrande}
+              <p className="rd-saludo">{saludo}</p>
+              <p className="rd-estimado">
+                <span className="rd-pill">Estimado</span>
+                con lo que respondiste{parcial}
+              </p>
+            </div>
+            <Capas r={r} />
+          </div>
+          <div className="rd-radar">{radar}</div>
+        </section>
+
+        {rec && <PorDondeEmpezar rec={rec} />}
+        {r.riesgos.length > 0 && <Riesgos riesgos={r.riesgos} />}
+        {r.casos.length > 0 && <Casos casos={r.casos} />}
+        <Barras r={r} />
+
+        <section className="rd-agenda">
+          <div className="rd-agenda-texto">
+            <p className="rd-eyebrow">El siguiente paso</p>
+            <h2>Revisemos juntos tu resultado, sin costo</h2>
+            <p>En 30 minutos lo leemos contigo y armamos el primer paso. Te llevas el plan aunque no trabajemos juntos.</p>
+          </div>
+          <div className="rd-agenda-caja">
+            {agenda ? (
+              <CalendarioDeHubspot agenda={agenda} />
+            ) : (
+              <div className="rd-agenda-aviso">
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#5f6d85" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <rect x="3" y="4.5" width="18" height="16" rx="2.5" />
+                  <path d="M3 9.5h18" />
+                  <path d="M8 2.5v4" />
+                  <path d="M16 2.5v4" />
+                </svg>
+                {sinCorreo ? (
+                  <p>
+                    Para coordinarla, <a href="/external/test">haz el test de nuevo</a> y te escribimos al correo que dejes.
+                  </p>
+                ) : (
+                  <p>Te escribimos al correo que dejaste para coordinarla.</p>
+                )}
+              </div>
+            )}
+          </div>
+        </section>
+        <div className="rd-pie">
+          <a className="rd-btn rd-btn-ghost" href="/external/test">
+            Diagnosticar otra área
+          </a>
+          <p className="rd-pie-texto">Diagnóstico hecho con la Escala de Rendimiento de Smarteam.</p>
+        </div>
       </main>
     </div>
   );
