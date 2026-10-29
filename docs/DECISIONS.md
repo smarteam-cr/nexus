@@ -12378,3 +12378,23 @@ artefactos. Plan: docs/escala-unica-plan.md.
   historia de toda la empresa (la de hoy de la preventa y de cada proyecto, en solo lectura, con cuántos niveles
   propuestos tienen sin revisar y un botón para ir a revisarlos) y «Probar la escala». Ya no se usan desde la ficha los
   niveles propuestos en la preventa o en un proyecto: se revisan en su pantalla.
+
+## Cada sesión de la exploración tiene su dirección (2026-10-28)
+
+Elías: «que cada sesión en el artefacto de exploración (en preventas y clientes) genere una URL diferente… para poder
+pasar el enlace del análisis de una sesión específica». Es un enlace INTERNO: abre la página de siempre con su guarda
+(`preventa.read` en Ventas › Preventa; el acceso a la empresa en la ficha). Nada que ver con los enlaces del cliente.
+
+- **La sesión va por su id, la pestaña en palabras**: `?sesion=s-…&momento=preparacion | en-vivo | analisis`
+  (lib/exploraciones/enlace-de-la-sesion.ts). Nunca por el número de la lista: quitar o sumar una sesión no cambia a
+  cuál apunta un enlace viejo. Sin `momento`, abre en la pestaña que le toca.
+- **Una reunión que entró sola** (`r-meet-…`) se vuelve sesión (`s-…`) cuando alguien le escribe: el enlace viejo la
+  encuentra por su reunión. **La próxima sin planear** no tiene id: no lleva «Copiar enlace».
+- **Un id que no está** (la quitaron, o es de otra exploración) abre el inicio de la Exploración con un aviso, no una
+  sesión cualquiera. En la ficha con varios proyectos, `?tab=` dice de cuál es la dirección: la sesión no se busca en otro.
+- **El historial**: dentro de Exploración, elegir otra sesión, otra pestaña o volver al inicio es un paso más («Atrás»
+  vuelve a lo anterior); salir de la pieza o cambiar de proyecto solo saca la sesión de la dirección.
+- ⚠ **Se escribe con `history.pushState(null, …)`, nunca con `window.history.state`**: con el estado de Next, Next da la
+  dirección por no cambiada y, en el próximo refresco (cambiar el responsable, la edición), vuelve a escribir la vieja.
+  Lo encontró la revisión antes del commit.
+- Los enlaces viejos de la preventa a una exploración que es de un proyecto llevan la sesión hasta la ficha.

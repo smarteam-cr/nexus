@@ -12,6 +12,7 @@ import KickoffWorkspace from "@/components/canvas/KickoffWorkspace";
 import DesarrolloWorkspace from "@/components/canvas/DesarrolloWorkspace";
 import ExploracionWorkspace from "@/components/canvas/ExploracionWorkspace";
 import ExploracionDelProyecto from "@/components/exploraciones/ExploracionDelProyecto";
+import { sinLaSesion } from "@/lib/exploraciones/enlace-de-la-sesion";
 import DiagnosticoWorkspace from "@/components/canvas/DiagnosticoWorkspace";
 import PlanificacionWorkspace from "@/components/canvas/PlanificacionWorkspace";
 import ImplementacionWorkspace from "@/components/canvas/ImplementacionWorkspace";
@@ -392,7 +393,8 @@ export default function ProjectCanvasPanel({
     setEnResumen(false);
     setPiezaSinCanvas(null);
     setActiveCanvasId(canvasId);
-    const url = new URL(window.location.href);
+    // La sesión abierta de la Exploración (`?sesion=`) es de esa pieza: al cambiar de pieza deja de nombrarse.
+    const url = sinLaSesion(new URL(window.location.href));
     /* SIEMPRE se escribe el `?canvas=`, incluso para el canvas por defecto: la URL sin el
        parámetro ya significa otra cosa —el resumen—, así que omitirlo mandaría al kickoff
        a una dirección que abre el resumen. */
@@ -405,7 +407,7 @@ export default function ProjectCanvasPanel({
     if (cronogramaOcupado) return;
     setEnResumen(false);
     setPiezaSinCanvas(slug);
-    const url = new URL(window.location.href);
+    const url = sinLaSesion(new URL(window.location.href));
     url.searchParams.set("canvas", slug);
     router.replace(url.pathname + url.search, { scroll: false });
   }, [router, cronogramaOcupado]);
@@ -415,7 +417,7 @@ export default function ProjectCanvasPanel({
     if (cronogramaOcupado) return;
     setEnResumen(true);
     setPiezaSinCanvas(null);
-    const url = new URL(window.location.href);
+    const url = sinLaSesion(new URL(window.location.href));
     url.searchParams.delete("canvas");
     router.replace(url.pathname + url.search, { scroll: false });
   }, [router, cronogramaOcupado]);

@@ -93,7 +93,12 @@ type Destino =
    * con el mismo chequeo del mapa (lo confirmado y lo propuesto), para compararlo con el que cree el equipo. Interno
    * (Escala › Probar): nunca llega a un documento del cliente.
    */
-  | "prueba-de-la-escala";
+  | "prueba-de-la-escala"
+  /**
+   * LA DIRECCIÓN DE UNA SESIÓN (2026-10-28, lib/exploraciones/enlace-de-la-sesion.ts): solo los nombres de `?sesion=` y
+   * `?momento=`, para sacarlos al cambiar de pieza. No lee ninguna exploración.
+   */
+  | "direccion-de-la-sesion";
 
 const CENSO: Record<string, { destino: Destino; motivo: string }> = {
   "lib/escala/prueba/calculo.ts": {
@@ -268,6 +273,14 @@ const CENSO: Record<string, { destino: Destino; motivo: string }> = {
     destino: "guia-interna",
     motivo: "El agente de la guía lee los niveles del preliminar como punto de partida (interno, nunca al cliente).",
   },
+  "app/(shell)/clients/[id]/WorkspaceClient.tsx": {
+    destino: "direccion-de-la-sesion",
+    motivo: "Al cambiar de proyecto en la ficha, saca de la dirección la sesión abierta de la Exploración del anterior (sacarLaSesion). No lee ninguna exploración.",
+  },
+  "components/clients/ProjectCanvasPanel.tsx": {
+    destino: "direccion-de-la-sesion",
+    motivo: "Al cambiar de pieza en la ficha, saca de la dirección la sesión abierta de la Exploración (sinLaSesion). No lee ninguna exploración.",
+  },
   "app/api/projects/[projectId]/exploracion/route.ts": {
     destino: "exploracion-del-proyecto",
     motivo: "Abrir y leer la exploración del proyecto en su ficha (pantalla interna del CSE).",
@@ -392,6 +405,10 @@ const PUERTAS: Record<Exclude<Destino, "ventas">, { permitidas: RegExp; prohibid
   "cuestionario-al-cliente": {
     permitidas: /\bubicacionPreviaDelProyecto\b/,
     prohibidas: /exploracionParaLaPropuesta|bloqueParaElHandoff|exploracionParaElHandoff|internoParaElCse|leerContenido|leerExploracion\b|\.exploracionDeVenta\b|\.estado\b/,
+  },
+  "direccion-de-la-sesion": {
+    permitidas: /\bsinLaSesion\b|\bsacarLaSesion\b/,
+    prohibidas: /\bparaLaPropuesta\b|bloqueParaLaPropuesta|exploracionParaElHandoff|internoParaElCse|bloqueParaElHandoff|leerContenido|leerExploracion\b|\.exploracionDeVenta\b/,
   },
   "exploracion-del-proyecto": {
     permitidas: /\btextoDeLaExploracionDelProyecto\b|\basegurarExploracionDelProyecto\b|\bcuantoHayEnLaExploracionDelProyecto\b|\bfechasDeLasLecturasDelProyecto\b/,

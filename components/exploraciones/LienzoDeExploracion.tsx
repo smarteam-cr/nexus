@@ -22,7 +22,8 @@
  * Exploración abre en su página de inicio (InicioDeLaExploracion): la próxima sesión, las sesiones con
  * su reunión, «+ Agregar sesión», las fuentes manuales y las instrucciones. Elegir una sesión sale del
  * inicio; tocar «Exploración» en el riel (o en el de la ficha, con el evento `exploracion:inicio`)
- * vuelve. Con `?sesion=<id>` (los enlaces de «Para ti») se abre esa sesión. El «Contexto adicional» de
+ * vuelve. Cada sesión tiene su dirección (`?sesion=<id>&momento=analisis`, 2026-10-28; lib/exploraciones/enlace-de-la-sesion.ts):
+ * elegirla la escribe, «Atrás» vuelve a la anterior y abrir el enlace abre esa sesión en esa pestaña. El «Contexto adicional» de
  * la exploración se retiró: las demás piezas con agente tienen el suyo, sin lista de reuniones.
  *
  * ── EN LA CUENTA (escala única, 2026-10-28) ────────────────────────────────
@@ -63,6 +64,7 @@ import type { ExploracionParaLaPantalla } from "@/lib/exploraciones/servidor";
 import { hoyEnCostaRica } from "@/lib/exploraciones/fechas";
 import { opcionesDeLasPestanas, pestanasDeSesiones } from "@/lib/exploraciones/guia";
 import { esParaEstaExploracion, EVENTO_GUIA_CAMBIADA, type AvisoDeLaGuia } from "@/lib/exploraciones/aviso-de-la-guia";
+import { conLaSesion, esDeEsteProyecto, modoDeEscritura, sesionQuePideLaDireccion, sinLaSesion } from "@/lib/exploraciones/enlace-de-la-sesion";
 import { Casilla } from "./Casilla";
 import ManejoDeObjeciones from "./ManejoDeObjeciones";
 import { LienzoContexto, type Lienzo, type LugarDelLienzo, type ModoDelSelector, type MomentoDeLaSesion, type OpcionesDeCambio, type PasoDelLienzoUI } from "./contexto";
@@ -122,6 +124,12 @@ const AYUDA_DEL_ESTADO: Record<EstadoDePieza, string> = {
 
 const esPieza = (x: string | null | undefined): x is PasoDelLienzoUI => !!x && x in NOMBRE_DEL_PASO;
 
+/** Las sesiones que muestra esta exploración: las mismas de useSesiones. */
+function sesionesQueSeMuestran(e: ExploracionParaLaPantalla, reuniones: NonNullable<ExploracionParaLaPantalla["reuniones"]>) {
+  const opciones = opcionesDeLasPestanas(e.automaticas, e.estado.contenido.fuera);
+  return pestanasDeSesiones(e.estado.contenido.sesiones, reuniones, hoyEnCostaRica(), opciones);
+}
+
 /** Dónde vive la exploración de un proyecto en la ficha del cliente. */
 export interface EnElProyecto {
   /** El panel de la derecha de la ficha (null si está oculto). */
@@ -178,8 +186,20 @@ export default function LienzoDeExploracion({
 }) {
   const router = useRouter();
   const toast = useToast();
-  // `?sesion=<id>` (los enlaces de «Para ti»): se abre esa sesión en vez de la página de inicio.
-  const sesionDeLaDireccion = useSearchParams().get("sesion");
+  const enProyecto = !!proyecto;
+  const lugar: LugarDelLienzo = cuenta ? "cuenta" : proyecto ? "proyecto" : "preventa";
+  /* `?sesion=<id>&momento=analisis` (los enlaces de «Copiar enlace» y de «Para ti»): se abre esa sesión, en esa pestaña,
+     en vez de la página de inicio. Una que ya no está en ESTA exploración abre el inicio con un aviso (más abajo). */
+  const direccion = useSearchParams();
+  const [alAbrir] = useState(() =>
+    sesionQuePideLaDireccion(direccion, {
+      sesiones: sesionesQueSeMuestran(inicial, inicial.reuniones ?? []),
+      enProyecto,
+      projectId: inicial.projectId,
+      // En la preventa, una sesión sin `?pieza=` abre Exploración; con otra pieza, no se abre.
+      enLaPieza: !cuenta && (enProyecto || !esPieza(piezaInicial) || piezaInicial === "exploracion"),
+    }),
+  );
   const [exp, setExp] = useState(inicial);
   const [sinLeer, setSinLeer] = useState(inicial.sinLeer ?? []);
   const [proyectos, setProyectos] = useState(inicial.proyectos ?? []);
@@ -190,21 +210,28 @@ export default function LienzoDeExploracion({
   const [guardando, setGuardando] = useState(false);
   const conAnalisis = veAnalisisDeVenta && !proyecto && !cuenta;
   const [paso, setPasoCrudo] = useState<PasoDelLienzoUI>(
-    cuenta ? "escala" : proyecto ? "exploracion" : esPieza(piezaInicial) && (piezaInicial !== "analisis" || conAnalisis) ? piezaInicial : "resumen",
+    cuenta
+      ? "escala"
+      : proyecto
+        ? "exploracion"
+        : esPieza(piezaInicial) && (piezaInicial !== "analisis" || conAnalisis)
+          ? piezaInicial
+          : alAbrir.sesion || alAbrir.perdida
+            ? "exploracion"
+            : "resumen",
   );
   const [vista, setVista] = useState<VistaDelProyecto>("sesiones");
-  const [sesionElegida, setSesionElegida] = useState<string | null>(sesionDeLaDireccion);
-  const [enInicio, setEnInicio] = useState(!sesionDeLaDireccion);
+  const [sesionElegida, setSesionElegida] = useState<string | null>(alAbrir.sesion);
+  const [enInicio, setEnInicio] = useState(!alAbrir.sesion);
   const [selector, setSelector] = useState<ModoDelSelector | null>(null);
-  const [momentos, setMomentos] = useState<Record<string, MomentoDeLaSesion>>({});
+  const [momentos, setMomentos] = useState<Record<string, MomentoDeLaSesion>>(() =>
+    alAbrir.sesion && alAbrir.momento ? { [alAbrir.sesion]: alAbrir.momento } : {},
+  );
   const [casillaAbierta, setCasillaAbierta] = useState<ClaveDeCasilla | null>(null);
   const [objecionesAbiertas, setObjecionesAbiertas] = useState(false);
   const [revision, setRevision] = useState<{ abierto: boolean; filtro: "todo" | PasoDelLienzoUI }>({ abierto: false, filtro: "todo" });
   // El pie del cajón: ahí van «Guardar» y «Cancelar», fijos abajo aunque el formulario sea largo.
   const [pie, setPie] = useState<HTMLDivElement | null>(null);
-  // La pieza abierta queda en la dirección, sin otra navegación (no vuelve a pedir la página).
-  const enProyecto = !!proyecto;
-  const lugar: LugarDelLienzo = cuenta ? "cuenta" : proyecto ? "proyecto" : "preventa";
   /* La escala del lienzo la arma el servidor con la edición y el perfil: si cambian, se vuelve a pedir. En la cuenta la
      pide la ficha (no hay página que refrescar); en la preventa y en un proyecto, la página. Por referencia: los
      callbacks de abajo no se rehacen cada vez que la ficha se vuelve a pintar. */
@@ -218,6 +245,7 @@ export default function LienzoDeExploracion({
   useEffect(() => {
     pasoActual.current = paso;
   }, [paso]);
+  // La pieza abierta queda en la dirección, sin otra navegación (no vuelve a pedir la página).
   const setPaso = useCallback((p: PasoDelLienzoUI) => {
     // En un proyecto (o en la cuenta) hay una sola pieza: la dirección es la de la ficha.
     if (enProyecto || lugar === "cuenta") return;
@@ -225,10 +253,13 @@ export default function LienzoDeExploracion({
     pasoActual.current = p;
     setPasoCrudo(p);
     try {
-      const url = new URL(window.location.href);
+      // Fuera de Exploración la dirección deja de nombrar una sesión.
+      const url = p === "exploracion" ? new URL(window.location.href) : sinLaSesion(new URL(window.location.href));
       if (p === "resumen") url.searchParams.delete("pieza");
       else url.searchParams.set("pieza", p);
-      window.history.replaceState(window.history.state, "", url.toString());
+      /* Con `null` y no con `window.history.state`: así Next se entera de la dirección nueva. Con su estado, la daba por
+         no cambiada y, en el próximo refresco, volvía a escribir la vieja (la sesión anterior en la barra). */
+      window.history.replaceState(null, "", url.toString());
     } catch {
       /* sin la dirección, igual cambia de pieza */
     }
@@ -565,10 +596,90 @@ export default function LienzoDeExploracion({
     return () => window.removeEventListener("exploracion:inicio", alInicio);
   }, [enProyecto]);
 
+  /* ── La sesión en la dirección (Elías, 2026-10-28: «que cada sesión genere una URL diferente») ──────────────
+     La sesión abierta y su pestaña elegida a mano viven en `?sesion=` y `?momento=` (lib/exploraciones/enlace-de-la-sesion.ts).
+     Elegir otra sesión, otra pestaña o volver al inicio deja una entrada en el historial, así «Atrás» vuelve a lo
+     anterior; salir de Exploración solo la saca (modoDeEscritura). Se escribe sin navegar (no vuelve a pedir la página) y
+     con `null` de estado, para que Next adopte la dirección nueva: con el suyo la daba por no cambiada y, en el próximo
+     refresco (cambiar el responsable, la edición), volvía a escribir la vieja. */
+  const mostradas = useMemo(() => sesionesQueSeMuestran(exp, reuniones), [exp, reuniones]);
+  const mostradasAhora = useRef(mostradas);
+  useEffect(() => {
+    mostradasAhora.current = mostradas;
+  }, [mostradas]);
+  const enLaPieza = lugar !== "cuenta" && (enProyecto ? vista === "sesiones" : paso === "exploracion");
+  const sesionDeLaUrl = enLaPieza && !enInicio ? sesionElegida : null;
+  const momentoDeLaUrl = sesionDeLaUrl ? (momentos[sesionDeLaUrl] ?? null) : null;
+  const primeraEscritura = useRef(true);
+  useEffect(() => {
+    if (lugar === "cuenta") return;
+    const primera = primeraEscritura.current;
+    primeraEscritura.current = false;
+    try {
+      const actual = new URL(window.location.href);
+      if (!esDeEsteProyecto(actual.searchParams, enProyecto, exp.projectId)) return;
+      const deseada = conLaSesion(actual, sesionDeLaUrl, momentoDeLaUrl);
+      if (deseada.href === actual.href) return;
+      if (modoDeEscritura({ primera, enLaPieza }) === "agregar") window.history.pushState(null, "", deseada.href);
+      else window.history.replaceState(null, "", deseada.href);
+    } catch {
+      /* sin la dirección, la sesión igual se abre */
+    }
+  }, [lugar, enProyecto, exp.projectId, enLaPieza, sesionDeLaUrl, momentoDeLaUrl]);
+
+  // «Atrás» y «Adelante»: la pantalla vuelve a lo que dice la dirección.
+  useEffect(() => {
+    if (lugar === "cuenta") return;
+    const alVolver = () => {
+      const url = new URL(window.location.href);
+      if (!esDeEsteProyecto(url.searchParams, enProyecto, exp.projectId)) return;
+      let enExploracion = true;
+      if (!enProyecto) {
+        const p = url.searchParams.get("pieza");
+        const nuevo: PasoDelLienzoUI = esPieza(p) && (p !== "analisis" || conAnalisis) ? p : "resumen";
+        pasoActual.current = nuevo;
+        setPasoCrudo(nuevo);
+        enExploracion = nuevo === "exploracion";
+      }
+      const { sesion: clave, momento } = sesionQuePideLaDireccion(url.searchParams, {
+        sesiones: mostradasAhora.current,
+        enProyecto,
+        projectId: exp.projectId,
+        enLaPieza: enExploracion,
+      });
+      if (clave) {
+        if (enProyecto) setVista("sesiones");
+        setSesionElegida(clave);
+        setEnInicio(false);
+        setMomentos((m) => {
+          const resto = { ...m };
+          delete resto[clave];
+          return momento ? { ...resto, [clave]: momento } : resto;
+        });
+      } else if (enExploracion) {
+        setEnInicio(true);
+      }
+      /* Si la dirección a la que se volvió nombra algo que ya no está, se corrige EN SU LUGAR: escribirla después con
+         un pushState borraría el «Adelante». */
+      const canonica = conLaSesion(url, clave, momento);
+      if (canonica.href !== url.href) window.history.replaceState(null, "", canonica.href);
+    };
+    window.addEventListener("popstate", alVolver);
+    return () => window.removeEventListener("popstate", alVolver);
+  }, [lugar, enProyecto, exp.projectId, conAnalisis]);
+
+  // Un enlace a una sesión que ya no está (la quitaron, o es de otra exploración): se abre el inicio y se dice.
+  const avisado = useRef(false);
+  useEffect(() => {
+    if (!alAbrir.perdida || avisado.current) return;
+    avisado.current = true;
+    toast.info("La sesión de ese enlace ya no está en esta exploración. Te dejamos en su inicio.");
+  }, [alAbrir.perdida, toast]);
+
   // Lo que falta en las sesiones va primero en «Qué sigue» (la exploración de un cliente arranca vacía).
   const hoy = hoyEnCostaRica();
   const sesionesParaSigue = {
-    pestanas: pestanasDeSesiones(exp.estado.contenido.sesiones, reuniones, hoy, opcionesDeLasPestanas(exp.automaticas, exp.estado.contenido.fuera)),
+    pestanas: mostradas,
     automaticas: exp.automaticas,
   };
   const sigue = enProyecto
