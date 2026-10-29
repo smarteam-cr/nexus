@@ -171,7 +171,7 @@ describe("las líneas base de eslint y tsc solo bajan (A-23)", () => {
    * guarda impide que los archivos SUBAN solos — subir uno exige tocar estos dos números, o sea
    * un diff que alguien lee.
    */
-  const TOPE_ESLINT = 57;
+  const TOPE_ESLINT = 16;
   const TOPE_TSC = 0;
   const leer = (archivo: string) =>
     Number.parseInt(fs.readFileSync(path.join(process.cwd(), archivo), "utf8").trim(), 10);

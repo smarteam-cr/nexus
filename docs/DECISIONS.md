@@ -12490,3 +12490,21 @@ pasar el enlace del análisis de una sesión específica». Es un enlace INTERNO
   dirección por no cambiada y, en el próximo refresco (cambiar el responsable, la edición), vuelve a escribir la vieja.
   Lo encontró la revisión antes del commit.
 - Los enlaces viejos de la preventa a una exploración que es de un proyecto llevan la sesión hasta la ficha.
+
+## Las tarjetas viejas de contexto: se borra lo que no tiene lector (2026-10-29)
+
+Rescate de una copia del 7-oct que lo había hecho sin commitear (deuda #24 de ARCHITECTURE). Se rehízo sobre main,
+con el diff viejo solo como referencia, después de confirmar con búsqueda que nada vivo lo llamaba.
+
+- **Se borra la cara de pantalla de `ClientContextCard`**: los componentes `ClientContextCards`, `SendToCanvasMenu` y
+  `SectionDiscoveryModal`, y las rutas `clients/[id]/context-cards` (y `[cardId]`), `projects/[projectId]/canvas-cards`
+  y `cards/[cardId]/send-to-canvas` y `canvas-status`. Ninguna pantalla los montaba ni ningún `fetch` los llamaba desde
+  el retiro del Resumen. *Por qué ahora:* las rutas de tarjetas eran una puerta lateral al dato de un cliente (la
+  auditoría del 2026-09-03 les tuvo que poner guarda); sin pantalla, mantener esa guarda era pagar por una puerta que
+  nadie usa.
+- **La guarda N2c de `project-api-guards.test.ts` se queda, sin piso de archivos**: hoy `app/api/cards/` no existe y
+  no escanea nada; si vuelve una ruta de tarjetas, cada handler tiene que pasar por `guardAccessToClient` sobre
+  `card.clientId`. *Por qué no borrarla:* un comentario no frena a nadie (lo marcó la revisión). La entrada exenta de
+  `send-to-canvas` en `scope-coverage.ts` sí sale con su ruta.
+- **El modelo, sus filas y lo que leen y escriben los agentes en `/analyze` se quedan**: es el ítem 23 y el resto del
+  24 (los agentes encadenados por paso todavía leen las cards del paso anterior y las HUMAN del cliente).

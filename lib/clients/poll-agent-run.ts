@@ -7,7 +7,7 @@
  * pollear el GET /api/clients/[id]/analyze/[runId] hasta DONE/ERROR.
  *
  * Lo usan los disparadores de agentes: CanvasAgentButton (CTA por-canvas),
- * SubstepAgentButton y ClientContextCards — para no duplicar el loop.
+ * ProjectHandoffSection y el hook useAgentRun — para no duplicar el loop.
  */
 
 export interface PolledRun {
