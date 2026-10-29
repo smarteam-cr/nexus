@@ -265,6 +265,19 @@ describe("pedidoDePosicionar", () => {
 });
 
 describe("las reuniones que alguien eligió", () => {
+  it("la que unió sola Nexus (el calendario) no es elegida: entra como reciente, sin prioridad", () => {
+    const ids = reunionesElegidas([
+      {
+        sesiones: [
+          { id: "s1", reunion: { id: "a-mano", origen: "meet" } },
+          { id: "s2", reunion: { id: "sola", origen: "meet" }, asociadaSola: "2026-10-27T10:00:00.000Z" },
+        ],
+        reunionesElegidas: [],
+      },
+    ]);
+    expect(ids).toEqual(["a-mano"]);
+  });
+
   it("la de cada sesión de Meet y las del buscador, sin repetir; las de HubSpot o de un documento no", () => {
     const ids = reunionesElegidas([
       {

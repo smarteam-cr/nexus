@@ -8,8 +8,9 @@ import "server-only";
  * entera»): una fila de `ExploracionDeVenta` con `marco = "cs"`, sin tabla nueva. La ficha la pinta con el lienzo de la
  * preventa en modo `cuenta` (LienzoDeExploracion) y la cambia por el PATCH de siempre.
  *   · `laEscalaDeLaCuenta` — la exploración tal como la pinta el lienzo, sin crear nada.
- *   · `abrirLaEscalaDeLaCuenta` — la crea si no está y, si no tiene ningún nivel, le trae lo medido en la preventa
- *     (lib/exploraciones/punto-de-partida.ts) por el escritor de siempre, que deja la versión del día.
+ *   · `abrirLaEscalaDeLaCuenta` — la crea si no está y, si nunca midió nada, le trae lo medido en la preventa o en la
+ *     Exploración de un proyecto, la más reciente que midió algo (lib/exploraciones/punto-de-partida.ts), por el escritor
+ *     de siempre, que deja la versión del día.
  *   · `proyectoDeContextoDeLaEmpresa` — el proyecto de contexto de «Actualizar escala», solo si es de la empresa.
  *   · `reunionesElegidasDeLaEmpresa` — las reuniones que alguien unió a una sesión de cualquier exploración de la empresa:
  *     «Actualizar escala» las lee primero.
@@ -19,15 +20,14 @@ import "server-only";
 import { ensureClientInfoProject } from "@/lib/canvas/strategy-project";
 import { esquemaDesactualizado, modeloDisponible } from "@/lib/db/esquema";
 import { prisma } from "@/lib/db/prisma";
-import { SENTINEL_SERVICE_TYPE } from "@/lib/projects/kind";
+import { CONTENEDOR_PRIMERO, SENTINEL_SERVICE_TYPE } from "@/lib/projects/kind";
 import { asegurarExploracionDelProyecto } from "./del-proyecto";
 import { idsDeLaEscala, type EscalaDelLienzo } from "./escala-del-lienzo";
 import { leerContenido } from "./esquemas";
-import { DE_LA_PREVENTA } from "./marco";
 import { reunionesElegidas } from "./posicionar";
-import { escalaDeLaPreventa, hayQueTraer, medidoDeLaPreventa, midioAlgo } from "./punto-de-partida";
+import { escalaDeLaPreventa, hayQueTraer, medidoDeLaPreventa, midioAlgo, origenDelPuntoDePartida } from "./punto-de-partida";
 import { aplicarCambios, escalaDeLaExploracion, escalaParaExplorar, estadoDesdeFila, leerExploracion, paraLaPantalla, type ExploracionParaLaPantalla } from "./servidor";
-import { anotarVersionDelCambio, tieneVersiones } from "./versiones-de-la-escala";
+import { anotarVersionDelCambio, tieneVersiones, ultimaMedicionDe } from "./versiones-de-la-escala";
 
 export interface EscalaDeLaCuenta {
   exploracion: ExploracionParaLaPantalla;
@@ -40,7 +40,7 @@ export interface EscalaDeLaCuenta {
 async function contenedorDe(clientId: string): Promise<string | null> {
   const p = await prisma.project.findFirst({
     where: { clientId, serviceType: SENTINEL_SERVICE_TYPE },
-    orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+    orderBy: CONTENEDOR_PRIMERO,
     select: { id: true },
   });
   return p?.id ?? null;
@@ -52,19 +52,44 @@ async function laViva(contenedorId: string): Promise<string | null> {
   return f?.id ?? null;
 }
 
-/** La preventa más reciente de la empresa que midió algo (viva o archivada: lo medido no se pierde al archivarla). */
-async function preventaQueMidio(clientId: string) {
+/**
+ * De dónde parte la cuenta: la exploración de ESTA empresa que midió algo más recientemente, la preventa o la de un
+ * proyecto (viva o archivada: lo medido no se pierde al archivarla). Nunca la de la cuenta misma (el contenedor), la de
+ * un proyecto de prueba (`esPrueba`: sus niveles son inventados) ni la de un proyecto que hoy es de otra empresa (una
+ * fusión o una reasignación que dejó la exploración con la empresa vieja: invariante #1). «Más recientemente» es la
+ * fecha de su última versión (`ultimaMedicionDe`), no la de su último cambio; sin versiones, la de su último cambio.
+ */
+async function origenQueMidio(clientId: string) {
   const filas = await prisma.exploracionDeVenta.findMany({
-    where: { clientId, ...DE_LA_PREVENTA },
+    where: { clientId },
     orderBy: { updatedAt: "desc" },
-    take: 5,
-    select: { id: true, contenido: true, propuesta: true, areas: true, edicion: true, perfilCierre: true, perfilDespues: true, responsableEmail: true, archivadaEn: true },
+    take: 20,
+    select: {
+      id: true,
+      contenido: true,
+      propuesta: true,
+      areas: true,
+      edicion: true,
+      perfilCierre: true,
+      perfilDespues: true,
+      responsableEmail: true,
+      archivadaEn: true,
+      updatedAt: true,
+      project: { select: { name: true, serviceType: true, esPrueba: true, clientId: true } },
+    },
   });
-  for (const f of filas) {
-    const estado = estadoDesdeFila(f);
-    if (midioAlgo(estado)) return { id: f.id, estado };
-  }
-  return null;
+  const candidatas = filas.filter(
+    (f) => !f.project || (f.project.serviceType !== SENTINEL_SERVICE_TYPE && !f.project.esPrueba && f.project.clientId === clientId),
+  );
+  const medidas = await ultimaMedicionDe(candidatas.map((f) => f.id));
+  return origenDelPuntoDePartida(
+    candidatas.map((f) => ({
+      id: f.id,
+      desde: f.project ? `la Exploración de «${f.project.name}»` : "la preventa",
+      actualizada: medidas.get(f.id) ?? f.updatedAt,
+      estado: estadoDesdeFila(f),
+    })),
+  );
 }
 
 async function paraElLienzo(id: string, contenedorId: string): Promise<EscalaDeLaCuenta | null> {
@@ -78,19 +103,19 @@ async function paraElLienzo(id: string, contenedorId: string): Promise<EscalaDeL
 }
 
 /**
- * La escala de la cuenta como la pinta el lienzo, sin crear nada. `faltaAbrir`: hay algo de la preventa que traer (la
- * preventa midió algo y la cuenta nunca midió nada: no existe, o no tiene niveles ni versiones). Solo entonces la
- * pantalla la abre sola; sin preventa, la abre una persona con un botón (abrirla escribe: crea la exploración y, si
- * falta, el contenedor).
+ * La escala de la cuenta como la pinta el lienzo, sin crear nada. `faltaAbrir`: hay algo que traer (la preventa o la
+ * Exploración de un proyecto midió algo y la cuenta nunca midió nada: no existe, o no tiene niveles ni versiones). Solo
+ * entonces la pantalla la abre sola; si no, la abre una persona con un botón (abrirla escribe: crea la exploración y,
+ * si falta, el contenedor).
  */
 export async function laEscalaDeLaCuenta(clientId: string): Promise<{ cuenta: EscalaDeLaCuenta | null; faltaAbrir: boolean }> {
   if (!modeloDisponible(prisma.exploracionDeVenta)) return { cuenta: null, faltaAbrir: false };
   try {
     const contenedorId = await contenedorDe(clientId);
     const id = contenedorId ? await laViva(contenedorId) : null;
-    if (!contenedorId || !id) return { cuenta: null, faltaAbrir: !!(await preventaQueMidio(clientId)) };
+    if (!contenedorId || !id) return { cuenta: null, faltaAbrir: !!(await origenQueMidio(clientId)) };
     const cuenta = await paraElLienzo(id, contenedorId);
-    const faltaAbrir = !!cuenta && !midioAlgo(cuenta.exploracion.estado) && !(await tieneVersiones(id)) && !!(await preventaQueMidio(clientId));
+    const faltaAbrir = !!cuenta && !midioAlgo(cuenta.exploracion.estado) && !(await tieneVersiones(id)) && !!(await origenQueMidio(clientId));
     return { cuenta, faltaAbrir };
   } catch (e) {
     if (esquemaDesactualizado(e)) return { cuenta: null, faltaAbrir: false };
@@ -102,9 +127,10 @@ export type ResultadoDeAbrir =
   | {
       ok: true;
       cuenta: EscalaDeLaCuenta;
-      /** Cuántas dimensiones trajo de la preventa. */
+      /** Cuántas dimensiones trajo, y de dónde («la preventa», «la Exploración de «X»»; null si no trajo nada). */
       traidas: number;
-      /** Lo medido en la preventa que no existe en la escala de la cuenta (otra edición, una dimensión retirada). */
+      desde: string | null;
+      /** Lo medido allá que no existe en la escala de la cuenta (otra edición, una dimensión retirada). */
       afuera: number;
       /** Había algo que traer y no se pudo (otra persona la cambió entretanto, o el escritor lo rechazó). */
       noSeTrajo: boolean;
@@ -112,7 +138,8 @@ export type ResultadoDeAbrir =
   | { ok: false; status: number; error: string };
 
 /**
- * Abre la escala de la cuenta (la crea si no está) y, si nunca midió nada, le trae lo medido en la preventa. Dos
+ * Abre la escala de la cuenta (la crea si no está) y, si nunca midió nada, le trae lo medido en la preventa o en la
+ * Exploración de un proyecto (la más reciente que midió algo; una sola). Dos
  * tandas por el escritor de siempre (lib/exploraciones/punto-de-partida.ts): primero la edición y el perfil, después lo
  * medido que existe en la escala con que queda la cuenta. Si otra persona la cambió entretanto, no se pisa: queda como
  * está y se avisa. Pide el permiso quien llama (la celda de generar la exploración).
@@ -125,21 +152,22 @@ export async function abrirLaEscalaDeLaCuenta(clientId: string, email: string): 
   if (!r.ok) return r;
 
   let traidas = 0;
+  let desde: string | null = null;
   let afuera = 0;
   let noSeTrajo = false;
   // Una que ya midió algo alguna vez (tiene versiones) no se vuelve a llenar sola, aunque hoy no tenga niveles.
-  const preventa = (await tieneVersiones(r.id)) ? null : await preventaQueMidio(clientId).catch(() => null);
-  const lectura = preventa ? await leerExploracion(r.id) : null;
-  if (preventa && lectura?.estado === "ok" && hayQueTraer(preventa.estado, estadoDesdeFila(lectura.fila))) {
+  const origen = (await tieneVersiones(r.id)) ? null : await origenQueMidio(clientId).catch(() => null);
+  const lectura = origen ? await leerExploracion(r.id) : null;
+  if (origen && lectura?.estado === "ok" && hayQueTraer(origen.estado, estadoDesdeFila(lectura.fila))) {
     let fila = lectura.fila;
     const ediciones = new Set(general.general.ediciones.map((e) => e.slug));
-    const escala = escalaDeLaPreventa(preventa.estado, estadoDesdeFila(fila), ediciones);
+    const escala = escalaDeLaPreventa(origen.estado, estadoDesdeFila(fila), ediciones);
     if (escala.length) {
       const a = await aplicarCambios(r.id, fila.version, escala, general.general, { quienPide: email });
       if (a.estado === "ok") fila = a.fila;
       else {
         noSeTrajo = true;
-        console.error(`[exploraciones/escala-de-la-cuenta] no se trajo la edición de la preventa ${preventa.id}: ${a.estado}`);
+        console.error(`[exploraciones/escala-de-la-cuenta] no se trajo la edición de ${origen.id}: ${a.estado}`);
       }
     }
     if (!noSeTrajo) {
@@ -147,24 +175,25 @@ export async function abrirLaEscalaDeLaCuenta(clientId: string, email: string): 
       const cuenta = estadoDesdeFila(fila);
       const lienzo = escalaDeLaExploracion(general.general, cuenta);
       const ids = idsDeLaEscala(lienzo);
-      const medido = medidoDeLaPreventa(preventa.estado, cuenta, { dimensiones: ids.dimensiones, criterios: ids.criterios, areas: new Set(lienzo.areas.map((x) => x.id)) });
+      const medido = medidoDeLaPreventa(origen.estado, cuenta, { dimensiones: ids.dimensiones, criterios: ids.criterios, areas: new Set(lienzo.areas.map((x) => x.id)) });
       afuera = medido.afuera;
       if (medido.ops.length) {
         const m = await aplicarCambios(r.id, fila.version, medido.ops, general.general, { quienPide: email });
         if (m.estado === "ok") {
           traidas = medido.dimensiones;
-          // La versión del día: la historia empieza en lo medido en la preventa.
+          desde = origen.desde;
+          // La versión del día: la historia de la cuenta empieza en lo medido allá.
           if (m.confirmado) anotarVersionDelCambio(r.id, email);
         } else {
           noSeTrajo = true;
-          console.error(`[exploraciones/escala-de-la-cuenta] no se trajo lo medido en la preventa ${preventa.id}: ${m.estado}`);
+          console.error(`[exploraciones/escala-de-la-cuenta] no se trajo lo medido en ${origen.id}: ${m.estado}`);
         }
       }
     }
   }
   const cuenta = await paraElLienzo(r.id, projectId);
   if (!cuenta) return { ok: false, status: 404, error: "No se pudo abrir la escala de la cuenta." };
-  return { ok: true, cuenta, traidas, afuera, noSeTrajo };
+  return { ok: true, cuenta, traidas, desde, afuera, noSeTrajo };
 }
 
 /**

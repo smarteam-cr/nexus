@@ -97,6 +97,9 @@ Funcional, ni la pregunta; y la industria se corrige en un formulario distinto. 
   por el escritor de siempre (`aplicarCambios`), así que queda la versión del día en la historia. Si la cuenta ya midió
   algo (niveles o versiones), no se toca. La pantalla la abre sola solo si hay algo de la preventa que traer; si no, con
   el botón «Abrir la escala».
+- **También parte de un proyecto** (revisión de lo juntado, 29 oct): sin preventa, o si un proyecto midió después, la
+  cuenta parte de la exploración de la empresa que midió algo más recientemente, la preventa o la de un proyecto; una
+  sola, nunca se mezclan.
 - **Una edición no se compara con otra.** En «La escala en el tiempo», una versión solo se compara con la anterior de
   la MISMA edición; si la anterior es de otra, esa versión dice «Punto de partida nuevo: se mide con la edición X». Lo
   mismo para «Qué explorar» en la preventa: sin una versión anterior de la misma edición, no hay «lo que cambió».

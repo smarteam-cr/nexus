@@ -277,7 +277,8 @@ describe("⛔ una exploración de proyecto no es una preventa", () => {
     "lib/escala/prueba/servidor.ts",
     /* La escala de la CUENTA (escala única, 2026-10-28): busca la exploración viva del contenedor «Información del
        cliente» por su `projectId`, y las reuniones elegidas en TODAS las exploraciones de la empresa (las dos clases a
-       propósito: son de la misma empresa). La preventa que le da el punto de partida se busca con DE_LA_PREVENTA. */
+       propósito: son de la misma empresa), y de cuál parte (la preventa o la de un proyecto que midió algo, la más
+       reciente; nunca la de la cuenta misma). */
     "lib/exploraciones/escala-de-la-cuenta.ts",
   ]);
   function archivos(dir: string): string[] {

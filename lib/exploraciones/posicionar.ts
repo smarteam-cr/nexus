@@ -364,15 +364,16 @@ export function ordenarVersiones<V extends { dia: string; diaDeLaPosicion: strin
 }
 
 /**
- * Las reuniones de Meet que una persona eligió en las exploraciones de la empresa (escala única, 2026-10-28): la de cada
- * sesión y las del buscador viejo (`reunionesElegidas`, deprecado pero se lee). «Actualizar escala» las lee primero, antes
- * que las más recientes. Sin repetir, en el orden en que aparecen (la exploración más reciente primero). Solo ids: el
- * chokepoint descarta las que no son de la empresa.
+ * Las reuniones de Meet que una persona eligió en las exploraciones de la empresa (escala única, 2026-10-28): la que unió
+ * a mano a cada sesión y las del buscador viejo (`reunionesElegidas`, deprecado pero se lee). La que Nexus unió sola
+ * (`asociadaSola`, el job de K5) no cuenta: nadie la eligió, y entra como reciente, sin prioridad (DECISIONS «Una sola
+ * escala»). «Actualizar escala» las lee primero. Sin repetir, en el orden en que aparecen (la exploración más reciente
+ * primero). Solo ids: el chokepoint descarta las que no son de la empresa.
  */
 export function reunionesElegidas(contenidos: readonly Pick<ContenidoDeExploracion, "sesiones" | "reunionesElegidas">[]): string[] {
   const ids: string[] = [];
   for (const c of contenidos) {
-    for (const s of c.sesiones) if (s.reunion?.origen === "meet") ids.push(s.reunion.id);
+    for (const s of c.sesiones) if (s.reunion?.origen === "meet" && !s.asociadaSola) ids.push(s.reunion.id);
     ids.push(...c.reunionesElegidas);
   }
   return [...new Set(ids)];

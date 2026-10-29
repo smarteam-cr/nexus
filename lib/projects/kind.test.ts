@@ -21,6 +21,7 @@ import {
   buscarEtapa,
   cerradoPorEstadoCrudo,
   decidirCierre,
+  elContenedor,
   fuenteDelCiclo,
   lineaDeAvance,
   parseProjectPipeline,
@@ -621,5 +622,12 @@ describe("el sentinel", () => {
   it("lo reexporta strategy-project para no romper los imports viejos", async () => {
     const legacy = await import("@/lib/canvas/strategy-project");
     expect(legacy.SENTINEL_SERVICE_TYPE).toBe(SENTINEL_SERVICE_TYPE);
+  });
+
+  it("con más de un contenedor, todos eligen el mismo: el más viejo (y a la misma hora, el de menor id)", () => {
+    const p = (id: string, dia: string, serviceType: string | null = SENTINEL_SERVICE_TYPE) => ({ id, serviceType, createdAt: new Date(`${dia}T00:00:00Z`) });
+    expect(elContenedor([p("nuevo", "2026-10-01"), p("viejo", "2026-01-01"), p("proyecto", "2025-01-01", null)])?.id).toBe("viejo");
+    expect(elContenedor([p("b", "2026-01-01"), p("a", "2026-01-01")])?.id).toBe("a");
+    expect(elContenedor([p("proyecto", "2025-01-01", "consultoria")])).toBeNull();
   });
 });
