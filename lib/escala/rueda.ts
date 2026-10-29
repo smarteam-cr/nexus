@@ -5,8 +5,8 @@
  * (components/escala/RadarDeUnaEmpresa.tsx, para la página pública del test y su PDF). Las dos dibujan la MISMA
  * rueda —mismo tamaño, mismas mitades, mismos rótulos en el mismo lugar— y solo cambia lo de adentro (pedido de
  * Elías, 2026-10-28: «básicamente solo debería cambiar lo del centro»). Un número que se mueve acá se mueve en las
- * dos. El Radar de la escala (components/escala/Radar.tsx) dejó la rueda el mismo día por un radar clásico
- * (lib/escala/radar-dibujo.ts); de acá solo toma `lineaDeLaSerie` y `partirEnLineas`.
+ * dos. El radar de la teoría (components/escala/Radar.tsx) tiene su propia geometría (lib/escala/radar-dibujo.ts); de
+ * acá solo toma `partirEnLineas`.
  *
  * Grados de reloj: 0 = arriba, en el sentido de las agujas. La base operativa ocupa la mitad derecha y la
  * producción la izquierda, separadas por un hueco arriba y abajo; arriba, en ese hueco, van los nombres de los

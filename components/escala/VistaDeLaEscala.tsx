@@ -6,7 +6,7 @@
  *   · Matriz: las dimensiones frente a los cinco niveles (para comparar).
  *   · Por dimensión: una dimensión como escalera (para leer e interiorizar).
  *   · Mapa: el área como rueda (para recorrerla nivel por nivel y ver dónde se concentra cada cosa).
- *   · Radar: lo mismo que el mapa con puntos: en qué nivel se concentra cada cosa en cada dimensión.
+ *   · Radar: la teoría como radar: un eje por dimensión, un anillo por etapa y, en cada cruce, la celda del mapa.
  *
  * El perfil de negocio filtra las cuatro igual (la regla de `pruebas_escala.py`). La escala es de
  * SOLO LECTURA: lo que alguien quiera decir de un criterio, un nivel o una dimensión lo manda como
@@ -506,7 +506,7 @@ export default function VistaDeLaEscala({
             <div data-recorrido="escala.vista">
             <GrupoDeControl
               nombre="Vista"
-              ayuda="Cuatro formas de recorrer el área que elegiste arriba: el mapa para ver dónde se concentran los criterios, los hábitos o los riesgos, la matriz para comparar, una dimensión como escalera para leerla entera y el radar para ver con puntos en qué nivel se concentra cada cosa de cada dimensión."
+              ayuda="Cuatro formas de recorrer el área que elegiste arriba: el mapa para ver dónde se concentran los criterios, los hábitos o los riesgos, la matriz para comparar, una dimensión como escalera para leerla entera y el radar para ver la teoría con un eje por dimensión y un anillo por etapa."
             >
               <Segmentado<Vista>
                 etiqueta="Vista"
@@ -516,7 +516,7 @@ export default function VistaDeLaEscala({
                   { clave: "mapa", etiqueta: "Mapa", title: "El área como rueda: cada porción una dimensión, cada anillo un nivel. Para subirla de Deficiente a Óptimo y ver dónde se concentran criterios, hábitos o riesgos." },
                   { clave: "matriz", etiqueta: "Matriz", title: "Las ocho dimensiones del área frente a los cinco niveles, con todos sus criterios: para comparar." },
                   { clave: "dimension", etiqueta: "Por dimensión", title: "Una dimensión a la vez, sus cinco niveles como escalera: para leerla de punta a punta." },
-                  { clave: "radar", etiqueta: "Radar", title: "Un eje por dimensión y un anillo por nivel: cada punto dice en qué nivel se concentran sus criterios, hábitos, riesgos o requeridos, para compararlos." },
+                  { clave: "radar", etiqueta: "Radar", title: "La escala como radar: un eje por dimensión y un anillo por etapa. Cada cruce dice cuántos criterios, hábitos, riesgos o requeridos tiene esa celda del mapa." },
                 ]}
               />
             </GrupoDeControl>

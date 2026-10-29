@@ -12257,6 +12257,11 @@ Todo en el Json de la exploración: sin SQL.
 Funcional y un punto por dimensión: «por puntos, no por áreas». La página es la escala de REFERENCIA, sin empresa: no hay
 un «nivel de la dimensión» que dibujar.
 
+⚠ **Las decisiones 1, 2 y 4 y la regla de 0 a 100 de la 6 (el radar de promedios, con series) las reemplaza la 8, el
+radar de la teoría.** Quedan escritas para saber por qué se dejaron. De la 6 sigue vigente dónde va cada eje (la base a la
+derecha, la producción a la izquierda, 22,5° + 45°·k). La 3 sigue vigente con la forma de la 8: una dimensión que no
+aplica deja su eje punteado y sus cinco cruces como puntos grises (no hay línea que cortar). La 5 y la 7 siguen igual.
+
 **Decisiones.**
 1. **Cada punto es dónde se concentra algo, no dónde está alguien.** El valor de una serie en un eje es el nivel promedio
    (1 = Deficiente … 5 = Óptimo) de los criterios de esa clase en la dimensión (`ejesDelRadar`, `lib/escala/radar.ts`). Es
@@ -12295,7 +12300,26 @@ un «nivel de la dimensión» que dibujar.
    (`posicionDelPuntaje`, con los tramos del chequeo): un punto nunca cae en un anillo que contradiga el nivel que se le
    dice a la empresa. Una dimensión sin nivel no lleva punto y su número dice «no se preguntó»; una que contestó «No lo
    sé» va con el borde punteado, «?» en vez del puntaje y «no lo sabías», como las barras. Con una sola serie, la línea
-   lleva un relleno apenas visible (7 %) para que se lea la forma. (El radar interno ya no es esta rueda: su dibujo y su relleno de 10 % están en la decisión 6.)
+   lleva un relleno apenas visible (7 %) para que se lea la forma. (El radar interno ya no es esta rueda: su dibujo está en la decisión 8.)
+8. **El radar de la escala es el radar de la teoría: el Mapa en forma de radar** (Elías, 2026-10-28, al rechazar el de
+   promedios: «se ve como si estuviera seleccionada una empresa. En la escala general la idea es ver la teoría, poder ver
+   todas las etapas, los diferentes criterios por dimensión, explorarla como si fuera el mapa, pero que se vea distinto»;
+   diseño aprobado en Claude Design, pantallas `Teoria`, `TeoriaDimension` y `TeoriaCruce`). Un eje por dimensión (con
+   los ángulos de la 6, que siguen) y un anillo por etapa, de Deficiente adentro a Óptimo afuera: cada anillo es una línea del color de su
+   nivel, sin rellenos; Funcional punteada y con su chip «La base». El centro dice el área y «8 dimensiones · 5 etapas», y
+   los nombres de las etapas van en el hueco de arriba. En cada cruce va la celda del Mapa con su cuenta de lo que se elige
+   en «Qué se cuenta» (todos los criterios, hábitos, riesgos, requeridos y, con un perfil, los escondidos por el perfil);
+   una celda en 0 es un punto gris chico; una dimensión que no aplica al perfil queda en 0 salvo en «Escondidos por el
+   perfil». *La cuenta es una sola para el Mapa y el radar* (`cuentaDeLaCelda`, `lib/escala/radar.ts`): un número que
+   cambia, cambia en las dos. Y el número del cruce y la lista del panel salen de la misma función
+   (`criteriosDelCruce`). Los nombres de los filtros sí son de cada vista (el Mapa dice «Criterios»; el radar, «Todos los
+   criterios», como en el diseño); lo que se cuenta, en palabras, es uno solo. El número del cruce elegido va en la tinta
+   del tema con halo, no en blanco: en blanco no se leía sobre Inicial ni Funcional. *Los puntos van sobre las líneas*: la versión con
+   puntos dentro de zonas de color ya se había rechazado. Tocar un cruce muestra su etapa con sus criterios y sus marcas
+   (las de `MetaDelCriterio`, las mismas del Mapa) y «← etapa anterior · siguiente →»; tocar una dimensión, sus cinco
+   etapas con su cuenta y «Leer la dimensión entera»; tocar fuera, suelta. El número de «qué se trabaja primero» va junto
+   al número de la dimensión, del lado de afuera: hacia el radar tapaba un cruce (`lugarDelOrden`, medido con el ancho
+   real del número). La tabla de abajo tiene cada cruce como botón, para el teclado y los lectores de pantalla.
 
 ## Las Acciones coherentes: el enfoque en el diagnóstico, el detalle en la Planificación (2026-10-28, decisión 16, L4 etapa 2)
 

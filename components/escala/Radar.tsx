@@ -1,161 +1,113 @@
 "use client";
 
 /**
- * components/escala/Radar.tsx — un área de la escala como radar (pedido de Elías, 2026-10-28).
+ * components/escala/Radar.tsx — el radar de la teoría: un área de la escala como radar (diseño aprobado por Elías el
+ * 2026-10-28, pantallas `Teoria`, `TeoriaDimension` y `TeoriaCruce` del lienzo del radar).
  *
- * Un radar clásico (lib/escala/radar-dibujo.ts): un eje por dimensión, la base operativa a la derecha y la producción a
- * la izquierda con su nombre al costado; una regla de 0 (el centro) a 100 (el borde) con un anillo en cada límite de
- * franja (20, 40, 60, 80) y sus números en el hueco de arriba; «la base», punteada en 40. Cada serie es un polígono con
- * sus vértices sobre los ejes: el nivel donde se concentran, en promedio, los criterios de esa clase
- * (`lib/escala/radar.ts`), puesto en la regla con `enLaRegla` (un nivel entero, a la mitad de su franja). Sin zonas de
- * color por nivel: el diseño aprobado en Claude Design (pantallas `Main` y `Dimension`).
+ * Es el Mapa en forma de radar, no una empresa: un eje por dimensión (la base operativa a la derecha, la producción a
+ * la izquierda, con su nombre al costado) y un anillo por etapa, de Deficiente adentro a Óptimo afuera. Cada anillo es
+ * una línea del color de su nivel, sin rellenos; Funcional va punteada, con su chip «La base». En el centro, el área.
+ * En cada cruce de eje y anillo va la celda del Mapa con cuántos criterios tiene de lo que se elige en «Qué se cuenta»
+ * (la cuenta es la misma del Mapa: `lib/escala/radar.ts`); una celda en 0 es un punto gris chico. Los puntos van
+ * siempre sobre las líneas, nunca dentro de una zona (Elías ya rechazó las zonas de color).
  *
- * Cada serie tiene su color (`--color-serie-*`) y su forma, para que no dependa solo del color; los chips de arriba
- * son también el interruptor de cada una. Pasar el cursor por una dimensión (su nombre, su eje o una marca) la cuenta
- * en el panel del costado; tocarla la deja fija (tocar fuera del radar la suelta), y el panel lleva a leerla entera.
+ * Pasar el cursor por un cruce (o tocarlo) cuenta esa celda en el panel del costado, con sus criterios; pasar por una
+ * dimensión (su nombre o su eje) cuenta sus cinco etapas. Tocar deja lo elegido fijo, y tocar fuera del radar lo
+ * suelta. El número de «qué se trabaja primero» va junto al número de la dimensión, del lado de afuera: hacia el radar
+ * tapaba un cruce. Para el teclado y los lectores de pantalla, los rótulos son botones y la tabla de abajo tiene cada
+ * celda como botón.
  */
-import { useMemo, useState, type KeyboardEvent } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { cn } from "@/lib/cn";
 import { describirPerfil, type Perfil } from "@/lib/escala/documento/perfil";
 import { LETRAS, type Letra } from "@/lib/escala/documento/tipos";
 import {
-  ejesDelRadar,
-  nivelConMas,
-  nivelMasCercano,
-  nombreDelPromedio,
-  SERIES_DE_ENTRADA,
-  SERIES_DEL_RADAR,
-  seriesDisponibles,
-  type EjeDelRadar,
-  type SerieDelRadar,
+  conPerfil,
+  criteriosDelCruce,
+  cuentaDeLaCelda,
+  ejesDeLaTeoria,
+  enPalabras,
+  opcionesDeQueSeCuenta,
+  QUE_SE_CUENTA,
+  type EjeDeLaTeoria,
+  type QueSeCuenta,
 } from "@/lib/escala/radar";
 import {
+  anchoDelNumero,
   angulosDeLosEjes,
-  anilloDelRadar,
+  anilloDeLaEtapa,
+  cajaDelChipDeLaBase,
+  CHIP_DE_LA_BASE,
+  CRUCE,
+  CRUCE_ELEGIDO,
+  CRUCE_EN_FOCO,
+  cruce,
   CX,
   CY,
-  enElRadar,
-  enLaRegla,
   f,
-  FRANJAS,
   H,
-  LA_BASE,
-  LIMITES,
+  HALO,
+  LETRA_DE_ETAPA,
+  lugarDelOrden,
+  polar,
   porcionDelEje,
+  PUNTO_EN_CERO,
   puntosSvg,
-  rangoDeLaFranja,
+  R_CENTRO,
+  R_EJE_DESDE,
+  R_EJE_HASTA,
+  R_ORDEN,
   rotuloDeLaMitad,
   rotuloDelEje,
   W,
-  yEnElCentro,
+  yDelNombreDeEtapa,
 } from "@/lib/escala/radar-dibujo";
-import { lineaDeLaSerie } from "@/lib/escala/rueda";
 import { lugarEnElOrden, ordenDeDependencias, type DatosDeLaVista } from "@/lib/escala/vista";
 import { conteoDeDimension, useEscala } from "./contexto";
 import { COLOR_DE_NIVEL } from "./niveles";
-import { BOTON_CLARO, GrupoDeControl, ParrafoDeLaEscala, ROTULO } from "./piezas";
+import { BOTON_CLARO, GrupoDeControl, MetaDelCriterio, NoAplicanEnLaEdicion, ROTULO, Segmentado, TextoConPalabras } from "./piezas";
 
-/** Las rayas del dibujo, con los tokens del tema: los anillos de adentro más tenues que el borde y los ejes. */
-const RAYA_TENUE = { stroke: "var(--color-fg-muted)", strokeOpacity: 0.18, strokeWidth: 1 };
+/** Las rayas del dibujo, con los tokens del tema. */
 const RAYA = { stroke: "var(--color-fg-muted)", strokeOpacity: 0.32, strokeWidth: 1 };
 
-/** El tamaño de una marca (la mitad de su ancho, en unidades del viewBox) y su anillo de superficie. */
-const MARCA = 6;
-const MARCA_EN_FOCO = 8;
-const BORDE_DE_MARCA = 2.5;
-
-/** La forma de cada serie: el color no carga la identidad solo. */
-const FORMA: Record<SerieDelRadar, "circulo" | "cuadrado" | "rombo" | "triangulo" | "anillo"> = {
-  criterios: "circulo",
-  habitos: "cuadrado",
-  riesgos: "rombo",
-  requeridos: "triangulo",
-  escondidos: "anillo",
-};
-
-/** Qué dice cada serie, en una línea («Cómo se lee»). */
-const QUE_DICE: Record<SerieDelRadar, string> = {
-  criterios: "dónde pesa la dimensión",
-  habitos: "desde dónde se pide repetir",
-  riesgos: "dónde están sus riesgos",
-  requeridos: "dónde están los cimientos que otros necesitan",
-  escondidos: "lo que el perfil saca",
-};
-
-/** Una marca de serie centrada en (x, y). `s` es la mitad de su ancho; `borde`, el anillo que la separa del fondo. */
-function Marca({
-  serie,
-  x,
-  y,
-  s = MARCA,
-  color,
-  borde = BORDE_DE_MARCA,
-}: {
-  serie: SerieDelRadar;
-  x: number;
-  y: number;
-  s?: number;
-  color: string;
-  borde?: number;
-}) {
-  // El anillo de superficie separa marcas que se tocan (sin bordes oscuros).
-  const estilo = { fill: color, stroke: "var(--color-surface)", strokeWidth: borde };
-  switch (FORMA[serie]) {
-    case "circulo":
-      return <circle cx={x} cy={y} r={s} style={estilo} />;
-    case "cuadrado":
-      return <rect x={x - s} y={y - s} width={s * 2} height={s * 2} rx={s / 3} style={estilo} />;
-    case "rombo":
-      return <polygon points={`${f(x)},${f(y - s * 1.3)} ${f(x + s * 1.3)},${f(y)} ${f(x)},${f(y + s * 1.3)} ${f(x - s * 1.3)},${f(y)}`} style={estilo} />;
-    case "triangulo":
-      return <polygon points={`${f(x)},${f(y - s * 1.3)} ${f(x + s * 1.2)},${f(y + s * 0.9)} ${f(x - s * 1.2)},${f(y + s * 0.9)}`} style={estilo} />;
-    case "anillo":
-      return <circle cx={x} cy={y} r={s * 0.85} style={{ fill: "var(--color-surface)", stroke: color, strokeWidth: Math.max(2, s * 0.4) }} />;
-  }
-}
-
-/** La misma marca, chica, para los chips y el panel. */
-function MarcaSuelta({ serie, color }: { serie: SerieDelRadar; color: string }) {
-  return (
-    <svg viewBox="0 0 16 16" className="h-3.5 w-3.5 flex-shrink-0" aria-hidden>
-      <Marca serie={serie} x={8} y={8} s={5} color={color} borde={0} />
-    </svg>
-  );
-}
-
-/** «3,3» */
-const decimal = (v: number) =>
-  v.toLocaleString("es-CR", {
-    minimumFractionDigits: 1,
-    maximumFractionDigits: 1,
-  });
-
-/** «1 criterio», «3 criterios». */
+/** «1 reporte», «3 reportes». */
 const cuantos = (n: number, uno: string, varios: string) => `${n} ${n === 1 ? uno : varios}`;
 
-/** Qué está bajo el cursor (o fijo): una dimensión y, si se apuntó a una marca, su serie. */
-type Foco = { dim: string; serie: SerieDelRadar | null } | null;
+/** Lo que está en foco: una dimensión y, si se apuntó a un cruce, su etapa. */
+type Foco = { dim: string; letra: Letra | null } | null;
+const mismoFoco = (a: Foco, b: Foco) => (!a || !b ? a === b : a.dim === b.dim && a.letra === b.letra);
 
 export default function Radar({ datos, perfil, onLeerDimension }: { datos: DatosDeLaVista; perfil: Perfil; onLeerDimension: (dimensionId: string) => void }) {
   const { conteos } = useEscala();
   const { area, niveles, capas } = datos;
   const dims = area.dimensiones;
-  const ejes = useMemo(() => ejesDelRadar(area, perfil, datos.requeridos), [area, perfil, datos.requeridos]);
+  const disponibles = opcionesDeQueSeCuenta(perfil);
+  const [queElegido, setQue] = useState<QueSeCuenta>("criterios");
+  /** Si se quita el perfil, «Escondidos por el perfil» deja de existir: vuelve a todos los criterios. */
+  const que = disponibles.includes(queElegido) ? queElegido : "criterios";
+  const ejes = useMemo(() => ejesDeLaTeoria(area, perfil, datos.requeridos, que), [area, perfil, datos.requeridos, que]);
   const angulos = useMemo(() => angulosDeLosEjes(dims), [dims]);
   const todosLosAngulos = useMemo(() => [...angulos.values()], [angulos]);
-  const disponibles = seriesDisponibles(perfil);
-  const [prendidas, setPrendidas] = useState<SerieDelRadar[]>([...SERIES_DE_ENTRADA]);
-  /** Las que se dibujan: prendidas Y disponibles, siempre en el orden de la escala (el color sigue a la serie). */
-  const visibles = SERIES_DEL_RADAR.filter((s) => prendidas.includes(s.clave) && disponibles.includes(s.clave));
-  const ofrecidas = SERIES_DEL_RADAR.filter((s) => disponibles.includes(s.clave));
+
   const [encima, setEncima] = useState<Foco>(null);
   const [fijo, setFijo] = useState<Foco>(null);
-  /** Una serie apagada (o que el perfil ya no ofrece) deja de estar en foco: no puede apagar a las que se ven. */
-  const sinSerieOculta = (f: Foco): Foco => (f && f.serie && !visibles.some((s) => s.clave === f.serie) ? { ...f, serie: null } : f);
-  const foco = sinSerieOculta(encima ?? fijo);
+  const foco = encima ?? fijo;
+  /** Lo del panel es lo fijo (con su X) mientras el cursor no apunte a otra cosa: encima de lo fijo, sigue fijo. */
+  const panelFijo = !!fijo && (!encima || mismoFoco(encima, fijo));
+  /** Lo que se anuncia a los lectores de pantalla: vive fuera del panel, que se cambia entero, para que sí se lea. */
+  const [anuncio, setAnuncio] = useState("");
+  /**
+   * Al elegir desde el panel (una etapa, ← →, la X), el botón que se tocó desaparece con el panel: el foco del teclado
+   * pasa al título del panel nuevo, para no volver al comienzo de la página.
+   */
+  const seccionRef = useRef<HTMLElement>(null);
+  const [enfocarElPanel, setEnfocarElPanel] = useState(0);
+  useEffect(() => {
+    if (enfocarElPanel) seccionRef.current?.querySelector<HTMLElement>("[data-titulo-del-panel]")?.focus();
+  }, [enfocarElPanel]);
 
   const nombreNivel = (l: Letra) => niveles.find((n) => n.letra === l)?.nombre ?? l;
-  const conPerfil = describirPerfil(perfil) !== null;
+  const perfilEnPalabras = describirPerfil(perfil);
 
   /** «Qué se trabaja primero», como en el mapa: el número junto al rótulo de cada dimensión, si hay un orden solo. */
   const ordenes = useMemo(
@@ -163,189 +115,270 @@ export default function Radar({ datos, perfil, onLeerDimension }: { datos: Datos
     [capas, datos.dependencias, area.nombre, perfil.cierre],
   );
 
-  const alternar = (s: SerieDelRadar) => setPrendidas((p) => (p.includes(s) ? p.filter((x) => x !== s) : [...p, s]));
+  // Al salir de algo, soltar con un respiro: si el cursor entra enseguida a otra cosa (de un cruce a su eje), no parpadea.
+  const soltarRef = useRef<number | null>(null);
+  const ponerEncima = (fc: Foco) => {
+    if (soltarRef.current) window.clearTimeout(soltarRef.current);
+    soltarRef.current = null;
+    setEncima(fc);
+  };
+  const soltarEncima = () => {
+    if (soltarRef.current) window.clearTimeout(soltarRef.current);
+    soltarRef.current = window.setTimeout(() => {
+      soltarRef.current = null;
+      setEncima(null);
+    }, 80);
+  };
+  useEffect(
+    () => () => {
+      if (soltarRef.current) window.clearTimeout(soltarRef.current);
+    },
+    [],
+  );
+
+  /** Cómo se dice lo fijo, para los lectores de pantalla. */
+  const decir = (fc: Foco) => {
+    const e = fc ? ejes.find((x) => x.dimensionId === fc.dim) : null;
+    if (!fc || !e) return "Nada fijo en el panel.";
+    return fc.letra
+      ? `${e.nombre} en ${nombreNivel(fc.letra)}, fijado en el panel: ${enPalabras(e.cuentas[fc.letra], que)}.`
+      : `${e.nombre}, fijada en el panel: sus cinco etapas.`;
+  };
   // Al tocar, se olvida el «por encima»: en una pantalla táctil el toque también lo pone, y taparía lo fijo.
-  const tocarEje = (dim: string, serie: SerieDelRadar | null = null) => {
-    setEncima(null);
-    setFijo((f) => (f && f.dim === dim && f.serie === serie ? null : { dim, serie }));
+  const tocar = (fc: Foco) => {
+    ponerEncima(null);
+    const nuevo = mismoFoco(fijo, fc) ? null : fc;
+    setFijo(nuevo);
+    setAnuncio(decir(nuevo));
+  };
+  /** Desde el panel o la tabla: elige sin alternar. Desde el panel, el foco pasa al panel nuevo. */
+  const fijar = (fc: Foco, desdeElPanel = false) => {
+    ponerEncima(null);
+    setFijo(fc);
+    setAnuncio(decir(fc));
+    if (desdeElPanel) setEnfocarElPanel((n) => n + 1);
+  };
+  const soltar = (desdeElPanel = false) => {
+    if (!fijo) return;
+    setFijo(null);
+    setAnuncio(decir(null));
+    if (desdeElPanel) setEnfocarElPanel((n) => n + 1);
   };
   const alTecladoDelRotulo = (dim: string) => (e: KeyboardEvent) => {
     if (e.key === "Enter" || e.key === " ") {
       e.preventDefault();
-      tocarEje(dim);
-    } else if (e.key === "Escape") setFijo(null);
+      tocar({ dim, letra: null });
+    } else if (e.key === "Escape") soltar();
   };
 
-  /** Dónde cae la marca de una serie en una dimensión (null si no tiene punto). */
-  const puntoDe = (e: EjeDelRadar, s: SerieDelRadar): [number, number] | null => {
-    const v = e.series[s].valor;
-    const ang = angulos.get(e.dimensionId);
-    if (v === null || ang === undefined) return null;
-    return enElRadar(ang, enLaRegla(v));
-  };
-
-  const capaDe = (dim: string) => dims.find((d) => d.id === dim)?.capa ?? "base";
-  const apagada = (s: SerieDelRadar) => foco?.serie != null && foco.serie !== s;
+  // El número de «qué se trabaja primero» va pasado el final del número de la dimensión: se mide de verdad apenas está
+  // dibujado (el ancho estimado es solo el primer lugar). Se mueve el atributo a mano para no volver a dibujar.
+  const numerosRef = useRef(new Map<string, SVGTextElement>());
+  const ordenesRef = useRef(new Map<string, SVGGElement>());
+  useLayoutEffect(() => {
+    for (const e of ejes) {
+      const numero = numerosRef.current.get(e.dimensionId);
+      const marca = ordenesRef.current.get(e.dimensionId);
+      if (!numero || !marca) continue;
+      let ancho: number;
+      try {
+        ancho = numero.getComputedTextLength();
+      } catch {
+        continue;
+      }
+      if (!(ancho > 0)) continue;
+      const [x, y] = lugarDelOrden(rotuloDelEje(angulos.get(e.dimensionId)!, e.nombre, !e.aplica), ancho);
+      marca.setAttribute("transform", `translate(${f(x)} ${f(y)})`);
+    }
+  });
 
   const ejeEnFoco = foco ? (ejes.find((e) => e.dimensionId === foco.dim) ?? null) : null;
-  const yDeLaBase = yEnElCentro(todosLosAngulos, LA_BASE, "abajo");
+  const chipDeLaBase = cajaDelChipDeLaBase(todosLosAngulos);
+  const etiquetaDeQue = QUE_SE_CUENTA.find((q) => q.clave === que)!;
 
   return (
-    <section aria-label={`Radar de ${area.nombre}`} className="flex min-w-0 flex-col gap-3 rounded-[20px] border border-line bg-surface px-6 py-5">
+    <section
+      ref={seccionRef}
+      aria-label={`Radar de ${area.nombre}`}
+      className="flex min-w-0 flex-col gap-3 rounded-[20px] border border-line bg-surface px-6 py-5"
+      onKeyDown={(e) => {
+        if (e.key === "Escape") soltar();
+      }}
+    >
+      <p className="sr-only" aria-live="polite">
+        {anuncio}
+      </p>
       <div className="flex flex-wrap items-start justify-between gap-6">
-        <div className="flex min-w-0 max-w-[620px] flex-col gap-1">
-          <h2 className="text-base font-semibold text-fg">
-            Radar de {area.nombre}
-            <span className="ml-2 text-[13px] font-normal text-fg-muted">
-              {dims.length} dimensiones · {niveles.length} niveles
-            </span>
-          </h2>
+        <div className="flex min-w-0 max-w-[560px] flex-col gap-1">
+          <h2 className="text-base font-semibold text-fg">Radar de {area.nombre}</h2>
           <p className="text-[13px] leading-normal text-fg-muted">
-            Un eje por dimensión. Cada punto es el nivel donde se concentran, en promedio, los criterios de esa clase
-            {conPerfil ? ` (solo los que aplican con el perfil «${describirPerfil(perfil)}»)` : ""}. Es la escala misma, no una empresa.
+            La escala misma, vista como radar: el mismo contenido del Mapa, con cada celda en el cruce de una dimensión y una etapa
+            {perfilEnPalabras ? ` (con el perfil «${perfilEnPalabras}»: solo los criterios que aplican)` : ""}. No es una empresa.
           </p>
         </div>
         <GrupoDeControl
-          nombre="Qué se compara"
-          ayuda="Prende y apaga cada serie. Criterios: dónde pesa cada dimensión. Hábitos: dónde se pide repetir algo hasta que sea costumbre. Riesgos: dónde están los criterios que hay que cumplir para pasar a Eficiente. Requeridos: dónde están los cimientos que otros criterios necesitan. Escondidos por el perfil: lo que el perfil de negocio elegido saca, y solo aparece con un perfil elegido."
+          nombre="Qué se cuenta"
+          className="flex-row flex-wrap items-center gap-2"
+          ayuda={`El número de cada cruce dice cuántos tiene esa celda de lo que elijas. ${QUE_SE_CUENTA.filter((q) => disponibles.includes(q.clave))
+            .map((q) => `${q.etiqueta}: ${q.title}`)
+            .join(" ")}${conPerfil(perfil) ? "" : " «Escondidos por el perfil» aparece al elegir un perfil de negocio arriba."}`}
         >
-          <div role="group" aria-label="Series del radar" className="flex flex-wrap items-center gap-2">
-            {ofrecidas.map((s) => {
-              const prendida = prendidas.includes(s.clave);
-              return (
-                <button
-                  key={s.clave}
-                  type="button"
-                  aria-pressed={prendida}
-                  onClick={() => alternar(s.clave)}
-                  title={`${prendida ? "Apagar" : "Prender"} «${s.etiqueta}»: dónde se concentran los ${s.queCuenta} de cada dimensión.`}
-                  className={cn(
-                    "inline-flex h-8 items-center gap-2 whitespace-nowrap rounded-full border px-3 text-[13px] font-semibold leading-tight transition-colors",
-                    prendida ? "border-line bg-surface text-fg" : "border-dashed border-line bg-surface-muted text-fg-muted hover:bg-surface-hover",
-                  )}
-                >
-                  <span className={cn(!prendida && "opacity-40")}>
-                    <MarcaSuelta serie={s.clave} color={s.color} />
-                  </span>
-                  {s.etiqueta}
-                </button>
-              );
-            })}
-          </div>
+          <Segmentado<QueSeCuenta>
+            etiqueta="Qué se cuenta"
+            valor={que}
+            onCambio={setQue}
+            opciones={QUE_SE_CUENTA.filter((q) => disponibles.includes(q.clave)).map((q) => ({ clave: q.clave, etiqueta: q.etiqueta, title: q.title }))}
+          />
         </GrupoDeControl>
       </div>
 
-      <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_300px]">
-        <div className="min-w-0" onMouseLeave={() => setEncima(null)}>
+      <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_330px]">
+        <div className="min-w-0" onMouseLeave={soltarEncima}>
           <svg
             viewBox={`0 0 ${W} ${H}`}
             className="mx-auto block h-auto max-h-[calc(100vh-11rem)] w-full"
             role="group"
-            aria-label={`Radar de las ${dims.length} dimensiones de ${area.nombre}, de 0 en el centro a 100 en el borde`}
+            aria-label={`Radar de ${area.nombre}: un eje por dimensión y un anillo por etapa; cada cruce dice cuántos ${etiquetaDeQue.varios} tiene esa dimensión en esa etapa.`}
           >
-            {/* El fondo: tocar fuera del radar suelta la dimensión fija. */}
-            <rect width={W} height={H} style={{ fill: "transparent" }} onClick={() => setFijo(null)} />
+            {/* El fondo: tocar fuera del radar suelta lo elegido. */}
+            <rect width={W} height={H} style={{ fill: "transparent" }} onClick={() => soltar()} />
 
-            {/* La porción de cada eje: pasar el cursor por cualquier parte la enfoca; tocarla la deja fija. */}
+            {/* La porción de cada eje: pasar el cursor por cualquier parte enfoca la dimensión; tocarla la deja fija. */}
             {dims.map((d) => (
               <polygon
                 key={d.id}
                 points={puntosSvg(porcionDelEje(todosLosAngulos, angulos.get(d.id)!))}
                 style={{ fill: "transparent", cursor: "pointer" }}
-                onMouseEnter={() => setEncima({ dim: d.id, serie: null })}
-                onMouseLeave={() => setEncima(null)}
-                onClick={() => tocarEje(d.id)}
+                onMouseEnter={() => ponerEncima({ dim: d.id, letra: null })}
+                onMouseLeave={soltarEncima}
+                onClick={() => tocar({ dim: d.id, letra: null })}
               />
             ))}
 
-            <g style={{ pointerEvents: "none" }}>
-              {/* Los anillos de la regla: 20, 40, 60, 80 y el borde en 100. */}
-              {LIMITES.map((l) => (
-                <polygon key={l} points={puntosSvg(anilloDelRadar(todosLosAngulos, l))} style={{ fill: "none", ...(l === 100 ? RAYA : RAYA_TENUE) }} />
-              ))}
-              {/* Los ejes: el de la dimensión en foco, más grueso y del color de marca; el que no aplica, punteado. */}
+            <g aria-hidden style={{ pointerEvents: "none" }}>
+              {/* El centro: el área. */}
+              <circle cx={CX} cy={CY} r={R_CENTRO} style={{ fill: "var(--color-surface-muted)", stroke: "var(--color-line)", strokeWidth: 1 }} />
+              <text x={CX} y={CY + 2} style={{ fill: "var(--color-fg)", fontSize: 26, fontWeight: 700, textAnchor: "middle" }}>
+                {area.nombre}
+              </text>
+              <text x={CX} y={CY + 24} style={{ fill: "var(--color-fg-muted)", fontSize: 12.5, textAnchor: "middle" }}>
+                {dims.length} dimensiones · {niveles.length} etapas
+              </text>
+
+              {/* Los ejes: salen del borde del centro. El de la dimensión en foco, más grueso y del color de marca. */}
               {ejes.map((e) => {
-                const [x, y] = enElRadar(angulos.get(e.dimensionId)!, 100);
+                const g = angulos.get(e.dimensionId)!;
+                const [x1, y1] = polar(g, R_EJE_DESDE);
+                const [x2, y2] = polar(g, R_EJE_HASTA);
                 const enFoco = foco?.dim === e.dimensionId;
                 return (
                   <line
                     key={e.dimensionId}
-                    x1={CX}
-                    y1={CY}
-                    x2={f(x)}
-                    y2={f(y)}
-                    style={enFoco ? { stroke: "var(--color-brand)", strokeWidth: 2 } : { ...RAYA, strokeDasharray: e.aplica ? undefined : "3 4" }}
+                    x1={f(x1)}
+                    y1={f(y1)}
+                    x2={f(x2)}
+                    y2={f(y2)}
+                    style={enFoco ? { stroke: "var(--color-brand)", strokeWidth: 2.5 } : { ...RAYA, strokeDasharray: e.aplica ? undefined : "3 4" }}
                   />
                 );
               })}
-              {/* La base: donde empieza Funcional. */}
-              <polygon
-                points={puntosSvg(anilloDelRadar(todosLosAngulos, LA_BASE))}
-                style={{ fill: "none", stroke: "var(--color-nivel-funcional)", strokeWidth: 1.75, strokeDasharray: "6 5" }}
-              />
 
-              {/* Cada serie, un polígono: relleno muy tenue y trazo de 2,5. Un eje sin punto lo corta y se queda sin relleno. */}
-              {visibles.map((s) => {
-                const { lados, relleno } = lineaDeLaSerie(
-                  ejes.map((e) => ({ medio: angulos.get(e.dimensionId)!, capa: capaDe(e.dimensionId), punto: puntoDe(e, s.clave) })),
-                );
-                return (
-                  <g key={s.clave} style={{ opacity: apagada(s.clave) ? 0.25 : 1, transition: "opacity 150ms" }}>
-                    {relleno ? (
-                      <polygon points={puntosSvg(relleno)} style={{ fill: s.color, fillOpacity: 0.1, stroke: s.color, strokeWidth: 2.5, strokeLinejoin: "round" }} />
-                    ) : (
-                      lados.map(({ de, a }, k) => (
-                        <line key={k} x1={f(de[0])} y1={f(de[1])} x2={f(a[0])} y2={f(a[1])} style={{ stroke: s.color, strokeWidth: 2.5, strokeLinecap: "round" }} />
-                      ))
-                    )}
-                  </g>
-                );
-              })}
+              {/* Un anillo por etapa, del color de su nivel y sin relleno; Funcional, la base, punteada. */}
+              {LETRAS.map((l, k) => (
+                <polygon
+                  key={l}
+                  points={puntosSvg(anilloDeLaEtapa(todosLosAngulos, k))}
+                  style={{
+                    fill: "none",
+                    stroke: COLOR_DE_NIVEL[l],
+                    strokeOpacity: l === "F" ? 1 : 0.75,
+                    strokeWidth: foco?.letra === l ? 3 : 1.75,
+                    strokeDasharray: l === "F" ? "7 5" : undefined,
+                  }}
+                />
+              ))}
 
-              {/* Los números de la regla, en el hueco de arriba, con halo del color de la superficie. */}
-              {LIMITES.map((l) => (
+              {/* El nombre de cada etapa, en el hueco de arriba, con halo del color de la superficie. */}
+              {LETRAS.map((l, k) => (
                 <text
                   key={l}
                   x={CX}
-                  y={f(yEnElCentro(todosLosAngulos, l, "arriba") + 3.5)}
+                  y={f(yDelNombreDeEtapa(todosLosAngulos, k))}
                   style={{
-                    fill: "var(--color-fg-muted)",
-                    fontSize: 10.5,
+                    fill: "var(--color-fg-secondary)",
+                    fontSize: LETRA_DE_ETAPA,
                     fontWeight: 600,
                     textAnchor: "middle",
                     stroke: "var(--color-surface)",
-                    strokeWidth: 4,
+                    strokeWidth: 5,
                     paintOrder: "stroke",
-                    fontVariantNumeric: "tabular-nums",
                   }}
                 >
-                  {l}
+                  {nombreNivel(l)}
                 </text>
               ))}
-              {/* El chip de «la base», abajo. */}
+              {/* El chip de «La base», abajo, sobre el anillo de Funcional. */}
               <rect
-                x={CX - 32}
-                y={f(yDeLaBase - 11)}
-                width={64}
-                height={22}
-                rx={11}
+                x={chipDeLaBase.x0}
+                y={f(chipDeLaBase.y0)}
+                width={CHIP_DE_LA_BASE.ancho}
+                height={CHIP_DE_LA_BASE.alto}
+                rx={CHIP_DE_LA_BASE.alto / 2}
                 style={{ fill: "var(--color-surface)", stroke: "var(--color-nivel-funcional)", strokeWidth: 1.25 }}
               />
-              <text x={CX} y={f(yDeLaBase + 4)} style={{ fill: "var(--color-success-ink)", fontSize: 11.5, fontWeight: 600, textAnchor: "middle" }}>
+              <text x={CX} y={f((chipDeLaBase.y0 + chipDeLaBase.y1) / 2 + 4)} style={{ fill: "var(--color-success-ink)", fontSize: 11.5, fontWeight: 600, textAnchor: "middle" }}>
                 La base
               </text>
 
-              {/* Las marcas, en los vértices; las de la dimensión en foco, más grandes. */}
-              {visibles.map((s) => (
-                <g key={s.clave} style={{ opacity: apagada(s.clave) ? 0.25 : 1, transition: "opacity 150ms" }}>
-                  {ejes.map((e) => {
-                    const p = puntoDe(e, s.clave);
-                    return p ? (
-                      <Marca key={e.dimensionId} serie={s.clave} x={p[0]} y={p[1]} s={foco?.dim === e.dimensionId ? MARCA_EN_FOCO : MARCA} color={s.color} />
-                    ) : null;
-                  })}
-                </g>
-              ))}
+              {/* Los cruces: la cuenta de cada celda. En 0, un punto gris; el elegido, lleno del color de su nivel. */}
+              {ejes.map((e) =>
+                LETRAS.map((l, k) => {
+                  const [x, y] = cruce(angulos.get(e.dimensionId)!, k);
+                  const n = e.cuentas[l];
+                  const enFoco = foco?.dim === e.dimensionId;
+                  const elegido = enFoco && foco?.letra === l;
+                  if (elegido) {
+                    return (
+                      <g key={`${e.dimensionId}-${l}`}>
+                        <circle cx={f(x)} cy={f(y)} r={CRUCE_ELEGIDO} style={{ fill: COLOR_DE_NIVEL[l], stroke: "var(--color-surface)", strokeWidth: 2.5 }} />
+                        <circle cx={f(x)} cy={f(y)} r={HALO} style={{ fill: "none", stroke: COLOR_DE_NIVEL[l], strokeOpacity: 0.35, strokeWidth: 2 }} />
+                        {/* En blanco no se lee sobre Inicial ni Funcional: la tinta del tema con halo de la superficie, en claro y en oscuro. */}
+                        <text
+                          x={f(x)}
+                          y={f(y + 3.9)}
+                          style={{
+                            fill: "var(--color-fg)",
+                            stroke: "var(--color-surface)",
+                            strokeWidth: 3,
+                            paintOrder: "stroke",
+                            fontSize: 11,
+                            fontWeight: 700,
+                            textAnchor: "middle",
+                          }}
+                        >
+                          {n}
+                        </text>
+                      </g>
+                    );
+                  }
+                  if (n === 0) {
+                    return <circle key={`${e.dimensionId}-${l}`} cx={f(x)} cy={f(y)} r={PUNTO_EN_CERO} style={{ fill: "var(--color-fg-muted)", fillOpacity: 0.4 }} />;
+                  }
+                  return (
+                    <g key={`${e.dimensionId}-${l}`}>
+                      <circle
+                        cx={f(x)}
+                        cy={f(y)}
+                        r={enFoco ? CRUCE_EN_FOCO : CRUCE}
+                        style={{ fill: "var(--color-surface)", stroke: COLOR_DE_NIVEL[l], strokeWidth: enFoco ? 2.25 : 1.75 }}
+                      />
+                      <text x={f(x)} y={f(y + 3.4)} style={{ fill: "var(--color-fg)", fontSize: enFoco ? 10 : 9, fontWeight: 700, textAnchor: "middle" }}>
+                        {n}
+                      </text>
+                    </g>
+                  );
+                }),
+              )}
 
               {/* El nombre de cada mitad, al costado. */}
               {capas.map((c) => {
@@ -367,21 +400,20 @@ export default function Radar({ datos, perfil, onLeerDimension }: { datos: Datos
               })}
             </g>
 
-            {/* Encima de las series, la zona de cada marca: más grande que la marca, para el cursor y el dedo. */}
-            {visibles.map((s) =>
-              ejes.map((e) => {
-                const p = puntoDe(e, s.clave);
-                if (!p) return null;
+            {/* Encima, la zona de cada cruce: más grande que el cruce, para el cursor y el dedo. */}
+            {ejes.map((e) =>
+              LETRAS.map((l, k) => {
+                const [x, y] = cruce(angulos.get(e.dimensionId)!, k);
                 return (
                   <circle
-                    key={`${s.clave}-${e.dimensionId}`}
-                    cx={f(p[0])}
-                    cy={f(p[1])}
-                    r={12}
+                    key={`${e.dimensionId}-${l}`}
+                    cx={f(x)}
+                    cy={f(y)}
+                    r={14}
                     style={{ fill: "transparent", cursor: "pointer" }}
-                    onMouseEnter={() => setEncima({ dim: e.dimensionId, serie: s.clave })}
-                    onMouseLeave={() => setEncima(null)}
-                    onClick={() => tocarEje(e.dimensionId, s.clave)}
+                    onMouseEnter={() => ponerEncima({ dim: e.dimensionId, letra: l })}
+                    onMouseLeave={soltarEncima}
+                    onClick={() => tocar({ dim: e.dimensionId, letra: l })}
                   />
                 );
               }),
@@ -391,31 +423,36 @@ export default function Radar({ datos, perfil, onLeerDimension }: { datos: Datos
             {ejes.map((e) => {
               const r = rotuloDelEje(angulos.get(e.dimensionId)!, e.nombre, !e.aplica);
               const reportes = conteoDeDimension(conteos, e.dimensionId).total;
+              const numero = `${e.dimensionId}${reportes > 0 ? ` · ${cuantos(reportes, "reporte", "reportes")}` : ""}`;
               const enFoco = foco?.dim === e.dimensionId;
-              // «Qué se trabaja primero»: el número en un círculo, del lado del radar, y el texto del número corrido.
-              const capa = capas.find((c) => c.clave === capaDe(e.dimensionId));
+              // «Qué se trabaja primero»: el número en un círculo, pasado el final del número de la dimensión.
+              const capa = capas.find((c) => c.clave === e.capa);
               const filas = capa ? (ordenes.get(capa.clave) ?? []) : [];
               const orden = filas.length === 1 ? filas[0] : null;
               const dim = dims.find((d) => d.id === e.dimensionId);
               const lugar = orden && dim ? lugarEnElOrden(orden, dim) : null;
-              const lado = r.ancla === "start" ? 1 : -1;
+              const [ox, oy] = lugarDelOrden(r, anchoDelNumero(numero));
               return (
                 <g key={e.dimensionId}>
                   <g
                     role="button"
                     tabIndex={0}
-                    aria-label={`${e.dimensionId} ${e.nombre}${e.aplica ? "" : ", no aplica a este perfil"}: tócala para dejarla fija en el panel`}
-                    aria-pressed={fijo?.dim === e.dimensionId}
+                    aria-label={`${e.dimensionId} ${e.nombre}${e.aplica ? "" : ", no aplica a este perfil"}: tócala para ver sus cinco etapas en el panel`}
+                    aria-pressed={!!fijo && fijo.dim === e.dimensionId && fijo.letra === null}
                     className="cursor-pointer outline-none focus-visible:outline-2 focus-visible:outline-brand"
-                    onMouseEnter={() => setEncima({ dim: e.dimensionId, serie: null })}
-                    onMouseLeave={() => setEncima(null)}
-                    onFocus={() => setEncima({ dim: e.dimensionId, serie: null })}
+                    onMouseEnter={() => ponerEncima({ dim: e.dimensionId, letra: null })}
+                    onMouseLeave={soltarEncima}
+                    onFocus={() => ponerEncima({ dim: e.dimensionId, letra: null })}
                     onBlur={() => setEncima(null)}
-                    onClick={() => tocarEje(e.dimensionId)}
+                    onClick={() => tocar({ dim: e.dimensionId, letra: null })}
                     onKeyDown={alTecladoDelRotulo(e.dimensionId)}
                   >
                     <text
-                      x={f(lugar ? r.x + lado * 24 : r.x)}
+                      ref={(el) => {
+                        if (el) numerosRef.current.set(e.dimensionId, el);
+                        else numerosRef.current.delete(e.dimensionId);
+                      }}
+                      x={f(r.x)}
                       y={f(r.yNumero)}
                       style={{
                         textAnchor: r.ancla,
@@ -426,7 +463,7 @@ export default function Radar({ datos, perfil, onLeerDimension }: { datos: Datos
                         fontVariantNumeric: "tabular-nums",
                       }}
                     >
-                      {`${e.dimensionId}${reportes > 0 ? ` · ${cuantos(reportes, "reporte", "reportes")}` : ""}`}
+                      {numero}
                     </text>
                     {r.nombre.map((linea) => (
                       <text
@@ -450,10 +487,17 @@ export default function Radar({ datos, perfil, onLeerDimension }: { datos: Datos
                     )}
                   </g>
                   {lugar && orden && capa && (
-                    <g transform={`translate(${f(r.x + lado * 9)} ${f(r.yNumero - 4)})`} className="cursor-help">
+                    <g
+                      ref={(el) => {
+                        if (el) ordenesRef.current.set(e.dimensionId, el);
+                        else ordenesRef.current.delete(e.dimensionId);
+                      }}
+                      transform={`translate(${f(ox)} ${f(oy)})`}
+                      className="cursor-help"
+                    >
                       <title>{`${lugar}.º en el orden de ${capa.nombre.toLowerCase()}: ${orden.orden.join(" → ")}. ${orden.porQue}`}</title>
-                      <circle r={9} style={{ fill: "var(--color-surface)", stroke: "var(--color-fg-muted)", strokeWidth: 1.25 }} />
-                      <text y={3.8} style={{ fill: "var(--color-fg)", fontSize: 11, fontWeight: 700, textAnchor: "middle" }}>
+                      <circle r={R_ORDEN} style={{ fill: "var(--color-surface)", stroke: "var(--color-fg-muted)", strokeWidth: 1.25 }} />
+                      <text y={3.4} style={{ fill: "var(--color-fg)", fontSize: 9.5, fontWeight: 600, textAnchor: "middle" }}>
                         {lugar}
                       </text>
                     </g>
@@ -462,221 +506,328 @@ export default function Radar({ datos, perfil, onLeerDimension }: { datos: Datos
               );
             })}
           </svg>
-          {visibles.length === 0 && <p className="text-center text-[13px] text-fg-muted">Prende una serie arriba para ver sus puntos.</p>}
         </div>
 
-        <PanelDelRadar
-          eje={ejeEnFoco}
-          serieEnFoco={foco?.serie ?? null}
-          series={visibles}
-          ofrecidas={ofrecidas}
-          datos={datos}
-          nombreNivel={nombreNivel}
-          fijo={!!fijo && !encima}
-          onSoltar={() => setFijo(null)}
-          onLeerDimension={onLeerDimension}
-        />
+        {!ejeEnFoco ? (
+          <ComoSeLee nombreNivel={nombreNivel} />
+        ) : foco?.letra ? (
+          <PanelDelCruce
+            eje={ejeEnFoco}
+            letra={foco.letra}
+            que={que}
+            datos={datos}
+            perfil={perfil}
+            nombreNivel={nombreNivel}
+            fijo={panelFijo}
+            onElegir={(letra) => fijar({ dim: ejeEnFoco.dimensionId, letra }, true)}
+            onSoltar={() => soltar(true)}
+          />
+        ) : (
+          <PanelDeLaDimension
+            eje={ejeEnFoco}
+            que={que}
+            datos={datos}
+            nombreNivel={nombreNivel}
+            fijo={panelFijo}
+            onElegir={(letra) => fijar({ dim: ejeEnFoco.dimensionId, letra }, true)}
+            onSoltar={() => soltar(true)}
+            onLeerDimension={onLeerDimension}
+          />
+        )}
       </div>
 
-      <TablaDelRadar ejes={ejes} series={visibles} nombreNivel={nombreNivel} />
+      <TablaDelRadar ejes={ejes} que={que} nombreNivel={nombreNivel} fijo={fijo} onElegir={fijar} />
     </section>
   );
 }
 
-type SerieVisible = (typeof SERIES_DEL_RADAR)[number];
+const CAJA = "relative flex flex-col self-start rounded-[14px] bg-surface-muted p-4 xl:sticky xl:top-4";
 
-/** Lo que cuenta un eje: cada serie con su nivel, cuántos hay en cada nivel y lo que dice la escala de ese nivel. */
-function PanelDelRadar({
-  eje,
-  serieEnFoco,
-  series,
-  ofrecidas,
-  datos,
-  nombreNivel,
-  fijo,
-  onSoltar,
-  onLeerDimension,
-}: {
-  eje: EjeDelRadar | null;
-  serieEnFoco: SerieDelRadar | null;
-  series: SerieVisible[];
-  /** Todas las que se pueden prender (las apagadas también, para la leyenda). */
-  ofrecidas: SerieVisible[];
-  datos: DatosDeLaVista;
-  nombreNivel: (l: Letra) => string;
-  fijo: boolean;
-  onSoltar: () => void;
-  onLeerDimension: (dimensionId: string) => void;
-}) {
-  const caja = "relative flex flex-col gap-3 self-start rounded-[14px] bg-surface-muted p-4 xl:sticky xl:top-4";
-  if (!eje) {
-    return (
-      <aside aria-label="Detalle del radar" className={caja}>
-        <p className={ROTULO}>Cómo se lee</p>
-        <p className="text-[13px] leading-normal text-fg-secondary">
-          Cada eje es una dimensión: el centro es 0 y el borde, 100. De {nombreNivel("D")} a {nombreNivel("E")} cada nivel es una franja de 20 entre dos
-          anillos, y un nivel entero cae a la mitad de la suya; {nombreNivel("O")} es el borde, en 100. Un punto entre dos niveles queda entre sus
-          lugares.
-        </p>
-        <ul className="flex flex-col gap-2.5">
-          {ofrecidas.map((s) => {
-            const prendida = series.some((v) => v.clave === s.clave);
-            return (
-              <li key={s.clave} className="flex items-start gap-2.5">
-                <span className={cn("mt-0.5", !prendida && "opacity-40")}>
-                  <MarcaSuelta serie={s.clave} color={s.color} />
-                </span>
-                <div className="min-w-0">
-                  <p className={cn("text-[13px] font-semibold", prendida ? "text-fg" : "text-fg-muted")}>
-                    {s.etiqueta}
-                    {!prendida && <span className="font-normal"> · apagado</span>}
-                  </p>
-                  <p className="text-xs text-fg-muted">{QUE_DICE[s.clave]}</p>
-                </div>
-              </li>
-            );
-          })}
-          <li className="flex items-center gap-2.5">
-            <svg width="14" height="14" viewBox="0 0 14 14" className="flex-shrink-0" aria-hidden>
-              <line x1="0" y1="7" x2="14" y2="7" style={{ stroke: "var(--color-nivel-funcional)", strokeWidth: 2, strokeDasharray: "4 3" }} />
-            </svg>
-            <p className="text-[13px] text-fg">
-              <span className="font-semibold">La base</span>{" "}
-              <span className="text-fg-muted">
-                · donde empieza {nombreNivel("F")} ({LA_BASE})
-              </span>
-            </p>
-          </li>
-        </ul>
-        <p className="text-[13px] leading-normal text-fg-secondary">
-          Pasa el cursor por una dimensión, o tócala, para ver en qué nivel se concentra cada serie y lo que dice la escala de ese nivel. Un punto pasada la
-          línea punteada quiere decir que eso se pide sobre todo desde {nombreNivel("F")}, la base; más adentro, antes de llegar a ella.
-        </p>
-        <div className="flex flex-col gap-2 border-t border-line pt-3">
-          <p className={ROTULO}>Las franjas</p>
-          <ul className="flex flex-col gap-1.5">
-            {FRANJAS.map((fr) => (
-              <li key={fr.letra} className="flex items-center gap-2 text-[12.5px] text-fg">
-                <svg width="8" height="8" viewBox="0 0 8 8" className="flex-shrink-0" aria-hidden>
-                  <circle cx="4" cy="4" r="4" style={{ fill: COLOR_DE_NIVEL[fr.letra] }} />
-                </svg>
-                <span className="w-[74px] font-semibold">{nombreNivel(fr.letra)}</span>
-                <span className="tabular-nums text-fg-muted">
-                  {rangoDeLaFranja(fr)}
-                  {fr.letra === "F" && <span className="text-success-ink"> · aquí empieza la base</span>}
-                </span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      </aside>
-    );
-  }
-  const dimension = datos.area.dimensiones.find((d) => d.id === eje.dimensionId);
-  const capa = datos.capas.find((c) => c.clave === dimension?.capa);
-  // La descripción que se muestra: la del nivel de la serie apuntada, o la de la primera que tiene punto.
-  const principal = series.find((s) => s.clave === serieEnFoco && eje.series[s.clave].valor !== null) ?? series.find((s) => eje.series[s.clave].valor !== null);
-  // Se describe el nivel donde la serie tiene más criterios: un promedio puede caer en uno donde no tiene ninguno.
-  const letraPrincipal = principal ? nivelConMas(eje.series[principal.clave]) : null;
-  const descripcion = letraPrincipal ? dimension?.niveles.find((nv) => nv.letra === letraPrincipal)?.descripcion : null;
-
+/** Las flechas de los botones del panel. */
+function Flecha({ hacia }: { hacia: "izquierda" | "derecha" }) {
   return (
-    <aside aria-label="Detalle del radar" className={caja}>
-      {/* Se anuncia solo lo que se deja fijo: pasar el cursor por el dibujo no puede hablar en cada eje que cruza. */}
-      <p className="sr-only" aria-live="polite">
-        {fijo ? `${eje.nombre}, fijada en el panel.` : ""}
-      </p>
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className={ROTULO}>
-            Dimensión {eje.dimensionId}
-            {capa ? ` · ${capa.nombre}` : ""}
-          </p>
-          <h3 className="mt-0.5 text-base font-semibold text-fg">{eje.nombre}</h3>
-          {!eje.aplica && <p className="text-xs text-fg-muted">No aplica con este perfil de negocio.</p>}
-        </div>
-        {fijo && (
-          <button type="button" onClick={onSoltar} className="rounded p-1 text-fg-muted hover:bg-surface-hover hover:text-fg" aria-label="Soltar la dimensión">
-            <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" aria-hidden>
-              <path d="M6 6l12 12M18 6L6 18" />
-            </svg>
-          </button>
-        )}
-      </div>
-
-      {dimension?.descripcion && <p className="text-[13px] leading-normal text-fg-secondary">{dimension.descripcion}</p>}
-
-      <ul className="flex flex-col divide-y divide-line rounded-[10px] bg-surface px-3 py-1">
-        {series.map((s) => {
-          const p = eje.series[s.clave];
-          return (
-            <li key={s.clave} className={cn("flex gap-2 py-2.5", serieEnFoco && serieEnFoco !== s.clave && "opacity-60")}>
-              <span className="mt-[3px]">
-                <MarcaSuelta serie={s.clave} color={s.color} />
-              </span>
-              <div className="min-w-0 text-[13px]">
-                <p className="text-fg">
-                  <span className="font-semibold">{s.etiqueta}</span>
-                  {p.valor !== null ? (
-                    <>
-                      {" "}
-                      ·{" "}
-                      <svg width="8" height="8" viewBox="0 0 8 8" className="inline-block align-baseline" aria-hidden>
-                        <circle cx="4" cy="4" r="4" style={{ fill: COLOR_DE_NIVEL[nivelMasCercano(p.valor)] }} />
-                      </svg>{" "}
-                      {nombreDelPromedio(p.valor, nombreNivel)} <span className="text-fg-muted tabular-nums">({decimal(p.valor)})</span>
-                    </>
-                  ) : (
-                    <span className="text-fg-muted"> · sin {s.queCuenta}</span>
-                  )}
-                </p>
-                {p.cuantos > 0 && (
-                  <p className="text-xs tabular-nums text-fg-muted">
-                    {p.cuantos} en total:{" "}
-                    {LETRAS.filter((l) => p.porNivel[l] > 0)
-                      .map((l) => `${p.porNivel[l]} en ${nombreNivel(l)}`)
-                      .join(", ")}
-                  </p>
-                )}
-              </div>
-            </li>
-          );
-        })}
-      </ul>
-
-      {letraPrincipal && descripcion && (
-        <div className="border-t border-line pt-3">
-          <p className={ROTULO}>
-            Donde más {principal?.queCuenta} hay: {nombreNivel(letraPrincipal)}
-          </p>
-          <ParrafoDeLaEscala texto={descripcion} className="mt-1 text-[13px] leading-relaxed text-fg-secondary" />
-        </div>
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      {hacia === "derecha" ? (
+        <>
+          <path d="M5 12h14" />
+          <path d="M13 6l6 6-6 6" />
+        </>
+      ) : (
+        <>
+          <path d="M19 12H5" />
+          <path d="M11 6l-6 6 6 6" />
+        </>
       )}
+    </svg>
+  );
+}
 
-      <button type="button" onClick={() => onLeerDimension(eje.dimensionId)} className={cn(BOTON_CLARO, "justify-center font-semibold text-fg")}>
-        Leer la dimensión entera
-      </button>
-      {fijo && <p className="text-xs leading-normal text-fg-muted">Toca otra dimensión para cambiarla, o fuera del radar para soltarla.</p>}
+/** El punto de 8 px del color de un nivel. */
+function PuntoDeNivel({ letra, tamano = 8 }: { letra: Letra; tamano?: number }) {
+  return (
+    <svg width={tamano} height={tamano} viewBox="0 0 8 8" className="flex-shrink-0" aria-hidden>
+      <circle cx="4" cy="4" r="4" style={{ fill: COLOR_DE_NIVEL[letra] }} />
+    </svg>
+  );
+}
+
+/** La X de lo que quedó fijo (también se suelta tocando fuera del radar, o con Escape). */
+function Soltar({ onClick, que }: { onClick: () => void; que: string }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="absolute right-3 top-3 inline-flex h-7 w-7 items-center justify-center rounded-md text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg"
+      aria-label={`Soltar ${que}`}
+      title="Soltar (también: tocar fuera del radar, o Escape)"
+    >
+      <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" aria-hidden>
+        <path d="M6 6l12 12M18 6L6 18" />
+      </svg>
+    </button>
+  );
+}
+
+/** Al entrar, sin nada en foco: cómo se lee el dibujo. */
+function ComoSeLee({ nombreNivel }: { nombreNivel: (l: Letra) => string }) {
+  return (
+    <aside aria-label="Detalle del radar" className={cn(CAJA, "gap-[14px]")}>
+      <p data-titulo-del-panel tabIndex={-1} className={cn(ROTULO, "outline-none")}>
+        Cómo se lee
+      </p>
+      <p className="text-[13px] leading-normal text-fg-secondary">
+        Cada eje es una dimensión y cada anillo, una etapa. Donde se cruzan está la celda del Mapa: el número dice cuántos criterios tiene esa dimensión en esa
+        etapa.
+      </p>
+      <ul className="flex flex-col gap-2">
+        {LETRAS.map((l) => (
+          <li key={l} className="flex items-center gap-2.5 text-[13px] text-fg">
+            <svg width="20" height="10" viewBox="0 0 20 10" className="flex-shrink-0" aria-hidden>
+              <line x1="0" y1="5" x2="20" y2="5" style={{ stroke: COLOR_DE_NIVEL[l], strokeWidth: 2.5, strokeDasharray: l === "F" ? "4 3" : undefined }} />
+            </svg>
+            <span className="font-semibold">{nombreNivel(l)}</span>
+            {l === "F" && <span className="text-success-ink">· la base</span>}
+          </li>
+        ))}
+      </ul>
+      <p className="flex items-start gap-2.5 text-[12.5px] leading-[1.45] text-fg-secondary">
+        <svg width="20" height="20" viewBox="0 0 20 20" className="flex-shrink-0" aria-hidden>
+          <circle cx="10" cy="10" r="8.5" style={{ fill: "var(--color-surface)", stroke: "var(--color-fg-muted)", strokeWidth: 1.25 }} />
+          <text x="10" y="13.8" style={{ fill: "var(--color-fg)", fontSize: 10.5, fontWeight: 600, textAnchor: "middle" }}>
+            1
+          </text>
+        </svg>
+        <span>Junto al número de una dimensión: su lugar en «qué se trabaja primero».</span>
+      </p>
+      <p className="flex items-start gap-2.5 text-[12.5px] leading-[1.45] text-fg-secondary">
+        <svg width="20" height="20" viewBox="0 0 20 20" className="flex-shrink-0" aria-hidden>
+          <circle cx="10" cy="10" r={PUNTO_EN_CERO} style={{ fill: "var(--color-fg-muted)", fillOpacity: 0.4 }} />
+        </svg>
+        <span>Un punto gris: en esa etapa no hay ninguno de lo que se cuenta.</span>
+      </p>
+      <div className="flex items-start gap-2.5 border-t border-line pt-3">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="mt-px flex-shrink-0 stroke-brand" aria-hidden>
+          <path d="M9 9l5 12 1.8-5.2L21 14 9 9z" />
+          <path d="M7.2 2.2L8 5.1" />
+          <path d="M5.1 8L2.2 7.2" />
+          <path d="M14 4.1L12 6" />
+          <path d="M6 12l-1.9 2" />
+        </svg>
+        <p className="text-[13px] leading-normal text-fg-secondary">Toca un cruce para leer sus criterios, o el nombre de una dimensión para ver sus cinco etapas.</p>
+      </div>
     </aside>
   );
 }
 
-/** Los mismos números en una tabla: para quien no lee el dibujo, y para comparar con precisión. */
-function TablaDelRadar({ ejes, series, nombreNivel }: { ejes: EjeDelRadar[]; series: SerieVisible[]; nombreNivel: (l: Letra) => string }) {
-  if (series.length === 0) return null;
+/** Una dimensión: sus cinco etapas, cada una con su cuenta y su descripción. */
+function PanelDeLaDimension({
+  eje,
+  que,
+  datos,
+  nombreNivel,
+  fijo,
+  onElegir,
+  onSoltar,
+  onLeerDimension,
+}: {
+  eje: EjeDeLaTeoria;
+  que: QueSeCuenta;
+  datos: DatosDeLaVista;
+  nombreNivel: (l: Letra) => string;
+  fijo: boolean;
+  onElegir: (letra: Letra) => void;
+  onSoltar: () => void;
+  onLeerDimension: (dimensionId: string) => void;
+}) {
+  const dimension = datos.area.dimensiones.find((d) => d.id === eje.dimensionId);
+  const capa = datos.capas.find((c) => c.clave === eje.capa);
+  return (
+    <aside aria-label="Detalle del radar" className={cn(CAJA, "gap-2.5")}>
+      {fijo && <Soltar onClick={onSoltar} que="la dimensión" />}
+      <p className={cn("pr-8", ROTULO)}>
+        {eje.dimensionId}
+        {capa ? ` · ${capa.nombre}` : ""}
+      </p>
+      <h3 data-titulo-del-panel tabIndex={-1} className="-mt-0.5 text-base font-semibold text-fg outline-none">
+        {eje.nombre}
+      </h3>
+      {!eje.aplica && <p className="text-xs text-fg-muted">No aplica con este perfil de negocio.</p>}
+      {dimension?.descripcion && (
+        <p className="text-[13px] leading-normal text-fg-secondary">
+          <TextoConPalabras texto={dimension.descripcion} palabras={datos.terminos} />
+        </p>
+      )}
+      <ul className="flex flex-col divide-y divide-line rounded-[10px] bg-surface px-3">
+        {(dimension?.niveles ?? []).map((nv) => (
+          <li key={nv.id}>
+            <button type="button" onClick={() => onElegir(nv.letra)} className="flex w-full flex-col gap-[3px] py-[9px] text-left hover:bg-surface-hover">
+              <span className="flex items-center justify-between gap-2">
+                <span className="inline-flex items-center gap-[7px] text-[13px] font-semibold text-fg">
+                  <PuntoDeNivel letra={nv.letra} />
+                  {nombreNivel(nv.letra)}
+                </span>
+                <span className="text-xs tabular-nums text-fg-muted">{enPalabras(eje.cuentas[nv.letra], que)}</span>
+              </span>
+              <span className="text-xs leading-[1.45] text-fg-muted">{nv.descripcion}</span>
+            </button>
+          </li>
+        ))}
+      </ul>
+      <button
+        type="button"
+        onClick={() => onLeerDimension(eje.dimensionId)}
+        className={cn(BOTON_CLARO, "h-9 justify-center rounded-[10px] py-0 font-semibold text-fg")}
+      >
+        Leer la dimensión entera
+        <Flecha hacia="derecha" />
+      </button>
+      <p className="text-xs leading-normal text-fg-muted">Toca una etapa (aquí o en su cruce) para leer sus criterios.</p>
+    </aside>
+  );
+}
+
+/** Un cruce: la etapa de esa dimensión, cuántos hay de cada clase y sus criterios con sus marcas. */
+function PanelDelCruce({
+  eje,
+  letra,
+  que,
+  datos,
+  perfil,
+  nombreNivel,
+  fijo,
+  onElegir,
+  onSoltar,
+}: {
+  eje: EjeDeLaTeoria;
+  letra: Letra;
+  que: QueSeCuenta;
+  datos: DatosDeLaVista;
+  perfil: Perfil;
+  nombreNivel: (l: Letra) => string;
+  fijo: boolean;
+  onElegir: (letra: Letra) => void;
+  onSoltar: () => void;
+}) {
+  const dimension = datos.area.dimensiones.find((d) => d.id === eje.dimensionId);
+  const nv = dimension?.niveles.find((x) => x.letra === letra);
+  if (!dimension || !nv) return null;
+  const n = eje.cuentas[letra];
+  const cuenta = (q: QueSeCuenta) => cuentaDeLaCelda(nv.criterios, q, perfil, datos.requeridos);
+  // Los mismos criterios que cuenta el número del cruce (la regla vive en lib/escala/radar.ts).
+  const listados = criteriosDelCruce(dimension, nv, que, perfil, datos.requeridos);
+  // Cuántos hay de cada clase, de los que aplican.
+  const clases = eje.aplica
+    ? [
+        que !== "criterios" ? enPalabras(cuenta("criterios"), "criterios") : null,
+        cuenta("habitos") ? `${cuenta("habitos")} ${cuenta("habitos") === 1 ? "hábito" : "hábitos"}` : null,
+        cuenta("riesgos") ? `${cuenta("riesgos")} de riesgo` : null,
+        cuenta("requeridos") ? `${cuenta("requeridos")} que otros requieren` : null,
+      ].filter(Boolean)
+    : [];
+  const escondidos = conPerfil(perfil) && que !== "perfil" ? cuenta("perfil") : 0;
+  const k = LETRAS.indexOf(letra);
+  const anterior = k > 0 ? LETRAS[k - 1] : null;
+  const siguiente = k < LETRAS.length - 1 ? LETRAS[k + 1] : null;
+
+  return (
+    <aside aria-label="Detalle del radar" className={cn(CAJA, "gap-2.5")}>
+      {fijo && <Soltar onClick={onSoltar} que="el cruce" />}
+      <p className={cn("pr-8", ROTULO)}>
+        {eje.dimensionId} · {eje.nombre}
+      </p>
+      <h3 data-titulo-del-panel tabIndex={-1} className="-mt-0.5 flex flex-wrap items-center gap-2 text-base font-semibold text-fg outline-none">
+        <PuntoDeNivel letra={letra} tamano={10} />
+        {nombreNivel(letra)} <span className="text-sm font-normal text-fg-muted">· {enPalabras(n, que)}</span>
+      </h3>
+      <p className="text-[13px] leading-normal text-fg-secondary">{nv.descripcion}</p>
+      {!eje.aplica && que !== "perfil" && <p className="text-xs text-fg-muted">Esta dimensión no aplica con este perfil de negocio.</p>}
+      {clases.length > 0 && <p className="text-xs text-fg-muted">{clases.join(" · ")}</p>}
+      {listados.length > 0 ? (
+        <ul className="flex flex-col divide-y divide-line rounded-[10px] bg-surface px-3">
+          {listados.map((c) => (
+            <li key={c.id} className="flex flex-col gap-[5px] py-[9px]">
+              <span className="line-clamp-3 text-[12.5px] leading-[1.45] text-fg" title={c.texto}>
+                <TextoConPalabras texto={c.texto} palabras={datos.terminos} />
+              </span>
+              <MetaDelCriterio criterio={c} datos={datos} perfil={perfil} />
+            </li>
+          ))}
+        </ul>
+      ) : (
+        eje.aplica && <p className="text-xs text-fg-muted">En esta etapa no hay {QUE_SE_CUENTA.find((q) => q.clave === que)!.varios}.</p>
+      )}
+      {escondidos > 0 && (
+        <p className="text-xs text-fg-muted">
+          {escondidos} {escondidos === 1 ? "criterio no aplica" : "criterios no aplican"} a este perfil.
+        </p>
+      )}
+      <NoAplicanEnLaEdicion nivel={nv} className="block text-xs" />
+      <div className="flex gap-2">
+        {anterior && (
+          <button type="button" onClick={() => onElegir(anterior)} className={cn(BOTON_CLARO, "h-9 flex-1 justify-center rounded-[10px] py-0 font-semibold text-fg")}>
+            <Flecha hacia="izquierda" />
+            {nombreNivel(anterior)} · {eje.cuentas[anterior]}
+          </button>
+        )}
+        {siguiente && (
+          <button type="button" onClick={() => onElegir(siguiente)} className={cn(BOTON_CLARO, "h-9 flex-1 justify-center rounded-[10px] py-0 font-semibold text-fg")}>
+            {nombreNivel(siguiente)} · {eje.cuentas[siguiente]}
+            <Flecha hacia="derecha" />
+          </button>
+        )}
+      </div>
+    </aside>
+  );
+}
+
+/** Los mismos números en una tabla: para quien no lee el dibujo, y para llegar a cada cruce con el teclado. */
+function TablaDelRadar({
+  ejes,
+  que,
+  nombreNivel,
+  fijo,
+  onElegir,
+}: {
+  ejes: EjeDeLaTeoria[];
+  que: QueSeCuenta;
+  nombreNivel: (l: Letra) => string;
+  fijo: Foco;
+  onElegir: (fc: Foco) => void;
+}) {
   return (
     <details className="group rounded-xl border border-line text-xs text-fg-secondary">
       <summary className="cursor-pointer select-none px-3 py-2 font-medium text-fg-secondary hover:text-fg">Ver los números en una tabla</summary>
       <div className="overflow-x-auto px-3 pb-3">
-        <table className="w-full min-w-[420px] border-collapse text-left">
+        <table className="w-full min-w-[480px] border-collapse text-left">
+          <caption className="sr-only">Cuántos {QUE_SE_CUENTA.find((q) => q.clave === que)!.varios} tiene cada dimensión en cada etapa</caption>
           <thead>
             <tr className="border-b border-line">
               <th className="py-1.5 pr-3 font-semibold text-fg">Dimensión</th>
-              {series.map((s) => (
-                <th key={s.clave} className="py-1.5 pr-3 font-semibold text-fg">
-                  <span className="inline-flex items-center gap-1">
-                    <MarcaSuelta serie={s.clave} color={s.color} />
-                    {s.etiqueta}
+              {LETRAS.map((l) => (
+                <th key={l} className="py-1.5 pr-3 font-semibold text-fg">
+                  <span className="inline-flex items-center gap-1.5">
+                    <PuntoDeNivel letra={l} />
+                    {nombreNivel(l)}
                   </span>
                 </th>
               ))}
@@ -685,16 +836,23 @@ function TablaDelRadar({ ejes, series, nombreNivel }: { ejes: EjeDelRadar[]; ser
           <tbody>
             {ejes.map((e) => (
               <tr key={e.dimensionId} className="border-b border-line last:border-0">
-                <td className="py-1.5 pr-3 text-fg">{e.nombre}</td>
-                {series.map((s) => {
-                  const p = e.series[s.clave];
+                <td className="py-1.5 pr-3 text-fg">
+                  {e.nombre}
+                  {!e.aplica && <span className="text-fg-muted"> · no aplica</span>}
+                </td>
+                {LETRAS.map((l) => {
+                  const elegido = fijo?.dim === e.dimensionId && fijo.letra === l;
                   return (
-                    <td key={s.clave} className="py-1.5 pr-3 tabular-nums">
-                      {p.valor === null ? (
-                        <span className="text-fg-muted">—</span>
-                      ) : (
-                        `${nombreDelPromedio(p.valor, nombreNivel)} (${decimal(p.valor)}, ${p.cuantos})`
-                      )}
+                    <td key={l} className="py-1 pr-3">
+                      <button
+                        type="button"
+                        aria-pressed={elegido}
+                        aria-label={`${e.nombre} en ${nombreNivel(l)}: ${enPalabras(e.cuentas[l], que)}. Ver en el panel.`}
+                        onClick={() => onElegir({ dim: e.dimensionId, letra: l })}
+                        className={cn("min-w-8 rounded px-1.5 py-0.5 tabular-nums hover:bg-surface-hover", elegido ? "bg-surface-hover font-semibold text-fg" : e.cuentas[l] === 0 && "text-fg-muted")}
+                      >
+                        {e.cuentas[l]}
+                      </button>
                     </td>
                   );
                 })}
@@ -702,9 +860,6 @@ function TablaDelRadar({ ejes, series, nombreNivel }: { ejes: EjeDelRadar[]; ser
             ))}
           </tbody>
         </table>
-        <p className="mt-2 text-fg-muted">
-          Entre paréntesis: el promedio (1 = {nombreNivel("D")}, 5 = {nombreNivel("O")}) y cuántos criterios cuenta.
-        </p>
       </div>
     </details>
   );
