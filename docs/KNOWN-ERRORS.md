@@ -152,6 +152,12 @@ No tropezar dos veces. Si pisás uno nuevo, agregalo acá.
   (`lib/google/reunion-movida.ts`). Con algo leído no la toca: el caso del texto de otro día sigue sin guarda. *Señal:* `sequence` mayor que 0 en el evento de Calendar. Las de antes de
   la guarda: `recuperar-transcripts-meet.ts --solo-futuras` antes de la fecha nueva; después,
   `--solo-antes-de-terminar --dias 7`.
+- **El main se queda sin `node_modules` después de archivar sesiones o limpiar copias de trabajo.** *Causa:* las
+  sesiones enlazan su `node_modules` al del main con un *junction* de Windows (para no reinstalar en cada copia), y al
+  borrar la copia el borrado siguió el enlace y vació la carpeta del main (pasó el 29 oct, al archivar 108 sesiones).
+  *Guarda:* antes de archivar o limpiar copias, quitar los enlaces con `rmdir` (borra solo el enlace, no el destino):
+  `for d in .claude/worktrees/*/; do cmd //c "rmdir $(cygpath -w "${d}node_modules")"; done`. Si ya pasó: `npm ci` y
+  `npx prisma generate` en el main, y reiniciar el servidor local.
 - **Una sesión de Claude Code se queda sin contexto a las pocas horas.** *Causa:* `CLAUDE.md` importaba con `@` el
   DECISIONS, el GLOSSARY y el RUNBOOK: 411.000 tokens (41 % de la ventana) cargados antes del primer mensaje, medido el
   2026-10-20. *Guarda:* esos tres son punteros con su condición; con `@` solo van ARCHITECTURE y este archivo. Antes de
