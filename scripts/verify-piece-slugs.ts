@@ -12,7 +12,7 @@
  *
  * Solo lee. Correr con: npx tsx scripts/verify-piece-slugs.ts
  */
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, type Prisma } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
 import "dotenv/config";
@@ -20,7 +20,7 @@ import { PIECES, pieceForCanvas } from "../lib/pieces/registry";
 import { canvasOf } from "../lib/pieces/canvas-query";
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL!, ssl: { rejectUnauthorized: false } });
-const prisma = new PrismaClient({ adapter: new PrismaPg(pool) });
+const prisma = new PrismaClient<Prisma.PrismaClientOptions>({ adapter: new PrismaPg(pool) });
 
 async function main() {
   const todos = await prisma.projectCanvas.findMany({

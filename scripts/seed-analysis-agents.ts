@@ -10,7 +10,7 @@
  *   npx tsx --env-file=.env scripts/seed-analysis-agents.ts
  */
 
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, type Prisma } from "@prisma/client";
 import { sslParaConexion } from "@/lib/db/ssl";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
@@ -20,7 +20,7 @@ const pool = new Pool({
   ssl: sslParaConexion(process.env.DATABASE_URL),
 });
 const adapter = new PrismaPg(pool);
-const prisma = new PrismaClient({ adapter });
+const prisma = new PrismaClient<Prisma.PrismaClientOptions>({ adapter });
 
 // ── Slugs estables — usados como agentSlug en AgentRun ─────────────────────────
 export const AGENT_SLUG_SALES = "sales-analysis";

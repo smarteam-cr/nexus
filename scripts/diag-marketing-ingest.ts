@@ -3,13 +3,13 @@
  * Diagnóstico de la ingesta de inspiración: último run (counts), fuentes
  * (lastFetchedAt/lastFetchError) y si hay APIFY_TOKEN configurado.
  */
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, type Prisma } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
 import "dotenv/config";
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL!, ssl: { rejectUnauthorized: false } });
-const prisma = new PrismaClient({ adapter: new PrismaPg(pool) });
+const prisma = new PrismaClient<Prisma.PrismaClientOptions>({ adapter: new PrismaPg(pool) });
 
 async function main() {
   console.log(`APIFY_TOKEN: ${process.env.APIFY_TOKEN ? `set (${process.env.APIFY_TOKEN.length} chars)` : "❌ VACÍO"}`);

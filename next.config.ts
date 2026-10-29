@@ -26,6 +26,10 @@ const nextConfig: NextConfig = {
   // cada build y un error de tipos.)
   // echarts-for-react y echarts son paquetes ESM que necesitan transpilación en Next.js
   transpilePackages: ["echarts", "echarts-for-react", "zrender"],
+  // El chequeo de tipos del build usa tsconfig.build.json: el mismo tsconfig SIN los tests, cuyos
+  // errores Next ya ignora en el build. Bajó el pico de memoria de 5,2 a 4,3 GB (2026-10-29, RUNBOOK ›
+  // Deploy). `npx tsc --noEmit` y el CI siguen chequeando todo con tsconfig.json.
+  typescript: { tsconfigPath: "tsconfig.build.json" },
   /**
    * `Referrer-Policy: no-referrer` en TODA la superficie externa.
    *

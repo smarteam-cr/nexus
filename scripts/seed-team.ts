@@ -9,7 +9,7 @@
  * Idempotente (upsert por email). Guard: contra prod exige ALLOW_PROD_WRITE=1.
  */
 import { PrismaPg } from "@prisma/adapter-pg";
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, type Prisma } from "@prisma/client";
 import * as dotenv from "dotenv";
 dotenv.config();
 
@@ -20,7 +20,7 @@ import { createScriptPool } from "./lib/db";
 assertProdWriteAllowed("scripts/seed-team.ts");
 const { pool } = createScriptPool();
 const adapter = new PrismaPg(pool);
-const prisma = new PrismaClient({ adapter });
+const prisma = new PrismaClient<Prisma.PrismaClientOptions>({ adapter });
 
 // `area` = eje de ANÁLISIS (Ventas/CSE/…). El roleEnum (permiso) arranca en CSE
 // y se asigna por scripts/assign-team-roles.ts.

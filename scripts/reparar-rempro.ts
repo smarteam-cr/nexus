@@ -23,11 +23,11 @@
  */
 import { resolverApply } from "./lib/guard";
 import { asignarDuenioManual } from "@/lib/sessions/duenio-manual";
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, type Prisma } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { writeFileSync, mkdirSync } from "node:fs";
 
-const prisma = new PrismaClient({
+const prisma = new PrismaClient<Prisma.PrismaClientOptions>({
   adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL, max: 2 }),
 });
 

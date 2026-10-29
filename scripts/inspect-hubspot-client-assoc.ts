@@ -13,7 +13,7 @@
  *
  * No escribe nada. Uso: npx tsx scripts/inspect-hubspot-client-assoc.ts multiquimica
  */
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, type Prisma } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
 import "dotenv/config";
@@ -23,7 +23,7 @@ import { getSystemHubspotClient } from "@/lib/hubspot/client";
 type ClienteHubspot = Awaited<ReturnType<typeof getSystemHubspotClient>>;
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL!, ssl: { rejectUnauthorized: false } });
-const prisma = new PrismaClient({ adapter: new PrismaPg(pool) });
+const prisma = new PrismaClient<Prisma.PrismaClientOptions>({ adapter: new PrismaPg(pool) });
 
 const SLUGS = ["projects", "PROJECT", "0-18", "0-49"];
 const PROPS = "hs_name,nombre_del_proyecto,hs_status,estatus_del_proyecto,hs_pipeline,hs_pipeline_stage";

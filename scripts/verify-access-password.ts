@@ -12,7 +12,7 @@
  *
  * Uso: npx tsx scripts/verify-access-password.ts  (dev server en :3004)
  */
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, type Prisma } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
 import { randomBytes } from "node:crypto";
@@ -20,7 +20,7 @@ import bcrypt from "bcrypt";
 import "dotenv/config";
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL!, ssl: { rejectUnauthorized: false } });
-const prisma = new PrismaClient({ adapter: new PrismaPg(pool) });
+const prisma = new PrismaClient<Prisma.PrismaClientOptions>({ adapter: new PrismaPg(pool) });
 
 const BASE = "http://localhost:3004";
 const BCRYPT_ROUNDS = 12;
