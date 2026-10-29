@@ -9,7 +9,7 @@
 <!-- El resumen se arma con este bloque. Cómo se regenera: «Cómo se mantiene este roadmap» y la skill regenerar-roadmap. -->
 ```temas
 {
- "dondeVamos": "La página de resultados del test ya salió con el diseño que aprobaste: la estructura de antes, el radar de la teoría grande y a lo ancho, y el PDF en 3 hojas horizontales. Ayer salieron el radar de la teoría en la Escala, tu position statement, la escala única y un enlace por sesión.",
+ "dondeVamos": "La página de resultados del test quedó pulida y en producción: la escala más grande, sin la barra azul, con las animaciones de la aplicación vieja, «Ver detalles» en cada barra y la agenda de HubSpot incrustada. También salieron cuatro rescates de copias viejas: el build usa menos memoria, la lectura de páginas web está protegida, se borraron las tarjetas viejas de contexto y KAIZEN y KJ quedaron en su registro activo de Partner.",
  "temas": [
   {
    "n": 4,
@@ -175,10 +175,14 @@
     {
      "fecha": "29 oct",
      "texto": "La página de resultados con la estructura de antes: radar de la teoría grande, a lo ancho, estilo V3 y PDF en 3 hojas."
+    },
+    {
+     "fecha": "29 oct",
+     "texto": "El resultado pulido: escala más grande, sin barra azul, animaciones, «Ver detalles» por barra y la agenda de HubSpot."
     }
    ],
    "sigue": "Tu revisión de las preguntas y qué formulario usa el test. Después, el corte de la aplicación vieja.",
-   "teToca": "Recorrer el test en Escala › Tests › Preguntas y abrir un resultado con su PDF (pruebas 296 y 297).",
+   "teToca": "Recorrer el test en Escala › Tests › Preguntas y abrir un resultado con su PDF (pruebas 296 a 298).",
    "decisiones": [
     15,
     29,
@@ -189,7 +193,8 @@
     67,
     68,
     69,
-    70
+    70,
+    71
    ]
   },
   {
@@ -416,6 +421,10 @@
     {
      "fecha": "28 oct",
      "texto": "Fomento Urbano en una ficha, kölbi reapuntado, 6 «Información del cliente» repetidas unidas y CAMOSA en Maquinaria."
+    },
+    {
+     "fecha": "29 oct",
+     "texto": "Se borraron las tarjetas viejas de contexto, que nadie usaba: 2.637 líneas menos."
     }
    ],
    "sigue": "La carga inicial de los datos (espera a la CSL) y prender la escritura en HubSpot.",
@@ -428,7 +437,8 @@
     26,
     27,
     35,
-    36
+    36,
+    72
    ]
   },
   {
@@ -477,6 +487,14 @@
     {
      "fecha": "26 oct",
      "texto": "El banco de Odoo y la IA por lotes."
+    },
+    {
+     "fecha": "29 oct",
+     "texto": "El build usa 4,4 GB de sus 6 (antes 5,5) y leer una página pegada ya no puede abrir direcciones internas."
+    },
+    {
+     "fecha": "29 oct",
+     "texto": "Partner: un cliente colgado de un registro inactivo pasa solo al activo; KAIZEN KAPITAL y KJ Publicidad ya pasaron."
     }
    ],
    "sigue": "Tus configuraciones del servidor y lo que queda de HubSpot.",
@@ -563,6 +581,7 @@ Lo que dice «Hoy» en cada tarjeta es del 24 oct, antes de construir: dónde va
   1. **Los correos:** si no gastan IA, todos; si gastan, solo los de las empresas que lo necesitan (activas o usadas en Nexus).
   2. **La dirección de producción en HubSpot: sin decidir.** Te recomiendo registrarla, para que reconectar no dependa de tu PC; queda en «Lo que configuras tú».
   3. **El aviso de un job que deja de correr te llega a ti,** por ahora.
+- **El 29 oct, en producción (rescates de copias viejas):** el chequeo de tipos del build baja de 5,5 a 4,4 GB de sus 6; leer una página que pega una persona ya no puede abrir direcciones internas, con una sola pieza (`lib/net`) para eso y para la preventa; y Partner pasa solo a un cliente colgado de un registro inactivo al activo que coincide (aplicado a KAIZEN KAPITAL y KJ Publicidad; el simulacro de después da 0).
 
 ### 4 · El análisis de la venta consultiva <span class="estado">En producción</span>
 
@@ -602,6 +621,7 @@ Lo que dice «Hoy» en cada tarjeta es del 24 oct, antes de construir: dónde va
   2. **La completa la llena el consultor, por equipo.** La escala ubica a un equipo, así que una empresa puede tener varias exploraciones: Ventas, servicio, Customer Success, sus clientes.
   3. **Las preguntas las revisas tú,** y el equipo te da su opinión al usarlas.
 - **El 28 oct:** el resultado del test con la regla de colores abajo no va; se retoma con tus comentarios anteriores sobre la página de resultados. A quien ya es contacto, el test no le pisa sus datos en HubSpot («Lo que decides tú» 39; queda la 54).
+- **El 29 oct, en producción:** la página de resultados con la estructura de antes y el radar de la teoría, y después pulida: sin el contenedor general, letra más grande, el logo de color sin la barra azul, las animaciones de la aplicación vieja (el radar al pasar el cursor, las barras que se llenan al bajar), «Ver detalles» en cada barra y la agenda de HubSpot incrustada (la de msalas2, la misma de la aplicación vieja; confirmada por ti). El PDF no cambia. Pruebas 296 a 298.
 
 ### 7 · Vender por resultados <span class="estado">Propuesta</span>
 
@@ -713,7 +733,7 @@ Que Nexus amarre los puntos: entrar a un cliente y ver todo lo que Smarteam est�
 
 | Qué | Cómo está |
 |---|---|
-| Producción | Corre `f75b8bb4` desde el 29 oct: la página de resultados del test con el diseño aprobado (la estructura de antes, el radar de la teoría grande y a lo ancho, el estilo V3 y el PDF en 3 hojas horizontales). Antes, `0968a8a0`, la noche del 28 oct: el radar de la teoría en Escala › Radar, tu position statement en Marketing › Audiencia (cargado) y en la preventa, los arreglos de la escala única y una dirección por cada sesión de la exploración. Antes, `7817de59`, el 28 oct: una sola escala para la preventa y los clientes, y la escala 9.2.0 con Telecomunicaciones y los 54 bancos del test. |
+| Producción | Corre `f7b2beb7` desde el 29 oct: la página de resultados del test pulida (sin el contenedor general, letra más grande, el logo de color sin la barra azul, las animaciones de la aplicación vieja, «Ver detalles» por barra y la agenda de HubSpot de msalas2 incrustada), las tarjetas viejas de contexto borradas y Partner pasando solo a un cliente de un registro inactivo al activo (aplicado a KAIZEN KAPITAL y KJ Publicidad). Antes, `0a608cd8` el mismo día: el chequeo de tipos del build baja de 5,5 a 4,4 GB y la lectura de páginas web protegida contra direcciones internas (`lib/net`). Antes, `f75b8bb4`: la página de resultados con el diseño aprobado. |
 | Por desplegar | Nada. **Sin aplicar, a propósito:** la carga inicial de los datos de la empresa (espera a la CSL) y las banderas `EMPRESA_HUBSPOT_ESCRITURA` y `EMPRESA_HUBSPOT_COPIA` («Lo que configuras tú»). |
 | En rojo en producción | Por datos de antes, ninguno nuevo (28 oct): 16 reuniones colgadas de proyectos de otro cliente (INV1) y 9 tareas que citan una reunión de otro cliente (INV42), las que ordena el plan de dominio compartido; el pipeline de Secure Title (INV11: 2 proyectos y 6 en una etapa desconocida); «TEC- AE» fusionada en HubSpot (INV13 e INV54: ya solo ella, kölbi quedó bien); una reunión de Meet leída antes de ocurrir (INV16a), y el corte de cartera de hace 96 días (INV32). |
 | Pruebas | 30 para ti (pestaña «Pruebas para personas»; desde el 20 oct solo las que piden tu criterio), 83 que valida el equipo al usarlas, 77 con IA sobre los datos y 48 ya validadas por ti. |
@@ -801,11 +821,13 @@ Sin esto, algo sigue mal o no se puede validar:
 63. **Artefactos · el kickoff y la exploración:** ¿siguen siendo uno por proyecto, como estaba decidido?
 64. **Artefactos · de la empresa:** ¿cuáles pueden ser de la empresa entera, sin proyecto? Hoy lo son el diagnóstico y la escala.
 65. **Artefactos · un pedido sin tipo:** si lo que pides no calza con ningún tipo, ¿Nexus lo arma con secciones libres o te dice que no hay?
-66. **Resultado del test · el caso que falta:** ninguno de los casos de uso del ejemplo mueve «Priorización de interesados», que es justo lo que más frena. ¿Se deja así o la sección de casos tiene que traer uno para eso? (Sigue abierta con el diseño aprobado del 29 oct: la sección de casos es la misma.) (diseño: claude.ai/artifact/J9yRct2sfaQN99mVn18Zs8)
-67. **Resultado del test · «No lo sé»:** en el test corto, un «No lo sé» cuenta como Deficiente y la recomendación puede caer ahí. ¿Se recomienda igual o se dice «primero averigüemos esto»?
+66. **Resultado del test · el caso que falta:** el resultado dice qué es lo que más frena al área (en el ejemplo de Maquinaria, «Priorización de interesados») y debajo recomienda 3 casos de uso, pero ninguno de los 3 mueve esa parte: todos suben Procesos, Datos o Equipo. ¿Se deja así, o el resultado tiene que traer siempre un caso para lo que más frena (y entonces hay que crear en la biblioteca los casos que falten)?
+67. **Resultado del test · «No lo sé»:** en el test corto, contestar «No lo sé» cuenta como Deficiente. Entonces el resultado puede decir «lo que más te frena es Datos» cuando la persona solo no sabía cómo está Datos. ¿Se recomienda igual, o el resultado dice «primero averigüemos esto»?
 68. ✓ **Resultado del test · el botón principal:** ¿azul de Nexus, como en el diseño, o el naranja de Smarteam? **Ya no aplica (29 oct):** aprobaste el diseño con la estructura de hoy, que lleva «Descargar PDF» en el azul de Nexus.
-69. **Resultado del test · el uso de CRM:** ¿se muestra lo que la persona contestó sobre cómo gestiona hoy a sus clientes?
+69. **Resultado del test · el uso de CRM:** en el formulario la persona contesta con qué gestiona hoy a sus clientes (Excel, otro CRM, HubSpot). Eso se manda a HubSpot pero el resultado no lo muestra. ¿Se muestra, con algo como «Hoy gestionan a sus clientes con Excel»?
 70. ✓ **Resultado del test · el PDF:** ¿una hoja por bloque o se queda en 2 o 3? **Ya no aplica (29 oct):** era del diseño en láminas, que se descartó; el aprobado saca el PDF en 3 hojas horizontales.
+71. **Resultado del test · el puntaje en el PDF:** en la página, el puntaje general sobre 100 aparece solo al tocar «Ver puntajes». El PDF no tiene ese botón, así que hoy sale sin el número, solo con el nivel (por ejemplo, «Deficiente»). ¿Se muestra el puntaje en el PDF? Te propongo que sí: el PDF es lo que el prospecto guarda o le pasa a su jefe.
+72. **La ficha del cliente, solo con lo confirmado:** hoy la ficha le pasa a la IA también lo propuesto sin revisar, y no descarta lo que vino de una reunión que después resultó ser de otro cliente. Una copia vieja (7 oct) lo resolvía, pero ya no aplica sobre el código de hoy. ¿Vale una tarea chica para que la ficha parta solo de lo confirmado y suelte lo de reuniones que ya no son del cliente?
 
 ## Propuesta por aprobar: vender y entregar por casos de uso
 
@@ -1769,6 +1791,7 @@ Las áreas van por prioridad: **Alta** (lo usa el equipo cada día, toca plata o
 | 291 | Por validar | Que la vista Radar muestre la teoría, como el Mapa | Escala › Ventas › vista «Radar». Toca un cruce de un eje con un anillo (por ejemplo Datos en Funcional); después, el nombre de una dimensión; después, fuera del radar. | Un anillo por etapa, cada uno del color de su nivel, Funcional punteado como «La base», y en cada cruce cuántos criterios tiene esa celda (no una figura que parezca una empresa). Al tocar un cruce, el panel muestra sus criterios; al tocar una dimensión, sus cinco etapas; al tocar fuera, se suelta. «Qué se cuenta» cambia los números (Hábitos, Riesgos, Requeridos). |
 | 296 | Por validar | Que el resultado del test se vea con el radar nuevo | El enlace de un resultado terminado (por ejemplo nexus.smarteamcr.com/external/test/resultado/vPJYrzl6zj--UWl5ETPM_Q7d0k5tlx_qgKyuskFnwf8), en la computadora; después toca «Ver puntajes». | La misma estructura de antes con un radar grande a lo ancho: anillos de colores por etapa y un vértice por cada parte que se preguntó, con lo que más frena marcado. Con «Ver puntajes», cada vértice muestra su número. |
 | 297 | Por validar | Que los PDF sigan saliendo bien | En ese resultado, «Descargar PDF»; después, el PDF del kickoff de un cliente. | El del resultado, en 3 hojas carta horizontales (la primera con el radar grande). El del kickoff, igual que antes: una sola página corrida. |
+| 298 | Por validar | Que el resultado pulido se sienta bien | El mismo resultado, en la computadora: baja despacio hasta el final, pasa el cursor por el radar y toca «Ver detalles» en dos o tres barras. | Arriba el logo de color sin barra azul; el radar más grande y, con el cursor encima, su eje se resalta; las barras se llenan con el número contando al aparecer; «Ver detalles» muestra lo que respondió, lo que pide el nivel siguiente y los riesgos; al final, el calendario de HubSpot con horarios. |
 | 108 | Por validar | Que cada nivel de cada edición hable de su industria | Publicada el 24 oct (8.9.1; tu tarea #285). Para revisarla: Escala › Ventas › vista «Matriz» › Industria «Turismo», fila 1.7 «Seguimiento de cotizaciones y reservas». | En Inicial: «Cuando una cotización no se contesta o una reserva no se paga, cada persona del equipo decide si insiste y cómo: no hay un paso acordado.» (Comprobado contra el documento: ninguna de las 720 celdas queda sin personalizar.) |
 
 ### Rentabilidad, la meta y el uso <span class="prioridad">Baja</span>
