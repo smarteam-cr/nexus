@@ -12,23 +12,36 @@
  * precio), «Cómo está cada parte» (las barras con su puntaje sobre 100) y el calendario de HubSpot para agendar. El
  * nivel va marcado como ESTIMADO: lo dijo quien respondió.
  *
+ * El pulido del 29 oct (pedido de Elías, mirando la aplicación vieja): arriba, el logo de color sobre el fondo claro con
+ * los dos botones al lado (ya no la barra azul); la cabecera sin su contenedor, para que el radar gane ancho; toda la
+ * letra un poco más grande; el movimiento de la vieja (AnimacionesDelResultado: las secciones que aparecen al bajar, las
+ * barras que se llenan con el puntaje que cuenta y el resalte del radar); «Ver detalles» en cada barra (lo que sale de
+ * la escala y de lo que respondió: lib/tests-diagnostico/detalle-de-la-dimension.ts), y la agenda de HubSpot siempre
+ * incrustada (la de la vieja si el servidor no trae otra).
+ *
  * El PDF va en hojas horizontales (carta, 1056 × 816): la 1 con la cabecera y el radar grande, la 2 con las tres piezas
- * y la 3 con las barras y el enlace para agendar. Sin botones, sin calendario y sin puntajes en el radar.
+ * y la 3 con las barras y el enlace para agendar. Sin botones, sin calendario, sin puntajes en el radar, sin «Ver
+ * detalles» y sin movimiento: el pulido del 29 oct no lo cambia.
  * Las salidas a la portada son enlaces comunes y no `<Link>`: al volver con «Atrás», Next revivía la página en el
  * navegador y la agenda de HubSpot quedaba en blanco; con una carga completa vuelve bien (probado el 28 oct).
  */
 /* eslint-disable @next/next/no-html-link-for-pages -- las salidas a la portada recargan la página a propósito: con
    `<Link>`, al volver con «Atrás» la agenda de HubSpot quedaba en blanco (ver el encabezado). */
 import type { ReactNode } from "react";
+import type { DetalleDeLaDimension } from "@/lib/tests-diagnostico/detalle-de-la-dimension";
 import { puntajeDeLaDimension } from "@/lib/tests-diagnostico/pagina-del-resultado";
 import type { ResultadoDelTest } from "@/lib/tests-diagnostico/resultado";
 import RadarDeUnaEmpresa from "@/components/escala/RadarDeUnaEmpresa";
+import AnimacionesDelResultado from "./AnimacionesDelResultado";
 import CalendarioDeHubspot from "./CalendarioDeHubspot";
 import DescargarPdfDelResultado from "./DescargarPdfDelResultado";
 import "./diagnostico.css";
 import "./resultado.css";
 
-const LOGO = "/logo-smarteam-blanco.png";
+/** El de la barra azul de cada hoja del PDF. */
+const LOGO_BLANCO = "/logo-smarteam-blanco.png";
+/** El de la página, sobre el fondo claro (public/logo-smarteam.png, el mismo de ExternalShell). */
+const LOGO_DE_COLOR = "/logo-smarteam.png";
 const DESCRIPCION_DE_LA_CAPA: Record<string, string> = {
   base: "cómo está montado el departamento por dentro",
   produccion: "qué entrega el departamento hacia afuera",
@@ -44,10 +57,10 @@ const IconoAlerta = () => (
   </svg>
 );
 
-/** Una sección blanca con su título chico arriba. */
+/** Una sección blanca con su título chico arriba. `data-revela`: en la página, aparece al llegar a ella. */
 function Tarjeta({ titulo, className = "", children }: { titulo?: string; className?: string; children: ReactNode }) {
   return (
-    <section className={`rd-tarjeta ${className}`}>
+    <section className={`rd-tarjeta ${className}`} data-revela="">
       {titulo && <p className="rd-eyebrow">{titulo}</p>}
       {children}
     </section>
@@ -109,7 +122,51 @@ function Casos({ casos }: { casos: ResultadoDelTest["casos"] }) {
   );
 }
 
-function Barras({ r }: { r: ResultadoDelTest }) {
+/** «Ver detalles» de una barra: lo que respondió, su nivel en la escala, lo que pide el siguiente y lo que pone en riesgo. */
+function VerDetalles({ d }: { d: DetalleDeLaDimension }) {
+  return (
+    <details className="rd-detalles">
+      <summary>Ver detalles</summary>
+      <div className="rd-detalles-cuerpo">
+        {d.queMide && <p className="rd-detalles-mide">{d.queMide}</p>}
+        {d.respondiste && (
+          <div className="rd-detalles-bloque">
+            <p className="rd-detalles-k">Lo que respondiste</p>
+            <p className="rd-detalles-respuesta">«{d.respondiste}»</p>
+          </div>
+        )}
+        {d.esteNivel && (
+          <div className="rd-detalles-bloque">
+            <p className="rd-detalles-k">En la escala, {d.esteNivel.nombre} es</p>
+            <p>{d.esteNivel.descripcion}</p>
+          </div>
+        )}
+        {d.siguiente && (
+          <div className="rd-detalles-bloque rd-detalles-falta">
+            <p className="rd-detalles-k">Para llegar a {d.siguiente.nombre}</p>
+            <ul className="rd-detalles-lista">
+              {d.siguiente.criterios.map((c) => (
+                <li key={c}>{c}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+        {d.riesgos.length > 0 && (
+          <div className="rd-detalles-bloque rd-detalles-riesgo">
+            <p className="rd-detalles-k">Lo que hoy pone en riesgo</p>
+            <ul className="rd-detalles-lista">
+              {d.riesgos.map((x) => (
+                <li key={x}>{x}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </div>
+    </details>
+  );
+}
+
+function Barras({ r, detalles = null }: { r: ResultadoDelTest; detalles?: Record<string, DetalleDeLaDimension> | null }) {
   const frena = r.recomendacion?.tipo === "trabajar" ? r.recomendacion.dimensionId : null;
   return (
     <Tarjeta titulo="Cómo está cada parte">
@@ -125,6 +182,7 @@ function Barras({ r }: { r: ResultadoDelTest }) {
               </div>
               {dims.map((d) => {
                 const p = puntajeDeLaDimension(d.nivel, d.puntaje);
+                const det = detalles?.[d.id];
                 return (
                   <div key={d.id} className="rd-fila" data-nivel={d.nivel ?? undefined}>
                     <span className="rd-fila-nombre">
@@ -132,15 +190,20 @@ function Barras({ r }: { r: ResultadoDelTest }) {
                       {d.id === frena && <span className="rd-frena">LO QUE MÁS FRENA</span>}
                     </span>
                     <span className="rd-barra" aria-hidden="true">
-                      <span className="rd-barra-fill" style={{ width: `${Math.max(3, p)}%` }} />
+                      <span className="rd-barra-fill" data-fill={Math.max(3, p)} style={{ width: `${Math.max(3, p)}%` }} />
                     </span>
                     <span className="rd-num">
-                      {p}
+                      {/* El número que cuenta es solo para la vista; el lector de pantalla lee el puntaje de una vez. */}
+                      <span data-count={p} aria-hidden="true">
+                        {p}
+                      </span>
+                      <span className="rd-sr">{p}</span>
                       <small>/100</small>
                     </span>
                     <span className="rd-chip" data-no-lo-se={d.noLoSe || undefined}>
                       {d.noLoSe ? "No lo sabías" : (d.nivelNombre ?? "Sin ubicar")}
                     </span>
+                    {det && <VerDetalles d={det} />}
                   </div>
                 );
               })}
@@ -181,10 +244,10 @@ export default function ResultadoDelTestVista({
   dominio = null,
   fecha = null,
   agenda,
-  sinCorreo = false,
   pdf = null,
   modo = "pantalla",
   aviso = null,
+  detalles = null,
 }: {
   r: ResultadoDelTest;
   /** Null en un resultado reabierto de la aplicación vieja (O6): su dirección no se usa para escribir un nombre. */
@@ -193,19 +256,16 @@ export default function ResultadoDelTestVista({
   dominio?: string | null;
   /** Cuándo lo terminó (ISO). */
   fecha?: string | null;
-  /** El enlace para agendar la sesión (`TESTS_ENLACE_DE_AGENDA`); sin él, se le dice que le escribimos. */
-  agenda: string | null;
-  /**
-   * Un resultado reabierto de la app vieja (O6): Nexus no tiene el correo de quien lo mira, así que sin agenda no se le
-   * promete escribirle; se le ofrece hacer el test de nuevo.
-   */
-  sinCorreo?: boolean;
+  /** El enlace de la agenda que va incrustada (`enlaceDeLaAgenda`: el del servidor o el de la aplicación vieja). */
+  agenda: string;
   /** La dirección que arma el PDF. Null = sin botón (el resultado viejo no está guardado en Nexus). */
   pdf?: string | null;
   /** `pdf`: lo que abre el navegador que imprime (en hojas, sin botones ni calendario). */
   modo?: "pantalla" | "pdf";
   /** Una línea arriba de todo (el resultado viejo dice cuándo se hizo y con qué escala se lee). */
   aviso?: string | null;
+  /** «Ver detalles» de cada barra, por dimensión (solo en la página; el PDF no los lleva). */
+  detalles?: Record<string, DetalleDeLaDimension> | null;
 }) {
   const enPdf = modo === "pdf";
   const nombreDeLaEmpresa = empresa || dominio || "";
@@ -273,7 +333,7 @@ export default function ResultadoDelTestVista({
           <section key={i} className={`rd-hoja${i === 0 ? " rd-hoja-1" : ""}`}>
             <header className="rd-hoja-barra">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={LOGO} alt="Smarteam" height={20} />
+              <img src={LOGO_BLANCO} alt="Smarteam" height={20} />
               <span>
                 {[nombreDeLaEmpresa, dominio && dominio !== nombreDeLaEmpresa ? dominio : null, `Diagnóstico de rendimiento · ${r.areaNombre}`, fecha ? fechaLarga(fecha) : null]
                   .filter(Boolean)
@@ -293,27 +353,27 @@ export default function ResultadoDelTestVista({
 
   return (
     <div className="dr rd-v3">
-      <header className="topbar">
-        <a className="brand" href="/external/test" title="Hacer otro diagnóstico">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={LOGO} alt="Smarteam" height={28} />
-        </a>
-      </header>
-      <main className="rd">
-        <div className="rd-acciones">
-          <a className="rd-btn rd-btn-ghost" href="/external/test">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <path d="M3 12a9 9 0 1 0 3-6.7" />
-              <path d="M3 4v5h5" />
-            </svg>
-            Hacer otro test
+      <AnimacionesDelResultado className="rd">
+        <header className="rd-arriba">
+          <a className="rd-logo" href="/external/test" title="Hacer otro diagnóstico">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={LOGO_DE_COLOR} alt="Smarteam" height={34} />
           </a>
-          {pdf && <DescargarPdfDelResultado href={pdf} />}
-        </div>
+          <div className="rd-acciones">
+            <a className="rd-btn rd-btn-ghost" href="/external/test">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M3 12a9 9 0 1 0 3-6.7" />
+                <path d="M3 4v5h5" />
+              </svg>
+              Hacer otro test
+            </a>
+            {pdf && <DescargarPdfDelResultado href={pdf} />}
+          </div>
+        </header>
 
         {aviso && <p className="rd-aviso">{aviso}</p>}
 
-        <section className="rd-head">
+        <section className="rd-cabecera">
           <div className="rd-head-arriba">
             <div className="rd-head-texto">
               {nombreDeLaEmpresa && (
@@ -345,34 +405,16 @@ export default function ResultadoDelTestVista({
         {rec && <PorDondeEmpezar rec={rec} />}
         {r.riesgos.length > 0 && <Riesgos riesgos={r.riesgos} />}
         {r.casos.length > 0 && <Casos casos={r.casos} />}
-        <Barras r={r} />
+        <Barras r={r} detalles={detalles} />
 
-        <section className="rd-agenda">
+        <section className="rd-agenda" data-revela="">
           <div className="rd-agenda-texto">
             <p className="rd-eyebrow">El siguiente paso</p>
             <h2>Revisemos juntos tu resultado, sin costo</h2>
             <p>En 30 minutos lo leemos contigo y armamos el primer paso. Te llevas el plan aunque no trabajemos juntos.</p>
           </div>
           <div className="rd-agenda-caja">
-            {agenda ? (
-              <CalendarioDeHubspot agenda={agenda} />
-            ) : (
-              <div className="rd-agenda-aviso">
-                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#5f6d85" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <rect x="3" y="4.5" width="18" height="16" rx="2.5" />
-                  <path d="M3 9.5h18" />
-                  <path d="M8 2.5v4" />
-                  <path d="M16 2.5v4" />
-                </svg>
-                {sinCorreo ? (
-                  <p>
-                    Para coordinarla, <a href="/external/test">haz el test de nuevo</a> y te escribimos al correo que dejes.
-                  </p>
-                ) : (
-                  <p>Te escribimos al correo que dejaste para coordinarla.</p>
-                )}
-              </div>
-            )}
+            <CalendarioDeHubspot agenda={agenda} />
           </div>
         </section>
         <div className="rd-pie">
@@ -381,7 +423,7 @@ export default function ResultadoDelTestVista({
           </a>
           <p className="rd-pie-texto">Diagnóstico hecho con la Escala de Rendimiento de Smarteam.</p>
         </div>
-      </main>
+      </AnimacionesDelResultado>
     </div>
   );
 }

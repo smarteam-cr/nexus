@@ -69,6 +69,14 @@ export type EstadoDelBanco = "borrador" | "aprobado";
 
 /** El id de «No lo sé»: cuenta como el nivel más bajo (especificación del cálculo, paso 2). */
 export const NO_LO_SE = "no-se";
+/** Cómo se lee «No lo sé»: el botón del test, la dirección del resultado, la nota de HubSpot y «Ver detalles». */
+export const TEXTO_DE_NO_LO_SE = "No lo sé";
+
+/** El texto de lo que eligió en una pregunta («No lo sé» incluido); null si la opción ya no existe. */
+export function textoDeLaRespuesta(p: Pick<PreguntaDelBanco, "opciones">, r: { opcion: string }): string | null {
+  if (r.opcion === NO_LO_SE) return TEXTO_DE_NO_LO_SE;
+  return p.opciones.find((o) => o.id === r.opcion)?.texto ?? null;
+}
 
 /** Lo que eligió la persona en una pregunta, con su matiz opcional. */
 export interface RespuestaDelTest {

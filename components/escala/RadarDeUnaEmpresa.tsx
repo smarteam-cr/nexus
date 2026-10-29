@@ -36,6 +36,7 @@ import type { ReactNode } from "react";
 import type { ClaveDeCapa, Letra } from "@/lib/escala/documento/tipos";
 import {
   COMPACTO,
+  cunasDelRadar,
   dibujoDelRadar,
   estadoDeLaDimension,
   f,
@@ -155,7 +156,7 @@ export default function RadarDeUnaEmpresa({
         </label>
       </div>
       <div className="rde-grande">
-        <SvgDelRadar m={GRANDE} {...comun} etiqueta={etiqueta} conPuntajes />
+        <SvgDelRadar m={GRANDE} {...comun} etiqueta={etiqueta} conPuntajes interactivo />
         {leyenda}
       </div>
       <div className="rde-compacto">
@@ -163,7 +164,7 @@ export default function RadarDeUnaEmpresa({
           <span>{nombreDeCapa("produccion").toUpperCase()}</span>
           <span>{nombreDeCapa("base").toUpperCase()}</span>
         </div>
-        <SvgDelRadar m={COMPACTO} {...comun} etiqueta={`${etiqueta} Cada número es una parte; abajo dice cuál es.`} conPuntajes />
+        <SvgDelRadar m={COMPACTO} {...comun} etiqueta={`${etiqueta} Cada número es una parte; abajo dice cuál es.`} conPuntajes interactivo />
         <div className="rde-lista">
           <ListaDeUnaMitad dims={prod} frena={frena} nombreDeNivel={nombreDeNivel} />
           <ListaDeUnaMitad dims={base} frena={frena} nombreDeNivel={nombreDeNivel} />
@@ -248,6 +249,7 @@ function SvgDelRadar({
   frena,
   etiqueta,
   conPuntajes,
+  interactivo = false,
 }: {
   m: MedidasDelRadar;
   area: string;
@@ -258,19 +260,26 @@ function SvgDelRadar({
   frena: FrenoDelRadar | null;
   etiqueta: string;
   conPuntajes: boolean;
+  /**
+   * La página: cada dimensión con su zona de cursor (una cuña) y la línea que se dibuja al pasarle el cursor
+   * (AnimacionesDelResultado.tsx). En el PDF, nada de eso.
+   */
+  interactivo?: boolean;
 }) {
   const d = dibujoDelRadar(m, dims, { frena, capas, nombreDeNivel });
   const vertFrena = d.vertices.find((v) => v.frena);
   const puntajeDelArea = redondo(resultado.puntaje);
 
   return (
-    <svg viewBox={d.caja.map((v) => f(v)).join(" ")} role="img" aria-label={etiqueta} className="rde-svg">
+    <svg viewBox={d.caja.map((v) => f(v)).join(" ")} role="img" aria-label={etiqueta} className={`rde-svg${interactivo ? " rde-interactivo" : ""}`}>
       {d.guias.map(([a, b], i) => (
         <line key={`g${i}`} x1={f(a[0])} y1={f(a[1])} x2={f(b[0])} y2={f(b[1])} stroke={C.guia} strokeWidth={m.trazo.guia} strokeDasharray={m.rayas.guia} />
       ))}
       {d.ejes.map((e) => (
         <line
           key={`e${e.clave}`}
+          className="rde-eje"
+          data-d={e.clave}
           x1={f(e.desde[0])}
           y1={f(e.desde[1])}
           x2={f(e.hasta[0])}
@@ -315,64 +324,84 @@ function SvgDelRadar({
         </text>
       </g>
 
-      {/* La empresa: la figura, la flecha de lo que más frena hasta su objetivo y los vértices. */}
-      {d.figura.length > 1 && (
-        <polygon points={puntosSvg(d.figura)} fill={C.tinta} fillOpacity={0.07} stroke={C.tinta} strokeWidth={m.trazo.figura} strokeLinejoin="round" />
-      )}
-      <Capa cual="sin">
-        {vertFrena && <circle cx={f(vertFrena.punto[0])} cy={f(vertFrena.punto[1])} r={m.vertice.halo} fill={COLOR_DEL_NIVEL.D} fillOpacity={0.12} />}
-        {d.vertices.map((v) =>
-          v.noLoSe ? (
-            <g key={v.clave}>
-              <circle
-                cx={f(v.punto[0])}
-                cy={f(v.punto[1])}
-                r={m.noLoSe.r}
-                fill={C.blanco}
-                stroke={COLOR_DEL_NIVEL[v.nivel]}
-                strokeWidth={m.objetivo.trazo}
-                strokeDasharray={m.objetivo.raya}
-              />
-              <text x={f(v.punto[0])} y={f(v.punto[1] + m.noLoSe.baja)} textAnchor="middle" fontSize={m.noLoSe.letra} fontWeight={700} fill={C.frenaTexto}>
-                ?
-              </text>
-            </g>
-          ) : (
-            <circle
-              key={v.clave}
-              cx={f(v.punto[0])}
-              cy={f(v.punto[1])}
-              r={v.frena ? m.vertice.rFrena : m.vertice.r}
-              fill={COLOR_DEL_NIVEL[v.nivel]}
-              stroke={C.blanco}
-              strokeWidth={m.vertice.trazo}
-            />
-          ),
+      {interactivo &&
+        cunasDelRadar(m, d.ejes).map((c) => <polygon key={`z${c.clave}`} className="rde-cuna" data-d={c.clave} points={puntosSvg(c.puntos)} fill="transparent" />)}
+
+      {/* La empresa: la figura y los vértices (en la página, crecen desde el centro al abrir: radar-de-una-empresa.css). */}
+      <g className="rde-empresa" style={{ transformOrigin: `${f(m.cx)}px ${f(m.cy)}px` }}>
+        {d.figura.length > 1 && (
+          <polygon points={puntosSvg(d.figura)} fill={C.tinta} fillOpacity={0.07} stroke={C.tinta} strokeWidth={m.trazo.figura} strokeLinejoin="round" />
         )}
-      </Capa>
-      {conPuntajes && (
-        <Capa cual="con">
-          {vertFrena && m.conPuntaje.halo && (
-            <circle cx={f(vertFrena.punto[0])} cy={f(vertFrena.punto[1])} r={m.conPuntaje.halo} fill={COLOR_DEL_NIVEL.D} fillOpacity={0.12} />
-          )}
-          {d.vertices.map((v) => (
-            <g key={v.clave}>
+        {interactivo &&
+          d.ejes.map((e) => (
+            <line
+              key={`h${e.clave}`}
+              className="rde-eje-resalte"
+              data-d={e.clave}
+              x1={f(e.hasta[0])}
+              y1={f(e.hasta[1])}
+              x2={f(e.desde[0])}
+              y2={f(e.desde[1])}
+              pathLength={1}
+            />
+          ))}
+        <Capa cual="sin">
+          {vertFrena && <circle cx={f(vertFrena.punto[0])} cy={f(vertFrena.punto[1])} r={m.vertice.halo} fill={COLOR_DEL_NIVEL.D} fillOpacity={0.12} />}
+          {d.vertices.map((v) =>
+            v.noLoSe ? (
+              <g key={v.clave} className="rde-vertice" data-d={v.clave}>
+                <circle
+                  cx={f(v.punto[0])}
+                  cy={f(v.punto[1])}
+                  r={m.noLoSe.r}
+                  fill={C.blanco}
+                  stroke={COLOR_DEL_NIVEL[v.nivel]}
+                  strokeWidth={m.objetivo.trazo}
+                  strokeDasharray={m.objetivo.raya}
+                />
+                <text x={f(v.punto[0])} y={f(v.punto[1] + m.noLoSe.baja)} textAnchor="middle" fontSize={m.noLoSe.letra} fontWeight={700} fill={C.frenaTexto}>
+                  ?
+                </text>
+              </g>
+            ) : (
               <circle
+                key={v.clave}
+                className="rde-vertice"
+                data-d={v.clave}
                 cx={f(v.punto[0])}
                 cy={f(v.punto[1])}
-                r={m.conPuntaje.r}
-                fill={C.blanco}
-                stroke={COLOR_DEL_NIVEL[v.nivel]}
-                strokeWidth={v.noLoSe ? m.objetivo.trazo : m.conPuntaje.trazo}
-                strokeDasharray={v.noLoSe ? m.objetivo.raya : undefined}
+                r={v.frena ? m.vertice.rFrena : m.vertice.r}
+                fill={COLOR_DEL_NIVEL[v.nivel]}
+                stroke={C.blanco}
+                strokeWidth={m.vertice.trazo}
               />
-              <text x={f(v.punto[0])} y={f(v.punto[1] + m.conPuntaje.baja)} textAnchor="middle" fontSize={m.conPuntaje.letra} fontWeight={700} fill={C.tinta}>
-                {v.puntaje ?? ""}
-              </text>
-            </g>
-          ))}
+            ),
+          )}
         </Capa>
-      )}
+        {conPuntajes && (
+          <Capa cual="con">
+            {vertFrena && m.conPuntaje.halo && (
+              <circle cx={f(vertFrena.punto[0])} cy={f(vertFrena.punto[1])} r={m.conPuntaje.halo} fill={COLOR_DEL_NIVEL.D} fillOpacity={0.12} />
+            )}
+            {d.vertices.map((v) => (
+              <g key={v.clave} className="rde-vertice" data-d={v.clave}>
+                <circle
+                  cx={f(v.punto[0])}
+                  cy={f(v.punto[1])}
+                  r={m.conPuntaje.r}
+                  fill={C.blanco}
+                  stroke={COLOR_DEL_NIVEL[v.nivel]}
+                  strokeWidth={v.noLoSe ? m.objetivo.trazo : m.conPuntaje.trazo}
+                  strokeDasharray={v.noLoSe ? m.objetivo.raya : undefined}
+                />
+                <text x={f(v.punto[0])} y={f(v.punto[1] + m.conPuntaje.baja)} textAnchor="middle" fontSize={m.conPuntaje.letra} fontWeight={700} fill={C.tinta}>
+                  {v.puntaje ?? ""}
+                </text>
+              </g>
+            ))}
+          </Capa>
+        )}
+      </g>
 
       {/* La flecha de lo que más frena y su objetivo, encima de los vértices: en el teléfono el disco del puntaje la tapaba. */}
       {d.objetivo && (
@@ -447,10 +476,10 @@ function SvgDelRadar({
       )}
 
       {d.rotulos.map((r) => (
-        <RotuloDeLaDimension key={`r${r.clave}`} r={r} m={m} nombreDeNivel={nombreDeNivel} />
+        <RotuloDeLaDimension key={`r${r.clave}`} r={r} m={m} nombreDeNivel={nombreDeNivel} interactivo={interactivo} />
       ))}
       {d.numeros.map((n) => (
-        <g key={`c${n.clave}`}>
+        <g key={`c${n.clave}`} className="rde-numero" data-d={n.clave}>
           <circle
             cx={f(n.punto[0])}
             cy={f(n.punto[1])}
@@ -511,11 +540,23 @@ function SvgDelRadar({
 }
 
 /** El rótulo de una dimensión: «1.1 · ● Inicial», su nombre y, si va, la nota de «No lo sé» y el chip de lo que más frena. */
-function RotuloDeLaDimension({ r, m, nombreDeNivel }: { r: RotuloDelRadar; m: MedidasDelRadar; nombreDeNivel: (l: Letra) => string }) {
+function RotuloDeLaDimension({
+  r,
+  m,
+  nombreDeNivel,
+  interactivo,
+}: {
+  r: RotuloDelRadar;
+  m: MedidasDelRadar;
+  nombreDeNivel: (l: Letra) => string;
+  interactivo: boolean;
+}) {
   const ro = m.rotulo!;
   const apagado = r.estado.tipo === "noPreguntada" || r.estado.tipo === "sinUbicar";
   return (
-    <g>
+    <g className="rde-rotulo" data-d={r.clave}>
+      {/* En la página, todo el bloque del rótulo recibe el cursor (también el hueco entre sus renglones). */}
+      {interactivo && <rect x={f(r.caja.x0)} y={f(r.caja.y0)} width={f(r.caja.x1 - r.caja.x0)} height={f(r.caja.y1 - r.caja.y0)} fill="transparent" />}
       <text x={f(r.x)} y={f(r.yNumero)} textAnchor={r.ancla} fontSize={ro.numero} fontWeight={600} letterSpacing="0.04em" fill={C.apagado}>
         {`${r.numero} · `}
         {r.estado.tipo === "nivel" ? (
@@ -531,6 +572,7 @@ function RotuloDeLaDimension({ r, m, nombreDeNivel }: { r: RotuloDelRadar; m: Me
       {r.nombre.map((l) => (
         <text
           key={l.texto}
+          className="rde-rotulo-nombre"
           x={f(r.x)}
           y={f(l.y)}
           textAnchor={r.ancla}

@@ -11640,6 +11640,17 @@ vive en el RUNBOOK › «El corte de la aplicación vieja del test»; acá va el
   una al azar, como el script), y la respuesta de consentimiento con la analítica apagada, que la agenda necesita para
   dibujarse. El iframe lleva un nombre nuevo en cada carga: con «Atrás», Chrome reponía el anterior y quedaba en blanco.
   La CSP (report-only) suma `frame-src` de meetings.hubspot.com.
+- **El pulido del resultado (29 oct, pedido de Elías mirando la aplicación vieja).** La agenda sale SIEMPRE incrustada:
+  sin `TESTS_ENLACE_DE_AGENDA`, la de la vieja (`meetings.hubspot.com/msalas2/diagnostico-de-rendimiento`, la misma para
+  todos), porque producción no tenía la variable y la página mostraba el aviso en vez del calendario; sigue sin el script
+  de HubSpot. «Ver detalles» en cada barra trae lo de la vieja sin IA (la vieja mostraba una evidencia que redactaba la
+  IA): qué mide la dimensión, la opción que eligió, la descripción de su nivel (si no es el mismo texto), los criterios
+  del nivel siguiente y hasta tres riesgos (`lib/tests-diagnostico/detalle-de-la-dimension.ts`, con la escala de hoy
+  vista por la edición del resultado). El movimiento copia el de la vieja (secciones que aparecen al bajar, barras que se
+  llenan con el puntaje que cuenta, resalte de la dimensión del radar al pasar el cursor) y solo anima lo que estaba
+  debajo de la pantalla al abrir, para que nada parpadee; con «reducir movimiento», nada. Arriba, el logo de color sin la
+  barra azul; la cabecera sin contenedor; la letra más grande solo en pantalla. El PDF no cambia, salvo que ahora lleva
+  el enlace de la agenda en la hoja 3.
 - **El PDF del resultado usa el motor de siempre, desde una ruta pública** (`GET /api/external/test/[token]/pdf`, que
   imprime `/external/test/resultado/imprimir?t=`): el token va en la consulta para que el log del motor no lo escriba, y
   `sinElToken` lo tapa en los errores. Como abre un Chromium sin login, además del semáforo único hay tope por dirección

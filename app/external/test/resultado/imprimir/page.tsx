@@ -10,7 +10,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import PdfReadySignal from "@/components/print/PdfReadySignal";
 import ResultadoDelTestVista from "@/components/external/test/ResultadoDelTestVista";
-import { TOKEN_DEL_RESULTADO } from "@/lib/tests-diagnostico/pagina-del-resultado";
+import { enlaceDeLaAgenda, TOKEN_DEL_RESULTADO } from "@/lib/tests-diagnostico/pagina-del-resultado";
 import { resultadoPublico } from "@/lib/tests-diagnostico/servicio-server";
 
 export const dynamic = "force-dynamic";
@@ -25,7 +25,7 @@ export default async function ImprimirResultadoPage({ searchParams }: { searchPa
   if (typeof t !== "string" || !TOKEN_DEL_RESULTADO.test(t)) notFound();
   const res = await resultadoPublico(t);
   if (!res) notFound();
-  const agenda = process.env.TESTS_ENLACE_DE_AGENDA?.trim() ?? "";
+  const agenda = enlaceDeLaAgenda(process.env.TESTS_ENLACE_DE_AGENDA);
   const { intento: i, resultado: r } = res;
   return (
     <>
@@ -36,7 +36,7 @@ export default async function ImprimirResultadoPage({ searchParams }: { searchPa
         empresa={i.empresa}
         dominio={i.dominio}
         fecha={i.terminadoAt}
-        agenda={/^https:\/\//.test(agenda) ? agenda : null}
+        agenda={agenda}
         modo="pdf"
       />
     </>

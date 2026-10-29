@@ -860,7 +860,8 @@ comparar.
    que no son de HubSpot»: el formulario del test lleva `data-hs-do-not-collect`, pero si esa opción recoge igual, cada
    lead entraría dos veces y sin pasar por la decisión del punto 1.
 3. **[VPS]** En el `.env` de `/opt/smartflow/Nexus`: `TESTS_HUBSPOT_PORTAL_ID=6553628`, `TESTS_HUBSPOT_FORM_GUID=<el
-   nuevo>`, `TESTS_ENLACE_DE_AGENDA=<https://… de la agenda de 30 minutos>` y `TESTS_HUBSPOT_ENABLED=1`. Después,
+   nuevo>` y `TESTS_HUBSPOT_ENABLED=1` (`TESTS_ENLACE_DE_AGENDA` solo si la agenda es otra: sin ella va la de la app
+   vieja, `meetings.hubspot.com/msalas2/diagnostico-de-rendimiento`). Después,
    `bash scripts/deploy.sh` (el contenedor lee el `.env` al arrancar).
 4. **Probar en paralelo**, con la app vieja todavía arriba: un test por área en Nexus con un correo de Smarteam (nunca el
    de un cliente). En unos 10 minutos, en HubSpot: el contacto, la nota y la propiedad `url_ultimo_diag_*`. En Escala ›

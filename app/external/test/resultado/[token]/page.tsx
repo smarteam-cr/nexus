@@ -12,8 +12,8 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import ResultadoDelTestVista from "@/components/external/test/ResultadoDelTestVista";
-import { rutaDelPdf, TOKEN_DEL_RESULTADO } from "@/lib/tests-diagnostico/pagina-del-resultado";
-import { resultadoPublico } from "@/lib/tests-diagnostico/servicio-server";
+import { enlaceDeLaAgenda, rutaDelPdf, TOKEN_DEL_RESULTADO } from "@/lib/tests-diagnostico/pagina-del-resultado";
+import { detallesParaLaPagina, resultadoPublico } from "@/lib/tests-diagnostico/servicio-server";
 
 export const dynamic = "force-dynamic";
 
@@ -27,8 +27,9 @@ export default async function ResultadoPage({ params }: { params: Promise<{ toke
   if (!TOKEN_DEL_RESULTADO.test(token)) notFound();
   const res = await resultadoPublico(token);
   if (!res) notFound();
-  const agenda = process.env.TESTS_ENLACE_DE_AGENDA?.trim() ?? "";
+  const agenda = enlaceDeLaAgenda(process.env.TESTS_ENLACE_DE_AGENDA);
   const { intento: i, resultado: r } = res;
+  const detalles = await detallesParaLaPagina(r, { preguntas: i.preguntas, respuestas: i.respuestas });
   return (
     <ResultadoDelTestVista
       r={r}
@@ -36,8 +37,9 @@ export default async function ResultadoPage({ params }: { params: Promise<{ toke
       empresa={i.empresa}
       dominio={i.dominio}
       fecha={i.terminadoAt}
-      agenda={/^https:\/\//.test(agenda) ? agenda : null}
+      agenda={agenda}
       pdf={rutaDelPdf(token)}
+      detalles={detalles}
     />
   );
 }

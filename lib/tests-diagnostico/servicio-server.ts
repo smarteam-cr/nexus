@@ -22,8 +22,9 @@ import type { Escala } from "@/lib/escala/documento/tipos";
 import { edicionDeLaIndustria } from "@/lib/clients/datos-de-la-empresa";
 import { esDominioGenerico } from "@/lib/clients/personas-de-la-empresa";
 import { resultadoDelTest, type ResultadoDelTest } from "./resultado";
+import { detallesDelResultado, type DetalleDeLaDimension } from "./detalle-de-la-dimension";
 import { urlDelResultado } from "./enlace";
-import { NO_LO_SE, type VersionDelTest } from "./tipos";
+import { textoDeLaRespuesta, type VersionDelTest } from "./tipos";
 import { conIdsPublicos, nombresDeLosPasos, respuestasDelBanco, vistaDelIntento, type VistaDelIntento } from "./ids-publicos";
 import {
   aprobadasPara,
@@ -123,8 +124,7 @@ export async function terminarTest(token: string, publicas: Record<string, { opc
       const r = respuestas[p.id];
       const d = resultado.dimensiones.find((x) => x.id === p.dimensionId);
       if (!r || !d?.nivel) return [];
-      const texto = r.opcion === NO_LO_SE ? "No lo sé" : (p.opciones.find((o) => o.id === r.opcion)?.texto ?? null);
-      return [{ id: p.dimensionId, nivel: d.nivel, respuesta: texto, matiz: r.matiz ?? null }];
+      return [{ id: p.dimensionId, nivel: d.nivel, respuesta: textoDeLaRespuesta(p, r), matiz: r.matiz ?? null }];
     }),
   });
   await terminarIntento(i.id, { respuestas, paso: i.preguntas.length, resultado, url });
@@ -136,4 +136,21 @@ export async function resultadoPublico(token: string): Promise<{ intento: Intent
   const i = await intentoPorToken(token).catch(() => null);
   if (!i || i.estado !== "terminado" || !i.resultado) return null;
   return { intento: i, resultado: i.resultado };
+}
+
+/**
+ * «Ver detalles» de cada barra (./detalle-de-la-dimension.ts), con la escala vigente vista por la edición del resultado.
+ * Es un extra: sin escala publicada, o si algo falla, la página sale sin detalles y nunca se rompe.
+ */
+export async function detallesParaLaPagina(
+  r: ResultadoDelTest,
+  lo?: { preguntas: Intento["preguntas"]; respuestas: Intento["respuestas"] } | null,
+): Promise<Record<string, DetalleDeLaDimension>> {
+  try {
+    const vigente = await leerEscalaVigente();
+    if (!("escala" in vigente)) return {};
+    return detallesDelResultado(aplicarEdicion(vigente.escala, r.edicion), r, lo);
+  } catch {
+    return {};
+  }
 }

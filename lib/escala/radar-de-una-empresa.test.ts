@@ -7,6 +7,8 @@ import { describe, expect, it } from "vitest";
 import { LETRAS, type Letra } from "./documento/tipos";
 import {
   COMPACTO,
+  cunasDelRadar,
+  radioDeLasCunas,
   dibujoDelRadar,
   GRANDE,
   PDF,
@@ -301,4 +303,31 @@ describe("los renglones de un nombre", () => {
     expect(renglonesParejos("Superintercomunicaciones y más", 10)).toEqual(["Superintercomunicaciones", "y más"]);
     expect(renglonesParejos("", 18)).toEqual([]);
   });
+});
+
+describe("las zonas de cursor de la página (una cuña por dimensión)", () => {
+  /** El ángulo de reloj de un punto, como lo mide el radar (0 = arriba). */
+  const angulo = (m: MedidasDelRadar, [x, y]: [number, number]) => ((Math.atan2(x - m.cx, m.cy - y) * 180) / Math.PI + 360) % 360;
+  for (const m of [GRANDE, COMPACTO]) {
+    it(`cada dimensión tiene la suya, la de su eje, y juntas dan la vuelta sin pisarse (${m === GRANDE ? "grande" : "compacto"})`, () => {
+      const d = dibujar(m, VENTAS, { frena: FRENA, capas: CAPAS });
+      const cunas = cunasDelRadar(m, d.ejes);
+      expect(cunas.map((c) => c.clave).sort()).toEqual(VENTAS.map((x) => x.clave).sort());
+      let total = 0;
+      for (const c of cunas) {
+        const eje = d.ejes.find((e) => e.clave === c.clave)!;
+        const arco = c.puntos.slice(1);
+        const a0 = angulo(m, arco[0]);
+        const a1 = angulo(m, arco[arco.length - 1]);
+        const ancho = (a1 - a0 + 360) % 360;
+        // El eje queda adentro de su cuña.
+        expect((eje.grados - a0 + 360) % 360).toBeLessThan(ancho);
+        for (const p of arco) expect(distancia(m, p)).toBeCloseTo(radioDeLasCunas(m), 1);
+        total += ancho;
+      }
+      expect(total).toBeCloseTo(360, 0);
+      // Llegan hasta el borde del dibujo: cubren los rótulos.
+      expect(radioDeLasCunas(m)).toBeGreaterThan(m.rEjeHasta);
+    });
+  }
 });

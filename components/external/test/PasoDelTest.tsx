@@ -6,6 +6,8 @@
  * con «Pregunta N de M», la capa, el nombre del paso, la pregunta y sus opciones (más «No lo sé»), el matiz opcional y
  * Volver / Siguiente. Solo pinta: el estado y el guardado los lleva TestDelDiagnostico.
  */
+import { TEXTO_DE_NO_LO_SE } from "@/lib/tests-diagnostico/tipos";
+
 export const NO_LO_SE = "no-se";
 
 export interface PreguntaEnPantalla {
@@ -101,7 +103,7 @@ export default function PasoDelTest({
         <p className="dim-pregunta">{pregunta.texto}</p>
         {pregunta.ayuda && <p className="dim-ayuda">{pregunta.ayuda}</p>}
         <div className="opt-list" role="radiogroup" aria-label={titulo}>
-          {[...pregunta.opciones, { id: NO_LO_SE, texto: "No lo sé" }].map((o) => {
+          {[...pregunta.opciones, { id: NO_LO_SE, texto: TEXTO_DE_NO_LO_SE }].map((o) => {
             const activa = elegida === o.id;
             return (
               <button key={o.id} type="button" role="radio" aria-checked={activa} className={`opt-item${activa ? " is-active" : ""}`} onClick={() => alElegir(o.id)}>
