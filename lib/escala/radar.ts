@@ -2,9 +2,9 @@
  * lib/escala/radar.ts — la vista «Radar» de la escala: de cada dimensión, dónde se concentra cada cosa. PURO.
  *
  * El mapa pinta cada celda (dimensión × nivel) como un sector de la rueda; el radar dice lo mismo con
- * PUNTOS (pedido de Elías, 2026-10-28: «por puntos, no por áreas»), sobre la MISMA rueda (lib/escala/rueda.ts):
- * el eje de cada dimensión va por el medio de su porción, y en cada eje hay un punto por serie: el nivel promedio de los criterios de esa clase en esa
- * dimensión. «Criterios» dice dónde pesa la dimensión; «Riesgos», dónde están sus riesgos; «Hábitos»,
+ * PUNTOS (pedido de Elías, 2026-10-28: «por puntos, no por áreas»), en un radar clásico (lib/escala/radar-dibujo.ts):
+ * un eje por dimensión, y en cada eje un punto por serie: el nivel promedio de los criterios de esa clase en esa
+ * dimensión, puesto en la regla de 0 a 100 con `enLaRegla`. «Criterios» dice dónde pesa la dimensión; «Riesgos», dónde están sus riesgos; «Hábitos»,
  * desde dónde se pide repetir… La página es la escala de referencia, sin empresa: ningún punto es «dónde
  * está» alguien.
  *

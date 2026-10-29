@@ -1,7 +1,8 @@
 /**
- * lib/escala/radar.test.ts — la vista «Radar»: la geometría que comparte con el mapa (lib/escala/rueda.ts: de un nivel o
- * un puntaje a su anillo, el eje de cada dimensión, los rótulos en el mismo lugar), dónde se concentra cada serie, el
- * radar de UNA empresa (la página pública del test) y que la vista esté registrada en el selector y en la URL.
+ * lib/escala/radar.test.ts — la vista «Radar»: su dibujo (lib/escala/radar-dibujo.ts: la regla de 0 a 100, un eje por
+ * dimensión, los anillos y los rótulos), la rueda del mapa que usa el radar de UNA empresa (lib/escala/rueda.ts: de un
+ * puntaje a su anillo, la porción de cada dimensión, los rótulos), dónde se concentra cada serie y que la vista esté
+ * registrada en el selector y en la URL.
  */
 import { describe, expect, it } from "vitest";
 import { leerArchivoDeLaEscala } from "./documento/archivos";
@@ -17,10 +18,8 @@ import {
   MITAD,
   polar,
   porciones,
-  posicionDelPromedio,
   posicionDelPuntaje,
   puntosDeUnaEmpresa,
-  R_BASE,
   R_DENTRO,
   R_FUERA,
   radioEnAnillos,
@@ -29,6 +28,8 @@ import {
   lineaDeLaSerie,
   type DimensionDeUnaEmpresa,
 } from "./rueda";
+import * as dibujo from "./radar-dibujo";
+import { puntajeDelTramo, puntajeEstimado } from "./chequeo";
 import { CIERRES, dimensionAplica } from "./documento/perfil";
 import { LETRAS } from "./documento/tipos";
 import { consultaDeLaEscala, requeridosDelArea, VISTAS, vistaDesdeUrl } from "./vista";
@@ -45,19 +46,7 @@ const radio = (p: { x: number; y: number }) => Math.hypot(p.x - CX, p.y - CY);
 const anilloDe = (r: number) => Math.floor((r - R_DENTRO) / ANCHO);
 
 describe("geometría de la rueda (la del mapa, la del radar y la de una empresa)", () => {
-  it("un nivel entero cae en el medio de su anillo; un promedio, entre los medios", () => {
-    expect(radioEnAnillos(posicionDelPromedio(1))).toBe(R_DENTRO + ANCHO / 2);
-    expect(radioEnAnillos(posicionDelPromedio(3))).toBe(R_DENTRO + ANCHO * 2.5);
-    expect(radioEnAnillos(posicionDelPromedio(5))).toBe(R_FUERA - ANCHO / 2);
-    expect(radioEnAnillos(posicionDelPromedio(3.5))).toBe(R_DENTRO + ANCHO * 3);
-    // Funcional queda por fuera de la línea de la base (el borde de adentro de Funcional), como en el mapa.
-    expect(radioEnAnillos(posicionDelPromedio(3))).toBeGreaterThan(R_BASE);
-    expect(radioEnAnillos(posicionDelPromedio(2))).toBeLessThan(R_BASE);
-  });
-
   it("un valor fuera de la escala no se sale de la rueda", () => {
-    expect(radioEnAnillos(posicionDelPromedio(9))).toBe(R_FUERA - ANCHO / 2);
-    expect(radioEnAnillos(posicionDelPromedio(-1))).toBe(R_DENTRO + ANCHO / 2);
     expect(radioEnAnillos(-3)).toBe(R_DENTRO);
     expect(radioEnAnillos(12)).toBe(R_FUERA);
   });
@@ -127,6 +116,154 @@ describe("geometría de la rueda (la del mapa, la del radar y la de una empresa)
     expect(nombreDelPromedio(3, nombre)).toBe("Funcional");
     expect(nombreDelPromedio(3.1, nombre)).toBe("Funcional");
     expect(nombreDelPromedio(11 / 3, nombre)).toBe("cerca de Eficiente");
+  });
+});
+
+describe("el dibujo del radar: una regla de 0 a 100 y un eje por dimensión", () => {
+  it("cada nivel entero cae a la mitad de su franja, y Óptimo en 100", () => {
+    expect([1, 2, 3, 4, 5].map(dibujo.enLaRegla)).toEqual([10, 30, 50, 70, 100]);
+  });
+
+  it("entre dos niveles se interpola en línea recta", () => {
+    expect(dibujo.enLaRegla(1.5)).toBeCloseTo(20);
+    expect(dibujo.enLaRegla(3.25)).toBeCloseTo(55);
+    expect(dibujo.enLaRegla(4.5)).toBeCloseTo(85);
+    // Un nivel entero de Funcional para arriba queda pasada la base; Inicial, antes.
+    expect(dibujo.enLaRegla(3)).toBeGreaterThan(dibujo.LA_BASE);
+    expect(dibujo.enLaRegla(2)).toBeLessThan(dibujo.LA_BASE);
+  });
+
+  it("fuera de la escala, al extremo más cercano", () => {
+    expect(dibujo.enLaRegla(0)).toBe(10);
+    expect(dibujo.enLaRegla(-4)).toBe(10);
+    expect(dibujo.enLaRegla(9)).toBe(100);
+    expect(dibujo.enLaRegla(Number.NaN)).toBe(10);
+  });
+
+  it("el centro vale 0 y el borde 100; nada se sale del borde", () => {
+    const cerca = (p: [number, number]) => p.map((v) => Math.round(v * 1000) / 1000);
+    expect(cerca(dibujo.enElRadar(45, 0))).toEqual([dibujo.CX, dibujo.CY]);
+    expect(cerca(dibujo.enElRadar(0, 100))).toEqual([dibujo.CX, dibujo.CY - dibujo.R]);
+    expect(cerca(dibujo.enElRadar(0, 140))).toEqual([dibujo.CX, dibujo.CY - dibujo.R]);
+  });
+
+  it("las franjas son las del cálculo: Deficiente 0–19 … Eficiente 60–79, Óptimo 100; la base en 40", () => {
+    expect(dibujo.FRANJAS.map((fr) => fr.letra)).toEqual(LETRAS);
+    expect(dibujo.FRANJAS.map(dibujo.rangoDeLaFranja)).toEqual(["0 a 19", "20 a 39", "40 a 59", "60 a 79", "100"]);
+    expect(dibujo.LIMITES).toEqual([20, 40, 60, 80, 100]);
+    expect(dibujo.LA_BASE).toBe(40);
+    // Cada nivel entero cae dentro de su franja.
+    for (const [i, fr] of dibujo.FRANJAS.entries()) {
+      const v = dibujo.enLaRegla(i + 1);
+      expect(v).toBeGreaterThanOrEqual(fr.desde);
+      expect(v).toBeLessThanOrEqual(fr.hasta);
+    }
+  });
+
+  it("con cuatro dimensiones por mitad, los ejes van a 22,5° + 45°·k: la base a la derecha, la producción a la izquierda", () => {
+    const dims = ["base", "base", "base", "base", "produccion", "produccion", "produccion", "produccion"].map((capa, i) => ({
+      id: `1.${i + 1}`,
+      capa: capa as "base" | "produccion",
+    }));
+    const angulos = dibujo.angulosDeLosEjes(dims);
+    expect(dims.map((d) => angulos.get(d.id))).toEqual([22.5, 67.5, 112.5, 157.5, 202.5, 247.5, 292.5, 337.5]);
+  });
+
+  it("en cada área publicada, ningún eje queda vertical y cada capa se queda en su mitad", () => {
+    for (const a of real.areas) {
+      const angulos = dibujo.angulosDeLosEjes(a.dimensiones);
+      for (const d of a.dimensiones) {
+        const g = angulos.get(d.id)!;
+        expect(g % 180, d.id).not.toBe(0);
+        if (d.capa === "base") expect(g).toBeLessThan(180);
+        else expect(g).toBeGreaterThan(180);
+      }
+    }
+  });
+
+  it("los anillos tienen un vértice en cada eje; sus números van arriba y «la base» abajo, sobre el anillo de 40", () => {
+    const angulos = [22.5, 67.5, 112.5, 157.5, 202.5, 247.5, 292.5, 337.5];
+    expect(dibujo.anilloDelRadar(angulos, 40)).toHaveLength(8);
+    const r40 = (dibujo.R * 40) / 100;
+    const cos = Math.cos((22.5 * Math.PI) / 180);
+    expect(dibujo.yEnElCentro(angulos, 40, "arriba")).toBeCloseTo(dibujo.CY - r40 * cos);
+    expect(dibujo.yEnElCentro(angulos, 40, "abajo")).toBeCloseTo(dibujo.CY + r40 * cos);
+    // Más arriba el número cuanto más grande el anillo.
+    const ys = dibujo.LIMITES.map((l) => dibujo.yEnElCentro(angulos, l, "arriba"));
+    expect([...ys].sort((x, y) => y - x)).toEqual(ys);
+    // Con todas las dimensiones en una mitad no hay lado que cruce: el radio a secas.
+    expect(dibujo.yEnElCentro([30, 90, 150], 50, "arriba")).toBe(dibujo.CY - dibujo.R / 2);
+  });
+
+  it("los rótulos no se salen del dibujo ni se pisan entre sí", () => {
+    for (const a of real.areas) {
+      const angulos = dibujo.angulosDeLosEjes(a.dimensiones);
+      const rotulos = a.dimensiones.map((d) => dibujo.rotuloDelEje(angulos.get(d.id)!, d.nombre, true));
+      for (const r of rotulos) {
+        expect(r.yNumero).toBeGreaterThan(12);
+        expect(r.yNota).toBeLessThan(dibujo.H - 4);
+        // A 15 y en semibold, cada letra mide ~8.
+        for (const { texto } of r.nombre) {
+          const ancho = texto.length * 8.2;
+          const [x0, x1] = r.ancla === "start" ? [r.x, r.x + ancho] : [r.x - ancho, r.x];
+          expect(x0, texto).toBeGreaterThanOrEqual(0);
+          expect(x1, texto).toBeLessThanOrEqual(dibujo.W);
+        }
+      }
+      for (const lado of ["start", "end"] as const) {
+        const bloques = rotulos
+          .filter((r) => r.ancla === lado)
+          .map((r) => [r.yNumero, r.yNota] as const)
+          .sort((x, y) => x[0] - y[0]);
+        for (let i = 1; i < bloques.length; i++) expect(bloques[i][0] - bloques[i - 1][1]).toBeGreaterThan(12);
+      }
+    }
+    // El nombre de cada mitad, al costado, como en el diseño.
+    const base = dibujo.rotuloDeLaMitad("base", "Base operativa", "cómo está montado el departamento por dentro");
+    expect(base.ancla).toBe("start");
+    expect(base.nombre.map((l) => [l.texto, l.y])).toEqual([
+      ["BASE", 368],
+      ["OPERATIVA", 400],
+    ]);
+    expect(base.descripcion.map((l) => [l.texto, l.y])).toEqual([
+      ["cómo está montado el", 424],
+      ["departamento por dentro", 441],
+    ]);
+    expect(dibujo.rotuloDeLaMitad("produccion", "Producción", "qué entrega el departamento hacia afuera").nombre).toEqual([{ texto: "PRODUCCIÓN", y: 384 }]);
+  });
+
+  it("la porción de un eje va del centro hasta la mitad del camino a cada vecino", () => {
+    const angulos = [22.5, 67.5, 112.5, 157.5, 202.5, 247.5, 292.5, 337.5];
+    expect(dibujo.porcionDelEje(angulos, 22.5)).toHaveLength(4);
+    expect(dibujo.porcionDelEje(angulos, 22.5)[0]).toEqual([dibujo.CX, dibujo.CY]);
+    expect(dibujo.porcionDelEje(angulos, 99)).toEqual([]);
+  });
+
+  it("las porciones se tocan sin hueco ni encimarse, también del último eje al primero", () => {
+    const cerca = (p: [number, number]) => p.map((v) => Math.round(v * 1000) / 1000);
+    for (const a of real.areas) {
+      const ang = dibujo.angulosDeLosEjes(a.dimensiones);
+      const orden = [...ang.values()].sort((x, y) => x - y);
+      for (let i = 0; i < orden.length; i++) {
+        const esta = dibujo.porcionDelEje(orden, orden[i]);
+        const siguiente = dibujo.porcionDelEje(orden, orden[(i + 1) % orden.length]);
+        // El borde de salida de una es el de entrada de la siguiente.
+        expect(cerca(esta[3])).toEqual(cerca(siguiente[1]));
+        // Y el eje queda adentro de su porción: entre sus dos bordes, en el sentido de las agujas.
+        const borde0 = Math.atan2(esta[1][0] - dibujo.CX, dibujo.CY - esta[1][1]);
+        const borde1 = Math.atan2(esta[3][0] - dibujo.CX, dibujo.CY - esta[3][1]);
+        const abre = (((borde1 - borde0) * 180) / Math.PI + 360) % 360;
+        expect(abre).toBeGreaterThan(0);
+        expect(abre).toBeLessThan(180);
+      }
+    }
+  });
+
+  it("las franjas y la mitad de cada una salen del cálculo del chequeo", () => {
+    for (const [i, fr] of dibujo.FRANJAS.entries()) {
+      expect(dibujo.enLaRegla(i + 1)).toBe(puntajeEstimado(fr.letra));
+      expect(fr.desde).toBe(puntajeDelTramo(fr.letra, 0, 1));
+    }
   });
 });
 
