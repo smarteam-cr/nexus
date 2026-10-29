@@ -1,21 +1,17 @@
 /**
- * lib/escala/radar-dibujo.ts — la geometría del Radar de la escala (components/escala/Radar.tsx). PURO: sin React ni
+ * lib/escala/radar-dibujo.ts — la geometría del radar de la teoría (components/escala/Radar.tsx). PURO: sin React ni
  * colores.
  *
- * Un radar clásico (Elías, 2026-10-28, al rechazar la versión sobre la rueda del mapa: «no es un radar de verdad»): un eje
- * por dimensión, una regla de 0 (el centro) a 100 (el borde) con anillos poligonales en los límites de cada franja, y
- * cada serie como un polígono con sus vértices sobre los ejes. Sin zonas de color por nivel. Las medidas son las del
- * diseño aprobado en Claude Design (pantallas `Main` y `Dimension` del lienzo del radar).
- *
- * La regla es la del cálculo de la escala (docs/escala/especificacion_calculo_escala.md, pasos 6 y 7 del diagnóstico):
- * Deficiente 0–19, Inicial 20–39, Funcional 40–59, Eficiente 60–79 y Óptimo 100. «La base» es el anillo de 40, donde
- * empieza Funcional.
+ * El Mapa en forma de radar (diseño aprobado por Elías el 2026-10-28, pantallas `Teoria`, `TeoriaDimension` y
+ * `TeoriaCruce` del lienzo del radar): un eje por dimensión y un anillo por etapa, de Deficiente (adentro) a Óptimo
+ * (afuera). En cada cruce de eje y anillo va la celda del Mapa con su cuenta. El centro es un círculo con el nombre del
+ * área; los ejes salen de su borde. Las medidas son las del diseño.
  *
  * Grados de reloj: 0 = arriba, en el sentido de las agujas. La base operativa ocupa la mitad derecha y la producción la
  * izquierda; cada eje va por el medio de su tramo, así que ninguno queda vertical (con cuatro por mitad: 22,5° + 45°·k).
+ * Arriba, en el hueco entre las dos mitades, van los nombres de las etapas; abajo, el chip de «La base».
  */
-import { puntajeDelTramo, puntajeEstimado } from "./chequeo";
-import { LETRAS, type ClaveDeCapa, type Letra } from "./documento/tipos";
+import type { ClaveDeCapa } from "./documento/tipos";
 import { partirEnLineas } from "./rueda";
 
 // ── Medidas (unidades del viewBox) ────────────────────────────────────────────
@@ -23,44 +19,27 @@ export const W = 1000;
 export const H = 690;
 export const CX = 500;
 export const CY = 380;
-/** El radio del 100: el borde. */
-export const R = 240;
+/** El círculo del centro, con el nombre del área. */
+export const R_CENTRO = 88;
+/** Los ejes: del borde del centro hasta un poco pasado el último anillo. */
+export const R_EJE_DESDE = 96;
+export const R_EJE_HASTA = 248;
+/** El anillo de la primera etapa (Deficiente) y la distancia entre dos anillos. */
+export const R_PRIMER_ANILLO = 110;
+export const PASO = 32.5;
 /** Dónde va el rótulo de cada dimensión. */
-export const R_ETIQUETA = 266;
+export const R_ETIQUETA = 268;
 
-/** Los anillos de la regla: el límite de cada franja y el borde. */
-export const LIMITES = [20, 40, 60, 80, 100] as const;
-/** «La base»: donde empieza Funcional. */
-export const LA_BASE = 40;
+/** Los cruces: el de siempre, el de la dimensión en foco y el elegido (con su halo). Una celda en 0 es un punto. */
+export const CRUCE = 8.5;
+export const CRUCE_EN_FOCO = 10.5;
+export const CRUCE_ELEGIDO = 12.5;
+export const HALO = 16;
+export const PUNTO_EN_CERO = 3.5;
 
-/**
- * Las franjas de la regla, sacadas del cálculo del chequeo (lib/escala/chequeo.ts, el que da el resultado de una
- * empresa): el nivel, desde dónde (sin avance) y hasta dónde (con todo el avance que el tramo admite). Óptimo vale 100.
- * Si el chequeo cambia un tramo, el Radar lo sigue solo.
- */
-export const FRANJAS: readonly { letra: Letra; desde: number; hasta: number }[] = LETRAS.map((letra) => ({
-  letra,
-  desde: puntajeDelTramo(letra, 0, 1),
-  hasta: puntajeDelTramo(letra, 2, 1),
-}));
-
-/** «0 a 19», «100». */
-export const rangoDeLaFranja = (fr: { desde: number; hasta: number }) => (fr.desde === fr.hasta ? `${fr.desde}` : `${fr.desde} a ${fr.hasta}`);
-
-/** Dónde cae cada nivel entero en la regla: a la mitad de su franja (Óptimo, en 100), como el estimado del chequeo. */
-const MITAD_DE_LA_FRANJA = LETRAS.map(puntajeEstimado);
-
-/**
- * Un nivel promedio (1 = Deficiente … 5 = Óptimo, el de `ejesDelRadar`) a la regla de 0 a 100: cada nivel entero cae a
- * la mitad de su franja (1→10, 2→30, 3→50, 4→70, 5→100) y entre dos niveles se interpola en línea recta. Fuera de la
- * escala, al extremo más cercano.
- */
-export function enLaRegla(valor: number): number {
-  const v = Math.min(LETRAS.length, Math.max(1, Number.isFinite(valor) ? valor : 1));
-  const i = Math.min(LETRAS.length - 2, Math.floor(v - 1));
-  const t = v - 1 - i;
-  return MITAD_DE_LA_FRANJA[i] + (MITAD_DE_LA_FRANJA[i + 1] - MITAD_DE_LA_FRANJA[i]) * t;
-}
+/** El número de «qué se trabaja primero»: su radio y el aire que lo separa del número de la dimensión. */
+export const R_ORDEN = 8;
+const AIRE_DEL_ORDEN = 9;
 
 export const f = (v: number) => v.toFixed(1);
 const aRadianes = (g: number) => (g * Math.PI) / 180;
@@ -70,10 +49,8 @@ export function polar(grados: number, r: number): [number, number] {
   return [CX + r * Math.sin(aRadianes(grados)), CY - r * Math.cos(aRadianes(grados))];
 }
 
-/** Grados de reloj y un valor de la regla (0–100) → coordenadas del SVG. Fuera de la regla, al extremo: nada se sale. */
-export function enElRadar(grados: number, puntaje: number): [number, number] {
-  return polar(grados, (R * Math.min(100, Math.max(0, puntaje))) / 100);
-}
+/** El radio del anillo de una etapa (k = 0 es Deficiente). */
+export const radioDeLaEtapa = (k: number) => R_PRIMER_ANILLO + PASO * k;
 
 /**
  * El ángulo del eje de cada dimensión: la base operativa reparte la mitad derecha y la producción la izquierda, y cada
@@ -90,36 +67,49 @@ export function angulosDeLosEjes(dims: readonly { id: string; capa: ClaveDeCapa 
   return out;
 }
 
-/** Un anillo de la regla: el polígono con un vértice en cada eje, a la altura de `puntaje`. */
-export function anilloDelRadar(angulos: readonly number[], puntaje: number): [number, number][] {
-  return [...angulos].sort((a, b) => a - b).map((g) => enElRadar(g, puntaje));
+/** El cruce de un eje con el anillo de una etapa. */
+export const cruce = (grados: number, k: number) => polar(grados, radioDeLaEtapa(k));
+
+/** El anillo de una etapa: el polígono con un vértice en cada eje. */
+export function anilloDeLaEtapa(angulos: readonly number[], k: number): [number, number][] {
+  return [...angulos].sort((a, b) => a - b).map((g) => cruce(g, k));
 }
 
 /** Los puntos de un polígono, para el atributo `points`. */
 export const puntosSvg = (ps: readonly [number, number][]) => ps.map((p) => `${f(p[0])},${f(p[1])}`).join(" ");
 
 /**
- * Dónde cruza un anillo la vertical del centro, arriba (`"arriba"`) o abajo: ahí van los números de la regla y el chip
- * de «la base». Es el lado que une el último eje de una mitad con el primero de la otra; si no hay lado que cruce (un
- * área con todas sus dimensiones en una mitad), el radio a secas.
+ * Dónde cruza un anillo la vertical del centro, arriba o abajo: ahí van los nombres de las etapas y el chip de «La
+ * base». Es el lado que une el último eje de una mitad con el primero de la otra; si no hay lado que cruce (un área con
+ * todas sus dimensiones en una mitad), el radio a secas.
  */
-export function yEnElCentro(angulos: readonly number[], puntaje: number, lado: "arriba" | "abajo"): number {
+export function yEnElCentro(angulos: readonly number[], radio: number, lado: "arriba" | "abajo"): number {
   const derecha = angulos.filter((g) => g < 180);
   const izquierda = angulos.filter((g) => g >= 180);
-  const radio = (R * puntaje) / 100;
   if (!derecha.length || !izquierda.length) return lado === "arriba" ? CY - radio : CY + radio;
   // Arriba: del último eje de la izquierda al primero de la derecha. Abajo: del último de la derecha al primero de la izquierda.
-  const [px, py] = enElRadar(lado === "arriba" ? Math.max(...izquierda) : Math.max(...derecha), puntaje);
-  const [qx, qy] = enElRadar(lado === "arriba" ? Math.min(...derecha) : Math.min(...izquierda), puntaje);
+  const [px, py] = polar(lado === "arriba" ? Math.max(...izquierda) : Math.max(...derecha), radio);
+  const [qx, qy] = polar(lado === "arriba" ? Math.min(...derecha) : Math.min(...izquierda), radio);
   const t = (CX - px) / (qx - px);
   return py + (qy - py) * t;
+}
+
+/** El nombre de cada etapa, en el hueco de arriba: 10,5 px, y su línea base un poco por debajo del anillo. */
+export const LETRA_DE_ETAPA = 10.5;
+export const yDelNombreDeEtapa = (angulos: readonly number[], k: number) => yEnElCentro(angulos, radioDeLaEtapa(k), "arriba") + 3.8;
+
+/** El chip de «La base», abajo, centrado sobre el anillo de Funcional (k = 2). */
+export const CHIP_DE_LA_BASE = { ancho: 64, alto: 22 };
+export function cajaDelChipDeLaBase(angulos: readonly number[]): Caja {
+  const y = yEnElCentro(angulos, radioDeLaEtapa(2), "abajo");
+  return { x0: CX - CHIP_DE_LA_BASE.ancho / 2, x1: CX + CHIP_DE_LA_BASE.ancho / 2, y0: y - CHIP_DE_LA_BASE.alto / 2, y1: y + CHIP_DE_LA_BASE.alto / 2 };
 }
 
 // ── Los rótulos ───────────────────────────────────────────────────────────────
 
 /** Un nombre de dimensión va en renglones de hasta 22 letras («Tecnología y / Automatización»). */
 const LETRAS_POR_RENGLON = 22;
-const RENGLON = 18;
+export const RENGLON = 18;
 
 /**
  * El rótulo de una dimensión, afuera de su eje: arriba su número (con sus reportes), abajo su nombre y, si va, una nota.
@@ -145,6 +135,45 @@ export function rotuloDelEje(grados: number, nombre: string, conNota = false) {
 }
 
 /**
+ * Cuánto mide el número de una dimensión («1.5 · 1 reporte»: 11 px, semibold, con 0,06 em entre letras), estimado. El
+ * componente lo mide de verdad cuando puede; esto es lo de antes de medir y lo que usan las pruebas.
+ */
+export function anchoDelNumero(texto: string): number {
+  let ancho = 0;
+  for (const letra of texto) ancho += (/[.,·:\s]/.test(letra) ? 3.4 : 6.9) + 0.66;
+  return ancho;
+}
+
+/**
+ * Dónde va el número de «qué se trabaja primero»: junto al número de la dimensión, del lado de afuera (pasado su final),
+ * nunca hacia el radar, donde taparía un cruce (Elías, 2026-10-28). Devuelve el centro del círculo.
+ */
+export function lugarDelOrden(rotulo: { x: number; ancla: "start" | "end"; yNumero: number }, anchoNumero: number): [number, number] {
+  const lado = rotulo.ancla === "start" ? 1 : -1;
+  return [rotulo.x + lado * (anchoNumero + AIRE_DEL_ORDEN + R_ORDEN), rotulo.yNumero - 4];
+}
+
+/** Una caja: de x0 a x1 y de y0 (arriba) a y1 (abajo). */
+export interface Caja {
+  x0: number;
+  x1: number;
+  y0: number;
+  y1: number;
+}
+
+/**
+ * Lo que ocupa el rótulo de una dimensión: su número (y el de «qué se trabaja primero», si va), su nombre y su nota. Con
+ * anchos estimados (15 px semibold ≈ 8,2 por letra; 12 px ≈ 6,4).
+ */
+export function cajaDelRotulo(r: ReturnType<typeof rotuloDelEje>, numero: string, conOrden: boolean, conNota: boolean): Caja {
+  const anchoNumero = anchoDelNumero(numero) + (conOrden ? AIRE_DEL_ORDEN + R_ORDEN * 2 : 0);
+  const ancho = Math.max(anchoNumero, ...r.nombre.map((l) => l.texto.length * 8.2), conNota ? "no aplica a este perfil".length * 6.4 : 0);
+  const abajo = conNota ? r.yNota + 4 : r.nombre[r.nombre.length - 1].y + 4;
+  const arriba = Math.min(r.yNumero - 11, conOrden ? r.yNumero - 4 - R_ORDEN : Infinity);
+  return r.ancla === "start" ? { x0: r.x, x1: r.x + ancho, y0: arriba, y1: abajo } : { x0: r.x - ancho, x1: r.x, y0: arriba, y1: abajo };
+}
+
+/**
  * El nombre de una mitad al costado («BASE OPERATIVA» y su descripción), en renglones de 10 y de 26 letras, centrado a la
  * altura del centro del radar.
  */
@@ -155,7 +184,7 @@ export function rotuloDeLaMitad(clave: ClaveDeCapa, nombre: string, descripcion:
   const alto = (lineas.length - 1) * 32 + (lineasDeDescripcion.length ? 24 + (lineasDeDescripcion.length - 1) * 17 : 0);
   const y0 = CY + 24.5 - alto / 2;
   return {
-    x: derecha ? 790 : 210,
+    x: derecha ? 800 : 200,
     ancla: (derecha ? "start" : "end") as "start" | "end",
     nombre: lineas.map((texto, j) => ({ texto, y: y0 + j * 32 })),
     descripcion: lineasDeDescripcion.map((texto, j) => ({ texto, y: y0 + (lineas.length - 1) * 32 + 24 + j * 17 })),
@@ -170,6 +199,7 @@ export function porcionDelEje(angulos: readonly number[], grados: number): [numb
   const antes = i === 0 ? orden[orden.length - 1] - 360 : orden[i - 1];
   const despues = i === orden.length - 1 ? orden[0] + 360 : orden[i + 1];
   const [g0, g1] = [(antes + grados) / 2, (grados + despues) / 2];
-  // Un poco más allá del borde, para que tocar cerca del 100 también cuente.
-  return [[CX, CY], polar(g0, R + 20), polar(grados, R + 20), polar(g1, R + 20)];
+  // Un poco más allá del último anillo, para que tocar cerca de Óptimo también cuente.
+  const r = R_EJE_HASTA + 12;
+  return [[CX, CY], polar(g0, r), polar(grados, r), polar(g1, r)];
 }

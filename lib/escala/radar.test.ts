@@ -1,14 +1,14 @@
 /**
- * lib/escala/radar.test.ts — la vista «Radar»: su dibujo (lib/escala/radar-dibujo.ts: la regla de 0 a 100, un eje por
- * dimensión, los anillos y los rótulos), la rueda del mapa que usa el radar de UNA empresa (lib/escala/rueda.ts: de un
- * puntaje a su anillo, la porción de cada dimensión, los rótulos), dónde se concentra cada serie y que la vista esté
- * registrada en el selector y en la URL.
+ * lib/escala/radar.test.ts — la vista «Radar», el radar de la teoría: qué cuenta cada cruce (lib/escala/radar.ts, la
+ * misma cuenta del Mapa), su dibujo (lib/escala/radar-dibujo.ts: un eje por dimensión, un anillo por etapa, los rótulos
+ * sin pisar cruces ni pisarse entre sí), la rueda del mapa que usa el radar de UNA empresa (lib/escala/rueda.ts) y que la
+ * vista esté registrada en el selector y en la URL.
  */
 import { describe, expect, it } from "vitest";
 import { leerArchivoDeLaEscala } from "./documento/archivos";
 import { MINI_ESCALA } from "./documento/mini-escala.fixture";
 import { parsearEscala } from "./documento/parsear";
-import { ejesDelRadar, nivelConMas, nivelMasCercano, nombreDelPromedio, SERIES_DE_ENTRADA, SERIES_DEL_RADAR, seriesDisponibles } from "./radar";
+import { conPerfil, criteriosDelCruce, cuentaDeLaCelda, ejesDeLaTeoria, enPalabras, opcionesDeQueSeCuenta, QUE_SE_CUENTA, type QueSeCuenta } from "./radar";
 import {
   ANCHO,
   CX,
@@ -29,10 +29,11 @@ import {
   type DimensionDeUnaEmpresa,
 } from "./rueda";
 import * as dibujo from "./radar-dibujo";
-import { puntajeDelTramo, puntajeEstimado } from "./chequeo";
-import { CIERRES, dimensionAplica } from "./documento/perfil";
-import { LETRAS } from "./documento/tipos";
-import { consultaDeLaEscala, requeridosDelArea, VISTAS, vistaDesdeUrl } from "./vista";
+import { aplicarEdicion } from "./documento/edicion";
+import { aplica, CIERRES, DESPUES, dimensionAplica, type Perfil } from "./documento/perfil";
+import { enlacesQueAplican } from "./documento/requeridos";
+import { LETRAS, type Criterio } from "./documento/tipos";
+import { consultaDeLaEscala, requeridosDelArea, VISTAS, vistaDesdeUrl, type RequeridosDelArea } from "./vista";
 
 const mini = parsearEscala(MINI_ESCALA);
 const real = parsearEscala(leerArchivoDeLaEscala("escala"));
@@ -45,7 +46,15 @@ const radio = (p: { x: number; y: number }) => Math.hypot(p.x - CX, p.y - CY);
 /** En qué anillo cae un radio (0 = Deficiente … 4 = Óptimo). */
 const anilloDe = (r: number) => Math.floor((r - R_DENTRO) / ANCHO);
 
-describe("geometría de la rueda (la del mapa, la del radar y la de una empresa)", () => {
+/** Todos los perfiles que se pueden elegir con las dos primeras preguntas, más ninguno. */
+const PERFILES: Perfil[] = [SIN_PERFIL, ...CIERRES.flatMap((cierre) => [null, ...DESPUES].map((despues) => ({ cierre, despues })))];
+const QUES = QUE_SE_CUENTA.map((q) => q.clave);
+/** Las áreas como se ven: la escala general y cada edición por industria (que renombra dimensiones). */
+const AREAS_QUE_SE_VEN = [real, ...real.ediciones.map((e) => aplicarEdicion(real, e.slug))].flatMap((esc) =>
+  esc.areas.map((a) => ({ ...a, nombre: `${a.nombre}${esc.edicion ? ` (${esc.edicion.nombre})` : ""}` })),
+);
+
+describe("geometría de la rueda (la del mapa y la de una empresa)", () => {
   it("un valor fuera de la escala no se sale de la rueda", () => {
     expect(radioEnAnillos(-3)).toBe(R_DENTRO);
     expect(radioEnAnillos(12)).toBe(R_FUERA);
@@ -102,64 +111,9 @@ describe("geometría de la rueda (la del mapa, la del radar y la de una empresa)
     expect(base.nombre.map((l) => l.texto)).toEqual(["BASE", "OPERATIVA"]);
     expect(rotuloDeCapa("produccion", "Producción", null).ancla).toBe("end");
   });
-
-  it("un promedio se nombra con el nivel más cercano", () => {
-    expect(nivelMasCercano(1)).toBe("D");
-    expect(nivelMasCercano(2.4)).toBe("I");
-    expect(nivelMasCercano(2.5)).toBe("F");
-    expect(nivelMasCercano(4.6)).toBe("O");
-    expect(nivelMasCercano(0.2)).toBe("D");
-  });
-
-  it("un promedio entre dos anillos se dice «cerca de»: no hace creer que hay criterios en ese nivel", () => {
-    const nombre = (l: string) => ({ D: "Deficiente", I: "Inicial", F: "Funcional", E: "Eficiente", O: "Óptimo" })[l] ?? l;
-    expect(nombreDelPromedio(3, nombre)).toBe("Funcional");
-    expect(nombreDelPromedio(3.1, nombre)).toBe("Funcional");
-    expect(nombreDelPromedio(11 / 3, nombre)).toBe("cerca de Eficiente");
-  });
 });
 
-describe("el dibujo del radar: una regla de 0 a 100 y un eje por dimensión", () => {
-  it("cada nivel entero cae a la mitad de su franja, y Óptimo en 100", () => {
-    expect([1, 2, 3, 4, 5].map(dibujo.enLaRegla)).toEqual([10, 30, 50, 70, 100]);
-  });
-
-  it("entre dos niveles se interpola en línea recta", () => {
-    expect(dibujo.enLaRegla(1.5)).toBeCloseTo(20);
-    expect(dibujo.enLaRegla(3.25)).toBeCloseTo(55);
-    expect(dibujo.enLaRegla(4.5)).toBeCloseTo(85);
-    // Un nivel entero de Funcional para arriba queda pasada la base; Inicial, antes.
-    expect(dibujo.enLaRegla(3)).toBeGreaterThan(dibujo.LA_BASE);
-    expect(dibujo.enLaRegla(2)).toBeLessThan(dibujo.LA_BASE);
-  });
-
-  it("fuera de la escala, al extremo más cercano", () => {
-    expect(dibujo.enLaRegla(0)).toBe(10);
-    expect(dibujo.enLaRegla(-4)).toBe(10);
-    expect(dibujo.enLaRegla(9)).toBe(100);
-    expect(dibujo.enLaRegla(Number.NaN)).toBe(10);
-  });
-
-  it("el centro vale 0 y el borde 100; nada se sale del borde", () => {
-    const cerca = (p: [number, number]) => p.map((v) => Math.round(v * 1000) / 1000);
-    expect(cerca(dibujo.enElRadar(45, 0))).toEqual([dibujo.CX, dibujo.CY]);
-    expect(cerca(dibujo.enElRadar(0, 100))).toEqual([dibujo.CX, dibujo.CY - dibujo.R]);
-    expect(cerca(dibujo.enElRadar(0, 140))).toEqual([dibujo.CX, dibujo.CY - dibujo.R]);
-  });
-
-  it("las franjas son las del cálculo: Deficiente 0–19 … Eficiente 60–79, Óptimo 100; la base en 40", () => {
-    expect(dibujo.FRANJAS.map((fr) => fr.letra)).toEqual(LETRAS);
-    expect(dibujo.FRANJAS.map(dibujo.rangoDeLaFranja)).toEqual(["0 a 19", "20 a 39", "40 a 59", "60 a 79", "100"]);
-    expect(dibujo.LIMITES).toEqual([20, 40, 60, 80, 100]);
-    expect(dibujo.LA_BASE).toBe(40);
-    // Cada nivel entero cae dentro de su franja.
-    for (const [i, fr] of dibujo.FRANJAS.entries()) {
-      const v = dibujo.enLaRegla(i + 1);
-      expect(v).toBeGreaterThanOrEqual(fr.desde);
-      expect(v).toBeLessThanOrEqual(fr.hasta);
-    }
-  });
-
+describe("el dibujo del radar de la teoría: un eje por dimensión y un anillo por etapa", () => {
   it("con cuatro dimensiones por mitad, los ejes van a 22,5° + 45°·k: la base a la derecha, la producción a la izquierda", () => {
     const dims = ["base", "base", "base", "base", "produccion", "produccion", "produccion", "produccion"].map((capa, i) => ({
       id: `1.${i + 1}`,
@@ -181,46 +135,123 @@ describe("el dibujo del radar: una regla de 0 a 100 y un eje por dimensión", ()
     }
   });
 
-  it("los anillos tienen un vértice en cada eje; sus números van arriba y «la base» abajo, sobre el anillo de 40", () => {
-    const angulos = [22.5, 67.5, 112.5, 157.5, 202.5, 247.5, 292.5, 337.5];
-    expect(dibujo.anilloDelRadar(angulos, 40)).toHaveLength(8);
-    const r40 = (dibujo.R * 40) / 100;
-    const cos = Math.cos((22.5 * Math.PI) / 180);
-    expect(dibujo.yEnElCentro(angulos, 40, "arriba")).toBeCloseTo(dibujo.CY - r40 * cos);
-    expect(dibujo.yEnElCentro(angulos, 40, "abajo")).toBeCloseTo(dibujo.CY + r40 * cos);
-    // Más arriba el número cuanto más grande el anillo.
-    const ys = dibujo.LIMITES.map((l) => dibujo.yEnElCentro(angulos, l, "arriba"));
-    expect([...ys].sort((x, y) => y - x)).toEqual(ys);
-    // Con todas las dimensiones en una mitad no hay lado que cruce: el radio a secas.
-    expect(dibujo.yEnElCentro([30, 90, 150], 50, "arriba")).toBe(dibujo.CY - dibujo.R / 2);
+  it("los anillos son los del diseño: Deficiente adentro, Óptimo afuera, entre el centro y el final de los ejes", () => {
+    expect(LETRAS.map((_, k) => dibujo.radioDeLaEtapa(k))).toEqual([110, 142.5, 175, 207.5, 240]);
+    expect(dibujo.radioDeLaEtapa(0) - dibujo.CRUCE).toBeGreaterThan(dibujo.R_CENTRO);
+    expect(dibujo.radioDeLaEtapa(LETRAS.length - 1)).toBeLessThan(dibujo.R_EJE_HASTA);
+    // El cruce de 1.1 con Deficiente y con Óptimo, medidos en el diseño.
+    const cerca = (p: [number, number]) => p.map((v) => Math.round(v * 10) / 10);
+    expect(cerca(dibujo.cruce(22.5, 0))).toEqual([542.1, 278.4]);
+    expect(cerca(dibujo.cruce(22.5, 4))).toEqual([591.8, 158.3]);
+    expect(dibujo.anilloDeLaEtapa([22.5, 67.5, 112.5, 157.5, 202.5, 247.5, 292.5, 337.5], 2)).toHaveLength(8);
   });
 
-  it("los rótulos no se salen del dibujo ni se pisan entre sí", () => {
-    for (const a of real.areas) {
+  it("los nombres de las etapas van arriba, de adentro hacia afuera, y «La base» abajo, sobre Funcional", () => {
+    const angulos = [22.5, 67.5, 112.5, 157.5, 202.5, 247.5, 292.5, 337.5];
+    const ys = LETRAS.map((_, k) => dibujo.yEnElCentro(angulos, dibujo.radioDeLaEtapa(k), "arriba"));
+    expect([...ys].sort((x, y) => y - x)).toEqual(ys);
+    expect(ys[0]).toBeCloseTo(278.4, 1);
+    expect(dibujo.yEnElCentro(angulos, dibujo.radioDeLaEtapa(2), "abajo")).toBeCloseTo(541.7, 1);
+    // Con todas las dimensiones en una mitad no hay lado que cruce: el radio a secas.
+    expect(dibujo.yEnElCentro([30, 90, 150], 50, "arriba")).toBe(dibujo.CY - 50);
+  });
+
+  it("el número de «qué se trabaja primero» va pasado el final del número de la dimensión, nunca hacia el radar", () => {
+    for (const a of AREAS_QUE_SE_VEN) {
       const angulos = dibujo.angulosDeLosEjes(a.dimensiones);
-      const rotulos = a.dimensiones.map((d) => dibujo.rotuloDelEje(angulos.get(d.id)!, d.nombre, true));
-      for (const r of rotulos) {
-        expect(r.yNumero).toBeGreaterThan(12);
-        expect(r.yNota).toBeLessThan(dibujo.H - 4);
-        // A 15 y en semibold, cada letra mide ~8.
-        for (const { texto } of r.nombre) {
-          const ancho = texto.length * 8.2;
-          const [x0, x1] = r.ancla === "start" ? [r.x, r.x + ancho] : [r.x - ancho, r.x];
-          expect(x0, texto).toBeGreaterThanOrEqual(0);
-          expect(x1, texto).toBeLessThanOrEqual(dibujo.W);
-        }
-      }
-      for (const lado of ["start", "end"] as const) {
-        const bloques = rotulos
-          .filter((r) => r.ancla === lado)
-          .map((r) => [r.yNumero, r.yNota] as const)
-          .sort((x, y) => x[0] - y[0]);
-        for (let i = 1; i < bloques.length; i++) expect(bloques[i][0] - bloques[i - 1][1]).toBeGreaterThan(12);
+      for (const d of a.dimensiones) {
+        const r = dibujo.rotuloDelEje(angulos.get(d.id)!, d.nombre);
+        const ancho = dibujo.anchoDelNumero(`${d.id} · 123 reportes`);
+        const [x, y] = dibujo.lugarDelOrden(r, ancho);
+        if (r.ancla === "start") expect(x - dibujo.R_ORDEN).toBeGreaterThan(r.x + ancho);
+        else expect(x + dibujo.R_ORDEN).toBeLessThan(r.x - ancho);
+        // Más lejos del centro que el comienzo del número: hacia afuera.
+        expect(Math.abs(x - dibujo.CX)).toBeGreaterThan(Math.abs(r.x - dibujo.CX));
+        expect(y).toBeCloseTo(r.yNumero - 4);
       }
     }
-    // El nombre de cada mitad, al costado, como en el diseño.
+    // El diseño: «1.6» a la izquierda, con el círculo a ~33 de su final.
+    expect(dibujo.lugarDelOrden({ x: 252.4, ancla: "end", yNumero: 460.6 }, 16)[0]).toBeCloseTo(219.4);
+  });
+
+  /** Lo que ocupa cada cosa del dibujo, para ver que nada se pise. */
+  const solapan = (p: dibujo.Caja, q: dibujo.Caja) => p.x0 < q.x1 && q.x0 < p.x1 && p.y0 < q.y1 && q.y0 < p.y1;
+  const cajaDeCirculo = ([x, y]: [number, number], r: number): dibujo.Caja => ({ x0: x - r, x1: x + r, y0: y - r, y1: y + r });
+
+  it("ningún rótulo pisa un cruce ni a otro rótulo, ni se sale del dibujo (con el número de orden, reportes y la nota)", () => {
+    expect(AREAS_QUE_SE_VEN.length).toBeGreaterThan(real.areas.length);
+    for (const a of AREAS_QUE_SE_VEN) {
+      const angulos = dibujo.angulosDeLosEjes(a.dimensiones);
+      const todos = [...angulos.values()];
+      // Cada cruce, del tamaño del elegido con su halo: el más grande que se dibuja.
+      const cruces = a.dimensiones.flatMap((d) => LETRAS.map((_, k) => cajaDeCirculo(dibujo.cruce(angulos.get(d.id)!, k), dibujo.HALO)));
+      for (const conNota of [false, true]) {
+        const rotulos = a.dimensiones.map((d) =>
+          dibujo.cajaDelRotulo(dibujo.rotuloDelEje(angulos.get(d.id)!, d.nombre, conNota), `${d.id} · 123 reportes`, true, conNota),
+        );
+        rotulos.forEach((r, i) => {
+          const nombre = `${a.nombre} ${a.dimensiones[i].id}${conNota ? " con nota" : ""}`;
+          expect(r.x0, nombre).toBeGreaterThanOrEqual(0);
+          expect(r.x1, nombre).toBeLessThanOrEqual(dibujo.W);
+          expect(r.y0, nombre).toBeGreaterThanOrEqual(0);
+          expect(r.y1, nombre).toBeLessThanOrEqual(dibujo.H);
+          for (const c of cruces) expect(solapan(r, c), nombre).toBe(false);
+          rotulos.forEach((otro, j) => {
+            if (j !== i) expect(solapan(r, otro), `${nombre} y ${a.dimensiones[j].id}`).toBe(false);
+          });
+        });
+        // El nombre de cada mitad, al costado, tampoco pisa un rótulo ni un cruce.
+        for (const c of ["base", "produccion"] as const) {
+          const m = dibujo.rotuloDeLaMitad(
+            c,
+            c === "base" ? "Base operativa" : "Producción",
+            c === "base" ? "cómo está montado el área por dentro" : "qué entrega el área hacia afuera",
+          );
+          const ancho = Math.max(...m.nombre.map((l) => l.texto.length * 18), ...m.descripcion.map((l) => l.texto.length * 6.8));
+          const caja: dibujo.Caja = {
+            x0: m.ancla === "start" ? m.x : m.x - ancho,
+            x1: m.ancla === "start" ? m.x + ancho : m.x,
+            y0: m.nombre[0].y - 22,
+            y1: (m.descripcion.at(-1)?.y ?? m.nombre.at(-1)!.y) + 4,
+          };
+          expect(caja.x0).toBeGreaterThanOrEqual(0);
+          expect(caja.x1).toBeLessThanOrEqual(dibujo.W);
+          for (const r of rotulos) expect(solapan(caja, r), `mitad ${c}`).toBe(false);
+          for (const cr of cruces) expect(solapan(caja, cr), `mitad ${c}`).toBe(false);
+        }
+      }
+      // Los nombres de las etapas, en el hueco de arriba, y el chip de «La base», abajo, tampoco pisan un cruce, ni el
+      // elegido (su halo es un anillo tenue, y puede rozar la punta de «Deficiente»). A 10,5 px, ~5,4 por letra.
+      const elegidos = a.dimensiones.flatMap((d) => LETRAS.map((_, k) => cajaDeCirculo(dibujo.cruce(angulos.get(d.id)!, k), dibujo.CRUCE_ELEGIDO)));
+      // Con las medidas que usa el componente: el tamaño de letra y la altura salen de radar-dibujo.ts.
+      const etapas = real.niveles.map((nivel, k) => {
+        const y = dibujo.yDelNombreDeEtapa(todos, k);
+        const medio = (nivel.nombre.length * dibujo.LETRA_DE_ETAPA * 0.52) / 2;
+        return { x0: dibujo.CX - medio, x1: dibujo.CX + medio, y0: y - dibujo.LETRA_DE_ETAPA * 0.75, y1: y + 2 };
+      });
+      const chip = dibujo.cajaDelChipDeLaBase(todos);
+      for (const c of elegidos) {
+        for (const e of etapas) expect(solapan(e, c), a.nombre).toBe(false);
+        expect(solapan(chip, c), a.nombre).toBe(false);
+      }
+    }
+  });
+
+  it("dos cruces vecinos no se tocan, ni siquiera el elegido con su halo", () => {
+    for (const a of real.areas) {
+      const angulos = dibujo.angulosDeLosEjes(a.dimensiones);
+      const puntos = a.dimensiones.flatMap((d) => LETRAS.map((_, k) => dibujo.cruce(angulos.get(d.id)!, k)));
+      for (let i = 0; i < puntos.length; i++)
+        for (let j = i + 1; j < puntos.length; j++) {
+          expect(Math.hypot(puntos[i][0] - puntos[j][0], puntos[i][1] - puntos[j][1])).toBeGreaterThan(dibujo.HALO + dibujo.CRUCE_EN_FOCO);
+        }
+    }
+  });
+
+  it("el nombre de cada mitad va al costado, como en el diseño", () => {
     const base = dibujo.rotuloDeLaMitad("base", "Base operativa", "cómo está montado el departamento por dentro");
     expect(base.ancla).toBe("start");
+    expect(base.x).toBe(800);
     expect(base.nombre.map((l) => [l.texto, l.y])).toEqual([
       ["BASE", 368],
       ["OPERATIVA", 400],
@@ -232,6 +263,14 @@ describe("el dibujo del radar: una regla de 0 a 100 y un eje por dimensión", ()
     expect(dibujo.rotuloDeLaMitad("produccion", "Producción", "qué entrega el departamento hacia afuera").nombre).toEqual([{ texto: "PRODUCCIÓN", y: 384 }]);
   });
 
+  it("los rótulos de las dimensiones caen donde el diseño los pone", () => {
+    const r = dibujo.rotuloDelEje(22.5, "Procesos y Rutinas");
+    expect([r.x, r.yNumero, r.nombre[0].y].map((v) => Math.round(v * 10) / 10)).toEqual([602.6, 114.4, 132.4]);
+    const lado = dibujo.rotuloDelEje(67.5, "Tecnología y Automatización");
+    expect(lado.nombre.map((l) => l.texto)).toEqual(["Tecnología y", "Automatización"]);
+    expect(Math.round(lado.yNumero * 10) / 10).toBe(255.4);
+  });
+
   it("la porción de un eje va del centro hasta la mitad del camino a cada vecino", () => {
     const angulos = [22.5, 67.5, 112.5, 157.5, 202.5, 247.5, 292.5, 337.5];
     expect(dibujo.porcionDelEje(angulos, 22.5)).toHaveLength(4);
@@ -239,7 +278,7 @@ describe("el dibujo del radar: una regla de 0 a 100 y un eje por dimensión", ()
     expect(dibujo.porcionDelEje(angulos, 99)).toEqual([]);
   });
 
-  it("las porciones se tocan sin hueco ni encimarse, también del último eje al primero", () => {
+  it("las porciones se tocan sin hueco ni encimarse, también del último eje al primero, y llegan pasado Óptimo", () => {
     const cerca = (p: [number, number]) => p.map((v) => Math.round(v * 1000) / 1000);
     for (const a of real.areas) {
       const ang = dibujo.angulosDeLosEjes(a.dimensiones);
@@ -255,14 +294,8 @@ describe("el dibujo del radar: una regla de 0 a 100 y un eje por dimensión", ()
         const abre = (((borde1 - borde0) * 180) / Math.PI + 360) % 360;
         expect(abre).toBeGreaterThan(0);
         expect(abre).toBeLessThan(180);
+        expect(Math.hypot(esta[2][0] - dibujo.CX, esta[2][1] - dibujo.CY)).toBeGreaterThan(dibujo.radioDeLaEtapa(4) + dibujo.CRUCE);
       }
-    }
-  });
-
-  it("las franjas y la mitad de cada una salen del cálculo del chequeo", () => {
-    for (const [i, fr] of dibujo.FRANJAS.entries()) {
-      expect(dibujo.enLaRegla(i + 1)).toBe(puntajeEstimado(fr.letra));
-      expect(fr.desde).toBe(puntajeDelTramo(fr.letra, 0, 1));
     }
   });
 });
@@ -378,67 +411,118 @@ describe("lineaDeLaSerie: por dónde va la línea", () => {
   });
 });
 
-describe("ejesDelRadar: dónde se concentra cada cosa", () => {
-  it("un eje por dimensión, en el orden de la escala", () => {
-    expect(ejesDelRadar(area, SIN_PERFIL, req).map((e) => e.dimensionId)).toEqual(area.dimensiones.map((d) => d.id));
+describe("qué cuenta cada cruce: la celda del Mapa", () => {
+  it("un eje por dimensión, en el orden de la escala, con la cuenta de cada etapa", () => {
+    const ejes = ejesDeLaTeoria(area, SIN_PERFIL, req, "criterios");
+    expect(ejes.map((e) => e.dimensionId)).toEqual(area.dimensiones.map((d) => d.id));
+    // 1.1: D1, I1, F1–F3, E1–E2, O1–O2.
+    expect(ejes[0].cuentas).toEqual({ D: 1, I: 1, F: 3, E: 2, O: 2 });
   });
 
-  it("el punto es el nivel promedio de sus criterios, con cuántos hay en cada nivel", () => {
-    const [procesos] = ejesDelRadar(area, SIN_PERFIL, req);
-    // 1.1: D1, I1, F1–F3, E1–E2, O1–O2 → (1 + 2 + 3·3 + 4·2 + 5·2) / 9.
-    expect(procesos.series.criterios.cuantos).toBe(9);
-    expect(procesos.series.criterios.valor).toBeCloseTo(30 / 9);
-    expect(procesos.series.criterios.porNivel).toEqual({
-      D: 1,
-      I: 1,
-      F: 3,
-      E: 2,
-      O: 2,
-    });
-    // Hábitos: F2 y E2. Riesgos: F3.
-    expect(procesos.series.habitos.valor).toBe(3.5);
-    expect(procesos.series.riesgos).toMatchObject({ valor: 3, cuantos: 1 });
-  });
-
-  it("sin criterios de una clase, la serie no tiene punto", () => {
-    const [, traccion] = ejesDelRadar(area, SIN_PERFIL, req);
-    expect(traccion.series.riesgos).toMatchObject({ valor: null, cuantos: 0 });
+  it("cada filtro cuenta lo suyo: hábitos y riesgos", () => {
+    // 1.1: los hábitos son F2 y E2; el riesgo, F3.
+    expect(ejesDeLaTeoria(area, SIN_PERFIL, req, "habitos")[0].cuentas).toEqual({ D: 0, I: 0, F: 1, E: 1, O: 0 });
+    expect(ejesDeLaTeoria(area, SIN_PERFIL, req, "riesgos")[0].cuentas).toEqual({ D: 0, I: 0, F: 1, E: 0, O: 0 });
+    // Tracción no tiene riesgos: todo en 0 (puntos grises).
+    expect(Object.values(ejesDeLaTeoria(area, SIN_PERFIL, req, "riesgos")[1].cuentas)).toEqual([0, 0, 0, 0, 0]);
   });
 
   it("con el perfil cuentan solo los que aplican, y los escondidos van aparte", () => {
     const perfil = { cierre: "transaccional" as const, despues: null };
-    const [procesos] = ejesDelRadar(area, perfil, req);
-    expect(procesos.series.criterios.cuantos).toBe(8);
-    expect(procesos.series.escondidos).toMatchObject({ valor: 3, cuantos: 1 });
-    expect(ejesDelRadar(area, SIN_PERFIL, req)[0].series.escondidos.cuantos).toBe(0);
+    expect(ejesDeLaTeoria(area, perfil, req, "criterios")[0].cuentas.F).toBe(2);
+    expect(ejesDeLaTeoria(area, perfil, req, "perfil")[0].cuentas).toEqual({ D: 0, I: 0, F: 1, E: 0, O: 0 });
+    // Sin perfil no hay nada escondido.
+    expect(ejesDeLaTeoria(area, SIN_PERFIL, req, "perfil").every((e) => LETRAS.every((l) => e.cuentas[l] === 0))).toBe(true);
   });
 
-  it("los escondidos por el perfil solo se ofrecen con un perfil elegido", () => {
-    expect(seriesDisponibles(SIN_PERFIL)).not.toContain("escondidos");
-    expect(seriesDisponibles({ cierre: "mixta", despues: null })).toContain("escondidos");
-  });
-
-  it("con la escala publicada, cada dimensión de cada área tiene su punto de criterios", () => {
+  it("la lista del panel es la del número: los mismos criterios que cuenta el cruce, en cada filtro y perfil", () => {
     for (const a of real.areas) {
-      const ejes = ejesDelRadar(a, SIN_PERFIL, requeridosDelArea(real, a));
-      expect(ejes).toHaveLength(a.dimensiones.length);
-      for (const e of ejes) expect(e.series.criterios.valor).not.toBeNull();
+      const r = requeridosDelArea(real, a);
+      for (const perfil of PERFILES)
+        for (const que of QUES) {
+          const ejes = ejesDeLaTeoria(a, perfil, r, que);
+          a.dimensiones.forEach((d, i) => {
+            for (const nv of d.niveles) {
+              const lista = criteriosDelCruce(d, nv, que, perfil, r);
+              expect(lista.length, `${nv.id} ${que}`).toBe(ejes[i].cuentas[nv.letra]);
+              expect(lista.every((c) => nv.criterios.includes(c))).toBe(true);
+            }
+          });
+        }
     }
+  });
+
+  it("«Escondidos por el perfil» solo se ofrece con un perfil elegido", () => {
+    expect(opcionesDeQueSeCuenta(SIN_PERFIL)).toEqual(["criterios", "habitos", "riesgos", "requeridos"]);
+    expect(opcionesDeQueSeCuenta({ cierre: "mixta", despues: null })).toContain("perfil");
+    expect(opcionesDeQueSeCuenta({ cierre: null, despues: null, trafico: null })).not.toContain("perfil");
+    expect(conPerfil({ cierre: null, despues: null })).toBe(false);
+  });
+
+  it("se dice con sus palabras: «1 hábito», «3 criterios de riesgo»", () => {
+    expect(enPalabras(1, "habitos")).toBe("1 hábito");
+    expect(enPalabras(3, "riesgos")).toBe("3 criterios de riesgo");
+    expect(enPalabras(0, "criterios")).toBe("0 criterios");
+    expect(QUE_SE_CUENTA.map((q) => q.etiqueta)).toEqual(["Todos los criterios", "Hábitos", "Riesgos", "Requeridos", "Escondidos por el perfil"]);
   });
 });
 
-describe("ejesDelRadar con la escala publicada", () => {
-  it("una dimensión que no aplica al perfil queda sin punto (salvo lo que el perfil esconde)", () => {
+describe("las cuentas con la escala publicada, con perfil y sin perfil", () => {
+  /** La regla de siempre del Mapa, escrita aparte: si `cuentaDeLaCelda` se mueve, esta prueba lo nota. */
+  function aMano(criterios: readonly Criterio[], que: QueSeCuenta, perfil: Perfil, r: RequeridosDelArea): number {
+    const visibles = criterios.filter((c) => aplica(c, perfil));
+    if (que === "perfil") return criterios.length - visibles.length;
+    if (que === "habitos") return visibles.filter((c) => c.habito).length;
+    if (que === "riesgos") return visibles.filter((c) => c.riesgo).length;
+    if (que === "requeridos") return visibles.filter((c) => enlacesQueAplican(r.loRequieren[c.id], perfil).length > 0).length;
+    return visibles.length;
+  }
+
+  it("cada celda cuenta lo mismo que contaba el Mapa, en cada filtro y cada perfil", () => {
+    let celdas = 0;
+    for (const a of real.areas) {
+      const r = requeridosDelArea(real, a);
+      for (const perfil of PERFILES)
+        for (const d of a.dimensiones)
+          for (const nv of d.niveles)
+            for (const que of QUES) {
+              celdas++;
+              expect(cuentaDeLaCelda(nv.criterios, que, perfil, r), `${nv.id} ${que} ${JSON.stringify(perfil)}`).toBe(aMano(nv.criterios, que, perfil, r));
+            }
+    }
+    expect(celdas).toBeGreaterThan(1000);
+  });
+
+  it("los cruces de un área suman sus criterios: todos sin perfil, y con uno, los que aplican en las dimensiones que aplican", () => {
+    for (const a of real.areas) {
+      const r = requeridosDelArea(real, a);
+      const suma = (perfil: Perfil, que: QueSeCuenta) => ejesDeLaTeoria(a, perfil, r, que).reduce((s, e) => s + LETRAS.reduce((t, l) => t + e.cuentas[l], 0), 0);
+      const criteriosDe = (dims: typeof a.dimensiones) => dims.flatMap((d) => d.niveles.flatMap((nv) => nv.criterios));
+      expect(suma(SIN_PERFIL, "criterios"), a.nombre).toBe(criteriosDe(a.dimensiones).length);
+      for (const perfil of PERFILES.slice(1)) {
+        const aplican = criteriosDe(a.dimensiones.filter((d) => dimensionAplica(d, perfil))).filter((c) => aplica(c, perfil)).length;
+        expect(suma(perfil, "criterios"), `${a.nombre} ${JSON.stringify(perfil)}`).toBe(aplican);
+        // Los escondidos son los que el perfil saca, criterio por criterio (la regla del Mapa).
+        expect(suma(perfil, "perfil")).toBe(criteriosDe(a.dimensiones).filter((c) => !aplica(c, perfil)).length);
+      }
+    }
+  });
+
+  it("una dimensión que no aplica al perfil queda en 0, salvo lo que el perfil esconde", () => {
     let vistas = 0;
-    for (const cierre of CIERRES) {
-      const perfil = { cierre, despues: null };
+    for (const perfil of PERFILES.slice(1)) {
       for (const a of real.areas) {
-        const ejes = ejesDelRadar(a, perfil, requeridosDelArea(real, a));
+        const r = requeridosDelArea(real, a);
         a.dimensiones.forEach((d, i) => {
           if (dimensionAplica(d, perfil)) return;
           vistas++;
-          expect(ejes[i].aplica).toBe(false);
-          for (const s of ["criterios", "habitos", "riesgos", "requeridos"] as const) expect(ejes[i].series[s].valor).toBeNull();
+          for (const que of ["criterios", "habitos", "riesgos", "requeridos"] as const) {
+            const e = ejesDeLaTeoria(a, perfil, r, que)[i];
+            expect(e.aplica).toBe(false);
+            expect(LETRAS.every((l) => e.cuentas[l] === 0)).toBe(true);
+          }
+          const escondidos = ejesDeLaTeoria(a, perfil, r, "perfil")[i];
+          for (const nv of d.niveles) expect(escondidos.cuentas[nv.letra]).toBe(cuentaDeLaCelda(nv.criterios, "perfil", perfil, r));
         });
       }
     }
@@ -446,36 +530,17 @@ describe("ejesDelRadar con la escala publicada", () => {
     expect(vistas).toBeGreaterThan(0);
   });
 
-  it("los requeridos son solo los criterios que otros requieren, no todos", () => {
-    const ventas = real.areas[0];
-    const ejes = ejesDelRadar(ventas, SIN_PERFIL, requeridosDelArea(real, ventas));
-    const req = ejes.reduce((s, e) => s + e.series.requeridos.cuantos, 0);
-    const todos = ejes.reduce((s, e) => s + e.series.criterios.cuantos, 0);
-    expect(req).toBeGreaterThan(0);
-    expect(req).toBeLessThan(todos);
-  });
-
-  it("las series de entrada dicen algo: su punto cambia de una dimensión a otra", () => {
+  it("hábitos, riesgos y requeridos tienen, en cada área, celdas en 0 y celdas con algo", () => {
     for (const a of real.areas) {
-      const ejes = ejesDelRadar(a, SIN_PERFIL, requeridosDelArea(real, a));
-      for (const s of SERIES_DE_ENTRADA) {
-        const valores = new Set(ejes.map((e) => e.series[s].valor?.toFixed(2)).filter(Boolean));
-        expect(valores.size, `${a.nombre} · ${s}`).toBeGreaterThan(1);
+      const r = requeridosDelArea(real, a);
+      const todos = ejesDeLaTeoria(a, SIN_PERFIL, r, "criterios").reduce((s, e) => s + LETRAS.reduce((t, l) => t + e.cuentas[l], 0), 0);
+      for (const que of ["habitos", "riesgos", "requeridos"] as const) {
+        const valores = ejesDeLaTeoria(a, SIN_PERFIL, r, que).flatMap((e) => LETRAS.map((l) => e.cuentas[l]));
+        expect(valores.some((v) => v === 0), `${a.nombre} ${que}`).toBe(true);
+        expect(valores.some((v) => v > 0), `${a.nombre} ${que}`).toBe(true);
+        expect(valores.reduce((s, v) => s + v, 0), `${a.nombre} ${que}`).toBeLessThan(todos);
       }
     }
-  });
-});
-
-describe("nivelConMas: el nivel que se describe en el panel", () => {
-  it("es el que más criterios tiene, nunca uno vacío", () => {
-    // Dos en Funcional y uno en Óptimo: el promedio (3,7) cae en Eficiente, pero ahí no hay ninguno.
-    expect(nivelConMas({ valor: 11 / 3, cuantos: 3, porNivel: { D: 0, I: 0, F: 2, E: 0, O: 1 } })).toBe("F");
-  });
-
-  it("con un empate, el más cercano al promedio; sin criterios, ninguno", () => {
-    expect(nivelConMas({ valor: 3.5, cuantos: 4, porNivel: { D: 0, I: 1, F: 0, E: 2, O: 1 } })).toBe("E");
-    expect(nivelConMas({ valor: 2.5, cuantos: 2, porNivel: { D: 0, I: 1, F: 1, E: 0, O: 0 } })).toBe("I");
-    expect(nivelConMas({ valor: null, cuantos: 0, porNivel: { D: 0, I: 0, F: 0, E: 0, O: 0 } })).toBeNull();
   });
 });
 
@@ -495,18 +560,5 @@ describe("la vista Radar está registrada", () => {
       }),
     ).toBe("?vista=radar");
     expect(vistaDesdeUrl("radar")).toBe("radar");
-  });
-
-  it("cada serie tiene su color fijo, en orden, y las de entrada existen", () => {
-    expect(SERIES_DEL_RADAR.map((s) => s.color)).toEqual([
-      "var(--color-serie-1)",
-      "var(--color-serie-5)",
-      "var(--color-serie-4)",
-      "var(--color-fg)",
-      "var(--color-fg-muted)",
-    ]);
-    // Ni el aqua ni el verde (se confundirían con la línea punteada de Funcional), ni el naranja (con el magenta y el amarillo).
-    expect(SERIES_DEL_RADAR.some((s) => /serie-[236]/.test(s.color))).toBe(false);
-    for (const s of SERIES_DE_ENTRADA) expect(SERIES_DEL_RADAR.some((x) => x.clave === s)).toBe(true);
   });
 });

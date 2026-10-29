@@ -1,156 +1,134 @@
 /**
- * lib/escala/radar.ts — la vista «Radar» de la escala: de cada dimensión, dónde se concentra cada cosa. PURO.
+ * lib/escala/radar.ts — qué cuenta cada celda de la escala (dimensión × etapa). PURO.
  *
- * El mapa pinta cada celda (dimensión × nivel) como un sector de la rueda; el radar dice lo mismo con
- * PUNTOS (pedido de Elías, 2026-10-28: «por puntos, no por áreas»), en un radar clásico (lib/escala/radar-dibujo.ts):
- * un eje por dimensión, y en cada eje un punto por serie: el nivel promedio de los criterios de esa clase en esa
- * dimensión, puesto en la regla de 0 a 100 con `enLaRegla`. «Criterios» dice dónde pesa la dimensión; «Riesgos», dónde están sus riesgos; «Hábitos»,
- * desde dónde se pide repetir… La página es la escala de referencia, sin empresa: ningún punto es «dónde
- * está» alguien.
+ * Lo comparten el Mapa (components/escala/Mapa.tsx: la intensidad de cada celda de la rueda) y el radar de la teoría
+ * (components/escala/Radar.tsx: el número de cada cruce de eje y anillo). Una sola regla para las dos vistas: un número
+ * que cambia acá cambia en las dos.
  *
- * Con el perfil de negocio cuentan solo los criterios que aplican (la regla de `aplica`, como en las otras
- * vistas), y una dimensión que no aplica no tiene punto. «Escondidos por el perfil» es lo contrario: lo
- * que el perfil saca, y solo existe con un perfil elegido.
+ * El radar de la teoría (Elías, 2026-10-28, al rechazar el de promedios: «se ve como si estuviera seleccionada una
+ * empresa») es el Mapa en forma de radar: un eje por dimensión, un anillo por etapa y, en cada cruce, cuántos criterios
+ * tiene esa celda de lo que se elige en «Qué se cuenta». Es la escala misma: ningún número es «dónde está» alguien.
+ *
+ * Con el perfil de negocio cuentan solo los criterios que aplican (la regla de `aplica`, como en las otras vistas), y
+ * una dimensión que no aplica no cuenta nada. «Escondidos por el perfil» es lo contrario: lo que el perfil saca, y
+ * solo se ofrece con un perfil elegido.
  */
 import { aplica, dimensionAplica, type Perfil } from "./documento/perfil";
 import { enlacesQueAplican } from "./documento/requeridos";
-import { LETRAS, type Area, type Criterio, type Letra } from "./documento/tipos";
+import { LETRAS, type Area, type ClaveDeCapa, type Criterio, type Dimension, type Letra, type Nivel } from "./documento/tipos";
 import type { RequeridosDelArea } from "./vista";
 
-export type SerieDelRadar = "criterios" | "habitos" | "riesgos" | "requeridos" | "escondidos";
+export type QueSeCuenta = "criterios" | "habitos" | "riesgos" | "requeridos" | "perfil";
 
-/**
- * En el orden en que se ofrecen. Cada una con su color FIJO: sigue a la serie, nunca a cuántas están prendidas.
- * Las series conviven en el mismo dibujo, así que se validó cada PAR (claro y oscuro, con el validador de la guía
- * de gráficos): azul, magenta y amarillo pasan; el naranja se confunde con los dos, y el aqua y el verde con la
- * línea punteada de Funcional (verde, como en el mapa). Requeridos va en tinta y los escondidos, lo que el perfil
- * saca, en gris y huecos: las dos con su forma propia.
- */
-export const SERIES_DEL_RADAR: readonly {
-  clave: SerieDelRadar;
-  etiqueta: string;
-  queCuenta: string;
-  color: string;
-}[] = [
+/** En el orden en que se ofrecen, con cómo se dice uno y varios («1 hábito», «3 hábitos»). */
+export const QUE_SE_CUENTA: readonly { clave: QueSeCuenta; etiqueta: string; uno: string; varios: string; title: string }[] = [
   {
     clave: "criterios",
-    etiqueta: "Criterios",
-    queCuenta: "criterios",
-    color: "var(--color-serie-1)",
+    etiqueta: "Todos los criterios",
+    uno: "criterio",
+    varios: "criterios",
+    title: "Cuántos criterios tiene cada celda (con el perfil de negocio elegido, solo los que aplican).",
   },
   {
     clave: "habitos",
     etiqueta: "Hábitos",
-    queCuenta: "hábitos",
-    color: "var(--color-serie-5)",
+    uno: "hábito",
+    varios: "hábitos",
+    title: "Cuántos criterios de cada celda son hábitos: algo que el equipo repite y que solo se confirma después de operar un tiempo.",
   },
   {
     clave: "riesgos",
     etiqueta: "Riesgos",
-    queCuenta: "criterios de riesgo",
-    color: "var(--color-serie-4)",
+    uno: "criterio de riesgo",
+    varios: "criterios de riesgo",
+    title: "Cuántos criterios de cada celda son de riesgo: no deciden el nivel, pero hay que cumplirlos para pasar a Eficiente.",
   },
   {
     clave: "requeridos",
     etiqueta: "Requeridos",
-    queCuenta: "criterios que otros requieren",
-    color: "var(--color-fg)",
+    uno: "criterio que otros requieren",
+    varios: "criterios que otros requieren",
+    title: "Cuántos criterios de cada celda son requeridos por otros: dónde están los cimientos de la escala.",
   },
   {
-    clave: "escondidos",
+    clave: "perfil",
     etiqueta: "Escondidos por el perfil",
-    queCuenta: "criterios escondidos por el perfil",
-    color: "var(--color-fg-muted)",
+    uno: "criterio escondido por el perfil",
+    varios: "criterios escondidos por el perfil",
+    title: "Cuántos criterios de cada celda NO aplican al perfil de negocio elegido y quedan escondidos.",
   },
 ];
 
-/**
- * Las que se ven al entrar: dónde pesa cada dimensión y desde dónde se pide repetir. Riesgos no: sus criterios son, por
- * definición, los que hay que cumplir para pasar a Eficiente, así que su punto cae siempre en Funcional.
- */
-export const SERIES_DE_ENTRADA: readonly SerieDelRadar[] = ["criterios", "habitos"];
+/** ¿Hay un perfil de negocio elegido? */
+export const conPerfil = (perfil: Perfil) => !!(perfil.cierre || perfil.despues || perfil.trafico);
 
-/** Lo que se sabe de una serie en una dimensión. `valor` (1 a 5) es null si no hay ningún criterio de esa clase. */
-export interface PuntoDelRadar {
-  valor: number | null;
-  cuantos: number;
-  porNivel: Record<Letra, number>;
+/** Lo que se puede elegir: «Escondidos por el perfil» solo con un perfil elegido. */
+export function opcionesDeQueSeCuenta(perfil: Perfil): QueSeCuenta[] {
+  return QUE_SE_CUENTA.map((q) => q.clave).filter((q) => q !== "perfil" || conPerfil(perfil));
 }
 
-export interface EjeDelRadar {
+/** «1 hábito», «3 hábitos». */
+export function enPalabras(n: number, que: QueSeCuenta): string {
+  const q = QUE_SE_CUENTA.find((x) => x.clave === que)!;
+  return `${n} ${n === 1 ? q.uno : q.varios}`;
+}
+
+/** ¿Cuenta este criterio en lo que se eligió? Lo que el perfil esconde solo cuenta en «Escondidos por el perfil». */
+export function cuentaElCriterio(c: Criterio, que: QueSeCuenta, perfil: Perfil, requeridos: Pick<RequeridosDelArea, "loRequieren">): boolean {
+  if (que === "perfil") return !aplica(c, perfil);
+  if (!aplica(c, perfil)) return false;
+  if (que === "habitos") return c.habito;
+  if (que === "riesgos") return c.riesgo;
+  if (que === "requeridos") return enlacesQueAplican(requeridos.loRequieren[c.id], perfil).length > 0;
+  return true;
+}
+
+/** Cuántos criterios de una celda cuentan (la regla de `cuentaElCriterio`). */
+export function cuentaDeLaCelda(
+  criterios: readonly Criterio[],
+  que: QueSeCuenta,
+  perfil: Perfil,
+  requeridos: Pick<RequeridosDelArea, "loRequieren">,
+): number {
+  return criterios.filter((c) => cuentaElCriterio(c, que, perfil, requeridos)).length;
+}
+
+/** Un eje del radar de la teoría: una dimensión con la cuenta de cada una de sus etapas. */
+export interface EjeDeLaTeoria {
   dimensionId: string;
   nombre: string;
-  /** Con el perfil elegido: si no aplica, sus series (salvo «escondidos») van sin punto. */
+  capa: ClaveDeCapa;
+  /** Con el perfil elegido: si no aplica, sus cruces van en 0 (salvo en «Escondidos por el perfil»). */
   aplica: boolean;
-  series: Record<SerieDelRadar, PuntoDelRadar>;
+  cuentas: Record<Letra, number>;
 }
 
-function punto(criteriosPorNivel: [Letra, Criterio[]][], cuenta: (c: Criterio) => boolean): PuntoDelRadar {
-  const porNivel = Object.fromEntries(LETRAS.map((l) => [l, 0])) as Record<Letra, number>;
-  for (const [letra, criterios] of criteriosPorNivel) porNivel[letra] += criterios.filter(cuenta).length;
-  const cuantos = LETRAS.reduce((s, l) => s + porNivel[l], 0);
-  const suma = LETRAS.reduce((s, l, i) => s + porNivel[l] * (i + 1), 0);
-  return { valor: cuantos ? suma / cuantos : null, cuantos, porNivel };
+/**
+ * Los criterios de un cruce: los de esa dimensión en esa etapa que cuentan en lo que se eligió. Una dimensión que no
+ * aplica al perfil no cuenta nada, salvo en «Escondidos por el perfil». El número del cruce y la lista del panel salen
+ * de acá: no pueden decir cosas distintas.
+ */
+export function criteriosDelCruce(
+  dimension: Dimension,
+  nivel: Pick<Nivel, "criterios">,
+  que: QueSeCuenta,
+  perfil: Perfil,
+  requeridos: Pick<RequeridosDelArea, "loRequieren">,
+): Criterio[] {
+  if (que !== "perfil" && !dimensionAplica(dimension, perfil)) return [];
+  return nivel.criterios.filter((c) => cuentaElCriterio(c, que, perfil, requeridos));
 }
-
-const VACIO: PuntoDelRadar = {
-  valor: null,
-  cuantos: 0,
-  porNivel: { D: 0, I: 0, F: 0, E: 0, O: 0 },
-};
 
 /** Un eje por dimensión, en el orden de la escala (el de la matriz y el mapa). */
-export function ejesDelRadar(area: Pick<Area, "dimensiones">, perfil: Perfil, requeridos: RequeridosDelArea): EjeDelRadar[] {
-  const conPerfil = !!(perfil.cierre || perfil.despues || perfil.trafico);
+export function ejesDeLaTeoria(
+  area: Pick<Area, "dimensiones">,
+  perfil: Perfil,
+  requeridos: Pick<RequeridosDelArea, "loRequieren">,
+  que: QueSeCuenta,
+): EjeDeLaTeoria[] {
   return area.dimensiones.map((d) => {
-    const porNivel = d.niveles.map((n) => [n.letra, n.criterios] as [Letra, Criterio[]]);
-    const siAplica = dimensionAplica(d, perfil);
-    const visible = (c: Criterio) => siAplica && aplica(c, perfil);
-    return {
-      dimensionId: d.id,
-      nombre: d.nombre,
-      aplica: siAplica,
-      series: {
-        criterios: punto(porNivel, visible),
-        habitos: punto(porNivel, (c) => visible(c) && c.habito),
-        riesgos: punto(porNivel, (c) => visible(c) && c.riesgo),
-        requeridos: punto(porNivel, (c) => visible(c) && enlacesQueAplican(requeridos.loRequieren[c.id], perfil).length > 0),
-        escondidos: conPerfil ? punto(porNivel, (c) => !aplica(c, perfil)) : VACIO,
-      },
-    };
+    const cuentas = Object.fromEntries(LETRAS.map((l) => [l, 0])) as Record<Letra, number>;
+    for (const nv of d.niveles) cuentas[nv.letra] = criteriosDelCruce(d, nv, que, perfil, requeridos).length;
+    return { dimensionId: d.id, nombre: d.nombre, capa: d.capa, aplica: dimensionAplica(d, perfil), cuentas };
   });
-}
-
-/** Las series que se pueden prender: «Escondidos por el perfil» solo con un perfil elegido. */
-export function seriesDisponibles(perfil: Perfil): SerieDelRadar[] {
-  const conPerfil = !!(perfil.cierre || perfil.despues || perfil.trafico);
-  return SERIES_DEL_RADAR.map((s) => s.clave).filter((s) => s !== "escondidos" || conPerfil);
-}
-
-/** El nivel al que queda más cerca un promedio: 2,4 → Inicial; 2,5 → Funcional. */
-export function nivelMasCercano(valor: number): Letra {
-  const i = Math.min(LETRAS.length, Math.max(1, Math.round(valor))) - 1;
-  return LETRAS[i];
-}
-
-/**
- * El nivel donde más criterios tiene una serie (si empatan, el más cercano al promedio): el que se describe en el
- * panel. Nunca un nivel donde la serie no tiene ninguno. null sin criterios.
- */
-export function nivelConMas(p: PuntoDelRadar): Letra | null {
-  if (p.valor === null || p.cuantos === 0) return null;
-  const valor = p.valor;
-  const maximo = Math.max(...LETRAS.map((l) => p.porNivel[l]));
-  const empatados = LETRAS.filter((l) => p.porNivel[l] === maximo);
-  return empatados.reduce((mejor, l) => (Math.abs(LETRAS.indexOf(l) + 1 - valor) < Math.abs(LETRAS.indexOf(mejor) + 1 - valor) ? l : mejor));
-}
-
-/**
- * Cómo se nombra un promedio: «Funcional» si cae en el anillo, «cerca de Eficiente» si cae entre dos. Un 3,7
- * puede salir de dos criterios en Funcional y uno en Óptimo, sin ninguno en Eficiente: decir «Eficiente» a
- * secas engañaría.
- */
-export function nombreDelPromedio(valor: number, nombreNivel: (l: Letra) => string): string {
-  const nombre = nombreNivel(nivelMasCercano(valor));
-  return Math.abs(valor - Math.round(valor)) < 0.15 ? nombre : `cerca de ${nombre}`;
 }

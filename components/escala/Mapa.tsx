@@ -61,6 +61,7 @@ import {
   W,
   yDelNombreDeNivel,
 } from "@/lib/escala/rueda";
+import { cuentaDeLaCelda, QUE_SE_CUENTA, type QueSeCuenta } from "@/lib/escala/radar";
 import { lugarEnElOrden, ordenDeDependencias, type DatosDeLaVista } from "@/lib/escala/vista";
 import { conteoDe, conteoDeCelda, conteoDeDimension, useEscala } from "./contexto";
 import { COLOR_DE_HERRAMIENTA, HerramientasDelCriterio, MarcaDeHerramienta, useHerramientas } from "./herramientas";
@@ -82,7 +83,7 @@ import {
   TextoConPalabras,
 } from "./piezas";
 
-type CapaDeDatos = "comentarios" | "criterios" | "habitos" | "riesgos" | "requeridos" | "perfil";
+type CapaDeDatos = "comentarios" | QueSeCuenta;
 
 export type SeleccionDelMapa =
   | { tipo: "celda"; dim: string; letra: Letra }
@@ -141,11 +142,7 @@ const CAPAS: { clave: CapaDeDatos; etiqueta: string; title: string }[] = [
  * parecería de otro nivel.
  */
 const QUE_CUENTA: Record<CapaDeDatos, string> = {
-  criterios: "criterios",
-  habitos: "hábitos",
-  riesgos: "criterios de riesgo",
-  requeridos: "criterios que otros requieren",
-  perfil: "criterios escondidos por el perfil",
+  ...(Object.fromEntries(QUE_SE_CUENTA.map((q) => [q.clave, q.varios])) as Record<QueSeCuenta, string>),
   comentarios: "reportes de feedback",
 };
 
@@ -311,19 +308,11 @@ export default function Mapa({ datos, perfil, seleccion, onSeleccion, onLeerDime
     const out = new Map<string, { valor: number; abiertos: number }>();
     for (const d of dims) {
       for (const nv of d.niveles) {
-        const visibles = nv.criterios.filter((c) => aplica(c, perfil));
-        let valor = 0;
-        let abiertos = 0;
+        // La cuenta de la escala es la misma del radar de la teoría (lib/escala/radar.ts); el feedback es solo del mapa.
         if (capa === "comentarios") {
           const c = conteoDeCelda(conteos, d.id, nv.letra);
-          valor = c.total;
-          abiertos = c.abiertos;
-        } else if (capa === "criterios") valor = visibles.length;
-        else if (capa === "habitos") valor = visibles.filter((c) => c.habito).length;
-        else if (capa === "riesgos") valor = visibles.filter((c) => c.riesgo).length;
-        else if (capa === "requeridos") valor = visibles.filter((c) => enlacesDe(datos, c.id, perfil).loRequieren.length > 0).length;
-        else valor = nv.criterios.length - visibles.length;
-        out.set(nv.id, { valor, abiertos });
+          out.set(nv.id, { valor: c.total, abiertos: c.abiertos });
+        } else out.set(nv.id, { valor: cuentaDeLaCelda(nv.criterios, capa, perfil, datos.requeridos), abiertos: 0 });
       }
     }
     return out;
