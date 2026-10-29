@@ -7,7 +7,7 @@ import { aplicarOperaciones, type EstadoDeExploracion, type Validez } from "./co
 import { idsDeLaEscala } from "./escala-del-lienzo";
 import { VALIDADOR_ESTRICTO } from "./esquemas";
 import { ESCALA_DE_PRUEBA, estadoDePrueba, propuestoDePrueba } from "./escala-de-prueba.test-helpers";
-import { escalaDeLaPreventa, hayQueTraer, medidoDeLaPreventa, type LoQueExiste } from "./punto-de-partida";
+import { escalaDeLaPreventa, hayQueTraer, medidoDeLaPreventa, origenDelPuntoDePartida, type LoQueExiste } from "./punto-de-partida";
 
 const ids = idsDeLaEscala(ESCALA_DE_PRUEBA);
 const EXISTE: LoQueExiste = { dimensiones: ids.dimensiones, criterios: ids.criterios, areas: new Set(ESCALA_DE_PRUEBA.areas.map((a) => a.id)) };
@@ -91,5 +91,24 @@ describe("lo medido en la preventa es el punto de partida de la cuenta", () => {
   it("una edición que ya no está publicada no se trae: la cuenta sigue con la suya", () => {
     const preventa = estadoDePrueba({ "1.1": { nivel: "F", fuente: "reunion" } }, { edicion: "retirada" });
     expect(escalaDeLaPreventa(preventa, estadoDePrueba(), EDICIONES)).toEqual([]);
+  });
+});
+
+describe("de dónde parte la cuenta", () => {
+  const candidata = (id: string, dia: string, medida: boolean) => ({
+    id,
+    desde: id,
+    actualizada: new Date(`${dia}T12:00:00Z`),
+    estado: estadoDePrueba(medida ? { "1.1": { nivel: "F", fuente: "reunion" } } : {}),
+  });
+
+  it("de la que midió algo más recientemente, la preventa o un proyecto: una sola", () => {
+    const r = origenDelPuntoDePartida([candidata("la preventa", "2026-03-01", true), candidata("el proyecto", "2026-09-01", true), candidata("vacía", "2026-10-01", false)]);
+    expect(r?.id).toBe("el proyecto");
+  });
+
+  it("si nadie midió nada, de ninguna", () => {
+    expect(origenDelPuntoDePartida([candidata("vacía", "2026-10-01", false)])).toBeNull();
+    expect(origenDelPuntoDePartida([])).toBeNull();
   });
 });

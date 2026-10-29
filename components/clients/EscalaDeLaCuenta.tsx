@@ -12,13 +12,14 @@
  * descartar igual. Ver docs/escala-unica-plan.md.
  *
  * Lo que es solo de la ficha, y vive acá:
- *   · al abrirla por primera vez parte de lo medido en la preventa (POST `abrir`);
+ *   · al abrirla por primera vez parte de lo medido en la preventa o en la Exploración de un proyecto (POST `abrir`);
  *   · el agente es «Actualizar escala» (modo `posicionar`): lee todo lo que Nexus sabe de la cuenta —la memoria, las
  *     reuniones que alguien eligió primero—, con una venta y un proyecto como contexto si se eligen, y solo PROPONE;
  *   · «Guardar esta versión» con su momento («al vender», «al arrancar», «hoy») y su venta;
  *   · el camino de crecimiento con los casos de la biblioteca;
  *   · la escala en el tiempo: las versiones de TODA la empresa y la de hoy de la preventa y de cada proyecto, en solo
- *     lectura. Una edición no se compara con otra: cambiarla es un punto de partida nuevo.
+ *     lectura. Cada versión se compara solo con la anterior de su misma escala (la cuenta con la cuenta), y una edición
+ *     no se compara con otra: cambiarla es un punto de partida nuevo. Se pone al día sola al confirmar un nivel.
  * Lo propio de la preventa (la propuesta comercial, el vendedor, la próxima sesión) no aparece.
  * Datos: GET/POST /api/clients/[id]/escala.
  */
@@ -39,6 +40,7 @@ import type { EscalaDeLaEmpresa } from "@/lib/exploraciones/escala-de-la-empresa
 import { diaYHora } from "@/lib/exploraciones/fechas";
 import {
   anteriorDeLaMismaVara,
+  anteriorDeSuEscala,
   cambiosEntreFotos,
   deDondeSaleElNivel,
   ETIQUETA_DEL_ORIGEN,
@@ -371,7 +373,8 @@ function filasDeLaHistoria(datos: Ok, cuentaId: string | null, abrir: (exploraci
   const deDonde = deDondeEn(datos);
   const cuandoDe = (v: VersionGuardada) => (v.diaDeLaPosicion ? `${v.diaDeLaPosicion}T12:00:00-06:00` : v.fecha);
   const versiones = datos.versiones.map((v, i, todas): FilaDeLaHistoria => {
-    const previa = todas.slice(i + 1).find((x) => x.exploracionId === v.exploracionId) ?? todas[i + 1] ?? null;
+    // Solo con la anterior de la MISMA escala (lib/exploraciones/foto-de-la-escala.ts › anteriorDeSuEscala).
+    const previa = anteriorDeSuEscala(todas, i);
     const { anterior, puntoDePartida } = anteriorDeLaMismaVara(v.foto, previa ? [previa] : []);
     const origen = v.nota && v.creadoPorEmail === "sistema" ? "Primera versión" : ETIQUETA_DEL_ORIGEN[v.origen];
     return {
@@ -500,6 +503,26 @@ function HistoriaDeLaEscala({ filas, niveles }: { filas: FilaDeLaHistoria[]; niv
   );
 }
 
+/**
+ * La historia se pone al día sola: cuando se confirma algo en la escala (sube la versión de la exploración), se vuelve a
+ * pedir, un rato después, porque la versión del día la guarda el servidor por su cuenta (anotarVersionDelCambio).
+ */
+function AlDiaConLaEscala({ alCambiar }: { alCambiar: () => void }) {
+  const { exp } = useLienzo();
+  const primera = useRef(exp.version);
+  const alCambiarRef = useRef(alCambiar);
+  useEffect(() => {
+    alCambiarRef.current = alCambiar;
+  }, [alCambiar]);
+  useEffect(() => {
+    if (exp.version === primera.current) return;
+    primera.current = exp.version;
+    const t = setTimeout(() => alCambiarRef.current(), 2500);
+    return () => clearTimeout(t);
+  }, [exp.version]);
+  return null;
+}
+
 /** «Qué sigue» en el panel de la derecha de la ficha, con la escala de ahora. */
 function QueSigueDeLaCuenta({ slot, accion }: { slot: HTMLElement | null; accion: React.ReactNode }) {
   const { pendientes, mapa, exp } = useLienzo();
@@ -568,17 +591,17 @@ export default function EscalaDeLaCuenta({
     void cargarCasos();
   }, [cargar, cargarCasos]);
 
-  /** Abre la escala de la cuenta: la crea si no está y, sin ningún nivel, parte de lo medido en la preventa. */
+  /** Abre la escala de la cuenta: la crea si no está y, si nunca midió nada, parte de lo medido en la preventa o en un proyecto. */
   const abrir = useCallback(async () => {
     setAbriendo(true);
     try {
       const r = await fetch(`/api/clients/${clientId}/escala`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ accion: "abrir" }) });
-      const j = (await r.json().catch(() => null)) as { error?: string; traidas?: number; afuera?: number; noSeTrajo?: boolean } | null;
+      const j = (await r.json().catch(() => null)) as { error?: string; traidas?: number; desde?: string | null; afuera?: number; noSeTrajo?: boolean } | null;
       if (!r.ok) throw new Error(j?.error ?? "No se pudo abrir la escala de la cuenta.");
-      if (j?.noSeTrajo) toast.error("No se pudo traer lo medido en la preventa: alguien cambió la escala al mismo tiempo. Recarga para intentarlo de nuevo.");
+      if (j?.noSeTrajo) toast.error("No se pudo traer lo ya medido: alguien cambió la escala al mismo tiempo. Recarga para intentarlo de nuevo.");
       else if (j?.traidas)
         toast.success(
-          `La escala de la cuenta parte de lo medido en la preventa: ${j.traidas === 1 ? "una dimensión" : `${j.traidas} dimensiones`}.` +
+          `La escala de la cuenta parte de lo medido en ${j.desde ?? "la preventa"}: ${j.traidas === 1 ? "una dimensión" : `${j.traidas} dimensiones`}.` +
             (j.afuera ? ` ${j.afuera === 1 ? "Una cosa no existe" : `${j.afuera} cosas no existen`} en esta escala y no se trajo.` : ""),
         );
       await cargar();
@@ -770,6 +793,7 @@ export default function EscalaDeLaCuenta({
             agente: <AgenteDeLaCuenta clientId={clientId} datos={datos} />,
             despues: (
               <>
+                <AlDiaConLaEscala alCambiar={() => void cargar()} />
                 <QueSigueDeLaCuenta slot={slotDelPanel} accion={exploracionDeProyecto ? abrirExp(exploracionDeProyecto.id) : null} />
                 <CaminoDeCrecimiento casos={casos} ocupado={ocupado} onSumar={(t, c) => void sumarCaso(t, c)} />
                 <HistoriaDeLaEscala filas={historia} niveles={niveles} />
@@ -787,8 +811,10 @@ export default function EscalaDeLaCuenta({
             title="La escala de la cuenta todavía no está abierta"
             description={
               puede.exploracion
-                ? "Al abrirla parte de lo medido en la preventa, si la hubo. Después, «Actualizar escala» lee todo lo que Nexus sabe y propone dónde está; tú usas lo que esté bien."
-                : "La abre quien puede trabajar la exploración del cliente."
+                ? "Al abrirla parte de lo ya medido en la preventa o en la Exploración de un proyecto, si lo hay. Después, «Actualizar escala» lee todo lo que Nexus sabe y propone dónde está; tú usas lo que esté bien."
+                : historia.length
+                  ? "La abre quien puede trabajar la exploración del cliente. Abajo está lo medido en la preventa y en cada proyecto."
+                  : "La abre quien puede trabajar la exploración del cliente."
             }
             action={
               puede.exploracion ? (

@@ -3,7 +3,7 @@
  * qué cambió entre dos fotos. Correr: `npx vitest run lib/exploraciones/foto-de-la-escala.test.ts --project unit`.
  */
 import { describe, expect, it } from "vitest";
-import { anteriorDeLaMismaVara, cambiosEntreFotos, fotoDeLaExploracion, fraseDelCambio, huellaDeLaFoto, leerFoto, mismaVara } from "./foto-de-la-escala";
+import { anteriorDeLaMismaVara, anteriorDeSuEscala, cambiosEntreFotos, fotoDeLaExploracion, fraseDelCambio, huellaDeLaFoto, leerFoto, mismaVara } from "./foto-de-la-escala";
 import { ESCALA_DE_PRUEBA, estadoDePrueba, propuestoDePrueba, todasEn } from "./escala-de-prueba.test-helpers";
 
 describe("la foto de la escala", () => {
@@ -91,5 +91,18 @@ describe("una edición no se compara con otra", () => {
 
   it("sin nada antes no hay con qué comparar ni línea que se corte", () => {
     expect(anteriorDeLaMismaVara({ edicion: "Banca" }, [])).toEqual({ anterior: null, puntoDePartida: null });
+  });
+});
+
+describe("cada versión se compara solo con la anterior de su misma escala", () => {
+  it("la de la cuenta con la de la cuenta, aunque en medio haya una de un proyecto", () => {
+    const vs = [{ id: "c2", exploracionId: "cuenta" }, { id: "p1", exploracionId: "proyecto" }, { id: "c1", exploracionId: "cuenta" }];
+    expect(anteriorDeSuEscala(vs, 0)?.id).toBe("c1");
+    expect(anteriorDeSuEscala(vs, 1)).toBeNull();
+  });
+
+  it("una versión suelta (su exploración se borró) no se compara con nada, ni con otra suelta", () => {
+    const vs = [{ id: "a", exploracionId: null }, { id: "b", exploracionId: null }];
+    expect(anteriorDeSuEscala(vs, 0)).toBeNull();
   });
 });

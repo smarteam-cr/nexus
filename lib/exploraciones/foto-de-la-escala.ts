@@ -209,6 +209,18 @@ export function mismaVara(a: Pick<FotoDeLaEscala, "edicion">, b: Pick<FotoDeLaEs
 }
 
 /**
+ * La versión anterior de la MISMA escala (la misma exploración: la cuenta con la cuenta, un proyecto con su proyecto),
+ * en una lista de la más nueva a la más vieja. Una de otra exploración se midió aparte: compararlas diría «cambió» o
+ * «antes se medía con…» de algo que nunca fue suyo. Una versión suelta (su exploración se borró: `exploracionId` null)
+ * no se compara con nada, ni con otra suelta (revisión de la escala única, 2026-10-29).
+ */
+export function anteriorDeSuEscala<T extends { exploracionId: string | null }>(versiones: readonly T[], i: number): T | null {
+  const v = versiones[i];
+  if (!v?.exploracionId) return null;
+  return versiones.slice(i + 1).find((x) => x.exploracionId === v.exploracionId) ?? null;
+}
+
+/**
  * Con qué foto se compara una: la inmediatamente anterior (`previas`, de la más nueva a la más vieja), si es de la MISMA
  * edición. Si es de otra, la de ahora es un punto de partida nuevo (`desdeEdicion`: con qué se medía), aunque más atrás
  * haya una de la misma: la línea se cortó en el cambio.

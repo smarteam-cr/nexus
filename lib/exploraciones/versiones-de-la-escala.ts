@@ -300,3 +300,23 @@ export async function tieneVersiones(exploracionId: string): Promise<boolean> {
     throw e;
   }
 }
+
+/**
+ * Cuándo MIDIÓ algo cada exploración por última vez: la fecha de su última versión (se guarda una al confirmar un nivel,
+ * al presentar el diagnóstico y a mano). No es `updatedAt`, que cambia con solo abrir el lienzo, con una propuesta del
+ * agente o al unir una reunión (revisión de la escala única, 2026-10-29). Las que no tienen versión no salen.
+ */
+export async function ultimaMedicionDe(exploracionIds: readonly string[]): Promise<Map<string, Date>> {
+  if (!hayTabla() || !exploracionIds.length) return new Map();
+  try {
+    const filas = await prisma.versionDeLaEscala.groupBy({
+      by: ["exploracionId"],
+      where: { exploracionId: { in: [...exploracionIds] } },
+      _max: { createdAt: true },
+    });
+    return new Map(filas.flatMap((f) => (f.exploracionId && f._max.createdAt ? [[f.exploracionId, f._max.createdAt] as const] : [])));
+  } catch (e) {
+    if (esquemaDesactualizado(e)) return new Map();
+    throw e;
+  }
+}

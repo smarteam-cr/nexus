@@ -14,6 +14,10 @@
  *      criterio de otra edición (marcado antes de cambiarla en la preventa) o una dimensión que la escala ya no trae se
  *      quedan afuera y se cuentan, para avisarlo.
  * Una cuenta que ya tiene algún nivel no se toca: lo que se midió en ella manda.
+ *
+ * DE DÓNDE (2026-10-29, revisión de lo juntado): no solo de la preventa. Un cliente sin preventa cuyo CSE confirmó niveles
+ * en la Exploración de su proyecto también tiene un punto de partida (`origenDelPuntoDePartida`): la exploración de la
+ * empresa que midió algo más recientemente, la preventa o la de un proyecto, UNA sola (nunca se mezclan dos).
  */
 import type { EstadoDeExploracion, Operacion } from "./contenido";
 
@@ -24,6 +28,21 @@ export interface LoQueExiste {
   dimensiones: ReadonlySet<string>;
   criterios: ReadonlySet<string>;
   areas: ReadonlySet<string>;
+}
+
+/** Una exploración de la empresa que puede dar el punto de partida (la preventa o la de un proyecto, nunca la cuenta). */
+export interface CandidataDePartida<E extends Estado = Estado> {
+  id: string;
+  /** «la preventa» o «la Exploración de «Implementación»», para el aviso. */
+  desde: string;
+  /** Cuándo midió algo por última vez (la fecha de su última versión). */
+  actualizada: Date;
+  estado: E;
+}
+
+/** La que midió algo más recientemente; null si ninguna midió nada. */
+export function origenDelPuntoDePartida<E extends Estado>(candidatas: readonly CandidataDePartida<E>[]): CandidataDePartida<E> | null {
+  return [...candidatas].filter((c) => midioAlgo(c.estado)).sort((a, b) => b.actualizada.getTime() - a.actualizada.getTime())[0] ?? null;
 }
 
 /** ¿La exploración midió algo? (un nivel en alguna dimensión). */

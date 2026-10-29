@@ -9079,7 +9079,10 @@ tareas, el cronograma ni la memoria, y que un cliente sin proyecto ni preventa n
   «una viva por proyecto»), sin SQL. *Se descartó* una exploración sin proyecto con un marco nuevo: chocaba con «una
   preventa viva por empresa» (índice parcial sobre `projectId IS NULL`) y se colaba en las 23 lecturas de preventas
   (`DE_LA_PREVENTA`). *Y* abrir una preventa: aparecería en el listado y en «Para ti» sin que haya una venta en curso.
-- **Lo propuesto se usa en la misma ficha** (`nivelesPropuestos`, con su porqué, su frase y su fuente), uno por uno o
+- **REEMPLAZADO 2026-10-28** (ver «Una sola escala: la de la preventa, también en la ficha del cliente»): la ficha ya no
+  usa lo propuesto en la preventa ni en un proyecto; lo propuesto en la escala de la cuenta se usa con «Lo que sugiere el
+  agente», la pieza de la preventa. Lo que sigue queda como historia.
+  **Lo propuesto se usa en la misma ficha** (`nivelesPropuestos`, con su porqué, su frase y su fuente), uno por uno o
   todos, por el PATCH de la exploración: el mismo escritor que La escala de la exploración, que sube la versión y deja la
   versión del día. Lo propuesto nunca entra a la historia; lo confirmado, sí.
 - **La versión de la escala sabe de qué venta y de qué momento es** (SQL `2026-10-18-escala-ligada-a-la-venta.sql`):
@@ -9092,7 +9095,8 @@ tareas, el cronograma ni la memoria, y que un cliente sin proyecto ni preventa n
   qué (la razón guardada, o la industria de HubSpot) y lo que cambia frente a la general, sacado de la edición misma
   (sus palabras, las dimensiones dichas con su lenguaje, los criterios propios y los que no aplican). Toma cualquier
   edición publicada sin nombrarlas. «Corregir» va por el mismo PATCH (`edicion`, `perfil`), y desde ahí el agente ya no
-  la cambia. Las preguntas de la exploración, la lectura de cada nivel y el pedido de «posicionar» ya usaban la escala
+  la cambia. **REEMPLAZADO 2026-10-28** (ver «Una sola escala…»): la ficha ya no tiene «Se mide con…» ni «Corregir»; la
+  industria y el perfil se eligen con «Con qué se mide», la pieza de la preventa (`ConQueSeMide` de Identificacion.tsx). Las preguntas de la exploración, la lectura de cada nivel y el pedido de «posicionar» ya usaban la escala
   con la edición y el perfil de la exploración (`escalaDeLaExploracion`).
 - **Costo**: una llamada a Sonnet 4.6 por corrida, sin búsqueda web. Estimado con los topes de las fuentes: entre 15.000
   y 45.000 tokens de entrada y 1.000 a 3.000 de salida: unos US$0,05 a US$0,20. No se midió con una corrida real.
@@ -12374,6 +12378,13 @@ artefactos. Plan: docs/escala-unica-plan.md.
 - **Una edición no se compara con otra** (`mismaVara`, `anteriorDeLaMismaVara` en foto-de-la-escala.ts). «Qué cambió» en
   la historia y «Qué explorar» en la preventa solo comparan con la anterior de la misma edición; si la anterior es de
   otra, la de ahora es un punto de partida nuevo y se dice.
+- **El punto de partida también sale de un proyecto** (2026-10-29, revisión de lo juntado): un cliente sin preventa cuyo
+  CSE confirmó niveles en la Exploración de su proyecto se veía «no ubicado». La cuenta parte de la exploración de la
+  empresa que midió algo más recientemente, la preventa o la de un proyecto, una sola (`origenDelPuntoDePartida`): nunca
+  se mezclan dos. «Más recientemente» es la fecha de su última versión, no `updatedAt` (que cambia con solo abrir el
+  lienzo); y nunca un proyecto de prueba ni uno que hoy es de otra empresa. «Elegida» excluye la reunión que Nexus unió sola (`asociadaSola`). El contenedor, si hay dos, es el más
+  viejo en todos lados (`elContenedor`, `CONTENEDOR_PRIMERO` en lib/projects/kind.ts). Cada versión de la historia se
+  compara solo con la anterior de su misma exploración, y la historia se pone al día sola al confirmar un nivel.
 - **Lo que era solo de la ficha sigue**: «Guardar esta versión» con su momento y su venta, el camino de crecimiento, la
   historia de toda la empresa (la de hoy de la preventa y de cada proyecto, en solo lectura, con cuántos niveles
   propuestos tienen sin revisar y un botón para ir a revisarlos) y «Probar la escala». Ya no se usan desde la ficha los

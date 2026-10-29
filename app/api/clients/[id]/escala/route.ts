@@ -10,8 +10,9 @@
  *          partida de la preventa.
  *   POST →
  *          { accion: "abrir" } — abre la escala de la cuenta (la crea si no está) y, sin ningún nivel, le trae lo medido
- *              en la preventa. Pide la celda de generar la exploración. Devuelve `cuenta`, cuántas dimensiones trajo
- *              (`traidas`), cuánto de lo medido no existe en su escala (`afuera`) y si no se pudo traer (`noSeTrajo`).
+ *              en la preventa o en la Exploración de un proyecto. Pide la celda de generar la exploración. Devuelve
+ *              `cuenta`, cuántas dimensiones trajo y de dónde (`traidas`, `desde`), cuánto de lo medido no existe en su
+ *              escala (`afuera`) y si no se pudo traer (`noSeTrajo`).
  *          { accion: "actualizar", objetivo, ventaId?, proyectoId? } — «Actualizar escala» (2026-10-18): el agente lee TODO lo que
  *              Nexus sabe de la cuenta y PROPONE niveles (modo «posicionar»): nada se confirma solo, y nada se marca
  *              como leído. `objetivo`: `proyecto:<id>` (abre su exploración si no tiene), `preventa:<id>` o `cuenta`
@@ -101,7 +102,7 @@ export async function POST(req: NextRequest, { params }: { params: Params }) {
       if (g instanceof NextResponse) return g;
       const r = await abrirLaEscalaDeLaCuenta(id, g.teamMember?.email ?? g.user.email ?? "desconocido");
       if (!r.ok) return NextResponse.json({ error: r.error }, { status: r.status });
-      return NextResponse.json({ cuenta: r.cuenta, traidas: r.traidas, afuera: r.afuera, noSeTrajo: r.noSeTrajo });
+      return NextResponse.json({ cuenta: r.cuenta, traidas: r.traidas, desde: r.desde, afuera: r.afuera, noSeTrajo: r.noSeTrajo });
     }
 
     const v = await ventaDeLaEmpresa(id, c.ventaId);

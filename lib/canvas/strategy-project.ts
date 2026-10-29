@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/db/prisma";
 import { canvasOfNested } from "@/lib/pieces/canvas-query";
-import { SENTINEL_SERVICE_TYPE } from "@/lib/projects/kind";
+import { CONTENEDOR_PRIMERO, SENTINEL_SERVICE_TYPE } from "@/lib/projects/kind";
 
 // Secciones predefinidas del canvas "Información del cliente".
 // (Ex "canvas de estrategia" — quitamos handoff_ventas y perfil_cliente.)
@@ -38,7 +38,7 @@ export async function ensureClientInfoProject(clientId: string): Promise<ClientI
   // el que daba la base. scripts/unir-informacion-del-cliente-repetida.ts deja uno solo, y es este.
   const existing = await prisma.project.findFirst({
     where: { clientId, serviceType: SENTINEL_SERVICE_TYPE },
-    orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+    orderBy: CONTENEDOR_PRIMERO,
     select: { id: true },
   });
 

@@ -50,6 +50,19 @@ import { altaEnCurso, parseEstadoDeAlta } from "./alta";
  */
 export const SENTINEL_SERVICE_TYPE = "__strategy__";
 
+/**
+ * EL contenedor de una empresa cuando hay más de uno: el más viejo (y, a la misma hora, el de menor id). Es la regla de
+ * `ensureClientInfoProject` (R4, 2026-10-25): quien elige el contenedor de una lista ya cargada usa esta función, y quien
+ * lo busca en la base, `CONTENEDOR_PRIMERO` como `orderBy`. Así todos hablan del mismo.
+ */
+export function elContenedor<P extends { id: string; serviceType: string | null; createdAt: Date }>(proyectos: readonly P[]): P | null {
+  const contenedores = proyectos.filter((p) => p.serviceType === SENTINEL_SERVICE_TYPE);
+  return [...contenedores].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime() || a.id.localeCompare(b.id))[0] ?? null;
+}
+
+/** El `orderBy` que deja primero al contenedor que elige `elContenedor`. */
+export const CONTENEDOR_PRIMERO = [{ createdAt: "asc" as const }, { id: "asc" as const }];
+
 // ── Las decisiones ───────────────────────────────────────────────────────────
 
 /**

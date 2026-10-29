@@ -20,7 +20,7 @@ import { fotoDeLaExploracion, type AreaDeLaFoto, type DimensionDeLaFoto } from "
 import { escalaDeLaExploracion, escalaParaExplorar, estadoDesdeFila } from "./servidor";
 import { versionesDeLaEmpresa, type VersionGuardada } from "./versiones-de-la-escala";
 import type { Letra } from "@/lib/escala/documento/tipos";
-import { resolvePipeline, SENTINEL_SERVICE_TYPE } from "@/lib/projects/kind";
+import { elContenedor, resolvePipeline } from "@/lib/projects/kind";
 import { industriaLegible } from "./industria";
 import { hoyEnCostaRica } from "./fechas";
 import {
@@ -113,7 +113,8 @@ export async function escalaDeLaEmpresa(clientId: string): Promise<EscalaDeLaEmp
     prisma.client.findUnique({ where: { id: clientId }, select: { industry: true } }),
     ventasDeLaEmpresa(clientId).catch(() => []),
   ]);
-  const contenedor = proyectos.find((p) => p.serviceType === SENTINEL_SERVICE_TYPE) ?? null;
+  // El mismo contenedor que `ensureClientInfoProject` y la escala de la cuenta: el más viejo, si hay más de uno.
+  const contenedor = elContenedor(proyectos);
   const deLosProyectos = proyectos.filter((p) => p !== contenedor).map((p) => ({ id: p.id, nombre: p.name }));
   const ediciones = general.general.ediciones.map((e) => ({ slug: e.slug, nombre: e.nombre }));
   const deLasVentas = ventas.map((v) => ({ id: v.id, nombre: v.nombre, fechaCierre: v.fechaCierre, monto: v.monto, moneda: v.moneda }));
