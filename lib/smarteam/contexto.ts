@@ -22,6 +22,7 @@ import { prisma } from "@/lib/db/prisma";
 import { esquemaDesactualizado } from "@/lib/db/esquema";
 import { ICP_SECTION_META, ICP_SECTION_ORDER } from "@/lib/marketing/seed-data";
 import { leerReferencias, leerServicios, PERFIL_VACIO, type ContextoDeLaEmpresaQueUsaNexus, type PerfilDeLaEmpresa } from "./perfil";
+import { leerFrentes } from "./posicionamiento";
 
 /** La empresa que usa Nexus, o null si no se puede saber sin adivinar. */
 export async function empresaQueUsaNexus(): Promise<{ id: string; nombre: string } | null> {
@@ -52,6 +53,7 @@ export async function perfilDe(clientId: string): Promise<PerfilDeLaEmpresa> {
   return {
     propuestaDeValor: fila.propuestaDeValor,
     positionStatement: fila.positionStatement,
+    frentes: leerFrentes(fila.frentes),
     tono: fila.tono,
     servicios: leerServicios(fila.servicios),
     // Una referencia a una ficha que ya no existe (se fusionó o se borró) no se muestra.

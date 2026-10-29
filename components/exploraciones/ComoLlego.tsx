@@ -7,7 +7,8 @@
  * Nexus PROPONE cómo llegó desde HubSpot (lib/exploraciones/como-llego.ts › llegadaPropuesta) y una persona lo
  * CONFIRMA: sin confirmar no se guarda ni cambia la guía. Con «En frío» o «Referido» y todavía sin hablar con el cliente,
  * la primera sesión es para abrir la puerta: `AbrirLaPuerta` lo dice arriba de la Preparación, con cómo presentar a
- * Smarteam (el position statement del perfil o, mientras no esté escrito, su propuesta de valor; nunca inventado).
+ * Smarteam (el position statement armado para este prospecto, K3; si todavía no se armó, el de la base o, mientras no
+ * esté escrito, la propuesta de valor; nunca inventado).
  */
 import { useState } from "react";
 import { Button, Input, Select } from "@/components/ui";
@@ -26,6 +27,7 @@ import {
 } from "@/lib/exploraciones/como-llego";
 import { useLienzo } from "./contexto";
 import { BotonTexto } from "./FranjaDeSugerencias";
+import { PositionStatementDelProspecto } from "./PositionStatementDelProspecto";
 
 export interface PresentacionDeSmarteam {
   texto: string | null;
@@ -121,12 +123,17 @@ export function ComoLlego({ contactos }: { contactos: readonly ContactoParaLaLle
   );
 }
 
+/** ¿La Preparación muestra arriba «La primera sesión abre la puerta»? (la primera de las sesiones que esperan, o ninguna planeada). */
+export function useAbreLaPuerta(): boolean {
+  const { exp, marco } = useLienzo();
+  const sesiones = exp.estado.contenido.sesiones;
+  return sesiones.length ? sesiones.some((s) => abreLaPuerta(exp.estado, s.id, { marco: marco.clave })) : abreLaPuerta(exp.estado, null, { marco: marco.clave });
+}
+
 /** Arriba de la Preparación: la primera sesión de un prospecto en frío o referido abre la puerta. Null si no aplica. */
 export function AbrirLaPuerta({ presentacion }: { presentacion: PresentacionDeSmarteam | null }) {
-  const { exp, marco } = useLienzo();
-  // La primera de las sesiones que esperan (abreLaPuerta elige cuál), o ninguna planeada todavía.
-  const sesiones = exp.estado.contenido.sesiones;
-  const abre = sesiones.length ? sesiones.some((s) => abreLaPuerta(exp.estado, s.id, { marco: marco.clave })) : abreLaPuerta(exp.estado, null, { marco: marco.clave });
+  const { exp } = useLienzo();
+  const abre = useAbreLaPuerta();
   if (!abre) return null;
   const llego = exp.estado.contenido.comoLlego!;
   const tramo = (t: readonly [number, number]) => `${t[0]}–${t[1]} min`;
@@ -152,15 +159,20 @@ export function AbrirLaPuerta({ presentacion }: { presentacion: PresentacionDeSm
           <p className="text-fg">Unas {PREGUNTAS_DE_ABRIR_LA_PUERTA} preguntas y acordar la segunda sesión.</p>
         </li>
       </ol>
-      <div className="rounded-lg border border-line bg-surface px-3 py-2.5">
-        <p className="text-2xs font-semibold uppercase tracking-wide text-fg-muted">
-          {presentacion?.de === "positionStatement" ? "Cómo presentar a Smarteam" : "Cómo presentar a Smarteam (mientras no esté el position statement)"}
-        </p>
-        <p className={cn("mt-1 whitespace-pre-wrap text-[13px] leading-[19px]", presentacion?.texto ? "text-fg" : "text-fg-muted")}>
-          {presentacion?.texto ??
-            "Todavía no está escrito el position statement de Smarteam ni su propuesta de valor (se escriben en la ficha de Smarteam, en su pestaña de reuniones). Preséntate con lo que hace Smarteam, sin prometer resultados."}
-        </p>
-      </div>
+      {/* K3 (2026-10-28): con el position statement armado para este prospecto, la presentación es esa. */}
+      {exp.estado.propuesta.posicionamiento ? (
+        <PositionStatementDelProspecto />
+      ) : (
+        <div className="rounded-lg border border-line bg-surface px-3 py-2.5">
+          <p className="text-2xs font-semibold uppercase tracking-wide text-fg-muted">
+            {presentacion?.de === "positionStatement" ? "Cómo presentar a Smarteam" : "Cómo presentar a Smarteam (mientras no esté el position statement)"}
+          </p>
+          <p className={cn("mt-1 whitespace-pre-wrap text-[13px] leading-[19px]", presentacion?.texto ? "text-fg" : "text-fg-muted")}>
+            {presentacion?.texto ??
+              "Todavía no está escrito el position statement de Smarteam (Marketing › Audiencia) ni su propuesta de valor (la ficha de Smarteam). Preséntate con lo que hace Smarteam, sin prometer resultados."}
+          </p>
+        </div>
+      )}
     </section>
   );
 }

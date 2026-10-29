@@ -22,6 +22,7 @@ import { aFecha, hoyEnCostaRica } from "./fechas";
 import { MAX_SESIONES, type GuiaDeLaSesion, type SesionPlaneada } from "./guia";
 import { aplicarCambioDeLaGuia, hayAjustes, type CambioDeLaGuia } from "./ajustes-de-la-guia";
 import type { ComoLlego } from "./como-llego";
+import type { PosicionamientoDelProspecto } from "./posicionamiento";
 import type { ClaveDeEquipo } from "./equipos";
 import {
   definicionDe,
@@ -412,6 +413,12 @@ export interface PropuestaDeExploracion {
    * `lecturas`. Los últimos 24.
    */
   correos: Record<string, CorreoDeSeguimiento>;
+  /**
+   * El position statement del prospecto (K3, 2026-10-28; lib/exploraciones/posicionamiento.ts): la frase de Smarteam con
+   * dos o tres hechos de la empresa y el frente que calza, validado contra la base. Lo arma la preparación; la última
+   * reemplaza a la anterior. Material de preparación: se muestra directo, sin «usar». null = todavía no se armó.
+   */
+  posicionamiento?: PosicionamientoDelProspecto | null;
 }
 
 /** El correo de seguimiento de una reunión: qué entendimos, lo acordado, lo que quedó abierto y la próxima reunión. */
@@ -502,6 +509,7 @@ export function propuestaVacia(): PropuestaDeExploracion {
     alertaTecnica: null,
     lecturas: {},
     correos: {},
+    posicionamiento: null,
   };
 }
 

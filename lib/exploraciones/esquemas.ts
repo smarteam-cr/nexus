@@ -31,6 +31,7 @@ import {
   type SiguientePaso,
   type TipoDeCasilla,
 } from "./casillas";
+import { ESTADOS_DE_LA_CONDICION, MAX_HECHOS, MAX_LOGROS, TOPES, type PosicionamientoDelProspecto } from "./posicionamiento";
 import {
   contenidoVacio,
   ESTADOS_DEL_CRITERIO,
@@ -716,6 +717,38 @@ const LecturaDeReunionSchema: z.ZodType<LecturaDeReunion> = z.object({
 /** La clave de una reunión en `lecturas` (contenido.ts › `claveDeLaReunion`). Hasta 200 después del prefijo (antes 80: la lectura de una reunión de una serie se perdía al volver a abrir). */
 const CLAVE_DE_LECTURA = CLAVE_DE_REUNION;
 
+const HechoCitadoSchema = z.object({
+  texto: z.string().max(TOPES.hecho),
+  fuente: z.string().max(120),
+  url: z.string().max(2000).optional(),
+  fecha: z.string().max(20).optional(),
+});
+
+/** El position statement del prospecto (K3, lib/exploraciones/posicionamiento.ts). Uno que no tiene la forma se lee null. */
+const PosicionamientoDelProspectoSchema: z.ZodType<PosicionamientoDelProspecto> = z.object({
+  version: z.literal(1),
+  en: z.string().max(40),
+  corridaId: z.string().max(60),
+  frase: z.string().max(1000),
+  hechos: z.array(HechoCitadoSchema).max(MAX_HECHOS),
+  frente: z
+    .object({
+      clave: z.string().max(40),
+      nombre: z.string().max(130),
+      promesa: z.string().max(200),
+      calce: z.enum(["calza", "a_medias"]),
+      razon: z.string().max(TOPES.razon),
+      logros: z.array(z.object({ titulo: z.string().max(80), detalle: z.string().max(200).nullable() })).max(MAX_LOGROS),
+      condiciones: z
+        .array(z.object({ texto: z.string().max(160), estado: z.enum(ESTADOS_DE_LA_CONDICION), razon: z.string().max(TOPES.razonDeCondicion).nullable(), hechos: z.array(HechoCitadoSchema).max(24) }))
+        .max(8),
+      nota: z.string().max(240).nullable(),
+    })
+    .nullable(),
+  sinFrente: z.string().max(TOPES.sinFrente).nullable(),
+  descartes: z.array(z.string().max(TOPES.descarte)).max(TOPES.descartes),
+});
+
 const CorreoDeSeguimientoSchema: z.ZodType<CorreoDeSeguimiento> = z.object({
   asunto: z.string().max(MAX_ASUNTO_DEL_CORREO),
   cuerpo: z.string().max(MAX_CUERPO_DEL_CORREO),
@@ -759,6 +792,10 @@ export function leerPropuesta(raw: unknown): PropuestaDeExploracion {
   p.alertaTecnica = tecnica.success ? tecnica.data : null;
   p.lecturas = Object.fromEntries(Object.entries(registroValido(raw.lecturas, CLAVE_DE_LECTURA, LecturaDeReunionSchema)).slice(-MAX_LECTURAS));
   p.correos = Object.fromEntries(Object.entries(registroValido(raw.correos, CLAVE_DE_LECTURA, CorreoDeSeguimientoSchema)).slice(-MAX_CORREOS));
+  const posicionamiento = PosicionamientoDelProspectoSchema.safeParse(raw.posicionamiento);
+  // El armado respeta estos topes (posicionamiento.ts › TOPES): si igual no se puede leer, que quede dicho.
+  if (!posicionamiento.success && raw.posicionamiento != null) console.warn("[exploraciones] el position statement guardado no se pudo leer", posicionamiento.error.issues[0]);
+  p.posicionamiento = posicionamiento.success ? posicionamiento.data : null;
   if (!Array.isArray(raw.items)) return p;
   const items = raw.items.map(leerItem).filter((it): it is ItemPropuesto => it !== null);
   return { ...p, items };

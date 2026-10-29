@@ -31,8 +31,8 @@ import { leerPropuesta } from "./esquemas";
 import { contenidoVacio, fusionarPropuestas, idDeCasoLibre, idDelItem, MOTIVOS_PARA_EXPLORAR, NIVELES, propuestaVacia, propuestaVigente, type EstadoDeExploracion } from "./contenido";
 import type { DimensionDelLienzo, EscalaDelLienzo } from "./escala-del-lienzo";
 import { hostDelSitio, ipInterna, mismoSitio } from "./sitio-web-reglas";
-import { leerLaRadiografia, urlComparable } from "./radiografia-pedido";
-import { conSuOrigen, separarOrigen } from "./casillas";
+import { investigacionDesdeLaRadiografia, leerLaRadiografia, urlComparable } from "./radiografia-pedido";
+import { conSuOrigen, separarOrigen, type Radiografia } from "./casillas";
 import { bloqueDeInstrucciones, claveDeInstrucciones } from "./notas-de-sesion";
 import { contactoPrincipal, estadoDeLaConexion, porQueAhoraSugerido, rastroDe, senalesDe } from "./senales";
 
@@ -685,6 +685,38 @@ describe("Preparación: la radiografía que investiga en internet", () => {
 
   it("compara direcciones sin www, sin la barra final", () => {
     expect(urlComparable("https://www.Acme.com/a/")).toBe(urlComparable("https://acme.com/a"));
+  });
+
+  it("K3: una contratación entra solo con un enlace de la búsqueda, y va a la fuente W1 y a la investigación de la empresa", () => {
+    const vacante = {
+      type: "web_search_tool_result",
+      tool_use_id: "s2",
+      content: [{ type: "web_search_result", url: "https://empleos.example/credit-force/gerente-crm", title: "Gerente de CRM", encrypted_content: "", page_age: null }],
+    };
+    const r = leerLaRadiografia(
+      [
+        busqueda,
+        vacante,
+        herramientaDe({
+          resumen: "Software de crédito y cobranza para financieras.",
+          contrataciones: [
+            { puesto: "Gerente de CRM", fecha: "2026-10", url: "https://empleos.example/credit-force/gerente-crm" },
+            { puesto: "Vendedor B2B", url: "https://otro-sitio.com/vendedor" },
+            { puesto: " ", url: "https://empleos.example/credit-force/gerente-crm" },
+          ],
+        }),
+      ] as unknown as Anthropic.Messages.ContentBlock[],
+      "run_1",
+      AHORA,
+    );
+    expect(r.contrataciones).toEqual([{ puesto: "Gerente de CRM", fecha: "2026-10", url: "https://empleos.example/credit-force/gerente-crm" }]);
+    expect(r.hitosSinEnlace).toBe(1);
+    expect(r.fuente?.texto).toContain("Está contratando: Gerente de CRM (2026-10)");
+    // La casilla no cambia de forma: las contrataciones no son parte de la radiografía guardada.
+    expect(r.item?.valor).toEqual({ resumen: "Software de crédito y cobranza para financieras." });
+    const paraLaEmpresa = investigacionDesdeLaRadiografia(r.item!.valor as Radiografia, r.contrataciones);
+    expect(paraLaEmpresa?.contrataciones).toEqual(r.contrataciones);
+    expect(paraLaEmpresa?.fuentes).toEqual([{ url: "https://empleos.example/credit-force/gerente-crm" }]);
   });
 });
 

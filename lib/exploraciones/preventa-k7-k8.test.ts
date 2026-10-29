@@ -235,6 +235,7 @@ describe("R5 · la preventa lee la investigación de la empresa", () => {
       resumen: "x",
       contenido: { sector: "y", hitos: [{ texto: "Hito", url: "https://a.example" }] },
       fuentes: [{ url: "https://a.example" }],
+      contrataciones: [],
     });
     expect(investigacionDesdeLaRadiografia({})).toBeNull();
   });

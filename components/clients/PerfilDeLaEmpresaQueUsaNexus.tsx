@@ -7,7 +7,8 @@
  * su tarifa y los clientes de referencia por industria; y, para mirar, el cliente ideal y las buyer personas, que se
  * editan donde ya se editaban (Marketing › Audiencia) y cuelgan de esta misma ficha. Lo leen los agentes por
  * lib/smarteam/contexto.ts. Solo aparece en la ficha de la empresa que usa Nexus (la ruta lo dice); edita quien tiene
- * `marketing.write`.
+ * `marketing.write`. El position statement (la frase y sus frentes) se edita desde el 2026-10-28 en Marketing › Audiencia:
+ * acá solo se ve.
  */
 import { useEffect, useState } from "react";
 import Link from "next/link";
@@ -78,7 +79,6 @@ export default function PerfilDeLaEmpresaQueUsaNexus({ clientId }: { clientId: s
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           propuestaDeValor: borrador.propuestaDeValor ?? null,
-          positionStatement: borrador.positionStatement ?? null,
           tono: borrador.tono ?? null,
           servicios: borrador.servicios.map((s) => ({ nombre: s.nombre, descripcion: s.descripcion ?? null, tarifa: s.tarifa ?? null })),
           clientesDeReferencia: borrador.clientesDeReferencia.map((c) => ({ clientId: c.clientId, industria: c.industria, porque: c.porque ?? null })),
@@ -100,7 +100,7 @@ export default function PerfilDeLaEmpresaQueUsaNexus({ clientId }: { clientId: s
     }
   };
 
-  const texto = (rotulo: string, clave: "propuestaDeValor" | "positionStatement" | "tono", ayuda: string) => (
+  const texto = (rotulo: string, clave: "propuestaDeValor" | "tono", ayuda: string) => (
     <div className="border-t border-line py-3">
       {editando ? (
         <Field label={rotulo} hint={ayuda}>
@@ -153,7 +153,20 @@ export default function PerfilDeLaEmpresaQueUsaNexus({ clientId }: { clientId: s
 
       <div className="mt-3">
         {texto("Propuesta de valor", "propuestaDeValor", "Qué le damos al cliente, en dos o tres frases.")}
-        {texto("Position statement", "positionStatement", "Para quién, qué problema le resolvemos, en qué categoría y en qué somos distintos.")}
+        <div className="border-t border-line py-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="flex-1 text-xs text-fg-muted">Position statement</p>
+            <Link href="/marketing/posicionamiento" className="text-xs text-brand hover:underline">
+              {r.puedeEditar ? "Editar en Marketing › Audiencia" : "Ver en Marketing › Audiencia"}
+            </Link>
+          </div>
+          {p.positionStatement ? (
+            <p className="mt-0.5 whitespace-pre-line text-[13px] leading-[19px] text-fg">{p.positionStatement}</p>
+          ) : (
+            <p className="mt-0.5 text-[13px] text-fg-muted">Falta.</p>
+          )}
+          {p.frentes.length > 0 && <p className="mt-1 text-xs text-fg-secondary">Frentes: {p.frentes.map((f) => (f.herramienta ? `${f.nombre} · ${f.herramienta}` : f.nombre)).join(" · ")}</p>}
+        </div>
         {texto("Tono de la marca", "tono", "Cómo hablamos. Vacío: vale el de Marketing › Voz.")}
         <Servicios servicios={p.servicios} editando={editando} onCambio={(servicios) => cambiar({ servicios })} />
         <Referencias referencias={p.clientesDeReferencia} clientes={r.clientes ?? []} editando={editando} onCambio={(clientesDeReferencia) => cambiar({ clientesDeReferencia })} />

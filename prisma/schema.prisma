@@ -8269,8 +8269,11 @@ model PerfilDeLaEmpresa {
   client               Client   @relation("PerfilDeLaEmpresa", fields: [clientId], references: [id], onDelete: Cascade)
   /// La propuesta de valor, en dos o tres frases.
   propuestaDeValor     String?  @db.Text
-  /// El position statement (K3): para quién, qué problema, qué categoría, en qué es distinta.
+  /// La frase del position statement (K3): qué hacemos por las empresas. Se edita en Marketing › Audiencia.
   positionStatement    String?  @db.Text
+  /// [{ clave, nombre, herramienta?, promesa, queLogra: [{ titulo, detalle }], cuandoCabe: [string], nota? }]: los
+  /// frentes del position statement (lib/smarteam/posicionamiento.ts). La preventa valida contra ellos lo que propone.
+  frentes              Json     @default("[]")
   /// El tono de la marca. Mientras esté vacío, vale el de Marketing (MarketingSettings.brandVoice).
   tono                 String?  @db.Text
   /// [{ nombre, descripcion?, tarifa? }]: los servicios y sus tarifas (lib/smarteam/perfil.ts).

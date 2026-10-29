@@ -113,6 +113,7 @@ export const PAGE_SHELL_COVERAGE: Record<string, ShellDecl> = {
   "marketing/fuentes": { custom: "el layout de marketing pone el contenedor" },
   "marketing/voz": { custom: "el layout de marketing pone el contenedor" },
   "marketing/icp": { custom: "el layout de marketing pone el contenedor" },
+  "marketing/posicionamiento": { custom: "el layout de marketing pone el contenedor" },
   "marketing/leads-del-test": { custom: "el layout de marketing pone el contenedor" },
   "cobranza/importar": { custom: "wizard de importación con contenedor propio" },
   "cobranza/odoo": { custom: "px-6 py-8 propio, igual que el importador: es una pantalla de trabajo puntual" },

@@ -94,8 +94,19 @@ import { investigacionDesdeLaRadiografia, leerLaRadiografia, pedidoDeLaRadiograf
 import type { Radiografia } from "./casillas";
 import { guardarInvestigacionDeLaPreventa, ultimaInvestigacion } from "@/lib/clients/investigacion/servidor";
 import { comunicacionesDeLaCuenta } from "@/lib/comunicaciones/lectura-server";
-import { contextoDeSmarteam } from "@/lib/smarteam/contexto";
+import { contextoDeSmarteam, empresaQueUsaNexus, perfilDe } from "@/lib/smarteam/contexto";
 import { textoParaLaPreventa } from "@/lib/smarteam/perfil";
+import {
+  entradaDeLaRespuesta,
+  hayQuePedirlo,
+  hechosDisponibles,
+  pedidoDelPosicionamiento,
+  textoDelPosicionamientoDelProspecto,
+  validarElPosicionamiento,
+  type ContratacionEncontrada,
+  type PosicionamientoDelProspecto,
+  type ValoresParaElPosicionamiento,
+} from "./posicionamiento";
 import { posicionesDelMapa } from "./mapa";
 import { DE_LA_PREVENTA, marcoDe, type Marco } from "./marco";
 import { avanceDeLaEstrategia } from "./avance-del-proyecto";
@@ -153,6 +164,11 @@ interface LoQueLeyoLaCorrida {
   tecnica?: Lectura["tecnica"];
   /** Al leer: lo que el agente dijo de cada reunión, por su clave (contenido.ts › `claveDeLaReunion`). */
   lecturas?: Record<string, LecturaDeReunion>;
+  /**
+   * Al preparar la preventa: el position statement del prospecto (K3). null = la base ya no permite armarlo (sin frase o
+   * sin hechos): se borra el anterior, que quedaría mostrándose como válido. undefined = falló o no se pidió: queda el anterior.
+   */
+  posicionamiento?: PosicionamientoDelProspecto | null;
 }
 
 /** Un fallo con un mensaje que ya está escrito para el vendedor (no hace falta traducirlo). */
@@ -341,6 +357,13 @@ async function correr(runId: string, exploracionId: string, modo: ModoDelAgente,
        encuentra queda también en la empresa. Lo que encuentra se propone en su casilla y entra como fuente para la
        hipótesis de valor y el pitch. Si falla, la preparación sigue sin ella. */
     let deLaWeb: ItemPropuesto[] = [];
+    // Lo que la investigación sabe de la empresa, para su position statement (K3): de la de la empresa o de la radiografía.
+    const investigado: { radiografia: Radiografia | null; contrataciones: ContratacionEncontrada[]; industria: string | null } = {
+      radiografia: null,
+      contrataciones: [],
+      industria: null,
+    };
+    let posicionamiento: PosicionamientoDelProspecto | null | undefined;
     if (modo === "preparar") {
       const vigente = await ultimaInvestigacion(fila.clientId).catch(() => null);
       const deLaEmpresa = vigente && !vigente.vencida ? radiografiaDesdeLaInvestigacion(vigente, runId) : null;
@@ -348,6 +371,8 @@ async function correr(runId: string, exploracionId: string, modo: ModoDelAgente,
         await fase(runId, "Leyendo la investigación de la empresa…");
         deLaWeb = [deLaEmpresa.item];
         leido.fuentes.push(deLaEmpresa.fuente);
+        investigado.radiografia = deLaEmpresa.item.valor as Radiografia;
+        investigado.contrataciones = vigente!.contrataciones;
       } else if (fila.client.hubspotCompanyId) {
         await fase(runId, "Investigando la empresa en internet…");
         const r = await investigar(runId, fila, opts).catch((e) => {
@@ -358,7 +383,10 @@ async function correr(runId: string, exploracionId: string, modo: ModoDelAgente,
         if (r?.industria) deLaWeb.push(r.industria.item);
         if (r?.fuente) leido.fuentes.push(r.fuente);
         if (r?.industria) leido.fuentes.push(r.industria.fuente);
-        const paraLaEmpresa = r?.item ? investigacionDesdeLaRadiografia(r.item.valor as Radiografia) : null;
+        if (r?.item) investigado.radiografia = r.item.valor as Radiografia;
+        investigado.contrataciones = r?.contrataciones ?? [];
+        investigado.industria = r?.industria?.fuente.texto ?? null;
+        const paraLaEmpresa = r?.item ? investigacionDesdeLaRadiografia(r.item.valor as Radiografia, r.contrataciones) : null;
         if (paraLaEmpresa) {
           await guardarInvestigacionDeLaPreventa({ clientId: fila.clientId, exploracionId, agentRunId: runId, ...paraLaEmpresa }).catch((e) =>
             console.error(`[exploraciones/agente] la radiografía no quedó en la empresa ${exploracionId}`, e),
@@ -366,6 +394,22 @@ async function correr(runId: string, exploracionId: string, modo: ModoDelAgente,
         }
       }
       ctx.fuentes = leido.fuentes;
+      /* K3 (2026-10-28): el position statement del prospecto, desde la base de Smarteam y validado contra ella. Solo la
+         preventa. Sin investigación de esta corrida, la radiografía que el vendedor ya usó. Si falla, la preparación sigue. */
+      if (!fila.projectId) {
+        investigado.radiografia ??= estado.contenido.casillas.radiografia ?? null;
+        const datos = {
+          aQuienVende: fila.client.aQuienVende,
+          perfilCierre: estado.perfilCierre,
+          perfilDespues: fila.client.perfilDespues ?? estado.perfilDespues,
+          trafico: fila.client.trafico,
+          baseConsentimiento: fila.client.baseConsentimiento,
+        };
+        posicionamiento = await armarElPosicionamiento(runId, fila, { ...investigado, datos }, opts).catch((e) => {
+          console.error(`[exploraciones/agente] position statement ${exploracionId}`, e);
+          return undefined;
+        });
+      }
     }
 
     const delTest = propuestasDelTest(leido.tests, ctx, runId);
@@ -406,6 +450,7 @@ async function correr(runId: string, exploracionId: string, modo: ModoDelAgente,
         noOcurrieron: leido.noOcurrieron ?? [],
         tecnica,
         lecturas,
+        ...(posicionamiento !== undefined ? { posicionamiento } : {}),
       },
       { runId, modo, automatica: opts.automatica === true },
     );
@@ -626,6 +671,36 @@ async function investigar(runId: string, fila: { clientId: string; client: { nam
     mensajes.push({ role: "assistant", content: respuesta.content as unknown as Anthropic.Messages.ContentBlockParam[] });
   }
   return leerLaRadiografia(contenido, runId);
+}
+
+/**
+ * El position statement del prospecto (K3, 2026-10-28; lib/exploraciones/posicionamiento.ts): la frase de la base, dos o
+ * tres hechos de la investigación con su fuente y el frente que calza, validado contra la base. Sin frase en la base o
+ * sin hechos, no llama al modelo y devuelve null: el anterior se borra (se armó con una base que ya no es la de hoy).
+ */
+async function armarElPosicionamiento(
+  runId: string,
+  fila: { clientId: string; client: { name: string } },
+  investigado: { radiografia: Radiografia | null; contrataciones: ContratacionEncontrada[]; industria: string | null; datos: ValoresParaElPosicionamiento },
+  opts: OpcionesDeLaCorrida,
+): Promise<PosicionamientoDelProspecto | null> {
+  const empresa = await empresaQueUsaNexus();
+  if (!empresa) return null;
+  const perfil = await perfilDe(empresa.id);
+  const ctx = { empresa: fila.client.name, base: { frase: perfil.positionStatement, frentes: perfil.frentes }, hechos: hechosDisponibles(investigado) };
+  if (!hayQuePedirlo(ctx)) return null;
+  await fase(runId, "Armando su position statement…");
+  const respuesta = await conContextoDeIA(
+    {
+      agentSlug: AGENTE_DE_LA_EXPLORACION,
+      agentRunId: runId,
+      clientId: fila.clientId,
+      triggeredByEmail: opts.triggeredByEmail,
+      origen: "exploraciones/agente:posicionamiento",
+    },
+    () => getAnthropic().messages.create(pedidoDelPosicionamiento(ctx)),
+  );
+  return validarElPosicionamiento(entradaDeLaRespuesta(respuesta.content), ctx, { corridaId: runId });
 }
 
 /**
@@ -953,8 +1028,13 @@ export async function contextoParaLaGuia(exploracionId: string) {
           comunicacionesDeLaCuenta(fila.clientId, { tope: 30, tipo: "nota" })
             .then((ns) => notasParaLaGuia(ns))
             .catch(() => []),
+          /* K3 (2026-10-28): con el position statement del prospecto armado, la apertura lo usa: la frase de Smarteam con
+             los hechos de la empresa y el frente que calza (o a medias, dicho). */
           contextoDeSmarteam()
-            .then((c) => textoParaLaPreventa(c))
+            .then((c) => {
+              const ps = estado.propuesta.posicionamiento;
+              return [textoParaLaPreventa(c), ps ? textoDelPosicionamientoDelProspecto(ps, fila.client.name) : null].filter(Boolean).join("\n\n") || null;
+            })
             .catch(() => null),
         ])
       : [[], null];
@@ -1246,6 +1326,8 @@ async function guardar(
         : {}),
       // Lo que dijo de cada reunión: la nueva lectura de una reunión reemplaza a la anterior.
       ...(leido.lecturas ? { lecturas: Object.fromEntries(Object.entries({ ...fusion.lecturas, ...leido.lecturas }).slice(-MAX_LECTURAS)) } : {}),
+      // El position statement del prospecto (K3): el de esta preparación reemplaza al anterior (null lo borra).
+      ...(leido.posicionamiento !== undefined ? { posicionamiento: leido.posicionamiento } : {}),
       corridas: [
         ...fusion.corridas,
         {

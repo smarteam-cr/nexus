@@ -5,7 +5,7 @@
  * «Audiencia», «Voz de marca») con pestañas adentro, y todas las páginas se titulaban «Marketing». Ahora cada
  * entrada es una página con su propio título, en dos bloques: lo que hay que REVISAR (lo que propone el agente) y
  * lo que LEE el agente para escribir. Generación va suelta al final. La única página con pestañas es Audiencia
- * (ICP y buyer personas), por eso su entrada se marca activa en las dos rutas.
+ * (ICP, buyer personas y position statement), por eso su entrada se marca activa en sus tres rutas.
  *
  * Las rutas no cambian (son identidad: hay enlaces pegados); cambian los nombres que se ven.
  */
@@ -31,7 +31,7 @@ export const MARKETING_NAV: readonly MarketingNavItem[] = [
     href: "/marketing/icp",
     label: "Audiencia",
     section: "Lo que lee el agente",
-    match: ["/marketing/icp", "/marketing/personas"],
+    match: ["/marketing/icp", "/marketing/personas", "/marketing/posicionamiento"],
   },
   { href: "/marketing/voz", label: "Voz de marca", section: "Lo que lee el agente" },
   { href: "/marketing/fuentes", label: "Fuentes", section: "Lo que lee el agente" },

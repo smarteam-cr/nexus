@@ -11,13 +11,13 @@ describe("lo que acepta al guardar", () => {
   it("recorta los textos y deja null lo vacío; un servicio sin nombre no pasa", () => {
     const ok = PerfilEdicionSchema.parse({
       propuestaDeValor: "  Hacemos que HubSpot rinda.  ",
-      positionStatement: "",
       tono: null,
       servicios: [{ nombre: "SmartLoop", descripcion: " ", tarifa: "US$ 1.800 al mes" }],
       clientesDeReferencia: [],
     });
     expect(ok.propuestaDeValor).toBe("Hacemos que HubSpot rinda.");
-    expect(ok.positionStatement).toBeNull();
+    // El position statement se edita en Marketing › Audiencia (lib/smarteam/posicionamiento.ts): la ficha ya no lo manda.
+    expect(PerfilEdicionSchema.safeParse({ ...ok, positionStatement: "x" }).success).toBe(false);
     expect(ok.servicios[0]).toEqual({ nombre: "SmartLoop", descripcion: null, tarifa: "US$ 1.800 al mes" });
     expect(PerfilEdicionSchema.safeParse({ ...ok, servicios: [{ nombre: " ", descripcion: null, tarifa: null }] }).success).toBe(false);
     expect(PerfilEdicionSchema.safeParse({ ...ok, otro: 1 }).success).toBe(false);
