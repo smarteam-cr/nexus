@@ -9,7 +9,7 @@
 <!-- El resumen se arma con este bloque. Cómo se regenera: «Cómo se mantiene este roadmap» y la skill regenerar-roadmap. -->
 ```temas
 {
- "dondeVamos": "Hoy salieron a producción el radar de la teoría en la Escala, tu position statement en Marketing › Audiencia y en la preventa, la escala única con sus arreglos y un enlace por cada sesión de la exploración. El rediseño de la página de resultados del test espera tu visto bueno.",
+ "dondeVamos": "La página de resultados del test ya salió con el diseño que aprobaste: la estructura de antes, el radar de la teoría grande y a lo ancho, y el PDF en 3 hojas horizontales. Ayer salieron el radar de la teoría en la Escala, tu position statement, la escala única y un enlace por sesión.",
  "temas": [
   {
    "n": 4,
@@ -171,10 +171,14 @@
     {
      "fecha": "28 oct",
      "texto": "El diseño nuevo de la página de resultados: el radar grande, a lo ancho y casi como slides, con la línea V3."
+    },
+    {
+     "fecha": "29 oct",
+     "texto": "La página de resultados con la estructura de antes: radar de la teoría grande, a lo ancho, estilo V3 y PDF en 3 hojas."
     }
    ],
-   "sigue": "La página de resultados rehecha con el radar nuevo, a lo ancho como slides (espera tu visto bueno). Tu revisión de las preguntas y qué formulario usa el test. Después, el corte de la aplicación vieja.",
-   "teToca": "Aprobar el diseño de la página de resultados (claude.ai/artifact/J9yRct2sfaQN99mVn18Zs8) y recorrer el test en Escala › Tests › Preguntas.",
+   "sigue": "Tu revisión de las preguntas y qué formulario usa el test. Después, el corte de la aplicación vieja.",
+   "teToca": "Recorrer el test en Escala › Tests › Preguntas y abrir un resultado con su PDF (pruebas 296 y 297).",
    "decisiones": [
     15,
     29,
@@ -709,10 +713,10 @@ Que Nexus amarre los puntos: entrar a un cliente y ver todo lo que Smarteam est�
 
 | Qué | Cómo está |
 |---|---|
-| Producción | Corre `0968a8a0` desde la noche del 28 oct: el radar de la teoría en Escala › Radar, tu position statement en Marketing › Audiencia (cargado) y en la preventa, los arreglos de la escala única y una dirección por cada sesión de la exploración. Antes, `7817de59`, el 28 oct: una sola escala para la preventa y los clientes, y la escala 9.2.0 con Telecomunicaciones y los 54 bancos del test. |
-| Por desplegar | Nada. Esperando tu visto bueno: el diseño de la página de resultados del test (claude.ai/artifact/J9yRct2sfaQN99mVn18Zs8). **Sin aplicar, a propósito:** la carga inicial de los datos de la empresa (espera a la CSL) y las banderas `EMPRESA_HUBSPOT_ESCRITURA` y `EMPRESA_HUBSPOT_COPIA` («Lo que configuras tú»). |
+| Producción | Corre `f75b8bb4` desde el 29 oct: la página de resultados del test con el diseño aprobado (la estructura de antes, el radar de la teoría grande y a lo ancho, el estilo V3 y el PDF en 3 hojas horizontales). Antes, `0968a8a0`, la noche del 28 oct: el radar de la teoría en Escala › Radar, tu position statement en Marketing › Audiencia (cargado) y en la preventa, los arreglos de la escala única y una dirección por cada sesión de la exploración. Antes, `7817de59`, el 28 oct: una sola escala para la preventa y los clientes, y la escala 9.2.0 con Telecomunicaciones y los 54 bancos del test. |
+| Por desplegar | Nada. **Sin aplicar, a propósito:** la carga inicial de los datos de la empresa (espera a la CSL) y las banderas `EMPRESA_HUBSPOT_ESCRITURA` y `EMPRESA_HUBSPOT_COPIA` («Lo que configuras tú»). |
 | En rojo en producción | Por datos de antes, ninguno nuevo (28 oct): 16 reuniones colgadas de proyectos de otro cliente (INV1) y 9 tareas que citan una reunión de otro cliente (INV42), las que ordena el plan de dominio compartido; el pipeline de Secure Title (INV11: 2 proyectos y 6 en una etapa desconocida); «TEC- AE» fusionada en HubSpot (INV13 e INV54: ya solo ella, kölbi quedó bien); una reunión de Meet leída antes de ocurrir (INV16a), y el corte de cartera de hace 96 días (INV32). |
-| Pruebas | 28 para ti (pestaña «Pruebas para personas»; desde el 20 oct solo las que piden tu criterio), 83 que valida el equipo al usarlas, 77 con IA sobre los datos y 48 ya validadas por ti. |
+| Pruebas | 30 para ti (pestaña «Pruebas para personas»; desde el 20 oct solo las que piden tu criterio), 83 que valida el equipo al usarlas, 77 con IA sobre los datos y 48 ya validadas por ti. |
 
 ## Cómo va Nexus
 
@@ -797,11 +801,11 @@ Sin esto, algo sigue mal o no se puede validar:
 63. **Artefactos · el kickoff y la exploración:** ¿siguen siendo uno por proyecto, como estaba decidido?
 64. **Artefactos · de la empresa:** ¿cuáles pueden ser de la empresa entera, sin proyecto? Hoy lo son el diagnóstico y la escala.
 65. **Artefactos · un pedido sin tipo:** si lo que pides no calza con ningún tipo, ¿Nexus lo arma con secciones libres o te dice que no hay?
-66. **Resultado del test · el caso que falta:** ninguno de los casos de uso del ejemplo mueve «Priorización de interesados», que es justo lo que más frena. ¿Se deja así o el bloque de casos tiene que traer uno para eso? (diseño: claude.ai/artifact/J9yRct2sfaQN99mVn18Zs8)
+66. **Resultado del test · el caso que falta:** ninguno de los casos de uso del ejemplo mueve «Priorización de interesados», que es justo lo que más frena. ¿Se deja así o la sección de casos tiene que traer uno para eso? (Sigue abierta con el diseño aprobado del 29 oct: la sección de casos es la misma.) (diseño: claude.ai/artifact/J9yRct2sfaQN99mVn18Zs8)
 67. **Resultado del test · «No lo sé»:** en el test corto, un «No lo sé» cuenta como Deficiente y la recomendación puede caer ahí. ¿Se recomienda igual o se dice «primero averigüemos esto»?
-68. **Resultado del test · el botón principal:** ¿azul de Nexus, como en el diseño, o el naranja de Smarteam?
+68. ✓ **Resultado del test · el botón principal:** ¿azul de Nexus, como en el diseño, o el naranja de Smarteam? **Ya no aplica (29 oct):** aprobaste el diseño con la estructura de hoy, que lleva «Descargar PDF» en el azul de Nexus.
 69. **Resultado del test · el uso de CRM:** ¿se muestra lo que la persona contestó sobre cómo gestiona hoy a sus clientes?
-70. **Resultado del test · el PDF:** ¿una hoja por bloque o se queda en 2 o 3?
+70. ✓ **Resultado del test · el PDF:** ¿una hoja por bloque o se queda en 2 o 3? **Ya no aplica (29 oct):** era del diseño en láminas, que se descartó; el aprobado saca el PDF en 3 hojas horizontales.
 
 ## Propuesta por aprobar: vender y entregar por casos de uso
 
@@ -1294,7 +1298,7 @@ Pedido del 23 oct: migrar a Nexus el test público de cada departamento, con mej
    - Etapa 2 · La industria elige la edición (Ecommerce y retail, Banca, Educación, Inmobiliaria, Turismo, Automotriz) con sus palabras y sus preguntas.
    - Etapa 3 · El perfil corto (cómo cierra la venta, qué pasa después y el tráfico); lo que no aplica no se pregunta.
    - Etapa 4 · Las revisas tú antes de publicarlas.
-3. [hecho, 26 oct, en producción] **O3 · La página de resultados.** *Existe a medias:* hoy muestra el nivel, el radar y recomendaciones de la IA, con un puntaje que mueve la IA.
+3. [hecho, 26 oct, en producción; 29 oct, en producción: el rediseño con la estructura de antes, el radar de la teoría grande y a lo ancho, el estilo V3 y el PDF en 3 hojas horizontales (diseño: claude.ai/artifact/J9yRct2sfaQN99mVn18Zs8)] **O3 · La página de resultados.** *Existe a medias:* hoy muestra el nivel, el radar y recomendaciones de la IA, con un puntaje que mueve la IA.
    - Etapa 1 · El cálculo lo hace Nexus con la escala de hoy (cada dimensión a mitad de su banda, la capa y el área como promedio), marcado como estimado.
    - Etapa 2 · Los riesgos, el costo de quedarse y una sola recomendación con su razón.
    - Etapa 3 · Los casos de uso que lo mueven, sin precio, y la lectura de preparación cuando aplica (N6).
@@ -1763,6 +1767,8 @@ Las áreas van por prioridad: **Alta** (lo usa el equipo cada día, toca plata o
 | 55 | ⏳ La valida el equipo: Alexander Vanegas | Que se entienda con qué edición y perfil se mide | Clientes › Cemaco Internacional (la del proyecto «Cemaco Internacional - CRM») › La cuenta › La escala › «Se mide con la escala general» › «Corregir» › Industria «Ecommerce y retail», Cómo vende «Mixta», Después de la venta «Recompra» › «Guardar». | Antes: «Porque no hay una edición de su industria…». Después: aviso «Listo: la escala se lee con la edición y el perfil nuevos.», título «Se mide con la edición Ecommerce y retail y el perfil mixta · recompra», chip «La eligió una persona» y lo que cambia frente a la general. Queda guardado en la exploración de Cemaco. |
 | 56 | ⏳ La valida el equipo: Alexander Vanegas | Que la historia se ate a la venta | Cemaco Internacional › La cuenta › La escala › «Guardar esta versión» › De qué momento es «Al vender» › «Guardar». | Aviso «Versión guardada.». En «La escala en el tiempo», la fila «27 sep 2026 · Al vender · Guardada a mano · venta «Cemaco Internacional - CRM»». |
 | 291 | Por validar | Que la vista Radar muestre la teoría, como el Mapa | Escala › Ventas › vista «Radar». Toca un cruce de un eje con un anillo (por ejemplo Datos en Funcional); después, el nombre de una dimensión; después, fuera del radar. | Un anillo por etapa, cada uno del color de su nivel, Funcional punteado como «La base», y en cada cruce cuántos criterios tiene esa celda (no una figura que parezca una empresa). Al tocar un cruce, el panel muestra sus criterios; al tocar una dimensión, sus cinco etapas; al tocar fuera, se suelta. «Qué se cuenta» cambia los números (Hábitos, Riesgos, Requeridos). |
+| 296 | Por validar | Que el resultado del test se vea con el radar nuevo | El enlace de un resultado terminado (por ejemplo nexus.smarteamcr.com/external/test/resultado/vPJYrzl6zj--UWl5ETPM_Q7d0k5tlx_qgKyuskFnwf8), en la computadora; después toca «Ver puntajes». | La misma estructura de antes con un radar grande a lo ancho: anillos de colores por etapa y un vértice por cada parte que se preguntó, con lo que más frena marcado. Con «Ver puntajes», cada vértice muestra su número. |
+| 297 | Por validar | Que los PDF sigan saliendo bien | En ese resultado, «Descargar PDF»; después, el PDF del kickoff de un cliente. | El del resultado, en 3 hojas carta horizontales (la primera con el radar grande). El del kickoff, igual que antes: una sola página corrida. |
 | 108 | Por validar | Que cada nivel de cada edición hable de su industria | Publicada el 24 oct (8.9.1; tu tarea #285). Para revisarla: Escala › Ventas › vista «Matriz» › Industria «Turismo», fila 1.7 «Seguimiento de cotizaciones y reservas». | En Inicial: «Cuando una cotización no se contesta o una reserva no se paga, cada persona del equipo decide si insiste y cómo: no hay un paso acordado.» (Comprobado contra el documento: ninguna de las 720 celdas queda sin personalizar.) |
 
 ### Rentabilidad, la meta y el uso <span class="prioridad">Baja</span>
