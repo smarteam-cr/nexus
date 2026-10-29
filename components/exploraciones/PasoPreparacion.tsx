@@ -9,8 +9,9 @@
  *     (Elías, 2026-10-03); abajo, solo los hechos de HubSpot: las señales (lo que hizo y de dónde
  *     llegó) y, en una fila, la ficha de contacto y la ficha de empresa. La escala y las áreas en
  *     juego viven en La escala.
- *   - Conexión: lo que todavía no se dijo en Identificación y sirve para abrir la conversación, la
- *     hipótesis de valor (cada idea con de dónde sale) y la estrategia de conexión. Con conversación
+ *   - Conexión: lo que todavía no se dijo en Identificación y sirve para abrir la conversación, el
+ *     position statement de Smarteam para este prospecto (K3, 2026-10-28), la hipótesis de valor (cada
+ *     idea con de dónde sale) y la estrategia de conexión. Con conversación
  *     (agendó, ya hablaron o agendó por HubSpot) la estrategia y su correo de ejemplo sobran: arriba
  *     lo dice y la estrategia se ve solo si se pide (Elías, 2026-10-07).
  *
@@ -31,7 +32,8 @@ import { useLienzo } from "./contexto";
 import { BotonAzul, BotonTexto, IconoDeSugerencia } from "./FranjaDeSugerencias";
 import { FilaSugerida, UsadasHoy } from "./Propuestas";
 import { useCorrida } from "./useCorrida";
-import { AbrirLaPuerta, ComoLlego, type PresentacionDeSmarteam } from "./ComoLlego";
+import { AbrirLaPuerta, ComoLlego, useAbreLaPuerta, type PresentacionDeSmarteam } from "./ComoLlego";
+import { PositionStatementDelProspecto } from "./PositionStatementDelProspecto";
 import LoQueSabes from "./LoQueSabes";
 
 interface DatosDePreparacion {
@@ -480,6 +482,7 @@ export default function PasoPreparacion() {
   const porQueAhoraDeHubspot = datos ? porQueAhoraSugerido(senales, diaConAnio) : null;
   // La agenda que viene y las reuniones salen del lienzo (ya están al abrir); lo que agendó, del contacto.
   const conexion = estadoDeLaConexion({ agenda: exp.leido.agenda, reuniones, agendo: principal?.rastro.agendo ?? null });
+  const abreLaPuerta = useAbreLaPuerta();
 
   return (
     <div className="space-y-6">
@@ -514,6 +517,9 @@ export default function PasoPreparacion() {
       ) : (
         <div data-recorrido="preventa.preparacion.conexion" className="space-y-4">
           {conexion.tipo !== "sin-contacto" && <Conexion conexion={conexion} />}
+          {/* K3 (2026-10-28): el position statement de Smarteam para este prospecto, validado contra la base. Con la
+              primera sesión que abre la puerta ya está arriba, entero: no se repite. */}
+          {!abreLaPuerta && <PositionStatementDelProspecto />}
           <Casilla clave="contexto" />
           <Casilla clave="hipotesisDeValor" />
           {conexion.tipo === "sin-contacto" && <Conexion conexion={conexion} />}

@@ -118,6 +118,7 @@ export const SKELETON_COVERAGE: Record<string, Cobertura> = {
   "marketing/fuentes": { modo: "inherits", de: "marketing" },
   "marketing/voz": { modo: "inherits", de: "marketing" },
   "marketing/icp": { modo: "inherits", de: "marketing" },
+  "marketing/posicionamiento": { modo: "inherits", de: "marketing" },
   "marketing/leads-del-test": { modo: "inherits", de: "marketing" },
 
   // ── Ventas ──────────────────────────────────────────────────────────────────

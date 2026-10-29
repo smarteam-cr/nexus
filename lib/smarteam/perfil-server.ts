@@ -12,6 +12,7 @@ import { prisma } from "@/lib/db/prisma";
 import { CS_CLIENT_WHERE } from "@/lib/clients/kind";
 import { esLaEmpresaQueUsaNexus } from "./contexto";
 import { sinReferenciasRepetidas, type PerfilEdicion } from "./perfil";
+import type { Posicionamiento } from "./posicionamiento";
 
 export class ErrorDelPerfil extends Error {
   constructor(
@@ -32,11 +33,20 @@ export async function guardarPerfil(clientId: string, p: PerfilEdicion, email: s
   }
   const datos = {
     propuestaDeValor: p.propuestaDeValor,
-    positionStatement: p.positionStatement,
     tono: p.tono,
     servicios: p.servicios as Prisma.InputJsonValue,
     clientesDeReferencia: referencias as unknown as Prisma.InputJsonValue,
     actualizadoPorEmail: email.toLowerCase(),
   };
+  await prisma.perfilDeLaEmpresa.upsert({ where: { clientId }, create: { clientId, ...datos }, update: datos });
+}
+
+/**
+ * El position statement (K3, 2026-10-28): la frase y sus frentes. Lo edita Marketing › Audiencia; no toca lo demás del
+ * perfil. Si la empresa todavía no tiene perfil, lo crea con solo esto.
+ */
+export async function guardarPosicionamiento(clientId: string, p: Posicionamiento, email: string): Promise<void> {
+  if (!(await esLaEmpresaQueUsaNexus(clientId))) throw new ErrorDelPerfil("Esta ficha no es la de la empresa que usa Nexus.", 409);
+  const datos = { positionStatement: p.frase, frentes: p.frentes as unknown as Prisma.InputJsonValue, actualizadoPorEmail: email.toLowerCase() };
   await prisma.perfilDeLaEmpresa.upsert({ where: { clientId }, create: { clientId, ...datos }, update: datos });
 }

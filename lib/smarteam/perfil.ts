@@ -9,6 +9,7 @@
  */
 import { z } from "zod";
 import type { IcpSection } from "@prisma/client";
+import { textoDelPosicionamiento, type FrenteDelPosicionamiento } from "./posicionamiento";
 
 export interface ServicioDelPerfil {
   nombre: string;
@@ -28,13 +29,16 @@ export interface ClienteDeReferencia {
 
 export interface PerfilDeLaEmpresa {
   propuestaDeValor: string | null;
+  /** La frase del position statement («Smarteam en una frase»). Se edita en Marketing › Audiencia, con sus frentes. */
   positionStatement: string | null;
+  /** Los frentes del position statement (lib/smarteam/posicionamiento.ts). */
+  frentes: FrenteDelPosicionamiento[];
   tono: string | null;
   servicios: ServicioDelPerfil[];
   clientesDeReferencia: ClienteDeReferencia[];
 }
 
-export const PERFIL_VACIO: PerfilDeLaEmpresa = { propuestaDeValor: null, positionStatement: null, tono: null, servicios: [], clientesDeReferencia: [] };
+export const PERFIL_VACIO: PerfilDeLaEmpresa = { propuestaDeValor: null, positionStatement: null, frentes: [], tono: null, servicios: [], clientesDeReferencia: [] };
 
 const texto = (max: number) =>
   z
@@ -43,10 +47,12 @@ const texto = (max: number) =>
     .transform((s) => s.trim() || null)
     .nullable();
 
-/** Lo que acepta la ruta al guardar el perfil (Zod en la frontera). */
+/**
+ * Lo que acepta la ruta al guardar el perfil (Zod en la frontera). Sin el position statement: desde el 2026-10-28 se edita
+ * en Marketing › Audiencia, con sus frentes (lib/smarteam/posicionamiento.ts), y la ficha solo lo muestra.
+ */
 export const PerfilEdicionSchema = z.strictObject({
   propuestaDeValor: texto(4000),
-  positionStatement: texto(4000),
   tono: texto(4000),
   servicios: z
     .array(z.strictObject({ nombre: z.string().trim().min(1, "Cada servicio necesita un nombre.").max(120), descripcion: texto(1000), tarifa: texto(120) }))
@@ -123,7 +129,8 @@ export function textoParaElAgente(c: ContextoDeLaEmpresaQueUsaNexus, o: { con?: 
   const partes: string[] = [];
   if (con.has("perfil")) {
     if (c.perfil.propuestaDeValor) partes.push(`Propuesta de valor de ${c.empresa?.nombre ?? "la empresa"}:\n${c.perfil.propuestaDeValor}`);
-    if (c.perfil.positionStatement) partes.push(`Position statement:\n${c.perfil.positionStatement}`);
+    const ps = textoDelPosicionamiento({ frase: c.perfil.positionStatement, frentes: c.perfil.frentes });
+    if (ps) partes.push(`Position statement:\n${ps}`);
     if (c.tono) partes.push(`Tono de la marca:\n${c.tono}`);
     if (c.perfil.servicios.length) {
       partes.push(`Servicios:\n${c.perfil.servicios.map((s) => `- ${s.nombre}${s.descripcion ? `: ${s.descripcion}` : ""}${s.tarifa ? ` (${s.tarifa})` : ""}`).join("\n")}`);

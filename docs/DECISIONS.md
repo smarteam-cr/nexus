@@ -12389,3 +12389,28 @@ artefactos. Plan: docs/escala-unica-plan.md.
   historia de toda la empresa (la de hoy de la preventa y de cada proyecto, en solo lectura, con cuántos niveles
   propuestos tienen sin revisar y un botón para ir a revisarlos) y «Probar la escala». Ya no se usan desde la ficha los
   niveles propuestos en la preventa o en un proyecto: se revisan en su pantalla.
+
+## El position statement de Smarteam: se escribe en Audiencia y la preventa lo valida contra él (2026-10-28, K3, pregunta 12)
+
+Elías escribió el position statement el 28 oct (la frase y tres frentes: Estructura · HubSpot, Activación · Insider One,
+Acompañamiento, cada uno con «qué logra» y «cuándo cabe») y pidió que se documente en Marketing › Audiencia y que la
+preventa se valide con eso. Plan: `docs/position-statement-plan.md`.
+
+- **Un solo lugar para escribirlo: Marketing › Audiencia** (`/marketing/posicionamiento`, `marketing.write`). La frase
+  sigue en `PerfilDeLaEmpresa.positionStatement` (ya la leían la presentación en frío, la guía y el analizador de la
+  venta); los frentes van en `PerfilDeLaEmpresa.frentes` (Json). La ficha de Smarteam lo muestra y enlaza a Audiencia: su
+  PUT ya no acepta el position statement, para que no haya dos editores del mismo texto.
+- **El agente elige, no escribe.** La frase va palabra por palabra; los hechos los elige de una lista que arma Nexus con
+  su fuente (los datos de la empresa, la investigación, las noticias, las vacantes); el frente, por su clave; las
+  condiciones y lo que «logra», por número. Así lo que se le dice al cliente sale de la base o de un hecho con fuente.
+- **La validación decide, no el modelo** (`lib/exploraciones/posicionamiento.ts`): un juicio sin hecho que lo respalde
+  queda «sin dato»; una condición no revisada, también. Calza si se cumplen todas; a medias si se cumple alguna y no
+  fallan más de las que se cumplen, y lo dice con lo que falta confirmar; si no, el frente no se propone. Un frente sin
+  «cuándo cabe» (Acompañamiento, hasta que Elías lo escriba) no se propone. Una razón que promete (garantiza, duplica, o
+  una cifra que nadie dijo) se cambia por una armada con las condiciones que se cumplen. *Por qué tan estricto:* «no
+  puede prometer algo que la base no dice» es la regla de Elías, y un modelo que se autocalifica no la garantiza.
+- **Se guarda en `propuesta.posicionamiento` de la exploración**, como la guía: material de preparación que se lee, sin
+  «usar». Lo arma cada preparación de la preventa (no la exploración de un proyecto) y reemplaza al anterior.
+- **Contrataciones en la radiografía de la preventa** (5 búsquedas, antes 4): la misma regla del enlace que los hitos.
+  Van a la fuente W1, a la investigación que se guarda en la empresa y a los hechos del position statement. La casilla
+  «Radiografía» no cambia de forma.

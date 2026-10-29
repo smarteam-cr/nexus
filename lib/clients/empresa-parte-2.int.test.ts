@@ -15,7 +15,8 @@ import { escribirEnHubspot } from "./escritura-en-hubspot-server";
 import { documentoDeLaEmpresa, documentosDeLaEmpresa } from "./documentos-de-la-empresa-server";
 import { copiarPersonasDeLaEmpresa, decidirRol, personasDeLaEmpresa } from "./personas-de-la-empresa-server";
 import { contextoDeSmarteam, empresaQueUsaNexus } from "@/lib/smarteam/contexto";
-import { guardarPerfil } from "@/lib/smarteam/perfil-server";
+import { guardarPerfil, guardarPosicionamiento } from "@/lib/smarteam/perfil-server";
+import { PosicionamientoEdicionSchema } from "@/lib/smarteam/posicionamiento-esquema";
 import { INV51 } from "@/lib/invariantes/empresa";
 
 async function persona(nombre: string, email?: string) {
@@ -137,7 +138,7 @@ describe("el perfil de la empresa que usa Nexus (R13)", () => {
     await prisma.buyerPersona.create({ data: { name: "Gerente comercial", description: "Decide la compra." } });
     expect(await empresaQueUsaNexus()).toEqual({ id: s.id, nombre: "Smarteam (test)" });
 
-    const perfil = { propuestaDeValor: "Que HubSpot rinda.", positionStatement: null, tono: null, servicios: [{ nombre: "SmartLoop", descripcion: null, tarifa: "US$ 1.800 al mes" }], clientesDeReferencia: [{ clientId: ref.id, industria: "Software", porque: null }] };
+    const perfil = { propuestaDeValor: "Que HubSpot rinda.", tono: null, servicios: [{ nombre: "SmartLoop", descripcion: null, tarifa: "US$ 1.800 al mes" }], clientesDeReferencia: [{ clientId: ref.id, industria: "Software", porque: null }] };
     await guardarPerfil(s.id, perfil, "elias@test.local");
     await expect(guardarPerfil(ref.id, perfil, "elias@test.local")).rejects.toMatchObject({ status: 409 });
     await expect(guardarPerfil(s.id, { ...perfil, clientesDeReferencia: [{ clientId: prospecto.id, industria: "Software", porque: null }] }, "e@test.local")).rejects.toMatchObject({ status: 400 });
@@ -155,5 +156,21 @@ describe("el perfil de la empresa que usa Nexus (R13)", () => {
     expect(await empresaQueUsaNexus()).toBeNull();
     // Sin saber cuál es, sin perfil pero con el cliente ideal y las personas: el agente de ideas no se queda sin contexto.
     expect((await contextoDeSmarteam()).empresa).toBeNull();
+  });
+
+  it("K3: el position statement se guarda desde Audiencia y el perfil de la ficha no lo pisa", async () => {
+    const s = await prisma.client.create({ data: { name: "Smarteam (test)", kind: "INTERNO" } });
+    const ps = PosicionamientoEdicionSchema.parse({
+      frase: "Acompañamos a empresas que están creciendo.",
+      frentes: [{ nombre: "Activación", herramienta: "Insider One", promesa: "Que miles de clientes compren", titulo: null, queLogra: [{ titulo: "Ver al cliente completo", detalle: null }], cuandoCabe: ["Le vende a personas"], nota: null }],
+    });
+    await guardarPosicionamiento(s.id, ps, "elias@test.local");
+    await guardarPerfil(s.id, { propuestaDeValor: "Que HubSpot rinda.", tono: null, servicios: [], clientesDeReferencia: [] }, "otra@test.local");
+    const ctx = await contextoDeSmarteam();
+    expect(ctx.perfil.positionStatement).toBe("Acompañamos a empresas que están creciendo.");
+    expect(ctx.perfil.frentes.map((f) => [f.clave, f.cuandoCabe])).toEqual([["activacion", ["Le vende a personas"]]]);
+    expect(ctx.perfil.propuestaDeValor).toBe("Que HubSpot rinda.");
+    const otra = await prisma.client.create({ data: { name: "Cliente (test)", kind: "CLIENTE" } });
+    await expect(guardarPosicionamiento(otra.id, ps, "elias@test.local")).rejects.toMatchObject({ status: 409 });
   });
 });

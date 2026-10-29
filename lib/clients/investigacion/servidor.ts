@@ -71,6 +71,8 @@ export async function guardarInvestigacionDeLaPreventa(o: {
   resumen: string | null;
   contenido: LecturaDeLaInvestigacion["contenido"];
   fuentes: { url: string }[];
+  /** Los puestos que encontró la radiografía (K3, 2026-10-28); vacío si no buscó o no encontró. */
+  contrataciones?: LecturaDeLaInvestigacion["contrataciones"];
   ahora?: Date;
 }): Promise<void> {
   const hechaAt = o.ahora ?? new Date();
@@ -85,6 +87,7 @@ export async function guardarInvestigacionDeLaPreventa(o: {
       resumen: o.resumen,
       contenido: o.contenido as Prisma.InputJsonValue,
       fuentes: o.fuentes as Prisma.InputJsonValue,
+      ...(o.contrataciones?.length ? { contrataciones: o.contrataciones as Prisma.InputJsonValue } : {}),
     },
   });
 }
