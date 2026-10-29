@@ -9,7 +9,7 @@
 <!-- El resumen se arma con este bloque. Cómo se regenera: «Cómo se mantiene este roadmap» y la skill regenerar-roadmap. -->
 ```temas
 {
- "dondeVamos": "Hoy salieron a producción el radar nuevo de la escala, el test que no pisa los contactos de HubSpot y las Acciones coherentes cortas. Arranca un área nueva: los artefactos, empezando por una sola escala para preventa y clientes.",
+ "dondeVamos": "Hoy salieron a producción una sola escala para la preventa y los clientes y la escala 9.2 con Telecomunicaciones. El radar de la escala se rediseña como el Mapa en forma de radar, y los artefactos ya tienen su plan.",
  "temas": [
   {
    "n": 4,
@@ -90,15 +90,26 @@
     {
      "fecha": "28 oct",
      "texto": "La vista Radar, un radar de verdad de 0 a 100: un eje por dimensión, una línea por serie y sin zonas de color."
+    },
+    {
+     "fecha": "28 oct",
+     "texto": "La escala 9.2.0, con la edición Telecomunicaciones; los 54 bancos del test aprobados, 6 de ellos nuevos."
+    },
+    {
+     "fecha": "28 oct",
+     "texto": "La escala de un cliente es la misma pieza que la de la preventa, con su historia en el tiempo."
     }
    ],
-   "sigue": "La edición Telecomunicaciones para TELCOM, en construcción. Probar la escala con 5 a 8 empresas de 3 industrias (Escala › Probar). Falta el umbral de tráfico de Insider.",
-   "teToca": "Revisar las 52 decisiones provisionales de la 9.0 (en el manual 1.4.0); empieza por el grupo de control y los Óptimos sin IA.",
+   "sigue": "El radar de la teoría: el Mapa en forma de radar, con cada cruce como una celda y sus criterios. Probar la escala con 5 a 8 empresas de 3 industrias. Falta el umbral de tráfico de Insider.",
+   "teToca": "Aprobar el diseño del radar de la teoría y crear «Telecomunicaciones» en «Industria (Smarteam)» de HubSpot. Después, las 52 decisiones provisionales de la 9.0.",
    "decisiones": [
     8,
     18,
     38,
-    47
+    47,
+    55,
+    56,
+    57
    ]
   },
   {
@@ -229,10 +240,27 @@
     {
      "fecha": "28 oct",
      "texto": "La idea, contigo: tipos, plantillas y varias copias por cliente; la escala, el primer artefacto compartido."
+    },
+    {
+     "fecha": "28 oct",
+     "texto": "En producción, una sola escala para la preventa y los clientes: el primer artefacto compartido."
+    },
+    {
+     "fecha": "28 oct",
+     "texto": "El plan, de V1 a V8, y el catálogo de 20 artefactos sacado de 120 reuniones de 29 cuentas."
     }
    ],
-   "sigue": "Una sola escala en preventa y clientes, en construcción. El plan de los artefactos y el análisis de reuniones que dice cuáles hacen falta.",
-   "decisiones": []
+   "sigue": "Arreglar lo que dejó la revisión de la escala única (una cuenta medida solo en un proyecto se ve sin medir). Después, el catálogo de secciones y varias copias de planificación y diagnóstico.",
+   "decisiones": [
+    58,
+    59,
+    60,
+    61,
+    62,
+    63,
+    64,
+    65
+   ]
   },
   {
    "n": 7,
@@ -249,9 +277,13 @@
     {
      "fecha": "28 oct",
      "texto": "El equipo de cada sesión guía la lectura y la escala; «Usar» dice qué cambia, con Deshacer y Ctrl+Z."
+    },
+    {
+     "fecha": "28 oct",
+     "texto": "Tu position statement de Smarteam, con sus tres frentes: qué logra cada uno y cuándo cabe."
     }
    ],
-   "sigue": "Los clientes similares en la preparación de la sesión y tu position statement base. Después, el ejercicio de las actividades contigo, el catálogo y el cotizador.",
+   "sigue": "Tu position statement entra a Marketing › Audiencia y la preventa lo usa y lo valida (en curso). Los clientes similares en la preparación. Después, las actividades contigo, el catálogo y el cotizador.",
    "teToca": "El ejercicio de las actividades de los casos de uso, cuando tengas energía: destraba el cotizador, las tareas desde lo vendido y la rentabilidad.",
    "decisiones": [
     11,
@@ -510,7 +542,7 @@ Lo que dice «Hoy» en cada tarjeta es del 24 oct, antes de construir: dónde va
 ### 5 · La escala de rendimiento <span class="estado">En curso</span>
 
 - **Resultado esperado:** la escala ubica bien a cada empresa en Ventas, Marketing y Servicio, según su industria y su perfil, y muestra el camino hacia arriba; el mapa de herramientas dice qué pone HubSpot y qué pone Insider en cada paso.
-- **Hoy:** corre la 8.9.1 desde el 24 oct (tu tarea #285 para revisarla). Para la 9.0 hay 17 temas y 124 puntos pendientes (`docs/escala/pendiente-9-0.md`) y, desde el 23 oct, lo de Insider: 16 cambios, la condición «tráfico suficiente» y la lectura «Preparación para engagement avanzado» (área N).
+- **Hoy:** corre la 9.2.0 desde el 28 oct, con las ediciones Maquinaria y equipo pesado y Telecomunicaciones (antes, la 8.9.1 desde el 24 oct y la 9.0 desde el 27). Para la 9.0 hay 17 temas y 124 puntos pendientes (`docs/escala/pendiente-9-0.md`) y, desde el 23 oct, lo de Insider: 16 cambios, la condición «tráfico suficiente» y la lectura «Preparación para engagement avanzado» (área N).
 - **Plan:** probar la 8.9.1 con la empresa que elija cada usuario, hasta juntar 5 a 8 de varias industrias, nunca Wherex (el orden acordado para la 9.0); escribir la 9.0 con sus temas pendientes y lo de Insider juntos; el mapa de herramientas para la 9.0; y la lectura de preparación en la preventa y el diagnóstico.
 - **Criterio de éxito:** la 9.0 publicada y probada con 5 a 8 clientes; por empresa y área se guardan el nivel que da la escala y el que cree su CSE, y coinciden en al menos 4 de cada 5.
 - **Respuestas (24 oct):**
@@ -519,7 +551,9 @@ Lo que dice «Hoy» en cada tarjeta es del 24 oct, antes de construir: dónde va
   1. **La vista Radar es un radar de verdad,** de 0 a 100: un eje por dimensión, un vértice por serie en su eje, una línea por serie y sin las zonas de color del Mapa (el diseño aprobado está en Claude Design, «Radar de la Escala»). En producción el 28 oct.
   2. **Varios departamentos superpuestos, cada uno en su color,** y el radar de una empresa sobre la regla de 0 a 100: cuando exista el diagnóstico criterio por criterio, que da el número dentro de cada nivel.
   3. **Una sola escala para la preventa y los clientes:** es la primera etapa de los artefactos (tarjeta 15).
-  4. **La edición Telecomunicaciones, para TELCOM,** en construcción.
+  4. **La edición Telecomunicaciones, para TELCOM:** publicada el 28 oct en la 9.2.0, sobre el molde de Banca y con 14 reuniones de kölbi (224 criterios reescritos y 50 propios). TELCOM no aparece en HubSpot ni en Nexus. Falta crear su opción en HubSpot (pregunta 55 y «Lo que configuras tú»). Para mirar: Banca pide dos veces verificar la identidad antes de un cambio en la cuenta; arreglarlo es una versión nueva de la escala.
+  5. **El radar de 0 a 100 no va para la escala misma:** sus polígonos de promedio parecen una empresa. Lo que va es **el radar de la teoría**, el Mapa en forma de radar: un eje por dimensión, un anillo por etapa y, en cada cruce, la celda del Mapa con cuántos criterios tiene; al tocarlo, sus criterios. El diseño espera tu visto bueno en Claude Design, «Radar de la Escala». La regla de 0 a 100 queda para el radar de una empresa.
+  6. **Una sola escala, en producción el 28 oct:** la de un cliente es la misma pieza que la de la preventa. La revisión dejó siete arreglos, que están en curso; el principal es que una cuenta medida solo en un proyecto se ve sin medir.
 
 ### 6 · Los tests del diagnóstico de rendimiento <span class="estado">En curso</span>
 
@@ -625,7 +659,9 @@ Lo que dice «Hoy» en cada tarjeta es del 24 oct, antes de construir: dónde va
 - **Resultado esperado:** el CSE dice qué necesita («tengo de frente una presentación de diagnóstico», «ocupo un consenso del proceso comercial», «necesito explorar mejor marketing», «ocupo un plan de adopción») y Nexus crea el artefacto con las secciones que aplican y lo llena con todo lo que sabe del cliente. Como un Miro: varias copias de un mismo tipo por cliente (tres planificaciones en FACO, por ejemplo), cada una con su área para compartir.
 - **Hoy:** cada proyecto tiene documentos de una sola vez, uno por tipo y en orden (Kickoff, Planificación, Diagnóstico…). La Planificación ya tiene dos plantillas, completa y esencial. La escala se ve de dos formas distintas en la preventa y en la ficha del cliente.
 - **Plan:** primero, una sola escala para la preventa y los clientes (en construcción). Después, varias copias por tipo, creadas desde un pedido con el catálogo de secciones de cada tipo, que sale de las secciones de hoy. Los tipos y plantillas que hacen falta salen del análisis de las reuniones reales con las cuentas. Las plantillas que crea el equipo van al final, con Alex Vanegas. La recomendación de artefactos se conecta con los casos de uso, pero sirve también a los clientes sin casos de uso claros, que hoy son la mayoría. El plan ampliado va a `docs/artefactos-plan.md`.
-- **Criterio de éxito:** se define en el plan.
+- **Etapas** (`docs/artefactos-plan.md`): V1 · una sola escala (en producción el 28 oct, con sus arreglos en curso) · V2 · los tipos y el catálogo de secciones, sin cambios en pantalla · V3 · varias copias de un tipo, primero planificación y diagnóstico (SQL que solo agrega) · V4 · compartir cada copia con su enlace · V5 · crear desde un pedido (prueba de criterio: 12 pedidos reales en local) · V6 · los tipos nuevos · V7 · Nexus te propone un artefacto · V8 · las plantillas del equipo.
+- **Lo que dicen las reuniones** (`docs/artefactos-sugeridos.md`, 120 reuniones de 29 cuentas): lo que más hace el CSE es capacitar (22 cuentas), acordar un proceso (21) y dejar por escrito lo acordado (20), y Nexus no tiene documento para ninguna de las tres; aparecen tus tres tipos de adopción (comercial, por niveles y técnico); WhatsApp y los agentes de IA son frente propio en 9 cuentas; SmartLoop necesita una hoja de ruta de la cuenta y un informe de avance y valor.
+- **Criterio de éxito:** un CSE crea desde un pedido un artefacto que no existía (por ejemplo, un plan de adopción) y lo comparte con su cliente, sin que cambie lo que leen los documentos de hoy.
 - **Respuestas (28 oct):**
   1. **Al CSE se le pregunta qué necesita, no cómo llenarlo:** eso lo hace la IA con el contexto.
   2. **El contexto entre entidades se aísla separando proyectos** (tarjeta 2).
@@ -644,8 +680,8 @@ Que Nexus amarre los puntos: entrar a un cliente y ver todo lo que Smarteam est�
 
 | Qué | Cómo está |
 |---|---|
-| Producción | Corre `f4588f96` desde la noche del 28 oct: la vista Radar de 0 a 100, el test que no pisa los contactos de HubSpot y las Acciones coherentes cortas con su detalle en la Planificación. Antes, `e63217a3`, el 28 oct: el equipo de cada sesión, «Usar» con Deshacer, la vista Radar con la forma del Mapa, la edición Maquinaria y el test público con el aspecto de la aplicación vieja, su resultado nuevo con la rueda y el PDF, y la pregunta del CRM (SQL 2026-10-28-uso-de-crm-del-test aplicado). Antes, desde el 27 oct: la noche 3, la escala 9.0 publicada (con el manual 1.4.0 y el mapa 2.0.0), el test nuevo con sus 42 bancos aprobados y el sprint sin tope. Todos los SQL aplicados. |
-| Por desplegar | Nada. En construcción, en sus sesiones: una sola escala para la preventa y los clientes, el plan de los artefactos con su análisis de reuniones, y la edición Telecomunicaciones. **Sin aplicar, a propósito:** la carga inicial de los datos de la empresa (espera a la CSL) y las banderas `EMPRESA_HUBSPOT_ESCRITURA` y `EMPRESA_HUBSPOT_COPIA` («Lo que configuras tú»). |
+| Producción | Corre `7817de59` desde la noche del 28 oct: una sola escala para la preventa y los clientes, y la escala 9.2.0 publicada con la edición Telecomunicaciones y los 54 bancos del test aprobados. Antes, `f4588f96`, el 28 oct: la vista Radar de 0 a 100, el test que no pisa los contactos de HubSpot y las Acciones coherentes cortas con su detalle en la Planificación. Antes, `e63217a3`, el 28 oct: el equipo de cada sesión, «Usar» con Deshacer, la vista Radar con la forma del Mapa, la edición Maquinaria y el test público con el aspecto de la aplicación vieja, su resultado nuevo con la rueda y el PDF, y la pregunta del CRM (SQL 2026-10-28-uso-de-crm-del-test aplicado). Antes, desde el 27 oct: la noche 3, la escala 9.0 publicada (con el manual 1.4.0 y el mapa 2.0.0), el test nuevo con sus 42 bancos aprobados y el sprint sin tope. Todos los SQL aplicados. |
+| Por desplegar | Nada. En construcción, en sus sesiones: los arreglos de la escala única y tu position statement en Marketing › Audiencia y en la preventa. Esperando tu visto bueno: el diseño del radar de la teoría. **Sin aplicar, a propósito:** la carga inicial de los datos de la empresa (espera a la CSL) y las banderas `EMPRESA_HUBSPOT_ESCRITURA` y `EMPRESA_HUBSPOT_COPIA` («Lo que configuras tú»). |
 | En rojo en producción | Por datos de antes, ninguno nuevo (28 oct): 16 reuniones colgadas de proyectos de otro cliente (INV1) y 9 tareas que citan una reunión de otro cliente (INV42), las que ordena el plan de dominio compartido; el pipeline de Secure Title (INV11: 2 proyectos y 6 en una etapa desconocida); «TEC- AE» fusionada en HubSpot (INV13 e INV54: ya solo ella, kölbi quedó bien); una reunión de Meet leída antes de ocurrir (INV16a), y el corte de cartera de hace 96 días (INV32). |
 | Pruebas | 26 para ti (pestaña «Pruebas para personas»; desde el 20 oct solo las que piden tu criterio), 82 que valida el equipo al usarlas, 77 con IA sobre los datos y 48 ya validadas por ti. |
 
@@ -721,6 +757,17 @@ Sin esto, algo sigue mal o no se puede validar:
 52. **Otros pares que comparten reuniones:** Clínica Oceánica y Grupo Petroil (30 reuniones juntas), Real Shipping y Logistics Plus (10), Secure Title y Seguro Global (8). ¿Alguno es una sola cuenta con proyectos que hay que separar?
 53. **«TEC- AE»:** ¿la fusiono en «TEC»? Está vacía, así que no se pierde nada; sus proyectos ya viven en «TEC».
 54. **«El mismo form» del test:** ¿es el formulario de la aplicación vieja o uno solo para todos los tests? El viejo exige «puesto actual» y nombra distinto los campos: habría que adaptar lo que manda Nexus. Si es uno solo para todos, ya está así.
+55. **¿TELCOM es una empresa concreta?** No aparece en HubSpot ni en Nexus, así que la edición Telecomunicaciones quedó para la industria. Si es una empresa, al crearla en HubSpot se le pone esa industria y Nexus le sugiere la edición.
+56. **kölbi, Claro y CONTINEX** están en «Retail Especializado», así que hoy se les sugiere Ecommerce y retail. ¿Los paso a Telecomunicaciones? Su próxima medición sería un punto de partida nuevo.
+57. **El proveedor que solo le vende conectividad a empresas** (IFX Networks, InterNexa) quedó fuera de Telecomunicaciones y se mide con la escala general. ¿Lo sumamos a la edición?
+58. **Artefactos · la copia oficial:** si un proyecto tiene tres planificaciones, ¿cuál leen la entrega y la escala? Te propongo la primera que existió, con un botón para cambiarla.
+59. **Artefactos · compartir:** ¿cada copia se comparte con su propio enlace, o detrás de la contraseña del proyecto?
+60. **Artefactos · el primer tipo nuevo:** te propongo el plan de adopción, después el consenso del proceso comercial y después la presentación del diagnóstico. ¿Empezamos así?
+61. **Artefactos · crear desde un pedido:** ¿te muestro las secciones antes de llenarlas? Te propongo que sí.
+62. **Artefactos · el nombre en pantalla:** ¿«artefactos» o «documentos»?
+63. **Artefactos · el kickoff y la exploración:** ¿siguen siendo uno por proyecto, como estaba decidido?
+64. **Artefactos · de la empresa:** ¿cuáles pueden ser de la empresa entera, sin proyecto? Hoy lo son el diagnóstico y la escala.
+65. **Artefactos · un pedido sin tipo:** si lo que pides no calza con ningún tipo, ¿Nexus lo arma con secciones libres o te dice que no hay?
 
 ## Propuesta por aprobar: vender y entregar por casos de uso
 
@@ -1463,7 +1510,7 @@ Pasaron a otro lugar: unir los contenedores «Información del cliente» repetid
 
 **Para lo de la noche del 25 oct** (en el servidor salvo lo que dice otra cosa):
 1. **HubSpot, los avisos:** en la app de HubSpot, la URL `https://nexus.smarteamcr.com/api/hubspot/webhooks` y las suscripciones de empresa, contacto, negocio y ticket (RUNBOOK › «Los avisos de HubSpot»). Revisar que `APP_URL` del servidor sea esa dirección.
-2. **Que Nexus escriba en HubSpot lo que decide la persona:** `EMPRESA_HUBSPOT_ESCRITURA=1` (yo lo pruebo después con 5 empresas) y, tras revisar el simulacro, `EMPRESA_HUBSPOT_COPIA=1`. Antes, en HubSpot, sumar las opciones «Banca y servicios financieros» y «Maquinaria y equipo pesado» (con esos mismos valores) a la propiedad «Industria (Smarteam)» de las empresas: Nexus ya las ofrece desde el 27 y el 28 oct.
+2. **Que Nexus escriba en HubSpot lo que decide la persona:** `EMPRESA_HUBSPOT_ESCRITURA=1` (yo lo pruebo después con 5 empresas) y, tras revisar el simulacro, `EMPRESA_HUBSPOT_COPIA=1`. Antes, en HubSpot, sumar las opciones «Banca y servicios financieros», «Maquinaria y equipo pesado» y «Telecomunicaciones» (con esos mismos valores) a la propiedad «Industria (Smarteam)» de las empresas: Nexus ya las ofrece desde el 27 y el 28 oct.
 3. **Los avisos de Meet al momento:** `GOOGLE_MEET_EVENTOS_ENABLED=1`.
 4. ✓ No por ahora (decidiste dejar Speech-to-Text apagado, 24 oct). **El audio de las reuniones presenciales:** en Google Cloud, habilitar «Cloud Speech-to-Text», un bucket con CORS y dos roles para la cuenta de servicio (RUNBOOK); en el servidor, `REUNIONES_AUDIO=1` y `GOOGLE_SPEECH_BUCKET`.
 5. **Sentry:** con `SENTRY_DSN`, una alerta de Crons para los monitores `nexus-*` (los jobs que dejan de correr).
