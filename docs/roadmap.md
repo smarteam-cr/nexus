@@ -1,6 +1,6 @@
 # Roadmap de Nexus
 
-**Corte:** 2026-10-27
+**Corte:** 2026-10-28
 
 ## Resumen
 
@@ -9,7 +9,7 @@
 <!-- El resumen se arma con este bloque. Cómo se regenera: «Cómo se mantiene este roadmap» y la skill regenerar-roadmap. -->
 ```temas
 {
- "dondeVamos": "La escala 9.0 está publicada y el test nuevo ya funciona en producción, con área, industria y preguntas aprobadas. Todavía no reemplaza al test viejo: primero lo revisas tú.",
+ "dondeVamos": "Hoy salieron a producción el radar nuevo de la escala, el test que no pisa los contactos de HubSpot y las Acciones coherentes cortas. Arranca un área nueva: los artefactos, empezando por una sola escala para preventa y clientes.",
  "temas": [
   {
    "n": 4,
@@ -86,9 +86,13 @@
     {
      "fecha": "28 oct",
      "texto": "La vista Radar rediseñada con la misma rueda que el Mapa: mismas mitades y rótulos, con puntos por serie."
+    },
+    {
+     "fecha": "28 oct",
+     "texto": "La vista Radar, un radar de verdad de 0 a 100: un eje por dimensión, una línea por serie y sin zonas de color."
     }
    ],
-   "sigue": "Probarla con 5 a 8 empresas de al menos 3 industrias (Escala › Probar). Falta el umbral de tráfico de Insider (se usa uno provisional).",
+   "sigue": "La edición Telecomunicaciones para TELCOM, en construcción. Probar la escala con 5 a 8 empresas de 3 industrias (Escala › Probar). Falta el umbral de tráfico de Insider.",
    "teToca": "Revisar las 52 decisiones provisionales de la 9.0 (en el manual 1.4.0); empieza por el grupo de control y los Óptimos sin IA.",
    "decisiones": [
     8,
@@ -136,15 +140,20 @@
     {
      "fecha": "28 oct",
      "texto": "El formulario pregunta cómo gestionan hoy a sus clientes (en vez del puesto) y ya no sale el aviso al terminar."
+    },
+    {
+     "fecha": "28 oct",
+     "texto": "A quien ya es contacto en HubSpot, el test no le pisa nombre, empresa ni cargo; la nota trae sus respuestas."
     }
    ],
-   "sigue": "Tu revisión de las preguntas. Después, el corte: un formulario nuevo de HubSpot, cambiar la dirección y apagar la aplicación vieja.",
+   "sigue": "Tu revisión de las preguntas y qué formulario de HubSpot usa el test. Después, el corte: el formulario, cambiar la dirección y apagar la aplicación vieja.",
    "teToca": "Recorrer el test (nexus.smarteamcr.com/external/test) y corregir lo que quieras en Escala › Tests › Preguntas.",
    "decisiones": [
     15,
     29,
     39,
-    46
+    46,
+    54
    ]
   },
   {
@@ -210,11 +219,27 @@
    "decisiones": []
   },
   {
+   "n": 15,
+   "nombre": "Artefactos: tipos, plantillas y varias copias",
+   "corto": "Artefactos",
+   "estado": "en-curso",
+   "prioridad": 6,
+   "resultado": "El CSE dice qué necesita y Nexus arma el artefacto con las secciones que aplican, lleno con lo que sabe del cliente.",
+   "hecho": [
+    {
+     "fecha": "28 oct",
+     "texto": "La idea, contigo: tipos, plantillas y varias copias por cliente; la escala, el primer artefacto compartido."
+    }
+   ],
+   "sigue": "Una sola escala en preventa y clientes, en construcción. El plan de los artefactos y el análisis de reuniones que dice cuáles hacen falta.",
+   "decisiones": []
+  },
+  {
    "n": 7,
    "nombre": "Vender por resultados",
    "corto": "Vender por resultados",
    "estado": "propuesta",
-   "prioridad": 6,
+   "prioridad": 7,
    "resultado": "El vendedor arma la propuesta con casos de uso y actividades; Nexus calcula el precio mínimo y el precio se pone por valor.",
    "hecho": [
     {
@@ -242,7 +267,7 @@
    "nombre": "Entregar: cronograma y tareas",
    "corto": "Entregar",
    "estado": "propuesta",
-   "prioridad": 7,
+   "prioridad": 8,
    "resultado": "El cliente ve cómo va su proyecto y cada CSE sabe qué le toca hoy, sin 20 tareas de golpe.",
    "hecho": [
     {
@@ -262,7 +287,7 @@
    "nombre": "Rentabilidad y capacidad",
    "corto": "Rentabilidad",
    "estado": "propuesta",
-   "prioridad": 8,
+   "prioridad": 9,
    "resultado": "Saber cuánto cuesta entregar cada caso y cuánto tiempo gana Nexus.",
    "hecho": [
     {
@@ -294,9 +319,13 @@
     {
      "fecha": "27 oct",
      "texto": "La Planificación con las siete etapas del Brief."
+    },
+    {
+     "fecha": "28 oct",
+     "texto": "Las Acciones coherentes: tres o cuatro de una línea en el diagnóstico, y el detalle en la Planificación."
     }
    ],
-   "sigue": "Pasar el detalle de las Acciones coherentes a la Planificación (en el diagnóstico queda el enfoque en una línea). Definir contigo los entregables de Customer Success.",
+   "sigue": "Que Caroline pruebe la Planificación con el Brief en «FACO · SmartLoop (prueba)». Definir contigo los entregables de Customer Success.",
    "decisiones": [
     16,
     32,
@@ -318,6 +347,10 @@
     {
      "fecha": "27 oct",
      "texto": "Los documentos de la empresa sin proyecto."
+    },
+    {
+     "fecha": "28 oct",
+     "texto": "Fomento Urbano en una ficha, kölbi reapuntado, 6 «Información del cliente» repetidas unidas y CAMOSA en Maquinaria."
     }
    ],
    "sigue": "La carga inicial de los datos (espera a la CSL) y prender la escritura en HubSpot.",
@@ -347,12 +380,22 @@
     {
      "fecha": "26 oct",
      "texto": "Una reunión reprogramada al futuro vuelve sola a «no leída»."
+    },
+    {
+     "fecha": "28 oct",
+     "texto": "El plan de las empresas que comparten dominio: la pared es el proyecto y el nombre de la reunión pesa más."
     }
    ],
-   "sigue": "Medir el paso del 72 % al 90 % de reuniones con texto, y que las reuniones sin empresa lleguen a cero.",
+   "sigue": "Tus respuestas al plan de dominio compartido (TEC, Honda y FACO, Grupo INVE). Medir el paso del 72 % al 90 % de reuniones con texto, y las sin empresa en cero.",
    "decisiones": [
     21,
-    34
+    34,
+    48,
+    49,
+    50,
+    51,
+    52,
+    53
    ]
   },
   {
@@ -443,6 +486,8 @@ Lo que dice «Hoy» en cada tarjeta es del 24 oct, antes de construir: dónde va
   2. **El aviso va en la reunión misma, en Nexus,** para que la persona aporte el contexto, idealmente respondiendo unas preguntas que Nexus le hace con lo que sabe de las otras reuniones (T9).
   3. **El caso de Liliana quedó resuelto:** era «Cemaco | Data Hub» del 22 oct. La API de Meet dice que ocurrió (de 8:58 a 9:46, con 7 personas) y que nadie activó la transcripción ni las notas. Nexus la tiene en Cemaco, sin texto, y la guarda a la hora del evento (3 de la tarde), no a la real: U3 lo corrige.
 
+- **El 28 oct, las empresas que comparten dominio** (TEC- AE y TAE, Grupo INVE y AnalisaLab): la pared que separa el contexto es el proyecto, y para decidir de qué proyecto es una reunión pesa primero su nombre y después quiénes estuvieron. El plan, en `docs/empresas-con-dominio-compartido-plan.md`; sus preguntas son las 48 a 53.
+
 ### 3 · Las integraciones: Google, HubSpot, finanzas y la IA <span class="estado">En producción</span>
 
 - **Resultado esperado:** cada integración usa lo que su API de verdad permite (la lección de Mercury): Google da la transcripción con quién habló, quiénes estuvieron y si la reunión ocurrió; HubSpot avisa sus cambios y trae los resúmenes de sus reuniones; Odoo dice en qué banco entró cada pago; y la IA cuesta lo que debe.
@@ -470,6 +515,11 @@ Lo que dice «Hoy» en cada tarjeta es del 24 oct, antes de construir: dónde va
 - **Criterio de éxito:** la 9.0 publicada y probada con 5 a 8 clientes; por empresa y área se guardan el nivel que da la escala y el que cree su CSE, y coinciden en al menos 4 de cada 5.
 - **Respuestas (24 oct):**
   1. **La escala se prueba con la empresa que el usuario quiera,** desde su preventa o su ficha, en el artefacto de la escala (N2).
+- **El 28 oct:**
+  1. **La vista Radar es un radar de verdad,** de 0 a 100: un eje por dimensión, un vértice por serie en su eje, una línea por serie y sin las zonas de color del Mapa (el diseño aprobado está en Claude Design, «Radar de la Escala»). En producción el 28 oct.
+  2. **Varios departamentos superpuestos, cada uno en su color,** y el radar de una empresa sobre la regla de 0 a 100: cuando exista el diagnóstico criterio por criterio, que da el número dentro de cada nivel.
+  3. **Una sola escala para la preventa y los clientes:** es la primera etapa de los artefactos (tarjeta 15).
+  4. **La edición Telecomunicaciones, para TELCOM,** en construcción.
 
 ### 6 · Los tests del diagnóstico de rendimiento <span class="estado">En curso</span>
 
@@ -484,6 +534,7 @@ Lo que dice «Hoy» en cada tarjeta es del 24 oct, antes de construir: dónde va
      - la completa, que la llena Customer Success en la exploración profunda, según el caso de uso o una exploración general.
   2. **La completa la llena el consultor, por equipo.** La escala ubica a un equipo, así que una empresa puede tener varias exploraciones: Ventas, servicio, Customer Success, sus clientes.
   3. **Las preguntas las revisas tú,** y el equipo te da su opinión al usarlas.
+- **El 28 oct:** el resultado del test con la regla de colores abajo no va; se retoma con tus comentarios anteriores sobre la página de resultados. A quien ya es contacto, el test no le pisa sus datos en HubSpot («Lo que decides tú» 39; queda la 54).
 
 ### 7 · Vender por resultados <span class="estado">Propuesta</span>
 
@@ -534,7 +585,7 @@ Lo que dice «Hoy» en cada tarjeta es del 24 oct, antes de construir: dónde va
 - **Plan:** en el kickoff, la ruta de HubSpot Academy por rol y el pedido fijo del acceso a su portal (Q); lo que salió de usar el diagnóstico el 23 oct (L): las reuniones con solo notas cuentan, publicar dice por qué no, la ficha editable y todo movible; después, la Planificación con sesiones y entrenamientos, plantillas por caso de uso y qué necesita Customer Success para cada entregable.
 - **Criterio de éxito:** Liliana genera, presenta y publica un diagnóstico sin tener que preguntar por qué no puede; cada kickoff nuevo trae la ruta de Academy y el pedido del acceso al portal, y el acceso queda «dado» en menos de 10 días hábiles en 8 de cada 10 proyectos (el criterio de Q).
 - **Para después:**
-  1. Las Acciones coherentes, ¿van en el diagnóstico o en la Planificación? («Lo que decides tú» 16)
+  1. ✓ Las Acciones coherentes: el enfoque en el diagnóstico y el detalle en la Planificación, en producción el 28 oct («Lo que decides tú» 16).
   2. ¿Quién arma y mantiene la lista de cursos de Academy por rol?
   3. ¿Cuándo hacemos el chat por entregable (J1)?
 
@@ -569,6 +620,18 @@ Lo que dice «Hoy» en cada tarjeta es del 24 oct, antes de construir: dónde va
   2. Las 98 líneas del banco sin conciliar, ¿las revisa Alex en Nexus o en Odoo? («Lo que decides tú» 28)
   3. ¿Cuándo llega la clave de Stripe?
 
+### 15 · Artefactos: tipos, plantillas y varias copias <span class="estado">En curso</span>
+
+- **Resultado esperado:** el CSE dice qué necesita («tengo de frente una presentación de diagnóstico», «ocupo un consenso del proceso comercial», «necesito explorar mejor marketing», «ocupo un plan de adopción») y Nexus crea el artefacto con las secciones que aplican y lo llena con todo lo que sabe del cliente. Como un Miro: varias copias de un mismo tipo por cliente (tres planificaciones en FACO, por ejemplo), cada una con su área para compartir.
+- **Hoy:** cada proyecto tiene documentos de una sola vez, uno por tipo y en orden (Kickoff, Planificación, Diagnóstico…). La Planificación ya tiene dos plantillas, completa y esencial. La escala se ve de dos formas distintas en la preventa y en la ficha del cliente.
+- **Plan:** primero, una sola escala para la preventa y los clientes (en construcción). Después, varias copias por tipo, creadas desde un pedido con el catálogo de secciones de cada tipo, que sale de las secciones de hoy. Los tipos y plantillas que hacen falta salen del análisis de las reuniones reales con las cuentas. Las plantillas que crea el equipo van al final, con Alex Vanegas. La recomendación de artefactos se conecta con los casos de uso, pero sirve también a los clientes sin casos de uso claros, que hoy son la mayoría. El plan ampliado va a `docs/artefactos-plan.md`.
+- **Criterio de éxito:** se define en el plan.
+- **Respuestas (28 oct):**
+  1. **Al CSE se le pregunta qué necesita, no cómo llenarlo:** eso lo hace la IA con el contexto.
+  2. **El contexto entre entidades se aísla separando proyectos** (tarjeta 2).
+  3. **Cada artefacto tiene su área para compartir** con el cliente.
+  4. **Las plantillas del equipo, después,** iterándolas con Alex Vanegas.
+
 ## Para qué
 
 Que Nexus amarre los puntos: entrar a un cliente y ver todo lo que Smarteam está haciendo con él, y que cada persona sepa qué le toca hoy.
@@ -581,10 +644,10 @@ Que Nexus amarre los puntos: entrar a un cliente y ver todo lo que Smarteam est�
 
 | Qué | Cómo está |
 |---|---|
-| Producción | Corre `e63217a3` desde el 28 oct: el equipo de cada sesión, «Usar» con Deshacer, la vista Radar con la forma del Mapa, la edición Maquinaria y el test público con el aspecto de la aplicación vieja, su resultado nuevo con la rueda y el PDF, y la pregunta del CRM (SQL 2026-10-28-uso-de-crm-del-test aplicado). Antes, desde el 27 oct: la noche 3, la escala 9.0 publicada (con el manual 1.4.0 y el mapa 2.0.0), el test nuevo con sus 42 bancos aprobados y el sprint sin tope. Todos los SQL aplicados. |
-| Por desplegar | Nada. **Sin aplicar, a propósito:** la carga inicial de los datos de la empresa (espera a la CSL), unir las 6 «Información del cliente» repetidas (borra copias: «Lo que decides tú» 36), y las banderas `EMPRESA_HUBSPOT_ESCRITURA` y `EMPRESA_HUBSPOT_COPIA` («Lo que configuras tú»). |
-| En rojo en producción | 4 invariantes: el pipeline de Secure Title, «TEC- AE» fusionada en HubSpot y el corte de cobranza apagado (con su decisión abajo), y desde el 21 oct INV16(a): 2 reuniones de Meet leídas antes de ocurrir (un evento movido de fecha después de leerse, el caso conocido de KNOWN-ERRORS). |
-| Pruebas | 25 para ti (pestaña «Pruebas para personas»; desde el 20 oct solo las que piden tu criterio), 81 que valida el equipo al usarlas, 77 con IA sobre los datos y 48 ya validadas por ti. |
+| Producción | Corre `f4588f96` desde la noche del 28 oct: la vista Radar de 0 a 100, el test que no pisa los contactos de HubSpot y las Acciones coherentes cortas con su detalle en la Planificación. Antes, `e63217a3`, el 28 oct: el equipo de cada sesión, «Usar» con Deshacer, la vista Radar con la forma del Mapa, la edición Maquinaria y el test público con el aspecto de la aplicación vieja, su resultado nuevo con la rueda y el PDF, y la pregunta del CRM (SQL 2026-10-28-uso-de-crm-del-test aplicado). Antes, desde el 27 oct: la noche 3, la escala 9.0 publicada (con el manual 1.4.0 y el mapa 2.0.0), el test nuevo con sus 42 bancos aprobados y el sprint sin tope. Todos los SQL aplicados. |
+| Por desplegar | Nada. En construcción, en sus sesiones: una sola escala para la preventa y los clientes, el plan de los artefactos con su análisis de reuniones, y la edición Telecomunicaciones. **Sin aplicar, a propósito:** la carga inicial de los datos de la empresa (espera a la CSL) y las banderas `EMPRESA_HUBSPOT_ESCRITURA` y `EMPRESA_HUBSPOT_COPIA` («Lo que configuras tú»). |
+| En rojo en producción | Por datos de antes, ninguno nuevo (28 oct): 16 reuniones colgadas de proyectos de otro cliente (INV1) y 9 tareas que citan una reunión de otro cliente (INV42), las que ordena el plan de dominio compartido; el pipeline de Secure Title (INV11: 2 proyectos y 6 en una etapa desconocida); «TEC- AE» fusionada en HubSpot (INV13 e INV54: ya solo ella, kölbi quedó bien); una reunión de Meet leída antes de ocurrir (INV16a), y el corte de cartera de hace 96 días (INV32). |
+| Pruebas | 26 para ti (pestaña «Pruebas para personas»; desde el 20 oct solo las que piden tu criterio), 82 que valida el equipo al usarlas, 77 con IA sobre los datos y 48 ya validadas por ti. |
 
 ## Cómo va Nexus
 
@@ -608,8 +671,8 @@ Sin esto, algo sigue mal o no se puede validar:
 2. **«Empresa para pruebas»** está como cliente en la cartera (aparece en lo de la CSL): ¿la marco como interna o se cierra su proyecto? Y «Test CSE (vista Heiver)» sigue activo con rol CSL.
 3. **La cartera del CSE:** ¿cuenta las cuentas que le compartieron, o solo las que lleva? (Juan Carlos: 13 contra 16.)
 4. **Las tareas de seguimiento en «Por asignar · Customer Success»** de una cuenta sin CSE (4 en Secure Title): ¿pasan solas al encargado nuevo?
-5. **«Fomento Urbano» y «Fomento Urbano S.A.»** parecen la misma empresa: ¿las fusiono?
-6. **«TEC- AE»** apunta a una empresa fusionada en HubSpot: ¿la reapunto (`scripts/reapuntar-empresa-fusionada.ts`)?
+5. ✓ **«Fomento Urbano» y «Fomento Urbano S.A.»** parecen la misma empresa: ¿las fusiono? **Tu respuesta (28 oct): sí.** (Hecha el 28 oct: queda «Fomento Urbano», con su empresa de HubSpot, sus procesos y su cobranza: 2 servicios y 13 cobros.)
+6. ✓ **«TEC- AE»** apunta a una empresa fusionada en HubSpot: ¿la reapunto (`scripts/reapuntar-empresa-fusionada.ts`)? **Tu respuesta (28 oct):** sí, pero el TEC son escuelas que funcionan como empresas separadas con el mismo dominio, y su contexto no se puede mezclar. Reapuntarla la juntaría con TEC, así que pasa al plan de las empresas que comparten dominio (`docs/empresas-con-dominio-compartido-plan.md`, preguntas 48 a 53).
 7. ✓ **La reunión del sprint:** sacar el tope de 5 tareas por persona y leer también su conversación (unos US$0,014 por reunión). **Tu respuesta (27 oct): sí.**
 8. ✓ **La escala 8.9.1:** publicada el 24 oct. Queda tu tarea #285 para revisarla en producción.
 9. **El correo de la mañana:** mandarlo por Gmail o por un proveedor.
@@ -619,7 +682,7 @@ Sin esto, algo sigue mal o no se puede validar:
 13. ✓ **Los clientes similares** (K4): ¿se pueden nombrar todos los clientes al presentarse, o hay algunos que no? La lista sería solo para el consultor. **Tu respuesta (28 oct):** todos, sin aviso: es para que el vendedor sepa, al preparar la sesión de exploración, con qué empresas parecidas hemos trabajado.
 14. **El banco de preguntas por departamento y los aprendizajes de Andrés** (K1 y K8): pedírselos para contrastarlos con lo que tiene Nexus.
 15. ✓ **«Diagnóstico virtual»** (K7): confirmar con Marco que es el test en línea que deja la nota «Diagnóstico de Rendimiento» en HubSpot. **Tu respuesta (24 oct): sí, «Diagnóstico de Rendimiento» es la nota del test.**
-16. **Las Acciones coherentes** (L4): ¿se quedan en el diagnóstico o pasan a la Planificación? Te propongo dejar en el diagnóstico el enfoque con tres o cuatro acciones en una línea, y pasar el detalle a la Planificación.
+16. ✓ **Las Acciones coherentes** (L4): ¿se quedan en el diagnóstico o pasan a la Planificación? Te propongo dejar en el diagnóstico el enfoque con tres o cuatro acciones en una línea, y pasar el detalle a la Planificación. **Tu respuesta (28 oct):** «Me parece bien tu recomendación. Haz el cambio para los nuevos diagnósticos que se generen.» (En producción el 28 oct, `f4588f96`.)
 17. **El formato del documento de resultados de la preventa** (C5): lo define Ventas el lunes 27 oct.
 18. **La calificación de clientes de Insider** (N4): pedirles el umbral de tráfico con que califican a un cliente; es el de la condición «tráfico suficiente». *(27 oct: todavía no tienes el dato; el borrador usa 50.000 visitas al mes, provisional.)*
 19. **«Capacitación» en las tareas** (P1): ¿es la formación del equipo de Smarteam, la que se le da a un cliente, o las dos? Te propongo una categoría propia para la del equipo; la de un cliente va con su cliente asociado.
@@ -636,13 +699,13 @@ Sin esto, algo sigue mal o no se puede validar:
 30. **Lo que Nexus ordena solo en «Lo que no cuadra»:** ¿qué porcentaje esperas, a fijar con Alex? Es la N del criterio de la tarjeta 14.
 31. **Una tarea «por validar» que una persona marca hecha en el Gantt:** hoy conserva la marca, así que ni el cronograma del cliente ni la Entrega la muestran (una sola regla desde el 24 oct, porque la IA de avance también marca tareas hechas). Te propongo que marcarla hecha **a mano** le borre la marca; lo que marca la IA, no.
 32. **Los Briefs de implementación ya llenos de los clientes actuales:** ¿se traen a la Planificación de cada uno, o solo los nuevos nacen en Nexus? (L4, `docs/planificacion-brief-plan.md`.)
-33. **Con qué cliente prueba Caroline** la Planificación con el Brief.
+33. ✓ **Con qué cliente prueba Caroline** la Planificación con el Brief. **Tu respuesta (28 oct):** con FACO, en el proyecto «FACO · SmartLoop (prueba)».
 34. **FACO:** ¿`facocr.com` es solo de Honda Costa Rica? Si sí, lo registro y 18 reuniones dejan de proponer «crear Faco». Y `hubspot.com`, ¿lo declaramos aliado? (13 reuniones.)
-35. **kölbi y «TEC- AE»:** la búsqueda de fusiones confirma que kölbi apunta a su empresa vieja de HubSpot y que «TEC- AE» es la misma que «TEC». ¿Reapunto kölbi y fusiono las dos TEC?
-36. **Las 6 «Información del cliente» repetidas:** son copias exactas; el script las une (borra las copias y muda 4 documentos de Librería). ¿Lo aplico?
+35. ✓ **kölbi y «TEC- AE»:** la búsqueda de fusiones confirma que kölbi apunta a su empresa vieja de HubSpot y que «TEC- AE» es la misma que «TEC». ¿Reapunto kölbi y fusiono las dos TEC? **Tu respuesta (28 oct):** kölbi sí, «solo hay 1» (hecho el 28 oct: apunta a «KÖLBI ICE»). Lo del TEC pasa al plan de dominio compartido (pregunta 53).
+36. ✓ **Las 6 «Información del cliente» repetidas:** son copias exactas; el script las une (borra las copias y muda 4 documentos de Librería). ¿Lo aplico? **Tu respuesta (28 oct): si hay duplicidad, elimínala.** (Hecha el 28 oct: 6 copias borradas y los 4 PDF de Librería mudados.)
 37. **La comisión de HubSpot:** cuenta cada venta solo por los meses en que ya existía (reconstruye los pagos pasados con menos de 9 % de diferencia). ¿Te parece bien la regla?
 38. ✓ **El borrador de la escala 9.0:** 36 preguntas en Escala › Borrador › «Lo que falta decidir» (las principales: si los cambios de Insider conservan su número, el grupo de control de 2.8.O3, «tráfico suficiente» y su umbral, y qué ejecuta la IA en los Óptimos que hoy se cumplen sin ella). Mientras haya preguntas abiertas, no se puede publicar. **No era una pregunta (27 oct): son las 36 preguntas que viven dentro del borrador; quedaron en «Te toca» de la escala.**
-39. **Cuando alguien que ya está en HubSpot llena el test:** el test le manda a HubSpot el nombre, la empresa y el puesto que la persona escribió. Si su correo ya es un contacto (por ejemplo, alguien de un cliente), HubSpot reemplaza lo que tenía por lo que escribió en el test; la aplicación vieja hace lo mismo. ¿Lo dejamos así, o a los que ya son contactos solo les sumamos la nota del resultado, sin tocar sus datos?
+39. ✓ **Cuando alguien que ya está en HubSpot llena el test:** el test le manda a HubSpot el nombre, la empresa y el puesto que la persona escribió. Si su correo ya es un contacto (por ejemplo, alguien de un cliente), HubSpot reemplaza lo que tenía por lo que escribió en el test; la aplicación vieja hace lo mismo. ¿Lo dejamos así, o a los que ya son contactos solo les sumamos la nota del resultado, sin tocar sus datos? **Tu respuesta (28 oct):** «No creo que deba mandarle lo mismo. Pero la idea es que sea un form de HubSpot… la idea es que sea el mismo form. Por otro lado, creo que no debería estar mandando lo mismo y reemplazar los datos del form, pero sí las respuestas del test y la nota que deja en HubSpot.» (En producción el 28 oct, `f4588f96`: a quien ya es contacto, el formulario le llega solo con el correo, y la nota trae las respuestas. El envío sigue apagado; queda la pregunta 54.)
 40. ✓ **El analizador de venta:** entran solas las reuniones de prospectos y las de clientes con una preventa abierta y alguien de Ventas (95 en 90 días); «Fase 2: Marketing» de CEMACO se analiza a mano. Y la reunión de referencia no entra al análisis (es de otra empresa), se muestra al lado. ¿De acuerdo? **Tu respuesta (27 oct): el análisis automático, solo para las sesiones de las exploraciones de la preventa; «Marcar como referencia» se quita.**
 41. ✓ **Quién confirma el análisis de una sesión de venta:** hoy cualquier super admin, incluso el vendedor. ¿Tiene que confirmar el líder (Andrés)? **Tu respuesta (27 oct): no; puede confirmar cualquier super admin.**
 42. ✓ **Las expansiones de un cliente sin preventa** (como la Fase 2 de CEMACO): antes se analizaban a mano desde la reunión; ahora hay que abrirles una preventa. ¿Está bien así? **Tu respuesta (27 oct): sí.**
@@ -650,7 +713,14 @@ Sin esto, algo sigue mal o no se puede validar:
 44. **La plantilla recomendada de la Planificación:** hoy el selector propone la completa. ¿Recomendamos una?
 45. **«Cómo llegó» un prospecto:** sumé una quinta vía, «Por la web o un anuncio». ¿La dejamos?
 46. ✓ **La industria «Banca y servicios financieros» en el test:** la escala tiene su edición, pero la lista de industrias de Smarteam no trae Banca, así que nadie llega a esas preguntas. ¿Sumo «Banca y servicios financieros» a la lista de industrias (también la de los datos de la empresa)? **Tu respuesta (27 oct):** Sí, súmala. (Hecha el 27 oct: ya aparece en el test y en los datos de la empresa. En HubSpot la opción todavía no existe; hay que crearla antes de que Nexus escriba la industria allá.)
-47. **CAMOSA y la industria Maquinaria:** desde el 28 oct existe la edición «Maquinaria y equipo pesado» de la escala, y CAMOSA sigue en «Automotriz». ¿La paso a Maquinaria? Su próxima medición sería un punto de partida nuevo, sin comparar con la anterior.
+47. ✓ **CAMOSA y la industria Maquinaria:** desde el 28 oct existe la edición «Maquinaria y equipo pesado» de la escala, y CAMOSA sigue en «Automotriz». ¿La paso a Maquinaria? Su próxima medición sería un punto de partida nuevo, sin comparar con la anterior. **Tu respuesta (28 oct): sí; su próxima medición es un punto de partida nuevo.** (Hecha el 28 oct: su ficha y su preventa abierta, en Maquinaria, con el mismo perfil.)
+48. **El TEC:** ¿hay un tercer proyecto aparte, FUNDATEC por ejemplo? Las 3 reuniones que no se pueden repartir son de FUNDATEC y de un evento: ¿van a los dos proyectos o quedan por decidir? (`docs/empresas-con-dominio-compartido-plan.md`.)
+49. **Honda y FACO (urgente):** ¿son la misma cuenta con proyectos aparte, o dos cuentas? Hoy se creó «Faco» y 15 reuniones quedaron colgando de proyectos de Honda. Va con la 34.
+50. **Grupo INVE y AnalisaLab:** ¿la integración con SAP de AnalisaLab pasa a «Grupo Inve» como un proyecto más, y la ficha «Analisalab» se fusiona? Sus 23 reuniones con el cliente ya están en «Grupo Inve».
+51. **Lo que se comparte en la ficha del TEC:** ¿los procesos y la ficha de datos son uno solo para la institución, o AE y TAE tienen procesos distintos? Hoy los dos están vacíos.
+52. **Otros pares que comparten reuniones:** Clínica Oceánica y Grupo Petroil (30 reuniones juntas), Real Shipping y Logistics Plus (10), Secure Title y Seguro Global (8). ¿Alguno es una sola cuenta con proyectos que hay que separar?
+53. **«TEC- AE»:** ¿la fusiono en «TEC»? Está vacía, así que no se pierde nada; sus proyectos ya viven en «TEC».
+54. **«El mismo form» del test:** ¿es el formulario de la aplicación vieja o uno solo para todos los tests? El viejo exige «puesto actual» y nombra distinto los campos: habría que adaptar lo que manda Nexus. Si es uno solo para todos, ya está así.
 
 ## Propuesta por aprobar: vender y entregar por casos de uso
 
@@ -1062,7 +1132,7 @@ Sale del feedback de Customer Success y Ventas del 23 oct, validado contra el di
    - Etapa 2 · Las tarjetas que todavía no se mueven: «Consecuencias positivas», la escala, los objetivos, los ítems de un grupo del alcance y las filas de las tablas.
    - Etapa 3 · El asistente sí puede quitar ítems, pero no sabe que «Consecuencias positivas» se arma con las Acciones coherentes: enseñárselo.
    - Etapa 4 · El contexto adicional abre cerrado siempre que ya tenga algo, y recuerda lo que eligió cada persona.
-4. [hecho, 27 oct, en producción: las siete etapas del Brief] **L4 · La Planificación como el siguiente entregable.** *Existe a medias:* tiene propiedades, pilotos y rutinas de adopción, y lee las Acciones coherentes del diagnóstico; no tiene sesiones, con quiénes ni entrenamientos.
+4. [hecho, 27 oct, en producción: las siete etapas del Brief; 28 oct, en producción: las Acciones coherentes en detalle] **L4 · La Planificación como el siguiente entregable.** *Existe a medias:* tiene propiedades, pilotos y rutinas de adopción, y lee las Acciones coherentes del diagnóstico; no tiene sesiones, con quiénes ni entrenamientos.
    - Etapa 1 · Una sección «Sesiones y entrenamientos», que sale de las actividades vendidas cuando existan.
    - Etapa 2 · Las Acciones coherentes: en el diagnóstico queda el enfoque con tres o cuatro acciones en una línea; el detalle pasa a la Planificación (decisión 16).
    - Etapa 3 · Dos plantillas de Planificación, como el diagnóstico (es I2).
@@ -1148,7 +1218,7 @@ Pedido del 23 oct: migrar a Nexus el test público de cada departamento, con mej
    - Etapa 2 · Los riesgos, el costo de quedarse y una sola recomendación con su razón.
    - Etapa 3 · Los casos de uso que lo mueven, sin precio, y la lectura de preparación cuando aplica (N6).
    - Etapa 4 · La síntesis la escribe la IA sin mover números; se reusan el radar y la curva de hoy.
-4. [hecho, 26 oct; el envío a HubSpot queda apagado («Lo que configuras tú»)] **O4 · Unido a HubSpot y a la preventa.** *Existe a medias:* hoy deja la nota y la dirección del resultado en HubSpot, y la preventa la decodifica.
+4. [hecho, 26 oct; 28 oct, en producción: no pisa los datos de un contacto que ya existe y la nota trae las respuestas; el envío a HubSpot queda apagado («Lo que configuras tú»)] **O4 · Unido a HubSpot y a la preventa.** *Existe a medias:* hoy deja la nota y la dirección del resultado en HubSpot, y la preventa la decodifica.
    - Etapa 1 · HubSpot recibe lo mismo que hoy (contacto, empresa, nota y dirección), para no romper nada.
    - Etapa 2 · El resultado entra directo a la preventa de la empresa en Nexus, como algo a validar en la primera sesión (K7).
    - Etapa 3 · Los leads, agrupados por empresa con quién llenó cada área (K10).
@@ -1517,6 +1587,7 @@ Las áreas van por prioridad: **Alta** (lo usa el equipo cada día, toca plata o
 | 287 | Por validar | Que el diagnóstico avise cuando casi nada está confirmado | CEMACO › «Cemaco Internacional - CRM» › activar «Diagnóstico». | Un aviso «Casi nada de lo que lee el diagnóstico está confirmado», con la ficha, los resultados y los procesos y dónde revisar cada uno. Al generar, pide confirmación («Generar igual» o «Revisar antes»). |
 | 288 | Por validar | Que se elija entre dos plantillas | El mismo lugar, debajo del aviso. | Dos tarjetas, «Diagnóstico esencial» (recomendada, 7 partes) y «Diagnóstico completo», cada una con su lista de secciones. |
 | 289 | Por validar | Que el diagnóstico esencial explique simple el porqué y el qué haremos | Generar con la esencial y leerlo entero. | 7 partes: portada, objetivos, problema, desafío, «Enfoque de la solución», acciones y siguiente paso; lee las 5 sesiones de la exploración. |
+| 292 | ⏳ La valida el equipo: Liliana | Que las Acciones coherentes salgan cortas y su detalle llegue a la Planificación | Un cliente › Diagnóstico › generar uno nuevo › «Acciones coherentes»; después, su Planificación › regenerar. | En el diagnóstico, tres o cuatro acciones de una línea, con ID · Acción · Ataca · Mueve. En la Planificación, «Las acciones, en detalle» después de la portada, una fila por acción con los mismos AC. Un diagnóstico de antes del 28 oct se ve igual que siempre. |
 | 290 | Por validar | Que el «Enfoque de la solución» se lea claro | Esa sección. | La frase del enfoque pegada al título y los principios numerados; arriba a la derecha, «Marcar como revisado», que el cliente no ve. |
 
 ### La cuenta: encargado, proyectos y ficha <span class="prioridad">Alta</span>
@@ -1607,6 +1678,7 @@ Las áreas van por prioridad: **Alta** (lo usa el equipo cada día, toca plata o
 | 54 | Por validar | Que lo propuesto se confirme en la misma pantalla y quede en la historia | Al terminar la 52 (o en Tecnosagot, que ya tiene 2 propuestos): en el recuadro azul «El agente propone N niveles…», abre «Ver la frase y el nivel» en uno, toca «Usar» y después «Usar los N». | Cada nivel con su porqué, «De dónde sale» y la frase. Aviso «Nivel usado.» / «Usaste los N niveles.». Lo usado aparece en su área con «✓ Con evidencia». En «La escala en el tiempo», una fila de hoy «Se confirmó un nivel». Lo no usado no entra a la historia. |
 | 55 | ⏳ La valida el equipo: Alexander Vanegas | Que se entienda con qué edición y perfil se mide | Clientes › Cemaco Internacional (la del proyecto «Cemaco Internacional - CRM») › La cuenta › La escala › «Se mide con la escala general» › «Corregir» › Industria «Ecommerce y retail», Cómo vende «Mixta», Después de la venta «Recompra» › «Guardar». | Antes: «Porque no hay una edición de su industria…». Después: aviso «Listo: la escala se lee con la edición y el perfil nuevos.», título «Se mide con la edición Ecommerce y retail y el perfil mixta · recompra», chip «La eligió una persona» y lo que cambia frente a la general. Queda guardado en la exploración de Cemaco. |
 | 56 | ⏳ La valida el equipo: Alexander Vanegas | Que la historia se ate a la venta | Cemaco Internacional › La cuenta › La escala › «Guardar esta versión» › De qué momento es «Al vender» › «Guardar». | Aviso «Versión guardada.». En «La escala en el tiempo», la fila «27 sep 2026 · Al vender · Guardada a mano · venta «Cemaco Internacional - CRM»». |
+| 291 | Por validar | Que la vista Radar sea un radar de verdad | Escala › Ventas › vista «Radar». Pasa el cursor por una dimensión y tócala; después, toca fuera del radar. | Anillos de 0 a 100 con 20, 40, 60, 80 y 100 arriba, «La base» en verde punteado en 40, una línea por serie con sus puntos sobre cada eje y sin colores de fondo. La dimensión elegida se pone azul y queda fija en el panel con «Leer la dimensión entera»; al tocar fuera se suelta. Junto al número de cada dimensión, su lugar en «qué se trabaja primero». |
 | 108 | Por validar | Que cada nivel de cada edición hable de su industria | Publicada el 24 oct (8.9.1; tu tarea #285). Para revisarla: Escala › Ventas › vista «Matriz» › Industria «Turismo», fila 1.7 «Seguimiento de cotizaciones y reservas». | En Inicial: «Cuando una cotización no se contesta o una reserva no se paga, cada persona del equipo decide si insiste y cómo: no hay un paso acordado.» (Comprobado contra el documento: ninguna de las 720 celdas queda sin personalizar.) |
 
 ### Rentabilidad, la meta y el uso <span class="prioridad">Baja</span>
@@ -1870,6 +1942,7 @@ Lo que ya está en producción, por tema. Cada tarjeta se abre para ver el detal
 3. [hecho] Con varios proyectos, cada quien abre en el suyo, con el aviso «Esta cuenta tiene otro proyecto».
 4. [hecho] Los proyectos fusionados en HubSpot se dan de baja solos; Cemaco, Total Finco y Librería Internacional quedaron en una sola ficha.
 5. [hecho] El riel separa herramientas y entregables; los documentos tienen plantillas.
+6. [hecho] Fomento Urbano en una sola ficha, kölbi apuntando a su empresa vigente de HubSpot, 6 «Información del cliente» repetidas unidas y CAMOSA en Maquinaria y equipo pesado (28 oct).
 
 ### SmartLoop y el servicio recurrente <span class="estado">En producción</span>
 
@@ -1908,6 +1981,7 @@ Lo que ya está en producción, por tema. Cada tarjeta se abre para ver el detal
 2. [hecho] «Política rectora» pasa a «Enfoque de la solución», con su marca de revisión arriba a la derecha que el cliente no ve (23 oct).
 3. [hecho] El subtítulo, la intro y el cuerpo de cada sección se mueven y se quitan, y todas las secciones se pueden ocultar; un diseño más liviano, igual en la vista del cliente y en el PDF (23 oct).
 4. [hecho] Dos plantillas, esencial (7 partes, la recomendada) y completa (la de siempre), o «Escribirlo yo» en blanco (23 oct).
+5. [hecho] Las Acciones coherentes, en tres o cuatro líneas; su detalle va a «Las acciones, en detalle» de la Planificación. Los diagnósticos de antes no cambian (28 oct).
 
 ### Kickoff y cronograma <span class="estado">En producción</span>
 
@@ -1924,6 +1998,8 @@ Lo que ya está en producción, por tema. Cada tarjeta se abre para ver el detal
 3. [hecho] La escala con ediciones por industria (Turismo y Automotriz nuevas), «Actualizar escala» con todo el contexto y la historia amarrada a la venta.
 4. [hecho] El chat de Nexus sobre la cuenta, con sugerencias y documentos con plantilla.
 5. [hecho] El gasto de la IA por mes, con su proyección, el tope que frena y la factura.
+6. [hecho] La vista Radar de la escala, un radar de 0 a 100 con una línea por serie y sin zonas de color (28 oct).
+7. [hecho] El test no le pisa nombre, empresa ni cargo a quien ya es contacto en HubSpot, y su nota trae las respuestas (28 oct).
 
 ### Pruebas que ya validaste
 
