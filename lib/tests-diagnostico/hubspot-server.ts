@@ -3,7 +3,8 @@
  *
  *   1. Los intentos en curso que llevan `MINUTOS_PARA_ABANDONO` sin moverse pasan a «abandonado» (la medición y la nota
  *      «SIN TERMINAR» salen de ahí).
- *   2. A cada intento que le falta algo en HubSpot: primero el formulario (el lead), después la nota y la dirección.
+ *   2. A cada intento que le falta algo en HubSpot: primero el formulario (el lead; solo con el correo si ya es contacto,
+ *      lib/hubspot/test-del-diagnostico.ts › `EnvioDelFormulario`), después la nota y la dirección.
  *      Cada falla queda anotada en el intento (la pantalla interna la muestra y deja reintentar) y suma un intento; a los
  *      `MAX_INTENTOS_HUBSPOT` se deja de reintentar solo. Nunca se pierde un lead: el intento queda guardado en Nexus
  *      aunque HubSpot falle, e INV58 avisa del que no llegó.
@@ -18,6 +19,8 @@ export const MAX_INTENTOS_HUBSPOT = 8;
 export interface TandaDeHubspot {
   abandonados: number;
   formularios: number;
+  /** De esos formularios, los que salieron solo con el correo (ya era contacto, o no se pudo saber). */
+  soloCorreo: number;
   notas: number;
   errores: string[];
 }
@@ -25,7 +28,7 @@ export interface TandaDeHubspot {
 export async function mandarPendientesAHubspot(now: Date, env: Readonly<Record<string, string | undefined>> = process.env): Promise<TandaDeHubspot> {
   const abandonados = await marcarAbandonados(new Date(now.getTime() - MINUTOS_PARA_ABANDONO * 60_000));
   const cfg = configDelFormulario(env);
-  const out: TandaDeHubspot = { abandonados, formularios: 0, notas: 0, errores: [] };
+  const out: TandaDeHubspot = { abandonados, formularios: 0, soloCorreo: 0, notas: 0, errores: [] };
   if (!cfg) {
     out.errores.push("Falta TESTS_HUBSPOT_PORTAL_ID o TESTS_HUBSPOT_FORM_GUID en el .env del servidor.");
     return out;
@@ -33,9 +36,10 @@ export async function mandarPendientesAHubspot(now: Date, env: Readonly<Record<s
   for (const i of await pendientesDeHubspot(MAX_INTENTOS_HUBSPOT)) {
     try {
       if (!i.hubspotFormAt) {
-        await enviarFormulario(i, cfg);
+        const envio = await enviarFormulario(i, cfg, { ultimoIntento: i.hubspotIntentos + 1 >= MAX_INTENTOS_HUBSPOT });
         await anotarHubspot(i.id, { formulario: true });
         out.formularios++;
+        if (envio === "solo-correo") out.soloCorreo++;
         // La nota espera la próxima tanda: el formulario tarda en crear el contacto.
         continue;
       }

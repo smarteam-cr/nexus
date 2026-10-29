@@ -11539,12 +11539,20 @@ veta Funcional en tres dimensiones. Se construyó con la escala vigente (8.9.1) 
     Cada falla queda en el intento, con «Reintentar» en `/escala/tests`; INV58 avisa del intento de más de 3 horas que no
     llegó (nace «no bloquea»; con el envío apagado solo avisa). Un intento dado por dejado que la persona retoma vuelve
     a «en curso» y, al terminar, manda la nota con el resultado aunque antes haya salido la de «SIN TERMINAR».
-  - ⚠ **Riesgo que decide Elías antes de prender el envío:** el formulario nativo de HubSpot actualiza el contacto que
-    ya existe con ese correo (nombre, teléfono, cargo, empresa, sitio), y nadie confirma que el correo sea de quien
-    responde: alguien que escriba el correo de un contacto real le pisa esos datos y le deja una nota con un resultado
-    inventado. La app vieja hace lo mismo (es un formulario de HubSpot). Las salidas: aceptarlo como hoy, o mandar a
-    HubSpot solo los correos que todavía no son contactos y dejar los demás para que una persona los revise en
-    `/escala/tests`.
+  - **Un contacto que ya existe no se pisa (decidido el 28 oct, pregunta 39 del roadmap).** El formulario nativo de
+    HubSpot reemplaza lo que el contacto tenía (nombre, teléfono, cargo, empresa, sitio) por lo que trae el envío, y nadie
+    confirma que el correo sea de quien responde; la app vieja lo pisaba. Elías: «creo que no debería estar mandando lo
+    mismo y reemplazar los datos del form, pero sí las respuestas del test y la nota que deja en HubSpot», y que sea el
+    mismo formulario de HubSpot por su API. Por eso el job busca el correo antes: si ya es contacto, el MISMO formulario
+    sale solo con el correo, la cookie y la página (queda el envío y la atribución; HubSpot no toca los campos que el
+    envío no trae); si es nuevo, sale completo. Si la búsqueda no contesta, se reintenta en la próxima tanda y en el
+    último intento sale solo con el correo: sin saber, no se pisa. La nota (que desde el 28 oct trae al final las
+    respuestas, con el matiz sin enlaces), la dirección del resultado y el uso de CRM se escriben siempre
+    (`lib/hubspot/test-del-diagnostico.ts › EnvioDelFormulario`). *Lo que queda:* `url_ultimo_diag_*` y
+    `como_gestionan_actualmente_a_sus_clientes` sí se reemplazan en un contacto existente (son respuestas del test); el
+    formulario tiene que tener obligatorio SOLO el correo, o rechaza el envío de un contacto existente; y la búsqueda
+    solo mira el correo principal y tarda unos segundos en ver un contacto recién creado: en esos casos el envío va
+    completo.
   - Los leads por empresa, con quién hizo qué área (K10), y la medición (cuántos empiezan, terminan y lo dejan, y en qué
     pregunta) están en `/escala/tests`, que ve quien ve la preventa.
 - **Las tablas se leen y escriben con SQL crudo** (`lib/tests-diagnostico/repositorio-server.ts`), no con el cliente de

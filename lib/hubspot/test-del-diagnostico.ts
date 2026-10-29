@@ -2,11 +2,13 @@
  * lib/hubspot/test-del-diagnostico.ts — EL TEST DEL DIAGNÓSTICO, EN HUBSPOT (área O, O4, 2026-10-26).
  *
  * Lo mismo que hacía la aplicación vieja, para no romper la preventa ni Marketing:
- *   1. el FORMULARIO nativo de HubSpot (crea o actualiza el contacto y la empresa, con la cookie `hubspotutk` y la página
- *      de origen: así la atribución de anuncios sigue igual). Se manda apenas la persona empieza el test: cada intento es
- *      un lead, lo termine o no;
+ *   1. el FORMULARIO nativo de HubSpot (crea el contacto y la empresa, con la cookie `hubspotutk` y la página de origen:
+ *      así la atribución de anuncios sigue igual). Se manda apenas la persona empieza el test: cada intento es un lead,
+ *      lo termine o no. Si el correo ya es un contacto (o no se pudo saber), sale solo con el correo: no le pisa el
+ *      nombre, la empresa ni el cargo (`EnvioDelFormulario`, 28 oct);
  *   2. al terminar o dejarlo, una NOTA en el contacto con el mismo formato de siempre («📊 Diagnóstico de Rendimiento —
- *      Área · nivel» / «⏳ Diagnóstico SIN TERMINAR — Área»), que lee `lib/exploraciones/test-de-marketing.ts`;
+ *      Área · nivel» / «⏳ Diagnóstico SIN TERMINAR — Área»), que lee `lib/exploraciones/llegadas.ts › leerNotaDelTest`,
+ *      y al final las respuestas;
  *   3. al terminar, la dirección del resultado en la propiedad del contacto `url_ultimo_diag_sales|marketing|service`;
  *   4. con la nota, cómo gestionan hoy a sus clientes en la propiedad del contacto que ya existe
  *      (`como_gestionan_actualmente_a_sus_clientes`). Va por la API del CRM y no por el formulario: el envío público
@@ -17,9 +19,9 @@
  * página vieja); la nota y la propiedad van por el transporte de siempre (lib/hubspot/client.ts).
  */
 import type { Intento } from "@/lib/tests-diagnostico/repositorio-server";
-import { notaDelTestSinTerminar, notaDelTestTerminado } from "@/lib/tests-diagnostico/nota";
+import { notaDelTestSinTerminar, notaDelTestTerminado, type RespuestaDeLaNota } from "@/lib/tests-diagnostico/nota";
 import { PROPIEDAD_DEL_USO_DE_CRM, USOS_DE_CRM } from "@/lib/tests-diagnostico/formulario";
-import { ETIQUETA_DE_LA_VERSION, NOMBRE_DEL_AREA } from "@/lib/tests-diagnostico/tipos";
+import { ETIQUETA_DE_LA_VERSION, NO_LO_SE, NOMBRE_DEL_AREA } from "@/lib/tests-diagnostico/tipos";
 import { getSystemHubspotClient } from "./client";
 import { buscarContactoPorCorreo } from "./contacto-por-correo";
 
@@ -52,18 +54,33 @@ export function partirElNombre(nombre: string): { firstname: string; lastname: s
   return { firstname: partes[0] ?? "", lastname: partes.slice(1).join(" ") };
 }
 
+/**
+ * Cómo sale el formulario: `completo` (con nombre, teléfono, cargo, empresa y sitio) solo si HubSpot dijo que el correo
+ * NO es un contacto; `solo-correo` si ya lo es o si no se pudo saber. El formulario de HubSpot reemplaza lo que el
+ * contacto tenía por lo que trae el envío, y nadie confirma que el correo sea de quien responde: a alguien de un cliente
+ * no se le pisan los datos con lo que escribió en el test (pregunta 39 del roadmap, Elías el 28 oct). El envío con solo
+ * el correo igual queda en el formulario, con la cookie y la página (la atribución), y no toca los campos que no lleva.
+ */
+export type EnvioDelFormulario = "completo" | "solo-correo";
+
 /** El cuerpo del envío del formulario (PURO). Solo los campos estándar: un campo que el formulario no tiene lo rechaza. */
-export function cuerpoDelFormulario(i: Pick<Intento, "nombre" | "email" | "telefono" | "puesto" | "empresa" | "dominio" | "origen">) {
+export function cuerpoDelFormulario(
+  i: Pick<Intento, "nombre" | "email" | "telefono" | "puesto" | "empresa" | "dominio" | "origen">,
+  envio: EnvioDelFormulario = "completo",
+) {
   const { firstname, lastname } = partirElNombre(i.nombre);
-  const campos: Record<string, string | null> = {
-    email: i.email,
-    firstname,
-    lastname: lastname || null,
-    phone: i.telefono,
-    jobtitle: i.puesto,
-    company: i.empresa,
-    website: i.dominio,
-  };
+  const campos: Record<string, string | null> =
+    envio === "solo-correo"
+      ? { email: i.email }
+      : {
+          email: i.email,
+          firstname,
+          lastname: lastname || null,
+          phone: i.telefono,
+          jobtitle: i.puesto,
+          company: i.empresa,
+          website: i.dominio,
+        };
   const pagina = i.origen?.pagina ?? null;
   return {
     fields: Object.entries(campos)
@@ -82,16 +99,47 @@ async function textoDe(res: { status: number; text?: () => Promise<string> }): P
   return `${res.status}${t ? ` ${t.slice(0, 160)}` : ""}`;
 }
 
-/** Manda el formulario. Lanza con un mensaje legible si HubSpot no lo aceptó. */
-export async function enviarFormulario(i: Intento, cfg: ConfigDelFormulario): Promise<void> {
+/**
+ * Manda el formulario: primero busca el correo en HubSpot para saber si va completo o solo con el correo
+ * (`EnvioDelFormulario`). Devuelve cómo salió. Lanza con un mensaje legible si HubSpot no lo aceptó.
+ *
+ * Si la búsqueda no contesta, lanza y el job lo reintenta en la próxima tanda: mandar solo el correo dejaba para siempre
+ * sin nombre ni empresa al lead nuevo de un anuncio por una falla pasajera. En el `ultimoIntento` sale solo con el correo:
+ * sin saber, el criterio es no pisar, y el lead igual llega.
+ */
+export async function enviarFormulario(
+  i: Intento,
+  cfg: ConfigDelFormulario,
+  { ultimoIntento = false }: { ultimoIntento?: boolean } = {},
+): Promise<EnvioDelFormulario> {
+  const { estado } = await buscarContactoPorCorreo(i.email);
+  if (estado === "no-se-pudo" && !ultimoIntento) throw new Error("No se pudo buscar el contacto en HubSpot antes del formulario (se reintenta).");
+  // Solo «no-existe» (un 200 sin ese contacto) deja mandar los datos.
+  const envio: EnvioDelFormulario = estado === "no-existe" ? "completo" : "solo-correo";
   // El envío público de formularios: no lleva token (es el mismo que hace la página de un formulario de HubSpot).
   const res = await fetch(`https://api.hsforms.com/submissions/v3/integration/submit/${cfg.portalId}/${cfg.formGuid}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(cuerpoDelFormulario(i)),
+    body: JSON.stringify(cuerpoDelFormulario(i, envio)),
     signal: AbortSignal.timeout(15_000),
   });
-  if (!res.ok) throw new Error(`El formulario de HubSpot no aceptó el envío (${await textoDe(res)}).`);
+  if (!res.ok) {
+    const detalle = await textoDe(res);
+    // El envío de un contacto existente lleva solo el correo: si el formulario exige más, lo rechaza siempre.
+    const pista = envio === "solo-correo" && /REQUIRED_FIELD/.test(detalle) ? " El formulario exige campos además del correo: en HubSpot, deja obligatorio solo el correo." : "";
+    throw new Error(`El formulario de HubSpot no aceptó el envío (${detalle}).${pista}`);
+  }
+  return envio;
+}
+
+/** Lo que contestó, legible y en el orden del test (PURO). Las preguntas sin contestar no salen. */
+export function respuestasDeLaNota(i: Pick<Intento, "preguntas" | "respuestas">): RespuestaDeLaNota[] {
+  return i.preguntas.flatMap((p) => {
+    const r = i.respuestas[p.id];
+    if (!r) return [];
+    const respuesta = r.opcion === NO_LO_SE ? "No lo sé" : p.opciones.find((o) => o.id === r.opcion)?.texto;
+    return respuesta ? [{ pregunta: p.texto, respuesta, matiz: r.matiz ?? null }] : [];
+  });
 }
 
 /** La nota de este intento (terminado o dejado), con el formato que lee la preventa. null = todavía no lleva nota. */
@@ -106,6 +154,7 @@ export function notaDelIntento(i: Intento): string | null {
     puesto: i.puesto,
     usoDeCrm: i.usoDeCrm,
     version: ETIQUETA_DE_LA_VERSION[i.version],
+    respuestas: respuestasDeLaNota(i),
   };
   if (i.estado === "terminado" && i.resultado && i.url) {
     const r = i.resultado.recomendacion;
