@@ -15,13 +15,14 @@
  * la reunión abre el selector de «Agregar sesión» en modo «unir».
  */
 import { useEffect, useRef, useState } from "react";
-import { Pencil } from "lucide-react";
-import { Alert, IconButton, Select } from "@/components/ui";
+import { Link2, Pencil } from "lucide-react";
+import { Alert, Button, IconButton, Select, useToast } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import type { Persona } from "@/lib/exploraciones/casillas";
 import type { Operacion } from "@/lib/exploraciones/contenido";
 import { aFecha, diaConAnio, diaCorto, hoyEnCostaRica } from "@/lib/exploraciones/fechas";
 import { horario } from "@/lib/exploraciones/inicio";
+import { CLAVE_DE_LA_PROXIMA, conLaSesion, enlaceDeLaSesion, type DondeVive } from "@/lib/exploraciones/enlace-de-la-sesion";
 import {
   DURACION_DE_LA_SESION,
   ETIQUETA_DEL_ESTADO,
@@ -48,6 +49,8 @@ import { useCorrida } from "./useCorrida";
 import { nuevoIdDeSesion, useSesiones } from "./useSesiones";
 
 const ORIGEN: Record<OrigenDeReunion, string> = { meet: "Google Meet", hubspot: "HubSpot", documento: "sumada a mano" };
+/** Cómo se nombra cada pestaña de la sesión en el aviso de «Copiar enlace»: las palabras de los segmentos. */
+const NOMBRE_DEL_MOMENTO: Record<MomentoDeLaSesion, string> = { antes: "su Preparación", durante: "En vivo", despues: "su Análisis" };
 
 const TONO_DEL_ESTADO: Record<EstadoDeLaSesion, string> = {
   ocurrio: "border-success-line bg-success-surface text-success-ink",
@@ -153,8 +156,9 @@ function EncabezadoDeLaSesion({
   alMomento: (m: MomentoDeLaSesion) => void;
   onSumarMinuta: () => void;
 }) {
-  const { exp, puedeEditar, guardando, sesion: seleccion } = useLienzo();
+  const { exp, lugar, puedeEditar, guardando, sesion: seleccion } = useLienzo();
   const { todas, sesiones, guardar, claveDeLaProxima, proxima, agregar, estadoDe, yaEmpezo } = useSesiones();
+  const toast = useToast();
   const { corrida, corriendo, lanzando, lanzar } = useCorrida();
   const estado = estadoDe(pestana);
   const s = pestana.sesion;
@@ -199,6 +203,28 @@ function EncabezadoDeLaSesion({
   };
   const evento = s?.evento;
   const hora = evento && !evento.cancelada ? horario(evento.inicio, evento.fin) : "";
+
+  /**
+   * «Copiar enlace» (Elías, 2026-10-28): la dirección de ESTA sesión en la pestaña que se ve, para pasársela a alguien del
+   * equipo. Es interna: quien la abre necesita su sesión de Nexus y acceso a la empresa (lib/exploraciones/enlace-de-la-sesion.ts).
+   */
+  const copiarEnlace = async () => {
+    const donde: DondeVive | null =
+      lugar === "preventa"
+        ? { lugar: "preventa", exploracionId: exp.id }
+        : exp.projectId
+          ? { lugar: "proyecto", clientId: exp.empresa.clientId, projectId: exp.projectId }
+          : null;
+    const url = donde
+      ? enlaceDeLaSesion(window.location.origin, donde, pestana.clave, momento)
+      : conLaSesion(new URL(window.location.href), pestana.clave, momento).href;
+    try {
+      await navigator.clipboard.writeText(url);
+      toast.success(`Enlace copiado: abre «${titulo ?? nombreDeLaPestana(pestana)}» en ${NOMBRE_DEL_MOMENTO[momento]}.`);
+    } catch {
+      toast.error("No se pudo copiar el enlace. Cópialo de la barra de direcciones.");
+    }
+  };
 
   const enlace = (texto: string, onClick: () => void) => (
     <button type="button" className="text-brand hover:underline" onClick={onClick}>
@@ -330,6 +356,13 @@ function EncabezadoDeLaSesion({
             onCambiar={alMomento}
           />
         </div>
+        {/* La próxima sin planear no tiene id todavía: su enlace mañana abriría otra sesión. */}
+        {pestana.clave !== CLAVE_DE_LA_PROXIMA && (
+          <Button variant="secondary" size="sm" onClick={() => void copiarEnlace()} title="Copia la dirección de esta sesión, en esta pestaña, para pasársela a alguien del equipo">
+            <Link2 className="h-3.5 w-3.5" aria-hidden="true" />
+            Copiar enlace
+          </Button>
+        )}
         {momento === "despues" && r && !r.leida && !r.corta && r.texto !== "nada" && puedeEditar && (
           <button
             type="button"

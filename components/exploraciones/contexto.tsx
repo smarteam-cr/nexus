@@ -14,6 +14,7 @@ import { createContext, useContext } from "react";
 import type { ResultadoDelChequeo } from "@/lib/escala/chequeo";
 import type { Letra } from "@/lib/escala/documento/tipos";
 import type { ClaveDeCasilla } from "@/lib/exploraciones/casillas";
+import type { MomentoDeLaSesion } from "@/lib/exploraciones/enlace-de-la-sesion";
 import type { DestinoDePropuesta, ItemPropuesto, Operacion, UsoDeSugerencia } from "@/lib/exploraciones/contenido";
 import type { LoQueHaceUsar, LugarDelLote } from "@/lib/exploraciones/usar-sugerencias";
 import type { EscalaDelLienzo } from "@/lib/exploraciones/escala-del-lienzo";
@@ -148,8 +149,8 @@ export const AL_LUGAR: Record<LugarDelLienzo, string> = { preventa: "a la preven
  */
 export type ModoDelSelector = { tipo: "nueva"; ver?: "agendadas" | "pasadas"; elegir?: boolean } | { tipo: "unir"; sesionId: string };
 
-/** Antes (la guía), durante (las notas del vendedor) y después (la reunión y lo que salió). */
-export type MomentoDeLaSesion = "antes" | "durante" | "despues";
+/** Antes (la guía), durante (las notas del vendedor) y después (la reunión y lo que salió). Vive con el enlace de la sesión. */
+export type { MomentoDeLaSesion } from "@/lib/exploraciones/enlace-de-la-sesion";
 
 /**
  * Las piezas del lienzo, en el desplegable de arriba (el mismo caparazón que el proyecto). El

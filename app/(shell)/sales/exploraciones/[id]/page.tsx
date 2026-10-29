@@ -26,6 +26,7 @@ import {
   SQL_DE_EXPLORACIONES,
 } from "@/lib/exploraciones/servidor";
 import { paraLaPantallaCompleta } from "@/lib/exploraciones/pantalla";
+import { rutaDeLaSesion, sesionDeLaDireccion } from "@/lib/exploraciones/enlace-de-la-sesion";
 import { veElAnalizador, veLaTendenciaDelEquipo } from "@/lib/analizador-venta/reglas";
 import { empresaExcluida } from "@/lib/escala/prueba/calculo";
 
@@ -49,9 +50,10 @@ export default async function ExploracionPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ pieza?: string }>;
+  searchParams: Promise<{ pieza?: string; sesion?: string; momento?: string }>;
 }) {
-  const [{ id }, { pieza }] = await Promise.all([params, searchParams]);
+  const [{ id }, direccion] = await Promise.all([params, searchParams]);
+  const { pieza } = direccion;
   const ctx = await requireInternalUser().catch(() => null);
   if (!ctx || !(await can(ctx.teamMember, "preventa", "read"))) redirect("/clients");
   const puedeEditar = await can(ctx.teamMember, "preventa", "write");
@@ -76,7 +78,12 @@ export default async function ExploracionPage({
   }
 
   // La exploración de un proyecto vive en su ficha, no en Preventa (lib/exploraciones/marco.ts).
-  if (lectura.fila.projectId) redirect(`/clients/${lectura.fila.clientId}?tab=${encodeURIComponent(lectura.fila.projectId)}&canvas=exploration`);
+  /* Con la sesión que nombraba el enlace (lib/exploraciones/enlace-de-la-sesion.ts): un enlace viejo de la preventa a una
+     sesión sigue abriendo esa sesión en la ficha. */
+  if (lectura.fila.projectId) {
+    const d = sesionDeLaDireccion(new URLSearchParams({ sesion: direccion.sesion ?? "", momento: direccion.momento ?? "" }));
+    redirect(rutaDeLaSesion({ lugar: "proyecto", clientId: lectura.fila.clientId, projectId: lectura.fila.projectId }, d.sesion, d.momento));
+  }
   const exp = await paraLaPantallaCompleta(lectura.fila);
   /* La información de la empresa es la MISMA de su ficha de cliente (Elías, 2026-10-06): vive en su
      proyecto de estrategia, que se crea acá si un prospecto todavía no lo tiene (como al mapear sus

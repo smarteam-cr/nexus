@@ -26,6 +26,7 @@ import PanelLateral, { usePanelLateral } from "@/components/ui/PanelLateral";
 import DisparoDelVigia from "@/components/cs/DisparoDelVigia";
 import PreguntaSobreLaCuenta from "@/components/encuestas-de-cuenta/PreguntaSobreLaCuenta";
 import { parseEstadoDeAlta, siguientePaso } from "@/lib/projects/alta";
+import { sacarLaSesion } from "@/lib/exploraciones/enlace-de-la-sesion";
 import { leerAutoria, type AutoriaDeLaPropuesta } from "@/lib/timeline/autoria-de-la-propuesta";
 import {
   SENTINEL_SERVICE_TYPE,
@@ -505,7 +506,11 @@ function ProjectSection({
       setActiveProjectId(id);
       const params = new URLSearchParams(Array.from(searchParams.entries()));
       params.set("tab", id);
-      if (changingProject) params.delete("canvas");
+      // Ni la sesión abierta de su Exploración (`?sesion=`): es de ese proyecto.
+      if (changingProject) {
+        params.delete("canvas");
+        sacarLaSesion(params);
+      }
       router.replace(`${pathname}?${params.toString()}`, { scroll: false });
     },
     [activeProjectId, searchParams, pathname, router, setActiveProjectId],
@@ -581,6 +586,7 @@ function ProjectSection({
       params.set("tab", projectId);
       if (canvasId) params.set("canvas", canvasId);
       else params.delete("canvas");
+      sacarLaSesion(params);
       router.replace(`${pathname}?${params.toString()}`, { scroll: false });
     },
     [searchParams, pathname, router, setActiveProjectId],
