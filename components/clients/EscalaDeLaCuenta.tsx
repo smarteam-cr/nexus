@@ -2,21 +2,25 @@
 
 /**
  * components/clients/EscalaDeLaCuenta.tsx — La cuenta › La escala (2026-10-12, pedido de Elías; ficha B, 2026-10-17;
- * «Actualizar escala», 2026-10-18).
+ * «Actualizar escala», 2026-10-18; escala única, 2026-10-28).
  *
- * Dónde está la empresa en cada área de la escala, venga o no de una preventa, para el EQUIPO (el cliente no la ve):
- *   · «Actualizar escala»: se elige sobre qué se ubica (un proyecto, la preventa o la cuenta entera) y con qué venta, y
- *     el agente lee TODO lo que Nexus sabe (lo vendido, las reuniones, las tareas, el cronograma, la memoria, HubSpot) y
- *     PROPONE niveles. Lo dispara una persona, por cliente: nunca corre solo ni para todos;
- *   · lo propuesto se usa acá mismo, uno por uno o todos, por el PATCH de la exploración (el mismo escritor de siempre,
- *     que deja la versión del día). Lo propuesto nunca entra a la historia; lo confirmado, sí;
- *   · con qué edición y perfil se mide, por qué, qué cambia frente a la general y un clic para corregirlo;
- *   · cada nivel con DE DÓNDE SALE: la fuente, la frase del cliente y el porqué;
- *   · la escala en el tiempo, amarrada a la venta: cada versión dice de qué venta y de qué momento es («al vender»,
- *     «al arrancar», «hoy»), y qué cambió desde la anterior;
- *   · el camino de crecimiento: qué sigue y los casos de la biblioteca que lo mueven.
- * Datos: GET/POST /api/clients/[id]/escala (lib/exploraciones/escala-de-la-empresa.ts, posicionar.ts y
- * versiones-de-la-escala.ts).
+ * ESCALA ÚNICA (pedido de Elías, 28 oct: «debería ser la misma escala… que se comparta realmente entre módulos de
+ * preventa o de clientes»). La escala de un cliente es la MISMA pieza que la de la preventa: el lienzo de la preventa en
+ * modo `cuenta` (LienzoDeExploracion + PasoEscala), sobre la exploración de «Información del cliente»
+ * (lib/exploraciones/escala-de-la-cuenta.ts). Se elige la industria (la edición), el perfil y las áreas igual; cada
+ * dimensión se abre, se ve su evidencia y se elige su nivel igual; lo que propone el agente aparece arriba para usar o
+ * descartar igual. Ver docs/escala-unica-plan.md.
+ *
+ * Lo que es solo de la ficha, y vive acá:
+ *   · al abrirla por primera vez parte de lo medido en la preventa (POST `abrir`);
+ *   · el agente es «Actualizar escala» (modo `posicionar`): lee todo lo que Nexus sabe de la cuenta —la memoria, las
+ *     reuniones que alguien eligió primero—, con una venta y un proyecto como contexto si se eligen, y solo PROPONE;
+ *   · «Guardar esta versión» con su momento («al vender», «al arrancar», «hoy») y su venta;
+ *   · el camino de crecimiento con los casos de la biblioteca;
+ *   · la escala en el tiempo: las versiones de TODA la empresa y la de hoy de la preventa y de cada proyecto, en solo
+ *     lectura. Una edición no se compara con otra: cambiarla es un punto de partida nuevo.
+ * Lo propio de la preventa (la propuesta comercial, el vendedor, la próxima sesión) no aparece.
+ * Datos: GET/POST /api/clients/[id]/escala.
  */
 import Link from "next/link";
 import { createPortal } from "react-dom";
@@ -26,21 +30,34 @@ import { SkeletonPanel, SkeletonText } from "@/components/ui/Skeleton";
 import { BotonAzul, BotonBlanco, BotonEnlace, IconoDeSugerencia, QueSigue, ROTULO_DEL_SISTEMA } from "@/components/ui/sistema";
 import { cn } from "@/lib/cn";
 import { PUNTO_DE_NIVEL, nombreDe } from "@/components/escala/niveles";
+import LienzoDeExploracion from "@/components/exploraciones/LienzoDeExploracion";
+import { useLienzo } from "@/components/exploraciones/contexto";
+import { useCorrida } from "@/components/exploraciones/useCorrida";
 import { caminoDeCrecimiento } from "@/lib/casos-de-uso/camino";
-import type { EscalaDeLaEmpresa, ExploracionDeLaEmpresa, PosicionDeLaEmpresa } from "@/lib/exploraciones/escala-de-la-empresa";
-import { cambiosEntreFotos, deDondeSaleElNivel, ETIQUETA_DEL_ORIGEN, fraseDelCambio, huellaDeLaFoto, type AreaDeLaFoto, type FotoDeLaEscala } from "@/lib/exploraciones/foto-de-la-escala";
+import type { EscalaDeLaCuenta as LaEscalaDeLaCuenta } from "@/lib/exploraciones/escala-de-la-cuenta";
+import type { EscalaDeLaEmpresa } from "@/lib/exploraciones/escala-de-la-empresa";
+import { diaYHora } from "@/lib/exploraciones/fechas";
 import {
-  ETIQUETA_DEL_MOMENTO,
-  MOMENTOS_DE_LA_VERSION,
-  NOMBRE_DEL_CIERRE,
-  NOMBRE_DEL_DESPUES,
-  type MomentoDeLaVersion,
-  type NivelPropuesto,
-} from "@/lib/exploraciones/posicionar";
+  anteriorDeLaMismaVara,
+  cambiosEntreFotos,
+  deDondeSaleElNivel,
+  ETIQUETA_DEL_ORIGEN,
+  fotoDeLaExploracion,
+  fraseDelCambio,
+  huellaDeLaFoto,
+  type AreaDeLaFoto,
+  type FotoDeLaEscala,
+} from "@/lib/exploraciones/foto-de-la-escala";
+import { ETIQUETA_DEL_MOMENTO, MOMENTOS_DE_LA_VERSION, type MomentoDeLaVersion } from "@/lib/exploraciones/posicionar";
 import type { VersionGuardada } from "@/lib/exploraciones/versiones-de-la-escala";
-import { CIERRES, DESPUES, type Cierre, type Despues, type Letra } from "@/lib/escala/documento/tipos";
+import type { Letra } from "@/lib/escala/documento/tipos";
 
-type Datos = EscalaDeLaEmpresa & { puede?: { preventa: boolean; exploracion: boolean }; sePuedeProbar?: boolean };
+type Datos = EscalaDeLaEmpresa & {
+  puede?: { preventa: boolean; exploracion: boolean };
+  sePuedeProbar?: boolean;
+  cuenta?: LaEscalaDeLaCuenta | null;
+  faltaAbrir?: boolean;
+};
 type Ok = Extract<Datos, { estado: "ok" }>;
 type Niveles = { letra: Letra; nombre: string }[];
 
@@ -81,13 +98,13 @@ function ChipDeClase({ clase }: { clase: "evidencia" | "hipotesis" | null }) {
   return null;
 }
 
-/** Un área con cada dimensión y de dónde sale su nivel. */
+/** Un área de una versión guardada (solo lectura): cada dimensión y de dónde sale su nivel. */
 function AreaConEvidencia({ a, niveles }: { a: AreaDeLaFoto; niveles: Niveles }) {
   const [abierta, setAbierta] = useState<string | null>(null);
   return (
     <section className="flex flex-col gap-3 rounded-xl border border-line bg-surface p-5">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h3 className="text-[15px] font-semibold text-fg">{a.nombre}</h3>
+        <h4 className="text-[15px] font-semibold text-fg">{a.nombre}</h4>
         <span className="flex items-baseline gap-2">
           <Nivel letra={a.nivel} niveles={niveles} />
           {a.puntaje !== null && <span className="text-xs tabular-nums text-fg-muted">{a.puntaje} de 100</span>}
@@ -140,36 +157,222 @@ function AreaConEvidencia({ a, niveles }: { a: AreaDeLaFoto; niveles: Niveles })
           </ul>
         </div>
       ))}
+    </section>
+  );
+}
+
+// ── El agente de la cuenta: «Actualizar escala» ──────────────────────────────
+
+/**
+ * En el lugar del agente de la preventa (leer la última reunión, preparar): «Actualizar escala» lee todo lo que Nexus
+ * sabe de la cuenta y PROPONE niveles en esta misma escala. Con qué venta y con qué proyecto como contexto, si se eligen.
+ * La corrida la sigue el mismo seguimiento del lienzo (useCorrida): al terminar, lo propuesto aparece arriba.
+ */
+function AgenteDeLaCuenta({ clientId, datos }: { clientId: string; datos: Ok }) {
+  const { exp, puedeEditar } = useLienzo();
+  const { corrida, corriendo, seguir } = useCorrida();
+  const toast = useToast();
+  // El proyecto sugerido: el del objetivo por defecto, si es un proyecto (el vivo más reciente).
+  const deProyecto = datos.objetivos.filter((o) => o.tipo === "proyecto" && o.projectId);
+  const sugerido = deProyecto.find((o) => o.clave === datos.porDefecto)?.projectId ?? null;
+  const [proyectoId, setProyectoId] = useState<string | null>(sugerido);
+  const objetivo = datos.objetivos.find((o) => o.clave === (proyectoId ? `proyecto:${proyectoId}` : "cuenta"));
+  const [ventaId, setVentaId] = useState<string | null | undefined>(undefined);
+  const venta = ventaId === undefined ? (objetivo?.ventaSugerida ?? null) : ventaId;
+  const [lanzando, setLanzando] = useState(false);
+  const ultima = [...exp.estado.propuesta.corridas].reverse().find((c) => c.modo === "posicionar");
+
+  const actualizar = async () => {
+    setLanzando(true);
+    try {
+      const r = await fetch(`/api/clients/${clientId}/escala`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ accion: "actualizar", objetivo: "cuenta", ventaId: venta, proyectoId }),
+      });
+      const j = (await r.json().catch(() => null)) as { error?: string; yaCorria?: boolean } | null;
+      if (!r.ok) throw new Error(j?.error ?? "No se pudo lanzar el agente.");
+      toast.info(j?.yaCorria ? "El agente ya estaba ubicando esta escala: cuando termine, lo propuesto aparece arriba." : "El agente está leyendo todo lo que Nexus sabe de la cuenta…");
+      void seguir();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "No se pudo lanzar el agente.");
+    } finally {
+      setLanzando(false);
+    }
+  };
+
+  return (
+    <section aria-label="Actualizar escala" className="space-y-3 rounded-xl border border-line bg-surface p-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h3 className="text-sm font-semibold text-fg">El agente</h3>
+          <p className="text-xs text-fg-muted">
+            {ultima
+              ? `Última vez: ${diaYHora(ultima.en)} · ${ultima.propuestos === 0 ? "nada nuevo que proponer" : `${ultima.propuestos} ${ultima.propuestos === 1 ? "nivel propuesto" : "niveles propuestos"}`}`
+              : "Lee todo lo que Nexus sabe de la cuenta y propone niveles; tú usas o descartas."}
+          </p>
+        </div>
+        {puedeEditar && (
+          <BotonAzul disabled={lanzando || corriendo} onClick={() => void actualizar()}>
+            {corriendo ? "Ubicando…" : "Actualizar escala"}
+          </BotonAzul>
+        )}
+      </div>
+      {puedeEditar && (deProyecto.length > 0 || datos.ventas.length > 0) && (
+        <div className="flex flex-wrap items-end gap-3">
+          {deProyecto.length > 0 && (
+            <label className="flex min-w-[220px] flex-col gap-1 text-xs text-fg-muted">
+              Con el contexto de
+              <Select
+                value={proyectoId ?? ""}
+                disabled={lanzando || corriendo}
+                onChange={(e) => {
+                  setProyectoId(e.target.value || null);
+                  setVentaId(undefined);
+                }}
+              >
+                <option value="">Toda la cuenta, sin un proyecto</option>
+                {deProyecto.map((o) => (
+                  <option key={o.clave} value={o.projectId!}>
+                    {o.etiqueta}
+                    {o.detalle ? ` · ${o.detalle}` : ""}
+                  </option>
+                ))}
+              </Select>
+            </label>
+          )}
+          {datos.ventas.length > 0 && (
+            <label className="flex min-w-[220px] flex-col gap-1 text-xs text-fg-muted">
+              Venta
+              <Select value={venta ?? ""} disabled={lanzando || corriendo} onChange={(e) => setVentaId(e.target.value || null)}>
+                <option value="">Sin una venta en particular</option>
+                {datos.ventas.map((v) => (
+                  <option key={v.id} value={v.id}>
+                    {v.nombre} · ganada el {elDia(v.fechaCierre)}
+                  </option>
+                ))}
+              </Select>
+            </label>
+          )}
+        </div>
+      )}
+      {corriendo && (
+        <p className="text-xs text-fg-secondary" role="status">
+          {corrida?.etiqueta ?? "El agente está trabajando"}: {corrida?.fase ?? "empezando…"}
+        </p>
+      )}
+      {corrida?.estado === "ERROR" && <Alert variant="danger">{corrida.error}</Alert>}
       <p className="text-xs text-fg-muted">
-        {a.conNivel} de {a.aplican} dimensiones con nivel · {a.conEvidencia} con evidencia. El área queda en su capa más baja, y la capa en su dimensión más
-        débil. Toca una dimensión para ver de dónde sale.
+        Lee lo vendido, el handoff y los cuestionarios del proyecto que elijas, las reuniones ya leídas (primero las que alguien unió a una sesión), las
+        tareas, el cronograma, HubSpot y la memoria de la cuenta. Propone solo con lo que dijo o hizo el cliente, y nada se confirma solo. Cuesta entre
+        US$0,05 y US$0,20.
       </p>
     </section>
   );
 }
 
-/** La foto que se mira: la de hoy de una exploración o una versión guardada. */
-interface Vista {
+// ── Lo de la ficha, debajo de la escala ───────────────────────────────────────
+
+/** El camino de crecimiento: qué sigue, con los casos de la biblioteca que lo mueven. Sale de la escala de ahora. */
+function CaminoDeCrecimiento({
+  casos,
+  ocupado,
+  onSumar,
+}: {
+  casos: { titulos: Set<string>; puedeEditar: boolean };
+  ocupado: boolean;
+  onSumar: (titulo: string, cuerpo: Record<string, unknown>) => void;
+}) {
+  const { exp, escala } = useLienzo();
+  const niveles = escala.niveles;
+  const nombre = (l: Letra) => nombreDe(niveles, l);
+  const camino = caminoDeCrecimiento(fotoDeLaExploracion(escala, exp.estado).areas, nombre);
+  if (!camino.length) return null;
+  return (
+    <section className="space-y-3">
+      <div>
+        <h3 className="text-sm font-semibold text-fg">El camino de crecimiento</h3>
+        <p className="text-xs text-fg-muted">Qué sigue en la escala y por qué, con los casos de la biblioteca que lo mueven. Sale de lo confirmado: sin IA.</p>
+      </div>
+      <div className="grid gap-3 xl:grid-cols-2">
+        {camino.map((p) => (
+          <article key={p.areaId} className="flex flex-col gap-2 rounded-xl border border-line bg-surface p-4">
+            <div className="flex flex-wrap items-baseline justify-between gap-2">
+              <h4 className="text-[14px] font-semibold text-fg">{p.areaNombre}</h4>
+              {p.nivel && p.siguiente && (
+                <span className="flex items-center gap-1.5 text-xs text-fg-muted">
+                  <Nivel letra={p.nivel} niveles={niveles} /> → <Nivel letra={p.siguiente} niveles={niveles} />
+                </span>
+              )}
+            </div>
+            <p className="text-[13px] text-fg-secondary">{p.porQue}</p>
+            {p.casos.length > 0 && (
+              <ul className="flex flex-col gap-1.5">
+                {p.casos.map((c) => {
+                  const ya = casos.titulos.has(c.caso.titulo.trim().toLowerCase());
+                  return (
+                    <li key={c.caso.id} className="flex items-start gap-2.5 rounded-lg border border-info-line bg-info-surface px-3 py-2">
+                      <IconoDeSugerencia className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-brand" />
+                      <div className="min-w-0 flex-1">
+                        <Link href={`/sales/use-cases/${c.caso.id}`} className="text-[13px] font-medium text-fg hover:underline">
+                          {c.caso.titulo}
+                        </Link>
+                        <p className="text-xs text-fg-secondary">{c.razon}</p>
+                      </div>
+                      {ya ? (
+                        <span className="flex-shrink-0 text-xs text-fg-muted">Ya está en Casos de uso</span>
+                      ) : (
+                        casos.puedeEditar && (
+                          <BotonBlanco
+                            disabled={ocupado}
+                            onClick={() =>
+                              onSumar(c.caso.titulo, {
+                                resultado: c.caso.promesa,
+                                porque: c.razon,
+                                mueve: c.mueve.map((m) => ({ area: p.areaNombre, dimension: m.dimension, nivel: nombre(m.hasta) })),
+                              })
+                            }
+                          >
+                            Sumar a los sugeridos
+                          </BotonBlanco>
+                        )
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </article>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+/** Una fila de la historia: una versión guardada o la escala de hoy de otra exploración (solo lectura). */
+interface FilaDeLaHistoria {
   clave: string;
   titulo: string;
-  /** El día que se lee al lado del título: el de la posición (puede ser del pasado). */
+  /** El día de la posición (puede ser del pasado). */
   fecha: string;
-  edicion: string | null;
-  areas: AreaDeLaFoto[];
-  exploracionId: string | null;
-  /** Contra qué se mide «qué cambió». */
+  foto: FotoDeLaEscala;
+  /** Contra qué se compara: la anterior de la misma edición; o, si la anterior es de otra, un punto de partida nuevo. */
   anterior: { fecha: string; foto: FotoDeLaEscala } | null;
+  puntoDePartida: { desdeEdicion: string | null } | null;
+  /** Lo que propuso el agente en esa exploración y nadie revisó, y dónde se revisa. */
+  pendientes?: { cuantos: number; abrir: React.ReactNode };
 }
 
 /** De dónde sale una posición: la preventa, la cuenta entera («Información del cliente») o la Exploración de un proyecto. */
 const deDondeEn = (datos: Ok) => (p: { proyecto: { id: string; nombre: string } | null }) =>
   !p.proyecto ? "La escala de la preventa" : p.proyecto.id === datos.contenedorId ? "La escala de la cuenta" : `La Exploración de «${p.proyecto.nombre}»`;
 
-function vistas(datos: Ok): Vista[] {
+function filasDeLaHistoria(datos: Ok, cuentaId: string | null, abrir: (exploracionId: string) => React.ReactNode): FilaDeLaHistoria[] {
   const deDonde = deDondeEn(datos);
   const cuandoDe = (v: VersionGuardada) => (v.diaDeLaPosicion ? `${v.diaDeLaPosicion}T12:00:00-06:00` : v.fecha);
-  const deVersion = (v: VersionGuardada, i: number, todas: VersionGuardada[]): Vista => {
+  const versiones = datos.versiones.map((v, i, todas): FilaDeLaHistoria => {
     const previa = todas.slice(i + 1).find((x) => x.exploracionId === v.exploracionId) ?? todas[i + 1] ?? null;
+    const { anterior, puntoDePartida } = anteriorDeLaMismaVara(v.foto, previa ? [previa] : []);
     const origen = v.nota && v.creadoPorEmail === "sistema" ? "Primera versión" : ETIQUETA_DEL_ORIGEN[v.origen];
     return {
       clave: v.id,
@@ -177,220 +380,145 @@ function vistas(datos: Ok): Vista[] {
         .filter(Boolean)
         .join(" · "),
       fecha: cuandoDe(v),
-      edicion: v.foto.edicion,
-      areas: v.foto.areas,
-      exploracionId: v.exploracionId,
-      anterior: previa ? { fecha: cuandoDe(previa), foto: previa.foto } : null,
-    };
-  };
-  const hoy = datos.posiciones.map((p: PosicionDeLaEmpresa): Vista => {
-    // Contra la última versión de esa exploración que dice algo distinto (la del día puede ser igual a la de hoy).
-    const actual = huellaDeLaFoto({ formato: 1, escalaVersion: null, edicion: p.edicion, areas: p.areas });
-    const ultima = datos.versiones.find((v) => v.exploracionId === p.exploracionId && huellaDeLaFoto(v.foto) !== actual);
-    return {
-      clave: `hoy:${p.exploracionId}`,
-      titulo: `Hoy · ${deDonde(p)}`,
-      fecha: p.fecha,
-      edicion: p.edicion,
-      areas: p.areas,
-      exploracionId: p.exploracionId,
-      anterior: ultima ? { fecha: cuandoDe(ultima), foto: ultima.foto } : null,
+      foto: v.foto,
+      anterior: anterior ? { fecha: cuandoDe(anterior), foto: anterior.foto } : null,
+      puntoDePartida,
     };
   });
-  return [...hoy, ...datos.versiones.map(deVersion)];
+  // La escala de HOY de las otras exploraciones de la empresa (la preventa, cada proyecto): la de la cuenta está arriba.
+  const hoy = datos.posiciones
+    .filter((p) => p.exploracionId !== cuentaId)
+    .map((p): FilaDeLaHistoria => {
+      const foto: FotoDeLaEscala = { formato: 1, escalaVersion: null, edicion: p.edicion, areas: p.areas };
+      // Contra la última versión de esa exploración que dice algo distinto (la del día puede ser igual a la de hoy).
+      const ultima = datos.versiones.find((v) => v.exploracionId === p.exploracionId && huellaDeLaFoto(v.foto) !== huellaDeLaFoto(foto));
+      const { anterior, puntoDePartida } = anteriorDeLaMismaVara(foto, ultima ? [ultima] : []);
+      const exp = datos.exploraciones.find((e) => e.id === p.exploracionId);
+      return {
+        clave: `hoy:${p.exploracionId}`,
+        titulo: `Hoy · ${deDonde(p)}`,
+        fecha: p.fecha,
+        foto,
+        anterior: anterior ? { fecha: cuandoDe(anterior), foto: anterior.foto } : null,
+        puntoDePartida,
+        ...(exp?.propuestos.length ? { pendientes: { cuantos: exp.propuestos.length, abrir: abrir(exp.id) } } : {}),
+      };
+    });
+  return [...hoy, ...versiones];
 }
 
-/** Lo que propuso el agente en una exploración, para usarlo acá mismo. Nada se confirma solo. */
-function LoQuePropone({
-  exp,
-  deDonde,
-  niveles,
-  puedeUsar,
-  ocupado,
-  onCambiar,
-}: {
-  exp: ExploracionDeLaEmpresa;
-  /** «La Exploración de «X»», «La escala de la cuenta»: dónde queda lo que se usa. */
-  deDonde: string;
-  niveles: Niveles;
-  puedeUsar: boolean;
-  ocupado: boolean;
-  onCambiar: (operaciones: Record<string, unknown>[], aviso: string) => Promise<void>;
-}) {
-  const [abierta, setAbierta] = useState<string | null>(null);
-  if (!exp.propuestos.length) return null;
-  const todos = exp.propuestos;
+/** La escala en el tiempo: las versiones de toda la empresa y la de hoy de la preventa y de cada proyecto. */
+function HistoriaDeLaEscala({ filas, niveles }: { filas: FilaDeLaHistoria[]; niveles: Niveles }) {
+  const [elegida, setElegida] = useState<string | null>(null);
+  if (!filas.length) return null;
+  const vista = filas.find((f) => f.clave === elegida) ?? null;
+  const nombre = (l: Letra) => nombreDe(niveles, l);
+  const cambios = vista?.anterior ? cambiosEntreFotos(vista.anterior.foto, vista.foto) : [];
   return (
-    <section aria-label="Lo que propone el agente" className="flex flex-col gap-2 rounded-xl border border-info-line bg-info-surface p-4">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="inline-flex items-center gap-1.5 text-[13px] text-fg">
-          <IconoDeSugerencia className="h-4 w-4 text-brand" />
-          El agente propone {todos.length === 1 ? "un nivel" : `${todos.length} niveles`} en {deDonde}. Nada se confirma solo: lo que uses queda en la historia.
+    <section className="space-y-3">
+      <div>
+        <h3 className="text-sm font-semibold text-fg">La escala en el tiempo</h3>
+        <p className="text-xs text-fg-muted">
+          Se guarda una versión al confirmar un nivel (una por día), al presentar el diagnóstico de un ciclo y con «Guardar esta versión». Lo que propone el
+          agente no entra hasta que lo usas. Una edición no se compara con otra: cambiarla es un punto de partida nuevo.
         </p>
-        {puedeUsar && (
-          <BotonAzul
-            disabled={ocupado}
-            onClick={() => void onCambiar([{ op: "usarVarias", items: todos.map((p) => ({ itemId: p.itemId })) }], `Usaste ${todos.length === 1 ? "el nivel" : `los ${todos.length} niveles`}.`)}
-          >
-            {todos.length === 1 ? "Usar el nivel" : `Usar los ${todos.length}`}
-          </BotonAzul>
-        )}
       </div>
-      <ul className="flex flex-col gap-1.5">
-        {todos.map((p: NivelPropuesto) => {
-          const abierto = abierta === p.itemId;
-          return (
-            <li key={p.itemId} className="flex flex-col gap-1 rounded-lg border border-line bg-surface px-3 py-2">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <span className="min-w-0 text-[13px] text-fg-secondary">
-                  <span className="text-fg-muted">{p.areaNombre} ·</span> {p.dimensionNombre}
-                </span>
-                <span className="flex flex-wrap items-center gap-2">
-                  {p.actual && p.actual !== p.nivel && (
-                    <span className="flex items-center gap-1 text-xs text-fg-muted">
-                      <Nivel letra={p.actual} niveles={niveles} /> →
-                    </span>
-                  )}
-                  <Nivel letra={p.nivel} niveles={niveles} hipotesis={p.hipotesis} />
-                  {puedeUsar && (
-                    <>
-                      <BotonEnlace disabled={ocupado} onClick={() => void onCambiar([{ op: "descartar", itemIds: [p.itemId] }], "Descartado: no se vuelve a proponer.")}>
-                        Descartar
-                      </BotonEnlace>
-                      <BotonBlanco disabled={ocupado} onClick={() => void onCambiar([{ op: "usar", itemId: p.itemId }], "Nivel usado.")}>
-                        Usar
-                      </BotonBlanco>
-                    </>
-                  )}
-                </span>
-              </div>
-              {p.porQue && <p className="text-[13px] text-fg-secondary">{p.porQue}</p>}
-              <div className="flex flex-wrap items-center gap-1.5 text-xs text-fg-muted">
-                {p.hipotesis && <ChipDeClase clase="hipotesis" />}
-                <span>De dónde sale: {p.fuentes.join(" · ") || "sin fuente"}</span>
-                {(p.cita || p.descripcionDelNivel) && (
-                  <BotonEnlace onClick={() => setAbierta(abierto ? null : p.itemId)} aria-expanded={abierto}>
-                    {abierto ? "Ocultar" : "Ver la frase y el nivel"}
-                  </BotonEnlace>
-                )}
-              </div>
-              {abierto && (
-                <div className="flex flex-col gap-1 rounded-lg border border-line bg-surface-muted px-3 py-2">
-                  {p.cita && <p className="text-[13px] italic text-fg-secondary">«{p.cita}»</p>}
-                  {p.descripcionDelNivel && (
-                    <p className="text-xs text-fg-muted">
-                      {nombreDe(niveles, p.nivel)}, con las palabras de su industria: {p.descripcionDelNivel}
-                    </p>
-                  )}
-                </div>
-              )}
-            </li>
-          );
-        })}
+      <ul className="divide-y divide-line rounded-xl border border-line bg-surface">
+        {filas.map((v) => (
+          <li key={v.clave}>
+            <button
+              type="button"
+              aria-pressed={v.clave === elegida}
+              onClick={() => setElegida(v.clave === elegida ? null : v.clave)}
+              className={cn("flex w-full flex-wrap items-baseline justify-between gap-3 px-4 py-2.5 text-left text-[13px] hover:bg-surface-hover", v.clave === elegida && "bg-surface-muted")}
+            >
+              <span className="text-fg-secondary">
+                <span className="tabular-nums text-fg">{fecha(v.fecha)}</span> · {v.titulo}
+                {v.foto.edicion ? ` · edición ${v.foto.edicion}` : ""}
+                {v.puntoDePartida && <span className="ml-1.5 rounded-full border border-line bg-surface-muted px-1.5 text-[11px] font-semibold text-fg-secondary">Punto de partida</span>}
+                {v.pendientes && <span className="ml-1.5 text-xs text-brand">{v.pendientes.cuantos === 1 ? "1 nivel propuesto sin revisar" : `${v.pendientes.cuantos} niveles propuestos sin revisar`}</span>}
+              </span>
+              <span className="flex flex-wrap gap-3">
+                {v.foto.areas.map((a) => (
+                  <span key={a.id} className="inline-flex items-baseline gap-1.5">
+                    <span className="text-fg-muted">{a.nombre}</span>
+                    <Nivel letra={a.nivel} niveles={niveles} />
+                  </span>
+                ))}
+              </span>
+            </button>
+          </li>
+        ))}
       </ul>
+      {vista && (
+        <div className="space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-[13px] text-fg-secondary">
+              <span className="font-medium text-fg">{vista.titulo}</span> · {fecha(vista.fecha)}
+              {vista.foto.edicion ? ` · edición ${vista.foto.edicion}` : ""}
+            </p>
+            <span className="flex items-center gap-2">
+              {vista.pendientes?.abrir}
+              <BotonEnlace onClick={() => setElegida(null)}>Cerrar</BotonEnlace>
+            </span>
+          </div>
+          {vista.puntoDePartida ? (
+            <section className="rounded-xl border border-line bg-surface-muted px-4 py-3">
+              <p className={ROTULO_DEL_SISTEMA}>Punto de partida nuevo</p>
+              <p className="mt-1 text-[13px] text-fg-secondary">
+                Antes se medía con {vista.puntoDePartida.desdeEdicion ? `la edición ${vista.puntoDePartida.desdeEdicion}` : "la escala general"}: una edición no
+                se compara con otra, así que desde acá se mide de nuevo.
+              </p>
+            </section>
+          ) : (
+            vista.anterior && (
+              <section className="rounded-xl border border-line bg-surface-muted px-4 py-3">
+                <p className={ROTULO_DEL_SISTEMA}>Qué cambió desde el {fecha(vista.anterior.fecha)}</p>
+                {cambios.length ? (
+                  <ul className="mt-1.5 flex flex-col gap-0.5 text-[13px] text-fg-secondary">
+                    {cambios.slice(0, 8).map((c) => (
+                      <li key={c.dimensionId}>
+                        <span className="text-fg-muted">{c.areaNombre} ·</span> {fraseDelCambio(c, nombre)}
+                      </li>
+                    ))}
+                    {cambios.length > 8 && <li className="text-xs text-fg-muted">y {cambios.length - 8} más</li>}
+                  </ul>
+                ) : (
+                  <p className="mt-1 text-[13px] text-fg-muted">Nada: los mismos niveles.</p>
+                )}
+              </section>
+            )
+          )}
+          <div className="grid gap-4 xl:grid-cols-2">
+            {vista.foto.areas.map((a) => (
+              <AreaConEvidencia key={a.id} a={a} niveles={niveles} />
+            ))}
+          </div>
+        </div>
+      )}
     </section>
   );
 }
 
-/** «Se mide con la edición X y el perfil Y, porque…», con lo que cambia frente a la general y un clic para corregirlo. */
-function ConQueSeMide({
-  exp,
-  ediciones,
-  puedeCorregir,
-  ocupado,
-  onCambiar,
-}: {
-  exp: ExploracionDeLaEmpresa;
-  ediciones: { slug: string; nombre: string }[];
-  puedeCorregir: boolean;
-  ocupado: boolean;
-  onCambiar: (operaciones: Record<string, unknown>[], aviso: string) => Promise<void>;
-}) {
-  const m = exp.modelo;
-  const [corrigiendo, setCorrigiendo] = useState(false);
-  const [edicion, setEdicion] = useState(m.edicion?.slug ?? "");
-  const [cierre, setCierre] = useState<Cierre | "">(m.cierre ?? "");
-  const [despues, setDespues] = useState<Despues | "">(m.despues ?? "");
-  const guardar = async () => {
-    const ops: Record<string, unknown>[] = [];
-    if ((edicion || null) !== (m.edicion?.slug ?? null)) ops.push({ op: "edicion", edicion: edicion || null });
-    // Elegir la edición trae su perfil habitual; el perfil que se eligió a mano va después y gana.
-    if (cierre && despues && (cierre !== m.cierre || despues !== m.despues || ops.length)) ops.push({ op: "perfil", cierre, despues });
-    if (!ops.length) {
-      setCorrigiendo(false);
-      return;
-    }
-    await onCambiar(ops, "Listo: la escala se lee con la edición y el perfil nuevos.");
-    setCorrigiendo(false);
-  };
-  return (
-    <section aria-label="Con qué se mide" className="flex flex-col gap-2 rounded-xl border border-line bg-surface p-4">
-      <div className="flex flex-wrap items-start justify-between gap-2">
-        <div className="min-w-0">
-          <p className="text-[14px] font-semibold text-fg">{m.titulo}</p>
-          <p className="mt-0.5 text-[13px] text-fg-secondary">{m.porQue}</p>
-        </div>
-        <span className="flex items-center gap-2">
-          {m.quien && (
-            <span className="rounded-full border border-line bg-surface-muted px-2 py-px text-[11px] text-fg-muted">{m.quien === "persona" ? "La eligió una persona" : "Automática"}</span>
-          )}
-          {puedeCorregir && !corrigiendo && <BotonBlanco onClick={() => setCorrigiendo(true)}>Corregir</BotonBlanco>}
-        </span>
-      </div>
-      {m.queCambia.length > 0 && (
-        <ul className="flex list-disc flex-col gap-0.5 pl-5 text-[13px] text-fg-secondary">
-          {m.queCambia.map((l) => (
-            <li key={l}>{l}</li>
-          ))}
-        </ul>
-      )}
-      {m.habitualDistinto && <p className="text-xs text-fg-muted">{m.habitualDistinto}</p>}
-      {corrigiendo && (
-        <div className="flex flex-wrap items-end gap-3 rounded-lg border border-line bg-surface-muted p-3">
-          <label className="flex min-w-[200px] flex-col gap-1 text-xs text-fg-muted">
-            Industria
-            <Select value={edicion} disabled={ocupado} onChange={(e) => setEdicion(e.target.value)}>
-              <option value="">Escala general</option>
-              {ediciones.map((e) => (
-                <option key={e.slug} value={e.slug}>
-                  {e.nombre}
-                </option>
-              ))}
-            </Select>
-          </label>
-          <label className="flex flex-col gap-1 text-xs text-fg-muted">
-            Cómo vende
-            <Select value={cierre} disabled={ocupado} onChange={(e) => setCierre(e.target.value as Cierre | "")}>
-              <option value="">Sin elegir</option>
-              {CIERRES.map((c) => (
-                <option key={c} value={c}>
-                  {NOMBRE_DEL_CIERRE[c]}
-                </option>
-              ))}
-            </Select>
-          </label>
-          <label className="flex flex-col gap-1 text-xs text-fg-muted">
-            Después de la venta
-            <Select value={despues} disabled={ocupado} onChange={(e) => setDespues(e.target.value as Despues | "")}>
-              <option value="">Sin elegir</option>
-              {DESPUES.map((d) => (
-                <option key={d} value={d}>
-                  {NOMBRE_DEL_DESPUES[d]}
-                </option>
-              ))}
-            </Select>
-          </label>
-          <BotonBlanco disabled={ocupado || (!!cierre !== !!despues)} onClick={() => void guardar()}>
-            Guardar
-          </BotonBlanco>
-          <BotonEnlace onClick={() => setCorrigiendo(false)}>Cancelar</BotonEnlace>
-          <p className="basis-full text-xs text-fg-muted">
-            Desde ahora el agente ya no la cambia. Las preguntas de la exploración y la lectura de cada nivel usan esta edición y este perfil.
-          </p>
-        </div>
-      )}
-    </section>
-  );
+/** «Qué sigue» en el panel de la derecha de la ficha, con la escala de ahora. */
+function QueSigueDeLaCuenta({ slot, accion }: { slot: HTMLElement | null; accion: React.ReactNode }) {
+  const { pendientes, mapa, exp } = useLienzo();
+  if (!slot) return null;
+  const propuestos = pendientes.filter((it) => it.destino.tipo === "nivel").length;
+  const enJuego = mapa.chequeo.areas.filter((a) => exp.estado.areas.includes(a.id));
+  const sinNivel = enJuego.filter((a) => a.faltan.length > 0).map((a) => a.nombre);
+  const hipotesis = Object.values(mapa.posiciones).some((p) => p.clase === "hipotesis");
+  const texto = propuestos
+    ? `El agente propuso ${propuestos === 1 ? "un nivel" : `${propuestos} niveles`}: úsalos en la escala o descártalos.`
+    : !Object.keys(exp.estado.contenido.chequeo).length
+      ? "La empresa todavía no está ubicada: toca «Actualizar escala» para que el agente proponga dónde está con lo que Nexus ya sabe."
+      : sinNivel.length
+        ? `Faltan dimensiones sin nivel en ${sinNivel.join(" y ")}.`
+        : hipotesis
+          ? "Hay niveles que son hipótesis: confírmalos con el cliente en la Exploración del proyecto."
+          : null;
+  if (!texto) return null;
+  return createPortal(<QueSigue accion={accion}>{texto}</QueSigue>, slot);
 }
 
 export default function EscalaDeLaCuenta({
@@ -400,21 +528,16 @@ export default function EscalaDeLaCuenta({
 }: {
   clientId: string;
   slotDelPanel: HTMLElement | null;
-  /** Abre la Exploración de un proyecto (ahí también se confirma cada nivel con su evidencia). */
+  /** Abre la Exploración de un proyecto (ahí se explora con el cliente, sesión por sesión). */
   onAbrirExploracion: (projectId: string) => void;
 }) {
   const toast = useToast();
   const [datos, setDatos] = useState<Datos | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [elegida, setElegida] = useState<string | null>(null);
   const [ocupado, setOcupado] = useState(false);
-  const [corrida, setCorrida] = useState<{ exploracionId: string } | null>(null);
-  const [fase, setFase] = useState<string | null>(null);
+  const [abriendo, setAbriendo] = useState(false);
+  const intentoAbrir = useRef(false);
   const [casos, setCasos] = useState<{ titulos: Set<string>; puedeEditar: boolean }>({ titulos: new Set(), puedeEditar: false });
-  // «Actualizar escala»: sobre qué se ubica y con qué venta.
-  const [actualizando, setActualizando] = useState(false);
-  const [objetivo, setObjetivo] = useState<string | null>(null);
-  const [ventaId, setVentaId] = useState<string | null | undefined>(undefined);
   // «Guardar esta versión»: de qué momento y de qué venta.
   const [guardando, setGuardando] = useState(false);
   const [momento, setMomento] = useState<MomentoDeLaVersion>("hoy");
@@ -445,120 +568,54 @@ export default function EscalaDeLaCuenta({
     void cargarCasos();
   }, [cargar, cargarCasos]);
 
-  // Sigue la corrida del agente hasta que termine (cada 3 s), y después recarga.
-  const vivo = useRef(true);
-  useEffect(() => {
-    vivo.current = true;
-    return () => {
-      vivo.current = false;
-    };
-  }, []);
-  useEffect(() => {
-    if (!corrida) return;
-    let parar = false;
-    const desde = Date.now();
-    let fallos = 0;
-    // Si la consulta falla 5 veces seguidas, o pasan 10 minutos, se deja de mirar y se avisa: no se pregunta para siempre.
-    const rendirse = (mensaje: string) => {
-      parar = true;
-      setFase(null);
-      setCorrida(null);
-      toast.error(mensaje);
-    };
-    const vuelta = async () => {
-      while (!parar && vivo.current) {
-        await new Promise((r) => setTimeout(r, 3000));
-        if (parar || !vivo.current) break;
-        if (Date.now() - desde > 10 * 60_000) {
-          rendirse("El agente sigue sin terminar después de 10 minutos. Recarga la página en un rato para ver lo que propuso.");
-          break;
-        }
-        const r = await fetch(`/api/sales/exploraciones/${corrida.exploracionId}/agente`, { cache: "no-store" }).catch(() => null);
-        const j = r?.ok
-          ? ((await r.json().catch(() => null)) as { corrida?: { estado: string; fase: string | null; propuestos: number | null; error: string | null } | null } | null)
-          : null;
-        const c = j?.corrida;
-        if (!c) {
-          fallos += 1;
-          if (fallos >= 5) {
-            rendirse("No se pudo saber cómo va el agente. Recarga la página en un rato para ver lo que propuso.");
-            break;
-          }
-          continue;
-        }
-        fallos = 0;
-        if (c.estado === "RUNNING") {
-          setFase(c.fase);
-          continue;
-        }
-        parar = true;
-        setFase(null);
-        setCorrida(null);
-        if (c.estado === "ERROR") toast.error(c.error ?? "El agente no pudo terminar.");
-        else
-          toast.success(
-            c.propuestos
-              ? `El agente propuso ${c.propuestos} ${c.propuestos === 1 ? "nivel" : "niveles"}: revísalos acá abajo y usa los que estén bien.`
-              : "El agente terminó sin nada nuevo: o ya está todo confirmado, o no hay nada que haya dicho el cliente para respaldar un nivel.",
-          );
-        void cargar();
-      }
-    };
-    void vuelta();
-    return () => {
-      parar = true;
-    };
-  }, [corrida, cargar, toast]);
-
-  const ok = datos && datos.estado === "ok" ? datos : null;
-  const lista = useMemo(() => (ok ? vistas(ok) : []), [ok]);
-  const vista = lista.find((v) => v.clave === elegida) ?? lista[0] ?? null;
-
-  const pedir = async (cuerpo: Record<string, unknown>): Promise<void> => {
-    setOcupado(true);
+  /** Abre la escala de la cuenta: la crea si no está y, sin ningún nivel, parte de lo medido en la preventa. */
+  const abrir = useCallback(async () => {
+    setAbriendo(true);
     try {
-      const r = await fetch(`/api/clients/${clientId}/escala`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(cuerpo) });
-      const j = (await r.json().catch(() => null)) as { error?: string; igual?: boolean; exploracionId?: string } | null;
-      if (!r.ok) throw new Error(j?.error ?? "No se pudo completar el pedido.");
-      if (cuerpo.accion === "guardar") {
-        toast.success(j?.igual ? "Esta versión ya estaba guardada: nada cambió desde la última." : "Versión guardada.");
-        setGuardando(false);
-        await cargar();
-      } else if (j?.exploracionId) {
-        toast.info("El agente está leyendo todo lo que Nexus sabe de la empresa…");
-        setActualizando(false);
-        setFase("Empezando…");
-        setCorrida({ exploracionId: j.exploracionId });
-        // Lo que proponga se ve en la exploración sobre la que se ubicó.
-        setElegida(`hoy:${j.exploracionId}`);
-      }
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "No se pudo completar el pedido.");
-    } finally {
-      setOcupado(false);
-    }
-  };
-
-  /** Usar, descartar o corregir la edición: por el PATCH de la exploración (el mismo escritor de La escala de la exploración). */
-  const cambiarEn = (exp: ExploracionDeLaEmpresa) => async (operaciones: Record<string, unknown>[], aviso: string) => {
-    setOcupado(true);
-    try {
-      const r = await fetch(`/api/sales/exploraciones/${exp.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ version: exp.version, operaciones }),
-      });
-      const j = (await r.json().catch(() => null)) as { error?: string } | null;
-      if (r.status === 409) {
-        toast.error("Alguien cambió la escala mientras la mirabas. Se cargó lo último: vuelve a intentarlo.");
-      } else if (!r.ok) {
-        throw new Error(j?.error ?? "No se pudo guardar.");
-      } else {
-        toast.success(aviso);
-      }
+      const r = await fetch(`/api/clients/${clientId}/escala`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ accion: "abrir" }) });
+      const j = (await r.json().catch(() => null)) as { error?: string; traidas?: number; afuera?: number; noSeTrajo?: boolean } | null;
+      if (!r.ok) throw new Error(j?.error ?? "No se pudo abrir la escala de la cuenta.");
+      if (j?.noSeTrajo) toast.error("No se pudo traer lo medido en la preventa: alguien cambió la escala al mismo tiempo. Recarga para intentarlo de nuevo.");
+      else if (j?.traidas)
+        toast.success(
+          `La escala de la cuenta parte de lo medido en la preventa: ${j.traidas === 1 ? "una dimensión" : `${j.traidas} dimensiones`}.` +
+            (j.afuera ? ` ${j.afuera === 1 ? "Una cosa no existe" : `${j.afuera} cosas no existen`} en esta escala y no se trajo.` : ""),
+        );
       await cargar();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "No se pudo guardar.");
+      toast.error(e instanceof Error ? e.message : "No se pudo abrir la escala de la cuenta.");
+    } finally {
+      setAbriendo(false);
+    }
+  }, [clientId, cargar, toast]);
+
+  // Quien puede trabajarla la abre al entrar (una vez), como la Exploración de un proyecto.
+  const puede = datos?.puede ?? { preventa: false, exploracion: false };
+  useEffect(() => {
+    if (!datos || datos.estado !== "ok" || !datos.faltaAbrir || !puede.exploracion || intentoAbrir.current) return;
+    intentoAbrir.current = true;
+    void abrir();
+  }, [datos, puede.exploracion, abrir]);
+
+  const ok = datos && datos.estado === "ok" ? datos : null;
+  const cuenta = ok?.cuenta ?? null;
+
+  const guardarVersion = async () => {
+    if (!cuenta) return;
+    setOcupado(true);
+    try {
+      const r = await fetch(`/api/clients/${clientId}/escala`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ accion: "guardar", exploracionId: cuenta.exploracion.id, momento, ...(ventaParaGuardar ? { ventaId: ventaParaGuardar } : {}) }),
+      });
+      const j = (await r.json().catch(() => null)) as { error?: string; igual?: boolean } | null;
+      if (!r.ok) throw new Error(j?.error ?? "No se pudo guardar la versión.");
+      toast.success(j?.igual ? "Esta versión ya estaba guardada: nada cambió desde la última." : "Versión guardada.");
+      setGuardando(false);
+      await cargar();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "No se pudo guardar la versión.");
     } finally {
       setOcupado(false);
     }
@@ -583,11 +640,31 @@ export default function EscalaDeLaCuenta({
     }
   };
 
+  // Dónde se revisa lo propuesto en otra exploración: la preventa en su página, un proyecto en su Exploración.
+  const abrirExp = useCallback(
+    (exploracionId: string) => {
+      const e = ok?.exploraciones.find((x) => x.id === exploracionId);
+      if (!e || e.esLaCuenta) return null;
+      return e.proyecto ? (
+        <BotonBlanco onClick={() => onAbrirExploracion(e.proyecto!.id)}>Abrir la Exploración</BotonBlanco>
+      ) : (
+        <Link href={`/sales/exploraciones/${e.id}?pieza=escala`} className="rounded-md border border-line bg-surface px-2.5 py-[5px] text-xs font-medium text-fg-secondary hover:bg-surface-hover hover:text-fg">
+          Abrir la preventa
+        </Link>
+      );
+    },
+    [ok, onAbrirExploracion],
+  );
+  const historia = useMemo(() => (ok ? filasDeLaHistoria(ok, cuenta?.exploracion.id ?? null, abrirExp) : []), [ok, cuenta, abrirExp]);
+
   const encabezado = (acciones?: React.ReactNode) => (
     <div className="flex flex-wrap items-start justify-between gap-3">
       <div>
         <h2 className="text-[22px] font-bold leading-tight text-fg">La escala</h2>
-        <p className="mt-1 text-[13px] text-fg-muted">Dónde está la empresa en cada área, de dónde sale cada nivel y cómo se movió desde que nos compró. Para el equipo: el cliente no la ve.</p>
+        <p className="mt-1 text-[13px] text-fg-muted">
+          La misma escala de la preventa: dónde está la empresa en cada área, de dónde sale cada nivel y cómo se movió desde que nos compró. Para el equipo:
+          el cliente no la ve.
+        </p>
       </div>
       {acciones && <div className="flex flex-wrap items-center gap-2">{acciones}</div>}
     </div>
@@ -620,50 +697,16 @@ export default function EscalaDeLaCuenta({
     );
   }
 
-  const puede = datos.puede ?? { preventa: false, exploracion: false };
-  const niveles = datos.niveles;
-  const nombre = (l: Letra) => nombreDe(niveles, l);
-  const puedeTrabajar = (e: { origen: "preventa" | "proyecto" } | null) => !!e && (e.origen === "preventa" ? puede.preventa : puede.exploracion);
-
-  // Sobre qué se ubica: lo elegido, o el que sugiere el servidor. La venta: la elegida o la que sugiere ese objetivo.
-  const objetivoActual = datos.objetivos.find((o) => o.clave === objetivo) ?? datos.objetivos.find((o) => o.clave === datos.porDefecto) ?? null;
-  const ventaActual = ventaId === undefined ? (objetivoActual?.ventaSugerida ?? null) : ventaId;
-  const puedeActualizar = (o: typeof objetivoActual) => !!o && (o.tipo === "preventa" ? puede.preventa : puede.exploracion);
-
-  // La exploración que se trabaja: la de lo que se mira o, si no, la del objetivo elegido, o la más reciente.
-  const exp: ExploracionDeLaEmpresa | null =
-    datos.exploraciones.find((e) => e.id === vista?.exploracionId) ??
-    datos.exploraciones.find((e) => e.id === objetivoActual?.exploracionId) ??
-    datos.exploraciones[0] ??
-    null;
-  const abrirExp = (e: ExploracionDeLaEmpresa) =>
-    e.esLaCuenta ? null : e.proyecto ? (
-      <BotonBlanco onClick={() => onAbrirExploracion(e.proyecto!.id)}>Abrir la Exploración</BotonBlanco>
-    ) : (
-      <Link href={`/sales/exploraciones/${e.id}?pieza=escala`} className="rounded-md border border-line bg-surface px-2.5 py-[5px] text-xs font-medium text-fg-secondary hover:bg-surface-hover hover:text-fg">
-        Abrir la preventa
-      </Link>
-    );
-
+  const niveles = cuenta?.escala.niveles ?? datos.niveles;
+  const exploracionDeProyecto = datos.exploraciones.find((e) => e.proyecto && !e.esLaCuenta) ?? null;
   const acciones = (
     <>
-      {fase && (
-        <span className="inline-flex items-center gap-1.5 text-xs text-brand">
-          <IconoDeSugerencia className="h-3.5 w-3.5" />
-          {fase}
-        </span>
-      )}
-      {vista?.exploracionId && vista.clave.startsWith("hoy:") && puedeTrabajar(datos.exploraciones.find((e) => e.id === vista.exploracionId) ?? null) && !guardando && (
+      {cuenta && puede.exploracion && !guardando && (
         <BotonBlanco disabled={ocupado} onClick={() => setGuardando(true)}>
           Guardar esta versión
         </BotonBlanco>
       )}
-      {(puede.exploracion || puede.preventa) && !actualizando && (
-        <BotonAzul disabled={ocupado || !!corrida} onClick={() => setActualizando(true)} title="El agente lee todo lo que Nexus sabe de la empresa y propone niveles. Nada se confirma solo.">
-          Actualizar escala
-        </BotonAzul>
-      )}
-      {datos.exploraciones.length > 0 && datos.sePuedeProbar && (
+      {datos.sePuedeProbar && (cuenta || datos.exploraciones.length > 0) && (
         <Link
           href={`/escala/probar?cliente=${clientId}`}
           className="text-[13px] font-medium text-brand hover:underline"
@@ -675,67 +718,7 @@ export default function EscalaDeLaCuenta({
     </>
   );
 
-  const nombreDeVenta = (v: { nombre: string; fechaCierre: string }) => `${v.nombre} · ganada el ${elDia(v.fechaCierre)}`;
-  const selectorDeVenta = (valor: string | null, cambiar: (v: string | null) => void, primera = "Sin una venta en particular") => (
-    <label className="flex min-w-[220px] flex-col gap-1 text-xs text-fg-muted">
-      Venta
-      <Select value={valor ?? ""} disabled={ocupado} onChange={(e) => cambiar(e.target.value || null)}>
-        <option value="">{primera}</option>
-        {datos.ventas.map((v) => (
-          <option key={v.id} value={v.id}>
-            {nombreDeVenta(v)}
-          </option>
-        ))}
-      </Select>
-    </label>
-  );
-
-  const panelDeActualizar = actualizando && (
-    <section aria-label="Actualizar escala" className="flex flex-col gap-3 rounded-xl border border-line bg-surface p-4">
-      <div>
-        <p className="text-[14px] font-semibold text-fg">Actualizar escala</p>
-        <p className="mt-0.5 text-[13px] text-fg-secondary">
-          El agente lee todo lo que Nexus sabe de la empresa: lo vendido (las ventas, la propuesta y el handoff), las reuniones ya leídas en resumen, las
-          tareas, el cronograma, los cuestionarios, el test, HubSpot y la memoria. Propone niveles solo con lo que dijo o hizo el cliente, y nada se confirma
-          solo. No marca nada como leído ni cambia la guía de la exploración. Cuesta entre US$0,05 y US$0,20.
-        </p>
-      </div>
-      <div className="flex flex-wrap items-end gap-3">
-        <label className="flex min-w-[240px] flex-col gap-1 text-xs text-fg-muted">
-          Sobre qué se ubica
-          <Select
-            value={objetivoActual?.clave ?? ""}
-            disabled={ocupado}
-            onChange={(e) => {
-              setObjetivo(e.target.value);
-              setVentaId(undefined);
-            }}
-          >
-            {datos.objetivos.map((o) => (
-              <option key={o.clave} value={o.clave}>
-                {o.etiqueta}
-                {o.detalle ? ` · ${o.detalle}` : ""}
-              </option>
-            ))}
-          </Select>
-        </label>
-        {datos.ventas.length > 0 && selectorDeVenta(ventaActual, setVentaId)}
-        <BotonAzul
-          disabled={ocupado || !!corrida || !puedeActualizar(objetivoActual)}
-          onClick={() => void pedir({ accion: "actualizar", objetivo: objetivoActual?.clave, ventaId: ventaActual })}
-          title={puedeActualizar(objetivoActual) ? undefined : "No tienes permiso para trabajar esa exploración."}
-        >
-          Actualizar
-        </BotonAzul>
-        <BotonEnlace onClick={() => setActualizando(false)}>Cancelar</BotonEnlace>
-      </div>
-      {objetivoActual?.tipo === "cuenta" && !objetivoActual.exploracionId && (
-        <p className="text-xs text-fg-muted">Como no hay un proyecto en particular, lo propuesto queda en la escala de la cuenta (dentro de «Información del cliente»).</p>
-      )}
-    </section>
-  );
-
-  const panelDeGuardar = guardando && vista?.exploracionId && (
+  const panelDeGuardar = guardando && cuenta && (
     <section aria-label="Guardar esta versión" className="flex flex-wrap items-end gap-3 rounded-xl border border-line bg-surface p-4">
       <label className="flex flex-col gap-1 text-xs text-fg-muted">
         De qué momento es
@@ -747,11 +730,20 @@ export default function EscalaDeLaCuenta({
           ))}
         </Select>
       </label>
-      {datos.ventas.length > 0 && selectorDeVenta(ventaParaGuardar ?? null, (v) => setVentaParaGuardar(v ?? undefined), "La del proyecto, si la tiene")}
-      <BotonBlanco
-        disabled={ocupado}
-        onClick={() => void pedir({ accion: "guardar", exploracionId: vista.exploracionId, momento, ...(ventaParaGuardar ? { ventaId: ventaParaGuardar } : {}) })}
-      >
+      {datos.ventas.length > 0 && (
+        <label className="flex min-w-[220px] flex-col gap-1 text-xs text-fg-muted">
+          Venta
+          <Select value={ventaParaGuardar ?? ""} disabled={ocupado} onChange={(e) => setVentaParaGuardar(e.target.value || undefined)}>
+            <option value="">La del proyecto, si la tiene</option>
+            {datos.ventas.map((v) => (
+              <option key={v.id} value={v.id}>
+                {v.nombre} · ganada el {elDia(v.fechaCierre)}
+              </option>
+            ))}
+          </Select>
+        </label>
+      )}
+      <BotonBlanco disabled={ocupado} onClick={() => void guardarVersion()}>
         Guardar
       </BotonBlanco>
       <BotonEnlace onClick={() => setGuardando(false)}>Cancelar</BotonEnlace>
@@ -762,172 +754,51 @@ export default function EscalaDeLaCuenta({
     </section>
   );
 
-  const cambios = vista && vista.anterior ? cambiosEntreFotos(vista.anterior.foto, { formato: 1, escalaVersion: null, edicion: vista.edicion, areas: vista.areas }) : [];
-  const camino = vista ? caminoDeCrecimiento(vista.areas, nombre) : [];
-
-  const propuestosEnTotal = datos.exploraciones.reduce((n, e) => n + e.propuestos.length, 0);
-  const queSigue = propuestosEnTotal
-    ? `El agente propuso ${propuestosEnTotal === 1 ? "un nivel" : `${propuestosEnTotal} niveles`}: úsalos acá o descártalos.`
-    : !vista
-      ? "La empresa todavía no está posicionada: toca «Actualizar escala» para que el agente proponga dónde está con lo que Nexus ya sabe."
-      : vista.areas.some((a) => a.conNivel < a.aplican)
-        ? `Faltan dimensiones sin nivel en ${vista.areas.filter((a) => a.conNivel < a.aplican).map((a) => a.nombre).join(" y ")}.`
-        : vista.areas.some((a) => a.conEvidencia < a.conNivel)
-          ? "Hay niveles que son hipótesis: confírmalos con el cliente en la próxima sesión."
-          : null;
-
   return (
     <div className="space-y-6 px-8 pb-10 pt-6">
       {encabezado(acciones)}
-      {slotDelPanel && queSigue && createPortal(<QueSigue accion={exp ? abrirExp(exp) : null}>{queSigue}</QueSigue>, slotDelPanel)}
-      {panelDeActualizar}
       {panelDeGuardar}
-      {datos.exploraciones
-        .filter((e) => e.propuestos.length > 0)
-        .map((e) => (
-          <LoQuePropone key={e.id} exp={e} deDonde={deDondeEn(datos)(e).replace(/^La /, "la ")} niveles={niveles} puedeUsar={puedeTrabajar(e)} ocupado={ocupado} onCambiar={cambiarEn(e)} />
-        ))}
-      {exp && <ConQueSeMide key={`${exp.id}:${exp.version}`} exp={exp} ediciones={datos.ediciones} puedeCorregir={puedeTrabajar(exp)} ocupado={ocupado} onCambiar={cambiarEn(exp)} />}
-
-      {!vista ? (
-        <EmptyState
-          title="La empresa todavía no está posicionada en la escala"
-          description="Sin una posición con fecha no hay de dónde partir ni cómo medir cuánto se movió. «Actualizar escala» lee lo vendido, las reuniones, las tareas y todo lo que Nexus sabe, y propone dónde está; tú usas lo que esté bien."
-          action={
-            (puede.exploracion || puede.preventa) && !actualizando ? (
-              <BotonAzul disabled={ocupado || !!corrida} onClick={() => setActualizando(true)}>
-                Actualizar escala
-              </BotonAzul>
-            ) : undefined
-          }
+      {cuenta ? (
+        <LienzoDeExploracion
+          key={cuenta.exploracion.id}
+          inicial={cuenta.exploracion}
+          escala={cuenta.escala}
+          puedeEditar={puede.exploracion}
+          puedeProponer={false}
+          cuenta={{
+            alRefrescar: () => void cargar(),
+            agente: <AgenteDeLaCuenta clientId={clientId} datos={datos} />,
+            despues: (
+              <>
+                <QueSigueDeLaCuenta slot={slotDelPanel} accion={exploracionDeProyecto ? abrirExp(exploracionDeProyecto.id) : null} />
+                <CaminoDeCrecimiento casos={casos} ocupado={ocupado} onSumar={(t, c) => void sumarCaso(t, c)} />
+                <HistoriaDeLaEscala filas={historia} niveles={niveles} />
+              </>
+            ),
+          }}
         />
+      ) : abriendo ? (
+        <SkeletonPanel minH="min-h-[420px]">
+          <SkeletonText lines={4} />
+        </SkeletonPanel>
       ) : (
         <>
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <p className="text-[13px] text-fg-secondary">
-              <span className="font-medium text-fg">{vista.titulo}</span> · {fecha(vista.fecha)}
-              {vista.edicion ? ` · edición ${vista.edicion}` : ""}
-            </p>
-            {!vista.clave.startsWith("hoy:") && <BotonEnlace onClick={() => setElegida(null)}>Volver a la de hoy</BotonEnlace>}
-          </div>
-
-          {vista.anterior && (
-            <section className="rounded-xl border border-line bg-surface-muted px-4 py-3">
-              <p className={ROTULO_DEL_SISTEMA}>Qué cambió desde el {fecha(vista.anterior.fecha)}</p>
-              {cambios.length ? (
-                <ul className="mt-1.5 flex flex-col gap-0.5 text-[13px] text-fg-secondary">
-                  {cambios.slice(0, 8).map((c) => (
-                    <li key={c.dimensionId}>
-                      <span className="text-fg-muted">{c.areaNombre} ·</span> {fraseDelCambio(c, nombre)}
-                    </li>
-                  ))}
-                  {cambios.length > 8 && <li className="text-xs text-fg-muted">y {cambios.length - 8} más</li>}
-                </ul>
-              ) : (
-                <p className="mt-1 text-[13px] text-fg-muted">Nada: los mismos niveles.</p>
-              )}
-            </section>
-          )}
-
-          <div className="grid gap-4 xl:grid-cols-2">
-            {vista.areas.map((a) => (
-              <AreaConEvidencia key={a.id} a={a} niveles={niveles} />
-            ))}
-          </div>
-
-          {camino.length > 0 && (
-            <section className="space-y-3">
-              <div>
-                <h3 className="text-sm font-semibold text-fg">El camino de crecimiento</h3>
-                <p className="text-xs text-fg-muted">Qué sigue en la escala y por qué, con los casos de la biblioteca que lo mueven. Sale de esta foto: sin IA.</p>
-              </div>
-              <div className="grid gap-3 xl:grid-cols-2">
-                {camino.map((p) => (
-                  <article key={p.areaId} className="flex flex-col gap-2 rounded-xl border border-line bg-surface p-4">
-                    <div className="flex flex-wrap items-baseline justify-between gap-2">
-                      <h4 className="text-[14px] font-semibold text-fg">{p.areaNombre}</h4>
-                      {p.nivel && p.siguiente && (
-                        <span className="flex items-center gap-1.5 text-xs text-fg-muted">
-                          <Nivel letra={p.nivel} niveles={niveles} /> → <Nivel letra={p.siguiente} niveles={niveles} />
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-[13px] text-fg-secondary">{p.porQue}</p>
-                    {p.casos.length > 0 && (
-                      <ul className="flex flex-col gap-1.5">
-                        {p.casos.map((c) => {
-                          const ya = casos.titulos.has(c.caso.titulo.trim().toLowerCase());
-                          return (
-                            <li key={c.caso.id} className="flex items-start gap-2.5 rounded-lg border border-info-line bg-info-surface px-3 py-2">
-                              <IconoDeSugerencia className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-brand" />
-                              <div className="min-w-0 flex-1">
-                                <Link href={`/sales/use-cases/${c.caso.id}`} className="text-[13px] font-medium text-fg hover:underline">
-                                  {c.caso.titulo}
-                                </Link>
-                                <p className="text-xs text-fg-secondary">{c.razon}</p>
-                              </div>
-                              {ya ? (
-                                <span className="flex-shrink-0 text-xs text-fg-muted">Ya está en Casos de uso</span>
-                              ) : (
-                                casos.puedeEditar && (
-                                  <BotonBlanco
-                                    disabled={ocupado}
-                                    onClick={() =>
-                                      void sumarCaso(c.caso.titulo, {
-                                        resultado: c.caso.promesa,
-                                        porque: c.razon,
-                                        mueve: c.mueve.map((m) => ({ area: p.areaNombre, dimension: m.dimension, nivel: nombre(m.hasta) })),
-                                      })
-                                    }
-                                  >
-                                    Sumar a los sugeridos
-                                  </BotonBlanco>
-                                )
-                              )}
-                            </li>
-                          );
-                        })}
-                      </ul>
-                    )}
-                  </article>
-                ))}
-              </div>
-            </section>
-          )}
-
-          {lista.length > 1 && (
-            <section className="space-y-2">
-              <h3 className="text-sm font-semibold text-fg">La escala en el tiempo</h3>
-              <ul className="divide-y divide-line rounded-xl border border-line bg-surface">
-                {lista.map((v) => (
-                  <li key={v.clave}>
-                    <button
-                      type="button"
-                      aria-pressed={v.clave === vista.clave}
-                      onClick={() => setElegida(v.clave)}
-                      className={cn("flex w-full flex-wrap items-baseline justify-between gap-3 px-4 py-2.5 text-left text-[13px] hover:bg-surface-hover", v.clave === vista.clave && "bg-surface-muted")}
-                    >
-                      <span className="text-fg-secondary">
-                        <span className="tabular-nums text-fg">{fecha(v.fecha)}</span> · {v.titulo}
-                      </span>
-                      <span className="flex flex-wrap gap-3">
-                        {v.areas.map((a) => (
-                          <span key={a.id} className="inline-flex items-baseline gap-1.5">
-                            <span className="text-fg-muted">{a.nombre}</span>
-                            <Nivel letra={a.nivel} niveles={niveles} />
-                          </span>
-                        ))}
-                      </span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-              <p className="text-xs text-fg-muted">
-                Se guarda una versión al confirmar un nivel (una por día), al presentar el diagnóstico de un ciclo y con «Guardar esta versión», que se puede
-                fechar «al vender» o «al arrancar». Lo que propone el agente no entra hasta que lo usas.
-              </p>
-            </section>
-          )}
+          <EmptyState
+            title="La escala de la cuenta todavía no está abierta"
+            description={
+              puede.exploracion
+                ? "Al abrirla parte de lo medido en la preventa, si la hubo. Después, «Actualizar escala» lee todo lo que Nexus sabe y propone dónde está; tú usas lo que esté bien."
+                : "La abre quien puede trabajar la exploración del cliente."
+            }
+            action={
+              puede.exploracion ? (
+                <BotonAzul disabled={abriendo} onClick={() => void abrir()}>
+                  Abrir la escala
+                </BotonAzul>
+              ) : undefined
+            }
+          />
+          <HistoriaDeLaEscala filas={historia} niveles={niveles} />
         </>
       )}
     </div>

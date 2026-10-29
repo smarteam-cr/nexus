@@ -24,6 +24,12 @@
  * inicio; tocar «Exploración» en el riel (o en el de la ficha, con el evento `exploracion:inicio`)
  * vuelve. Con `?sesion=<id>` (los enlaces de «Para ti») se abre esa sesión. El «Contexto adicional» de
  * la exploración se retiró: las demás piezas con agente tienen el suyo, sin lista de reuniones.
+ *
+ * ── EN LA CUENTA (escala única, 2026-10-28) ────────────────────────────────
+ * Con `cuenta`, el mismo lienzo es La cuenta › La escala de la ficha del cliente: solo la pieza La escala, sobre la
+ * exploración de «Información del cliente» (lib/exploraciones/escala-de-la-cuenta.ts). Sin riel ni panel: la ficha
+ * pone su encabezado, el agente («Actualizar escala»), la historia y el camino de crecimiento. Cuando cambia la
+ * edición o el perfil, la escala del lienzo es otra: la vuelve a pedir la ficha (`alRefrescar`), no la página.
  */
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
@@ -59,7 +65,7 @@ import { opcionesDeLasPestanas, pestanasDeSesiones } from "@/lib/exploraciones/g
 import { esParaEstaExploracion, EVENTO_GUIA_CAMBIADA, type AvisoDeLaGuia } from "@/lib/exploraciones/aviso-de-la-guia";
 import { Casilla } from "./Casilla";
 import ManejoDeObjeciones from "./ManejoDeObjeciones";
-import { LienzoContexto, type Lienzo, type ModoDelSelector, type MomentoDeLaSesion, type OpcionesDeCambio, type PasoDelLienzoUI } from "./contexto";
+import { LienzoContexto, type Lienzo, type LugarDelLienzo, type ModoDelSelector, type MomentoDeLaSesion, type OpcionesDeCambio, type PasoDelLienzoUI } from "./contexto";
 import PanelDeContexto from "./PanelDeContexto";
 import { NOMBRE_DEL_PASO, piezaDelDestino } from "./piezas";
 import PasoCasosDeUso from "./PasoCasosDeUso";
@@ -128,6 +134,16 @@ export interface EnElProyecto {
 
 type VistaDelProyecto = "sesiones" | "informe";
 
+/** La escala de la cuenta en la ficha del cliente (ver arriba). */
+export interface EnLaCuenta {
+  /** Vuelve a pedir la exploración y la escala (cambió la edición o el perfil). */
+  alRefrescar: () => void;
+  /** El agente de la cuenta («Actualizar escala»), en el lugar del de la preventa. */
+  agente: ReactNode;
+  /** Lo propio de la ficha, debajo de la escala: el camino de crecimiento y la historia. */
+  despues?: ReactNode;
+}
+
 export default function LienzoDeExploracion({
   inicial,
   escala,
@@ -136,6 +152,7 @@ export default function LienzoDeExploracion({
   infoDeLaEmpresa,
   piezaInicial,
   proyecto,
+  cuenta,
   conAsistente = false,
   veAnalisisDeVenta = false,
   veTendenciaDelEquipo = false,
@@ -150,6 +167,8 @@ export default function LienzoDeExploracion({
   piezaInicial?: string | null;
   /** La exploración de un proyecto, dentro de la ficha del cliente (ver arriba). */
   proyecto?: EnElProyecto;
+  /** La escala de la cuenta, dentro de la ficha del cliente (ver arriba). */
+  cuenta?: EnLaCuenta;
   /** El chat de la cuenta está en la pantalla: la guía ofrece «Mejorar con el asistente» (validación 71). */
   conAsistente?: boolean;
   /** Quien mira ve el análisis de la venta (S4 y S5): quien entra a la preventa (2026-10-28). Nunca en un proyecto. */
@@ -169,9 +188,9 @@ export default function LienzoDeExploracion({
   const [reuniones, setReuniones] = useState(inicial.reuniones ?? []);
   const [escalaAnterior, setEscalaAnterior] = useState(inicial.escalaAnterior ?? null);
   const [guardando, setGuardando] = useState(false);
-  const conAnalisis = veAnalisisDeVenta && !proyecto;
+  const conAnalisis = veAnalisisDeVenta && !proyecto && !cuenta;
   const [paso, setPasoCrudo] = useState<PasoDelLienzoUI>(
-    proyecto ? "exploracion" : esPieza(piezaInicial) && (piezaInicial !== "analisis" || conAnalisis) ? piezaInicial : "resumen",
+    cuenta ? "escala" : proyecto ? "exploracion" : esPieza(piezaInicial) && (piezaInicial !== "analisis" || conAnalisis) ? piezaInicial : "resumen",
   );
   const [vista, setVista] = useState<VistaDelProyecto>("sesiones");
   const [sesionElegida, setSesionElegida] = useState<string | null>(sesionDeLaDireccion);
@@ -185,14 +204,23 @@ export default function LienzoDeExploracion({
   const [pie, setPie] = useState<HTMLDivElement | null>(null);
   // La pieza abierta queda en la dirección, sin otra navegación (no vuelve a pedir la página).
   const enProyecto = !!proyecto;
+  const lugar: LugarDelLienzo = cuenta ? "cuenta" : proyecto ? "proyecto" : "preventa";
+  /* La escala del lienzo la arma el servidor con la edición y el perfil: si cambian, se vuelve a pedir. En la cuenta la
+     pide la ficha (no hay página que refrescar); en la preventa y en un proyecto, la página. Por referencia: los
+     callbacks de abajo no se rehacen cada vez que la ficha se vuelve a pintar. */
+  const alRefrescar = useRef(cuenta?.alRefrescar);
+  useEffect(() => {
+    alRefrescar.current = cuenta?.alRefrescar;
+  }, [cuenta?.alRefrescar]);
+  const refrescarLaEscala = useCallback(() => (alRefrescar.current ? alRefrescar.current() : router.refresh()), [router]);
   // La pieza abierta, por referencia: entrar a Exploración desde OTRA pieza arranca en su página de inicio.
   const pasoActual = useRef(paso);
   useEffect(() => {
     pasoActual.current = paso;
   }, [paso]);
   const setPaso = useCallback((p: PasoDelLienzoUI) => {
-    // En un proyecto hay una sola pieza (la exploración): la dirección es la de la ficha.
-    if (enProyecto) return;
+    // En un proyecto (o en la cuenta) hay una sola pieza: la dirección es la de la ficha.
+    if (enProyecto || lugar === "cuenta") return;
     if (p === "exploracion" && pasoActual.current !== "exploracion") setEnInicio(true);
     pasoActual.current = p;
     setPasoCrudo(p);
@@ -204,7 +232,7 @@ export default function LienzoDeExploracion({
     } catch {
       /* sin la dirección, igual cambia de pieza */
     }
-  }, [enProyecto]);
+  }, [enProyecto, lugar]);
 
   /* Lo último que confirmó el servidor, y la fila de pedidos: cada uno sale con la versión que dejó
      el anterior. */
@@ -279,7 +307,7 @@ export default function LienzoDeExploracion({
           if (!data.exploracion) void recargar();
           return false;
         }
-        if (opciones.refrescar) router.refresh();
+        if (opciones.refrescar) refrescarLaEscala();
         if (opciones.exito) toast.success(opciones.exito);
         return true;
       } catch {
@@ -291,7 +319,7 @@ export default function LienzoDeExploracion({
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `recargar` se declara abajo y es estable
-    [router, toast],
+    [refrescarLaEscala, toast],
   );
 
   const me = useMe();
@@ -401,7 +429,7 @@ export default function LienzoDeExploracion({
           /* La preparación eligió la industria o el perfil: la escala del lienzo es otra (la arma el
              servidor con esos dos), así que se vuelve a pedir la página. */
           if (antes.edicion !== ahora.edicion || antes.perfilCierre !== ahora.perfilCierre || antes.perfilDespues !== ahora.perfilDespues) {
-            router.refresh();
+            refrescarLaEscala();
           }
         }
       } catch {
@@ -410,7 +438,7 @@ export default function LienzoDeExploracion({
     });
     cola.current = p;
     return p;
-  }, [router]);
+  }, [refrescarLaEscala]);
 
   // Lo confirmado CON evidencia: lo mismo que lee el servidor para la propuesta y el handoff.
   const chequeo = useMemo(() => chequeoConfirmado(escala, exp.estado), [exp.estado, escala]);
@@ -442,6 +470,7 @@ export default function LienzoDeExploracion({
   const lienzo: Lienzo = {
     exp,
     marco,
+    lugar,
     escala,
     chequeo,
     mapa,
@@ -612,6 +641,18 @@ export default function LienzoDeExploracion({
       </Drawer>
     </>
   );
+
+  if (cuenta) {
+    return (
+      <LienzoContexto.Provider value={lienzo}>
+        <div ref={raiz} className="space-y-8">
+          <PasoEscala agente={cuenta.agente} />
+          {cuenta.despues}
+        </div>
+        {cajones}
+      </LienzoContexto.Provider>
+    );
+  }
 
   if (proyecto) {
     const extras = [

@@ -18,6 +18,7 @@ import {
   textoDeLasVentas,
   textoDelCronograma,
   ordenarVersiones,
+  reunionesElegidas,
   type ProyectoParaUbicar,
 } from "./posicionar";
 
@@ -260,5 +261,22 @@ describe("pedidoDePosicionar", () => {
     const r = leerLaRespuesta(respuesta, ctx, "run");
     expect(r.items.map((it) => (it.destino as { dimensionId: string }).dimensionId)).toEqual(["1.2"]);
     expect(r.descartadas).toBe(1);
+  });
+});
+
+describe("las reuniones que alguien eligió", () => {
+  it("la de cada sesión de Meet y las del buscador, sin repetir; las de HubSpot o de un documento no", () => {
+    const ids = reunionesElegidas([
+      {
+        sesiones: [
+          { id: "s1", reunion: { id: "m1", origen: "meet" } },
+          { id: "s2", reunion: { id: "h1", origen: "hubspot" } },
+          { id: "s3" },
+        ],
+        reunionesElegidas: ["m2", "m1"],
+      },
+      { sesiones: [{ id: "s4", reunion: { id: "m3", origen: "meet" } }], reunionesElegidas: [] },
+    ]);
+    expect(ids).toEqual(["m1", "m2", "m3"]);
   });
 });

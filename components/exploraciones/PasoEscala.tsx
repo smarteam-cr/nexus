@@ -15,8 +15,12 @@
  *   4. Qué va primero y el agente, al pie.
  * El «Por qué Ventas / Marketing» escrito a mano se fue de la pantalla (lo que dijo el cliente queda
  * como la fuente de la sugerencia); los porqués guardados se conservan.
+ *
+ * ESCALA ÚNICA (2026-10-28): la misma pieza es La cuenta › La escala de la ficha del cliente (`lugar = "cuenta"`). Ahí
+ * no van «Qué explorar en la próxima sesión» ni «Explorarla a fondo» (la cuenta no tiene sesiones: viven en la
+ * Exploración de cada proyecto), y el agente es el de la ficha (`agente`: «Actualizar escala»), no leer ni preparar.
  */
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { Alert, Button } from "@/components/ui";
 import { PUNTO_DE_NIVEL } from "@/components/escala/niveles";
 import { cn } from "@/lib/cn";
@@ -25,10 +29,10 @@ import { esHipotesisDeNivel, type DestinoDePropuesta, type EstimadoGuardado } fr
 import type { AreaDelLienzo, DimensionDelLienzo, EscalaDelLienzo } from "@/lib/exploraciones/escala-del-lienzo";
 import { cuentaDelArea, loQueLaFrena, type PosicionEnElMapa } from "@/lib/exploraciones/mapa";
 import { diaCorto } from "@/lib/exploraciones/fechas";
-import { fotoDeLaExploracion } from "@/lib/exploraciones/foto-de-la-escala";
+import { fotoDeLaExploracion, mismaVara } from "@/lib/exploraciones/foto-de-la-escala";
 import { areasDeLaProxima, queExplorar } from "@/lib/exploraciones/que-explorar";
 import { EQUIPOS } from "@/lib/exploraciones/equipos";
-import { useLienzo } from "./contexto";
+import { AL_LUGAR, DEL_LUGAR, useLienzo } from "./contexto";
 import FranjaDeSugerencias, { BotonAzul, IconoDeSugerencia } from "./FranjaDeSugerencias";
 import { ConQueSeMide } from "./Identificacion";
 import PanelDelAgente from "./PanelDelAgente";
@@ -127,7 +131,10 @@ function QueExplorarEnLaProxima() {
   const { exp, escala, mapa, escalaAnterior, cambiar, puedeEditar, guardando, nombreDeNivel } = useLienzo();
   const { sesiones, proxima } = useSesiones();
   if (!exp.estado.areas.length) return null;
-  const equipo = sesiones.find((s) => s.id === proxima.sesionId)?.equipo ?? null;
+  const ahora = fotoDeLaExploracion(escala, exp.estado);
+  // Una edición no se compara con otra: con la anterior de otra edición, hoy es un punto de partida nuevo.
+  const anterior = escalaAnterior && mismaVara(escalaAnterior.foto, ahora) ? escalaAnterior : null;
+  const equipo =sesiones.find((s) => s.id === proxima.sesionId)?.equipo ?? null;
   // La misma regla que filtra la lista (que-explorar.ts): la frase dice el filtro solo si de verdad quedó un área.
   const areas = areasDeLaProxima(escala, exp.estado.areas, equipo);
   const areaDelEquipo = equipo && areas.length === 1 && areas[0].id === EQUIPOS[equipo].area ? areas[0] : undefined;
@@ -136,8 +143,8 @@ function QueExplorarEnLaProxima() {
     areas: exp.estado.areas,
     posiciones: mapa.posiciones,
     chequeo: mapa.chequeo,
-    ahora: fotoDeLaExploracion(escala, exp.estado),
-    anterior: escalaAnterior,
+    ahora,
+    anterior,
     aExplorar: exp.estado.contenido.aExplorar,
     nombreDeNivel,
     diaCorto: elDia,
@@ -156,8 +163,8 @@ function QueExplorarEnLaProxima() {
         <div>
           <h3 className="text-[15px] font-semibold text-fg">Qué explorar en la próxima sesión</h3>
           <p className="text-xs text-fg-muted">
-            {escalaAnterior
-              ? "Según lo que cambió desde el " + elDia(escalaAnterior.dia) + " y lo que todavía no tiene evidencia."
+            {anterior
+              ? "Según lo que cambió desde el " + elDia(anterior.dia) + " y lo que todavía no tiene evidencia."
               : "Según lo que todavía no tiene evidencia y lo que frena a cada área."}
             {equipo && areaDelEquipo ? ` La próxima sesión es con ${EQUIPOS[equipo].nombre}: solo lo de ${areaDelEquipo.nombre}.` : ""}
           </p>
@@ -198,7 +205,7 @@ function QueExplorarEnLaProxima() {
 
 /** Lo que dice la pestaña de un área: su nivel y cuánto tiene con evidencia, o que está fuera. */
 function PestanaDeArea({ area, activa, orden, onElegir }: { area: AreaDelLienzo; activa: boolean; orden: number; onElegir: () => void }) {
-  const { mapa, nombreDeNivel } = useLienzo();
+  const { mapa, nombreDeNivel, lugar } = useLienzo();
   const calculo = orden > 0 ? mapa.chequeo.areas.find((a) => a.id === area.id) : undefined;
   const cuenta = calculo ? cuentaDelArea(calculo, mapa.posiciones) : null;
   const todo = !!cuenta && cuenta.hipotesis === 0 && cuenta.sinDato === 0;
@@ -238,7 +245,7 @@ function PestanaDeArea({ area, activa, orden, onElegir }: { area: AreaDelLienzo;
         </>
       ) : (
         <>
-          <span className="text-[13px] text-fg-muted">Fuera de la preventa</span>
+          <span className="text-[13px] text-fg-muted">Fuera {DEL_LUGAR[lugar]}</span>
           <span className="text-xs text-fg-muted">Súmala desde aquí</span>
         </>
       )}
@@ -248,7 +255,7 @@ function PestanaDeArea({ area, activa, orden, onElegir }: { area: AreaDelLienzo;
 
 /** Una dimensión abierta: cómo está hoy, la pregunta, los cinco niveles y lo que pide Funcional. */
 function DetalleDeDimension({ d, onCerrar }: { d: DimensionDelLienzo; onCerrar: () => void }) {
-  const { exp, escala, mapa, cambiar, usar, puedeEditar, guardando, nombreDeNivel, pendientesPara } = useLienzo();
+  const { exp, escala, mapa, cambiar, usar, puedeEditar, guardando, nombreDeNivel, pendientesPara, lugar } = useLienzo();
   const p = mapa.posiciones[d.id];
   const confirmado = exp.estado.contenido.chequeo[d.id];
   const marcada = exp.estado.contenido.aExplorar[d.id];
@@ -438,7 +445,7 @@ function DetalleDeDimension({ d, onCerrar }: { d: DimensionDelLienzo; onCerrar: 
         </div>
       )}
 
-      {puedeEditar && (
+      {puedeEditar && lugar !== "cuenta" && (
         <div>
           <button
             type="button"
@@ -460,7 +467,7 @@ function DetalleDeDimension({ d, onCerrar }: { d: DimensionDelLienzo; onCerrar: 
 
 /** El área en juego: su nivel, por qué está ahí, la rueda y la dimensión abierta. */
 function AreaEnJuego({ area, onSacar }: { area: AreaDelLienzo; onSacar: () => void }) {
-  const { mapa, escala, nombreDeNivel, puedeEditar, guardando } = useLienzo();
+  const { mapa, escala, nombreDeNivel, puedeEditar, guardando, lugar } = useLienzo();
   const [elegida, setElegida] = useState<string | null>(null);
   const calculo = mapa.chequeo.areas.find((a) => a.id === area.id);
   if (!calculo) return null;
@@ -499,7 +506,7 @@ function AreaEnJuego({ area, onSacar }: { area: AreaDelLienzo; onSacar: () => vo
         </div>
         {puedeEditar && (
           <button type="button" disabled={guardando} onClick={onSacar} className="px-1.5 py-1 text-xs font-semibold text-fg-muted hover:text-fg hover:underline">
-            Sacar {area.nombre} de la preventa
+            Sacar {area.nombre} {DEL_LUGAR[lugar]}
           </button>
         )}
       </div>
@@ -612,14 +619,21 @@ function EvidenciaDelArea({ area, onElegir }: { area: AreaDelLienzo; onElegir: (
 
 /** Un área fuera de la preventa: se suma desde su pestaña. */
 function AreaFuera({ area, onSumar }: { area: AreaDelLienzo; onSumar: () => void }) {
-  const { puedeEditar, guardando } = useLienzo();
+  const { puedeEditar, guardando, lugar } = useLienzo();
+  const enLaCuenta = lugar === "cuenta";
   return (
     <div role="tabpanel" className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-line bg-surface-muted px-5 py-7 text-center">
-      <p className="text-sm font-semibold text-fg">{area.nombre} no está en juego en esta preventa</p>
-      <p className="max-w-[460px] text-[13px] text-fg-muted">Súmala si el prospecto la nombra o paga licencias que no usa. Al sumarla, el agente la ubica en la escala con lo que ya sabe.</p>
+      <p className="text-sm font-semibold text-fg">
+        {area.nombre} no está en juego en {enLaCuenta ? "la escala de la cuenta" : lugar === "proyecto" ? "este proyecto" : "esta preventa"}
+      </p>
+      <p className="max-w-[460px] text-[13px] text-fg-muted">
+        {enLaCuenta
+          ? "Súmala si el cliente la trabaja o paga licencias que no usa. Después, «Actualizar escala» la ubica con lo que Nexus ya sabe."
+          : "Súmala si el prospecto la nombra o paga licencias que no usa. Al sumarla, el agente la ubica en la escala con lo que ya sabe."}
+      </p>
       {puedeEditar && (
         <Button size="sm" variant="secondary" className="mt-1" disabled={guardando} onClick={onSumar}>
-          Sumar {area.nombre} a la preventa
+          Sumar {area.nombre} {AL_LUGAR[lugar]}
         </Button>
       )}
     </div>
@@ -627,7 +641,7 @@ function AreaFuera({ area, onSumar }: { area: AreaDelLienzo; onSumar: () => void
 }
 
 function DondeEstaHoy() {
-  const { exp, escala, cambiar, nombreDeNivel } = useLienzo();
+  const { exp, escala, cambiar, nombreDeNivel, lugar } = useLienzo();
   const enJuego = exp.estado.areas;
   const [cual, setCual] = useState<string | null>(null);
   const activa = escala.areas.find((a) => a.id === cual) ?? escala.areas.find((a) => enJuego.includes(a.id)) ?? escala.areas[0];
@@ -640,7 +654,9 @@ function DondeEstaHoy() {
     <section aria-label="Dónde está hoy" className="flex flex-col gap-3">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h3 className="text-[15px] font-semibold text-fg">Dónde está hoy</h3>
-        <span className="text-xs text-fg-muted">Objetivo de la primera venta: llevar cada área en juego a {nombreDeNivel("F")}</span>
+        <span className="text-xs text-fg-muted">
+          {lugar === "preventa" ? "Objetivo de la primera venta" : "El objetivo"}: llevar cada área en juego a {nombreDeNivel("F")}
+        </span>
       </div>
       <div data-recorrido="preventa.escala.areas" role="tablist" aria-label="Áreas" className="grid grid-cols-1 gap-2 sm:grid-cols-3">
         {escala.areas.map((a) => (
@@ -656,14 +672,15 @@ function DondeEstaHoy() {
   );
 }
 
-export default function PasoEscala() {
-  const { exp } = useLienzo();
+/** `agente`: el panel del agente de este lugar (en la cuenta, «Actualizar escala»). Sin él, el de la exploración. */
+export default function PasoEscala({ agente }: { agente?: ReactNode } = {}) {
+  const { exp, lugar } = useLienzo();
   const hayAreas = exp.estado.areas.length > 0;
   // El título y de qué va la pieza los pone el lienzo, como en las demás piezas.
   return (
     <div className="flex flex-col gap-5">
       <SugerenciasDeLaEscala />
-      <QueExplorarEnLaProxima />
+      {lugar !== "cuenta" && <QueExplorarEnLaProxima />}
       <ConQueSeMide />
       <DondeEstaHoy />
       <PreparacionParaEngagement />
@@ -672,7 +689,7 @@ export default function PasoEscala() {
           <QueVaPrimero />
         </div>
       )}
-      <PanelDelAgente modoPrincipal="leer" compacto />
+      {agente ?? <PanelDelAgente modoPrincipal="leer" compacto />}
     </div>
   );
 }

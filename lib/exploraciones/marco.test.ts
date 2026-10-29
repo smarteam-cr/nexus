@@ -275,6 +275,10 @@ describe("⛔ una exploración de proyecto no es una preventa", () => {
     /* Probar la escala (N2, 2026-10-26): como la escala de la empresa, las dos clases a propósito (la preventa y la de
        cada proyecto posicionan a la empresa); el buscador solo pregunta si la empresa tiene alguna viva. */
     "lib/escala/prueba/servidor.ts",
+    /* La escala de la CUENTA (escala única, 2026-10-28): busca la exploración viva del contenedor «Información del
+       cliente» por su `projectId`, y las reuniones elegidas en TODAS las exploraciones de la empresa (las dos clases a
+       propósito: son de la misma empresa). La preventa que le da el punto de partida se busca con DE_LA_PREVENTA. */
+    "lib/exploraciones/escala-de-la-cuenta.ts",
   ]);
   function archivos(dir: string): string[] {
     const abs = path.join(RAIZ, dir);

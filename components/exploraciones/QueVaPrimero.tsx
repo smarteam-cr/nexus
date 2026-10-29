@@ -28,7 +28,7 @@ export function NivelChip({ nivel, className }: { nivel: Letra | null; className
 
 const RAZON_DEL_AREA: Record<Exclude<Extract<Recomendacion, { tipo: "trabajar" }>["razon"]["area"], "unica">, string> = {
   "la-mas-baja": "es el área más baja de las que se miraron",
-  "empate-la-primera": "empata con otra y es la que el prospecto eligió primero",
+  "empate-la-primera": "empata con otra y es la que se eligió primero",
 };
 
 export function QueVaPrimero() {

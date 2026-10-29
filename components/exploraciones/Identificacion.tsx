@@ -91,8 +91,10 @@ function ParaComparar() {
 }
 
 export function ConQueSeMide() {
-  const { exp, escala, cambiar, puedeEditar, guardando } = useLienzo();
+  const { exp, escala, cambiar, puedeEditar, guardando, lugar } = useLienzo();
   const { corriendo, lanzando, lanzar } = useCorrida();
+  // En la escala de la cuenta no se prepara: la industria la elige una persona (o «Restablecer la sugerida»).
+  const conPreparar = lugar !== "cuenta";
   const e = exp.estado;
   const elegida = e.contenido.edicionElegida;
   const edicion = escala.ediciones.find((x) => x.slug === e.edicion) ?? null;
@@ -139,7 +141,7 @@ export function ConQueSeMide() {
       ? { insignia: "Automática", texto: elegida.razon ?? "La eligió el agente con lo que hay en HubSpot." }
       : elegida?.por === "industria"
         ? { insignia: "Automática", texto: elegida.razon ?? "Por la industria de la empresa en HubSpot." }
-        : { insignia: null, texto: "El agente la elige al preparar, con lo que hay de la empresa en HubSpot." };
+        : { insignia: null, texto: conPreparar ? "El agente la elige al preparar, con lo que hay de la empresa en HubSpot." : "Elige la industria que describe a la empresa." };
   const delHabitual =
     edicion && habitual
       ? esElHabitual
@@ -216,7 +218,7 @@ export function ConQueSeMide() {
                 <>Es la misma que sugiere el agente. Restablécela para que la vuelva a manejar él.</>
               )
             ) : (
-              <>Todavía no hay una sugerida: el agente la propone al preparar, con lo que hay de la empresa.</>
+              <>{conPreparar ? "Todavía no hay una sugerida: el agente la propone al preparar, con lo que hay de la empresa." : "Todavía no hay una sugerida: elige la industria que la describe."}</>
             )}
           </p>
           {puedeEditar &&
@@ -225,9 +227,11 @@ export function ConQueSeMide() {
                 Restablecer la sugerida
               </BotonBlanco>
             ) : (
-              <BotonBlanco disabled={corriendo || lanzando} onClick={() => void lanzar("preparar")}>
-                {corriendo || lanzando ? "Preparando…" : "Pedírsela al agente"}
-              </BotonBlanco>
+              conPreparar && (
+                <BotonBlanco disabled={corriendo || lanzando} onClick={() => void lanzar("preparar")}>
+                  {corriendo || lanzando ? "Preparando…" : "Pedírsela al agente"}
+                </BotonBlanco>
+              )
             ))}
         </div>
       )}
