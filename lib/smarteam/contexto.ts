@@ -22,7 +22,7 @@ import { prisma } from "@/lib/db/prisma";
 import { esquemaDesactualizado } from "@/lib/db/esquema";
 import { ICP_SECTION_META, ICP_SECTION_ORDER } from "@/lib/marketing/seed-data";
 import { leerReferencias, leerServicios, PERFIL_VACIO, type ContextoDeLaEmpresaQueUsaNexus, type PerfilDeLaEmpresa } from "./perfil";
-import { leerFrentes } from "./posicionamiento";
+import { leerFrentes, type Posicionamiento } from "./posicionamiento";
 
 /** La empresa que usa Nexus, o null si no se puede saber sin adivinar. */
 export async function empresaQueUsaNexus(): Promise<{ id: string; nombre: string } | null> {
@@ -59,6 +59,19 @@ export async function perfilDe(clientId: string): Promise<PerfilDeLaEmpresa> {
     // Una referencia a una ficha que ya no existe (se fusionó o se borró) no se muestra.
     clientesDeReferencia: referencias.filter((r) => nombres.has(r.clientId)).map((r) => ({ ...r, nombre: nombres.get(r.clientId) })),
   };
+}
+
+/**
+ * Solo el position statement de Smarteam (la frase y los frentes), en una consulta: lo que necesita la apertura de una
+ * preventa para saber si su position statement se armó con el de hoy, sin leer el cliente ideal ni las personas. La misma
+ * empresa que `empresaQueUsaNexus` (el primer perfil); sin perfil, vacío.
+ */
+export async function posicionamientoDeSmarteam(): Promise<Posicionamiento> {
+  const fila = await prisma.perfilDeLaEmpresa.findFirst({ orderBy: { createdAt: "asc" }, select: { positionStatement: true, frentes: true } }).catch((e) => {
+    if (esquemaDesactualizado(e)) return null;
+    throw e;
+  });
+  return { frase: fila?.positionStatement ?? null, frentes: fila ? leerFrentes(fila.frentes) : [] };
 }
 
 /** Lo que Nexus sabe de la empresa que lo usa. Sin saber cuál es, `empresa: null` y sin perfil, pero con todo lo demás. */

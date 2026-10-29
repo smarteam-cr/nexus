@@ -3,7 +3,7 @@
  * K3 del 2026-10-28). Aparte de ./posicionamiento.ts porque importa zod y aquel lo usa la pantalla.
  */
 import { z } from "zod";
-import { claveDelFrente, type Posicionamiento } from "./posicionamiento";
+import { claveDelFrente, MAX_FRASE, type Posicionamiento } from "./posicionamiento";
 
 const textoOpcional = (max: number) =>
   z
@@ -32,7 +32,7 @@ const FrenteEdicionSchema = z.strictObject({
 /** Lo que acepta la ruta al guardar el position statement (Zod en la frontera). La clave de cada frente sale del nombre. */
 export const PosicionamientoEdicionSchema = z
   .strictObject({
-    frase: textoOpcional(1000),
+    frase: textoOpcional(MAX_FRASE),
     frentes: z.array(FrenteEdicionSchema).max(6),
   })
   .superRefine((p, ctx) => {

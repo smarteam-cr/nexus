@@ -31,6 +31,7 @@ import {
   type SiguientePaso,
   type TipoDeCasilla,
 } from "./casillas";
+import { MAX_FRASE } from "@/lib/smarteam/posicionamiento";
 import { ESTADOS_DE_LA_CONDICION, MAX_HECHOS, MAX_LOGROS, TOPES, type PosicionamientoDelProspecto } from "./posicionamiento";
 import {
   contenidoVacio,
@@ -729,7 +730,7 @@ const PosicionamientoDelProspectoSchema: z.ZodType<PosicionamientoDelProspecto> 
   version: z.literal(1),
   en: z.string().max(40),
   corridaId: z.string().max(60),
-  frase: z.string().max(1000),
+  frase: z.string().max(MAX_FRASE),
   hechos: z.array(HechoCitadoSchema).max(MAX_HECHOS),
   frente: z
     .object({

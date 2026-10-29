@@ -67,6 +67,12 @@ export interface Lienzo {
   propuestas: NonNullable<ExploracionParaLaPantalla["propuestas"]>;
   /** La última versión de la escala de antes de hoy (al abrir y al recargar): contra ella «Qué explorar» dice qué cambió. */
   escalaAnterior: NonNullable<ExploracionParaLaPantalla["escalaAnterior"]> | null;
+  /**
+   * La corrida del position statement del prospecto que se armó con una base de Smarteam que ya cambió (al abrir y al
+   * recargar), o null. Por corrida y no un sí/no: volver a preparar arma otra y el aviso se va solo, y un cambio cualquiera
+   * del lienzo no lo borra.
+   */
+  posicionamientoAnterior: string | null;
   puedeEditar: boolean;
   /** Armar y enlazar la propuesta comercial es de Ventas (`ventas.write`); Customer Success trabaja la preventa sin eso. */
   puedeProponer: boolean;

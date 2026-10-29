@@ -97,11 +97,11 @@ import { comunicacionesDeLaCuenta } from "@/lib/comunicaciones/lectura-server";
 import { contextoDeSmarteam, empresaQueUsaNexus, perfilDe } from "@/lib/smarteam/contexto";
 import { textoParaLaPreventa } from "@/lib/smarteam/perfil";
 import {
-  armadoConOtraBase,
   entradaDeLaRespuesta,
   hayQuePedirlo,
   hechosDisponibles,
   pedidoDelPosicionamiento,
+  posicionamientoVigente,
   textoDelPosicionamientoDelProspecto,
   validarElPosicionamiento,
   type ContratacionEncontrada,
@@ -1046,7 +1046,7 @@ export async function contextoParaLaGuia(exploracionId: string) {
             .then((c) => {
               const ps = estado.propuesta.posicionamiento;
               // Armado con un position statement que ya cambió en Audiencia: no está validado contra el de hoy.
-              const vigente = ps && !armadoConOtraBase(ps, { frase: c.perfil.positionStatement, frentes: c.perfil.frentes }) ? ps : null;
+              const vigente = posicionamientoVigente(ps, { frase: c.perfil.positionStatement, frentes: c.perfil.frentes });
               return [textoParaLaPreventa(c), vigente ? textoDelPosicionamientoDelProspecto(vigente, fila.client.name) : null].filter(Boolean).join("\n\n") || null;
             })
             .catch(() => null),

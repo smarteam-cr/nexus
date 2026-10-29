@@ -38,6 +38,9 @@ export interface FrenteDelPosicionamiento {
   nota: string | null;
 }
 
+/** El largo máximo de la frase de Smarteam: lo acepta el editor, la lectura de lo armado y el pedido al agente. */
+export const MAX_FRASE = 1000;
+
 export interface Posicionamiento {
   /** «Smarteam en una frase»: qué hacemos por las empresas. */
   frase: string | null;

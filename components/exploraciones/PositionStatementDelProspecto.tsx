@@ -39,10 +39,10 @@ function Fuente({ h }: { h: HechoCitado }) {
 
 /** El bloque de Preparación › Conexión. Null en un proyecto o mientras la preparación no lo armó. */
 export function PositionStatementDelProspecto() {
-  const { exp } = useLienzo();
+  const { exp, posicionamientoAnterior } = useLienzo();
   const ps = exp.estado.propuesta.posicionamiento;
   if (!ps || exp.projectId) return null;
-  return <Contenido ps={ps} empresa={exp.empresa.nombre} anterior={!!exp.posicionamientoAnterior} />;
+  return <Contenido ps={ps} empresa={exp.empresa.nombre} anterior={posicionamientoAnterior !== null && posicionamientoAnterior === ps.corridaId} />;
 }
 
 function Contenido({ ps, empresa, anterior }: { ps: PosicionamientoDelProspecto; empresa: string; anterior: boolean }) {

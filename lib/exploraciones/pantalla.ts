@@ -19,7 +19,7 @@ import { reunionesDeLaExploracion, reunionesSinLeer } from "./fuentes";
 import { proyectosQueLaReciben } from "./handoff";
 import { leerLoLeido } from "./lo-leido";
 import { propuestasDeLaExploracion } from "./propuesta";
-import { contextoDeSmarteam } from "@/lib/smarteam/contexto";
+import { posicionamientoDeSmarteam } from "@/lib/smarteam/contexto";
 import { armadoConOtraBase } from "./posicionamiento";
 import { versionAnteriorDeLaExploracion } from "./versiones-de-la-escala";
 import { paraLaPantalla, type ExploracionParaLaPantalla, type FilaDeExploracion, type LoQueSabeLaIA } from "./servidor";
@@ -80,7 +80,7 @@ export async function paraLaPantallaCompleta(fila: FilaDeExploracion): Promise<E
       return null;
     }),
     // K3: el position statement del prospecto, ¿se armó con el de Smarteam de hoy?
-    (ps ? contextoDeSmarteam().then((c) => armadoConOtraBase(ps, { frase: c.perfil.positionStatement, frentes: c.perfil.frentes })) : Promise.resolve(false)).catch((e) => {
+    (ps ? posicionamientoDeSmarteam().then((base) => armadoConOtraBase(ps, base)) : Promise.resolve(false)).catch((e) => {
       console.error("[exploraciones] no se pudo comparar el position statement con el de hoy", e);
       return false;
     }),

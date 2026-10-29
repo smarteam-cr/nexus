@@ -12438,6 +12438,17 @@ preventa se valide con eso. Plan: `docs/position-statement-plan.md`.
 - **Contrataciones en la radiografía de la preventa** (5 búsquedas, antes 4): la misma regla del enlace que los hitos.
   Van a la fuente W1, a la investigación que se guarda en la empresa y a los hechos del position statement. La casilla
   «Radiografía» no cambia de forma.
+- **Cada armado guarda con qué base se hizo** (la revisión de lo juntado, 28 oct): la huella de la frase y los frentes
+  (`huellaDeLaBase`). Si la base cambió en Audiencia, la guía no lo usa (`posicionamientoVigente`) y la preparación
+  avisa «Se armó con un position statement anterior: vuelve a preparar». Uno armado antes de que existiera la huella
+  cuenta como anterior: a propósito, nada se presenta como validado contra una base que no se miró. El aviso es por
+  corrida: volver a preparar lo quita y editar otra cosa del lienzo no.
+- **El filtro de promesas mira la forma del verbo, no la palabra**: un verbo de resultado en futuro, condicional o
+  primera plural («venderá», «aumentaría», «venderemos»), «va a / van a / le permitirá / podrá» + ese verbo, «tendrá
+  más», garantiza, duplica. El infinitivo («quiere mejorar») y el subjuntivo («si impulsara») describen y pasan;
+  «duplicados» también. Los bordes de palabra van con la bandera `u` y `\p{L}`: con `\b` la «á» final cortaba la palabra.
+- **Un solo tope para la frase** (`MAX_FRASE`, lib/smarteam/posicionamiento.ts): el editor, la lectura de lo armado y el
+  pedido al agente. Una frase más larga no se le pide al agente: se pagaría la corrida y se descartaría al leerla.
 
 ## Cada sesión de la exploración tiene su dirección (2026-10-28)
 

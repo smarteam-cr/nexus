@@ -23,7 +23,7 @@
  */
 import type Anthropic from "@anthropic-ai/sdk";
 import { datoDeLaEmpresa, valorParaMostrar, type ClaveDeDato } from "@/lib/clients/datos-de-la-empresa";
-import { frentePendiente, nombreCompleto, type FrenteDelPosicionamiento, type Posicionamiento } from "@/lib/smarteam/posicionamiento";
+import { frentePendiente, MAX_FRASE, nombreCompleto, type FrenteDelPosicionamiento, type Posicionamiento } from "@/lib/smarteam/posicionamiento";
 import { ETIQUETA_DEL_MODELO, type Radiografia } from "./casillas";
 
 export const MODELO_DEL_POSICIONAMIENTO = "claude-sonnet-4-6";
@@ -112,6 +112,11 @@ export function huellaDeLaBase(base: Posicionamiento): string {
 /** ¿Se armó con un position statement distinto del de hoy? */
 export function armadoConOtraBase(ps: Pick<PosicionamientoDelProspecto, "huella">, base: Posicionamiento): boolean {
   return ps.huella !== huellaDeLaBase(base);
+}
+
+/** El position statement del prospecto que todavía vale contra la base de hoy, o null: lo que usa la guía. */
+export function posicionamientoVigente(ps: PosicionamientoDelProspecto | null | undefined, base: Posicionamiento): PosicionamientoDelProspecto | null {
+  return ps && !armadoConOtraBase(ps, base) ? ps : null;
 }
 
 // ── Los hechos que se ofrecen ─────────────────────────────────────────────────────────────────
@@ -211,9 +216,6 @@ export interface ContextoDelPosicionamiento {
   base: Posicionamiento;
   hechos: readonly HechoDelProspecto[];
 }
-
-/** El largo máximo de la frase: el mismo que acepta el editor (posicionamiento-esquema.ts) y la lectura (esquemas.ts). */
-export const MAX_FRASE = 1000;
 
 /**
  * Se pide solo si hay frase y algún hecho: sin frase no hay qué personalizar; sin hechos, no hay con qué. Una frase más
@@ -332,12 +334,36 @@ const sinId = (h: HechoDelProspecto): HechoCitado => ({
   ...(h.fecha ? { fecha: h.fecha } : {}),
 });
 
+/** Los verbos de un resultado: en futuro, condicional o «va a …» prometen; en infinitivo («quiere mejorar») describen. */
+const VERBOS =
+  "aumentar|subir|crecer|vender|mejorar|ahorrar|recuperar|ganar|lograr|incrementar|elevar|impulsar|potenciar|duplicar|triplicar|multiplicar|reducir|optimizar|conseguir|alcanzar|generar|acelerar|cerrar";
+
 /**
- * Palabras que prometen un resultado, también en futuro singular («venderá», «aumentará»). Los bordes de palabra son
- * `(?<!\p{L})` / `(?!\p{L})` con la bandera `u`, no `\b`: sin `u`, `\b` no ve la «á» como letra y «venderá más» pasaba.
+ * Lo que promete un resultado. Los bordes de palabra son `(?<!\p{L})` / `(?!\p{L})` con la bandera `u`, no `\b`: sin
+ * `u`, `\b` no ve la «á» como letra y «venderá más» pasaba. Promete:
+ *   · un verbo de resultado en futuro, futuro plural, primera plural o condicional («venderá», «venderán», «venderemos»,
+ *     «aumentaría»); el subjuntivo sin tilde («si impulsara») no, porque describe un supuesto;
+ *   · «va a / van a / vamos a» o «le permitirá / podrá» + uno de esos verbos, y «tendrá más …»;
+ *   · garantiza, aseguramos, duplica, «veces más», «sin falta», «con certeza».
+ * «Duplicados» o «multiplicidad» describen, no prometen: solo cuentan las formas del verbo.
  */
-const PROMESA =
-  /(?<!\p{L})(garantiz|aseguramos(?!\p{L})|duplic|triplic|multiplic|sin falta(?!\p{L})|con certeza(?!\p{L})|vamos a (lograr|aumentar|subir|duplicar|crecer|vender|incrementar|reducir)|veces m[aá]s(?!\p{L})|(aumentar|subir|crecer|vender|mejorar|ahorrar|recuperar|ganar|lograr|incrementar|elevar|impulsar|potenciar|duplicar|reducir|optimizar|multiplicar)[aá]n?(?!\p{L}))/iu;
+const PROMESA = new RegExp(
+  [
+    /garantiz/,
+    /aseguramos(?!\p{L})/u,
+    /(duplic|triplic|multiplic)(a|an|amos|ará|arán|aremos|aría|arían)(?!\p{L})/u,
+    /sin falta(?!\p{L})/u,
+    /con certeza(?!\p{L})/u,
+    /veces m[aá]s(?!\p{L})/u,
+    new RegExp(`${/(va|van|vas|vamos|iremos|irá|irán) a /.source}(${VERBOS})${/(?!\p{L})/u.source}`, "u"),
+    new RegExp(`${/(le |les )?(permite|permiten|permitirá|permitirán|permitiría|permitirían|podrá|podrán|podría|podrían|podremos) /.source}(${VERBOS})${/(?!\p{L})/u.source}`, "u"),
+    /tendr(á|án|emos|ía|ían) m[aá]s(?!\p{L})/u,
+    new RegExp(`(${VERBOS})${/(á|án|emos|ía|ían)(?!\p{L})/u.source}`, "u"),
+  ]
+    .map((r) => `${/(?<!\p{L})/u.source}(?:${r.source})`)
+    .join("|"),
+  "iu",
+);
 
 /** Las cifras de un texto, enteras («2026-03» son 2026 y 03; «20 %» es 20%). */
 function cifrasDe(texto: string): string[] {

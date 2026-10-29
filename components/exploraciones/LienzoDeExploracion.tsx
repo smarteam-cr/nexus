@@ -207,6 +207,9 @@ export default function LienzoDeExploracion({
   const [propuestas, setPropuestas] = useState(inicial.propuestas ?? []);
   const [reuniones, setReuniones] = useState(inicial.reuniones ?? []);
   const [escalaAnterior, setEscalaAnterior] = useState(inicial.escalaAnterior ?? null);
+  const corridaAnterior = (e: Pick<ExploracionParaLaPantalla, "posicionamientoAnterior" | "estado">) =>
+    e.posicionamientoAnterior ? (e.estado.propuesta.posicionamiento?.corridaId ?? null) : null;
+  const [posicionamientoAnterior, setPosicionamientoAnterior] = useState<string | null>(corridaAnterior(inicial));
   const [guardando, setGuardando] = useState(false);
   const conAnalisis = veAnalisisDeVenta && !proyecto && !cuenta;
   const [paso, setPasoCrudo] = useState<PasoDelLienzoUI>(
@@ -291,6 +294,7 @@ export default function LienzoDeExploracion({
     if (inicial.propuestas) setPropuestas(inicial.propuestas);
     if (inicial.reuniones) setReuniones(inicial.reuniones);
     if (inicial.escalaAnterior !== undefined) setEscalaAnterior(inicial.escalaAnterior);
+    if (inicial.posicionamientoAnterior !== undefined) setPosicionamientoAnterior(corridaAnterior(inicial));
   }
 
   const validez = useMemo<Validez>(() => {
@@ -457,6 +461,7 @@ export default function LienzoDeExploracion({
           if (data.exploracion.propuestas) setPropuestas(data.exploracion.propuestas);
           if (data.exploracion.reuniones) setReuniones(data.exploracion.reuniones);
           if (data.exploracion.escalaAnterior !== undefined) setEscalaAnterior(data.exploracion.escalaAnterior);
+          if (data.exploracion.posicionamientoAnterior !== undefined) setPosicionamientoAnterior(corridaAnterior(data.exploracion));
           /* La preparación eligió la industria o el perfil: la escala del lienzo es otra (la arma el
              servidor con esos dos), así que se vuelve a pedir la página. */
           if (antes.edicion !== ahora.edicion || antes.perfilCierre !== ahora.perfilCierre || antes.perfilDespues !== ahora.perfilDespues) {
@@ -513,6 +518,7 @@ export default function LienzoDeExploracion({
     propuestas,
     reuniones,
     escalaAnterior,
+    posicionamientoAnterior,
     puedeEditar,
     puedeProponer: puedeEditar && puedeProponer,
     conAsistente: puedeEditar && conAsistente,

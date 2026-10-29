@@ -2,6 +2,8 @@
  * lib/exploraciones/posicionamiento.test.ts — el position statement del prospecto se valida contra la base (K3, «validarse
  * con eso», 2026-10-28): casos que pasan y casos que no.
  */
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import type Anthropic from "@anthropic-ai/sdk";
 import type { Posicionamiento } from "@/lib/smarteam/posicionamiento";
@@ -13,6 +15,7 @@ import {
   hayQuePedirlo,
   hechosDisponibles,
   pedidoDelPosicionamiento,
+  posicionamientoVigente,
   prometeDeMas,
   textoDelPosicionamientoDelProspecto,
   validarElPosicionamiento,
@@ -241,11 +244,29 @@ describe("lo que encontró la revisión (2026-10-28)", () => {
       "Con Insider recuperará los carritos abandonados.",
       "Mejorará la conversión.",
       "Su equipo logrará cerrar antes.",
+      // La segunda revisión (28 oct): «va a», «le permitirá», la primera plural, el condicional, «tendrá más», «podrá».
+      "HubSpot le permitirá aumentar sus ventas.",
+      "HubSpot le permite aumentar sus ventas.",
+      "Acme va a vender más.",
+      "Con Insider van a recuperar los carritos.",
+      "Con HubSpot venderemos más.",
+      "Aumentaría sus ventas en pocos meses.",
+      "Tendrá más clientes que vuelven.",
+      "Podrá vender más sin sumar gente.",
+      "Duplica sus oportunidades.",
+      "AUMENTARÁ SUS VENTAS.",
     ])
       expect(prometeDeMas(t, permitido), t).toBe(true);
     // Lo que describe sin prometer sigue pasando.
-    expect(prometeDeMas("Vende a personas y tiene mucho tráfico en su sitio.", permitido)).toBe(false);
-    expect(prometeDeMas("Quiere mejorar su seguimiento de prospectos.", permitido)).toBe(false);
+    for (const t of [
+      "Vende a personas y tiene mucho tráfico en su sitio.",
+      "Quiere mejorar su seguimiento de prospectos.",
+      "Busca reducir el tiempo de respuesta.",
+      "Tiene contactos duplicados en su CRM.",
+      "Si impulsara su tienda en línea, tendría con qué medir.",
+      "Su equipo cerró 40 negocios el año pasado.",
+    ])
+      expect(prometeDeMas(t, [...permitido, "40 negocios"]), t).toBe(false);
     const r = validar({
       hechos: [id("tienda en línea")],
       frente: "estructura",
@@ -343,6 +364,18 @@ describe("armado con un position statement anterior (la revisión de lo juntado,
     expect(armadoConOtraBase(r, { ...BASE, frase: `  ${BASE.frase}  ` })).toBe(false);
     // Uno armado antes de que existiera la huella cuenta como armado con otra base.
     expect(armadoConOtraBase({}, BASE)).toBe(true);
+  });
+
+  it("la guía usa solo el armado con la base de hoy, y lo decide con esa misma regla", () => {
+    const r = validar({ hechos: [id("tienda en línea")] });
+    expect(posicionamientoVigente(r, BASE)).toBe(r);
+    expect(posicionamientoVigente(r, { ...BASE, frase: "Otra frase." })).toBeNull();
+    expect(posicionamientoVigente(null, BASE)).toBeNull();
+    // La guía pasa por la regla: lo que se le manda es el vigente, nunca el guardado a secas.
+    const agente = readFileSync(join(process.cwd(), "lib/exploraciones/agente.ts"), "utf8");
+    expect(agente).toMatch(/const vigente = posicionamientoVigente\(ps,/);
+    expect(agente).toMatch(/vigente \? textoDelPosicionamientoDelProspecto\(vigente,/);
+    expect(agente).not.toMatch(/ps \? textoDelPosicionamientoDelProspecto\(ps,/);
   });
 
   it("la huella sobrevive a la lectura de lo guardado", () => {
