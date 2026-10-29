@@ -84,6 +84,8 @@ export const SECCIONES_DEL_KICKOFF_RECURRENTE = [
 export const PLANTILLA_DE_LA_PLANIFICACION_ESENCIAL = "planificacion-esencial";
 export const SECCIONES_DE_LA_PLANIFICACION_ESENCIAL = [
   "planificacion",
+  // 2026-10-28 (decisión 16): el detalle de las acciones del diagnóstico vive acá; sin ella, la esencial lo perdería.
+  "acciones_en_detalle",
   "ficha_proyecto",
   "usuarios_permisos",
   "ciclo_vida_crm",
@@ -153,7 +155,7 @@ export const ENTREGABLES: readonly Entregable[] = [
         id: PLANTILLA_DE_LA_PLANIFICACION_ESENCIAL,
         nombre: "Planificación esencial",
         paraQue:
-          "Lo justo para configurar el portal: la ficha del proyecto, los usuarios y sus permisos, el ciclo de vida y el estado del lead, las propiedades, los pipelines, los formularios y las automatizaciones.",
+          "Lo justo para configurar el portal: las acciones del diagnóstico en detalle, la ficha del proyecto, los usuarios y sus permisos, el ciclo de vida y el estado del lead, las propiedades, los pipelines, los formularios y las automatizaciones.",
         secciones: SECCIONES_DE_LA_PLANIFICACION_ESENCIAL,
       },
     ],

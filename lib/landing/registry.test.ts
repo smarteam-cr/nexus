@@ -906,8 +906,10 @@ describe("Planificación: registry completo + keys congeladas", () => {
     // diagnóstico), la hoja de ruta y las métricas: quedan al final, SOLO LECTURA.
     // 2026-10-25 — lo que pide el Brief de implementación (decisión de Elías del 24 oct): ficha del proyecto,
     // usuarios y permisos, canales de entrada, formularios, cotizaciones e informes. Curadas.
+    // 2026-10-28 — «Las acciones, en detalle» (decisión 16 de Elías): el detalle de cada acción del diagnóstico, justo
+    // después de la portada. La genera el agente.
     expect(PLANIFICACION_SECTION_DEFS.map((d) => d.key)).toEqual([
-      "planificacion", "ficha_proyecto", "usuarios_permisos", "definicion_procesos", "ciclo_vida_crm",
+      "planificacion", "acciones_en_detalle", "ficha_proyecto", "usuarios_permisos", "definicion_procesos", "ciclo_vida_crm",
       "canales_entrada", "arquitectura_solucion", "propiedades", "formularios", "pipelines", "automatizaciones",
       "conversaciones", "cotizaciones", "informes", "rutinas_adopcion", "plan_despliegue", "cierre",
       "politica_rectora", "roadmap", "metricas_exito",

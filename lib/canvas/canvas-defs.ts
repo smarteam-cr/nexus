@@ -283,6 +283,8 @@ export const DEFAULT_PROJECT_CANVASES: CanvasDefinition[] = [
     // Rutinas y olas se quedan hasta que exista el documento de Puesta en marcha.
     sections: [
       { key: "planificacion", label: "Plan de implementación" },
+      // 2026-10-28 (decisión 16): el detalle de cada acción del diagnóstico, que el diagnóstico nuevo ya no escribe.
+      { key: "acciones_en_detalle", label: "Las acciones, en detalle" },
       // 2026-10-25 — lo que pide el Brief de implementación (docs/planificacion-brief-plan.md): la ficha
       // del proyecto, usuarios y permisos, canales de entrada, formularios, cotizaciones e informes.
       { key: "ficha_proyecto", label: "Ficha del proyecto" },

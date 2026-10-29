@@ -18,6 +18,7 @@ import { DesarrolloHeroSection } from "@/components/canvas/desarrollo-sections/D
 import { KickoffProseSection, KickoffCtaSection } from "@/components/canvas/kickoff-sections/KickoffSections";
 import { RoiSection } from "../sections";
 import { DiagramSection } from "../sections-diagram";
+import { AccionesEjecucionSection } from "../sections-ejecucion";
 import {
   ProcesosFuturoSection,
   CicloDeVidaSection,
@@ -55,6 +56,8 @@ export const PLANIFICACION_SECTION_COMPONENTS: Record<string, FC<SectionProps<an
   formularios: FormulariosSection,
   cotizaciones: CotizacionesSection,
   informes: InformesSection,
+  // Las acciones del diagnóstico, en detalle (2026-10-28, decisión 16): la misma tabla que las del diagnóstico.
+  ejecucion_acciones: AccionesEjecucionSection,
 };
 
 const PLANIFICACION_LANDING_CONFIG: LandingConfig = {

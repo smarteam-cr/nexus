@@ -111,6 +111,17 @@ export const HERRAMIENTAS_SCHEMA = obj({
   herramientas: arrayOf({ herramienta: str, paraQue: str, acciones: str }, ["herramienta"]),
 });
 
+/**
+ * La guía de las acciones de ANTES del 2026-10-28 (5-10 acciones con grupo, hub, quick win y alcance). El agente que
+ * genera ya no la usa; la usa «Mejorar con IA» sobre un diagnóstico generado antes de esa fecha, para no proponerle
+ * vaciar el detalle (`briefSegunLoGuardado` en lib/canvas/assist-de-documento.ts).
+ */
+export const BRIEF_DE_LAS_ACCIONES_CON_DETALLE =
+  "Las acciones coherentes: cómo se resuelve el problema, en el orden en que se hacen. `acciones` (5-10): `id` = 'AC-01', 'AC-02'… correlativos; `accion` = la acción en 4-10 palabras, dicha al cliente ('Captación conectada: formularios nativos, Meta, LinkedIn y Google Ads'); `detalle` = UNA línea con cómo genera dinero o qué gana el cliente ('Cada lead que llega por la pauta entra al CRM con su campaña, para saber qué inversión genera matrículas'); " +
+  "`grupo` = UNO de: Planeación · Configuración · Integración · Reportería · Adopción; `ataca` = las causas que ataca ('F1, F2') — OBLIGATORIO; `mueve` = los objetivos que mueve ('OBJ-01, OBJ-04') — OBLIGATORIO; `hub` = el hub o herramienta ('Sales Hub', 'Smart CRM', 'Breeze'); " +
+  "`quickWin` = 'si' si da resultado en semanas, si no 'no'; `alcance` = 'dentro' si lo contratado la cubre, 'fuera' si no (una acción fuera de alcance se lista igual: es la conversación de la siguiente etapa). " +
+  "⛔ Toda causa (F) tiene al menos una acción que la ataca, y toda acción cita causas y objetivos que EXISTEN arriba. Sin detalle de configuración (ni propiedades, ni etapas, ni reglas de workflow). `intro`: vacío.";
+
 /** Rótulo interno de la política mientras el ejecutivo no la revisa. El cliente nunca lo ve. */
 export const SUGERENCIA_POR_REVISAR = "Sugerencia por revisar";
 
@@ -313,6 +324,10 @@ export const DIAGNOSTICO_SECTION_DEFS: BCSectionDef[] = [
        «cómo lo vamos a resolver» contado al cliente. Cada una ATACA causas (F) y MUEVE objetivos
        (OBJ); sin eso no se presenta (lib/canvas/revisar-hilo.ts). Su `detalle` es también la
        cuarta columna de la Explicación del problema: cómo genera dinero. */
+    /* 2026-10-28 (decisión 16 del roadmap, L4 etapa 2): en el diagnóstico queda el ENFOQUE, tres o cuatro acciones de
+       una línea; el grupo, el hub, el quick win y el alcance pasan a la Planificación («Las acciones, en detalle»). El
+       esquema NO cambia —es el mismo contrato que la Planificación y la Ejecución, y un diagnóstico viejo lo usa entero—:
+       el brief pide el detalle vacío y el runner lo hace cumplir y marca la sección (lib/canvas/acciones-del-enfoque.ts). */
     key: ACCIONES_KEY,
     label: "Acciones coherentes",
     eyebrow: "¿Qué nos hace falta?",
@@ -321,14 +336,15 @@ export const DIAGNOSTICO_SECTION_DEFS: BCSectionDef[] = [
     agentGenerated: true,
     avisoDelChat:
       "cada acción ataca causas (F) y mueve objetivos (OBJ) que existen en este diagnóstico, y toda causa tiene al menos una acción: si cambias un código, cámbialo donde se cita; códigos AC nuevos, correlativos. " +
-      "Estas acciones son también la columna «Consecuencias positivas» de la Explicación del problema: lo que cambies acá (quitar, editar, reordenar) cambia allá.",
+      "Estas acciones son también la columna «Consecuencias positivas» de la Explicación del problema: lo que cambies acá (quitar, editar, reordenar) cambia allá. " +
+      "Un diagnóstico generado desde el 28 de octubre de 2026 tiene el enfoque corto: tres o cuatro acciones de una línea, sin grupo, hub, quick win ni alcance (ese detalle vive en la Planificación); no se lo agregues salvo que te lo pidan.",
     empty: { intro: "", acciones: [] },
-    agentHint: "AC-01…: la acción, cómo genera dinero, su grupo, qué causas (F) ataca, qué objetivos (OBJ) mueve, hub, quick win y alcance.",
+    agentHint: "El enfoque: 3-4 acciones AC-01…, cada una en una línea, con cómo genera dinero, qué causas (F) ataca y qué objetivos (OBJ) mueve.",
     brief:
-      "Las acciones coherentes: cómo se resuelve el problema, en el orden en que se hacen. `acciones` (5-10): `id` = 'AC-01', 'AC-02'… correlativos; `accion` = la acción en 4-10 palabras, dicha al cliente ('Captación conectada: formularios nativos, Meta, LinkedIn y Google Ads'); `detalle` = UNA línea con cómo genera dinero o qué gana el cliente ('Cada lead que llega por la pauta entra al CRM con su campaña, para saber qué inversión genera matrículas'); " +
-      "`grupo` = UNO de: Planeación · Configuración · Integración · Reportería · Adopción; `ataca` = las causas que ataca ('F1, F2') — OBLIGATORIO; `mueve` = los objetivos que mueve ('OBJ-01, OBJ-04') — OBLIGATORIO; `hub` = el hub o herramienta ('Sales Hub', 'Smart CRM', 'Breeze'); " +
-      "`quickWin` = 'si' si da resultado en semanas, si no 'no'; `alcance` = 'dentro' si lo contratado la cubre, 'fuera' si no (una acción fuera de alcance se lista igual: es la conversación de la siguiente etapa). " +
-      "⛔ Toda causa (F) tiene al menos una acción que la ataca, y toda acción cita causas y objetivos que EXISTEN arriba. Sin detalle de configuración (ni propiedades, ni etapas, ni reglas de workflow). `intro`: vacío.",
+      "Las acciones coherentes: el enfoque de la solución bajado a TRES o CUATRO acciones grandes, en el orden en que se hacen. Cada acción junta trabajo: ataca varias causas a la vez. `acciones` (3-4): `id` = 'AC-01', 'AC-02'… correlativos; `accion` = la acción en UNA línea corta (5-12 palabras), dicha al cliente ('Conectar la captación para que todo lead entre al CRM con su campaña'); `detalle` = UNA línea con cómo genera dinero o qué gana el cliente ('Saber qué inversión en pauta genera matrículas'); " +
+      "`ataca` = las causas que ataca ('F1, F2') — OBLIGATORIO; `mueve` = los objetivos que mueve ('OBJ-01, OBJ-04') — OBLIGATORIO. " +
+      "Deja VACÍOS `grupo`, `hub`, `quickWin` y `alcance`: ese detalle lo desarrolla la Planificación, acción por acción. " +
+      "⛔ Toda causa (F) tiene al menos una acción que la ataca, y toda acción cita causas y objetivos que EXISTEN arriba. Sin detalle de configuración (ni propiedades, ni etapas, ni reglas de workflow) ni herramientas. `intro`: vacío.",
     schema: ACCIONES_SCHEMA,
   },
   {
@@ -417,7 +433,7 @@ export const DIAGNOSTICO_SECTION_DEFS: BCSectionDef[] = [
     agentHint: "Lo contratado agrupado por hub (o «Transversal»), cada ítem con sus AC. Lo que queda fuera, aparte.",
     brief:
       "El alcance contratado, tal como se vendió (SOLO lo que respaldan el alcance contratado y el desarrollo del handoff — no inflar). `grupos` (2-5): `titulo` = el hub o el frente ('Smart CRM y Sales Hub Professional', 'Service Hub Enterprise', 'Transversal'); `items` (2-6 por grupo): `texto` = lo que incluye, en una línea ('Pipeline de tickets de cinco etapas, formulario de entrada y asignación por categoría'), `acciones` = las AC que lo cubren ('AC-05'). " +
-      "`fuera` (0-4): las acciones con alcance 'fuera', dichas como la siguiente conversación — `texto` + `acciones`. Toda acción 'dentro' aparece en algún ítem. `intro`: vacío.",
+      "`fuera` (0-4): lo que las acciones piden y lo contratado NO cubre, dicho como la siguiente conversación — `texto` + `acciones` (las AC que quedan fuera). Toda acción que lo contratado cubre aparece en algún ítem de `grupos`. `intro`: vacío.",
     schema: obj({
       intro: str,
       grupos: arrayOf({ titulo: str, items: arrayOf({ texto: str, acciones: str }, ["texto"]) }, ["titulo"]),
@@ -592,7 +608,7 @@ export const DIAGNOSTICO_ESENCIAL_TEMPLATE: BcTemplateDef = {
   agentIntro:
     DIAGNOSTICO_TEMPLATE.agentIntro +
     "\n\nESTA ES LA VERSIÓN ESENCIAL: el informe se lee en cinco minutos y le explica simple al cliente por qué tiene los resultados que tiene y qué vamos a hacer para mejorarlos. Escribe SOLO las secciones de tu formato (no hay cómo va a operar, herramientas, equipos, preguntas, brecha ni alcance). " +
-    "Cada lista va en el MÍNIMO de su rango: objetivos 3-5, síntomas 3-5, causas 3-5, consecuencias 3-4, situaciones del desafío 3-4, principios del enfoque 3-4, acciones 4-6. Si algo no entra, junta: menos y más claro es mejor que completo.",
+    "Cada lista va en el MÍNIMO de su rango: objetivos 3-5, síntomas 3-5, causas 3-5, consecuencias 3-4, situaciones del desafío 3-4, principios del enfoque 3-4, acciones 3-4. Si algo no entra, junta: menos y más claro es mejor que completo.",
   sections: DIAGNOSTICO_SECTION_DEFS.filter((d) => ESENCIAL.has(d.key)),
 };
 

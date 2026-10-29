@@ -223,7 +223,7 @@ export async function runPlanificacionGeneration(opts: {
     // La regla otra vez, justo antes de la instrucción: el bloque de reuniones puede ser largo.
     material.cierreDeFrontera ? `\n${material.cierreDeFrontera}` : "",
     "",
-    "Escribe la planificación siguiendo tus instrucciones: las acciones del diagnóstico bajadas a lo que va a quedar configurado en HubSpot, respetando su enfoque de la solución — cómo van a funcionar los procesos (solo lo que se hará), etapas del ciclo de vida, arquitectura, propiedades por objeto, pipelines, automatizaciones y conversaciones, cada cosa con su origen —, rutinas por rol, y el despliegue por olas SOLO si la modalidad es por pilotos. SIN fechas.",
+    "Escribe la planificación siguiendo tus instrucciones: las acciones del diagnóstico bajadas a lo que va a quedar configurado en HubSpot, respetando su enfoque de la solución — cada acción en detalle (una fila por acción, con su mismo código), cómo van a funcionar los procesos (solo lo que se hará), etapas del ciclo de vida, arquitectura, propiedades por objeto, pipelines, automatizaciones y conversaciones, cada cosa con su origen —, rutinas por rol, y el despliegue por olas SOLO si la modalidad es por pilotos. SIN fechas.",
   ]
     .filter((x) => x !== "")
     .join("\n");

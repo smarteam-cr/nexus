@@ -12296,3 +12296,43 @@ un «nivel de la dimensión» que dibujar.
    dice a la empresa. Una dimensión sin nivel no lleva punto y su número dice «no se preguntó»; una que contestó «No lo
    sé» va con el borde punteado, «?» en vez del puntaje y «no lo sabías», como las barras. Con una sola serie, la línea
    lleva un relleno apenas visible (7 %) para que se lea la forma. (El radar interno ya no es esta rueda: su dibujo y su relleno de 10 % están en la decisión 6.)
+
+## Las Acciones coherentes: el enfoque en el diagnóstico, el detalle en la Planificación (2026-10-28, decisión 16, L4 etapa 2)
+
+**Contexto.** Pregunta 16 del roadmap: ¿las Acciones coherentes se quedan en el diagnóstico o pasan a la Planificación?
+Elías, el 28 oct: «Me parece bien tu recomendación. Haz el cambio para los nuevos diagnósticos que se generen.» La
+recomendación: en el diagnóstico, el enfoque con tres o cuatro acciones de una línea; el detalle, en la Planificación.
+
+- **La sección del diagnóstico se queda, más corta.** Misma key (`acciones`), mismo rótulo y mismo esquema
+  (`ACCIONES_SCHEMA`). *Por qué no se borra:* sostiene el hilo (toda causa F con una acción, toda acción con F y OBJ,
+  lib/canvas/revisar-hilo.ts), la cuarta columna de la Explicación del problema («Consecuencias positivas» = la acción y
+  cómo genera dinero) y las herramientas, que citan AC. El agente pide 3-4 acciones (también en la esencial, que pedía
+  4-6), cada una en una línea con su `detalle` de cómo genera dinero, `ataca` y `mueve`, y el grupo, el hub, el quick win
+  y el alcance vacíos.
+- **Solo los diagnósticos nuevos.** El runner (`dejarElEnfoqueCorto`, lib/canvas/acciones-del-enfoque.ts) les saca el
+  detalle a las acciones aunque el modelo lo escriba y marca la sección con `__forma: "enfoque"` (fuera del esquema, en
+  `NO_CONTENIDO`). La tabla corta (ID · Acción · Ataca · Mueve) se pinta solo con la marca y sin detalle escrito
+  (`seVeCorta`). Un diagnóstico viejo no tiene la marca: se ve igual y sus datos no se tocan. Medido ese día en
+  producción, los cuatro con acciones tenían detalle en todas. Si una persona o el chat le escriben detalle a uno nuevo,
+  la tabla lo muestra en vez de esconderlo.
+- **El esquema no cambia, a propósito.** Achicarlo dividía el contrato de `ejecucion_acciones` con la Planificación y
+  la Ejecución (lib/landing/registry.test.ts) y hacía que «Mejorar con IA» y el chat le borraran el detalle a un
+  diagnóstico viejo (`coerceToSchema` borra lo anidado que el esquema no declara).
+- **«Mejorar con IA» sobre las acciones de un diagnóstico viejo usa la guía de antes** (`BRIEF_DE_LAS_ACCIONES_CON_DETALLE`,
+  elegida por `briefSegunLoGuardado` en lib/canvas/assist-de-documento.ts). Con la nueva le proponía tres o cuatro
+  acciones con el detalle vacío. Regenerar un diagnóstico viejo entero sí lo deja corto: eso es generarlo de nuevo.
+- **Lo que queda fuera del alcance lo dice «Alcance acordado».** Sin el campo `alcance`, la etiqueta «Fuera de este
+  alcance» de «Consecuencias positivas» sale de las AC que cita su lista `fuera` (`accionFuera`). En uno viejo manda el
+  `alcance` de cada acción, como siempre. La esencial no tiene «Alcance acordado»: ahí ninguna acción se marca fuera.
+- **El detalle va a una sección nueva de la Planificación, «Las acciones, en detalle»** (`acciones_en_detalle`, después
+  de la portada, en la completa y en la esencial), con la misma tabla y el mismo esquema: una fila por acción del
+  diagnóstico, con su mismo código, el `detalle` de qué se configura en el plan para cumplirla, y el grupo, el hub, el
+  quick win y el alcance. *Por qué una sección propia y no repartido en las demás:* el cliente lee qué se hace con cada
+  acción en un solo lugar, y el hilo AC sigue siendo uno. *El tope del agente:* medido en producción, la corrida completa
+  usó a lo sumo ~13.700 de sus 21.000 tokens de salida; tres o cuatro filas entran. La esencial no tiene medida propia
+  (comparte el `agentSlug`) y con un diagnóstico viejo de 5-10 acciones la sección puede pedir unos 2.000 más: su tope
+  sube de 14.000 a 16.000. Si igual no entra, la corrida falla entera con su error; no se pierde nada en silencio.
+- **La marca no es texto**: `__forma` va en `NO_CONTENIDO` (is-blank), en el `SKIP` del contexto de los agentes
+  (load-canvas-context) y en el `SKIP_KEYS` del PDF (print-vocab).
+- **Sin SQL ni script.** El prompt de los dos agentes vive en el código (las defs), no en `Agent.systemPrompt`. Una
+  Planificación ya generada gana la sección vacía al reconciliarse (vacía no se ve) y se llena al regenerarla.

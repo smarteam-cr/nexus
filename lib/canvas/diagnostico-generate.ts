@@ -56,6 +56,7 @@ import {
 } from "@/components/landing/configs/diagnostico.defs";
 import { canvasOfNested } from "@/lib/pieces/canvas-query";
 import { ordenarObjetivosDelDiagnostico } from "@/lib/canvas/diagnostico-hilo";
+import { dejarElEnfoqueCorto } from "@/lib/canvas/acciones-del-enfoque";
 import { fuentesDelDiagnostico } from "@/lib/canvas/diagnostico-fuentes";
 import { guardarVersionDelDocumento } from "@/lib/canvas/versiones";
 import { ocultarSeccionesRetiradas } from "@/lib/canvas/retirar-secciones";
@@ -152,8 +153,9 @@ export async function runDiagnosticoGeneration(opts: {
     prevDataByKey,
   );
   // Los OBJ en orden (cuantitativos primero, seguidos) y sus menciones reescritas: no se le pide al
-  // modelo, se ordena acá (lib/canvas/diagnostico-hilo.ts).
-  const gen = { ...generado, sections: ordenarObjetivosDelDiagnostico(generado.sections) };
+  // modelo, se ordena acá (lib/canvas/diagnostico-hilo.ts). Y las acciones quedan como el enfoque corto, sin el detalle
+  // que pasó a la Planificación (decisión 16, 2026-10-28: lib/canvas/acciones-del-enfoque.ts).
+  const gen = { ...generado, sections: dejarElEnfoqueCorto(ordenarObjetivosDelDiagnostico(generado.sections)) };
 
   /* ⛔ Volver a mirar ANTES de escribir (2026-10-05): la IA tarda minutos y el cliente pudo aprobar
      mientras tanto. Aprobado = no se escribe nada y la corrida queda con el error a la vista. Esta
