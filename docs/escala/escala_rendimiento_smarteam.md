@@ -1,6 +1,6 @@
 ---
 documento: Escala de Rendimiento Smarteam — Escalas departamentales
-version: 9.1.1
+version: 9.2.0
 fecha: 2026-10-28
 estado: En revisión: cambia con el criterio de su responsable y con el feedback que el equipo manda desde Nexus; cada feedback lo decide un super admin
 relacionados: especificacion_calculo_escala.md, manual_operacion_escala.md
@@ -1713,6 +1713,8 @@ Términos que aparecen en la escala, la especificación o el manual, o que el eq
 
 ## Historial de versiones
 
+**9.2.0 (2026-10-28).** Una edición nueva, con sus tres áreas enteras: Telecomunicaciones. Es para el operador que le vende a personas, hogares y empresas sus servicios móviles —prepago y pospago, con o sin equipo—, de internet y televisión para el hogar y de conectividad para empresas, parte con un ejecutivo y parte en la web, la app o la recarga, y que atiende después la activación o la instalación, las averías, la facturación, la renovación y la retención; en Ventas sus dimensiones de producción son Planes y ofertas, Calificación y priorización, Seguimiento de la contratación, y Ventas ganadas y perdidas; y en Servicio, Consistencia de Atención, Priorización de Clientes, Proactividad y retención, y Autoservicio. Pide, entre otras cosas, un proceso escrito para la portabilidad, que la venta se dé por concretada solo con la línea activa o el servicio instalado, la cobertura antes de vender un servicio del hogar y el crédito antes del pospago o del equipo en cuotas, que el cliente reciba por escrito el plazo de permanencia y lo que cuesta salir antes, que las campañas no le ofrezcan a un cliente lo que ya tiene y solo le lleguen por los canales que aceptó, el plazo del regulador para cada reclamo, verificar la identidad antes de cambiar la SIM o el titular, una razón para quedarse antes de la baja, el aviso antes del fin del plazo de permanencia y de una suspensión por falta de pago, y que el cliente recargue, vea su consumo, pague su factura y reporte una avería sin esperar a una persona. Avisarle al cliente que su plazo de permanencia termina es de Servicio; ofrecerle renovar con un equipo nuevo o sumar una línea, de Ventas. No cambia ningún criterio de la matriz ni su cálculo.
+
 **9.1.1 (2026-10-28).** En la edición de Maquinaria y equipo pesado, ocho criterios reescritos vuelven a pedir lo mismo que la matriz: lo que sumaban —la máquina de interés en cada negocio, las horas de uso en la ficha del cliente, la proyección por modelo, los datos fijos de la cotización y de la entrega técnica, entre otros— queda como ejemplo. No cambia ningún criterio de la matriz ni su cálculo.
 
 **9.1.0 (2026-10-28).** Una edición nueva, con sus tres áreas enteras: Maquinaria y equipo pesado. Es para el distribuidor de maquinaria —de construcción, agrícola, de minería o industrial— y de camiones que vende máquinas nuevas y usadas con un asesor y atiende su posventa en el taller y en el lugar de trabajo del cliente; en Ventas sus dimensiones de producción son Líneas de máquinas y cotización, Priorización de interesados, Seguimiento de demostraciones y cotizaciones, y Ventas ganadas y perdidas; y en Servicio, Consistencia de la posventa, Priorización de la posventa, Seguimiento de la máquina y Escalabilidad de la posventa. Pide, entre otras cosas, que cada demostración deje su siguiente paso, un proceso escrito para recibir la máquina usada, que apartar una máquina la marque en el inventario, una sola lista de precios, que en las ventas de más valor la cotización compare el costo de operación, la entrega técnica con la capacitación al operador, ver si hay repuesto antes de prometer una fecha, el recordatorio del mantenimiento por horas de uso, el aviso de cada boletín de servicio de la marca y, donde la máquina trae telemetría, que sus alertas abran el aviso solas. Recordarle al cliente el mantenimiento de su máquina es de Servicio, y ofrecerle renovarla o sumar otra a su flota, de Ventas. No cambia ningún criterio de la matriz ni su cálculo.
@@ -1803,7 +1805,7 @@ Términos que aparecen en la escala, la especificación o el manual, o que el eq
 
 Una edición es la misma escala dicha para una industria: comparte las áreas, las ocho preguntas de fondo de cada área, los cinco niveles, las reglas y el cálculo, y cambia lo que ve quien la lee.
 
-La matriz de la Parte 3 es la escala general, escrita para cualquier empresa. Una tienda, un banco, una universidad, una inmobiliaria, un hotel, un concesionario o un distribuidor de maquinaria se reconocen mejor en una escala que habla de lo suyo: por eso cada edición les pone a las dimensiones de producción el nombre que tienen en esa industria, hace las preguntas y dice los costos con sus palabras, y suma los criterios que solo tienen sentido ahí.
+La matriz de la Parte 3 es la escala general, escrita para cualquier empresa. Una tienda, un banco, una universidad, una inmobiliaria, un hotel, un concesionario, un distribuidor de maquinaria o un operador de telecomunicaciones se reconocen mejor en una escala que habla de lo suyo: por eso cada edición les pone a las dimensiones de producción el nombre que tienen en esa industria, hace las preguntas y dice los costos con sus palabras, y suma los criterios que solo tienen sentido ahí.
 
 ## Qué cambia una edición y qué no
 
@@ -1820,7 +1822,7 @@ Una unidad se mide con la escala general o con una sola edición, la de su indus
 
 Una edición puede darle criterios a una dimensión que en la escala general no aplica a un perfil. Pasa en la de ecommerce y retail: en la venta transaccional, la dimensión de personalización de Ventas no aplica en la escala general, y en la edición mide la oferta que la tienda le hace a cada comprador. Y pasa en la de banca, donde esa dimensión mide también a quién se le ofrece cada producto cuando el cliente lo contrata solo.
 
-Una edición se escribe por áreas, y un área que la edición no escribe se mide con la escala general. Las siete ediciones de hoy —Ecommerce y retail, Banca y servicios financieros, Educación, Inmobiliaria, Turismo, Automotriz y Maquinaria y equipo pesado— traen las tres áreas enteras.
+Una edición se escribe por áreas, y un área que la edición no escribe se mide con la escala general. Las ocho ediciones de hoy —Ecommerce y retail, Banca y servicios financieros, Educación, Inmobiliaria, Turismo, Automotriz, Maquinaria y equipo pesado y Telecomunicaciones— traen las tres áreas enteras.
 
 ## Cómo se escribe una edición
 
@@ -8386,3 +8388,1028 @@ Mide el rendimiento de la posventa del distribuidor, que recibe al cliente desde
 - Los picos de demanda —como la temporada de cosecha, el arranque de las obras o un boletín de servicio de la marca— los absorben la IA y el autoservicio: el equipo no crece cuando crece el parque de máquinas que atiende, y el líder ve en los tableros del área qué parte de la demanda resolvieron la IA y el autoservicio y qué pasó a una persona. `[3.8.O2]`
 
 *Se leen igual:* `3.8.D1`, `3.8.I1`, `3.8.F2`, `3.8.E1`, `3.8.E2`, `3.8.E4`, `3.8.E5`, `3.8.O1`, `3.8.O3`, `3.8.O4`.
+
+## Edición — Telecomunicaciones
+
+Para el operador de telecomunicaciones que le vende a personas, hogares y empresas sus servicios móviles —prepago y pospago, con o sin equipo—, de internet y televisión para el hogar y de conectividad y telefonía para empresas, y que atiende después la relación: parte de la venta la trabaja un ejecutivo —en una tienda, por teléfono o en la visita a una empresa— y parte se cierra sola en la web, la app o la recarga; después vienen la activación o la instalación, la facturación, las averías, el cambio de plan, la renovación y la retención. La venta de una línea, un equipo, un servicio del hogar o una portabilidad se mide en Ventas; la atención de las averías, los reclamos y las gestiones del cliente, en Servicio. Avisarle al cliente que su plazo de permanencia termina es de Servicio; ofrecerle renovar con un equipo nuevo o sumar una línea, de Ventas. El fabricante de equipos o de infraestructura que le vende a los operadores, el mayorista de capacidad o de torres, la empresa de software de comunicaciones, el integrador que vende proyectos de redes y el proveedor que solo le vende conectividad a empresas se miden con la escala general; el distribuidor o la tienda que solo revende recargas y teléfonos, con Ecommerce y retail o con la escala general.
+
+*Clave:* telecom
+
+*Perfil habitual:* mixta · relación continua.
+
+*Criterios propios:* desde el 801.
+
+### Palabras de esta edición
+
+| En la escala general | En esta edición |
+|:--|:--|
+| Prospecto | Interesado en un plan, un equipo o un servicio |
+| Negocio | La venta de una línea, un plan, un equipo o un servicio del hogar, de la consulta a la activación o la instalación |
+| Negocio ganado | Venta concretada: la línea activa, el número portado o el servicio instalado |
+| Lead | Interesado: quien pidió información de un plan, un equipo o un servicio del hogar, o respondió a una campaña, sea o no cliente del operador |
+| Pipeline | El recorrido de la venta: consulta, contacto, calificación, oferta, contrato, entrega del equipo o de la SIM, y activación o instalación |
+| Revisión del pipeline | Reunión de seguimiento de ventas |
+| Lead calificado | Interesado calificado: quiere el servicio, hay cobertura donde lo necesita y, si pide pospago o un equipo en cuotas, cumple las condiciones de crédito |
+| Vendedor | Ejecutivo de ventas |
+| Propuesta | La oferta: el plan, el equipo y sus cuotas, el plazo de permanencia, las promociones y la fecha de activación o de instalación |
+| Material de venta | Fichas de los planes y de los equipos, comparativos, mapas de cobertura y respuestas a las preguntas frecuentes |
+| Razón de pérdida | Por qué no se concretó la venta: el precio, el equipo, la cobertura, el crédito, que el cliente se quedó con su operador o se fue con otro |
+| Cliente ideal | El cliente objetivo de cada plan y de cada servicio |
+| Pronóstico | Proyección de ventas por línea de negocio: móvil, hogar y empresas |
+| Cliente | Quien tiene una línea o un servicio contratado: una persona, un hogar o una empresa |
+| Caso | Un reclamo, una avería, una consulta o una gestión sobre un servicio: un cobro, un cambio de plan, la SIM, la instalación |
+| Agente | Ejecutivo de atención |
+| Buyer persona | Perfil de cliente: quién es, cómo usa el servicio y cómo decide, como quien pasa de prepago a pospago o la familia que contrata internet para la casa |
+| Traspaso | El de un interesado de Marketing a un ejecutivo de ventas, o el de un cliente de Ventas a la atención después de la activación |
+
+### Área 1 — Ventas
+
+Mide el rendimiento de la venta del operador: cómo está montada por dentro y qué produce en interesados atendidos, ventas concretadas y líneas activas o servicios instalados, en la tienda, por teléfono, en la visita a una empresa y en la web o la app. Vale igual si la venta la trabaja un equipo de ejecutivos de ventas o una sola persona, o si el cliente contrata solo.
+
+**Deficiente.** Tus ventas dependen de quién atienda. Cada ejecutivo lleva a sus interesados en su teléfono y su WhatsApp personal, lo que se vende en las tiendas no llega al CRM y nadie sabe cuántos interesados de una campaña se quedaron sin una llamada.
+
+**Inicial.** Tienes un CRM y un proceso a medias. Los interesados de cada campaña se reparten a mano, el primer contacto llega días después, cada ejecutivo explica la oferta a su manera y la portabilidad y la instalación se siguen por fuera del sistema.
+
+**Funcional.** Tu equipo comercial opera como una maquinaria base. Cada interesado —de una campaña, de la línea de atención, de la tienda o de la web— entra al mismo recorrido, la oferta se dice igual en todos los canales, el cliente sabe por escrito lo que contrata antes de firmar y ninguna venta se da por concretada hasta que la línea está activa o el servicio instalado.
+
+**Eficiente.** La venta deja de depender del empuje de cada ejecutivo. Mides en qué etapa se cae cada venta —también entre la firma y la activación—, sabes a qué clientes ofrecerles pasar a pospago, subir de plan o sumar una línea, el cliente puede contratar en línea de punta a punta y proyectas las ventas con confianza.
+
+**Óptimo.** La IA hace el trabajo pesado y tu equipo valida donde importa. Si atiendes por WhatsApp o chat, agentes de IA responden, califican y llevan al interesado hasta la contratación a toda hora; los modelos dicen a qué cliente ofrecerle qué plan o qué equipo y cuándo, y detectan la portabilidad o la instalación que se traba antes de que el cliente se quede con su operador.
+
+#### 1.1 Procesos y Rutinas
+
+¿Qué tan parecido trabajan tus ejecutivos cada venta, desde que llega el interesado hasta que la línea queda activa o el servicio instalado?
+
+*Descripción:* Mide si la venta sigue un proceso escrito y repetible —también el de la portabilidad—, con etapas, cadencias y reuniones que no dependen de cada ejecutivo ni de cada tienda.
+
+*Costo de quedarse:* Si se va un ejecutivo, se lleva a sus interesados en el teléfono: nadie sabe a quién se le ofreció qué plan, qué portabilidad quedó a medias ni qué instalación se le prometió a quién.
+
+**Deficiente.** Sin proceso: cada ejecutivo y cada tienda venden a su manera, y lo que se sabe de cada venta vive en su cabeza o en su WhatsApp.
+
+- No hay nada escrito sobre el recorrido de la venta ni sus etapas —consulta, contacto, oferta, contrato, entrega de la SIM o del equipo y activación o instalación—: cada ejecutivo usa su criterio. `[1.1.D1]`
+- Los interesados de las campañas y de la línea de atención se reparten a ojo, o se los queda el ejecutivo que los ve primero: no hay una regla que diga a quién le toca cada uno. `[1.1.D2]`
+- No hay una reunión de seguimiento de ventas: se habla de las ventas en curso solo cuando una se complica. `[1.1.D3]`
+- Si se van dos ejecutivos clave, nadie sabe en qué quedó cada venta, cada portabilidad ni cada instalación. `[1.1.D4]`
+
+**Inicial.** Hay etapas y algo de estructura, pero cada ejecutivo y cada tienda las aplican a su manera, y la reunión de seguimiento de ventas no tiene fecha fija.
+
+- Hay etapas de la venta de palabra o en un borrador, pero cada ejecutivo —y cada tienda— las interpreta distinto. `[1.1.I1]`
+- Hay una cadencia de contacto sugerida para los interesados de cada campaña, pero cada ejecutivo la cumple cuando puede o cuando se acuerda. `[1.1.I2]`
+- La reunión de seguimiento de ventas se hace cuando hay tiempo, sin una fecha fija ni un orden para repasar las ventas en curso. `[1.1.I3]`
+- Que una venta quede bien registrada —por ejemplo, la que se cierra en la tienda— depende de la voluntad de cada ejecutivo, no de una rutina del equipo. `[1.1.I4]`
+
+**Funcional.** Todo el equipo sigue el mismo recorrido escrito en el CRM, de la consulta a la activación o la instalación, con una cadencia de contacto, el proceso de la portabilidad por escrito y una revisión fija de las ventas.
+
+*Resultado:* Si rota un ejecutivo, el siguiente sabe en qué va cada venta, porque todo el equipo trabaja el mismo recorrido en el CRM: las ventas avanzan con los mismos criterios, cada portabilidad sigue los mismos pasos, cada interesado se contacta con la cadencia acordada y las ventas en curso se repasan en cada reunión de seguimiento.
+
+- Cualquier ejecutivo explica igual las etapas de la venta —consulta, contacto, calificación, oferta, contrato, entrega del equipo o de la SIM, y activación o instalación— y qué tiene que cumplirse para pasar de una a la siguiente. `[1.1.F1]`
+- Cada tipo de venta —por ejemplo, una línea nueva, una portabilidad, una renovación, un servicio del hogar o la venta a empresas— tiene su propio recorrido en el CRM, con lo que la venta tiene que cumplir para pasar de cada etapa a la siguiente. `[1.1.F2]`
+- El proceso de la portabilidad está escrito: qué datos y qué documentos se le piden al cliente, cómo recibe la SIM —en la tienda o por envío, también quien vive lejos de una tienda—, qué plazos y qué causas de rechazo fija el regulador y qué se le dice al cliente en cada paso. `[1.1.F801 · declarado]`
+- La reunión de seguimiento de ventas se hace en una fecha fija, cada semana o cada quince días. `[1.1.F5]`
+- Cualquier ejecutivo, en la tienda, por teléfono o en la visita a una empresa, trabaja en el CRM y no en hojas ni notas aparte: lo abre para ver qué le toca hacer —a qué interesado llamar, qué portabilidad retomar—, no solo para cargar lo que ya vendió. `[1.1.F6]`
+- Hay una cadencia de contacto definida —cuántos intentos y en cuántos días, por ejemplo con una primera llamada en los 30 minutos siguientes a que el interesado deja sus datos en la página de una campaña— y se cumple con la mayoría de los interesados nuevos. `[1.1.F7]`
+
+**Eficiente.**
+
+- Hay playbooks escritos de descubrimiento, calificación y manejo de objeciones, por ejemplo para saber cómo usa el servicio el cliente, cuánto paga hoy con su operador y qué le hace dudar de cambiarse. `[1.1.E2]`
+- El sistema marca en el CRM las ventas que se salen del proceso —por ejemplo, una portabilidad sin la SIM entregada o un servicio del hogar sin fecha de instalación— y se las señala al líder. `[1.1.E6]`
+
+**Óptimo.**
+
+- La mayoría de las ventas siguen el recorrido como está escrito sin que nadie lo revise a mano, y el CRM lo muestra. `[1.1.O2]`
+- Las técnicas nuevas se prueban en pilotos de ciclo corto —por ejemplo, en una región, en una tienda o con una campaña— antes de sumarlas al proceso. `[1.1.O3]`
+- La IA corrige sola lo que se sale del proceso —crea la llamada al interesado que nadie contactó, completa el plan de interés, reasigna la venta a otra región— y el líder revisa en el CRM lo que no pudo resolver. `[1.1.O4]`
+
+*Se leen igual:* `1.1.F4`, `1.1.F8`, `1.1.E1`, `1.1.E3`, `1.1.E5`.
+
+#### 1.2 Tecnología y Automatización
+
+¿Qué pasa en tu sistema, sin que nadie lo haga a mano, cuando llega un interesado o una venta avanza hacia la activación?
+
+*Descripción:* Mide cuánto del trabajo repetitivo hace el sistema —repartir los interesados, avisar qué toca, registrar lo que se contrata en la web, la app o la tienda y avisarle al cliente en qué va su activación o su instalación— y cómo usa el equipo la automatización y la IA.
+
+*Costo de quedarse:* Tus ejecutivos pierden horas en tareas que el sistema podría hacer: los interesados de una campaña esperan días a que alguien los reparta, la contratación que el cliente deja a medias en la web no la retoma nadie y el cliente tiene que llamar para saber cuándo le activan la línea o le instalan el servicio.
+
+**Deficiente.** No hay un CRM: los interesados y las ventas se anotan en hojas de cálculo o en el WhatsApp de cada ejecutivo.
+
+- Los interesados viven en hojas de cálculo, en listas o en el teléfono de cada ejecutivo. `[1.2.D1]`
+- No hay un CRM donde montar una automatización: los interesados y las ventas se pasan por correo, por WhatsApp o de palabra, y ningún ejecutivo recibe avisos del sistema. `[1.2.D2]`
+
+**Inicial.** Hay un CRM, pero los interesados se reparten a mano, lo que se contrata en la web o en la app se pasa al sistema cuando alguien tiene tiempo y el cliente tiene que llamar para saber en qué va su venta.
+
+- Hay un CRM, pero nada pasa solo: los interesados que llegan de cada campaña o de la línea de atención se reparten a mano y cada ejecutivo tiene que acordarse de sus seguimientos. `[1.2.I1]`
+- Lo que el cliente contrata solo —una línea, un plan o un equipo, en la web, en la app o por otro canal de autoservicio— se pasa a mano al sistema, cuando alguien tiene tiempo. `[1.2.I2]`
+
+**Funcional.** Lo básico pasa solo —los interesados se reparten por una regla, el sistema avisa qué toca, lo que se contrata en la web o en la app entra solo aunque quede a medias y el cliente recibe un aviso en cada paso hasta la activación o la instalación— y, si se usa IA, trabaja con los datos de cada cliente.
+
+*Resultado:* Ningún interesado se pierde por no saber a quién le toca y el ejecutivo deja de depender de su memoria para dar seguimiento; lo que se contrata en la web o en la app entra solo, aunque quede a medias, y el cliente sabe cuándo le activan la línea o le instalan el servicio sin tener que llamar.
+
+- Los interesados que llegan —de una campaña, de la línea de atención, de la web o de la tienda— entran a una bandeja o cola y se asignan por una regla simple: por turnos, por región, por tipo de servicio o según la fuente de donde llegan. `[1.2.F2]`
+- Cuando hay algo que hacer —por ejemplo, un interesado nuevo asignado, una portabilidad que espera la SIM o un interesado que respondió a la campaña—, el sistema le avisa al ejecutivo sin que el líder se lo recuerde. `[1.2.F3]`
+- Si el equipo atiende a los interesados por WhatsApp u otro canal conversacional, lo que cada ejecutivo habla por ahí queda en el sistema, aunque responda desde su teléfono. `[1.2.F4]`
+- Lo que el cliente contrata solo —una línea prepago, un plan, un equipo o un servicio del hogar, en la web, en la app o por otro canal de autoservicio— entra solo al sistema como una venta, con su monto, su canal y su fecha, y con su cliente cuando se identifica. `[1.2.F6]`
+- Si lo que se vende es limitado —los equipos en inventario de cada tienda, o los que llegan con un preregistro cuando sale un modelo—, quien vende puede ver qué está disponible antes de ofrecerlo, en el CRM o en el sistema donde se lleva el inventario, sin preguntarle a otra persona. `[1.2.F8]`
+- La contratación que el cliente deja a medias en la web o en la app —un plan, un equipo o una portabilidad— queda guardada en el sistema, con sus datos de contacto y lo que eligió. `[1.2.F801 · comprobable · venta sin vendedor]`
+- En cada cambio de estado de su venta —contrato firmado, equipo o SIM en camino, portabilidad aprobada o rechazada, instalación agendada y servicio activo—, al cliente le llega un aviso automático. `[1.2.F802 · comprobable]`
+- Los ejecutivos le escriben al cliente solo desde los números, perfiles y correos que el operador publica como oficiales, no desde su teléfono personal. `[1.2.F803 · evaluado · hábito · venta con equipo]`
+
+**Eficiente.** Las ofertas salen del sistema, el CRM se conecta con los sistemas del operador, el cliente puede contratar en línea de punta a punta y el equipo usa la IA en su trabajo diario.
+
+*Resultado:* El ejecutivo recupera el tiempo que se le iba en tareas repetitivas, el líder ve en tiempo real en qué etapa se caen las ventas y el cliente que prefiere contratar solo lo hace sin pasar por una tienda.
+
+- Las ofertas se generan desde el sistema —por ejemplo, con el plan, el equipo, sus cuotas y el plazo de permanencia vigentes—, no como documentos sueltos. `[1.2.E1]`
+- Si el operador lleva su operación en otro sistema —la facturación, las activaciones, el inventario de equipos o las instalaciones—, el CRM está conectado con él. `[1.2.E3]`
+- El cliente contrata en línea de punta a punta —elige el plan o el equipo, verifica su identidad, firma de forma digital y recibe la SIM o agenda la instalación—, también cuando trae su número de otro operador, sin tener que ir a una tienda. `[1.2.E801 · comprobable · venta sin vendedor]`
+
+**Óptimo.** La IA califica, lleva al interesado hasta la contratación y calcula qué ventas se van a concretar; el ejecutivo valida y se queda con las conversaciones que deciden la venta.
+
+- Si el equipo atiende por un canal conversacional, agentes de IA califican ahí a los interesados con la definición de interesado calificado y agendan una llamada o una visita a cualquier hora; le pasan al ejecutivo, con el contexto, a quien está listo, y el equipo revisa en el CRM lo que calificaron. `[1.2.O2]`
+- Si el operador atiende por un canal conversacional, agentes de IA atienden ahí a quienes quieren contratar —una línea prepago, un plan, un equipo— y los llevan hasta el pago; una persona revisa lo que no pudieron resolver, y en el CRM queda cada conversación que atendió la IA. `[1.2.O5]`
+
+*Se leen igual:* `1.2.F7`, `1.2.F9`, `1.2.E2`, `1.2.E4`, `1.2.E5`, `1.2.E6`, `1.2.E7`, `1.2.E8`, `1.2.O1`, `1.2.O3`, `1.2.O4`.
+
+#### 1.3 Datos
+
+¿Qué tienes que hacer con el reporte de tus ventas en curso antes de usarlo para decidir?
+
+*Descripción:* Mide si los datos de ventas son confiables para decidir: ventas completas, el origen de cada una, los servicios que ya tiene cada cliente y reportes que salen del sistema sin armarlos a mano.
+
+*Costo de quedarse:* Decides con números que no cuadran: lo que se vende en las tiendas no llega al CRM, el reporte se arma a mano cruzando hojas con el sistema de facturación y no sabes qué campaña te trae ventas y cuál solo llamadas.
+
+**Deficiente.** Los datos de ventas están repartidos entre el CRM, las hojas de cada tienda y los sistemas del operador, y nadie los cuida.
+
+- No se registra de qué campaña o canal vino cada venta ni qué ejecutivo la lleva: sacar un reporte confiable es imposible. `[1.3.D2]`
+- No hay un registro de quiénes son los clientes: cada vez que se necesita la lista —por ejemplo, para una campaña—, hay que armarla a mano con hojas de cálculo y lo que guardan la facturación, las recargas y cada tienda. `[1.3.D3]`
+- Las ventas concretadas no quedan registradas con su monto y su fecha —por ejemplo, las de la tienda quedan solo en el sistema donde se activan—: no se sabe cuánto se vendió ni cuándo. `[1.3.D4]`
+
+**Inicial.**
+
+- En las ventas que se crean hoy, la campaña o el canal de donde vino cada una —la página de una campaña, la línea de atención, la tienda o un referido— se anota a mano, cuando alguien se acuerda, y en parte de ellas queda vacío. `[1.3.I2]`
+- Las ventas que se crean hoy se registran, pero a algunas les falta la fecha esperada de activación o de instalación, el monto o el ejecutivo responsable. `[1.3.I3]`
+
+**Funcional.** El reporte de ventas en curso sale del sistema, sin armarlo a mano, y la ficha de cada cliente dice qué servicios tiene y cuándo termina su plazo de permanencia.
+
+*Resultado:* El líder ve el estado real de las ventas cuando lo necesita, sin armar el reporte a mano, y sabe de qué campaña o canal vino cada una; el ejecutivo sabe qué tiene contratado cada cliente antes de ofrecerle algo.
+
+- Toda venta creada desde la puesta en marcha del recorrido actual tiene fecha esperada de activación o de instalación, monto y ejecutivo responsable. `[1.3.F1]`
+- Toda venta creada desde la puesta en marcha del recorrido actual dice de qué fuente vino su contacto original: una campaña por WhatsApp, SMS o correo, la línea de atención, la tienda, la web, la app o un referido. `[1.3.F3]`
+- Las personas a las que el equipo les escribe por WhatsApp o por correo —también las que vienen en las bases de una campaña— aceptaron que les escriban. `[1.3.F10]`
+- La ficha de cada cliente dice qué servicios tiene activos —líneas, planes, equipos en cuotas y servicios del hogar— y cuándo termina su plazo de permanencia. `[1.3.F801 · comprobable · relación continua]`
+
+**Eficiente.** Aparece una proyección de ventas confiable, la ficha del cliente reúne lo que viene de los sistemas del operador y se sabe cuánto vale cada cliente según su plan y su canal.
+
+*Resultado:* El operador puede comprometer un número de ventas con confianza, y sabe cuánto deja cada cliente según el plan que contrató y el canal por donde llegó.
+
+- Hay una proyección de ventas que se actualiza cada semana o cada quince días —por ejemplo, de las líneas móviles, los equipos, los servicios del hogar y las empresas—, y en al menos cinco de los últimos seis meses lo vendido quedó dentro de ±10% de lo proyectado. `[1.3.E1]`
+- La ficha de cada cliente reúne lo comercial con su historial de conversaciones y, si el operador lleva en otros sistemas la facturación, las activaciones o las recargas, con lo que viene de ellos: la vista 360° empieza a tomar forma. `[1.3.E3]`
+- Se sabe cuánto deja cada cliente en el tiempo según el plan que contrató y el canal por donde llegó —la tienda, el ejecutivo, la web o la app—, y ese número se revisa al menos una vez por trimestre. `[1.3.E801 · comprobable · hábito]`
+
+**Óptimo.**
+
+- Cada interesado, cliente y venta se asocia solo, al entrar, con lo que ya había de esa persona, ese hogar o esa empresa —por ejemplo, por su número de línea o su identificación—; la IA resuelve los dudosos y una persona valida solo las excepciones que el CRM le marca. `[1.3.O1]`
+- La vista 360° está operativa: la ficha de cada cliente reúne lo comercial, sus servicios, su facturación, sus casos —averías, reclamos, consultas y gestiones— y sus conversaciones. `[1.3.O3]`
+- Ventas se apoya en el almacén central de datos del operador para su pronóstico, cruzando lo comercial con la facturación y el servicio. `[1.3.O4]`
+
+*Se leen igual:* `1.3.D1`, `1.3.I1`, `1.3.F2`, `1.3.F4`, `1.3.F8`, `1.3.F9`, `1.3.E4`, `1.3.E5`, `1.3.O2`, `1.3.O6`.
+
+#### 1.4 Equipo y Gobierno
+
+¿Cómo sabe el líder, cada semana, qué región, qué tienda y qué ejecutivo van bien y quién necesita ayuda?
+
+*Descripción:* Mide si cada ejecutivo tiene un rol y una meta por escrito, si cada tienda, cada región y cada canal tienen la suya, y si el líder sigue los números y pide cuentas con datos.
+
+*Costo de quedarse:* El líder se entera al cierre del mes de que la meta de ingreso no se cumplió: no vio antes qué región, qué tienda o qué ejecutivo se quedó atrás, ni en qué etapa se cayeron las ventas.
+
+**Deficiente.**
+
+- El líder apaga incendios —una campaña que no vende, una portabilidad trabada, una región que no llega a la meta—: no hay métricas ni rendición de cuentas. `[1.4.D2]`
+
+**Inicial.**
+
+- El líder revisa algunos números —las activaciones del mes, el ingreso de cada ejecutivo— en hojas de cálculo, cuando tiene tiempo. `[1.4.I1]`
+- Los reportes de cómo operan los ejecutivos, las tiendas y las regiones se arman a mano. `[1.4.I2]`
+
+**Funcional.** Cada ejecutivo tiene un rol y una meta por escrito, el líder sigue un tablero cada semana y en la reunión de seguimiento de ventas cada quien rinde cuentas.
+
+*Resultado:* Cada ejecutivo sabe qué se espera de él, y el líder sabe cada semana qué región, qué tienda y qué ejecutivo van bien y quién necesita ayuda, antes de que cierre el mes.
+
+- El líder tiene un tablero con 4 a 6 métricas clave —por ejemplo, interesados atendidos, tiempo hasta el primer contacto, ventas concretadas, líneas activadas o servicios instalados e ingreso— y lo consulta al menos una vez por semana. `[1.4.F2]`
+- Cada ejecutivo —o cada canal, donde se contrata sin ejecutivo, como la web o la app— tiene una meta escrita, con un monto o una cantidad y un plazo, por ejemplo el ingreso mensual de las ventas que activa. `[1.4.F4]`
+
+**Eficiente.** El líder prepara a quien entra, escucha al equipo y acuerda reglas con las áreas que completan la venta y, si Marketing pasa interesados, también las del traspaso.
+
+*Resultado:* Un ejecutivo nuevo produce más rápido, el crédito, la entrega de equipos y SIM, la instalación y la portabilidad no se traban entre áreas, lo que el equipo ve que no funciona llega a quien puede cambiarlo y, si Marketing pasa interesados, el traspaso tiene reglas que se cumplen.
+
+- Cuando entra un ejecutivo nuevo, hay un plan de inducción con sus pasos y materiales —los planes y los equipos vigentes, la portabilidad, las condiciones de crédito y los sistemas—; no se le entrena de memoria. `[1.4.E2]`
+- Si Marketing le pasa interesados a Ventas —por ejemplo, los de cada campaña—, el acuerdo de traspaso está escrito y se sigue en el sistema: en cuánto tiempo se responde, qué calidad se espera del interesado y por qué se puede rechazar. `[1.4.E3]`
+- Las decisiones de la dirección usan números de fondo: cuánto deja cada cliente en el tiempo, cuánto margen deja cada canal —la tienda, el ejecutivo, la web o la app— y cuánto aporta cada ejecutivo. `[1.4.E6]`
+- El acuerdo con las áreas que completan la venta —el análisis de crédito, la logística de equipos y SIM, las instalaciones y la portabilidad— está escrito y se mide: qué recibe cada una, en cuánto tiempo responde y por qué devuelve una venta. `[1.4.E801 · comprobable]`
+
+**Óptimo.**
+
+- Al menos una vez por trimestre, el líder y el equipo se reúnen a decidir qué probar en la venta —una oferta, un guion de llamada, una campaña en una región— y revisan cómo les fue con lo que probaron antes. `[1.4.O2]`
+- Hay responsables de validar lo que hace la IA en ventas, y lo que puede decidir sola —por ejemplo, ofrecer un plan, agendar una instalación o aplicar una promoción— está por escrito. `[1.4.O3]`
+
+*Se leen igual:* `1.4.D1`, `1.4.F3`, `1.4.F6`, `1.4.F7`, `1.4.E4`, `1.4.E5`, `1.4.O4`.
+
+#### 1.5 Planes y ofertas
+
+¿Cómo sabe un ejecutivo que entra a tu equipo a quién va dirigido cada plan y con qué condiciones ofrecerlo?
+
+*Descripción:* Mide si el equipo sabe para quién es cada plan y cada servicio, si la oferta llega igual con cualquier ejecutivo y en cualquier canal, y si el cliente sabe por escrito lo que contrata antes de firmar.
+
+*Costo de quedarse:* El cliente escucha un precio en la tienda y otro en la web, o descubre en la primera factura un cargo o un plazo de permanencia que nadie le dijo: reclama, desconfía y se lleva su número a otro operador en cuanto puede.
+
+**Deficiente.** Nadie puede decir a quién va dirigido cada plan, y cada ejecutivo explica las condiciones de memoria y a su manera.
+
+- Nadie puede decir con claridad a quién va dirigido cada plan o cada servicio, y lo que se le dice a cada interesado —el precio, lo que incluye, la permanencia— cambia según quién lo atienda. `[1.5.D1]`
+- No hay un formato de oferta: cada ejecutivo arma la suya desde cero, de palabra o en un mensaje de WhatsApp, y su calidad depende de quién le toque al cliente. `[1.5.D2]`
+
+**Inicial.** Hay fichas de los planes y de los equipos, pero cada ejecutivo arma la oferta a su manera y las condiciones todavía varían entre la tienda, el teléfono y la web.
+
+- Hay un formato de oferta, pero cada ejecutivo lo cambia o lo usa a su manera. `[1.5.I2]`
+- Los precios, las promociones o las condiciones cambian según el canal sin que sea a propósito: el interesado encuentra en la web un precio o una promoción distinta de la que le dicen en la tienda. `[1.5.I3]`
+
+**Funcional.** El cliente objetivo de cada plan está escrito, la oferta se dice igual en todos los canales y el cliente recibe por escrito lo que contrata antes de firmar.
+
+*Resultado:* Dos interesados parecidos reciben la misma oferta —el plan, el equipo y sus cuotas, el plazo de permanencia y las promociones— sin importar qué ejecutivo los atienda ni por qué canal lleguen, y saben antes de firmar cuánto van a pagar y cuánto les cuesta irse antes.
+
+- Existe un documento con el cliente objetivo de cada plan y de cada servicio —a quién va dirigido, cómo usa el servicio y qué busca—, consultable por cualquier ejecutivo. `[1.5.F1]`
+- Las ofertas están estandarizadas: tienen una estructura común reconocible —por ejemplo, el plan, el equipo y sus cuotas, el plazo de permanencia, las promociones y la fecha de activación o de instalación—, no armada desde cero cada vez. `[1.5.F4]`
+- Si se vende por más de un canal, los precios, las promociones y las condiciones de cada plan y de cada equipo son los mismos en la tienda, por teléfono, en la web y en la app, o la diferencia es a propósito y está escrita, como un descuento solo en línea. `[1.5.F5]`
+- Antes de firmar, el cliente recibe por escrito lo que contrata: el plan y lo que incluye, el precio mensual, las cuotas del equipo, el plazo de permanencia si lo tiene y cuánto le cuesta terminar el contrato antes. `[1.5.F801 · comprobable · hábito]`
+
+**Eficiente.** La oferta se distingue de la de otros operadores y solo promete lo que se va a entregar.
+
+*Resultado:* Los interesados ven qué distingue al operador: la oferta dice lo mismo en la web, en la app, en la tienda y en boca de cada ejecutivo, y lo que se le ofreció al cliente es lo que después ve en su factura.
+
+- La propuesta de valor dice por escrito en qué se distingue de la de otros operadores, por ejemplo en la cobertura, la velocidad, los equipos o la atención. `[1.5.E2]`
+- Las ofertas solo prometen lo que el operador puede entregar: lo que se ofrece —por ejemplo, la cobertura, la velocidad, el equipo y la fecha de activación o de instalación— se valida antes de ofrecerlo. `[1.5.E3]`
+- Se mide cuántas ventas se facturan con un precio, unas cuotas o un plazo de permanencia distintos de los ofrecidos, y se corrige el origen. `[1.5.E801 · comprobable · hábito]`
+
+**Óptimo.** La IA revisa contra la propuesta de valor vigente del operador todo lo que se le dice a cada interesado, y el equipo valida lo que se sale.
+
+- La IA revisa en tiempo real, contra la propuesta de valor vigente del operador, lo que se les dice a los interesados —por WhatsApp, por teléfono o en la oferta—, lo escriba ella o el equipo; lo que se sale queda marcado en el sistema y el equipo lo valida. `[1.5.O1]`
+
+*Se leen igual:* `1.5.I1`, `1.5.F2`, `1.5.F3`, `1.5.F6`, `1.5.E4`.
+
+#### 1.6 Calificación y priorización
+
+¿Cómo decide tu equipo a qué interesados llamar primero, y cómo sabe que puede venderles lo que piden?
+
+*Descripción:* Mide si el equipo decide a qué interesados dedicar su tiempo con criterios escritos, según el cliente objetivo de cada plan, y si confirma la cobertura y el crédito antes de ofrecer lo que los necesita.
+
+*Costo de quedarse:* Tus ejecutivos llaman en orden una base de miles de números —muchos ya no existen o ya tienen el plan que se les ofrece—, le venden internet a quien no tiene cobertura y un equipo en cuotas a quien no pasa el crédito, mientras los interesados listos esperan días su primera llamada.
+
+**Deficiente.** Los interesados se atienden por orden de llegada, desde bases sin depurar, y la cobertura o el crédito se descubren al final.
+
+- No hay criterios para distinguir a un interesado que va a contratar de uno que solo pregunta precios: se pierde tiempo con interesados que nunca van a contratar. `[1.6.D1]`
+- Las bases de cada campaña llegan al ejecutivo sin depurar: traen números que ya no existen, clientes que ya tienen lo que se les ofrece y clientes tratados como interesados nuevos. `[1.6.D801 · comprobable]`
+
+**Inicial.**
+
+- Los interesados se separan en alguna lista o con una etiqueta —por ejemplo, por campaña o por lo que pidieron—, pero cada ejecutivo lo hace con su propio criterio. `[1.6.I1]`
+- El líder sabe quién es el cliente objetivo de cada plan, pero el CRM no tiene los campos —el servicio que busca, la zona, si ya es cliente, si viene de otro operador— para separar a los interesados que encajan. `[1.6.I2]`
+
+**Funcional.** Los interesados se separan por los rasgos del cliente objetivo de cada plan, hay una definición escrita de interesado calificado que el equipo aplica, y la cobertura y el crédito se confirman antes de ofrecer lo que los necesita.
+
+*Resultado:* El equipo deja de dedicarle tiempo a quien no encaja con el cliente objetivo y concentra el esfuerzo en quien sí encaja y cumple la definición de interesado calificado; a nadie se le vende un servicio del hogar sin cobertura, ni un pospago o un equipo en cuotas que no va a pasar el crédito.
+
+- El equipo segmenta a los interesados por los atributos del cliente objetivo antes de trabajarlos: en personas, el servicio que buscan, la zona, si ya son clientes o si vienen de otro operador; en empresas, el tamaño, la actividad o cuántas líneas necesitan. `[1.6.F1]`
+- Hay una definición escrita de interesado calificado: los criterios para aceptarlo como tal, por ejemplo que quiera el servicio, que haya cobertura donde lo necesita y, si pide pospago o un equipo en cuotas, que cumpla las condiciones de crédito. `[1.6.F2]`
+- Los rasgos del cliente objetivo —el servicio que busca, la zona, si ya es cliente, si trae su número de otro operador— son campos del CRM y de los formularios de las campañas. `[1.6.F4]`
+- Antes de ofrecer un pospago o un equipo en cuotas, se revisa si el interesado tiene deuda con el operador y si cumple las condiciones de crédito; el prepago no pasa por ahí. `[1.6.F801 · comprobable · hábito]`
+- Si el operador vende servicios del hogar, antes de vender uno se confirma que hay cobertura en la dirección del cliente, y queda registrado en la venta. `[1.6.F802 · comprobable · hábito]`
+
+**Eficiente.** Los interesados se ordenan con un puntaje, la cobertura y el crédito se revisan solos, y hay listas de clientes a quienes ofrecerles pasar a pospago, subir de plan o sumar una línea sin esperar a que pregunten.
+
+*Resultado:* Cada ejecutivo sabe cada mañana a quién llamar primero, quien no tiene cobertura o no cumple el crédito lo sabe enseguida, y los clientes que ya están listos para pasar a pospago, subir de plan o sumar una línea reciben la oferta sin tener que pedirla.
+
+- Los ejecutivos trabajan primero a los interesados con más puntaje. `[1.6.E4]`
+- Los segmentos prioritarios —por ejemplo, quien viene de otro operador, la familia que contrata el hogar o la pyme con varias líneas— están escritos y cada uno tiene su plan de contacto. `[1.6.E7]`
+- Hay listas de clientes a quienes ofrecerles pasar de prepago a pospago, subir de plan, renovar con un equipo nuevo o sumar una línea, armadas con su consumo, sus recargas y cómo pagan, y se les ofrece sin esperar a que pregunten. `[1.6.E801 · comprobable · cliente recurrente · requiere 1.3.E3]`
+- El crédito y, si el operador vende servicios del hogar, la cobertura se revisan solos: con la identificación del interesado y, cuando hace falta, su dirección, el sistema dice si cumple las condiciones de crédito y si hay cobertura antes de que alguien le dedique tiempo o de pedirle documentos. `[1.6.E802 · comprobable · requiere 1.6.F801, 1.6.F802]`
+
+**Óptimo.** La IA decide a qué interesado atender, qué plan o qué equipo ofrecerle y cuándo, con todo lo que se sabe de cada uno; el ejecutivo valida y, en la web y la app, se ofrece dentro de los límites que fijó el operador.
+
+- Si en la decisión de contratar participan varias personas —en una empresa, el gerente, el de compras y el de tecnología—, la IA adapta en tiempo real el mensaje a cada una, dentro de los límites que fijó el equipo; el ejecutivo revisa lo que se envió, y en el CRM queda qué recibió cada persona. `[1.6.O3]`
+- La priorización usa señales de Servicio y de Marketing —qué clientes suben de plan, suman líneas, refieren o se llevan su número a otro operador— para decidir qué perfiles perseguir. `[1.6.O4]`
+- La IA ejecuta sola las acciones de rutina —recordatorios, reagendar una instalación, enviar la ficha de un plan o el mapa de cobertura— y el ejecutivo valida las de las ventas de más valor; en el CRM queda qué hizo la IA en cada venta. `[1.6.O5]`
+- En la web y en la app, la IA le ofrece sola a cada cliente el plan, el equipo o el servicio que le conviene, dentro de los límites que fijó el operador, y el ejecutivo revisa en el CRM lo que se ofreció. `[1.6.O801 · comprobable]`
+
+*Se leen igual:* `1.6.F3`, `1.6.E3`, `1.6.E5`, `1.6.E6`.
+
+#### 1.7 Seguimiento de la contratación
+
+¿Qué pasa con el interesado que no volvió a contestar, o con la venta que se firmó y todavía no tiene la línea activa o el servicio instalado?
+
+*Descripción:* Mide si alguien detecta cuando una venta deja de avanzar —antes de firmar o mientras se espera la SIM, la portabilidad o la instalación— y si hay un paso acordado para retomarla a tiempo; y si la venta se da por concretada solo cuando el servicio está activo.
+
+*Costo de quedarse:* Las ventas se caen en silencio: el interesado en una portabilidad espera días una llamada, la SIM no llega, la instalación se reprograma y nadie lo nota hasta que el cliente se queda con su operador o se va con otro.
+
+**Deficiente.** El ejecutivo está solo con sus ventas, y lo que pasa entre la firma y la activación no lo sigue nadie.
+
+- Nadie se da cuenta de que una venta dejó de avanzar —un interesado que no contesta, una portabilidad sin la SIM, una instalación sin fecha— hasta que ya se perdió. `[1.7.D2]`
+- No hay material de venta —fichas de los planes y de los equipos, comparativos, mapas de cobertura— para mostrarles a los interesados. `[1.7.D4]`
+- Los interesados en una portabilidad que llegan de una campaña o de la web se quedan sin que nadie los contacte, o los contactan días después. `[1.7.D801 · comprobable]`
+
+**Inicial.**
+
+- Cuando una venta se detiene —el interesado no contesta, falta un documento o la portabilidad se rechazó—, cada ejecutivo decide si insiste y cómo: no hay un paso acordado. `[1.7.I1]`
+- Cada ejecutivo tiene su propio material —capturas de los planes, fotos de los equipos— y lo arma a su manera. `[1.7.I3]`
+- Todos los intentos de hacer avanzar una venta se hacen por el mismo canal: por ejemplo, el ejecutivo solo escribe por WhatsApp desde su teléfono. `[1.7.I4]`
+
+**Funcional.** Ninguna venta se enfría en silencio, de la consulta a la activación: se detecta a tiempo, hay un paso acordado para retomarla y la venta se da por concretada solo con la línea activa o el servicio instalado.
+
+*Resultado:* Las ventas que se traban se detectan a tiempo y se retoman por más de un canal; donde se vende con equipo, con material de venta común y con el líder actuando mientras todavía hay margen. Cada portabilidad se sigue hasta que el número queda activo, y una venta firmada no cuenta como ganada mientras el cliente no tenga el servicio.
+
+- Para cada etapa —también la entrega de la SIM o del equipo, la portabilidad y la instalación— está definido cuánto tiempo sin avance vuelve estancada una venta, y las estancadas se reconocen a tiempo. `[1.7.F1]`
+- La reactivación usa al menos dos canales, por ejemplo una llamada desde la línea oficial y WhatsApp. `[1.7.F2]`
+- Hay material de venta estandarizado —fichas de los planes y de los equipos, comparativos, mapas de cobertura y respuestas a las preguntas frecuentes— que ayuda a cerrar las ventas. `[1.7.F4]`
+- Cada portabilidad se sigue hasta que el número queda activo: si se rechaza o se atrasa —por ejemplo, porque la SIM no llegó—, el ejecutivo lo sabe y retoma con el cliente dentro del plazo acordado. `[1.7.F801 · comprobable · hábito · requiere 1.1.F801]`
+- Una venta se da por concretada solo cuando la línea está activa, el número portado o el servicio instalado: la firma del contrato no alcanza. `[1.7.F802 · comprobable]`
+
+**Eficiente.** El seguimiento combina varios canales, el sistema le avisa al líder de lo que se traba y se mide cuántas ventas se caen entre la firma y la activación.
+
+*Resultado:* Ninguna venta espera a la reunión para recibir ayuda: el líder se entera cuando se traba, el interesado que todavía no está listo sigue recibiendo ofertas hasta que lo esté, el cliente que puede crecer se trabaja como una venta y se sabe cuántas ventas se pierden entre la firma y la activación, y en qué paso.
+
+- El seguimiento de las ventas que se enfrían combina al menos tres canales —por ejemplo, llamada, WhatsApp y SMS— en una secuencia definida. `[1.7.E1]`
+- Los interesados que todavía no están listos para contratar no se abandonan: pasan a nutrición —la de Marketing o una secuencia del propio equipo— y vuelven al ejecutivo cuando muestran interés, por ejemplo cuando termina su contrato con otro operador o llega el equipo que esperaban. `[1.7.E2]`
+- Los clientes con potencial de crecer que señala Servicio —por ejemplo, quien está por terminar su plazo de permanencia, quien usa más datos de los que su plan incluye o el hogar que puede sumar líneas— se trabajan como ventas, con responsable y siguiente paso. `[1.7.E5]`
+- Se mide cuántas ventas se caen entre la firma y la activación o la instalación —la SIM que no llegó, la portabilidad rechazada, la instalación que no se pudo hacer— y en qué paso, y ese número se revisa cada mes. `[1.7.E801 · comprobable · hábito]`
+
+**Óptimo.**
+
+- Con las reglas que fijó el líder, la IA actúa sola en las ventas de más valor que se traban —por ejemplo, la venta de varias líneas a una empresa o una instalación que se reprogramó dos veces: envía el contenido o avisa a quien corresponde— y el líder revisa en el CRM lo que hizo. `[1.7.O3]`
+
+*Se leen igual:* `1.7.D1`, `1.7.D3`, `1.7.I2`, `1.7.F3`, `1.7.F6`, `1.7.F7`, `1.7.E3`, `1.7.E4`, `1.7.E6`, `1.7.E7`, `1.7.O2`.
+
+#### 1.8 Ventas ganadas y perdidas
+
+¿Qué queda registrado cuando un interesado no contrata o una venta se cae antes de la activación?
+
+*Descripción:* Mide si queda registrado por qué no se concreta cada venta —si la rechazó el operador o la dejó el cliente— y si el equipo revisa lo que gana y lo que pierde para mejorar su proceso.
+
+*Costo de quedarse:* No sabes por qué pierdes ventas —el precio, el equipo, la cobertura, el crédito, la oferta de otro operador—: cada ejecutivo tiene su explicación, y sin un registro no hay cómo ver cuántas rechazó el operador y cuántas dejó el cliente.
+
+**Deficiente.** Cuando una venta no se concreta, no se anota la razón: cada ejecutivo da su propia versión, de memoria.
+
+- Las ventas que no se concretan se cierran sin anotar por qué: ni el precio, ni la cobertura, ni el crédito, ni el operador con que se quedó el cliente. `[1.8.D2]`
+
+**Inicial.**
+
+- Por qué no se concretó una venta se anota a veces y en texto libre, a criterio de cada ejecutivo, así que no se puede sumar. `[1.8.I1]`
+
+**Funcional.** Cada venta que no se concreta queda con su razón, elegida de una lista fija que separa lo que rechazó el operador de lo que dejó el cliente, y el líder saca del sistema el reporte del trimestre.
+
+*Resultado:* El líder sabe por qué no se concretan las ventas —cuántas rechazó el operador por el crédito, la cobertura o la portabilidad, cuántas dejó el cliente y por qué—, con datos del trimestre y no con impresiones.
+
+- Toda venta creada desde la puesta en marcha del recorrido actual que no se concretó tiene registrada su razón. `[1.8.F1]`
+- Las razones por las que no se concreta una venta se eligen de una lista definida —el precio, el equipo, la cobertura, el crédito, que el cliente se quedó con su operador o se fue con otro—, no se escriben en texto libre. `[1.8.F2]`
+- Las razones separan lo que rechazó el operador —el crédito, la falta de cobertura, una portabilidad rechazada— de lo que dejó el cliente —el precio, el equipo, la demora, la oferta de otro operador—. `[1.8.F801 · comprobable]`
+
+**Eficiente.** Cada trimestre se revisa por qué se concretan y por qué se caen las ventas, se sabe con qué operador se quedó o a cuál se fue cada interesado, lo aprendido cambia el proceso y el equipo se capacita con un calendario fijo.
+
+- Al menos una vez por trimestre se revisan las ventas concretadas y las que no se concretaron —también las que se cayeron entre la firma y la activación— para encontrar lo que se repite. `[1.8.E1]`
+- Cuando el interesado se queda con su operador o contrata con otro, queda registrado con cuál y por qué. `[1.8.E801 · comprobable]`
+
+**Óptimo.**
+
+- La IA analiza las llamadas con los interesados —también las de video— y le deja a cada ejecutivo recomendaciones que quedan registradas; el líder las revisa con él. `[1.8.O1]`
+
+*Se leen igual:* `1.8.D1`, `1.8.F3`, `1.8.E2`, `1.8.E3`, `1.8.E4`, `1.8.O4`.
+
+### Área 2 — Marketing
+
+Mide el rendimiento del marketing del operador: cómo está montado por dentro y qué produce en interesados, ventas y clientes que vuelven a contratar —las campañas masivas sobre la base, los lanzamientos de equipos, las promociones de recarga y la portabilidad—. Vale igual si el marketing lo hace un equipo propio, una sola persona o una agencia que el operador dirige.
+
+**Deficiente.** Tus campañas salen a toda la base con el mismo mensaje. Las bases llegan en archivos que alguien pide, arma y envía a mano, con números que ya no existen y clientes tratados como interesados; nadie sabe quién aceptó recibir mensajes por cada canal, y cada lanzamiento de un equipo se improvisa. Los interesados llegan, pero no sabes cuántos ni de dónde.
+
+**Inicial.** Tienes marca, páginas de campaña y envíos por WhatsApp, SMS y correo, pero sin una estrategia detrás. Las bases se depuran a mano en cada campaña, la promoción de portabilidad le llega a quien ya es tu cliente y el plan que alguien ya paga se le vuelve a ofrecer. Los resultados se miden tarde y a mano, en envíos y clics, y lo aprendido no queda escrito.
+
+**Funcional.** Tu marketing dejó de depender de una persona. La marca, la voz y los perfiles de cliente están escritos, cada plan y cada equipo tiene su página con su precio y cómo contratarlo, y tus clientes saben por qué canales les escribes y qué nunca les vas a pedir. Cada base de campaña pasa por el CRM, el calendario sigue los lanzamientos, las temporadas y las promociones de recarga, y tus campañas salen por segmento, coordinadas por los canales de tu plan y solo a quien aceptó cada canal. Sabes de dónde llega cada interesado y cuánto te cuesta en cada canal, y hasta la campaña de portabilidad, que nunca termina, se revisa cada mes.
+
+**Eficiente.** Probar y ajustar ya es rutina, y lo aprendido cambia cómo se arma la siguiente campaña. Las bases llegan solas desde tus sistemas, los segmentos se arman con lo que cada cliente consume y recarga, y WhatsApp, SMS, correo y la app se coordinan en un mismo recorrido sin saturar a nadie. Sabes qué aportó cada canal a cada venta y cuánto te cuesta cada una, también las que se cierran en una tienda, y la IA asiste a tu equipo en su trabajo diario.
+
+**Óptimo.** La IA produce y ajusta; tu equipo dirige. La IA predice quién va a pasar a pospago, cambiar de equipo o perder interés, decide qué mensaje recibe cada cliente, por qué canal y cuándo, y mueve la pauta entre canales dentro de los límites que fija el equipo; los clientes que Servicio vuelve promotores traen clientes nuevos. El equipo define la estrategia y valida lo que sale.
+
+#### 2.1 Procesos y Rutinas
+
+¿Cómo se arma en tu equipo una campaña —el lanzamiento de un equipo, una promoción de recarga, la de portabilidad—, desde que se decide hasta que sale a la base?
+
+*Descripción:* Mide si las campañas de los planes, los equipos y las recargas salen de un calendario y un proceso compartidos, sin depender de quién las arma, y si el calendario sigue las fechas del negocio.
+
+*Costo de quedarse:* Cada campaña depende de quien la arma: si esa persona falta, el lanzamiento del equipo nuevo sale tarde, la promoción de recarga se cruza con otra y la base se vuelve a armar desde cero.
+
+**Deficiente.**
+
+- No hay calendario de campañas: cada lanzamiento de un equipo, cada promoción de recarga y cada envío a la base se improvisan. `[2.1.D1]`
+- Una agencia arma y envía las campañas —las piezas, las páginas de campaña, los mensajes a la base—, y nadie en el operador decide qué sale ni lo revisa. `[2.1.D3]`
+
+**Inicial.**
+
+- Las campañas dependen de quien las arma —una persona del equipo o la agencia—: el calendario, los accesos a las herramientas de envío y a las bases y los pasos a seguir están en sus manos. `[2.1.I3]`
+
+**Funcional.** Las campañas salen con un calendario y un proceso que el equipo sigue, sin depender de una persona, y el calendario sigue las fechas del negocio.
+
+*Resultado:* Todo el equipo trabaja en el mismo sistema, y los lanzamientos, las promociones y las campañas sobre la base siguen saliendo aunque cambie una persona: el calendario y el proceso no viven en la cabeza de nadie, y el líder sabe en qué va cada campaña sin tener que preguntar.
+
+- Existe un proceso de campaña escrito —del brief y la base a las piezas, el envío por cada canal y la publicación— que el equipo aplica de forma consistente. `[2.1.F2]`
+- Si una agencia ejecuta todo o parte del trabajo —las piezas, las páginas de campaña, los envíos—, el equipo es dueño del calendario, del brief, de la aprobación y de los accesos, y las campañas no se detienen si cambia la agencia. `[2.1.F5]`
+- El calendario de campañas sigue las fechas del negocio: los lanzamientos de equipos con su preregistro, las temporadas fuertes —el regreso a clases, el aguinaldo, el fin de año—, las promociones de recarga y las campañas largas, como la de portabilidad. `[2.1.F801 · declarado]`
+
+**Eficiente.**
+
+- Cada pieza —el mensaje de WhatsApp, el SMS, el correo o la página de la campaña— pasa por una revisión con lista escrita, por ejemplo, que el enlace lleve a la página de esa campaña y que el precio sea el vigente, y por una aprobación registrada. `[2.1.E5]`
+
+**Óptimo.**
+
+- El sistema detecta por sí mismo cuando una campaña se sale del proceso —un paso que se saltó, una base que no se cargó, una fecha que venció antes de un lanzamiento— y se lo avisa al líder y al responsable; el líder decide el ajuste, y cada aviso queda en el sistema. `[2.1.O4]`
+
+*Se leen igual:* `2.1.D2`, `2.1.I1`, `2.1.I2`, `2.1.F1`, `2.1.F3`, `2.1.F4`, `2.1.F6`, `2.1.E4`, `2.1.O5`.
+
+#### 2.2 Tecnología y Automatización
+
+¿Qué pasa en tu sistema, sin que nadie lo haga a mano, cuando alguien llena la página de una campaña, se preregistra para un equipo o te escribe por WhatsApp, y cuando sale una base de tus sistemas?
+
+*Descripción:* Mide si las herramientas que paga el operador se usan, si lo que entra por las páginas de campaña, el preregistro, WhatsApp y las bases de sus sistemas llega solo al CRM, y cuánto trabajo repetitivo hacen las automatizaciones y la IA.
+
+*Costo de quedarse:* Cada campaña empieza con alguien que pide la base, la limpia y la sube a mano, con un día de atraso; quien llena la página de la campaña o te escribe por WhatsApp espera a que alguien lo pase a un ejecutivo, o se va con otro operador.
+
+**Deficiente.**
+
+- No hay un sistema donde registrar a los interesados: las bases de cada campaña y lo que responde la gente se llevan en hojas de cálculo o en el correo. `[2.2.D1]`
+- Lo que llega por el sitio —como la página de una campaña— o por mensajes, como WhatsApp o las redes —una consulta por un plan, un pedido de portabilidad—, cae en el correo o el teléfono de alguien, y no queda registrado en ningún lado. `[2.2.D2]`
+
+**Inicial.**
+
+- Algunos formularios —el de una página de campaña, el del preregistro de un equipo— no están conectados al sistema, o ninguno de los canales conversacionales por los que se atiende lo está: lo que entra por ahí se pasa a mano o se pierde. `[2.2.I2]`
+- Las bases de algunas campañas se envían desde una hoja o desde la herramienta de un canal, como la de SMS, sin pasar por el CRM: después nadie sabe a quién le llegó qué. `[2.2.I801 · declarado]`
+
+**Funcional.** Las herramientas que se pagan se usan, lo que entra llega solo al sistema y recibe respuesta, cada base de campaña pasa por el CRM, y si el equipo usa IA, esta conoce la voz de marca y los perfiles de cliente.
+
+*Resultado:* Todo lo que entra por las páginas de campaña, el preregistro y, si se usa, por WhatsApp o el chat llega al CRM y recibe respuesta; cada envío sale de una base cargada en el CRM, así que se sabe a quién le llegó qué, y no se paga por herramientas que nadie usa.
+
+- Si el sitio tiene formularios para dejar datos —la página de una campaña, el preregistro de un equipo, pedir que llame un ejecutivo—, están conectados al CRM: lo que una persona llena entra solo como contacto. `[2.2.F3]`
+- Cada envío queda registrado en el CRM, también cuando un canal, como el SMS, sale con otra herramienta: en la ficha de cada contacto se ve qué campaña le llegó y de qué base salió. `[2.2.F801 · comprobable]`
+
+**Eficiente.**
+
+- Si el canal conversacional, como WhatsApp, es parte del plan de canales, sus campañas —la de portabilidad, la de un lanzamiento— están automatizadas, con segmentación y con caminos distintos según lo que hizo la persona: si leyó, entró a la página de la campaña o respondió. `[2.2.E2]`
+- El traspaso de interesados es automático: cuando un interesado cumple los criterios para pasar a un ejecutivo, le llega con su historial —la campaña, el plan o el equipo que pidió— al ejecutivo o a la tienda que le corresponde, sin que nadie lo pase a mano. `[2.2.E3]`
+- Si los contactos nacen o viven en otro sistema —como, en un operador, los de facturación, consumo y recargas, o la herramienta propia de envío de SMS—, ese sistema está integrado con el de marketing y los datos pasan solos, sin cargarlos a mano: las bases de cada campaña ya no se piden ni se suben. `[2.2.E8]`
+- Si el operador abre un preregistro para el lanzamiento de un equipo, cada inscrito queda en el CRM con el modelo que pidió, y los avisos del lanzamiento —la fecha, la disponibilidad, cómo contratarlo— le salen solos según ese modelo, sin depurar la lista a mano. `[2.2.E801 · comprobable · requiere 2.2.F3]`
+
+**Óptimo.**
+
+- Lo que se calcula en el almacén central de datos del operador vuelve a las herramientas de marketing sin que nadie lo cargue y se ve en la ficha de cada contacto: la segmentación usa, por ejemplo, el consumo, las recargas y el valor de cada cliente, calculados afuera. `[2.2.O3]`
+
+*Se leen igual:* `2.2.D3`, `2.2.I1`, `2.2.I3`, `2.2.F2`, `2.2.F4`, `2.2.F5`, `2.2.F9`, `2.2.F10`, `2.2.F11`, `2.2.E1`, `2.2.E4`, `2.2.E5`, `2.2.E6`, `2.2.E7`, `2.2.O1`, `2.2.O4`, `2.2.O5`, `2.2.O6`.
+
+#### 2.3 Datos
+
+¿Cómo sabes cuántos interesados te dejan tus campañas, de dónde vienen y cuántos terminan en una línea activa o un servicio instalado?
+
+*Descripción:* Mide si los datos de marketing son confiables: de dónde viene cada interesado, si se distingue al cliente del interesado, si la base está limpia y si queda registrado el permiso de cada canal.
+
+*Costo de quedarse:* Le escribes a números que ya no existen y le ofreces la portabilidad a quien ya es tu cliente; no sabes qué campaña trajo cada venta y, sin el permiso de cada canal registrado, te expones a reclamos y a una sanción.
+
+**Deficiente.**
+
+- No se registra de dónde llegó cada interesado: nadie sabe si vino por un envío de WhatsApp, un SMS, la pauta, la línea de atención o una tienda. `[2.3.D1]`
+
+**Inicial.**
+
+- No hay una regla de cuándo se limpian los datos: se corrigen a mano cuando alguien nota un problema —un número que ya no existe, un cliente que entró como interesado—, y a muchos contactos les faltan los datos que describen al cliente objetivo de cada plan y de cada servicio. `[2.3.I1]`
+- Hay reportes, pero se arman a mano en una hoja cada vez, y a una parte de los interesados le falta el origen, como la campaña, el canal o la base de la que salieron. `[2.3.I2]`
+
+**Funcional.** Cada interesado tiene su origen y su etapa, los reportes salen del sistema sin armarlos a mano y el permiso de cada canal queda registrado.
+
+*Resultado:* El líder sabe de qué campaña y de qué canal llega cada interesado, distingue al cliente del que todavía no lo es, y sus reportes salen del sistema y no de una hoja armada a mano.
+
+- Cada contacto creado desde la puesta en marcha del sistema —entre por la página de una campaña, WhatsApp, la línea de atención, una tienda o la base de un sistema del operador— tiene su etapa del ciclo de vida, por ejemplo, si ya es cliente o todavía es interesado, y su origen. `[2.3.F1]`
+- Los duplicados —la misma persona cargada una vez por cada línea, o como cliente y como interesado a la vez— están bajo control: se revisan y se unen al menos una vez por trimestre, a mano o de forma automática, y no distorsionan los reportes. `[2.3.F3]`
+- Los reportes básicos —cuántos interesados entran, de dónde vienen, como la campaña o el canal, y cuántos terminan en una venta— salen del sistema sin armarlos a mano. `[2.3.F5]`
+- El permiso de cada contacto está registrado por canal —correo, SMS, WhatsApp, llamadas de telemercadeo, notificaciones de la app— y se respeta en cada envío. `[2.3.F9]`
+
+**Eficiente.**
+
+- Se sabe cuánto ingreso deja cada canal —el SMS, el correo, la pauta, la línea de atención—, también el conversacional, como WhatsApp, si se usa. `[2.3.E5]`
+- Los duplicados se detectan y se unen solos con reglas que definió el equipo, también los de la misma persona con otro correo o sin correo, como quien solo dejó su número de teléfono. `[2.3.E6]`
+
+**Óptimo.**
+
+- Cada persona tiene una sola ficha que junta al momento lo que hace en todos los canales —la página de una campaña, WhatsApp, el SMS, la app, la tienda y la línea de atención—. `[2.3.O5]`
+
+*Se leen igual:* `2.3.D2`, `2.3.F2`, `2.3.F6`, `2.3.F8`, `2.3.E1`, `2.3.E2`, `2.3.E7`, `2.3.O1`, `2.3.O6`.
+
+#### 2.4 Equipo y Gobierno
+
+¿Cómo rinde cuentas tu equipo de marketing por los interesados y las ventas que dejan sus campañas?
+
+*Descripción:* Mide si cada persona sabe qué le toca en las campañas, si el equipo tiene metas y si decide qué promocionar y rinde cuentas con números del sistema.
+
+*Costo de quedarse:* Qué se promociona lo decide el lanzamiento del momento o quien insiste más, y nadie responde por una meta: el equipo no sabe qué se espera de él ni cuántas ventas dejó su última campaña.
+
+**Deficiente.**
+
+- Qué promocionar —qué plan, qué equipo, qué promoción de recarga— y cómo hacerlo se decide sobre la marcha, sin metas ni números. `[2.4.D2]`
+
+**Inicial.**
+
+- Los roles no están escritos, así que hasta lo del día a día —qué base usar, qué mensaje aprobar, cuándo enviarlo— espera a que lo resuelva la gerencia general. `[2.4.I1]`
+
+**Funcional.** Cada uno sabe qué le toca en las campañas, hay metas, y las decisiones y la rendición de cuentas se hacen con números del sistema.
+
+*Resultado:* El equipo sabe qué se espera de cada uno, qué se promociona se defiende con números y no con opiniones, y la dirección recibe cada mes cómo le fue a Marketing sin tener que pedirlo.
+
+- El líder tiene un tablero con 4 a 6 métricas clave —cuántos interesados entran, de qué campaña o canal vienen, cuántos terminan en una venta y, donde la venta pasa por un ejecutivo, cuántos pasan a uno— y lo consulta al menos una vez por semana. `[2.4.F2]`
+- El equipo tiene metas mensuales o trimestrales —por ejemplo, por línea de negocio: móvil, hogar y empresas—, y en la reunión de resultados rinde cuentas por ellas. `[2.4.F3]`
+
+**Eficiente.**
+
+- Las decisiones se toman con lo que deja cada canal a lo largo del tiempo —el valor de vida de los clientes que trae: cuánto pagan cada mes y cuánto tiempo se quedan— frente a lo que cuesta. `[2.4.E8]`
+
+**Óptimo.**
+
+- Lo que la IA puede decidir sola en marketing —por ejemplo, a qué clientes de la base enviarles una promoción de recarga, por qué canal y en qué momento— está por escrito. `[2.4.O6]`
+
+*Se leen igual:* `2.4.D1`, `2.4.D3`, `2.4.I2`, `2.4.F4`, `2.4.F5`, `2.4.F7`, `2.4.E2`, `2.4.E5`, `2.4.E6`, `2.4.E7`, `2.4.O1`, `2.4.O2`, `2.4.O5`.
+
+#### 2.5 Marca y Presencia
+
+¿Qué guía a tu equipo cuando arma una pieza, y qué encuentra un cliente cuando busca un plan o un equipo en tu sitio, o cuando recibe un mensaje a tu nombre?
+
+*Descripción:* Mide si la marca se ve y suena igual en todo lo que sale, si está escrito a quién le habla, si cada plan y cada equipo tiene dónde mostrarse con su precio, si el sitio aparece en buscadores y si el cliente sabe reconocer un mensaje del operador.
+
+*Costo de quedarse:* Cada pieza se ve y suena distinta a la anterior, quien busca el equipo nuevo encuentra la página de otro operador o una sin precio, y tus clientes no distinguen un mensaje tuyo de un fraude que usa tu nombre para pedirles un código o cambiarles la SIM.
+
+**Deficiente.**
+
+- No hay una guía de marca: ni logo, colores y tipografía definidos, ni una forma de escribir acordada, así que cada plan, cada equipo y cada promoción se anuncia a su manera. `[2.5.D1]`
+- No está escrito a quién le habla el operador: no hay perfiles de cliente. `[2.5.D2]`
+
+**Inicial.**
+
+- Hay logo, colores y plantillas, pero el perfil de cliente es uno solo y tan general que sirve para cualquiera: no distingue a quien recarga cada semana del hogar que contrata internet o de la pyme que necesita varias líneas. `[2.5.I1]`
+- Solo algunas páginas del sitio —por ejemplo, las de algunos planes o equipos— tienen título y descripción, o el sitio carga mal en el celular o tiene enlaces rotos. `[2.5.I2]`
+
+**Funcional.** La marca, la voz y los perfiles de cliente están escritos y se usan, cada plan y cada equipo tiene su página, el sitio cumple lo básico para buscadores, se publica contenido propio cada mes y el cliente sabe por dónde le escribe el operador.
+
+*Resultado:* La marca se ve y suena igual en todo lo que sale, quien busca un plan o un equipo encuentra su precio y cómo contratarlo, el cliente reconoce cuándo le escribe el operador y cuándo es un fraude, y el sitio es encontrable en buscadores con lo básico bien resuelto.
+
+- Se publica al menos una vez por mes contenido propio que queda disponible —en el sitio, en un canal de video o en guías, como comparar planes, configurar el equipo nuevo o tener buen internet en toda la casa—, no solo publicaciones en redes. `[2.5.F5]`
+- Cada plan, cada equipo en venta y cada servicio del hogar tiene su página en el sitio, con su precio —también en cuotas y con su plazo de permanencia, si lo tiene—, sus condiciones y cómo contratarlo: en línea, con un ejecutivo o en una tienda. `[2.5.F801 · comprobable]`
+- El operador le dice al cliente, en su sitio, en la app y en los demás canales que tenga, desde qué números, perfiles y correos le escribe, y qué nunca le va a pedir, como una clave, el código que le llega por SMS o que confirme por mensaje un cambio de SIM. `[2.5.F802 · comprobable]`
+
+**Eficiente.**
+
+- Si el contenido propio se publica en el sitio, está organizado por temas —por ejemplo, elegir un plan, cambiarse de operador o tener buen internet en la casa—: una página central por tema y contenido de apoyo que la refuerza. `[2.5.E2]`
+- El recorrido de compra está dibujado de punta a punta —por ejemplo, de la campaña y su página a la contratación, en línea, con un ejecutivo o en una tienda, la entrega de la SIM o del equipo y la activación o la instalación—, con los puntos de contacto de cada etapa. `[2.5.E4]`
+
+**Óptimo.**
+
+- La IA produce y ajusta el contenido de forma continua —como el de cada plan, cada equipo y cada promoción, y también para la búsqueda conversacional y los asistentes de IA—; el equipo valida cada pieza antes de publicarla, y en el sistema se ve qué produjo o cambió la IA y quién lo aprobó. `[2.5.O2]`
+
+*Se leen igual:* `2.5.D3`, `2.5.I3`, `2.5.F1`, `2.5.F2`, `2.5.F3`, `2.5.F4`, `2.5.F6`, `2.5.F7`, `2.5.E3`, `2.5.E6`.
+
+#### 2.6 Segmentación
+
+¿Qué cambia en la campaña que recibe una persona según quién es y lo que ya tiene contratado: prepago, pospago, el hogar o una empresa?
+
+*Descripción:* Mide si cada segmento recibe la campaña que le sirve, según cómo usa el servicio y lo que ya tiene con el operador, o si toda la base recibe la misma oferta.
+
+*Costo de quedarse:* Le ofreces la portabilidad a quien ya es tu cliente y el plan que ya paga a quien lo tiene: gastas mensajes sobre bases enormes que nadie aprovecha, cansas a tus clientes y les das razones para pedir que no les escribas más.
+
+**Deficiente.**
+
+- No hay segmentos: las campañas salen a toda la base con el mismo mensaje, al cliente de prepago igual que al de pospago o al hogar con fibra. `[2.6.D1]`
+
+**Inicial.** La base se separa por datos sueltos, como la provincia, el mensaje casi no cambia de un grupo a otro y las campañas le ofrecen a un cliente lo que ya tiene.
+
+- La base se separa solo por datos generales —provincia, ciudad o edad—, no por lo que cada grupo necesita, como cuánto consume, cuánto recarga o qué tiene contratado. `[2.6.I1]`
+- Las campañas le ofrecen a un cliente lo que ya tiene: la portabilidad a quien ya tiene su línea con el operador, o el plan que ya paga. `[2.6.I801 · comprobable]`
+
+**Funcional.** Hay segmentos escritos, piezas pensadas para cada uno, nadie recibe la oferta de lo que ya tiene y, donde la venta pasa por un ejecutivo, criterios escritos para clasificar a los interesados.
+
+*Resultado:* Cada segmento recibe la campaña que le sirve, nadie recibe la oferta de lo que ya tiene y, donde la venta pasa por un ejecutivo, este recibe interesados que Marketing ya clasificó con criterios escritos.
+
+- La mayoría de las campañas del último trimestre tienen piezas distintas para cada segmento: no le hablan igual al cliente de prepago que al de pospago, al hogar o a la pyme. `[2.6.F3]`
+- Existen criterios escritos de qué es un suscriptor, un interesado y un interesado listo para pasar a un ejecutivo, y Marketing clasifica cada contacto según ellos, a mano o con una automatización simple sobre las propiedades que usan esos criterios. `[2.6.F4]`
+- Las campañas no le llegan a quien ya tiene lo que ofrecen, salvo que sean para él —subir de plan, sumar una línea, renovar el equipo—: la base se cruza con los servicios activos de cada cliente antes de enviar, y la de portabilidad sale solo a quien todavía no tiene su línea con el operador. `[2.6.F801 · comprobable · requiere 1.3.F801]`
+
+**Eficiente.**
+
+- Cada segmento prioritario —por ejemplo, quien recarga cada semana, el pospago con equipo, el hogar con fibra y la pyme— tiene su perfil de cliente escrito. `[2.6.E6]`
+- La segmentación usa datos de comportamiento —qué abrió, qué visitó, cuánto consume, cuándo recarga, cuándo termina su plazo de permanencia—, no solo lo que la persona declaró, y los segmentos se actualizan solos. `[2.6.E7]`
+
+**Óptimo.**
+
+- La IA predice quién va a contratar —pasar de prepago a pospago, cambiar de equipo, sumar una línea— y quién va a perder interés en los mensajes, y arma los segmentos con eso; el equipo revisa los segmentos antes de usarlos en una campaña, y en la ficha de cada persona se ve su predicción. `[2.6.O1]`
+
+*Se leen igual:* `2.6.D2`, `2.6.I2`, `2.6.F5`, `2.6.E1`, `2.6.E2`, `2.6.E3`, `2.6.E5`, `2.6.O3`, `2.6.O4`.
+
+#### 2.7 Canales y Alcance
+
+¿Cómo salen tus campañas por WhatsApp, SMS, correo, la pauta, la app y las tiendas, y a quién le llegan?
+
+*Descripción:* Mide si los canales que el operador eligió salen con regularidad y bajo un mismo plan, solo a quien aceptó cada canal y nunca a quien pidió que no le escriban, y si se sabe lo que cuesta cada interesado y cada venta.
+
+*Costo de quedarse:* Mandas el mismo mensaje por WhatsApp, SMS y correo el mismo día, a veces a quien pidió que no le escribieras: saturas a tus clientes, pagas envíos que nadie lee, te expones a una sanción y no sabes cuánto te cuesta cada venta.
+
+**Deficiente.**
+
+- No hay un plan que diga por qué canales sale el operador: WhatsApp, SMS, correo, la pauta, la app, las tiendas o el telemercadeo. `[2.7.D2]`
+
+**Inicial.**
+
+- La pauta y los correos salen cuando hay algo que promocionar —el lanzamiento de un equipo, una promoción de recarga—, sin presupuesto ni fechas fijados de antemano. `[2.7.I2]`
+- Cada canal va por su cuenta —la tienda se entera por el cliente de la promoción que salió por SMS—: no hay calendario común ni campaña que los atraviese. `[2.7.I3]`
+
+**Funcional.** Los canales que el operador eligió salen con regularidad, bajo un mismo plan y solo a quien aceptó recibir mensajes por cada uno.
+
+*Resultado:* Una campaña sale coordinada por WhatsApp, SMS, correo y los demás canales del plan en vez de esfuerzos sueltos, solo a quien aceptó recibirla por ese canal, y el líder ve cuánto le cuesta cada interesado según el canal del que venga.
+
+- Si el canal conversacional, como WhatsApp, es parte del plan de canales, se usa para salir con la frecuencia que fija el calendario —la campaña de portabilidad, la de un lanzamiento, la de recarga—, no solo para responder lo que entra. `[2.7.F4]`
+- En el sistema se ve cuánto costó cada interesado —o cada venta, donde se contrata sin ejecutivo, como la recarga o el plan contratado en la web— el último mes, al menos por canal. `[2.7.F6]`
+- Quien pide no recibir más por un canal, o está en la lista de exclusión del operador, deja de recibir campañas por ese canal desde el siguiente envío. `[2.7.F801 · comprobable · requiere 2.3.F9]`
+
+**Eficiente.**
+
+- Si hay app, sus notificaciones son parte de las campañas —por ejemplo, la promoción de recarga o el equipo nuevo—, con el permiso de cada persona. `[2.7.E5]`
+- Al menos tres canales —por ejemplo, el correo, el SMS y la app—, también WhatsApp si se usa, se coordinan en un mismo recorrido: uno continúa lo que empezó otro, con un límite de frecuencia y respetando el permiso de cada canal. `[2.7.E6]`
+- Se sabe, por canal, cuánto costó cada venta concretada —la línea activa, el número portado o el servicio instalado—, contando también las que se cerraron en una tienda o con un ejecutivo, no solo en la web o la app. `[2.7.E801 · comprobable · requiere 1.3.F3]`
+
+**Óptimo.**
+
+- Los clientes que Servicio identifica como promotores se vuelven un canal de referidos —por ejemplo, para traer a su familia a un plan o pasar otro número por portabilidad— y de casos de éxito sin pedirlos a mano: el sistema los invita solo, el equipo elige qué casos se publican, y en el sistema se ve quién trajo a quién. `[2.7.O4]`
+
+*Se leen igual:* `2.7.D1`, `2.7.I1`, `2.7.F1`, `2.7.F2`, `2.7.F5`, `2.7.F7`, `2.7.F8`, `2.7.E2`, `2.7.E3`, `2.7.E4`, `2.7.E7`, `2.7.E8`, `2.7.E9`, `2.7.O2`.
+
+#### 2.8 Medición y Aprendizaje
+
+¿Qué te queda de cada campaña —un lanzamiento, una promoción de recarga, la de portabilidad— cuando termina, o mientras sigue corriendo?
+
+*Descripción:* Mide si cada campaña se evalúa por las ventas y las recargas que dejó, también las campañas largas que no terminan, y si deja un aprendizaje.
+
+*Costo de quedarse:* Repites los envíos de siempre porque nadie anota cuáles dejaron ventas: la campaña de portabilidad corre meses sin que nadie la revise, y cada lanzamiento empieza de cero.
+
+**Deficiente.**
+
+- No se mide qué trajo cada campaña —interesados, ventas o recargas—: solo se sabe cuántos mensajes salieron y lo que se gastó, o ni eso. `[2.8.D2]`
+
+**Inicial.**
+
+- Se miran envíos, aperturas, clics y visitas a la página de la campaña, no los interesados ni las ventas que trajo cada campaña. `[2.8.I1]`
+
+**Funcional.** Los resultados de cada campaña están a la vista, y cada una deja una revisión escrita, también las que corren meses sin cerrarse.
+
+*Resultado:* El equipo ve cuántas ventas dejó cada campaña sin armar el número a mano, y cada una deja una lección escrita para la siguiente, también la de portabilidad, que no espera a terminar para revisarse.
+
+- Los resultados de cada campaña —los interesados, las ventas o las recargas que trajo: líneas activas, números portados, servicios instalados, no solo los envíos y los clics— se ven en el sistema sin armarlos a mano. `[2.8.F5]`
+- Las campañas que corren sin fecha de cierre —la de portabilidad, la de recargas— tienen una revisión escrita de qué funciona y qué no al menos una vez por mes, sin esperar a que terminen. `[2.8.F801 · declarado · hábito]`
+
+**Eficiente.**
+
+- La planificación de las campañas siguientes se ajusta con lo aprendido: el próximo lanzamiento o la próxima promoción de recarga se arma con lo que mostraron las pruebas y las revisiones de cierre. `[2.8.E4]`
+- Hay pruebas A/B regulares —al menos una activa por mes, por ejemplo, dos versiones del SMS o dos páginas para la misma campaña—, cada una con su hipótesis escrita y su resultado registrado. `[2.8.E5]`
+
+**Óptimo.**
+
+- La IA ajusta las campañas mientras corren —deja de enviar la versión del mensaje que no funciona y le da más espacio a la que sí—, dentro de los límites que fijó el equipo; el equipo revisa los cambios, y cada uno queda en el sistema con su razón. `[2.8.O2]`
+- Los mensajes que decide la IA se miden contra un grupo de control —por ejemplo, una parte de la base que no recibe la promoción de recarga—, y en el sistema se ve cuánto agregan; con eso el equipo revisa los límites que le fijó a la IA. `[2.8.O3]`
+
+*Se leen igual:* `2.8.D1`, `2.8.D3`, `2.8.I2`, `2.8.F3`, `2.8.E3`.
+
+### Área 3 — Servicio
+
+Mide el rendimiento del servicio del operador, que cubre todo lo que pasa después de la activación o la instalación: las averías, los reclamos, la facturación y los cobros, los cambios de plan, de SIM y de titular, la renovación y la retención. Mira cómo está montado por dentro y qué produce en averías resueltas, reclamos respondidos dentro del plazo del regulador y clientes que se quedan.
+
+**Deficiente.** El servicio se improvisa cliente por cliente. Cada tienda y cada ejecutivo de atención resuelve las averías y los reclamos a su manera, no hay un sistema donde queden los casos y nadie sabe si los reclamos se respondieron dentro del plazo que fija el regulador. Te enteras de que un cliente se fue cuando ya se llevó su número a otro operador.
+
+**Inicial.** El conocimiento vive en una o dos personas que saben cómo se destraba una portabilidad o se corrige un cobro, y eso te deja con un punto único de fallo. Hay un sistema de casos, pero parte del equipo sigue atendiendo por fuera, en el WhatsApp de la tienda o en su correo; cada ejecutivo de atención tiene sus propias respuestas y cada quien verifica a su manera quién es el titular antes de entregar una SIM. La atención es frágil: para reportar una avería, el cliente tiene que llamar y esperar.
+
+**Funcional.** Tu atención es consistente y ya no depende de quién atienda. Sabes qué tipos de cliente atiendes —prepago, pospago, hogar, pymes y empresas— y qué espera cada uno. Cada caso sigue un mismo recorrido en el sistema, con los servicios del cliente a la vista; cada avería tiene su número y el cliente se entera de cada cambio de estado, cada reclamo lleva el plazo que fija el regulador y sabes cuántos se respondieron dentro de él, y nadie entrega una SIM ni cambia un titular sin verificar la identidad. El cliente recarga, consulta su consumo, paga su factura y reporta una avería sin esperar a nadie. Todavía no hay alertas automáticas de quién se puede ir, pero el cliente ya recibe aviso antes de que termine su plazo de permanencia, antes de una suspensión por falta de pago y cuando una avería masiva lo afecta, y quien pide la baja recibe una razón para quedarse.
+
+**Eficiente.** El servicio empieza a adelantarse al problema. Cada tipo de caso tiene su plazo, con alertas y escalación automática; la red abre sola la avería masiva, el cliente sigue sus casos y diagnostica su avería en la app, y la IA asiste a tu equipo en su trabajo diario. Mides tiempos, satisfacción y las averías que se repiten por cliente y por zona, y ningún caso se pierde entre la red, las instalaciones, la facturación y Servicio. Cada cliente tiene un indicador de salud, tus empresas más importantes tienen un responsable dedicado y quien da señales de irse —deja de recargar, baja su consumo, reclama más— recibe una acción de retención antes de decidirlo.
+
+**Óptimo.** Un agente de IA resuelve casos en todos los canales donde atiende tu equipo —la app, el chat, WhatsApp y la línea de atención— y le pasa a una persona, con todo el contexto, lo que no puede resolver. Las rutinas corren solas mientras el equipo supervisa y atiende las excepciones; casi todas las fallas que detecta la red se resuelven antes de que el cliente las note, y un modelo anticipa qué cliente se puede ir a otro operador antes de que pida la portabilidad. Sumas clientes sin que crezca el equipo.
+
+#### 3.1 Procesos y Rutinas
+
+¿Cómo se atiende un caso en tu operador —una avería, un reclamo por un cobro o una gestión de la SIM—, desde que entra hasta que se cierra?
+
+*Descripción:* Mide si las averías, los reclamos y las gestiones siguen un proceso definido, para que la atención no dependa de quién los tome en la tienda o en el centro de contacto.
+
+*Costo de quedarse:* Una avería o un reclamo se resuelve distinto según quién lo tome: el cliente no sabe a qué atenerse, un plazo del regulador que se vence termina en una sanción y una SIM entregada sin verificar le abre la puerta al fraude.
+
+**Deficiente.**
+
+- Cada ejecutivo de atención resuelve los casos a su manera —las averías, los reclamos, las consultas y las gestiones—, en la tienda o en el centro de contacto. `[3.1.D1]`
+
+**Inicial.**
+
+- Hay un recorrido para atender los casos —las averías, los reclamos, las consultas y las gestiones— que el equipo sigue de palabra, sin configurar ni escribir. `[3.1.I1]`
+- Todavía se depende de héroes: cuando falta la persona que sabe —por ejemplo, cómo se destraba una portabilidad o se corrige un cobro mal hecho—, los casos se traban. `[3.1.I2]`
+
+**Funcional.** El equipo atiende en un mismo sistema, con el recorrido de atención configurado, los plazos del regulador escritos y la identidad del cliente verificada antes de cada cambio de SIM o de titular.
+
+*Resultado:* Todo el equipo atiende en el mismo sistema, cada cliente tiene a alguien que responde por él, cada reclamo lleva escrito el plazo que fija el regulador, y nadie entrega una SIM ni cambia un titular sin verificar antes quién es el cliente.
+
+- El recorrido de atención está configurado con sus etapas y cubre cada caso —una avería, un reclamo, una consulta o una gestión como un cambio de plan—, de la recepción al cierre. `[3.1.F1]`
+- Existe un proceso escrito para escalar los reclamos graves y los casos que quien atiende no puede resolver —por ejemplo, una avería que deja a una empresa sin servicio o un cambio de SIM que el titular no pidió—: dice cuáles se escalan y a quién. `[3.1.F4]`
+- Cada tipo de reclamo —un cobro, la calidad del servicio, una portabilidad— tiene escrito en el proceso el plazo de respuesta que fija el regulador de telecomunicaciones. `[3.1.F801 · declarado]`
+- Si el área atiende cambios en las cuentas y las líneas, los pagos, los envíos o los datos personales —por ejemplo, entregar una SIM nueva, hacer un duplicado o cambiar el titular de una línea—, verifica la identidad del cliente con los pasos que define el proceso antes de atenderlos, en cualquier canal, y queda registrado en el caso. `[3.1.F8]`
+
+**Eficiente.**
+
+*Resultado:* El equipo sabe en cuánto tiempo debe resolver cada tipo de caso, también los que no tienen un plazo del regulador; cada momento clave de la relación del cliente con el operador tiene un dueño, una avería masiva se atiende con una guía y no improvisando, y el líder sabe dónde se desvía la atención y corrige con datos, no de memoria.
+
+- Hay SLA definidos por tipo de caso o prioridad —cuánto se tarda en reparar una avería del hogar, en responder una consulta o en hacer un cambio de plan—, también para lo que el regulador no fija. `[3.1.E1]`
+- El recorrido del cliente está definido de punta a punta, con sus momentos clave —la contratación, la activación o la instalación y, si lo hay, el fin del plazo de permanencia— y un responsable y un estándar para cada uno. `[3.1.E4]`
+- Hay una guía escrita para la avería masiva: quién la declara, cómo se juntan los casos de los clientes afectados, qué se les dice y cada cuánto, y cuándo se da por cerrada. `[3.1.E801 · declarado]`
+
+**Óptimo.**
+
+- El sistema detecta, sin que nadie lo revise a mano, cuando una avería, un reclamo o una gestión se sale de las etapas o los pasos del proceso —por ejemplo, un cambio de SIM sin la verificación de identidad registrada—, y se lo señala al ejecutivo de atención y al líder, que deciden cómo corregirlo; el aviso queda registrado en el caso. `[3.1.O3]`
+
+*Se leen igual:* `3.1.D2`, `3.1.I3`, `3.1.I4`, `3.1.F2`, `3.1.F3`, `3.1.F5`, `3.1.F6`, `3.1.F7`, `3.1.E3`, `3.1.E5`, `3.1.E6`, `3.1.O4`.
+
+#### 3.2 Tecnología y Automatización
+
+¿Cómo llega una avería, un reclamo o una gestión al sistema y a quien la tiene que atender, entre por la tienda, la línea de atención, WhatsApp o la app?
+
+*Descripción:* Mide si cada caso, venga de la tienda, la línea de atención o la app, queda en el sistema y llega solo a quien lo atiende, y cuánto de la atención se automatiza.
+
+*Costo de quedarse:* Las averías y los reclamos se reparten a mano y se pierden entre la tienda, la línea de atención y el WhatsApp de cada ejecutivo: el cliente tiene que llamar varias veces para saber cuándo vuelve su servicio.
+
+**Deficiente.**
+
+- Los casos —las averías, los reclamos, las consultas y las gestiones— se manejan en los celulares personales o el WhatsApp de cada ejecutivo de atención, o en correos individuales. `[3.2.D2]`
+
+**Inicial.**
+
+- Hay un sistema de casos, pero lo que entra —por ejemplo, por la tienda, la línea de atención o la app— se reparte a mano, o el equipo atiende por WhatsApp o chat y ninguno de esos canales llega al sistema. `[3.2.I2]`
+
+**Funcional.** Los casos entran al sistema y se asignan solos, cada avería tiene su número y el cliente recibe cada cambio de estado, y el equipo le escribe al cliente solo desde los canales oficiales del operador.
+
+*Resultado:* Lo que entra por los canales conectados llega al sistema y se le asigna a alguien sin que nadie lo reparta, el cliente sabe en qué va su avería y cuándo llega el técnico sin tener que llamar, y ningún cliente recibe un mensaje del operador desde un número que no sea oficial.
+
+- Al entrar un caso, el sistema lo asigna solo según una regla simple: por ejemplo, las averías del hogar al equipo técnico y los reclamos por cobros a quien atiende la facturación. `[3.2.F5]`
+- Si el equipo contacta clientes por WhatsApp o por teléfono, lo hace desde los canales verificados del operador y nunca pide claves ni códigos, como el PIN de la SIM o el código que llega por mensaje para un cambio de línea. `[3.2.F11]`
+- Quien tiene que enterarse de un cambio de estado —por ejemplo, el cliente cuando su avería pasa a tener una visita técnica agendada, con su fecha y su franja horaria, o queda resuelta— recibe el aviso sin que nadie se lo mande. `[3.2.F10]`
+- Cada avería que reporta un cliente queda en el sistema con un número que se le da en el momento, y con ese número el cliente consulta en qué va sin tener que contar de nuevo lo que le pasa. `[3.2.F801 · comprobable]`
+
+**Eficiente.**
+
+*Resultado:* Los plazos se vigilan solos y los casos que están por vencer —un reclamo cerca del plazo del regulador, una avería que no se reparó en el tiempo prometido— suben solos a quien los tiene que resolver; la avería masiva aparece en el sistema antes de que lleguen las llamadas, el cliente ve y abre sus casos en la app, y el líder ve en tiempo real cuánto hay abierto y qué quedó sin atender.
+
+- Hay un portal o una app donde el cliente ve y abre sus casos —una avería, un reclamo por su factura— y sigue en qué van. `[3.2.E2]`
+- Si los servicios del cliente y lo que paga viven en otro sistema —el de facturación o el de la red—, una integración los trae a su ficha sin cargarlos a mano. `[3.2.E6]`
+- Las alarmas de la red —una caída en una zona, un corte de fibra, una antena fuera de servicio— abren solas en el sistema la avería masiva y la relacionan con los clientes afectados, sin que nadie la cargue a mano. `[3.2.E801 · comprobable]`
+
+**Óptimo.**
+
+- Un agente de IA resuelve casos en todos los canales donde atiende el equipo —explica por qué cambió una factura, hace un cambio de plan, guía el reinicio del módem—, sin que intervenga una persona, y le pasa a un ejecutivo de atención, con el contexto completo, lo que no puede resolver; el equipo revisa una muestra de sus respuestas y corrige lo que hace falta, y en el sistema se ve qué casos resolvió la IA y cuáles pasó. `[3.2.O1]`
+- Las conclusiones que se calculan en el almacén central de datos vuelven al sistema de servicio: quien atiende ve en la ficha, por ejemplo, qué tan probable es que el cliente se lleve su número a otro operador. `[3.2.O4]`
+
+*Se leen igual:* `3.2.D1`, `3.2.F4`, `3.2.F6`, `3.2.F8`, `3.2.F9`, `3.2.E1`, `3.2.E3`, `3.2.E4`, `3.2.E5`, `3.2.E7`, `3.2.E8`, `3.2.O5`.
+
+#### 3.3 Datos
+
+¿De dónde sacas qué averías, reclamos y gestiones te llegan, cuántos, de qué clientes y de qué zonas?
+
+*Descripción:* Mide si los datos de cada cliente —sus líneas, sus servicios y sus casos— están completos y ordenados para atender, decidir y responderle al regulador sin reconstruirlos.
+
+*Costo de quedarse:* Cada vez que el cliente llama tiene que volver a decir qué plan tiene y qué le pasó, y no puedes demostrarle al regulador cuántos reclamos respondiste dentro del plazo.
+
+**Deficiente.**
+
+- La información de los clientes y sus casos está repartida entre correos, chats, hojas, el sistema de facturación, el de la red y otros que no se conectan, y no hay un lugar donde se vea junta. `[3.3.D1]`
+- No se puede reconstruir qué le pasó a un cliente con su línea o su servicio del hogar —qué averías tuvo, qué reclamó, qué se le acreditó—: su historia no queda registrada en ningún lado. `[3.3.D2]`
+
+**Inicial.**
+
+- Los casos están en un solo sistema, pero la ficha del cliente sale incompleta: lo que tiene contratado —sus líneas, su plan, los servicios del hogar— hay que buscarlo en otro sistema, como el de facturación. `[3.3.I1]`
+- Los números de casos —cuántas averías, reclamos, consultas y gestiones llegan y de qué tipo— se arman a mano, fuera del sistema. `[3.3.I2]`
+
+**Funcional.** La historia y los servicios de cada cliente están a la vista, cada caso tiene su tipo y su motivo, y se sabe cuántos reclamos se respondieron dentro del plazo del regulador.
+
+*Resultado:* El líder sabe qué tipo de casos llegan y cuántos, y cuántos reclamos se respondieron dentro del plazo que fija el regulador; quien atiende tiene la historia del cliente y sus servicios en segundos.
+
+- La ficha del cliente muestra lo que tiene contratado —por ejemplo, el plan de cada línea, el internet del hogar o el equipo que paga en cuotas— y su valor para el operador, no solo sus casos. `[3.3.F2]`
+- Cada caso tiene su tipo y su motivo, elegidos de una lista definida: por ejemplo, una avería de la línea o del hogar, un reclamo por un cobro, un cambio de plan o de SIM, una baja o una portabilidad. `[3.3.F4]`
+- Se sabe, con un reporte que sale del sistema, cuántos reclamos se respondieron dentro del plazo que fija el regulador y cuáles se vencieron. `[3.3.F801 · comprobable · requiere 3.1.F801]`
+
+**Eficiente.**
+
+*Resultado:* El operador sabe qué tan rápido y qué tan bien atiende, cuánto tarda un cliente nuevo en tener su servicio funcionando y dónde se repiten las averías, con la satisfacción medida y no supuesta; sabe además qué tan sano está cada cliente.
+
+- Se mide cuánto tarda cada cliente nuevo en tener su servicio funcionando: el tiempo desde que contrata hasta que su línea queda activa o su servicio del hogar queda instalado y en uso. `[3.3.E4]`
+- Hay un indicador de salud por reglas para cada cliente, que combina sus casos abiertos —como las averías que vuelven o los reclamos—, su satisfacción y su uso del servicio: por ejemplo, su consumo o, en el prepago, sus recargas. `[3.3.E5]`
+- Se mide cuántas averías se repiten —en el mismo cliente dentro del plazo que fija el proceso y en la misma zona—, y ese número se revisa cada mes. `[3.3.E801 · comprobable · hábito]`
+
+**Óptimo.**
+
+- Un modelo predictivo de salud calcula para cada cliente qué tan probable es que se vaya —que pida la baja, se lleve su número a otro operador o deje de recargar— y si está logrando lo que busca con su servicio, a partir de su experiencia y de sus resultados; el puntaje se ve en su ficha y el responsable de cada cliente revisa a los que el modelo marca. `[3.3.O1]`
+- Modelos con IA predicen lo que viene —por ejemplo, cuántas averías van a entrar después de una tormenta o cuántos reclamos llegan con el cierre de la facturación— y proponen qué hacer; lo que predicen se ve en los tableros del área y el líder decide con eso. `[3.3.O3]`
+
+*Se leen igual:* `3.3.I3`, `3.3.F1`, `3.3.F5`, `3.3.F6`, `3.3.F7`, `3.3.F8`, `3.3.F9`, `3.3.E1`, `3.3.E2`, `3.3.E6`, `3.3.E7`, `3.3.E8`, `3.3.O2`, `3.3.O5`.
+
+#### 3.4 Equipo y Gobierno
+
+¿Cómo sabe el líder si el equipo va al día con las averías, los reclamos y los plazos del regulador?
+
+*Descripción:* Mide si cada persona de la atención sabe qué le toca, y si el líder sigue con datos el avance, los plazos de los reclamos y lo que resuelven las áreas técnicas, y pide cuentas.
+
+*Costo de quedarse:* Nadie sabe bien a quién le toca la avería que la red no resolvió o el cobro que facturación no corrigió, y la gerencia se entera de un reclamo vencido cuando el cliente ya fue al regulador.
+
+**Deficiente.**
+
+- Nadie tiene claro qué le toca: entre la bienvenida de los clientes nuevos, las averías, los reclamos por cobros y las bajas, las tareas se pisan o quedan sin dueño. `[3.4.D1]`
+
+**Inicial.**
+
+- El líder mira los números de vez en cuando, sobre todo cuando algo sale mal, como una avería masiva o un reclamo que llega al regulador. `[3.4.I2]`
+
+**Funcional.** Cada persona tiene su rol por escrito, el líder sigue un tablero cada semana —con las averías abiertas y los reclamos cerca del plazo del regulador— y el equipo rinde cuentas en sus reuniones.
+
+*Resultado:* Cada persona sabe qué le toca, y el líder ve cada semana si el equipo va al día, cuántas averías siguen abiertas y si hay reclamos cerca de vencer su plazo.
+
+- El líder tiene un tablero con 4 a 6 métricas clave —casos abiertos, entre ellos las averías, reclamos cerca del plazo que fija el regulador, volumen, casos por tipo— y lo consulta al menos una vez por semana. `[3.4.F2]`
+- El equipo tiene metas escritas —tiempos de respuesta, tiempo de reparación de las averías, casos resueltos, satisfacción— y el líder las revisa cada mes. `[3.4.F4]`
+
+**Eficiente.** El equipo rinde cuentas por sus plazos, el líder prepara a quien entra y acuerda con Ventas y con la red, las instalaciones y la facturación qué recibe y qué devuelve cada una.
+
+*Resultado:* El equipo responde por sus tiempos de atención, una persona nueva rinde rápido, cada cliente nuevo llega de Ventas con lo que contrató y lo que se le prometió, y la red, las instalaciones y la facturación cumplen lo acordado con los casos que resuelven.
+
+- Cuando entra alguien nuevo al equipo, hay un plan de inducción con sus pasos y materiales —los planes y la oferta vigente, la verificación de identidad, las averías y los reclamos—; no se le entrena de memoria. `[3.4.E2]`
+- El sistema calcula cuánto cuesta atender a cada tipo de cliente —prepago, pospago, hogar, pymes y empresas— frente a lo que deja, y el líder usa ese dato para decidir cómo atenderlo. `[3.4.E8]`
+- El acuerdo con las áreas que resuelven parte de los casos —la red, las instalaciones, propias o de contratistas, y la facturación— está escrito y se mide: qué reciben, en cuánto tiempo lo resuelven y por qué devuelven un caso. `[3.4.E801 · comprobable]`
+
+**Óptimo.**
+
+- El líder ya no reparte averías ni reclamos ni apaga incendios: dedica su tiempo a decidir qué se automatiza, qué se mide y qué se mejora. `[3.4.O2]`
+- El equipo de servicio se mide por los clientes que retiene —los que no piden la baja ni se llevan su número a otro operador— y por los clientes con potencial que le pasa a Ventas, no solo por los casos que cierra. `[3.4.O5]`
+
+*Se leen igual:* `3.4.D2`, `3.4.I1`, `3.4.I3`, `3.4.F3`, `3.4.F5`, `3.4.E1`, `3.4.E4`, `3.4.E5`, `3.4.E6`, `3.4.E7`, `3.4.O1`, `3.4.O6`.
+
+#### 3.5 Consistencia de Atención
+
+¿En qué se apoya tu equipo para que una avería o un reclamo se resuelva igual en cualquier tienda o canal, lo atienda quien lo atienda?
+
+*Descripción:* Mide si el equipo conoce a sus tipos de cliente y da la misma respuesta y el mismo criterio en cualquier tienda o canal, lo atienda quien lo atienda.
+
+*Costo de quedarse:* A un cliente le acreditan los días sin servicio en una tienda y en la línea de atención se los niegan: lo nota, desconfía y se va a otro operador.
+
+**Deficiente.**
+
+- No hay respuestas guardadas: cada ejecutivo de atención, en la tienda o en el centro de contacto, escribe cada respuesta desde cero, a su manera, como la de una avería o la de un cobro. `[3.5.D1]`
+
+**Inicial.**
+
+- Hay algunas respuestas guardadas, pero cada ejecutivo de atención o cada tienda tiene las suyas: no están al alcance de todo el equipo. `[3.5.I1]`
+
+**Funcional.** Los tipos de cliente están escritos, cada cliente nuevo arranca con una bienvenida definida, el equipo tiene respuestas guardadas para lo frecuente y cada tipo de reclamo tiene escritos sus criterios de resolución.
+
+*Resultado:* El equipo sabe qué tipos de cliente atiende y qué espera cada uno, el cliente nuevo arranca con una bienvenida clara hasta tener su servicio funcionando, y en cualquier tienda o canal quien atiende tiene a mano las mismas respuestas y los mismos criterios para acreditar una caída del servicio o ajustar un cobro.
+
+- Existe un proceso escrito de bienvenida del cliente nuevo, con un resultado definido que debe alcanzar al terminarlo: por ejemplo, que su línea o su servicio del hogar funcione, que sepa usar la app y que entienda su primera factura. `[3.5.F2]`
+- Existe un documento simple con los tipos de cliente que atiende el área —por ejemplo, prepago, pospago, hogar, pymes y empresas—, qué necesita cada uno, qué espera del servicio y cuáles se consideran clientes clave, consultable por cualquier ejecutivo de atención. `[3.5.F4]`
+- Cada tipo de reclamo tiene escritos sus criterios de resolución —cuándo se acreditan los días sin servicio, cuándo se ajusta un cobro que el cliente no reconoce, cuándo se cambia un equipo en garantía—, consultables por quien atiende, en la tienda o en el centro de contacto. `[3.5.F801 · declarado]`
+
+**Eficiente.**
+
+- El tono y la voz de marca se aplican a las respuestas, en la tienda, en la línea de atención y en cada canal escrito, no cada ejecutivo de atención con su estilo. `[3.5.E2]`
+- Existe una guía de estilo de servicio documentada; por ejemplo, dice cómo se le habla al cliente durante una avería masiva, ante un cobro que no reconoce o antes de suspenderle un servicio por falta de pago. `[3.5.E3]`
+
+**Óptimo.**
+
+- Lo que la IA responde o escribe sola —en la app, el chat o WhatsApp, como el estado de una avería o la explicación de una factura— sigue la guía de tono y estilo de la marca; el equipo revisa una muestra de sus respuestas y corrige a la IA cuando se sale de la guía, y cada respuesta queda en el sistema. `[3.5.O1]`
+
+*Se leen igual:* `3.5.F1`, `3.5.F3`, `3.5.F5`.
+
+#### 3.6 Priorización de Clientes
+
+¿Cómo se decide qué se atiende primero: una empresa sin servicio, un cambio de SIM que el titular no pidió o una consulta sobre la factura?
+
+*Descripción:* Mide si una avería que deja al cliente sin servicio o un posible fraude con su línea se atienden antes que una consulta, y si cada cliente recibe la atención que le corresponde.
+
+*Costo de quedarse:* La empresa que se quedó sin internet espera en la misma fila que una consulta de saldo, y quien denuncia que le cambiaron la SIM sin pedirlo espera su turno mientras alguien usa su número.
+
+**Deficiente.**
+
+- Los casos se atienden por orden de llegada o como prefiere cada ejecutivo de atención, sin mirar su gravedad —un cliente sin servicio, un cambio de SIM que nadie pidió— ni quién es el cliente. `[3.6.D1]`
+
+**Inicial.**
+
+- Se intenta atender primero lo urgente, como un cliente sin servicio, pero los casos no tienen una prioridad asignada: cada ejecutivo de atención decide a ojo, o se adelanta el cliente que más insiste. `[3.6.I1]`
+
+**Funcional.** Cada caso tiene una prioridad que el equipo respeta, cada tipo de cliente recibe la atención que le corresponde y la empresa con un nivel de servicio contratado se atiende en el plazo de su contrato.
+
+*Resultado:* Un cliente sin servicio o un posible fraude con su SIM se atiende primero, cada tipo de cliente recibe la atención que le corresponde, la empresa con un tiempo de reparación garantizado lo recibe, y quien atiende no tiene que reconstruir su historia.
+
+- Cada caso tiene una prioridad asignada —urgente, alta, normal o baja; un cliente sin servicio o un cambio de SIM que el titular no pidió, por ejemplo, es urgente— y los ejecutivos de atención la respetan. `[3.6.F1]`
+- El ejecutivo de atención usa la ficha del cliente —sus líneas, sus servicios, su plan y sus casos abiertos— para atenderlo con contexto, sin reconstruirlo a mano. `[3.6.F3]`
+- Si un cliente tiene contratado un nivel de servicio —por ejemplo, una empresa con un tiempo de reparación garantizado—, sus averías se atienden con el plazo y la prioridad que fija su contrato, y quien las atiende los ve en el caso. `[3.6.F801 · comprobable]`
+
+**Eficiente.**
+
+*Resultado:* La atención cambia según el momento en que está cada cliente, cada empresa importante tiene un responsable que la conoce, y el resto de la cartera no queda sola.
+
+- Cada cliente clave —por ejemplo, la empresa con muchas líneas o con su conectividad contratada con el operador— tiene un responsable dedicado que lo conoce. `[3.6.E1]`
+
+**Óptimo.**
+
+*Resultado:* Cada cliente recibe una atención a su medida en cualquier canal, incluso cuando se atiende solo en la app, y nunca tiene que volver a explicar lo que se le ofreció al contratar.
+
+- En la app o la web, cada cliente ve lo que corresponde a su tipo, a sus servicios y a sus casos abiertos —por ejemplo, la empresa ve sus líneas y sus averías, y el cliente prepago su saldo y sus recargas—, sin que nadie lo arme a mano; el equipo define qué corresponde a cada tipo. `[3.6.O1]`
+- Cada cliente se atiende con el contexto de cómo llegó —lo que se le ofreció al contratar, como una promoción o un precio por traer su número, y el segmento del que viene—, que quien lo atiende, ejecutivo de atención o IA, ve en su ficha sin volver a preguntarlo. `[3.6.O3]`
+
+*Se leen igual:* `3.6.F2`, `3.6.F4`, `3.6.F5`, `3.6.E4`, `3.6.E5`, `3.6.O2`.
+
+#### 3.7 Proactividad y retención
+
+¿Cómo te enteras de que un cliente tiene un problema con su servicio, o de que se está por ir a otro operador?
+
+*Descripción:* Mide si el servicio avisa antes de lo que afecta al cliente —una avería masiva, el fin de su plazo de permanencia, una suspensión por falta de pago— y actúa antes de que pida la baja o se lleve su número.
+
+*Costo de quedarse:* Te enteras de que un cliente estaba mal cuando ya se llevó su número a otro operador, y una avería masiva sin aviso o una suspensión sorpresa te llena la línea de atención de llamadas y de reclamos.
+
+**Deficiente.**
+
+- Aunque un cliente acumule averías que vuelven, un cobro que reclama cada mes o un reclamo sin resolver, nadie lo contacta: los problemas se atienden cuando estallan. `[3.7.D1]`
+- El área nunca contacta al cliente por iniciativa propia: ni cuando una avería masiva lo afecta ni cuando se acerca el fin de su plazo de permanencia. `[3.7.D2]`
+
+**Inicial.**
+
+- Cuando un cliente tiene problemas repetidos —la misma avería que vuelve, un cobro que vuelve a aparecer—, a veces alguien lo contacta, pero depende de que lo note. `[3.7.I1]`
+
+**Funcional.** Los problemas repetidos y los reclamos se detectan, aunque sea a mano, y los clientes clave reciben contacto antes de sus fechas críticas; el cliente recibe aviso antes del fin de su plazo de permanencia, antes de una suspensión por falta de pago y cuando una avería masiva lo afecta, y quien pide la baja recibe una razón para quedarse.
+
+*Resultado:* Los problemas que se repiten, los reclamos y las fechas críticas de los clientes clave ya no toman al equipo por sorpresa: el cliente sabe antes cuándo termina su plazo de permanencia y cuándo se le va a suspender un servicio, se entera de una avería masiva sin tener que llamar, quien pide la baja recibe una razón para quedarse y, cuando alguno se va, se sabe por qué.
+
+- Un cliente con casos repetidos por el mismo problema —una avería que vuelve, una señal que se cae en su casa, un cobro que vuelve a aparecer—, un reclamo sin resolver o, si se piden calificaciones, una mala calificación se identifica, y alguien lo contacta antes de que el problema crezca. `[3.7.F1]`
+- Los clientes clave —por ejemplo, la empresa con muchas líneas— reciben contacto antes de sus fechas críticas —el fin de su contrato, la renovación de sus equipos o el vencimiento de un servicio contratado—, no después. `[3.7.F2]`
+- Cada cliente que se va —da de baja sus servicios o se lleva su número a otro operador— deja registrada la razón de su salida: por ejemplo, el precio, la cobertura, una avería que no se resolvió o la oferta de otro operador. `[3.7.F3]`
+- Quien pide la baja de una línea o de un servicio del hogar recibe, antes de que se procese, una razón para quedarse —un plan que le calce mejor, un descuento, un equipo nuevo—, no solo el trámite de la baja; también quien pide llevarse su número a otro operador, donde la regulación permite contactarlo. `[3.7.F801 · comprobable · hábito · relación continua]`
+- Antes de que termine su plazo de permanencia, el cliente recibe un aviso con la fecha, lo que pasa después con su plan y su precio, y qué opciones tiene, sin tener que preguntarlo. `[3.7.F802 · comprobable · relación continua]`
+- Cuando una avería masiva afecta una zona, los clientes afectados reciben un aviso con lo que pasa y cuándo se espera que vuelva el servicio, y otro cuando se restablece, sin tener que llamar. `[3.7.F803 · comprobable · hábito]`
+- Antes de suspender un servicio por falta de pago, el cliente recibe un aviso con el monto pendiente, la fecha de la suspensión y cómo pagar. `[3.7.F804 · comprobable · relación continua]`
+
+**Eficiente.** Ningún caso se pierde aunque lo resuelva la red, las instalaciones o la facturación, el cliente recibe lo que necesita saber antes de pedirlo y quien da señales de irse recibe una acción de retención antes de decidirlo.
+
+*Resultado:* Los casos del cliente no se pierden entre áreas, el cliente sabe lo que necesita antes de preguntarlo y los problemas se atienden antes de que crezcan; el operador retiene clientes que antes se iban sin aviso, ve quién está listo para pasar a pospago o sumar un servicio, y sus empresas más importantes ven qué lograron.
+
+- Hay alertas tempranas, a partir del indicador de salud, de que un cliente se puede ir —por ejemplo, porque dejó de recargar o bajó su consumo— o de que está listo para crecer, como pasar a pospago o sumar el internet del hogar. `[3.7.E1]`
+- Si otras áreas resuelven casos del cliente —la red, las instalaciones o la facturación—, quedan en el mismo sistema y no se pierden. `[3.7.E4]`
+- Los clientes en riesgo —por ejemplo, quien deja de recargar, baja su consumo o reclama más— reciben una acción de retención antes de decidir irse, y los que tienen potencial, como quien podría pasar a pospago o sumar una línea, se le señalan a Ventas con su contexto. `[3.7.E7]`
+- Cada cliente recibe, sin tener que pedirla, la información que necesita antes de los momentos clave de su relación —la visita técnica de su instalación, el fin de una promoción, un cambio en las condiciones de su plan—; sale sola, disparada por el evento y en el canal que el cliente prefiere, no cuando alguien se acuerda. `[3.7.E8]`
+
+**Óptimo.**
+
+- La mayoría de los problemas que detecta el sistema —por ejemplo, una falla de la red en una zona o un módem que se desconecta seguido— se resuelven antes de que el cliente los note: el equipo valida la solución y en el sistema se ve que el cliente no tuvo que abrir un caso. `[3.7.O2]`
+- La IA decide qué acción proactiva recibe cada cliente —qué, cuándo y por qué canal, como una oferta para quedarse o una revisión de su plan— según su historia y sus señales, dentro de los límites que fijó el equipo, que revisa los resultados; en el sistema queda qué decidió para cada cliente. `[3.7.O3]`
+
+*Se leen igual:* `3.7.F4`, `3.7.E3`, `3.7.E6`, `3.7.O5`, `3.7.O6`.
+
+#### 3.8 Autoservicio
+
+¿Qué pasa con lo que tus clientes preguntan y piden una y otra vez, como recargar, ver su consumo, pagar la factura o reportar una avería?
+
+*Descripción:* Mide si el operador puede atender a más clientes sin que el equipo crezca al mismo ritmo, gracias a las respuestas publicadas, a las gestiones que el cliente hace solo y a lo que se aprende de los casos.
+
+*Costo de quedarse:* La línea de atención se llena de llamadas para consultar un saldo, pagar una factura o reportar una avería, y cada cliente que sumas suma más llamadas a la fila.
+
+**Deficiente.**
+
+- No hay ninguna respuesta publicada —en el sitio o en la app— que el cliente pueda consultar por su cuenta. `[3.8.D1]`
+- Hasta las preguntas que más se repiten —cómo recargar, por qué subió la factura, cómo reiniciar el módem— se responden a mano, una por una, cada vez que llegan. `[3.8.D2]`
+
+**Inicial.** Hay algunas respuestas publicadas o un chatbot de menú, pero lo que más preguntan los clientes todavía no tiene respuesta publicada, y para reportar una avería hay que llamar y esperar a una persona.
+
+- Hay un chatbot de menú fijo —en WhatsApp o en la app—, pero no responde las preguntas que más se repiten, como por qué cambió el monto de la factura. `[3.8.I1]`
+- Para reportar una avería, el cliente tiene que llamar a la línea de atención y esperar a que lo atienda una persona. `[3.8.I801 · comprobable]`
+
+**Funcional.** Las preguntas más frecuentes tienen respuesta publicada, y el cliente recarga, consulta su saldo y su consumo, paga su factura y reporta una avería sin esperar a nadie.
+
+*Resultado:* El cliente consulta por su cuenta la respuesta a las preguntas de siempre y hace solo, a cualquier hora, lo que más pide —recargar, ver su consumo, pagar y descargar su factura, reportar una avería—; quien atiende remite a la respuesta publicada en vez de volver a escribirla.
+
+- Las diez preguntas que más se repitieron en el último trimestre —o todas, si son menos— tienen una respuesta publicada que el cliente puede leer por su cuenta: por ejemplo, cómo consultar el saldo, por qué cambió el monto de la factura o cómo configurar el módem. `[3.8.F1]`
+- El cliente puede hacer por su cuenta y a cualquier hora —en la app, la web o por mensaje— lo que corresponde a su servicio: recargar, consultar su saldo y su consumo, y pagar y descargar su factura, sin ir a una tienda ni llamar. `[3.8.F801 · comprobable]`
+- El cliente puede reportar una avería a cualquier hora sin esperar a una persona —en la app, la web, WhatsApp o una línea automática—, y la avería queda registrada en el sistema. `[3.8.F802 · comprobable]`
+
+**Eficiente.** El cliente diagnostica su avería en la app, se documenta lo que se aprende de los casos y el autoservicio empieza a liberar al equipo.
+
+*Resultado:* El operador puede sumar clientes sin sumar ejecutivos de atención en la misma proporción, porque buena parte de lo que preguntan y piden se resuelve sin abrir un caso, también muchas averías.
+
+- Al menos una vez por trimestre se revisan los casos que se repiten y, donde la relación es continua, las razones por las que los clientes se van —dan de baja sus servicios o se llevan su número a otro operador—. `[3.8.E2]`
+- Se mide cuántos clientes resuelven en el autoservicio sin abrir un caso —recargan, pagan, cambian de plan o diagnostican una avería solos—, y ese número alcanza la meta que fijó el área. `[3.8.E4]`
+- El cliente puede diagnosticar su avería desde la app —por ejemplo, ver si hay una falla en su zona, probar su línea o, en el hogar, reiniciar su módem a distancia— y, si no se resuelve, reportarla ahí mismo con el resultado del diagnóstico. `[3.8.E801 · comprobable]`
+
+**Óptimo.**
+
+- La IA detecta las preguntas nuevas que llegan —por ejemplo, sobre un plan, un equipo o un cobro nuevo— y redacta el artículo o la respuesta; el equipo lo revisa antes de publicarlo, y en la base de conocimiento se ve qué escribió la IA y quién lo aprobó. `[3.8.O1]`
+- Los picos de demanda —una avería masiva, el lanzamiento de un equipo, el cierre de la facturación— los absorben la IA y el autoservicio: el equipo no crece cuando crece la cartera, y el líder ve en los tableros del área qué parte de la demanda resolvieron la IA y el autoservicio y qué pasó a una persona. `[3.8.O2]`
+
+*Se leen igual:* `3.8.I2`, `3.8.F2`, `3.8.E1`, `3.8.E5`, `3.8.O3`, `3.8.O4`.

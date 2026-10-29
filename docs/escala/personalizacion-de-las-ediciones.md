@@ -1,6 +1,6 @@
 # Cuánto dice cada edición con sus palabras
 
-Una edición tiene que hablar del negocio de su industria. La regla, desde la 8.9.1 («Cómo se escribe una edición»): **cada nivel de cada dimensión dice al menos un criterio con las palabras de la industria**, reescrito o propio. Una «celda» es una edición × una dimensión × un nivel: 7 ediciones × 24 dimensiones × 5 niveles = 840 desde la 9.1.0 (eran 6 y 720).
+Una edición tiene que hablar del negocio de su industria. La regla, desde la 8.9.1 («Cómo se escribe una edición»): **cada nivel de cada dimensión dice al menos un criterio con las palabras de la industria**, reescrito o propio. Una «celda» es una edición × una dimensión × un nivel: 8 ediciones × 24 dimensiones × 5 niveles = 960 desde la 9.2.0 (eran 7 y 840 en la 9.1.0, y 6 y 720 antes).
 
 Se mide con `npx tsx scripts/medir-personalizacion-escala.ts` (solo lee el `.md` del repo; `--todas` lista cada celda). Lo vigila `lib/escala/documento/personalizacion.test.ts`: falla si una celda queda entera con el texto general y no está en `GENERALES_A_PROPOSITO` con su porqué. Correrlo en cada versión.
 
@@ -29,6 +29,8 @@ El caso que lo disparó: en Turismo, Inicial de «Seguimiento de cotizaciones y 
 Desde la 9.0.0 (27 oct), 83 celdas: Automotriz 21, Turismo 20, Inmobiliaria 14, Banca y servicios financieros 11, Ecommerce y retail 10, Educación 7. La 9.0 cambió o sacó criterios generales, y lo que cada edición decía de ellos con sus palabras se soltó; se publicó así, con la decisión provisional de reescribirlas en la versión siguiente (manual de operación 1.4.0, «Decisiones provisionales de la 9.0»). Están en `GENERALES_A_PROPOSITO`, y la lista solo encoge.
 
 Maquinaria y equipo pesado, la edición de la 9.1.0 (28 oct), nace sin ninguna: sus 120 celdas dicen al menos un criterio con sus palabras (127 reescritos y 32 propios), también las 21 que Automotriz, su edición más parecida, todavía lee como la general.
+
+Telecomunicaciones, la edición de la 9.2.0 (28 oct), también nace sin ninguna: sus 120 celdas dicen al menos un criterio con sus palabras (224 reescritos y 50 propios), también las 11 que Banca y servicios financieros, su edición más parecida, todavía lee como la general.
 
 Hasta la 8.9.1, ninguna celda. Dentro de las celdas, quedan criterios que se leen igual porque no ganan nada con palabras de la industria: por ejemplo, en Ecommerce y retail y en Educación, que el proceso de Marketing se cumpla sin que nadie lo vigile (`2.1.O5`). La celda igual queda personalizada por otro criterio del mismo nivel.
 
