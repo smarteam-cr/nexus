@@ -25,6 +25,7 @@
 export const SKIP_KEYS = new Set([
   "diagram", // lo dibuja DiagramStatic aparte
   "__lang",
+  "__forma", // cómo se pinta la tabla de acciones de un diagnóstico nuevo (lib/canvas/acciones-del-enfoque.ts)
   "buttonTarget",
   "buttonUrl", // un link largo en papel es ruido; el rótulo del botón sí queda
   "coverImageUrl",

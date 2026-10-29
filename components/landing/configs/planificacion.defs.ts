@@ -6,7 +6,7 @@
  * presenta como la arquitectura de HubSpot; se llama «Planificación» para que el equipo piense en
  * estrategia y no solo en HubSpot.
  *
- * Secciones: portada · cómo van a funcionar los procesos (solo lo que se hará) · etapas del ciclo de
+ * Secciones: portada · las acciones del diagnóstico en detalle · cómo van a funcionar los procesos (solo lo que se hará) · etapas del ciclo de
  * vida · arquitectura · propiedades por objeto · pipelines (leads, ventas, servicio) ·
  * automatizaciones · conversaciones (mensajería instantánea y agentes de IA) · rutinas de adopción y
  * despliegue por olas (hasta que exista el documento de Puesta en marcha) · aprobación. TODAS se
@@ -15,6 +15,11 @@
  * 2026-10-25 — lo que pide el Brief de implementación (docs/planificacion-brief-plan.md): ficha del
  * proyecto, usuarios y permisos, por dónde entran los leads, formularios, cotizaciones e informes.
  * CURADAS: el agente no las escribe al generar (la corrida ya está en su tope de tokens).
+ *
+ * 2026-10-28 — «Las acciones, en detalle» (decisión 16 del roadmap, L4 etapa 2): el diagnóstico nuevo deja el enfoque
+ * con tres o cuatro acciones de una línea, y acá se desarrolla cada una: qué se configura para cumplirla, su grupo, su
+ * hub, si es quick win y si está dentro del alcance. Monta la MISMA tabla y el MISMO esquema que las acciones del
+ * diagnóstico (`ejecucion_acciones`, ACCIONES_SCHEMA).
  *
  * Lo que salió: la política rectora (al Diagnóstico), la hoja de ruta (el orden vive en el Cronograma
  * y en las acciones del Diagnóstico) y las métricas de éxito (los OBJ del Diagnóstico). Quedan al
@@ -37,6 +42,7 @@ import {
   PROSA_SCHEMA_DEL_CHAT,
 } from "./shared-sections.defs";
 import { PLANIFICACION_CIERRE_DEFAULT } from "@/lib/canvas/canvas-defs";
+import { ACCIONES_SCHEMA } from "./diagnostico.defs";
 import { heroTitleBrief } from "@/lib/landing/hero-title";
 import { SECCIONES_DE_LA_PLANIFICACION_ESENCIAL } from "@/lib/entregables/registro";
 import {
@@ -206,6 +212,9 @@ const INFORMES_DEF: BCSectionDef = {
   },
 };
 
+/** La sección que desarrolla las acciones del diagnóstico (2026-10-28, decisión 16). */
+export const ACCIONES_EN_DETALLE_KEY = "acciones_en_detalle";
+
 export const PLANIFICACION_SECTION_DEFS: BCSectionDef[] = [
   {
     key: "planificacion",
@@ -232,6 +241,29 @@ export const PLANIFICACION_SECTION_DEFS: BCSectionDef[] = [
        `seccion.rotular` se rechaza —escribiría en una columna que nadie lee— y el renderer lo
        pintaba como texto pelado. Las dos puertas cerradas a la vez. */
     schemaDelChat: { type: "object", properties: { titulo: str, headline: str, subhead: str, tags: strArray, eyebrow: str } },
+  },
+  {
+    /* 2026-10-28 (decisión 16, L4 etapa 2): el detalle que el diagnóstico dejó de escribir. Una fila por acción del
+       diagnóstico, con su mismo código: el hilo AC → F → OBJ sigue siendo uno solo. Medido ese día en producción, la
+       corrida completa usa a lo sumo ~13.700 de sus 21.000 tokens de salida: tres o cuatro filas entran. */
+    key: ACCIONES_EN_DETALLE_KEY,
+    label: "Las acciones, en detalle",
+    eyebrow: "Cómo lo vamos a hacer",
+    theme: "light",
+    sectionType: "ejecucion_acciones",
+    agentGenerated: true,
+    avisoDelChat:
+      "cada fila desarrolla una acción (AC) del diagnóstico: los códigos AC, F y OBJ son los del diagnóstico — no inventes ni renumeres; " +
+      "`detalle` dice qué se configura en este plan para cumplirla.",
+    empty: { intro: "", acciones: [] },
+    agentHint: "Una fila por cada acción AC del diagnóstico: qué se configura para cumplirla, su grupo, hub, quick win y alcance.",
+    brief:
+      "Las acciones del diagnóstico (AC-01…), desarrolladas: UNA fila por cada acción del diagnóstico, en su orden y con su MISMO código. " +
+      "`id`, `accion`, `ataca` y `mueve` = los del diagnóstico, tal cual; `detalle` = 1-2 líneas con lo que se configura en este plan para cumplirla, nombrando las piezas de las secciones de abajo ('Pipeline de leads por proyecto, formularios nativos con la campaña y la automatización que asigna al asesor'); " +
+      "`grupo` = UNO de: Planeación · Configuración · Integración · Reportería · Adopción; `hub` = el hub o herramienta ('Sales Hub', 'Smart CRM', 'Breeze'); " +
+      "`quickWin` = 'si' si da resultado en semanas, si no 'no'; `alcance` = 'dentro' si lo contratado la cubre, 'fuera' si no (una acción fuera de alcance se lista igual: es la conversación de la siguiente etapa). " +
+      "Sin diagnóstico, o sin acciones en él, deja `acciones` VACÍO: no inventes acciones ni códigos. `intro`: vacío.",
+    schema: ACCIONES_SCHEMA,
   },
   FICHA_PROYECTO_DEF,
   USUARIOS_PERMISOS_DEF,
@@ -542,7 +574,7 @@ export const PLANIFICACION_TEMPLATE: BcTemplateDef = {
   agentIntro:
     "Eres el consultor senior de Smarteam que escribe la PLANIFICACIÓN de un proyecto de HubSpot: lo que va a quedar CONFIGURADO en el portal, armado por fuera para que el cliente lo vea y lo apruebe antes de configurar nada. Muestra cómo van a funcionar sus procesos, las etapas del ciclo de vida, la arquitectura, las propiedades por objeto, los pipelines, las automatizaciones y las conversaciones (mensajería instantánea y agentes de IA).\n\n" +
     "SOLO LO QUE SE HARÁ: cómo opera hoy el cliente, el problema y el enfoque viven en el DIAGNÓSTICO. Acá no se describe el presente ni se vuelve a explicar el problema: se dice qué se va a configurar.\n\n" +
-    "TU MÉTODO: parte del DIAGNÓSTICO (la parte teórica: une todo con CÓDIGOS —síntomas S1…, causas F1…, objetivos OBJ-01…, acciones AC-01…—, y trae el ENFOQUE DE LA SOLUCIÓN y las ACCIONES con sus herramientas). Esta planificación es la parte práctica: baja esas acciones a lo que se configura en HubSpot, respetando el enfoque de la solución. Si no hay diagnóstico, trabaja con las reuniones de tu contexto. No inventes códigos.\n\n" +
+    "TU MÉTODO: parte del DIAGNÓSTICO (la parte teórica: une todo con CÓDIGOS —síntomas S1…, causas F1…, objetivos OBJ-01…, acciones AC-01…—, y trae el ENFOQUE DE LA SOLUCIÓN y las ACCIONES con sus herramientas). Esta planificación es la parte práctica: baja esas acciones a lo que se configura en HubSpot, respetando el enfoque de la solución. El diagnóstico trae las acciones en una línea: el detalle de cada una (qué se configura, grupo, hub, quick win y alcance) lo escribes tú en «Las acciones, en detalle», una fila por acción. Si no hay diagnóstico, trabaja con las reuniones de tu contexto. No inventes códigos.\n\n" +
     "DE DÓNDE SALE CADA COSA: cada paso, etapa, propiedad, pipeline, automatización y conversación lleva su `origen`. 'acordado' SOLO si una reunión con el cliente lo respalda (y la nombras en `fuente`); 'propuesta' si es diseño de Smarteam; 'supuesto' si das por hecho algo del cliente que nadie dijo. Lo que solo aparece en una nota interna o en el handoff NO cuenta como acordado. Prefiere menos cosas bien respaldadas a muchas supuestas.\n\n" +
     "LOS MAPAS DE PROCESOS son una fuente más, no la verdad: un sistema, un paso o un rol que el mapa trae y que ninguna reunión menciona es, a lo sumo, un supuesto.\n\n" +
     "LA MODALIDAD DE ADOPCIÓN gobierna las rutinas y el despliegue por olas: la recibes en el contexto (directa o por pilotos, con su porqué). Con adopción DIRECTA, el plan de despliegue por olas queda VACÍO — vacío es correcto. Con PILOTOS, define las olas con equipo inicial, módulos e indicador de éxito para avanzar.\n\n" +
@@ -565,11 +597,13 @@ export const PLANIFICACION_ESENCIAL_TEMPLATE: BcTemplateDef = {
   ...PLANIFICACION_TEMPLATE,
   id: "planificacion_esencial_v1",
   caseLabel: "Planificación esencial",
-  // Cinco secciones generadas en vez de diez.
-  maxTokens: 14000,
+  // Seis secciones generadas en vez de once. 16.000 (era 14.000) desde que suma «Las acciones, en detalle» (2026-10-28):
+  // con un diagnóstico de antes, de 5-10 acciones, la sección nueva puede pedir unos 2.000 más, y la esencial no tiene
+  // medida propia (comparte el agentSlug con la completa). Sigue debajo del tope sin streaming (~21.300).
+  maxTokens: 16000,
   agentIntro:
     PLANIFICACION_TEMPLATE.agentIntro +
-    "\n\nESTA ES LA VERSIÓN ESENCIAL: lo justo para configurar el portal. Escribe SOLO las secciones de tu formato (no hay procesos, arquitectura, conversaciones, rutinas ni olas): la portada, las etapas del ciclo de vida, las propiedades, los pipelines y las automatizaciones. Prefiere lo acordado y lo que un pipeline o un formulario necesita para funcionar; lo demás queda para la completa.",
+    "\n\nESTA ES LA VERSIÓN ESENCIAL: lo justo para configurar el portal. Escribe SOLO las secciones de tu formato (no hay procesos, arquitectura, conversaciones, rutinas ni olas): la portada, las acciones en detalle, las etapas del ciclo de vida, las propiedades, los pipelines y las automatizaciones. Prefiere lo acordado y lo que un pipeline o un formulario necesita para funcionar; lo demás queda para la completa.",
   sections: PLANIFICACION_SECTION_DEFS.filter((d) => ESENCIAL.has(d.key)),
 };
 

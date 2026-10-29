@@ -291,6 +291,8 @@ function blockToText(b: BlockLite): string {
 const SKIP = new Set([
   "diagram",
   "__lang",
+  // La forma corta de las acciones de un diagnóstico nuevo (lib/canvas/acciones-del-enfoque.ts): dice cómo se pinta.
+  "__forma",
   "buttonTarget",
   "coverImageUrl",
   "brands",

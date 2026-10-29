@@ -11,6 +11,7 @@
  */
 import type { CtxDelDiagnostico, LandingConfig } from "@/components/landing/types";
 import { ACCIONES_KEY } from "@/components/landing/configs/diagnostico.defs";
+import { accionFuera, accionesFueraDelAlcance } from "@/lib/canvas/acciones-del-enfoque";
 import {
   buildLandingConfigFromOrder,
   landingRowData,
@@ -61,6 +62,9 @@ const texto = (v: unknown) => (typeof v === "string" ? v.trim() : "");
 export function ctxDelDiagnostico(sections: ReadonlyArray<{ key: string; data: unknown }>): CtxDelDiagnostico {
   const data = sections.find((s) => s.key === ACCIONES_KEY)?.data as { acciones?: unknown } | undefined;
   const lista = Array.isArray(data?.acciones) ? (data!.acciones as Array<Record<string, unknown>>) : [];
+  /* Una acción de un diagnóstico nuevo no trae su `alcance` (pasó a la Planificación, decisión 16): lo que queda fuera lo
+     dice «Alcance acordado». En uno viejo manda el `alcance` de la acción, como siempre. */
+  const fueraDelAlcance = accionesFueraDelAlcance(sections.find((s) => s.key === "alcance_acordado")?.data);
   return {
     acciones: lista
       .map((a, indice) => ({ a, indice }))
@@ -70,7 +74,7 @@ export function ctxDelDiagnostico(sections: ReadonlyArray<{ key: string; data: u
         accion: texto(a.accion),
         detalle: texto(a.detalle),
         ataca: texto(a.ataca),
-        fuera: /fuera/i.test(texto(a.alcance)),
+        fuera: accionFuera(a, fueraDelAlcance),
         indice,
       })),
   };

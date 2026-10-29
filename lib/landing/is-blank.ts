@@ -45,6 +45,9 @@ export const NO_CONTENIDO = new Set([
   // Las piezas de la sección (2026-10-23, lib/landing/partes.ts): en qué orden van el subtítulo, la intro y el cuerpo,
   // y cuáles se quitaron. Una sección vacía con las piezas reordenadas sigue vacía.
   "__partes",
+  // La forma de las «Acciones coherentes» de un diagnóstico nuevo (2026-10-28, lib/canvas/acciones-del-enfoque.ts): dice
+  // CÓMO se pinta la tabla, no QUÉ dice. Sin esta entrada, una sección sin acciones quedaría no-blank por la marca.
+  "__forma",
   // Moneda de la sección de inversión. El `<select>` la escribe apenas el CSE lo toca, así
   // que una sección donde SOLO eligió la moneda quedaría no-blank y se publicaría diciendo
   // "Montos en CRC" y nada más. Describe CÓMO se muestran los montos, no QUÉ dice.

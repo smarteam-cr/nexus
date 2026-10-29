@@ -10,6 +10,10 @@
  * (el nombre del archivo y los `sectionType` quedaron, para no romper lo ya guardado).
  *
  *   · `ejecucion_acciones`     — la tabla de acciones.
+ *     Desde el 2026-10-28 (decisión 16) un diagnóstico NUEVO la tiene corta: el enfoque con tres o cuatro acciones de una
+ *     línea (ID · Acción · Ataca · Mueve), y el grupo, el hub, el quick win y el alcance viven en la Planificación, que
+ *     monta esta misma tabla entera. La decide `seVeCorta` (lib/canvas/acciones-del-enfoque.ts): un diagnóstico viejo se
+ *     ve igual que siempre.
  *   · `ejecucion_herramientas` — qué herramienta de HubSpot se usa, para qué, y en qué AC.
  *
  * Tablas con la clase del motor (`.stl-props`), editables celda por celda. Filas con flechas y no
@@ -19,22 +23,24 @@ import type { FC } from "react";
 import type { SectionProps } from "./types";
 import { Editable, RemoveBtn, AddBtn, replaceAt, removeAt, appendItem } from "./inline";
 import { ConIntro } from "./partes";
+import { accionNueva, seVeCorta } from "@/lib/canvas/acciones-del-enfoque";
 
 export interface AccionEjecucion {
   id: string;
   accion: string;
   detalle: string;
+  /* Los cuatro del DETALLE son opcionales: un diagnóstico nuevo no los tiene (lib/canvas/acciones-del-enfoque.ts). */
   /** Planeación · Configuración · Reportería · Adopción… */
-  grupo: string;
+  grupo?: string;
   /** Las causas del diagnóstico que ataca: «F1, F2». */
   ataca: string;
   /** Los objetivos del diagnóstico que mueve: «OBJ-01, OBJ-05». */
   mueve: string;
-  hub: string;
+  hub?: string;
   /** «si» | «no». */
-  quickWin: string;
+  quickWin?: string;
   /** «dentro» | «fuera». */
-  alcance: string;
+  alcance?: string;
 }
 export interface AccionesEjecucionData {
   intro?: string;
@@ -53,8 +59,8 @@ export interface HerramientasEjecucionData {
 }
 
 const arr = <T,>(v: T[] | undefined): T[] => (Array.isArray(v) ? v : []);
-const esSi = (v: string) => /^s[ií]/i.test((v ?? "").trim());
-const esFuera = (v: string) => /fuera/i.test(v ?? "");
+const esSi = (v: string | undefined) => /^s[ií]/i.test((v ?? "").trim());
+const esFuera = (v: string | undefined) => /fuera/i.test(v ?? "");
 /** Lo que se lee (el cliente, el PDF): «Sí» / «No» / «Dentro» / «Fuera», como en FUNDAUNA. La IA
  *  escribe «si», «no», «dentro»: al editar se ve tal cual está guardado. */
 const leerSiNo = (v: string) => (esSi(v) ? "Sí" : /^no\b/i.test((v ?? "").trim()) ? "No" : (v ?? ""));
@@ -74,6 +80,7 @@ export const AccionesEjecucionSection: FC<SectionProps<AccionesEjecucionData>> =
   const set = (next: Partial<AccionesEjecucionData>) => onChange?.({ ...data, ...next });
   const setCampo = (i: number, campo: keyof AccionEjecucion, v: string) => set({ acciones: replaceAt(acciones, i, { ...acciones[i], [campo]: v }) });
   if (!editable && !acciones.length) return null;
+  const corta = seVeCorta(data);
   const celda = (
     i: number,
     campo: keyof AccionEjecucion,
@@ -93,12 +100,16 @@ export const AccionesEjecucionSection: FC<SectionProps<AccionesEjecucionData>> =
             <tr>
               <th>ID</th>
               <th>Acción</th>
-              <th>Grupo</th>
+              {!corta && <th>Grupo</th>}
               <th>Ataca</th>
               <th>Mueve</th>
-              <th>Hub</th>
-              <th>Quick win</th>
-              <th>Alcance</th>
+              {!corta && (
+                <>
+                  <th>Hub</th>
+                  <th>Quick win</th>
+                  <th>Alcance</th>
+                </>
+              )}
               {editable && <th className="stl-props-actions" aria-label="Acciones" />}
             </tr>
           </thead>
@@ -111,12 +122,16 @@ export const AccionesEjecucionSection: FC<SectionProps<AccionesEjecucionData>> =
                   <br />
                   {celda(i, "detalle", "Para qué sirve, en una línea…", "stl-accion-detalle")}
                 </td>
-                <td>{celda(i, "grupo", "Configuración", "stl-accion-grupo")}</td>
+                {!corta && <td>{celda(i, "grupo", "Configuración", "stl-accion-grupo")}</td>}
                 <td>{celda(i, "ataca", "F1")}</td>
                 <td>{celda(i, "mueve", "OBJ-01")}</td>
-                <td>{celda(i, "hub", "Sales Hub")}</td>
-                <td className={esSi(a.quickWin) ? "stl-accion-si" : undefined}>{celda(i, "quickWin", "no", undefined, leerSiNo)}</td>
-                <td className={esFuera(a.alcance) ? "stl-accion-fuera-txt" : "stl-accion-dentro"}>{celda(i, "alcance", "dentro", undefined, leerAlcance)}</td>
+                {!corta && (
+                  <>
+                    <td>{celda(i, "hub", "Sales Hub")}</td>
+                    <td className={esSi(a.quickWin) ? "stl-accion-si" : undefined}>{celda(i, "quickWin", "no", undefined, leerSiNo)}</td>
+                    <td className={esFuera(a.alcance) ? "stl-accion-fuera-txt" : "stl-accion-dentro"}>{celda(i, "alcance", "dentro", undefined, leerAlcance)}</td>
+                  </>
+                )}
                 {editable && (
                   <td className="stl-props-actions">
                     <RemoveBtn onClick={() => set({ acciones: removeAt(acciones, i) })} title="Quitar esta acción" />
@@ -132,10 +147,7 @@ export const AccionesEjecucionSection: FC<SectionProps<AccionesEjecucionData>> =
           label="Agregar acción"
           onClick={() =>
             set({
-              acciones: appendItem(acciones, {
-                id: siguienteAC(acciones.map((a) => a.id)),
-                accion: "", detalle: "", grupo: "", ataca: "", mueve: "", hub: "", quickWin: "no", alcance: "dentro",
-              }),
+              acciones: appendItem(acciones, accionNueva(siguienteAC(acciones.map((a) => a.id)), corta)),
             })
           }
         />

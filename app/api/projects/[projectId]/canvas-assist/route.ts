@@ -92,7 +92,7 @@ export async function POST(req: NextRequest, { params }: { params: Params }) {
       key: def.key,
       label: def.label,
       schema: def.schema,
-      brief: def.brief ?? def.agentHint,
+      brief: doc.briefSegunLoGuardado?.(def.key, card?.data) ?? def.brief ?? def.agentHint,
       currentData: card?.data ?? def.empty,
     });
   }

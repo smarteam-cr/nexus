@@ -9,7 +9,14 @@ import type { BcTemplateDef } from "@/components/landing/configs/templates.defs"
 import type { BCSectionDef } from "@/components/landing/configs/business-case.defs";
 import { KICKOFF_DEF_BY_KEY, KICKOFF_HANDOFF_KEYS, KICKOFF_TEMPLATE } from "@/components/landing/configs/kickoff.defs";
 import { DESARROLLO_DEF_BY_KEY, DESARROLLO_HANDOFF_KEYS, DESARROLLO_TEMPLATE } from "@/components/landing/configs/desarrollo.defs";
-import { DIAGNOSTICO_DEF_BY_KEY, DIAGNOSTICO_HANDOFF_KEYS, DIAGNOSTICO_TEMPLATE } from "@/components/landing/configs/diagnostico.defs";
+import {
+  ACCIONES_KEY,
+  BRIEF_DE_LAS_ACCIONES_CON_DETALLE,
+  DIAGNOSTICO_DEF_BY_KEY,
+  DIAGNOSTICO_HANDOFF_KEYS,
+  DIAGNOSTICO_TEMPLATE,
+} from "@/components/landing/configs/diagnostico.defs";
+import { esDeAntesDelEnfoqueCorto } from "@/lib/canvas/acciones-del-enfoque";
 import { PLANIFICACION_DEF_BY_KEY, PLANIFICACION_HANDOFF_KEYS, PLANIFICACION_TEMPLATE } from "@/components/landing/configs/planificacion.defs";
 import { IMPLEMENTACION_DEF_BY_KEY, IMPLEMENTACION_TEMPLATE } from "@/components/landing/configs/implementacion.defs";
 import { ENTREGA_DEF_BY_KEY, ENTREGA_HANDOFF_KEYS, ENTREGA_TEMPLATE } from "@/components/landing/configs/entrega.defs";
@@ -27,6 +34,8 @@ export interface DocConAssist {
   handoffKeys: readonly string[] | null;
   /** Solo el kickoff muestra el cronograma; los demás no lo necesitan en el prompt. */
   conCronograma?: true;
+  /** La guía de una sección según lo que tiene guardado, cuando no es la de la def. `undefined` = la de la def. */
+  briefSegunLoGuardado?: (key: string, data: unknown) => string | undefined;
 }
 
 /**
@@ -73,6 +82,10 @@ export const DOC: Record<string, DocConAssist> = {
     defs: DIAGNOSTICO_DEF_BY_KEY,
     tpl: DIAGNOSTICO_TEMPLATE,
     handoffKeys: DIAGNOSTICO_HANDOFF_KEYS,
+    /* Decisión 16 (2026-10-28): las acciones de un diagnóstico de ANTES se mejoran con la guía de antes. Con la nueva, la
+       IA le propondría tres o cuatro acciones y el detalle vacío, y el diagnóstico viejo dejaría de verse igual. */
+    briefSegunLoGuardado: (key, data) =>
+      key === ACCIONES_KEY && esDeAntesDelEnfoqueCorto(data) ? BRIEF_DE_LAS_ACCIONES_CON_DETALLE : undefined,
   },
   planning: {
     agentId: "agent-planificacion-canvas",
