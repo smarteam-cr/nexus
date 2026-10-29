@@ -289,9 +289,8 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
        nunca corrió. Pasó de verdad con el canvas de Entrega, y el modo de falla es de TODOS los
        agentes: alcanza con que su fila no exista o quede en DRAFT (el default del API), que es
        justo lo que produce un deploy sin correr el seed.
-       Los cuatro callers ya leen `data.message ?? data.error` en la rama de error, y
-       `ClientContextCards` mira `data.error` sin importar el status — así que el mensaje llega
-       a todos sin tocar ninguno. */
+       Los cuatro callers ya leen `data.message ?? data.error` en la rama de error, así que el
+       mensaje llega a todos sin tocar ninguno. */
     const pedido = bodyAgentId ? ` («${bodyAgentId}»)` : "";
     return NextResponse.json(
       {

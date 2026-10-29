@@ -168,15 +168,6 @@ export const SCOPE_COVERAGE: Record<string, Cobertura> = {
       "leyera y GUARDARA el deal ajeno). Un criterio de alcance acá sería el bug: pedir los line " +
       "items de un proyecto inactivo del MISMO cliente es legítimo.",
   },
-  "app/api/cards/[cardId]/send-to-canvas/route.ts": {
-    modo: "exento",
-    razon:
-      "no pregunta «¿qué proyectos cuentan?»: verifica que UN id que vino del body pertenezca al " +
-      "cliente de la tarjeta antes de clonarla ahí (auditoría 2026-09-03: sin ese cruce se clonaba " +
-      "contenido a un proyecto de CUALQUIER cliente). Acotarlo con un criterio de alcance sería el " +
-      "bug: mandar una tarjeta a un proyecto inactivo o suspendido del MISMO cliente es legítimo; " +
-      "lo que no es legítimo es otro cliente, y eso es exactamente lo que cruza.",
-  },
   "lib/sessions/classify-session-project.ts": { modo: "criterio", criterio: "clasificable" },
   /**
    * No hace ninguna consulta: recibe el array que el `select` anidado de `ClientsTable` ya

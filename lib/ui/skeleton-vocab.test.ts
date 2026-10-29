@@ -39,11 +39,9 @@ const DEUDA = {
     "components/charts/EChartRenderer.tsx:10",
     "components/clients/MinuteDialog.tsx:230",
     "components/clients/ProjectSessionsReview.tsx:152",
-    "components/clients/SectionDiscoveryModal.tsx:9",
   ],
-  animatePulse: [
-    "components/clients/ClientContextCards.tsx",
-  ],
+  // Sin deuda: el último ofensor (ClientContextCards.tsx) se borró con las tarjetas del Resumen retirado.
+  animatePulse: [],
   // El aside de /sessions es excelente, pero su panel derecho usa un spinner centrado.
   spinnerEnLoading: ["app/(shell)/sessions/loading.tsx"],
 };
