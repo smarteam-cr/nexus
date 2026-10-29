@@ -94,7 +94,14 @@ export function pdfErrorMessage(e: unknown): string {
  * `paged: true` avisa que el documento superó el techo y salió paginado en vez de una sola
  * página continua — el caller decide si se lo dice al usuario.
  */
-export async function renderPathToPdf(printPath: string): Promise<{ pdf: Buffer; paged: boolean }> {
+export async function renderPathToPdf(
+  printPath: string,
+  /**
+   * `hoja`: el documento ya viene en hojas de este tamaño (px), una sección por hoja con su salto (el resultado del test,
+   * en carta horizontal): se mide a ese ancho y se imprime cada hoja como una página, sin el PDF corrido.
+   */
+  opciones: { hoja?: { ancho: number; alto: number } } = {},
+): Promise<{ pdf: Buffer; paged: boolean }> {
   const port = process.env.PORT || "3000";
   const url = `http://127.0.0.1:${port}${printPath}`;
   /* Para los logs, el path SIN query: la query lleva el `?pdfToken=`, que sigue siendo válido
@@ -119,7 +126,7 @@ export async function renderPathToPdf(printPath: string): Promise<{ pdf: Buffer;
       timeout: NAV_TIMEOUT_MS,
     });
     const page = await browser.newPage();
-    await page.setViewport({ width: DOC_WIDTH, height: 1600 });
+    await page.setViewport({ width: opciones.hoja?.ancho ?? DOC_WIDTH, height: opciones.hoja?.alto ?? 1600 });
 
     /* Lo que pasó DENTRO del navegador headless, por si no llega a estar listo.
      *
@@ -184,6 +191,21 @@ export async function renderPathToPdf(printPath: string): Promise<{ pdf: Buffer;
         ].join("\n"),
       );
       throw e;
+    }
+
+    if (opciones.hoja) {
+      const { ancho, alto } = opciones.hoja;
+      await page.evaluate(
+        (w, h) => {
+          const style = document.createElement("style");
+          style.textContent = `@page { size: ${w}px ${h}px; margin: 0; }`;
+          document.head.appendChild(style);
+        },
+        ancho,
+        alto,
+      );
+      const pdf = await page.pdf({ preferCSSPageSize: true, printBackground: true });
+      return { pdf: Buffer.from(pdf), paged: false };
     }
 
     // PDF CORRIDO — estos documentos son LANDINGS, no documentos paginados: UNA sola

@@ -1,0 +1,51 @@
+/* ─────────────────────────────────────────────────────────────────────────
+   components/escala/radar-de-una-empresa.css — el radar de UNA empresa (RadarDeUnaEmpresa.tsx): el interruptor «Ver
+   puntajes», cuál de los dos radares se ve y la leyenda. Página del cliente: hex literal, nunca flipea a oscuro.
+
+   El interruptor es un checkbox y lo resuelve este CSS (`:has`), sin JavaScript: apagado al abrir, se ven los vértices
+   (`.rde-sin`); prendido, el puntaje de cada uno (`.rde-con`). En el PDF no hay interruptor ni `.rde-con`.
+   El grande va cuando la tarjeta tiene 960 px o más; debajo, el compacto (el tablero `Movil`), con su lista. Es una
+   consulta del contenedor y no de la pantalla, así que el papel no la confunde; el PDF solo trae el grande.
+   ───────────────────────────────────────────────────────────────────────── */
+.rde { container-type: inline-size; display: flex; flex-direction: column; font-family: var(--font-geist-sans), Geist, ui-sans-serif, system-ui, sans-serif; color: #1c2a44; }
+.rde-svg { display: block; width: 100%; height: auto; font-family: var(--font-geist-sans), Geist, ui-sans-serif, system-ui, sans-serif; }
+.rde .rde-con { display: none; }
+.rde:has(.rde-check:checked) .rde-con { display: inline; }
+.rde:has(.rde-check:checked) .rde-sin { display: none; }
+
+/* El interruptor, arriba a la derecha; el radar grande sube un poco por debajo de él. */
+.rde-arriba { display: flex; justify-content: flex-end; position: relative; z-index: 1; }
+.rde-interruptor { display: inline-flex; align-items: center; gap: 10px; border: 1px solid #edf1f7; background: #f4f7fb; border-radius: 999px; padding: 6px 8px 6px 14px; font-size: 13px; font-weight: 600; line-height: 1; color: #1c2a44; cursor: pointer; user-select: none; position: relative; }
+.rde-check { position: absolute; opacity: 0; width: 1px; height: 1px; margin: 0; pointer-events: none; }
+.rde-pista { flex: none; position: relative; width: 36px; height: 20px; border-radius: 999px; background: #e3e9f2; transition: background .15s; }
+.rde-perilla { position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 999px; background: #ffffff; box-shadow: 0 1px 3px rgba(16, 42, 84, .3); transition: left .15s; }
+.rde-check:checked + .rde-pista { background: #3b82f6; }
+.rde-check:checked + .rde-pista .rde-perilla { left: 18px; }
+.rde-check:focus-visible + .rde-pista { outline: 2px solid #3b82f6; outline-offset: 2px; }
+.rde-grande > .rde-svg { margin-top: -24px; }
+
+/* Lo que no se preguntó y «No lo sé»: solo si hay alguno. */
+.rde-leyenda { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 8px 28px; padding-top: 8px; border-top: 1px solid #edf1f7; font-size: 12.5px; line-height: 1.4; color: #3d4b63; }
+.rde-leyenda > span { display: inline-flex; align-items: center; gap: 8px; }
+.rde-leyenda svg { flex: none; }
+
+/* El teléfono: los nombres de las mitades arriba, el radar compacto y la lista de las dimensiones. */
+.rde-compacto { display: none; flex-direction: column; gap: 6px; }
+.rde-mitades { display: flex; justify-content: space-between; padding: 0 4px; font-size: 11.5px; font-weight: 700; letter-spacing: .04em; color: #1c2f55; }
+.rde-compacto > .rde-svg { max-width: 520px; margin: 0 auto; }
+.rde-lista { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; padding: 10px 6px 0; border-top: 1px solid #edf1f7; }
+.rde-lista ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; align-content: start; }
+.rde-lista li { font-size: 12px; line-height: 16px; color: #3d4b63; }
+.rde-lista li b { color: #1c2f55; }
+.rde-lista li[data-apagada] { color: #5f6d85; }
+.rde-lista-estado { color: #5f6d85; }
+
+/* El corte va por el ancho de la TARJETA, no de la pantalla: en una tablet o una ventana a media pantalla el grande
+   quedaba con letras de 5 a 7 px. Debajo de 960 px de radar, el compacto. */
+@container (max-width: 959px) {
+  .rde-grande { display: none; }
+  .rde-compacto { display: flex; }
+  .rde-interruptor { min-height: 40px; padding: 4px 6px 4px 12px; font-size: 12.5px; gap: 8px; }
+}
+
+.rde-pdf .rde-leyenda { font-size: 11.5px; }

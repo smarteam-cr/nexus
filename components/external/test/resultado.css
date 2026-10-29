@@ -1,136 +1,244 @@
 /* ─────────────────────────────────────────────────────────────────────────
-   components/external/test/resultado.css — EL ASPECTO de la página de resultado del test público.
+   components/external/test/resultado.css — EL ASPECTO de la página de resultado del test público y de su PDF.
 
-   Calca la del resultado de la aplicación vieja (dev.smarteamcr.com/diagnostico-rendimiento/resultado.html:
-   resultado.css): la cabecera celeste con el nivel en grande, los botones arriba, las barras con su puntaje sobre 100 y el
-   calendario de HubSpot al final. Lo que cambió a propósito (Elías, 28 oct): el radar va arriba (sin la curva de niveles),
-   el foco son «Por dónde empezar», «Lo que hoy pone en riesgo a tu área» y «Lo que lo mueve», y las barras son más
-   compactas y con menos texto. Vive bajo `.dr` (las variables de diagnostico.css). Página del cliente: hex literal, nunca
-   flipea a oscuro. `.rd-pdf` es el modo del PDF (lib/print/pdf-runner.ts): sin botones, sin calendario, sin sombras.
+   Rediseño aprobado por Elías el 29 oct (Claude Design, tableros `Main`, `Movil` y `PdfHoja1`), medida por medida: la
+   estructura de antes con la línea visual V3 de Nexus (Geist, tarjetas de 20 px con sombra suave, chips pastel y el
+   degradado en la cabecera) y cada sección a lo ancho (columnas lado a lado). Vive bajo `.dr.rd-v3` (diagnostico.css
+   pone la base). Página del cliente: hex literal, nunca flipea a oscuro. `.rd-pdf` es el PDF (lib/print/pdf-runner.ts),
+   en hojas horizontales de 1056 × 816.
    ───────────────────────────────────────────────────────────────────────── */
-.dr .rd { width: 100%; max-width: 980px; margin: 0 auto; padding: 24px var(--gutter) 72px; display: grid; gap: 20px; }
+.dr.rd-v3 {
+  --font-display: var(--font-geist-sans), Geist, ui-sans-serif, system-ui, 'Segoe UI', sans-serif;
+  --font-body: var(--font-geist-sans), Geist, ui-sans-serif, system-ui, 'Segoe UI', sans-serif;
+  --v3-tinta: #1c2f55;
+  --v3-texto: #1c2a44;
+  --v3-secundario: #3d4b63;
+  --v3-apagado: #5f6d85;
+  --v3-marca: #2d5fb3;
+  --v3-azul: #3b82f6;
+  --v3-borde: #edf1f7;
+  --v3-borde-fuerte: #d6dee9;
+  --v3-fondo: #f4f7fb;
+  --v3-sombra: 0 1px 2px rgba(16, 42, 84, .04), 0 12px 32px -16px rgba(16, 42, 84, .16);
+  --v3-degradado: linear-gradient(105deg, #e6f0ff 0%, #eef5ff 52%, #ecf8f2 100%);
+  background: var(--v3-fondo);
+  color: var(--v3-texto);
+  line-height: 1.5;
+}
+.dr.rd-v3 .topbar { position: static; background: #051849; backdrop-filter: none; border-bottom: 0; }
+.dr.rd-v3 a { color: var(--v3-marca); }
+.dr.rd-v3 a:hover { color: #1e4b9e; }
 
-/* Los botones de arriba: rehacer a la izquierda, el PDF a la derecha. */
+/* Los niveles: el color del punto y de la barra. */
+.dr.rd-v3 [data-nivel="D"] { --nc: #dc2626; }
+.dr.rd-v3 [data-nivel="I"] { --nc: #f59e0b; }
+.dr.rd-v3 [data-nivel="F"] { --nc: #22c55e; }
+.dr.rd-v3 [data-nivel="E"] { --nc: #3b82f6; }
+.dr.rd-v3 [data-nivel="O"] { --nc: #8b5cf6; }
+.dr.rd-v3 .rd-punto { flex: none; display: inline-block; width: 9px; height: 9px; border-radius: 999px; background: var(--nc, transparent); border: 1.5px dashed #a9b5c7; }
+.dr.rd-v3 [data-nivel] .rd-punto { border: 0; }
+
+.dr .rd { width: 100%; max-width: 1440px; margin: 0 auto; padding: 20px 24px 48px; display: grid; gap: 20px; }
+
+/* Los botones de arriba: rehacer a la izquierda, el PDF (en el azul de Nexus) a la derecha. */
 .dr .rd-acciones { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
-.dr .rd .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 42px; padding: 10px 20px; border-radius: var(--r-pill); font-family: var(--font-display); font-weight: 600; font-size: 14.5px; border: 1px solid transparent; text-decoration: none; transition: background .15s, box-shadow .15s, transform .15s; }
-.dr .rd .btn:hover { text-decoration: none; }
-.dr .rd .btn-primary { background: var(--accent); color: #fff; box-shadow: var(--sh-primary); }
-.dr .rd .btn-primary:hover { background: var(--accent-dark); }
-.dr .rd .btn-primary[aria-busy="true"] { opacity: .75; cursor: progress; }
-.dr .rd .btn-ghost { background: #fff; color: var(--text); border-color: var(--border-strong); }
-.dr .rd .btn-ghost:hover { background: var(--surface-2); }
-.dr .rd-pdf-error { flex-basis: 100%; text-align: right; font-size: 13px; color: var(--accent-dark); }
+.dr .rd-btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 9px 16px; border-radius: 10px; border: 1px solid transparent; font-family: var(--font-body); font-size: 13px; font-weight: 500; line-height: 1.2; text-decoration: none; cursor: pointer; transition: background .15s, box-shadow .15s; }
+.dr .rd-btn:hover { text-decoration: none; }
+.dr .rd-btn-ghost { background: #ffffff; border-color: var(--v3-borde-fuerte); color: var(--v3-secundario) !important; }
+.dr .rd-btn-ghost:hover { background: var(--v3-fondo); }
+.dr .rd-btn-primary { background: var(--v3-azul); color: #ffffff; font-weight: 600; box-shadow: 0 6px 16px -8px rgba(59, 130, 246, .7); }
+.dr .rd-btn-primary:hover { background: #2f74e6; }
+.dr .rd-btn-primary[aria-busy="true"] { opacity: .75; cursor: progress; }
+.dr .rd-pdf-error { flex-basis: 100%; text-align: right; font-size: 13px; color: #b5342a; }
+.dr .rd-aviso { font-size: 13px; color: var(--v3-secundario); background: #ffffff; border: 1px dashed #c9d3e1; border-radius: 14px; padding: 12px 14px; }
 
-/* La cabecera: el nivel en grande y las dos capas arriba, y el radar de la empresa a todo el ancho debajo. */
-.dr .rd-head { display: grid; grid-template-columns: minmax(0, 1fr) minmax(200px, 280px); gap: 8px 24px; align-items: end; background: linear-gradient(180deg, #E4F2FF 0%, #CFE8FF 100%); border: 1px solid #AFD3F3; border-radius: var(--r-lg); padding: clamp(22px, 4vw, 40px); box-shadow: var(--sh-md); }
-.dr .rd-head-texto { display: grid; gap: 6px; justify-items: start; }
-.dr .rd-empresa { display: inline-flex; align-items: center; gap: 10px; padding: 6px 14px 6px 6px; background: #fff; border: 1px solid #C9DDF5; border-radius: var(--r-pill); margin-bottom: 8px; max-width: 100%; }
-.dr .rd-empresa-logo { flex: none; width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; background: var(--text); color: #fff; font-family: var(--font-display); font-weight: 700; font-size: 14px; }
+/* Los rótulos chicos de cada sección. */
+.dr .rd-eyebrow { font-family: var(--font-body); font-size: 10.5px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; color: var(--v3-marca); line-height: 1.4; }
+.dr .rd-label { font-size: 10.5px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; color: var(--v3-apagado); line-height: 1.4; }
+
+/* La cabecera: el degradado, el nivel en grande con las dos capas al lado y el radar en su tarjeta blanca. */
+.dr .rd-head { border-radius: 24px; padding: 32px; background: var(--v3-degradado); display: grid; gap: 24px; }
+.dr .rd-head-arriba { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 640px); gap: 32px; align-items: end; }
+.dr .rd-head-texto { display: flex; flex-direction: column; gap: 10px; align-items: flex-start; min-width: 0; }
+.dr .rd-empresa { display: inline-flex; align-items: center; gap: 10px; padding: 5px 14px 5px 5px; border-radius: 999px; background: #ffffff; box-shadow: 0 1px 2px rgba(16, 42, 84, .06); max-width: 100%; }
+.dr .rd-empresa-logo { flex: none; width: 28px; height: 28px; border-radius: 999px; background: #051849; color: #ffffff; font-size: 12px; font-weight: 700; display: grid; place-items: center; }
 .dr .rd-empresa-txt { display: grid; line-height: 1.2; min-width: 0; }
-.dr .rd-empresa-txt b { font-size: 14px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.dr .rd-empresa-txt small { font-size: 12px; color: var(--muted); }
-.dr .rd-eyebrow { font-family: var(--font-display); font-size: 12px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--accent); }
-.dr .rd-fecha { font-size: 13px; color: var(--muted); }
-.dr .rd-label { font-family: var(--font-display); font-size: 12px; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; color: #5A6E92; margin-top: 14px; }
-.dr .rd-nivel { font-size: clamp(38px, 6vw, 60px); line-height: 1.04; letter-spacing: -.015em; color: var(--nc, var(--text)); font-weight: 700; }
-.dr .rd-saludo { font-size: 15.5px; color: var(--text-secondary); line-height: 1.55; max-width: 36ch; }
-.dr .rd-estimado { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; font-size: 13px; color: var(--text-secondary); margin-top: 4px; }
-.dr .rd-pill { display: inline-block; padding: 2px 10px; border-radius: var(--r-pill); background: #fff4ef; color: var(--accent); font-weight: 700; font-size: 12px; }
-.dr .rd-capas { display: grid; grid-template-columns: 1fr; gap: 8px; width: 100%; }
-.dr .rd-capa { background: rgba(255, 255, 255, .75); border: 1px solid #C9DDF5; border-radius: var(--r-sm); padding: 10px 12px; }
-.dr .rd-capa-k { font-size: 11.5px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: #5A6E92; }
-.dr .rd-capa-v { font-family: var(--font-display); font-weight: 700; font-size: 17px; color: var(--nc, var(--text)); }
-/* El radar: la rueda en escritorio y en el PDF; el radar simple solo en el celular (ver la regla de 700 px). */
-.dr .rd-head-radar { grid-column: 1 / -1; margin-top: 16px; background: #fff; border: 1px solid #C9DDF5; border-radius: var(--r-md); padding: 8px; }
-.dr .rd-rueda svg { display: block; width: 100%; height: auto; }
-.dr .rd-radar-simple { display: none; }
-.dr .rd-radar-simple svg { display: block; width: 100%; max-width: 460px; height: auto; margin: 0 auto; overflow: visible; }
+.dr .rd-empresa-txt b { font-size: 14px; font-weight: 600; color: var(--v3-tinta); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dr .rd-empresa-txt small { font-size: 12px; color: var(--v3-apagado); }
+.dr .rd-head-texto > .rd-eyebrow { margin-top: 6px; }
+.dr .rd-fecha { font-size: 12px; color: var(--v3-apagado); line-height: 1.4; }
+.dr .rd-head-texto > .rd-label { margin-top: 10px; }
+.dr .rd-nivel { display: flex; align-items: center; gap: 14px; margin: 0; font-family: var(--font-body); font-size: 60px; line-height: 64px; font-weight: 300; letter-spacing: -.03em; color: var(--v3-tinta); }
+.dr .rd-nivel .rd-punto { width: 14px; height: 14px; }
+.dr .rd-saludo { font-size: 17px; line-height: 25px; color: var(--v3-secundario); }
+.dr .rd-estimado { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; font-size: 12.5px; line-height: 1.4; color: var(--v3-secundario); }
+.dr .rd-pill { display: inline-flex; border-radius: 999px; padding: 2px 9px; font-size: 11px; font-weight: 600; line-height: 16px; background: #fdf3e3; color: #95580f; }
+.dr .rd-capas { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.dr .rd-capa { background: #ffffff; border: 1px solid var(--v3-borde); border-radius: 14px; padding: 14px 16px; display: flex; flex-direction: column; gap: 4px; box-shadow: 0 1px 2px rgba(16, 42, 84, .04); }
+.dr .rd-capa-k { font-size: 10.5px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; color: var(--v3-apagado); line-height: 1.4; }
+.dr .rd-capa-v { display: inline-flex; align-items: center; gap: 8px; font-size: 20px; font-weight: 600; line-height: 1.3; color: var(--v3-tinta); }
+.dr .rd-radar { background: #ffffff; border: 1px solid var(--v3-borde); border-radius: 20px; box-shadow: var(--v3-sombra); padding: 16px 24px 20px; min-width: 0; }
 
-/* Los niveles: el mismo color en el texto, la barra y la etiqueta (los de la aplicación vieja). */
-.dr [data-nivel="D"] { --nc: #DC2626; --nf: #F87171; --ns: #FEECEC; }
-.dr [data-nivel="I"] { --nc: #E05A0C; --nf: #FB923C; --ns: #FFF1E6; }
-.dr [data-nivel="F"] { --nc: #A66A00; --nf: #FBBF24; --ns: #FFF7DB; }
-.dr [data-nivel="E"] { --nc: #1D4ED8; --nf: #60A5FA; --ns: #EAF2FE; }
-.dr [data-nivel="O"] { --nc: #047857; --nf: #42E4B3; --ns: #E3FBF3; }
+/* Las tarjetas de las secciones. */
+.dr .rd-tarjeta { background: #ffffff; border: 1px solid var(--v3-borde); border-radius: 20px; box-shadow: var(--v3-sombra); padding: 28px 32px; display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.dr .rd-tarjeta h2 { font-family: var(--font-body); font-size: 28px; line-height: 34px; font-weight: 600; letter-spacing: -.015em; color: var(--v3-tinta); }
 
-/* Las tres piezas: lo que más importa de la página. */
-.dr .rd-panel { background: #fff; border: 1px solid var(--border); border-radius: var(--r-lg); box-shadow: var(--sh-sm); padding: clamp(20px, 3vw, 28px); }
-.dr .rd-panel-titulo { font-size: 13px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); font-family: var(--font-display); margin-bottom: 10px; }
-.dr .rd-empezar { border: 2px solid var(--accent); box-shadow: 0 18px 40px -30px rgba(232, 72, 28, .55); }
-.dr .rd-empezar .rd-panel-titulo { color: var(--accent); }
-.dr .rd-empezar h2 { font-size: clamp(22px, 3vw, 28px); font-weight: 800; margin-bottom: 10px; }
-.dr .rd-empezar p { font-size: 15.5px; color: var(--text); }
-.dr .rd-costo { margin-top: 12px; padding: 12px 14px; background: var(--accent-soft); border-radius: var(--r-sm); color: var(--text-secondary) !important; }
-.dr .rd-costo b { color: var(--text); }
-.dr .rd-riesgos { list-style: none; padding: 0; display: grid; gap: 10px; }
-.dr .rd-riesgos li { position: relative; padding-left: 26px; font-size: 15px; line-height: 1.55; color: var(--text); }
-.dr .rd-riesgos li::before { content: "!"; position: absolute; left: 0; top: 2px; width: 18px; height: 18px; border-radius: 50%; background: #FEECEC; color: #DC2626; font-weight: 800; font-size: 12px; display: grid; place-items: center; line-height: 1; }
-.dr .rd-casos { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px; }
-.dr .rd-caso { background: var(--surface-2); border-radius: var(--r-md); padding: 16px; display: grid; gap: 6px; align-content: start; }
-.dr .rd-caso-titulo { font-family: var(--font-display); font-weight: 700; font-size: 15.5px; line-height: 1.3; color: var(--text); }
-.dr .rd-caso-promesa { font-size: 14px; line-height: 1.55; color: var(--text); }
-.dr .rd-caso-razon { font-size: 12.5px; line-height: 1.5; color: var(--muted); }
+/* Por dónde empezar: la recomendación a la izquierda y lo que cuesta quedarse, al lado. */
+.dr .rd-empezar.con-costo { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 32px; align-items: start; }
+.dr .rd-empezar-texto { display: flex; flex-direction: column; gap: 12px; }
+.dr .rd-empezar-razon { font-size: 15px; line-height: 23px; color: var(--v3-secundario); }
+.dr .rd-costo { background: #fdf3e3; border: 1px solid #f4dcb2; border-radius: 14px; padding: 18px 20px; display: flex; flex-direction: column; gap: 6px; }
+.dr .rd-costo-titulo { font-size: 13px; font-weight: 600; color: #95580f; line-height: 1.4; }
+.dr .rd-costo p:not(.rd-costo-titulo) { font-size: 15px; line-height: 23px; color: var(--v3-texto); }
 
-/* Las barras, compactas: nombre, barra y puntaje en una sola línea. */
-.dr .rd-barras { display: grid; gap: 18px; }
-.dr .rd-grupo-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 4px; }
-.dr .rd-grupo-head h3 { font-size: 16px; font-weight: 800; }
-.dr .rd-grupo-head span { font-size: 13px; color: var(--muted); }
-.dr .rd-fila { display: grid; grid-template-columns: minmax(150px, 230px) minmax(0, 1fr) 64px 104px; align-items: center; gap: 12px; padding: 8px 0; }
-.dr .rd-fila + .rd-fila { border-top: 1px solid var(--border); }
-.dr .rd-fila-nombre { font-size: 14.5px; font-weight: 600; color: var(--text); line-height: 1.3; }
-.dr .rd-frena { display: inline-block; margin-left: 6px; font-size: 10.5px; font-weight: 800; letter-spacing: .04em; color: var(--accent); white-space: nowrap; }
-.dr .rd-barra { display: block; height: 10px; border-radius: var(--r-pill); background: var(--surface-2); overflow: hidden; }
-.dr .rd-barra-fill { display: block; height: 100%; border-radius: var(--r-pill); background: var(--nf, var(--primary)); }
-.dr .rd-num { font-family: var(--font-display); font-weight: 700; font-size: 20px; font-variant-numeric: tabular-nums; color: var(--nc, var(--text)); text-align: right; line-height: 1; }
-.dr .rd-num small { font-size: 11px; color: var(--muted); font-weight: 600; }
-.dr .rd-chip { justify-self: start; display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: var(--r-pill); background: var(--ns, var(--surface-2)); color: var(--nc, var(--text)); font-size: 12px; font-weight: 600; white-space: nowrap; }
-.dr .rd-chip::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--nf, var(--muted)); }
-.dr .rd-nota { font-size: 12.5px; color: var(--muted); }
+/* Los riesgos, lado a lado. */
+.dr .rd-riesgos { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }
+.dr .rd-riesgos li { display: flex; gap: 12px; align-items: flex-start; background: #fdf7f7; border: 1px solid #f6e0dd; border-radius: 14px; padding: 16px; font-size: 14.5px; line-height: 22px; color: var(--v3-texto); }
+.dr .rd-riesgo-icono { flex: none; width: 24px; height: 24px; border-radius: 999px; background: #fdecec; color: #b5342a; display: grid; place-items: center; }
 
-/* El siguiente paso: el calendario de HubSpot, como la vieja. */
-.dr .rd-agenda { text-align: center; margin-top: 12px; display: grid; gap: 10px; justify-items: center; }
-.dr .rd-agenda h2 { font-size: clamp(21px, 2.8vw, 28px); }
-.dr .rd-agenda p { max-width: 56ch; color: var(--text-secondary); font-size: 15px; }
-.dr .rd-agenda-cal { width: 100%; border-radius: var(--r-lg); overflow: hidden; box-shadow: var(--sh-lg); margin-top: 8px; }
+/* Los casos que lo mueven, lado a lado. */
+.dr .rd-casos { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }
+.dr .rd-caso { background: var(--v3-fondo); border-radius: 14px; padding: 20px; display: flex; flex-direction: column; gap: 8px; }
+.dr .rd-caso-titulo { font-size: 17px; line-height: 23px; font-weight: 600; color: var(--v3-tinta); }
+.dr .rd-caso-promesa { font-size: 14px; line-height: 21px; color: var(--v3-secundario); }
+.dr .rd-caso-razon { margin-top: 4px; font-size: 13px; line-height: 19px; font-weight: 500; color: #177a4f; }
+
+/* Cómo está cada parte: las dos capas lado a lado, cada fila con nombre, barra, puntaje y nivel. */
+.dr .rd-barras { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 520px), 1fr)); gap: 18px 40px; }
+.dr .rd-grupo { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.dr .rd-grupo-head { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 10px; padding-bottom: 8px; border-bottom: 1px solid var(--v3-borde); margin-bottom: 4px; }
+.dr .rd-grupo-head h3 { font-family: var(--font-body); font-size: 16px; line-height: 1.3; font-weight: 600; letter-spacing: 0; color: var(--v3-tinta); }
+.dr .rd-grupo-head span { font-size: 12.5px; color: var(--v3-apagado); }
+.dr .rd-fila { display: grid; grid-template-columns: minmax(0, 1fr) minmax(80px, 180px) 60px 92px; gap: 14px; align-items: center; min-height: 44px; }
+.dr .rd-fila-nombre { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; font-size: 14px; line-height: 1.35; color: var(--v3-texto); }
+.dr .rd-frena { display: inline-flex; border-radius: 999px; padding: 1px 8px; font-size: 10px; font-weight: 700; letter-spacing: .06em; line-height: 16px; background: #fdecec; color: #b5342a; white-space: nowrap; }
+.dr .rd-barra { display: block; position: relative; height: 8px; border-radius: 999px; background: #eef2f7; overflow: hidden; }
+.dr .rd-barra-fill { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 999px; background: var(--nc, #a9b5c7); }
+.dr .rd-num { font-size: 15px; font-weight: 600; color: var(--v3-tinta); text-align: right; font-variant-numeric: tabular-nums; line-height: 1; }
+.dr .rd-num small { font-size: 11px; font-weight: 500; color: var(--v3-apagado); }
+.dr .rd-chip { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 500; color: var(--v3-texto); white-space: nowrap; }
+.dr .rd-chip::before { content: ""; flex: none; width: 8px; height: 8px; border-radius: 999px; background: var(--nc, #a9b5c7); }
+.dr .rd-chip[data-no-lo-se]::before { background: #ffffff; border: 1.5px dashed var(--nc, #a9b5c7); width: 9px; height: 9px; }
+.dr .rd-nota { font-size: 12.5px; color: var(--v3-apagado); }
+
+/* El siguiente paso: el texto a la izquierda y la agenda de HubSpot a la derecha. */
+.dr .rd-agenda { padding: 20px 8px 0; display: grid; grid-template-columns: 440px minmax(0, 1fr); gap: 40px; align-items: start; }
+.dr .rd-agenda-texto { display: flex; flex-direction: column; gap: 12px; padding-top: 12px; }
+.dr .rd-agenda-texto h2 { font-family: var(--font-body); font-size: 32px; line-height: 38px; font-weight: 600; letter-spacing: -.02em; color: var(--v3-tinta); }
+.dr .rd-agenda-texto > p:not(.rd-eyebrow) { font-size: 16px; line-height: 24px; color: var(--v3-secundario); }
+.dr .rd-agenda-caja { background: #ffffff; border: 1px solid var(--v3-borde); border-radius: 20px; box-shadow: var(--v3-sombra); padding: 16px; min-width: 0; }
+.dr .rd-agenda-cal { width: 100%; border-radius: 14px; overflow: hidden; }
 /* El alto del iframe lo pide HubSpot por mensaje (CalendarioDeHubspot.tsx); mientras carga, se reserva el lugar. */
 .dr .rd-agenda-cal iframe { display: block; width: 100%; border: 0; }
-.dr .rd-agenda-cargando { height: 560px; background: #fff; }
+.dr .rd-agenda-cargando { height: 520px; background: #ffffff; }
 @media screen and (min-width: 700px) { .dr .rd-agenda-cal.is-compacto { max-height: 560px; } }
-.dr .rd-agenda-enlace { font-size: 13px; }
-.dr .rd-agenda-aviso { font-weight: 600; color: var(--text) !important; }
-.dr .rd-pie { display: flex; justify-content: center; flex-wrap: wrap; gap: 10px; margin-top: 8px; }
-.dr .rd-pie-texto { text-align: center; font-size: 12.5px; color: var(--muted); }
+.dr .rd-agenda-enlace { display: inline-block; margin-top: 10px; font-size: 13px; }
+.dr .rd-agenda-aviso { min-height: 200px; border: 1.5px dashed #c9d3e1; background: var(--v3-fondo); border-radius: 14px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; text-align: center; padding: 20px; }
+.dr .rd-agenda-aviso p { font-size: 14px; font-weight: 600; color: var(--v3-tinta); max-width: 40ch; }
+.dr .rd-pie { display: flex; flex-direction: column; align-items: center; gap: 14px; padding-top: 12px; }
+.dr .rd-pie-texto { text-align: center; font-size: 12.5px; color: var(--v3-apagado); }
 
-/* En el PDF: el mismo documento, sin lo que no se puede tocar en papel. */
-.dr.rd-pdf { min-height: 0; }
-.dr.rd-pdf .topbar { position: static; backdrop-filter: none; background: var(--ink); }
-.dr.rd-pdf .rd { padding-bottom: 32px; }
-.dr.rd-pdf .rd-head, .dr.rd-pdf .rd-panel { box-shadow: none; }
-.dr.rd-pdf .rd-panel, .dr.rd-pdf .rd-head { break-inside: avoid; }
-
-/* Solo en pantalla: al imprimir, Chromium mide estas reglas contra el papel por defecto (816 px) y el PDF salía con el
-   diseño del celular y cortado, porque su alto se mide antes en la pantalla de 1000 px. */
+/* Solo en pantalla (al imprimir, Chromium mide las max-width contra el papel). */
+@media screen and (max-width: 1100px) {
+  .dr .rd-head-arriba { grid-template-columns: 1fr; gap: 20px; }
+  .dr .rd-agenda { grid-template-columns: 1fr; gap: 16px; }
+}
 @media screen and (max-width: 820px) {
-  .dr .rd-head { grid-template-columns: 1fr; }
-  .dr .rd-capas { grid-template-columns: 1fr 1fr; margin-top: 6px; }
+  .dr .rd-empezar.con-costo { grid-template-columns: 1fr; gap: 16px; }
 }
-/* En el teléfono los textos de la rueda quedan de 5 px: va el radar simple, y el detalle está en las barras. */
-@media screen and (max-width: 700px) {
-  .dr .rd-rueda { display: none; }
-  .dr .rd-radar-simple { display: block; }
-  .dr .rd-head-radar { background: rgba(255, 255, 255, .7); padding: 4px 0; }
-}
+/* El teléfono: el tablero `Movil`. */
 @media screen and (max-width: 640px) {
-  .dr .rd { padding-top: 16px; gap: 16px; }
-  .dr .rd-acciones .btn { flex: 1 1 auto; }
-  .dr .rd-fila { grid-template-columns: minmax(0, 1fr) auto auto; grid-template-areas: "nombre num chip" "barra barra barra"; gap: 6px 10px; }
+  .dr.rd-v3 .topbar { height: 56px; }
+  .dr .rd { padding: 14px 16px 32px; gap: 14px; }
+  .dr .rd-acciones { gap: 8px; }
+  .dr .rd-btn { min-height: 44px; padding: 0 14px; }
+  .dr .rd-head { border-radius: 24px; padding: 22px 16px 16px; gap: 14px; }
+  .dr .rd-head-arriba { gap: 14px; }
+  .dr .rd-head-texto { gap: 8px; padding: 0 4px; }
+  .dr .rd-empresa { padding: 4px 12px 4px 4px; }
+  .dr .rd-empresa-logo { width: 24px; height: 24px; font-size: 11px; }
+  .dr .rd-empresa-txt b { font-size: 13px; }
+  .dr .rd-head-texto > .rd-eyebrow { margin-top: 4px; }
+  .dr .rd-head-texto > .rd-label { margin-top: 6px; }
+  .dr .rd-nivel { font-size: 42px; line-height: 46px; gap: 10px; }
+  .dr .rd-nivel .rd-punto { width: 11px; height: 11px; }
+  .dr .rd-saludo { font-size: 15px; line-height: 22px; }
+  .dr .rd-capas { gap: 8px; }
+  .dr .rd-capa { border: 0; border-radius: 14px; padding: 12px; gap: 3px; box-shadow: none; }
+  .dr .rd-capa-k { font-size: 10px; letter-spacing: .12em; }
+  .dr .rd-capa-v { font-size: 16px; gap: 7px; }
+  .dr .rd-capa-v .rd-punto { width: 8px; height: 8px; }
+  .dr .rd-radar { border: 0; padding: 12px 10px 14px; }
+  .dr .rd-tarjeta { padding: 20px 18px; gap: 10px; }
+  .dr .rd-tarjeta h2 { font-size: 22px; line-height: 28px; letter-spacing: -.01em; }
+  .dr .rd-empezar-texto { gap: 10px; }
+  .dr .rd-empezar-razon { font-size: 14.5px; line-height: 22px; }
+  .dr .rd-empezar.con-costo { gap: 10px; }
+  .dr .rd-costo { padding: 14px; gap: 4px; }
+  .dr .rd-costo-titulo { font-size: 12.5px; }
+  .dr .rd-costo p:not(.rd-costo-titulo) { font-size: 14px; line-height: 21px; }
+  .dr .rd-riesgos { gap: 10px; }
+  .dr .rd-riesgos li { gap: 10px; padding: 14px; font-size: 14px; line-height: 21px; }
+  .dr .rd-riesgo-icono { width: 22px; height: 22px; }
+  .dr .rd-casos { gap: 10px; }
+  .dr .rd-caso { padding: 16px; }
+  .dr .rd-fila { grid-template-columns: minmax(0, 1fr) auto auto; grid-template-areas: "nombre num chip" "barra barra barra"; gap: 6px 10px; padding: 6px 0; }
   .dr .rd-fila-nombre { grid-area: nombre; }
   .dr .rd-barra { grid-area: barra; }
-  .dr .rd-num { grid-area: num; font-size: 18px; }
+  .dr .rd-num { grid-area: num; }
   .dr .rd-chip { grid-area: chip; }
+  .dr .rd-agenda { padding: 8px 0 0; }
+  .dr .rd-agenda-texto { padding-top: 0; }
+  .dr .rd-agenda-texto h2 { font-size: 24px; line-height: 30px; }
+  .dr .rd-agenda-caja { padding: 8px; }
 }
+
+/* ── El PDF: hojas horizontales de 1056 × 816 (carta), una sección por hoja ───────────────── */
+.dr.rd-pdf { min-height: 0; display: block; background: #ffffff; }
+.dr .rd-hoja { width: 1056px; height: 816px; box-sizing: border-box; padding: 32px 40px 24px; background: #ffffff; display: flex; flex-direction: column; gap: 12px; overflow: hidden; break-after: page; page-break-after: always; }
+.dr .rd-hoja:last-child { break-after: auto; page-break-after: auto; }
+.dr .rd-hoja-barra { flex: none; display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 8px 16px; border-radius: 12px; background: #051849; }
+.dr .rd-hoja-barra img { height: 20px; width: auto; }
+.dr .rd-hoja-barra span { font-size: 11px; line-height: 1.3; color: #c3cee0; text-align: right; }
+.dr .rd-hoja-cuerpo { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 12px; }
+.dr .rd-hoja-pie { flex: none; margin-top: auto; display: flex; justify-content: space-between; align-items: center; gap: 16px; padding-top: 8px; border-top: 1px solid var(--v3-borde); font-size: 10.5px; color: var(--v3-apagado); }
+.dr .rd-hoja-numero { font-variant-numeric: tabular-nums; }
+/* Hoja 1: la cabecera en una banda y el radar grande, sin tarjeta. */
+.dr.rd-pdf .rd-head { border-radius: 18px; padding: 16px 22px; grid-template-columns: minmax(0, 1fr) 420px; gap: 24px; align-items: center; }
+.dr.rd-pdf .rd-head-texto { gap: 4px; }
+.dr.rd-pdf .rd-nivel-fila { display: flex; align-items: center; gap: 6px; }
+.dr.rd-pdf .rd-nivel { font-size: 38px; line-height: 42px; gap: 12px; }
+.dr.rd-pdf .rd-nivel .rd-punto { width: 11px; height: 11px; }
+.dr.rd-pdf .rd-pill { font-size: 10.5px; padding: 1px 8px; line-height: 15px; }
+.dr.rd-pdf .rd-saludo { font-size: 13px; line-height: 1.4; }
+.dr.rd-pdf .rd-parcial { font-size: 12px; color: var(--v3-secundario); margin-left: 2px; }
+.dr.rd-pdf .rd-capas { gap: 10px; }
+.dr.rd-pdf .rd-capa { border: 0; box-shadow: none; border-radius: 12px; padding: 10px 14px; gap: 2px; }
+.dr.rd-pdf .rd-capa-k { font-size: 9.5px; letter-spacing: .12em; }
+.dr.rd-pdf .rd-capa-v { font-size: 16px; gap: 7px; }
+.dr.rd-pdf .rd-capa-v .rd-punto { width: 8px; height: 8px; }
+.dr.rd-pdf .rd-radar { background: none; border: 0; box-shadow: none; padding: 0; border-radius: 0; flex: 1; min-height: 0; display: flex; justify-content: center; }
+.dr.rd-pdf .rd-radar .rde { width: 924px; max-width: 100%; height: 100%; }
+/* Si la leyenda suma alto, el radar se achica para que la hoja no se corte (el SVG conserva su proporción). */
+.dr.rd-pdf .rd-radar .rde-svg { flex: 1; min-height: 0; height: 100%; }
+/* Hojas 2 y 3: las tarjetas, más compactas y sin sombra. */
+.dr.rd-pdf .rd-tarjeta { box-shadow: none; padding: 16px 22px; gap: 10px; border-radius: 16px; }
+.dr.rd-pdf .rd-tarjeta h2 { font-size: 21px; line-height: 27px; }
+.dr.rd-pdf .rd-empezar.con-costo { gap: 24px; }
+.dr.rd-pdf .rd-empezar-texto { gap: 8px; }
+.dr.rd-pdf .rd-empezar-razon, .dr.rd-pdf .rd-costo p:not(.rd-costo-titulo) { font-size: 13px; line-height: 19px; }
+.dr.rd-pdf .rd-costo { padding: 12px 14px; }
+.dr.rd-pdf .rd-riesgos, .dr.rd-pdf .rd-casos { grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+.dr.rd-pdf .rd-riesgos li { padding: 12px; font-size: 12.5px; line-height: 18px; gap: 10px; }
+.dr.rd-pdf .rd-caso { padding: 14px; gap: 6px; }
+.dr.rd-pdf .rd-caso-titulo { font-size: 14.5px; line-height: 19px; }
+.dr.rd-pdf .rd-caso-promesa { font-size: 12.5px; line-height: 18px; }
+.dr.rd-pdf .rd-caso-razon { font-size: 12px; line-height: 17px; }
+.dr.rd-pdf .rd-barras { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 32px; }
+.dr.rd-pdf .rd-fila { grid-template-columns: minmax(0, 1fr) 120px 52px 86px; gap: 10px; min-height: 38px; }
+.dr.rd-pdf .rd-fila-nombre { font-size: 12.5px; }
+.dr.rd-pdf .rd-agenda-pdf p:not(.rd-eyebrow) { font-size: 13px; line-height: 19px; color: var(--v3-secundario); }
+.dr.rd-pdf .rd-agenda-pdf a { word-break: break-all; }
 @media print {
   .dr .rd-acciones, .dr .rd-agenda, .dr .rd-pie { display: none !important; }
-  .dr .topbar { position: static; backdrop-filter: none; background: var(--ink); }
 }

@@ -11614,10 +11614,25 @@ vive en el RUNBOOK › «El corte de la aplicación vieja del test»; acá va el
 - **El resultado, como el de la app vieja, con lo de Nexus al frente (Elías, 28 oct).** La cabecera celeste con el
   nivel, el **radar de la empresa arriba** (reemplaza la curva de niveles, que salió), después «Por dónde empezar», «Lo
   que hoy pone en riesgo a tu área» y «Lo que lo mueve», y recién ahí las barras con su puntaje sobre 100, compactas y
-  sin la explicación de cada una. El radar es la rueda de la escala (`RadarDeUnaEmpresa`, la del Mapa) en escritorio y en
-  el PDF; en el celular, donde sus textos quedan de 5 px, va un radar simple que se lee (`RadarDelResultado.tsx`) y el
-  detalle está en las barras. Sin aviso del navegador al irse: salía también al pasar al resultado y no protegía nada
+  sin la explicación de cada una. Sin aviso del navegador al irse: salía también al pasar al resultado y no protegía nada
   (el avance se guarda en cada pregunta).
+- **El rediseño del resultado: la misma estructura, a lo ancho y en V3 (Elías, 29 oct; Claude Design, tableros `Main`,
+  `Movil` y `PdfHoja1`).** «Mucho más parecido a lo que está hoy en cuanto a estructura»: mismas secciones, mismo orden y
+  mismos textos. Cambian tres cosas. (1) El radar es el de la teoría con la empresa como figura (decisión 7 de «La escala
+  se ve también como radar»), grande y a todo el ancho de su tarjeta, con «Ver puntajes» apagado al abrir; el interruptor
+  es un checkbox que resuelve el CSS (`:has`), sin JavaScript. Cuando la tarjeta del radar mide menos de 960 px (el
+  teléfono, una tablet, una ventana a media pantalla; es una consulta del contenedor, no de la pantalla) va el mismo
+  radar compacto, con el número de cada dimensión en la punta del eje y la lista debajo: ya no hay un radar simple
+  aparte. El PDF repite el dominio de la empresa en la barra de cada hoja; no lleva el puntaje general sobre 100 (el
+  radar del PDF va sin puntajes, como pidió Elías), pero sí el de cada parte en las barras.
+  (2) Cada sección usa el ancho: el costo de quedarse al lado de la recomendación, los riesgos y los casos lado a lado,
+  las dos capas de las barras en dos columnas, el texto de la agenda al lado del calendario. (3) La línea V3 de Nexus:
+  Geist, tarjetas de 20 px con sombra suave, chips pastel, el degradado en la cabecera y «Descargar PDF» en el azul de
+  Nexus. Sigue siendo una página del cliente: hex literal, nunca flipea a oscuro.
+- **El PDF del resultado va en hojas carta horizontales** (1056 × 816): la 1 con la cabecera y el radar grande (sin
+  puntajes ni interruptor), la 2 con «Por dónde empezar», los riesgos y los casos, y la 3 con las barras y el enlace para
+  agendar; cada una con la barra de Smarteam arriba y su número abajo. El motor de PDF aprendió a imprimir hojas de un
+  tamaño fijo (`renderPathToPdf(ruta, { hoja })`); el resto de los documentos sigue con su PDF corrido.
 - **La agenda de HubSpot va incrustada, pero SIN su script** (`CalendarioDeHubspot.tsx`). El script oficial
   (MeetingsEmbedCode.js) le manda a HubSpot la dirección de la página, que en el resultado ES el token, y correría código
   de un tercero junto a la llave del prospecto: la misma razón por la que los píxeles no van en el resultado. El iframe
@@ -12297,14 +12312,20 @@ aplica deja su eje punteado y sus cinco cruces como puntos grises (no hay línea
    línea y la deja sin relleno. La dimensión en foco resalta su eje y su nombre en el color de marca y agranda sus marcas.
    El área y «8 dimensiones · 5 niveles» van al título de la tarjeta (el centro ahora es el 0), el número de «qué se
    trabaja primero» va junto al rótulo de cada dimensión, y «Cómo se lee» suma las franjas. La geometría es solo del
-   Radar: el Mapa y el radar de una empresa siguen en la rueda (`lib/escala/rueda.ts`).
-7. **El radar de UNA empresa es la misma rueda** (`components/escala/RadarDeUnaEmpresa.tsx`), para la página pública del
-   resultado del test y su PDF: hex literal, SVG estático sin JavaScript, un punto por dimensión con su puntaje adentro y
-   el borde del color de su nivel. El NIVEL elige el anillo y el puntaje dice cuánto avanzó dentro de él
-   (`posicionDelPuntaje`, con los tramos del chequeo): un punto nunca cae en un anillo que contradiga el nivel que se le
-   dice a la empresa. Una dimensión sin nivel no lleva punto y su número dice «no se preguntó»; una que contestó «No lo
-   sé» va con el borde punteado, «?» en vez del puntaje y «no lo sabías», como las barras. Con una sola serie, la línea
-   lleva un relleno apenas visible (7 %) para que se lea la forma. (El radar interno ya no es esta rueda: su dibujo está en la decisión 8.)
+   Radar: el Mapa sigue en la rueda (`lib/escala/rueda.ts`). (El radar de una empresa también usó la rueda hasta el
+   2026-10-29; ahora es el de la teoría, decisión 7, y el código de la rueda para una empresa se borró.)
+7. **El radar de UNA empresa es el radar de la teoría con la empresa como figura** (Elías, 2026-10-29, rediseño del
+   resultado del test; antes era la rueda del Mapa): `components/escala/RadarDeUnaEmpresa.tsx`, con su geometría en
+   `lib/escala/radar-de-una-empresa.ts`, para la página pública del resultado y su PDF. Hex literal y SVG del servidor.
+   La gramática de la decisión 8 (un anillo poligonal por etapa del color de su nivel, Funcional punteado como «La
+   base», los nombres de las etapas en el hueco de arriba) y encima la empresa: **cada vértice va exacto en el cruce de
+   su eje con el anillo de su etapa** (el puntaje no lo mueve dentro del anillo: lo que se dice es la etapa; el número
+   solo se lee con «Ver puntajes»); lo que más frena lleva un halo, el chip «LO QUE MÁS FRENA» y una flecha punteada
+   hasta su objetivo, marcado con un aro punteado; una dimensión que no se preguntó va con el eje punteado, sin vértice
+   y «No se preguntó», y la figura pasa por el centro donde faltan; «No lo sé» va con «?» en un aro punteado y «No lo
+   sabías · cuenta como Deficiente». Con alguna de esas dos, una leyenda debajo. Tres juegos de medidas, los del diseño:
+   pantalla, PDF y teléfono. Pruebas: `radar-de-una-empresa.test.ts` (vértices por etapa, lo no preguntado, «No lo sé»,
+   lo que más frena y que ningún rótulo pise a otro, también con áreas de 3 y 5 dimensiones por mitad).
 8. **El radar de la escala es el radar de la teoría: el Mapa en forma de radar** (Elías, 2026-10-28, al rechazar el de
    promedios: «se ve como si estuviera seleccionada una empresa. En la escala general la idea es ver la teoría, poder ver
    todas las etapas, los diferentes criterios por dimensión, explorarla como si fuera el mapa, pero que se vea distinto»;

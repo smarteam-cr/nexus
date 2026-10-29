@@ -4,7 +4,7 @@
  *
  * Usa el motor de PDF de siempre (lib/print/pdf-runner.ts: Chromium abre una página de la propia app y la imprime, con
  * el semáforo único de 2 a la vez y cola de 4 para todo Nexus). Imprime /external/test/resultado/imprimir: la misma vista
- * del resultado sin botones ni calendario, con el radar en SVG. El orden:
+ * del resultado sin botones ni calendario, con el radar en SVG, en hojas horizontales (`HOJA_DEL_PDF`). El orden:
  *   1. el token con su forma y el tope por dirección (lib/tests-diagnostico/limite.ts) → sin tocar la base;
  *   2. que el resultado exista y esté terminado → 404 neutro antes de gastar un Chromium;
  *   3. el tope total por hora, que cuenta solo resultados reales (un script con tokens inventados no lo agota);
@@ -15,7 +15,7 @@ import { createHash } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { acquirePdfSlot, pdfErrorMessage, renderPathToPdf, slugify } from "@/lib/print/pdf-runner";
 import { direccionDelVisitante, permitirPdfDeLaDireccion, permitirPdfEnTotal } from "@/lib/tests-diagnostico/limite";
-import { rutaDeImpresion, sinElToken, TOKEN_DEL_RESULTADO } from "@/lib/tests-diagnostico/pagina-del-resultado";
+import { HOJA_DEL_PDF, rutaDeImpresion, sinElToken, TOKEN_DEL_RESULTADO } from "@/lib/tests-diagnostico/pagina-del-resultado";
 import { resultadoPublico } from "@/lib/tests-diagnostico/servicio-server";
 
 export const dynamic = "force-dynamic";
@@ -41,7 +41,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
     return NextResponse.json({ error: "Estamos preparando varios PDF a la vez. Espera unos segundos y vuelve a intentarlo." }, { status: 429 });
   }
   try {
-    const { pdf } = await renderPathToPdf(rutaDeImpresion(token));
+    const { pdf } = await renderPathToPdf(rutaDeImpresion(token), { hoja: HOJA_DEL_PDF });
     const empresa = res.intento.empresa || res.intento.dominio || "";
     const archivo = `${["diagnostico", slugify(res.resultado.areaNombre, ""), slugify(empresa, "")].filter(Boolean).join("-")}.pdf`;
     return new NextResponse(new Uint8Array(pdf), {

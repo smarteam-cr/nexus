@@ -1,6 +1,6 @@
 /**
  * lib/tests-diagnostico/pagina-del-resultado.ts — LO PURO DE LA PÁGINA DE RESULTADO del test público y de su PDF (28 oct).
- * Lo usan components/external/test/ResultadoDelTestVista.tsx, RadarDelResultado.tsx, CalendarioDeHubspot.tsx y las rutas
+ * Lo usan components/external/test/ResultadoDelTestVista.tsx, CalendarioDeHubspot.tsx y las rutas
  * del PDF.
  *
  * El PDF lo arma el motor de siempre (lib/print/pdf-runner.ts: Chromium abre una página de la propia app y la imprime).
@@ -13,6 +13,13 @@ export const TOKEN_DEL_RESULTADO = /^[A-Za-z0-9_-]{43}$/;
 
 /** La página que imprime el motor (pública como el resultado: la llave es el token). */
 export const rutaDeImpresion = (token: string) => `/external/test/resultado/imprimir?t=${encodeURIComponent(token)}`;
+
+/**
+ * La hoja del PDF: carta horizontal, en px (11 × 8,5 pulgadas a 96 por pulgada). La vista repite estas medidas en
+ * `.rd-hoja` de components/external/test/resultado.css (el CSS no puede importarlas): pagina-del-resultado.test.ts falla si
+ * dejan de coincidir, porque cada hoja se partiría en dos páginas.
+ */
+export const HOJA_DEL_PDF = { ancho: 1056, alto: 816 } as const;
 
 /** Lo que pide el botón de la página para bajar el PDF. */
 export const rutaDelPdf = (token: string) => `/api/external/test/${encodeURIComponent(token)}/pdf`;
@@ -34,23 +41,6 @@ export function puntajeDeLaDimension(letra: string | null, puntaje: number | nul
   if (puntaje != null) return Math.max(0, Math.min(100, Math.round(puntaje)));
   const i = letra ? LETRAS.indexOf(letra as (typeof LETRAS)[number]) : -1;
   return i < 0 ? 0 : Math.round(((i + 0.5) / LETRAS.length) * 100);
-}
-
-/** Dónde cae el punto de un nivel en el radar: sobre su anillo (Deficiente el primero, Óptimo el borde). Sin nivel, 0. */
-export function radioDelNivel(letra: string | null): number {
-  const i = letra ? LETRAS.indexOf(letra as (typeof LETRAS)[number]) : -1;
-  return i < 0 ? 0 : (i + 1) / LETRAS.length;
-}
-
-/** Parte el nombre de una dimensión en hasta dos líneas de ~`max` letras, por palabras (los rótulos del radar). */
-export function lineasDelNombre(nombre: string, max = 16): string[] {
-  const lineas: string[] = [];
-  for (const p of nombre.split(/\s+/).filter(Boolean)) {
-    const ultima = lineas[lineas.length - 1];
-    if (ultima && `${ultima} ${p}`.length <= max) lineas[lineas.length - 1] = `${ultima} ${p}`;
-    else lineas.push(p);
-  }
-  return lineas.length <= 2 ? lineas : [lineas[0], lineas.slice(1).join(" ")];
 }
 
 /** De dónde puede hablar la agenda de HubSpot incrustada (los de su script oficial, sin los de prueba). */
