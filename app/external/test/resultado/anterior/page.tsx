@@ -13,6 +13,8 @@ import LeerResultadoAnterior from "@/components/external/test/LeerResultadoAnter
 import ResultadoDelTestVista from "@/components/external/test/ResultadoDelTestVista";
 import { leerEscalaVigente } from "@/lib/escala/documento/vigente";
 import { getBrandLogos } from "@/lib/external/smarteam-logo";
+import { detallesDelResultado } from "@/lib/tests-diagnostico/detalle-de-la-dimension";
+import { enlaceDeLaAgenda } from "@/lib/tests-diagnostico/pagina-del-resultado";
 import { leerNivelesDelResultadoAnterior, resultadoDelTestAnterior } from "@/lib/tests-diagnostico/resultado-anterior";
 
 export const dynamic = "force-dynamic";
@@ -38,7 +40,7 @@ export default async function ResultadoAnteriorPage({ searchParams }: { searchPa
   }
   const vigente = await leerEscalaVigente();
   const r = "escala" in vigente ? resultadoDelTestAnterior(vigente.escala, leidos) : null;
-  const agenda = process.env.TESTS_ENLACE_DE_AGENDA?.trim() ?? "";
+  const agenda = enlaceDeLaAgenda(process.env.TESTS_ENLACE_DE_AGENDA);
   if (!r) {
     return (
       <ExternalShell smarteamLogoUrl={logos.smarteam}>
@@ -53,8 +55,8 @@ export default async function ResultadoAnteriorPage({ searchParams }: { searchPa
       r={r}
       nombre={null}
       empresa={null}
-      agenda={/^https:\/\//.test(agenda) ? agenda : null}
-      sinCorreo
+      agenda={agenda}
+      detalles={"escala" in vigente ? detallesDelResultado(vigente.escala, r) : {}}
       aviso={`${leidos.fecha ? `Hiciste este test el ${fechaLarga(leidos.fecha)}. ` : "Este es un test que hiciste antes. "}Lo leemos con la versión de hoy de la escala, así que el nivel puede no ser idéntico al que viste ese día.`}
     />
   );

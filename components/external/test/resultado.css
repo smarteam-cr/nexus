@@ -6,6 +6,11 @@
    degradado en la cabecera) y cada sección a lo ancho (columnas lado a lado). Vive bajo `.dr.rd-v3` (diagnostico.css
    pone la base). Página del cliente: hex literal, nunca flipea a oscuro. `.rd-pdf` es el PDF (lib/print/pdf-runner.ts),
    en hojas horizontales de 1056 × 816.
+
+   El pulido del 29 oct: arriba, el logo de color con los botones (sin la barra azul); la cabecera sin su contenedor
+   (`.rd-cabecera`; `.rd-head` es la banda del PDF); la letra un poco más grande SOLO en pantalla (el bloque
+   `@media screen` de más abajo: el PDF se imprime con `print` y sigue igual); las barras que se llenan, las secciones que
+   aparecen (`[data-revela]`, AnimacionesDelResultado.tsx) y «Ver detalles» (`.rd-detalles`).
    ───────────────────────────────────────────────────────────────────────── */
 .dr.rd-v3 {
   --font-display: var(--font-geist-sans), Geist, ui-sans-serif, system-ui, 'Segoe UI', sans-serif;
@@ -25,7 +30,6 @@
   color: var(--v3-texto);
   line-height: 1.5;
 }
-.dr.rd-v3 .topbar { position: static; background: #051849; backdrop-filter: none; border-bottom: 0; }
 .dr.rd-v3 a { color: var(--v3-marca); }
 .dr.rd-v3 a:hover { color: #1e4b9e; }
 
@@ -40,8 +44,11 @@
 
 .dr .rd { width: 100%; max-width: 1440px; margin: 0 auto; padding: 20px 24px 48px; display: grid; gap: 20px; }
 
-/* Los botones de arriba: rehacer a la izquierda, el PDF (en el azul de Nexus) a la derecha. */
-.dr .rd-acciones { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+/* Arriba: el logo de color a la izquierda; rehacer y el PDF (en el azul de Nexus) a la derecha. */
+.dr .rd-arriba { display: flex; justify-content: space-between; align-items: center; gap: 12px 20px; flex-wrap: wrap; padding: 4px 0 8px; }
+.dr .rd-logo { display: inline-flex; flex: none; }
+.dr .rd-logo img { display: block; height: 34px; width: auto; }
+.dr .rd-acciones { display: flex; justify-content: flex-end; align-items: center; gap: 12px; flex-wrap: wrap; }
 .dr .rd-btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 9px 16px; border-radius: 10px; border: 1px solid transparent; font-family: var(--font-body); font-size: 13px; font-weight: 500; line-height: 1.2; text-decoration: none; cursor: pointer; transition: background .15s, box-shadow .15s; }
 .dr .rd-btn:hover { text-decoration: none; }
 .dr .rd-btn-ghost { background: #ffffff; border-color: var(--v3-borde-fuerte); color: var(--v3-secundario) !important; }
@@ -56,8 +63,10 @@
 .dr .rd-eyebrow { font-family: var(--font-body); font-size: 10.5px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; color: var(--v3-marca); line-height: 1.4; }
 .dr .rd-label { font-size: 10.5px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; color: var(--v3-apagado); line-height: 1.4; }
 
-/* La cabecera: el degradado, el nivel en grande con las dos capas al lado y el radar en su tarjeta blanca. */
+/* La cabecera: el nivel en grande con las dos capas al lado y, debajo, el radar en su tarjeta blanca a todo el ancho.
+   En la página va sin contenedor (`.rd-cabecera`); en el PDF, en su banda con el degradado (`.rd-head`). */
 .dr .rd-head { border-radius: 24px; padding: 32px; background: var(--v3-degradado); display: grid; gap: 24px; }
+.dr .rd-cabecera { display: grid; gap: 24px; padding: 8px 8px 0; }
 .dr .rd-head-arriba { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 640px); gap: 32px; align-items: end; }
 .dr .rd-head-texto { display: flex; flex-direction: column; gap: 10px; align-items: flex-start; min-width: 0; }
 .dr .rd-empresa { display: inline-flex; align-items: center; gap: 10px; padding: 5px 14px 5px 5px; border-radius: 999px; background: #ffffff; box-shadow: 0 1px 2px rgba(16, 42, 84, .06); max-width: 100%; }
@@ -78,6 +87,7 @@
 .dr .rd-capa-k { font-size: 10.5px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; color: var(--v3-apagado); line-height: 1.4; }
 .dr .rd-capa-v { display: inline-flex; align-items: center; gap: 8px; font-size: 20px; font-weight: 600; line-height: 1.3; color: var(--v3-tinta); }
 .dr .rd-radar { background: #ffffff; border: 1px solid var(--v3-borde); border-radius: 20px; box-shadow: var(--v3-sombra); padding: 16px 24px 20px; min-width: 0; }
+.dr .rd-cabecera .rd-radar { margin: 0 -8px; padding: 20px 28px 24px; }
 
 /* Las tarjetas de las secciones. */
 .dr .rd-tarjeta { background: #ffffff; border: 1px solid var(--v3-borde); border-radius: 20px; box-shadow: var(--v3-sombra); padding: 28px 32px; display: flex; flex-direction: column; gap: 16px; min-width: 0; }
@@ -113,13 +123,55 @@
 .dr .rd-fila-nombre { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; font-size: 14px; line-height: 1.35; color: var(--v3-texto); }
 .dr .rd-frena { display: inline-flex; border-radius: 999px; padding: 1px 8px; font-size: 10px; font-weight: 700; letter-spacing: .06em; line-height: 16px; background: #fdecec; color: #b5342a; white-space: nowrap; }
 .dr .rd-barra { display: block; position: relative; height: 8px; border-radius: 999px; background: #eef2f7; overflow: hidden; }
-.dr .rd-barra-fill { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 999px; background: var(--nc, #a9b5c7); }
+.dr .rd-barra-fill { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 999px; background: var(--nc, #a9b5c7); overflow: hidden; }
 .dr .rd-num { font-size: 15px; font-weight: 600; color: var(--v3-tinta); text-align: right; font-variant-numeric: tabular-nums; line-height: 1; }
 .dr .rd-num small { font-size: 11px; font-weight: 500; color: var(--v3-apagado); }
 .dr .rd-chip { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 500; color: var(--v3-texto); white-space: nowrap; }
 .dr .rd-chip::before { content: ""; flex: none; width: 8px; height: 8px; border-radius: 999px; background: var(--nc, #a9b5c7); }
 .dr .rd-chip[data-no-lo-se]::before { background: #ffffff; border: 1.5px dashed var(--nc, #a9b5c7); width: 9px; height: 9px; }
 .dr .rd-nota { font-size: 12.5px; color: var(--v3-apagado); }
+
+/* «Ver detalles» de cada barra: ocupa la fila entera, debajo del nombre y la barra. */
+.dr .rd-detalles { grid-column: 1 / -1; margin-top: -6px; }
+.dr .rd-detalles > summary { display: inline-flex; align-items: center; gap: 6px; padding: 2px 0 4px; font-size: 13px; font-weight: 600; color: var(--v3-marca); cursor: pointer; list-style: none; user-select: none; }
+.dr .rd-detalles > summary::-webkit-details-marker { display: none; }
+.dr .rd-detalles > summary::after { content: ""; width: 6px; height: 6px; border-right: 1.75px solid currentColor; border-bottom: 1.75px solid currentColor; transform: rotate(-45deg); transition: transform .15s ease; margin-left: 2px; }
+.dr .rd-detalles[open] > summary::after { transform: rotate(45deg) translate(-1px, -1px); }
+.dr .rd-detalles > summary:hover { color: #1e4b9e; }
+.dr .rd-detalles > summary:focus-visible { outline: 2px solid var(--v3-azul); outline-offset: 3px; border-radius: 6px; }
+.dr .rd-detalles-cuerpo { margin: 6px 0 12px; padding: 16px 18px; border-radius: 14px; background: var(--v3-fondo); display: grid; gap: 12px; font-size: 14px; line-height: 21px; color: var(--v3-secundario); }
+.dr .rd-detalles-mide { color: var(--v3-texto); }
+.dr .rd-detalles-bloque { display: grid; gap: 4px; padding-top: 12px; border-top: 1px dashed #d6dee9; }
+.dr .rd-detalles-cuerpo > .rd-detalles-bloque:first-child { padding-top: 0; border-top: 0; }
+.dr .rd-detalles-k { font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--v3-apagado); }
+.dr .rd-detalles-respuesta { color: var(--v3-texto); font-style: italic; }
+.dr .rd-detalles-falta .rd-detalles-k { color: #177a4f; }
+.dr .rd-detalles-riesgo .rd-detalles-k { color: #b5342a; }
+.dr .rd-detalles-lista { list-style: none; margin: 2px 0 0; padding: 0; display: grid; gap: 6px; }
+.dr .rd-detalles-lista li { position: relative; padding-left: 20px; }
+.dr .rd-detalles-falta li::before { content: ""; position: absolute; left: 0; top: 4px; width: 12px; height: 12px; border-radius: 4px; border: 1.5px solid #22c55e; background: #ffffff; }
+.dr .rd-detalles-riesgo li::before { content: ""; position: absolute; left: 3px; top: 7px; width: 7px; height: 7px; border-radius: 999px; background: #dc2626; }
+@media (prefers-reduced-motion: no-preference) {
+  .dr .rd-detalles[open] .rd-detalles-cuerpo { animation: rd-detalles-abre .25s ease both; }
+}
+@keyframes rd-detalles-abre { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+
+/* Solo para el lector de pantalla. */
+.dr .rd-sr { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+
+/* El movimiento (AnimacionesDelResultado.tsx): solo lo que estaba debajo de la pantalla al abrir. Sin JS, o con
+   «reducir movimiento», nada de esto se activa y todo queda en su lugar. */
+.dr [data-revela="oculta"] { opacity: 0; transform: translateY(22px); }
+.dr [data-revela="oculta"], .dr [data-revela="vista"] { transition: opacity .7s cubic-bezier(.2, .7, .2, 1), transform .7s cubic-bezier(.2, .7, .2, 1); }
+.dr .rd-fila[data-barra="llena"] .rd-barra-fill { transition: width 1.6s cubic-bezier(.2, .7, .2, 1) var(--retraso, 0ms); }
+.dr .rd-barra-fill::after { content: ""; position: absolute; inset: 0; background: linear-gradient(90deg, transparent, rgba(255, 255, 255, .55), transparent); transform: translateX(-130%); }
+.dr .rd-fila[data-barra="llena"] .rd-barra-fill::after { animation: rd-barrido 1.6s ease calc(var(--retraso, 0ms) + .2s) 1 both; }
+@keyframes rd-barrido { from { transform: translateX(-130%); } to { transform: translateX(130%); } }
+@media (prefers-reduced-motion: reduce) {
+  .dr [data-revela="oculta"] { opacity: 1; transform: none; }
+  .dr .rd-fila[data-barra="llena"] .rd-barra-fill { transition: none; }
+  .dr .rd-barra-fill::after { animation: none !important; }
+}
 
 /* El siguiente paso: el texto a la izquierda y la agenda de HubSpot a la derecha. */
 .dr .rd-agenda { padding: 20px 8px 0; display: grid; grid-template-columns: 440px minmax(0, 1fr); gap: 40px; align-items: start; }
@@ -133,10 +185,55 @@
 .dr .rd-agenda-cargando { height: 520px; background: #ffffff; }
 @media screen and (min-width: 700px) { .dr .rd-agenda-cal.is-compacto { max-height: 560px; } }
 .dr .rd-agenda-enlace { display: inline-block; margin-top: 10px; font-size: 13px; }
-.dr .rd-agenda-aviso { min-height: 200px; border: 1.5px dashed #c9d3e1; background: var(--v3-fondo); border-radius: 14px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; text-align: center; padding: 20px; }
-.dr .rd-agenda-aviso p { font-size: 14px; font-weight: 600; color: var(--v3-tinta); max-width: 40ch; }
 .dr .rd-pie { display: flex; flex-direction: column; align-items: center; gap: 14px; padding-top: 12px; }
 .dr .rd-pie-texto { text-align: center; font-size: 12.5px; color: var(--v3-apagado); }
+
+/* La letra un poco más grande, pareja, SOLO en pantalla (pedido del 29 oct). El PDF se imprime con `print`: no la ve. */
+@media screen {
+  .dr .rd-btn { font-size: 14.5px; padding: 10px 18px; }
+  .dr .rd-pdf-error, .dr .rd-aviso { font-size: 14.5px; }
+  .dr .rd-eyebrow, .dr .rd-label { font-size: 12px; }
+  .dr .rd-empresa-logo { width: 32px; height: 32px; font-size: 13px; }
+  .dr .rd-empresa-txt b { font-size: 15.5px; }
+  .dr .rd-empresa-txt small { font-size: 13px; }
+  .dr .rd-fecha { font-size: 13.5px; }
+  .dr .rd-nivel { font-size: 68px; line-height: 72px; }
+  .dr .rd-nivel .rd-punto { width: 16px; height: 16px; }
+  .dr .rd-saludo { font-size: 19px; line-height: 28px; }
+  .dr .rd-estimado { font-size: 14px; }
+  .dr .rd-pill { font-size: 12.5px; line-height: 18px; padding: 2px 10px; }
+  .dr .rd-capa { padding: 16px 18px; }
+  .dr .rd-capa-k { font-size: 12px; }
+  .dr .rd-capa-v { font-size: 23px; }
+  .dr .rd-tarjeta h2 { font-size: 31px; line-height: 38px; }
+  .dr .rd-empezar-razon { font-size: 17px; line-height: 26px; }
+  .dr .rd-costo-titulo { font-size: 14.5px; }
+  .dr .rd-costo p:not(.rd-costo-titulo) { font-size: 17px; line-height: 26px; }
+  .dr .rd-riesgos li { font-size: 16px; line-height: 25px; }
+  .dr .rd-riesgo-icono { width: 26px; height: 26px; }
+  .dr .rd-caso-titulo { font-size: 19px; line-height: 25px; }
+  .dr .rd-caso-promesa { font-size: 15.5px; line-height: 23.5px; }
+  .dr .rd-caso-razon { font-size: 14.5px; line-height: 21px; }
+  .dr .rd-grupo-head h3 { font-size: 18px; }
+  .dr .rd-grupo-head span { font-size: 14px; }
+  .dr .rd-fila { grid-template-columns: minmax(150px, 1fr) minmax(64px, 200px) 66px 108px; min-height: 50px; row-gap: 2px; padding: 10px 0 4px; }
+  .dr .rd-fila + .rd-fila { border-top: 1px solid var(--v3-borde); }
+  .dr .rd-detalles { margin-top: 0; }
+  .dr .rd-fila-nombre { font-size: 15.5px; }
+  .dr .rd-frena { font-size: 11px; padding: 1px 9px; line-height: 18px; }
+  .dr .rd-barra { height: 10px; }
+  .dr .rd-num { font-size: 18px; }
+  .dr .rd-num small { font-size: 12px; }
+  .dr .rd-chip { font-size: 14.5px; }
+  .dr .rd-nota { font-size: 14px; }
+  .dr .rd-detalles > summary { font-size: 14px; }
+  .dr .rd-detalles-cuerpo { font-size: 15px; line-height: 23px; }
+  .dr .rd-detalles-k { font-size: 11.5px; }
+  .dr .rd-agenda-texto h2 { font-size: 35px; line-height: 42px; }
+  .dr .rd-agenda-texto > p:not(.rd-eyebrow) { font-size: 17.5px; line-height: 26.5px; }
+  .dr .rd-agenda-enlace { font-size: 14.5px; }
+  .dr .rd-pie-texto { font-size: 14px; }
+}
 
 /* Solo en pantalla (al imprimir, Chromium mide las max-width contra el papel). */
 @media screen and (max-width: 1100px) {
@@ -148,48 +245,57 @@
 }
 /* El teléfono: el tablero `Movil`. */
 @media screen and (max-width: 640px) {
-  .dr.rd-v3 .topbar { height: 56px; }
   .dr .rd { padding: 14px 16px 32px; gap: 14px; }
-  .dr .rd-acciones { gap: 8px; }
-  .dr .rd-btn { min-height: 44px; padding: 0 14px; }
-  .dr .rd-head { border-radius: 24px; padding: 22px 16px 16px; gap: 14px; }
+  .dr .rd-arriba { gap: 12px; padding: 2px 0 4px; }
+  .dr .rd-logo img { height: 28px; }
+  .dr .rd-acciones { gap: 8px; width: 100%; }
+  .dr .rd-acciones .rd-btn { flex: 1 1 0; }
+  .dr .rd-btn { min-height: 44px; padding: 0 14px; font-size: 14px; }
+  .dr .rd-cabecera { gap: 14px; padding: 6px 0 0; }
+  .dr .rd-cabecera .rd-radar { margin: 0; }
   .dr .rd-head-arriba { gap: 14px; }
   .dr .rd-head-texto { gap: 8px; padding: 0 4px; }
   .dr .rd-empresa { padding: 4px 12px 4px 4px; }
   .dr .rd-empresa-logo { width: 24px; height: 24px; font-size: 11px; }
-  .dr .rd-empresa-txt b { font-size: 13px; }
+  .dr .rd-empresa-txt b { font-size: 14.5px; }
   .dr .rd-head-texto > .rd-eyebrow { margin-top: 4px; }
   .dr .rd-head-texto > .rd-label { margin-top: 6px; }
-  .dr .rd-nivel { font-size: 42px; line-height: 46px; gap: 10px; }
+  .dr .rd-nivel { font-size: 48px; line-height: 52px; gap: 10px; }
   .dr .rd-nivel .rd-punto { width: 11px; height: 11px; }
-  .dr .rd-saludo { font-size: 15px; line-height: 22px; }
+  .dr .rd-saludo { font-size: 16.5px; line-height: 24px; }
   .dr .rd-capas { gap: 8px; }
   .dr .rd-capa { border: 0; border-radius: 14px; padding: 12px; gap: 3px; box-shadow: none; }
-  .dr .rd-capa-k { font-size: 10px; letter-spacing: .12em; }
-  .dr .rd-capa-v { font-size: 16px; gap: 7px; }
+  .dr .rd-capa-k { font-size: 11px; letter-spacing: .12em; }
+  .dr .rd-capa-v { font-size: 18px; gap: 7px; }
   .dr .rd-capa-v .rd-punto { width: 8px; height: 8px; }
   .dr .rd-radar { border: 0; padding: 12px 10px 14px; }
   .dr .rd-tarjeta { padding: 20px 18px; gap: 10px; }
-  .dr .rd-tarjeta h2 { font-size: 22px; line-height: 28px; letter-spacing: -.01em; }
+  .dr .rd-tarjeta h2 { font-size: 24px; line-height: 30px; letter-spacing: -.01em; }
   .dr .rd-empezar-texto { gap: 10px; }
-  .dr .rd-empezar-razon { font-size: 14.5px; line-height: 22px; }
+  .dr .rd-empezar-razon { font-size: 15.5px; line-height: 23.5px; }
   .dr .rd-empezar.con-costo { gap: 10px; }
   .dr .rd-costo { padding: 14px; gap: 4px; }
-  .dr .rd-costo-titulo { font-size: 12.5px; }
-  .dr .rd-costo p:not(.rd-costo-titulo) { font-size: 14px; line-height: 21px; }
+  .dr .rd-costo-titulo { font-size: 13.5px; }
+  .dr .rd-costo p:not(.rd-costo-titulo) { font-size: 15px; line-height: 22.5px; }
   .dr .rd-riesgos { gap: 10px; }
-  .dr .rd-riesgos li { gap: 10px; padding: 14px; font-size: 14px; line-height: 21px; }
+  .dr .rd-riesgos li { gap: 10px; padding: 14px; font-size: 15px; line-height: 22.5px; }
   .dr .rd-riesgo-icono { width: 22px; height: 22px; }
   .dr .rd-casos { gap: 10px; }
   .dr .rd-caso { padding: 16px; }
-  .dr .rd-fila { grid-template-columns: minmax(0, 1fr) auto auto; grid-template-areas: "nombre num chip" "barra barra barra"; gap: 6px 10px; padding: 6px 0; }
+  .dr .rd-caso-titulo { font-size: 17.5px; line-height: 23px; }
+  .dr .rd-caso-promesa { font-size: 15px; line-height: 22.5px; }
+  .dr .rd-fila { grid-template-columns: minmax(0, 1fr) auto auto; grid-template-areas: "nombre num chip" "barra barra barra"; gap: 6px 10px; padding: 6px 0; min-height: 0; }
+  .dr .rd-fila-nombre { font-size: 15px; }
+  .dr .rd-detalles { margin-top: 0; }
+  .dr .rd-detalles-cuerpo { padding: 14px; font-size: 14.5px; line-height: 22px; }
   .dr .rd-fila-nombre { grid-area: nombre; }
   .dr .rd-barra { grid-area: barra; }
   .dr .rd-num { grid-area: num; }
   .dr .rd-chip { grid-area: chip; }
   .dr .rd-agenda { padding: 8px 0 0; }
   .dr .rd-agenda-texto { padding-top: 0; }
-  .dr .rd-agenda-texto h2 { font-size: 24px; line-height: 30px; }
+  .dr .rd-agenda-texto h2 { font-size: 26px; line-height: 32px; }
+  .dr .rd-agenda-texto > p:not(.rd-eyebrow) { font-size: 16px; line-height: 24px; }
   .dr .rd-agenda-caja { padding: 8px; }
 }
 
@@ -240,5 +346,6 @@
 .dr.rd-pdf .rd-agenda-pdf p:not(.rd-eyebrow) { font-size: 13px; line-height: 19px; color: var(--v3-secundario); }
 .dr.rd-pdf .rd-agenda-pdf a { word-break: break-all; }
 @media print {
-  .dr .rd-acciones, .dr .rd-agenda, .dr .rd-pie { display: none !important; }
+  .dr .rd-arriba, .dr .rd-agenda, .dr .rd-pie, .dr .rd-detalles { display: none !important; }
+  .dr [data-revela="oculta"] { opacity: 1; transform: none; transition: none; }
 }

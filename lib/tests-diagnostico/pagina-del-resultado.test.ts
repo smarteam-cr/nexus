@@ -6,6 +6,8 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { PDF_POR_DIRECCION, PDF_POR_HORA, permitirPdfDeLaDireccion, permitirPdfEnTotal, reiniciarLimites, VENTANA_DE_PDF_MIN } from "./limite";
 import {
+  AGENDA_DE_LA_APLICACION_VIEJA,
+  enlaceDeLaAgenda,
   puntajeDeLaDimension,
   rutaDeImpresion,
   rutaDelPdf,
@@ -83,5 +85,13 @@ describe("las barras y el radar dicen lo mismo que el cálculo", () => {
     expect(src.searchParams.get("parentHubspotUtk")).toBe("0123456789abcdef0123456789abcdef");
     // Una cookie con forma rara no viaja.
     expect(new URL(srcDeLaAgenda("https://meetings.hubspot.com/x", { origen: "https://a.b", utk: "x&y=1" })).searchParams.has("parentHubspotUtk")).toBe(false);
+  });
+
+  it("la agenda es la del servidor si es https; si no hay, la de la aplicación vieja (siempre incrustada)", () => {
+    expect(enlaceDeLaAgenda(" https://meetings.hubspot.com/otra/agenda ")).toBe("https://meetings.hubspot.com/otra/agenda");
+    expect(enlaceDeLaAgenda(undefined)).toBe(AGENDA_DE_LA_APLICACION_VIEJA);
+    expect(enlaceDeLaAgenda("")).toBe(AGENDA_DE_LA_APLICACION_VIEJA);
+    expect(enlaceDeLaAgenda("http://meetings.hubspot.com/x")).toBe(AGENDA_DE_LA_APLICACION_VIEJA);
+    expect(new URL(AGENDA_DE_LA_APLICACION_VIEJA).origin).toBe("https://meetings.hubspot.com");
   });
 });

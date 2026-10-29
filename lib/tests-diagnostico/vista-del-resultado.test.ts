@@ -80,7 +80,7 @@ function resultado(corto = false): ResultadoDelTest {
 }
 
 const AGENDA = "https://meetings.hubspot.com/smarteam/diagnostico";
-const dibujar = (modo: "pantalla" | "pdf", corto = false, agenda: string | null = AGENDA) =>
+const dibujar = (modo: "pantalla" | "pdf", corto = false, agenda: string = AGENDA) =>
   renderToStaticMarkup(
     createElement(ResultadoDelTestVista, {
       r: resultado(corto),
@@ -175,8 +175,13 @@ describe("la página de resultado, como se dibuja", () => {
     expect(t).toContain("Contestaste «No lo sé»: cuenta como Deficiente");
   });
 
-  it("sin agenda, el aviso de siempre", () => {
-    expect(texto(dibujar("pantalla", false, null))).toContain("Te escribimos al correo que dejaste para coordinarla.");
+  it("⛔ la agenda va siempre incrustada, sin el script de HubSpot (DECISIONS «Test público»)", () => {
+    const html = dibujar("pantalla");
+    expect(html).toContain("rd-agenda-cal");
+    expect(texto(html)).toContain("¿No ves el calendario? Ábrelo aquí");
+    expect(html).not.toContain("MeetingsEmbedCode");
+    expect(html).not.toContain("meetings-iframe-container");
+    expect(html).not.toContain("Te escribimos al correo");
   });
 
   it("el PDF: tres hojas, sin interruptor ni puntajes en el radar, sin calendario y con el enlace para agendar", () => {

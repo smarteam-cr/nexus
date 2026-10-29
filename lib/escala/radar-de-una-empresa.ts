@@ -530,3 +530,33 @@ function alejarDeLosRotulos(mi: MitadDelRadar, rotulos: readonly RotuloDelRadar[
 
 /** Los puntos de un polígono, para el atributo `points`. */
 export const puntosSvg = (ps: readonly Punto[]) => ps.map((p) => `${f(p[0])},${f(p[1])}`).join(" ");
+
+/** Hasta dónde llegan las cuñas: la esquina de la caja más lejana del centro. */
+export function radioDeLasCunas(m: MedidasDelRadar): number {
+  const [x, y, ancho, alto] = m.caja;
+  return Math.max(...[[x, y], [x + ancho, y], [x, y + alto], [x + ancho, y + alto]].map(([a, b]) => Math.hypot(a - m.cx, b - m.cy)));
+}
+
+/** Cada cuánto se parte el arco de una cuña (grados): suficiente para que se vea redonda. */
+const PASO_DEL_ARCO = 6;
+
+/**
+ * La zona de cursor de cada dimensión (la página, nunca el PDF): una cuña desde el centro hasta el borde del dibujo (así
+ * cubre también el hueco entre los renglones del rótulo), que llega hasta la mitad del camino a cada eje vecino. Al pasar
+ * el cursor, la página resalta esa dimensión, su vértice y su rótulo (components/external/test/AnimacionesDelResultado.tsx).
+ * Las cuñas no se pisan; el SVG recorta lo que sale de su caja.
+ */
+export function cunasDelRadar(m: MedidasDelRadar, ejes: readonly Pick<EjeDelRadar, "clave" | "grados">[]): { clave: string; puntos: Punto[] }[] {
+  if (!ejes.length) return [];
+  const orden = [...ejes].sort((a, b) => a.grados - b.grados);
+  const r = radioDeLasCunas(m);
+  return orden.map((e, i) => {
+    const antes = orden.length === 1 ? e.grados - 180 : i === 0 ? orden[orden.length - 1].grados - 360 : orden[i - 1].grados;
+    const despues = orden.length === 1 ? e.grados + 180 : i === orden.length - 1 ? orden[0].grados + 360 : orden[i + 1].grados;
+    const desde = (antes + e.grados) / 2;
+    const hasta = (e.grados + despues) / 2;
+    const pasos = Math.max(1, Math.ceil((hasta - desde) / PASO_DEL_ARCO));
+    const arco = Array.from({ length: pasos + 1 }, (_, k) => polarDe(m, desde + ((hasta - desde) * k) / pasos, r));
+    return { clave: e.clave, puntos: [[m.cx, m.cy] as Punto, ...arco] };
+  });
+}

@@ -43,6 +43,18 @@ export function puntajeDeLaDimension(letra: string | null, puntaje: number | nul
   return i < 0 ? 0 : Math.round(((i + 0.5) / LETRAS.length) * 100);
 }
 
+/**
+ * La agenda de 30 minutos de la aplicación vieja (`resultado.js › montarCalendario`, medido el 29 oct): la misma para
+ * todos, no la de cada vendedor. Es la que se incrusta si el servidor no trae `TESTS_ENLACE_DE_AGENDA`.
+ */
+export const AGENDA_DE_LA_APLICACION_VIEJA = "https://meetings.hubspot.com/msalas2/diagnostico-de-rendimiento";
+
+/** El enlace de la agenda: el de `TESTS_ENLACE_DE_AGENDA` si es https, o el de la aplicación vieja. */
+export function enlaceDeLaAgenda(delServidor: string | undefined): string {
+  const x = delServidor?.trim() ?? "";
+  return /^https:\/\//.test(x) ? x : AGENDA_DE_LA_APLICACION_VIEJA;
+}
+
 /** De dónde puede hablar la agenda de HubSpot incrustada (los de su script oficial, sin los de prueba). */
 export const ORIGENES_DE_LA_AGENDA = ["https://meetings.hubspot.com", "https://meetings-eu1.hubspot.com", "https://app.hubspot.com", "https://app-eu1.hubspot.com"];
 
