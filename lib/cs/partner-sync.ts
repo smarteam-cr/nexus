@@ -10,8 +10,12 @@
  *     de 15 min): el cron, el endpoint manual y el script comparten UNA corrida a
  *     la vez ENTRE LAS DOS MÁQUINAS que comparten la DB.
  *   - EL VÍNCULO EXISTENTE ES LA FUENTE #0 del match: un snapshot ya vinculado
- *     CONSERVA su Client (los vínculos solo se mueven con evidencia positiva:
- *     match por company ID hacia otro cliente). Nunca se degrada un vínculo a null.
+ *     CONSERVA su Client. Nunca se degrada un vínculo a null sin reemplazo.
+ *     ÚNICA excepción (2026-10-07, rehecha sobre el sync de hoy el 2026-10-29): un cliente
+ *     vinculado a un registro INACTIVO pasa al registro ACTIVO, suelto, que coincide con él por
+ *     company o dominio — con evidencia positiva, un solo candidato y en una transacción que
+ *     suelta el viejo y vincula el nuevo (lib/cs/partner-cambio-de-registro.ts). Dos registros
+ *     activos para el mismo cliente no se eligen: se reportan.
  *   - Si el batch de asociaciones falló (associationsOk=false), la corrida es
  *     "partial": actualiza propiedades/escalares pero NO re-matchea ni crea Clients.
  *   - Los índices de matching EXCLUYEN prospectos (un snapshot vinculado a un
@@ -29,6 +33,26 @@ import { leerDuenos } from "@/lib/hubspot/duenos";
 import { CS_CLIENT_WHERE } from "@/lib/clients/kind";
 import { crearOReusarFicha } from "@/lib/clients/empresa-de-hubspot";
 import { columnasDePartner, semanaIso } from "@/lib/cs/partner-columnas";
+import {
+  activoEnHubspot,
+  matchPorEvidencia,
+  mensajeSinElegir,
+  planearCambiosDeRegistro,
+  type CambioDeRegistro,
+  type MotivoSinElegir,
+  type ViaDelMatch,
+} from "./partner-cambio-de-registro";
+
+/** Un cliente que pasó de su registro inactivo al activo en esta corrida. */
+export interface CambioDeRegistroHecho {
+  clientId: string;
+  cliente: string | null;
+  desde: string;
+  hacia: string;
+  via: ViaDelMatch;
+  /** Semanas de historial de uso del registro nuevo que quedaron a nombre del cliente. */
+  semanasDeHistorial: number;
+}
 
 export interface PartnerSyncResult {
   supported: boolean;
@@ -45,6 +69,12 @@ export interface PartnerSyncResult {
   wouldCreateClients: Array<{ name: string; domain: string | null; hubspotCompanyId: string | null }>;
   briefsMarkedStale: number;
   unlinkedGone: number;
+  /** Clientes que pasaron de un registro inactivo al activo (lib/cs/partner-cambio-de-registro.ts). */
+  cambiosDeRegistro: CambioDeRegistroHecho[];
+  /** Con `cambiarRegistros: false`: los cambios que la corrida habría hecho y no hizo. */
+  cambiosPendientes: Array<CambioDeRegistro & { cliente: string | null }>;
+  /** Clientes con un registro activo suelto que coincide y que NO se movieron: los mira una persona. */
+  cambiosSinElegir: Array<{ clientId: string; cliente: string | null; motivo: MotivoSinElegir; actual: string; candidatos: string[] }>;
   errors: string[];
 }
 
@@ -97,6 +127,11 @@ function stableStringify(v: unknown): string {
   return `{${keys.map((k) => `${JSON.stringify(k)}:${stableStringify(obj[k])}`).join(",")}}`;
 }
 
+/** Dominio del record, normalizado: con el que se busca al cliente por `emailDomains`. */
+function dominioDelRegistro(rec: PartnerClientRecord): string | null {
+  return (rec.resolved.domain ?? rec.resolved.domainFallback ?? "").toLowerCase() || null;
+}
+
 /** Escalares del snapshot a partir de los campos resueltos por label. */
 function buildScalars(rec: PartnerClientRecord) {
   const r = rec.resolved;
@@ -120,9 +155,8 @@ function buildScalars(rec: PartnerClientRecord) {
     content: r.editionContent ?? null,
     commerce: r.editionCommerce ?? null,
   };
-  const domain = (r.domain ?? r.domainFallback ?? "").toLowerCase() || null;
   return {
-    domain,
+    domain: dominioDelRegistro(rec),
     associatedCompanyIds: rec.associatedCompanyIds,
     uusScore: numOrNull(r.uusScore),
     // Float directo: sondeado contra los 157 records (2026-07-10) — siempre número plano.
@@ -174,6 +208,80 @@ function materialKey(s: {
   });
 }
 
+/** Lo que se escribe en el snapshot de un record (todo menos el vínculo). */
+function datosDelSnapshot(
+  rec: PartnerClientRecord,
+  scalars: ReturnType<typeof buildScalars>,
+  associationsOk: boolean,
+  nombres: Map<string, string> | null,
+) {
+  // U29: lo vendido, las fechas de la relación, la comisión y el MRR por hub, a columnas.
+  const columnas = columnasDePartner(rec.properties as Record<string, unknown>);
+  const mrrByHub = columnas.mrrByHub ? (columnas.mrrByHub as Prisma.InputJsonValue) : Prisma.DbNull;
+  return {
+    fetchedAt: new Date(),
+    fetchStatus: associationsOk ? "ok" : "partial",
+    properties: conUltimoActivo(rec, nombres) as Prisma.InputJsonValue,
+    ...scalars,
+    seats: scalars.seats as Prisma.InputJsonValue,
+    renewalsByHub: scalars.renewalsByHub as Prisma.InputJsonValue,
+    hubEditions: scalars.hubEditions as Prisma.InputJsonValue,
+    ...columnas,
+    mrrByHub,
+  };
+}
+
+/**
+ * Pasa al cliente de su registro inactivo al activo, en UNA transacción:
+ *   1. suelta el viejo, solo si todavía es del cliente (`clientId` es @unique: primero se suelta);
+ *   2. vincula el nuevo, solo si sigue suelto (en la misma escritura que lo comprueba; si no existe todavía, lo crea
+ *      con sus datos, y si otro lo creó entretanto, el índice único frena la creación);
+ *   3. el historial semanal pasa con el registro: las filas del viejo dejan de ser del cliente y
+ *      las del nuevo que no eran de nadie pasan a serlo. Así la ficha y el vigía, que lo leen por
+ *      cliente, y `ultimoUsoConocido`, que lo lee por registro, ven la MISMA serie, la del portal
+ *      vivo, sin mezclar dos portales en una curva;
+ *   4. el resumen de la cuenta queda desactualizado (cambió todo el bloque de Partner).
+ * Si 1 o 2 no se cumple (el vínculo cambió entre la lectura y la escritura), la transacción se
+ * deshace entera: nada se escribe y el cliente sigue con el registro viejo. Exportada para la prueba de integración.
+ */
+export async function aplicarCambioDeRegistro(
+  c: CambioDeRegistro,
+  crear: ReturnType<typeof datosDelSnapshot>,
+  ahora: Date,
+): Promise<{ semanasDeHistorial: number; briefsMarcados: number }> {
+  return prisma.$transaction(async (tx) => {
+    const soltado = await tx.clientPartnerSnapshot.updateMany({
+      where: { hubspotPartnerClientId: c.desde, clientId: c.clientId },
+      data: { clientId: null },
+    });
+    if (soltado.count !== 1) throw new Error(`el registro ${c.desde} ya no tiene al cliente`);
+
+    const vinculado = await tx.clientPartnerSnapshot.updateMany({
+      where: { hubspotPartnerClientId: c.hacia, clientId: null },
+      data: { clientId: c.clientId },
+    });
+    if (vinculado.count !== 1) {
+      const existe = await tx.clientPartnerSnapshot.findUnique({ where: { hubspotPartnerClientId: c.hacia }, select: { id: true } });
+      if (existe) throw new Error(`el registro ${c.hacia} ya tiene otro cliente`);
+      await tx.clientPartnerSnapshot.create({ data: { hubspotPartnerClientId: c.hacia, clientId: c.clientId, ...crear } });
+    }
+
+    await tx.partnerUsageSnapshot.updateMany({
+      where: { hubspotPartnerClientId: c.desde, clientId: c.clientId },
+      data: { clientId: null },
+    });
+    const semanas = await tx.partnerUsageSnapshot.updateMany({
+      where: { hubspotPartnerClientId: c.hacia, clientId: null },
+      data: { clientId: c.clientId },
+    });
+    const briefs = await tx.csAccountBrief.updateMany({
+      where: { clientId: c.clientId, staleAt: null },
+      data: { staleAt: ahora },
+    });
+    return { semanasDeHistorial: semanas.count, briefsMarcados: briefs.count };
+  });
+}
+
 /**
  * Records de partner que NUNCA se convierten en Client aunque no matcheen:
  * los portales internos de Smarteam y los records sin nombre real. Post-mortem
@@ -218,16 +326,22 @@ function conUltimoActivo(rec: PartnerClientRecord, nombres: Map<string, string> 
 }
 
 export async function syncPartnerClients(
-  options: { createClients?: boolean } = {},
+  options: {
+    createClients?: boolean;
+    /** false = el cambio de registro solo se planea y se devuelve en `cambiosPendientes`: no se mueve ningún cliente.
+     *  Lo usa `scripts/run-partner-sync.ts` sin `--apply`, que se corre «para ver». Por defecto true (el job y el botón). */
+    cambiarRegistros?: boolean;
+  } = {},
 ): Promise<PartnerSyncResult> {
   /* Por defecto NO crea clientes (revisión de la juntura, 2026-10-24): crearlos es una decisión, y la toma quien llama
      —el botón del panel y `scripts/run-partner-sync.ts --apply` lo piden explícito; el job diario, solo con
      `CS_PARTNER_CREA_CLIENTES`—. Una llamada nueva sin opciones ya no fabrica fichas. */
   const createClients = options.createClients ?? false;
+  const cambiarRegistros = options.cambiarRegistros ?? true;
   const result: PartnerSyncResult = {
     supported: true, total: 0, matchedByCompany: 0, matchedByDomain: 0, alreadyLinked: 0,
     unmatched: 0, createdClients: [], wouldCreateClients: [], briefsMarkedStale: 0,
-    unlinkedGone: 0, errors: [],
+    unlinkedGone: 0, cambiosDeRegistro: [], cambiosPendientes: [], cambiosSinElegir: [], errors: [],
   };
 
   const now = new Date();
@@ -281,14 +395,72 @@ export async function syncPartnerClients(
       },
     });
     const existingByPartnerId = new Map(existingSnapshots.map((s) => [s.hubspotPartnerClientId, s]));
+    // partnerId → clientId: el vínculo con el que el bucle procesa cada record.
+    const vinculoActual = new Map<string, string>();
     // clientId → partnerId dueño actual del vínculo (clientId es @unique en el snapshot).
     const linkOwner = new Map<string, string>();
-    for (const s of existingSnapshots) if (s.clientId) linkOwner.set(s.clientId, s.hubspotPartnerClientId);
+    for (const s of existingSnapshots) {
+      if (!s.clientId) continue;
+      vinculoActual.set(s.hubspotPartnerClientId, s.clientId);
+      linkOwner.set(s.clientId, s.hubspotPartnerClientId);
+    }
+
+    // ── Cambio de registro: el cliente que quedó en un registro INACTIVO pasa al ACTIVO que
+    //    coincide con él (reglas en lib/cs/partner-cambio-de-registro.ts). Va ANTES del bucle,
+    //    para que cada record se procese ya con su vínculo nuevo. ─────────────────────────
+    const nombreDelCliente = new Map(clients.map((c) => [c.id, c.name]));
+    const recordPorId = new Map(fetched.records.map((r) => [r.id, r]));
+    const plan = planearCambiosDeRegistro({
+      registros: fetched.records.map((r) => ({
+        id: r.id,
+        activo: activoEnHubspot(r.properties),
+        associatedCompanyIds: r.associatedCompanyIds,
+        domain: dominioDelRegistro(r),
+      })),
+      vinculos: vinculoActual,
+      porCompany: byCompanyId,
+      porDominio: byDomain,
+      asociacionesConfiables: canRelink,
+      duenoDeLaEmpresa: new Map([...fichaDeLaEmpresa].map(([companyId, ficha]) => [companyId, ficha.id])),
+    });
+    // Los clientes que ya tienen su línea en `errors` por esta regla: el bucle no la repite.
+    const yaReportados = new Set<string>();
+    for (const s of plan.sinElegir) {
+      const cliente = nombreDelCliente.get(s.clientId) ?? null;
+      result.cambiosSinElegir.push({ ...s, cliente });
+      result.errors.push(mensajeSinElegir(s, cliente));
+      yaReportados.add(s.clientId);
+    }
+    for (const c of plan.cambios) {
+      const rec = recordPorId.get(c.hacia);
+      if (!rec) continue; // el plan sale de estos records: no pasa
+      const cliente = nombreDelCliente.get(c.clientId) ?? null;
+      if (!cambiarRegistros) {
+        result.cambiosPendientes.push({ ...c, cliente });
+        yaReportados.add(c.clientId);
+        continue;
+      }
+      try {
+        const hecho = await aplicarCambioDeRegistro(c, datosDelSnapshot(rec, buildScalars(rec), fetched.associationsOk, nombres), now);
+        vinculoActual.delete(c.desde);
+        vinculoActual.set(c.hacia, c.clientId);
+        linkOwner.set(c.clientId, c.hacia);
+        result.briefsMarkedStale += hecho.briefsMarcados;
+        result.cambiosDeRegistro.push({ ...c, cliente, semanasDeHistorial: hecho.semanasDeHistorial });
+      } catch (e) {
+        const motivo = e instanceof Error ? e.message : "error";
+        result.errors.push(
+          `no se pudo pasar a ${cliente ?? c.clientId} del registro ${c.desde} al ${c.hacia} (${motivo}): sigue con ${c.desde}`,
+        );
+        yaReportados.add(c.clientId);
+      }
+    }
 
     for (const rec of fetched.records) {
       try {
         const scalars = buildScalars(rec);
         const existing = existingByPartnerId.get(rec.id);
+        const activo = activoEnHubspot(rec.properties);
         const name =
           rec.resolved.clientName?.trim() ||
           rec.resolved.accountName?.trim() ||
@@ -296,18 +468,16 @@ export async function syncPartnerClients(
           `Partner ${rec.id}`;
 
         // ── Match — FUENTE #0: el vínculo existente se conserva ─────────────
-        let clientId: string | null = existing?.clientId ?? null;
+        // (`vinculoActual`, no `existing`: un cambio de registro de esta corrida ya soltó el viejo.)
+        let clientId: string | null = vinculoActual.get(rec.id) ?? null;
+        let via: ViaDelMatch | null = null;
         if (clientId) {
           result.alreadyLinked++;
         } else if (canRelink) {
-          for (const companyId of rec.associatedCompanyIds) {
-            const hit = byCompanyId.get(companyId);
-            if (hit) { clientId = hit; result.matchedByCompany++; break; }
-          }
-          if (!clientId && scalars.domain) {
-            const hit = byDomain.get(scalars.domain);
-            if (hit) { clientId = hit; result.matchedByDomain++; }
-          }
+          // La MISMA regla que usa el plan de cambio de registro.
+          const match = matchPorEvidencia({ associatedCompanyIds: rec.associatedCompanyIds, domain: scalars.domain }, byCompanyId, byDomain);
+          clientId = match?.clientId ?? null;
+          via = match?.via ?? null;
 
           // Los portales INTERNOS de Smarteam y los records basura NO se convierten
           // en Client: el resolver de sesiones matchea por nombre/dominio, y un
@@ -320,7 +490,10 @@ export async function syncPartnerClients(
           // ⚠ Sin `continue`: el registro se copia igual, sin vincular. Hasta el 2026-10-09 se saltaba entero y sus
           // datos quedaban congelados en la primera copia (siete registros del 10 jul, entre ellos RSM Costa Rica).
           const unmatchable = !scalars.domain && rec.associatedCompanyIds.length === 0;
-          const noSeCrea = !clientId && (PARTNER_CREATE_SKIP.test(name) || unmatchable);
+          // Tampoco un registro que HubSpot da por INACTIVO (2026-10-07): es un portal que ya no está en el book. Sobre
+          // todo el que suelta un cambio de registro: si su dominio o su company ya no apuntan al cliente, crearlo
+          // duplicaría al cliente que se acaba de mudar al registro activo. Se sincroniza igual, sin vincular.
+          const noSeCrea = !clientId && (PARTNER_CREATE_SKIP.test(name) || unmatchable || activo === false);
           if (noSeCrea) result.unmatched++;
 
           // Una empresa asociada que ya es de otra ficha (un prospecto, un aliado): no se crea otra.
@@ -375,14 +548,21 @@ export async function syncPartnerClients(
           }
 
           // clientId es @unique en el snapshot: si otro record ya es dueño del
-          // vínculo, este queda sin vincular (se loguea; el dueño se conserva).
+          // vínculo, este queda sin vincular (el dueño se conserva). Se avisa solo si este
+          // record NO está inactivo y su cliente no tiene ya su aviso: un registro inactivo cuyo
+          // cliente vive en otro registro es lo esperable (p. ej. el que soltó un cambio de
+          // registro), y repetirlo cada día en los errores sería ruido.
           if (clientId) {
             const owner = linkOwner.get(clientId);
             if (owner && owner !== rec.id) {
-              result.errors.push(`client ${clientId} ya vinculado al partner record ${owner} — ${rec.id} queda sin vincular`);
+              if (activo !== false && !yaReportados.has(clientId)) {
+                result.errors.push(`client ${clientId} ya vinculado al partner record ${owner} — ${rec.id} queda sin vincular`);
+              }
               clientId = null;
             } else {
               linkOwner.set(clientId, rec.id);
+              if (via === "company") result.matchedByCompany++;
+              else if (via === "domain") result.matchedByDomain++;
             }
           }
         } else {
@@ -394,20 +574,8 @@ export async function syncPartnerClients(
         // del primer sync no cita el bloque entero de partner que acaba de aparecer.
         const changedMaterially = !existing || materialKey(existing) !== materialKey(scalars);
 
-        // U29: lo vendido, las fechas de la relación, la comisión y el MRR por hub, a columnas.
-        const columnas = columnasDePartner(rec.properties as Record<string, unknown>);
-        const mrrByHub = columnas.mrrByHub ? (columnas.mrrByHub as Prisma.InputJsonValue) : Prisma.DbNull;
-        const base = {
-          fetchedAt: new Date(),
-          fetchStatus: fetched.associationsOk ? "ok" : "partial",
-          properties: conUltimoActivo(rec, nombres) as Prisma.InputJsonValue,
-          ...scalars,
-          seats: scalars.seats as Prisma.InputJsonValue,
-          renewalsByHub: scalars.renewalsByHub as Prisma.InputJsonValue,
-          hubEditions: scalars.hubEditions as Prisma.InputJsonValue,
-          ...columnas,
-          mrrByHub,
-        };
+        const base = datosDelSnapshot(rec, scalars, fetched.associationsOk, nombres);
+        const { isManaged, soldMrr, projectedCommission, mrrByHub } = base;
         await prisma.clientPartnerSnapshot.upsert({
           where: { hubspotPartnerClientId: rec.id },
           create: { hubspotPartnerClientId: rec.id, clientId, ...base },
@@ -425,7 +593,10 @@ export async function syncPartnerClients(
 
         // ── Historial SEMANAL de uso (el UUS se recalcula semanalmente): una fila
         //    por (record, semana ISO); el sync diario pisa la de la semana en curso
-        //    → queda la última foto de cada semana para tendencia propia. ────────
+        //    → queda la última foto de cada semana para tendencia propia. Su clientId es
+        //    el cliente del record: cuando el cliente pasa a otro record, la serie pasa con
+        //    él (`aplicarCambioDeRegistro`), así la ficha y el vigía, que la leen por cliente,
+        //    no mezclan dos portales. ────────
         const weekKey = semanaIso(now);
         const usageRow = {
           clientId,
@@ -442,10 +613,10 @@ export async function syncPartnerClients(
           seats: scalars.seats as Prisma.InputJsonValue,
           mrrTotal: scalars.mrrTotal,
           nextRenewalAt: scalars.nextRenewalAt,
-          isManaged: columnas.isManaged,
+          isManaged,
           mrrManaged: scalars.mrrManaged,
-          soldMrr: columnas.soldMrr,
-          projectedCommission: columnas.projectedCommission,
+          soldMrr,
+          projectedCommission,
           mrrByHub,
           capturedAt: new Date(),
         };
@@ -505,6 +676,10 @@ async function persistSyncStatus(result: PartnerSyncResult): Promise<void> {
     errors: result.errors.length,
     // U29: el texto, no solo la cuenta (la corrida del 23 oct tuvo 10 errores y nadie sabía cuáles).
     errorDetail: result.errors.slice(0, MAX_ERRORES_GUARDADOS),
+    cambiosDeRegistro: result.cambiosDeRegistro.length,
+    // De qué registro a cuál: para poder deshacer un cambio a mano (el viejo queda sin cliente y sin rastro de quién era).
+    cambiosDeRegistroDetalle: result.cambiosDeRegistro.map(({ clientId, cliente, desde, hacia, via }) => ({ clientId, cliente, desde, hacia, via })),
+    cambiosSinElegir: result.cambiosSinElegir.length,
     at: new Date().toISOString(),
   };
   await prisma.cronJobState
@@ -527,5 +702,11 @@ export interface PartnerSyncStatus {
   errors: number;
   /** El texto de los primeros `MAX_ERRORES_GUARDADOS` errores. Ausente en las corridas de antes del 2026-10-25. */
   errorDetail?: string[];
+  /** Clientes que pasaron a su registro activo (ausente en corridas anteriores al 2026-10-29). */
+  cambiosDeRegistro?: number;
+  /** De qué registro a cuál pasó cada uno (ausente antes del 2026-10-29). */
+  cambiosDeRegistroDetalle?: Array<{ clientId: string; cliente: string | null; desde: string; hacia: string; via: ViaDelMatch }>;
+  /** Clientes con un registro activo que coincide y que no se movieron: los mira una persona. */
+  cambiosSinElegir?: number;
   at: string;
 }

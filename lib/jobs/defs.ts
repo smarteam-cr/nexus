@@ -193,7 +193,7 @@ const csPartnerDaily: JobDef = {
       return;
     }
     console.log(
-      `[jobs/cs-partner] ${dateKey} — ${r.total} records (asociaciones ${r.associationsOk ? "ok" : "PARCIALES"}): ${r.matchedByCompany} por company, ${r.matchedByDomain} por dominio, ${r.alreadyLinked} ya vinculados, ${r.createdClients.length} clients creados, ${r.briefsMarkedStale} briefs stale, ${r.unlinkedGone} desvinculados${r.errors.length ? `, ${r.errors.length} errores` : ""}`,
+      `[jobs/cs-partner] ${dateKey} — ${r.total} records (asociaciones ${r.associationsOk ? "ok" : "PARCIALES"}): ${r.matchedByCompany} por company, ${r.matchedByDomain} por dominio, ${r.alreadyLinked} ya vinculados, ${r.createdClients.length} clients creados, ${r.briefsMarkedStale} briefs stale, ${r.unlinkedGone} desvinculados${r.cambiosDeRegistro.length ? `, ${r.cambiosDeRegistro.length} pasados a su registro activo (${r.cambiosDeRegistro.map((c) => `${c.cliente ?? c.clientId} ${c.desde}→${c.hacia}`).join(", ")})` : ""}${r.cambiosSinElegir.length ? `, ${r.cambiosSinElegir.length} sin elegir` : ""}${r.errors.length ? `, ${r.errors.length} errores` : ""}`,
     );
   },
 };

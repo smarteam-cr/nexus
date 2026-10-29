@@ -5116,6 +5116,40 @@ Alexander Vanegas (CSL) y dirección.
 - **Lo que no se usa de Partner, a propósito**: `hs_renewal_mrr` (no coincide con la suma de los hubs)
   y los puntos de tier como dato fresco (HubSpot los dejó de calcular el 26-11-2025: se muestran con
   su fecha).
+- **Un cliente en un registro inactivo pasa al activo que coincide con él** (decidido el 2026-10-07 con
+  KAIZEN KAPITAL y KJ Publicidad; la rama nunca llegó a main y se rehízo sobre el sync de hoy el
+  2026-10-29, con los dos todavía colgados). El sync conserva el vínculo existente y `clientId` es único:
+  cuando la empresa pasaba a otro registro de Partner Clients, el viejo quedaba inactivo con el cliente y
+  el nuevo, activo, suelto para siempre, y la cuenta decía «Inactiva en HubSpot» sin MRR, renovaciones ni
+  hubs. Ahora el sync lo pasa (`lib/cs/partner-cambio-de-registro.ts`) solo si las asociaciones de la
+  corrida son confiables (una corrida «partial» no re-matchea), HubSpot da el viejo por inactivo (sin el
+  dato no se mueve) y hay UN registro activo suelto que coincide con el cliente por la misma regla del
+  sync (company, después dominio). Dos activos para el mismo cliente, o varios candidatos, no se eligen:
+  quedan como están, en los errores del sync y en el aviso de «Actualizar partner», y se resuelven en
+  HubSpot. Suelta el viejo y vincula el nuevo en una transacción: nunca deja al cliente sin registro. No
+  depende de `createClients`: el job diario, que no crea fichas, también los pasa.
+- **Quitarle a un cliente el registro que ya tiene pide más que vincular a uno que no tiene ninguno.** Un
+  candidato asociado en HubSpot a una empresa que es de OTRA ficha (un prospecto, un aliado: los índices
+  del sync no los ven) no se lleva al cliente aunque coincida por dominio: sería el portal de otra empresa
+  con el mismo dominio (un grupo, un dominio de agencia), y la ficha mostraría su MRR y su uso.
+- **El registro viejo, ya suelto, sigue la regla de siempre.** Si su evidencia apunta a otro cliente sin
+  registro, el sync lo vincula a ese: es lo que HubSpot dice de ese portal, y «Inactiva en HubSpot» ahí es
+  cierto (no tiene otro registro). El simulacro lo muestra antes; no se frena a propósito.
+- **Lo que se corre «para ver» no mueve a nadie.** `scripts/run-partner-sync.ts` sin `--apply` escribe
+  los registros pero no cambia vínculos (`cambiarRegistros: false`, imprime cuáles pasarían). El cambio,
+  solo, sin crear fichas y con el guard de producción: `scripts/partner-cambios-de-registro.ts --apply`.
+  Cada cambio queda en la línea del job (`cliente desde→hacia`) y en el estado de la última corrida, para
+  poder deshacerlo a mano.
+- **El historial semanal de uso pasa con el registro.** En la misma transacción, las semanas del registro
+  viejo dejan de ser del cliente y las del nuevo que no eran de nadie pasan a serlo. Así la ficha y el
+  vigía, que leen el historial por cliente, y el último puntaje conocido, que lo lee por registro, ven la
+  misma serie, la del portal vivo, sin mezclar dos portales en una curva. Lo del viejo queda en la base,
+  por registro.
+- **Un registro inactivo sin cliente ya no crea uno.** Sobre todo el que suelta un cambio: si su company
+  o su dominio dejaran de apuntar al cliente, crearlo duplicaría al que se acaba de mudar. Medido el
+  2026-10-29 con el simulacro (`scripts/partner-cambios-de-registro.ts`, solo lectura, 168 registros):
+  pasan los dos clientes, por company; ninguno queda sin elegir y la regla nueva no deja sin crear a
+  ningún registro de hoy.
 - **El vigía lee la cuenta entera, en el mensaje** (`lib/cs/watchdog-cuenta.ts`): handoff (resumen,
   resultados, fecha límite y duración vendida), facturación, Partner, el registro de la empresa con
   sus personas, y las reuniones de 45 días, separando las internas. Más una guía de cruces (riesgo

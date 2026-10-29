@@ -609,6 +609,15 @@ El permiso `crm.objects.partner-clients.read` ya está concedido. Al día siguie
 del servidor tiene que mostrar los jobs en verde; si dicen **apagado**, nombran la variable que falta.
 Para no esperar a las 6:00: «Actualizar partner» y «Actualizar señales» en Éxito del cliente.
 
+**Una cuenta que dice «Inactiva en HubSpot» y no lo está** suele ser una empresa que pasó a otro registro
+de Partner Clients. Desde el deploy del 2026-10-29 la corrida siguiente la pasa al registro activo, si hay
+uno solo que coincide con ella (DECISIONS › Éxito del cliente). Para ver antes qué cuentas pasarían y
+cuáles quedan con aviso, sin escribir nada: `npx tsx scripts/partner-cambios-de-registro.ts`. Para no
+esperar al job, y SOLO después del deploy: `ALLOW_PROD_WRITE=1 npx tsx scripts/partner-cambios-de-registro.ts --apply`
+(corre el sync como el job diario, sin crear fichas). Las que quedan con aviso (dos registros activos, o
+varios que coinciden) se resuelven en HubSpot. Cada cambio queda en el log del job
+(`[jobs/cs-partner] … pasados a su registro activo (Cliente viejo→nuevo)`): con eso se deshace a mano.
+
 ### Cerrar las alertas sueltas (fase 1.2, una vez, 2026-10-16)
 
 Desde ese deploy el vigía tiene UNA alerta por cuenta (o proyecto) y categoría, y la ficha del cliente muestra la lectura
