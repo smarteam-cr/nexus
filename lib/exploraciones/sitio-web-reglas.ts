@@ -7,9 +7,10 @@
  * instrucción para el agente.
  *   - Solo `http(s)` y un nombre de host de verdad: nada de IPs escritas, puertos ni `localhost`.
  *   - El host tiene que resolver a una IP pública (lo verifica el servidor, sitio-web.ts).
+ *   Qué es un host y una IP de internet lo deciden las reglas compartidas (lib/net/direccion-publica.ts).
  *   - Una redirección solo se sigue dentro del mismo sitio (`acme.com` ↔ `www.acme.com`).
  */
-import { isIP } from "node:net";
+import { hostDeUrl, motivoUrlNoPublica } from "@/lib/net/direccion-publica";
 
 /** El host del sitio de la empresa, desde lo que dice HubSpot (el sitio o el dominio). null si no sirve. */
 export function hostDelSitio(sitio: string | null | undefined, dominio: string | null | undefined): string | null {
@@ -22,48 +23,10 @@ export function hostDelSitio(sitio: string | null | undefined, dominio: string |
     } catch {
       continue;
     }
-    if (u.protocol !== "https:" && u.protocol !== "http:") continue;
-    if (u.port || u.username || u.password) continue;
-    const host = u.hostname.toLowerCase().replace(/\.$/, "");
-    if (!hostPublicoValido(host)) continue;
-    return host;
+    if (motivoUrlNoPublica(u)) continue;
+    return hostDeUrl(u);
   }
   return null;
-}
-
-/** Un nombre de host con forma de dominio público: nada de IPs escritas, `localhost` ni nombres sin punto. */
-export function hostPublicoValido(host: string): boolean {
-  if (!host || host.length > 253 || isIP(host.replace(/^\[|\]$/g, "")) !== 0) return false;
-  if (host === "localhost" || host.endsWith(".localhost") || host.endsWith(".local") || host.endsWith(".internal")) return false;
-  if (!host.includes(".")) return false;
-  return /^[a-z0-9.-]+$/.test(host) && host.split(".").every((p) => p.length > 0 && p.length <= 63 && !p.startsWith("-") && !p.endsWith("-"));
-}
-
-/** ¿La IP es interna (privada, loopback, link-local, metadatos de la nube, multicast…)? */
-export function ipInterna(ip: string): boolean {
-  const v = isIP(ip);
-  if (v === 4) {
-    const [a, b] = ip.split(".").map(Number);
-    return (
-      a === 0 ||
-      a === 10 ||
-      a === 127 ||
-      (a === 100 && b >= 64 && b <= 127) ||
-      (a === 169 && b === 254) ||
-      (a === 172 && b >= 16 && b <= 31) ||
-      (a === 192 && b === 168) ||
-      (a === 198 && (b === 18 || b === 19)) ||
-      a >= 224
-    );
-  }
-  if (v === 6) {
-    const x = ip.toLowerCase();
-    if (x === "::" || x === "::1") return true;
-    const mapeada = /^::ffff:(\d+\.\d+\.\d+\.\d+)$/.exec(x);
-    if (mapeada) return ipInterna(mapeada[1]);
-    return x.startsWith("fc") || x.startsWith("fd") || x.startsWith("fe8") || x.startsWith("fe9") || x.startsWith("fea") || x.startsWith("feb") || x.startsWith("ff");
-  }
-  return true;
 }
 
 /** ¿El host al que redirige es el mismo sitio? (`acme.com`, `www.acme.com` y sus subdominios.) */

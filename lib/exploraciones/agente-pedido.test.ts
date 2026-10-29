@@ -30,7 +30,8 @@ import {
 import { leerPropuesta } from "./esquemas";
 import { contenidoVacio, fusionarPropuestas, idDeCasoLibre, idDelItem, MOTIVOS_PARA_EXPLORAR, NIVELES, propuestaVacia, propuestaVigente, type EstadoDeExploracion } from "./contenido";
 import type { DimensionDelLienzo, EscalaDelLienzo } from "./escala-del-lienzo";
-import { hostDelSitio, ipInterna, mismoSitio } from "./sitio-web-reglas";
+import { ipInterna } from "@/lib/net/direccion-publica";
+import { hostDelSitio, mismoSitio } from "./sitio-web-reglas";
 import { investigacionDesdeLaRadiografia, leerLaRadiografia, urlComparable } from "./radiografia-pedido";
 import { conSuOrigen, separarOrigen, type Radiografia } from "./casillas";
 import { bloqueDeInstrucciones, claveDeInstrucciones } from "./notas-de-sesion";
