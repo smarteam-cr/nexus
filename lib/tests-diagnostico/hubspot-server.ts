@@ -12,9 +12,10 @@
 import "server-only";
 import { configDelFormulario, dejarNotaYResultado, enviarFormulario } from "@/lib/hubspot/test-del-diagnostico";
 import { anotarHubspot, marcarAbandonados, pendientesDeHubspot } from "./repositorio-server";
+import { esElUltimoIntento, MAX_INTENTOS_HUBSPOT } from "./reintentos";
 
+export { MAX_INTENTOS_HUBSPOT };
 export const MINUTOS_PARA_ABANDONO = 60;
-export const MAX_INTENTOS_HUBSPOT = 8;
 
 export interface TandaDeHubspot {
   abandonados: number;
@@ -36,7 +37,7 @@ export async function mandarPendientesAHubspot(now: Date, env: Readonly<Record<s
   for (const i of await pendientesDeHubspot(MAX_INTENTOS_HUBSPOT)) {
     try {
       if (!i.hubspotFormAt) {
-        const envio = await enviarFormulario(i, cfg, { ultimoIntento: i.hubspotIntentos + 1 >= MAX_INTENTOS_HUBSPOT });
+        const envio = await enviarFormulario(i, cfg, { ultimoIntento: esElUltimoIntento(i.hubspotIntentos) });
         await anotarHubspot(i.id, { formulario: true });
         out.formularios++;
         if (envio === "solo-correo") out.soloCorreo++;
