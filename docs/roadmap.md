@@ -9,7 +9,7 @@
 <!-- El resumen se arma con este bloque. Cómo se regenera: «Cómo se mantiene este roadmap» y la skill regenerar-roadmap. -->
 ```temas
 {
- "dondeVamos": "Hoy salieron a producción una sola escala para la preventa y los clientes y la escala 9.2 con Telecomunicaciones. El radar de la escala se rediseña como el Mapa en forma de radar, y los artefactos ya tienen su plan.",
+ "dondeVamos": "Hoy salieron a producción el radar de la teoría en la Escala, tu position statement en Marketing › Audiencia y en la preventa, la escala única con sus arreglos y un enlace por cada sesión de la exploración. El rediseño de la página de resultados del test espera tu visto bueno.",
  "temas": [
   {
    "n": 4,
@@ -41,6 +41,10 @@
     {
      "fecha": "28 oct",
      "texto": "Se lo presentaste a Ventas y ya lo usa en cada preventa."
+    },
+    {
+     "fecha": "28 oct",
+     "texto": "Cada sesión de una exploración tiene su propia dirección y «Copiar enlace», para pasar su análisis."
     }
    ],
    "sigue": "Tu revisión de cinco análisis reales, ya agendada; lo que salga se ajusta.",
@@ -98,10 +102,18 @@
     {
      "fecha": "28 oct",
      "texto": "La escala de un cliente es la misma pieza que la de la preventa, con su historia en el tiempo."
+    },
+    {
+     "fecha": "28 oct",
+     "texto": "El radar de la teoría en Escala › Radar: el Mapa en forma de radar, cada cruce con sus criterios al tocarlo."
+    },
+    {
+     "fecha": "28 oct",
+     "texto": "La escala única, arreglada: una cuenta medida solo en un proyecto ya se ve medida."
     }
    ],
-   "sigue": "El radar de la teoría: el Mapa en forma de radar, con cada cruce como una celda y sus criterios. Probar la escala con 5 a 8 empresas de 3 industrias. Falta el umbral de tráfico de Insider.",
-   "teToca": "Aprobar el diseño del radar de la teoría y crear «Telecomunicaciones» en «Industria (Smarteam)» de HubSpot. Después, las 52 decisiones provisionales de la 9.0.",
+   "sigue": "Probar la escala con 5 a 8 empresas de 3 industrias. Falta el umbral de tráfico de Insider.",
+   "teToca": "Crear «Telecomunicaciones» en «Industria (Smarteam)» de HubSpot. Después, las 52 decisiones provisionales de la 9.0.",
    "decisiones": [
     8,
     18,
@@ -155,16 +167,25 @@
     {
      "fecha": "28 oct",
      "texto": "A quien ya es contacto en HubSpot, el test no le pisa nombre, empresa ni cargo; la nota trae sus respuestas."
+    },
+    {
+     "fecha": "28 oct",
+     "texto": "El diseño nuevo de la página de resultados: el radar grande, a lo ancho y casi como slides, con la línea V3."
     }
    ],
-   "sigue": "Tu revisión de las preguntas y qué formulario de HubSpot usa el test. Después, el corte: el formulario, cambiar la dirección y apagar la aplicación vieja.",
-   "teToca": "Recorrer el test (nexus.smarteamcr.com/external/test) y corregir lo que quieras en Escala › Tests › Preguntas.",
+   "sigue": "La página de resultados rehecha con el radar nuevo, a lo ancho como slides (espera tu visto bueno). Tu revisión de las preguntas y qué formulario usa el test. Después, el corte de la aplicación vieja.",
+   "teToca": "Aprobar el diseño de la página de resultados (claude.ai/artifact/J9yRct2sfaQN99mVn18Zs8) y recorrer el test en Escala › Tests › Preguntas.",
    "decisiones": [
     15,
     29,
     39,
     46,
-    54
+    54,
+    66,
+    67,
+    68,
+    69,
+    70
    ]
   },
   {
@@ -250,7 +271,7 @@
      "texto": "El plan, de V1 a V8, y el catálogo de 20 artefactos sacado de 120 reuniones de 29 cuentas."
     }
    ],
-   "sigue": "Arreglar lo que dejó la revisión de la escala única (una cuenta medida solo en un proyecto se ve sin medir). Después, el catálogo de secciones y varias copias de planificación y diagnóstico.",
+   "sigue": "El catálogo de secciones de cada tipo y varias copias de planificación y diagnóstico (V2 y V3).",
    "decisiones": [
     58,
     59,
@@ -281,10 +302,18 @@
     {
      "fecha": "28 oct",
      "texto": "Tu position statement de Smarteam, con sus tres frentes: qué logra cada uno y cuándo cabe."
+    },
+    {
+     "fecha": "28 oct",
+     "texto": "Tu position statement vive en Marketing › Audiencia y la preventa lo arma para cada prospecto y lo valida."
+    },
+    {
+     "fecha": "28 oct",
+     "texto": "La investigación de la preventa también busca vacantes publicadas."
     }
    ],
-   "sigue": "Tu position statement entra a Marketing › Audiencia y la preventa lo usa y lo valida (en curso). Los clientes similares en la preparación. Después, las actividades contigo, el catálogo y el cotizador.",
-   "teToca": "El ejercicio de las actividades de los casos de uso, cuando tengas energía: destraba el cotizador, las tareas desde lo vendido y la rentabilidad.",
+   "sigue": "Los clientes similares en la preparación. Después, las actividades contigo, el catálogo y el cotizador.",
+   "teToca": "Escribir «qué logra» y «cuándo cabe» de Acompañamiento en Marketing › Audiencia. Y el ejercicio de las actividades de los casos de uso.",
    "decisiones": [
     11,
     12,
@@ -680,10 +709,10 @@ Que Nexus amarre los puntos: entrar a un cliente y ver todo lo que Smarteam est�
 
 | Qué | Cómo está |
 |---|---|
-| Producción | Corre `7817de59` desde la noche del 28 oct: una sola escala para la preventa y los clientes, y la escala 9.2.0 publicada con la edición Telecomunicaciones y los 54 bancos del test aprobados. Antes, `f4588f96`, el 28 oct: la vista Radar de 0 a 100, el test que no pisa los contactos de HubSpot y las Acciones coherentes cortas con su detalle en la Planificación. Antes, `e63217a3`, el 28 oct: el equipo de cada sesión, «Usar» con Deshacer, la vista Radar con la forma del Mapa, la edición Maquinaria y el test público con el aspecto de la aplicación vieja, su resultado nuevo con la rueda y el PDF, y la pregunta del CRM (SQL 2026-10-28-uso-de-crm-del-test aplicado). Antes, desde el 27 oct: la noche 3, la escala 9.0 publicada (con el manual 1.4.0 y el mapa 2.0.0), el test nuevo con sus 42 bancos aprobados y el sprint sin tope. Todos los SQL aplicados. |
-| Por desplegar | Nada. En construcción, en sus sesiones: los arreglos de la escala única y tu position statement en Marketing › Audiencia y en la preventa. Esperando tu visto bueno: el diseño del radar de la teoría. **Sin aplicar, a propósito:** la carga inicial de los datos de la empresa (espera a la CSL) y las banderas `EMPRESA_HUBSPOT_ESCRITURA` y `EMPRESA_HUBSPOT_COPIA` («Lo que configuras tú»). |
+| Producción | Corre `0968a8a0` desde la noche del 28 oct: el radar de la teoría en Escala › Radar, tu position statement en Marketing › Audiencia (cargado) y en la preventa, los arreglos de la escala única y una dirección por cada sesión de la exploración. Antes, `7817de59`, el 28 oct: una sola escala para la preventa y los clientes, y la escala 9.2.0 con Telecomunicaciones y los 54 bancos del test. |
+| Por desplegar | Nada. Esperando tu visto bueno: el diseño de la página de resultados del test (claude.ai/artifact/J9yRct2sfaQN99mVn18Zs8). **Sin aplicar, a propósito:** la carga inicial de los datos de la empresa (espera a la CSL) y las banderas `EMPRESA_HUBSPOT_ESCRITURA` y `EMPRESA_HUBSPOT_COPIA` («Lo que configuras tú»). |
 | En rojo en producción | Por datos de antes, ninguno nuevo (28 oct): 16 reuniones colgadas de proyectos de otro cliente (INV1) y 9 tareas que citan una reunión de otro cliente (INV42), las que ordena el plan de dominio compartido; el pipeline de Secure Title (INV11: 2 proyectos y 6 en una etapa desconocida); «TEC- AE» fusionada en HubSpot (INV13 e INV54: ya solo ella, kölbi quedó bien); una reunión de Meet leída antes de ocurrir (INV16a), y el corte de cartera de hace 96 días (INV32). |
-| Pruebas | 26 para ti (pestaña «Pruebas para personas»; desde el 20 oct solo las que piden tu criterio), 82 que valida el equipo al usarlas, 77 con IA sobre los datos y 48 ya validadas por ti. |
+| Pruebas | 28 para ti (pestaña «Pruebas para personas»; desde el 20 oct solo las que piden tu criterio), 83 que valida el equipo al usarlas, 77 con IA sobre los datos y 48 ya validadas por ti. |
 
 ## Cómo va Nexus
 
@@ -768,6 +797,11 @@ Sin esto, algo sigue mal o no se puede validar:
 63. **Artefactos · el kickoff y la exploración:** ¿siguen siendo uno por proyecto, como estaba decidido?
 64. **Artefactos · de la empresa:** ¿cuáles pueden ser de la empresa entera, sin proyecto? Hoy lo son el diagnóstico y la escala.
 65. **Artefactos · un pedido sin tipo:** si lo que pides no calza con ningún tipo, ¿Nexus lo arma con secciones libres o te dice que no hay?
+66. **Resultado del test · el caso que falta:** ninguno de los casos de uso del ejemplo mueve «Priorización de interesados», que es justo lo que más frena. ¿Se deja así o el bloque de casos tiene que traer uno para eso? (diseño: claude.ai/artifact/J9yRct2sfaQN99mVn18Zs8)
+67. **Resultado del test · «No lo sé»:** en el test corto, un «No lo sé» cuenta como Deficiente y la recomendación puede caer ahí. ¿Se recomienda igual o se dice «primero averigüemos esto»?
+68. **Resultado del test · el botón principal:** ¿azul de Nexus, como en el diseño, o el naranja de Smarteam?
+69. **Resultado del test · el uso de CRM:** ¿se muestra lo que la persona contestó sobre cómo gestiona hoy a sus clientes?
+70. **Resultado del test · el PDF:** ¿una hoja por bloque o se queda en 2 o 3?
 
 ## Propuesta por aprobar: vender y entregar por casos de uso
 
@@ -1124,7 +1158,7 @@ Sale del feedback de Ventas (Marco, Andrés y Liz) y de Customer Success (Lilian
    - Etapa 1 · «Cómo llegó»: test, en frío, referido (por quién) o evento; lo propone Nexus desde HubSpot y lo confirma el consultor.
    - Etapa 2 · En frío o referido, la primera sesión: 10 minutos para presentar a Smarteam con el position statement, 35 para que el cliente cuente y unas 3 preguntas al final.
    - Etapa 3 · Desde la segunda sesión, la guía de siempre.
-3. **K3 · La investigación arma el position statement.** *Existe a medias:* la investigación web sí corre (sitio, noticias, industria, hitos como rondas de inversión); no busca contrataciones y no hay position statement. *Solo preventa.*
+3. [hecho, 28 oct, en producción: en Marketing › Audiencia y en la preparación de la preventa; falta el detalle de Acompañamiento] **K3 · La investigación arma el position statement.** *Existe a medias:* la investigación web sí corre (sitio, noticias, industria, hitos como rondas de inversión); no busca contrataciones y no hay position statement. *Solo preventa.*
    - Etapa 1 · El position statement base de Smarteam: lo escribes tú (decisión 12) y Nexus lo carga.
    - Etapa 2 · Correr la investigación de la empresa (R5) también sin empresa en HubSpot, cuando hay dominio.
    - Etapa 3 · En «Conexión», el position statement personalizado con dos o tres hechos de la empresa, cada uno con su fuente.
@@ -1607,6 +1641,9 @@ Las áreas van por prioridad: **Alta** (lo usa el equipo cada día, toca plata o
 
 | # | Estado | Prueba | Pasos | Resultado esperado |
 |---|---|---|---|---|
+| 293 | Por validar | Que tu position statement esté en Audiencia | Marketing › Audiencia › pestaña «Posicionamiento». | Tu frase «Acompañamos a empresas que están creciendo…» y tres tarjetas: Estructura · HubSpot, Activación · Insider One y Acompañamiento, cada una con «Qué logra» y «Cuándo cabe»; Acompañamiento dice «Pendiente». |
+| 294 | Por validar | Que la preventa arme el position statement de cada prospecto sin prometer | Ventas › Preventa de un prospecto que vende a personas › «Preparar» la sesión › pestaña «Conexión». | «Position statement para [empresa]»: tu frase tal cual, 2 o 3 hechos de la empresa con su fuente y «Por dónde entrar» con el frente que calza o calza a medias, condición por condición. Ninguna frase promete resultados («venderá más», «aumentará»). |
+| 295 | ⏳ La valida el equipo: Liliana Moreno | Que cada sesión de la exploración tenga su enlace | Una preventa o la Exploración de un cliente › una sesión › «Copiar enlace»; pégalo en otra pestaña. | Se abre la misma exploración, en esa sesión y en su pestaña (por ejemplo, el Análisis). |
 | 104 | ⏳ La valida el equipo: Liliana Moreno | Que se pueda regenerar una sola pregunta | Distribuidora Larce › Exploración › sesión 2 › Preparación › «La guía»: en una pregunta, ⋯ › «Regenerar». Después, en una pregunta «Del asistente», ⋯ › «Regenerar». | La pregunta cambia por otra del mismo tema, marcada «Regenerada»; la «Del asistente» regenerada pasa a «Regenerada» (antes seguía diciendo «Del asistente»). «Volver a la de la guía» aparece solo en una pregunta de la guía. Una tuya editada por ti sigue diciendo «Tuya». |
 | 113 | ⏳ La valida el equipo: Liliana Moreno | Que el asistente ofrezca pedidos al abrirse | Larce › Preparación › «La guía» › «Mejorar con el asistente». | Arriba del campo, de 3 a 4 pedidos en botones armados con la guía real (la pregunta con menos repreguntas, las dimensiones sin preguntar, lo primero que falta para proponer). Un clic llena el campo; lo mandas tú. |
 | 114 | ⏳ La valida el equipo: Liliana Moreno | Que el chat numere como la pantalla y respete el tope | Larce › «La guía», vista «En orden» › «Mejorar con el asistente». Pide «Quita la última pregunta». Después «Agrega tres preguntas sobre cómo miden el pipeline». | «Quitar la N» apunta a la misma pregunta que ves última (la del presupuesto). Con las tres: la lista trae solo las que entran y dice que la guía llega a 8 preguntas sumadas (tuyas o del asistente); al aplicar entran sin avisos. |
@@ -1725,7 +1762,7 @@ Las áreas van por prioridad: **Alta** (lo usa el equipo cada día, toca plata o
 | 54 | Por validar | Que lo propuesto se confirme en la misma pantalla y quede en la historia | Al terminar la 52 (o en Tecnosagot, que ya tiene 2 propuestos): en el recuadro azul «El agente propone N niveles…», abre «Ver la frase y el nivel» en uno, toca «Usar» y después «Usar los N». | Cada nivel con su porqué, «De dónde sale» y la frase. Aviso «Nivel usado.» / «Usaste los N niveles.». Lo usado aparece en su área con «✓ Con evidencia». En «La escala en el tiempo», una fila de hoy «Se confirmó un nivel». Lo no usado no entra a la historia. |
 | 55 | ⏳ La valida el equipo: Alexander Vanegas | Que se entienda con qué edición y perfil se mide | Clientes › Cemaco Internacional (la del proyecto «Cemaco Internacional - CRM») › La cuenta › La escala › «Se mide con la escala general» › «Corregir» › Industria «Ecommerce y retail», Cómo vende «Mixta», Después de la venta «Recompra» › «Guardar». | Antes: «Porque no hay una edición de su industria…». Después: aviso «Listo: la escala se lee con la edición y el perfil nuevos.», título «Se mide con la edición Ecommerce y retail y el perfil mixta · recompra», chip «La eligió una persona» y lo que cambia frente a la general. Queda guardado en la exploración de Cemaco. |
 | 56 | ⏳ La valida el equipo: Alexander Vanegas | Que la historia se ate a la venta | Cemaco Internacional › La cuenta › La escala › «Guardar esta versión» › De qué momento es «Al vender» › «Guardar». | Aviso «Versión guardada.». En «La escala en el tiempo», la fila «27 sep 2026 · Al vender · Guardada a mano · venta «Cemaco Internacional - CRM»». |
-| 291 | Por validar | Que la vista Radar sea un radar de verdad | Escala › Ventas › vista «Radar». Pasa el cursor por una dimensión y tócala; después, toca fuera del radar. | Anillos de 0 a 100 con 20, 40, 60, 80 y 100 arriba, «La base» en verde punteado en 40, una línea por serie con sus puntos sobre cada eje y sin colores de fondo. La dimensión elegida se pone azul y queda fija en el panel con «Leer la dimensión entera»; al tocar fuera se suelta. Junto al número de cada dimensión, su lugar en «qué se trabaja primero». |
+| 291 | Por validar | Que la vista Radar muestre la teoría, como el Mapa | Escala › Ventas › vista «Radar». Toca un cruce de un eje con un anillo (por ejemplo Datos en Funcional); después, el nombre de una dimensión; después, fuera del radar. | Un anillo por etapa, cada uno del color de su nivel, Funcional punteado como «La base», y en cada cruce cuántos criterios tiene esa celda (no una figura que parezca una empresa). Al tocar un cruce, el panel muestra sus criterios; al tocar una dimensión, sus cinco etapas; al tocar fuera, se suelta. «Qué se cuenta» cambia los números (Hábitos, Riesgos, Requeridos). |
 | 108 | Por validar | Que cada nivel de cada edición hable de su industria | Publicada el 24 oct (8.9.1; tu tarea #285). Para revisarla: Escala › Ventas › vista «Matriz» › Industria «Turismo», fila 1.7 «Seguimiento de cotizaciones y reservas». | En Inicial: «Cuando una cotización no se contesta o una reserva no se paga, cada persona del equipo decide si insiste y cómo: no hay un paso acordado.» (Comprobado contra el documento: ninguna de las 720 celdas queda sin personalizar.) |
 
 ### Rentabilidad, la meta y el uso <span class="prioridad">Baja</span>
