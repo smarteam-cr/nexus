@@ -49,6 +49,3 @@ const ADAPTADORES: Readonly<Record<string, AdaptadorDelTipo>> = {
 export function adaptadorDelTipo(tipo: string | null | undefined): AdaptadorDelTipo | null {
   return tipo ? (ADAPTADORES[tipo] ?? null) : null;
 }
-
-/** Los tipos con adaptador (lo congela su prueba contra el registro de tipos). */
-export const TIPOS_CON_ADAPTADOR: readonly string[] = Object.keys(ADAPTADORES);
