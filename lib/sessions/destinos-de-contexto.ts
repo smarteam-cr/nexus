@@ -33,6 +33,9 @@
  *    Lo que hacía el modo sugerido lo hacen las SUGERENCIAS CALCULADAS (se calculan al leer y nunca
  *    escriben `true` solas: `true` es el candado humano); «Usar» es el clic de una persona y escribe
  *    `true`.
+ *      Desde el 2026-10-24 en el diagnóstico y el 2026-10-29 en la planificación, las reuniones del proyecto con el cliente
+ *      que dejaron texto ENTRAN SOLAS (`DESTINOS_DONDE_ENTRAN_SOLAS`, lib/contexto/sugerencias-del-documento.ts): no se
+ *      escribe `true`, se calculan al leer y «Sacar» escribe `false`.
  *  · ⚠ EXPLORACIÓN: sigue con la regla sugerida (`linkFeedsExploracion`) hasta salir de este módulo.
  *    Desde la etapa A (2026-10-09) la exploración nueva ya NO lee esta columna: lee solo la reunión de
  *    cada una de sus sesiones (lib/exploraciones/fuentes.ts). Queda por los tipos de

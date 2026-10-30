@@ -17,7 +17,7 @@ import { rotuloVigente, PLANIFICACION_CANVAS } from "@/lib/canvas/canvas-defs";
    dos literales, el chat podía acordar algo que este editor rechaza al aplicar. */
 import { CAPACIDADES_POR_PIEZA } from "@/lib/canvas/capacidades-de-documento";
 import { PLANIFICACION_DEF_BY_KEY } from "@/components/landing/configs/planificacion.defs";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import LandingView, { type LandingSectionData } from "@/components/landing/LandingView";
 import type { LandingContext } from "@/components/landing/types";
 import { useCanvasSections } from "./useCanvasSections";
@@ -31,6 +31,7 @@ import { cronogramaParaLaFila } from "@/lib/kickoff/datos-de-la-portada";
 import { CANVAS_PRIMARY_AGENT } from "@/lib/agents/canvas-agents";
 import { plantillaDe, seccionesDeLaPlantilla } from "@/lib/entregables/registro";
 import { conservarMarcas, esSeccionDelCliente, marcarQuitadasPorElEquipo } from "@/lib/planificacion/lo-del-cliente";
+import { BRIEF_IMPORTADO_KEY, BRIEF_IMPORTADO_VACIO, adoptarBrief, briefImportadoVacio } from "@/lib/planificacion/brief-importado";
 
 const MAXW = 860;
 
@@ -98,8 +99,9 @@ export default function PlanificacionWorkspace({
   useEjecutarOperacionesDelChat(cs, PLANIFICACION_DEF_BY_KEY, CAPACIDADES_POR_PIEZA["planning"]);
 
   // ¿Ya corrió la generación? El seed solo siembra el bloque del `cierre` (curado).
+  // El Brief traído de la hoja (2026-10-29) tampoco cuenta: es del equipo, y traerlo no es generar.
   const hasGeneratedContent = useMemo(
-    () => cs.sections.some((s) => s.key !== "cierre" && s.blocks.length > 0),
+    () => cs.sections.some((s) => s.key !== "cierre" && s.key !== BRIEF_IMPORTADO_KEY && s.blocks.length > 0),
     [cs.sections],
   );
 
@@ -124,6 +126,10 @@ export default function PlanificacionWorkspace({
     return Array.isArray(d?.filas) ? d.filas : [];
   }, [cs.sections]);
   const etiquetasClave = (etiquetas ?? []).join(",");
+  const briefTraido = useMemo(() => {
+    const d = cs.sections.find((x) => x.key === BRIEF_IMPORTADO_KEY)?.blocks.find((b) => b.blockType === "CARD")?.data;
+    return briefImportadoVacio(d) ? null : adoptarBrief(d).titulo || "La hoja";
+  }, [cs.sections]);
   /* Lo que el editor lee de afuera (2026-10-27): los asientos comprados en HubSpot (Partner, para la cuenta de
      licencias) y las fechas del Cronograma (para la ficha). Solo el editor: el enlace y el PDF no los traen. */
   const [asientos, setAsientos] = useState<AsientosComprados | null>(null);
@@ -146,12 +152,46 @@ export default function PlanificacionWorkspace({
       vivo = false;
     };
   }, [projectId]);
+  /* Traer la hoja del Brief de implementación (2026-10-29, pregunta 32): la lee el servidor con la cuenta de quien la pide
+     y la guarda en la sección solo interna; después se vuelve a leer el documento. */
+  const refetch = cs.refetch;
+  const [briefesTraidos, setBriefesTraidos] = useState(0);
+  const traerBrief = useCallback(
+    async (url: string, confirmado?: boolean): Promise<{ ok: boolean; error?: string; confirmar?: boolean }> => {
+      try {
+        const r = await fetch(`/api/projects/${projectId}/planificacion/brief`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url, confirmado }),
+        });
+        const j = (await r.json().catch(() => null)) as { error?: string; confirmar?: boolean } | null;
+        if (!r.ok) return { ok: false, error: j?.error ?? "No se pudo traer la hoja.", confirmar: j?.confirmar === true };
+        await refetch();
+        setBriefesTraidos((n) => n + 1); // La sugerencia de la plantilla cambia con el Brief.
+        return { ok: true };
+      } catch {
+        return { ok: false, error: "Error de conexión." };
+      }
+    },
+    [projectId, refetch],
+  );
+  /* Quitarlo desde el selector: antes de generar es la única salida de una hoja que no era. Vacía la tarjeta, como «Quitar»
+     en la sección. */
+  const upsert = cs.upsertCardData;
+  const quitarBrief = useCallback(async () => {
+    const s = cs.sections.find((x) => x.key === BRIEF_IMPORTADO_KEY);
+    const card = s?.blocks.find((b) => b.blockType === "CARD");
+    if (!s || !card) return;
+    await upsert(s.id, card.id, { ...BRIEF_IMPORTADO_VACIO });
+    await refetch();
+    setBriefesTraidos((n) => n + 1);
+  }, [cs.sections, upsert, refetch]);
   const ctx: LandingContext = useMemo(
     () => ({
       clientName: "",
-      planificacion: { propiedades: propiedadesDelPlan, etiquetasDelProyecto: etiquetasClave ? etiquetasClave.split(",") : [], asientos, fechas },
+      planificacion: { propiedades: propiedadesDelPlan, etiquetasDelProyecto: etiquetasClave ? etiquetasClave.split(",") : [], asientos, fechas, traerBrief },
     }),
-    [propiedadesDelPlan, etiquetasClave, asientos, fechas],
+    [propiedadesDelPlan, etiquetasClave, asientos, fechas, traerBrief],
   );
 
   /* Un documento anterior a las secciones del Brief (2026-10-25) no las tiene, y el motor solo pinta las que
@@ -161,22 +201,22 @@ export default function PlanificacionWorkspace({
   const yaReconciliado = useRef(false);
   /* La plantilla del documento (I2, 2026-10-27): la esencial no tiene las secciones de la completa, así que lo que «falta»
      se mide contra las suyas. null = todavía no se sabe (no se reconcilia nada hasta saberlo). */
-  const [plantilla, setPlantilla] = useState<{ id: string | null; guardada: boolean } | null>(null);
+  const [plantilla, setPlantilla] = useState<{ id: string | null; guardada: boolean; sugerida: { plantilla: string; razon: string } | null } | null>(null);
   useEffect(() => {
     let vivo = true;
     fetch(`/api/projects/${projectId}/planificacion/plantilla`)
       .then((r) => (r.ok ? r.json() : null))
-      .then((j: { plantilla?: string | null; guardada?: boolean } | null) => {
-        if (vivo) setPlantilla({ id: j?.plantilla ?? null, guardada: j?.guardada === true });
+      .then((j: { plantilla?: string | null; guardada?: boolean; sugerida?: { plantilla: string; razon: string } | null } | null) => {
+        if (vivo) setPlantilla({ id: j?.plantilla ?? null, guardada: j?.guardada === true, sugerida: j?.sugerida ?? null });
       })
       .catch(() => {
         // Sin saberlo, el documento: nunca dejar a alguien sin poder escribir.
-        if (vivo) setPlantilla({ id: null, guardada: true });
+        if (vivo) setPlantilla({ id: null, guardada: true, sugerida: null });
       });
     return () => {
       vivo = false;
     };
-  }, [projectId]);
+  }, [projectId, briefesTraidos]);
   const idDeLaPlantilla = plantilla?.id ?? null;
   const canonDeLaPlantilla = useMemo(
     () => (idDeLaPlantilla ? seccionesDeLaPlantilla(plantillaDe("planning", idDeLaPlantilla) ?? {}, PLANIFICACION_CANVAS.sections) : PLANIFICACION_CANVAS.sections),
@@ -286,6 +326,10 @@ export default function PlanificacionWorkspace({
         canvasId={canvasId}
         agentId={CANVAS_PRIMARY_AGENT[PIECE_SLUG].agentId}
         onGenerado={onGenerado}
+        sugerida={plantilla?.sugerida ?? null}
+        traerBrief={traerBrief}
+        briefTraido={briefTraido}
+        quitarBrief={quitarBrief}
       />
     )}
     {/* La lista de construcción (L4 etapa 5): el estado y el enlace de cada cosa, y el paso a Tareas. Del equipo: no va

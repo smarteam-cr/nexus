@@ -22,7 +22,8 @@
  *    Si no se leyeron todas, la primera línea del bloque (después de la regla) dice cuántas y por qué.
  *    Sin elegidas el bloque queda en "" y `avisoSinReuniones` trae la línea que lo dice: el documento
  *    trabaja con la memoria del proyecto (lib/memoria), que el lector suma aparte. La exploración,
- *    mientras siga en el módulo, lee como antes (la regla sugerida, en resumen).
+ *    mientras siga en el módulo, lee como antes (la regla sugerida, en resumen). El diagnóstico y la planificación suman
+ *    además las reuniones del proyecto con texto que entran solas (`sumarReuniones`).
  *  · LA MINUTA EN UN DOCUMENTO DEL CLIENTE (`minutaParaElDocumento`): la regla de la memoria. Solo la
  *    revisada, y de ella solo los acuerdos y las decisiones, sin montos. Nunca el resumen, los riesgos
  *    ni una minuta en borrador. La ejecución (interna) la lee entera.

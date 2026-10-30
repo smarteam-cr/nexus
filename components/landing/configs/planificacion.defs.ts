@@ -53,6 +53,7 @@ import {
   cotizacionesVacia,
   informesVacia,
 } from "@/lib/planificacion/brief";
+import { BRIEF_IMPORTADO_KEY, BRIEF_IMPORTADO_VACIO, briefImportadoVacio } from "@/lib/planificacion/brief-importado";
 
 const str = { type: "string" } as const;
 const strArray = { type: "array", items: { type: "string" } } as const;
@@ -84,6 +85,24 @@ const ORIGEN_BRIEF =
 const MANUAL_BRIEF = "Sección curada: la llenan el equipo o el cliente; el agente no la escribe al generar.";
 
 const PERMISOS_DE_OBJETO = { type: "object", properties: { ver: str, editar: str, eliminar: str } } as const;
+
+/* 2026-10-29 (pregunta 32 del roadmap) — el Brief de implementación que el equipo YA llenó, traído de la hoja de Google
+   tal cual, pestaña por pestaña (lib/planificacion/brief-importado.ts). SOLO INTERNA: nunca va al cliente ni al PDF, no
+   lleva ojo y arranca abierta. La IA no la escribe: la lee como fuente al generar. */
+const BRIEF_IMPORTADO_DEF: BCSectionDef = {
+  key: BRIEF_IMPORTADO_KEY,
+  label: "El Brief de implementación (la hoja)",
+  eyebrow: "Lo que el equipo llenó en el Brief · solo lo ve el equipo",
+  theme: "soft",
+  sectionType: "brief_importado",
+  agentGenerated: false,
+  soloInterna: true,
+  vacia: briefImportadoVacio,
+  empty: { ...BRIEF_IMPORTADO_VACIO },
+  agentHint: "",
+  brief: "Sección curada y solo interna: la hoja del Brief de implementación de este cliente, traída de Google Sheets. La IA no la escribe.",
+  schema: { type: "object", properties: {} },
+};
 
 const FICHA_PROYECTO_DEF: BCSectionDef = {
   key: "ficha_proyecto",
@@ -265,6 +284,7 @@ export const PLANIFICACION_SECTION_DEFS: BCSectionDef[] = [
       "Sin diagnóstico, o sin acciones en él, deja `acciones` VACÍO: no inventes acciones ni códigos. `intro`: vacío.",
     schema: ACCIONES_SCHEMA,
   },
+  BRIEF_IMPORTADO_DEF,
   FICHA_PROYECTO_DEF,
   USUARIOS_PERMISOS_DEF,
   {

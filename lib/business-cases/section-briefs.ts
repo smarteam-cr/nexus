@@ -93,9 +93,17 @@ export function briefsByKeyFrom(sections: unknown): Record<string, string> {
   return out;
 }
 
-/** Set de keys de sección OCULTAS (el cliente no las ve). */
+/**
+ * Las secciones SOLO INTERNAS (2026-10-29): las ve el equipo y nunca el cliente, sin importar lo que diga su ojo. Hoy, el
+ * Brief de implementación traído a la Planificación (lib/planificacion/brief-importado.ts): la hoja que el equipo llenaba
+ * a mano, con correos, teléfonos y notas internas. Van ACÁ y no en un `hidden: true` porque `hiddenKeysFrom` es lo que
+ * leen el enlace del cliente, el PDF y la publicación: un ojo que alguien abre no puede mandarla afuera.
+ */
+export const SECCIONES_SOLO_INTERNAS: ReadonlySet<string> = new Set(["brief_importado"]);
+
+/** Set de keys de sección OCULTAS (el cliente no las ve). Siempre con las solo internas. */
 export function hiddenKeysFrom(sections: unknown): Set<string> {
-  const out = new Set<string>();
+  const out = new Set<string>(SECCIONES_SOLO_INTERNAS);
   for (const e of parseSectionEntries(sections)) {
     if (e.hidden === true) out.add(e.key);
   }
