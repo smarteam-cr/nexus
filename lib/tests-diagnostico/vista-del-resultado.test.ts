@@ -310,4 +310,15 @@ describe("los ajustes del 29 oct", () => {
     // El PDF no tiene imán.
     expect(dibujar("pdf")).not.toContain("data-iman-x");
   });
+
+  it("⛔ el radar limpio (30 oct): sin «La base», la figura en azul y Funcional como el único anillo con color (también en el PDF)", () => {
+    for (const modo of ["pantalla", "pdf"] as const) {
+      const html = dibujar(modo);
+      expect(texto(html)).not.toContain("La base");
+      expect(html).toMatch(/class="rde-figura"[^>]*fill="#0b58d3"[^>]*stroke="#0b58d3"/);
+      const trazos = [...html.matchAll(/<polygon points="[^"]*" fill="none" stroke="(#[0-9a-f]{6})"/g)].map((m) => m[1]);
+      expect(trazos.length).toBeGreaterThanOrEqual(5);
+      expect(new Set(trazos.filter((x) => !["#dde3ec", "#eef1f6"].includes(x)))).toEqual(new Set(["#22c55e"]));
+    }
+  });
 });
