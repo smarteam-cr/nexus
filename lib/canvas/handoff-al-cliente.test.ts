@@ -242,6 +242,15 @@ const LECTORES: Lector[] = [
     porque: "el requerimiento técnico tiene vista externa para el dev del cliente",
   },
   {
+    /* Artefactos, etapa V3 (2026-10-29): genera las COPIAS de cada tipo (otra planificación, un plan de adopción, una
+       integración técnica). La allowlist es la del tipo (`handoffKeysDelTipo`, lib/artefactos/catalogo.ts), que un test
+       exige para todo tipo que admite copias. Se declara con la planificación: la más amplia de las que leen el cliente. */
+    archivo: "lib/artefactos/generar-server.ts",
+    pieza: "planning",
+    exposicion: "directo",
+    porque: "las copias de los tipos que lee el cliente se comparten con su enlace, sin un humano que filtre el handoff",
+  },
+  {
     archivo: "lib/canvas/exploracion-generate.ts",
     pieza: "exploration",
     exposicion: "interno",

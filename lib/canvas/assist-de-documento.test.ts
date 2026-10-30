@@ -97,3 +97,31 @@ describe("el registro de documentos con assist", () => {
     }
   });
 });
+
+describe("los tipos nuevos de artefacto con assist (etapa V6 adelantada, docs/artefactos-plan.md)", () => {
+  it("⛔ cada uno es un tipo del registro, lo lee el cliente con allowlist y su celda declara `regenerate` exigido", async () => {
+    const { DOC_DE_LOS_TIPOS_NUEVOS } = await import("./assist-de-documento");
+    const { tipoDeArtefacto } = await import("@/lib/artefactos/tipos");
+    const rotos: string[] = [];
+    for (const [tipo, doc] of Object.entries(DOC_DE_LOS_TIPOS_NUEVOS)) {
+      const t = tipoDeArtefacto(tipo);
+      if (!t) {
+        rotos.push(`${tipo}: no es un tipo del registro`);
+        continue;
+      }
+      const accion = PERMISSION_SECTIONS.find((s) => s.key === t.permiso)?.actions.find((a) => a.key === "regenerate");
+      if (!accion?.enforced) rotos.push(`${tipo}: su celda "${t.permiso}" no declara regenerate exigido`);
+      if (t.clientFacing && !doc.handoffKeys?.length) rotos.push(`${tipo}: lo lee el cliente y lleva el handoff entero`);
+      if (doc.agentId !== null) rotos.push(`${tipo}: un tipo nuevo no tiene fila en Agent (su corrida va con agentSlug)`);
+    }
+    expect(rotos).toEqual([]);
+    expect(Object.keys(DOC_DE_LOS_TIPOS_NUEVOS).sort()).toEqual(["adoption-plan", "integration"]);
+  });
+
+  it("una copia se mejora con el documento de su tipo, y la exploración sigue fuera", async () => {
+    const { docConAssist, DOC: doc } = await import("./assist-de-documento");
+    expect(docConAssist("planning")).toBe(doc.planning);
+    expect(docConAssist("exploration")).toBeNull();
+    expect(docConAssist(null)).toBeNull();
+  });
+});

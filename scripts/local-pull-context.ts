@@ -90,9 +90,12 @@ async function resolverPorNombre(prisma: PrismaClient, nombres: string[]): Promi
   const problemas: string[] = [];
 
   for (const nombre of nombres) {
-    const matches = await prisma.client.findMany({
+    const parecidos = await prisma.client.findMany({
       where: { name: { contains: nombre, mode: "insensitive" } },
     });
+    // El nombre exacto gana: «TEC» no puede quedar sin resolver porque también aparece dentro de «INTECO».
+    const exactos = parecidos.filter((c) => c.name.toLowerCase() === nombre.toLowerCase());
+    const matches = exactos.length ? exactos : parecidos;
     if (matches.length === 0) {
       problemas.push(`  ✗ "${nombre}" — ningún cliente contiene ese texto.`);
     } else if (matches.length > 1) {

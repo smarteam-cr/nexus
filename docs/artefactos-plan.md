@@ -1,6 +1,9 @@
 # Artefactos: tipos, plantillas y varias copias — plan
 
-> Estado: **plan, sin código ni datos tocados**. Medido en el código el 2026-10-28 (rama `main` en `ff7daf0e`).
+> Estado: **V1 en producción. V2, V3, V4 y los dos primeros tipos nuevos (adelantados de V6) construidos el 2026-10-29**
+> (rama `claude/artefactos-copias-d6c1b8`, sin desplegar; SQL `scripts/sql/2026-10-29-artefactos-copias.sql` antes del
+> deploy). Elías respondió las ocho preguntas el 29 oct (§5): donde el plan proponía otra cosa, se corrigió en su lugar.
+> Medido en el código el 2026-10-28 (rama `main` en `ff7daf0e`).
 > Lo pidió Elías el 28 oct: pasar de pasos a **artefactos**. «Yo como CSE dentro de FACO pueda tener 3 artefactos de
 > planificación.» Lo que se le pregunta al CSE no es cómo llenarlo, sino qué necesita: «tengo de frente una
 > presentación de diagnóstico», «ocupo un consenso del proceso comercial», «necesito explorar mejor marketing», «ocupo
@@ -15,10 +18,12 @@
 ## En una frase
 
 Un **artefacto** es una copia de un **tipo** de documento (planificación, diagnóstico, kickoff, adopción…), armada con
-una **plantilla** o con las secciones que pide un pedido, que pertenece a **un proyecto** (o a la empresa) y tiene **su
-propio enlace para compartir**. Los documentos de hoy pasan a ser la **copia principal** de su tipo, sin moverse de
-lugar; las copias nuevas viven en la misma tabla, sin `slug`, así que nada de lo que hoy busca «el diagnóstico del
-proyecto» cambia de respuesta.
+una **plantilla** o con las secciones que pide un pedido, que pertenece a **un proyecto** (o a la empresa), tiene **su
+nombre, su lugar en el orden, su estado** (en construcción o terminado) y **su propio enlace para compartir**. No hay una
+copia oficial (Elías, 29 oct): Nexus es el depósito de las que va creando el equipo, y quien lee un tipo —la entrega, la
+escala, los agentes— lee **todas**, cada una con su nombre y su estado. El documento de hoy de cada tipo es una más:
+conserva su `slug` como ancla técnica (lo buscan 105 lugares) y las copias nuevas viven en la misma tabla sin `slug`, así
+que nada de lo que hoy busca «el diagnóstico del proyecto» cambia de respuesta.
 
 ---
 
@@ -88,11 +93,15 @@ entrega, handoff e Información del cliente. **Tareas y «Para ti» no leen ning
 - **Agregar, quitar o reordenar las secciones de una plantilla es decisión de producto** (`lib/landing/registry.test.ts`
   lo congela; `catalogo-de-secciones.ts` lo repite: «el motor sabe pintar ~50 componentes, no son un menú»). Por eso
   Nexus elige secciones **del catálogo del tipo**, nunca las inventa.
-- **El kickoff se presenta una sola vez por proyecto** (decisión 11 de `docs/nexus-sistema-de-trabajo-plan.md`).
+- ~~**El kickoff se presenta una sola vez por proyecto**~~ (decisión 11 de `docs/nexus-sistema-de-trabajo-plan.md`).
+  **Corregido por Elías el 29 oct** (respuesta 6): «si tenemos una desalineación con un cliente, o cambia algún acuerdo,
+  podemos hacer otro kickoff». El kickoff admite copias; el de siempre sigue siendo el que se publica por la contraseña
+  del proyecto y el que re-ancla el cronograma.
 - **El cronograma es uno por proyecto** (`ProjectTimeline.projectId @unique`).
-- **Una exploración viva por proyecto**, y las sesiones se planean **por equipo** del cliente (DECISIONS «Las
-  exploraciones por equipo»). «Necesito explorar mejor marketing» ya tiene dónde caer: una sesión con Marketing en la
-  exploración viva.
+- **Una exploración viva por proyecto** (el lienzo con sus sesiones por equipo, DECISIONS «Las exploraciones por
+  equipo») se queda como está. **Pero la exploración también admite copias** (Elías, 29 oct: «SmartLoop lleva una parte
+  de diagnóstico, y para el diagnóstico casi siempre hay que explorar»): una copia es un documento de exploración del
+  motor (lo que hay que entender, lo que ya sabemos, los supuestos, el plan de sesiones, a quién involucrar), interno.
 - **La pared es el proyecto** y lo que más pesa para saber de qué proyecto es una reunión es su nombre
   (`docs/empresas-con-dominio-compartido-plan.md`). Este plan la hereda: un artefacto lee solo de su proyecto.
 - **El render se comparte, el storage se aísla** (ARCHITECTURE §1-WEB punto 1): no hay tabla nueva para el contenido.
@@ -109,7 +118,9 @@ entrega, handoff e Información del cliente. **Tareas y «Para ti» no leen ning
 | **Tipo** | Qué clase de documento es: planificación, diagnóstico, kickoff, adopción, escala… Tiene nombre, para qué sirve, su **catálogo de secciones**, cuáles son estructurales (portada y cierre), su agente (la `agentIntro` de su plantilla base), su tope de salida, si se comparte con el cliente, **cuántas copias admite** y de quién puede ser. | Código: `lib/artefactos/tipos.ts` (puro, congelado por test). Ningún tipo en la base. |
 | **Plantilla** | Un subconjunto ordenado del catálogo del tipo, con su tope. Las de hoy (esencial, completa, recurrente) son plantillas de su tipo. Una más: **«a medida»**, la que arma un pedido. | Las de hoy, en `lib/entregables/registro.ts` como siempre. La que usó cada copia, en `__plantilla` (la «a medida» lleva además su lista de secciones). |
 | **Copia (el artefacto)** | Una fila de `ProjectCanvas`. | Igual que hoy, más cuatro columnas aditivas (2.4). |
-| **Título** | «Planificación — Marketing», «Plan de adopción para líderes». | Columna nueva `titulo`. Sin título, el nombre del tipo. |
+| **Nombre** | «Planificación — Marketing», «Plan de adopción para líderes». Editable en cada copia, también en la de siempre. | Columna nueva `titulo`. Sin él, una copia se ve con su `name` y la de siempre con el nombre de su pieza (como hoy). |
+| **Orden** | El que elige la persona, arrastrando, dentro de su tipo. | La columna `order` de siempre. |
+| **Estado** | En construcción o terminado: quien lee lo pesa distinto. | Columna nueva `terminadoEn` (+ `terminadoPor`). |
 | **Pertenencia** | Un proyecto (`projectId`), o la empresa (`clientId`) para los tipos que lo admiten. Nunca dos. | El CHECK de un solo dueño ya lo garantiza. |
 | **Área para compartir** | Su enlace propio, su foto publicada, revocar. | `AccesoAlDocumento` (2.6). |
 
@@ -117,30 +128,41 @@ entrega, handoff e Información del cliente. **Tareas y «Para ti» no leen ning
 
 | Tipo | Copias por proyecto | Por qué |
 |---|---|---|
-| Planificación, Diagnóstico, Integraciones, Entrega, y los tipos nuevos (adopción, consenso de procesos…) | **Varias** | Lo pidió Elías. |
-| Kickoff | **Una** | Decisión 11: se presenta una vez. |
+| Planificación, Diagnóstico, Kickoff, Exploración, Plan de adopción, Integración técnica | **Varias** | Elías, 29 oct (respuestas 1 y 6). |
+| Integraciones (el requerimiento técnico que nace del handoff), Entrega, Ejecución | **Una** (por ahora) | Su flujo nace del handoff o del cierre; otra integración es una **integración técnica**. |
 | Cronograma | **Una** | `ProjectTimeline` es único por proyecto, y Tareas y Cobranza lo leen como tal. |
-| Exploración | **Una viva** | Decidido; las áreas van como sesiones por equipo. |
 | Handoff | **Una** | Es el paso Ventas → CS. |
 | Cuestionarios | **Varias** (ya hoy) | Sus propias tablas, sin cambio. |
 | Escala | **Una por empresa** | Lo define `escala-unica`. |
 
-### 2.2 La copia principal: cómo conviven lo de hoy y lo nuevo sin migrar nada
+**De la empresa entera, sin proyecto** (respuesta 7): el diagnóstico (ya existe), la escala (V1), la exploración y la hoja
+de ruta de la cuenta. El registro (`lib/artefactos/tipos.ts › duenos`) ya lo declara; la exploración y la hoja de ruta de
+la empresa son la etapa V9.
 
-La regla de convivencia cabe en una línea: **la copia principal es la que tiene `slug`; las demás no lo tienen.**
+### 2.2 El documento de siempre y las copias, sin una oficial
 
-- Los documentos que existen hoy **son** la copia principal de su tipo. No se toca una fila.
-- Una copia nueva nace con `slug = NULL` y `tipoArtefacto = "planning"` (el slug del tipo). El índice único no la ve.
-- Las **105 búsquedas por tipo siguen devolviendo la principal**, que es lo que hacen hoy. Ninguna hay que migrarla
-  para que lo de hoy siga funcionando: la entrega sigue leyendo «el» diagnóstico, el cronograma sigue anclado a «el»
-  kickoff.
-- Lo nuevo (abrir, generar, editar, compartir una copia) va **por id**, por las rutas genéricas que ya existen
-  (`canvases/[canvasId]`, `canvas-sections/*`, `versiones`) más las que se sumen por id.
-- Un helper único, `tipoDelDocumento(canvas) = canvas.slug ?? canvas.tipoArtefacto`, reemplaza a las 61 comparaciones
-  `slug === "…"` **solo donde una copia tiene que comportarse como su tipo** (el renderer del panel, el PDF, el assist,
-  la frontera). Las demás quedan como están.
-- **Cambiar cuál es la principal** (etapa posterior, si Elías lo quiere): en una transacción, a la vieja se le saca el
-  `slug` y se le pone `tipoArtefacto`; a la nueva, al revés. El índice único se respeta porque primero se suelta.
+**Corregido el 29 oct** (respuesta 1). El plan proponía una «copia principal», la que leían la entrega, la escala y el
+servicio recurrente. Elías: «cuando uno crea una entrega o la escala, pueden leer todos los artefactos, cada uno con su
+nombre. Los artefactos deberían estar en construcción o terminados, para que quien los lea lo tome en cuenta». Queda así:
+
+- La regla técnica de convivencia no cambia: **el documento de siempre de un tipo tiene `slug`; las copias no lo tienen y
+  llevan `tipoArtefacto`**. Ninguna fila de hoy se toca, y el índice único parcial `(projectId, slug)` no ve a las copias.
+- **En pantalla son todas iguales**: cada una con su nombre, su lugar (arrastrando) y su estado. La de siempre no se
+  rotula «principal» ni «oficial».
+- **Los lectores leen todas** (`lib/artefactos/lectores-server.ts`). `loadCanvasContext` —por donde leen los agentes un
+  documento de otro tipo— trae el de siempre y las copias, rotulados «Planificación — Marketing (terminado)», con lo
+  terminado primero y una línea que le dice al modelo que lo en construcción es un borrador. **Con un solo documento del
+  tipo, el texto es byte a byte el de antes.** Los lectores que necesitan un solo valor (la posición en la escala del
+  diagnóstico, el desafío que retoma la entrega) toman el terminado más reciente; sin terminados, el primero del orden.
+- Las búsquedas por tipo que deciden **a qué documento se le escribe** (generar el de siempre, publicar el kickoff,
+  re-anclar el cronograma) siguen yendo al de siempre: escribir no es leer.
+- Lo nuevo (abrir, generar, editar, compartir una copia) va **por id**. `tipoDelDocumento(canvas) = slug ?? tipoArtefacto`
+  (`lib/artefactos/copias.ts`) dice su tipo, y **`pieceForCanvas` devuelve null para una copia**: así ningún botón de la
+  pieza (generar, publicar, el contexto del tipo) le escribe al documento de siempre desde una copia.
+- **Una copia nunca se llama como una pieza** (`nombreGuardableDeUnaCopia`): la lectura doble por nombre de
+  `canvasOf` la confundiría con la de siempre. A «Kickoff» se le suma « · copia». Lo vigila una invariante.
+- **Una copia no lleva las secciones que leen el proyecto** (`ctxDriven`: el cronograma y los procesos del kickoff, la
+  estimación de integraciones), salvo la portada y el cierre: pintarían lo mismo en cada copia.
 
 *Se descartó* una tabla `Artefacto` aparte que apunte al canvas: duplicaría el dueño, el título y el estado en dos
 filas (ARCHITECTURE §2 regla 1) y obligaría a crear 1 fila por cada documento que ya existe. *Se descartó* también
@@ -174,42 +196,60 @@ y métricas. Para que una sección se pueda prestar, su def se mueve a `shared-s
 contrato de datos» que ya existe). Las secciones `ctxDriven` (cronograma, procesos del kickoff, estimación) se prestan
 con una condición: leen el proyecto, así que pintan lo mismo en cada copia.
 
-**La lista de tipos nuevos y sus plantillas queda pendiente de `docs/artefactos-sugeridos.md`** (sesión
-`analisis-artefactos`, que analiza reuniones reales). Cuando llegue, entra a la etapa 6 tal cual. Los tres que Elías
-nombró sirven de ejemplo mientras tanto: **presentación de diagnóstico** (una plantilla del diagnóstico, pensada para
-proyectar), **consenso del proceso comercial** (cómo van a funcionar tus procesos, mapeo de procesos, cómo opera hoy y
-cómo va a operar, aprobación) y **plan de adopción** (arriba).
+**La lista de tipos nuevos llegó** (`docs/artefactos-sugeridos.md`, 120 reuniones de 29 cuentas) y Elías eligió los dos
+primeros el 29 oct (respuesta 3): el **plan de adopción** y la **integración técnica**. Ya están en el registro
+(`lib/artefactos/tipos.ts`) con su catálogo (`lib/artefactos/catalogo.ts`) y sus defs:
+
+| Tipo | Plantillas | Secciones (✱ prestadas de otro tipo, ✚ nuevas) |
+|---|---|---|
+| **Plan de adopción** (`adoption-plan`) | Equipo comercial (recomendada) · Organización por niveles · Componente técnico | ✚ portada · ✚ lo que se espera de cada rol (tabla) · ✚ lo que no se negocia · ✚ quién entra y cuándo (tabla) · ✱ rutinas de adopción · ✱ despliegue por olas · ✚ cómo se lo contamos al equipo (tabla) · ✚ quién administra el portal · ✚ altas y bajas de usuarios · ✚ cómo medimos la adopción (tabla) · ✚ cierre |
+| **Integración técnica** (`integration`) | Mapa de integración (recomendada) · Integración completa | ✱ portada del requerimiento · ✚ alcance firmado (tabla) · ✱ qué duele hoy · ✱ arquitectura · ✚ identificador único entre sistemas (tabla) · ✚ **mapa de integración** (tabla: origen sistema·objeto·campo, propiedad de HubSpot, sentido, transformación, frecuencia) · ✱ relación entre objetos · ✱ propiedades y campos · ✱ momentos de sincronización · ✚ lo que debe entregar el cliente o un tercero (tabla) · ✱ cómo sabremos que funcionó · ✱ cierre |
+
+**El mapa de integración** (Elías pidió validar que existiera): el tipo `tech-requirements` («Integraciones») lo tenía a
+medias —arquitectura, relación de objetos y propiedades— y le faltaban la tabla de equivalencias campo a campo, el
+identificador único, el alcance firmado y lo que debe entregar el cliente o un tercero. La integración técnica presta las
+secciones del requerimiento (mismo renderer, mismo esquema) y suma esas cuatro. Las tablas nuevas usan el renderer
+genérico `tabla` con las columnas sembradas: no hubo que construir componentes. Integraciones (el de siempre, el que
+nace del handoff) no cambia. Los demás tipos del catálogo siguen en V6.
 
 ### 2.4 Lo que cambia en la base (todo aditivo)
 
-Un solo `.sql`, que se puede correr dos veces:
+**Lo que se aplicó en V3** (`scripts/sql/2026-10-29-artefactos-copias.sql`, se puede correr dos veces):
 
 ```sql
--- scripts/sql/AAAA-MM-DD-artefactos-copias.sql (borrador; se escribe en la etapa 3)
-ALTER TABLE "ProjectCanvas" ADD COLUMN IF NOT EXISTS "tipoArtefacto" TEXT;     -- el slug del tipo, solo en las copias
-ALTER TABLE "ProjectCanvas" ADD COLUMN IF NOT EXISTS "titulo" TEXT;
-ALTER TABLE "ProjectCanvas" ADD COLUMN IF NOT EXISTS "pedido" TEXT;            -- lo que pidió la persona, tal cual
-ALTER TABLE "ProjectCanvas" ADD COLUMN IF NOT EXISTS "archivadoEn" TIMESTAMP(3);
+ALTER TABLE "ProjectCanvas" ADD COLUMN IF NOT EXISTS "tipoArtefacto" TEXT;   -- el tipo, solo en las copias
+ALTER TABLE "ProjectCanvas" ADD COLUMN IF NOT EXISTS "titulo" TEXT;          -- el nombre que le pone una persona
+ALTER TABLE "ProjectCanvas" ADD COLUMN IF NOT EXISTS "terminadoEn" TIMESTAMP(3);  -- null = en construcción
+ALTER TABLE "ProjectCanvas" ADD COLUMN IF NOT EXISTS "terminadoPor" TEXT;
+-- punto de partida, una sola vez: lo ya presentado o publicado nace terminado
 CREATE INDEX IF NOT EXISTS "ProjectCanvas_projectId_tipoArtefacto_idx" ON "ProjectCanvas" ("projectId", "tipoArtefacto");
--- una copia nunca tiene slug: el slug es la marca de la principal
-ALTER TABLE "ProjectCanvas" ADD CONSTRAINT "ProjectCanvas_copia_sin_slug"
-  CHECK ("tipoArtefacto" IS NULL OR "slug" IS NULL) NOT VALID;  -- (envuelto en DO $$ … $$ para correr dos veces)
+-- una copia nunca tiene slug (CHECK NOT VALID, envuelto en DO $$ … $$)
+```
 
--- las reuniones elegidas, por documento y no por tipo
+*Lo que cambió del borrador:* `titulo` es el nombre que pone una persona a CUALQUIER documento (null = el de fábrica: una
+copia se ve con su `name`, el de siempre con el de su pieza). No se reusó `name` porque hay documentos de siempre con un
+`name` viejo que hoy no se muestra, y porque el `name` de una copia nunca puede ser el de una pieza (la lectura doble de
+`canvasOf`). No hay `archivadoEn` (archivar escribe `disabledAt`, la columna de apagar una pieza, que ya filtran los
+listados) ni `pedido` (llega con V5).
+
+**Lo que queda para V3b** (las reuniones y notas elegidas por copia): hoy cada tipo tiene su columna de afinado en
+`SessionProject` y sus notas en `NotaDeContexto.pieza`, así que **las copias de un tipo comparten las reuniones y notas
+elegidas de ese tipo**; las instrucciones (`__doc.brief`) sí son de cada documento. V3b suma:
+
+```sql
 CREATE TABLE IF NOT EXISTS "ReunionDelDocumento" (
   "id" TEXT PRIMARY KEY, "canvasId" TEXT NOT NULL REFERENCES "ProjectCanvas"("id") ON DELETE CASCADE,
   "sessionId" TEXT NOT NULL REFERENCES "FirefliesSession"("id") ON DELETE CASCADE,
   "elegida" BOOLEAN NOT NULL, "porEmail" TEXT, "createdAt" TIMESTAMP(3) NOT NULL DEFAULT now(),
   UNIQUE ("canvasId", "sessionId"));
 ALTER TABLE "ReunionDelDocumento" ENABLE ROW LEVEL SECURITY;
--- las notas de contexto, también por documento
 ALTER TABLE "NotaDeContexto" ADD COLUMN IF NOT EXISTS "canvasId" TEXT REFERENCES "ProjectCanvas"("id") ON DELETE CASCADE;
 ```
 
-*Por qué una tabla para las reuniones elegidas:* hoy cada tipo tiene su columna de afinado en `SessionProject`. Con
-tres planificaciones, las tres compartirían la misma columna: elegir una reunión para la de Marketing la elegiría para
-las otras dos. La principal sigue usando su columna; las copias, la tabla. La tabla solo acepta reuniones que el
-chokepoint da como del proyecto del documento (se valida al escribir y lo vigila un INV nuevo).
+*Por qué una tabla:* con tres planificaciones, elegir una reunión para la de Marketing la elegiría para las otras dos. La
+de siempre sigue usando su columna; las copias, la tabla, que solo acepta reuniones que el chokepoint da como del proyecto
+del documento (se valida al escribir y lo vigila un INV nuevo). *Por qué no entró en esta tanda:* el «Contexto adicional»
+de la Planificación lo está cambiando otra sesión el 29 oct.
 
 ### 2.5 Crear un artefacto desde un pedido
 
@@ -227,14 +267,17 @@ La entrada es una caja: **«¿Qué necesitas?»**, en el riel del proyecto (y la
   2. **Usar uno que ya existe**: «necesito explorar mejor marketing» → «Suma una sesión con Marketing a la exploración
      del proyecto», con el botón que abre «+ Agregar sesión» con el equipo elegido. O «ya tienes un diagnóstico
      publicado; ¿armo una presentación a partir de él?».
-  3. **No hay un tipo para eso**: lo dice, y ofrece armarlo con secciones libres (hasta 10).
+  3. **No hay un tipo para eso**: **corregido el 29 oct** (respuesta 8). Nexus lo arma con las secciones que más se
+     parezcan, del tipo más cercano y, si hace falta, con secciones libres; y dice en la propuesta que no hay un tipo
+     para ese pedido (así sabemos qué tipos faltan).
 - Se valida en código, no se confía: el tipo existe, cada key está en su catálogo, la portada y el cierre van siempre
   (una portada es la identidad del documento), ninguna `ctxDriven` dos veces, un tope de secciones por tipo, y el tipo
   admite otra copia (un segundo kickoff responde «ya tiene kickoff» y ofrece abrirlo).
 - Costo estimado: Sonnet 4.6, unos 6.000 a 10.000 tokens de entrada y 1.000 de salida: menos de US$0,05. Sin búsqueda
   web. Sin medir.
 
-**Paso 2 · La persona confirma** en el marco de siempre (`<AgentProposal>`): «Voy a crear *Plan de adopción para
+**Paso 2 · La persona confirma** (Elías, 29 oct, respuesta 4: «mostrar las secciones antes de llenarlas»), en el marco de
+siempre (`<AgentProposal>`): «Voy a crear *Plan de adopción para
 líderes*, con estas 6 secciones», cada una con su por qué y su casilla. Puede quitar, sumar del catálogo o cambiar el
 título. *Por qué un clic más:* las secciones que elige la IA son una propuesta, igual que todo lo demás en Nexus («IA
 arriba, una vez»); y llenar 6 secciones cuesta una corrida de verdad.
@@ -257,19 +300,25 @@ arriba, una vez»); y llenar 6 secciones cuesta una corrida de verdad.
 
 ### 2.6 El área para compartir de cada artefacto
 
-- **Cada copia se comparte con su propio enlace**: `AccesoAlDocumento` (ya existe, uno por documento) y
-  `/external/documento/[token]` (ya existe: foto publicada, lo oculto filtrado, publicar otra vez conserva el enlace,
-  dejar de compartir lo revoca).
-- Hay que **enmendar INV64**: hoy prohíbe que un enlace abra un documento de un proyecto. Pasa a decir: un enlace
-  vigente abre **solo su documento**, y ese documento es **de la misma empresa** del enlace (y, si es de un proyecto,
-  de un proyecto de esa empresa). La puerta (`documento-de-la-empresa-guard.ts`) gana el caso «de un proyecto», con el
-  acceso al proyecto.
-- **La frontera viaja con el tipo**: la vista externa de una copia aplica la frontera de su tipo
-  (`frontera-de-los-documentos.ts`, por `tipoDelDocumento`). Una copia de un tipo que no es para el cliente
-  (`clientFacing: false`, como la ejecución) no tiene botón de compartir.
-- **Las copias principales no cambian**: siguen con sus 7 superficies, su contraseña del proyecto y sus columnas
-  `*PublishedAt`. Unificar las siete en este mecanismo es un plan aparte (ARCHITECTURE §1-WEB punto 7 lo deja así), y
-  con esta área queda el camino hecho: el mecanismo nuevo ya es uno solo.
+Elías, 29 oct (respuesta 2): «cada copia, con su propio enlace. Muchas veces ese enlace lo usa Customer Success para
+compartir la pantalla desde ahí».
+
+- **Cada documento de un tipo con barra se comparte con su propio enlace** —las copias y también el de siempre de
+  kickoff, diagnóstico y planificación—: `AccesoAlDocumento` (ya existía, uno por documento, token de 64 hex, `revokedAt`) y
+  la página que ya existía `/external/documento/[token]`. Sin contraseña: el enlace es el secreto y se revoca. La entrega y
+  el requerimiento técnico siguen solo con su superficie. Un proyecto de prueba no se comparte.
+- **Muestra el documento VIVO, no una foto**: sirve para compartir pantalla mientras se trabaja, y la foto
+  (`publishedSnapshot`) del de siempre ya la usan los mecanismos de publicar del kickoff y de la planificación. Vivo =
+  solo los bloques confirmados, sin lo oculto, sin las secciones que leen el proyecto ni las internas (la estimación),
+  sin autor, fuentes ni estado de los bloques. Un documento archivado no abre. Los documentos de la empresa siguen con su
+  foto, como hasta hoy.
+- **INV64 enmendada**: un enlace vigente abre un documento de su empresa: de la empresa misma o de un proyecto de esa
+  empresa, nunca de una propuesta. La vista lo vuelve a comprobar en cada render.
+- **La frontera viaja con el tipo**: la vista externa y el PDF de una copia usan el adaptador de su tipo
+  (`tipoDelDocumento`). Un tipo interno (`clientFacing: false`: la exploración) no tiene enlace.
+- **Las superficies de siempre no cambian**: el kickoff, el cronograma y los demás siguen con la contraseña del proyecto
+  y sus columnas `*PublishedAt`. Unificar las siete en este mecanismo sigue siendo un plan aparte (ARCHITECTURE §1-WEB
+  punto 7).
 
 ### 2.7 La recomendación: cuándo propone Nexus un artefacto
 
@@ -314,85 +363,71 @@ Cada etapa se puede desplegar sola y se puede volver atrás sin tocar datos de c
   registrada como un tipo (`escala`, una por empresa, dueño `clientId`) cuando exista el registro de la etapa 2, sin
   mover su storage.
 
-### Etapa 2 · El registro de tipos y el catálogo de secciones
+### Etapa 2 · El registro de tipos y el catálogo de secciones — construida el 2026-10-29
 
-- **Qué**: `lib/artefactos/tipos.ts` (cada tipo con su catálogo, sus estructurales, cuántas copias admite y de quién
-  puede ser) y `lib/artefactos/catalogo.ts` (lo arma de las defs; no repite nada). Puro, sin SQL, **sin cambio
-  visible**.
-- **Terminado cuando**: cada pieza de hoy con documento es un tipo; cada plantilla de `ENTREGABLES` es una plantilla de
-  su tipo; el catálogo de cada tipo coincide con las defs.
-- **Pruebas** (`lib/artefactos/tipos.test.ts`): (1) cada key del catálogo resuelve una def con componente; (2) cada
-  plantilla solo usa keys de su catálogo; (3) portada y cierre están en toda plantilla; (4) kickoff, cronograma,
-  exploración y handoff admiten una copia; (5) snapshot del catálogo (cambiarlo es decisión de producto, como
-  `registry.test.ts`). La suite y `tsc` en 0.
-- **Vuelta atrás**: revertir el commit. Nadie lo lee todavía.
+- **Qué**: `lib/artefactos/tipos.ts` (cada tipo con lo que admite: cuántas copias, de quién puede ser, si lo lee el
+  cliente, su celda, de qué «Contexto adicional» lee y sus plantillas) y `lib/artefactos/catalogo.ts` (el catálogo de
+  cada tipo sale de las defs; no repite nada). Puro, sin SQL, sin cambio visible.
+- **Pruebas** (`lib/artefactos/tipos.test.ts`): cada key de cada plantilla está en el catálogo de su tipo; portada y
+  cierre en toda plantilla; qué tipos admiten copias; snapshot del catálogo por tipo; la plantilla de siempre de cada
+  entregable es exactamente su template de siempre.
 
-### Etapa 3 · Varias copias de un tipo (planificación y diagnóstico primero)
+### Etapa 3 · Varias copias de un tipo — construida el 2026-10-29 (sin V3b)
 
-- **Qué**: el `.sql` de 2.4; «+ Otra planificación» y «+ Otro diagnóstico» en el riel, con el selector de plantilla de
-  siempre y un título; el riel agrupa las copias debajo de su tipo; el panel abre una copia por id con el renderer de
-  su tipo (`tipoDelDocumento`); generar, regenerar, «Mejorar con IA», el contexto adicional (reuniones elegidas en
-  `ReunionDelDocumento`, notas con `canvasId`), las versiones y el PDF funcionan por id; archivar una copia
-  (`archivadoEn`) la saca del riel sin borrarla.
-- **Terminado cuando**: en un proyecto de prueba hay 3 planificaciones, cada una con su título, su plantilla, sus
-  reuniones elegidas y su contenido, y **la principal no cambió en nada** (mismo id, mismo contenido, misma vista
-  externa).
-- **Pruebas**:
-  1. Unidad: `tipoDelDocumento`; el riel con 3 copias del mismo tipo muestra 3 filas y la principal primero; una copia
-     no puede tener slug (la regla en código y el CHECK).
-  2. Integración (`nexus_test`): las 105 búsquedas por tipo, representadas por `canvasOf("planning")`, devuelven la
-     principal con dos copias al lado; una reunión elegida para la copia A no aparece en la B ni en la principal;
-     `ReunionDelDocumento` rechaza una reunión de otro proyecto.
-  3. Escaneo: ninguna ruta nueva de copias busca por slug.
-  4. INV nuevo en `check:invariants`: ninguna copia lee una reunión que el chokepoint no da como de su proyecto, y
-     ninguna copia tiene slug.
-  5. Prueba con datos reales en la base local (`db:local:pull` de FACO): 3 planificaciones, una generada con cada
-     plantilla; medir caracteres de entrada y segundos.
-- **SQL**: `scripts/sql/AAAA-MM-DD-artefactos-copias.sql` (2.4), antes del deploy; `npm run check:esquema` lo confirma.
-- **Vuelta atrás**: apagar «+ Otra…» (una constante). Las copias que existan quedan archivadas con un script
-  (`scripts/archivar-copias.ts`, simulacro primero). Las columnas y la tabla se quedan: son aditivas y sin lectores
-  viejos.
+- **Qué**: el `.sql` de 2.4; «Nuevo artefacto» al pie de las piezas del riel y «Crear otro…» en la barra de cada documento
+  (tipo, plantilla, nombre, y empezar en blanco o duplicando otro del mismo tipo); el riel lista las copias junto a su
+  tipo, en el orden de la persona; la barra de cada documento (el de siempre incluido) cambia el nombre, el estado y el
+  orden (arrastrando); el editor de una copia (`ArtefactoWorkspace`) con «Generar con IA», «Mejorar con IA», versiones y
+  PDF por id; archivar una copia (`disabledAt`) la saca del riel y de lo que leen los agentes, sin borrarla.
+- **Tipos con copias**: planificación, diagnóstico, kickoff, exploración, plan de adopción, integración técnica.
+- **Los lectores leen todas** (2.2).
+- **Pruebas**: unidad del riel con 3 copias (juntas, en el orden de la persona, la de siempre una más; una copia llamada
+  como su pieza no se confunde), del mensaje de generación y de `tipoDelDocumento`; integración (`copias.int.test.ts`):
+  crear, duplicar, renombrar, ordenar, terminar y archivar sin tocar el documento de siempre, y `canvasOf("planning")`
+  sigue devolviéndolo; lectores (`lectores.int.test.ts`): con uno solo, el texto de siempre; con dos, los dos rotulados.
+  Invariante nueva de las copias en `check:invariants`.
+- **SQL**: `scripts/sql/2026-10-29-artefactos-copias.sql`, antes del deploy; `npm run check:esquema` lo confirma.
+- **Vuelta atrás**: quitar «Nuevo artefacto» y la barra (dos líneas del panel). Las copias que existan se archivan con un
+  `UPDATE` de `disabledAt` sobre las filas con `tipoArtefacto`, y sus enlaces se revocan. Las columnas se quedan: son
+  aditivas.
 
-### Etapa 4 · El área para compartir de cada copia
+### Etapa 3b · Las reuniones y notas elegidas de cada copia (siguiente tanda)
 
-- **Qué**: «Compartir» en cada copia: crear el enlace, publicar la foto, ver cuándo se abrió, dejar de compartir. INV64
-  enmendado (2.6) y la puerta de los documentos de la empresa con el caso «de un proyecto».
-- **Terminado cuando**: una copia de planificación se abre por su enlace con lo oculto filtrado y la frontera de su
-  tipo; revocar la cierra; la principal sigue con su enlace de siempre.
-- **Pruebas**: (1) INV64 nuevo: ningún enlace abre un documento de otra empresa, ni de un proyecto de otra empresa;
-  (2) un enlace de una copia no abre la principal ni otra copia; (3) la vista externa no muestra nada de lo que la
-  frontera de su tipo saca (prueba con una sección interna); (4) una copia de un tipo interno no ofrece compartir.
-- **SQL**: ninguno (`AccesoAlDocumento` ya existe con `canvasId @unique`).
-- **Vuelta atrás**: un script revoca todos los enlaces de copias (`revokedAt`), y la puerta vuelve a rechazar los
-  documentos de proyecto.
+- **Qué**: `ReunionDelDocumento` y `NotaDeContexto.canvasId` (2.4); el «Contexto adicional» en el editor de una copia.
+  Hasta entonces las copias de un tipo comparten las reuniones y notas elegidas de su tipo.
+- **Espera** a que se integre el cambio del «Contexto adicional» de la Planificación (otra sesión, 29 oct).
+- **Pruebas**: una reunión elegida para la copia A no aparece en la B ni en la de siempre; la tabla rechaza una reunión
+  de otro proyecto (chokepoint); INV nuevo.
 
-### Etapa 5 · Crear desde un pedido
+### Etapa 4 · El enlace de cada documento — construida el 2026-10-29
 
-- **Qué**: la caja «¿Qué necesitas?» y `documento.crear` en el chat; el armador (2.5) con sus tres respuestas; la
-  confirmación en `<AgentProposal>`; la plantilla «a medida»; la estimación de salida por sección
-  (`salidaEstimada` en el catálogo).
-- **Terminado cuando**: con los pedidos de Elías («tengo de frente una presentación de diagnóstico», «ocupo un consenso
-  del proceso comercial», «necesito explorar mejor marketing», «ocupo un plan de adopción para los líderes») Nexus
-  propone algo sensato en cada uno, con FACO en la base local; uno de ellos manda a la exploración en vez de crear.
-- **Pruebas**: (1) unidad del validador: un tipo inexistente, una key ajena, sin portada, un segundo kickoff y una
-  `ctxDriven` repetida se rechazan; (2) regenerar una copia «a medida» usa las mismas secciones; (3) el armador recibe
-  solo artefactos y reuniones del proyecto (escaneo de que pasa por el chokepoint); (4) una tanda de 12 pedidos reales
-  (los de la sesión `analisis-artefactos`) corrida en local, con el resultado revisado por Elías: **esta es la prueba de
-  criterio**.
-- **SQL**: ninguno (usa el de la etapa 3).
-- **Vuelta atrás**: apagar la caja y la operación del chat. Lo creado son copias como las de la etapa 3.
+- **Qué**: «Compartir» en la barra de cada documento de un tipo que lee el cliente: crear el enlace, copiarlo, abrirlo,
+  ver cuándo se abrió por última vez, dejar de compartir. La vista es la del documento vivo (2.6). INV64 enmendada.
+- **Pruebas** (`compartir.int.test.ts`): el enlace de una copia abre solo esa copia; revocar lo cierra; lo oculto, lo no
+  confirmado y la estimación no salen; un acceso cruzado a un proyecto de otra empresa no abre; la exploración no se
+  comparte; el documento de la empresa sigue abriendo con su foto.
+- **SQL**: ninguno.
 
-### Etapa 6 · Los tipos nuevos
+### Etapa 5 · Crear desde un pedido (siguiente tanda; queda lista la base)
 
-- **Qué**: los tipos y plantillas de `docs/artefactos-sugeridos.md` (**pendiente de ese análisis**). Cada tipo nuevo es:
-  su entrada en el registro, su `agentIntro` y su tope, las secciones prestadas movidas a `shared-sections.defs.ts`, y
-  su plantilla recomendada. Mientras llega la lista: plan de adopción, consenso del proceso comercial y presentación de
-  diagnóstico, en ese orden.
-- **Terminado cuando**: cada tipo nuevo se crea a mano y desde un pedido, se genera, se comparte y sale en PDF.
-- **Pruebas**: las de la etapa 2 sobre el tipo nuevo; mover una sección a `shared-sections` no cambia el golden
-  (`build-landing.test.ts`) de los tipos de donde sale; una corrida real por tipo con su costo.
-- **SQL**: ninguno (el tipo es código).
-- **Vuelta atrás**: sacar el tipo del registro; sus copias quedan archivadas (mismo script).
+- **Qué**: la caja «¿Qué necesitas?» y `documento.crear` en el chat; el armador (2.5) con sus tres respuestas, mostrando
+  las secciones antes de llenarlas (respuesta 4) y armando con las más parecidas lo que no calza (respuesta 8); la
+  plantilla «a medida».
+- **Lo que ya está**: el catálogo de cada tipo con `tip`, `agentGenerated`, `ctxDriven` y `estructural`
+  (`catalogoDelTipo`), la creación de una copia con secciones elegidas (`crearCopia` + `canvasDefDeUnaCopia`) y su
+  generación por id. Falta: el armador, `salidaEstimada` por sección, la plantilla «a medida» en `__plantilla` y la
+  pantalla.
+- **Pruebas**: las de 2.5; la prueba de criterio es la tanda de pedidos reales que revisa Elías.
+
+### Etapa 6 · Los tipos nuevos — los dos primeros construidos el 2026-10-29
+
+- **Hechos**: plan de adopción (equipo comercial, organización por niveles, técnico) e integración técnica (mapa de
+  integración, completa), §2.3. Se crean, se generan, se mejoran con IA, se comparten y salen en PDF.
+- **Siguen**, por cuántas cuentas los piden (`docs/artefactos-sugeridos.md`): plan de capacitación, consenso de proceso
+  (como plantilla de la planificación), registro de decisiones, catálogo de paneles, propuesta de siguiente paso,
+  diccionario de datos, ficha de campaña…
+- **Pruebas**: las de la etapa 2 sobre el tipo nuevo (registro congelado en `registry.test.ts` y `tipos.test.ts`); una
+  corrida real por tipo con su costo, en local (pendiente: la hace quien lo pruebe con datos reales).
 
 ### Etapa 7 · La recomendación
 
@@ -411,6 +446,13 @@ Cada etapa se puede desplegar sola y se puede volver atrás sin tocar datos de c
 
 Descrita en 2.8. Espera a que Elías la itere con Alex Vanegas.
 
+### Etapa 9 · Los artefactos de la empresa entera (respuesta 7)
+
+- **Qué**: además del diagnóstico de la empresa (R3) y la escala (V1), la **exploración** y la **hoja de ruta de la
+  cuenta** sin proyecto, en `/clients/[id]/documentos`, con el mismo mecanismo de copias y enlace. La hoja de ruta es un
+  tipo nuevo (catálogo n.º 16).
+- **Espera** a V3b (el contexto por copia) y a que la hoja de ruta tenga sus secciones decididas.
+
 ### Relación con el roadmap de hoy
 
 - **I · Varias plantillas de diagnóstico y planificación**: I1 (selector en cada entregable) se cumple con las etapas 2
@@ -427,51 +469,54 @@ Descrita en 2.8. Espera a que Elías la itere con Alex Vanegas.
   copias es el trabajo más delicado de la etapa 3; conviene sacar el renderer por tipo a un mapa antes.
 - **Muchas copias confunden**: el riel agrupa por tipo, muestra la principal primero y archiva lo viejo.
 - **El armador elige mal**: siempre hay confirmación con por qué, y la tanda de 12 pedidos reales es la vara.
-- **Varios lectores siguen leyendo solo la principal** (entrega, escala, servicio recurrente, procesos). Está bien a
-  propósito, pero hay que decirlo en pantalla: «Esta es la planificación principal: la que lee la entrega».
+- **Los lectores leen todas las copias** (corregido el 29 oct): el riesgo pasa a ser el contrario, que un borrador a
+  medio hacer pese como algo acordado. Por eso cada copia lleva su estado y el agente lee lo terminado primero, con la
+  línea que le dice que lo en construcción todavía cambia. Y el texto crece con cada copia: si al medir pasa el tope de
+  algún lector, se recorta lo en construcción primero.
 
-## 5. Preguntas para Elías
+## 5. Las respuestas de Elías (29 oct)
 
-1. **Cuando un proyecto tenga tres planificaciones, ¿cuál es la «oficial»?** La que lee la entrega, la escala y el
-   servicio recurrente. Te propongo: la primera que existió, con un botón para cambiarla.
-2. **¿Cómo se comparte una copia con el cliente?** Te propongo: con su propio enlace, sin contraseña, como la propuesta
-   y los documentos de la empresa (el enlace es el secreto y se puede revocar). La otra opción es que quede detrás de la
-   contraseña del proyecto, junto al kickoff y el cronograma.
-3. **¿El kickoff sigue siendo uno por proyecto?** Hoy está decidido así (se presenta una vez). Igual la exploración: una
-   viva por proyecto, y «explorar mejor marketing» se resuelve sumando sesiones con Marketing. ¿Lo dejamos así?
-4. **¿Qué artefactos pueden ser de la empresa entera, sin proyecto?** Hoy solo el diagnóstico (para un prospecto) y la
-   escala. ¿Sumamos otros, por ejemplo un consenso del proceso comercial antes de vender?
-5. **¿Por cuál tipo nuevo empezamos?** Te propongo el plan de adopción, después el consenso del proceso comercial y
-   después la presentación de diagnóstico (salvo que el análisis de reuniones diga otra cosa).
-6. **Al crear desde un pedido, ¿te muestro las secciones antes de llenarlas?** Te propongo que sí: un clic más, pero
-   ves qué va a armar y por qué antes de gastar la corrida.
-7. **Si el pedido pide algo que ningún tipo tiene, ¿Nexus lo arma con secciones libres o te dice que no hay?** Te
-   propongo que lo diga y ofrezca armarlo libre; así sabemos qué tipos faltan.
-8. **En pantalla, ¿se llaman «artefactos» o «documentos»?** El equipo hoy dice «documentos» en el riel.
+Las ocho preguntas del 28 oct, con lo que respondió. Mandan sobre lo que el plan proponía; donde decía otra cosa, se
+corrigió en su lugar (§1.4, §2.1, §2.2, §2.5, §2.6) y quedó en DECISIONS («Artefactos: varias copias sin una oficial,
+cada una con su enlace»).
+
+1. **Varias copias, ninguna oficial.** «La idea es que un proyecto pueda tener tres planificaciones, que el usuario le
+   pueda cambiar el nombre a cada una y arrastrarlas de arriba abajo: usar Nexus como un depósito de las planificaciones
+   que va creando. Cuando uno crea una entrega o la escala, pueden leer todos los artefactos, cada uno con su nombre. Los
+   artefactos deberían estar en construcción o terminados, para que quien los lea lo tome en cuenta.» → §2.2.
+2. **Compartir:** cada copia con su propio enlace; CS lo usa para compartir pantalla. → §2.6 (enlace vivo).
+3. **Los primeros tipos nuevos:** el plan de adopción y uno de integración técnica (CEMACO quiere integrar su ERP). → §2.3,
+   adelantados de V6 a esta tanda.
+4. **Crear desde un pedido:** mostrar las secciones antes de llenarlas. → §2.5, paso 2.
+5. **En pantalla se llaman «artefactos».**
+6. **El kickoff y la exploración no quedan amarrados a uno por proyecto.** «Si tenemos una desalineación con un cliente,
+   o cambia algún acuerdo, podemos hacer otro kickoff. Lo mismo para la exploración.» → §1.4 y §2.1.
+7. **De la empresa entera, sin proyecto:** el diagnóstico, la escala, la exploración y la hoja de ruta de la cuenta. →
+   §2.1 y etapa V9.
+8. **Un pedido que no calza con ningún tipo:** Nexus lo arma con las secciones que más se parezcan. → §2.5.
+
+Además pidió **validar el mapa de integración**: estaba a medias en Integraciones; la integración técnica lo completa
+(§2.3).
 
 ## 6. Para el roadmap
 
-**V · Artefactos: tipos, plantillas y varias copias** <span class="estado">Propuesta</span>
+**V · Artefactos: tipos, plantillas y varias copias**
 
 Plan: `docs/artefactos-plan.md`.
 
-1. **V1 · La escala única.** La escala como el primer artefacto compartido entre la preventa y los clientes, una por
-   empresa (sesión `escala-unica`, `docs/escala-unica-plan.md`).
-2. **V2 · Los tipos y el catálogo de secciones.** Cada documento de hoy es un tipo con su lista de secciones, sacada de
-   las que ya existen; sin cambio en pantalla. *Prueba:* la suite en verde con el registro congelado.
-3. **V3 · Varias copias de un tipo.** «+ Otra planificación» y «+ Otro diagnóstico», cada una con su título, su
-   plantilla y sus reuniones; la de hoy queda como la principal sin cambiar. SQL aditivo antes del deploy. *Prueba:* en
-   un proyecto de FACO en local, 3 planificaciones; la principal igual que antes y su enlace de siempre abre lo mismo.
-4. **V4 · Compartir cada copia.** Su enlace, su foto publicada y revocar. *Prueba:* el enlace de una copia abre solo esa
-   copia, sin lo interno.
-5. **V5 · Crear desde un pedido.** «¿Qué necesitas?»: Nexus propone el tipo y las secciones, tú confirmas y lo llena con
-   el contexto del proyecto. *Prueba de criterio (Elías):* 12 pedidos reales corridos en local; dices cuáles armó bien.
-6. **V6 · Los tipos nuevos.** Plan de adopción, consenso del proceso comercial, presentación de diagnóstico y lo que diga
-   el análisis de reuniones (`docs/artefactos-sugeridos.md`).
-7. **V7 · Nexus te propone un artefacto.** Por una reunión agendada, por lo que se dijo, por la etapa y por la escala; con
-   casos de uso, cuando exista la biblioteca de actividades (A).
-8. **V8 · Las plantillas del equipo** (futura, con Alex Vanegas).
+1. **V1 · La escala única.** En producción.
+2. **V2 · Los tipos y el catálogo de secciones.** Construida el 29 oct, sin cambio en pantalla.
+3. **V3 · Varias copias de un tipo.** Construida el 29 oct: planificación, diagnóstico, kickoff y exploración, cada copia
+   con su nombre, su orden y su estado; los lectores leen todas. SQL aditivo antes del deploy.
+4. **V3b · Las reuniones y notas elegidas de cada copia.** Siguiente tanda.
+5. **V4 · El enlace de cada documento.** Construida el 29 oct: vivo, sin contraseña, sin lo interno.
+6. **V5 · Crear desde un pedido.** Siguiente tanda (la base ya está).
+7. **V6 · Los tipos nuevos.** Plan de adopción e integración técnica (con el mapa de integración) construidos el 29 oct;
+   siguen los demás del catálogo.
+8. **V7 · Nexus te propone un artefacto.**
+9. **V8 · Las plantillas del equipo** (futura, con Alex Vanegas).
+10. **V9 · Los artefactos de la empresa entera** (exploración y hoja de ruta de la cuenta).
 
 **Criterio de éxito:** un CSE escribe lo que necesita y en un par de clics tiene el artefacto armado con las secciones
 que aplican y lleno con el contexto de su proyecto; un proyecto puede tener varias copias de un tipo sin que cambie
-nada de lo que ya existe; cada copia se comparte sola.
+nada de lo que ya existe; cada copia se comparte sola y quien la lee sabe si está terminada.

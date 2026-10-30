@@ -20,9 +20,14 @@ import { esDeAntesDelEnfoqueCorto } from "@/lib/canvas/acciones-del-enfoque";
 import { PLANIFICACION_DEF_BY_KEY, PLANIFICACION_HANDOFF_KEYS, PLANIFICACION_TEMPLATE } from "@/components/landing/configs/planificacion.defs";
 import { IMPLEMENTACION_DEF_BY_KEY, IMPLEMENTACION_TEMPLATE } from "@/components/landing/configs/implementacion.defs";
 import { ENTREGA_DEF_BY_KEY, ENTREGA_HANDOFF_KEYS, ENTREGA_TEMPLATE } from "@/components/landing/configs/entrega.defs";
+import { ADOPCION_DEF_BY_KEY, ADOPCION_HANDOFF_KEYS, ADOPCION_TEMPLATE } from "@/components/landing/configs/adopcion.defs";
+import { INTEGRACION_DEF_BY_KEY, INTEGRACION_HANDOFF_KEYS, INTEGRACION_TEMPLATE } from "@/components/landing/configs/integracion.defs";
+import { TIPO_INTEGRACION_TECNICA, TIPO_PLAN_DE_ADOPCION } from "@/lib/artefactos/tipos";
 
 export interface DocConAssist {
-  agentId: string;
+  /** La fila de `Agent` (sus instrucciones adicionales). null en los tipos nuevos, que no tienen fila: la corrida va con
+   *  `agentSlug` («artefacto:<tipo>»), como su generación. */
+  agentId: string | null;
   docLabel: string;
   defs: Record<string, BCSectionDef>;
   /** El template del CÓDIGO — de acá sale la VOZ (agentIntro + gate brandVoice).
@@ -114,3 +119,30 @@ export const DOC: Record<string, DocConAssist> = {
   },
 };
 
+/**
+ * Los TIPOS NUEVOS de artefacto (etapa V6 adelantada, docs/artefactos-plan.md): no son piezas del registro, así que no van
+ * en `DOC` (su guarda exige que cada slug sea una pieza). La celda de permiso sale del registro de tipos
+ * (lib/artefactos/tipos.ts › permiso), y `assist-de-documento.test.ts` la verifica igual que para las piezas.
+ */
+export const DOC_DE_LOS_TIPOS_NUEVOS: Record<string, DocConAssist> = {
+  [TIPO_PLAN_DE_ADOPCION]: {
+    agentId: null,
+    docLabel: "plan de adopción (se comparte con el cliente)",
+    defs: ADOPCION_DEF_BY_KEY,
+    tpl: ADOPCION_TEMPLATE,
+    handoffKeys: ADOPCION_HANDOFF_KEYS,
+  },
+  [TIPO_INTEGRACION_TECNICA]: {
+    agentId: null,
+    docLabel: "mapa de integración técnica (lo firma el cliente)",
+    defs: INTEGRACION_DEF_BY_KEY,
+    tpl: INTEGRACION_TEMPLATE,
+    handoffKeys: INTEGRACION_HANDOFF_KEYS,
+  },
+};
+
+/** El documento con assist de un TIPO (el slug de una pieza, o un tipo nuevo). Una copia usa el de su tipo. */
+export function docConAssist(tipo: string | null): DocConAssist | null {
+  if (!tipo) return null;
+  return DOC[tipo] ?? DOC_DE_LOS_TIPOS_NUEVOS[tipo] ?? null;
+}

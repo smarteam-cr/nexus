@@ -18,6 +18,8 @@ import { getAnthropic } from "@/lib/anthropic";
 import { conContextoDeIA } from "@/lib/ai/contexto-de-corrida";
 import { parseObject } from "@/lib/ai/section-schema";
 import { prisma } from "@/lib/db/prisma";
+import { artefactosDelTipoEnProyectos } from "@/lib/artefactos/lectores-server";
+import { ordenParaLosAgentes } from "@/lib/artefactos/lectores";
 import { ensureProcesosSection } from "@/lib/canvas/sync-procesos-blocks";
 import { proyectoClasificableWhere } from "@/lib/projects/scope";
 import { getClientSessions } from "@/lib/sessions/project-sources";
@@ -108,17 +110,30 @@ async function contextoDelCliente(clientId: string): Promise<string> {
     orderBy: { createdAt: "desc" },
     take: 6,
   });
-  const bloquesDePlan = await prisma.canvasBlock.findMany({
-    where: { section: { key: "definicion_procesos", canvas: { slug: "planning", projectId: { in: proyectos.map((p) => p.id) } } } },
-    select: { data: true },
-  });
+  /* VARIAS COPIAS (artefactos, etapa V3): todas las planificaciones de cada proyecto, las terminadas primero. Con más de
+     una en un proyecto, los procesos de cada una van debajo de su rótulo («Planificación — Marketing (terminado)»), así
+     el agente sabe cuál ya se acordó (lib/artefactos/lectores.ts). Con una, las líneas de siempre. */
+  const planificaciones = await artefactosDelTipoEnProyectos(proyectos.map((p) => p.id), "planning");
+  const docs = proyectos.flatMap((p) => ordenParaLosAgentes(planificaciones.get(p.id) ?? []));
+  const conVarias = proyectos.some((p) => (planificaciones.get(p.id)?.length ?? 0) > 1);
+  const bloquesDePlan = docs.length
+    ? await prisma.canvasBlock.findMany({
+        where: { section: { key: "definicion_procesos", canvasId: { in: docs.map((d) => d.id) } } },
+        select: { data: true, section: { select: { canvasId: true } } },
+      })
+    : [];
   const plan: string[] = [];
-  for (const b of bloquesDePlan) {
-    const d = b.data as { procesos?: { nombre?: string; comoSera?: string; pasos?: { paso?: string }[] }[] } | null;
-    for (const p of d?.procesos ?? []) {
-      const pasos = (p.pasos ?? []).map((x) => x.paso).filter(Boolean).join(" → ");
-      plan.push(`- ${p.nombre ?? "(sin nombre)"}: ${pasos || p.comoSera || ""}`.slice(0, 900));
+  for (const doc of docs) {
+    const deEste: string[] = [];
+    for (const b of bloquesDePlan.filter((x) => x.section.canvasId === doc.id)) {
+      const d = b.data as { procesos?: { nombre?: string; comoSera?: string; pasos?: { paso?: string }[] }[] } | null;
+      for (const p of d?.procesos ?? []) {
+        const pasos = (p.pasos ?? []).map((x) => x.paso).filter(Boolean).join(" → ");
+        deEste.push(`- ${p.nombre ?? "(sin nombre)"}: ${pasos || p.comoSera || ""}`.slice(0, 900));
+      }
     }
+    if (deEste.length && conVarias) plan.push(`${doc.rotulo}:`);
+    plan.push(...deEste);
   }
   return encabezadoDelCliente({
     cliente: cliente?.name ?? "(cliente)",

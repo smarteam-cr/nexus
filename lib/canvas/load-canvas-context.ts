@@ -24,6 +24,10 @@ import { resolverDuenioDelHandoff } from "@/lib/handoff/duenio";
 import { esSugerenciaPendiente } from "@/lib/handoff/congelado";
 import { esCerrada } from "@/lib/timeline/particularidad-state";
 import { renderCronogramaParaAgentes } from "@/lib/contexto/cronograma-para-agentes";
+import { admiteCopias } from "@/lib/artefactos/tipos";
+import { artefactosDelTipo, copiasDelTipo, type ArtefactoLeido } from "@/lib/artefactos/lectores-server";
+import { loadCanvasesConContenido } from "@/lib/pieces/piece-content";
+import { ordenParaLosAgentes, textoDeVariasCopias } from "@/lib/artefactos/lectores";
 
 /**
  * Las secciones de la Entrega que sirven de REFERENCIA para el próximo proyecto del mismo
@@ -391,15 +395,66 @@ export async function loadCanvasContext(
     // Import dinámico: el módulo es solo del servidor y este archivo lo cargan también las pruebas.
     const { textoDeLaExploracionDelProyecto } = await import("@/lib/exploraciones/del-proyecto");
     const nueva = await textoDeLaExploracionDelProyecto(projectId).catch(() => "");
-    if (nueva) return nueva;
-    const guia = await textoDeLaGuia(projectId);
-    if (guia) return guia;
+    const viva = nueva || (await textoDeLaGuia(projectId));
+    if (viva) {
+      // La exploración viva y, si el equipo armó más, sus copias: «los lectores leen todas» vale también acá.
+      const copias = await copiasConContenido(projectId, "exploration");
+      if (!copias.length) return viva;
+      return textoDeVariasCopias([{ rotulo: "Exploración del proyecto", texto: viva }, ...(await textosDe(ordenParaLosAgentes(copias), canvasSlug, opts))]);
+    }
   }
   const canvas = await prisma.projectCanvas.findFirst({
     where: { projectId, ...canvasOf(canvasSlug) },
     select: { id: true, sections: true },
   });
-  if (!canvas) return "";
+  /* VARIAS COPIAS (artefactos, etapa V3 — docs/artefactos-plan.md): Elías, 29 oct, «los lectores leen todas, cada una con
+     su nombre y su estado». Sin copias, el camino de siempre y el texto byte a byte como antes. Con copias, cada documento
+     rotulado y los terminados primero (lib/artefactos/lectores.ts). */
+  const copias = await copiasConContenido(projectId, canvasSlug);
+  if (copias.length === 0) {
+    if (!canvas) return "";
+    return textoDelCanvas(canvas, canvasSlug, opts);
+  }
+  // El de siempre (si existe) y las copias, con su rótulo: lo terminado primero.
+  const delTipo = await artefactosDelTipo(projectId, canvasSlug);
+  const conTexto = new Set(copias.map((c) => c.id));
+  return textoDeVariasCopias(await textosDe(ordenParaLosAgentes(delTipo.filter((d) => !d.esCopia || conTexto.has(d.id))), canvasSlug, opts));
+}
+
+/**
+ * Las copias de un tipo con algo escrito: una copia recién creada solo tiene su semilla (el cierre) y no cuenta. Sin esto,
+ * crear una copia en blanco cambiaría lo que leen los agentes.
+ */
+async function copiasConContenido(projectId: string, tipo: string): Promise<ArtefactoLeido[]> {
+  if (!admiteCopias(tipo)) return [];
+  const copias = await copiasDelTipo(projectId, tipo);
+  if (!copias.length) return [];
+  const con = await loadCanvasesConContenido(projectId, copias.map((c) => ({ id: c.id, slug: null, tipoArtefacto: tipo })));
+  return copias.filter((c) => con.has(c.id));
+}
+
+/** El texto de cada documento, con su rótulo, en el orden dado. */
+async function textosDe(
+  documentos: readonly ArtefactoLeido[],
+  canvasSlug: string,
+  opts: { onlyConfirmed?: boolean; includeKeys?: readonly string[]; soloVisibles?: boolean },
+): Promise<Array<{ rotulo: string; texto: string }>> {
+  const filas = await prisma.projectCanvas.findMany({ where: { id: { in: documentos.map((d) => d.id) } }, select: { id: true, sections: true } });
+  const porId = new Map(filas.map((f) => [f.id, f]));
+  const textos: Array<{ rotulo: string; texto: string }> = [];
+  for (const d of documentos) {
+    const f = porId.get(d.id);
+    if (f) textos.push({ rotulo: d.rotulo, texto: await textoDelCanvas(f, canvasSlug, opts) });
+  }
+  return textos;
+}
+
+/** El texto de UN canvas, sección por sección: lo que `loadCanvasContext` devolvía siempre. */
+async function textoDelCanvas(
+  canvas: { id: string; sections: unknown },
+  canvasSlug: string,
+  opts: { onlyConfirmed?: boolean; includeKeys?: readonly string[]; soloVisibles?: boolean },
+): Promise<string> {
   // Lo SOLO INTERNO (el Brief traído de la hoja) no llega a ningún agente por acá, con `soloVisibles` o sin él.
   const ocultas = opts.soloVisibles ? hiddenKeysFrom(canvas.sections) : new Set<string>(SECCIONES_SOLO_INTERNAS);
 

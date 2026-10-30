@@ -21,12 +21,16 @@ import { prisma } from "@/lib/db/prisma";
 import { runDocumentAssist, type AssistSectionDef } from "@/lib/ai/assist";
 import { loadHandoffContext, loadTimelineContext } from "@/lib/canvas/load-canvas-context";
 import { pieceForCanvas } from "@/lib/pieces/registry";
-import { DOC } from "@/lib/canvas/assist-de-documento";
+import { docConAssist } from "@/lib/canvas/assist-de-documento";
+import { tipoDelDocumento } from "@/lib/artefactos/copias";
+import { tipoDeArtefacto } from "@/lib/artefactos/tipos";
 import { KICKOFF_RECURRENTE_TEMPLATE } from "@/components/landing/configs/kickoff.defs";
 import { resolvePipeline } from "@/lib/projects/kind";
 import { servicioDelProyecto, servicioParaElKickoff } from "@/lib/servicios/catalogo";
 import { triggeredByEmail } from "@/lib/agents/triggered-by";
 import { fuentesDelDiagnostico } from "@/lib/canvas/diagnostico-fuentes";
+import { conContextoDeIA } from "@/lib/ai/contexto-de-corrida";
+import { docBriefFrom } from "@/lib/business-cases/section-briefs";
 import { documentoAprobado, MENSAJE_APROBADO } from "@/lib/canvas/estado-del-documento-servidor";
 
 const bodySchema = z.object({
@@ -52,6 +56,9 @@ export async function POST(req: NextRequest, { params }: { params: Params }) {
     select: {
       name: true,
       slug: true,
+      // Una COPIA de un tipo (etapa V3, docs/artefactos-plan.md) se mejora con el documento de su tipo.
+      tipoArtefacto: true,
+      sections: true,
       canvasSections: {
         orderBy: { order: "asc" },
         select: { key: true, blocks: { orderBy: { order: "asc" }, select: { blockType: true, data: true } } },
@@ -64,8 +71,10 @@ export async function POST(req: NextRequest, { params }: { params: Params }) {
      con el respaldo por nombre histórico para las filas que un script viejo haya creado sin él
      (misma lectura doble que documenta lib/pieces/canvas-query.ts). */
   const pieza = pieceForCanvas(canvas);
-  const doc = pieza ? DOC[pieza.slug] : undefined;
-  if (!pieza || !doc) {
+  const tipo = tipoDelDocumento(canvas);
+  const doc = docConAssist(tipo);
+  const seccionDePermiso = pieza?.permissionSection ?? tipoDeArtefacto(tipo)?.permiso ?? null;
+  if (!tipo || !doc || !seccionDePermiso) {
     return NextResponse.json(
       { error: `Este documento todavía no se puede modificar con IA (${canvas.name}).` },
       { status: 400 },
@@ -74,7 +83,7 @@ export async function POST(req: NextRequest, { params }: { params: Params }) {
   /* La celda sale del REGISTRO, no se repite acá: una pieza que cambie de sección de permiso lo
      hace en un solo lugar. */
   const perm = await guardPermission(
-    pieza.permissionSection as Parameters<typeof guardPermission>[0],
+    seccionDePermiso as Parameters<typeof guardPermission>[0],
     "regenerate" as never,
   );
   if (perm instanceof NextResponse) return perm;
@@ -104,7 +113,7 @@ export async function POST(req: NextRequest, { params }: { params: Params }) {
   const [agent, project, handoffCtx, timelineCtx] = await Promise.all([
     // Solo `additionalInstructions` (el apéndice calibrable desde /agents): el
     // `systemPrompt` de estos agentes en DB es la nota-puntero al código.
-    prisma.agent.findUnique({ where: { id: doc.agentId }, select: { additionalInstructions: true } }),
+    doc.agentId ? prisma.agent.findUnique({ where: { id: doc.agentId }, select: { additionalInstructions: true } }) : Promise.resolve(null),
     prisma.project.findUnique({
       where: { id: projectId },
       select: {
@@ -134,7 +143,7 @@ export async function POST(req: NextRequest, { params }: { params: Params }) {
   /* El kickoff de un SERVICIO que avanza por ciclos (M1, 2026-10-25, lo encontró la revisión): «Mejorar con IA» lee la voz
      y el servicio de su plantilla, como la generación. Sin esto, podía devolverlo a un kickoff de proyecto temporal. */
   const servicio =
-    pieza.slug === "kickoff" && project
+    tipo === "kickoff" && project
       ? servicioDelProyecto({
           servicioRecurrente: project.servicioRecurrente,
           servicioDelPipeline: resolvePipeline(project.hubspotPipelineId)?.servicioRecurrente ?? null,
@@ -154,10 +163,14 @@ export async function POST(req: NextRequest, { params }: { params: Params }) {
      un síntoma a una reunión que nunca vio. Desde la etapa 7, con una diferencia: las reuniones elegidas
      van EN RESUMEN (`paraElAssist`) y no enteras — este pedido manda el contexto entero cada vez — y sin
      búsqueda web (abajo): lo dicho por terceros en una reunión no puede terminar en una consulta al buscador. */
-  const esDiagnostico = pieza.slug === "diagnosis";
+  const esDiagnostico = tipo === "diagnosis";
   const context =
     esDiagnostico
-      ? await fuentesDelDiagnostico(projectId, { paraElAssist: true })
+      ? await fuentesDelDiagnostico(projectId, {
+          paraElAssist: true,
+          // Una copia obedece SUS instrucciones, no las del documento de siempre.
+          ...(canvas.tipoArtefacto ? { instruccionesDeLaCopia: docBriefFrom(canvas.sections) ?? "" } : {}),
+        })
       : [
           `Empresa: ${project?.client.name ?? "—"} · Industria: ${project?.client.industry ?? "No especificada"}`,
           delServicio ? servicioParaElKickoff(delServicio) : "",
@@ -170,6 +183,7 @@ export async function POST(req: NextRequest, { params }: { params: Params }) {
   const run = await prisma.agentRun.create({
     data: {
       agentId: doc.agentId,
+      ...(doc.agentId ? {} : { agentSlug: `artefacto:${tipo}` }),
       clientId: project?.clientId ?? null,
       projectId,
       status: "RUNNING",
@@ -180,18 +194,32 @@ export async function POST(req: NextRequest, { params }: { params: Params }) {
   });
 
   try {
-    const result = await runDocumentAssist({
-      docLabel: doc.docLabel,
-      systemPrompt,
-      sections,
-      instruction,
-      context,
-      // Mismo gate que la generación: el requerimiento técnico (brandVoice:false)
-      // no lleva voz comercial; el kickoff sí (lo lee el cliente).
-      brandVoice: doc.tpl.brandVoice !== false,
-      // El diagnóstico lleva lo que se dijo en las reuniones: sin búsqueda web (ver arriba).
-      maxWebSearches: esDiagnostico ? 0 : 3,
-    });
+    const quien = await triggeredByEmail();
+    /* En el medidor, con su agente, su cliente y quien lo pidió: sin esto el gasto no se le carga a nadie, y el clic de una
+       persona cuenta como gasto automático. */
+    const result = await conContextoDeIA(
+      {
+        agentSlug: doc.agentId ?? `artefacto:${tipo}`,
+        agentRunId: run.id,
+        clientId: project?.clientId ?? null,
+        projectId,
+        triggeredByEmail: quien,
+        origen: "canvas-assist",
+      },
+      () =>
+        runDocumentAssist({
+          docLabel: doc.docLabel,
+          systemPrompt,
+          sections,
+          instruction,
+          context,
+          // Mismo gate que la generación: el requerimiento técnico (brandVoice:false)
+          // no lleva voz comercial; el kickoff sí (lo lee el cliente).
+          brandVoice: doc.tpl.brandVoice !== false,
+          // El diagnóstico lleva lo que se dijo en las reuniones: sin búsqueda web (ver arriba).
+          maxWebSearches: esDiagnostico ? 0 : 3,
+        }),
+    );
     await prisma.agentRun.update({
       where: { id: run.id },
       data: { status: "DONE", output: JSON.stringify(result) },

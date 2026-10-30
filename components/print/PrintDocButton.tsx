@@ -29,7 +29,16 @@ const ICONO_IMPRESORA = (
 const CLASES = BOTON_DE_HERRAMIENTA;
 
 /** Descarga un documento del registro y, al lado, un ojo para ver la hoja antes de bajarla. */
-export function PrintDownloadButton({ tipo, docId }: { tipo: PrintDocType; docId: string }) {
+export function PrintDownloadButton({
+  tipo,
+  docId,
+  canvasId,
+}: {
+  tipo: PrintDocType;
+  docId: string;
+  /** Una COPIA de un tipo (etapa V3, docs/artefactos-plan.md): sin esto, el documento de siempre del proyecto. */
+  canvasId?: string | null;
+}) {
   const toast = useToast();
   const [working, setWorking] = useState(false);
   /* Lo que el editor tiene oculto EN PANTALLA y todavía no subió: el ojo del kickoff es
@@ -43,7 +52,7 @@ export function PrintDownloadButton({ tipo, docId }: { tipo: PrintDocType; docId
       const res = await fetch(`/api/print/${tipo.id}/${docId}/export`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ hiddenKeys: ocultasEnPantalla }),
+        body: JSON.stringify({ hiddenKeys: ocultasEnPantalla, ...(canvasId ? { canvasId } : {}) }),
       });
       if (!res.ok) {
         const payload = await res.json().catch(() => ({}));
@@ -103,7 +112,11 @@ export function PrintDownloadButton({ tipo, docId }: { tipo: PrintDocType; docId
           revisar acá es revisar el PDF. Vale un ícono discreto, no un segundo botón. */}
       <a
         href={`/print/doc/${tipo.id}/${docId}${
-          ocultasEnPantalla.length ? `?ocultar=${encodeURIComponent(ocultasEnPantalla.join(","))}` : ""
+          canvasId
+            ? `?canvasId=${encodeURIComponent(canvasId)}`
+            : ocultasEnPantalla.length
+              ? `?ocultar=${encodeURIComponent(ocultasEnPantalla.join(","))}`
+              : ""
         }`}
         target="_blank"
         rel="noopener noreferrer"

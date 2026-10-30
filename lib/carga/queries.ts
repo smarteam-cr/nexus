@@ -14,13 +14,14 @@
 import "server-only";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
+import { artefactosDelTipoEnProyectos } from "@/lib/artefactos/lectores-server";
+import { prioridadParaUnValor } from "@/lib/artefactos/lectores";
 import { modeloDisponible } from "@/lib/db/esquema";
 import { CS_CLIENT_WHERE } from "@/lib/clients/kind";
 import { esCuentaDePrueba } from "@/lib/documentacion/equipo";
 import { proyectoClasificableWhere, proyectoDeCarteraWhere } from "@/lib/projects/scope";
 import { encargadoDeLaCuenta, proyectoQueLleva } from "@/lib/cuentas/encargado";
 import { SELECT_PARA_EL_ENCARGADO } from "@/lib/cuentas/encargado-server";
-import { canvasOfNested } from "@/lib/pieces/canvas-query";
 import { SECCION_DE_ESCALA } from "@/lib/escala/contexto";
 import { leerPosicion, valorDeNivel } from "@/lib/escala/posicion";
 import { completarConfig, horasDisponibles, type ConfigCarga } from "./config";
@@ -438,16 +439,30 @@ const NIVEL_POR_VALOR: Record<number, NivelDeEscala> = { 1: "DEFICIENTE", 2: "IN
  */
 export async function nivelesDeEscala(ids: string[]): Promise<Map<string, NivelDeEscala>> {
   if (ids.length === 0) return new Map();
-  const bloques = await prisma.canvasBlock.findMany({
-    where: {
-      blockType: "CARD",
-      section: { key: SECCION_DE_ESCALA.diagnostico, canvas: canvasOfNested("diagnosis", { project: { clientId: { in: ids } } }) },
-    },
-    select: { data: true, section: { select: { canvas: { select: { project: { select: { clientId: true } } } } } } },
+  /* VARIAS COPIAS (artefactos, etapa V3): de cada proyecto, UN diagnóstico —el terminado más reciente; sin terminados, el
+     primero en el orden de la persona que tenga la escala—, como la entrega y la escala (lib/artefactos/lectores.ts).
+     Así una copia en construcción no le baja el nivel a la cuenta. Con un diagnóstico por proyecto, lo de siempre. */
+  const proyectos = await prisma.project.findMany({ where: { clientId: { in: ids } }, select: { id: true, clientId: true } });
+  const diagnosticos = await artefactosDelTipoEnProyectos(proyectos.map((p) => p.id), "diagnosis");
+  const candidatos = proyectos.map((p) => ({ clientId: p.clientId, docs: prioridadParaUnValor(diagnosticos.get(p.id) ?? []) }));
+  const todos = candidatos.flatMap((c) => c.docs.map((d) => d.id));
+  const filas = todos.length
+    ? await prisma.canvasBlock.findMany({
+        where: { blockType: "CARD", section: { key: SECCION_DE_ESCALA.diagnostico, canvasId: { in: todos } } },
+        orderBy: { order: "asc" },
+        select: { data: true, section: { select: { canvasId: true } } },
+      })
+    : [];
+  const bloques = candidatos.flatMap((c) => {
+    for (const d of c.docs) {
+      const b = filas.find((f) => f.section.canvasId === d.id && leerPosicion(f.data));
+      if (b) return [{ clienteId: c.clientId, data: b.data }];
+    }
+    return [];
   });
   const minimoPorCliente = new Map<string, number>();
   for (const b of bloques) {
-    const clienteId = b.section.canvas.project?.clientId;
+    const clienteId = b.clienteId;
     const pos = leerPosicion(b.data);
     if (!clienteId || !pos) continue;
     const valores = pos.areas.flatMap((a) => [valorDeNivel(a.base), valorDeNivel(a.produccion)]).filter((v): v is number => v !== null);

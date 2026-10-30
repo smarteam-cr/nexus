@@ -26,6 +26,7 @@ import { INV63 } from "./tareas";
 import { INV55, INV55_BLOQUEA } from "./smartloop";
 import { INV51, INV56 } from "./empresa";
 import { INV64 } from "./documentos-de-la-empresa";
+import { INV65 } from "./artefactos";
 import { INV58, INV58_BLOQUEA } from "./tests-diagnostico";
 import { INV61 } from "./exploraciones";
 import { INV62 } from "./analizador-venta";
@@ -836,7 +837,7 @@ describe("hechos: INV45 (memoria de la cuenta, etapa 6)", () => {
 
 describe("el registro y el consumidor", () => {
 
-  it("el registro tiene los 52 solo-base, con ids únicos y en el orden del gate", () => {
+  it("el registro tiene los 53 solo-base, con ids únicos y en el orden del gate", () => {
     /* Del 28 salta al 30: INV29 lo reserva docs/database-refactoring-plan.md. 31 y 32 son las frescuras (espejo y corte);
        33 y 34, el número de factura (etapa 7); 35, la plata que no es venta (etapa 10); 36, a quién se facturó (etapa 12); 37, dos clientes con un dominio (2026-10-02). */
     expect(INVARIANTES_SOLO_BASE.map((i) => i.id)).toEqual([
@@ -850,7 +851,7 @@ describe("el registro y el consumidor", () => {
       "44", "45", "46", "47",
       // Del 49 en adelante (2026-10-25 en adelante): qué vigila cada una está en su archivo de lib/invariantes/ y en
       // la fila invariants-daily del RUNBOOK.
-      "49", "50", "51", "52", "53", "54", "55", "56", "57", "58", "59", "60", "61", "62", "63", "64",
+      "49", "50", "51", "52", "53", "54", "55", "56", "57", "58", "59", "60", "61", "62", "63", "64", "65",
     ]);
     expect(new Set(INVARIANTES_SOLO_BASE.map((i) => i.id)).size).toBe(INVARIANTES_SOLO_BASE.length);
   });
@@ -898,7 +899,7 @@ describe("el job invariants-daily (B-08)", () => {
    */
   it("con todo en verde devuelve el resumen; con algo en rojo LANZA con los ids y el mensaje acotado", async () => {
     /* La edición que lo pone en rojo: cambiar el throw por un console.error «para no ensuciar Sentry». */
-    await expect(correrJobDeInvariantes(baseFalsa({}), AHORA)).resolves.toBe("52 invariantes solo-base en verde");
+    await expect(correrJobDeInvariantes(baseFalsa({}), AHORA)).resolves.toBe("53 invariantes solo-base en verde");
 
     const promesa = correrJobDeInvariantes(baseFalsa({ cobro: 2 }), AHORA); // INV3 e INV5 cuentan cobros
     await expect(promesa).rejects.toBeInstanceOf(InvariantesVioladosError);
@@ -1022,6 +1023,28 @@ describe("INV64 (el enlace de un documento de la empresa)", () => {
     expect(r.ok).toBe(false);
     expect(r.lineas[0]).toContain("2 enlace(s)");
     expect(r.lineas[0]).toContain("a2, a3");
+  });
+
+  it("desde la V4 abre también un documento de un PROYECTO de su empresa; de otra empresa o de una propuesta, no", async () => {
+    const deSuProyecto = { id: "a4", clientId: "c1", canvas: { clientId: null, projectId: "p1", businessCaseId: null, project: { clientId: "c1" } } };
+    const deOtroProyecto = { id: "a5", clientId: "c1", canvas: { clientId: null, projectId: "p2", businessCaseId: null, project: { clientId: "c2" } } };
+    const dePropuesta = { id: "a6", clientId: "c1", canvas: { clientId: null, projectId: null, businessCaseId: "bc1", project: null } };
+    expect((await INV64.correr(baseFalsa({ accesoAlDocumento: [deSuProyecto] }), AHORA)).ok).toBe(true);
+    const r = await INV64.correr(baseFalsa({ accesoAlDocumento: [deSuProyecto, deOtroProyecto, dePropuesta] }), AHORA);
+    expect(r.ok).toBe(false);
+    expect(r.lineas[0]).toContain("a5, a6");
+  });
+});
+
+describe("INV65 (las copias de un artefacto)", () => {
+  it("una copia con slug, sin proyecto o con nombre de pieza la pone en rojo; una sana, no", async () => {
+    const sana = { id: "k1", slug: null, tipoArtefacto: "planning", projectId: "p1", name: "Planificación — Marketing" };
+    const conNombreDePieza = { ...sana, id: "k2", name: "Kickoff" };
+    const sinProyecto = { ...sana, id: "k3", projectId: null };
+    expect((await INV65.correr(baseFalsa({ projectCanvas: [sana] }), AHORA)).ok).toBe(true);
+    const r = await INV65.correr(baseFalsa({ projectCanvas: [sana, conNombreDePieza, sinProyecto] }), AHORA);
+    expect(r.ok).toBe(false);
+    expect(r.lineas[0]).toContain("2 copia(s)");
   });
 });
 

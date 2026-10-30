@@ -293,18 +293,24 @@ async function leerHechos(clientId: string, projectId: string | null): Promise<H
  * un proyecto), ese proyecto se marca en la historia y su propia entrega no cuenta como «lo que se entregó antes».
  * Texto "" si no hay nada que decir.
  */
+/** Las partes que el lector no recibe: las de su consumidor, menos las que pide leer de todos modos. */
+function partesExcluidas(sinPartes: readonly ClaveDeParte[] | undefined, tambienLeer: readonly ClaveDeParte[] | undefined): Set<ClaveDeParte> {
+  const pide = new Set(tambienLeer ?? []);
+  return new Set((sinPartes ?? []).filter((p) => !pide.has(p)));
+}
+
 export async function memoriaDeLaCuenta(
   clientId: string,
-  opts: { lector: LectorDeMemoria; projectId?: string | null },
+  opts: { lector: LectorDeMemoria; projectId?: string | null; tambienLeer?: readonly ClaveDeParte[] },
 ): Promise<MemoriaArmada> {
   const c = consumidorDeLaMemoria(opts.lector);
-  const sinPartes = new Set(c.sinPartes ?? []);
+  const sinPartes = partesExcluidas(c.sinPartes, opts.tambienLeer);
   const datos = await cargarDatosDeLaCuenta(clientId, queCargar(c.alcance), { proyectoActualId: opts.projectId ?? null, sinPartes });
   if (!datos) return VACIA;
   return armarMemoriaDeLaCuenta(datos, {
     alcance: c.alcance,
     excluirOrigenes: c.excluirOrigenes,
-    sinPartes: c.sinPartes,
+    sinPartes: [...sinPartes],
     proyectoActualId: opts.projectId ?? null,
     pieza: c.pieza,
   });
@@ -408,11 +414,11 @@ async function leerDesviaciones(projectId: string, q: QueCargar): Promise<Desvia
  */
 export async function memoriaDelProyecto(
   projectId: string,
-  opts: { lector: LectorDeMemoria; yaLeidas?: readonly string[] },
+  opts: { lector: LectorDeMemoria; yaLeidas?: readonly string[]; tambienLeer?: readonly ClaveDeParte[] },
 ): Promise<MemoriaArmada> {
   const c = consumidorDeLaMemoria(opts.lector);
   const q = queCargar(c.alcance);
-  const sin = new Set(c.sinPartes ?? []);
+  const sin = partesExcluidas(c.sinPartes, opts.tambienLeer);
   const proyecto = await seguro("el proyecto", () => prisma.project.findUnique({ where: { id: projectId }, select: { name: true, clientId: true } }), null);
   if (!proyecto) return VACIA;
   const [reuniones, compromisos, desviaciones, resultados, hechos] = await Promise.all([
@@ -430,7 +436,7 @@ export async function memoriaDelProyecto(
   ]);
   return armarMemoriaDelProyecto(
     { proyecto: { nombre: proyecto.name }, reuniones, compromisos, desviaciones, resultados, hechos },
-    { alcance: c.alcance, yaLeidas: opts.yaLeidas, sinPartes: c.sinPartes, pieza: c.pieza },
+    { alcance: c.alcance, yaLeidas: opts.yaLeidas, sinPartes: [...sin], pieza: c.pieza },
   );
 }
 
@@ -443,14 +449,17 @@ export async function memoriaDelProyecto(
  */
 export async function memoriaDelDocumento(
   projectId: string,
-  opts: { lector: LectorDeMemoria; clientId?: string | null; yaLeidas?: readonly string[] },
+  /* `tambienLeer`: lo que su `sinPartes` excluye porque el documento de siempre lo lee por otro lado. Una COPIA de un tipo
+     (etapa V3) usa el lector de su tipo pero no tiene esa otra vía. Solo eso: lo que un lector excluye por su contenido
+     sigue excluido. */
+  opts: { lector: LectorDeMemoria; clientId?: string | null; yaLeidas?: readonly string[]; tambienLeer?: readonly ClaveDeParte[] },
 ): Promise<MemoriaArmada> {
   const clientId =
     opts.clientId ??
     (await seguro("el cliente del proyecto", async () => (await prisma.project.findUnique({ where: { id: projectId }, select: { clientId: true } }))?.clientId ?? null, null));
   const [cuenta, proyecto] = await Promise.all([
-    clientId ? memoriaDeLaCuenta(clientId, { lector: opts.lector, projectId }) : Promise.resolve(VACIA),
-    memoriaDelProyecto(projectId, { lector: opts.lector, yaLeidas: opts.yaLeidas }),
+    clientId ? memoriaDeLaCuenta(clientId, { lector: opts.lector, projectId, tambienLeer: opts.tambienLeer }) : Promise.resolve(VACIA),
+    memoriaDelProyecto(projectId, { lector: opts.lector, yaLeidas: opts.yaLeidas, tambienLeer: opts.tambienLeer }),
   ]);
   return {
     texto: [cuenta.texto, proyecto.texto].filter(Boolean).join("\n\n"),

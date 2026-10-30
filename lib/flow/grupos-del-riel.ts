@@ -13,6 +13,7 @@
  * Un servicio recurrente no pasa por acá: su riel lleva el grupo del ciclo («Ciclo · Implementación»), como antes.
  */
 import { pieceBySlug, type ClaseDePieza } from "@/lib/pieces/registry";
+import { tipoDeArtefacto } from "@/lib/artefactos/tipos";
 
 export interface GrupoDelRiel {
   id: ClaseDePieza;
@@ -22,14 +23,22 @@ export interface GrupoDelRiel {
 export const GRUPO_HERRAMIENTAS: GrupoDelRiel = { id: "herramienta", titulo: "Herramientas del proyecto" };
 export const GRUPO_ENTREGABLES: GrupoDelRiel = { id: "entregable", titulo: "Entregables" };
 
-/** El grupo de una fila del riel. Lo que no es un entregable (un canvas suelto, una pieza sin clase) es herramienta. */
+/**
+ * El grupo de una fila del riel. Lo que no es un entregable (un canvas suelto, una pieza sin clase) es herramienta. Un tipo
+ * de artefacto sin pieza (el plan de adopción, la integración técnica: lib/artefactos/tipos.ts) va en el grupo de su clase.
+ */
 export function grupoDelRiel(slug: string): GrupoDelRiel {
-  return pieceBySlug(slug)?.clase === "entregable" ? GRUPO_ENTREGABLES : GRUPO_HERRAMIENTAS;
+  const clase = pieceBySlug(slug)?.clase ?? tipoDeArtefacto(slug)?.clase ?? null;
+  return clase === "entregable" ? GRUPO_ENTREGABLES : GRUPO_HERRAMIENTAS;
 }
 
-/** Las filas con las herramientas primero y los entregables después; estable adentro de cada grupo. */
-export function ordenarPorGrupo<T extends { slug: string }>(filas: readonly T[]): T[] {
-  const herramientas = filas.filter((f) => grupoDelRiel(f.slug).id === "herramienta");
-  const entregables = filas.filter((f) => grupoDelRiel(f.slug).id === "entregable");
+/**
+ * Las filas con las herramientas primero y los entregables después; estable adentro de cada grupo. Una COPIA de un tipo
+ * (etapa V3) va en el grupo de su tipo (`tipo`), no en el de su slug de fila (`copia:<id>`).
+ */
+export function ordenarPorGrupo<T extends { slug: string; tipo?: string }>(filas: readonly T[]): T[] {
+  const grupo = (f: T) => grupoDelRiel(f.tipo ?? f.slug).id;
+  const herramientas = filas.filter((f) => grupo(f) === "herramienta");
+  const entregables = filas.filter((f) => grupo(f) === "entregable");
   return [...herramientas, ...entregables];
 }

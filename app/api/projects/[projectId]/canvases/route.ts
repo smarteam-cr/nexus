@@ -41,6 +41,10 @@ export async function GET(
       createdAt: true,
       // Para el aviso de "el handoff cambió después" (lib/pieces/piece-staleness.ts).
       contentUpdatedAt: true,
+      // Artefactos (etapa V3, docs/artefactos-plan.md): el tipo de una copia y el estado de cada documento.
+      tipoArtefacto: true,
+      titulo: true,
+      terminadoEn: true,
     },
   });
 

@@ -13,9 +13,10 @@
  * y las reuniones solo se leen por el chokepoint de sesiones.
  */
 import { prisma } from "@/lib/db/prisma";
+import { artefactosDelTipo } from "@/lib/artefactos/lectores-server";
+import { prioridadParaUnValor } from "@/lib/artefactos/lectores";
 import { loadCanvasContext } from "@/lib/canvas/load-canvas-context";
 import { serializeProcesosForPrompt } from "@/lib/canvas/read-procesos";
-import { canvasOf } from "@/lib/pieces/canvas-query";
 import { adoptarPipelines } from "@/lib/planificacion/secciones";
 import { proyectoClasificableWhere } from "@/lib/projects/scope";
 import type { ContextoDelCliente } from "./cruces";
@@ -81,15 +82,19 @@ export async function leerContextoDelCliente(clientId: string): Promise<Contexto
 
 async function pipelinesDeLaPlanificacion(projectId: string): Promise<ContextoDelCliente["pipelinesPlaneados"]> {
   // Por el slug de la pieza, como `loadCanvasContext` arriba: el nombre visible se puede cambiar.
-  const canvas = await prisma.projectCanvas.findFirst({ where: { projectId, ...canvasOf("planning") }, select: { id: true } });
-  if (!canvas) return [];
-  const seccion = await prisma.canvasSection.findFirst({
-    where: { canvasId: canvas.id, key: "pipelines" },
-    select: { blocks: { where: { blockType: "CARD" }, select: { data: true }, take: 1 } },
-  });
-  const data = seccion?.blocks[0]?.data;
-  if (!data || typeof data !== "object") return [];
-  return adoptarPipelines(data).pipelines
-    .map((p) => ({ nombre: p.nombre, tipo: p.tipo, etapas: p.etapas.map((e) => e.etapa?.trim() ?? "").filter(Boolean) }))
-    .filter((p) => p.nombre.trim());
+  /* VARIAS COPIAS (artefactos, etapa V3): los pipelines de la planificación terminada más reciente; sin terminadas, de
+     la primera en el orden de la persona que los tenga. Con una sola planificación, la de siempre (lib/artefactos/lectores.ts). */
+  for (const canvas of prioridadParaUnValor(await artefactosDelTipo(projectId, "planning"))) {
+    const seccion = await prisma.canvasSection.findFirst({
+      where: { canvasId: canvas.id, key: "pipelines" },
+      select: { blocks: { where: { blockType: "CARD" }, select: { data: true }, take: 1 } },
+    });
+    const data = seccion?.blocks[0]?.data;
+    if (!data || typeof data !== "object") continue;
+    const pipelines = adoptarPipelines(data)
+      .pipelines.map((p) => ({ nombre: p.nombre, tipo: p.tipo, etapas: p.etapas.map((e) => e.etapa?.trim() ?? "").filter(Boolean) }))
+      .filter((p) => p.nombre.trim());
+    if (pipelines.length) return pipelines;
+  }
+  return [];
 }

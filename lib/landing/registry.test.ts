@@ -32,6 +32,10 @@ import { PROPUESTA_SECTION_COMPONENTS } from "@/components/landing/configs/propu
 import { ROLES_SECTION_COMPONENTS } from "@/components/landing/configs/roles";
 import { DESARROLLO_SECTION_DEFS } from "@/components/landing/configs/desarrollo.defs";
 import { DESARROLLO_SECTION_COMPONENTS, landingConfigForDesarrollo } from "@/components/landing/configs/desarrollo";
+import { ADOPCION_SECTION_DEFS } from "@/components/landing/configs/adopcion.defs";
+import { ADOPCION_SECTION_COMPONENTS, landingConfigForAdopcion } from "@/components/landing/configs/adopcion";
+import { INTEGRACION_SECTION_DEFS } from "@/components/landing/configs/integracion.defs";
+import { INTEGRACION_SECTION_COMPONENTS, landingConfigForIntegracion } from "@/components/landing/configs/integracion";
 import { EXPLORACION_SECTION_DEFS } from "@/components/landing/configs/exploracion.defs";
 import { EXPLORACION_SECTION_COMPONENTS, landingConfigForExploracion } from "@/components/landing/configs/exploracion";
 import {
@@ -97,6 +101,9 @@ const DEFS_DE_TODOS_LOS_DOCUMENTOS: readonly { doc: string; def: BCSectionDef }[
   ...DESARROLLO_SECTION_DEFS.map((def) => ({ doc: "desarrollo", def })),
   ...EXPLORACION_SECTION_DEFS.map((def) => ({ doc: "exploracion", def })),
   ...CRONOGRAMA_SECTION_DEFS.map((def) => ({ doc: "cronograma", def })),
+  // Los artefactos nuevos (2026-10-29, docs/artefactos-plan.md): sus secciones prestadas son LAS MISMAS defs.
+  ...ADOPCION_SECTION_DEFS.map((def) => ({ doc: "adopcion", def })),
+  ...INTEGRACION_SECTION_DEFS.map((def) => ({ doc: "integracion", def })),
 ];
 
 
@@ -324,6 +331,8 @@ describe("un renderer, un contrato de datos", () => {
       ["KICKOFF", KICKOFF_SECTION_COMPONENTS],
       ["CRONOGRAMA", CRONOGRAMA_SECTION_COMPONENTS],
       ["DESARROLLO", DESARROLLO_SECTION_COMPONENTS],
+      ["ADOPCION", ADOPCION_SECTION_COMPONENTS],
+      ["INTEGRACION", INTEGRACION_SECTION_COMPONENTS],
       ["DIAGNOSTICO", DIAGNOSTICO_SECTION_COMPONENTS],
       ["ENTREGA", ENTREGA_SECTION_COMPONENTS],
       ["EXPLORACION", EXPLORACION_SECTION_COMPONENTS],
@@ -333,7 +342,7 @@ describe("un renderer, un contrato de datos", () => {
       ["ROLES", ROLES_SECTION_COMPONENTS],
     ];
     const TODOS_LOS_MAPAS: Record<string, unknown> = Object.assign({}, ...MAPAS.map(([, m]) => m));
-    expect(MAPAS.length, "se cayó un mapa de la guarda").toBe(12);
+    expect(MAPAS.length, "se cayó un mapa de la guarda").toBe(14);
     expect(Object.keys(TODOS_LOS_MAPAS).length, "la guarda no está mirando nada").toBeGreaterThan(50);
     const rotos: string[] = [];
     for (const [alias, canonico] of Object.entries(ALIAS_DE_SECTION_TYPE)) {
@@ -366,6 +375,8 @@ describe("un renderer, un contrato de datos", () => {
       KICKOFF_SECTION_COMPONENTS,
       CRONOGRAMA_SECTION_COMPONENTS,
       DESARROLLO_SECTION_COMPONENTS,
+      ADOPCION_SECTION_COMPONENTS,
+      INTEGRACION_SECTION_COMPONENTS,
       DIAGNOSTICO_SECTION_COMPONENTS,
       ENTREGA_SECTION_COMPONENTS,
       EXPLORACION_SECTION_COMPONENTS,
@@ -496,7 +507,13 @@ describe("un renderer, un contrato de datos", () => {
     operacion_servicio: "modulo",
     ciclo_servicio: "modulo",
     nivel_servicio: "modulo",
-    cards_icono: "modulo",
+    /* ⚠ GENÉRICO desde el 2026-10-29: el plan de adopción la monta para «Lo que no se negocia», con el MISMO
+       PROSA_SCHEMA que la propuesta recurrente. */
+    cards_icono: "generico",
+    /* ⚠ La tabla genérica de las secciones creables (2026-08-21) la declaran desde el 2026-10-29 dos plantillas: el plan de
+       adopción y la integración técnica (el mapa de integración), siempre con TABLA_SCHEMA y las columnas sembradas en
+       `empty`. Un renderer, un contrato: sus columnas cambian por sección, su esquema no. */
+    tabla: "generico",
     /* El kickoff con HubSpot Academy y el acceso al portal (área Q, 2026-10-27): la prosa de «Lo que necesitamos de tu
        equipo» con la tarjeta fija arriba, y la ruta de Academy. Solo el kickoff las usa. */
     kickoff_tu_rol: "modulo",
@@ -687,6 +704,46 @@ describe("Desarrollo: registry completo + keys congeladas", () => {
       (t) => !usados.has(t) && !LEGACY_SNAPSHOT_TYPES.has(t),
     );
     expect(huerfanos).toEqual([]);
+  });
+});
+
+describe("Plan de adopción: registry completo + keys congeladas", () => {
+  it("cada def resuelve componente y la config no dropea ninguna", () => {
+    const faltantes = ADOPCION_SECTION_DEFS.filter((d) => !ADOPCION_SECTION_COMPONENTS[d.sectionType ?? d.key]);
+    expect(faltantes.map((d) => `${d.key}→${d.sectionType}`)).toEqual([]);
+    expect(landingConfigForAdopcion().sections.map((s) => s.key)).toEqual(ADOPCION_SECTION_DEFS.map((d) => d.key));
+  });
+
+  it("snapshot de keys: la portada abre, el cierre cierra", () => {
+    expect(ADOPCION_SECTION_DEFS.map((d) => d.key)).toEqual([
+      "adopcion", "comportamientos", "reglas", "niveles", "rutinas_adopcion", "plan_despliegue",
+      "comunicacion", "administradores", "altas_bajas", "medicion", "cierre",
+    ]);
+  });
+
+  it("sin componentes huérfanos en ADOPCION_SECTION_COMPONENTS", () => {
+    const usados = new Set(ADOPCION_SECTION_DEFS.map((d) => d.sectionType ?? d.key));
+    expect(Object.keys(ADOPCION_SECTION_COMPONENTS).filter((t) => !usados.has(t))).toEqual([]);
+  });
+});
+
+describe("Integración técnica: registry completo + keys congeladas", () => {
+  it("cada def resuelve componente y la config no dropea ninguna", () => {
+    const faltantes = INTEGRACION_SECTION_DEFS.filter((d) => !INTEGRACION_SECTION_COMPONENTS[d.sectionType ?? d.key]);
+    expect(faltantes.map((d) => `${d.key}→${d.sectionType}`)).toEqual([]);
+    expect(landingConfigForIntegracion().sections.map((s) => s.key)).toEqual(INTEGRACION_SECTION_DEFS.map((d) => d.key));
+  });
+
+  it("snapshot de keys: el requerimiento abre, el cierre cierra, y sin la estimación (lee el proyecto)", () => {
+    expect(INTEGRACION_SECTION_DEFS.map((d) => d.key)).toEqual([
+      "requerimiento", "alcance_firmado", "retos_cliente", "arquitectura", "identificador_unico", "mapa_integracion",
+      "relacion_objetos", "propiedades", "comunicacion", "entregables_de_terceros", "criterios_exito", "cierre",
+    ]);
+  });
+
+  it("sin componentes huérfanos en INTEGRACION_SECTION_COMPONENTS", () => {
+    const usados = new Set(INTEGRACION_SECTION_DEFS.map((d) => d.sectionType ?? d.key));
+    expect(Object.keys(INTEGRACION_SECTION_COMPONENTS).filter((t) => !usados.has(t))).toEqual([]);
   });
 });
 
@@ -1028,6 +1085,8 @@ describe("eyebrow ≠ título en toda def con encabezado del motor", () => {
     ...Object.fromEntries(Object.entries(BC_TEMPLATES).map(([id, t]) => [id, t.sections])),
     kickoff: KICKOFF_SECTION_DEFS,
     desarrollo: DESARROLLO_SECTION_DEFS,
+    adopcion: ADOPCION_SECTION_DEFS,
+    integracion: INTEGRACION_SECTION_DEFS,
     exploracion: EXPLORACION_SECTION_DEFS,
     diagnostico: DIAGNOSTICO_SECTION_DEFS,
     implementacion: IMPLEMENTACION_SECTION_DEFS,

@@ -16,7 +16,7 @@ import type { Prisma, TeamMember } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { esquemaDesactualizado } from "@/lib/db/esquema";
 import { canvasOfAny } from "@/lib/pieces/canvas-query";
-import { pieceForCanvas } from "@/lib/pieces/registry";
+import { tipoDelDocumento } from "@/lib/artefactos/copias";
 import { buscarEtapa, resolvePipeline } from "@/lib/projects/kind";
 import { getClientSessions } from "@/lib/sessions/project-sources";
 import { invitadosDeLaProxima } from "@/lib/seguimiento/reunion/proxima";
@@ -138,14 +138,19 @@ async function proyectoParaPasar(p: FilaDelProyecto) {
       select: {
         timeline: { select: { phases: { orderBy: { order: "asc" }, select: { name: true, status: true } } } },
         handoff: { select: { id: true } },
-        canvases: { where: canvasOfAny(DOCUMENTOS_DEL_CICLO), select: { slug: true, name: true, canvasSections: { select: { _count: { select: { blocks: true } } } } } },
+        /* Las copias cuentan como su tipo (artefactos, etapa V3): una planificación con contenido es una planificación,
+           se llame como se llame. Las archivadas no. */
+        canvases: {
+          where: { OR: [canvasOfAny(DOCUMENTOS_DEL_CICLO), { slug: null, tipoArtefacto: { in: [...DOCUMENTOS_DEL_CICLO] }, disabledAt: null }] },
+          select: { slug: true, tipoArtefacto: true, name: true, canvasSections: { select: { _count: { select: { blocks: true } } } } },
+        },
       },
     }),
     prisma.cicloDeProyecto.findFirst({ where: { projectId: p.id, estado: "abierto" }, select: { etapa: true } }),
   ]);
   const documentos = new Set<string>();
   for (const c of extra?.canvases ?? []) {
-    const slug = pieceForCanvas(c)?.slug;
+    const slug = tipoDelDocumento(c);
     if (slug && c.canvasSections.some((s) => s._count.blocks > 0)) documentos.add(slug);
   }
   return {

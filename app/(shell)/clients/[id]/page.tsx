@@ -29,7 +29,8 @@ async function seedCanvases(projectId: string): Promise<SeededCanvas[]> {
   const canvases = await prisma.projectCanvas.findMany({
     where: { projectId, ...canvasNotOf("handoff"), ...onlyEnabled },
     orderBy: [{ order: "asc" }, { createdAt: "asc" }],
-    select: { id: true, slug: true, name: true, isDefault: true, sections: true, contentUpdatedAt: true },
+    // tipoArtefacto/terminadoEn/order/createdAt: las copias de un tipo y su orden (etapa V3, docs/artefactos-plan.md).
+    select: { id: true, slug: true, name: true, isDefault: true, sections: true, contentUpdatedAt: true, tipoArtefacto: true, titulo: true, terminadoEn: true, order: true, createdAt: true },
   });
   const [conContenido, handoffCambioAt] = await Promise.all([
     loadCanvasesConContenido(projectId, canvases),
@@ -47,6 +48,11 @@ async function seedCanvases(projectId: string): Promise<SeededCanvas[]> {
     slug: c.slug,
     name: c.name,
     isDefault: c.isDefault,
+    tipoArtefacto: c.tipoArtefacto,
+    titulo: c.titulo,
+    terminadoEn: c.terminadoEn?.toISOString() ?? null,
+    order: c.order,
+    createdAt: c.createdAt.toISOString(),
     sections: (c.sections as Array<{ key: string; label: string }> | null) ?? [],
     hasContent: conContenido.has(c.id),
     novedades: (c.slug && novedades[c.slug]) || 0,

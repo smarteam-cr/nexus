@@ -40,6 +40,8 @@ import { tagLabels, usaEscala } from "@/lib/tags/catalog";
 import { posicionDelDiagnostico } from "@/lib/escala/contexto";
 import { posicionParaLaEntrega } from "@/lib/escala/posicion";
 import { canvasOfNested } from "@/lib/pieces/canvas-query";
+import { artefactosDelTipo } from "@/lib/artefactos/lectores-server";
+import { prioridadParaUnValor } from "@/lib/artefactos/lectores";
 import { getProjectMemberSessions } from "@/lib/sessions/project-sources";
 import { cargarMaterialDelDocumento } from "@/lib/contexto/material-del-documento";
 import { documentoConContexto } from "@/lib/contexto/documento";
@@ -84,19 +86,28 @@ const KEYS_DERIVADAS = new Set(
  * El desafío y los objetivos del Diagnóstico del proyecto, tal como están escritos. El Diagnóstico
  * es un documento de cara al cliente, así que nada de esto es interno.
  */
-async function desafioYObjetivosDelDiagnostico(
+export async function desafioYObjetivosDelDiagnostico(
   projectId: string,
 ): Promise<{ desafio: DesafioDelDiagnostico | null; objetivos: ObjetivoDelDiagnostico[] }> {
+  /* VARIAS COPIAS (artefactos, etapa V3): el diagnóstico terminado más reciente; sin terminados, el primero en el orden
+     de la persona. Se toma el primero que tenga desafío u objetivos: una copia recién creada y vacía no le tapa el dato
+     al documento de siempre. Con un solo diagnóstico, el de siempre, como antes (lib/artefactos/lectores.ts). */
+  const candidatos = prioridadParaUnValor(await artefactosDelTipo(projectId, "diagnosis"));
+  if (candidatos.length === 0) return { desafio: null, objetivos: [] };
   const bloques = await prisma.canvasBlock.findMany({
     where: {
       blockType: "CARD",
-      section: { key: { in: ["desafio", "objetivos"] }, canvas: canvasOfNested("diagnosis", { projectId }) },
+      section: { key: { in: ["desafio", "objetivos"] }, canvasId: { in: candidatos.map((c) => c.id) } },
     },
     orderBy: { order: "asc" },
-    select: { data: true, section: { select: { key: true } } },
+    select: { data: true, section: { select: { key: true, canvasId: true } } },
   });
-  const deLa = (key: string) => bloques.find((b) => b.section.key === key)?.data;
-  return { desafio: leerDesafioDelDiagnostico(deLa("desafio")), objetivos: leerObjetivosDelDiagnostico(deLa("objetivos")) };
+  for (const c of candidatos) {
+    const deLa = (key: string) => bloques.find((b) => b.section.canvasId === c.id && b.section.key === key)?.data;
+    const r = { desafio: leerDesafioDelDiagnostico(deLa("desafio")), objetivos: leerObjetivosDelDiagnostico(deLa("objetivos")) };
+    if (r.desafio || r.objetivos.length > 0) return r;
+  }
+  return { desafio: null, objetivos: [] };
 }
 
 /*

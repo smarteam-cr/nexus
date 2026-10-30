@@ -2,6 +2,17 @@ import { describe, it, expect } from "vitest";
 import { GRUPO_ENTREGABLES, GRUPO_HERRAMIENTAS, grupoDelRiel, ordenarPorGrupo } from "./grupos-del-riel";
 import { buildPieceRows } from "./dropdown-rows";
 
+describe("las copias de un tipo (artefactos, etapa V3)", () => {
+  it("van en el grupo de su tipo, y los tipos nuevos en el de su clase", () => {
+    expect(grupoDelRiel("adoption-plan")).toEqual(GRUPO_ENTREGABLES);
+    const filas = [
+      { slug: "copia:a", tipo: "planning" },
+      { slug: "copia:b", tipo: "exploration" },
+    ];
+    expect(ordenarPorGrupo(filas).map((f) => f.slug)).toEqual(["copia:b", "copia:a"]);
+  });
+});
+
 describe("los dos grupos del riel (decisión 11)", () => {
   it("entregables: Kickoff, Diagnóstico, Planificación, Integraciones y Entrega", () => {
     for (const s of ["kickoff", "diagnosis", "planning", "tech-requirements", "delivery"]) expect(grupoDelRiel(s)).toBe(GRUPO_ENTREGABLES);

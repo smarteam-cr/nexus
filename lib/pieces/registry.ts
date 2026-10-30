@@ -444,13 +444,19 @@ export function pieceByAgentGroup(group: string): PieceDefinition | null {
  *   2. `businessCaseId` presente → es del Business Case, sin mirar el nombre.
  *   3. el nombre, para los canvases anteriores al backfill.
  * Devolver null significa "canvas suelto/custom", no es un error.
+ *
+ * ⛔ Una COPIA de un tipo (`tipoArtefacto`, docs/artefactos-plan.md etapa V3) no es la pieza: es null, aunque se llame
+ * igual. Así ningún botón de la pieza (generar, publicar, el contexto del tipo) le escribe encima al documento de
+ * siempre. Su tipo lo dice `tipoDelDocumento` (lib/artefactos/copias.ts), y solo lo usa lo que sabe tratar una copia.
  */
 export function pieceForCanvas(canvas: {
   slug?: string | null;
   name: string;
   businessCaseId?: string | null;
+  tipoArtefacto?: string | null;
 }): PieceDefinition | null {
   if (canvas.slug) return pieceBySlug(canvas.slug);
+  if (canvas.tipoArtefacto) return null;
   if (canvas.businessCaseId) return pieceBySlug("business-case");
   return pieceByName(canvas.name);
 }
@@ -459,6 +465,7 @@ export function pieceForCanvas(canvas: {
 export function slugForCanvas(canvas: {
   name: string;
   businessCaseId?: string | null;
+  tipoArtefacto?: string | null;
 }): string | null {
   return pieceForCanvas(canvas)?.slug ?? null;
 }

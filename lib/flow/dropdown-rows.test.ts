@@ -98,3 +98,59 @@ describe("los canvases sueltos del CSE", () => {
     expect(rows.filter((r) => r.label === "Diagnóstico")).toHaveLength(2);
   });
 });
+
+describe("las COPIAS de un tipo (etapa V3, docs/artefactos-plan.md)", () => {
+  const copia = (id: string, tipo: string, over: Partial<CanvasParaFila> = {}): CanvasParaFila => ({
+    id,
+    slug: null,
+    tipoArtefacto: tipo,
+    name: `${tipo} ${id}`,
+    ...over,
+  });
+
+  it("con una sola planificación, las filas son las de siempre (sin copias que mostrar)", () => {
+    const sola = buildPieceRows([c({ slug: "planning", name: "Planificación", hasContent: true })]);
+    expect(slugs(sola)).toEqual(slugs(buildPieceRows([])));
+    expect(de(sola, "planning")).toMatchObject({ label: "Planificación", state: "generada", tipo: "planning", terminado: false });
+  });
+
+  it("tres planificaciones: tres filas juntas, en el orden de la persona (el de siempre es una más)", () => {
+    const rows = buildPieceRows([
+      c({ slug: "planning", name: "Planificación", order: 1, hasContent: true }),
+      copia("a", "planning", { titulo: "Marketing", order: 0 }),
+      copia("b", "planning", { titulo: "WhatsApp", order: 2, terminadoEn: "2026-10-29T10:00:00.000Z" }),
+      c({ slug: "kickoff", name: "Kickoff" }),
+    ]);
+    const i = slugs(rows).indexOf("copia:a");
+    expect(slugs(rows).slice(i, i + 3)).toEqual(["copia:a", "planning", "copia:b"]);
+    expect(rows.find((r) => r.slug === "copia:a")).toMatchObject({ label: "Marketing", esCopia: true, tipo: "planning", agent: null, canvasId: "a" });
+    expect(rows.find((r) => r.slug === "copia:b")?.terminado).toBe(true);
+  });
+
+  it("una copia sin el documento de siempre: la fila «por activar» del tipo va primero y la copia al lado", () => {
+    const rows = buildPieceRows([copia("a", "diagnosis", { titulo: "Diagnóstico de marketing" })]);
+    const i = slugs(rows).indexOf("diagnosis");
+    expect(slugs(rows)[i + 1]).toBe("copia:a");
+    expect(de(rows, "diagnosis").state).toBe("por_activar");
+  });
+
+  it("los tipos nuevos (sin fila en el flujo) van después del flujo y antes de los sueltos del CSE", () => {
+    const rows = buildPieceRows([
+      copia("i", "integration", { titulo: "Integración con el ERP" }),
+      copia("p", "adoption-plan", { titulo: "Adopción de ventas" }),
+      c({ slug: null, id: "suelto", name: "Notas sueltas" }),
+    ]);
+    expect(slugs(rows).slice(-3)).toEqual(["copia:p", "copia:i", "custom:suelto"]);
+  });
+
+  it("una copia llamada como su pieza no se confunde con el de siempre", () => {
+    const rows = buildPieceRows([copia("a", "planning", { name: "Planificación · copia", titulo: "Planificación" })]);
+    expect(de(rows, "planning").canvasId).toBeNull();
+    expect(rows.find((r) => r.slug === "copia:a")?.label).toBe("Planificación");
+  });
+
+  it("el widget no cuenta las copias", () => {
+    const rows = buildPieceRows([copia("a", "planning")], { incluirCopias: false, incluirCustom: false });
+    expect(slugs(rows)).not.toContain("copia:a");
+  });
+});
