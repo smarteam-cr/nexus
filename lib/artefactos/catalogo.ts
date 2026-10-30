@@ -1,14 +1,14 @@
 /**
  * lib/artefactos/catalogo.ts — EL CATÁLOGO DE SECCIONES DE CADA TIPO (etapa V2 de docs/artefactos-plan.md). Server-safe
- * (importa las defs del motor; la pantalla no lo carga: le alcanza con ./tipos.ts).
+ * (importa las defs del motor; las secciones de cada plantilla las muestra «Nuevo artefacto»).
  *
  * Sale del código, no se escribe dos veces: el catálogo de un tipo es la lista de sus defs en el orden del canon de su
  * canvas (lib/canvas/canvas-defs.ts) — la unión de las secciones de sus plantillas —, y cada plantilla es un subconjunto
  * de ese catálogo. Las secciones `ctxDriven` (el cronograma del kickoff, la estimación del requerimiento) leen el
  * proyecto: una COPIA no las lleva, salvo la portada y el cierre, que son la identidad del documento.
  *
- * Los tipos nuevos (el plan de adopción y la integración técnica) tienen su template en el motor
- * (components/landing/configs/adopcion.defs.ts, integracion.defs.ts) y sus plantillas en ./tipos.ts.
+ * Los tipos nuevos (el plan de adopción y la hoja de ruta) y el requerimiento técnico tienen su template en el motor
+ * (components/landing/configs/) y sus plantillas en ./tipos.ts.
  *
  * Congelado por ./tipos.test.ts: cambiar el catálogo de un tipo es decisión de producto, como lib/landing/registry.test.ts.
  */
@@ -17,32 +17,34 @@ import type { BcTemplateDef } from "@/components/landing/configs/templates.defs"
 import { canvasDefForSlug, type CanvasDefinition, type CanvasSectionDef } from "@/lib/canvas/canvas-defs";
 import { KICKOFF_DEF_BY_KEY, KICKOFF_HANDOFF_KEYS } from "@/components/landing/configs/kickoff.defs";
 import { DIAGNOSTICO_DEF_BY_KEY, DIAGNOSTICO_HANDOFF_KEYS } from "@/components/landing/configs/diagnostico.defs";
-import { PLANIFICACION_DEF_BY_KEY, PLANIFICACION_HANDOFF_KEYS } from "@/components/landing/configs/planificacion.defs";
+import { PLANIFICACION_HANDOFF_KEYS } from "@/components/landing/configs/planificacion.defs";
 import { EXPLORACION_DEF_BY_KEY, EXPLORACION_HANDOFF_KEYS, EXPLORACION_TEMPLATE } from "@/components/landing/configs/exploracion.defs";
-import { DESARROLLO_DEF_BY_KEY, DESARROLLO_HANDOFF_KEYS } from "@/components/landing/configs/desarrollo.defs";
-import { ENTREGA_DEF_BY_KEY, ENTREGA_HANDOFF_KEYS } from "@/components/landing/configs/entrega.defs";
+import { DESARROLLO_HANDOFF_KEYS } from "@/components/landing/configs/desarrollo.defs";
+import { ENTREGA_HANDOFF_KEYS } from "@/components/landing/configs/entrega.defs";
+import { ENTREGA_DEF_BY_KEY_CON_ADICIONALES, PLANIFICACION_DEF_BY_KEY_CON_ADICIONALES } from "@/components/landing/configs/plantillas-adicionales.defs";
+import { HOJA_DE_RUTA_HANDOFF_KEYS, HOJA_DE_RUTA_TEMPLATE } from "@/components/landing/configs/hoja-de-ruta.defs";
 import { IMPLEMENTACION_DEF_BY_KEY, IMPLEMENTACION_TEMPLATE } from "@/components/landing/configs/implementacion.defs";
 import { ADOPCION_HANDOFF_KEYS, ADOPCION_TEMPLATE } from "@/components/landing/configs/adopcion.defs";
-import { INTEGRACION_HANDOFF_KEYS, INTEGRACION_TEMPLATE } from "@/components/landing/configs/integracion.defs";
+import { INTEGRACION_TEMPLATE } from "@/components/landing/configs/integracion.defs";
 import { entregableDe } from "@/lib/entregables/registro";
 import { templateDeLaPlantilla } from "@/lib/entregables/plantillas";
-import { plantillaDelTipo, plantillasDelTipo, tipoDeArtefacto, TIPO_INTEGRACION_TECNICA, TIPO_PLAN_DE_ADOPCION } from "./tipos";
+import { plantillaDelTipo, plantillasDelTipo, tipoDeArtefacto, TIPO_HOJA_DE_RUTA, TIPO_REQUERIMIENTO_TECNICO, TIPO_PLAN_DE_ADOPCION } from "./tipos";
 
 /** Los tipos que ya existían: sus defs por key (el canon y el orden salen de su canvas). */
 const DEFS_POR_KEY_DE_LOS_DE_SIEMPRE: Readonly<Record<string, Record<string, BCSectionDef>>> = {
   kickoff: KICKOFF_DEF_BY_KEY,
   diagnosis: DIAGNOSTICO_DEF_BY_KEY,
-  planning: PLANIFICACION_DEF_BY_KEY,
+  planning: PLANIFICACION_DEF_BY_KEY_CON_ADICIONALES,
   exploration: EXPLORACION_DEF_BY_KEY,
-  "tech-requirements": DESARROLLO_DEF_BY_KEY,
-  delivery: ENTREGA_DEF_BY_KEY,
+  delivery: ENTREGA_DEF_BY_KEY_CON_ADICIONALES,
   implementation: IMPLEMENTACION_DEF_BY_KEY,
 };
 
-/** Los tipos nuevos: su template ES su canon. */
+/** Los tipos nuevos y el requerimiento técnico, que junta dos documentos: su template ES su canon. */
 const TEMPLATE_DE_LOS_NUEVOS: Readonly<Record<string, BcTemplateDef>> = {
   [TIPO_PLAN_DE_ADOPCION]: ADOPCION_TEMPLATE,
-  [TIPO_INTEGRACION_TECNICA]: INTEGRACION_TEMPLATE,
+  [TIPO_HOJA_DE_RUTA]: HOJA_DE_RUTA_TEMPLATE,
+  [TIPO_REQUERIMIENTO_TECNICO]: INTEGRACION_TEMPLATE,
 };
 
 /** Los tipos que no son entregables y tienen un solo template (no pasan por lib/entregables/plantillas.ts). */
@@ -56,10 +58,10 @@ const HANDOFF_KEYS: Readonly<Record<string, readonly string[]>> = {
   diagnosis: DIAGNOSTICO_HANDOFF_KEYS,
   planning: PLANIFICACION_HANDOFF_KEYS,
   exploration: EXPLORACION_HANDOFF_KEYS,
-  "tech-requirements": DESARROLLO_HANDOFF_KEYS,
+  [TIPO_REQUERIMIENTO_TECNICO]: DESARROLLO_HANDOFF_KEYS,
   delivery: ENTREGA_HANDOFF_KEYS,
   [TIPO_PLAN_DE_ADOPCION]: ADOPCION_HANDOFF_KEYS,
-  [TIPO_INTEGRACION_TECNICA]: INTEGRACION_HANDOFF_KEYS,
+  [TIPO_HOJA_DE_RUTA]: HOJA_DE_RUTA_HANDOFF_KEYS,
 };
 
 /**
@@ -84,6 +86,9 @@ export function defsDelTipo(tipo: string): readonly BCSectionDef[] | null {
       orden.splice(antes ? orden.indexOf(antes) + 1 : 0, 0, k);
     }
   }
+  // Las secciones que suma una plantilla viven después del cierre en las defs: el cierre sigue cerrando.
+  const cierre = tipoDeArtefacto(tipo)?.estructurales[1];
+  if (cierre && orden.includes(cierre)) orden.push(...orden.splice(orden.indexOf(cierre), 1));
   return orden.map((k) => porKey[k]).filter((d): d is BCSectionDef => !!d);
 }
 
@@ -126,6 +131,8 @@ export function templateDelTipo(tipo: string, plantillaId?: string | null): BcTe
   if (!nuevo && !unico && !entregableDe(tipo)) throw new Error(`${t.nombre} no se genera con un template del motor.`);
   const plantilla = plantillaDelTipo(tipo, plantillaId);
   if (plantillaId && !plantilla) throw new Error(`${t.nombre} no tiene la plantilla «${plantillaId}».`);
+  /* La plantilla de siempre de un entregable manda EXACTAMENTE su template, también si el tipo tiene un canon más ancho. */
+  if (plantilla && entregableDe(tipo)?.plantillas.some((p) => p.id === plantilla.id)) return templateDeLaPlantilla(plantilla.id);
   if (nuevo) {
     if (!plantilla) return nuevo;
     if (!plantilla.secciones) return { ...nuevo, id: `${nuevo.id}:${plantilla.id}` };
@@ -148,7 +155,10 @@ export function seccionesDeUnaCopia(tipo: string, plantillaId?: string | null): 
   if (plantillaId && !plantilla) throw new Error(`${tipoDeArtefacto(tipo)?.nombre ?? tipo} no tiene la plantilla «${plantillaId}».`);
   const de = plantilla?.secciones ? new Set<string>(plantilla.secciones) : null;
   const estructurales = new Set<string>(tipoDeArtefacto(tipo)?.estructurales ?? []);
-  return defs.filter((d) => (!de || de.has(d.key)) && (d.ctxDriven !== true || estructurales.has(d.key)));
+  const secciones = defs.filter((d) => (!de || de.has(d.key)) && (d.ctxDriven !== true || estructurales.has(d.key)));
+  if (!plantilla?.ordenPropio || !plantilla.secciones) return secciones;
+  const lugar = (key: string) => plantilla.secciones!.indexOf(key);
+  return [...secciones].sort((a, b) => lugar(a.key) - lugar(b.key));
 }
 
 /**

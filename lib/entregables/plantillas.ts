@@ -12,6 +12,12 @@ import { DIAGNOSTICO_ESENCIAL_TEMPLATE, DIAGNOSTICO_TEMPLATE } from "@/component
 import { PLANIFICACION_ESENCIAL_TEMPLATE, PLANIFICACION_TEMPLATE } from "@/components/landing/configs/planificacion.defs";
 import { DESARROLLO_TEMPLATE } from "@/components/landing/configs/desarrollo.defs";
 import { ENTREGA_TEMPLATE } from "@/components/landing/configs/entrega.defs";
+import {
+  INFORME_DE_AVANCE_TEMPLATE,
+  PLANIFICACION_CAMPANA_TEMPLATE,
+  PLANIFICACION_MARKETING_TEMPLATE,
+  PLANIFICACION_WHATSAPP_TEMPLATE,
+} from "@/components/landing/configs/plantillas-adicionales.defs";
 
 /** id de la plantilla → su template. */
 export const TEMPLATE_DE_LA_PLANTILLA: Readonly<Record<string, BcTemplateDef>> = {
@@ -23,6 +29,11 @@ export const TEMPLATE_DE_LA_PLANTILLA: Readonly<Record<string, BcTemplateDef>> =
   "planificacion-esencial": PLANIFICACION_ESENCIAL_TEMPLATE,
   integraciones: DESARROLLO_TEMPLATE,
   entrega: ENTREGA_TEMPLATE,
+  // Las que suman las copias (lib/artefactos/tipos.ts): el selector del documento de siempre no las ofrece.
+  "planificacion-campana": PLANIFICACION_CAMPANA_TEMPLATE,
+  "planificacion-marketing": PLANIFICACION_MARKETING_TEMPLATE,
+  "planificacion-whatsapp": PLANIFICACION_WHATSAPP_TEMPLATE,
+  "informe-de-avance": INFORME_DE_AVANCE_TEMPLATE,
 };
 
 export function templateDeLaPlantilla(id: string): BcTemplateDef {

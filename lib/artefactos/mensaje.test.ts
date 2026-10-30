@@ -5,7 +5,7 @@ import { tipoDeArtefacto, tiposCreablesEnElProyecto } from "./tipos";
 const base = (over: Partial<PartesDelMensaje> = {}): PartesDelMensaje => ({
   pedido: "",
   instruccionesDeLaCopia: "",
-  tipo: tipoDeArtefacto("integration")!,
+  tipo: tipoDeArtefacto("tech-requirements")!,
   nombreDeLaCopia: "Integración con el ERP",
   empresa: "CEMACO",
   industria: "Retail",
@@ -26,7 +26,7 @@ const base = (over: Partial<PartesDelMensaje> = {}): PartesDelMensaje => ({
 describe("el mensaje con que se genera una copia", () => {
   it("dice qué documento es y su nombre, y lleva el handoff como fuente ancla", () => {
     const m = mensajeDeLaCopia(base());
-    expect(m).toContain("Integración técnica «Integración con el ERP»");
+    expect(m).toContain("Requerimiento técnico «Integración con el ERP»");
     expect(m).toContain("=== HANDOFF DEL PROYECTO");
     expect(m).toContain("Integrar Intelisis.");
   });

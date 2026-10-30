@@ -15,6 +15,34 @@
 > plantillas; **todavía no está commiteado**) y `docs/empresas-con-dominio-compartido-plan.md` (la pared entre
 > proyectos de una misma ficha; rama `claude/dominio-compartido-plan-c58271`).
 
+## El catálogo, decidido el 30 oct (Elías probó los artefactos)
+
+**Pocos artefactos; lo que cambia es la plantilla**: una liviana para avanzar rápido y otra más detallada según el cliente.
+Una plantilla suma o quita secciones, y lo ideal es no repetir secciones entre artefactos. Sin aprobaciones. Cada artefacto
+es web, se comparte y se edita con «Mejorar con IA» (ese es el chat). Manda sobre lo que diga más abajo este plan.
+
+| Artefacto | Plantillas | Notas |
+|---|---|---|
+| Exploración | Exploración | «Mejorar con IA» sin la sección de las sesiones: sus marcas de «ya la pregunté» viven anidadas |
+| Diagnóstico | Diagnóstico estratégico (la de hoy), Diagnóstico esencial | Sin cambios de fondo |
+| Propuesta | La de la preventa | Vive en su módulo; no se crea desde «Nuevo artefacto» |
+| Kickoff | Kickoff, Servicio recurrente | |
+| Planificación | HubSpot completa, Implementación esencial, Campaña de marketing, Cómo debería funcionar el marketing, WhatsApp y agente | La que más plantillas tiene. La campaña NO es un tipo propio. Consenso de proceso (`definicion_procesos`), diccionario (`propiedades`), usuarios (`usuarios_permisos`), cotizaciones (`cotizaciones`) y paneles (`informes`) son secciones que ya existen |
+| Cronograma | El de siempre | Uno por proyecto |
+| Requerimiento técnico | Integraciones, Mapa de integración, Integración completa | Une «Integraciones» e «Integración técnica». Guion de pruebas y migración de datos son secciones suyas; el mapa de procesos llega en la arquitectura |
+| Plan de adopción | Equipo comercial, Organización por niveles, Componente técnico, Capacitación y pilotos | Absorbe la capacitación: introducción, estructura del equipo, plan por equipo, entrenamientos y pilotos |
+| Hoja de ruta | Esencial, Con backlog y decisiones | Tipo nuevo |
+| Entrega | Entrega, Informe de avance | El informe de avance es una copia y se comparte; la entrega de siempre, no (guarda en su Json lo que el cliente no ve) y no se duplica |
+
+La escala NO es un artefacto (otra sesión se ocupa de ella): puede ir como sección. Ejecución y handoff siguen como piezas.
+
+Las plantillas que se suman a un tipo que ya existía viven en `lib/artefactos/tipos.ts` y sus secciones en
+`components/landing/configs/plantillas-adicionales.defs.ts`: el canon del documento de siempre no cambia, así que ningún
+documento existente gana una sección y su selector de plantilla sigue igual. Solo las toma una copia nueva.
+
+**Quedó fuera de esta tanda:** que Nexus sugiera qué artefacto usar leyendo propuesta, handoff y kickoff, sin crear nada solo
+(sigue en la etapa 7).
+
 ## En una frase
 
 Un **artefacto** es una copia de un **tipo** de documento (planificación, diagnóstico, kickoff, adopción…), armada con
@@ -391,7 +419,13 @@ Cada etapa se puede desplegar sola y se puede volver atrás sin tocar datos de c
   `UPDATE` de `disabledAt` sobre las filas con `tipoArtefacto`, y sus enlaces se revocan. Las columnas se quedan: son
   aditivas.
 
-### Etapa 3b · Las reuniones y notas elegidas de cada copia (siguiente tanda)
+### Etapa 3b · El contexto de cada copia — construida el 2026-10-30
+
+Va en la barra del documento, «Contexto adicional», y es de cada copia (`lib/artefactos/contexto-de-la-copia.ts`): las
+reuniones elegidas en la entry `__contexto` (se leen enteras, pasan por el chokepoint), las notas, transcripciones y archivos
+en `NotaDeContexto` con la pieza `copia-<canvasId>`, y las instrucciones en `__doc`. Sin DDL. El documento de siempre abre su
+contexto de siempre en la misma ventana. Lo que sigue abajo fue el plan de esta etapa.
+
 
 - **Qué**: `ReunionDelDocumento` y `NotaDeContexto.canvasId` (2.4); el «Contexto adicional» en el editor de una copia.
   Hasta entonces las copias de un tipo comparten las reuniones y notas elegidas de su tipo.

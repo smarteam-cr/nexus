@@ -8,7 +8,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { seccionesQueSalenPorElEnlace, tipoCompartible, SECCIONES_INTERNAS } from "./secciones-del-enlace";
 import { rutaDelEnlace } from "./enlaces";
-import { TIPOS, TIPO_INTEGRACION_TECNICA, TIPO_PLAN_DE_ADOPCION, admiteCopias } from "./tipos";
+import { TIPOS, TIPO_REQUERIMIENTO_TECNICO, TIPO_PLAN_DE_ADOPCION, admiteCopias, TIPO_HOJA_DE_RUTA, tipoDeArtefacto } from "./tipos";
 import { printDocType } from "@/lib/print/doc-types";
 import { motivoDeLaCopia } from "@/lib/invariantes/artefactos";
 
@@ -18,7 +18,7 @@ describe("qué tipos se comparten por su enlace propio", () => {
     expect(tipoCompartible("diagnosis")).toBe(true);
     expect(tipoCompartible("kickoff")).toBe(true);
     expect(tipoCompartible(TIPO_PLAN_DE_ADOPCION)).toBe(true);
-    expect(tipoCompartible(TIPO_INTEGRACION_TECNICA)).toBe(true);
+    expect(tipoCompartible(TIPO_REQUERIMIENTO_TECNICO)).toBe(true);
     // La exploración y la ejecución son internas: no tienen botón de compartir.
     expect(tipoCompartible("exploration")).toBe(false);
     expect(tipoCompartible("implementation")).toBe(false);
@@ -34,10 +34,10 @@ describe("qué tipos se comparten por su enlace propio", () => {
 });
 
 describe("qué secciones salen por el enlace", () => {
-  it("la estimación del equipo técnico nunca sale, ni en Integraciones ni en la integración técnica", () => {
-    expect(SECCIONES_INTERNAS["integration"]).toContain("estimacion");
-    expect(seccionesQueSalenPorElEnlace(TIPO_INTEGRACION_TECNICA)("estimacion")).toBe(false);
-    expect(seccionesQueSalenPorElEnlace(TIPO_INTEGRACION_TECNICA)("arquitectura")).toBe(true);
+  it("la estimación del equipo técnico nunca sale del requerimiento técnico", () => {
+    expect(SECCIONES_INTERNAS["tech-requirements"]).toContain("estimacion");
+    expect(seccionesQueSalenPorElEnlace(TIPO_REQUERIMIENTO_TECNICO)("estimacion")).toBe(false);
+    expect(seccionesQueSalenPorElEnlace(TIPO_REQUERIMIENTO_TECNICO)("arquitectura")).toBe(true);
   });
 
   it("lo que lee el proyecto no sale; la portada y el cierre sí, aunque pinten con su contexto", () => {
@@ -58,14 +58,16 @@ describe("qué secciones salen por el enlace", () => {
 });
 
 describe("el PDF y el enlace de un artefacto", () => {
-  it("la entrega y el requerimiento técnico no se comparten por este enlace: siguen con su superficie", () => {
-    expect(tipoCompartible("delivery")).toBe(false);
-    expect(tipoCompartible("tech-requirements")).toBe(false);
+  it("una copia de la entrega se comparte, sin lo que calcula el documento de cierre; la entrega de siempre sigue con su superficie", () => {
+    expect(tipoCompartible("delivery")).toBe(true);
+    expect(tipoDeArtefacto("delivery")?.sinEnlaceElDeSiempre).toBe(true);
+    expect(seccionesQueSalenPorElEnlace("delivery")("impacto")).toBe(false);
+    expect(seccionesQueSalenPorElEnlace("delivery")("avance_por_frente")).toBe(true);
     expect(rutaDelEnlace({ projectId: "p1", canvasId: "c1" })).toBe("/api/projects/p1/artefactos/c1/enlace");
   });
 
   it("los tipos nuevos imprimen: tienen tipo de impresión y no son una pieza", () => {
-    for (const id of [TIPO_PLAN_DE_ADOPCION, TIPO_INTEGRACION_TECNICA]) {
+    for (const id of [TIPO_PLAN_DE_ADOPCION, TIPO_HOJA_DE_RUTA, "integration"]) {
       expect(printDocType(id)).toMatchObject({ id, scope: "project-piece", pieceSlug: null, palette: "brand" });
     }
   });
@@ -75,7 +77,7 @@ describe("el PDF y el enlace de un artefacto", () => {
     const bloque = /const ADAPTADORES[\s\S]*?\n};/.exec(src)?.[0] ?? "";
     const claves = new Set([...bloque.matchAll(/^  (?:"([a-z-]+)"|([a-z]+)|\[(TIPO_[A-Z_]+)\]):/gm)].map((m) => m[1] ?? m[2] ?? m[3]));
     const esperadas = TIPOS.filter((t) => tipoCompartible(t.id) || t.id === "exploration").map((t) =>
-      t.id === TIPO_PLAN_DE_ADOPCION ? "TIPO_PLAN_DE_ADOPCION" : t.id === TIPO_INTEGRACION_TECNICA ? "TIPO_INTEGRACION_TECNICA" : t.id,
+      t.id === TIPO_PLAN_DE_ADOPCION ? "TIPO_PLAN_DE_ADOPCION" : t.id === TIPO_REQUERIMIENTO_TECNICO ? "TIPO_REQUERIMIENTO_TECNICO" : t.id === TIPO_HOJA_DE_RUTA ? "TIPO_HOJA_DE_RUTA" : t.id,
     );
     expect([...claves].sort()).toEqual(esperadas.sort());
   });

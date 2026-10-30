@@ -115,13 +115,14 @@ describe("los tipos nuevos de artefacto con assist (etapa V6 adelantada, docs/ar
       if (doc.agentId !== null) rotos.push(`${tipo}: un tipo nuevo no tiene fila en Agent (su corrida va con agentSlug)`);
     }
     expect(rotos).toEqual([]);
-    expect(Object.keys(DOC_DE_LOS_TIPOS_NUEVOS).sort()).toEqual(["adoption-plan", "integration"]);
+    expect(Object.keys(DOC_DE_LOS_TIPOS_NUEVOS).sort()).toEqual(["adoption-plan", "exploration", "roadmap"]);
   });
 
-  it("una copia se mejora con el documento de su tipo, y la exploración sigue fuera", async () => {
+  it("una copia se mejora con el documento de su tipo, y la exploración entra sin la sección de sus marcas", async () => {
     const { docConAssist, DOC: doc } = await import("./assist-de-documento");
     expect(docConAssist("planning")).toBe(doc.planning);
-    expect(docConAssist("exploration")).toBeNull();
+    expect(Object.keys(docConAssist("exploration")!.defs)).not.toContain("sesiones");
+    expect(docConAssist("exploration")!.tpl.sections.map((s) => s.key)).not.toContain("sesiones");
     expect(docConAssist(null)).toBeNull();
   });
 });

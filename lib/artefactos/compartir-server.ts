@@ -18,6 +18,7 @@ import { randomBytes } from "node:crypto";
 import { prisma } from "@/lib/db/prisma";
 import { enlaceDelDocumento } from "@/lib/clients/documentos-de-la-empresa-compartir";
 import { tipoDelDocumento } from "./copias";
+import { tipoDeArtefacto } from "./tipos";
 import { tipoCompartible } from "./secciones-del-enlace";
 
 export interface EstadoDelEnlace {
@@ -61,6 +62,7 @@ async function documentoCompartible(o: { projectId: string; clientId: string; ca
   if (!c) throw new ErrorDelEnlace(404, "Documento no encontrado.");
   if (c.project?.esPrueba) throw new ErrorDelEnlace(409, "Un proyecto de prueba no se comparte con el cliente.");
   if (c.disabledAt) throw new ErrorDelEnlace(409, "Este documento está archivado: no se comparte.");
+  if (c.slug && tipoDeArtefacto(c.slug)?.sinEnlaceElDeSiempre) throw new ErrorDelEnlace(400, "Este documento se comparte con el acceso del proyecto.");
   if (!tipoCompartible(tipoDelDocumento(c))) throw new ErrorDelEnlace(400, "Este documento es interno: no se comparte con el cliente.");
   return c;
 }

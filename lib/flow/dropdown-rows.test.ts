@@ -136,7 +136,7 @@ describe("las COPIAS de un tipo (etapa V3, docs/artefactos-plan.md)", () => {
 
   it("los tipos nuevos (sin fila en el flujo) van después del flujo y antes de los sueltos del CSE", () => {
     const rows = buildPieceRows([
-      copia("i", "integration", { titulo: "Integración con el ERP" }),
+      copia("i", "roadmap", { titulo: "Hoja de ruta 2027" }),
       copia("p", "adoption-plan", { titulo: "Adopción de ventas" }),
       c({ slug: null, id: "suelto", name: "Notas sueltas" }),
     ]);

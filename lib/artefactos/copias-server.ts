@@ -185,6 +185,8 @@ async function duplicar(o: {
     },
   });
   if (!fuente) throw new ErrorDelArtefacto(404, "El documento que quieres duplicar no es de este proyecto.");
+  // La entrega guarda en su Json lo que el cliente no ve, y una copia se puede compartir.
+  if (fuente.slug && tipoDeArtefacto(o.tipo)?.sinEnlaceElDeSiempre) throw new ErrorDelArtefacto(400, "Este documento no se duplica: crea uno en blanco.");
   if (tipoDelDocumento(fuente) !== o.tipo) throw new ErrorDelArtefacto(400, "Solo se duplica un documento del mismo tipo.");
 
   // Todo lo del tipo, de cualquier plantilla (duplicar no recorta), y las que creó una persona.

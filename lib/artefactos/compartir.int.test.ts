@@ -112,13 +112,13 @@ describe("el enlace propio de un documento del proyecto", () => {
   it("lo que lee el proyecto y la estimación del equipo técnico no salen; un documento interno no se comparte", async () => {
     const { clientId, projectId } = await proyecto("Cemaco V4");
     const integracion = await documento(projectId, {
-      tipoArtefacto: "integration",
+      tipoArtefacto: "tech-requirements",
       name: "Integración con el ERP",
       secciones: [{ key: "mapa_integracion" }, { key: "estimacion", texto: "40 horas internas" }, { key: "cierre" }],
     });
     const enlace = await compartirArtefacto({ projectId, clientId, canvasId: integracion, porEmail: null });
     const vista = await artefactoParaElToken(tokenDe(enlace.enlace));
-    expect(vista?.tipo).toBe("integration");
+    expect(vista?.tipo).toBe("tech-requirements");
     expect(vista?.rows.map((r) => r.key)).toEqual(["mapa_integracion", "cierre"]);
     expect(JSON.stringify(vista?.rows)).not.toContain("40 horas");
 

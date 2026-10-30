@@ -1,3 +1,5 @@
+import { copiaDelProyecto } from "@/lib/artefactos/contexto-server";
+import type { SeccionConContexto } from "@/lib/contexto/documento";
 import { NextRequest, NextResponse } from "next/server";
 import { guardAccessToProject, guardContextoDelDocumento, guardTimelineEdit } from "@/lib/auth/api-guards";
 import { documentoConContexto } from "@/lib/contexto/documento";
@@ -37,6 +39,12 @@ type Params = Promise<{ projectId: string }>;
 // El mismo tope que la caja de la pantalla (su `maxLength` y su contador): una sola constante.
 const CAP = TOPE_INSTRUCCIONES_DEL_DOC;
 
+/** Una copia guarda sus propias instrucciones (etapa V3b): se pide por su id. */
+async function copiaDe(projectId: string, canvasId: string) {
+  const c = await copiaDelProyecto(projectId, canvasId);
+  return c ? { id: c.id, sections: c.sections, seccion: c.tipo.permiso as SeccionConContexto } : null;
+}
+
 async function canvasDe(projectId: string, slug: string) {
   return prisma.projectCanvas.findFirst({
     where: { projectId, ...canvasOf(slug) },
@@ -49,7 +57,13 @@ export async function GET(req: NextRequest, { params }: { params: Params }) {
   const guard = await guardAccessToProject(projectId);
   if (guard instanceof NextResponse) return guard;
 
-  const slug = new URL(req.url).searchParams.get("slug") ?? "";
+  const q = new URL(req.url).searchParams;
+  const canvasId = q.get("canvasId");
+  if (canvasId) {
+    const copia = await copiaDe(projectId, canvasId);
+    return copia ? NextResponse.json({ brief: docBriefFrom(copia.sections) }) : NextResponse.json({ error: "canvas_not_found" }, { status: 404 });
+  }
+  const slug = q.get("slug") ?? "";
   if (!pieceBySlug(slug)) return NextResponse.json({ error: "unknown_slug" }, { status: 400 });
 
   const canvas = await canvasDe(projectId, slug);
@@ -58,9 +72,11 @@ export async function GET(req: NextRequest, { params }: { params: Params }) {
 
 export async function PATCH(req: NextRequest, { params }: { params: Params }) {
   const { projectId } = await params;
-  const body = (await req.json().catch(() => ({}))) as { slug?: string; brief?: string | null };
+  const body = (await req.json().catch(() => ({}))) as { slug?: string; canvasId?: string; brief?: string | null };
+  const copia = typeof body.canvasId === "string" ? await copiaDe(projectId, body.canvasId) : null;
+  if (typeof body.canvasId === "string" && !copia) return NextResponse.json({ error: "canvas_not_found" }, { status: 404 });
   const slug = body.slug ?? "";
-  if (!pieceBySlug(slug)) return NextResponse.json({ error: "unknown_slug" }, { status: 400 });
+  if (!copia && !pieceBySlug(slug)) return NextResponse.json({ error: "unknown_slug" }, { status: 400 });
 
   /* ⚠ Escribir reglas duras del prompt pide la celda del documento (auditoría 2026-08-08: un
      endpoint gateado solo por acceso dejaba que un rol de solo-lectura las escribiera por curl). El
@@ -68,8 +84,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Params }) {
      documentos con contexto, con la de generarlos. Leer (GET) sigue siendo por acceso — mirar
      instrucciones no edita nada. */
   const doc = documentoConContexto(slug);
-  const guard =
-    slug === "timeline"
+  const guard = copia
+    ? await guardContextoDelDocumento(projectId, copia.seccion)
+    : slug === "timeline"
       ? await guardTimelineEdit(projectId)
       : slug === "handoff"
         ? await guardContextoDelDocumento(projectId, "handoff")
@@ -82,7 +99,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Params }) {
   }
   const brief = body.brief?.trim().slice(0, CAP) || null;
 
-  const canvas = await canvasDe(projectId, slug);
+  const canvas = copia ?? (await canvasDe(projectId, slug));
   if (!canvas) return NextResponse.json({ error: "canvas_not_found" }, { status: 404 });
 
   // `withBriefUpdated` guarda el valor anterior en previousBrief (deshacer de 1 nivel) y

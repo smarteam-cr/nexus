@@ -12617,6 +12617,28 @@ con el diff viejo solo como referencia, después de confirmar con búsqueda que 
 
 ## Artefactos: varias copias sin una oficial, cada una con su enlace (2026-10-29, V2 a V4 y los dos primeros tipos de V6)
 
+**El catálogo del 30 oct** (Elías probó los artefactos; la tabla vive en `docs/artefactos-plan.md`):
+
+- **Pocos artefactos, muchas plantillas.** «Integraciones» e «Integración técnica» son un solo Requerimiento técnico: el id
+  `integration` desaparece y el SQL `2026-10-30-artefactos-requerimiento-tecnico.sql` pasa las copias que existan. La campaña
+  no es un tipo: es una plantilla de la Planificación. El plan de adopción absorbe la capacitación. La escala salió de los tipos.
+- **Las plantillas que se suman a un tipo viejo son de las copias.** Viven en `lib/artefactos/tipos.ts`, no en
+  `lib/entregables/registro.ts`. *Por qué:* sumarlas al canon haría que la reconciliación le agregara secciones a todos los
+  documentos que ya existen.
+- **El contexto adicional es por artefacto** y va en la barra: las reuniones elegidas de una copia viven en su Json
+  (`__contexto`), sin columnas nuevas en `SessionProject`, y se cruzan con el chokepoint al leer. *Por qué:* las columnas son una
+  por tipo; una copia es una fila más, y agregar una columna por copia no existe.
+- **Ocultar y colapsar son dos controles, en todo el motor.** Antes ocultar encogía la sección. Ahora el control dice
+  «Ocultar» o «Mostrar», decide si la ve el cliente y no toca el tamaño; colapsar es de cada sección, solo para quien edita.
+- **El acceso general va solo en el Resumen;** cada documento trae su «Acceso» en la barra, con punto verde si está compartido
+  y gris si no. Los enlaces y las superficies ya publicadas no cambian: solo se mueve el botón.
+- **Borrar una sección de una copia se puede, menos la portada y el cierre,** y queda anotado en `__quitadas` para que
+  regenerar no la devuelva. En el documento de siempre se sigue ocultando: la reconciliación la volvería a crear.
+- **El cargador es el mismo en todo documento** (`components/canvas/VeloDeGeneracion.tsx`, salió del cronograma). En el
+  documento de siempre lo prende el botón de generar, así que una recarga a mitad de corrida no lo muestra.
+- **«Mejorar con IA» en la exploración, sin la sección de las sesiones:** el merge es superficial y borraría las marcas de
+  «ya la pregunté». El resto de sus secciones sí.
+
 Elías respondió las ocho preguntas del plan (`docs/artefactos-plan.md` §5) y donde el plan proponía otra cosa se corrigió
 en su lugar. Lo que queda decidido:
 

@@ -11,11 +11,12 @@
  * Tabla genérica `NotaDeContexto` (por `pieza`), NO `HandoffSource` ni `TimelineSource`: cada una la
  * leen otros agentes sin filtrar, y una nota del diagnóstico se habría colado ahí.
  */
+import { documentoDeLasNotas } from "@/lib/artefactos/contexto-server";
 import { NextRequest, NextResponse } from "next/server";
 import { guardAccessToProject, guardContextoDelDocumento } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
 import { esquemaDesactualizado, modeloDisponible } from "@/lib/db/esquema";
-import { TOPE_NOTAS_DEL_DOCUMENTO, documentoConContexto } from "@/lib/contexto/documento";
+import { TOPE_NOTAS_DEL_DOCUMENTO } from "@/lib/contexto/documento";
 
 const SELECT = { id: true, title: true, content: true, createdByEmail: true, createdAt: true } as const;
 
@@ -34,7 +35,7 @@ const sinContexto = () => NextResponse.json({ error: "Este documento no tiene co
 
 export async function GET(_req: NextRequest, { params }: Params) {
   const { projectId, pieza } = await params;
-  const doc = documentoConContexto(pieza);
+  const doc = await documentoDeLasNotas(projectId, pieza);
   if (!doc) return sinContexto();
   const guard = await guardAccessToProject(projectId);
   if (guard instanceof NextResponse) return guard;
@@ -55,7 +56,7 @@ export async function GET(_req: NextRequest, { params }: Params) {
 
 export async function POST(req: NextRequest, { params }: Params) {
   const { projectId, pieza } = await params;
-  const doc = documentoConContexto(pieza);
+  const doc = await documentoDeLasNotas(projectId, pieza);
   if (!doc) return sinContexto();
   const guard = await guardContextoDelDocumento(projectId, doc.seccion);
   if (guard instanceof NextResponse) return guard;

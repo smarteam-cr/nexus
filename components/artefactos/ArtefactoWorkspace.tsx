@@ -15,10 +15,26 @@ import LandingView, { type LandingSectionData } from "@/components/landing/Landi
 import type { LandingContext } from "@/components/landing/types";
 import { useCanvasSections } from "@/components/canvas/useCanvasSections";
 import DocumentAssist from "@/components/ai/DocumentAssist";
-import { Alert, Button, ConfirmDialog, Input } from "@/components/ui";
+import { Alert, Button, ConfirmDialog } from "@/components/ui";
+import VeloDeGeneracion from "@/components/canvas/VeloDeGeneracion";
 import { useToast } from "@/components/ui/Toast";
 import { adaptadorDelTipo } from "./adaptadores";
 import { tipoDeArtefacto } from "@/lib/artefactos/tipos";
+
+/** La píldora del chrome del motor: el mismo look que «Ocultar» (components/business-cases/SectionTools.tsx). */
+const PILDORA_DE_BORRAR = {
+  display: "inline-flex",
+  alignItems: "center",
+  padding: "4px 9px",
+  borderRadius: 999,
+  cursor: "pointer",
+  fontSize: 11,
+  fontWeight: 600,
+  lineHeight: 1,
+  border: "1px solid rgba(0,0,0,0.12)",
+  background: "rgba(255,255,255,0.92)",
+  color: "#b91c1c",
+} as const;
 
 interface Corrida {
   id: string;
@@ -50,7 +66,7 @@ export default function ArtefactoWorkspace({
   const adaptador = adaptadorDelTipo(tipo);
   const toast = useToast();
   const [corrida, setCorrida] = useState<Corrida | null>(null);
-  const [instrucciones, setInstrucciones] = useState("");
+  const [porBorrar, setPorBorrar] = useState<{ id: string; nombre: string } | null>(null);
   const base = `/api/projects/${projectId}/artefactos/${canvasId}/generar`;
   const vigilando = useRef<ReturnType<typeof setInterval> | null>(null);
   const [confirmando, setConfirmando] = useState(false);
@@ -140,7 +156,7 @@ export default function ArtefactoWorkspace({
     const r = await fetch(base, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ instrucciones: instrucciones.trim() || null }),
+      body: JSON.stringify({}),
     }).catch(() => null);
     const j = (await r?.json().catch(() => null)) as { runId?: string; error?: string } | null;
     if (!r?.ok || !j?.runId) return toast.error(j?.error ?? "No se pudo empezar. Inténtalo de nuevo.");
@@ -174,6 +190,7 @@ export default function ArtefactoWorkspace({
   const conAlgo = cs.sections.some((s) => s.key !== "cierre" && s.blocks.length > 0);
   const generando = corrida?.estado === "RUNNING";
   const portada = config?.sections[0]?.key;
+  const estructurales: readonly string[] = t?.estructurales ?? [];
 
   if (!adaptador || !config) {
     return <Alert variant="danger">Este documento es de un tipo que todavía no se puede abrir acá ({tipo}).</Alert>;
@@ -192,30 +209,22 @@ export default function ArtefactoWorkspace({
   }
 
   return (
-    <div className="space-y-3">
+    <div className="relative space-y-3">
+      {generando && (
+        <VeloDeGeneracion
+          rotulo={`Escribiendo ${t?.conArticulo ?? "el documento"}`}
+          detalle={`${corrida?.fase && corrida.fase !== "Empezando…" ? `${corrida.fase} ` : ""}Puedes seguir en otra parte de Nexus: te avisa al terminar.`}
+        />
+      )}
       <div className="flex flex-wrap items-center gap-2 rounded-lg border border-line bg-surface-muted px-3 py-2 text-xs">
-        {generando ? (
-          <span className="flex-1 text-fg-secondary">{corrida?.fase ?? "Generando…"} Puedes seguir en otra parte de Nexus: te avisa al terminar.</span>
-        ) : (
-          <>
-            <span className="text-fg-secondary">
-              {conDeLaIa
-                ? "Regenerar reescribe las secciones que escribe la IA, también lo que corregiste a mano. Queda una foto de antes en las versiones."
-                : `La IA escribe ${t?.conArticulo ?? "el documento"} con el handoff, las reuniones y los demás documentos del proyecto.`}
-            </span>
-            <Input
-              value={instrucciones}
-              onChange={(e) => setInstrucciones(e.target.value)}
-              maxLength={2000}
-              placeholder="Qué quieres que tenga en cuenta (opcional)"
-              aria-label="Instrucciones para esta generación"
-              className="min-w-[220px] flex-1 text-xs"
-            />
-            <Button size="xs" variant={conDeLaIa ? "secondary" : "primary"} onClick={() => (conContenido || conDeLaIa ? setConfirmando(true) : void generar())}>
-              {conDeLaIa ? "Regenerar con IA" : "Generar con IA"}
-            </Button>
-          </>
-        )}
+        <span className="min-w-0 flex-1 text-fg-secondary">
+          {conDeLaIa
+            ? "Regenerar reescribe las secciones que escribe la IA, también lo que corregiste a mano. Queda una foto de antes en las versiones."
+            : `La IA escribe ${t?.conArticulo ?? "el documento"} con lo vendido, lo que elijas en «Contexto adicional» y los demás documentos del proyecto.`}
+        </span>
+        <Button size="xs" variant={conDeLaIa ? "secondary" : "primary"} disabled={generando} onClick={() => (conContenido || conDeLaIa ? setConfirmando(true) : void generar())}>
+          {conDeLaIa ? "Regenerar con IA" : "Generar con IA"}
+        </Button>
       </div>
       <ConfirmDialog
         open={confirmando}
@@ -234,8 +243,18 @@ export default function ArtefactoWorkspace({
           {cs.error}
         </Alert>
       )}
-      {/* La exploración no tiene «Mejorar con IA»: sus marcas de «ya la pregunté» viven anidadas (lib/canvas/assist-de-documento.ts). */}
-      {conAlgo && !generando && tipo !== "exploration" && (
+      <ConfirmDialog
+        open={!!porBorrar}
+        title={`¿Borrar «${porBorrar?.nombre}»?`}
+        description="Se va de este documento con lo que tenga escrito, y regenerar no la devuelve. Lo escrito queda en las versiones."
+        confirmLabel="Borrar"
+        onCancel={() => setPorBorrar(null)}
+        onConfirm={() => {
+          if (porBorrar) void cs.removeSection(porBorrar.id);
+          setPorBorrar(null);
+        }}
+      />
+      {conAlgo && !generando && (
         <DocumentAssist
           url={`/api/projects/${projectId}/canvas-assist`}
           extraBody={{ canvasId }}
@@ -251,7 +270,7 @@ export default function ArtefactoWorkspace({
           }}
         />
       )}
-      <div className={`stl ${adaptador.palette === "internal" ? "stl-internal" : ""} overflow-hidden rounded-xl border border-line`}>
+      <div inert={generando} className={`stl ${adaptador.palette === "internal" ? "stl-internal" : ""} overflow-hidden rounded-xl border border-line`}>
         <LandingView
           key={nonce}
           config={config}
@@ -260,6 +279,16 @@ export default function ArtefactoWorkspace({
           mode="edit"
           palette={adaptador.palette}
           showBriefs={false}
+          // Borrar, en toda sección menos la portada y el cierre (Elías, 30 oct). Ocultar y mover los pinta el motor.
+          renderOverlay={(key) => {
+            const s = cs.sections.find((x) => x.key === key);
+            if (!s || estructurales.includes(key)) return null;
+            return (
+              <button type="button" style={PILDORA_DE_BORRAR} onClick={() => setPorBorrar({ id: s.id, nombre: s.titleOverride?.trim() || s.label })} title="Borrar esta sección" aria-label="Borrar esta sección">
+                ✕ Borrar
+              </button>
+            );
+          }}
           onSectionChange={(key, data) => {
             const s = cs.sections.find((x) => x.key === key);
             if (!s) return;

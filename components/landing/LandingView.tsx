@@ -151,7 +151,7 @@ function HideToggle({ hidden, label, onToggle }: { hidden: boolean; label: strin
           </>
         )}
       </svg>
-      {hidden ? "Oculto" : "Visible"}
+      {hidden ? "Mostrar" : "Ocultar"}
     </button>
   );
 }
@@ -320,23 +320,18 @@ export default function LandingView({
 
   // Secciones OCULTAS que el CSE desplegó a mano. Efímero (no se persiste): una sección
   // oculta arranca colapsada en cada visita.
-  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [colapsadas, setColapsadas] = useState<Set<string>>(new Set());
   const toggleExpanded = useCallback((key: string) => {
-    setExpanded((prev) => {
+    setColapsadas((prev) => {
       const next = new Set(prev);
       if (next.has(key)) next.delete(key);
       else next.add(key);
       return next;
     });
   }, []);
-  /** Ocultar SIEMPRE colapsa (si no, la sección quedaría abierta y "oculta" a la vez). */
-  const setHidden = useCallback(
-    (key: string, hide: boolean) => {
-      if (hide) setExpanded((prev) => (prev.has(key) ? new Set([...prev].filter((k) => k !== key)) : prev));
-      onToggleHidden?.(key, hide);
-    },
-    [onToggleHidden],
-  );
+  /* Elías, 30 oct: ocultar y colapsar son dos controles. Ocultar decide si la ve el cliente y NO encoge la sección;
+     colapsar la encoge en el editor, solo para quien edita, y vale para toda sección. */
+  const setHidden = useCallback((key: string, hide: boolean) => onToggleHidden?.(key, hide), [onToggleHidden]);
 
   // Sensor con umbral: un clic normal (editar texto inline) no inicia drag.
   // + teclado en el handle (Enter/Space levanta, flechas mueven) — accesibilidad.
@@ -385,12 +380,8 @@ export default function LandingView({
     const avisoDeVacia = editable ? avisoDeLaSeccion(raw, estaVacia) : null;
     const alCambiar = editable ? (d: unknown) => onSectionChange?.(def.key, alEditar(d, vaciaDe)) : undefined;
     const isHero = !!def.backdrop;
-    // Una sección OCULTA se colapsa a su título: el CSE la sigue viendo en su lugar (puede
-    // arrastrarla y volver a mostrarla) sin que le coma la pantalla. El caret la despliega.
-    /* Las SOLO INTERNAS (el Brief traído a la Planificación, 2026-10-29) son ocultas para el cliente, pero son para que el
-       equipo las lea: arrancan ABIERTAS, y para ellas `expanded` es «la cerró a mano». Una sección que llega después de
-       montar (un documento viejo la gana al abrirse) también abre. */
-    const collapsed = editable && hidden && (def.soloInterna ? expanded.has(def.key) : !expanded.has(def.key));
+    // Colapsada solo si alguien la colapsó: arrancan abiertas, también las ocultas y las solo internas.
+    const collapsed = editable && colapsadas.has(def.key);
     // Portada con imagen (hero): capa de fondo + degradado a nivel SECCIÓN
     // (hermana de .stl-wrap — dentro del wrap no cubriría el full-bleed).
     const coverUrl =
@@ -485,7 +476,7 @@ export default function LandingView({
         contexto» — dos nombres para la misma sección en el mismo prompt. */}
     <ChatDeSeccionBtn seccionKey={def.key} label={nombreParaElChat(def, effTitle)} />
     {!collapsed && renderOverlay?.(def.key)}
-        {hidden && <CollapseToggle collapsed={collapsed} label={effTitle} onToggle={() => toggleExpanded(def.key)} />}
+        {!isHero && <CollapseToggle collapsed={collapsed} label={effTitle} onToggle={() => toggleExpanded(def.key)} />}
         {onToggleHidden && !def.noHide && !def.soloInterna && (
           <HideToggle hidden={hidden} label={effTitle} onToggle={() => setHidden(def.key, !hidden)} />
         )}

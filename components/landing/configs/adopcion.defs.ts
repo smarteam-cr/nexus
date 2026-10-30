@@ -37,7 +37,7 @@ export function reglaDeLasColumnas(columnas: readonly string[]): string {
 
 const HERO = DESARROLLO_DEF_BY_KEY["requerimiento"];
 const CIERRE_DE_DESARROLLO = DESARROLLO_DEF_BY_KEY["cierre"];
-const PROSA_DE_LA_PLANIFICACION = PLANIFICACION_DEF_BY_KEY["rutinas_adopcion"];
+export const PROSA_DE_LA_PLANIFICACION = PLANIFICACION_DEF_BY_KEY["rutinas_adopcion"];
 
 /** El cierre por defecto del plan de adopción. */
 export const ADOPCION_CIERRE_DEFAULT = {
@@ -54,8 +54,39 @@ export const COLUMNAS_DE_NIVELES = ["Grupo", "Quiénes", "Cuándo entra", "Con q
 export const COLUMNAS_DE_COMUNICACION = ["Mensaje", "A quién", "Canal", "Cuándo"] as const;
 export const COLUMNAS_DE_MEDICION = ["Indicador", "Cómo se mide", "Umbral", "Quién lo mira"] as const;
 
-const NO_INVENTES =
+export const NO_INVENTES =
   "No inventes cargos, personas, cifras ni umbrales que la fuente no respalde: lo que no esté confirmado va con `⚠️ Por validar`. Sin precios ni horas de Smarteam.";
+
+export const COLUMNAS_DE_LA_ESTRUCTURA = ["Equipo", "Quién lo lidera", "Quiénes lo forman", "Qué cambia para ellos"] as const;
+export const COLUMNAS_DEL_PLAN_POR_EQUIPO = ["Equipo", "Qué tiene que aprender", "Cómo", "Quién lo acompaña"] as const;
+export const COLUMNAS_DE_LOS_ENTRENAMIENTOS = ["Sesión", "Para quién", "Qué se ve", "Duración"] as const;
+export const COLUMNAS_DE_LOS_PILOTOS = ["Piloto", "Quién participa", "Qué se prueba", "Cómo se sabe que funcionó"] as const;
+
+/** Una sección de tabla del motor, con sus columnas fijas (la usan los artefactos sin componentes propios). */
+export function seccionDeTabla(o: {
+  key: string;
+  label: string;
+  eyebrow: string;
+  columnas: readonly string[];
+  tip: string;
+  agentHint: string;
+  brief: string;
+  theme?: "light" | "soft";
+}): BCSectionDef {
+  return {
+    key: o.key,
+    label: o.label,
+    eyebrow: o.eyebrow,
+    theme: o.theme ?? "light",
+    sectionType: TABLA_TYPE,
+    agentGenerated: true,
+    empty: tablaConColumnas(o.columnas),
+    tip: o.tip,
+    agentHint: o.agentHint,
+    brief: `${reglaDeLasColumnas(o.columnas)}${o.brief} ${NO_INVENTES}`,
+    schema: asSchema(TABLA_SCHEMA),
+  };
+}
 
 export const ADOPCION_SECTION_DEFS: BCSectionDef[] = [
   {
@@ -156,6 +187,53 @@ export const ADOPCION_SECTION_DEFS: BCSectionDef[] = [
       "EL PROTOCOLO DE ALTAS Y BAJAS. `intro`: una frase de quién lo pide y quién lo ejecuta. `items` (3-6), en orden: `title` = el paso ('Pedir el alta con el rol', 'Asignar equipo y permisos', 'Antes de la baja: reasignar contactos, negocios y tareas', 'Desactivar el usuario'); `detail` = UNA línea con el detalle (a quién se le reasignan los registros, quién lo aprueba). La reasignación antes de la baja es lo que más se olvida: no la dejes afuera. " +
       NO_INVENTES,
   },
+  {
+    ...PROSA_DE_LA_PLANIFICACION,
+    key: "introduccion",
+    label: "Por qué este plan",
+    eyebrow: "Introducción",
+    theme: "soft",
+    agentHint: "Por qué se capacita y qué cambia para el equipo cuando el plan funciona.",
+    brief: "LA INTRODUCCIÓN: `intro` con por qué este plan y qué cambia en el día a día del equipo. `items` (0-4): lo que se espera lograr. " + NO_INVENTES,
+  },
+  seccionDeTabla({
+    key: "estructura_equipo",
+    label: "La estructura del equipo",
+    eyebrow: "Quiénes son",
+    columnas: COLUMNAS_DE_LA_ESTRUCTURA,
+    tip: "Los equipos que entran: quién los lidera y qué cambia para cada uno.",
+    agentHint: "Una fila por equipo del cliente.",
+    brief: "LA ESTRUCTURA DEL EQUIPO: una fila por equipo o área que entra al plan.",
+  }),
+  seccionDeTabla({
+    key: "plan_por_equipo",
+    label: "El plan por equipo",
+    eyebrow: "Qué aprende cada uno",
+    theme: "soft",
+    columnas: COLUMNAS_DEL_PLAN_POR_EQUIPO,
+    tip: "Qué tiene que aprender cada equipo, cómo y quién lo acompaña.",
+    agentHint: "Una fila por equipo: lo que aprende, cómo y con quién.",
+    brief: "EL PLAN POR EQUIPO: una fila por equipo. «Cómo»: sesión en vivo, HubSpot Academy, acompañamiento en el puesto.",
+  }),
+  seccionDeTabla({
+    key: "entrenamientos",
+    label: "Los entrenamientos",
+    eyebrow: "Sesión por sesión",
+    columnas: COLUMNAS_DE_LOS_ENTRENAMIENTOS,
+    tip: "Cada sesión de capacitación: para quién, qué se ve y cuánto dura.",
+    agentHint: "Una fila por sesión de capacitación.",
+    brief: "LOS ENTRENAMIENTOS: una fila por sesión, en el orden en que se dan. Sin fechas: el calendario vive en el Cronograma.",
+  }),
+  seccionDeTabla({
+    key: "pilotos",
+    label: "Los pilotos",
+    eyebrow: "Probar antes de extender",
+    theme: "soft",
+    columnas: COLUMNAS_DE_LOS_PILOTOS,
+    tip: "Con quién se prueba primero, qué se prueba y cómo se decide extenderlo.",
+    agentHint: "Una fila por piloto, si el plan los lleva.",
+    brief: "LOS PILOTOS: una fila por piloto: con quién se prueba primero, qué se prueba y qué señal dice que se puede extender.",
+  }),
   {
     key: "medicion",
     label: "Cómo medimos la adopción",

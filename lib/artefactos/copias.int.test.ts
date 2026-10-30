@@ -54,6 +54,17 @@ describe("duplicar", () => {
     expect(new Set(keys)).toEqual(new Set(["diagnostico", "fortalezas", "gap_analysis"]));
   });
 
+  it("en blanco, cada plantilla del plan de adopción nace con SUS secciones, aunque ya haya otra copia", async () => {
+    const { proyecto } = await proyectoConPlanificacion();
+    const keysDe = async (plantillaId: string) => {
+      const c = await crearCopia({ projectId: proyecto.id, tipo: "adoption-plan", plantillaId, porEmail: null });
+      return (await prisma.canvasSection.findMany({ where: { canvasId: c.canvasId }, orderBy: { order: "asc" }, select: { key: true } })).map((s) => s.key);
+    };
+    expect(await keysDe("adopcion-equipo-comercial")).toEqual(["adopcion", "comportamientos", "reglas", "rutinas_adopcion", "altas_bajas", "medicion", "cierre"]);
+    expect(await keysDe("adopcion-por-niveles")).toContain("niveles");
+    expect(await keysDe("adopcion-tecnica")).toContain("administradores");
+  });
+
   it("un plan de adopción por niveles conserva sus secciones y su plantilla", async () => {
     const { proyecto } = await proyectoConPlanificacion();
     const a = await crearCopia({ projectId: proyecto.id, tipo: "adoption-plan", plantillaId: "adopcion-por-niveles", porEmail: null });
@@ -179,13 +190,13 @@ describe("varias copias de un tipo en un proyecto", () => {
     // El cierre curado nace sembrado.
     expect(await prisma.canvasBlock.count({ where: { section: { canvasId: adopcion.canvasId, key: "cierre" } } })).toBe(1);
 
-    const integracion = await crearCopia({ projectId: proyecto.id, tipo: "integration", porEmail: null });
+    const integracion = await crearCopia({ projectId: proyecto.id, tipo: "tech-requirements", porEmail: null });
     const keysI = (await prisma.canvasSection.findMany({ where: { canvasId: integracion.canvasId }, select: { key: true } })).map((s) => s.key);
     expect(keysI).toContain("mapa_integracion");
     expect(keysI).not.toContain("estimacion");
 
     await expect(crearCopia({ projectId: proyecto.id, tipo: "timeline", porEmail: null })).rejects.toMatchObject({ status: 400 });
-    await expect(crearCopia({ projectId: proyecto.id, tipo: "delivery", porEmail: null })).rejects.toMatchObject({ status: 400 });
+    await expect(crearCopia({ projectId: proyecto.id, tipo: "implementation", porEmail: null })).rejects.toMatchObject({ status: 400 });
     await expect(crearCopia({ projectId: proyecto.id, tipo: "planning", plantillaId: "no-existe", porEmail: null })).rejects.toMatchObject({ status: 400 });
   });
 

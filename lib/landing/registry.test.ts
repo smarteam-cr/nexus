@@ -35,6 +35,9 @@ import { DESARROLLO_SECTION_COMPONENTS, landingConfigForDesarrollo } from "@/com
 import { ADOPCION_SECTION_DEFS } from "@/components/landing/configs/adopcion.defs";
 import { ADOPCION_SECTION_COMPONENTS, landingConfigForAdopcion } from "@/components/landing/configs/adopcion";
 import { INTEGRACION_SECTION_DEFS } from "@/components/landing/configs/integracion.defs";
+import { HOJA_DE_RUTA_SECTION_DEFS } from "@/components/landing/configs/hoja-de-ruta.defs";
+import { landingConfigForHojaDeRuta } from "@/components/landing/configs/hoja-de-ruta";
+import { ENTREGA_DEFS_ADICIONALES, PLANIFICACION_DEFS_ADICIONALES } from "@/components/landing/configs/plantillas-adicionales.defs";
 import { INTEGRACION_SECTION_COMPONENTS, landingConfigForIntegracion } from "@/components/landing/configs/integracion";
 import { EXPLORACION_SECTION_DEFS } from "@/components/landing/configs/exploracion.defs";
 import { EXPLORACION_SECTION_COMPONENTS, landingConfigForExploracion } from "@/components/landing/configs/exploracion";
@@ -104,6 +107,9 @@ const DEFS_DE_TODOS_LOS_DOCUMENTOS: readonly { doc: string; def: BCSectionDef }[
   // Los artefactos nuevos (2026-10-29, docs/artefactos-plan.md): sus secciones prestadas son LAS MISMAS defs.
   ...ADOPCION_SECTION_DEFS.map((def) => ({ doc: "adopcion", def })),
   ...INTEGRACION_SECTION_DEFS.map((def) => ({ doc: "integracion", def })),
+  ...HOJA_DE_RUTA_SECTION_DEFS.map((def) => ({ doc: "hoja-de-ruta", def })),
+  ...PLANIFICACION_DEFS_ADICIONALES.map((def) => ({ doc: "planificacion", def })),
+  ...ENTREGA_DEFS_ADICIONALES.map((def) => ({ doc: "entrega", def })),
 ];
 
 
@@ -717,13 +723,22 @@ describe("Plan de adopción: registry completo + keys congeladas", () => {
   it("snapshot de keys: la portada abre, el cierre cierra", () => {
     expect(ADOPCION_SECTION_DEFS.map((d) => d.key)).toEqual([
       "adopcion", "comportamientos", "reglas", "niveles", "rutinas_adopcion", "plan_despliegue",
-      "comunicacion", "administradores", "altas_bajas", "medicion", "cierre",
+      "comunicacion", "administradores", "altas_bajas", "introduccion", "estructura_equipo",
+      "plan_por_equipo", "entrenamientos", "pilotos", "medicion", "cierre",
     ]);
   });
 
   it("sin componentes huérfanos en ADOPCION_SECTION_COMPONENTS", () => {
     const usados = new Set(ADOPCION_SECTION_DEFS.map((d) => d.sectionType ?? d.key));
     expect(Object.keys(ADOPCION_SECTION_COMPONENTS).filter((t) => !usados.has(t))).toEqual([]);
+  });
+});
+
+describe("Hoja de ruta: registry completo + keys congeladas", () => {
+  it("cada def resuelve componente, y la portada abre y el cierre cierra", () => {
+    expect(landingConfigForHojaDeRuta().sections.map((s) => s.key)).toEqual([
+      "hoja_de_ruta", "frentes", "horizonte", "backlog", "diferido", "decisiones", "horas", "cierre",
+    ]);
   });
 });
 
@@ -737,7 +752,8 @@ describe("Integración técnica: registry completo + keys congeladas", () => {
   it("snapshot de keys: el requerimiento abre, el cierre cierra, y sin la estimación (lee el proyecto)", () => {
     expect(INTEGRACION_SECTION_DEFS.map((d) => d.key)).toEqual([
       "requerimiento", "alcance_firmado", "retos_cliente", "arquitectura", "identificador_unico", "mapa_integracion",
-      "relacion_objetos", "propiedades", "comunicacion", "entregables_de_terceros", "criterios_exito", "cierre",
+      "relacion_objetos", "propiedades", "comunicacion", "entregables_de_terceros", "criterios_exito",
+      "guion_pruebas", "migracion_datos", "cierre",
     ]);
   });
 
@@ -954,7 +970,7 @@ describe("Planificación: registry completo + keys congeladas", () => {
     const faltantes = PLANIFICACION_SECTION_DEFS.filter((d) => !PLANIFICACION_SECTION_COMPONENTS[d.sectionType ?? d.key]);
     expect(faltantes.map((d) => `${d.key}→${d.sectionType}`)).toEqual([]);
     expect(landingConfigForPlanificacion().sections.map((s) => s.key)).toEqual(
-      PLANIFICACION_SECTION_DEFS.map((d) => d.key),
+      [...PLANIFICACION_SECTION_DEFS, ...PLANIFICACION_DEFS_ADICIONALES].map((d) => d.key),
     );
   });
 
@@ -1112,7 +1128,7 @@ describe("Entrega: registry completo + keys congeladas", () => {
     const faltantes = ENTREGA_SECTION_DEFS.filter((d) => !ENTREGA_SECTION_COMPONENTS[d.sectionType ?? d.key]);
     expect(faltantes.map((d) => `${d.key}→${d.sectionType}`)).toEqual([]);
     expect(landingConfigForEntrega().sections.map((s) => s.key)).toEqual(
-      ENTREGA_SECTION_DEFS.map((d) => d.key),
+      [...ENTREGA_SECTION_DEFS, ...ENTREGA_DEFS_ADICIONALES].map((d) => d.key),
     );
   });
 

@@ -19,6 +19,7 @@
  * lib/ui/full-bleed-workspaces.test.ts.
  */
 import type { ReactNode } from "react";
+import VeloDeGeneracion, { useGeneracionDelDocumento } from "@/components/canvas/VeloDeGeneracion";
 import { ROTULO_DEL_SISTEMA } from "@/components/ui/sistema";
 
 export function MarcoDelDocumento({
@@ -29,15 +30,17 @@ export function MarcoDelDocumento({
   loVeElCliente: boolean;
   children: ReactNode;
 }) {
+  const generando = useGeneracionDelDocumento();
   return (
-    <section aria-label="El documento" className="overflow-clip rounded-xl border border-line bg-surface">
+    <section aria-label="El documento" className="relative overflow-clip rounded-xl border border-line bg-surface">
+      {generando && <VeloDeGeneracion rotulo="Escribiendo el documento" detalle="Puedes seguir en otra parte de Nexus: te avisa al terminar." />}
       <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-b border-line bg-surface-muted px-4 py-2">
         <span className={ROTULO_DEL_SISTEMA}>
           {loVeElCliente ? "El documento · así lo ve el cliente" : "El documento · interno, el cliente no lo ve"}
         </span>
         <span className="text-xs text-fg-muted">Se edita en el lugar</span>
       </div>
-      {children}
+      <div inert={generando}>{children}</div>
     </section>
   );
 }

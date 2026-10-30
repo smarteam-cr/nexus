@@ -33,7 +33,7 @@ describe("tipoDelDocumento", () => {
 describe("el nombre en pantalla", () => {
   it("el documento de siempre sin renombrar se ve como hoy: la etiqueta de su pieza", () => {
     expect(nombreDelArtefacto({ slug: "planning", name: "Planificación" })).toBe("Planificación");
-    expect(nombreDelArtefacto({ slug: "tech-requirements", name: "Desarrollo" })).toBe("Integraciones");
+    expect(nombreDelArtefacto({ slug: "tech-requirements", name: "Desarrollo" })).toBe("Requerimiento técnico");
   });
 
   it("con `titulo` (el nombre que puso una persona) gana el titulo, también en el de siempre", () => {

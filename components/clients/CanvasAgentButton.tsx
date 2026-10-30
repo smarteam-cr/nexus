@@ -8,7 +8,8 @@
  * polling (pollAgentRun) si el run es detached + spinner + toast (incluye guards como
  * NO_HANDOFF vía data.message). `onDone` deja al canvas refrescar su contenido.
  */
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { avisarGeneracion } from "@/components/canvas/VeloDeGeneracion";
 import { summarizeRun, summarizePollResult } from "@/lib/clients/poll-agent-run";
 import { useAgentRun } from "@/hooks/useAgentRun";
 import { useToast } from "@/components/ui/Toast";
@@ -118,6 +119,13 @@ export default function CanvasAgentButton({
   // lo resuelve server-side desde los bloques que escribió el agente
   // (lib/agents/run-url.ts) — acá todavía no existen.
   const notifyUrl = urlDeProyecto(clientId, projectId, canvasId);
+
+  // El documento se tapa mientras se escribe: el mismo cargador en todos (VeloDeGeneracion). Sin `canvasId`, el botón no es de un documento.
+  useEffect(() => {
+    if (!running || !canvasId) return;
+    avisarGeneracion(true);
+    return () => avisarGeneracion(false);
+  }, [running, canvasId]);
 
   const run = async (forzar = false, aSabiendas = false) => {
     if (running || disabled || busy) return;

@@ -2,19 +2,21 @@
 
 /**
  * components/artefactos/BarraDelArtefacto.tsx — la barra de un documento de un tipo que admite copias (etapa V3 y V4 de
- * docs/artefactos-plan.md): su nombre, su estado (en construcción o terminado), su enlace para compartir pantalla, el
- * orden de los de su tipo y «Crear otra». La misma para el documento de siempre y para cada copia: son todas iguales
- * (Elías, 29 oct). Archivar es solo de las copias.
+ * docs/artefactos-plan.md): su nombre, su estado (en construcción o terminado), su «Contexto adicional», su «Acceso» (el
+ * enlace para compartir pantalla, con el punto verde si está compartido), el orden de los de su tipo y «Crear otra». La
+ * misma para el documento de siempre y para cada copia: son todas iguales (Elías, 29 oct). Archivar es solo de las copias.
  *
  * UI interna: primitivas de components/ui, tokens semánticos y tuteo.
  */
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { Alert, Button, ConfirmDialog, IconButton, Input, Menu, Modal, Segmentado } from "@/components/ui";
 import { useToast } from "@/components/ui/Toast";
+import { BOTON_DE_HERRAMIENTA } from "@/components/ui/sistema";
 import { tipoDeArtefacto } from "@/lib/artefactos/tipos";
 import { rutaDelEnlace } from "@/lib/artefactos/enlaces";
 import { ROTULO_DEL_ESTADO } from "@/lib/artefactos/copias";
 import OrdenarArtefactosModal, { type DocumentoParaOrdenar } from "./OrdenarArtefactosModal";
+import ContextoDeLaCopia from "./ContextoDeLaCopia";
 
 interface Enlace {
   enlace: string | null;
@@ -25,22 +27,24 @@ interface Enlace {
 const fecha = (iso: string) =>
   new Date(iso).toLocaleDateString("es-CR", { day: "numeric", month: "long", hour: "numeric", minute: "2-digit", timeZone: "America/Costa_Rica" });
 
-/** El enlace propio del documento: crearlo, copiarlo, abrirlo y dejar de compartir. */
-function CompartirModal({ projectId, canvasId, nombre, open, onClose }: { projectId: string; canvasId: string; nombre: string; open: boolean; onClose: () => void }) {
+/** El enlace propio del documento: crearlo, copiarlo, abrirlo y dejar de compartir. El botón dice si ya está compartido. */
+function BotonDeAcceso({ projectId, canvasId, nombre }: { projectId: string; canvasId: string; nombre: string }) {
   const base = rutaDelEnlace({ projectId, canvasId });
   /** null = leyendo; «error» = no se pudo leer (no es lo mismo que «no se comparte»). */
   const [estado, setEstado] = useState<Enlace | "error" | null>(null);
   const [trabajando, setTrabajando] = useState(false);
+  const [open, setOpen] = useState(false);
   const toast = useToast();
 
   useEffect(() => {
-    if (!open) return;
     void (async () => {
       const r = await fetch(base).catch(() => null);
       const j = r?.ok ? ((await r.json().catch(() => null)) as Enlace | null) : null;
       setEstado(j ?? "error");
     })();
-  }, [open, base]);
+  }, [base]);
+
+  const compartido = !!estado && estado !== "error" && !!estado.enlace;
 
   const cambiar = async (metodo: "POST" | "DELETE") => {
     setTrabajando(true);
@@ -58,10 +62,20 @@ function CompartirModal({ projectId, canvasId, nombre, open, onClose }: { projec
   };
 
   return (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className={BOTON_DE_HERRAMIENTA}
+        title={compartido ? "Acceso: este documento está compartido con su enlace" : "Acceso: este documento todavía no se comparte"}
+      >
+        <span className={`h-2 w-2 flex-shrink-0 rounded-full ${compartido ? "bg-success" : "bg-fg-muted"}`} aria-hidden="true" />
+        Acceso
+      </button>
     <Modal
       open={open}
-      onClose={onClose}
-      title={`Compartir «${nombre}»`}
+      onClose={() => setOpen(false)}
+      title={`Acceso a «${nombre}»`}
       description="Un enlace propio de este documento, sin contraseña. Muestra lo que está escrito ahora, sin lo oculto ni lo interno: sirve para compartir pantalla."
     >
       {estado === "error" ? (
@@ -96,6 +110,7 @@ function CompartirModal({ projectId, canvasId, nombre, open, onClose }: { projec
         </div>
       )}
     </Modal>
+    </>
   );
 }
 
@@ -108,6 +123,7 @@ export default function BarraDelArtefacto({
   terminado,
   delTipo,
   compartible,
+  contextoDeSiempre,
   onCambio,
   onCrearOtra,
   onArchivada,
@@ -122,6 +138,8 @@ export default function BarraDelArtefacto({
   delTipo: readonly DocumentoParaOrdenar[];
   /** false = no se ofrece compartir (un proyecto de prueba). */
   compartible: boolean;
+  /** El «Contexto adicional» del documento de siempre. Una copia trae el suyo. Sin ninguno, no hay botón (la exploración de siempre lo lleva adentro). */
+  contextoDeSiempre?: ReactNode;
   /** Algo cambió (nombre, estado, orden): el panel vuelve a leer el listado. */
   onCambio: () => void | Promise<unknown>;
   onCrearOtra: () => void;
@@ -131,7 +149,7 @@ export default function BarraDelArtefacto({
   const [editando, setEditando] = useState(false);
   const [borrador, setBorrador] = useState(nombre);
   const [guardando, setGuardando] = useState(false);
-  const [compartir, setCompartir] = useState(false);
+  const [verContexto, setVerContexto] = useState(false);
   const [ordenar, setOrdenar] = useState(false);
   /** El estado elegido mientras se guarda (optimista); null = el que dice el listado. */
   const [estadoElegido, setEstadoElegido] = useState<boolean | null>(null);
@@ -230,11 +248,12 @@ export default function BarraDelArtefacto({
           void patch({ terminado: nuevo }).then(() => setEstadoElegido(null));
         }}
       />
-      {t?.clientFacing && compartible && (
-        <Button size="xs" variant="secondary" onClick={() => setCompartir(true)}>
-          Compartir
-        </Button>
+      {(esCopia || contextoDeSiempre) && (
+        <button type="button" onClick={() => setVerContexto(true)} className={BOTON_DE_HERRAMIENTA} title="Las reuniones, notas, transcripciones, archivos e instrucciones de este documento">
+          Contexto adicional
+        </button>
       )}
+      {t?.clientFacing && compartible && (esCopia || !t.sinEnlaceElDeSiempre) && <BotonDeAcceso projectId={projectId} canvasId={canvasId} nombre={nombre} />}
       <Menu
         align="end"
         triggerTitle="Más"
@@ -260,7 +279,9 @@ export default function BarraDelArtefacto({
         onCancel={() => setConfirmarArchivo(false)}
         onConfirm={() => void archivar()}
       />
-      <CompartirModal projectId={projectId} canvasId={canvasId} nombre={nombre} open={compartir} onClose={() => setCompartir(false)} />
+      <Modal open={verContexto} onClose={() => setVerContexto(false)} size="xxl" title={`Contexto adicional de «${nombre}»`}>
+        {verContexto && (esCopia ? <ContextoDeLaCopia projectId={projectId} canvasId={canvasId} tipo={tipo} /> : contextoDeSiempre)}
+      </Modal>
       <OrdenarArtefactosModal
         projectId={projectId}
         tipo={tipo}

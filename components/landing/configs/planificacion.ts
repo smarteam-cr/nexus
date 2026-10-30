@@ -13,7 +13,9 @@
 import type { FC } from "react";
 import type { LandingConfig, SectionDef, SectionProps } from "../types";
 import { PLANIFICACION_SECTION_DEFS } from "./planificacion.defs";
-import { toSectionDef } from "./templates";
+import { COMPONENTES_CREABLES, toSectionDef } from "./templates";
+import { PLANIFICACION_DEFS_ADICIONALES } from "./plantillas-adicionales.defs";
+import { TABLA_TYPE } from "@/lib/landing/catalogo-de-secciones";
 import { DesarrolloHeroSection } from "@/components/canvas/desarrollo-sections/DesarrolloSections";
 import { KickoffProseSection, KickoffCtaSection } from "@/components/canvas/kickoff-sections/KickoffSections";
 import { RoiSection } from "../sections";
@@ -43,6 +45,7 @@ export const PLANIFICACION_SECTION_COMPONENTS: Record<string, FC<SectionProps<an
   planificacion_cta: KickoffCtaSection,
   diagram: DiagramSection,
   kickoff_prose: KickoffProseSection,
+  [TABLA_TYPE]: COMPONENTES_CREABLES[TABLA_TYPE],
   roi: RoiSection,
   procesos_futuro: ProcesosFuturoSection,
   ciclo_vida_tabla: CicloDeVidaSection,
@@ -65,7 +68,7 @@ export const PLANIFICACION_SECTION_COMPONENTS: Record<string, FC<SectionProps<an
 
 const PLANIFICACION_LANDING_CONFIG: LandingConfig = {
   type: "planificacion",
-  sections: PLANIFICACION_SECTION_DEFS.map((d) => toSectionDef(d, PLANIFICACION_SECTION_COMPONENTS)).filter(
+  sections: [...PLANIFICACION_SECTION_DEFS, ...PLANIFICACION_DEFS_ADICIONALES].map((d) => toSectionDef(d, PLANIFICACION_SECTION_COMPONENTS)).filter(
     (s): s is SectionDef => s !== null,
   ),
 };

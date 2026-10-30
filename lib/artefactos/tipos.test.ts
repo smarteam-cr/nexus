@@ -20,18 +20,17 @@ const DEL_MOTOR = TIPOS.filter((t) => t.vive === "canvas" && t.id !== "handoff")
 describe("tipos: el set y lo que admite cada uno", () => {
   it("snapshot del set de tipos (id · copias · dueños · lo lee el cliente)", () => {
     expect(TIPOS.map((t) => `${t.id} · ${t.copias} · ${t.duenos.join("+")} · ${t.clientFacing ? "cliente" : "interno"}`)).toEqual([
-      "kickoff · varias · proyecto · cliente",
-      "diagnosis · varias · proyecto+empresa · cliente",
-      "planning · varias · proyecto · cliente",
       "exploration · varias · proyecto+empresa · interno",
+      "diagnosis · varias · proyecto+empresa · cliente",
+      "kickoff · varias · proyecto · cliente",
+      "planning · varias · proyecto · cliente",
+      "tech-requirements · varias · proyecto · cliente",
       "adoption-plan · varias · proyecto · cliente",
-      "integration · varias · proyecto · cliente",
-      "tech-requirements · una · proyecto · cliente",
-      "delivery · una · proyecto · cliente",
+      "roadmap · varias · proyecto+empresa · cliente",
+      "delivery · varias · proyecto · cliente",
       "implementation · una · proyecto · interno",
       "timeline · una · proyecto · cliente",
       "handoff · una · proyecto · interno",
-      "escala · una · empresa · cliente",
     ]);
   });
 
@@ -39,16 +38,18 @@ describe("tipos: el set y lo que admite cada uno", () => {
     expect(new Set(TIPOS.map((t) => t.id)).size).toBe(TIPOS.length);
   });
 
-  it("admiten copias: kickoff, diagnóstico, planificación, exploración, plan de adopción e integración técnica", () => {
+  it("se crean: los ocho del catálogo que viven en el motor (la propuesta y el cronograma tienen su lugar; la escala no es un artefacto)", () => {
     expect(tiposCreablesEnElProyecto().map((t) => t.id)).toEqual([
-      "kickoff",
-      "diagnosis",
-      "planning",
       "exploration",
+      "diagnosis",
+      "kickoff",
+      "planning",
+      "tech-requirements",
       "adoption-plan",
-      "integration",
+      "roadmap",
+      "delivery",
     ]);
-    for (const id of ["timeline", "handoff", "delivery", "tech-requirements", "implementation", "escala", "no-existe", null]) {
+    for (const id of ["timeline", "handoff", "implementation", "escala", "integration", "no-existe", null]) {
       expect(admiteCopias(id), String(id)).toBe(false);
     }
   });
@@ -84,7 +85,7 @@ describe("tipos: el set y lo que admite cada uno", () => {
     expect(plantillaDelTipo("diagnosis")?.id).toBe("diagnostico-esencial");
     expect(plantillaDelTipo("planning")?.id).toBe("planificacion");
     expect(plantillaDelTipo("adoption-plan")?.id).toBe("adopcion-equipo-comercial");
-    expect(plantillaDelTipo("integration")?.id).toBe("integracion-mapa");
+    expect(plantillaDelTipo("tech-requirements")?.id).toBe("integracion-mapa");
     expect(plantillaDelTipo("planning", "adopcion-tecnica")).toBeNull();
     expect(tipoDeArtefacto("no-existe")).toBeNull();
   });
@@ -105,6 +106,11 @@ describe("catálogo de secciones por tipo (congelado)", () => {
           "comunicacion",
           "administradores",
           "altas_bajas",
+          "introduccion",
+          "estructura_equipo",
+          "plan_por_equipo",
+          "entrenamientos",
+          "pilotos",
           "medicion",
           "cierre",
         ],
@@ -120,6 +126,8 @@ describe("catálogo de secciones por tipo (congelado)", () => {
           "pendientes",
           "continuidad",
           "recomendaciones",
+          "avance_por_frente",
+          "riesgos_y_pendientes_del_cliente",
           "cierre",
         ],
         "diagnosis": [
@@ -154,20 +162,6 @@ describe("catálogo de secciones por tipo (congelado)", () => {
           "a_mano",
           "cierre",
         ],
-        "integration": [
-          "requerimiento",
-          "alcance_firmado",
-          "retos_cliente",
-          "arquitectura",
-          "identificador_unico",
-          "mapa_integracion",
-          "relacion_objetos",
-          "propiedades",
-          "comunicacion",
-          "entregables_de_terceros",
-          "criterios_exito",
-          "cierre",
-        ],
         "kickoff": [
           "bienvenida",
           "objetivos",
@@ -192,6 +186,7 @@ describe("catálogo de secciones por tipo (congelado)", () => {
         "planning": [
           "planificacion",
           "acciones_en_detalle",
+          "brief_importado",
           "ficha_proyecto",
           "usuarios_permisos",
           "definicion_procesos",
@@ -207,17 +202,43 @@ describe("catálogo de secciones por tipo (congelado)", () => {
           "informes",
           "rutinas_adopcion",
           "plan_despliegue",
+          "campana_objetivo",
+          "campana_segmentos",
+          "campana_piezas",
+          "campana_presupuesto",
+          "campana_resultado",
+          "agente_objetivo",
+          "agente_identidad",
+          "agente_conocimiento",
+          "agente_derivacion",
+          "whatsapp_plantillas",
+          "agente_fases",
+          "cierre",
+        ],
+        "roadmap": [
+          "hoja_de_ruta",
+          "frentes",
+          "horizonte",
+          "backlog",
+          "diferido",
+          "decisiones",
+          "horas",
           "cierre",
         ],
         "tech-requirements": [
           "requerimiento",
-          "estimacion",
+          "alcance_firmado",
           "retos_cliente",
-          "criterios_exito",
           "arquitectura",
+          "identificador_unico",
+          "mapa_integracion",
           "relacion_objetos",
           "propiedades",
           "comunicacion",
+          "entregables_de_terceros",
+          "criterios_exito",
+          "guion_pruebas",
+          "migracion_datos",
           "cierre",
         ],
       }
@@ -294,7 +315,7 @@ describe("templates: generar una copia manda lo mismo que el documento de siempr
   });
 
   it("los tipos nuevos filtran su template a la plantilla, en el orden del canon", () => {
-    const tpl = templateDelTipo("integration", "integracion-mapa");
+    const tpl = templateDelTipo("tech-requirements", "integracion-mapa");
     expect(tpl.id).toBe("integracion_v1:integracion-mapa");
     expect(tpl.sections.map((s) => s.key)).toEqual([
       "requerimiento",
@@ -307,7 +328,7 @@ describe("templates: generar una copia manda lo mismo que el documento de siempr
       "criterios_exito",
       "cierre",
     ]);
-    expect(templateDelTipo("integration", "integracion-completa").sections.length).toBe(catalogoDelTipo("integration").length);
+    expect(templateDelTipo("tech-requirements", "integracion-completa").sections.length).toBe(catalogoDelTipo("tech-requirements").length);
   });
 
   it("una plantilla ajena o un tipo sin template tiran con su motivo", () => {

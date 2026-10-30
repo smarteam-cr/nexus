@@ -18,6 +18,7 @@ import { useToast } from "@/components/ui/Toast";
 export default function InstruccionesDelDocumento({
   projectId,
   slug,
+  canvasId,
   elDocumento,
   ejemplo,
   soloLectura,
@@ -26,6 +27,8 @@ export default function InstruccionesDelDocumento({
   projectId: string;
   /** El slug de la pieza (lib/pieces/registry.ts): «handoff», «diagnosis», «kickoff»… */
   slug: string;
+  /** Una copia guarda las suyas: se piden por su id (etapa V3b). */
+  canvasId?: string;
   /** Cómo se nombra en una frase: «el diagnóstico», «la entrega». */
   elDocumento: string;
   ejemplo: string;
@@ -38,7 +41,7 @@ export default function InstruccionesDelDocumento({
 
   useEffect(() => {
     let vivo = true;
-    fetch(`/api/projects/${projectId}/doc-brief?slug=${encodeURIComponent(slug)}`)
+    fetch(`/api/projects/${projectId}/doc-brief?${canvasId ? `canvasId=${encodeURIComponent(canvasId)}` : `slug=${encodeURIComponent(slug)}`}`)
       .then((r) => (r.ok ? (r.json() as Promise<{ brief: string | null }>) : null))
       .then((d) => {
         if (vivo && d) setGuardadas(d.brief ?? "");
@@ -47,7 +50,7 @@ export default function InstruccionesDelDocumento({
     return () => {
       vivo = false;
     };
-  }, [projectId, slug]);
+  }, [projectId, slug, canvasId]);
 
   useEffect(() => {
     onActivas?.(guardadas.trim() !== "");
@@ -58,7 +61,7 @@ export default function InstruccionesDelDocumento({
       const r = await fetch(`/api/projects/${projectId}/doc-brief`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ slug, brief: texto || null }),
+        body: JSON.stringify({ slug, ...(canvasId ? { canvasId } : {}), brief: texto || null }),
       });
       if (!r.ok) {
         const d = (await r.json().catch(() => null)) as { error?: string } | null;

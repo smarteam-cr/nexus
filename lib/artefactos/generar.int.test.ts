@@ -131,7 +131,7 @@ describe("generar una copia", () => {
     expect(generacion.fn.mock.calls[0][1] as string).toContain("Duplicar los test drive");
 
     generacion.fn.mockClear();
-    const i = await crearCopia({ projectId: p.id, tipo: "integration", porEmail: null });
+    const i = await crearCopia({ projectId: p.id, tipo: "tech-requirements", porEmail: null });
     await generarCopia({ projectId: p.id, canvasId: i.canvasId, agentRunId: null });
     expect(generacion.fn.mock.calls[0][1] as string).not.toContain("Duplicar los test drive");
   });

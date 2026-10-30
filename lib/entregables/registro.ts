@@ -28,6 +28,8 @@ export interface PlantillaDeEntregable {
   nombre: string;
   /** Para qué sirve, en una frase (lo leen la pantalla y el chat). */
   paraQue: string;
+  /** Sus secciones van en el orden de `secciones` y no en el del canon: una plantilla con secciones propias. */
+  ordenPropio?: boolean;
   /**
    * Las secciones del documento que tiene esta plantilla (sus keys, en el orden del canon del canvas). Sin esto, todas
    * las del canvas. Con esto, el documento tiene SOLO esas: la reconciliación no le suma las demás.
@@ -128,7 +130,7 @@ export const ENTREGABLES: readonly Entregable[] = [
     plantillas: [
       {
         id: "diagnostico-estrategico",
-        nombre: "Diagnóstico completo",
+        nombre: "Diagnóstico estratégico",
         paraQue:
           "Todo el hilo: además de lo esencial, cómo opera hoy y cómo va a operar, fortalezas, herramientas de HubSpot, equipos y licencias, preguntas de negocio, la brecha y el alcance acordado.",
       },
@@ -149,13 +151,13 @@ export const ENTREGABLES: readonly Entregable[] = [
       // 2026-10-27 (I2 · L4 etapa 7): el id de siempre es la completa; un documento sin plantilla anotada la tiene.
       {
         id: "planificacion",
-        nombre: "Planificación completa",
+        nombre: "HubSpot completa",
         paraQue:
           "Todo lo que va a quedar configurado en HubSpot: además de lo esencial, cómo van a funcionar los procesos, la arquitectura, por dónde entran los leads, las conversaciones, las cotizaciones, los informes, las rutinas y las olas.",
       },
       {
         id: PLANTILLA_DE_LA_PLANIFICACION_ESENCIAL,
-        nombre: "Planificación esencial",
+        nombre: "Implementación esencial",
         paraQue:
           "Lo justo para configurar el portal: las acciones del diagnóstico en detalle, la ficha del proyecto, los usuarios y sus permisos, el ciclo de vida y el estado del lead, las propiedades, los pipelines, los formularios y las automatizaciones.",
         secciones: SECCIONES_DE_LA_PLANIFICACION_ESENCIAL,
@@ -165,7 +167,7 @@ export const ENTREGABLES: readonly Entregable[] = [
   {
     slug: "tech-requirements",
     agentId: "agent-desarrollo-canvas",
-    plantillas: [{ id: "integraciones", nombre: "Integraciones", paraQue: "El requerimiento técnico de las integraciones: arquitectura, objetos y cómo se comunican." }],
+    plantillas: [{ id: "integraciones", nombre: "Requerimiento técnico", paraQue: "El requerimiento técnico de las integraciones: arquitectura, objetos y cómo se comunican." }],
   },
   {
     slug: "delivery",

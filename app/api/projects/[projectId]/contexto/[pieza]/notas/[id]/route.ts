@@ -7,14 +7,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { guardContextoDelDocumento } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
-import { documentoConContexto } from "@/lib/contexto/documento";
+import { documentoDeLasNotas } from "@/lib/artefactos/contexto-server";
 
 export async function DELETE(
   _req: NextRequest,
   { params }: { params: Promise<{ projectId: string; pieza: string; id: string }> },
 ) {
   const { projectId, pieza, id } = await params;
-  const doc = documentoConContexto(pieza);
+  const doc = await documentoDeLasNotas(projectId, pieza);
   if (!doc) return NextResponse.json({ error: "Este documento no tiene contexto propio." }, { status: 404 });
   const guard = await guardContextoDelDocumento(projectId, doc.seccion);
   if (guard instanceof NextResponse) return guard;

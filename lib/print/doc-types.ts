@@ -142,8 +142,16 @@ export const PRINT_DOC_TYPES: PrintDocType[] = [
     id: "integration",
     pieceSlug: null,
     scope: "project-piece",
-    label: "Integración técnica",
+    label: "Requerimiento técnico",
     palette: "brand", // se comparte con el cliente y con quien integra
+    ready: true,
+  },
+  {
+    id: "roadmap",
+    pieceSlug: null,
+    scope: "project-piece",
+    label: "Hoja de ruta",
+    palette: "brand", // lo ve el cliente
     ready: true,
   },
   {

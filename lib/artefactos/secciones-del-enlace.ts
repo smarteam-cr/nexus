@@ -9,30 +9,35 @@
  *     salvo la portada y el cierre, que son la identidad del documento y pintan su propio `data`;
  *   · NO sale una sección interna de su tipo (`SECCIONES_INTERNAS`), aunque deje de ser `ctxDriven` algún día;
  *   · NO sale una key que el tipo no conoce: falla cerrado.
- * Un tipo sin defs acá, que no lee el cliente o sin barra de artefacto (la entrega y el requerimiento técnico, que siguen con
- * su superficie de siempre: la entrega guarda en su Json lo que el cliente no ve) no se comparte.
+ * Un tipo sin defs acá o que no lee el cliente no se comparte. La entrega de siempre tampoco (`sinEnlaceElDeSiempre`): guarda
+ * en su Json lo que el cliente no ve, y por eso no se duplica. Sí se comparte un informe de avance, que nace en blanco.
  */
 import type { BCSectionDef } from "@/components/landing/configs/business-case.defs";
 import { KICKOFF_DEF_BY_KEY } from "@/components/landing/configs/kickoff.defs";
 import { DIAGNOSTICO_DEF_BY_KEY } from "@/components/landing/configs/diagnostico.defs";
-import { PLANIFICACION_DEF_BY_KEY } from "@/components/landing/configs/planificacion.defs";
 import { ADOPCION_DEF_BY_KEY } from "@/components/landing/configs/adopcion.defs";
 import { INTEGRACION_DEF_BY_KEY } from "@/components/landing/configs/integracion.defs";
+import { HOJA_DE_RUTA_DEF_BY_KEY } from "@/components/landing/configs/hoja-de-ruta.defs";
+import { ENTREGA_DEF_BY_KEY_CON_ADICIONALES, PLANIFICACION_DEF_BY_KEY_CON_ADICIONALES } from "@/components/landing/configs/plantillas-adicionales.defs";
 import { esCustomKey } from "@/lib/landing/custom-sections";
-import { admiteCopias, TIPO_INTEGRACION_TECNICA, TIPO_PLAN_DE_ADOPCION, tipoDeArtefacto } from "./tipos";
+import { admiteCopias, TIPO_HOJA_DE_RUTA, TIPO_REQUERIMIENTO_TECNICO, TIPO_PLAN_DE_ADOPCION, tipoDeArtefacto } from "./tipos";
 
 /** Las defs de cada tipo que se puede compartir por enlace. La exploración no está: es interna. */
 const DEFS_DEL_ENLACE: Readonly<Record<string, Record<string, BCSectionDef>>> = {
   kickoff: KICKOFF_DEF_BY_KEY,
   diagnosis: DIAGNOSTICO_DEF_BY_KEY,
-  planning: PLANIFICACION_DEF_BY_KEY,
+  planning: PLANIFICACION_DEF_BY_KEY_CON_ADICIONALES,
   [TIPO_PLAN_DE_ADOPCION]: ADOPCION_DEF_BY_KEY,
-  [TIPO_INTEGRACION_TECNICA]: INTEGRACION_DEF_BY_KEY,
+  [TIPO_REQUERIMIENTO_TECNICO]: INTEGRACION_DEF_BY_KEY,
+  [TIPO_HOJA_DE_RUTA]: HOJA_DE_RUTA_DEF_BY_KEY,
+  delivery: ENTREGA_DEF_BY_KEY_CON_ADICIONALES,
 };
 
 /** Las secciones que el cliente nunca ve por el enlace, por tipo: lo que estima o decide el equipo por dentro. */
 export const SECCIONES_INTERNAS: Readonly<Record<string, readonly string[]>> = {
-  [TIPO_INTEGRACION_TECNICA]: ["estimacion"],
+  [TIPO_REQUERIMIENTO_TECNICO]: ["estimacion"],
+  // Lo que la entrega calcula o toma del diagnóstico: un informe de avance no lo lleva.
+  delivery: ["cumplimiento", "impacto", "escala"],
 };
 
 /** ¿Este tipo se comparte por su enlace propio? Lo lee el cliente y se sabe qué sale. */
