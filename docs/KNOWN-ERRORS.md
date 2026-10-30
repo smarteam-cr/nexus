@@ -15,6 +15,13 @@ No tropezar dos veces. Si pisás uno nuevo, agregalo acá.
 » falla solo en Windows.** *Causa:* con `core.autocrlf` los archivos llegan con
   CRLF. *Guarda:* el test normaliza los fines de línea al leer (`lib/tareas/guardas.test.ts`).
 
+- **Un análisis de la venta sale sin «Lo que falta explorar» (o sin «qué tan consultiva fue») aunque la reunión habló de
+  eso.** *Causa (2026-10-29, Camosa):* la cita se verificaba como pedazo EXACTO y el modelo la copia sin los «eh», los
+  «este» ni las palabras repetidas, o une una frase que la transcripción partió en dos turnos: se descartaba más de la
+  mitad de las citas ciertas, y con ellas los juicios. *Guarda:* `verificarCita` busca palabra por palabra
+  (`lib/analizador-venta/analisis.ts`, pruebas en `analizador.test.ts`). *Señal:* `AnalisisDeVenta.descartados` alto.
+  *OJO:* volver a analizar una sesión vieja puede cambiarle el alcance: la lectura de la reunión rehace la guía de esa
+  sesión después de la reunión, y esa guía ya no cuenta.
 - **Handoff con sesiones de OTRA empresa** (leak cross-cliente). *Causa:* resolución
   sesión→cliente dispersa + title-match con catch-all (`para` matcheaba "Empresa para pruebas"
   y DISTELSA) + la generación confiaba ciego en links `SessionProject` legacy. *Guarda:*

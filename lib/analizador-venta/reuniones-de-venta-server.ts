@@ -26,7 +26,7 @@ import { equipoEnLasReuniones } from "@/lib/google/equipo-en-la-reunion";
 import { esquemaDesactualizado } from "@/lib/db/esquema";
 import { reunionesDeLasSesionesDeLaPreventa } from "@/lib/exploraciones/fuentes";
 
-import { leerResultadoGuardado, type Juicio, type ResultadoDelAnalisis } from "./analisis";
+import { areaDelJuicio, exploracionEnFoco, leerResultadoGuardado, separarArea, type Juicio, type ResultadoDelAnalisis } from "./analisis";
 import type { QuienHablo } from "./quien-hablo";
 import { empresasConPreventaAbierta, quienHabloEnLasReuniones } from "./analizar-server";
 import { atribuirLaReunion, delEquipoQueHablo } from "./tendencia";
@@ -174,7 +174,9 @@ export async function reunionesDeVenta(o: { dias: number; ahora?: Date; clientId
     // Un análisis hecho cuando la reunión era de otra empresa no se muestra (INV57 lo reclama).
     const vigente = vigenteDe(f.id, f.empresaId);
     const resultado = vigente ? leerResultadoGuardado(vigente.resultado) : null;
-    const exploracion = (resultado?.juicios ?? []).filter((j: Juicio) => j.punto === "exploracion" && j.dimension);
+    // Solo el área a la que fueron las preguntas, y cada dimensión con su área («Datos» está en las tres).
+    const exploracion = resultado ? exploracionEnFoco(resultado) : [];
+    const nombre = (j: Juicio) => `${separarArea(j.dimension!).nombre}${areaDelJuicio(j) ? ` (${areaDelJuicio(j)})` : ""}`;
     const motivo =
       f.clase === "nada"
         ? DE_QUIEN_ES[
@@ -208,8 +210,8 @@ export async function reunionesDeVenta(o: { dias: number; ahora?: Date; clientId
             estado: vigente.estado,
             resumen: resultado?.resumen ?? null,
             quienHablo: (vigente.quienHablo as unknown as QuienHablo | null) ?? null,
-            exploradas: exploracion.filter((j) => j.valor !== "sin_explorar").map((j) => j.dimension!),
-            sinExplorar: exploracion.filter((j) => j.valor === "sin_explorar").map((j) => j.dimension!),
+            exploradas: exploracion.filter((j) => j.valor !== "sin_explorar").map(nombre),
+            sinExplorar: exploracion.filter((j) => j.valor === "sin_explorar").map(nombre),
             error: vigente.error,
           }
         : null,

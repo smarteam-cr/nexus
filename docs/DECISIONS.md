@@ -11917,7 +11917,8 @@ el manejo de un cliente ni de una sesión: el análisis vive en la preventa (doc
    línea y la cita; agrupadas por equipo cuando hay más de uno), las etapas del proceso consultivo que se saltaron o se
    hicieron en parte, en tarjetas en una fila, y las recomendaciones escritas como «Para mejorar». Una persona confirma
    (con una nota opcional); volver a analizar borra la confirmación e INV62 vigila que ninguna quede sobre un análisis
-   que nadie leyó.
+   que nadie leyó. ⚠ 2026-10-29: las tarjetas pasaron a listas, lo que falta explorar va solo del área a la que fueron
+   las preguntas y lo que salió bien va al lado de «Para mejorar» (sección «El análisis de la venta, menos agresivo»).
 2. **Lo que se fue el 27 oct (Elías revisó la primera versión):** los comentarios del vendedor (comentar o discrepar), el
    siguiente paso (con fecha y dueño, sus citas y si tuvo continuidad) y «Para la próxima» (las casillas, los ítems
    automáticos «Explorar X» y «Profundizar en X», que repetían lo que faltó explorar, y el camino para llevarlo a la guía
@@ -12634,3 +12635,67 @@ con el diff viejo solo como referencia, después de confirmar con búsqueda que 
   `send-to-canvas` en `scope-coverage.ts` sí sale con su ruta.
 - **El modelo, sus filas y lo que leen y escriben los agentes en `/analyze` se quedan**: es el ítem 23 y el resto del
   24 (los agentes encadenados por paso todavía leen las cards del paso anterior y las HUMAN del cliente).
+
+## El análisis de la venta, menos agresivo: lo bien con su cita, aterrizar y expandir, y lo que falta explorar enfocado (2026-10-29)
+
+**Contexto.** Elías, 29 oct, con la reunión de Camosa de ese día («se preguntó más y fue por mucho mejor camino»): el
+análisis está muy agresivo; tiene que reconocer lo que está bien, aparte de «Para mejorar» (que se conserva); el resumen
+tiene que mirar la estrategia de aterrizar y expandir; nada de recomendaciones vacías, neutro y con evidencia. Y la sesión
+del 29 no traía «Lo que falta explorar», mientras las anteriores traían todas las dimensiones de los tres departamentos.
+
+**Por qué el 29 oct salió sin «Lo que falta explorar» (medido en producción, solo lectura).** El análisis corrió a las
+23:30 con la guía de esa sesión armada el 28 oct, enfocada en dos dimensiones de Ventas. El modelo devolvió 14 juicios
+y Nexus descartó 7: los dos de exploración, «qué tan consultiva fue», la escala y tres etapas. No por inventados: la
+verificación buscaba la cita como un pedazo EXACTO y el modelo la copia «limpia» (sin los «eh», los «este», las palabras
+repetidas, o uniendo una frase que la transcripción partió en dos turnos con un «Mhm» de otro en medio). Repetido sobre
+dos corridas del 29 oct: la búsqueda exacta aceptaba 16 de 46 y 29 de 61 citas; la nueva, 37 y 53. Cinco minutos
+después del análisis, la lectura de la reunión rehízo la guía de esa sesión; por eso, si hoy se vuelve a analizar, la
+guía ya es de después de la reunión, no cuenta (la regla de CreditForce) y el alcance cae a las áreas en juego: las 24
+dimensiones de Ventas, Marketing y Servicio, lo mismo que se veía en las del 23 y el 27.
+
+**Decisiones.**
+1. **La cita se verifica palabra por palabra** (`lib/analizador-venta/analisis.ts › verificarCita`): casi todas sus
+   palabras (85 %), en orden, casi todas pegadas a la anterior (70 %, a lo sumo una muletilla en medio), sin saltarse
+   más de 12 palabras de lo dicho entre una y otra, en un tramo no mucho más largo que la cita; una letra distinta en
+   una palabra larga cuenta igual; la frase puede seguir en el siguiente turno de la misma persona si en medio hay hasta
+   dos interjecciones de otro (hasta cuatro palabras). Lo que se MUESTRA es el tramo de la transcripción, con sus
+   muletillas, nunca lo que escribió el modelo. *Lo que nunca se tolera* (lo encontraron las dos vueltas de la revisión):
+   un número distinto («3000» por «2000»; «dos» y «2», «2.000» y «2000» sí son lo mismo); una palabra que cambia el
+   sentido que la cita se salta, que lo dicho tiene de más dentro del tramo o justo antes de él («no», «nunca», «sin»,
+   «ni», «tampoco», «nada», «jamás», «ningún», «nadie», «poco», «casi», «apenas», «menos»), salvo el «¿no?» de muletilla,
+   el «sin embargo» y la palabra repetida («no, no»); unir la respuesta a lo de antes por encima de una pregunta corta
+   de otro («¿Y lo usan todos?» no es un «Mhm»); y palabras comunes sueltas juntadas de aquí y de allá. Con la
+   transcripción real del 29 oct: 0 de 40 citas inventadas pasan, en menos de un tercio de segundo, y de las 50 citas de
+   una corrida pasan 43 (con la búsqueda exacta, 9). *Lo que todavía se cuela:* una palabra cambiada por su contraria que
+   no está en esa lista («rechazado» por «aprobado») si el resto de la cita calza; la pantalla muestra siempre lo dicho.
+2. **Lo que salió bien (`bien`) va aparte de «Para mejorar»**, al lado en pantalla ancha, y **los dos llevan cita
+   siempre**: lo que llega sin una cita que esté se descarta y se cuenta. Antes una recomendación podía ir sin cita («si
+   la hay»): así se colaban los consejos genéricos.
+3. **Aterrizar y expandir: dos puntos nuevos.** `dolor` (a fondo · en parte · sin explorar): el cliente dijo qué
+   resultado necesita Y por qué no lo tiene hoy. `caso_de_uso` (hay base · falta · sin base): si con lo explorado ya se
+   puede ofrecer un caso de uso ligado a lo que más impacto le causa, o qué falta. El agente solo ve los casos de uso YA
+   ELEGIDOS en la preventa (`contenido.casosDeUso`), nunca el catálogo, y el código solo guarda el nombre de un caso si es
+   uno de esos. El resumen dice las tres cosas: lo que salió bien, el dolor y la base para el caso.
+4. **El foco de la sesión (`enfoque`).** Con el área ya sabida (el equipo de la sesión o la guía enfocada) el foco es esa.
+   Sin ella (las áreas en juego), el agente dice hacia qué áreas fueron las preguntas y juzga la exploración solo ahí; el
+   código suma toda área donde algo se exploró o se tocó con cita (si el modelo no nombra ninguna válida y nada se tocó,
+   el foco son todas: no se esconde nada). Lo juzgado fuera del foco se GUARDA y solo se deja de mostrar
+   (`exploracionEnFoco`): si el foco estuviera mal, el dato sigue. La tendencia de cada vendedor cuenta con la misma
+   regla, así un análisis viejo (hasta 24 dimensiones) y uno nuevo miden lo mismo. Un juicio de exploración sobre algo
+   que no estaba en la lista se descarta. La dimensión se guarda sin el área en el nombre y con su
+   área aparte: «Datos» está en los tres departamentos (la lectura de conjunto los confundía).
+5. **La pantalla, en listas, no en tarjetas.** «Lo que falta explorar» dice con quién se habló y hacia dónde fueron las
+   preguntas, lista lo que se tocó sin profundizar y lo que no se tocó de esa área, y en una línea «No se tocó en esta
+   sesión: Marketing y Servicio». El proceso consultivo, también en lista. Los análisis de antes se leen igual: sin foco
+   guardado, el foco son las áreas donde algo se tocó con cita (en Camosa, el del 23 oct pasa de 19 filas a 11 y el del 27
+   de 23 a 15, de Ventas y Marketing; Servicio queda en una línea). El del 29 sigue vacío hasta volver a analizarlo.
+6. **Lo que sostiene las reglas vive en el código** (la herramienta, el material y la lectura), no solo en el prompt:
+   mientras el prompt de la base no se re-siembra, el agente igual recibe el foco, los casos elegidos y los campos
+   nuevos, y lo que llega sin cita igual se cae. El prompt nuevo (`lib/analizador-venta/prompt.ts`) se siembra con
+   `scripts/crear-agente-analizador-venta.ts --apply`, SIN `--force`: el script reemplaza solo un prompt que él mismo
+   sembró antes (`HUELLAS_DE_PROMPTS_ANTERIORES`); si alguien lo calibró a mano en /agents, avisa y no lo pisa. El de
+   producción es idéntico al anterior del código (comprobado el 29 oct). El criterio sube a `2026-10-29`.
+7. **No se re-analizan solos los análisis viejos.** Volver a analizar borra la confirmación; se hace a mano desde la sesión.
+
+**Costo.** Una corrida sigue en ~$0,16–0,18 (Sonnet 4.6, ~23–29 mil tokens de entrada y ~6 mil de salida): el foco
+ahorra los juicios de las áreas que no se tocaron y lo bien, el dolor y el caso los gastan.
