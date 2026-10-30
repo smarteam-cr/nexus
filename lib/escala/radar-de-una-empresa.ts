@@ -110,7 +110,7 @@ export const GRANDE: MedidasDelRadar = {
   paso: 46,
   trazo: { anillo: 1.75, eje: 1.25, guia: 1, figura: 2.5 },
   rayas: { funcional: "7 5", guia: "2 4", noPreguntada: "4 5" },
-  etapa: { letra: 11, baja: 3.8, borde: 5 },
+  etapa: { letra: 12, baja: 3.8, borde: 5 },
   chipDeLaBase: { ancho: 64, alto: 22, letra: 11.5, trazo: 1.25, baja: 4 },
   vertice: { r: 5.5, rFrena: 7, halo: 15, trazo: 1 },
   conPuntaje: { r: 14, letra: 11.5, baja: 4, trazo: 2.5, halo: 20 },
@@ -118,10 +118,12 @@ export const GRANDE: MedidasDelRadar = {
   objetivo: { r: 10, rPunto: 3.5, trazo: 2, raya: "3 2.5" },
   flecha: { desde: 14, hasta: 16, punta: 12, base: 21, medioAncho: 5, trazo: 2, raya: "4 4" },
   puntoGris: 2.6,
-  centro: { area: 28, yArea: -2, sub: 14, ySub: 23 },
-  rotulo: { r: 353, numero: 12.5, nombre: 16.5, renglon: 20.1, aire: 27, letrasPorRenglon: 18, chip: { ancho: 118, alto: 20, letra: 10.5, baja: 10, texto: 13.8 } },
+  centro: { area: 30, yArea: -2, sub: 15, ySub: 24 },
+  // Los rótulos, un poco más grandes (Elías, 29 oct: «los textos de las dimensiones un poquito más grandes»); la página
+  // dibuja el radar un poco más angosto (radar-de-una-empresa.css), así que la figura queda algo más chica.
+  rotulo: { r: 353, numero: 13.5, nombre: 18, renglon: 21.6, aire: 28, letrasPorRenglon: 18, chip: { ancho: 126, alto: 21, letra: 11, baja: 10.5, texto: 14.4 } },
   numeroEnLaPunta: null,
-  mitad: { xIzquierda: 200, xDerecha: 1190, medio: 429, nombre: 28, renglon: 32, descripcion: 13.5, conNivel: true },
+  mitad: { xIzquierda: 200, xDerecha: 1190, medio: 429, nombre: 28, renglon: 32, descripcion: 14.5, conNivel: true },
 };
 
 /** La hoja 1 del PDF (horizontal): el tablero `PdfHoja1`, la misma geometría con letras un poco más grandes. */

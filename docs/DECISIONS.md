@@ -11743,6 +11743,29 @@ vive en el RUNBOOK › «El corte de la aplicación vieja del test»; acá va el
     agenda pasó de 560 a 500 px, lo que mide ese paso.
   - **El PDF:** el resumen nuevo en la hoja 1 y, en la hoja 3, qué priorizar debajo de cada barra. Sin tarjetas ni
     movimiento.
+- **El resultado, tercera vuelta (Elías lo probó en el 3004 el 29 oct).**
+  - **El resumen interpreta, no describe.** «Lo que hay es una descripción, no una interpretación»: ya no repite el nivel
+    (está en grande encima) ni nombra la industria (quien hizo el test la da por sentada). La IA escribe UNA frase con
+    lo que significa en la práctica operar así y lo que más frena; la página le agrega siempre «Es una estimación con
+    solo N preguntas: hay vacíos de información que conviene explorar para afinarla». La revisión descarta un resumen
+    que nombre cualquier nivel, la industria (por las palabras que la distinguen: «banca» delata «Banca y servicios
+    financieros»; una palabra corta cuenta entera, una larga por su raíz, para que «a pesar de» no cuente como
+    «pesado» — `nombraLaIndustria`) o que diga «estimación» (se leería dos veces). Sin IA, la interpretación sale de
+    cómo están las dos capas (`interpretacionSinIa`). *Por qué la frase de la estimación la pone la página y no la IA:*
+    la IA la olvidaba o se pasaba del largo. La industria va en un chip junto al título (página y PDF); «Otra», sin
+    chip. Las redacciones de antes de esta vuelta (sin `v: 2`) describían el resultado: la página no muestra su
+    resumen y usa la interpretación de los datos.
+  - **La tarjeta del radar, corta:** el nombre, el puntaje con su nivel, lo que le pasa al área por operar así según lo
+    que respondió (`impacto`, en palabras del cliente; sin IA, el costo de quedarse de la dimensión debajo de
+    Funcional, o lo que logra su nivel desde Funcional) y una línea de que es un estimado. Sale «En la escala, este
+    nivel es» y sus viñetas: nadie que llena el test tiene la escala en la cabeza.
+  - **El radar:** la base (Funcional) y las líneas grises más tenues; los rótulos de las dimensiones un poco más
+    grandes y el radar un poco más angosto (hasta 1.240 px); y el **imán** de la vieja (`anim.js › iniciarRadarFX`):
+    los vértices, la figura, el halo de lo que más frena y su flecha al objetivo (que se mueve con su vértice: si no, se
+    despegaba) se corren hasta 7 px hacia el cursor, con un piso de fuerza para que responda en toda la página
+    (`lib/tests-diagnostico/iman-del-radar.ts`). Solo con mouse y nunca con «reducir movimiento».
+  - **Las cajas de las capas, en el orden del radar:** Producción a la izquierda y Base operativa a la derecha.
+  - **Cada riesgo con subtítulo:** el nombre de la dimensión de la que sale (`dimensionDeCadaRiesgo`, con la escala).
 - **El PDF del resultado usa el motor de siempre, desde una ruta pública** (`GET /api/external/test/[token]/pdf`, que
   imprime `/external/test/resultado/imprimir?t=`): el token va en la consulta para que el log del motor no lo escriba, y
   `sinElToken` lo tapa en los errores. Como abre un Chromium sin login, además del semáforo único hay tope por dirección

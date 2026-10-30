@@ -57,8 +57,8 @@ export interface ResultadoDelTest {
   riesgos: string[];
   casos: { id: string; titulo: string; promesa: string; razon: string }[];
   /**
-   * El resumen sin IA, sin la industria (`resumenSinIa` de ./redaccion.ts). Lo que ve el prospecto arriba de su página es
-   * `resumenDelResultado` (el de la IA, o este con la industria): quien muestre un resumen, que use ese.
+   * El resumen sin IA (`resumenSinIa` de ./redaccion.ts). Lo que ve el prospecto arriba de su página es
+   * `resumenDelResultado` (el de la IA, o este): quien muestre un resumen, que use ese.
    */
   sintesis: string;
   /**
@@ -216,7 +216,7 @@ export function resultadoDelTest(o: {
     riesgos: riesgos.slice(0, 3),
     casos,
     // La misma síntesis sin IA que muestra la página (./redaccion.ts): una sola, para que no haya dos resúmenes distintos.
-    sintesis: resumenSinIa({ areaNombre: area.nombre, nivelNombre: nombre(a.nivel), capas, recomendacion }, null),
+    sintesis: resumenSinIa({ areaNombre: area.nombre, nivel: a.nivel, capas, recomendacion, preguntadas: preguntadas.size }),
     preguntadas: preguntadas.size,
     total: area.dimensiones.length,
   };

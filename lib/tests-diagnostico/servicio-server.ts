@@ -22,7 +22,7 @@ import type { Escala } from "@/lib/escala/documento/tipos";
 import { edicionDeLaIndustria } from "@/lib/clients/datos-de-la-empresa";
 import { esDominioGenerico } from "@/lib/clients/personas-de-la-empresa";
 import { resultadoDelTest, type ResultadoDelTest } from "./resultado";
-import { detallesDelResultado, type DetalleDeLaDimension } from "./detalle-de-la-dimension";
+import { detallesDelResultado, dimensionDeCadaRiesgo, type DetalleDeLaDimension } from "./detalle-de-la-dimension";
 import { etiquetaDeIndustria } from "./direccion-publica";
 import { redactarElResultado } from "./redaccion-server";
 import { unaSolaVez } from "./una-sola-vez";
@@ -165,16 +165,19 @@ export async function resultadoPublico(token: string): Promise<{ intento: Intent
 }
 
 /**
- * Lo que se dice de cada dimensión (./detalle-de-la-dimension.ts: la tarjeta del radar y «Ver detalles» de su barra), con
- * la escala vigente vista por la edición del resultado. Es un extra: sin escala publicada, o si algo falla, la página sale
- * sin tarjetas ni detalles y nunca se rompe.
+ * Lo que la página saca de la escala (./detalle-de-la-dimension.ts): lo que se dice de cada dimensión (la tarjeta del
+ * radar y «Ver detalles» de su barra) y de qué dimensión es cada riesgo, con la escala vigente vista por la edición del
+ * resultado. Es un extra: sin escala publicada, o si algo falla, la página sale sin eso y nunca se rompe.
  */
-export async function detallesParaLaPagina(r: ResultadoDelTest): Promise<Record<string, DetalleDeLaDimension>> {
+export async function loDeLaEscalaParaLaPagina(
+  r: ResultadoDelTest,
+): Promise<{ detalles: Record<string, DetalleDeLaDimension>; dimensionDelRiesgo: Record<string, string> }> {
   try {
     const vigente = await leerEscalaVigente();
-    if (!("escala" in vigente)) return {};
-    return detallesDelResultado(aplicarEdicion(vigente.escala, r.edicion), r);
+    if (!("escala" in vigente)) return { detalles: {}, dimensionDelRiesgo: {} };
+    const escala = aplicarEdicion(vigente.escala, r.edicion);
+    return { detalles: detallesDelResultado(escala, r), dimensionDelRiesgo: dimensionDeCadaRiesgo(escala, r) };
   } catch {
-    return {};
+    return { detalles: {}, dimensionDelRiesgo: {} };
   }
 }

@@ -35,7 +35,7 @@
  */
 import type { ReactNode } from "react";
 import type { DetalleDeLaDimension } from "@/lib/tests-diagnostico/detalle-de-la-dimension";
-import { etiquetaDeIndustria } from "@/lib/tests-diagnostico/direccion-publica";
+import { etiquetaDeIndustria, OTRA_INDUSTRIA } from "@/lib/tests-diagnostico/direccion-publica";
 import { ENLACE_DE_OTRA_EMPRESA, enlaceDeOtraArea, puntajeDeLaDimension } from "@/lib/tests-diagnostico/pagina-del-resultado";
 import { resumenDelResultado } from "@/lib/tests-diagnostico/redaccion";
 import type { DimensionDelResultado, ResultadoDelTest } from "@/lib/tests-diagnostico/resultado";
@@ -55,7 +55,7 @@ const DESCRIPCION_DE_LA_CAPA: Record<string, string> = {
   produccion: "qué entrega el departamento hacia afuera",
 };
 /** El test es una estimación: lo dice cada tarjeta del radar y cada «Ver detalles». */
-const FALTAN_PREGUNTAS = "Faltan preguntas por responder para ubicar mejor este puntaje: el test lo estima y el diagnóstico lo ubica con precisión.";
+const FALTAN_PREGUNTAS = "Es un estimado: faltan preguntas para ubicarlo con precisión.";
 const FALTA_CORROBORAR = "Falta información por corroborar: en la sesión lo revisamos contigo con evidencia.";
 
 const fechaLarga = (iso: string) =>
@@ -105,7 +105,8 @@ function PorDondeEmpezar({ rec }: { rec: NonNullable<ResultadoDelTest["recomenda
   );
 }
 
-function Riesgos({ riesgos }: { riesgos: readonly string[] }) {
+/** Los riesgos, cada uno con el nombre de la dimensión de la que sale como subtítulo (Elías, 29 oct). */
+function Riesgos({ riesgos, dimensionDelRiesgo }: { riesgos: readonly string[]; dimensionDelRiesgo: Record<string, string> }) {
   return (
     <Tarjeta titulo="Lo que hoy pone en riesgo a tu área">
       <ul className="rd-riesgos">
@@ -114,7 +115,10 @@ function Riesgos({ riesgos }: { riesgos: readonly string[] }) {
             <span className="rd-riesgo-icono">
               <IconoAlerta />
             </span>
-            <span>{x}</span>
+            <span className="rd-riesgo-texto">
+              {dimensionDelRiesgo[x] && <span className="rd-riesgo-titulo">{dimensionDelRiesgo[x]}</span>}
+              <span>{x}</span>
+            </span>
           </li>
         ))}
       </ul>
@@ -216,18 +220,16 @@ function Barras({ r, detalles = null, enPdf = false }: { r: ResultadoDelTest; de
 }
 
 /**
- * La tarjeta de una dimensión del radar (como la de la aplicación vieja): la página trae una por dimensión, escondida, y
- * AnimacionesDelResultado muestra la de la dimensión bajo el cursor (o el dedo), al lado del puntero.
+ * La tarjeta de una dimensión del radar: la página trae una por dimensión, escondida, y AnimacionesDelResultado muestra
+ * la de la dimensión bajo el cursor (o el dedo). Corta y legible (segunda prueba de Elías, 29 oct): el nombre, el
+ * puntaje con su nivel, lo que le pasa al área por operar así y una línea de que es un estimado.
  */
 function TarjetaDeLaDimension({ d, det }: { d: DimensionDelResultado; det: DetalleDeLaDimension | undefined }) {
   const p = puntajeDeLaDimension(d.nivel, d.puntaje);
   return (
     <div className="rd-tip" data-tarjeta={d.id} data-nivel={d.preguntada ? (d.nivel ?? undefined) : undefined} role="status" hidden>
       <div className="rd-tip-cabeza">
-        <div className="rd-tip-id">
-          <p className="rd-tip-nombre">{d.nombre}</p>
-          {det?.queMide && <p className="rd-tip-mide">{det.queMide}</p>}
-        </div>
+        <p className="rd-tip-nombre">{d.nombre}</p>
         {d.preguntada && d.nivel && (
           <div className="rd-tip-puntaje">
             <span className="rd-tip-num">
@@ -242,21 +244,11 @@ function TarjetaDeLaDimension({ d, det }: { d: DimensionDelResultado; det: Detal
         <p className="rd-tip-lectura">Esta parte no se preguntó en este test: la vemos juntos en la sesión.</p>
       ) : (
         <>
-          {(d.noLoSe || det?.lectura) && (
+          {(d.noLoSe || det?.impacto) && (
             <p className="rd-tip-lectura">
-              {d.noLoSe ? `Contestaste «No lo sé», así que cuenta como ${d.nivelNombre}. ` : ""}
-              {det?.lectura}
+              {d.noLoSe ? "Contestaste «No lo sé». " : ""}
+              {det?.impacto}
             </p>
-          )}
-          {det?.esteNivel && (
-            <div className="rd-tip-escala">
-              <p className="rd-tip-k">En la escala, este nivel es:</p>
-              <ul>
-                {det.esteNivel.criterios.map((c) => (
-                  <li key={c}>{c}</li>
-                ))}
-              </ul>
-            </div>
           )}
           <p className="rd-tip-estimado">{FALTAN_PREGUNTAS}</p>
         </>
@@ -265,11 +257,15 @@ function TarjetaDeLaDimension({ d, det }: { d: DimensionDelResultado; det: Detal
   );
 }
 
-/** Las dos capas, con su nivel (o que no se midió). */
+/**
+ * Las dos capas, con su nivel (o que no se midió). Producción a la izquierda y base a la derecha, como en el radar
+ * (Elías, 29 oct: «en la misma posición que en la escala»).
+ */
 function Capas({ r }: { r: ResultadoDelTest }) {
+  const enElOrdenDelRadar = [...r.capas].sort((a, b) => (a.clave === "produccion" ? -1 : 0) - (b.clave === "produccion" ? -1 : 0));
   return (
     <div className="rd-capas">
-      {r.capas.map((c) => (
+      {enElOrdenDelRadar.map((c) => (
         <div key={c.clave} className="rd-capa" data-nivel={c.nivel ?? undefined}>
           <p className="rd-capa-k">{c.nombre}</p>
           <p className="rd-capa-v">
@@ -302,6 +298,7 @@ export default function ResultadoDelTestVista({
   modo = "pantalla",
   aviso = null,
   detalles = null,
+  dimensionDelRiesgo = {},
 }: {
   r: ResultadoDelTest;
   empresa: string | null;
@@ -320,11 +317,16 @@ export default function ResultadoDelTestVista({
   aviso?: string | null;
   /** Lo que se dice de cada dimensión: la tarjeta del radar y «Ver detalles» de su barra (en el PDF, qué priorizar). */
   detalles?: Record<string, DetalleDeLaDimension> | null;
+  /** De qué dimensión es cada riesgo (el subtítulo de su tarjeta): `dimensionDeCadaRiesgo`. */
+  dimensionDelRiesgo?: Record<string, string>;
 }) {
   const enPdf = modo === "pdf";
   const nombreDeLaEmpresa = empresa || dominio || "";
   const rec = r.recomendacion;
-  const resumen = resumenDelResultado(r, industria ? etiquetaDeIndustria(industria) : null);
+  const resumen = resumenDelResultado(r);
+  // La industria va en un chip junto al título, no en el resumen (quien hizo el test la da por sentada).
+  const sector = industria && industria !== OTRA_INDUSTRIA ? etiquetaDeIndustria(industria) : null;
+  const chipDelSector = sector ? <span className="rd-sector">{sector}</span> : null;
   const parcial = r.preguntadas < r.total ? ` (${r.preguntadas} de ${r.total} partes)` : "";
   const otraArea = enlaceDeOtraArea({ version: r.version, industria });
 
@@ -351,7 +353,10 @@ export default function ResultadoDelTestVista({
       <>
         <section className="rd-head">
           <div className="rd-head-texto">
-            <p className="rd-label">Resultado general</p>
+            <p className="rd-label rd-eyebrow-con-sector">
+              Resultado general
+              {chipDelSector}
+            </p>
             <div className="rd-nivel-fila">
               {nivelGrande}
               <span className="rd-pill">Estimado</span>
@@ -365,7 +370,7 @@ export default function ResultadoDelTestVista({
       </>,
       <>
         {rec && <PorDondeEmpezar rec={rec} />}
-        {r.riesgos.length > 0 && <Riesgos riesgos={r.riesgos} />}
+        {r.riesgos.length > 0 && <Riesgos riesgos={r.riesgos} dimensionDelRiesgo={dimensionDelRiesgo} />}
         {r.casos.length > 0 && <Casos casos={r.casos} />}
       </>,
       <>
@@ -441,7 +446,10 @@ export default function ResultadoDelTestVista({
                   </span>
                 </span>
               )}
-              <p className="rd-eyebrow rd-entra">Diagnóstico de rendimiento · {r.areaNombre}</p>
+              <p className="rd-eyebrow rd-entra rd-eyebrow-con-sector">
+                Diagnóstico de rendimiento · {r.areaNombre}
+                {chipDelSector}
+              </p>
               {fecha && <p className="rd-fecha rd-entra">{fechaLarga(fecha)}</p>}
               <p className="rd-label rd-entra">Resultado general</p>
               <div className="rd-entra">{nivelGrande}</div>
@@ -457,12 +465,12 @@ export default function ResultadoDelTestVista({
           </div>
           <div className="rd-radar rd-entra">
             {radar}
-            <p className="rd-radar-ayuda">Pasa el cursor (o toca) una parte del radar para ver por qué está en ese nivel.</p>
+            <p className="rd-radar-ayuda">Pasa el cursor (o toca) una parte del radar para ver qué le pasa hoy a tu área en esa parte.</p>
           </div>
         </section>
 
         {rec && <PorDondeEmpezar rec={rec} />}
-        {r.riesgos.length > 0 && <Riesgos riesgos={r.riesgos} />}
+        {r.riesgos.length > 0 && <Riesgos riesgos={r.riesgos} dimensionDelRiesgo={dimensionDelRiesgo} />}
         {r.casos.length > 0 && <Casos casos={r.casos} />}
         <Barras r={r} detalles={detalles} />
 
