@@ -11777,7 +11777,12 @@ vive en el RUNBOOK › «El corte de la aplicación vieja del test»; acá va el
   tarjeta, sin el tope de la vuelta anterior. En el PDF el radar conserva su tamaño de la hoja y sus nombres; ahí crecen
   solo las etapas. Con «Ver puntajes» los discos también van en azul, salvo lo que más frena y «No lo sé». **La tarjeta del hover va junto a la dimensión** y ya no del lado contrario
   («súper alejado»): al costado de afuera del rótulo o, si ahí no cabe, encima o debajo de él; en una ventana baja, al
-  costado de adentro, sin taparlo nunca (`lib/tests-diagnostico/tarjeta-del-radar.ts`). En tablet y teléfono sigue en la otra mitad de la pantalla.
+  costado de adentro, sin taparlo nunca (`lib/tests-diagnostico/tarjeta-del-radar.ts`). En tablet y teléfono sigue en la
+  otra mitad de la pantalla. El jalón del vértice al pasar el cursor era del imán, no de la línea (medido en Chrome: los
+  dos iban juntos, a 0,07 px): con fuerza fija, al cruzar el cursor por encima del punto la dirección se invertía y el
+  vértice brincaba 11 px en un cuadro. Ahora la fuerza se apaga cerca del cursor (también cruzando rápido: menos de 4 px
+  por cuadro a 1500 px por segundo) y entra de a poco con el primer movimiento del mouse, y el vértice crece y se encoge
+  al ritmo de la línea, sin sombra.
 - **El PDF del resultado usa el motor de siempre, desde una ruta pública** (`GET /api/external/test/[token]/pdf`, que
   imprime `/external/test/resultado/imprimir?t=`): el token va en la consulta para que el log del motor no lo escriba, y
   `sinElToken` lo tapa en los errores. Como abre un Chromium sin login, además del semáforo único hay tope por dirección

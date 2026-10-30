@@ -172,7 +172,7 @@ function imanDelRadar(raiz: HTMLElement): () => void {
     const puntos: Punto[] = figura ? [...figura.points].map((q) => ({ x: q.x, y: q.y })) : [];
     // El resalte termina en el vértice: se corre con él.
     const lineas = [...svg.querySelectorAll<SVGLineElement>(".rde-eje-resalte")].map((el) => ({ el, x: el.x2.baseVal.value, y: el.y2.baseVal.value }));
-    return { svg, piezas, figura, puntos, lineas, caja: svg.getBoundingClientRect(), m: null as Punto | null, objetivo: { x: 0, y: 0 } };
+    return { svg, piezas, figura, puntos, lineas, caja: svg.getBoundingClientRect(), m: null as Punto | null, objetivo: { x: 0, y: 0 }, peso: 0 };
   });
   let cuadro = 0;
   let cursor: Punto | null = null;
@@ -183,11 +183,15 @@ function imanDelRadar(raiz: HTMLElement): () => void {
       if (!r.caja.width || !r.m) continue;
       r.m.x += (r.objetivo.x - r.m.x) * IMAN.suavizado;
       r.m.y += (r.objetivo.y - r.m.y) * IMAN.suavizado;
-      if (Math.abs(r.objetivo.x - r.m.x) > 0.3 || Math.abs(r.objetivo.y - r.m.y) > 0.3) falta = true;
+      r.peso += (1 - r.peso) * IMAN.suavizado;
+      if (Math.abs(r.objetivo.x - r.m.x) > 0.3 || Math.abs(r.objetivo.y - r.m.y) > 0.3 || r.peso < 0.98) falta = true;
       // De píxeles de pantalla a unidades del dibujo.
       const k = r.svg.viewBox.baseVal.width / r.caja.width || 1;
       const m = r.m;
-      const hacia = (p: Punto) => imanHacia(p.x, p.y, m.x, m.y, IMAN.amplitudPx * k, IMAN.radioPx * k);
+      const hacia = (p: Punto) => {
+        const d = imanHacia(p.x, p.y, m.x, m.y, IMAN.amplitudPx * k, IMAN.radioPx * k);
+        return { x: d.x * r.peso, y: d.y * r.peso };
+      };
       for (const p of r.piezas) {
         const d = hacia(p);
         p.el.style.translate = `${d.x.toFixed(2)}px ${d.y.toFixed(2)}px`;
@@ -213,7 +217,8 @@ function imanDelRadar(raiz: HTMLElement): () => void {
       if (!r.caja.width) continue;
       const vb = r.svg.viewBox.baseVal;
       r.objetivo = { x: vb.x + ((cursor.x - r.caja.left) / r.caja.width) * vb.width, y: vb.y + ((cursor.y - r.caja.top) / r.caja.height) * vb.height };
-      // La primera vez arranca donde está el cursor: suavizar desde (0, 0) los corría hacia arriba a la izquierda.
+      // La primera vez arranca donde está el cursor: suavizar desde (0, 0) los corría hacia arriba a la izquierda. El tirón
+      // entra de a poco (`peso`): de golpe, el primer movimiento del mouse corría toda la figura en un cuadro.
       r.m ??= { ...r.objetivo };
     }
     if (!cuadro) cuadro = requestAnimationFrame(dibujar);
