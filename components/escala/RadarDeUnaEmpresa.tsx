@@ -221,7 +221,7 @@ function LeyendaDelRadar({ dims, nombreDeNivel }: { dims: readonly DimensionDelR
           <svg width="24" height="10" viewBox="0 0 24 10" aria-hidden="true">
             <line x1="0" y1="5" x2="24" y2="5" stroke={C.noPreguntada} strokeWidth="1.75" strokeDasharray="4 4" />
           </svg>
-          Eje punteado y sin vértice: no se preguntó en este test
+          {dims.some((d) => d.sinMedir) ? "Eje punteado y sin vértice: todavía no se midió" : "Eje punteado y sin vértice: no se preguntó en este test"}
         </span>
       )}
       {noLoSe && (

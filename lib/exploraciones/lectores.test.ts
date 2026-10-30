@@ -98,9 +98,23 @@ type Destino =
    * LA DIRECCIÓN DE UNA SESIÓN (2026-10-28, lib/exploraciones/enlace-de-la-sesion.ts): solo los nombres de `?sesion=` y
    * `?momento=`, para sacarlos al cambiar de pieza. No lee ninguna exploración.
    */
-  | "direccion-de-la-sesion";
+  | "direccion-de-la-sesion"
+  /**
+   * LA ESCALA QUE VE EL CLIENTE (2026-10-30): la única página pública que muestra algo de una exploración, y a propósito
+   * (Elías: presentarle la escala). Lee SOLO por `escalaParaElCliente` (lib/exploraciones/escala-para-el-cliente-server.ts):
+   * los niveles confirmados con evidencia, sin citas, porqués, fuentes ni lo interno.
+   */
+  | "escala-al-cliente";
 
 const CENSO: Record<string, { destino: Destino; motivo: string }> = {
+  "lib/external/escala-view.ts": {
+    destino: "escala-al-cliente",
+    motivo: "El chokepoint de /external/escala/[token]: del token a lo que deja pasar la puerta. No toca la exploración.",
+  },
+  "app/api/sales/exploraciones/[id]/acceso/route.ts": {
+    destino: "ventas",
+    motivo: "El «Acceso» de La escala, en la cuenta y en la preventa: crear y revocar el enlace. Pantalla interna, con la guardia de la exploración.",
+  },
   "lib/escala/prueba/calculo.ts": {
     destino: "prueba-de-la-escala",
     motivo: "N2: el nivel de cada área con el chequeo del mapa (posicionesDelMapa + chequeoDelMapa), para compararlo con el que cree el equipo.",
@@ -476,6 +490,12 @@ const PUERTAS: Record<Exclude<Destino, "ventas">, { permitidas: RegExp; prohibid
     // Solo los niveles del mapa: ni la propuesta al cliente, ni el handoff, ni lo interno de la preventa.
     prohibidas: /\bparaLaPropuesta\b|bloqueParaLaPropuesta|exploracionParaElHandoff|internoParaElCse|bloqueParaElHandoff|leerExploracion\b/,
   },
+  "escala-al-cliente": {
+    permitidas: /\bescalaParaElCliente\b/,
+    // Solo la puerta: nada más de lib/exploraciones, ni la fila por una relación, ni el contenido, ni el mapa (trae lo que
+    // propone el agente), ni la propuesta o el handoff.
+    prohibidas: /@\/lib\/exploraciones\/(?!escala-para-el-cliente-server")|\bexploracion\s*:|\binclude\s*:|leerExploracion\b|leerContenido|\.exploracionDeVenta\b|\bexploracionesDeVenta\b|posicionesDelMapa|\bparaLaPropuesta\b|bloqueParaLaPropuesta|exploracionParaElHandoff|internoParaElCse|bloqueParaElHandoff/,
+  },
   "memoria-interna": {
     permitidas: /\bloAprendidoEnLaPreventa\b/,
     prohibidas: /bloqueParaLaPropuesta|\bparaLaPropuesta\b|leerExploracion\b|\.exploracionDeVenta\b/,
@@ -534,7 +554,8 @@ describe("⛔ quién lee una exploración de venta", () => {
   });
 
   it("ningún documento del cliente la lee directo (kickoff, entrega, diagnóstico, cronograma)", () => {
-    const deDocumentos = lectores.filter((f) => /kickoff|entrega|diagnostic|timeline|cronograma|external/i.test(f));
+    // La escala al cliente no es un documento que la lea: es su puerta, con `PUERTAS["escala-al-cliente"]` arriba.
+    const deDocumentos = lectores.filter((f) => /kickoff|entrega|diagnostic|timeline|cronograma|external/i.test(f) && CENSO[f]?.destino !== "escala-al-cliente");
     expect(deDocumentos).toEqual([]);
   });
 });

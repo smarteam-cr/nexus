@@ -2017,10 +2017,29 @@ model ExploracionDeVenta {
   pruebasDeLaEscala          PruebaDeLaEscala[]
   /// R5: las investigaciones que se mudaron de esta preventa a su empresa.
   investigacionesDeLaEmpresa InvestigacionDeEmpresa[] @relation("InvestigacionesDeLaPreventa")
+  /// El enlace con que la empresa ve esta escala (AccesoALaEscala).
+  accesoALaEscala            AccesoALaEscala?
 
   @@index([clientId])
   @@index([projectId])
   @@index([updatedAt])
+}
+
+// El enlace con que una EMPRESA ve su escala en una página como la del resultado del test (Elías, 30 oct). Mismo modelo
+// que un documento de la empresa: la URL es el secreto (/external/escala/[token], 256 bits), sin contraseña; se revoca y
+// se vuelve a crear. Lo que ve es lo medido hoy, solo con evidencia (lib/external/escala-view.ts). La empresa sale de la
+// exploración. SQL: scripts/sql/2026-10-30-acceso-a-la-escala.sql.
+model AccesoALaEscala {
+  id            String             @id @default(cuid())
+  exploracionId String             @unique
+  exploracion   ExploracionDeVenta @relation(fields: [exploracionId], references: [id], onDelete: Cascade)
+  accessToken   String             @unique // 64 hex (crypto.randomBytes(32))
+  enabledAt     DateTime           @default(now())
+  revokedAt     DateTime? // != null → el enlace no abre nada
+  lastUsedAt    DateTime?
+  creadoPor     String? // el correo de quien lo creó (auditoría)
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
 }
 
 // Una sesión o un documento que el vendedor suma a mano a su exploración (pegó el texto o subió un
