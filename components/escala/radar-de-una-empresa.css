@@ -52,16 +52,18 @@
 
 /* ── La página: el cursor sobre una dimensión (como la aplicación vieja) ─────────────────────────────────────────────
    AnimacionesDelResultado.tsx le pone al SVG `data-activa` y a las piezas de esa dimensión (`[data-d]`) la clase
-   `is-activa`: su eje se dibuja desde el rótulo hacia el centro, su vértice crece y su nombre se pinta en azul; lo demás
-   se apaga un poco. Solo las piezas de una dimensión y su cuña reciben el cursor. En el PDF no hay nada de esto. */
+   `is-activa`: su eje se dibuja desde el rótulo hasta su vértice, el vértice apenas crece y su nombre se pinta en azul; lo
+   demás se apaga un poco (29 oct: antes la línea llegaba al centro y el vértice crecía de golpe). Solo las piezas de una dimensión y su cuña reciben el cursor. En el PDF no hay nada de esto. */
 .rde-interactivo * { pointer-events: none; }
 .rde-interactivo [data-d], .rde-interactivo [data-d] * { pointer-events: auto; }
 .rde-interactivo .rde-eje-resalte { pointer-events: none; }
 .rde-interactivo .rde-cuna { cursor: pointer; }
+.rde-interactivo [data-d]:focus { outline: none; }
+.rde-interactivo [data-d]:focus-visible { outline: 2px solid #3b82f6; outline-offset: 3px; border-radius: 4px; }
 .rde-eje-resalte { fill: none; stroke: #2d5fb3; stroke-width: 2.5; stroke-linecap: round; stroke-dasharray: 1; stroke-dashoffset: 1; opacity: 0; transition: stroke-dashoffset .4s ease, opacity .4s ease .05s; }
 .rde-eje-resalte.is-activa { opacity: 1; stroke-dashoffset: 0; transition: stroke-dashoffset .6s cubic-bezier(.2, .7, .2, 1), opacity .15s ease; }
-.rde-interactivo .rde-vertice { transform-box: fill-box; transform-origin: center; transition: transform .2s ease, opacity .2s ease, filter .2s ease; }
-.rde-interactivo .rde-vertice.is-activa { transform: scale(1.6); filter: drop-shadow(0 1px 4px rgba(45, 95, 179, .55)); }
+.rde-interactivo .rde-vertice { transform-box: fill-box; transform-origin: center; transition: transform .35s cubic-bezier(.2, .7, .2, 1), opacity .25s ease, filter .35s ease; }
+.rde-interactivo .rde-vertice.is-activa { transform: scale(1.3); filter: drop-shadow(0 1px 2px rgba(45, 95, 179, .35)); }
 .rde-interactivo .rde-rotulo, .rde-interactivo .rde-numero { transition: opacity .2s ease; }
 .rde-interactivo .rde-rotulo-nombre { transition: fill .15s ease; }
 .rde-interactivo .rde-rotulo.is-activa .rde-rotulo-nombre { fill: #2d5fb3; }

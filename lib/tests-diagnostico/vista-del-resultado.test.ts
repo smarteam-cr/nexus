@@ -10,7 +10,9 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import ResultadoDelTestVista from "@/components/external/test/ResultadoDelTestVista";
+import type { DetalleDeLaDimension } from "./detalle-de-la-dimension";
 import { HOJA_DEL_PDF } from "./pagina-del-resultado";
+import { resumenSinIa } from "./redaccion";
 import type { ResultadoDelTest } from "./resultado";
 
 const NIVELES = [
@@ -80,11 +82,18 @@ function resultado(corto = false): ResultadoDelTest {
 }
 
 const AGENDA = "https://meetings.hubspot.com/smarteam/diagnostico";
-const dibujar = (modo: "pantalla" | "pdf", corto = false, agenda: string = AGENDA) =>
+const INDUSTRIA = "Maquinaria y equipo pesado";
+/** Lo que se dice de cada dimensión (lib/tests-diagnostico/detalle-de-la-dimension.ts), de ejemplo. */
+const DETALLES: Record<string, DetalleDeLaDimension> = {
+  "1.1": { queMide: "Mide si la venta sigue un proceso escrito.", lectura: "Hay etapas, pero cada vendedor las aplica a su manera.", esteNivel: { nombre: "Inicial", criterios: ["Hay etapas de palabra.", "La revisión no tiene fecha fija."] }, siguiente: { nombre: "Funcional", prioridad: "Escribe el proceso en el CRM y fija la revisión semanal." } },
+  "1.6": { queMide: "Mide cómo se priorizan los interesados.", lectura: "Se atiende a todos por igual.", esteNivel: { nombre: "Deficiente", criterios: ["No hay criterios de prioridad."] }, siguiente: { nombre: "Inicial", prioridad: "Define quién merece una demostración." } },
+};
+const dibujar = (modo: "pantalla" | "pdf", corto = false, agenda: string = AGENDA, r: ResultadoDelTest = resultado(corto)) =>
   renderToStaticMarkup(
     createElement(ResultadoDelTestVista, {
-      r: resultado(corto),
-      nombre: "Elías González",
+      r,
+      industria: INDUSTRIA,
+      detalles: DETALLES,
       empresa: "Máquinas del Valle",
       dominio: "maquinasdelvalle.cr",
       fecha: "2026-10-28T15:00:00.000Z",
@@ -111,7 +120,7 @@ function loQueSeLee(r: ResultadoDelTest): string[] {
     "28 de octubre de 2026",
     "Resultado general",
     "Deficiente",
-    "Elías, así está hoy tu área de Ventas, parte por parte.",
+    resumenSinIa(r, INDUSTRIA),
     "Estimado",
     "con lo que respondiste",
     "Base operativa",
@@ -140,9 +149,11 @@ function loQueSeLee(r: ResultadoDelTest): string[] {
 describe("la página de resultado, como se dibuja", () => {
   it("en la pantalla: ningún texto de antes se pierde", () => {
     const t = texto(dibujar("pantalla"));
-    for (const x of [...loQueSeLee(resultado()), "Hacer otro test", "Descargar PDF", "Diagnosticar otra área", "El siguiente paso", "Revisemos juntos tu resultado, sin costo"]) {
+    for (const x of [...loQueSeLee(resultado()), "Hacer otro test", "Descargar PDF", "Diagnosticar otra área", "Diagnosticar otra empresa", "El siguiente paso", "Revisemos juntos tu resultado, sin costo"]) {
       expect(t, `falta «${x}»`).toContain(x);
     }
+    // El saludo con el nombre se fue (29 oct): arriba va el resumen.
+    expect(t).not.toContain("así está hoy tu área");
     // Las barras: cada puntaje sobre 100.
     for (const p of ["30", "50", "10"]) expect(t).toContain(`${p} /100`);
   });
@@ -203,5 +214,59 @@ describe("la página de resultado, como se dibuja", () => {
     const hoja = css.match(/\.dr \.rd-hoja \{ width: (\d+)px; height: (\d+)px;/);
     expect(hoja).not.toBeNull();
     expect({ ancho: Number(hoja![1]), alto: Number(hoja![2]) }).toEqual(HOJA_DEL_PDF);
+  });
+});
+
+describe("los ajustes del 29 oct", () => {
+  it("el resumen de la IA, si lo hay, va arriba en lugar del de los datos (también en el PDF)", () => {
+    const r = { ...resultado(), redaccion: { modelo: "m", at: "", resumen: "El área de Ventas opera en un estado incipiente.", dimensiones: {} } };
+    for (const modo of ["pantalla", "pdf"] as const) {
+      const t = texto(dibujar(modo, false, AGENDA, r));
+      expect(t).toContain("El área de Ventas opera en un estado incipiente.");
+      expect(t).not.toContain(resumenSinIa(r, INDUSTRIA));
+    }
+  });
+
+  it("la tarjeta de cada dimensión del radar: escondida, con su puntaje, su nivel, cómo está, la escala y que es un estimado", () => {
+    const html = dibujar("pantalla");
+    const tarjetas = html.match(/<div class="rd-tip"[^>]*data-tarjeta="[^"]+"[^>]*hidden/g) ?? [];
+    expect(tarjetas).toHaveLength(8);
+    const t11 = texto(html.slice(html.indexOf('data-tarjeta="1.1"'), html.indexOf('data-tarjeta="1.2"')));
+    for (const x of ["Procesos y Rutinas", DETALLES["1.1"].queMide!, "30 /100", "Inicial", DETALLES["1.1"].lectura!, "En la escala, este nivel es:", ...DETALLES["1.1"].esteNivel!.criterios, "Faltan preguntas por responder"]) {
+      expect(t11, `falta «${x}» en la tarjeta`).toContain(x);
+    }
+    // La tarjeta dice cómo está; qué priorizar va solo en «Ver detalles».
+    expect(t11).not.toContain(DETALLES["1.1"].siguiente!.prioridad);
+  });
+
+  it("«Ver detalles» dice qué priorizar y que falta corroborar, sin repetir la tarjeta", () => {
+    const html = dibujar("pantalla");
+    const det = html.slice(html.indexOf('<details class="rd-detalles">'));
+    const t = texto(det.slice(0, det.indexOf("</details>")));
+    expect(t).toContain("Qué priorizar para llegar a Funcional");
+    expect(t).toContain(DETALLES["1.1"].siguiente!.prioridad);
+    expect(t).toContain("Falta información por corroborar");
+    expect(t).not.toContain(DETALLES["1.1"].lectura!);
+    expect(t).not.toContain("En la escala, este nivel es:");
+  });
+
+  it("al final: «otra área» con la misma industria y «otra empresa» desde cero, y el logo", () => {
+    const html = dibujar("pantalla");
+    expect(html).toContain(`href="/external/test?industria=${encodeURIComponent(INDUSTRIA).replace(/%20/g, "+")}#otra-area"`);
+    expect(html).toContain('href="/external/test#otra-empresa"');
+    expect(html).toMatch(/class="rd-pie"[\s\S]*logo-smarteam\.png/);
+  });
+
+  it("«El siguiente paso» con tres viñetas de lo que se lleva", () => {
+    const html = dibujar("pantalla");
+    expect(html.match(/<li><span class="rd-agenda-check">/g)).toHaveLength(3);
+    expect(texto(html)).toContain("aunque no trabajemos juntos");
+  });
+
+  it("el PDF lleva qué priorizar debajo de cada barra, y no las tarjetas ni «Ver detalles»", () => {
+    const html = dibujar("pdf");
+    expect(texto(html)).toContain(`Qué priorizar para llegar a Funcional: ${DETALLES["1.1"].siguiente!.prioridad}`);
+    expect(html).not.toContain("rd-tip");
+    expect(html).not.toContain("rd-detalles");
   });
 });

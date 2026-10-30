@@ -269,6 +269,8 @@ function SvgDelRadar({
   const d = dibujoDelRadar(m, dims, { frena, capas, nombreDeNivel });
   const vertFrena = d.vertices.find((v) => v.frena);
   const puntajeDelArea = redondo(resultado.puntaje);
+  /** Las etapas que tienen que ver con el resultado: donde cae algún vértice y el objetivo de lo que más frena. */
+  const enElResultado = new Set<Letra>([...d.vertices.map((v) => v.nivel), ...(d.objetivo ? [d.objetivo.nivel] : [])]);
 
   return (
     <svg viewBox={d.caja.map((v) => f(v)).join(" ")} role="img" aria-label={etiqueta} className={`rde-svg${interactivo ? " rde-interactivo" : ""}`}>
@@ -289,13 +291,15 @@ function SvgDelRadar({
           strokeDasharray={e.preguntada ? undefined : m.rayas.noPreguntada}
         />
       ))}
+      {/* La base (Funcional) punteada y entera; las etapas donde cae la empresa, suaves; las otras, casi transparentes
+          (Elías, 29 oct, como la aplicación vieja: los colores fuertes en etapas que no tenían que ver confundían). */}
       {d.anillos.map((a) => (
         <polygon
           key={`a${a.letra}`}
           points={puntosSvg(a.puntos)}
           fill="none"
           stroke={COLOR_DEL_NIVEL[a.letra]}
-          strokeOpacity={a.letra === "F" ? undefined : 0.7}
+          strokeOpacity={a.letra === "F" ? undefined : enElResultado.has(a.letra) ? 0.5 : 0.14}
           strokeWidth={m.trazo.anillo}
           strokeDasharray={a.letra === "F" ? m.rayas.funcional : undefined}
         />
@@ -332,19 +336,25 @@ function SvgDelRadar({
         {d.figura.length > 1 && (
           <polygon points={puntosSvg(d.figura)} fill={C.tinta} fillOpacity={0.07} stroke={C.tinta} strokeWidth={m.trazo.figura} strokeLinejoin="round" />
         )}
+        {/* El resalte va del rótulo hasta el vértice de la dimensión, no hasta el centro (como la vieja). Sin vértice
+            (no se preguntó), no hay resalte. */}
         {interactivo &&
-          d.ejes.map((e) => (
-            <line
-              key={`h${e.clave}`}
-              className="rde-eje-resalte"
-              data-d={e.clave}
-              x1={f(e.hasta[0])}
-              y1={f(e.hasta[1])}
-              x2={f(e.desde[0])}
-              y2={f(e.desde[1])}
-              pathLength={1}
-            />
-          ))}
+          d.ejes.map((e) => {
+            const v = d.vertices.find((x) => x.clave === e.clave);
+            if (!v) return null;
+            return (
+              <line
+                key={`h${e.clave}`}
+                className="rde-eje-resalte"
+                data-d={e.clave}
+                x1={f(e.hasta[0])}
+                y1={f(e.hasta[1])}
+                x2={f(v.punto[0])}
+                y2={f(v.punto[1])}
+                pathLength={1}
+              />
+            );
+          })}
         <Capa cual="sin">
           {vertFrena && <circle cx={f(vertFrena.punto[0])} cy={f(vertFrena.punto[1])} r={m.vertice.halo} fill={COLOR_DEL_NIVEL.D} fillOpacity={0.12} />}
           {d.vertices.map((v) =>
@@ -479,7 +489,14 @@ function SvgDelRadar({
         <RotuloDeLaDimension key={`r${r.clave}`} r={r} m={m} nombreDeNivel={nombreDeNivel} interactivo={interactivo} />
       ))}
       {d.numeros.map((n) => (
-        <g key={`c${n.clave}`} className="rde-numero" data-d={n.clave}>
+        <g
+          key={`c${n.clave}`}
+          className="rde-numero"
+          data-d={n.clave}
+          tabIndex={interactivo ? 0 : undefined}
+          role={interactivo ? "button" : undefined}
+          aria-label={interactivo ? `${dims.find((x) => x.clave === n.clave)?.nombre ?? n.numero}: ver cómo está` : undefined}
+        >
           <circle
             cx={f(n.punto[0])}
             cy={f(n.punto[1])}
@@ -554,7 +571,14 @@ function RotuloDeLaDimension({
   const ro = m.rotulo!;
   const apagado = r.estado.tipo === "noPreguntada" || r.estado.tipo === "sinUbicar";
   return (
-    <g className="rde-rotulo" data-d={r.clave}>
+    // En la página, cada rótulo recibe el foco del teclado y muestra la tarjeta de su dimensión (AnimacionesDelResultado).
+    <g
+      className="rde-rotulo"
+      data-d={r.clave}
+      tabIndex={interactivo ? 0 : undefined}
+      role={interactivo ? "button" : undefined}
+      aria-label={interactivo ? `${r.nombre.map((l) => l.texto).join(" ")}: ver cómo está` : undefined}
+    >
       {/* En la página, todo el bloque del rótulo recibe el cursor (también el hueco entre sus renglones). */}
       {interactivo && <rect x={f(r.caja.x0)} y={f(r.caja.y0)} width={f(r.caja.x1 - r.caja.x0)} height={f(r.caja.y1 - r.caja.y0)} fill="transparent" />}
       <text x={f(r.x)} y={f(r.yNumero)} textAnchor={r.ancla} fontSize={ro.numero} fontWeight={600} letterSpacing="0.04em" fill={C.apagado}>

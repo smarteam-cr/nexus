@@ -11,7 +11,7 @@
  *   · UNA sola recomendación con su razón (la del chequeo) y el costo de quedarse de esa dimensión;
  *   · los riesgos activos: los criterios de riesgo de los niveles que la dimensión todavía no alcanza (hasta 3);
  *   · los casos de uso que lo mueven (lib/casos-de-uso/camino.ts), sin precio;
- *   · una síntesis armada con los datos, sin IA (la de la IA, si se prende, solo la redacta).
+ *   · una síntesis armada con los datos, sin IA (`resumenSinIa`); la de la IA va aparte, en `redaccion`.
  * La versión de Marketing pregunta 4 dimensiones: las que no preguntó no cuentan (no aplican al cálculo) y el resultado
  * lo dice («estimado con 4 de 8»).
  */
@@ -20,6 +20,7 @@ import { nombreDeNivel } from "@/lib/escala/documento/parsear";
 import type { ClaveDeCapa, Escala, Letra } from "@/lib/escala/documento/tipos";
 import { LETRAS } from "@/lib/escala/documento/tipos";
 import { casosParaElArea, type AreaParaElCamino } from "@/lib/casos-de-uso/camino";
+import { resumenSinIa, type RedaccionDelResultado } from "./redaccion";
 import { NO_LO_SE, type PreguntaDelBanco, type RespuestasDelTest, type VersionDelTest } from "./tipos";
 
 export interface DimensionDelResultado {
@@ -55,7 +56,16 @@ export interface ResultadoDelTest {
     | null;
   riesgos: string[];
   casos: { id: string; titulo: string; promesa: string; razon: string }[];
+  /**
+   * El resumen sin IA, sin la industria (`resumenSinIa` de ./redaccion.ts). Lo que ve el prospecto arriba de su página es
+   * `resumenDelResultado` (el de la IA, o este con la industria): quien muestre un resumen, que use ese.
+   */
   sintesis: string;
+  /**
+   * Los textos que redactó la IA al terminar (./redaccion.ts): el resumen de arriba y, por dimensión, cómo está y qué
+   * priorizar. Opcional: los resultados de antes del 29 oct no lo traen, y sin él la página usa los textos de los datos.
+   */
+  redaccion?: RedaccionDelResultado | null;
   preguntadas: number;
   total: number;
 }
@@ -189,7 +199,6 @@ export function resultadoDelTest(o: {
     razon: c.razon,
   }));
 
-  const contestadas = Object.keys(niveles).length;
   return {
     v: 1,
     escalaVersion: escala.version,
@@ -206,35 +215,9 @@ export function resultadoDelTest(o: {
     recomendacion,
     riesgos: riesgos.slice(0, 3),
     casos,
-    sintesis: sintesisDelResultado({ areaNombre: area.nombre, nivelNombre: nombre(a.nivel), dimensiones, recomendacion, contestadas, total: area.dimensiones.length }),
+    // La misma síntesis sin IA que muestra la página (./redaccion.ts): una sola, para que no haya dos resúmenes distintos.
+    sintesis: resumenSinIa({ areaNombre: area.nombre, nivelNombre: nombre(a.nivel), capas, recomendacion }, null),
     preguntadas: preguntadas.size,
     total: area.dimensiones.length,
   };
-}
-
-/** La síntesis armada con los datos, sin IA: lo más fuerte, lo que frena y el alcance de la estimación. */
-export function sintesisDelResultado(o: {
-  areaNombre: string;
-  nivelNombre: string | null;
-  dimensiones: readonly DimensionDelResultado[];
-  recomendacion: ResultadoDelTest["recomendacion"];
-  contestadas: number;
-  total: number;
-}): string {
-  const conNivel = o.dimensiones.filter((d) => d.nivel);
-  if (!o.nivelNombre || !conNivel.length) {
-    return `Con lo que respondiste todavía no alcanza para ubicar a ${o.areaNombre}: en una sesión lo completamos juntos.`;
-  }
-  const mejor = [...conNivel].sort((a, b) => idx(b.nivel!) - idx(a.nivel!))[0];
-  const partes = [
-    `Por lo que respondiste, ${o.areaNombre} está hoy en ${o.nivelNombre}.`,
-    mejor && mejor.nivel && idx(mejor.nivel) >= idx("F") ? `Lo más sólido es ${mejor.nombre.toLowerCase()}.` : "",
-    o.recomendacion?.tipo === "trabajar"
-      ? `Lo que más te frena es ${o.recomendacion.dimensionNombre.toLowerCase()}: llevarlo a ${o.recomendacion.objetivoNombre} es lo primero.`
-      : "",
-    o.contestadas < o.total
-      ? `Es un estimado con ${o.contestadas} de las ${o.total} dimensiones del área; el resto se mira en la sesión.`
-      : "Es un estimado con lo que tú nos dijiste: en la sesión lo confirmamos con evidencia.",
-  ];
-  return partes.filter(Boolean).join(" ");
 }

@@ -53,7 +53,6 @@ export default async function ResultadoAnteriorPage({ searchParams }: { searchPa
   return (
     <ResultadoDelTestVista
       r={r}
-      nombre={null}
       empresa={null}
       agenda={agenda}
       detalles={"escala" in vigente ? detallesDelResultado(vigente.escala, r) : {}}

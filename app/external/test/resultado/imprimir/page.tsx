@@ -11,7 +11,7 @@ import { notFound } from "next/navigation";
 import PdfReadySignal from "@/components/print/PdfReadySignal";
 import ResultadoDelTestVista from "@/components/external/test/ResultadoDelTestVista";
 import { enlaceDeLaAgenda, TOKEN_DEL_RESULTADO } from "@/lib/tests-diagnostico/pagina-del-resultado";
-import { resultadoPublico } from "@/lib/tests-diagnostico/servicio-server";
+import { detallesParaLaPagina, resultadoPublico } from "@/lib/tests-diagnostico/servicio-server";
 
 export const dynamic = "force-dynamic";
 
@@ -27,15 +27,18 @@ export default async function ImprimirResultadoPage({ searchParams }: { searchPa
   if (!res) notFound();
   const agenda = enlaceDeLaAgenda(process.env.TESTS_ENLACE_DE_AGENDA);
   const { intento: i, resultado: r } = res;
+  // Qué priorizar en cada parte: en el PDF va como un renglón debajo de cada barra.
+  const detalles = await detallesParaLaPagina(r);
   return (
     <>
       <PdfReadySignal />
       <ResultadoDelTestVista
         r={r}
-        nombre={i.nombre}
         empresa={i.empresa}
         dominio={i.dominio}
         fecha={i.terminadoAt}
+        industria={i.industria}
+        detalles={detalles}
         agenda={agenda}
         modo="pdf"
       />
