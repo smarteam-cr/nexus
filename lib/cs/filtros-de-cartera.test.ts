@@ -33,6 +33,7 @@ const fila = (o: Partial<FilaDeLaCartera> & { relacionVigente?: string; momento?
     salud: "saludable",
     porqueDeLaSalud: "",
     razonesDelColor: [],
+    prioritaria: null,
     cse: { nombre: "Ana", email: "ana@x.com" },
     cses: ["Ana"],
     proyectosActivos: 1,

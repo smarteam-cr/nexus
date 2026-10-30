@@ -44,6 +44,7 @@ import {
   evidenciaJuntoALaRegla,
   PREFIJO_DE_RENOVACION,
   juntarEvidencia,
+  esPorCita,
   llaveDelVigia,
   mismaCitaVerificada,
   queHacerConLaRedeteccion,
@@ -58,6 +59,9 @@ import { buildInternalDomainsSet } from "@/lib/sessions/categorize";
 import { esReunionDePuertasAdentro } from "@/lib/sessions/candidatas-internas";
 import { riesgosRecientes } from "@/lib/seguimiento/hechos-server";
 import { hablanteDelEquipo } from "@/lib/seguimiento/hechos/salida";
+import { alertaConLaCita } from "./aviso-del-equipo";
+import { ALERTAS_DE_LA_CUENTA } from "./proyecto-en-marcha";
+import { alertasApagadasPorMarcha, cerrarAlertasApagadas, marchaDeLosProyectos } from "./proyecto-en-marcha-server";
 import { CLIENTE_NO_EXCLIENTE_WHERE } from "./exclientes";
 import { esCuentaExcliente } from "./exclientes-server";
 import { razonDelRiesgo } from "./propuestas-del-vigia";
@@ -103,10 +107,7 @@ const LOW_UUS_THRESHOLD = 35; // score de uso bajo (0-100) — candidato si adem
 // Categorías de CUENTA (no de proyecto): el hecho es del cliente (uso, licencias,
 // renovación, frialdad) — dedupean por clientId para que un cliente con 3 proyectos
 // no genere 3 alertas idénticas.
-const ACCOUNT_CATEGORIES = new Set<string>([
-  "ADOPTION_RISK", "LICENSE_UNUSED", "RENEWAL_RISK", "CHURN_RISK",
-  "ENGAGEMENT_COLD", "SUPPORT_TICKETS", "EXPANSION_OPPORTUNITY", "QUEJA",
-]);
+const ACCOUNT_CATEGORIES = ALERTAS_DE_LA_CUENTA;
 const SEVERITIES = ["LOW", "MEDIUM", "HIGH"] as const;
 const sevRank = (s: string) => SEVERITIES.indexOf(s as (typeof SEVERITIES)[number]);
 
@@ -175,9 +176,9 @@ function parseAlerts(rawText: string): ParsedAlert[] {
  * `evidence.citaSinVerificar` y la alerta se ve igual, sin pintar.
  *
  * La reunión se busca por el chokepoint de pertenencia (`whereBelongsToClient`): una reunión de otro cliente no
- * verifica nada, aunque el agente la cite. Una QUEJA cuya frase está en el turno de alguien de Smarteam (nombre y
- * apellido de alguien del equipo) tampoco: lo que dice el equipo no es una queja del cliente, aunque le llegue al vigía
- * como riesgo de la lectura (memoria de la cuenta, etapa 6).
+ * verifica nada, aunque el agente la cite. Una QUEJA cuya frase está en el turno de alguien de Smarteam
+ * (`hablanteDelEquipo`) pasa a AVISO DEL EQUIPO (2026-10-29): lo que dice el equipo no es una queja del cliente, aunque
+ * le llegue al vigía como riesgo de la lectura (memoria de la cuenta, etapa 6).
  */
 async function verificarCitas(
   alerts: ParsedAlert[],
@@ -205,6 +206,7 @@ async function verificarCitas(
     const { cita: _pedida, ...resto } = a.evidence as Record<string, unknown> & { cita?: unknown };
     void _pedida;
     let verificada: Record<string, unknown> | null = null;
+    let avisoDe: string | null = null;
     if (pedida.correoId) {
       const c = i.correos.get(pedida.correoId);
       if (c && citaEnElTexto(pedida.texto, `${c.asunto}
@@ -218,13 +220,11 @@ ${c.texto}`)) {
         const fuente = citaEnElTexto(pedida.texto, s.transcript) ? "reunion" : citaEnElTexto(pedida.texto, s.minute?.summary) ? "minuta" : null;
         const hablante = fuente === "reunion" && a.category === "QUEJA" ? hablanteDeLaCita(pedida.texto, s.transcript) : null;
         const laDijoSmarteam = !!hablante && hablanteDelEquipo(hablante, equipo) === true;
-        if (fuente && !laDijoSmarteam) verificada = { texto: pedida.texto, fuente, id: s.id, fecha: s.date.toISOString().slice(0, 10), titulo: s.title };
+        if (fuente) verificada = { texto: pedida.texto, fuente, id: s.id, fecha: s.date.toISOString().slice(0, 10), titulo: s.title };
+        if (fuente && laDijoSmarteam) avisoDe = hablante;
       }
     }
-    return {
-      ...a,
-      evidence: verificada ? { ...resto, cita: { ...verificada, verificada: true } } : { ...resto, citaSinVerificar: pedida.texto },
-    };
+    return alertaConLaCita(a, { evidencia: resto, textoPedido: pedida.texto, verificada, avisoDe });
   });
 }
 
@@ -284,6 +284,11 @@ async function prepararElTriaje(projectId: string): Promise<
   if (!esCartera) return { ok: false, reason: "no_es_cartera_cs" };
   // Un excliente confirmado no recibe alertas (lib/cs/exclientes.ts), venga de donde venga la corrida.
   if (await esCuentaExcliente(project.clientId)) return { ok: false, reason: "excliente" };
+  /* Las alertas de riesgo solo miran proyectos EN MARCHA (2026-10-29, lib/cs/proyecto-en-marcha.ts): uno que no arrancó
+     (Kaizen: creado y sin kickoff ni fecha) o bloqueado sin que el freno sea nuestro no se tría. Acá y no solo en el barrido, por la
+     misma razón que el gate de cartera: las cuatro vías pasan por esta función. */
+  const marcha = (await marchaDeLosProyectos([projectId], crDateParts(new Date()).dateKey)).get(projectId);
+  if (marcha && marcha.estado !== "en-marcha") return { ok: false, reason: `proyecto_${marcha.estado.replace("-", "_")}` };
 
   const agent = await prisma.agent.findUnique({ where: { id: AGENT_ID }, select: { systemPrompt: true } });
   if (!agent) return { ok: false, reason: "agent_not_seeded" };
@@ -473,8 +478,8 @@ async function guardarLasAlertas(p: {
 
     // La que ya está abierta sobre lo mismo se actualiza con lo último que vio el agente, tenga la llave que tenga:
     // también las de antes del 2026-10-16, que llevaban la huella. La renovación se junta con el aviso de la regla.
-    // La queja no: sigue una por cita (abajo, con su gemela).
-    if (a.category !== "QUEJA") {
+    // La queja y el aviso del equipo no: siguen uno por cita (abajo, con su gemela).
+    if (!esPorCita(a.category)) {
       const sobreLoMismo: Prisma.CsAlertWhereInput = {
         clientId: project.clientId,
         category: a.category,
@@ -562,7 +567,7 @@ async function guardarLasAlertas(p: {
     // misma frase de la misma reunión, `mismaCitaVerificada`) y sigue abierta, se actualiza esa en vez de duplicarla
     // con otra llave. SOLO la queja: es la única que levantan los dos detectores, y es de la cuenta. Un retraso es de
     // su proyecto: el de otro proyecto que cita la misma reunión es otra alerta.
-    if (a.category === "QUEJA") {
+    if (esPorCita(a.category)) {
       const gemelas = await prisma.csAlert.findMany({
         where: { clientId: project.clientId, category: a.category, status: { in: ["OPEN", "SEEN"] } },
         orderBy: { lastDetectedAt: "desc" },
@@ -803,7 +808,10 @@ export async function runWatchdogDebounceTick(now: Date): Promise<void> {
     },
     _max: { createdAt: true },
   });
+  // Por lo mismo, sin los que no están en marcha (2026-10-29): `prepararElTriaje` los saltea. Sus eventos esperan a que arranquen.
+  const marcha = await marchaDeLosProyectos(groups.map((g) => g.projectId), crDateParts(now).dateKey);
   const quiesced = groups
+    .filter((g) => (marcha.get(g.projectId)?.estado ?? "en-marcha") === "en-marcha")
     .filter((g) => g._max.createdAt && g._max.createdAt.getTime() < now.getTime() - DEBOUNCE_MS)
     .slice(0, MAX_PROJECTS_PER_DEBOUNCE_TICK);
   for (const g of quiesced) {
@@ -818,6 +826,11 @@ export async function runWatchdogDebounceTick(now: Date): Promise<void> {
 /** SWEEP diario (L–V 7:00 CR): pre-filtro DETERMINÍSTICO para no quemar tokens —
  *  solo van al agente los proyectos con algo nuevo que triar. */
 export async function runWatchdogSweep(now: Date): Promise<{ candidates: number; ran: number; enLote: number; sinCambios: number }> {
+  // Lo que la regla de «en marcha» apaga se cierra solo: si no, un proyecto que se bloquea hoy dejaría su alerta abierta
+  // en Para ti, sin poder cerrarla desde la ficha, que ya no la muestra (2026-10-29).
+  await alertasApagadasPorMarcha(crDateParts(now).dateKey)
+    .then(cerrarAlertasApagadas)
+    .catch((e) => console.error("[cs-watchdog] no se pudieron cerrar las alertas apagadas:", e instanceof Error ? e.message : e));
   const { loadPortfolio } = await import("@/lib/portfolio/load");
   // Mismo criterio que el panel (accessibleClientWhere de roles see-all): los
   // prospectos de Ventas no son clientes reales — sin esto el sweep les crearía
@@ -925,11 +938,17 @@ export async function runWatchdogSweep(now: Date): Promise<{ candidates: number;
       (r) => r.clientId === clientId && (r.projectId === null || r.projectId === projectId) && r.createdAt.getTime() > (ultimaCorrida.get(projectId) ?? 0),
     );
 
+  // Solo los proyectos en marcha son candidatos (2026-10-29): uno sin arrancar o detenido no ocupa un
+  // lugar del tope. `prepararElTriaje` lo vuelve a mirar para las otras vías.
+  const marcha = await marchaDeLosProyectos(rows.map((r) => r.projectId), crDateParts(now).dateKey);
+
   const candidates: string[] = [];
   const conNovedad = new Set<string>();
   const huellas = new Map<string, string>();
   for (const row of rows) {
     if (row.status !== "active") continue;
+    const estadoDeMarcha = marcha.get(row.projectId)?.estado;
+    if (estadoDeMarcha && estadoDeMarcha !== "en-marcha") continue;
     const s = row.summary;
     const sig = signalsByClient.get(row.clientId);
     const ops = opsByProject.get(row.projectId);

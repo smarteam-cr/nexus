@@ -63,6 +63,8 @@ const APIS = [
   "app/api/cs/salud/[clientId]/route.ts",
   "app/api/cs/vistas/route.ts",
   "app/api/cs/vistas/[id]/route.ts",
+  // Marcar una cuenta como prioritaria (2026-10-29): el rol del área y, además, la celda `customerSuccess.marcarPrioridad`.
+  "app/api/cs/prioridad/[clientId]/route.ts",
 ];
 const AREA = [...PANTALLAS, ...APIS];
 const CUENTA = "app/(shell)/customer-success/[clientId]/page.tsx";
@@ -151,6 +153,12 @@ describe("el área es de la CSL y dirección, por rol", () => {
     expect(sinGuard, `estas APIs dejaron de pedir el rol:\n${sinGuard.join("\n")}`).toEqual([]);
   });
 
+  it("⭐ marcar una cuenta prioritaria pide la celda de la matriz, además del rol del área", () => {
+    const src = sinComentarios("app/api/cs/prioridad/[clientId]/route.ts");
+    expect(src).toContain('can(guard.teamMember, "customerSuccess", "marcarPrioridad")');
+    expect(sectionByKey("customerSuccess")?.actions.find((a) => a.key === "marcarPrioridad")?.enforced).toBe(true);
+  });
+
   it("el ítem del sidebar también: lo ven quienes ven «Seguimiento de cuentas», y el CSE entra directo ahí", () => {
     /* 2026-10-19: el CSE ve «Éxito del cliente» en el menú, pero el clic lo lleva a «Seguimiento de cuentas» (la única
        página del área que es suya). La cartera sigue pidiendo `esLiderDeCs` (las pantallas de arriba). */
@@ -166,7 +174,8 @@ describe("el área es de la CSL y dirección, por rol", () => {
     const accion = sectionByKey("customerSuccess")?.actions.find((a) => a.key === "read");
     expect(accion, "desapareció la sección customerSuccess").toBeDefined();
     expect(accion?.enforced, "la celda vieja volvió a mostrarse en el modal").toBe(false);
-    const usos = AREA.filter((r) => sinComentarios(r).includes('"customerSuccess"'));
+    // La celda VIEJA es `read`. `marcarPrioridad` (2026-10-29) es otra, encendida: la piden la cartera y su ruta.
+    const usos = AREA.filter((r) => /"customerSuccess",\s*"read"/.test(sinComentarios(r)));
     expect(usos, `estas puertas volvieron a colgar de la celda:\n${usos.join("\n")}`).toEqual([]);
   });
 });

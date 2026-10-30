@@ -269,7 +269,7 @@ export async function buildWatchdogContext(
   const riesgosBlock = riesgos
     .map(
       (r) =>
-        `- [${r.fecha}] ${r.deLaCuenta ? "(de la cuenta) " : ""}${r.tipo === "queja" ? "(queja) " : ""}${r.frase}${r.gravedad ? ` · gravedad ${r.gravedad}` : ""} · ${quienLoDijo(r.quien)}\n  cita: «${r.cita.slice(0, 300)}»${r.sessionId ? ` · sessionId=${r.sessionId}` : ""}`,
+        `- [${r.fecha}] ${r.deLaCuenta ? "(de la cuenta) " : ""}${r.tipo === "queja" ? (r.quien === "smarteam" ? "(aviso del equipo, no queja del cliente) " : "(queja) ") : ""}${r.frase}${r.gravedad ? ` · gravedad ${r.gravedad}` : ""} · ${quienLoDijo(r.quien)}\n  cita: «${r.cita.slice(0, 300)}»${r.sessionId ? ` · sessionId=${r.sessionId}` : ""}`,
     )
     .join("\n");
 

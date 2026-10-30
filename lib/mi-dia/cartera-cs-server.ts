@@ -26,7 +26,7 @@ import { pipelineByKey } from "@/lib/projects/kind";
 import { esLiderDeCs } from "@/lib/cs/acceso";
 import { esCuentaDePrueba } from "@/lib/documentacion/equipo";
 import { hoyEnCostaRica } from "@/lib/cs/cartera";
-import { cseDeLaCuenta, proximaRenovacion, type CuentaDeCartera } from "@/lib/cs/cartera-reglas";
+import { cseDeLaCuenta, enMarcha, proximaRenovacion, type CuentaDeCartera } from "@/lib/cs/cartera-reglas";
 import { encargadoDeLaCuenta, proyectoQueLleva } from "@/lib/cuentas/encargado";
 import { relacionConHubspot } from "@/lib/cs/relacion-gestionada";
 import { portalDelSistema } from "@/lib/hubspot/registro-para-vincular";
@@ -262,6 +262,7 @@ export async function cargarCarteraDeCs(variante: "cse" | "csl", a: Alcance, o: 
           etapa: pc?.etapa ?? p.hubspotPipelineStageLabel ?? null,
           encargado: nombreDelEncargado(p.hubspotOwnerEmail, p.hubspotOwnerName),
           bloqueado: pc?.bloqueado ?? (p.hubspotStatus === "blocked" || /bloquead/i.test(p.hubspotPipelineStageLabel ?? "")),
+          enMarcha: pc ? enMarcha(pc) : true,
           atrasoDias: pc?.atraso?.dias ?? null,
           hubspotUrl: hubspotProjectUrl(portal, p.hubspotServiceId),
         };

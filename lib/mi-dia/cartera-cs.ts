@@ -65,6 +65,8 @@ export interface ProyectoDeCs {
   /** El encargado del proyecto en HubSpot. */
   encargado: string | null;
   bloqueado: boolean;
+  /** false = no arrancó o está detenido (lib/cs/proyecto-en-marcha.ts): el bloqueo se ve, pero no pide atención. */
+  enMarcha?: boolean;
   /** Días de atraso del cronograma (solo implementación y SmartLoop). */
   atrasoDias: number | null;
   hubspotUrl: string | null;
@@ -180,7 +182,7 @@ const plural = (n: number, uno: string, varios: string) => (n === 1 ? `1 ${uno}`
 export function motivosDeAtencion(e: EmpresaDeCs, hoyISO: string): MotivoDeAtencion[] {
   const out: MotivoDeAtencion[] = [];
   if (e.salud === "riesgo") out.push({ clave: "riesgo", texto: "Riesgo alto", peso: 100 });
-  const bloqueados = e.proyectos.filter((p) => p.bloqueado);
+  const bloqueados = e.proyectos.filter((p) => p.bloqueado && p.enMarcha !== false);
   if (bloqueados.length) {
     out.push({
       clave: "bloqueado",

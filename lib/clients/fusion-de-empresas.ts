@@ -91,6 +91,9 @@ export const SE_MUDAN = [
   /* El color corregido a mano y el «en espera del cliente» (2026-10-09). Es una bitácora: se muda entera, y el estado
      sigue siendo el último evento de cada clase. */
   ["correccionDeSalud", "clientId"],
+  /* La cuenta prioritaria (2026-10-29): `onDelete: Cascade`, así que sin mudarla se BORRARÍA la marca de la absorbida.
+     Es una bitácora: se muda entera, y la marca de hoy sigue siendo el último evento. */
+  ["prioridadDeCuenta", "clientId"],
   /* «¿Cuánto te tomó?» (2026-10-09): `onDelete: SetNull`; sin mudarla, la respuesta queda sin cliente. */
   ["preguntaDeTiempo", "clientId"],
   /* Preguntas sobre la cuenta (2026-10-13): `onDelete: SetNull`; sin mudarlas, lo que respondió el equipo queda sin

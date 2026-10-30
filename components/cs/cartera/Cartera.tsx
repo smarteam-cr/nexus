@@ -53,6 +53,7 @@ import { InfoHint } from "@/components/ui/Tooltip";
 import { Avatar, CajaDeTabla, EncabezadoDeTabla, META_DE_SALUD, Punto, Salud } from "../piezas";
 import { CeldaDeClasificacion, conLoGuardado, guardarClasificacion, operacionesParaUsarTodo } from "../CeldaDeClasificacion";
 import { CorregirColor } from "../AjusteDelColor";
+import MarcaDePrioridad from "../MarcaDePrioridad";
 import { CampoDeBusqueda } from "./Buscar";
 import FiltroMultiple from "./FiltroMultiple";
 import CseEncargadoSelect, { type OpcionDeEncargado } from "@/components/clients/CseEncargadoSelect";
@@ -77,6 +78,7 @@ export default function Cartera({
   yo,
   equipoParaPase,
   puedeReasignar,
+  puedeMarcarPrioridad,
 }: {
   filas: readonly FilaDeLaCartera[];
   /** Los CSE que llevan algún cliente, para el filtro. */
@@ -95,6 +97,8 @@ export default function Cartera({
   /** A quién se le puede pasar una cuenta (el pase escribe «CSE Encargado» en HubSpot). */
   equipoParaPase: OpcionDeEncargado[];
   puedeReasignar: boolean;
+  /** Puede marcar una cuenta como prioritaria (`customerSuccess.marcarPrioridad`, 2026-10-29). */
+  puedeMarcarPrioridad: boolean;
 }) {
   const router = useRouter();
   const toast = useToast();
@@ -121,7 +125,8 @@ export default function Cartera({
   const visibles = useMemo(
     () =>
       filasQuePasan(filas, filtros, hoy, (f) => pendientesDeConfirmar(f.clasificacion)).sort(
-        (a, b) => RANGO_DE_LA_SALUD[a.salud] - RANGO_DE_LA_SALUD[b.salud] || a.nombre.localeCompare(b.nombre, "es"),
+        // Dentro del color, la prioritaria primero (2026-10-29).
+        (a, b) => RANGO_DE_LA_SALUD[a.salud] - RANGO_DE_LA_SALUD[b.salud] || Number(!a.prioritaria) - Number(!b.prioritaria) || a.nombre.localeCompare(b.nombre, "es"),
       ),
     [filas, filtros, hoy],
   );
@@ -362,6 +367,7 @@ export default function Cartera({
               puedeCorregir={puedeCorregir}
               equipoParaPase={equipoParaPase}
               puedeReasignar={puedeReasignar}
+              puedeMarcarPrioridad={puedeMarcarPrioridad}
               onGuardada={(g) => guardar(f.clientId, g)}
             />
           ))}
@@ -449,6 +455,7 @@ function FilaDeCartera({
   puedeCorregir,
   equipoParaPase,
   puedeReasignar,
+  puedeMarcarPrioridad,
   onGuardada,
 }: {
   fila: FilaDeLaCartera;
@@ -458,6 +465,7 @@ function FilaDeCartera({
   puedeCorregir: boolean;
   equipoParaPase: OpcionDeEncargado[];
   puedeReasignar: boolean;
+  puedeMarcarPrioridad: boolean;
   onGuardada: (g: ClasificacionGuardada) => void;
 }) {
   const toast = useToast();
@@ -512,6 +520,7 @@ function FilaDeCartera({
         <Link href={`/customer-success/${f.clientId}`} className="truncate text-sm font-semibold hover:text-brand">
           {f.nombre}
         </Link>
+        <MarcaDePrioridad clientId={f.clientId} cuenta={f.nombre} prioritaria={f.prioritaria} puedeMarcar={puedeMarcarPrioridad} compacto />
         {f.excliente && (
           <span className="flex flex-wrap items-center gap-1.5 text-xs">
             <span className="rounded-full border border-line bg-surface-muted px-2 py-0.5 font-semibold text-fg-secondary">Excliente</span>

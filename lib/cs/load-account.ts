@@ -29,6 +29,7 @@ import { estadoDeLaCuenta, type Lectura } from "./ficha-reglas";
 import { clasificarCuenta, type ClasificacionDeLaCuenta } from "./clasificacion";
 import { leerClasificaciones } from "./clasificacion-server";
 import { leerAjustes } from "./ajustes-de-salud-server";
+import { leerPrioridades } from "./prioridad-de-cuenta-server";
 import { esCuentaDePrueba } from "@/lib/documentacion/equipo";
 import { camposPropuestos, leerFicha } from "@/lib/clients/ficha";
 import { propuestaDeEspera, sugerirEspera, SIN_AJUSTES, type PropuestaDeEspera } from "./ajustes-de-salud";
@@ -162,6 +163,8 @@ export interface CsAccountData {
   equipoParaPase: Array<{ email: string; name: string }>;
   /** Puede pasar la cuenta (`proyectos.reasignarEncargado`). Lo pone la página. */
   puedeReasignar?: boolean;
+  /** Puede marcar la cuenta como prioritaria (`customerSuccess.marcarPrioridad`, 2026-10-29). Lo pone la página. */
+  puedeMarcarPrioridad?: boolean;
   /** Las personas del cliente en HubSpot (copia de señales). */
   contactos: Array<{ nombre: string; cargo: string | null; email: string | null; ultimoContacto: string | null }>;
   resultados: Array<{
@@ -323,6 +326,8 @@ export async function loadCsAccount(
     facturacion: null,
     licenciasManuales: [],
     ajustes: ajustesLeidos.porCliente.get(clientId) ?? null,
+    // La marca de prioridad (2026-10-29): la armada ya la trae; esta, la de respaldo, la lee acá.
+    prioritaria: (await leerPrioridades([clientId]).catch(() => null))?.porCliente.get(clientId) ?? null,
   };
   if (!includePartner) {
     cuenta.partner = null;

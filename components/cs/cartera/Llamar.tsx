@@ -32,6 +32,7 @@ import {
 } from "@/lib/cs/cartera-reglas";
 import { Avatar, CajaDeTabla, Chip, EncabezadoDeTabla, Flecha, Salud } from "../piezas";
 import { AlertaParaCerrar, AlertasCerradas } from "../AlertaParaCerrar";
+import MarcaDePrioridad, { ChipDePrioridad } from "../MarcaDePrioridad";
 import { CampoDeBusqueda, OtrasCuentas } from "./Buscar";
 
 /** Los filtros que llegan desde la tira «Entrega de proyectos» (la regla vive en cartera-reglas). */
@@ -91,6 +92,7 @@ function VistaDeAlertas({
             <Link href={`/customer-success/${c.clientId}`} className="text-sm font-semibold text-fg hover:text-brand">
               {c.nombre}
             </Link>
+            {c.prioritaria && <ChipDePrioridad prioritaria={c.prioritaria} />}
             <span className="text-xs text-fg-muted">{plural(c.alertas.length, "alerta abierta", "alertas abiertas")}</span>
           </header>
           <div className="grid gap-2 p-3 md:grid-cols-2">
@@ -114,6 +116,7 @@ export default function Llamar({
   entrega,
   filtroDeEntrega,
   onQuitarFiltro,
+  puedeMarcarPrioridad,
 }: {
   filas: FilaParaLlamar[];
   /** Todas las cuentas, para el buscador: también las que no tienen nada que pida llamar (la pestaña «Cartera» las lista). */
@@ -129,6 +132,8 @@ export default function Llamar({
   entrega: EntregaDeProyectos;
   filtroDeEntrega: FiltroDeEntrega | null;
   onQuitarFiltro: () => void;
+  /** Puede marcar una cuenta como prioritaria (`customerSuccess.marcarPrioridad`, 2026-10-29). */
+  puedeMarcarPrioridad: boolean;
 }) {
   const router = useRouter();
   const [filtro, setFiltro] = useState<Filtro>("todas");
@@ -317,6 +322,11 @@ export default function Llamar({
                         {f.nombre}
                       </Link>
                       <span className="text-xs text-fg-muted">{f.mrr !== null ? `${fmtMonto(f.mrr, f.moneda)} al mes` : "monto sin dato"}</span>
+                      {(f.prioritaria || puedeMarcarPrioridad) && (
+                        <span className="relative z-[1] max-w-full">
+                          <MarcaDePrioridad clientId={f.clientId} cuenta={f.nombre} prioritaria={f.prioritaria} puedeMarcar={puedeMarcarPrioridad} compacto />
+                        </span>
+                      )}
                     </span>
                     <span className="flex min-w-0 flex-col gap-1">
                       <span className="text-[13px]">{f.principal.texto}</span>

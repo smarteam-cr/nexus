@@ -58,6 +58,8 @@ export const SCOPE_COVERAGE: Record<string, Cobertura> = {
   "lib/ai/proyeccion-server.ts": { modo: "criterio", criterio: "cartera" },
   // El vigía de UN cliente (al entrar y a mano, D14): corre para sus proyectos de cartera.
   "lib/cs/vigia-por-cliente.ts": { modo: "criterio", criterio: "cartera" },
+  // ¿Le queda a la cuenta un proyecto en marcha? (2026-10-29): mira sus proyectos de cartera, como el vigía.
+  "lib/cs/proyecto-en-marcha-server.ts": { modo: "criterio", criterio: "cartera" },
   // La carga de CS (2026-10-06): los cronogramas y las cuentas de la cartera, como Éxito del cliente.
   "lib/carga/queries.ts": { modo: "criterio", criterio: "cartera" },
   // La lectura de seguimiento (memoria de la cuenta, etapa 2): el CSE de la cuenta, para lo que prometió el cliente.

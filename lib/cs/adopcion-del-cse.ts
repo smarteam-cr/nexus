@@ -54,6 +54,7 @@ export function soloLaAdopcion(data: CsAccountData): CsAccountData {
       licenciasManuales: [],
       clasificacion: null,
       ajustes: null,
+      prioritaria: null,
       ultimoContacto: null,
       ticketsAbiertos: null,
       partner: p

@@ -147,10 +147,16 @@ export const PREFIJO_DE_RENOVACION = "renovacion:";
  * La llave de una alerta del vigía: UNA por cuenta (o proyecto) y categoría. Hasta el 2026-10-16 llevaba además la
  * huella que escribía el agente, que cambiaba en cada corrida: cada día nacía otra alerta sobre lo mismo (147 de las 162
  * de las últimas dos semanas seguían abiertas). Ahora la alerta que ya está se actualiza con lo último que vio.
- * La queja sigue siendo una por cita: cada una es una frase distinta del cliente, verificada, y pinta el color.
+ * La queja sigue siendo una por cita: cada una es una frase distinta del cliente, verificada, y pinta el color. El aviso
+ * del equipo (2026-10-29) también: dos avisos distintos no se pisan.
  */
 export function llaveDelVigia(scopeId: string, categoria: string, huella: string): string {
-  return categoria === "QUEJA" ? `${scopeId}:${categoria}:${huella}` : `${scopeId}:${categoria}`;
+  return esPorCita(categoria) ? `${scopeId}:${categoria}:${huella}` : `${scopeId}:${categoria}`;
+}
+
+/** Las alertas que van una por frase, no una por cuenta. */
+export function esPorCita(categoria: string): boolean {
+  return categoria === "QUEJA" || categoria === "AVISO_DEL_EQUIPO";
 }
 
 /** La llave del aviso de renovación de un cliente para una fecha y un umbral (uno por fecha desde el 2026-10-16). */

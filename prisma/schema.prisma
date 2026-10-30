@@ -290,6 +290,7 @@ model Client {
   partnerSnapshot          ClientPartnerSnapshot? // CS360: snapshot del objeto Partner Clients de HubSpot
   clasificacion            ClasificacionDeCuenta? // Éxito del cliente: relación, potencial y momento confirmados por la CSL
   correccionesDeSalud      CorreccionDeSalud[] // Éxito del cliente: el color corregido a mano y el «en espera del cliente»
+  prioridades              PrioridadDeCuenta[] // Éxito del cliente: la cuenta marcada como prioritaria (más seguimiento)
   accountBrief             CsAccountBrief? // CS360: resumen ejecutivo citado (agente)
   cuentaFinanciera         CuentaFinanciera? // Cobranza: perfil de cobro 1:1 (ver sección Cobranza)
   ingresosVariables        IngresoVariable[]         @relation("IngresosVariablesDeCliente") // Finanzas: entradas fuera del ciclo
@@ -3520,6 +3521,8 @@ enum CsAlertCategory {
   STAGE_STALLED // etapa temprana estancada (kickoff sin publicar / cronograma sin consensuar / entendimiento sin cerrar)
   // Éxito del cliente, 2026-10-09 (ADD VALUE, al final):
   QUEJA // el cliente se quejó en una reunión o un correo; con la frase literal verificada pinta el color
+  // 2026-10-29 (ADD VALUE, al final): una «queja» que en la reunión levantó alguien de Smarteam. No pinta el color.
+  AVISO_DEL_EQUIPO
 }
 
 enum CsAlertStatus {
@@ -3994,6 +3997,25 @@ model CorreccionDeSalud {
   porEmail       String
   porNombre      String?
   createdAt      DateTime @default(now())
+
+  @@index([clientId, createdAt])
+}
+
+/// La cuenta marcada como prioritaria (más seguimiento) por la CSL o un super admin (Éxito del cliente, 2026-10-29).
+/// Append-only: la marca de hoy es el último evento (lib/cs/prioridad-de-cuenta.ts). No cambia el color: ordena.
+model PrioridadDeCuenta {
+  id        String   @id @default(cuid())
+  clientId  String
+  client    Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  /// marcar · quitar
+  tipo      String
+  /// smartloop · ticket-grande · interlocutores-dificiles · otro (solo «marcar»).
+  motivo    String?
+  /// Una línea opcional (con «otro», el motivo en palabras).
+  nota      String?  @db.Text
+  porEmail  String
+  porNombre String?
+  createdAt DateTime @default(now())
 
   @@index([clientId, createdAt])
 }

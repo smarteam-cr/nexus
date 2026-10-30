@@ -99,15 +99,35 @@ export function limpiarCita(cita: string, hablantes: ReadonlySet<string>): strin
 const normalizarNombre = (s: string) =>
   s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-zñ ]+/g, " ").replace(/\s+/g, " ").trim();
 
+/** Segundos nombres comunes: en «Juan Carlos Armijos», «Carlos» no es un apellido. */
+const SEGUNDOS_NOMBRES = new Set(
+  "jose maria carlos luis antonio manuel fernanda fernando alejandra andres daniel david diego eduardo enrique felipe francisco ignacio javier lucia miguel pablo paula rafael sebastian sofia alberto isabel elena".split(" "),
+);
+
 /**
- * ¿Quien habla es del equipo de Smarteam? true con el nombre y el apellido de alguien del equipo; false con dos
- * palabras o más que no calzan; null con un solo nombre que coincide con el de alguien del equipo (no se sabe).
+ * ¿Quien habla es del equipo de Smarteam? true con el nombre y el apellido de alguien del equipo, o si todo lo que se
+ * ve de quien habla es parte de un nombre del equipo; false con dos palabras o más que no calzan; null con un solo
+ * nombre que coincide, o con dos nombres sin apellido («Juan Carlos»): no se sabe.
+ *
+ * Con TODO lo que se ve, no solo el último apellido (2026-10-29): en el equipo está «Valentina Sandoval Devia» y Meet
+ * la muestra como «Valentina Sandoval». Con el último apellido no calzaba, su turno pasaba por el del cliente y Nexus
+ * levantó en kölbi una «queja del cliente» que era un aviso de ella. Y TODO, no una palabra cualquiera: «María José
+ * García» (una clienta) comparte dos palabras con «María José Zamora Gutierrez», pero «García» no es del equipo.
+ *
+ * ⛔ Por el correo no: «Esteban González», cliente, calzaría con egonzalez@ de Elías, que estaba en la misma reunión. Una
+ * queja real se volvería un aviso y nadie llamaría.
  */
 export function hablanteDelEquipo(hablante: string, equipo: readonly string[]): boolean | null {
-  const palabras = new Set(normalizarNombre(hablante).split(" ").filter(Boolean));
+  const lista = normalizarNombre(hablante).split(" ").filter(Boolean);
+  const palabras = new Set(lista);
   if (!palabras.size) return null;
   const personas = equipo.map((n) => normalizarNombre(n).split(" ").filter(Boolean)).filter((t) => t.length >= 1);
   if (personas.some((t) => t.length >= 2 && palabras.has(t[0]) && palabras.has(t[t.length - 1]))) return true;
+  const calzan = lista.length >= 2 ? personas.filter((t) => t[0] === lista[0] && lista.every((p) => t.includes(p))) : [];
+  // Con cuatro palabras en el equipo, la segunda es un nombre: «María José» no dice el apellido de «María José Zamora Gutierrez».
+  const esApellido = (p: string, t: string[]) => !SEGUNDOS_NOMBRES.has(p) && !(t.length >= 4 && p === t[1]);
+  if (calzan.some((t) => lista.slice(1).some((p) => esApellido(p, t)))) return true;
+  if (calzan.length > 0) return null;
   if (palabras.size === 1 && personas.some((t) => palabras.has(t[0]))) return null;
   return false;
 }

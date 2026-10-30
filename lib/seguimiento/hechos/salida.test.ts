@@ -133,6 +133,36 @@ describe("la gente de Smarteam", () => {
     expect(hablanteDelEquipo("Elías", EQUIPO)).toBeNull();
     expect(hablanteDelEquipo("Ana", EQUIPO)).toBe(false);
   });
+
+  it("hablanteDelEquipo: con dos apellidos en el equipo, Meet muestra uno (kölbi, 2026-10-29)", () => {
+    // En el equipo: «Valentina Sandoval Devia»; en la transcripción: «Valentina Sandoval».
+    expect(hablanteDelEquipo("Valentina Sandoval", ["Valentina Sandoval Devia"])).toBe(true);
+    expect(hablanteDelEquipo("Valentina Devia", ["Valentina Sandoval Devia"])).toBe(true);
+    // Otra Valentina, con otro apellido, no.
+    expect(hablanteDelEquipo("Valentina Rojas", ["Valentina Sandoval Devia"])).toBe(false);
+  });
+
+  it("⭐ hablanteDelEquipo: un segundo nombre no es un apellido (clientas y clientes reales)", () => {
+    const equipo = ["María José Zamora Gutierrez", "Juan Carlos Armijos"];
+    expect(hablanteDelEquipo("María José García", equipo)).toBe(false);
+    expect(hablanteDelEquipo("Maria Jose Estrada", equipo)).toBe(false);
+    expect(hablanteDelEquipo("María José Martínez León", equipo)).toBe(false);
+    expect(hablanteDelEquipo("Juan Carlos Cedeño", equipo)).toBe(false);
+    // Los que sí son, y los que no se puede saber.
+    expect(hablanteDelEquipo("María José Zamora", equipo)).toBe(true);
+    expect(hablanteDelEquipo("Juan Carlos Armijos", equipo)).toBe(true);
+    expect(hablanteDelEquipo("Juan Carlos", equipo)).toBeNull();
+    expect(hablanteDelEquipo("María José", equipo)).toBeNull();
+  });
+
+  it("hablanteDelEquipo: con cuatro palabras en el equipo, la segunda es un nombre, esté o no en la lista", () => {
+    expect(hablanteDelEquipo("Mariana Inés", ["Mariana Inés Rojas Mora"])).toBeNull();
+    expect(hablanteDelEquipo("Mariana Rojas", ["Mariana Inés Rojas Mora"])).toBe(true);
+  });
+
+  it("⛔ el apellido solo no alcanza: un cliente con el apellido de alguien del equipo es del cliente", () => {
+    expect(hablanteDelEquipo("Esteban González", ["Elías González Ugalde"])).toBe(false);
+  });
 });
 
 describe("el ámbito", () => {

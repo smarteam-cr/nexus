@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
 import { leerPartner } from "./lectura-partner";
+import { estadoDeLaCuenta } from "./ficha-reglas";
 import {
   QUE_PINTA_CADA_COLOR,
   adopcionPorHub,
@@ -759,5 +760,69 @@ describe("CSE dado de baja", () => {
       HOY,
     );
     expect(fila.cses.sort()).toEqual(["Andrea Solís", "Heiver Gómez"]);
+  });
+});
+
+describe("solo los proyectos en marcha pintan riesgo (2026-10-29)", () => {
+  // Kamalio: su único proyecto dice «Bloqueado» en HubSpot (el cliente no responde) y nunca arrancó.
+  const kamalio = cuenta("kamalio", {
+    crudo: null,
+    ultimoContacto: null,
+    proyectos: [
+      proyecto({
+        nombre: "Kamalio",
+        etapa: "Bloqueado",
+        bloqueado: true,
+        motivoBloqueo: "Cliente no responde",
+        marcha: { estado: "sin-arrancar", porque: "no ha arrancado (sin kickoff publicado ni fecha de arranque confirmada)" },
+      }),
+    ],
+  });
+
+  it("⭐ un proyecto sin arrancar y bloqueado no pinta rojo ni es motivo de «bloqueado»", () => {
+    const s = saludDeLaCuenta(kamalio, HOY);
+    expect(s.salud).toBe("sin-datos");
+    expect(s.porque).toContain("Ningún proyecto en marcha: «Kamalio» no ha arrancado");
+    expect(motivosDeLaCuenta(kamalio, HOY).map((m) => m.clave)).not.toContain("bloqueado");
+  });
+
+  it("la misma cuenta, con el proyecto en marcha, sigue en rojo como antes", () => {
+    const enMarcha = { ...kamalio, proyectos: [{ ...kamalio.proyectos[0], marcha: null }] };
+    expect(saludDeLaCuenta(enMarcha, HOY).salud).toBe("en-riesgo");
+  });
+
+  it("el botón de «Entrega de proyectos» y el Equipo cuentan lo mismo que la lista", () => {
+    expect(entregaDeProyectos([kamalio]).bloqueados).toEqual([]);
+    expect(equipo([kamalio], HOY).filas.reduce((n, f) => n + f.bloqueados, 0)).toBe(0);
+  });
+
+  it("la entrega de la ficha dice lo mismo que la lista", () => {
+    const [entrega] = estadoDeLaCuenta(kamalio, HOY);
+    expect(entrega).toMatchObject({ color: "gris", palabra: "Ninguno en marcha" });
+  });
+});
+
+describe("la marca de prioridad ordena dentro del color (2026-10-29)", () => {
+  const marca = { motivo: "smartloop" as const, nota: null, porEmail: "avanegas@smarteamcr.com", porNombre: "Alexander Vanegas", en: "2026-10-29T15:00:00Z" };
+  const roja = (id: string, o: Partial<CuentaDeCartera> = {}) =>
+    cuenta(id, { proyectos: [proyecto({ bloqueado: true, motivoBloqueo: "Atraso por Smarteam" })], ...o });
+
+  it("⭐ una prioritaria en riesgo va antes que una no prioritaria en riesgo, aunque pese menos", () => {
+    const cancelada = cuenta("a-cancelada", { proyectos: [proyecto({ bloqueado: true })], crudo: { hs_cancellation_hubs: "SALES" } });
+    const filas = listaParaLlamar([cancelada, roja("b-prioritaria", { prioritaria: marca })], HOY);
+    expect(filas.map((f) => f.clientId)).toEqual(["b-prioritaria", "a-cancelada"]);
+    expect(filas[0].prioritaria).toMatchObject({ enPalabras: "SmartLoop", quien: "Alexander Vanegas" });
+  });
+
+  it("no cambia el color: una prioritaria que va bien no sube arriba de una en riesgo", () => {
+    const sana = cuenta("a-sana", { prioritaria: marca, proyectos: [proyecto({ atraso: { dias: 10, fase: null } })] });
+    const filas = listaParaLlamar([sana, roja("b-roja")], HOY);
+    expect(filas[0].clientId).toBe("b-roja");
+  });
+
+  it("en las alertas, dentro de las que tienen una alta, la prioritaria primero", () => {
+    const a = cuenta("a", { alertas: [alerta()] });
+    const b = cuenta("b", { alertas: [alerta()], prioritaria: marca });
+    expect(alertasParaRevisar([a, b], HOY).map((x) => x.clientId)).toEqual(["b", "a"]);
   });
 });
