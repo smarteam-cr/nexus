@@ -72,10 +72,9 @@ describe("el radar de una empresa: la geometría del diseño", () => {
       [490.3, 323.1],
       [648.3, 285.3],
     ]);
-    // Los nombres de las etapas y el chip de «La base».
+    // Los nombres de las etapas.
     expect(d.etapas[0].y).toBeCloseTo(289.1, 1);
     expect(d.etapas[2].y).toBeCloseTo(204.1, 1);
-    expect((d.chipDeLaBase.y0 + d.chipDeLaBase.y1) / 2).toBeCloseTo(619.7, 1);
   });
 
   it("cada vértice va EXACTO en el cruce de su eje con el anillo de su etapa, en las cinco etapas", () => {
@@ -100,19 +99,13 @@ describe("el radar de una empresa: la geometría del diseño", () => {
     expect(d.ejes.map((e) => e.grados)).toEqual([22.5, 67.5, 112.5, 157.5, 202.5, 247.5, 292.5, 337.5]);
   });
 
-  it("una dimensión que no se preguntó: eje punteado, sin vértice, sin puntos grises, y la figura pasa por el centro", () => {
+  it("una dimensión que no se preguntó: eje punteado, sin vértice, y la figura pasa por el centro", () => {
     const d = dibujar(GRANDE, CORTO, { capas: CAPAS });
     expect(d.ejes.filter((e) => !e.preguntada).map((e) => e.clave)).toEqual(["1.5", "1.6", "1.7", "1.8"]);
     expect(d.vertices.map((v) => v.clave)).toEqual(["1.1", "1.2", "1.3", "1.4"]);
     // La figura: los cuatro vértices de la base y UNA vez el centro por la racha de la producción.
     expect(d.figura).toHaveLength(5);
     expect(d.figura.filter(([x, y]) => x === GRANDE.cx && y === GRANDE.cy)).toHaveLength(1);
-    // Ningún punto gris en los ejes sin preguntar.
-    const angulosSinPreguntar = d.ejes.filter((e) => !e.preguntada).map((e) => e.grados);
-    for (const p of d.puntosGrises) {
-      const g = ((Math.atan2(p[0] - GRANDE.cx, GRANDE.cy - p[1]) * 180) / Math.PI + 360) % 360;
-      expect(angulosSinPreguntar.some((a) => Math.abs(a - g) < 0.01)).toBe(false);
-    }
     // El rótulo dice que no se preguntó.
     expect(d.rotulos.find((r) => r.clave === "1.6")!.estado).toEqual({ tipo: "noPreguntada" });
   });
@@ -157,8 +150,6 @@ describe("el radar de una empresa: la geometría del diseño", () => {
     // La flecha sale del vértice y no llega a tapar el aro del objetivo.
     expect(distancia(GRANDE, o.linea![0])).toBeGreaterThan(distancia(GRANDE, v.punto));
     expect(distancia(GRANDE, o.punta[0])).toBeLessThan(distancia(GRANDE, o.punto) - GRANDE.objetivo.r);
-    // El cruce del objetivo no lleva punto gris (lo tapa el aro).
-    expect(d.puntosGrises.some((p) => Math.hypot(p[0] - o.punto[0], p[1] - o.punto[1]) < 0.01)).toBe(false);
   });
 
   it("en el teléfono, con el objetivo a una sola etapa, la punta de la flecha cabe entre el vértice y el aro del objetivo", () => {
@@ -207,8 +198,8 @@ describe("el radar de una empresa: la geometría del diseño", () => {
     expect(r("1.3").yNumero).toBeCloseTo(537.5, 0);
     expect(r("1.4").yNumero).toBeCloseTo(750.6, 0);
     expect(r("1.5").nombre.map((l) => l.texto)).toEqual(["Líneas de máquinas", "y cotización"]);
-    // 584,6 en el diseño; 587,5 desde el 29 oct, con los rótulos un poco más grandes que pidió Elías.
-    expect(r("1.6").chip!.y).toBeCloseTo(587.5, 0);
+    // 584,6 en el diseño; 588 desde el 30 oct, con los rótulos más grandes que pidió Elías.
+    expect(r("1.6").chip!.y).toBeCloseTo(588, 0);
     expect(r("1.7").yNumero).toBeCloseTo(247.2, 0);
     expect(r("1.7").nombre.map((l) => l.texto)).toEqual(["Seguimiento de", "demostraciones y", "cotizaciones"]);
     expect(r("1.8").nombre.map((l) => l.texto)).toEqual(["Ventas ganadas", "y perdidas"]);

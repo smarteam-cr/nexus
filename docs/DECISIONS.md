@@ -11718,7 +11718,8 @@ vive en el RUNBOOK › «El corte de la aplicación vieja del test»; acá va el
     dice QUÉ HACER: qué priorizar para llegar al nivel siguiente (el de la IA o la descripción de ese nivel) y que falta
     información por corroborar. Lo que salió de «Ver detalles»: lo que respondió, los criterios del nivel siguiente y los
     riesgos (los riesgos ya tienen su sección). La tarjeta va del lado contrario del radar, a la altura del puntero: el
-    radar ocupa todo el ancho y al costado, como en la vieja, no hay lugar; así nunca tapa la dimensión que se mira. En
+    radar ocupa todo el ancho y al costado, como en la vieja, no hay lugar; así nunca tapa la dimensión que se mira (el
+    30 oct pasó a ir junto a la dimensión: abajo, «El radar de la empresa, más limpio»). En
     pantallas de menos de 1.100 px (tablet, teléfono) va en la otra mitad de la pantalla, con el alto que queda hasta el
     dedo, y se desplaza por dentro (`lib/tests-diagnostico/tarjeta-del-radar.ts`). Cada rótulo recibe el foco del
     teclado y muestra su tarjeta (`role="status"`): «cómo está» no queda solo para el cursor. «Qué priorizar» sin IA es
@@ -11760,12 +11761,23 @@ vive en el RUNBOOK › «El corte de la aplicación vieja del test»; acá va el
     Funcional, o lo que logra su nivel desde Funcional) y una línea de que es un estimado. Sale «En la escala, este
     nivel es» y sus viñetas: nadie que llena el test tiene la escala en la cabeza.
   - **El radar:** la base (Funcional) y las líneas grises más tenues; los rótulos de las dimensiones un poco más
-    grandes y el radar un poco más angosto (hasta 1.240 px); y el **imán** de la vieja (`anim.js › iniciarRadarFX`):
+    grandes y el radar un poco más angosto (ese tope de 1.240 px salió el 30 oct: abajo); y el **imán** de la vieja (`anim.js › iniciarRadarFX`):
     los vértices, la figura, el halo de lo que más frena y su flecha al objetivo (que se mueve con su vértice: si no, se
     despegaba) se corren hasta 7 px hacia el cursor, con un piso de fuerza para que responda en toda la página
     (`lib/tests-diagnostico/iman-del-radar.ts`). Solo con mouse y nunca con «reducir movimiento».
   - **Las cajas de las capas, en el orden del radar:** Producción a la izquierda y Base operativa a la derecha.
   - **Cada riesgo con subtítulo:** el nombre de la dimensión de la que sale (`dimensionDeCadaRiesgo`, con la escala).
+- **El radar de la empresa, más limpio (Elías, 30 oct, con una captura de la aplicación vieja).** «Se ve más limpio. No
+  sé si son por los colores.» Eran los colores: la figura y su centro pasan al azul de la vieja (`#0b58d3` al 16 %; el
+  fondo del centro es ese mismo azul sobre blanco, para que la figura no se corte), los vértices van en azul salvo el de
+  lo que más frena, y los anillos pasan a gris, más tenue el de las etapas sin uso, con Funcional como la única referencia
+  de color (verde y punteada). Salen el chip «La base» y los puntos grises de los cruces. Vale también para el PDF. La
+  letra: las etapas suben y los nombres llegan a 18 en el dibujo, que es el tope (con más, un nombre largo de un área de
+  3 + 5 dimensiones pisa la punta del radar); para que se vean más grandes, el radar vuelve a ocupar todo el ancho de su
+  tarjeta, sin el tope de la vuelta anterior. En el PDF el radar conserva su tamaño de la hoja y sus nombres; ahí crecen
+  solo las etapas. Con «Ver puntajes» los discos también van en azul, salvo lo que más frena y «No lo sé». **La tarjeta del hover va junto a la dimensión** y ya no del lado contrario
+  («súper alejado»): al costado de afuera del rótulo o, si ahí no cabe, encima o debajo de él; en una ventana baja, al
+  costado de adentro, sin taparlo nunca (`lib/tests-diagnostico/tarjeta-del-radar.ts`). En tablet y teléfono sigue en la otra mitad de la pantalla.
 - **El PDF del resultado usa el motor de siempre, desde una ruta pública** (`GET /api/external/test/[token]/pdf`, que
   imprime `/external/test/resultado/imprimir?t=`): el token va en la consulta para que el log del motor no lo escriba, y
   `sinElToken` lo tapa en los errores. Como abre un Chromium sin login, además del semáforo único hay tope por dirección

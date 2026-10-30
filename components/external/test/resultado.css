@@ -185,7 +185,7 @@
   .dr .rd-barra-fill::after { animation: none !important; }
 }
 
-/* La tarjeta de una dimensión del radar (como la de la vieja): fija, al lado del puntero, sin recibir el cursor.
+/* La tarjeta de una dimensión del radar (como la de la vieja): fija, junto a la dimensión, sin recibir el cursor.
    AnimacionesDelResultado le quita el `hidden` y la ubica. */
 .dr .rd-tip { position: fixed; top: 0; left: 0; z-index: 60; width: min(340px, calc(100vw - 24px)); box-sizing: border-box; padding: 14px 18px; background: #ffffff; border: 1px solid var(--v3-borde); border-radius: 16px; box-shadow: 0 2px 6px rgba(16, 42, 84, .06), 0 20px 44px -18px rgba(16, 42, 84, .38); pointer-events: none; display: grid; gap: 10px; opacity: 0; transition: opacity .16s ease; }
 .dr .rd-tip[hidden] { display: none; }

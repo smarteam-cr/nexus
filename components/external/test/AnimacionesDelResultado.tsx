@@ -10,8 +10,8 @@
  *     Antes la barra iba por una transición de CSS y el número por su cuenta, y no llegaban a la vez;
  *   · el imán del radar: sus vértices y su figura se corren apenas hacia el cursor (`imanDelRadar`, como la vieja);
  *   · al pasar el cursor (o tocar) una dimensión del radar, se resaltan su eje (del rótulo a su vértice), su vértice y su
- *     rótulo (`[data-d]` de RadarDeUnaEmpresa; el aspecto, en radar-de-una-empresa.css), y aparece su TARJETA al lado del
- *     puntero (`[data-tarjeta]`, que la página trae escondida: ResultadoDelTestVista › TarjetaDeLaDimension).
+ *     rótulo (`[data-d]` de RadarDeUnaEmpresa; el aspecto, en radar-de-una-empresa.css), y aparece su TARJETA junto a la
+ *     dimensión (`[data-tarjeta]`, que la página trae escondida: ResultadoDelTestVista › TarjetaDeLaDimension).
  * La página llega del servidor ya completa (las barras llenas, los números puestos): este componente solo esconde lo
  * que todavía no se ve para animarlo al llegar. Lo que ya está en pantalla al abrir no se toca (no parpadea), y con
  * «reducir movimiento» no se anima nada. «Llegar» es que su borde de arriba entró en la pantalla, se mire con el scroll
@@ -59,8 +59,8 @@ function ubicar(tip: HTMLElement, svg: SVGSVGElement, clave: string, x: number, 
     h: tip.offsetHeight || 260,
     x,
     y,
-    radar: { left: caja.left, right: caja.right },
-    xDeLaDimension: rotulo ? rotulo.left + rotulo.width / 2 : x,
+    radar: caja,
+    rotulo: rotulo ?? null,
   });
   tip.classList.toggle("es-angosta", p.angosta);
   if (p.altoMaximo !== null) tip.style.maxHeight = `${p.altoMaximo}px`;
