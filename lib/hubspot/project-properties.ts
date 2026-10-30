@@ -9,6 +9,7 @@
  * El punto de que esté acá y no copiada en la doc: la lista de propiedades cambia, y una copia
  * en prosa se vuelve mentira sin que nadie se entere. La doc lee ESTA constante.
  */
+import { PROP_CSE_ENCARGADO } from "./encargados";
 
 /**
  * Un `booleancheckbox` de HubSpot. Sin marcar llega como `null`, como `""` o directamente
@@ -32,14 +33,14 @@ export const PROJECT_PROPERTIES = [
   "estatus_del_proyecto",
   "tipo_de_servicio",
   "account_manager",
-  // Para meta info del proyecto que se muestra en el GPS
+  // El «Propietario»: quién lleva el proyecto (manda desde el 2026-10-29; ver lib/hubspot/encargados.ts)
   "hubspot_owner_id",
   "hs_createdate",
   "hs_pipeline",
   "hs_pipeline_stage",    // D.2: etapa actual del pipeline de CS (ancla del cronograma vivo)
   "proyecto_interno",     // booleancheckbox: proyecto de Smarteam para Smarteam (ver lib/projects/kind.ts)
-  "cse_encargado",        // propiedad custom OWNER = CSE de la cuenta (2026-10-09: manda; ver lib/hubspot/encargados.ts)
-  "csl_encargado",        // propiedad custom OWNER = la CSL; antes del 2026-10-09 guardaba al CSE (lo lee si «CSE Encargado» está vacío)
+  PROP_CSE_ENCARGADO,     // propiedad custom OWNER = CSE de la cuenta (desde el 2026-10-29 manda el propietario; esta, si está vacío; de salida)
+  "csl_encargado",        // propiedad custom OWNER = la CSL; antes del 2026-10-09 guardaba al CSE (lo lee si los dos de arriba están vacíos)
   // CS360 — dashboard de la CSL (internal names confirmados por discover-partner-clients.ts):
   "hs_priority",          // low | medium | high
   "motivo_de_bloqueo",    // enum radio 7 valores ("Cliente pidió pausa", "Atraso por Smarteam", …)
@@ -67,7 +68,7 @@ export const GRUPOS_DE_PROPIEDAD: { titulo: string; props: readonly string[] }[]
   },
   {
     titulo: "Quién lo lleva",
-    props: ["hubspot_owner_id", "account_manager", "cse_encargado", "csl_encargado", "proyecto_interno"],
+    props: ["hubspot_owner_id", "account_manager", PROP_CSE_ENCARGADO, "csl_encargado", "proyecto_interno"],
   },
   {
     titulo: "Seguimiento (CS360)",

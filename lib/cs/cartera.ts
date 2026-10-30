@@ -60,6 +60,7 @@ import { alertaApagadaPorMarcha, bloqueadoEnHubspot, marchaDelProyecto } from ".
 import { leerVistas } from "./vistas-de-cartera-server";
 import { cargarConfigCarga } from "@/lib/carga/queries";
 import { esCuentaDePrueba } from "@/lib/documentacion/equipo";
+import { esDelEquipoTecnico } from "@/lib/hubspot/encargados";
 import { DE_LA_PREVENTA } from "@/lib/exploraciones/marco";
 import { esExcliente } from "./exclientes";
 import { cuentasExcliente } from "./exclientes-server";
@@ -491,8 +492,8 @@ export async function cargarCarteraDeLaCsl(clientWhere: Prisma.ClientWhereInput 
     metaRecurrentes: configCarga?.config.metaRecurrentes ?? { min: 6, max: 7 },
     /** El id de cada persona del equipo por correo, para abrir su 1:1 en la carga. */
     idsDelEquipo: Object.fromEntries(delEquipo.map((m) => [m.email.toLowerCase(), m.id])) as Record<string, string>,
-    /** A quién se le puede pasar una cuenta: el equipo activo (sin las cuentas de prueba). */
-    equipoParaPase: delEquipo.filter((m) => !esCuentaDePrueba(m.name)).map((m) => ({ email: m.email, name: m.name })),
+    /** A quién se le puede pasar una cuenta: el equipo activo (sin las cuentas de prueba ni el equipo técnico). */
+    equipoParaPase: delEquipo.filter((m) => !esCuentaDePrueba(m.name) && !esDelEquipoTecnico(m.roleEnum)).map((m) => ({ email: m.email, name: m.name })),
     /** false = el SQL de las correcciones del color todavía no corrió: se ve el color de Nexus, sin corregir. */
     ajustesListos: !(await leerAjustes(todas.slice(0, 1).map((c) => c.clientId))).faltaLaTabla,
     renovaciones: renovacionesProximas(cuentas, hoy, 120),
@@ -504,7 +505,7 @@ export async function cargarCarteraDeLaCsl(clientWhere: Prisma.ClientWhereInput 
     /** Las cuentas con proyectos activos sin CSE y a quién propone Nexus (lo confirma la CSL con el pase de cuenta). */
     sinCse: await proponerCseParaLasCuentas(
       cuentas,
-      delEquipo.filter((m) => !esCuentaDePrueba(m.name)).map((m) => ({ email: m.email, nombre: m.name, esCse: m.roleEnum === "CSE" })),
+      delEquipo.filter((m) => !esCuentaDePrueba(m.name) && !esDelEquipoTecnico(m.roleEnum)).map((m) => ({ email: m.email, nombre: m.name, esCse: m.roleEnum === "CSE" })),
     ),
     nivel: nivelDePartner(cuentas, hoy),
     fuentes,

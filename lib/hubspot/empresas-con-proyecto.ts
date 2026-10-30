@@ -28,7 +28,9 @@ import { OBJETO_PROYECTOS } from "./asociaciones-proyecto";
 import { prisma } from "@/lib/db/prisma";
 import { detectarGemelas, type ClienteComparable, type Gemela } from "@/lib/clients/gemelas";
 import { resolvePipeline, decidirCierre, estadoCrudoDeHubspot } from "@/lib/projects/kind";
-import { encargadoDelProyecto } from "@/lib/hubspot/encargados";
+import { candidatosDelProyecto, ownerQueSeGuarda, PROP_CSE_ENCARGADO } from "@/lib/hubspot/encargados";
+import { correosDelEquipoTecnico } from "@/lib/hubspot/equipo-tecnico";
+import { esPipelineIdDeCs } from "@/lib/projects/scope";
 
 /** Un proyecto de HubSpot que Nexus todavía no tiene. */
 export interface ProyectoFaltante {
@@ -108,8 +110,8 @@ interface RecordProyecto {
   /** Los dos que consume `decidirCierre`: un proyecto terminado no se ofrece. */
   stageId: string | null;
   rawStatus: string | null;
-  ownerId: string | null;
-  cslEncargado: string | null;
+  /** Quién puede llevar el proyecto, en orden (`candidatosDelProyecto`), como en el espejo. */
+  candidatos: string[];
 }
 
 /**
@@ -137,7 +139,7 @@ export async function listarEmpresasTraibles(): Promise<UniversoTraible | null> 
          paga —mismo criterio que `hs_merged_object_ids` en el paso 4— y sin ellas la lista
          ofrece proyectos terminados, que es el caso que deja el alta sin salida. */
       properties:
-        "hs_name,hs_pipeline,hubspot_owner_id,cse_encargado,csl_encargado," +
+        `hs_name,hs_pipeline,hubspot_owner_id,${PROP_CSE_ENCARGADO},csl_encargado,` +
         "hs_pipeline_stage,hs_status,estatus_del_proyecto",
       ...(after ? { after } : {}),
     });
@@ -160,9 +162,8 @@ export async function listarEmpresasTraibles(): Promise<UniversoTraible | null> 
            ellas decide. Esta línea nació invertida y podía ofrecer un proyecto que el espejo
            —mirando el mismo record— iba a cerrar. Ver `estadoCrudoDeHubspot`. */
         rawStatus: estadoCrudoDeHubspot(r.properties),
-        ownerId: r.properties.hubspot_owner_id ?? null,
-        // «CSE Encargado» primero (2026-10-09): el mismo encargado que lee el espejo (`encargadoDelProyecto`).
-        cslEncargado: encargadoDelProyecto(r.properties),
+        // El propietario primero (2026-10-29): el mismo encargado que lee el espejo.
+        candidatos: candidatosDelProyecto(r.properties),
       });
     }
     after = body.paging?.next?.after;
@@ -370,6 +371,8 @@ export async function listarEmpresasTraibles(): Promise<UniversoTraible | null> 
 
   // ── 5 · Quién es el encargado ──────────────────────────────────────────────
   const duenios = new Map<string, { email: string | null; nombre: string | null }>();
+  // Sin el equipo técnico la lista igual se ofrece: lo que muestra es una propuesta, y el espejo decide al traerla.
+  const tecnicos = await correosDelEquipoTecnico().catch(() => new Set<string>());
   try {
     const res = await hs.apiRequest({ method: "GET", path: "/crm/v3/owners?limit=200" });
     if (res.status === 200) {
@@ -410,15 +413,15 @@ export async function listarEmpresasTraibles(): Promise<UniversoTraible | null> 
       rotulo: ficha.name ?? ficha.domain ?? `Empresa ${companyId}`,
       dominio: ficha.domain,
       proyectos: faltantes.map((p) => {
-        const idDuenio = p.cslEncargado ?? p.ownerId;
-        const d = idDuenio ? duenios.get(idDuenio) : undefined;
+        const candidatos = p.candidatos.map((id) => ({ id, name: duenios.get(id)?.nombre ?? null, email: duenios.get(id)?.email ?? null }));
+        const d = ownerQueSeGuarda(candidatos, { deCs: esPipelineIdDeCs(p.pipelineId), tecnicos });
         return {
           hubspotServiceId: p.id,
           nombre: p.nombre,
           pipelineId: p.pipelineId,
           tipo: resolvePipeline(p.pipelineId)?.label ?? null,
           encargadoEmail: d?.email ?? null,
-          encargadoNombre: d?.nombre ?? null,
+          encargadoNombre: d?.name ?? null,
         };
       }),
       gemelas: detectarGemelas({ nombre: ficha.name, dominio: ficha.domain }, comparables),

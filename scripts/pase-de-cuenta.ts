@@ -24,7 +24,8 @@ import { prisma } from "@/lib/db/prisma";
 import { getSystemHubspotClient } from "@/lib/hubspot/client";
 import { OBJETO_PROYECTOS } from "@/lib/hubspot/asociaciones-proyecto";
 import { leerDuenos } from "@/lib/hubspot/duenos";
-import { encargadoEnLaFecha, type ValorEnElTiempo } from "@/lib/hubspot/encargados";
+import { encargadoEnLaFecha, esDelEquipoTecnico, type ValorEnElTiempo } from "@/lib/hubspot/encargados";
+import { correosDelEquipoTecnico } from "@/lib/hubspot/equipo-tecnico";
 import { PROYECTO_DE_PIPELINE_CS_WHERE } from "@/lib/projects/scope";
 import { planDelPase, planExplicito, paresDelPase, type ProyectoDelPase } from "@/lib/cuentas/pase";
 import { fotoParaElPase, pasarLoDeLaCuenta, quienesSiguen, type ResumenDelPase } from "@/lib/cuentas/pase-server";
@@ -47,8 +48,9 @@ function contar(r: ResumenDelPase): string {
 async function unaCuenta(clientId: string, de: string, a: string, firma: string) {
   const cliente = await prisma.client.findUnique({ where: { id: clientId }, select: { name: true } });
   if (!cliente) throw new Error(`No existe el cliente ${clientId}.`);
-  const destino = await prisma.teamMember.findUnique({ where: { email: a.toLowerCase() }, select: { name: true, deactivatedAt: true } });
+  const destino = await prisma.teamMember.findUnique({ where: { email: a.toLowerCase() }, select: { name: true, deactivatedAt: true, roleEnum: true } });
   if (!destino || destino.deactivatedAt) throw new Error(`${a} no está en el equipo activo.`);
+  if (esDelEquipoTecnico(destino.roleEnum)) throw new Error(`${destino.name} es del equipo técnico: las cuentas las lleva Customer Success.`);
   const plan = planExplicito([de], a, await quienesSiguen(clientId));
   const simulado = await pasarLoDeLaCuenta({ clientId, plan, porEmail: firma, motivo: "pase", simular: true });
   console.log(`\n${cliente.name}: de ${de} a ${a}`);
@@ -65,28 +67,39 @@ async function unaCuenta(clientId: string, de: string, a: string, firma: string)
 async function medir(dias: number) {
   const hs = await getSystemHubspotClient();
   const { porOwner } = await leerDuenos(hs);
-  const correoDe = (owner: string | null) => (owner ? (porOwner.get(owner)?.email ?? null) : null);
+  // Como en el espejo: un owner archivado no tiene correo. `leerDuenos` trae también los archivados, con el suyo.
+  const correoDe = (owner: string | null) => {
+    const d = owner ? porOwner.get(owner) : undefined;
+    return d && !d.archivado ? d.email : null;
+  };
   const desde = new Date(Date.now() - dias * 86_400_000);
   const equipo = await nombresDelEquipo();
+  // Mira solo proyectos de CS: ahí un owner archivado o del equipo técnico no cuenta (lib/hubspot/encargados.ts).
+  const tecnicos = await correosDelEquipoTecnico();
+  const noCuenta = (owner: string) => {
+    const correo = correoDe(owner)?.trim().toLowerCase();
+    return !correo || tecnicos.has(correo);
+  };
 
   const proyectos = await prisma.project.findMany({
     where: { status: "active", hubspotServiceId: { not: null }, ...PROYECTO_DE_PIPELINE_CS_WHERE },
     select: { id: true, clientId: true, hubspotServiceId: true, client: { select: { name: true } } },
   });
-  const antesPorCliente = new Map<string, Map<string, string | null>>();
+  const antesPorCliente = new Map<string, Map<string, { ownerId: string | null; email: string | null }>>();
   let sinLeer = 0;
   for (const p of proyectos) {
     const res = await hs
-      .apiRequest({ method: "GET", path: `/crm/v3/objects/${OBJETO_PROYECTOS}/${p.hubspotServiceId}?propertiesWithHistory=cse_encargado,csl_encargado` })
+      .apiRequest({ method: "GET", path: `/crm/v3/objects/${OBJETO_PROYECTOS}/${p.hubspotServiceId}?propertiesWithHistory=hubspot_owner_id,cse_encargado,csl_encargado` })
       .catch(() => null);
     if (!res || !res.ok) {
       sinLeer++;
       continue;
     }
-    const d = (await res.json()) as { propertiesWithHistory?: { cse_encargado?: ValorEnElTiempo[]; csl_encargado?: ValorEnElTiempo[] } };
-    const owner = encargadoEnLaFecha({ cse: d.propertiesWithHistory?.cse_encargado, csl: d.propertiesWithHistory?.csl_encargado }, desde);
-    const m = antesPorCliente.get(p.clientId) ?? new Map<string, string | null>();
-    m.set(p.id, correoDe(owner));
+    const d = (await res.json()) as { propertiesWithHistory?: { hubspot_owner_id?: ValorEnElTiempo[]; cse_encargado?: ValorEnElTiempo[]; csl_encargado?: ValorEnElTiempo[] } };
+    const h = d.propertiesWithHistory;
+    const owner = encargadoEnLaFecha({ propietario: h?.hubspot_owner_id, cse: h?.cse_encargado, csl: h?.csl_encargado }, desde, noCuenta);
+    const m = antesPorCliente.get(p.clientId) ?? new Map<string, { ownerId: string | null; email: string | null }>();
+    m.set(p.id, { ownerId: owner, email: correoDe(owner) });
     antesPorCliente.set(p.clientId, m);
   }
   if (sinLeer) console.log(`No se pudo leer la historia de ${sinLeer} proyecto(s) en HubSpot.`);
@@ -98,7 +111,8 @@ async function medir(dias: number) {
   for (const [clientId, antesDe] of antesPorCliente) {
     if (/wherex/i.test(nombre.get(clientId) ?? "")) continue; // el cliente de prueba de Nexus
     const despues = await fotoParaElPase(clientId);
-    const antes: ProyectoDelPase[] = despues.map((p) => (antesDe.has(p.id) ? { ...p, email: antesDe.get(p.id) ?? null } : p));
+    // Con el id de antes: `planDelPase` solo ve un cambio si el id es otro.
+    const antes: ProyectoDelPase[] = despues.map((p) => ({ ...p, ...antesDe.get(p.id) }));
     const plan = planDelPase(antes, despues, { deBaja: equipo.deBaja });
     const pares = paresDelPase(plan);
     if (pares.length === 0) continue;

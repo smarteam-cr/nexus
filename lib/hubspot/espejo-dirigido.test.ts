@@ -60,7 +60,9 @@ describe("el espejo dirigido apaga lo que asume la corrida completa", () => {
   });
 
   it("NO dispara la reclasificación de sesiones — la paga el motor del alta, una vez", () => {
-    expect(sinComentarios).toMatch(/if\s*\(\s*result\.created\s*>\s*0\s*&&\s*!dirigido\s*\)/);
+    // `sinDescubrir` = el espejo dirigido o la relectura del botón (2026-10-29): ninguno de los dos crea proyectos.
+    expect(sinComentarios).toMatch(/if\s*\(\s*result\.created\s*>\s*0\s*&&\s*!sinDescubrir\s*\)/);
+    expect(sinComentarios).toMatch(/const sinDescubrir = !!dirigido \|\| /);
   });
 
   it("SÍ resuelve el hermano — sin eso, toda alta de un hermano queda trabada", () => {
@@ -110,6 +112,50 @@ describe("el espejo dirigido apaga lo que asume la corrida completa", () => {
     const i = sinComentarios.indexOf("if (dirigido) {");
     expect(i, "desapareció la rama del portal del sistema para el espejo dirigido").toBeGreaterThan(-1);
     expect(sinComentarios.slice(i, i + 400)).toContain("getSystemHubspotClient");
+  });
+});
+
+/**
+ * La relectura del botón «Traer proyectos de HubSpot» (2026-10-29): cuando el piso de 60 s no deja correr la corrida
+ * completa, relee por id los proyectos activos que la ficha ya tiene. Reusa el mismo recorrido que el espejo dirigido,
+ * con los mismos peligros: no sabe nada del resto de la cartera.
+ */
+describe("la relectura del botón tampoco se porta como la corrida completa", () => {
+  it("reconcilia SOLO los ids que pidió y no volvieron, nunca el resto de la cartera", () => {
+    expect(sinComentarios).toMatch(/hubspotServiceId:\s*releer\?\.length\s*\?\s*\{\s*in:\s*faltan\s*\}/);
+  });
+
+  it("no crea lo que no pidió (el que sigue tras una fusión es de la corrida completa)", () => {
+    const bloque = bloqueDesde("if (releer?.length) {");
+    expect(bloque).toContain("projects = projects.filter((p) => pedidos.has(p.id))");
+  });
+
+  it("un fallo al leer no apaga proyectos: lo reporta, como el espejo dirigido", () => {
+    const bloque = bloqueDesde("if (!hasRealProps)");
+    expect(bloque).toMatch(/if\s*\(\s*sinDescubrir\s*\)/);
+  });
+
+  it("es de verdad una relectura: pide `soloRecords` y no toca el piso ni el cooldown", () => {
+    /* Si `releerAhora` llamara a la corrida completa, D1-D9 de sync-gate seguirían en verde (el mock corta antes) y el
+       botón volvería a ser la palanca contra el pool que el piso existe para frenar. */
+    const bloque = bloqueDesde("async function releerAhora");
+    expect(bloque).toMatch(/correrSync\(clientId,\s*\{[^}]*soloRecords:\s*ids/);
+    expect(bloque).not.toContain("lastSyncByClient");
+    expect(bloque).not.toContain("ultimoFinPorCliente");
+  });
+
+  it("no da de baja un proyecto fusionado: el que sigue puede no estar, y lo crea la corrida completa", () => {
+    /* Sin este `continue`, una fusión con un proyecto que Nexus no conoce dejaba la cuenta sin ese proyecto (y a su dueño
+       sin acceso) hasta la corrida completa, y el pase de lo abierto no se hacía nunca. */
+    const i = sinComentarios.indexOf('if (releer?.length && typeof verdict === "object")');
+    const baja = sinComentarios.indexOf('await prisma.project.update({ where: { id: cand.id }, data: { status: "inactive" } })');
+    expect(i, "desapareció la salida de la relectura ante una fusión").toBeGreaterThan(-1);
+    expect(i, "la relectura da de baja antes de mirar si se fusionó").toBeLessThan(baja);
+    expect(sinComentarios.slice(i, baja)).toContain("continue");
+  });
+
+  it("no busca la empresa por nombre (ya sabe qué records leer)", () => {
+    expect(sinComentarios).toMatch(/if\s*\(\s*!companyId\s*&&\s*!sinDescubrir\s*\)/);
   });
 });
 

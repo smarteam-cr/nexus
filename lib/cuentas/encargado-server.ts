@@ -25,17 +25,19 @@ export const SELECT_PARA_EL_ENCARGADO = {
   hubspotOwnerId: true,
 } as const;
 
-/** Correo → nombre de quienes están dados de baja, y correo → nombre en Nexus de todo el equipo. */
-export async function nombresDelEquipo(): Promise<{ deBaja: Map<string, string>; nombres: Map<string, string> }> {
-  const filas = await prisma.teamMember.findMany({ select: { email: true, name: true, deactivatedAt: true } });
+/** Correo → nombre de quienes están dados de baja, correo → nombre en Nexus de todo el equipo, y correo → su foto. */
+export async function nombresDelEquipo(): Promise<{ deBaja: Map<string, string>; nombres: Map<string, string>; fotos: Map<string, string> }> {
+  const filas = await prisma.teamMember.findMany({ select: { email: true, name: true, deactivatedAt: true, photoUrl: true } });
   const deBaja = new Map<string, string>();
   const nombres = new Map<string, string>();
+  const fotos = new Map<string, string>();
   for (const m of filas) {
     const e = m.email.toLowerCase();
     nombres.set(e, m.name);
+    if (m.photoUrl) fotos.set(e, m.photoUrl);
     if (m.deactivatedAt) deBaja.set(e, m.name);
   }
-  return { deBaja, nombres };
+  return { deBaja, nombres, fotos };
 }
 
 /** Quién lleva cada una de estas cuentas. Una cuenta sin proyectos que la definan queda sin encargado. */

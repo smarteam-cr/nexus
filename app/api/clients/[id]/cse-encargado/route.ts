@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { guardAccessToClient, guardPermission } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
 import { getSystemHubspotClient } from "@/lib/hubspot/client";
+import { esDelEquipoTecnico } from "@/lib/hubspot/encargados";
 import { actualizarEncargadosDelProyecto, resolverOwnerIdPorEmail } from "@/lib/hubspot/project-record";
 import { escribirEncargadosEnLaEmpresa, laCsl } from "@/lib/hubspot/encargados-de-la-cuenta";
 import { cargarCuentas, hoyEnCostaRica } from "@/lib/cs/cartera";
@@ -10,6 +11,7 @@ import { loEsencialDeLaCuenta } from "@/lib/memoria";
 import { espejarProyectoRecienCreado, syncProjectsForClient } from "@/lib/hubspot/sync-projects";
 import { hayQueReleerLosProyectos } from "@/lib/hubspot/proyecto-fusionado";
 import { olvidarMedicion } from "@/lib/para-ti/medir-server";
+import { resolvePipeline } from "@/lib/projects/kind";
 import { PROYECTO_DE_PIPELINE_CS_WHERE } from "@/lib/projects/scope";
 import { avisar } from "@/lib/para-ti/avisos-server";
 import { encargadoDe } from "@/lib/cuentas/encargado-server";
@@ -21,14 +23,15 @@ import { lineaDeLoQuePaso, pasarLoDeLaCuenta, quienesSiguen } from "@/lib/cuenta
  *
  * ── DESDE EL 2026-10-09: «CSE ENCARGADO» Y «CSL ENCARGADO» (entrega 5 del plan de la cartera) ──────────
  * Escribe «CSE Encargado» (`cse_encargado`) = el CSE elegido y «CSL Encargado» (`csl_encargado`) = la CSL del
- * equipo, en los proyectos de implementación, en la EMPRESA y en sus CONTACTOS. El espejo lee primero
- * `cse_encargado` (lib/hubspot/encargados.ts). Al CSE nuevo le llega en «Para ti» el resumen de la cuenta; al
- * anterior, una línea de que la cuenta pasó.
+ * equipo, en los proyectos de implementación, en la EMPRESA y en sus CONTACTOS. En los PROYECTOS escribe además el
+ * «Propietario» (`hubspot_owner_id`) = el CSE: desde el 2026-10-29 es lo que el espejo lee primero
+ * (lib/hubspot/encargados.ts). En la empresa no: su propietario es el vendedor. Al CSE nuevo le llega en «Para ti» el
+ * resumen de la cuenta; al anterior, una línea de que la cuenta pasó.
  *
  * ── ES POR CLIENTE, NO POR PROYECTO, Y ESA ES LA IDEA ────────────────────────
  * Elías, 2026-08-21: *«Los customer success del pipeline de implementación de hubspot son los
  * customer success de la cuenta»*. El encargado no es un atributo de UN proyecto: es de la
- * cuenta, y vive replicado en `csl_encargado` de cada proyecto del pipeline de Implementación
+ * cuenta, y vive replicado en el propietario de cada proyecto del pipeline de Implementación
  * de HubSpot. Por eso esta ruta cuelga del cliente y escribe TODOS esos proyectos de una.
  *
  * ⛔ NUNCA toca los de "development"/"sitios-web". Ésos cuelgan como hijos/hermanos de una
@@ -38,12 +41,12 @@ import { lineaDeLoQuePaso, pasarLoDeLaCuenta, quienesSiguen } from "@/lib/cuenta
  *
  * ── ESCRIBE EN HUBSPOT, NO EN NEXUS ─────────────────────────────────────────
  * Mismo motivo que el interruptor de "interno": `Project.hubspotOwnerId/Name/Email` los escribe
- * SOLO el espejo, que los resuelve desde `csl_encargado`. Si esta ruta escribiera esas columnas,
+ * SOLO el espejo, que los resuelve desde el propietario. Si esta ruta escribiera esas columnas,
  * el sync las revertiría en diez minutos — sobre el campo que decide QUIÉN VE EL CLIENTE.
  *
  * ── PERMISO: LIDERAZGO, NO EL CSE ───────────────────────────────────────────
  * `proyectos.reasignarEncargado`, por default solo CSL + SUPER_ADMIN (decisión de Elías). Mover
- * cartera es decisión de liderazgo, y como `csl_encargado` gobierna la visibilidad, un CSE que
+ * cartera es decisión de liderazgo, y como el propietario gobierna la visibilidad, un CSE que
  * pudiera reasignar podría quitarse —o quitarle a otro— una cuenta entera sin aprobación.
  */
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -69,11 +72,21 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
      escribir en HubSpot un owner que Nexus no conoce — o resucitar a alguien que se fue. */
   const destino = await prisma.teamMember.findUnique({
     where: { email },
-    select: { email: true, name: true, deactivatedAt: true },
+    select: { email: true, name: true, deactivatedAt: true, roleEnum: true },
   });
   if (!destino || destino.deactivatedAt) {
     return NextResponse.json(
       { error: "Esa persona no está en el equipo activo de Nexus." },
+      { status: 400 },
+    );
+  }
+
+  /* Este pase escribe solo en proyectos de Customer Success, y ahí alguien del equipo técnico no cuenta como encargado
+     (lib/hubspot/encargados.ts): escribirlo como propietario dejaría un dueño que el espejo no lee. Los desplegables ya
+     no lo ofrecen; esto es el candado. */
+  if (esDelEquipoTecnico(destino.roleEnum)) {
+    return NextResponse.json(
+      { error: `${destino.name} es del equipo técnico: los proyectos de implementación los lleva Customer Success.` },
       { status: 400 },
     );
   }
@@ -87,7 +100,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const proyectos = await prisma.project.findMany({
     // Solo los activos (2026-10-11): un proyecto cerrado guarda quién lo llevaba entonces, y el espejo no lo relee.
     where: { clientId, status: "active", hubspotServiceId: { not: null }, ...PROYECTO_DE_PIPELINE_CS_WHERE },
-    select: { id: true, name: true, hubspotServiceId: true },
+    select: { id: true, name: true, hubspotServiceId: true, hubspotPipelineId: true },
   });
   if (proyectos.length === 0) {
     return NextResponse.json(
@@ -134,7 +147,10 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const escritos: string[] = [];
   for (const p of proyectos) {
     try {
-      await actualizarEncargadosDelProyecto(hs, p.hubspotServiceId!, { cse: ownerId, csl: cslOwnerId });
+      /* Un pipeline que Nexus no declara cuenta como CS por defecto, pero no se sabe de quién es: «Acompañamiento técnico»
+         (924878469) tiene dos integraciones con su dueño técnico. Ahí el pase escribe los encargados y no pisa al
+         propietario, que no se recuperaría. Lo que ve Nexus cambia igual: el técnico no cuenta y gana «CSE Encargado». */
+      await actualizarEncargadosDelProyecto(hs, p.hubspotServiceId!, { cse: ownerId, csl: cslOwnerId }, { propietario: !!resolvePipeline(p.hubspotPipelineId) });
       escritos.push(p.name);
     } catch (e) {
       return NextResponse.json(

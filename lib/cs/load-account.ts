@@ -31,6 +31,7 @@ import { leerClasificaciones } from "./clasificacion-server";
 import { leerAjustes } from "./ajustes-de-salud-server";
 import { leerPrioridades } from "./prioridad-de-cuenta-server";
 import { esCuentaDePrueba } from "@/lib/documentacion/equipo";
+import { esDelEquipoTecnico } from "@/lib/hubspot/encargados";
 import { camposPropuestos, leerFicha } from "@/lib/clients/ficha";
 import { propuestaDeEspera, sugerirEspera, SIN_AJUSTES, type PropuestaDeEspera } from "./ajustes-de-salud";
 import { leerPartner } from "./lectura-partner";
@@ -445,8 +446,10 @@ export async function loadCsAccount(
       };
     })(),
     equipoParaPase: (
-      await prisma.teamMember.findMany({ where: { deactivatedAt: null }, select: { email: true, name: true }, orderBy: { name: "asc" } })
-    ).filter((m) => !esCuentaDePrueba(m.name)),
+      await prisma.teamMember.findMany({ where: { deactivatedAt: null }, select: { email: true, name: true, roleEnum: true }, orderBy: { name: "asc" } })
+    )
+      .filter((m) => !esCuentaDePrueba(m.name) && !esDelEquipoTecnico(m.roleEnum))
+      .map((m) => ({ email: m.email, name: m.name })),
     esperaPropuesta: (() => {
       const propuesta = propuestaDeEspera(cuenta.proyectos);
       return sugerirEspera(propuesta, cuenta.ajustes ?? SIN_AJUSTES) ? propuesta : null;

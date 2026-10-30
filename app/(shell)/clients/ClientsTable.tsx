@@ -12,6 +12,7 @@ import {
 } from "@/lib/clients/proyectos-internos";
 import { elegirEtapa, ordenarAvisos, type AvisoDeCartera } from "@/lib/clients/indice";
 import { listarEmpresasTraibles } from "@/lib/hubspot/empresas-con-proyecto";
+import { esDelEquipoTecnico } from "@/lib/hubspot/encargados";
 import { esProyectoDePipelineCS } from "@/lib/projects/scope";
 import { encargadoDeLaCuenta, proyectoQueLleva, quienesLlevanLaCuenta } from "@/lib/cuentas/encargado";
 import { nombresDelEquipo } from "@/lib/cuentas/encargado-server";
@@ -122,8 +123,9 @@ export const consultarIndice = cache(async (
    * `/api/clients/[id]/cse-encargado` lo vuelve a exigir igual, así que esto solo decide si se
    * pinta el desplegable — no es el candado.
    *
-   * ⭐ Las opciones son TODO el equipo activo, sin filtrar por rol (decisión de Elías,
-   * 2026-08-21). Acotarlo a `roleEnum === "CSE"` dejaría fuera a los CSL, que hoy llevan cuentas.
+   * ⭐ Las opciones son el equipo activo sin el equipo técnico (decisión de Elías, 2026-08-21, y del 2026-10-30: los
+   * proyectos de implementación son de Customer Success). Acotarlo a `roleEnum === "CSE"` dejaría fuera a los CSL, que
+   * hoy llevan cuentas.
    */
   const puedeReasignar = user.teamMember
     ? await can(user.teamMember, "proyectos", "reasignarEncargado")
@@ -139,10 +141,12 @@ export const consultarIndice = cache(async (
     ? (
         await prisma.teamMember.findMany({
           where: { deactivatedAt: null },
-          select: { email: true, name: true },
+          select: { email: true, name: true, roleEnum: true },
           orderBy: { name: "asc" },
         })
-      ).map((m) => ({ email: m.email, name: m.name }))
+      )
+        .filter((m) => !esDelEquipoTecnico(m.roleEnum))
+        .map((m) => ({ email: m.email, name: m.name }))
     : [];
 
   const clientIds = clients.map((c) => c.id);
@@ -177,7 +181,7 @@ export const consultarIndice = cache(async (
 
   /* Quién está de baja y cómo se llama cada persona en Nexus: el encargado de la cuenta (lib/cuentas/encargado.ts) no
      cuenta a quien se fue, y se nombra como en el desplegable (HubSpot escribe «Heiver Gómez», Nexus quizás no). */
-  const { deBaja, nombres: nombreEnNexus } = equipo;
+  const { deBaja, nombres: nombreEnNexus, fotos: fotoEnNexus } = equipo;
 
   const rows: ClientRow[] = clients.map((c) => {
     const md = meetingDates.get(c.id);
@@ -224,6 +228,7 @@ export const consultarIndice = cache(async (
       cseNames,
       cseEmails,
       cseEmail,
+      cseFoto: cseEmail ? (fotoEnNexus.get(cseEmail) ?? null) : null,
       lastSalesMeeting: md?.sales ? md.sales.toISOString() : null,
       lastCseMeeting: md?.cse ? md.cse.toISOString() : null,
       // Última actividad pasada (sesión, nota, agent run)

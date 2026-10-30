@@ -6,9 +6,9 @@
  * separadas: las pestañas de proyecto, las pestañas «Procesos» e «Información del cliente», y el
  * desplegable de piezas de cada proyecto.
  *
- *  · PROYECTOS: uno por fila, con su tipo debajo. Debajo del proyecto abierto cuelgan sus piezas
- *    (las pinta `PiezasDelRiel`, por portal, desde el panel del proyecto: es el que sabe cuáles
- *    tiene y en qué estado están).
+ *  · PROYECTOS: uno por fila, con su tipo debajo y, a la derecha, la foto de su encargado (2026-10-30): en uno de
+ *    Desarrollo, la persona técnica. Debajo del proyecto abierto cuelgan sus piezas (las pinta `PiezasDelRiel`, por
+ *    portal, desde el panel del proyecto: es el que sabe cuáles tiene y en qué estado están).
  *  · LA CUENTA: «Información del cliente», «Procesos», «La escala» y «Casos de uso» (2026-10-12: dónde está la
  *    empresa en la escala y lo que se hace con ella, venga o no de una preventa) y «Fuera de alcance» (2026-10-07:
  *    las solicitudes fuera de alcance de todos sus proyectos, con su seguimiento).
@@ -20,6 +20,7 @@
 import type { ReactNode } from "react";
 import { cn } from "@/lib/cn";
 import type { EstadoDePieza } from "@/components/canvas/SelectorDePiezas";
+import { Avatar } from "@/components/ui/Avatar";
 import { IconoDeSugerencia, ROTULO_DEL_SISTEMA } from "@/components/ui/sistema";
 
 export type CuentaDelRiel = "info" | "procesos" | "personas" | "notas" | "tareas" | "escala" | "casos" | "solicitudes";
@@ -33,6 +34,8 @@ export interface ProyectoDelRiel {
   ayuda?: string;
   /** Un proyecto de prueba (2026-10-11): lleva su marca, para no confundirlo con el real. */
   prueba?: boolean;
+  /** Quien lleva el proyecto: su foto, con el nombre al pasar el mouse. null = nadie. */
+  encargado?: { nombre: string; foto: string | null } | null;
 }
 
 export default function RielDelCliente({
@@ -89,10 +92,15 @@ export default function RielDelCliente({
                 >
                   <path d="M9 5l7 7-7 7" />
                 </svg>
-                <span className="flex min-w-0 flex-col gap-px">
+                <span className="flex min-w-0 flex-1 flex-col gap-px">
                   <span className={cn("text-sm leading-[1.35]", abierto ? "font-semibold text-fg" : "font-medium text-fg-secondary")}>{p.nombre}</span>
                   <span className={cn("text-xs leading-[1.35]", p.prueba ? "font-medium text-warn-ink" : "text-fg-muted")}>{p.tipo}</span>
                 </span>
+                {p.encargado ? (
+                  <Avatar name={p.encargado.nombre} src={p.encargado.foto ?? undefined} size="xs" neutro title={p.encargado.nombre} />
+                ) : (
+                  !p.prueba && <span title="Sin encargado" className="h-6 w-6 flex-shrink-0 rounded-full border border-dashed border-line" />
+                )}
               </button>
               {abierto && <div ref={slotDePiezas} />}
             </div>
@@ -122,7 +130,7 @@ export default function RielDelCliente({
             type="button"
             onClick={traer.onClick}
             disabled={traer.sincronizando}
-            title="Trae los proyectos que esta empresa tenga en HubSpot y todavía no estén acá. No borra nada."
+            title="Trae de HubSpot los proyectos de esta empresa: los nuevos y lo que cambió en los que ya están (etapa, nombre, encargado, si se cerró)."
             className="flex w-full items-center gap-2 rounded-lg border border-line bg-surface-muted px-3 py-2.5 text-left text-[13px] text-fg-secondary transition-colors hover:bg-surface-hover hover:text-fg disabled:opacity-60"
           >
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={cn("h-4 w-4 flex-shrink-0", traer.sincronizando && "animate-spin")} aria-hidden="true">

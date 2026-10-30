@@ -7,6 +7,9 @@
  * (`csl_encargado`) pasa a ser la CSL. Hasta ahora `csl_encargado` guardaba al CSE (103 de 111 proyectos) y
  * `cse_encargado` estaba vacío: el espejo lee primero `cse_encargado` y, si está vacío, `csl_encargado`, así que la
  * migración (scripts/migrar-cse-encargado.ts) no le cambia a nadie las cuentas que ve.
+ * Desde el 2026-10-29 el espejo lee primero el «Propietario» del proyecto (lib/hubspot/encargados.ts); estas dos
+ * propiedades siguen escribiéndose y son el respaldo cuando el propietario está vacío o, en un proyecto de CS, es del
+ * equipo técnico.
  *
  * Los dos son campos OWNER: guardan el id de usuario de HubSpot, no el correo (`resolverOwnerIdPorEmail`).
  */
@@ -17,7 +20,7 @@ import type { getSystemHubspotClient } from "./client";
 
 type HsClient = Awaited<ReturnType<typeof getSystemHubspotClient>>;
 
-import { propiedadesDeEncargados, type Encargados } from "./encargados";
+import { escribirSinLaRetirada, propiedadesDeEncargados, type Encargados, type RespuestaDeHubspot } from "./encargados";
 export { PROP_CSE_ENCARGADO, PROP_CSL_ENCARGADO, propiedadesDeEncargados, type Encargados } from "./encargados";
 
 /** La CSL del equipo (el rol en Nexus, no un correo escrito en el código). null si no hay una activa. */
@@ -32,13 +35,16 @@ export async function laCsl(): Promise<{ email: string; nombre: string } | null>
   return m ? { email: m.email, nombre: m.name } : null;
 }
 
-async function pedir(hs: HsClient, method: "GET" | "PATCH" | "POST", path: string, body?: unknown) {
-  const res = await hs.apiRequest({ method, path, ...(body ? { body } : {}) });
+async function leerRespuesta(res: RespuestaDeHubspot, method: string, path: string) {
   if (!res.ok) {
     const cuerpo = await res.text().catch(() => "");
     throw new Error(`${method} ${path} → ${res.status}: ${cuerpo.slice(0, 200)}`);
   }
   return res.status === 204 ? null : res.json();
+}
+
+async function pedir(hs: HsClient, method: "GET" | "PATCH" | "POST", path: string, body?: unknown) {
+  return leerRespuesta(await hs.apiRequest({ method, path, ...(body ? { body } : {}) }), method, path);
 }
 
 /** Los contactos asociados a una empresa (ids). */
@@ -71,7 +77,8 @@ export async function escribirEncargadosEnLaEmpresa(
   let empresa = false;
   let error: string | null = null;
   try {
-    await pedir(hs, "PATCH", `/crm/v3/objects/companies/${encodeURIComponent(companyId)}`, { properties });
+    const path = `/crm/v3/objects/companies/${encodeURIComponent(companyId)}`;
+    await leerRespuesta(await escribirSinLaRetirada(properties, (p) => hs.apiRequest({ method: "PATCH", path, body: { properties: p } })), "PATCH", path);
     empresa = true;
   } catch (err) {
     error = (err as Error).message;
@@ -83,7 +90,12 @@ export async function escribirEncargadosEnLaEmpresa(
     for (let i = 0; i < ids.length; i += 100) {
       const lote = ids.slice(i, i + 100);
       try {
-        await pedir(hs, "POST", "/crm/v3/objects/contacts/batch/update", { inputs: lote.map((id) => ({ id, properties })) });
+        const path = "/crm/v3/objects/contacts/batch/update";
+        await leerRespuesta(
+          await escribirSinLaRetirada(properties, (p) => hs.apiRequest({ method: "POST", path, body: { inputs: lote.map((id) => ({ id, properties: p })) } })),
+          "POST",
+          path,
+        );
         contactos += lote.length;
       } catch (err) {
         contactosFallidos += lote.length;

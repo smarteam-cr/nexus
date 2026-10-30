@@ -9,6 +9,8 @@ import { redirect, notFound } from "next/navigation";
 import { prisma } from "@/lib/db/prisma";
 import { ensureStrategyProject } from "@/lib/canvas/strategy-project";
 import { esProyectoNavegable } from "@/lib/projects/scope";
+import { personaDelProyecto } from "@/lib/cuentas/encargado";
+import { nombresDelEquipo } from "@/lib/cuentas/encargado-server";
 import WorkspaceClient, { type SeededCanvas } from "./WorkspaceClient";
 import { canvasNotOf, onlyEnabled } from "@/lib/pieces/canvas-query";
 import { loadCanvasesConContenido } from "@/lib/pieces/piece-content";
@@ -114,7 +116,7 @@ export default async function ClientPage({
     return <EspacioSesiones clientId={id} clientName={empresa.name} kind={empresa.kind} />;
   }
 
-  const [projects, hubspotAccount] = await Promise.all([
+  const [projects, hubspotAccount, equipo] = await Promise.all([
     prisma.project.findMany({
       where: { clientId: id },
       orderBy: { createdAt: "asc" },
@@ -161,6 +163,7 @@ export default async function ClientPage({
       where: { clientId: id },
       select: { id: true },
     }),
+    nombresDelEquipo(),
   ]);
 
   /* El rail de proyectos. MISMO criterio que la pestaña inicial del layout —importado, no
@@ -176,7 +179,7 @@ export default async function ClientPage({
     .filter((p) => esProyectoNavegable(p, paraFiltro))
     // El borrador vacío que espera sus tareas no es una propuesta que revisar (revisión de E2a).
     .map(({ timeline, ...p }) => ({
-      fila: { ...p, timelineProposalPending: hayPropuestaParaRevisar(timeline?.pendingProposal ?? null) },
+      fila: { ...p, encargado: personaDelProyecto(p, equipo), timelineProposalPending: hayPropuestaParaRevisar(timeline?.pendingProposal ?? null) },
       timeline,
     }));
   /* E2b P7: quién dejó la propuesta y cuándo, en UNA lectura en lote y solo de las filas que la

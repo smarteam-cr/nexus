@@ -75,6 +75,8 @@ interface ProjectSummary {
   esPrueba?: boolean;
   /** El encargado en HubSpot: la línea «Esta cuenta tiene otro proyecto» lo nombra. */
   hubspotOwnerName?: string | null;
+  /** Ese encargado como persona de Nexus, con su foto: la que se ve en el riel. */
+  encargado?: { nombre: string; foto: string | null } | null;
   /** `Project.altaEstado` — un alta a medio hacer no cobra ni se publica (lib/projects/alta.ts). */
   altaEstado?: string | null;
   /** Diagnóstico del alta trabada: alimentan el cartel con el botón "Reintentar". */
@@ -296,6 +298,15 @@ export default function WorkspaceClient({
               : data.omitido === "piso"
                 ? "Se intentó hace menos de un minuto. Esperá un momento y volvé a probar."
                 : "Ya se sincronizó hace poco. Probá de nuevo en un rato.",
+          );
+        } else if (typeof data.releidos === "number" && data.releidos > 0) {
+          /* La corrida completa no podía correr todavía (el piso de 60 s): el botón releyó por id los proyectos que ya
+             estaban (2026-10-29). Lo que cambió en ellos ya está en pantalla; uno NUEVO llega con la corrida completa. */
+          toast.success(
+            `Releí en HubSpot ${data.releidos === 1 ? "el proyecto" : `los ${data.releidos} proyectos`} de esta ficha. ` +
+              (data.created
+                ? `Y llegó ${data.created === 1 ? "1 proyecto nuevo" : `${data.created} proyectos nuevos`}.`
+                : "Un proyecto nuevo aparece al volver a traer en un minuto."),
           );
         } else if (data.created || data.updated) {
           const partes = [
@@ -648,7 +659,7 @@ function ProjectSection({
     );
   };
 
-  const filasDelRiel: ProyectoDelRiel[] = projects.map((p) => ({ id: p.id, nombre: p.name, ...claseDelProyecto(p, projects) }));
+  const filasDelRiel: ProyectoDelRiel[] = projects.map((p) => ({ id: p.id, nombre: p.name, encargado: p.encargado, ...claseDelProyecto(p, projects) }));
 
   return (
     /* El lienzo de tres columnas, como la preventa (sistema «Nexus · interfaz interna»): a la

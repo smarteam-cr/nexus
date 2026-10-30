@@ -13,6 +13,7 @@ import {
 } from "@/components/ui";
 import { BotonBlanco } from "@/components/ui/sistema";
 import { useToast } from "@/components/ui/Toast";
+import { Avatar } from "@/components/ui/Avatar";
 import CseEncargadoSelect, { type OpcionDeEncargado } from "@/components/clients/CseEncargadoSelect";
 import { urlDeProyecto } from "@/lib/agents/run-url";
 import { CLIENT_KINDS, CLIENT_KIND_META, formatTamUsd } from "@/lib/clients/kind";
@@ -74,6 +75,8 @@ export interface ClientRow {
   cseEmails: string[];          // owners en email para matching contra activeCse
   /** El encargado de la cuenta (lib/cuentas/encargado.ts); null = nadie del equipo activo la lleva. */
   cseEmail: string | null;
+  /** La foto de su usuario de Nexus; null = sus iniciales. */
+  cseFoto: string | null;
   lastSalesMeeting: string | null; // ISO
   lastCseMeeting: string | null;   // ISO
   // Última actividad PASADA — orden principal de la lista
@@ -210,11 +213,6 @@ function EtapaCell({ etapa }: { etapa: EtapaDeFila | null }) {
       )}
     </span>
   );
-}
-
-function iniciales(nombre: string): string {
-  const partes = nombre.split(/[\s._-]+/).filter(Boolean);
-  return ((partes[0]?.[0] ?? "") + (partes[1]?.[0] ?? "")).toUpperCase() || "—";
 }
 
 /**
@@ -482,27 +480,25 @@ export default function ClientsGrid({
       key: "cse",
       header: "CSE encargado",
       sortValue: (c) => c.cseNames[0],
-      width: "w-[164px]",
+      width: "w-[204px]",
       /* ⭐ SEGUNDA COLUMNA DE DATOS (Elías, 2026-08-22). Después del nombre, lo que se pregunta de
          una cuenta es de quién es. Se ve siempre, también en pantallas angostas.
          ⭐ Editable: elegir acá reasigna la CUENTA — escribe `csl_encargado` en todos los
          proyectos del cliente que están en el pipeline de Implementación de HubSpot. Sin
          permiso se pinta exactamente como antes (texto). Ver `CseEncargadoSelect`. */
       headerHint:
-        "Cambiar este valor actualiza «CSE Encargado» en HubSpot: en todos los proyectos del " +
+        "Cambiar este valor actualiza «Propietario» y «CSE Encargado» en HubSpot: en todos los proyectos del " +
         "cliente que están en el pipeline de Implementación, en la empresa y en sus contactos " +
-        "(«CSL Encargado» queda con la CSL). Los proyectos de Desarrollo o Sitios web no se " +
+        "(ahí sin el propietario, que es el vendedor; «CSL Encargado» queda con la CSL). Los proyectos de Desarrollo o Sitios web no se " +
         "tocan: tienen su propio encargado técnico.",
       render: (c) => (
         <span className="flex min-w-0 items-center gap-2">
           {c.cseNames.length > 0 ? (
-            <span className="flex h-[22px] w-[22px] flex-shrink-0 items-center justify-center rounded-full border border-line bg-surface-hover text-[10px] font-semibold text-fg-secondary">
-              {iniciales(c.cseNames[0])}
-            </span>
+            <Avatar name={c.cseNames[0]} src={c.cseFoto ?? undefined} size="sm" neutro />
           ) : (
-            <span className="h-[22px] w-[22px] flex-shrink-0 rounded-full border border-dashed border-line" aria-hidden="true" />
+            <span className="h-8 w-8 flex-shrink-0 rounded-full border border-dashed border-line" aria-hidden="true" />
           )}
-          <span className="min-w-0 text-[13px]">
+          <span className="min-w-0 text-sm font-medium text-fg">
             <CseEncargadoSelect
               clientId={c.id}
               clientName={c.name}

@@ -6,7 +6,7 @@ import { describe, expect, it } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
 import { RAIZ } from "@/lib/ui/scan-source";
-import { encargadoDeLaCuenta, llevaLaCuenta, proyectoQueLleva, quienesLlevanLaCuenta, type ProyectoQueLleva } from "./encargado";
+import { encargadoDeLaCuenta, llevaLaCuenta, personaDelProyecto, proyectoQueLleva, quienesLlevanLaCuenta, type ProyectoQueLleva } from "./encargado";
 
 const p = (email: string | null, o: Partial<ProyectoQueLleva> = {}): ProyectoQueLleva => ({
   activo: true,
@@ -114,5 +114,30 @@ describe("⛔ una sola fuente: nadie vuelve a contar dueños por su cuenta", () 
     const celda = leer("components/clients/CseEncargadoSelect.tsx");
     expect(celda).toContain("encargado: { nombre: string; email: string | null } | null");
     expect(celda).not.toMatch(/\bnombres:\s*string\[\]/);
+  });
+});
+
+describe("personaDelProyecto (la foto del riel)", () => {
+  const equipo = {
+    deBaja: new Map([["rebeca@smarteamcr.com", "Rebeca Zúñiga"]]),
+    nombres: new Map([["asalas@smarteamcr.com", "Alejandro Salas"], ["rebeca@smarteamcr.com", "Rebeca Zúñiga"]]),
+    fotos: new Map([["asalas@smarteamcr.com", "https://foto"], ["rebeca@smarteamcr.com", "https://vieja"]]),
+  };
+
+  it("el nombre en Nexus y la foto, sin importar las mayúsculas del correo", () => {
+    expect(personaDelProyecto({ hubspotOwnerEmail: "ASalas@smarteamcr.com", hubspotOwnerName: "Ale" }, equipo)).toEqual({ nombre: "Alejandro Salas", foto: "https://foto" });
+  });
+
+  it("alguien que no está en Nexus va con el nombre de HubSpot y sin foto", () => {
+    expect(personaDelProyecto({ hubspotOwnerEmail: "otra@cliente.com", hubspotOwnerName: "Otra Persona" }, equipo)).toEqual({ nombre: "Otra Persona", foto: null });
+    expect(personaDelProyecto({ hubspotOwnerEmail: "otra@cliente.com", hubspotOwnerName: null }, equipo)).toEqual({ nombre: "otra@cliente.com", foto: null });
+  });
+
+  it("quien está de baja va marcada y sin foto, como en la columna de Clientes", () => {
+    expect(personaDelProyecto({ hubspotOwnerEmail: "rebeca@smarteamcr.com", hubspotOwnerName: "Rebeca" }, equipo)).toEqual({ nombre: "Rebeca Zúñiga (de baja)", foto: null });
+  });
+
+  it("sin dueño, nadie", () => {
+    expect(personaDelProyecto({ hubspotOwnerEmail: null, hubspotOwnerName: null }, equipo)).toBeNull();
   });
 });
