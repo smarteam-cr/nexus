@@ -135,7 +135,7 @@ describe("el resultado lo calcula Nexus con el chequeo", () => {
       expect(r.recomendacion.razon.length).toBeGreaterThan(10);
     }
     // La síntesis es la misma que la página muestra sin IA (redaccion.ts › resumenSinIa).
-    expect(r.sintesis).toBe(resumenSinIa(r, null));
+    expect(r.sintesis).toBe(resumenSinIa(r));
     expect(r.preguntadas).toBe(area.dimensiones.length);
   });
 
@@ -149,7 +149,7 @@ describe("el resultado lo calcula Nexus con el chequeo", () => {
     const r = resultadoDelTest({ escala, areaId: area.id, version: "marketing", preguntas: mk, respuestas: { [mk[0].id]: { opcion: mk[0].opciones[2].id } } })!;
     expect(r.preguntadas).toBe(mk.length);
     expect(r.dimensiones.filter((d) => !d.preguntada).every((d) => d.nivel === null)).toBe(true);
-    expect(r.sintesis).toBe(resumenSinIa(r, null));
+    expect(r.sintesis).toBe(resumenSinIa(r));
   });
 });
 

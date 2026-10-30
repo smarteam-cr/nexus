@@ -11,7 +11,7 @@ import { notFound } from "next/navigation";
 import PdfReadySignal from "@/components/print/PdfReadySignal";
 import ResultadoDelTestVista from "@/components/external/test/ResultadoDelTestVista";
 import { enlaceDeLaAgenda, TOKEN_DEL_RESULTADO } from "@/lib/tests-diagnostico/pagina-del-resultado";
-import { detallesParaLaPagina, resultadoPublico } from "@/lib/tests-diagnostico/servicio-server";
+import { loDeLaEscalaParaLaPagina, resultadoPublico } from "@/lib/tests-diagnostico/servicio-server";
 
 export const dynamic = "force-dynamic";
 
@@ -28,7 +28,7 @@ export default async function ImprimirResultadoPage({ searchParams }: { searchPa
   const agenda = enlaceDeLaAgenda(process.env.TESTS_ENLACE_DE_AGENDA);
   const { intento: i, resultado: r } = res;
   // Qué priorizar en cada parte: en el PDF va como un renglón debajo de cada barra.
-  const detalles = await detallesParaLaPagina(r);
+  const { detalles, dimensionDelRiesgo } = await loDeLaEscalaParaLaPagina(r);
   return (
     <>
       <PdfReadySignal />
@@ -39,6 +39,7 @@ export default async function ImprimirResultadoPage({ searchParams }: { searchPa
         fecha={i.terminadoAt}
         industria={i.industria}
         detalles={detalles}
+        dimensionDelRiesgo={dimensionDelRiesgo}
         agenda={agenda}
         modo="pdf"
       />

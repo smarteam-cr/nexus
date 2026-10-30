@@ -22,7 +22,8 @@
 .rde-check:checked + .rde-pista { background: #3b82f6; }
 .rde-check:checked + .rde-pista .rde-perilla { left: 18px; }
 .rde-check:focus-visible + .rde-pista { outline: 2px solid #3b82f6; outline-offset: 2px; }
-.rde-grande > .rde-svg { margin-top: -24px; }
+/* Un poco más angosto que la tarjeta (Elías, 29 oct: «la escala un poquito más pequeña y los textos más grandes»). */
+.rde-grande > .rde-svg { margin-top: -24px; width: 100%; max-width: 1240px; margin-inline: auto; }
 
 /* Lo que no se preguntó y «No lo sé»: solo si hay alguno. */
 .rde-leyenda { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 8px 28px; padding-top: 8px; border-top: 1px solid #edf1f7; font-size: 13.5px; line-height: 1.4; color: #3d4b63; }

@@ -61,8 +61,9 @@ const C = {
   secundario: "#3d4b63",
   apagado: "#5f6d85",
   marca: "#2d5fb3",
-  eje: "#d6dee9",
-  guia: "#e3e9f2",
+  // Más tenues desde el 29 oct (Elías: «las líneas grises, un poquito más tenues»).
+  eje: "#e3e8f0",
+  guia: "#edf1f6",
   gris: "#c9d3e1",
   noPreguntada: "#a9b5c7",
   centro: "#f4f7fb",
@@ -299,7 +300,7 @@ function SvgDelRadar({
           points={puntosSvg(a.puntos)}
           fill="none"
           stroke={COLOR_DEL_NIVEL[a.letra]}
-          strokeOpacity={a.letra === "F" ? undefined : enElResultado.has(a.letra) ? 0.5 : 0.14}
+          strokeOpacity={a.letra === "F" ? 0.6 : enElResultado.has(a.letra) ? 0.5 : 0.14}
           strokeWidth={m.trazo.anillo}
           strokeDasharray={a.letra === "F" ? m.rayas.funcional : undefined}
         />
@@ -334,7 +335,15 @@ function SvgDelRadar({
       {/* La empresa: la figura y los vértices (en la página, crecen desde el centro al abrir: radar-de-una-empresa.css). */}
       <g className="rde-empresa" style={{ transformOrigin: `${f(m.cx)}px ${f(m.cy)}px` }}>
         {d.figura.length > 1 && (
-          <polygon points={puntosSvg(d.figura)} fill={C.tinta} fillOpacity={0.07} stroke={C.tinta} strokeWidth={m.trazo.figura} strokeLinejoin="round" />
+          <polygon
+            className="rde-figura"
+            points={puntosSvg(d.figura)}
+            fill={C.tinta}
+            fillOpacity={0.07}
+            stroke={C.tinta}
+            strokeWidth={m.trazo.figura}
+            strokeLinejoin="round"
+          />
         )}
         {/* El resalte va del rótulo hasta el vértice de la dimensión, no hasta el centro (como la vieja). Sin vértice
             (no se preguntó), no hay resalte. */}
@@ -356,7 +365,9 @@ function SvgDelRadar({
             );
           })}
         <Capa cual="sin">
-          {vertFrena && <circle cx={f(vertFrena.punto[0])} cy={f(vertFrena.punto[1])} r={m.vertice.halo} fill={COLOR_DEL_NIVEL.D} fillOpacity={0.12} />}
+          {vertFrena && (
+            <circle className="rde-iman" cx={f(vertFrena.punto[0])} cy={f(vertFrena.punto[1])} r={m.vertice.halo} fill={COLOR_DEL_NIVEL.D} fillOpacity={0.12} />
+          )}
           {d.vertices.map((v) =>
             v.noLoSe ? (
               <g key={v.clave} className="rde-vertice" data-d={v.clave}>
@@ -391,7 +402,7 @@ function SvgDelRadar({
         {conPuntajes && (
           <Capa cual="con">
             {vertFrena && m.conPuntaje.halo && (
-              <circle cx={f(vertFrena.punto[0])} cy={f(vertFrena.punto[1])} r={m.conPuntaje.halo} fill={COLOR_DEL_NIVEL.D} fillOpacity={0.12} />
+              <circle className="rde-iman" cx={f(vertFrena.punto[0])} cy={f(vertFrena.punto[1])} r={m.conPuntaje.halo} fill={COLOR_DEL_NIVEL.D} fillOpacity={0.12} />
             )}
             {d.vertices.map((v) => (
               <g key={v.clave} className="rde-vertice" data-d={v.clave}>
@@ -414,8 +425,14 @@ function SvgDelRadar({
       </g>
 
       {/* La flecha de lo que más frena y su objetivo, encima de los vértices: en el teléfono el disco del puntaje la tapaba. */}
+      {/* En la página, la flecha y su aro se mueven con el vértice de lo que más frena cuando el imán lo corre (si no, se
+          despegaban): `data-iman-x/y` es el punto del que toman la fuerza. */}
       {d.objetivo && (
-        <g>
+        <g
+          className={interactivo && vertFrena ? "rde-iman" : undefined}
+          data-iman-x={interactivo && vertFrena ? f(vertFrena.punto[0]) : undefined}
+          data-iman-y={interactivo && vertFrena ? f(vertFrena.punto[1]) : undefined}
+        >
           {d.objetivo.linea && (
             <line
               x1={f(d.objetivo.linea[0][0])}

@@ -207,7 +207,8 @@ describe("el radar de una empresa: la geometría del diseño", () => {
     expect(r("1.3").yNumero).toBeCloseTo(537.5, 0);
     expect(r("1.4").yNumero).toBeCloseTo(750.6, 0);
     expect(r("1.5").nombre.map((l) => l.texto)).toEqual(["Líneas de máquinas", "y cotización"]);
-    expect(r("1.6").chip!.y).toBeCloseTo(584.6, 0);
+    // 584,6 en el diseño; 587,5 desde el 29 oct, con los rótulos un poco más grandes que pidió Elías.
+    expect(r("1.6").chip!.y).toBeCloseTo(587.5, 0);
     expect(r("1.7").yNumero).toBeCloseTo(247.2, 0);
     expect(r("1.7").nombre.map((l) => l.texto)).toEqual(["Seguimiento de", "demostraciones y", "cotizaciones"]);
     expect(r("1.8").nombre.map((l) => l.texto)).toEqual(["Ventas ganadas", "y perdidas"]);
