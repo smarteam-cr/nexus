@@ -176,22 +176,33 @@ describe("el enlace propio de un documento del proyecto", () => {
 
   it("el kickoff de siempre sale con los horarios que eligió el cliente, y las ocultas fijas viajan", async () => {
     const { clientId, projectId } = await proyecto("Horarios V4");
-    const k = await documento(projectId, {
-      slug: "kickoff",
-      name: "Kickoff",
-      secciones: [{ key: "horarios", texto: "semilla" }],
+    const k = await documento(projectId, { slug: "kickoff", name: "Kickoff", secciones: [{ key: "horarios", texto: "semilla" }] });
+    await prisma.canvasBlock.updateMany({
+      where: { section: { canvasId: k, key: "horarios" } },
+      data: { data: { sessions: [{ id: "s1", optionId: "semilla" }] } },
     });
+    await prisma.project.update({ where: { id: projectId }, data: { kickoffHorarioAssignments: { s1: "la-elegida" } } });
     await prisma.projectCanvas.update({ where: { id: k }, data: { sections: [{ key: "cierre", label: "Cierre", hidden: true }] } });
     const { enlace } = await compartirArtefacto({ projectId, clientId, canvasId: k, porEmail: null });
     const vista = await artefactoParaElToken(tokenDe(enlace));
     expect(vista?.ocultas).toContain("cierre");
     expect(vista?.rows.map((r) => r.key)).toEqual(["horarios"]);
+    expect(vista?.rows[0].blocks[0].data).toEqual({ sessions: [{ id: "s1", optionId: "la-elegida" }] });
   });
 
   it("un diagnóstico compartido lleva la línea base y la meta de sus resultados, solo esos campos", async () => {
     const { clientId, projectId } = await proyecto("Resultados V4");
     const d = await documento(projectId, { tipoArtefacto: "diagnosis", name: "Diagnóstico de marketing", secciones: [{ key: "objetivos", texto: "x" }] });
+    await prisma.canvasBlock.updateMany({ where: { section: { canvasId: d, key: "objetivos" } }, data: { data: { objetivos: [{ id: "OBJ-01", resultado: "R1" }] } } });
+    const fila = (id: string) => ({ id, resultado: `Resultado ${id}`, metrica: "m", lineaBase: "10", meta: "20", plazo: "6 meses", quienLoNecesita: "Ana, del equipo" });
+    await prisma.project.update({ where: { id: projectId }, data: { handoffResultados: { resultados: [fila("R1"), fila("R2")], generadoAt: "2026-10-29T10:00:00.000Z" } } });
     const { enlace } = await compartirArtefacto({ projectId, clientId, canvasId: d, porEmail: null });
+    // Solo el que cita un objetivo que sale, y solo sus campos para el cliente.
+    expect((await artefactoParaElToken(tokenDe(enlace)))?.resultados).toEqual([
+      { id: "R1", resultado: "Resultado R1", metrica: "m", lineaBase: "10", meta: "20", plazo: "6 meses" },
+    ]);
+    // Con «Objetivos» oculto no viaja ninguno.
+    await prisma.projectCanvas.update({ where: { id: d }, data: { sections: [{ key: "objetivos", label: "Objetivos", hidden: true }] } });
     expect((await artefactoParaElToken(tokenDe(enlace)))?.resultados).toEqual([]);
   });
 

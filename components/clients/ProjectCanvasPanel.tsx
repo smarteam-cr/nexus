@@ -1174,6 +1174,7 @@ export default function ProjectCanvasPanel({
             canvasId={activeCanvasId}
             tipo={tipoActivo}
             clientName=""
+            conContenido={!!activeCanvas?.hasContent}
             onGenerado={() => {
               bumpGpsRefresh();
               void refetchCanvases();

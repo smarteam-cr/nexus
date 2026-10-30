@@ -105,10 +105,40 @@ export async function artefactoParaElToken(token: string): Promise<ArtefactoView
   const dropProseCompara = tipo === "kickoff" && comparaSectionHasContent(secciones);
   // Los horarios que eligió el cliente viven en el proyecto, fuera del bloque (el kickoff de siempre): como en su PDF.
   const asignaciones = tipo === "kickoff" && !esCopia(c) ? normalizeAssignments(c.project.kickoffHorarioAssignments) : null;
-  const resultados = tipo === "diagnosis" ? ((await resultadosDelProyecto(c.projectId).catch(() => null))?.resultados ?? []) : null;
 
   await prisma.accesoAlDocumento.update({ where: { id: acceso.id }, data: { lastUsedAt: new Date() } }).catch(() => {});
   const logos = await getBrandLogos();
+  const rows: LandingSectionRow[] = secciones
+    .filter((s) => salen(s.key) && !ocultas.has(s.key) && !ocultasDelKickoff.has(kickoffHiddenKey(s.key, s.id)) && s.blocks.length > 0)
+    .map((s) => ({
+      key: s.key,
+      titleOverride: s.titleOverride ?? null,
+      eyebrowOverride: s.eyebrowOverride ?? null,
+      blocks: s.blocks.map((b) => ({
+        blockType: b.blockType,
+        content: b.content,
+        data: sinLoInterno(
+          asignaciones && s.key === HORARIOS_KEY
+            ? applyAssignments(b.data, asignaciones)
+            : dropProseCompara && s.key !== COMPARA_KEY
+              ? stripProseCompara(b.data)
+              : b.data,
+        ),
+      })),
+    }));
+  /* Diagnóstico: solo los resultados que cita un objetivo que sale por el enlace. La lista entera viajaría al navegador aunque
+     «Objetivos» estuviera oculto. */
+  const citados = new Set(
+    rows
+      .filter((r) => r.key === "objetivos")
+      .flatMap((r) => r.blocks.flatMap((b) => ((b.data as { objetivos?: Array<{ resultado?: unknown }> } | null)?.objetivos ?? [])))
+      .map((o) => (typeof o?.resultado === "string" ? o.resultado.trim().toUpperCase() : ""))
+      .filter(Boolean),
+  );
+  const resultados =
+    tipo === "diagnosis" && citados.size
+      ? ((await resultadosDelProyecto(c.projectId).catch(() => null))?.resultados ?? []).filter((r) => citados.has(r.id.toUpperCase()))
+      : [];
   return {
     tipo,
     nombre: nombreDelArtefacto(c),
@@ -119,7 +149,7 @@ export async function artefactoParaElToken(token: string): Promise<ArtefactoView
     smarteamLogoUrl: logos.smarteam ?? null,
     brandLogos: brandLogoMap(logos),
     ocultas: [...ocultas],
-    ...(resultados
+    ...(tipo === "diagnosis"
       ? {
           // Solo estos campos: lo demás de un resultado es del equipo.
           resultados: resultados.map((r) => ({
@@ -133,24 +163,7 @@ export async function artefactoParaElToken(token: string): Promise<ArtefactoView
           })),
         }
       : {}),
-    rows: secciones
-      .filter((s) => salen(s.key) && !ocultas.has(s.key) && !ocultasDelKickoff.has(kickoffHiddenKey(s.key, s.id)) && s.blocks.length > 0)
-      .map((s) => ({
-        key: s.key,
-        titleOverride: s.titleOverride ?? null,
-        eyebrowOverride: s.eyebrowOverride ?? null,
-        blocks: s.blocks.map((b) => ({
-          blockType: b.blockType,
-          content: b.content,
-          data: sinLoInterno(
-            asignaciones && s.key === HORARIOS_KEY
-              ? applyAssignments(b.data, asignaciones)
-              : dropProseCompara && s.key !== COMPARA_KEY
-                ? stripProseCompara(b.data)
-                : b.data,
-          ),
-        })),
-      })),
+    rows,
   };
 }
 

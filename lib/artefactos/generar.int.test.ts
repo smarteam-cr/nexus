@@ -91,6 +91,51 @@ describe("generar una copia", () => {
     expect(await prisma.canvasBlock.findMany({ where: { sectionId: s.id }, select: { data: true } })).toEqual([{ data: revisado }]);
   });
 
+  it("una copia de planificación conserva las propiedades de una persona", async () => {
+    const p = await proyecto();
+    const c = await crearCopia({ projectId: p.id, tipo: "planning", plantillaId: "planificacion-esencial", porEmail: null });
+    const s = await prisma.canvasSection.findFirstOrThrow({ where: { canvasId: c.canvasId, key: "propiedades" }, select: { id: true } });
+    const dePersona = { id: "p1", autor: "persona", objeto: "Contacto", nombre: "Marca", tipo: "texto" };
+    await prisma.canvasBlock.create({ data: { sectionId: s.id, blockType: "CARD", data: { filas: [dePersona] }, source: "HUMAN", status: "CONFIRMED" } });
+    generacion.fn.mockImplementation(async () => ({ sections: [{ key: "propiedades", data: { filas: [{ objeto: "Negocio", nombre: "Monto", tipo: "numero" }] } }] }));
+
+    await generarCopia({ projectId: p.id, canvasId: c.canvasId, agentRunId: null });
+
+    const fila = await prisma.canvasBlock.findFirstOrThrow({ where: { sectionId: s.id }, select: { data: true } });
+    expect(JSON.stringify(fila.data)).toContain("Marca");
+    expect(JSON.stringify(fila.data)).toContain("Monto");
+  });
+
+  it("una copia duplicada de un documento viejo recibe sus secciones nuevas y oculta lo retirado", async () => {
+    const p = await proyecto();
+    const viejo = await prisma.projectCanvas.create({ data: { projectId: p.id, slug: "diagnosis", name: "Diagnóstico", sections: [{ key: "recomendaciones", label: "Recomendaciones" }] } });
+    const s = await prisma.canvasSection.create({ data: { canvasId: viejo.id, key: "recomendaciones", label: "Recomendaciones", order: 0 } });
+    await prisma.canvasBlock.create({ data: { sectionId: s.id, blockType: "CARD", data: { intro: "de antes" }, source: "AGENT", status: "CONFIRMED" } });
+    const c = await crearCopia({ projectId: p.id, tipo: "diagnosis", desdeCanvasId: viejo.id, porEmail: null });
+
+    await generarCopia({ projectId: p.id, canvasId: c.canvasId, agentRunId: null });
+
+    const fila = await prisma.projectCanvas.findUniqueOrThrow({ where: { id: c.canvasId }, select: { sections: true, canvasSections: { select: { key: true } } } });
+    expect(fila.canvasSections.map((x) => x.key)).toContain("objetivos");
+    expect((fila.sections as Array<{ key: string; hidden?: boolean }>).find((e) => e.key === "recomendaciones")?.hidden).toBe(true);
+  });
+
+  it("⛔ la memoria le da lo que su documento de siempre lee aparte, y nada más: un diagnóstico lee los resultados, una integración no", async () => {
+    const p = await proyecto();
+    await prisma.project.update({
+      where: { id: p.id },
+      data: { handoffResultados: { resultados: [{ id: "R1", resultado: "Duplicar los test drive", metrica: "m", lineaBase: "1", meta: "2", plazo: "6 meses" }], generadoAt: "2026-10-29T10:00:00.000Z" } },
+    });
+    const d = await crearCopia({ projectId: p.id, tipo: "diagnosis", plantillaId: "diagnostico-esencial", porEmail: null });
+    await generarCopia({ projectId: p.id, canvasId: d.canvasId, agentRunId: null });
+    expect(generacion.fn.mock.calls[0][1] as string).toContain("Duplicar los test drive");
+
+    generacion.fn.mockClear();
+    const i = await crearCopia({ projectId: p.id, tipo: "integration", porEmail: null });
+    await generarCopia({ projectId: p.id, canvasId: i.canvasId, agentRunId: null });
+    expect(generacion.fn.mock.calls[0][1] as string).not.toContain("Duplicar los test drive");
+  });
+
   it("un kickoff sin Escala no la genera y la vacía", async () => {
     const p = await proyecto();
     await prisma.project.update({ where: { id: p.id }, data: { tags: [SIN_ESCALA_TAG] } });

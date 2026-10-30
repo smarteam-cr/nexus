@@ -12661,7 +12661,8 @@ en su lugar. Lo que queda decidido:
   Elías:* es la opción por defecto de las dos que propuso la revisión; la otra era deducirlo en cada lectura.
 - **Una copia se genera con las reglas de su tipo y con todo lo que su documento de siempre lee aparte**: en el diagnóstico
   no se reescribe lo revisado y las acciones quedan en el enfoque corto; en el kickoff, «Sin Escala» no lleva escala; y la
-  memoria le da la ficha, los procesos y los resultados (`conTodasLasPartes`), que el documento de siempre lee por su cuenta.
+  memoria le da lo que el documento de siempre lee por su cuenta (`tambienLeer`: la ficha y los procesos; los resultados del diagnóstico van con sus códigos), y
+  solo eso. Las propiedades de personas o plantillas no se pisan, y lo retirado de un documento viejo duplicado se oculta.
 - **Archivar pide confirmación y se deshace desde el aviso**; el enlace de la copia no vuelve (hay que crear uno nuevo).
 - **Los dos primeros tipos nuevos son el plan de adopción y la integración técnica** (Elías, respuesta 3), adelantados
   de V6. La integración técnica presta las secciones del requerimiento técnico y suma el **mapa de integración** (campo de

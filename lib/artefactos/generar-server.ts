@@ -28,31 +28,38 @@ import { cargarMaterialDelDocumento } from "@/lib/contexto/material-del-document
 import { documentoConContexto } from "@/lib/contexto/documento";
 import { bloqueDeInstruccionesDelPedido } from "@/lib/entregables/registro";
 import { memoriaDelDocumento, type LectorDeMemoria } from "@/lib/memoria";
+import type { ClaveDeParte } from "@/lib/memoria/tipos";
 import { relacionToDiagram, specToDiagram } from "@/lib/flowchart/spec-to-diagram";
 import { fronteraDeLaPieza } from "@/lib/contexto/frontera-de-los-documentos";
 import { estaRevisada } from "@/lib/canvas/diagnostico-generate";
 import { ordenarObjetivosDelDiagnostico } from "@/lib/canvas/diagnostico-hilo";
 import { dejarElEnfoqueCorto } from "@/lib/canvas/acciones-del-enfoque";
 import { DESAFIO_KEY } from "@/lib/canvas/estado-del-documento";
-import { POLITICA_RECTORA_KEY } from "@/components/landing/configs/diagnostico.defs";
+import { POLITICA_RECTORA_KEY, SECCIONES_RETIRADAS_DEL_DIAGNOSTICO } from "@/components/landing/configs/diagnostico.defs";
+import { SECCIONES_RETIRADAS_DE_PLANIFICACION } from "@/components/landing/configs/planificacion.defs";
+import { ocultarSeccionesRetiradas } from "@/lib/canvas/retirar-secciones";
+import { fusionarFilas, type FilaPropiedad } from "@/lib/planificacion/propiedades";
 import { escalaParaPosicionar, posicionDeLaPropuesta, SECCION_DE_ESCALA } from "@/lib/escala/contexto";
 import { tagLabels } from "@/lib/tags/catalog";
+import { resultadosDelProyecto } from "@/lib/handoff/resultados";
+import { resultadosParaPrompt } from "@/lib/handoff/resultados-medibles";
 import { resolvePipeline } from "@/lib/projects/kind";
 import { servicioDelProyecto, servicioParaElKickoff } from "@/lib/servicios/catalogo";
 import { plantillaGuardadaDelTipo, tipoDeArtefacto, type TipoDeArtefacto } from "./tipos";
 import { nombreDelArtefacto, tipoDelDocumento } from "./copias";
-import { handoffKeysDelTipo, templateDelTipo } from "./catalogo";
+import { handoffKeysDelTipo, seccionesDeUnaCopia, templateDelTipo } from "./catalogo";
 import { ErrorDelArtefacto } from "./copias-server";
 import { fuenteConTope, mensajeDeLaCopia, TIPOS_QUE_LO_ALIMENTAN } from "./mensaje";
 
 /**
  * El lector de la memoria de cada tipo (lib/memoria/consumidores.ts): el mismo que el documento de siempre de ese tipo,
  * así una copia de un documento que lee el cliente recibe la memoria recortada como él. Escrito como `{ lector: "…" }` a
- * propósito: lib/memoria/consumidores.test.ts busca esa forma en cada archivo declarado.
+ * propósito: lib/memoria/consumidores.test.ts busca esa forma en cada archivo declarado. `tambienLeer`: lo que ese lector
+ * excluye porque su documento de siempre lo lee por otro lado (una copia no tiene esa vía).
  */
-const LECTOR: Record<NonNullable<TipoDeArtefacto["contextoDe"]>, { lector: LectorDeMemoria }> = {
-  diagnosis: { lector: "diagnosis" },
-  planning: { lector: "planning" },
+const LECTOR: Record<NonNullable<TipoDeArtefacto["contextoDe"]>, { lector: LectorDeMemoria; tambienLeer?: readonly ClaveDeParte[] }> = {
+  diagnosis: { lector: "diagnosis", tambienLeer: ["ficha", "procesos"] },
+  planning: { lector: "planning", tambienLeer: ["ficha", "procesos"] },
   kickoff: { lector: "kickoff" },
   exploration: { lector: "exploracion-del-proyecto" },
   "tech-requirements": { lector: "tech-requirements" },
@@ -93,7 +100,18 @@ export async function generarCopia(o: {
   const { canvas, tipo } = await copiaParaGenerar(o.projectId, o.canvasId);
   const { plantilla } = plantillaGuardadaDelTipo(tipo.id, canvas.sections);
   const base = templateDelTipo(tipo.id, plantilla?.id ?? null);
-  const keysDeLaCopia = new Set(canvas.canvasSections.map((s) => s.key));
+  /* Las secciones de su plantilla que la copia no tiene (una duplicada de un documento viejo): se crean, como reconcilia el
+     documento de siempre. Las nuevas van al final; el motor mantiene el cierre abajo. */
+  const yaTiene = new Set(canvas.canvasSections.map((s) => s.key));
+  const faltan = seccionesDeUnaCopia(tipo.id, plantilla?.id ?? null).filter((s) => !yaTiene.has(s.key));
+  if (faltan.length) {
+    await prisma.canvasSection.createMany({
+      skipDuplicates: true,
+      data: faltan.map((s, i) => ({ canvasId: o.canvasId, key: s.key, label: s.label, order: canvas.canvasSections.length + i })),
+    });
+  }
+  const filas = await prisma.canvasSection.findMany({ where: { canvasId: o.canvasId }, select: { id: true, key: true } });
+  const keysDeLaCopia = new Set(filas.map((s) => s.key));
   // El template, recortado a lo que la copia tiene: no se paga por escribir secciones que no se van a guardar.
   const template = { ...base, sections: base.sections.filter((s) => keysDeLaCopia.has(s.key)) };
 
@@ -137,8 +155,6 @@ export async function generarCopia(o: {
         ...LECTOR[tipo.contextoDe],
         clientId: proyecto?.clientId ?? null,
         yaLeidas: material?.sesionesUsadas ?? [],
-        // La ficha, los procesos y los resultados: su documento de siempre los lee aparte; una copia, solo de acá.
-        conTodasLasPartes: true,
       })
     : null;
 
@@ -152,7 +168,13 @@ export async function generarCopia(o: {
     industria: proyecto?.client?.industry ?? null,
     alcanceEtiquetado: tagLabels(proyecto?.tags ?? []).join(", "),
     servicio: servicio?.nombre ?? "",
-    delTipo: tipo.id === "kickoff" ? [servicio ? servicioParaElKickoff(servicio, null) : "", escala?.texto ?? ""].filter(Boolean).join("\n\n") : "",
+    delTipo:
+      tipo.id === "kickoff"
+        ? [servicio ? servicioParaElKickoff(servicio, null) : "", escala?.texto ?? ""].filter(Boolean).join("\n\n")
+        : tipo.id === "diagnosis"
+          ? // Los resultados con sus códigos, también los sin confirmar: los objetivos los citan (como el diagnóstico de siempre).
+            resultadosParaPrompt((await resultadosDelProyecto(o.projectId).catch(() => null))?.resultados ?? [])
+          : "",
     frontera: fronteraDeLaPieza(tipo.id),
     handoff,
     reuniones: material?.reuniones ?? "",
@@ -180,11 +202,19 @@ export async function generarCopia(o: {
   o.alFase?.(`Escribiendo ${tipo.conArticulo}…`);
   const generado = await generateSectionsForTemplate(template, mensaje, undefined, saltar.size ? saltar : undefined, prevDataByKey);
   const gen = tipo.id === "diagnosis" ? { ...generado, sections: dejarElEnfoqueCorto(ordenarObjetivosDelDiagnostico(generado.sections)) } : generado;
+  /* Las propiedades de una persona o de una plantilla no se pisan: el agente reemplaza solo las suyas (como en la
+     planificación de siempre, y por eso con el mismo `fusionarFilas`). */
+  for (const s of gen.sections) {
+    if (s.key !== "propiedades" || tipo.id !== "planning" || !s.data || typeof s.data !== "object") continue;
+    const nuevas = (s.data as { filas?: FilaPropiedad[] }).filas ?? [];
+    const previas = ((prevDataByKey.propiedades as { filas?: FilaPropiedad[] } | undefined)?.filas ?? []).filter((f) => f && typeof f === "object");
+    s.data = { ...(s.data as object), filas: fusionarFilas(previas, Array.isArray(nuevas) ? nuevas : []) };
+  }
 
   await guardarVersionDelDocumento(o.canvasId, { origen: "Antes de regenerar" });
   if (sinEscala) await prisma.canvasBlock.deleteMany({ where: { section: { canvasId: o.canvasId, key: SECCION_DE_ESCALA.kickoff } } });
 
-  const idPorKey = new Map(canvas.canvasSections.map((s) => [s.key, s.id]));
+  const idPorKey = new Map(filas.map((s) => [s.key, s.id]));
   let sectionCount = 0;
   for (const s of gen.sections) {
     const sectionId = idPorKey.get(s.key);
@@ -211,6 +241,11 @@ export async function generarCopia(o: {
     ]);
     sectionCount++;
   }
-  if (sectionCount > 0) await prisma.projectCanvas.update({ where: { id: o.canvasId }, data: { contentUpdatedAt: new Date() } }).catch(() => {});
+  if (sectionCount > 0) {
+    // Lo retirado de una copia duplicada de un documento viejo se oculta al regenerar, como en el de siempre: se contradice.
+    const retiradas = tipo.id === "diagnosis" ? SECCIONES_RETIRADAS_DEL_DIAGNOSTICO : tipo.id === "planning" ? SECCIONES_RETIRADAS_DE_PLANIFICACION : [];
+    await ocultarSeccionesRetiradas(o.canvasId, [...keysDeLaCopia], retiradas);
+    await prisma.projectCanvas.update({ where: { id: o.canvasId }, data: { contentUpdatedAt: new Date() } }).catch(() => {});
+  }
   return { sectionCount };
 }

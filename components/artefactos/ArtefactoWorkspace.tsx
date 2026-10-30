@@ -32,12 +32,15 @@ export default function ArtefactoWorkspace({
   canvasId,
   tipo,
   clientName,
+  conContenido,
   onGenerado,
 }: {
   projectId: string;
   canvasId: string;
   tipo: string;
   clientName: string;
+  /** ¿Tiene algo escrito de verdad? (el criterio del riel: la semilla no cuenta). Regenerar eso se confirma. */
+  conContenido: boolean;
   /** Terminó una corrida: el panel vuelve a leer el listado (el punto del riel pasa a verde). */
   onGenerado?: () => void;
 }) {
@@ -51,17 +54,42 @@ export default function ArtefactoWorkspace({
   const base = `/api/projects/${projectId}/artefactos/${canvasId}/generar`;
   const vigilando = useRef<ReturnType<typeof setInterval> | null>(null);
   const [confirmando, setConfirmando] = useState(false);
-  const [marca, setMarca] = useState<Pick<LandingContext, "clientName" | "clientLogoUrl" | "clientLogoDarkUrl" | "clientLogoScale"> | null>(null);
+  const [marca, setMarca] = useState<Partial<LandingContext> | null>(null);
+  const [resultados, setResultados] = useState<NonNullable<LandingContext["diagnostico"]>["resultados"]>(undefined);
 
   // El nombre y el logo del cliente: los mismos que abre el enlace (quien escribe ve lo que se comparte).
   useEffect(() => {
     void fetch(`/api/projects/${projectId}/client-logo`)
-      .then((r) => (r.ok ? (r.json() as Promise<{ clientName?: string; logoUrl?: string | null; logoDarkUrl?: string | null; logoScale?: number | null }>) : null))
+      .then(
+        (r) =>
+          (r.ok ? r.json() : null) as Promise<{
+            clientName?: string;
+            logoUrl?: string | null;
+            logoDarkUrl?: string | null;
+            logoScale?: number | null;
+            smarteamLogoUrl?: string | null;
+            brandLogos?: Record<string, string>;
+          } | null>,
+      )
       .then((j) => {
-        if (j) setMarca({ clientName: j.clientName ?? clientName, clientLogoUrl: j.logoUrl ?? null, clientLogoDarkUrl: j.logoDarkUrl ?? null, clientLogoScale: j.logoScale ?? null });
+        if (!j) return;
+        setMarca({
+          clientName: j.clientName ?? clientName,
+          clientLogoUrl: j.logoUrl ?? null,
+          clientLogoDarkUrl: j.logoDarkUrl ?? null,
+          clientLogoScale: j.logoScale ?? null,
+          smarteamLogoUrl: j.smarteamLogoUrl ?? null,
+          brandLogos: j.brandLogos ?? {},
+        });
       })
       .catch(() => {});
-  }, [projectId, clientName]);
+    // La línea base y la meta de los objetivos, las mismas del enlace.
+    if (tipo !== "diagnosis") return;
+    void fetch(`/api/projects/${projectId}/handoff-resultados`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j: { resultados?: NonNullable<LandingContext["diagnostico"]>["resultados"] } | null) => setResultados(j?.resultados))
+      .catch(() => {});
+  }, [projectId, clientName, tipo]);
 
   /* Lo que hay que hacer al terminar una corrida, en un ref: `cs` es un objeto nuevo en cada render, y con él en las
      dependencias el efecto de abajo corría en cada render, pedía sin parar y borraba el intervalo antes de ver el fin. */
@@ -133,10 +161,15 @@ export default function ArtefactoWorkspace({
       hidden: s.hidden === true,
     }));
   }, [adaptador, cs.sections]);
-  const ctx: LandingContext = useMemo(
-    () => ({ clientName, ...(marca ?? {}), ...(adaptador?.ctx?.(sections) ?? {}) }),
-    [adaptador, clientName, marca, sections],
-  );
+  const ctx: LandingContext = useMemo(() => {
+    const delTipo = adaptador?.ctx?.(sections) ?? {};
+    return {
+      clientName,
+      ...(marca ?? {}),
+      ...delTipo,
+      ...(resultados && delTipo.diagnostico ? { diagnostico: { ...delTipo.diagnostico, resultados } } : {}),
+    };
+  }, [adaptador, clientName, marca, resultados, sections]);
   const conDeLaIa = cs.sections.some((s) => s.blocks.some((b) => b.source === "AGENT"));
   const conAlgo = cs.sections.some((s) => s.key !== "cierre" && s.blocks.length > 0);
   const generando = corrida?.estado === "RUNNING";
@@ -178,7 +211,7 @@ export default function ArtefactoWorkspace({
               aria-label="Instrucciones para esta generación"
               className="min-w-[220px] flex-1 text-xs"
             />
-            <Button size="xs" variant={conDeLaIa ? "secondary" : "primary"} onClick={() => (conAlgo ? setConfirmando(true) : void generar())}>
+            <Button size="xs" variant={conDeLaIa ? "secondary" : "primary"} onClick={() => (conContenido || conDeLaIa ? setConfirmando(true) : void generar())}>
               {conDeLaIa ? "Regenerar con IA" : "Generar con IA"}
             </Button>
           </>

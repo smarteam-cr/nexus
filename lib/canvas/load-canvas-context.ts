@@ -398,7 +398,7 @@ export async function loadCanvasContext(
       // La exploración viva y, si el equipo armó más, sus copias: «los lectores leen todas» vale también acá.
       const copias = await copiasConContenido(projectId, "exploration");
       if (!copias.length) return viva;
-      return textoDeVariasCopias([{ rotulo: "Exploración del proyecto", texto: viva }, ...(await textosDe(copias, canvasSlug, opts))]);
+      return textoDeVariasCopias([{ rotulo: "Exploración del proyecto", texto: viva }, ...(await textosDe(ordenParaLosAgentes(copias), canvasSlug, opts))]);
     }
   }
   const canvas = await prisma.projectCanvas.findFirst({

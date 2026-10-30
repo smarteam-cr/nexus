@@ -8,6 +8,12 @@ import { describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
 
+const exploracionViva = vi.hoisted(() => ({ texto: "" }));
+vi.mock("@/lib/exploraciones/del-proyecto", async (original) => ({
+  ...(await original<typeof import("@/lib/exploraciones/del-proyecto")>()),
+  textoDeLaExploracionDelProyecto: async () => exploracionViva.texto,
+}));
+
 import { prisma } from "@/lib/db/prisma";
 import { canvasOf } from "@/lib/pieces/canvas-query";
 import { loadCanvasContext } from "@/lib/canvas/load-canvas-context";
@@ -52,7 +58,21 @@ describe("una copia en blanco y los lectores de un valor", () => {
     expect(await loadCanvasContext(p.id, "diagnosis", { onlyConfirmed: false })).toBe("[Sección: Situación actual]\nintro: Venden por WhatsApp.");
   });
 
-  it("una copia de exploración se lee junto a la exploración viva; sin copias, la viva tal cual", async () => {
+  it("la exploración viva sola queda tal cual; con copias, se suman rotuladas y las terminadas primero", async () => {
+    const p = await proyecto();
+    exploracionViva.texto = "LO DEL LIENZO";
+    expect(await loadCanvasContext(p.id, "exploration", { onlyConfirmed: false })).toBe("LO DEL LIENZO");
+
+    await documento(p.id, { tipoArtefacto: "exploration", name: "Borrador", order: 0, key: "ya_sabemos", label: "Lo que ya sabemos", data: { intro: "En construcción." } });
+    await documento(p.id, { tipoArtefacto: "exploration", name: "Marketing", order: 1, terminadoEn: new Date(), key: "ya_sabemos", label: "Lo que ya sabemos", data: { intro: "Terminada." } });
+    const texto = await loadCanvasContext(p.id, "exploration", { onlyConfirmed: false });
+    exploracionViva.texto = "";
+    expect(texto).toContain("LO DEL LIENZO");
+    expect(texto.indexOf("LO DEL LIENZO")).toBeLessThan(texto.indexOf("Terminada."));
+    expect(texto.indexOf("Terminada.")).toBeLessThan(texto.indexOf("En construcción."));
+  });
+
+  it("sin exploración viva, las copias se leen por el camino de siempre", async () => {
     const p = await proyecto();
     await documento(p.id, { tipoArtefacto: "exploration", name: "Explorar Marketing", terminadoEn: new Date(), key: "ya_sabemos", label: "Lo que ya sabemos", data: { intro: "Compran por feria." } });
     // Sin exploración viva ni guía: las copias, por el camino de siempre.

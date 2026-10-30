@@ -262,7 +262,8 @@ export async function loadPrintDoc(
      calculara después de filtrar, ocultar «Hoy / Con el sistema» haría que la comparación
      reapareciera desde la prosa, o sea exactamente lo contrario de lo que el CSE pidió. */
   const dropProseCompara = esKickoff && comparaSectionHasContent(secciones);
-  const assignments = esKickoff ? normalizeAssignments(proyecto.kickoffHorarioAssignments) : null;
+  // Los horarios elegidos son del kickoff de siempre: una copia imprime los suyos.
+  const assignments = esKickoff && !deUnaCopia ? normalizeAssignments(proyecto.kickoffHorarioAssignments) : null;
 
   const rows: PrintRow[] = secciones
     .filter((s) => !ocultasPorKey.has(s.key) && !ocultasKickoff.has(kickoffHiddenKey(s.key, s.id)))

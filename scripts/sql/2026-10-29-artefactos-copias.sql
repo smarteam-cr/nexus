@@ -19,8 +19,10 @@
 --
 -- Y UN PUNTO DE PARTIDA para la columna nueva: lo que ya se le presentó o publicó al cliente nace «terminado», no «en
 -- construcción» (si no, en cuanto el tipo tenga una copia, la planificación leería un diagnóstico aprobado como borrador).
--- Solo escribe `terminadoEn`/`terminadoPor`, que nadie lee todavía, y solo la primera vez: si alguna fila ya tiene estado
--- (o sea, el SQL ya corrió y hay decisiones de personas), no hace nada.
+-- Solo escribe `terminadoEn`/`terminadoPor`, que nadie lee todavía, y solo la primera vez: si ya hay filas con esta marca
+-- (`terminadoPor`), el SQL ya corrió y lo que haya cambiado una persona no se pisa.
+-- Simulacro del 2026-10-30 contra producción, solo lectura: 21 filas (19 kickoffs, 1 diagnóstico, 1 planificación). Para
+-- repetirlo, un SELECT count(*) con el mismo FROM y WHERE. Para deshacerlo: las filas con esa marca en `terminadoPor`.
 --
 -- ⚠ ORDEN: este SQL va ANTES del deploy: el listado de documentos del proyecto selecciona las columnas nuevas y sin
 -- ellas la ficha del cliente no carga (`/api/health` da 503 y deploy.sh revierte).
@@ -39,7 +41,7 @@ SET "terminadoEn" = now(), "terminadoPor" = 'punto de partida 2026-10-29'
 FROM "Project" p
 WHERE p."id" = pc."projectId"
   AND pc."terminadoEn" IS NULL
-  AND NOT EXISTS (SELECT 1 FROM "ProjectCanvas" ya WHERE ya."terminadoEn" IS NOT NULL)
+  AND NOT EXISTS (SELECT 1 FROM "ProjectCanvas" ya WHERE ya."terminadoPor" = 'punto de partida 2026-10-29')
   AND (
     pc."estadoDocumento" IN ('presentado', 'aprobado')
     OR (pc."slug" = 'kickoff' AND p."kickoffPublishedAt" IS NOT NULL)
