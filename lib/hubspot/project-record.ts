@@ -1,7 +1,7 @@
 import type { Client as HsClient } from "./sdk";
 import { getSystemAccessToken, getPortalInfo } from "@/lib/hubspot/client";
 import type { PipelineDef } from "@/lib/projects/kind";
-import { propiedadesDelPaseEnElProyecto, type Encargados } from "@/lib/hubspot/encargados";
+import { escribirSinLaRetirada, propiedadesDeEncargados, propiedadesDelPaseEnElProyecto, type Encargados } from "@/lib/hubspot/encargados";
 import { ESTADOS_PROPONIBLES, esProponible } from "@/lib/projects/estado-hubspot";
 import { etapasProponibles } from "@/lib/projects/etapa-hubspot";
 import {
@@ -192,13 +192,14 @@ export async function actualizarEncargadosDelProyecto(
   hs: HsClient,
   recordId: string,
   encargados: Encargados,
+  opciones: { propietario: boolean } = { propietario: true },
 ): Promise<void> {
   if (!encargados.cse.trim()) throw new Error("Falta el owner de HubSpot al que reasignar el proyecto");
-  const res = await hs.apiRequest({
-    method: "PATCH",
-    path: `/crm/v3/objects/${OBJETO_PROYECTOS}/${recordId}`,
-    body: { properties: propiedadesDelPaseEnElProyecto({ cse: encargados.cse.trim(), csl: encargados.csl?.trim() || null }) },
-  });
+  const limpios = { cse: encargados.cse.trim(), csl: encargados.csl?.trim() || null };
+  const res = await escribirSinLaRetirada(
+    opciones.propietario ? propiedadesDelPaseEnElProyecto(limpios) : propiedadesDeEncargados(limpios),
+    (properties) => hs.apiRequest({ method: "PATCH", path: `/crm/v3/objects/${OBJETO_PROYECTOS}/${recordId}`, body: { properties } }),
+  );
   if (!res.ok) {
     const cuerpo = await res.text().catch(() => "");
     throw new Error(

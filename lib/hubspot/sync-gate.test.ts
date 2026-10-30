@@ -37,6 +37,7 @@ vi.mock("@/lib/db/prisma", () => ({
       }),
     },
     hubspotAccount: { findFirst: vi.fn(async () => null) },
+    teamMember: { findMany: vi.fn(async () => []) },
     project: { findMany: vi.fn(async () => h.activos) },
   },
 }));

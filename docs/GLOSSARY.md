@@ -1073,7 +1073,9 @@
   arranque están en el código.
 - **Pase de cuenta**: cambiar el CSE de una cuenta. Escribe el «Propietario» (`hubspot_owner_id`, lo que Nexus lee
   como encargado desde el 2026-10-29, solo en los proyectos), «CSE Encargado» (`cse_encargado`) y «CSL Encargado»
-  (`csl_encargado`, la CSL) en HubSpot y le manda al CSE nuevo el resumen de la cuenta en «Para ti».
+  (`csl_encargado`, la CSL) en HubSpot y le manda al CSE nuevo el resumen de la cuenta en «Para ti». Toca solo proyectos
+  de Customer Success, así que no se le puede pasar una cuenta a alguien del equipo técnico (rol DEV): ahí su propietario
+  no cuenta como encargado (2026-10-30). En Desarrollo y Sitios web manda el propietario.
 - **Carga del equipo** (`/customer-success/carga`, `lib/carga`): las horas comprometidas de cada persona de CS por
   semana —reuniones agendadas, preparación y entrega del cronograma (lo respondido o, si no, lo estimado)— contra sus
   horas disponibles (contrato × parte productiva). **Utilización** = horas ÷ disponibles; semáforo: con espacio

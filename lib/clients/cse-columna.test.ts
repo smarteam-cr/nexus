@@ -54,3 +54,59 @@ describe("⭐ la columna CSE de /clients no mezcla pipelines", () => {
     expect(bloque, "cseNames/cseEmails volvieron a leer de c.projects crudo").not.toContain("c.projects");
   });
 });
+
+describe("⭐ el encargado se ve con su foto (2026-10-30)", () => {
+  const texto = (ruta: string) => soloCodigo(fs.readFileSync(path.join(RAIZ, ruta), "utf8"));
+
+  it("la columna de Clientes usa el avatar con la foto de Nexus", () => {
+    const grid = texto("app/(shell)/clients/ClientsGrid.tsx");
+    expect(grid).toMatch(/<Avatar[^>]*src=\{c\.cseFoto \?\? undefined\}/);
+    // La foto sale de la regla del encargado, y el equipo la trae de la base: si no, la columna quedaría en iniciales.
+    expect(FUENTE).toMatch(/cseFoto: cseEmail \? \(fotoEnNexus\.get\(cseEmail\)/);
+    expect(texto("lib/cuentas/encargado-server.ts")).toMatch(/photoUrl: true/);
+  });
+
+  it("el riel pinta la foto de cada proyecto, con el nombre al pasar el mouse", () => {
+    expect(texto("components/clients/RielDelCliente.tsx")).toMatch(/<Avatar name=\{p\.encargado\.nombre\} src=\{p\.encargado\.foto \?\? undefined\}[^>]*title=\{p\.encargado\.nombre\}/);
+    expect(texto("app/(shell)/clients/[id]/page.tsx")).toContain("encargado: personaDelProyecto(p, equipo)");
+    expect(texto("app/(shell)/clients/[id]/WorkspaceClient.tsx")).toContain("encargado: p.encargado");
+  });
+
+  it("⛔ el riel no filtra por quién mira: Customer Success ve los proyectos de Desarrollo", () => {
+    const pagina = texto("app/(shell)/clients/[id]/page.tsx");
+    expect(pagina).toContain(".filter((p) => esProyectoNavegable(p, paraFiltro))");
+    expect(pagina).not.toMatch(/esProyectoDePipelineCS|esPipelineIdDeCs/);
+  });
+});
+
+describe("⛔ el pase de cuenta nunca escribe a alguien técnico en un proyecto de CS (2026-10-30)", () => {
+  const texto = (ruta: string) => soloCodigo(fs.readFileSync(path.join(RAIZ, ruta), "utf8"));
+
+  it("la ruta lo rechaza antes de tocar HubSpot", () => {
+    const ruta = texto("app/api/clients/[id]/cse-encargado/route.ts");
+    const candado = ruta.indexOf("if (esDelEquipoTecnico(destino.roleEnum))");
+    expect(candado).toBeGreaterThan(-1);
+    expect(candado).toBeLessThan(ruta.indexOf("getSystemHubspotClient()"));
+  });
+
+  it.each(["app/(shell)/clients/ClientsTable.tsx", "lib/cs/load-account.ts", "lib/mi-dia/cartera-cs-server.ts"])("%s no lo ofrece", (ruta) => {
+    expect(texto(ruta)).toContain("!esDelEquipoTecnico(m.roleEnum)");
+  });
+
+  it("Éxito del cliente no lo ofrece en la celda ni lo propone en «Cuentas sin CSE»", () => {
+    const cartera = texto("lib/cs/cartera.ts");
+    expect(cartera).toMatch(/equipoParaPase: delEquipo\.filter\([^\n]*!esDelEquipoTecnico\(m\.roleEnum\)/);
+    expect(cartera).toMatch(/proponerCseParaLasCuentas\(\s*cuentas,\s*delEquipo\.filter\([^\n]*!esDelEquipoTecnico\(m\.roleEnum\)/);
+  });
+
+  it("el pase por consola lo rechaza antes de mover nada", () => {
+    const script = texto("scripts/pase-de-cuenta.ts");
+    const candado = script.indexOf("if (esDelEquipoTecnico(destino.roleEnum)) throw");
+    expect(candado).toBeGreaterThan(-1);
+    expect(candado).toBeLessThan(script.indexOf("pasarLoDeLaCuenta(", candado));
+  });
+
+  it("en un pipeline sin declarar el pase no pisa al propietario: no se sabe de quién es", () => {
+    expect(texto("app/api/clients/[id]/cse-encargado/route.ts")).toContain("{ propietario: !!resolvePipeline(p.hubspotPipelineId) }");
+  });
+});

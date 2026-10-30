@@ -4,7 +4,8 @@
  *
  * Simulacro por defecto (solo lee la base y HubSpot): compara, en cada proyecto activo con registro en HubSpot, a quién
  * lee el espejo con la regla de antes («CSE Encargado», luego «CSL Encargado», luego el propietario) y con la de ahora
- * (el propietario primero). Dice qué cuentas cambian de encargado (lib/cuentas/encargado.ts) y a quién se le abre o se
+ * (el propietario primero; en un proyecto de CS, alguien del equipo técnico no cuenta). Dice qué cuentas cambian de
+ * encargado (lib/cuentas/encargado.ts) y a quién se le abre o se
  * le cierra una cuenta (lib/auth/access.ts: el dueño de un proyecto de Customer Success abre la cuenta, si no ve toda la
  * cartera). Un propietario archivado en HubSpot no tiene correo, igual que en el espejo, y cae al respaldo.
  *
@@ -27,8 +28,9 @@ import { resolverApply } from "./lib/guard";
 import { prisma } from "@/lib/db/prisma";
 import { getSystemHubspotClient } from "@/lib/hubspot/client";
 import { OBJETO_PROYECTOS } from "@/lib/hubspot/asociaciones-proyecto";
-import { duenoDelProyecto, PROP_CSE_ENCARGADO, PROP_CSL_ENCARGADO, PROP_PROPIETARIO, type PropiedadesDelEncargado } from "@/lib/hubspot/encargados";
-import { esProyectoDePipelineCS } from "@/lib/projects/scope";
+import { candidatosDelProyecto, ownerQueSeGuarda, PROP_CSE_ENCARGADO, PROP_CSL_ENCARGADO, PROP_PROPIETARIO, type PropiedadesDelEncargado } from "@/lib/hubspot/encargados";
+import { correosDelEquipoTecnico } from "@/lib/hubspot/equipo-tecnico";
+import { esPipelineIdDeCs, esProyectoDePipelineCS } from "@/lib/projects/scope";
 import { encargadoDeLaCuenta, proyectoQueLleva } from "@/lib/cuentas/encargado";
 import { nombresDelEquipo, SELECT_PARA_EL_ENCARGADO } from "@/lib/cuentas/encargado-server";
 import { veTodaLaCartera } from "@/lib/auth/access";
@@ -58,6 +60,10 @@ async function main() {
   if (correos.size === 0) throw new Error("HubSpot devolvió la lista de owners vacía. No se mide ni se escribe nada.");
   const correoDe = (d: { principal: string | null; respaldo: string | null }) =>
     (d.principal ? correos.get(d.principal) : undefined) ?? (d.respaldo ? correos.get(d.respaldo) : undefined) ?? null;
+  const tecnicos = await correosDelEquipoTecnico();
+  /** El correo con la regla de hoy, con la misma función que el espejo. */
+  const correoDeHoy = (pr: PropiedadesDelEncargado, deCs: boolean) =>
+    ownerQueSeGuarda(candidatosDelProyecto(pr).map((id) => ({ id, name: null, email: correos.get(id) ?? null })), { deCs, tecnicos })?.email ?? null;
 
   const todos = await prisma.project.findMany({
     where: { hubspotServiceId: { not: null } },
@@ -90,7 +96,7 @@ async function main() {
     if (!prop) sinPropietario++;
     else if (prop !== cse) distintoEnHubspot++;
     const a = correoDe(duenoDeAntes(pr));
-    const b = correoDe(duenoDelProyecto(pr));
+    const b = correoDeHoy(pr, esPipelineIdDeCs(p.hubspotPipelineId));
     antes.set(p.id, a);
     ahora.set(p.id, b);
     if (a !== b) cambios.push(`  ${esProyectoDePipelineCS(p) ? "CS  " : "otro"} · ${p.client.name} · «${p.name}»: ${a ?? "(nadie)"} → ${b ?? "(nadie)"}`);

@@ -75,6 +75,8 @@ interface ProjectSummary {
   esPrueba?: boolean;
   /** El encargado en HubSpot: la línea «Esta cuenta tiene otro proyecto» lo nombra. */
   hubspotOwnerName?: string | null;
+  /** Ese encargado como persona de Nexus, con su foto: la que se ve en el riel. */
+  encargado?: { nombre: string; foto: string | null } | null;
   /** `Project.altaEstado` — un alta a medio hacer no cobra ni se publica (lib/projects/alta.ts). */
   altaEstado?: string | null;
   /** Diagnóstico del alta trabada: alimentan el cartel con el botón "Reintentar". */
@@ -651,7 +653,7 @@ function ProjectSection({
     );
   };
 
-  const filasDelRiel: ProyectoDelRiel[] = projects.map((p) => ({ id: p.id, nombre: p.name, ...claseDelProyecto(p, projects) }));
+  const filasDelRiel: ProyectoDelRiel[] = projects.map((p) => ({ id: p.id, nombre: p.name, encargado: p.encargado, ...claseDelProyecto(p, projects) }));
 
   return (
     /* El lienzo de tres columnas, como la preventa (sistema «Nexus · interfaz interna»): a la

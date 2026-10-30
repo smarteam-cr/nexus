@@ -11,7 +11,9 @@ import type { Client } from "./sdk";
 import { detectarFusion, explicarFusion } from "@/lib/hubspot/empresa-fusionada";
 import { fusionadoEn } from "@/lib/hubspot/proyecto-fusionado";
 import { OBJETO_PROYECTOS } from "@/lib/hubspot/asociaciones-proyecto";
-import { duenoDelProyecto, ownerQueSeGuarda, type OwnerLeido } from "@/lib/hubspot/encargados";
+import { candidatosDelProyecto, ownerQueSeGuarda, type OwnerLeido } from "@/lib/hubspot/encargados";
+import { correosDelEquipoTecnico } from "@/lib/hubspot/equipo-tecnico";
+import { esPipelineIdDeCs } from "@/lib/projects/scope";
 
 // ── Mapeo de nombre del proyecto → serviceType + projectType ─────────────────
 
@@ -1267,6 +1269,7 @@ async function correrElEspejo(
   );
 
   // 6. Sincronizar cada proyecto HubSpot → DB
+  const tecnicos = await correosDelEquipoTecnico();
   for (const project of projects) {
     const props = project.properties;
 
@@ -1372,13 +1375,11 @@ async function correrElEspejo(
     // (guardan un owner id). La visibilidad (lib/auth/access) matchea por EMAIL, así que resolvemos ese owner →
     // email/nombre. Si el propietario está archivado en HubSpot, se guarda el respaldo entero (id y correo); si HubSpot
     // no contestó, `guardado` es null y los tres quedan undefined: Prisma no toca lo que ya estaba (`ownerQueSeGuarda`,
-    // lib/hubspot/encargados.ts).
-    const dueno = duenoDelProyecto(props);
-    const [principal, respaldo] = await Promise.all([
-      resolveOwner(hsClient, dueno.principal),
-      resolveOwner(hsClient, dueno.respaldo),
-    ]);
-    const guardado = ownerQueSeGuarda(dueno, principal, respaldo);
+    // lib/hubspot/encargados.ts). En un proyecto de CS, alguien del equipo técnico no cuenta como propietario (2026-10-30).
+    const candidatos = await Promise.all(
+      candidatosDelProyecto(props).map(async (id) => ({ id, ...(await resolveOwner(hsClient, id)) })),
+    );
+    const guardado = ownerQueSeGuarda(candidatos, { deCs: esPipelineIdDeCs(pipelineId), tecnicos });
     const hubOwnerId = guardado?.id;
     const ownerName = guardado?.name;
     const ownerEmail = guardado?.email;

@@ -70,6 +70,21 @@ export function proyectoQueLleva(p: FilaParaElEncargado): ProyectoQueLleva {
   };
 }
 
+/**
+ * La persona que lleva UN proyecto, para pintarla: el nombre en Nexus y la foto de su usuario. Sirve para todo pipeline:
+ * en uno de Desarrollo es la persona técnica. null = nadie. `foto` null = se pintan sus iniciales. Quien está de baja va
+ * marcada y sin foto, como en la columna del listado de Clientes: no lleva nada.
+ */
+export function personaDelProyecto(
+  p: { hubspotOwnerEmail: string | null; hubspotOwnerName: string | null },
+  equipo: { deBaja: ReadonlyMap<string, string>; nombres: ReadonlyMap<string, string>; fotos: ReadonlyMap<string, string> },
+): { nombre: string; foto: string | null } | null {
+  const email = (p.hubspotOwnerEmail ?? "").trim().toLowerCase();
+  const nombre = equipo.nombres.get(email) ?? ((p.hubspotOwnerName ?? "").trim() || email);
+  if (!nombre) return null;
+  return equipo.deBaja.has(email) ? { nombre: `${nombre} (de baja)`, foto: null } : { nombre, foto: equipo.fotos.get(email) ?? null };
+}
+
 export const SIN_ENCARGADO: EncargadoDeLaCuenta = { email: null, nombre: null, deBaja: null, otros: [] };
 
 const norm = (e: string | null | undefined) => (e ?? "").trim().toLowerCase();

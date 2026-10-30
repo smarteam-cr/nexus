@@ -37,9 +37,10 @@ const WEB = "922688687";
 const WEB_ENTREGA = "1409897128";
 const WEB_FINALIZADO = "1409897129";
 const CS = "826270797";
+const DESARROLLO = "922785384";
 const CS_DIAGNOSTICO = "1410223917";
 
-const OWNERS: Record<string, string> = { "100": "cse@smarteam.com", "200": "propietaria@smarteam.com" };
+const OWNERS: Record<string, string> = { "100": "cse@smarteam.com", "200": "propietaria@smarteam.com", "300": "tecnico@smarteam.com" };
 /** El owner que no contesta (429). Uno que no está en `OWNERS` está archivado: contesta 404. */
 const NO_CONTESTA = "429";
 
@@ -92,6 +93,7 @@ vi.mock("@/lib/db/prisma", () => ({
       findUnique: async () => ({ id: "c1", name: "SmartAgro", company: null, hubspotCompanyId: "58804639346", ignoredHubspotServiceIds: [] }),
     },
     hubspotAccount: { findFirst: async () => null },
+    teamMember: { findMany: async () => [{ email: "Tecnico@smarteam.com", roleEnum: "DEV" }, { email: "cse@smarteam.com", roleEnum: "CSE" }] },
     project: {
       findUnique: async ({ where }: { where: { hubspotServiceId: string } }) => h.filas.find((f) => f.hubspotServiceId === where.hubspotServiceId) ?? null,
       findFirst: async () => null,
@@ -240,6 +242,26 @@ describe("quién queda como encargado cuando HubSpot duda", () => {
     h.hubspot.get("595998424735")!.properties.hubspot_owner_id = "200";
     await tocarElBoton();
     expect(fila("p-impl")).toMatchObject({ hubspotOwnerId: "200", hubspotOwnerEmail: "propietaria@smarteam.com" });
+  });
+});
+
+describe("el propietario según el pipeline", () => {
+  it("BLUESAT: en una implementación, un propietario técnico no le quita el proyecto a «CSE Encargado»", async () => {
+    const tocarElBoton = await abrirLaFicha();
+    h.hubspot.get("595998424735")!.properties.hubspot_owner_id = "300";
+
+    await tocarElBoton();
+
+    expect(fila("p-impl")).toMatchObject({ hubspotOwnerId: "100", hubspotOwnerEmail: "cse@smarteam.com" });
+  });
+
+  it("en Desarrollo manda el propietario técnico", async () => {
+    const tocarElBoton = await abrirLaFicha();
+    Object.assign(h.hubspot.get("595998424735")!.properties, { hs_pipeline: DESARROLLO, hubspot_owner_id: "300" });
+
+    await tocarElBoton();
+
+    expect(fila("p-impl")).toMatchObject({ hubspotOwnerId: "300", hubspotOwnerEmail: "tecnico@smarteam.com" });
   });
 });
 

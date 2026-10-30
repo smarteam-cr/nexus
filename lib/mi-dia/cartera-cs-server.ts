@@ -25,6 +25,7 @@ import { proyectoNavegableWhere } from "@/lib/projects/scope";
 import { pipelineByKey } from "@/lib/projects/kind";
 import { esLiderDeCs } from "@/lib/cs/acceso";
 import { esCuentaDePrueba } from "@/lib/documentacion/equipo";
+import { esDelEquipoTecnico } from "@/lib/hubspot/encargados";
 import { hoyEnCostaRica } from "@/lib/cs/cartera";
 import { cseDeLaCuenta, proximaRenovacion, type CuentaDeCartera } from "@/lib/cs/cartera-reglas";
 import { encargadoDeLaCuenta, proyectoQueLleva } from "@/lib/cuentas/encargado";
@@ -161,13 +162,15 @@ export async function cargarCarteraDeCs(variante: "cse" | "csl", a: Alcance, o: 
   const proyectos = await proyectosDeLaCartera(propias);
   const ids = [...new Set(proyectos.map((p) => p.clientId))];
   if (ids.length === 0) return vacia;
-  // A quién se le puede pasar una cuenta: el equipo activo sin las cuentas de prueba, como en Éxito del cliente.
+  // A quién se le puede pasar una cuenta: el equipo activo sin las cuentas de prueba ni el técnico, como en Éxito del cliente.
   const equipoParaPase = tienePermiso(a, "proyectos", "reasignarEncargado")
     ? (
         await prisma.teamMember
-          .findMany({ where: { deactivatedAt: null }, select: { email: true, name: true }, orderBy: { name: "asc" } })
+          .findMany({ where: { deactivatedAt: null }, select: { email: true, name: true, roleEnum: true }, orderBy: { name: "asc" } })
           .catch(() => [])
-      ).filter((m) => !esCuentaDePrueba(m.name))
+      )
+        .filter((m) => !esCuentaDePrueba(m.name) && !esDelEquipoTecnico(m.roleEnum))
+        .map((m) => ({ email: m.email, name: m.name }))
     : [];
 
   // Las que lleva el CSE (es el encargado en HubSpot): de esas ve el color. Las compartidas, sin color.

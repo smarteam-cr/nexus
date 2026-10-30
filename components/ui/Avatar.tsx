@@ -43,6 +43,9 @@ export interface AvatarProps {
   size?: keyof typeof SIZE;
   /** Semilla para el color; por defecto se deriva del nombre. */
   colorSeed?: string;
+  /** Las iniciales con tokens neutros, en vez del color por hash (filas densas: la gente no se distingue por color). */
+  neutro?: boolean;
+  title?: string;
   className?: string;
 }
 
@@ -52,7 +55,7 @@ export interface AvatarProps {
  * Avatar — imagen o iniciales con color derivado por hash. Generaliza la lógica
  * de avatar que estaba duplicada inline en varias vistas.
  */
-export function Avatar({ name, src, size = "md", colorSeed, className }: AvatarProps) {
+export function Avatar({ name, src, size = "md", colorSeed, neutro = false, title, className }: AvatarProps) {
   const base = cn(
     "rounded-full flex items-center justify-center font-semibold flex-shrink-0",
     SIZE[size],
@@ -61,11 +64,11 @@ export function Avatar({ name, src, size = "md", colorSeed, className }: AvatarP
 
   if (src) {
     // eslint-disable-next-line @next/next/no-img-element
-    return <img src={src} alt={name} className={cn(base, "object-cover")} />;
+    return <img src={src} alt={name} title={title} className={cn(base, "object-cover")} />;
   }
 
   return (
-    <div className={cn(base, colorFor(colorSeed ?? name))} aria-label={name}>
+    <div className={cn(base, neutro ? "border border-line bg-surface-hover text-fg-secondary" : colorFor(colorSeed ?? name))} aria-label={name} title={title}>
       {initials(name)}
     </div>
   );
