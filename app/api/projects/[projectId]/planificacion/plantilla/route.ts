@@ -2,7 +2,8 @@
  * /api/projects/[projectId]/planificacion/plantilla — la plantilla de la planificación del proyecto (I2, 2026-10-27).
  * Gemela de …/diagnostico/plantilla: la planificación tiene dos plantillas, la completa y la esencial.
  *
- *   GET                     → { plantilla, nombre, guardada }: la anotada en el documento (o la de siempre, sin anotar).
+ *   GET                     → { plantilla, nombre, guardada, sugerida }: la anotada en el documento (o la de siempre, sin
+ *                             anotar) y la que sugiere Nexus con su razón (2026-10-29, pregunta 44), o null si no puede.
  *   POST { plantilla }      → EMPEZAR EN BLANCO: el documento con las secciones de esa plantilla, sin la IA, y la plantilla
  *                             anotada. Es la salida «Escribirlo yo» del selector (components/canvas/ElegirPlantilla.tsx).
  *
@@ -17,6 +18,7 @@ import { plantillaDelDocumento } from "@/lib/entregables/registro";
 import { empezarEnBlanco, ErrorDelEntregable } from "@/lib/entregables/generar-server";
 import { triggeredByEmail } from "@/lib/agents/triggered-by";
 import { MENSAJE_APROBADO } from "@/lib/canvas/estado-del-documento";
+import { plantillaSugeridaDelProyecto } from "@/lib/planificacion/plantilla-sugerida-server";
 
 type Params = { params: Promise<{ projectId: string }> };
 
@@ -31,7 +33,9 @@ export async function GET(_req: NextRequest, { params }: Params) {
   if (guard instanceof NextResponse) return guard;
   const c = await prisma.projectCanvas.findFirst({ where: { projectId, ...canvasOf(SLUG) }, select: { sections: true } });
   const g = plantillaDelDocumento(SLUG, c?.sections);
-  return NextResponse.json({ plantilla: g?.plantilla.id ?? null, nombre: g?.plantilla.nombre ?? null, guardada: g?.guardada ?? false });
+  // La sugerencia solo le sirve al selector, que se ve mientras no hay plantilla anotada.
+  const sugerida = g?.guardada ? null : await plantillaSugeridaDelProyecto(projectId);
+  return NextResponse.json({ plantilla: g?.plantilla.id ?? null, nombre: g?.plantilla.nombre ?? null, guardada: g?.guardada ?? false, sugerida });
 }
 
 export async function POST(req: NextRequest, { params }: Params) {

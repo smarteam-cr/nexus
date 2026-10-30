@@ -96,6 +96,12 @@ export interface BCSectionDef {
   /** (kickoff) no se puede ocultar (sin toggle de ojo): hero y cierre. */
   noHide?: boolean;
   /**
+   * SOLO INTERNA (2026-10-29): la ve el equipo y nunca el cliente (`SECCIONES_SOLO_INTERNAS`, lib/business-cases/
+   * section-briefs.ts). En el editor no lleva ojo (no se puede mostrar), dice «Solo lo ve el equipo» y arranca ABIERTA; en
+   * lectura no se pinta. Hoy, el Brief de implementación traído a la Planificación.
+   */
+  soloInterna?: boolean;
+  /**
    * Cómo se llama cada lista del schema EN PANTALLA, por su key. Solo para las líneas que el chat
    * le muestra a una persona antes de aplicar.
    *

@@ -14,7 +14,9 @@ import {
   MOTIVO_DE_LA_REGLA_VIEJA,
   SUGERIDAS_DE_LA_REGLA_VIEJA,
   TOPE_DE_SUGERENCIAS,
+  DESTINOS_DONDE_ENTRAN_SOLAS,
   FUENTES_QUE_ENTRAN_SOLAS,
+  entranSolasLasDelProyecto,
   motivoDeLaReunionConTexto,
   motivoDeLaSesion,
   motivoDeLosHechos,
@@ -364,9 +366,20 @@ describe("en el diagnóstico entran solas todas las reuniones del proyecto con t
     expect(r.filter((s) => s.fuente === "proyecto")).toHaveLength(TOPE_DE_SUGERENCIAS + 5);
   });
 
-  it("solo en el diagnóstico: los demás documentos siguen esperando un «Usar»", () => {
+  it("en la planificación también entran solas (2026-10-29, SmartAgro), sin las de la exploración", () => {
     const r = sugerenciasDelDocumento("planificacion", { reuniones, clasesDeTexto: new Map(clases), dominiosPropios: PROPIOS, ahora: AHORA });
-    expect(r.some((s) => s.fuente === "proyecto")).toBe(false);
+    // La de la sesión de la exploración (s1) entra igual, como reunión del proyecto: la exploración es del diagnóstico.
+    expect(r.filter((s) => s.fuente === "proyecto").map((s) => s.sessionId)).toEqual(["solo-notas", "caso", "s1", "alineacion", "handoff"]);
+    expect(r.some((s) => s.fuente === "exploracion")).toBe(false);
+    expect(DESTINOS_DONDE_ENTRAN_SOLAS).toEqual(["diagnostico", "planificacion"]);
+  });
+
+  it("los demás documentos siguen esperando un «Usar»", () => {
+    for (const d of ["ejecucion", "kickoff", "integraciones", "entrega"] as const) {
+      const r = sugerenciasDelDocumento(d, { reuniones, clasesDeTexto: new Map(clases), dominiosPropios: PROPIOS, ahora: AHORA });
+      expect(r.some((s) => s.fuente === "proyecto"), d).toBe(false);
+      expect(entranSolasLasDelProyecto(d), d).toBe(false);
+    }
   });
 
   it("el servidor usa el predicado único y el chokepoint", () => {

@@ -27,6 +27,8 @@ import { ultimaVersionPresentada } from "@/lib/external/diagnostico-view";
 import { estadoDelDocumento } from "@/lib/canvas/estado-del-documento-servidor";
 import { urlDeProyecto } from "@/lib/agents/run-url";
 import { PLANIFICACION_DEF_BY_KEY } from "@/components/landing/configs/planificacion.defs";
+import { SECCIONES_SOLO_INTERNAS } from "@/lib/business-cases/section-briefs";
+import { sinPorQueVacia } from "@/lib/landing/por-que-vacia";
 
 export type DocumentoPublicable = "diagnostico" | "planificacion";
 
@@ -92,6 +94,20 @@ async function publicarDiagnosticoPresentado(projectId: string) {
   return NextResponse.json({ published: true, publishedAt: now.toISOString() });
 }
 
+/**
+ * Lo que entra a la foto que ve el cliente (2026-10-29): sin las secciones SOLO INTERNAS (el Brief traído de la hoja) y sin
+ * el porqué de las vacías, que es un aviso del equipo. Se saca ACÁ y no solo al servir: lo que no está en la foto no se
+ * puede filtrar por un olvido en el enlace o en el PDF.
+ */
+export function seccionesParaLaFoto<S extends { key: string; blocks: Array<{ data: unknown }> }>(secciones: readonly S[]): S[] {
+  return secciones
+    .filter((s) => !SECCIONES_SOLO_INTERNAS.has(s.key))
+    .map((s) => ({
+      ...s,
+      blocks: s.blocks.map((b) => (b.data && typeof b.data === "object" && !Array.isArray(b.data) ? { ...b, data: sinPorQueVacia(b.data as object) } : b)),
+    }));
+}
+
 async function publicarPlanificacion(projectId: string) {
   const canvas = await prisma.projectCanvas.findFirst({
     where: canvasOfNested("planning", { projectId }),
@@ -115,13 +131,15 @@ async function publicarPlanificacion(projectId: string) {
   if (!canvas) {
     return NextResponse.json({ error: "SIN_CANVAS", message: "Este proyecto todavía no tiene la Planificación." }, { status: 409 });
   }
-  if (!canvas.canvasSections.some((s) => s.blocks.length > 0)) {
+  const paraElCliente = seccionesParaLaFoto(canvas.canvasSections);
+  // La «Aprobación» nace sembrada: sola no es un documento. Con el Brief fuera de la foto, sin esto se publicaría solo ella.
+  if (!paraElCliente.some((s) => s.key !== "cierre" && s.blocks.length > 0)) {
     return NextResponse.json(
       { error: "SIN_CONTENIDO", message: "La Planificación está vacía: genérala o escríbela antes de compartirla." },
       { status: 409 },
     );
   }
-  const congeladas = canvas.canvasSections.map((s) => {
+  const congeladas = paraElCliente.map((s) => {
     const def = PLANIFICACION_DEF_BY_KEY[s.key];
     return {
       ...s,

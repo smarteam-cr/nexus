@@ -14,7 +14,7 @@ import {
   ocultasDelBorrador,
   ocultasEnElEditor,
 } from "./ocultas-del-editor";
-import { hiddenKeysFrom, parseSectionEntries } from "@/lib/business-cases/section-briefs";
+import { hiddenKeysFrom, parseSectionEntries, SECCIONES_SOLO_INTERNAS } from "@/lib/business-cases/section-briefs";
 
 const leer = (f: string) => fs.readFileSync(path.join(process.cwd(), f), "utf8");
 
@@ -53,7 +53,7 @@ describe("el oculto vive en el canvas", () => {
 
   it("la entry reservada no se lee como una sección oculta ni rompe el parseo de secciones", () => {
     const con = conOcultasDelBorrador(SECCIONES, ["procesos"], null, "x");
-    expect(hiddenKeysFrom(con).size).toBe(0);
+    expect([...hiddenKeysFrom(con)].filter((k) => !SECCIONES_SOLO_INTERNAS.has(k))).toEqual([]);
     expect(parseSectionEntries(con).find((e) => e.key === CLAVE_OCULTAS_DEL_EDITOR)?.label).toBe(CLAVE_OCULTAS_DEL_EDITOR);
   });
 

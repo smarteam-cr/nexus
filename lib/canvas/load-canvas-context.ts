@@ -17,7 +17,7 @@
 import { prisma } from "@/lib/db/prisma";
 import { extractFingerprint } from "@/lib/timeline/particularidad-identity";
 import { canvasOf } from "@/lib/pieces/canvas-query";
-import { hiddenKeysFrom } from "@/lib/business-cases/section-briefs";
+import { hiddenKeysFrom, SECCIONES_SOLO_INTERNAS } from "@/lib/business-cases/section-briefs";
 import { textoDeLaGuia } from "@/lib/guia-exploracion/contexto";
 import { SENTINEL_SERVICE_TYPE } from "@/lib/projects/kind";
 import { resolverDuenioDelHandoff } from "@/lib/handoff/duenio";
@@ -297,6 +297,8 @@ const SKIP = new Set([
   "__lang",
   // La forma corta de las acciones de un diagnóstico nuevo (lib/canvas/acciones-del-enfoque.ts): dice cómo se pinta.
   "__forma",
+  // El porqué de una sección vacía (lib/landing/por-que-vacia.ts): un aviso para el equipo, no contenido.
+  "__porQueVacia",
   "buttonTarget",
   "coverImageUrl",
   "brands",
@@ -453,7 +455,8 @@ async function textoDelCanvas(
   canvasSlug: string,
   opts: { onlyConfirmed?: boolean; includeKeys?: readonly string[]; soloVisibles?: boolean },
 ): Promise<string> {
-  const ocultas = opts.soloVisibles ? hiddenKeysFrom(canvas.sections) : new Set<string>();
+  // Lo SOLO INTERNO (el Brief traído de la hoja) no llega a ningún agente por acá, con `soloVisibles` o sin él.
+  const ocultas = opts.soloVisibles ? hiddenKeysFrom(canvas.sections) : new Set<string>(SECCIONES_SOLO_INTERNAS);
 
   const sections = await prisma.canvasSection.findMany({
     where: { canvasId: canvas.id },

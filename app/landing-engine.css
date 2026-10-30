@@ -211,6 +211,8 @@
    y los paneles oscuros no se "engrisan" completos). */
 .stl .stl-sec.stl-hidden { outline: 2px dashed rgba(245, 158, 11, 0.55); outline-offset: -4px; border-radius: 10px; }
 .stl .stl-sec.stl-hidden > .stl-wrap { opacity: 0.42; filter: grayscale(0.55); }
+/* Lo SOLO INTERNO se oculta del cliente, pero es para que el equipo lo lea: no va lavado (2026-10-29). */
+.stl .stl-sec.stl-hidden.stl-solo-interna > .stl-wrap { opacity: 1; filter: none; }
 .stl .stl-hidden-badge {
   font-size: 11px; font-weight: 700; line-height: 1; color: #b45309;
   background: rgba(245, 158, 11, 0.16); border: 1px solid rgba(245, 158, 11, 0.5);

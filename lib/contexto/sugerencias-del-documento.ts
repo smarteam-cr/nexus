@@ -18,6 +18,9 @@
  *    único)—, sin tope. Motivo: «Reunión del proyecto» (y «solo notas» si no hay transcripción). Como las de la
  *    exploración, ENTRAN SOLAS (`reunionesQueEntranSolasAlDiagnostico`) y el panel las muestra con «Sacar»: quedaban
  *    fuera la Alineación, el Handoff y «Caso CEMACO» porque nadie las había elegido.
+ *  · En la PLANIFICACIÓN, desde el 2026-10-29 (Elías, con la de SmartAgro de Liliana), la misma regla de las reuniones del
+ *    proyecto con texto (`DESTINOS_DONDE_ENTRAN_SOLAS`): una planificación nueva no leía ninguna reunión hasta que alguien
+ *    tocaba «Usar» en cada una, y salía de la memoria y del handoff. Las de la exploración siguen siendo del diagnóstico.
  *  · En TODOS, las reuniones con hechos abiertos que el registro de destinos (lib/seguimiento/destinos.ts) rutea a ese
  *    documento. Motivo: la frase del hecho más reciente.
  *  · En TODOS, después de las otras dos y sin repetirlas, las reuniones que el documento leía con la REGLA VIEJA (el
@@ -79,7 +82,7 @@ export interface EntradaDeSugerencias {
   hechos?: readonly HechoQueSugiere[];
   /**
    * La clase de texto de cada reunión de la membresía (`claseDeTexto`, lib/sessions/tiene-texto.ts). Solo cuenta en el
-   * diagnóstico: con ella entran solas las del proyecto con texto. Sin ella, ninguna por esta vía.
+   * diagnóstico y en la planificación: con ella entran solas las del proyecto con texto. Sin ella, ninguna por esta vía.
    */
   clasesDeTexto?: ReadonlyMap<string, ClaseDeTexto>;
   /**
@@ -97,8 +100,18 @@ export interface EntradaDeSugerencias {
  */
 export type FuenteDeLaSugerencia = "exploracion" | "proyecto" | "hecho" | "reunion";
 
-/** Las fuentes que ENTRAN SOLAS al diagnóstico (el panel las muestra con «Sacar»); las demás esperan un «Usar». */
+/** Las fuentes que ENTRAN SOLAS al documento (el panel las muestra con «Sacar»); las demás esperan un «Usar». */
 export const FUENTES_QUE_ENTRAN_SOLAS: readonly FuenteDeLaSugerencia[] = ["exploracion", "proyecto"];
+
+/**
+ * Los documentos donde las reuniones del proyecto CON EL CLIENTE que dejaron texto entran solas (fuente `proyecto`): el
+ * diagnóstico desde el 2026-10-24 y la planificación desde el 2026-10-29. Los demás esperan un «Usar» por reunión.
+ */
+export const DESTINOS_DONDE_ENTRAN_SOLAS = ["diagnostico", "planificacion"] as const satisfies readonly DestinoDeContexto[];
+
+export function entranSolasLasDelProyecto(destino: DestinoDeContexto): boolean {
+  return (DESTINOS_DONDE_ENTRAN_SOLAS as readonly string[]).includes(destino);
+}
 
 /** El motivo de una reunión del proyecto que entra sola al diagnóstico. */
 export function motivoDeLaReunionConTexto(clase: ClaseDeTexto): string {
@@ -200,10 +213,10 @@ export function sugerenciasDelDocumento(destino: DestinoDeContexto, e: EntradaDe
   /* Las del proyecto con texto (L1 etapa 2): sin tope, de la más reciente a la más vieja. Van fuera del tope de las
      sugerencias porque entran solas: el panel las muestra todas, cada una con su «Sacar». */
   const entranSolas: SugerenciaDeReunion[] = [];
-  /* Solo las que fueron CON EL CLIENTE (la revisión del 25 oct): el diagnóstico lo lee el cliente, y una reunión de puertas
-     adentro (la Alineación, el Handoff, una revisión de precio) entra solo si una persona la elige con «Usar». Sin los
-     dominios de Smarteam no se sabe la sala: no entra ninguna sola. */
-  if (destino === "diagnostico" && e.clasesDeTexto && e.dominiosPropios) {
+  /* Solo las que fueron CON EL CLIENTE (la revisión del 25 oct): el diagnóstico y la planificación los lee el cliente, y una
+     reunión de puertas adentro (la Alineación, el Handoff, una revisión de precio) entra solo si una persona la elige con
+     «Usar». Sin los dominios de Smarteam no se sabe la sala: no entra ninguna sola. */
+  if (entranSolasLasDelProyecto(destino) && e.clasesDeTexto && e.dominiosPropios) {
     const propiosDeLaSala = e.dominiosPropios;
     const conTexto = [...libres.values()]
       .filter((r) => !out.has(r.id) && (e.clasesDeTexto!.get(r.id) ?? "nada") !== "nada")

@@ -57,6 +57,11 @@ export interface GeneratedCanvas {
   /** Idioma declarado por el agente (código ISO, "en"…) — null = español. Se persiste
    *  como `__lang` en el data del hero para traducir los rótulos fijos (i18n.ts). */
   lang: string | null;
+  /**
+   * Por qué quedó vacía cada sección que el agente no pudo llenar (`__vacias`, solo keys del template), cuando su
+   * template se lo pide (la Planificación, 2026-10-29: lib/landing/por-que-vacia.ts). Vacío si no hay.
+   */
+  porQueVacias: Record<string, string>;
 }
 
 /** Filtra un posible mapa { key: string } del modelo a keys válidas del template. */
@@ -161,6 +166,7 @@ export async function generateSectionsForTemplate(
     titleOverrides: stringMapFor(obj["__titles"], validKeys),
     eyebrowOverrides: stringMapFor(obj["__eyebrows"], validKeys),
     lang: typeof rawLang === "string" && rawLang.trim() ? rawLang.trim().toLowerCase() : null,
+    porQueVacias: stringMapFor(obj["__vacias"], validKeys),
   };
 }
 

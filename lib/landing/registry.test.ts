@@ -495,6 +495,7 @@ describe("un renderer, un contrato de datos", () => {
     canales_entrada: "modulo",
     formularios: "modulo",
     cotizaciones: "modulo",
+    brief_importado: "modulo",
     informes: "modulo",
     site_architecture: "modulo",
     web_methodology: "modulo",
@@ -957,6 +958,10 @@ describe("Planificación: registry completo + keys congeladas", () => {
     );
   });
 
+  it("el Brief traído llega al motor marcado solo interno (sin ojo, abierto, nunca en lectura)", () => {
+    expect(landingConfigForPlanificacion().sections.find((s) => s.key === "brief_importado")?.soloInterna).toBe(true);
+  });
+
   it("snapshot de keys: hero abre, lo que se configura en el medio, cierre, y las retiradas al final", () => {
     // 2026-10-02 — la Planificación PRÁCTICA (lo que va a quedar configurado en HubSpot). Propiedades,
     // pipelines y automatizaciones vinieron de Ejecución. Salieron la política rectora (al
@@ -966,7 +971,7 @@ describe("Planificación: registry completo + keys congeladas", () => {
     // 2026-10-28 — «Las acciones, en detalle» (decisión 16 de Elías): el detalle de cada acción del diagnóstico, justo
     // después de la portada. La genera el agente.
     expect(PLANIFICACION_SECTION_DEFS.map((d) => d.key)).toEqual([
-      "planificacion", "acciones_en_detalle", "ficha_proyecto", "usuarios_permisos", "definicion_procesos", "ciclo_vida_crm",
+      "planificacion", "acciones_en_detalle", "brief_importado", "ficha_proyecto", "usuarios_permisos", "definicion_procesos", "ciclo_vida_crm",
       "canales_entrada", "arquitectura_solucion", "propiedades", "formularios", "pipelines", "automatizaciones",
       "conversaciones", "cotizaciones", "informes", "rutinas_adopcion", "plan_despliegue", "cierre",
       "politica_rectora", "roadmap", "metricas_exito",

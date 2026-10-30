@@ -12,14 +12,20 @@
  * mismo permiso, misma corrida y el mismo aviso si casi nada está confirmado. «Escribirlo yo» abre el documento con las
  * secciones de la plantilla elegida y sin la IA (POST …/diagnostico/plantilla): antes del selector, un diagnóstico vacío
  * se podía escribir a mano, y esa puerta no se cierra.
+ *
+ * La Planificación (2026-10-29, pregunta 44): la lista sigue, y Nexus sugiere una según el caso, con su razón en una línea
+ * (lib/planificacion/plantilla-sugerida.ts). `sugerida` la deja marcada y gana a la `recomendada` del registro; la persona
+ * elige. Si alguien ya tocó una tarjeta, la sugerencia que llega tarde no le cambia la elección.
  */
-import { useState, type KeyboardEvent } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { cn } from "@/lib/cn";
 import { BotonBlanco, ROTULO_DEL_SISTEMA } from "@/components/ui/sistema";
+import { Input } from "@/components/ui/Input";
 import { useToast } from "@/components/ui/Toast";
 import CanvasAgentButton from "@/components/clients/CanvasAgentButton";
 import { canvasDefForSlug } from "@/lib/canvas/canvas-defs";
 import { entregableDe, seccionesDeLaPlantilla, type PlantillaDeEntregable } from "@/lib/entregables/registro";
+import { SECCIONES_SOLO_INTERNAS } from "@/lib/business-cases/section-briefs";
 
 /** El rótulo de una sección en la lista: la portada se llama por lo que es. */
 const ROTULO: Record<string, string> = { diagnostico: "Portada", planificacion: "Portada" };
@@ -65,6 +71,10 @@ export default function ElegirPlantilla({
   canvasId,
   agentId,
   onGenerado,
+  sugerida,
+  traerBrief,
+  briefTraido,
+  quitarBrief,
 }: {
   slug: string;
   clientId: string;
@@ -72,13 +82,35 @@ export default function ElegirPlantilla({
   canvasId: string;
   agentId: string;
   onGenerado?: () => void;
+  /** La plantilla que sugiere Nexus para este proyecto y por qué. Sin ella, la `recomendada` del registro. */
+  sugerida?: { plantilla: string; razon: string } | null;
+  /** La Planificación (2026-10-29): traer el Brief ANTES de generar, que es cuando más le sirve al agente. */
+  traerBrief?: (url: string, confirmado?: boolean) => Promise<{ ok: boolean; error?: string; confirmar?: boolean }>;
+  /** El título de la hoja ya traída, o null. */
+  briefTraido?: string | null;
+  /** Quitar la hoja traída: antes de generar es la única salida si no era la de este cliente. */
+  quitarBrief?: () => Promise<void>;
 }) {
   const plantillas: readonly PlantillaDeEntregable[] = entregableDe(slug)?.plantillas ?? [];
   const textos = POR_DOCUMENTO[slug] ?? POR_DOCUMENTO.diagnosis;
   const canon = canvasDefForSlug(slug)?.sections ?? [];
   const [elegida, setElegida] = useState<string>(() => (plantillas.find((p) => p.recomendada) ?? plantillas[0])?.id ?? "");
   const [abriendo, setAbriendo] = useState(false);
+  const [enlace, setEnlace] = useState("");
+  const [trayendo, setTrayendo] = useState(false);
+  // La hoja no nombra al cliente: la pregunta se queda a la vista hasta que alguien conteste (no un aviso que se va).
+  const [porConfirmar, setPorConfirmar] = useState<string | null>(null);
   const toast = useToast();
+  // La sugerencia llega por red: marca la tarjeta solo si nadie eligió todavía.
+  const tocada = useRef(false);
+  const idSugerida = sugerida && plantillas.some((p) => p.id === sugerida.plantilla) ? sugerida.plantilla : null;
+  useEffect(() => {
+    if (idSugerida && !tocada.current) setElegida(idSugerida);
+  }, [idSugerida]);
+  const elegir = (id: string) => {
+    tocada.current = true;
+    setElegida(id);
+  };
   if (plantillas.length < 2 || !POR_DOCUMENTO[slug]) return null;
 
   const escribirloYo = async () => {
@@ -102,10 +134,25 @@ export default function ElegirPlantilla({
     }
   };
 
+  const pedirBrief = async (confirmado?: boolean) => {
+    if (!traerBrief || !enlace.trim()) return;
+    setTrayendo(true);
+    try {
+      const r = await traerBrief(enlace.trim(), confirmado);
+      if (r.ok) {
+        setEnlace("");
+        setPorConfirmar(null);
+      } else if (r.confirmar) setPorConfirmar(r.error ?? "La hoja no nombra a este cliente. ¿Es la de este cliente?");
+      else toast.error(r.error ?? "No se pudo traer la hoja.");
+    } finally {
+      setTrayendo(false);
+    }
+  };
+
   const alTeclado = (e: KeyboardEvent<HTMLDivElement>, id: string) => {
     if (e.key === " " || e.key === "Enter") {
       e.preventDefault();
-      setElegida(id);
+      elegir(id);
     }
   };
 
@@ -115,11 +162,51 @@ export default function ElegirPlantilla({
         <p className={ROTULO_DEL_SISTEMA}>Antes de generar</p>
         <h2 className="text-sm font-semibold text-fg">{textos.titulo}</h2>
         <p className="text-xs text-fg-muted">{textos.bajada} Después puedes ocultar, mover o quitar cualquier parte.</p>
+        {idSugerida && sugerida && <p className="text-xs text-fg-secondary">Nexus sugiere la {plantillas.find((p) => p.id === idSugerida)?.nombre}. {sugerida.razon}</p>}
       </div>
+
+      {traerBrief && (
+        <div className="space-y-1 rounded-lg border border-line bg-surface p-3">
+          {briefTraido ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="min-w-0 flex-1 text-xs text-fg-secondary">Brief traído: «{briefTraido}». La IA lo lee al generar y el cliente no lo ve.</p>
+              {quitarBrief && <BotonBlanco onClick={() => void quitarBrief()}>Quitar</BotonBlanco>}
+            </div>
+          ) : (
+            <>
+              <p className="text-xs text-fg-secondary">¿Este cliente ya tiene su Brief de implementación lleno? Tráelo antes de generar: la IA lo lee y el cliente no lo ve.</p>
+              <div className="flex flex-wrap items-center gap-2">
+                <Input
+                  type="url"
+                  aria-label="Enlace de la hoja del Brief"
+                  placeholder="https://docs.google.com/spreadsheets/d/…"
+                  value={enlace}
+                  onChange={(e) => {
+                    setEnlace(e.target.value);
+                    setPorConfirmar(null);
+                  }}
+                  className="min-w-0 flex-1"
+                />
+                <BotonBlanco onClick={() => void pedirBrief()} disabled={trayendo || !enlace.trim()}>
+                  {trayendo ? "Trayendo…" : "Traer el Brief"}
+                </BotonBlanco>
+              </div>
+              {porConfirmar && (
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="min-w-0 flex-1 text-xs text-fg-secondary">{porConfirmar}</p>
+                  <BotonBlanco onClick={() => void pedirBrief(true)} disabled={trayendo}>Sí, es de este cliente</BotonBlanco>
+                  <BotonBlanco onClick={() => setPorConfirmar(null)}>No</BotonBlanco>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      )}
 
       <div role="radiogroup" aria-label="Plantillas del documento" className="grid gap-4 sm:grid-cols-2">
         {plantillas.map((p) => {
-          const secciones = seccionesDeLaPlantilla(p, canon);
+          // Lo solo interno (el Brief traído de la hoja) no es parte de lo que se elige.
+          const secciones = seccionesDeLaPlantilla(p, canon).filter((s) => !SECCIONES_SOLO_INTERNAS.has(s.key));
           const activa = p.id === elegida;
           return (
             <div
@@ -127,7 +214,7 @@ export default function ElegirPlantilla({
               role="radio"
               aria-checked={activa}
               tabIndex={activa ? 0 : -1}
-              onClick={() => setElegida(p.id)}
+              onClick={() => elegir(p.id)}
               onKeyDown={(e) => alTeclado(e, p.id)}
               className={cn(
                 "relative flex cursor-pointer flex-col gap-4 rounded-lg border p-5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand",
@@ -149,8 +236,8 @@ export default function ElegirPlantilla({
               <div className="space-y-1 text-center">
                 <p className="flex items-center justify-center gap-2 text-sm font-semibold text-fg">
                   {p.nombre}
-                  {p.recomendada && (
-                    <span className="rounded-full bg-brand/10 px-2 py-0.5 text-[11px] font-semibold text-brand">Recomendada</span>
+                  {(idSugerida ? p.id === idSugerida : p.recomendada) && (
+                    <span className="rounded-full bg-brand/10 px-2 py-0.5 text-[11px] font-semibold text-brand">{idSugerida ? "Sugerida" : "Recomendada"}</span>
                   )}
                 </p>
                 <p className="text-xs text-fg-secondary">{p.paraQue}</p>

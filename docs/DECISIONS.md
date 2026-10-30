@@ -7625,6 +7625,9 @@ escribió entero sin el sondeo y quedó apagado: hasta que Elías lo corra y dec
 
 ## Los documentos leen la memoria y solo las reuniones elegidas (2026-10-09)
 
+> Corregido en parte: en el diagnóstico (2026-10-24) y en la Planificación (2026-10-29) las reuniones del proyecto con el
+> cliente que dejaron texto entran solas. Ver «La Planificación lee las reuniones del proyecto…» (2026-10-29).
+
 > **Estado (2026-10-10): la etapa 7 está entera en el código, SIN desplegar.** El lector (solo las elegidas, enteras,
 > `lib/contexto/material-del-documento.ts`), la regla (`lib/sessions/destinos-de-contexto.ts`), la puerta (`null`,
 > `false` y `true`), la memoria del diagnóstico y de la planificación, las sugerencias calculadas
@@ -12670,3 +12673,72 @@ en su lugar. Lo que queda decidido:
   debe entregar el cliente o un tercero: el pedido de Elías de validar que existiera. Las tablas usan el renderer genérico
   `tabla` con las columnas sembradas: ningún componente nuevo.
 - **En pantalla se llaman «artefactos»** («Nuevo artefacto» en el riel).
+## La Planificación lee las reuniones del proyecto, dice por qué quedó vacía una sección, trae el Brief y sugiere plantilla (2026-10-29)
+
+**Contexto.** Feedback de Elías del 29 oct, con la Planificación de Liliana en SmartAgro, más las preguntas 32 y 44 del
+roadmap.
+
+- **La causa de SmartAgro (solo lectura contra producción).** Desde la etapa 7 (2026-10-10) los documentos leen solo las
+  reuniones que una persona eligió. La migración de ese día eligió 6 reuniones por documento **ya existente**; una
+  Planificación nacida después arranca sin ninguna. La de SmartAgro nació el 28 oct: el proyecto tenía 11 reuniones suyas y
+  la Planificación no leía ninguna hasta que alguien tocara «Usar». Sacarlas y volver a ponerlas fue lo que las eligió:
+  por eso «se arregló». El diagnóstico ya había pasado por lo mismo (CEMACO, 24 oct) y sus reuniones entran solas; la
+  Planificación se quedó con la regla vieja. **No fue** el cliente interno (SmartAgro es cartera, con dominio propio, y las
+  11 reuniones estaban bien atribuidas), ni el chokepoint, ni el resumen del proyecto. *Lo que los datos no dicen:* no hay
+  ninguna corrida vacía. La primera corrida ya dejó contenido en 10 secciones y 6 quedaron vacías; el documento en blanco
+  que vio Liliana fue el recién activado (se creó antes de la primera corrida), y las elecciones no guardan fecha, así que
+  no se puede probar qué reuniones leyó cada corrida (`AgentRun.sourceSessionIds` queda vacío).
+- **Las reuniones del proyecto con texto entran solas a la Planificación**, con la misma regla del diagnóstico
+  (`DESTINOS_DONDE_ENTRAN_SOLAS`, lib/contexto/sugerencias-del-documento.ts): con el cliente, con transcripción o notas de
+  Gemini, ya ocurridas. «Sacar» la deja afuera. Las de puertas adentro siguen esperando un «Usar», porque la Planificación
+  la lee el cliente. Corrige en parte «Los documentos leen la memoria y solo las reuniones elegidas» para este documento;
+  los otros cuatro (ejecución, kickoff, integraciones, entrega) siguen como estaban. Topes de siempre: 6 enteras, las
+  demás en resumen, 24 como mucho; las elegidas a mano van primero (`primero: []`), si no los últimos seguimientos las
+  desplazan. Cada corrida deja en `AgentRun.sourceSessionIds` qué reuniones leyó.
+- **Una sección vacía dice por qué** (`__porQueVacia`, lib/landing/por-que-vacia.ts, razones en
+  lib/planificacion/por-que-vacia.ts). El agente devuelve `__vacias` con una frase por sección que no pudo llenar; la
+  instrucción va en el mensaje de la corrida y no en el `agentIntro`, porque «Mejorar con IA» también lo lee. Primero mandan
+  las razones ciertas: las curadas dicen quién las llena; «Las acciones, en detalle» sin diagnóstico y el
+  despliegue con adopción directa dicen su motivo. Es del EQUIPO: el motor la pinta solo en edición, con cara de aviso y
+  con «Quitar»; está en `NO_CONTENIDO`, en las listas que no van a otros agentes ni al papel, y se saca de la data que viaja
+  al enlace del cliente y de la foto al publicar. La primera edición con contenido la borra. Es una capacidad del motor,
+  pero solo la Planificación la escribe.
+- **Generar no pisa lo de una persona** (lo cazó la revisión). La corrida tarda minutos y una sección curada puede
+  recibir algo mientras tanto, también del cliente en su enlace: el porqué de las curadas se anota al final, releyendo el
+  bloque bajo `FOR UPDATE` (`anotarPorQueDeLaCurada`), y si falla no tumba la corrida. Una sección generable que una
+  persona escribió y el agente hoy deja vacía se queda como está, también si la escribió durante la corrida (se relee antes
+  de escribir): el agente no ve ese texto, y borrarla para decir «no encontré con qué llenarla» sería perderla y además
+  mentir. Un editor abierto desde antes de generar que crea la tarjeta de una curada usa la que solo trae el porqué en vez
+  de crear otra al lado (ruta de bloques, `esSoloElPorQue`).
+- **El Brief ya lleno entra a la Planificación tal cual, pestaña por pestaña** (`brief_importado`,
+  lib/planificacion/brief-importado.ts), como sección SOLO INTERNA y abierta. *Por qué no se reparte en las secciones:* la
+  hoja cambió de forma, y una lectura que se equivoca de columna escribe un dato falso en un documento que ve el cliente;
+  para las propiedades ya existe pegar la pestaña. *Por qué solo interna va en `hiddenKeysFrom` y no en un `hidden: true`:*
+  esa función la leen el enlace y el PDF, y un ojo que alguien abre no puede mandar la hoja afuera (trae correos, teléfonos
+  y notas). Además no entra a la foto al publicar (`seccionesParaLaFoto`), `loadCanvasContext` no se la da a ningún agente,
+  y no cuenta como contenido (`deriveCanvasesConContenido`, «¿Cuándo lo presentas?»): traerla no es generar. Se exporta
+  como .xlsx porque el CSV de Drive trae solo la primera pestaña, y se lee el valor con su formato (`cell.text` corre las
+  fechas un día en Costa Rica, muestra 0.5 por 50 % y repite las celdas combinadas). Se lee con la cuenta de quien la
+  pide. ⛔ Si el título no nombra al cliente NO se guarda hasta que alguien conteste «Sí, es de este cliente»: el Brief de
+  otra cuenta llegaría a la IA de esta (invariante #1), y un aviso que se va no alcanza. Se puede traer y quitar antes de
+  generar, en el selector de plantilla. La IA la lee con la regla de la frontera adelante y al final, con las celdas vacías
+  marcadas para que los valores no se corran de columna, y lo de la hoja es «acordado» solo si una reunión lo respalda.
+  *Las filas y columnas ocultas entran a propósito:* una hoja con un filtro puesto las deja ocultas, y perderlas en
+  silencio es peor que traer de más a una sección que solo ve el equipo.
+- **Traerlos en lote** (`scripts/traer-briefs-de-implementacion.ts`): Nexus no sabe qué hoja es de quién, y las hojas no
+  están en un solo lugar. `--buscar` propone el proyecto por el nombre del cliente, conservador (nombre entero; con dos
+  clientes o varios proyectos no propone), y deja un CSV que **una persona revisa**. El Brief de otro cliente es la misma falla que mezclar
+  sesiones. Después, simulacro y `--apply`.
+- **La plantilla sugerida** (lib/planificacion/plantilla-sugerida.ts): la lista sigue y Nexus marca una con su razón. Por
+  pilotos, desarrollo a medida, tres hubs o dos con más de 10 usuarios → completa; Brief traído o un hub con equipo chico →
+  esencial; lo demás, completa. Sugerir no escribe nada, y si alguien ya tocó una tarjeta la sugerencia no le cambia la
+  elección. *Pendiente de Elías:* el umbral de 10 usuarios es mío, y también que tener el Brief le gane a «dos hubs».
+
+*Lo que no garantiza esta tanda:* el editor no se probó con sesión. Leer una hoja real de Google no se probó: la prueba usa
+un libro armado, no Drive. Con la IA real tampoco se corrió: ni cómo escribe sus `__vacias`, ni que no copie algo de la
+hoja a una sección visible (la regla se lo prohíbe, nada lo impide), ni el costo de sumar reuniones y Brief. Las
+planificaciones ya generadas no cambian hasta regenerarlas, y una foto ya publicada conserva lo que tenía hasta volver a
+publicar (no tenía Brief: esto nace ahora). El Brief entero se repite en cada foto del documento (hasta 30). Con muchas
+reuniones, las más viejas entran en resumen o no entran: «todas» es todas las que el tope deja leer, y la línea de
+cobertura lo dice. Una generable con contenido que alguien edita mientras corre se sigue pisando, como siempre: queda en
+la foto «Antes de regenerar». El lote `--buscar` no corrió contra Drive.

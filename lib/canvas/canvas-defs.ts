@@ -285,6 +285,8 @@ export const DEFAULT_PROJECT_CANVASES: CanvasDefinition[] = [
       { key: "planificacion", label: "Plan de implementación" },
       // 2026-10-28 (decisión 16): el detalle de cada acción del diagnóstico, que el diagnóstico nuevo ya no escribe.
       { key: "acciones_en_detalle", label: "Las acciones, en detalle" },
+      // 2026-10-29 (pregunta 32): el Brief de implementación que el equipo ya llenó, traído de la hoja. SOLO INTERNA.
+      { key: "brief_importado", label: "El Brief de implementación (la hoja)" },
       // 2026-10-25 — lo que pide el Brief de implementación (docs/planificacion-brief-plan.md): la ficha
       // del proyecto, usuarios y permisos, canales de entrada, formularios, cotizaciones e informes.
       { key: "ficha_proyecto", label: "Ficha del proyecto" },

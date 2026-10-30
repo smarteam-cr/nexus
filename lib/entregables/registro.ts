@@ -86,6 +86,8 @@ export const SECCIONES_DE_LA_PLANIFICACION_ESENCIAL = [
   "planificacion",
   // 2026-10-28 (decisión 16): el detalle de las acciones del diagnóstico vive acá; sin ella, la esencial lo perdería.
   "acciones_en_detalle",
+  // 2026-10-29 (pregunta 32): el Brief traído de la hoja va en las dos plantillas (es del equipo, solo interna).
+  "brief_importado",
   "ficha_proyecto",
   "usuarios_permisos",
   "ciclo_vida_crm",

@@ -8,6 +8,7 @@ import { datosDelBloqueRestaurado } from "@/lib/canvas/restaurar-bloque";
 import { restaurarBloqueSchema } from "@/lib/canvas/restaurar-bloque-schema";
 import { z } from "zod";
 import { esSeccionDelCliente, reconciliarConElCliente } from "@/lib/planificacion/lo-del-cliente";
+import { esSoloElPorQue } from "@/lib/landing/por-que-vacia";
 
 type Params = Promise<{ projectId: string; sectionId: string }>;
 
@@ -102,6 +103,24 @@ export async function POST(req: NextRequest, { params }: { params: Params }) {
     });
     await touchCanvasContent(sectionId);
     return NextResponse.json(restaurado, { status: 201 });
+  }
+
+  /* Un editor que se abrió antes de generar cree que esta sección curada no tiene tarjeta, pero la corrida le dejó una con
+     solo el porqué (lib/landing/por-que-vacia.ts). Crear otra al lado escondería lo escrito: se usa esa. */
+  if (blockType === "CARD") {
+    const primera = await prisma.canvasBlock.findFirst({
+      where: { sectionId, blockType: "CARD" },
+      orderBy: { order: "asc" },
+      select: { id: true, data: true },
+    });
+    if (primera && esSoloElPorQue(primera.data)) {
+      const usada = await prisma.canvasBlock.update({
+        where: { id: primera.id },
+        data: { content: content ?? "", data: (data ?? {}) as Prisma.InputJsonValue, source: "HUMAN" },
+      });
+      await touchCanvasContent(sectionId);
+      return NextResponse.json(usada, { status: 201 });
+    }
   }
 
   const maxOrder = await prisma.canvasBlock.aggregate({
