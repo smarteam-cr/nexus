@@ -12622,11 +12622,11 @@ roadmap.
 
 - **La causa de SmartAgro (solo lectura contra producción).** Desde la etapa 7 (2026-10-10) los documentos leen solo las
   reuniones que una persona eligió. La migración de ese día eligió 6 reuniones por documento **ya existente**; una
-  Planificación nacida después arranca sin ninguna. La de SmartAgro nació el 28 oct: el proyecto tenía 12 reuniones suyas y
+  Planificación nacida después arranca sin ninguna. La de SmartAgro nació el 28 oct: el proyecto tenía 11 reuniones suyas y
   la Planificación no leía ninguna hasta que alguien tocara «Usar». Sacarlas y volver a ponerlas fue lo que las eligió:
   por eso «se arregló». El diagnóstico ya había pasado por lo mismo (CEMACO, 24 oct) y sus reuniones entran solas; la
   Planificación se quedó con la regla vieja. **No fue** el cliente interno (SmartAgro es cartera, con dominio propio, y las
-  12 reuniones estaban bien atribuidas), ni el chokepoint, ni el resumen del proyecto. *Lo que los datos no dicen:* no hay
+  11 reuniones estaban bien atribuidas), ni el chokepoint, ni el resumen del proyecto. *Lo que los datos no dicen:* no hay
   ninguna corrida vacía. La primera corrida ya dejó contenido en 10 secciones y 6 quedaron vacías; el documento en blanco
   que vio Liliana fue el recién activado (se creó antes de la primera corrida), y las elecciones no guardan fecha, así que
   no se puede probar qué reuniones leyó cada corrida (`AgentRun.sourceSessionIds` queda vacío).
