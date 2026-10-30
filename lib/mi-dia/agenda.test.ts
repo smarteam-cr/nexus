@@ -57,6 +57,10 @@ describe("dos fichas que comparten dominio (el TEC)", () => {
     expect(de("AE y TAE | Planificación")).toBeNull();
   });
 
+  it("con el TEC y otra empresa en la sala no cuenta para ninguna, aunque el título diga «AE»", () => {
+    expect(de("AE | con Wherex", ["ivania@itcr.ac.cr", "b@wherex.com"])).toBeNull();
+  });
+
   it("el título no decide entre empresas que no son del mismo grupo", () => {
     const empresas = empresasDeLaReunion(["a@itcr.ac.cr", "b@wherex.com"], new Map(), new Map([["itcr.ac.cr", ["tae", "wherex"]], ["wherex.com", ["tae", "wherex"]]]), { titulo: "Wherex", entidades });
     expect(empresas).toEqual(["tae", "wherex"]);

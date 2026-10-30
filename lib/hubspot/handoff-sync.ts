@@ -53,7 +53,7 @@ export async function syncHandoffToHubspot(handoffId: string): Promise<SyncResul
   const handoff = await prisma.handoff.findUnique({
     where: { id: handoffId },
     include: {
-      client: { select: { hubspotCompanyId: true, name: true } },
+      client: { select: { hubspotCompanyId: true, name: true, comparteDominioCon: { select: { hubspotCompanyId: true } } } },
       project: { select: { name: true, hubspotServiceId: true } },
     },
   });
@@ -102,7 +102,8 @@ export async function syncHandoffToHubspot(handoffId: string): Promise<SyncResul
       pipeline: pipelineByKey("customer-success"),
       // Solo CASO B (creación). Si el handoff nació del stepper, trae el owner a setear.
       ownerId: handoff.hubspotOwnerIdOnCreate,
-      empresaId: companyId,
+      // Una ficha que comparte dominio no tiene empresa propia: el record cuelga de la de su dueña, o el espejo no lo ve.
+      empresaId: handoff.client.comparteDominioCon?.hubspotCompanyId ?? companyId,
       tratoId: handoff.hubspotDealId,
     });
     // Link inmediato y secuencial (project primero): si el 2º update fallara, el retry

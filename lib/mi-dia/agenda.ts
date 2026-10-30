@@ -92,9 +92,13 @@ export function empresasDeLaReunion(
 ): string[] {
   const deUna = new Set<string>();
   const deVarias = new Set<string>();
+  const grupoDe = reparto?.entidades?.grupoDe;
   for (const c of externos) {
     const es = empresasDelInvitado(c, porCorreo, porDominio);
+    /* Un invitado de un grupo que comparte dominio es de UNA institución, aunque sean dos fichas: pesa como uno de una. */
+    const deUnGrupo = es.length > 1 && !!grupoDe?.get(es[0]) && es.every((e) => grupoDe.get(e) === grupoDe.get(es[0]));
     if (es.length === 1) deUna.add(es[0]);
+    else if (deUnGrupo) for (const e of es) deUna.add(e);
     else for (const e of es) deVarias.add(e);
   }
   const empresas = [...(deUna.size ? deUna : deVarias)].sort();

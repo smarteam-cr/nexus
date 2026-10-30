@@ -103,7 +103,8 @@ async function main() {
   const cambiosAe = { name: AE.nombre, siglas: conSigla(ae.siglas, AE.sigla), comparteDominioConId: TEC_ID, hubspotCompanyId: null };
   /* `ficha.propuesta`: lo que propuso la IA y nadie confirmó (lib/clients/ficha.ts). */
   const fichaDelTec = (tec.ficha ?? {}) as Record<string, unknown>;
-  const hayPropuestaEnLaFicha = !!fichaDelTec.propuesta;
+  /* Solo la primera vez: una propuesta que TAE genere después de separar ya no mezcla nada y no se toca. */
+  const hayPropuestaEnLaFicha = !ae.comparteDominioConId && !!fichaDelTec.propuesta;
 
   console.log("\n── Las dos fichas ──");
   console.log(`  «${tec.name}» → «${cambiosTec.name}»   siglas ${JSON.stringify(tec.siglas)} → ${JSON.stringify(cambiosTec.siglas)}`);

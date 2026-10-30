@@ -197,9 +197,10 @@ export async function POST(req: NextRequest) {
 
   const client = await prisma.client.findUnique({
     where: { id: clientId },
-    select: { hubspotCompanyId: true, ignoredHubspotServiceIds: true },
+    select: { hubspotCompanyId: true, ignoredHubspotServiceIds: true, comparteDominioCon: { select: { hubspotCompanyId: true } } },
   });
-  if (!client?.hubspotCompanyId) {
+  /* Una ficha que comparte dominio no tiene empresa propia: su proyecto cuelga de la de su dueña (alta-runner.ts). */
+  if (!client?.hubspotCompanyId && !client?.comparteDominioCon?.hubspotCompanyId) {
     return malo("Ese cliente no tiene empresa en HubSpot. Primero se crea la empresa allá.");
   }
 

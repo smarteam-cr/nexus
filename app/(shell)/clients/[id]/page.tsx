@@ -83,7 +83,7 @@ export default async function ClientPage({
      evita; filtrar al final habría dejado el efecto igual. */
   const empresa = await prisma.client.findUnique({
     where: { id },
-    select: { id: true, name: true, kind: true, hubspotCompanyId: true },
+    select: { id: true, name: true, kind: true, hubspotCompanyId: true, comparteDominioConId: true },
   });
   if (!empresa) notFound();
 
@@ -161,7 +161,8 @@ export default async function ClientPage({
      copiado—: cuando estaban copiados, uno filtraba en SQL y el otro en JavaScript y
      trataban distinto a los proyectos con `serviceType` NULL, así que el layout podía
      elegir como pestaña inicial un proyecto que este rail no mostraba. */
-  const hasHubspot = !!hubspotAccount || !!empresa.hubspotCompanyId;
+  // Una ficha que comparte dominio copia sus proyectos de la empresa de su dueña (lib/hubspot/entidades-en-la-copia.ts).
+  const hasHubspot = !!hubspotAccount || !!empresa.hubspotCompanyId || !!empresa.comparteDominioConId;
   const paraFiltro = {
     hubspotCompanyId: empresa.hubspotCompanyId,
     tieneHubspotAccount: !!hubspotAccount,
