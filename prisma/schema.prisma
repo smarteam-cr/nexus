@@ -145,7 +145,17 @@ model Client {
   // sin dueño y fuera del handoff de SHP (2026-09-15). Una sigla declarada acá cuenta como el
   // nombre entero. Las escribe una persona en la ficha; nada las deduce. Ver lib/sessions/match-por-titulo.ts.
   siglas            String[]   @default([])
-  logoUrl           String? // URL pública del logo del cliente (bucket public-assets) — se muestra en kickoff/cronograma externos
+  // La ficha DUEÑA del dominio que esta ficha comparte (2026-10-29, el TEC: «TEC · AE» y «TEC · TAE» son dos
+  // entidades del mismo instituto, con el mismo dominio y una sola empresa de HubSpot, la de la dueña; la entidad
+  // no tiene empresa propia y copia sus proyectos de la de su dueña). Con esto, una reunión que por
+  // dominio o por HubSpot sería de la dueña se reparte entre la dueña y sus entidades: primero por el nombre de la
+  // reunión (las `siglas`), después por la gente de cada una, y sin pista queda POR DECIDIR (resolvedClientId null).
+  // La regla vive SOLO en lib/sessions/categorize.ts. La escribe una persona (scripts/separar-tec.ts); nada la deduce.
+  // nullable porque casi ninguna ficha comparte dominio. Ver DECISIONS «Dos fichas que comparten dominio».
+  comparteDominioConId String?
+  comparteDominioCon   Client?   @relation("DominioCompartido", fields: [comparteDominioConId], references: [id], onDelete: SetNull)
+  entidadesDelDominio  Client[]  @relation("DominioCompartido")
+  logoUrl          String? // URL pública del logo del cliente (bucket public-assets) — se muestra en kickoff/cronograma externos
   // Segundo archivo de logo, para las superficies de fondo OSCURO (el hero de TODOS los
   // documentos del motor de landing). Es la ALTERNATIVA del primario, no un asset suelto:
   // borrar `logoUrl` borra también este (un logo para fondo oscuro es tinta clara y sobre
@@ -332,6 +342,7 @@ model Client {
   intentosDelTest          IntentoDelTest[]          @relation("IntentosDelTestDeLaEmpresa") // Área O: los tests de su gente (SET NULL)
 
   @@unique([source, sourceExternalId]) // NULLs no colisionan en Postgres — los legacy conviven
+  @@index([comparteDominioConId])
 }
 
 /// Una propuesta de cambio a un dato de la empresa, y la historia de cada cambio (R1 y R9, 2026-10-24). La propone la

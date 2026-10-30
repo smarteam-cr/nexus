@@ -3021,7 +3021,8 @@ async function armarEstadoParaAuditar(
       },
     }),
     prisma.client.findMany({
-      where: { cuentaFinanciera: { isNot: null }, hubspotCompanyId: null },
+      // `comparteDominioConId`: una ficha que comparte dominio no tiene empresa a propósito (el TEC · AE); ligarla la rompería.
+      where: { cuentaFinanciera: { isNot: null }, hubspotCompanyId: null, comparteDominioConId: null },
       select: { id: true, name: true },
     }),
     // Cobro por cobro y no agrupado: cada uno se imputa con `tipoIngresoDeCobro`, igual que en el

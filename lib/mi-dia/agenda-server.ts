@@ -88,11 +88,11 @@ async function leerAgenda(email: string, desde: Date, hasta: Date, dia: string):
   const dias = Math.ceil((hasta.getTime() - desde.getTime()) / DIA_MS);
   const eventos = await eventosEntre(email, desde, hasta, { maxDias: dias });
   if (!eventos.ok) return agendaVacia(eventos.motivo, dia);
-  const { porCorreo, porDominio, internos, nombreDe, indiceDeNombres } = await mapasDeEmpresas();
+  const { porCorreo, porDominio, internos, nombreDe, indiceDeNombres, entidades } = await mapasDeEmpresas();
   const datos = eventos.datos as EventoConEnlaces[];
   // Una reunión interna que nombra una empresa («Preparar demo para Accesos Automáticos», con alguien más de la casa)
   // lleva su nombre en `nombradas`, para el panel; no cambia de quién es la reunión.
-  const reuniones = agendaDelDia(datos, { porCorreo, porDominio, internos, nombrar: indiceDeNombres }).map((r) => ({
+  const reuniones = agendaDelDia(datos, { porCorreo, porDominio, internos, nombrar: indiceDeNombres, entidades }).map((r) => ({
     ...r,
     nombres: Object.fromEntries([...r.empresas, ...(r.nombradas ?? [])].map((id) => [id, nombreDe.get(id) ?? "Empresa"])),
   }));

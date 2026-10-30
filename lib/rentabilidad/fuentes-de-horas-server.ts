@@ -86,6 +86,7 @@ export async function leerReunionesDelCalendario(
   const lectura = reunionesDelCalendario(calendarios, {
     porCorreo: mapas.porCorreo,
     porDominio: mapas.porDominio,
+    entidades: mapas.entidades,
     internos: mapas.internos,
     empresas: new Map(clientes.map((c) => [c.id, { nombre: c.name, tipo: c.kind as TipoDeEmpresa }])),
     eventosDeSesiones: new Set(sesiones.map((s) => s.googleEventId).filter((x): x is string => !!x)),

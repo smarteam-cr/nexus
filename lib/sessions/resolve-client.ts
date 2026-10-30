@@ -25,6 +25,9 @@ import {
   buildInternalDomainsSet,
   collectExternalDomains,
   computeAmbiguousNameTokens,
+  entidadesDelDominio,
+  aprenderPersonasDeEntidades,
+  pistasDeTitulo,
   type CategorizeContext,
   type CategorizableSession,
   ORDEN_DE_CLIENTES_PARA_ATRIBUIR,
@@ -39,7 +42,15 @@ export async function buildCategorizeCtx(): Promise<CategorizeContext> {
   const [clients, categories] = await Promise.all([
     prisma.client.findMany({
       orderBy: ORDEN_DE_CLIENTES_PARA_ATRIBUIR,
-      select: { id: true, name: true, company: true, emailDomains: true, hubspotCompanyId: true, siglas: true },
+      select: {
+        id: true,
+        name: true,
+        company: true,
+        emailDomains: true,
+        hubspotCompanyId: true,
+        siglas: true,
+        comparteDominioConId: true,
+      },
     }),
     prisma.sessionCategory.findMany({
       select: { id: true, name: true, slug: true, domains: true, kind: true, color: true },
@@ -52,7 +63,7 @@ export async function buildCategorizeCtx(): Promise<CategorizeContext> {
       clientsByHubspotCompanyId.set(c.hubspotCompanyId, { id: c.id, name: c.name, company: c.company });
     }
   }
-  return {
+  const ctx: CategorizeContext = {
     clients,
     categories,
     // Se puebla por sesión/batch en reResolveSession/resolveAllSessions (degrada a vacío si falla HubSpot).
@@ -61,6 +72,24 @@ export async function buildCategorizeCtx(): Promise<CategorizeContext> {
     clientsByHubspotCompanyId,
     ambiguousNameTokens: computeAmbiguousNameTokens(clients),
   };
+  ctx.personasDeEntidades = await cargarPersonasDeEntidades(ctx);
+  return ctx;
+}
+
+/**
+ * La gente de cada entidad que comparte dominio (categorize.ts › `aprenderPersonasDeEntidades`). Se cargan las reuniones
+ * que pueden enseñar: las que traen una pista en el título. A propósito NO mira `resolvedClientId`: si dependiera de lo
+ * materializado, una corrida cambiaría lo aprendido y la siguiente daría otro resultado (INV2 en rojo). Sin grupos no
+ * consulta nada.
+ */
+async function cargarPersonasDeEntidades(ctx: CategorizeContext): Promise<Map<string, string>> {
+  const delGrupo = ctx.clients.filter((c) => entidadesDelDominio(c.id, ctx));
+  if (delGrupo.length === 0) return new Map();
+  const sesiones = await prisma.firefliesSession.findMany({
+    where: { OR: pistasDeTitulo(delGrupo, ctx.ambiguousNameTokens).map((p) => ({ title: { contains: p, mode: "insensitive" as const } })) },
+    select: { title: true, participants: true, manualClientId: true },
+  });
+  return aprenderPersonasDeEntidades(sesiones, ctx);
 }
 
 /**

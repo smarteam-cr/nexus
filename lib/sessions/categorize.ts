@@ -19,6 +19,12 @@
  *      (groupUnlinkedHubspotCompany); en materialización/ownership cae al título (aditivo).
  *   6. Title-word match con Client.name/company (fallback débil, ≥4 chars, sin stopwords)
  *   7. Orphan
+ *
+ * ⚠ Entidades que comparten dominio (el TEC: AE y TAE, 2026-10-29). Cuando el paso 3 o el 5 da una
+ * ficha de un grupo que comparte dominio (`Client.comparteDominioConId`), la reunión se reparte
+ * entre la dueña y sus entidades: primero por el nombre de la reunión, después por la gente de
+ * cada una, y sin pista queda POR DECIDIR (orphan → `resolvedClientId` null), nunca en la ficha
+ * más vieja. Ver `decidirEntreEntidades` y DECISIONS «Dos fichas que comparten dominio».
  */
 
 import type { Client, SessionCategory } from "@prisma/client";
@@ -34,8 +40,14 @@ export type SessionGroup =
   | { kind: "orphan"; label: string; domain?: string };
 
 export interface CategorizeContext {
-  /** ⚠ En el orden de `ORDEN_DE_CLIENTES_PARA_ATRIBUIR` (abajo): el primero gana. */
-  clients: (Pick<Client, "id" | "name" | "company" | "emailDomains"> & { siglas?: string[] | null })[];
+  /**
+   * ⚠ En el orden de `ORDEN_DE_CLIENTES_PARA_ATRIBUIR` (abajo): el primero gana.
+   * `comparteDominioConId`: la ficha dueña del dominio, si esta es una entidad que lo comparte (ver arriba).
+   */
+  clients: (Pick<Client, "id" | "name" | "company" | "emailDomains"> & {
+    siglas?: string[] | null;
+    comparteDominioConId?: string | null;
+  })[];
   categories: Pick<SessionCategory, "id" | "name" | "slug" | "domains" | "kind" | "color">[];
   hubspotCompaniesByDomain: Map<string, HubspotCompanyLite>;
   /** Dominios marcados como "internos" en categorías kind=internal (set para lookup O(1)) */
@@ -58,6 +70,12 @@ export interface CategorizeContext {
    * Opcional: si falta, no se filtra ninguno (comportamiento previo).
    */
   ambiguousNameTokens?: Set<string>;
+  /**
+   * La gente de cada entidad que comparte dominio: correo (en minúsculas) → la ficha. Sale de
+   * `aprenderPersonasDeEntidades` y solo trae a quien estuvo en reuniones de UNA sola entidad.
+   * Opcional: sin él, una reunión cuyo nombre no dice la entidad queda por decidir.
+   */
+  personasDeEntidades?: Map<string, string>;
 }
 
 export interface CategorizableSession {
@@ -80,7 +98,7 @@ export const ORDEN_DE_CLIENTES_PARA_ATRIBUIR = [{ createdAt: "asc" as const }, {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-import { clientePorTitulo } from "./match-por-titulo";
+import { clientePorTitulo, tokensDelCliente } from "./match-por-titulo";
 
 export function normalize(s: string): string {
   return s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().trim();
@@ -307,6 +325,169 @@ function findClientByTitleMatch(
   return (r.cliente as Pick<Client, "id" | "name" | "company"> | null) ?? null;
 }
 
+// ── Entidades que comparten dominio ──────────────────────────────────────────
+
+type ClienteDelCtx = CategorizeContext["clients"][number];
+
+/** Por cada ficha de un grupo: la dueña y sus entidades, en el orden del ctx. Se arma una vez por lista de clientes. */
+const gruposPorLista = new WeakMap<readonly ClienteDelCtx[], Map<string, ClienteDelCtx[]>>();
+
+function gruposDeEntidades(clients: readonly ClienteDelCtx[]): Map<string, ClienteDelCtx[]> {
+  const hecho = gruposPorLista.get(clients);
+  if (hecho) return hecho;
+  const porId = new Map(clients.map((c) => [c.id, c]));
+  const entidadesDe = new Map<string, Set<string>>();
+  for (const c of clients) {
+    const duena = c.comparteDominioConId ? porId.get(c.comparteDominioConId) : undefined;
+    /* Sin cadenas: una dueña que a su vez es entidad de otra no arma grupo (sería una regla que nadie decidió). */
+    if (!duena || duena.id === c.id || duena.comparteDominioConId) continue;
+    entidadesDe.set(duena.id, (entidadesDe.get(duena.id) ?? new Set()).add(c.id));
+  }
+  const out = new Map<string, ClienteDelCtx[]>();
+  for (const [duenaId, entidades] of entidadesDe) {
+    const grupo = clients.filter((c) => c.id === duenaId || entidades.has(c.id));
+    for (const c of grupo) out.set(c.id, grupo);
+  }
+  gruposPorLista.set(clients, out);
+  return out;
+}
+
+/** La dueña y sus entidades si `clientId` es parte de un grupo que comparte dominio; null si no. */
+export function entidadesDelDominio(clientId: string, ctx: Pick<CategorizeContext, "clients">): ClienteDelCtx[] | null {
+  return gruposDeEntidades(ctx.clients).get(clientId) ?? null;
+}
+
+export type DecisionEntreEntidades =
+  | { clientId: string; por: "nombre" | "gente" }
+  | { clientId: null; por: "dos-nombres" | "gente-de-varias" | "sin-pista" };
+
+/** Los correos de la reunión que no son de la casa ni de un calendario, en minúsculas. */
+function correosDeAfuera(participants: string[], internalDomains: Set<string>): string[] {
+  const out = new Set<string>();
+  for (const p of participants) {
+    const correo = p?.trim().toLowerCase();
+    const d = correo?.split("@")[1];
+    if (d && !internalDomains.has(d) && !esDominioDeCalendario(d)) out.add(correo);
+  }
+  return [...out];
+}
+
+/**
+ * De cuál de las entidades que comparten dominio es la reunión. PURO.
+ *  1. El NOMBRE de la reunión: si nombra a UNA sola entidad (sus `siglas` o su nombre, con el mismo matcher del
+ *     paso 6 acotado al grupo), es de esa. Si nombra a dos, por decidir: la gente no desempata un título que dice
+ *     las dos cosas.
+ *  2. La GENTE: si todas las personas de afuera que se conocen (`personasDeEntidades`) son de la misma entidad,
+ *     es de esa.
+ *  3. Si no, por decidir.
+ * La gente de Smarteam no cuenta: lleva las dos (en el TEC, Heiver).
+ */
+export function decidirEntreEntidades(
+  session: CategorizableSession,
+  entidades: readonly ClienteDelCtx[],
+  ctx: Pick<CategorizeContext, "internalDomains" | "ambiguousNameTokens" | "personasDeEntidades">,
+): DecisionEntreEntidades {
+  const ambiguous = ctx.ambiguousNameTokens ?? EMPTY_TOKEN_SET;
+  const r = clientePorTitulo(session.title, entidades, {
+    modo: "mejor-fraccion",
+    skip: (w) => TITLE_MATCH_STOPWORDS.has(w) || ambiguous.has(w),
+    normalize,
+    esClienteDePrueba: isTestClient,
+  });
+  if (r.cliente) return { clientId: r.cliente.id, por: "nombre" };
+  if (r.candidatos.length > 1) return { clientId: null, por: "dos-nombres" };
+
+  const personas = ctx.personasDeEntidades;
+  if (personas && personas.size > 0) {
+    const ids = new Set(entidades.map((e) => e.id));
+    const de = new Set<string>();
+    for (const correo of correosDeAfuera(session.participants, ctx.internalDomains)) {
+      const id = personas.get(correo);
+      if (id && ids.has(id)) de.add(id);
+    }
+    if (de.size === 1) return { clientId: [...de][0]!, por: "gente" };
+    if (de.size > 1) return { clientId: null, por: "gente-de-varias" };
+  }
+  return { clientId: null, por: "sin-pista" };
+}
+
+/**
+ * Si `clientId` (lo que dio el dominio o HubSpot) es de un grupo que comparte dominio, la reunión se reparte: la
+ * entidad que decide `decidirEntreEntidades`, o POR DECIDIR (orphan, que materializa `resolvedClientId` null y queda
+ * a la vista en /sessions para asignarla a mano). Null si la ficha no comparte dominio: la cascada sigue como siempre.
+ */
+function repartirEntreEntidades(
+  clientId: string,
+  session: CategorizableSession,
+  externalDomains: Set<string>,
+  ctx: CategorizeContext,
+): SessionGroup | null {
+  const entidades = entidadesDelDominio(clientId, ctx);
+  if (!entidades) return null;
+  const d = decidirEntreEntidades(session, entidades, ctx);
+  const elegida = d.clientId ? entidades.find((e) => e.id === d.clientId) : undefined;
+  if (elegida) return { kind: "client", id: elegida.id, label: elegida.name, company: elegida.company };
+  const delGrupo = new Set(entidades.flatMap((e) => effectiveDomainsForClient(e)));
+  const dominio = [...externalDomains].find((x) => delGrupo.has(x)) ?? [...externalDomains][0];
+  return { kind: "orphan", label: `Por decidir: ${entidades.map((e) => e.name).join(" o ")}`, domain: dominio };
+}
+
+/**
+ * Lo que un título tiene que traer para poder nombrar a una de estas fichas: sus siglas y las palabras de su nombre.
+ * Va en minúsculas, normalizado y tal como se escribe (la consulta de la base no quita acentos).
+ */
+export function pistasDeTitulo(clients: readonly ClienteDelCtx[], ambiguous: Set<string> = EMPTY_TOKEN_SET): string[] {
+  const skip = (w: string) => TITLE_MATCH_STOPWORDS.has(w) || ambiguous.has(w);
+  const out = new Set<string>();
+  for (const c of clients) {
+    for (const s of c.siglas ?? []) out.add(normalize(s).replace(/\s+/g, ""));
+    for (const t of tokensDelCliente(c, skip, normalize).todos) out.add(t);
+    for (const p of `${c.name} ${c.company ?? ""}`.toLowerCase().split(/[\s.\-_]+/)) {
+      if (p.length >= 4 && !skip(normalize(p))) out.add(p);
+    }
+  }
+  return [...out].filter((p) => p.length >= 2);
+}
+
+/**
+ * La gente de cada entidad, aprendida SOLO del NOMBRE de las reuniones. Tres cosas que no enseñan, a propósito:
+ *  · lo que decidió la gente: un error no se alimenta a sí mismo;
+ *  · lo materializado (`resolvedClientId`): el resultado es el mismo antes y después de re-resolver;
+ *  · lo asignado a mano: `reResolveSession` escribe solo esa reunión, y si la asignación enseñara, cambiaría el dueño de
+ *    otras reuniones sin que nadie las vuelva a resolver (medido: asignar una por decidir movía 5).
+ * Quien estuvo en reuniones de las dos cuenta para la que tiene al menos el doble: una reunión cruzada no borra a una
+ * persona que lleva decenas en la otra. Parejo, no cuenta.
+ * PURO: el caller le pasa las reuniones (resolve-client.ts carga las que traen una pista; /sessions ya las tiene todas).
+ */
+export function aprenderPersonasDeEntidades(
+  sessions: readonly CategorizableSession[],
+  ctx: CategorizeContext,
+): Map<string, string> {
+  const grupos = gruposDeEntidades(ctx.clients);
+  if (grupos.size === 0) return new Map();
+  const sinGente: CategorizeContext = { ...ctx, personasDeEntidades: undefined };
+  const pistas = pistasDeTitulo(ctx.clients.filter((c) => grupos.has(c.id)), ctx.ambiguousNameTokens);
+  const visto = new Map<string, Map<string, number>>();
+  for (const s of sessions) {
+    /* Sin ninguna pista en el título no hay nombre que decida: se ahorra la cascada entera (es por reunión). */
+    const titulo = normalize(s.title);
+    if (!pistas.some((p) => titulo.includes(p))) continue;
+    const sinMano = { ...s, manualClientId: null };
+    const g = categorizeSession(sinMano, sinGente);
+    if (g.kind !== "client" || !grupos.has(g.id) || decidirEntreEntidades(sinMano, grupos.get(g.id)!, sinGente).por !== "nombre") continue;
+    for (const correo of correosDeAfuera(s.participants, ctx.internalDomains)) {
+      const cuentas = visto.get(correo) ?? new Map<string, number>();
+      visto.set(correo, cuentas.set(g.id, (cuentas.get(g.id) ?? 0) + 1));
+    }
+  }
+  const out = new Map<string, string>();
+  for (const [correo, cuentas] of visto) {
+    const [primera, segunda] = [...cuentas].sort((a, b) => b[1] - a[1]);
+    if (primera && (!segunda || primera[1] >= segunda[1] * 2)) out.set(correo, primera[0]);
+  }
+  return out;
+}
+
 // ── Función principal ────────────────────────────────────────────────────────
 
 /**
@@ -373,7 +554,10 @@ export function categorizeSession(
     if (domains.length === 0) continue;
     const hit = domains.some((d) => externalDomains.has(d));
     if (hit) {
-      return { kind: "client", id: c.id, label: c.name, company: c.company };
+      return (
+        repartirEntreEntidades(c.id, session, externalDomains, ctx) ??
+        { kind: "client", id: c.id, label: c.name, company: c.company }
+      );
     }
   }
 
@@ -407,7 +591,10 @@ export function categorizeSession(
     const linkedClient = clientsByHs.get(company.id);
     if (linkedClient) {
       // Señal FUERTE: la company de HubSpot está ligada a un Client → ese Client.
-      return { kind: "client", id: linkedClient.id, label: linkedClient.name, company: linkedClient.company };
+      return (
+        repartirEntreEntidades(linkedClient.id, session, externalDomains, ctx) ??
+        { kind: "client", id: linkedClient.id, label: linkedClient.name, company: linkedClient.company }
+      );
     }
     unlinkedCompany ??= company; // primera company de HubSpot que NO es Client de Nexus
   }
