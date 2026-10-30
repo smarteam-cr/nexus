@@ -1,9 +1,13 @@
 import { redirect } from "next/navigation";
 import { requireInternalUser } from "@/lib/auth/supabase";
+import { can } from "@/lib/auth/permissions/engine";
 import { esLiderDeCs, veSeguimientoDeCuentas } from "@/lib/cs/acceso";
 import { crDateParts } from "@/lib/jobs/time";
 import { cargarSeguimientoDeCuentas } from "@/lib/mi-dia/seguimiento-server";
+import { leerPrioridades } from "@/lib/cs/prioridad-de-cuenta-server";
+import { prioridadesVisibles } from "@/lib/cs/prioridad-de-cuenta";
 import SeguimientoDeCuentas from "@/components/cs/SeguimientoDeCuentas";
+import { PrioridadesDeLaCartera } from "@/components/cs/EstrellaDePrioridad";
 // Mismo contenedor que loading.tsx — la fuente única evita que page y skeleton deriven.
 import { SHELL_DEFAULT } from "@/lib/ui/page-shell";
 
@@ -21,5 +25,15 @@ export default async function SeguimientoDeCuentasPage() {
   const ahora = new Date();
   const hoyISO = crDateParts(ahora).dateKey;
   const data = await cargarSeguimientoDeCuentas(ctx.teamMember, { ahora, hoyISO });
-  return <SeguimientoDeCuentas data={data} hoyISO={hoyISO} conCartera={esLiderDeCs(ctx.role)} contenedor={SHELL_DEFAULT} />;
+  const lider = esLiderDeCs(ctx.role);
+  const [prioridades, puedeMarcar] = await Promise.all([
+    leerPrioridades(data.filas.map((f) => f.clientId)),
+    // La ruta de la marca pide el rol del área además de la celda: el CSE ve la estrella de sus cuentas y no la cambia.
+    lider ? can(ctx.teamMember, "customerSuccess", "marcarPrioridad") : false,
+  ]);
+  return (
+    <PrioridadesDeLaCartera iniciales={prioridadesVisibles(prioridades.porCliente)} puedeMarcar={puedeMarcar} ordenaLaLista={false}>
+      <SeguimientoDeCuentas data={data} hoyISO={hoyISO} conCartera={lider} contenedor={SHELL_DEFAULT} />
+    </PrioridadesDeLaCartera>
+  );
 }

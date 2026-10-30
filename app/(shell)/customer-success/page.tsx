@@ -5,6 +5,7 @@ import { accessibleClientWhere } from "@/lib/auth/access";
 import { esLiderDeCs } from "@/lib/cs/acceso";
 import { cargarCarteraDeLaCsl } from "@/lib/cs/cartera";
 import CsPanel from "@/components/cs/CsPanel";
+import { PrioridadesDeLaCartera } from "@/components/cs/EstrellaDePrioridad";
 // Mismo contenedor que loading.tsx — la fuente única evita que page y skeleton deriven.
 import { SHELL_DEFAULT } from "@/lib/ui/page-shell";
 
@@ -40,5 +41,9 @@ export default async function CustomerSuccessPage({
 
   // La pestaña y los filtros de «Cartera» viven en la dirección: una vista es un enlace.
   const parametros = await searchParams;
-  return <CsPanel data={data} puedeCurar={puedeCurar} contenedor={SHELL_DEFAULT} yo={ctx.user.email ?? null} parametros={parametros} puedeReasignar={puedeReasignar} puedeMarcarPrioridad={puedeMarcarPrioridad} />;
+  return (
+    <PrioridadesDeLaCartera iniciales={data.prioritarias} puedeMarcar={puedeMarcarPrioridad} ordenaLaLista>
+      <CsPanel data={data} puedeCurar={puedeCurar} contenedor={SHELL_DEFAULT} yo={ctx.user.email ?? null} parametros={parametros} puedeReasignar={puedeReasignar} />
+    </PrioridadesDeLaCartera>
+  );
 }

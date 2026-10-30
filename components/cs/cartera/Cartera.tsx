@@ -53,12 +53,12 @@ import { InfoHint } from "@/components/ui/Tooltip";
 import { Avatar, CajaDeTabla, EncabezadoDeTabla, META_DE_SALUD, Punto, Salud } from "../piezas";
 import { CeldaDeClasificacion, conLoGuardado, guardarClasificacion, operacionesParaUsarTodo } from "../CeldaDeClasificacion";
 import { CorregirColor } from "../AjusteDelColor";
-import MarcaDePrioridad from "../MarcaDePrioridad";
+import { EstrellaDePrioridad } from "../EstrellaDePrioridad";
 import { CampoDeBusqueda } from "./Buscar";
 import FiltroMultiple from "./FiltroMultiple";
 import CseEncargadoSelect, { type OpcionDeEncargado } from "@/components/clients/CseEncargadoSelect";
 
-const COLUMNAS = "grid-cols-[150px_minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,0.8fr)_minmax(0,0.9fr)_150px_88px]";
+const COLUMNAS = "grid-cols-[108px_150px_minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,0.8fr)_minmax(0,0.9fr)_150px_88px]";
 
 /** El orden de las columnas de la clasificación (el CSE va aparte: se cambia con el pase de cuenta). */
 const COLUMNAS_DE_CLASIFICACION: DatoDeClasificacion[] = ["relacion", "momento", "potencial"];
@@ -78,7 +78,6 @@ export default function Cartera({
   yo,
   equipoParaPase,
   puedeReasignar,
-  puedeMarcarPrioridad,
 }: {
   filas: readonly FilaDeLaCartera[];
   /** Los CSE que llevan algún cliente, para el filtro. */
@@ -97,8 +96,6 @@ export default function Cartera({
   /** A quién se le puede pasar una cuenta (el pase escribe «CSE Encargado» en HubSpot). */
   equipoParaPase: OpcionDeEncargado[];
   puedeReasignar: boolean;
-  /** Puede marcar una cuenta como prioritaria (`customerSuccess.marcarPrioridad`, 2026-10-29). */
-  puedeMarcarPrioridad: boolean;
 }) {
   const router = useRouter();
   const toast = useToast();
@@ -344,8 +341,9 @@ export default function Cartera({
           description={filtros.porConfirmar ? "Lo que propone Nexus en estas cuentas ya está confirmado o descartado." : "Prueba con otros filtros o quítalos."}
         />
       ) : (
-        <CajaDeTabla minimo="min-w-[1320px]">
+        <CajaDeTabla minimo="min-w-[1428px]">
           <EncabezadoDeTabla columnas={COLUMNAS}>
+            <span>Prioritaria</span>
             <span>Color</span>
             <span>Cuenta</span>
             <span>Tipo de relación</span>
@@ -367,7 +365,6 @@ export default function Cartera({
               puedeCorregir={puedeCorregir}
               equipoParaPase={equipoParaPase}
               puedeReasignar={puedeReasignar}
-              puedeMarcarPrioridad={puedeMarcarPrioridad}
               onGuardada={(g) => guardar(f.clientId, g)}
             />
           ))}
@@ -455,7 +452,6 @@ function FilaDeCartera({
   puedeCorregir,
   equipoParaPase,
   puedeReasignar,
-  puedeMarcarPrioridad,
   onGuardada,
 }: {
   fila: FilaDeLaCartera;
@@ -465,7 +461,6 @@ function FilaDeCartera({
   puedeCorregir: boolean;
   equipoParaPase: OpcionDeEncargado[];
   puedeReasignar: boolean;
-  puedeMarcarPrioridad: boolean;
   onGuardada: (g: ClasificacionGuardada) => void;
 }) {
   const toast = useToast();
@@ -486,6 +481,9 @@ function FilaDeCartera({
   const r = f.relacion;
   return (
     <div className={cn("grid items-start gap-4 px-4 py-3 text-fg", COLUMNAS, !primera && "border-t border-line")}>
+      <span className="pt-0.5">
+        <EstrellaDePrioridad clientId={f.clientId} cuenta={f.nombre} />
+      </span>
       <span className="flex flex-col items-start gap-0.5 pt-0.5">
         <Salud salud={f.salud} porque={f.porqueDeLaSalud} />
         {f.correccion && (
@@ -520,7 +518,6 @@ function FilaDeCartera({
         <Link href={`/customer-success/${f.clientId}`} className="truncate text-sm font-semibold hover:text-brand">
           {f.nombre}
         </Link>
-        <MarcaDePrioridad clientId={f.clientId} cuenta={f.nombre} prioritaria={f.prioritaria} puedeMarcar={puedeMarcarPrioridad} compacto />
         {f.excliente && (
           <span className="flex flex-wrap items-center gap-1.5 text-xs">
             <span className="rounded-full border border-line bg-surface-muted px-2 py-0.5 font-semibold text-fg-secondary">Excliente</span>

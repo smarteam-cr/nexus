@@ -1,5 +1,7 @@
+import fs from "node:fs";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { motivoEnPalabras, prioridadDesdeEventos, prioridadVisible, rangoDePrioridad, type EventoDePrioridad } from "./prioridad-de-cuenta";
+import { marcasConLoGuardado, motivoEnPalabras, prioridadDesdeEventos, prioridadVisible, prioridadesVisibles, rangoDePrioridad, type EventoDePrioridad, type PrioridadGuardada } from "./prioridad-de-cuenta";
 import { prioridadDeCuentaSchema } from "./schema";
 
 const evento = (o: Partial<EventoDePrioridad>): EventoDePrioridad => ({
@@ -45,5 +47,44 @@ describe("la marca de prioridad", () => {
     expect(prioridadDeCuentaSchema.safeParse({ accion: "marcar", motivo: "otro", nota: "el sponsor se va" }).success).toBe(true);
     expect(prioridadDeCuentaSchema.safeParse({ accion: "marcar", motivo: "vip" }).success).toBe(false);
     expect(prioridadDeCuentaSchema.safeParse({ accion: "quitar" }).success).toBe(true);
+  });
+});
+
+describe("la columna «Prioritaria» de los listados", () => {
+  const leer = (rel: string) => fs.readFileSync(path.join(process.cwd(), rel), "utf8");
+  const LISTADOS = ["cartera/Llamar", "cartera/Cartera", "cartera/Renovaciones", "cartera/UsoYLicencias", "cartera/Crecimiento", "cartera/Equipo", "cartera/NivelDePartner", "cartera/Buscar", "SeguimientoDeCuentas"];
+
+  it("las marcas llegan por cuenta, en palabras", () => {
+    const p: PrioridadGuardada = { motivo: "smartloop", nota: null, porEmail: "a@smarteam.cr", porNombre: "Alex", en: "2026-10-30T00:00:00Z" };
+    expect(prioridadesVisibles(new Map([["c1", p]]))).toEqual({ c1: { motivo: "smartloop", nota: null, enPalabras: "SmartLoop", quien: "Alex" } });
+  });
+
+  it.each(LISTADOS)("%s trae la estrella", (l) => {
+    expect(leer(`components/cs/${l}.tsx`)).toContain("<EstrellaDePrioridad");
+  });
+
+  it("ninguna fila con la estrella es un enlace entero: un clic en la estrella abriría la cuenta", () => {
+    for (const l of LISTADOS) {
+      const src = leer(`components/cs/${l}.tsx`);
+      expect(src, l).not.toMatch(/<Link\b(?:(?!<\/Link>)[\s\S])*?<EstrellaDePrioridad/);
+    }
+  });
+
+  it("⭐ lo guardado acá gana a la foto del servidor: marcar dos seguidas no hace parpadear la primera", () => {
+    const m = (motivo: "smartloop" | "ticket-grande") => prioridadVisible({ motivo, nota: null, porEmail: "a@x", porNombre: null, en: "2026-10-30" })!;
+    const delServidor = { a: m("smartloop"), c: m("smartloop") };
+    expect(marcasConLoGuardado(delServidor, { b: m("ticket-grande"), c: null })).toEqual({ a: m("smartloop"), b: m("ticket-grande") });
+  });
+
+  it("la estrella va por encima del enlace de la fila: sin eso, el clic abre la cuenta", () => {
+    expect(leer("components/cs/EstrellaDePrioridad.tsx").match(/relative z-\[1\]/g)?.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("las dos páginas ponen las marcas de verdad; en Seguimiento el CSE no marca y no se recarga", () => {
+    expect(leer("app/(shell)/customer-success/page.tsx")).toContain("iniciales={data.prioritarias}");
+    const seguimiento = leer("app/(shell)/customer-success/seguimiento/page.tsx");
+    expect(seguimiento).toContain("iniciales={prioridadesVisibles(prioridades.porCliente)}");
+    expect(seguimiento).toContain("lider ? can(");
+    expect(seguimiento).toContain("ordenaLaLista={false}");
   });
 });

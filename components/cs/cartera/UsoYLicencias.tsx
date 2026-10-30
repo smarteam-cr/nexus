@@ -15,6 +15,7 @@ import { plural } from "@/lib/cs/formato";
 import { UMBRALES } from "@/lib/cs/lectura-partner";
 import type { AdopcionDeUnHub, CuentaNueva, ItemDeConsumo } from "@/lib/cs/cartera-reglas";
 import { Avatar, Barra, CajaDeTabla, Chip, EncabezadoDeTabla, TituloDeSeccion } from "../piezas";
+import { EstrellaDePrioridad } from "../EstrellaDePrioridad";
 
 const COLUMNAS = "grid-cols-[minmax(0,1fr)_90px_120px_96px_minmax(0,1.5fr)_minmax(0,1.2fr)]";
 
@@ -115,19 +116,23 @@ export default function UsoYLicencias({
         {primeros90.pendientes.length > 0 && (
           <div className="rounded-xl border border-line bg-surface">
             {primeros90.pendientes.map((c, i) => (
-              <Link
+              <div
                 key={c.clientId}
-                href={`/customer-success/${c.clientId}`}
                 className={cn(
-                  "grid grid-cols-[minmax(0,1fr)_minmax(0,1.6fr)_130px_30px] items-center gap-4 px-4 py-3.5 transition-colors hover:bg-surface-hover",
+                  "relative grid grid-cols-[108px_minmax(0,1fr)_minmax(0,1.6fr)_130px_30px] items-center gap-4 px-4 py-3.5 transition-colors hover:bg-surface-hover",
                   i > 0 && "border-t border-line",
                 )}
               >
-                <span className="truncate text-sm font-semibold text-fg">{c.nombre}</span>
+                <EstrellaDePrioridad clientId={c.clientId} cuenta={c.nombre} />
+                <Link href={`/customer-success/${c.clientId}`} className="truncate text-sm font-semibold text-fg after:absolute after:inset-0">
+                  {c.nombre}
+                </Link>
                 <span className="text-[13px] text-fg">{c.pendiente}</span>
                 <span className={cn("text-[13px]", c.dias > 60 ? "text-warn-ink" : "text-fg-secondary")}>cliente hace {c.dias} días</span>
-                <Avatar nombre={c.cse?.nombre ?? null} />
-              </Link>
+                <span className="relative z-[1]">
+                  <Avatar nombre={c.cse?.nombre ?? null} />
+                </span>
+              </div>
             ))}
           </div>
         )}
@@ -158,18 +163,20 @@ function ListaDeConsumo({ titulo, chip, items, vacio }: { titulo: string; chip: 
         <p className="mt-3 border-t border-line pt-3 text-[13px] text-fg-muted">{vacio}</p>
       ) : (
         items.map((it, i) => (
-          <Link
+          <div
             key={`${it.clientId}-${it.que}`}
-            href={`/customer-success/${it.clientId}`}
-            className={cn("flex justify-between gap-3 border-t border-line py-2.5 text-[13px] hover:text-brand", i === 0 && "mt-2.5", i === items.length - 1 && "pb-0")}
+            className={cn("relative flex items-start gap-2 border-t border-line py-2.5 text-[13px] hover:text-brand", i === 0 && "mt-2.5", i === items.length - 1 && "pb-0")}
           >
-            <span>
-              <b className="font-semibold text-fg">{it.nombre}</b>
+            <EstrellaDePrioridad clientId={it.clientId} cuenta={it.nombre} soloEstrella />
+            <span className="min-w-0 flex-1">
+              <Link href={`/customer-success/${it.clientId}`} className="font-semibold text-fg after:absolute after:inset-0">
+                {it.nombre}
+              </Link>
               <br />
               <span className="text-fg-muted">{it.que}</span>
             </span>
             <span className="whitespace-nowrap text-fg-secondary">{it.cuanto}</span>
-          </Link>
+          </div>
         ))
       )}
     </div>

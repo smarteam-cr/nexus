@@ -11,6 +11,7 @@
  */
 import Link from "next/link";
 import { EmptyState } from "@/components/ui";
+import { EstrellaDePrioridad } from "@/components/cs/EstrellaDePrioridad";
 import { RUTA_DE_LA_CARGA, RUTA_DE_LOS_SUPUESTOS, rutaDeLaUnoAUno } from "@/lib/carga/rutas";
 import { cn } from "@/lib/cn";
 import { plural } from "@/lib/cs/formato";
@@ -178,8 +179,9 @@ function CuentasSinCse({
             : "Elige quién lleva cada una. Se escribe en HubSpot como «CSE Encargado»."}
         </span>
       </div>
-      <CajaDeTabla minimo="min-w-[760px]">
+      <CajaDeTabla minimo="min-w-[868px]">
         <EncabezadoDeTabla columnas={COLUMNAS_SIN_CSE}>
+          <span>Prioritaria</span>
           <span>Cuenta</span>
           <span>Proyectos sin CSE</span>
           <span>CSE encargado</span>
@@ -187,6 +189,7 @@ function CuentasSinCse({
         </EncabezadoDeTabla>
         {cuentas.map((c, i) => (
           <div key={c.clientId} className={cn("grid items-start gap-4 px-4 py-3 text-[13px] text-fg", COLUMNAS_SIN_CSE, i > 0 && "border-t border-line")}>
+            <EstrellaDePrioridad clientId={c.clientId} cuenta={c.nombre} />
             <Link href={`/customer-success/${c.clientId}`} className="truncate font-semibold transition-colors hover:text-brand">
               {c.nombre}
             </Link>
@@ -210,7 +213,7 @@ function CuentasSinCse({
   );
 }
 
-const COLUMNAS_SIN_CSE = "grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)_180px_minmax(0,1fr)]";
+const COLUMNAS_SIN_CSE = "grid-cols-[108px_minmax(0,1fr)_minmax(0,1.2fr)_180px_minmax(0,1fr)]";
 
 function Cifra({ onClick, titulo, children }: { onClick: () => void; titulo: string; children: React.ReactNode }) {
   return (

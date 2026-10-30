@@ -12669,7 +12669,13 @@ con el diff viejo solo como referencia, después de confirmar con búsqueda que 
 - **La marca de prioridad** (`PrioridadDeCuenta`, append-only como `CorreccionDeSalud`; lib/cs/prioridad-de-cuenta.ts).
   Un motivo (SmartLoop, ticket grande, interlocutores difíciles u otro, con una línea opcional; con «otro», obligatoria).
   La pone o la quita quien tenga la celda `customerSuccess.marcarPrioridad` (por defecto la CSL; SUPER_ADMIN siempre),
-  desde la Cartera, «A quién llamar» y el panel de la cuenta. La ruta pide además el rol del área (`guardLiderDeCs`).
+  desde la columna «Prioritaria» de los listados y desde el panel de la cuenta. La ruta pide además el rol del área
+  (`guardLiderDeCs`).
+  - *Una columna con estrella en cada listado (2026-10-30, pedido de Elías: «debería ser muy sencillo de marcar»):* un
+    clic abre los motivos y elegir uno guarda; «Otro motivo» pide la línea. Está en todas las pestañas del índice y en
+    Seguimiento de cuentas (ahí el CSE la ve y no la cambia). Las marcas viajan en un contexto que pone la página, no fila
+    por fila (`components/cs/EstrellaDePrioridad.tsx`). No va en Rentabilidad ni en Propuestas del vigía: la primera se
+    abre por otra celda y la segunda lista propuestas, no cuentas.
   - *No cambia el color, ordena*: dentro del mismo color la prioritaria va primero (en «A quién llamar», en la Cartera
     y, entre las que tienen una alerta alta, en «Alertas»). *Por qué no sube de color:* el color dice cómo va la cuenta
     y lo calcula Nexus con hechos; mezclarle «cuánto nos importa» le quitaba el significado a los dos.
