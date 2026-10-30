@@ -12,6 +12,7 @@ import { prisma } from "@/lib/db/prisma";
 import { modeloDisponible } from "@/lib/db/esquema";
 import { dominiosDeLaCasa } from "@/lib/sessions/reuniones-para-seguimiento";
 import { indiceDeClientes, type IndiceDeClientes } from "@/lib/sessions/clientes-por-texto";
+import type { RepartoDeEntidades } from "./agenda";
 
 export interface MapasDeEmpresas {
   porCorreo: Map<string, string[]>;
@@ -24,6 +25,8 @@ export interface MapasDeEmpresas {
    * Automáticos»), con el match de títulos del cascade (lib/sessions/clientes-por-texto.ts).
    */
   indiceDeNombres: IndiceDeClientes;
+  /** Las fichas que comparten dominio: su reunión se reparte por el título (lib/mi-dia/agenda.ts). */
+  entidades: RepartoDeEntidades;
 }
 
 const VIDA_MS = 2 * 60_000;
@@ -32,7 +35,7 @@ let enVuelo: Promise<MapasDeEmpresas> | null = null;
 
 async function leer(): Promise<MapasDeEmpresas> {
   const [clientes, contactos, internos] = await Promise.all([
-    prisma.client.findMany({ where: { kind: { in: ["CLIENTE", "PROSPECTO"] } }, select: { id: true, name: true, company: true, siglas: true, emailDomains: true } }),
+    prisma.client.findMany({ where: { kind: { in: ["CLIENTE", "PROSPECTO"] } }, select: { id: true, name: true, company: true, siglas: true, emailDomains: true, comparteDominioConId: true } }),
     modeloDisponible(prisma.contactoDeHubspot)
       ? prisma.contactoDeHubspot.findMany({ where: { vigente: true, email: { not: null } }, select: { email: true, clientId: true } }).catch(() => [])
       : Promise.resolve([]),
@@ -51,12 +54,26 @@ async function leer(): Promise<MapasDeEmpresas> {
     const k = c.email.trim().toLowerCase();
     porCorreo.set(k, [...new Set([...(porCorreo.get(k) ?? []), c.clientId])]);
   }
+  /* Una ficha que comparte dominio no tiene dominios ni contactos propios: su gente es la de la dueña. Un invitado del
+     dominio es de las dos, y la reunión no cuenta para ninguna hasta que el título diga cuál. Nunca, por defecto, de la dueña. */
+  const grupoDe = new Map<string, string>();
+  for (const c of clientes) {
+    const duena = c.comparteDominioConId;
+    if (!duena || duena === c.id) continue;
+    grupoDe.set(c.id, duena);
+    grupoDe.set(duena, duena);
+    for (const mapa of [porDominio, porCorreo]) {
+      for (const [k, ids] of mapa) if (ids.includes(duena) && !ids.includes(c.id)) mapa.set(k, [...ids, c.id]);
+    }
+  }
+  const indiceDeNombres = indiceDeClientes(clientes.map((c) => ({ id: c.id, name: c.name, company: c.company, siglas: c.siglas })));
   return {
     porCorreo,
     porDominio,
     internos,
     nombreDe: new Map(clientes.map((c) => [c.id, c.name])),
-    indiceDeNombres: indiceDeClientes(clientes.map((c) => ({ id: c.id, name: c.name, company: c.company, siglas: c.siglas }))),
+    indiceDeNombres,
+    entidades: { grupoDe, indice: indiceDeNombres },
   };
 }
 

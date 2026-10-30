@@ -146,7 +146,8 @@ model Client {
   // nombre entero. Las escribe una persona en la ficha; nada las deduce. Ver lib/sessions/match-por-titulo.ts.
   siglas            String[]   @default([])
   // La ficha DUEÑA del dominio que esta ficha comparte (2026-10-29, el TEC: «TEC · AE» y «TEC · TAE» son dos
-  // entidades del mismo instituto, con el mismo dominio y la misma empresa de HubSpot). Con esto, una reunión que por
+  // entidades del mismo instituto, con el mismo dominio y una sola empresa de HubSpot, la de la dueña; la entidad
+  // no tiene empresa propia y copia sus proyectos de la de su dueña). Con esto, una reunión que por
   // dominio o por HubSpot sería de la dueña se reparte entre la dueña y sus entidades: primero por el nombre de la
   // reunión (las `siglas`), después por la gente de cada una, y sin pista queda POR DECIDIR (resolvedClientId null).
   // La regla vive SOLO en lib/sessions/categorize.ts. La escribe una persona (scripts/separar-tec.ts); nada la deduce.

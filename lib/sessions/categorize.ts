@@ -378,7 +378,7 @@ function correosDeAfuera(participants: string[], internalDomains: Set<string>): 
  *     paso 6 acotado al grupo), es de esa. Si nombra a dos, por decidir: la gente no desempata un título que dice
  *     las dos cosas.
  *  2. La GENTE: si todas las personas de afuera que se conocen (`personasDeEntidades`) son de la misma entidad,
- *     es de esa. Quien estuvo en reuniones de las dos no se aprende, así que no cuenta.
+ *     es de esa.
  *  3. Si no, por decidir.
  * La gente de Smarteam no cuenta: lleva las dos (en el TEC, Heiver).
  */
@@ -450,10 +450,13 @@ export function pistasDeTitulo(clients: readonly ClienteDelCtx[], ambiguous: Set
 }
 
 /**
- * La gente de cada entidad, aprendida de las reuniones que decidió una PERSONA (`manualClientId` en el grupo) o el
- * NOMBRE de la reunión. Nunca de las que decidió la gente: un error no se alimenta a sí mismo. Y nunca de lo ya
- * materializado (`resolvedClientId`): el resultado es el mismo antes y después de re-resolver, así que una corrida de
- * `resolveAllSessions` converge en una pasada. Quien aparece en reuniones de dos entidades no se aprende.
+ * La gente de cada entidad, aprendida SOLO del NOMBRE de las reuniones. Tres cosas que no enseñan, a propósito:
+ *  · lo que decidió la gente: un error no se alimenta a sí mismo;
+ *  · lo materializado (`resolvedClientId`): el resultado es el mismo antes y después de re-resolver;
+ *  · lo asignado a mano: `reResolveSession` escribe solo esa reunión, y si la asignación enseñara, cambiaría el dueño de
+ *    otras reuniones sin que nadie las vuelva a resolver (medido: asignar una por decidir movía 5).
+ * Quien estuvo en reuniones de las dos cuenta para la que tiene al menos el doble: una reunión cruzada no borra a una
+ * persona que lleva decenas en la otra. Parejo, no cuenta.
  * PURO: el caller le pasa las reuniones (resolve-client.ts carga las que traen una pista; /sessions ya las tiene todas).
  */
 export function aprenderPersonasDeEntidades(
@@ -464,27 +467,24 @@ export function aprenderPersonasDeEntidades(
   if (grupos.size === 0) return new Map();
   const sinGente: CategorizeContext = { ...ctx, personasDeEntidades: undefined };
   const pistas = pistasDeTitulo(ctx.clients.filter((c) => grupos.has(c.id)), ctx.ambiguousNameTokens);
-  const visto = new Map<string, Set<string>>();
+  const visto = new Map<string, Map<string, number>>();
   for (const s of sessions) {
-    let de: string | null = null;
-    if (s.manualClientId) {
-      de = grupos.has(s.manualClientId) ? s.manualClientId : null;
-    } else {
-      /* Sin ninguna pista en el título no hay nombre que decida: se ahorra la cascada entera (es por reunión). */
-      const titulo = normalize(s.title);
-      if (!pistas.some((p) => titulo.includes(p))) continue;
-      const g = categorizeSession(s, sinGente);
-      if (g.kind === "client" && grupos.has(g.id) && decidirEntreEntidades(s, grupos.get(g.id)!, sinGente).por === "nombre") {
-        de = g.id;
-      }
-    }
-    if (!de) continue;
+    /* Sin ninguna pista en el título no hay nombre que decida: se ahorra la cascada entera (es por reunión). */
+    const titulo = normalize(s.title);
+    if (!pistas.some((p) => titulo.includes(p))) continue;
+    const sinMano = { ...s, manualClientId: null };
+    const g = categorizeSession(sinMano, sinGente);
+    if (g.kind !== "client" || !grupos.has(g.id) || decidirEntreEntidades(sinMano, grupos.get(g.id)!, sinGente).por !== "nombre") continue;
     for (const correo of correosDeAfuera(s.participants, ctx.internalDomains)) {
-      visto.set(correo, (visto.get(correo) ?? new Set<string>()).add(de));
+      const cuentas = visto.get(correo) ?? new Map<string, number>();
+      visto.set(correo, cuentas.set(g.id, (cuentas.get(g.id) ?? 0) + 1));
     }
   }
   const out = new Map<string, string>();
-  for (const [correo, ids] of visto) if (ids.size === 1) out.set(correo, [...ids][0]!);
+  for (const [correo, cuentas] of visto) {
+    const [primera, segunda] = [...cuentas].sort((a, b) => b[1] - a[1]);
+    if (primera && (!segunda || primera[1] >= segunda[1] * 2)) out.set(correo, primera[0]);
+  }
   return out;
 }
 

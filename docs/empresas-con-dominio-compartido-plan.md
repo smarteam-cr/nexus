@@ -136,8 +136,8 @@ lector, y un lector nuevo nacía leyendo la cuenta entera.
   memoria y sus documentos, y se ve cómo va cada una.
 - **Cuesta, y cómo se resolvió:**
   - *Una empresa de HubSpot sirve a dos fichas.* Una empresa es de una sola ficha (R7b), así que la del ITCR queda en
-    TAE y AE conserva la suya, fusionada en el ITCR (sección 5). Lo que llega por la empresa (negocios, contactos,
-    correos, tickets) sigue llegando a TAE.
+    TAE y AE se queda sin empresa (sección 5). Lo que llega por la empresa (negocios, contactos, correos, tickets) sigue
+    llegando a TAE.
   - *Hay que cambiar el resolver de cliente.* Sí, en un solo lugar: la regla de la sección 3, en `categorize.ts`.
   - *Hay que mover proyectos y re-resolver reuniones.* Dos scripts con simulacro (sección 6).
   - *De qué entidad es un proyecto nuevo del ITCR.* Lo copia TAE, la ficha de la empresa: AE solo actualiza los suyos.
@@ -158,9 +158,9 @@ ningún otro lado. Solo actúa cuando la ficha que dio el dominio es de un **gru
    del paso 6 acotado al grupo), es de esa. «TAE» no se lee como «AE»: la sigla es la palabra entera. Si nombra a las
    dos, por decidir.
 3. **La gente.** Si todas las personas de afuera que se conocen son de la misma ficha, es de esa. La gente se aprende
-   SOLO de las reuniones que decidió el nombre o una persona, nunca de las que decidió la gente, así que un error no se
-   alimenta a sí mismo. Quien estuvo en reuniones de las dos no cuenta; la gente de Smarteam tampoco (Heiver lleva las
-   dos). La carga `resolve-client.ts` (de las reuniones del grupo) y /sessions la arma igual.
+   SOLO del nombre de las reuniones: ni de las que decidió la gente ni de las asignadas a mano, así que asignar una no
+   mueve otras. Quien estuvo en las dos cuenta para la que tiene al menos el doble; parejo no cuenta. La gente de Smarteam
+   tampoco (Heiver lleva las dos). La carga `resolve-client.ts` y /sessions la arma igual.
 4. **Si nada decide**, la reunión queda **por decidir**: `resolvedClientId` null. En /sessions aparece en el grupo
    «Por decidir: TEC · TAE o TEC · AE», donde se asigna a mano. No alimenta a ninguna ficha mientras tanto.
 
@@ -190,9 +190,9 @@ para ellos, y esta sección es su punto de partida.
   TEC?») pasa a **no**, y la 6 (reapuntar «TEC- AE») se cierra sin reapuntar.
 - Su empresa de HubSpot (56463266574) **ya no existe por sí sola**: HubSpot la fusionó en el ITCR (59180429929), una
   fusión de empresas no se deshace, y el ITCR ya es de TAE (un reapunte que choca con otra ficha responde 409, R7b).
-  Se queda como está: el registro de Partner del portal de AE (51047287) y su cuenta de cobro ya cuelgan de esta ficha.
-- INV13 e INV54 marcaban «TEC- AE» y mandaban a fusionarla. Desde este cambio no cuentan a una ficha que comparte
-  dominio con la dueña de la empresa sobreviviente: es el estado esperado.
+  Además responde 200 con los datos del ITCR, así que cada lector y escritor de la empresa cruzaba con TAE. Por eso AE se
+  queda **sin empresa**. El registro de Partner del portal de AE (51047287) y su cuenta de cobro ya cuelgan de esta ficha
+  y no dependen de eso. INV13 e INV54, que marcaban «TEC- AE», se ponen en verde solas.
 
 ## 6. Etapas
 
@@ -214,8 +214,8 @@ primero.
   `clientId` y `sessionId` (hechos, tareas, pendientes). La reunión manda sobre el proyecto. La lógica pura y sus
   pruebas: `lib/sessions/reubicar-entre-entidades.ts`.
 - La copia de proyectos de las dos corre contra la empresa de la dueña y cada una toca solo lo suyo
-  (`lib/hubspot/entidades-en-la-copia.ts`). Una entidad no escribe en la empresa de HubSpot, y las propuestas de estas
-  fichas no suman reuniones sin dueño por dominio.
+  (`lib/hubspot/entidades-en-la-copia.ts`, con prueba de integración contra un HubSpot simulado). Las propuestas de estas
+  fichas no suman reuniones sin dueño por dominio, y la agenda reparte por el título.
 - **Simulacro del 30 oct** (con la separación simulada en memoria, porque la columna todavía no existe): **217
   reuniones**, las 185 de «TEC» y 32 que traen las siglas desde afuera («Hand Off | AE», «TAE - interno»; 31 sin dueña y
   1 de Smarteam). **AE 90** (77 por el nombre, 13 por la gente), **TAE 122** (110 por el nombre, 8 por la gente, 4

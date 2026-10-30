@@ -153,17 +153,10 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
   /* La empresa y sus contactos (2026-10-09). No frena el pase: lo que decide quién ve la cuenta son los proyectos,
      que ya quedaron escritos. Lo que no entró se dice en la respuesta. */
-  const ficha = await prisma.client.findUnique({ where: { id: clientId }, select: { hubspotCompanyId: true, comparteDominioConId: true } });
-  /* Una ficha que comparte dominio no escribe en la empresa: es de su dueña (DECISIONS «Dos fichas que comparten dominio»). */
-  const empresaId = ficha?.comparteDominioConId ? null : (ficha?.hubspotCompanyId ?? null);
+  const empresaId = (await prisma.client.findUnique({ where: { id: clientId }, select: { hubspotCompanyId: true } }))?.hubspotCompanyId ?? null;
   const enLaEmpresa = empresaId
     ? await escribirEncargadosEnLaEmpresa(hs, empresaId, { cse: ownerId, csl: cslOwnerId })
-    : {
-        empresa: false,
-        contactos: 0,
-        contactosFallidos: 0,
-        error: ficha?.comparteDominioConId ? "la empresa de HubSpot es de la otra ficha que comparte el dominio" : "el cliente no está ligado a una empresa de HubSpot",
-      };
+    : { empresa: false, contactos: 0, contactosFallidos: 0, error: "el cliente no está ligado a una empresa de HubSpot" };
 
   /* Un solo sync por cliente al final, no uno por proyecto: el espejo trae TODOS los proyectos
      de la empresa en la misma corrida, así que llamarlo N veces sería pagar lo mismo N veces. */

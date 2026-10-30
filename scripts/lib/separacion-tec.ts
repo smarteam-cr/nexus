@@ -29,9 +29,13 @@ export const conSigla = (siglas: readonly string[], s: string): string[] =>
   siglas.some((x) => x.toUpperCase() === s.toUpperCase()) ? [...siglas] : [...siglas, s];
 
 /** Un cliente como quedará después de separar. Los demás, igual. */
-export function clienteSeparado<T extends { id: string; name: string; siglas?: string[] | null; comparteDominioConId?: string | null }>(c: T): T {
+export function clienteSeparado<
+  T extends { id: string; name: string; siglas?: string[] | null; comparteDominioConId?: string | null; hubspotCompanyId?: string | null },
+>(c: T): T {
   if (c.id === S.duenaId) return { ...c, name: S.duena.nombre, siglas: conSigla(c.siglas ?? [], S.duena.sigla) };
-  if (c.id === S.entidadId) return { ...c, name: S.entidad.nombre, siglas: conSigla(c.siglas ?? [], S.entidad.sigla), comparteDominioConId: S.duenaId };
+  if (c.id === S.entidadId) {
+    return { ...c, name: S.entidad.nombre, siglas: conSigla(c.siglas ?? [], S.entidad.sigla), comparteDominioConId: S.duenaId, hubspotCompanyId: null };
+  }
   return c;
 }
 

@@ -790,6 +790,8 @@ async function correrElEspejo(
      (0 de 165, medido el 2026-07-30), así que esto no cambia nada para nadie; está escrito para
      el día que aparezca uno. */
   const usingSystemAccount = dirigido ? true : !hubspotAccount;
+  /* Una entidad que comparte dominio no tiene empresa propia: copia de la de su dueña (lib/hubspot/entidades-en-la-copia.ts). */
+  const empresaCompartida = dirigido ? null : empresaDeLaDuena(client);
 
   if (dirigido) {
     try {
@@ -807,7 +809,7 @@ async function correrElEspejo(
       result.errors.push(`Error al obtener HubSpot client del cliente: ${(e as Error).message}`);
       return result;
     }
-  } else if (client.hubspotCompanyId) {
+  } else if (client.hubspotCompanyId || empresaCompartida) {
     // Caso B: usar sistema
     try {
       hsClient = await getSystemHubspotClient();
@@ -829,9 +831,6 @@ async function correrElEspejo(
         hace falta) o guardar en el cliente una empresa resuelta por parecido de nombre. */
   /* R7b (Elías, 24 oct): `hubspotCompanyId` es SOLO la empresa en el HubSpot de Smarteam. Con la cuenta del cliente (su
      portal propio) no sirve: se busca por nombre en su portal en cada corrida, y no se guarda. */
-  /* Una entidad que comparte dominio copia de la empresa de su dueña: la suya está fusionada y no devuelve proyectos
-     (lib/hubspot/entidades-en-la-copia.ts). */
-  const empresaCompartida = dirigido ? null : empresaDeLaDuena(client);
   let companyId = usingSystemAccount ? (empresaCompartida ?? client.hubspotCompanyId) : null;
 
   if (!companyId && !dirigido) {
@@ -1197,7 +1196,10 @@ async function correrElEspejo(
     : null;
   const entidades = dirigido
     ? []
-    : await prisma.client.findMany({ where: { comparteDominioConId: clientId }, select: { id: true, ignoredHubspotServiceIds: true } });
+    : await prisma.client.findMany({
+        where: { comparteDominioConId: clientId, id: { not: clientId } },
+        select: { id: true, ignoredHubspotServiceIds: true },
+      });
   const deSusEntidades = new Set<string>(entidades.flatMap((e) => e.ignoredHubspotServiceIds));
   if (entidades.length) {
     for (const p of await prisma.project.findMany({

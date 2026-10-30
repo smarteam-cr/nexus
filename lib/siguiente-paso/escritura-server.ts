@@ -62,9 +62,9 @@ export interface ObjetoResuelto {
 export async function resolverObjeto(objeto: ObjetoDelPaso, objetoId: string): Promise<ObjetoResuelto> {
   const tipo = OBJETO_EN_HUBSPOT[objeto];
   if (objeto === "empresa") {
-    const c = await prisma.client.findUnique({ where: { id: objetoId }, select: { id: true, name: true, hubspotCompanyId: true, comparteDominioConId: true } });
+    const c = await prisma.client.findUnique({ where: { id: objetoId }, select: { id: true, name: true, hubspotCompanyId: true } });
     if (!c) throw new ErrorDelPaso(404, "Esa empresa no existe.");
-    return { objeto, objetoId, nombre: c.name, clientId: c.id, hubspotObjectType: tipo, hubspotObjectId: c.comparteDominioConId ? null : c.hubspotCompanyId }; // una ficha que comparte dominio no escribe en la empresa de su dueña
+    return { objeto, objetoId, nombre: c.name, clientId: c.id, hubspotObjectType: tipo, hubspotObjectId: c.hubspotCompanyId };
   }
   if (objeto === "negocio") {
     const n = await prisma.negocioAbierto.findUnique({

@@ -2,7 +2,7 @@
  * lib/hubspot/entidades-en-la-copia.ts — QUIÉN COPIA CADA PROYECTO CUANDO DOS FICHAS COMPARTEN EMPRESA. PURO.
  *
  * El TEC (2026-10-29): la empresa de HubSpot del ITCR es de «TEC · TAE» y trae los proyectos de las dos entidades.
- * «TEC · AE» conserva una empresa fusionada que no devuelve ninguno. Las dos corren la copia normal contra la empresa
+ * «TEC · AE» no tiene empresa propia. Las dos corren la copia normal contra la empresa
  * de la dueña (con su reconciliación y su reactivación), pero cada una toca solo lo suyo: la entidad, los proyectos que ya
  * son de ella; la dueña, todo menos eso. Si la dueña escribiera los de la entidad, el pase de encargado de la entidad no
  * vería el cambio. Un proyecto NUEVO del instituto lo copia la dueña. DECISIONS «Dos fichas que comparten dominio».

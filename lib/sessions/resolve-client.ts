@@ -78,20 +78,15 @@ export async function buildCategorizeCtx(): Promise<CategorizeContext> {
 
 /**
  * La gente de cada entidad que comparte dominio (categorize.ts › `aprenderPersonasDeEntidades`). Se cargan las reuniones
- * que pueden enseñar: las asignadas a mano a una ficha del grupo y las que traen una pista en el título. A propósito NO
- * mira `resolvedClientId`: si dependiera de lo materializado, una corrida cambiaría lo aprendido y la siguiente daría
- * otro resultado (INV2 en rojo). Sin grupos no consulta nada.
+ * que pueden enseñar: las que traen una pista en el título. A propósito NO mira `resolvedClientId`: si dependiera de lo
+ * materializado, una corrida cambiaría lo aprendido y la siguiente daría otro resultado (INV2 en rojo). Sin grupos no
+ * consulta nada.
  */
 async function cargarPersonasDeEntidades(ctx: CategorizeContext): Promise<Map<string, string>> {
   const delGrupo = ctx.clients.filter((c) => entidadesDelDominio(c.id, ctx));
   if (delGrupo.length === 0) return new Map();
   const sesiones = await prisma.firefliesSession.findMany({
-    where: {
-      OR: [
-        { manualClientId: { in: delGrupo.map((c) => c.id) } },
-        ...pistasDeTitulo(delGrupo, ctx.ambiguousNameTokens).map((p) => ({ title: { contains: p, mode: "insensitive" as const } })),
-      ],
-    },
+    where: { OR: pistasDeTitulo(delGrupo, ctx.ambiguousNameTokens).map((p) => ({ title: { contains: p, mode: "insensitive" as const } })) },
     select: { title: true, participants: true, manualClientId: true },
   });
   return aprenderPersonasDeEntidades(sesiones, ctx);

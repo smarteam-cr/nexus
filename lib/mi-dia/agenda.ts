@@ -65,11 +65,30 @@ function empresasDelInvitado(
   return porDominio.get(d) ?? [];
 }
 
+/**
+ * Lo que hace falta para repartir una reunión entre fichas que comparten dominio (DECISIONS «Dos fichas que comparten
+ * dominio»): de qué grupo es cada ficha. Los mapas de abajo ya traen a toda ficha del grupo por cada invitado suyo.
+ */
+export interface RepartoDeEntidades {
+  grupoDe: ReadonlyMap<string, string>;
+  indice: IndiceDeClientes;
+}
+
+/** Si las empresas son de un mismo grupo y el título nombra a UNA, es esa. Si no, siguen todas y la reunión no es de nadie. */
+function repartirPorElTitulo(empresas: string[], titulo: string | null | undefined, r: RepartoDeEntidades): string[] {
+  if (empresas.length < 2 || !titulo?.trim()) return empresas;
+  const grupo = r.grupoDe.get(empresas[0]!);
+  if (!grupo || !empresas.every((e) => r.grupoDe.get(e) === grupo)) return empresas;
+  const nombradas = clientesNombradosEnteros(titulo, r.indice).filter((id) => empresas.includes(id));
+  return nombradas.length === 1 ? nombradas : empresas;
+}
+
 /** Las empresas de una reunión, con la regla de arriba. */
 export function empresasDeLaReunion(
   externos: readonly string[],
   porCorreo: ReadonlyMap<string, readonly string[]>,
   porDominio: ReadonlyMap<string, readonly string[]>,
+  reparto?: { titulo: string | null | undefined; entidades: RepartoDeEntidades | undefined },
 ): string[] {
   const deUna = new Set<string>();
   const deVarias = new Set<string>();
@@ -78,7 +97,8 @@ export function empresasDeLaReunion(
     if (es.length === 1) deUna.add(es[0]);
     else for (const e of es) deVarias.add(e);
   }
-  return [...(deUna.size ? deUna : deVarias)].sort();
+  const empresas = [...(deUna.size ? deUna : deVarias)].sort();
+  return reparto?.entidades ? repartirPorElTitulo(empresas, reparto.titulo, reparto.entidades) : empresas;
 }
 
 // ── Qué es cada evento del calendario (2026-10-19) ────────────────────────────────────────────
@@ -238,6 +258,7 @@ export function agendaDelDia(
     internos: ReadonlySet<string>;
     /** Con el índice, cada reunión interna lleva las empresas que nombra (`nombradas`). Solo la agenda de «Para ti». */
     nombrar?: IndiceDeClientes;
+    entidades?: RepartoDeEntidades;
   },
 ): ReunionDeHoy[] {
   const out: ReunionDeHoy[] = [];
@@ -257,7 +278,7 @@ export function agendaDelDia(
       conMeet: e.conferenceData?.conferenceSolution?.key?.type === "hangoutsMeet" || !!e.hangoutLink,
       meetUrl: e.hangoutLink?.startsWith("https://") ? e.hangoutLink : null,
       calendarUrl: e.htmlLink?.startsWith("https://") ? e.htmlLink : null,
-      empresas: empresasDeLaReunion(externos, o.porCorreo, o.porDominio),
+      empresas: empresasDeLaReunion(externos, o.porCorreo, o.porDominio, { titulo: e.summary, entidades: o.entidades }),
       externos: externos.length,
       internos: gente.length - externos.length,
       deSmarteam: gente.filter((c) => o.internos.has(dominioDe(c))),

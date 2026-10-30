@@ -39,7 +39,7 @@ async function elTec() {
   await reunion("ae-nombre", "AE | Reportes de Ventas", ["ivania@itcr.ac.cr"]);
   await reunion("tae-nombre", "TEC TAE | RE-IMPLEMENTACIÓN CRM", ["marco@itcr.ac.cr"]);
   await reunion("ae-gente", "Kick Off | TEC & Smarteam", ["ivania@itcr.ac.cr"]);
-  await reunion("tae-mano", "Seguimiento", ["otra@itcr.ac.cr"], tae.id);
+  await reunion("tae-mano", "Soporte | TAE", ["otra@itcr.ac.cr"], tae.id);
   await reunion("tae-gente", "Workflows", ["otra@itcr.ac.cr"]);
   await reunion("duda", "Visita FUNDATEC", ["ivania@itcr.ac.cr", "marco@itcr.ac.cr"]);
   return { tae, ae };
@@ -60,7 +60,7 @@ describe("dos fichas que comparten dominio — DB real", () => {
       "tae-nombre": tae.id,
       "ae-gente": ae.id,
       "tae-mano": tae.id,
-      "tae-gente": tae.id, // «otra» la conoce una reunión asignada a mano a TAE
+      "tae-gente": tae.id, // a «otra» la conoce el título de la reunión asignada a mano
       duda: null,
     });
 

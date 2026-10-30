@@ -1475,7 +1475,12 @@ const hubspotProyectos: JobDef = {
     // Una tanda por minuto, y un solo proceso por tanda.
     const minuto = `${p.dateKey}T${String(p.hour).padStart(2, "0")}:${String(now.getUTCMinutes()).padStart(2, "0")}`;
     if (!(await claimDateKey("hubspot-proyectos", minuto, now))) return SIN_TURNO;
-    const clientes = await prisma.client.findMany({ where: { hubspotCompanyId: { not: null }, kind: "CLIENTE" }, select: { id: true }, orderBy: { id: "asc" } });
+    /* Una ficha que comparte dominio no tiene empresa propia, y copia sus proyectos de la de su dueña (entidades-en-la-copia.ts). */
+    const clientes = await prisma.client.findMany({
+      where: { OR: [{ hubspotCompanyId: { not: null } }, { comparteDominioConId: { not: null } }], kind: "CLIENTE" },
+      select: { id: true },
+      orderBy: { id: "asc" },
+    });
     const desde = deHoy ? (avance?.desde ?? 0) : 0;
     const { syncProjectsForClient } = await import("@/lib/hubspot/sync-projects");
     let nuevos = deHoy ? (avance?.nuevos ?? 0) : 0;

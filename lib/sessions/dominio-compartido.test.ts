@@ -121,21 +121,36 @@ describe("lo que decidió una persona y lo que no cambia", () => {
 });
 
 describe("cómo se aprende la gente", () => {
-  it("de las reuniones que decidió el nombre o una persona; quien estuvo en las dos no se aprende", () => {
+  it("de las reuniones que decidió el nombre; quien estuvo parejo en las dos no cuenta", () => {
     const personas = aprenderPersonasDeEntidades(
       [
         reunion("AE | Limpieza BBDD", ["ibrenes@itcr.ac.cr", "doble@itcr.ac.cr"]),
         reunion("TEC TAE | Workflows", ["mmartinez@itcr.ac.cr", "doble@itcr.ac.cr"]),
-        reunion("Sin nombre", ["mano@itcr.ac.cr"], "ae"),
         reunion("Otra", ["x@wherex.com"]),
       ],
       ctx(),
     );
-    expect(Object.fromEntries(personas)).toEqual({
-      "ibrenes@itcr.ac.cr": "ae",
-      "mmartinez@itcr.ac.cr": "tae",
-      "mano@itcr.ac.cr": "ae",
-    });
+    expect(Object.fromEntries(personas)).toEqual({ "ibrenes@itcr.ac.cr": "ae", "mmartinez@itcr.ac.cr": "tae" });
+  });
+
+  it("una reunión cruzada no borra a quien lleva el doble o más en la otra", () => {
+    const marco = ["marco@itcr.ac.cr"];
+    const personas = aprenderPersonasDeEntidades(
+      [reunion("TAE | a", marco), reunion("TAE | b", marco), reunion("AE | cruzada", marco)],
+      ctx(),
+    );
+    expect(personas.get("marco@itcr.ac.cr")).toBe("tae");
+  });
+
+  it("una asignación a mano NO enseña: no le cambia el dueño a otras reuniones", () => {
+    const antes = [reunion("AE | a", ["ivania@itcr.ac.cr"])];
+    const conMano = [...antes, reunion("Sin nombre", ["ivania@itcr.ac.cr", "nueva@itcr.ac.cr"], "tae")];
+    expect(aprenderPersonasDeEntidades(conMano, ctx())).toEqual(aprenderPersonasDeEntidades(antes, ctx()));
+  });
+
+  it("una reunión asignada a mano cuyo título nombra a una entidad enseña por el título, no por la mano", () => {
+    const personas = aprenderPersonasDeEntidades([reunion("Soporte | TAE", ["gc@itcr.ac.cr"], "tae")], ctx());
+    expect(personas.get("gc@itcr.ac.cr")).toBe("tae");
   });
 
   it("NUNCA de una reunión que decidió la gente: un error no se alimenta a sí mismo", () => {

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { agendaDelDia, empresasDeLaReunion, limitesDelDiaCR } from "./agenda";
+import { agendaDelDia, cuentaDelEvento, empresasDeLaReunion, limitesDelDiaCR } from "./agenda";
+import { indiceDeClientes } from "@/lib/sessions/clientes-por-texto";
 
 const internos = new Set(["smarteamcr.com"]);
 const porDominio = new Map([
@@ -31,6 +32,34 @@ describe("la empresa de una reunión", () => {
   it("un correo personal cuenta solo si es un contacto", () => {
     expect(empresasDeLaReunion(["luis@gmail.com"], porCorreo, porDominio)).toEqual(["c2"]);
     expect(empresasDeLaReunion(["otro@gmail.com"], porCorreo, porDominio)).toEqual([]);
+  });
+});
+
+describe("dos fichas que comparten dominio (el TEC)", () => {
+  const indice = indiceDeClientes([
+    { id: "tae", name: "TEC · TAE", company: "tec.ac.cr", siglas: ["TAE"] },
+    { id: "ae", name: "TEC · AE", company: null, siglas: ["AE"] },
+    { id: "wherex", name: "Wherex", company: null, siglas: [] },
+  ]);
+  const entidades = { grupoDe: new Map([["tae", "tae"], ["ae", "tae"]]), indice };
+  /* Así los arma lib/mi-dia/empresas-server.ts: un invitado del dominio es de las dos. */
+  const porDominio = new Map([["itcr.ac.cr", ["tae", "ae"]], ["wherex.com", ["wherex"]]]);
+  const de = (titulo: string, externos = ["ivania@itcr.ac.cr"]) =>
+    cuentaDelEvento({ empresas: empresasDeLaReunion(externos, new Map(), porDominio, { titulo, entidades }) });
+
+  it("la reunión es de la que nombra el título", () => {
+    expect(de("AE | Reportes de Ventas")).toBe("ae");
+    expect(de("TEC TAE | Workflows")).toBe("tae");
+  });
+
+  it("sin nombre, o con los dos, no cuenta para ninguna: nunca para la dueña por defecto", () => {
+    expect(de("Seguimiento")).toBeNull();
+    expect(de("AE y TAE | Planificación")).toBeNull();
+  });
+
+  it("el título no decide entre empresas que no son del mismo grupo", () => {
+    const empresas = empresasDeLaReunion(["a@itcr.ac.cr", "b@wherex.com"], new Map(), new Map([["itcr.ac.cr", ["tae", "wherex"]], ["wherex.com", ["tae", "wherex"]]]), { titulo: "Wherex", entidades });
+    expect(empresas).toEqual(["tae", "wherex"]);
   });
 });
 

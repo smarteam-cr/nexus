@@ -110,7 +110,7 @@ async function correrElAlta(projectId: string): Promise<ResultadoDelAlta> {
       altaHermanoHsId: true, altaIniciadaAt: true, altaReclasificadoAt: true,
       canvases: { where: canvasOf("handoff"), select: { id: true } },
       handoff: { select: { id: true } },
-      client: { select: { hubspotCompanyId: true, ignoredHubspotServiceIds: true } },
+      client: { select: { hubspotCompanyId: true, ignoredHubspotServiceIds: true, comparteDominioCon: { select: { hubspotCompanyId: true } } } },
     },
   });
   if (!p) return { estado: null, termino: false, error: "El proyecto no existe", hubspotServiceId: null, adoptado: false };
@@ -171,7 +171,9 @@ async function correrElAlta(projectId: string): Promise<ResultadoDelAlta> {
 
   // ── pendiente_crm: dejar el proyecto creado en HubSpot ──────────────────────
   if (estado === "pendiente_crm") {
-    if (!p.client.hubspotCompanyId) {
+    /* Una ficha que comparte dominio no tiene empresa propia: su proyecto cuelga de la de su dueña. */
+    const empresaDelAlta = p.client.comparteDominioCon?.hubspotCompanyId ?? p.client.hubspotCompanyId;
+    if (!empresaDelAlta) {
       return fallar(projectId, estado, null, "El cliente no tiene empresa en HubSpot: primero se crea la empresa allá.");
     }
     if (!(await hasProjectsWriteScope())) {
@@ -188,7 +190,7 @@ async function correrElAlta(projectId: string): Promise<ResultadoDelAlta> {
     // 1. ¿Un intento anterior ya lo creó? Adoptarlo antes de crear otro.
     const previo = await buscarRecordDeUnIntentoAnterior(hs, {
       nombre: p.name,
-      companyId: p.client.hubspotCompanyId,
+      companyId: empresaDelAlta,
       desde: p.altaIniciadaAt,
       suprimidos: p.client.ignoredHubspotServiceIds,
     });
@@ -212,7 +214,7 @@ async function correrElAlta(projectId: string): Promise<ResultadoDelAlta> {
           nombre: p.name,
           pipeline,
           interno: p.altaInternoDeclarado ?? false,
-          empresaId: p.client.hubspotCompanyId,
+          empresaId: empresaDelAlta,
           tratoId: p.hubspotDealId,
           hermanoHsId: p.altaHermanoHsId,
           /* El record nace con dueño asignado, igual que por el camino viejo. Es uno de los dos

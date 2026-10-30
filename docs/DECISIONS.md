@@ -12623,7 +12623,7 @@ separación de proyectos debería bastar»). Plan y números: `docs/empresas-con
 
 - **Dos fichas: «TEC · TAE» (la vieja «TEC») y «TEC · AE» (la vieja «TEC- AE»).** TAE se queda con los dominios
   (`itcr.ac.cr`, `tec.ac.cr`), la empresa de HubSpot del ITCR y todo lo que es de la cuenta (contactos, correos, tickets,
-  negocios). AE recibe su proyecto y lo que cuelga de él. *Por qué la vieja es TAE:* ahí está la historia y la empresa
+  negocios). AE recibe su proyecto, lo que cuelga de él y la propuesta «AE - Smartloop» con su preventa. *Por qué la vieja es TAE:* ahí está la historia y la empresa
   de HubSpot; AE nació vacía.
 - **AE no tiene dominio propio: COMPARTE el de TAE (`Client.comparteDominioConId`).** Registrar el mismo dominio en las
   dos fichas rompía INV37 y los ~30 lugares que arman «dominio → ficha» (cobranza, Partner, exploraciones…), que se
@@ -12632,27 +12632,34 @@ separación de proyectos debería bastar»). Plan y números: `docs/empresas-con
   lado:** cuando la ficha que dio el dominio es de un grupo, la reunión se reparte entre la dueña y sus entidades.
   1. El **nombre** de la reunión (las `siglas` de cada ficha: «AE», «TAE»; o su nombre). Si nombra a dos, por decidir.
   2. La **gente**: si todas las personas de afuera que se conocen son de la misma entidad, es de esa. La gente se
-     aprende SOLO de reuniones que decidió el nombre o una persona (`manualClientId`), nunca de las que decidió la gente:
-     un error no se alimenta a sí mismo. Quien estuvo en reuniones de las dos no cuenta; la de Smarteam tampoco.
+     aprende SOLO del nombre de las reuniones. Las que decidió la gente no enseñan: un error no se alimenta a sí mismo.
+     Las asignadas a mano tampoco: `reResolveSession` escribe solo esa reunión, y si enseñaran cambiarían el dueño de otras
+     sin que nadie las vuelva a resolver (medido: asignar una por decidir movía 5). Quien estuvo en las dos cuenta para
+     la que tiene al menos el doble: una reunión cruzada no borra a quien lleva decenas en la otra. Parejo, no cuenta.
+     La gente de Smarteam tampoco cuenta.
   3. Si no hay pista, **por decidir**: `resolvedClientId` null, a la vista en /sessions para asignarla a mano.
   *Por qué no a la ficha más vieja:* es exactamente la mezcla que se quería cortar; una reunión sin dueño se ve, una
   mal puesta no.
 - **Lo asignado a mano gana siempre** (paso 1, como siempre). Las 4 reuniones del TEC asignadas a mano dicen «TAE» en el
   título y quedan en TAE.
-- **La empresa de HubSpot de AE (56463266574, fusionada en el ITCR) no se reapunta.** La del ITCR ya es de TAE (una
-  empresa es de una sola ficha, R7b), HubSpot no separa las escuelas, y el registro de Partner del portal de AE ya cuelga
-  de esta ficha (el vínculo existente se conserva). INV13 e INV54 no la cuentan: es el estado real de HubSpot, no un error de Nexus.
+- **AE se queda SIN empresa de HubSpot (`hubspotCompanyId` null).** La suya (56463266574) se fusionó en el ITCR y responde
+  200 con los datos de la que sobrevive (comprobado con un GET), así que cada lector y escritor de la empresa (la ficha,
+  las notas, los datos, el siguiente paso, el encargado) cruzaba con TAE en los dos sentidos. Taparlos uno por uno dejaba
+  caminos abiertos; sin empresa, todos se apagan solos. Reapuntarla no se puede: la del ITCR ya es de TAE (una empresa es de
+  una sola ficha, R7b), y HubSpot no separa las escuelas. El registro de Partner del portal de AE y su cuenta de cobro no
+  dependen de esto. La propuesta «AE - Smartloop» también suelta la empresa del ITCR: regenerarla metería en el prompt la
+  actividad de HubSpot de todo el instituto.
 - **Lo que viene de la empresa de HubSpot sigue llegando a TAE**: los negocios (incluido el trato de AE), los contactos,
   correos y tickets. El proyecto de AE no vuelve a TAE: la copia de proyectos nunca cambia el `clientId` de un proyecto
   que ya existe.
 - **La copia de proyectos de las dos corre contra la empresa de la dueña, y cada una toca solo lo suyo**
-  (`lib/hubspot/entidades-en-la-copia.ts`). *Por qué:* la empresa fusionada de AE da cero, y la corrida se cortaría con
-  error en cada vuelta, también en el pase de encargado. Copiar uno por uno se descartó: sin la corrida normal se perdían
-  la reconciliación y la reactivación (un proyecto apagado una vez no volvía). La dueña se salta los proyectos de sus
+  (`lib/hubspot/entidades-en-la-copia.ts`). Copiar uno por uno se descartó: sin la corrida normal se perdían la
+  reconciliación y la reactivación (un proyecto apagado una vez no volvía). La dueña se salta los proyectos de sus
   entidades, también los que una persona borró allá: si los escribiera ella, el pase de la entidad no vería el cambio.
-  Un proyecto NUEVO del instituto lo copia la dueña.
-- **Una entidad no escribe en la empresa de HubSpot** (el encargado de la empresa, el siguiente paso): el id viejo cae en la
-  de la dueña. Sus proyectos sí.
+  Un proyecto NUEVO del instituto lo copia la dueña; un alta hecha desde la entidad cuelga de la empresa de la dueña.
+  El trabajo diario y los eventos de HubSpot incluyen a la entidad aunque no tenga empresa.
+- **La agenda reparte igual** (`lib/mi-dia/agenda.ts`): un invitado del dominio es de las dos fichas; la reunión es de
+  la que nombra el título, y sin nombre no cuenta para ninguna. Nunca, por defecto, de la dueña.
 - **La gente se aprende sin mirar lo materializado** (`resolvedClientId`): de las reuniones asignadas a mano y de las que
   traen una pista en el título. *Por qué:* si dependiera de quién es hoy la dueña, una corrida cambiaría lo aprendido y la
   siguiente daría otro resultado (INV2 en rojo).

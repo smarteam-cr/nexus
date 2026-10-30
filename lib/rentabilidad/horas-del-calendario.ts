@@ -18,7 +18,7 @@
  *  7. Cuenta solo quien no rechazó la invitación; los topes de duración los pone `minutosContables` al juntar.
  */
 import { invitadosDelEvento, isoDelEvento } from "@/lib/exploraciones/agendadas";
-import { cuentaDelEvento, empresasDeLaReunion, type EventoConEnlaces } from "@/lib/mi-dia/agenda";
+import { cuentaDelEvento, empresasDeLaReunion, type EventoConEnlaces, type RepartoDeEntidades } from "@/lib/mi-dia/agenda";
 import { esBloqueDeTarea } from "@/lib/google/meet-sync-cambios";
 import type { ReunionParaCarga, TipoDeEmpresa } from "@/lib/carga/reuniones";
 
@@ -39,6 +39,8 @@ export interface DatosParaElCalendario {
   porCorreo: ReadonlyMap<string, readonly string[]>;
   /** Dominio → empresas (dominios registrados). */
   porDominio: ReadonlyMap<string, readonly string[]>;
+  /** Las fichas que comparten dominio: su reunión se reparte por el título. */
+  entidades?: RepartoDeEntidades;
   /** Los dominios de Smarteam. */
   internos: ReadonlySet<string>;
   /** Las empresas que se pueden cargar: id → nombre y tipo. Una empresa fuera de este mapa no carga horas. */
@@ -123,7 +125,7 @@ export function reunionesDelCalendario(calendarios: readonly CalendarioDeUnaPers
         continue;
       }
       const externos = gente.filter((c) => !d.internos.has(dominioDe(c)));
-      const clienteId = cuentaDelEvento({ empresas: empresasDeLaReunion(externos, d.porCorreo, d.porDominio) });
+      const clienteId = cuentaDelEvento({ empresas: empresasDeLaReunion(externos, d.porCorreo, d.porDominio, { titulo: e.summary, entidades: d.entidades }) });
       if (!clienteId || !d.empresas.has(clienteId)) {
         descartar("sinUnaEmpresa");
         continue;
