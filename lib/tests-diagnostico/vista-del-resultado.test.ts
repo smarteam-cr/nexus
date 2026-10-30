@@ -85,15 +85,18 @@ const AGENDA = "https://meetings.hubspot.com/smarteam/diagnostico";
 const INDUSTRIA = "Maquinaria y equipo pesado";
 /** Lo que se dice de cada dimensión (lib/tests-diagnostico/detalle-de-la-dimension.ts), de ejemplo. */
 const DETALLES: Record<string, DetalleDeLaDimension> = {
-  "1.1": { queMide: "Mide si la venta sigue un proceso escrito.", lectura: "Hay etapas, pero cada vendedor las aplica a su manera.", esteNivel: { nombre: "Inicial", criterios: ["Hay etapas de palabra.", "La revisión no tiene fecha fija."] }, siguiente: { nombre: "Funcional", prioridad: "Escribe el proceso en el CRM y fija la revisión semanal." } },
-  "1.6": { queMide: "Mide cómo se priorizan los interesados.", lectura: "Se atiende a todos por igual.", esteNivel: { nombre: "Deficiente", criterios: ["No hay criterios de prioridad."] }, siguiente: { nombre: "Inicial", prioridad: "Define quién merece una demostración." } },
+  "1.1": { impacto: "Si se va un vendedor, se lleva lo que sabe de cada negocio.", siguiente: { nombre: "Funcional", prioridad: "Escribe el proceso en el CRM y fija la revisión semanal." } },
+  "1.6": { impacto: "Tus asesores le hacen una demostración a todo el que la pide.", siguiente: { nombre: "Inicial", prioridad: "Define quién merece una demostración." } },
 };
+/** De qué dimensión es cada riesgo (el subtítulo de su tarjeta). */
+const DIMENSION_DEL_RIESGO = { "Tus reportes pueden estar inflados: hay contactos repetidos.": "Datos" };
 const dibujar = (modo: "pantalla" | "pdf", corto = false, agenda: string = AGENDA, r: ResultadoDelTest = resultado(corto)) =>
   renderToStaticMarkup(
     createElement(ResultadoDelTestVista, {
       r,
       industria: INDUSTRIA,
       detalles: DETALLES,
+      dimensionDelRiesgo: DIMENSION_DEL_RIESGO,
       empresa: "Máquinas del Valle",
       dominio: "maquinasdelvalle.cr",
       fecha: "2026-10-28T15:00:00.000Z",
@@ -120,7 +123,7 @@ function loQueSeLee(r: ResultadoDelTest): string[] {
     "28 de octubre de 2026",
     "Resultado general",
     "Deficiente",
-    resumenSinIa(r, INDUSTRIA),
+    resumenSinIa(r),
     "Estimado",
     "con lo que respondiste",
     "Base operativa",
@@ -219,23 +222,24 @@ describe("la página de resultado, como se dibuja", () => {
 
 describe("los ajustes del 29 oct", () => {
   it("el resumen de la IA, si lo hay, va arriba en lugar del de los datos (también en el PDF)", () => {
-    const r = { ...resultado(), redaccion: { modelo: "m", at: "", resumen: "El área de Ventas opera en un estado incipiente.", dimensiones: {} } };
+    const r = { ...resultado(), redaccion: { v: 2 as const, modelo: "m", at: "", resumen: "Tu equipo vende cada uno a su manera.", dimensiones: {} } };
     for (const modo of ["pantalla", "pdf"] as const) {
       const t = texto(dibujar(modo, false, AGENDA, r));
-      expect(t).toContain("El área de Ventas opera en un estado incipiente.");
-      expect(t).not.toContain(resumenSinIa(r, INDUSTRIA));
+      expect(t).toContain("Tu equipo vende cada uno a su manera. Es una estimación con solo 8 preguntas");
+      expect(t).not.toContain(resumenSinIa(r));
     }
   });
 
-  it("la tarjeta de cada dimensión del radar: escondida, con su puntaje, su nivel, cómo está, la escala y que es un estimado", () => {
+  it("la tarjeta de cada dimensión del radar: corta — el nombre, el puntaje con su nivel, el impacto y que es un estimado", () => {
     const html = dibujar("pantalla");
     const tarjetas = html.match(/<div class="rd-tip"[^>]*data-tarjeta="[^"]+"[^>]*hidden/g) ?? [];
     expect(tarjetas).toHaveLength(8);
     const t11 = texto(html.slice(html.indexOf('data-tarjeta="1.1"'), html.indexOf('data-tarjeta="1.2"')));
-    for (const x of ["Procesos y Rutinas", DETALLES["1.1"].queMide!, "30 /100", "Inicial", DETALLES["1.1"].lectura!, "En la escala, este nivel es:", ...DETALLES["1.1"].esteNivel!.criterios, "Faltan preguntas por responder"]) {
+    for (const x of ["Procesos y Rutinas", "30 /100", "Inicial", DETALLES["1.1"].impacto!, "Es un estimado: faltan preguntas para ubicarlo con precisión."]) {
       expect(t11, `falta «${x}» en la tarjeta`).toContain(x);
     }
-    // La tarjeta dice cómo está; qué priorizar va solo en «Ver detalles».
+    // Sin la escala (nadie que llena el test la tiene en la cabeza) y sin qué priorizar (eso va en «Ver detalles»).
+    expect(t11).not.toContain("En la escala");
     expect(t11).not.toContain(DETALLES["1.1"].siguiente!.prioridad);
   });
 
@@ -246,8 +250,7 @@ describe("los ajustes del 29 oct", () => {
     expect(t).toContain("Qué priorizar para llegar a Funcional");
     expect(t).toContain(DETALLES["1.1"].siguiente!.prioridad);
     expect(t).toContain("Falta información por corroborar");
-    expect(t).not.toContain(DETALLES["1.1"].lectura!);
-    expect(t).not.toContain("En la escala, este nivel es:");
+    expect(t).not.toContain(DETALLES["1.1"].impacto!);
   });
 
   it("al final: «otra área» con la misma industria y «otra empresa» desde cero, y el logo", () => {
@@ -268,5 +271,54 @@ describe("los ajustes del 29 oct", () => {
     expect(texto(html)).toContain(`Qué priorizar para llegar a Funcional: ${DETALLES["1.1"].siguiente!.prioridad}`);
     expect(html).not.toContain("rd-tip");
     expect(html).not.toContain("rd-detalles");
+  });
+
+  it("⛔ el resumen no repite el nivel ni nombra la industria; la industria va en un chip junto al título (también en el PDF)", () => {
+    for (const modo of ["pantalla", "pdf"] as const) {
+      const html = dibujar(modo);
+      expect(html).toContain(`<span class="rd-sector">${INDUSTRIA}</span>`);
+      const resumen = texto(html.match(/<p class="rd-resumen[^"]*">([\s\S]*?)<\/p>/)![1]);
+      expect(resumen).not.toMatch(/Deficiente|Inicial|Funcional|Eficiente|Óptimo/);
+      expect(resumen.toLowerCase()).not.toContain(INDUSTRIA.toLowerCase());
+    }
+    // «Otra» no va en el chip.
+    expect(renderToStaticMarkup(createElement(ResultadoDelTestVista, { r: resultado(), industria: "Otra", empresa: null, agenda: AGENDA }))).not.toContain("rd-sector");
+  });
+
+  it("las cajas de las capas, en el orden del radar: producción a la izquierda, base a la derecha (también en el PDF)", () => {
+    for (const modo of ["pantalla", "pdf"] as const) {
+      const capas = dibujar(modo).match(/<p class="rd-capa-k">([^<]+)<\/p>/g) ?? [];
+      expect(capas.map((x) => x.replace(/<[^>]+>/g, ""))).toEqual(["Producción", "Base operativa"]);
+    }
+  });
+
+  it("cada riesgo lleva de subtítulo la dimensión de la que sale (también en el PDF)", () => {
+    for (const modo of ["pantalla", "pdf"] as const) {
+      expect(dibujar(modo)).toContain('<span class="rd-riesgo-titulo">Datos</span><span>Tus reportes pueden estar inflados: hay contactos repetidos.</span>');
+    }
+  });
+
+  it("⛔ la flecha de lo que más frena se mueve con su vértice: su grupo lleva el punto del vértice (solo en la página)", () => {
+    const html = dibujar("pantalla");
+    const grande = html.slice(html.indexOf('class="rde-grande"'), html.indexOf('class="rde-compacto"'));
+    const marca = grande.match(/<g class="rde-iman" data-iman-x="([\d.]+)" data-iman-y="([\d.]+)">/);
+    expect(marca).not.toBeNull();
+    // El mismo punto que el vértice de lo que más frena (1.6), que es el más grande (rFrena).
+    const vertice = grande.match(/<circle class="rde-vertice" data-d="1\.6" cx="([\d.]+)" cy="([\d.]+)"/);
+    expect(vertice).not.toBeNull();
+    expect([marca![1], marca![2]]).toEqual([vertice![1], vertice![2]]);
+    // El PDF no tiene imán.
+    expect(dibujar("pdf")).not.toContain("data-iman-x");
+  });
+
+  it("⛔ el radar limpio (30 oct): sin «La base», la figura en azul y Funcional como el único anillo con color (también en el PDF)", () => {
+    for (const modo of ["pantalla", "pdf"] as const) {
+      const html = dibujar(modo);
+      expect(texto(html)).not.toContain("La base");
+      expect(html).toMatch(/class="rde-figura"[^>]*fill="#0b58d3"[^>]*stroke="#0b58d3"/);
+      const trazos = [...html.matchAll(/<polygon points="[^"]*" fill="none" stroke="(#[0-9a-f]{6})"/g)].map((m) => m[1]);
+      expect(trazos.length).toBeGreaterThanOrEqual(5);
+      expect(new Set(trazos.filter((x) => !["#dde3ec", "#eef1f6"].includes(x)))).toEqual(new Set(["#22c55e"]));
+    }
   });
 });

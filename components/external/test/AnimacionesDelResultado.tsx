@@ -8,9 +8,10 @@
  *   · cada fila de «Cómo está cada parte» aparece al llegar a ella, una tras otra, y su barra y su puntaje se cargan
  *     JUNTOS: el mismo cuadro mueve el ancho y el número (`[data-fill]` y `[data-count]`, dentro de cada `.rd-fila`).
  *     Antes la barra iba por una transición de CSS y el número por su cuenta, y no llegaban a la vez;
+ *   · el imán del radar: sus vértices y su figura se corren apenas hacia el cursor (`imanDelRadar`, como la vieja);
  *   · al pasar el cursor (o tocar) una dimensión del radar, se resaltan su eje (del rótulo a su vértice), su vértice y su
- *     rótulo (`[data-d]` de RadarDeUnaEmpresa; el aspecto, en radar-de-una-empresa.css), y aparece su TARJETA al lado del
- *     puntero (`[data-tarjeta]`, que la página trae escondida: ResultadoDelTestVista › TarjetaDeLaDimension).
+ *     rótulo (`[data-d]` de RadarDeUnaEmpresa; el aspecto, en radar-de-una-empresa.css), y aparece su TARJETA junto a la
+ *     dimensión (`[data-tarjeta]`, que la página trae escondida: ResultadoDelTestVista › TarjetaDeLaDimension).
  * La página llega del servidor ya completa (las barras llenas, los números puestos): este componente solo esconde lo
  * que todavía no se ve para animarlo al llegar. Lo que ya está en pantalla al abrir no se toca (no parpadea), y con
  * «reducir movimiento» no se anima nada. «Llegar» es que su borde de arriba entró en la pantalla, se mire con el scroll
@@ -18,6 +19,7 @@
  * escondido para siempre). Es el `<main>` de la página; el PDF no lo usa.
  */
 import { useEffect, useRef, type ReactNode } from "react";
+import { IMAN, imanHacia } from "@/lib/tests-diagnostico/iman-del-radar";
 import { posicionDeLaTarjeta } from "@/lib/tests-diagnostico/tarjeta-del-radar";
 
 /** Cuánto tarda en llenarse una barra y el desfase entre filas del mismo grupo. */
@@ -57,8 +59,8 @@ function ubicar(tip: HTMLElement, svg: SVGSVGElement, clave: string, x: number, 
     h: tip.offsetHeight || 260,
     x,
     y,
-    radar: { left: caja.left, right: caja.right },
-    xDeLaDimension: rotulo ? rotulo.left + rotulo.width / 2 : x,
+    radar: caja,
+    rotulo: rotulo ?? null,
   });
   tip.classList.toggle("es-angosta", p.angosta);
   if (p.altoMaximo !== null) tip.style.maxHeight = `${p.altoMaximo}px`;
@@ -148,6 +150,95 @@ function resaltarElRadar(raiz: HTMLElement): () => void {
   };
 }
 
+/**
+ * El IMÁN del radar (la cuenta, en lib/tests-diagnostico/iman-del-radar.ts): cada vértice de la empresa, su figura, el
+ * halo de lo que más frena y su flecha al objetivo (`data-iman-x/y`: se mueven con el vértice, no se despegan) se corren
+ * un poco hacia el cursor; el movimiento se suaviza cuadro a cuadro. La grilla y los rótulos quedan fijos. Solo con
+ * mouse (en el teléfono no hay cursor que seguir) y nunca con «reducir movimiento».
+ */
+function imanDelRadar(raiz: HTMLElement): () => void {
+  type Punto = { x: number; y: number };
+  const radares = [...raiz.querySelectorAll<SVGSVGElement>("svg.rde-interactivo")].map((svg) => {
+    const centro = (el: SVGElement): Punto | null => {
+      if (el.dataset.imanX && el.dataset.imanY) return { x: Number(el.dataset.imanX), y: Number(el.dataset.imanY) };
+      const c = el instanceof SVGCircleElement ? el : el.querySelector("circle");
+      return c ? { x: c.cx.baseVal.value, y: c.cy.baseVal.value } : null;
+    };
+    const piezas = [...svg.querySelectorAll<SVGGraphicsElement>(".rde-vertice, .rde-iman")].flatMap((el) => {
+      const p = centro(el);
+      return p ? [{ el, ...p }] : [];
+    });
+    const figura = svg.querySelector<SVGPolygonElement>(".rde-figura");
+    const puntos: Punto[] = figura ? [...figura.points].map((q) => ({ x: q.x, y: q.y })) : [];
+    // El resalte termina en el vértice: se corre con él.
+    const lineas = [...svg.querySelectorAll<SVGLineElement>(".rde-eje-resalte")].map((el) => ({ el, x: el.x2.baseVal.value, y: el.y2.baseVal.value }));
+    return { svg, piezas, figura, puntos, lineas, caja: svg.getBoundingClientRect(), m: null as Punto | null, objetivo: { x: 0, y: 0 }, peso: 0 };
+  });
+  let cuadro = 0;
+  let cursor: Punto | null = null;
+  const dibujar = () => {
+    cuadro = 0;
+    let falta = false;
+    for (const r of radares) {
+      if (!r.caja.width || !r.m) continue;
+      r.m.x += (r.objetivo.x - r.m.x) * IMAN.suavizado;
+      r.m.y += (r.objetivo.y - r.m.y) * IMAN.suavizado;
+      r.peso += (1 - r.peso) * IMAN.suavizado;
+      if (Math.abs(r.objetivo.x - r.m.x) > 0.3 || Math.abs(r.objetivo.y - r.m.y) > 0.3 || r.peso < 0.98) falta = true;
+      // De píxeles de pantalla a unidades del dibujo.
+      const k = r.svg.viewBox.baseVal.width / r.caja.width || 1;
+      const m = r.m;
+      const hacia = (p: Punto) => {
+        const d = imanHacia(p.x, p.y, m.x, m.y, IMAN.amplitudPx * k, IMAN.radioPx * k);
+        return { x: d.x * r.peso, y: d.y * r.peso };
+      };
+      for (const p of r.piezas) {
+        const d = hacia(p);
+        p.el.style.translate = `${d.x.toFixed(2)}px ${d.y.toFixed(2)}px`;
+      }
+      const corrido = (p: Punto) => {
+        const d = hacia(p);
+        return `${(p.x + d.x).toFixed(1)},${(p.y + d.y).toFixed(1)}`;
+      };
+      if (r.figura) r.figura.setAttribute("points", r.puntos.map(corrido).join(" "));
+      for (const l of r.lineas) {
+        const d = hacia(l);
+        l.el.setAttribute("x2", (l.x + d.x).toFixed(1));
+        l.el.setAttribute("y2", (l.y + d.y).toFixed(1));
+      }
+    }
+    if (falta) cuadro = requestAnimationFrame(dibujar);
+  };
+  /** Dónde está el cursor en las unidades de cada radar (se mide cada vez: al abrir, la cabecera todavía entra). */
+  const apuntar = () => {
+    if (!cursor) return;
+    for (const r of radares) {
+      r.caja = r.svg.getBoundingClientRect();
+      if (!r.caja.width) continue;
+      const vb = r.svg.viewBox.baseVal;
+      r.objetivo = { x: vb.x + ((cursor.x - r.caja.left) / r.caja.width) * vb.width, y: vb.y + ((cursor.y - r.caja.top) / r.caja.height) * vb.height };
+      // La primera vez arranca donde está el cursor: suavizar desde (0, 0) los corría hacia arriba a la izquierda. El tirón
+      // entra de a poco (`peso`): de golpe, el primer movimiento del mouse corría toda la figura en un cuadro.
+      r.m ??= { ...r.objetivo };
+    }
+    if (!cuadro) cuadro = requestAnimationFrame(dibujar);
+  };
+  const alMover = (e: MouseEvent) => {
+    cursor = { x: e.clientX, y: e.clientY };
+    apuntar();
+  };
+  // Al desplazar con la rueda el cursor no se mueve, pero el radar sí: se vuelve a apuntar.
+  window.addEventListener("mousemove", alMover, { passive: true });
+  window.addEventListener("scroll", apuntar, { passive: true });
+  window.addEventListener("resize", apuntar, { passive: true });
+  return () => {
+    window.removeEventListener("mousemove", alMover);
+    window.removeEventListener("scroll", apuntar);
+    window.removeEventListener("resize", apuntar);
+    if (cuadro) cancelAnimationFrame(cuadro);
+  };
+}
+
 export default function AnimacionesDelResultado({ className, children }: { className?: string; children: ReactNode }) {
   const ref = useRef<HTMLElement>(null);
 
@@ -156,6 +247,7 @@ export default function AnimacionesDelResultado({ className, children }: { class
     if (!raiz) return;
     const soltarElRadar = resaltarElRadar(raiz);
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return soltarElRadar;
+    const soltarElIman = window.matchMedia("(pointer: fine)").matches ? imanDelRadar(raiz) : () => undefined;
 
     const secciones = [...raiz.querySelectorAll<HTMLElement>("[data-revela]")].filter(debajoDeLaPantalla);
     const filas = [...raiz.querySelectorAll<HTMLElement>(".rd-fila")].filter(debajoDeLaPantalla);
@@ -214,6 +306,7 @@ export default function AnimacionesDelResultado({ className, children }: { class
       window.removeEventListener("beforeprint", completar);
       if (cuadro) cancelAnimationFrame(cuadro);
       soltarElRadar();
+      soltarElIman();
       completar();
     };
   }, []);

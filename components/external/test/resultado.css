@@ -61,6 +61,9 @@
 
 /* Los rótulos chicos de cada sección. */
 .dr .rd-eyebrow { font-family: var(--font-body); font-size: 10.5px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; color: var(--v3-marca); line-height: 1.4; }
+/* La industria, en un chip al lado del título (no en el resumen: quien hizo el test la da por sentada). */
+.dr .rd-eyebrow-con-sector { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; }
+.dr .rd-sector { display: inline-flex; align-items: center; border-radius: 999px; padding: 2px 10px; background: #ffffff; border: 1px solid var(--v3-borde-fuerte); font-size: 11.5px; font-weight: 600; letter-spacing: 0; text-transform: none; line-height: 18px; color: var(--v3-secundario); }
 .dr .rd-label { font-size: 10.5px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; color: var(--v3-apagado); line-height: 1.4; }
 
 /* La cabecera: el nivel en grande con las dos capas al lado y, debajo, el radar en su tarjeta blanca a todo el ancho.
@@ -104,6 +107,8 @@
 /* Los riesgos, lado a lado. */
 .dr .rd-riesgos { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }
 .dr .rd-riesgos li { display: flex; gap: 12px; align-items: flex-start; background: #fdf7f7; border: 1px solid #f6e0dd; border-radius: 14px; padding: 16px; font-size: 14.5px; line-height: 22px; color: var(--v3-texto); }
+.dr .rd-riesgo-texto { display: grid; gap: 4px; min-width: 0; }
+.dr .rd-riesgo-titulo { font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; line-height: 1.4; color: #b5342a; }
 .dr .rd-riesgo-icono { flex: none; width: 24px; height: 24px; border-radius: 999px; background: #fdecec; color: #b5342a; display: grid; place-items: center; }
 
 /* Los casos que lo mueven, lado a lado. */
@@ -180,9 +185,9 @@
   .dr .rd-barra-fill::after { animation: none !important; }
 }
 
-/* La tarjeta de una dimensión del radar (como la de la vieja): fija, al lado del puntero, sin recibir el cursor.
+/* La tarjeta de una dimensión del radar (como la de la vieja): fija, junto a la dimensión, sin recibir el cursor.
    AnimacionesDelResultado le quita el `hidden` y la ubica. */
-.dr .rd-tip { position: fixed; top: 0; left: 0; z-index: 60; width: min(420px, calc(100vw - 24px)); box-sizing: border-box; padding: 16px 20px; background: #ffffff; border: 1px solid var(--v3-borde); border-radius: 16px; box-shadow: 0 2px 6px rgba(16, 42, 84, .06), 0 20px 44px -18px rgba(16, 42, 84, .38); pointer-events: none; display: grid; gap: 10px; opacity: 0; transition: opacity .16s ease; }
+.dr .rd-tip { position: fixed; top: 0; left: 0; z-index: 60; width: min(340px, calc(100vw - 24px)); box-sizing: border-box; padding: 14px 18px; background: #ffffff; border: 1px solid var(--v3-borde); border-radius: 16px; box-shadow: 0 2px 6px rgba(16, 42, 84, .06), 0 20px 44px -18px rgba(16, 42, 84, .38); pointer-events: none; display: grid; gap: 10px; opacity: 0; transition: opacity .16s ease; }
 .dr .rd-tip[hidden] { display: none; }
 .dr .rd-tip.is-visible { opacity: 1; }
 /* En pantallas angostas va en la otra mitad, con un alto máximo: lo que no entra se desplaza con el dedo. */
@@ -192,22 +197,17 @@
 .dr .rd-tip[data-nivel="F"] { --nf: #e7f7ee; --nt: #177a4f; }
 .dr .rd-tip[data-nivel="E"] { --nf: #e8f0fe; --nt: #1d4ed8; }
 .dr .rd-tip[data-nivel="O"] { --nf: #f1ebfe; --nt: #6d28d9; }
-.dr .rd-tip-cabeza { display: flex; justify-content: space-between; align-items: flex-start; gap: 14px; }
-.dr .rd-tip-id { display: grid; gap: 2px; min-width: 0; }
-.dr .rd-tip-nombre { font-size: 16px; line-height: 1.3; font-weight: 600; color: var(--v3-tinta); }
-.dr .rd-tip-mide { font-size: 12.5px; line-height: 1.4; color: var(--v3-apagado); }
+/* Corta y legible (segunda prueba de Elías, 29 oct): el nombre, el puntaje con su nivel, lo que le pasa al área y una
+   línea de que es un estimado. */
+.dr .rd-tip-cabeza { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-start; gap: 6px 12px; }
+.dr .rd-tip-nombre { flex: 1 1 160px; font-size: 16.5px; line-height: 1.3; font-weight: 600; color: var(--v3-tinta); min-width: 0; }
 .dr .rd-tip-puntaje { flex: none; display: flex; align-items: center; gap: 8px; }
 .dr .rd-tip-num { font-size: 19px; font-weight: 700; line-height: 1; color: var(--nt, var(--v3-tinta)); font-variant-numeric: tabular-nums; }
 .dr .rd-tip-num small { font-size: 11px; font-weight: 600; color: var(--v3-apagado); }
-.dr .rd-tip-chip { display: inline-flex; align-items: center; gap: 6px; border-radius: 999px; padding: 2px 10px; font-size: 12.5px; font-weight: 600; line-height: 18px; background: var(--nf, var(--v3-fondo)); color: var(--nt, var(--v3-secundario)); white-space: nowrap; }
+.dr .rd-tip-chip { display: inline-flex; align-items: center; gap: 6px; border-radius: 999px; padding: 2px 10px; font-size: 13px; font-weight: 600; line-height: 18px; background: var(--nf, var(--v3-fondo)); color: var(--nt, var(--v3-secundario)); white-space: nowrap; }
 .dr .rd-tip-chip::before { content: ""; width: 7px; height: 7px; border-radius: 999px; background: var(--nc, #a9b5c7); }
-.dr .rd-tip-lectura { font-size: 14px; line-height: 21px; color: var(--v3-texto); }
-.dr .rd-tip-escala { display: grid; gap: 6px; padding-top: 10px; border-top: 1px dashed #d6dee9; }
-.dr .rd-tip-k { font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--v3-apagado); }
-.dr .rd-tip-escala ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
-.dr .rd-tip-escala li { position: relative; padding-left: 14px; font-size: 13.5px; line-height: 20px; color: var(--v3-secundario); }
-.dr .rd-tip-escala li::before { content: ""; position: absolute; left: 2px; top: 8px; width: 5px; height: 5px; border-radius: 999px; background: #a9b5c7; }
-.dr .rd-tip-estimado { font-size: 12px; line-height: 17px; color: #95580f; background: #fdf3e3; border-radius: 10px; padding: 8px 10px; }
+.dr .rd-tip-lectura { font-size: 15px; line-height: 22px; color: var(--v3-texto); }
+.dr .rd-tip-estimado { font-size: 12.5px; line-height: 17px; color: var(--v3-apagado); }
 .dr .rd-radar-ayuda { margin-top: 6px; text-align: center; font-size: 13px; line-height: 1.4; color: var(--v3-apagado); }
 
 /* El siguiente paso: el texto (con lo que se lleva) a la izquierda y la agenda de HubSpot a la derecha. */
@@ -254,6 +254,8 @@
   .dr .rd-costo-titulo { font-size: 14.5px; }
   .dr .rd-costo p:not(.rd-costo-titulo) { font-size: 17px; line-height: 26px; }
   .dr .rd-riesgos li { font-size: 16px; line-height: 25px; }
+  .dr .rd-riesgo-titulo { font-size: 12.5px; }
+  .dr .rd-sector { font-size: 13px; padding: 2px 11px; }
   .dr .rd-riesgo-icono { width: 26px; height: 26px; }
   .dr .rd-caso-titulo { font-size: 19px; line-height: 25px; }
   .dr .rd-caso-promesa { font-size: 15.5px; line-height: 23.5px; }
@@ -263,12 +265,12 @@
   .dr .rd-fila { grid-template-columns: minmax(150px, 1fr) minmax(64px, 200px) 66px 108px; min-height: 50px; row-gap: 2px; padding: 10px 0 4px; }
   .dr .rd-fila + .rd-fila { border-top: 1px solid var(--v3-borde); }
   .dr .rd-detalles { margin-top: 0; }
-  .dr .rd-fila-nombre { font-size: 15.5px; }
+  .dr .rd-fila-nombre { font-size: 16.5px; }
   .dr .rd-frena { font-size: 11px; padding: 1px 9px; line-height: 18px; }
   .dr .rd-barra { height: 14px; }
   .dr .rd-num { font-size: 18px; }
   .dr .rd-num small { font-size: 12px; }
-  .dr .rd-chip { font-size: 14.5px; }
+  .dr .rd-chip { font-size: 15px; }
   .dr .rd-nota { font-size: 14px; }
   .dr .rd-detalles > summary { font-size: 14px; }
   .dr .rd-detalles-cuerpo { font-size: 15px; line-height: 23px; }
@@ -278,7 +280,7 @@
   .dr .rd-agenda-enlace { font-size: 14.5px; }
   .dr .rd-agenda-vinetas li { font-size: 17px; line-height: 25.5px; }
   .dr .rd-agenda-check { margin-top: 2px; }
-  .dr .rd-tip-lectura { font-size: 14.5px; line-height: 22px; }
+  .dr .rd-tip-lectura { font-size: 15.5px; line-height: 23px; }
   .dr .rd-radar-ayuda { font-size: 14px; }
   .dr .rd-pie-texto { font-size: 14px; }
 }
@@ -349,7 +351,6 @@
   .dr .rd-pie-botones { width: 100%; flex-direction: column; }
   .dr .rd-pie-botones .rd-btn { width: 100%; }
   .dr .rd-tip { padding: 14px 16px; }
-  .dr .rd-tip-cabeza { flex-direction: column; gap: 8px; }
 }
 
 /* ── El PDF: hojas horizontales de 1056 × 816 (carta), una sección por hoja ───────────────── */
@@ -389,6 +390,8 @@
 .dr.rd-pdf .rd-costo { padding: 12px 14px; }
 .dr.rd-pdf .rd-riesgos, .dr.rd-pdf .rd-casos { grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
 .dr.rd-pdf .rd-riesgos li { padding: 12px; font-size: 12.5px; line-height: 18px; gap: 10px; }
+.dr.rd-pdf .rd-riesgo-titulo { font-size: 10px; }
+.dr.rd-pdf .rd-sector { font-size: 10.5px; padding: 1px 8px; line-height: 15px; }
 .dr.rd-pdf .rd-caso { padding: 14px; gap: 6px; }
 .dr.rd-pdf .rd-caso-titulo { font-size: 14.5px; line-height: 19px; }
 .dr.rd-pdf .rd-caso-promesa { font-size: 12.5px; line-height: 18px; }

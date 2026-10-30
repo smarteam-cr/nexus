@@ -7,7 +7,7 @@
  */
 import { cn } from "@/lib/cn";
 import { PROCESO_CONSULTIVO, PUNTOS_DEL_ANALISIS } from "@/lib/analizador-venta/criterio";
-import { TEXTO_DEL_VALOR, VALORES, type Cita, type Juicio, type ResultadoDelAnalisis } from "@/lib/analizador-venta/analisis";
+import { TEXTO_DEL_VALOR, VALORES, areaDelJuicio, separarArea, type Cita, type Juicio, type ResultadoDelAnalisis } from "@/lib/analizador-venta/analisis";
 import { quienHabloEnPalabras, type QuienHablo } from "@/lib/analizador-venta/quien-hablo";
 import type { Continuidad } from "@/lib/analizador-venta/revision";
 
@@ -18,7 +18,8 @@ export const fechaDelAnalisis = (iso: string) =>
 export function tonoDelValor(j: Pick<Juicio, "punto" | "valor">): string {
   const lista = VALORES[j.punto];
   const i = j.valor ? lista.indexOf(j.valor) : -1;
-  if (j.valor?.startsWith("sin_") && j.valor !== "sin_explorar") return "bg-surface-muted text-fg-muted";
+  // «Sin guía», «sin escala»: no había con qué. «Sin explorar» y «sin base» sí dicen algo de la reunión.
+  if (j.valor?.startsWith("sin_") && j.valor !== "sin_explorar" && j.valor !== "sin_base") return "bg-surface-muted text-fg-muted";
   if (i === 0) return "bg-success-surface text-success-ink";
   if (i === lista.length - 1 || j.valor === "sin_explorar" || j.valor === "ninguno") return "bg-warn-surface text-warn-ink";
   return "bg-surface-muted text-fg-secondary";
@@ -108,7 +109,8 @@ export function AnalisisCompleto({ r }: { r: ResultadoDelAnalisis }) {
           <h4 className="text-sm font-semibold text-fg">Qué se exploró, de lo que se esperaba en esta sesión</h4>
           <div className="grid gap-3 md:grid-cols-2">
             {juiciosDe("exploracion").map((j, i) => (
-              <JuicioVisto key={i} j={j} titulo={j.dimension ?? undefined} />
+              // Con el área: «Datos» está en Ventas, en Marketing y en Servicio.
+              <JuicioVisto key={i} j={j} titulo={j.dimension ? `${separarArea(j.dimension).nombre}${areaDelJuicio(j) ? ` · ${areaDelJuicio(j)}` : ""}` : undefined} />
             ))}
           </div>
         </div>

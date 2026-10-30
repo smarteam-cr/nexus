@@ -27,8 +27,7 @@
  *
  *   · `formato="pantalla"`: la tarjeta entera, con el interruptor «Ver puntajes» (apagado al abrir), el radar grande y,
  *     en el teléfono (menos de 860 px), el compacto con su lista de dimensiones debajo. El CSS decide cuál se ve.
- *   · `formato="pdf"`: solo el radar grande con las letras de la hoja, sin puntajes, sin interruptor y sin los puntos
- *     grises de los cruces.
+ *   · `formato="pdf"`: solo el radar grande con las letras de la hoja, sin puntajes y sin interruptor.
  *   · Una dimensión con `preguntada: false` va con el eje punteado, sin vértice y «No se preguntó»; con `noLoSe`, «?» en
  *     un aro punteado y «No lo sabías · cuenta como Deficiente». Debajo, una leyenda que solo aparece si hay alguna.
  */
@@ -61,16 +60,20 @@ const C = {
   secundario: "#3d4b63",
   apagado: "#5f6d85",
   marca: "#2d5fb3",
-  eje: "#d6dee9",
-  guia: "#e3e9f2",
+  // La figura en azul y todo lo demás en gris muy suave, como el radar de la aplicación vieja (Elías, 30 oct: «se ve más
+  // limpio»). El fondo del centro es el azul de la figura sobre blanco: la figura sigue por debajo sin cortarse.
+  figura: "#0b58d3",
+  eje: "#e9edf3",
+  guia: "#eef1f6",
+  anillo: "#dde3ec",
+  anilloSinUso: "#eef1f6",
+  etapaSinUso: "#b6c0cf",
   gris: "#c9d3e1",
   noPreguntada: "#a9b5c7",
-  centro: "#f4f7fb",
-  centroBorde: "#edf1f7",
+  centro: "#d8e4f8",
   blanco: "#ffffff",
   frenaFondo: "#fdecec",
   frenaTexto: "#b5342a",
-  baseTexto: "#177a4f",
 };
 export const COLOR_DEL_NIVEL: Record<Letra, string> = {
   D: "#dc2626",
@@ -291,50 +294,34 @@ function SvgDelRadar({
           strokeDasharray={e.preguntada ? undefined : m.rayas.noPreguntada}
         />
       ))}
-      {/* La base (Funcional) punteada y entera; las etapas donde cae la empresa, suaves; las otras, casi transparentes
-          (Elías, 29 oct, como la aplicación vieja: los colores fuertes en etapas que no tenían que ver confundían). */}
+      {/* Funcional, la única referencia con color: verde y punteada. Las otras etapas en gris, y más tenues si la empresa
+          no cae en ellas (Elías, 30 oct, mirando la aplicación vieja). */}
       {d.anillos.map((a) => (
         <polygon
           key={`a${a.letra}`}
           points={puntosSvg(a.puntos)}
           fill="none"
-          stroke={COLOR_DEL_NIVEL[a.letra]}
-          strokeOpacity={a.letra === "F" ? undefined : enElResultado.has(a.letra) ? 0.5 : 0.14}
+          stroke={a.letra === "F" ? COLOR_DEL_NIVEL.F : enElResultado.has(a.letra) ? C.anillo : C.anilloSinUso}
+          strokeOpacity={a.letra === "F" ? 0.6 : undefined}
           strokeWidth={m.trazo.anillo}
           strokeDasharray={a.letra === "F" ? m.rayas.funcional : undefined}
         />
       ))}
-      {m.puntoGris && d.puntosGrises.map(([x, y], i) => <circle key={`p${i}`} cx={f(x)} cy={f(y)} r={m.puntoGris!} fill={C.gris} />)}
-      <g>
-        <rect
-          x={f(d.chipDeLaBase.x0)}
-          y={f(d.chipDeLaBase.y0)}
-          width={m.chipDeLaBase.ancho}
-          height={m.chipDeLaBase.alto}
-          rx={m.chipDeLaBase.alto / 2}
-          fill={C.blanco}
-          stroke={COLOR_DEL_NIVEL.F}
-          strokeWidth={m.chipDeLaBase.trazo}
-        />
-        <text
-          x={f(m.cx)}
-          y={f((d.chipDeLaBase.y0 + d.chipDeLaBase.y1) / 2 + m.chipDeLaBase.baja)}
-          textAnchor="middle"
-          fontSize={m.chipDeLaBase.letra}
-          fontWeight={600}
-          fill={C.baseTexto}
-        >
-          La base
-        </text>
-      </g>
-
       {interactivo &&
         cunasDelRadar(m, d.ejes).map((c) => <polygon key={`z${c.clave}`} className="rde-cuna" data-d={c.clave} points={puntosSvg(c.puntos)} fill="transparent" />)}
 
       {/* La empresa: la figura y los vértices (en la página, crecen desde el centro al abrir: radar-de-una-empresa.css). */}
       <g className="rde-empresa" style={{ transformOrigin: `${f(m.cx)}px ${f(m.cy)}px` }}>
         {d.figura.length > 1 && (
-          <polygon points={puntosSvg(d.figura)} fill={C.tinta} fillOpacity={0.07} stroke={C.tinta} strokeWidth={m.trazo.figura} strokeLinejoin="round" />
+          <polygon
+            className="rde-figura"
+            points={puntosSvg(d.figura)}
+            fill={C.figura}
+            fillOpacity={0.16}
+            stroke={C.figura}
+            strokeWidth={m.trazo.figura}
+            strokeLinejoin="round"
+          />
         )}
         {/* El resalte va del rótulo hasta el vértice de la dimensión, no hasta el centro (como la vieja). Sin vértice
             (no se preguntó), no hay resalte. */}
@@ -356,7 +343,9 @@ function SvgDelRadar({
             );
           })}
         <Capa cual="sin">
-          {vertFrena && <circle cx={f(vertFrena.punto[0])} cy={f(vertFrena.punto[1])} r={m.vertice.halo} fill={COLOR_DEL_NIVEL.D} fillOpacity={0.12} />}
+          {vertFrena && (
+            <circle className="rde-iman" cx={f(vertFrena.punto[0])} cy={f(vertFrena.punto[1])} r={m.vertice.halo} fill={COLOR_DEL_NIVEL.D} fillOpacity={0.12} />
+          )}
           {d.vertices.map((v) =>
             v.noLoSe ? (
               <g key={v.clave} className="rde-vertice" data-d={v.clave}>
@@ -381,7 +370,7 @@ function SvgDelRadar({
                 cx={f(v.punto[0])}
                 cy={f(v.punto[1])}
                 r={v.frena ? m.vertice.rFrena : m.vertice.r}
-                fill={COLOR_DEL_NIVEL[v.nivel]}
+                fill={v.frena ? COLOR_DEL_NIVEL[v.nivel] : C.figura}
                 stroke={C.blanco}
                 strokeWidth={m.vertice.trazo}
               />
@@ -391,7 +380,7 @@ function SvgDelRadar({
         {conPuntajes && (
           <Capa cual="con">
             {vertFrena && m.conPuntaje.halo && (
-              <circle cx={f(vertFrena.punto[0])} cy={f(vertFrena.punto[1])} r={m.conPuntaje.halo} fill={COLOR_DEL_NIVEL.D} fillOpacity={0.12} />
+              <circle className="rde-iman" cx={f(vertFrena.punto[0])} cy={f(vertFrena.punto[1])} r={m.conPuntaje.halo} fill={COLOR_DEL_NIVEL.D} fillOpacity={0.12} />
             )}
             {d.vertices.map((v) => (
               <g key={v.clave} className="rde-vertice" data-d={v.clave}>
@@ -400,7 +389,7 @@ function SvgDelRadar({
                   cy={f(v.punto[1])}
                   r={m.conPuntaje.r}
                   fill={C.blanco}
-                  stroke={COLOR_DEL_NIVEL[v.nivel]}
+                  stroke={v.frena || v.noLoSe ? COLOR_DEL_NIVEL[v.nivel] : C.figura}
                   strokeWidth={v.noLoSe ? m.objetivo.trazo : m.conPuntaje.trazo}
                   strokeDasharray={v.noLoSe ? m.objetivo.raya : undefined}
                 />
@@ -414,8 +403,14 @@ function SvgDelRadar({
       </g>
 
       {/* La flecha de lo que más frena y su objetivo, encima de los vértices: en el teléfono el disco del puntaje la tapaba. */}
+      {/* En la página, la flecha y su aro se mueven con el vértice de lo que más frena cuando el imán lo corre (si no, se
+          despegaban): `data-iman-x/y` es el punto del que toman la fuerza. */}
       {d.objetivo && (
-        <g>
+        <g
+          className={interactivo && vertFrena ? "rde-iman" : undefined}
+          data-iman-x={interactivo && vertFrena ? f(vertFrena.punto[0]) : undefined}
+          data-iman-y={interactivo && vertFrena ? f(vertFrena.punto[1]) : undefined}
+        >
           {d.objetivo.linea && (
             <line
               x1={f(d.objetivo.linea[0][0])}
@@ -449,8 +444,8 @@ function SvgDelRadar({
           y={f(e.y)}
           textAnchor="middle"
           fontSize={m.etapa.letra}
-          fontWeight={600}
-          fill={C.secundario}
+          fontWeight={500}
+          fill={e.letra === "F" || enElResultado.has(e.letra) ? C.apagado : C.etapaSinUso}
           stroke={C.blanco}
           strokeWidth={m.etapa.borde}
           paintOrder="stroke"
@@ -459,20 +454,20 @@ function SvgDelRadar({
         </text>
       ))}
       {/* El centro: el área y, en grande, su nivel (y su puntaje, con «Ver puntajes»). */}
-      <circle cx={m.cx} cy={m.cy} r={m.rCentro} fill={C.centro} stroke={C.centroBorde} strokeWidth={1} />
+      <circle cx={m.cx} cy={m.cy} r={m.rCentro} fill={C.centro} />
       <text x={m.cx} y={m.cy + m.centro.yArea} textAnchor="middle" fontSize={m.centro.area} fontWeight={700} fill={C.tinta}>
         {area}
       </text>
       {m.centro.sub && resultado.nivel && (
         <>
           <Capa cual="sin">
-            <text x={m.cx} y={m.cy + m.centro.ySub} textAnchor="middle" fontSize={m.centro.sub} fill={C.apagado}>
+            <text x={m.cx} y={m.cy + m.centro.ySub} textAnchor="middle" fontSize={m.centro.sub} fill={C.secundario}>
               {nombreDeNivel(resultado.nivel)}
             </text>
           </Capa>
           {conPuntajes && (
             <Capa cual="con">
-              <text x={m.cx} y={m.cy + m.centro.ySub} textAnchor="middle" fontSize={m.centro.sub} fill={C.apagado}>
+              <text x={m.cx} y={m.cy + m.centro.ySub} textAnchor="middle" fontSize={m.centro.sub} fill={C.secundario}>
                 {nombreDeNivel(resultado.nivel)}
                 {puntajeDelArea !== null && (
                   <tspan fill={C.marca} fontWeight={600}>
@@ -502,7 +497,7 @@ function SvgDelRadar({
             cy={f(n.punto[1])}
             r={m.numeroEnLaPunta!.r}
             fill={n.frena ? C.frenaFondo : C.blanco}
-            stroke={n.frena ? C.frenaTexto : n.preguntada ? C.tinta : C.noPreguntada}
+            stroke={n.frena ? C.frenaTexto : n.preguntada ? C.gris : C.noPreguntada}
             strokeWidth={n.frena ? 1.25 : 1}
             strokeDasharray={n.preguntada ? undefined : "2 2"}
           />
@@ -601,8 +596,8 @@ function RotuloDeLaDimension({
           y={f(l.y)}
           textAnchor={r.ancla}
           fontSize={ro.nombre}
-          fontWeight={apagado ? 500 : 600}
-          fill={apagado ? C.apagado : C.tinta}
+          fontWeight={500}
+          fill={apagado ? C.apagado : C.secundario}
         >
           {l.texto}
         </text>

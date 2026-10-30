@@ -10,12 +10,13 @@
  *   · el proceso consultivo de Smarteam como lista (identificar, investigar, conectar, explorar y asesorar), con qué se
  *     espera en cada etapa y las señales de que se hizo o no. ⚠ Es la propuesta de la primera versión: la revisan Elías
  *     y Andrés en Ventas › Reuniones de venta › «El criterio» y se corrige AQUÍ (`VERSION_DEL_CRITERIO` sube);
- *   · los diez puntos que responde el análisis de cada reunión (el punto 3, quién habló, lo calcula Nexus: no la IA);
+ *   · los puntos que responde el análisis de cada reunión (el punto 3, quién habló, lo calcula Nexus: no la IA): los diez
+ *     del plan y, desde el 29 oct (Elías, con Camosa), lo que salió bien y los dos de aterrizar y expandir;
  *   · cómo se le cuenta al agente, con el position statement de Smarteam si existe (K3) o «sin posicionamiento escrito».
  */
 
 /** Sube cuando cambia el criterio: cada análisis guarda con cuál se hizo. */
-export const VERSION_DEL_CRITERIO = "2026-10-25";
+export const VERSION_DEL_CRITERIO = "2026-10-29";
 
 export const ETAPAS = ["identificar", "investigar", "conectar", "explorar", "asesorar"] as const;
 export type EtapaDelProceso = (typeof ETAPAS)[number];
@@ -71,7 +72,10 @@ export const PROCESO_CONSULTIVO: readonly EtapaDelCriterio[] = [
   },
 ];
 
-/** Los diez puntos que responde el análisis de cada reunión (el plan). El 3 lo calcula Nexus. */
+/**
+ * Los puntos que responde el análisis de cada reunión: los diez del plan y, desde el 29 oct, los dos de aterrizar y
+ * expandir (el dolor del área y la base para un caso de uso) y lo que salió bien. El 3 lo calcula Nexus.
+ */
 export const PUNTOS_DEL_ANALISIS = [
   { id: "consultiva", titulo: "Qué tan consultiva fue" },
   { id: "temas", titulo: "De qué se habló: los problemas y resultados del cliente, o licencias, precio y producto" },
@@ -82,7 +86,10 @@ export const PUNTOS_DEL_ANALISIS = [
   { id: "exploracion", titulo: "Qué se exploró y qué quedó sin explorar, por dimensión de la escala" },
   { id: "posicion", titulo: "En qué posición quedó el vendedor: asesor o vendedor de licencias" },
   { id: "siguiente_paso", titulo: "Cuál quedó como siguiente paso, y si tiene fecha y dueño" },
-  { id: "recomendaciones", titulo: "Dos o tres recomendaciones para la siguiente reunión" },
+  { id: "dolor", titulo: "Si se exploró a fondo el dolor del área: qué resultado necesita el cliente y por qué no lo tiene hoy" },
+  { id: "caso_de_uso", titulo: "Si ya hay base para ofrecer un caso de uso ligado a lo que más impacto le causa, o qué falta" },
+  { id: "bien", titulo: "Lo que salió bien, cada cosa con su cita" },
+  { id: "recomendaciones", titulo: "Para mejorar: dos o tres, cada una con su cita" },
 ] as const;
 export type PuntoDelAnalisis = (typeof PUNTOS_DEL_ANALISIS)[number]["id"];
 

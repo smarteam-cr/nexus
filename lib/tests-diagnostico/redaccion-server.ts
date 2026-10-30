@@ -51,12 +51,12 @@ export async function redactarElResultado(o: {
         }),
       ),
     );
-    const redaccion = leerLaRedaccion(respuestas, { escala: o.escala, r: o.r, parse: parseObject, ahora: new Date() });
+    const redaccion = leerLaRedaccion(respuestas, { escala: o.escala, r: o.r, parse: parseObject, ahora: new Date(), industria: o.industria });
     // Lo que se pagó y no pasó la revisión, para saber cuánto se descarta (el texto de la IA no se escribe en el log).
     const esperadas = o.r.dimensiones.filter((d) => d.preguntada && d.nivel).length;
-    const llegaron = Object.values(redaccion?.dimensiones ?? {}).filter((d) => d.lectura).length;
+    const llegaron = Object.values(redaccion?.dimensiones ?? {}).filter((d) => d.impacto).length;
     if (!redaccion?.resumen || llegaron < esperadas) {
-      console.warn(`[tests-diagnostico] redacción incompleta: resumen ${redaccion?.resumen ? "sí" : "no"}, lecturas ${llegaron} de ${esperadas}`);
+      console.warn(`[tests-diagnostico] redacción incompleta: resumen ${redaccion?.resumen ? "sí" : "no"}, impactos ${llegaron} de ${esperadas}`);
     }
     return redaccion;
   } catch (e) {

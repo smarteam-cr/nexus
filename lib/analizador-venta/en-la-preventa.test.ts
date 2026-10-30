@@ -10,7 +10,7 @@ import { alcanceDeLaSesion, type AreaParaElAlcance } from "./alcance";
 import { lecturaDeConjunto, type SesionParaElConjunto } from "./conjunto";
 import type { QuienHablo } from "./quien-hablo";
 import { RevisionSchema } from "./schema";
-import { continuidadDelSiguientePaso, equipoDeLaDimension, loDeLaSesion, loQueFaltoPorEquipo, siguientePasoConFecha } from "./revision";
+import { continuidadDelSiguientePaso, equipoDeLaDimension, loDeLaSesion, loQueFaltaExplorar, siguientePasoConFecha } from "./revision";
 import { atribuirLaReunion, delEquipoQueHablo, mesEnCostaRica, tendenciaPorVendedor, vendedoresAtribuidos, type ReunionParaLaTendencia } from "./tendencia";
 
 const cita = { turno: 3, hablante: "Andrés Pinzón", texto: "¿cuánto les cuesta hoy ese reporte?" };
@@ -28,7 +28,9 @@ const RESULTADO: ResultadoDelAnalisis = {
     j({ punto: "etapa", valor: "se_hizo", etapa: "identificar", citas: [cita] }),
     j({ punto: "siguiente_paso", valor: "sin_duenio", citas: [cita] }),
   ],
+  bien: [],
   recomendaciones: [{ texto: "Pregunta cuánto les cuesta hoy no tener el pronóstico.", citas: [] }],
+  enfoque: null,
 };
 
 const quien = (cliente: number, personas: QuienHablo["personas"] = []): QuienHablo => ({
@@ -43,7 +45,7 @@ describe("S4 · la autoevaluación de la sesión", () => {
   it("resume la sesión: lo explorado, lo que solo se tocó (con su cita), lo que no se tocó y la etapa que se saltó", () => {
     const lo = loDeLaSesion(RESULTADO);
     expect(lo.exploradas).toEqual(["Captación de leads"]);
-    expect(lo.tocadas).toEqual([{ dimension: "Seguimiento de oportunidades", lectura: "Lectura.", citas: [cita] }]);
+    expect(lo.tocadas).toEqual([{ dimension: "Seguimiento de oportunidades", area: null, lectura: "Lectura.", citas: [cita] }]);
     expect(lo.sinExplorar.map((x) => x.dimension)).toEqual(["Pronóstico de ventas"]);
     expect(lo.etapasFlojas.map((e) => [e.etapa, e.valor])).toEqual([["explorar", "se_salto"]]);
     expect(lo.siguientePaso?.valor).toBe("sin_duenio");
@@ -51,7 +53,7 @@ describe("S4 · la autoevaluación de la sesión", () => {
     expect(siguientePasoConFecha({ valor: "sin_fecha" })).toBe(false);
   });
 
-  it("lo que faltó explorar va con su equipo y agrupado por equipo; en cada grupo, lo tocado primero", () => {
+  it("lo que falta explorar: el área de cada dimensión, lo tocado primero, y una dimensión juzgada dos veces sale una vez", () => {
     const areas = [
       { id: "1", nombre: "Ventas", dimensiones: [{ nombre: "Seguimiento de oportunidades" }, { nombre: "Pronóstico", nombreGeneral: "Pronóstico de ventas" }] },
       { id: "2", nombre: "Marketing", dimensiones: [{ nombre: "Medición de campañas" }] },
@@ -66,20 +68,68 @@ describe("S4 · la autoevaluación de la sesión", () => {
     expect(equipoDeLaDimension("Cómo está armado", { equipo: "servicio", areas })).toBe("Servicio");
     expect(equipoDeLaDimension("Tiempo de respuesta", { equipo: "servicio", areas })).toBe("Servicio");
     const lo = {
+      exploradas: [],
+      areasExploradas: [],
+      enfoque: null,
       tocadas: [
-        { dimension: "Medición de campañas", lectura: "Se mencionó.", citas: [cita] },
-        { dimension: "Seguimiento de oportunidades", lectura: "Se mencionó.", citas: [] },
+        { dimension: "Medición de campañas", area: null, lectura: "Se mencionó.", citas: [cita] },
+        { dimension: "Seguimiento de oportunidades", area: null, lectura: "Se mencionó.", citas: [] },
       ],
       // Juzgada dos veces: sale una sola, la tocada.
-      sinExplorar: [{ dimension: "Pronóstico de ventas", lectura: "No se tocó." }, { dimension: "medicion de campañas", lectura: "Otra vez." }],
+      sinExplorar: [
+        { dimension: "Pronóstico de ventas", area: null, lectura: "No se tocó." },
+        { dimension: "medicion de campañas", area: null, lectura: "Otra vez." },
+      ],
     };
-    const g = loQueFaltoPorEquipo(lo, (d) => equipoDeLaDimension(d, { equipo: null, areas }));
-    expect(g.map((x) => [x.equipo, x.items.map((i) => [i.dimension, i.estado])])).toEqual([
-      ["Marketing", [["Medición de campañas", "tocado"]]],
-      ["Ventas", [["Seguimiento de oportunidades", "tocado"], ["Pronóstico de ventas", "sin_explorar"]]],
+    const f = loQueFaltaExplorar(lo, (d) => equipoDeLaDimension(d, { equipo: null, areas }));
+    // Sin el foco del análisis (los de antes del 29 oct), el foco son las áreas donde algo se tocó con cita.
+    expect(f.foco).toEqual(["Marketing", "Ventas"]);
+    expect(f.items.map((i) => [i.dimension, i.area, i.estado])).toEqual([
+      ["Medición de campañas", "Marketing", "tocado"],
+      ["Seguimiento de oportunidades", "Ventas", "tocado"],
+      ["Pronóstico de ventas", "Ventas", "sin_explorar"],
     ]);
-    expect(g[0].items[0].cita).toEqual(cita);
-    expect(g[1].items[1].cita).toBeNull();
+    expect(f.items[0].cita).toEqual(cita);
+    expect(f.items[2].cita).toBeNull();
+    expect(f.sinTocar).toEqual([]);
+  });
+
+  it("lo que falta explorar va enfocado: solo el área a la que fueron las preguntas; del resto, el nombre (Camosa, 29 oct)", () => {
+    // Un análisis de antes, con dimensiones de tres áreas y el área entre paréntesis: el foco sale de lo que se tocó.
+    const viejo = loDeLaSesion({
+      ...RESULTADO,
+      juicios: [
+        j({ punto: "exploracion", valor: "explorado", dimension: "Priorización de interesados (Ventas)", citas: [cita] }),
+        j({ punto: "exploracion", valor: "tocado", dimension: "Datos (Ventas)", citas: [cita] }),
+        j({ punto: "exploracion", valor: "sin_explorar", dimension: "Equipo y Gobierno (Ventas)", porAusencia: true }),
+        j({ punto: "exploracion", valor: "sin_explorar", dimension: "Datos (Marketing)", porAusencia: true }),
+        j({ punto: "exploracion", valor: "sin_explorar", dimension: "Datos (Servicio)", porAusencia: true }),
+      ],
+    });
+    expect(viejo.exploradas).toEqual(["Priorización de interesados"]);
+    const f = loQueFaltaExplorar(viejo, () => null);
+    expect(f.foco).toEqual(["Ventas"]);
+    expect(f.items.map((i) => `${i.dimension}/${i.estado}`)).toEqual(["Datos/tocado", "Equipo y Gobierno/sin_explorar"]);
+    expect(f.sinTocar).toEqual(["Marketing", "Servicio"]);
+    // Con el foco del análisis nuevo, manda ese.
+    const nuevo = loQueFaltaExplorar({ ...viejo, enfoque: { areas: ["Ventas"], sinTocar: ["Marketing"], lectura: "Con Laura, gerente comercial." } }, () => null);
+    expect(nuevo.sinTocar).toEqual(["Marketing"]);
+  });
+
+  it("un análisis viejo sin el área en el nombre: lo explorado a fondo también cuenta para el foco (no dice «no se tocó Ventas»)", () => {
+    const viejo = loDeLaSesion({
+      ...RESULTADO,
+      juicios: [
+        j({ punto: "exploracion", valor: "explorado", dimension: "Proceso de venta", citas: [cita] }),
+        j({ punto: "exploracion", valor: "sin_explorar", dimension: "Pronóstico", porAusencia: true }),
+        j({ punto: "exploracion", valor: "sin_explorar", dimension: "Medición de campañas", porAusencia: true }),
+      ],
+    });
+    const areaDe = (d: string) => ({ "Proceso de venta": "Ventas", Pronóstico: "Ventas", "Medición de campañas": "Marketing" })[d] ?? null;
+    const f = loQueFaltaExplorar(viejo, areaDe);
+    expect(f.foco).toEqual(["Ventas"]);
+    expect(f.items.map((i) => i.dimension)).toEqual(["Pronóstico"]);
+    expect(f.sinTocar).toEqual(["Marketing"]);
   });
 
   it("las rutas validan el cuerpo: los comentarios se fueron y confirmar pide el análisis que se leyó", () => {
@@ -201,6 +251,25 @@ describe("S7 · la tendencia de cada vendedor", () => {
     expect(andres.porMes[1].exploro).toBeNull();
     expect(liz.reuniones).toBe(1);
     expect(liz.hablo).toBeNull();
+  });
+
+  it("«cuánto exploró» cuenta solo el área de la sesión: un análisis viejo con tres áreas y uno nuevo miden lo mismo", () => {
+    const habla = quien(70, [{ nombre: "Andrés", correo: ANDRES, lado: "smarteam", palabras: 30, porcentaje: 30 }]);
+    // Viejo: el área en el nombre, sin foco guardado; Marketing y Servicio no se tocaron.
+    const viejo: ResultadoDelAnalisis = {
+      ...RESULTADO,
+      juicios: [
+        j({ punto: "exploracion", valor: "explorado", dimension: "Datos (Ventas)", citas: [cita] }),
+        j({ punto: "exploracion", valor: "sin_explorar", dimension: "Equipo (Ventas)", porAusencia: true }),
+        ...["Datos", "Equipo", "Canales"].flatMap((d) => [
+          j({ punto: "exploracion", valor: "sin_explorar", dimension: `${d} (Marketing)`, porAusencia: true }),
+          j({ punto: "exploracion", valor: "sin_explorar", dimension: `${d} (Servicio)`, porAusencia: true }),
+        ]),
+      ],
+    };
+    const [andres] = tendenciaPorVendedor([{ fecha: "2026-10-20T15:00:00Z", vendedores: [ANDRES], conTranscripcion: true, quienHablo: habla, analisis: { resultado: viejo, confirmado: true } }]);
+    // 1 de las 2 de Ventas (no 1 de 8).
+    expect(andres.exploro).toBe(50);
   });
 
   it("una transcripción sin nadie del equipo reconocido no cuenta para «cuánto habló» (no es un 0 % del vendedor)", () => {

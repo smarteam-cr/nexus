@@ -51,11 +51,18 @@ describe("redactar el resultado al terminar el test", () => {
 
   it("si una parte falla, las otras se quedan", async () => {
     create.mockImplementation((pedido: { system: string }) =>
-      pedido.system.includes('{"resumen"') ? Promise.reject(new Error("se cayó")) : Promise.resolve(texto({ dimensiones: [{ id: area.dimensiones[0].id, lectura: "Hay etapas.", prioridad: "Escribe el proceso." }] })),
+      pedido.system.includes('{"resumen"') ? Promise.reject(new Error("se cayó")) : Promise.resolve(texto({ dimensiones: [{ id: area.dimensiones[0].id, impacto: "Hay etapas.", prioridad: "Escribe el proceso." }] })),
     );
     const x = await redactarElResultado(entrada);
     expect(x?.resumen).toBeNull();
-    expect(x?.dimensiones[area.dimensiones[0].id]).toEqual({ lectura: "Hay etapas.", prioridad: "Escribe el proceso." });
+    expect(x?.dimensiones[area.dimensiones[0].id]).toEqual({ impacto: "Hay etapas.", prioridad: "Escribe el proceso." });
+  });
+
+  it("⛔ la revisión recibe la industria: un resumen que la nombra se descarta", async () => {
+    create.mockResolvedValue(texto({ resumen: "En turismo, cada reserva depende de quien la toma.", dimensiones: [] }));
+    expect(await redactarElResultado(entrada)).toBeNull();
+    create.mockResolvedValue(texto({ resumen: "Cada reserva depende de quien la toma.", dimensiones: [] }));
+    expect((await redactarElResultado(entrada))?.resumen).toBe("Cada reserva depende de quien la toma.");
   });
 
   it("⛔ nunca rompe el test: si todo falla, sin redacción (la página usa los datos)", async () => {
@@ -72,11 +79,11 @@ describe("redactar el resultado al terminar el test", () => {
   });
 
   it("⛔ lo que devuelve son solo textos: ningún número del resultado cambia", async () => {
-    create.mockResolvedValue(texto({ resumen: "El área opera a medias.", nivel: "O", puntaje: 99, dimensiones: [{ id: area.dimensiones[0].id, nivel: "O", puntaje: 99, lectura: "Bien." }] }));
+    create.mockResolvedValue(texto({ resumen: "El área opera a medias.", nivel: "O", puntaje: 99, dimensiones: [{ id: area.dimensiones[0].id, nivel: "O", puntaje: 99, impacto: "Bien." }] }));
     const antes = JSON.stringify(r);
     const x = await redactarElResultado(entrada);
-    expect(Object.keys(x!).sort()).toEqual(["at", "dimensiones", "modelo", "resumen"]);
-    expect(Object.keys(x!.dimensiones[area.dimensiones[0].id]).sort()).toEqual(["lectura", "prioridad"]);
+    expect(Object.keys(x!).sort()).toEqual(["at", "dimensiones", "modelo", "resumen", "v"]);
+    expect(Object.keys(x!.dimensiones[area.dimensiones[0].id]).sort()).toEqual(["impacto", "prioridad"]);
     expect(JSON.stringify(r)).toBe(antes);
   });
 });

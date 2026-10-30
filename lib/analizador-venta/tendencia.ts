@@ -18,7 +18,7 @@
  * evaluación sin esa confirmación (las decisiones del plan). No hay puntaje ni ranking: cada vendedor se compara con sus
  * propios meses.
  */
-import type { ResultadoDelAnalisis } from "./analisis";
+import { exploracionEnFoco, type ResultadoDelAnalisis } from "./analisis";
 import type { QuienHablo } from "./quien-hablo";
 import { vendedoresDeLaReunion } from "./reglas";
 import { siguientePasoConFecha } from "./revision";
@@ -90,7 +90,9 @@ export function cifras(reuniones: readonly ReunionParaLaTendencia[], correo: str
   const conHabla = reuniones.filter((r) => quienHabloSirve(r.quienHablo));
 
   const confirmadas = reuniones.filter((r) => r.analisis?.confirmado && r.analisis.resultado).map((r) => r.analisis!.resultado!);
-  const dimensiones = confirmadas.flatMap((x) => x.juicios.filter((j) => j.punto === "exploracion" && j.dimension));
+  // Solo el área a la que fueron las preguntas (29 oct): un análisis viejo juzgaba hasta 24 dimensiones de tres áreas y
+  // uno nuevo solo las del foco; contadas igual, el porcentaje no salta solo de un mes al otro.
+  const dimensiones = confirmadas.flatMap((x) => exploracionEnFoco({ juicios: x.juicios, enfoque: x.enfoque ?? null }));
   return {
     reuniones: reuniones.length,
     conTranscripcion: reuniones.filter((r) => r.conTranscripcion).length,
