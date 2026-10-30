@@ -16,8 +16,6 @@ import { buildKickoffConfig, buildKickoffSections } from "@/components/canvas/ki
 import { buildDiagnosticoConfig, buildDiagnosticoSections, ctxDelDiagnostico } from "@/components/canvas/diagnostico-landing-adapter";
 import { buildPlanificacionConfig, buildPlanificacionSections } from "@/components/canvas/planificacion-landing-adapter";
 import { buildExploracionConfig, buildExploracionSections } from "@/components/canvas/exploracion-landing-adapter";
-import { buildDesarrolloConfig, buildDesarrolloSections } from "@/components/canvas/desarrollo-landing-adapter";
-import { buildEntregaConfig, buildEntregaSections } from "@/components/canvas/entrega-landing-adapter";
 import { buildAdopcionConfig, buildAdopcionSections } from "@/components/canvas/adopcion-landing-adapter";
 import { buildIntegracionConfig, buildIntegracionSections } from "@/components/canvas/integracion-landing-adapter";
 import { TIPO_INTEGRACION_TECNICA, TIPO_PLAN_DE_ADOPCION } from "@/lib/artefactos/tipos";
@@ -44,8 +42,6 @@ const ADAPTADORES: Readonly<Record<string, AdaptadorDelTipo>> = {
   },
   planning: { config: buildPlanificacionConfig, sections: buildPlanificacionSections, palette: "internal" },
   exploration: { config: buildExploracionConfig, sections: buildExploracionSections, palette: "internal" },
-  "tech-requirements": { config: buildDesarrolloConfig, sections: buildDesarrolloSections, palette: "brand" },
-  delivery: { config: buildEntregaConfig, sections: buildEntregaSections, palette: "brand" },
   [TIPO_PLAN_DE_ADOPCION]: { config: buildAdopcionConfig, sections: buildAdopcionSections, palette: "brand" },
   [TIPO_INTEGRACION_TECNICA]: { config: buildIntegracionConfig, sections: buildIntegracionSections, palette: "brand" },
 };

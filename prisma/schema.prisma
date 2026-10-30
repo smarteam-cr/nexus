@@ -1431,6 +1431,7 @@ model ProjectCanvas {
   // ("clientId", slug) WHERE "clientId" IS NOT NULL AND slug IS NOT NULL (scripts/sql/2026-10-25-empresa-parte-2.sql).
 
   @@index([projectId])
+  @@index([projectId, tipoArtefacto])
   @@index([businessCaseId])
   @@index([clientId])
 }

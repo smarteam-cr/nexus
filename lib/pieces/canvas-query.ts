@@ -53,7 +53,10 @@ export function canvasOfNested(
  * el dropdown sin que nadie lo pidiera.
  */
 export function canvasNotOf(slug: string): Prisma.ProjectCanvasWhereInput {
-  return { NOT: canvasOf(slug) };
+  /* ⛔ Sin `NOT: canvasOf(slug)`: para una fila con slug NULL, SQL evalúa NOT (NULL OR FALSE) = NULL y la descarta. Así
+     quedaban afuera todas las filas sin slug: las copias de un tipo (etapa V3) y los canvases sueltos del CSE. */
+  const legacy = pieceBySlug(slug)?.legacyNames ?? [];
+  return { OR: [{ slug: { not: slug } }, legacy.length ? { slug: null, name: { notIn: legacy } } : { slug: null }] };
 }
 
 /**

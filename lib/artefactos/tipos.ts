@@ -15,7 +15,7 @@
  *
  * Agregar un tipo, quitar uno o cambiar lo que admite es decisión de producto: `tipos.test.ts` congela el set.
  */
-import { entregableDe, type PlantillaDeEntregable } from "@/lib/entregables/registro";
+import { CLAVE_DE_LA_PLANTILLA, entregableDe, type PlantillaDeEntregable } from "@/lib/entregables/registro";
 
 /** De quién puede ser un documento de este tipo. */
 export type DuenoDelArtefacto = "proyecto" | "empresa";
@@ -353,6 +353,19 @@ export function plantillasDelTipo(id: string): readonly PlantillaDeEntregable[] 
   if (!t) return [];
   if (t.plantillas) return t.plantillas;
   return entregableDe(id)?.plantillas ?? [];
+}
+
+/**
+ * La plantilla con que se armó un documento, leída de su entry `__plantilla`, para CUALQUIER tipo (`plantillaDelDocumento`
+ * de lib/entregables/registro.ts solo conoce los entregables, no el plan de adopción ni la integración técnica). Sin
+ * anotar, la de siempre (la primera): así se lee un documento de antes de las plantillas.
+ */
+export function plantillaGuardadaDelTipo(id: string, sections: unknown): { plantilla: PlantillaDeEntregable | null; guardada: boolean } {
+  const e = (Array.isArray(sections) ? sections : []).find(
+    (x): x is { plantilla?: unknown } => !!x && typeof x === "object" && (x as { key?: unknown }).key === CLAVE_DE_LA_PLANTILLA,
+  );
+  const guardada = typeof e?.plantilla === "string" ? plantillaDelTipo(id, e.plantilla) : null;
+  return guardada ? { plantilla: guardada, guardada: true } : { plantilla: plantillasDelTipo(id)[0] ?? null, guardada: false };
 }
 
 /** Una plantilla de un tipo. Sin id, la recomendada o la de siempre. Un id ajeno es null (quien llama lo rechaza). */

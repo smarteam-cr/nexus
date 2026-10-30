@@ -11,11 +11,16 @@ import { z } from "zod";
 import { guardAccessToProject } from "@/lib/auth/api-guards";
 import { cuerpoInvalido } from "@/lib/api/cuerpo-invalido";
 import { triggeredByEmail } from "@/lib/agents/triggered-by";
-import { archivarCopia, ErrorDelArtefacto, marcarTerminado, renombrarArtefacto } from "@/lib/artefactos/copias-server";
+import { archivarCopia, ErrorDelArtefacto, marcarTerminado, reactivarCopia, renombrarArtefacto } from "@/lib/artefactos/copias-server";
 
 type Params = Promise<{ projectId: string; canvasId: string }>;
 
-const cuerpo = z.union([z.strictObject({ nombre: z.string().min(1).max(200) }), z.strictObject({ terminado: z.boolean() })]);
+const cuerpo = z.union([
+  z.strictObject({ nombre: z.string().min(1).max(200) }),
+  z.strictObject({ terminado: z.boolean() }),
+  // Deshacer archivar. Solo `false`: archivar es el DELETE.
+  z.strictObject({ archivado: z.literal(false) }),
+]);
 
 function respuestaDeError(e: unknown, que: string) {
   if (e instanceof ErrorDelArtefacto) return NextResponse.json({ error: e.message }, { status: e.status });
@@ -32,6 +37,10 @@ export async function PATCH(req: NextRequest, { params }: { params: Params }) {
   if (!parsed.success) return cuerpoInvalido(parsed.error);
   try {
     if ("nombre" in parsed.data) return NextResponse.json(await renombrarArtefacto(projectId, canvasId, parsed.data.nombre));
+    if ("archivado" in parsed.data) {
+      await reactivarCopia(projectId, canvasId);
+      return NextResponse.json({ ok: true });
+    }
     return NextResponse.json(await marcarTerminado(projectId, canvasId, parsed.data.terminado, await triggeredByEmail()));
   } catch (e) {
     return respuestaDeError(e, "editar");

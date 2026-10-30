@@ -50,6 +50,7 @@ const NO_INVENTES =
 export const INTEGRACION_SECTION_DEFS: BCSectionDef[] = [
   {
     ...prestada("requerimiento"),
+    label: "Integración técnica",
     eyebrow: "Integración técnica",
     agentHint: "Título de la integración + una bajada de qué conecta con qué + chips de los sistemas.",
     brief:

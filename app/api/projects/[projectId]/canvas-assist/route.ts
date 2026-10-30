@@ -29,6 +29,8 @@ import { resolvePipeline } from "@/lib/projects/kind";
 import { servicioDelProyecto, servicioParaElKickoff } from "@/lib/servicios/catalogo";
 import { triggeredByEmail } from "@/lib/agents/triggered-by";
 import { fuentesDelDiagnostico } from "@/lib/canvas/diagnostico-fuentes";
+import { conContextoDeIA } from "@/lib/ai/contexto-de-corrida";
+import { docBriefFrom } from "@/lib/business-cases/section-briefs";
 import { documentoAprobado, MENSAJE_APROBADO } from "@/lib/canvas/estado-del-documento-servidor";
 
 const bodySchema = z.object({
@@ -56,6 +58,7 @@ export async function POST(req: NextRequest, { params }: { params: Params }) {
       slug: true,
       // Una COPIA de un tipo (etapa V3, docs/artefactos-plan.md) se mejora con el documento de su tipo.
       tipoArtefacto: true,
+      sections: true,
       canvasSections: {
         orderBy: { order: "asc" },
         select: { key: true, blocks: { orderBy: { order: "asc" }, select: { blockType: true, data: true } } },
@@ -163,7 +166,11 @@ export async function POST(req: NextRequest, { params }: { params: Params }) {
   const esDiagnostico = tipo === "diagnosis";
   const context =
     esDiagnostico
-      ? await fuentesDelDiagnostico(projectId, { paraElAssist: true })
+      ? await fuentesDelDiagnostico(projectId, {
+          paraElAssist: true,
+          // Una copia obedece SUS instrucciones, no las del documento de siempre.
+          ...(canvas.tipoArtefacto ? { instruccionesDeLaCopia: docBriefFrom(canvas.sections) ?? "" } : {}),
+        })
       : [
           `Empresa: ${project?.client.name ?? "—"} · Industria: ${project?.client.industry ?? "No especificada"}`,
           delServicio ? servicioParaElKickoff(delServicio) : "",
@@ -187,18 +194,32 @@ export async function POST(req: NextRequest, { params }: { params: Params }) {
   });
 
   try {
-    const result = await runDocumentAssist({
-      docLabel: doc.docLabel,
-      systemPrompt,
-      sections,
-      instruction,
-      context,
-      // Mismo gate que la generación: el requerimiento técnico (brandVoice:false)
-      // no lleva voz comercial; el kickoff sí (lo lee el cliente).
-      brandVoice: doc.tpl.brandVoice !== false,
-      // El diagnóstico lleva lo que se dijo en las reuniones: sin búsqueda web (ver arriba).
-      maxWebSearches: esDiagnostico ? 0 : 3,
-    });
+    const quien = await triggeredByEmail();
+    /* En el medidor, con su agente, su cliente y quien lo pidió: sin esto el gasto no se le carga a nadie, y el clic de una
+       persona cuenta como gasto automático. */
+    const result = await conContextoDeIA(
+      {
+        agentSlug: doc.agentId ?? `artefacto:${tipo}`,
+        agentRunId: run.id,
+        clientId: project?.clientId ?? null,
+        projectId,
+        triggeredByEmail: quien,
+        origen: "canvas-assist",
+      },
+      () =>
+        runDocumentAssist({
+          docLabel: doc.docLabel,
+          systemPrompt,
+          sections,
+          instruction,
+          context,
+          // Mismo gate que la generación: el requerimiento técnico (brandVoice:false)
+          // no lleva voz comercial; el kickoff sí (lo lee el cliente).
+          brandVoice: doc.tpl.brandVoice !== false,
+          // El diagnóstico lleva lo que se dijo en las reuniones: sin búsqueda web (ver arriba).
+          maxWebSearches: esDiagnostico ? 0 : 3,
+        }),
+    );
     await prisma.agentRun.update({
       where: { id: run.id },
       data: { status: "DONE", output: JSON.stringify(result) },

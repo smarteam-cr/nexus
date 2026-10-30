@@ -15,7 +15,7 @@ import LandingView, { type LandingSectionData } from "@/components/landing/Landi
 import type { LandingContext } from "@/components/landing/types";
 import { useCanvasSections } from "@/components/canvas/useCanvasSections";
 import DocumentAssist from "@/components/ai/DocumentAssist";
-import { Alert, Button, Input } from "@/components/ui";
+import { Alert, Button, ConfirmDialog, Input } from "@/components/ui";
 import { useToast } from "@/components/ui/Toast";
 import { adaptadorDelTipo } from "./adaptadores";
 import { tipoDeArtefacto } from "@/lib/artefactos/tipos";
@@ -50,6 +50,30 @@ export default function ArtefactoWorkspace({
   const [instrucciones, setInstrucciones] = useState("");
   const base = `/api/projects/${projectId}/artefactos/${canvasId}/generar`;
   const vigilando = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [confirmando, setConfirmando] = useState(false);
+  const [marca, setMarca] = useState<Pick<LandingContext, "clientName" | "clientLogoUrl" | "clientLogoDarkUrl" | "clientLogoScale"> | null>(null);
+
+  // El nombre y el logo del cliente: los mismos que abre el enlace (quien escribe ve lo que se comparte).
+  useEffect(() => {
+    void fetch(`/api/projects/${projectId}/client-logo`)
+      .then((r) => (r.ok ? (r.json() as Promise<{ clientName?: string; logoUrl?: string | null; logoDarkUrl?: string | null; logoScale?: number | null }>) : null))
+      .then((j) => {
+        if (j) setMarca({ clientName: j.clientName ?? clientName, clientLogoUrl: j.logoUrl ?? null, clientLogoDarkUrl: j.logoDarkUrl ?? null, clientLogoScale: j.logoScale ?? null });
+      })
+      .catch(() => {});
+  }, [projectId, clientName]);
+
+  /* Lo que hay que hacer al terminar una corrida, en un ref: `cs` es un objeto nuevo en cada render, y con él en las
+     dependencias el efecto de abajo corría en cada render, pedía sin parar y borraba el intervalo antes de ver el fin. */
+  const alTerminar = useRef<() => void>(() => {});
+  useEffect(() => {
+    alTerminar.current = () => {
+      void cs.refetch();
+      setNonce((n) => n + 1);
+      onGenerado?.();
+      toast.success(`Listo: ${t?.conArticulo ?? "el documento"} quedó escrito. Revísalo antes de compartirlo.`);
+    };
+  });
 
   const leerCorrida = useCallback(async (): Promise<Corrida | null> => {
     const r = await fetch(base).catch(() => null);
@@ -66,16 +90,11 @@ export default function ArtefactoWorkspace({
         if (c && c.estado !== "RUNNING") {
           if (vigilando.current) clearInterval(vigilando.current);
           vigilando.current = null;
-          if (c.estado === "DONE") {
-            void cs.refetch();
-            setNonce((n) => n + 1);
-            onGenerado?.();
-            toast.success(`Listo: ${t?.conArticulo ?? "el documento"} quedó escrito. Revísalo antes de compartirlo.`);
-          }
+          if (c.estado === "DONE") alTerminar.current();
         }
       });
     }, 3000);
-  }, [cs, leerCorrida, onGenerado, t, toast]);
+  }, [leerCorrida]);
 
   // Al abrir, ¿ya se estaba generando? (otra pestaña, o se recargó a mitad).
   useEffect(() => {
@@ -114,7 +133,10 @@ export default function ArtefactoWorkspace({
       hidden: s.hidden === true,
     }));
   }, [adaptador, cs.sections]);
-  const ctx: LandingContext = useMemo(() => ({ clientName, ...(adaptador?.ctx?.(sections) ?? {}) }), [adaptador, clientName, sections]);
+  const ctx: LandingContext = useMemo(
+    () => ({ clientName, ...(marca ?? {}), ...(adaptador?.ctx?.(sections) ?? {}) }),
+    [adaptador, clientName, marca, sections],
+  );
   const conDeLaIa = cs.sections.some((s) => s.blocks.some((b) => b.source === "AGENT"));
   const conAlgo = cs.sections.some((s) => s.key !== "cierre" && s.blocks.length > 0);
   const generando = corrida?.estado === "RUNNING";
@@ -144,7 +166,9 @@ export default function ArtefactoWorkspace({
         ) : (
           <>
             <span className="text-fg-secondary">
-              {conDeLaIa ? "Regenerar reescribe lo que escribió la IA (queda una foto de antes en las versiones)." : `La IA escribe ${t?.conArticulo ?? "el documento"} con el handoff, las reuniones y los demás documentos del proyecto.`}
+              {conDeLaIa
+                ? "Regenerar reescribe las secciones que escribe la IA, también lo que corregiste a mano. Queda una foto de antes en las versiones."
+                : `La IA escribe ${t?.conArticulo ?? "el documento"} con el handoff, las reuniones y los demás documentos del proyecto.`}
             </span>
             <Input
               value={instrucciones}
@@ -154,12 +178,23 @@ export default function ArtefactoWorkspace({
               aria-label="Instrucciones para esta generación"
               className="min-w-[220px] flex-1 text-xs"
             />
-            <Button size="xs" variant={conDeLaIa ? "secondary" : "primary"} onClick={() => void generar()}>
+            <Button size="xs" variant={conDeLaIa ? "secondary" : "primary"} onClick={() => (conAlgo ? setConfirmando(true) : void generar())}>
               {conDeLaIa ? "Regenerar con IA" : "Generar con IA"}
             </Button>
           </>
         )}
       </div>
+      <ConfirmDialog
+        open={confirmando}
+        title="¿Regenerar este documento?"
+        description="La IA reescribe sus secciones, también lo que corregiste a mano. Lo de antes queda en las versiones, de donde puedes traerlo."
+        confirmLabel="Regenerar"
+        onCancel={() => setConfirmando(false)}
+        onConfirm={() => {
+          setConfirmando(false);
+          void generar();
+        }}
+      />
       {corrida?.estado === "ERROR" && corrida.error && <Alert variant="danger">{corrida.error}</Alert>}
       {cs.error && (
         <Alert variant="danger" onDismiss={() => cs.clearError()}>

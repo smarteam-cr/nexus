@@ -9,7 +9,7 @@ import { describe, expect, it, vi } from "vitest";
 vi.mock("server-only", () => ({}));
 
 import { prisma } from "@/lib/db/prisma";
-import { compartirArtefacto, dejarDeCompartirArtefacto, estadoDelEnlace } from "./compartir-server";
+import { compartirArtefacto, dejarDeCompartirArtefacto, esDocumentoDelProyecto, estadoDelEnlace } from "./compartir-server";
 import { artefactoParaElToken } from "@/lib/external/artefacto-view";
 import { documentoDeLaEmpresaParaElToken } from "@/lib/external/documento-de-la-empresa-view";
 import { compartirDocumentoDeLaEmpresa, crearDocumentoDeLaEmpresa } from "@/lib/clients/documentos-de-la-empresa-compartir";
@@ -150,6 +150,49 @@ describe("el enlace propio de un documento del proyecto", () => {
     expect(await artefactoParaElToken(token)).toBeNull();
     expect(await documentoDeLaEmpresaParaElToken(token)).toBeNull();
     expect((await INV64.correr(prisma, new Date())).ok).toBe(false);
+    // La puerta de la ruta (GET y DELETE): el documento de B no es del proyecto de A, y A no lo puede apagar.
+    expect(await esDocumentoDelProyecto(a.projectId, deB)).toBe(false);
+    await dejarDeCompartirArtefacto(deB, a.projectId);
+    expect((await prisma.accesoAlDocumento.findUniqueOrThrow({ where: { canvasId: deB } })).revokedAt).toBeNull();
+  });
+
+  it("un proyecto de prueba no se comparte, y uno que pasa a serlo deja de abrir", async () => {
+    const { clientId, projectId } = await proyecto("Prueba V4");
+    const c = await documento(projectId, { tipoArtefacto: "planning", name: "Planificación", secciones: [{ key: "pipelines", texto: "x" }] });
+    const { enlace } = await compartirArtefacto({ projectId, clientId, canvasId: c, porEmail: null });
+    expect(await artefactoParaElToken(tokenDe(enlace))).not.toBeNull();
+
+    await prisma.project.update({ where: { id: projectId }, data: { esPrueba: true } });
+    expect(await artefactoParaElToken(tokenDe(enlace))).toBeNull();
+    await dejarDeCompartirArtefacto(c, projectId);
+    await expect(compartirArtefacto({ projectId, clientId, canvasId: c, porEmail: null })).rejects.toMatchObject({ status: 409 });
+  });
+
+  it("la entrega no se comparte por este enlace: guarda en su Json lo que el cliente no ve", async () => {
+    const { clientId, projectId } = await proyecto("Entrega V4");
+    const c = await documento(projectId, { slug: "delivery", name: "Entrega", secciones: [{ key: "logros", texto: "x" }] });
+    await expect(compartirArtefacto({ projectId, clientId, canvasId: c, porEmail: null })).rejects.toMatchObject({ status: 400 });
+  });
+
+  it("el kickoff de siempre sale con los horarios que eligió el cliente, y las ocultas fijas viajan", async () => {
+    const { clientId, projectId } = await proyecto("Horarios V4");
+    const k = await documento(projectId, {
+      slug: "kickoff",
+      name: "Kickoff",
+      secciones: [{ key: "horarios", texto: "semilla" }],
+    });
+    await prisma.projectCanvas.update({ where: { id: k }, data: { sections: [{ key: "cierre", label: "Cierre", hidden: true }] } });
+    const { enlace } = await compartirArtefacto({ projectId, clientId, canvasId: k, porEmail: null });
+    const vista = await artefactoParaElToken(tokenDe(enlace));
+    expect(vista?.ocultas).toContain("cierre");
+    expect(vista?.rows.map((r) => r.key)).toEqual(["horarios"]);
+  });
+
+  it("un diagnóstico compartido lleva la línea base y la meta de sus resultados, solo esos campos", async () => {
+    const { clientId, projectId } = await proyecto("Resultados V4");
+    const d = await documento(projectId, { tipoArtefacto: "diagnosis", name: "Diagnóstico de marketing", secciones: [{ key: "objetivos", texto: "x" }] });
+    const { enlace } = await compartirArtefacto({ projectId, clientId, canvasId: d, porEmail: null });
+    expect((await artefactoParaElToken(tokenDe(enlace)))?.resultados).toEqual([]);
   });
 
   it("el documento de la empresa sigue abriendo su foto como antes, y no por la rama del proyecto", async () => {

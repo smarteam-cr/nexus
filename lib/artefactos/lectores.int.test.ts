@@ -4,11 +4,16 @@
  * terminada primero; una copia archivada no se lee; `canvasOf` sigue devolviendo la de siempre; y la posición en la escala
  * sale del diagnóstico terminado. Correr con la base local: `npx vitest run --project integration lib/artefactos/lectores.int.test.ts`.
  */
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+vi.mock("server-only", () => ({}));
+
 import { prisma } from "@/lib/db/prisma";
 import { canvasOf } from "@/lib/pieces/canvas-query";
 import { loadCanvasContext } from "@/lib/canvas/load-canvas-context";
 import { posicionDelDiagnostico } from "@/lib/escala/contexto";
+import { desafioYObjetivosDelDiagnostico } from "@/lib/canvas/entrega-generate";
+import { nivelesDeEscala } from "@/lib/carga/queries";
 import { artefactosDelTipo } from "./lectores-server";
 import { COMO_LEER_VARIAS_COPIAS } from "./copias";
 
@@ -38,6 +43,43 @@ async function documento(
   await prisma.canvasBlock.create({ data: { sectionId: s.id, blockType: "CARD", data: o.data, order: 0, source: "HUMAN", status: "CONFIRMED" } });
   return canvas.id;
 }
+
+describe("una copia en blanco y los lectores de un valor", () => {
+  it("⛔ una copia recién creada (solo su cierre sembrado) no cambia lo que lee el agente", async () => {
+    const p = await proyecto();
+    await documento(p.id, { slug: "diagnosis", name: "Diagnóstico", key: "situacion_actual", label: "Situación actual", data: { intro: "Venden por WhatsApp." } });
+    await documento(p.id, { tipoArtefacto: "diagnosis", name: "En blanco", key: "cierre", label: "Cierre", data: { headline: "Sigamos" } });
+    expect(await loadCanvasContext(p.id, "diagnosis", { onlyConfirmed: false })).toBe("[Sección: Situación actual]\nintro: Venden por WhatsApp.");
+  });
+
+  it("una copia de exploración se lee junto a la exploración viva; sin copias, la viva tal cual", async () => {
+    const p = await proyecto();
+    await documento(p.id, { tipoArtefacto: "exploration", name: "Explorar Marketing", terminadoEn: new Date(), key: "ya_sabemos", label: "Lo que ya sabemos", data: { intro: "Compran por feria." } });
+    // Sin exploración viva ni guía: las copias, por el camino de siempre.
+    expect(await loadCanvasContext(p.id, "exploration", { onlyConfirmed: false })).toContain("Compran por feria.");
+  });
+
+  it("el desafío que retoma la entrega: una copia terminada gana; una copia vacía no tapa al de siempre", async () => {
+    const p = await proyecto();
+    await documento(p.id, { slug: "diagnosis", name: "Diagnóstico", key: "desafio", label: "Desafío", data: { intro: "El de siempre", items: [{ title: "Uno", detail: "d" }] } });
+    await documento(p.id, { tipoArtefacto: "diagnosis", name: "Vacía", order: -1, key: "objetivos", label: "Objetivos", data: {} });
+    expect(JSON.stringify((await desafioYObjetivosDelDiagnostico(p.id)).desafio)).toContain("El de siempre");
+
+    await documento(p.id, { tipoArtefacto: "diagnosis", name: "Terminada", order: 5, terminadoEn: new Date(), key: "desafio", label: "Desafío", data: { intro: "La terminada", items: [{ title: "Dos", detail: "d" }] } });
+    expect(JSON.stringify((await desafioYObjetivosDelDiagnostico(p.id)).desafio)).toContain("La terminada");
+  });
+
+  it("una copia en construcción con un nivel más bajo no le baja la escala a la cuenta", async () => {
+    const p = await proyecto();
+    const nivel = (n: string) => ({ areas: [{ area: "Ventas", base: n, produccion: n }] });
+    await documento(p.id, { slug: "diagnosis", name: "Diagnóstico", terminadoEn: new Date(), key: "escala", label: "Escala", data: nivel("Eficiente") });
+    await documento(p.id, { tipoArtefacto: "diagnosis", name: "Borrador", key: "escala", label: "Escala", data: nivel("Deficiente") });
+    const antes = await nivelesDeEscala([p.clientId]);
+    await prisma.projectCanvas.deleteMany({ where: { projectId: p.id, tipoArtefacto: "diagnosis" } });
+    expect(antes.size).toBe(1);
+    expect(await nivelesDeEscala([p.clientId])).toEqual(antes);
+  });
+});
 
 describe("los lectores y las copias", () => {
   it("con un solo diagnóstico, el texto del agente es el de siempre (sin rótulo ni aviso)", async () => {

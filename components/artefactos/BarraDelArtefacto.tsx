@@ -4,15 +4,16 @@
  * components/artefactos/BarraDelArtefacto.tsx — la barra de un documento de un tipo que admite copias (etapa V3 y V4 de
  * docs/artefactos-plan.md): su nombre, su estado (en construcción o terminado), su enlace para compartir pantalla, el
  * orden de los de su tipo y «Crear otra». La misma para el documento de siempre y para cada copia: son todas iguales
- * (Elías, 29 oct). Archivar y el PDF propio son solo de las copias (el de siempre tiene su PDF arriba).
+ * (Elías, 29 oct). Archivar es solo de las copias.
  *
  * UI interna: primitivas de components/ui, tokens semánticos y tuteo.
  */
 import { useCallback, useEffect, useState } from "react";
-import { Button, IconButton, Input, Menu, Modal, Segmentado } from "@/components/ui";
+import { Alert, Button, ConfirmDialog, IconButton, Input, Menu, Modal, Segmentado } from "@/components/ui";
 import { useToast } from "@/components/ui/Toast";
 import { tipoDeArtefacto } from "@/lib/artefactos/tipos";
-import { urlDelPdfDelArtefacto } from "@/lib/artefactos/enlaces";
+import { rutaDelEnlace } from "@/lib/artefactos/enlaces";
+import { ROTULO_DEL_ESTADO } from "@/lib/artefactos/copias";
 import OrdenarArtefactosModal, { type DocumentoParaOrdenar } from "./OrdenarArtefactosModal";
 
 interface Enlace {
@@ -26,17 +27,19 @@ const fecha = (iso: string) =>
 
 /** El enlace propio del documento: crearlo, copiarlo, abrirlo y dejar de compartir. */
 function CompartirModal({ projectId, canvasId, nombre, open, onClose }: { projectId: string; canvasId: string; nombre: string; open: boolean; onClose: () => void }) {
-  const base = `/api/projects/${projectId}/artefactos/${canvasId}/enlace`;
-  const [estado, setEstado] = useState<Enlace | null>(null);
+  const base = rutaDelEnlace({ projectId, canvasId });
+  /** null = leyendo; «error» = no se pudo leer (no es lo mismo que «no se comparte»). */
+  const [estado, setEstado] = useState<Enlace | "error" | null>(null);
   const [trabajando, setTrabajando] = useState(false);
   const toast = useToast();
 
   useEffect(() => {
     if (!open) return;
-    void fetch(base)
-      .then((r) => (r.ok ? (r.json() as Promise<Enlace>) : null))
-      .then((j) => setEstado(j))
-      .catch(() => setEstado(null));
+    void (async () => {
+      const r = await fetch(base).catch(() => null);
+      const j = r?.ok ? ((await r.json().catch(() => null)) as Enlace | null) : null;
+      setEstado(j ?? "error");
+    })();
   }, [open, base]);
 
   const cambiar = async (metodo: "POST" | "DELETE") => {
@@ -61,7 +64,11 @@ function CompartirModal({ projectId, canvasId, nombre, open, onClose }: { projec
       title={`Compartir «${nombre}»`}
       description="Un enlace propio de este documento, sin contraseña. Muestra lo que está escrito ahora, sin lo oculto ni lo interno: sirve para compartir pantalla."
     >
-      {estado?.enlace ? (
+      {estado === "error" ? (
+        <Alert variant="danger">No se pudo leer si este documento se comparte. Cierra y vuelve a intentarlo.</Alert>
+      ) : estado === null ? (
+        <p className="text-sm text-fg-muted">Leyendo…</p>
+      ) : estado.enlace ? (
         <div className="space-y-3">
           <Input readOnly value={estado.enlace} onFocus={(e) => e.currentTarget.select()} aria-label="El enlace" />
           <p className="text-xs text-fg-muted">
@@ -100,6 +107,7 @@ export default function BarraDelArtefacto({
   esCopia,
   terminado,
   delTipo,
+  compartible,
   onCambio,
   onCrearOtra,
   onArchivada,
@@ -112,8 +120,10 @@ export default function BarraDelArtefacto({
   terminado: boolean;
   /** Todos los documentos del tipo, en su orden (para «Ordenar»). */
   delTipo: readonly DocumentoParaOrdenar[];
+  /** false = no se ofrece compartir (un proyecto de prueba). */
+  compartible: boolean;
   /** Algo cambió (nombre, estado, orden): el panel vuelve a leer el listado. */
-  onCambio: () => void;
+  onCambio: () => void | Promise<unknown>;
   onCrearOtra: () => void;
   onArchivada?: () => void;
 }) {
@@ -128,7 +138,7 @@ export default function BarraDelArtefacto({
   const estadoLocal = estadoElegido ?? terminado;
   const toast = useToast();
   const base = `/api/projects/${projectId}/artefactos/${canvasId}`;
-  const pdf = urlDelPdfDelArtefacto({ projectId, canvasId, tipo });
+  const [confirmarArchivo, setConfirmarArchivo] = useState(false);
 
 
   const patch = useCallback(
@@ -139,7 +149,7 @@ export default function BarraDelArtefacto({
         toast.error(j?.error ?? "No se pudo guardar.");
         return false;
       }
-      onCambio();
+      await onCambio();
       return true;
     },
     [base, onCambio, toast],
@@ -154,10 +164,13 @@ export default function BarraDelArtefacto({
   };
 
   const archivar = async () => {
+    setConfirmarArchivo(false);
     const r = await fetch(base, { method: "DELETE" }).catch(() => null);
     const j = (await r?.json().catch(() => null)) as { error?: string } | null;
     if (!r?.ok) return toast.error(j?.error ?? "No se pudo archivar.");
-    toast.success(`«${nombre}» quedó archivado: ya no está en el riel ni lo leen los agentes.`);
+    toast.success(`«${nombre}» quedó archivado: ya no está en el riel ni lo leen los agentes.`, {
+      action: { label: "Deshacer", onClick: () => void patch({ archivado: false }) },
+    });
     onArchivada?.();
   };
 
@@ -206,8 +219,8 @@ export default function BarraDelArtefacto({
       <Segmentado
         etiqueta="Estado del documento"
         opciones={[
-          { clave: "en_construccion", etiqueta: "En construcción", title: "Quien lo lee lo toma como un borrador que todavía cambia" },
-          { clave: "terminado", etiqueta: "Terminado", title: "Quien lo lee lo toma como acordado" },
+          { clave: "en_construccion", etiqueta: ROTULO_DEL_ESTADO.en_construccion, title: "Quien lo lee lo toma como un borrador que todavía cambia" },
+          { clave: "terminado", etiqueta: ROTULO_DEL_ESTADO.terminado, title: "Quien lo lee lo toma como acordado" },
         ]}
         valor={estadoLocal ? "terminado" : "en_construccion"}
         onCambio={(k) => {
@@ -217,7 +230,7 @@ export default function BarraDelArtefacto({
           void patch({ terminado: nuevo }).then(() => setEstadoElegido(null));
         }}
       />
-      {t?.clientFacing && (
+      {t?.clientFacing && compartible && (
         <Button size="xs" variant="secondary" onClick={() => setCompartir(true)}>
           Compartir
         </Button>
@@ -236,9 +249,16 @@ export default function BarraDelArtefacto({
         items={[
           { key: "otra", label: `Crear otr${t?.conArticulo.startsWith("una") ? "a" : "o"} ${(t?.nombre ?? "documento").toLowerCase()}`, onSelect: onCrearOtra },
           ...(delTipo.length > 1 ? [{ key: "ordenar", label: `Ordenar (${delTipo.length})`, onSelect: () => setOrdenar(true) }] : []),
-          ...(esCopia && pdf ? [{ key: "pdf", label: "Ver el PDF", href: pdf }] : []),
-          ...(esCopia ? [{ key: "archivar", label: "Archivar", danger: true, separatorBefore: true, onSelect: () => void archivar() }] : []),
+          ...(esCopia ? [{ key: "archivar", label: "Archivar", danger: true, separatorBefore: true, onSelect: () => setConfirmarArchivo(true) }] : []),
         ]}
+      />
+      <ConfirmDialog
+        open={confirmarArchivo}
+        title={`¿Archivar «${nombre}»?`}
+        description="Sale del riel y los agentes dejan de leerlo. Nada se borra, pero si tiene enlace deja de abrir y, al recuperarlo, hay que crear uno nuevo."
+        confirmLabel="Archivar"
+        onCancel={() => setConfirmarArchivo(false)}
+        onConfirm={() => void archivar()}
       />
       <CompartirModal projectId={projectId} canvasId={canvasId} nombre={nombre} open={compartir} onClose={() => setCompartir(false)} />
       <OrdenarArtefactosModal

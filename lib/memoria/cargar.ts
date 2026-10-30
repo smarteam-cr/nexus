@@ -295,10 +295,10 @@ async function leerHechos(clientId: string, projectId: string | null): Promise<H
  */
 export async function memoriaDeLaCuenta(
   clientId: string,
-  opts: { lector: LectorDeMemoria; projectId?: string | null },
+  opts: { lector: LectorDeMemoria; projectId?: string | null; conTodasLasPartes?: boolean },
 ): Promise<MemoriaArmada> {
   const c = consumidorDeLaMemoria(opts.lector);
-  const sinPartes = new Set(c.sinPartes ?? []);
+  const sinPartes = new Set(opts.conTodasLasPartes ? [] : (c.sinPartes ?? []));
   const datos = await cargarDatosDeLaCuenta(clientId, queCargar(c.alcance), { proyectoActualId: opts.projectId ?? null, sinPartes });
   if (!datos) return VACIA;
   return armarMemoriaDeLaCuenta(datos, {
@@ -408,11 +408,11 @@ async function leerDesviaciones(projectId: string, q: QueCargar): Promise<Desvia
  */
 export async function memoriaDelProyecto(
   projectId: string,
-  opts: { lector: LectorDeMemoria; yaLeidas?: readonly string[] },
+  opts: { lector: LectorDeMemoria; yaLeidas?: readonly string[]; conTodasLasPartes?: boolean },
 ): Promise<MemoriaArmada> {
   const c = consumidorDeLaMemoria(opts.lector);
   const q = queCargar(c.alcance);
-  const sin = new Set(c.sinPartes ?? []);
+  const sin = new Set(opts.conTodasLasPartes ? [] : (c.sinPartes ?? []));
   const proyecto = await seguro("el proyecto", () => prisma.project.findUnique({ where: { id: projectId }, select: { name: true, clientId: true } }), null);
   if (!proyecto) return VACIA;
   const [reuniones, compromisos, desviaciones, resultados, hechos] = await Promise.all([
@@ -443,14 +443,16 @@ export async function memoriaDelProyecto(
  */
 export async function memoriaDelDocumento(
   projectId: string,
-  opts: { lector: LectorDeMemoria; clientId?: string | null; yaLeidas?: readonly string[] },
+  /* `conTodasLasPartes`: el lector no tiene otra vía para lo que su `sinPartes` excluye. Una COPIA de un tipo (etapa V3) usa
+     el lector de su tipo pero no lee la ficha ni los procesos ni los resultados por su cuenta, como sí su documento de siempre. */
+  opts: { lector: LectorDeMemoria; clientId?: string | null; yaLeidas?: readonly string[]; conTodasLasPartes?: boolean },
 ): Promise<MemoriaArmada> {
   const clientId =
     opts.clientId ??
     (await seguro("el cliente del proyecto", async () => (await prisma.project.findUnique({ where: { id: projectId }, select: { clientId: true } }))?.clientId ?? null, null));
   const [cuenta, proyecto] = await Promise.all([
-    clientId ? memoriaDeLaCuenta(clientId, { lector: opts.lector, projectId }) : Promise.resolve(VACIA),
-    memoriaDelProyecto(projectId, { lector: opts.lector, yaLeidas: opts.yaLeidas }),
+    clientId ? memoriaDeLaCuenta(clientId, { lector: opts.lector, projectId, conTodasLasPartes: opts.conTodasLasPartes }) : Promise.resolve(VACIA),
+    memoriaDelProyecto(projectId, { lector: opts.lector, yaLeidas: opts.yaLeidas, conTodasLasPartes: opts.conTodasLasPartes }),
   ]);
   return {
     texto: [cuenta.texto, proyecto.texto].filter(Boolean).join("\n\n"),

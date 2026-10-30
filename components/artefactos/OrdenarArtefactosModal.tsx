@@ -13,6 +13,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { Button, Modal } from "@/components/ui";
 import { useToast } from "@/components/ui/Toast";
 import { cn } from "@/lib/cn";
+import { ROTULO_DEL_ESTADO } from "@/lib/artefactos/copias";
 
 export interface DocumentoParaOrdenar {
   id: string;
@@ -46,7 +47,7 @@ function Fila({ d, numero }: { d: DocumentoParaOrdenar; numero: number }) {
         </svg>
       </button>
       <span className="min-w-0 flex-1 truncate text-sm text-fg">{d.nombre}</span>
-      <span className="flex-none text-xs text-fg-muted">{d.terminado ? "Terminado" : "En construcción"}</span>
+      <span className="flex-none text-xs text-fg-muted">{ROTULO_DEL_ESTADO[d.terminado ? "terminado" : "en_construccion"]}</span>
     </li>
   );
 }

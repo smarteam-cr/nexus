@@ -12645,11 +12645,24 @@ en su lugar. Lo que queda decidido:
 - **Las reuniones y notas elegidas siguen siendo POR TIPO** en esta tanda: las copias de un tipo comparten las de su tipo;
   las instrucciones sí son de cada documento. La tabla `ReunionDelDocumento` es V3b. *Por qué:* el «Contexto adicional»
   de la Planificación lo estaba cambiando otra sesión el mismo día.
-- **Cada documento de un proyecto tiene su propio enlace, VIVO** (`AccesoAlDocumento` + `/external/documento/[token]`):
-  las copias y también el de siempre. Sin contraseña; muestra lo confirmado, sin lo oculto, sin lo interno. *Por qué
-  vivo y no una foto:* CS lo usa para compartir pantalla mientras trabaja, y la foto (`publishedSnapshot`) del de siempre
-  ya la usan los mecanismos de publicar del kickoff y la planificación. INV64 se enmendó: un enlace abre un documento de
-  su empresa, de la empresa misma o de un proyecto suyo, nunca de una propuesta. Las superficies de siempre no cambian.
+- **Cada documento de un tipo con barra tiene su propio enlace, VIVO** (`AccesoAlDocumento` +
+  `/external/documento/[token]`): las copias y también el de siempre de kickoff, diagnóstico y planificación. Sin
+  contraseña; muestra lo confirmado, sin lo oculto, sin lo interno. *Por qué vivo y no una foto:* CS lo usa para compartir
+  pantalla mientras trabaja, y la foto (`publishedSnapshot`) del de siempre ya la usan los mecanismos de publicar del
+  kickoff y la planificación. *Por qué no la entrega ni integraciones:* no tienen barra, y la entrega guarda en su Json lo
+  que el cliente no ve. Un proyecto de prueba no se comparte, y uno que pasa a serlo deja de abrir. INV64 se enmendó: un
+  enlace abre un documento de su empresa, de la empresa misma o de un proyecto suyo, nunca de una propuesta. Las superficies
+  de siempre no cambian.
+- **`canvasNotOf` ya no descarta las filas sin slug.** Era `NOT (slug = x OR …)`, que con slug NULL da NULL: las copias no
+  habrían salido nunca en el riel, y los canvases sueltos del CSE tampoco salían (el 30 oct, 0 filas así en producción).
+- **Lo ya presentado o publicado nace terminado.** El SQL pone `terminadoEn` en lo que el cliente ya vio (el diagnóstico
+  presentado o aprobado, lo publicado de kickoff, diagnóstico y planificación), una sola vez. *Por qué:* si no, en cuanto
+  un tipo tuviera una copia, la planificación leería un diagnóstico aprobado como borrador. *Pendiente de confirmar con
+  Elías:* es la opción por defecto de las dos que propuso la revisión; la otra era deducirlo en cada lectura.
+- **Una copia se genera con las reglas de su tipo y con todo lo que su documento de siempre lee aparte**: en el diagnóstico
+  no se reescribe lo revisado y las acciones quedan en el enfoque corto; en el kickoff, «Sin Escala» no lleva escala; y la
+  memoria le da la ficha, los procesos y los resultados (`conTodasLasPartes`), que el documento de siempre lee por su cuenta.
+- **Archivar pide confirmación y se deshace desde el aviso**; el enlace de la copia no vuelve (hay que crear uno nuevo).
 - **Los dos primeros tipos nuevos son el plan de adopción y la integración técnica** (Elías, respuesta 3), adelantados
   de V6. La integración técnica presta las secciones del requerimiento técnico y suma el **mapa de integración** (campo de
   origen ↔ propiedad de HubSpot, sentido, transformación, frecuencia), el identificador único, el alcance firmado y lo que

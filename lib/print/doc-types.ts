@@ -128,8 +128,7 @@ export const PRINT_DOC_TYPES: PrintDocType[] = [
     ctxSections: ["cronograma"],
   },
   /* Los tipos de artefacto nuevos (docs/artefactos-plan.md, 2026-10-29): no son una pieza, así que no hay «el de
-     siempre» que cargar por slug — todas sus filas son copias, y se imprimen siempre con `canvasId` (lib/artefactos/
-     enlaces.ts). El id es el del tipo (lib/artefactos/tipos.ts). Sin `canvasId`, el cargador responde que no hay
+     siempre» que cargar por slug — todas sus filas son copias, y se imprimen siempre con `canvasId`. El id es el del tipo (lib/artefactos/tipos.ts). Sin `canvasId`, el cargador responde que no hay
      documento. */
   {
     id: "adoption-plan",

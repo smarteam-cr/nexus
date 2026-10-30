@@ -17,6 +17,11 @@
 -- ADITIVO: 4 columnas nullable, 1 índice y 1 CHECK NOT VALID. Nada se dropea, nada se renombra. Inocuo con el código
 -- viejo corriendo (no lee las columnas nuevas). Se puede correr dos veces.
 --
+-- Y UN PUNTO DE PARTIDA para la columna nueva: lo que ya se le presentó o publicó al cliente nace «terminado», no «en
+-- construcción» (si no, en cuanto el tipo tenga una copia, la planificación leería un diagnóstico aprobado como borrador).
+-- Solo escribe `terminadoEn`/`terminadoPor`, que nadie lee todavía, y solo la primera vez: si alguna fila ya tiene estado
+-- (o sea, el SQL ya corrió y hay decisiones de personas), no hace nada.
+--
 -- ⚠ ORDEN: este SQL va ANTES del deploy: el listado de documentos del proyecto selecciona las columnas nuevas y sin
 -- ellas la ficha del cliente no carga (`/api/health` da 503 y deploy.sh revierte).
 --
@@ -28,6 +33,19 @@ ALTER TABLE "ProjectCanvas" ADD COLUMN IF NOT EXISTS "tipoArtefacto" TEXT;
 ALTER TABLE "ProjectCanvas" ADD COLUMN IF NOT EXISTS "titulo" TEXT;
 ALTER TABLE "ProjectCanvas" ADD COLUMN IF NOT EXISTS "terminadoEn" TIMESTAMP(3);
 ALTER TABLE "ProjectCanvas" ADD COLUMN IF NOT EXISTS "terminadoPor" TEXT;
+
+UPDATE "ProjectCanvas" pc
+SET "terminadoEn" = now(), "terminadoPor" = 'punto de partida 2026-10-29'
+FROM "Project" p
+WHERE p."id" = pc."projectId"
+  AND pc."terminadoEn" IS NULL
+  AND NOT EXISTS (SELECT 1 FROM "ProjectCanvas" ya WHERE ya."terminadoEn" IS NOT NULL)
+  AND (
+    pc."estadoDocumento" IN ('presentado', 'aprobado')
+    OR (pc."slug" = 'kickoff' AND p."kickoffPublishedAt" IS NOT NULL)
+    OR (pc."slug" = 'diagnosis' AND p."diagnosticoPublishedAt" IS NOT NULL)
+    OR (pc."slug" = 'planning' AND p."planificacionPublishedAt" IS NOT NULL)
+  );
 
 CREATE INDEX IF NOT EXISTS "ProjectCanvas_projectId_tipoArtefacto_idx" ON "ProjectCanvas" ("projectId", "tipoArtefacto");
 

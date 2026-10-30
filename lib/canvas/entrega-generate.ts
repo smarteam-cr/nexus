@@ -86,7 +86,7 @@ const KEYS_DERIVADAS = new Set(
  * El desafío y los objetivos del Diagnóstico del proyecto, tal como están escritos. El Diagnóstico
  * es un documento de cara al cliente, así que nada de esto es interno.
  */
-async function desafioYObjetivosDelDiagnostico(
+export async function desafioYObjetivosDelDiagnostico(
   projectId: string,
 ): Promise<{ desafio: DesafioDelDiagnostico | null; objetivos: ObjetivoDelDiagnostico[] }> {
   /* VARIAS COPIAS (artefactos, etapa V3): el diagnóstico terminado más reciente; sin terminados, el primero en el orden

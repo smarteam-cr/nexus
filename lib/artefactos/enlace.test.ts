@@ -7,7 +7,7 @@ import { describe, expect, it } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
 import { seccionesQueSalenPorElEnlace, tipoCompartible, SECCIONES_INTERNAS } from "./secciones-del-enlace";
-import { rutaDelEnlace, rutaParaExportarElPdf, urlDelPdfDelArtefacto } from "./enlaces";
+import { rutaDelEnlace } from "./enlaces";
 import { TIPOS, TIPO_INTEGRACION_TECNICA, TIPO_PLAN_DE_ADOPCION, admiteCopias } from "./tipos";
 import { printDocType } from "@/lib/print/doc-types";
 import { motivoDeLaCopia } from "@/lib/invariantes/artefactos";
@@ -35,10 +35,9 @@ describe("qué tipos se comparten por su enlace propio", () => {
 
 describe("qué secciones salen por el enlace", () => {
   it("la estimación del equipo técnico nunca sale, ni en Integraciones ni en la integración técnica", () => {
-    expect(SECCIONES_INTERNAS["tech-requirements"]).toContain("estimacion");
-    expect(seccionesQueSalenPorElEnlace("tech-requirements")("estimacion")).toBe(false);
+    expect(SECCIONES_INTERNAS["integration"]).toContain("estimacion");
     expect(seccionesQueSalenPorElEnlace(TIPO_INTEGRACION_TECNICA)("estimacion")).toBe(false);
-    expect(seccionesQueSalenPorElEnlace("tech-requirements")("arquitectura")).toBe(true);
+    expect(seccionesQueSalenPorElEnlace(TIPO_INTEGRACION_TECNICA)("arquitectura")).toBe(true);
   });
 
   it("lo que lee el proyecto no sale; la portada y el cierre sí, aunque pinten con su contexto", () => {
@@ -59,13 +58,9 @@ describe("qué secciones salen por el enlace", () => {
 });
 
 describe("el PDF y el enlace de un artefacto", () => {
-  it("el PDF de una copia va por el camino genérico con su canvasId; uno sin tipo de impresión, null", () => {
-    expect(urlDelPdfDelArtefacto({ projectId: "p1", canvasId: "c1", tipo: "planning" })).toBe("/print/doc/planning/p1?canvasId=c1");
-    expect(urlDelPdfDelArtefacto({ projectId: "p1", canvasId: "c1", tipo: TIPO_PLAN_DE_ADOPCION })).toBe("/print/doc/adoption-plan/p1?canvasId=c1");
-    expect(rutaParaExportarElPdf({ projectId: "p1", tipo: TIPO_INTEGRACION_TECNICA })).toBe("/api/print/integration/p1/export");
-    // La entrega todavía imprime por el camino del canvas suelto; un tipo de propuesta no es de un proyecto.
-    expect(urlDelPdfDelArtefacto({ projectId: "p1", canvasId: "c1", tipo: "delivery" })).toBeNull();
-    expect(urlDelPdfDelArtefacto({ projectId: "p1", canvasId: "c1", tipo: "business-case" })).toBeNull();
+  it("la entrega y el requerimiento técnico no se comparten por este enlace: siguen con su superficie", () => {
+    expect(tipoCompartible("delivery")).toBe(false);
+    expect(tipoCompartible("tech-requirements")).toBe(false);
     expect(rutaDelEnlace({ projectId: "p1", canvasId: "c1" })).toBe("/api/projects/p1/artefactos/c1/enlace");
   });
 

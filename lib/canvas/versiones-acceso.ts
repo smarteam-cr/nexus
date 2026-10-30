@@ -12,26 +12,28 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
 import { denyHandoffCanvasEditForCse, guardPermission } from "@/lib/auth/api-guards";
 import { pieceForCanvas } from "@/lib/pieces/registry";
+import { tipoDeArtefacto } from "@/lib/artefactos/tipos";
 
 export async function documentoDelProyecto(projectId: string, canvasId: string) {
   const canvas = await prisma.projectCanvas.findUnique({
     where: { id: canvasId },
-    select: { id: true, projectId: true, slug: true, name: true, businessCaseId: true },
+    select: { id: true, projectId: true, slug: true, name: true, businessCaseId: true, tipoArtefacto: true },
   });
   return canvas && canvas.projectId === projectId ? canvas : null;
 }
 
 /** null = puede; si no, la respuesta de rechazo. */
 export async function permisoParaUsarVersion(
-  canvas: { slug: string | null; name: string; businessCaseId: string | null },
+  canvas: { slug: string | null; name: string; businessCaseId: string | null; tipoArtefacto?: string | null },
   accion: "traer" | "restaurar",
 ): Promise<NextResponse | null> {
   const veto = await denyHandoffCanvasEditForCse(canvas.slug ?? canvas.name);
   if (veto) return veto;
   if (accion === "restaurar") {
-    const pieza = pieceForCanvas(canvas);
-    if (pieza) {
-      const perm = await guardPermission(pieza.permissionSection as Parameters<typeof guardPermission>[0], "regenerate" as never);
+    // Una copia no es su pieza: la celda es la de su tipo, la misma que pide regenerarla.
+    const seccion = pieceForCanvas(canvas)?.permissionSection ?? tipoDeArtefacto(canvas.tipoArtefacto)?.permiso ?? null;
+    if (seccion) {
+      const perm = await guardPermission(seccion as Parameters<typeof guardPermission>[0], "regenerate" as never);
       if (perm instanceof NextResponse) return perm;
     }
   }

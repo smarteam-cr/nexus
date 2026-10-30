@@ -35,7 +35,8 @@ import { UnreviewedSessionsChip } from "./ProjectSessionsReview";
 import CronogramaCanvas from "@/components/canvas/CronogramaCanvas";
 import CronogramaDelCiclo from "@/components/ciclos/CronogramaDelCiclo";
 import CanvasBoundary from "./CanvasBoundary";
-import PrintDocButton from "@/components/print/PrintDocButton";
+import PrintDocButton, { PrintDownloadButton } from "@/components/print/PrintDocButton";
+import { printDocType } from "@/lib/print/doc-types";
 import { PrintStagingProvider } from "@/components/print/PrintStaging";
 import CanvasAgentButton from "@/components/clients/CanvasAgentButton";
 import { PiezasDelRiel, type FilaDelRielDePiezas } from "./RielDelCliente";
@@ -983,7 +984,7 @@ export default function ProjectCanvasPanel({
                   {piezaSinCanvas && activeSlug ? pieceLabel(activeSlug) : activeCanvas ? nombreDelArtefacto(activeCanvas) : activeSlug ? pieceLabel(activeSlug) : null}
                 </h2>
                 {/* La exploración es una herramienta de trabajo del equipo, no un documento (2026-10-05). */}
-                {activeSlug === "exploration" && (
+                {(activeSlug ?? tipoActivo) === "exploration" && (
                   <span className="inline-flex items-center gap-1.5 rounded-full border border-line bg-surface px-2.5 py-px text-[11px] font-semibold text-fg-secondary">
                     <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} aria-hidden="true">
                       <path d="M3 3l18 18M10.6 10.6a2 2 0 002.8 2.8M9.9 5.1A9.7 9.7 0 0112 5c5 0 9 4.5 10 7a13 13 0 01-3.2 4.3M6.6 6.6C4.3 8 2.7 10.2 2 12c1 2.5 5 7 10 7a9.6 9.6 0 004.4-1" />
@@ -1028,7 +1029,7 @@ export default function ProjectCanvasPanel({
           {!ctaEnElPanel && botonDelAgente}
           {/* Las fotos que se toman antes de cada regeneración (lib/canvas/versiones.ts): en todo
               documento que la IA reescribe, incluido Desarrollo (su CTA viene por portal). */}
-          {activeCanvas && activeCanvasId && activeSlug !== "exploration" && (CANVAS_PRIMARY_AGENT[activeSlug ?? ""] || activeSlug === "tech-requirements" || activeSlug === "handoff") && (
+          {activeCanvas && activeCanvasId && activeSlug !== "exploration" && (CANVAS_PRIMARY_AGENT[activeSlug ?? ""] || activeSlug === "tech-requirements" || activeSlug === "handoff" || copiaActiva) && (
             <VersionesDelDocumento
               projectId={projectId}
               canvasId={activeCanvasId}
@@ -1072,6 +1073,10 @@ export default function ProjectCanvasPanel({
           {/* Export PDF. Qué camino toma lo decide el REGISTRO de impresión leyendo la pieza del
               canvas activo. El resumen no se imprime: no es un documento, es la foto de cómo va el
               proyecto — y sus dos piezas (el brief y el handoff) tienen su propio PDF. */}
+          {/* Una copia exporta por su id (etapa V3); la exploración, interna, no se imprime. */}
+          {copiaActiva && activeCanvasId && tipoActivo !== "exploration" && printDocType(tipoActivo) && (
+            <PrintDownloadButton tipo={printDocType(tipoActivo)!} docId={projectId} canvasId={activeCanvasId} />
+          )}
           {!enResumen && !piezaSinCanvas && activeSlug !== "exploration" && !copiaActiva && (
             <PrintDocButton
               projectId={projectId}
@@ -1084,7 +1089,7 @@ export default function ProjectCanvasPanel({
               vive acá y no en un canvas. */}
           {/* Los cuestionarios tienen su propio enlace por persona: el acceso del proyecto no va ahí. */}
           {/* Un proyecto de prueba nunca se comparte: sin «Acceso». */}
-          {activeSlug !== "exploration" && !piezaSinCanvas && !esPrueba && <ExternalAccessButton projectId={projectId} />}
+          {(activeSlug ?? tipoActivo) !== "exploration" && !piezaSinCanvas && !esPrueba && <ExternalAccessButton projectId={projectId} />}
         </div>
       </div>
 
@@ -1152,7 +1157,8 @@ export default function ProjectCanvasPanel({
           esCopia={!!copiaActiva}
           terminado={!!activeCanvas.terminadoEn}
           delTipo={delTipoActivo}
-          onCambio={() => void refetchCanvases()}
+          compartible={!esPrueba}
+          onCambio={() => refetchCanvases()}
           onCrearOtra={() => setNuevoArtefacto({ tipo: tipoActivo })}
           onArchivada={() => {
             void refetchCanvases();
@@ -1163,7 +1169,7 @@ export default function ProjectCanvasPanel({
       {copiaActiva && activeCanvasId && tipoActivo && (
         <CanvasBoundary label="este artefacto">
           <ArtefactoWorkspace
-            key={`artefacto-${activeCanvasId}`}
+            key={`artefacto-${activeCanvasId}-${agentNonce}`}
             projectId={projectId}
             canvasId={activeCanvasId}
             tipo={tipoActivo}

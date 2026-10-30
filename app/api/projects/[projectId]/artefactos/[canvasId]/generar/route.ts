@@ -20,6 +20,7 @@ import { prisma } from "@/lib/db/prisma";
 import { ErrorDelArtefacto } from "@/lib/artefactos/copias-server";
 import { copiaParaGenerar, generarCopia } from "@/lib/artefactos/generar-server";
 import { TOPE_INSTRUCCIONES_DEL_PEDIDO } from "@/lib/entregables/registro";
+import { nombreDelArtefacto } from "@/lib/artefactos/copias";
 
 type Params = Promise<{ projectId: string; canvasId: string }>;
 
@@ -58,7 +59,7 @@ export async function POST(req: NextRequest, { params }: { params: Params }) {
     async (tx) => {
       await tx.$queryRaw`SELECT id FROM "ProjectCanvas" WHERE id = ${canvasId} FOR UPDATE`;
       const enCurso = await tx.agentRun.findFirst({
-        where: { projectId, agentSlug, status: "RUNNING", stepLabel: canvasId, createdAt: { gte: new Date(Date.now() - EN_CURSO_MS) } },
+        where: { projectId, agentSlug, status: "RUNNING", sectionLabel: canvasId, createdAt: { gte: new Date(Date.now() - EN_CURSO_MS) } },
         select: { id: true },
       });
       if (enCurso) return null;
@@ -69,9 +70,10 @@ export async function POST(req: NextRequest, { params }: { params: Params }) {
           clientId: guard.clientId,
           projectId,
           status: "RUNNING",
-          // El id de la copia: con eso se sabe cuál se está generando (varias copias del mismo tipo conviven).
-          stepLabel: canvasId,
-          sectionLabel: copia.canvas.name,
+          // El nombre es lo que muestra el centro de corridas. El id de la copia dice cuál se está generando: varias
+          // copias del mismo tipo conviven y comparten `agentSlug`.
+          stepLabel: nombreDelArtefacto(copia.canvas),
+          sectionLabel: canvasId,
           output: "{}",
           triggeredByEmail: quien,
         },
@@ -113,7 +115,7 @@ export async function GET(_req: NextRequest, { params }: { params: Params }) {
   const guard = await guardAccessToProject(projectId);
   if (guard instanceof NextResponse) return guard;
   const run = await prisma.agentRun.findFirst({
-    where: { projectId, stepLabel: canvasId, agentSlug: { startsWith: "artefacto:" } },
+    where: { projectId, sectionLabel: canvasId, agentSlug: { startsWith: "artefacto:" } },
     orderBy: { createdAt: "desc" },
     select: { id: true, status: true, currentPhase: true, output: true, createdAt: true },
   });

@@ -6,6 +6,22 @@ vi.mock("@/lib/db/prisma", () => ({ prisma: {} }));
 
 const { deriveCanvasesConContenido, seededSectionKeys } = await import("./piece-content");
 
+describe("una copia de un tipo (artefactos, etapa V3)", () => {
+  const juzgar = (key: string, conIa = false) =>
+    deriveCanvasesConContenido({
+      canvases: [{ id: "c", slug: null, tipoArtefacto: "adoption-plan" }],
+      seccionesConBloques: [{ canvasId: "c", key }],
+      canvasesConBloqueGenerado: conIa ? ["c"] : [],
+      timelineTieneFases: false,
+    }).has("c");
+
+  it("con solo su cierre sembrado no cuenta como escrita; con una sección escrita sí", () => {
+    expect(juzgar("cierre")).toBe(false);
+    expect(juzgar("reglas")).toBe(true);
+    expect(juzgar("cierre", true)).toBe(true);
+  });
+});
+
 const base = {
   seccionesConBloques: [] as Array<{ canvasId: string; key: string }>,
   canvasesConBloqueGenerado: [] as string[],

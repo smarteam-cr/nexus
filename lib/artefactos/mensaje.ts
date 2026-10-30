@@ -18,6 +18,17 @@ export const TIPOS_QUE_LO_ALIMENTAN: Readonly<Record<string, readonly string[]>>
 /** El tope de cada documento que alimenta: con varias copias, el texto crece. */
 export const TOPE_DE_CADA_FUENTE = 30_000;
 
+/**
+ * Una fuente con su tope. Se corta en un límite de sección y lo DICE: sin el aviso, el modelo toma lo que falta como que no
+ * existe. Las copias en construcción van al final (lib/artefactos/lectores.ts), así que son las primeras en quedar afuera.
+ */
+export function fuenteConTope(texto: string, tope = TOPE_DE_CADA_FUENTE): string {
+  if (texto.length <= tope) return texto;
+  const corte = texto.lastIndexOf("[Sección: ", tope);
+  const hasta = corte > tope / 2 ? corte : tope;
+  return `${texto.slice(0, hasta).trimEnd()}\n\n(Esta fuente sigue y se recortó por largo: no concluyas que algo no existe por no verlo acá.)`;
+}
+
 export interface PartesDelMensaje {
   /** Lo que pidió quien genera ESTA corrida (ya rotulado; "" sin pedido). */
   pedido: string;
@@ -27,6 +38,14 @@ export interface PartesDelMensaje {
   nombreDeLaCopia: string;
   empresa: string;
   industria: string | null;
+  /** Lo vendido según las etiquetas del proyecto (los hubs y el alcance); "" sin etiquetas. */
+  alcanceEtiquetado: string;
+  /** El servicio recurrente contratado, en una línea; "" si es un proyecto. */
+  servicio: string;
+  /** Lo propio del tipo que lee el documento de siempre: el bloque del servicio y la escala del kickoff. "" sin eso. */
+  delTipo: string;
+  /** La regla de lo que puede pasar al documento (`fronteraDeLaPieza`): va delante de los documentos que lo alimentan. */
+  frontera: string;
   handoff: string;
   reuniones: string;
   avisoSinReuniones: string;
@@ -42,9 +61,17 @@ export function mensajeDeLaCopia(p: PartesDelMensaje): string {
   if (p.instruccionesDeLaCopia) partes.push(p.instruccionesDeLaCopia.trim());
   partes.push(
     `Empresa: ${p.empresa}\nIndustria: ${p.industria ?? "No especificada"}\n` +
+      (p.servicio ? `Servicio contratado: ${p.servicio} (servicio recurrente)\n` : "") +
+      (p.alcanceEtiquetado ? `Alcance etiquetado (tags del proyecto): ${p.alcanceEtiquetado}\n` : "") +
       `Documento: ${p.tipo.nombre} «${p.nombreDeLaCopia}». El nombre dice el foco de este documento: escríbelo para ese foco y no repitas lo que otro documento del proyecto ya cubre.`,
   );
+  if (p.delTipo.trim()) partes.push(p.delTipo.trim());
   partes.push(`=== HANDOFF DEL PROYECTO (lo vendido: tu fuente ancla) ===\n${p.handoff.trim() || "(Sin handoff. No inventes alcance: marca con ⚠️ Por validar lo que no esté en las fuentes.)"}`);
+  /* ⛔ La regla va DELANTE de lo que alimenta: la exploración es interna (lo que se supuso, de dónde salió cada dato) y sin
+     reuniones ni notas no habría ninguna frontera en el mensaje. */
+  if (p.alimentan.some((a) => a.texto.trim())) {
+    partes.push(`${p.frontera}\nLo que una de estas fuentes marque como supuesto o sin verificar NUNCA se afirma como hecho.`);
+  }
   for (const a of p.alimentan) {
     if (!a.texto.trim()) continue;
     const nombre = tipoDeArtefacto(a.tipo)?.nombre ?? pieceLabel(a.tipo);

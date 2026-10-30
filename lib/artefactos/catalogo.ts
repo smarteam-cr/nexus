@@ -152,6 +152,16 @@ export function seccionesDeUnaCopia(tipo: string, plantillaId?: string | null): 
 }
 
 /**
+ * Las secciones que pasan al DUPLICAR un documento: todas las del tipo, de cualquier plantilla y también las retiradas que
+ * un documento viejo todavía muestra (duplicar no recorta lo escrito), sin las `ctxDriven` que no son la portada o el cierre.
+ */
+export function seccionesQuePasanAlDuplicar(tipo: string): ReadonlySet<string> {
+  const defs = [...(defsDelTipo(tipo) ?? []), ...Object.values(DEFS_POR_KEY_DE_LOS_DE_SIEMPRE[tipo] ?? {})];
+  const estructurales = new Set<string>(tipoDeArtefacto(tipo)?.estructurales ?? []);
+  return new Set(defs.filter((d) => d.ctxDriven !== true || estructurales.has(d.key)).map((d) => d.key));
+}
+
+/**
  * La estructura con que se CREA una copia (la que consume la creación en ./copias-server.ts). Las secciones curadas se
  * siembran con lo mismo que el documento de siempre de su tipo (la `defaultData` de su canvas: el equipo y los canales del
  * kickoff, el cierre); en los tipos nuevos, con el `empty` de lo que el agente no escribe (el cierre).

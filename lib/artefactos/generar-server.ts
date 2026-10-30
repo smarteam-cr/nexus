@@ -13,6 +13,9 @@
  *   · el template de su plantilla, recortado a las secciones que la copia tiene.
  * Escribe un bloque CARD por sección en el lugar (como el requerimiento técnico), con la foto de antes
  * (`guardarVersionDelDocumento`). Lo curado (el cierre) no se toca: el agente no lo escribe.
+ *
+ * Respeta las reglas de su tipo que viven en los runners de siempre: en el diagnóstico, lo que el ejecutivo marcó revisado
+ * no se reescribe y las acciones quedan en el enfoque corto; en el kickoff, el trato «Sin Escala» no lleva escala.
  */
 import "server-only";
 import { Prisma } from "@prisma/client";
@@ -23,14 +26,24 @@ import { guardarVersionDelDocumento } from "@/lib/canvas/versiones";
 import { loadCanvasContext, loadHandoffContext } from "@/lib/canvas/load-canvas-context";
 import { cargarMaterialDelDocumento } from "@/lib/contexto/material-del-documento";
 import { documentoConContexto } from "@/lib/contexto/documento";
-import { bloqueDeInstruccionesDelPedido, plantillaDelDocumento } from "@/lib/entregables/registro";
+import { bloqueDeInstruccionesDelPedido } from "@/lib/entregables/registro";
 import { memoriaDelDocumento, type LectorDeMemoria } from "@/lib/memoria";
 import { relacionToDiagram, specToDiagram } from "@/lib/flowchart/spec-to-diagram";
-import { tipoDeArtefacto, plantillaDelTipo, type TipoDeArtefacto } from "./tipos";
-import { tipoDelDocumento } from "./copias";
+import { fronteraDeLaPieza } from "@/lib/contexto/frontera-de-los-documentos";
+import { estaRevisada } from "@/lib/canvas/diagnostico-generate";
+import { ordenarObjetivosDelDiagnostico } from "@/lib/canvas/diagnostico-hilo";
+import { dejarElEnfoqueCorto } from "@/lib/canvas/acciones-del-enfoque";
+import { DESAFIO_KEY } from "@/lib/canvas/estado-del-documento";
+import { POLITICA_RECTORA_KEY } from "@/components/landing/configs/diagnostico.defs";
+import { escalaParaPosicionar, posicionDeLaPropuesta, SECCION_DE_ESCALA } from "@/lib/escala/contexto";
+import { tagLabels } from "@/lib/tags/catalog";
+import { resolvePipeline } from "@/lib/projects/kind";
+import { servicioDelProyecto, servicioParaElKickoff } from "@/lib/servicios/catalogo";
+import { plantillaGuardadaDelTipo, tipoDeArtefacto, type TipoDeArtefacto } from "./tipos";
+import { nombreDelArtefacto, tipoDelDocumento } from "./copias";
 import { handoffKeysDelTipo, templateDelTipo } from "./catalogo";
 import { ErrorDelArtefacto } from "./copias-server";
-import { mensajeDeLaCopia, TIPOS_QUE_LO_ALIMENTAN, TOPE_DE_CADA_FUENTE } from "./mensaje";
+import { fuenteConTope, mensajeDeLaCopia, TIPOS_QUE_LO_ALIMENTAN } from "./mensaje";
 
 /**
  * El lector de la memoria de cada tipo (lib/memoria/consumidores.ts): el mismo que el documento de siempre de ese tipo,
@@ -55,6 +68,7 @@ export async function copiaParaGenerar(projectId: string, canvasId: string) {
       slug: true,
       tipoArtefacto: true,
       name: true,
+      titulo: true,
       sections: true,
       canvasSections: { select: { id: true, key: true, blocks: { where: { blockType: "CARD" }, select: { data: true, source: true }, take: 1 } } },
     },
@@ -77,8 +91,7 @@ export async function generarCopia(o: {
   alFase?: (fase: string) => void;
 }): Promise<{ sectionCount: number }> {
   const { canvas, tipo } = await copiaParaGenerar(o.projectId, o.canvasId);
-  const guardada = plantillaDelDocumento(tipo.id, canvas.sections);
-  const plantilla = (guardada?.guardada ? guardada.plantilla : null) ?? plantillaDelTipo(tipo.id);
+  const { plantilla } = plantillaGuardadaDelTipo(tipo.id, canvas.sections);
   const base = templateDelTipo(tipo.id, plantilla?.id ?? null);
   const keysDeLaCopia = new Set(canvas.canvasSections.map((s) => s.key));
   // El template, recortado a lo que la copia tiene: no se paga por escribir secciones que no se van a guardar.
@@ -88,20 +101,45 @@ export async function generarCopia(o: {
   const doc = tipo.contextoDe ? documentoConContexto(tipo.contextoDe) : null;
   const proyecto = await prisma.project.findUnique({
     where: { id: o.projectId },
-    select: { clientId: true, tags: true, client: { select: { name: true, company: true, industry: true } } },
+    select: {
+      clientId: true,
+      tags: true,
+      servicioRecurrente: true,
+      hubspotPipelineId: true,
+      client: { select: { name: true, company: true, industry: true } },
+    },
   });
+  const servicio = proyecto
+    ? servicioDelProyecto({
+        servicioRecurrente: proyecto.servicioRecurrente,
+        servicioDelPipeline: resolvePipeline(proyecto.hubspotPipelineId)?.servicioRecurrente ?? null,
+      })
+    : null;
+  const escala =
+    tipo.id === "kickoff"
+      ? await escalaParaPosicionar(proyecto?.tags ?? [], {
+          titulo: "EL ESTIMADO QUE DEJÓ LA PROPUESTA (un antecedente de la venta, no una medición)",
+          posicion: await posicionDeLaPropuesta(o.projectId),
+        })
+      : null;
   const [handoff, material, alimentan] = await Promise.all([
     loadHandoffContext(o.projectId, { onlyConfirmed: false, includeKeys: handoffKeysDelTipo(tipo.id) }),
     doc ? cargarMaterialDelDocumento(o.projectId, doc) : Promise.resolve(null),
     Promise.all(
       (TIPOS_QUE_LO_ALIMENTAN[tipo.id] ?? []).map(async (t) => ({
         tipo: t,
-        texto: (await loadCanvasContext(o.projectId, t, { onlyConfirmed: false, soloVisibles: true }).catch(() => "")).slice(0, TOPE_DE_CADA_FUENTE),
+        texto: fuenteConTope(await loadCanvasContext(o.projectId, t, { onlyConfirmed: false, soloVisibles: true }).catch(() => "")),
       })),
     ),
   ]);
   const memoria = tipo.contextoDe
-    ? await memoriaDelDocumento(o.projectId, { ...LECTOR[tipo.contextoDe], clientId: proyecto?.clientId ?? null, yaLeidas: material?.sesionesUsadas ?? [] })
+    ? await memoriaDelDocumento(o.projectId, {
+        ...LECTOR[tipo.contextoDe],
+        clientId: proyecto?.clientId ?? null,
+        yaLeidas: material?.sesionesUsadas ?? [],
+        // La ficha, los procesos y los resultados: su documento de siempre los lee aparte; una copia, solo de acá.
+        conTodasLasPartes: true,
+      })
     : null;
 
   const mensaje = mensajeDeLaCopia({
@@ -109,9 +147,13 @@ export async function generarCopia(o: {
     // Las instrucciones de ESTA copia: las del documento de siempre son de otro documento.
     instruccionesDeLaCopia: bloqueDeInstruccionesDeDoc(docBriefFrom(canvas.sections)),
     tipo,
-    nombreDeLaCopia: canvas.name,
+    nombreDeLaCopia: nombreDelArtefacto(canvas),
     empresa: proyecto?.client?.name ?? proyecto?.client?.company ?? "el cliente",
     industria: proyecto?.client?.industry ?? null,
+    alcanceEtiquetado: tagLabels(proyecto?.tags ?? []).join(", "),
+    servicio: servicio?.nombre ?? "",
+    delTipo: tipo.id === "kickoff" ? [servicio ? servicioParaElKickoff(servicio, null) : "", escala?.texto ?? ""].filter(Boolean).join("\n\n") : "",
+    frontera: fronteraDeLaPieza(tipo.id),
     handoff,
     reuniones: material?.reuniones ?? "",
     avisoSinReuniones: material?.avisoSinReuniones ?? "",
@@ -128,10 +170,19 @@ export async function generarCopia(o: {
     if (d && typeof d === "object") prevDataByKey[s.key] = d;
   }
 
+  /* Lo que su tipo no reescribe. Diagnóstico: lo revisado por el ejecutivo (regenerar no lo devuelve a la sugerencia).
+     Kickoff «Sin Escala»: la sección de la escala, que además se vacía abajo. */
+  const saltar = new Set<string>();
+  if (tipo.id === "diagnosis") for (const k of [POLITICA_RECTORA_KEY, DESAFIO_KEY]) if (estaRevisada(prevDataByKey[k])) saltar.add(k);
+  const sinEscala = tipo.id === "kickoff" && !escala?.usa;
+  if (sinEscala) saltar.add(SECCION_DE_ESCALA.kickoff);
+
   o.alFase?.(`Escribiendo ${tipo.conArticulo}…`);
-  const gen = await generateSectionsForTemplate(template, mensaje, undefined, undefined, prevDataByKey);
+  const generado = await generateSectionsForTemplate(template, mensaje, undefined, saltar.size ? saltar : undefined, prevDataByKey);
+  const gen = tipo.id === "diagnosis" ? { ...generado, sections: dejarElEnfoqueCorto(ordenarObjetivosDelDiagnostico(generado.sections)) } : generado;
 
   await guardarVersionDelDocumento(o.canvasId, { origen: "Antes de regenerar" });
+  if (sinEscala) await prisma.canvasBlock.deleteMany({ where: { section: { canvasId: o.canvasId, key: SECCION_DE_ESCALA.kickoff } } });
 
   const idPorKey = new Map(canvas.canvasSections.map((s) => [s.key, s.id]));
   let sectionCount = 0;

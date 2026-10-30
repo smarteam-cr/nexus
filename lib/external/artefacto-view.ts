@@ -11,7 +11,8 @@
  * Fail-closed, en CADA render (la página es `force-dynamic`):
  *   1. el token tiene la forma de uno (64 hex) y existe un `AccesoAlDocumento` con él, sin revocar;
  *   2. el documento es de un PROYECTO de la MISMA empresa que el enlace, nunca de una propuesta (lo vigila también INV64);
- *   3. el documento no está apagado/archivado (`disabledAt`) y su tipo lo lee el cliente (`clientFacing`) y se sabe pintar.
+ *   3. el documento no está apagado/archivado (`disabledAt`), su proyecto no es de prueba, y su tipo lo lee el cliente
+ *      (`clientFacing`) y se sabe pintar.
  * Sirve solo lo confirmado, sin lo oculto, sin las secciones que leen el proyecto (las `ctxDriven` que no son la portada
  * ni el cierre), sin las secciones internas de su tipo (la estimación del equipo técnico) y sin nada interno: ni quién lo
  * escribió, ni las fuentes, ni el estado de los bloques, ni el costo de una licencia (`sinLoInterno`).
@@ -24,7 +25,9 @@ import { comparaSectionHasContent, kickoffHiddenKey, stripProseCompara, COMPARA_
 import { ocultasDelBorrador, ocultasEnElEditor } from "@/lib/kickoff/ocultas-del-editor";
 import type { LandingSectionRow } from "@/components/landing/build-landing";
 import { esCopia, nombreDelArtefacto, tipoDelDocumento } from "@/lib/artefactos/copias";
-import { getBrandLogos } from "./smarteam-logo";
+import { applyAssignments, HORARIOS_KEY, normalizeAssignments } from "@/lib/kickoff/horario-assignments";
+import { resultadosDelProyecto } from "@/lib/handoff/resultados";
+import { brandLogoMap, getBrandLogos } from "./smarteam-logo";
 import { seccionesQueSalenPorElEnlace, tipoCompartible } from "@/lib/artefactos/secciones-del-enlace";
 
 export interface ArtefactoViewData {
@@ -39,6 +42,10 @@ export interface ArtefactoViewData {
   smarteamLogoUrl: string | null;
   brandLogos: Record<string, string>;
   rows: LandingSectionRow[];
+  /** Las secciones ocultas: la portada y el cierre las arma el motor aunque no venga su fila, y tienen que salir ocultas. */
+  ocultas: string[];
+  /** Diagnóstico: la línea base y la meta de los objetivos, de la lista VIVA de resultados (como su superficie y su PDF). */
+  resultados?: Array<{ id: string; resultado: string; metrica: string; lineaBase: string; meta: string; plazo: string; confirmadoAt?: string }>;
 }
 
 const TOKEN = /^[0-9a-f]{64}$/;
@@ -63,7 +70,7 @@ export async function artefactoParaElToken(token: string): Promise<ArtefactoView
           titulo: true,
           disabledAt: true,
           sections: true,
-          project: { select: { clientId: true, hiddenKickoffKeys: true } },
+          project: { select: { clientId: true, esPrueba: true, hiddenKickoffKeys: true, kickoffHorarioAssignments: true } },
         },
       },
       client: { select: { name: true, logoUrl: true, logoDarkUrl: true, logoScale: true } },
@@ -72,7 +79,7 @@ export async function artefactoParaElToken(token: string): Promise<ArtefactoView
   if (!acceso || acceso.revokedAt) return null;
   const c = acceso.canvas;
   if (!c || c.businessCaseId !== null || c.clientId !== null || !c.projectId || !c.project) return null;
-  if (c.project.clientId !== acceso.clientId || c.disabledAt) return null;
+  if (c.project.clientId !== acceso.clientId || c.disabledAt || c.project.esPrueba) return null;
   const tipo = tipoDelDocumento(c);
   if (!tipo || !tipoCompartible(tipo)) return null;
 
@@ -96,10 +103,12 @@ export async function artefactoParaElToken(token: string): Promise<ArtefactoView
     tipo === "kickoff" && !esCopia(c) ? new Set(ocultasEnElEditor(c.project.hiddenKickoffKeys ?? [], ocultasDelBorrador(c.sections))) : new Set<string>();
   const salen = seccionesQueSalenPorElEnlace(tipo);
   const dropProseCompara = tipo === "kickoff" && comparaSectionHasContent(secciones);
+  // Los horarios que eligió el cliente viven en el proyecto, fuera del bloque (el kickoff de siempre): como en su PDF.
+  const asignaciones = tipo === "kickoff" && !esCopia(c) ? normalizeAssignments(c.project.kickoffHorarioAssignments) : null;
+  const resultados = tipo === "diagnosis" ? ((await resultadosDelProyecto(c.projectId).catch(() => null))?.resultados ?? []) : null;
 
   await prisma.accesoAlDocumento.update({ where: { id: acceso.id }, data: { lastUsedAt: new Date() } }).catch(() => {});
   const logos = await getBrandLogos();
-  const brandLogos = Object.fromEntries(Object.entries(logos).filter((e): e is [string, string] => typeof e[1] === "string" && !!e[1]));
   return {
     tipo,
     nombre: nombreDelArtefacto(c),
@@ -108,7 +117,22 @@ export async function artefactoParaElToken(token: string): Promise<ArtefactoView
     clientLogoDarkUrl: acceso.client.logoDarkUrl,
     clientLogoScale: acceso.client.logoScale,
     smarteamLogoUrl: logos.smarteam ?? null,
-    brandLogos,
+    brandLogos: brandLogoMap(logos),
+    ocultas: [...ocultas],
+    ...(resultados
+      ? {
+          // Solo estos campos: lo demás de un resultado es del equipo.
+          resultados: resultados.map((r) => ({
+            id: r.id,
+            resultado: r.resultado,
+            metrica: r.metrica,
+            lineaBase: r.lineaBase,
+            meta: r.meta,
+            plazo: r.plazo,
+            ...(r.confirmadoAt ? { confirmadoAt: r.confirmadoAt } : {}),
+          })),
+        }
+      : {}),
     rows: secciones
       .filter((s) => salen(s.key) && !ocultas.has(s.key) && !ocultasDelKickoff.has(kickoffHiddenKey(s.key, s.id)) && s.blocks.length > 0)
       .map((s) => ({
@@ -118,7 +142,13 @@ export async function artefactoParaElToken(token: string): Promise<ArtefactoView
         blocks: s.blocks.map((b) => ({
           blockType: b.blockType,
           content: b.content,
-          data: sinLoInterno(dropProseCompara && s.key !== COMPARA_KEY ? stripProseCompara(b.data) : b.data),
+          data: sinLoInterno(
+            asignaciones && s.key === HORARIOS_KEY
+              ? applyAssignments(b.data, asignaciones)
+              : dropProseCompara && s.key !== COMPARA_KEY
+                ? stripProseCompara(b.data)
+                : b.data,
+          ),
         })),
       })),
   };

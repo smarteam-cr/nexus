@@ -38,6 +38,7 @@ import { cargarMaterialDelDocumento, encuadreDeLasElegidas } from "@/lib/context
 import { documentoConContexto } from "@/lib/contexto/documento";
 import { fronteraDeLaPieza } from "@/lib/contexto/frontera-de-los-documentos";
 import { resultadosDelProyecto } from "@/lib/handoff/resultados";
+import { bloqueDeInstruccionesDeDoc } from "@/lib/business-cases/section-briefs";
 import { resultadosParaPrompt } from "@/lib/handoff/resultados-medibles";
 import { memoriaDelDocumento } from "@/lib/memoria";
 import {
@@ -82,7 +83,11 @@ async function equipoDeSmarteam(projectId: string): Promise<string[]> {
  * `paraElAssist`: «Mejorar con IA» (canvas-assist) lee las elegidas EN RESUMEN, no enteras: manda el contexto entero en
  * cada pedido, y 160.000 caracteres de transcripción por pedido no se justifican para mejorar una sección.
  */
-export async function fuentesDelDiagnostico(projectId: string, opts: { paraElAssist?: boolean } = {}): Promise<string> {
+export async function fuentesDelDiagnostico(
+  projectId: string,
+  /* `instruccionesDeLaCopia`: «Mejorar con IA» de una copia (etapa V3) obedece las suyas, no las del documento de siempre. */
+  opts: { paraElAssist?: boolean; instruccionesDeLaCopia?: string } = {},
+): Promise<string> {
   const doc = documentoConContexto("diagnosis")!;
   /* Las reuniones que entran solas, como elegidas: las de las sesiones de la exploración (2026-10-23) y las del proyecto
      con texto (2026-10-24). Si falla, el diagnóstico sale con las elegidas de siempre: nunca lo frena. */
@@ -140,7 +145,7 @@ export async function fuentesDelDiagnostico(projectId: string, opts: { paraElAss
 
   return [
     // Las «Instrucciones adicionales» del diagnóstico (2026-10-07): primero, porque mandan sobre todo.
-    material.instrucciones,
+    opts.instruccionesDeLaCopia !== undefined ? bloqueDeInstruccionesDeDoc(opts.instruccionesDeLaCopia) : material.instrucciones,
     `Empresa: ${companyName}`,
     `Industria: ${project?.client?.industry ?? "No especificada"}`,
     `Proyecto: ${project?.name ?? "(sin nombre)"}`,

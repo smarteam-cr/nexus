@@ -10,8 +10,8 @@
  * Mismo mecanismo que los documentos de la empresa (`AccesoAlDocumento`, la URL es el secreto: 256 bits, sin contraseña,
  * `/external/documento/[token]`), con una diferencia a propósito: muestra el documento VIVO, sin publicar (ver
  * lib/external/artefacto-view.ts). Compartir crea el enlace; dejar de compartir lo revoca; volver a compartir crea uno
- * NUEVO (el viejo pudo circular a quien ya no debía verlo). Archivar una copia lo revoca también (quien archiva llama a
- * `dejarDeCompartirArtefacto`).
+ * NUEVO (el viejo pudo circular a quien ya no debía verlo). Archivar una copia lo revoca también (`archivarCopia`, en la
+ * misma transacción que la archiva). Un proyecto de prueba no se comparte.
  */
 import "server-only";
 import { randomBytes } from "node:crypto";
@@ -56,10 +56,11 @@ export async function estadoDelEnlace(canvasId: string): Promise<EstadoDelEnlace
 async function documentoCompartible(o: { projectId: string; clientId: string; canvasId: string }) {
   const c = await prisma.projectCanvas.findFirst({
     where: { id: o.canvasId, projectId: o.projectId, businessCaseId: null, project: { clientId: o.clientId } },
-    select: { id: true, slug: true, tipoArtefacto: true, name: true, disabledAt: true },
+    select: { id: true, slug: true, tipoArtefacto: true, name: true, disabledAt: true, project: { select: { esPrueba: true } } },
   });
   if (!c) throw new ErrorDelEnlace(404, "Documento no encontrado.");
-  if (c.disabledAt) throw new ErrorDelEnlace(409, "Este documento está archivado: vuelve a activarlo para compartirlo.");
+  if (c.project?.esPrueba) throw new ErrorDelEnlace(409, "Un proyecto de prueba no se comparte con el cliente.");
+  if (c.disabledAt) throw new ErrorDelEnlace(409, "Este documento está archivado: no se comparte.");
   if (!tipoCompartible(tipoDelDocumento(c))) throw new ErrorDelEnlace(400, "Este documento es interno: no se comparte con el cliente.");
   return c;
 }
@@ -85,12 +86,11 @@ export async function compartirArtefacto(o: { projectId: string; clientId: strin
 }
 
 /**
- * Deja de compartir: el enlace deja de abrir. Idempotente. Con `projectId`, solo si el documento es de ese proyecto
- * (la ruta lo pasa siempre; quien archiva una copia ya la tiene verificada).
+ * Deja de compartir: el enlace deja de abrir, solo si el documento es de ese proyecto. Idempotente.
  */
-export async function dejarDeCompartirArtefacto(canvasId: string, projectId?: string): Promise<EstadoDelEnlace> {
+export async function dejarDeCompartirArtefacto(canvasId: string, projectId: string): Promise<EstadoDelEnlace> {
   await prisma.accesoAlDocumento.updateMany({
-    where: { canvasId, revokedAt: null, ...(projectId ? { canvas: { projectId } } : {}) },
+    where: { canvasId, revokedAt: null, canvas: { projectId } },
     data: { revokedAt: new Date() },
   });
   return SIN_ENLACE;

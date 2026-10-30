@@ -221,6 +221,7 @@ ALTER TABLE "ProjectCanvas" ADD COLUMN IF NOT EXISTS "tipoArtefacto" TEXT;   -- 
 ALTER TABLE "ProjectCanvas" ADD COLUMN IF NOT EXISTS "titulo" TEXT;          -- el nombre que le pone una persona
 ALTER TABLE "ProjectCanvas" ADD COLUMN IF NOT EXISTS "terminadoEn" TIMESTAMP(3);  -- null = en construcción
 ALTER TABLE "ProjectCanvas" ADD COLUMN IF NOT EXISTS "terminadoPor" TEXT;
+-- punto de partida, una sola vez: lo ya presentado o publicado nace terminado
 CREATE INDEX IF NOT EXISTS "ProjectCanvas_projectId_tipoArtefacto_idx" ON "ProjectCanvas" ("projectId", "tipoArtefacto");
 -- una copia nunca tiene slug (CHECK NOT VALID, envuelto en DO $$ … $$)
 ```
@@ -302,9 +303,10 @@ arriba, una vez»); y llenar 6 secciones cuesta una corrida de verdad.
 Elías, 29 oct (respuesta 2): «cada copia, con su propio enlace. Muchas veces ese enlace lo usa Customer Success para
 compartir la pantalla desde ahí».
 
-- **Cada documento de un proyecto se comparte con su propio enlace** —las copias y también el de siempre—:
-  `AccesoAlDocumento` (ya existía, uno por documento, token de 64 hex, `revokedAt`) y la página que ya existía
-  `/external/documento/[token]`. Sin contraseña: el enlace es el secreto y se revoca.
+- **Cada documento de un tipo con barra se comparte con su propio enlace** —las copias y también el de siempre de
+  kickoff, diagnóstico y planificación—: `AccesoAlDocumento` (ya existía, uno por documento, token de 64 hex, `revokedAt`) y
+  la página que ya existía `/external/documento/[token]`. Sin contraseña: el enlace es el secreto y se revoca. La entrega y
+  el requerimiento técnico siguen solo con su superficie. Un proyecto de prueba no se comparte.
 - **Muestra el documento VIVO, no una foto**: sirve para compartir pantalla mientras se trabaja, y la foto
   (`publishedSnapshot`) del de siempre ya la usan los mecanismos de publicar del kickoff y de la planificación. Vivo =
   solo los bloques confirmados, sin lo oculto, sin las secciones que leen el proyecto ni las internas (la estimación),
@@ -386,7 +388,8 @@ Cada etapa se puede desplegar sola y se puede volver atrás sin tocar datos de c
   Invariante nueva de las copias en `check:invariants`.
 - **SQL**: `scripts/sql/2026-10-29-artefactos-copias.sql`, antes del deploy; `npm run check:esquema` lo confirma.
 - **Vuelta atrás**: quitar «Nuevo artefacto» y la barra (dos líneas del panel). Las copias que existan se archivan con un
-  `UPDATE` de `disabledAt` sobre las filas con `tipoArtefacto`. Las columnas se quedan: son aditivas.
+  `UPDATE` de `disabledAt` sobre las filas con `tipoArtefacto`, y sus enlaces se revocan. Las columnas se quedan: son
+  aditivas.
 
 ### Etapa 3b · Las reuniones y notas elegidas de cada copia (siguiente tanda)
 

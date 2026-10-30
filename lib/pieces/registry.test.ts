@@ -90,6 +90,16 @@ describe("resolución de canvases YA existentes en la base", () => {
   });
 });
 
+describe("una COPIA de un tipo no es su pieza (artefactos, etapa V3)", () => {
+  it("⛔ aunque se llame igual: los botones de la pieza no pueden apuntarle al documento de siempre", () => {
+    const copia = { slug: null, tipoArtefacto: "kickoff", name: "Kickoff" };
+    expect(pieceForCanvas(copia)).toBeNull();
+    expect(slugForCanvas(copia)).toBeNull();
+    // Sin `tipoArtefacto`, la lectura doble por nombre de siempre.
+    expect(pieceForCanvas({ slug: null, name: "Kickoff" })?.slug).toBe("kickoff");
+  });
+});
+
 describe("precedencia de resolución", () => {
   it("el slug ya poblado MANDA sobre el nombre", () => {
     // Post-renombre, el nombre en la base puede quedar viejo: el slug es la verdad.

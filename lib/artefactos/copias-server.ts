@@ -13,9 +13,11 @@ import "server-only";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { canvasOf } from "@/lib/pieces/canvas-query";
-import { conPlantillaAnotada, plantillaDelDocumento } from "@/lib/entregables/registro";
+import { conPlantillaAnotada } from "@/lib/entregables/registro";
 import { esCustomKey } from "@/lib/landing/custom-sections";
-import { admiteCopias, plantillaDelTipo, tipoDeArtefacto } from "./tipos";
+import { CLAVE_OCULTAS_DEL_EDITOR, ocultasDelBorrador, ocultasEnElEditor } from "@/lib/kickoff/ocultas-del-editor";
+import { kickoffHiddenKey } from "@/components/canvas/kickoff-landing-adapter";
+import { admiteCopias, plantillaDelTipo, plantillaGuardadaDelTipo, tipoDeArtefacto } from "./tipos";
 import {
   esCopia,
   nombreGuardableDeUnaCopia,
@@ -25,7 +27,7 @@ import {
   tipoDelDocumento,
   tituloLimpio,
 } from "./copias";
-import { canvasDefDeUnaCopia, seccionesDeUnaCopia } from "./catalogo";
+import { canvasDefDeUnaCopia, seccionesQuePasanAlDuplicar } from "./catalogo";
 
 export class ErrorDelArtefacto extends Error {
   constructor(
@@ -167,9 +169,11 @@ async function duplicar(o: {
       name: true,
       businessCaseId: true,
       sections: true,
+      project: { select: { hiddenKickoffKeys: true } },
       canvasSections: {
         orderBy: { order: "asc" },
         select: {
+          id: true,
           key: true,
           label: true,
           titleOverride: true,
@@ -183,18 +187,30 @@ async function duplicar(o: {
   if (!fuente) throw new ErrorDelArtefacto(404, "El documento que quieres duplicar no es de este proyecto.");
   if (tipoDelDocumento(fuente) !== o.tipo) throw new ErrorDelArtefacto(400, "Solo se duplica un documento del mismo tipo.");
 
-  // Las secciones del canon de una copia (con todas sus plantillas: duplicar no recorta) y las que creó una persona.
-  const g = plantillaDelDocumento(o.tipo, fuente.sections);
-  const permitidas = new Set(seccionesDeUnaCopia(o.tipo, null).map((s) => s.key));
+  // Todo lo del tipo, de cualquier plantilla (duplicar no recorta), y las que creó una persona.
+  const g = plantillaGuardadaDelTipo(o.tipo, fuente.sections);
+  const permitidas = seccionesQuePasanAlDuplicar(o.tipo);
   const secciones = fuente.canvasSections.filter((s) => permitidas.has(s.key) || esCustomKey(s.key));
   const keys = new Set(secciones.map((s) => s.key));
   const entradas = (Array.isArray(fuente.sections) ? (fuente.sections as unknown[]) : []).filter((e): e is Record<string, unknown> => {
     if (!e || typeof e !== "object") return false;
     const k = (e as { key?: unknown }).key;
     // Las entries reservadas (`__doc`, `__plantilla`…) pasan: son las instrucciones y la plantilla del documento.
-    return typeof k === "string" && (k.startsWith("__") || keys.has(k));
+    return typeof k === "string" && k !== CLAVE_OCULTAS_DEL_EDITOR && (k.startsWith("__") || keys.has(k));
   });
-  const sectionsJson = g?.guardada ? entradas : conPlantillaAnotada(entradas, g?.plantilla ?? plantillaDelTipo(o.tipo)!, o.porEmail, new Date().toISOString());
+  /* Lo oculto del kickoff de siempre vive por ID de sección (en el proyecto y en su borrador), y la copia tiene ids nuevos:
+     se traduce a `hidden` en el Json, como lo oculta cualquier otro documento. Sin esto reaparecería por el enlace de la copia. */
+  const ocultasDelKickoff =
+    o.tipo === "kickoff" && fuente.slug
+      ? new Set(ocultasEnElEditor(fuente.project?.hiddenKickoffKeys ?? [], ocultasDelBorrador(fuente.sections)))
+      : new Set<string>();
+  const anotadas = [...entradas];
+  for (const s of secciones.filter((x) => ocultasDelKickoff.has(kickoffHiddenKey(x.key, x.id)))) {
+    const i = anotadas.findIndex((e) => e.key === s.key);
+    if (i >= 0) anotadas[i] = { ...anotadas[i], hidden: true };
+    else anotadas.push({ key: s.key, label: s.label, hidden: true });
+  }
+  const sectionsJson = g.guardada || !g.plantilla ? anotadas : conPlantillaAnotada(anotadas, g.plantilla, o.porEmail, new Date().toISOString());
 
   const canvasId = await prisma.$transaction(async (tx) => {
     const c = await tx.projectCanvas.create({
@@ -241,7 +257,8 @@ async function duplicar(o: {
  */
 export async function renombrarArtefacto(projectId: string, canvasId: string, nombre: string): Promise<{ nombre: string }> {
   const c = await documentoDelProyecto(projectId, canvasId);
-  if (!c.tipo) throw new ErrorDelArtefacto(400, "Ese documento no es un artefacto.");
+  // Solo los tipos con barra: el handoff tiene su propia regla de quién lo edita y el cronograma no vive acá.
+  if (!admiteCopias(c.tipo)) throw new ErrorDelArtefacto(400, "Ese documento no se renombra desde acá.");
   const titulo = tituloLimpio(nombre);
   if (!titulo) throw new ErrorDelArtefacto(400, "Escribe un nombre.");
   await prisma.projectCanvas.update({
@@ -254,7 +271,7 @@ export async function renombrarArtefacto(projectId: string, canvasId: string, no
 /** Lo marca terminado (o lo devuelve a en construcción). Vale para cualquier documento del tipo. */
 export async function marcarTerminado(projectId: string, canvasId: string, terminado: boolean, porEmail: string | null): Promise<{ terminadoEn: string | null }> {
   const c = await documentoDelProyecto(projectId, canvasId);
-  if (!c.tipo) throw new ErrorDelArtefacto(400, "Ese documento no es un artefacto.");
+  if (!admiteCopias(c.tipo)) throw new ErrorDelArtefacto(400, "Ese documento no tiene estado.");
   const terminadoEn = terminado ? new Date() : null;
   await prisma.projectCanvas.update({ where: { id: canvasId }, data: { terminadoEn, terminadoPor: terminado ? porEmail : null } });
   return { terminadoEn: terminadoEn?.toISOString() ?? null };
@@ -272,6 +289,13 @@ export async function archivarCopia(projectId: string, canvasId: string, porEmai
     prisma.projectCanvas.update({ where: { id: canvasId }, data: { disabledAt: ahora, disabledBy: porEmail, disabledReason: "archivada" } }),
     prisma.accesoAlDocumento.updateMany({ where: { canvasId, revokedAt: null }, data: { revokedAt: ahora } }),
   ]);
+}
+
+/** Deshace archivar: la copia vuelve al riel y a lo que leen los agentes. Su enlace no vuelve: hay que crear uno nuevo. */
+export async function reactivarCopia(projectId: string, canvasId: string): Promise<void> {
+  const c = await documentoDelProyecto(projectId, canvasId);
+  if (!esCopia(c)) throw new ErrorDelArtefacto(409, "Ese documento no se archiva desde acá.");
+  await prisma.projectCanvas.update({ where: { id: canvasId }, data: { disabledAt: null, disabledBy: null, disabledReason: null } });
 }
 
 /**

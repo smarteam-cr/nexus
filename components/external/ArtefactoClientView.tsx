@@ -16,12 +16,20 @@ export default function ArtefactoClientView({ data }: { data: ArtefactoViewData 
   if (!adaptador) return null;
   const config = adaptador.config(data.rows.map((s) => s.key));
   const built = adaptador.sections(data.rows);
-  const sections = data.rows.map((s, i) => ({
+  const conFila = data.rows.map((s, i) => ({
     key: s.key,
     data: built[i]?.data ?? null,
     titleOverride: s.titleOverride ?? null,
     eyebrowOverride: s.eyebrowOverride ?? null,
   }));
+  /* La portada y el cierre los arma el motor aunque su fila no venga: oculta, saldría con el texto de fábrica (como el PDF). */
+  const enConfig = new Set(config.sections.map((s) => s.key));
+  const filas = new Set(data.rows.map((s) => s.key));
+  const ocultasFijas = data.ocultas
+    .filter((k) => enConfig.has(k) && !filas.has(k))
+    .map((key) => ({ key, data: null, titleOverride: null, eyebrowOverride: null, hidden: true }));
+  const sections = [...conFila, ...ocultasFijas];
+  const ctxDelTipo = adaptador.ctx?.(conFila) ?? {};
   return (
     <LandingView
       config={config}
@@ -34,7 +42,9 @@ export default function ArtefactoClientView({ data }: { data: ArtefactoViewData 
         clientLogoScale: data.clientLogoScale,
         smarteamLogoUrl: data.smarteamLogoUrl,
         brandLogos: data.brandLogos,
-        ...(adaptador.ctx?.(sections) ?? {}),
+        ...ctxDelTipo,
+        // La línea base y la meta de los objetivos (sin esto, cada objetivo dice «Por validar»).
+        ...(data.resultados && ctxDelTipo.diagnostico ? { diagnostico: { ...ctxDelTipo.diagnostico, resultados: data.resultados } } : {}),
       }}
       sections={sections}
       mode="read"
