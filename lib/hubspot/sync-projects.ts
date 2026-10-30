@@ -10,6 +10,7 @@ import { tipoDeServicioDelEspejo } from "@/lib/servicios/tipo-de-servicio";
 import type { Client } from "./sdk";
 import { detectarFusion, explicarFusion } from "@/lib/hubspot/empresa-fusionada";
 import { fusionadoEn } from "@/lib/hubspot/proyecto-fusionado";
+import { empresaDeLaDuena, laCopiaLoSalta } from "@/lib/hubspot/entidades-en-la-copia";
 import { OBJETO_PROYECTOS } from "@/lib/hubspot/asociaciones-proyecto";
 import { encargadoDelProyecto } from "@/lib/hubspot/encargados";
 
@@ -753,7 +754,14 @@ async function correrElEspejo(
   const [client, hubspotAccount] = await Promise.all([
     prisma.client.findUnique({
       where: { id: clientId },
-      select: { id: true, name: true, company: true, hubspotCompanyId: true },
+      select: {
+        id: true,
+        name: true,
+        company: true,
+        hubspotCompanyId: true,
+        comparteDominioConId: true,
+        comparteDominioCon: { select: { hubspotCompanyId: true, comparteDominioConId: true } },
+      },
     }),
     prisma.hubspotAccount.findFirst({
       where: { clientId },
@@ -821,7 +829,10 @@ async function correrElEspejo(
         hace falta) o guardar en el cliente una empresa resuelta por parecido de nombre. */
   /* R7b (Elías, 24 oct): `hubspotCompanyId` es SOLO la empresa en el HubSpot de Smarteam. Con la cuenta del cliente (su
      portal propio) no sirve: se busca por nombre en su portal en cada corrida, y no se guarda. */
-  let companyId = usingSystemAccount ? client.hubspotCompanyId : null;
+  /* Una entidad que comparte dominio copia de la empresa de su dueña: la suya está fusionada y no devuelve proyectos
+     (lib/hubspot/entidades-en-la-copia.ts). */
+  const empresaCompartida = dirigido ? null : empresaDeLaDuena(client);
+  let companyId = usingSystemAccount ? (empresaCompartida ?? client.hubspotCompanyId) : null;
 
   if (!companyId && !dirigido) {
     result.debug!.push("hubspotCompanyId no guardado — buscando empresa en HubSpot por nombre...");
@@ -1175,9 +1186,37 @@ async function correrElEspejo(
       ?.ignoredHubspotServiceIds ?? [],
   );
 
+  /* Cada ficha que comparte empresa toca solo lo suyo (lib/hubspot/entidades-en-la-copia.ts). Va antes de todo el bucle:
+     las ramas de abajo apagan un proyecto por su id, sin mirar de qué ficha es. */
+  const propios = empresaCompartida
+    ? new Set(
+        (await prisma.project.findMany({ where: { clientId, hubspotServiceId: { not: null } }, select: { hubspotServiceId: true } })).map(
+          (p) => p.hubspotServiceId!,
+        ),
+      )
+    : null;
+  const entidades = dirigido
+    ? []
+    : await prisma.client.findMany({ where: { comparteDominioConId: clientId }, select: { id: true, ignoredHubspotServiceIds: true } });
+  const deSusEntidades = new Set<string>(entidades.flatMap((e) => e.ignoredHubspotServiceIds));
+  if (entidades.length) {
+    for (const p of await prisma.project.findMany({
+      where: { clientId: { in: entidades.map((e) => e.id) }, hubspotServiceId: { not: null } },
+      select: { hubspotServiceId: true },
+    })) {
+      deSusEntidades.add(p.hubspotServiceId!);
+    }
+  }
+
   // 6. Sincronizar cada proyecto HubSpot → DB
   for (const project of projects) {
     const props = project.properties;
+
+    if (laCopiaLoSalta(project.id, { propios, deSusEntidades })) {
+      result.skipped++;
+      result.debug!.push(`Proyecto de la otra ficha que comparte la empresa: lo copia ella (${project.id})`);
+      continue;
+    }
 
     // Proyecto borrado a mano en Nexus → no recrear (antes del lookup: ni create ni reactivate).
     if (suppressed.has(project.id)) {

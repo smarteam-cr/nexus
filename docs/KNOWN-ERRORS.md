@@ -103,6 +103,11 @@ No tropezar dos veces. Si pisás uno nuevo, agregalo acá.
   responde 409 si después de sincronizar Nexus no lee a la persona nueva.
 - **«Perdí el cronograma (y el kickoff, el handoff…)» de un cliente, y los datos están.** *Causa (2026-10-19, Cemaco):* le llegó de HubSpot un segundo proyecto (Desarrollo, «CEMACO ») y la ficha, que con un solo proyecto abría directo en él, pasó a abrir en la cuenta; la CSE entró al proyecto nuevo, vacío. *Guarda:* con varios proyectos la ficha abre en el de quien mira, o en el del tipo de su equipo, y arriba dice «Esta cuenta tiene otro proyecto» (`lib/clients/proyecto-inicial.ts`). *Antes de «recuperar» nada:* contar `TimelineTask` y `CanvasBlock` por proyecto del cliente; si están en el otro, no hay nada que mover.
 - **La misma empresa dos veces: una con los proyectos y otra creada en Cobranza.** *Causa:* «Nueva empresa» de Cobranza busca la empresa por su id de origen, por la que confirma la persona o por el dominio, nunca por el nombre: sin dominio y sin confirmar, crea una ficha `source = "manual"` sin empresa de HubSpot (Cemaco y Total Finco, sep 2026). *Guarda:* `scripts/merge-duplicate-clients.ts`, quedándose con la que tiene la empresa de HubSpot y los proyectos.
+- **Dos fichas con la misma institución detrás no siempre son un duplicado.** «TEC · AE» y «TEC · TAE» son dos a
+  propósito (2026-10-29): AE comparte el dominio de TAE (`Client.comparteDominioConId`) y conserva la empresa de HubSpot
+  fusionada en el ITCR. *Guarda:* INV13 e INV54 no la cuentan, y la regla del resolver reparte sus reuniones. *Antes de
+  fusionar dos fichas o reapuntar una empresa fusionada:* mirar `comparteDominioConId` de las dos (DECISIONS «Dos
+  fichas que comparten dominio»).
 - **"Creé un proyecto en HubSpot y Nexus no lo ve."** *Causa:* la empresa se fusionó en HubSpot — el
   id viejo sigue respondiendo 200 con los datos del sobreviviente (nombre, dominio, fecha, todo
   correcto), pero las asociaciones (proyectos) se mudaron; no hay 404 ni ningún campo que lo marque.

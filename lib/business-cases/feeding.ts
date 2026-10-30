@@ -53,11 +53,17 @@ export interface BcFeedingResult {
 export async function loadBcFeeding(businessCaseId: string): Promise<BcFeedingResult | null> {
   const bc = await prisma.businessCase.findUnique({
     where: { id: businessCaseId },
-    select: { client: { select: { id: true, emailDomains: true } } },
+    select: {
+      client: { select: { id: true, emailDomains: true, comparteDominioConId: true, _count: { select: { entidadesDelDominio: true } } } },
+    },
   });
   if (!bc) return null;
 
-  const domains = (bc.client.emailDomains ?? []).map((d) => d.toLowerCase()).filter(Boolean);
+  /* Una ficha que comparte dominio no se suma las reuniones sin dueño por dominio: ahí están las POR DECIDIR entre sus
+     entidades, y traerlas es alimentar una propuesta con reuniones que pueden ser de la otra (DECISIONS «Dos fichas que
+     comparten dominio»). Las suyas ya llegan por `resolvedClientId`. */
+  const comparteDominio = !!bc.client.comparteDominioConId || bc.client._count.entidadesDelDominio > 0;
+  const domains = comparteDominio ? [] : (bc.client.emailDomains ?? []).map((d) => d.toLowerCase()).filter(Boolean);
 
   const [salesEmails, links] = await Promise.all([
     salesPresenceEmails(),

@@ -286,10 +286,12 @@ async function main() {
     // Primero TODAS las empresas del lote (y sus proyectos), después las reuniones: una reunión de B vinculada a un
     // proyecto de A tiene que encontrar a B ya en la local, pidas «A,B» o «B,A» (lo encontró /revisar, 2026-10-24).
     for (const plan of planes) {
+      // La ficha dueña del dominio puede venir después en el lote, o no venir: la llave se pone al final.
+      const sinDuena = { ...plan.cliente, comparteDominioConId: null };
       await destino.prisma.client.upsert({
         where: { id: plan.cliente.id },
-        create: asInput<Prisma.ClientUncheckedCreateInput>(plan.cliente),
-        update: asInput<Prisma.ClientUncheckedUpdateInput>(plan.cliente),
+        create: asInput<Prisma.ClientUncheckedCreateInput>(sinDuena),
+        update: asInput<Prisma.ClientUncheckedUpdateInput>(sinDuena),
       });
       enDestino.add(plan.cliente.id);
       for (const p of plan.proyectos) {
@@ -298,6 +300,13 @@ async function main() {
           create: asInput<Prisma.ProjectUncheckedCreateInput>(p),
           update: asInput<Prisma.ProjectUncheckedUpdateInput>(p),
         });
+      }
+    }
+
+    for (const plan of planes) {
+      const duena = plan.cliente.comparteDominioConId;
+      if (await existeEnDestino(duena)) {
+        await destino.prisma.client.update({ where: { id: plan.cliente.id }, data: { comparteDominioConId: duena } });
       }
     }
 

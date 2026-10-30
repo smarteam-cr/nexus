@@ -18,6 +18,7 @@ import {
   INV31, INV32, INV33, INV34, INV35, INV36, INV37, INV38, INV39, INV40, INV41, INV42, INV43, INV44, INV45, INV46, INV47,
   type Invariante,
 } from "@/lib/invariantes";
+import { fusionadaEsperada } from "@/lib/invariantes/hubspot";
 import { INV49, INV50, INV51, INV52, INV53, INV54, INV55, INV56, INV57, INV58, INV59, INV60, INV61, INV62, INV63, INV64 } from "@/lib/invariantes";
 
 /**
@@ -458,16 +459,22 @@ async function main(): Promise<number> {
     const [clientes, bcs] = await Promise.all([
       prisma.client.findMany({
         where: { hubspotCompanyId: { not: null } },
-        select: { name: true, hubspotCompanyId: true },
+        select: { id: true, name: true, hubspotCompanyId: true, comparteDominioConId: true },
       }),
       prisma.businessCase.findMany({
         where: { hubspotCompanyId: { not: null } },
         select: { name: true, hubspotCompanyId: true },
       }),
     ]);
+    /* Una ENTIDAD que comparte dominio con la dueña de la sobreviviente no se cuenta: `fusionadaEsperada`, como INV54. */
+    const empresaDe = new Map(clientes.map((c) => [c.id, c.hubspotCompanyId]));
     const conEmpresa = [
-      ...clientes.map((c) => ({ name: c.name, hubspotCompanyId: c.hubspotCompanyId })),
-      ...bcs.map((b) => ({ name: `BC «${b.name}»`, hubspotCompanyId: b.hubspotCompanyId })),
+      ...clientes.map((c) => ({
+        name: c.name,
+        hubspotCompanyId: c.hubspotCompanyId,
+        empresaDeLaDuena: c.comparteDominioConId ? (empresaDe.get(c.comparteDominioConId) ?? null) : null,
+      })),
+      ...bcs.map((b) => ({ name: `BC «${b.name}»`, hubspotCompanyId: b.hubspotCompanyId, empresaDeLaDuena: null })),
     ];
     if (conEmpresa.length === 0) {
       console.log("✓ INV13: no hay clientes con empresa de HubSpot que revisar.");
@@ -479,7 +486,8 @@ async function main(): Promise<number> {
       );
       const fusionadas = conEmpresa
         .map((c) => ({ c, v: veredictos.get(c.hubspotCompanyId!) }))
-        .filter((x) => x.v?.estado === "fusionada");
+        .filter((x) => x.v?.estado === "fusionada")
+        .filter((x) => !(x.v?.estado === "fusionada" && fusionadaEsperada(x.c.empresaDeLaDuena, x.v.idSobreviviente)));
       const ilegibles = [...veredictos.values()].filter((v) => v.estado === "ilegible").length;
 
       if (fusionadas.length > 0) {

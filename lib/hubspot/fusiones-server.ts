@@ -18,6 +18,7 @@ import { prisma } from "@/lib/db/prisma";
 import { esquemaDesactualizado } from "@/lib/db/esquema";
 import { getSystemHubspotClient } from "./client";
 import { buscarFusiones, OBJETOS_FUSIONABLES, sobrevivienteFinal, type ObjetoFusionable, type ParDeFusion } from "./fusiones";
+import { fusionadaEsperada } from "@/lib/invariantes/hubspot";
 
 /** La fila de `CronJobState` donde queda el último informe (la del job la pisa el semáforo con `{ok, at}`). */
 export const FILA_DEL_INFORME = "hubspot-fusiones-informe";
@@ -111,16 +112,21 @@ export async function revisarFusiones(o: { escribir?: boolean; ahora?: Date } = 
 
   const empresas = [...de("empresa").keys()];
   const fichasViejas = empresas.length
-    ? await prisma.client.findMany({ where: { hubspotCompanyId: { in: empresas } }, select: { id: true, name: true, hubspotCompanyId: true } })
+    ? await prisma.client.findMany({ where: { hubspotCompanyId: { in: empresas } }, select: { id: true, name: true, hubspotCompanyId: true, comparteDominioConId: true } })
     : [];
   const sobrevivientes = fichasViejas.map((f) => nuevo("empresa", f.hubspotCompanyId!));
-  const tomadas = sobrevivientes.length
-    ? new Map((await prisma.client.findMany({ where: { hubspotCompanyId: { in: sobrevivientes } }, select: { name: true, hubspotCompanyId: true } })).map((c) => [c.hubspotCompanyId!, c.name]))
-    : new Map<string, string>();
-  const fichas: FichaConIdViejo[] = fichasViejas.map((f) => {
-    const idNuevo = nuevo("empresa", f.hubspotCompanyId!);
-    return { clientId: f.id, nombre: f.name, idViejo: f.hubspotCompanyId!, idNuevo, sobrevivienteEnOtraFicha: tomadas.get(idNuevo) ?? null };
-  });
+  const duenasDeLaSobreviviente = sobrevivientes.length
+    ? await prisma.client.findMany({ where: { hubspotCompanyId: { in: sobrevivientes } }, select: { id: true, name: true, hubspotCompanyId: true } })
+    : [];
+  const tomadas = new Map(duenasDeLaSobreviviente.map((c) => [c.hubspotCompanyId!, c.name]));
+  const empresaDe = new Map(duenasDeLaSobreviviente.map((c) => [c.id, c.hubspotCompanyId]));
+  /* Una entidad que comparte dominio con la dueña de la sobreviviente es a propósito (INV54): no se ofrece reapuntarla. */
+  const fichas: FichaConIdViejo[] = fichasViejas
+    .filter((f) => !fusionadaEsperada(f.comparteDominioConId ? empresaDe.get(f.comparteDominioConId) : null, nuevo("empresa", f.hubspotCompanyId!)))
+    .map((f) => {
+      const idNuevo = nuevo("empresa", f.hubspotCompanyId!);
+      return { clientId: f.id, nombre: f.name, idViejo: f.hubspotCompanyId!, idNuevo, sobrevivienteEnOtraFicha: tomadas.get(idNuevo) ?? null };
+    });
   const businessCases = empresas.length ? await prisma.businessCase.count({ where: { hubspotCompanyId: { in: empresas } } }) : 0;
 
   const idsDeProyectos = [...de("proyecto").keys()];

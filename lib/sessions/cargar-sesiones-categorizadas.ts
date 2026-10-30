@@ -15,6 +15,8 @@ import {
   buildInternalDomainsSet,
   collectExternalDomains,
   computeAmbiguousNameTokens,
+  aprenderPersonasDeEntidades,
+  type CategorizeContext,
 } from "@/lib/sessions/categorize";
 import { cachedSearchCompaniesByDomains } from "@/lib/hubspot/companies";
 import { esReunionDePuertasAdentro } from "@/lib/sessions/candidatas-internas";
@@ -94,7 +96,16 @@ export async function cargarSesionesCategorizadas() {
     }),
     prisma.client.findMany({
       orderBy: { name: "asc" },
-      select: { id: true, name: true, company: true, emailDomains: true, hubspotCompanyId: true, siglas: true, createdAt: true },
+      select: {
+        id: true,
+        name: true,
+        company: true,
+        emailDomains: true,
+        hubspotCompanyId: true,
+        siglas: true,
+        comparteDominioConId: true,
+        createdAt: true,
+      },
     }),
     getTeamMembers(),       // cacheado
     getSessionCategories(), // cacheado
@@ -149,7 +160,7 @@ export async function cargarSesionesCategorizadas() {
   const clientsParaAtribuir = [...clients].sort(
     (a, b) => a.createdAt.getTime() - b.createdAt.getTime() || a.id.localeCompare(b.id),
   );
-  const categorized = categorizeSessions(sessions, {
+  const ctx: CategorizeContext = {
     clients: clientsParaAtribuir,
     categories,
     hubspotCompaniesByDomain,
@@ -157,7 +168,10 @@ export async function cargarSesionesCategorizadas() {
     clientsByHubspotCompanyId,
     groupUnlinkedHubspotCompany: true, // /sessions agrupa las empresas-HubSpot no-cliente
     ambiguousNameTokens: computeAmbiguousNameTokens(clients),
-  });
+  };
+  // La gente de cada entidad que comparte dominio (sin HubSpot, como la materialización).
+  ctx.personasDeEntidades = aprenderPersonasDeEntidades(sessions, { ...ctx, hubspotCompaniesByDomain: new Map() });
+  const categorized = categorizeSessions(sessions, ctx);
 
   // ── 6. Enriquecer con team members + group ─────────────────────────────────
   const sessionsWithMeta = categorized.map((s) => {

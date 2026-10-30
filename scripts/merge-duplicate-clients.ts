@@ -539,6 +539,9 @@ async function processPair(p: (typeof PAIRS)[number], opciones: { nombre: string
       }
       /* Borrar la absorbida, ya vacía, y DESPUÉS dejar la ficha que sigue con su nombre final: así nunca hay dos
          empresas con el mismo nombre, ni siquiera dentro de la transacción. */
+      // Si la absorbida era la dueña de un dominio compartido (DECISIONS «Dos fichas que comparten dominio»), sus
+      // entidades pasan a la que sigue: con el SET NULL de la llave, el grupo se disolvería sin aviso.
+      await tx.client.updateMany({ where: { comparteDominioConId: a.dup, id: { not: a.canon } }, data: { comparteDominioConId: a.canon } });
       await tx.client.delete({ where: { id: a.dup } });
       await tx.client.update({
         where: { id: a.canon },

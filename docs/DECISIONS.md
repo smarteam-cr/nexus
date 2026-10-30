@@ -13,6 +13,9 @@ Decisiones ya tomadas, con el porqué. Si vas a cambiar una, primero entendé po
   (`emailDomains` + `company`) → categoría → **HubSpot→Client** (dominio→company ligada vía
   `Client.hubspotCompanyId`) → título (fallback débil) → orphan. El **dominio manda antes que
   el título**.
+- **Dos fichas que comparten dominio** (el TEC, 2026-10-29): en los pasos de dominio y HubSpot, la reunión se reparte
+  entre la dueña y sus entidades por nombre y después por gente; sin pista, por decidir. Ver «Dos fichas que comparten
+  dominio» al final.
 - **HubSpot→Client es ADITIVO, no "corte":** si la company de HubSpot NO está ligada a un Client,
   en la materialización cae al título (no a null). *Por qué:* el "corte" perdía sesiones
   legítimas de clientes cuyo dominio real está en HubSpot pero NO registrado en el Client
@@ -12611,3 +12614,62 @@ con el diff viejo solo como referencia, después de confirmar con búsqueda que 
   `send-to-canvas` en `scope-coverage.ts` sí sale con su ruta.
 - **El modelo, sus filas y lo que leen y escriben los agentes en `/analyze` se quedan**: es el ítem 23 y el resto del
   24 (los agentes encadenados por paso todavía leen las cards del paso anterior y las HUMAN del cliente).
+
+## Dos fichas que comparten dominio: el TEC se separa en AE y TAE (2026-10-29)
+
+Elías, 29 oct: «Que el TEC se separe en dos clientes, uno para el AE y otro para el TAE, cada uno con sus sesiones y
+proyectos. Hoy Nexus los mezcla y no se puede ver bien cómo va cada uno.» Cambia lo que había dicho el 28 oct («con la
+separación de proyectos debería bastar»). Plan y números: `docs/empresas-con-dominio-compartido-plan.md`.
+
+- **Dos fichas: «TEC · TAE» (la vieja «TEC») y «TEC · AE» (la vieja «TEC- AE»).** TAE se queda con los dominios
+  (`itcr.ac.cr`, `tec.ac.cr`), la empresa de HubSpot del ITCR y todo lo que es de la cuenta (contactos, correos, tickets,
+  negocios). AE recibe su proyecto y lo que cuelga de él. *Por qué la vieja es TAE:* ahí está la historia y la empresa
+  de HubSpot; AE nació vacía.
+- **AE no tiene dominio propio: COMPARTE el de TAE (`Client.comparteDominioConId`).** Registrar el mismo dominio en las
+  dos fichas rompía INV37 y los ~30 lugares que arman «dominio → ficha» (cobranza, Partner, exploraciones…), que se
+  quedarían con la primera. Con la marca, solo el resolver de reuniones sabe que el dominio es de las dos.
+- **La regla vive en el resolver único (`categorize.ts`), en los pasos 3 (dominio) y 5 (HubSpot), y en ningún otro
+  lado:** cuando la ficha que dio el dominio es de un grupo, la reunión se reparte entre la dueña y sus entidades.
+  1. El **nombre** de la reunión (las `siglas` de cada ficha: «AE», «TAE»; o su nombre). Si nombra a dos, por decidir.
+  2. La **gente**: si todas las personas de afuera que se conocen son de la misma entidad, es de esa. La gente se
+     aprende SOLO de reuniones que decidió el nombre o una persona (`manualClientId`), nunca de las que decidió la gente:
+     un error no se alimenta a sí mismo. Quien estuvo en reuniones de las dos no cuenta; la de Smarteam tampoco.
+  3. Si no hay pista, **por decidir**: `resolvedClientId` null, a la vista en /sessions para asignarla a mano.
+  *Por qué no a la ficha más vieja:* es exactamente la mezcla que se quería cortar; una reunión sin dueño se ve, una
+  mal puesta no.
+- **Lo asignado a mano gana siempre** (paso 1, como siempre). Las 4 reuniones del TEC asignadas a mano dicen «TAE» en el
+  título y quedan en TAE.
+- **La empresa de HubSpot de AE (56463266574, fusionada en el ITCR) no se reapunta.** La del ITCR ya es de TAE (una
+  empresa es de una sola ficha, R7b), HubSpot no separa las escuelas, y el registro de Partner del portal de AE ya cuelga
+  de esta ficha (el vínculo existente se conserva). INV13 e INV54 no la cuentan: es el estado real de HubSpot, no un error de Nexus.
+- **Lo que viene de la empresa de HubSpot sigue llegando a TAE**: los negocios (incluido el trato de AE), los contactos,
+  correos y tickets. El proyecto de AE no vuelve a TAE: la copia de proyectos nunca cambia el `clientId` de un proyecto
+  que ya existe.
+- **La copia de proyectos de las dos corre contra la empresa de la dueña, y cada una toca solo lo suyo**
+  (`lib/hubspot/entidades-en-la-copia.ts`). *Por qué:* la empresa fusionada de AE da cero, y la corrida se cortaría con
+  error en cada vuelta, también en el pase de encargado. Copiar uno por uno se descartó: sin la corrida normal se perdían
+  la reconciliación y la reactivación (un proyecto apagado una vez no volvía). La dueña se salta los proyectos de sus
+  entidades, también los que una persona borró allá: si los escribiera ella, el pase de la entidad no vería el cambio.
+  Un proyecto NUEVO del instituto lo copia la dueña.
+- **Una entidad no escribe en la empresa de HubSpot** (el encargado de la empresa, el siguiente paso): el id viejo cae en la
+  de la dueña. Sus proyectos sí.
+- **La gente se aprende sin mirar lo materializado** (`resolvedClientId`): de las reuniones asignadas a mano y de las que
+  traen una pista en el título. *Por qué:* si dependiera de quién es hoy la dueña, una corrida cambiaría lo aprendido y la
+  siguiente daría otro resultado (INV2 en rojo).
+- **Las siglas valen en toda la cascada**, también para las reuniones internas: «Hand Off | AE» es de AE. El script de
+  reubicar por eso mira todas las reuniones, no solo las del grupo.
+- **Una propuesta de una ficha que comparte dominio no suma reuniones sin dueño por dominio** (`lib/business-cases/feeding.ts`):
+  ahí están las por decidir. La propuesta «AE - Smartloop» y su preventa no tienen proyecto y pasan a AE a mano en
+  `scripts/separar-tec.ts`.
+- **Mudanza con dos scripts, después del deploy:** `scripts/separar-tec.ts` (nombres, siglas, la marca y el proyecto de
+  AE con cada fila que tiene `clientId` y `projectId`) y `scripts/reubicar-reuniones-compartidas.ts` (cada reunión del
+  grupo al dueño que dice el resolver, con sus vínculos a proyectos y cada fila con `clientId` y `sessionId`). La
+  reunión manda sobre el proyecto: un hecho de una reunión de AE que estaba en el proyecto de TAE va a AE. Lo de una
+  reunión por decidir se queda donde está y se lista. La reunión que no queda vinculada al único proyecto de trabajo de
+  su ficha se vincula, como el atajo del clasificador: el proyecto lee por vínculo. Simulacro por defecto y respaldo en
+  JSON (`backups/`).
+- **Fusionar a la dueña pasa sus entidades a la ficha que sigue** (`scripts/merge-duplicate-clients.ts`): con el SET NULL
+  de la llave, el grupo se disolvería sin aviso.
+- **Etapa futura, no ahora: el grupo arriba, para la reportería.** Ver el TEC entero (AE + TAE) en un solo número
+  —cartera, rentabilidad, uso de Nexus— pide una vista de grupo por encima de las fichas. Hoy no existe y nada la lee:
+  cada ficha se reporta por su lado.
