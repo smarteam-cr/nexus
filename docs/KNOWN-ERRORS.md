@@ -101,6 +101,11 @@ No tropezar dos veces. Si pisás uno nuevo, agregalo acá.
   mostraba el primero. *Guarda:* el espejo dirigido da de baja la fila del id pedido cuando vuelve otro
   (`lib/hubspot/sync-projects.ts`), la columna sale de la regla única (`lib/cuentas/encargado.ts`) y la ruta del pase
   responde 409 si después de sincronizar Nexus no lee a la persona nueva.
+- **«Le di a "Traer proyectos de HubSpot" y la ficha no cambió hasta minutos después».** *Causa (2026-10-29, SmartAgro):*
+  el piso de 60 s se cuenta desde la copia que hace la ficha al abrirse; un cambio en HubSpot y un clic dentro de ese
+  minuto no corrían nada. *Guarda:* el botón relee por id lo que ya está (`releerSiHayPiso`, lib/hubspot/sync-projects.ts).
+  *OJO:* un proyecto NUEVO sigue necesitando la corrida completa (un minuto). *Antes de culpar a la caché:* mirar
+  `hubspotStageSyncedAt` y `updatedAt` de los proyectos contra la historia de HubSpot (`propertiesWithHistory`).
 - **«Perdí el cronograma (y el kickoff, el handoff…)» de un cliente, y los datos están.** *Causa (2026-10-19, Cemaco):* le llegó de HubSpot un segundo proyecto (Desarrollo, «CEMACO ») y la ficha, que con un solo proyecto abría directo en él, pasó a abrir en la cuenta; la CSE entró al proyecto nuevo, vacío. *Guarda:* con varios proyectos la ficha abre en el de quien mira, o en el del tipo de su equipo, y arriba dice «Esta cuenta tiene otro proyecto» (`lib/clients/proyecto-inicial.ts`). *Antes de «recuperar» nada:* contar `TimelineTask` y `CanvasBlock` por proyecto del cliente; si están en el otro, no hay nada que mover.
 - **La misma empresa dos veces: una con los proyectos y otra creada en Cobranza.** *Causa:* «Nueva empresa» de Cobranza busca la empresa por su id de origen, por la que confirma la persona o por el dominio, nunca por el nombre: sin dominio y sin confirmar, crea una ficha `source = "manual"` sin empresa de HubSpot (Cemaco y Total Finco, sep 2026). *Guarda:* `scripts/merge-duplicate-clients.ts`, quedándose con la que tiene la empresa de HubSpot y los proyectos.
 - **"Creé un proyecto en HubSpot y Nexus no lo ve."** *Causa:* la empresa se fusionó en HubSpot — el

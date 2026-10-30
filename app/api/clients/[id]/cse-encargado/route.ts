@@ -21,14 +21,15 @@ import { lineaDeLoQuePaso, pasarLoDeLaCuenta, quienesSiguen } from "@/lib/cuenta
  *
  * ── DESDE EL 2026-10-09: «CSE ENCARGADO» Y «CSL ENCARGADO» (entrega 5 del plan de la cartera) ──────────
  * Escribe «CSE Encargado» (`cse_encargado`) = el CSE elegido y «CSL Encargado» (`csl_encargado`) = la CSL del
- * equipo, en los proyectos de implementación, en la EMPRESA y en sus CONTACTOS. El espejo lee primero
- * `cse_encargado` (lib/hubspot/encargados.ts). Al CSE nuevo le llega en «Para ti» el resumen de la cuenta; al
- * anterior, una línea de que la cuenta pasó.
+ * equipo, en los proyectos de implementación, en la EMPRESA y en sus CONTACTOS. En los PROYECTOS escribe además el
+ * «Propietario» (`hubspot_owner_id`) = el CSE: desde el 2026-10-29 es lo que el espejo lee primero
+ * (lib/hubspot/encargados.ts). En la empresa no: su propietario es el vendedor. Al CSE nuevo le llega en «Para ti» el
+ * resumen de la cuenta; al anterior, una línea de que la cuenta pasó.
  *
  * ── ES POR CLIENTE, NO POR PROYECTO, Y ESA ES LA IDEA ────────────────────────
  * Elías, 2026-08-21: *«Los customer success del pipeline de implementación de hubspot son los
  * customer success de la cuenta»*. El encargado no es un atributo de UN proyecto: es de la
- * cuenta, y vive replicado en `csl_encargado` de cada proyecto del pipeline de Implementación
+ * cuenta, y vive replicado en el propietario de cada proyecto del pipeline de Implementación
  * de HubSpot. Por eso esta ruta cuelga del cliente y escribe TODOS esos proyectos de una.
  *
  * ⛔ NUNCA toca los de "development"/"sitios-web". Ésos cuelgan como hijos/hermanos de una
@@ -38,12 +39,12 @@ import { lineaDeLoQuePaso, pasarLoDeLaCuenta, quienesSiguen } from "@/lib/cuenta
  *
  * ── ESCRIBE EN HUBSPOT, NO EN NEXUS ─────────────────────────────────────────
  * Mismo motivo que el interruptor de "interno": `Project.hubspotOwnerId/Name/Email` los escribe
- * SOLO el espejo, que los resuelve desde `csl_encargado`. Si esta ruta escribiera esas columnas,
+ * SOLO el espejo, que los resuelve desde el propietario. Si esta ruta escribiera esas columnas,
  * el sync las revertiría en diez minutos — sobre el campo que decide QUIÉN VE EL CLIENTE.
  *
  * ── PERMISO: LIDERAZGO, NO EL CSE ───────────────────────────────────────────
  * `proyectos.reasignarEncargado`, por default solo CSL + SUPER_ADMIN (decisión de Elías). Mover
- * cartera es decisión de liderazgo, y como `csl_encargado` gobierna la visibilidad, un CSE que
+ * cartera es decisión de liderazgo, y como el propietario gobierna la visibilidad, un CSE que
  * pudiera reasignar podría quitarse —o quitarle a otro— una cuenta entera sin aprobación.
  */
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {

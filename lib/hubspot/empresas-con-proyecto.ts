@@ -28,7 +28,7 @@ import { OBJETO_PROYECTOS } from "./asociaciones-proyecto";
 import { prisma } from "@/lib/db/prisma";
 import { detectarGemelas, type ClienteComparable, type Gemela } from "@/lib/clients/gemelas";
 import { resolvePipeline, decidirCierre, estadoCrudoDeHubspot } from "@/lib/projects/kind";
-import { encargadoDelProyecto } from "@/lib/hubspot/encargados";
+import { duenoDelProyecto, encargadoDelProyecto } from "@/lib/hubspot/encargados";
 
 /** Un proyecto de HubSpot que Nexus todavía no tiene. */
 export interface ProyectoFaltante {
@@ -110,6 +110,8 @@ interface RecordProyecto {
   rawStatus: string | null;
   ownerId: string | null;
   cslEncargado: string | null;
+  /** A quién se recurre si el de arriba está archivado en HubSpot (`duenoDelProyecto`), como en el espejo. */
+  respaldoEncargado: string | null;
 }
 
 /**
@@ -161,8 +163,9 @@ export async function listarEmpresasTraibles(): Promise<UniversoTraible | null> 
            —mirando el mismo record— iba a cerrar. Ver `estadoCrudoDeHubspot`. */
         rawStatus: estadoCrudoDeHubspot(r.properties),
         ownerId: r.properties.hubspot_owner_id ?? null,
-        // «CSE Encargado» primero (2026-10-09): el mismo encargado que lee el espejo (`encargadoDelProyecto`).
+        // El propietario primero (2026-10-29): el mismo encargado que lee el espejo (`encargadoDelProyecto`).
         cslEncargado: encargadoDelProyecto(r.properties),
+        respaldoEncargado: duenoDelProyecto(r.properties).respaldo,
       });
     }
     after = body.paging?.next?.after;
@@ -411,7 +414,7 @@ export async function listarEmpresasTraibles(): Promise<UniversoTraible | null> 
       dominio: ficha.domain,
       proyectos: faltantes.map((p) => {
         const idDuenio = p.cslEncargado ?? p.ownerId;
-        const d = idDuenio ? duenios.get(idDuenio) : undefined;
+        const d = (idDuenio ? duenios.get(idDuenio) : undefined) ?? (p.respaldoEncargado ? duenios.get(p.respaldoEncargado) : undefined);
         return {
           hubspotServiceId: p.id,
           nombre: p.nombre,

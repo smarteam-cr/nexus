@@ -7,6 +7,8 @@
  * (`csl_encargado`) pasa a ser la CSL. Hasta ahora `csl_encargado` guardaba al CSE (103 de 111 proyectos) y
  * `cse_encargado` estaba vacío: el espejo lee primero `cse_encargado` y, si está vacío, `csl_encargado`, así que la
  * migración (scripts/migrar-cse-encargado.ts) no le cambia a nadie las cuentas que ve.
+ * Desde el 2026-10-29 el espejo lee primero el «Propietario» del proyecto (lib/hubspot/encargados.ts); estas dos
+ * propiedades siguen escribiéndose y son el respaldo cuando el propietario está vacío.
  *
  * Los dos son campos OWNER: guardan el id de usuario de HubSpot, no el correo (`resolverOwnerIdPorEmail`).
  */

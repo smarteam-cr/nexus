@@ -8,7 +8,7 @@
  * Pinzón o Marco Salas); algunas empresas no tienen dueño.
  *
  * ⚠ Es el dueño de la EMPRESA (`hubspot_owner_id` de la company), NO el del proyecto:
- * `Project.hubspotOwnerEmail` es el CSE (sale de `csl_encargado`). Nexus no guarda este dato: se lee
+ * `Project.hubspotOwnerEmail` es el CSE (sale del propietario del PROYECTO, lib/hubspot/encargados.ts). Nexus no guarda este dato: se lee
  * de HubSpot en el momento del aviso, que pasa pocas veces. Una empresa fusionada responde con los
  * datos de la que quedó, así que el dueño sigue siendo el correcto.
  *

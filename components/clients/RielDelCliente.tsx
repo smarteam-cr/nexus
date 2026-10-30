@@ -122,7 +122,7 @@ export default function RielDelCliente({
             type="button"
             onClick={traer.onClick}
             disabled={traer.sincronizando}
-            title="Trae los proyectos que esta empresa tenga en HubSpot y todavía no estén acá. No borra nada."
+            title="Trae de HubSpot los proyectos de esta empresa: los nuevos y lo que cambió en los que ya están (etapa, nombre, encargado, si se cerró)."
             className="flex w-full items-center gap-2 rounded-lg border border-line bg-surface-muted px-3 py-2.5 text-left text-[13px] text-fg-secondary transition-colors hover:bg-surface-hover hover:text-fg disabled:opacity-60"
           >
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={cn("h-4 w-4 flex-shrink-0", traer.sincronizando && "animate-spin")} aria-hidden="true">

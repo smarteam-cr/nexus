@@ -77,14 +77,15 @@ async function medir(dias: number) {
   let sinLeer = 0;
   for (const p of proyectos) {
     const res = await hs
-      .apiRequest({ method: "GET", path: `/crm/v3/objects/${OBJETO_PROYECTOS}/${p.hubspotServiceId}?propertiesWithHistory=cse_encargado,csl_encargado` })
+      .apiRequest({ method: "GET", path: `/crm/v3/objects/${OBJETO_PROYECTOS}/${p.hubspotServiceId}?propertiesWithHistory=hubspot_owner_id,cse_encargado,csl_encargado` })
       .catch(() => null);
     if (!res || !res.ok) {
       sinLeer++;
       continue;
     }
-    const d = (await res.json()) as { propertiesWithHistory?: { cse_encargado?: ValorEnElTiempo[]; csl_encargado?: ValorEnElTiempo[] } };
-    const owner = encargadoEnLaFecha({ cse: d.propertiesWithHistory?.cse_encargado, csl: d.propertiesWithHistory?.csl_encargado }, desde);
+    const d = (await res.json()) as { propertiesWithHistory?: { hubspot_owner_id?: ValorEnElTiempo[]; cse_encargado?: ValorEnElTiempo[]; csl_encargado?: ValorEnElTiempo[] } };
+    const h = d.propertiesWithHistory;
+    const owner = encargadoEnLaFecha({ propietario: h?.hubspot_owner_id, cse: h?.cse_encargado, csl: h?.csl_encargado }, desde);
     const m = antesPorCliente.get(p.clientId) ?? new Map<string, string | null>();
     m.set(p.id, correoDe(owner));
     antesPorCliente.set(p.clientId, m);

@@ -291,6 +291,15 @@ export default function WorkspaceClient({
                 ? "Se intentó hace menos de un minuto. Esperá un momento y volvé a probar."
                 : "Ya se sincronizó hace poco. Probá de nuevo en un rato.",
           );
+        } else if (typeof data.releidos === "number" && data.releidos > 0) {
+          /* La corrida completa no podía correr todavía (el piso de 60 s): el botón releyó por id los proyectos que ya
+             estaban (2026-10-29). Lo que cambió en ellos ya está en pantalla; uno NUEVO llega con la corrida completa. */
+          toast.success(
+            `Releí en HubSpot ${data.releidos === 1 ? "el proyecto" : `los ${data.releidos} proyectos`} de esta ficha. ` +
+              (data.created
+                ? `Y llegó ${data.created === 1 ? "1 proyecto nuevo" : `${data.created} proyectos nuevos`}.`
+                : "Un proyecto nuevo aparece al volver a traer en un minuto."),
+          );
         } else if (data.created || data.updated) {
           const partes = [
             data.created ? `${data.created} proyecto${data.created === 1 ? "" : "s"} nuevo${data.created === 1 ? "" : "s"}` : null,

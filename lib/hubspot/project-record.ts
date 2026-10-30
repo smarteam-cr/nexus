@@ -1,7 +1,7 @@
 import type { Client as HsClient } from "./sdk";
 import { getSystemAccessToken, getPortalInfo } from "@/lib/hubspot/client";
 import type { PipelineDef } from "@/lib/projects/kind";
-import { propiedadesDeEncargados, type Encargados } from "@/lib/hubspot/encargados";
+import { propiedadesDelPaseEnElProyecto, type Encargados } from "@/lib/hubspot/encargados";
 import { ESTADOS_PROPONIBLES, esProponible } from "@/lib/projects/estado-hubspot";
 import { etapasProponibles } from "@/lib/projects/etapa-hubspot";
 import {
@@ -86,9 +86,10 @@ export interface RecordACrear {
  * reintenta; este módulo no traga errores.
  *
  * ── `csl_encargado` SE DEJA VACÍO A PROPÓSITO ────────────────────────────────
- * Es la propiedad con la que el espejo resuelve QUÉ CSE ve el proyecto, y la prioriza por
- * encima del owner. Escribir ahí a quien apretó el botón le secuestraría el acceso al CSE que
- * de verdad va a llevar el proyecto — y lo haría en silencio, porque el creador SÍ lo vería.
+ * Era la propiedad con la que el espejo resolvía QUÉ CSE ve el proyecto. Desde el 2026-10-29 manda el propietario
+ * (`hubspot_owner_id`, lib/hubspot/encargados.ts), que acá se escribe SOLO con `ownerId` (el dueño que trae el alta o
+ * el handoff), ⛔ nunca con quien aprieta el botón: le secuestraría el acceso al CSE que de verdad va a llevar el
+ * proyecto — y lo haría en silencio, porque el creador SÍ lo vería.
  * La asignación del encargado es una decisión de la persona, no un efecto secundario del alta.
  */
 export async function crearProjectRecord(hs: HsClient, datos: RecordACrear): Promise<string> {
@@ -169,9 +170,10 @@ export async function actualizarProyectoInterno(
 }
 
 /**
- * Cambia los ENCARGADOS de un proyecto que ya existe en HubSpot: «CSE Encargado» (`cse_encargado`) = el CSE de la
- * cuenta y, si se pasa, «CSL Encargado» (`csl_encargado`) = la CSL (2026-10-09, entrega 5 del plan de la cartera;
- * hasta ese día solo escribía `csl_encargado`, que guardaba al CSE). Ver lib/hubspot/encargados-de-la-cuenta.ts.
+ * Cambia los ENCARGADOS de un proyecto que ya existe en HubSpot: el «Propietario» (`hubspot_owner_id`) y «CSE
+ * Encargado» (`cse_encargado`) = el CSE de la cuenta y, si se pasa, «CSL Encargado» (`csl_encargado`) = la CSL. Desde el
+ * 2026-10-29 el espejo lee primero el propietario (lib/hubspot/encargados.ts): sin escribirlo, el pase no cambiaba a
+ * nadie. Ver lib/hubspot/encargados-de-la-cuenta.ts.
  *
  * ── POR QUÉ ESCRIBE ALLÁ Y NO ACÁ ────────────────────────────────────────────
  * Mismo motivo que sus dos vecinas: `Project.hubspotOwnerId/Name/Email` los escribe SOLO el
@@ -195,7 +197,7 @@ export async function actualizarEncargadosDelProyecto(
   const res = await hs.apiRequest({
     method: "PATCH",
     path: `/crm/v3/objects/${OBJETO_PROYECTOS}/${recordId}`,
-    body: { properties: propiedadesDeEncargados({ cse: encargados.cse.trim(), csl: encargados.csl?.trim() || null }) },
+    body: { properties: propiedadesDelPaseEnElProyecto({ cse: encargados.cse.trim(), csl: encargados.csl?.trim() || null }) },
   });
   if (!res.ok) {
     const cuerpo = await res.text().catch(() => "");

@@ -23,6 +23,8 @@ const h = vi.hoisted(() => ({
   corridas: 0,
   /** Si está seteada, la corrida se cuelga acá hasta que el test la libere (simula una en vuelo). */
   freno: null as null | Promise<void>,
+  /** Los proyectos activos con registro en HubSpot que la ficha ya tiene (la relectura del botón). */
+  activos: [] as { hubspotServiceId: string }[],
 }));
 
 vi.mock("@/lib/db/prisma", () => ({
@@ -35,6 +37,7 @@ vi.mock("@/lib/db/prisma", () => ({
       }),
     },
     hubspotAccount: { findFirst: vi.fn(async () => null) },
+    project: { findMany: vi.fn(async () => h.activos) },
   },
 }));
 
@@ -49,6 +52,7 @@ let ahora = 1_000_000_000_000;
 beforeEach(() => {
   h.corridas = 0;
   h.freno = null;
+  h.activos = [];
   ahora = 1_000_000_000_000;
   vi.spyOn(Date, "now").mockImplementation(() => ahora);
 });
@@ -266,5 +270,116 @@ describe("syncProjectsForClient — el espejo dirigido pasa derecho", () => {
 
     expect(h.corridas).toBe(2);
     expect(rd.omitido).toBeUndefined();
+  });
+});
+
+/**
+ * El botón «Traer proyectos de HubSpot» (2026-10-29, SmartAgro): la ficha se sincronizó sola al abrirse, Elías pasó un
+ * proyecto a finalizado en HubSpot 24 s después, tocó el botón y el piso no dejó correr nada. Ahora, si el piso o una
+ * corrida en curso frenan la completa, el botón relee por id los proyectos que ya están.
+ */
+describe("syncProjectsForClient — el botón relee lo que ya está", () => {
+  it("D1 · dentro del piso, con releerSiHayPiso: relee por id en vez de no hacer nada", async () => {
+    const { syncProjectsForClient } = await cargarModulo();
+    h.activos = [{ hubspotServiceId: "hs-1" }, { hubspotServiceId: "hs-2" }];
+    await syncProjectsForClient("c1");
+    ahora += 24_000;
+    const r = await syncProjectsForClient("c1", { force: true, releerSiHayPiso: true });
+    expect(h.corridas).toBe(2);
+    expect(r.omitido).toBeUndefined();
+    expect(r.releidos).toBe(2);
+  });
+
+  it("D2 · sin proyectos que releer, dice lo del piso (y no corre nada)", async () => {
+    const { syncProjectsForClient } = await cargarModulo();
+    await syncProjectsForClient("c1");
+    ahora += 24_000;
+    const r = await syncProjectsForClient("c1", { force: true, releerSiHayPiso: true });
+    expect(h.corridas).toBe(1);
+    expect(r.omitido).toBe("piso");
+  });
+
+  it("D3 · la relectura no corre el piso ni reclama el cooldown: la corrida completa sigue pudiendo correr", async () => {
+    const { syncProjectsForClient } = await cargarModulo();
+    h.activos = [{ hubspotServiceId: "hs-1" }];
+    await syncProjectsForClient("c1");
+    ahora += 24_000;
+    await syncProjectsForClient("c1", { force: true, releerSiHayPiso: true });
+    ahora += 40_000; // 64 s desde que terminó la completa
+    const r = await syncProjectsForClient("c1", { force: true, releerSiHayPiso: true });
+    expect(r.releidos).toBeUndefined();
+    expect(h.corridas).toBe(3);
+  });
+
+  it("D4 · con una corrida en curso, espera a que termine y relee (no se queda con lo que leyó antes del clic)", async () => {
+    const { syncProjectsForClient } = await cargarModulo();
+    h.activos = [{ hubspotServiceId: "hs-1" }];
+    let liberar!: () => void;
+    h.freno = new Promise<void>((res) => { liberar = res; });
+    const deFondo = syncProjectsForClient("c1", { force: true });
+    await Promise.resolve();
+    const boton = syncProjectsForClient("c1", { force: true, releerSiHayPiso: true });
+    h.freno = null;
+    liberar();
+    const [, rb] = await Promise.all([deFondo, boton]);
+    expect(h.corridas).toBe(2);
+    expect(rb.releidos).toBe(1);
+  });
+
+  it("D5 · sin releerSiHayPiso (los avisos de HubSpot, el pase) el piso sigue frenando", async () => {
+    const { syncProjectsForClient } = await cargarModulo();
+    h.activos = [{ hubspotServiceId: "hs-1" }];
+    await syncProjectsForClient("c1");
+    ahora += 24_000;
+    const r = await syncProjectsForClient("c1", { force: true });
+    expect(h.corridas).toBe(1);
+    expect(r.omitido).toBe("piso");
+  });
+
+  it("D6 · dos relecturas a la vez comparten una: el botón no es una palanca contra el pool", async () => {
+    const { syncProjectsForClient } = await cargarModulo();
+    h.activos = [{ hubspotServiceId: "hs-1" }];
+    await syncProjectsForClient("c1");
+    ahora += 24_000;
+    let liberar!: () => void;
+    h.freno = new Promise<void>((res) => { liberar = res; });
+    const a = syncProjectsForClient("c1", { force: true, releerSiHayPiso: true });
+    const b = syncProjectsForClient("c1", { force: true, releerSiHayPiso: true });
+    await new Promise((r) => setTimeout(r, 0));
+    liberar();
+    await Promise.all([a, b]);
+    expect(h.corridas).toBe(2); // la completa del principio + UNA relectura
+  });
+
+  it("D7 · el candado se libera: la relectura siguiente vuelve a correr", async () => {
+    const { syncProjectsForClient } = await cargarModulo();
+    h.activos = [{ hubspotServiceId: "hs-1" }];
+    await syncProjectsForClient("c1");
+    ahora += 10_000;
+    await syncProjectsForClient("c1", { force: true, releerSiHayPiso: true });
+    ahora += 10_000;
+    await syncProjectsForClient("c1", { force: true, releerSiHayPiso: true });
+    expect(h.corridas).toBe(3);
+  });
+
+  it("D8 · lo que dijo la corrida en curso no se pierde: su error llega al botón", async () => {
+    const { syncProjectsForClient } = await cargarModulo();
+    h.activos = [{ hubspotServiceId: "hs-1" }];
+    const deFondo = syncProjectsForClient("c1", { force: true });
+    await Promise.resolve();
+    const r = await syncProjectsForClient("c1", { force: true, releerSiHayPiso: true });
+    await deFondo;
+    expect(r.releidos).toBe(1);
+    expect(r.errors).toEqual(["Cliente no encontrado", "Cliente no encontrado"]); // el de la corrida y el de la relectura
+  });
+
+  it("D9 · con una corrida en curso y nada que releer, el botón recibe el resultado de esa corrida", async () => {
+    const { syncProjectsForClient } = await cargarModulo();
+    const deFondo = syncProjectsForClient("c1", { force: true });
+    await Promise.resolve();
+    const r = await syncProjectsForClient("c1", { force: true, releerSiHayPiso: true });
+    await deFondo;
+    expect(r.omitido).toBe("en_vuelo");
+    expect(r.errors).toEqual(["Cliente no encontrado"]);
   });
 });

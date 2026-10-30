@@ -11,7 +11,7 @@ import type { Client } from "./sdk";
 import { detectarFusion, explicarFusion } from "@/lib/hubspot/empresa-fusionada";
 import { fusionadoEn } from "@/lib/hubspot/proyecto-fusionado";
 import { OBJETO_PROYECTOS } from "@/lib/hubspot/asociaciones-proyecto";
-import { encargadoDelProyecto } from "@/lib/hubspot/encargados";
+import { duenoDelProyecto, ownerQueSeGuarda, type OwnerLeido } from "@/lib/hubspot/encargados";
 
 // ── Mapeo de nombre del proyecto → serviceType + projectType ─────────────────
 
@@ -197,7 +197,7 @@ function cacheConVencimiento<V>() {
   };
 }
 
-const ownerCache = cacheConVencimiento<{ name: string | null; email: string | null }>();
+const ownerCache = cacheConVencimiento<OwnerLeido>();
 const pipelineNameCache = cacheConVencimiento<string | null>();
 // D.2 — cache de las etapas de un pipeline (slug:pipelineId → Map<stageId,label>).
 const pipelineStagesCache = cacheConVencimiento<Map<string, string>>();
@@ -205,7 +205,7 @@ const pipelineStagesCache = cacheConVencimiento<Map<string, string>>();
 async function resolveOwner(
   hs: Client,
   ownerId: string | null | undefined,
-): Promise<{ name: string | null; email: string | null }> {
+): Promise<OwnerLeido> {
   if (!ownerId) return { name: null, email: null };
   const cacheado = ownerCache.get(ownerId);
   if (cacheado !== undefined) return cacheado;
@@ -214,6 +214,10 @@ async function resolveOwner(
       method: "GET",
       path: `/crm/v3/owners/${ownerId}`,
     });
+    /* 2026-10-29: un owner archivado contesta 404 (sin correo, y se recuerda); cualquier otra falla es «no contestó» y
+       no se recuerda: con el propietario primero, confundirlas haría pasar un hipo de HubSpot por un cambio de manos
+       (ver `ownerQueSeGuarda`). */
+    if (!res.ok && res.status !== 404) return { name: null, email: null, sinRespuesta: true };
     const data = (await res.json()) as {
       firstName?: string;
       lastName?: string;
@@ -225,9 +229,7 @@ async function resolveOwner(
     ownerCache.set(ownerId, result);
     return result;
   } catch {
-    const result = { name: null, email: null };
-    ownerCache.set(ownerId, result);
-    return result;
+    return { name: null, email: null, sinRespuesta: true };
   }
 }
 
@@ -453,6 +455,11 @@ export interface SyncResult {
    *                   ella; los conteos son los de ESA corrida, no los de una segunda.
    */
   omitido?: "cooldown" | "piso" | "en_vuelo";
+  /**
+   * La corrida completa no pudo correr (el piso o una en curso) y el botón releyó por id estos N proyectos que ya
+   * estaban (`releerLosQueEstan`): lo que cambió en ellos ya está; un proyecto nuevo llega con la corrida completa.
+   */
+  releidos?: number;
 }
 
 type VeredictoDelProyecto = "alive" | "closed" | "gone" | { fusionadoEn: string };
@@ -646,6 +653,20 @@ export interface SyncOpts {
    */
   soloRecord?: string;
   /**
+   * Releer SOLO estos records (los proyectos activos que la ficha ya tiene), por id, sin descubrir los de la empresa. Lo
+   * arma `releerLosQueEstan`. Como el espejo dirigido, no reconcilia el resto ni reclasifica sesiones; a diferencia de
+   * él, un id que HubSpot no devuelve se verifica uno por uno y se da de baja si se borró o se cerró. Uno fusionado no
+   * se da de baja y el que sigue no se crea: las dos cosas son de la corrida completa, que las hace juntas.
+   */
+  soloRecords?: readonly string[];
+  /**
+   * El botón «Traer proyectos de HubSpot» (2026-10-29): si el piso de 60 s o una corrida en curso no dejan correr la
+   * completa, se releen por id los proyectos que ya están, en vez de no hacer nada. SmartAgro, 29 oct: la ficha se
+   * sincronizó sola al abrirse, Elías pasó el sitio web a finalizado en HubSpot 24 s después, tocó el botón y el piso
+   * no dejó correr nada; el cambio se vio casi 3 minutos más tarde.
+   */
+  releerSiHayPiso?: boolean;
+  /**
    * Quien pidió la corrida para hacer el pase de cuenta (la ruta del pase). Si el encargado cambió, lo abierto del
    * anterior pasa al nuevo firmado por esa persona; sin esto (cambió en HubSpot), firma el sistema.
    */
@@ -686,10 +707,23 @@ export async function syncProjectsForClient(clientId: string, opts: SyncOpts = {
 
   const viva = enVueloPorCliente.get(clientId);
   if (viva && ahora - viva.arrancada < MUTEX_MAX_MS) {
+    // El botón no se queda con lo que leyó una corrida que arrancó antes del clic: espera a que termine y relee.
+    if (opts.releerSiHayPiso) {
+      // Lo que esa corrida hizo no se pierde: sus errores (una empresa fusionada…) y lo que creó o cerró van en la
+      // respuesta, también si la relectura falla: el botón refresca la ficha según esos números.
+      const despuesDeLaViva = async (viva: SyncResult | null): Promise<SyncResult> => {
+        if (!viva) return releerLosQueEstan(clientId, opts);
+        const r = await releerLosQueEstan(clientId, opts).catch((e: unknown) => sinCorrer("en_vuelo", String(e)));
+        if (r.omitido) return { ...viva, omitido: "en_vuelo" };
+        return { ...r, created: r.created + viva.created, updated: r.updated + viva.updated, errors: [...viva.errors, ...r.errors] };
+      };
+      return viva.promesa.then(despuesDeLaViva, () => despuesDeLaViva(null));
+    }
     return viva.promesa.then((r) => ({ ...r, omitido: "en_vuelo" as const }));
   }
 
   if (ahora - (ultimoFinPorCliente.get(clientId) ?? 0) < SYNC_FLOOR_MS) {
+    if (opts.releerSiHayPiso) return releerLosQueEstan(clientId, opts);
     return sinCorrer("piso", `Piso de ${SYNC_FLOOR_MS / 1000}s — se sincronizó recién, ni force lo saltea.`);
   }
 
@@ -703,6 +737,41 @@ export async function syncProjectsForClient(clientId: string, opts: SyncOpts = {
   });
   enVueloPorCliente.set(clientId, { arrancada: ahora, promesa });
   return promesa;
+}
+
+/**
+ * Relee por id los proyectos activos que la ficha ya tiene (`soloRecords`): un `batch/read` en vez de descubrir los de la
+ * empresa, así que no pasa por el piso ni por el mutex de la corrida completa (como el espejo dirigido). Trae lo que
+ * cambió en ellos —etapa, cierre, nombre, encargado— y da de baja el que se borró. Lo que NO trae es un proyecto nuevo
+ * asociado a la empresa, ni resuelve una fusión: eso es de la corrida completa. Sin proyectos que releer, dice lo del
+ * piso.
+ */
+async function releerLosQueEstan(clientId: string, opts: SyncOpts): Promise<SyncResult> {
+  /* Su propio candado: dos pestañas o dos personas tocando el botón a la vez comparten UNA relectura (es barata, pero
+     sin candado N clics simultáneos eran N lecturas a HubSpot y N pases contra el pool). En memoria, como el mutex de
+     la corrida completa: no separa producción del 3004 de cada PC. Con el mismo techo de vida (`MUTEX_MAX_MS`): una
+     relectura colgada no traba el botón para siempre. */
+  const ahora = Date.now();
+  const viva = releyendoPorCliente.get(clientId);
+  if (viva && ahora - viva.arrancada < MUTEX_MAX_MS) return viva.promesa;
+  const promesa: Promise<SyncResult> = releerAhora(clientId, opts).finally(() => {
+    if (releyendoPorCliente.get(clientId)?.promesa === promesa) releyendoPorCliente.delete(clientId);
+  });
+  releyendoPorCliente.set(clientId, { arrancada: ahora, promesa });
+  return promesa;
+}
+
+const releyendoPorCliente = new Map<string, CorridaViva>();
+
+async function releerAhora(clientId: string, opts: SyncOpts): Promise<SyncResult> {
+  const filas = await prisma.project.findMany({
+    where: { clientId, status: "active", hubspotServiceId: { not: null } },
+    select: { hubspotServiceId: true },
+  });
+  const ids = filas.map((f) => f.hubspotServiceId!);
+  if (ids.length === 0) return sinCorrer("piso", `Piso de ${SYNC_FLOOR_MS / 1000}s — se sincronizó recién y no hay proyectos que releer.`);
+  const r = await correrSync(clientId, { porEmail: opts.porEmail, soloRecords: ids });
+  return { ...r, releidos: ids.length };
 }
 
 /**
@@ -748,6 +817,11 @@ async function correrElEspejo(
 ): Promise<SyncResult> {
   const result: SyncResult = { found: 0, created: 0, updated: 0, skipped: 0, suprimidos: 0, errors: [], debug: [] };
   const dirigido = opts.soloRecord?.trim() || null;
+  /* La relectura del botón (`soloRecords`): ya sabe qué records traer, como el espejo dirigido, pero son varios y lee del
+     portal de siempre. `sinDescubrir` = cualquiera de los dos: no se busca la empresa, no se reconcilia el resto de la
+     cartera, no se crea nada y un fallo al leer no apaga proyectos. */
+  const releer = dirigido ? null : [...new Set((opts.soloRecords ?? []).map((id) => id.trim()).filter(Boolean))];
+  const sinDescubrir = !!dirigido || !!releer?.length;
 
   // 1. Obtener client + HubspotAccount (query directa para evitar quirks del relation lookup)
   const [client, hubspotAccount] = await Promise.all([
@@ -799,8 +873,8 @@ async function correrElEspejo(
       result.errors.push(`Error al obtener HubSpot client del cliente: ${(e as Error).message}`);
       return result;
     }
-  } else if (client.hubspotCompanyId) {
-    // Caso B: usar sistema
+  } else if (client.hubspotCompanyId || releer?.length) {
+    // Caso B: usar sistema (la relectura ya sabe qué records leer: no necesita la empresa)
     try {
       hsClient = await getSystemHubspotClient();
       result.debug!.push("✓ Usando cuenta HubSpot del sistema (Smarteam)");
@@ -823,7 +897,7 @@ async function correrElEspejo(
      portal propio) no sirve: se busca por nombre en su portal en cada corrida, y no se guarda. */
   let companyId = usingSystemAccount ? client.hubspotCompanyId : null;
 
-  if (!companyId && !dirigido) {
+  if (!companyId && !sinDescubrir) {
     result.debug!.push("hubspotCompanyId no guardado — buscando empresa en HubSpot por nombre...");
     companyId = await findCompanyId(hsClient, {
       clientName: client.name,
@@ -863,7 +937,7 @@ async function correrElEspejo(
       return result;
     }
   } else {
-    result.debug!.push(companyId ? `✓ hubspotCompanyId: ${companyId}` : "sin hubspotCompanyId (no hace falta: espejo dirigido)");
+    result.debug!.push(companyId ? `✓ hubspotCompanyId: ${companyId}` : "sin hubspotCompanyId (no hace falta: espejo dirigido o relectura)");
   }
 
   // 4. Buscar proyectos HubSpot asociados a la empresa.
@@ -876,7 +950,7 @@ async function correrElEspejo(
      traer, porque lo acabamos de crear. Arrancar con el id puesto saltea toda la cascada de
      abajo —que existe para AVERIGUAR qué proyectos tiene la empresa— y de paso saltea su bloque
      de error, que corta la corrida cuando no encuentra ninguno. */
-  let projectIds: string[] = dirigido ? [dirigido] : [];
+  let projectIds: string[] = dirigido ? [dirigido] : releer?.length ? releer : [];
   let workingAssocSlug: string | null = null;
   let objectIdentified = false; // ¿pudimos identificar el objeto Proyectos del portal?
   let anyTransient = false;     // ¿hubo algún error transitorio (timeout/5xx) consultando?
@@ -1121,7 +1195,10 @@ async function correrElEspejo(
     } catch { /* ignorar */ }
   }
 
-  if (projects.length === 0 && projectIds.length > 0) {
+  /* La relectura no usa este último recurso: no vino NINGUNO de los pedidos, así que todos pasan por la verificación
+     de abajo. Eso da de baja al que HubSpot confirma borrado (una ficha con un solo proyecto, borrado) y deja intacto,
+     con un error, al que no se pudo leer (un 429). */
+  if (projects.length === 0 && projectIds.length > 0 && !releer?.length) {
     // Último recurso: crear proyectos con solo el ID
     // Al menos aparecen las tabs; el nombre se puede editar después
     result.debug!.push("⚠ No se pudieron leer propiedades — creando proyectos con ID como nombre temporal");
@@ -1156,6 +1233,20 @@ async function correrElEspejo(
         });
       }
     }
+  }
+
+  /* La relectura del botón: los ids pedidos que HubSpot no devolvió con su propio id (borrados, o fusionados: un id
+     fusionado vuelve con el del que sigue) se verifican uno por uno al final, como en la reconciliación. Lo que vino sin
+     pedirse (el que sigue tras una fusión) no se toca acá: crear proyectos es de la corrida completa. */
+  let faltan: string[] = [];
+  if (releer?.length) {
+    const pedidos = new Set(releer);
+    const vinieron = new Set(projects.map((p) => p.id));
+    faltan = releer.filter((id) => !vinieron.has(id));
+    const ajenos = projects.filter((p) => !pedidos.has(p.id)).length;
+    if (ajenos) result.debug!.push(`Relectura: ${ajenos} record(s) que no se pidieron quedan para la corrida completa`);
+    projects = projects.filter((p) => pedidos.has(p.id));
+    result.found = projects.length;
   }
 
   /* Las asociaciones proyecto↔proyecto de TODA la corrida, en una sola llamada. Como los
@@ -1206,11 +1297,13 @@ async function correrElEspejo(
          crear. Un 429 o un 5xx apagaría el proyecto recién nacido —sacándolo del rail, que es la
          única pantalla donde vive el botón "Reintentar"— y encima devolvería `errors: []` con un
          `updated`, indistinguible del éxito: el motor lo daría por bueno.
-         Acá el fallo se REPORTA, para que el alta quede pendiente y se pueda reintentar. */
-      if (dirigido) {
+         Acá el fallo se REPORTA, para que el alta quede pendiente y se pueda reintentar.
+         La relectura del botón tampoco: un 429 apagaría todos los proyectos de la ficha de un clic. */
+      if (sinDescubrir) {
         result.errors.push(
-          `HubSpot no devolvió las propiedades del proyecto ${project.id}. El alta queda ` +
-            `pendiente: se reintenta, no se descarta.`,
+          dirigido
+            ? `HubSpot no devolvió las propiedades del proyecto ${project.id}. El alta queda pendiente: se reintenta, no se descarta.`
+            : `HubSpot no devolvió las propiedades del proyecto ${project.id}. No se tocó nada: vuelve a intentarlo en un minuto.`,
         );
         result.skipped++;
         continue;
@@ -1273,23 +1366,22 @@ async function correrElEspejo(
        temporal»; lo que el nombre no deja deducir queda vacío y el servicio lo dice el pipeline (lib/servicios). */
     const mapping = { ...deducido, serviceType: tipoDeServicioDelEspejo(deducido.serviceType, pipelineId) };
 
-    // ── Resolver CSE encargado (gobierna la VISIBILIDAD del cliente) ──────────
-    // La asignación del CSE vive en la propiedad custom "CSE Encargado" (cse_encargado) y, si
-    // está vacía, en "CSL Encargado" (csl_encargado), que es donde vivía hasta el 2026-10-09 y
-    // donde la tienen Desarrollo y Sitios web (ver lib/hubspot/encargados.ts). Son campos OWNER
-    // (guardan un owner id). La visibilidad (lib/auth/access) matchea por EMAIL, así que
-    // resolvemos ESE owner → email/nombre y lo priorizamos sobre el owner estándar
-    // (hubspot_owner_id, que suele ser el SA/líder técnico cuando el servicio lleva
-    // integraciones, NO el CSE). Fallback al owner estándar si no hay ninguno de los dos.
-    const cslOwnerId = encargadoDelProyecto(props);
-    const stdOwnerId = (props.hubspot_owner_id ?? "").trim() || null;
-    const [cslOwner, stdOwner] = await Promise.all([
-      resolveOwner(hsClient, cslOwnerId),
-      resolveOwner(hsClient, stdOwnerId),
+    // ── Resolver quién lleva el proyecto (gobierna la VISIBILIDAD del cliente) ──────────
+    // Desde el 2026-10-29 manda el «Propietario» (hubspot_owner_id) y, si está vacío, «CSE Encargado» y después «CSL
+    // Encargado» (lib/hubspot/encargados.ts; del 2026-10-09 a ese día mandaba «CSE Encargado»). Son campos OWNER
+    // (guardan un owner id). La visibilidad (lib/auth/access) matchea por EMAIL, así que resolvemos ese owner →
+    // email/nombre. Si el propietario está archivado en HubSpot, se guarda el respaldo entero (id y correo); si HubSpot
+    // no contestó, `guardado` es null y los tres quedan undefined: Prisma no toca lo que ya estaba (`ownerQueSeGuarda`,
+    // lib/hubspot/encargados.ts).
+    const dueno = duenoDelProyecto(props);
+    const [principal, respaldo] = await Promise.all([
+      resolveOwner(hsClient, dueno.principal),
+      resolveOwner(hsClient, dueno.respaldo),
     ]);
-    const hubOwnerId = cslOwnerId ?? stdOwnerId;
-    const ownerName = cslOwner.name ?? stdOwner.name;
-    const ownerEmail = cslOwner.email ?? stdOwner.email;
+    const guardado = ownerQueSeGuarda(dueno, principal, respaldo);
+    const hubOwnerId = guardado?.id;
+    const ownerName = guardado?.name;
+    const ownerEmail = guardado?.email;
 
     /* El NOMBRE del pipeline es solo el rótulo que se muestra; el id (resuelto arriba, antes
        de decidir el cierre) es el HECHO del que cuelga toda la tabla de decisiones. */
@@ -1520,7 +1612,7 @@ async function correrElEspejo(
   /* El espejo dirigido NO la dispara: la reclasificación cuesta ~US$1 de modelo por corrida y en
      el alta única la paga el motor UNA sola vez al terminar, sellada, para que reintentar no la
      cobre N veces. Si se disparara acá también, cada reintento sumaría un dólar. */
-  if (result.created > 0 && !dirigido) {
+  if (result.created > 0 && !sinDescubrir) {
     void import("@/lib/sessions/reclassify")
       .then((m) => m.reclassifyClientSessions(clientId))
       .catch(() => {});
@@ -1535,7 +1627,8 @@ async function correrElEspejo(
      Esta reconciliación desactiva todo proyecto activo que no vino en `projectIds`, y en el
      espejo dirigido `projectIds` tiene UN elemento: desactivaría el resto de la cartera del
      cliente. No es una optimización — es la diferencia entre traer un proyecto y borrar del
-     mapa a todos sus hermanos. */
+     mapa a todos sus hermanos.
+     La relectura del botón reconcilia SOLO los ids que pidió y no volvieron (`faltan`): no sabe nada del resto. */
   if (projectIds.length > 0 && !dirigido) {
     // Candidatos: proyectos sincronizados (hubspotServiceId) activos que NO vinieron
     // en el set de asociaciones de ESTA corrida. ANTES era un updateMany ciego — pero
@@ -1543,15 +1636,23 @@ async function correrElEspejo(
     // equivocado), y eso desactivaba proyectos VIVOS. Ahora verificamos cada uno
     // directamente en HubSpot y solo desactivamos si está confirmado gone/closed.
     const candidates = await prisma.project.findMany({
-      where: { clientId, status: "active", hubspotServiceId: { not: null, notIn: projectIds } },
+      where: { clientId, status: "active", hubspotServiceId: releer?.length ? { in: faltan } : { not: null, notIn: projectIds } },
       select: { id: true, name: true, hubspotServiceId: true },
     });
     for (const cand of candidates) {
       const verdict = await verifyProjectInHubspot(hsClient, cand.hubspotServiceId!);
       if (verdict === "alive") {
+        if (releer?.length) result.errors.push(`HubSpot no devolvió «${cand.name}». No se tocó nada: vuelve a intentarlo en un minuto.`);
         result.debug!.push(
           `Reconciliación: "${cand.name}" (${cand.hubspotServiceId}) no vino en la asociación pero SIGUE vivo en HubSpot → se conserva activo (probable hipo de la API o slug equivocado)`,
         );
+        continue;
+      }
+      /* La relectura no da de baja un proyecto FUSIONADO: el que sigue puede no estar en Nexus todavía y la relectura no
+         crea nada, así que la cuenta quedaría sin ese proyecto (y sin acceso para su dueño) y el pase de lo abierto no se
+         haría nunca. Lo hace la corrida completa, que crea el que sigue y da de baja este en la misma pasada. */
+      if (releer?.length && typeof verdict === "object") {
+        result.debug!.push(`Relectura: "${cand.name}" (${cand.hubspotServiceId}) se fusionó en ${verdict.fusionadoEn} → queda para la corrida completa`);
         continue;
       }
       await prisma.project.update({ where: { id: cand.id }, data: { status: "inactive" } });

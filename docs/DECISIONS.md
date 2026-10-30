@@ -548,7 +548,8 @@ Decisiones ya tomadas, con el porqué. Si vas a cambiar una, primero entendé po
   otro tope; exponerlo en un click sin salvaguardas era una palanca. Se agregaron tres, y viven en
   el SERVER —no en la UI— porque ahí no dependen de que el cliente se porte bien: (1) **mutex de
   corrida viva por cliente** (el segundo llamador se engancha a la promesa en curso y recibe su
-  resultado, marcado `omitido:"en_vuelo"`); (2) **piso duro de 60 s** que ni `force` saltea —el
+  resultado, marcado `omitido:"en_vuelo"`); (2) **piso duro de 60 s** que ni `force` saltea (⚠ *desde el 2026-10-29
+  el botón no se queda sin nada: relee por id lo que ya está; ver «El propietario de HubSpot lleva el proyecto»*) —el
   mutex cubre lo simultáneo, el piso cubre "una atrás de otra"—; (3) **try/catch de P2002** en la
   creación, que es check-then-act sobre `Project.hubspotServiceId @unique`: sin eso una carrera
   tiraba un 500 que cortaba la corrida ANTES de la reconciliación y de `resolverHermanos`, dejando
@@ -5447,7 +5448,8 @@ servicio» no va por CSE: una cuenta sin proyecto activo no tiene CSE en Nexus; 
 
 **Entrega 5 · el pase de cuenta y «CSE Encargado»** (decisión de Elías: migrar):
 - **El espejo lee primero «CSE Encargado» (`cse_encargado`) y, si está vacío, «CSL Encargado» (`csl_encargado`)**
-  (`encargadoDelProyecto`, lib/hubspot/encargados.ts). Hasta hoy `csl_encargado` guardaba al CSE. Con esa lectura, la
+  (`encargadoDelProyecto`, lib/hubspot/encargados.ts). ⚠ *Reemplazado el 2026-10-29: manda el «Propietario» del
+  proyecto y estas dos quedan de respaldo (ver «El propietario de HubSpot lleva el proyecto», más abajo).* Hasta hoy `csl_encargado` guardaba al CSE. Con esa lectura, la
   migración no le cambia a nadie las cuentas que ve, en ningún orden.
 - **El pase** (la celda «CSE encargado», en «Cartera», en el panel de la cuenta y en el listado de clientes): escribe
   `cse_encargado` = el CSE y `csl_encargado` = la CSL (el rol en Nexus, no un correo en el código; las cuentas de
@@ -12611,3 +12613,57 @@ con el diff viejo solo como referencia, después de confirmar con búsqueda que 
   `send-to-canvas` en `scope-coverage.ts` sí sale con su ruta.
 - **El modelo, sus filas y lo que leen y escriben los agentes en `/analyze` se quedan**: es el ítem 23 y el resto del
   24 (los agentes encadenados por paso todavía leen las cards del paso anterior y las HUMAN del cliente).
+
+## El propietario de HubSpot lleva el proyecto, y «Traer proyectos» relee al instante (2026-10-29)
+
+**Contexto.** Feedback de Elías del 29 oct: «que Nexus lea el campo "propietario" de los proyectos de HubSpot como el
+Customer Success encargado, en lugar de "CSE encargado"», y (urgente) en SmartAgro pasó el sitio web a finalizado, le
+cambió el nombre a la implementación, tocó «Traer proyectos de HubSpot» y la ficha no cambió hasta minutos después.
+
+- **Manda el «Propietario» (`hubspot_owner_id`)**; si está vacío, «CSE Encargado» y después «CSL Encargado»
+  (`encargadoDelProyecto` / `duenoDelProyecto`, lib/hubspot/encargados.ts). Qué se guarda (`ownerQueSeGuarda`), siempre
+  id y correo del MISMO owner: con el propietario archivado en HubSpot (contesta 404), el respaldo entero, así cambiar
+  «CSE Encargado» cambia el id y el pase de cuenta lo ve; si HubSpot no contestó (429, 5xx), **no se toca nada**: lo que
+  decide quién ve la cuenta no se escribe con una duda. Las dos versiones anteriores fallaban (lo vio la revisión): con el
+  id del propietario archivado, un cambio de «CSE Encargado» cambiaba el encargado sin pase; y con el correo vacío o el
+  del respaldo ante un hipo, el CSE perdía el acceso, lo abierto podía pasar a otro y un cambio real se quedaba sin pase
+  para siempre (`planDelPase` exige otro id). Por eso `resolveOwner` distingue archivado (404, se recuerda 10 minutos)
+  de no contestó (no se recuerda). La regla de la cuenta
+  (lib/cuentas/encargado.ts: quien lleva más proyectos de CS activos) y la de acceso (lib/auth/access.ts: el dueño de un
+  proyecto de CS abre la cuenta) no cambian: cambia de quién es cada proyecto.
+- **El pase de cuenta escribe también el propietario en los proyectos** (`propiedadesDelPaseEnElProyecto`); si no, la
+  celda elegía a alguien, el espejo seguía leyendo al propietario y la ruta respondía 409. En la empresa y sus contactos
+  NO: el propietario de la empresa es el vendedor (lib/hubspot/vendedor-de-la-empresa.ts).
+- **Medido el 29 oct en solo lectura** (`scripts/propietario-como-encargado.ts`): de 98 proyectos activos, 23 tenían un
+  propietario distinto de «CSE Encargado» y 5 no tenían; en la mayoría uno de los dos está archivado en HubSpot y el
+  espejo ya caía al otro. Cambian 4 proyectos (dos de CS: BLUESAT y Grupo Inve pasan de Heiver Gómez a Alejandro Salas;
+  dos de Desarrollo entre Alejandro y Breiner Salas) y **una cuenta: BLUESAT, de Heiver Gómez a Alejandro Salas**.
+  **Acceso:** a Heiver (CSE) se le cierra BLUESAT; a nadie se le abre una (los demás que cambian ven toda la cartera).
+  Un proyecto que crea Nexus nace con el propietario que trae el alta (`HUBSPOT_HANDOFF_OWNER_ID`) o el handoff, igual
+  que antes: con «CSE Encargado» vacío, la regla vieja ya caía a ese propietario.
+- **La causa de SmartAgro, la más probable: el piso de 60 s.** Los datos (la historia de HubSpot y las fechas de la base): la ficha se
+  copió a las 23:07:38 (hora de Costa Rica), Elías pasó el sitio web a finalizado a las 23:08:02 y le cambió el nombre a
+  la implementación a las 23:10:32; la copia siguiente fue a las 23:10:43 y trajo las dos cosas. Entre medio no corrió
+  ninguna: el sitio web quedó inactivo recién a las 23:10:43. El piso se mide desde que terminó la copia anterior —la de
+  la ficha al abrirse—, así que un clic dentro de ese minuto contestaba «Se intentó hace menos de un minuto» y no hacía
+  nada. El supuesto del piso («60 s es menos de lo que tarda una persona en hacer algo en HubSpot y volver») era falso:
+  tardó 24 s. No fue la caché (la página lee la base en cada `router.refresh`) ni la búsqueda de HubSpot (la copia lee
+  por asociaciones y `batch/read`, que no esperan el índice). Los clics no quedaban registrados, así que no se puede
+  descartar que el clic no haya llegado; por eso ahora se cuentan (abajo).
+- **El arreglo: el botón relee por id lo que ya está** (`releerSiHayPiso`, `releerLosQueEstan` en
+  lib/hubspot/sync-projects.ts). Si el piso o una corrida en curso frenan la completa, se leen por id los proyectos
+  activos de la ficha (un `batch/read`) con el mismo recorrido del espejo: etapa, cierre, nombre y encargado al
+  instante. Con una corrida en curso, espera a que termine, relee y suma lo de esa corrida (sus errores y lo que creó).
+  Lo que no vino se verifica uno por uno, como la reconciliación, y solo esos, aunque no vuelva ninguno: el borrado o
+  cerrado se da de baja, y el que no se pudo leer queda intacto con un error; uno FUSIONADO no se da
+  de baja: el que sigue puede no estar en Nexus, y darlo de baja sin crearlo dejaba la cuenta sin ese proyecto y el pase
+  sin hacer (lo vio la revisión). No crea nada (un proyecto nuevo es de la corrida completa), no busca la empresa, no
+  reclasifica sesiones y, si no puede leer, no apaga nada: lo dice. No pasa por el piso ni lo corre; tiene su propio
+  candado por cliente (dos clics a la vez comparten una relectura), en memoria como el de la corrida completa. El piso sigue para la corrida completa y para los avisos de HubSpot y el pase, que no piden
+  relectura.
+- **Si el botón se usa: no había cómo saberlo.** La ruta no dejaba rastro (la copia escribe las mismas filas la dispare
+  quien la dispare, los avisos de HubSpot no traen proyectos y no hay acceso al registro del servidor). Desde este
+  cambio se cuenta por día, por disparo (botón o la ficha al abrirse) y desenlace (`lib/hubspot/uso-de-traer-proyectos.ts`,
+  fila `hubspot-traer-proyectos` de `CronJobState`; lo lee `scripts/uso-de-traer-proyectos.ts`). La de fondo frenada
+  por el cooldown no se cuenta: sería una escritura por ficha abierta. Con dos semanas de datos se decide si el botón
+  se queda, se mueve o la ficha relee sola al abrirse.

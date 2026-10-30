@@ -18,7 +18,8 @@
  *     según qué proyecto se sincronizó último (revisión del 2026-10-19). Después, por correo;
  *   · quien está dado de baja en Nexus no lleva nada: si nadie más lleva la cuenta, queda sin encargado y se dice de
  *     quién era (`deBaja`).
- * El encargado de UN proyecto sigue siendo su dueño en HubSpot (`Project.hubspotOwnerEmail`): eso no cambia.
+ * El encargado de UN proyecto sigue siendo su dueño en HubSpot (`Project.hubspotOwnerEmail`). Desde el 2026-10-29 ese dueño
+ * es el «Propietario» del proyecto y, si está vacío, «CSE Encargado» y «CSL Encargado» (lib/hubspot/encargados.ts).
  *
  * El servidor (lee la base): ./encargado-server.ts.
  */
