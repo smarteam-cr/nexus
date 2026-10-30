@@ -34,9 +34,11 @@ export default async function CustomerSuccessPage({
   const puedeCurar = await can(ctx.teamMember, "clientes", "viewAll");
   // El pase de cuenta (2026-10-09) pide lo mismo que reasignar el CSE en el listado de clientes.
   const puedeReasignar = await can(ctx.teamMember, "proyectos", "reasignarEncargado");
+  // Marcar una cuenta como prioritaria (2026-10-29): la celda de la matriz, por defecto de la CSL y los super admin.
+  const puedeMarcarPrioridad = await can(ctx.teamMember, "customerSuccess", "marcarPrioridad");
   const data = await cargarCarteraDeLaCsl(where);
 
   // La pestaña y los filtros de «Cartera» viven en la dirección: una vista es un enlace.
   const parametros = await searchParams;
-  return <CsPanel data={data} puedeCurar={puedeCurar} contenedor={SHELL_DEFAULT} yo={ctx.user.email ?? null} parametros={parametros} puedeReasignar={puedeReasignar} />;
+  return <CsPanel data={data} puedeCurar={puedeCurar} contenedor={SHELL_DEFAULT} yo={ctx.user.email ?? null} parametros={parametros} puedeReasignar={puedeReasignar} puedeMarcarPrioridad={puedeMarcarPrioridad} />;
 }

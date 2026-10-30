@@ -14,6 +14,8 @@ import { cn } from "@/lib/cn";
 import { diasEntre, fmtDia } from "@/lib/cs/formato";
 import { NOMBRE_DE_LA_SALUD, cseDeLaCuenta, quienCorrigio } from "@/lib/cs/cartera-reglas";
 import { CorregirColor, EnEsperaDelCliente } from "../AjusteDelColor";
+import MarcaDePrioridad from "../MarcaDePrioridad";
+import { prioridadVisible } from "@/lib/cs/prioridad-de-cuenta";
 import { REGLA_DE_LA_RELACION, relacionConHubspot } from "@/lib/cs/relacion-gestionada";
 import { InfoHint } from "@/components/ui/Tooltip";
 import type { CsAccountData } from "@/lib/cs/load-account";
@@ -133,6 +135,13 @@ function ElColor({ data }: { data: CsAccountData }) {
       <div className="flex flex-col gap-2 rounded-xl border border-line bg-surface px-3 py-2.5 text-[13px]">
         <Salud salud={s.salud} />
         <p className="text-fg-secondary">{s.porque}</p>
+        {/* La marca de prioridad (2026-10-29): no cambia el color, ordena la cartera. */}
+        <MarcaDePrioridad
+          clientId={data.cuenta.clientId}
+          cuenta={data.cuenta.nombre}
+          prioritaria={prioridadVisible(data.cuenta.prioritaria)}
+          puedeMarcar={!!data.puedeMarcarPrioridad}
+        />
         {s.nexus && (
           <p className="text-xs text-fg-muted">
             Nexus diría: {NOMBRE_DE_LA_SALUD[s.nexus.salud].toLowerCase()} · {s.nexus.porque}

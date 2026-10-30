@@ -166,7 +166,8 @@ export const DEFAULT_MATRIX: Record<TeamRole, PermissionMap> = {
   CSL: grant({
     clientes: ["viewAll", "share", "delete", "classify", "decidirDatos"],
     // El área es SU centro de decisión; además es el único rol (con SUPER_ADMIN) que ve partner.
-    customerSuccess: ["read"],
+    // `marcarPrioridad` (2026-10-29): marca qué cuentas piden más seguimiento.
+    customerSuccess: ["read", "marcarPrioridad"],
     // `congelar` (2026-10-10): la CSL congela y busca lo nuevo, como el CSE de su equipo.
     handoff: ["write", "generate", "regenerate", "confirmarResultados", "congelar"],
     kickoff: ["generate", "regenerate"],

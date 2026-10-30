@@ -41,6 +41,8 @@ import { CATEGORIAS_QUE_PINTAN, citaDeLaEvidencia, dondeLoDijo, type CitaDeAlert
 import { coincideBusqueda, filtrarPorBusqueda } from "@/lib/ui/text-search";
 import { encargadoDeLaCuenta, quienesLlevanLaCuenta, type ProyectoQueLleva } from "@/lib/cuentas/encargado";
 import { esReunionDePuertasAdentro } from "@/lib/sessions/candidatas-internas";
+import type { LecturaDeMarcha } from "./proyecto-en-marcha";
+import { prioridadVisible, rangoDePrioridad, type PrioridadGuardada, type PrioridadVisible } from "./prioridad-de-cuenta";
 
 // ───────────────────────────────────────────────────────────────────────────────────────────
 // ── LA ENTRADA ─────────────────────────────────────────────────────────────────────────────
@@ -83,6 +85,17 @@ export interface ProyectoDeCuenta {
   salud: string;
   /** AAAA-MM-DD aproximada en que se cerró (Nexus no guarda la fecha exacta: es la del último cambio). */
   cerradoEn: string | null;
+  /**
+   * ¿Está en marcha? (2026-10-29, lib/cs/proyecto-en-marcha.ts). Uno que no arrancó o que está bloqueado sin que el
+   * freno sea nuestro sigue activo (tiene CSE, se clasifica), pero no pinta riesgo ni da motivos para llamar. null o ausente =
+   * en marcha (las filas de antes y las pruebas).
+   */
+  marcha?: LecturaDeMarcha | null;
+}
+
+/** El proyecto está activo y en marcha: el único que cuenta para el riesgo de la cuenta. */
+export function enMarcha(p: Pick<ProyectoDeCuenta, "activo" | "marcha">): boolean {
+  return p.activo && (!p.marcha || p.marcha.estado === "en-marcha");
 }
 
 export interface AlertaDeCuenta {
@@ -232,6 +245,8 @@ export interface CuentaDeCartera {
   clasificacion?: ClasificacionGuardada | null;
   /** El color corregido a mano y el «en espera del cliente» (2026-10-09). null = nada. */
   ajustes?: AjustesDeSalud | null;
+  /** La marca de prioridad que puso la CSL (2026-10-29, lib/cs/prioridad-de-cuenta.ts). null = no es prioritaria. */
+  prioritaria?: PrioridadGuardada | null;
 }
 
 // ───────────────────────────────────────────────────────────────────────────────────────────
@@ -438,7 +453,8 @@ export function motivosDeLaCuenta(c: CuentaDeCartera, hoy: string): Motivo[] {
   const renueva = proximaRenovacion(c, hoy);
   const diasARenovar = renueva ? diasEntre(hoy, renueva) : null;
   const renuevaPronto = diasARenovar !== null && diasARenovar <= VENTANA_DE_RENOVACION;
-  const activos = c.proyectos.filter((x) => x.activo);
+  // Solo los proyectos en marcha (2026-10-29): uno sin arrancar o bloqueado sin que el freno sea nuestro no es motivo para llamar.
+  const activos = c.proyectos.filter(enMarcha);
   const bloqueado = activos.find((x) => x.bloqueado) ?? null;
   const atrasado = activos.filter((x) => x.atraso).sort((a, b) => b.atraso!.dias - a.atraso!.dias)[0] ?? null;
 
@@ -772,7 +788,15 @@ export function quienCorrigio(c: Pick<CorreccionGuardada, "porNombre" | "porEmai
 
 /** ¿Smarteam acompaña la cuenta hoy? Con un proyecto activo o la relación gestionada en HubSpot. */
 export function laAcompanamos(c: Pick<CuentaDeCartera, "proyectos" | "partner">): boolean {
-  return c.proyectos.some((p) => p.activo) || !!c.partner?.gestionada;
+  // Un proyecto EN MARCHA (2026-10-29): uno que no arrancó o que el cliente frenó no es acompañar la cuenta.
+  return c.proyectos.some(enMarcha) || !!c.partner?.gestionada;
+}
+
+/** Los proyectos activos que no cuentan para el riesgo, en una frase («Kamalio» no ha arrancado…). null = ninguno. */
+export function proyectosFueraDeMarcha(c: Pick<CuentaDeCartera, "proyectos">): string | null {
+  const fuera = c.proyectos.filter((p) => p.activo && !enMarcha(p));
+  if (fuera.length === 0) return null;
+  return fuera.map((p) => `«${p.nombre}» ${p.marcha?.porque ?? "no está en marcha"}`).join("; ");
 }
 
 /**
@@ -814,7 +838,8 @@ export function saludSegunNexus(c: CuentaDeCartera, hoy: string): SaludConPorque
   const medias: RazonDelColor[] = [];
 
   // Con «en espera», el freno que es del cliente no pinta: es lo que se está esperando. El de Smarteam sí.
-  const activos = c.proyectos.filter((p) => p.activo);
+  // Solo los proyectos en marcha pintan (2026-10-29, lib/cs/proyecto-en-marcha.ts).
+  const activos = c.proyectos.filter(enMarcha);
   const cuenta = (p: ProyectoDeCuenta) => !(espera && esMotivoDelCliente(p.motivoBloqueo));
   const bloqueado = activos.find((p) => p.bloqueado && cuenta(p)) ?? null;
   const atrasado = bloqueado
@@ -886,11 +911,14 @@ export function saludSegunNexus(c: CuentaDeCartera, hoy: string): SaludConPorque
   if (bien.length > 0) return { salud: "saludable", porque: `Va bien: ${enLista(bien)}.`, razones: [] };
 
   const contacto = c.ultimoContacto ? `el último contacto fue hace ${diasEntre(c.ultimoContacto, hoy)} días` : "sin contacto registrado";
+  const fuera = proyectosFueraDeMarcha(c);
   return {
     salud: "sin-datos",
     porque: acompanamos
       ? "Nexus no sabe cómo está: sin puntaje de uso ni contacto reciente."
-      : `Smarteam no la acompaña hoy (sin proyecto activo ni relación gestionada en HubSpot) y ${contacto}.`,
+      : fuera
+        ? `Ningún proyecto en marcha: ${fuera}. No cuenta como riesgo; ${contacto}.`
+        : `Smarteam no la acompaña hoy (sin proyecto activo ni relación gestionada en HubSpot) y ${contacto}.`,
     razones: [],
   };
 }
@@ -920,7 +948,7 @@ export const COLORES_EN_ORDEN: readonly SaludDeCuenta[] = ["en-riesgo", "en-fric
  * acá con su color, y nada de acá es inventado.
  */
 export const QUE_PINTA_CADA_COLOR: ReadonlyArray<{ clave: RazonDeSalud; salud: "en-riesgo" | "en-friccion"; texto: string }> = [
-  { clave: "bloqueado", salud: "en-riesgo", texto: "un proyecto bloqueado" },
+  { clave: "bloqueado", salud: "en-riesgo", texto: "un proyecto en marcha bloqueado por Smarteam o un proveedor" },
   { clave: "cancelacion", salud: "en-riesgo", texto: "una cancelación registrada en HubSpot" },
   {
     clave: "renuevaEnRiesgo",
@@ -980,6 +1008,8 @@ export interface FilaParaLlamar {
   riesgoDoble: boolean;
   cruce: boolean;
   sinDatos: boolean;
+  /** La marca de la CSL (2026-10-29): dentro del mismo color, la prioritaria va primero. null = no es prioritaria. */
+  prioritaria: PrioridadVisible | null;
 }
 
 function rango(f: Pick<FilaParaLlamar, "principal" | "otros" | "prioridad" | "sinDatos">): number {
@@ -1022,11 +1052,14 @@ export function listaParaLlamar(cuentas: readonly CuentaDeCartera[], hoy: string
       // «Sin datos» es no saber: de su uso (Partner) o de ningún contacto con el cliente. Las dos van
       // arriba de las de fricción (`rango`) y las dos las muestra el filtro «Sin datos».
       sinDatos: motivos.some((m) => m.clave === "sinDatos" || m.clave === "sinContactoRegistrado"),
+      prioritaria: prioridadVisible(c.prioritaria),
     });
   }
+  // La marca de la CSL ordena dentro del color (2026-10-29): una prioritaria en riesgo va antes que una que no lo es.
   return filas.sort(
     (a, b) =>
       RANGO_DE_LA_SALUD[a.salud] - RANGO_DE_LA_SALUD[b.salud] ||
+      rangoDePrioridad(a) - rangoDePrioridad(b) ||
       rango(a) - rango(b) ||
       b.principal.peso - a.principal.peso ||
       b.otros.length - a.otros.length ||
@@ -1047,6 +1080,8 @@ export interface CuentaConAlertas {
   porqueDeLaSalud: string;
   cses: string[];
   alertas: AlertaDeCuenta[];
+  /** La marca de la CSL (2026-10-29). null = no es prioritaria. */
+  prioritaria: PrioridadVisible | null;
 }
 
 const RANGO_DE_SEVERIDAD: Record<AlertaDeCuenta["severidad"], number> = { HIGH: 0, MEDIUM: 1, LOW: 2 };
@@ -1071,12 +1106,14 @@ export function alertasParaRevisar(cuentas: readonly CuentaDeCartera[], hoy: str
         alertas: [...c.alertas].sort(
           (a, b) => RANGO_DE_SEVERIDAD[a.severidad] - RANGO_DE_SEVERIDAD[b.severidad] || b.detectadaEn.localeCompare(a.detectadaEn),
         ),
+        prioritaria: prioridadVisible(c.prioritaria),
       };
     })
     .sort((a, b) => {
       const alta = (x: CuentaConAlertas) => (x.alertas.some((al) => al.severidad === "HIGH") ? 0 : 1);
       return (
         alta(a) - alta(b) ||
+        rangoDePrioridad(a) - rangoDePrioridad(b) ||
         RANGO_DE_LA_SALUD[a.salud] - RANGO_DE_LA_SALUD[b.salud] ||
         b.alertas.length - a.alertas.length ||
         a.nombre.localeCompare(b.nombre)
@@ -1558,8 +1595,8 @@ export function equipo(
         continue;
       }
       const f = fila(p.cseNombre, p.cseEmail);
-      if (p.atraso) f.atrasados++;
-      if (p.bloqueado) f.bloqueados++;
+      if (p.atraso && enMarcha(p)) f.atrasados++;
+      if (p.bloqueado && enMarcha(p)) f.bloqueados++;
       if (p.avance !== null) f._avances.push(p.avance);
     }
     const cse = cseDeLaCuenta(c);
@@ -1726,7 +1763,8 @@ const BALDE_DE_ENTREGA: Record<FiltroDeEntrega, "bloqueados" | "atrasados" | "al
 
 export function entregaDeProyectos(cuentas: readonly CuentaDeCartera[]): EntregaDeProyectos {
   const conProyecto = (pasa: (p: ProyectoDeCuenta) => boolean) =>
-    cuentas.filter((c) => c.proyectos.some((p) => p.activo && pasa(p))).map((c) => c.clientId);
+    // Solo los proyectos en marcha (2026-10-29): el botón y «A quién llamar» cuentan lo mismo.
+    cuentas.filter((c) => c.proyectos.some((p) => enMarcha(p) && pasa(p))).map((c) => c.clientId);
   return {
     bloqueados: conProyecto((p) => p.bloqueado),
     atrasados: conProyecto((p) => !!p.atraso),
@@ -1770,8 +1808,11 @@ export function estadoDeLaCuenta(c: CuentaDeCartera, hoy: string): Lectura[] {
 }
 
 function entrega(c: CuentaDeCartera): Lectura {
-  const activos = c.proyectos.filter((p) => p.activo);
+  // Solo los proyectos en marcha (2026-10-29): la ficha y la lista no pueden decir cosas distintas del mismo proyecto.
+  const activos = c.proyectos.filter(enMarcha);
   const base = { rotulo: "Entrega" as const, fuente: "Cronograma · HubSpot" };
+  const fuera = proyectosFueraDeMarcha(c);
+  if (activos.length === 0 && fuera) return { ...base, color: "gris", palabra: "Ninguno en marcha", porque: `${fuera.charAt(0).toUpperCase()}${fuera.slice(1)}. No cuenta como riesgo.` };
   if (activos.length === 0) return { ...base, color: "gris", palabra: "Sin proyecto activo", porque: "La cuenta no tiene proyectos en curso en Nexus." };
   const bloqueado = activos.find((p) => p.bloqueado);
   if (bloqueado) {

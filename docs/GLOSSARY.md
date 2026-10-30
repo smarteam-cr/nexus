@@ -1066,6 +1066,13 @@
 - **Queja del cliente** (`CsAlertCategory.QUEJA`): alerta con la frase literal del cliente, verificada contra la reunión
   o el correo. La levanta el vigía y, desde la etapa 6 de la memoria de la cuenta, también la lectura de cada reunión.
   Verificada, pinta el color de la cuenta.
+- **Aviso del equipo** (`CsAlertCategory.AVISO_DEL_EQUIPO`, 2026-10-29): una «queja» cuya frase dijo alguien de
+  Smarteam en la reunión. Se ve con quién la levantó y no pinta el color: es contexto, no una queja del cliente.
+- **Cuenta prioritaria** (`PrioridadDeCuenta`, 2026-10-29): la CSL o un super admin la marcan con un motivo (SmartLoop,
+  ticket grande, interlocutores difíciles u otro). No cambia el color: dentro del mismo color, va primero.
+- **Proyecto en marcha** (2026-10-29): arrancó (kickoff publicado, fecha de arranque confirmada que llegó o etapa de
+  HubSpot de trabajo) y no está bloqueado, o el freno es de Smarteam o de un proveedor. Solo estos pintan riesgo y el
+  vigía los revisa.
 - **Detector** (de alertas): quien levanta una `CsAlert`. Son tres: las reglas en código, la lectura de cada reunión (la
   queja con su cita) y el vigía con IA, que recibe el riesgo como evidencia y decide. Todas tienen el mismo ciclo.
   Cobranza tiene sus alertas aparte.

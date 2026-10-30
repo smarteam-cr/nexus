@@ -58,6 +58,7 @@ export default function CsPanel({
   yo,
   parametros,
   puedeReasignar,
+  puedeMarcarPrioridad,
 }: {
   data: CarteraDeLaCsl;
   /** El correo de quien mira (borra solo las vistas que creó). */
@@ -66,6 +67,8 @@ export default function CsPanel({
   parametros: Record<string, string | string[] | undefined>;
   /** Puede pasar una cuenta a otro CSE (`proyectos.reasignarEncargado`). */
   puedeReasignar: boolean;
+  /** Puede marcar una cuenta como prioritaria (`customerSuccess.marcarPrioridad`, 2026-10-29). */
+  puedeMarcarPrioridad: boolean;
   /** El padding de la columna de contenido: la página pasa su `SHELL_*`, el mismo que su loading. */
   contenedor: string;
   /**
@@ -214,6 +217,7 @@ export default function CsPanel({
             entrega={entrega}
             filtroDeEntrega={filtroDeEntrega}
             onQuitarFiltro={() => setFiltroDeEntrega(null)}
+            puedeMarcarPrioridad={puedeMarcarPrioridad}
           />
         )}
         {pestana === "cartera" && (
@@ -230,6 +234,7 @@ export default function CsPanel({
             yo={yo}
             equipoParaPase={data.equipoParaPase}
             puedeReasignar={puedeReasignar}
+            puedeMarcarPrioridad={puedeMarcarPrioridad}
           />
         )}
         {pestana === "renovaciones" && <Renovaciones filas={data.renovaciones} hoy={data.hoy} />}

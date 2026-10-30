@@ -10,6 +10,7 @@ import {
   esLlaveViejaDelAviso,
   evidenciaJuntoALaRegla,
   idsDeLaEvidencia,
+  esPorCita,
   juntarEvidencia,
   llaveDelAviso,
   llaveDelVigia,
@@ -156,7 +157,8 @@ describe("⭐ una alerta por cita: la lectura y el vigía no duplican la misma q
   it("los dos escritores la usan antes de crear; el vigía, solo para la queja (un retraso es de su proyecto)", () => {
     const vigia = leer("lib/cs/watchdog.ts");
     expect(vigia).toContain("mismaCitaVerificada(");
-    expect(vigia).toContain('if (a.category === "QUEJA") {');
+    expect(vigia).toContain("if (esPorCita(a.category)) {");
+    expect(esPorCita("TIMELINE_OVERDUE")).toBe(false);
     expect(leer("lib/cs/alertas-de-la-lectura-server.ts")).toContain("mismaCitaVerificada(");
   });
 });

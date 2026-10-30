@@ -70,6 +70,15 @@ describe("saludDeCs", () => {
 });
 
 describe("motivosDeAtencion", () => {
+  it("un proyecto bloqueado que no está en marcha no pide atención (2026-10-29)", () => {
+    const base = empresa({ proxima: null });
+    const proyecto = { ...base.proyectos[0], bloqueado: true };
+    const claves = (enMarcha?: boolean) =>
+      motivosDeAtencion({ ...base, proyectos: [{ ...proyecto, enMarcha }] }, HOY).map((m) => m.clave);
+    expect(claves(false)).not.toContain("bloqueado");
+    expect(claves(undefined)).toContain("bloqueado");
+  });
+
   it("una cuenta al día no pide nada (sin reunión no es motivo)", () => {
     expect(motivosDeAtencion(empresa({ proxima: null }), HOY)).toEqual([]);
   });

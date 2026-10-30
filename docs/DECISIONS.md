@@ -5305,7 +5305,9 @@ Alexander Vanegas (CSL) y dirección.
   chip de la cabecera no se contradicen. Ya no sale de los motivos para llamar, que siguen ordenando
   la lista y diciendo «Por qué llamar».
   - **Rojo, solo con un hecho duro**: un proyecto bloqueado, una cancelación registrada en HubSpot, o
-    una renovación a 90 días o menos que llega con el uso mal o un proyecto atrasado.
+    una renovación a 90 días o menos que llega con el uso mal o un proyecto atrasado. *Desde el 2026-10-29 solo
+    cuentan los proyectos EN MARCHA*: un proyecto bloqueado pinta rojo solo si arrancó y el freno es de Smarteam o
+    de un proveedor (ver «Cuentas prioritarias, alertas solo de proyectos en marcha y el aviso del equipo»).
   - **Amarillo**: un proyecto atrasado; el uso bajo, cayendo o con hubs sin activar; más de
     `DIAS_SIN_CONTACTO` días sin contacto, o ninguno en 6 meses.
   - **Verde**: nada de lo anterior, y algo dice que va bien (entrega al día, uso o contacto reciente).
@@ -12611,3 +12613,80 @@ con el diff viejo solo como referencia, después de confirmar con búsqueda que 
   `send-to-canvas` en `scope-coverage.ts` sí sale con su ruta.
 - **El modelo, sus filas y lo que leen y escriben los agentes en `/analyze` se quedan**: es el ítem 23 y el resto del
   24 (los agentes encadenados por paso todavía leen las cards del paso anterior y las HUMAN del cliente).
+
+## Cuentas prioritarias, alertas solo de proyectos en marcha y el aviso del equipo (2026-10-29)
+
+> Tres pedidos de Elías del 29 oct para Éxito del cliente: (1) que la CSL y los super admin marquen a mano qué cuentas
+> son prioritarias o piden más seguimiento («hoy un proyecto muerto como Camalio sale en riesgo al mismo nivel que RC o
+> CEMACO»); (2) que las alertas de riesgo solo tomen proyectos activos («Kaizen está creado pero no ha pagado»); (3) que
+> Nexus distinga una queja del cliente de un aviso que levantó nuestro equipo (kölbi, revisión de campañas).
+
+**Lo medido en producción (solo lectura, 29 oct).**
+- **Kamalio** (así se llama en Nexus) salía en ROJO por una sola razón: su único proyecto dice «Bloqueado» en HubSpot
+  («Cliente no responde»), creado en diciembre de 2025, sin handoff, kickoff ni fecha de arranque. «Bloqueado» pesaba 80
+  en los motivos para llamar, más que una alerta alta del vigía (60), así que dentro del rojo quedaba ARRIBA de CEMACO
+  (rojo por una queja grave). RC Inmobiliaria estaba en amarillo (queja media).
+- **Kaizen Kapital**: «KAIZEN KAPITAL | HUBS NUEVOS», creado en HubSpot el 13 oct, en la etapa «Bloqueado», sin
+  handoff, kickoff ni fecha. Rojo por «bloqueado».
+- **El pago no sirve como señal**: 3 de los 97 proyectos activos con registro en HubSpot tienen un servicio de Cobranza
+  ligado al proyecto. «Creado sin pago» se lee como lo que es en los datos: sin kickoff, sin fecha y sin etapa de trabajo.
+- **kölbi**: la QUEJA «ellos digamos que nos han manifestado mucho que no hay una rutina…» (vigía, 26 oct) la dijo
+  Valentina Sandoval, de Smarteam. La regla que separa al equipo del cliente (`hablanteDelEquipo`) pedía el nombre y el
+  ÚLTIMO apellido; en el equipo ella es «Valentina Sandoval Devia» y Meet la muestra como «Valentina Sandoval». No
+  calzó, su turno pasó por el del cliente y la queja quedó verificada. El mismo hueco tenía la lectura de cada reunión.
+  De las 22 quejas abiertas, solo esa la dijo alguien del equipo.
+
+- **El efecto** (con la regla final, 30 oct, 96 cuentas): de 20 a 12 en rojo. Pasan a gris «Ningún proyecto en marcha»
+  Kamalio, Kaizen, Oceánica, Seguro Global y REMPRO; pasan a amarillo por lo demás que tienen Aditec JCB, Alliance RH y
+  Secure Title. En «A quién llamar», Kamalio baja al lugar 67 y Kaizen al 79; CEMACO sigue en rojo.
+
+**Las decisiones.**
+- **Un proyecto cuenta para el riesgo solo si está EN MARCHA** (`marchaDelProyecto`, lib/cs/proyecto-en-marcha.ts, una
+  sola regla para la cartera y el vigía). Primero, *el freno nuestro*: con «Atraso por Smarteam» o «Proveedor» cuenta
+  siempre, arrancara o no (la etapa «Bloqueado» borra la anterior, y lo que trabamos nosotros no puede quedar callado).
+  *Arrancó* si tiene el kickoff publicado, una fecha de arranque CONFIRMADA que ya llegó (`anchorStartDate`, que solo
+  escribe un clic humano; la estimada nunca va ahí, KNOWN-ERRORS) o una etapa de HubSpot de trabajo (cualquiera menos
+  «Handoff» y «Bloqueado»). *Detenido*: arrancó y HubSpot lo tiene bloqueado, con el motivo del cliente o SIN motivo
+  (Elías pidió «solo proyectos activos»; 7 de los 9 detenidos medidos no tienen motivo: si un bloqueo es nuestro, se
+  escribe en HubSpot y vuelve a contar). Sin etapa de HubSpot cuenta: no saber no esconde riesgo. «En pausa»
+  (`on_hold`) no es bloqueado.
+  - *Lo que ya no pinta*: el color, los motivos para llamar, la «Entrega» de la ficha (`Ninguno en marcha`, en gris) y
+    `laAcompanamos` miran solo los proyectos en marcha. El proyecto sigue activo para todo lo demás (su CSE, la
+    clasificación, el pase de cuenta). Una cuenta sin ningún proyecto en marcha queda en gris y su porqué lo dice.
+  - *El vigía* no tría un proyecto que no está en marcha (`prepararElTriaje`, donde convergen las cuatro vías; el barrido
+    y el debounce los dejan afuera para que no ocupen lugares).
+  - *Qué alertas se apagan* (`alertaApagadaPorMarcha`): el vigía le guarda un proyecto a TODA alerta, también a las de
+    la cuenta, así que el proyecto solo no alcanza. Una alerta de proyecto se apaga con su proyecto; una de la cuenta,
+    solo si a la cuenta no le queda ningún proyecto en marcha; una queja, un aviso del equipo, el riesgo de renovación o
+    de cancelación y una oportunidad (no es un riesgo) no se apagan nunca. La cartera no las muestra, y el barrido del vigía las cierra solas, firmadas por el
+    sistema, para que Para ti no señale algo que la ficha ya no muestra. La primera limpieza la hace
+    `scripts/cerrar-alertas-de-proyectos-detenidos.ts`, con su simulacro, después del deploy.
+  - *También cuentan igual* el botón de «Entrega de proyectos», el Equipo y «Mi día» (que sigue mostrando el dato, pero
+    no lo pone por encima de una renovación).
+  - ⚠ *Consecuencia a sabiendas*: un proyecto en «Handoff» ya no recibe alertas de etapa temprana (kickoff sin publicar,
+    contrato sin enviar). Es lo que pidió Elías («los que nunca arrancaron»); si se quieren de vuelta, es una línea
+    (`etapaDeArranque`). La queja de una reunión es de la cuenta, no de un proyecto, y sigue igual.
+- **La marca de prioridad** (`PrioridadDeCuenta`, append-only como `CorreccionDeSalud`; lib/cs/prioridad-de-cuenta.ts).
+  Un motivo (SmartLoop, ticket grande, interlocutores difíciles u otro, con una línea opcional; con «otro», obligatoria).
+  La pone o la quita quien tenga la celda `customerSuccess.marcarPrioridad` (por defecto la CSL; SUPER_ADMIN siempre),
+  desde la Cartera, «A quién llamar» y el panel de la cuenta. La ruta pide además el rol del área (`guardLiderDeCs`).
+  - *No cambia el color, ordena*: dentro del mismo color la prioritaria va primero (en «A quién llamar», en la Cartera
+    y, entre las que tienen una alerta alta, en «Alertas»). *Por qué no sube de color:* el color dice cómo va la cuenta
+    y lo calcula Nexus con hechos; mezclarle «cuánto nos importa» le quitaba el significado a los dos.
+  - `customerSuccess.read` sigue apagada; la guarda de `customer-success-propio.test.ts` mira ahora esa celda puntual.
+- **Una «queja» que dijo alguien de Smarteam es un AVISO DEL EQUIPO** (`AVISO_DEL_EQUIPO`, valor nuevo de
+  `CsAlertCategory`; lib/cs/aviso-del-equipo.ts). `hablanteDelEquipo` reconoce a quien se ve con TODAS sus palabras dentro
+  de un nombre del equipo («Valentina Sandoval» en «Valentina Sandoval Devia»). Un segundo nombre no hace de apellido:
+  «María José García» es del cliente aunque en el equipo esté «María José Zamora Gutierrez», y «Juan Carlos» a secas
+  queda en «no se sabe». *Por el correo no*: la primera versión lo usaba y «Esteban González», cliente, calzaba con
+  `egonzalez@` de Elías en la misma reunión. El vigía, cuando la frase de una QUEJA está en el turno de alguien del equipo, la guarda como aviso: título
+  «Aviso del equipo: …», el porqué dice quién la levantó y su frase (el texto del detector decía «queja del cliente» y no
+  se conserva), la frase queda verificada con `dichaPor`, y NO pinta el color
+  (no está en `CATEGORIAS_QUE_PINTAN`). Antes quedaba como queja sin verificar, igual de «queja» en la pantalla. La
+  lectura de cada reunión, con el hablante bien leído, ya manda esa frase al vigía como «lo dijo alguien de Smarteam»
+  (rotulada «aviso del equipo, no queja del cliente»), no como queja. Van uno por frase, como la queja: dos avisos
+  distintos no se pisan. Las abiertas se pasan con `scripts/reclasificar-quejas-del-equipo.ts`, SIEMPRE después del
+  deploy: el cliente Prisma viejo revienta al leer un valor de enum que no conoce (simulacro: la de kölbi).
+  - *Riesgo aceptado*: `SEGUNDOS_NOMBRES` es una lista cerrada. Si en el equipo hay un nombre de tres palabras con un
+    segundo nombre que no está en ella, un cliente que Meet muestre solo con esos dos nombres se leería como del equipo.
+    Es raro, y su efecto es una queja de menos, que el vigía igual ve como riesgo; no una queja inventada.

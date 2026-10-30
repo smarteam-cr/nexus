@@ -4,6 +4,7 @@
 import { z } from "zod";
 import { esValorDe, type DatoDeClasificacion } from "./clasificacion";
 import { LARGO_DE_LA_NOTA, SALUDES_CORREGIBLES } from "./ajustes-de-salud";
+import { LARGO_DE_LA_NOTA_DE_PRIORIDAD, MOTIVOS_DE_PRIORIDAD } from "./prioridad-de-cuenta";
 
 const datoSchema = z.enum(["relacion", "potencial", "momento"]);
 
@@ -46,6 +47,22 @@ export const ajusteDeSaludSchema = z.discriminatedUnion("accion", [
   z.object({ accion: z.literal("descartar-espera"), huella: z.string().min(1).max(2000) }),
 ]);
 export type AjusteDeSaludPedido = z.infer<typeof ajusteDeSaludSchema>;
+
+/**
+ * POST /api/cs/prioridad/[clientId] (2026-10-29): marcar la cuenta como prioritaria con un motivo, o quitar la marca
+ * (lib/cs/prioridad-de-cuenta.ts). Con «otro», la línea es el motivo y es obligatoria.
+ */
+export const prioridadDeCuentaSchema = z.discriminatedUnion("accion", [
+  z
+    .object({
+      accion: z.literal("marcar"),
+      motivo: z.enum(MOTIVOS_DE_PRIORIDAD),
+      nota: z.string().trim().max(LARGO_DE_LA_NOTA_DE_PRIORIDAD, `Hasta ${LARGO_DE_LA_NOTA_DE_PRIORIDAD} caracteres.`).optional().nullable(),
+    })
+    .refine((p) => p.motivo !== "otro" || (p.nota?.trim().length ?? 0) >= 3, { message: "Con «Otro motivo», escribe cuál.", path: ["nota"] }),
+  z.object({ accion: z.literal("quitar") }),
+]);
+export type PrioridadDeCuentaPedido = z.infer<typeof prioridadDeCuentaSchema>;
 
 /** POST /api/cs/vistas: guardar los filtros de la pestaña «Cartera» con un nombre (2026-10-09, entrega 3). */
 export const vistaDeCarteraSchema = z.object({

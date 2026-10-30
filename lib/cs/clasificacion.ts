@@ -21,6 +21,7 @@ import { relacionTerminada } from "./lectura-partner";
 import { relacionConHubspot, type RelacionConHubspot } from "./relacion-gestionada";
 import { SIN_AJUSTES, propuestaDeEspera, sugerirEspera, type PropuestaDeEspera } from "./ajustes-de-salud";
 import { EXCLIENTE, esExcliente } from "./exclientes";
+import { prioridadVisible, type PrioridadVisible } from "./prioridad-de-cuenta";
 import {
   VENTANA_DE_RENOVACION,
   VENTANA_TRAS_CIERRE,
@@ -395,6 +396,8 @@ export interface FilaDeLaCartera {
   /** Nexus propone «en espera del cliente» (un proyecto dice que el freno es del cliente). */
   esperaPropuesta: PropuestaDeEspera | null;
   clasificacion: ClasificacionDeLaCuenta;
+  /** La marca de prioridad de la CSL (2026-10-29): ordena dentro del color. null = no es prioritaria. */
+  prioritaria: PrioridadVisible | null;
 }
 
 /** TODOS los clientes, por nombre, con su clasificación. */
@@ -421,6 +424,7 @@ export function filasDeLaCartera(cuentas: readonly CuentaDeCartera[], hoy: strin
         excliente: esExcliente(c.clasificacion) ? { sigueActivo: loQueSigueActivo(c) } : null,
         esperaPropuesta: esperaQuePropone(c),
         clasificacion: clasificarCuenta(c, hoy),
+        prioritaria: prioridadVisible(c.prioritaria),
       };
     })
     .sort((a, b) => a.nombre.localeCompare(b.nombre, "es"));

@@ -54,6 +54,9 @@ import type { CierreAnterior } from "./alertas-reglas";
 import { filasDeLaCartera } from "./clasificacion";
 import { leerClasificaciones } from "./clasificacion-server";
 import { leerAjustes } from "./ajustes-de-salud-server";
+import { leerPrioridades } from "./prioridad-de-cuenta-server";
+import { datosDeMarcha } from "./proyecto-en-marcha-server";
+import { alertaApagadaPorMarcha, bloqueadoEnHubspot, marchaDelProyecto } from "./proyecto-en-marcha";
 import { leerVistas } from "./vistas-de-cartera-server";
 import { cargarConfigCarga } from "@/lib/carga/queries";
 import { esCuentaDePrueba } from "@/lib/documentacion/equipo";
@@ -93,7 +96,7 @@ export async function ultimoUsoConocido(partnerIds: string[]): Promise<Map<strin
 }
 
 function esBloqueado(hubspotStatus: string | null, etapa: string | null): boolean {
-  return hubspotStatus === "blocked" || /bloquead/i.test(etapa ?? "");
+  return bloqueadoEnHubspot({ estadoHubspot: hubspotStatus, etapaHubspot: etapa });
 }
 
 /**
@@ -234,7 +237,7 @@ export async function cargarCuentas(
   const sinUso = ids
     .filter((id) => partnerPorCliente.has(id) && partnerPorCliente.get(id)?.uso === null)
     .map((id) => registroPorCliente.get(id) as string);
-  const [clientes, ops, cerrados, senales, contactoDe, alertas, cuentasFin, manuales, deBaja, usoAnterior, cierres, preventas, clasificaciones, ajustes] = await Promise.all([
+  const [clientes, ops, cerrados, senales, contactoDe, alertas, cuentasFin, manuales, deBaja, usoAnterior, cierres, preventas, clasificaciones, ajustes, prioridades, paraMarcha] = await Promise.all([
     prisma.client.findMany({ where: { id: { in: ids } }, select: { id: true, name: true, company: true, tamUsd: true, tamFuente: true } }),
     prisma.project.findMany({
       where: { id: { in: filas.map((r) => r.projectId) } },
@@ -262,7 +265,7 @@ export async function cargarCuentas(
       orderBy: { lastDetectedAt: "desc" },
       select: {
         id: true, clientId: true, severity: true, category: true, title: true, reason: true, suggestedAction: true,
-        status: true, agentRunId: true, lastDetectedAt: true, dedupeKey: true, evidence: true, project: { select: { name: true } },
+        status: true, agentRunId: true, lastDetectedAt: true, dedupeKey: true, evidence: true, projectId: true, project: { select: { name: true } },
       },
     }),
     prisma.cuentaFinanciera.findMany({
@@ -294,7 +297,17 @@ export async function cargarCuentas(
     leerClasificaciones(ids),
     // El color corregido a mano y el «en espera del cliente» (2026-10-09).
     leerAjustes(ids),
+    // La marca de prioridad (2026-10-29). Sin la tabla, ninguna cuenta la tiene.
+    leerPrioridades(ids),
+    // ¿Cada proyecto activo está en marcha? (2026-10-29): uno sin arrancar o bloqueado no pinta riesgo ni muestra alertas.
+    datosDeMarcha(filas.map((r) => r.projectId)),
   ]);
+  const marchaPorProyecto = new Map([...paraMarcha].map(([id, d]) => [id, marchaDelProyecto(d, hoy)]));
+  // Lo que apaga la regla (`alertaApagadaPorMarcha`) no se muestra: el barrido del vigía y scripts/cerrar-alertas-de-
+  // proyectos-detenidos.ts lo cierran. Lo que no apaga (una queja, una alerta de la cuenta con otro proyecto en marcha)
+  // sigue a la vista aunque el vigía se la haya colgado a un proyecto detenido.
+  const fueraDeMarcha = new Set([...marchaPorProyecto].filter(([, m]) => m.estado !== "en-marcha").map(([id]) => id));
+  const conProyectoEnMarcha = new Set(filas.filter((r) => !fueraDeMarcha.has(r.projectId)).map((r) => r.clientId));
   const ultimoCierrePorCliente = new Map(cierres.map((c) => [c.clientId, c._max.updatedAt ? ymd(c._max.updatedAt) : null]));
   const conPreventa = new Set(preventas.map((p) => p.clientId));
 
@@ -306,7 +319,9 @@ export async function cargarCuentas(
   return clientes
     .map((cl): CuentaDeCartera => {
       const proyectos: ProyectoDeCuenta[] = [
-        ...filas.filter((r) => r.clientId === cl.id).map((r) => proyectoDesdeFila(r, opsPorProyecto.get(r.projectId), deBaja)),
+        ...filas
+          .filter((r) => r.clientId === cl.id)
+          .map((r) => ({ ...proyectoDesdeFila(r, opsPorProyecto.get(r.projectId), deBaja), marcha: marchaPorProyecto.get(r.projectId) ?? null })),
         ...cerrados
           .filter((p) => p.clientId === cl.id)
           .map((p) => ({
@@ -349,7 +364,7 @@ export async function cargarCuentas(
         ticketsAbiertos: senal?.ticketsSupported ? senal.openTicketCount : null,
         // Las alertas de un excliente no se muestran (lib/cs/exclientes.ts).
         alertas: alertas
-          .filter((a) => a.clientId === cl.id && !esExcliente(clasificaciones.porCliente.get(cl.id)))
+          .filter((a) => a.clientId === cl.id && !esExcliente(clasificaciones.porCliente.get(cl.id)) && !alertaApagadaPorMarcha({ category: a.category, proyectoFuera: !!a.projectId && fueraDeMarcha.has(a.projectId), cuentaConMarcha: conProyectoEnMarcha.has(cl.id) }))
           .map((a) => ({ ...alertaDeLaCuenta(a), antes: cierreAnterior.get(a.dedupeKey) ?? null })),
         facturacion: resumirFacturacion(cobros, hoy, fin?.creditoDias ?? null),
         licenciasManuales: manuales
@@ -370,6 +385,7 @@ export async function cargarCuentas(
         tamFuente: cl.tamFuente,
         clasificacion: clasificaciones.porCliente.get(cl.id) ?? null,
         ajustes: ajustes.porCliente.get(cl.id) ?? null,
+        prioritaria: prioridades.porCliente.get(cl.id) ?? null,
       };
     })
     .sort((a, b) => a.nombre.localeCompare(b.nombre));

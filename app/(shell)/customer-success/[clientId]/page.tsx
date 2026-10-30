@@ -40,6 +40,8 @@ export default async function CustomerSuccessAccountPage({
   // (/customer-success/propuestas), que pide `clientes.viewAll`.
   // El pase de cuenta (2026-10-09) pide lo mismo que reasignar el CSE en el listado de clientes.
   const puedeReasignar = await can(ctx.teamMember, "proyectos", "reasignarEncargado");
+  // Marcar la cuenta como prioritaria (2026-10-29): la celda de la matriz, por defecto de la CSL y los super admin.
+  const puedeMarcarPrioridad = await can(ctx.teamMember, "customerSuccess", "marcarPrioridad");
   const data = await loadCsAccount(clientId, where, true);
   if (!data) notFound();
 
@@ -53,6 +55,7 @@ export default async function CustomerSuccessAccountPage({
 
   // Solo la CSL y dirección llegan acá (el CSE salió arriba con la cuenta vaciada).
   data.puedeReasignar = puedeReasignar;
+  data.puedeMarcarPrioridad = puedeMarcarPrioridad;
   return (
     <div className={SHELL_FULL}>
       {/* El agente vigía, en segundo plano, si hace más de 48 h que no revisa este cliente (D14). */}

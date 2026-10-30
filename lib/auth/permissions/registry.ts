@@ -246,6 +246,11 @@ export const PERMISSION_SECTIONS = [
     label: "Éxito del cliente",
     actions: [
       { key: "read", label: "Acceder al área de Éxito del cliente", enforced: false },
+      /* `marcarPrioridad` (2026-10-29, pedido de Elías): marcar una cuenta como prioritaria (más seguimiento) con un
+         motivo, desde la Cartera y desde la cuenta. Enforced: la pide POST /api/cs/prioridad/[clientId]. Por defecto la
+         tiene la CSL (y SUPER_ADMIN, que es all-true). Va en esta sección aunque `read` esté apagada: el área sigue
+         siendo de la CSL y dirección por rol; esta celda dice quién de los que entran puede marcar. */
+      { key: "marcarPrioridad", label: "Marcar cuentas prioritarias (más seguimiento)", enforced: true },
     ],
   },
   {

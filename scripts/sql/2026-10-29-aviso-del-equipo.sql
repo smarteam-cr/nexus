@@ -1,0 +1,26 @@
+-- 2026-10-29 · Éxito del cliente: la categoría de alerta «Aviso del equipo»
+--
+-- Pedido de Elías del 29 oct: Nexus marcó en kölbi una «queja del cliente» en la revisión de campañas, pero la frase la
+-- dijo Valentina Sandoval, de Smarteam, avisando que había desorden. Desde este cambio, una queja cuya frase está en el
+-- turno de alguien del equipo se guarda como AVISO_DEL_EQUIPO: se ve en la cuenta con quién la levantó, y no pinta el
+-- color como una queja del cliente (lib/cs/aviso-del-equipo.ts).
+--
+-- Un solo `ADD VALUE`, al final del enum y solo: Postgres 12 o más lo corre en una transacción mientras el valor
+-- nuevo no se use en ella, y acá no se usa. Agregar un valor que nadie usa todavía es inocuo para el código viejo.
+-- Re-ejecutable (`IF NOT EXISTS`).
+--
+-- ⛔ ORDEN: ANTES del deploy. Con el código nuevo y sin el valor, /api/health responde 503 (el cliente Prisma lo
+-- espera) y el deploy se revierte solo. Ninguna fila lo usa antes del deploy: lo escriben el vigía y
+-- scripts/reclasificar-quejas-del-equipo.ts, que va DESPUÉS.
+--
+-- ⛔ REVERTIR A MANO: una fila con este valor revienta las lecturas del código viejo, y el vigía las crea desde el primer
+-- día. ANTES de volver al código anterior, devolverlas a la categoría que el código viejo conoce:
+--   UPDATE "CsAlert" SET "category" = 'QUEJA' WHERE "category" = 'AVISO_DEL_EQUIPO';
+--
+--   PowerShell:  $env:ALLOW_PROD_WRITE="1"; npx prisma db execute --file scripts/sql/2026-10-29-aviso-del-equipo.sql
+--
+-- Si la base respondiera «cannot run inside a transaction block», es la excepción documentada en ARCHITECTURE
+-- Parte 0 · cap. D: el mismo comando en un one-liner `npx tsx -e` que llama a `assertProdWriteAllowed()` primero.
+-- NUNCA `prisma db push`. Después: `npx prisma generate` y reiniciar el dev server.
+
+ALTER TYPE "CsAlertCategory" ADD VALUE IF NOT EXISTS 'AVISO_DEL_EQUIPO';
