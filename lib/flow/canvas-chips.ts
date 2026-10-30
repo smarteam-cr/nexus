@@ -82,6 +82,8 @@ export function buildCanvasChips(input: EntradaDeChips): ChipDeCanvas[] {
     incluirHandoff: true,
     // Un canvas suelto del CSE no tiene estado "pendiente" — nadie lo espera.
     incluirCustom: false,
+    // Una copia de un tipo tampoco (etapa V3, docs/artefactos-plan.md): el checklist cuenta el recorrido, no el depósito.
+    incluirCopias: false,
   })
     .filter((r) =>
       piezaAplica(r.slug, { tags: input.tags, hubspotPipelineId: input.hubspotPipelineId }),

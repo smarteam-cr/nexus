@@ -24,6 +24,9 @@ import { resolverDuenioDelHandoff } from "@/lib/handoff/duenio";
 import { esSugerenciaPendiente } from "@/lib/handoff/congelado";
 import { esCerrada } from "@/lib/timeline/particularidad-state";
 import { renderCronogramaParaAgentes } from "@/lib/contexto/cronograma-para-agentes";
+import { admiteCopias } from "@/lib/artefactos/tipos";
+import { artefactosDelTipo, copiasDelTipo } from "@/lib/artefactos/lectores-server";
+import { ordenParaLosAgentes, textoDeVariasCopias } from "@/lib/artefactos/lectores";
 
 /**
  * Las secciones de la Entrega que sirven de REFERENCIA para el próximo proyecto del mismo
@@ -397,7 +400,32 @@ export async function loadCanvasContext(
     where: { projectId, ...canvasOf(canvasSlug) },
     select: { id: true, sections: true },
   });
-  if (!canvas) return "";
+  /* VARIAS COPIAS (artefactos, etapa V3 — docs/artefactos-plan.md): Elías, 29 oct, «los lectores leen todas, cada una con
+     su nombre y su estado». Sin copias, el camino de siempre y el texto byte a byte como antes. Con copias, cada documento
+     rotulado y los terminados primero (lib/artefactos/lectores.ts). */
+  const copias = admiteCopias(canvasSlug) ? await copiasDelTipo(projectId, canvasSlug) : [];
+  if (copias.length === 0) {
+    if (!canvas) return "";
+    return textoDelCanvas(canvas, canvasSlug, opts);
+  }
+  const todos = await artefactosDelTipo(projectId, canvasSlug);
+  const enOrden = ordenParaLosAgentes(todos);
+  const filas = await prisma.projectCanvas.findMany({ where: { id: { in: enOrden.map((d) => d.id) } }, select: { id: true, sections: true } });
+  const porId = new Map(filas.map((f) => [f.id, f]));
+  const textos: Array<{ rotulo: string; texto: string }> = [];
+  for (const d of enOrden) {
+    const f = porId.get(d.id);
+    if (f) textos.push({ rotulo: d.rotulo, texto: await textoDelCanvas(f, canvasSlug, opts) });
+  }
+  return textoDeVariasCopias(textos);
+}
+
+/** El texto de UN canvas, sección por sección: lo que `loadCanvasContext` devolvía siempre. */
+async function textoDelCanvas(
+  canvas: { id: string; sections: unknown },
+  canvasSlug: string,
+  opts: { onlyConfirmed?: boolean; includeKeys?: readonly string[]; soloVisibles?: boolean },
+): Promise<string> {
   const ocultas = opts.soloVisibles ? hiddenKeysFrom(canvas.sections) : new Set<string>();
 
   const sections = await prisma.canvasSection.findMany({

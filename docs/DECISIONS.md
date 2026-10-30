@@ -12611,3 +12611,48 @@ con el diff viejo solo como referencia, después de confirmar con búsqueda que 
   `send-to-canvas` en `scope-coverage.ts` sí sale con su ruta.
 - **El modelo, sus filas y lo que leen y escriben los agentes en `/analyze` se quedan**: es el ítem 23 y el resto del
   24 (los agentes encadenados por paso todavía leen las cards del paso anterior y las HUMAN del cliente).
+
+## Artefactos: varias copias sin una oficial, cada una con su enlace (2026-10-29, V2 a V4 y los dos primeros tipos de V6)
+
+Elías respondió las ocho preguntas del plan (`docs/artefactos-plan.md` §5) y donde el plan proponía otra cosa se corrigió
+en su lugar. Lo que queda decidido:
+
+- **No hay copia oficial.** Un proyecto puede tener varias planificaciones, diagnósticos, kickoffs y exploraciones, cada
+  una con su nombre, su lugar (arrastrando) y su estado (en construcción o terminado). *Por qué:* «usar Nexus como un
+  depósito de las planificaciones que va creando»; y «cuando uno crea una entrega o la escala, pueden leer todos los
+  artefactos, cada uno con su nombre». El plan proponía una «principal» que leían los demás: se descartó.
+- **El documento de siempre conserva su `slug`; las copias no lo tienen y llevan `tipoArtefacto`.** *Por qué:* 105
+  búsquedas por tipo lo encuentran por `slug` y deciden a quién se le ESCRIBE (generar con su botón, publicar el
+  kickoff, re-anclar el cronograma). Escribir sigue yendo al de siempre; LEER va a todos. *Se descartó* numerar copias
+  con el mismo slug (el índice único parcial y las 105 búsquedas devolverían una cualquiera).
+- **`pieceForCanvas` devuelve null para una copia, y una copia nunca se llama como una pieza en `name`.** *Por qué:* así
+  ningún botón de la pieza le escribe al de siempre desde una copia, y la lectura doble por nombre de `canvasOf` no la
+  confunde. El nombre que se ve vive en una columna aparte, `titulo` (también para el de siempre: hay `name` viejos que
+  hoy no se muestran, y el riel no puede empezar a mostrarlos).
+- **Los lectores leen todas las copias, rotuladas con su nombre y su estado, lo terminado primero** (`loadCanvasContext`,
+  y los puntuales: el desafío y los objetivos que retoma la entrega, la posición en la escala del diagnóstico, los
+  procesos de la planificación). Con un solo documento del tipo, el texto que recibe el agente es byte a byte el de
+  antes. Los que necesitan un valor toman el terminado más reciente.
+- **Una copia se edita y se genera con su propio editor** (`ArtefactoWorkspace`), no con el de su tipo. *Por qué:* los
+  editores de siempre traen sus botones (generar por /analyze, el selector de plantilla, publicar), que buscan por
+  `slug`. El editor de una copia pinta el MISMO motor con el MISMO adaptador del tipo, que comparten la vista del enlace
+  y el PDF. Su generación (`lib/artefactos/generar-server.ts`) lee lo mismo que un documento de su tipo —el handoff con la
+  allowlist del tipo, el «Contexto adicional» del tipo por el chokepoint, la memoria y los documentos que lo alimentan—
+  con las instrucciones de ESA copia. La corrida va con `agentId: null` y `agentSlug: "artefacto:<tipo>"`, y la celda es
+  la del tipo.
+- **Una copia no lleva las secciones que leen el proyecto** (`ctxDriven`: el cronograma y los procesos del kickoff, la
+  estimación), salvo la portada y el cierre: pintarían lo mismo en cada copia.
+- **Las reuniones y notas elegidas siguen siendo POR TIPO** en esta tanda: las copias de un tipo comparten las de su tipo;
+  las instrucciones sí son de cada documento. La tabla `ReunionDelDocumento` es V3b. *Por qué:* el «Contexto adicional»
+  de la Planificación lo estaba cambiando otra sesión el mismo día.
+- **Cada documento de un proyecto tiene su propio enlace, VIVO** (`AccesoAlDocumento` + `/external/documento/[token]`):
+  las copias y también el de siempre. Sin contraseña; muestra lo confirmado, sin lo oculto, sin lo interno. *Por qué
+  vivo y no una foto:* CS lo usa para compartir pantalla mientras trabaja, y la foto (`publishedSnapshot`) del de siempre
+  ya la usan los mecanismos de publicar del kickoff y la planificación. INV64 se enmendó: un enlace abre un documento de
+  su empresa, de la empresa misma o de un proyecto suyo, nunca de una propuesta. Las superficies de siempre no cambian.
+- **Los dos primeros tipos nuevos son el plan de adopción y la integración técnica** (Elías, respuesta 3), adelantados
+  de V6. La integración técnica presta las secciones del requerimiento técnico y suma el **mapa de integración** (campo de
+  origen ↔ propiedad de HubSpot, sentido, transformación, frecuencia), el identificador único, el alcance firmado y lo que
+  debe entregar el cliente o un tercero: el pedido de Elías de validar que existiera. Las tablas usan el renderer genérico
+  `tabla` con las columnas sembradas: ningún componente nuevo.
+- **En pantalla se llaman «artefactos»** («Nuevo artefacto» en el riel).

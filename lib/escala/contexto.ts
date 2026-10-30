@@ -16,7 +16,8 @@
 import { prisma } from "@/lib/db/prisma";
 import { loadKnowledgeByTags } from "@/lib/knowledge/load-by-tags";
 import { usaEscala } from "@/lib/tags/catalog";
-import { canvasOfNested } from "@/lib/pieces/canvas-query";
+import { artefactosDelTipo } from "@/lib/artefactos/lectores-server";
+import { prioridadParaUnValor } from "@/lib/artefactos/lectores";
 import {
   ETIQUETA_ESCALA_COMPLETA,
   ETIQUETA_ESCALA_RESUMEN,
@@ -104,15 +105,24 @@ export async function escalaParaPosicionar(
 
 /** Lo que midió el Diagnóstico del proyecto: el punto de partida que devuelve la Entrega. */
 export async function posicionDelDiagnostico(projectId: string): Promise<PosicionEnLaEscala | null> {
-  const bloque = await prisma.canvasBlock.findFirst({
+  /* VARIAS COPIAS (artefactos, etapa V3): la posición del diagnóstico terminado más reciente; sin terminados, la del
+     primero en el orden de la persona que la tenga. Con un solo diagnóstico, la de siempre (lib/artefactos/lectores.ts). */
+  const candidatos = prioridadParaUnValor(await artefactosDelTipo(projectId, "diagnosis"));
+  if (candidatos.length === 0) return null;
+  const bloques = await prisma.canvasBlock.findMany({
     where: {
       blockType: "CARD",
-      section: { key: SECCION_DE_ESCALA.diagnostico, canvas: canvasOfNested("diagnosis", { projectId }) },
+      section: { key: SECCION_DE_ESCALA.diagnostico, canvasId: { in: candidatos.map((c) => c.id) } },
     },
     orderBy: { order: "asc" },
-    select: { data: true },
+    select: { data: true, section: { select: { canvasId: true } } },
   });
-  return leerPosicion(bloque?.data);
+  for (const c of candidatos) {
+    const bloque = bloques.find((b) => b.section.canvasId === c.id);
+    const posicion = leerPosicion(bloque?.data);
+    if (posicion) return posicion;
+  }
+  return null;
 }
 
 /**

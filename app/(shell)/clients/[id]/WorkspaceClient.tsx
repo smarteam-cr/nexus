@@ -153,6 +153,12 @@ export interface SeededCanvas {
   stale?: boolean;
   /** Las novedades de las reuniones para este documento (etapa 6; 0 con los hechos apagados). */
   novedades?: number;
+  /** Artefactos (etapa V3): el tipo de una copia (null en el documento de siempre), su estado y su orden. */
+  tipoArtefacto?: string | null;
+  titulo?: string | null;
+  terminadoEn?: string | null;
+  order?: number;
+  createdAt?: string;
 }
 
 export default function WorkspaceClient({

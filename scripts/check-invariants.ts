@@ -18,7 +18,7 @@ import {
   INV31, INV32, INV33, INV34, INV35, INV36, INV37, INV38, INV39, INV40, INV41, INV42, INV43, INV44, INV45, INV46, INV47,
   type Invariante,
 } from "@/lib/invariantes";
-import { INV49, INV50, INV51, INV52, INV53, INV54, INV55, INV56, INV57, INV58, INV59, INV60, INV61, INV62, INV63, INV64 } from "@/lib/invariantes";
+import { INV49, INV50, INV51, INV52, INV53, INV54, INV55, INV56, INV57, INV58, INV59, INV60, INV61, INV62, INV63, INV64, INV65 } from "@/lib/invariantes";
 
 /**
  * Imprime un invariante extraído a `lib/invariantes/` exactamente como se imprimía acá adentro
@@ -853,6 +853,8 @@ async function main(): Promise<number> {
   // ── Inv 64 → lib/invariantes/documentos-de-la-empresa.ts (2026-10-27, R3: cada enlace de un documento de la empresa abre
   //    un documento de esa empresa) ──
   violations += await reportar(INV64, prisma);
+  // ── Inv 65 → lib/invariantes/artefactos.ts (2026-10-29, V3: cada copia de un artefacto es una copia sana) ──
+  violations += await reportar(INV65, prisma);
 
   // ── Inv 56 → lib/invariantes/empresa.ts (2026-10-26, R5: cada investigación que salió de una preventa es de la empresa de esa preventa) ──
   violations += await reportar(INV56, prisma);

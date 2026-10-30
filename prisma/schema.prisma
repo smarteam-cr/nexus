@@ -1403,6 +1403,17 @@ model ProjectCanvas {
   estadoDocumento  String?
   versionDocumento Int     @default(1)
 
+  // 2026-10-29 — ARTEFACTOS, etapa V3 (docs/artefactos-plan.md): varias copias de un tipo en un proyecto.
+  // `tipoArtefacto` = el tipo de una COPIA (lib/artefactos/tipos.ts); nullable porque solo lo llevan las copias: el
+  // documento de siempre conserva su `slug` y esto en null (la base lo exige: CHECK ProjectCanvas_copia_sin_slug).
+  // `titulo` = el nombre que le pone una persona; nullable: sin él, una copia se ve con `name` y el de siempre con el de su
+  // pieza (hay `name` viejos que hoy no se muestran). `terminadoEn` = el estado: null = en construcción. El orden es
+  // `order`; archivar una copia escribe `disabledAt`. SQL: scripts/sql/2026-10-29-artefactos-copias.sql (⛔ nunca `db push`).
+  tipoArtefacto String?
+  titulo        String?
+  terminadoEn   DateTime?
+  terminadoPor  String? // correo, no FK: el rastro sobrevive a que la persona salga del equipo
+
   cards          ClientContextCard[]
   canvasSections CanvasSection[]
   versiones      VersionDeDocumento[]

@@ -181,6 +181,8 @@ export interface FilaDelRielDePiezas {
   grupo?: { id: string; titulo: string; detalle?: string | null };
   /** El equipo la ocultó del riel (2026-10-12): va plegada en «Ver N piezas más», salvo mientras está abierta. */
   oculta?: boolean;
+  /** Una COPIA de un tipo (etapa V3, docs/artefactos-plan.md): sin el ojo de ocultar (se archiva desde su barra). */
+  esCopia?: boolean;
 }
 
 const PUNTO: Record<EstadoDePieza, string> = {
@@ -208,6 +210,7 @@ export function PiezasDelRiel({
   onOcultar,
   slotDeSesiones,
   grupoDelResumen,
+  onNuevoArtefacto,
 }: {
   resumen: { activa: boolean; meta?: string | null; onClick: () => void };
   /**
@@ -227,6 +230,8 @@ export function PiezasDelRiel({
    * sesiones por portal, como la preventa las cuelga de su pieza (2026-10-07).
    */
   slotDeSesiones?: (el: HTMLDivElement | null) => void;
+  /** «+ Nuevo artefacto» al pie de las piezas (etapa V3): otra planificación, un plan de adopción… Sin él, no se pinta. */
+  onNuevoArtefacto?: () => void;
 }) {
   // La pieza abierta se ve en su lugar aunque esté oculta: no se pierde de vista dónde se está.
   const existentes = filas.filter((f) => f.estado !== "por_activar" && (!f.oculta || f.activa));
@@ -273,7 +278,7 @@ export function PiezasDelRiel({
               /* Los Cuestionarios (2026-10-11) traen siempre su aviso («sin enviar», «enviado», «respondido 1 de 2»):
                  no se generan, se mandan. */
             }
-            className={cn(clase(f.activa), onOcultar && "pr-7")}
+            className={cn(clase(f.activa), onOcultar && !f.esCopia && "pr-7")}
           >
             <span className={cn("h-2 w-2 flex-shrink-0 rounded-full", f.activa ? "bg-brand" : PUNTO[f.estado as EstadoDePieza])} aria-hidden="true" />
             <span className="min-w-0 flex-1 truncate">{f.etiqueta}</span>
@@ -304,7 +309,7 @@ export function PiezasDelRiel({
               </>
             )}
           </button>
-          {onOcultar && (
+          {onOcultar && !f.esCopia && (
             <button
               type="button"
               onClick={() => onOcultar(f.slug, !f.oculta)}
@@ -328,6 +333,21 @@ export function PiezasDelRiel({
           {f.slug === "exploration" && f.activa && slotDeSesiones && <div ref={slotDeSesiones} />}
         </li>
       ))}
+      {onNuevoArtefacto && (
+        <li>
+          <button
+            type="button"
+            onClick={onNuevoArtefacto}
+            title="Otra planificación, otro kickoff, un plan de adopción, una integración técnica…"
+            className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-[13px] text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg"
+          >
+            <span className="flex h-2 w-2 flex-shrink-0 items-center justify-center text-[13px] leading-none" aria-hidden="true">
+              +
+            </span>
+            <span className="min-w-0 flex-1 truncate">Nuevo artefacto</span>
+          </button>
+        </li>
+      )}
       {plegadas > 0 && (
         <li>
           <button

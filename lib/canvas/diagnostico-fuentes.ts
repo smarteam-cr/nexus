@@ -26,6 +26,8 @@
  *   · la exploración (con la regla de «sin verificar»), los procesos y el cronograma de solo lectura.
  */
 import { prisma } from "@/lib/db/prisma";
+import { artefactosDelTipo } from "@/lib/artefactos/lectores-server";
+import { prioridadParaUnValor } from "@/lib/artefactos/lectores";
 import { loadCanvasContext, loadHandoffContext, loadTimelineContext } from "@/lib/canvas/load-canvas-context";
 import { serializeProcesosForPrompt } from "@/lib/canvas/read-procesos";
 import { DIAGNOSTICO_HANDOFF_KEYS } from "@/components/landing/configs/diagnostico.defs";
@@ -35,7 +37,6 @@ import { fichaParaPrompt, leerFicha, propuestaDeLaFichaParaElDocumento } from "@
 import { cargarMaterialDelDocumento, encuadreDeLasElegidas } from "@/lib/contexto/material-del-documento";
 import { documentoConContexto } from "@/lib/contexto/documento";
 import { fronteraDeLaPieza } from "@/lib/contexto/frontera-de-los-documentos";
-import { canvasOfNested } from "@/lib/pieces/canvas-query";
 import { resultadosDelProyecto } from "@/lib/handoff/resultados";
 import { resultadosParaPrompt } from "@/lib/handoff/resultados-medibles";
 import { memoriaDelDocumento } from "@/lib/memoria";
@@ -53,11 +54,18 @@ import { bloqueDelDiagnosticoPorEquipo, rotuloDelEquipo } from "@/lib/canvas/dia
  * Sin kickoff curado, el agente lo dice («Por validar») en vez de adivinar nombres.
  */
 async function equipoDeSmarteam(projectId: string): Promise<string[]> {
-  const bloque = await prisma.canvasBlock.findFirst({
-    where: { blockType: "CARD", section: { key: "equipo", canvas: canvasOfNested("kickoff", { projectId }) } },
-    select: { data: true },
+  /* VARIAS COPIAS (artefactos, etapa V3): el equipo del kickoff terminado más reciente; sin terminados, del primero en
+     el orden de la persona que lo tenga curado. Con un solo kickoff, el de siempre (lib/artefactos/lectores.ts). */
+  const candidatos = prioridadParaUnValor(await artefactosDelTipo(projectId, "kickoff"));
+  if (candidatos.length === 0) return [];
+  const bloques = await prisma.canvasBlock.findMany({
+    where: { blockType: "CARD", section: { key: "equipo", canvasId: { in: candidatos.map((c) => c.id) } } },
+    select: { data: true, section: { select: { canvasId: true } } },
   });
-  const members = (bloque?.data as { members?: Array<{ name?: unknown; role?: unknown }> } | null)?.members;
+  const deCadaUno = candidatos.map(
+    (c) => (bloques.find((b) => b.section.canvasId === c.id)?.data as { members?: Array<{ name?: unknown; role?: unknown }> } | null)?.members,
+  );
+  const members = deCadaUno.find((m) => Array.isArray(m) && m.length > 0) ?? deCadaUno.find((m) => Array.isArray(m));
   if (!Array.isArray(members)) return [];
   return members
     .map((m) => {

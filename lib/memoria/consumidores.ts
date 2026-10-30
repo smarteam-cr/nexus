@@ -81,7 +81,8 @@ export const CONSUMIDORES_DE_LA_MEMORIA: Readonly<Record<LectorDeMemoria, Consum
     excluirOrigenes: [],
     destino: "kickoff",
     // Desde el 2026-10-17 el kickoff se genera en su runner (lib/entregables/generar-server.ts lo llama).
-    archivos: ["lib/canvas/kickoff-generate.ts"],
+    // + las copias de su tipo (etapa V3, docs/artefactos-plan.md), con el mismo lector.
+    archivos: ["lib/canvas/kickoff-generate.ts", "lib/artefactos/generar-server.ts"],
     motivo: "Las personas de la ficha y los acuerdos posteriores a la venta, recortados para el cliente.",
   },
   diagnosis: {
@@ -91,7 +92,8 @@ export const CONSUMIDORES_DE_LA_MEMORIA: Readonly<Record<LectorDeMemoria, Consum
     destino: "diagnostico",
     // Ya lee la ficha confirmada (`fichaParaPrompt`, sin lo interno), los mapas de procesos enteros y los resultados medibles.
     sinPartes: ["ficha", "procesos", "resultados"],
-    archivos: ["lib/canvas/diagnostico-fuentes.ts"],
+    // + las copias de su tipo (etapa V3, docs/artefactos-plan.md), con el mismo lector.
+    archivos: ["lib/canvas/diagnostico-fuentes.ts", "lib/artefactos/generar-server.ts"],
     motivo:
       "Lo que se sabe de la cuenta y del proyecto, recortado para el cliente. Desde la etapa 7 lleva el peso cuando nadie eligió reuniones.",
   },
@@ -102,7 +104,8 @@ export const CONSUMIDORES_DE_LA_MEMORIA: Readonly<Record<LectorDeMemoria, Consum
     destino: "planificacion",
     // Ya lee la ficha confirmada (`fichaParaPrompt`, sin lo interno) y los mapas de procesos enteros.
     sinPartes: ["ficha", "procesos"],
-    archivos: ["lib/canvas/planificacion-generate.ts"],
+    // + las copias de su tipo (etapa V3, docs/artefactos-plan.md), con el mismo lector.
+    archivos: ["lib/canvas/planificacion-generate.ts", "lib/artefactos/generar-server.ts"],
     motivo:
       "Lo que se sabe de la cuenta y del proyecto, recortado para el cliente. Desde la etapa 7 lleva el peso cuando nadie eligió reuniones.",
   },
@@ -113,7 +116,8 @@ export const CONSUMIDORES_DE_LA_MEMORIA: Readonly<Record<LectorDeMemoria, Consum
     destino: "integraciones",
     // Un requerimiento técnico no escribe desviaciones del plan ni resultados del negocio.
     sinPartes: ["desviaciones", "resultados"],
-    archivos: ["lib/canvas/desarrollo-generate.ts"],
+    // + las copias de su tipo (etapa V3, docs/artefactos-plan.md), con el mismo lector.
+    archivos: ["lib/canvas/desarrollo-generate.ts", "lib/artefactos/generar-server.ts"],
     motivo: "Integraciones se ve en vivo desde afuera: recortado para el cliente.",
   },
   implementation: {
@@ -134,7 +138,8 @@ export const CONSUMIDORES_DE_LA_MEMORIA: Readonly<Record<LectorDeMemoria, Consum
     /* Ya lee los procesos y los resultados medibles, y las cifras del proyecto (semanas, fechas) las escribe Nexus, no
        el agente: la historia (fechas de otros proyectos) y las desviaciones (semanas) lo invitarían a escribirlas. */
     sinPartes: ["procesos", "historia", "resultados", "desviaciones"],
-    archivos: ["lib/canvas/entrega-generate.ts"],
+    // + las copias de su tipo (etapa V3, docs/artefactos-plan.md), con el mismo lector.
+    archivos: ["lib/canvas/entrega-generate.ts", "lib/artefactos/generar-server.ts"],
     motivo: "La entrega se comparte al cliente: recortado. Lo que suma es la ficha confirmada y los acuerdos de las reuniones que su material no lee.",
   },
   "business-case": {
@@ -166,7 +171,8 @@ export const CONSUMIDORES_DE_LA_MEMORIA: Readonly<Record<LectorDeMemoria, Consum
     pieza: "exploration",
     alcance: alcanceDeLaPieza("exploration"),
     excluirOrigenes: ["Exploración"],
-    archivos: ["lib/exploraciones/fuentes-del-proyecto.ts"],
+    // + las copias de su tipo (etapa V3, docs/artefactos-plan.md), con el mismo lector.
+    archivos: ["lib/exploraciones/fuentes-del-proyecto.ts", "lib/artefactos/generar-server.ts"],
     motivo: "La exploración del proyecto (interna), sin lo que ella misma propuso a la ficha.",
   },
   preventa: {

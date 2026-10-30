@@ -53,6 +53,15 @@ export function seededSectionKeys(slug: string | null): Set<string> {
 export interface CanvasParaContenido {
   id: string;
   slug: string | null;
+  /** El tipo de una COPIA (lib/artefactos/copias.ts): su semilla es la de su tipo. */
+  tipoArtefacto?: string | null;
+}
+
+/** La semilla de una copia: la de su tipo; la de un tipo sin canvas de siempre (los nuevos), su cierre. */
+function semillaDe(c: CanvasParaContenido): Set<string> {
+  if (c.slug || !c.tipoArtefacto) return seededSectionKeys(c.slug);
+  const delTipo = seededSectionKeys(c.tipoArtefacto);
+  return delTipo.size ? delTipo : new Set(["cierre"]);
 }
 
 export interface ContenidoInput {
@@ -68,7 +77,7 @@ export interface ContenidoInput {
 /** Núcleo PURO del criterio: qué canvases tienen contenido real. */
 export function deriveCanvasesConContenido(input: ContenidoInput): Set<string> {
   const semillaPorCanvas = new Map(
-    input.canvases.map((c) => [c.id, seededSectionKeys(c.slug)]),
+    input.canvases.map((c) => [c.id, semillaDe(c)]),
   );
 
   // Puerta 1: hay un bloque generado por IA en el canvas.

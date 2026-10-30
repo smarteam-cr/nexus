@@ -127,6 +127,26 @@ export const PRINT_DOC_TYPES: PrintDocType[] = [
     // la fuente única es ProjectTimeline. La portada la sintetiza el cargador.
     ctxSections: ["cronograma"],
   },
+  /* Los tipos de artefacto nuevos (docs/artefactos-plan.md, 2026-10-29): no son una pieza, así que no hay «el de
+     siempre» que cargar por slug — todas sus filas son copias, y se imprimen siempre con `canvasId` (lib/artefactos/
+     enlaces.ts). El id es el del tipo (lib/artefactos/tipos.ts). Sin `canvasId`, el cargador responde que no hay
+     documento. */
+  {
+    id: "adoption-plan",
+    pieceSlug: null,
+    scope: "project-piece",
+    label: "Plan de adopción",
+    palette: "brand", // lo ve el cliente
+    ready: true,
+  },
+  {
+    id: "integration",
+    pieceSlug: null,
+    scope: "project-piece",
+    label: "Integración técnica",
+    palette: "brand", // se comparte con el cliente y con quien integra
+    ready: true,
+  },
   {
     id: "role",
     pieceSlug: null, // vive en RoleProfile.content, no en CanvasBlock

@@ -73,6 +73,11 @@ import NovedadesDelDocumento from "./NovedadesDelDocumento";
 import type { NovedadesDeLaPieza } from "@/lib/seguimiento/novedades";
 import type { NovedadEnElTurno } from "@/lib/asistente/alcance";
 import { usePantallaDelRecorrido } from "@/components/recorridos/contexto";
+import ArtefactoWorkspace from "@/components/artefactos/ArtefactoWorkspace";
+import BarraDelArtefacto from "@/components/artefactos/BarraDelArtefacto";
+import NuevoArtefactoModal from "@/components/artefactos/NuevoArtefactoModal";
+import { esCopia, nombreDelArtefacto, ordenarArtefactos, tipoDelDocumento } from "@/lib/artefactos/copias";
+import { admiteCopias } from "@/lib/artefactos/tipos";
 
 /**
  * Canvases que tienen su PROPIO renderer más abajo (motor de landing, Gantt o vista lineal).
@@ -115,6 +120,16 @@ interface CanvasMeta {
   stale?: boolean;
   /** Las novedades de las reuniones para este documento (etapa 6; 0 con los hechos apagados). */
   novedades?: number;
+  /**
+   * ARTEFACTOS (etapa V3, docs/artefactos-plan.md): el tipo de una COPIA (null en el documento de siempre), su estado y su
+   * orden. Una copia no tiene `slug`, así que `slugForCanvas` la ve como suelta y ningún editor de un tipo la toma: la
+   * abre `ArtefactoWorkspace`, por id.
+   */
+  tipoArtefacto?: string | null;
+  titulo?: string | null;
+  terminadoEn?: string | null;
+  order?: number;
+  createdAt?: string;
 }
 
 // ── Component ────────────────────────────────────────────────────────────────
@@ -291,6 +306,25 @@ export default function ProjectCanvasPanel({
    * el gate escrito a mano, porque para ellos "sin slug" significa otra cosa.
    */
   const activeSlug = visible && !enResumen ? (piezaSinCanvas ?? (activeCanvas ? slugForCanvas(activeCanvas) : null)) : null;
+  /* ── ARTEFACTOS (etapa V3) ──────────────────────────────────────────────────────────────────
+     La COPIA que se mira, si es una (null en el documento de siempre y en todo lo demás), y el TIPO del documento abierto
+     cuando admite copias: con él va la barra del nombre, el estado y el enlace, también sobre el documento de siempre. */
+  const copiaActiva = visible && !enResumen && !piezaSinCanvas && activeCanvas && esCopia(activeCanvas) ? activeCanvas : null;
+  const tipoActivo = visible && !enResumen && !piezaSinCanvas && activeCanvas ? tipoDelDocumento(activeCanvas) : null;
+  const conBarraDeArtefacto = !!tipoActivo && admiteCopias(tipoActivo) && !!activeCanvas;
+  const delTipoActivo = useMemo(
+    () =>
+      tipoActivo
+        ? ordenarArtefactos(
+            canvases
+              .filter((c) => tipoDelDocumento(c) === tipoActivo)
+              .map((c) => ({ ...c, order: c.order ?? 0, createdAt: c.createdAt ?? 0 })),
+          ).map((c) => ({ id: c.id, nombre: nombreDelArtefacto(c), terminado: !!c.terminadoEn }))
+        : [],
+    [canvases, tipoActivo],
+  );
+  /** «Nuevo artefacto» / «Crear otra…»: abierto, y con qué tipo ya elegido. */
+  const [nuevoArtefacto, setNuevoArtefacto] = useState<{ tipo: string | null } | null>(null);
   /* Los Cuestionarios están en el riel con las mismas condiciones en que se veían cuando colgaban de la
      fila «Exploración»: con la Exploración en el proyecto (o con algún cuestionario ya armado). No se
      activan: si no corresponden, no se listan. */
@@ -841,7 +875,8 @@ export default function ProjectCanvasPanel({
                 hubspotPipelineId: hubspotPipelineId ?? null,
               });
               const avisoDelResumen = avisosDePiezas[row.slug];
-              const grupo = grupoDe(row.slug);
+              // Una copia va en el grupo de su tipo (etapa V3): su slug de fila es `copia:<id>`.
+              const grupo = grupoDe(row.tipo ?? row.slug);
               const oculta = piezasOcultas.includes(row.slug);
               // Adopción y Aprendizaje (servicio recurrente) no tienen canvas: su fila dice la etapa en curso.
               if ((PIEZAS_PROPIAS_DEL_CICLO as readonly string[]).includes(row.slug)) {
@@ -885,6 +920,10 @@ export default function ProjectCanvasPanel({
                    Si no, lo que el Resumen sabe de la pieza («opcional», «sin subir»). */
                 aviso: avisoCiclo
                   ? avisoCiclo
+                  : row.esCopia
+                  ? row.terminado
+                    ? { corto: "terminado", largo: "Terminado: quien lo lee lo toma como acordado", tono: "neutro" }
+                    : null
                   : readiness.shortReason
                   ? { corto: readiness.shortReason, largo: readiness.reason ?? undefined, tono: "neutro" }
                   : row.stale
@@ -892,6 +931,7 @@ export default function ProjectCanvasPanel({
                     : avisoDelResumen
                       ? avisoDelResumen
                       : null,
+                esCopia: row.esCopia,
                 propuesta: row.slug === PIEZA_CRONOGRAMA && propuestaPendiente,
                 novedades: nNovedades(row.slug),
                 ocupada: activando === row.slug,
@@ -919,6 +959,7 @@ export default function ProjectCanvasPanel({
             }}
             onOcultar={(slug, oculta) => void alternarOculta(slug, oculta)}
             slotDeSesiones={setSlotDeSesiones}
+            onNuevoArtefacto={esRecurrente ? undefined : () => setNuevoArtefacto({ tipo: null })}
           />,
           slotDePiezas,
         )}
@@ -938,7 +979,8 @@ export default function ProjectCanvasPanel({
             <>
               <div className="flex flex-wrap items-center gap-2">
                 <h2 className="text-[22px] font-bold leading-tight text-fg">
-                  {activeSlug ? pieceLabel(activeSlug) : activeCanvas?.name}
+                  {/* Un documento renombrado se ve con su nombre (etapa V3); sin renombrar, el de su pieza, como siempre. */}
+                  {piezaSinCanvas && activeSlug ? pieceLabel(activeSlug) : activeCanvas ? nombreDelArtefacto(activeCanvas) : activeSlug ? pieceLabel(activeSlug) : null}
                 </h2>
                 {/* La exploración es una herramienta de trabajo del equipo, no un documento (2026-10-05). */}
                 {activeSlug === "exploration" && (
@@ -1030,7 +1072,7 @@ export default function ProjectCanvasPanel({
           {/* Export PDF. Qué camino toma lo decide el REGISTRO de impresión leyendo la pieza del
               canvas activo. El resumen no se imprime: no es un documento, es la foto de cómo va el
               proyecto — y sus dos piezas (el brief y el handoff) tienen su propio PDF. */}
-          {!enResumen && !piezaSinCanvas && activeSlug !== "exploration" && (
+          {!enResumen && !piezaSinCanvas && activeSlug !== "exploration" && !copiaActiva && (
             <PrintDocButton
               projectId={projectId}
               activeSlug={activeSlug ?? null}
@@ -1054,7 +1096,7 @@ export default function ProjectCanvasPanel({
             key={activeCanvasId}
             projectId={projectId}
             canvasId={activeCanvasId}
-            etiqueta={activeSlug ? pieceLabel(activeSlug) : activeCanvas.name}
+            etiqueta={nombreDelArtefacto(activeCanvas)}
             grupoDelAgente={activeSlug ? (pieceBySlug(activeSlug)?.agentGroup ?? null) : null}
             generada={filaActiva ? filaActiva.state === "generada" : !!activeCanvas.hasContent}
             desactualizada={!!filaActiva?.stale}
@@ -1097,6 +1139,55 @@ export default function ProjectCanvasPanel({
           <CanvasLinearView destacarKey={HANDOFF_SECCION_PRINCIPAL} projectId={projectId} canvasId={activeCanvasId} />
         </CanvasBoundary>
       )}
+
+      {/* ARTEFACTOS (etapa V3 y V4, docs/artefactos-plan.md): el nombre, el estado, el enlace y el orden de cada documento
+          de un tipo que admite copias —el de siempre incluido: son todas iguales—, y el editor de una COPIA. */}
+      {conBarraDeArtefacto && activeCanvas && activeCanvasId && tipoActivo && (
+        <BarraDelArtefacto
+          key={`barra-${activeCanvasId}`}
+          projectId={projectId}
+          canvasId={activeCanvasId}
+          tipo={tipoActivo}
+          nombre={nombreDelArtefacto(activeCanvas)}
+          esCopia={!!copiaActiva}
+          terminado={!!activeCanvas.terminadoEn}
+          delTipo={delTipoActivo}
+          onCambio={() => void refetchCanvases()}
+          onCrearOtra={() => setNuevoArtefacto({ tipo: tipoActivo })}
+          onArchivada={() => {
+            void refetchCanvases();
+            irAlResumen();
+          }}
+        />
+      )}
+      {copiaActiva && activeCanvasId && tipoActivo && (
+        <CanvasBoundary label="este artefacto">
+          <ArtefactoWorkspace
+            key={`artefacto-${activeCanvasId}`}
+            projectId={projectId}
+            canvasId={activeCanvasId}
+            tipo={tipoActivo}
+            clientName=""
+            onGenerado={() => {
+              bumpGpsRefresh();
+              void refetchCanvases();
+            }}
+          />
+        </CanvasBoundary>
+      )}
+      <NuevoArtefactoModal
+        projectId={projectId}
+        open={nuevoArtefacto !== null}
+        onClose={() => setNuevoArtefacto(null)}
+        tipoInicial={nuevoArtefacto?.tipo ?? null}
+        documentos={canvases.flatMap((c) => {
+          const t = tipoDelDocumento(c);
+          return t && admiteCopias(t) ? [{ id: c.id, nombre: nombreDelArtefacto(c), tipo: t }] : [];
+        })}
+        onCreado={(id) => {
+          void refetchCanvases().then(() => switchCanvas(id));
+        }}
+      />
 
       {/* El «Contexto adicional» del documento (sus reuniones, notas e instrucciones) va ARRIBA del
           marco, no adentro: es del equipo, no de lo que ve el cliente, y adentro quedaba cerrado y no
@@ -1324,7 +1415,7 @@ export default function ProjectCanvasPanel({
           Los que tienen renderer PROPIO se excluyen por `CANVAS_CON_RENDERER_PROPIO`:
           si uno falta ahí, su canvas se pinta DOS veces (el motor arriba y esta grilla
           abajo). Pasó con Exploración — por eso es un set con nombre y no otra `&&`. */}
-      {visible && !enResumen && !CANVAS_CON_RENDERER_PROPIO.has(activeSlug ?? "") && activeCanvasId && (
+      {visible && !enResumen && !CANVAS_CON_RENDERER_PROPIO.has(activeSlug ?? "") && activeCanvasId && !copiaActiva && (
         // agentNonce remonta la grilla al terminar una corrida del CTA → refetch
         <CanvasBoundary label="este canvas">
           <SectionBlockList key={`${activeCanvasId}-${agentNonce}`} projectId={projectId} canvasId={activeCanvasId} />

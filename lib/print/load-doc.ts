@@ -22,6 +22,7 @@ import { requireInternalUser } from "@/lib/auth/supabase";
 import { guardAccessToProject } from "@/lib/auth/api-guards";
 import { can } from "@/lib/auth/permissions/engine";
 import { canvasOf } from "@/lib/pieces/canvas-query";
+import { esCopia, nombreDelArtefacto, tipoDelDocumento } from "@/lib/artefactos/copias";
 import { getBrandLogos, brandLogoMap } from "@/lib/external/smarteam-logo";
 import { hiddenKeysFrom } from "@/lib/business-cases/section-briefs";
 import { sinLoInterno } from "@/lib/landing/inversion-costo";
@@ -191,10 +192,28 @@ export async function loadPrintDoc(
   });
   if (!proyecto) return null;
 
-  const canvas = await prisma.projectCanvas.findFirst({
-    where: { projectId: docId, ...canvasOf(tipo.pieceSlug!) },
-    select: { id: true, sections: true },
-  });
+  /* UNA COPIA (docs/artefactos-plan.md, etapa V4): con `canvasId`, ESE documento, y solo si es de este proyecto y de este
+     tipo (anti-IDOR: el id del proyecto ya pasó el gate, el del canvas no). Sin `canvasId`, el documento de siempre del
+     tipo por su slug, como siempre: su PDF no cambia. Un tipo sin pieza (los nuevos: todas sus filas son copias) sin
+     `canvasId` no tiene documento. */
+  const pedido = opts?.canvasId ?? null;
+  const elegido = pedido
+    ? await prisma.projectCanvas.findFirst({
+        where: { id: pedido, projectId: docId, businessCaseId: null },
+        select: { id: true, sections: true, slug: true, tipoArtefacto: true, name: true, titulo: true, disabledAt: true },
+      })
+    : null;
+  if (pedido && (!elegido || elegido.disabledAt || tipoDelDocumento(elegido) !== tipo.id)) return null;
+  const canvas = elegido
+    ? { id: elegido.id, sections: elegido.sections }
+    : tipo.pieceSlug
+      ? await prisma.projectCanvas.findFirst({
+          where: { projectId: docId, ...canvasOf(tipo.pieceSlug) },
+          select: { id: true, sections: true },
+        })
+      : null;
+  /* Una copia no lleva las secciones que leen el proyecto (el cronograma y los procesos del kickoff): su PDF tampoco. */
+  const deUnaCopia = !!elegido && esCopia(elegido);
   /* Sin canvas no hay documento… salvo cuando el canvas no es la fuente del contenido. El
      Cronograma sale entero de `ProjectTimeline`: su canvas existe solo para ocupar un lugar
      en el desplegable, con cero secciones. Exigirlo sería 404 en un proyecto con cronograma
@@ -274,8 +293,8 @@ export async function loadPrintDoc(
   /* El cronograma vivo se lee UNA vez: la sección (que se apaga si está oculta) y la fila de datos de la
      portada (que no: ocultar el cronograma del kickoff no le borra los números a la portada, igual que
      en el editor — ARCHITECTURE §1-WEB punto 6). */
-  const cronogramaVivo = esKickoff ? await readClientTimeline(docId) : null;
-  const kickoff = esKickoff
+  const cronogramaVivo = esKickoff && !deUnaCopia ? await readClientTimeline(docId) : null;
+  const kickoff = esKickoff && !deUnaCopia
     ? {
         timeline: ocultasKickoff.has("cronograma") ? null : cronogramaVivo,
         portada: cronogramaParaLaFila(cronogramaVivo),
@@ -322,7 +341,7 @@ export async function loadPrintDoc(
       ? { cronograma: (cronograma?.timeline.phases.length ?? 0) > 0 }
       : {};
 
-  for (const k of filasCtxFaltantes(tipo.ctxSections, rows.map((r) => r.key), canales)) {
+  for (const k of deUnaCopia ? [] : filasCtxFaltantes(tipo.ctxSections, rows.map((r) => r.key), canales)) {
     if (esKickoff && ocultasKickoff.has(k)) continue;
     rows.push({ key: k, titleOverride: null, eyebrowOverride: null, blocks: [] });
   }
@@ -360,7 +379,9 @@ export async function loadPrintDoc(
     projectName: proyecto.name,
     // El nombre del archivo NO sale del titular escrito: ese cambia con cada edición y el
     // CSE termina con cinco PDFs que no distingue. Cliente + tipo es estable y ordena solo.
-    docTitle: tipo.label,
+    /* Una copia (o un documento renombrado, abierto por su id) lleva su nombre: tres planificaciones no bajan con el mismo
+       archivo. */
+    docTitle: elegido ? nombreDelArtefacto(elegido) : tipo.label,
     palette: tipo.palette,
     templateId: null,
     rows,
