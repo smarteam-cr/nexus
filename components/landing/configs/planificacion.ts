@@ -35,6 +35,7 @@ import {
   CotizacionesSection,
   InformesSection,
 } from "../sections-planificacion-brief";
+import { BriefImportadoSection } from "../sections-brief-importado";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const PLANIFICACION_SECTION_COMPONENTS: Record<string, FC<SectionProps<any>>> = {
@@ -56,6 +57,8 @@ export const PLANIFICACION_SECTION_COMPONENTS: Record<string, FC<SectionProps<an
   formularios: FormulariosSection,
   cotizaciones: CotizacionesSection,
   informes: InformesSection,
+  // 2026-10-29 (pregunta 32): el Brief de implementación traído de la hoja. Solo interna.
+  brief_importado: BriefImportadoSection,
   // Las acciones del diagnóstico, en detalle (2026-10-28, decisión 16): la misma tabla que las del diagnóstico.
   ejecucion_acciones: AccionesEjecucionSection,
 };

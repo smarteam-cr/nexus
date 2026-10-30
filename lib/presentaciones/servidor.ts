@@ -13,6 +13,7 @@ import { avisar } from "@/lib/para-ti/avisos-server";
 import { urlDeProyecto } from "@/lib/agents/run-url";
 import { SIN_BUSCAR_LO_NUEVO } from "@/lib/agents/historial-corridas";
 import { canvasOfAnyNested, canvasOfNested } from "@/lib/pieces/canvas-query";
+import { SECCIONES_SOLO_INTERNAS } from "@/lib/business-cases/section-briefs";
 import { pieceBySlug, pieceForCanvas } from "@/lib/pieces/registry";
 import { CS_CLIENT_WHERE } from "@/lib/clients/kind";
 import { NO_ES_CONTENEDOR_WHERE, PROYECTO_DE_PIPELINE_CS_WHERE, proyectoClasificableWhere } from "@/lib/projects/scope";
@@ -111,7 +112,8 @@ async function cargar(projectIds: readonly string[]): Promise<Carga> {
         name: true,
         estadoDocumento: true,
         updatedAt: true,
-        canvasSections: { where: { key: { not: "cierre" }, blocks: { some: {} } }, select: { id: true }, take: 1 },
+        // Lo solo interno (el Brief traído de la hoja) no es «ya hay documento»: traerlo no es generar.
+        canvasSections: { where: { key: { notIn: ["cierre", ...SECCIONES_SOLO_INTERNAS] }, blocks: { some: {} } }, select: { id: true }, take: 1 },
       },
     }),
     prisma.agentRun.findMany({

@@ -60,3 +60,6 @@ backups/
 
 # Vista armada del roadmap (scripts/roadmap-vista.mjs)
 .roadmap/
+
+# El archivo del lote de Briefs (scripts/traer-briefs-de-implementacion.ts): nombres de clientes, enlaces y correos.
+/briefs*.csv

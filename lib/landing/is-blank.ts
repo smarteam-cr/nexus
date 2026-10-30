@@ -82,6 +82,9 @@ export const NO_CONTENIDO = new Set([
   // el cliente veía el título de la sección y nada debajo (2026-10-07).
   "kpisPropuestos",
   "objetivosPropuestos",
+  // El porqué de una sección vacía (2026-10-29, lib/landing/por-que-vacia.ts): un aviso para el EQUIPO de que el agente no
+  // encontró con qué llenarla. Sin esta entrada, la sección vacía con su porqué se publicaría como un título sin nada abajo.
+  "__porQueVacia",
 ]);
 
 /** Una sección está "en blanco" si todos sus strings y arrays lo están. */

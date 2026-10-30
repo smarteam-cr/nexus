@@ -28,6 +28,7 @@ import {
 import { resumirSala, textoDeSala } from "@/lib/sessions/participantes";
 import { esSoloElegidas, usaReglaDeRelevancia, type DestinoDeContexto } from "@/lib/sessions/destinos-de-contexto";
 import { MAX_ELEGIDAS_A_LEER, MAX_ELEGIDAS_ENTERAS, documentoDelDestino } from "@/lib/contexto/documento";
+import { entranSolasLasDelProyecto } from "@/lib/contexto/sugerencias-del-documento";
 import { BotonBlanco, BotonTexto, BotonUsar, FilaSugerida, FranjaDeSugerencias } from "@/components/ui/sistema";
 import {
   avisoDelMaterial,
@@ -171,26 +172,30 @@ function EquipoDeLaReunion({
   );
 }
 
-/** Lo que dice la franja de las reuniones que entran solas al diagnóstico (la exploración y las del proyecto con texto). */
-function fraseDeLasQueEntranSolas(total: number, deLaExploracion: number): string {
+/**
+ * Lo que dice la franja de las reuniones que entran solas al documento: al diagnóstico, las de la exploración y las del
+ * proyecto con texto; a la planificación (2026-10-29), las del proyecto con texto. `alDocumento`: «al diagnóstico».
+ */
+function fraseDeLasQueEntranSolas(total: number, deLaExploracion: number, alDocumento = "al diagnóstico"): string {
   const delProyecto = total - deLaExploracion;
+  const primero = alDocumento === "al diagnóstico" ? "las elegidas y las de la exploración" : "las elegidas";
   const lectura =
     total > MAX_ELEGIDAS_A_LEER
-      ? ` Lee ${MAX_ELEGIDAS_A_LEER}: primero las elegidas y las de la exploración (6 enteras), después las más recientes; las más viejas quedan afuera.`
+      ? ` Lee ${MAX_ELEGIDAS_A_LEER}: primero ${primero} (6 enteras), después las más recientes; las más viejas quedan afuera.`
       : total > 6
-        ? " Lee 6 enteras (primero las elegidas y las de la exploración) y las demás en resumen."
+        ? ` Lee 6 enteras (primero ${primero}) y las demás en resumen.`
         : "";
   if (delProyecto === 0) {
     return total === 1
-      ? "La reunión de la sesión de la exploración entra sola y entera al diagnóstico."
-      : `Las ${total} reuniones de las sesiones de la exploración entran solas al diagnóstico.${lectura}`;
+      ? `La reunión de la sesión de la exploración entra sola y entera ${alDocumento}.`
+      : `Las ${total} reuniones de las sesiones de la exploración entran solas ${alDocumento}.${lectura}`;
   }
   if (deLaExploracion === 0) {
     return total === 1
-      ? "La reunión del proyecto con texto entra sola al diagnóstico. «Sacar» la deja afuera."
-      : `Las ${total} reuniones del proyecto con texto entran solas al diagnóstico. «Sacar» deja afuera la que no va.${lectura}`;
+      ? `La reunión del proyecto con texto entra sola ${alDocumento}. «Sacar» la deja afuera.`
+      : `Las ${total} reuniones del proyecto con texto entran solas ${alDocumento}. «Sacar» deja afuera la que no va.${lectura}`;
   }
-  return `${total} reuniones entran solas al diagnóstico: las de las sesiones de la exploración y las del proyecto con texto. «Sacar» deja afuera la que no va.${lectura}`;
+  return `${total} reuniones entran solas ${alDocumento}: las de las sesiones de la exploración y las del proyecto con texto. «Sacar» deja afuera la que no va.${lectura}`;
 }
 
 function fmtDuracion(min: number | null | undefined): string | null {
@@ -268,6 +273,7 @@ export default function SessionSelectionReview({
   const esFemenino = docConContexto?.elDocumento.startsWith("la ") ?? false;
   const delDocumento = `${esFemenino ? "de la" : "del"} ${documento}`;
   const esteDocumento = `${esFemenino ? "esta" : "este"} ${documento}`;
+  const alDocumento = `${esFemenino ? "a la" : "al"} ${documento}`;
   /* El cronograma no tiene regla de relevancia: ninguna reunión se destaca ni se atenúa por su
      título (el chip «aplica» es del handoff). */
   const conRegla = usaReglaDeRelevancia(destino);
@@ -578,11 +584,12 @@ export default function SessionSelectionReview({
   );
 
   /* En el DIAGNÓSTICO, las reuniones de las sesiones de la exploración (2026-10-23) y, desde el 2026-10-24 (L1 etapa 2),
-     todas las demás del proyecto con texto ENTRAN SOLAS (`reunionesQueEntranSolasAlDiagnostico`). El servidor las manda
-     como sugeridas de las fuentes `exploracion` y `proyecto`; acá se cuentan y se muestran como lo que son, con «Sacar»
-     (`false`). */
-  const entranSolasDeLaExploracion =
-    destino === "diagnostico" ? data.sugeridas.filter((s) => s.fuente === "exploracion" || s.fuente === "proyecto") : [];
+     todas las demás del proyecto con texto ENTRAN SOLAS (`reunionesQueEntranSolasAlDiagnostico`); en la PLANIFICACIÓN,
+     desde el 2026-10-29, las del proyecto con texto (`entranSolasLasDelProyecto`). El servidor las manda como sugeridas
+     de las fuentes `exploracion` y `proyecto`; acá se cuentan y se muestran como lo que son, con «Sacar» (`false`). */
+  const entranSolasDeLaExploracion = entranSolasLasDelProyecto(destino)
+    ? data.sugeridas.filter((s) => s.fuente === "exploracion" || s.fuente === "proyecto")
+    : [];
   const nDeLaExploracion = entranSolasDeLaExploracion.filter((s) => s.fuente === "exploracion").length;
   const nEntranSolas = entranSolasDeLaExploracion.length;
   useEffect(() => {
@@ -888,7 +895,7 @@ export default function SessionSelectionReview({
         {entranSolasDeLaExploracion.length > 0 && (
           <div className="flex flex-col gap-1.5">
             <FranjaDeSugerencias>
-              {fraseDeLasQueEntranSolas(entranSolasDeLaExploracion.length, nDeLaExploracion)}
+              {fraseDeLasQueEntranSolas(entranSolasDeLaExploracion.length, nDeLaExploracion, alDocumento)}
             </FranjaDeSugerencias>
             <ul className="flex flex-col gap-1.5">
               {entranSolasDeLaExploracion.map((s) => (
@@ -900,7 +907,7 @@ export default function SessionSelectionReview({
                       <BotonTexto
                         onClick={() => void descartarSugerida(s.sessionId)}
                         disabled={decidiendo !== null}
-                        title="El diagnóstico deja de leerla"
+                        title={`${docConContexto?.elDocumento ? docConContexto.elDocumento[0].toUpperCase() + docConContexto.elDocumento.slice(1) : "El documento"} deja de leerla`}
                       >
                         Sacar
                       </BotonTexto>

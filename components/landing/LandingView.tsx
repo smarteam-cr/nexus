@@ -21,6 +21,7 @@ import { useChatDeSeccion, SeccionEnPantallaProvider } from "@/components/asiste
 import { nombreParaElChat, schemaParaElChat } from "@/lib/canvas/capacidades-de-documento";
 import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import { isBlank } from "@/lib/landing/is-blank";
+import { alEditar, avisoDeLaSeccion, sinPorQueVacia } from "@/lib/landing/por-que-vacia";
 import { formatoDeSeccion } from "@/lib/landing/formato-de-seccion";
 import {
   DndContext,
@@ -80,6 +81,44 @@ function LegacyNotice() {
     >
       Contenido del formato anterior — se muestra tal cual se escribió y no se edita por
       campos. Si regenerás el documento con IA, esta sección se reemplaza.
+    </div>
+  );
+}
+
+/**
+ * EL PORQUÉ DE UNA SECCIÓN VACÍA (2026-10-29, lib/landing/por-que-vacia.ts): la línea con que el agente explica que no
+ * encontró con qué llenarla. Solo en modo edición, con cara de aviso del equipo (no de contenido) y con «Quitar». El cliente
+ * y el PDF no la ven: la sección vacía se omite igual.
+ */
+function AvisoDeSeccionVacia({ texto, onQuitar }: { texto: string; onQuitar?: () => void }) {
+  return (
+    <div
+      role="note"
+      style={{
+        display: "flex",
+        alignItems: "flex-start",
+        gap: 10,
+        fontSize: 12,
+        color: "var(--text-muted)",
+        background: "var(--bg-soft)",
+        border: "1px dashed var(--border-strong)",
+        borderRadius: 8,
+        padding: "8px 12px",
+      }}
+    >
+      <span style={{ flex: 1, lineHeight: 1.45 }}>
+        <strong style={{ fontWeight: 600 }}>Sección vacía · solo lo ve el equipo.</strong> {texto}
+      </span>
+      {onQuitar && (
+        <button
+          type="button"
+          onClick={onQuitar}
+          title="Quitar este aviso (la sección sigue vacía y el cliente no la ve)"
+          style={{ fontSize: 12, fontWeight: 600, color: "var(--text-muted)", background: "transparent", border: 0, cursor: "pointer", padding: 0, whiteSpace: "nowrap" }}
+        >
+          Quitar
+        </button>
+      )}
     </div>
   );
 }
@@ -325,7 +364,8 @@ export default function LandingView({
     // Título/eyebrow efectivos: override del CSE gana; si no, el default de la config.
     const effTitle = (sec?.titleOverride ?? "").trim() || def.label;
     const effEyebrow = sec?.eyebrowOverride != null ? sec.eyebrowOverride : (def.eyebrow ?? "");
-    const hidden = sec?.hidden === true;
+    // Una sección solo interna está oculta para el cliente siempre, diga lo que diga su ojo.
+    const hidden = sec?.hidden === true || def.soloInterna === true;
     const data = {
       ...(def.empty as Record<string, unknown>),
       ...((raw as Record<string, unknown>) ?? {}),
@@ -334,11 +374,23 @@ export default function LandingView({
     // (hero/cierre) y `ctxDriven` (cronograma/procesos: se alimentan de ctx, no de
     // data) NUNCA se omiten por isBlank — su Component decide si devuelve null.
     const alwaysRender = def.pinned || def.ctxDriven;
-    if (!editable && ((!alwaysRender && (def.vacia ? def.vacia(data) : isBlank(data))) || hidden)) return null;
+    const vaciaDe = (d: unknown) => {
+      const conVacios = { ...(def.empty as Record<string, unknown>), ...((d as Record<string, unknown>) ?? {}) };
+      return def.vacia ? def.vacia(conVacios) : isBlank(conVacios);
+    };
+    const estaVacia = vaciaDe(raw);
+    if (!editable && ((!alwaysRender && estaVacia) || hidden)) return null;
+    /* El porqué de la sección vacía (lib/landing/por-que-vacia.ts): solo en edición, solo mientras siga vacía. La primera
+       edición con contenido lo saca de la data (`alEditar`), así no vuelve si después se vacía. */
+    const avisoDeVacia = editable ? avisoDeLaSeccion(raw, estaVacia) : null;
+    const alCambiar = editable ? (d: unknown) => onSectionChange?.(def.key, alEditar(d, vaciaDe)) : undefined;
     const isHero = !!def.backdrop;
     // Una sección OCULTA se colapsa a su título: el CSE la sigue viendo en su lugar (puede
     // arrastrarla y volver a mostrarla) sin que le coma la pantalla. El caret la despliega.
-    const collapsed = editable && hidden && !expanded.has(def.key);
+    /* Las SOLO INTERNAS (el Brief traído a la Planificación, 2026-10-29) son ocultas para el cliente, pero son para que el
+       equipo las lea: arrancan ABIERTAS, y para ellas `expanded` es «la cerró a mano». Una sección que llega después de
+       montar (un documento viejo la gana al abrirse) también abre. */
+    const collapsed = editable && hidden && (def.soloInterna ? expanded.has(def.key) : !expanded.has(def.key));
     // Portada con imagen (hero): capa de fondo + degradado a nivel SECCIÓN
     // (hermana de .stl-wrap — dentro del wrap no cubriría el full-bleed).
     const coverUrl =
@@ -383,12 +435,17 @@ export default function LandingView({
       data,
       schema: schemaParaElChat(def),
     };
+    const aviso = avisoDeVacia ? (
+      <AvisoDeSeccionVacia texto={avisoDeVacia} onQuitar={onSectionChange ? () => onSectionChange(def.key, sinPorQueVacia(data)) : undefined} />
+    ) : null;
     const cuerpo = showLegacy ? (
       <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
         {editable && <LegacyNotice />}
         <Prose content={legacyMd} />
       </div>
     ) : (
+      <>
+      {aviso}
       <Comp
         data={data}
         ctx={ctx}
@@ -405,8 +462,9 @@ export default function LandingView({
         sectionDiseno={def.diseno}
         sectionRevision={def.revision}
         editable={editable}
-        onChange={editable ? (d: unknown) => onSectionChange?.(def.key, d) : undefined}
+        onChange={alCambiar}
       />
+      </>
     );
     const sectionBody = <SeccionEnPantallaProvider valor={enPantalla}>{cuerpo}</SeccionEnPantallaProvider>;
 
@@ -417,7 +475,7 @@ export default function LandingView({
        controles a la izquierda se quedaría sin con qué componerse. Un solo dueño del layout. */
     const chrome = editable && (renderOverlay || onToggleHidden || dragHandle) && (
       <div className="stl-overlay">
-        {hidden && <span className="stl-hidden-badge">No visible para el cliente</span>}
+        {hidden && <span className="stl-hidden-badge">{def.soloInterna ? "Solo lo ve el equipo" : "No visible para el cliente"}</span>}
         {/* ⭐ El botón de conversar sobre ESTA sección. Va FUERA del `!collapsed` a propósito: una
         sección oculta se colapsa, y «está apagada, ¿la reescribo y la muestro?» es una
         conversación legítima — la única del chrome para la que eso tiene sentido.
@@ -428,7 +486,7 @@ export default function LandingView({
     <ChatDeSeccionBtn seccionKey={def.key} label={nombreParaElChat(def, effTitle)} />
     {!collapsed && renderOverlay?.(def.key)}
         {hidden && <CollapseToggle collapsed={collapsed} label={effTitle} onToggle={() => toggleExpanded(def.key)} />}
-        {onToggleHidden && !def.noHide && (
+        {onToggleHidden && !def.noHide && !def.soloInterna && (
           <HideToggle hidden={hidden} label={effTitle} onToggle={() => setHidden(def.key, !hidden)} />
         )}
         {dragHandle && (
@@ -485,7 +543,7 @@ export default function LandingView({
           sectionDiseno={def.diseno}
           sectionRevision={def.revision}
           editable={editable}
-          onChange={editable ? (d: unknown) => onSectionChange?.(def.key, d) : undefined}
+          onChange={alCambiar}
         />
         </SeccionEnPantallaProvider>
       );
@@ -511,7 +569,7 @@ export default function LandingView({
         /* El índice de secciones del panel de la ficha salta acá (PanelDelDocumento). */
         data-seccion={def.key}
         ref={isHero ? heroRef : undefined}
-        className={`stl-sec stl-${def.theme}${isHero ? " hero-backdrop" : ""}${editable && hidden ? " stl-hidden" : ""}${collapsed ? " stl-collapsed" : ""}`}
+        className={`stl-sec stl-${def.theme}${isHero ? " hero-backdrop" : ""}${editable && hidden ? " stl-hidden" : ""}${def.soloInterna ? " stl-solo-interna" : ""}${collapsed ? " stl-collapsed" : ""}`}
       >
         {coverUrl && !collapsed && (
           <div className="stl-sec-cover" style={{ backgroundImage: `url(${coverUrl})` }} aria-hidden />
