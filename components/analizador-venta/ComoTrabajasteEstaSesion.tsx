@@ -6,9 +6,13 @@
  * de lo que ya estaba ahí (siguiente paso acordado, cuánto avanzó, quedó abierto), que no se toca.
  *
  * Es FEEDBACK de cómo se trabajó esta sesión, no la planificación de la que sigue (Elías, 27 oct): arriba y en grande la
- * lectura general, después quién habló, lo que faltó explorar en tarjetas, el proceso consultivo en una fila y las
- * recomendaciones como «Para mejorar». Una persona lo confirma y lo confirmado cuenta en la tendencia de cada vendedor
- * (S7). Se fueron los comentarios del vendedor, el siguiente paso y las casillas de «para la próxima».
+ * lectura general, después aterrizar y expandir (el dolor del área y la base para un caso de uso), quién habló, lo que
+ * salió bien junto a «Para mejorar», lo que falta explorar y el proceso consultivo. Una persona lo confirma y lo
+ * confirmado cuenta en la tendencia de cada vendedor (S7). Se fueron los comentarios del vendedor, el siguiente paso y las
+ * casillas de «para la próxima».
+ *
+ * 29 oct (Elías, con Camosa): lo que salió bien, aparte y con su cita; lo que falta explorar, en lista y solo del área a
+ * la que fueron las preguntas (el resto, en una línea); el proceso consultivo, también en lista. Nada de tarjetas.
  *
  * Lo ve quien entra a la preventa (`veAnalisisDeVenta` del lienzo, abierto el 2026-10-28). Solo tokens del tema.
  */
@@ -16,7 +20,8 @@ import { useMemo, useState } from "react";
 import { Alert, Button, Field, Textarea, useToast } from "@/components/ui";
 import { BotonTexto } from "@/components/ui/sistema";
 import { cn } from "@/lib/cn";
-import { equipoDeLaDimension, loDeLaSesion, loQueFaltoPorEquipo, MAX_LETRAS_DE_LA_NOTA, type FaltaExplorar, type LoDeLaSesion } from "@/lib/analizador-venta/revision";
+import { equipoDeLaDimension, loDeLaSesion, loQueFaltaExplorar, MAX_LETRAS_DE_LA_NOTA, type LoDeLaSesion, type LoQueFaltaExplorar } from "@/lib/analizador-venta/revision";
+import { TEXTO_DEL_VALOR, type Cita, type Juicio, type Observacion } from "@/lib/analizador-venta/analisis";
 import type { ReunionDeVentaVista } from "@/lib/analizador-venta/reuniones-de-venta-server";
 import type { PestanaDeSesion } from "@/lib/exploraciones/guia";
 import { useLienzo } from "@/components/exploraciones/contexto";
@@ -80,7 +85,8 @@ function ElAnalisis({ vista, pestana, puedeEditar }: { vista: ReunionDeVentaVist
   const res = d?.resultado ?? null;
   const lo = useMemo(() => (res ? loDeLaSesion(res) : null), [res]);
   const equipo = pestana.sesion?.equipo ?? null;
-  const faltas = useMemo(() => (lo ? loQueFaltoPorEquipo(lo, (dim) => equipoDeLaDimension(dim, { equipo, areas: escala.areas })) : []), [lo, equipo, escala.areas]);
+  const falta = useMemo(() => (lo ? loQueFaltaExplorar(lo, (dim) => equipoDeLaDimension(dim, { equipo, areas: escala.areas })) : null), [lo, equipo, escala.areas]);
+  const delCliente = vista.quienHablo?.personas.filter((p) => p.lado === "cliente").map((p) => p.nombre) ?? [];
   const nombre = (correo: string) => datos?.nombres[correo] ?? correo;
 
   /** Corre una acción con su botón ocupado; devuelve si salió bien. */
@@ -158,9 +164,11 @@ function ElAnalisis({ vista, pestana, puedeEditar }: { vista: ReunionDeVentaVist
             <p className="mt-3 text-[17px] leading-[27px] text-fg">{lo.resumen}</p>
             <p className="mt-2.5 text-xs text-fg-muted">
               Analizada el {fechaDelAnalisis(d.analizadoAt)}
-              {d.descartados ? ` · ${d.descartados} juicios sin una cita que esté en la transcripción se descartaron` : ""}.
+              {d.descartados ? ` · ${d.descartados} ${d.descartados === 1 ? "cosa se descartó" : "cosas se descartaron"}: sin una cita que esté en la transcripción, o fuera de lo que se esperaba explorar` : ""}.
             </p>
           </div>
+
+          <AterrizarYExpandir lo={lo} />
 
           {vista.quienHablo && (
             <div className="space-y-1.5">
@@ -169,25 +177,9 @@ function ElAnalisis({ vista, pestana, puedeEditar }: { vista: ReunionDeVentaVist
             </div>
           )}
 
-          <LoQueFalto lo={lo} faltas={faltas} />
+          <BienYParaMejorar bien={lo.bien} mejorar={lo.recomendaciones} />
+          {falta && <LoQueFalta lo={lo} falta={falta} delCliente={delCliente} />}
           <ElProcesoConsultivo lo={lo} juzgado={res.juicios.some((j) => j.punto === "etapa")} />
-
-          {lo.recomendaciones.length > 0 && (
-            <div className="space-y-2.5">
-              <Subtitulo>Para mejorar</Subtitulo>
-              <ul className="space-y-2.5">
-                {lo.recomendaciones.map((x, i) => (
-                  <li key={i} className="flex gap-2.5">
-                    <span aria-hidden className="mt-[7px] h-1.5 w-1.5 flex-shrink-0 rounded-full bg-brand" />
-                    <div className="min-w-0">
-                      <p className="text-[13px] leading-[19px] text-fg">{x.texto}</p>
-                      <Citas citas={x.citas.slice(0, 1)} />
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
 
           <Confirmacion
             key={d.analizadoAt}
@@ -222,59 +214,127 @@ function ElAnalisis({ vista, pestana, puedeEditar }: { vista: ReunionDeVentaVist
   );
 }
 
-/** Una tarjeta chica: título, etiqueta, una línea y la cita. */
-function Tarjeta({ titulo, rotulo, etiqueta, tono, lectura, cita }: { titulo: string; rotulo?: string | null; etiqueta: string; tono: "aviso" | "info" | "neutro"; lectura: string; cita: FaltaExplorar["cita"] }) {
+type Tono = "aviso" | "info" | "neutro";
+
+const TONO: Record<Tono, string> = {
+  aviso: "bg-warn-surface text-warn-ink",
+  info: "bg-info-surface text-brand",
+  neutro: "bg-surface-muted text-fg-secondary",
+};
+
+/** Una fila de lista: a la izquierda qué y su etiqueta; a la derecha la lectura y la cita. Se lee de corrido. */
+function Fila({ titulo, rotulo, etiqueta, tono, lectura, cita }: { titulo: string; rotulo?: string | null; etiqueta: string; tono: Tono; lectura: string; cita: Cita | null }) {
   return (
-    <li className="flex min-w-0 flex-col gap-1.5 rounded-lg border border-line bg-surface p-3">
-      <div className="min-w-0">
-        <p className="text-[13px] font-semibold leading-[18px] text-fg">{titulo}</p>
-        {rotulo && <p className="text-[11.5px] text-fg-muted">{rotulo}</p>}
+    <li className="grid gap-x-4 gap-y-1 py-2.5 sm:grid-cols-[minmax(0,13rem)_minmax(0,1fr)]">
+      <div className="min-w-0 space-y-1">
+        <p className="text-[13px] font-semibold leading-[18px] text-fg">
+          {titulo}
+          {rotulo && <span className="font-normal text-fg-muted"> · {rotulo}</span>}
+        </p>
+        <span className={cn("inline-flex rounded-full px-2 py-0.5 text-[11px] font-semibold", TONO[tono])}>{etiqueta}</span>
       </div>
-      <span
-        className={cn(
-          "self-start rounded-full px-2 py-0.5 text-[11px] font-semibold",
-          tono === "aviso" ? "bg-warn-surface text-warn-ink" : tono === "info" ? "bg-info-surface text-brand" : "bg-surface-muted text-fg-secondary",
-        )}
-      >
-        {etiqueta}
-      </span>
-      <p className="line-clamp-2 text-[12.5px] leading-[18px] text-fg-secondary" title={lectura}>
-        {lectura}
-      </p>
-      {cita && <Citas citas={[cita]} />}
+      <div className="min-w-0">
+        <p className="text-[12.5px] leading-[18px] text-fg-secondary">{lectura}</p>
+        {cita && <Citas citas={[cita]} />}
+      </div>
     </li>
   );
 }
 
-function LoQueFalto({ lo, faltas }: { lo: LoDeLaSesion; faltas: ReturnType<typeof loQueFaltoPorEquipo> }) {
-  const agrupado = faltas.length > 1;
+/** El dolor del área y la base para un caso de uso: la estrategia de aterrizar y expandir. */
+function AterrizarYExpandir({ lo }: { lo: LoDeLaSesion }) {
+  const filas = [
+    { titulo: "El dolor del área", j: lo.dolor },
+    { titulo: "Base para un caso de uso", j: lo.casoDeUso },
+  ].filter((f): f is { titulo: string; j: Juicio } => !!f.j);
+  if (!filas.length) return null;
+  const tono = (j: Juicio): Tono => (j.valor === "a_fondo" || j.valor === "hay_base" ? "info" : j.valor === "en_parte" || j.valor === "falta" ? "neutro" : "aviso");
   return (
-    <div className="space-y-2.5">
-      <Subtitulo>Lo que faltó explorar</Subtitulo>
-      {!faltas.length ? (
-        <p className="text-[13px] text-fg-muted">
-          {lo.exploradas.length ? `Se exploró a fondo lo que se esperaba: ${lo.exploradas.join(", ")}.` : "El análisis no juzgó qué se exploró en esta sesión."}
-        </p>
+    <div className="space-y-1">
+      <Subtitulo>Para aterrizar y expandir</Subtitulo>
+      <ul className="divide-y divide-line">
+        {filas.map(({ titulo, j }) => (
+          <Fila
+            key={titulo}
+            titulo={titulo}
+            rotulo={j.caso ?? null}
+            etiqueta={TEXTO_DEL_VALOR[j.valor ?? ""] ?? j.valor ?? ""}
+            tono={tono(j)}
+            lectura={j.lectura}
+            cita={j.citas[0] ?? null}
+          />
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function Observaciones({ titulo, items, punto }: { titulo: string; items: readonly Observacion[]; punto: string }) {
+  return (
+    <div className="min-w-0 space-y-2.5">
+      <Subtitulo>{titulo}</Subtitulo>
+      <ul className="space-y-2.5">
+        {items.map((x, i) => (
+          <li key={i} className="flex gap-2.5">
+            <span aria-hidden className={cn("mt-[7px] h-1.5 w-1.5 flex-shrink-0 rounded-full", punto)} />
+            <div className="min-w-0">
+              <p className="text-[13px] leading-[19px] text-fg">{x.texto}</p>
+              <Citas citas={x.citas.slice(0, 1)} />
+            </div>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+/** Lo que salió bien al lado de «Para mejorar»: los dos con su cita (los análisis de antes del 29 oct no traen lo bien). */
+function BienYParaMejorar({ bien, mejorar }: { bien: readonly Observacion[]; mejorar: readonly Observacion[] }) {
+  if (!bien.length && !mejorar.length) return null;
+  return (
+    <div className={cn("grid gap-6", bien.length && mejorar.length && "lg:grid-cols-2")}>
+      {bien.length > 0 && <Observaciones titulo="Lo que salió bien" items={bien} punto="bg-success" />}
+      {mejorar.length > 0 && <Observaciones titulo="Para mejorar" items={mejorar} punto="bg-brand" />}
+    </div>
+  );
+}
+
+const enLista = (xs: readonly string[]) => (xs.length > 1 ? `${xs.slice(0, -1).join(", ")} y ${xs[xs.length - 1]}` : (xs[0] ?? ""));
+
+/**
+ * Lo que falta explorar, del área a la que fueron las preguntas (Elías, 29 oct): con quién se habló y hacia dónde, la
+ * lista de lo que se tocó sin profundizar o no se tocó, y del resto de las áreas solo su nombre, en una línea.
+ */
+function LoQueFalta({ lo, falta, delCliente }: { lo: LoDeLaSesion; falta: LoQueFaltaExplorar; delCliente: readonly string[] }) {
+  const varias = falta.foco.length > 1;
+  const contexto =
+    lo.enfoque?.lectura ||
+    [falta.foco.length ? `Las preguntas fueron a ${enLista(falta.foco)}.` : null, delCliente.length ? `Del cliente hablaron ${enLista(delCliente.slice(0, 4))}.` : null].filter(Boolean).join(" ");
+  return (
+    <div className="space-y-1.5">
+      <Subtitulo>Lo que falta explorar</Subtitulo>
+      {contexto && <p className="text-[12.5px] leading-[18px] text-fg-muted">{contexto}</p>}
+      {falta.items.length ? (
+        <ul className="divide-y divide-line">
+          {falta.items.map((f, i) => (
+            <Fila
+              key={`${f.estado}-${i}-${f.dimension}`}
+              titulo={f.dimension}
+              rotulo={varias ? f.area : null}
+              etiqueta={f.estado === "tocado" ? "Se tocó sin profundizar" : "No se tocó"}
+              tono={f.estado === "tocado" ? "info" : "aviso"}
+              lectura={f.lectura}
+              cita={f.cita}
+            />
+          ))}
+        </ul>
       ) : (
-        faltas.map((g) => (
-          <div key={g.equipo ?? "sin-equipo"} className="space-y-2">
-            {agrupado && <p className="text-[12.5px] font-semibold text-fg-secondary">{g.equipo ?? "Otras"}</p>}
-            <ul className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-3">
-              {g.items.map((f, i) => (
-                <Tarjeta
-                  key={`${f.estado}-${i}-${f.dimension}`}
-                  titulo={f.dimension}
-                  rotulo={agrupado ? null : f.equipo}
-                  etiqueta={f.estado === "tocado" ? "Se tocó sin profundizar" : "No se tocó"}
-                  tono={f.estado === "tocado" ? "info" : "aviso"}
-                  lectura={f.lectura}
-                  cita={f.cita}
-                />
-              ))}
-            </ul>
-          </div>
-        ))
+        <p className="text-[13px] text-fg-muted">
+          {lo.exploradas.length ? `Se exploró a fondo lo que se esperaba: ${enLista(lo.exploradas)}.` : "El análisis no juzgó qué se exploró en esta sesión."}
+        </p>
       )}
+      {falta.items.length > 0 && lo.exploradas.length > 0 && <p className="text-[12.5px] text-fg-secondary">Se exploró a fondo: {enLista(lo.exploradas)}.</p>}
+      {falta.sinTocar.length > 0 && <p className="text-[12.5px] text-fg-muted">No se tocó en esta sesión: {enLista(falta.sinTocar)}.</p>}
     </div>
   );
 }
@@ -282,15 +342,14 @@ function LoQueFalto({ lo, faltas }: { lo: LoDeLaSesion; faltas: ReturnType<typeo
 function ElProcesoConsultivo({ lo, juzgado }: { lo: LoDeLaSesion; juzgado: boolean }) {
   if (!juzgado) return null;
   return (
-    <div className="space-y-2.5">
+    <div className="space-y-1.5">
       <Subtitulo>Del proceso consultivo</Subtitulo>
       {!lo.etapasFlojas.length ? (
         <p className="text-[13px] text-fg-muted">Se hicieron todas las etapas del proceso consultivo.</p>
       ) : (
-        // En pantalla ancha, todas en una fila.
-        <ul className="grid gap-2.5 sm:grid-cols-2 lg:grid-flow-col lg:grid-cols-none lg:auto-cols-fr">
+        <ul className="divide-y divide-line">
           {lo.etapasFlojas.map((e) => (
-            <Tarjeta
+            <Fila
               key={e.etapa}
               titulo={e.nombre}
               etiqueta={e.valor === "se_salto" ? "Se saltó" : "En parte"}
