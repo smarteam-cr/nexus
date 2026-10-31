@@ -12809,3 +12809,16 @@ dimensiones de Ventas, Marketing y Servicio, lo mismo que se veía en las del 23
 
 **Costo.** Una corrida sigue en ~$0,16–0,18 (Sonnet 4.6, ~23–29 mil tokens de entrada y ~6 mil de salida): el foco
 ahorra los juicios de las áreas que no se tocaron y lo bien, el dolor y el caso los gastan.
+
+## La escala que se le presenta al cliente: «Acceso» en La escala (2026-10-30)
+
+Elías: ese paso se maneja en la escala que ya está en la cuenta, la misma de la preventa, con un acceso y una página como la del resultado del test. Ventas pidió lo mismo.
+
+- **No es un documento nuevo:** el botón «Acceso» de La escala (`AccesoALaEscala.tsx`, en la cuenta y en la preventa; no en la Exploración de un proyecto) crea un enlace y `/external/escala/[token]` pinta `ResultadoDelTestVista` con `deLaEscala`. Sale del mismo cálculo del test (`resultadoDeLosNiveles`), con los niveles de la exploración en vez de las respuestas.
+- **Solo lo confirmado con evidencia** (`lib/exploraciones/escala-para-el-cliente.ts`): la regla de `mapa.ts` de que una hipótesis no llega al cliente vale acá. Lo demás sale como «Sin medir». Un área o una capa incompleta no lleva nivel (la revisión lo cazó: con 1 de 8 confirmada en Óptimo, la página decía «Óptimo»), igual que el chequeo por dentro; dice «En medición · Medido en 3 de 8 partes», sin lo que más frena ni qué lo mueve. El «Acceso» dice cuántas partes vería el cliente, y sin ninguna con evidencia no se crea (409). Si la evidencia se va después, el enlace abre un aviso, no un error.
+- **Viva, no una foto:** la página lee lo medido hoy (`lib/external/escala-view.ts`, chokepoint fail-closed en cada render). Es la escala de la cuenta: no hay nada que publicar. Por eso `AccesoALaEscala` no guarda foto, a diferencia de `AccesoAlDocumento`.
+- **Es la única página pública que lee una exploración, y tiene puerta propia:** `lectores.test.ts` prohibía que algo de `external` la leyera. Se le sumó el destino `escala-al-cliente`, cuya única entrada es `escalaParaElCliente` (`lib/exploraciones/escala-para-el-cliente-server.ts`); los documentos del cliente siguen sin poder leerla.
+- **La tabla no repite la empresa:** sale de la exploración, y una fusión de empresas mueve el enlace sin tocarlo. El chokepoint comprueba que el proyecto de la exploración sea de esa empresa.
+- **Solo la preventa y la de la cuenta:** la Exploración de un proyecto no se comparte, y lo hace cumplir el servidor, no solo el botón. La preventa y la cuenta tienen un enlace cada una.
+- **Sin lo del test:** sin «Estimado», sin otro test, sin agenda ni PDF. Varias áreas en juego son pestañas (`?area=`).
+- No usa la medición criterio por criterio, que sigue sin programar.

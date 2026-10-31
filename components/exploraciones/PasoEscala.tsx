@@ -19,6 +19,7 @@
  * ESCALA ÚNICA (2026-10-28): la misma pieza es La cuenta › La escala de la ficha del cliente (`lugar = "cuenta"`). Ahí
  * no van «Qué explorar en la próxima sesión» ni «Explorarla a fondo» (la cuenta no tiene sesiones: viven en la
  * Exploración de cada proyecto), y el agente es el de la ficha (`agente`: «Actualizar escala»), no leer ni preparar.
+ * «Acceso» (30 oct, cuenta y preventa): el enlace con que el cliente la ve (AccesoALaEscala.tsx).
  */
 import { useState, type ReactNode } from "react";
 import { Alert, Button } from "@/components/ui";
@@ -32,6 +33,7 @@ import { diaCorto } from "@/lib/exploraciones/fechas";
 import { fotoDeLaExploracion, mismaVara } from "@/lib/exploraciones/foto-de-la-escala";
 import { areasDeLaProxima, queExplorar } from "@/lib/exploraciones/que-explorar";
 import { EQUIPOS } from "@/lib/exploraciones/equipos";
+import AccesoALaEscala from "./AccesoALaEscala";
 import { AL_LUGAR, DEL_LUGAR, useLienzo } from "./contexto";
 import FranjaDeSugerencias, { BotonAzul, IconoDeSugerencia } from "./FranjaDeSugerencias";
 import { ConQueSeMide } from "./Identificacion";
@@ -679,6 +681,11 @@ export default function PasoEscala({ agente }: { agente?: ReactNode } = {}) {
   // El título y de qué va la pieza los pone el lienzo, como en las demás piezas.
   return (
     <div className="flex flex-col gap-5">
+      {lugar !== "proyecto" && (
+        <div className="flex justify-end">
+          <AccesoALaEscala />
+        </div>
+      )}
       <SugerenciasDeLaEscala />
       {lugar !== "cuenta" && <QueExplorarEnLaProxima />}
       <ConQueSeMide />

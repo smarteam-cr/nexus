@@ -285,7 +285,7 @@ const esBaja = (l: Letra | null) => l !== null && LETRAS.indexOf(l) < LETRAS.ind
  * La interpretación armada con los datos, para cuando no hay la de la IA: qué significa operar así, por cómo están sus
  * dos capas, y qué es lo que más frena. Sin el nivel ni la industria, igual que la de la IA.
  */
-export function interpretacionSinIa(r: Pick<ResultadoDelTest, "capas" | "recomendacion">): string {
+export function interpretacionSinIa(r: Pick<ResultadoDelTest, "capas" | "recomendacion">, inicio = "Por lo que respondiste"): string {
   const base = r.capas.find((c) => c.clave === "base")?.nivel ?? null;
   const prod = r.capas.find((c) => c.clave === "produccion")?.nivel ?? null;
   const practica =
@@ -301,7 +301,7 @@ export function interpretacionSinIa(r: Pick<ResultadoDelTest, "capas" | "recomen
         ? "tu área depende más del esfuerzo de cada persona que de un sistema"
         : "tu área tiene su base montada";
   const rec = r.recomendacion;
-  return `Por lo que respondiste, ${practica}.${rec?.tipo === "trabajar" ? ` Lo que más la frena es «${rec.dimensionNombre}».` : ""}`;
+  return `${inicio}, ${practica}.${rec?.tipo === "trabajar" ? ` Lo que más la frena es «${rec.dimensionNombre}».` : ""}`;
 }
 
 /** Lo que el resumen dice SIEMPRE al final, con o sin IA: que es una estimación con pocas preguntas. */

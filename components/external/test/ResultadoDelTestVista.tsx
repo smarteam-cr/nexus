@@ -150,7 +150,7 @@ function textoDeLaPrioridad(d: DetalleDeLaDimension): { titulo: string; texto: s
 }
 
 /** «Ver detalles» de una barra: qué hacer (no cómo está: eso lo dice la tarjeta del radar). */
-function VerDetalles({ d }: { d: DetalleDeLaDimension }) {
+function VerDetalles({ d, esEstimado }: { d: DetalleDeLaDimension; esEstimado: boolean }) {
   const p = textoDeLaPrioridad(d);
   return (
     <details className="rd-detalles">
@@ -158,13 +158,23 @@ function VerDetalles({ d }: { d: DetalleDeLaDimension }) {
       <div className="rd-detalles-cuerpo">
         <p className="rd-detalles-k">{p.titulo}</p>
         <p className="rd-detalles-prioridad">{p.texto}</p>
-        <p className="rd-detalles-corroborar">{FALTA_CORROBORAR}</p>
+        {esEstimado && <p className="rd-detalles-corroborar">{FALTA_CORROBORAR}</p>}
       </div>
     </details>
   );
 }
 
-function Barras({ r, detalles = null, enPdf = false }: { r: ResultadoDelTest; detalles?: Record<string, DetalleDeLaDimension> | null; enPdf?: boolean }) {
+function Barras({
+  r,
+  detalles = null,
+  enPdf = false,
+  esEstimado = true,
+}: {
+  r: ResultadoDelTest;
+  detalles?: Record<string, DetalleDeLaDimension> | null;
+  enPdf?: boolean;
+  esEstimado?: boolean;
+}) {
   const frena = r.recomendacion?.tipo === "trabajar" ? r.recomendacion.dimensionId : null;
   return (
     <Tarjeta titulo="Cómo está cada parte">
@@ -201,7 +211,7 @@ function Barras({ r, detalles = null, enPdf = false }: { r: ResultadoDelTest; de
                     <span className="rd-chip" data-no-lo-se={d.noLoSe || undefined}>
                       {d.noLoSe ? "No lo sabías" : (d.nivelNombre ?? "Sin ubicar")}
                     </span>
-                    {det && !enPdf && <VerDetalles d={det} />}
+                    {det && !enPdf && <VerDetalles d={det} esEstimado={esEstimado} />}
                     {det && enPdf && <p className="rd-fila-prioridad">{`${textoDeLaPrioridad(det).titulo}: ${textoDeLaPrioridad(det).texto}`}</p>}
                   </div>
                 );
@@ -212,7 +222,9 @@ function Barras({ r, detalles = null, enPdf = false }: { r: ResultadoDelTest; de
       </div>
       {r.preguntadas < r.total && (
         <p className="rd-nota">
-          Este test mira {r.preguntadas} de las {r.total} partes del área; las otras las vemos juntos en la sesión.
+          {esEstimado
+            ? `Este test mira ${r.preguntadas} de las ${r.total} partes del área; las otras las vemos juntos en la sesión.`
+            : `Medimos ${r.preguntadas} de las ${r.total} partes del área; las otras todavía no.`}
         </p>
       )}
     </Tarjeta>
@@ -224,7 +236,7 @@ function Barras({ r, detalles = null, enPdf = false }: { r: ResultadoDelTest; de
  * la de la dimensión bajo el cursor (o el dedo). Corta y legible (segunda prueba de Elías, 29 oct): el nombre, el
  * puntaje con su nivel, lo que le pasa al área por operar así y una línea de que es un estimado.
  */
-function TarjetaDeLaDimension({ d, det }: { d: DimensionDelResultado; det: DetalleDeLaDimension | undefined }) {
+function TarjetaDeLaDimension({ d, det, esEstimado }: { d: DimensionDelResultado; det: DetalleDeLaDimension | undefined; esEstimado: boolean }) {
   const p = puntajeDeLaDimension(d.nivel, d.puntaje);
   return (
     <div className="rd-tip" data-tarjeta={d.id} data-nivel={d.preguntada ? (d.nivel ?? undefined) : undefined} role="status" hidden>
@@ -241,7 +253,7 @@ function TarjetaDeLaDimension({ d, det }: { d: DimensionDelResultado; det: Detal
         )}
       </div>
       {!d.preguntada ? (
-        <p className="rd-tip-lectura">Esta parte no se preguntó en este test: la vemos juntos en la sesión.</p>
+        <p className="rd-tip-lectura">{esEstimado ? "Esta parte no se preguntó en este test: la vemos juntos en la sesión." : "Esta parte todavía no se midió."}</p>
       ) : (
         <>
           {(d.noLoSe || det?.impacto) && (
@@ -250,7 +262,7 @@ function TarjetaDeLaDimension({ d, det }: { d: DimensionDelResultado; det: Detal
               {det?.impacto}
             </p>
           )}
-          <p className="rd-tip-estimado">{FALTAN_PREGUNTAS}</p>
+          {esEstimado && <p className="rd-tip-estimado">{FALTAN_PREGUNTAS}</p>}
         </>
       )}
     </div>
@@ -287,6 +299,27 @@ function vinetasDeLaSesion(area: string): string[] {
   ];
 }
 
+/** La escala de una empresa cuyo enlace sirve, pero que hoy no tiene nada con evidencia que mostrar. */
+export function EscalaSinMedir() {
+  return (
+    <div className="dr rd-v3">
+      <main className="rd">
+        <header className="rd-arriba">
+          <span className="rd-logo">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={LOGO_DE_COLOR} alt="Smarteam" height={34} />
+          </span>
+        </header>
+        <section className="rd-tarjeta">
+          <p className="rd-eyebrow">Escala de rendimiento</p>
+          <h2>Tu escala todavía no está lista</h2>
+          <p className="rd-nota">Todavía no hay nada medido para mostrarte. Escríbele a tu contacto de Smarteam para revisarla juntos.</p>
+        </section>
+      </main>
+    </div>
+  );
+}
+
 export default function ResultadoDelTestVista({
   r,
   empresa,
@@ -299,6 +332,7 @@ export default function ResultadoDelTestVista({
   aviso = null,
   detalles = null,
   dimensionDelRiesgo = {},
+  deLaEscala = null,
 }: {
   r: ResultadoDelTest;
   empresa: string | null;
@@ -319,11 +353,17 @@ export default function ResultadoDelTestVista({
   detalles?: Record<string, DetalleDeLaDimension> | null;
   /** De qué dimensión es cada riesgo (el subtítulo de su tarjeta): `dimensionDeCadaRiesgo`. */
   dimensionDelRiesgo?: Record<string, string>;
+  /**
+   * La escala de una empresa, no un test (app/external/escala/[token]): está medida, así que se va todo lo del test (el
+   * «Estimado», otro test, la agenda). `areas`: las medidas; si son varias, cada una es un enlace arriba.
+   */
+  deLaEscala?: { areas: { id: string; nombre: string; href: string }[] } | null;
 }) {
   const enPdf = modo === "pdf";
   const nombreDeLaEmpresa = empresa || dominio || "";
   const rec = r.recomendacion;
-  const resumen = resumenDelResultado(r);
+  const esEstimado = !deLaEscala;
+  const resumen = esEstimado ? resumenDelResultado(r) : r.sintesis;
   // La industria va en un chip junto al título, no en el resumen (quien hizo el test la da por sentada).
   const sector = industria && industria !== OTRA_INDUSTRIA ? etiquetaDeIndustria(industria) : null;
   const chipDelSector = sector ? <span className="rd-sector">{sector}</span> : null;
@@ -333,7 +373,7 @@ export default function ResultadoDelTestVista({
   const radar = (
     <RadarDeUnaEmpresa
       area={r.areaNombre}
-      dimensiones={r.dimensiones.map((d) => ({ clave: d.id, nombre: d.nombre, capa: d.capa, preguntada: d.preguntada, nivel: d.nivel, noLoSe: d.noLoSe, puntaje: d.puntaje }))}
+      dimensiones={r.dimensiones.map((d) => ({ clave: d.id, nombre: d.nombre, capa: d.capa, preguntada: d.preguntada, sinMedir: !esEstimado, nivel: d.nivel, noLoSe: d.noLoSe, puntaje: d.puntaje }))}
       capas={r.capas.map((c) => ({ clave: c.clave, nombre: c.nombre, descripcion: DESCRIPCION_DE_LA_CAPA[c.clave] ?? null, nivel: c.nivel, puntaje: c.puntaje }))}
       niveles={r.niveles}
       resultado={{ nivel: r.nivel, puntaje: r.puntaje }}
@@ -344,7 +384,7 @@ export default function ResultadoDelTestVista({
   const nivelGrande = (
     <h1 className="rd-nivel" data-nivel={r.nivel ?? undefined}>
       <span className="rd-punto" aria-hidden="true" />
-      {r.nivelNombre ?? "Sin determinar"}
+      {r.nivelNombre ?? (deLaEscala ? "En medición" : "Sin determinar")}
     </h1>
   );
 
@@ -414,20 +454,40 @@ export default function ResultadoDelTestVista({
     <div className="dr rd-v3">
       <AnimacionesDelResultado className="rd">
         <header className="rd-arriba">
-          <a className="rd-logo" href={otraArea} title="Hacer otro diagnóstico">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={LOGO_DE_COLOR} alt="Smarteam" height={34} />
-          </a>
-          <div className="rd-acciones">
-            <a className="rd-btn rd-btn-ghost" href={otraArea}>
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <path d="M3 12a9 9 0 1 0 3-6.7" />
-                <path d="M3 4v5h5" />
-              </svg>
-              Hacer otro test
-            </a>
-            {pdf && <DescargarPdfDelResultado href={pdf} />}
-          </div>
+          {deLaEscala ? (
+            <>
+              <span className="rd-logo">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={LOGO_DE_COLOR} alt="Smarteam" height={34} />
+              </span>
+              {deLaEscala.areas.length > 1 && (
+                <nav className="rd-acciones" aria-label="Áreas">
+                  {deLaEscala.areas.map((a) => (
+                    <a key={a.id} className={`rd-btn ${a.id === r.areaId ? "rd-btn-primary" : "rd-btn-ghost"}`} href={a.href} aria-current={a.id === r.areaId ? "page" : undefined}>
+                      {a.nombre}
+                    </a>
+                  ))}
+                </nav>
+              )}
+            </>
+          ) : (
+            <>
+              <a className="rd-logo" href={otraArea} title="Hacer otro diagnóstico">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={LOGO_DE_COLOR} alt="Smarteam" height={34} />
+              </a>
+              <div className="rd-acciones">
+                <a className="rd-btn rd-btn-ghost" href={otraArea}>
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <path d="M3 12a9 9 0 1 0 3-6.7" />
+                    <path d="M3 4v5h5" />
+                  </svg>
+                  Hacer otro test
+                </a>
+                {pdf && <DescargarPdfDelResultado href={pdf} />}
+              </div>
+            </>
+          )}
         </header>
 
         {aviso && <p className="rd-aviso">{aviso}</p>}
@@ -447,17 +507,25 @@ export default function ResultadoDelTestVista({
                 </span>
               )}
               <p className="rd-eyebrow rd-entra rd-eyebrow-con-sector">
-                Diagnóstico de rendimiento · {r.areaNombre}
+                {esEstimado ? "Diagnóstico de rendimiento" : "Escala de rendimiento"} · {r.areaNombre}
                 {chipDelSector}
               </p>
               {fecha && <p className="rd-fecha rd-entra">{fechaLarga(fecha)}</p>}
               <p className="rd-label rd-entra">Resultado general</p>
               <div className="rd-entra">{nivelGrande}</div>
               <p className="rd-resumen rd-entra">{resumen}</p>
-              <p className="rd-estimado rd-entra">
-                <span className="rd-pill">Estimado</span>
-                con lo que respondiste{parcial}
-              </p>
+              {esEstimado ? (
+                <p className="rd-estimado rd-entra">
+                  <span className="rd-pill">Estimado</span>
+                  con lo que respondiste{parcial}
+                </p>
+              ) : (
+                r.preguntadas < r.total && (
+                  <p className="rd-estimado rd-entra">
+                    Medido en {r.preguntadas} de {r.total} partes
+                  </p>
+                )
+              )}
             </div>
             <div className="rd-entra">
               <Capas r={r} />
@@ -472,46 +540,50 @@ export default function ResultadoDelTestVista({
         {rec && <PorDondeEmpezar rec={rec} />}
         {r.riesgos.length > 0 && <Riesgos riesgos={r.riesgos} dimensionDelRiesgo={dimensionDelRiesgo} />}
         {r.casos.length > 0 && <Casos casos={r.casos} />}
-        <Barras r={r} detalles={detalles} />
+        <Barras r={r} detalles={detalles} esEstimado={esEstimado} />
 
-        <section className="rd-agenda" data-revela="">
-          <div className="rd-agenda-texto">
-            <p className="rd-eyebrow">El siguiente paso</p>
-            <h2>Revisemos juntos tu resultado, sin costo</h2>
-            <p>Son 30 minutos de trabajo, no una llamada de ventas. Te llevas:</p>
-            <ul className="rd-agenda-vinetas">
-              {vinetasDeLaSesion(r.areaNombre).map((x) => (
-                <li key={x}>
-                  <span className="rd-agenda-check">
-                    <IconoCheck />
-                  </span>
-                  <span>{x}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-          <div className="rd-agenda-caja">
-            <CalendarioDeHubspot agenda={agenda} />
-          </div>
-        </section>
+        {esEstimado && (
+          <section className="rd-agenda" data-revela="">
+            <div className="rd-agenda-texto">
+              <p className="rd-eyebrow">El siguiente paso</p>
+              <h2>Revisemos juntos tu resultado, sin costo</h2>
+              <p>Son 30 minutos de trabajo, no una llamada de ventas. Te llevas:</p>
+              <ul className="rd-agenda-vinetas">
+                {vinetasDeLaSesion(r.areaNombre).map((x) => (
+                  <li key={x}>
+                    <span className="rd-agenda-check">
+                      <IconoCheck />
+                    </span>
+                    <span>{x}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <div className="rd-agenda-caja">
+              <CalendarioDeHubspot agenda={agenda} />
+            </div>
+          </section>
+        )}
         <footer className="rd-pie" data-revela="">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img className="rd-pie-logo" src={LOGO_DE_COLOR} alt="Smarteam" height={30} />
-          <div className="rd-pie-botones">
-            <a className="rd-btn rd-btn-primary" href={otraArea}>
-              Diagnosticar otra área
-            </a>
-            <a className="rd-btn rd-btn-ghost" href={ENLACE_DE_OTRA_EMPRESA}>
-              Diagnosticar otra empresa
-            </a>
-          </div>
-          <p className="rd-pie-texto">Diagnóstico hecho con la Escala de Rendimiento de Smarteam.</p>
+          {esEstimado && (
+            <div className="rd-pie-botones">
+              <a className="rd-btn rd-btn-primary" href={otraArea}>
+                Diagnosticar otra área
+              </a>
+              <a className="rd-btn rd-btn-ghost" href={ENLACE_DE_OTRA_EMPRESA}>
+                Diagnosticar otra empresa
+              </a>
+            </div>
+          )}
+          <p className="rd-pie-texto">{esEstimado ? "Diagnóstico hecho con la Escala de Rendimiento de Smarteam." : "Medido con la Escala de Rendimiento de Smarteam."}</p>
         </footer>
         {/* Las tarjetas del radar: escondidas, una por dimensión. Fuera de las secciones que se mueven, para que su
             posición fija no dependa de una animación. */}
         <div className="rd-tips">
           {r.dimensiones.map((d) => (
-            <TarjetaDeLaDimension key={d.id} d={d} det={detalles?.[d.id]} />
+            <TarjetaDeLaDimension key={d.id} d={d} det={detalles?.[d.id]} esEstimado={esEstimado} />
           ))}
         </div>
       </AnimacionesDelResultado>

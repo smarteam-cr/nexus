@@ -34,6 +34,8 @@ export interface DimensionDelRadar {
   capa: ClaveDeCapa;
   /** Si el test la preguntó. Sin preguntar: eje punteado y sin vértice. */
   preguntada: boolean;
+  /** En la escala de una empresa no hay preguntas: una dimensión sin dato dice «Sin medir», no «No se preguntó». */
+  sinMedir?: boolean;
   /** La etapa en que quedó. Null (preguntada pero sin ubicar): sin vértice. */
   nivel: Letra | null;
   /** Contestó «No lo sé» (cuenta como el nivel más bajo). */
@@ -236,7 +238,7 @@ export interface Caja {
 export const seCruzan = (a: Caja, b: Caja) => a.x0 < b.x1 && b.x0 < a.x1 && a.y0 < b.y1 && b.y0 < a.y1;
 
 /** Lo que dice el número de una dimensión, después de su clave. */
-export type EstadoDelRotulo = { tipo: "nivel"; letra: Letra } | { tipo: "noLoSe" } | { tipo: "noPreguntada" } | { tipo: "sinUbicar" };
+export type EstadoDelRotulo = { tipo: "nivel"; letra: Letra } | { tipo: "noLoSe" } | { tipo: "noPreguntada"; sinMedir?: boolean } | { tipo: "sinUbicar" };
 
 export interface RotuloDelRadar {
   clave: string;
@@ -394,7 +396,7 @@ export function dibujoDelRadar(
 
 /** El estado que dice el número de una dimensión. */
 export function estadoDeLaDimension(d: DimensionDelRadar): EstadoDelRotulo {
-  if (!d.preguntada) return { tipo: "noPreguntada" };
+  if (!d.preguntada) return { tipo: "noPreguntada", sinMedir: d.sinMedir };
   if (!d.nivel) return { tipo: "sinUbicar" };
   if (d.noLoSe) return { tipo: "noLoSe" };
   return { tipo: "nivel", letra: d.nivel };
@@ -457,7 +459,7 @@ export const notaDelNoLoSe = (nombreDeNivel: (l: Letra) => string) => `cuenta co
 export function textoDelEstado(e: EstadoDelRotulo, nombreDeNivel: (l: Letra) => string): string {
   if (e.tipo === "nivel") return nombreDeNivel(e.letra);
   if (e.tipo === "noLoSe") return "No lo sabías";
-  if (e.tipo === "noPreguntada") return "No se preguntó";
+  if (e.tipo === "noPreguntada") return e.sinMedir ? "Sin medir" : "No se preguntó";
   return "Sin ubicar";
 }
 

@@ -15,7 +15,7 @@
  * La versión de Marketing pregunta 4 dimensiones: las que no preguntó no cuentan (no aplican al cálculo) y el resultado
  * lo dice («estimado con 4 de 8»).
  */
-import { calcularChequeo, type Estimado, type RazonDeLaRecomendacion } from "@/lib/escala/chequeo";
+import { calcularChequeo, type AreaParaChequeo, type Estimado, type RazonDeLaRecomendacion } from "@/lib/escala/chequeo";
 import { nombreDeNivel } from "@/lib/escala/documento/parsear";
 import type { ClaveDeCapa, Escala, Letra } from "@/lib/escala/documento/tipos";
 import { LETRAS } from "@/lib/escala/documento/tipos";
@@ -106,22 +106,45 @@ export function resultadoDelTest(o: {
   preguntas: readonly PreguntaDelBanco[];
   respuestas: RespuestasDelTest;
 }): ResultadoDelTest | null {
-  const { escala } = o;
+  return resultadoDeLosNiveles({
+    escala: o.escala,
+    areaId: o.areaId,
+    version: o.version,
+    preguntadas: new Set(o.preguntas.map((p) => p.dimensionId)),
+    niveles: nivelesDeLasRespuestas(o.preguntas, o.respuestas),
+  });
+}
+
+/** El nivel de una dimensión. `riesgo`: dejó ver un riesgo (en la escala de una empresa; el test no lo sabe). */
+export type NivelDeLaDimension = { nivel: Letra; noLoSe: boolean; riesgo?: boolean };
+
+/**
+ * El resultado de un área con el nivel de cada dimensión, venga de donde venga: las respuestas del test o lo medido en la
+ * escala de una empresa (lib/exploraciones/escala-para-el-cliente.ts). `preguntadas`: las que cuentan.
+ */
+export function resultadoDeLosNiveles(o: {
+  escala: Escala;
+  areaId: string;
+  version: VersionDelTest;
+  preguntadas: ReadonlySet<string>;
+  niveles: Record<string, NivelDeLaDimension>;
+  /** El orden de dependencias de cada capa (desempata lo que más frena). El test no lo sabe: va por identificador. */
+  orden?: AreaParaChequeo["orden"];
+}): ResultadoDelTest | null {
+  const { escala, niveles, preguntadas } = o;
   const area = escala.areas.find((a) => a.id === o.areaId);
   if (!area) return null;
-  const niveles = nivelesDeLasRespuestas(o.preguntas, o.respuestas);
-  const preguntadas = new Set(o.preguntas.map((p) => p.dimensionId));
   const nombre = (l: Letra | null) => (l ? nombreDeNivel(escala, l) : null);
 
   // Las dimensiones que no se preguntaron no cuentan: la de Marketing ubica la capa base, y el área por ella.
-  const estimados: Record<string, Estimado> = Object.fromEntries(Object.entries(niveles).map(([id, v]) => [id, { nivel: v.nivel }]));
+  const estimados: Record<string, Estimado> = Object.fromEntries(Object.entries(niveles).map(([id, v]) => [id, { nivel: v.nivel, ...(v.riesgo ? { riesgoALaVista: true } : {}) }]));
   const chequeo = calcularChequeo(
     [
       {
         id: area.id,
         nombre: area.nombre,
         dimensiones: area.dimensiones.map((d) => ({ id: d.id, nombre: d.nombre, capa: d.capa, aplica: preguntadas.has(d.id) })),
-        orden: { base: null, produccion: null },
+        orden: o.orden ?? { base: null, produccion: null },
       },
     ],
     estimados,
@@ -168,7 +191,8 @@ export function resultadoDelTest(o: {
   // Los riesgos activos: los criterios de riesgo de los niveles que cada dimensión preguntada todavía no alcanza.
   const riesgos: string[] = [];
   for (const d of area.dimensiones) {
-    const nivel = niveles[d.id]?.nivel;
+    // El de la dimensión, no el dicho: un riesgo a la vista lo topa en Funcional.
+    const nivel = dimensiones.find((x) => x.id === d.id)?.nivel;
     if (!nivel) continue;
     for (const n of d.niveles) {
       if (idx(n.letra) <= idx(nivel)) continue;

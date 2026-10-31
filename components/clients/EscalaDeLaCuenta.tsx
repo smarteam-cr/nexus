@@ -686,7 +686,7 @@ export default function EscalaDeLaCuenta({
         <h2 className="text-[22px] font-bold leading-tight text-fg">La escala</h2>
         <p className="mt-1 text-[13px] text-fg-muted">
           La misma escala de la preventa: dónde está la empresa en cada área, de dónde sale cada nivel y cómo se movió desde que nos compró. Para el equipo:
-          el cliente no la ve.
+          el cliente solo ve lo que tiene evidencia, y solo si le compartes el «Acceso».
         </p>
       </div>
       {acciones && <div className="flex flex-wrap items-center gap-2">{acciones}</div>}
