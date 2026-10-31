@@ -152,7 +152,11 @@ export function buildPieceRows(
     return ordenarArtefactos(lista.map((c) => ({ id: c.id, order: c.order ?? 0, createdAt: c.createdAt ?? 0 }))).map((x) => porId.get(x.id)!);
   };
 
-  const delFlujo: PieceRow[] = (opts.piezasDelServicio ?? piezasParaMostrar())
+  /* Lo que se abre desde «Nuevo artefacto» sale en el riel en todo proyecto, también en un servicio con su propio flujo. */
+  const abiertasFuera = opts.piezasDelServicio
+    ? TIPOS.filter((t) => t.seAbreUna && porSlug.has(t.id) && !opts.piezasDelServicio!.includes(t.id)).map((t) => t.id)
+    : [];
+  const delFlujo: PieceRow[] = [...(opts.piezasDelServicio ?? piezasParaMostrar()), ...abiertasFuera]
     .filter((slug) => opts.incluirHandoff || !FUERA_DEL_DESPLEGABLE.has(slug))
     .filter((slug) => pieceBySlug(slug)?.hasCanvas !== false || opts.sinCanvas?.[slug] !== undefined)
     .flatMap((slug) => {

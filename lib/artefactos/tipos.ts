@@ -55,6 +55,11 @@ export interface TipoDeArtefacto {
    * elegido (reuniones, notas e instrucciones) es de cada copia (lib/artefactos/contexto-de-la-copia.ts).
    */
   contextoDe: "diagnosis" | "planning" | "kickoff" | "exploration" | "tech-requirements" | "delivery" | null;
+  /**
+   * No lleva copias, pero se abre desde «Nuevo artefacto»: la exploración es UNA por proyecto, la misma pantalla de la
+   * preventa, y adentro se agregan las sesiones (Elías, 30 oct). Abrirla activa su pieza.
+   */
+  seAbreUna?: boolean;
   /** La copia sí se comparte por enlace, el documento de siempre no: la entrega guarda en su Json lo que el cliente no ve. */
   sinEnlaceElDeSiempre?: boolean;
   /**
@@ -147,8 +152,9 @@ export const TIPOS: readonly TipoDeArtefacto[] = [
     id: "exploration",
     nombre: "Exploración",
     conArticulo: "una exploración",
-    paraQue: "Qué hay que entender del negocio antes de proponer: lo que ya sabemos, lo que suponemos y a quién preguntarle. Interna.",
-    copias: "varias",
+    paraQue: "La misma de la preventa, con las preguntas de Customer Success: la abres y adentro agregas las sesiones. Interna.",
+    copias: "una",
+    seAbreUna: true,
     duenos: ["proyecto", "empresa"],
     clientFacing: false,
     vive: "canvas",
@@ -429,7 +435,7 @@ export function admiteCopias(id: string | null | undefined): boolean {
 
 /** Los tipos con que se crea una copia en un proyecto, en el orden en que se ofrecen. */
 export function tiposCreablesEnElProyecto(): TipoDeArtefacto[] {
-  return TIPOS.filter((t) => admiteCopias(t.id));
+  return TIPOS.filter((t) => admiteCopias(t.id) || t.seAbreUna);
 }
 
 /** Las plantillas de un tipo: las suyas, o las de su entregable. La primera es la de siempre. */

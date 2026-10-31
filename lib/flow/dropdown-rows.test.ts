@@ -99,6 +99,14 @@ describe("los canvases sueltos del CSE", () => {
   });
 });
 
+describe("un servicio con su propio flujo", () => {
+  it("la exploración que se abrió desde «Nuevo artefacto» sale en el riel; sin abrirse, no", () => {
+    const piezasDelServicio = ["kickoff", "timeline"];
+    expect(slugs(buildPieceRows([c({ slug: "kickoff" })], { piezasDelServicio }))).not.toContain("exploration");
+    expect(slugs(buildPieceRows([c({ slug: "kickoff" }), c({ slug: "exploration" })], { piezasDelServicio }))).toContain("exploration");
+  });
+});
+
 describe("las COPIAS de un tipo (etapa V3, docs/artefactos-plan.md)", () => {
   const copia = (id: string, tipo: string, over: Partial<CanvasParaFila> = {}): CanvasParaFila => ({
     id,

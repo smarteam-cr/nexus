@@ -23,7 +23,7 @@ es web, se comparte y se edita con «Mejorar con IA» (ese es el chat). Manda so
 
 | Artefacto | Plantillas | Notas |
 |---|---|---|
-| Exploración | Exploración | «Mejorar con IA» sin la sección de las sesiones: sus marcas de «ya la pregunté» viven anidadas |
+| Exploración | La de la preventa | Una por proyecto, la misma pantalla de la preventa con las preguntas de CS. Se abre desde «Nuevo artefacto» y adentro se agregan las sesiones; su asistente es el de la guía |
 | Diagnóstico | Diagnóstico estratégico (la de hoy), Diagnóstico esencial | Sin cambios de fondo |
 | Propuesta | La de la preventa | Vive en su módulo; no se crea desde «Nuevo artefacto» |
 | Kickoff | Kickoff, Servicio recurrente | |

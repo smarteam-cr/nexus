@@ -138,15 +138,13 @@ describe("⭐ el chrome de cada sección va a la IZQUIERDA (Elías, 2026-08-23)"
     expect(base).toContain("row-reverse");
   });
 
-  it("⛔ pero sobre una sección COLAPSADA vuelve a la derecha", () => {
-    /* Con `padding: 14px` el overlay se superpone con la barra, que arranca con «▸ Título». A la
-       izquierda taparía el caret y el título — el ÚNICO asidero para volver a mostrar una sección
-       oculta. La edición que la pone en rojo: borrar esta regla «porque es redundante». */
-    const exc = regla(".stl .stl-collapsed > .stl-overlay {");
-    expect(exc, "el chrome colapsado taparía el asidero para volver a mostrar la sección").toContain(
-      "right: 16px",
-    );
-    expect(exc).toContain("left: auto");
+  it("⛔ y sobre una sección COLAPSADA no se mueve: el mismo control la vuelve a abrir", () => {
+    /* Elías, 30 oct: «cambia mucho el diseño cuando está colapsado». La sección conserva su padding y su encabezado, así que
+       el chrome no tapa el título. La edición que la pone en rojo: volver a una barra angosta que obligue a mudar el chrome. */
+    expect(regla(".stl .stl-collapsed > .stl-overlay {")).toBe("");
+    const lv = leer("components/landing/LandingView.tsx");
+    expect(lv).toContain('{collapsed ? "Mostrar" : "Colapsar"}');
+    expect(lv).toContain("{!isHero && <CollapseToggle");
   });
 
   it("⛔ el layout tiene UN dueño: la hoja, no un estilo inline", () => {

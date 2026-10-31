@@ -12642,8 +12642,15 @@ con el diff viejo solo como referencia, después de confirmar con búsqueda que 
 - **Una copia de la entrega es un informe de avance, sin la plantilla «Entrega».** Sus secciones calculadas (cumplimiento,
   escala, pendientes) las llena el runner del documento de siempre, y `logros` lleva propuestas que el cliente no debe recibir.
   El informe tiene sus tablas propias, sin nada escondido en el Json.
-- **«Mejorar con IA» en la exploración, sin la sección de las sesiones:** el merge es superficial y borraría las marcas de
-  «ya la pregunté». El resto de sus secciones sí.
+- **La exploración no lleva copias: es una por proyecto, la misma pantalla de la preventa** (`ExploracionDeVenta` con
+  `marco = "cs"`), y adentro se agregan las sesiones. Corrige la respuesta 6 del 29 oct. Elías, 30 oct: «uno nada más lo crea y
+  uno adentro agrega las sesiones». *Por qué no varias:* la pantalla, la guía y la escala buscan «la viva del proyecto», y hay un
+  índice de una viva por proyecto; para explorar otra área se agrega una sesión. «Nuevo artefacto» la abre, también en un
+  servicio SmartLoop. Lo que ya se haya creado como copia abre esa misma pantalla.
+- **«Nuevo artefacto» funciona igual en todo proyecto.** Lo apagaba solo una condición de servicio recurrente en el panel;
+  Desarrollo y Sitios web no tenían ninguna.
+- **Colapsar dice «Colapsar», y colapsada dice «Mostrar».** La sección conserva su fondo y su encabezado; solo se esconde el
+  cuerpo, y los controles no se mueven.
 
 Elías respondió las ocho preguntas del plan (`docs/artefactos-plan.md` §5) y donde el plan proponía otra cosa se corrigió
 en su lugar. Lo que queda decidido:

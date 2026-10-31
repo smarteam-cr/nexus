@@ -31,6 +31,7 @@ export default function NuevoArtefactoModal({
   tipoInicial,
   documentos,
   onCreado,
+  onActivarPieza,
 }: {
   projectId: string;
   open: boolean;
@@ -40,6 +41,8 @@ export default function NuevoArtefactoModal({
   /** Los documentos del proyecto que se pueden duplicar (de cualquier tipo: se filtran por el elegido). */
   documentos: readonly DocumentoParaDuplicar[];
   onCreado: (canvasId: string) => void;
+  /** Un tipo que no lleva copias (`seAbreUna`): abre su pieza en vez de crear un documento. */
+  onActivarPieza: (slug: string) => void;
 }) {
   const tipos = useMemo(() => tiposCreablesEnElProyecto(), []);
   const [tipo, setTipo] = useState<string>(tipoInicial ?? tipos[0]?.id ?? "");
@@ -79,6 +82,11 @@ export default function NuevoArtefactoModal({
   }, [documentos, duplicado, plantilla, plantillas.length, t?.nombre]);
 
   const crear = async () => {
+    if (t?.seAbreUna) {
+      onActivarPieza(tipo);
+      onClose();
+      return;
+    }
     setCreando(true);
     try {
       const r = await fetch(`/api/projects/${projectId}/artefactos`, {
@@ -111,7 +119,7 @@ export default function NuevoArtefactoModal({
             Cancelar
           </Button>
           <Button variant="primary" loading={creando} disabled={!tipo} onClick={() => void crear()}>
-            Crear
+            {t?.seAbreUna ? `Abrir ${t.nombre.toLowerCase()}` : "Crear"}
           </Button>
         </div>
       }
@@ -140,6 +148,13 @@ export default function NuevoArtefactoModal({
           </div>
         )}
 
+        {t?.seAbreUna ? (
+          <div className="min-w-0 flex-1 space-y-2 rounded-lg border border-line bg-surface p-5">
+            <p className="text-sm font-semibold text-fg">{t.nombre} del proyecto</p>
+            <p className="text-sm text-fg-secondary">{t.paraQue}</p>
+            <p className="text-xs text-fg-muted">Hay una por proyecto. Si ya existe, la abre.</p>
+          </div>
+        ) : (
         <div className="min-w-0 flex-1 space-y-4">
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label="Nombre" hint="Si lo dejas vacío, se llama como sugerimos.">
@@ -184,6 +199,7 @@ export default function NuevoArtefactoModal({
             </div>
           )}
         </div>
+        )}
       </div>
     </Modal>
   );

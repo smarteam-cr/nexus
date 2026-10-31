@@ -252,27 +252,11 @@
 .stl .stl-ctx-sec.stl-hidden > :not(.stl-overlay) { opacity: 0.42; filter: grayscale(0.55); }
 
 /* Sección OCULTA y COLAPSADA: se reduce a una barra con su título (clic = desplegar). */
-.stl .stl-collapsed { padding-top: 0; padding-bottom: 0; }
-.stl .stl-sec.stl-collapsed { padding: 14px 24px; }
-.stl .stl-ctx-sec.stl-collapsed { padding: 14px 24px; background: var(--bg-soft); }
+/* Colapsada: el mismo fondo y el mismo encabezado, sin el cuerpo. Los controles no se mueven. */
+.stl .stl-sec.stl-collapsed { padding-bottom: 24px; }
+.stl .stl-ctx-sec.stl-collapsed { padding: clamp(48px, 7vw, 88px) 0 24px; background: var(--bg-soft); }
 .stl .stl-collapsed > .stl-wrap { opacity: 1; filter: none; }
-.stl .stl-collapsed-bar {
-  display: flex; align-items: center; gap: 10px; width: 100%; padding: 8px 0;
-  border: none; background: transparent; cursor: pointer; text-align: left;
-  color: var(--text-2); font-size: 13px; line-height: 1;
-}
-.stl .stl-collapsed-bar:hover { color: var(--text); }
-.stl .stl-collapsed-title {
-  font-size: 15px; font-weight: 700; color: var(--text); letter-spacing: -0.01em;
-}
-/* ⛔ LA EXCEPCIÓN: sobre una sección colapsada el chrome vuelve a la DERECHA.
- * Con `padding: 14px` el overlay (top:12px, ~28px de alto) se superpone con la barra, que es
- * `text-align:left` y arranca con «▸ Título». A la izquierda le taparía el caret y el título — o
- * sea el único asidero para volver a mostrar una sección oculta, que es exactamente lo que la
- * regla de abajo existe para proteger.
- * `.stl-overlay` es hijo DIRECTO tanto de `.stl-sec` como de `.stl-ctx-sec`, así que un selector
- * cubre los dos armadores del motor. */
-.stl .stl-collapsed > .stl-overlay { left: auto; right: 16px; }
+.stl .stl-collapsed-head { margin-bottom: 0; }
 /* La barra colapsada nunca se atenúa (es el único asidero para volver a mostrarla). */
 .stl .stl-hidden.stl-collapsed > .stl-wrap,
 .stl .stl-ctx-sec.stl-hidden.stl-collapsed > :not(.stl-overlay) { opacity: 1; filter: none; }
