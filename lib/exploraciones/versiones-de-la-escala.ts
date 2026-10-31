@@ -176,7 +176,7 @@ export function anotarVersionDelCambio(exploracionId: string, email: string | nu
 export async function guardarVersionDelDiagnostico(projectId: string, email: string | null): Promise<ResultadoDeGuardar> {
   if (!hayTabla() || !modeloDisponible(prisma.exploracionDeVenta)) return { estado: "sin-tabla" };
   try {
-    const exp = await prisma.exploracionDeVenta.findFirst({ where: { projectId, archivadaEn: null }, select: { id: true } });
+    const exp = await prisma.exploracionDeVenta.findFirst({ where: { projectId, canvasId: null, archivadaEn: null }, select: { id: true } });
     if (!exp) return { estado: "no-existe" };
     const ciclo = modeloDisponible(prisma.cicloDeProyecto)
       ? await prisma.cicloDeProyecto.findFirst({ where: { projectId, estado: "abierto" }, select: { id: true } }).catch(() => null)

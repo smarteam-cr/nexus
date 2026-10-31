@@ -1,3 +1,4 @@
+import { hayExploracionAbierta } from "@/lib/exploraciones/del-proyecto";
 import { selectorDelKickoff } from "@/lib/entregables/generar-server";
 import { NextRequest, NextResponse } from "next/server";
 import { guardAccessToProject, guardCapability, guardHandoffAccess } from "@/lib/auth/api-guards";
@@ -68,7 +69,7 @@ export async function GET(
   /* Los Cuestionarios (2026-10-11) no viven en un canvas: su fila del riel sale de sus propias tablas.
      El «Ahora no» de su sugerencia está en las secciones del Kickoff, que ya vienen en esta lista. */
   const kickoff = canvases.find((c) => slugForCanvas(c) === "kickoff");
-  const [handoffCambioAt, novedades, estadoCuestionarios, puedeEditarCuestionarios, ciclo, piezasOcultas, selectorKickoff] = await Promise.all([
+  const [handoffCambioAt, novedades, estadoCuestionarios, puedeEditarCuestionarios, ciclo, piezasOcultas, selectorKickoff, exploracionAbierta] = await Promise.all([
     ultimoCambioDelHandoff(projectId),
     conteoDeNovedadesDelProyecto(
       projectId,
@@ -92,6 +93,8 @@ export async function GET(
       .catch(() => [] as string[]),
     /* Si el kickoff sigue como nació: decide si se abre el selector de plantilla o el documento. Si falla, el documento. */
     selectorDelKickoff(projectId).catch(() => null),
+    /* La exploración se escribe en su lienzo, no en el canvas: abierta alguna vez cuenta como creada, aunque el canvas siga vacío. */
+    hayExploracionAbierta(projectId).catch(() => false),
   ]);
   const cuestionarios = estadoCuestionarios ? { ...estadoCuestionarios, puedeEditar: puedeEditarCuestionarios } : null;
 
@@ -100,6 +103,7 @@ export async function GET(
     ciclo,
     piezasOcultas,
     selectorKickoff,
+    exploracionAbierta,
     canvases: canvases.map((c) => ({
       ...c,
       hasContent: conContenido.has(c.id),

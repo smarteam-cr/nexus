@@ -90,6 +90,8 @@ export interface PieceRow {
   tipo?: string;
   esCopia?: boolean;
   terminado?: boolean;
+  /** Le pusieron nombre: alguien lo creó, y queda en la lista aunque esté vacío (lib/flow/reparto-del-riel.ts). */
+  conNombre?: boolean;
 }
 
 /** Lo mínimo que hace falta saber de un canvas para armar su fila. */
@@ -128,7 +130,7 @@ export function buildPieceRows(
   const copiasPorTipo = new Map<string, CanvasParaFila[]>();
   for (const c of canvases) {
     if (c.slug) porSlug.set(c.slug, c);
-    // Un tipo que dejó de llevar copias (la exploración, 30 oct): las de prueba no salen en el riel.
+    // Un tipo que dejó de llevar copias: las que hayan quedado no salen en la lista.
     else if (esCopia(c) && !admiteCopias(c.tipoArtefacto)) continue;
     else if (esCopia(c)) copiasPorTipo.set(c.tipoArtefacto!, [...(copiasPorTipo.get(c.tipoArtefacto!) ?? []), c]);
     else custom.push(c);
@@ -170,7 +172,7 @@ export function buildPieceRows(
         agent: CANVAS_PRIMARY_AGENT[slug] ?? null,
         optional: pieza?.optional ?? false,
         stale: canvas?.stale ?? false,
-        ...(canvas ? { tipo: slug, terminado: !!canvas.terminadoEn } : {}),
+        ...(canvas ? { tipo: slug, terminado: !!canvas.terminadoEn, conNombre: !!canvas.titulo?.trim() } : {}),
       } satisfies PieceRow;
       const copias = conCopias ? (copiasPorTipo.get(slug) ?? []) : [];
       copiasPorTipo.delete(slug);

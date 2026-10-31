@@ -101,6 +101,9 @@ type Destino =
   | "direccion-de-la-sesion";
 
 const CENSO: Record<string, { destino: Destino; motivo: string }> = {
+  "lib/artefactos/copias-server.ts": { destino: "exploracion-del-proyecto", motivo: "2026-10-30: archiva y reactiva la exploración de una copia junto con ella (por canvasId). No lee ninguna." },
+  "lib/artefactos/adoptar-server.ts": { destino: "exploracion-del-proyecto", motivo: "2026-10-30: solo si la exploración de siempre ya se abrió, para no tomarla al crear otra." },
+  "app/api/projects/[projectId]/canvases/route.ts": { destino: "exploracion-del-proyecto", motivo: "2026-10-30: solo si la exploración de siempre ya se abrió, para que su fila se quede en la lista." },
   "lib/escala/prueba/calculo.ts": {
     destino: "prueba-de-la-escala",
     motivo: "N2: el nivel de cada área con el chequeo del mapa (posicionesDelMapa + chequeoDelMapa), para compararlo con el que cree el equipo.",
@@ -411,7 +414,7 @@ const PUERTAS: Record<Exclude<Destino, "ventas">, { permitidas: RegExp; prohibid
     prohibidas: /\bparaLaPropuesta\b|bloqueParaLaPropuesta|exploracionParaElHandoff|internoParaElCse|bloqueParaElHandoff|leerContenido|leerExploracion\b|\.exploracionDeVenta\b/,
   },
   "exploracion-del-proyecto": {
-    permitidas: /\btextoDeLaExploracionDelProyecto\b|\basegurarExploracionDelProyecto\b|\bcuantoHayEnLaExploracionDelProyecto\b|\bfechasDeLasLecturasDelProyecto\b/,
+    permitidas: /\btextoDeLaExploracionDelProyecto\b|\barchivarExploracionDeLaCopia\b|\bexploracionVivaDelDocumento\b|\bhayExploracionAbierta\b|\basegurarExploracionDelProyecto\b|\bcuantoHayEnLaExploracionDelProyecto\b|\bfechasDeLasLecturasDelProyecto\b/,
     // Nunca lo de la preventa: ni la propuesta, ni el handoff, ni lo interno.
     prohibidas: /\bparaLaPropuesta\b|bloqueParaLaPropuesta|exploracionParaElHandoff|internoParaElCse|bloqueParaElHandoff/,
   },

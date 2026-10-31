@@ -102,16 +102,23 @@ describe("los canvases sueltos del CSE", () => {
   });
 });
 
-describe("la exploración es una por proyecto", () => {
-  it("un servicio recurrente la tiene en su flujo, y «Nuevo artefacto» no depende del tipo de proyecto", () => {
+describe("las herramientas también llevan copias (Elías, 30 oct)", () => {
+  it("un servicio recurrente tiene la exploración en su flujo, y «Nuevo artefacto» no depende del tipo de proyecto", () => {
     expect(PIEZAS_DE_UN_SERVICIO_RECURRENTE as readonly string[]).toContain("exploration");
     const panel = fs.readFileSync(path.join(process.cwd(), "components/clients/ProjectCanvasPanel.tsx"), "utf8");
-    expect(panel).toContain("onNuevoArtefacto={() => setNuevoArtefacto({ tipo: null })}");
+    expect(panel).toContain("onNuevoArtefacto={(grupo) => setNuevoArtefacto(");
   });
 
-  it("una copia de exploración que quedó de las pruebas no sale en el riel", () => {
-    const filas = buildPieceRows([c({ slug: "exploration" }), c({ slug: null, id: "vieja", tipoArtefacto: "exploration", name: "Marketing" })]);
-    expect(slugs(filas)).not.toContain("copia:vieja");
+  it("una copia de exploración sale debajo de la de siempre, y los cuestionarios sin canvas también tienen las suyas", () => {
+    const filas = buildPieceRows([c({ slug: "exploration" }), c({ slug: null, id: "otra", tipoArtefacto: "exploration", name: "Marketing" })]);
+    expect(slugs(filas)).toContain("copia:otra");
+    const cuestionarios = buildPieceRows([c({ slug: null, id: "t", tipoArtefacto: "questionnaires", name: "Dirección" })]);
+    expect(de(cuestionarios, "copia:t")).toMatchObject({ label: "Dirección", tipo: "questionnaires", esCopia: true });
+  });
+
+  it("un documento con nombre propio lo creó alguien: queda en la lista aunque esté vacío", () => {
+    expect(de(buildPieceRows([c({ slug: "diagnosis", titulo: "Ventas" })]), "diagnosis").conNombre).toBe(true);
+    expect(de(buildPieceRows([c({ slug: "diagnosis" })]), "diagnosis").conNombre).toBe(false);
   });
 });
 

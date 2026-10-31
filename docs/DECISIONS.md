@@ -12642,11 +12642,29 @@ con el diff viejo solo como referencia, después de confirmar con búsqueda que 
 - **Una copia de la entrega es un informe de avance, sin la plantilla «Entrega».** Sus secciones calculadas (cumplimiento,
   escala, pendientes) las llena el runner del documento de siempre, y `logros` lleva propuestas que el cliente no debe recibir.
   El informe tiene sus tablas propias, sin nada escondido en el Json.
-- **La exploración no lleva copias: es una por proyecto, la misma pantalla de la preventa** (`ExploracionDeVenta` con
-  `marco = "cs"`), y adentro se agregan las sesiones. Corrige la respuesta 6 del 29 oct. Elías, 30 oct: «uno nada más lo crea y
-  uno adentro agrega las sesiones». *Por qué no varias:* la pantalla, la guía y la escala buscan «la viva del proyecto», y hay un
-  índice de una viva por proyecto; para explorar otra área se agrega una sesión. «Nuevo artefacto» la abre, también en un
-  servicio SmartLoop. Las copias de exploración que hayan quedado de las pruebas no salen en el riel y ningún agente las lee.
+- **Todo lleva copias menos el Resumen y el cronograma (30 oct, Elías, tras probar en el 3005).** Corrige «una exploración por
+  proyecto» de la tanda anterior. Exploración, Cuestionarios y Ejecución se crean varias veces y se les cambia el nombre, como
+  los entregables. La de siempre sigue siendo la de siempre: su exploración es la fila sin `canvasId`, y todo lo que busca «la
+  viva del proyecto» (la escala, la guía, el diagnóstico, el cuestionario) mira esa. Una copia guarda en su tabla de siempre
+  con su `canvasId` (`ExploracionDeVenta`, `Cuestionario`), abre la misma pantalla y nace en blanco: no se duplica, porque lo
+  escrito no vive en el canvas. Los agentes leen todas las exploraciones, con su nombre. Las personas de los cuestionarios
+  son del proyecto y sirven para todas las tandas. Los Cuestionarios de siempre no tienen canvas: al darles nombre toman uno,
+  con sus cuestionarios adentro. Cada kickoff ya tenía su enlace, su PDF y sus ocultas por id: eso no cambió.
+- **Lo que no se creó no sale de la lista (30 oct, Elías).** Sin «Activar» y sin «Ver N piezas más» de piezas vacías: de entrada
+  solo el Cronograma y el Kickoff, y todo lo demás se crea con el + de «Herramientas del proyecto» y «Entregables». *El primero
+  de un tipo es su documento de siempre* (`lib/artefactos/adoptar-server.ts`): crear una copia dejaba vacío el documento que
+  buscan por `slug` el «Qué sigue» y los botones de generar. Toma el vacío, le aplica la plantilla y le pone el nombre, y ese
+  nombre es lo que lo deja en la lista aunque siga vacío; nunca toma uno con algo escrito, con nombre o apagado. La Entrega de
+  cierre solo se ofrece mientras ese documento esté libre: una copia no puede calcular sus secciones. Un servicio recurrente
+  conserva sus piezas: trabaja sobre ellas. La exploración cuenta como creada si alguien abrió su lienzo: su canvas queda vacío
+  aunque esté llena.
+- **Anclados, no «riel» ni ocultar (30 oct, Elías).** La palabra no se entendía. Desanclar se lleva la fila de verdad, también
+  si está abierta: la pantalla vuelve al Resumen y solo se ve en «Ver N sin anclar».
+- **El nombre va una sola vez (30 oct, Elías).** Se editaba en la barra y se repetía en el título. Ahora es el título, con
+  lápiz o doble clic, y en la barra lateral también con doble clic. Vale para todo menos el handoff, también para el cronograma.
+- **El acceso al portal es una alerta del Resumen, no una franja del kickoff (30 oct, Elías).** Sale con la regla de «Para
+  ti» (el kickoff lo pide y sigue pendiente) y con su ícono en la fila «Resumen». El estado «dado el…» y «Volver a pendiente» se
+  fueron: al marcarlo queda un «Deshacer».
 - **«Nuevo artefacto» funciona igual en todo proyecto.** Lo apagaba solo una condición de servicio recurrente en el panel;
   Desarrollo y Sitios web no tenían ninguna.
 - **Las rutinas y el despliegue por olas se mudaron de la planificación al plan de adopción (30 oct, Elías).** Salieron del

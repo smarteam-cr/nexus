@@ -226,7 +226,7 @@ export async function porQueNoSePuedeGenerar(projectId: string, slug: string): P
     const handoff = await prisma.canvasBlock.count({ where: { section: { canvas: canvasOfNested("handoff", { projectId }) } } });
     if (handoff === 0) return "Este proyecto no tiene handoff generado: el kickoff sale del handoff.";
     const canvas = await prisma.projectCanvas.findFirst({ where: { projectId, ...canvasOf("kickoff") }, select: { id: true } });
-    if (!canvas) return "Este proyecto no tiene el kickoff: actívalo en el riel de la ficha.";
+    if (!canvas) return "Este proyecto no tiene el kickoff: créalo con el + de «Entregables».";
   }
   const proj = await prisma.project.findUnique({ where: { id: projectId }, select: { tags: true, hubspotPipelineId: true } });
   const hechos = { tags: proj?.tags ?? [], hubspotPipelineId: proj?.hubspotPipelineId ?? null };

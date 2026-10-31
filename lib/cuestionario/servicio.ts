@@ -201,10 +201,14 @@ function aVista(c: CuestionarioCompleto): CuestionarioVista {
   };
 }
 
-export async function obtenerCuestionarios(projectId: string): Promise<CuestionariosDelProyecto> {
+/**
+ * Los cuestionarios del proyecto y sus personas. `documento` los recorta a una tanda (2026-10-30): el id de una copia, o null
+ * para los de siempre. Sin él, todos: lo que lee el resto de Nexus no depende de cómo los agrupó el equipo.
+ */
+export async function obtenerCuestionarios(projectId: string, documento?: string | null): Promise<CuestionariosDelProyecto> {
   const [personas, cuestionarios] = await Promise.all([
     prisma.cuestionarioResponsable.findMany({ where: { projectId }, orderBy: { createdAt: "asc" } }),
-    prisma.cuestionario.findMany({ where: { projectId }, include: INCLUDE, orderBy: { createdAt: "asc" } }),
+    prisma.cuestionario.findMany({ where: { projectId, ...(documento === undefined ? {} : { canvasId: documento }) }, include: INCLUDE, orderBy: { createdAt: "asc" } }),
   ]);
   return {
     personas: personas.map((r) => ({
@@ -238,16 +242,16 @@ async function exigirPersona(projectId: string, personaId: string, activa = true
  * El de escala lo arma `lib/cuestionario/escala.ts` (lee la escala vigente).
  * Una persona tiene a lo sumo UNO de cada tipo: si ya lo tiene, se devuelve ese.
  */
-export async function crearTactico(projectId: string, personaId: string | null, creadoPor: string | null): Promise<string> {
-  return crearConPestanas(projectId, personaId, creadoPor, "tactico", (tags) => pestanasParaTags(tags));
+export async function crearTactico(projectId: string, personaId: string | null, creadoPor: string | null, canvasId: string | null = null): Promise<string> {
+  return crearConPestanas(projectId, personaId, creadoPor, "tactico", (tags) => pestanasParaTags(tags), canvasId);
 }
 
 /**
  * Crea un cuestionario de ESTRATEGIA para una persona (2026-10-11): una pestaña con las preguntas fijas de
  * lib/cuestionario/estrategia.ts. No depende de los hubs: la estrategia del negocio es la misma con cualquier alcance.
  */
-export async function crearEstrategia(projectId: string, personaId: string | null, creadoPor: string | null): Promise<string> {
-  return crearConPestanas(projectId, personaId, creadoPor, "estrategia", () => pestanasDeEstrategia());
+export async function crearEstrategia(projectId: string, personaId: string | null, creadoPor: string | null, canvasId: string | null = null): Promise<string> {
+  return crearConPestanas(projectId, personaId, creadoPor, "estrategia", () => pestanasDeEstrategia(), canvasId);
 }
 
 async function crearConPestanas(
@@ -256,10 +260,11 @@ async function crearConPestanas(
   creadoPor: string | null,
   tipo: "tactico" | "estrategia",
   armar: (tags: string[]) => ReturnType<typeof pestanasParaTags>,
+  canvasId: string | null = null,
 ): Promise<string> {
   if (personaId) {
     await exigirPersona(projectId, personaId);
-    const ya = await prisma.cuestionario.findFirst({ where: { projectId, personaId, tipo }, select: { id: true } });
+    const ya = await prisma.cuestionario.findFirst({ where: { projectId, personaId, tipo, canvasId }, select: { id: true } });
     if (ya) return ya.id;
   }
   const project = await prisma.project.findUnique({ where: { id: projectId }, select: { tags: true } });
@@ -268,6 +273,7 @@ async function crearConPestanas(
   const c = await prisma.cuestionario.create({
     data: {
       projectId,
+      canvasId,
       tipo,
       personaId,
       createdById: creadoPor,

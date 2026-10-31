@@ -33,11 +33,11 @@ import { ubicacionPreviaDelProyecto } from "@/lib/exploraciones/para-el-cuestion
 import { armarSecciones, leerPerfil, resultadoDeLaEscala } from "./escala-armado";
 import { ErrorDeCuestionario } from "./servicio";
 
-export async function crearEscala(projectId: string, personaId: string, creadoPor: string | null): Promise<string> {
+export async function crearEscala(projectId: string, personaId: string, creadoPor: string | null, canvasId: string | null = null): Promise<string> {
   const persona = await prisma.cuestionarioResponsable.findFirst({ where: { id: personaId, projectId } });
   if (!persona) throw new ErrorDeCuestionario("Esa persona no es de este proyecto.", 404);
   if (persona.revokedAt) throw new ErrorDeCuestionario("Esa persona ya no tiene un enlace activo.", 409);
-  const ya = await prisma.cuestionario.findFirst({ where: { projectId, personaId, tipo: "escala" }, select: { id: true } });
+  const ya = await prisma.cuestionario.findFirst({ where: { projectId, personaId, tipo: "escala", canvasId }, select: { id: true } });
   if (ya) return ya.id;
 
   const vigente = await leerEscalaVigente();
@@ -61,6 +61,7 @@ export async function crearEscala(projectId: string, personaId: string, creadoPo
   const c = await prisma.cuestionario.create({
     data: {
       projectId,
+      canvasId,
       tipo: "escala",
       personaId,
       createdById: creadoPor,

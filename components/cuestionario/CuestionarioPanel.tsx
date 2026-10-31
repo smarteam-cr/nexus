@@ -109,7 +109,7 @@ function RespuestaVista({ q, r }: { q?: Pregunta; r: Respuesta | undefined }) {
 /** Las acciones que cambian cuántos hay publicados o respondidos: lo que mide la fila del riel. */
 const CAMBIAN_EL_ESTADO = new Set(["publicar", "cerrar", "reabrir_pestana", "eliminar_cuestionario", "asignar_persona", "revocar_persona"]);
 
-export default function CuestionarioPanel({ projectId, onCambio }: { projectId: string; onCambio?: () => void }) {
+export default function CuestionarioPanel({ projectId, canvasId, onCambio }: { projectId: string; /** La copia que se abre; sin él, los de siempre. */ canvasId?: string | null; onCambio?: () => void }) {
   const toast = useToast();
   const [estado, setEstado] = useState<Estado | null>(null);
   const [ocupado, setOcupado] = useState(false);
@@ -117,7 +117,7 @@ export default function CuestionarioPanel({ projectId, onCambio }: { projectId: 
   const [abierto, setAbierto] = useState<string | null>(null);
 
   const cargar = useCallback(async () => {
-    const res = await fetch(`/api/projects/${projectId}/cuestionario`, { cache: "no-store" });
+    const res = await fetch(`/api/projects/${projectId}/cuestionario${canvasId ? `?canvasId=${encodeURIComponent(canvasId)}` : ""}`, { cache: "no-store" });
     const data = await res.json().catch(() => null);
     if (!res.ok) {
       toast.error(data?.error ?? "No se pudieron cargar los cuestionarios.");
@@ -146,7 +146,7 @@ export default function CuestionarioPanel({ projectId, onCambio }: { projectId: 
         const res = await fetch(`/api/projects/${projectId}/cuestionario`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(body),
+          body: JSON.stringify(body.accion === "crear_cuestionario" && canvasId ? { ...body, canvasId } : body),
         });
         const data = await res.json().catch(() => null);
         if (!res.ok) {

@@ -18,9 +18,9 @@ export async function cargarEstadoDeCuestionarios(
   try {
     const lista = await prisma.cuestionario.findMany({
       where: { projectId },
-      select: { publicadoAt: true, cerradoAt: true, pestanas: { select: { enviadaAt: true } } },
+      select: { publicadoAt: true, cerradoAt: true, canvasId: true, pestanas: { select: { enviadaAt: true } } },
     });
-    return estadoDeCuestionarios(lista, sugerenciaDescartadaEn(seccionesDelKickoff));
+    return { ...estadoDeCuestionarios(lista, sugerenciaDescartadaEn(seccionesDelKickoff)), sueltos: lista.filter((c) => !c.canvasId).length };
   } catch (e) {
     console.error("[estado-de-cuestionarios] no se pudo leer", e instanceof Error ? e.message : e);
     return null;

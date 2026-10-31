@@ -509,7 +509,7 @@ export const PIEZAS_NO_REQUERIDAS: ReadonlySet<string> = new Set(["kickoff"]);
  * defecto). Un proyecto sin su canvas lo crea al abrirla, y ahí se elige la plantilla: así no hace falta rellenar los
  * proyectos que ya existen ni crear documentos vacíos que nadie va a abrir.
  */
-export const PIEZAS_SIEMPRE_EN_EL_RIEL: ReadonlySet<string> = new Set(["kickoff"]);
+export const PIEZAS_SIEMPRE_EN_EL_RIEL: ReadonlySet<string> = new Set(["timeline", "kickoff"]);
 
 /** Las piezas de una clase, en el orden del registro. */
 export function piezasDeLaClase(clase: ClaseDePieza): PieceDefinition[] {

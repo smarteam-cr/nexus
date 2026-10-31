@@ -14,10 +14,11 @@ import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { canvasOf } from "@/lib/pieces/canvas-query";
 import { conPlantillaAnotada } from "@/lib/entregables/registro";
+import { archivarExploracionDeLaCopia, reactivarExploracionDeLaCopia } from "@/lib/exploraciones/del-proyecto";
 import { esCustomKey } from "@/lib/landing/custom-sections";
 import { CLAVE_OCULTAS_DEL_EDITOR, ocultasDelBorrador, ocultasEnElEditor } from "@/lib/kickoff/ocultas-del-editor";
 import { kickoffHiddenKey } from "@/components/canvas/kickoff-landing-adapter";
-import { admiteCopias, plantillaDelTipo, plantillaGuardadaDelTipo, tipoDeArtefacto } from "./tipos";
+import { admiteCopias, plantillaDelTipo, plantillaGuardadaDelTipo, seRenombra, tipoDeArtefacto, TIPO_CUESTIONARIOS } from "./tipos";
 import {
   esCopia,
   nombreGuardableDeUnaCopia,
@@ -92,10 +93,13 @@ export async function crearCopia(o: {
   nombre?: string | null;
   /** Duplicar este documento (del mismo proyecto y del mismo tipo). */
   desdeCanvasId?: string | null;
+  /** Cuestionarios: los de siempre del proyecto pasan a esta copia. Es como la pieza, que no tiene canvas, toma un nombre. */
+  conLosSueltos?: boolean;
   porEmail: string | null;
 }): Promise<CopiaCreada> {
   const t = tipoDeArtefacto(o.tipo);
   if (!t || !admiteCopias(o.tipo)) throw new ErrorDelArtefacto(400, `«${o.tipo}» no admite varias copias en un proyecto.`);
+  if (o.desdeCanvasId && t.sinDuplicar) throw new ErrorDelArtefacto(400, `${t.nombre} no se duplica: crea uno en blanco.`);
   const proyecto = await prisma.project.findUnique({ where: { id: o.projectId }, select: { id: true } });
   if (!proyecto) throw new ErrorDelArtefacto(404, "El proyecto no existe.");
 
@@ -146,6 +150,9 @@ export async function crearCopia(o: {
           status: "CONFIRMED" as const,
         })),
       });
+    }
+    if (o.conLosSueltos && o.tipo === TIPO_CUESTIONARIOS) {
+      await tx.cuestionario.updateMany({ where: { projectId: o.projectId, canvasId: null }, data: { canvasId: c.id } });
     }
     return c.id;
   });
@@ -268,8 +275,8 @@ async function duplicar(o: {
  */
 export async function renombrarArtefacto(projectId: string, canvasId: string, nombre: string): Promise<{ nombre: string }> {
   const c = await documentoDelProyecto(projectId, canvasId);
-  // Solo los tipos con barra: el handoff tiene su propia regla de quién lo edita y el cronograma no vive acá.
-  if (!admiteCopias(c.tipo)) throw new ErrorDelArtefacto(400, "Ese documento no se renombra desde acá.");
+  // El handoff tiene su propia regla de quién lo edita.
+  if (!seRenombra(c.tipo)) throw new ErrorDelArtefacto(400, "Ese documento no se renombra desde acá.");
   const titulo = tituloLimpio(nombre);
   if (!titulo) throw new ErrorDelArtefacto(400, "Escribe un nombre.");
   await prisma.projectCanvas.update({
@@ -299,6 +306,7 @@ export async function archivarCopia(projectId: string, canvasId: string, porEmai
   await prisma.$transaction([
     prisma.projectCanvas.update({ where: { id: canvasId }, data: { disabledAt: ahora, disabledBy: porEmail, disabledReason: "archivada" } }),
     prisma.accesoAlDocumento.updateMany({ where: { canvasId, revokedAt: null }, data: { revokedAt: ahora } }),
+    archivarExploracionDeLaCopia(canvasId, ahora),
   ]);
 }
 
@@ -306,7 +314,10 @@ export async function archivarCopia(projectId: string, canvasId: string, porEmai
 export async function reactivarCopia(projectId: string, canvasId: string): Promise<void> {
   const c = await documentoDelProyecto(projectId, canvasId);
   if (!esCopia(c)) throw new ErrorDelArtefacto(409, "Ese documento no se archiva desde acá.");
-  await prisma.projectCanvas.update({ where: { id: canvasId }, data: { disabledAt: null, disabledBy: null, disabledReason: null } });
+  await prisma.$transaction([
+    prisma.projectCanvas.update({ where: { id: canvasId }, data: { disabledAt: null, disabledBy: null, disabledReason: null } }),
+    reactivarExploracionDeLaCopia(canvasId),
+  ]);
 }
 
 /**

@@ -109,9 +109,10 @@ describe("⛔ los cuestionarios ya no cuelgan de la Exploración", () => {
   /* La edición que la pone en rojo: volver a montar CuestionarioPanel dentro de la exploración, o sumar
      otra vez «Cuestionarios» a las filas de debajo de sus sesiones. «Informe anterior» sí se queda. */
   const leer = (rel: string) => readFileSync(join(process.cwd(), rel), "utf8");
-  it("la ficha la monta una vez, como su propia pieza", () => {
+  it("la ficha la monta como su propia pieza, y otra vez para cada copia", () => {
     const panel = leer("components/clients/ProjectCanvasPanel.tsx");
-    expect((panel.match(/<CuestionarioPanel /g) ?? []).length).toBe(1);
+    expect((panel.match(/<CuestionarioPanel /g) ?? []).length).toBe(2);
+    expect(panel).toContain("<CuestionarioPanel key={activeCanvasId} projectId={projectId} canvasId={activeCanvasId}");
     expect(panel).toContain('activeSlug === "questionnaires"');
   });
   it("la exploración del proyecto no la lista ni la monta", () => {

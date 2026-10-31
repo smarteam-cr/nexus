@@ -1,35 +1,42 @@
 import { describe, expect, it } from "vitest";
 import { estadoEnElRiel, repartirElRiel } from "./reparto-del-riel";
 
-const fila = (slug: string, o: { estado?: string; oculta?: boolean; activa?: boolean; esCopia?: boolean } = {}) => ({ slug, estado: "generada", activa: false, ...o });
+const fila = (slug: string, o: { estado?: string; oculta?: boolean; esCopia?: boolean } = {}) => ({ slug, estado: "generada", ...o });
 
-describe("el reparto del riel", () => {
-  it("⛔ ocultar la pieza abierta la saca de la vista: era lo que hacía parecer que ocultar no funcionaba", () => {
-    const r = repartirElRiel([fila("kickoff", { oculta: true, activa: true }), fila("planning")]);
+describe("el reparto de la barra lateral", () => {
+  it("⛔ desanclar la pieza abierta la saca de la vista, y no se queda abajo: «tiene que irse de verdad»", () => {
+    const r = repartirElRiel([fila("exploration", { oculta: true }), fila("planning")]);
     expect(r.existentes.map((f) => f.slug)).toEqual(["planning"]);
-    expect(r.ocultas.map((f) => f.slug)).toEqual(["kickoff"]);
+    expect(r.ocultasALaVista).toEqual([]);
     expect(r.plegadas).toBe(1);
   });
 
-  it("⛔ el kickoff no pide «Activar»: las demás piezas sí", () => {
-    expect(estadoEnElRiel({ slug: "kickoff", state: "por_activar" })).toBe("pendiente");
-    expect(estadoEnElRiel({ slug: "delivery", state: "por_activar" })).toBe("por_activar");
-    expect(estadoEnElRiel({ slug: "kickoff", state: "generada" })).toBe("generada");
-  });
-
-  it("⛔ la oculta que está abierta sigue a la vista con «Ver más» cerrado; las demás ocultas, no", () => {
-    const filas = [fila("kickoff", { oculta: true, activa: true }), fila("planning", { oculta: true })];
-    expect(repartirElRiel(filas).ocultasALaVista.map((f) => f.slug)).toEqual(["kickoff"]);
+  it("lo desanclado se ve al abrir «Ver N sin anclar»", () => {
+    const filas = [fila("kickoff", { oculta: true }), fila("planning", { oculta: true })];
     expect(repartirElRiel(filas, true).ocultasALaVista.map((f) => f.slug)).toEqual(["kickoff", "planning"]);
   });
 
-  it("lo que no existe queda por activar y cuenta en «Ver N piezas más»", () => {
-    const r = repartirElRiel([fila("delivery", { estado: "por_activar" }), fila("planning", { oculta: true })]);
-    expect(r.porActivar.map((f) => f.slug)).toEqual(["delivery"]);
-    expect(r.plegadas).toBe(2);
+  it("⛔ por defecto solo salen el cronograma y el kickoff: lo vacío o sin documento no sale ni pide «Activar»", () => {
+    expect(estadoEnElRiel({ slug: "kickoff", state: "por_activar" })).toBe("pendiente");
+    expect(estadoEnElRiel({ slug: "timeline", state: "por_activar" })).toBe("pendiente");
+    expect(estadoEnElRiel({ slug: "delivery", state: "por_activar" })).toBe("sin_crear");
+    expect(estadoEnElRiel({ slug: "diagnosis", state: "vacia" })).toBe("sin_crear");
+    expect(estadoEnElRiel({ slug: "kickoff", state: "generada" })).toBe("generada");
+    expect(repartirElRiel([fila("delivery", { estado: "sin_crear" })]).plegadas).toBe(0);
   });
 
-  it("una copia no se oculta: se archiva desde su barra", () => {
+  it("lo que alguien creó se queda aunque esté vacío: la copia, el de nombre propio y el canvas suelto", () => {
+    expect(estadoEnElRiel({ slug: "copia:a", state: "vacia", esCopia: true })).toBe("pendiente");
+    expect(estadoEnElRiel({ slug: "diagnosis", state: "vacia", conNombre: true })).toBe("pendiente");
+    expect(estadoEnElRiel({ slug: "custom:a", state: "vacia" })).toBe("pendiente");
+  });
+
+  it("la vacía que se está mirando se ve, y un servicio recurrente conserva sus piezas", () => {
+    expect(estadoEnElRiel({ slug: "diagnosis", state: "vacia" }, { activa: true })).toBe("pendiente");
+    expect(estadoEnElRiel({ slug: "diagnosis", state: "vacia" }, { conVacias: true })).toBe("pendiente");
+  });
+
+  it("una copia no se desancla: se archiva desde su barra", () => {
     const r = repartirElRiel([fila("copia:a", { esCopia: true }), fila("planning")]);
     expect(r.ocultables.map((f) => f.slug)).toEqual(["planning"]);
   });

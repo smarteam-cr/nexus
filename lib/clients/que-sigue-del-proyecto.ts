@@ -223,7 +223,7 @@ export function queSigueDelProyecto(i: {
     const pieza = i.piezas.find((p) => p.slug === flujo.primary);
     const generada = pieza?.estado === "generada";
     const generarla = (p: PiezaParaQueSigue): QueSigueDelProyecto => ({
-      texto: `El proyecto está en ${STAGE_LABEL_ES[stage]}: ${p.estado === "por_activar" && !PIEZAS_SIEMPRE_EN_EL_RIEL.has(p.slug) ? "activa" : "genera"} «${p.etiqueta}» para trabajar la etapa con el cliente.`,
+      texto: `El proyecto está en ${STAGE_LABEL_ES[stage]}: ${p.estado === "por_activar" && !PIEZAS_SIEMPRE_EN_EL_RIEL.has(p.slug) ? "crea" : "genera"} «${p.etiqueta}» para trabajar la etapa con el cliente.`,
       accion: { tipo: "pieza", slug: p.slug, etiqueta: p.etiqueta },
     });
     /* Sin la sugerencia de los cuestionarios, «genera» va primero, como siempre. Con ella (solo en el Handoff y en

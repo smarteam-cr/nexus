@@ -16,6 +16,8 @@ import { useToast } from "@/components/ui/Toast";
 import { TarjetaDePlantilla } from "@/components/canvas/ElegirPlantilla";
 import { seccionesDeUnaCopia } from "@/lib/artefactos/catalogo";
 import { plantillaDelTipo, plantillasDelTipo, tipoDeArtefacto, tiposCreablesEnElProyecto } from "@/lib/artefactos/tipos";
+import { canvasDefForSlug } from "@/lib/canvas/canvas-defs";
+import { entregableDe } from "@/lib/entregables/registro";
 import { cn } from "@/lib/cn";
 
 export interface DocumentoParaDuplicar {
@@ -29,24 +31,26 @@ export default function NuevoArtefactoModal({
   open,
   onClose,
   tipoInicial,
+  clase,
+  libres,
   documentos,
   onCreado,
-  onActivarPieza,
 }: {
   projectId: string;
   open: boolean;
   onClose: () => void;
   /** El tipo ya elegido («Crear otra planificación»). Sin él, se elige en el modal. */
   tipoInicial?: string | null;
-  /** Los documentos del proyecto que se pueden duplicar (de cualquier tipo: se filtran por el elegido). */
+  /** El grupo desde cuyo + se abrió: solo sus tipos. Sin él, todos. */
+  clase?: "entregable" | "herramienta" | null;
+  /** Los tipos cuyo documento de siempre sigue sin usar: crear uno lo toma, y ofrece también sus plantillas de siempre. */
+  libres: readonly string[];
+  /** Los documentos del proyecto (de cualquier tipo: los que se pueden duplicar se filtran por el elegido). */
   documentos: readonly DocumentoParaDuplicar[];
   onCreado: (canvasId: string) => void;
-  /** Un tipo que no lleva copias (`seAbreUna`): abre su pieza en vez de crear un documento. */
-  onActivarPieza: (slug: string) => void;
 }) {
-  const tipos = useMemo(() => tiposCreablesEnElProyecto(), []);
-  // Arranca en el primero que se crea: la exploración no pide nada más que abrirse.
-  const primero = useMemo(() => tipos.find((x) => !x.seAbreUna)?.id ?? "", [tipos]);
+  const tipos = useMemo(() => tiposCreablesEnElProyecto(clase ?? undefined), [clase]);
+  const primero = tipos[0]?.id ?? "";
   const [tipo, setTipo] = useState<string>(tipoInicial ?? primero);
   const [elegidas, setElegidas] = useState<Record<string, string>>({});
   const [nombre, setNombre] = useState("");
@@ -69,10 +73,13 @@ export default function NuevoArtefactoModal({
     setDesde("");
   };
 
-  const plantillas = plantillasDelTipo(tipo);
-  const plantilla = plantillas.find((p) => p.id === elegidas[tipo]) ?? plantillaDelTipo(tipo);
-  const delTipo = documentos.filter((d) => d.tipo === tipo);
+  const propias = plantillasDelTipo(tipo);
+  // Una plantilla solo del documento de siempre (la Entrega) se ofrece mientras ese documento esté libre.
+  const deSiempre = libres.includes(tipo) ? (entregableDe(tipo)?.plantillas ?? []).filter((p) => !propias.some((x) => x.id === p.id)) : [];
+  const plantillas = [...deSiempre, ...propias];
+  const plantilla = plantillas.find((p) => p.id === elegidas[tipo]) ?? deSiempre[0] ?? plantillaDelTipo(tipo);
   const t = tipoDeArtefacto(tipo);
+  const delTipo = t?.sinDuplicar ? [] : documentos.filter((d) => d.tipo === tipo);
   const duplicado = delTipo.find((d) => d.id === desde);
 
   /* El nombre que toma si la persona no escribe uno: el del tipo con su plantilla, numerado si ya existe. */
@@ -84,11 +91,6 @@ export default function NuevoArtefactoModal({
   }, [documentos, duplicado, plantilla, plantillas.length, t?.nombre]);
 
   const crear = async () => {
-    if (t?.seAbreUna) {
-      onActivarPieza(tipo);
-      onClose();
-      return;
-    }
     setCreando(true);
     try {
       const r = await fetch(`/api/projects/${projectId}/artefactos`, {
@@ -98,7 +100,7 @@ export default function NuevoArtefactoModal({
       });
       const j = (await r.json().catch(() => null)) as { canvasId?: string; nombre?: string; error?: string } | null;
       if (!r.ok || !j?.canvasId) return toast.error(j?.error ?? "No se pudo crear. Inténtalo de nuevo.");
-      toast.success(`Listo: «${j.nombre ?? "el artefacto"}» está en el riel.`);
+      toast.success(`Listo: «${j.nombre ?? "el artefacto"}» está en la lista.`);
       onCreado(j.canvasId);
       onClose();
     } catch {
@@ -114,14 +116,14 @@ export default function NuevoArtefactoModal({
       onClose={onClose}
       size="pantalla"
       title={tipoInicial && t ? `Crear otr${t.conArticulo.startsWith("una") ? "a" : "o"} ${t.nombre.toLowerCase()}` : "Nuevo artefacto"}
-      description={t?.seAbreUna ? "Adentro agregas las sesiones." : "Queda en el riel con su nombre, en construcción. Lo generas con IA o lo escribes tú desde adentro."}
+      description="Queda en la lista con su nombre, en construcción. Lo trabajas desde adentro."
       footer={
         <div className="flex justify-end gap-2">
           <Button variant="secondary" onClick={onClose} disabled={creando}>
             Cancelar
           </Button>
           <Button variant="primary" loading={creando} disabled={!tipo} onClick={() => void crear()}>
-            {t?.seAbreUna ? `Abrir ${t.nombre.toLowerCase()}` : "Crear"}
+            Crear
           </Button>
         </div>
       }
@@ -150,13 +152,6 @@ export default function NuevoArtefactoModal({
           </div>
         )}
 
-        {t?.seAbreUna ? (
-          <div className="min-w-0 flex-1 space-y-2 rounded-lg border border-line bg-surface p-5">
-            <p className="text-sm font-semibold text-fg">{t.nombre} del proyecto</p>
-            <p className="text-sm text-fg-secondary">{t.paraQue}</p>
-            <p className="text-xs text-fg-muted">Hay una por proyecto. Si ya existe, la abre.</p>
-          </div>
-        ) : (
         <div className="min-w-0 flex-1 space-y-4">
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label="Nombre" hint="Si lo dejas vacío, se llama como sugerimos.">
@@ -184,7 +179,7 @@ export default function NuevoArtefactoModal({
                   <TarjetaDePlantilla
                     key={p.id}
                     plantilla={p}
-                    secciones={seccionesDeUnaCopia(tipo, p.id).map((s) => ({ key: s.key, nombre: s.label }))}
+                    secciones={(t?.sinDuplicar ? [] : plantillaDelTipo(tipo, p.id) ? seccionesDeUnaCopia(tipo, p.id) : (canvasDefForSlug(tipo)?.sections ?? [])).map((s) => ({ key: s.key, nombre: s.label }))}
                     activa={p.id === plantilla?.id}
                     distintivo={p.recomendada ? "Recomendada" : null}
                     enfocable
@@ -201,7 +196,6 @@ export default function NuevoArtefactoModal({
             </div>
           )}
         </div>
-        )}
       </div>
     </Modal>
   );

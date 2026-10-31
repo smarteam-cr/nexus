@@ -109,7 +109,7 @@ export default function OrdenarArtefactosModal({
       open={open}
       onClose={onClose}
       title={`El orden de ${nombreDelTipo.toLowerCase()}`}
-      description="Arrástralos de arriba abajo. Es el orden del riel y el de quien los lee."
+      description="Arrástralos de arriba abajo. Es el orden de la lista y el de quien los lee."
       footer={
         <div className="flex justify-end gap-2">
           <Button variant="secondary" onClick={onClose} disabled={guardando}>

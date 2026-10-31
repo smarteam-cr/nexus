@@ -164,7 +164,11 @@ export interface FilaDelRielDePiezas {
   etiqueta: string;
   /** Se le puede cambiar el nombre desde acá: un documento de un tipo que admite copias. */
   canvasId?: string | null;
-  estado: EstadoDePieza | "por_activar";
+  /** Se le cambia el nombre aunque no tenga canvas: los Cuestionarios de siempre. */
+  renombrable?: boolean;
+  /** El tipo del documento: una copia de Exploración cuelga sus sesiones igual que la de siempre. */
+  tipo?: string;
+  estado: EstadoDePieza | "sin_crear";
   activa: boolean;
   /** Lo que se lee a la derecha: «desactualizado» (ámbar), «Antes: Kickoff» (gris). */
   aviso?: { corto: string; largo?: string; tono: "atencion" | "neutro" } | null;
@@ -183,9 +187,9 @@ export interface FilaDelRielDePiezas {
    * se cliquea.
    */
   grupo?: { id: string; titulo: string; detalle?: string | null };
-  /** El equipo la ocultó del riel (2026-10-12): va plegada en «Ver N piezas más» (lib/flow/reparto-del-riel.ts). */
+  /** El equipo la desancló (2026-10-12): va plegada en «Ver N sin anclar» (lib/flow/reparto-del-riel.ts). */
   oculta?: boolean;
-  /** Una COPIA de un tipo (etapa V3, docs/artefactos-plan.md): no se oculta (se archiva desde su barra). */
+  /** Una COPIA de un tipo (etapa V3, docs/artefactos-plan.md): no se desancla (se archiva desde su barra). */
   esCopia?: boolean;
 }
 
@@ -200,10 +204,9 @@ const PUNTO: Record<EstadoDePieza, string> = {
  * riel: el estado de cada pieza (generada, vacía, desactualizada) y su activación viven allá.
  *
  * El punto de color dice el estado y nunca solo: «desactualizado» va escrito, la propuesta lleva la
- * chispa, y lo que todavía no existe en el proyecto queda plegado en «Ver N piezas más», junto con lo que
- * el equipo ocultó (2026-10-12). Ocultar y mostrar viven ahí mismo, al abrir «Ver más» (Elías, 30 oct: el ojo de
- * cada fila se retiró). Las novedades de las reuniones (etapa 6) llevan la misma chispa con su número; el aviso que
- * tapan va en el `title`.
+ * chispa, y lo que todavía no se creó no sale: se crea con el + de cada grupo (Elías, 30 oct). Lo que el equipo desancló
+ * queda plegado en «Ver N sin anclar», y anclar o desanclar vive ahí mismo. Las novedades de las reuniones (etapa 6) llevan
+ * la misma chispa con su número; el aviso que tapan va en el `title`.
  */
 export function PiezasDelRiel({
   resumen,
@@ -211,59 +214,74 @@ export function PiezasDelRiel({
   porActivarAbiertas,
   onAlternarPorActivar,
   onElegir,
-  onActivar,
   onOcultar,
   slotDeSesiones,
   grupoDelResumen,
+  grupoAlFinal,
   onNuevoArtefacto,
   onRenombrar,
 }: {
-  resumen: { activa: boolean; meta?: string | null; onClick: () => void };
+  resumen: { activa: boolean; meta?: string | null; onClick: () => void; /** Algo del proyecto pide atención: va como ícono, con esta frase. */ alerta?: string | null };
   /**
    * El grupo al que pertenece el Resumen (2026-10-17: «Herramientas del proyecto»). Su rótulo va arriba del Resumen, y
    * las filas que siguen del mismo grupo no lo repiten. Sin él (un servicio recurrente), el Resumen va sin rótulo.
    */
   grupoDelResumen?: { id: string; titulo: string; detalle?: string | null };
+  /** El grupo que va siempre, aunque no le quede ninguna fila: su + es por donde se crea lo primero de él. */
+  grupoAlFinal?: { id: string; titulo: string };
   filas: FilaDelRielDePiezas[];
   porActivarAbiertas: boolean;
   onAlternarPorActivar: () => void;
   onElegir: (slug: string) => void;
-  onActivar: (slug: string) => void;
-  /** Ocultar (`true`) o volver a mostrar (`false`) una pieza del riel. Sin él, las filas no se ocultan. */
+  /** Desanclar (`true`) o volver a anclar (`false`) una pieza. Sin él, las filas no se desanclan. */
   onOcultar?: (slug: string, oculta: boolean) => void;
   /**
    * Debajo de la fila «Exploración», cuando está abierta: ahí la exploración del proyecto pinta sus
    * sesiones por portal, como la preventa las cuelga de su pieza (2026-10-07).
    */
   slotDeSesiones?: (el: HTMLDivElement | null) => void;
-  /** «+ Nuevo artefacto» al pie de las piezas (etapa V3): otra planificación, un plan de adopción… Sin él, no se pinta. */
-  onNuevoArtefacto?: () => void;
-  /** Cambiar el nombre de un documento desde el riel, con el lápiz que aparece al pasar el mouse. true si quedó guardado. */
-  onRenombrar?: (canvasId: string, nombre: string) => Promise<boolean>;
+  /** El + junto al título de cada grupo: crea un artefacto de ese grupo. Sin él, no se pinta. */
+  onNuevoArtefacto?: (grupo: string) => void;
+  /** Cambiar el nombre desde acá, con doble clic o con el lápiz que aparece al pasar el mouse. true si quedó guardado. */
+  onRenombrar?: (canvasId: string | null, nombre: string) => Promise<boolean>;
 }) {
-  const [renombrando, setRenombrando] = useState<{ slug: string; canvasId: string; nombre: string; original: string } | null>(null);
+  const [renombrando, setRenombrando] = useState<{ slug: string; canvasId: string | null; nombre: string; original: string } | null>(null);
+  const seRenombra = (f: FilaDelRielDePiezas) => !!onRenombrar && (!!f.canvasId || !!f.renombrable);
+  const empezarARenombrar = (f: FilaDelRielDePiezas) => seRenombra(f) && setRenombrando({ slug: f.slug, canvasId: f.canvasId ?? null, nombre: f.etiqueta, original: f.etiqueta });
   const guardarNombre = async () => {
     if (!renombrando) return;
     const nombre = renombrando.nombre.trim();
     if (nombre && nombre !== renombrando.original && !(await onRenombrar?.(renombrando.canvasId, nombre))) return;
     setRenombrando(null);
   };
-  const { existentes, ocultasALaVista, porActivar, ocultables, plegadas } = repartirElRiel(filas, porActivarAbiertas);
+  const { existentes, ocultasALaVista, ocultables, plegadas } = repartirElRiel(filas, porActivarAbiertas);
   const hayQueOcultar = !!onOcultar && ocultables.length > 0;
-  // Con «Exploración» ya abierta, el clic vuelve a su página de inicio (lo escucha LienzoDeExploracion).
-  const elegir = (f: FilaDelRielDePiezas) => (f.slug === "exploration" && f.activa ? window.dispatchEvent(new Event("exploracion:inicio")) : onElegir(f.slug));
+  const esExploracion = (f: FilaDelRielDePiezas) => (f.tipo ?? f.slug) === "exploration";
+  // Con una exploración ya abierta, el clic vuelve a su página de inicio (lo escucha LienzoDeExploracion).
+  const elegir = (f: FilaDelRielDePiezas) => (esExploracion(f) && f.activa ? window.dispatchEvent(new Event("exploracion:inicio")) : onElegir(f.slug));
   const clase = (activa: boolean) =>
     cn(
       "flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-[13px] transition-colors",
       activa ? "bg-info-surface font-semibold text-brand" : "text-fg-secondary hover:bg-surface-hover hover:text-fg",
     );
-  const rotuloDeGrupo = (g: { titulo: string; detalle?: string | null }) => (
-    <p className="flex items-baseline justify-between gap-2 px-2.5 pb-0.5 pt-2.5 text-[11px] font-semibold uppercase tracking-[0.06em] text-fg-muted">
+  const rotuloDeGrupo = (g: { id?: string; titulo: string; detalle?: string | null }) => (
+    <div className="flex items-center justify-between gap-2 px-2.5 pb-0.5 pt-2.5 text-[11px] font-semibold uppercase tracking-[0.06em] text-fg-muted">
       <span className="min-w-0 truncate" title={g.titulo}>
         {g.titulo}
       </span>
       {g.detalle && <span className="flex-shrink-0 font-normal normal-case tracking-normal">{g.detalle}</span>}
-    </p>
+      {g.id && onNuevoArtefacto && (
+        <button
+          type="button"
+          onClick={() => onNuevoArtefacto(g.id!)}
+          aria-label={`Nuevo artefacto en ${g.titulo}`}
+          title="Nuevo artefacto"
+          className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-md text-[15px] font-normal leading-none text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg"
+        >
+          +
+        </button>
+      )}
+    </div>
   );
   return (
     <ul className="mb-1.5 ml-[18px] space-y-0.5 border-l border-line pl-2">
@@ -272,6 +290,13 @@ export function PiezasDelRiel({
         <button type="button" onClick={resumen.onClick} aria-current={resumen.activa ? "page" : undefined} className={clase(resumen.activa)}>
           <span className={cn("h-2 w-2 flex-shrink-0 rounded-full", resumen.activa ? "bg-brand" : "bg-transparent")} aria-hidden="true" />
           <span className="min-w-0 flex-1 truncate">Resumen</span>
+          {resumen.alerta && (
+            <span className="flex-shrink-0 text-warn-ink" title={resumen.alerta} role="img" aria-label={resumen.alerta}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-3.5 w-3.5" aria-hidden="true">
+                <path d="M12 9v4m0 4h.01M10.3 3.9L1.8 18a2 2 0 001.7 3h17a2 2 0 001.7-3L13.7 3.9a2 2 0 00-3.4 0z" />
+              </svg>
+            </span>
+          )}
           {resumen.meta && <span className={cn("flex-shrink-0 text-[11.5px]", resumen.activa ? "" : "text-fg-muted")}>{resumen.meta}</span>}
         </button>
       </li>
@@ -304,6 +329,7 @@ export function PiezasDelRiel({
           <button
             type="button"
             onClick={() => elegir(f)}
+            onDoubleClick={() => empezarARenombrar(f)}
             aria-current={f.activa ? "page" : undefined}
             data-recorrido={f.propuesta ? "ficha.propuesta" : f.slug === "questionnaires" ? "ficha.cuestionarios" : undefined}
             title={
@@ -313,7 +339,7 @@ export function PiezasDelRiel({
               /* Los Cuestionarios (2026-10-11) traen siempre su aviso («sin enviar», «enviado», «respondido 1 de 2»):
                  no se generan, se mandan. */
             }
-            className={cn(clase(f.activa), onRenombrar && f.canvasId && "pr-7")}
+            className={cn(clase(f.activa), seRenombra(f) && "pr-7")}
           >
             <span className={cn("h-2 w-2 flex-shrink-0 rounded-full", f.activa ? "bg-brand" : PUNTO[f.estado as EstadoDePieza])} aria-hidden="true" />
             <span className="min-w-0 flex-1 truncate">{f.etiqueta}</span>
@@ -345,10 +371,10 @@ export function PiezasDelRiel({
             )}
           </button>
           )}
-          {onRenombrar && f.canvasId && renombrando?.slug !== f.slug && (
+          {seRenombra(f) && renombrando?.slug !== f.slug && (
             <button
               type="button"
-              onClick={() => setRenombrando({ slug: f.slug, canvasId: f.canvasId!, nombre: f.etiqueta, original: f.etiqueta })}
+              onClick={() => empezarARenombrar(f)}
               aria-label={`Cambiar el nombre de «${f.etiqueta}»`}
               title="Cambiar el nombre"
               className="absolute right-1 flex h-6 w-6 items-center justify-center rounded-md text-fg-muted opacity-0 transition-opacity hover:bg-surface-hover hover:text-fg focus-visible:opacity-100 group-hover/fila:opacity-100"
@@ -359,24 +385,10 @@ export function PiezasDelRiel({
             </button>
           )}
           </div>
-          {f.slug === "exploration" && f.activa && slotDeSesiones && <div ref={slotDeSesiones} />}
+          {esExploracion(f) && f.activa && slotDeSesiones && <div ref={slotDeSesiones} />}
         </li>
       ))}
-      {onNuevoArtefacto && (
-        <li>
-          <button
-            type="button"
-            onClick={onNuevoArtefacto}
-            title="Otra planificación, otro kickoff, un plan de adopción, una hoja de ruta…"
-            className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-[13px] text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg"
-          >
-            <span className="flex h-2 w-2 flex-shrink-0 items-center justify-center text-[13px] leading-none" aria-hidden="true">
-              +
-            </span>
-            <span className="min-w-0 flex-1 truncate">Nuevo artefacto</span>
-          </button>
-        </li>
-      )}
+      {grupoAlFinal && !existentes.some((f) => f.grupo?.id === grupoAlFinal.id) && <li>{rotuloDeGrupo(grupoAlFinal)}</li>}
       {(plegadas > 0 || hayQueOcultar) && (
         <li>
           <button
@@ -385,7 +397,7 @@ export function PiezasDelRiel({
             aria-expanded={porActivarAbiertas}
             className="w-full rounded-lg px-2.5 py-1.5 text-left text-[13px] text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg"
           >
-            {porActivarAbiertas ? "Ver menos" : plegadas > 0 ? `Ver ${plegadas} ${plegadas === 1 ? "pieza" : "piezas"} más +` : "Ocultar piezas"}
+            {porActivarAbiertas ? "Ver menos" : plegadas > 0 ? `Ver ${plegadas} sin anclar` : "Anclar o desanclar"}
           </button>
         </li>
       )}
@@ -396,7 +408,7 @@ export function PiezasDelRiel({
                 type="button"
                 onClick={() => elegir(f)}
                 aria-current={f.activa ? "page" : undefined}
-                title="Abrirla (sigue oculta del riel)"
+                title="Abrirla (sigue sin anclar)"
                 className="flex min-w-0 flex-1 items-center gap-2.5 text-left transition-colors hover:text-fg"
               >
                 <span className={cn("h-2 w-2 flex-shrink-0 rounded-full", f.activa ? "bg-brand" : PUNTO[f.estado as EstadoDePieza])} aria-hidden="true" />
@@ -404,43 +416,27 @@ export function PiezasDelRiel({
               </button>
               {onOcultar && (
                 <button type="button" onClick={() => onOcultar(f.slug, false)} className="flex-shrink-0 text-[11.5px] font-normal text-brand hover:text-brand-light">
-                  Mostrar
+                  Anclar
                 </button>
               )}
             </div>
-            {f.slug === "exploration" && f.activa && slotDeSesiones && <div ref={slotDeSesiones} />}
-          </li>
-        ))}
-      {porActivarAbiertas &&
-        porActivar.map((f) => (
-          <li key={f.slug}>
-            <button
-              type="button"
-              onClick={() => onActivar(f.slug)}
-              disabled={f.ocupada}
-              title={f.aviso?.largo ?? "Este proyecto todavía no la tiene: actívala para empezar a trabajarla"}
-              className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-[13px] text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg disabled:opacity-60"
-            >
-              <span className="h-2 w-2 flex-shrink-0 rounded-full border border-dashed border-line" aria-hidden="true" />
-              <span className="min-w-0 flex-1 truncate">{f.etiqueta}</span>
-              <span className="flex-shrink-0 text-[11.5px]">{f.ocupada ? "Activando…" : "Activar"}</span>
-            </button>
+            {esExploracion(f) && f.activa && slotDeSesiones && <div ref={slotDeSesiones} />}
           </li>
         ))}
       {porActivarAbiertas && hayQueOcultar && (
         <>
-          <li>{rotuloDeGrupo({ titulo: "En el riel" })}</li>
+          <li>{rotuloDeGrupo({ titulo: "Anclados" })}</li>
           {ocultables.map((f) => (
             <li key={`ocultar:${f.slug}`} className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1 text-[13px] text-fg-muted">
               <span className="min-w-0 flex-1 truncate pl-[18px]">{f.etiqueta}</span>
               <button
                 type="button"
                 onClick={() => onOcultar?.(f.slug, true)}
-                aria-label={`Ocultar «${f.etiqueta}» del riel`}
-                title="Queda aquí, en «Ver más piezas». No borra nada."
+                aria-label={`Desanclar «${f.etiqueta}»`}
+                title="Sale de la lista y queda aquí, en «Sin anclar». No borra nada."
                 className="flex-shrink-0 text-[11.5px] text-brand hover:text-brand-light"
               >
-                Ocultar
+                Desanclar
               </button>
             </li>
           ))}
