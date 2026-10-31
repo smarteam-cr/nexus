@@ -13,6 +13,10 @@
  * secciones de la plantilla elegida y sin la IA (POST …/diagnostico/plantilla): antes del selector, un diagnóstico vacío
  * se podía escribir a mano, y esa puerta no se cierra.
  *
+ * El Kickoff (2026-10-30): se elige al entrar por primera vez, con las mismas tarjetas de «Nuevo artefacto»; sus
+ * secciones salen de `canonDelKickoff`, porque las del servicio recurrente no están en el canon de su canvas. En un
+ * servicio por ciclos la plantilla no se elige (`soloPlantilla`): la impone lib/entregables/generar-server.ts.
+ *
  * La Planificación (2026-10-29, pregunta 44): la lista sigue, y Nexus sugiere una según el caso, con su razón en una línea
  * (lib/planificacion/plantilla-sugerida.ts). `sugerida` la deja marcada y gana a la `recomendada` del registro; la persona
  * elige. Si alguien ya tocó una tarjeta, la sugerencia que llega tarde no le cambia la elección.
@@ -23,7 +27,7 @@ import { BotonBlanco, ROTULO_DEL_SISTEMA } from "@/components/ui/sistema";
 import { Input } from "@/components/ui/Input";
 import { useToast } from "@/components/ui/Toast";
 import CanvasAgentButton from "@/components/clients/CanvasAgentButton";
-import { canvasDefForSlug } from "@/lib/canvas/canvas-defs";
+import { canonDelKickoff, canvasDefForSlug } from "@/lib/canvas/canvas-defs";
 import { entregableDe, seccionesDeLaPlantilla, type PlantillaDeEntregable } from "@/lib/entregables/registro";
 import { SECCIONES_SOLO_INTERNAS } from "@/lib/business-cases/section-briefs";
 
@@ -35,6 +39,12 @@ const ROTULO: Record<string, string> = { diagnostico: "Portada", planificacion: 
  * va «Escribirlo yo» y cómo se llama la corrida en el aviso.
  */
 const POR_DOCUMENTO: Record<string, { titulo: string; bajada: string; ruta: string; corrida: string }> = {
+  kickoff: {
+    titulo: "Elige cómo armar el kickoff",
+    bajada: "Los dos presentan el arranque al cliente; el de servicio recurrente cuenta cómo se trabaja cada ciclo.",
+    ruta: "kickoff/plantilla",
+    corrida: "kickoff",
+  },
   diagnosis: {
     titulo: "Elige cómo armar el diagnóstico",
     bajada: "Los dos le explican al cliente por qué tiene los resultados que tiene y qué vamos a hacer.",
@@ -134,6 +144,7 @@ export default function ElegirPlantilla({
   traerBrief,
   briefTraido,
   quitarBrief,
+  soloPlantilla,
 }: {
   slug: string;
   clientId: string;
@@ -149,8 +160,11 @@ export default function ElegirPlantilla({
   briefTraido?: string | null;
   /** Quitar la hoja traída: antes de generar es la única salida si no era la de este cliente. */
   quitarBrief?: () => Promise<void>;
+  /** La única plantilla que le toca a este proyecto: se muestra sola. */
+  soloPlantilla?: string | null;
 }) {
-  const plantillas: readonly PlantillaDeEntregable[] = entregableDe(slug)?.plantillas ?? [];
+  const todas: readonly PlantillaDeEntregable[] = entregableDe(slug)?.plantillas ?? [];
+  const plantillas = soloPlantilla ? todas.filter((p) => p.id === soloPlantilla) : todas;
   const textos = POR_DOCUMENTO[slug] ?? POR_DOCUMENTO.diagnosis;
   const canon = canvasDefForSlug(slug)?.sections ?? [];
   const [elegida, setElegida] = useState<string>(() => (plantillas.find((p) => p.recomendada) ?? plantillas[0])?.id ?? "");
@@ -170,7 +184,7 @@ export default function ElegirPlantilla({
     tocada.current = true;
     setElegida(id);
   };
-  if (plantillas.length < 2 || !POR_DOCUMENTO[slug]) return null;
+  if ((plantillas.length < 2 && !soloPlantilla) || !POR_DOCUMENTO[slug]) return null;
 
   const escribirloYo = async () => {
     setAbriendo(true);
@@ -220,7 +234,9 @@ export default function ElegirPlantilla({
       <div className="space-y-1">
         <p className={ROTULO_DEL_SISTEMA}>Antes de generar</p>
         <h2 className="text-sm font-semibold text-fg">{textos.titulo}</h2>
-        <p className="text-xs text-fg-muted">{textos.bajada} Después puedes ocultar, mover o quitar cualquier parte.</p>
+        <p className="text-xs text-fg-muted">
+          {soloPlantilla ? "Este proyecto es un servicio por ciclos: lleva el kickoff del servicio." : textos.bajada} Después puedes ocultar, mover o quitar cualquier parte.
+        </p>
         {idSugerida && sugerida && <p className="text-xs text-fg-secondary">Nexus sugiere la {plantillas.find((p) => p.id === idSugerida)?.nombre}. {sugerida.razon}</p>}
       </div>
 
@@ -265,7 +281,7 @@ export default function ElegirPlantilla({
       <div role="radiogroup" aria-label="Plantillas del documento" className="grid gap-4 sm:grid-cols-2">
         {plantillas.map((p) => {
           // Lo solo interno (el Brief traído de la hoja) no es parte de lo que se elige.
-          const secciones = seccionesDeLaPlantilla(p, canon).filter((s) => !SECCIONES_SOLO_INTERNAS.has(s.key));
+          const secciones = (slug === "kickoff" ? canonDelKickoff(p.secciones) : seccionesDeLaPlantilla(p, canon)).filter((s) => !SECCIONES_SOLO_INTERNAS.has(s.key));
           return (
             <TarjetaDePlantilla
               key={p.id}

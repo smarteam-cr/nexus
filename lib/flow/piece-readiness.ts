@@ -37,14 +37,9 @@ interface PieceNeeds {
   /**
    * Pipelines a los que la pieza NO les corresponde, tengan el tag que tengan.
    *
-   * Es el caso contrario a `anyPipeline` y se evalúa PRIMERO: un desarrollo no hace kickoff
-   * —no hay landing de arranque que presentarle a un cliente que ya está adentro—, y eso no
-   * se puede expresar con una lista de inclusión sin enumerar los pipelines que sí.
-   *
-   * La regla existía, pero suelta: `pasosDeSetup` la deducía de `seedPieces` para el chip
-   * del widget y nadie más la veía. Acá vive donde ya vive la pregunta "¿esta pieza va en
-   * este proyecto?", así que el desplegable, el widget y cualquier consumidor futuro dan la
-   * misma respuesta.
+   * Es el caso contrario a `anyPipeline` y se evalúa PRIMERO: no se puede expresar con una lista
+   * de inclusión sin enumerar los pipelines que sí. Ninguna pieza lo usa hoy: el kickoff, que
+   * no iba en un Desarrollo, va en todos los proyectos desde el 2026-10-30 (pedido de Elías).
    */
   exceptPipeline?: ProjectPipelineKey[];
   /** Piezas que conviene tener con contenido antes que ésta. */
@@ -54,12 +49,6 @@ interface PieceNeeds {
 }
 
 const NEEDS: Record<string, PieceNeeds> = {
-  kickoff: {
-    /* Un desarrollo no lleva kickoff: es la landing con la que se le presenta el arranque a
-       un cliente, y un desarrollo que cuelga de una implementación ya lo tuvo — el suyo es
-       el del hermano. Sitios web SÍ lo lleva (es su landing de cara al cliente). */
-    exceptPipeline: ["development"],
-  },
   "tech-requirements": {
     // hasTechnicalScope(): los mismos dos tags, ahora también del lado de la UI.
     anyTag: ["custom_dev", "insider_one"],
@@ -126,7 +115,7 @@ export function pieceReadiness(slug: string, input: PieceReadinessInput): PieceR
   if (!needs) return OK;
 
   // 0. ¿Está EXCLUIDA de este pipeline? Va primero: es la exclusión más fuerte y ningún tag
-  //    la levanta. Un desarrollo no hace kickoff aunque le pongan todos los tags del mundo.
+  //    la levanta.
   const keyDelPipeline = resolvePipeline(input.hubspotPipelineId)?.key;
   if (keyDelPipeline && needs.exceptPipeline?.includes(keyDelPipeline)) {
     const pieza = pieceBySlug(slug)?.label ?? slug;

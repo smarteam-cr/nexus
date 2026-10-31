@@ -64,9 +64,10 @@ describe("qué chips se listan", () => {
     expect(slugs()).toContain("handoff");
   });
 
-  it("un desarrollo NO muestra kickoff, y no queda un hueco rojo", () => {
+  it("un desarrollo también lleva kickoff (Elías, 2026-10-30), y no se le reclama", () => {
     const s = slugs({ hubspotPipelineId: DEV });
-    expect(s).not.toContain("kickoff");
+    expect(s).toContain("kickoff");
+    expect(estadoDe("kickoff", { hubspotPipelineId: DEV })).toBe("opcional");
     // …y sí muestra su pieza central, que en CS sin tags no aparece.
     expect(s).toContain("tech-requirements");
   });
@@ -193,9 +194,8 @@ describe("D-02: el kickoff que falta es «opcional», no «pendiente» — y las
     /* Desde el rediseño de la ficha (2026-10-04) el estado de cada pieza lo dice el riel de la
        izquierda; el widget le manda la anotación «opcional» y tiene que ir en NEUTRO. */
     const gps = leer("components/clients/ProjectGPS.tsx");
-    expect(gps, "el widget no distingue «opcional»").toContain('c.estado === "opcional"');
-    const i = gps.indexOf('c.estado === "opcional"');
-    expect(gps.slice(i, i + 220), "«opcional» dejó de ir en neutro").toContain('tono: "neutro"');
+    // Elías, 2026-10-30: el kickoff viene en todos los proyectos, y el riel no dice «opcional» al lado de su nombre.
+    expect(gps).not.toContain('corto: "opcional"');
     const grid = leer("components/dashboard/PortfolioGrid.tsx");
     expect(grid, "la cartera decide por su cuenta si el kickoff se reclama").toContain('PIEZAS_NO_REQUERIDAS.has("kickoff")');
     /* Sobre el USO, no sobre el nombre: que la constante se lea no prueba que decida el color. */

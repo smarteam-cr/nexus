@@ -9,6 +9,7 @@ import SectionBlockList from "@/components/canvas/SectionBlockList";
 import CanvasLinearView from "@/components/canvas/CanvasLinearView";
 import { HANDOFF_SECCION_PRINCIPAL } from "@/lib/canvas/canvas-defs";
 import KickoffWorkspace from "@/components/canvas/KickoffWorkspace";
+import ElegirPlantilla from "@/components/canvas/ElegirPlantilla";
 import DesarrolloWorkspace from "@/components/canvas/DesarrolloWorkspace";
 import ExploracionWorkspace from "@/components/canvas/ExploracionWorkspace";
 import ExploracionDelProyecto from "@/components/exploraciones/ExploracionDelProyecto";
@@ -53,6 +54,7 @@ import VersionesDelDocumento from "@/components/canvas/VersionesDelDocumento";
 import { CANVAS_PRIMARY_AGENT } from "@/lib/agents/canvas-agents";
 import { rotuloVigente } from "@/lib/canvas/canvas-defs";
 import { plantillaDelDocumento } from "@/lib/entregables/registro";
+import { estadoEnElRiel } from "@/lib/flow/reparto-del-riel";
 import { slugForCanvas, pieceBySlug, pieceLabel, PIECES } from "@/lib/pieces/registry";
 import { buscarDocumento, vistaDeLaUrl } from "@/lib/flow/vista-de-la-url";
 // La dirección de la ficha del documento dentro del manual — un solo lugar que sabe dónde vive.
@@ -276,6 +278,8 @@ export default function ProjectCanvasPanel({
   const [estadoCiclo, setEstadoCiclo] = useState<CicloParaElRiel | null>(null);
   /** Las piezas que el equipo ocultó del riel (2026-10-12): quedan en «Ver N piezas más». */
   const [piezasOcultas, setPiezasOcultas] = useState<string[]>([]);
+  /** Si el kickoff sigue como nació y qué plantilla le toca (lib/entregables/generar-server.ts). null = todavía no se sabe: el documento. */
+  const [selectorKickoff, setSelectorKickoff] = useState<{ sinTocar: boolean; plantillaDelServicio: string | null } | null>(null);
   /* Slot en el header para los CTAs de un canvas que necesita ESTADO PROPIO para decidir
      qué botón mostrar. El canvas los renderiza acá por portal y quedan junto al nombre, en
      el mismo lugar que el `CanvasAgentButton` que este panel monta para los demás.
@@ -495,6 +499,7 @@ export default function ProjectCanvasPanel({
         setCuestionariosLeidos(true);
         setEstadoCiclo((d.ciclo as CicloParaElRiel | null | undefined) ?? null);
         if (Array.isArray(d.piezasOcultas)) setPiezasOcultas(d.piezasOcultas as string[]);
+        setSelectorKickoff((d.selectorKickoff as { sinTocar: boolean; plantillaDelServicio: string | null } | null | undefined) ?? null);
         setActiveCanvasId((prev) => {
           // Selección vigente que sigue existiendo → se mantiene.
           if (prev && list.some((c) => c.id === prev)) return prev;
@@ -773,12 +778,31 @@ export default function ProjectCanvasPanel({
   /* El diagnóstico sin generar y sin plantilla elegida se genera desde su selector (2026-10-23,
      components/canvas/ElegirPlantilla.tsx): el botón de arriba generaría con la plantilla de siempre sin que nadie la
      eligiera. Con la plantilla anotada («Escribirlo yo», o ya generado), el botón vuelve y genera con la suya. */
-  // La planificación también, desde el 2026-10-27 (I2: la completa y la esencial).
+  // La planificación también, desde el 2026-10-27 (I2: la completa y la esencial), y el kickoff desde el 2026-10-30.
   const diagnosticoSinGenerar =
-    (activeSlug === "diagnosis" || activeSlug === "planning") &&
+    (activeSlug === "kickoff"
+      ? selectorKickoff?.sinTocar === true
+      : activeSlug === "diagnosis" || activeSlug === "planning") &&
     !!filaActiva &&
     filaActiva.state !== "generada" &&
-    !plantillaDelDocumento(activeSlug, activeCanvas?.sections)?.guardada;
+    !plantillaDelDocumento(activeSlug ?? "", activeCanvas?.sections)?.guardada;
+  /* El kickoff sin generar: el de siempre o el del servicio recurrente (Elías, 2026-10-30). */
+  const selectorDelKickoff =
+    diagnosticoSinGenerar && activeSlug === "kickoff" && activeCanvasId ? (
+      <ElegirPlantilla
+        slug="kickoff"
+        clientId={clientId}
+        projectId={projectId}
+        canvasId={activeCanvasId}
+        agentId={CANVAS_PRIMARY_AGENT.kickoff.agentId}
+        soloPlantilla={selectorKickoff?.plantillaDelServicio ?? null}
+        onGenerado={() => {
+          setAgentNonce((n) => n + 1);
+          bumpGpsRefresh();
+          void refetchCanvases();
+        }}
+      />
+    ) : null;
   const botonDelAgente =
     activeCanvas && CANVAS_PRIMARY_AGENT[activeSlug ?? ""] && activeSlug !== "exploration" && !diagnosticoSinGenerar ? (
       <CanvasAgentButton
@@ -916,13 +940,15 @@ export default function ProjectCanvasPanel({
                 etiqueta: row.label,
                 grupo,
                 oculta,
-                estado: row.state === "generada" ? "generada" : row.state === "vacia" ? "pendiente" : "por_activar",
+                estado: estadoEnElRiel(row),
                 activa: visible && !enResumen && !piezaSinCanvas && row.canvasId !== null && row.canvasId === activeCanvasId,
                 /* El aviso COMPRIMIDO ("Sin tag X" / "Antes: Y"); la frase completa va en el title.
                    Si no, el de «el handoff corrió después»: el encadenado ya NO reescribe solo
                    (borraba ediciones a mano) y sin este renglón el CSE creía que estaba al día.
-                   Si no, lo que el Resumen sabe de la pieza («opcional», «sin subir»). */
-                aviso: avisoCiclo
+                   Si no, lo que el Resumen sabe de la pieza («sin subir»). */
+                aviso: activando === row.slug
+                  ? { corto: "Abriendo…", tono: "neutro" }
+                  : avisoCiclo
                   ? avisoCiclo
                   : row.esCopia
                   ? row.terminado
@@ -968,7 +994,11 @@ export default function ProjectCanvasPanel({
                 return;
               }
               const row = pieceRows.find((r) => r.slug === slug);
-              if (!row?.canvasId) return;
+              if (!row) return;
+              if (!row.canvasId) {
+                if (activando === null) void activarPieza(slug);
+                return;
+              }
               if (visible) switchCanvas(row.canvasId);
               else onAbrirDesdeOculto?.(row.canvasId);
             }}
@@ -1283,7 +1313,7 @@ export default function ProjectCanvasPanel({
               (KickoffLanding) y su escape `?kve=old` se borraron en la Ola 4 del plan
               de puestos — rollback de esa ola = git revert. */}
           <CanvasBoundary label="el Kickoff">
-            <KickoffWorkspace key={`${activeCanvasId}-${agentNonce}`} projectId={projectId} canvasId={activeCanvasId} />
+            {selectorDelKickoff ?? <KickoffWorkspace key={`${activeCanvasId}-${agentNonce}`} projectId={projectId} canvasId={activeCanvasId} />}
           </CanvasBoundary>
         </MarcoDelDocumento>
       )}

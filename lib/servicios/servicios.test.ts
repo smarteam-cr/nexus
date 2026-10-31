@@ -145,10 +145,10 @@ describe("las piezas de un servicio recurrente", () => {
     expect(filas.filter((x) => x.startsWith("cycle-"))).toEqual([]);
   });
 
-  it("SmartLoop no se da de alta desde el formulario ni lleva kickoff", () => {
+  it("SmartLoop no se da de alta desde el formulario y lleva kickoff, como todo proyecto", () => {
     const sl = PROJECT_PIPELINES.find((p) => p.key === "smartloop")!;
     expect(sl.servicioRecurrente).toBe("smartloop");
-    expect(sl.seedPieces).not.toContain("kickoff");
+    expect(sl.seedPieces).toContain("kickoff");
     expect(sl.closedStageIds).toEqual(sl.stages.filter((s) => s.terminal).map((s) => s.id));
   });
 });

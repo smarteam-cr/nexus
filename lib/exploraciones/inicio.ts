@@ -104,6 +104,18 @@ export function estadoDeLaFila(estado: EstadoDeLaReunion): EstadoDeLaFila | null
   }
 }
 
+/**
+ * Qué va a pasar con la reunión de la PRÓXIMA sesión, en una línea debajo de la lista: el estado corto va a la derecha de
+ * su fila, y esto decía la tarjeta «Próxima sesión» (retirada el 30 oct). null = nada que agregar.
+ */
+export function pistaDeLaProxima(estado: EstadoDeLaReunion): string | null {
+  if (estado === "agendada") return "cuando ocurra, Nexus espera su transcripción y la lee sola";
+  if (estado === "esperando") return "Meet puede tardar hasta una hora; cuando llegue, el agente la lee solo";
+  if (estado === "sinTexto") return "suma la minuta o dile qué pasó con ella";
+  if (estado === "cancelada") return "la sesión y su guía siguen";
+  return null;
+}
+
 /** ¿La fila ofrece unir la sesión a una reunión? Sin reunión, o con la del calendario cancelada. */
 export function pideUnirla(estado: EstadoDeLaReunion): boolean {
   return estado === "sinReunion" || estado === "cancelada";

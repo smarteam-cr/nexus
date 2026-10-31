@@ -265,6 +265,19 @@ Generá la landing de kickoff de cara al cliente siguiendo tus instrucciones: es
 }
 
 /**
+ * EMPEZAR EN BLANCO (2026-10-30): el kickoff con las secciones de la plantilla elegida, sin la IA. Es la salida
+ * «Escribirlo yo» del selector; el kickoff nace al abrirlo, por eso acá ya existe.
+ */
+export async function prepararKickoffEnBlanco(projectId: string, plantilla: BcTemplateDef): Promise<string> {
+  const canvas = await prisma.projectCanvas.findFirst({ where: { projectId, ...canvasOf("kickoff") }, select: { id: true } });
+  if (!canvas) throw new Error(MENSAJE_SIN_KICKOFF);
+  const secciones = seccionesDeLaPlantilla(plantilla);
+  await reconcileKickoffCanvasSections(canvas.id, undefined, { secciones });
+  await ajustarElKickoffALaPlantilla(projectId, canvas.id, secciones);
+  return canvas.id;
+}
+
+/**
  * EL KICKOFF QUEDA CON LAS SECCIONES DE SU PLANTILLA (M1, 2026-10-25). Las del canon (el de siempre más las del servicio)
  * que la plantilla no tiene: vacías, se borran; con algo, se ocultan en el editor. Las de la plantilla que había ocultado
  * otra plantilla vuelven a verse. Las creadas por una persona (`custom:*`) no se tocan. Nada cambia para el cliente hasta

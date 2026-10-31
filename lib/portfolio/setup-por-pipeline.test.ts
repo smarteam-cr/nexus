@@ -30,8 +30,8 @@ describe("qué pasos de setup le corresponden a cada pipeline", () => {
     expect(pasosDeSetup("un-pipeline-que-nadie-declaro")).toEqual(["handoff", "kickoff"]);
   });
 
-  it("Desarrollo: sin kickoff", () => {
-    expect(pasosDeSetup(DEV)).not.toContain("kickoff");
+  it("Desarrollo: con kickoff desde el 2026-10-30, como todo proyecto", () => {
+    expect(pasosDeSetup(DEV)).toContain("kickoff");
     expect(pasosDeSetup(DEV)).toContain("handoff");
   });
 

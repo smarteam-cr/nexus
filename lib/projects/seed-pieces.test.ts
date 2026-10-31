@@ -118,15 +118,12 @@ describe("la fila de Customer Success ES la lista legacy", () => {
 });
 
 describe("las diferencias entre pipelines son deliberadas", () => {
-  it("Desarrollo lleva su requerimiento técnico y NO lleva kickoff", () => {
+  it("Desarrollo lleva su requerimiento técnico y, desde el 2026-10-30, kickoff como todo proyecto", () => {
     const dev = pipelineByKey("development").seedPieces;
     expect(dev, "tech-requirements es la pieza central de un desarrollo").toContain(
       "tech-requirements",
     );
-    expect(
-      dev,
-      "un desarrollo no le presenta un kickoff al cliente: su entregable es el requerimiento",
-    ).not.toContain("kickoff");
+    expect(dev, "Elías, 2026-10-30: el kickoff viene por defecto en todos los proyectos").toContain("kickoff");
   });
 
   it("Sitios web SÍ lleva kickoff — es su landing de cara al cliente", () => {

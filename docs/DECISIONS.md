@@ -12649,6 +12649,17 @@ con el diff viejo solo como referencia, después de confirmar con búsqueda que 
   servicio SmartLoop. Las copias de exploración que hayan quedado de las pruebas no salen en el riel y ningún agente las lee.
 - **«Nuevo artefacto» funciona igual en todo proyecto.** Lo apagaba solo una condición de servicio recurrente en el panel;
   Desarrollo y Sitios web no tenían ninguna.
+- **El kickoff viene en todos los proyectos (30 oct, Elías).** Corrige dos reglas viejas: en el riel ya no dice «opcional»
+  junto a su nombre (la cartera lo sigue diciendo: no se reclama), y un proyecto de Desarrollo también lo tiene (`exceptPipeline`
+  queda sin usuarios). Nace con cada proyecto nuevo (`seedPieces`); en los que ya existen no se creó en lote: el riel lo muestra
+  siempre (`PIEZAS_SIEMPRE_EN_EL_RIEL`) y el canvas nace al abrirlo. El selector de plantilla sale solo si nadie tocó el kickoff
+  (`lib/pieces/kickoff-sin-tocar.ts`: publicado o con algo escrito a mano abre el documento). En un servicio por ciclos se muestra
+  solo su plantilla, porque esa regla (M1) gana a cualquier elección.
+- **Ocultar una pieza vive en «Ver N piezas más» (30 oct, Elías).** El ojo de cada fila guardaba bien, pero la pieza abierta
+  se quedaba en su lugar y se veía igual: casi siempre se oculta lo que se está mirando. Ahora sale de la vista aunque esté
+  abierta (`lib/flow/reparto-del-riel.ts`); la oculta abierta se ve abajo, marcada, con «Mostrar».
+- **La exploración sin tarjeta «Próxima sesión» (30 oct, Elías).** Repetía la fila: «Preparar la sesión» y el estado de la
+  guía van en la fila de la próxima. Si la próxima no es fila (nada por delante, o agendada en HubSpot), sale debajo de la lista.
 - **Colapsar dice «Colapsar», y colapsada dice «Mostrar».** La sección conserva su fondo y su encabezado; solo se esconde el
   cuerpo, y los controles no se mueven. El ojo de una sección oculta dice «Mostrar al cliente»: los dos «Mostrar» hacen cosas
   distintas, y ese se guarda al instante.

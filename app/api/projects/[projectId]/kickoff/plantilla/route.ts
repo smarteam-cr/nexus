@@ -1,0 +1,35 @@
+/**
+ * POST /api/projects/[projectId]/kickoff/plantilla { plantilla } — EMPEZAR EN BLANCO (2026-10-30): el kickoff con las
+ * secciones de esa plantilla, sin la IA, y la plantilla anotada. Es la salida «Escribirlo yo» del selector
+ * (components/canvas/ElegirPlantilla.tsx), gemela de …/diagnostico/plantilla.
+ *
+ * Escribir pide lo mismo que editar el documento (acceso al proyecto, como el PATCH de sus secciones).
+ */
+import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
+import { guardAccessToProject } from "@/lib/auth/api-guards";
+import { empezarEnBlanco, ErrorDelEntregable, selectorDelKickoff } from "@/lib/entregables/generar-server";
+import { triggeredByEmail } from "@/lib/agents/triggered-by";
+
+type Params = { params: Promise<{ projectId: string }> };
+
+const IdDelProyecto = z.string().cuid();
+const Cuerpo = z.object({ plantilla: z.string().min(1).max(80) });
+
+export async function POST(req: NextRequest, { params }: Params) {
+  const { projectId } = await params;
+  if (!IdDelProyecto.safeParse(projectId).success) return NextResponse.json({ error: "Proyecto inválido" }, { status: 400 });
+  const guard = await guardAccessToProject(projectId);
+  if (guard instanceof NextResponse) return guard;
+  const cuerpo = Cuerpo.safeParse(await req.json().catch(() => null));
+  if (!cuerpo.success) return NextResponse.json({ error: "Falta la plantilla." }, { status: 400 });
+  // Con dos pestañas, la otra pudo escribir o generar: el recorte de la plantilla no se aplica sobre un documento vivo.
+  if (!(await selectorDelKickoff(projectId)).sinTocar) return NextResponse.json({ error: "Este kickoff ya tiene contenido. Recarga la página." }, { status: 409 });
+  try {
+    const r = await empezarEnBlanco({ projectId, slug: "kickoff", plantillaId: cuerpo.data.plantilla, porEmail: await triggeredByEmail() });
+    return NextResponse.json({ ok: true, canvasId: r.canvasId });
+  } catch (e) {
+    if (e instanceof ErrorDelEntregable) return NextResponse.json({ error: e.message }, { status: e.status });
+    throw e;
+  }
+}

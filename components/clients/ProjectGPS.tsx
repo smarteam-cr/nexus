@@ -553,20 +553,16 @@ export default function ProjectGPS({ projectId, clientId }: { projectId: string;
     onEtapa(etapaParaElRiel);
   }, [etapaParaElRiel, onEtapa]);
 
-  /* «Opcional» y «sin subir» dejaron de ser chips del widget (el riel ya dice el estado de cada
-     pieza) y viajan al riel como su aviso, en NEUTRO: un rojo por algo que no se reclama enseña a
-     ignorar los rojos. `PIEZAS_NO_REQUERIDAS` decide cuál es opcional, en el servidor. */
+  /* «Sin subir» dejó de ser chip del widget (el riel ya dice el estado de cada pieza) y viaja al riel
+     como su aviso, en NEUTRO. El kickoff no dice «opcional» al lado de su nombre (Elías, 2026-10-30):
+     viene en todos los proyectos. */
   const canvasChips = data?.canvasChips;
   const avisosDePiezas = useMemo(() => {
     const out: Record<string, AvisoDePieza> = {};
     if (!canvasChips) return out;
     for (const [slug, aviso] of canvasChips.map((c): [string, AvisoDePieza | null] => [
       c.slug,
-      c.estado === "opcional"
-        ? { corto: "opcional", largo: "Le corresponde a este proyecto, pero no se reclama si no se usa.", tono: "neutro" }
-        : c.estado === "borrador"
-          ? { corto: "sin subir", largo: "Tiene contenido, pero el cliente todavía no lo ve: falta subirlo.", tono: "neutro" }
-          : null,
+      c.estado === "borrador" ? { corto: "sin subir", largo: "Tiene contenido, pero el cliente todavía no lo ve: falta subirlo.", tono: "neutro" } : null,
     ])) {
       if (aviso) out[slug] = aviso;
     }

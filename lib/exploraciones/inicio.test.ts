@@ -2,6 +2,8 @@
  * lib/exploraciones/inicio.test.ts — lo que dice la página de inicio de la exploración (etapa A).
  * Correr: `npx vitest run lib/exploraciones/inicio.test.ts --project unit`.
  */
+import fs from "node:fs";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { aplicarOperaciones, contenidoVacio, propuestaVacia, VALIDADOR_LIBRE, type EstadoDeExploracion, type Validez } from "./contenido";
 import type { PestanaDeSesion, ReunionDeLaExploracion, SesionPlaneada } from "./guia";
@@ -10,6 +12,7 @@ import {
   datosDeLaSesion,
   devolverALaExploracion,
   estadoCortoDeLaGuia,
+  pistaDeLaProxima,
   estadoDeLaFila,
   horaDeCostaRica,
   horario,
@@ -90,6 +93,16 @@ describe("el estado a la derecha de cada fila", () => {
 
 describe("el estado de la guía de la próxima sesión", () => {
   it("de base, al día o vieja con lo primero que cambió", () => {
+    // ⛔ Una exploración sin sesiones por delante no se queda sin «Preparar la sesión».
+    const pantalla = fs.readFileSync(path.join(process.cwd(), "components/exploraciones/InicioDeLaExploracion.tsx"), "utf8");
+    expect(pantalla).toContain("<ProximaFueraDeLaLista p={proximaFuera} />");
+    expect(pantalla).toContain("agregarla como sesión");
+    // Lo que decía la tarjeta «Próxima sesión» sigue debajo de la lista.
+    expect(pistaDeLaProxima("agendada")).toContain("la lee sola");
+    expect(pistaDeLaProxima("esperando")).toContain("hasta una hora");
+    expect(pistaDeLaProxima("sinTexto")).toContain("la minuta");
+    expect(pistaDeLaProxima("cancelada")).toContain("su guía siguen");
+    expect(pistaDeLaProxima("sinReunion")).toBeNull();
     expect(estadoCortoDeLaGuia(false, null)).toBe("la guía todavía es la de base");
     expect(estadoCortoDeLaGuia(true, null)).toBe("la guía está al día");
     expect(estadoCortoDeLaGuia(true, { respondidas: ["metas", "retos"], nuevas: [], dimensiones: false, llevados: 0 })).toBe("la guía está vieja: ya se respondieron 2 puntos");

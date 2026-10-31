@@ -367,7 +367,7 @@ export const PROJECT_PIPELINES: readonly PipelineDef[] = [
     // El único con frente técnico propio: mira SOLO a Desarrollo.
     frenteDeEntrega: "Desarrollo",
     equipoDeEntrega: "desarrollo",
-    seedPieces: ["handoff", "timeline", "tech-requirements"],
+    seedPieces: ["handoff", "kickoff", "timeline", "tech-requirements"],
     base: BASE_ENTREGA_TECNICA,
   },
   {
@@ -433,7 +433,7 @@ export const PROJECT_PIPELINES: readonly PipelineDef[] = [
     equipoDeEntrega: "entrega",
     /* Sin kickoff: el servicio arranca con el traspaso y el diagnóstico del ciclo 1. La pieza «Ciclo»
        no vive en un canvas: no se siembra (la arma el panel). */
-    seedPieces: ["handoff", "timeline", "exploration"],
+    seedPieces: ["handoff", "kickoff", "timeline", "exploration"],
     base: BASE_CUSTOMER_SUCCESS,
     servicioRecurrente: "smartloop",
   },

@@ -6,11 +6,11 @@
  *
  * La exploración son sus SESIONES: no hay una lista general de reuniones (las demás las tiene la
  * memoria). De arriba hacia abajo:
- *   · la próxima sesión, con el estado de su reunión y «Preparar la sesión» (el único botón azul), que
- *     abre su preparación; debajo, en una línea, si la guía es la de base, está al día o está vieja;
  *   · «Sesiones de la exploración»: cada una con su número, su reunión, su estado y lo que se puede
  *     hacer («Leerla», unirla a una reunión, «Abrir»), y «+ Agregar sesión» (agendada, una que ya pasó o
- *     sin reunión). En un prospecto cada reunión con la empresa entra sola: se sacan de a una o varias
+ *     sin reunión). La próxima lleva «Preparar la sesión» (el único botón azul) y, debajo, si la guía es
+ *     la de base, está al día o está vieja (Elías, 30 oct: la tarjeta «Próxima sesión» repetía esta fila).
+ *     En un prospecto cada reunión con la empresa entra sola: se sacan de a una o varias
  *     (con casillas) a «Fuera de la exploración». En un cliente o un proyecto nada entra solo y se
  *     quitan con su X. Sacar se deshace (Ctrl+Z) y no borra ninguna reunión;
  *   · las fuentes manuales (lo que no quedó en Meet) y las instrucciones adicionales de la exploración
@@ -26,7 +26,7 @@ import type { EscribirReuniones } from "@/components/contexto/useEleccionDeReuni
 import { cn } from "@/lib/cn";
 import { datosConOrigen } from "@/lib/contexto/lista-de-reuniones";
 import type { Operacion } from "@/lib/exploraciones/contenido";
-import { diaConSemana, diaCorto } from "@/lib/exploraciones/fechas";
+import { diaConSemana } from "@/lib/exploraciones/fechas";
 import {
   claveDeReunion,
   nombreDeLaPestana,
@@ -42,6 +42,7 @@ import {
   estadoDeLaFila,
   horario,
   pideUnirla,
+  pistaDeLaProxima,
   sacarDeLaExploracion,
   sesionDesdeLaReunion,
   type LoSacado,
@@ -62,20 +63,6 @@ const ORIGEN = { meet: "Google Meet", hubspot: "HubSpot", documento: "Sumada a m
 const PUNTO: Record<TonoDeLaFila, string> = { bien: "bg-success", atencion: "bg-warning", neutro: "bg-fg-muted" };
 const TEXTO: Record<TonoDeLaFila, string> = { bien: "font-medium text-success-ink", atencion: "font-medium text-warn-ink", neutro: "text-fg-muted" };
 
-/** El ícono del calendario de las líneas de estado (azul cuando está unida a una reunión). */
-function IconoDeCalendario({ className }: { className: string }) {
-  return (
-    <svg className={cn("h-[15px] w-[15px] flex-none", className)} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-      <rect x="3" y="4" width="18" height="18" rx="2" />
-      <path d="M16 2v4M8 2v4M3 10h18" />
-    </svg>
-  );
-}
-
-function Punto({ className }: { className: string }) {
-  return <span aria-hidden className={cn("h-[7px] w-[7px] flex-none rounded-full", className)} />;
-}
-
 function Contador({ n }: { n: number }) {
   return (
     <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full border border-line px-1.5 text-[11px] text-fg-muted" aria-label={`${n}`}>
@@ -84,116 +71,83 @@ function Contador({ n }: { n: number }) {
   );
 }
 
-// ── La próxima sesión ─────────────────────────────────────────────────────────
+// ── «Preparar la sesión» ──────────────────────────────────────────────────────
 
-function ProximaSesion() {
-  const { puedeEditar, sesion } = useLienzo();
-  const { todas, claveDeLaProxima, proxima, estadoDeLaReunion } = useSesiones();
+/** El botón de la próxima sesión y, debajo, cómo está su guía (la de base, al día o vieja). */
+function PrepararLaSesion({ p }: { p: PestanaDeSesion }) {
+  const { sesion } = useLienzo();
   const { corrida, corriendo } = useCorrida();
-  const p = todas.find((x) => x.clave === claveDeLaProxima) ?? todas[todas.length - 1];
   // El mismo «qué cambió» que la Preparación (piezas-de-la-sesion.tsx › `useCambiosDesdeLaGuia`).
   const { guia, cambios } = useCambiosDesdeLaGuia(p);
-  const estado = estadoDeLaReunion(p);
-  const e = p.sesion?.evento;
-  const deHubspot = !p.sesion && proxima.desde === "hubspot";
-  const titulo = tituloDeLaSesion(p) ?? (deHubspot ? proxima.titulo : null) ?? nombreDeLaPestana(p);
-
-  let cuando = "Sin agendar";
-  if (e && !e.cancelada) cuando = [diaConSemana(e.inicio), horario(e.inicio, e.fin)].filter(Boolean).join(" · ");
-  else if (p.fecha) cuando = diaConSemana(p.fecha);
-  else if (deHubspot && proxima.fecha) cuando = [diaConSemana(proxima.fecha), horario(proxima.fecha)].filter(Boolean).join(" · ");
-
+  const armando = corriendo && corrida?.modo === "guia";
   const preparar = () => {
     sesion.elegir(p.clave);
     sesion.ponerMomento(p.clave, "antes");
   };
-  const unir = () => (p.sesion ? sesion.buscarReunion({ tipo: "unir", sesionId: p.sesion.id }) : sesion.buscarReunion({ tipo: "nueva", elegir: true }));
-  const armando = corriendo && corrida?.modo === "guia";
-
-  let linea: React.ReactNode;
-  if (deHubspot) {
-    linea = (
-      <>
-        <IconoDeCalendario className="text-brand" />
-        <span className="text-fg-secondary">Agendada en HubSpot</span>
-        {puedeEditar && (
-          <>
-            <span>·</span>
-            <BotonEnlace className="text-[13px]" onClick={() => sesion.buscarReunion({ tipo: "nueva", ver: "agendadas", elegir: true })}>
-              agregarla como sesión
-            </BotonEnlace>
-          </>
-        )}
-      </>
-    );
-  } else if (estado === "agendada") {
-    linea = (
-      <>
-        <IconoDeCalendario className="text-brand" />
-        <span className="text-fg-secondary">Unida al calendario</span>
-        <span>· cuando ocurra, Nexus espera su transcripción y la lee sola</span>
-      </>
-    );
-  } else if (estado === "esperando" || estado === "sinTexto") {
-    linea = (
-      <>
-        <Punto className="bg-warning" />
-        <span className="font-medium text-warn-ink">{estado === "esperando" ? "Esperando la transcripción" : "Terminó sin transcripción ni notas de Gemini"}</span>
-        <span>· {estado === "esperando" ? "Meet puede tardar hasta una hora; cuando llegue, el agente la lee solo" : "suma la minuta o dile qué pasó con ella"}</span>
-      </>
-    );
-  } else if (estado === "cancelada" && e) {
-    linea = (
-      <>
-        <Punto className="bg-warning" />
-        <span className="font-medium text-warn-ink">La reunión del {diaCorto(e.inicio)} se canceló en el calendario</span>
-        <span>· la sesión y su guía siguen</span>
-        {puedeEditar && (
-          <>
-            <span>·</span>
-            <BotonEnlace className="text-[13px]" onClick={unir}>
-              asociar otra reunión
-            </BotonEnlace>
-          </>
-        )}
-      </>
-    );
-  } else {
-    linea = (
-      <>
-        <IconoDeCalendario className="text-fg-muted" />
-        <span className="text-fg-secondary">Sin reunión del calendario</span>
-        <span>· la guía se puede preparar igual</span>
-        {puedeEditar && (
-          <>
-            <span>·</span>
-            <BotonEnlace className="text-[13px]" onClick={unir}>
-              unirla a una del calendario
-            </BotonEnlace>
-          </>
-        )}
-      </>
-    );
-  }
-
   return (
-    <section aria-labelledby="exploracion-proxima" className="flex flex-wrap items-center gap-5 rounded-xl border border-line bg-surface px-5 py-[18px]">
-      <div className="flex min-w-0 flex-[1_1_420px] flex-col gap-1">
-        <p className={ROTULO_DEL_SISTEMA}>Próxima sesión</p>
-        <h3 id="exploracion-proxima" className="text-lg font-bold leading-[26px] text-fg">
-          {!p.noSeHizo && <span className="font-semibold text-fg-muted">{p.numero}. </span>}
-          {titulo}
-        </h3>
-        <p className="text-[13px] text-fg-secondary">{cuando}</p>
-        <p className="mt-0.5 flex flex-wrap items-center gap-2 text-[13px] text-fg-muted">{linea}</p>
+    <span className="flex flex-none flex-col items-end gap-0.5">
+      <BotonAzul className="rounded-lg px-3 py-1.5 text-[13px]" onClick={preparar}>
+        Preparar la sesión
+      </BotonAzul>
+      <span className="text-[11px] text-fg-muted">{armando ? "el agente está armando la guía" : estadoCortoDeLaGuia(!!guia, cambios)}</span>
+    </span>
+  );
+}
+
+const INSIGNIA_DE_LA_PROXIMA = (
+  <span className="inline-flex flex-none rounded-full border border-info-line bg-info-surface px-2 py-px text-[11px] font-semibold text-brand">Próxima</span>
+);
+
+/**
+ * La próxima sesión cuando todavía no es una fila de la lista: no hay ninguna por delante (se prepara igual), o está
+ * agendada en HubSpot y nadie la agregó como sesión.
+ */
+function ProximaFueraDeLaLista({ p }: { p: PestanaDeSesion }) {
+  const { puedeEditar, sesion } = useLienzo();
+  const { proxima, estadoDeLaReunion } = useSesiones();
+  const deHubspot = proxima.desde === "hubspot";
+  const titulo = (deHubspot ? proxima.titulo : null) ?? nombreDeLaPestana(p);
+  const cuando = deHubspot && proxima.fecha ? [diaConSemana(proxima.fecha), horario(proxima.fecha)].filter(Boolean).join(" · ") : "Sin agendar";
+  return (
+    <div className="flex flex-wrap items-center gap-3 rounded-lg border border-line bg-surface px-3 py-2.5">
+      <NumeroDeLaSesion p={p} estado={estadoDeLaReunion(p)} esLaProxima />
+      <div className="min-w-0 flex-1">
+        <p className="flex items-center gap-2 text-[13px] font-medium text-fg">
+          <span className="truncate">{titulo}</span>
+          {INSIGNIA_DE_LA_PROXIMA}
+        </p>
+        <p className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-fg-muted">
+          <span>{cuando}</span>
+          <span>·</span>
+          {deHubspot ? (
+            <>
+              <span>Agendada en HubSpot</span>
+              {puedeEditar && (
+                <>
+                  <span>·</span>
+                  <BotonEnlace className="text-xs" onClick={() => sesion.buscarReunion({ tipo: "nueva", ver: "agendadas", elegir: true })}>
+                    agregarla como sesión
+                  </BotonEnlace>
+                </>
+              )}
+            </>
+          ) : (
+            <>
+              <span>la guía se puede preparar igual</span>
+              {puedeEditar && (
+                <>
+                  <span>·</span>
+                  <BotonEnlace className="text-xs" onClick={() => sesion.buscarReunion({ tipo: "nueva", elegir: true })}>
+                    unirla a una del calendario
+                  </BotonEnlace>
+                </>
+              )}
+            </>
+          )}
+        </p>
       </div>
-      <div className="flex flex-none flex-col items-end gap-1.5">
-        <BotonAzul className="rounded-lg px-[18px] py-2.5 text-sm" onClick={preparar}>
-          Preparar la sesión
-        </BotonAzul>
-        <span className="text-xs text-fg-muted">{armando ? "el agente está armando la guía" : estadoCortoDeLaGuia(!!guia, cambios)}</span>
-      </div>
-    </section>
+      <PrepararLaSesion p={p} />
+    </div>
   );
 }
 
@@ -220,7 +174,7 @@ function NumeroDeLaSesion({ p, estado, esLaProxima }: { p: PestanaDeSesion; esta
 
 function LasSesiones() {
   const { exp, puedeEditar, cambiar, sesion } = useLienzo();
-  const { pestanas, claveDeLaProxima, estadoDeLaReunion, fuera } = useSesiones();
+  const { pestanas, todas, claveDeLaProxima, estadoDeLaReunion, fuera } = useSesiones();
   const { corriendo, lanzando, lanzar } = useCorrida();
   const automaticas = exp.automaticas;
   // Lo sacado, para deshacerlo (la sesión ya no está en el estado cuando llega el Ctrl+Z).
@@ -229,15 +183,20 @@ function LasSesiones() {
   const porClave = new Map(pestanas.map((p) => [p.clave, p]));
   const claveDeFuera = (r: { origen: string; id: string }) => `fuera:${claveDeReunion(r)}`;
 
-  const filas: ReunionDeLaLista[] = pestanas.map((p) => ({
-    id: p.clave,
-    titulo: tituloDeLaSesion(p) ?? nombreDeLaPestana(p),
-    datos: datosDeLaSesion(p, estadoDeLaReunion(p)),
-    insignia:
-      p.clave === claveDeLaProxima ? (
-        <span className="inline-flex flex-none rounded-full border border-info-line bg-info-surface px-2 py-px text-[11px] font-semibold text-brand">Próxima</span>
-      ) : undefined,
-  }));
+  const proximaFuera = porClave.has(claveDeLaProxima) ? null : (todas.find((p) => p.clave === claveDeLaProxima) ?? null);
+  const proximaEnLaLista = porClave.get(claveDeLaProxima);
+  const pista = proximaEnLaLista ? pistaDeLaProxima(estadoDeLaReunion(proximaEnLaLista)) : null;
+
+  const filas: ReunionDeLaLista[] = pestanas.map((p) => {
+    const estado = estadoDeLaReunion(p);
+    const esLaProxima = p.clave === claveDeLaProxima;
+    return {
+      id: p.clave,
+      titulo: tituloDeLaSesion(p) ?? nombreDeLaPestana(p),
+      datos: datosDeLaSesion(p, estado),
+      insignia: esLaProxima ? INSIGNIA_DE_LA_PROXIMA : undefined,
+    };
+  });
   const excluidas: ReunionDeLaLista[] = fuera.map((r) => ({ id: claveDeFuera(r), titulo: r.titulo, datos: datosConOrigen(ORIGEN[r.origen], r.fecha) }));
 
   /* Sacar (incluir false) quita la sesión y, en un prospecto, deja su reunión fuera. Incluir devuelve lo
@@ -332,9 +291,13 @@ function LasSesiones() {
                   {estado === "cancelada" ? "Asociar otra reunión" : "Unirla a una del calendario"}
                 </BotonEnlace>
               )}
-              <BotonEnlace className="text-[13px]" onClick={() => abrir(p)}>
-                Abrir
-              </BotonEnlace>
+              {/* En la próxima, «Abrir» sería el mismo «Preparar»: solo queda si la reunión ya empezó. */}
+              {(p.clave !== claveDeLaProxima || p.hecha || estado === "esperando" || estado === "sinTexto") && (
+                <BotonEnlace className="text-[13px]" onClick={() => abrir(p)}>
+                  Abrir
+                </BotonEnlace>
+              )}
+              {p.clave === claveDeLaProxima && <PrepararLaSesion p={p} />}
             </>
           );
         }}
@@ -349,6 +312,8 @@ function LasSesiones() {
         accionExcluida="Agregar como sesión"
         sinTope
       />
+      {proximaFuera && <ProximaFueraDeLaLista p={proximaFuera} />}
+      {pista && <p className="text-xs leading-[18px] text-fg-secondary">La próxima sesión: {pista}.</p>}
       <p className="text-xs leading-[18px] text-fg-muted">
         {automaticas
           ? "Lo que sacas no se borra: pasa a «Fuera de la exploración» y se puede devolver. Se deshace con Ctrl+Z."
@@ -520,7 +485,6 @@ export default function InicioDeLaExploracion() {
         <h2 className="text-[22px] font-bold leading-7 text-fg">Exploración</h2>
         <p className="text-[15px] text-fg-muted">{subtitulo}</p>
       </header>
-      <ProximaSesion />
       <LasSesiones />
       <div data-recorrido="preventa.inicio.fuentes" className="flex flex-wrap gap-4">
         <FuentesManuales />

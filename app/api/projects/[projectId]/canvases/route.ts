@@ -1,3 +1,4 @@
+import { selectorDelKickoff } from "@/lib/entregables/generar-server";
 import { NextRequest, NextResponse } from "next/server";
 import { guardAccessToProject, guardCapability, guardHandoffAccess } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
@@ -67,7 +68,7 @@ export async function GET(
   /* Los Cuestionarios (2026-10-11) no viven en un canvas: su fila del riel sale de sus propias tablas.
      El «Ahora no» de su sugerencia está en las secciones del Kickoff, que ya vienen en esta lista. */
   const kickoff = canvases.find((c) => slugForCanvas(c) === "kickoff");
-  const [handoffCambioAt, novedades, estadoCuestionarios, puedeEditarCuestionarios, ciclo, piezasOcultas] = await Promise.all([
+  const [handoffCambioAt, novedades, estadoCuestionarios, puedeEditarCuestionarios, ciclo, piezasOcultas, selectorKickoff] = await Promise.all([
     ultimoCambioDelHandoff(projectId),
     conteoDeNovedadesDelProyecto(
       projectId,
@@ -89,6 +90,8 @@ export async function GET(
       .findUnique({ where: { id: projectId }, select: { piezasOcultas: true } })
       .then((p) => p?.piezasOcultas ?? [])
       .catch(() => [] as string[]),
+    /* Si el kickoff sigue como nació: decide si se abre el selector de plantilla o el documento. Si falla, el documento. */
+    selectorDelKickoff(projectId).catch(() => null),
   ]);
   const cuestionarios = estadoCuestionarios ? { ...estadoCuestionarios, puedeEditar: puedeEditarCuestionarios } : null;
 
@@ -96,6 +99,7 @@ export async function GET(
     cuestionarios,
     ciclo,
     piezasOcultas,
+    selectorKickoff,
     canvases: canvases.map((c) => ({
       ...c,
       hasContent: conContenido.has(c.id),
