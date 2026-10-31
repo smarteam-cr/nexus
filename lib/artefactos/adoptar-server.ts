@@ -8,20 +8,21 @@
  * nombre. El nombre es también lo que lo deja en la lista (lib/flow/reparto-del-riel.ts). null = no hay nada que tomar: va
  * una copia, como siempre.
  *
- * ⛔ Nunca toma un documento con algo escrito, con nombre propio o apagado: ahí la copia es lo correcto.
+ * ⛔ Nunca toma un documento con algo escrito (también a mano, en una sección sembrada), publicado, con nombre propio o
+ * apagado: ahí la copia es lo correcto. Aplicar la plantilla recorta secciones.
  */
 import "server-only";
 import { prisma } from "@/lib/db/prisma";
 import { entregableDe } from "@/lib/entregables/registro";
-import { empezarEnBlanco, ErrorDelEntregable } from "@/lib/entregables/generar-server";
+import { empezarEnBlanco, ErrorDelEntregable, selectorDelKickoff } from "@/lib/entregables/generar-server";
 import { canvasOf } from "@/lib/pieces/canvas-query";
 import { ensurePieceCanvas, PieceNotActivatableError } from "@/lib/pieces/ensure-canvas";
 import { exploracionVivaDelDocumento } from "@/lib/exploraciones/del-proyecto";
-import { loadCanvasesConContenido } from "@/lib/pieces/piece-content";
+import { loadCanvasesConContenido, loadCanvasesTocados } from "@/lib/pieces/piece-content";
 import { pieceBySlug } from "@/lib/pieces/registry";
 import { ErrorDelArtefacto, type CopiaCreada } from "./copias-server";
 import { tituloLimpio } from "./copias";
-import { plantillaDelTipo, plantillasDelTipo, tipoDeArtefacto } from "./tipos";
+import { admiteCopias, plantillaDelTipo, plantillasDelTipo, tipoDeArtefacto } from "./tipos";
 
 /** Las plantillas con que se arma el documento de siempre de un tipo. Las demás son solo de las copias. */
 function plantillasDeSiempre(tipo: string): readonly string[] {
@@ -37,19 +38,23 @@ export async function adoptarElDeSiempre(o: {
 }): Promise<CopiaCreada | null> {
   const t = tipoDeArtefacto(o.tipo);
   const pieza = t?.pieza ? pieceBySlug(t.pieza) : null;
-  if (!t || !pieza || pieza.hasCanvas === false) return null;
+  if (!t || !pieza || pieza.hasCanvas === false || !admiteCopias(o.tipo)) return null;
   const plantillaId = o.plantillaId ?? plantillaDelTipo(o.tipo)?.id ?? null;
   const deSiempre = plantillasDeSiempre(o.tipo);
   if (plantillaId && deSiempre.length && !deSiempre.includes(plantillaId)) return null;
 
   const actual = await prisma.projectCanvas.findFirst({
     where: { projectId: o.projectId, ...canvasOf(o.tipo) },
-    select: { id: true, slug: true, titulo: true, disabledAt: true },
+    select: { id: true, slug: true, titulo: true, disabledAt: true, sections: true },
   });
   if (actual?.disabledAt || actual?.titulo?.trim()) return null;
   // La exploración se escribe en su lienzo: con el lienzo abierto, el documento de siempre ya está tomado aunque el canvas esté vacío.
   if (o.tipo === "exploration" && (await exploracionVivaDelDocumento(o.projectId, null))) return null;
-  if (actual && (await loadCanvasesConContenido(o.projectId, [{ id: actual.id, slug: actual.slug, tipoArtefacto: null }])).has(actual.id)) return null;
+  if (actual) {
+    const fila = { id: actual.id, slug: actual.slug, tipoArtefacto: null, sections: actual.sections };
+    if ((await loadCanvasesConContenido(o.projectId, [fila])).has(actual.id) || (await loadCanvasesTocados([fila])).has(actual.id)) return null;
+    if (o.tipo === "kickoff" && !(await selectorDelKickoff(o.projectId)).sinTocar) return null;
+  }
 
   let canvasId: string;
   try {

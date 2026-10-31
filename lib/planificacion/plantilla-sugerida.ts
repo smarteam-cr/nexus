@@ -60,7 +60,7 @@ export function plantillaSugeridaDeLaPlanificacion(h: HechosParaLaPlantilla): Pl
   const proyecto = `Proyecto ${hubs === 0 ? deHubs : `con ${deHubs}`}${deEquipo}`;
 
   if (h.adopcion === "por_pilotos") {
-    return { plantilla: PLANTILLA_COMPLETA, razon: "La adopción va por pilotos: la completa trae el despliegue por olas y las rutinas de cada equipo." };
+    return { plantilla: PLANTILLA_COMPLETA, razon: "La adopción va por pilotos: la completa trae lo que hay que dejar configurado. Las olas y las rutinas van en el plan de adopción." };
   }
   if (etiquetas.has("custom_dev")) {
     return { plantilla: PLANTILLA_COMPLETA, razon: "Se vendió desarrollo a medida o integraciones: la completa trae la arquitectura de la solución." };

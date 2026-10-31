@@ -225,18 +225,21 @@ export async function cuantoHayEnLaExploracionDelProyecto(
 ): Promise<{ existe: boolean; confirmados: number; propuestos: number }> {
   const nada = { existe: false, confirmados: 0, propuestos: 0 };
   if (!modeloDisponible(prisma.exploracionDeVenta)) return nada;
-  const fila = await prisma.exploracionDeVenta
-    .findFirst({ where: { projectId, canvasId: null, archivadaEn: null }, select: { contenido: true, propuesta: true } })
-    .catch(() => null);
-  if (!fila) return nada;
-  const c = leerContenido(fila.contenido);
-  const propuesta = leerPropuesta(fila.propuesta);
-  const enCasillas = CASILLAS_PROPUESTAS_AL_DOCUMENTO.reduce((n, k) => {
-    const v = c.casillas[k] as unknown;
-    return n + (Array.isArray(v) ? v.length : 0);
-  }, 0);
-  const niveles = Object.values(c.chequeo).filter((e) => e.fuente !== "test" && e.fuente !== "hipotesis").length;
-  return { existe: true, confirmados: enCasillas + niveles, propuestos: itemsPropuestosAlDocumento(c, propuesta.items).length };
+  // Todas las vivas, también las copias: lo mismo que lee el agente (`textoDeLaExploracionDelProyecto`).
+  const filas = await prisma.exploracionDeVenta
+    .findMany({ where: { projectId, archivadaEn: null }, select: { contenido: true, propuesta: true } })
+    .catch(() => []);
+  if (!filas.length) return nada;
+  return filas.reduce((total, fila) => {
+    const c = leerContenido(fila.contenido);
+    const propuesta = leerPropuesta(fila.propuesta);
+    const enCasillas = CASILLAS_PROPUESTAS_AL_DOCUMENTO.reduce((n, k) => {
+      const v = c.casillas[k] as unknown;
+      return n + (Array.isArray(v) ? v.length : 0);
+    }, 0);
+    const niveles = Object.values(c.chequeo).filter((e) => e.fuente !== "test" && e.fuente !== "hipotesis").length;
+    return { existe: true, confirmados: total.confirmados + enCasillas + niveles, propuestos: total.propuestos + itemsPropuestosAlDocumento(c, propuesta.items).length };
+  }, nada);
 }
 
 /**
@@ -246,11 +249,8 @@ export async function cuantoHayEnLaExploracionDelProyecto(
  */
 export async function fechasDeLasLecturasDelProyecto(projectId: string): Promise<Array<{ fecha?: string; en: string }>> {
   if (!modeloDisponible(prisma.exploracionDeVenta)) return [];
-  const fila = await prisma.exploracionDeVenta
-    .findFirst({ where: { projectId, canvasId: null, archivadaEn: null }, select: { propuesta: true } })
-    .catch(() => null);
-  if (!fila) return [];
-  return Object.values(leerPropuesta(fila.propuesta).lecturas).map((l) => ({ ...(l.fecha ? { fecha: l.fecha } : {}), en: l.en }));
+  const filas = await prisma.exploracionDeVenta.findMany({ where: { projectId, archivadaEn: null }, select: { propuesta: true } }).catch(() => []);
+  return filas.flatMap((f) => Object.values(leerPropuesta(f.propuesta).lecturas).map((l) => ({ ...(l.fecha ? { fecha: l.fecha } : {}), en: l.en })));
 }
 
 /**
@@ -261,8 +261,6 @@ export async function fechasDeLasLecturasDelProyecto(projectId: string): Promise
  */
 export async function sesionesDeLaExploracionDelProyecto(projectId: string): Promise<SesionPlaneada[]> {
   if (!modeloDisponible(prisma.exploracionDeVenta)) return [];
-  const fila = await prisma.exploracionDeVenta
-    .findFirst({ where: { projectId, canvasId: null, archivadaEn: null }, select: { contenido: true } })
-    .catch(() => null);
-  return fila ? leerContenido(fila.contenido).sesiones : [];
+  const filas = await prisma.exploracionDeVenta.findMany({ where: { projectId, archivadaEn: null }, select: { contenido: true } }).catch(() => []);
+  return filas.flatMap((f) => leerContenido(f.contenido).sesiones);
 }

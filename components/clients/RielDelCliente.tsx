@@ -17,7 +17,7 @@
  * Copia medida por medida el riel de la preventa: filas de 14 px con un punto de 8 px, la pieza
  * abierta en azul sobre azul claro, lo colgado con una línea a la izquierda.
  */
-import { useState } from "react";
+import { useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { cn } from "@/lib/cn";
 import { repartirElRiel } from "@/lib/flow/reparto-del-riel";
@@ -248,11 +248,15 @@ export function PiezasDelRiel({
   const [renombrando, setRenombrando] = useState<{ slug: string; canvasId: string | null; nombre: string; original: string } | null>(null);
   const seRenombra = (f: FilaDelRielDePiezas) => !!onRenombrar && (!!f.canvasId || !!f.renombrable);
   const empezarARenombrar = (f: FilaDelRielDePiezas) => seRenombra(f) && setRenombrando({ slug: f.slug, canvasId: f.canvasId ?? null, nombre: f.etiqueta, original: f.etiqueta });
+  // Enter y salir del campo llegan juntos: sin esto, los Cuestionarios de siempre crearían dos copias.
+  const guardandoNombre = useRef(false);
   const guardarNombre = async () => {
-    if (!renombrando) return;
+    if (!renombrando || guardandoNombre.current) return;
     const nombre = renombrando.nombre.trim();
-    if (nombre && nombre !== renombrando.original && !(await onRenombrar?.(renombrando.canvasId, nombre))) return;
-    setRenombrando(null);
+    guardandoNombre.current = true;
+    const listo = !nombre || nombre === renombrando.original || (await onRenombrar?.(renombrando.canvasId, nombre));
+    guardandoNombre.current = false;
+    if (listo) setRenombrando(null);
   };
   const { existentes, ocultasALaVista, ocultables, plegadas } = repartirElRiel(filas, porActivarAbiertas);
   const hayQueOcultar = !!onOcultar && ocultables.length > 0;

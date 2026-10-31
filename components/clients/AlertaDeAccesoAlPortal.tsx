@@ -1,9 +1,10 @@
 "use client";
 
 /**
- * components/clients/AlertaDeAccesoAlPortal.tsx — el acceso al portal de HubSpot que el cliente todavía no nos dio (Elías,
- * 30 oct): era una franja adentro del kickoff y pasó a ser una alerta en el Resumen, con su ícono en la fila «Resumen» de la
- * barra lateral. Sale con la misma regla que el recordatorio de «Para ti»: el kickoff lo pide y sigue pendiente.
+ * components/clients/AlertaDeAccesoAlPortal.tsx — el acceso al portal de HubSpot del cliente, en el Resumen (Elías, 30 oct):
+ * era una franja adentro del kickoff. Pendiente es una alerta, con su ícono en la fila «Resumen» de la barra lateral, con la
+ * misma regla que el recordatorio de «Para ti» (`falta`, lib/kickoff/acceso-al-portal.ts). Dado, una línea con la fecha y
+ * «Volver a pendiente», por si se marcó por error.
  *
  * UI interna: primitivas y tokens, tuteo.
  */
@@ -11,23 +12,29 @@ import { useCallback, useEffect, useState } from "react";
 import { Alert, Button } from "@/components/ui";
 import { useToast } from "@/components/ui/Toast";
 
+interface EstadoDelAcceso {
+  falta: boolean;
+  dadoEn: string | null;
+  diasHabiles: number | null;
+}
+
 /** El estado del acceso. `clave` lo vuelve a leer: cada vez que se entra al Resumen, por si el kickoff se publicó recién. */
 export function useAccesoAlPortal(projectId: string, clave: unknown) {
-  const [pendiente, setPendiente] = useState(false);
+  const [acceso, setAcceso] = useState<EstadoDelAcceso | null>(null);
   useEffect(() => {
     let vivo = true;
     fetch(`/api/projects/${projectId}/acceso-al-portal`)
       .then((r) => (r.ok ? r.json() : null))
-      .then((j: { dadoEn?: string | null; pedidoDesde?: string | null } | null) => vivo && setPendiente(!!j && !j.dadoEn && !!j.pedidoDesde))
+      .then((j: EstadoDelAcceso | null) => vivo && setAcceso(j))
       .catch(() => {});
     return () => {
       vivo = false;
     };
   }, [projectId, clave]);
-  return { pendiente, setPendiente };
+  return { acceso, setAcceso };
 }
 
-export default function AlertaDeAccesoAlPortal({ projectId, onCambio }: { projectId: string; onCambio: (pendiente: boolean) => void }) {
+export default function AlertaDeAccesoAlPortal({ projectId, acceso, onCambio }: { projectId: string; acceso: EstadoDelAcceso; onCambio: (a: EstadoDelAcceso) => void }) {
   const [guardando, setGuardando] = useState(false);
   const toast = useToast();
   const marcar = useCallback(
@@ -39,10 +46,9 @@ export default function AlertaDeAccesoAlPortal({ projectId, onCambio }: { projec
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ dado }),
         });
-        const j = (await r.json().catch(() => null)) as { error?: string } | null;
-        if (!r.ok) return toast.error(j?.error ?? "No se pudo guardar. Vuelve a intentarlo.");
-        onCambio(!dado);
-        if (dado) toast.success("Listo: el acceso al portal quedó marcado.", { action: { label: "Deshacer", onClick: () => void marcar(false) } });
+        const j = (await r.json().catch(() => null)) as (EstadoDelAcceso & { error?: string }) | null;
+        if (!r.ok || !j) return toast.error(j?.error ?? "No se pudo guardar. Vuelve a intentarlo.");
+        onCambio(j);
       } catch {
         toast.error("Error de conexión.");
       } finally {
@@ -51,6 +57,19 @@ export default function AlertaDeAccesoAlPortal({ projectId, onCambio }: { projec
     },
     [projectId, onCambio, toast],
   );
+  if (acceso.dadoEn) {
+    const fecha = new Date(acceso.dadoEn).toLocaleDateString("es-CR", { day: "numeric", month: "long", year: "numeric", timeZone: "America/Costa_Rica" });
+    return (
+      <p className="flex flex-wrap items-center gap-2 text-xs text-fg-muted">
+        Acceso al portal de HubSpot dado el {fecha}
+        {acceso.diasHabiles != null ? ` (${acceso.diasHabiles} ${acceso.diasHabiles === 1 ? "día hábil" : "días hábiles"} desde que el kickoff lo pide)` : ""}.
+        <Button size="xs" variant="ghost" loading={guardando} onClick={() => void marcar(false)}>
+          Volver a pendiente
+        </Button>
+      </p>
+    );
+  }
+  if (!acceso.falta) return null;
   return (
     <Alert
       variant="warning"

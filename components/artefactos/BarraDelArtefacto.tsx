@@ -13,7 +13,7 @@ import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { Alert, Button, ConfirmDialog, Input, Menu, Modal, Segmentado } from "@/components/ui";
 import { useToast } from "@/components/ui/Toast";
 import { BOTON_DE_HERRAMIENTA } from "@/components/ui/sistema";
-import { tipoDeArtefacto } from "@/lib/artefactos/tipos";
+import { rotuloDeCrearOtro, tipoDeArtefacto } from "@/lib/artefactos/tipos";
 import { rutaDelEnlace } from "@/lib/artefactos/enlaces";
 import { ROTULO_DEL_ESTADO } from "@/lib/artefactos/copias";
 import OrdenarArtefactosModal, { type DocumentoParaOrdenar } from "./OrdenarArtefactosModal";
@@ -216,7 +216,7 @@ export default function BarraDelArtefacto({
           </span>
         }
         items={[
-          { key: "otra", label: `Crear otr${t?.conArticulo.startsWith("una") ? "a" : "o"} ${(t?.nombre ?? "documento").toLowerCase()}`, onSelect: onCrearOtra },
+          { key: "otra", label: t ? rotuloDeCrearOtro(t) : "Crear otro documento", onSelect: onCrearOtra },
           ...(delTipo.length > 1 ? [{ key: "ordenar", label: `Ordenar (${delTipo.length})`, onSelect: () => setOrdenar(true) }] : []),
           ...(esCopia ? [{ key: "archivar", label: "Archivar", danger: true, separatorBefore: true, onSelect: () => setConfirmarArchivo(true) }] : []),
         ]}

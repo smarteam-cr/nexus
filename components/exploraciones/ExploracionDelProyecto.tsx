@@ -73,7 +73,7 @@ export default function ExploracionDelProyecto({
     return () => {
       vivo = false;
     };
-  }, [projectId]);
+  }, [projectId, canvasId]);
 
   if (estado.tipo === "cargando") return <SkeletonPanel minH="min-h-[420px]" />;
   if (estado.tipo === "error") return <Alert variant="danger">{estado.mensaje}</Alert>;

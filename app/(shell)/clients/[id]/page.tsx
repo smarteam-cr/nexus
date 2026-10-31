@@ -11,7 +11,7 @@ import { ensureStrategyProject } from "@/lib/canvas/strategy-project";
 import { esProyectoNavegable } from "@/lib/projects/scope";
 import WorkspaceClient, { type SeededCanvas } from "./WorkspaceClient";
 import { canvasNotOf, onlyEnabled } from "@/lib/pieces/canvas-query";
-import { loadCanvasesConContenido } from "@/lib/pieces/piece-content";
+import { loadCanvasesConContenido, loadCanvasesTocados } from "@/lib/pieces/piece-content";
 import { piezaDesactualizadaPorHandoff } from "@/lib/pieces/piece-staleness";
 import { ultimoCambioDelHandoff } from "@/lib/handoff/congelado-server";
 import { conteoDeNovedadesDelProyecto } from "@/lib/seguimiento/novedades-server";
@@ -38,6 +38,7 @@ async function seedCanvases(projectId: string): Promise<SeededCanvas[]> {
     // calculara, la fila arrancaría sin aviso y lo estrenaría al llegar el refetch.
     ultimoCambioDelHandoff(projectId),
   ]);
+  const tocados = await loadCanvasesTocados(canvases.filter((c) => !conContenido.has(c.id)));
   // El número de novedades del riel (etapa 6): la misma función que el listado, por la misma razón.
   const novedades = await conteoDeNovedadesDelProyecto(
     projectId,
@@ -55,6 +56,7 @@ async function seedCanvases(projectId: string): Promise<SeededCanvas[]> {
     createdAt: c.createdAt.toISOString(),
     sections: (c.sections as Array<{ key: string; label: string }> | null) ?? [],
     hasContent: conContenido.has(c.id),
+    tocado: tocados.has(c.id),
     novedades: (c.slug && novedades[c.slug]) || 0,
     stale: piezaDesactualizadaPorHandoff(
       { slug: c.slug, contentUpdatedAt: c.contentUpdatedAt, hasContent: conContenido.has(c.id) },

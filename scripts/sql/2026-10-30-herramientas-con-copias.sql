@@ -24,13 +24,15 @@ DO $$ BEGIN
     FOREIGN KEY ("canvasId") REFERENCES "ProjectCanvas"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
--- «Una viva por proyecto» pasa a ser «una viva de siempre por proyecto y una viva por copia». Se arman los nuevos con
--- otro nombre ANTES de soltar el viejo: nunca hay un rato sin la regla.
+-- «Una viva por proyecto» pasa a ser «una viva de siempre por proyecto y una viva por copia». El índice de siempre CONSERVA
+-- su nombre: el SQL del 2026-10-07 lo crea con IF NOT EXISTS y, al reaplicarse en una base local con copias, volvería a
+-- exigir una por proyecto. Se arma con otro nombre ANTES de soltar el viejo: nunca hay un rato sin la regla.
 CREATE UNIQUE INDEX IF NOT EXISTS "ExploracionDeVenta_proyecto_de_siempre_viva_key"
   ON "ExploracionDeVenta" ("projectId") WHERE "archivadaEn" IS NULL AND "projectId" IS NOT NULL AND "canvasId" IS NULL;
+DROP INDEX IF EXISTS "ExploracionDeVenta_proyecto_viva_key";
+ALTER INDEX "ExploracionDeVenta_proyecto_de_siempre_viva_key" RENAME TO "ExploracionDeVenta_proyecto_viva_key";
 CREATE UNIQUE INDEX IF NOT EXISTS "ExploracionDeVenta_copia_viva_key"
   ON "ExploracionDeVenta" ("canvasId") WHERE "archivadaEn" IS NULL AND "canvasId" IS NOT NULL;
-DROP INDEX IF EXISTS "ExploracionDeVenta_proyecto_viva_key";
 
 -- ── Los cuestionarios de una copia ─────────────────────────────────────────────────────────────
 ALTER TABLE "Cuestionario" ADD COLUMN IF NOT EXISTS "canvasId" TEXT;

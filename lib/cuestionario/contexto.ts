@@ -1,3 +1,4 @@
+import { SIN_ARCHIVAR } from "./sin-archivar";
 import "server-only";
 
 /**
@@ -86,7 +87,7 @@ function extrasDe(p: {
 
 export async function loadCuestionarioContext(projectId: string): Promise<string> {
   const cuestionarios = await prisma.cuestionario.findMany({
-    where: { projectId, publicadoAt: { not: null } },
+    where: { projectId, publicadoAt: { not: null }, ...SIN_ARCHIVAR },
     orderBy: { createdAt: "asc" },
     include: {
       persona: { select: { nombre: true, cargo: true } },

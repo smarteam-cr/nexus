@@ -341,7 +341,7 @@ export default function ProjectCanvasPanel({
   /** «Nuevo artefacto» / «Crear otra…»: abierto, con qué tipo ya elegido y desde qué grupo. */
   const [nuevoArtefacto, setNuevoArtefacto] = useState<{ tipo: string | null; clase?: "entregable" | "herramienta" | null } | null>(null);
   /** El acceso al portal del cliente, si el kickoff lo pide y sigue pendiente: alerta en el Resumen e ícono en su fila. */
-  const { pendiente: faltaElAcceso, setPendiente: setFaltaElAcceso } = useAccesoAlPortal(projectId, enResumen);
+  const { acceso: accesoAlPortal, setAcceso: setAccesoAlPortal } = useAccesoAlPortal(projectId, enResumen);
   /* Los Cuestionarios están en el riel con las mismas condiciones en que se veían cuando colgaban de la
      fila «Exploración»: con la Exploración en el proyecto (o con algún cuestionario ya armado). No se
      activan: si no corresponden, no se listan. */
@@ -922,7 +922,7 @@ export default function ProjectCanvasPanel({
               activa: visible && enResumen,
               meta: etapaMeta,
               onClick: () => (visible ? irAlResumen() : onAbrirDesdeOculto?.(null)),
-              alerta: faltaElAcceso ? "Falta el acceso al portal de HubSpot del cliente" : null,
+              alerta: accesoAlPortal?.falta ? "Falta el acceso al portal de HubSpot del cliente" : null,
             }}
             grupoDelResumen={esRecurrente ? undefined : GRUPO_HERRAMIENTAS}
             grupoAlFinal={esRecurrente ? undefined : GRUPO_ENTREGABLES}
@@ -1213,7 +1213,7 @@ export default function ProjectCanvasPanel({
           vivos y vuelven como quedaron; se pintan UNA vez, solo en el Resumen. Guarda:
           lib/flow/resumen-del-proyecto.test.ts. */}
       <ProveedorDelResumen value={contextoDelResumen}>
-      {enResumen && faltaElAcceso && <AlertaDeAccesoAlPortal projectId={projectId} onCambio={setFaltaElAcceso} />}
+      {enResumen && accesoAlPortal && <AlertaDeAccesoAlPortal projectId={projectId} acceso={accesoAlPortal} onCambio={setAccesoAlPortal} />}
       <div hidden={!enResumen} className="grid items-start gap-4 lg:grid-cols-2">
         <ProjectGPS projectId={projectId} clientId={clientId} />
         <ProjectHandoffSection

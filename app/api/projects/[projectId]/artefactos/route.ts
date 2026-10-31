@@ -8,7 +8,7 @@
  */
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { guardAccessToProject } from "@/lib/auth/api-guards";
+import { guardAccessToProject, guardProjectHandoffAccess } from "@/lib/auth/api-guards";
 import { cuerpoInvalido } from "@/lib/api/cuerpo-invalido";
 import { triggeredByEmail } from "@/lib/agents/triggered-by";
 import { adoptarElDeSiempre } from "@/lib/artefactos/adoptar-server";
@@ -31,6 +31,11 @@ export async function POST(req: NextRequest, { params }: { params: Params }) {
 
   const parsed = cuerpo.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return cuerpoInvalido(parsed.error);
+  // Mover los cuestionarios del proyecto pide lo mismo que editarlos.
+  if (parsed.data.conLosSueltos) {
+    const permiso = await guardProjectHandoffAccess(projectId);
+    if (permiso instanceof NextResponse) return permiso;
+  }
 
   try {
     const porEmail = await triggeredByEmail();

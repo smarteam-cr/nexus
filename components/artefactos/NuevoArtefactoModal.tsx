@@ -15,7 +15,7 @@ import { Button, Field, Input, Modal, Select } from "@/components/ui";
 import { useToast } from "@/components/ui/Toast";
 import { TarjetaDePlantilla } from "@/components/canvas/ElegirPlantilla";
 import { seccionesDeUnaCopia } from "@/lib/artefactos/catalogo";
-import { plantillaDelTipo, plantillasDelTipo, tipoDeArtefacto, tiposCreablesEnElProyecto } from "@/lib/artefactos/tipos";
+import { plantillaDelTipo, plantillasDelTipo, rotuloDeCrearOtro, tipoDeArtefacto, tiposCreablesEnElProyecto } from "@/lib/artefactos/tipos";
 import { canvasDefForSlug } from "@/lib/canvas/canvas-defs";
 import { entregableDe } from "@/lib/entregables/registro";
 import { cn } from "@/lib/cn";
@@ -115,7 +115,7 @@ export default function NuevoArtefactoModal({
       open={open}
       onClose={onClose}
       size="pantalla"
-      title={tipoInicial && t ? `Crear otr${t.conArticulo.startsWith("una") ? "a" : "o"} ${t.nombre.toLowerCase()}` : "Nuevo artefacto"}
+      title={tipoInicial && t ? rotuloDeCrearOtro(t) : "Nuevo artefacto"}
       description="Queda en la lista con su nombre, en construcción. Lo trabajas desde adentro."
       footer={
         <div className="flex justify-end gap-2">

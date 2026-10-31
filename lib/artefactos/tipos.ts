@@ -454,6 +454,12 @@ export function admiteCopias(id: string | null | undefined): boolean {
   return !!t && t.copias === "varias" && t.vive === "canvas" && t.duenos.includes("proyecto");
 }
 
+/** «Crear otra planificación», «Crear otro kickoff», «Crear otros cuestionarios». */
+export function rotuloDeCrearOtro(t: TipoDeArtefacto): string {
+  const otro = t.conArticulo.startsWith("unos") ? "otros" : t.conArticulo.startsWith("una") ? "otra" : "otro";
+  return `Crear ${otro} ${t.nombre.toLowerCase()}`;
+}
+
 /** ¿Se le cambia el nombre? Todo lo que admite copias y el cronograma, que es uno solo pero también se llama como quieran. */
 export function seRenombra(id: string | null | undefined): boolean {
   return admiteCopias(id) || id === "timeline";

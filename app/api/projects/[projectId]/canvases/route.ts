@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { guardAccessToProject, guardCapability, guardHandoffAccess } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
 import { canvasNotOf, onlyEnabled } from "@/lib/pieces/canvas-query";
-import { loadCanvasesConContenido } from "@/lib/pieces/piece-content";
+import { loadCanvasesConContenido, loadCanvasesTocados } from "@/lib/pieces/piece-content";
 import { piezaDesactualizadaPorHandoff } from "@/lib/pieces/piece-staleness";
 import { ultimoCambioDelHandoff } from "@/lib/handoff/congelado-server";
 import { conteoDeNovedadesDelProyecto } from "@/lib/seguimiento/novedades-server";
@@ -57,6 +57,7 @@ export async function GET(
   // app/(shell)/clients/[id]/page.tsx: si cada uno tuviera el suyo, la pantalla
   // arrancaría con un estado y saltaría a otro al llegar el refetch.
   const conContenido = await loadCanvasesConContenido(projectId, canvases);
+  const tocados = await loadCanvasesTocados(canvases.filter((c) => !conContenido.has(c.id)));
 
   /* Cuándo cambió el handoff por última vez: con eso se marca el requerimiento técnico
      que quedó viejo. El encadenado ya NO lo reescribe solo (borraba ediciones a mano), y
@@ -107,6 +108,7 @@ export async function GET(
     canvases: canvases.map((c) => ({
       ...c,
       hasContent: conContenido.has(c.id),
+      tocado: tocados.has(c.id),
       novedades: (c.slug && novedades[c.slug]) || 0,
       stale: piezaDesactualizadaPorHandoff(
         { slug: c.slug, contentUpdatedAt: c.contentUpdatedAt, hasContent: conContenido.has(c.id) },

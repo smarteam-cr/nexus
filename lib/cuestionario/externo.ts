@@ -1,3 +1,4 @@
+import { SIN_ARCHIVAR } from "./sin-archivar";
 import "server-only";
 
 /**
@@ -97,9 +98,11 @@ export async function resolver(token: unknown): Promise<ResolucionDelCliente> {
     include: {
       project: { select: { id: true, name: true, clientId: true, client: { select: { name: true, logoUrl: true } } } },
       cuestionarios: {
-        where: { publicadoAt: { not: null } },
+        where: { publicadoAt: { not: null }, ...SIN_ARCHIVAR },
         orderBy: { createdAt: "asc" },
         include: {
+          // Con dos tandas, la misma persona puede tener dos del mismo tipo: el nombre de la tanda los distingue.
+          canvas: { select: { titulo: true, name: true } },
           pestanas: {
             orderBy: { orden: "asc" },
             include: {
@@ -143,7 +146,7 @@ export async function resolver(token: unknown): Promise<ResolucionDelCliente> {
         return {
           id: c.id,
           tipo,
-          titulo: TITULO_DEL_TIPO[tipo],
+          titulo: c.canvas ? `${TITULO_DEL_TIPO[tipo]} · ${c.canvas.titulo?.trim() || c.canvas.name}` : TITULO_DEL_TIPO[tipo],
           cerrado: c.cerradoAt != null,
           pestanas: c.pestanas.map((p) => ({
             id: p.id,

@@ -32,6 +32,7 @@ import type { ResultadoDeEscalaDeCuestionario } from "./comparar";
 import { ubicacionPreviaDelProyecto } from "@/lib/exploraciones/para-el-cuestionario";
 import { armarSecciones, leerPerfil, resultadoDeLaEscala } from "./escala-armado";
 import { ErrorDeCuestionario } from "./servicio";
+import { SIN_ARCHIVAR } from "./sin-archivar";
 
 export async function crearEscala(projectId: string, personaId: string, creadoPor: string | null, canvasId: string | null = null): Promise<string> {
   const persona = await prisma.cuestionarioResponsable.findFirst({ where: { id: personaId, projectId } });
@@ -93,7 +94,7 @@ export async function crearEscala(projectId: string, personaId: string, creadoPo
  */
 export async function resultadosDeEscala(projectId: string): Promise<ResultadoDeEscalaDeCuestionario[]> {
   const cs = await prisma.cuestionario.findMany({
-    where: { projectId, tipo: "escala", publicadoAt: { not: null } },
+    where: { projectId, tipo: "escala", publicadoAt: { not: null }, ...SIN_ARCHIVAR },
     include: { pestanas: { orderBy: { orden: "asc" }, select: { key: true, preguntas: true, respuestas: true } } },
   });
   if (cs.length === 0) return [];

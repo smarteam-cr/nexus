@@ -107,7 +107,7 @@ function RespuestaVista({ q, r }: { q?: Pregunta; r: Respuesta | undefined }) {
 }
 
 /** Las acciones que cambian cuántos hay publicados o respondidos: lo que mide la fila del riel. */
-const CAMBIAN_EL_ESTADO = new Set(["publicar", "cerrar", "reabrir_pestana", "eliminar_cuestionario", "asignar_persona", "revocar_persona"]);
+const CAMBIAN_EL_ESTADO = new Set(["crear_cuestionario", "publicar", "cerrar", "reabrir_pestana", "eliminar_cuestionario", "asignar_persona", "revocar_persona"]);
 
 export default function CuestionarioPanel({ projectId, canvasId, onCambio }: { projectId: string; /** La copia que se abre; sin él, los de siempre. */ canvasId?: string | null; onCambio?: () => void }) {
   const toast = useToast();
@@ -116,8 +116,10 @@ export default function CuestionarioPanel({ projectId, canvasId, onCambio }: { p
   const [vista, setVista] = useState<"personas" | "comparar">("personas");
   const [abierto, setAbierto] = useState<string | null>(null);
 
+  const url = `/api/projects/${projectId}/cuestionario${canvasId ? `?canvasId=${encodeURIComponent(canvasId)}` : ""}`;
+
   const cargar = useCallback(async () => {
-    const res = await fetch(`/api/projects/${projectId}/cuestionario${canvasId ? `?canvasId=${encodeURIComponent(canvasId)}` : ""}`, { cache: "no-store" });
+    const res = await fetch(url, { cache: "no-store" });
     const data = await res.json().catch(() => null);
     if (!res.ok) {
       toast.error(data?.error ?? "No se pudieron cargar los cuestionarios.");
@@ -143,10 +145,10 @@ export default function CuestionarioPanel({ projectId, canvasId, onCambio }: { p
     async (body: Record<string, unknown>, ok?: string): Promise<{ aviso: string | null } | null> => {
       setOcupado(true);
       try {
-        const res = await fetch(`/api/projects/${projectId}/cuestionario`, {
+        const res = await fetch(url, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(body.accion === "crear_cuestionario" && canvasId ? { ...body, canvasId } : body),
+          body: JSON.stringify(body),
         });
         const data = await res.json().catch(() => null);
         if (!res.ok) {
@@ -162,7 +164,7 @@ export default function CuestionarioPanel({ projectId, canvasId, onCambio }: { p
         setOcupado(false);
       }
     },
-    [projectId, toast, onCambio],
+    [url, toast, onCambio],
   );
   const accion = useCallback(
     async (body: Record<string, unknown>, ok?: string): Promise<boolean> => (await enviar(body, ok)) != null,

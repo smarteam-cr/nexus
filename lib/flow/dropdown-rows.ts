@@ -90,7 +90,7 @@ export interface PieceRow {
   tipo?: string;
   esCopia?: boolean;
   terminado?: boolean;
-  /** Le pusieron nombre: alguien lo creó, y queda en la lista aunque esté vacío (lib/flow/reparto-del-riel.ts). */
+  /** Le pusieron nombre o lo tocaron: alguien lo creó, y queda en la lista aunque esté vacío (lib/flow/reparto-del-riel.ts). */
   conNombre?: boolean;
 }
 
@@ -108,6 +108,8 @@ export interface CanvasParaFila {
   hasContent?: boolean;
   /** Ídem: lo calculan las dos lecturas con lib/pieces/piece-staleness.ts. */
   stale?: boolean;
+  /** Alguien lo tocó sin que cuente como contenido (lib/pieces/piece-content.ts): se queda en la lista. */
+  tocado?: boolean;
   /** Artefactos (etapa V3): el tipo de una copia (null en el de siempre), su estado y su orden. */
   tipoArtefacto?: string | null;
   titulo?: string | null;
@@ -172,7 +174,7 @@ export function buildPieceRows(
         agent: CANVAS_PRIMARY_AGENT[slug] ?? null,
         optional: pieza?.optional ?? false,
         stale: canvas?.stale ?? false,
-        ...(canvas ? { tipo: slug, terminado: !!canvas.terminadoEn, conNombre: !!canvas.titulo?.trim() } : {}),
+        ...(canvas ? { tipo: slug, terminado: !!canvas.terminadoEn, conNombre: !!canvas.titulo?.trim() || !!canvas.tocado } : {}),
       } satisfies PieceRow;
       const copias = conCopias ? (copiasPorTipo.get(slug) ?? []) : [];
       copiasPorTipo.delete(slug);

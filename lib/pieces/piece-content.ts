@@ -33,6 +33,8 @@
  * contenido si el timeline del proyecto tiene al menos una FASE (el mismo umbral que
  * `deriveSetup` usa para llamarlo "borrador" en lib/portfolio/project-setup.ts).
  */
+import { CLAVE_DE_LA_PLANTILLA } from "@/lib/entregables/registro";
+import { mismoDato } from "./kickoff-sin-tocar";
 import { prisma } from "@/lib/db/prisma";
 import { CANVAS_DEF_BY_SLUG } from "@/lib/canvas/canvas-defs";
 import { SECCIONES_SOLO_INTERNAS } from "@/lib/business-cases/section-briefs";
@@ -97,6 +99,31 @@ export function deriveCanvasesConContenido(input: ContenidoInput): Set<string> {
   }
 
   return conContenido;
+}
+
+/**
+ * De estos canvases, los que alguien TOCÓ sin que eso cuente como contenido: escribió a mano en una sección sembrada (el
+ * equipo, los canales, el cierre) o le eligió una plantilla. `hasContent` no los ve, y la lista no puede esconderlos ni
+ * «Nuevo artefacto» tomarlos: tienen trabajo (Elías, 30 oct; la revisión). Una semilla de una versión vieja se lee como
+ * tocada: es el lado seguro, una fila de más.
+ */
+export async function loadCanvasesTocados(canvases: ReadonlyArray<CanvasParaContenido & { sections?: unknown }>): Promise<Set<string>> {
+  const tocados = new Set(
+    canvases
+      .filter((c) => Array.isArray(c.sections) && c.sections.some((s) => (s as { key?: unknown } | null)?.key === CLAVE_DE_LA_PLANTILLA))
+      .map((c) => c.id),
+  );
+  const conSlug = new Map(canvases.filter((c) => c.slug).map((c) => [c.id, c.slug!]));
+  if (!conSlug.size) return tocados;
+  const bloques = await prisma.canvasBlock.findMany({
+    where: { section: { canvasId: { in: [...conSlug.keys()] } } },
+    select: { data: true, section: { select: { canvasId: true, key: true } } },
+  });
+  for (const b of bloques) {
+    const def = CANVAS_DEF_BY_SLUG[conSlug.get(b.section.canvasId) ?? ""];
+    if (!mismoDato(b.data, def?.sections.find((s) => s.key === b.section.key)?.defaultData)) tocados.add(b.section.canvasId);
+  }
+  return tocados;
 }
 
 /**

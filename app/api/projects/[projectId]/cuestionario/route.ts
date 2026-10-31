@@ -80,7 +80,7 @@ const Accion = z.discriminatedUnion("accion", [
   z.strictObject({ accion: z.literal("crear_persona"), ...datosPersona }),
   z.strictObject({ accion: z.literal("editar_persona"), personaId: id, ...datosPersona }),
   z.strictObject({ accion: z.literal("revocar_persona"), personaId: id }),
-  z.strictObject({ accion: z.literal("crear_cuestionario"), tipo: z.enum(["tactico", "escala", "estrategia"]), personaId: id, canvasId: id.nullish() }),
+  z.strictObject({ accion: z.literal("crear_cuestionario"), tipo: z.enum(["tactico", "escala", "estrategia"]), personaId: id }),
   z.strictObject({ accion: z.literal("asignar_persona"), cuestionarioId: id, personaId: id.nullable() }),
   z.strictObject({ accion: z.literal("operaciones"), cuestionarioId: id, ops: z.array(z.unknown()).min(1).max(50) }),
   z.strictObject({ accion: z.literal("publicar"), cuestionarioId: id, publicado: z.boolean() }),
@@ -107,6 +107,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ pro
   const parsed = Accion.safeParse(raw);
   if (!parsed.success) return NextResponse.json({ error: "Solicitud inválida" }, { status: 400 });
   const a = parsed.data;
+  // La tanda que se mira: responder con otra le cambiaría la lista debajo a quien está trabajando.
+  const canvasId = req.nextUrl.searchParams.get("canvasId");
 
   if (HACIA_AFUERA.has(a.accion) && !(a.accion === "publicar" && !a.publicado)) {
     const acceso = await guardAccessToProject(projectId);
@@ -134,7 +136,6 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ pro
         await revocarPersona(projectId, a.personaId);
         break;
       case "crear_cuestionario": {
-        const canvasId = a.canvasId ?? null;
         if (canvasId && !(await prisma.projectCanvas.findFirst({ where: { id: canvasId, projectId, slug: null, tipoArtefacto: TIPO_CUESTIONARIOS, disabledAt: null }, select: { id: true } }))) {
           return NextResponse.json({ error: "Esos cuestionarios no son de este proyecto." }, { status: 404 });
         }
@@ -176,7 +177,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ pro
         await reabrirPestana(projectId, a.pestanaId, email, a.motivo);
         break;
     }
-    return NextResponse.json({ ...(await respuesta(projectId)), aviso });
+    return NextResponse.json({ ...(await respuesta(projectId, canvasId)), aviso });
   } catch (e) {
     if (e instanceof ErrorDeCuestionario) return NextResponse.json({ error: e.message }, { status: e.status });
     throw e;

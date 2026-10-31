@@ -10,7 +10,9 @@ vi.mock("server-only", () => ({}));
 import { prisma } from "@/lib/db/prisma";
 import { asegurarExploracionDelProyecto, exploracionVivaDelDocumento, textoDeLaExploracionDelProyecto } from "@/lib/exploraciones/del-proyecto";
 import { crearTactico, obtenerCuestionarios } from "@/lib/cuestionario/servicio";
+import { cargarEstadoDeCuestionarios } from "@/lib/pieces/estado-de-cuestionarios-server";
 import { ensurePieceCanvas } from "@/lib/pieces/ensure-canvas";
+import { loadCanvasesTocados } from "@/lib/pieces/piece-content";
 import { adoptarElDeSiempre } from "./adoptar-server";
 import { archivarCopia, crearCopia, ErrorDelArtefacto, reactivarCopia, renombrarArtefacto } from "./copias-server";
 
@@ -77,6 +79,21 @@ describe("varias tandas de cuestionarios", () => {
     expect((await obtenerCuestionarios(p.id, null)).cuestionarios).toHaveLength(0);
     expect((await obtenerCuestionarios(p.id, nombrada.canvasId)).cuestionarios.map((c) => c.id)).toEqual([suelto]);
   });
+
+  it("⛔ archivar una tanda la apaga: sale de lo que se cuenta y se lee, y recuperarla la devuelve", async () => {
+    const p = await proyecto();
+    await crearTactico(p.id, null, null);
+    const tanda = await crearCopia({ projectId: p.id, tipo: "questionnaires", nombre: "Dirección", porEmail: null });
+    await crearTactico(p.id, null, null, tanda.canvasId);
+    expect((await obtenerCuestionarios(p.id)).cuestionarios).toHaveLength(2);
+
+    await archivarCopia(p.id, tanda.canvasId, null);
+    expect((await obtenerCuestionarios(p.id)).cuestionarios).toHaveLength(1);
+    expect((await cargarEstadoDeCuestionarios(p.id, null))?.total).toBe(1);
+
+    await reactivarCopia(p.id, tanda.canvasId);
+    expect((await obtenerCuestionarios(p.id)).cuestionarios).toHaveLength(2);
+  });
 });
 
 describe("el primero de un tipo es su documento de siempre", () => {
@@ -110,6 +127,31 @@ describe("el primero de un tipo es su documento de siempre", () => {
     const s = await prisma.canvasSection.create({ data: { canvasId, key: "otra_seccion", label: "Otra", order: 99 } });
     await prisma.canvasBlock.create({ data: { sectionId: s.id, blockType: "CARD", data: { intro: "Escrito" }, source: "AGENT", status: "CONFIRMED" } });
     expect(await adoptarElDeSiempre({ projectId: p.id, tipo: "implementation", nombre: "Ventas", porEmail: null })).toBeNull();
+  });
+});
+
+describe("lo tocado a mano no se toma ni se esconde", () => {
+  it("⛔ un kickoff con el equipo escrito a mano, o publicado, no se toma: va una copia", async () => {
+    const p = await proyecto();
+    const { canvasId } = await ensurePieceCanvas(p.id, "kickoff");
+    const cierre = await prisma.canvasBlock.findFirstOrThrow({ where: { section: { canvasId, key: "cierre" } }, select: { id: true } });
+    await prisma.canvasBlock.update({ where: { id: cierre.id }, data: { data: { titulo: "Escrito a mano" } } });
+    expect(await adoptarElDeSiempre({ projectId: p.id, tipo: "kickoff", nombre: "Otro", porEmail: null })).toBeNull();
+
+    const otro = await proyecto();
+    await ensurePieceCanvas(otro.id, "kickoff");
+    await prisma.project.update({ where: { id: otro.id }, data: { kickoffPublishedAt: new Date() } });
+    expect(await adoptarElDeSiempre({ projectId: otro.id, tipo: "kickoff", nombre: "Otro", porEmail: null })).toBeNull();
+  });
+
+  it("recién sembrado no cuenta como tocado; escrito a mano, sí", async () => {
+    const p = await proyecto();
+    const { canvasId } = await ensurePieceCanvas(p.id, "kickoff");
+    const fila = { id: canvasId, slug: "kickoff", sections: [] };
+    expect((await loadCanvasesTocados([fila])).has(canvasId)).toBe(false);
+    const cierre = await prisma.canvasBlock.findFirstOrThrow({ where: { section: { canvasId, key: "cierre" } }, select: { id: true } });
+    await prisma.canvasBlock.update({ where: { id: cierre.id }, data: { data: { titulo: "Escrito a mano" } } });
+    expect((await loadCanvasesTocados([fila])).has(canvasId)).toBe(true);
   });
 });
 

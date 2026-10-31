@@ -1,3 +1,4 @@
+import { SIN_ARCHIVAR } from "./sin-archivar";
 import "server-only";
 
 /**
@@ -208,7 +209,7 @@ function aVista(c: CuestionarioCompleto): CuestionarioVista {
 export async function obtenerCuestionarios(projectId: string, documento?: string | null): Promise<CuestionariosDelProyecto> {
   const [personas, cuestionarios] = await Promise.all([
     prisma.cuestionarioResponsable.findMany({ where: { projectId }, orderBy: { createdAt: "asc" } }),
-    prisma.cuestionario.findMany({ where: { projectId, ...(documento === undefined ? {} : { canvasId: documento }) }, include: INCLUDE, orderBy: { createdAt: "asc" } }),
+    prisma.cuestionario.findMany({ where: { projectId, ...(documento === undefined ? SIN_ARCHIVAR : { canvasId: documento }) }, include: INCLUDE, orderBy: { createdAt: "asc" } }),
   ]);
   return {
     personas: personas.map((r) => ({
@@ -421,7 +422,7 @@ export async function asignarPersona(projectId: string, cuestionarioId: string, 
   if (personaId) {
     await exigirPersona(projectId, personaId);
     const otro = await prisma.cuestionario.findFirst({
-      where: { projectId, personaId, tipo: c.tipo, id: { not: c.id } },
+      where: { projectId, personaId, tipo: c.tipo, canvasId: c.canvasId, id: { not: c.id } },
       select: { id: true },
     });
     if (otro) {

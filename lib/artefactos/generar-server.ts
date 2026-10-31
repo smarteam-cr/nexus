@@ -145,7 +145,8 @@ export async function generarCopia(o: {
         })
       : null;
   const [handoff, material, alimentan] = await Promise.all([
-    loadHandoffContext(o.projectId, { onlyConfirmed: false, includeKeys: handoffKeysDelTipo(tipo.id) }),
+    // Sin allowlist solo un tipo interno (la Ejecución): `[]` dejaría al modelo con «Sin handoff».
+    loadHandoffContext(o.projectId, { onlyConfirmed: false, ...(handoffKeysDelTipo(tipo.id).length || tipo.clientFacing ? { includeKeys: handoffKeysDelTipo(tipo.id) } : {}) }),
     doc
       ? cargarMaterialDelDocumento(o.projectId, doc, { deLaCopia: { reuniones: reunionesDeLaCopia(canvas.sections), notasDe: piezaDeLasNotas(o.canvasId) } })
       : Promise.resolve(null),

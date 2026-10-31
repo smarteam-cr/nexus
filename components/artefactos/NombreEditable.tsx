@@ -6,15 +6,20 @@
  *
  * UI interna: primitivas de components/ui, tokens semánticos y tuteo.
  */
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { IconButton } from "@/components/ui";
 
 export default function NombreEditable({ nombre, onGuardar }: { nombre: string; /** true si quedó guardado. */ onGuardar: (nombre: string) => Promise<boolean> }) {
   const [borrador, setBorrador] = useState<string | null>(null);
+  // Enter y salir del campo llegan juntos: sin esto, los Cuestionarios de siempre crearían dos copias.
+  const guardando = useRef(false);
   const guardar = async () => {
+    if (guardando.current) return;
     const n = borrador?.trim();
-    if (n && n !== nombre && !(await onGuardar(n))) return;
-    setBorrador(null);
+    guardando.current = true;
+    const listo = !n || n === nombre || (await onGuardar(n));
+    guardando.current = false;
+    if (listo) setBorrador(null);
   };
   if (borrador === null) {
     return (
