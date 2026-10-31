@@ -133,6 +133,7 @@ export const SKELETON_COVERAGE: Record<string, Cobertura> = {
   "sales/exploraciones": { modo: "own" },
   // El análisis de la venta (S7, 2026-10-27): una tarjeta por vendedor con su tabla mes a mes. No se parece a la Preventa.
   "sales/analisis": { modo: "own" },
+  "sales/pipeline": { modo: "own" },
   "sales/exploraciones/[id]": { modo: "own" },
   "business-cases": { modo: "own" },
   "business-cases/[id]": { modo: "inherits", de: "business-cases" },

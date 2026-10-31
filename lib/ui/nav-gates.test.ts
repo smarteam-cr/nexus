@@ -234,7 +234,7 @@ describe("gates del sidebar congelados (espejo de los booleanos pre-migración)"
     }
     // El catálogo de casos de uso también (2026-10-12): lo usa la preventa.
     expect(hijos(DEFAULT_MATRIX.CSE)).toEqual(["/sales/exploraciones", "/sales/use-cases"]);
-    expect(hijos(DEFAULT_MATRIX.VENTAS)).toEqual(["/sales/exploraciones", "/business-cases", "/sales/use-cases", "/sales/sicop"]);
+    expect(hijos(DEFAULT_MATRIX.VENTAS)).toEqual(["/sales/exploraciones", "/business-cases", "/sales/pipeline", "/sales/use-cases", "/sales/sicop"]);
     expect(ventas.entradaEsHijo, "un CSE que hace clic en Ventas no puede caer en Propuestas").toBe(true);
   });
 });

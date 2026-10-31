@@ -325,6 +325,8 @@ export const APP_NAV: readonly NavItemConfig[] = [
       // del proceso (se explora, después se propone).
       { href: "/sales/exploraciones", label: "Preventa", permiso: { section: "preventa", action: "read" } },
       { href: "/business-cases", label: "Propuestas", permiso: { section: "ventas", action: "read" } },
+      // El reporte de los negocios abiertos (2026-10-30): trabajar un prospecto es Preventa; esto es verlos todos.
+      { href: "/sales/pipeline", label: "Pipeline", permiso: { section: "ventas", action: "read" } },
       // El catálogo de casos de uso (2026-10-12): lo que consigue un cliente, atado a la escala. Lo usan la
       // preventa y las propuestas, así que lo ve quien tiene Preventa (todo Customer Success y Ventas).
       { href: "/sales/use-cases", label: "Casos de uso", permiso: { section: "preventa", action: "read" } },

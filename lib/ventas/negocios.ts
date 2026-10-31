@@ -333,7 +333,7 @@ export interface Ponderado {
 }
 
 /** Lo ponderado y el pipeline, sin los pausados: un negocio pausado no se está vendiendo. */
-export function ponderadoDelAnio(negocios: readonly NegocioVisto[], anio: number): Ponderado {
+export function ponderadoDelAnio(negocios: ReadonlyArray<Pick<NegocioVisto, "etapa" | "monto" | "moneda" | "fechaCierre" | "probabilidad">>, anio: number): Ponderado {
   const r: Ponderado = { usd: 0, pipelineUsd: 0, activos: 0, pausados: 0, enOtraMoneda: 0, sinMonto: 0, fueraDelAnio: 0 };
   for (const n of negocios) {
     if (esPausado(n)) {
