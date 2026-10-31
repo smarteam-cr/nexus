@@ -177,9 +177,26 @@ describe("la corrida de la Planificación (2026-10-29) — DB real, modelo simul
     expect(await razon("pipelines")).toBe("No encontré en las reuniones con qué llenar los pipelines.");
     expect(await razon("formularios")).toBe(POR_QUE_DE_LAS_CURADAS.formularios);
     expect(await razon("acciones_en_detalle")).toMatch(/no hay diagnóstico/);
-    expect(await razon("plan_despliegue")).toMatch(/adopción es directa/);
+    // Se mudó al plan de adopción: una planificación nueva no la trae.
+    expect(await seccion(canvasId, "plan_despliegue")).toBeNull();
     expect(await razon("automatizaciones")).toMatch(/No encontré en las reuniones, el handoff ni el diagnóstico/);
     expect(await razon("planificacion")).toBeNull();
+  });
+
+  it("⛔ una planificación vieja conserva sus olas y sus rutinas, visibles, al regenerar", async () => {
+    const { proyecto } = await mundo();
+    crear.mockResolvedValue(respuesta({ planificacion: { headline: "Plan" } }));
+    const { canvasId } = await runPlanificacionGeneration({ projectId: proyecto.id });
+    const s = await prisma.canvasSection.create({ data: { canvasId, key: "plan_despliegue", label: "Plan de despliegue por olas", order: 90 } });
+    await prisma.canvasBlock.create({ data: { sectionId: s.id, blockType: "CARD", data: { items: [{ title: "Ola 1", detail: "Ventas de CR" }] }, source: "AGENT", status: "CONFIRMED" } });
+
+    await runPlanificacionGeneration({ projectId: proyecto.id });
+
+    const b = await prisma.canvasBlock.findFirstOrThrow({ where: { sectionId: s.id } });
+    expect((b.data as { items: Array<{ title: string }> }).items[0].title).toBe("Ola 1");
+    const c = await prisma.projectCanvas.findUniqueOrThrow({ where: { id: canvasId }, select: { sections: true } });
+    const entrada = (c.sections as Array<{ key: string; hidden?: boolean }>).find((e) => e.key === "plan_despliegue");
+    expect(entrada?.hidden ?? false).toBe(false);
   });
 
   it("regenerar con contenido quita el porqué; lo que escribió una persona en una curada no se toca", async () => {

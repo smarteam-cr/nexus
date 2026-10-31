@@ -12649,6 +12649,10 @@ con el diff viejo solo como referencia, después de confirmar con búsqueda que 
   servicio SmartLoop. Las copias de exploración que hayan quedado de las pruebas no salen en el riel y ningún agente las lee.
 - **«Nuevo artefacto» funciona igual en todo proyecto.** Lo apagaba solo una condición de servicio recurrente en el panel;
   Desarrollo y Sitios web no tenían ninguna.
+- **Las rutinas y el despliegue por olas se mudaron de la planificación al plan de adopción (30 oct, Elías).** Salieron del
+  canon y del prompt: una planificación nueva no las trae. Las que ya las tienen las conservan visibles y editables, también al
+  regenerar (`SECCIONES_MUDADAS_A_LA_ADOPCION`, sin pasar por las retiradas, que se ocultan). La modalidad de adopción se le pasa
+  ahora al plan de adopción.
 - **El kickoff viene en todos los proyectos (30 oct, Elías).** Corrige dos reglas viejas: en el riel ya no dice «opcional»
   junto a su nombre (la cartera lo sigue diciendo: no se reclama), y un proyecto de Desarrollo también lo tiene (`exceptPipeline`
   queda sin usuarios). Nace con cada proyecto nuevo (`seedPieces`); en los que ya existen no se creó en lote: el riel lo muestra

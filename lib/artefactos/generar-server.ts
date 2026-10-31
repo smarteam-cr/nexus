@@ -17,6 +17,8 @@
  * Respeta las reglas de su tipo que viven en los runners de siempre: en el diagnóstico, lo que el ejecutivo marcó revisado
  * no se reescribe y las acciones quedan en el enfoque corto; en el kickoff, el trato «Sin Escala» no lleva escala.
  */
+import { modalidadDeAdopcion } from "@/lib/canvas/planificacion-generate";
+import { TIPO_PLAN_DE_ADOPCION } from "./tipos";
 import "server-only";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
@@ -162,8 +164,14 @@ export async function generarCopia(o: {
       })
     : null;
 
+  // Las rutinas y el despliegue por olas dependen de la modalidad: desde el 2026-10-30 los escribe el plan de adopción.
+  const modalidad =
+    tipo.id === TIPO_PLAN_DE_ADOPCION
+      ? `=== MODALIDAD DE ADOPCIÓN ===\n${(await modalidadDeAdopcion(o.projectId, proyecto?.clientId ?? null)).texto}\n\n`
+      : "";
+
   const mensaje = mensajeDeLaCopia({
-    pedido: bloqueDeInstruccionesDelPedido(o.instrucciones),
+    pedido: `${modalidad}${bloqueDeInstruccionesDelPedido(o.instrucciones)}`,
     // Las instrucciones de ESTA copia: las del documento de siempre son de otro documento.
     instruccionesDeLaCopia: bloqueDeInstruccionesDeDoc(docBriefFrom(canvas.sections)),
     tipo,

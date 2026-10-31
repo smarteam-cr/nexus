@@ -302,8 +302,7 @@ export const DEFAULT_PROJECT_CANVASES: CanvasDefinition[] = [
       { key: "conversaciones", label: "Conversaciones" },
       { key: "cotizaciones", label: "Cotizaciones" },
       { key: "informes", label: "Informes y paneles" },
-      { key: "rutinas_adopcion", label: "Rutinas de adopción" },
-      { key: "plan_despliegue", label: "Plan de despliegue por olas" },
+      // Las rutinas de adopción y el despliegue por olas se mudaron al plan de adopción (2026-10-30).
       { key: "cierre", label: "Aprobación", defaultData: { ...PLANIFICACION_CIERRE_DEFAULT } },
     ],
   },

@@ -15,7 +15,7 @@
  */
 import type { BCSectionDef } from "./business-case.defs";
 import type { BcTemplateDef } from "./templates.defs";
-import { PLANIFICACION_DEF_BY_KEY, PLANIFICACION_HANDOFF_KEYS } from "./planificacion.defs";
+import { PLAN_DESPLIEGUE_DEF, PLANIFICACION_DEF_BY_KEY, PLANIFICACION_HANDOFF_KEYS, RUTINAS_ADOPCION_DEF } from "./planificacion.defs";
 import { DESARROLLO_DEF_BY_KEY } from "./desarrollo.defs";
 import { PROSA_EMPTY, PROSA_SCHEMA, TABLA_SCHEMA, TABLA_TYPE, TARJETAS_TYPE } from "@/lib/landing/catalogo-de-secciones";
 import { heroTitleBrief } from "@/lib/landing/hero-title";
@@ -37,7 +37,7 @@ export function reglaDeLasColumnas(columnas: readonly string[]): string {
 
 const HERO = DESARROLLO_DEF_BY_KEY["requerimiento"];
 const CIERRE_DE_DESARROLLO = DESARROLLO_DEF_BY_KEY["cierre"];
-export const PROSA_DE_LA_PLANIFICACION = PLANIFICACION_DEF_BY_KEY["rutinas_adopcion"];
+export const PROSA_DE_LA_PLANIFICACION = RUTINAS_ADOPCION_DEF;
 
 /** El cierre por defecto del plan de adopción. */
 export const ADOPCION_CIERRE_DEFAULT = {
@@ -147,8 +147,8 @@ export const ADOPCION_SECTION_DEFS: BCSectionDef[] = [
       NO_INVENTES,
     schema: asSchema(TABLA_SCHEMA),
   },
-  PLANIFICACION_DEF_BY_KEY["rutinas_adopcion"],
-  PLANIFICACION_DEF_BY_KEY["plan_despliegue"],
+  RUTINAS_ADOPCION_DEF,
+  PLAN_DESPLIEGUE_DEF,
   {
     key: "comunicacion",
     label: "Cómo se lo contamos al equipo",

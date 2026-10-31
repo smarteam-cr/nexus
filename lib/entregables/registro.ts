@@ -153,7 +153,7 @@ export const ENTREGABLES: readonly Entregable[] = [
         id: "planificacion",
         nombre: "HubSpot completa",
         paraQue:
-          "Todo lo que va a quedar configurado en HubSpot: además de lo esencial, cómo van a funcionar los procesos, la arquitectura, por dónde entran los leads, las conversaciones, las cotizaciones, los informes, las rutinas y las olas.",
+          "Todo lo que va a quedar configurado en HubSpot: además de lo esencial, cómo van a funcionar los procesos, la arquitectura, por dónde entran los leads, las conversaciones, las cotizaciones y los informes.",
       },
       {
         id: PLANTILLA_DE_LA_PLANIFICACION_ESENCIAL,
