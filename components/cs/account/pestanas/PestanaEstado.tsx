@@ -91,8 +91,8 @@ export default function PestanaEstado({ data, irA }: { data: CsAccountData; irA:
                   {l.palabra}
                 </span>
                 <span className="text-[13px] text-fg-secondary">{l.porque}</span>
-                {/* Se parte en dos renglones si no cabe: el enlace azul se salía de la tarjeta (feedback #15). */}
-                <span className="mt-auto flex flex-wrap items-center justify-between gap-x-2 gap-y-1 pt-1.5">
+                {/* Siempre en dos renglones, al pie: con el enlace al lado de la fuente, se salía de la tarjeta (feedback #15) o quedaba desalineado entre tarjetas. */}
+                <span className="mt-auto flex flex-col items-start gap-1.5 pt-1.5">
                   <Chip>{l.fuente}</Chip>
                   <span className="inline-flex items-center gap-1 whitespace-nowrap text-xs font-semibold text-brand">
                     {NOMBRE_DE_LA_PESTANA[pestana]}
