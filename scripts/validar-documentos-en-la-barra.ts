@@ -223,7 +223,8 @@ async function main() {
       .catch(() => null));
   if (!desde) throw new Error("Pasa --desde <sha>: no se pudo leer el sha de producción.");
   const git = (c: string) => execSync(`git ${c}`, { encoding: "utf8", maxBuffer: 200 * 1024 * 1024 });
-  const lineasNuevas = git(`diff ${desde}...HEAD`).split("\n").filter((l) => l.startsWith("+") && !l.startsWith("+++"));
+  // Las pruebas siembran fases y fechas en su base: no son lo que entra al deploy.
+  const lineasNuevas = git(`diff ${desde}...HEAD -- . ":(exclude)*.test.ts"`).split("\n").filter((l) => l.startsWith("+") && !l.startsWith("+++"));
   const escribeCronograma = lineasNuevas.filter(
     (l) =>
       /(timelinePhase|timelineTask)\.(create|createMany|update|updateMany|upsert|delete|deleteMany)\b/.test(l) ||
