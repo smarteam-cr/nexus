@@ -29,6 +29,8 @@ import {
 import { crDateParts } from "@/lib/jobs/time";
 import { huellaDelCronograma as huellaPura } from "./plan-vs-cobros";
 import { decidirReversion } from "./reversion-cobro";
+import { porQueNoSeBorraElServicio } from "./borrar-servicio";
+import { TIPO_SERVICIO_LABEL } from "./schema";
 import { decidirNumeroFactura, mensajeNumeroEnOtraCuenta, normalizarNumeroFactura } from "./numero-factura";
 import { resolverSociedad, type DecisionDeSociedad } from "./sociedades";
 import { cambiarViaCobroTx } from "./via-cobro";
@@ -333,26 +335,62 @@ export async function cerrarAlertasPorClave(cuentaId: string, todayISO: string):
 }
 
 export async function deleteServicio(servicioId: string, byEmail = "sistema") {
-  const cobrados = await prisma.cobro.count({ where: { servicioId, estado: "COBRADO" } });
-  if (cobrados > 0) {
-    throw new CobranzaError(
-      `No se puede borrar: el servicio tiene ${cobrados} cobro(s) ya COBRADO(s). Márcalo FINALIZADO en su lugar.`,
-      409,
-    );
-  }
-  /* ⚠ Las alertas se cierran ANTES del delete: `Cobro.servicioId` es Cascade, así que después
-     los ids ya no existen y no hay a quién cerrarle nada. Era el segundo camino que dejaba
-     huérfanas, y el que nadie estaba mirando. */
-  const cobros = await prisma.cobro.findMany({ where: { servicioId }, select: { id: true } });
-  return prisma.$transaction(async (tx) => {
+  const borrado = await prisma.$transaction(async (tx) => {
+    /* La regla y el borrado en una sola transacción y con las filas bloqueadas: un cobro que se marca cobrado o
+       facturado en medio, o una cuota nueva, espera a que esto termine y no se va en la cascada sin que nadie lo mire. */
+    await tx.$queryRaw`SELECT id FROM "ServicioContratado" WHERE id = ${servicioId} FOR UPDATE`;
+    await tx.$queryRaw`SELECT id FROM "Cobro" WHERE "servicioId" = ${servicioId} FOR UPDATE`;
+    const s = await tx.servicioContratado.findUnique({
+      where: { id: servicioId },
+      select: {
+        estado: true,
+        atribucion: { select: { id: true } },
+        reglasComision: { select: { id: true }, take: 1 },
+        cobros: {
+          select: {
+            id: true,
+            estado: true,
+            fechaEmision: true,
+            numeroFactura: true,
+            cobroFacturaOdoos: { select: { id: true }, take: 1 },
+            ordenesDelSistema: { select: { id: true }, take: 1 },
+          },
+        },
+      },
+    });
+    if (!s) throw new CobranzaError("El servicio no existe", 404);
+    const motivo = porQueNoSeBorraElServicio({
+      estado: s.estado,
+      cobros: s.cobros,
+      ligadoAlErp: s.cobros.some((c) => c.cobroFacturaOdoos.length > 0 || c.ordenesDelSistema.length > 0),
+      conComision: s.atribucion !== null || s.reglasComision.length > 0,
+    });
+    if (motivo) throw new CobranzaError(motivo, 409);
+    /* ⚠ Las alertas se cierran ANTES del delete: `Cobro.servicioId` es Cascade, así que después
+       los ids ya no existen y no hay a quién cerrarle nada. Era el segundo camino que dejaba
+       huérfanas, y el que nadie estaba mirando. */
     await cerrarAlertasDeCobros(
       tx,
-      cobros.map((c) => c.id),
+      s.cobros.map((c) => c.id),
       "El servicio se eliminó: este cobro ya no existe.",
       byEmail,
     );
-    return tx.servicioContratado.delete({ where: { id: servicioId } });
+    const fila = await tx.servicioContratado.delete({ where: { id: servicioId } });
+    const quePago = `${fila.moneda} ${fila.montoTotal.toString()}`;
+    const conCobros = s.cobros.length > 0 ? `, con ${s.cobros.length} cobro(s) sin cobrar` : "";
+    await tx.bitacoraCobro.create({
+      data: {
+        cuentaId: fila.cuentaId,
+        tipo: "ACTUALIZACION_IA",
+        contenido: `Servicio «${fila.descripcion || TIPO_SERVICIO_LABEL[fila.tipoServicio] || fila.tipoServicio}» (${quePago}) eliminado por ${byEmail}${conCobros}.`,
+        usuarioEmail: byEmail,
+      },
+    });
+    return fila;
   });
+  // Lo de la cuenta que dependía del servicio y no cuelga de un cobro (sin datos, montos descuadrados).
+  await cerrarAlertasPorClave(borrado.cuentaId, crDateParts(new Date()).dateKey);
+  return borrado;
 }
 
 // ── Plan de pago (1 activo por servicio, transaccional) ─────────────────────────

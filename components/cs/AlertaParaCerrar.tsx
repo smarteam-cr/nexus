@@ -46,6 +46,7 @@ export function AlertaParaCerrar({
   hoy,
   onCerrada,
   conProyecto = true,
+  razonCompleta = false,
   className,
 }: {
   alerta: AlertaDeCuenta;
@@ -54,6 +55,8 @@ export function AlertaParaCerrar({
   onCerrada: (id: string) => void;
   /** Muestra el proyecto de la alerta (en el panel de la cuenta sí; en la lista ya se sabe la cuenta). */
   conProyecto?: boolean;
+  /** La razón entera, sin cortarla a tres líneas (el detalle que se abre en «Pide atención»). */
+  razonCompleta?: boolean;
   className?: string;
 }) {
   const toast = useToast();
@@ -81,7 +84,7 @@ export function AlertaParaCerrar({
         {alerta.delAgente ? <Chip tono="ia">Agente vigía</Chip> : <Chip>Aviso automático</Chip>}
         <span className="text-[13px] font-semibold text-fg">{alerta.titulo}</span>
       </span>
-      {alerta.razon && <span className="line-clamp-3 text-xs text-fg-secondary">{alerta.razon}</span>}
+      {alerta.razon && <span className={cn("text-xs text-fg-secondary", !razonCompleta && "line-clamp-3")}>{alerta.razon}</span>}
       {/* La frase del cliente, verificada contra la reunión o el correo (2026-10-09): con ella la alerta pinta el color. */}
       {alerta.cita && (
         <span className="border-l-2 border-line pl-2 text-xs text-fg-secondary">

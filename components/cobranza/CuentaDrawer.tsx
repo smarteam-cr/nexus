@@ -13,6 +13,7 @@ import { Drawer, ConfirmDialog, Spinner } from "@/components/ui";
 import { useToast } from "@/components/ui/Toast";
 import { fetchJson, ApiError } from "@/lib/api/fetch-json";
 import type { CuentaDetailDTO, ServicioDTO } from "@/lib/cobranza";
+import { porQueNoSeBorraElServicio } from "@/lib/cobranza/borrar-servicio";
 import {
   COBRANZA_TIPOS_CUENTA,
   COBRANZA_VIAS_COBRO,
@@ -129,6 +130,7 @@ export default function CuentaDrawer({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const [generando, setGenerando] = useState<string | null>(null);
+  const [servicioABorrar, setServicioABorrar] = useState<ServicioDTO | null>(null);
   const [bitTipo, setBitTipo] = useState<string>("NOTA");
   const [bitContenido, setBitContenido] = useState("");
   const [bitBusy, setBitBusy] = useState(false);
@@ -251,6 +253,17 @@ export default function CuentaDrawer({
     }
   }
 
+  async function borrarServicio(servicioId: string) {
+    try {
+      await fetchJson(`/api/cobranza/servicios/${servicioId}`, { method: "DELETE" });
+      toast.success("Servicio eliminado.");
+      setServicioABorrar(null);
+      await load(false);
+    } catch (e) {
+      toast.error(e instanceof ApiError ? e.message : "No se pudo eliminar el servicio.");
+    }
+  }
+
   // ── (d) Bitácora ──────────────────────────────────────────────────────────────
 
   async function addBitacora() {
@@ -338,6 +351,7 @@ export default function CuentaDrawer({
                     await load(false);
                   }}
                   onGenerar={() => generarCobros(s.id)}
+                  onEliminar={() => setServicioABorrar(s)}
                   generando={generando === s.id}
                   onRefresh={() => load(false)}
                   cuenta={cuenta}
@@ -663,6 +677,26 @@ export default function CuentaDrawer({
           await saveCuenta();
         }}
       />
+
+      <ConfirmDialog
+        open={servicioABorrar !== null}
+        z="z-[60]"
+        title="¿Eliminar este servicio?"
+        description={
+          servicioABorrar
+            ? `«${servicioABorrar.descripcion || servicioABorrar.projectName || "Servicio"}» sale de la cuenta${
+                servicioABorrar.cobros.length > 0
+                  ? ` con ${servicioABorrar.cobros.length === 1 ? "su cobro pendiente" : `sus ${servicioABorrar.cobros.length} cobros pendientes`}`
+                  : ""
+              }. No se puede deshacer.`
+            : undefined
+        }
+        confirmLabel="Eliminar servicio"
+        onCancel={() => setServicioABorrar(null)}
+        onConfirm={async () => {
+          if (servicioABorrar) await borrarServicio(servicioABorrar.id);
+        }}
+      />
     </>
   );
 }
@@ -680,6 +714,7 @@ function ServicioCard({
   onCancelEdit,
   onSaved,
   onGenerar,
+  onEliminar,
   generando,
   onRefresh,
   puedeEditar,
@@ -695,10 +730,12 @@ function ServicioCard({
   onCancelEdit: () => void;
   onSaved: () => Promise<void>;
   onGenerar: () => void;
+  onEliminar: () => void;
   generando: boolean;
   onRefresh: () => void;
 }) {
   const plan = servicio.planActivo;
+  const noSeBorra = porQueNoSeBorraElServicio(servicio);
   const arranqueMovido =
     servicio.anchorActual !== null &&
     servicio.fechaInicioFacturacion !== null &&
@@ -842,6 +879,18 @@ function ServicioCard({
                     >
                       {generando ? "Generando…" : "Generar cobros"}
                     </button>
+                    {servicio.estado === "FINALIZADO" &&
+                      (noSeBorra ? (
+                        <span className="text-[11px] text-fg-muted">{noSeBorra}</span>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={onEliminar}
+                          className="text-[11px] font-medium px-2.5 py-1 rounded-md border border-line text-destructive hover:bg-surface-hover transition-colors"
+                        >
+                          Eliminar servicio
+                        </button>
+                      ))}
                   </>
                 )}
               </div>
