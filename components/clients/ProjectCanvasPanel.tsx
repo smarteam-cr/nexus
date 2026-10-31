@@ -977,7 +977,7 @@ export default function ProjectCanvasPanel({
             }}
             onOcultar={(slug, oculta) => void alternarOculta(slug, oculta)}
             slotDeSesiones={setSlotDeSesiones}
-            onNuevoArtefacto={esRecurrente ? undefined : () => setNuevoArtefacto({ tipo: null })}
+            onNuevoArtefacto={() => setNuevoArtefacto({ tipo: null })}
           />,
           slotDePiezas,
         )}
@@ -1221,6 +1221,9 @@ export default function ProjectCanvasPanel({
           // La entrega de siempre no se duplica: guarda en su Json lo que el cliente no ve.
           return t && admiteCopias(t) && !(c.slug && tipoDeArtefacto(t)?.sinEnlaceElDeSiempre) ? [{ id: c.id, nombre: nombreDelArtefacto(c), tipo: t }] : [];
         })}
+        onActivarPieza={(slug) => {
+          if (activando === null) void activarPieza(slug);
+        }}
         onCreado={(id) => {
           void refetchCanvases().then(() => switchCanvas(id));
         }}

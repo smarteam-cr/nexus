@@ -79,7 +79,7 @@ describe("el porqué en la data de la sección", () => {
   it("toda sección arranca abierta: colapsar es un control aparte de ocultar", () => {
     const motor = fs.readFileSync(path.join(process.cwd(), "components/landing/LandingView.tsx"), "utf8");
     expect(motor).toContain("const collapsed = editable && colapsadas.has(def.key);");
-    expect(motor).toContain('{hidden ? "Mostrar" : "Ocultar"}');
+    expect(motor).toContain('{hidden ? "Mostrar al cliente" : "Ocultar"}');
   });
 
   it("la tarjeta que solo trae el porqué se reconoce, y la ruta la usa en vez de crear otra al lado", () => {

@@ -23,7 +23,7 @@ es web, se comparte y se edita con «Mejorar con IA» (ese es el chat). Manda so
 
 | Artefacto | Plantillas | Notas |
 |---|---|---|
-| Exploración | Exploración | «Mejorar con IA» sin la sección de las sesiones: sus marcas de «ya la pregunté» viven anidadas |
+| Exploración | La de la preventa | Una por proyecto, la misma pantalla de la preventa con las preguntas de CS. Se abre desde «Nuevo artefacto» y adentro se agregan las sesiones; su asistente es el de la guía |
 | Diagnóstico | Diagnóstico estratégico (la de hoy), Diagnóstico esencial | Sin cambios de fondo |
 | Propuesta | La de la preventa | Vive en su módulo; no se crea desde «Nuevo artefacto» |
 | Kickoff | Kickoff, Servicio recurrente | |
@@ -156,8 +156,8 @@ entrega, handoff e Información del cliente. **Tareas y «Para ti» no leen ning
 
 | Tipo | Copias por proyecto | Por qué |
 |---|---|---|
-| Planificación, Diagnóstico, Kickoff, Exploración, Plan de adopción, Integración técnica | **Varias** | Elías, 29 oct (respuestas 1 y 6). |
-| Integraciones (el requerimiento técnico que nace del handoff), Entrega, Ejecución | **Una** (por ahora) | Su flujo nace del handoff o del cierre; otra integración es una **integración técnica**. |
+| Planificación, Diagnóstico, Kickoff, Requerimiento técnico, Plan de adopción, Hoja de ruta, Entrega (informe de avance) (Exploración: una, ver el catálogo del 30 oct) | **Varias** | Elías, 29 oct (respuestas 1 y 6). |
+| Exploración, Ejecución | **Una** | Su flujo nace del handoff o del cierre; otra integración es una **integración técnica**. |
 | Cronograma | **Una** | `ProjectTimeline` es único por proyecto, y Tareas y Cobranza lo leen como tal. |
 | Handoff | **Una** | Es el paso Ventas → CS. |
 | Cuestionarios | **Varias** (ya hoy) | Sus propias tablas, sin cambio. |

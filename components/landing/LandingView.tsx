@@ -151,7 +151,7 @@ function HideToggle({ hidden, label, onToggle }: { hidden: boolean; label: strin
           </>
         )}
       </svg>
-      {hidden ? "Mostrar" : "Ocultar"}
+      {hidden ? "Mostrar al cliente" : "Ocultar"}
     </button>
   );
 }
@@ -163,15 +163,15 @@ function CollapseToggle({ collapsed, label, onToggle }: { collapsed: boolean; la
       type="button"
       onClick={onToggle}
       aria-expanded={!collapsed}
-      title={collapsed ? `Ver ${label}` : `Contraer ${label}`}
+      title={collapsed ? `Mostrar ${label}` : `Colapsar ${label}`}
       style={{
-        display: "inline-flex", alignItems: "center", justifyContent: "center", width: 26, height: 26,
-        borderRadius: 999, cursor: "pointer", fontSize: 11, lineHeight: 1,
+        display: "inline-flex", alignItems: "center", gap: 5, padding: "4px 9px",
+        borderRadius: 999, cursor: "pointer", fontSize: 11, fontWeight: 600, lineHeight: 1,
         border: "1px solid rgba(0,0,0,0.12)", background: "rgba(255,255,255,0.92)", color: "#6b7280",
         backdropFilter: "blur(4px)", boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
       }}
     >
-      {collapsed ? "▸" : "▾"}
+      {collapsed ? "Mostrar" : "Colapsar"}
     </button>
   );
 }
@@ -493,15 +493,16 @@ export default function LandingView({
       </div>
     );
 
-    /* Barra de una sección colapsada: solo el título, clickeable para desplegarla.
+    /* Una sección colapsada conserva su fondo y su encabezado: solo se esconde el cuerpo (Elías, 30 oct: «cambia mucho el
+       diseño»). Se vuelve a abrir con el mismo control, que dice «Mostrar».
        El cuerpo NO se desmonta (se esconde con display:none) — desmontarlo perdería lo
        que el CSE está tipeando (los campos comitean en `blur`, y un input que se desmonta
        no lo dispara) y re-dispararía los fetch de las secciones curadas al reabrirlas. */
     const collapsedBar = collapsed && (
-      <button type="button" className="stl-collapsed-bar" aria-expanded={false} onClick={() => toggleExpanded(def.key)}>
-        <span aria-hidden>▸</span>
-        <span className="stl-collapsed-title">{effTitle}</span>
-      </button>
+      <div className="stl-sec-head stl-collapsed-head">
+        {effEyebrow && <span className="stl-eyebrow">{effEyebrow}</span>}
+        <h2 className="stl-title">{effTitle}</h2>
+      </div>
     );
     const hideWhenCollapsed = collapsed ? ({ display: "none" } as const) : undefined;
 
@@ -547,7 +548,7 @@ export default function LandingView({
       return (
         <div key={def.key} data-seccion={def.key} className={`stl-ctx-sec${hidden ? " stl-hidden" : ""}${collapsed ? " stl-collapsed" : ""}`}>
           {chrome}
-          {collapsedBar}
+          {collapsedBar && <div className="stl-wrap">{collapsedBar}</div>}
           <div style={hideWhenCollapsed}>{body}</div>
         </div>
       );

@@ -31,6 +31,7 @@ export default function NuevoArtefactoModal({
   tipoInicial,
   documentos,
   onCreado,
+  onActivarPieza,
 }: {
   projectId: string;
   open: boolean;
@@ -40,9 +41,13 @@ export default function NuevoArtefactoModal({
   /** Los documentos del proyecto que se pueden duplicar (de cualquier tipo: se filtran por el elegido). */
   documentos: readonly DocumentoParaDuplicar[];
   onCreado: (canvasId: string) => void;
+  /** Un tipo que no lleva copias (`seAbreUna`): abre su pieza en vez de crear un documento. */
+  onActivarPieza: (slug: string) => void;
 }) {
   const tipos = useMemo(() => tiposCreablesEnElProyecto(), []);
-  const [tipo, setTipo] = useState<string>(tipoInicial ?? tipos[0]?.id ?? "");
+  // Arranca en el primero que se crea: la exploración no pide nada más que abrirse.
+  const primero = useMemo(() => tipos.find((x) => !x.seAbreUna)?.id ?? "", [tipos]);
+  const [tipo, setTipo] = useState<string>(tipoInicial ?? primero);
   const [elegidas, setElegidas] = useState<Record<string, string>>({});
   const [nombre, setNombre] = useState("");
   const [desde, setDesde] = useState<string>("");
@@ -52,12 +57,12 @@ export default function NuevoArtefactoModal({
   useEffect(() => {
     if (!open) return;
     /* eslint-disable react-hooks/set-state-in-effect -- cada apertura arranca de cero */
-    setTipo(tipoInicial ?? tipos[0]?.id ?? "");
+    setTipo(tipoInicial ?? primero);
     setElegidas({});
     setNombre("");
     setDesde("");
     /* eslint-enable react-hooks/set-state-in-effect */
-  }, [open, tipoInicial, tipos]);
+  }, [open, tipoInicial, primero]);
 
   const elegirTipo = (id: string) => {
     setTipo(id);
@@ -79,6 +84,11 @@ export default function NuevoArtefactoModal({
   }, [documentos, duplicado, plantilla, plantillas.length, t?.nombre]);
 
   const crear = async () => {
+    if (t?.seAbreUna) {
+      onActivarPieza(tipo);
+      onClose();
+      return;
+    }
     setCreando(true);
     try {
       const r = await fetch(`/api/projects/${projectId}/artefactos`, {
@@ -104,14 +114,14 @@ export default function NuevoArtefactoModal({
       onClose={onClose}
       size="pantalla"
       title={tipoInicial && t ? `Crear otr${t.conArticulo.startsWith("una") ? "a" : "o"} ${t.nombre.toLowerCase()}` : "Nuevo artefacto"}
-      description="Queda en el riel con su nombre, en construcción. Lo generas con IA o lo escribes tú desde adentro."
+      description={t?.seAbreUna ? "Adentro agregas las sesiones." : "Queda en el riel con su nombre, en construcción. Lo generas con IA o lo escribes tú desde adentro."}
       footer={
         <div className="flex justify-end gap-2">
           <Button variant="secondary" onClick={onClose} disabled={creando}>
             Cancelar
           </Button>
           <Button variant="primary" loading={creando} disabled={!tipo} onClick={() => void crear()}>
-            Crear
+            {t?.seAbreUna ? `Abrir ${t.nombre.toLowerCase()}` : "Crear"}
           </Button>
         </div>
       }
@@ -140,6 +150,13 @@ export default function NuevoArtefactoModal({
           </div>
         )}
 
+        {t?.seAbreUna ? (
+          <div className="min-w-0 flex-1 space-y-2 rounded-lg border border-line bg-surface p-5">
+            <p className="text-sm font-semibold text-fg">{t.nombre} del proyecto</p>
+            <p className="text-sm text-fg-secondary">{t.paraQue}</p>
+            <p className="text-xs text-fg-muted">Hay una por proyecto. Si ya existe, la abre.</p>
+          </div>
+        ) : (
         <div className="min-w-0 flex-1 space-y-4">
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label="Nombre" hint="Si lo dejas vacío, se llama como sugerimos.">
@@ -184,6 +201,7 @@ export default function NuevoArtefactoModal({
             </div>
           )}
         </div>
+        )}
       </div>
     </Modal>
   );

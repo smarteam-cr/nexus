@@ -20,7 +20,7 @@ const DEL_MOTOR = TIPOS.filter((t) => t.vive === "canvas" && t.id !== "handoff")
 describe("tipos: el set y lo que admite cada uno", () => {
   it("snapshot del set de tipos (id · copias · dueños · lo lee el cliente)", () => {
     expect(TIPOS.map((t) => `${t.id} · ${t.copias} · ${t.duenos.join("+")} · ${t.clientFacing ? "cliente" : "interno"}`)).toEqual([
-      "exploration · varias · proyecto+empresa · interno",
+      "exploration · una · proyecto+empresa · interno",
       "diagnosis · varias · proyecto+empresa · cliente",
       "kickoff · varias · proyecto · cliente",
       "planning · varias · proyecto · cliente",
@@ -49,7 +49,7 @@ describe("tipos: el set y lo que admite cada uno", () => {
       "roadmap",
       "delivery",
     ]);
-    for (const id of ["timeline", "handoff", "implementation", "escala", "integration", "no-existe", null]) {
+    for (const id of ["timeline", "handoff", "implementation", "escala", "integration", "exploration", "no-existe", null]) {
       expect(admiteCopias(id), String(id)).toBe(false);
     }
   });

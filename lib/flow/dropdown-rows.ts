@@ -20,7 +20,7 @@
 import { pieceBySlug } from "@/lib/pieces/registry";
 import { piezasParaMostrar } from "./orden-de-presentacion";
 import { CANVAS_PRIMARY_AGENT } from "@/lib/agents/canvas-agents";
-import { TIPOS } from "@/lib/artefactos/tipos";
+import { admiteCopias, TIPOS } from "@/lib/artefactos/tipos";
 import { esCopia, nombreDelArtefacto, ordenarArtefactos } from "@/lib/artefactos/copias";
 
 /** Piezas que NO se listan en el DESPLEGABLE, con su motivo. */
@@ -128,6 +128,8 @@ export function buildPieceRows(
   const copiasPorTipo = new Map<string, CanvasParaFila[]>();
   for (const c of canvases) {
     if (c.slug) porSlug.set(c.slug, c);
+    // Un tipo que dejó de llevar copias (la exploración, 30 oct): las de prueba no salen en el riel.
+    else if (esCopia(c) && !admiteCopias(c.tipoArtefacto)) continue;
     else if (esCopia(c)) copiasPorTipo.set(c.tipoArtefacto!, [...(copiasPorTipo.get(c.tipoArtefacto!) ?? []), c]);
     else custom.push(c);
   }

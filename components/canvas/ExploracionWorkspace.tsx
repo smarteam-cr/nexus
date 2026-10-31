@@ -31,7 +31,6 @@ import { useMemo } from "react";
 import LandingView, { type LandingSectionData } from "@/components/landing/LandingView";
 import type { LandingContext } from "@/components/landing/types";
 import { useCanvasSections } from "./useCanvasSections";
-import DocumentAssist from "@/components/ai/DocumentAssist";
 import { buildExploracionConfig, buildExploracionSections } from "./exploracion-landing-adapter";
 
 const MAXW = 860;
@@ -118,25 +117,6 @@ export default function ExploracionWorkspace({
 
   return (
     <div className="stl stl-internal">
-      {/* Sin la sección de las sesiones: sus marcas de «ya la pregunté» viven anidadas (lib/canvas/assist-de-documento.ts). */}
-      {hasGeneratedContent && (
-        <div style={{ padding: "12px 16px 0" }}>
-          <DocumentAssist
-            url={`/api/projects/${projectId}/canvas-assist`}
-            extraBody={{ canvasId }}
-            dialogTitle="Mejorar la exploración con IA"
-            chips={["Hazlo más concreto", "Sácale lo que no está respaldado"]}
-            placeholder='Ej.: "agrega lo que falta entender de Finanzas"'
-            labelFor={(key) => cs.sections.find((s) => s.key === key)?.label ?? key}
-            onApplySection={(key, data) => {
-              const s = cs.sections.find((x) => x.key === key);
-              if (!s) return;
-              const card = s.blocks.find((b) => b.blockType === "CARD");
-              return cs.upsertCardData(s.id, card?.id ?? null, data);
-            }}
-          />
-        </div>
-      )}
       {cs.error && (
         <div style={{ position: "sticky", top: 0, zIndex: 50, display: "flex", alignItems: "center", gap: 10, padding: "10px 16px", background: "#fef2f2", borderBottom: "1px solid #fecaca", color: "#b91c1c", fontSize: 13 }}>
           <span style={{ flex: 1 }}>{cs.error}</span>
