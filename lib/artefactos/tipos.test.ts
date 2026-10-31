@@ -201,8 +201,6 @@ describe("catálogo de secciones por tipo (congelado)", () => {
           "conversaciones",
           "cotizaciones",
           "informes",
-          "rutinas_adopcion",
-          "plan_despliegue",
           "campana_objetivo",
           "campana_segmentos",
           "campana_piezas",
@@ -247,8 +245,10 @@ describe("catálogo de secciones por tipo (congelado)", () => {
   });
 
   it("los tipos nuevos prestan las secciones de siempre, no las copian (un renderer, un contrato de datos)", () => {
-    expect(ADOPCION_DEF_BY_KEY.rutinas_adopcion).toBe(PLANIFICACION_DEF_BY_KEY.rutinas_adopcion);
-    expect(ADOPCION_DEF_BY_KEY.plan_despliegue).toBe(PLANIFICACION_DEF_BY_KEY.plan_despliegue);
+    // Las escribe el plan de adopción; la planificación vieja las lee con el mismo render.
+    expect(ADOPCION_DEF_BY_KEY.rutinas_adopcion.agentGenerated).toBe(true);
+    expect(ADOPCION_DEF_BY_KEY.plan_despliegue.agentGenerated).toBe(true);
+    expect(PLANIFICACION_DEF_BY_KEY.plan_despliegue.sectionType).toBe(ADOPCION_DEF_BY_KEY.plan_despliegue.sectionType);
     for (const k of ["retos_cliente", "arquitectura", "relacion_objetos", "propiedades", "comunicacion", "criterios_exito", "cierre"]) {
       expect(INTEGRACION_DEF_BY_KEY[k], k).toBe(DESARROLLO_DEF_BY_KEY[k]);
     }

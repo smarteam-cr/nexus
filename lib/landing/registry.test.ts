@@ -55,7 +55,7 @@ import { IMPLEMENTACION_SECTION_COMPONENTS, landingConfigForImplementacion } fro
 import {
   PLANIFICACION_SECTION_DEFS,
   PLANIFICACION_DEF_BY_KEY,
-  SECCIONES_RETIRADAS_DE_PLANIFICACION,
+  SECCIONES_RETIRADAS_DE_PLANIFICACION, SECCIONES_MUDADAS_A_LA_ADOPCION, PLAN_DESPLIEGUE_DEF,
 } from "@/components/landing/configs/planificacion.defs";
 import { PLANIFICACION_SECTION_COMPONENTS, landingConfigForPlanificacion } from "@/components/landing/configs/planificacion";
 import { HTML_EMBED_TYPE } from "@/lib/landing/custom-sections";
@@ -996,7 +996,7 @@ describe("Planificación: registry completo + keys congeladas", () => {
 
   it("las keys 1:1 con las secciones del canvas (el runner saltea en silencio lo que no matchea)", () => {
     const canvasKeys = new Set(PLANIFICACION_CANVAS.sections.map((s) => s.key));
-    const retiradas = new Set<string>(SECCIONES_RETIRADAS_DE_PLANIFICACION);
+    const retiradas = new Set<string>([...SECCIONES_RETIRADAS_DE_PLANIFICACION, ...SECCIONES_MUDADAS_A_LA_ADOPCION]);
     for (const d of PLANIFICACION_SECTION_DEFS) {
       if (retiradas.has(d.key)) {
         expect(canvasKeys.has(d.key), `la retirada "${d.key}" volvió al canon del canvas`).toBe(false);
@@ -1008,10 +1008,11 @@ describe("Planificación: registry completo + keys congeladas", () => {
     expect(PLANIFICACION_CANVAS.sections.length).toBe(PLANIFICACION_SECTION_DEFS.length - retiradas.size);
   });
 
-  it("el plan de despliegue es CONDICIONAL: el agente puede dejarlo vacío", () => {
+  it("el plan de despliegue es CONDICIONAL y lo escribe el plan de adopción: la planificación solo lo lee", () => {
     // La decisión de negocio: con adopción directa la sección queda vacía y el modo
     // lectura la omite. Si dejara de ser agentGenerated, el mecanismo se rompe.
-    expect(PLANIFICACION_DEF_BY_KEY["plan_despliegue"].agentGenerated).toBe(true);
+    expect(PLAN_DESPLIEGUE_DEF.agentGenerated).toBe(true);
+    expect(PLANIFICACION_DEF_BY_KEY["plan_despliegue"].agentGenerated).toBe(false);
     expect(PLANIFICACION_DEF_BY_KEY["cierre"].agentGenerated).toBe(false);
   });
 });

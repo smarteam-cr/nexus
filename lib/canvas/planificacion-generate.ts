@@ -103,10 +103,10 @@ export async function prepararPlanificacionEnBlanco(projectId: string, plantilla
 }
 
 /**
- * La modalidad de adopción para el prompt: la confirmada, o la sugerida por tamaño. `directa` (2026-10-29): si el
- * despliegue por olas no aplica, que es el porqué de esa sección cuando queda vacía (lib/planificacion/por-que-vacia.ts).
+ * La modalidad de adopción para el prompt del PLAN DE ADOPCIÓN (lib/artefactos/generar-server.ts), que desde el 2026-10-30
+ * escribe las rutinas y el despliegue por olas: la confirmada, o la sugerida por tamaño.
  */
-async function adoptionBlock(projectId: string, clientId: string | null): Promise<{ texto: string; directa: boolean }> {
+export async function modalidadDeAdopcion(projectId: string, clientId: string | null): Promise<{ texto: string; directa: boolean }> {
   const project = await prisma.project.findUnique({
     where: { id: projectId },
     select: { adoptionMode: true },
@@ -175,10 +175,9 @@ export async function runPlanificacionGeneration(opts: {
       loadCuestionarioContext(projectId).catch(() => ""),
     ]);
 
-  const [procesosCtx, portalCtx, adopcion] = await Promise.all([
+  const [procesosCtx, portalCtx] = await Promise.all([
     project?.clientId ? serializeProcesosForPrompt(project.clientId, { onlyConfirmed: false }) : Promise.resolve(""),
     project?.clientId ? loadPortalLifecycleContext(project.clientId) : Promise.resolve(""),
-    adoptionBlock(projectId, project?.clientId ?? null),
   ]);
 
   /* El «Contexto adicional» de este documento (lib/contexto/material-del-documento.ts): las reuniones que eligió el
@@ -236,7 +235,6 @@ export async function runPlanificacionGeneration(opts: {
     `Proyecto: ${project?.name ?? "(sin nombre)"}`,
     hubs.length ? `Hubs/alcance del proyecto: ${hubs.join(", ")}` : "",
     "",
-    `=== MODALIDAD DE ADOPCIÓN ===\n${adopcion.texto}`,
     "",
     "=== DIAGNÓSTICO — TU FUENTE ANCLA (el plan ataca estas causas) ===",
     diagnosticoCtx || "(Sin diagnóstico todavía. Dilo en el subhead de la portada: el plan sale de las reuniones, el handoff y la exploración, y conviene validarlo contra un diagnóstico cuando exista.)",
@@ -267,7 +265,7 @@ export async function runPlanificacionGeneration(opts: {
     cierreDeFrontera ? `\n${cierreDeFrontera}` : "",
     "",
     "SI UNA SECCIÓN QUEDA VACÍA: no la rellenes con supuestos para que no quede en blanco. Déjala vacía y agrega al JSON la key extra \"__vacias\": un objeto { key de sección: una frase } con el porqué de CADA sección que dejaste vacía, en primera persona y nombrando lo que faltó (p.ej. \"No encontré en las reuniones con qué llenar los pipelines: nadie habló de las etapas de la venta.\"). Una frase corta por sección; la lee solo el equipo, nunca el cliente. No la pongas en una sección con contenido.",
-    "Escribe la planificación siguiendo tus instrucciones: las acciones del diagnóstico bajadas a lo que va a quedar configurado en HubSpot, respetando su enfoque de la solución — cada acción en detalle (una fila por acción, con su mismo código), cómo van a funcionar los procesos (solo lo que se hará), etapas del ciclo de vida, arquitectura, propiedades por objeto, pipelines, automatizaciones y conversaciones, cada cosa con su origen —, rutinas por rol, y el despliegue por olas SOLO si la modalidad es por pilotos. SIN fechas.",
+    "Escribe la planificación siguiendo tus instrucciones: las acciones del diagnóstico bajadas a lo que va a quedar configurado en HubSpot, respetando su enfoque de la solución — cada acción en detalle (una fila por acción, con su mismo código), cómo van a funcionar los procesos (solo lo que se hará), etapas del ciclo de vida, arquitectura, propiedades por objeto, pipelines, automatizaciones y conversaciones, cada cosa con su origen. SIN fechas.",
   ]
     .filter((x) => x !== "")
     .join("\n");
@@ -309,7 +307,6 @@ export async function runPlanificacionGeneration(opts: {
   const loQueSeLeyo: LoQueSeLeyo = {
     porQueDelAgente: gen.porQueVacias,
     hayDiagnostico: !!diagnosticoCtx,
-    adopcionDirecta: adopcion.directa,
     leyoReuniones: material.sesionesUsadas.length > 0,
   };
   /* Lo que escribió una persona en una sección que el agente hoy deja vacía se queda: el agente no ve ese texto, y borrarlo

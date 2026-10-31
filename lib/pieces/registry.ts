@@ -504,6 +504,13 @@ export function piecesEnabledByTags(tags: string[]): PieceDefinition[] {
  */
 export const PIEZAS_NO_REQUERIDAS: ReadonlySet<string> = new Set(["kickoff"]);
 
+/**
+ * Las piezas que el riel muestra en TODO proyecto, sin pasar por «Activar» (Elías, 2026-10-30: el kickoff viene por
+ * defecto). Un proyecto sin su canvas lo crea al abrirla, y ahí se elige la plantilla: así no hace falta rellenar los
+ * proyectos que ya existen ni crear documentos vacíos que nadie va a abrir.
+ */
+export const PIEZAS_SIEMPRE_EN_EL_RIEL: ReadonlySet<string> = new Set(["kickoff"]);
+
 /** Las piezas de una clase, en el orden del registro. */
 export function piezasDeLaClase(clase: ClaseDePieza): PieceDefinition[] {
   return PIECES.filter((p) => p.clase === clase);

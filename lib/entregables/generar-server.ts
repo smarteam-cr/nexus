@@ -14,11 +14,14 @@
  * (lib/canvas/kickoff-generate.ts). La exploración y la ejecución NO pasan por acá: son herramientas del proyecto, sin
  * plantilla, y siguen con su atajo en /analyze.
  */
+import { KICKOFF_CANVAS } from "@/lib/canvas/canvas-defs";
+import { kickoffSinTocar } from "@/lib/pieces/kickoff-sin-tocar";
+import { loadCanvasesConContenido } from "@/lib/pieces/piece-content";
 import "server-only";
 import { prisma } from "@/lib/db/prisma";
 import { canvasOf, canvasOfNested } from "@/lib/pieces/canvas-query";
 import { piezaAplica, pieceReadiness } from "@/lib/flow/piece-readiness";
-import { runKickoffGeneration } from "@/lib/canvas/kickoff-generate";
+import { runKickoffGeneration, prepararKickoffEnBlanco } from "@/lib/canvas/kickoff-generate";
 import { prepararDiagnosticoEnBlanco, runDiagnosticoGeneration } from "@/lib/canvas/diagnostico-generate";
 import { prepararPlanificacionEnBlanco, runPlanificacionGeneration } from "@/lib/canvas/planificacion-generate";
 import { runDesarrolloGeneration } from "@/lib/canvas/desarrollo-generate";
@@ -117,6 +120,33 @@ export async function plantillaPorDefectoDelProyecto(projectId: string, slug: st
   return servicio?.ciclo ? PLANTILLA_DEL_KICKOFF_RECURRENTE : null;
 }
 
+/**
+ * Lo que necesita el selector del kickoff: si sigue como nació (lib/pieces/kickoff-sin-tocar.ts) y, en un servicio por
+ * ciclos, la única plantilla que le toca: ahí la regla de arriba manda, y ofrecer la de siempre sería mentir.
+ */
+export async function selectorDelKickoff(projectId: string): Promise<{ sinTocar: boolean; plantillaDelServicio: string | null }> {
+  const [p, c, plantillaDelServicio] = await Promise.all([
+    prisma.project.findUnique({ where: { id: projectId }, select: { kickoffPublishedAt: true } }),
+    prisma.projectCanvas.findFirst({ where: { projectId, ...canvasOf("kickoff") }, select: { id: true, sections: true, slug: true } }),
+    plantillaPorDefectoDelProyecto(projectId, "kickoff"),
+  ]);
+  if (!p || !c) return { sinTocar: false, plantillaDelServicio };
+  const semillas = new Map(KICKOFF_CANVAS.sections.filter((s) => s.defaultData).map((s) => [s.key, s.defaultData]));
+  const [conContenido, bloques] = await Promise.all([
+    loadCanvasesConContenido(projectId, [{ id: c.id, slug: c.slug }]),
+    prisma.canvasBlock.findMany({ where: { section: { canvasId: c.id, key: { in: [...semillas.keys()] } } }, select: { data: true, section: { select: { key: true } } } }),
+  ]);
+  return {
+    plantillaDelServicio,
+    sinTocar: kickoffSinTocar({
+      publicado: !!p.kickoffPublishedAt,
+      plantillaAnotada: !!plantillaDelDocumento("kickoff", c.sections)?.guardada,
+      conContenido: conContenido.has(c.id),
+      sembrados: bloques.map((b) => ({ data: b.data, semilla: semillas.get(b.section.key) })),
+    }),
+  };
+}
+
 export async function generarEntregable(pedido: PedidoDeEntregable): Promise<EntregableGenerado> {
   const plantillaId =
     pedido.plantillaId ??
@@ -159,14 +189,14 @@ export async function generarEntregable(pedido: PedidoDeEntregable): Promise<Ent
 
 /**
  * EMPEZAR EN BLANCO (2026-10-23): el documento con las secciones de la plantilla elegida, sin la IA, y la plantilla
- * anotada (así regenerar después usa la misma). El diagnóstico y la planificación tienen más de una plantilla; los demás
+ * anotada (así regenerar después usa la misma). El diagnóstico, la planificación y el kickoff tienen más de una plantilla; los demás
  * se escriben a mano como siempre, sin pasar por acá.
  */
 export async function empezarEnBlanco(o: { projectId: string; slug: string; plantillaId: string; porEmail: string | null }): Promise<{ canvasId: string }> {
   const plantilla = resolverPlantilla(o.slug, o.plantillaId);
-  // La Planificación tiene dos plantillas desde el 2026-10-27 (I2).
+  // La Planificación tiene dos plantillas desde el 2026-10-27 (I2); el kickoff se elige al abrirlo desde el 2026-10-30.
   const preparar =
-    o.slug === "diagnosis" ? prepararDiagnosticoEnBlanco : o.slug === "planning" ? prepararPlanificacionEnBlanco : null;
+    o.slug === "diagnosis" ? prepararDiagnosticoEnBlanco : o.slug === "planning" ? prepararPlanificacionEnBlanco : o.slug === "kickoff" ? prepararKickoffEnBlanco : null;
   if (!preparar) throw new ErrorDelEntregable(400, `${nombreDelEntregable(o.slug)} se escribe a mano sin elegir plantilla.`);
   const canvasId = await preparar(o.projectId, templateDeLaPlantilla(plantilla.id));
   await anotarPlantilla(canvasId, plantilla, o.porEmail);

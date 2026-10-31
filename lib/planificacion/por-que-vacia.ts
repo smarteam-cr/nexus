@@ -23,6 +23,8 @@ export const POR_QUE_DE_LAS_CURADAS: Readonly<Record<string, string>> = {
   formularios: "La IA no escribe los formularios al generar: se arman eligiendo los campos de la tabla de propiedades.",
   cotizaciones: "La IA no escribe las cotizaciones al generar: van si el alcance trae Sales Hub Pro o más, y las llena el equipo.",
   informes: "La IA no escribe los informes y paneles al generar: los llena el equipo, cada uno atado a un objetivo del diagnóstico.",
+  rutinas_adopcion: "Esta parte se mudó al plan de adopción: créalo desde «Nuevo artefacto». Lo que ya esté escrito acá se queda.",
+  plan_despliegue: "Esta parte se mudó al plan de adopción: créalo desde «Nuevo artefacto». Lo que ya esté escrito acá se queda.",
 };
 
 export interface SeccionVacia {
@@ -37,8 +39,6 @@ export interface LoQueSeLeyo {
   porQueDelAgente: Readonly<Record<string, string>>;
   /** ¿Había un diagnóstico con contenido? */
   hayDiagnostico: boolean;
-  /** ¿La adopción es directa (confirmada, sugerida o asumida)? Ahí el despliegue por olas no aplica. */
-  adopcionDirecta: boolean;
   /** ¿La planificación leyó alguna reunión? */
   leyoReuniones: boolean;
 }
@@ -50,9 +50,6 @@ export function porQueQuedoVacia(s: SeccionVacia, l: LoQueSeLeyo): string {
   }
   if (s.key === ACCIONES_EN_DETALLE_KEY && !l.hayDiagnostico) {
     return "Todavía no hay diagnóstico: esta sección desarrolla sus acciones. Genera el diagnóstico y vuelve a generar la planificación.";
-  }
-  if (s.key === "plan_despliegue" && l.adopcionDirecta) {
-    return "La adopción es directa (todo el equipo a la vez), así que el despliegue por olas no aplica. Si el arranque va por pilotos, cámbialo en el proyecto y vuelve a generar.";
   }
   const delAgente = l.porQueDelAgente[s.key]?.trim();
   if (delAgente) return delAgente;

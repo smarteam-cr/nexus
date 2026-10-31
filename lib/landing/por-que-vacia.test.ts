@@ -104,7 +104,7 @@ describe("el porqué en la data de la sección", () => {
 });
 
 describe("por qué quedó vacía cada sección de la Planificación", () => {
-  const base: LoQueSeLeyo = { porQueDelAgente: {}, hayDiagnostico: true, adopcionDirecta: false, leyoReuniones: true };
+  const base: LoQueSeLeyo = { porQueDelAgente: {}, hayDiagnostico: true, leyoReuniones: true };
 
   it("las curadas dicen quién las llena, aunque el agente diga otra cosa", () => {
     const r = porQueQuedoVacia({ key: "usuarios_permisos", label: "Usuarios y permisos", agentGenerated: false }, { ...base, porQueDelAgente: { usuarios_permisos: "otra" } });
@@ -118,7 +118,6 @@ describe("por qué quedó vacía cada sección de la Planificación", () => {
 
   it("las acciones en detalle sin diagnóstico, y el despliegue con adopción directa, dicen su motivo", () => {
     expect(porQueQuedoVacia({ key: "acciones_en_detalle", label: "Las acciones", agentGenerated: true }, { ...base, hayDiagnostico: false })).toMatch(/no hay diagnóstico/);
-    expect(porQueQuedoVacia({ key: "plan_despliegue", label: "Despliegue", agentGenerated: true }, { ...base, adopcionDirecta: true })).toMatch(/adopción es directa/);
   });
 
   it("la frase del agente gana a la genérica; sin ella, la genérica dice qué se leyó", () => {

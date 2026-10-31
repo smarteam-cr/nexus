@@ -28,8 +28,8 @@
  * Propiedades, pipelines y automatizaciones vinieron de Ejecución
  * (scripts/migrar-planificacion-practica.ts pasa el contenido que ya existía).
  *
- * `plan_despliegue` es CONDICIONAL por diseño: el agente la deja VACÍA cuando la
- * adopción es directa (equipo chico) — vacía → blank → el modo lectura la omite solo.
+ * Las rutinas y el despliegue por olas se mudaron al plan de adopción el 2026-10-30
+ * (SECCIONES_MUDADAS_A_LA_ADOPCION); `plan_despliegue` sigue siendo condicional allá.
  */
 import type { BCSectionDef } from "./business-case.defs";
 import type { BcTemplateDef } from "./templates.defs";
@@ -233,6 +233,41 @@ const INFORMES_DEF: BCSectionDef = {
 
 /** La sección que desarrolla las acciones del diagnóstico (2026-10-28, decisión 16). */
 export const ACCIONES_EN_DETALLE_KEY = "acciones_en_detalle";
+
+/** Las rutinas que hacen que el CRM se use. Viven en el plan de adopción desde el 2026-10-30. */
+export const RUTINAS_ADOPCION_DEF: BCSectionDef = {
+  key: "rutinas_adopcion",
+  label: "Rutinas de adopción",
+  eyebrow: "Quién, con qué cadencia",
+  theme: "soft",
+  sectionType: "kickoff_prose",
+  agentGenerated: true,
+  empty: proseEmpty,
+  agentHint: "Una rutina por item: quién + cadencia + qué mira. La modalidad (directa/pilotos) se declara en la intro.",
+  brief:
+    "Las rutinas que hacen que el CRM se USE — sin esto, la configuración es un mueble. `intro`: 1 frase que declara la modalidad de adopción del plan (directa o por pilotos) y por qué. " +
+    "`items` (3-6): `title` = la rutina ('Revisión semanal de pipeline'); `detail` = UNA línea con QUIÉN la hace + CADENCIA + QUÉ mira ('Gerente comercial, lunes: negocios sin actividad hace 7 días y etapas estancadas'). " +
+    "Rutinas para los roles que el proyecto involucra — no inventes cargos que la fuente no menciona.",
+  schema: asSchema(proseSchema),
+  schemaDelChat: asSchema(PROSA_SCHEMA_DEL_CHAT),
+};
+
+/** Las olas del despliegue, si la adopción es por pilotos. Viven en el plan de adopción desde el 2026-10-30. */
+export const PLAN_DESPLIEGUE_DEF: BCSectionDef = {
+  key: "plan_despliegue",
+  label: "Plan de despliegue por olas",
+  eyebrow: "Piloto escalonado",
+  theme: "light",
+  sectionType: "kickoff_prose",
+  agentGenerated: true,
+  empty: proseEmpty,
+  agentHint: "SOLO si la adopción es por pilotos. Adopción directa → déjala VACÍA (vacía = no se muestra).",
+  brief:
+    "SOLO para adopción POR PILOTOS (equipos grandes). Si la modalidad es DIRECTA, deja `items` VACÍO — una sección vacía no se muestra, y eso es lo correcto. " +
+    "`intro`: el criterio de la ola inicial. `items`: una OLA por item — `title` = 'Ola 1 — Equipo comercial de CR'; `detail` = UNA línea con quiénes entran + qué módulos usan + el indicador de éxito para pasar a la siguiente ola ('5 vendedores, pipeline + tareas; pasan cuando el 80% registra su actividad sin recordatorios').",
+  schema: asSchema(proseSchema),
+  schemaDelChat: asSchema(PROSA_SCHEMA_DEL_CHAT),
+};
 
 export const PLANIFICACION_SECTION_DEFS: BCSectionDef[] = [
   {
@@ -473,39 +508,9 @@ export const PLANIFICACION_SECTION_DEFS: BCSectionDef[] = [
   },
   COTIZACIONES_DEF,
   INFORMES_DEF,
-  {
-    /* Se queda acá hasta que exista el documento de Puesta en marcha (entrenamiento y adopción), que es
-       a donde va. Mientras tanto no se esconde: no tiene otro lugar donde verse. */
-    key: "rutinas_adopcion",
-    label: "Rutinas de adopción",
-    eyebrow: "Quién, con qué cadencia",
-    theme: "soft",
-    sectionType: "kickoff_prose",
-    agentGenerated: true,
-    empty: proseEmpty,
-    agentHint: "Una rutina por item: quién + cadencia + qué mira. La modalidad (directa/pilotos) se declara en la intro.",
-    brief:
-      "Las rutinas que hacen que el CRM se USE — sin esto, la configuración es un mueble. `intro`: 1 frase que declara la modalidad de adopción del plan (directa o por pilotos) y por qué. " +
-      "`items` (3-6): `title` = la rutina ('Revisión semanal de pipeline'); `detail` = UNA línea con QUIÉN la hace + CADENCIA + QUÉ mira ('Gerente comercial, lunes: negocios sin actividad hace 7 días y etapas estancadas'). " +
-      "Rutinas para los roles que el proyecto involucra — no inventes cargos que la fuente no menciona.",
-    schema: asSchema(proseSchema),
-    schemaDelChat: asSchema(PROSA_SCHEMA_DEL_CHAT),
-  },
-  {
-    key: "plan_despliegue",
-    label: "Plan de despliegue por olas",
-    eyebrow: "Piloto escalonado",
-    theme: "light",
-    sectionType: "kickoff_prose",
-    agentGenerated: true,
-    empty: proseEmpty,
-    agentHint: "SOLO si la adopción es por pilotos. Adopción directa → déjala VACÍA (vacía = no se muestra).",
-    brief:
-      "SOLO para adopción POR PILOTOS (equipos grandes). Si la modalidad es DIRECTA, deja `items` VACÍO — una sección vacía no se muestra, y eso es lo correcto. " +
-      "`intro`: el criterio de la ola inicial. `items`: una OLA por item — `title` = 'Ola 1 — Equipo comercial de CR'; `detail` = UNA línea con quiénes entran + qué módulos usan + el indicador de éxito para pasar a la siguiente ola ('5 vendedores, pipeline + tareas; pasan cuando el 80% registra su actividad sin recordatorios').",
-    schema: asSchema(proseSchema),
-    schemaDelChat: asSchema(PROSA_SCHEMA_DEL_CHAT),
-  },
+  // Se mudaron al plan de adopción (ver SECCIONES_MUDADAS_A_LA_ADOPCION): acá las sigue leyendo la planificación vieja.
+  { ...RUTINAS_ADOPCION_DEF, agentGenerated: false },
+  { ...PLAN_DESPLIEGUE_DEF, agentGenerated: false },
   {
     key: "cierre",
     label: "Aprobación",
@@ -581,12 +586,19 @@ export const PLANIFICACION_SECTION_DEFS: BCSectionDef[] = [
  */
 export const SECCIONES_RETIRADAS_DE_PLANIFICACION = ["politica_rectora", "roadmap", "metricas_exito"] as const;
 
+/**
+ * Lo que se mudó al plan de adopción (Elías, 2026-10-30). Ya no está en el canon: una planificación nueva no lo trae y la IA
+ * no lo escribe. A diferencia de las retiradas, en las planificaciones que ya lo tienen sigue VISIBLE y editable, también al
+ * regenerar: su contenido no tiene otro lugar donde verse hasta que alguien cree el plan de adopción.
+ */
+export const SECCIONES_MUDADAS_A_LA_ADOPCION = ["rutinas_adopcion", "plan_despliegue"] as const;
+
 /** Template del canvas Planificación para el agente tipado. */
 export const PLANIFICACION_TEMPLATE: BcTemplateDef = {
   id: "planificacion_v1",
   caseLabel: "Planificación",
   // Procesos con pasos + ciclo de vida + diagrama + propiedades + pipelines con etapas + automatizaciones
-  // + conversaciones + rutinas: lo más denso del motor. Tope del modo sin streaming (claude-sonnet-4-6:
+  // + conversaciones: lo más denso del motor. Tope del modo sin streaming (claude-sonnet-4-6:
   // ~21.333); el generador aborta sin persistir si se queda corto.
   maxTokens: 21000,
   brandVoice: false, // documento de TRABAJO (se discute con el cliente en sesión)
@@ -597,7 +609,6 @@ export const PLANIFICACION_TEMPLATE: BcTemplateDef = {
     "TU MÉTODO: parte del DIAGNÓSTICO (la parte teórica: une todo con CÓDIGOS —síntomas S1…, causas F1…, objetivos OBJ-01…, acciones AC-01…—, y trae el ENFOQUE DE LA SOLUCIÓN y las ACCIONES con sus herramientas). Esta planificación es la parte práctica: baja esas acciones a lo que se configura en HubSpot, respetando el enfoque de la solución. El diagnóstico trae las acciones en una línea: el detalle de cada una (qué se configura, grupo, hub, quick win y alcance) lo escribes tú en «Las acciones, en detalle», una fila por acción. Si no hay diagnóstico, trabaja con las reuniones de tu contexto. No inventes códigos.\n\n" +
     "DE DÓNDE SALE CADA COSA: cada paso, etapa, propiedad, pipeline, automatización y conversación lleva su `origen`. 'acordado' SOLO si una reunión con el cliente lo respalda (y la nombras en `fuente`); 'propuesta' si es diseño de Smarteam; 'supuesto' si das por hecho algo del cliente que nadie dijo. Lo que solo aparece en una nota interna o en el handoff NO cuenta como acordado. Prefiere menos cosas bien respaldadas a muchas supuestas.\n\n" +
     "LOS MAPAS DE PROCESOS son una fuente más, no la verdad: un sistema, un paso o un rol que el mapa trae y que ninguna reunión menciona es, a lo sumo, un supuesto.\n\n" +
-    "LA MODALIDAD DE ADOPCIÓN gobierna las rutinas y el despliegue por olas: la recibes en el contexto (directa o por pilotos, con su porqué). Con adopción DIRECTA, el plan de despliegue por olas queda VACÍO — vacío es correcto. Con PILOTOS, define las olas con equipo inicial, módulos e indicador de éxito para avanzar.\n\n" +
     "EL CICLO DE VIDA: si el portal ya tiene etapas (vienen en el contexto), parte de esas y propone SOLO los cambios que los procesos justifican. Renombrar etapas sin motivo es trabajo que el equipo del cliente paga después.\n\n" +
     "SIN FECHAS: ni semanas ni duraciones. El calendario vive en el Cronograma.\n\n" +
     "LO QUE TE LLEGA DEL HANDOFF ES APTO PARA EL CLIENTE: recibes solo el alcance, el dolor, las expectativas, los resultados que persigue el cliente, los interesados y el desarrollo. Este documento se le comparte al cliente por enlace y se exporta a PDF entero, así que lo que Smarteam escribió para adentro (riesgos, motivación de la compra, promesas de la venta) NO te llega a propósito: no lo supongas ni lo menciones.\n\n" +

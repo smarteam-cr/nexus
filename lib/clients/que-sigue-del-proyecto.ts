@@ -24,6 +24,7 @@
  * las demás etapas (y sin etapa reconocida) no sale: un proyecto avanzado no tiene por qué mandarlos.
  * Se va solo al publicar uno o con «Ahora no».
  */
+import { PIEZAS_SIEMPRE_EN_EL_RIEL } from "@/lib/pieces/registry";
 import type { ProjectLifecycleStage } from "@prisma/client";
 import type { EtapaParaLaUI } from "@/lib/lifecycle/etapa-ui";
 import { FULL_CYCLE_ORDER, STAGE_EXIT_STEPS, STAGE_LABEL_ES } from "@/lib/lifecycle/stage-engine";
@@ -222,7 +223,7 @@ export function queSigueDelProyecto(i: {
     const pieza = i.piezas.find((p) => p.slug === flujo.primary);
     const generada = pieza?.estado === "generada";
     const generarla = (p: PiezaParaQueSigue): QueSigueDelProyecto => ({
-      texto: `El proyecto está en ${STAGE_LABEL_ES[stage]}: ${p.estado === "por_activar" ? "activa" : "genera"} «${p.etiqueta}» para trabajar la etapa con el cliente.`,
+      texto: `El proyecto está en ${STAGE_LABEL_ES[stage]}: ${p.estado === "por_activar" && !PIEZAS_SIEMPRE_EN_EL_RIEL.has(p.slug) ? "activa" : "genera"} «${p.etiqueta}» para trabajar la etapa con el cliente.`,
       accion: { tipo: "pieza", slug: p.slug, etiqueta: p.etiqueta },
     });
     /* Sin la sugerencia de los cuestionarios, «genera» va primero, como siempre. Con ella (solo en el Handoff y en

@@ -17,8 +17,8 @@
  * las piezas que faltaban ni siquiera existían para el CSE que miraba el widget.
  *
  * ── POR QUÉ FILTRA POR `piezaAplica` Y NO MUESTRA TODO ───────────────────────
- * Un desarrollo no lleva kickoff. Mostrárselo en gris para siempre es el chip rojo
- * permanente que ya sacamos una vez: un chip AUSENTE dice "no corresponde", uno apagado
+ * Una pieza que no le corresponde al proyecto (el requerimiento técnico sin alcance técnico).
+ * Mostrársela en gris para siempre es el chip rojo permanente que ya sacamos una vez: un chip AUSENTE dice "no corresponde", uno apagado
  * dice "te falta". El desplegable del panel sigue siendo el MAPA completo — ahí sí están
  * todas, porque ahí se activan.
  */
