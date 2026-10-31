@@ -18,8 +18,8 @@
  *
  * PURA a propósito: la decisión se puede escribir entera como una tabla en el test, sin base.
  */
-import { resolvePipeline } from "@/lib/projects/kind";
 import { AGENTES_HANDOFF_POR_TIPO } from "@/lib/agents/handoff-por-tipo";
+import { pipelineKeyDeProyecto } from "@/lib/agents/resolver";
 import { PRIMERA_FASE_ES_ARRANQUE } from "./arranque";
 
 /**
@@ -35,7 +35,7 @@ export { PRIMERA_FASE_ES_ARRANQUE };
  * pipeline desconocido/legacy). `false` = respetar las fases tal como las propuso el agente.
  */
 export function tieneVozDeHandoffPropia(hubspotPipelineId: string | null): boolean {
-  return claveConVozDeHandoffPropia(resolvePipeline(hubspotPipelineId)?.key ?? null);
+  return claveConVozDeHandoffPropia(pipelineKeyDeProyecto(hubspotPipelineId));
 }
 
 /**

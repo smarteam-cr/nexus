@@ -56,6 +56,9 @@ export const ROLE_RANK: Record<TeamRole, number> = {
   SUPER_ADMIN: 4,
 };
 
+/** ¿Este rol es de Customer Success? */
+export const esDeCustomerSuccess = (rol: string | null | undefined): boolean => rol === "CSE" || rol === "CSL";
+
 /**
  * Etiqueta legible para UI. OJO: los VALORES del enum de DB no cambian (lección
  * REANCHOR: enum nuevo en filas rompe el prod viejo) — solo la etiqueta.

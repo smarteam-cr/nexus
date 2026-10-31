@@ -12687,9 +12687,8 @@ cambió el nombre a la implementación, tocó «Traer proyectos de HubSpot» y l
   del equipo técnico no cuenta: se usa «CSE Encargado» o, si está vacío, «CSL Encargado». Quién es técnico lo dice el rol DEV de
   `TeamMember` (`esDelEquipoTecnico`, `correosDelEquipoTecnico`), no una lista de nombres, y ser técnico no se pierde con
   la baja. Si no hay nadie más escrito se queda ese propietario: dejar el proyecto sin dueño le quitaría a la cuenta el
-  dato sin dar uno mejor; pasa con Secure Title y Analisalab, dos integraciones en «Acompañamiento técnico» (924878469),
-  un pipeline que Nexus no declara y sigue como pregunta abierta del roadmap. Como no se sabe de quién es, el pase escribe
-  ahí los encargados y no pisa al propietario, que no se recuperaría; y la lista para migrar los pone aparte. En
+  dato sin dar uno mejor. En un pipeline que Nexus no declara no se sabe de quién es el proyecto: el pase escribe ahí los
+  encargados y no pisa al propietario, que no se recuperaría, y la lista para migrar los pone aparte. En
   Desarrollo y Sitios web manda el propietario. Comprobado con el simulacro del 30 oct: **cambian 2 proyectos, los dos de
   Desarrollo (RC Inmobiliaria · Contratos en Docusign y kölbi · InfoClic), ninguna cuenta cambia de encargado y nadie
   gana ni pierde acceso**; Heiver conserva BLUESAT. El pase de cuenta escribe solo en proyectos de CS, así que ya no
@@ -12703,20 +12702,31 @@ cambió el nombre a la implementación, tocó «Traer proyectos de HubSpot» y l
   que Nexus tape para siempre. Por eso: (1) `scripts/propietarios-por-migrar.ts` lista, en solo lectura, cada proyecto de
   CS activo cuyo propietario falta, está archivado o es técnico, con quién debería quedar según «CSE Encargado»; Nexus no
   escribe esa migración, la decide Elías. El 30 oct: 12 proyectos por migrar, 3 con destino claro (BLUESAT y Grupo Inve a
-  Heiver, Smarteam a Elías) y 9 sin nadie claro, porque quedaron de personas que se fueron; más los 2 de arriba. (2) Si HubSpot rechaza la escritura porque la propiedad ya no existe, se repite
+  Heiver, Smarteam a Elías) y 9 sin nadie claro, porque quedaron de personas que se fueron. (2) Si HubSpot rechaza la escritura porque la propiedad ya no existe, se repite
   sin ella (`escribirSinLaRetirada`, en proyectos, empresa y contactos): si no, el pase se caía con la propiedad borrada,
   y solo con ese rechazo, para no tapar un error real. La lectura no debería necesitar nada: una propiedad que no existe
   llega vacía. Ni ese rechazo ni esa lectura se vieron contra HubSpot real: no se escribió nada allá. (3) Lo que Nexus lee
   y escribe cambia en una línea, `SE_USA_CSE_ENCARGADO`. **Ese día** lo que siga en la lista cae a «CSL Encargado», que es
   la CSL, y eso sí mueve cuentas: por eso se migra primero y se confirma la lista en cero, con todos los proyectos leídos.
+- **«Acompañamiento técnico» es del equipo técnico (30 oct).** Elías: el pipeline 924878469 se declara con el trato de
+  Desarrollo (`lib/projects/kind.ts`): manda su propietario, no decide la cuenta y no suma a la cartera de CS. Usa los
+  agentes de Desarrollo (`pipelineKeyDeProyecto`), sin Semana 0, y entra a las cuentas de Desarrollo de «Mi día». Sus dos
+  proyectos, la integración de Secure Title y la de Analisalab, salen de la lista para migrar. El alta lo ofrece como un
+  tipo más.
+- **Las cuentas con solo proyectos técnicos las abre Customer Success (30 oct).** Elías: una cuenta sin proyectos de CS la
+  puede ver quien es de Customer Success. Es una regla general (`CUENTA_SOLO_TECNICA_WHERE`, `esDeCustomerSuccess`, en
+  lib/auth/access.ts): roles CSE y CSL, cuenta de la cartera, algún proyecto activo de un pipeline técnico y ninguno
+  activo de CS (un proyecto de CS inactivo no la cierra: Plastimex y Grupo Printer tienen). Va después del REVOKE, que
+  sigue cortando, en los cuatro caminos: la ficha, el listado, el lote de «Para ti» y Tareas (lib/tareas/clientes.ts). El
+  30 oct son 8 cuentas y 5 CSE. ⚠ Abre con los mismos derechos que un acceso dado a mano, no solo lectura: un CSE puede
+  cambiar el enlace externo o los dominios de esa cuenta. No cuenta como cartera del CSE ni da el permiso de editar el
+  handoff si no lo tiene. Si «ver» debe ser solo leer, hace falta un modo que hoy Nexus no tiene.
 - **Foto del encargado (30 oct).** Cada proyecto del riel de la ficha muestra solo la foto de quien lo lleva, con el nombre
   al pasar el mouse (`personaDelProyecto`): en uno de Desarrollo, la persona técnica; quien está de baja va marcada y sin
   foto, como en el listado. La columna del listado de Clientes
   crece y usa la foto del usuario de Nexus; sin foto, las iniciales con tokens (`<Avatar neutro>`, porque el color por
   hash no flipea en claro). El riel sale de `esProyectoNavegable`, que no mira quién pregunta ni el pipeline: de 33 proyectos
-  activos fuera de CS, los 33 se ven en la ficha. Lo que no cambia: un CSE sin ver toda la cartera entra a una cuenta
-  por un proyecto de CS (lib/auth/access.ts), y 7 cuentas tienen solo proyectos de Desarrollo o Sitios web, que un CSE
-  no abre sin un permiso explícito.
+  activos fuera de CS, los 33 se ven en la ficha.
 - Un proyecto que crea Nexus nace con el propietario que trae el alta (`HUBSPOT_HANDOFF_OWNER_ID`) o el handoff, igual
   que antes: con «CSE Encargado» vacío, la regla vieja ya caía a ese propietario.
 - **La causa de SmartAgro, la más probable: el piso de 60 s.** Los datos (la historia de HubSpot y las fechas de la base): la ficha se

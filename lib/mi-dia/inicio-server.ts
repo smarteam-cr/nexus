@@ -82,16 +82,16 @@ async function cuentasDeLaCartera(): Promise<{ clientId: string; empresa: string
   });
 }
 
-/** Los clientes con un proyecto de desarrollo abierto. */
+/** Los clientes con un proyecto de desarrollo abierto (o de acompañamiento técnico, con el mismo trato). */
 async function cuentasDeDesarrollo(): Promise<{ clientId: string; empresa: string; llevaEmail: string | null; proyectos: string[] }[]> {
-  const desarrollo = pipelineByKey("development").hubspotPipelineId;
+  const pipelinesTecnicos = [pipelineByKey("development").hubspotPipelineId, pipelineByKey("acompanamiento-tecnico").hubspotPipelineId];
   const clientes = await prisma.client.findMany({
-    where: { kind: { in: ["CLIENTE", "PROSPECTO"] }, ...CLIENTE_NO_EXCLIENTE_WHERE, projects: { some: { status: "active", hubspotPipelineId: desarrollo } } },
+    where: { kind: { in: ["CLIENTE", "PROSPECTO"] }, ...CLIENTE_NO_EXCLIENTE_WHERE, projects: { some: { status: "active", hubspotPipelineId: { in: pipelinesTecnicos } } } },
 
     select: { id: true, name: true, projects: { select: SELECT_PROYECTO } },
   });
   return clientes.flatMap((c) => {
-    const dev = proyectosAbiertos(c.projects).filter((p) => p.hubspotPipelineId === desarrollo);
+    const dev = proyectosAbiertos(c.projects).filter((p) => pipelinesTecnicos.includes(p.hubspotPipelineId ?? ""));
     if (!dev.length) return [];
     return [{ clientId: c.id, empresa: c.name, llevaEmail: dev.find((p) => p.hubspotOwnerEmail)?.hubspotOwnerEmail?.toLowerCase() ?? null, proyectos: dev.map((p) => p.name) }];
   });

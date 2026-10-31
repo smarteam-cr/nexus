@@ -31,22 +31,28 @@
  *   5. ClientAssignment REVOKE → 403 (corta antes que cualquier otro permiso)
  *   6. ClientAssignment GRANT → OK (reason: granted)
  *   7. Owner en HubSpot (algún Project.hubspotOwnerEmail = email del user) → OK (reason: hubspot-owner)
- *   8. Preventa: un PROSPECTO con una preventa viva, para quien tiene `preventa.read` → OK
+ *   8. Cuenta con solo proyectos técnicos, para Customer Success → OK (reason: cuenta-tecnica). Sin proyectos de CS
+ *      activos, sin esto casi ningún CSE la abría (Elías, 2026-10-30). No abre a nadie más.
+ *   9. Preventa: un PROSPECTO con una preventa viva, para quien tiene `preventa.read` → OK
  *      (reason: preventa). Todo Customer Success trabaja las preventas (2026-10-06) y la preventa
  *      muestra la información y los procesos de la empresa. Una empresa que ya es CLIENTE no entra
  *      por acá: su acceso sigue siendo el de la cartera.
- *   9. 403
+ *  10. 403
  */
 import { prisma } from "@/lib/db/prisma";
 import type { Prisma, TeamMember } from "@prisma/client";
 import { requireInternalUser, ForbiddenError, type AppUserWithTeamMember } from "./supabase";
 import { can } from "./permissions/engine";
 import { CS_CLIENT_WHERE } from "@/lib/clients/kind";
-import { PROYECTO_DE_PIPELINE_CS_WHERE } from "@/lib/projects/scope";
+import { CUENTA_SOLO_TECNICA_WHERE, PROYECTO_DE_PIPELINE_CS_WHERE } from "@/lib/projects/scope";
+import { esDeCustomerSuccess } from "./roles";
 
 /** Por qué se concedió el acceso. Todas las razones son de gente INTERNA: no hay —ni
  *  debe volver a haber— una razón "porque es el cliente dueño". */
-export type AccessReason = "super-admin" | "view-all" | "hubspot-owner" | "granted" | "preventa";
+export type AccessReason = "super-admin" | "view-all" | "hubspot-owner" | "granted" | "cuenta-tecnica" | "preventa";
+
+/** La cuenta que abre todo Customer Success: de la cartera y con solo proyectos técnicos. Una regla para los cuatro caminos (Tareas, en lib/tareas/clientes.ts). */
+export const CUENTA_TECNICA_DE_LA_CARTERA: Prisma.ClientWhereInput = { AND: [CS_CLIENT_WHERE, CUENTA_SOLO_TECNICA_WHERE] };
 
 export interface AccessResult {
   user: AppUserWithTeamMember;
@@ -97,7 +103,13 @@ export async function requireAccessToClient(clientId: string): Promise<AccessRes
   });
   if (ownerProjectCount > 0) return { user, reason: "hubspot-owner" };
 
-  // 7. Un prospecto en preventa, para quien trabaja las preventas (no una empresa que ya es cliente).
+  // 7. Una cuenta con solo proyectos técnicos, para Customer Success.
+  if (esDeCustomerSuccess(tm.roleEnum)) {
+    const tecnica = await prisma.client.count({ where: { id: clientId, ...CUENTA_TECNICA_DE_LA_CARTERA } });
+    if (tecnica > 0) return { user, reason: "cuenta-tecnica" };
+  }
+
+  // 8. Un prospecto en preventa, para quien trabaja las preventas (no una empresa que ya es cliente).
   if (await can(tm, "preventa", "read")) {
     const enPreventa = await prisma.exploracionDeVenta.count({
       // Solo una PREVENTA: la exploración de un proyecto (projectId) no abre la empresa (lib/exploraciones/marco.ts).
@@ -106,7 +118,7 @@ export async function requireAccessToClient(clientId: string): Promise<AccessRes
     if (enPreventa > 0) return { user, reason: "preventa" };
   }
 
-  // 8. Sin acceso
+  // 9. Sin acceso
   throw new ForbiddenError("Sin acceso a este cliente");
 }
 
@@ -178,6 +190,7 @@ export async function accessibleClientWhere(
     { projects: { some: { hubspotOwnerEmail: tm.email, ...PROYECTO_DE_PIPELINE_CS_WHERE } } },
   ];
   if (grantedIds.length) visibility.push({ id: { in: grantedIds } });
+  if (esDeCustomerSuccess(tm.roleEnum)) visibility.push(CUENTA_TECNICA_DE_LA_CARTERA);
 
   return {
     AND: [
@@ -242,8 +255,8 @@ export async function clientesRevocadosPara(tm: Pick<TeamMember, "id" | "roleEnu
 /**
  * La regla de `requireAccessToClient`, por LOTE y para una persona explícita (no la sesión): de esas cuentas, las que
  * NO puede abrir. La usa «Para ti» para no nombrar la reunión de una cuenta ajena. Ve toda la cartera → ninguna; si no,
- * un REVOKE corta, y abren un GRANT, ser el encargado de un proyecto de Customer Success o un prospecto en preventa con
- * `preventa.read`. ⚠ Si cambia la regla de arriba, cambia acá.
+ * un REVOKE corta, y abren un GRANT, ser el encargado de un proyecto de Customer Success, una cuenta con solo proyectos
+ * técnicos para Customer Success o un prospecto en preventa con `preventa.read`. ⚠ Si cambia la regla de arriba, cambia acá.
  */
 export async function clientesQueNoAbre(teamMemberId: string, clientIds: readonly string[]): Promise<Set<string>> {
   const ids = [...new Set(clientIds)];
@@ -255,13 +268,14 @@ export async function clientesQueNoAbre(teamMemberId: string, clientIds: readonl
   // Sin la persona (o dada de baja) no se sabe: ninguna se abre.
   if (!tm || tm.deactivatedAt) return new Set(ids);
   if (await veTodaLaCartera(tm)) return new Set();
-  const [revocadas, grants, propios, enPreventa] = await Promise.all([
+  const [revocadas, grants, propios, tecnicas, enPreventa] = await Promise.all([
     clientesRevocadosPara(tm),
     prisma.clientAssignment.findMany({
       where: { kind: "GRANT", clientId: { in: ids }, OR: [{ teamMemberId: tm.id }, { targetRole: tm.roleEnum }] },
       select: { clientId: true },
     }),
     prisma.project.findMany({ where: { clientId: { in: ids }, hubspotOwnerEmail: tm.email, ...PROYECTO_DE_PIPELINE_CS_WHERE }, select: { clientId: true } }),
+    esDeCustomerSuccess(tm.roleEnum) ? prisma.client.findMany({ where: { id: { in: ids }, ...CUENTA_TECNICA_DE_LA_CARTERA }, select: { id: true } }) : [],
     can(tm, "preventa", "read").then((puede) =>
       puede
         ? prisma.exploracionDeVenta.findMany({
@@ -271,7 +285,7 @@ export async function clientesQueNoAbre(teamMemberId: string, clientIds: readonl
         : [],
     ),
   ]);
-  const abre = new Set([...grants, ...propios, ...enPreventa].map((x) => x.clientId).filter((id) => !revocadas.has(id)));
+  const abre = new Set([...grants, ...propios, ...tecnicas.map((c) => ({ clientId: c.id })), ...enPreventa].map((x) => x.clientId).filter((id) => !revocadas.has(id)));
   return new Set(ids.filter((id) => !abre.has(id)));
 }
 

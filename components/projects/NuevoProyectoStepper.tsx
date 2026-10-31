@@ -696,7 +696,7 @@ export default function NuevoProyectoStepper() {
                   <p className="text-2xs font-medium text-fg-muted uppercase tracking-wider">
                     Tipo de proyecto
                   </p>
-                  {/* Los cuatro tipos, también SmartLoop (servicio recurrente) desde el 2026-10-17: nace en Diagnóstico
+                  {/* Todos los tipos, también SmartLoop (servicio recurrente) desde el 2026-10-17: nace en Diagnóstico
                       y su ciclo 1 se abre solo (docs/smartloop-plan.md, «Para cuando lleguen los proyectos reales»). */}
                   {PROJECT_PIPELINES.map((p) => (
                     <label
