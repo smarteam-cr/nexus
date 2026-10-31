@@ -184,7 +184,7 @@ export function canvasDefDeUnaCopia(tipo: string, plantillaId?: string | null): 
   const deSiempre = canvasDefForSlug(tipo);
   const defaultDe = new Map<string, Record<string, unknown> | undefined>((deSiempre?.sections ?? []).map((s) => [s.key, s.defaultData]));
   const sections: CanvasSectionDef[] = seccionesDeUnaCopia(tipo, plantillaId).map((d) => {
-    const defaultData = plantillaId === "informe-de-avance" && d.key === "cierre"
+    const defaultData = (plantillaId === "informe-de-avance" || plantillaId === "aprendizaje") && d.key === "cierre"
       ? CIERRE_DEL_INFORME_DE_AVANCE
       : deSiempre
       ? defaultDe.get(d.key)
