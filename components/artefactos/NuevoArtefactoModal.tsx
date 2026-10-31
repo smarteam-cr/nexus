@@ -31,6 +31,7 @@ export default function NuevoArtefactoModal({
   open,
   onClose,
   tipoInicial,
+  plantillaInicial,
   clase,
   libres,
   documentos,
@@ -41,6 +42,8 @@ export default function NuevoArtefactoModal({
   onClose: () => void;
   /** El tipo ya elegido («Crear otra planificación»). Sin él, se elige en el modal. */
   tipoInicial?: string | null;
+  /** La plantilla ya marcada de ese tipo (la sugerencia del «Qué sigue»: el Aprendizaje no es la Entrega de cierre). */
+  plantillaInicial?: string | null;
   /** El grupo desde cuyo + se abrió: solo sus tipos. Sin él, todos. */
   clase?: "entregable" | "herramienta" | null;
   /** Los tipos cuyo documento de siempre sigue sin usar: crear uno lo toma, y ofrece también sus plantillas de siempre. */
@@ -62,11 +65,11 @@ export default function NuevoArtefactoModal({
     if (!open) return;
     /* eslint-disable react-hooks/set-state-in-effect -- cada apertura arranca de cero */
     setTipo(tipoInicial ?? primero);
-    setElegidas({});
+    setElegidas(tipoInicial && plantillaInicial ? { [tipoInicial]: plantillaInicial } : {});
     setNombre("");
     setDesde("");
     /* eslint-enable react-hooks/set-state-in-effect */
-  }, [open, tipoInicial, primero]);
+  }, [open, tipoInicial, plantillaInicial, primero]);
 
   const elegirTipo = (id: string) => {
     setTipo(id);

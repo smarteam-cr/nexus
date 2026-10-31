@@ -47,12 +47,6 @@ export interface OpcionesDeFilas {
    */
   sinCanvas?: Partial<Record<string, RowState>>;
   /**
-   * Las piezas de un SERVICIO RECURRENTE, en su orden (lib/servicios/ciclo.ts). Un proyecto así no recorre
-   * el flujo de una implementación: sus filas son el Kickoff, el Cronograma y los artefactos de su ciclo, y
-   * nada más (más los canvases sueltos del CSE). Sin el campo, el flujo de siempre.
-   */
-  piezasDelServicio?: readonly string[];
-  /**
    * Incluir las COPIAS de un tipo (etapa V3 de docs/artefactos-plan.md). El riel las lista debajo de su tipo; el widget
    * (un checklist del recorrido) no: una copia no es un paso pendiente.
    */
@@ -158,7 +152,7 @@ export function buildPieceRows(
     return ordenarArtefactos(lista.map((c) => ({ id: c.id, order: c.order ?? 0, createdAt: c.createdAt ?? 0 }))).map((x) => porId.get(x.id)!);
   };
 
-  const delFlujo: PieceRow[] = (opts.piezasDelServicio ?? piezasParaMostrar())
+  const delFlujo: PieceRow[] = piezasParaMostrar()
     .filter((slug) => opts.incluirHandoff || !FUERA_DEL_DESPLEGABLE.has(slug))
     .filter((slug) => pieceBySlug(slug)?.hasCanvas !== false || opts.sinCanvas?.[slug] !== undefined)
     .flatMap((slug) => {

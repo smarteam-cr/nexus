@@ -67,13 +67,13 @@ export function AntesDeGenerarElDiagnostico({
 }) {
   const [abierto, setAbierto] = useState(!generado);
   const pendientes = confirmado.piezas.filter((p) => p.estado === "sin-confirmar" || p.estado === "en-parte");
-  /* M2 (2026-10-24): un ciclo de SmartLoop cuya exploración no leyó ninguna reunión. Una respuesta vieja no lo trae. */
-  const cicloSinExploracion = confirmado.cicloSinExploracion ?? null;
+  /* M2 (2026-10-24): un SmartLoop cuya exploración no leyó ninguna reunión. Una respuesta vieja no lo trae. */
+  const cicloSinExploracion = !!confirmado.cicloSinExploracion;
   // Ya generado y todo confirmado: no hay nada que decir.
   if (generado && !pendientes.length) return null;
 
   const titulo =
-    cicloSinExploracion !== null
+    cicloSinExploracion
       ? "Explora primero, por equipo"
       : confirmado.casiNada
         ? "Casi nada de lo que lee el diagnóstico está confirmado"
@@ -122,7 +122,7 @@ export function AntesDeGenerarElDiagnostico({
   return (
     <Alert variant={pideConfirmacion ? "warning" : "info"} title={titulo}>
       <p className="text-xs">
-        {cicloSinExploracion !== null ? (
+        {cicloSinExploracion ? (
           <>
             {`${confirmado.mensaje} `}
             <a className="font-semibold underline underline-offset-2" href={urlDeProyecto(clientId, projectId, "exploration")}>

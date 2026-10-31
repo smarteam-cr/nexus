@@ -25,7 +25,6 @@ import { AccionDeRecurrencia, BloqueDeRecurrencia, useRecomendacionDeRecurrencia
 import type { EtapaEnHubspot } from "@/lib/projects/etapa-sugerida";
 import { useMe } from "@/hooks/useMe";
 import EncuestaDeEtapa from "./EncuestaDeEtapa";
-import { CambiarEtapaDelCiclo, EditarElCiclo, SugerenciaDeEtapaDelCiclo } from "@/components/ciclos/ControlesDelCiclo";
 import PanelDelServicio from "@/components/ciclos/PanelDelServicio";
 import GuiaDelServicio, { BotonPasarARecurrente, useServicioDelProyecto } from "@/components/servicios/GuiaDelServicio";
 import CicloEnCirculo from "@/components/servicios/CicloEnCirculo";
@@ -687,20 +686,14 @@ export default function ProjectGPS({ projectId, clientId }: { projectId: string;
   const pctTranscript = cobertura ? pctConTranscript(cobertura) : null;
   const etapa = data.etapa ?? null;
   const encuesta = data.etapaHubspot ?? null;
-  /* Un servicio recurrente (2026-10-12): la tarjeta de la etapa ES la del ciclo. Lo que tiene que quedar en la
-     etapa en curso reemplaza al «Para pasar a…» de una implementación. */
+  /* Un servicio recurrente: la tarjeta dice la etapa que trae HubSpot, en su círculo. No hay «Para pasar a…»: nada se exige. */
   const ciclo = resumenCtx.ciclo ?? null;
-  const lineas = ciclo
-    ? ciclo.producido.map((x) => ({ hecho: x.hecho === true, texto: x.hecho === false ? `${x.texto} · falta` : x.texto }))
-    : porQueEstaAca(etapa);
+  const lineas = ciclo ? [] : porQueEstaAca(etapa);
   const cicloCambio = () => {
     invalidateGps(projectId);
     void fetchGPS();
     resumenCtx.onCicloCambio?.();
   };
-  const [, mDesde, dDesde] = ciclo?.desde?.split("-") ?? [];
-  const [, mHasta, dHasta] = ciclo?.hasta?.split("-") ?? [];
-  const fechasDelCiclo = ciclo?.desde && ciclo?.hasta ? ` · ${Number(dDesde)}/${Number(mDesde)} – ${Number(dHasta)}/${Number(mHasta)}` : "";
 
   // Pendientes: lo reciente (decisión del 2026-10-04), de Tareas desde la etapa 2 de la memoria de la cuenta.
   const recientes = pendientes?.recientes ?? [];
@@ -832,6 +825,11 @@ export default function ProjectGPS({ projectId, clientId }: { projectId: string;
         >
           Cargar la próxima reunión
         </BotonAzul>
+      ) : undefined;
+    }
+    if (a.tipo === "artefacto") {
+      return resumenCtx.abrirNuevoArtefacto ? (
+        <BotonBlanco onClick={() => resumenCtx.abrirNuevoArtefacto?.(a.tipoDeArtefacto, a.plantilla)}>Crear en «Nuevo artefacto»</BotonBlanco>
       ) : undefined;
     }
     if (a.tipo === "sesiones") return <BotonAzul onClick={() => setSesionesAbiertas(true)}>Revisar las reuniones</BotonAzul>;
@@ -1049,18 +1047,8 @@ export default function ProjectGPS({ projectId, clientId }: { projectId: string;
                 {etapa.posicion.index} de {etapa.posicion.total}
               </span>
             )}
-            {ciclo && (
-              <span className="text-xs text-fg-muted">
-                · Ciclo {ciclo.numero}
-                {fechasDelCiclo}
-              </span>
-            )}
           </div>
           <div className="flex items-baseline gap-3">
-            {ciclo && !ciclo.enHubspot && ciclo.puedeEditar && (
-              <CambiarEtapaDelCiclo projectId={projectId} cicloId={ciclo.id ?? null} etapa={ciclo.etapa} onCambio={cicloCambio} />
-            )}
-            {ciclo && <EditarElCiclo projectId={projectId} onCambio={cicloCambio} />}
             <BotonPasarARecurrente
               projectId={projectId}
               datos={servicio}
@@ -1087,24 +1075,13 @@ export default function ProjectGPS({ projectId, clientId }: { projectId: string;
             {encuesta.sugerencia.desde ?? "otra etapa"}.
           </FranjaDeSugerencias>
         )}
-        {ciclo && !encuesta?.sugerencia && (ciclo.puedeEditar || ciclo.enHubspot) && (
-          <SugerenciaDeEtapaDelCiclo
-            projectId={projectId}
-            cicloId={ciclo.id ?? null}
-            etapa={ciclo.etapa}
-            piezasConContenido={resumenCtx.piezas.filter((x) => x.estado === "generada").map((x) => x.slug)}
-            enHubspot={ciclo.enHubspot}
-            onCambio={cicloCambio}
-            onResponder={encuesta && !encuesta.bloqueo ? () => setEncuestaAbierta(true) : undefined}
-          />
-        )}
         {/* SmartLoop (iniciativa 4, paso 2): las cinco etapas como un ciclo, no como una barra que termina. */}
         {ciclo && esEtapaDelCiclo(ciclo.etapa) ? (
           <div className="flex justify-center">
             <CicloEnCirculo
               etapas={ETAPAS_DEL_CICLO.map((e) => ETIQUETA_DE_ETAPA[e])}
               actual={ETAPAS_DEL_CICLO.indexOf(ciclo.etapa)}
-              centro={`Ciclo ${ciclo.numero}`}
+              centro={ciclo.corto}
             />
           </div>
         ) : etapa && etapa.linea.length > 0 && etapa.posicion && (
@@ -1124,9 +1101,6 @@ export default function ProjectGPS({ projectId, clientId }: { projectId: string;
         )}
         {lineas.length > 0 && (
           <div className="flex flex-col gap-1 border-t border-line pt-2.5 text-[13px] text-fg-secondary">
-            {ciclo?.etapa && (
-              <span className="text-xs text-fg-muted">En {ciclo.corto} tiene que quedar:</span>
-            )}
             {lineas.map((l, k) => (
               <span key={k}>
                 {l.hecho ? <span className="font-bold text-success">✓</span> : <span className="text-fg-muted">○</span>} {l.texto}
@@ -1136,7 +1110,7 @@ export default function ProjectGPS({ projectId, clientId }: { projectId: string;
         )}
       </section>
 
-      {/* La guía del servicio recurrente: qué se entrega, la cadencia, qué toca y las rutinas. Sin servicio no pinta nada. */}
+      {/* La guía del servicio recurrente: qué se entrega, la cadencia y las rutinas. Sin servicio no pinta nada. */}
       <GuiaDelServicio
         projectId={projectId}
         datos={servicio}

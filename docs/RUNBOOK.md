@@ -1311,6 +1311,4 @@ Los cinco SQL ya están aplicados. Además:
 
 1. La primera sync de Meet después del deploy guarda la descripción de la invitación en las reuniones de los últimos 30
    días que la tengan (un UPDATE por reunión, una sola vez).
-2. SmartLoop: con el plan de FACO pasado a JSON (la forma está en `scripts/data/propuesta-smartloop.ejemplo.json`),
-   `npx tsx scripts/cargar-propuesta-en-ciclo.ts --proyecto <id de «FACO · SmartLoop (prueba)»> --archivo <faco.json> --por <correo>`
-   en simulacro, y con `ALLOW_PROD_WRITE=1 … --apply`. Se niega si el proyecto ya tiene historia.
+2. (El traductor de propuestas a ciclos se retiró el 2026-10-31: Nexus ya no administra ciclos. Ver DECISIONS «SmartLoop se lleva como cualquier proyecto».)

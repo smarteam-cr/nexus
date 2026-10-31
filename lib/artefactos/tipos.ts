@@ -78,6 +78,9 @@ export const SECCIONES_DE_LA_HOJA_DE_RUTA_ESENCIAL = ["hoja_de_ruta", "frentes",
 /** El informe de avance de la Entrega (catálogo n.º 15). Sus secciones nuevas viven en plantillas-adicionales.defs.ts. */
 export const SECCIONES_DEL_INFORME_DE_AVANCE = ["portada", "resumen", "avance_por_frente", "logros_del_periodo", "riesgos_y_pendientes_del_cliente", "recomendaciones", "cierre"] as const;
 
+/** El aprendizaje de un servicio recurrente (Elías, 31 oct): una plantilla más de la Entrega. Sus secciones viven en plantillas-adicionales.defs.ts. */
+export const SECCIONES_DEL_APRENDIZAJE = ["portada", "resumen", "resultados_medidos", "lo_que_aprendimos", "recomendaciones", "cierre"] as const;
+
 /** Las plantillas que se suman a la Planificación. Las listas viven acá: el template las lee (plantillas-adicionales.defs.ts). */
 export const SECCIONES_DE_LA_CAMPANA = ["planificacion", "campana_objetivo", "campana_segmentos", "campana_piezas", "campana_presupuesto", "formularios", "automatizaciones", "campana_resultado", "cierre"] as const;
 export const SECCIONES_DEL_MARKETING = ["planificacion", "definicion_procesos", "ciclo_vida_crm", "canales_entrada", "formularios", "automatizaciones", "informes", "cierre"] as const;
@@ -388,6 +391,13 @@ export const TIPOS: readonly TipoDeArtefacto[] = [
         nombre: "Informe de avance",
         paraQue: "El informe periódico al cliente: lo avanzado por frente, lo logrado, los riesgos, lo que falta de su lado y lo que viene.",
         secciones: SECCIONES_DEL_INFORME_DE_AVANCE,
+        ordenPropio: true,
+      },
+      {
+        id: "aprendizaje",
+        nombre: "Aprendizaje",
+        paraQue: "Lo que se midió, lo que aprendimos juntos y qué conviene hacer ahora, con el contexto del proyecto y sus reuniones.",
+        secciones: SECCIONES_DEL_APRENDIZAJE,
         ordenPropio: true,
       },
     ],

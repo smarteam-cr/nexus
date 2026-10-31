@@ -25,13 +25,13 @@ import { contextoDeTareas, equipoDe, ErrorDeTareas } from "@/lib/tareas/servidor
 import { clientesQueVesParaTareas } from "@/lib/tareas/clientes";
 import { crearTarea, urlDeLaTarea } from "@/lib/tareas/mutaciones";
 import { hoyEnCostaRica } from "@/lib/tareas/semana";
-import { abrirCiclo, cargarEstadoDelCiclo, ErrorDelCiclo, sumarCasosDeLaPropuestaEnTx } from "./ciclos-server";
+import { abrirCiclo, ErrorDelCiclo, estadoDelCicloParaElRiel, sumarCasosDeLaPropuestaEnTx } from "./ciclos-server";
 import { esTipoRecurrente, resolveBcType, SERVICIO_RECURRENTE_TYPE_ID } from "@/lib/business-cases/case-types";
 import { USE_CASES_SECTION_KEY } from "@/lib/business-cases/use-cases";
 import { casosDeLaPropuesta } from "./propuesta";
 import { sanitizeTags } from "@/lib/tags/catalog";
 import { CATALOGO_DE_SERVICIOS, ETIQUETA_DE_CADENCIA, servicioDelCatalogo, servicioDelProyecto, type Cadencia, type ServicioRecurrente } from "./catalogo";
-import { esEtapaDelCiclo, type EtapaDelCiclo } from "./ciclo";
+import { ETAPAS_DEL_CICLO, ETIQUETA_DE_ETAPA, type EtapaDelCiclo } from "./ciclo";
 import { propuestaDePaso, type PropuestaDePaso } from "./pasar-a-recurrente";
 import { puedeDecidirRecurrencia } from "./recurrencia";
 import { enlaceDeLaReunion, leerRutinas, queTocaAhora, RUTINAS_VACIAS, tareasDeLaVentana, type EstadoDeLasRutinas, type QueTocaAhora } from "./rutinas";
@@ -76,14 +76,16 @@ export interface GuiaDelServicioDto {
       agendada: { at: string; por: string } | null;
     }>;
     tareas: Array<{ clave: string; titulo: string; cada: string }>;
+    /** Qué se suele hacer en cada etapa, si avanza por ciclos: teoría, no pide nada. */
+    etapas: Array<{ clave: EtapaDelCiclo; nombre: string; queHaces: string }>;
   } | null;
   /** Desde cuándo corre (AAAA-MM-DD), si se sabe. */
   desde: string | null;
   /** Hasta qué semana hay tareas de la rutina creadas, y cuántas crearía «Crear las tareas» ahora. */
   tareas: { hasta: string | null; siguientes: number; ventanaHasta: string } | null;
   queToca: QueTocaAhora | null;
-  /** El ciclo abierto, si el servicio avanza por ciclos. */
-  ciclo: { numero: number; etapa: EtapaDelCiclo; falta: string | null } | null;
+  /** La etapa en que va, si el servicio avanza por ciclos. */
+  etapa: EtapaDelCiclo | null;
   /** El proyecto todavía no está donde el servicio lo pide en HubSpot (lo mueve una persona). */
   pendienteEnHubspot: string | null;
   puedeEditar: boolean;
@@ -185,7 +187,7 @@ export async function cargarGuiaDelServicio(projectId: string, persona: TeamMemb
       desde: null,
       tareas: null,
       queToca: null,
-      ciclo: null,
+      etapa: null,
       pendienteEnHubspot: null,
       puedeEditar,
       catalogo: puedeEditar && !cerrado(p) ? CATALOGO_DE_SERVICIOS.map((s) => ({ clave: s.clave, nombre: s.nombre, descripcion: s.descripcion, conCiclo: !!s.ciclo })) : [],
@@ -197,13 +199,9 @@ export async function cargarGuiaDelServicio(projectId: string, persona: TeamMemb
   const arranque = dia(p.servicioDesde) ?? dia(p.createdAt) ?? hoy;
   const [invitados, estadoCiclo] = await Promise.all([
     invitadosDelCliente(p.clientId),
-    servicio.ciclo ? cargarEstadoDelCiclo(projectId).catch(() => null) : Promise.resolve(null),
+    servicio.ciclo ? estadoDelCicloParaElRiel(projectId).catch(() => null) : Promise.resolve(null),
   ]);
   const ventana = tareasDeLaVentana({ projectId, servicio, arranque, hoy, estado });
-  const ciclo =
-    estadoCiclo?.abierto && esEtapaDelCiclo(estadoCiclo.abierto.etapa)
-      ? { numero: estadoCiclo.abierto.numero, etapa: estadoCiclo.abierto.etapa, falta: estadoCiclo.guia?.primeroQueFalta ?? null }
-      : null;
   const pipeline = resolvePipeline(p.hubspotPipelineId);
   const pendienteEnHubspot =
     p.servicioRecurrente && pipeline?.key !== servicio.enHubspot.pipeline
@@ -230,11 +228,15 @@ export async function cargarGuiaDelServicio(projectId: string, persona: TeamMemb
         agendada: estado.reuniones[r.clave] ? { at: estado.reuniones[r.clave].agendadaAt, por: estado.reuniones[r.clave].por } : null,
       })),
       tareas: servicio.tareas.map((t) => ({ clave: t.clave, titulo: t.titulo, cada: ETIQUETA_DE_CADENCIA[t.cada as Cadencia] })),
+      etapas: servicio.ciclo
+        ? ETAPAS_DEL_CICLO.map((e) => ({ clave: e, nombre: ETIQUETA_DE_ETAPA[e], queHaces: servicio.ciclo!.guia.etapas[e].queHaces }))
+        : [],
     },
     desde: dia(p.servicioDesde),
     tareas: servicio.tareas.length ? { hasta: estado.tareas?.hasta ?? null, siguientes: ventana.tareas.length, ventanaHasta: ventana.hasta } : null,
-    queToca: queTocaAhora({ servicio, estado, hoy, faltaDelCiclo: ciclo?.falta ?? null }),
-    ciclo,
+    // Un servicio con ciclo no pide nada: sus rutinas son «Cómo se suele llevar» (Elías, 31 oct).
+    queToca: servicio.ciclo ? null : queTocaAhora({ servicio, estado, hoy }),
+    etapa: estadoCiclo?.etapa ?? null,
     pendienteEnHubspot,
     puedeEditar,
     catalogo: [],

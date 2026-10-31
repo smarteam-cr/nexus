@@ -7911,6 +7911,8 @@ le pregunta a la persona del cliente.
 
 ## Servicios recurrentes (SmartLoop): proyecto de prueba y el ciclo como pieza (2026-10-11)
 
+> ⚠ **Corregido el 2026-10-31:** las tablas siguen, pero el ciclo ya no es una pieza ni se administra en Nexus. Ver «SmartLoop se lleva como cualquier proyecto», al final de este archivo.
+
 > Pedido de Elías: llevar en Nexus los servicios recurrentes de SmartLoop, tanto los vendidos con un plan
 > (FACO) como los que pasaron de temporal a recurrente sin plan. El plan acordado, por etapas, está en
 > `docs/smartloop-plan.md`; la fuente de verdad del servicio es su documento de proceso (v0.3.0).
@@ -7984,6 +7986,8 @@ le pregunta a la persona del cliente.
 - **Fase 2, pendiente:** las licencias (hubs, ediciones y asientos) y el precio de cada caso.
 
 ## Servicios recurrentes: el ciclo con los documentos de siempre (2026-10-12)
+
+> ⚠ **Corregido el 2026-10-31:** la tarjeta de la etapa ya no es el control del ciclo, el riel es el de cualquier proyecto y Adopción y Aprendizaje dejaron de ser piezas. Ver «SmartLoop se lleva como cualquier proyecto», al final de este archivo.
 
 > Elías, sobre el diseño del 2026-10-11 desplegado: usar el diseño que ya está codeado, optimizado para el CSE de un
 > servicio recurrente. Supera, de la sección anterior, el ciclo como grupo con «Diagnóstico del ciclo» y «Plan del ciclo».
@@ -8899,6 +8903,8 @@ que tener su acción de la semana y su reunión agendada.
 
 ## El cronograma y el cierre del ciclo de SmartLoop (2026-10-17, ficha E)
 
+> ⚠ **Corregido el 2026-10-31:** esta sección es historia: el cronograma aprobado, el cierre, «Ciclos anteriores» y el traductor se retiraron. Ver «SmartLoop se lleva como cualquier proyecto», al final de este archivo.
+
 - **El cronograma del ciclo es el `ProjectTimeline` del proyecto**, no otro modelo: cada caso de uso es una fase
   (`CasoDeUso.faseId`) y sus dependencias del cliente son tareas `party=CLIENTE` de esa fase. Así el Gantt, «Lo que debe
   el cliente» y los hitos ya lo leen.
@@ -9004,6 +9010,8 @@ que tener su acción de la semana y su reunión agendada.
 - **Lo publicado no cambia**: `iva` es presentación (entra a `NO_CONTENIDO`, como `contrato`), y «Sin IVA» lo borra.
 
 ## SmartLoop: recomendar la recurrencia y la ruta del servicio (2026-10-17, etapas 6 y 7)
+
+> ⚠ **Corregido el 2026-10-31:** la ruta se sube sin que exista un ciclo: con la etapa de hoy. Ver «SmartLoop se lleva como cualquier proyecto», al final de este archivo.
 
 - **La recomendación de pasar a SmartLoop es un tipo más de lo propuesto** (`recomendacion-de-recurrencia`, 30 días):
   una implementación de CS en «Entrega», o en «Finalizado» hace 60 días o menos, en una cuenta sin un servicio
@@ -9142,6 +9150,8 @@ tareas, el cronograma ni la memoria, y que un cliente sin proyecto ni preventa n
   y 45.000 tokens de entrada y 1.000 a 3.000 de salida: unos US$0,05 a US$0,20. No se midió con una corrida real.
 
 ## El servicio recurrente, dentro de la ficha del cliente (2026-10-18)
+
+> ⚠ **Corregido el 2026-10-31:** en SmartLoop la cadencia y las rutinas son «Cómo se suele llevar», plegado, y no dicen «qué toca». Ver «SmartLoop se lleva como cualquier proyecto», al final de este archivo.
 
 **Contexto.** Roadmap «La siguiente serie», iniciativa 4 y pasos 1, 2 y 7 de la 3. Elías pidió algo simple: que el CSE
 entienda un servicio recurrente y lo lleve con cadencia, rutinas y tareas, sin un sistema de ciclos nuevo. Y que las
@@ -11312,6 +11322,8 @@ llamen.
 
 ## SmartLoop y el diagnóstico después de usarlos: el kickoff del servicio, explorar primero, todas las reuniones con texto y publicar diciendo por qué (2026-10-25, paso dos: M1, M2, L1 etapa 2, L2, L3 y L5)
 
+> ⚠ **Corregido el 2026-10-31:** el «Qué sigue» ya no pide regenerar el kickoff ni exige explorar: sugiere. Ver «SmartLoop se lleva como cualquier proyecto», al final de este archivo.
+
 **Contexto.** Liliana con RC Inmobiliaria y CEMACO (23 oct) y la validación en producción en solo lectura
 (`docs/smartloop-plan.md` › «El recorrido de punta a punta» y `docs/diagnostico-plantillas-plan.md` › «Lo que salió de
 usarlo»). Elías aprobó el paso dos el 24 oct. Simulacro del 25 oct: 5 de los 7 proyectos del pipeline SmartLoop tienen
@@ -12813,3 +12825,27 @@ publicar (no tenía Brief: esto nace ahora). El Brief entero se repite en cada f
 reuniones, las más viejas entran en resumen o no entran: «todas» es todas las que el tope deja leer, y la línea de
 cobertura lo dice. Una generable con contenido que alguien edita mientras corre se sigue pisando, como siempre: queda en
 la foto «Antes de regenerar». El lote `--buscar` no corrió contra Drive.
+
+## SmartLoop se lleva como cualquier proyecto: sin administrar ciclos (2026-10-31)
+
+**Contexto.** Elías, con la tanda de artefactos: «la diferencia principal de un proyecto SmartLoop a otro es que las etapas
+son un ciclo; todo lo demás es muy parecido». Nexus administraba ciclos con estructura propia y eso iba contra los proyectos
+maleables. No se volvió a discutir: lo decidió él.
+
+- **Se quitó:** editar tramo, fechas y meta; el cronograma aprobado por ciclo; la sesión de cierre; los ciclos anteriores; las
+  piezas Adopción y Aprendizaje; el traductor de propuestas a ciclos y las rutas `/ciclo`.
+- **No se cuentan vueltas.** Nexus muestra la etapa que trae HubSpot en el círculo de las cinco etapas. Sin HubSpot (prueba, o
+  mientras una persona lo mueve allá), la que se confirmó al pasar a recurrente.
+- **La barra arranca como la de cualquier proyecto:** Cronograma y Kickoff, sin el grupo «Ciclo · etapa» ni la excepción de
+  conservar piezas vacías. Lo que un proyecto ya tiene con contenido sigue visible.
+- **La teoría no pide nada.** La cadencia, las rutinas y qué se suele hacer en cada etapa van en «Cómo se suele llevar»,
+  plegado en el Resumen. No hay «Qué toca ahora» y no se crean pendientes, tareas ni avisos solos; agendar y crear tareas
+  siguen a mano. Los otros servicios recurrentes conservan su guía como estaba.
+- **«Qué sigue» sugiere, no exige:** dice la etapa y el artefacto que suele servir (`ARTEFACTO_DE_LA_ETAPA`). Si ya está
+  escrito, sigue con lo de rutina. Nunca dice «ciclo» y nunca cae al flujo de una implementación.
+- **Aprendizaje es una plantilla de Entrega** (`aprendizaje`), con el contexto del proyecto y sus reuniones.
+- **Las tablas se quedan.** `CicloDeProyecto` y `CasoDeUso` siguen en la base, sin DROP. «Pasar a recurrente» guarda ahí la
+  etapa. La escala anota el ciclo abierto si lo hay, y funciona sin él. Casos de uso de la cuenta sigue igual.
+- **La ruta del servicio sigue.** Se sube aunque no haya un ciclo vivo: la foto suma una entrada con la etapa de hoy, que no se
+  guarda. *Consecuencia aceptada:* sin administrar ciclos, una ruta nueva no trae fechas ni casos de uso, y la página dice
+  «Hoy estamos en Adopción. Las fechas aparecen aquí cuando las acordemos». Si se quiere llenar, es una decisión aparte.

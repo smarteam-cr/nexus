@@ -1,7 +1,7 @@
 import { hayExploracionAbierta } from "@/lib/exploraciones/del-proyecto";
 import { selectorDelKickoff } from "@/lib/entregables/generar-server";
 import { NextRequest, NextResponse } from "next/server";
-import { guardAccessToProject, guardCapability, guardHandoffAccess } from "@/lib/auth/api-guards";
+import { guardAccessToProject, guardHandoffAccess } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
 import { canvasNotOf, onlyEnabled } from "@/lib/pieces/canvas-query";
 import { loadCanvasesConContenido, loadCanvasesTocados } from "@/lib/pieces/piece-content";
@@ -82,11 +82,8 @@ export async function GET(
     guardHandoffAccess(guard.clientId)
       .then((r) => !(r instanceof NextResponse))
       .catch(() => false),
-    /* El Ciclo de un servicio recurrente (2026-10-11): tampoco vive en un canvas. null = el proyecto no es
-       recurrente (o la tabla todavía no existe): la pieza no se lista. */
-    estadoDelCicloParaElRiel(projectId)
-      .then(async (c) => (c ? { ...c, puedeEditar: !((await guardCapability("editTimeline")) instanceof NextResponse) } : null))
-      .catch(() => null),
+    /* La etapa de un servicio recurrente (null = el proyecto no es recurrente, o la tabla todavía no existe). */
+    estadoDelCicloParaElRiel(projectId).catch(() => null),
     /* Las piezas que el equipo ocultó del riel (2026-10-12). Sin la columna todavía, ninguna. */
     prisma.project
       .findUnique({ where: { id: projectId }, select: { piezasOcultas: true } })

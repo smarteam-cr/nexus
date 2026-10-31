@@ -1,6 +1,5 @@
 import fs from "node:fs";
 import path from "node:path";
-import { PIEZAS_DE_UN_SERVICIO_RECURRENTE } from "@/lib/servicios/ciclo";
 import { describe, expect, it } from "vitest";
 import { buildPieceRows, type CanvasParaFila } from "./dropdown-rows";
 
@@ -103,8 +102,7 @@ describe("los canvases sueltos del CSE", () => {
 });
 
 describe("las herramientas también llevan copias (Elías, 30 oct)", () => {
-  it("un servicio recurrente tiene la exploración en su flujo, y «Nuevo artefacto» no depende del tipo de proyecto", () => {
-    expect(PIEZAS_DE_UN_SERVICIO_RECURRENTE as readonly string[]).toContain("exploration");
+  it("«Nuevo artefacto» no depende del tipo de proyecto", () => {
     const panel = fs.readFileSync(path.join(process.cwd(), "components/clients/ProjectCanvasPanel.tsx"), "utf8");
     expect(panel).toContain("onNuevoArtefacto={(grupo) => setNuevoArtefacto(");
   });

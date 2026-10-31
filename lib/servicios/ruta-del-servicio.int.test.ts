@@ -44,4 +44,59 @@ describe("armarRutaDelServicio — lo que el cliente tiene que entregar (D0)", (
     const delCliente = ruta!.ciclos.flatMap((c) => c.casos.flatMap((x) => x.delCliente.map((d) => d.titulo)));
     expect(delCliente).toEqual(["Enviar la base de contactos"]);
   });
+
+  it("sin ninguna fila de ciclo se sube igual, con la etapa de HubSpot, y no escribe nada (Elías, 31 oct)", async () => {
+    const cliente = await prisma.client.create({ data: { name: "Cliente SmartLoop sin ciclos (test)" } });
+    const proyecto = await prisma.project.create({
+      data: {
+        clientId: cliente.id,
+        name: "SmartLoop de HubSpot (test)",
+        hubspotPipelineId: PIPELINE_SMARTLOOP,
+        hubspotServiceId: "hs-sin-ciclos",
+        hubspotPipelineStageLabel: "Adopción",
+      },
+    });
+
+    const ruta = await armarRutaDelServicio(proyecto.id, new Date("2026-10-31T12:00:00Z"));
+
+    expect(ruta?.ciclos).toHaveLength(1);
+    expect(ruta?.ciclos[0]).toMatchObject({ etapa: "Adopción", cerrado: false, casos: [] });
+    expect(await prisma.cicloDeProyecto.count({ where: { projectId: proyecto.id } })).toBe(0);
+  });
+
+  it("con todos los ciclos cerrados, la foto suma la etapa de hoy", async () => {
+    const cliente = await prisma.client.create({ data: { name: "Cliente SmartLoop con cerrados (test)" } });
+    const proyecto = await prisma.project.create({
+      data: {
+        clientId: cliente.id,
+        name: "SmartLoop con cerrados (test)",
+        hubspotPipelineId: PIPELINE_SMARTLOOP,
+        hubspotServiceId: "hs-cerrados",
+        hubspotPipelineStageLabel: "Planificación",
+      },
+    });
+    await prisma.cicloDeProyecto.create({ data: { projectId: proyecto.id, numero: 1, estado: "cerrado" } });
+
+    const ruta = await armarRutaDelServicio(proyecto.id, new Date("2026-10-31T12:00:00Z"));
+
+    expect(ruta?.ciclos.map((c) => [c.numero, c.cerrado, c.etapa])).toEqual([[1, true, null], [2, false, "Planificación"]]);
+  });
+
+  it("el ciclo abierto muestra la etapa de HubSpot, no la que quedó guardada", async () => {
+    const cliente = await prisma.client.create({ data: { name: "Cliente SmartLoop con ciclo (test)" } });
+    const proyecto = await prisma.project.create({
+      data: {
+        clientId: cliente.id,
+        name: "SmartLoop movido en HubSpot (test)",
+        hubspotPipelineId: PIPELINE_SMARTLOOP,
+        hubspotServiceId: "hs-movido",
+        hubspotPipelineStageLabel: "Implementación",
+      },
+    });
+    await prisma.cicloDeProyecto.create({ data: { projectId: proyecto.id, numero: 1, etapa: "diagnostico" } });
+
+    const ruta = await armarRutaDelServicio(proyecto.id, new Date("2026-10-31T12:00:00Z"));
+
+    expect(ruta?.ciclos[0].etapa).toBe("Implementación");
+  });
 });

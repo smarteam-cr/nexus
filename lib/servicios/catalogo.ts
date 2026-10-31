@@ -16,8 +16,9 @@
  * docs/smartloop-plan.md, el documento de proceso de SmartLoop (lib/servicios/smartloop.ts) y lo que Ventas ya vendió a
  * mano a Cayalá y a Grupo Inve. Cada servicio lo dice en `validado: false`, y la guía del Resumen lo muestra.
  *
- * ⚠ Que un servicio avance por CICLOS (tenga `ciclo`) es otra cosa que ser recurrente: hoy solo SmartLoop. Los ciclos,
- * los casos de uso del ciclo y el cronograma del ciclo siguen siendo de lib/servicios/ciclo.ts y no cambian.
+ * ⚠ Que un servicio avance por CICLOS (tenga `ciclo`) es otra cosa que ser recurrente: hoy solo SmartLoop. Sus etapas son
+ * las de lib/servicios/ciclo.ts. Su cadencia y sus rutinas son teoría: «Cómo se suele llevar» en el Resumen, plegado, y no
+ * generan pendientes, tareas ni avisos solos (Elías, 31 oct).
  */
 import type { ProjectPipelineKey } from "@/lib/projects/kind";
 import { GUIA_SMARTLOOP } from "./smartloop";
@@ -300,10 +301,10 @@ export function servicioParaLaPropuesta(s: ServicioRecurrente): string {
 /**
  * Lo que el agente del KICKOFF tiene que saber del servicio recurrente (M1 del roadmap, 2026-10-24). Sin esto, el kickoff
  * de un recurrente se escribía como el arranque de una implementación: le llegaba «Tipo de servicio contratado:
- * proyecto_temporal» (RC Inmobiliaria). Es la misma fuente que la propuesta —el catálogo—, más el ciclo en que está el
+ * proyecto_temporal» (RC Inmobiliaria). Es la misma fuente que la propuesta —el catálogo—, más la etapa en que está el
  * proyecto y el nivel de servicio, que en el kickoff es «cómo nos pides cosas».
  */
-export function servicioParaElKickoff(s: ServicioRecurrente, ciclo?: { numero: number; etapa: string } | null): string {
+export function servicioParaElKickoff(s: ServicioRecurrente, etapa?: string | null): string {
   const lineas = [
     `=== EL SERVICIO CONTRATADO (fuente: el catálogo de Smarteam; es un servicio RECURRENTE, no un proyecto temporal) ===`,
     `Servicio: ${s.nombre}. ${s.descripcion}`,
@@ -317,7 +318,7 @@ export function servicioParaElKickoff(s: ServicioRecurrente, ciclo?: { numero: n
       "El primer ciclo arranca explorando con cada equipo del cliente (una sesión por equipo: cómo está armado, cómo lo mide, cómo funciona, con qué sistemas y dónde duele) y después escribimos el diagnóstico, que define la prioridad del ciclo.",
     );
   }
-  if (ciclo) lineas.push(`Hoy el proyecto está en el ciclo ${ciclo.numero}, etapa ${ciclo.etapa}.`);
+  if (etapa) lineas.push(`Hoy el proyecto está en la etapa ${etapa}.`);
   lineas.push(
     `Cómo nos pide cosas el cliente (nivel de servicio): ${s.nivelDeServicio.map((n) => `${n.prioridad}: ${n.tiempo} (${n.detalle})`).join(" · ")}. ${NOTA_DE_TIEMPOS}`,
   );

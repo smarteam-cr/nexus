@@ -2,9 +2,8 @@
  * scripts/validar-smartloop.ts — SOLO LECTURA. ¿Cómo se ve SmartLoop y el servicio recurrente? (pasada de validación del
  * 2026-10-19, docs/validacion-2026-10-19.md › área 5).
  *
- * Con las MISMAS funciones de la ficha (`cargarEstadoDelCiclo`, `estadoDelCicloParaElRiel`, `guiaDeServicio`) dice, de
- * cada proyecto recurrente (pipeline de SmartLoop, servicio elegido en Nexus o proyecto de prueba): el servicio, la etapa
- * de HubSpot, el ciclo abierto con su etapa, sus casos de uso, lo que falta y los ciclos cerrados. Y de la recomendación
+ * Con las MISMAS funciones de la ficha (`estadoDelCicloParaElRiel`) dice, de cada proyecto recurrente (pipeline de
+ * SmartLoop, servicio elegido en Nexus o proyecto de prueba): el servicio, la etapa de HubSpot y la que muestra. Y de la recomendación
  * de pasar a SmartLoop: qué proyectos de Customer Success están en «Entrega» o recién «Finalizado», cuáles califican, a
  * quién le llega y cuáles ya se decidieron.
  *
@@ -18,7 +17,7 @@ process.env.DB_POOL_MAX ??= "2";
 
 async function main() {
   const { prisma } = await import("@/lib/db/prisma");
-  const { cargarEstadoDelCiclo, estadoDelCicloParaElRiel } = await import("@/lib/servicios/ciclos-server");
+  const { estadoDelCicloParaElRiel } = await import("@/lib/servicios/ciclos-server");
   const { recomendacionesPendientesPara, recomendacionDelProyecto } = await import("@/lib/servicios/recurrencia-server");
   const { ETAPA_DE_ENTREGA, ETAPA_FINALIZADO } = await import("@/lib/servicios/recurrencia");
   const { pipelineByKey } = await import("@/lib/projects/kind");
@@ -30,20 +29,9 @@ async function main() {
   });
   console.log(`══ Proyectos recurrentes o de prueba: ${proyectos.length}`);
   for (const p of proyectos) {
-    const estado = await cargarEstadoDelCiclo(p.id).catch((e) => `error: ${e instanceof Error ? e.message : e}`);
     const riel = await estadoDelCicloParaElRiel(p.id).catch(() => null);
     console.log(`\n── ${p.client.name} · «${p.name}» (${p.status}${p.esPrueba ? ", prueba" : ""}) · servicio ${p.servicioRecurrente ?? "(del pipeline)"} · HubSpot: ${p.hubspotServiceId ? (p.hubspotPipelineStageLabel ?? "sin etapa") : "no existe"}`);
-    if (typeof estado === "string") {
-      console.log(`   ${estado}`);
-      continue;
-    }
-    if (!estado) {
-      console.log("   no es un servicio con ciclo (cargarEstadoDelCiclo = null)");
-      continue;
-    }
-    const a = estado.abierto;
-    console.log(`   ${estado.nombreDelServicio} · compromiso ${estado.compromiso ?? "—"} · ${a ? `ciclo ${a.numero} «${a.nombre ?? ""}» ${a.desde ?? "?"}→${a.hasta ?? "?"} · etapa ${a.etapa} · meta ${a.meta ? "sí" : "no"} · ${a.casos.length} casos (${a.casos.filter((c) => c.criterio).length} con criterio) · cronograma aprobado v${a.versionAprobada}` : "sin ciclo abierto"} · ${estado.cerrados.length} cerrados`);
-    if (riel) console.log(`   riel: «${riel.corto}» · falta: ${riel.falta ?? "nada"} · pieza ${riel.piezaDeLaEtapa ?? "—"} · plan listo ${riel.planListo} · producido: ${riel.producido.map((x) => `${x.texto.slice(0, 40)}${"hecho" in x ? (x.hecho ? " ✓" : " ·") : ""}`).join(" | ")}`);
+    console.log(riel ? `   etapa que muestra: «${riel.corto}» · exploración: ${riel.arranque?.lecturasDeExploracion ?? 0} lecturas · kickoff anterior al servicio: ${riel.arranque?.kickoffAnteriorAlServicio ? "sí" : "no"}` : "   no es un servicio con ciclo");
   }
 
   console.log("\n══ La recomendación de pasar a SmartLoop");

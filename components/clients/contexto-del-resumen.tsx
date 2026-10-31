@@ -43,12 +43,14 @@ export interface ContextoDelResumen {
    */
   cuestionarios?: { publicados: number; descartada: boolean } | null;
   /**
-   * El Ciclo de un servicio recurrente: su etapa, lo que tiene que quedar y lo primero que falta.
+   * La etapa de un servicio recurrente, para el círculo y el «Qué sigue».
    * null = el proyecto no es recurrente, o su estado todavía no llegó.
    */
   ciclo?: CicloParaElRiel | null;
-  /** Avisa que el ciclo cambió (la etapa, sus datos): el riel y el «Qué sigue» se ponen al día. */
+  /** Avisa que el proyecto pasó a recurrente: el riel y el «Qué sigue» se ponen al día. */
   onCicloCambio?: () => void;
+  /** Abre «Nuevo artefacto» con el tipo, y si hay, la plantilla ya elegidos (la sugerencia del «Qué sigue» de un recurrente). */
+  abrirNuevoArtefacto?: (tipo: string, plantilla?: string) => void;
   /** «Ahora no» de «Manda los cuestionarios al cliente». */
   descartarCuestionarios?: () => void;
   aLaVista: boolean;

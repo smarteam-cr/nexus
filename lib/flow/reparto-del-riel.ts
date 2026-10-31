@@ -20,12 +20,12 @@ export type EstadoEnElRiel = "generada" | "pendiente" | "sin_crear";
 
 export function estadoEnElRiel(
   row: { slug: string; state: "generada" | "vacia" | "por_activar"; esCopia?: boolean; conNombre?: boolean },
-  o: { activa?: boolean; conVacias?: boolean } = {},
+  o: { activa?: boolean } = {},
 ): EstadoEnElRiel {
   if (row.state === "generada") return "generada";
   if (row.esCopia || row.conNombre || row.slug.startsWith("custom:") || PIEZAS_SIEMPRE_EN_EL_RIEL.has(row.slug)) return "pendiente";
-  // La vacía que se está mirando (se llegó por «Qué sigue») y las de un servicio recurrente, que trabaja sobre sus piezas.
-  return row.state === "vacia" && (o.activa || o.conVacias) ? "pendiente" : "sin_crear";
+  // La vacía que se está mirando (se llegó por «Qué sigue»).
+  return row.state === "vacia" && o.activa ? "pendiente" : "sin_crear";
 }
 
 export function repartirElRiel<F extends FilaParaRepartir>(filas: readonly F[], verMasAbierto = false) {

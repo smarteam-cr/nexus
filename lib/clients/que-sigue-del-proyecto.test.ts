@@ -1,3 +1,5 @@
+import { ARTEFACTO_DE_LA_ETAPA, ETAPAS_DEL_CICLO, ETIQUETA_DE_ETAPA, type EtapaDelCiclo } from "@/lib/servicios/ciclo";
+import { tipoDeArtefacto } from "@/lib/artefactos/tipos";
 import { describe, expect, it } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
@@ -197,84 +199,70 @@ describe("⭐ «Pendientes recientes»: lo que no se muestra se cuenta bien", ()
 });
 
 describe("qué sigue en un servicio recurrente (2026-10-12)", () => {
-  const conCiclo: PiezaParaQueSigue[] = [
-    { slug: "diagnosis", etiqueta: "Diagnóstico", estado: "vacia", stale: false },
-    { slug: "planning", etiqueta: "Planificación", estado: "vacia", stale: false },
-  ];
-  it("sin ciclo abierto está en Diagnóstico: lleva a escribirlo", () => {
-    const q = queSigueDelProyecto({
-      ...base,
-      piezas: conCiclo,
-      etapa: null,
-      ciclo: { corto: "Diagnóstico", abierto: false, falta: null, numero: 1, piezaDeLaEtapa: "diagnosis" },
-    });
-    expect(q.texto).toBe("El ciclo está en Diagnóstico: trabaja «Diagnóstico».");
-    expect(q.accion).toEqual({ tipo: "pieza", slug: "diagnosis", etiqueta: "Diagnóstico" });
-  });
-  it("con el ciclo abierto, lo primero que falta en su etapa, y lleva a su artefacto", () => {
-    const q = queSigueDelProyecto({
-      ...base,
-      piezas: conCiclo,
-      etapa: null,
-      ciclo: { corto: "Planificación", abierto: true, falta: "Falta la meta del ciclo.", numero: 1, piezaDeLaEtapa: "planning" },
-    });
-    expect(q.texto).toBe("Planificación: falta la meta del ciclo.");
-    expect(q.accion).toEqual({ tipo: "pieza", slug: "planning", etiqueta: "Planificación" });
-  });
-  it("sin nada que falte, sigue con lo de siempre (y nunca con el flujo de una implementación)", () => {
-    const q = queSigueDelProyecto({
-      ...base,
-      piezas: conCiclo,
-      etapa: etapa("x", "Adopción"),
-      ciclo: { corto: "Adopción", abierto: true, falta: null, numero: 1, piezaDeLaEtapa: "cycle-adoption" },
-    });
-    expect(q.accion).toBeNull();
-  });
-  it("las reuniones sin revisar le ganan al ciclo", () => {
-    const q = queSigueDelProyecto({ ...base, piezas: conCiclo, etapa: null, sesionesSinRevisar: 1, ciclo: { corto: "sin abrir", abierto: false, falta: null, numero: 1 } });
-    expect(q.accion).toEqual({ tipo: "sesiones" });
-  });
-});
-
-describe("primero el kickoff del servicio y la exploración, después el diagnóstico (M1 y M2, 2026-10-24)", () => {
-  const rc: PiezaParaQueSigue[] = [
-    { slug: "kickoff", etiqueta: "Kickoff", estado: "generada", stale: false },
+  const piezas: PiezaParaQueSigue[] = [
     { slug: "exploration", etiqueta: "Exploración", estado: "vacia", stale: false },
     { slug: "diagnosis", etiqueta: "Diagnóstico", estado: "vacia", stale: false },
+    { slug: "planning", etiqueta: "Planificación", estado: "por_activar", stale: false },
+    { slug: "timeline", etiqueta: "Cronograma", estado: "generada", stale: false },
+    { slug: "delivery", etiqueta: "Entrega", estado: "por_activar", stale: false },
   ];
-  const ciclo = (arranque: { lecturasDeExploracion: number; kickoffAnteriorAlServicio: boolean }, numero = 1) => ({
-    corto: "Diagnóstico", abierto: true, falta: "Falta el nivel de cada dimensión del área.", numero, piezaDeLaEtapa: "diagnosis", arranque,
+  const ciclo = (etapa: EtapaDelCiclo, lecturasDeExploracion = 1) => ({
+    etapa,
+    corto: ETIQUETA_DE_ETAPA[etapa],
+    arranque: { lecturasDeExploracion, kickoffAnteriorAlServicio: false },
+  });
+  const para = (etapa: EtapaDelCiclo, extra: Partial<Parameters<typeof queSigueDelProyecto>[0]> = {}) =>
+    queSigueDelProyecto({ ...base, piezas, etapa: null, ciclo: ciclo(etapa), proximaReunion: "2026-11-02T15:00:00Z", ...extra });
+
+  it("dice la etapa y sugiere lo que suele servir, sin exigir nada ni decir «ciclo»", () => {
+    const q = para("adopcion");
+    expect(q.texto).toBe("Estás en Adopción: un plan de adopción suele servir aquí.");
+    expect(q.accion).toEqual({ tipo: "artefacto", tipoDeArtefacto: "adoption-plan" });
+    for (const e of ETAPAS_DEL_CICLO) expect(para(e).texto).not.toMatch(/ciclo|falta|debes|tienes que/i);
   });
 
-  it("RC Inmobiliaria: el kickoff de julio es anterior al servicio → regenerarlo", () => {
-    const q = queSigueDelProyecto({ ...base, piezas: rc, etapa: null, ciclo: ciclo({ lecturasDeExploracion: 0, kickoffAnteriorAlServicio: true }) });
-    expect(q.texto).toMatch(/kickoff es anterior al servicio/);
-    expect(q.accion).toEqual({ tipo: "pieza", slug: "kickoff", etiqueta: "Kickoff" });
+  it("lleva al documento si es uno de los de siempre", () => {
+    expect(para("planificacion").accion).toEqual({ tipo: "pieza", slug: "planning", etiqueta: "Planificación" });
+    expect(para("diagnostico").accion).toEqual({ tipo: "pieza", slug: "diagnosis", etiqueta: "Diagnóstico" });
   });
 
-  it("con el kickoff al día y sin reuniones leídas en la exploración, propone explorar por equipo (no el diagnóstico)", () => {
-    const q = queSigueDelProyecto({ ...base, piezas: rc, etapa: null, ciclo: ciclo({ lecturasDeExploracion: 0, kickoffAnteriorAlServicio: false }) });
-    expect(q.texto).toMatch(/Explora primero, por equipo/);
+  it("en Aprendizaje sugiere una entrega nueva, no el cierre de siempre", () => {
+    const q = para("aprendizaje");
+    expect(q.texto).toBe("Estás en Aprendizaje: una entrega de aprendizaje suele servir aquí.");
+    expect(q.accion).toEqual({ tipo: "artefacto", tipoDeArtefacto: "delivery", plantilla: "aprendizaje" });
+  });
+
+  it("cada sugerencia es un tipo del catálogo de artefactos", () => {
+    for (const e of ETAPAS_DEL_CICLO) expect(tipoDeArtefacto(ARTEFACTO_DE_LA_ETAPA[e].tipo), e).toBeTruthy();
+  });
+
+  it("lo que ya está escrito no se vuelve a pedir, ni como copia con otro nombre: sigue con lo de rutina", () => {
+    expect(para("implementacion").accion).toBeNull();
+    const conPlan = [...piezas, { slug: "copia:a", etiqueta: "Equipo comercial", estado: "generada" as const, stale: false, tipo: "adoption-plan" }];
+    expect(para("adopcion", { piezas: conPlan }).accion).toBeNull();
+  });
+
+  it("nunca cae al flujo de una implementación", () => {
+    const conDiagnostico = piezas.map((p) => (p.slug === "diagnosis" ? { ...p, estado: "generada" as const } : p));
+    const q = para("diagnostico", { piezas: conDiagnostico, etapa: etapa("x", "Diagnóstico") });
+    expect(q.accion).toBeNull();
+    expect(q.texto).toBe("El proyecto está al día: no hay nada esperando tu decisión.");
+  });
+
+  it("en Diagnóstico, sin reuniones leídas en la exploración, sugiere explorar primero", () => {
+    const q = para("diagnostico", { ciclo: ciclo("diagnostico", 0) });
+    expect(q.texto).toBe("Estás en Diagnóstico: una exploración suele servir aquí.");
     expect(q.accion).toEqual({ tipo: "pieza", slug: "exploration", etiqueta: "Exploración" });
   });
 
-  it("con una sesión leída en el ciclo, vuelve a lo que falta del diagnóstico", () => {
-    const q = queSigueDelProyecto({ ...base, piezas: rc, etapa: null, ciclo: ciclo({ lecturasDeExploracion: 1, kickoffAnteriorAlServicio: false }) });
-    expect(q.texto).toBe("Diagnóstico: falta el nivel de cada dimensión del área.");
+  it("con la exploración escrita, aunque sin reuniones leídas, sugiere el diagnóstico", () => {
+    const conExploracion = piezas.map((p) => (p.slug === "exploration" ? { ...p, estado: "generada" as const } : p));
+    const q = para("diagnostico", { piezas: conExploracion, ciclo: ciclo("diagnostico", 0) });
     expect(q.accion).toEqual({ tipo: "pieza", slug: "diagnosis", etiqueta: "Diagnóstico" });
   });
 
-  it("el kickoff viejo solo se pide en el primer ciclo; con el diagnóstico escrito, ni el kickoff ni explorar", () => {
-    const segundo = queSigueDelProyecto({ ...base, piezas: rc, etapa: null, ciclo: ciclo({ lecturasDeExploracion: 0, kickoffAnteriorAlServicio: true }, 2) });
-    expect(segundo.accion).toEqual({ tipo: "pieza", slug: "exploration", etiqueta: "Exploración" });
-    const conDiagnostico = rc.map((p) => (p.slug === "diagnosis" ? { ...p, estado: "generada" as const } : p));
-    const q = queSigueDelProyecto({ ...base, piezas: conDiagnostico, etapa: null, ciclo: ciclo({ lecturasDeExploracion: 0, kickoffAnteriorAlServicio: true }) });
-    expect(q.accion).toEqual({ tipo: "pieza", slug: "diagnosis", etiqueta: "Diagnóstico" });
-  });
-
-  it("sin el dato del arranque (una respuesta vieja), lo de siempre", () => {
-    const q = queSigueDelProyecto({ ...base, piezas: rc, etapa: null, ciclo: { corto: "Diagnóstico", abierto: false, falta: null, numero: 1, piezaDeLaEtapa: "diagnosis" } });
-    expect(q.texto).toBe("El ciclo está en Diagnóstico: trabaja «Diagnóstico».");
+  it("las reuniones sin revisar le ganan a la sugerencia", () => {
+    expect(para("adopcion", { sesionesSinRevisar: 1 }).accion).toEqual({ tipo: "sesiones" });
   });
 });
 

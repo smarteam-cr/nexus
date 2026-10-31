@@ -23,13 +23,18 @@
  * «desactualizado» y de las novedades del documento de la etapa, y antes de «genera «Exploración»». En
  * las demás etapas (y sin etapa reconocida) no sale: un proyecto avanzado no tiene por qué mandarlos.
  * Se va solo al publicar uno o con «Ahora no».
+ *
+ * Un servicio recurrente (Elías, 31 oct): no recorre el flujo de una implementación ni se le exige nada. Dice la etapa que
+ * trae HubSpot y sugiere el artefacto que suele servir ahí («Estás en Adopción: un plan de adopción suele servir aquí»). Si
+ * ya está escrito, no insiste: sigue con lo de rutina. Nunca dice «ciclo».
  */
 import { PIEZAS_SIEMPRE_EN_EL_RIEL } from "@/lib/pieces/registry";
 import type { ProjectLifecycleStage } from "@prisma/client";
 import type { EtapaParaLaUI } from "@/lib/lifecycle/etapa-ui";
 import { FULL_CYCLE_ORDER, STAGE_EXIT_STEPS, STAGE_LABEL_ES } from "@/lib/lifecycle/stage-engine";
 import { flowForStage } from "@/lib/flow/stage-pieces";
-import { EXPLORA_PRIMERO, type ArranqueDelCiclo } from "@/lib/servicios/arranque-del-ciclo";
+import type { ArranqueDelCiclo } from "@/lib/servicios/arranque-del-ciclo";
+import { ARTEFACTO_DE_LA_ETAPA, type EtapaDelCiclo } from "@/lib/servicios/ciclo";
 
 /** Lo mínimo de una pieza que el cálculo necesita (sale de las filas del riel). */
 export interface PiezaParaQueSigue {
@@ -39,6 +44,8 @@ export interface PiezaParaQueSigue {
   stale: boolean;
   /** Las novedades de reuniones para esta pieza (etapa 6; el mismo número del riel). */
   novedades?: number;
+  /** El tipo del documento (lib/artefactos/tipos.ts), el de siempre o una copia. Sin él, cuenta su slug. */
+  tipo?: string;
 }
 
 export type AccionDeQueSigue =
@@ -50,6 +57,8 @@ export type AccionDeQueSigue =
   | { tipo: "novedades"; slug: string; etiqueta: string; n: number }
   /** Mandar los cuestionarios (recomendado): «Abrir «Cuestionarios»» y «Ahora no». */
   | { tipo: "cuestionarios"; slug: string; etiqueta: string }
+  /** Crear un documento de un tipo en «Nuevo artefacto» (lo que suele servir en la etapa de un recurrente). */
+  | { tipo: "artefacto"; tipoDeArtefacto: string; plantilla?: string }
   /** Seguir con un servicio recurrente después de la entrega (lib/servicios/recurrencia.ts): se usa o se descarta. */
   | { tipo: "recurrencia" };
 
@@ -109,6 +118,25 @@ export function porQueEstaAca(etapa: EtapaParaLaUI | null): Array<{ hecho: boole
   ];
 }
 
+/**
+ * Lo que suele servir en la etapa de un recurrente, o null si ya está escrito. En Diagnóstico, sin ninguna reunión leída en
+ * la exploración y sin diagnóstico escrito, la exploración: el diagnóstico se escribe sobre lo que dijo cada equipo (M2).
+ */
+function queSueleServir(
+  ciclo: NonNullable<Parameters<typeof queSigueDelProyecto>[0]["ciclo"]>,
+  piezas: readonly PiezaParaQueSigue[],
+): QueSigueDelProyecto | null {
+  const escrito = (tipo: string) => piezas.some((p) => (p.tipo ?? p.slug) === tipo && p.estado === "generada");
+  const explorar = ciclo.etapa === "diagnostico" && ciclo.arranque?.lecturasDeExploracion === 0 && !escrito("diagnosis") && !escrito("exploration");
+  const s: (typeof ARTEFACTO_DE_LA_ETAPA)[EtapaDelCiclo] = explorar ? { tipo: "exploration", texto: "una exploración" } : ARTEFACTO_DE_LA_ETAPA[ciclo.etapa];
+  if (escrito(s.tipo)) return null;
+  const pieza = s.nuevo ? undefined : piezas.find((p) => p.slug === s.tipo);
+  return {
+    texto: `Estás en ${ciclo.corto}: ${s.texto} suele servir aquí.`,
+    accion: pieza ? { tipo: "pieza", slug: pieza.slug, etiqueta: pieza.etiqueta } : { tipo: "artefacto", tipoDeArtefacto: s.tipo, ...(s.plantilla ? { plantilla: s.plantilla } : {}) },
+  };
+}
+
 export function queSigueDelProyecto(i: {
   etapa: EtapaParaLaUI | null;
   piezas: readonly PiezaParaQueSigue[];
@@ -125,19 +153,8 @@ export function queSigueDelProyecto(i: {
    * pieza a la vista en el riel (sin Exploración) o todavía no llegó su estado: no se sugiere nada.
    */
   cuestionarios?: { publicados: number; descartada: boolean } | null;
-  /**
-   * El Ciclo de un servicio recurrente (docs/smartloop-plan.md). null = el proyecto no es recurrente. Lo primero
-   * que falta en su etapa (si Nexus lo puede comprobar) y, si no, el artefacto de la etapa todavía sin escribir.
-   */
-  ciclo?: {
-    corto: string;
-    abierto: boolean;
-    falta: string | null;
-    numero: number;
-    piezaDeLaEtapa?: string | null;
-    /** M1 y M2 (2026-10-24): el kickoff anterior al servicio y la exploración del ciclo. */
-    arranque?: ArranqueDelCiclo;
-  } | null;
+  /** La etapa de un servicio recurrente. null = el proyecto no es recurrente. */
+  ciclo?: { etapa: EtapaDelCiclo; corto: string; arranque?: ArranqueDelCiclo } | null;
   /**
    * La recomendación de pasar a un servicio recurrente (SmartLoop, etapa 6 de docs/smartloop-plan.md), solo mientras
    * está PENDIENTE (lib/lo-propuesto). null = el proyecto no califica, ya se decidió o venció.
@@ -159,42 +176,13 @@ export function queSigueDelProyecto(i: {
     };
   }
 
-  /* Un servicio recurrente no recorre el flujo de una implementación: lo que sigue sale de su ciclo. Sin ciclo
-     abierto el proyecto está en Diagnóstico, o en la etapa que dice HubSpot (el ciclo se abre solo al cambiar la etapa). */
   if (i.ciclo) {
-    const slug = i.ciclo.piezaDeLaEtapa ?? "diagnosis";
-    const pieza = i.piezas.find((p) => p.slug === slug);
-    const accion = pieza ? ({ tipo: "pieza", slug: pieza.slug, etiqueta: pieza.etiqueta } as const) : null;
-    /* En Diagnóstico, con el diagnóstico todavía sin escribir (M1 y M2, Liliana con RC Inmobiliaria, 2026-10-23): primero
-       el kickoff del servicio —en el primer ciclo: es el arranque— y después explorar con cada equipo del cliente. El
-       diagnóstico se escribe sobre lo que dijo cada equipo, no antes. */
-    const arranque = i.ciclo.arranque;
-    if (slug === "diagnosis" && pieza?.estado !== "generada" && arranque) {
-      const kickoff = i.piezas.find((p) => p.slug === "kickoff");
-      if (i.ciclo.numero === 1 && arranque.kickoffAnteriorAlServicio && kickoff) {
-        return {
-          texto: "El kickoff es anterior al servicio: no cuenta cómo se trabaja por ciclos ni la cadencia. Regenéralo antes de arrancar el ciclo.",
-          accion: { tipo: "pieza", slug: kickoff.slug, etiqueta: kickoff.etiqueta },
-        };
-      }
-      const exploracion = i.piezas.find((p) => p.slug === "exploration");
-      if (arranque.lecturasDeExploracion === 0 && exploracion) {
-        return {
-          texto: `El ciclo está en ${i.ciclo.corto}. ${EXPLORA_PRIMERO}`,
-          accion: { tipo: "pieza", slug: exploracion.slug, etiqueta: exploracion.etiqueta },
-        };
-      }
-    }
-    if (i.ciclo.falta) {
-      const falta = i.ciclo.falta.replace(/\.$/, "");
-      return { texto: `${i.ciclo.corto}: ${falta.charAt(0).toLowerCase()}${falta.slice(1)}.`, accion };
-    }
-    if (pieza && pieza.estado !== "generada" && slug !== "timeline") {
-      return { texto: `El ciclo está en ${i.ciclo.corto}: trabaja «${pieza.etiqueta}».`, accion };
-    }
+    const sugerencia = queSueleServir(i.ciclo, i.piezas);
+    if (sugerencia) return sugerencia;
   }
 
-  const stage = etapaDeNexus(i.etapa);
+  // Un recurrente no recorre el flujo de una implementación: después de su sugerencia, solo lo de rutina.
+  const stage = i.ciclo ? null : etapaDeNexus(i.etapa);
   const flujo = stage ? flowForStage(stage) : null;
 
   /* Los cuestionarios (recomendados): SOLO en el Handoff y en la Exploración (se mandan después del
