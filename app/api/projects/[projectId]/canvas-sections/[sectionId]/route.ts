@@ -1,3 +1,6 @@
+import { conSeccionQuitada } from "@/lib/artefactos/contexto-de-la-copia";
+import { esCopia } from "@/lib/artefactos/copias";
+import { tipoDeArtefacto } from "@/lib/artefactos/tipos";
 import { NextRequest, NextResponse } from "next/server";
 import type { Prisma } from "@prisma/client";
 import { guardAccessToProject, denyHandoffCanvasEditForCse } from "@/lib/auth/api-guards";
@@ -146,7 +149,7 @@ export async function DELETE(_req: NextRequest, { params }: { params: Params }) 
     select: {
       key: true,
       canvasId: true,
-      canvas: { select: { projectId: true, name: true, sections: true } },
+      canvas: { select: { projectId: true, name: true, sections: true, slug: true, tipoArtefacto: true } },
     },
   });
   if (!section || section.canvas.projectId !== projectId) {
@@ -155,7 +158,13 @@ export async function DELETE(_req: NextRequest, { params }: { params: Params }) 
   const denied = await denyHandoffCanvasEditForCse(section.canvas.name);
   if (denied) return denied;
 
-  if (!esCustomKey(section.key)) {
+  /* En una COPIA se puede borrar también una sección de su plantilla, menos la portada y el cierre (Elías, 30 oct): queda
+     anotada para que regenerar no la devuelva. El documento de siempre sigue con la regla de arriba: la reconciliación la
+     volvería a crear. */
+  const tipoDeLaCopia = esCopia(section.canvas) ? tipoDeArtefacto(section.canvas.tipoArtefacto) : null;
+  const deLaPlantillaEnUnaCopia = !!tipoDeLaCopia && !esCustomKey(section.key) && !(tipoDeLaCopia.estructurales as readonly string[]).includes(section.key);
+
+  if (!esCustomKey(section.key) && !deLaPlantillaEnUnaCopia) {
     return NextResponse.json(
       { error: "Solo se pueden borrar las secciones propias. Las de la plantilla se ocultan." },
       { status: 400 },
@@ -169,9 +178,9 @@ export async function DELETE(_req: NextRequest, { params }: { params: Params }) 
     prisma.projectCanvas.update({
       where: { id: section.canvasId },
       data: {
-        sections: parseSectionEntries(section.canvas.sections).filter(
-          (e) => e.key !== section.key,
-        ) as unknown as Prisma.InputJsonValue,
+        sections: (deLaPlantillaEnUnaCopia
+          ? conSeccionQuitada(section.canvas.sections, section.key).filter((e) => e.key !== section.key)
+          : parseSectionEntries(section.canvas.sections).filter((e) => e.key !== section.key)) as unknown as Prisma.InputJsonValue,
       },
     }),
   ]);

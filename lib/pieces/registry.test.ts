@@ -120,7 +120,7 @@ describe("precedencia de resolución", () => {
 describe("renombrar es seguro: identidad ≠ nombre visible", () => {
   it("la pieza técnica se identifica por slug aunque se haya renombrado", () => {
     const p = pieceBySlug("tech-requirements")!;
-    expect(p.label).toBe("Integraciones"); // «Desarrollo» hasta el 2026-09-27
+    expect(p.label).toBe("Requerimiento técnico"); // «Desarrollo» hasta el 2026-09-27, «Integraciones» hasta el 2026-10-30
     expect(p.legacyNames).toContain("Desarrollo"); // y el viejo NO se borra
   });
 

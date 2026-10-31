@@ -19,6 +19,7 @@ import { prisma } from "@/lib/db/prisma";
 import type { BcTemplateDef } from "@/components/landing/configs/templates.defs";
 import { SIN_ESCALA_TAG } from "@/lib/tags/catalog";
 import { crearCopia } from "./copias-server";
+import { conSeccionQuitada } from "./contexto-de-la-copia";
 import { copiaParaGenerar, generarCopia } from "./generar-server";
 
 async function proyecto() {
@@ -131,9 +132,23 @@ describe("generar una copia", () => {
     expect(generacion.fn.mock.calls[0][1] as string).toContain("Duplicar los test drive");
 
     generacion.fn.mockClear();
-    const i = await crearCopia({ projectId: p.id, tipo: "integration", porEmail: null });
+    const i = await crearCopia({ projectId: p.id, tipo: "tech-requirements", porEmail: null });
     await generarCopia({ projectId: p.id, canvasId: i.canvasId, agentRunId: null });
     expect(generacion.fn.mock.calls[0][1] as string).not.toContain("Duplicar los test drive");
+  });
+
+  it("⛔ una sección borrada de una copia no vuelve al regenerar", async () => {
+    const p = await proyecto();
+    const c = await crearCopia({ projectId: p.id, tipo: "adoption-plan", plantillaId: "adopcion-equipo-comercial", porEmail: null });
+    const s = await prisma.canvasSection.findFirstOrThrow({ where: { canvasId: c.canvasId, key: "reglas" }, select: { id: true } });
+    const fila = await prisma.projectCanvas.findUniqueOrThrow({ where: { id: c.canvasId }, select: { sections: true } });
+    await prisma.canvasSection.delete({ where: { id: s.id } });
+    await prisma.projectCanvas.update({ where: { id: c.canvasId }, data: { sections: conSeccionQuitada(fila.sections, "reglas") as never } });
+
+    await generarCopia({ projectId: p.id, canvasId: c.canvasId, agentRunId: null });
+
+    expect(await prisma.canvasSection.count({ where: { canvasId: c.canvasId, key: "reglas" } })).toBe(0);
+    expect((generacion.fn.mock.calls[0][0] as BcTemplateDef).sections.map((x) => x.key)).not.toContain("reglas");
   });
 
   it("un kickoff sin Escala no la genera y la vacía", async () => {

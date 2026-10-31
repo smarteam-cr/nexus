@@ -12,7 +12,9 @@ export const TIPOS_QUE_LO_ALIMENTAN: Readonly<Record<string, readonly string[]>>
   planning: ["diagnosis", "exploration"],
   exploration: ["kickoff"],
   "adoption-plan": ["diagnosis", "planning"],
-  integration: ["tech-requirements", "planning"],
+  roadmap: ["diagnosis", "planning"],
+  "tech-requirements": ["planning"],
+  delivery: ["diagnosis", "planning"],
 };
 
 /** El tope de cada documento que alimenta: con varias copias, el texto crece. */

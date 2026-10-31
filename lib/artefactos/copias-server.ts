@@ -28,6 +28,7 @@ import {
   tituloLimpio,
 } from "./copias";
 import { canvasDefDeUnaCopia, seccionesQuePasanAlDuplicar } from "./catalogo";
+import { piezaDeLasNotas } from "./contexto-de-la-copia";
 
 export class ErrorDelArtefacto extends Error {
   constructor(
@@ -185,6 +186,8 @@ async function duplicar(o: {
     },
   });
   if (!fuente) throw new ErrorDelArtefacto(404, "El documento que quieres duplicar no es de este proyecto.");
+  // La entrega guarda en su Json lo que el cliente no ve, y una copia se puede compartir.
+  if (fuente.slug && tipoDeArtefacto(o.tipo)?.sinEnlaceElDeSiempre) throw new ErrorDelArtefacto(400, "Este documento no se duplica: crea uno en blanco.");
   if (tipoDelDocumento(fuente) !== o.tipo) throw new ErrorDelArtefacto(400, "Solo se duplica un documento del mismo tipo.");
 
   // Todo lo del tipo, de cualquier plantilla (duplicar no recorta), y las que creó una persona.
@@ -245,6 +248,14 @@ async function duplicar(o: {
           })),
         });
       }
+    }
+    // Las notas, transcripciones y archivos de una copia son suyas: pasan con ella. Las del documento de siempre son de su tipo.
+    if (!fuente.slug) {
+      const notas = await tx.notaDeContexto.findMany({
+        where: { projectId: o.projectId, pieza: piezaDeLasNotas(o.desdeCanvasId!), deletedAt: null },
+        select: { title: true, content: true, createdByEmail: true },
+      });
+      if (notas.length) await tx.notaDeContexto.createMany({ data: notas.map((n) => ({ ...n, projectId: o.projectId, pieza: piezaDeLasNotas(c.id) })) });
     }
     return c.id;
   }, { timeout: 20_000 });

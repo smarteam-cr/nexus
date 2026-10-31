@@ -45,6 +45,7 @@ import { resultadosDelProyecto } from "@/lib/handoff/resultados";
 import { resultadosParaPrompt } from "@/lib/handoff/resultados-medibles";
 import { resolvePipeline } from "@/lib/projects/kind";
 import { servicioDelProyecto, servicioParaElKickoff } from "@/lib/servicios/catalogo";
+import { piezaDeLasNotas, reunionesDeLaCopia, seccionesQuitadas } from "./contexto-de-la-copia";
 import { plantillaGuardadaDelTipo, tipoDeArtefacto, type TipoDeArtefacto } from "./tipos";
 import { nombreDelArtefacto, tipoDelDocumento } from "./copias";
 import { handoffKeysDelTipo, seccionesDeUnaCopia, templateDelTipo } from "./catalogo";
@@ -103,7 +104,8 @@ export async function generarCopia(o: {
   /* Las secciones de su plantilla que la copia no tiene (una duplicada de un documento viejo): se crean, como reconcilia el
      documento de siempre. Las nuevas van al final; el motor mantiene el cierre abajo. */
   const yaTiene = new Set(canvas.canvasSections.map((s) => s.key));
-  const faltan = seccionesDeUnaCopia(tipo.id, plantilla?.id ?? null).filter((s) => !yaTiene.has(s.key));
+  const quitadas = seccionesQuitadas(canvas.sections);
+  const faltan = seccionesDeUnaCopia(tipo.id, plantilla?.id ?? null).filter((s) => !yaTiene.has(s.key) && !quitadas.has(s.key));
   if (faltan.length) {
     await prisma.canvasSection.createMany({
       skipDuplicates: true,
@@ -142,7 +144,9 @@ export async function generarCopia(o: {
       : null;
   const [handoff, material, alimentan] = await Promise.all([
     loadHandoffContext(o.projectId, { onlyConfirmed: false, includeKeys: handoffKeysDelTipo(tipo.id) }),
-    doc ? cargarMaterialDelDocumento(o.projectId, doc) : Promise.resolve(null),
+    doc
+      ? cargarMaterialDelDocumento(o.projectId, doc, { deLaCopia: { reuniones: reunionesDeLaCopia(canvas.sections), notasDe: piezaDeLasNotas(o.canvasId) } })
+      : Promise.resolve(null),
     Promise.all(
       (TIPOS_QUE_LO_ALIMENTAN[tipo.id] ?? []).map(async (t) => ({
         tipo: t,

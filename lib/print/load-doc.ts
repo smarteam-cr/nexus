@@ -203,7 +203,9 @@ export async function loadPrintDoc(
         select: { id: true, sections: true, slug: true, tipoArtefacto: true, name: true, titulo: true, disabledAt: true },
       })
     : null;
-  if (pedido && (!elegido || elegido.disabledAt || tipoDelDocumento(elegido) !== tipo.id)) return null;
+  // El requerimiento técnico: una copia imprime con el adaptador que tiene todas sus secciones (`integration`).
+  const tipoDelPedido = tipo.id === "integration" ? "tech-requirements" : tipo.id;
+  if (pedido && (!elegido || elegido.disabledAt || tipoDelDocumento(elegido) !== tipoDelPedido)) return null;
   const canvas = elegido
     ? { id: elegido.id, sections: elegido.sections }
     : tipo.pieceSlug

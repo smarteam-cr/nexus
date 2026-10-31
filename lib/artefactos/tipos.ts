@@ -10,7 +10,7 @@
  * nombre y su estado (`./copias.ts`, `./copias-server.ts`).
  *
  * El id de un tipo que ya era pieza es el slug de su pieza (lib/pieces/registry.ts): «planning», «diagnosis». Los tipos
- * nuevos estrenan el suyo, en inglés y estable como un slug: «adoption-plan», «integration». Cambiar un id rompe las copias
+ * nuevos estrenan el suyo, en inglés y estable como un slug: «adoption-plan», «roadmap». Cambiar un id rompe las copias
  * que ya existen; cambiar el nombre visible no rompe nada.
  *
  * Agregar un tipo, quitar uno o cambiar lo que admite es decisión de producto: `tipos.test.ts` congela el set.
@@ -35,10 +35,10 @@ export interface TipoDeArtefacto {
   /**
    * «varias» = un proyecto puede tener las que quiera, cada una con su nombre (Elías, 29 oct: kickoff y exploración
    * incluidos). «una» = el storage o el flujo la hacen única (el cronograma es `ProjectTimeline.projectId @unique`; el
-   * handoff es el paso Ventas → CS; la escala es una por empresa).
+   * handoff es el paso Ventas → CS).
    */
   copias: "varias" | "una";
-  /** De quién puede ser. Elías, 29 oct: el diagnóstico, la escala, la exploración y la hoja de ruta, también de la empresa. */
+  /** De quién puede ser. Elías, 29 oct: el diagnóstico, la exploración y la hoja de ruta, también de la empresa. */
   duenos: readonly DuenoDelArtefacto[];
   /** Lo lee el cliente (se comparte con su enlace). Uno interno no ofrece compartir. */
   clientFacing: boolean;
@@ -51,15 +51,32 @@ export interface TipoDeArtefacto {
   /** La celda con que se genera y se regenera. */
   permiso: SeccionDePermisoDelTipo;
   /**
-   * El «Contexto adicional» del que lee al generar (lib/contexto/documento.ts): las reuniones elegidas y las notas son POR
-   * TIPO hasta que lleguen las de cada copia (siguiente tanda), así que un tipo nuevo lee las del documento más parecido.
+   * Con qué reglas lee su contexto al generar (lib/contexto/documento.ts): un tipo nuevo, las del documento más parecido. Lo
+   * elegido (reuniones, notas e instrucciones) es de cada copia (lib/artefactos/contexto-de-la-copia.ts).
    */
   contextoDe: "diagnosis" | "planning" | "kickoff" | "exploration" | "tech-requirements" | "delivery" | null;
-  /** Sus plantillas propias. Los tipos que ya eran entregables las toman de lib/entregables/registro.ts. */
+  /** La copia sí se comparte por enlace, el documento de siempre no: la entrega guarda en su Json lo que el cliente no ve. */
+  sinEnlaceElDeSiempre?: boolean;
+  /**
+   * Sus plantillas propias. Sin esto, las de su entregable (lib/entregables/registro.ts). Las que suman a un entregable van
+   * acá y no en el registro a propósito: son de las copias, y el selector del documento de siempre no cambia.
+   */
   plantillas?: readonly PlantillaDeEntregable[];
   /** Las keys estructurales: la portada (la primera) y el cierre (la última). Van en toda plantilla. */
   estructurales: readonly [string, string] | readonly [];
 }
+
+/** La HOJA DE RUTA (catálogo n.º 16 y n.º 3): tipo nuevo, con el backlog y las decisiones (Elías, 30 oct). */
+export const TIPO_HOJA_DE_RUTA = "roadmap";
+export const SECCIONES_DE_LA_HOJA_DE_RUTA_ESENCIAL = ["hoja_de_ruta", "frentes", "horizonte", "diferido", "cierre"] as const;
+
+/** El informe de avance de la Entrega (catálogo n.º 15). Sus secciones nuevas viven en plantillas-adicionales.defs.ts. */
+export const SECCIONES_DEL_INFORME_DE_AVANCE = ["portada", "resumen", "avance_por_frente", "logros_del_periodo", "riesgos_y_pendientes_del_cliente", "recomendaciones", "cierre"] as const;
+
+/** Las plantillas que se suman a la Planificación. Las listas viven acá: el template las lee (plantillas-adicionales.defs.ts). */
+export const SECCIONES_DE_LA_CAMPANA = ["planificacion", "campana_objetivo", "campana_segmentos", "campana_piezas", "campana_presupuesto", "formularios", "automatizaciones", "campana_resultado", "cierre"] as const;
+export const SECCIONES_DEL_MARKETING = ["planificacion", "definicion_procesos", "ciclo_vida_crm", "canales_entrada", "formularios", "automatizaciones", "informes", "cierre"] as const;
+export const SECCIONES_DE_WHATSAPP = ["planificacion", "agente_objetivo", "agente_identidad", "agente_conocimiento", "conversaciones", "agente_derivacion", "whatsapp_plantillas", "agente_fases", "cierre"] as const;
 
 /* ── Los tipos nuevos (etapa V6, adelantada: Elías, 29 oct) ────────────────────────────────────────────────────── */
 
@@ -85,12 +102,34 @@ export const SECCIONES_DEL_PLAN_DE_ADOPCION_POR_NIVELES = [
 ] as const;
 export const SECCIONES_DEL_PLAN_DE_ADOPCION_TECNICO = ["adopcion", "administradores", "altas_bajas", "reglas", "medicion", "cierre"] as const;
 
+/** Con la capacitación adentro (catálogo n.º 1): el plan de adopción la absorbe (Elías, 30 oct). */
+export const SECCIONES_DEL_PLAN_DE_ADOPCION_CAPACITACION = [
+  "adopcion",
+  "introduccion",
+  "estructura_equipo",
+  "plan_por_equipo",
+  "entrenamientos",
+  "pilotos",
+  "medicion",
+  "cierre",
+] as const;
+
 /**
- * La INTEGRACIÓN TÉCNICA (catálogo n.º 6, 15 cuentas; Cemaco quiere integrar su ERP), con su MAPA DE INTEGRACIÓN: qué
- * objetos y campos de cada sistema pasan a HubSpot, en qué sentido, con qué transformación y cada cuánto. Presta las
- * secciones del requerimiento técnico (el tipo `tech-requirements`, «Integraciones») y suma las cuatro que le faltaban.
+ * El REQUERIMIENTO TÉCNICO (catálogo n.º 6, 15 cuentas): junta «Integraciones» y lo que fue «Integración técnica» en un solo
+ * tipo (Elías, 30 oct). El documento de siempre no cambia; las copias eligen plantilla. El guion de pruebas y la migración
+ * de datos son secciones suyas, y el mapa de procesos llega en la arquitectura.
  */
-export const TIPO_INTEGRACION_TECNICA = "integration";
+export const TIPO_REQUERIMIENTO_TECNICO = "tech-requirements";
+export const SECCIONES_DEL_REQUERIMIENTO_DE_SIEMPRE = [
+  "requerimiento",
+  "retos_cliente",
+  "criterios_exito",
+  "arquitectura",
+  "relacion_objetos",
+  "propiedades",
+  "comunicacion",
+  "cierre",
+] as const;
 export const SECCIONES_DEL_MAPA_DE_INTEGRACION = [
   "requerimiento",
   "alcance_firmado",
@@ -104,51 +143,6 @@ export const SECCIONES_DEL_MAPA_DE_INTEGRACION = [
 ] as const;
 
 export const TIPOS: readonly TipoDeArtefacto[] = [
-  {
-    id: "kickoff",
-    nombre: "Kickoff",
-    conArticulo: "un kickoff",
-    paraQue: "La presentación de arranque: el alcance, el equipo, cómo se trabaja y lo que sigue. Otro kickoff sirve cuando cambia un acuerdo o hay una desalineación.",
-    copias: "varias",
-    duenos: ["proyecto"],
-    clientFacing: true,
-    vive: "canvas",
-    pieza: "kickoff",
-    clase: "entregable",
-    permiso: "kickoff",
-    contextoDe: "kickoff",
-    estructurales: ["bienvenida", "cierre"],
-  },
-  {
-    id: "diagnosis",
-    nombre: "Diagnóstico",
-    conArticulo: "un diagnóstico",
-    paraQue: "Por qué el cliente tiene los resultados que tiene y qué vamos a hacer. Uno por área, de uso o para presentar.",
-    copias: "varias",
-    duenos: ["proyecto", "empresa"],
-    clientFacing: true,
-    vive: "canvas",
-    pieza: "diagnosis",
-    clase: "entregable",
-    permiso: "diagnostico",
-    contextoDe: "diagnosis",
-    estructurales: ["diagnostico", "cierre"],
-  },
-  {
-    id: "planning",
-    nombre: "Planificación",
-    conArticulo: "una planificación",
-    paraQue: "Lo que va a quedar configurado en HubSpot. Una por frente (Marketing, WhatsApp, Servicio…), cada una con su nombre.",
-    copias: "varias",
-    duenos: ["proyecto"],
-    clientFacing: true,
-    vive: "canvas",
-    pieza: "planning",
-    clase: "entregable",
-    permiso: "planificacion",
-    contextoDe: "planning",
-    estructurales: ["planificacion", "cierre"],
-  },
   {
     id: "exploration",
     nombre: "Exploración",
@@ -172,10 +166,114 @@ export const TIPOS: readonly TipoDeArtefacto[] = [
     estructurales: ["exploracion", "cierre"],
   },
   {
+    id: "diagnosis",
+    nombre: "Diagnóstico",
+    conArticulo: "un diagnóstico",
+    paraQue: "Por qué el cliente tiene los resultados que tiene y qué vamos a hacer. Uno por área, de uso o para presentar.",
+    copias: "varias",
+    duenos: ["proyecto", "empresa"],
+    clientFacing: true,
+    vive: "canvas",
+    pieza: "diagnosis",
+    clase: "entregable",
+    permiso: "diagnostico",
+    contextoDe: "diagnosis",
+    estructurales: ["diagnostico", "cierre"],
+  },
+  {
+    id: "kickoff",
+    nombre: "Kickoff",
+    conArticulo: "un kickoff",
+    paraQue: "La presentación de arranque: el alcance, el equipo, cómo se trabaja y lo que sigue. Otro kickoff sirve cuando cambia un acuerdo o hay una desalineación.",
+    copias: "varias",
+    duenos: ["proyecto"],
+    clientFacing: true,
+    vive: "canvas",
+    pieza: "kickoff",
+    clase: "entregable",
+    permiso: "kickoff",
+    contextoDe: "kickoff",
+    estructurales: ["bienvenida", "cierre"],
+  },
+  {
+    id: "planning",
+    nombre: "Planificación",
+    conArticulo: "una planificación",
+    paraQue: "Lo que va a quedar configurado: HubSpot completo, lo esencial, una campaña, el marketing o WhatsApp y su agente. Una por frente, cada una con su nombre.",
+    copias: "varias",
+    duenos: ["proyecto"],
+    clientFacing: true,
+    vive: "canvas",
+    pieza: "planning",
+    clase: "entregable",
+    permiso: "planificacion",
+    contextoDe: "planning",
+    plantillas: [
+      ...(entregableDe("planning")?.plantillas ?? []),
+      {
+        id: "planificacion-campana",
+        nombre: "Campaña de marketing",
+        paraQue: "Una campaña: su objetivo, a quién le llega y a quién no, las piezas y los canales, el presupuesto y el resultado contra la meta.",
+        secciones: SECCIONES_DE_LA_CAMPANA,
+        ordenPropio: true,
+      },
+      {
+        id: "planificacion-marketing",
+        nombre: "Cómo debería funcionar el marketing",
+        paraQue: "El marketing de punta a punta: el proceso, el ciclo de vida, por dónde entran los contactos, los formularios, las automatizaciones y los informes.",
+        secciones: SECCIONES_DEL_MARKETING,
+      },
+      {
+        id: "planificacion-whatsapp",
+        nombre: "WhatsApp y agente",
+        paraQue: "Qué atiende el agente, cómo habla, de dónde responde, cuándo pasa a una persona, las plantillas de mensajes, las fases y los créditos.",
+        secciones: SECCIONES_DE_WHATSAPP,
+        ordenPropio: true,
+      },
+    ],
+    estructurales: ["planificacion", "cierre"],
+  },
+  {
+    id: TIPO_REQUERIMIENTO_TECNICO,
+    nombre: "Requerimiento técnico",
+    conArticulo: "un requerimiento técnico",
+    paraQue:
+      "El trabajo técnico que se firma: la arquitectura, el mapa de integración con otro sistema, el identificador único, las pruebas, la migración de datos y lo que debe entregar el cliente o un tercero.",
+    copias: "varias",
+    duenos: ["proyecto"],
+    clientFacing: true,
+    vive: "canvas",
+    pieza: "tech-requirements",
+    clase: "entregable",
+    permiso: "desarrollo",
+    contextoDe: "tech-requirements",
+    plantillas: [
+      {
+        id: "integraciones",
+        nombre: "Integraciones",
+        paraQue: "El requerimiento de siempre: arquitectura, objetos, propiedades y cómo se comunican.",
+        secciones: SECCIONES_DEL_REQUERIMIENTO_DE_SIEMPRE,
+      },
+      {
+        id: "integracion-mapa",
+        nombre: "Mapa de integración",
+        paraQue: "Lo que hay que firmar antes de construir: el alcance, la arquitectura, el identificador único, el mapa de campos, cuándo se sincroniza y lo que falta que entreguen.",
+        secciones: SECCIONES_DEL_MAPA_DE_INTEGRACION,
+        recomendada: true,
+      },
+      {
+        id: "integracion-completa",
+        nombre: "Integración completa",
+        paraQue: "Además del mapa: qué duele hoy, la relación entre objetos, el diccionario de propiedades, el guion de pruebas y la migración de datos.",
+      },
+    ],
+    estructurales: ["requerimiento", "cierre"],
+  },
+  {
     id: TIPO_PLAN_DE_ADOPCION,
     nombre: "Plan de adopción",
     conArticulo: "un plan de adopción",
-    paraQue: "Que lo entregado se use: qué se espera de cada rol, qué no se negocia, cómo se mide y cómo se suma el equipo.",
+    paraQue: "Que lo entregado se use: qué se espera de cada rol, cómo se capacita cada equipo, los pilotos, qué no se negocia y cómo se mide.",
     copias: "varias",
     duenos: ["proyecto"],
     clientFacing: true,
@@ -204,61 +302,50 @@ export const TIPOS: readonly TipoDeArtefacto[] = [
         paraQue: "Para cuando los administradores del cliente quedan a cargo del portal: el traspaso, las altas y bajas y lo que no se toca.",
         secciones: SECCIONES_DEL_PLAN_DE_ADOPCION_TECNICO,
       },
+      {
+        id: "adopcion-capacitacion",
+        nombre: "Capacitación y pilotos",
+        paraQue: "La versión detallada: la introducción, la estructura del equipo, el plan por equipo, los entrenamientos, los pilotos y cómo se mide.",
+        secciones: SECCIONES_DEL_PLAN_DE_ADOPCION_CAPACITACION,
+      },
     ],
     estructurales: ["adopcion", "cierre"],
   },
   {
-    id: TIPO_INTEGRACION_TECNICA,
-    nombre: "Integración técnica",
-    conArticulo: "una integración técnica",
-    paraQue:
-      "El mapa de integración con otro sistema (un ERP, un sistema de operación): qué objetos y campos pasan a HubSpot, en qué sentido, con qué transformación y cada cuánto, el identificador único, el alcance firmado y lo que debe entregar el cliente o un tercero.",
+    id: TIPO_HOJA_DE_RUTA,
+    nombre: "Hoja de ruta",
+    conArticulo: "una hoja de ruta",
+    paraQue: "Qué se va a hacer los próximos meses y en qué orden, el backlog, lo que quedó para después y las decisiones tomadas.",
     copias: "varias",
-    duenos: ["proyecto"],
+    duenos: ["proyecto", "empresa"],
     clientFacing: true,
     vive: "canvas",
     pieza: null,
     clase: "entregable",
-    permiso: "desarrollo",
-    contextoDe: "tech-requirements",
+    permiso: "planificacion",
+    contextoDe: "planning",
     plantillas: [
       {
-        id: "integracion-mapa",
-        nombre: "Mapa de integración",
-        paraQue: "Lo que hay que firmar antes de construir: el alcance, la arquitectura, el identificador único, el mapa de campos, cuándo se sincroniza y lo que falta que entreguen.",
-        secciones: SECCIONES_DEL_MAPA_DE_INTEGRACION,
+        id: "hoja-de-ruta-esencial",
+        nombre: "Hoja de ruta esencial",
+        paraQue: "Para avanzar rápido: los frentes activos, lo que viene y lo que quedó para después.",
+        secciones: SECCIONES_DE_LA_HOJA_DE_RUTA_ESENCIAL,
         recomendada: true,
       },
       {
-        id: "integracion-completa",
-        nombre: "Integración completa",
-        paraQue: "Además del mapa: qué duele hoy, la relación entre objetos y el diccionario de propiedades.",
+        id: "hoja-de-ruta-completa",
+        nombre: "Con backlog y decisiones",
+        paraQue: "Además: el backlog priorizado, el registro de decisiones y la bolsa de horas.",
       },
     ],
-    estructurales: ["requerimiento", "cierre"],
-  },
-  // ── Los que se quedan en una copia (el storage o el flujo los hace únicos) ──────────────────────────────────────
-  {
-    id: "tech-requirements",
-    nombre: "Integraciones",
-    conArticulo: "un requerimiento técnico",
-    paraQue: "El requerimiento técnico que nace del handoff cuando hay trabajo técnico. Para otra integración, una integración técnica.",
-    copias: "una",
-    duenos: ["proyecto"],
-    clientFacing: true,
-    vive: "canvas",
-    pieza: "tech-requirements",
-    clase: "entregable",
-    permiso: "desarrollo",
-    contextoDe: "tech-requirements",
-    estructurales: ["requerimiento", "cierre"],
+    estructurales: ["hoja_de_ruta", "cierre"],
   },
   {
     id: "delivery",
     nombre: "Entrega",
     conArticulo: "una entrega",
-    paraQue: "El cierre del proyecto: el desafío resuelto, los objetivos alcanzados y lo que queda funcionando.",
-    copias: "una",
+    paraQue: "El cierre del proyecto. Mientras sigue abierto, un informe de avance para el cliente.",
+    copias: "varias",
     duenos: ["proyecto"],
     clientFacing: true,
     vive: "canvas",
@@ -266,8 +353,21 @@ export const TIPOS: readonly TipoDeArtefacto[] = [
     clase: "entregable",
     permiso: "entrega",
     contextoDe: "delivery",
+    sinEnlaceElDeSiempre: true,
+    /* Sin la plantilla «Entrega»: cumplimiento, escala y pendientes los calcula su runner, y una copia quedaría sin ellas.
+       El documento de siempre sigue con su botón y su plantilla. */
+    plantillas: [
+      {
+        id: "informe-de-avance",
+        nombre: "Informe de avance",
+        paraQue: "El informe periódico al cliente: lo avanzado por frente, lo logrado, los riesgos, lo que falta de su lado y lo que viene.",
+        secciones: SECCIONES_DEL_INFORME_DE_AVANCE,
+        ordenPropio: true,
+      },
+    ],
     estructurales: ["portada", "cierre"],
   },
+  // ── Los que se quedan en uno (el storage o el flujo los hacen únicos) ───────────────────────────────────────────
   {
     id: "implementation",
     nombre: "Ejecución",
@@ -310,21 +410,6 @@ export const TIPOS: readonly TipoDeArtefacto[] = [
     pieza: "handoff",
     clase: "herramienta",
     permiso: "handoff",
-    contextoDe: null,
-    estructurales: [],
-  },
-  {
-    id: "escala",
-    nombre: "Escala de rendimiento",
-    conArticulo: "una escala",
-    paraQue: "Dónde está la empresa en cada dimensión. Una por empresa, la comparten la preventa y el proyecto (etapa V1).",
-    copias: "una",
-    duenos: ["empresa"],
-    clientFacing: true,
-    vive: "propio",
-    pieza: null,
-    clase: "herramienta",
-    permiso: "diagnostico",
     contextoDe: null,
     estructurales: [],
   },

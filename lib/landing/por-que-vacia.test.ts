@@ -76,9 +76,10 @@ describe("el porqué en la data de la sección", () => {
     expect(foto).toEqual([{ key: "pipelines", blocks: [{ data: PIPELINES_VACIOS }] }]);
   });
 
-  it("una sección solo interna arranca abierta: `expanded` es «la cerró a mano»", () => {
+  it("toda sección arranca abierta: colapsar es un control aparte de ocultar", () => {
     const motor = fs.readFileSync(path.join(process.cwd(), "components/landing/LandingView.tsx"), "utf8");
-    expect(motor).toContain("(def.soloInterna ? expanded.has(def.key) : !expanded.has(def.key))");
+    expect(motor).toContain("const collapsed = editable && colapsadas.has(def.key);");
+    expect(motor).toContain('{hidden ? "Mostrar" : "Ocultar"}');
   });
 
   it("la tarjeta que solo trae el porqué se reconoce, y la ruta la usa en vez de crear otra al lado", () => {

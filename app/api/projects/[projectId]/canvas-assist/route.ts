@@ -22,8 +22,10 @@ import { runDocumentAssist, type AssistSectionDef } from "@/lib/ai/assist";
 import { loadHandoffContext, loadTimelineContext } from "@/lib/canvas/load-canvas-context";
 import { pieceForCanvas } from "@/lib/pieces/registry";
 import { docConAssist } from "@/lib/canvas/assist-de-documento";
+import { templateDelTipo } from "@/lib/artefactos/catalogo";
+import { esCopia } from "@/lib/artefactos/copias";
 import { tipoDelDocumento } from "@/lib/artefactos/copias";
-import { tipoDeArtefacto } from "@/lib/artefactos/tipos";
+import { tipoDeArtefacto, plantillaGuardadaDelTipo } from "@/lib/artefactos/tipos";
 import { KICKOFF_RECURRENTE_TEMPLATE } from "@/components/landing/configs/kickoff.defs";
 import { resolvePipeline } from "@/lib/projects/kind";
 import { servicioDelProyecto, servicioParaElKickoff } from "@/lib/servicios/catalogo";
@@ -73,6 +75,9 @@ export async function POST(req: NextRequest, { params }: { params: Params }) {
   const pieza = pieceForCanvas(canvas);
   const tipo = tipoDelDocumento(canvas);
   const doc = docConAssist(tipo);
+  // Una copia se mejora con la voz de SU plantilla: un informe de avance no es el cierre del proyecto.
+  const plantillaDeLaCopia = esCopia(canvas) && tipo ? plantillaGuardadaDelTipo(tipo, canvas.sections).plantilla : null;
+  const introDeLaCopia = plantillaDeLaCopia && tipo ? templateDelTipo(tipo, plantillaDeLaCopia.id).agentIntro : null;
   const seccionDePermiso = pieza?.permissionSection ?? tipoDeArtefacto(tipo)?.permiso ?? null;
   if (!tipo || !doc || !seccionDePermiso) {
     return NextResponse.json(
@@ -151,7 +156,7 @@ export async function POST(req: NextRequest, { params }: { params: Params }) {
       : null;
   const delServicio = servicio?.ciclo ? servicio : null;
   const systemPrompt = [
-    (delServicio ? KICKOFF_RECURRENTE_TEMPLATE.agentIntro : doc.tpl.agentIntro) ??
+    (delServicio ? KICKOFF_RECURRENTE_TEMPLATE.agentIntro : introDeLaCopia ?? doc.tpl.agentIntro) ??
       `Mejoras el ${doc.docLabel} de un proyecto de Smarteam (consultora HubSpot).`,
     agent?.additionalInstructions?.trim() || "",
   ]

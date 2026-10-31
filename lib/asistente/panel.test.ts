@@ -248,22 +248,18 @@ describe("mientras aplica, el DOCUMENTO se bloquea — no el cajón", () => {
   const CANVAS = soloCodigo(
     fs.readFileSync(path.join(RAIZ, "components/canvas/CronogramaCanvas.tsx"), "utf8"),
   );
+  /* El velo salió a su componente el 2026-10-30, para ser el mismo en todo artefacto: las guardas miran ahí, y el canvas
+     tiene que seguir montándolo con su rótulo, su detalle y el foco del cartel. */
+  const VELO = soloCodigo(fs.readFileSync(path.join(RAIZ, "components/canvas/VeloDeGeneracion.tsx"), "utf8"));
+  const MONTAJE = "{ocupado.activo && <VeloDeGeneracion rotulo={ocupado.rotulo} detalle={ocupado.detalle} carteRef={carteldeBloqueoRef} />}";
 
   it("⚠ el velo tapa el cronograma y se anuncia como ocupado", () => {
     /* La edición que la pone en rojo: borrar el bloque `{ocupado.activo && (…)}` del canvas. Sin
        él la espera es invisible: el cronograma sigue mostrando lo viejo, acepta clicks, y el
        cambio aparece de golpe sin que nada lo haya anunciado. */
-    const i = CANVAS.indexOf("{ocupado.activo && (");
-    expect(i, "se fue el velo: el cronograma acepta clicks a mitad de la escritura").toBeGreaterThan(
-      -1,
-    );
-    /* ⚠ ACTUALIZADA el 2026-09-24 con esta razón: el tramo era un largo fijo (1.800) y la barrita que
-       corre pasó ADENTRO del aviso, más abajo. Ahora el tramo termina donde termina el velo: en la
-       región viva que va después. */
-    const velo = CANVAS.slice(i, CANVAS.indexOf('role="status"', i));
-    expect(velo.length, "la guarda no está mirando el velo").toBeGreaterThan(500);
-    expect(velo, "la guarda dejó de mirar el velo").toContain("aria-busy");
-    expect(velo).toContain("skeleton-shimmer");
+    expect(CANVAS, "se fue el velo: el cronograma acepta clicks a mitad de la escritura").toContain(MONTAJE);
+    expect(VELO, "la guarda dejó de mirar el velo").toContain("aria-busy");
+    expect(VELO).toContain("skeleton-shimmer");
   });
 
   it("⭐ y cubre la GENERACIÓN, no solo el aplicar — que era el agujero reportado", () => {
@@ -343,19 +339,13 @@ describe("mientras aplica, el DOCUMENTO se bloquea — no el cajón", () => {
       );
       expect(apertura, "volvió una ventana de espera que no se puede cerrar").not.toContain("onClose={() => {}}");
     }
-    const i = CANVAS.indexOf("{ocupado.activo && (");
-    expect(i, "se fue el velo").toBeGreaterThan(-1);
-    // El velo termina donde empieza la región viva (sr-only): ese texto también nombra el rótulo, y
-    // si el tramo se la comiera, el aviso VISIBLE podría dejar de decir qué pasa en verde.
-    const velo = CANVAS.slice(i, CANVAS.indexOf('role="status"', i));
-    expect(velo.length, "la guarda no está mirando el velo").toBeGreaterThan(500);
-    expect(velo, "el tramo del velo se comió la región viva").not.toContain("sr-only");
-    const iCartel = velo.indexOf("ref={carteldeBloqueoRef}");
+    expect(CANVAS, "se fue el velo").toContain(MONTAJE);
+    const iCartel = VELO.indexOf("ref={carteRef}");
     expect(iCartel, "el aviso perdió el foco (o se fue)").toBeGreaterThan(-1);
-    const cartel = velo.slice(iCartel);
+    const cartel = VELO.slice(iCartel);
     expect(cartel, "el aviso dejó de ir arriba, pegado al cronograma").toMatch(/\bsticky top-2\b/);
     expect(cartel, "el aviso volvió al centro de la pantalla").not.toContain("top-[38vh]");
-    expect(cartel, "el aviso visible dejó de decir qué pasa").toContain("{ocupado.rotulo}…");
+    expect(cartel, "el aviso visible dejó de decir qué pasa").toContain("{rotulo}…");
     expect(cartel, "la barrita que corre dejó de ir adentro del aviso (afuera la tapa)").toContain("skeleton-shimmer");
   });
 
@@ -430,8 +420,7 @@ describe("mientras aplica, el DOCUMENTO se bloquea — no el cajón", () => {
        test: simplemente tapa el panel durante la espera, que es EL momento en que el CSE quiere
        leer qué está pasando y encadenar el ajuste siguiente.
        La edición que la pone en rojo: cambiar `z-[44]` por `z-50` en el velo. */
-    const i = CANVAS.indexOf("{ocupado.activo && (");
-    const z = CANVAS.slice(i, i + 400).match(/\bz-\[?(\d+)\]?\b/);
+    const z = VELO.match(/\bz-\[?(\d+)\]?\b/);
     expect(z, "el velo perdió su z declarado").not.toBeNull();
     const zPanel = PANEL.match(/z-\[(\d+)\]/);
     expect(Number(z![1])).toBeLessThan(Number(zPanel![1]));

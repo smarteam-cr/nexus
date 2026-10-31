@@ -19,7 +19,7 @@
 import type { BCSectionDef } from "./business-case.defs";
 import type { BcTemplateDef } from "./templates.defs";
 import { DESARROLLO_DEF_BY_KEY, DESARROLLO_HANDOFF_KEYS, DESARROLLO_TEMPLATE } from "./desarrollo.defs";
-import { reglaDeLasColumnas, tablaConColumnas } from "./adopcion.defs";
+import { reglaDeLasColumnas, seccionDeTabla, tablaConColumnas } from "./adopcion.defs";
 import { TABLA_SCHEMA, TABLA_TYPE } from "@/lib/landing/catalogo-de-secciones";
 import { heroTitleBrief } from "@/lib/landing/hero-title";
 
@@ -50,12 +50,12 @@ const NO_INVENTES =
 export const INTEGRACION_SECTION_DEFS: BCSectionDef[] = [
   {
     ...prestada("requerimiento"),
-    label: "Integración técnica",
-    eyebrow: "Integración técnica",
+    label: "Requerimiento técnico",
+    eyebrow: "Requerimiento técnico",
     agentHint: "Título de la integración + una bajada de qué conecta con qué + chips de los sistemas.",
     brief:
-      heroTitleBrief("Integración técnica") +
-      "Portada de la integración técnica. `headline`: patrón `Integración de HubSpot con [sistema]` (sacá el nombre propio del sistema de la fuente: SAP, Intelisis, Odoo, el ERP…). `subhead`: UNA frase, en lenguaje llano, de qué datos pasan y para qué ('Los clientes y sus compras del ERP llegan a HubSpot para que ventas vea el historial sin pedirlo'). `tags`: 2-5 chips de los sistemas y el tipo de conexión ('HubSpot', 'SAP', 'API REST', 'Bidireccional'). " +
+      heroTitleBrief("Requerimiento técnico") +
+      "Portada del requerimiento técnico. `headline`: patrón `Integración de HubSpot con [sistema]` (sacá el nombre propio del sistema de la fuente: SAP, Intelisis, Odoo, el ERP…). `subhead`: UNA frase, en lenguaje llano, de qué datos pasan y para qué ('Los clientes y sus compras del ERP llegan a HubSpot para que ventas vea el historial sin pedirlo'). `tags`: 2-5 chips de los sistemas y el tipo de conexión ('HubSpot', 'SAP', 'API REST', 'Bidireccional'). " +
       NO_INVENTES,
   },
   {
@@ -136,18 +136,36 @@ export const INTEGRACION_SECTION_DEFS: BCSectionDef[] = [
     schema: asSchema(TABLA_SCHEMA),
   },
   prestada("criterios_exito"),
+  seccionDeTabla({
+    key: "guion_pruebas",
+    label: "El guion de pruebas",
+    eyebrow: "Cómo se acepta",
+    columnas: ["Prueba", "Quién la hace", "Qué debería pasar", "Resultado"],
+    tip: "Las pruebas con que el cliente acepta la integración. Sin esto, «funciona» es una opinión.",
+    agentHint: "Una fila por prueba de aceptación, en orden.",
+    brief: "EL GUION DE PRUEBAS Y ACEPTACIÓN: una fila por prueba. «Qué debería pasar»: el resultado observable. «Resultado»: vacío hasta que se pruebe.",
+  }),
+  seccionDeTabla({
+    key: "migracion_datos",
+    label: "La migración de datos",
+    eyebrow: "Qué se trae",
+    theme: "soft",
+    columnas: ["Qué datos", "De dónde", "Limpieza que necesita", "Quién la hace"],
+    tip: "Qué datos se traen, de dónde y qué limpieza necesitan antes de entrar a HubSpot.",
+    agentHint: "Una fila por conjunto de datos a migrar.",
+    brief: "LA MIGRACIÓN Y LIMPIEZA DE DATOS: una fila por conjunto de datos (contactos, empresas, negocios). Si no hay migración, deja `filas` vacío.",
+  }),
   prestada("cierre"),
 ];
 
 export const INTEGRACION_TEMPLATE: BcTemplateDef = {
   id: "integracion_v1",
-  caseLabel: "Integración técnica",
-  maxTokens: 14000, // el mapa de campos es la sección más larga del motor: una fila por campo que viaja
+  caseLabel: "Requerimiento técnico",
+  maxTokens: 18000, // el mapa de campos es la sección más larga del motor; 18.000 desde que suma el guion de pruebas y la migración
   brandVoice: false, // documento técnico, como el requerimiento
   features: { useCaseChecklist: false },
   agentIntro:
     (DESARROLLO_TEMPLATE.agentIntro ?? "")
-      .replace("escribes el REQUERIMIENTO TÉCNICO", "escribes la INTEGRACIÓN TÉCNICA")
       .replace(
         "FUENTE ÚNICA: la sección `desarrollo` del handoff (veredicto + lo conversado), el alcance contratado y el deal del mensaje. No inventes NADA que no esté ahí.",
         "TU FUENTE: la sección `desarrollo` del handoff, el alcance contratado, las reuniones del proyecto que te llegan y los demás documentos del proyecto. No inventes NADA que no esté ahí.",

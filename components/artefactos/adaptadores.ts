@@ -18,7 +18,9 @@ import { buildPlanificacionConfig, buildPlanificacionSections } from "@/componen
 import { buildExploracionConfig, buildExploracionSections } from "@/components/canvas/exploracion-landing-adapter";
 import { buildAdopcionConfig, buildAdopcionSections } from "@/components/canvas/adopcion-landing-adapter";
 import { buildIntegracionConfig, buildIntegracionSections } from "@/components/canvas/integracion-landing-adapter";
-import { TIPO_INTEGRACION_TECNICA, TIPO_PLAN_DE_ADOPCION } from "@/lib/artefactos/tipos";
+import { buildHojaDeRutaConfig, buildHojaDeRutaSections } from "@/components/canvas/hoja-de-ruta-landing-adapter";
+import { buildEntregaConfig, buildEntregaSections } from "@/components/canvas/entrega-landing-adapter";
+import { TIPO_HOJA_DE_RUTA, TIPO_REQUERIMIENTO_TECNICO, TIPO_PLAN_DE_ADOPCION } from "@/lib/artefactos/tipos";
 
 export interface AdaptadorDelTipo {
   config: (orderedKeys: string[]) => LandingConfig;
@@ -43,7 +45,9 @@ const ADAPTADORES: Readonly<Record<string, AdaptadorDelTipo>> = {
   planning: { config: buildPlanificacionConfig, sections: buildPlanificacionSections, palette: "internal" },
   exploration: { config: buildExploracionConfig, sections: buildExploracionSections, palette: "internal" },
   [TIPO_PLAN_DE_ADOPCION]: { config: buildAdopcionConfig, sections: buildAdopcionSections, palette: "brand" },
-  [TIPO_INTEGRACION_TECNICA]: { config: buildIntegracionConfig, sections: buildIntegracionSections, palette: "brand" },
+  [TIPO_REQUERIMIENTO_TECNICO]: { config: buildIntegracionConfig, sections: buildIntegracionSections, palette: "brand" },
+  [TIPO_HOJA_DE_RUTA]: { config: buildHojaDeRutaConfig, sections: buildHojaDeRutaSections, palette: "brand" },
+  delivery: { config: buildEntregaConfig, sections: (rows) => buildEntregaSections(rows as never), palette: "brand" },
 };
 
 export function adaptadorDelTipo(tipo: string | null | undefined): AdaptadorDelTipo | null {

@@ -49,6 +49,7 @@ import {
 } from "@/components/canvas/exploracion-landing-adapter";
 import { buildAdopcionConfig, buildAdopcionSections } from "@/components/canvas/adopcion-landing-adapter";
 import { buildIntegracionConfig, buildIntegracionSections } from "@/components/canvas/integracion-landing-adapter";
+import { buildHojaDeRutaConfig, buildHojaDeRutaSections } from "@/components/canvas/hoja-de-ruta-landing-adapter";
 
 interface Adaptador {
   /** `templateId` solo lo usa el caso de negocio, que elige plantilla por DOCUMENTO. */
@@ -128,6 +129,7 @@ const ADAPTADORES: Record<string, Adaptador> = {
   /* Los tipos de artefacto nuevos (2026-10-29): siempre una copia, con su adaptador compartido con el editor y el enlace. */
   "adoption-plan": { config: buildAdopcionConfig, sections: buildAdopcionSections },
   integration: { config: buildIntegracionConfig, sections: buildIntegracionSections },
+  roadmap: { config: buildHojaDeRutaConfig, sections: buildHojaDeRutaSections },
 };
 
 export default function PrintDocView({ doc }: { doc: PrintDocPayload }) {

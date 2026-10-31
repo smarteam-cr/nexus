@@ -8,7 +8,6 @@
 import type { BcTemplateDef } from "@/components/landing/configs/templates.defs";
 import type { BCSectionDef } from "@/components/landing/configs/business-case.defs";
 import { KICKOFF_DEF_BY_KEY, KICKOFF_HANDOFF_KEYS, KICKOFF_TEMPLATE } from "@/components/landing/configs/kickoff.defs";
-import { DESARROLLO_DEF_BY_KEY, DESARROLLO_HANDOFF_KEYS, DESARROLLO_TEMPLATE } from "@/components/landing/configs/desarrollo.defs";
 import {
   ACCIONES_KEY,
   BRIEF_DE_LAS_ACCIONES_CON_DETALLE,
@@ -22,7 +21,10 @@ import { IMPLEMENTACION_DEF_BY_KEY, IMPLEMENTACION_TEMPLATE } from "@/components
 import { ENTREGA_DEF_BY_KEY, ENTREGA_HANDOFF_KEYS, ENTREGA_TEMPLATE } from "@/components/landing/configs/entrega.defs";
 import { ADOPCION_DEF_BY_KEY, ADOPCION_HANDOFF_KEYS, ADOPCION_TEMPLATE } from "@/components/landing/configs/adopcion.defs";
 import { INTEGRACION_DEF_BY_KEY, INTEGRACION_HANDOFF_KEYS, INTEGRACION_TEMPLATE } from "@/components/landing/configs/integracion.defs";
-import { TIPO_INTEGRACION_TECNICA, TIPO_PLAN_DE_ADOPCION } from "@/lib/artefactos/tipos";
+import { EXPLORACION_DEF_BY_KEY, EXPLORACION_HANDOFF_KEYS, EXPLORACION_TEMPLATE } from "@/components/landing/configs/exploracion.defs";
+import { ENTREGA_DEF_BY_KEY_CON_ADICIONALES, PLANIFICACION_DEF_BY_KEY_CON_ADICIONALES } from "@/components/landing/configs/plantillas-adicionales.defs";
+import { HOJA_DE_RUTA_DEF_BY_KEY, HOJA_DE_RUTA_HANDOFF_KEYS, HOJA_DE_RUTA_TEMPLATE } from "@/components/landing/configs/hoja-de-ruta.defs";
+import { TIPO_HOJA_DE_RUTA, TIPO_PLAN_DE_ADOPCION } from "@/lib/artefactos/tipos";
 
 export interface DocConAssist {
   /** La fila de `Agent` (sus instrucciones adicionales). null en los tipos nuevos, que no tienen fila: la corrida va con
@@ -52,7 +54,8 @@ export interface DocConAssist {
  * planeado) habría apagado su assist en silencio, sin error y sin test en rojo. Con 6 filas el
  * riesgo se multiplica, así que se paga antes de sumarlas.
  *
- * ⛔ EXPLORACIÓN NO ENTRA, y no es un olvido: aplicar una propuesta pasa por
+ * ⛔ LA SECCIÓN `sesiones` DE LA EXPLORACIÓN NO ENTRA, y no es un olvido (la exploración sí, desde el 30 oct, sin ella: el
+ * contrato sale de sus defs): aplicar una propuesta pasa por
  * `preserveNonSchemaKeys` (lib/ai/assist.ts), que es SHALLOW — solo conserva keys de PRIMER
  * NIVEL fuera del schema. Las marcas «ya la pregunté» del plan de sesiones viven anidadas en
  * `sesiones[].preguntas[].hecha`, así que una propuesta que toque `sesiones` las borraría TODAS
@@ -77,9 +80,10 @@ export const DOC: Record<string, DocConAssist> = {
   "tech-requirements": {
     agentId: "agent-desarrollo-canvas",
     docLabel: "requerimiento técnico de integración",
-    defs: DESARROLLO_DEF_BY_KEY,
-    tpl: DESARROLLO_TEMPLATE,
-    handoffKeys: DESARROLLO_HANDOFF_KEYS,
+    // Las de las copias incluidas: el contrato sale de las secciones que el documento tiene de verdad.
+    defs: INTEGRACION_DEF_BY_KEY,
+    tpl: INTEGRACION_TEMPLATE,
+    handoffKeys: INTEGRACION_HANDOFF_KEYS,
   },
   diagnosis: {
     agentId: "agent-diagnostico-canvas",
@@ -95,7 +99,8 @@ export const DOC: Record<string, DocConAssist> = {
   planning: {
     agentId: "agent-planificacion-canvas",
     docLabel: "plan de trabajo (se proyecta frente al cliente)",
-    defs: PLANIFICACION_DEF_BY_KEY,
+    // Las de las plantillas de las copias incluidas: el contrato sale de las secciones que el documento tiene de verdad.
+    defs: PLANIFICACION_DEF_BY_KEY_CON_ADICIONALES,
     tpl: PLANIFICACION_TEMPLATE,
     handoffKeys: PLANIFICACION_HANDOFF_KEYS,
   },
@@ -113,7 +118,7 @@ export const DOC: Record<string, DocConAssist> = {
   delivery: {
     agentId: "agent-entrega-canvas",
     docLabel: "documento de entrega (cierre de cara al cliente)",
-    defs: ENTREGA_DEF_BY_KEY,
+    defs: ENTREGA_DEF_BY_KEY_CON_ADICIONALES,
     tpl: ENTREGA_TEMPLATE,
     handoffKeys: ENTREGA_HANDOFF_KEYS,
   },
@@ -132,12 +137,19 @@ export const DOC_DE_LOS_TIPOS_NUEVOS: Record<string, DocConAssist> = {
     tpl: ADOPCION_TEMPLATE,
     handoffKeys: ADOPCION_HANDOFF_KEYS,
   },
-  [TIPO_INTEGRACION_TECNICA]: {
+  exploration: {
     agentId: null,
-    docLabel: "mapa de integración técnica (lo firma el cliente)",
-    defs: INTEGRACION_DEF_BY_KEY,
-    tpl: INTEGRACION_TEMPLATE,
-    handoffKeys: INTEGRACION_HANDOFF_KEYS,
+    docLabel: "exploración (interna, del equipo)",
+    defs: Object.fromEntries(Object.entries(EXPLORACION_DEF_BY_KEY).filter(([k]) => k !== "sesiones")),
+    tpl: { ...EXPLORACION_TEMPLATE, sections: EXPLORACION_TEMPLATE.sections.filter((s) => s.key !== "sesiones") },
+    handoffKeys: EXPLORACION_HANDOFF_KEYS,
+  },
+  [TIPO_HOJA_DE_RUTA]: {
+    agentId: null,
+    docLabel: "hoja de ruta (se comparte con el cliente)",
+    defs: HOJA_DE_RUTA_DEF_BY_KEY,
+    tpl: HOJA_DE_RUTA_TEMPLATE,
+    handoffKeys: HOJA_DE_RUTA_HANDOFF_KEYS,
   },
 };
 

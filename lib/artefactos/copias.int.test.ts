@@ -11,6 +11,7 @@ vi.mock("server-only", () => ({}));
 import { prisma } from "@/lib/db/prisma";
 import { canvasNotOf, canvasOf, onlyEnabled } from "@/lib/pieces/canvas-query";
 import { plantillaDelDocumento } from "@/lib/entregables/registro";
+import { piezaDeLasNotas } from "./contexto-de-la-copia";
 import { SECCIONES_DEL_PLAN_DE_ADOPCION_COMERCIAL } from "./tipos";
 import { archivarCopia, crearCopia, documentosDelTipo, marcarTerminado, ordenarDelTipo, reactivarCopia, renombrarArtefacto } from "./copias-server";
 import { artefactoParaElToken } from "@/lib/external/artefacto-view";
@@ -52,6 +53,39 @@ describe("duplicar", () => {
     const d = await crearCopia({ projectId: proyecto.id, tipo: "diagnosis", desdeCanvasId: original.id, porEmail: null });
     const keys = (await prisma.canvasSection.findMany({ where: { canvasId: d.canvasId }, select: { key: true } })).map((s) => s.key);
     expect(new Set(keys)).toEqual(new Set(["diagnostico", "fortalezas", "gap_analysis"]));
+  });
+
+  it("⛔ la entrega de siempre no se duplica: guarda en su Json lo que el cliente no ve", async () => {
+    const { proyecto } = await proyectoConPlanificacion();
+    const entrega = await prisma.projectCanvas.create({ data: { projectId: proyecto.id, slug: "delivery", name: "Entrega", sections: [] } });
+    await expect(crearCopia({ projectId: proyecto.id, tipo: "delivery", desdeCanvasId: entrega.id, porEmail: null })).rejects.toMatchObject({ status: 400 });
+  });
+
+  it("duplicar una copia pasa sus notas, y sus notas quedan de la copia nueva", async () => {
+    const { proyecto } = await proyectoConPlanificacion();
+    const a = await crearCopia({ projectId: proyecto.id, tipo: "adoption-plan", porEmail: null });
+    await prisma.notaDeContexto.create({ data: { projectId: proyecto.id, pieza: piezaDeLasNotas(a.canvasId), content: "Lo que dijo la gerencia" } });
+    const d = await crearCopia({ projectId: proyecto.id, tipo: "adoption-plan", desdeCanvasId: a.canvasId, porEmail: null });
+    expect(await prisma.notaDeContexto.findMany({ where: { pieza: piezaDeLasNotas(d.canvasId) }, select: { content: true } })).toEqual([{ content: "Lo que dijo la gerencia" }]);
+  });
+
+  it("una «HubSpot completa» nace con su canon, sin las secciones de la campaña ni de WhatsApp", async () => {
+    const { proyecto } = await proyectoConPlanificacion();
+    const c = await crearCopia({ projectId: proyecto.id, tipo: "planning", plantillaId: "planificacion", porEmail: null });
+    const keys = (await prisma.canvasSection.findMany({ where: { canvasId: c.canvasId }, select: { key: true } })).map((s) => s.key);
+    expect(keys).toContain("pipelines");
+    expect(keys.filter((k) => k.startsWith("campana_") || k.startsWith("agente_") || k.startsWith("whatsapp_"))).toEqual([]);
+  });
+
+  it("en blanco, cada plantilla del plan de adopción nace con SUS secciones, aunque ya haya otra copia", async () => {
+    const { proyecto } = await proyectoConPlanificacion();
+    const keysDe = async (plantillaId: string) => {
+      const c = await crearCopia({ projectId: proyecto.id, tipo: "adoption-plan", plantillaId, porEmail: null });
+      return (await prisma.canvasSection.findMany({ where: { canvasId: c.canvasId }, orderBy: { order: "asc" }, select: { key: true } })).map((s) => s.key);
+    };
+    expect(await keysDe("adopcion-equipo-comercial")).toEqual(["adopcion", "comportamientos", "reglas", "rutinas_adopcion", "altas_bajas", "medicion", "cierre"]);
+    expect(await keysDe("adopcion-por-niveles")).toContain("niveles");
+    expect(await keysDe("adopcion-tecnica")).toContain("administradores");
   });
 
   it("un plan de adopción por niveles conserva sus secciones y su plantilla", async () => {
@@ -179,13 +213,13 @@ describe("varias copias de un tipo en un proyecto", () => {
     // El cierre curado nace sembrado.
     expect(await prisma.canvasBlock.count({ where: { section: { canvasId: adopcion.canvasId, key: "cierre" } } })).toBe(1);
 
-    const integracion = await crearCopia({ projectId: proyecto.id, tipo: "integration", porEmail: null });
+    const integracion = await crearCopia({ projectId: proyecto.id, tipo: "tech-requirements", porEmail: null });
     const keysI = (await prisma.canvasSection.findMany({ where: { canvasId: integracion.canvasId }, select: { key: true } })).map((s) => s.key);
     expect(keysI).toContain("mapa_integracion");
     expect(keysI).not.toContain("estimacion");
 
     await expect(crearCopia({ projectId: proyecto.id, tipo: "timeline", porEmail: null })).rejects.toMatchObject({ status: 400 });
-    await expect(crearCopia({ projectId: proyecto.id, tipo: "delivery", porEmail: null })).rejects.toMatchObject({ status: 400 });
+    await expect(crearCopia({ projectId: proyecto.id, tipo: "implementation", porEmail: null })).rejects.toMatchObject({ status: 400 });
     await expect(crearCopia({ projectId: proyecto.id, tipo: "planning", plantillaId: "no-existe", porEmail: null })).rejects.toMatchObject({ status: 400 });
   });
 

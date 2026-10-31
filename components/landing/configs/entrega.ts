@@ -16,7 +16,9 @@
 import type { FC } from "react";
 import type { LandingConfig, SectionDef, SectionProps } from "../types";
 import { ENTREGA_SECTION_DEFS } from "./entrega.defs";
-import { toSectionDef } from "./templates";
+import { COMPONENTES_CREABLES, toSectionDef } from "./templates";
+import { ENTREGA_DEFS_ADICIONALES } from "./plantillas-adicionales.defs";
+import { TABLA_TYPE } from "@/lib/landing/catalogo-de-secciones";
 import { HeroSection, RoiSection } from "../sections";
 import { ProcessMappingSection } from "../sections-shared";
 import { HubsClienteSection } from "../sections-hubs";
@@ -41,11 +43,12 @@ export const ENTREGA_SECTION_COMPONENTS: Record<string, FC<SectionProps<any>>> =
   // El punto de partida en la Escala: lo escribe el runner desde el Diagnóstico, no el agente.
   escala_posicion: EscalaPosicionSection,
   entrega_cta: KickoffCtaSection,
+  [TABLA_TYPE]: COMPONENTES_CREABLES[TABLA_TYPE],
 };
 
 const ENTREGA_LANDING_CONFIG: LandingConfig = {
   type: "entrega",
-  sections: ENTREGA_SECTION_DEFS.map((d) => toSectionDef(d, ENTREGA_SECTION_COMPONENTS)).filter(
+  sections: [...ENTREGA_SECTION_DEFS, ...ENTREGA_DEFS_ADICIONALES].map((d) => toSectionDef(d, ENTREGA_SECTION_COMPONENTS)).filter(
     (s): s is SectionDef => s !== null,
   ),
 };

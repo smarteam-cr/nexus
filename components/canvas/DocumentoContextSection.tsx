@@ -45,6 +45,7 @@ export default function DocumentoContextSection({
   doc,
   generado,
   canEdit = true,
+  enVentana = false,
 }: {
   projectId: string;
   doc: DocumentoConContexto;
@@ -55,6 +56,8 @@ export default function DocumentoContextSection({
    */
   generado: boolean;
   canEdit?: boolean;
+  /** Se abre desde el botón de la barra del documento (Elías, 30 oct): adentro de la ventana va siempre abierta. */
+  enVentana?: boolean;
 }) {
   const clave = `nexus:contexto-abierto:${projectId}:${doc.pieza}`;
   const [override, setOverride] = useState<boolean | null>(null);
@@ -82,7 +85,7 @@ export default function DocumentoContextSection({
   const [reunionesIlegibles, setReunionesIlegibles] = useState(false);
   const [instruccionesActivas, setInstruccionesActivasState] = useState(false);
   const tieneAlgo = reuniones > 0 || notas > 0 || instruccionesActivas;
-  const abierto = override ?? (!generado && !tieneAlgo);
+  const abierto = enVentana || (override ?? (!generado && !tieneAlgo));
   const setInstruccionesActivas = useCallback((v: boolean) => setInstruccionesActivasState(v), []);
   const setReuniones = useCallback((n: number) => setReunionesState((c) => (c === n ? c : n)), []);
   const setSugeridas = useCallback((n: number) => setSugeridasState((c) => (c === n ? c : n)), []);

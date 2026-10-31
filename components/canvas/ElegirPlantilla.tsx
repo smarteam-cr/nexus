@@ -64,6 +64,65 @@ function Dibujo({ secciones }: { secciones: number }) {
   );
 }
 
+/** Una plantilla con su descripción y sus secciones. La misma al generar un entregable y al crear un artefacto. */
+export function TarjetaDePlantilla({
+  plantilla: p,
+  secciones,
+  activa,
+  distintivo,
+  onElegir,
+  onKeyDown,
+  enfocable,
+}: {
+  plantilla: Pick<PlantillaDeEntregable, "nombre" | "paraQue">;
+  secciones: ReadonlyArray<{ key: string; nombre: string }>;
+  activa: boolean;
+  distintivo?: string | null;
+  onElegir: () => void;
+  onKeyDown?: (e: KeyboardEvent<HTMLDivElement>) => void;
+  /** Se llega con Tab aunque no esté elegida: quien no tiene flechas entre tarjetas. */
+  enfocable?: boolean;
+}) {
+  return (
+    <div
+      role="radio"
+      aria-checked={activa}
+      tabIndex={activa || enfocable ? 0 : -1}
+      onClick={onElegir}
+      onKeyDown={onKeyDown}
+      className={cn(
+        "relative flex cursor-pointer flex-col gap-4 rounded-lg border p-5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand",
+        activa ? "border-brand bg-surface-muted ring-1 ring-brand" : "border-line bg-surface hover:bg-surface-hover",
+      )}
+    >
+      <span aria-hidden className={cn("absolute right-4 top-4 flex h-4 w-4 items-center justify-center rounded-full border", activa ? "border-brand" : "border-line")}>
+        {activa && <span className="h-2 w-2 rounded-full bg-brand" />}
+      </span>
+      <div className="flex justify-center">
+        <Dibujo secciones={secciones.length} />
+      </div>
+      <div className="space-y-1 text-center">
+        <p className="flex items-center justify-center gap-2 text-sm font-semibold text-fg">
+          {p.nombre}
+          {distintivo && <span className="rounded-full bg-brand/10 px-2 py-0.5 text-[11px] font-semibold text-brand">{distintivo}</span>}
+        </p>
+        <p className="text-xs text-fg-secondary">{p.paraQue}</p>
+      </div>
+      <div>
+        <p className={ROTULO_DEL_SISTEMA}>Secciones · {secciones.length}</p>
+        <ol className="mt-2 divide-y divide-line rounded-md border border-line bg-surface">
+          {secciones.map((s, i) => (
+            <li key={s.key} className="flex items-baseline gap-3 px-3 py-1.5 text-xs">
+              <span className="w-4 shrink-0 text-right tabular-nums text-fg-muted">{i + 1}</span>
+              <span className="text-fg">{s.nombre}</span>
+            </li>
+          ))}
+        </ol>
+      </div>
+    </div>
+  );
+}
+
 export default function ElegirPlantilla({
   slug,
   clientId,
@@ -207,53 +266,16 @@ export default function ElegirPlantilla({
         {plantillas.map((p) => {
           // Lo solo interno (el Brief traído de la hoja) no es parte de lo que se elige.
           const secciones = seccionesDeLaPlantilla(p, canon).filter((s) => !SECCIONES_SOLO_INTERNAS.has(s.key));
-          const activa = p.id === elegida;
           return (
-            <div
+            <TarjetaDePlantilla
               key={p.id}
-              role="radio"
-              aria-checked={activa}
-              tabIndex={activa ? 0 : -1}
-              onClick={() => elegir(p.id)}
+              plantilla={p}
+              secciones={secciones.map((x) => ({ key: x.key, nombre: ROTULO[x.key] ?? x.label }))}
+              activa={p.id === elegida}
+              distintivo={(idSugerida ? p.id === idSugerida : p.recomendada) ? (idSugerida ? "Sugerida" : "Recomendada") : null}
+              onElegir={() => elegir(p.id)}
               onKeyDown={(e) => alTeclado(e, p.id)}
-              className={cn(
-                "relative flex cursor-pointer flex-col gap-4 rounded-lg border p-5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand",
-                activa ? "border-brand bg-surface-muted ring-1 ring-brand" : "border-line bg-surface hover:bg-surface-hover",
-              )}
-            >
-              <span
-                aria-hidden
-                className={cn(
-                  "absolute right-4 top-4 flex h-4 w-4 items-center justify-center rounded-full border",
-                  activa ? "border-brand" : "border-line",
-                )}
-              >
-                {activa && <span className="h-2 w-2 rounded-full bg-brand" />}
-              </span>
-              <div className="flex justify-center">
-                <Dibujo secciones={secciones.length} />
-              </div>
-              <div className="space-y-1 text-center">
-                <p className="flex items-center justify-center gap-2 text-sm font-semibold text-fg">
-                  {p.nombre}
-                  {(idSugerida ? p.id === idSugerida : p.recomendada) && (
-                    <span className="rounded-full bg-brand/10 px-2 py-0.5 text-[11px] font-semibold text-brand">{idSugerida ? "Sugerida" : "Recomendada"}</span>
-                  )}
-                </p>
-                <p className="text-xs text-fg-secondary">{p.paraQue}</p>
-              </div>
-              <div>
-                <p className={ROTULO_DEL_SISTEMA}>Secciones · {secciones.length}</p>
-                <ol className="mt-2 divide-y divide-line rounded-md border border-line bg-surface">
-                  {secciones.map((s, i) => (
-                    <li key={s.key} className="flex items-baseline gap-3 px-3 py-1.5 text-xs">
-                      <span className="w-4 shrink-0 text-right tabular-nums text-fg-muted">{i + 1}</span>
-                      <span className="text-fg">{ROTULO[s.key] ?? s.label}</span>
-                    </li>
-                  ))}
-                </ol>
-              </div>
-            </div>
+            />
           );
         })}
       </div>

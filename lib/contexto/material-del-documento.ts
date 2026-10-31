@@ -152,6 +152,11 @@ export interface OpcionesDelMaterial {
    * de la exploración): ver `planDeLasElegidas`. Sin esto, todas por fecha.
    */
   primero?: readonly string[];
+  /**
+   * El contexto de UNA COPIA (etapa V3b): sus reuniones elegidas y sus notas, en vez de las de su tipo. Las ids se cruzan
+   * con la membresía del proyecto (el chokepoint): una que no sea del proyecto no entra.
+   */
+  deLaCopia?: { reuniones: readonly string[]; notasDe: string };
 }
 
 export async function cargarMaterialDelDocumento(
@@ -160,18 +165,21 @@ export async function cargarMaterialDelDocumento(
   opts: OpcionesDelMaterial = {},
 ): Promise<MaterialDelDocumento> {
   const sumar = new Set(opts.sumarReuniones ?? []);
+  const propias = opts.deLaCopia ? new Set(opts.deLaCopia.reuniones) : null;
   const [{ sessions: elegidas }, sumadas, categorias, notas, instrucciones] = await Promise.all([
-    getProjectDocumentSessions(projectId, doc.destino),
+    propias
+      ? getProjectMemberSessions(projectId).then((r) => ({ sessions: r.sessions.filter((s) => propias.has(s.id)) }))
+      : getProjectDocumentSessions(projectId, doc.destino),
     sumar.size ? getProjectMemberSessions(projectId).then((r) => r.sessions.filter((s) => sumar.has(s.id))) : Promise.resolve([]),
     getSessionCategories(),
-    leerNotas(projectId, doc.pieza),
+    leerNotas(projectId, opts.deLaCopia?.notasDe ?? doc.pieza),
     leerInstrucciones(projectId, doc.pieza),
   ]);
   const yaElegidas = new Set(elegidas.map((s) => s.id));
   const sessions = [...elegidas, ...sumadas.filter((s) => !yaElegidas.has(s.id))];
   const dominiosPropios = buildInternalDomainsSet(categorias);
   const ahora = Date.now();
-  const soloElegidas = esSoloElegidas(doc.destino);
+  const soloElegidas = !!propias || esSoloElegidas(doc.destino);
 
   const ocurridas = soloOcurridas(sessions, ahora);
   /* Primero cuáles tienen algo que leer: una elegida vacía no ocupa uno de los 6 lugares de reunión entera ni le quita

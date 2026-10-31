@@ -27,6 +27,7 @@
  * Render INTERNO (tema oscuro del panel de canvas), no el design system del Kickoff.
  */
 
+import VeloDeGeneracion from "@/components/canvas/VeloDeGeneracion";
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import {
   plural,
@@ -3822,50 +3823,7 @@ export default function CronogramaCanvas({
           ⚠ Va por ENCIMA del contenido (z-30) pero por DEBAJO del cajón del asistente (z-45): el
           chat tiene que seguir visible y usable mientras el cronograma se acomoda — es donde está
           el aviso de qué pasó. */}
-      {ocupado.activo && (
-        <div
-          className="absolute inset-0 z-[44] cursor-wait"
-          /* ⛔ SIN `aria-live` ACÁ: `aria-busy` significa literalmente «no anuncies todavía, sigo
-             actualizando», así que suprimía la región viva que tenía al lado. Y como el nodo se
-             DESMONTA al terminar —nunca pasa a `aria-busy=false`— el anuncio retenido no se
-             disparaba nunca. El anuncio vive abajo, en una región montada siempre. */
-          aria-busy="true"
-          onClick={(e) => e.stopPropagation()}
-        >
-          {/* ⛔ TINTA BLANCA SOBRE TODO (pedido de Elías, 2026-08-21). `bg-surface/85` es el
-              blanco DEL TEMA —nunca un gris crudo, que rompe el modo oscuro— y el blur remata
-              que lo de abajo no se puede leer ni tocar. */}
-          <div className="absolute inset-0 rounded-2xl bg-surface/85 backdrop-blur-[2px]" />
-          {/* ⭐ EL AVISO VA ARRIBA DEL CRONOGRAMA, NO FLOTANDO (Elías, 2026-09-24: «que no esté en
-              un modal o pop-up»). Es una franja en el borde de arriba del cronograma, así que se lee
-              como parte de él: «esto está pasando acá».
-              ⚠ Va `sticky`: el cronograma mide varias pantallas y un aviso fijo en su borde de
-              arriba quedaría fuera de la vista apenas la persona scrollea — un bloqueo cuyo aviso
-              no se ve se lee como la pantalla colgada. La barrita que corre va ADENTRO del aviso,
-              en su borde de abajo: afuera la tapaba el propio aviso. */}
-          {/* ⚠ EL CARTEL TOMA EL FOCO, y no es un detalle: los botones que ENCIENDEN el bloqueo
-              viven dentro del subárbol que se vuelve inerte. Cuando el elemento enfocado pasa a
-              inerte, el navegador lo desenfoca y el foco cae a `body` — o sea que apretar
-              «Aplicar avance» con el teclado te devuelve al principio del documento. Poniéndolo
-              acá, el foco queda EN el aviso y se lee en contexto. */}
-          <div
-            ref={carteldeBloqueoRef}
-            tabIndex={-1}
-            className="sticky top-2 m-2 flex items-center gap-3 overflow-hidden rounded-xl border border-info-line bg-info-surface px-4 py-3 shadow-sm focus:outline-none"
-          >
-            <span className="w-5 h-5 flex-shrink-0 border-2 border-brand/25 border-t-brand rounded-full animate-spin" />
-            <div className="min-w-0">
-              <p className="text-sm font-semibold text-fg">{ocupado.rotulo}…</p>
-              <p className="text-xs text-fg-muted">{ocupado.detalle}</p>
-            </div>
-            <div className="absolute inset-x-0 bottom-0 h-0.5">
-              {/* El padre fija la altura en `h-0.5`: es una barra de 2 px que recorre el ancho,
-                  no un rectángulo relleno esperando contenido. */}
-              <div className="skeleton-shimmer h-full w-full" /> {/* slab-ok */}
-            </div>
-          </div>
-        </div>
-      )}
+      {ocupado.activo && <VeloDeGeneracion rotulo={ocupado.rotulo} detalle={ocupado.detalle} carteRef={carteldeBloqueoRef} />}
       {/* ⛔ `inert` ES LO QUE BLOQUEA DE VERDAD, y el velo solo lo hace parecer. Sin esto el
           contenido de abajo sigue siendo enfocable con Tab, editable desde el teclado, y
           clickeable por cualquier hijo con un z mayor que el del velo. `inert` saca el subárbol

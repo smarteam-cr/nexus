@@ -17,6 +17,7 @@
  * Copia medida por medida el riel de la preventa: filas de 14 px con un punto de 8 px, la pieza
  * abierta en azul sobre azul claro, lo colgado con una línea a la izquierda.
  */
+import { useState } from "react";
 import type { ReactNode } from "react";
 import { cn } from "@/lib/cn";
 import type { EstadoDePieza } from "@/components/canvas/SelectorDePiezas";
@@ -168,6 +169,8 @@ function FilaDeCuenta({ etiqueta, activa, onClick, extra }: { etiqueta: string; 
 export interface FilaDelRielDePiezas {
   slug: string;
   etiqueta: string;
+  /** Se le puede cambiar el nombre desde acá: un documento de un tipo que admite copias. */
+  canvasId?: string | null;
   estado: EstadoDePieza | "por_activar";
   activa: boolean;
   /** Lo que se lee a la derecha: «desactualizado» (ámbar), «Antes: Kickoff» (gris). */
@@ -219,6 +222,7 @@ export function PiezasDelRiel({
   slotDeSesiones,
   grupoDelResumen,
   onNuevoArtefacto,
+  onRenombrar,
 }: {
   resumen: { activa: boolean; meta?: string | null; onClick: () => void };
   /**
@@ -240,7 +244,16 @@ export function PiezasDelRiel({
   slotDeSesiones?: (el: HTMLDivElement | null) => void;
   /** «+ Nuevo artefacto» al pie de las piezas (etapa V3): otra planificación, un plan de adopción… Sin él, no se pinta. */
   onNuevoArtefacto?: () => void;
+  /** Cambiar el nombre de un documento desde el riel, con el lápiz que aparece al pasar el mouse. true si quedó guardado. */
+  onRenombrar?: (canvasId: string, nombre: string) => Promise<boolean>;
 }) {
+  const [renombrando, setRenombrando] = useState<{ slug: string; canvasId: string; nombre: string; original: string } | null>(null);
+  const guardarNombre = async () => {
+    if (!renombrando) return;
+    const nombre = renombrando.nombre.trim();
+    if (nombre && nombre !== renombrando.original && !(await onRenombrar?.(renombrando.canvasId, nombre))) return;
+    setRenombrando(null);
+  };
   // La pieza abierta se ve en su lugar aunque esté oculta: no se pierde de vista dónde se está.
   const existentes = filas.filter((f) => f.estado !== "por_activar" && (!f.oculta || f.activa));
   const ocultas = filas.filter((f) => f.estado !== "por_activar" && f.oculta && !f.activa);
@@ -273,6 +286,28 @@ export function PiezasDelRiel({
         <li key={f.slug}>
           {f.grupo && f.grupo.id !== (k === 0 ? grupoDelResumen : existentes[k - 1]?.grupo)?.id && rotuloDeGrupo(f.grupo)}
           <div className="group/fila relative flex items-center">
+          {renombrando?.slug === f.slug ? (
+            <form
+              className="w-full px-1 py-0.5"
+              onSubmit={(e) => {
+                e.preventDefault();
+                void guardarNombre();
+              }}
+            >
+              <input
+                autoFocus
+                value={renombrando.nombre}
+                maxLength={120}
+                aria-label={`Nombre de «${f.etiqueta}»`}
+                onChange={(e) => setRenombrando({ ...renombrando, nombre: e.target.value })}
+                onBlur={() => void guardarNombre()}
+                onKeyDown={(e) => {
+                  if (e.key === "Escape") setRenombrando(null);
+                }}
+                className="w-full rounded-md border border-brand bg-surface px-2 py-1 text-[13px] text-fg focus:outline-none"
+              />
+            </form>
+          ) : (
           <button
             type="button"
             // Con «Exploración» ya abierta, el clic vuelve a su página de inicio (lo escucha LienzoDeExploracion).
@@ -286,7 +321,7 @@ export function PiezasDelRiel({
               /* Los Cuestionarios (2026-10-11) traen siempre su aviso («sin enviar», «enviado», «respondido 1 de 2»):
                  no se generan, se mandan. */
             }
-            className={cn(clase(f.activa), onOcultar && !f.esCopia && "pr-7")}
+            className={cn(clase(f.activa), onOcultar && !f.esCopia && "pr-7", onRenombrar && f.canvasId && (f.esCopia ? "pr-7" : "pr-14"))}
           >
             <span className={cn("h-2 w-2 flex-shrink-0 rounded-full", f.activa ? "bg-brand" : PUNTO[f.estado as EstadoDePieza])} aria-hidden="true" />
             <span className="min-w-0 flex-1 truncate">{f.etiqueta}</span>
@@ -317,7 +352,24 @@ export function PiezasDelRiel({
               </>
             )}
           </button>
-          {onOcultar && !f.esCopia && (
+          )}
+          {onRenombrar && f.canvasId && renombrando?.slug !== f.slug && (
+            <button
+              type="button"
+              onClick={() => setRenombrando({ slug: f.slug, canvasId: f.canvasId!, nombre: f.etiqueta, original: f.etiqueta })}
+              aria-label={`Cambiar el nombre de «${f.etiqueta}»`}
+              title="Cambiar el nombre"
+              className={cn(
+                "absolute flex h-6 w-6 items-center justify-center rounded-md text-fg-muted opacity-0 transition-opacity hover:bg-surface-hover hover:text-fg focus-visible:opacity-100 group-hover/fila:opacity-100",
+                onOcultar && !f.esCopia ? "right-7" : "right-1",
+              )}
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-3.5 w-3.5" aria-hidden="true">
+                <path d="M12 20h9M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z" />
+              </svg>
+            </button>
+          )}
+          {onOcultar && !f.esCopia && renombrando?.slug !== f.slug && (
             <button
               type="button"
               onClick={() => onOcultar(f.slug, !f.oculta)}
@@ -346,7 +398,7 @@ export function PiezasDelRiel({
           <button
             type="button"
             onClick={onNuevoArtefacto}
-            title="Otra planificación, otro kickoff, un plan de adopción, una integración técnica…"
+            title="Otra planificación, otro kickoff, un plan de adopción, una hoja de ruta…"
             className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-[13px] text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg"
           >
             <span className="flex h-2 w-2 flex-shrink-0 items-center justify-center text-[13px] leading-none" aria-hidden="true">

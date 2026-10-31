@@ -78,7 +78,10 @@ import ArtefactoWorkspace from "@/components/artefactos/ArtefactoWorkspace";
 import BarraDelArtefacto from "@/components/artefactos/BarraDelArtefacto";
 import NuevoArtefactoModal from "@/components/artefactos/NuevoArtefactoModal";
 import { esCopia, nombreDelArtefacto, ordenarArtefactos, tipoDelDocumento } from "@/lib/artefactos/copias";
-import { admiteCopias } from "@/lib/artefactos/tipos";
+import { admiteCopias, TIPO_REQUERIMIENTO_TECNICO, tipoDeArtefacto } from "@/lib/artefactos/tipos";
+
+/** El PDF de una copia: la del requerimiento técnico imprime con el adaptador que tiene todas sus secciones. */
+const impresionDeLaCopia = (tipo: string | null) => (tipo === TIPO_REQUERIMIENTO_TECNICO ? "integration" : tipo);
 
 /**
  * Canvases que tienen su PROPIO renderer más abajo (motor de landing, Gantt o vista lineal).
@@ -933,11 +936,25 @@ export default function ProjectCanvasPanel({
                       ? avisoDelResumen
                       : null,
                 esCopia: row.esCopia,
+                canvasId: admiteCopias(row.tipo ?? row.slug) ? row.canvasId : null,
                 propuesta: row.slug === PIEZA_CRONOGRAMA && propuestaPendiente,
                 novedades: nNovedades(row.slug),
                 ocupada: activando === row.slug,
               };
             })}
+            onRenombrar={async (canvasId, nombre) => {
+              const r = await fetch(`/api/projects/${projectId}/artefactos/${canvasId}`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ nombre }),
+              }).catch(() => null);
+              if (!r?.ok) {
+                toast.error("No se pudo cambiar el nombre.");
+                return false;
+              }
+              await refetchCanvases();
+              return true;
+            }}
             porActivarAbiertas={porActivarAbiertas}
             onAlternarPorActivar={() => setPorActivarAbiertas((v) => !v)}
             onElegir={(slug) => {
@@ -1074,8 +1091,8 @@ export default function ProjectCanvasPanel({
               canvas activo. El resumen no se imprime: no es un documento, es la foto de cómo va el
               proyecto — y sus dos piezas (el brief y el handoff) tienen su propio PDF. */}
           {/* Una copia exporta por su id (etapa V3); la exploración, interna, no se imprime. */}
-          {copiaActiva && activeCanvasId && tipoActivo !== "exploration" && printDocType(tipoActivo) && (
-            <PrintDownloadButton tipo={printDocType(tipoActivo)!} docId={projectId} canvasId={activeCanvasId} />
+          {copiaActiva && activeCanvasId && tipoActivo !== "exploration" && printDocType(impresionDeLaCopia(tipoActivo)) && (
+            <PrintDownloadButton tipo={printDocType(impresionDeLaCopia(tipoActivo))!} docId={projectId} canvasId={activeCanvasId} />
           )}
           {!enResumen && !piezaSinCanvas && activeSlug !== "exploration" && !copiaActiva && (
             <PrintDocButton
@@ -1089,7 +1106,8 @@ export default function ProjectCanvasPanel({
               vive acá y no en un canvas. */}
           {/* Los cuestionarios tienen su propio enlace por persona: el acceso del proyecto no va ahí. */}
           {/* Un proyecto de prueba nunca se comparte: sin «Acceso». */}
-          {(activeSlug ?? tipoActivo) !== "exploration" && !piezaSinCanvas && !esPrueba && <ExternalAccessButton projectId={projectId} />}
+          {/* Elías, 30 oct: el acceso general va solo en el Resumen; cada documento trae el suyo en su barra. */}
+          {enResumen && !esPrueba && <ExternalAccessButton projectId={projectId} />}
         </div>
       </div>
 
@@ -1158,6 +1176,17 @@ export default function ProjectCanvasPanel({
           terminado={!!activeCanvas.terminadoEn}
           delTipo={delTipoActivo}
           compartible={!esPrueba}
+          contextoDeSiempre={
+            docConContexto && activeSlug !== "exploration" ? (
+              <DocumentoContextSection
+                key={`contexto-${activeCanvasId}-${contextoNonce}`}
+                projectId={projectId}
+                doc={docConContexto}
+                enVentana
+                generado={filaActiva ? filaActiva.state === "generada" : !!activeCanvas?.hasContent}
+              />
+            ) : undefined
+          }
           onCambio={() => refetchCanvases()}
           onCrearOtra={() => setNuevoArtefacto({ tipo: tipoActivo })}
           onArchivada={() => {
@@ -1189,7 +1218,8 @@ export default function ProjectCanvasPanel({
         tipoInicial={nuevoArtefacto?.tipo ?? null}
         documentos={canvases.flatMap((c) => {
           const t = tipoDelDocumento(c);
-          return t && admiteCopias(t) ? [{ id: c.id, nombre: nombreDelArtefacto(c), tipo: t }] : [];
+          // La entrega de siempre no se duplica: guarda en su Json lo que el cliente no ve.
+          return t && admiteCopias(t) && !(c.slug && tipoDeArtefacto(t)?.sinEnlaceElDeSiempre) ? [{ id: c.id, nombre: nombreDelArtefacto(c), tipo: t }] : [];
         })}
         onCreado={(id) => {
           void refetchCanvases().then(() => switchCanvas(id));
@@ -1201,7 +1231,7 @@ export default function ProjectCanvasPanel({
           se veía (2026-10-05). Va antes de TODOS los documentos en el orden de la página: desde el
           2026-10-07 también lo tienen el kickoff, integraciones, la exploración y la entrega. */}
       {/* La exploración trae el suyo, el de la preventa (ContextoDeLaPreventa, adentro de su lienzo). */}
-      {docConContexto && activeCanvasId && activeSlug !== "exploration" && (
+      {docConContexto && activeCanvasId && activeSlug !== "exploration" && !conBarraDeArtefacto && (
         <DocumentoContextSection
           key={`contexto-${activeCanvasId}-${contextoNonce}`}
           projectId={projectId}

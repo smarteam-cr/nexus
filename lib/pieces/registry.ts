@@ -308,7 +308,7 @@ export const PIECES: PieceDefinition[] = [
        lib/projects/kind.ts—, así que en una ficha convivían un proyecto «de Desarrollo» y un
        documento «Desarrollo» que no tenían nada que ver. El contenido siempre fue el
        requerimiento de las INTEGRACIONES a la medida. */
-    label: "Integraciones",
+    label: "Requerimiento técnico",
     // ⚠ Se AGREGA, nunca se reemplaza: los 58 canvases que ya existen en la base se
     // llamaron «Desarrollo» y sin esta entrada dejan de resolver (invariante del registro).
     legacyNames: ["Integraciones", "Desarrollo"],
