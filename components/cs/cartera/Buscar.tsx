@@ -10,7 +10,7 @@ import { cn } from "@/lib/cn";
 import { fmtDia, plural } from "@/lib/cs/formato";
 import type { CuentaParaBuscar } from "@/lib/cs/cartera-reglas";
 import { Avatar, CajaDeTabla, Chip, EncabezadoDeTabla, Flecha, Salud } from "../piezas";
-import { EstrellaDePrioridad } from "../EstrellaDePrioridad";
+import { CheckDePrioridad } from "../CheckDePrioridad";
 
 const COLUMNAS = "grid-cols-[108px_minmax(0,1.5fr)_136px_minmax(0,1.6fr)_96px_64px_30px_16px]";
 
@@ -81,9 +81,9 @@ export function TablaDeCuentas({ cuentas, hoy }: { cuentas: readonly CuentaParaB
             key={c.clientId}
             className={cn("relative grid items-center gap-4 px-4 py-3.5 text-fg transition-colors hover:bg-surface-hover", COLUMNAS, i > 0 && "border-t border-line")}
           >
-            <EstrellaDePrioridad clientId={c.clientId} cuenta={c.nombre} />
+            <CheckDePrioridad clientId={c.clientId} cuenta={c.nombre} />
             <span className="flex min-w-0 flex-col gap-0.5">
-              {/* La fila entera abre la cuenta (el enlace del nombre la cubre); la estrella y el color quedan por encima. */}
+              {/* La fila entera abre la cuenta (el enlace del nombre la cubre); el check y el color quedan por encima. */}
               <Link href={`/customer-success/${c.clientId}`} className="truncate text-sm font-semibold after:absolute after:inset-0">
                 {c.nombre}
               </Link>

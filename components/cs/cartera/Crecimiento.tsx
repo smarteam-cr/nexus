@@ -12,7 +12,7 @@ import { ROTULO_DEL_SISTEMA } from "@/components/ui/sistema";
 import { fmtMonto } from "@/lib/cs/formato";
 import type { Oportunidad } from "@/lib/cs/cartera-reglas";
 import { Chip } from "../piezas";
-import { EstrellaDePrioridad } from "../EstrellaDePrioridad";
+import { CheckDePrioridad } from "../CheckDePrioridad";
 
 type Filtro = "todas" | "senal" | "hubQueNoTiene";
 
@@ -46,7 +46,7 @@ export default function Crecimiento({ oportunidades }: { oportunidades: Oportuni
                 <div className="flex min-w-0 flex-col gap-1">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="text-sm font-semibold text-fg">{o.nombre}</span>
-                    <EstrellaDePrioridad clientId={o.clientId} cuenta={o.nombre} />
+                    <CheckDePrioridad clientId={o.clientId} cuenta={o.nombre} />
                     <Chip>{o.rotulo}</Chip>
                     {o.paga !== null && <span className="text-xs text-fg-muted">paga {fmtMonto(o.paga)} al mes</span>}
                   </div>

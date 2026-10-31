@@ -6,6 +6,7 @@ import { esLiderDeCs } from "@/lib/cs/acceso";
 import { esCseDeLaCuenta } from "@/lib/cs/adopcion-del-cse-server";
 import { soloLaAdopcion } from "@/lib/cs/adopcion-del-cse";
 import { loadCsAccount } from "@/lib/cs/load-account";
+import { leerMotivosDelEquipo } from "@/lib/cs/prioridad-de-cuenta-server";
 import AccountView from "@/components/cs/account/AccountView";
 import DisparoDelVigia from "@/components/cs/DisparoDelVigia";
 // Mismo contenedor que loading.tsx — la fuente única evita que page y skeleton deriven.
@@ -56,6 +57,7 @@ export default async function CustomerSuccessAccountPage({
   // Solo la CSL y dirección llegan acá (el CSE salió arriba con la cuenta vaciada).
   data.puedeReasignar = puedeReasignar;
   data.puedeMarcarPrioridad = puedeMarcarPrioridad;
+  if (puedeMarcarPrioridad) data.motivosDePrioridad = await leerMotivosDelEquipo();
   return (
     <div className={SHELL_FULL}>
       {/* El agente vigía, en segundo plano, si hace más de 48 h que no revisa este cliente (D14). */}

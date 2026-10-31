@@ -4,7 +4,7 @@
 import { z } from "zod";
 import { esValorDe, type DatoDeClasificacion } from "./clasificacion";
 import { LARGO_DE_LA_NOTA, SALUDES_CORREGIBLES } from "./ajustes-de-salud";
-import { LARGO_DE_LA_NOTA_DE_PRIORIDAD, MOTIVOS_DE_PRIORIDAD } from "./prioridad-de-cuenta";
+import { LARGO_DE_LA_NOTA_DE_PRIORIDAD, LARGO_DEL_MOTIVO, MOTIVOS_DE_PRIORIDAD, motivoEscritoValido } from "./prioridad-de-cuenta";
 
 const datoSchema = z.enum(["relacion", "potencial", "momento"]);
 
@@ -50,16 +50,21 @@ export type AjusteDeSaludPedido = z.infer<typeof ajusteDeSaludSchema>;
 
 /**
  * POST /api/cs/prioridad/[clientId] (2026-10-29): marcar la cuenta como prioritaria con un motivo, o quitar la marca
- * (lib/cs/prioridad-de-cuenta.ts). Con «otro», la línea es el motivo y es obligatoria.
+ * (lib/cs/prioridad-de-cuenta.ts). Con «otro», se elige un motivo del equipo o se escribe uno nuevo.
  */
 export const prioridadDeCuentaSchema = z.discriminatedUnion("accion", [
   z
     .object({
       accion: z.literal("marcar"),
       motivo: z.enum(MOTIVOS_DE_PRIORIDAD),
+      motivoDelEquipoId: z.string().min(1).max(64).optional().nullable(),
+      motivoNuevo: z.string().trim().max(LARGO_DEL_MOTIVO, `Hasta ${LARGO_DEL_MOTIVO} caracteres.`).optional().nullable(),
       nota: z.string().trim().max(LARGO_DE_LA_NOTA_DE_PRIORIDAD, `Hasta ${LARGO_DE_LA_NOTA_DE_PRIORIDAD} caracteres.`).optional().nullable(),
     })
-    .refine((p) => p.motivo !== "otro" || (p.nota?.trim().length ?? 0) >= 3, { message: "Con «Otro motivo», escribe cuál.", path: ["nota"] }),
+    .refine((p) => p.motivo !== "otro" || !!p.motivoDelEquipoId || motivoEscritoValido(p.motivoNuevo), {
+      message: "Con «Otro motivo», escribe cuál.",
+      path: ["motivoNuevo"],
+    }),
   z.object({ accion: z.literal("quitar") }),
 ]);
 export type PrioridadDeCuentaPedido = z.infer<typeof prioridadDeCuentaSchema>;

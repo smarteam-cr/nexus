@@ -4,41 +4,38 @@
  * components/cs/MarcaDePrioridad.tsx — la cuenta prioritaria (más seguimiento), 2026-10-29. Regla en
  * lib/cs/prioridad-de-cuenta.ts.
  *
- * Lo usa el panel de la cuenta; los listados llevan la columna de `EstrellaDePrioridad`, que comparte la ventana y el
+ * Lo usa el panel de la cuenta; los listados llevan la columna de `CheckDePrioridad`, que comparte la ventana y el
  * guardado de acá. Muestra la marca (con su motivo y quién la puso) y, a quien tiene `customerSuccess.marcarPrioridad`, el
  * enlace para marcarla, cambiar el motivo o quitarla. El servidor lo vuelve a mirar. Al guardar, la pantalla se refresca:
  * la marca ordena la cartera, no cambia el color.
  */
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Field, Modal, Segmentado, Textarea } from "@/components/ui";
+import { Field, Input, Modal, Select, Textarea } from "@/components/ui";
 import { BotonAzul, BotonBlanco } from "@/components/ui/sistema";
 import { useToast } from "@/components/ui/Toast";
 import { fetchJson, ApiError } from "@/lib/api/fetch-json";
 import { cn } from "@/lib/cn";
 import {
   LARGO_DE_LA_NOTA_DE_PRIORIDAD,
+  LARGO_DEL_MOTIVO,
   MOTIVOS_DE_PRIORIDAD,
   NOMBRE_DEL_MOTIVO,
-  type MotivoDePrioridad,
+  marcaDeLaVentana,
+  motivoEscritoValido,
+  opcionDeLaMarca,
+  opcionDelEquipo,
+  type MotivoDelEquipo,
   type PrioridadVisible,
 } from "@/lib/cs/prioridad-de-cuenta";
 import type { PrioridadDeCuentaPedido } from "@/lib/cs/schema";
 
-const OPCIONES = MOTIVOS_DE_PRIORIDAD.map((clave) => ({ clave, etiqueta: NOMBRE_DEL_MOTIVO[clave] }));
-
-export function Estrella({ className, vacia = false }: { className?: string; vacia?: boolean }) {
+/** La casilla de la marca: vacía si la cuenta no es prioritaria, llena y con el check si lo es. */
+export function CheckDeMarca({ className, vacio = false }: { className?: string; vacio?: boolean }) {
   return (
-    <svg
-      aria-hidden
-      viewBox="0 0 16 16"
-      className={cn("h-3 w-3 flex-shrink-0", className)}
-      fill={vacia ? "none" : "currentColor"}
-      stroke={vacia ? "currentColor" : undefined}
-      strokeWidth={vacia ? 1.25 : undefined}
-      strokeLinejoin="round"
-    >
-      <path d="M8 1.5l1.9 4 4.4.5-3.3 3 .9 4.3L8 11.1l-3.9 2.2.9-4.3-3.3-3 4.4-.5z" />
+    <svg aria-hidden viewBox="0 0 16 16" className={cn("h-3 w-3 flex-shrink-0", className)} fill="none" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="1.5" y="1.5" width="13" height="13" rx="3" stroke="currentColor" strokeWidth="1.25" fill={vacio ? "none" : "currentColor"} />
+      {!vacio && <path d="M4.75 8.25l2.25 2.25 4.25-4.75" stroke="var(--surface)" strokeWidth="1.75" />}
     </svg>
   );
 }
@@ -60,7 +57,7 @@ export function ChipDePrioridad({ prioritaria, className }: { prioritaria: Prior
       title={`Prioritaria: ${prioritaria.enPalabras} · la marcó ${prioritaria.quien}`}
       className={cn("inline-flex max-w-full items-center gap-1 rounded-full bg-brand-soft px-2 py-0.5 text-[11px] font-semibold text-brand", className)}
     >
-      <Estrella />
+      <CheckDeMarca />
       <span className="truncate">Prioritaria · {prioritaria.enPalabras}</span>
     </span>
   );
@@ -71,11 +68,13 @@ export default function MarcaDePrioridad({
   cuenta,
   prioritaria,
   puedeMarcar,
+  motivos,
 }: {
   clientId: string;
   cuenta: string;
   prioritaria: PrioridadVisible | null;
   puedeMarcar: boolean;
+  motivos: readonly MotivoDelEquipo[];
 }) {
   const router = useRouter();
   const [abierto, setAbierto] = useState(false);
@@ -100,6 +99,7 @@ export default function MarcaDePrioridad({
           clientId={clientId}
           cuenta={cuenta}
           prioritaria={prioritaria}
+          motivos={motivos}
           onCerrar={() => setAbierto(false)}
           onGuardada={() => router.refresh()}
         />
@@ -113,19 +113,22 @@ export function VentanaDePrioridad({
   clientId,
   cuenta,
   prioritaria,
-  motivoInicial,
+  motivos,
+  enOtroMotivo = false,
   onCerrar,
   onGuardada,
 }: {
   clientId: string;
   cuenta: string;
   prioritaria: PrioridadVisible | null;
-  motivoInicial?: MotivoDePrioridad;
+  motivos: readonly MotivoDelEquipo[];
+  enOtroMotivo?: boolean;
   onCerrar: () => void;
   onGuardada: (prioritaria: PrioridadVisible | null) => void;
 }) {
   const toast = useToast();
-  const [motivo, setMotivo] = useState<MotivoDePrioridad>(motivoInicial ?? prioritaria?.motivo ?? "smartloop");
+  const [opcion, setOpcion] = useState(enOtroMotivo ? "otro" : opcionDeLaMarca(prioritaria));
+  const [motivoNuevo, setMotivoNuevo] = useState("");
   const [nota, setNota] = useState(prioritaria?.nota ?? "");
   const [ocupado, setOcupado] = useState(false);
 
@@ -142,7 +145,8 @@ export function VentanaDePrioridad({
     }
   }
 
-  const otroSinTexto = motivo === "otro" && nota.trim().length < 3;
+  const escribeUnMotivo = opcion === "otro";
+  const otroSinTexto = escribeUnMotivo && !motivoEscritoValido(motivoNuevo);
 
   return (
     <Modal
@@ -162,7 +166,7 @@ export function VentanaDePrioridad({
           )}
           <BotonAzul
             disabled={ocupado || otroSinTexto}
-            onClick={() => void guardar({ accion: "marcar", motivo, nota: nota.trim() || null }, "Cuenta marcada como prioritaria.")}
+            onClick={() => void guardar(marcaDeLaVentana(opcion, motivoNuevo, nota), "Cuenta marcada como prioritaria.")}
           >
             {ocupado ? "Guardando…" : "Guardar"}
           </BotonAzul>
@@ -175,16 +179,36 @@ export function VentanaDePrioridad({
             Hoy: prioritaria por «{prioritaria.enPalabras}», la marcó {prioritaria.quien}.
           </p>
         )}
-        <Segmentado<MotivoDePrioridad> etiqueta="Por qué" valor={motivo} onCambio={setMotivo} opciones={OPCIONES} />
-        <Field
-          label={motivo === "otro" ? "Cuál es el motivo" : "Algo más (opcional)"}
-          hint={`Una línea. Hasta ${LARGO_DE_LA_NOTA_DE_PRIORIDAD} caracteres.`}
-        >
+        <Field label="Por qué">
+          <Select value={opcion} onChange={(e) => setOpcion(e.target.value)}>
+            {MOTIVOS_DE_PRIORIDAD.filter((m) => m !== "otro").map((m) => (
+              <option key={m} value={m}>
+                {NOMBRE_DEL_MOTIVO[m]}
+              </option>
+            ))}
+            {motivos.map((m) => (
+              <option key={m.id} value={opcionDelEquipo(m)}>
+                {m.nombre}
+              </option>
+            ))}
+            <option value="otro">{NOMBRE_DEL_MOTIVO.otro}</option>
+          </Select>
+        </Field>
+        {escribeUnMotivo && (
+          <Field label="Cuál es el motivo" hint="Queda en la lista para todo el equipo.">
+            <Input
+              value={motivoNuevo}
+              onChange={(e) => setMotivoNuevo(e.target.value.slice(0, LARGO_DEL_MOTIVO))}
+              placeholder="Ej.: Cambio de sponsor"
+            />
+          </Field>
+        )}
+        <Field label="Algo más (opcional)" hint={`Una línea. Hasta ${LARGO_DE_LA_NOTA_DE_PRIORIDAD} caracteres.`}>
           <Textarea
             value={nota}
             onChange={(e) => setNota(e.target.value.slice(0, LARGO_DE_LA_NOTA_DE_PRIORIDAD))}
             rows={2}
-            placeholder={motivo === "otro" ? "Ej.: el sponsor se va en diciembre." : "Ej.: renueva 3 hubs en enero."}
+            placeholder="Ej.: renueva 3 hubs en enero."
           />
         </Field>
       </div>

@@ -1,10 +1,10 @@
 /**
- * POST /api/cs/prioridad/[clientId]   body: { accion: "marcar", motivo, nota? } | { accion: "quitar" }
+ * POST /api/cs/prioridad/[clientId]   body: { accion: "marcar", motivo, motivoDelEquipoId?, motivoNuevo?, nota? } | { accion: "quitar" }
  *
  * La CSL (o un super admin) marca la cuenta como prioritaria —más seguimiento— con un motivo corto (SmartLoop, ticket
  * grande, interlocutores difíciles u otro), o le quita la marca (2026-10-29, pedido de Elías; regla en
  * lib/cs/prioridad-de-cuenta.ts). La marca no cambia el color: ordena la cartera. Devuelve cómo quedó; la pantalla
- * refresca.
+ * refresca. «Otro motivo» con `motivoNuevo` crea el motivo para todo el equipo, con este mismo permiso (2026-10-30).
  *
  * Dos puertas: el rol del área (`guardLiderDeCs`, como toda ruta de Éxito del cliente) y la celda de la matriz
  * `customerSuccess.marcarPrioridad` (por defecto la CSL; SUPER_ADMIN la tiene siempre), que dice quién de los que entran
@@ -18,7 +18,7 @@ import { can } from "@/lib/auth/permissions/engine";
 import { accessibleClientWhere } from "@/lib/auth/access";
 import { prisma } from "@/lib/db/prisma";
 import { prioridadDeCuentaSchema } from "@/lib/cs/schema";
-import { registrarPrioridad } from "@/lib/cs/prioridad-de-cuenta-server";
+import { MotivoQueNoExiste, registrarPrioridad } from "@/lib/cs/prioridad-de-cuenta-server";
 import { prioridadVisible } from "@/lib/cs/prioridad-de-cuenta";
 import { faltaLaTabla } from "@/lib/cs/clasificacion-server";
 
@@ -53,14 +53,17 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ cli
   try {
     const prioridad = await registrarPrioridad(
       clientId,
-      pedido.accion === "marcar" ? { tipo: "marcar", motivo: pedido.motivo, nota: pedido.nota ?? null } : { tipo: "quitar" },
+      pedido.accion === "marcar"
+        ? { tipo: "marcar", motivo: pedido.motivo, motivoDelEquipoId: pedido.motivoDelEquipoId ?? null, motivoNuevo: pedido.motivoNuevo ?? null, nota: pedido.nota ?? null }
+        : { tipo: "quitar" },
       quien,
     );
     return NextResponse.json({ prioritaria: prioridadVisible(prioridad) });
   } catch (e) {
+    if (e instanceof MotivoQueNoExiste) return NextResponse.json({ error: "Ese motivo ya no existe." }, { status: 400 });
     if (faltaLaTabla(e)) {
       return NextResponse.json(
-        { error: "Falta aplicar el SQL de la prioridad (scripts/sql/2026-10-29-prioridad-de-cuenta.sql)." },
+        { error: "Falta aplicar el SQL de la prioridad (scripts/sql/2026-10-29-prioridad-de-cuenta.sql y 2026-10-30-motivos-de-prioridad.sql)." },
         { status: 503 },
       );
     }

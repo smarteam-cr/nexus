@@ -11,7 +11,7 @@
  */
 import Link from "next/link";
 import { EmptyState } from "@/components/ui";
-import { EstrellaDePrioridad } from "@/components/cs/EstrellaDePrioridad";
+import { CheckDePrioridad } from "@/components/cs/CheckDePrioridad";
 import { RUTA_DE_LA_CARGA, RUTA_DE_LOS_SUPUESTOS, rutaDeLaUnoAUno } from "@/lib/carga/rutas";
 import { cn } from "@/lib/cn";
 import { plural } from "@/lib/cs/formato";
@@ -189,7 +189,7 @@ function CuentasSinCse({
         </EncabezadoDeTabla>
         {cuentas.map((c, i) => (
           <div key={c.clientId} className={cn("grid items-start gap-4 px-4 py-3 text-[13px] text-fg", COLUMNAS_SIN_CSE, i > 0 && "border-t border-line")}>
-            <EstrellaDePrioridad clientId={c.clientId} cuenta={c.nombre} />
+            <CheckDePrioridad clientId={c.clientId} cuenta={c.nombre} />
             <Link href={`/customer-success/${c.clientId}`} className="truncate font-semibold transition-colors hover:text-brand">
               {c.nombre}
             </Link>
