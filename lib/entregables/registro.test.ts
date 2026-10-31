@@ -171,7 +171,7 @@ describe("el registro de entregables", () => {
     const ids = ENTREGABLES.flatMap((e) => e.plantillas.map((p) => p.id));
     expect(new Set(ids).size).toBe(ids.length); // ids únicos entre todos los entregables
     // Las que suman las copias (lib/artefactos/tipos.ts) tienen template y el selector del documento de siempre no las ofrece.
-    const deLasCopias = ["informe-de-avance", "planificacion-campana", "planificacion-marketing", "planificacion-whatsapp"];
+    const deLasCopias = ["aprendizaje", "informe-de-avance", "planificacion-campana", "planificacion-marketing", "planificacion-whatsapp"];
     expect(Object.keys(TEMPLATE_DE_LA_PLANTILLA).sort()).toEqual([...ids, ...deLasCopias].sort());
     expect(TEMPLATE_DE_LA_PLANTILLA[plantillaDe("kickoff")!.id]).toBe(KICKOFF_TEMPLATE);
     expect(TEMPLATE_DE_LA_PLANTILLA[plantillaDe("diagnosis")!.id]).toBe(DIAGNOSTICO_TEMPLATE);

@@ -113,7 +113,7 @@ export interface LifecyclePipeline extends LifecycleComun {
    * la del ciclo («Ciclo 1 · Implementación») y la línea son las cinco etapas del método. `null` = el
    * pipeline usa ciclos pero el proyecto todavía no abrió el primero. Ausente = no usa ciclos.
    */
-  ciclo?: { numero: number; nombre: string | null; etapa: EtapaDelCiclo | null } | null;
+  ciclo?: { etapa: EtapaDelCiclo | null } | null;
 }
 
 /**
@@ -237,7 +237,7 @@ async function loadLifecycleBatchUncached(
   const ciclosAbiertos = conCiclos.length
     ? await prisma.cicloDeProyecto.findMany({
         where: { projectId: { in: conCiclos.map((p) => p.id) }, estado: "abierto" },
-        select: { projectId: true, numero: true, nombre: true, etapa: true },
+        select: { projectId: true, etapa: true },
       })
     : [];
   const cicloPorProyecto = new Map(ciclosAbiertos.map((c) => [c.projectId, c]));
@@ -285,8 +285,8 @@ async function loadLifecycleBatchUncached(
       const def = fuente.pipeline;
       const etapa = buscarEtapa(def, p.hubspotPipelineStageId);
       if (def.servicioRecurrente && !etapa?.terminal) {
-        /* SERVICIO RECURRENTE: la etapa es la del ciclo abierto. En un proyecto que existe en HubSpot la mueve
-           el equipo allá (se lee por nombre); en uno que no (la prueba), la lleva el ciclo en Nexus. */
+        /* SERVICIO RECURRENTE: en un proyecto que existe en HubSpot la etapa es la de allá (se lee por nombre); en uno
+           que no (la prueba), la que quedó guardada. No se cuentan vueltas (Elías, 31 oct). */
         const c = cicloPorProyecto.get(p.id) ?? null;
         const etapaCiclo: EtapaDelCiclo | null = p.hubspotServiceId
           ? etapaPorNombre(etapa?.label ?? p.hubspotPipelineStageLabel)
@@ -294,8 +294,7 @@ async function loadLifecycleBatchUncached(
             ? c.etapa
             : null;
         const lineaCiclo: PipelineStage[] = ETAPAS_DEL_CICLO.map((e) => ({ id: e, label: ETIQUETA_DE_ETAPA[e], enLinea: true, terminal: false }));
-        /* Sin ciclo abierto el proyecto está en Diagnóstico (2026-10-12): el primero se abre solo al cambiar la etapa.
-           Antes decía «Sin ciclo abierto» mientras el «Qué sigue» hablaba de una etapa. */
+        /* Sin etapa guardada el proyecto está en Diagnóstico (2026-10-12). */
         const etapaVista: EtapaDelCiclo | null = etapaCiclo ?? (c || p.hubspotServiceId ? null : "diagnostico");
         const idxCiclo = etapaVista ? ETAPAS_DEL_CICLO.indexOf(etapaVista) : -1;
         out.set(p.id, {
@@ -307,9 +306,8 @@ async function loadLifecycleBatchUncached(
           stageSyncedAt: p.hubspotStageSyncedAt,
           linea: lineaCiclo,
           position: idxCiclo >= 0 ? { index: idxCiclo + 1, total: lineaCiclo.length } : null,
-          // Importa la etapa, no el número del ciclo (Elías, 2026-10-12): «Implementación», y el ciclo va aparte.
           label: etapaVista ? ETIQUETA_DE_ETAPA[etapaVista] : (etapa?.label ?? "Sin etapa"),
-          ciclo: { numero: c?.numero ?? 1, nombre: c?.nombre ?? null, etapa: etapaVista },
+          ciclo: { etapa: etapaVista },
         });
         continue;
       }

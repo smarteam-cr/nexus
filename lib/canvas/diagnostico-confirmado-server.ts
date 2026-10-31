@@ -42,7 +42,7 @@ export async function loConfirmadoDelProyecto(projectId: string): Promise<LoConf
     seguro(() => cuantoHayEnLaExploracion(projectId), { existe: false, confirmados: 0, propuestos: 0 }),
     seguro(() => getProjectDocumentSessions(projectId, "diagnostico").then((r) => r.sessions.map((s) => s.id)), [] as string[]),
     seguro(() => reunionesQueEntranSolasAlDiagnostico(projectId), [] as string[]),
-    // M2: en un recurrente, cuántas reuniones leyó la exploración en el ciclo. null fuera de un servicio recurrente.
+    // M2: en un recurrente, cuántas reuniones leyó la exploración. null fuera de un servicio recurrente.
     seguro(() => estadoDelCicloParaElRiel(projectId), null),
   ]);
   const lista = resultados?.resultados ?? [];
@@ -52,6 +52,6 @@ export async function loConfirmadoDelProyecto(projectId: string): Promise<LoConf
     procesos,
     exploracionDelProyecto: exploracion,
     reuniones: new Set([...elegidas, ...deLaExplo]).size,
-    ciclo: ciclo?.arranque ? { numero: ciclo.numero, lecturasDeExploracion: ciclo.arranque.lecturasDeExploracion } : null,
+    ciclo: ciclo?.arranque ? { lecturasDeExploracion: ciclo.arranque.lecturasDeExploracion } : null,
   });
 }

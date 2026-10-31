@@ -81,30 +81,30 @@ describe("un ciclo de SmartLoop sin exploración (M2, 2026-10-24)", () => {
   };
 
   it("todo confirmado pero el ciclo sin ninguna reunión leída: pide confirmación con su propio motivo", () => {
-    const r = loConfirmadoDelDiagnostico({ ...confirmado, ciclo: { numero: 1, lecturasDeExploracion: 0 } });
+    const r = loConfirmadoDelDiagnostico({ ...confirmado, ciclo: { lecturasDeExploracion: 0 } });
     expect(r.casiNada).toBe(false);
-    expect(r.cicloSinExploracion).toBe(1);
+    expect(r.cicloSinExploracion).toBe(true);
     expect(r.pideConfirmacion).toBe(true);
-    expect(mensajeDeSupuestos(r)).toMatch(/ciclo 1 de un servicio recurrente/);
+    expect(mensajeDeSupuestos(r)).toMatch(/servicio recurrente todavía no tiene ninguna reunión leída/);
     expect(mensajeDeSupuestos(r)).not.toMatch(/fuentes tienen algo confirmado/);
   });
 
   it("con una reunión leída en el ciclo, no pide nada", () => {
-    const r = loConfirmadoDelDiagnostico({ ...confirmado, ciclo: { numero: 2, lecturasDeExploracion: 1 } });
-    expect(r.cicloSinExploracion).toBeNull();
+    const r = loConfirmadoDelDiagnostico({ ...confirmado, ciclo: { lecturasDeExploracion: 1 } });
+    expect(r.cicloSinExploracion).toBe(false);
     expect(r.pideConfirmacion).toBe(false);
     expect(mensajeDeSupuestos(r)).toBe("");
   });
 
   it("los dos motivos juntos: el del ciclo primero", () => {
-    const r = loConfirmadoDelDiagnostico({ ...CEMACO, ciclo: { numero: 1, lecturasDeExploracion: 0 } });
+    const r = loConfirmadoDelDiagnostico({ ...CEMACO, ciclo: { lecturasDeExploracion: 0 } });
     const m = mensajeDeSupuestos(r);
-    expect(m.indexOf("ciclo 1")).toBeLessThan(m.indexOf("Solo 1 de 4"));
+    expect(m.indexOf("servicio recurrente")).toBeLessThan(m.indexOf("Solo 1 de 4"));
   });
 
   it("fuera de un servicio recurrente, la regla de siempre", () => {
     const r = loConfirmadoDelDiagnostico(CEMACO);
-    expect(r.cicloSinExploracion).toBeNull();
+    expect(r.cicloSinExploracion).toBe(false);
     expect(r.pideConfirmacion).toBe(r.casiNada);
   });
 });

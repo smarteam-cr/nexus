@@ -17,7 +17,7 @@
  *
  * EL KICKOFF DE UN SERVICIO RECURRENTE (M1 del roadmap, 2026-10-24): con un servicio del catálogo, el mensaje ya no dice
  * «Tipo de servicio contratado: proyecto_temporal» (el `serviceType` viejo de RC Inmobiliaria) sino el servicio, su
- * cadencia, sus reuniones fijas, el ciclo en curso y su nivel de servicio (`servicioParaElKickoff`). Con la plantilla
+ * cadencia, sus reuniones fijas, la etapa en curso y su nivel de servicio (`servicioParaElKickoff`). Con la plantilla
  * «Kickoff de servicio recurrente» el documento queda con SUS secciones: las de afuera vacías se borran y las que tienen
  * algo se ocultan en el EDITOR (`ajustarElKickoffALaPlantilla`; el ojo del kickoff vive en `__ocultas` y en
  * `Project.hiddenKickoffKeys`, no en el `hidden` del Json: lib/kickoff/plantilla-del-kickoff.ts). El cliente deja de verlas
@@ -47,7 +47,7 @@ import { conOcultasDelBorrador, mismasOcultas, ocultasDelBorrador, ocultasEnElEd
 import { conOcultasPorLaPlantilla, fueraDeLaPlantilla, ocultasPorLaPlantilla, ocultasSegunLaPlantilla } from "@/lib/kickoff/plantilla-del-kickoff";
 import { resolvePipeline } from "@/lib/projects/kind";
 import { servicioDelProyecto, servicioParaElKickoff } from "@/lib/servicios/catalogo";
-import { esEtapaDelCiclo, ETIQUETA_DE_ETAPA } from "@/lib/servicios/ciclo";
+import { estadoDelCicloParaElRiel } from "@/lib/servicios/ciclos-server";
 
 /** Las secciones de la plantilla con que se genera; null = el canon de siempre. */
 function seccionesDeLaPlantilla(template: BcTemplateDef): string[] | null {
@@ -87,20 +87,9 @@ export async function runKickoffGeneration(opts: {
     servicioRecurrente: proyecto.servicioRecurrente,
     servicioDelPipeline: resolvePipeline(proyecto.hubspotPipelineId)?.servicioRecurrente ?? null,
   });
-  const cicloAbierto = servicio?.ciclo
-    ? await prisma.cicloDeProyecto
-        .findFirst({ where: { projectId, estado: "abierto" }, select: { numero: true, etapa: true } })
-        .catch(() => null)
-    : null;
+  const etapaDelServicio = servicio?.ciclo ? ((await estadoDelCicloParaElRiel(projectId).catch(() => null))?.corto ?? null) : null;
   const serviceTypeLabel = servicio ? null : (proyecto.serviceType ?? null);
-  const bloqueDelServicio = servicio
-    ? `${servicioParaElKickoff(
-        servicio,
-        cicloAbierto
-          ? { numero: cicloAbierto.numero, etapa: esEtapaDelCiclo(cicloAbierto.etapa) ? ETIQUETA_DE_ETAPA[cicloAbierto.etapa] : cicloAbierto.etapa }
-          : null,
-      )}\n\n`
-    : "";
+  const bloqueDelServicio = servicio ? `${servicioParaElKickoff(servicio, etapaDelServicio)}\n\n` : "";
   const secciones = seccionesDeLaPlantilla(template);
 
   // 9a2/9a3 de la ruta: el canvas destino, con las secciones nuevas del canon (idempotente).

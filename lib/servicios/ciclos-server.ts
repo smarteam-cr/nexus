@@ -1,34 +1,23 @@
 /**
- * lib/servicios/ciclos-server.ts — leer y escribir el CICLO de un proyecto recurrente y sus casos de uso.
+ * lib/servicios/ciclos-server.ts — lo que queda del CICLO de un proyecto recurrente, y los casos de uso de la empresa.
  *
- * Único escritor de `CicloDeProyecto` y `CasoDeUso` (docs/smartloop-plan.md, etapa 1), junto con sus tres hermanos de
- * la ficha E: cronograma-del-ciclo-server.ts (etapa 3), cierre-server.ts (etapa 4) y traductor-server.ts (etapa 5). Las
- * reglas puras viven en lib/servicios/ciclo.ts, guia.ts, cierre.ts y traductor.ts; acá solo se lee y se escribe.
- *
- * Reglas:
- *  · Un ciclo abierto por proyecto (también lo cuida un índice parcial de la base). Abrir el siguiente
- *    exige cerrar el anterior (etapa 4: la sesión de aprendizaje).
- *  · La etapa de un proyecto que existe en HubSpot la mueve el equipo allá: acá no se cambia.
- *  · Quitar un caso de uso lo deja «descartado», no lo borra: el historial del ciclo se conserva.
+ * Nexus ya no administra ciclos (Elías, 31 oct; docs/DECISIONS.md): la etapa la trae HubSpot y no se cuentan vueltas. Las
+ * tablas `CicloDeProyecto` y `CasoDeUso` se quedan, y este archivo sigue siendo su único escritor:
+ *  · «Pasar a recurrente» abre una fila con la etapa que se confirmó, mientras una persona mueve el proyecto en HubSpot.
+ *  · Quitar un caso de uso lo deja «descartado», no lo borra.
  */
 import "server-only";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { resolvePipeline } from "@/lib/projects/kind";
-import { guiaDeServicio, type ClaveDeServicio } from "@/lib/servicios";
-import { guiaDelCiclo, type GuiaDelCiclo, type ProducidoConEstado } from "@/lib/servicios/guia";
+import { guiaDeServicio } from "@/lib/servicios";
 import {
-  esEtapaDelCiclo,
   ETIQUETA_DE_ETAPA,
-  etapaPorNombre,
   etapaQueMuestraElCiclo,
   leerMueve,
-  PIEZA_DE_LA_ETAPA,
-  type Compromiso,
   type EtapaDelCiclo,
   type MovimientoEnLaEscala,
 } from "@/lib/servicios/ciclo";
-import { leerCierre, type CierreGuardado } from "@/lib/servicios/cierre";
 import { servicioDelCatalogo } from "@/lib/servicios/catalogo";
 import type { ArranqueDelCiclo } from "@/lib/servicios/arranque-del-ciclo";
 import { arranqueDelCiclo } from "@/lib/servicios/arranque-del-ciclo-server";
@@ -61,72 +50,6 @@ export interface CasoDeUsoVista {
   faseId: string | null;
 }
 
-export interface CicloVista {
-  id: string;
-  numero: number;
-  nombre: string | null;
-  desde: string | null;
-  hasta: string | null;
-  meta: string | null;
-  etapa: EtapaDelCiclo;
-  estado: string;
-  casos: CasoDeUsoVista[];
-  /** Etapa 3: la versión aprobada del cronograma del ciclo (0 = sin aprobar). */
-  versionAprobada: number;
-  aprobadoAt: string | null;
-  aprobadoPor: string | null;
-  /** Etapa 4: el borrador de la sesión de aprendizaje. */
-  metaResultado: string | null;
-  metaEvaluada: string | null;
-  siguienteCiclo: string | null;
-}
-
-/** Un ciclo cerrado, para «Ciclos anteriores»: con lo que quedó del cierre (los casos y los documentos congelados). */
-export interface CicloCerradoVista {
-  numero: number;
-  nombre: string | null;
-  desde: string | null;
-  hasta: string | null;
-  cerradoAt: string | null;
-  cerradoPor: string | null;
-  meta: string | null;
-  cierre: CierreGuardado | null;
-}
-
-export interface EstadoDelCiclo {
-  servicio: ClaveDeServicio;
-  nombreDelServicio: string;
-  /** El proyecto existe en HubSpot: su etapa la mueve el equipo allá. */
-  enHubspot: boolean;
-  esPrueba: boolean;
-  compromiso: Compromiso | null;
-  abierto: CicloVista | null;
-  guia: GuiaDelCiclo | null;
-  cerrados: CicloCerradoVista[];
-}
-
-const dia = (d: Date | null) => (d ? d.toISOString().slice(0, 10) : null);
-
-function casoVista(c: {
-  id: string; titulo: string; resultado: string | null; mueve: unknown; porque: string | null; criterio: string | null;
-  metrica: string | null; origen: string; estado: string; criterioMedido: string | null; decisionAlCerrar: string | null; faseId: string | null;
-}): CasoDeUsoVista {
-  return {
-    id: c.id,
-    titulo: c.titulo,
-    resultado: c.resultado,
-    mueve: leerMueve(c.mueve),
-    porque: c.porque,
-    criterio: c.criterio,
-    metrica: c.metrica,
-    origen: c.origen,
-    estado: c.estado,
-    criterioMedido: c.criterioMedido,
-    decisionAlCerrar: c.decisionAlCerrar,
-    faseId: c.faseId,
-  };
-}
-
 async function proyectoRecurrente(projectId: string) {
   const p = await prisma.project.findUnique({
     where: { id: projectId },
@@ -143,181 +66,34 @@ async function proyectoRecurrente(projectId: string) {
   return { ...p, servicio };
 }
 
-/** null si el proyecto no es de un servicio recurrente. */
-export async function cargarEstadoDelCiclo(projectId: string): Promise<EstadoDelCiclo | null> {
-  const p = await proyectoRecurrente(projectId);
-  const guiaServicio = guiaDeServicio(p.servicio);
-  if (!p.servicio || !guiaServicio) return null;
-  const ciclos = await prisma.cicloDeProyecto.findMany({
-    where: { projectId },
-    orderBy: { numero: "desc" },
-    include: { casosDeUso: { where: { estado: { not: "descartado" } }, orderBy: [{ orden: "asc" }, { createdAt: "asc" }] } },
-  });
-  const abierto = ciclos.find((c) => c.estado === "abierto") ?? null;
-  const enHubspot = !!p.hubspotServiceId;
-  // En un proyecto que existe en HubSpot la etapa es la de allá (lib/lifecycle/load.ts hace lo mismo).
-  const etapaDeHubspot = enHubspot ? etapaPorNombre(p.hubspotPipelineStageLabel) : null;
-  const vista: CicloVista | null = abierto
-    ? {
-        id: abierto.id,
-        numero: abierto.numero,
-        nombre: abierto.nombre,
-        desde: dia(abierto.desde),
-        hasta: dia(abierto.hasta),
-        meta: abierto.meta,
-        etapa: etapaDeHubspot ?? (esEtapaDelCiclo(abierto.etapa) ? abierto.etapa : "diagnostico"),
-        estado: abierto.estado,
-        casos: abierto.casosDeUso.map(casoVista),
-        versionAprobada: abierto.versionAprobada,
-        aprobadoAt: abierto.aprobadoAt?.toISOString() ?? null,
-        aprobadoPor: abierto.aprobadoPor,
-        metaResultado: abierto.metaResultado,
-        metaEvaluada: abierto.metaEvaluada,
-        siguienteCiclo: abierto.siguienteCiclo,
-      }
-    : null;
-  return {
-    servicio: p.servicio,
-    nombreDelServicio: guiaServicio.nombre,
-    enHubspot,
-    esPrueba: p.esPrueba,
-    compromiso: (p.compromiso as Compromiso | null) ?? null,
-    abierto: vista,
-    guia: vista
-      ? guiaDelCiclo(guiaServicio, {
-          etapa: vista.etapa,
-          meta: vista.meta,
-          desde: vista.desde,
-          hasta: vista.hasta,
-          casos: vista.casos,
-          aprobada: vista.versionAprobada > 0,
-          aprendizaje: { metaResultado: vista.metaResultado, siguienteCiclo: vista.siguienteCiclo },
-        })
-      : null,
-    cerrados: ciclos
-      .filter((c) => c.estado === "cerrado")
-      .map((c) => ({
-        numero: c.numero,
-        nombre: c.nombre,
-        desde: dia(c.desde),
-        hasta: dia(c.hasta),
-        cerradoAt: c.cerradoAt?.toISOString() ?? null,
-        cerradoPor: c.cerradoPor,
-        meta: c.meta,
-        cierre: leerCierre(c.cierre),
-      })),
-  };
-}
-
-/** Lo que el riel y el «Qué sigue» necesitan del ciclo, sin cargar la página entera. */
+/** Lo que la ficha necesita del servicio: la etapa, con su nombre, y el arranque. */
 export interface CicloParaElRiel {
-  abierto: boolean;
-  /** El id del ciclo abierto (null sin ciclo abierto): lo mandan los cambios del ciclo para no editar otro. */
-  id: string | null;
-  /** El número del ciclo abierto, o el del siguiente si no hay ninguno abierto. */
-  numero: number;
-  nombre: string | null;
-  desde: string | null;
-  hasta: string | null;
-  etapa: EtapaDelCiclo | null;
-  /** La etapa en palabras («Implementación»): importa la etapa, no el número del ciclo (Elías, 2026-10-12). */
+  etapa: EtapaDelCiclo;
+  /** La etapa en palabras («Implementación»). */
   corto: string;
-  /** Lo primero que falta en la etapa (o la señal de que se saltó), si Nexus lo puede comprobar. */
-  falta: string | null;
-  /** El artefacto donde se trabaja la etapa en curso (lib/servicios/ciclo.ts). */
-  piezaDeLaEtapa: string | null;
-  /** El plan del ciclo está escrito: meta, y casos de uso, todos con criterio. */
-  planListo: boolean;
-  /** Lo que tiene que quedar en la etapa en curso, con lo que Nexus puede comprobar (lib/servicios/guia.ts). */
-  producido: ProducidoConEstado[];
-  /** El proyecto existe en HubSpot: la etapa la mueve el equipo allá (por la encuesta de la etapa). */
-  enHubspot: boolean;
-  /** Quien mira puede cambiar el ciclo (lo pone la ruta que lo lee: es del usuario, no del proyecto). */
-  puedeEditar?: boolean;
-  /**
-   * M1 y M2 (2026-10-24): el kickoff anterior al servicio y cuántas reuniones leyó la exploración en este ciclo
-   * (lib/servicios/arranque-del-ciclo.ts). Opcional: una respuesta cacheada vieja no lo trae.
-   */
+  /** El kickoff anterior al servicio y cuántas reuniones leyó la exploración. Opcional: una respuesta cacheada vieja no lo trae. */
   arranque?: ArranqueDelCiclo;
-}
-
-/** Desde cuándo cuenta la exploración del ciclo: el cierre del último ciclo cerrado (null en el primero). */
-async function inicioDeLaExploracionDelCiclo(projectId: string): Promise<Date | null> {
-  const cerrado = await prisma.cicloDeProyecto.findFirst({
-    where: { projectId, estado: "cerrado" },
-    orderBy: { numero: "desc" },
-    select: { cerradoAt: true },
-  });
-  return cerrado?.cerradoAt ?? null;
 }
 
 async function arranqueSeguro(projectId: string): Promise<ArranqueDelCiclo> {
   try {
-    return await arranqueDelCiclo(projectId, await inicioDeLaExploracionDelCiclo(projectId));
+    return await arranqueDelCiclo(projectId, null);
   } catch (e) {
     console.warn("[ciclo] el arranque del ciclo no se pudo leer:", e instanceof Error ? e.message : e);
     return { lecturasDeExploracion: 0, kickoffAnteriorAlServicio: false };
   }
 }
 
-/** null si el proyecto no es recurrente. */
+/** null si el proyecto no es recurrente. La etapa es la de HubSpot; sin ella, la que se confirmó al pasar a recurrente. */
 export async function estadoDelCicloParaElRiel(projectId: string): Promise<CicloParaElRiel | null> {
   const p = await proyectoRecurrente(projectId).catch(() => null);
-  const guiaServicio = guiaDeServicio(p?.servicio);
-  if (!p?.servicio || !guiaServicio) return null;
-  const arranque = await arranqueSeguro(projectId);
-  const c = await prisma.cicloDeProyecto.findFirst({
-    where: { projectId, estado: "abierto" },
-    select: {
-      id: true, numero: true, nombre: true, etapa: true, meta: true, desde: true, hasta: true,
-      versionAprobada: true, metaResultado: true, siguienteCiclo: true,
-      casosDeUso: {
-        where: { estado: { not: "descartado" } },
-        select: { id: true, titulo: true, criterio: true, criterioMedido: true, decisionAlCerrar: true },
-      },
-    },
-  });
-  if (!c) {
-    /* Sin ciclo abierto el proyecto está en Diagnóstico, salvo que HubSpot diga otra etapa: ahí manda HubSpot, por
-       nombre (2026-10-19). El ciclo se abre solo cuando alguien cambia la etapa o pone sus datos (2026-10-12). */
-    const ultimo = await prisma.cicloDeProyecto.findFirst({ where: { projectId }, orderBy: { numero: "desc" }, select: { numero: true } });
-    const etapa0 = etapaQueMuestraElCiclo({ enHubspot: !!p.hubspotServiceId, rotuloDeHubspot: p.hubspotPipelineStageLabel, etapaGuardada: null });
-    const g0 = guiaDelCiclo(guiaServicio, { etapa: etapa0, meta: null, desde: null, hasta: null, casos: [] });
-    return {
-      abierto: false, id: null, numero: (ultimo?.numero ?? 0) + 1, nombre: null, desde: null, hasta: null, etapa: etapa0,
-      corto: ETIQUETA_DE_ETAPA[etapa0], falta: null, piezaDeLaEtapa: PIEZA_DE_LA_ETAPA[etapa0], planListo: false,
-      producido: g0.producido, enHubspot: !!p.hubspotServiceId, arranque,
-    };
-  }
-  const etapa = etapaQueMuestraElCiclo({ enHubspot: !!p.hubspotServiceId, rotuloDeHubspot: p.hubspotPipelineStageLabel, etapaGuardada: c.etapa });
-  const estado = {
-    etapa,
-    meta: c.meta,
-    desde: dia(c.desde),
-    hasta: dia(c.hasta),
-    casos: c.casosDeUso,
-    aprobada: c.versionAprobada > 0,
-    aprendizaje: { metaResultado: c.metaResultado, siguienteCiclo: c.siguienteCiclo },
-  };
-  const g = guiaDelCiclo(guiaServicio, estado);
-  const plan = guiaDelCiclo(guiaServicio, { ...estado, etapa: "planificacion" });
-  const faltaDelPlan = plan.producido.some((x) => (x.clave === "meta" || x.clave === "casos-con-criterio") && x.hecho === false);
-  return {
-    abierto: true,
-    id: c.id,
-    numero: c.numero,
-    nombre: c.nombre,
-    desde: estado.desde,
-    hasta: estado.hasta,
-    etapa,
-    corto: ETIQUETA_DE_ETAPA[etapa],
-    falta: g.senalVista ?? (g.primeroQueFalta ? `Falta ${g.primeroQueFalta.charAt(0).toLowerCase()}${g.primeroQueFalta.slice(1)}.` : null),
-    piezaDeLaEtapa: PIEZA_DE_LA_ETAPA[etapa],
-    planListo: !faltaDelPlan,
-    producido: g.producido,
-    enHubspot: !!p.hubspotServiceId,
-    arranque,
-  };
+  if (!p?.servicio || !guiaDeServicio(p.servicio)) return null;
+  const [arranque, abierto] = await Promise.all([
+    arranqueSeguro(projectId),
+    prisma.cicloDeProyecto.findFirst({ where: { projectId, estado: "abierto" }, select: { etapa: true } }),
+  ]);
+  const etapa = etapaQueMuestraElCiclo({ enHubspot: !!p.hubspotServiceId, rotuloDeHubspot: p.hubspotPipelineStageLabel, etapaGuardada: abierto?.etapa ?? null });
+  return { etapa, corto: ETIQUETA_DE_ETAPA[etapa], arranque };
 }
 
 const fecha = (s: string | null | undefined) => (s ? new Date(`${s}T00:00:00.000Z`) : null);
@@ -349,9 +125,9 @@ function abrirCicloEnTx(
 ) {
   return prisma.$transaction(async (tx) => {
     const abierto = await tx.cicloDeProyecto.findFirst({ where: { projectId, estado: "abierto" }, select: { numero: true } });
-    if (abierto) throw new ErrorDelCiclo(`El ciclo ${abierto.numero} sigue abierto: se cierra con la sesión de aprendizaje.`, 409);
+    if (abierto) throw new ErrorDelCiclo("Este proyecto ya tiene un ciclo abierto.", 409);
     const ultimo = await tx.cicloDeProyecto.findFirst({ where: { projectId }, orderBy: { numero: "desc" }, select: { numero: true } });
-    const nuevo = await tx.cicloDeProyecto.create({
+    return tx.cicloDeProyecto.create({
       data: {
         projectId,
         numero: (ultimo?.numero ?? 0) + 1,
@@ -365,85 +141,7 @@ function abrirCicloEnTx(
       },
       select: { id: true, numero: true },
     });
-    /* Lo que la sesión de aprendizaje del ciclo anterior decidió que «pasa» entra solo al ciclo nuevo (etapa 4, ficha
-       E): el cierre lo dejó en el plan del proyecto con esa marca. Entra sin fase ni medición: es otro ciclo. */
-    await tx.casoDeUso.updateMany({
-      where: { projectId, cicloId: null, estado: "en_plan", decisionAlCerrar: "pasa" },
-      data: { cicloId: nuevo.id, estado: "en_ciclo", decisionAlCerrar: null, criterioMedido: null, faseId: null },
-    });
-    return nuevo;
   });
-}
-
-export async function actualizarCiclo(
-  projectId: string,
-  cambios: {
-    nombre?: string | null;
-    desde?: string | null;
-    hasta?: string | null;
-    meta?: string | null;
-    etapa?: EtapaDelCiclo;
-    metaResultado?: string | null;
-    metaEvaluada?: string | null;
-    siguienteCiclo?: string | null;
-  },
-  por?: string,
-  /**
-   * El ciclo que la pantalla tiene enfrente: su id, o null si la pantalla no veía ninguno abierto. Si ya no es el
-   * abierto, 409: una pestaña vieja no edita (ni abre) otro ciclo con lo que tenía escrito. `undefined` = quien llama
-   * no lo sabe: edita el abierto, y sin abierto solo abre si el proyecto nunca tuvo un ciclo.
-   */
-  cicloId?: string | null,
-) {
-  const p = await proyectoRecurrente(projectId);
-  let abierto = await prisma.cicloDeProyecto.findFirst({ where: { projectId, estado: "abierto" }, select: { id: true } });
-  if (typeof cicloId === "string" && abierto?.id !== cicloId) {
-    const ese = await prisma.cicloDeProyecto.findFirst({ where: { id: cicloId, projectId }, select: { estado: true } });
-    throw new ErrorDelCiclo(
-      ese?.estado === "cerrado" ? "Este ciclo ya se cerró: recarga la página." : "El ciclo cambió: recarga la página.",
-      409,
-    );
-  }
-  if (cicloId === null && abierto) throw new ErrorDelCiclo("Ya hay un ciclo abierto: recarga la página.", 409);
-  /* Sin ciclo abierto el proyecto está en Diagnóstico (estadoDelCicloParaElRiel): el ciclo se abre solo al cambiar algo.
-     Vale para el primero y, desde la ficha E, para el siguiente a uno cerrado (al cerrar, el proyecto vuelve a
-     Diagnóstico): solo si la pantalla tampoco veía uno abierto (`cicloId: null`). Sin saber qué veía la pantalla, abre
-     solo el primero. Lo de la sesión de aprendizaje es del ciclo abierto: no abre uno nuevo. */
-  const delAprendizaje = cambios.metaResultado !== undefined || cambios.metaEvaluada !== undefined || cambios.siguienteCiclo !== undefined;
-  if (!abierto && por && !delAprendizaje) {
-    const puedeAbrir =
-      cicloId === null || (await prisma.cicloDeProyecto.count({ where: { projectId } })) === 0;
-    if (!puedeAbrir) throw new ErrorDelCiclo("Este ciclo ya se cerró: recarga la página.", 409);
-    abierto = await abrirCiclo(projectId, {}, por).then((c) => ({ id: c.id }));
-  }
-  if (!abierto) throw new ErrorDelCiclo("No hay un ciclo abierto.", 409);
-  if (cambios.etapa && p.hubspotServiceId) {
-    throw new ErrorDelCiclo("En un proyecto que está en HubSpot la etapa la mueve el equipo allá.", 409);
-  }
-  if (cambios.desde !== undefined && cambios.hasta !== undefined && cambios.desde && cambios.hasta && cambios.desde > cambios.hasta) {
-    throw new ErrorDelCiclo("El ciclo no puede terminar antes de empezar.", 400);
-  }
-  // Solo si sigue abierto: si se cerró entre la lectura y acá, no se le escribe nada.
-  const escrito = await prisma.cicloDeProyecto.updateMany({
-    where: { id: abierto.id, estado: "abierto" },
-    data: {
-      ...(cambios.nombre !== undefined ? { nombre: cambios.nombre?.trim() || null } : {}),
-      ...(cambios.desde !== undefined ? { desde: fecha(cambios.desde) } : {}),
-      ...(cambios.hasta !== undefined ? { hasta: fecha(cambios.hasta) } : {}),
-      ...(cambios.meta !== undefined ? { meta: cambios.meta?.trim() || null } : {}),
-      ...(cambios.etapa ? { etapa: cambios.etapa } : {}),
-      ...(cambios.metaResultado !== undefined ? { metaResultado: cambios.metaResultado || null } : {}),
-      ...(cambios.metaEvaluada !== undefined ? { metaEvaluada: cambios.metaEvaluada?.trim() || null } : {}),
-      ...(cambios.siguienteCiclo !== undefined ? { siguienteCiclo: cambios.siguienteCiclo?.trim() || null } : {}),
-    },
-  });
-  if (escrito.count === 0) throw new ErrorDelCiclo("Este ciclo ya se cerró: recarga la página.", 409);
-}
-
-export async function cambiarCompromiso(projectId: string, compromiso: Compromiso | null) {
-  const p = await proyectoRecurrente(projectId);
-  if (!p.servicio) throw new ErrorDelCiclo("Este proyecto no es de un servicio recurrente.", 409);
-  await prisma.project.update({ where: { id: projectId }, data: { compromiso } });
 }
 
 export interface DatosDeCaso {
@@ -455,60 +153,7 @@ export interface DatosDeCaso {
   metrica?: string | null;
 }
 
-/** Lo que se escribe de un caso de uso en la sesión de aprendizaje (etapa 4, ficha E): borrador hasta cerrar. */
-export interface DatosDelAprendizaje {
-  criterioMedido?: string | null;
-  decisionAlCerrar?: string | null;
-}
-
 const texto = (v: string | null | undefined) => (v === undefined ? undefined : v?.trim() || null);
-
-export async function crearCaso(projectId: string, datos: DatosDeCaso & { titulo: string }, por: string) {
-  const p = await proyectoRecurrente(projectId);
-  const abierto = await prisma.cicloDeProyecto.findFirst({ where: { projectId, estado: "abierto" }, select: { id: true } });
-  if (!abierto) throw new ErrorDelCiclo("Abre el ciclo antes de sumarle casos de uso.", 409);
-  const orden = await prisma.casoDeUso.count({ where: { cicloId: abierto.id } });
-  return prisma.casoDeUso.create({
-    data: {
-      clientId: p.clientId,
-      projectId,
-      cicloId: abierto.id,
-      titulo: datos.titulo.trim(),
-      resultado: texto(datos.resultado) ?? null,
-      mueve: (datos.mueve ?? []) as object[],
-      porque: texto(datos.porque) ?? null,
-      criterio: texto(datos.criterio) ?? null,
-      metrica: texto(datos.metrica) ?? null,
-      origen: "manual",
-      estado: "en_ciclo",
-      orden,
-      creadoPor: por,
-    },
-    select: { id: true },
-  });
-}
-
-/** Cambia un caso de uso del ciclo de ESTE proyecto (404 si es de otro). `quitar` lo deja descartado. */
-export async function actualizarCaso(projectId: string, casoId: string, datos: DatosDeCaso & DatosDelAprendizaje & { quitar?: boolean }) {
-  const caso = await prisma.casoDeUso.findFirst({ where: { id: casoId, projectId }, select: { id: true } });
-  if (!caso) throw new ErrorDelCiclo("Ese caso de uso no es de este proyecto.", 404);
-  if (datos.titulo !== undefined && !datos.titulo.trim()) throw new ErrorDelCiclo("El caso de uso necesita un título.", 400);
-  await prisma.casoDeUso.update({
-    where: { id: casoId },
-    data: datos.quitar
-      ? { estado: "descartado" }
-      : {
-          ...(datos.titulo !== undefined ? { titulo: datos.titulo.trim() } : {}),
-          ...(datos.resultado !== undefined ? { resultado: texto(datos.resultado) } : {}),
-          ...(datos.mueve !== undefined ? { mueve: datos.mueve as object[] } : {}),
-          ...(datos.porque !== undefined ? { porque: texto(datos.porque) } : {}),
-          ...(datos.criterio !== undefined ? { criterio: texto(datos.criterio) } : {}),
-          ...(datos.metrica !== undefined ? { metrica: texto(datos.metrica) } : {}),
-          ...(datos.criterioMedido !== undefined ? { criterioMedido: texto(datos.criterioMedido) } : {}),
-          ...(datos.decisionAlCerrar !== undefined ? { decisionAlCerrar: datos.decisionAlCerrar || null } : {}),
-        },
-  });
-}
 
 // ── Los casos de uso de la EMPRESA (La cuenta › Casos de uso, 2026-10-12) ─────
 

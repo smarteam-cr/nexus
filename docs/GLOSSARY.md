@@ -260,8 +260,7 @@
 - **Agenda de la reunión**: lo que se iba a tratar en una reunión: lo escrito por una persona, la invitación del
   calendario o lo que dejó planeado la reunión anterior. **Próxima reunión sugerida**: la que Nexus propone al terminar
   una reunión con un cliente, para agendar por enlace.
-- **Cronograma del ciclo**: el cronograma de un ciclo de SmartLoop, con cada caso de uso como una fase; tiene su
-  **versión aprobada**. **Ciclos anteriores**: los ciclos cerrados, con sus documentos congelados.
+- **Cronograma del ciclo** y **Ciclos anteriores**: retirados el 2026-10-31. SmartLoop usa el cronograma de cualquier proyecto.
 - **Lo pagado** (Conciliación): lo que Odoo y Mercury dan por pagado, listo para cobrar con la firma de quien confirma.
 - **Licencia revendida** (`LicenciaRevendida`): la parte de un contrato que es licencia de un tercero; el resto es
   servicio. **Gasto financiero** (`GastoFinanciero`): una comisión de Stripe o de una transferencia, confirmada.
@@ -489,8 +488,8 @@
   datos. No existe en HubSpot, no cuenta en la cartera ni en Cobranza, el clasificador no le cuelga reuniones y el
   cliente no lo ve. En la ficha lleva la marca «Proyecto de prueba». Se crea con `scripts/crear-proyecto-de-prueba.ts`.
 - **Servicio con ciclo** (`PipelineDef.servicioRecurrente`, `lib/servicios`): un servicio recurrente que además avanza por ciclos, hoy
-  solo SmartLoop. En el riel, el Cronograma va junto al Resumen y el ciclo es un grupo «Ciclo · <etapa>» con los documentos de
-  siempre más Adopción y Aprendizaje; su etapa es la del ciclo abierto. Ver `docs/smartloop-plan.md`.
+  solo SmartLoop. Se lleva como cualquier proyecto: lo que cambia es que sus etapas son un ciclo, y Nexus muestra la que trae
+  HubSpot en un círculo, sin contar vueltas. Ver DECISIONS «SmartLoop se lleva como cualquier proyecto».
 - **Pieza oculta** (`Project.piezasOcultas`): una pieza del riel que el equipo ocultó en ese proyecto; queda en «Ver N
   piezas más», no se borra ni se apaga.
 - **La escala de la empresa** (La cuenta › La escala): dónde está la empresa en cada área de la escala, con la fecha y de

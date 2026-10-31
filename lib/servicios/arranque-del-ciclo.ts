@@ -1,5 +1,5 @@
 /**
- * lib/servicios/arranque-del-ciclo.ts — LO QUE TIENE QUE ESTAR ANTES DE TRABAJAR UN CICLO. PURO y CLIENT-SAFE.
+ * lib/servicios/arranque-del-ciclo.ts — LO QUE CONVIENE ANTES DE ESCRIBIR EL DIAGNÓSTICO DE UN RECURRENTE. PURO y CLIENT-SAFE.
  *
  * Sale de Liliana con RC Inmobiliaria (2026-10-23, roadmap M1 y M2): el riel de un SmartLoop mostraba un kickoff de julio
  * que decía «proyecto temporal», y el «Qué sigue» mandaba a escribir el diagnóstico sin una sola sesión de exploración.
@@ -8,10 +8,9 @@
  *    («Kickoff de servicio recurrente», lib/entregables/registro.ts) es de antes de que el proyecto fuera recurrente: no
  *    cuenta el método por ciclos ni la cadencia. Se avisa «regenéralo»; nunca se regenera solo (la IA cuesta y pisa lo
  *    que el CSE editó).
- *  · LA EXPLORACIÓN DEL CICLO (M2): el ciclo se diagnostica después de explorar con cada equipo del cliente. Cuenta como
- *    exploración del ciclo una reunión que la exploración viva del proyecto ya LEYÓ (`propuesta.lecturas`) desde que
- *    cerró el ciclo anterior; en el primer ciclo, cualquiera. Sin ninguna, el «Qué sigue» propone explorar y el
- *    diagnóstico avisa antes de generarse.
+ *  · LA EXPLORACIÓN (M2): el diagnóstico se escribe después de explorar con cada equipo del cliente. Cuenta una reunión
+ *    que la exploración viva del proyecto ya LEYÓ (`propuesta.lecturas`). Sin ninguna, el «Qué sigue» sugiere explorar
+ *    (nunca lo exige) y el diagnóstico avisa antes de generarse.
  */
 
 /** Lo que el riel, el «Qué sigue» y el diagnóstico saben del arranque del ciclo. */
@@ -55,11 +54,7 @@ export const AVISO_KICKOFF_ANTERIOR = {
   largo: "Este kickoff es anterior al servicio: no cuenta cómo se trabaja por ciclos ni la cadencia. Regenéralo.",
 } as const;
 
-/** El «Qué sigue» de un ciclo en Diagnóstico sin exploración, y el aviso del diagnóstico. */
-export const EXPLORA_PRIMERO =
-  "Explora primero, por equipo: prepara la primera sesión de la exploración con un equipo del cliente. El diagnóstico se escribe después.";
-
-/** Lo que dice el aviso del diagnóstico de un recurrente que se genera sin exploración del ciclo. */
-export function avisoSinExploracionDelCiclo(numero: number): string {
-  return `Es el ciclo ${numero} de un servicio recurrente y su exploración no tiene ninguna reunión leída: el diagnóstico va a salir sin lo que dijo cada equipo del cliente en este ciclo.`;
+/** Lo que dice el aviso del diagnóstico de un recurrente que se genera sin exploración. */
+export function avisoSinExploracionDelCiclo(): string {
+  return "Este servicio recurrente todavía no tiene ninguna reunión leída en su exploración: el diagnóstico va a salir sin lo que dijo cada equipo del cliente.";
 }

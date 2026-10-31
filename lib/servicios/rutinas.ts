@@ -174,21 +174,17 @@ export function enlaceDeLaReunion(o: {
 export type QueTocaAhora =
   | { tipo: "reunion"; clave: string; texto: string }
   | { tipo: "tareas"; texto: string }
-  | { tipo: "ciclo"; texto: string }
   | { tipo: "al-dia"; texto: string };
 
 /**
- * Lo primero que toca, en una línea. En orden: lo que falta del ciclo (si avanza por ciclos y Nexus lo sabe), una
- * reunión fija sin agendar, las tareas sin crear, la ventana de tareas por terminarse; si no, al día.
+ * Lo primero que toca, en una línea: una reunión fija sin agendar, las tareas sin crear, la ventana de tareas por
+ * terminarse; si no, al día. Un servicio con ciclo no lo pide: sus rutinas son «Cómo se suele llevar» y no piden nada.
  */
 export function queTocaAhora(o: {
   servicio: Pick<ServicioRecurrente, "reuniones" | "tareas">;
   estado: EstadoDeLasRutinas;
   hoy: string;
-  /** Lo primero que falta en la etapa del ciclo abierto (lib/servicios/guia.ts › primeroQueFalta). */
-  faltaDelCiclo?: string | null;
 }): QueTocaAhora {
-  if (o.faltaDelCiclo) return { tipo: "ciclo", texto: `En esta etapa del ciclo falta: ${o.faltaDelCiclo.charAt(0).toLowerCase()}${o.faltaDelCiclo.slice(1)}.` };
   const sinAgendar = o.servicio.reuniones.find((r) => !o.estado.reuniones[r.clave]);
   if (sinAgendar) return { tipo: "reunion", clave: sinAgendar.clave, texto: `Agenda «${sinAgendar.titulo}» en tu calendario.` };
   if (o.servicio.tareas.length > 0) {

@@ -379,7 +379,7 @@ function filasDeLaHistoria(datos: Ok, cuentaId: string | null, abrir: (exploraci
     const origen = v.nota && v.creadoPorEmail === "sistema" ? "Primera versión" : ETIQUETA_DEL_ORIGEN[v.origen];
     return {
       clave: v.id,
-      titulo: [v.momento ? ETIQUETA_DEL_MOMENTO[v.momento] : null, origen + (v.ciclo ? ` · ciclo ${v.ciclo.numero}` : ""), v.venta ? `venta «${v.venta.nombre}»` : null, deDonde(v)]
+      titulo: [v.momento ? ETIQUETA_DEL_MOMENTO[v.momento] : null, origen, v.venta ? `venta «${v.venta.nombre}»` : null, deDonde(v)]
         .filter(Boolean)
         .join(" · "),
       fecha: cuandoDe(v),

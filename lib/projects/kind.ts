@@ -431,8 +431,6 @@ export const PROJECT_PIPELINES: readonly PipelineDef[] = [
     handoffDelHermano: false,
     frenteDeEntrega: "CSE",
     equipoDeEntrega: "entrega",
-    /* Sin kickoff: el servicio arranca con el traspaso y el diagnóstico del ciclo 1. La pieza «Ciclo»
-       no vive en un canvas: no se siembra (la arma el panel). */
     seedPieces: ["handoff", "kickoff", "timeline", "exploration"],
     base: BASE_CUSTOMER_SUCCESS,
     servicioRecurrente: "smartloop",
