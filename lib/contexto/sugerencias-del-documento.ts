@@ -195,6 +195,21 @@ export function reunionesDeLasSesiones(
  * leía la regla vieja (las más recientes, con el cliente). Una reunión se sugiere una sola vez. Nunca una elegida, una
  * desestimada, una futura ni una que no sea de la membresía.
  */
+/**
+ * Las reuniones del proyecto que dejaron texto y fueron CON EL CLIENTE, de la más reciente a la más vieja. Sin los dominios
+ * de Smarteam no se sabe la sala: no entra ninguna. La regla de las que entran solas, y la de una copia sin elegidas.
+ */
+export function reunionesConTextoConElCliente<R extends { id: string; fecha: number; participantes: readonly string[] }>(
+  reuniones: readonly R[],
+  clasesDeTexto: ReadonlyMap<string, ClaseDeTexto>,
+  dominiosPropios: ReadonlySet<string>,
+): R[] {
+  return reuniones
+    .filter((r) => (clasesDeTexto.get(r.id) ?? "nada") !== "nada")
+    .filter((r) => etiquetaDeSala({ participants: [...r.participantes] }, dominiosPropios) === "CON EL CLIENTE")
+    .sort((a, b) => b.fecha - a.fecha || a.id.localeCompare(b.id));
+}
+
 export function sugerenciasDelDocumento(destino: DestinoDeContexto, e: EntradaDeSugerencias): SugerenciaDeReunion[] {
   if (!esSoloElegidas(destino)) return [];
   const libres = new Map(e.reuniones.filter((r) => r.afinado === null && r.fecha <= e.ahora).map((r) => [r.id, r]));
@@ -217,11 +232,7 @@ export function sugerenciasDelDocumento(destino: DestinoDeContexto, e: EntradaDe
      reunión de puertas adentro (la Alineación, el Handoff, una revisión de precio) entra solo si una persona la elige con
      «Usar». Sin los dominios de Smarteam no se sabe la sala: no entra ninguna sola. */
   if (entranSolasLasDelProyecto(destino) && e.clasesDeTexto && e.dominiosPropios) {
-    const propiosDeLaSala = e.dominiosPropios;
-    const conTexto = [...libres.values()]
-      .filter((r) => !out.has(r.id) && (e.clasesDeTexto!.get(r.id) ?? "nada") !== "nada")
-      .filter((r) => etiquetaDeSala({ participants: [...r.participantes] }, propiosDeLaSala) === "CON EL CLIENTE")
-      .sort((a, b) => b.fecha - a.fecha || a.id.localeCompare(b.id));
+    const conTexto = reunionesConTextoConElCliente([...libres.values()].filter((r) => !out.has(r.id)), e.clasesDeTexto, e.dominiosPropios);
     for (const r of conTexto) {
       entranSolas.push({ sessionId: r.id, motivo: motivoDeLaReunionConTexto(e.clasesDeTexto.get(r.id)!), fuente: "proyecto" });
     }

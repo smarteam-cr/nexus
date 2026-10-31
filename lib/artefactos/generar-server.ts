@@ -5,8 +5,11 @@
  * `slug`: no sabe escribir en otro. Una copia (y los tipos nuevos, que solo tienen copias) se genera acá, con lo mismo
  * que lee un documento de su tipo:
  *   · el handoff, con la allowlist del tipo (lo que el cliente puede leer);
- *   · el «Contexto adicional» de su tipo (las reuniones elegidas y las notas, por el chokepoint; son POR TIPO hasta V3b)
- *     y las instrucciones de ESTA copia (su `__doc.brief`), no las del documento de siempre;
+ *   · su «Contexto adicional»: las reuniones elegidas y las notas de ESTA copia, por el chokepoint. Sin elegidas, las del
+ *     «Contexto adicional» de su tipo y las del proyecto con texto que nadie sacó de ahí: una copia recién creada no puede
+ *     salir en blanco teniendo reuniones (validación del deploy, 2026-10-31). Con elegidas, solo esas: elegirlas es decidir
+ *     el foco de esa copia. Y las instrucciones de ESTA copia (su `__doc.brief`);
+ *   · el cronograma y los cuestionarios, solo donde los lee su documento de siempre (`LEE_EL_CRONOGRAMA`, `LEE_LOS_CUESTIONARIOS`);
  *   · la memoria de la cuenta y del proyecto;
  *   · los documentos de los tipos que lo alimentan (el diagnóstico para la planificación…), con todas sus copias
  *     (`loadCanvasContext`);
@@ -17,15 +20,19 @@
  * Respeta las reglas de su tipo que viven en los runners de siempre: en el diagnóstico, lo que el ejecutivo marcó revisado
  * no se reescribe y las acciones quedan en el enfoque corto; en el kickoff, el trato «Sin Escala» no lleva escala.
  */
-import { modalidadDeAdopcion } from "@/lib/canvas/planificacion-generate";
-import { TIPO_PLAN_DE_ADOPCION } from "./tipos";
+import { anotarPorQueDeLaCurada, modalidadDeAdopcion } from "@/lib/canvas/planificacion-generate";
+import { TIPO_CUESTIONARIOS, TIPO_PLAN_DE_ADOPCION } from "./tipos";
 import "server-only";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { generateSectionsForTemplate } from "@/lib/business-cases/canvas-agent";
 import { bloqueDeInstruccionesDeDoc, docBriefFrom } from "@/lib/business-cases/section-briefs";
 import { guardarVersionDelDocumento } from "@/lib/canvas/versiones";
-import { loadCanvasContext, loadHandoffContext } from "@/lib/canvas/load-canvas-context";
+import { loadCanvasContext, loadHandoffContext, loadTimelineContext } from "@/lib/canvas/load-canvas-context";
+import { loadCuestionarioContext } from "@/lib/cuestionario/contexto";
+import { reunionesDeUnaCopiaSinElegidas } from "@/lib/contexto/sugerencias-del-documento-server";
+import { POR_QUE_DE_LAS_CURADAS } from "@/lib/planificacion/por-que-vacia";
+import { conPorQueVacia } from "@/lib/landing/por-que-vacia";
 import { cargarMaterialDelDocumento } from "@/lib/contexto/material-del-documento";
 import { documentoConContexto } from "@/lib/contexto/documento";
 import { bloqueDeInstruccionesDelPedido } from "@/lib/entregables/registro";
@@ -68,6 +75,14 @@ const LECTOR: Record<NonNullable<TipoDeArtefacto["contextoDe"]>, { lector: Lecto
   "tech-requirements": { lector: "tech-requirements" },
   delivery: { lector: "delivery" },
 };
+
+/**
+ * Con qué reglas lee cada tipo el cronograma y los cuestionarios: las de su documento de siempre. La Entrega y su informe no
+ * lo leen a propósito (sus desviaciones internas no pueden llegar a lo que lee el cliente), y los cuestionarios traen los
+ * niveles de la escala: solo el diagnóstico y la planificación saben qué hacer con ellos.
+ */
+const LEE_EL_CRONOGRAMA: ReadonlySet<TipoDeArtefacto["contextoDe"]> = new Set(["diagnosis", "planning", "kickoff"]);
+const LEE_LOS_CUESTIONARIOS: ReadonlySet<TipoDeArtefacto["contextoDe"]> = new Set(["diagnosis", "planning"]);
 
 /** La copia que se va a generar, o el motivo por el que no se puede. */
 export async function copiaParaGenerar(projectId: string, canvasId: string) {
@@ -144,11 +159,21 @@ export async function generarCopia(o: {
           posicion: await posicionDeLaPropuesta(o.projectId),
         })
       : null;
-  const [handoff, material, alimentan] = await Promise.all([
+  /* Si las que entran solas no se pueden leer, la copia sale igual: nunca la frena (como los documentos de siempre). */
+  const elegidas = reunionesDeLaCopia(canvas.sections);
+  const ninguna = { todas: [] as string[], primero: [] as string[] };
+  const solas =
+    !doc || elegidas.length
+      ? ninguna
+      : await reunionesDeUnaCopiaSinElegidas(o.projectId, doc.destino).catch((e: unknown) => {
+          console.warn("[artefactos] las reuniones del proyecto no se pudieron leer:", e instanceof Error ? e.message : e);
+          return ninguna;
+        });
+  const [handoff, material, alimentan, cronograma, cuestionarios] = await Promise.all([
     // Sin allowlist solo un tipo interno (la Ejecución): `[]` dejaría al modelo con «Sin handoff».
     loadHandoffContext(o.projectId, { onlyConfirmed: false, ...(handoffKeysDelTipo(tipo.id).length || tipo.clientFacing ? { includeKeys: handoffKeysDelTipo(tipo.id) } : {}) }),
     doc
-      ? cargarMaterialDelDocumento(o.projectId, doc, { deLaCopia: { reuniones: reunionesDeLaCopia(canvas.sections), notasDe: piezaDeLasNotas(o.canvasId) } })
+      ? cargarMaterialDelDocumento(o.projectId, doc, { deLaCopia: { reuniones: elegidas, notasDe: piezaDeLasNotas(o.canvasId) }, sumarReuniones: solas.todas, primero: solas.primero })
       : Promise.resolve(null),
     Promise.all(
       (TIPOS_QUE_LO_ALIMENTAN[tipo.id] ?? []).map(async (t) => ({
@@ -156,6 +181,8 @@ export async function generarCopia(o: {
         texto: fuenteConTope(await loadCanvasContext(o.projectId, t, { onlyConfirmed: false, soloVisibles: true }).catch(() => "")),
       })),
     ),
+    LEE_EL_CRONOGRAMA.has(tipo.contextoDe) ? loadTimelineContext(o.projectId).catch(() => "") : Promise.resolve(""),
+    LEE_LOS_CUESTIONARIOS.has(tipo.contextoDe) ? loadCuestionarioContext(o.projectId).catch(() => "") : Promise.resolve(""),
   ]);
   const memoria = tipo.contextoDe
     ? await memoriaDelDocumento(o.projectId, {
@@ -166,9 +193,12 @@ export async function generarCopia(o: {
     : null;
 
   // Las rutinas y el despliegue por olas dependen de la modalidad: desde el 2026-10-30 los escribe el plan de adopción.
+  // La plantilla por niveles ES el despliegue por olas: elegirla ya decide la modalidad, que es solo una sugerencia por tamaño.
   const modalidad =
     tipo.id === TIPO_PLAN_DE_ADOPCION
-      ? `=== MODALIDAD DE ADOPCIÓN ===\n${(await modalidadDeAdopcion(o.projectId, proyecto?.clientId ?? null)).texto}\n\n`
+      ? `=== MODALIDAD DE ADOPCIÓN ===\n${(await modalidadDeAdopcion(o.projectId, proyecto?.clientId ?? null)).texto}${
+          plantilla?.id === "adopcion-por-niveles" ? "\nEsta plantilla es la de una organización por niveles: escribe el plan de despliegue por olas aunque la sugerencia diga otra cosa, con quién entra primero según las fuentes." : ""
+        }\n\n`
       : "";
 
   const mensaje = mensajeDeLaCopia({
@@ -194,7 +224,8 @@ export async function generarCopia(o: {
     avisoSinReuniones: material?.avisoSinReuniones ?? "",
     notas: material?.notas ?? "",
     memoria: memoria?.texto ?? "",
-    alimentan,
+    alimentan: [...alimentan, { tipo: "timeline", texto: fuenteConTope(cronograma) }, { tipo: TIPO_CUESTIONARIOS, texto: fuenteConTope(cuestionarios) }],
+    reunionesSolas: solas.todas.length > 0,
     cierreDeFrontera: material?.cierreDeFrontera ?? "",
   });
 
@@ -237,6 +268,8 @@ export async function generarCopia(o: {
       const { diagram } = s.key === "arquitectura" ? specToDiagram(s.data) : relacionToDiagram(s.data);
       (s.data as Record<string, unknown>).diagram = diagram;
     }
+    // Lo que el agente dejó vacío dice por qué: lo lee solo el equipo (lib/landing/por-que-vacia.ts).
+    const razon = gen.porQueVacias[s.key] ?? null;
     await prisma.$transaction([
       prisma.canvasBlock.deleteMany({ where: { sectionId } }),
       prisma.canvasBlock.create({
@@ -244,7 +277,7 @@ export async function generarCopia(o: {
           sectionId,
           blockType: "CARD",
           content: null,
-          data: (s.data ?? {}) as Prisma.InputJsonValue,
+          data: conPorQueVacia((s.data ?? {}) as object, razon) as Prisma.InputJsonValue,
           order: 0,
           source: "AGENT",
           status: "CONFIRMED",
@@ -259,6 +292,16 @@ export async function generarCopia(o: {
     const retiradas = tipo.id === "diagnosis" ? SECCIONES_RETIRADAS_DEL_DIAGNOSTICO : tipo.id === "planning" ? SECCIONES_RETIRADAS_DE_PLANIFICACION : [];
     await ocultarSeccionesRetiradas(o.canvasId, [...keysDeLaCopia], retiradas);
     await prisma.projectCanvas.update({ where: { id: o.canvasId }, data: { contentUpdatedAt: new Date() } }).catch(() => {});
+    // Las curadas de la planificación dicen quién las llena, como en el documento de siempre. Best-effort: ya está escrito.
+    if (tipo.id === "planning") {
+      for (const def of template.sections) {
+        const sectionId = idPorKey.get(def.key);
+        if (!sectionId || def.agentGenerated !== false || !(def.key in POR_QUE_DE_LAS_CURADAS)) continue;
+        await anotarPorQueDeLaCurada(sectionId, def, { porQueDelAgente: {}, hayDiagnostico: true, leyoReuniones: true }, o.agentRunId).catch(() => {});
+      }
+    }
+    // Qué reuniones leyó esta corrida: entran solas y nadie las eligió. Best-effort: el documento ya está escrito.
+    if (o.agentRunId) await prisma.agentRun.update({ where: { id: o.agentRunId }, data: { sourceSessionIds: material?.sesionesUsadas ?? [] } }).catch(() => {});
   }
   return { sectionCount };
 }

@@ -109,6 +109,14 @@ describe("el enlace propio de un documento del proyecto", () => {
     expect((await INV65.correr(prisma, new Date())).ok).toBe(true);
   });
 
+  it("⛔ el porqué de una sección vacía es del equipo: no llega al enlace del cliente", async () => {
+    const { clientId, projectId } = await proyecto("Cemaco Aviso");
+    const canvasId = await documento(projectId, { tipoArtefacto: "planning", name: "Plan", secciones: [{ key: "pipelines" }] });
+    await prisma.canvasBlock.updateMany({ where: { section: { canvasId } }, data: { data: { intro: "Con texto", __porQueVacia: "AVISO DEL EQUIPO" } } });
+    const enlace = await compartirArtefacto({ projectId, clientId, canvasId, porEmail: null });
+    expect(JSON.stringify(await artefactoParaElToken(tokenDe(enlace.enlace)))).not.toContain("AVISO DEL EQUIPO");
+  });
+
   it("⛔ la entrega de siempre no se comparte por acá; un informe de avance sí, sin lo que el cierre guarda", async () => {
     const { clientId, projectId } = await proyecto("Cemaco Entrega");
     const entrega = await documento(projectId, { slug: "delivery", name: "Entrega", secciones: [{ key: "logros", texto: "Evidencia interna" }] });

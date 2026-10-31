@@ -21,6 +21,7 @@ import "server-only";
 import { prisma } from "@/lib/db/prisma";
 import { hiddenKeysFrom } from "@/lib/business-cases/section-briefs";
 import { sinLoInterno } from "@/lib/landing/inversion-costo";
+import { sinPorQueVacia } from "@/lib/landing/por-que-vacia";
 import { comparaSectionHasContent, kickoffHiddenKey, stripProseCompara, COMPARA_KEY } from "@/components/canvas/kickoff-landing-adapter";
 import { ocultasDelBorrador, ocultasEnElEditor } from "@/lib/kickoff/ocultas-del-editor";
 import type { LandingSectionRow } from "@/components/landing/build-landing";
@@ -49,6 +50,11 @@ export interface ArtefactoViewData {
 }
 
 const TOKEN = /^[0-9a-f]{64}$/;
+
+/** El porqué de una sección vacía es del equipo: no viaja al navegador del cliente (lib/landing/por-que-vacia.ts). */
+function sinAvisoDelEquipo<T>(data: T): T {
+  return data && typeof data === "object" && !Array.isArray(data) ? (sinPorQueVacia(data as object) as T) : data;
+}
 
 export async function artefactoParaElToken(token: string): Promise<ArtefactoViewData | null> {
   if (!TOKEN.test(token)) return null;
@@ -117,12 +123,14 @@ export async function artefactoParaElToken(token: string): Promise<ArtefactoView
       blocks: s.blocks.map((b) => ({
         blockType: b.blockType,
         content: b.content,
-        data: sinLoInterno(
-          asignaciones && s.key === HORARIOS_KEY
-            ? applyAssignments(b.data, asignaciones)
-            : dropProseCompara && s.key !== COMPARA_KEY
-              ? stripProseCompara(b.data)
-              : b.data,
+        data: sinAvisoDelEquipo(
+          sinLoInterno(
+            asignaciones && s.key === HORARIOS_KEY
+              ? applyAssignments(b.data, asignaciones)
+              : dropProseCompara && s.key !== COMPARA_KEY
+                ? stripProseCompara(b.data)
+                : b.data,
+          ),
         ),
       })),
     }));

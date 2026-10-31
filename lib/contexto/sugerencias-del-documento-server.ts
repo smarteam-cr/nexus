@@ -42,6 +42,7 @@ import { documentoDelDestino } from "./documento";
 import {
   FUENTES_QUE_ENTRAN_SOLAS,
   entranSolasLasDelProyecto,
+  reunionesConTextoConElCliente,
   reunionesDeLasSesiones,
   sugerenciasDelDocumento,
   type HechoQueSugiere,
@@ -232,6 +233,33 @@ export async function reunionesQueEntranSolasALaPlanificacion(projectId: string,
   return (await sugerenciasParaElDocumento(projectId, "planificacion", ahora))
     .filter((s) => FUENTES_QUE_ENTRAN_SOLAS.includes(s.fuente))
     .map((s) => s.sessionId);
+}
+
+/**
+ * LAS REUNIONES DE UNA COPIA QUE NO ELIGIÓ NINGUNA (lib/artefactos/generar-server.ts, 2026-10-31). Parte del «Contexto
+ * adicional» de SU TIPO, con su columna: lo que el equipo eligió ahí (`true`) y lo que nadie tocó (null) con texto y con el
+ * cliente, nunca lo que sacó (`false`). `primero`: lo elegido y las sesiones de la exploración, que se leen enteras. De la
+ * membresía del proyecto por el chokepoint: una reunión de otro cliente no aparece nunca.
+ */
+export async function reunionesDeUnaCopiaSinElegidas(
+  projectId: string,
+  destino: DestinoDeContexto,
+  ahora: Date = new Date(),
+): Promise<{ todas: string[]; primero: string[] }> {
+  if (!esSoloElegidas(destino)) return { todas: [], primero: [] };
+  const columna = COLUMNA_DEL_DESTINO[destino];
+  const [miembros, categorias, exploracion] = await Promise.all([
+    getProjectMemberSessions(projectId),
+    getSessionCategories(),
+    destino === "diagnostico" ? reunionesQueEntranSolasPorFuente(projectId, ahora).then((r) => r.deLaExploracion) : Promise.resolve([] as string[]),
+  ]);
+  const reuniones = miembros.sessions.filter((s) => s.date <= ahora.getTime()).map((s) => ({ id: s.id, fecha: s.date, participantes: s.participants, afinado: s[columna] }));
+  const libres = reuniones.filter((r) => r.afinado === null);
+  const clases = await clasesDeTextoDeLasReuniones(libres.map((r) => r.id));
+  const elegidas = reuniones.filter((r) => r.afinado === true).map((r) => r.id);
+  const conTexto = reunionesConTextoConElCliente(libres, clases, buildInternalDomainsSet(categorias)).map((r) => r.id);
+  const primero = [...new Set([...elegidas, ...exploracion])];
+  return { todas: [...new Set([...primero, ...conTexto])], primero };
 }
 
 /** Las mismas, separadas: las de las sesiones de la exploración van primero para leerse enteras (el material). */

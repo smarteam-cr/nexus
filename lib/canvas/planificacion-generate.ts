@@ -385,7 +385,7 @@ export async function runPlanificacionGeneration(opts: {
 }
 
 /** Anota (o quita) el porqué de una sección curada, sobre lo que hay AHORA en la base y bajo candado. */
-async function anotarPorQueDeLaCurada(sectionId: string, def: BCSectionDef, leido: LoQueSeLeyo, agentRunId: string | null): Promise<void> {
+export async function anotarPorQueDeLaCurada(sectionId: string, def: BCSectionDef, leido: LoQueSeLeyo, agentRunId: string | null): Promise<void> {
   await prisma.$transaction(async (tx) => {
     await tx.$queryRaw`SELECT id FROM "CanvasSection" WHERE id = ${sectionId} FOR UPDATE`;
     const vivos = await tx.$queryRaw<Array<{ id: string; data: unknown }>>`

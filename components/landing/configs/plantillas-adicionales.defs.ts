@@ -129,6 +129,27 @@ export const PLANIFICACION_DEF_BY_KEY_CON_ADICIONALES: Record<string, BCSectionD
   ...Object.fromEntries(PLANIFICACION_DEFS_ADICIONALES.map((d) => [d.key, d])),
 };
 
+/**
+ * Lo que en la planificación completa llena el equipo y en una plantilla de marketing es el corazón del documento (Elías, 31
+ * oct: una planificación de marketing no puede salir con los canales, los formularios y los informes en blanco). Curadas
+ * allá por el tope de tokens de la corrida; estas plantillas son cortas y el motivo no aplica. El documento de siempre no
+ * cambia: esto vive solo en estos templates, que solo usan las copias.
+ */
+const ESCRITAS_POR_EL_AGENTE: Readonly<Record<string, Pick<BCSectionDef, "agentHint" | "brief">>> = {
+  canales_entrada: {
+    agentHint: "Un canal por fila: de dónde llegan los contactos, quién los atiende y a dónde pasan.",
+    brief: `POR DÓNDE ENTRAN LOS CONTACTOS: un canal por fila, solo los que salen en las fuentes (formulario, WhatsApp, redes, llamada, evento…). «responsable»: la persona o el rol que lo atiende; «atencion»: cómo se atiende, paso a paso; «pasaA»: a qué equipo pasa. ${NO_INVENTES}`,
+  },
+  formularios: {
+    agentHint: "Un formulario por tarjeta: dónde vive, qué pide y qué pasa al enviarlo.",
+    brief: `LOS FORMULARIOS: una tarjeta por formulario que salga en las fuentes. «donde»: en qué página o pieza vive; «campos»: lo que pide, con su etiqueta y si es obligatorio (deja «propiedadId» vacío); «alEnviar»: qué pasa después. ${NO_INVENTES}`,
+  },
+  informes: {
+    agentHint: "Un indicador por fila: qué mide, cada cuánto y de qué área.",
+    brief: `LO QUE SE VA A MEDIR: un indicador por fila, sacado de las metas y resultados de las fuentes. «mide»: qué número; «frecuencia»: cada cuánto se mira; «area»: de quién es; «objetivo»: el código del diagnóstico (OBJ-01…) si existe. ${NO_INVENTES}`,
+  },
+};
+
 /** Un template de planificación con otras secciones. La portada y el cierre, los de siempre. */
 function deLaPlanificacion(id: string, caseLabel: string, foco: string, keys: readonly string[]): BcTemplateDef {
   return {
@@ -136,7 +157,10 @@ function deLaPlanificacion(id: string, caseLabel: string, foco: string, keys: re
     id,
     caseLabel,
     agentIntro: `${PLANIFICACION_TEMPLATE.agentIntro}\n\n${foco} Escribe SOLO las secciones de tu formato.`,
-    sections: keys.map((k) => PLANIFICACION_DEF_BY_KEY_CON_ADICIONALES[k]).filter((d): d is BCSectionDef => !!d),
+    sections: keys
+      .map((k) => PLANIFICACION_DEF_BY_KEY_CON_ADICIONALES[k])
+      .filter((d): d is BCSectionDef => !!d)
+      .map((d) => (ESCRITAS_POR_EL_AGENTE[d.key] ? { ...d, ...ESCRITAS_POR_EL_AGENTE[d.key], agentGenerated: true } : d)),
   };
 }
 
@@ -158,6 +182,16 @@ export const PLANIFICACION_WHATSAPP_TEMPLATE = deLaPlanificacion(
   "ESTA PLANIFICACIÓN ES DE WHATSAPP Y SU AGENTE: qué atiende, cómo habla, de dónde responde, cuándo pasa a una persona, las plantillas y las fases.",
   SECCIONES_DE_WHATSAPP,
 );
+
+/** El cierre de un informe de avance: el proyecto sigue abierto, así que no puede decir que terminó (el de la Entrega lo dice). */
+export const CIERRE_DEL_INFORME_DE_AVANCE = {
+  eyebrow: "Lo que sigue",
+  headline: "Así vamos, y esto es lo que viene",
+  subhead: "Tu equipo de Smarteam sigue trabajando contigo. Cualquier duda sobre este avance, escríbenos.",
+  buttonLabel: "",
+  buttonUrl: "",
+  buttonTarget: "_blank",
+};
 
 /** Las secciones propias del informe de avance (catálogo n.º 15): lo que la entrega no tiene porque solo existe al cerrar. */
 export const ENTREGA_DEFS_ADICIONALES: BCSectionDef[] = [

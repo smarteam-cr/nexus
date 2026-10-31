@@ -19,7 +19,7 @@ import { prisma } from "@/lib/db/prisma";
 import type { BcTemplateDef } from "@/components/landing/configs/templates.defs";
 import { SIN_ESCALA_TAG } from "@/lib/tags/catalog";
 import { crearCopia } from "./copias-server";
-import { conSeccionQuitada } from "./contexto-de-la-copia";
+import { conReunionesDeLaCopia, conSeccionQuitada } from "./contexto-de-la-copia";
 import { copiaParaGenerar, generarCopia } from "./generar-server";
 
 async function proyecto() {
@@ -34,6 +34,7 @@ beforeEach(() => {
     sections: tpl.sections
       .filter((s) => s.agentGenerated !== false && !s.ctxDriven && !saltar?.has(s.key))
       .map((s) => ({ key: s.key, data: { intro: `IA: ${s.key}` } })),
+    porQueVacias: {},
   }));
 });
 
@@ -77,6 +78,113 @@ describe("generar una copia", () => {
     expect(JSON.stringify(generacion.fn.mock.calls.at(-1))).toContain("MODALIDAD DE ADOPCIÓN");
   });
 
+  it("⛔ sin reuniones elegidas lee las del proyecto con texto, y con elegidas solo esas; nunca las de otra empresa", async () => {
+    const p = await proyecto();
+    const otra = await proyecto();
+    const reunion = async (id: string, projectId: string, clientId: string, dicho: string) => {
+      await prisma.firefliesSession.create({
+        data: {
+          id,
+          title: `Reunión ${id}`,
+          date: new Date("2026-09-10T15:00:00Z"),
+          participants: ["ana@cliente.test", "csm@smarteamcr.com"],
+          resolvedClientId: clientId,
+          transcript: `${dicho} `.repeat(30),
+        },
+      });
+      await prisma.sessionProject.create({ data: { sessionId: id, projectId } });
+    };
+    await reunion("s-propia", p.id, p.clientId, "Quieren el pipeline de distribuidores");
+    // Colgada de ESTE proyecto, con el dueño en otra empresa: el vínculo cruzado que dejó el leak. El chokepoint la descarta.
+    await reunion("s-ajena", p.id, otra.clientId, "Secreto de la otra empresa");
+
+    const sola = await crearCopia({ projectId: p.id, tipo: "planning", plantillaId: "planificacion-marketing", porEmail: null });
+    await generarCopia({ projectId: p.id, canvasId: sola.canvasId, agentRunId: null });
+    const mensaje = generacion.fn.mock.calls.at(-1)?.[1] as string;
+    expect(mensaje).toContain("Quieren el pipeline de distribuidores");
+    expect(mensaje).toContain("LAS REUNIONES DEL PROYECTO");
+    expect(mensaje).not.toContain("Secreto de la otra empresa");
+
+    await reunion("s-otra-propia", p.id, p.clientId, "Hablamos del frente de servicio");
+    const conFoco = await crearCopia({ projectId: p.id, tipo: "planning", plantillaId: "planificacion-marketing", porEmail: null });
+    const fila = await prisma.projectCanvas.findUniqueOrThrow({ where: { id: conFoco.canvasId }, select: { sections: true } });
+    await prisma.projectCanvas.update({ where: { id: conFoco.canvasId }, data: { sections: conReunionesDeLaCopia(fila.sections, ["s-otra-propia"]) as object[] } });
+    await generarCopia({ projectId: p.id, canvasId: conFoco.canvasId, agentRunId: null });
+    const elegida = generacion.fn.mock.calls.at(-1)?.[1] as string;
+    expect(elegida).toContain("Hablamos del frente de servicio");
+    expect(elegida).not.toContain("Quieren el pipeline de distribuidores");
+  });
+
+  it("⛔ sin elegidas lee lo elegido en su tipo y deja afuera lo que se sacó de su tipo, no de otro", async () => {
+    const p = await proyecto();
+    const reunion = async (id: string, dicho: string, afinado: { kickoffOverride?: boolean; planningOverride?: boolean }) => {
+      await prisma.firefliesSession.create({
+        data: {
+          id,
+          title: `Reunión ${id}`,
+          date: new Date("2026-09-10T15:00:00Z"),
+          participants: ["csm@smarteamcr.com"],
+          resolvedClientId: p.clientId,
+          transcript: `${dicho} `.repeat(30),
+        },
+      });
+      await prisma.sessionProject.create({ data: { sessionId: id, projectId: p.id, ...afinado } });
+    };
+    // Puertas adentro: entra porque alguien la eligió, no por la regla de las que entran solas.
+    await reunion("s-elegida", "Lo que eligió el equipo", { kickoffOverride: true });
+    await reunion("s-sacada", "Lo que el equipo sacó", { kickoffOverride: false, planningOverride: true });
+    const c = await crearCopia({ projectId: p.id, tipo: "kickoff", plantillaId: "kickoff", porEmail: null });
+    await generarCopia({ projectId: p.id, canvasId: c.canvasId, agentRunId: null });
+    const mensaje = generacion.fn.mock.calls.at(-1)?.[1] as string;
+    expect(mensaje).toContain("Lo que eligió el equipo");
+    expect(mensaje).not.toContain("Lo que el equipo sacó");
+  });
+
+  it("⛔ el informe de avance no lee el cronograma; el diagnóstico sí, y los cuestionarios solo donde los lee el de siempre", async () => {
+    const p = await proyecto();
+    const t = await prisma.projectTimeline.create({ data: { projectId: p.id } });
+    await prisma.timelinePhase.create({ data: { timelineId: t.id, name: "Fase Delicada", durationWeeks: 2, order: 0 } });
+    const informe = await crearCopia({ projectId: p.id, tipo: "delivery", plantillaId: "informe-de-avance", porEmail: null });
+    await generarCopia({ projectId: p.id, canvasId: informe.canvasId, agentRunId: null });
+    expect(generacion.fn.mock.calls.at(-1)?.[1] as string).not.toContain("Fase Delicada");
+    const d = await crearCopia({ projectId: p.id, tipo: "diagnosis", plantillaId: "diagnostico-esencial", porEmail: null });
+    await generarCopia({ projectId: p.id, canvasId: d.canvasId, agentRunId: null });
+    expect(generacion.fn.mock.calls.at(-1)?.[1] as string).toContain("Fase Delicada");
+  });
+
+  it("la plantilla por niveles pide las olas; lo que el agente deja vacío guarda su porqué", async () => {
+    const p = await proyecto();
+    generacion.fn.mockImplementation(async () => ({ sections: [{ key: "plan_despliegue", data: { intro: "", items: [] } }], porQueVacias: { plan_despliegue: "No encontré quién entra primero." } }));
+    const c = await crearCopia({ projectId: p.id, tipo: "adoption-plan", plantillaId: "adopcion-por-niveles", porEmail: null });
+    await generarCopia({ projectId: p.id, canvasId: c.canvasId, agentRunId: null });
+    expect(generacion.fn.mock.calls.at(-1)?.[1] as string).toContain("escribe el plan de despliegue por olas");
+    const b = await prisma.canvasBlock.findFirst({ where: { section: { canvasId: c.canvasId, key: "plan_despliegue" } }, select: { data: true } });
+    expect(JSON.stringify(b?.data)).toContain("No encontré quién entra primero.");
+  });
+
+  it("las plantillas de marketing escriben los canales, los formularios y los informes; la completa no", async () => {
+    const p = await proyecto();
+    const c = await crearCopia({ projectId: p.id, tipo: "planning", plantillaId: "planificacion-marketing", porEmail: null });
+    await generarCopia({ projectId: p.id, canvasId: c.canvasId, agentRunId: null });
+    const pedidas = (generacion.fn.mock.calls.at(-1)?.[0] as BcTemplateDef).sections.filter((s) => s.agentGenerated !== false).map((s) => s.key);
+    expect(pedidas).toEqual(expect.arrayContaining(["canales_entrada", "formularios", "informes"]));
+    const completa = await crearCopia({ projectId: p.id, tipo: "planning", plantillaId: "planificacion", porEmail: null });
+    await generarCopia({ projectId: p.id, canvasId: completa.canvasId, agentRunId: null });
+    const deLaCompleta = (generacion.fn.mock.calls.at(-1)?.[0] as BcTemplateDef).sections.filter((s) => s.agentGenerated !== false).map((s) => s.key);
+    expect(deLaCompleta).not.toContain("formularios");
+    // Lo que no escribe dice quién lo llena, solo para el equipo.
+    const bloque = await prisma.canvasBlock.findFirst({ where: { section: { canvasId: completa.canvasId, key: "formularios" } }, select: { data: true } });
+    expect(JSON.stringify(bloque?.data)).toContain("La IA no escribe los formularios");
+  });
+
+  it("el informe de avance no dice que el proyecto terminó", async () => {
+    const p = await proyecto();
+    const c = await crearCopia({ projectId: p.id, tipo: "delivery", plantillaId: "informe-de-avance", porEmail: null });
+    const cierre = await prisma.canvasBlock.findFirst({ where: { section: { canvasId: c.canvasId, key: "cierre" } }, select: { data: true } });
+    expect(JSON.stringify(cierre?.data)).toContain("Así vamos");
+    expect(JSON.stringify(cierre?.data)).not.toContain("Hasta acá llega");
+  });
+
   it("⛔ una copia de Ejecución lee el handoff entero: es interna, y sin él pagaría una corrida a ciegas", async () => {
     const p = await proyecto();
     const h = await prisma.projectCanvas.create({ data: { projectId: p.id, slug: "handoff", name: "Handoff", sections: [] } });
@@ -115,7 +223,7 @@ describe("generar una copia", () => {
     const s = await prisma.canvasSection.findFirstOrThrow({ where: { canvasId: c.canvasId, key: "propiedades" }, select: { id: true } });
     const dePersona = { id: "p1", autor: "persona", objeto: "Contacto", nombre: "Marca", tipo: "texto" };
     await prisma.canvasBlock.create({ data: { sectionId: s.id, blockType: "CARD", data: { filas: [dePersona] }, source: "HUMAN", status: "CONFIRMED" } });
-    generacion.fn.mockImplementation(async () => ({ sections: [{ key: "propiedades", data: { filas: [{ objeto: "Negocio", nombre: "Monto", tipo: "numero" }] } }] }));
+    generacion.fn.mockImplementation(async () => ({ porQueVacias: {}, sections: [{ key: "propiedades", data: { filas: [{ objeto: "Negocio", nombre: "Monto", tipo: "numero" }] } }] }));
 
     await generarCopia({ projectId: p.id, canvasId: c.canvasId, agentRunId: null });
 
