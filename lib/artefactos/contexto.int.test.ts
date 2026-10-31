@@ -37,6 +37,8 @@ describe("el contexto de una copia", () => {
   it("⛔ una reunión de otra empresa no entra aunque se mande su id", async () => {
     const a = await proyectoConReunion("Alfa");
     const b = await proyectoConReunion("Beta");
+    // Con el vínculo cruzado hecho, como los que quedaron en producción: el dueño es la resolución, no el vínculo.
+    await prisma.sessionProject.create({ data: { sessionId: b.s.id, projectId: a.p.id } });
     expect(await reunionesDelProyecto(a.p.id, [a.s.id, b.s.id])).toEqual([a.s.id]);
   });
 

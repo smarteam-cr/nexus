@@ -72,6 +72,7 @@ export function TarjetaDePlantilla({
   distintivo,
   onElegir,
   onKeyDown,
+  enfocable,
 }: {
   plantilla: Pick<PlantillaDeEntregable, "nombre" | "paraQue">;
   secciones: ReadonlyArray<{ key: string; nombre: string }>;
@@ -79,12 +80,14 @@ export function TarjetaDePlantilla({
   distintivo?: string | null;
   onElegir: () => void;
   onKeyDown?: (e: KeyboardEvent<HTMLDivElement>) => void;
+  /** Se llega con Tab aunque no esté elegida: quien no tiene flechas entre tarjetas. */
+  enfocable?: boolean;
 }) {
   return (
     <div
       role="radio"
       aria-checked={activa}
-      tabIndex={activa ? 0 : -1}
+      tabIndex={activa || enfocable ? 0 : -1}
       onClick={onElegir}
       onKeyDown={onKeyDown}
       className={cn(

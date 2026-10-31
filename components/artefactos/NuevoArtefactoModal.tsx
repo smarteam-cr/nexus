@@ -146,7 +146,7 @@ export default function NuevoArtefactoModal({
               <Input value={nombre} maxLength={120} onChange={(e) => setNombre(e.target.value)} placeholder={sugerido} />
             </Field>
             {delTipo.length > 0 && (
-              <Field label="Empezar" hint="Duplicar copia lo escrito, lo oculto y las instrucciones; el enlace no.">
+              <Field label="Empezar" hint="Duplicar copia lo escrito, lo oculto, las instrucciones, las reuniones elegidas y las notas; el enlace no.">
                 <Select value={desde} onChange={(e) => setDesde(e.target.value)}>
                   <option value="">En blanco, con una plantilla</option>
                   {delTipo.map((d) => (
@@ -170,6 +170,7 @@ export default function NuevoArtefactoModal({
                     secciones={seccionesDeUnaCopia(tipo, p.id).map((s) => ({ key: s.key, nombre: s.label }))}
                     activa={p.id === plantilla?.id}
                     distintivo={p.recomendada ? "Recomendada" : null}
+                    enfocable
                     onElegir={() => setElegidas((e) => ({ ...e, [tipo]: p.id }))}
                     onKeyDown={(e) => {
                       if (e.key === "Enter" || e.key === " ") {

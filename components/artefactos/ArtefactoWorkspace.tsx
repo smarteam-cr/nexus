@@ -246,7 +246,7 @@ export default function ArtefactoWorkspace({
       <ConfirmDialog
         open={!!porBorrar}
         title={`¿Borrar «${porBorrar?.nombre}»?`}
-        description="Se va de este documento con lo que tenga escrito, y regenerar no la devuelve. Lo escrito queda en las versiones."
+        description="Se va de este documento con todo lo que tenga escrito, regenerar no la devuelve y no se puede deshacer. Para esconderla del cliente sin perderla, usa «Ocultar»."
         confirmLabel="Borrar"
         onCancel={() => setPorBorrar(null)}
         onConfirm={() => {

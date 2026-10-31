@@ -36,8 +36,8 @@ const DEFS_DEL_ENLACE: Readonly<Record<string, Record<string, BCSectionDef>>> = 
 /** Las secciones que el cliente nunca ve por el enlace, por tipo: lo que estima o decide el equipo por dentro. */
 export const SECCIONES_INTERNAS: Readonly<Record<string, readonly string[]>> = {
   [TIPO_REQUERIMIENTO_TECNICO]: ["estimacion"],
-  // Lo que la entrega calcula o toma del diagnóstico: un informe de avance no lo lleva.
-  delivery: ["cumplimiento", "impacto", "escala"],
+  // Lo que la entrega de cierre calcula o guarda sin mostrar (`logros` lleva objetivos propuestos con su evidencia): un informe de avance no lo lleva.
+  delivery: ["logros", "cumplimiento", "impacto", "escala", "desafio_resuelto", "alcance", "pendientes", "continuidad"],
 };
 
 /** ¿Este tipo se comparte por su enlace propio? Lo lee el cliente y se sabe qué sale. */

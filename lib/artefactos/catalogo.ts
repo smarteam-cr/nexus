@@ -131,8 +131,6 @@ export function templateDelTipo(tipo: string, plantillaId?: string | null): BcTe
   if (!nuevo && !unico && !entregableDe(tipo)) throw new Error(`${t.nombre} no se genera con un template del motor.`);
   const plantilla = plantillaDelTipo(tipo, plantillaId);
   if (plantillaId && !plantilla) throw new Error(`${t.nombre} no tiene la plantilla «${plantillaId}».`);
-  /* La plantilla de siempre de un entregable manda EXACTAMENTE su template, también si el tipo tiene un canon más ancho. */
-  if (plantilla && entregableDe(tipo)?.plantillas.some((p) => p.id === plantilla.id)) return templateDeLaPlantilla(plantilla.id);
   if (nuevo) {
     if (!plantilla) return nuevo;
     if (!plantilla.secciones) return { ...nuevo, id: `${nuevo.id}:${plantilla.id}` };
@@ -153,7 +151,11 @@ export function seccionesDeUnaCopia(tipo: string, plantillaId?: string | null): 
   if (!defs) return [];
   const plantilla = plantillaDelTipo(tipo, plantillaId);
   if (plantillaId && !plantilla) throw new Error(`${tipoDeArtefacto(tipo)?.nombre ?? tipo} no tiene la plantilla «${plantillaId}».`);
-  const de = plantilla?.secciones ? new Set<string>(plantilla.secciones) : null;
+  /* Sin lista propia, una plantilla de un entregable es su documento de siempre: su canon, sin lo que suman las otras
+     plantillas del tipo (una «HubSpot completa» no lleva las secciones de la campaña). */
+  const delEntregable = plantilla && !plantilla.secciones && entregableDe(tipo)?.plantillas.some((p) => p.id === plantilla.id);
+  const canonDeSiempre = delEntregable ? (canvasDefForSlug(tipo)?.sections.map((s) => s.key) ?? null) : null;
+  const de = plantilla?.secciones ? new Set<string>(plantilla.secciones) : canonDeSiempre ? new Set<string>(canonDeSiempre) : null;
   const estructurales = new Set<string>(tipoDeArtefacto(tipo)?.estructurales ?? []);
   const secciones = defs.filter((d) => (!de || de.has(d.key)) && (d.ctxDriven !== true || estructurales.has(d.key)));
   if (!plantilla?.ordenPropio || !plantilla.secciones) return secciones;

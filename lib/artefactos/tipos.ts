@@ -71,7 +71,12 @@ export const TIPO_HOJA_DE_RUTA = "roadmap";
 export const SECCIONES_DE_LA_HOJA_DE_RUTA_ESENCIAL = ["hoja_de_ruta", "frentes", "horizonte", "diferido", "cierre"] as const;
 
 /** El informe de avance de la Entrega (catálogo n.º 15). Sus secciones nuevas viven en plantillas-adicionales.defs.ts. */
-export const SECCIONES_DEL_INFORME_DE_AVANCE = ["portada", "resumen", "avance_por_frente", "logros", "riesgos_y_pendientes_del_cliente", "recomendaciones", "cierre"] as const;
+export const SECCIONES_DEL_INFORME_DE_AVANCE = ["portada", "resumen", "avance_por_frente", "logros_del_periodo", "riesgos_y_pendientes_del_cliente", "recomendaciones", "cierre"] as const;
+
+/** Las plantillas que se suman a la Planificación. Las listas viven acá: el template las lee (plantillas-adicionales.defs.ts). */
+export const SECCIONES_DE_LA_CAMPANA = ["planificacion", "campana_objetivo", "campana_segmentos", "campana_piezas", "campana_presupuesto", "formularios", "automatizaciones", "campana_resultado", "cierre"] as const;
+export const SECCIONES_DEL_MARKETING = ["planificacion", "definicion_procesos", "ciclo_vida_crm", "canales_entrada", "formularios", "automatizaciones", "informes", "cierre"] as const;
+export const SECCIONES_DE_WHATSAPP = ["planificacion", "agente_objetivo", "agente_identidad", "agente_conocimiento", "conversaciones", "agente_derivacion", "whatsapp_plantillas", "agente_fases", "cierre"] as const;
 
 /* ── Los tipos nuevos (etapa V6, adelantada: Elías, 29 oct) ────────────────────────────────────────────────────── */
 
@@ -209,20 +214,20 @@ export const TIPOS: readonly TipoDeArtefacto[] = [
         id: "planificacion-campana",
         nombre: "Campaña de marketing",
         paraQue: "Una campaña: su objetivo, a quién le llega y a quién no, las piezas y los canales, el presupuesto y el resultado contra la meta.",
-        secciones: ["planificacion", "campana_objetivo", "campana_segmentos", "campana_piezas", "campana_presupuesto", "formularios", "automatizaciones", "campana_resultado", "cierre"],
+        secciones: SECCIONES_DE_LA_CAMPANA,
         ordenPropio: true,
       },
       {
         id: "planificacion-marketing",
         nombre: "Cómo debería funcionar el marketing",
         paraQue: "El marketing de punta a punta: el proceso, el ciclo de vida, por dónde entran los contactos, los formularios, las automatizaciones y los informes.",
-        secciones: ["planificacion", "definicion_procesos", "ciclo_vida_crm", "canales_entrada", "formularios", "automatizaciones", "informes", "cierre"],
+        secciones: SECCIONES_DEL_MARKETING,
       },
       {
         id: "planificacion-whatsapp",
         nombre: "WhatsApp y agente",
         paraQue: "Qué atiende el agente, cómo habla, de dónde responde, cuándo pasa a una persona, las plantillas de mensajes, las fases y los créditos.",
-        secciones: ["planificacion", "agente_objetivo", "agente_identidad", "agente_conocimiento", "conversaciones", "agente_derivacion", "whatsapp_plantillas", "agente_fases", "cierre"],
+        secciones: SECCIONES_DE_WHATSAPP,
         ordenPropio: true,
       },
     ],
@@ -339,7 +344,7 @@ export const TIPOS: readonly TipoDeArtefacto[] = [
     id: "delivery",
     nombre: "Entrega",
     conArticulo: "una entrega",
-    paraQue: "El cierre del proyecto, o un informe de avance mientras sigue abierto.",
+    paraQue: "El cierre del proyecto. Mientras sigue abierto, un informe de avance para el cliente.",
     copias: "varias",
     duenos: ["proyecto"],
     clientFacing: true,
@@ -349,8 +354,9 @@ export const TIPOS: readonly TipoDeArtefacto[] = [
     permiso: "entrega",
     contextoDe: "delivery",
     sinEnlaceElDeSiempre: true,
+    /* Sin la plantilla «Entrega»: cumplimiento, escala y pendientes los calcula su runner, y una copia quedaría sin ellas.
+       El documento de siempre sigue con su botón y su plantilla. */
     plantillas: [
-      ...(entregableDe("delivery")?.plantillas ?? []),
       {
         id: "informe-de-avance",
         nombre: "Informe de avance",

@@ -109,6 +109,22 @@ describe("el enlace propio de un documento del proyecto", () => {
     expect((await INV65.correr(prisma, new Date())).ok).toBe(true);
   });
 
+  it("⛔ la entrega de siempre no se comparte por acá; un informe de avance sí, sin lo que el cierre guarda", async () => {
+    const { clientId, projectId } = await proyecto("Cemaco Entrega");
+    const entrega = await documento(projectId, { slug: "delivery", name: "Entrega", secciones: [{ key: "logros", texto: "Evidencia interna" }] });
+    await expect(compartirArtefacto({ projectId, clientId, canvasId: entrega, porEmail: null })).rejects.toMatchObject({ status: 400 });
+
+    const informe = await documento(projectId, {
+      tipoArtefacto: "delivery",
+      name: "Informe de octubre",
+      secciones: [{ key: "logros", texto: "Propuesta sin aceptar" }, { key: "avance_por_frente", texto: "Ventas al día" }],
+    });
+    const enlace = await compartirArtefacto({ projectId, clientId, canvasId: informe, porEmail: null });
+    const vista = await artefactoParaElToken(tokenDe(enlace.enlace));
+    expect(vista?.rows.map((r) => r.key)).toEqual(["avance_por_frente"]);
+    expect(JSON.stringify(vista?.rows)).not.toContain("Propuesta sin aceptar");
+  });
+
   it("lo que lee el proyecto y la estimación del equipo técnico no salen; un documento interno no se comparte", async () => {
     const { clientId, projectId } = await proyecto("Cemaco V4");
     const integracion = await documento(projectId, {

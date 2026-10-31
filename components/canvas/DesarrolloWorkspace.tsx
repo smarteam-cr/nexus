@@ -198,6 +198,7 @@ export default function DesarrolloWorkspace({
             clientId={clientId}
             projectId={projectId}
             agentId="agent-desarrollo-canvas"
+            canvasId={canvasId}
             label="Regenerar requerimiento"
             runningLabel="Generando requerimiento…"
             notifyLabel="requerimiento técnico"

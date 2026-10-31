@@ -50,11 +50,12 @@ export function avisarGeneracion(activo: boolean) {
 
 /** ¿Se está escribiendo el documento abierto? Lo lee el marco de los documentos de siempre. */
 export function useGeneracionDelDocumento(): boolean {
-  const [activo, setActivo] = useState(false);
+  // Una cuenta y no un sí o no: con dos corridas a la vez, la primera que termina no apaga el cargador.
+  const [enCurso, setEnCurso] = useState(0);
   useEffect(() => {
-    const alAvisar = (e: Event) => setActivo(!!(e as CustomEvent<{ activo: boolean }>).detail.activo);
+    const alAvisar = (e: Event) => setEnCurso((n) => Math.max(0, n + ((e as CustomEvent<{ activo: boolean }>).detail.activo ? 1 : -1)));
     window.addEventListener(EVENTO, alAvisar);
     return () => window.removeEventListener(EVENTO, alAvisar);
   }, []);
-  return activo;
+  return enCurso > 0;
 }

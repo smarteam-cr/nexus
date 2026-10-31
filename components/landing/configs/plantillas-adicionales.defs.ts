@@ -14,6 +14,7 @@ import type { BcTemplateDef } from "./templates.defs";
 import { NO_INVENTES, PROSA_DE_LA_PLANIFICACION, seccionDeTabla } from "./adopcion.defs";
 import { PLANIFICACION_DEF_BY_KEY, PLANIFICACION_TEMPLATE } from "./planificacion.defs";
 import { ENTREGA_DEF_BY_KEY, ENTREGA_TEMPLATE } from "./entrega.defs";
+import { SECCIONES_DE_LA_CAMPANA, SECCIONES_DE_WHATSAPP, SECCIONES_DEL_INFORME_DE_AVANCE, SECCIONES_DEL_MARKETING } from "@/lib/artefactos/tipos";
 
 const prosa = (o: { key: string; label: string; eyebrow: string; agentHint: string; brief: string }): BCSectionDef => ({
   ...PROSA_DE_LA_PLANIFICACION,
@@ -139,10 +140,6 @@ function deLaPlanificacion(id: string, caseLabel: string, foco: string, keys: re
   };
 }
 
-export const SECCIONES_DE_LA_CAMPANA = ["planificacion", "campana_objetivo", "campana_segmentos", "campana_piezas", "campana_presupuesto", "formularios", "automatizaciones", "campana_resultado", "cierre"] as const;
-export const SECCIONES_DEL_MARKETING = ["planificacion", "definicion_procesos", "ciclo_vida_crm", "canales_entrada", "formularios", "automatizaciones", "informes", "cierre"] as const;
-export const SECCIONES_DE_WHATSAPP = ["planificacion", "agente_objetivo", "agente_identidad", "agente_conocimiento", "conversaciones", "agente_derivacion", "whatsapp_plantillas", "agente_fases", "cierre"] as const;
-
 export const PLANIFICACION_CAMPANA_TEMPLATE = deLaPlanificacion(
   "planificacion_campana_v1",
   "Campaña de marketing",
@@ -171,7 +168,17 @@ export const ENTREGA_DEFS_ADICIONALES: BCSectionDef[] = [
     columnas: ["Frente", "Qué se avanzó", "Estado", "Qué sigue"],
     tip: "Lo avanzado en el período, por frente o por proyecto.",
     agentHint: "Una fila por frente, con lo avanzado en el período y lo que sigue.",
-    brief: "EL AVANCE DEL PERÍODO: una fila por frente o proyecto. «Estado»: 'Al día', 'Con atraso' o 'Detenido'. El período sale del nombre del documento o de lo que pidió quien genera.",
+    brief: "EL AVANCE DEL PERÍODO: una fila por frente o proyecto. «Estado»: 'Al día', 'Con atraso' o 'Detenido', solo si la fuente lo dice; si no, `⚠️ Por validar`. El período sale del nombre del documento o de lo que pidió quien genera.",
+  }),
+  seccionDeTabla({
+    key: "logros_del_periodo",
+    label: "Lo logrado",
+    eyebrow: "El valor de este período",
+    theme: "soft",
+    columnas: ["Qué se logró", "Qué cambia para ti", "De dónde sale"],
+    tip: "Lo logrado en el período y qué cambia para el cliente, solo con lo que la fuente respalde.",
+    agentHint: "Una fila por logro respaldado por una reunión o un documento.",
+    brief: "LO LOGRADO EN EL PERÍODO: una fila por logro, en lenguaje del cliente. «De dónde sale»: la reunión o el documento que lo respalda. Sin respaldo, no va.",
   }),
   seccionDeTabla({
     key: "riesgos_y_pendientes_del_cliente",
@@ -190,15 +197,16 @@ export const ENTREGA_DEF_BY_KEY_CON_ADICIONALES: Record<string, BCSectionDef> = 
   ...Object.fromEntries(ENTREGA_DEFS_ADICIONALES.map((d) => [d.key, d])),
 };
 
-export const SECCIONES_DEL_INFORME_DE_AVANCE = ["portada", "resumen", "avance_por_frente", "logros", "riesgos_y_pendientes_del_cliente", "recomendaciones", "cierre"] as const;
-
 export const INFORME_DE_AVANCE_TEMPLATE: BcTemplateDef = {
   ...ENTREGA_TEMPLATE,
   id: "informe_de_avance_v1",
   caseLabel: "Informe de avance",
   maxTokens: 10000,
   agentIntro:
-    "ESTE NO ES EL CIERRE DEL PROYECTO: es un INFORME DE AVANCE periódico. El proyecto sigue abierto; cuenta lo avanzado en el período, lo logrado, lo que falta y lo que viene. Donde el texto de abajo hable de cierre, entiéndelo como este período.\n\n" +
-    ENTREGA_TEMPLATE.agentIntro,
+    "Eres quien escribe el INFORME DE AVANCE que Smarteam le manda a su cliente mientras el proyecto sigue abierto. No es el cierre: cuenta lo avanzado en el período, lo logrado, lo que falta y lo que viene.\n\n" +
+    "TU FUENTE: lo vendido (el handoff, solo lo apto para el cliente), las reuniones y notas de este documento, y los demás documentos del proyecto. Lo que dicen otros documentos pesa según su estado: lo «terminado» ya se acordó; lo «en construcción» todavía cambia.\n\n" +
+    "DISCIPLINA: no inventes avances, cifras, fechas ni responsables. No tienes el cronograma: no afirmes que algo va a tiempo o atrasado si la fuente no lo dice; escribe `⚠️ Por validar`. Si la fuente es delgada, el informe sale más corto.\n\n" +
+    "ESTE DOCUMENTO LO LEE EL CLIENTE: se le habla de tú, sin jerga interna.\n\n" +
+    "FORMATO: cada sección tiene su propio shape. En las tablas, conserva las columnas que trae la sección, en su orden, y escribe solo las filas. Español, tuteo. Arrays vacíos donde no haya respaldo.",
   sections: SECCIONES_DEL_INFORME_DE_AVANCE.map((k) => ENTREGA_DEF_BY_KEY_CON_ADICIONALES[k]).filter((d): d is BCSectionDef => !!d),
 };

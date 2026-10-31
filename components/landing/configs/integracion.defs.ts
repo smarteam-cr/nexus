@@ -161,7 +161,7 @@ export const INTEGRACION_SECTION_DEFS: BCSectionDef[] = [
 export const INTEGRACION_TEMPLATE: BcTemplateDef = {
   id: "integracion_v1",
   caseLabel: "Requerimiento técnico",
-  maxTokens: 14000, // el mapa de campos es la sección más larga del motor: una fila por campo que viaja
+  maxTokens: 18000, // el mapa de campos es la sección más larga del motor; 18.000 desde que suma el guion de pruebas y la migración
   brandVoice: false, // documento técnico, como el requerimiento
   features: { useCaseChecklist: false },
   agentIntro:

@@ -14,7 +14,7 @@ export const TIPOS_QUE_LO_ALIMENTAN: Readonly<Record<string, readonly string[]>>
   "adoption-plan": ["diagnosis", "planning"],
   roadmap: ["diagnosis", "planning"],
   "tech-requirements": ["planning"],
-  delivery: ["planning"],
+  delivery: ["diagnosis", "planning"],
 };
 
 /** El tope de cada documento que alimenta: con varias copias, el texto crece. */

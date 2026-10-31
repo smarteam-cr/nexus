@@ -28,6 +28,7 @@ import {
   tituloLimpio,
 } from "./copias";
 import { canvasDefDeUnaCopia, seccionesQuePasanAlDuplicar } from "./catalogo";
+import { piezaDeLasNotas } from "./contexto-de-la-copia";
 
 export class ErrorDelArtefacto extends Error {
   constructor(
@@ -247,6 +248,14 @@ async function duplicar(o: {
           })),
         });
       }
+    }
+    // Las notas, transcripciones y archivos de una copia son suyas: pasan con ella. Las del documento de siempre son de su tipo.
+    if (!fuente.slug) {
+      const notas = await tx.notaDeContexto.findMany({
+        where: { projectId: o.projectId, pieza: piezaDeLasNotas(o.desdeCanvasId!), deletedAt: null },
+        select: { title: true, content: true, createdByEmail: true },
+      });
+      if (notas.length) await tx.notaDeContexto.createMany({ data: notas.map((n) => ({ ...n, projectId: o.projectId, pieza: piezaDeLasNotas(c.id) })) });
     }
     return c.id;
   }, { timeout: 20_000 });

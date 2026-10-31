@@ -22,6 +22,7 @@ import { ENTREGA_DEF_BY_KEY, ENTREGA_HANDOFF_KEYS, ENTREGA_TEMPLATE } from "@/co
 import { ADOPCION_DEF_BY_KEY, ADOPCION_HANDOFF_KEYS, ADOPCION_TEMPLATE } from "@/components/landing/configs/adopcion.defs";
 import { INTEGRACION_DEF_BY_KEY, INTEGRACION_HANDOFF_KEYS, INTEGRACION_TEMPLATE } from "@/components/landing/configs/integracion.defs";
 import { EXPLORACION_DEF_BY_KEY, EXPLORACION_HANDOFF_KEYS, EXPLORACION_TEMPLATE } from "@/components/landing/configs/exploracion.defs";
+import { ENTREGA_DEF_BY_KEY_CON_ADICIONALES, PLANIFICACION_DEF_BY_KEY_CON_ADICIONALES } from "@/components/landing/configs/plantillas-adicionales.defs";
 import { HOJA_DE_RUTA_DEF_BY_KEY, HOJA_DE_RUTA_HANDOFF_KEYS, HOJA_DE_RUTA_TEMPLATE } from "@/components/landing/configs/hoja-de-ruta.defs";
 import { TIPO_HOJA_DE_RUTA, TIPO_PLAN_DE_ADOPCION } from "@/lib/artefactos/tipos";
 
@@ -98,7 +99,8 @@ export const DOC: Record<string, DocConAssist> = {
   planning: {
     agentId: "agent-planificacion-canvas",
     docLabel: "plan de trabajo (se proyecta frente al cliente)",
-    defs: PLANIFICACION_DEF_BY_KEY,
+    // Las de las plantillas de las copias incluidas: el contrato sale de las secciones que el documento tiene de verdad.
+    defs: PLANIFICACION_DEF_BY_KEY_CON_ADICIONALES,
     tpl: PLANIFICACION_TEMPLATE,
     handoffKeys: PLANIFICACION_HANDOFF_KEYS,
   },
@@ -116,7 +118,7 @@ export const DOC: Record<string, DocConAssist> = {
   delivery: {
     agentId: "agent-entrega-canvas",
     docLabel: "documento de entrega (cierre de cara al cliente)",
-    defs: ENTREGA_DEF_BY_KEY,
+    defs: ENTREGA_DEF_BY_KEY_CON_ADICIONALES,
     tpl: ENTREGA_TEMPLATE,
     handoffKeys: ENTREGA_HANDOFF_KEYS,
   },

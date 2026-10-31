@@ -32,7 +32,7 @@ es web, se comparte y se edita con «Mejorar con IA» (ese es el chat). Manda so
 | Requerimiento técnico | Integraciones, Mapa de integración, Integración completa | Une «Integraciones» e «Integración técnica». Guion de pruebas y migración de datos son secciones suyas; el mapa de procesos llega en la arquitectura |
 | Plan de adopción | Equipo comercial, Organización por niveles, Componente técnico, Capacitación y pilotos | Absorbe la capacitación: introducción, estructura del equipo, plan por equipo, entrenamientos y pilotos |
 | Hoja de ruta | Esencial, Con backlog y decisiones | Tipo nuevo |
-| Entrega | Entrega, Informe de avance | El informe de avance es una copia y se comparte; la entrega de siempre, no (guarda en su Json lo que el cliente no ve) y no se duplica |
+| Entrega | Entrega (el documento de siempre), Informe de avance (las copias) | El informe de avance se comparte; la entrega de siempre, no: guarda en su Json lo que el cliente no ve, y no se duplica |
 
 La escala NO es un artefacto (otra sesión se ocupa de ella): puede ir como sección. Ejecución y handoff siguen como piezas.
 

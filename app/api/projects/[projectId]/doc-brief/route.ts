@@ -73,6 +73,8 @@ export async function GET(req: NextRequest, { params }: { params: Params }) {
 export async function PATCH(req: NextRequest, { params }: { params: Params }) {
   const { projectId } = await params;
   const body = (await req.json().catch(() => ({}))) as { slug?: string; canvasId?: string; brief?: string | null };
+  const acceso = await guardAccessToProject(projectId);
+  if (acceso instanceof NextResponse) return acceso;
   const copia = typeof body.canvasId === "string" ? await copiaDe(projectId, body.canvasId) : null;
   if (typeof body.canvasId === "string" && !copia) return NextResponse.json({ error: "canvas_not_found" }, { status: 404 });
   const slug = body.slug ?? "";

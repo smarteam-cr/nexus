@@ -318,8 +318,7 @@ export default function LandingView({
   const editable = mode === "edit";
   const sortEnabled = editable && !!onReorder;
 
-  // Secciones OCULTAS que el CSE desplegó a mano. Efímero (no se persiste): una sección
-  // oculta arranca colapsada en cada visita.
+  // Secciones que quien edita colapsó a mano. Efímero (no se persiste): arrancan abiertas en cada visita.
   const [colapsadas, setColapsadas] = useState<Set<string>>(new Set());
   const toggleExpanded = useCallback((key: string) => {
     setColapsadas((prev) => {

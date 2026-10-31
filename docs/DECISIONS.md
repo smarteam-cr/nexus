@@ -12636,6 +12636,12 @@ con el diff viejo solo como referencia, después de confirmar con búsqueda que 
   regenerar no la devuelva. En el documento de siempre se sigue ocultando: la reconciliación la volvería a crear.
 - **El cargador es el mismo en todo documento** (`components/canvas/VeloDeGeneracion.tsx`, salió del cronograma). En el
   documento de siempre lo prende el botón de generar, así que una recarga a mitad de corrida no lo muestra.
+- **El Requerimiento técnico de siempre gana su enlace propio; la entrega de siempre no.** *Por qué:* Elías pidió que cada
+  artefacto se comparta desde su barra, y el enlace solo existe si una persona lo crea; la estimación no sale nunca. La entrega
+  de siempre sigue sin enlace y no se duplica, porque guarda en su Json objetivos propuestos con su evidencia.
+- **Una copia de la entrega es un informe de avance, sin la plantilla «Entrega».** Sus secciones calculadas (cumplimiento,
+  escala, pendientes) las llena el runner del documento de siempre, y `logros` lleva propuestas que el cliente no debe recibir.
+  El informe tiene sus tablas propias, sin nada escondido en el Json.
 - **«Mejorar con IA» en la exploración, sin la sección de las sesiones:** el merge es superficial y borraría las marcas de
   «ya la pregunté». El resto de sus secciones sí.
 

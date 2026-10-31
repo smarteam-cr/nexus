@@ -35,10 +35,10 @@ const sinContexto = () => NextResponse.json({ error: "Este documento no tiene co
 
 export async function GET(_req: NextRequest, { params }: Params) {
   const { projectId, pieza } = await params;
-  const doc = await documentoDeLasNotas(projectId, pieza);
-  if (!doc) return sinContexto();
   const guard = await guardAccessToProject(projectId);
   if (guard instanceof NextResponse) return guard;
+  const doc = await documentoDeLasNotas(projectId, pieza);
+  if (!doc) return sinContexto();
 
   if (!modeloDisponible(prisma.notaDeContexto)) return esquemaAtrasado();
   try {
@@ -56,6 +56,8 @@ export async function GET(_req: NextRequest, { params }: Params) {
 
 export async function POST(req: NextRequest, { params }: Params) {
   const { projectId, pieza } = await params;
+  const acceso = await guardAccessToProject(projectId);
+  if (acceso instanceof NextResponse) return acceso;
   const doc = await documentoDeLasNotas(projectId, pieza);
   if (!doc) return sinContexto();
   const guard = await guardContextoDelDocumento(projectId, doc.seccion);

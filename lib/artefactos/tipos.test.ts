@@ -127,6 +127,7 @@ describe("catálogo de secciones por tipo (congelado)", () => {
           "continuidad",
           "recomendaciones",
           "avance_por_frente",
+          "logros_del_periodo",
           "riesgos_y_pendientes_del_cliente",
           "cierre",
         ],
@@ -307,6 +308,8 @@ describe("una copia no lee el proyecto", () => {
 describe("templates: generar una copia manda lo mismo que el documento de siempre", () => {
   it("la plantilla de siempre de cada entregable es EXACTAMENTE su template de siempre (el mismo objeto)", () => {
     for (const e of ENTREGABLES) {
+      // El requerimiento técnico y la entrega tienen plantillas propias para las copias: su documento de siempre va por su botón.
+      if (tipoDeArtefacto(e.slug)?.plantillas && e.slug !== "planning") continue;
       for (const p of e.plantillas) {
         expect(templateDelTipo(e.slug, p.id), `${e.slug}/${p.id}`).toBe(TEMPLATE_DE_LA_PLANTILLA[p.id]);
       }

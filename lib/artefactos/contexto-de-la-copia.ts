@@ -10,10 +10,12 @@
  * El documento de siempre de cada tipo sigue con sus columnas de `SessionProject` y su pieza: nada de esto lo toca.
  */
 
+import { MAX_ELEGIDAS_A_LEER } from "@/lib/contexto/documento";
+
 export const CLAVE_DEL_CONTEXTO = "__contexto";
 export const CLAVE_DE_LAS_QUITADAS = "__quitadas";
-/** Las reuniones que se pueden elegir: más no entran al documento (lib/contexto/documento.ts, MAX_ELEGIDAS_A_LEER). */
-export const TOPE_DE_REUNIONES_DE_LA_COPIA = 40;
+/** Las reuniones que se pueden elegir: más no entran al documento. */
+export const TOPE_DE_REUNIONES_DE_LA_COPIA = MAX_ELEGIDAS_A_LEER;
 const PREFIJO_DE_LA_NOTA = "copia-";
 
 type Entry = Record<string, unknown>;

@@ -15,7 +15,7 @@ import type { Prisma } from "@prisma/client";
 
 type Params = Promise<{ projectId: string; canvasId: string }>;
 
-const cuerpo = z.strictObject({ reuniones: z.array(z.string().min(1).max(60)).max(TOPE_DE_REUNIONES_DE_LA_COPIA) });
+const cuerpo = z.strictObject({ reuniones: z.array(z.string().min(1).max(200)).max(TOPE_DE_REUNIONES_DE_LA_COPIA) });
 
 const noEsCopia = () => NextResponse.json({ error: "Ese documento no es una copia de este proyecto." }, { status: 404 });
 
@@ -23,12 +23,16 @@ export async function GET(_req: NextRequest, { params }: { params: Params }) {
   const { projectId, canvasId } = await params;
   const guard = await guardAccessToProject(projectId);
   if (guard instanceof NextResponse) return guard;
-  const reuniones = await reunionesParaElegir(projectId, canvasId);
-  return reuniones ? NextResponse.json({ reuniones }) : noEsCopia();
+  const copia = await copiaDelProyecto(projectId, canvasId);
+  if (!copia) return noEsCopia();
+  const [reuniones, puede] = await Promise.all([reunionesParaElegir(projectId, canvasId), guardContextoDelDocumento(projectId, copia.tipo.permiso as SeccionConContexto)]);
+  return reuniones ? NextResponse.json({ reuniones, puedeEditar: !(puede instanceof NextResponse) }) : noEsCopia();
 }
 
 export async function PUT(req: NextRequest, { params }: { params: Params }) {
   const { projectId, canvasId } = await params;
+  const acceso = await guardAccessToProject(projectId);
+  if (acceso instanceof NextResponse) return acceso;
   const copia = await copiaDelProyecto(projectId, canvasId);
   if (!copia) return noEsCopia();
   const guard = await guardContextoDelDocumento(projectId, copia.tipo.permiso as SeccionConContexto);

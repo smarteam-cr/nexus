@@ -25,27 +25,40 @@ interface Reunion {
 
 const fecha = (iso: string) => new Date(iso).toLocaleDateString("es-CR", { day: "numeric", month: "short", year: "numeric", timeZone: "America/Costa_Rica" });
 
-function ReunionesDeLaCopia({ projectId, canvasId, onCuenta }: { projectId: string; canvasId: string; onCuenta: (n: number) => void }) {
+function ReunionesDeLaCopia({
+  projectId,
+  canvasId,
+  onCuenta,
+  onPuedeEditar,
+}: {
+  projectId: string;
+  canvasId: string;
+  onCuenta: (n: number) => void;
+  onPuedeEditar: (puede: boolean) => void;
+}) {
   const base = `/api/projects/${projectId}/artefactos/${canvasId}/contexto`;
   /** null = leyendo; «error» = no se pudo leer. */
   const [lista, setLista] = useState<Reunion[] | "error" | null>(null);
   const [filtro, setFiltro] = useState("");
+  const [puedeEditar, setPuedeEditar] = useState(false);
   const toast = useToast();
 
   useEffect(() => {
     void (async () => {
       const r = await fetch(base).catch(() => null);
-      const j = r?.ok ? ((await r.json().catch(() => null)) as { reuniones: Reunion[] } | null) : null;
+      const j = r?.ok ? ((await r.json().catch(() => null)) as { reuniones: Reunion[]; puedeEditar: boolean } | null) : null;
       setLista(j?.reuniones ?? "error");
+      setPuedeEditar(!!j?.puedeEditar);
+      onPuedeEditar(!!j?.puedeEditar);
     })();
-  }, [base]);
+  }, [base, onPuedeEditar]);
 
   const elegidas = Array.isArray(lista) ? lista.filter((x) => x.elegida) : [];
   useEffect(() => onCuenta(elegidas.length), [elegidas.length, onCuenta]);
 
   const alternar = useCallback(
     async (id: string) => {
-      if (!Array.isArray(lista)) return;
+      if (!Array.isArray(lista) || !puedeEditar) return;
       const nueva = lista.map((x) => (x.id === id ? { ...x, elegida: !x.elegida } : x));
       if (nueva.filter((x) => x.elegida).length > TOPE_DE_REUNIONES_DE_LA_COPIA) return toast.error(`Hasta ${TOPE_DE_REUNIONES_DE_LA_COPIA} reuniones por documento.`);
       setLista(nueva);
@@ -59,7 +72,7 @@ function ReunionesDeLaCopia({ projectId, canvasId, onCuenta }: { projectId: stri
         toast.error("No se pudo guardar. Vuelve a intentarlo.");
       }
     },
-    [base, lista, toast],
+    [base, lista, puedeEditar, toast],
   );
 
   if (lista === "error") return <Alert variant="danger">No se pudieron cargar las reuniones del proyecto.</Alert>;
@@ -69,6 +82,7 @@ function ReunionesDeLaCopia({ projectId, canvasId, onCuenta }: { projectId: stri
   const visibles = texto ? lista.filter((x) => x.titulo.toLowerCase().includes(texto)) : lista;
   return (
     <div className="space-y-2">
+      {!puedeEditar && <p className="text-xs text-fg-muted">Solo lectura: elegirlas pide el permiso de generar este documento.</p>}
       <Input value={filtro} onChange={(e) => setFiltro(e.target.value)} placeholder="Buscar una reunión" aria-label="Buscar una reunión" />
       <ul className="max-h-72 space-y-0.5 overflow-y-auto">
         {visibles.map((x) => (
@@ -90,6 +104,7 @@ function ReunionesDeLaCopia({ projectId, canvasId, onCuenta }: { projectId: stri
 export default function ContextoDeLaCopia({ projectId, canvasId, tipo }: { projectId: string; canvasId: string; tipo: string }) {
   const [reuniones, setReuniones] = useState(0);
   const [notas, setNotas] = useState(0);
+  const [puedeEditar, setPuedeEditar] = useState(false);
   const t = tipoDeArtefacto(tipo);
   return (
     <div className="space-y-3">
@@ -99,12 +114,12 @@ export default function ContextoDeLaCopia({ projectId, canvasId, tipo }: { proje
       </p>
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
         <ContextColumn icon={CTX_ICONS.meet} color="#16a34a" title="Reuniones" count={reuniones}>
-          <ReunionesDeLaCopia projectId={projectId} canvasId={canvasId} onCuenta={setReuniones} />
+          <ReunionesDeLaCopia projectId={projectId} canvasId={canvasId} onCuenta={setReuniones} onPuedeEditar={setPuedeEditar} />
         </ContextColumn>
         <ContextColumn icon={CTX_ICONS.note} color="#7c6df2" title="Notas, transcripciones y archivos" count={notas}>
           <FuentesManualesColumn
             endpoint={`/api/projects/${projectId}/contexto/${piezaDeLasNotas(canvasId)}/notas`}
-            canEdit
+            canEdit={puedeEditar}
             onCount={setNotas}
             tope={TOPE_NOTAS_DEL_DOCUMENTO}
             adjunto={{ projectId, origen: t?.contextoDe ?? "planning" }}
@@ -115,6 +130,7 @@ export default function ContextoDeLaCopia({ projectId, canvasId, tipo }: { proje
         projectId={projectId}
         slug={tipo}
         canvasId={canvasId}
+        soloLectura={!puedeEditar}
         elDocumento={t?.conArticulo ?? "el documento"}
         ejemplo="Ej.: enfócate en el equipo de Marketing; no incluyas lo de la fase 2."
       />
