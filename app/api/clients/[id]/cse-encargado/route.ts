@@ -147,9 +147,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const escritos: string[] = [];
   for (const p of proyectos) {
     try {
-      /* Un pipeline que Nexus no declara cuenta como CS por defecto, pero no se sabe de quién es: «Acompañamiento técnico»
-         (924878469) tiene dos integraciones con su dueño técnico. Ahí el pase escribe los encargados y no pisa al
-         propietario, que no se recuperaría. Lo que ve Nexus cambia igual: el técnico no cuenta y gana «CSE Encargado». */
+      /* Un pipeline que Nexus no declara cuenta como CS por defecto, pero no se sabe de quién es (pasó con «Acompañamiento
+         técnico», hasta declararlo). Ahí el pase escribe los encargados y no pisa al propietario, que no se recuperaría. */
       await actualizarEncargadosDelProyecto(hs, p.hubspotServiceId!, { cse: ownerId, csl: cslOwnerId }, { propietario: !!resolvePipeline(p.hubspotPipelineId) });
       escritos.push(p.name);
     } catch (e) {

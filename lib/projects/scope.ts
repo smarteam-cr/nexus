@@ -409,6 +409,19 @@ export const esProyectoDePipelineCS = (p: ProyectoParaFiltro): boolean =>
 export const esPipelineIdDeCs = (hubspotPipelineId: string | null | undefined): boolean =>
   pipelineNoEstaEn({ hubspotPipelineId: hubspotPipelineId ?? null } as ProyectoParaFiltro, PIPELINES_QUE_NO_SON_CS);
 
+/**
+ * ⭐ Una CUENTA con solo proyectos técnicos (2026-10-30): tiene algún proyecto activo de un pipeline técnico y ninguno
+ * activo de Customer Success. El contenedor «Información del cliente» no tiene pipeline y contaría como de CS: se
+ * excluye; un alta de CS a medio hacer sí cuenta. Un proyecto de CS inactivo no la cierra: Plastimex tiene dos y su CSE
+ * igual la conserva por ser su dueño. La abre todo Customer Success (lib/auth/access.ts).
+ */
+export const CUENTA_SOLO_TECNICA_WHERE: Prisma.ClientWhereInput = {
+  AND: [
+    { projects: { some: { status: "active", hubspotServiceId: { not: null }, hubspotPipelineId: { in: [...PIPELINES_QUE_NO_SON_CS] } } } },
+    { projects: { none: { status: "active", AND: [NO_ES_CONTENEDOR_WHERE, PROYECTO_DE_PIPELINE_CS_WHERE] } } },
+  ],
+};
+
 /** Los nombres de los átomos de cada criterio — lo consume la guarda de cobertura. */
 export const ATOMOS_POR_CRITERIO = {
   navegable: NAVEGABLE.map((k) => k.nombre),

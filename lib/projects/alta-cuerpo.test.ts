@@ -166,6 +166,7 @@ describe("los nombres de los tres tipos", () => {
     development: "Desarrollo e integración",
     web: "Sitios web",
     smartloop: "SmartLoop",
+    "acompanamiento-tecnico": "Acompañamiento técnico",
   };
 
   for (const p of PROJECT_PIPELINES) {
@@ -174,9 +175,9 @@ describe("los nombres de los tres tipos", () => {
     });
   }
 
-  it("son cuatro: el cuarto es SmartLoop (2026-10-11), que no se da de alta desde el formulario", () => {
-    expect(PROJECT_PIPELINES.length).toBe(4);
-    expect(PROJECT_PIPELINES.filter((p) => !p.servicioRecurrente).length).toBe(3);
+  it("son cinco: SmartLoop (2026-10-11) y Acompañamiento técnico (2026-10-30), y solo el primero es recurrente", () => {
+    expect(PROJECT_PIPELINES.length).toBe(5);
+    expect(PROJECT_PIPELINES.filter((p) => !p.servicioRecurrente).length).toBe(4);
   });
 
   it("ninguno arrastra el nombre viejo", () => {

@@ -91,7 +91,7 @@ export interface ProjectCapabilities {
  * que sea porque alguien lo decidió mirando esta línea.
  */
 
-export type ProjectPipelineKey = "customer-success" | "development" | "web" | "smartloop";
+export type ProjectPipelineKey = "customer-success" | "development" | "web" | "smartloop" | "acompanamiento-tecnico";
 
 /**
  * Una ETAPA del pipeline, tal como la declara HubSpot.
@@ -436,6 +436,32 @@ export const PROJECT_PIPELINES: readonly PipelineDef[] = [
     seedPieces: ["handoff", "timeline", "exploration"],
     base: BASE_CUSTOMER_SUCCESS,
     servicioRecurrente: "smartloop",
+  },
+  {
+    /* Elías, 2026-10-30: este pipeline es del equipo técnico, con el trato de Desarrollo: manda su propietario y no decide
+       quién lleva la cuenta. Hasta ese día caía a legacy y contaba como Customer Success (INV11 en rojo a propósito).
+       Transcritas del portal ese día. «En espera», como «Bloqueado»: fuera de la línea y sin cerrar. */
+    key: "acompanamiento-tecnico",
+    hubspotPipelineId: "924878469",
+    label: "Acompañamiento técnico",
+    help: "Acompañamiento del equipo técnico a un cliente. Mismo trato que un desarrollo: lo lleva su propietario y no suma a la cartera de CS.",
+    stages: [
+      { id: "1416402229", label: "Handoff", enLinea: true, terminal: false },
+      { id: "1416401765", label: "Kickoff", enLinea: true, terminal: false },
+      { id: "1416401766", label: "Acompañamiento", enLinea: true, terminal: false },
+      { id: "1416401767", label: "Revisión", enLinea: true, terminal: false },
+      { id: "1416401768", label: "Completado", enLinea: true, terminal: true },
+      { id: "1416401769", label: "En espera", enLinea: false, terminal: false },
+      { id: "1416401770", label: "Cancelado", enLinea: false, terminal: true },
+    ],
+    closedStageIds: ["1416401768", "1416401770"], // Completado, Cancelado
+    initialStageId: "1416402229", // Handoff
+    canBeSiblingOf: ["customer-success"],
+    handoffDelHermano: false,
+    frenteDeEntrega: "Desarrollo",
+    equipoDeEntrega: "desarrollo",
+    seedPieces: ["handoff", "timeline", "tech-requirements"],
+    base: BASE_ENTREGA_TECNICA,
   },
 ] as const;
 

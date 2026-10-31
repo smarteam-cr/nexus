@@ -141,7 +141,9 @@ export function elegirAgente<T extends AgenteCandidato>(
  * accidente.
  */
 export function pipelineKeyDeProyecto(hubspotPipelineId: string | null): ProjectPipelineKey | null {
-  return resolvePipeline(hubspotPipelineId)?.key ?? null;
+  const key = resolvePipeline(hubspotPipelineId)?.key ?? null;
+  // «Acompañamiento técnico» no tiene agentes propios: usa los de Desarrollo (mismo trato, 2026-10-30).
+  return key === "acompanamiento-tecnico" ? "development" : key;
 }
 
 /**

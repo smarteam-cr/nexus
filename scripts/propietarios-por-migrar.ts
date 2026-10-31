@@ -6,7 +6,7 @@
  * Saca cada proyecto de Customer Success activo con registro en HubSpot cuyo «Propietario» falta, está archivado o es
  * del equipo técnico (lib/hubspot/encargados.ts › `propietarioPorMigrar`), con quién debería quedar según «CSE
  * Encargado». Sin nadie claro, lo dice: esa la decide una persona. Los de un pipeline que Nexus no declara van aparte:
- * no se sabe si son de CS (el 924878469, «Acompañamiento técnico», tiene dos integraciones con su dueño técnico).
+ * no se sabe si son de CS.
  *
  * Mientras esta lista no esté en cero y con todos los proyectos leídos, no se borra la propiedad: lo que siga acá caería
  * a «CSL Encargado», que es la CSL.

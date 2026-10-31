@@ -58,13 +58,13 @@ const NEEDS: Record<string, PieceNeeds> = {
     /* Un desarrollo no lleva kickoff: es la landing con la que se le presenta el arranque a
        un cliente, y un desarrollo que cuelga de una implementación ya lo tuvo — el suyo es
        el del hermano. Sitios web SÍ lo lleva (es su landing de cara al cliente). */
-    exceptPipeline: ["development"],
+    exceptPipeline: ["development", "acompanamiento-tecnico"],
   },
   "tech-requirements": {
     // hasTechnicalScope(): los mismos dos tags, ahora también del lado de la UI.
     anyTag: ["custom_dev", "insider_one"],
     // Y el pipeline entero de Desarrollo, sin necesidad de tag.
-    anyPipeline: ["development"],
+    anyPipeline: ["development", "acompanamiento-tecnico"],
   },
   diagnosis: {
     afterPieces: ["exploration"],

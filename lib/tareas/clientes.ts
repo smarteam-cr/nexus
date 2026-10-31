@@ -15,7 +15,8 @@ import { cache } from "react";
 import { prisma } from "@/lib/db/prisma";
 import type { TeamMember } from "@prisma/client";
 import { can } from "@/lib/auth/permissions/engine";
-import { veTodaLaCartera, clientesRevocadosPara } from "@/lib/auth/access";
+import { CUENTA_TECNICA_DE_LA_CARTERA, veTodaLaCartera, clientesRevocadosPara } from "@/lib/auth/access";
+import { esDeCustomerSuccess } from "@/lib/auth/roles";
 import { PROYECTO_DE_PIPELINE_CS_WHERE } from "@/lib/projects/scope";
 import { isTestClient } from "@/lib/sessions/categorize";
 import { DE_LA_PREVENTA } from "@/lib/exploraciones/marco";
@@ -80,7 +81,7 @@ async function calcular(tm: TmParaAcceso): Promise<ClientesQueVes> {
     return { todos: true, ids: new Set(porIdTodas.keys()), porId: porIdTodas };
   }
 
-  const [grants, revocados, propias, enPreventa] = await Promise.all([
+  const [grants, revocados, propias, tecnicas, enPreventa] = await Promise.all([
     prisma.clientAssignment.findMany({
       where: { kind: "GRANT", OR: [{ teamMemberId: tm.id }, { targetRole: tm.roleEnum }] },
       select: { clientId: true },
@@ -91,6 +92,8 @@ async function calcular(tm: TmParaAcceso): Promise<ClientesQueVes> {
       select: { clientId: true },
       distinct: ["clientId"],
     }),
+    // Las cuentas con solo proyectos técnicos, para Customer Success: la misma regla de requireAccessToClient.
+    esDeCustomerSuccess(tm.roleEnum) ? prisma.client.findMany({ where: CUENTA_TECNICA_DE_LA_CARTERA, select: { id: true } }) : [],
     (async () =>
       (await can(tm, "preventa", "read"))
         ? prisma.exploracionDeVenta.findMany({
@@ -105,6 +108,7 @@ async function calcular(tm: TmParaAcceso): Promise<ClientesQueVes> {
   const ids = new Set<string>();
   for (const g of grants) ids.add(g.clientId);
   for (const p of propias) ids.add(p.clientId);
+  for (const c of tecnicas) ids.add(c.id);
   for (const e of enPreventa) if (e.clientId) ids.add(e.clientId);
   // Un REVOKE corta todo lo demás (paso 5 de requireAccessToClient: lanza antes del dueño, el GRANT y la preventa).
   for (const r of revocados) ids.delete(r);
