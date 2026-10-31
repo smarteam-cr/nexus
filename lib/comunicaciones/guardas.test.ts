@@ -66,6 +66,9 @@ describe("⛔ las comunicaciones de HubSpot", () => {
       "scripts/a-quien-le-llegan-las-propuestas.ts",
       // Los leads de HubSpot (B3, 2026-10-25): la MISMA regla de dueño (`clienteDeLaComunicacion`, invariante 1), pura.
       "lib/leads/reglas.ts",
+      // Ventas › Pipeline (2026-10-30): los plazos y las reglas puras del aviso de las 48 horas; no lee comunicaciones.
+      "lib/ventas/pipeline.ts",
+      "lib/tareas/compromisos-del-pipeline.ts",
       // La guía de la preventa (K7, 2026-10-26): las notas recientes de UNA empresa, por la puerta de lectura.
       "lib/exploraciones/agente.ts",
     ]);

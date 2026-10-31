@@ -16,7 +16,7 @@ import { esquemaDesactualizado } from "@/lib/db/esquema";
 import { portalDelSistema } from "@/lib/hubspot/registro-para-vincular";
 import { hubspotDealUrl } from "@/lib/hubspot/urls";
 import { metasPorPersona } from "./metas";
-import { calendarioDeLosProximosDias } from "@/lib/mi-dia/calendario-server";
+import { calendarioDeLosProximosDias, type CalendarioDeLosProximosDias } from "@/lib/mi-dia/calendario-server";
 import { cuentaDelEvento } from "@/lib/mi-dia/agenda";
 import { DIAS_PARA_LA_REUNION } from "@/lib/mi-dia/constantes";
 import { pasosVigentes } from "@/lib/siguiente-paso/lectura-server";
@@ -62,7 +62,7 @@ export type ResultadoDeVentas =
 
 const DIAS_DE_REUNIONES = 180;
 
-function aNegocioVisto(
+export function aNegocioVisto(
   n: {
     id: string;
     hubspotDealId: string;
@@ -117,7 +117,7 @@ function tipoDe(kind: string | null | undefined): TipoDeEmpresa {
 }
 
 /** La última reunión de Nexus de cada cliente (por `resolvedClientId`, la fuente única de a quién es la reunión). */
-async function ultimasReuniones(clientIds: string[], ahora: Date): Promise<Map<string, string>> {
+export async function ultimasReuniones(clientIds: string[], ahora: Date): Promise<Map<string, string>> {
   if (clientIds.length === 0) return new Map();
   const filas = await prisma.firefliesSession.groupBy({
     by: ["resolvedClientId"],
@@ -137,8 +137,12 @@ async function ultimasReuniones(clientIds: string[], ahora: Date): Promise<Map<s
  * empresa (`cuentaDelEvento`, invariante 1). Sin el calendario, ninguna: el negocio se lee como antes.
  */
 async function reunionesConLasEmpresas(email: string, ahora: Date): Promise<Map<string, { inicio: string; titulo: string }>> {
+  return reunionesDelCalendario(await calendarioDeLosProximosDias(email, ahora).catch(() => null), ahora);
+}
+
+/** La primera reunión de cada empresa en un calendario ya leído. */
+export function reunionesDelCalendario(cal: CalendarioDeLosProximosDias | null, ahora: Date): Map<string, { inicio: string; titulo: string }> {
   const out = new Map<string, { inicio: string; titulo: string }>();
-  const cal = await calendarioDeLosProximosDias(email, ahora).catch(() => null);
   if (!cal) return out;
   const hasta = ahora.getTime() + DIAS_PARA_LA_REUNION * 86_400_000;
   for (const r of [...cal.reuniones].sort((a, b) => a.inicio.localeCompare(b.inicio))) {

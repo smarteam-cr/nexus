@@ -78,6 +78,7 @@ export const PAGE_SHELL_COVERAGE: Record<string, ShellDecl> = {
   "sales/sicop": { shell: "SHELL_DEFAULT" },
   "sales/exploraciones": { shell: "SHELL_DEFAULT" },
   "sales/analisis": { shell: "SHELL_DEFAULT" },
+  "sales/pipeline": { shell: "SHELL_DEFAULT" },
   "sales/exploraciones/[id]": { custom: "ficha a todo el ancho con la cabecera de la ficha, como clients/[id] (CabeceraDeFicha)" },
   knowledge: { shell: "SHELL_DEFAULT" },
   roles: { shell: "SHELL_DEFAULT" },

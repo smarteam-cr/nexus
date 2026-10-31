@@ -12716,3 +12716,30 @@ dimensiones de Ventas, Marketing y Servicio, lo mismo que se veía en las del 23
 
 **Costo.** Una corrida sigue en ~$0,16–0,18 (Sonnet 4.6, ~23–29 mil tokens de entrada y ~6 mil de salida): el foco
 ahorra los juicios de las áreas que no se tocaron y lo bien, el dolor y el caso los gastan.
+
+## Ventas › Pipeline: el reporte de los negocios abiertos (2026-10-30)
+
+**Contexto.** Feedback 9 de Marco Salas: un resumen de negocios abiertos con montos, fecha de cierre y siguiente paso, y
+que Nexus detecte negocios sin siguiente paso o compromisos sin cumplir. Elías: una sección nueva, porque es un reporte;
+Preventa es para trabajar un prospecto y Propuestas queda igual. Todo Ventas ve todos los negocios, con filtro «Mis
+negocios». Las reglas son puras (`lib/ventas/pipeline.ts`); el permiso, `ventas.read`.
+
+- **El límite es el de Customer Success:** Nexus mira tareas y reuniones; no confirma si algo se mandó.
+- **Sin siguiente paso** sale de `tieneSiguientePasoDeVentas`, sin otra regla. Lo que cambia es con qué se le pregunta: la
+  tarea de Ventas del negocio y, si no hay una vigente, la de su empresa (`pasosParaLaRegla`). *Por qué:* medido el
+  2026-10-30, las 10 tareas abiertas de Ventas sobre esas empresas estaban en la cuenta y ninguna ligada al negocio; con
+  solo el negocio, los 80 activos salían sin siguiente paso. La cartera de «Para ti» todavía mira solo el negocio.
+- **La reunión** cuenta si está en el calendario de cualquiera de los vendedores de los negocios abiertos y es de UNA
+  empresa (`cuentaDelEvento`). Un calendario que no se pudo leer se dice en pantalla. Un negocio de una empresa que no está
+  en Nexus (28 de 80) no tiene reunión ni tarea de la cuenta que mirar.
+- **Los pausados quedan fuera** de la tabla y del total, y se cuentan abajo (sección del 2026-10-14). Los montos no se
+  convierten: el total suma dólares y lo demás se cuenta aparte.
+- **Un compromiso** es una tarea de la lectura de seguimiento de una reunión, del lado de Smarteam, de una empresa con
+  negocio activo. *Sin cumplir:* su tarea venció, o nunca se volvió tarea (propuesta sin tomar a las 48 horas, vencida o
+  «Por asignar»). A los 21 días sin tomar deja de salir, los plazos del aviso de las 48 horas. Una reunión prometida que ya
+  ocurrió o está agendada (también en el calendario de quien lleva la cuenta) no queda sin cumplir, salvo que su tarea con
+  dueño haya vencido; una entrega que nombra una reunión («Enviar la presentación») no cuenta. Los compromisos de un correo no entran: el pedido fue lo de las reuniones.
+- **La cita sigue su regla** (`veLaCitaDe`): quien estuvo en la reunión o un Super Admin. El título de un paso o de una
+  reunión, quien ve esa cuenta. Y una tarea cuya reunión ya es de otro cliente no sale, ni como compromiso ni como
+  siguiente paso (invariante 1): el dueño se lee al momento, no de la tarea.
+- **Solo lectura.** Ni tareas ni HubSpot: un reporte no escribe.
