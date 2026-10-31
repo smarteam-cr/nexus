@@ -24,6 +24,22 @@ const base = (over: Partial<PartesDelMensaje> = {}): PartesDelMensaje => ({
 });
 
 describe("el mensaje con que se genera una copia", () => {
+  it("el rótulo de las reuniones dice si las eligió el equipo o entraron solas", () => {
+    expect(mensajeDeLaCopia(base({ reuniones: "R" }))).toContain("LAS REUNIONES ELEGIDAS POR EL EQUIPO");
+    const solas = mensajeDeLaCopia(base({ reuniones: "R", reunionesSolas: true }));
+    expect(solas).toContain("LAS REUNIONES DEL PROYECTO");
+    expect(solas).not.toContain("ELEGIDAS POR EL EQUIPO");
+  });
+
+  it("un documento del cliente no le habla al equipo; uno interno no lleva esa regla", () => {
+    expect(mensajeDeLaCopia(base())).toContain("no le hables al equipo de Smarteam");
+    expect(mensajeDeLaCopia(base({ tipo: tipoDeArtefacto("implementation")! }))).not.toContain("no le hables al equipo");
+  });
+
+  it("lo que queda vacío pide su porqué en __vacias", () => {
+    expect(mensajeDeLaCopia(base())).toContain("__vacias");
+  });
+
   it("dice qué documento es y su nombre, y lleva el handoff como fuente ancla", () => {
     const m = mensajeDeLaCopia(base());
     expect(m).toContain("Requerimiento técnico «Integración con el ERP»");

@@ -12813,3 +12813,30 @@ publicar (no tenía Brief: esto nace ahora). El Brief entero se repite en cada f
 reuniones, las más viejas entran en resumen o no entran: «todas» es todas las que el tope deja leer, y la línea de
 cobertura lo dice. Una generable con contenido que alguien edita mientras corre se sigue pisando, como siempre: queda en
 la foto «Antes de regenerar». El lote `--buscar` no corrió contra Drive.
+
+## Lo que lee una copia y lo que escribe cada plantilla (2026-10-31, validación antes del deploy de artefactos)
+
+Se generaron las 21 plantillas de «Nuevo artefacto» en dos clientes con datos reales, antes de que Elías le dijera al equipo
+que funcionan. Nada falló ni trajo datos de otra cuenta, pero en un cliente con poco escrito (kamalio, sin handoff) el
+diagnóstico salió con 352 caracteres y el kickoff con 587, aunque había reuniones. Lo que cambió, y por qué:
+
+- **Una copia sin reuniones elegidas lee las de su tipo** (`reunionesDeUnaCopiaSinElegidas`, lib/contexto/sugerencias-del-documento-server.ts):
+  lo que el equipo eligió en el «Contexto adicional» de su tipo y las del proyecto con texto y con el cliente que nadie sacó
+  de ahí, cada tipo con su columna. Una copia recién creada no pedía elegir nada y salía a ciegas. **Con elegidas, solo esas**:
+  elegirlas es decidir el foco de esa copia (una por frente).
+- **El cronograma y los cuestionarios, solo donde los lee su documento de siempre.** El cronograma: diagnóstico, planificación,
+  kickoff y lo que lee con sus reglas. La Entrega y su informe no: traería desviaciones internas a lo que lee el cliente (se
+  probó y la revisión lo paró). Los cuestionarios, solo diagnóstico y planificación: traen los niveles de la escala.
+- **Las plantillas de marketing y campaña escriben los canales, los formularios y los informes.** Esas secciones son curadas
+  en la planificación completa por el tope de tokens de la corrida; en una plantilla corta ese motivo no aplica y eran el
+  corazón del documento. Vive solo en sus templates (`ESCRITAS_POR_EL_AGENTE`): el documento de siempre no cambia.
+- **Lo que queda vacío dice por qué**, para el equipo: `__vacias` en toda copia y el porqué de las curadas en la planificación.
+  El enlace de una copia lo saca antes de llegar al navegador del cliente, como la planificación publicada.
+- **La plantilla por niveles escribe las olas aunque la modalidad sugerida sea directa**: elegirla ya decide eso.
+- **El informe de avance tiene su propio cierre**: el de la Entrega dice «Hasta acá llega este proyecto», y el informe se
+  manda con el proyecto abierto. No se tocó el cierre de la Entrega: cambiar esa semilla haría que todas las entregas vacías
+  se lean como tocadas y aparezcan en la barra. Sigue con voseo («escribinos»): corregirlo pide migrar esa semilla.
+
+`scripts/validar-plantillas-generar.ts` (gasta API, solo contra `nexus_local`) y `scripts/validar-documentos-en-la-barra.ts`
+(solo lectura, contra producción) repiten la validación. El segundo usa la lógica pura de la barra: hay que volver a correrlo
+cuando cambie la barra de los servicios recurrentes.

@@ -21,7 +21,7 @@ import { PLANIFICACION_HANDOFF_KEYS } from "@/components/landing/configs/planifi
 import { EXPLORACION_DEF_BY_KEY, EXPLORACION_HANDOFF_KEYS, EXPLORACION_TEMPLATE } from "@/components/landing/configs/exploracion.defs";
 import { DESARROLLO_HANDOFF_KEYS } from "@/components/landing/configs/desarrollo.defs";
 import { ENTREGA_HANDOFF_KEYS } from "@/components/landing/configs/entrega.defs";
-import { ENTREGA_DEF_BY_KEY_CON_ADICIONALES, PLANIFICACION_DEF_BY_KEY_CON_ADICIONALES } from "@/components/landing/configs/plantillas-adicionales.defs";
+import { CIERRE_DEL_INFORME_DE_AVANCE, ENTREGA_DEF_BY_KEY_CON_ADICIONALES, PLANIFICACION_DEF_BY_KEY_CON_ADICIONALES } from "@/components/landing/configs/plantillas-adicionales.defs";
 import { HOJA_DE_RUTA_HANDOFF_KEYS, HOJA_DE_RUTA_TEMPLATE } from "@/components/landing/configs/hoja-de-ruta.defs";
 import { IMPLEMENTACION_DEF_BY_KEY, IMPLEMENTACION_TEMPLATE } from "@/components/landing/configs/implementacion.defs";
 import { ADOPCION_HANDOFF_KEYS, ADOPCION_TEMPLATE } from "@/components/landing/configs/adopcion.defs";
@@ -184,7 +184,9 @@ export function canvasDefDeUnaCopia(tipo: string, plantillaId?: string | null): 
   const deSiempre = canvasDefForSlug(tipo);
   const defaultDe = new Map<string, Record<string, unknown> | undefined>((deSiempre?.sections ?? []).map((s) => [s.key, s.defaultData]));
   const sections: CanvasSectionDef[] = seccionesDeUnaCopia(tipo, plantillaId).map((d) => {
-    const defaultData = deSiempre
+    const defaultData = plantillaId === "informe-de-avance" && d.key === "cierre"
+      ? CIERRE_DEL_INFORME_DE_AVANCE
+      : deSiempre
       ? defaultDe.get(d.key)
       : d.agentGenerated === false && d.empty && typeof d.empty === "object"
         ? (d.empty as Record<string, unknown>)

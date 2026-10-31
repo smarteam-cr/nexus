@@ -52,6 +52,8 @@ export interface PartesDelMensaje {
   frontera: string;
   handoff: string;
   reuniones: string;
+  /** Nadie eligió reuniones y entraron las del proyecto con texto: el rótulo no puede decir que las eligió el equipo. */
+  reunionesSolas?: boolean;
   avisoSinReuniones: string;
   notas: string;
   memoria: string;
@@ -81,13 +83,13 @@ export function mensajeDeLaCopia(p: PartesDelMensaje): string {
     const nombre = tipoDeArtefacto(a.tipo)?.nombre ?? pieceLabel(a.tipo);
     partes.push(`=== ${nombre.toUpperCase()} DEL PROYECTO ===\n${a.texto.trim()}`);
   }
-  if (p.reuniones.trim()) partes.push(`=== LAS REUNIONES ELEGIDAS POR EL EQUIPO (precisan el alcance; nada de acá agranda lo vendido) ===\n${p.reuniones.trim()}`);
+  if (p.reuniones.trim()) partes.push(`=== ${p.reunionesSolas ? "LAS REUNIONES DEL PROYECTO" : "LAS REUNIONES ELEGIDAS POR EL EQUIPO"} (precisan el alcance; nada de acá agranda lo vendido) ===\n${p.reuniones.trim()}`);
   else if (p.avisoSinReuniones.trim()) partes.push(p.avisoSinReuniones.trim());
   if (p.notas.trim()) partes.push(`=== NOTAS DEL EQUIPO ===\n${p.notas.trim()}`);
   if (p.memoria.trim()) partes.push(`${p.memoria.trim()}\n(Lo de la memoria precisa el contexto; nada de acá agranda el alcance vendido.)`);
   if (p.cierreDeFrontera.trim()) partes.push(p.cierreDeFrontera.trim());
   partes.push(
-    `Escribe ${p.tipo.conArticulo} siguiendo tus instrucciones y el esquema de cada sección. Marca con ⚠️ Por validar lo que no esté confirmado en las fuentes; no inventes nombres de propiedades, cifras, fechas ni acuerdos. Si una sección no tiene respaldo, déjala vacía.`,
+    `Escribe ${p.tipo.conArticulo} siguiendo tus instrucciones y el esquema de cada sección.${p.tipo.clientFacing ? " Lo lee el cliente: no le hables al equipo de Smarteam ni nombres al CSE; lo que falte confirmar se dice como pendiente." : ""} Marca con ⚠️ Por validar lo que no esté confirmado en las fuentes; no inventes nombres de propiedades, cifras, fechas ni acuerdos. Si una sección no tiene respaldo, déjala vacía y agrega al JSON la key extra "__vacias": un objeto { key de sección: una frase } que diga qué faltó, en primera persona. La lee solo el equipo, nunca el cliente.`,
   );
   return partes.join("\n\n");
 }

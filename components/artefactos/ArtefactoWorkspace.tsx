@@ -220,7 +220,7 @@ export default function ArtefactoWorkspace({
         <span className="min-w-0 flex-1 text-fg-secondary">
           {conDeLaIa
             ? "Regenerar reescribe las secciones que escribe la IA, también lo que corregiste a mano. Queda una foto de antes en las versiones."
-            : `La IA escribe ${t?.conArticulo ?? "el documento"} con lo vendido, lo que elijas en «Contexto adicional» y los demás documentos del proyecto.`}
+            : `La IA escribe ${t?.conArticulo ?? "el documento"} con lo vendido, las reuniones del proyecto (o solo las que elijas en «Contexto adicional») y los demás documentos.`}
         </span>
         <Button size="xs" variant={conDeLaIa ? "secondary" : "primary"} disabled={generando} onClick={() => (conContenido || conDeLaIa ? setConfirmando(true) : void generar())}>
           {conDeLaIa ? "Regenerar con IA" : "Generar con IA"}
