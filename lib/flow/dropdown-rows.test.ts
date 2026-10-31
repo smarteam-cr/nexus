@@ -1,3 +1,6 @@
+import fs from "node:fs";
+import path from "node:path";
+import { PIEZAS_DE_UN_SERVICIO_RECURRENTE } from "@/lib/servicios/ciclo";
 import { describe, expect, it } from "vitest";
 import { buildPieceRows, type CanvasParaFila } from "./dropdown-rows";
 
@@ -99,11 +102,16 @@ describe("los canvases sueltos del CSE", () => {
   });
 });
 
-describe("un servicio con su propio flujo", () => {
-  it("la exploración que se abrió desde «Nuevo artefacto» sale en el riel; sin abrirse, no", () => {
-    const piezasDelServicio = ["kickoff", "timeline"];
-    expect(slugs(buildPieceRows([c({ slug: "kickoff" })], { piezasDelServicio }))).not.toContain("exploration");
-    expect(slugs(buildPieceRows([c({ slug: "kickoff" }), c({ slug: "exploration" })], { piezasDelServicio }))).toContain("exploration");
+describe("la exploración es una por proyecto", () => {
+  it("un servicio recurrente la tiene en su flujo, y «Nuevo artefacto» no depende del tipo de proyecto", () => {
+    expect(PIEZAS_DE_UN_SERVICIO_RECURRENTE as readonly string[]).toContain("exploration");
+    const panel = fs.readFileSync(path.join(process.cwd(), "components/clients/ProjectCanvasPanel.tsx"), "utf8");
+    expect(panel).toContain("onNuevoArtefacto={() => setNuevoArtefacto({ tipo: null })}");
+  });
+
+  it("una copia de exploración que quedó de las pruebas no sale en el riel", () => {
+    const filas = buildPieceRows([c({ slug: "exploration" }), c({ slug: null, id: "vieja", tipoArtefacto: "exploration", name: "Marketing" })]);
+    expect(slugs(filas)).not.toContain("copia:vieja");
   });
 });
 

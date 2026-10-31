@@ -254,7 +254,7 @@
 /* Sección OCULTA y COLAPSADA: se reduce a una barra con su título (clic = desplegar). */
 /* Colapsada: el mismo fondo y el mismo encabezado, sin el cuerpo. Los controles no se mueven. */
 .stl .stl-sec.stl-collapsed { padding-bottom: 24px; }
-.stl .stl-ctx-sec.stl-collapsed { padding: clamp(48px, 7vw, 88px) 0 24px; background: var(--bg-soft); }
+.stl .stl-ctx-sec.stl-collapsed { padding: clamp(48px, 7vw, 88px) 0 24px; }
 .stl .stl-collapsed > .stl-wrap { opacity: 1; filter: none; }
 .stl .stl-collapsed-head { margin-bottom: 0; }
 /* La barra colapsada nunca se atenúa (es el único asidero para volver a mostrarla). */

@@ -151,7 +151,7 @@ function HideToggle({ hidden, label, onToggle }: { hidden: boolean; label: strin
           </>
         )}
       </svg>
-      {hidden ? "Mostrar" : "Ocultar"}
+      {hidden ? "Mostrar al cliente" : "Ocultar"}
     </button>
   );
 }
@@ -548,7 +548,7 @@ export default function LandingView({
       return (
         <div key={def.key} data-seccion={def.key} className={`stl-ctx-sec${hidden ? " stl-hidden" : ""}${collapsed ? " stl-collapsed" : ""}`}>
           {chrome}
-          {collapsedBar}
+          {collapsedBar && <div className="stl-wrap">{collapsedBar}</div>}
           <div style={hideWhenCollapsed}>{body}</div>
         </div>
       );

@@ -12646,11 +12646,12 @@ con el diff viejo solo como referencia, después de confirmar con búsqueda que 
   `marco = "cs"`), y adentro se agregan las sesiones. Corrige la respuesta 6 del 29 oct. Elías, 30 oct: «uno nada más lo crea y
   uno adentro agrega las sesiones». *Por qué no varias:* la pantalla, la guía y la escala buscan «la viva del proyecto», y hay un
   índice de una viva por proyecto; para explorar otra área se agrega una sesión. «Nuevo artefacto» la abre, también en un
-  servicio SmartLoop. Lo que ya se haya creado como copia abre esa misma pantalla.
+  servicio SmartLoop. Las copias de exploración que hayan quedado de las pruebas no salen en el riel y ningún agente las lee.
 - **«Nuevo artefacto» funciona igual en todo proyecto.** Lo apagaba solo una condición de servicio recurrente en el panel;
   Desarrollo y Sitios web no tenían ninguna.
 - **Colapsar dice «Colapsar», y colapsada dice «Mostrar».** La sección conserva su fondo y su encabezado; solo se esconde el
-  cuerpo, y los controles no se mueven.
+  cuerpo, y los controles no se mueven. El ojo de una sección oculta dice «Mostrar al cliente»: los dos «Mostrar» hacen cosas
+  distintas, y ese se guarda al instante.
 
 Elías respondió las ocho preguntas del plan (`docs/artefactos-plan.md` §5) y donde el plan proponía otra cosa se corrigió
 en su lugar. Lo que queda decidido:

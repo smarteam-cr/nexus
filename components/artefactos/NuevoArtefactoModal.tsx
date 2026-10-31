@@ -45,7 +45,9 @@ export default function NuevoArtefactoModal({
   onActivarPieza: (slug: string) => void;
 }) {
   const tipos = useMemo(() => tiposCreablesEnElProyecto(), []);
-  const [tipo, setTipo] = useState<string>(tipoInicial ?? tipos[0]?.id ?? "");
+  // Arranca en el primero que se crea: la exploración no pide nada más que abrirse.
+  const primero = useMemo(() => tipos.find((x) => !x.seAbreUna)?.id ?? "", [tipos]);
+  const [tipo, setTipo] = useState<string>(tipoInicial ?? primero);
   const [elegidas, setElegidas] = useState<Record<string, string>>({});
   const [nombre, setNombre] = useState("");
   const [desde, setDesde] = useState<string>("");
@@ -55,12 +57,12 @@ export default function NuevoArtefactoModal({
   useEffect(() => {
     if (!open) return;
     /* eslint-disable react-hooks/set-state-in-effect -- cada apertura arranca de cero */
-    setTipo(tipoInicial ?? tipos[0]?.id ?? "");
+    setTipo(tipoInicial ?? primero);
     setElegidas({});
     setNombre("");
     setDesde("");
     /* eslint-enable react-hooks/set-state-in-effect */
-  }, [open, tipoInicial, tipos]);
+  }, [open, tipoInicial, primero]);
 
   const elegirTipo = (id: string) => {
     setTipo(id);
@@ -112,7 +114,7 @@ export default function NuevoArtefactoModal({
       onClose={onClose}
       size="pantalla"
       title={tipoInicial && t ? `Crear otr${t.conArticulo.startsWith("una") ? "a" : "o"} ${t.nombre.toLowerCase()}` : "Nuevo artefacto"}
-      description="Queda en el riel con su nombre, en construcción. Lo generas con IA o lo escribes tú desde adentro."
+      description={t?.seAbreUna ? "Adentro agregas las sesiones." : "Queda en el riel con su nombre, en construcción. Lo generas con IA o lo escribes tú desde adentro."}
       footer={
         <div className="flex justify-end gap-2">
           <Button variant="secondary" onClick={onClose} disabled={creando}>

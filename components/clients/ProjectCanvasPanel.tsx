@@ -1195,7 +1195,7 @@ export default function ProjectCanvasPanel({
           }}
         />
       )}
-      {copiaActiva && activeCanvasId && tipoActivo && tipoActivo !== "exploration" && (
+      {copiaActiva && activeCanvasId && tipoActivo && (
         <CanvasBoundary label="este artefacto">
           <ArtefactoWorkspace
             key={`artefacto-${activeCanvasId}-${agentNonce}`}
@@ -1221,7 +1221,9 @@ export default function ProjectCanvasPanel({
           // La entrega de siempre no se duplica: guarda en su Json lo que el cliente no ve.
           return t && admiteCopias(t) && !(c.slug && tipoDeArtefacto(t)?.sinEnlaceElDeSiempre) ? [{ id: c.id, nombre: nombreDelArtefacto(c), tipo: t }] : [];
         })}
-        onActivarPieza={(slug) => void activarPieza(slug)}
+        onActivarPieza={(slug) => {
+          if (activando === null) void activarPieza(slug);
+        }}
         onCreado={(id) => {
           void refetchCanvases().then(() => switchCanvas(id));
         }}
@@ -1366,7 +1368,7 @@ export default function ProjectCanvasPanel({
       {/* Exploración: el lienzo de la preventa con las preguntas de Customer Success (2026-10-07). Es
           una herramienta de trabajo, no un documento: va FUERA del marco, cuelga sus sesiones del riel
           y pinta su propia columna derecha. Solo el informe viejo —del motor de landings— lleva su marco. */}
-      {(activeSlug ?? tipoActivo) === "exploration" && activeCanvasId && (
+      {activeSlug === "exploration" && activeCanvasId && (
         <CanvasBoundary label="la Exploración">
           <ExploracionDelProyecto
             projectId={projectId}
