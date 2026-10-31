@@ -273,6 +273,8 @@ export interface Motivo {
   cruce?: boolean;
   /** Lo dijo la IA (lleva la chispa). */
   ia?: boolean;
+  /** La alerta del vigía de la que salió: su fila abre el detalle y el cierre (feedback #14). */
+  alertaId?: string;
 }
 
 /**
@@ -528,6 +530,7 @@ export function motivosDeLaCuenta(c: CuentaDeCartera, hoy: string): Motivo[] {
       peso: a.severidad === "HIGH" ? 60 : 28,
       fuente: "Agente vigía",
       ia: true,
+      alertaId: a.id,
     });
   }
 

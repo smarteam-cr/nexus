@@ -35,7 +35,7 @@ export const PESTANA_DE_LA_LECTURA: Record<"Entrega" | "Uso" | "Relación" | "Re
 
 /**
  * Dónde se ve el detalle de cada motivo de «Pide atención». null = no hay una pestaña que lo
- * explique mejor (la alerta del vigía ya se lee entera en su fila; las facturas viven en Cobranza).
+ * explique mejor (la alerta del vigía abre su detalle en la misma fila; las facturas viven en Cobranza).
  */
 export const PESTANA_DEL_MOTIVO: Record<ClaveDeMotivo, PestanaDeCuenta | null> = {
   cancelacion: "renovacion",

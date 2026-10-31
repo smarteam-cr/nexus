@@ -151,6 +151,8 @@ describe("⭐ la cuenta de respaldo de la ficha lleva sus alertas", () => {
     });
     expect(a).toMatchObject({ severidad: "HIGH", estado: "SEEN", delAgente: true, proyecto: "Implementación Sales Hub", detectadaEn: "2026-10-03T12:00:00.000Z" });
     expect(motivosDeLaCuenta(cuenta({ alertas: [a] }), HOY).map((m) => m.clave)).toContain("alertaDelAgente");
+    // La fila de «Pide atención» abre el detalle y el cierre de ESTA alerta (feedback #14).
+    expect(motivosDeLaCuenta(cuenta({ alertas: [a] }), HOY).find((m) => m.clave === "alertaDelAgente")?.alertaId).toBe(a.id);
   });
 
   it("load-account arma la cuenta de respaldo con las alertas que ya cargó, no con una lista vacía", () => {

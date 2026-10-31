@@ -1,10 +1,10 @@
 /**
  * /api/cobranza/servicios/[servicioId] — edición/baja de un servicio.
  *   PATCH  → editar campos del servicio.
- *   DELETE → borrar SOLO si no tiene cobros COBRADO (409 si no — marcá FINALIZADO).
+ *   DELETE → borrar SOLO un servicio Finalizado sin plata, factura ni comisión (409 si no: lib/cobranza/borrar-servicio.ts).
  */
 import { NextRequest, NextResponse } from "next/server";
-import { guardCobranzaAccess } from "@/lib/auth/api-guards";
+import { guardCobranzaAccess, guardCobranzaEditor } from "@/lib/auth/api-guards";
 import { updateServicio, deleteServicio, CobranzaError } from "@/lib/cobranza/mutations";
 import { servicioPatchSchema } from "@/lib/cobranza/schema";
 
@@ -41,7 +41,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
 }
 
 export async function DELETE(_req: NextRequest, { params }: Params) {
-  const guard = await guardCobranzaAccess();
+  const guard = await guardCobranzaEditor();
   if (guard instanceof NextResponse) return guard;
   const { servicioId } = await params;
   try {

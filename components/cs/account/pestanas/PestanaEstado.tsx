@@ -9,6 +9,9 @@
  *   3. Pide atención: los mismos motivos que ponen a la cuenta en la lista de la semana.
  *   4. Lo que viene · 90 días: las fechas que ya están en Nexus y en HubSpot (`loQueViene`).
  */
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { AlertaParaCerrar } from "@/components/cs/AlertaParaCerrar";
 import { ROTULO_DEL_SISTEMA } from "@/components/ui/sistema";
 import { cn } from "@/lib/cn";
 import { diasEntre, enCuanto, fmtDia, plural } from "@/lib/cs/formato";
@@ -41,7 +44,17 @@ const PUNTO_DEL_EVENTO: Record<EventoQueViene["tono"], string> = {
 };
 
 export default function PestanaEstado({ data, irA }: { data: CsAccountData; irA: IrA }) {
+  const router = useRouter();
+  const [abiertas, setAbiertas] = useState<ReadonlySet<string>>(new Set());
   const eventos = loQueViene(data.cuenta, data.hoy);
+
+  const alternar = (id: string) =>
+    setAbiertas((s) => {
+      const n = new Set(s);
+      if (!n.delete(id)) n.add(id);
+      return n;
+    });
+
   return (
     <div className="flex flex-col gap-8">
       <AccountBriefSection clientId={data.clientId} brief={data.brief} />
@@ -69,7 +82,7 @@ export default function PestanaEstado({ data, irA }: { data: CsAccountData; irA:
                 key={l.rotulo}
                 type="button"
                 onClick={() => irA(pestana)}
-                className="flex flex-col gap-1.5 rounded-xl border border-line bg-surface p-4 text-left transition-colors hover:bg-surface-hover"
+                className="flex min-w-0 flex-col gap-1.5 rounded-xl border border-line bg-surface p-4 text-left transition-colors hover:bg-surface-hover"
               >
                 {/* «Uso» se lee como «Adopción», que es el nombre de su pestaña. */}
                 <span className={ROTULO_DEL_SISTEMA}>{l.rotulo === "Uso" ? "Adopción" : l.rotulo}</span>
@@ -78,9 +91,10 @@ export default function PestanaEstado({ data, irA }: { data: CsAccountData; irA:
                   {l.palabra}
                 </span>
                 <span className="text-[13px] text-fg-secondary">{l.porque}</span>
-                <span className="mt-auto flex items-center justify-between gap-2 pt-1.5">
+                {/* Se parte en dos renglones si no cabe: el enlace azul se salía de la tarjeta (feedback #15). */}
+                <span className="mt-auto flex flex-wrap items-center justify-between gap-x-2 gap-y-1 pt-1.5">
                   <Chip>{l.fuente}</Chip>
-                  <span className="inline-flex items-center gap-1 text-xs font-semibold text-brand">
+                  <span className="inline-flex items-center gap-1 whitespace-nowrap text-xs font-semibold text-brand">
                     {NOMBRE_DE_LA_PESTANA[pestana]}
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-3.5 w-3.5" aria-hidden>
                       <path d="M9 5l7 7-7 7" />
@@ -99,6 +113,39 @@ export default function PestanaEstado({ data, irA }: { data: CsAccountData; irA:
           <div className="divide-y divide-line rounded-xl border border-line bg-surface px-4" data-recorrido="cs.atencion">
             {data.motivos.map((m) => {
               const destino = PESTANA_DEL_MOTIVO[m.clave];
+              const alerta = m.alertaId ? data.cuenta.alertas.find((a) => a.id === m.alertaId) : undefined;
+              if (alerta) {
+                const abierta = abiertas.has(alerta.id);
+                return (
+                  <div key={alerta.id} className="py-3">
+                    <div className="flex flex-wrap items-center gap-2.5">
+                      <ChipDeMotivo m={m} />
+                      <span className="min-w-[240px] flex-1 text-[13px] text-fg">{m.texto}</span>
+                      <button
+                        type="button"
+                        onClick={() => alternar(alerta.id)}
+                        aria-expanded={abierta}
+                        className="whitespace-nowrap text-xs font-semibold text-brand transition-colors hover:text-brand-light"
+                      >
+                        {abierta ? "Ocultar" : "Ver el detalle"}
+                      </button>
+                    </div>
+                    {abierta && (
+                      <AlertaParaCerrar
+                        alerta={alerta}
+                        hoy={data.hoy}
+                        razonCompleta
+                        className="mt-2.5"
+                        onCerrada={(id) => {
+                          // La fila sale con los datos del servidor: el título y la lista cuentan lo mismo.
+                          alternar(id);
+                          router.refresh();
+                        }}
+                      />
+                    )}
+                  </div>
+                );
+              }
               return (
                 <div key={m.clave + m.texto} className="flex flex-wrap items-center gap-2.5 py-3">
                   <ChipDeMotivo m={m} />
