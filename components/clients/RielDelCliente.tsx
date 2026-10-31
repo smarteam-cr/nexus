@@ -97,9 +97,9 @@ export default function RielDelCliente({
                   <span className={cn("text-xs leading-[1.35]", p.prueba ? "font-medium text-warn-ink" : "text-fg-muted")}>{p.tipo}</span>
                 </span>
                 {p.encargado ? (
-                  <Avatar name={p.encargado.nombre} src={p.encargado.foto ?? undefined} size="xs" neutro title={p.encargado.nombre} />
+                  <Avatar name={p.encargado.nombre} src={p.encargado.foto ?? undefined} size="xs" neutro title={p.encargado.nombre} className="self-center" />
                 ) : (
-                  !p.prueba && <span title="Sin encargado" className="h-6 w-6 flex-shrink-0 rounded-full border border-dashed border-line" />
+                  !p.prueba && <span title="Sin encargado" className="h-6 w-6 flex-shrink-0 self-center rounded-full border border-dashed border-line" />
                 )}
               </button>
               {abierto && <div ref={slotDePiezas} />}
