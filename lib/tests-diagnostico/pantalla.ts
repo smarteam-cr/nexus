@@ -14,7 +14,7 @@ import type { PreguntaDelBanco, VersionDelTest } from "./tipos";
 export type EstadoDelBancoEnPantalla = "sin-aprobar" | "aprobado" | "aprobado-con-cambios";
 
 const firma = (p: readonly PreguntaDelBanco[]) =>
-  JSON.stringify(p.map((q) => [q.id, q.dimensionId, q.texto, q.ayuda, q.opciones.map((o) => [o.id, o.texto, o.nivel])]));
+  JSON.stringify(p.map((q) => [q.id, q.dimensionId, q.texto, q.ayuda, q.variantes ?? null, q.opciones.map((o) => [o.id, o.texto, o.nivel, o.variantes ?? null])]));
 
 export function estadoDelBanco(b: { preguntas: readonly PreguntaDelBanco[]; aprobadas: readonly PreguntaDelBanco[] | null }): EstadoDelBancoEnPantalla {
   if (!b.aprobadas?.length) return "sin-aprobar";

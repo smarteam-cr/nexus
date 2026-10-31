@@ -9,7 +9,7 @@
 import { randomBytes } from "node:crypto";
 import type { Escala } from "@/lib/escala/documento/tipos";
 import type { Intento, PreguntaDelIntento } from "./repositorio-server";
-import { NO_LO_SE, type PreguntaDelBanco, type RespuestasDelTest, type VersionDelTest } from "./tipos";
+import { NO_LO_SE, type GrupoDeCrm, type PreguntaDelBanco, type RespuestasDelTest, type VersionDelTest } from "./tipos";
 
 /**
  * Las preguntas del banco con ids opacos para la persona (el `id` y el nivel de cada opción quedan del lado nuestro).
@@ -18,7 +18,7 @@ import { NO_LO_SE, type PreguntaDelBanco, type RespuestasDelTest, type VersionDe
  * nivel de ninguna opción.
  */
 export function conIdsPublicos(
-  preguntas: readonly PreguntaDelBanco[],
+  preguntas: readonly (PreguntaDelBanco & { grupo?: GrupoDeCrm | null })[],
   nombres: Readonly<Record<string, { paso: string; capa: string | null }>> = {},
 ): PreguntaDelIntento[] {
   const opaco = () => randomBytes(6).toString("hex");

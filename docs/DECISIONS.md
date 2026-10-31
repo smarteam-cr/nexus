@@ -12716,3 +12716,35 @@ dimensiones de Ventas, Marketing y Servicio, lo mismo que se veía en las del 23
 
 **Costo.** Una corrida sigue en ~$0,16–0,18 (Sonnet 4.6, ~23–29 mil tokens de entrada y ~6 mil de salida): el foco
 ahorra los juicios de las áreas que no se tocaron y lo bien, el dolor y el caso los gastan.
+
+## El test se adapta al CRM que marcó la persona, sin cambiar lo que mide (2026-10-31)
+
+**Contexto.** El formulario del test pregunta cómo gestionan hoy a sus clientes, pero las preguntas no usaban ese dato:
+quien marcó HubSpot leía «No hay un CRM» y quien usa Excel leía «Hay un CRM». Elías pidió aprovecharlo para que sea más
+fácil de responder, en todas las industrias, sin que se vuelva difícil de mantener.
+
+**Decisiones.**
+
+1. **Dos grupos y una base.** Tiene CRM (HubSpot, Salesforce, otro), no tiene (hojas, ninguna herramienta, buscando uno);
+   «No lo sé» ve la base. Se guarda solo lo que cambia, dentro del Json del banco: sin SQL. El intento guarda los textos
+   que vio y su grupo en su foto de preguntas, y los ids y niveles son los del banco: el puntaje, la medición y la nota de
+   HubSpot no se enteran.
+2. **Una entrada por texto distinto, no por banco.** `variantes-de-crm.datos.ts` se cuelga por el texto EXACTO de la base:
+   63 entradas cubren 54 bancos, y si la escala cambia una base, la entrada queda sin uso en vez de salir vieja.
+   `borradoresDeLaEscala` ya las trae, así que lo que se rearma desde la escala no las pierde.
+3. **El nivel se define por lo que hace el equipo, no por la marca.** Disperso, en un lugar a mano, pasa solo, conectado,
+   lo decide la IA. Por eso no hay niveles imposibles: siempre salen las 5 respuestas, en todas las industrias. Quien tiene
+   CRM sigue viendo el nivel más bajo («casi no se usa»), y un nivel que un grupo casi no alcanza queda escrito sin nombrar
+   lo que dice no tener; quien lo elija cuenta igual. Ojo: en 1.2 Ventas el criterio Inicial de la escala dice «hay un
+   CRM», y la variante sin CRM dice «un lugar común». Es la misma lógica de «el CRM casi no se usa» para Deficiente, pero
+   es la lectura menos literal: una hoja compartida llega a Inicial.
+4. **«Sistema» solo se reemplaza donde es el CRM.** En Servicio el sistema de casos puede no ser el CRM (HubSpot en ventas y
+   otro en atención), y decir «atiende en HubSpot» cambiaría lo que mide: ahí solo se adapta Deficiente. En Ventas y
+   Marketing, las opciones Funcional y superiores que dicen «el sistema» siguen diciendo eso.
+5. **Dos seguros.** La prueba `variantes.test.ts` revisa lo que LEE cada grupo contra la escala del repo (una mención sin
+   variante y una opción colgada salen igual que una variante mal escrita), y se pone en rojo si `escalaVersion` se mueve.
+   La misma revisión frena «Aprobar» en la pantalla. Si el texto sigue diciendo lo mismo que el nivel lo juzga la skill
+   `revisar-banco-del-test`, que corre en Claude Code sin gastar IA dentro de Nexus.
+6. **Las variantes no se editan en la pantalla.** «Ver como» es para revisar: la fuente es el archivo del repo, y dos
+   fuentes se separarían en la primera corrección. Si alguien cambia una base en el editor, su variante se quita: mejor
+   que salga la base, o que la revisión frene el banco, a que el público lea la versión vieja.

@@ -6,7 +6,8 @@
  *   · Preguntas: una subpestaña por área (Ventas, Marketing, Servicio al cliente) y, dentro, el test web (8 preguntas) y
  *     después el corto (4), cada uno con su título y un banco por edición con su estado. El super admin edita el borrador
  *     y lo aprueba; lo aprobado es lo que ve el público, y un borrador con cambios no cambia nada hasta aprobarse. Acá SÍ
- *     se ve a qué nivel apunta cada opción (el público nunca lo ve).
+ *     se ve a qué nivel apunta cada opción (el público nunca lo ve). «Ver como» muestra solo lo que cambia para quien tiene
+ *     CRM o no lo tiene (lib/tests-diagnostico/variantes.ts): es para revisar; las variantes se escriben en el repo.
  *   · Intentos: por empresa, quién hizo qué área, con qué nivel y si ya llegó a HubSpot (K10).
  *   · Medición: cuántos abren la página, empiezan, terminan y lo dejan, y en qué pregunta, por test y semana a semana
  *     (O4 y O6 etapa 3: la base para comparar antes y después del corte de la aplicación vieja), y la versión completa
@@ -27,7 +28,8 @@ import {
   type EstadoEnHubspot,
   type SemanaDelTest,
 } from "@/lib/tests-diagnostico/pantalla";
-import { ETIQUETA_DE_LA_VERSION, NOMBRE_DEL_AREA, nombreDelTest, SLUG_POR_AREA, type PreguntaDelBanco, type VersionDelTest } from "@/lib/tests-diagnostico/tipos";
+import { ETIQUETA_DE_LA_VERSION, NOMBRE_DEL_AREA, nombreDelTest, SLUG_POR_AREA, type GrupoDeCrm, type PreguntaDelBanco, type VersionDelTest } from "@/lib/tests-diagnostico/tipos";
+import { cambiosDelBanco, EJEMPLO_DEL_GRUPO, ETIQUETA_DEL_GRUPO, sinVarianteDelCampo } from "@/lib/tests-diagnostico/variantes";
 
 type Pestana = "preguntas" | "intentos" | "medicion";
 type AreaDelTest = "1" | "2" | "3";
@@ -71,7 +73,7 @@ function EditorDelBanco({ banco, datos, editor, alCerrar }: { banco: BancoEnPant
 
   const cambiar = (i: number, cambio: Partial<PreguntaDelBanco>) => setPreguntas((ps) => ps.map((p, k) => (k === i ? { ...p, ...cambio } : p)));
   const cambiarOpcion = (i: number, j: number, texto: string) =>
-    setPreguntas((ps) => ps.map((p, k) => (k === i ? { ...p, opciones: p.opciones.map((o, m) => (m === j ? { ...o, texto } : o)) } : p)));
+    setPreguntas((ps) => ps.map((p, k) => (k === i ? { ...p, opciones: p.opciones.map((o, m) => (m === j ? { ...o, texto, variantes: undefined } : o)) } : p)));
 
   const guardar = async (): Promise<PreguntaDelBanco[] | null> => {
     setOcupado(true);
@@ -129,10 +131,10 @@ function EditorDelBanco({ banco, datos, editor, alCerrar }: { banco: BancoEnPant
             Pregunta {i + 1} · {datos.escala?.dimensiones[p.dimensionId] ?? p.dimensionId} ({p.dimensionId})
           </span>
           <Field label="La pregunta">
-            <Textarea rows={2} value={p.texto} disabled={!editor} onChange={(e) => cambiar(i, { texto: e.target.value })} />
+            <Textarea rows={2} value={p.texto} disabled={!editor} onChange={(e) => cambiar(i, { texto: e.target.value, ...sinVarianteDelCampo(p, "texto") })} />
           </Field>
           <Field label="Una línea que la aclara (opcional)">
-            <Input value={p.ayuda ?? ""} disabled={!editor} onChange={(e) => cambiar(i, { ayuda: e.target.value || null })} />
+            <Input value={p.ayuda ?? ""} disabled={!editor} onChange={(e) => cambiar(i, { ayuda: e.target.value || null, ...sinVarianteDelCampo(p, "ayuda") })} />
           </Field>
           <div className="flex flex-col gap-2">
             {p.opciones.map((o, j) => (
@@ -143,7 +145,9 @@ function EditorDelBanco({ banco, datos, editor, alCerrar }: { banco: BancoEnPant
                 <Textarea rows={2} aria-label={`Opción ${nombreDelNivel(o.nivel)}`} value={o.texto} disabled={!editor} onChange={(e) => cambiarOpcion(i, j, e.target.value)} />
               </div>
             ))}
-            <span className="text-xs text-fg-muted">El público ve las opciones en este orden y, al final, «No lo sé» (cuenta como el nivel más bajo).</span>
+            <span className="text-xs text-fg-muted">
+              El público ve las opciones en este orden y, al final, «No lo sé» (cuenta como el nivel más bajo). Si cambias un texto, se quita su versión para quien tiene o no tiene CRM.
+            </span>
           </div>
         </div>
       ))}
@@ -174,10 +178,40 @@ function EditorDelBanco({ banco, datos, editor, alCerrar }: { banco: BancoEnPant
   );
 }
 
+/** Lo que cambia en un banco para un grupo: el texto base y, debajo, lo que lee la persona. Solo para revisar. */
+function LoQueCambia({ banco, datos, grupo }: { banco: BancoEnPantalla; datos: DatosDeLaPantalla; grupo: GrupoDeCrm }) {
+  const cambios = cambiosDelBanco(banco.preguntas, grupo);
+  const nombreDelCampo = (campo: string) => (campo === "texto" ? "La pregunta" : campo === "ayuda" ? "La línea que la aclara" : (datos.escala?.niveles.find((n) => n.letra === campo)?.nombre ?? campo));
+  if (!cambios.length) return <p className="border-t border-line pt-4 text-xs text-fg-muted">Para este grupo, este banco se ve igual que la base.</p>;
+  return (
+    <div className="flex flex-col gap-4 border-t border-line pt-4">
+      {cambios.map((c) => (
+        <div key={c.id} className="flex flex-col gap-2 rounded-lg border border-line p-3">
+          <span className="text-xs text-fg-muted">
+            {datos.escala?.dimensiones[c.dimensionId] ?? c.dimensionId} ({c.dimensionId})
+          </span>
+          {c.campos.map((f) => (
+            <div key={f.campo} className="grid gap-2 sm:grid-cols-[9rem_minmax(0,1fr)] sm:items-start">
+              <Badge variant="default" className="justify-self-start">
+                {nombreDelCampo(f.campo)}
+              </Badge>
+              <div className="flex flex-col gap-1">
+                <span className="text-xs text-fg-muted">{f.base}</span>
+                <span className="text-sm text-fg">{f.variante}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function Preguntas({ datos, editor }: { datos: DatosDeLaPantalla; editor: boolean }) {
   const router = useRouter();
   const [abierto, setAbierto] = useState<string | null>(null);
   const [area, setArea] = useState<AreaDelTest>("1");
+  const [verComo, setVerComo] = useState<GrupoDeCrm | "base">("base");
   const [aviso, setAviso] = useState<{ variante: "success" | "danger"; texto: string } | null>(null);
   const [ocupado, setOcupado] = useState(false);
   const nombreDeEdicion = (slug: string) => (slug === "general" ? "Escala general" : (datos.escala?.ediciones.find((e) => e.slug === slug)?.nombre ?? slug));
@@ -230,6 +264,22 @@ function Preguntas({ datos, editor }: { datos: DatosDeLaPantalla; editor: boolea
               count: datos.bancos.filter((b) => b.area === a && b.estado !== "aprobado").length || undefined,
             }))}
           />
+          <div className="flex flex-wrap items-center gap-3">
+            <span className="text-xs text-fg-muted">Ver como</span>
+            <Tabs<GrupoDeCrm | "base">
+              aria-label="Ver las preguntas como"
+              variant="pill"
+              size="sm"
+              value={verComo}
+              onChange={setVerComo}
+              items={[
+                { key: "base", label: "Base" },
+                { key: "con-crm", label: ETIQUETA_DEL_GRUPO["con-crm"] },
+                { key: "sin-crm", label: ETIQUETA_DEL_GRUPO["sin-crm"] },
+              ]}
+            />
+            {verComo !== "base" && <span className="text-xs text-fg-muted">Abre un banco: arriba el texto base y debajo lo que lee quien marcó «{EJEMPLO_DEL_GRUPO[verComo]}».</span>}
+          </div>
           {VERSIONES_EN_ORDEN.map((version) => {
             // Solo los bancos de ESTA área y esta versión: cada test queda bajo el área que le corresponde.
             const bancos = datos.bancos.filter((b) => b.area === area && b.version === version);
@@ -260,7 +310,7 @@ function Preguntas({ datos, editor }: { datos: DatosDeLaPantalla; editor: boolea
                       {abierto === b.id ? "Ocultar" : editor ? "Revisar" : "Ver"}
                     </Button>
                   </div>
-                  {abierto === b.id && <EditorDelBanco banco={b} datos={datos} editor={editor} alCerrar={() => setAbierto(null)} />}
+                  {abierto === b.id && (verComo === "base" ? <EditorDelBanco banco={b} datos={datos} editor={editor} alCerrar={() => setAbierto(null)} /> : <LoQueCambia banco={b} datos={datos} grupo={verComo} />)}
                 </Card>
                 ))}
               </section>

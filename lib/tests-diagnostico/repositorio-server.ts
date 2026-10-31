@@ -10,7 +10,7 @@ import "server-only";
 import { randomBytes } from "node:crypto";
 import { prisma } from "@/lib/db/prisma";
 import { esquemaDesactualizado } from "@/lib/db/esquema";
-import { EDICION_GENERAL, leerPreguntasDelBanco, leerRespuestasDelTest, SLUG_POR_AREA, type PreguntaDelBanco, type RespuestasDelTest, type VersionDelTest } from "./tipos";
+import { EDICION_GENERAL, GRUPOS_DE_CRM, leerPreguntasDelBanco, leerRespuestasDelTest, SLUG_POR_AREA, type GrupoDeCrm, type PreguntaDelBanco, type RespuestasDelTest, type VersionDelTest } from "./tipos";
 import type { ResultadoDelTest } from "./resultado";
 
 export const SQL_DE_LOS_TESTS = "scripts/sql/2026-10-26-tests-diagnostico.sql";
@@ -190,6 +190,8 @@ export interface PreguntaDelIntento extends PreguntaDelBanco {
   /** El nombre del paso y de su capa en la barra de avance (desde el 2026-10-28; los de antes no lo traen). */
   paso?: string;
   capa?: string | null;
+  /** El grupo cuyas variantes vio (./variantes.ts); null o sin el campo = la base (no sabe, o un intento de antes). */
+  grupo?: GrupoDeCrm | null;
 }
 
 export interface Persona {
@@ -255,7 +257,8 @@ function leerPreguntasDelIntento(raw: unknown): PreguntaDelIntento[] {
     const opcionesPublicas = Object.fromEntries(Object.entries(op).filter(([, v]) => typeof v === "string")) as Record<string, string>;
     const paso = typeof c?.paso === "string" ? c.paso.slice(0, 120) : undefined;
     const capa = typeof c?.capa === "string" ? c.capa.slice(0, 120) : undefined;
-    return [{ ...p, publico, opcionesPublicas, ...(paso ? { paso, capa: capa ?? null } : {}) }];
+    const grupo = GRUPOS_DE_CRM.find((g) => g === c?.grupo);
+    return [{ ...p, publico, opcionesPublicas, ...(paso ? { paso, capa: capa ?? null } : {}), ...(grupo ? { grupo } : {}) }];
   });
 }
 

@@ -48,11 +48,20 @@ export const NOMBRE_DEL_AREA: Readonly<Record<string, string>> = { "1": "Ventas"
 /** La edición de la escala general en el banco (la columna no es nula: es parte de la llave única). */
 export const EDICION_GENERAL = "general";
 
+/**
+ * Los grupos de quien responde, según lo que marcó en el formulario (./variantes.ts). «No lo sé» no es un grupo: ve la base.
+ * Una variante guarda solo lo que cambia para un grupo; sin variante, sale la base.
+ */
+export const GRUPOS_DE_CRM = ["con-crm", "sin-crm"] as const;
+export type GrupoDeCrm = (typeof GRUPOS_DE_CRM)[number];
+
 /** Una opción del banco: su texto para el cliente y el nivel que significa elegirla (solo del lado nuestro). */
 export interface OpcionDelBanco {
   id: string;
   texto: string;
   nivel: Letra;
+  /** El texto de esta opción para un grupo. El nivel es el mismo: una variante nunca lo cambia. */
+  variantes?: Partial<Record<GrupoDeCrm, string>>;
 }
 
 /** Una pregunta del banco: apunta a UNA dimensión de la escala (`1.3`). */
@@ -63,6 +72,8 @@ export interface PreguntaDelBanco {
   /** Una línea que aclara la pregunta, si hace falta. */
   ayuda: string | null;
   opciones: OpcionDelBanco[];
+  /** La pregunta y su aclaración para un grupo. */
+  variantes?: Partial<Record<GrupoDeCrm, { texto?: string; ayuda?: string }>>;
 }
 
 export type EstadoDelBanco = "borrador" | "aprobado";
@@ -90,6 +101,26 @@ const LETRAS: readonly Letra[] = ["D", "I", "F", "E", "O"];
 const esLetra = (x: unknown): x is Letra => typeof x === "string" && (LETRAS as readonly string[]).includes(x);
 const texto = (x: unknown, max: number) => (typeof x === "string" ? x.trim().slice(0, max) : "");
 
+/** Las variantes por grupo que traen texto; nada si no hay ninguna, para que un banco sin variantes se lea igual que antes. */
+function leerVariantes<T>(raw: unknown, leer: (v: unknown) => T | null): { variantes?: Partial<Record<GrupoDeCrm, T>> } {
+  if (!raw || typeof raw !== "object") return {};
+  const variantes = Object.fromEntries(
+    GRUPOS_DE_CRM.flatMap((g) => {
+      const v = leer((raw as Record<string, unknown>)[g]);
+      return v === null ? [] : [[g, v]];
+    }),
+  ) as Partial<Record<GrupoDeCrm, T>>;
+  return Object.keys(variantes).length ? { variantes } : {};
+}
+
+function leerVarianteDePregunta(v: unknown): { texto?: string; ayuda?: string } | null {
+  if (!v || typeof v !== "object") return null;
+  const o = v as Record<string, unknown>;
+  const t = texto(o.texto, 600);
+  const a = texto(o.ayuda, 600);
+  return t || a ? { ...(t ? { texto: t } : {}), ...(a ? { ayuda: a } : {}) } : null;
+}
+
 /** Lee el banco guardado (Json). Tolera basura: una pregunta mal formada se descarta, no revienta la página. */
 export function leerPreguntasDelBanco(raw: unknown): PreguntaDelBanco[] {
   if (!Array.isArray(raw)) return [];
@@ -105,9 +136,9 @@ export function leerPreguntasDelBanco(raw: unknown): PreguntaDelBanco[] {
       const r = x as Record<string, unknown>;
       const oid = texto(r.id, 60);
       const ot = texto(r.texto, 600);
-      return oid && ot && esLetra(r.nivel) ? [{ id: oid, texto: ot, nivel: r.nivel }] : [];
+      return oid && ot && esLetra(r.nivel) ? [{ id: oid, texto: ot, nivel: r.nivel, ...leerVariantes(r.variantes, (v) => texto(v, 600) || null) }] : [];
     });
-    return opciones.length ? [{ id, dimensionId, texto: t, ayuda: texto(o.ayuda, 600) || null, opciones }] : [];
+    return opciones.length ? [{ id, dimensionId, texto: t, ayuda: texto(o.ayuda, 600) || null, opciones, ...leerVariantes(o.variantes, leerVarianteDePregunta) }] : [];
   });
 }
 
