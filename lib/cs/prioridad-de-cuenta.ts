@@ -95,3 +95,26 @@ export interface PrioridadVisible {
 export function prioridadVisible(p: PrioridadGuardada | null | undefined): PrioridadVisible | null {
   return p ? { motivo: p.motivo, nota: p.nota, enPalabras: motivoEnPalabras(p), quien: quienLaMarco(p) } : null;
 }
+
+/** Las marcas del servidor con lo que se guardó en esta pantalla encima (null = se quitó). */
+export function marcasConLoGuardado(
+  delServidor: Readonly<Record<string, PrioridadVisible>>,
+  guardadas: Readonly<Record<string, PrioridadVisible | null>>,
+): Record<string, PrioridadVisible> {
+  const marcas = { ...delServidor };
+  for (const [clientId, p] of Object.entries(guardadas)) {
+    if (p) marcas[clientId] = p;
+    else delete marcas[clientId];
+  }
+  return marcas;
+}
+
+/** Las marcas de todas las cuentas, por id: lo que recibe la columna «Prioritaria» de los listados. */
+export function prioridadesVisibles(porCliente: ReadonlyMap<string, PrioridadGuardada>): Record<string, PrioridadVisible> {
+  const marcas: Record<string, PrioridadVisible> = {};
+  for (const [clientId, p] of porCliente) {
+    const visible = prioridadVisible(p);
+    if (visible) marcas[clientId] = visible;
+  }
+  return marcas;
+}

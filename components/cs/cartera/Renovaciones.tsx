@@ -13,10 +13,11 @@ import { enCuanto, fmtCambio, fmtDia, fmtMonto } from "@/lib/cs/formato";
 import { esEnDolares, type FilaDeRenovacion } from "@/lib/cs/cartera-reglas";
 import { UMBRALES } from "@/lib/cs/lectura-partner";
 import { Avatar, CajaDeTabla, Chip, EncabezadoDeTabla, GrupoDeTabla, Salud } from "../piezas";
+import { EstrellaDePrioridad } from "../EstrellaDePrioridad";
 
 type Ventana = "30" | "60" | "90";
 
-const COLUMNAS = "grid-cols-[minmax(0,1.1fr)_minmax(0,1.5fr)_92px_100px_112px_136px_minmax(0,1fr)_30px]";
+const COLUMNAS = "grid-cols-[108px_minmax(0,1.1fr)_minmax(0,1.5fr)_92px_100px_112px_136px_minmax(0,1fr)_30px]";
 
 const TRAMOS: Array<{ desde: number; hasta: number; titulo: string }> = [
   { desde: 0, hasta: 30, titulo: "Próximos 30 días" },
@@ -59,8 +60,9 @@ export default function Renovaciones({ filas, hoy }: { filas: FilaDeRenovacion[]
       {visibles.length === 0 ? (
         <EmptyState title={`Nada renueva en ${ventana} días`} description="Las fechas salen de HubSpot Partner y de lo cargado a mano en la información de cada cliente." />
       ) : (
-        <CajaDeTabla minimo="min-w-[1040px]">
+        <CajaDeTabla minimo="min-w-[1148px]">
           <EncabezadoDeTabla columnas={COLUMNAS}>
+            <span>Prioritaria</span>
             <span>Cuenta</span>
             <span>Qué renueva y cómo se usa</span>
             <span>Fecha</span>
@@ -80,13 +82,16 @@ export default function Renovaciones({ filas, hoy }: { filas: FilaDeRenovacion[]
                   const usos = f.hubs.filter((h) => h.uso !== null);
                   const usoBajo = usos.some((h) => (h.uso ?? 100) < UMBRALES.usoBajo);
                   return (
-                    <Link
+                    <div
                       key={`${f.clientId}-${f.fecha}-${f.moneda ?? ""}`}
-                      href={`/customer-success/${f.clientId}`}
-                      className={cn("grid items-center gap-4 px-4 py-3.5 text-fg transition-colors hover:bg-surface-hover", COLUMNAS, i > 0 && "border-t border-line")}
+                      className={cn("relative grid items-center gap-4 px-4 py-3.5 text-fg transition-colors hover:bg-surface-hover", COLUMNAS, i > 0 && "border-t border-line")}
                     >
+                      <EstrellaDePrioridad clientId={f.clientId} cuenta={f.nombre} />
                       <span className="flex min-w-0 flex-col gap-1">
-                        <span className="truncate text-sm font-semibold">{f.nombre}</span>
+                        {/* La fila entera abre la cuenta (el enlace del nombre la cubre); la estrella y el color quedan por encima. */}
+                        <Link href={`/customer-success/${f.clientId}`} className="truncate text-sm font-semibold after:absolute after:inset-0">
+                          {f.nombre}
+                        </Link>
                         {f.cancelacion && (
                           <span>
                             <Chip tono="atencion">Cancelación registrada</Chip>
@@ -114,10 +119,14 @@ export default function Renovaciones({ filas, hoy }: { filas: FilaDeRenovacion[]
                       >
                         {f.cambioEsperado === null ? "sin dato" : f.cambioEsperado === 0 ? "sin cambio" : fmtCambio(f.cambioEsperado, f.moneda)}
                       </span>
-                      <Salud salud={f.salud} porque={f.porqueDeLaSalud} />
+                      <span className="relative z-[1] justify-self-start">
+                        <Salud salud={f.salud} porque={f.porqueDeLaSalud} />
+                      </span>
                       <span className="text-[13px] text-fg-secondary">{f.conversacion}</span>
-                      <Avatar nombre={f.cse?.nombre ?? null} />
-                    </Link>
+                      <span className="relative z-[1]">
+                        <Avatar nombre={f.cse?.nombre ?? null} />
+                      </span>
+                    </div>
                   );
                 })}
               </div>

@@ -14,8 +14,9 @@ import { cn } from "@/lib/cn";
 import { diasEntre, enCuanto, fmtDia, fmtMonto, miles, plural } from "@/lib/cs/formato";
 import type { FilaDeNivel } from "@/lib/cs/cartera-reglas";
 import { CajaDeTabla, Chip, EncabezadoDeTabla, Punto } from "../piezas";
+import { EstrellaDePrioridad } from "../EstrellaDePrioridad";
 
-const COLUMNAS = "grid-cols-[minmax(0,1.3fr)_96px_104px_130px_110px_150px_110px]";
+const COLUMNAS = "grid-cols-[108px_minmax(0,1.3fr)_96px_104px_130px_110px_150px_110px]";
 
 interface Nivel {
   filas: FilaDeNivel[];
@@ -66,8 +67,9 @@ export default function NivelDePartner({ nivel, hoy }: { nivel: Nivel; hoy: stri
           detalle={nivel.comisionCalculadaEn ? `según HubSpot, al ${fmtDia(nivel.comisionCalculadaEn, hoy)}` : "según HubSpot"}
         />
       </div>
-      <CajaDeTabla minimo="min-w-[940px]">
+      <CajaDeTabla minimo="min-w-[1048px]">
         <EncabezadoDeTabla columnas={COLUMNAS}>
+          <span>Prioritaria</span>
           <span>Cuenta</span>
           <span className="text-right">Vendidos</span>
           <span className="text-right">Gestionados</span>
@@ -80,6 +82,7 @@ export default function NivelDePartner({ nivel, hoy }: { nivel: Nivel; hoy: stri
           const pronto = f.relacionVence ? diasEntre(hoy, f.relacionVence) <= 30 && diasEntre(hoy, f.relacionVence) >= 0 : false;
           return (
             <div key={f.clientId} className={cn("grid items-center gap-4 px-4 py-3.5 text-[13px] tabular-nums text-fg", COLUMNAS, i > 0 && "border-t border-line")}>
+              <EstrellaDePrioridad clientId={f.clientId} cuenta={f.nombre} />
               <span className="truncate text-sm font-semibold">{f.nombre}</span>
               <span className="text-right">{f.vendidos !== null ? miles(f.vendidos) : "—"}</span>
               <span className="text-right">{f.gestionados !== null ? miles(f.gestionados) : "—"}</span>

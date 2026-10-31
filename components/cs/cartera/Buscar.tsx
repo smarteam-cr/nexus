@@ -10,8 +10,9 @@ import { cn } from "@/lib/cn";
 import { fmtDia, plural } from "@/lib/cs/formato";
 import type { CuentaParaBuscar } from "@/lib/cs/cartera-reglas";
 import { Avatar, CajaDeTabla, Chip, EncabezadoDeTabla, Flecha, Salud } from "../piezas";
+import { EstrellaDePrioridad } from "../EstrellaDePrioridad";
 
-const COLUMNAS = "grid-cols-[minmax(0,1.5fr)_136px_minmax(0,1.6fr)_96px_64px_30px_16px]";
+const COLUMNAS = "grid-cols-[108px_minmax(0,1.5fr)_136px_minmax(0,1.6fr)_96px_64px_30px_16px]";
 
 /** El campo de búsqueda (la forma del índice de clientes). Enter y Esc los decide quien lo usa. */
 export function CampoDeBusqueda({
@@ -64,8 +65,9 @@ export function OtrasCuentas({ cuentas, hoy, conFiltro = false }: { cuentas: rea
 /** Una fila por cuenta, con su color y su porqué: la usan la búsqueda y «Toda la cartera». */
 export function TablaDeCuentas({ cuentas, hoy }: { cuentas: readonly CuentaParaBuscar[]; hoy: string }) {
   return (
-      <CajaDeTabla minimo="min-w-[820px]">
+      <CajaDeTabla minimo="min-w-[928px]">
         <EncabezadoDeTabla columnas={COLUMNAS}>
+          <span>Prioritaria</span>
           <span>Cuenta</span>
           <span>Salud</span>
           <span>Qué pasa</span>
@@ -75,18 +77,23 @@ export function TablaDeCuentas({ cuentas, hoy }: { cuentas: readonly CuentaParaB
           <span />
         </EncabezadoDeTabla>
         {cuentas.map((c, i) => (
-          <Link
+          <div
             key={c.clientId}
-            href={`/customer-success/${c.clientId}`}
-            className={cn("grid items-center gap-4 px-4 py-3.5 text-fg transition-colors hover:bg-surface-hover", COLUMNAS, i > 0 && "border-t border-line")}
+            className={cn("relative grid items-center gap-4 px-4 py-3.5 text-fg transition-colors hover:bg-surface-hover", COLUMNAS, i > 0 && "border-t border-line")}
           >
+            <EstrellaDePrioridad clientId={c.clientId} cuenta={c.nombre} />
             <span className="flex min-w-0 flex-col gap-0.5">
-              <span className="truncate text-sm font-semibold">{c.nombre}</span>
+              {/* La fila entera abre la cuenta (el enlace del nombre la cubre); la estrella y el color quedan por encima. */}
+              <Link href={`/customer-success/${c.clientId}`} className="truncate text-sm font-semibold after:absolute after:inset-0">
+                {c.nombre}
+              </Link>
               <span className="text-xs text-fg-muted">
                 {c.proyectosActivos > 0 ? plural(c.proyectosActivos, "proyecto activo", "proyectos activos") : "sin proyecto activo"}
               </span>
             </span>
-            <Salud salud={c.salud} porque={c.porqueDeLaSalud} />
+            <span className="relative z-[1] justify-self-start">
+              <Salud salud={c.salud} porque={c.porqueDeLaSalud} />
+            </span>
             <span className="flex min-w-0 flex-wrap items-center gap-1.5">
               {c.principal ? (
                 <>
@@ -99,9 +106,11 @@ export function TablaDeCuentas({ cuentas, hoy }: { cuentas: readonly CuentaParaB
             </span>
             <span className={cn("text-[13px]", c.renueva ? "text-fg" : "text-fg-muted")}>{c.renueva ? fmtDia(c.renueva, hoy) : "sin dato"}</span>
             <span className={cn("text-[13px] tabular-nums", c.uso !== null ? "text-fg" : "text-fg-muted")}>{c.uso !== null ? c.uso : "—"}</span>
-            <Avatar nombre={c.cse} />
+            <span className="relative z-[1]">
+              <Avatar nombre={c.cse} />
+            </span>
             <Flecha />
-          </Link>
+          </div>
         ))}
       </CajaDeTabla>
   );

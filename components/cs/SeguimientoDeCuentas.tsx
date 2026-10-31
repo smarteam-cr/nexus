@@ -16,6 +16,7 @@ import { useSearchParams } from "next/navigation";
 import { PageHeader, Select } from "@/components/ui";
 import { BotonTexto } from "@/components/ui/sistema";
 import { cn } from "@/lib/cn";
+import { EstrellaDePrioridad } from "./EstrellaDePrioridad";
 import { cuandoEsLaReunion, diaCorto, DIAS_PARA_LA_REUNION, elDia } from "@/lib/mi-dia/servicio";
 import {
   conteosDelSeguimiento,
@@ -37,7 +38,7 @@ import { usePlanificarAccion } from "@/components/para-ti/inicio/AgendarEnLaAgen
 
 const CHIP = "inline-flex items-center whitespace-nowrap rounded-full px-2 py-px text-[11px] font-semibold leading-4";
 const ROTULO = "text-[10.5px] font-semibold uppercase tracking-[0.14em] text-fg-muted";
-const COLUMNAS = "lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)_minmax(0,1.1fr)_minmax(0,1.6fr)_minmax(0,0.9fr)]";
+const COLUMNAS = "lg:grid-cols-[108px_minmax(0,1.1fr)_minmax(0,1fr)_minmax(0,1.1fr)_minmax(0,1.6fr)_minmax(0,0.9fr)]";
 const BOTON_CHICO =
   "inline-flex items-center rounded-lg border border-line bg-surface px-2.5 py-1 text-xs font-medium text-fg-secondary transition-colors hover:bg-surface-hover hover:text-fg";
 
@@ -152,6 +153,7 @@ export default function SeguimientoDeCuentas({
       ) : (
         <section aria-label="Cuentas" className="overflow-hidden rounded-xl border border-line bg-surface">
           <div className={cn("hidden gap-x-5 border-b border-line bg-surface-muted px-4 py-2 lg:grid", COLUMNAS)}>
+            <span className={ROTULO}>Prioritaria</span>
             <span className={ROTULO}>Cuenta</span>
             <span className={ROTULO}>Próxima sesión</span>
             <span className={ROTULO}>Siguiente paso</span>
@@ -192,6 +194,8 @@ function Fila({ f, hoyISO, correo, lider }: { f: FilaDeSeguimiento; hoyISO: stri
 
   return (
     <div className={cn("grid grid-cols-1 gap-x-5 gap-y-2.5 border-t border-line px-4 py-3.5 first:border-t-0 lg:grid", COLUMNAS)}>
+      <EstrellaDePrioridad clientId={f.clientId} cuenta={f.nombre} />
+
       {/* La cuenta y su CSE. */}
       <div className="min-w-0 space-y-1">
         <div className="flex min-w-0 items-center gap-2">
