@@ -9,6 +9,7 @@
  * Si la lectura falla devuelve null: la fila se pinta sin estado en vez de tumbar el listado entero.
  */
 import { prisma } from "@/lib/db/prisma";
+import { SIN_ARCHIVAR } from "@/lib/cuestionario/sin-archivar";
 import { estadoDeCuestionarios, sugerenciaDescartadaEn, type EstadoDeCuestionarios } from "./estado-de-cuestionarios";
 
 export async function cargarEstadoDeCuestionarios(
@@ -17,10 +18,10 @@ export async function cargarEstadoDeCuestionarios(
 ): Promise<EstadoDeCuestionarios | null> {
   try {
     const lista = await prisma.cuestionario.findMany({
-      where: { projectId },
-      select: { publicadoAt: true, cerradoAt: true, pestanas: { select: { enviadaAt: true } } },
+      where: { projectId, ...SIN_ARCHIVAR },
+      select: { publicadoAt: true, cerradoAt: true, canvasId: true, pestanas: { select: { enviadaAt: true } } },
     });
-    return estadoDeCuestionarios(lista, sugerenciaDescartadaEn(seccionesDelKickoff));
+    return { ...estadoDeCuestionarios(lista, sugerenciaDescartadaEn(seccionesDelKickoff)), sueltos: lista.filter((c) => !c.canvasId).length };
   } catch (e) {
     console.error("[estado-de-cuestionarios] no se pudo leer", e instanceof Error ? e.message : e);
     return null;

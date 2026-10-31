@@ -38,11 +38,14 @@ async function pedir(url: string, method: "GET" | "POST"): Promise<Respuesta> {
 
 export default function ExploracionDelProyecto({
   projectId,
+  canvasId,
   slotDelPanel,
   slotDeSesiones,
   informeAnterior,
 }: {
   projectId: string;
+  /** La copia que se abre (2026-10-30). Sin él, la exploración de siempre del proyecto. */
+  canvasId?: string | null;
   /** El panel de la derecha de la ficha (null si está oculto). */
   slotDelPanel: HTMLElement | null;
   /** Debajo de la fila «Exploración» del riel de la ficha. */
@@ -54,7 +57,7 @@ export default function ExploracionDelProyecto({
 
   useEffect(() => {
     let vivo = true;
-    const url = `/api/projects/${projectId}/exploracion`;
+    const url = `/api/projects/${projectId}/exploracion${canvasId ? `?canvasId=${encodeURIComponent(canvasId)}` : ""}`;
     (async () => {
       try {
         let r = await pedir(url, "GET");
@@ -70,7 +73,7 @@ export default function ExploracionDelProyecto({
     return () => {
       vivo = false;
     };
-  }, [projectId]);
+  }, [projectId, canvasId]);
 
   if (estado.tipo === "cargando") return <SkeletonPanel minH="min-h-[420px]" />;
   if (estado.tipo === "error") return <Alert variant="danger">{estado.mensaje}</Alert>;

@@ -2,17 +2,18 @@
 
 /**
  * components/artefactos/BarraDelArtefacto.tsx — la barra de un documento de un tipo que admite copias (etapa V3 y V4 de
- * docs/artefactos-plan.md): su nombre, su estado (en construcción o terminado), su «Contexto adicional», su «Acceso» (el
- * enlace para compartir pantalla, con el punto verde si está compartido), el orden de los de su tipo y «Crear otra». La
- * misma para el documento de siempre y para cada copia: son todas iguales (Elías, 29 oct). Archivar es solo de las copias.
+ * docs/artefactos-plan.md): su estado (en construcción o terminado), su «Contexto adicional», su «Acceso» (el enlace para
+ * compartir pantalla, con el punto verde si está compartido), el orden de los de su tipo y «Crear otra». El nombre va una
+ * sola vez, en el título de arriba (NombreEditable). La misma para el documento de siempre y para cada copia: son todas
+ * iguales (Elías, 29 oct). Archivar es solo de las copias.
  *
  * UI interna: primitivas de components/ui, tokens semánticos y tuteo.
  */
 import { useCallback, useEffect, useState, type ReactNode } from "react";
-import { Alert, Button, ConfirmDialog, IconButton, Input, Menu, Modal, Segmentado } from "@/components/ui";
+import { Alert, Button, ConfirmDialog, Input, Menu, Modal, Segmentado } from "@/components/ui";
 import { useToast } from "@/components/ui/Toast";
 import { BOTON_DE_HERRAMIENTA } from "@/components/ui/sistema";
-import { tipoDeArtefacto } from "@/lib/artefactos/tipos";
+import { rotuloDeCrearOtro, tipoDeArtefacto } from "@/lib/artefactos/tipos";
 import { rutaDelEnlace } from "@/lib/artefactos/enlaces";
 import { ROTULO_DEL_ESTADO } from "@/lib/artefactos/copias";
 import OrdenarArtefactosModal, { type DocumentoParaOrdenar } from "./OrdenarArtefactosModal";
@@ -146,9 +147,6 @@ export default function BarraDelArtefacto({
   onArchivada?: () => void;
 }) {
   const t = tipoDeArtefacto(tipo);
-  const [editando, setEditando] = useState(false);
-  const [borrador, setBorrador] = useState(nombre);
-  const [guardando, setGuardando] = useState(false);
   const [verContexto, setVerContexto] = useState(false);
   const [ordenar, setOrdenar] = useState(false);
   /** El estado elegido mientras se guarda (optimista); null = el que dice el listado. */
@@ -173,20 +171,12 @@ export default function BarraDelArtefacto({
     [base, onCambio, toast],
   );
 
-  const guardarNombre = async () => {
-    const n = borrador.trim();
-    if (!n || n === nombre) return setEditando(false);
-    setGuardando(true);
-    if (await patch({ nombre: n })) setEditando(false);
-    setGuardando(false);
-  };
-
   const archivar = async () => {
     setConfirmarArchivo(false);
     const r = await fetch(base, { method: "DELETE" }).catch(() => null);
     const j = (await r?.json().catch(() => null)) as { error?: string } | null;
     if (!r?.ok) return toast.error(j?.error ?? "No se pudo archivar.");
-    toast.success(`«${nombre}» quedó archivado: ya no está en el riel ni lo leen los agentes.`, {
+    toast.success(`«${nombre}» quedó archivado: ya no está en la lista ni lo leen los agentes.`, {
       action: { label: "Deshacer", onClick: () => void patch({ archivado: false }) },
     });
     onArchivada?.();
@@ -194,46 +184,6 @@ export default function BarraDelArtefacto({
 
   return (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-line bg-surface px-3 py-2 text-xs">
-      <div className="flex min-w-0 flex-1 items-center gap-2">
-        {editando ? (
-          <form
-            className="flex min-w-0 flex-1 items-center gap-2"
-            onSubmit={(e) => {
-              e.preventDefault();
-              void guardarNombre();
-            }}
-          >
-            <Input autoFocus value={borrador} maxLength={120} onChange={(e) => setBorrador(e.target.value)} aria-label="Nombre del documento" className="min-w-0 flex-1" />
-            <Button size="xs" variant="primary" type="submit" loading={guardando}>
-              Guardar
-            </Button>
-            <Button size="xs" variant="secondary" type="button" onClick={() => setEditando(false)}>
-              Cancelar
-            </Button>
-          </form>
-        ) : (
-          <>
-            <span className="text-fg-muted">{t?.nombre ?? "Documento"}</span>
-            <span className="min-w-0 truncate font-semibold text-fg" title={nombre}>
-              {nombre}
-            </span>
-            <IconButton
-              size="sm"
-              aria-label="Cambiar el nombre"
-              title="Cambiar el nombre"
-              onClick={() => {
-                setBorrador(nombre);
-                setEditando(true);
-              }}
-              icon={
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-3.5 w-3.5" aria-hidden="true">
-                  <path d="M12 20h9M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z" />
-                </svg>
-              }
-            />
-          </>
-        )}
-      </div>
       <Segmentado
         etiqueta="Estado del documento"
         opciones={[
@@ -248,7 +198,7 @@ export default function BarraDelArtefacto({
           void patch({ terminado: nuevo }).then(() => setEstadoElegido(null));
         }}
       />
-      {(esCopia || contextoDeSiempre) && (
+      {((esCopia && t?.contextoDe && !t.sinDuplicar) || contextoDeSiempre) && (
         <button type="button" onClick={() => setVerContexto(true)} className={BOTON_DE_HERRAMIENTA} title="Las reuniones, notas, transcripciones, archivos e instrucciones de este documento">
           Contexto adicional
         </button>
@@ -266,7 +216,7 @@ export default function BarraDelArtefacto({
           </span>
         }
         items={[
-          { key: "otra", label: `Crear otr${t?.conArticulo.startsWith("una") ? "a" : "o"} ${(t?.nombre ?? "documento").toLowerCase()}`, onSelect: onCrearOtra },
+          { key: "otra", label: t ? rotuloDeCrearOtro(t) : "Crear otro documento", onSelect: onCrearOtra },
           ...(delTipo.length > 1 ? [{ key: "ordenar", label: `Ordenar (${delTipo.length})`, onSelect: () => setOrdenar(true) }] : []),
           ...(esCopia ? [{ key: "archivar", label: "Archivar", danger: true, separatorBefore: true, onSelect: () => setConfirmarArchivo(true) }] : []),
         ]}
@@ -274,7 +224,7 @@ export default function BarraDelArtefacto({
       <ConfirmDialog
         open={confirmarArchivo}
         title={`¿Archivar «${nombre}»?`}
-        description="Sale del riel y los agentes dejan de leerlo. Nada se borra, pero si tiene enlace deja de abrir y, al recuperarlo, hay que crear uno nuevo."
+        description="Sale de la lista y los agentes dejan de leerlo. Nada se borra, pero si tiene enlace deja de abrir y, al recuperarlo, hay que crear uno nuevo."
         confirmLabel="Archivar"
         onCancel={() => setConfirmarArchivo(false)}
         onConfirm={() => void archivar()}

@@ -62,7 +62,7 @@ import { urlDeDocumentoEnManual } from "@/lib/manual/anclas";
 import ChatDelDocumento from "@/components/asistente/ChatDelDocumento";
 import { puedeConversar, PIEZA_CRONOGRAMA } from "@/lib/asistente/piezas";
 import { buildPieceRows } from "@/lib/flow/dropdown-rows";
-import { GRUPO_HERRAMIENTAS, grupoDelRiel, ordenarPorGrupo } from "@/lib/flow/grupos-del-riel";
+import { GRUPO_ENTREGABLES, GRUPO_HERRAMIENTAS, grupoDelRiel, ordenarPorGrupo } from "@/lib/flow/grupos-del-riel";
 import { AVISO_DESACTUALIZADA_LARGO } from "@/lib/pieces/piece-staleness";
 import { pieceReadiness } from "@/lib/flow/piece-readiness";
 import { ExternalAccessButton } from "./ExternalAccessPanel";
@@ -80,7 +80,9 @@ import ArtefactoWorkspace from "@/components/artefactos/ArtefactoWorkspace";
 import BarraDelArtefacto from "@/components/artefactos/BarraDelArtefacto";
 import NuevoArtefactoModal from "@/components/artefactos/NuevoArtefactoModal";
 import { esCopia, nombreDelArtefacto, ordenarArtefactos, tipoDelDocumento } from "@/lib/artefactos/copias";
-import { admiteCopias, TIPO_REQUERIMIENTO_TECNICO, tipoDeArtefacto } from "@/lib/artefactos/tipos";
+import { admiteCopias, seRenombra, TIPO_CUESTIONARIOS, TIPO_REQUERIMIENTO_TECNICO, tipoDeArtefacto } from "@/lib/artefactos/tipos";
+import NombreEditable from "@/components/artefactos/NombreEditable";
+import AlertaDeAccesoAlPortal, { useAccesoAlPortal } from "./AlertaDeAccesoAlPortal";
 
 /** El PDF de una copia: la del requerimiento técnico imprime con el adaptador que tiene todas sus secciones. */
 const impresionDeLaCopia = (tipo: string | null) => (tipo === TIPO_REQUERIMIENTO_TECNICO ? "integration" : tipo);
@@ -278,6 +280,8 @@ export default function ProjectCanvasPanel({
   const [estadoCiclo, setEstadoCiclo] = useState<CicloParaElRiel | null>(null);
   /** Las piezas que el equipo ocultó del riel (2026-10-12): quedan en «Ver N piezas más». */
   const [piezasOcultas, setPiezasOcultas] = useState<string[]>([]);
+  /** Alguien ya abrió la exploración de siempre: se escribe en su lienzo, así que el canvas vacío no dice que nadie la creó. */
+  const [exploracionAbierta, setExploracionAbierta] = useState(false);
   /** Si el kickoff sigue como nació y qué plantilla le toca (lib/entregables/generar-server.ts). null = todavía no se sabe: el documento. */
   const [selectorKickoff, setSelectorKickoff] = useState<{ sinTocar: boolean; plantillaDelServicio: string | null } | null>(null);
   /* Slot en el header para los CTAs de un canvas que necesita ESTADO PROPIO para decidir
@@ -320,6 +324,9 @@ export default function ProjectCanvasPanel({
   const copiaActiva = visible && !enResumen && !piezaSinCanvas && activeCanvas && esCopia(activeCanvas) ? activeCanvas : null;
   const tipoActivo = visible && !enResumen && !piezaSinCanvas && activeCanvas ? tipoDelDocumento(activeCanvas) : null;
   const conBarraDeArtefacto = !!tipoActivo && admiteCopias(tipoActivo) && !!activeCanvas;
+  /* Una copia de Exploración o de Cuestionarios abre su herramienta: no es un documento del motor. */
+  const copiaDelMotor = copiaActiva && !tipoDeArtefacto(tipoActivo)?.sinDuplicar ? copiaActiva : null;
+  const esExploracionAbierta = activeSlug === "exploration" || tipoActivo === "exploration";
   const delTipoActivo = useMemo(
     () =>
       tipoActivo
@@ -331,8 +338,10 @@ export default function ProjectCanvasPanel({
         : [],
     [canvases, tipoActivo],
   );
-  /** «Nuevo artefacto» / «Crear otra…»: abierto, y con qué tipo ya elegido. */
-  const [nuevoArtefacto, setNuevoArtefacto] = useState<{ tipo: string | null } | null>(null);
+  /** «Nuevo artefacto» / «Crear otra…»: abierto, con qué tipo ya elegido y desde qué grupo. */
+  const [nuevoArtefacto, setNuevoArtefacto] = useState<{ tipo: string | null; clase?: "entregable" | "herramienta" | null } | null>(null);
+  /** El acceso al portal del cliente, si el kickoff lo pide y sigue pendiente: alerta en el Resumen e ícono en su fila. */
+  const { acceso: accesoAlPortal, setAcceso: setAccesoAlPortal } = useAccesoAlPortal(projectId, enResumen);
   /* Los Cuestionarios están en el riel con las mismas condiciones en que se veían cuando colgaban de la
      fila «Exploración»: con la Exploración en el proyecto (o con algún cuestionario ya armado). No se
      activan: si no corresponden, no se listan. */
@@ -500,6 +509,7 @@ export default function ProjectCanvasPanel({
         setEstadoCiclo((d.ciclo as CicloParaElRiel | null | undefined) ?? null);
         if (Array.isArray(d.piezasOcultas)) setPiezasOcultas(d.piezasOcultas as string[]);
         setSelectorKickoff((d.selectorKickoff as { sinTocar: boolean; plantillaDelServicio: string | null } | null | undefined) ?? null);
+        setExploracionAbierta(d.exploracionAbierta === true);
         setActiveCanvasId((prev) => {
           // Selección vigente que sigue existiendo → se mantiene.
           if (prev && list.some((c) => c.id === prev)) return prev;
@@ -598,6 +608,26 @@ export default function ProjectCanvasPanel({
       setActivando(null);
     }
   }, [projectId, refetchCanvases, switchCanvas, toast, visible, onAbrirDesdeOculto]);
+
+  /** Cambia el nombre de un documento. Sin canvas son los Cuestionarios de siempre: toman uno, con sus cuestionarios adentro. */
+  const renombrar = useCallback(
+    async (canvasId: string | null, nombre: string): Promise<boolean> => {
+      const r = await fetch(`/api/projects/${projectId}/artefactos${canvasId ? `/${canvasId}` : ""}`, {
+        method: canvasId ? "PATCH" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(canvasId ? { nombre } : { tipo: TIPO_CUESTIONARIOS, nombre, conLosSueltos: true }),
+      }).catch(() => null);
+      if (!r?.ok) {
+        toast.error("No se pudo cambiar el nombre.");
+        return false;
+      }
+      const j = canvasId ? null : ((await r.json().catch(() => null)) as { canvasId?: string } | null);
+      await refetchCanvases();
+      if (j?.canvasId && visible && piezaSinCanvas === PIEZA_CUESTIONARIOS) switchCanvas(j.canvasId);
+      return true;
+    },
+    [piezaSinCanvas, projectId, refetchCanvases, switchCanvas, toast, visible],
+  );
 
   // Primer load + refetch cuando la señal genérica de canvases bumpea (canvas
   // auto-creado por un agente). La señal es el punto de escalabilidad: cualquier
@@ -720,7 +750,7 @@ export default function ProjectCanvasPanel({
       });
       if (!res.ok) throw new Error();
       setEstadoCuestionarios((e) => (e ? { ...e, sugerenciaDescartada: true } : e));
-      toast.info("Listo: no te lo vuelvo a sugerir. Los cuestionarios siguen en el riel.");
+      toast.info("Listo: no te lo vuelvo a sugerir. Los cuestionarios siguen en la lista.");
     } catch {
       toast.error("No se pudo guardar. Prueba de nuevo.");
     }
@@ -892,8 +922,10 @@ export default function ProjectCanvasPanel({
               activa: visible && enResumen,
               meta: etapaMeta,
               onClick: () => (visible ? irAlResumen() : onAbrirDesdeOculto?.(null)),
+              alerta: accesoAlPortal?.falta ? "Falta el acceso al portal de HubSpot del cliente" : null,
             }}
             grupoDelResumen={esRecurrente ? undefined : GRUPO_HERRAMIENTAS}
+            grupoAlFinal={esRecurrente ? undefined : GRUPO_ENTREGABLES}
             filas={(esRecurrente ? pieceRows : ordenarPorGrupo(pieceRows)).map((row): FilaDelRielDePiezas => {
               // ¿Esta pieza le corresponde a este proyecto, y están sus pasos previos?
               // Nunca bloquea: informa (lib/flow/piece-readiness).
@@ -906,6 +938,7 @@ export default function ProjectCanvasPanel({
               // Una copia va en el grupo de su tipo (etapa V3): su slug de fila es `copia:<id>`.
               const grupo = grupoDe(row.tipo ?? row.slug);
               const oculta = piezasOcultas.includes(row.slug);
+              const activaLaFila = visible && !enResumen && !piezaSinCanvas && row.canvasId !== null && row.canvasId === activeCanvasId;
               // Adopción y Aprendizaje (servicio recurrente) no tienen canvas: su fila dice la etapa en curso.
               if ((PIEZAS_PROPIAS_DEL_CICLO as readonly string[]).includes(row.slug)) {
                 return {
@@ -920,13 +953,16 @@ export default function ProjectCanvasPanel({
               }
               // Los Cuestionarios no tienen canvas: su fila dice cómo van, siempre escrito.
               if (row.slug === PIEZA_CUESTIONARIOS) {
+                const activa = visible && !enResumen && piezaSinCanvas === row.slug;
                 return {
                   slug: row.slug,
                   etiqueta: row.label,
                   grupo,
                   oculta,
-                  estado: row.state === "generada" ? "generada" : "pendiente",
-                  activa: visible && !enResumen && piezaSinCanvas === row.slug,
+                  renombrable: true,
+                  // Sin cuestionarios propios no sale en la lista: se crean en «Nuevo artefacto».
+                  estado: !activa && !estadoCuestionarios?.sueltos ? "sin_crear" : row.state === "generada" ? "generada" : "pendiente",
+                  activa,
                   aviso: {
                     corto: estadoCuestionarios?.corto ?? "",
                     largo: estadoCuestionarios?.largo ?? "Lo que contesta el cliente: el táctico, el de la escala y el de estrategia.",
@@ -940,8 +976,9 @@ export default function ProjectCanvasPanel({
                 etiqueta: row.label,
                 grupo,
                 oculta,
-                estado: estadoEnElRiel(row),
-                activa: visible && !enResumen && !piezaSinCanvas && row.canvasId !== null && row.canvasId === activeCanvasId,
+                tipo: row.tipo,
+                estado: estadoEnElRiel(row.slug === "exploration" && exploracionAbierta ? { ...row, conNombre: true } : row, { activa: activaLaFila, conVacias: esRecurrente }),
+                activa: activaLaFila,
                 /* El aviso COMPRIMIDO ("Sin tag X" / "Antes: Y"); la frase completa va en el title.
                    Si no, el de «el handoff corrió después»: el encadenado ya NO reescribe solo
                    (borraba ediciones a mano) y sin este renglón el CSE creía que estaba al día.
@@ -962,25 +999,13 @@ export default function ProjectCanvasPanel({
                       ? avisoDelResumen
                       : null,
                 esCopia: row.esCopia,
-                canvasId: admiteCopias(row.tipo ?? row.slug) ? row.canvasId : null,
+                canvasId: seRenombra(row.tipo ?? row.slug) ? row.canvasId : null,
                 propuesta: row.slug === PIEZA_CRONOGRAMA && propuestaPendiente,
                 novedades: nNovedades(row.slug),
                 ocupada: activando === row.slug,
               };
             })}
-            onRenombrar={async (canvasId, nombre) => {
-              const r = await fetch(`/api/projects/${projectId}/artefactos/${canvasId}`, {
-                method: "PATCH",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ nombre }),
-              }).catch(() => null);
-              if (!r?.ok) {
-                toast.error("No se pudo cambiar el nombre.");
-                return false;
-              }
-              await refetchCanvases();
-              return true;
-            }}
+            onRenombrar={renombrar}
             porActivarAbiertas={porActivarAbiertas}
             onAlternarPorActivar={() => setPorActivarAbiertas((v) => !v)}
             onElegir={(slug) => {
@@ -1002,12 +1027,14 @@ export default function ProjectCanvasPanel({
               if (visible) switchCanvas(row.canvasId);
               else onAbrirDesdeOculto?.(row.canvasId);
             }}
-            onActivar={(slug) => {
-              if (activando === null) void activarPieza(slug);
+            onOcultar={(slug, oculta) => {
+              void alternarOculta(slug, oculta);
+              // La que se está mirando se va de la lista: la pantalla no se queda en algo que ya no está ahí.
+              const abierta = piezaSinCanvas === slug || (!!activeCanvasId && pieceRows.find((r) => r.slug === slug)?.canvasId === activeCanvasId);
+              if (oculta && visible && !enResumen && abierta) irAlResumen();
             }}
-            onOcultar={(slug, oculta) => void alternarOculta(slug, oculta)}
             slotDeSesiones={setSlotDeSesiones}
-            onNuevoArtefacto={() => setNuevoArtefacto({ tipo: null })}
+            onNuevoArtefacto={(grupo) => setNuevoArtefacto({ tipo: null, clase: grupo === "herramienta" || grupo === "entregable" ? grupo : null })}
           />,
           slotDePiezas,
         )}
@@ -1027,11 +1054,22 @@ export default function ProjectCanvasPanel({
             <>
               <div className="flex flex-wrap items-center gap-2">
                 <h2 className="text-[22px] font-bold leading-tight text-fg">
-                  {/* Un documento renombrado se ve con su nombre (etapa V3); sin renombrar, el de su pieza, como siempre. */}
-                  {piezaSinCanvas && activeSlug ? pieceLabel(activeSlug) : activeCanvas ? nombreDelArtefacto(activeCanvas) : activeSlug ? pieceLabel(activeSlug) : null}
+                  {/* Un documento renombrado se ve con su nombre (etapa V3); sin renombrar, el de su pieza, como siempre. El
+                      nombre va una sola vez y se edita acá mismo (Elías, 30 oct). */}
+                  {piezaSinCanvas === PIEZA_CUESTIONARIOS ? (
+                    <NombreEditable key="cuestionarios" nombre={pieceLabel(PIEZA_CUESTIONARIOS)} onGuardar={(n) => renombrar(null, n)} />
+                  ) : piezaSinCanvas && activeSlug ? (
+                    pieceLabel(activeSlug)
+                  ) : activeCanvas && seRenombra(tipoActivo) && activeCanvasId ? (
+                    <NombreEditable key={activeCanvasId} nombre={nombreDelArtefacto(activeCanvas)} onGuardar={(n) => renombrar(activeCanvasId, n)} />
+                  ) : activeCanvas ? (
+                    nombreDelArtefacto(activeCanvas)
+                  ) : activeSlug ? (
+                    pieceLabel(activeSlug)
+                  ) : null}
                 </h2>
                 {/* La exploración es una herramienta de trabajo del equipo, no un documento (2026-10-05). */}
-                {(activeSlug ?? tipoActivo) === "exploration" && (
+                {esExploracionAbierta && (
                   <span className="inline-flex items-center gap-1.5 rounded-full border border-line bg-surface px-2.5 py-px text-[11px] font-semibold text-fg-secondary">
                     <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} aria-hidden="true">
                       <path d="M3 3l18 18M10.6 10.6a2 2 0 002.8 2.8M9.9 5.1A9.7 9.7 0 0112 5c5 0 9 4.5 10 7a13 13 0 01-3.2 4.3M6.6 6.6C4.3 8 2.7 10.2 2 12c1 2.5 5 7 10 7a9.6 9.6 0 004.4-1" />
@@ -1076,7 +1114,7 @@ export default function ProjectCanvasPanel({
           {!ctaEnElPanel && botonDelAgente}
           {/* Las fotos que se toman antes de cada regeneración (lib/canvas/versiones.ts): en todo
               documento que la IA reescribe, incluido Desarrollo (su CTA viene por portal). */}
-          {activeCanvas && activeCanvasId && activeSlug !== "exploration" && (CANVAS_PRIMARY_AGENT[activeSlug ?? ""] || activeSlug === "tech-requirements" || activeSlug === "handoff" || copiaActiva) && (
+          {activeCanvas && activeCanvasId && activeSlug !== "exploration" && (CANVAS_PRIMARY_AGENT[activeSlug ?? ""] || activeSlug === "tech-requirements" || activeSlug === "handoff" || copiaDelMotor) && (
             <VersionesDelDocumento
               projectId={projectId}
               canvasId={activeCanvasId}
@@ -1121,7 +1159,7 @@ export default function ProjectCanvasPanel({
               canvas activo. El resumen no se imprime: no es un documento, es la foto de cómo va el
               proyecto — y sus dos piezas (el brief y el handoff) tienen su propio PDF. */}
           {/* Una copia exporta por su id (etapa V3); la exploración, interna, no se imprime. */}
-          {copiaActiva && activeCanvasId && tipoActivo !== "exploration" && printDocType(impresionDeLaCopia(tipoActivo)) && (
+          {copiaDelMotor && activeCanvasId && printDocType(impresionDeLaCopia(tipoActivo)) && (
             <PrintDownloadButton tipo={printDocType(impresionDeLaCopia(tipoActivo))!} docId={projectId} canvasId={activeCanvasId} />
           )}
           {!enResumen && !piezaSinCanvas && activeSlug !== "exploration" && !copiaActiva && (
@@ -1143,7 +1181,7 @@ export default function ProjectCanvasPanel({
 
       {/* El panel de la derecha mientras se mira un documento: su «Qué sigue», de dónde salió y el
           índice de secciones. */}
-      {slotDelPanel && !enResumen && !piezaSinCanvas && activeCanvas && activeCanvasId && activeSlug !== "exploration" &&
+      {slotDelPanel && !enResumen && !piezaSinCanvas && activeCanvas && activeCanvasId && activeSlug !== "exploration" && (!copiaActiva || copiaDelMotor) &&
         createPortal(
           <PanelDelDocumento
             key={activeCanvasId}
@@ -1175,6 +1213,7 @@ export default function ProjectCanvasPanel({
           vivos y vuelven como quedaron; se pintan UNA vez, solo en el Resumen. Guarda:
           lib/flow/resumen-del-proyecto.test.ts. */}
       <ProveedorDelResumen value={contextoDelResumen}>
+      {enResumen && accesoAlPortal && <AlertaDeAccesoAlPortal projectId={projectId} acceso={accesoAlPortal} onCambio={setAccesoAlPortal} />}
       <div hidden={!enResumen} className="grid items-start gap-4 lg:grid-cols-2">
         <ProjectGPS projectId={projectId} clientId={clientId} />
         <ProjectHandoffSection
@@ -1225,7 +1264,7 @@ export default function ProjectCanvasPanel({
           }}
         />
       )}
-      {copiaActiva && activeCanvasId && tipoActivo && (
+      {copiaDelMotor && activeCanvasId && tipoActivo && (
         <CanvasBoundary label="este artefacto">
           <ArtefactoWorkspace
             key={`artefacto-${activeCanvasId}-${agentNonce}`}
@@ -1246,14 +1285,13 @@ export default function ProjectCanvasPanel({
         open={nuevoArtefacto !== null}
         onClose={() => setNuevoArtefacto(null)}
         tipoInicial={nuevoArtefacto?.tipo ?? null}
+        clase={nuevoArtefacto?.clase ?? null}
+        libres={pieceRows.filter((r) => !r.esCopia && r.state !== "generada" && !r.conNombre).map((r) => r.slug)}
         documentos={canvases.flatMap((c) => {
           const t = tipoDelDocumento(c);
           // La entrega de siempre no se duplica: guarda en su Json lo que el cliente no ve.
           return t && admiteCopias(t) && !(c.slug && tipoDeArtefacto(t)?.sinEnlaceElDeSiempre) ? [{ id: c.id, nombre: nombreDelArtefacto(c), tipo: t }] : [];
         })}
-        onActivarPieza={(slug) => {
-          if (activando === null) void activarPieza(slug);
-        }}
         onCreado={(id) => {
           void refetchCanvases().then(() => switchCanvas(id));
         }}
@@ -1398,14 +1436,16 @@ export default function ProjectCanvasPanel({
       {/* Exploración: el lienzo de la preventa con las preguntas de Customer Success (2026-10-07). Es
           una herramienta de trabajo, no un documento: va FUERA del marco, cuelga sus sesiones del riel
           y pinta su propia columna derecha. Solo el informe viejo —del motor de landings— lleva su marco. */}
-      {activeSlug === "exploration" && activeCanvasId && (
+      {esExploracionAbierta && activeCanvasId && (
         <CanvasBoundary label="la Exploración">
           <ExploracionDelProyecto
+            key={activeCanvasId}
             projectId={projectId}
+            canvasId={copiaActiva ? activeCanvasId : null}
             slotDelPanel={!enResumen ? slotDelPanel : null}
             slotDeSesiones={visible ? slotDeSesiones : null}
             informeAnterior={
-              piezasConContenido.includes("exploration") ? (
+              !copiaActiva && piezasConContenido.includes("exploration") ? (
                 <MarcoDelDocumento loVeElCliente={false}>
                   <ExploracionWorkspace key={`${activeCanvasId}-${agentNonce}`} projectId={projectId} canvasId={activeCanvasId} soloLectura />
                 </MarcoDelDocumento>
@@ -1423,6 +1463,12 @@ export default function ProjectCanvasPanel({
           <div data-recorrido="cuestionarios.panel">
             <CuestionarioPanel projectId={projectId} onCambio={cuestionariosCambiaron} />
           </div>
+        </CanvasBoundary>
+      )}
+      {/* Una tanda propia de cuestionarios (Elías, 30 oct): la misma pantalla, con los suyos. */}
+      {copiaActiva && tipoActivo === TIPO_CUESTIONARIOS && activeCanvasId && (
+        <CanvasBoundary label="los cuestionarios">
+          <CuestionarioPanel key={activeCanvasId} projectId={projectId} canvasId={activeCanvasId} onCambio={cuestionariosCambiaron} />
         </CanvasBoundary>
       )}
       {activeSlug === "questionnaires" && conCuestionarios && slotDelPanel && !queSigueOcupado && queSigueParaElDocumento &&

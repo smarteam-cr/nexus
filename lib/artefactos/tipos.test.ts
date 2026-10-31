@@ -5,7 +5,8 @@
  * lib/landing/registry.test.ts): el snapshot de abajo se cambia a la vista, nunca para callar el test.
  */
 import { describe, expect, it } from "vitest";
-import { TIPOS, admiteCopias, plantillaDelTipo, plantillasDelTipo, tipoDeArtefacto, tiposCreablesEnElProyecto } from "./tipos";
+import { TIPOS, TIPO_CUESTIONARIOS, admiteCopias, plantillaDelTipo, plantillasDelTipo, tipoDeArtefacto, tiposCreablesEnElProyecto } from "./tipos";
+import { piezasParaMostrar } from "@/lib/flow/orden-de-presentacion";
 import { canvasDefDeUnaCopia, catalogoDelTipo, defsDelTipo, handoffKeysDelTipo, seccionesDeUnaCopia, templateDelTipo } from "./catalogo";
 import { ENTREGABLES } from "@/lib/entregables/registro";
 import { TEMPLATE_DE_LA_PLANTILLA } from "@/lib/entregables/plantillas";
@@ -15,12 +16,14 @@ import { ADOPCION_DEF_BY_KEY } from "@/components/landing/configs/adopcion.defs"
 import { PLANIFICACION_DEF_BY_KEY } from "@/components/landing/configs/planificacion.defs";
 import { DESARROLLO_DEF_BY_KEY } from "@/components/landing/configs/desarrollo.defs";
 
-const DEL_MOTOR = TIPOS.filter((t) => t.vive === "canvas" && t.id !== "handoff");
+// Los cuestionarios tienen canvas para su nombre y su estado, pero nada del motor adentro.
+const DEL_MOTOR = TIPOS.filter((t) => t.vive === "canvas" && t.id !== "handoff" && t.id !== TIPO_CUESTIONARIOS);
 
 describe("tipos: el set y lo que admite cada uno", () => {
   it("snapshot del set de tipos (id · copias · dueños · lo lee el cliente)", () => {
     expect(TIPOS.map((t) => `${t.id} · ${t.copias} · ${t.duenos.join("+")} · ${t.clientFacing ? "cliente" : "interno"}`)).toEqual([
-      "exploration · una · proyecto+empresa · interno",
+      "exploration · varias · proyecto+empresa · interno",
+      "questionnaires · varias · proyecto · interno",
       "diagnosis · varias · proyecto+empresa · cliente",
       "kickoff · varias · proyecto · cliente",
       "planning · varias · proyecto · cliente",
@@ -28,7 +31,7 @@ describe("tipos: el set y lo que admite cada uno", () => {
       "adoption-plan · varias · proyecto · cliente",
       "roadmap · varias · proyecto+empresa · cliente",
       "delivery · varias · proyecto · cliente",
-      "implementation · una · proyecto · interno",
+      "implementation · varias · proyecto · interno",
       "timeline · una · proyecto · cliente",
       "handoff · una · proyecto · interno",
     ]);
@@ -38,9 +41,21 @@ describe("tipos: el set y lo que admite cada uno", () => {
     expect(new Set(TIPOS.map((t) => t.id)).size).toBe(TIPOS.length);
   });
 
-  it("se crean: los ocho del catálogo que viven en el motor (la propuesta y el cronograma tienen su lugar; la escala no es un artefacto)", () => {
+  it("⛔ todo lo que salió de la lista inicial se crea en «Nuevo artefacto», con su plantilla (solo el cronograma y el kickoff vienen de entrada)", () => {
+    const creables = tiposCreablesEnElProyecto().map((t) => t.id);
+    for (const slug of piezasParaMostrar()) {
+      if (slug === "handoff" || slug === "timeline") continue;
+      expect(creables, slug).toContain(slug);
+      expect(plantillasDelTipo(slug).length, `${slug} sin plantilla`).toBeGreaterThan(0);
+    }
+    expect(tiposCreablesEnElProyecto("herramienta").map((t) => t.id)).toEqual(["exploration", "questionnaires", "implementation"]);
+    expect(tiposCreablesEnElProyecto("entregable").map((t) => t.id)).not.toContain("exploration");
+  });
+
+  it("se crean: todos menos el cronograma y el handoff (la propuesta tiene su lugar; la escala no es un artefacto)", () => {
     expect(tiposCreablesEnElProyecto().map((t) => t.id)).toEqual([
       "exploration",
+      "questionnaires",
       "diagnosis",
       "kickoff",
       "planning",
@@ -48,8 +63,9 @@ describe("tipos: el set y lo que admite cada uno", () => {
       "adoption-plan",
       "roadmap",
       "delivery",
+      "implementation",
     ]);
-    for (const id of ["timeline", "handoff", "implementation", "escala", "integration", "exploration", "no-existe", null]) {
+    for (const id of ["timeline", "handoff", "escala", "integration", "no-existe", null]) {
       expect(admiteCopias(id), String(id)).toBe(false);
     }
   });
@@ -341,6 +357,6 @@ describe("templates: generar una copia manda lo mismo que el documento de siempr
   });
 
   it("todo tipo que lee el cliente y se copia tiene su allowlist del handoff", () => {
-    for (const t of tiposCreablesEnElProyecto()) expect(handoffKeysDelTipo(t.id).length, t.id).toBeGreaterThan(0);
+    for (const t of tiposCreablesEnElProyecto().filter((x) => x.clientFacing)) expect(handoffKeysDelTipo(t.id).length, t.id).toBeGreaterThan(0);
   });
 });

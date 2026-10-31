@@ -48,7 +48,7 @@ async function contenedorDe(clientId: string): Promise<string | null> {
 
 /** La exploración viva del contenedor (la de la cuenta), o null. */
 async function laViva(contenedorId: string): Promise<string | null> {
-  const f = await prisma.exploracionDeVenta.findFirst({ where: { projectId: contenedorId, archivadaEn: null }, select: { id: true } });
+  const f = await prisma.exploracionDeVenta.findFirst({ where: { projectId: contenedorId, canvasId: null, archivadaEn: null }, select: { id: true } });
   return f?.id ?? null;
 }
 

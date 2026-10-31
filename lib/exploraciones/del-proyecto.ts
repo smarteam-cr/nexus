@@ -32,19 +32,42 @@ export type ResultadoDeAsegurar = { ok: true; id: string; creada: boolean } | { 
 
 const sinSql = (): ResultadoDeAsegurar => ({ ok: false, status: 503, error: `Falta aplicar ${SQL_DE_LA_EXPLORACION_DEL_PROYECTO} y reiniciar.` });
 
-async function laViva(projectId: string): Promise<string | null> {
-  const f = await prisma.exploracionDeVenta.findFirst({ where: { projectId, archivadaEn: null }, select: { id: true } });
+/** La viva de ese documento: la de siempre del proyecto (sin `canvasId`) o la de una copia (2026-10-30). */
+async function laViva(projectId: string, canvasId: string | null): Promise<string | null> {
+  const f = await prisma.exploracionDeVenta.findFirst({ where: { projectId, canvasId, archivadaEn: null }, select: { id: true } });
   return f?.id ?? null;
+}
+
+/** Lee la exploración de un documento sin crearla. */
+export const exploracionVivaDelDocumento = laViva;
+
+/** Archiva la exploración de una copia junto con ella: si no, los agentes la seguirían leyendo. Va adentro de una transacción. */
+export const archivarExploracionDeLaCopia = (canvasId: string, ahora: Date) =>
+  prisma.exploracionDeVenta.updateMany({ where: { canvasId, archivadaEn: null }, data: { archivadaEn: ahora } });
+
+/** Deshace `archivarExploracionDeLaCopia`. */
+export const reactivarExploracionDeLaCopia = (canvasId: string) =>
+  prisma.exploracionDeVenta.updateMany({ where: { canvasId, archivadaEn: { not: null } }, data: { archivadaEn: null } });
+
+/** ¿Alguien abrió la exploración de siempre? Se escribe en su lienzo: el canvas vacío no dice que nadie la creó. */
+export async function hayExploracionAbierta(projectId: string): Promise<boolean> {
+  return (await prisma.exploracionDeVenta.count({ where: { projectId, canvasId: null, archivadaEn: null } })) > 0;
+}
+
+/** ¿Ese canvas es una copia de Exploración viva de ese proyecto? La pantalla manda el id: se comprueba acá. */
+export async function esCopiaDeExploracion(projectId: string, canvasId: string): Promise<boolean> {
+  const c = await prisma.projectCanvas.findFirst({ where: { id: canvasId, projectId, slug: null, tipoArtefacto: "exploration", disabledAt: null }, select: { id: true } });
+  return !!c;
 }
 
 /**
  * La exploración viva del proyecto; si no hay, la crea. Arranca con la edición, el perfil y las áreas
  * que dejó la preventa (`ubicacionPreviaDelProyecto`); sin preventa, con las áreas de los hubs vendidos.
  */
-export async function asegurarExploracionDelProyecto(projectId: string, email: string): Promise<ResultadoDeAsegurar> {
+export async function asegurarExploracionDelProyecto(projectId: string, email: string, canvasId: string | null = null): Promise<ResultadoDeAsegurar> {
   if (!modeloDisponible(prisma.exploracionDeVenta)) return sinSql();
   try {
-    const viva = await laViva(projectId);
+    const viva = await laViva(projectId, canvasId);
     if (viva) return { ok: true, id: viva, creada: false };
   } catch (e) {
     if (esquemaDesactualizado(e)) return sinSql();
@@ -74,6 +97,7 @@ export async function asegurarExploracionDelProyecto(projectId: string, email: s
       data: {
         clientId: proyecto.clientId,
         projectId,
+        canvasId,
         marco: "cs",
         creadaPor: email,
         responsableEmail: email,
@@ -90,7 +114,7 @@ export async function asegurarExploracionDelProyecto(projectId: string, email: s
   } catch (e) {
     // Dos aperturas a la vez: el índice único parcial deja pasar una sola.
     if (esUnicoViolado(e)) {
-      const otra = await laViva(projectId);
+      const otra = await laViva(projectId, canvasId);
       if (otra) return { ok: true, id: otra, creada: false };
     }
     if (esquemaDesactualizado(e)) return sinSql();
@@ -112,17 +136,38 @@ function lineasDeLaTarjeta(c: ContenidoDeExploracion, clave: "retos" | "metas" |
 /**
  * Lo confirmado de la exploración del proyecto, en texto: la estrategia (retos, resultados, obstáculos),
  * dónde está cada dimensión con evidencia, lo propio de la cuenta y lo que salió de cada sesión. "" si
- * todavía no hay nada (los agentes leen entonces la guía vieja, si el proyecto la tenía).
+ * todavía no hay nada (los agentes leen entonces la guía vieja, si el proyecto la tenía). Con copias (2026-10-30), todas
+ * con su nombre, la de siempre primero: con una sola, el texto queda byte a byte como antes.
  */
 export async function textoDeLaExploracionDelProyecto(projectId: string): Promise<string> {
   if (!modeloDisponible(prisma.exploracionDeVenta)) return "";
-  const fila = await prisma.exploracionDeVenta
-    .findFirst({
-      where: { projectId, archivadaEn: null },
-      select: { contenido: true, propuesta: true, areas: true, edicion: true, perfilCierre: true, perfilDespues: true, responsableEmail: true, archivadaEn: true },
+  const filas = await prisma.exploracionDeVenta
+    .findMany({
+      where: { projectId, archivadaEn: null, OR: [{ canvasId: null }, { canvas: { disabledAt: null } }] },
+      orderBy: { createdAt: "asc" },
+      select: { ...SELECT_DEL_TEXTO, canvasId: true, canvas: { select: { titulo: true, name: true } } },
     })
-    .catch(() => null);
-  if (!fila) return "";
+    .catch(() => []);
+  const textos = await Promise.all(
+    [...filas]
+      .sort((a, b) => Number(!!a.canvasId) - Number(!!b.canvasId))
+      .map((f) => textoDeUnaExploracion(f, f.canvas ? `Exploración: ${f.canvas.titulo?.trim() || f.canvas.name}` : "Exploración del proyecto")),
+  );
+  return textos.filter(Boolean).join("\n\n");
+}
+
+const SELECT_DEL_TEXTO = {
+  contenido: true,
+  propuesta: true,
+  areas: true,
+  edicion: true,
+  perfilCierre: true,
+  perfilDespues: true,
+  responsableEmail: true,
+  archivadaEn: true,
+} as const satisfies Prisma.ExploracionDeVentaSelect;
+
+async function textoDeUnaExploracion(fila: Prisma.ExploracionDeVentaGetPayload<{ select: typeof SELECT_DEL_TEXTO }>, titulo: string): Promise<string> {
   const c = leerContenido(fila.contenido);
   const propuesta = leerPropuesta(fila.propuesta);
   const partes: string[] = [];
@@ -167,7 +212,7 @@ export async function textoDeLaExploracionDelProyecto(projectId: string): Promis
   );
   if (lecturas.length) partes.push(`## Lo que salió de cada sesión\n${lecturas.map((l) => `- ${l.etiqueta}: ${l.resumen}`).join("\n")}`);
 
-  return partes.length ? `# Exploración del proyecto\n\n${partes.join("\n\n")}` : "";
+  return partes.length ? `# ${titulo}\n\n${partes.join("\n\n")}` : "";
 }
 
 /**
@@ -180,18 +225,21 @@ export async function cuantoHayEnLaExploracionDelProyecto(
 ): Promise<{ existe: boolean; confirmados: number; propuestos: number }> {
   const nada = { existe: false, confirmados: 0, propuestos: 0 };
   if (!modeloDisponible(prisma.exploracionDeVenta)) return nada;
-  const fila = await prisma.exploracionDeVenta
-    .findFirst({ where: { projectId, archivadaEn: null }, select: { contenido: true, propuesta: true } })
-    .catch(() => null);
-  if (!fila) return nada;
-  const c = leerContenido(fila.contenido);
-  const propuesta = leerPropuesta(fila.propuesta);
-  const enCasillas = CASILLAS_PROPUESTAS_AL_DOCUMENTO.reduce((n, k) => {
-    const v = c.casillas[k] as unknown;
-    return n + (Array.isArray(v) ? v.length : 0);
-  }, 0);
-  const niveles = Object.values(c.chequeo).filter((e) => e.fuente !== "test" && e.fuente !== "hipotesis").length;
-  return { existe: true, confirmados: enCasillas + niveles, propuestos: itemsPropuestosAlDocumento(c, propuesta.items).length };
+  // Todas las vivas, también las copias: lo mismo que lee el agente (`textoDeLaExploracionDelProyecto`).
+  const filas = await prisma.exploracionDeVenta
+    .findMany({ where: { projectId, archivadaEn: null }, select: { contenido: true, propuesta: true } })
+    .catch(() => []);
+  if (!filas.length) return nada;
+  return filas.reduce((total, fila) => {
+    const c = leerContenido(fila.contenido);
+    const propuesta = leerPropuesta(fila.propuesta);
+    const enCasillas = CASILLAS_PROPUESTAS_AL_DOCUMENTO.reduce((n, k) => {
+      const v = c.casillas[k] as unknown;
+      return n + (Array.isArray(v) ? v.length : 0);
+    }, 0);
+    const niveles = Object.values(c.chequeo).filter((e) => e.fuente !== "test" && e.fuente !== "hipotesis").length;
+    return { existe: true, confirmados: total.confirmados + enCasillas + niveles, propuestos: total.propuestos + itemsPropuestosAlDocumento(c, propuesta.items).length };
+  }, nada);
 }
 
 /**
@@ -201,11 +249,8 @@ export async function cuantoHayEnLaExploracionDelProyecto(
  */
 export async function fechasDeLasLecturasDelProyecto(projectId: string): Promise<Array<{ fecha?: string; en: string }>> {
   if (!modeloDisponible(prisma.exploracionDeVenta)) return [];
-  const fila = await prisma.exploracionDeVenta
-    .findFirst({ where: { projectId, archivadaEn: null }, select: { propuesta: true } })
-    .catch(() => null);
-  if (!fila) return [];
-  return Object.values(leerPropuesta(fila.propuesta).lecturas).map((l) => ({ ...(l.fecha ? { fecha: l.fecha } : {}), en: l.en }));
+  const filas = await prisma.exploracionDeVenta.findMany({ where: { projectId, archivadaEn: null }, select: { propuesta: true } }).catch(() => []);
+  return filas.flatMap((f) => Object.values(leerPropuesta(f.propuesta).lecturas).map((l) => ({ ...(l.fecha ? { fecha: l.fecha } : {}), en: l.en })));
 }
 
 /**
@@ -216,8 +261,6 @@ export async function fechasDeLasLecturasDelProyecto(projectId: string): Promise
  */
 export async function sesionesDeLaExploracionDelProyecto(projectId: string): Promise<SesionPlaneada[]> {
   if (!modeloDisponible(prisma.exploracionDeVenta)) return [];
-  const fila = await prisma.exploracionDeVenta
-    .findFirst({ where: { projectId, archivadaEn: null }, select: { contenido: true } })
-    .catch(() => null);
-  return fila ? leerContenido(fila.contenido).sesiones : [];
+  const filas = await prisma.exploracionDeVenta.findMany({ where: { projectId, archivadaEn: null }, select: { contenido: true } }).catch(() => []);
+  return filas.flatMap((f) => leerContenido(f.contenido).sesiones);
 }

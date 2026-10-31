@@ -2,7 +2,7 @@
  * lib/para-ti/fuentes/acceso-al-portal.ts — el acceso al portal de HubSpot que el cliente todavía no nos dio (Q2 etapa 2
  * del roadmap, 2026-10-27). PERSONAL: le llega a quien lleva el proyecto, con el kickoff publicado CON la tarjeta del acceso
  * y el acceso pendiente. Los días cuentan desde la tarjeta, no desde la última publicación.
- * La regla es la de lib/kickoff/acceso-al-portal.ts (`faltaElAcceso`); se resuelve marcándolo dado en el kickoff.
+ * La regla es la de lib/kickoff/acceso-al-portal.ts (`faltaElAcceso`); se resuelve marcándolo dado en la alerta del Resumen.
  */
 import "server-only";
 import { prisma } from "@/lib/db/prisma";
@@ -49,10 +49,10 @@ export const ACCESO_AL_PORTAL: Fuente = {
           cuando: dias >= 10 ? "hoy" : "semana",
           delAgente: false,
           titulo: `Pide el acceso al portal de HubSpot de ${p.empresa}`,
-          detalle: `El kickoff lo pide hace ${dias === 1 ? "1 día hábil" : `${dias} días hábiles`} y sigue pendiente. Cuando te lo den, márcalo en el kickoff.`,
+          detalle: `El kickoff lo pide hace ${dias === 1 ? "1 día hábil" : `${dias} días hábiles`} y sigue pendiente. Cuando te lo den, márcalo en el Resumen del proyecto.`,
           meta: `Kickoff · ${p.name}`,
-          accion: "Abrir el kickoff",
-          href: `${urlDeProyecto(p.clientId, p.id)}&canvas=kickoff`,
+          accion: "Abrir el Resumen",
+          href: urlDeProyecto(p.clientId, p.id),
           desde: desde.toISOString(),
           peso: PESOS.decision - 5,
         },

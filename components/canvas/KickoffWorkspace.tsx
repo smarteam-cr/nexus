@@ -43,7 +43,7 @@ import { completadorDeEquipo, completadorDeHorarios } from "@/lib/kickoff/comple
 import { useDirectorioDelEquipo } from "@/components/canvas/kickoff-sections/useDirectorioDelEquipo";
 import { newId } from "./kickoff-sections/types";
 import { AvisoDeContinuidad } from "./kickoff-sections/AvisoDeContinuidad";
-import AccesoAlPortalStrip, { useAccesoYAcademy } from "./kickoff-sections/AccesoAlPortalStrip";
+import { useAccesoYAcademy } from "./kickoff-sections/useAccesoYAcademy";
 import { AddBtn } from "@/components/landing/inline";
 
 const MAXW = 760;
@@ -51,7 +51,7 @@ const MAXW = 760;
 export default function KickoffWorkspace({ projectId, canvasId }: { projectId: string; canvasId: string }) {
   const k = useKickoffData(projectId, canvasId);
   // Q (2026-10-27): el acceso al portal (vivo) y el catálogo de HubSpot Academy, para las dos secciones nuevas.
-  const { acceso, setAcceso, academia } = useAccesoYAcademy(projectId);
+  const { acceso, academia } = useAccesoYAcademy(projectId);
   /* Un kickoff de antes de la ruta de Academy no tiene la sección: se suma solo si el CSE la pide (no al abrir, para no
      cambiarle el documento a un kickoff publicado sin que nadie lo decida). `POST /pieces/kickoff` crea las que faltan y
      nunca borra. */
@@ -240,8 +240,6 @@ export default function KickoffWorkspace({ projectId, canvasId }: { projectId: s
             return k.upsertCardData(s.id, card?.id ?? null, data);
           }}
         />
-      {/* El acceso al portal del cliente (Q2): del equipo, arriba del documento. */}
-      <AccesoAlPortalStrip projectId={projectId} acceso={acceso} onCambio={setAcceso} />
       {sinRutaDeAcademy && (
         <div style={{ maxWidth: MAXW, margin: "0 auto", padding: "8px 24px 0" }}>
           <AddBtn onClick={() => void (sumandoAcademy ? null : sumarRutaDeAcademy())} label={sumandoAcademy ? "Sumando…" : "Sumar la sección «Tu ruta en HubSpot Academy»"} />

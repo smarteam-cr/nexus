@@ -43,6 +43,8 @@ export interface EstadoDeCuestionarios {
   largo: string;
   /** El punto verde: ya hay al menos uno en manos del cliente. */
   enviado: boolean;
+  /** Los de siempre del proyecto, sin copia: con ellos se ve la fila de la pieza. El de la lectura lo llena el servidor. */
+  sueltos?: number;
   /** Alguien dijo «Ahora no» a la sugerencia de mandarlos. */
   sugerenciaDescartada: boolean;
   /**

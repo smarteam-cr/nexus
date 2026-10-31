@@ -20,6 +20,7 @@ import { buildAdopcionConfig, buildAdopcionSections } from "@/components/canvas/
 import { buildIntegracionConfig, buildIntegracionSections } from "@/components/canvas/integracion-landing-adapter";
 import { buildHojaDeRutaConfig, buildHojaDeRutaSections } from "@/components/canvas/hoja-de-ruta-landing-adapter";
 import { buildEntregaConfig, buildEntregaSections } from "@/components/canvas/entrega-landing-adapter";
+import { buildImplementacionConfig, buildImplementacionSections } from "@/components/canvas/implementacion-landing-adapter";
 import { TIPO_HOJA_DE_RUTA, TIPO_REQUERIMIENTO_TECNICO, TIPO_PLAN_DE_ADOPCION } from "@/lib/artefactos/tipos";
 
 export interface AdaptadorDelTipo {
@@ -48,6 +49,7 @@ const ADAPTADORES: Readonly<Record<string, AdaptadorDelTipo>> = {
   [TIPO_REQUERIMIENTO_TECNICO]: { config: buildIntegracionConfig, sections: buildIntegracionSections, palette: "brand" },
   [TIPO_HOJA_DE_RUTA]: { config: buildHojaDeRutaConfig, sections: buildHojaDeRutaSections, palette: "brand" },
   delivery: { config: buildEntregaConfig, sections: (rows) => buildEntregaSections(rows as never), palette: "brand" },
+  implementation: { config: buildImplementacionConfig, sections: (rows) => buildImplementacionSections(rows as never), palette: "internal" },
 };
 
 export function adaptadorDelTipo(tipo: string | null | undefined): AdaptadorDelTipo | null {

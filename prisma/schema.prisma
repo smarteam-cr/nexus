@@ -1356,6 +1356,9 @@ model ProjectExternalAccess {
 // Canvas dentro de un proyecto (default = "Canvas de servicio", custom = secciones libres)
 model ProjectCanvas {
   id             String        @id @default(cuid())
+  /// Las herramientas que guardan afuera del canvas (2026-10-30): lo de una COPIA de Exploración o Cuestionarios.
+  exploraciones  ExploracionDeVenta[]
+  cuestionarios  Cuestionario[]
   // Dueño flexible: el canvas cuelga de un Project (kickoff/diagnóstico/…) O de un
   // BusinessCase (Ventas). Exactamente uno seteado (validado en código).
   projectId      String?
@@ -2003,6 +2006,11 @@ model ExploracionDeVenta {
   /// nullable porque la preventa no tiene proyecto. SQL: 2026-10-07-exploracion-del-proyecto.sql.
   projectId String?
   project   Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  /// La exploración de una COPIA (2026-10-30): una viva por copia. null = la de siempre del proyecto, una viva por proyecto
+  /// (índices parciales en el SQL). nullable porque la preventa y la de siempre no son copias.
+  /// SQL: 2026-10-30-herramientas-con-copias.sql.
+  canvasId  String?
+  canvas    ProjectCanvas? @relation(fields: [canvasId], references: [id], onDelete: Cascade)
   /// Qué se explora: `venta` (la arquitectura de la venta) · `cs` (la estrategia del cliente).
   marco     String   @default("venta")
 
@@ -2046,6 +2054,7 @@ model ExploracionDeVenta {
 
   @@index([clientId])
   @@index([projectId])
+  @@index([canvasId])
   @@index([updatedAt])
 }
 
@@ -7054,6 +7063,9 @@ model Cuestionario {
   // Desde el 2026-10-02 hay VARIOS por proyecto: cada uno es de UNA persona y de un tipo.
   projectId          String
   project            Project                   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  // El de una COPIA de Cuestionarios (2026-10-30). nullable porque null = los de siempre del proyecto.
+  canvasId           String?
+  canvas             ProjectCanvas?            @relation(fields: [canvasId], references: [id], onDelete: SetNull)
   // "tactico" (métricas y operación, por hubs) | "escala" (ubica al cliente en la escala de rendimiento).
   tipo               String                    @default("tactico")
   // La persona del cliente que lo contesta. null = todavía sin asignar (no se le muestra a nadie).
@@ -7083,6 +7095,7 @@ model Cuestionario {
   responsablesViejos CuestionarioResponsable[] @relation("ResponsableDeCuestionarioViejo")
 
   @@index([projectId])
+  @@index([canvasId])
   @@index([personaId])
 }
 

@@ -162,7 +162,7 @@ export const FICHA_CRONOGRAMA: Recorrido = {
   ruta: RUTA_DE_LA_FICHA,
   porPantalla: true,
   ejemplo: EJEMPLO_DE_FICHA,
-  irA: { href: "/clients", aviso: "Abre un cliente y entra a su «Cronograma» desde el riel: el recorrido arranca solo." },
+  irA: { href: "/clients", aviso: "Abre un cliente y entra a su «Cronograma» desde la barra lateral: el recorrido arranca solo." },
   grupo: "clientes",
   roles: "todos",
   pasos: [
@@ -238,7 +238,7 @@ export const FICHA_EXPLORACION: Recorrido = {
   ruta: RUTA_DE_LA_FICHA,
   porPantalla: true,
   ejemplo: EJEMPLO_DE_FICHA,
-  irA: { href: "/clients", aviso: "Abre un cliente y entra a su «Exploración» desde el riel: el recorrido arranca solo." },
+  irA: { href: "/clients", aviso: "Abre un cliente y entra a su «Exploración» desde la barra lateral: el recorrido arranca solo." },
   grupo: "clientes",
   roles: "todos",
   pasos: [
@@ -251,7 +251,7 @@ export const FICHA_EXPLORACION: Recorrido = {
     },
     {
       ancla: "preventa.sesiones",
-      titulo: "También en el riel",
+      titulo: "También en la barra lateral",
       texto: "Cuelgan de «Exploración»: la próxima dice cuándo. Debajo, el informe anterior si el proyecto lo tenía. Toca «Exploración» para volver al inicio.",
       lado: "right-start",
     },
@@ -301,7 +301,7 @@ export const FICHA_CUESTIONARIOS: Recorrido = {
   ruta: RUTA_DE_LA_FICHA,
   porPantalla: true,
   ejemplo: EJEMPLO_DE_FICHA,
-  irA: { href: "/clients", aviso: "Abre un cliente y entra a sus «Cuestionarios» desde el riel: el recorrido arranca solo." },
+  irA: { href: "/clients", aviso: "Abre un cliente y entra a sus «Cuestionarios» desde la barra lateral: el recorrido arranca solo." },
   grupo: "clientes",
   roles: "todos",
   pasos: [
@@ -341,7 +341,7 @@ export const FICHA_INFORMACION: Recorrido = {
   ruta: RUTA_DE_LA_FICHA,
   porPantalla: true,
   ejemplo: EJEMPLO_DE_FICHA,
-  irA: { href: "/clients", aviso: "Abre un cliente y entra a «Información del cliente» desde el riel: el recorrido arranca solo." },
+  irA: { href: "/clients", aviso: "Abre un cliente y entra a «Información del cliente» desde la barra lateral: el recorrido arranca solo." },
   grupo: "clientes",
   roles: "todos",
   pasos: [

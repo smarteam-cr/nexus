@@ -144,7 +144,7 @@ export const PREVENTA: Recorrido = {
     },
     {
       ancla: "preventa.sesiones",
-      titulo: "Las sesiones, también en el riel",
+      titulo: "Las sesiones, también en la barra lateral",
       texto: "✓ la leída, ● en ámbar la que pide algo y ○ la que no tiene reunión. Toca «Exploración» para volver a la página de inicio.",
       lado: "right-start",
       accion: inicio,

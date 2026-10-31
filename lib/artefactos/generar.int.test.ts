@@ -70,6 +70,23 @@ describe("generar una copia", () => {
     expect(await prisma.canvasBlock.findMany({ where: { section: { canvasId: deSiempre.id } }, select: { data: true } })).toEqual([{ data: { intro: "La de siempre" } }]);
   });
 
+  it("⛔ el plan de adopción recibe la modalidad: sin ella inventaría las olas y las rutinas", async () => {
+    const p = await proyecto();
+    const c = await crearCopia({ projectId: p.id, tipo: "adoption-plan", plantillaId: "adopcion-por-niveles", porEmail: null });
+    await generarCopia({ projectId: p.id, canvasId: c.canvasId, agentRunId: null });
+    expect(JSON.stringify(generacion.fn.mock.calls.at(-1))).toContain("MODALIDAD DE ADOPCIÓN");
+  });
+
+  it("⛔ una copia de Ejecución lee el handoff entero: es interna, y sin él pagaría una corrida a ciegas", async () => {
+    const p = await proyecto();
+    const h = await prisma.projectCanvas.create({ data: { projectId: p.id, slug: "handoff", name: "Handoff", sections: [] } });
+    const s = await prisma.canvasSection.create({ data: { canvasId: h.id, key: "contexto_del_negocio", label: "Contexto", order: 0 } });
+    await prisma.canvasBlock.create({ data: { sectionId: s.id, blockType: "TEXT", content: "Lo vendido: tres pipelines", source: "AGENT", status: "CONFIRMED" } });
+    const c = await crearCopia({ projectId: p.id, tipo: "implementation", nombre: "Ventas", porEmail: null });
+    await generarCopia({ projectId: p.id, canvasId: c.canvasId, agentRunId: null });
+    expect(JSON.stringify(generacion.fn.mock.calls.at(-1))).toContain("tres pipelines");
+  });
+
   it("usa el nombre que se ve, no el guardable, en lo que le dice al modelo", async () => {
     const p = await proyecto();
     const c = await crearCopia({ projectId: p.id, tipo: "planning", nombre: "Planificación", porEmail: null });

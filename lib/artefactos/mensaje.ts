@@ -11,6 +11,8 @@ export const TIPOS_QUE_LO_ALIMENTAN: Readonly<Record<string, readonly string[]>>
   diagnosis: ["exploration"],
   planning: ["diagnosis", "exploration"],
   exploration: ["kickoff"],
+  implementation: ["planning", "tech-requirements"],
+  questionnaires: [],
   "adoption-plan": ["diagnosis", "planning"],
   roadmap: ["diagnosis", "planning"],
   "tech-requirements": ["planning"],

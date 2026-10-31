@@ -4,7 +4,8 @@
  * Desde el 2026-10-02: varias PERSONAS del cliente (un enlace cada una) y varios CUESTIONARIOS, cada
  * uno de una persona y de un tipo («tactico» | «escala» | «estrategia», desde el 2026-10-11).
  *
- * GET: lectura (cualquiera con acceso al proyecto). Los adjuntos traen un enlace firmado de 1 h.
+ * GET: lectura (cualquiera con acceso al proyecto). Los adjuntos traen un enlace firmado de 1 h. Con `?canvasId=`, los de esa
+ * COPIA (2026-10-30); sin él, los de siempre del proyecto. Las personas son del proyecto: sirven para todas.
  * POST: una ACCIÓN por request, validada con zod. Editar pide lo mismo que el cronograma (dueño del
  * cliente o handoff en cualquier cliente); crear personas y publicar pide además que el proyecto
  * admita publicación externa — un proyecto interno no le manda nada a nadie.
@@ -37,10 +38,11 @@ import {
   revocarPersona,
 } from "@/lib/cuestionario/servicio";
 import { getSignedUrl } from "@/lib/storage/client";
+import { TIPO_CUESTIONARIOS } from "@/lib/artefactos/tipos";
 import { prisma } from "@/lib/db/prisma";
 
-async function respuesta(projectId: string) {
-  const v = await obtenerCuestionarios(projectId);
+async function respuesta(projectId: string, canvasId: string | null = null) {
+  const v = await obtenerCuestionarios(projectId, canvasId);
   const ids = v.cuestionarios.flatMap((c) => c.pestanas.flatMap((p) => p.adjuntos.map((a) => a.id)));
   const docs = ids.length
     ? await prisma.clientDocument.findMany({ where: { id: { in: ids } }, select: { id: true, url: true } })
@@ -56,12 +58,12 @@ async function respuesta(projectId: string) {
   return { ...v, comparacion: compararCuestionarios(v, resultados), enlaces };
 }
 
-export async function GET(_req: NextRequest, { params }: { params: Promise<{ projectId: string }> }) {
+export async function GET(req: NextRequest, { params }: { params: Promise<{ projectId: string }> }) {
   const { projectId } = await params;
   const guard = await guardAccessToProject(projectId);
   if (guard instanceof NextResponse) return guard;
   return NextResponse.json({
-    ...(await respuesta(projectId)),
+    ...(await respuesta(projectId, req.nextUrl.searchParams.get("canvasId"))),
     publicable: guard.capacidades.publicable,
     motivoNoPublicable: guard.motivoNoPublicable ?? null,
   });
@@ -105,6 +107,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ pro
   const parsed = Accion.safeParse(raw);
   if (!parsed.success) return NextResponse.json({ error: "Solicitud inválida" }, { status: 400 });
   const a = parsed.data;
+  // La tanda que se mira: responder con otra le cambiaría la lista debajo a quien está trabajando.
+  const canvasId = req.nextUrl.searchParams.get("canvasId");
 
   if (HACIA_AFUERA.has(a.accion) && !(a.accion === "publicar" && !a.publicado)) {
     const acceso = await guardAccessToProject(projectId);
@@ -132,13 +136,16 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ pro
         await revocarPersona(projectId, a.personaId);
         break;
       case "crear_cuestionario": {
+        if (canvasId && !(await prisma.projectCanvas.findFirst({ where: { id: canvasId, projectId, slug: null, tipoArtefacto: TIPO_CUESTIONARIOS, disabledAt: null }, select: { id: true } }))) {
+          return NextResponse.json({ error: "Esos cuestionarios no son de este proyecto." }, { status: 404 });
+        }
         if (a.tipo === "tactico" || a.tipo === "estrategia") {
           const crear = a.tipo === "tactico" ? crearTactico : crearEstrategia;
-          const cuestionarioId = await crear(projectId, a.personaId, guard.teamMember?.id ?? null);
+          const cuestionarioId = await crear(projectId, a.personaId, guard.teamMember?.id ?? null, canvasId);
           // Recién armado: Nexus contesta de una lo que ya sabe (el handoff, el kickoff y, en estrategia, la ficha).
           await arrancarPrellenado(cuestionarioId);
         } else {
-          await crearEscala(projectId, a.personaId, guard.teamMember?.id ?? null);
+          await crearEscala(projectId, a.personaId, guard.teamMember?.id ?? null, canvasId);
         }
         break;
       }
@@ -170,7 +177,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ pro
         await reabrirPestana(projectId, a.pestanaId, email, a.motivo);
         break;
     }
-    return NextResponse.json({ ...(await respuesta(projectId)), aviso });
+    return NextResponse.json({ ...(await respuesta(projectId, canvasId)), aviso });
   } catch (e) {
     if (e instanceof ErrorDeCuestionario) return NextResponse.json({ error: e.message }, { status: e.status });
     throw e;

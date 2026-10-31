@@ -2,8 +2,9 @@
  * /api/projects/[projectId]/acceso-al-portal — si el cliente ya nos dio acceso a su portal de HubSpot (Q2 etapa 2 del
  * roadmap, 2026-10-27, lib/kickoff/acceso-al-portal.ts).
  *
- *   GET            → { dadoEn, marcadoPor, pedidoDesde, diasHabiles }: el estado y, si ya está dado, en cuántos días
- *                    hábiles desde que el kickoff lo pide (la tarjeta; el criterio de éxito es menos de 10).
+ *   GET            → { dadoEn, marcadoPor, pedidoDesde, diasHabiles, falta }: el estado y, si ya está dado, en cuántos días
+ *                    hábiles desde que el kickoff lo pide (la tarjeta; el criterio de éxito es menos de 10). `falta` es la
+ *                    regla de «Para ti» (`faltaElAcceso`): la que prende la alerta del Resumen.
  *   PUT { dado }   → lo marca dado (hoy) o lo vuelve a pendiente. Lo marca quien edita el proyecto.
  */
 import { NextRequest, NextResponse } from "next/server";
@@ -11,7 +12,7 @@ import { z } from "zod";
 import { guardAccessToProject } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
 import { esquemaDesactualizado } from "@/lib/db/esquema";
-import { diasHabilesEntre, pedidoDesde } from "@/lib/kickoff/acceso-al-portal";
+import { diasHabilesEntre, faltaElAcceso, pedidoDesde } from "@/lib/kickoff/acceso-al-portal";
 import { tarjetasDelAcceso } from "@/lib/kickoff/acceso-al-portal-server";
 
 type Params = { params: Promise<{ projectId: string }> };
@@ -26,9 +27,11 @@ const sinSql = () =>
 );
 
 /** El estado, con los días hábiles desde que el kickoff lo pide (la tarjeta) hasta que se dio. */
-async function respuesta(projectId: string, p: { accesoAlPortalDadoEn: Date | null; accesoAlPortalMarcadoPor: string | null; kickoffPublishedAt: Date | null }) {
-  const desde = pedidoDesde((await tarjetasDelAcceso([projectId])).get(projectId) ?? null, p.kickoffPublishedAt);
+async function respuesta(projectId: string, p: { accesoAlPortalDadoEn: Date | null; accesoAlPortalMarcadoPor: string | null; kickoffPublishedAt: Date | null; status: string }) {
+  const tarjeta = (await tarjetasDelAcceso([projectId])).get(projectId) ?? null;
+  const desde = pedidoDesde(tarjeta, p.kickoffPublishedAt);
   return {
+    falta: faltaElAcceso({ ...p, tarjeta }),
     dadoEn: p.accesoAlPortalDadoEn?.toISOString() ?? null,
     marcadoPor: p.accesoAlPortalMarcadoPor,
     pedidoDesde: desde?.toISOString() ?? null,
@@ -36,7 +39,7 @@ async function respuesta(projectId: string, p: { accesoAlPortalDadoEn: Date | nu
   };
 }
 
-const SELECT = { accesoAlPortalDadoEn: true, accesoAlPortalMarcadoPor: true, kickoffPublishedAt: true } as const;
+const SELECT = { accesoAlPortalDadoEn: true, accesoAlPortalMarcadoPor: true, kickoffPublishedAt: true, status: true } as const;
 
 export async function GET(_req: NextRequest, { params }: Params) {
   const { projectId } = await params;

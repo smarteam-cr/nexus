@@ -72,11 +72,11 @@ describe("el PDF y el enlace de un artefacto", () => {
     }
   });
 
-  it("la vista del enlace y el editor tienen el adaptador de cada tipo que se comparte (y de la exploración)", () => {
+  it("la vista del enlace y el editor tienen el adaptador de cada tipo que se comparte (y de los internos del motor)", () => {
     const src = fs.readFileSync(path.resolve(__dirname, "../../components/artefactos/adaptadores.ts"), "utf8");
     const bloque = /const ADAPTADORES[\s\S]*?\n};/.exec(src)?.[0] ?? "";
     const claves = new Set([...bloque.matchAll(/^  (?:"([a-z-]+)"|([a-z]+)|\[(TIPO_[A-Z_]+)\]):/gm)].map((m) => m[1] ?? m[2] ?? m[3]));
-    const esperadas = TIPOS.filter((t) => tipoCompartible(t.id) || t.id === "exploration").map((t) =>
+    const esperadas = TIPOS.filter((t) => tipoCompartible(t.id) || t.id === "exploration" || t.id === "implementation").map((t) =>
       t.id === TIPO_PLAN_DE_ADOPCION ? "TIPO_PLAN_DE_ADOPCION" : t.id === TIPO_REQUERIMIENTO_TECNICO ? "TIPO_REQUERIMIENTO_TECNICO" : t.id === TIPO_HOJA_DE_RUTA ? "TIPO_HOJA_DE_RUTA" : t.id,
     );
     expect([...claves].sort()).toEqual(esperadas.sort());

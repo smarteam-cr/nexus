@@ -33,9 +33,9 @@ export interface TipoDeArtefacto {
   /** Para qué sirve, en una frase (lo leen la pantalla, el chat y el armador de V5). */
   paraQue: string;
   /**
-   * «varias» = un proyecto puede tener las que quiera, cada una con su nombre (Elías, 29 oct: kickoff y exploración
-   * incluidos). «una» = el storage o el flujo la hacen única (el cronograma es `ProjectTimeline.projectId @unique`; el
-   * handoff es el paso Ventas → CS).
+   * «varias» = un proyecto puede tener las que quiera, cada una con su nombre (Elías, 30 oct: todo menos el Resumen).
+   * «una» = el storage o el flujo la hacen única (el cronograma es `ProjectTimeline.projectId @unique`; el handoff es el
+   * paso Ventas → CS y vive en el Resumen).
    */
   copias: "varias" | "una";
   /** De quién puede ser. Elías, 29 oct: el diagnóstico, la exploración y la hoja de ruta, también de la empresa. */
@@ -56,10 +56,10 @@ export interface TipoDeArtefacto {
    */
   contextoDe: "diagnosis" | "planning" | "kickoff" | "exploration" | "tech-requirements" | "delivery" | null;
   /**
-   * No lleva copias, pero se abre desde «Nuevo artefacto»: la exploración es UNA por proyecto, la misma pantalla de la
-   * preventa, y adentro se agregan las sesiones (Elías, 30 oct). Abrirla activa su pieza.
+   * Lo que se escribe no vive en el canvas: la exploración (`ExploracionDeVenta`) y los cuestionarios (`Cuestionario`), cada
+   * copia con su `canvasId`. Duplicar copiaría un canvas vacío, así que cada copia nace en blanco.
    */
-  seAbreUna?: boolean;
+  sinDuplicar?: boolean;
   /** La copia sí se comparte por enlace, el documento de siempre no: la entrega guarda en su Json lo que el cliente no ve. */
   sinEnlaceElDeSiempre?: boolean;
   /**
@@ -82,6 +82,9 @@ export const SECCIONES_DEL_INFORME_DE_AVANCE = ["portada", "resumen", "avance_po
 export const SECCIONES_DE_LA_CAMPANA = ["planificacion", "campana_objetivo", "campana_segmentos", "campana_piezas", "campana_presupuesto", "formularios", "automatizaciones", "campana_resultado", "cierre"] as const;
 export const SECCIONES_DEL_MARKETING = ["planificacion", "definicion_procesos", "ciclo_vida_crm", "canales_entrada", "formularios", "automatizaciones", "informes", "cierre"] as const;
 export const SECCIONES_DE_WHATSAPP = ["planificacion", "agente_objetivo", "agente_identidad", "agente_conocimiento", "conversaciones", "agente_derivacion", "whatsapp_plantillas", "agente_fases", "cierre"] as const;
+
+/** Los CUESTIONARIOS: la pieza no vive en un canvas; cada copia sí, y sus cuestionarios cuelgan de él (`Cuestionario.canvasId`). */
+export const TIPO_CUESTIONARIOS = "questionnaires";
 
 /* ── Los tipos nuevos (etapa V6, adelantada: Elías, 29 oct) ────────────────────────────────────────────────────── */
 
@@ -152,9 +155,9 @@ export const TIPOS: readonly TipoDeArtefacto[] = [
     id: "exploration",
     nombre: "Exploración",
     conArticulo: "una exploración",
-    paraQue: "La misma de la preventa, con las preguntas de Customer Success: la abres y adentro agregas las sesiones. Interna.",
-    copias: "una",
-    seAbreUna: true,
+    paraQue: "La misma de la preventa, con las preguntas de Customer Success, y adentro agregas las sesiones. Una por frente o por área, cada una con su nombre. Interna.",
+    copias: "varias",
+    sinDuplicar: true,
     duenos: ["proyecto", "empresa"],
     clientFacing: false,
     vive: "canvas",
@@ -170,6 +173,23 @@ export const TIPOS: readonly TipoDeArtefacto[] = [
       },
     ],
     estructurales: ["exploracion", "cierre"],
+  },
+  {
+    id: TIPO_CUESTIONARIOS,
+    nombre: "Cuestionarios",
+    conArticulo: "unos cuestionarios",
+    paraQue: "Lo que contesta el cliente: el táctico, el de la escala y el de estrategia, con un enlace por persona. Una tanda por frente o por momento, cada una con su nombre.",
+    copias: "varias",
+    sinDuplicar: true,
+    duenos: ["proyecto"],
+    clientFacing: false,
+    vive: "canvas",
+    pieza: TIPO_CUESTIONARIOS,
+    clase: "herramienta",
+    permiso: "exploracion",
+    contextoDe: null,
+    plantillas: [{ id: "cuestionarios", nombre: "Cuestionarios", paraQue: "Adentro eliges a quién le preguntas y qué cuestionario le mandas." }],
+    estructurales: [],
   },
   {
     id: "diagnosis",
@@ -378,15 +398,16 @@ export const TIPOS: readonly TipoDeArtefacto[] = [
     id: "implementation",
     nombre: "Ejecución",
     conArticulo: "una ejecución",
-    paraQue: "La guía de construcción del CSE. Interna.",
-    copias: "una",
+    paraQue: "La guía de construcción del CSE. Una por frente, cada una con su nombre. Interna.",
+    copias: "varias",
     duenos: ["proyecto"],
     clientFacing: false,
     vive: "canvas",
     pieza: "implementation",
     clase: "herramienta",
     permiso: "implementacion",
-    contextoDe: null,
+    contextoDe: "planning",
+    plantillas: [{ id: "ejecucion", nombre: "Ejecución", paraQue: "Qué se construye, en qué orden y cómo se verifica." }],
     estructurales: ["implementacion", "cierre"],
   },
   {
@@ -433,9 +454,20 @@ export function admiteCopias(id: string | null | undefined): boolean {
   return !!t && t.copias === "varias" && t.vive === "canvas" && t.duenos.includes("proyecto");
 }
 
-/** Los tipos con que se crea una copia en un proyecto, en el orden en que se ofrecen. */
-export function tiposCreablesEnElProyecto(): TipoDeArtefacto[] {
-  return TIPOS.filter((t) => admiteCopias(t.id) || t.seAbreUna);
+/** «Crear otra planificación», «Crear otro kickoff», «Crear otros cuestionarios». */
+export function rotuloDeCrearOtro(t: TipoDeArtefacto): string {
+  const otro = t.conArticulo.startsWith("unos") ? "otros" : t.conArticulo.startsWith("una") ? "otra" : "otro";
+  return `Crear ${otro} ${t.nombre.toLowerCase()}`;
+}
+
+/** ¿Se le cambia el nombre? Todo lo que admite copias y el cronograma, que es uno solo pero también se llama como quieran. */
+export function seRenombra(id: string | null | undefined): boolean {
+  return admiteCopias(id) || id === "timeline";
+}
+
+/** Los tipos con que se crea un documento en un proyecto, en el orden en que se ofrecen. */
+export function tiposCreablesEnElProyecto(clase?: TipoDeArtefacto["clase"]): TipoDeArtefacto[] {
+  return TIPOS.filter((t) => admiteCopias(t.id) && (!clase || t.clase === clase));
 }
 
 /** Las plantillas de un tipo: las suyas, o las de su entregable. La primera es la de siempre. */

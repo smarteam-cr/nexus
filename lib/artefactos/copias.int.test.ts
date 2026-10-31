@@ -219,7 +219,7 @@ describe("varias copias de un tipo en un proyecto", () => {
     expect(keysI).not.toContain("estimacion");
 
     await expect(crearCopia({ projectId: proyecto.id, tipo: "timeline", porEmail: null })).rejects.toMatchObject({ status: 400 });
-    await expect(crearCopia({ projectId: proyecto.id, tipo: "implementation", porEmail: null })).rejects.toMatchObject({ status: 400 });
+    await expect(crearCopia({ projectId: proyecto.id, tipo: "handoff", porEmail: null })).rejects.toMatchObject({ status: 400 });
     await expect(crearCopia({ projectId: proyecto.id, tipo: "planning", plantillaId: "no-existe", porEmail: null })).rejects.toMatchObject({ status: 400 });
   });
 
