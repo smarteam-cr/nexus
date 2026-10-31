@@ -4011,13 +4011,28 @@ model PrioridadDeCuenta {
   tipo      String
   /// smartloop · ticket-grande · interlocutores-dificiles · otro (solo «marcar»).
   motivo    String?
-  /// Una línea opcional (con «otro», el motivo en palabras).
+  /// Con «otro», el motivo creado por el equipo. nullable porque los fijos no lo llevan y las marcas anteriores tampoco.
+  motivoDelEquipoId String?
+  motivoDelEquipo   MotivoDePrioridad? @relation(fields: [motivoDelEquipoId], references: [id], onDelete: SetNull)
+  /// Una línea opcional (en las marcas anteriores con «otro», el motivo en palabras).
   nota      String?  @db.Text
   porEmail  String
   porNombre String?
   createdAt DateTime @default(now())
 
   @@index([clientId, createdAt])
+}
+
+/// Un motivo de prioridad creado por el equipo con «Otro motivo» (Éxito del cliente, 2026-10-30): lo ven todos.
+model MotivoDePrioridad {
+  id        String   @id @default(cuid())
+  nombre    String
+  /// El nombre en minúsculas y con un espacio entre palabras: evita los duplicados (claveDelMotivo).
+  clave     String   @unique
+  porEmail  String
+  porNombre String?
+  createdAt DateTime @default(now())
+  marcas    PrioridadDeCuenta[]
 }
 
 /// Una vista guardada de la pestaña «Cartera» de Éxito del cliente: un nombre y sus filtros (2026-10-09).

@@ -16,7 +16,7 @@ import { useSearchParams } from "next/navigation";
 import { PageHeader, Select } from "@/components/ui";
 import { BotonTexto } from "@/components/ui/sistema";
 import { cn } from "@/lib/cn";
-import { EstrellaDePrioridad } from "./EstrellaDePrioridad";
+import { CheckDePrioridad } from "./CheckDePrioridad";
 import { cuandoEsLaReunion, diaCorto, DIAS_PARA_LA_REUNION, elDia } from "@/lib/mi-dia/servicio";
 import {
   conteosDelSeguimiento,
@@ -194,7 +194,7 @@ function Fila({ f, hoyISO, correo, lider }: { f: FilaDeSeguimiento; hoyISO: stri
 
   return (
     <div className={cn("grid grid-cols-1 gap-x-5 gap-y-2.5 border-t border-line px-4 py-3.5 first:border-t-0 lg:grid", COLUMNAS)}>
-      <EstrellaDePrioridad clientId={f.clientId} cuenta={f.nombre} />
+      <CheckDePrioridad clientId={f.clientId} cuenta={f.nombre} />
 
       {/* La cuenta y su CSE. */}
       <div className="min-w-0 space-y-1">

@@ -1,17 +1,18 @@
 "use client";
 
 /**
- * components/cs/EstrellaDePrioridad.tsx — la columna «Prioritaria» de los listados de Éxito del cliente (2026-10-30,
+ * components/cs/CheckDePrioridad.tsx — la columna «Prioritaria» de los listados de Éxito del cliente (2026-10-30,
  * pedido de Elías: «debería ser muy sencillo de marcar»). Regla en lib/cs/prioridad-de-cuenta.ts.
  *
- * Una estrella por cuenta: un clic abre los motivos y elegir uno guarda, sin salir de la lista. «Otro motivo» y
- * «Agregar una línea» abren la ventana de siempre (`VentanaDePrioridad`). Las marcas y el permiso vienen de
+ * Un check por cuenta: un clic abre los motivos (los fijos y los que creó el equipo) y elegir uno guarda, sin salir de la
+ * lista. «Otro motivo» y «Agregar una línea» abren la ventana de siempre (`VentanaDePrioridad`). Las marcas, los motivos y
+ * el permiso vienen de
  * `PrioridadesDeLaCartera`, que la página pone una sola vez alrededor de todos los listados: una fila solo necesita el id
  * y el nombre de su cuenta.
  *
- * ⚠ La estrella siempre pinta algo, aunque esté vacía y quien mira no pueda marcar: en una fila de grilla, una celda que
+ * ⚠ El check siempre pinta algo, aunque esté vacío y quien mira no pueda marcar: en una fila de grilla, una celda que
  * no renderiza corre todas las columnas siguientes.
- * ⚠ Va por encima del enlace de la fila (`relative z-[1]`): una fila con la estrella no puede ser un <a> entero, porque un
+ * ⚠ Va por encima del enlace de la fila (`relative z-[1]`): una fila con el check no puede ser un <a> entero, porque un
  * botón dentro de un enlace también lo abriría.
  */
 import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
@@ -20,24 +21,34 @@ import { Menu, type MenuItemDef } from "@/components/ui";
 import { useToast } from "@/components/ui/Toast";
 import { ApiError } from "@/lib/api/fetch-json";
 import { cn } from "@/lib/cn";
-import { MOTIVOS_DE_PRIORIDAD, NOMBRE_DEL_MOTIVO, marcasConLoGuardado, type MotivoDePrioridad, type PrioridadVisible } from "@/lib/cs/prioridad-de-cuenta";
-import { Estrella, VentanaDePrioridad, guardarPrioridad } from "./MarcaDePrioridad";
+import {
+  MOTIVOS_DE_PRIORIDAD,
+  NOMBRE_DEL_MOTIVO,
+  marcasConLoGuardado,
+  motivosConLosUsados,
+  type MotivoDelEquipo,
+  type PrioridadVisible,
+} from "@/lib/cs/prioridad-de-cuenta";
+import { CheckDeMarca, VentanaDePrioridad, guardarPrioridad } from "./MarcaDePrioridad";
 
 type Marcas = Readonly<Record<string, PrioridadVisible>>;
 
 const Prioridades = createContext<{
   marcas: Marcas;
+  motivos: readonly MotivoDelEquipo[];
   puedeMarcar: boolean;
   onCambio: (clientId: string, prioritaria: PrioridadVisible | null) => void;
 } | null>(null);
 
 export function PrioridadesDeLaCartera({
   iniciales,
+  motivos,
   puedeMarcar,
   ordenaLaLista,
   children,
 }: {
   iniciales: Marcas;
+  motivos: readonly MotivoDelEquipo[];
   puedeMarcar: boolean;
   /** La marca ordena esta lista: al guardar se pide de nuevo. Seguimiento no ordena por ella y recargar lee calendarios. */
   ordenaLaLista: boolean;
@@ -45,28 +56,33 @@ export function PrioridadesDeLaCartera({
 }) {
   const router = useRouter();
   // Lo guardado acá manda sobre lo que traiga el servidor: al marcar dos seguidas, la primera recarga llega con una foto
-  // anterior a la segunda y haría parpadear la estrella.
+  // anterior a la segunda y haría parpadear el check.
   const [guardadas, setGuardadas] = useState<Readonly<Record<string, PrioridadVisible | null>>>({});
+  // Aparte de las marcas: cambiarle el motivo a la cuenta no saca del menú el que se acaba de crear.
+  const [usados, setUsados] = useState<readonly MotivoDelEquipo[]>([]);
 
   const valor = useMemo(
     () => ({
       marcas: marcasConLoGuardado(iniciales, guardadas),
+      motivos: motivosConLosUsados(motivos, usados),
       puedeMarcar,
       onCambio: (clientId: string, prioritaria: PrioridadVisible | null) => {
         setGuardadas((g) => ({ ...g, [clientId]: prioritaria }));
+        const motivo = prioritaria?.motivoDelEquipo;
+        if (motivo) setUsados((u) => [...u, motivo]);
         if (ordenaLaLista) router.refresh();
       },
     }),
-    [iniciales, guardadas, puedeMarcar, ordenaLaLista, router],
+    [iniciales, motivos, guardadas, usados, puedeMarcar, ordenaLaLista, router],
   );
   return <Prioridades.Provider value={valor}>{children}</Prioridades.Provider>;
 }
 
-export function EstrellaDePrioridad({ clientId, cuenta, soloEstrella = false }: { clientId: string; cuenta: string; soloEstrella?: boolean }) {
+export function CheckDePrioridad({ clientId, cuenta, soloCheck = false }: { clientId: string; cuenta: string; soloCheck?: boolean }) {
   const contexto = useContext(Prioridades);
   const toast = useToast();
   const [ocupado, setOcupado] = useState(false);
-  const [ventana, setVentana] = useState<MotivoDePrioridad | null>(null);
+  const [ventana, setVentana] = useState<"otro" | "linea" | null>(null);
 
   const prioritaria = contexto?.marcas[clientId] ?? null;
   const descripcion = prioritaria ? `Prioritaria: ${prioritaria.enPalabras} · la marcó ${prioritaria.quien}` : "";
@@ -75,11 +91,11 @@ export function EstrellaDePrioridad({ clientId, cuenta, soloEstrella = false }: 
 
   const contenido = (
     <>
-      <Estrella
-        vacia={!prioritaria}
+      <CheckDeMarca
+        vacio={!prioritaria}
         className={cn("h-4 w-4", prioritaria ? "text-brand" : "text-fg-muted transition-colors group-hover:text-brand", ocupado && "opacity-50")}
       />
-      {prioritaria && !soloEstrella && <span className="line-clamp-2 min-w-0 break-words text-left text-[11px] font-medium leading-[14px] text-brand">{prioritaria.enPalabras}</span>}
+      {prioritaria && !soloCheck && <span className="line-clamp-2 min-w-0 break-words text-left text-[11px] font-medium leading-[14px] text-brand">{prioritaria.enPalabras}</span>}
     </>
   );
 
@@ -103,19 +119,26 @@ export function EstrellaDePrioridad({ clientId, cuenta, soloEstrella = false }: 
     }
   }
 
-  const items: MenuItemDef[] = MOTIVOS_DE_PRIORIDAD.map((motivo) => ({
-    key: motivo,
-    label: motivo === "otro" ? `${NOMBRE_DEL_MOTIVO.otro}…` : NOMBRE_DEL_MOTIVO[motivo],
-    disabled: ocupado || (motivo !== "otro" && prioritaria?.motivo === motivo),
-    // «Otro motivo» pide decir cuál; los demás se guardan con el clic, conservando la línea que ya tuviera.
-    onSelect: () =>
-      motivo === "otro"
-        ? setVentana("otro")
-        : void guardar({ accion: "marcar", motivo, nota: prioritaria?.nota ?? null }, `${cuenta}: prioritaria por ${NOMBRE_DEL_MOTIVO[motivo]}.`),
-  }));
+  // «Otro motivo» pide decir cuál; los demás se guardan con el clic, conservando la línea que ya tuviera.
+  const nota = prioritaria?.nota ?? null;
+  const items: MenuItemDef[] = [
+    ...MOTIVOS_DE_PRIORIDAD.filter((motivo) => motivo !== "otro").map((motivo) => ({
+      key: motivo,
+      label: NOMBRE_DEL_MOTIVO[motivo],
+      disabled: ocupado || prioritaria?.motivo === motivo,
+      onSelect: () => void guardar({ accion: "marcar", motivo, nota }, `${cuenta}: prioritaria por ${NOMBRE_DEL_MOTIVO[motivo]}.`),
+    })),
+    ...contexto.motivos.map((m) => ({
+      key: m.id,
+      label: m.nombre,
+      disabled: ocupado || prioritaria?.motivoDelEquipo?.id === m.id,
+      onSelect: () => void guardar({ accion: "marcar", motivo: "otro", motivoDelEquipoId: m.id, nota }, `${cuenta}: prioritaria por ${m.nombre}.`),
+    })),
+    { key: "otro", label: `${NOMBRE_DEL_MOTIVO.otro}…`, disabled: ocupado, onSelect: () => setVentana("otro") },
+  ];
   if (prioritaria) {
     items.push(
-      { key: "linea", label: "Agregar o cambiar la línea…", separatorBefore: true, onSelect: () => setVentana(prioritaria.motivo) },
+      { key: "linea", label: "Agregar o cambiar la línea…", separatorBefore: true, onSelect: () => setVentana("linea") },
       { key: "quitar", label: "Quitar la marca", danger: true, disabled: ocupado, onSelect: () => void guardar({ accion: "quitar" }, `${cuenta} ya no es prioritaria.`) },
     );
   }
@@ -135,7 +158,8 @@ export function EstrellaDePrioridad({ clientId, cuenta, soloEstrella = false }: 
           clientId={clientId}
           cuenta={cuenta}
           prioritaria={prioritaria}
-          motivoInicial={ventana}
+          motivos={contexto.motivos}
+          enOtroMotivo={ventana === "otro"}
           onCerrar={() => setVentana(null)}
           onGuardada={(p) => contexto.onCambio(clientId, p)}
         />

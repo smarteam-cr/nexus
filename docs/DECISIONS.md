@@ -12667,15 +12667,21 @@ con el diff viejo solo como referencia, después de confirmar con búsqueda que 
     contrato sin enviar). Es lo que pidió Elías («los que nunca arrancaron»); si se quieren de vuelta, es una línea
     (`etapaDeArranque`). La queja de una reunión es de la cuenta, no de un proyecto, y sigue igual.
 - **La marca de prioridad** (`PrioridadDeCuenta`, append-only como `CorreccionDeSalud`; lib/cs/prioridad-de-cuenta.ts).
-  Un motivo (SmartLoop, ticket grande, interlocutores difíciles u otro, con una línea opcional; con «otro», obligatoria).
+  Un motivo (SmartLoop, ticket grande, interlocutores difíciles o uno del equipo, con una línea opcional).
   La pone o la quita quien tenga la celda `customerSuccess.marcarPrioridad` (por defecto la CSL; SUPER_ADMIN siempre),
   desde la columna «Prioritaria» de los listados y desde el panel de la cuenta. La ruta pide además el rol del área
   (`guardLiderDeCs`).
-  - *Una columna con estrella en cada listado (2026-10-30, pedido de Elías: «debería ser muy sencillo de marcar»):* un
-    clic abre los motivos y elegir uno guarda; «Otro motivo» pide la línea. Está en todas las pestañas del índice y en
+  - *Una columna con check en cada listado (2026-10-30, pedido de Elías: «debería ser muy sencillo de marcar»; primero
+    fue una estrella y pidió el check):* un clic abre los motivos y elegir uno guarda. Está en todas las pestañas del índice y en
     Seguimiento de cuentas (ahí el CSE la ve y no la cambia). Las marcas viajan en un contexto que pone la página, no fila
-    por fila (`components/cs/EstrellaDePrioridad.tsx`). No va en Rentabilidad ni en Propuestas del vigía: la primera se
+    por fila (`components/cs/CheckDePrioridad.tsx`). No va en Rentabilidad ni en Propuestas del vigía: la primera se
     abre por otra celda y la segunda lista propuestas, no cuentas.
+  - *«Otro motivo» crea un motivo para todo el equipo (2026-10-30, pedido de Elías):* vive en `MotivoDePrioridad`, con el
+    mismo permiso de marcar, y la lista de los motivos fijos sigue en el código. La marca lo apunta con
+    `motivoDelEquipoId` y guarda `motivo = "otro"`, así el CHECK de la columna no cambia y el SQL queda aditivo. Lo que solo
+    cambia en mayúsculas o espacios es el mismo motivo (`claveDelMotivo`, índice único), y escribir el nombre de uno fijo
+    usa el fijo. Todavía no hay cómo renombrar ni borrar un motivo. Las marcas anteriores con el motivo en la línea se leen
+    igual; al editarlas hay que elegir o escribir el motivo, para que una línea no pase sola a ser de todo el equipo.
   - *No cambia el color, ordena*: dentro del mismo color la prioritaria va primero (en «A quién llamar», en la Cartera
     y, entre las que tienen una alerta alta, en «Alertas»). *Por qué no sube de color:* el color dice cómo va la cuenta
     y lo calcula Nexus con hechos; mezclarle «cuánto nos importa» le quitaba el significado a los dos.

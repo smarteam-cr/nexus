@@ -32,7 +32,7 @@ import {
 } from "@/lib/cs/cartera-reglas";
 import { Avatar, CajaDeTabla, Chip, EncabezadoDeTabla, Flecha, Salud } from "../piezas";
 import { AlertaParaCerrar, AlertasCerradas } from "../AlertaParaCerrar";
-import { EstrellaDePrioridad } from "../EstrellaDePrioridad";
+import { CheckDePrioridad } from "../CheckDePrioridad";
 import { CampoDeBusqueda, OtrasCuentas } from "./Buscar";
 
 /** Los filtros que llegan desde la tira «Entrega de proyectos» (la regla vive en cartera-reglas). */
@@ -92,7 +92,7 @@ function VistaDeAlertas({
             <Link href={`/customer-success/${c.clientId}`} className="text-sm font-semibold text-fg hover:text-brand">
               {c.nombre}
             </Link>
-            <EstrellaDePrioridad clientId={c.clientId} cuenta={c.nombre} />
+            <CheckDePrioridad clientId={c.clientId} cuenta={c.nombre} />
             <span className="text-xs text-fg-muted">{plural(c.alertas.length, "alerta abierta", "alertas abiertas")}</span>
           </header>
           <div className="grid gap-2 p-3 md:grid-cols-2">
@@ -312,7 +312,7 @@ export default function Llamar({
                   {/* La fila entera abre la cuenta (el enlace del nombre la cubre); el color y las
                       alertas quedan por encima, para el porqué y para abrirlas sin salir. */}
                   <div className={cn("relative grid items-center gap-4 px-4 py-3.5 text-fg transition-colors hover:bg-surface-hover", COLUMNAS)}>
-                    <EstrellaDePrioridad clientId={f.clientId} cuenta={f.nombre} />
+                    <CheckDePrioridad clientId={f.clientId} cuenta={f.nombre} />
                     <span className="relative z-[1] justify-self-start">
                       <Salud salud={f.salud} porque={f.porqueDeLaSalud} />
                     </span>

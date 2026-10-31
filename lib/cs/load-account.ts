@@ -30,6 +30,7 @@ import { clasificarCuenta, type ClasificacionDeLaCuenta } from "./clasificacion"
 import { leerClasificaciones } from "./clasificacion-server";
 import { leerAjustes } from "./ajustes-de-salud-server";
 import { leerPrioridades } from "./prioridad-de-cuenta-server";
+import type { MotivoDelEquipo } from "./prioridad-de-cuenta";
 import { esCuentaDePrueba } from "@/lib/documentacion/equipo";
 import { camposPropuestos, leerFicha } from "@/lib/clients/ficha";
 import { propuestaDeEspera, sugerirEspera, SIN_AJUSTES, type PropuestaDeEspera } from "./ajustes-de-salud";
@@ -165,6 +166,8 @@ export interface CsAccountData {
   puedeReasignar?: boolean;
   /** Puede marcar la cuenta como prioritaria (`customerSuccess.marcarPrioridad`, 2026-10-29). Lo pone la página. */
   puedeMarcarPrioridad?: boolean;
+  /** Los motivos que creó el equipo. Lo pone la página. */
+  motivosDePrioridad?: MotivoDelEquipo[];
   /** Las personas del cliente en HubSpot (copia de señales). */
   contactos: Array<{ nombre: string; cargo: string | null; email: string | null; ultimoContacto: string | null }>;
   resultados: Array<{

@@ -141,6 +141,7 @@ function ElColor({ data }: { data: CsAccountData }) {
           cuenta={data.cuenta.nombre}
           prioritaria={prioridadVisible(data.cuenta.prioritaria)}
           puedeMarcar={!!data.puedeMarcarPrioridad}
+          motivos={data.motivosDePrioridad ?? []}
         />
         {s.nexus && (
           <p className="text-xs text-fg-muted">

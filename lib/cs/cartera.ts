@@ -54,7 +54,7 @@ import type { CierreAnterior } from "./alertas-reglas";
 import { filasDeLaCartera } from "./clasificacion";
 import { leerClasificaciones } from "./clasificacion-server";
 import { leerAjustes } from "./ajustes-de-salud-server";
-import { leerPrioridades } from "./prioridad-de-cuenta-server";
+import { leerMotivosDelEquipo, leerPrioridades } from "./prioridad-de-cuenta-server";
 import { prioridadesVisibles, type PrioridadGuardada } from "./prioridad-de-cuenta";
 import { datosDeMarcha } from "./proyecto-en-marcha-server";
 import { alertaApagadaPorMarcha, bloqueadoEnHubspot, marchaDelProyecto } from "./proyecto-en-marcha";
@@ -498,6 +498,8 @@ export async function cargarCarteraDeLaCsl(clientWhere: Prisma.ClientWhereInput 
     ajustesListos: !(await leerAjustes(todas.slice(0, 1).map((c) => c.clientId))).faltaLaTabla,
     /** Las marcas de prioridad, por cuenta: las lee la columna «Prioritaria» de todos los listados. */
     prioritarias: prioridadesVisibles(new Map(todas.flatMap((c): Array<[string, PrioridadGuardada]> => (c.prioritaria ? [[c.clientId, c.prioritaria]] : [])))),
+    /** Los motivos que creó el equipo: el menú de la columna los ofrece junto a los fijos. */
+    motivosDePrioridad: await leerMotivosDelEquipo(),
     renovaciones: renovacionesProximas(cuentas, hoy, 120),
     adopcion,
     primeros90: primeros90Dias(cuentas, hoy),

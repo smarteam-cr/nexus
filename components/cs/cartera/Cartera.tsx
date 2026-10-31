@@ -53,7 +53,7 @@ import { InfoHint } from "@/components/ui/Tooltip";
 import { Avatar, CajaDeTabla, EncabezadoDeTabla, META_DE_SALUD, Punto, Salud } from "../piezas";
 import { CeldaDeClasificacion, conLoGuardado, guardarClasificacion, operacionesParaUsarTodo } from "../CeldaDeClasificacion";
 import { CorregirColor } from "../AjusteDelColor";
-import { EstrellaDePrioridad } from "../EstrellaDePrioridad";
+import { CheckDePrioridad } from "../CheckDePrioridad";
 import { CampoDeBusqueda } from "./Buscar";
 import FiltroMultiple from "./FiltroMultiple";
 import CseEncargadoSelect, { type OpcionDeEncargado } from "@/components/clients/CseEncargadoSelect";
@@ -482,7 +482,7 @@ function FilaDeCartera({
   return (
     <div className={cn("grid items-start gap-4 px-4 py-3 text-fg", COLUMNAS, !primera && "border-t border-line")}>
       <span className="pt-0.5">
-        <EstrellaDePrioridad clientId={f.clientId} cuenta={f.nombre} />
+        <CheckDePrioridad clientId={f.clientId} cuenta={f.nombre} />
       </span>
       <span className="flex flex-col items-start gap-0.5 pt-0.5">
         <Salud salud={f.salud} porque={f.porqueDeLaSalud} />

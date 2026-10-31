@@ -13,7 +13,7 @@ import { enCuanto, fmtCambio, fmtDia, fmtMonto } from "@/lib/cs/formato";
 import { esEnDolares, type FilaDeRenovacion } from "@/lib/cs/cartera-reglas";
 import { UMBRALES } from "@/lib/cs/lectura-partner";
 import { Avatar, CajaDeTabla, Chip, EncabezadoDeTabla, GrupoDeTabla, Salud } from "../piezas";
-import { EstrellaDePrioridad } from "../EstrellaDePrioridad";
+import { CheckDePrioridad } from "../CheckDePrioridad";
 
 type Ventana = "30" | "60" | "90";
 
@@ -86,9 +86,9 @@ export default function Renovaciones({ filas, hoy }: { filas: FilaDeRenovacion[]
                       key={`${f.clientId}-${f.fecha}-${f.moneda ?? ""}`}
                       className={cn("relative grid items-center gap-4 px-4 py-3.5 text-fg transition-colors hover:bg-surface-hover", COLUMNAS, i > 0 && "border-t border-line")}
                     >
-                      <EstrellaDePrioridad clientId={f.clientId} cuenta={f.nombre} />
+                      <CheckDePrioridad clientId={f.clientId} cuenta={f.nombre} />
                       <span className="flex min-w-0 flex-col gap-1">
-                        {/* La fila entera abre la cuenta (el enlace del nombre la cubre); la estrella y el color quedan por encima. */}
+                        {/* La fila entera abre la cuenta (el enlace del nombre la cubre); el check y el color quedan por encima. */}
                         <Link href={`/customer-success/${f.clientId}`} className="truncate text-sm font-semibold after:absolute after:inset-0">
                           {f.nombre}
                         </Link>

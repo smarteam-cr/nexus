@@ -2,7 +2,7 @@
  * Esqueleto de /customer-success/seguimiento — la carga lee el calendario de quien lleva cada cuenta.
  *
  * FORMA REAL (page.tsx → SeguimientoDeCuentas): cabecera · la fila de filtros (el selector y los dos botones) · la línea
- * con los conteos · UNA tarjeta con la fila de títulos y una fila por cuenta (la estrella, cuenta, próxima sesión,
+ * con los conteos · UNA tarjeta con la fila de títulos y una fila por cuenta (el check, cuenta, próxima sesión,
  * siguiente paso, temas y última reunión). Los títulos se saben antes de cargar: se pintan de verdad.
  */
 import { PageHeaderSkeleton, Skeleton } from "@/components/ui";

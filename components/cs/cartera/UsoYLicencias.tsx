@@ -15,7 +15,7 @@ import { plural } from "@/lib/cs/formato";
 import { UMBRALES } from "@/lib/cs/lectura-partner";
 import type { AdopcionDeUnHub, CuentaNueva, ItemDeConsumo } from "@/lib/cs/cartera-reglas";
 import { Avatar, Barra, CajaDeTabla, Chip, EncabezadoDeTabla, TituloDeSeccion } from "../piezas";
-import { EstrellaDePrioridad } from "../EstrellaDePrioridad";
+import { CheckDePrioridad } from "../CheckDePrioridad";
 
 const COLUMNAS = "grid-cols-[minmax(0,1fr)_90px_120px_96px_minmax(0,1.5fr)_minmax(0,1.2fr)]";
 
@@ -123,7 +123,7 @@ export default function UsoYLicencias({
                   i > 0 && "border-t border-line",
                 )}
               >
-                <EstrellaDePrioridad clientId={c.clientId} cuenta={c.nombre} />
+                <CheckDePrioridad clientId={c.clientId} cuenta={c.nombre} />
                 <Link href={`/customer-success/${c.clientId}`} className="truncate text-sm font-semibold text-fg after:absolute after:inset-0">
                   {c.nombre}
                 </Link>
@@ -167,7 +167,7 @@ function ListaDeConsumo({ titulo, chip, items, vacio }: { titulo: string; chip: 
             key={`${it.clientId}-${it.que}`}
             className={cn("relative flex items-start gap-2 border-t border-line py-2.5 text-[13px] hover:text-brand", i === 0 && "mt-2.5", i === items.length - 1 && "pb-0")}
           >
-            <EstrellaDePrioridad clientId={it.clientId} cuenta={it.nombre} soloEstrella />
+            <CheckDePrioridad clientId={it.clientId} cuenta={it.nombre} soloCheck />
             <span className="min-w-0 flex-1">
               <Link href={`/customer-success/${it.clientId}`} className="font-semibold text-fg after:absolute after:inset-0">
                 {it.nombre}
