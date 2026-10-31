@@ -18,6 +18,7 @@ import type { Escala, Letra } from "@/lib/escala/documento/tipos";
 import { borradoresDeLaEscala, escalaDelBanco, problemasDelBanco } from "./banco";
 import { MINUTOS_PARA_ABANDONO } from "./hubspot-server";
 import { dominioDelCorreo } from "./servicio-server";
+import { problemasDeLasVariantes } from "./variantes";
 import {
   diaEnCostaRica,
   estadoDelBanco,
@@ -44,6 +45,12 @@ async function escalaVigente(): Promise<Escala | null> {
   return "escala" in v ? v.escala : null;
 }
 
+/** Lo que impide aprobar un banco: sus reglas y las de sus variantes. */
+const problemasParaAprobar = (escala: Escala, b: Pick<BancoGuardado, "area" | "version" | "edicion" | "preguntas">) => [
+  ...problemasDelBanco(escalaDelBanco(escala, b.edicion), b.area, b.version, b.preguntas),
+  ...problemasDeLasVariantes(b.preguntas),
+];
+
 /** Crea los borradores que falten. Devuelve cuántos creó, o null si no hay escala publicada. */
 export async function generarBorradores(por: string): Promise<number | null> {
   const escala = await escalaVigente();
@@ -67,7 +74,7 @@ export async function guardarElBorrador(id: string, preguntas: PreguntaDelBanco[
   return {
     estado: "ok",
     preguntas: banco.preguntas,
-    problemas: escala ? problemasDelBanco(escalaDelBanco(escala, banco.edicion), banco.area, banco.version, banco.preguntas) : [],
+    problemas: escala ? problemasParaAprobar(escala, banco) : [],
   };
 }
 
@@ -90,7 +97,7 @@ export async function aprobarElBorrador(id: string, revisadas: readonly Pregunta
   if (firmaDe(revisadas) !== firmaDe(banco.preguntas)) return { estado: "cambio-en-el-medio" };
   const escala = await escalaVigente();
   if (!escala) return { estado: "sin-escala" };
-  const problemas = problemasDelBanco(escalaDelBanco(escala, banco.edicion), banco.area, banco.version, banco.preguntas);
+  const problemas = problemasParaAprobar(escala, banco);
   if (problemas.length) return { estado: "con-problemas", problemas };
   return (await aprobarBanco(id, banco.preguntas, escala.version, por)) ? { estado: "aprobado" } : { estado: "cambio-en-el-medio" };
 }
@@ -167,7 +174,7 @@ export async function datosDeLaPantalla(ahora: Date = new Date()): Promise<Datos
       bancos: bancos.map((b) => ({
         ...b,
         estado: estadoDelBanco(b),
-        problemas: escala ? problemasDelBanco(escalaDelBanco(escala, b.edicion), b.area, b.version, b.preguntas) : [],
+        problemas: escala ? problemasParaAprobar(escala, b) : [],
       })),
       intentos: intentos.map((i) => ({
         id: i.id,

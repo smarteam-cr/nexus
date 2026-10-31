@@ -13,11 +13,14 @@
  *     Funcional en tres dimensiones);
  *   · ningún texto nombra un nivel de la escala («Funcional», «Óptimo»…): quien responde no ve niveles;
  *   · ningún texto muestra un código de la escala (`1.7.F`, `1.7.F2`, `(1.7)`): quien responde no ve códigos.
+ * Las dos últimas valen también para las variantes por grupo; lo propio de las variantes lo revisa ./variantes.ts.
  */
 import { aplicarEdicion } from "@/lib/escala/documento/edicion";
 import type { Escala, Letra } from "@/lib/escala/documento/tipos";
 import { LETRAS } from "@/lib/escala/documento/tipos";
 import { EDICION_GENERAL, VERSIONES_DEL_TEST, type PreguntaDelBanco, type VersionDelTest } from "./tipos";
+import { conVariantes, problemasDeLasVariantes, textosDeLasVariantes } from "./variantes";
+import { VARIANTES_DE_CRM } from "./variantes-de-crm.datos";
 
 /** Las áreas que mide la escala y tienen test. */
 export const AREAS_DEL_TEST = ["1", "2", "3"] as const;
@@ -25,12 +28,15 @@ export const AREAS_DEL_TEST = ["1", "2", "3"] as const;
 /** La escala vista por la edición de un banco (`general` = sin edición). */
 export const escalaDelBanco = (escala: Escala, edicion: string) => aplicarEdicion(escala, edicion === EDICION_GENERAL ? null : edicion);
 
-/** Un borrador por cada área × versión, para la escala general y cada edición. Los que quedan sin preguntas no van. */
+/**
+ * Un borrador por cada área × versión, para la escala general y cada edición, con sus variantes de CRM (las entradas
+ * cuya base coincide). Los que quedan sin preguntas no van.
+ */
 export function borradoresDeLaEscala(escala: Escala): { area: string; version: VersionDelTest; edicion: string; preguntas: PreguntaDelBanco[] }[] {
   const ediciones = [EDICION_GENERAL, ...escala.ediciones.map((e) => e.slug)];
   return AREAS_DEL_TEST.flatMap((area) =>
     VERSIONES_DEL_TEST.flatMap((version) =>
-      ediciones.map((edicion) => ({ area, version, edicion, preguntas: borradorDesdeLaEscala(escalaDelBanco(escala, edicion), area, version) })),
+      ediciones.map((edicion) => ({ area, version, edicion, preguntas: conVariantes(borradorDesdeLaEscala(escalaDelBanco(escala, edicion), area, version), VARIANTES_DE_CRM) })),
     ),
   ).filter((f) => f.preguntas.length > 0);
 }
@@ -99,10 +105,11 @@ export function problemasDelBanco(escala: Escala, areaId: string, version: Versi
     if (faltan.length) problemas.push(`La pregunta ${n} no deja elegir todos los niveles: falta ${faltan.map((l) => nombreDe(escala, l)).join(", ")}.`);
     if (new Set(letras).size !== letras.length) problemas.push(`La pregunta ${n} tiene dos opciones con el mismo nivel.`);
     if (p.opciones.some((o) => !o.texto.trim())) problemas.push(`La pregunta ${n} tiene una opción sin texto.`);
-    const textos = [p.texto, p.ayuda ?? "", ...p.opciones.map((o) => o.texto)].map(sinTildes);
+    const escritos = [p.texto, p.ayuda ?? "", ...p.opciones.map((o) => o.texto), ...textosDeLasVariantes(p)];
+    const textos = escritos.map(sinTildes);
     const nombra = nombresDeNivel.find((nom) => textos.some((t) => new RegExp(`(^|[^a-z])${nom}([^a-z]|$)`).test(t)));
     if (nombra) problemas.push(`La pregunta ${n} nombra un nivel de la escala («${nombra}»): quien responde no ve niveles.`);
-    const codigo = [p.texto, p.ayuda ?? "", ...p.opciones.map((o) => o.texto)].map(codigoDeLaEscala).find(Boolean);
+    const codigo = escritos.map(codigoDeLaEscala).find(Boolean);
     if (codigo) problemas.push(`La pregunta ${n} muestra un código de la escala («${codigo}»): quien responde no ve códigos.`);
   });
   if (version === "web") {
@@ -178,7 +185,7 @@ export function planDeLosBancos(
     else if (!igualAlGenerado) accion = { tipo: "rearmar", desde: existente.escalaVersion };
     else if (firma(existente.aprobadas) === firma(f.preguntas) && existente.escalaVersion === escala.version) accion = { tipo: "al-dia" };
     else accion = { tipo: "aprobar" };
-    const problemas = accion.tipo === "de-una-persona" ? [] : problemasDelBanco(escalaDelBanco(escala, f.edicion), f.area, f.version, f.preguntas);
+    const problemas = accion.tipo === "de-una-persona" ? [] : [...problemasDelBanco(escalaDelBanco(escala, f.edicion), f.area, f.version, f.preguntas), ...problemasDeLasVariantes(f.preguntas)];
     return { area: f.area, version: f.version, edicion: f.edicion, preguntas: f.preguntas, accion, problemas };
   });
 }

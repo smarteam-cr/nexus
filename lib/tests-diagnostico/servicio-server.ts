@@ -8,6 +8,8 @@
  *     edición, la general. Cuando se publique la 9.0, el test la toma sola.
  *   · Las preguntas son las APROBADAS del banco (las de la edición o, si no tiene, las de la general). Sin aprobadas, el
  *     test no se abre: el aviso lo dice y nadie llena un test con preguntas que Elías no revisó.
+ *   · Cada persona ve las preguntas de su grupo según lo que marcó en el formulario (./variantes.ts). El intento guarda
+ *     los textos que vio y su grupo; los ids y los niveles son los del banco, así que el puntaje no se entera.
  *   · Quien responde nunca ve ids del banco, dimensiones ni niveles: cada intento tiene sus ids opacos.
  *   · El resultado lo calcula Nexus (./resultado.ts); queda guardado y la dirección que va a HubSpot lo trae comprimido
  *     (./enlace.ts), para que la preventa lo siga leyendo sin base.
@@ -29,6 +31,7 @@ import { unaSolaVez } from "./una-sola-vez";
 import { urlDelResultado } from "./enlace";
 import { textoDeLaRespuesta, type VersionDelTest } from "./tipos";
 import { conIdsPublicos, nombresDeLosPasos, respuestasDelBanco, vistaDelIntento, type VistaDelIntento } from "./ids-publicos";
+import { preguntasParaElUso } from "./variantes";
 import {
   aprobadasPara,
   crearIntento,
@@ -91,7 +94,7 @@ export async function empezarTest(o: {
     // La edición de las preguntas que se usaron (la de la industria o la general).
     edicion: aprobadas.banco.edicion === "general" ? null : edicion,
     escalaVersion: escala.version,
-    preguntas: conIdsPublicos(aprobadas.preguntas, nombresDeLosPasos(escala, o.area)),
+    preguntas: conIdsPublicos(preguntasParaElUso(aprobadas.preguntas, o.persona.usoDeCrm), nombresDeLosPasos(escala, o.area)),
     persona,
     clientId,
     origen: o.origen,

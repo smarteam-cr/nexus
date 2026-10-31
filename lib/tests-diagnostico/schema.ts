@@ -77,6 +77,9 @@ export const VisitaSchema = z.object({ area: z.enum(["ventas", "marketing", "ser
 export const GuardarAvanceSchema = z.object({ respuestas: RespuestasPublicasSchema, paso: z.number().int().min(0).max(50) }).strict();
 export const TerminarTestSchema = z.object({ respuestas: RespuestasPublicasSchema }).strict();
 
+const variantesDeOpcion = z.object({ "con-crm": z.string().max(600).optional(), "sin-crm": z.string().max(600).optional() }).strict();
+const varianteDePregunta = z.object({ texto: z.string().max(600).optional(), ayuda: z.string().max(600).optional() }).strict();
+
 /** Lo que edita Elías del borrador: las preguntas enteras (el servidor revisa la forma con el lector tolerante). */
 export const GuardarBorradorSchema = z
   .object({
@@ -88,7 +91,11 @@ export const GuardarBorradorSchema = z
             dimensionId: z.string().min(1).max(20),
             texto: z.string().max(600),
             ayuda: z.string().max(600).nullable(),
-            opciones: z.array(z.object({ id: z.string().min(1).max(60), texto: z.string().max(600), nivel: z.enum(["D", "I", "F", "E", "O"]) }).strict()).max(10),
+            opciones: z
+              .array(z.object({ id: z.string().min(1).max(60), texto: z.string().max(600), nivel: z.enum(["D", "I", "F", "E", "O"]), variantes: variantesDeOpcion.optional() }).strict())
+              .max(10),
+            // Las variantes por grupo no se editan aquí, pero viajan con la pregunta: guardar el borrador no las borra.
+            variantes: z.object({ "con-crm": varianteDePregunta.optional(), "sin-crm": varianteDePregunta.optional() }).strict().optional(),
           })
           .strict(),
       )
