@@ -28,9 +28,9 @@ describe("la exploración del ciclo", () => {
     expect(lecturasDelCiclo({}, null)).toBe(0);
   });
 
-  it("el aviso del diagnóstico nombra el ciclo y lo que falta", () => {
-    expect(avisoSinExploracionDelCiclo(1)).toMatch(/ciclo 1/);
-    expect(avisoSinExploracionDelCiclo(1)).toMatch(/ninguna reunión leída/);
+  it("el aviso del diagnóstico dice lo que falta y no cuenta vueltas", () => {
+    expect(avisoSinExploracionDelCiclo()).toMatch(/ninguna reunión leída/);
+    expect(avisoSinExploracionDelCiclo()).not.toMatch(/ciclo/i);
   });
 });
 

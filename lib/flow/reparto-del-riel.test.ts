@@ -31,9 +31,10 @@ describe("el reparto de la barra lateral", () => {
     expect(estadoEnElRiel({ slug: "custom:a", state: "vacia" })).toBe("pendiente");
   });
 
-  it("la vacía que se está mirando se ve, y un servicio recurrente conserva sus piezas", () => {
+  it("la vacía que se está mirando se ve; sin mirarla no sale, tampoco en un servicio recurrente (Elías, 31 oct)", () => {
     expect(estadoEnElRiel({ slug: "diagnosis", state: "vacia" }, { activa: true })).toBe("pendiente");
-    expect(estadoEnElRiel({ slug: "diagnosis", state: "vacia" }, { conVacias: true })).toBe("pendiente");
+    expect(estadoEnElRiel({ slug: "diagnosis", state: "vacia" })).toBe("sin_crear");
+    expect(estadoEnElRiel({ slug: "diagnosis", state: "generada" })).toBe("generada");
   });
 
   it("una copia no se desancla: se archiva desde su barra", () => {

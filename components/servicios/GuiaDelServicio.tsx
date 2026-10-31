@@ -6,7 +6,10 @@
  * No es un sistema para llevar ciclos: es lo que el CSE necesita para llevar un servicio recurrente con cadencia. Qué se
  * entrega, con qué cadencia, qué toca ahora y las rutinas: las reuniones fijas (un enlace a Google Calendar ya armado
  * como serie: Nexus nunca escribe en el calendario) y las tareas que se repiten (Nexus las crea en Tareas, de a dos
- * meses). En SmartLoop suma el ciclo como círculo, salvo que la tarjeta de la etapa ya lo muestre.
+ * meses, solo si alguien lo pide).
+ *
+ * En SmartLoop es TEORÍA (Elías, 31 oct): todo va en «Cómo se suele llevar», plegado, sin «qué toca ahora». Suma qué se
+ * suele hacer en cada etapa y el círculo, salvo que la tarjeta de la etapa ya lo muestre.
  *
  * Sin servicio, no pinta nada: «Pasar a recurrente» vive en la tarjeta de la etapa (`BotonPasarARecurrente`).
  */
@@ -84,53 +87,35 @@ export default function GuiaDelServicio({
     }
   };
 
-  const etapaActual = datos.ciclo ? ETAPAS_DEL_CICLO.indexOf(datos.ciclo.etapa) : null;
+  const etapaActual = datos.etapa ? ETAPAS_DEL_CICLO.indexOf(datos.etapa) : null;
   const toca = datos.queToca;
 
-  return (
-    <section className="flex flex-col gap-4 rounded-xl border border-line bg-surface px-5 py-4 lg:col-span-2" data-recorrido="ficha.servicio">
-      <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <div className="flex flex-wrap items-baseline gap-2.5">
-          <span className={ROTULO_DEL_SISTEMA}>Servicio recurrente</span>
-          <span className="text-[15px] font-semibold text-fg">{s.nombre}</span>
-          {datos.desde && <span className="text-xs text-fg-muted">desde el {diaCorto(datos.desde)}</span>}
-        </div>
-        {!s.validado && (
-          <span className="text-[11px] text-fg-muted" title="La cadencia y las rutinas de este servicio todavía son una propuesta de Nexus.">
-            Cadencia y rutinas a validar
-          </span>
-        )}
+  const cuerpo = (
+    <>
+      <div className="flex flex-col gap-2">
+        <span className="text-xs text-fg-muted">Qué se entrega</span>
+        <ul className="flex flex-col gap-1 text-[13px] text-fg-secondary">
+          {s.incluye.map((x) => (
+            <li key={x}>· {x}</li>
+          ))}
+        </ul>
+        <span className="pt-1 text-xs text-fg-muted">Cadencia</span>
+        <p className="text-[13px] text-fg-secondary">{s.cadencia}</p>
       </div>
 
-      {toca && (
-        <p className={`rounded-lg px-3 py-2 text-[13px] ${toca.tipo === "al-dia" ? "bg-surface-muted text-fg-secondary" : "border border-info-line bg-info-surface text-fg"}`}>
-          <span className="font-semibold">Qué toca ahora: </span>
-          {toca.texto}
-        </p>
-      )}
-      {datos.pendienteEnHubspot && <p className="text-xs text-fg-muted">{datos.pendienteEnHubspot}</p>}
-
-      <div className="grid gap-4 md:grid-cols-2">
-        <div className="flex flex-col gap-2">
-          <span className="text-xs text-fg-muted">Qué se entrega</span>
-          <ul className="flex flex-col gap-1 text-[13px] text-fg-secondary">
-            {s.incluye.map((x) => (
-              <li key={x}>· {x}</li>
+      {s.etapas.length > 0 && (
+        <div className="flex flex-col gap-2 border-t border-line pt-3">
+          <span className="text-xs text-fg-muted">Qué se suele hacer en cada etapa</span>
+          <dl className="flex flex-col gap-1.5 text-[13px]">
+            {s.etapas.map((e) => (
+              <div key={e.clave}>
+                <dt className="font-semibold text-fg">{e.nombre}</dt>
+                <dd className="text-fg-secondary">{e.queHaces}</dd>
+              </div>
             ))}
-          </ul>
-          <span className="pt-1 text-xs text-fg-muted">Cadencia</span>
-          <p className="text-[13px] text-fg-secondary">{s.cadencia}</p>
+          </dl>
         </div>
-        {s.conCiclo && mostrarCiclo && (
-          <div className="flex flex-col items-center gap-1">
-            <CicloEnCirculo
-              etapas={ETAPAS_DEL_CICLO.map((e) => ETIQUETA_DE_ETAPA[e])}
-              actual={etapaActual !== null && etapaActual >= 0 ? etapaActual : null}
-              centro={datos.ciclo ? `Ciclo ${datos.ciclo.numero}` : "Sin ciclo"}
-            />
-          </div>
-        )}
-      </div>
+      )}
 
       <div className="flex flex-col gap-2 border-t border-line pt-3">
         <span className="text-xs text-fg-muted">Reuniones fijas · se guardan en tu Google Calendar</span>
@@ -184,11 +169,58 @@ export default function GuiaDelServicio({
                 onClick: () => void accion("tareas", { accion: "tareas" }, (d) => `Listo: ${Number(d.creadas ?? 0)} tareas en tus semanas.`),
               };
               const texto = ocupado === "tareas" ? "Creando…" : `Crear las ${datos.tareas.siguientes} de los próximos dos meses`;
-              // La primera vez es lo que toca (azul); renovar la ventana es secundario.
-              return datos.tareas.hasta ? <BotonBlanco {...props}>{texto}</BotonBlanco> : <BotonAzul {...props}>{texto}</BotonAzul>;
+              // La primera vez es lo que toca (azul); renovar la ventana es secundario. En SmartLoop nada toca: siempre secundario.
+              return datos.tareas.hasta || s.conCiclo ? <BotonBlanco {...props}>{texto}</BotonBlanco> : <BotonAzul {...props}>{texto}</BotonAzul>;
             })()}
           </div>
         </div>
+      )}
+    </>
+  );
+
+  return (
+    <section className="flex flex-col gap-4 rounded-xl border border-line bg-surface px-5 py-4 lg:col-span-2" data-recorrido="ficha.servicio">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <div className="flex flex-wrap items-baseline gap-2.5">
+          <span className={ROTULO_DEL_SISTEMA}>Servicio recurrente</span>
+          <span className="text-[15px] font-semibold text-fg">{s.nombre}</span>
+          {datos.desde && <span className="text-xs text-fg-muted">desde el {diaCorto(datos.desde)}</span>}
+        </div>
+        {!s.validado && (
+          <span className="text-[11px] text-fg-muted" title="La cadencia y las rutinas de este servicio todavía son una propuesta de Nexus.">
+            Cadencia y rutinas a validar
+          </span>
+        )}
+      </div>
+
+      {toca && (
+        <p className={`rounded-lg px-3 py-2 text-[13px] ${toca.tipo === "al-dia" ? "bg-surface-muted text-fg-secondary" : "border border-info-line bg-info-surface text-fg"}`}>
+          <span className="font-semibold">Qué toca ahora: </span>
+          {toca.texto}
+        </p>
+      )}
+      {datos.pendienteEnHubspot && <p className="text-xs text-fg-muted">{datos.pendienteEnHubspot}</p>}
+
+      {s.conCiclo && mostrarCiclo && (
+        <div className="flex justify-center">
+          <CicloEnCirculo
+            etapas={ETAPAS_DEL_CICLO.map((e) => ETIQUETA_DE_ETAPA[e])}
+            actual={etapaActual !== null && etapaActual >= 0 ? etapaActual : null}
+            centro={datos.etapa ? ETIQUETA_DE_ETAPA[datos.etapa] : s.nombre}
+          />
+        </div>
+      )}
+
+      {s.conCiclo ? (
+        <details className="group">
+          <summary className="flex cursor-pointer list-none items-center gap-1.5 text-[13px] font-semibold text-fg">
+            <span aria-hidden="true" className="text-fg-muted transition-transform group-open:rotate-90">›</span>
+            Cómo se suele llevar
+          </summary>
+          <div className="mt-3 flex flex-col gap-4">{cuerpo}</div>
+        </details>
+      ) : (
+        cuerpo
       )}
     </section>
   );

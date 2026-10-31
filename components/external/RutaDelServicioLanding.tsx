@@ -184,6 +184,7 @@ export default function RutaDelServicioLanding({
   const hoyISO = new Date().toISOString().slice(0, 10);
   const hoy = eje ? hoyEnElEje(eje, hoyISO) : null;
   const n = ruta.ciclos.length;
+  const etapaDeHoy = ruta.ciclos.find((c) => !c.cerrado)?.etapa ?? null;
 
   return (
     <div className="rds">
@@ -249,7 +250,7 @@ export default function RutaDelServicioLanding({
           </div>
         ) : (
           <p style={{ margin: "24px 0 0", fontSize: 14, color: TEXTO_SUAVE }}>
-            Todavía no hay fechas en la ruta: aparecen cuando se planifica el primer ciclo.
+            {etapaDeHoy ? `Hoy estamos en ${etapaDeHoy}. ` : ""}Las fechas aparecen aquí cuando las acordemos.
           </p>
         )}
       </div>

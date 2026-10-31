@@ -7,14 +7,14 @@
  * Solo las toma una copia nueva, desde «Nuevo artefacto».
  *
  *   · Planificación: la campaña de marketing, cómo debería funcionar el marketing, y WhatsApp y agente.
- *   · Entrega: el informe de avance.
+ *   · Entrega: el informe de avance y el aprendizaje de un servicio recurrente.
  */
 import type { BCSectionDef } from "./business-case.defs";
 import type { BcTemplateDef } from "./templates.defs";
 import { NO_INVENTES, PROSA_DE_LA_PLANIFICACION, seccionDeTabla } from "./adopcion.defs";
 import { PLANIFICACION_DEF_BY_KEY, PLANIFICACION_TEMPLATE } from "./planificacion.defs";
 import { ENTREGA_DEF_BY_KEY, ENTREGA_TEMPLATE } from "./entrega.defs";
-import { SECCIONES_DE_LA_CAMPANA, SECCIONES_DE_WHATSAPP, SECCIONES_DEL_INFORME_DE_AVANCE, SECCIONES_DEL_MARKETING } from "@/lib/artefactos/tipos";
+import { SECCIONES_DE_LA_CAMPANA, SECCIONES_DE_WHATSAPP, SECCIONES_DEL_APRENDIZAJE, SECCIONES_DEL_INFORME_DE_AVANCE, SECCIONES_DEL_MARKETING } from "@/lib/artefactos/tipos";
 
 const prosa = (o: { key: string; label: string; eyebrow: string; agentHint: string; brief: string }): BCSectionDef => ({
   ...PROSA_DE_LA_PLANIFICACION,
@@ -224,6 +224,25 @@ export const ENTREGA_DEFS_ADICIONALES: BCSectionDef[] = [
     agentHint: "Una fila por riesgo o por lo que falta que entreguen.",
     brief: "LOS RIESGOS Y LO QUE FALTA: una fila por cada uno. Sin culpar a nadie: qué falta y qué pasa si no llega.",
   }),
+  seccionDeTabla({
+    key: "resultados_medidos",
+    label: "Lo que se midió",
+    eyebrow: "El resultado",
+    columnas: ["Qué se buscaba", "Qué pasó", "De dónde sale"],
+    tip: "Lo que se buscaba y lo que pasó, solo con lo que la fuente respalde.",
+    agentHint: "Una fila por resultado respaldado por una reunión o un documento.",
+    brief: "LO QUE SE MIDIÓ: una fila por cosa que se buscaba. «Qué pasó»: el resultado con su número si la fuente lo trae; si no, `⚠️ Por validar`. «De dónde sale»: la reunión o el documento que lo respalda.",
+  }),
+  seccionDeTabla({
+    key: "lo_que_aprendimos",
+    label: "Lo que aprendimos",
+    eyebrow: "Para la próxima",
+    theme: "soft",
+    columnas: ["Qué aprendimos", "Qué cambia desde ahora", "De dónde sale"],
+    tip: "Lo que dejó el trabajo con el equipo del cliente y qué cambia desde ahora.",
+    agentHint: "Una fila por aprendizaje dicho en una reunión o que salga de un documento.",
+    brief: "LO QUE APRENDIMOS JUNTOS: una fila por aprendizaje, en lenguaje del cliente. Incluye lo que no funcionó, sin culpar a nadie. Sin respaldo en una reunión o un documento, no va.",
+  }),
 ];
 
 export const ENTREGA_DEF_BY_KEY_CON_ADICIONALES: Record<string, BCSectionDef> = {
@@ -243,4 +262,18 @@ export const INFORME_DE_AVANCE_TEMPLATE: BcTemplateDef = {
     "ESTE DOCUMENTO LO LEE EL CLIENTE: se le habla de tú, sin jerga interna.\n\n" +
     "FORMATO: cada sección tiene su propio shape. En las tablas, conserva las columnas que trae la sección, en su orden, y escribe solo las filas. Español, tuteo. Arrays vacíos donde no haya respaldo.",
   sections: SECCIONES_DEL_INFORME_DE_AVANCE.map((k) => ENTREGA_DEF_BY_KEY_CON_ADICIONALES[k]).filter((d): d is BCSectionDef => !!d),
+};
+
+export const APRENDIZAJE_TEMPLATE: BcTemplateDef = {
+  ...ENTREGA_TEMPLATE,
+  id: "aprendizaje_v1",
+  caseLabel: "Aprendizaje",
+  maxTokens: 10000,
+  agentIntro:
+    "Eres quien escribe el APRENDIZAJE que Smarteam comparte con su cliente en un servicio recurrente: qué se buscaba, qué pasó, qué aprendimos juntos y qué conviene hacer ahora. No es el cierre del proyecto: el servicio sigue.\n\n" +
+    "TU FUENTE: el contexto del proyecto, las reuniones y notas de este documento, y los demás documentos del proyecto. Lo que dicen otros documentos pesa según su estado: lo «terminado» ya se acordó; lo «en construcción» todavía cambia.\n\n" +
+    "DISCIPLINA: no inventes resultados, cifras, fechas ni responsables. Lo que no se pueda respaldar va como `⚠️ Por validar`. Si la fuente es delgada, el documento sale más corto.\n\n" +
+    "ESTE DOCUMENTO LO LEE EL CLIENTE: se le habla de tú, sin jerga interna y sin contar vueltas ni ciclos.\n\n" +
+    "FORMATO: cada sección tiene su propio shape. En las tablas, conserva las columnas que trae la sección, en su orden, y escribe solo las filas. Español, tuteo. Arrays vacíos donde no haya respaldo.",
+  sections: SECCIONES_DEL_APRENDIZAJE.map((k) => ENTREGA_DEF_BY_KEY_CON_ADICIONALES[k]).filter((d): d is BCSectionDef => !!d),
 };

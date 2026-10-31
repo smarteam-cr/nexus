@@ -53,8 +53,6 @@ const EXENTAS: Record<string, string> = {
   "business-case": "tiene documento propio, indexado por businessCaseId y no por pieceSlug",
   // No vive en un canvas (`hasCanvas: false`): no tiene PDF y el panel no pinta el botón de exportar.
   questionnaires: "no vive en un canvas; el botón de PDF no se pinta en los Cuestionarios",
-  "cycle-adoption": "no vive en un canvas; el botón de PDF no se pinta en los artefactos del ciclo",
-  "cycle-learning": "no vive en un canvas; el botón de PDF no se pinta en los artefactos del ciclo",
 };
 
 describe("ninguna pieza cae al camino genérico sin contenido que imprimir", () => {

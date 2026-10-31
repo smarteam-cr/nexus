@@ -97,16 +97,6 @@ export const DOC_PIEZAS: Record<string, DocDePieza> = {
     cuando:
       "Se arma en la planificación y se mantiene vivo durante todo el proyecto. Es el documento que más veces vas a abrir.",
   },
-  "cycle-adoption": {
-    paraQue:
-      "La adopción de un ciclo de un servicio recurrente como SmartLoop: que el equipo del cliente use lo implementado en su trabajo diario y que los hábitos se sostengan.",
-    cuando: "Después de implementar cada ciclo, antes de la sesión de aprendizaje.",
-  },
-  "cycle-learning": {
-    paraQue:
-      "La sesión de cierre de un ciclo: se mide el criterio de cada caso de uso y la meta, se decide cada pendiente y se propone el siguiente ciclo.",
-    cuando: "Al final de cada ciclo. Sin ella, el ciclo no se cierra.",
-  },
   questionnaires: {
     paraQue:
       "Lo que contesta el cliente antes de las sesiones: el cuestionario táctico (métricas y operación, por Hub), el de la escala de rendimiento y el de estrategia (su desafío central, los resultados que necesita y qué se lo impide). Cada uno va a una persona del cliente, con su propio enlace.",
@@ -167,8 +157,6 @@ export const DOC_PIEZAS: Record<string, DocDePieza> = {
 export const SIN_SECCIONES: Record<string, string> = {
   timeline: "Su contenido son fases y tareas en una línea de tiempo, no secciones de texto.",
   questionnaires: "Cada cuestionario tiene sus pestañas y sus preguntas, y se arma para una persona del cliente.",
-  "cycle-adoption": "Es el acompañamiento al equipo del cliente y los hábitos que se sostienen, no secciones de texto.",
-  "cycle-learning": "Es la medición de los criterios y la decisión de cada pendiente, no secciones de texto.",
   "client-info": "Se arma con los bloques que los agentes van sumando reunión tras reunión.",
   "business-case": "Sus secciones dependen del tipo de propuesta que elija Ventas al crearla.",
 };

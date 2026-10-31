@@ -1,17 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { ETAPAS_DEL_CICLO, etapaPorNombre, etapaQueMuestraElCiclo, etapaPosterior, etapaQueMuestranLasPiezas, etapaSiguiente, etapaDelProyecto, etapasDeLaPieza, leerMueve, nombreDelCiclo, PIEZA_DE_LA_ETAPA, PIEZAS_DE_UN_SERVICIO_RECURRENTE } from "./ciclo";
-import { guiaDelCiclo } from "./guia";
+import { ETAPAS_DEL_CICLO, etapaPorNombre, etapaQueMuestraElCiclo, etapaQueMuestranLasPiezas, leerMueve } from "./ciclo";
 import { SERVICIOS_RECURRENTES } from "./index";
-import { GUIA_SMARTLOOP } from "./smartloop";
 import { PROJECT_PIPELINES } from "@/lib/projects/kind";
-import { pieceBySlug } from "@/lib/pieces/registry";
 import { buildPieceRows } from "@/lib/flow/dropdown-rows";
 
 describe("el ciclo", () => {
-  it("las cinco etapas del método, en orden, y Aprendizaje no avanza (se cierra)", () => {
+  it("las cinco etapas del método, en orden", () => {
     expect(ETAPAS_DEL_CICLO).toEqual(["diagnostico", "planificacion", "implementacion", "adopcion", "aprendizaje"]);
-    expect(etapaSiguiente("diagnostico")).toBe("planificacion");
-    expect(etapaSiguiente("aprendizaje")).toBeNull();
   });
 
   it("lee la etapa de HubSpot por nombre, sin tildes; Cancelado no es una etapa del ciclo", () => {
@@ -19,12 +14,6 @@ describe("el ciclo", () => {
     expect(etapaPorNombre("ADOPCIÓN")).toBe("adopcion");
     expect(etapaPorNombre("Cancelado")).toBeNull();
     expect(etapaPorNombre(null)).toBeNull();
-  });
-
-  it("los nombres en pantalla", () => {
-    expect(nombreDelCiclo({ numero: 1, nombre: "Corregir y adoptar" })).toBe("Ciclo 1 · Corregir y adoptar");
-    expect(nombreDelCiclo({ numero: 2, nombre: "  " })).toBe("Ciclo 2");
-    expect(etapaDelProyecto({ numero: 1, etapa: "implementacion" })).toBe("Ciclo 1 · Implementación");
   });
 
   it("un caso de uso puede mover varias dimensiones; lo que no trae dimensión se descarta", () => {
@@ -57,87 +46,23 @@ describe("la guía del CSE", () => {
       expect(SERVICIOS_RECURRENTES[p.servicioRecurrente!], p.key).toBeDefined();
     }
   });
-
-  const base = { etapa: "planificacion" as const, meta: null, desde: null, hasta: null, casos: [] };
-
-  it("marca lo que puede comprobar y deja sin marca lo que no (nunca como hecho)", () => {
-    const g = guiaDelCiclo(GUIA_SMARTLOOP, base);
-    const por = Object.fromEntries(g.producido.map((p) => [p.clave, p.hecho]));
-    expect(por["casos-con-criterio"]).toBe(false);
-    expect(por.meta).toBe(false);
-    expect(por.fechas).toBe(false);
-    expect(por["version-aprobada"]).toBeNull();
-    expect(g.primeroQueFalta).toBe("Los casos de uso, cada uno con su criterio de aceptación");
-    expect(g.senalVista).toBeNull(); // en Planificación todavía se está escribiendo
-  });
-
-  it("con todo escrito, no falta nada comprobable", () => {
-    const g = guiaDelCiclo(GUIA_SMARTLOOP, {
-      ...base,
-      meta: "Que Ventas trabaje en HubSpot",
-      desde: "2026-09-07",
-      hasta: "2026-11-06",
-      casos: [{ titulo: "Rutina de ventas", criterio: "Todo negocio tiene próxima actividad" }],
-    });
-    expect(g.primeroQueFalta).toBeNull();
-  });
-
-  it("después de planificar, un caso de uso sin criterio es la señal de que se saltó", () => {
-    const g = guiaDelCiclo(GUIA_SMARTLOOP, {
-      ...base,
-      etapa: "implementacion",
-      casos: [
-        { titulo: "A", criterio: "x" },
-        { titulo: "B", criterio: null },
-      ],
-    });
-    expect(g.senalVista).toContain("Un caso de uso no tiene criterio");
-    expect(guiaDelCiclo(GUIA_SMARTLOOP, { ...base, etapa: "adopcion" }).senalVista).toContain("sin casos de uso");
-  });
 });
 
 describe("las piezas de un servicio recurrente", () => {
-  it("el Kickoff y el Cronograma junto al Resumen y, en el ciclo, los documentos de siempre más Adopción y Aprendizaje (2026-10-23)", () => {
-    expect(PIEZAS_DE_UN_SERVICIO_RECURRENTE).toEqual([
-      "kickoff",
-      "timeline",
-      "questionnaires",
-      "exploration",
-      "diagnosis",
-      "planning",
-      "tech-requirements",
-      "cycle-adoption",
-      "cycle-learning",
-      "delivery",
-    ]);
-    for (const s of PIEZAS_DE_UN_SERVICIO_RECURRENTE) expect(pieceBySlug(s), s).not.toBeNull();
-    const filas = buildPieceRows(
-      [
-        { id: "k", slug: "kickoff", name: "Kickoff" },
-        { id: "t", slug: "timeline", name: "Cronograma" },
-      ],
-      {
-        piezasDelServicio: PIEZAS_DE_UN_SERVICIO_RECURRENTE,
-        sinCanvas: { "cycle-adoption": "vacia", "cycle-learning": "vacia" },
-      },
-    ).map((r) => r.slug);
-    // El kickoff que el proyecto ya tiene se ve (RC Inmobiliaria, 2026-10-23: el riel lo escondía).
-    expect(filas).toEqual(["kickoff", "timeline", "exploration", "diagnosis", "planning", "tech-requirements", "cycle-adoption", "cycle-learning", "delivery"]);
-  });
-
-  it("cada etapa tiene su artefacto: el Diagnóstico, la Planificación, el Cronograma, Adopción y Aprendizaje", () => {
-    for (const e of ETAPAS_DEL_CICLO) expect(PIEZA_DE_LA_ETAPA[e], e).toBeTruthy();
-    expect(etapasDeLaPieza("timeline")).toEqual(["implementacion"]);
-    expect(etapasDeLaPieza("planning")).toEqual(["planificacion"]);
-    expect(etapasDeLaPieza("cycle-adoption")).toEqual(["adopcion"]);
+  it("arranca como cualquier proyecto: sin filas propias del ciclo", () => {
+    const filas = buildPieceRows([
+      { id: "k", slug: "kickoff", name: "Kickoff" },
+      { id: "t", slug: "timeline", name: "Cronograma" },
+    ]).map((r) => r.slug);
+    expect(filas).toContain("kickoff");
+    expect(filas).toContain("timeline");
+    expect(filas.filter((x) => x.startsWith("cycle-"))).toEqual([]);
   });
 
   it("la etapa que muestran los documentos es solo una sugerencia hacia adelante", () => {
     expect(etapaQueMuestranLasPiezas([])).toBeNull();
     expect(etapaQueMuestranLasPiezas(["diagnosis"])).toBe("planificacion");
     expect(etapaQueMuestranLasPiezas(["diagnosis", "planning"])).toBe("implementacion");
-    expect(etapaPosterior("implementacion", "diagnostico")).toBe(true);
-    expect(etapaPosterior("diagnostico", "implementacion")).toBe(false);
   });
 
   it("sin el servicio, los artefactos del ciclo no aparecen en el flujo de una implementación", () => {

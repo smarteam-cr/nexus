@@ -13,6 +13,7 @@ import { PLANIFICACION_ESENCIAL_TEMPLATE, PLANIFICACION_TEMPLATE } from "@/compo
 import { DESARROLLO_TEMPLATE } from "@/components/landing/configs/desarrollo.defs";
 import { ENTREGA_TEMPLATE } from "@/components/landing/configs/entrega.defs";
 import {
+  APRENDIZAJE_TEMPLATE,
   INFORME_DE_AVANCE_TEMPLATE,
   PLANIFICACION_CAMPANA_TEMPLATE,
   PLANIFICACION_MARKETING_TEMPLATE,
@@ -34,6 +35,7 @@ export const TEMPLATE_DE_LA_PLANTILLA: Readonly<Record<string, BcTemplateDef>> =
   "planificacion-marketing": PLANIFICACION_MARKETING_TEMPLATE,
   "planificacion-whatsapp": PLANIFICACION_WHATSAPP_TEMPLATE,
   "informe-de-avance": INFORME_DE_AVANCE_TEMPLATE,
+  aprendizaje: APRENDIZAJE_TEMPLATE,
 };
 
 export function templateDeLaPlantilla(id: string): BcTemplateDef {

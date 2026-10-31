@@ -102,8 +102,7 @@ describe("Las reuniones fijas, por enlace", () => {
 
 describe("Qué toca ahora", () => {
   const hoy = "2026-10-18";
-  it("primero lo que falta del ciclo, después una reunión sin agendar, después las tareas", () => {
-    expect(queTocaAhora({ servicio: smartloop, estado: RUTINAS_VACIAS, hoy, faltaDelCiclo: "La meta del ciclo" }).tipo).toBe("ciclo");
+  it("primero una reunión sin agendar, después las tareas", () => {
     expect(queTocaAhora({ servicio: smartloop, estado: RUTINAS_VACIAS, hoy })).toMatchObject({ tipo: "reunion", clave: "seguimiento" });
     const agendadas = { ...RUTINAS_VACIAS, reuniones: Object.fromEntries(smartloop.reuniones.map((r) => [r.clave, { agendadaAt: "x", por: "y" }])) };
     expect(queTocaAhora({ servicio: smartloop, estado: agendadas, hoy }).tipo).toBe("tareas");

@@ -4,6 +4,7 @@
  * Agregar un tipo, cambiar cuántas copias admite o mover una sección de su catálogo es decisión de producto (como
  * lib/landing/registry.test.ts): el snapshot de abajo se cambia a la vista, nunca para callar el test.
  */
+import { ARTEFACTO_DE_LA_ETAPA } from "@/lib/servicios/ciclo";
 import { describe, expect, it } from "vitest";
 import { TIPOS, TIPO_CUESTIONARIOS, admiteCopias, plantillaDelTipo, plantillasDelTipo, tipoDeArtefacto, tiposCreablesEnElProyecto } from "./tipos";
 import { piezasParaMostrar } from "@/lib/flow/orden-de-presentacion";
@@ -145,6 +146,8 @@ describe("catálogo de secciones por tipo (congelado)", () => {
           "avance_por_frente",
           "logros_del_periodo",
           "riesgos_y_pendientes_del_cliente",
+          "resultados_medidos",
+          "lo_que_aprendimos",
           "cierre",
         ],
         "diagnosis": [
@@ -358,5 +361,11 @@ describe("templates: generar una copia manda lo mismo que el documento de siempr
 
   it("todo tipo que lee el cliente y se copia tiene su allowlist del handoff", () => {
     for (const t of tiposCreablesEnElProyecto().filter((x) => x.clientFacing)) expect(handoffKeysDelTipo(t.id).length, t.id).toBeGreaterThan(0);
+  });
+});
+
+describe("la sugerencia de Aprendizaje (Elías, 31 oct)", () => {
+  it("apunta a una plantilla que existe en la Entrega, y solo a las de las copias", () => {
+    expect(plantillasDelTipo("delivery").map((p) => p.id)).toContain(ARTEFACTO_DE_LA_ETAPA.aprendizaje.plantilla);
   });
 });

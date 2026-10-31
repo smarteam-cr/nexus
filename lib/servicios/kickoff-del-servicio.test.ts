@@ -14,13 +14,13 @@ describe("el kickoff lee el servicio (etapa 1)", () => {
   const smartloop = servicioDelCatalogo("smartloop")!;
 
   it("el bloque dice que es recurrente, la cadencia, las reuniones fijas, el ciclo y el nivel de servicio", () => {
-    const b = servicioParaElKickoff(smartloop, { numero: 1, etapa: "Diagnóstico" });
+    const b = servicioParaElKickoff(smartloop, "Diagnóstico");
     expect(b).toMatch(/servicio RECURRENTE, no un proyecto temporal/);
     expect(b).toContain(smartloop.cadencia);
     expect(b).toContain("Seguimiento semanal del ciclo");
     expect(b).toMatch(/Se trabaja por CICLOS/);
     expect(b).toMatch(/explorando con cada equipo del cliente/);
-    expect(b).toContain("ciclo 1, etapa Diagnóstico");
+    expect(b).toContain("en la etapa Diagnóstico");
     expect(b).toContain("Crítica: 4 h");
   });
 

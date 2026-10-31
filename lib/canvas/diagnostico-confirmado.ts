@@ -36,7 +36,7 @@ export interface EntradaDeLoConfirmado {
   /** Las reuniones que el diagnóstico va a leer enteras (las de la exploración más las elegidas). */
   reuniones: number;
   /** Solo en un servicio recurrente: el ciclo abierto (o el siguiente) y cuántas reuniones leyó su exploración. */
-  ciclo?: { numero: number; lecturasDeExploracion: number } | null;
+  ciclo?: { lecturasDeExploracion: number } | null;
 }
 
 export interface PiezaDeLoConfirmado {
@@ -56,8 +56,8 @@ export interface LoConfirmado {
   conAlgoConfirmado: number;
   conAlgo: number;
   reuniones: number;
-  /** Un recurrente cuya exploración no leyó ninguna reunión en el ciclo: el número del ciclo. null en los demás. */
-  cicloSinExploracion: number | null;
+  /** Un recurrente cuya exploración no leyó ninguna reunión. */
+  cicloSinExploracion: boolean;
   /** Se pide confirmación antes de generar: casi nada confirmado, o un ciclo sin exploración. */
   pideConfirmacion: boolean;
 }
@@ -118,7 +118,7 @@ export function loConfirmadoDelDiagnostico(e: EntradaDeLoConfirmado): LoConfirma
   const conAlgo = piezas.filter((p) => p.estado !== "sin-datos").length;
   const conAlgoConfirmado = piezas.filter((p) => p.estado === "confirmado" || p.estado === "en-parte").length;
   const casiNada = conAlgo === 0 || conAlgoConfirmado * 2 < conAlgo;
-  const cicloSinExploracion = e.ciclo && e.ciclo.lecturasDeExploracion === 0 ? e.ciclo.numero : null;
+  const cicloSinExploracion = e.ciclo?.lecturasDeExploracion === 0;
   return {
     piezas,
     casiNada,
@@ -126,7 +126,7 @@ export function loConfirmadoDelDiagnostico(e: EntradaDeLoConfirmado): LoConfirma
     conAlgo,
     reuniones: e.reuniones,
     cicloSinExploracion,
-    pideConfirmacion: casiNada || cicloSinExploracion !== null,
+    pideConfirmacion: casiNada || cicloSinExploracion,
   };
 }
 
@@ -135,7 +135,7 @@ export const ERROR_SUPUESTOS_SIN_VALIDAR = "SUPUESTOS_SIN_VALIDAR";
 
 /** Lo que dice el aviso antes de generar igual (el diálogo de confirmación y el 409 de `/analyze`). */
 export function mensajeDeSupuestos(r: LoConfirmado): string {
-  const delCiclo = r.cicloSinExploracion !== null && r.cicloSinExploracion !== undefined ? avisoSinExploracionDelCiclo(r.cicloSinExploracion) : "";
+  const delCiclo = r.cicloSinExploracion ? avisoSinExploracionDelCiclo() : "";
   if (!r.casiNada) return delCiclo;
   const deLoConfirmado = mensajeDeLoConfirmado(r);
   return delCiclo ? `${delCiclo} ${deLoConfirmado}` : deLoConfirmado;

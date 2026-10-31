@@ -2,6 +2,9 @@
 
 > Fuente de verdad del servicio: el documento de proceso de SmartLoop (v0.3.0, 2026-10-10). Este plan
 > dice cómo lo lleva Nexus. Consensuado con Elías el 2026-10-11; se construye por etapas.
+>
+> ⚠ **Superado en parte el 2026-10-31:** Nexus ya no administra ciclos. Ver DECISIONS «SmartLoop se lleva como cualquier
+> proyecto». Lo de abajo sobre tramo, fechas, meta, cronograma por ciclo, cierre, ciclos anteriores y traductor es historia.
 
 ## Para qué
 

@@ -12,6 +12,7 @@ import { cronogramaDelCiclo } from "@/lib/timeline/ciclo";
 import { leerFasesDelCiclo } from "@/lib/timeline/ciclo-server";
 import { resolvePipeline } from "@/lib/projects/kind";
 import { cruzaAlCliente } from "@/lib/external/tarea-del-cronograma";
+import { etapaQueMuestraElCiclo } from "./ciclo";
 import { guiaDeServicio } from "./index";
 import { rutaDelServicio, type CicloParaLaRuta, type RutaDelServicio } from "./ruta-del-servicio";
 
@@ -23,6 +24,8 @@ export async function armarRutaDelServicio(projectId: string, ahora = new Date()
     where: { id: projectId },
     select: {
       hubspotPipelineId: true,
+      hubspotServiceId: true,
+      hubspotPipelineStageLabel: true,
       ciclos: {
         orderBy: { numero: "asc" },
         select: {
@@ -49,6 +52,9 @@ export async function armarRutaDelServicio(projectId: string, ahora = new Date()
   const { anchor, fases } = await leerFasesDelCiclo(projectId, faseIds);
   const fasesQueCruzan = fases.map((f) => ({ ...f, tasks: f.tasks.filter(cruzaAlCliente) }));
 
+  const etapaDeHoy = (guardada: string | null) =>
+    etapaQueMuestraElCiclo({ enHubspot: !!p.hubspotServiceId, rotuloDeHubspot: p.hubspotPipelineStageLabel, etapaGuardada: guardada });
+
   const ciclos: CicloParaLaRuta[] = p.ciclos.map((c) => {
     const crono = cronogramaDelCiclo({ anchor, casos: c.casosDeUso, fases: fasesQueCruzan, ahora });
     const porCaso = new Map(crono.casos.map((x) => [x.casoId, x]));
@@ -58,7 +64,8 @@ export async function armarRutaDelServicio(projectId: string, ahora = new Date()
       desde: dia(c.desde),
       hasta: dia(c.hasta),
       meta: c.meta,
-      etapa: c.etapa,
+      // La etapa del que sigue abierto es la de HubSpot, como en la ficha: la guardada no se mueve sola.
+      etapa: c.estado === "abierto" ? etapaDeHoy(c.etapa) : c.etapa,
       estado: c.estado,
       metaResultado: c.metaResultado,
       casos: c.casosDeUso.map((x) => {
@@ -76,6 +83,12 @@ export async function armarRutaDelServicio(projectId: string, ahora = new Date()
       }),
     };
   });
+
+  /* Nexus ya no abre ciclos (Elías, 31 oct): un proyecto que llegó de HubSpot no tiene ninguna fila, y uno con todo cerrado no
+     puede abrir otra. La ruta se sube igual, con la etapa de hoy. Esta fila no se guarda: solo va en la foto. */
+  if (!ciclos.some((c) => c.estado !== "cerrado")) {
+    ciclos.push({ numero: Math.max(0, ...ciclos.map((c) => c.numero)) + 1, nombre: null, desde: null, hasta: null, meta: null, etapa: etapaDeHoy(null), estado: "abierto", metaResultado: null, casos: [] });
+  }
 
   return rutaDelServicio({ servicio: guiaDeServicio(servicio)?.nombre ?? "SmartLoop", ciclos, ahora });
 }

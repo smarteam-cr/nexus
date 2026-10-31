@@ -208,7 +208,7 @@ function Caso({
               </p>
             )}
             <p className="text-xs text-fg-muted">
-              {caso.proyecto ? `${caso.proyecto.nombre}${caso.ciclo ? ` · ciclo ${caso.ciclo.numero}` : ""} · ` : ""}
+              {caso.proyecto ? `${caso.proyecto.nombre} · ` : ""}
               {ETIQUETA_DE_ORIGEN[caso.origen as OrigenDeCaso] ?? caso.origen}
             </p>
           </div>
@@ -317,7 +317,7 @@ function NuevoCaso({
           <option value="">Al plan de crecimiento</option>
           {ciclos.map((c) => (
             <option key={c.projectId} value={c.projectId}>
-              Al ciclo {c.numero} de «{c.nombre}»
+              Al servicio «{c.nombre}»
             </option>
           ))}
         </Select>

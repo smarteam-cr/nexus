@@ -19,7 +19,6 @@ import { prisma } from "@/lib/db/prisma";
 import { publishSurface } from "@/lib/projects/publish-surfaces";
 import { resolvePipeline } from "@/lib/projects/kind";
 import { armarRutaDelServicio } from "@/lib/servicios/ruta-del-servicio-server";
-import { rutaConContenido } from "@/lib/servicios/ruta-del-servicio";
 
 const SURFACE = publishSurface("ciclos");
 
@@ -65,13 +64,7 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ pr
 
   const now = new Date();
   const ruta = await armarRutaDelServicio(projectId, now);
-  /* Nada que mostrar ⇒ 409 con motivo, no una publicación vacía: el cliente abriría el enlace y no vería nada. */
-  if (!ruta || !rutaConContenido(ruta)) {
-    return NextResponse.json(
-      { error: "SIN_CICLOS", message: "Todavía no hay ciclos: abre el primero antes de subir la ruta del servicio." },
-      { status: 409 },
-    );
-  }
+  if (!ruta) return NextResponse.json({ error: "Proyecto no existe" }, { status: 404 });
 
   await prisma.project.update({
     where: { id: projectId },

@@ -141,11 +141,6 @@ export function rutaDelServicio(o: { servicio: string; ciclos: readonly CicloPar
   };
 }
 
-/** ¿Hay algo que mostrar? Una ruta sin ciclos no se publica (el cliente abriría una página vacía). */
-export function rutaConContenido(r: RutaDelServicio): boolean {
-  return r.ciclos.length > 0;
-}
-
 // ── Leer la foto (fail-closed) ───────────────────────────────────────────────
 
 const esTexto = (v: unknown): v is string => typeof v === "string";

@@ -37,13 +37,11 @@ async function bloquesConfirmados(slug: string, projectId: string): Promise<numb
 
 /** Un motivo por parte que no se puede publicar hoy; las que sí se pueden no aparecen. */
 export async function motivosParaNoPublicar(projectId: string): Promise<Partial<Record<PublishSurfaceKey, string>>> {
-  const [cronograma, entrega, planificacion, diagnostico, ciclos] = await Promise.all([
+  const [cronograma, entrega, planificacion, diagnostico] = await Promise.all([
     prisma.projectTimeline.findUnique({ where: { projectId }, select: { anchorStartDate: true, _count: { select: { phases: true } } } }),
     bloquesConfirmados("delivery", projectId),
     bloquesConfirmados("planning", projectId),
     prisma.projectCanvas.findFirst({ where: canvasOfNested("diagnosis", { projectId }), select: { id: true } }),
-    // La misma condición que publish-ciclos: al menos un ciclo.
-    prisma.cicloDeProyecto.count({ where: { projectId } }),
   ]);
   const motivos: Partial<Record<PublishSurfaceKey, string>> = {};
 
@@ -55,8 +53,6 @@ export async function motivosParaNoPublicar(projectId: string): Promise<Partial<
 
   if (planificacion === null) motivos.planificacion = "Todavía no tiene la Planificación.";
   else if (planificacion === 0) motivos.planificacion = "La Planificación está vacía.";
-
-  if (ciclos === 0) motivos.ciclos = "Todavía no hay ciclos: abre el primero antes de subir la ruta del servicio.";
 
   if (!diagnostico) motivos.diagnostico = "Todavía no tiene el Diagnóstico.";
   // La misma condición que `ultimaVersionPresentada` (lib/external/diagnostico-view.ts), contada
