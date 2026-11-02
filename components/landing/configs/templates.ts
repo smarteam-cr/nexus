@@ -145,6 +145,7 @@ export function toSectionDef(
     vacia: d.vacia,
     pinned: d.pinned,
     noHide: d.noHide,
+    soloInterna: d.soloInterna,
     schema: d.schema,
     /* ⛔ LOS DOS QUE FALTABAN, y es la MISMA trampa que `chatLabel` de arriba por tercera vez.
        `schemaDelChat` es lo que el chat puede tocar (más que el esquema del agente: la portada

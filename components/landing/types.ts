@@ -398,6 +398,11 @@ export interface LandingContext {
     asientos?: AsientosComprados | null;
     /** Solo el editor (2026-10-27): el arranque y el cierre estimado, leídos del Cronograma para la ficha del proyecto. */
     fechas?: { inicio: string | null; cierre: string | null } | null;
+    /**
+     * Solo el editor (2026-10-29, pregunta 32): traer a la Planificación la hoja del Brief de implementación del cliente
+     * (`POST …/planificacion/brief`). La sección `brief_importado` lo llama; sin él, no ofrece traer.
+     */
+    traerBrief?: (url: string, confirmado?: boolean) => Promise<{ ok: boolean; error?: string; confirmar?: boolean }>;
   };
   kickoff?: {
     timeline?: KickoffTimelineData | null;
@@ -777,6 +782,12 @@ export interface SectionDef {
   /** La sección NO se puede ocultar (sin toggle de ojo): estructural, ocultarla rompería
    *  la página. Ej. kickoff: hero (bienvenida) y cierre. BC no la usa. */
   noHide?: boolean;
+  /**
+   * SOLO INTERNA (2026-10-29): la ve el equipo y nunca el cliente (`SECCIONES_SOLO_INTERNAS`, lib/business-cases/
+   * section-briefs.ts). En el editor no lleva ojo (no se puede mostrar), dice «Solo lo ve el equipo» y arranca ABIERTA; en
+   * lectura no se pinta. Hoy, el Brief de implementación traído a la Planificación.
+   */
+  soloInterna?: boolean;
 }
 
 export interface LandingConfig {

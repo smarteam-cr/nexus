@@ -18,6 +18,7 @@ import { hiddenKeysFrom } from "@/lib/business-cases/section-briefs";
 import { PLANIFICACION_DEF_BY_KEY } from "@/components/landing/configs/planificacion.defs";
 import { conLasSeccionesDelCliente, SECCIONES_DEL_CLIENTE } from "@/lib/planificacion/lo-del-cliente";
 import type { LandingSectionRow } from "@/components/landing/build-landing";
+import { sinPorQueVacia } from "@/lib/landing/por-que-vacia";
 import { resolveActiveAccess } from "./access";
 import { vistaDelSnapshot, type DocumentoPublicadoViewData } from "./snapshot-de-documento";
 
@@ -29,7 +30,21 @@ export async function getPlanificacionForToken(credencial: string, accesoId: str
   if (!access.project.planificacionPublishedAt) return null;
   const vista = await vistaDelSnapshot(access, "planning");
   if (!vista) return null;
-  return { ...vista, rows: (await seccionesDelClienteEnVivo(access.project.id, vista.rows)) as LandingSectionRow[] };
+  const rows = (await seccionesDelClienteEnVivo(access.project.id, vista.rows)) as LandingSectionRow[];
+  return { ...vista, rows: sinLosAvisosDelEquipo(rows) };
+}
+
+/**
+ * El porqué de una sección vacía (`__porQueVacia`, lib/landing/por-que-vacia.ts) es del EQUIPO: el modo lectura ya no lo
+ * pinta, y acá se saca de la data para que tampoco viaje al navegador del cliente.
+ */
+export function sinLosAvisosDelEquipo(rows: LandingSectionRow[]): LandingSectionRow[] {
+  return rows.map((r) => ({
+    ...r,
+    blocks: r.blocks.map((b) =>
+      b.data && typeof b.data === "object" && !Array.isArray(b.data) ? { ...b, data: sinPorQueVacia(b.data as object) } : b,
+    ),
+  }));
 }
 
 /** Las secciones abiertas al cliente, del documento vivo de ESTE proyecto (lo oculto, afuera). */

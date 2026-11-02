@@ -142,7 +142,8 @@ enlace, la plantilla de importación sale sola de las propiedades, y la lista de
 ## Preguntas para Elías
 
 1. [decidido el 2026-10-24] Usuarios y permisos van **dentro** de la Planificación (la que ve el cliente).
-2. ¿Traemos los Briefs que ya están llenos de los clientes actuales? La hoja tiene forma fija, así que se puede leer.
+2. [decidido el 2026-10-29] Los Briefs ya llenos se traen a la Planificación de cada cliente como sección solo interna y
+   abierta, tal cual, pestaña por pestaña (DECISIONS «La Planificación lee las reuniones del proyecto…»).
 3. ¿Con qué cliente probamos primero, y lo prueba Caroline?
 
 ## Riesgos

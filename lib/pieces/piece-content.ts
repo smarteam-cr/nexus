@@ -35,6 +35,7 @@
  */
 import { prisma } from "@/lib/db/prisma";
 import { CANVAS_DEF_BY_SLUG } from "@/lib/canvas/canvas-defs";
+import { SECCIONES_SOLO_INTERNAS } from "@/lib/business-cases/section-briefs";
 
 /** SLUG de la pieza cuyo contenido no vive en bloques (ver cabecera). */
 export const TIMELINE_PIECE_SLUG = "timeline";
@@ -76,6 +77,8 @@ export function deriveCanvasesConContenido(input: ContenidoInput): Set<string> {
   // Puerta 2: hay un bloque en una sección que NO se siembra al crear la pieza.
   for (const s of input.seccionesConBloques) {
     if (conContenido.has(s.canvasId)) continue;
+    // Lo solo interno (el Brief traído de la hoja, 2026-10-29) no hace generado al documento: traerlo no es generar.
+    if (SECCIONES_SOLO_INTERNAS.has(s.key)) continue;
     if (!semillaPorCanvas.get(s.canvasId)?.has(s.key)) conContenido.add(s.canvasId);
   }
 

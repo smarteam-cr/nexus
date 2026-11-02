@@ -178,3 +178,94 @@ export async function extractGoogleDriveFile(
     throw toDriveError(err);
   }
 }
+
+// ── La hoja de cálculo ENTERA (2026-10-29) ──────────────────────────────────────
+
+const MIME_XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+/** Una hoja de trabajo no pesa esto: arriba de acá es un archivo que no debe bajarse a la memoria del servidor. */
+const MAX_HOJA_BYTES = 20 * 1024 * 1024;
+
+/**
+ * Una hoja de cálculo de Drive con TODAS sus pestañas, como .xlsx, impersonando al usuario dado (menor privilegio, igual
+ * que `extractGoogleDriveFile`). El export a CSV de arriba trae solo la primera pestaña, y el Brief de implementación
+ * tiene unas 20 (lib/planificacion/brief-importado-server.ts). Una Google Sheet se exporta; un .xlsx subido a Drive se
+ * descarga tal cual. Cualquier otra cosa: UNSUPPORTED.
+ */
+export async function exportarHojaDeCalculo(userEmail: string, fileId: string): Promise<{ title: string; xlsx: Buffer }> {
+  const auth = getImpersonatedAuth(userEmail);
+  const drive = apiDrive({ version: "v3", auth });
+  let name: string;
+  let mimeType: string;
+  let tamano = 0;
+  try {
+    const meta = await drive.files.get({ fileId, fields: "id, name, mimeType, size", supportsAllDrives: true });
+    name = meta.data.name ?? "Hoja de cálculo";
+    mimeType = meta.data.mimeType ?? "application/octet-stream";
+    tamano = Number(meta.data.size ?? 0);
+  } catch (err) {
+    throw toDriveError(err);
+  }
+  // Un .xlsx subido se baja entero a memoria: se mira antes. El export de Google ya tiene su propio tope (10 MB).
+  if (tamano > MAX_HOJA_BYTES) throw new DriveFileError("TOO_LARGE", "El archivo es demasiado grande para traerlo.");
+  try {
+    if (mimeType === "application/vnd.google-apps.spreadsheet") {
+      const res = await drive.files.export({ fileId, mimeType: MIME_XLSX }, { responseType: "arraybuffer" });
+      return { title: name, xlsx: Buffer.from(res.data as ArrayBuffer) };
+    }
+    if (mimeType === MIME_XLSX) {
+      const res = await drive.files.get({ fileId, alt: "media", supportsAllDrives: true }, { responseType: "arraybuffer" });
+      return { title: name, xlsx: Buffer.from(res.data as ArrayBuffer) };
+    }
+  } catch (err) {
+    // Google responde 403 cuando el export pasa de su tope: no es falta de acceso, y pedir acceso no lo arregla.
+    if (/exportSizeLimitExceeded|too large/i.test(JSON.stringify((err as { errors?: unknown })?.errors ?? "") + String((err as Error)?.message ?? ""))) {
+      throw new DriveFileError("TOO_LARGE", "La hoja es demasiado grande para exportarla.");
+    }
+    throw toDriveError(err);
+  }
+  throw new DriveFileError("UNSUPPORTED", "El enlace no es una hoja de cálculo (Google Sheets o Excel).");
+}
+
+/**
+ * Las hojas de cálculo de Google que `userEmail` puede ver con `texto` en el nombre, las más recientes primero. Solo
+ * lectura. La usa scripts/traer-briefs-de-implementacion.ts para buscar los Briefs: se proponen, una persona confirma.
+ */
+export async function buscarHojasPorNombre(
+  userEmail: string,
+  texto: string,
+): Promise<{ hojas: Array<{ id: string; nombre: string; url: string; modificada: string | null }>; incompleta: boolean }> {
+  const auth = getImpersonatedAuth(userEmail);
+  const drive = apiDrive({ version: "v3", auth });
+  const seguro = texto.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
+  const out: Array<{ id: string; nombre: string; url: string; modificada: string | null }> = [];
+  let pageToken: string | undefined;
+  let incompleta = false;
+  try {
+    do {
+      const res = await drive.files.list({
+        q: `name contains '${seguro}' and (mimeType = 'application/vnd.google-apps.spreadsheet' or mimeType = '${MIME_XLSX}') and trashed = false`,
+        fields: "nextPageToken, incompleteSearch, files(id, name, webViewLink, modifiedTime)",
+        orderBy: "modifiedTime desc",
+        pageSize: 100,
+        corpora: "allDrives",
+        includeItemsFromAllDrives: true,
+        supportsAllDrives: true,
+        pageToken,
+      });
+      for (const f of res.data.files ?? []) {
+        if (!f.id) continue;
+        out.push({
+          id: f.id,
+          nombre: f.name ?? "",
+          url: f.webViewLink ?? `https://docs.google.com/spreadsheets/d/${f.id}/edit`,
+          modificada: f.modifiedTime ?? null,
+        });
+      }
+      if (res.data.incompleteSearch) incompleta = true;
+      pageToken = res.data.nextPageToken ?? undefined;
+    } while (pageToken);
+  } catch (err) {
+    throw toDriveError(err);
+  }
+  return { hojas: out, incompleta };
+}

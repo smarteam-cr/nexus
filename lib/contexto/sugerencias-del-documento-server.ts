@@ -41,6 +41,7 @@ import { getProjectMemberSessions } from "@/lib/sessions/project-sources";
 import { documentoDelDestino } from "./documento";
 import {
   FUENTES_QUE_ENTRAN_SOLAS,
+  entranSolasLasDelProyecto,
   reunionesDeLasSesiones,
   sugerenciasDelDocumento,
   type HechoQueSugiere,
@@ -110,8 +111,8 @@ export async function sugerenciasParaElDocumento(
     afinado: s[columna],
   }));
   const porId = new Map(reuniones.map((r) => [r.id, r]));
-  // En el diagnóstico, la clase de texto de las que nadie tocó todavía (las que pueden entrar solas).
-  const clases = conExploracion
+  // En el diagnóstico y en la planificación, la clase de texto de las que nadie tocó todavía (las que pueden entrar solas).
+  const clases = entranSolasLasDelProyecto(destino)
     ? await seguro("la clase de texto", () => clasesDeTextoDeLasReuniones(reuniones.filter((r) => r.afinado === null).map((r) => r.id)), undefined)
     : undefined;
   const sugeridas = sugerenciasDelDocumento(destino, {
@@ -219,6 +220,18 @@ export async function equiposDeLasReunionesDelDiagnostico(
  */
 export async function reunionesQueEntranSolasAlDiagnostico(projectId: string, ahora: Date = new Date()): Promise<string[]> {
   return (await reunionesQueEntranSolasPorFuente(projectId, ahora)).todas;
+}
+
+/**
+ * LAS REUNIONES QUE ENTRAN SOLAS A LA PLANIFICACIÓN (2026-10-29, Elías con la de SmartAgro): las del proyecto CON EL CLIENTE
+ * que dejaron texto, sin que nadie las elija en su Contexto. La misma regla que pinta el panel (fuente `proyecto`) y la
+ * membresía del proyecto por el chokepoint; «Sacar» (`false`) la deja afuera. Sin las sesiones de la exploración: esas son
+ * del diagnóstico.
+ */
+export async function reunionesQueEntranSolasALaPlanificacion(projectId: string, ahora: Date = new Date()): Promise<string[]> {
+  return (await sugerenciasParaElDocumento(projectId, "planificacion", ahora))
+    .filter((s) => FUENTES_QUE_ENTRAN_SOLAS.includes(s.fuente))
+    .map((s) => s.sessionId);
 }
 
 /** Las mismas, separadas: las de las sesiones de la exploración van primero para leerse enteras (el material). */
