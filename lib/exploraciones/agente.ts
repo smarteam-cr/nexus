@@ -71,6 +71,9 @@ import { agendaRenovada, exploracionesQueLeenLaReunion, hayQueLeerAlPreparar, mi
 import { buildInternalDomainsSet } from "@/lib/sessions/categorize";
 import { hoyEnCostaRica } from "./fechas";
 import { bloqueDeInstrucciones } from "./notas-de-sesion";
+import { avisoDePreguntasCerradas, preguntasQueNoCumplen } from "./agenda";
+import { faltaParaLaGuia, textoDeConQuien } from "./contexto-de-la-exploracion";
+import { retomarParaLaGuia } from "./despues-de-la-sesion";
 import { avisoDeVoseo, contextoDeLaGuia, leerLaGuiaDelAgente, notasParaLaGuia, pedidoDeLaGuia, voseoEnLaGuia } from "./guia-pedido";
 import {
   focoDeLaGuia,
@@ -472,10 +475,8 @@ async function correr(runId: string, exploracionId: string, modo: ModoDelAgente,
         if (r.status === "error") console.error(`[exploraciones/agente] la preparación no llegó a la ficha ${exploracionId}: ${r.error}`);
       }
     }
-    /* Con lo nuevo ya guardado, la guía de la próxima reunión se rearma en la misma corrida (la
-       pantalla la sigue sola). Si falla, lo propuesto queda igual: la guía de base sigue ahí. */
-    await fase(runId, "Armando la guía de la próxima reunión…");
-    await armarGuia(runId, exploracionId, opts, false).catch((e) => console.error(`[exploraciones/agente] guía ${exploracionId}`, e));
+    /* La guía ya no se rearma sola al leer o preparar (2026-11-06, «La exploración guiada»): Nexus no planifica por
+       defecto. Si lo nuevo la deja vieja, la Preparación lo avisa y la persona la vuelve a armar. */
 
     await prisma.agentRun.update({
       where: { id: runId },
@@ -936,6 +937,9 @@ export async function armarLaGuiaSinGuardar(
   opts: Pick<OpcionesDeLaCorrida, "triggeredByEmail">,
 ): Promise<{ guia: GuiaDeLaSesion; ctx: ReturnType<typeof contextoDeLaGuia>; preguntas: PreguntaParaMostrar[] } | null> {
   const { fila, estado, escala, posiciones, loLeido, marco, ctx, ahora, automaticas } = await contextoParaLaGuia(exploracionId);
+  // Nexus no planifica por defecto (2026-11-06): sin el contexto de la persona no hay guía.
+  const falta = faltaParaLaGuia(estado.contenido.contexto, estado.contenido.sesiones.find((s) => s.id === ctx.proxima.sesionId) ?? null);
+  if (falta.length) throw new FalloDeLaExploracion(`Antes de armar la guía falta ${falta.join(", ")}.`);
   const pedir = (aviso = "") =>
     conContextoDeIA(
       {
@@ -954,10 +958,15 @@ export async function armarLaGuiaSinGuardar(
   if (!guia) return null;
   /* El vendedor lee la guía en voz alta: tiene que estar en tuteo. La de CreditForce (2026-10-01) salió
      en voseo («vivís», «podés») porque las fuentes lo estaban: si pasa, se pide una vez más avisándolo. */
-  const voseo = voseoEnLaGuia(guia);
-  if (voseo.length) {
-    const otra = leerLaGuiaDelAgente(await pedir(avisoDeVoseo(voseo)), ctx, runId, ahora);
-    if (otra && voseoEnLaGuia(otra).length < voseo.length) guia = otra;
+  /* La agenda (2026-11-06) además pide preguntas abiertas y de una sola cosa: si salen cerradas o dobles, va en el mismo
+     reintento. Una sola vez, y se queda la que tenga menos problemas. */
+  const problemas = (g: GuiaDeLaSesion) => ({ voseo: voseoEnLaGuia(g), cerradas: g.agenda ? preguntasQueNoCumplen(g.agenda) : [] });
+  const antes = problemas(guia);
+  if (antes.voseo.length || antes.cerradas.length) {
+    const aviso = `${antes.voseo.length ? avisoDeVoseo(antes.voseo) : ""}${antes.cerradas.length ? avisoDePreguntasCerradas(antes.cerradas) : ""}`;
+    const otra = leerLaGuiaDelAgente(await pedir(aviso), ctx, runId, ahora);
+    const despues = otra ? problemas(otra) : null;
+    if (otra && despues && despues.voseo.length <= antes.voseo.length && despues.voseo.length + despues.cerradas.length < antes.voseo.length + antes.cerradas.length) guia = otra;
   }
   // Lo que va a ver el vendedor: las preguntas del plan, con la de respaldo donde el agente repitió lo sabido.
   // La guía recién armada: cuenta todo lo leído (sin `hasta`).
@@ -1052,7 +1061,15 @@ export async function contextoParaLaGuia(exploracionId: string) {
             .catch(() => null),
         ])
       : [[], null];
-  const ctx = contextoDeLaGuia({
+  /* Los clientes de referencia de Smarteam por industria (Audiencia, 2026-11-06): los únicos que la apertura de la preventa
+     puede nombrar. Nunca otra cuenta: solo el nombre y la industria que el equipo cargó para esto. */
+  const referencias =
+    marco.clave === "venta"
+      ? await contextoDeSmarteam()
+          .then((c) => c.perfil.clientesDeReferencia.map((r) => `${r.industria}: ${r.nombre ?? "(sin nombre)"}${r.porque ? ` (${r.porque})` : ""}`).slice(0, 12))
+          .catch(() => [] as string[])
+      : [];
+  const ctxBase = contextoDeLaGuia({
     notasDeHubspot,
     smarteam,
     marco,
@@ -1075,6 +1092,23 @@ export async function contextoParaLaGuia(exploracionId: string) {
     tests: loLeido.tests,
     ...(marco.clave === "venta" ? { faltanParaProponer: listaParaProponer(estado, chequeoDe(escala, estado), hoyEnCostaRica(ahora)) } : {}),
   });
+  /* Lo que dio la persona (2026-11-06, contexto-de-la-exploracion.ts): el contexto de la exploración y el de la próxima
+     sesión. Sin eso no se arma la guía (`armarLaGuiaSinGuardar`). */
+  const proximaSesion = estado.contenido.sesiones.find((s) => s.id === ctxBase.proxima.sesionId) ?? null;
+  const cx = estado.contenido.contexto;
+  const ctx = {
+    ...ctxBase,
+    ...(referencias.length ? { referencias } : {}),
+    ...(cx ? { contextoDeLaExploracion: { objetivo: cx.objetivo, sabemos: cx.sabemos ?? null } } : {}),
+    ...(proximaSesion
+      ? {
+          contextoDeLaSesion: { conQuien: textoDeConQuien(proximaSesion.conQuien), espera: proximaSesion.espera ?? null, objetivo: proximaSesion.objetivo ?? null },
+          ...(proximaSesion.duracion ? { duracion: proximaSesion.duracion } : {}),
+        }
+      : {}),
+    // Punto 15: lo que las sesiones anteriores dejaron por retomar y su desafío principal.
+    ...retomarParaLaGuia(estado.contenido.sesiones, proximaSesion?.id ?? null),
+  };
   /* `delProyecto` (cada fuente con su id) y `memoriaDelProyecto` también los lee el asistente
      (lib/operaciones/guia-server.ts › `loEstableDeLaGuia`): sin F0, que el chat ya tiene en su contexto. */
   return { fila, estado, escala, general: escalaVig.general, posiciones, pendientes, loLeido, marco, ctx, ahora, delProyecto, memoriaDelProyecto: memoriaProyecto ?? "", automaticas };

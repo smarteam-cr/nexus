@@ -40,6 +40,9 @@ import { useLienzo } from "./contexto";
 import { diaLargo, EtiquetaDePregunta, nombreDelPara, Rotulo, useCambiosDesdeLaGuia, useEditarLaSesion, useGuiaDeLaSesion } from "./piezas-de-la-sesion";
 import { AgregarPregunta, PreguntaDeLaGuia, Quitadas, useAjustarLaGuia, useTemasDeLaGuia } from "./PreguntaDeLaGuia";
 import { GuiaEnOrden } from "./GuiaEnOrden";
+import { AgendaDeLaGuia } from "./AgendaDeLaGuia";
+import { ContactoPrevio, ContextoDeLaSesion, ContextoDeTodaLaExploracion } from "./ContextoDeLaPreparacion";
+import { faltaParaLaGuia } from "@/lib/exploraciones/contexto-de-la-exploracion";
 import { PreguntasDelObjetivo, usePedirPreguntasDelObjetivo } from "./PreguntasDelObjetivo";
 import { sugeridasVigentes } from "@/lib/exploraciones/ajustes-de-la-guia";
 import { LoQueCubreLaGuia } from "./LoQueCubreLaGuia";
@@ -69,7 +72,9 @@ function enLista(xs: readonly string[]): string {
  * la armada pero vieja, que dice QUÉ cambió desde entonces.
  */
 function EstadoDeLaGuia({ pestana }: { pestana: PestanaDeSesion }) {
-  const { escala, marco, puedeEditar } = useLienzo();
+  const { exp, escala, marco, puedeEditar } = useLienzo();
+  // Nexus no planifica por defecto (2026-11-06): sin el contexto de la persona, el botón espera.
+  const falta = faltaParaLaGuia(exp.estado.contenido.contexto, pestana.sesion);
   const { corrida, corriendo, lanzando, lanzar } = useCorrida();
   const { guia, cambios } = useCambiosDesdeLaGuia(pestana);
   const armando = (corriendo && corrida?.modo === "guia") || lanzando;
@@ -85,13 +90,15 @@ function EstadoDeLaGuia({ pestana }: { pestana: PestanaDeSesion }) {
     detalle = corrida?.fase ?? "Empezando…";
     boton = "Armando…";
     tono = "info";
+  } else if (falta.length) {
+    titulo = guia ? "Falta contexto para volver a armar la guía" : "Antes de armar la guía, Nexus necesita tu contexto";
+    detalle = `Falta ${enLista(falta)}. Nexus arma la guía solo con lo que le das${equipo ? `, para la sesión con ${EQUIPOS[equipo].nombre}` : ""}.`;
+    boton = guia ? "Volver a armarla" : "Armar la guía";
+    tono = "aviso";
   } else if (!guia) {
-    titulo = "Esta es la guía de base";
-    detalle = equipo
-      ? `Las preguntas de siempre para ${EQUIPOS[equipo].nombre}. «Armar la guía» las adapta a esta empresa con lo que ya se sabe, suma repreguntas y cómo abrir y cerrar.`
-      : marco.clave === "cs"
-        ? "Preguntas generales para lo que falta. «Armar la guía» la adapta a este cliente: escribe las preguntas con lo que dice el handoff, suma repreguntas y cómo abrir y cerrar."
-        : "Preguntas generales para lo que falta. «Armar la guía» la adapta a esta empresa: escribe las preguntas con lo que ya se sabe, suma repreguntas, cómo abrir y cómo responder objeciones.";
+    titulo = "Todavía no hay guía";
+    detalle =
+      "Nexus la arma con el contexto que le diste: con quién es, qué espera el cliente, el objetivo y lo que ya se sabe. Sale como una agenda de bloques, con lo que hay que averiguar en cada uno.";
     boton = "Armar la guía";
     tono = "info";
   } else if (cambios) {
@@ -140,11 +147,11 @@ function EstadoDeLaGuia({ pestana }: { pestana: PestanaDeSesion }) {
       </div>
       {puedeEditar &&
         (tono === "neutro" ? (
-          <BotonBlanco disabled={armando || corriendo} onClick={() => void lanzar("guia")}>
+          <BotonBlanco disabled={armando || corriendo || falta.length > 0} onClick={() => void lanzar("guia")}>
             {boton}
           </BotonBlanco>
         ) : (
-          <BotonAzul disabled={armando || corriendo} onClick={() => void lanzar("guia")}>
+          <BotonAzul disabled={armando || corriendo || falta.length > 0} onClick={() => void lanzar("guia")}>
             {boton}
           </BotonAzul>
         ))}
@@ -622,6 +629,9 @@ function LaGuia({ pestana, esLaProxima }: { pestana: PestanaDeSesion; esLaProxim
   });
   const columnas = 2 + (enProyecto ? 1 : 0) + (deEquipo.length ? 1 : 0);
 
+  // La guía nueva (2026-11-06): una agenda por bloques. Las de antes se siguen viendo como se armaron.
+  if (guia?.agenda) return <AgendaDeLaGuia pestana={pestana} agenda={guia.agenda} objetivo={null} momento="antes" editable={puedeEditar} />;
+
   return (
     <section data-recorrido="preventa.sesion.preguntas" className="overflow-hidden rounded-xl border border-line bg-surface">
       <header className="flex flex-wrap items-center gap-2.5 border-b border-line px-[18px] py-3.5">
@@ -864,11 +874,12 @@ export function SiSeResiste({ pestana, esLaProxima, compacto = false }: { pestan
 }
 
 export default function AntesDeLaSesion({ pestana, esLaProxima }: { pestana: PestanaDeSesion; esLaProxima: boolean }) {
-  const { exp } = useLienzo();
+  const { exp, marco } = useLienzo();
   const { guia, preguntas } = useGuiaDeLaSesion(pestana, esLaProxima);
   const delObjetivo = usePedirPreguntasDelObjetivo();
   const traidos = pestana.sesion?.explorar ?? [];
   const conTest = exp.leido.tests.length > 0;
+  const guiaDeAntes = !!guia && !guia.agenda;
 
   if (!esLaProxima && !guia) {
     return (
@@ -894,22 +905,31 @@ export default function AntesDeLaSesion({ pestana, esLaProxima }: { pestana: Pes
 
   return (
     <div className="space-y-5">
+      {/* Lo que Nexus pide antes de armar una guía (2026-11-06): el contexto de la exploración, el contacto previo en
+          la primera de una preventa y el de la sesión. */}
+      {esLaProxima && <ContextoDeTodaLaExploracion />}
+      {esLaProxima && marco.clave !== "cs" && pestana.numero === 1 && !pestana.hecha && <ContactoPrevio />}
       {esLaProxima && <EstadoDeLaGuia pestana={pestana} />}
       <Objetivo
         pestana={pestana}
         esLaProxima={esLaProxima}
         sugerido={guia?.objetivo ?? null}
         preguntas={preguntas}
-        alCambiarElObjetivo={() => void delObjetivo.pedir()}
+        alCambiarElObjetivo={() => {
+          // Las preguntas para el objetivo son de la guía de antes: la agenda se arma entera con el objetivo.
+          if (guiaDeAntes) void delObjetivo.pedir();
+        }}
         pidiendo={delObjetivo.pidiendo}
       />
-      {esLaProxima && <PreguntasDelObjetivo pestana={pestana} pidiendo={delObjetivo.pidiendo} alPedirOtras={() => void delObjetivo.pedir()} />}
+      {esLaProxima && <ContextoDeLaSesion key={pestana.clave} pestana={pestana} />}
+      {esLaProxima && guiaDeAntes && <PreguntasDelObjetivo pestana={pestana} pidiendo={delObjetivo.pidiendo} alPedirOtras={() => void delObjetivo.pedir()} />}
       {esLaProxima && <CuandoYConQuien pestana={pestana} />}
       {esLaProxima && <LoQueTraes pestana={pestana} />}
       {esLaProxima && <LoQueYaSabemos pestana={pestana} />}
-      <LaGuia pestana={pestana} esLaProxima={esLaProxima} />
-      <LoQueCubreLaGuia pestana={pestana} esLaProxima={esLaProxima} />
-      <RetosDeLaIndustria pestana={pestana} esLaProxima={esLaProxima} />
+      {/* Sin guía no hay guía de base: Nexus no planifica por defecto. */}
+      {guia && <LaGuia pestana={pestana} esLaProxima={esLaProxima} />}
+      {guia && <LoQueCubreLaGuia pestana={pestana} esLaProxima={esLaProxima} />}
+      {guia && <RetosDeLaIndustria pestana={pestana} esLaProxima={esLaProxima} />}
       {conTest && pestana.numero === 1 && (
         <details className="rounded-xl border border-line bg-surface">
           <summary className="cursor-pointer select-none px-[18px] py-3.5 text-sm font-semibold text-fg">Su plan: qué va primero (es lo que se lleva de esta reunión)</summary>
@@ -918,7 +938,7 @@ export default function AntesDeLaSesion({ pestana, esLaProxima }: { pestana: Pes
           </div>
         </details>
       )}
-      <SiSeResiste pestana={pestana} esLaProxima={esLaProxima} />
+      {guia && <SiSeResiste pestana={pestana} esLaProxima={esLaProxima} />}
     </div>
   );
 }

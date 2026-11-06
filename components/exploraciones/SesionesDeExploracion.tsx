@@ -423,7 +423,6 @@ function soloLoQueSigue(s: SesionPlaneada): SesionPlaneada {
 
 export default function SesionesDeExploracion() {
   const { exp, cambiar, sesion: seleccion } = useLienzo();
-  const { lanzar } = useCorrida();
   const { sesiones, hoy, pestanas, activa, esLaProxima, momento, guardar, estadoDeLaReunion } = useSesiones();
   /* «Sumar la minuta» abierto en el análisis de esta sesión (lo abre el enlace del encabezado o el de «¿Qué
      pasó?»). Vive acá porque sumar la minuta de una reunión suelta la vuelve sesión: cambia de pestaña. */
@@ -489,7 +488,7 @@ export default function SesionesDeExploracion() {
     }
     seleccion.elegir(destino.id);
     seleccion.ponerMomento(destino.id, "antes");
-    void lanzar("guia");
+    // La guía ya no se arma sola (2026-11-06): la Preparación pide el contexto de la sesión y la persona la arma.
   };
   /** Desmarca un punto: sale de la sesión a la que se había llevado. */
   const soltar = (texto: string) =>

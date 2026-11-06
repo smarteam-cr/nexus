@@ -22,6 +22,7 @@ import { aFecha, hoyEnCostaRica } from "./fechas";
 import { MAX_SESIONES, type GuiaDeLaSesion, type SesionPlaneada } from "./guia";
 import { aplicarCambioDeLaGuia, hayAjustes, type CambioDeLaGuia } from "./ajustes-de-la-guia";
 import type { ComoLlego } from "./como-llego";
+import type { ContactoPrevio, ContextoDeLaExploracion } from "./contexto-de-la-exploracion";
 import type { PosicionamientoDelProspecto } from "./posicionamiento";
 import type { ClaveDeEquipo } from "./equipos";
 import {
@@ -164,6 +165,10 @@ export interface FotoAlProponer {
   puntos: Record<string, boolean>;
 }
 
+/** Los campos de una sesión que cambia `editarSesion`: todos menos su id y su unión (reunión, evento, «la unió Nexus»). */
+export type CampoDeSesionEditable = Exclude<keyof SesionPlaneada, "id" | "reunion" | "evento" | "asociadaSola">;
+export type CambioDeSesion = Partial<Pick<SesionPlaneada, CampoDeSesionEditable>>;
+
 export interface ContenidoDeExploracion {
   version: 1;
   casillas: Partial<ValoresDeCasillas>;
@@ -220,6 +225,10 @@ export interface ContenidoDeExploracion {
    * de antes no lo tienen.
    */
   comoLlego?: ComoLlego;
+  /** Punto 2 (2026-11-06): el contexto de toda la exploración, confirmado por una persona. Sin él, Nexus no arma guías. */
+  contexto?: ContextoDeLaExploracion;
+  /** Punto 3, solo la preventa: si hubo contacto antes de la primera sesión y el mensaje que se redactó si no. */
+  contactoPrevio?: ContactoPrevio;
   /**
    * K5 (2026-10-27, asociar.ts): las reuniones (`meet:<id>`) que alguien dijo que NO son una sesión de la exploración
    * cuando Nexus lo preguntó. No se vuelven a sugerir ni se asocian solas. Es una lápida: no sube la versión.
@@ -880,6 +889,16 @@ export type Operacion =
    */
   | { op: "agregarSesion"; sesion: SesionPlaneada }
   /**
+   * Cambiar CAMPOS de una sesión sobre lo último guardado (2026-11-06, punto 18 de la exploración guiada): pone los de
+   * `poner` y quita los de `quitar`; lo demás de la sesión queda como está ahora. Antes la pantalla mandaba la lista
+   * entera armada con lo que veía, y un cambio armado con una sesión vieja (el objetivo, una casilla) borraba lo que se
+   * eligió entretanto: así el «Equipo del cliente» elegido volvía a otro valor.
+   */
+  | { op: "editarSesion"; sesionId: string; poner: CambioDeSesion; quitar: CampoDeSesionEditable[] }
+  /** Confirmar (o borrar) el contexto de la exploración. Quién y cuándo los pone quien aplica (el servidor). */
+  | { op: "contexto"; valor: { objetivo: string; sabemos?: string } | null }
+  | { op: "contactoPrevio"; valor: ContactoPrevio | null }
+  /**
    * Cambiar la guía de una sesión (2026-10-18, ajustes-de-la-guia.ts): sumar, cambiar, quitar o devolver una pregunta.
    * Si la sesión todavía no existe (la próxima sin planear), se crea con ese id, como al escribir su objetivo.
    */
@@ -1331,6 +1350,15 @@ function aplicarUna(estado: EstadoDeExploracion, op: Operacion, validez: Validez
     }
     case "sesiones":
       return { ok: true, estado: { ...estado, contenido: { ...c, sesiones: op.sesiones.slice(0, MAX_SESIONES) } } };
+    case "editarSesion": {
+      const i = c.sesiones.findIndex((s) => s.id === op.sesionId);
+      if (i < 0) return { ok: false, error: "Esa sesión ya no está." };
+      const nueva: Record<string, unknown> = { ...c.sesiones[i], ...op.poner };
+      for (const k of op.quitar) delete nueva[k];
+      for (const [k, v] of Object.entries(nueva)) if (v === undefined) delete nueva[k];
+      const sesiones = c.sesiones.map((s, k) => (k === i ? (nueva as unknown as SesionPlaneada) : s));
+      return { ok: true, estado: { ...estado, contenido: { ...c, sesiones } } };
+    }
     case "agregarSesion": {
       // Con evento, la fecha es el día de su inicio en Costa Rica (así no cambian sesionHecha ni proximaReunion).
       const s = op.sesion.evento && !op.sesion.fecha ? { ...op.sesion, fecha: hoyEnCostaRica(aFecha(op.sesion.evento.inicio)) } : op.sesion;
@@ -1446,6 +1474,20 @@ function aplicarUna(estado: EstadoDeExploracion, op: Operacion, validez: Validez
     }
     case "archivar":
       return { ok: true, estado: { ...estado, archivada: true } };
+    case "contexto": {
+      const { contexto: _antes, ...resto } = estado.contenido;
+      void _antes;
+      if (!op.valor) return { ok: true, estado: { ...estado, contenido: resto } };
+      const objetivo = op.valor.objetivo.trim();
+      if (!objetivo) return { ok: false, error: "Falta el objetivo de la exploración." };
+      const sabemos = op.valor.sabemos?.trim();
+      return { ok: true, estado: { ...estado, contenido: { ...resto, contexto: { objetivo, ...(sabemos ? { sabemos } : {}), por: quien.por, en: quien.en } } } };
+    }
+    case "contactoPrevio": {
+      const { contactoPrevio: _antes, ...resto } = estado.contenido;
+      void _antes;
+      return { ok: true, estado: { ...estado, contenido: op.valor ? { ...resto, contactoPrevio: op.valor } : resto } };
+    }
     case "comoLlego": {
       const { comoLlego: _antes, ...resto } = estado.contenido;
       void _antes;
@@ -1512,6 +1554,27 @@ export function operacionesDeLaPantalla(
     else salida.push(op);
   }
   return { ok: true, ops: salida };
+}
+
+const CAMPOS_DE_LA_UNION = new Set<string>(["id", "reunion", "evento", "asociadaSola"]);
+
+/**
+ * Lo que cambió de una sesión, como `editarSesion` (punto 18, 2026-11-06): solo los campos que cambian, para que el
+ * cambio se aplique sobre lo último guardado y no se lleve lo que otra pantalla (u otra persona) cambió entretanto.
+ * null si el cambio toca su unión (la reunión, el evento): eso va con la lista entera, como siempre.
+ */
+export function cambioDeLaSesion(antes: SesionPlaneada, despues: SesionPlaneada): Extract<Operacion, { op: "editarSesion" }> | null {
+  const a = antes as unknown as Record<string, unknown>;
+  const d = despues as unknown as Record<string, unknown>;
+  const poner: Record<string, unknown> = {};
+  const quitar: string[] = [];
+  for (const k of new Set([...Object.keys(a), ...Object.keys(d)])) {
+    if (JSON.stringify(a[k]) === JSON.stringify(d[k])) continue;
+    if (CAMPOS_DE_LA_UNION.has(k)) return null;
+    if (d[k] === undefined) quitar.push(k);
+    else poner[k] = d[k];
+  }
+  return { op: "editarSesion", sesionId: antes.id, poner: poner as CambioDeSesion, quitar: quitar as CampoDeSesionEditable[] };
 }
 
 /** Aplica las operaciones en orden. Si una no corresponde, no se aplica NINGUNA. */

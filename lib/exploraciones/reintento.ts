@@ -95,6 +95,15 @@ function operacionSegura(op: Operacion, antes: EstadoDeExploracion, ahora: Estad
     case "ajustarGuia":
       // Agregan, quitan o sacan una por una (la repetida no se agrega dos veces): no pisan lo que hizo otro.
       return true;
+    case "editarSesion": {
+      // Cambia unos campos de UNA sesión sobre lo de ahora: se reintenta si esos campos no cambiaron entretanto.
+      const a = ca.sesiones.find((s) => s.id === op.sesionId);
+      const b = cb.sesiones.find((s) => s.id === op.sesionId);
+      if (!b) return false;
+      // Recién creada en esta pantalla (no estaba en lo que se veía): el cambio va por campo, no pisa nada.
+      if (!a) return true;
+      return [...Object.keys(op.poner), ...op.quitar].every((k) => igual(a[k as keyof typeof a], b[k as keyof typeof b]));
+    }
     case "evento":
       // Mueve la fecha del evento de UNA sesión: si su evento cambió entretanto, se recarga.
       return igual(ca.sesiones.find((s) => s.id === op.sesionId)?.evento, cb.sesiones.find((s) => s.id === op.sesionId)?.evento);
@@ -120,6 +129,11 @@ function operacionSegura(op: Operacion, antes: EstadoDeExploracion, ahora: Estad
     case "correo":
       // Se reintenta solo sobre el MISMO correo: si entretanto se volvió a armar, el cambio era sobre otro.
       return antes.propuesta.correos[op.clave]?.corridaId === ahora.propuesta.correos[op.clave]?.corridaId;
+    case "contexto":
+      // Se confirma sobre lo que se veía: si otra persona lo cambió entretanto, se recarga.
+      return igual(ca.contexto, cb.contexto);
+    case "contactoPrevio":
+      return igual(ca.contactoPrevio, cb.contactoPrevio);
     case "comoLlego":
       // K2: se confirma sobre lo que se veía; si otra persona lo confirmó distinto entretanto, se recarga.
       return igual(ca.comoLlego, cb.comoLlego);

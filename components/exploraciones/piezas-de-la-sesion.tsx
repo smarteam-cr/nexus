@@ -10,7 +10,7 @@
 import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/cn";
 import { definicionEnElMarco, esTarjeta, MARCO_DE_VENTA, type Marco } from "@/lib/exploraciones/marco";
-import type { Operacion } from "@/lib/exploraciones/contenido";
+import { cambioDeLaSesion, type Operacion } from "@/lib/exploraciones/contenido";
 import { aFecha, conEspaciosComunes, diaCorto, hoyEnCostaRica } from "@/lib/exploraciones/fechas";
 import {
   cambiosDesdeLaGuia,
@@ -293,6 +293,9 @@ function sesionDeLaPestana(p: PestanaDeSesion): SesionPlaneada {
   return { id: nuevoIdDeSesion(), ...(r ? { reunion: { id: r.id, origen: r.origen }, fecha: hoyEnCostaRica(aFecha(r.fecha)) } : {}) };
 }
 
+/** Las sesiones que esta pantalla creó desde una pestaña que todavía no era sesión (por exploración y pestaña). */
+const CREADAS_DESDE_LA_PANTALLA = new Map<string, { sesion: SesionPlaneada; en: number }>();
+
 /**
  * Cambiar una sesión, aunque todavía no exista: si la pestaña es una reunión suelta o la próxima sin
  * planear, la sesión se crea en el mismo cambio y queda elegida (en el mismo momento). `extra` suma
@@ -300,23 +303,41 @@ function sesionDeLaPestana(p: PestanaDeSesion): SesionPlaneada {
  * la sesión, o null si no se pudo guardar.
  */
 export function useEditarLaSesion(pestana: PestanaDeSesion, momento: MomentoDeLaSesion) {
-  const { cambiar, sesion: seleccion } = useLienzo();
+  const { cambiar, sesion: seleccion, exp } = useLienzo();
   const { sesiones } = useSesiones();
   return async (
     cambio: ((s: SesionPlaneada) => SesionPlaneada) | null,
     extra: (id: string) => Operacion[] = () => [],
     opciones?: OpcionesDeCambio,
   ): Promise<string | null> => {
-    const existente = pestana.sesion;
+    /* Punto 18 (2026-11-06): una pestaña que todavía no era sesión y ya se creó desde esta pantalla (otro cambio, antes
+       de que la pantalla se entere) no se vuelve a crear: se cambia la que nació. */
+    const clave = `${exp.id}:${pestana.clave}`;
+    const memo = !pestana.sesion ? CREADAS_DESDE_LA_PANTALLA.get(clave) : undefined;
+    // Vale si la pantalla ya la ve, o si nació hace poco (todavía no llegó): una que después se quitó no revive.
+    const nacida = memo && (sesiones.some((x) => x.id === memo.sesion.id) || Date.now() - memo.en < 30_000) ? memo.sesion : undefined;
+    const existente = pestana.sesion ?? (nacida ? (sesiones.find((x) => x.id === nacida.id) ?? nacida) : undefined);
     if (!existente && sesiones.length >= MAX_SESIONES) return null;
     const base = existente ?? sesionDeLaPestana(pestana);
     const nueva = cambio ? cambio(base) : base;
     const ops: Operacion[] = [];
-    if (!existente) ops.push({ op: "sesiones", sesiones: [...sesiones, nueva] });
-    else if (cambio) ops.push({ op: "sesiones", sesiones: sesiones.map((x) => (x.id === existente.id ? nueva : x)) });
+    if (!existente) {
+      // Agregar no reemplaza la lista: no se lleva lo que cambió entretanto.
+      ops.push({ op: "agregarSesion", sesion: nueva });
+      CREADAS_DESDE_LA_PANTALLA.set(clave, { sesion: nueva, en: Date.now() });
+    } else if (cambio) {
+      /* Solo los campos que cambian, sobre lo último guardado: un cambio armado con una sesión vieja ya no borra el
+         equipo (u otro campo) elegido entretanto. Si toca su reunión, la lista entera, como antes. */
+      const campos = cambioDeLaSesion(base, nueva);
+      if (campos) {
+        if (Object.keys(campos.poner).length || campos.quitar.length) ops.push(campos);
+      } else ops.push({ op: "sesiones", sesiones: sesiones.map((x) => (x.id === existente.id ? nueva : x)) });
+    }
     ops.push(...extra(nueva.id));
     if (!ops.length) return nueva.id;
     const ok = await cambiar(ops, opciones);
+    // Si no se pudo crear, la pestaña no quedó con sesión: el próximo cambio la vuelve a crear.
+    if (!ok && !existente) CREADAS_DESDE_LA_PANTALLA.delete(clave);
     if (ok && !existente) {
       seleccion.elegir(nueva.id);
       seleccion.ponerMomento(nueva.id, momento);

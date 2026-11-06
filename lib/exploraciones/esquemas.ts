@@ -64,10 +64,24 @@ import {
   type UsoDeSugerencia,
   type LecturaDeReunion,
   type Medicion,
+  type CambioDeSesion,
+  type CampoDeSesionEditable,
   type Operacion,
   type PropuestaDeExploracion,
   type Validador,
 } from "./contenido";
+import { MAX_AVERIGUAR_POR_BLOQUE, MAX_BLOQUES, MAX_CLAVES, MAX_PREGUNTAS_SUGERIDAS } from "./agenda";
+import {
+  MAX_LO_QUE_ESPERA,
+  MAX_LO_QUE_SABEMOS,
+  MAX_MENSAJE_PREVIO,
+  MAX_OBJETIVO_DE_LA_EXPLORACION,
+  MAX_PERSONAS_DE_LA_SESION,
+  TIPOS_DE_MENSAJE_PREVIO,
+  type ContactoPrevio,
+  type ContextoDeLaExploracion,
+} from "./contexto-de-la-exploracion";
+import { MAX_FALTA_DEL_DESAFIO, MAX_RETOMAR, MAX_TEXTO_DEL_DESAFIO } from "./despues-de-la-sesion";
 import {
   MAX_PREGUNTAS_EN_LA_GUIA,
   MAX_PARA_EXPLORAR,
@@ -399,7 +413,7 @@ export const CambioDeLaGuiaSchema: z.ZodType<CambioDeLaGuia> = z.discriminatedUn
 ]);
 
 /** Una sesión planeada por el vendedor (lib/exploraciones/guia.ts). */
-export const SesionPlaneadaSchema: z.ZodType<SesionPlaneada> = z.object({
+const SesionPlaneadaObjeto = z.object({
   id: z.string().regex(/^s-[a-z0-9]{1,24}$/),
   titulo: texto(120).optional(),
   fecha: z
@@ -427,6 +441,40 @@ export const SesionPlaneadaSchema: z.ZodType<SesionPlaneada> = z.object({
   ajustesDeLaGuia: AjustesDeLaGuiaSchema.optional(),
   equipo: z.enum(EQUIPOS_DEL_CLIENTE).optional(),
   asociadaSola: FECHA_ISO.optional(),
+  conQuien: z
+    .array(z.object({ nombre: textoLleno(120), puesto: textoLleno(120).optional(), area: textoLleno(80).optional() }))
+    .max(MAX_PERSONAS_DE_LA_SESION)
+    .optional(),
+  espera: textoLleno(MAX_LO_QUE_ESPERA).optional(),
+  duracion: z.number().int().min(10).max(240).optional(),
+  desafio: z
+    .object({ texto: textoLleno(MAX_TEXTO_DEL_DESAFIO), falta: z.array(textoLleno(200)).max(MAX_FALTA_DEL_DESAFIO), propuesto: z.literal(true).optional() })
+    .optional(),
+  retomar: z
+    .array(z.object({ tema: textoLleno(200), donde: textoLleno(160) }))
+    .max(MAX_RETOMAR)
+    .optional(),
+});
+export const SesionPlaneadaSchema: z.ZodType<SesionPlaneada> = SesionPlaneadaObjeto;
+
+/**
+ * Lo que cambia `editarSesion` (contenido.ts): los campos de una sesión menos su id y su unión (la reunión, el evento y
+ * «la unió Nexus»: esas las fija el servidor o la lista entera).
+ */
+const SesionEditable = SesionPlaneadaObjeto.omit({ id: true, reunion: true, evento: true, asociadaSola: true });
+export const CambioDeSesionSchema = SesionEditable.partial().strict() as unknown as z.ZodType<CambioDeSesion>;
+const CAMPOS_EDITABLES = Object.keys(SesionEditable.shape) as [CampoDeSesionEditable, ...CampoDeSesionEditable[]];
+
+/** El contexto de la exploración y el contacto previo (contexto-de-la-exploracion.ts, 2026-11-06). */
+const ContextoDeLaExploracionSchema: z.ZodType<ContextoDeLaExploracion> = z.object({
+  objetivo: textoLleno(MAX_OBJETIVO_DE_LA_EXPLORACION),
+  sabemos: textoLleno(MAX_LO_QUE_SABEMOS).optional(),
+  por: z.string().max(200).nullable(),
+  en: FECHA_ISO,
+});
+const ContactoPrevioSchema: z.ZodType<ContactoPrevio> = z.object({
+  hubo: z.boolean(),
+  mensaje: z.object({ tipo: z.enum(TIPOS_DE_MENSAJE_PREVIO), texto: textoLleno(MAX_MENSAJE_PREVIO), en: FECHA_ISO }).optional(),
 });
 
 /** K2: cómo llegó el prospecto (como-llego.ts). «referidoPor» solo con «referido». */
@@ -450,6 +498,12 @@ export const OperacionSchema = z.discriminatedUnion("op", [
   z.object({ op: z.literal("nota"), paso: z.string().min(1).max(MAX_CLAVE_DE_NOTA), texto: z.string().max(4000) }),
   z.object({ op: z.literal("sesiones"), sesiones: z.array(SesionPlaneadaSchema).max(MAX_SESIONES) }),
   z.object({ op: z.literal("agregarSesion"), sesion: SesionPlaneadaSchema }),
+  z.object({
+    op: z.literal("editarSesion"),
+    sesionId: z.string().regex(/^s-[a-z0-9]{1,24}$/),
+    poner: CambioDeSesionSchema,
+    quitar: z.array(z.enum(CAMPOS_EDITABLES)).max(30),
+  }),
   z.object({ op: z.literal("ajustarGuia"), sesionId: z.string().regex(/^s-[a-z0-9]{1,24}$/), cambio: CambioDeLaGuiaSchema }),
   z.object({ op: z.literal("quitarSesiones"), ids: z.array(z.string().regex(/^s-[a-z0-9]{1,24}$/)).min(1).max(MAX_SESIONES) }),
   z.object({ op: z.literal("fuera"), claves: z.array(CLAVE_DE_REUNION).min(1).max(50), fuera: z.boolean() }),
@@ -475,6 +529,11 @@ export const OperacionSchema = z.discriminatedUnion("op", [
   z.object({ op: z.literal("responsable"), email: z.string().email().max(200).nullable() }),
   z.object({ op: z.literal("alertaTecnicaVista") }),
   z.object({ op: z.literal("comoLlego"), valor: ComoLlegoSchema.nullable() }),
+  z.object({
+    op: z.literal("contexto"),
+    valor: z.object({ objetivo: textoLleno(MAX_OBJETIVO_DE_LA_EXPLORACION), sabemos: z.string().trim().max(MAX_LO_QUE_SABEMOS).optional() }).nullable(),
+  }),
+  z.object({ op: z.literal("contactoPrevio"), valor: ContactoPrevioSchema.nullable() }),
   z.object({ op: z.literal("descartarAsociacion"), claves: z.array(CLAVE_DE_REUNION).min(1).max(20) }),
   z.object({
     op: z.literal("correo"),
@@ -527,6 +586,32 @@ const PreguntaDeLaGuiaSchema = z.object({
   investiga: textoDeGuia(200).optional(),
   pideVer: textoDeGuia(200).optional(),
 });
+const CosaPorAveriguarSchema = z.object({
+  id: z.string().regex(/^av:[a-z0-9]{1,12}$/),
+  que: textoDeGuia(200),
+  preguntas: z.array(textoDeGuia(300)).min(1).max(MAX_PREGUNTAS_SUGERIDAS),
+  para: z.string().min(1).max(40).optional(),
+  sabido: textoDeGuia(120).optional(),
+});
+const AgendaSchema = z.object({
+  claves: z.array(textoDeGuia(300)).min(1).max(MAX_CLAVES),
+  bloques: z
+    .array(
+      z.object({
+        desde: z.number().int().min(0).max(240),
+        hasta: z.number().int().min(1).max(240),
+        titulo: textoDeGuia(120),
+        tipo: z.enum(["apertura", "cuerpo", "cierre"]),
+        abre: textoDeGuia(600),
+        central: z.literal(true).optional(),
+        averiguar: z.array(CosaPorAveriguarSchema).max(MAX_AVERIGUAR_POR_BLOQUE),
+        impacto: textoDeGuia(400).optional(),
+      }),
+    )
+    .min(2)
+    .max(MAX_BLOQUES),
+  fraseDeDemo: textoDeGuia(500).optional(),
+});
 const GuiaSchema: z.ZodType<GuiaDeLaSesion> = z.object({
   en: z.string().max(40),
   corridaId: z.string().max(60).nullable(),
@@ -558,6 +643,7 @@ const GuiaSchema: z.ZodType<GuiaDeLaSesion> = z.object({
     .array(z.object({ equipo: z.enum(EQUIPOS_DEL_CLIENTE), porque: textoDeGuia(200) }))
     .max(4)
     .optional(),
+  agenda: AgendaSchema.optional(),
   apertura: z.array(textoDeGuia(400)).max(4),
   escalaEnSimple: textoDeGuia(800).nullable(),
   preguntas: z.array(PreguntaDeLaGuiaSchema).max(MAX_PREGUNTAS_EN_LA_GUIA),
@@ -668,6 +754,10 @@ export function leerContenido(raw: unknown): ContenidoDeExploracion {
   c.descartadas = listaDeTextos(raw.descartadas, MAX_DESCARTADAS);
   const llego = ComoLlegoSchema.safeParse(raw.comoLlego);
   if (llego.success) c.comoLlego = llego.data;
+  const contexto = ContextoDeLaExploracionSchema.safeParse(raw.contexto);
+  if (contexto.success) c.contexto = contexto.data;
+  const previo = ContactoPrevioSchema.safeParse(raw.contactoPrevio);
+  if (previo.success) c.contactoPrevio = previo.data;
   if (Array.isArray(raw.asociacionesDescartadas)) {
     c.asociacionesDescartadas = raw.asociacionesDescartadas
       .filter((k): k is string => typeof k === "string" && CLAVE_DE_REUNION.safeParse(k).success)

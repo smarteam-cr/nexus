@@ -27,6 +27,7 @@ import {
   type Validez,
 } from "./contenido";
 import { CambiosSchema, leerContenido, leerPropuesta, VALIDADOR_ESTRICTO } from "./esquemas";
+import { cambioDeLaSesion } from "./contenido";
 import { MAX_SESIONES, type SesionPlaneada } from "./guia";
 
 /** Como en el servidor: con el validador estricto. */
@@ -583,5 +584,37 @@ describe("⭐ el tope de id de una reunión es 200 (etapa A)", () => {
     expect(leerContenido({ version: 1 }).fuera).toEqual([]);
     expect(leerPropuesta({ leidas: { sesiones: ["m1"], hubspot: [], documentos: [], soloNotas: ["m2"] } }).leidas.soloNotas).toEqual(["m2"]);
     expect(leerPropuesta({ leidas: { sesiones: [], hubspot: [], documentos: [] } }).leidas.soloNotas).toEqual([]);
+  });
+});
+
+describe("editarSesion (punto 18: el equipo del cliente se mantiene)", () => {
+  const conSesion = (s: SesionPlaneada) => estado({ contenido: { ...contenidoVacio(), sesiones: [s] } });
+
+  it("cambiar el objetivo con la sesión vieja no borra el equipo elegido entretanto", () => {
+    const vieja: SesionPlaneada = { id: "s-a1" };
+    // Otra pantalla ya guardó «Dirección».
+    const ahora = conSesion({ id: "s-a1", equipo: "direccion" });
+    const op = cambioDeLaSesion(vieja, { ...vieja, objetivo: "Entender adónde quiere llevar la empresa" });
+    expect(op).toEqual({ op: "editarSesion", sesionId: "s-a1", poner: { objetivo: "Entender adónde quiere llevar la empresa" }, quitar: [] });
+    const r = aplicarOperaciones(ahora, [op!], VALIDEZ);
+    expect(r.ok && r.estado.contenido.sesiones[0]).toEqual({ id: "s-a1", equipo: "direccion", objetivo: "Entender adónde quiere llevar la empresa" });
+  });
+
+  it("quitar un campo lo quita y deja lo demás", () => {
+    const op = cambioDeLaSesion({ id: "s-a1", equipo: "ventas" }, { id: "s-a1" });
+    expect(op?.quitar).toEqual(["equipo"]);
+    const r = aplicarOperaciones(conSesion({ id: "s-a1", equipo: "ventas", objetivo: "x" }), [op!], VALIDEZ);
+    expect(r.ok && r.estado.contenido.sesiones[0]).toEqual({ id: "s-a1", objetivo: "x" });
+  });
+
+  it("un cambio de la reunión va con la lista entera, y una sesión que ya no está se rechaza", () => {
+    expect(cambioDeLaSesion({ id: "s-a1" }, { id: "s-a1", reunion: { id: "m1", origen: "meet" } })).toBeNull();
+    const r = aplicarOperaciones(estado(), [{ op: "editarSesion", sesionId: "s-zz", poner: { objetivo: "x" }, quitar: [] }], VALIDEZ);
+    expect(r.ok).toBe(false);
+  });
+
+  it("el esquema no deja fijar el evento ni la reunión por esta vía", () => {
+    const op = { op: "editarSesion", sesionId: "s-a1", poner: { evento: { id: "e", calendario: "a@b.co", inicio: "2026-11-06T10:00:00.000Z" } }, quitar: [] };
+    expect(CambiosSchema.safeParse({ version: 1, operaciones: [op] }).success).toBe(false);
   });
 });

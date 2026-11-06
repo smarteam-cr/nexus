@@ -34,6 +34,9 @@ import type { SaberDelCliente } from "./lo-que-ya-sabemos";
 import { planDeLaGuia, preguntaDeRespaldo, REPREGUNTAS_DEL_PASO, repiteLoSabido, type PasoDeLaPregunta, type PreguntaPlaneada } from "./plan-de-la-guia";
 import { sinCitaAdelante, type AjustesDeLaGuia, type OrigenDelAjuste } from "./ajustes-de-la-guia";
 import { esTemaDeEquipo, leerTemaDeEquipo, nombreDelTemaDeEquipo, type ClaveDeEquipo } from "./equipos";
+import type { AgendaDeLaGuia } from "./agenda";
+import type { PersonaDeLaSesion } from "./contexto-de-la-exploracion";
+import type { DesafioDeLaSesion, TemaPorRetomar } from "./despues-de-la-sesion";
 
 // ── Las sesiones ──────────────────────────────────────────────────────────────
 
@@ -131,6 +134,16 @@ export interface SesionPlaneada {
    * La pantalla lo dice («Nexus la unió») para que se pueda deshacer. Sin esto, la unió una persona.
    */
   asociadaSola?: string;
+  /** Punto 4 (2026-11-06, contexto-de-la-exploracion.ts): con quién es (nombre, puesto y área). Lo escribe una persona. */
+  conQuien?: PersonaDeLaSesion[];
+  /** Qué espera el cliente de esta reunión («quieren ver un demo y precios»). */
+  espera?: string;
+  /** Cuánto dura, en minutos. Sin él, 60. */
+  duracion?: number;
+  /** Punto 15 (despues-de-la-sesion.ts): el desafío principal que dejó la sesión y lo que falta para confirmarlo. */
+  desafio?: DesafioDeLaSesion;
+  /** Los temas por retomar (de 3 a 5), cada uno con dónde conviene: alimentan la guía de la siguiente. */
+  retomar?: TemaPorRetomar[];
 }
 
 /** Hasta cuántas sesiones tiene una exploración (subió de 12 a 20 en la etapa A: ahora se materializan más). */
@@ -880,6 +893,11 @@ export interface GuiaDeLaSesion {
    * después, cada una con su porqué. Las sugiere el agente; las agenda una persona.
    */
   sesionesSugeridas?: { equipo: ClaveDeEquipo; porque: string }[];
+  /**
+   * La guía como agenda por bloques (2026-11-06, agenda.ts): el formato de toda guía nueva. Con ella, la pantalla muestra
+   * la agenda; `preguntas` sale de la agenda (una por tema) para lo que todavía las lee. Sin ella, una guía de antes.
+   */
+  agenda?: AgendaDeLaGuia;
   /** Cómo abrir la conversación, desde algo de la empresa. */
   apertura: string[];
   /** La escala explicada en simple: solo cuando no hizo el test y todavía no se habló. */
