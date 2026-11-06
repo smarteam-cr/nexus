@@ -68,6 +68,8 @@ describe("⛔ las comunicaciones de HubSpot", () => {
       "lib/leads/reglas.ts",
       // La guía de la preventa (K7, 2026-10-26): las notas recientes de UNA empresa, por la puerta de lectura.
       "lib/exploraciones/agente.ts",
+      // El borrador del contexto de la exploración (2026-11-06): las notas de UNA empresa, por la puerta de lectura.
+      "lib/exploraciones/contexto-server.ts",
     ]);
     const malos = TODO.filter((rel) => !rel.startsWith("lib/comunicaciones/") && /["']@\/lib\/comunicaciones\//.test(leer(rel)) && !permitidos.has(rel));
     expect(malos).toEqual([]);

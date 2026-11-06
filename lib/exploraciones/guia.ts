@@ -35,6 +35,7 @@ import { planDeLaGuia, preguntaDeRespaldo, REPREGUNTAS_DEL_PASO, repiteLoSabido,
 import { sinCitaAdelante, type AjustesDeLaGuia, type OrigenDelAjuste } from "./ajustes-de-la-guia";
 import { esTemaDeEquipo, leerTemaDeEquipo, nombreDelTemaDeEquipo, type ClaveDeEquipo } from "./equipos";
 import type { AgendaDeLaGuia } from "./agenda";
+import type { PersonaDeLaSesion } from "./contexto-de-la-exploracion";
 
 // ── Las sesiones ──────────────────────────────────────────────────────────────
 
@@ -132,6 +133,12 @@ export interface SesionPlaneada {
    * La pantalla lo dice («Nexus la unió») para que se pueda deshacer. Sin esto, la unió una persona.
    */
   asociadaSola?: string;
+  /** Punto 4 (2026-11-06, contexto-de-la-exploracion.ts): con quién es (nombre, puesto y área). Lo escribe una persona. */
+  conQuien?: PersonaDeLaSesion[];
+  /** Qué espera el cliente de esta reunión («quieren ver un demo y precios»). */
+  espera?: string;
+  /** Cuánto dura, en minutos. Sin él, 60. */
+  duracion?: number;
 }
 
 /** Hasta cuántas sesiones tiene una exploración (subió de 12 a 20 en la etapa A: ahora se materializan más). */

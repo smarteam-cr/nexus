@@ -127,6 +127,11 @@ function operacionSegura(op: Operacion, antes: EstadoDeExploracion, ahora: Estad
     case "correo":
       // Se reintenta solo sobre el MISMO correo: si entretanto se volvió a armar, el cambio era sobre otro.
       return antes.propuesta.correos[op.clave]?.corridaId === ahora.propuesta.correos[op.clave]?.corridaId;
+    case "contexto":
+      // Se confirma sobre lo que se veía: si otra persona lo cambió entretanto, se recarga.
+      return igual(ca.contexto, cb.contexto);
+    case "contactoPrevio":
+      return igual(ca.contactoPrevio, cb.contactoPrevio);
     case "comoLlego":
       // K2: se confirma sobre lo que se veía; si otra persona lo confirmó distinto entretanto, se recarga.
       return igual(ca.comoLlego, cb.comoLlego);

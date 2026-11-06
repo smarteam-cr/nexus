@@ -188,6 +188,12 @@ const CENSO: Record<string, { destino: Destino; motivo: string }> = {
     destino: "ventas",
     motivo: "Al abrir la exploración, mirar si las reuniones agendadas de las sesiones se movieron o se cancelaron (etapa A).",
   },
+  "app/api/sales/exploraciones/[id]/contexto/route.ts": {
+    destino: "ventas",
+    motivo:
+      "2026-11-06: el borrador de «lo que ya sabemos» (el traspaso, las notas de la MISMA empresa, lo que dejaron sus sesiones) para que la persona lo confirme, " +
+      "y el correo o guion antes de la primera sesión de una preventa: lo redacta con el contexto confirmado y los clientes de referencia de Audiencia, y lo manda una persona.",
+  },
   "app/api/sales/exploraciones/[id]/correo/route.ts": {
     destino: "correo-al-cliente",
     motivo:

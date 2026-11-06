@@ -72,6 +72,7 @@ import { buildInternalDomainsSet } from "@/lib/sessions/categorize";
 import { hoyEnCostaRica } from "./fechas";
 import { bloqueDeInstrucciones } from "./notas-de-sesion";
 import { avisoDePreguntasCerradas, preguntasQueNoCumplen } from "./agenda";
+import { faltaParaLaGuia, textoDeConQuien } from "./contexto-de-la-exploracion";
 import { avisoDeVoseo, contextoDeLaGuia, leerLaGuiaDelAgente, notasParaLaGuia, pedidoDeLaGuia, voseoEnLaGuia } from "./guia-pedido";
 import {
   focoDeLaGuia,
@@ -473,10 +474,8 @@ async function correr(runId: string, exploracionId: string, modo: ModoDelAgente,
         if (r.status === "error") console.error(`[exploraciones/agente] la preparación no llegó a la ficha ${exploracionId}: ${r.error}`);
       }
     }
-    /* Con lo nuevo ya guardado, la guía de la próxima reunión se rearma en la misma corrida (la
-       pantalla la sigue sola). Si falla, lo propuesto queda igual: la guía de base sigue ahí. */
-    await fase(runId, "Armando la guía de la próxima reunión…");
-    await armarGuia(runId, exploracionId, opts, false).catch((e) => console.error(`[exploraciones/agente] guía ${exploracionId}`, e));
+    /* La guía ya no se rearma sola al leer o preparar (2026-11-06, «La exploración guiada»): Nexus no planifica por
+       defecto. Si lo nuevo la deja vieja, la Preparación lo avisa y la persona la vuelve a armar. */
 
     await prisma.agentRun.update({
       where: { id: runId },
@@ -937,6 +936,9 @@ export async function armarLaGuiaSinGuardar(
   opts: Pick<OpcionesDeLaCorrida, "triggeredByEmail">,
 ): Promise<{ guia: GuiaDeLaSesion; ctx: ReturnType<typeof contextoDeLaGuia>; preguntas: PreguntaParaMostrar[] } | null> {
   const { fila, estado, escala, posiciones, loLeido, marco, ctx, ahora, automaticas } = await contextoParaLaGuia(exploracionId);
+  // Nexus no planifica por defecto (2026-11-06): sin el contexto de la persona no hay guía.
+  const falta = faltaParaLaGuia(estado.contenido.contexto, estado.contenido.sesiones.find((s) => s.id === ctx.proxima.sesionId) ?? null);
+  if (falta.length) throw new FalloDeLaExploracion(`Antes de armar la guía falta ${falta.join(", ")}.`);
   const pedir = (aviso = "") =>
     conContextoDeIA(
       {
@@ -1089,7 +1091,21 @@ export async function contextoParaLaGuia(exploracionId: string) {
     tests: loLeido.tests,
     ...(marco.clave === "venta" ? { faltanParaProponer: listaParaProponer(estado, chequeoDe(escala, estado), hoyEnCostaRica(ahora)) } : {}),
   });
-  const ctx = { ...ctxBase, ...(referencias.length ? { referencias } : {}) };
+  /* Lo que dio la persona (2026-11-06, contexto-de-la-exploracion.ts): el contexto de la exploración y el de la próxima
+     sesión. Sin eso no se arma la guía (`armarLaGuiaSinGuardar`). */
+  const proximaSesion = estado.contenido.sesiones.find((s) => s.id === ctxBase.proxima.sesionId) ?? null;
+  const cx = estado.contenido.contexto;
+  const ctx = {
+    ...ctxBase,
+    ...(referencias.length ? { referencias } : {}),
+    ...(cx ? { contextoDeLaExploracion: { objetivo: cx.objetivo, sabemos: cx.sabemos ?? null } } : {}),
+    ...(proximaSesion
+      ? {
+          contextoDeLaSesion: { conQuien: textoDeConQuien(proximaSesion.conQuien), espera: proximaSesion.espera ?? null, objetivo: proximaSesion.objetivo ?? null },
+          ...(proximaSesion.duracion ? { duracion: proximaSesion.duracion } : {}),
+        }
+      : {}),
+  };
   /* `delProyecto` (cada fuente con su id) y `memoriaDelProyecto` también los lee el asistente
      (lib/operaciones/guia-server.ts › `loEstableDeLaGuia`): sin F0, que el chat ya tiene en su contexto. */
   return { fila, estado, escala, general: escalaVig.general, posiciones, pendientes, loLeido, marco, ctx, ahora, delProyecto, memoriaDelProyecto: memoriaProyecto ?? "", automaticas };

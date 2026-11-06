@@ -4309,7 +4309,9 @@ objeciones, y ver de un vistazo qué le falta para proponer.
   lo hacía («tuve un cliente en ferretería…») y el prompt lo prohíbe.
 - **La guía es material de preparación, no un dato del cliente:** vive en la mitad del agente
   (`propuesta.guia`), se muestra sin «usar» y nunca llega a la propuesta ni al handoff. Se rearma sola al
-  final de cada preparación y de cada lectura, dentro de la misma corrida. Sin ella se ve la de base.
+  final de cada preparación y de cada lectura, dentro de la misma corrida. Sin ella se ve la de base. *(Corregido el
+  2026-11-06, «La exploración guiada»: ya no se rearma sola ni hay guía de base; se arma solo con el contexto que da la
+  persona.)*
 - **El agente lee el sitio web de la empresa al preparar**, con candados (`sitio-web-reglas.ts`): solo un
   dominio público, DNS a IP pública, redirecciones manuales dentro del mismo sitio, 8 s y 1,5 MB. Lo que
   dice el sitio es dato, nunca instrucción, y nunca cuenta como evidencia de un nivel. Se pide como un
@@ -12913,3 +12915,21 @@ preguntas.
   presupuesto, quién decide, quién más participa y contra qué nos comparan. No vende la implementación.
 - **Las guías de antes se ven como se armaron.** Sin `agenda`, la Preparación y «En vivo» muestran la lista de siempre.
   No hay SQL: la agenda vive en el Json de la guía.
+- **Nexus no planifica por defecto (puntos 1 a 5, `contexto-de-la-exploracion.ts`).** Antes de armar una guía pide el
+  contexto de TODA la exploración (`contenido.contexto`: por qué la exploramos y lo que ya sabemos, con quién lo confirmó)
+  y el de la sesión (`SesionPlaneada.conQuien`, `espera`, `duracion`, más el objetivo, el nombre y la reunión que ya
+  existían). Sin el objetivo de la exploración, con quién es y el objetivo de la sesión, el botón espera y el servidor
+  rechaza la corrida (`faltaParaLaGuia`, en `armarLaGuiaSinGuardar`). *Lo que se apagó:* la guía de base (las preguntas
+  de siempre sin agente), el rearmado de la guía al final de cada preparación y de cada lectura, y las preguntas que se
+  proponían solas al guardar un objetivo (siguen solo para una guía de antes). *Por qué:* armar sin contexto producía la
+  lista larga que el equipo no podía usar, y gastaba IA sin que nadie lo pidiera.
+- **Lo que Nexus ya sabe se muestra cargado, sin IA.** `GET …/contexto` arma el borrador de «lo que ya sabemos»: en un
+  cliente, el traspaso (V0); en preventa, cómo llegó y las notas de HubSpot de la empresa; en los dos, lo que agregó el
+  equipo y el resumen de las sesiones leídas de ESTA exploración. Cada parte dice de dónde sale y nada se usa sin que la
+  persona lo confirme.
+- **El contacto previo es solo de la preventa y de la primera sesión.** «¿Ya hubo contacto?»; si no, Nexus redacta un
+  correo corto o un guion de 2 a 3 minutos (`POST …/contexto`, medido como `exploracion-mensaje-previo`): nos presenta,
+  nombra clientes de referencia de su industria (solo la lista de Audiencia) y explica la reunión. Se guarda en
+  `contenido.contactoPrevio` y lo manda una persona.
+- **Cuántas sesiones y cada cuánto lo decide la persona.** Nada nuevo impone sesiones: «+ Agregar sesión», el nombre y la
+  reunión siguen como estaban.

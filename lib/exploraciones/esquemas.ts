@@ -72,6 +72,16 @@ import {
 } from "./contenido";
 import { MAX_AVERIGUAR_POR_BLOQUE, MAX_BLOQUES, MAX_CLAVES, MAX_PREGUNTAS_SUGERIDAS } from "./agenda";
 import {
+  MAX_LO_QUE_ESPERA,
+  MAX_LO_QUE_SABEMOS,
+  MAX_MENSAJE_PREVIO,
+  MAX_OBJETIVO_DE_LA_EXPLORACION,
+  MAX_PERSONAS_DE_LA_SESION,
+  TIPOS_DE_MENSAJE_PREVIO,
+  type ContactoPrevio,
+  type ContextoDeLaExploracion,
+} from "./contexto-de-la-exploracion";
+import {
   MAX_PREGUNTAS_EN_LA_GUIA,
   MAX_PARA_EXPLORAR,
   MAX_PREGUNTAS_DE_LO_VENDIDO,
@@ -430,6 +440,12 @@ const SesionPlaneadaObjeto = z.object({
   ajustesDeLaGuia: AjustesDeLaGuiaSchema.optional(),
   equipo: z.enum(EQUIPOS_DEL_CLIENTE).optional(),
   asociadaSola: FECHA_ISO.optional(),
+  conQuien: z
+    .array(z.object({ nombre: textoLleno(120), puesto: textoLleno(120).optional(), area: textoLleno(80).optional() }))
+    .max(MAX_PERSONAS_DE_LA_SESION)
+    .optional(),
+  espera: textoLleno(MAX_LO_QUE_ESPERA).optional(),
+  duracion: z.number().int().min(10).max(240).optional(),
 });
 export const SesionPlaneadaSchema: z.ZodType<SesionPlaneada> = SesionPlaneadaObjeto;
 
@@ -440,6 +456,18 @@ export const SesionPlaneadaSchema: z.ZodType<SesionPlaneada> = SesionPlaneadaObj
 const SesionEditable = SesionPlaneadaObjeto.omit({ id: true, reunion: true, evento: true, asociadaSola: true });
 export const CambioDeSesionSchema = SesionEditable.partial().strict() as unknown as z.ZodType<CambioDeSesion>;
 const CAMPOS_EDITABLES = Object.keys(SesionEditable.shape) as [CampoDeSesionEditable, ...CampoDeSesionEditable[]];
+
+/** El contexto de la exploración y el contacto previo (contexto-de-la-exploracion.ts, 2026-11-06). */
+const ContextoDeLaExploracionSchema: z.ZodType<ContextoDeLaExploracion> = z.object({
+  objetivo: textoLleno(MAX_OBJETIVO_DE_LA_EXPLORACION),
+  sabemos: textoLleno(MAX_LO_QUE_SABEMOS).optional(),
+  por: z.string().max(200).nullable(),
+  en: FECHA_ISO,
+});
+const ContactoPrevioSchema: z.ZodType<ContactoPrevio> = z.object({
+  hubo: z.boolean(),
+  mensaje: z.object({ tipo: z.enum(TIPOS_DE_MENSAJE_PREVIO), texto: textoLleno(MAX_MENSAJE_PREVIO), en: FECHA_ISO }).optional(),
+});
 
 /** K2: cómo llegó el prospecto (como-llego.ts). «referidoPor» solo con «referido». */
 export const ComoLlegoSchema: z.ZodType<ComoLlego> = z
@@ -493,6 +521,11 @@ export const OperacionSchema = z.discriminatedUnion("op", [
   z.object({ op: z.literal("responsable"), email: z.string().email().max(200).nullable() }),
   z.object({ op: z.literal("alertaTecnicaVista") }),
   z.object({ op: z.literal("comoLlego"), valor: ComoLlegoSchema.nullable() }),
+  z.object({
+    op: z.literal("contexto"),
+    valor: z.object({ objetivo: textoLleno(MAX_OBJETIVO_DE_LA_EXPLORACION), sabemos: z.string().trim().max(MAX_LO_QUE_SABEMOS).optional() }).nullable(),
+  }),
+  z.object({ op: z.literal("contactoPrevio"), valor: ContactoPrevioSchema.nullable() }),
   z.object({ op: z.literal("descartarAsociacion"), claves: z.array(CLAVE_DE_REUNION).min(1).max(20) }),
   z.object({
     op: z.literal("correo"),
@@ -713,6 +746,10 @@ export function leerContenido(raw: unknown): ContenidoDeExploracion {
   c.descartadas = listaDeTextos(raw.descartadas, MAX_DESCARTADAS);
   const llego = ComoLlegoSchema.safeParse(raw.comoLlego);
   if (llego.success) c.comoLlego = llego.data;
+  const contexto = ContextoDeLaExploracionSchema.safeParse(raw.contexto);
+  if (contexto.success) c.contexto = contexto.data;
+  const previo = ContactoPrevioSchema.safeParse(raw.contactoPrevio);
+  if (previo.success) c.contactoPrevio = previo.data;
   if (Array.isArray(raw.asociacionesDescartadas)) {
     c.asociacionesDescartadas = raw.asociacionesDescartadas
       .filter((k): k is string => typeof k === "string" && CLAVE_DE_REUNION.safeParse(k).success)

@@ -126,7 +126,9 @@ function NotasLibres({ pestana }: { pestana: PestanaDeSesion }) {
 
 export default function DuranteLaSesion({ pestana, esLaProxima }: { pestana: PestanaDeSesion; esLaProxima: boolean }) {
   const { exp, marco, puedeEditar } = useLienzo();
-  const { guia, enOrden } = useGuiaDeLaSesion(pestana, esLaProxima);
+  const { guia, enOrden: deLaGuia } = useGuiaDeLaSesion(pestana, esLaProxima);
+  // Sin guía no hay preguntas de base (2026-11-06): Nexus no planifica por defecto; quedan las notas libres.
+  const enOrden = guia ? deLaGuia : [];
   const editar = useEditarLaSesion(pestana, "durante");
   const [filtro, setFiltro] = useState<Filtro>("todas");
   const [elegida, setElegida] = useState<string | null>(null);

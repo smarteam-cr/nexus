@@ -22,6 +22,7 @@ import { aFecha, hoyEnCostaRica } from "./fechas";
 import { MAX_SESIONES, type GuiaDeLaSesion, type SesionPlaneada } from "./guia";
 import { aplicarCambioDeLaGuia, hayAjustes, type CambioDeLaGuia } from "./ajustes-de-la-guia";
 import type { ComoLlego } from "./como-llego";
+import type { ContactoPrevio, ContextoDeLaExploracion } from "./contexto-de-la-exploracion";
 import type { PosicionamientoDelProspecto } from "./posicionamiento";
 import type { ClaveDeEquipo } from "./equipos";
 import {
@@ -224,6 +225,10 @@ export interface ContenidoDeExploracion {
    * de antes no lo tienen.
    */
   comoLlego?: ComoLlego;
+  /** Punto 2 (2026-11-06): el contexto de toda la exploración, confirmado por una persona. Sin él, Nexus no arma guías. */
+  contexto?: ContextoDeLaExploracion;
+  /** Punto 3, solo la preventa: si hubo contacto antes de la primera sesión y el mensaje que se redactó si no. */
+  contactoPrevio?: ContactoPrevio;
   /**
    * K5 (2026-10-27, asociar.ts): las reuniones (`meet:<id>`) que alguien dijo que NO son una sesión de la exploración
    * cuando Nexus lo preguntó. No se vuelven a sugerir ni se asocian solas. Es una lápida: no sube la versión.
@@ -890,6 +895,9 @@ export type Operacion =
    * eligió entretanto: así el «Equipo del cliente» elegido volvía a otro valor.
    */
   | { op: "editarSesion"; sesionId: string; poner: CambioDeSesion; quitar: CampoDeSesionEditable[] }
+  /** Confirmar (o borrar) el contexto de la exploración. Quién y cuándo los pone quien aplica (el servidor). */
+  | { op: "contexto"; valor: { objetivo: string; sabemos?: string } | null }
+  | { op: "contactoPrevio"; valor: ContactoPrevio | null }
   /**
    * Cambiar la guía de una sesión (2026-10-18, ajustes-de-la-guia.ts): sumar, cambiar, quitar o devolver una pregunta.
    * Si la sesión todavía no existe (la próxima sin planear), se crea con ese id, como al escribir su objetivo.
@@ -1466,6 +1474,20 @@ function aplicarUna(estado: EstadoDeExploracion, op: Operacion, validez: Validez
     }
     case "archivar":
       return { ok: true, estado: { ...estado, archivada: true } };
+    case "contexto": {
+      const { contexto: _antes, ...resto } = estado.contenido;
+      void _antes;
+      if (!op.valor) return { ok: true, estado: { ...estado, contenido: resto } };
+      const objetivo = op.valor.objetivo.trim();
+      if (!objetivo) return { ok: false, error: "Falta el objetivo de la exploración." };
+      const sabemos = op.valor.sabemos?.trim();
+      return { ok: true, estado: { ...estado, contenido: { ...resto, contexto: { objetivo, ...(sabemos ? { sabemos } : {}), por: quien.por, en: quien.en } } } };
+    }
+    case "contactoPrevio": {
+      const { contactoPrevio: _antes, ...resto } = estado.contenido;
+      void _antes;
+      return { ok: true, estado: { ...estado, contenido: op.valor ? { ...resto, contactoPrevio: op.valor } : resto } };
+    }
     case "comoLlego": {
       const { comoLlego: _antes, ...resto } = estado.contenido;
       void _antes;
