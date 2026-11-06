@@ -64,6 +64,8 @@ import {
   type UsoDeSugerencia,
   type LecturaDeReunion,
   type Medicion,
+  type CambioDeSesion,
+  type CampoDeSesionEditable,
   type Operacion,
   type PropuestaDeExploracion,
   type Validador,
@@ -399,7 +401,7 @@ export const CambioDeLaGuiaSchema: z.ZodType<CambioDeLaGuia> = z.discriminatedUn
 ]);
 
 /** Una sesión planeada por el vendedor (lib/exploraciones/guia.ts). */
-export const SesionPlaneadaSchema: z.ZodType<SesionPlaneada> = z.object({
+const SesionPlaneadaObjeto = z.object({
   id: z.string().regex(/^s-[a-z0-9]{1,24}$/),
   titulo: texto(120).optional(),
   fecha: z
@@ -428,6 +430,15 @@ export const SesionPlaneadaSchema: z.ZodType<SesionPlaneada> = z.object({
   equipo: z.enum(EQUIPOS_DEL_CLIENTE).optional(),
   asociadaSola: FECHA_ISO.optional(),
 });
+export const SesionPlaneadaSchema: z.ZodType<SesionPlaneada> = SesionPlaneadaObjeto;
+
+/**
+ * Lo que cambia `editarSesion` (contenido.ts): los campos de una sesión menos su id y su unión (la reunión, el evento y
+ * «la unió Nexus»: esas las fija el servidor o la lista entera).
+ */
+const SesionEditable = SesionPlaneadaObjeto.omit({ id: true, reunion: true, evento: true, asociadaSola: true });
+export const CambioDeSesionSchema = SesionEditable.partial().strict() as unknown as z.ZodType<CambioDeSesion>;
+const CAMPOS_EDITABLES = Object.keys(SesionEditable.shape) as [CampoDeSesionEditable, ...CampoDeSesionEditable[]];
 
 /** K2: cómo llegó el prospecto (como-llego.ts). «referidoPor» solo con «referido». */
 export const ComoLlegoSchema: z.ZodType<ComoLlego> = z
@@ -450,6 +461,12 @@ export const OperacionSchema = z.discriminatedUnion("op", [
   z.object({ op: z.literal("nota"), paso: z.string().min(1).max(MAX_CLAVE_DE_NOTA), texto: z.string().max(4000) }),
   z.object({ op: z.literal("sesiones"), sesiones: z.array(SesionPlaneadaSchema).max(MAX_SESIONES) }),
   z.object({ op: z.literal("agregarSesion"), sesion: SesionPlaneadaSchema }),
+  z.object({
+    op: z.literal("editarSesion"),
+    sesionId: z.string().regex(/^s-[a-z0-9]{1,24}$/),
+    poner: CambioDeSesionSchema,
+    quitar: z.array(z.enum(CAMPOS_EDITABLES)).max(30),
+  }),
   z.object({ op: z.literal("ajustarGuia"), sesionId: z.string().regex(/^s-[a-z0-9]{1,24}$/), cambio: CambioDeLaGuiaSchema }),
   z.object({ op: z.literal("quitarSesiones"), ids: z.array(z.string().regex(/^s-[a-z0-9]{1,24}$/)).min(1).max(MAX_SESIONES) }),
   z.object({ op: z.literal("fuera"), claves: z.array(CLAVE_DE_REUNION).min(1).max(50), fuera: z.boolean() }),

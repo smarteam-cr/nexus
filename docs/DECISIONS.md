@@ -12876,3 +12876,17 @@ maleables. No se volvió a discutir: lo decidió él.
 - **La ruta del servicio sigue.** Se sube aunque no haya un ciclo vivo: la foto suma una entrada con la etapa de hoy, que no se
   guarda. *Consecuencia aceptada:* sin administrar ciclos, una ruta nueva no trae fechas ni casos de uso, y la página dice
   «Hoy estamos en Adopción. Las fechas aparecen aquí cuando las acordemos». Si se quiere llenar, es una decisión aparte.
+
+## La exploración guiada: contexto primero, la guía como agenda y lo que queda después (2026-11-06)
+
+Especificación de Elías del 6 de noviembre, en preventa y en clientes: la guía de antes era una lista larga de preguntas
+sin orden y el equipo no la podía usar con el cliente enfrente. La guía sirve para averiguar cosas, no para leer
+preguntas.
+
+- **Los cambios a una sesión van por campo (punto 18).** El «Equipo del cliente» elegido volvía a otro valor: la pantalla
+  guardaba cada cambio de una sesión mandando la LISTA ENTERA de sesiones armada con lo que veía, así que un cambio armado
+  con la sesión vieja (el objetivo, una casilla, un cambio de la sesión recién creada) se llevaba el equipo elegido
+  entretanto. Ahora `useEditarLaSesion` manda `editarSesion` (contenido.ts): solo los campos que cambian, aplicados sobre
+  lo último guardado; una sesión nueva entra con `agregarSesion`, y la pestaña que ya se volvió sesión no se crea dos
+  veces. La lista entera queda solo para cambios de la reunión de la sesión. *Por qué por campo y no un candado:* el
+  reintento de un 409 también es seguro así (`reintento.ts` mira solo esos campos).
