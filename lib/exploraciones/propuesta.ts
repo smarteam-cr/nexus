@@ -26,6 +26,7 @@ import { listaParaProponer } from "./calidad";
 import { calcularMetricas, DIAS_DE_LA_METRICA, type Metricas } from "./metricas";
 import { leerContenido } from "./esquemas";
 import { bloquearFila, chequeoDe, escalaDeLaExploracion, escalaParaExplorar, estadoDesdeFila, leerExploracion } from "./servidor";
+import { FALTA_EL_RESULTADO_PARA_PROPONER, resultadoConfirmado } from "./resultado";
 import { DE_LA_PREVENTA } from "./marco";
 
 /** El tipo de la primera venta que sale de una exploración: la implementación de HubSpot. */
@@ -109,6 +110,8 @@ export async function armarPropuesta(o: { exploracionId: string; dealId: string;
   if (lectura.estado !== "ok") return { ok: false, status: lectura.estado === "no-existe" ? 404 : 503, error: "Esa exploración no existe." };
   const fila = lectura.fila;
   if (fila.archivadaEn) return { ok: false, status: 409, error: "La preventa está archivada." };
+  // El resultado como eje (2026-11-06): sin el resultado que busca el cliente, confirmado, no hay propuesta.
+  if (!resultadoConfirmado(estadoDesdeFila(fila).contenido.casillas)) return { ok: false, status: 409, error: FALTA_EL_RESULTADO_PARA_PROPONER };
   const companyId = fila.client.hubspotCompanyId;
   if (!companyId) return { ok: false, status: 409, error: "La empresa no está vinculada a HubSpot: no se puede elegir su negocio." };
 

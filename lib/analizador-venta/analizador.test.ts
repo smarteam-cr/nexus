@@ -28,8 +28,8 @@ describe("S1 · el criterio escrito", () => {
       expect(e.seHizo.length).toBeGreaterThan(0);
       expect(e.seSalto.length).toBeGreaterThan(0);
     }
-    // Los diez del plan, más el dolor, la base para un caso de uso y lo que salió bien (29 oct).
-    expect(PUNTOS_DEL_ANALISIS).toHaveLength(13);
+    // Los diez del plan, más el dolor, la base para un caso de uso y lo que salió bien (29 oct), y el resultado que busca (6 nov).
+    expect(PUNTOS_DEL_ANALISIS).toHaveLength(14);
   });
   it("con o sin position statement (K3)", () => {
     expect(criterioComoTexto({ positionStatement: null })).toContain(SIN_POSICIONAMIENTO);

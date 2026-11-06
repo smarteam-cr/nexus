@@ -1382,22 +1382,41 @@ async function correrElEspejo(
     // antes tenía su propia copia (y ni siquiera pedía la etapa).
     if (decidirCierre({ hubspotPipelineId: pipelineId, stageId, rawStatus }) === "cerrado") {
       const finished = await prisma.project.findUnique({ where: { hubspotServiceId: project.id } });
-      if (finished && finished.status === "active") {
+      const loApaga = !!finished && finished.status === "active";
+      /* EL CIERRE QUEDA GUARDADO (2026-11-06, Spectrum - MKT + SALES). Este bloque termina en `continue` antes de
+         escribir la etapa y el estado, así que la fila apagada se quedaba con los de cuando estaba abierta
+         («Entrega», «delayed») y nada distinguía un proyecto TERMINADO de uno fantasma, fusionado o dado de baja: la
+         ficha los escondía a todos y el CSE perdía su presentación de cierre. Ahora se guardan la etapa y el estado
+         que lo cerraron, y `esProyectoCerradoNavegable` (lib/projects/scope.ts) les aplica `decidirCierre`. El
+         pipeline NO se escribe (un alta a medio hacer lo compara; sin pipeline, el cerrado sigue oculto). Solo
+         escribe si algo cambió: un cerrado no se reescribe en cada sincronización. */
+      const statusDelCierre = (props.hs_status ?? "").trim() || rawStatus || null;
+      const cierreNuevo =
+        !!finished && (finished.hubspotPipelineStageId !== stageId || finished.hubspotStatus !== statusDelCierre);
+      if (finished && (loApaga || cierreNuevo)) {
         await prisma.project.update({
           where: { id: finished.id },
-          data: { status: "inactive" },
+          data: {
+            status: loApaga ? "inactive" : finished.status,
+            hubspotPipelineStageId: stageId,
+            hubspotPipelineStageLabel: stageLabel,
+            hubspotStageSyncedAt: stageId ? new Date() : null,
+            hubspotStatus: statusDelCierre,
+          },
         });
         result.updated++; // dispara router.refresh() en WorkspaceClient
-        logTransicion({
-          project: `${finished.name} (${project.id})`,
-          de: "active",
-          a: "inactive",
-          pipelineId,
-          stageLabel,
-          stageId,
-          rawStatus,
-          motivo: cerradoPorEstadoCrudo(rawStatus) ? "estado crudo cerrado" : "etapa terminal del pipeline",
-        });
+        if (loApaga) {
+          logTransicion({
+            project: `${finished.name} (${project.id})`,
+            de: "active",
+            a: "inactive",
+            pipelineId,
+            stageLabel,
+            stageId,
+            rawStatus,
+            motivo: cerradoPorEstadoCrudo(rawStatus) ? "estado crudo cerrado" : "etapa terminal del pipeline",
+          });
+        }
       } else {
         result.skipped++;
       }

@@ -28,7 +28,7 @@
 import { ETAPAS, type EtapaDelProceso } from "./criterio";
 
 /** Los puntos que juzga el modelo (el 3, quién habló, y las recomendaciones van aparte). */
-export const PUNTOS_JUZGADOS = ["consultiva", "temas", "guia", "escala", "posicionamiento", "exploracion", "posicion", "siguiente_paso", "etapa", "dolor", "caso_de_uso"] as const;
+export const PUNTOS_JUZGADOS = ["consultiva", "temas", "guia", "escala", "posicionamiento", "exploracion", "posicion", "siguiente_paso", "etapa", "dolor", "caso_de_uso", "resultado"] as const;
 export type PuntoJuzgado = (typeof PUNTOS_JUZGADOS)[number];
 
 /** Los valores de cada punto. El primero de la lista es el mejor. */
@@ -44,6 +44,8 @@ export const VALORES: Record<PuntoJuzgado, readonly string[]> = {
   etapa: ["se_hizo", "en_parte", "se_salto"],
   dolor: ["a_fondo", "en_parte", "sin_explorar"],
   caso_de_uso: ["hay_base", "falta", "sin_base"],
+  // 2026-11-06: ¿se averiguó el resultado que busca el cliente? (de dónde a dónde, con qué número, para cuándo).
+  resultado: ["si", "en_parte", "no"],
 };
 
 /** Los valores que dicen que algo NO pasó: no se pueden citar. */
@@ -59,6 +61,7 @@ const POR_AUSENCIA: Readonly<Record<PuntoJuzgado, readonly string[]>> = {
   etapa: ["se_salto"],
   dolor: ["sin_explorar"],
   caso_de_uso: ["sin_base"],
+  resultado: ["no"],
 };
 
 /** Cómo se dice cada valor en la pantalla. */

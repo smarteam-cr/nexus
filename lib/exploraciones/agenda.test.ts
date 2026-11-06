@@ -1,10 +1,11 @@
 import { describe, expect, it } from "vitest";
 import type Anthropic from "@anthropic-ai/sdk";
-import { alternarAveriguada, avanceDeLaAgenda, conHueco, partirPreguntaDoble, estaAveriguada, idDeAveriguar, preguntaCerrada, preguntaDoble, preguntasQueNoCumplen, type AgendaDeLaGuia } from "./agenda";
+import { alternarAveriguada, avanceDeLaAgenda, conHueco, partirPreguntaDoble, sinHuecos, estaAveriguada, idDeAveriguar, preguntaCerrada, preguntaDoble, preguntasQueNoCumplen, type AgendaDeLaGuia } from "./agenda";
 import { HERRAMIENTA_DE_LA_GUIA, leerLaGuiaDelAgente, pedidoDeLaGuia, voseoEnLaGuia, type ContextoDeLaGuia } from "./guia-pedido";
 import { leerGuia, VALIDADOR_ESTRICTO } from "./esquemas";
 import { aplicarOperaciones, contenidoVacio, propuestaVacia } from "./contenido";
-import { borradorDeLoQueSabemos, faltaParaLaGuia, textoDeConQuien } from "./contexto-de-la-exploracion";
+import { borradorDeLoQueSabemos, faltaParaLaGuia, porAveriguar, tarjetasParaLaGuia, textoDeConQuien } from "./contexto-de-la-exploracion";
+import { CLAVE_DEL_RESULTADO, conBloqueDelResultado, faltaElResultadoEnVivo, resultadoConfirmado } from "./resultado";
 import { coberturaDeLaEscala, dondeQuedo, HERRAMIENTA_DE_LO_QUE_DEJO, leerLoQueDejo, retomarParaLaGuia } from "./despues-de-la-sesion";
 
 function ctx(cambios: Partial<ContextoDeLaGuia> = {}): ContextoDeLaGuia {
@@ -54,6 +55,9 @@ describe("la agenda: preguntas abiertas y de una sola cosa (punto 11)", () => {
     expect(preguntaDoble("¿De dónde vienen los clientes que cierran, y cuántos llegan por semana?")).toBe(true);
     expect(preguntaDoble("¿Qué le pides al área comercial hoy, y cómo sabes si te lo está cumpliendo?")).toBe(true);
     expect(preguntaDoble("¿Cómo deciden a quién le toca cada interesado y en qué orden?")).toBe(false);
+    // Con tilde al final de la palabra (validación del 2026-11-06, segunda tanda).
+    expect(preguntaDoble("¿Cuántos casos llegan en una semana típica, y por qué canal llegan más?")).toBe(true);
+    expect(preguntaDoble("¿Qué te frena hoy, y qué harías distinto?")).toBe(true);
   });
 
   it("la doble que quedó se parte en dos preguntas de una sola cosa", () => {
@@ -68,6 +72,7 @@ describe("la agenda: preguntas abiertas y de una sola cosa (punto 11)", () => {
   it("un texto con un espacio por completar no se puede decir tal cual", () => {
     expect(conHueco("Déjame resumir lo que escuché: [retos con las palabras del cliente]. ¿Lo entendí bien?")).toBe(true);
     expect(conHueco("Resume con sus palabras los dos o tres retos que salieron.")).toBe(false);
+    expect(sinHuecos("Entonces lo que buscan es llegar a [resultado en sus palabras]; ¿lo dije bien?")).toBe("Entonces lo que buscan es llegar a (resultado en sus palabras); ¿lo dije bien?");
   });
 });
 
@@ -112,11 +117,16 @@ describe("leer la agenda que devuelve el agente", () => {
   it("la apertura y el cierre son el primero y el último, hay un solo central y lo repetido o ajeno se cae", () => {
     const g = leerLaGuiaDelAgente(respuesta(input), ctx(), "r1", new Date("2026-11-06T12:00:00Z"));
     const a = g!.agenda!;
-    expect(a.bloques.map((b) => b.tipo)).toEqual(["apertura", "cuerpo", "cuerpo", "cuerpo", "cierre"]);
+    // Sin bloque del resultado, el código lo suma después de la apertura (2026-11-06, segunda tanda).
+    expect(a.bloques.map((b) => b.tipo)).toEqual(["apertura", "cuerpo", "cuerpo", "cuerpo", "cuerpo", "cierre"]);
+    expect(a.bloques[1]).toMatchObject({ titulo: "El resultado que buscan", resultado: true, desde: 5, hasta: 13 });
     expect(a.bloques.filter((b) => b.central).map((b) => b.titulo)).toEqual(["El seguimiento"]);
     expect(a.claves).toHaveLength(4);
-    expect(a.bloques[1].averiguar.map((c) => c.que)).toEqual(["Cómo llega el interesado", "Cómo se asignan"]);
-    expect(a.bloques[1].averiguar[1].para).toBeUndefined();
+    expect(a.claves[0]).toMatch(/^El resultado que buscan/);
+    expect(a.bloques[2].averiguar.map((c) => c.que)).toEqual(["Cómo llega el interesado", "Cómo se asignan"]);
+    expect(a.bloques[2].averiguar[1].para).toBeUndefined();
+    // La sesión dura lo mismo: el central cedió los minutos.
+    expect(a.bloques[a.bloques.length - 1].hasta).toBe(60);
     // Las preguntas de antes salen de la agenda, para lo que todavía las lee.
     expect(g!.preguntas.map((p) => p.para)).toEqual(["metas"]);
     expect(g!.cierre).toContain("lo entendí bien");
@@ -125,7 +135,7 @@ describe("leer la agenda que devuelve el agente", () => {
   it("la guía guardada se vuelve a leer igual, y una de antes (sin agenda) también", () => {
     const g = leerLaGuiaDelAgente(respuesta(input), ctx(), "r1")!;
     const guardada = JSON.parse(JSON.stringify(g));
-    expect(leerGuia(guardada)?.agenda?.bloques).toHaveLength(5);
+    expect(leerGuia(guardada)?.agenda?.bloques).toHaveLength(6);
     const { agenda: _a, ...deAntes } = guardada;
     void _a;
     expect(leerGuia(deAntes)?.agenda).toBeUndefined();
@@ -258,5 +268,77 @@ describe("después de la sesión y dónde quedó (puntos 14 a 16)", () => {
 
   it("la guía de la siguiente sesión recibe lo que hay que retomar", () => {
     expect(String(pedidoDeLaGuia(ctx({ retomar: ["Retomar «x» — con Ana"] })).messages[0].content)).toContain("LO QUE QUEDÓ POR RETOMAR");
+  });
+});
+
+describe("el resultado como eje (segunda tanda, 2026-11-06)", () => {
+  const agenda = (bloques: AgendaDeLaGuia["bloques"]): AgendaDeLaGuia => ({ claves: ["Sus retos"], bloques });
+  const abrir = { desde: 0, hasta: 5, titulo: "Abrir", tipo: "apertura" as const, abre: "Hola", averiguar: [] };
+  const cerrar = { desde: 50, hasta: 60, titulo: "Cerrar", tipo: "cierre" as const, abre: "Gracias", averiguar: [] };
+
+  it("el bloque que marca el agente lleva las seis cosas fijas, con sus preguntas por posición", () => {
+    const marcado = { desde: 5, hasta: 15, titulo: "Lo que quieren lograr", tipo: "cuerpo" as const, abre: "¿Qué tendría que pasar?", averiguar: [{ id: "av:x", que: "otra cosa", preguntas: ["Cuéntame qué quieren lograr este año"] }] };
+    const a = conBloqueDelResultado(agenda([abrir, marcado, cerrar]), 1);
+    expect(a.bloques[1].resultado).toBe(true);
+    expect(a.bloques[1].averiguar.map((c) => c.id)).toEqual(["av:res1", "av:res2", "av:res3", "av:res4", "av:res5", "av:res6"]);
+    expect(a.bloques[1].averiguar[0].preguntas).toEqual(["Cuéntame qué quieren lograr este año"]);
+    expect(a.claves[0]).toBe(CLAVE_DEL_RESULTADO);
+  });
+
+  it("en vivo avisa pasada la mitad si el resultado sigue sin marcar, y no antes ni con él marcado", () => {
+    const a = conBloqueDelResultado(agenda([abrir, { desde: 5, hasta: 50, titulo: "Cuerpo", tipo: "cuerpo", abre: "x", averiguar: [] }, cerrar]), null);
+    const inicio = Date.parse("2026-11-06T10:00:00Z");
+    const a35 = inicio + 35 * 60_000;
+    expect(faltaElResultadoEnVivo({ agenda: a, hechas: [], inicio, ahora: a35, minutos: 60 })).toBe(true);
+    expect(faltaElResultadoEnVivo({ agenda: a, hechas: [], inicio, ahora: inicio + 20 * 60_000, minutos: 60 })).toBe(false);
+    expect(faltaElResultadoEnVivo({ agenda: a, hechas: ["av:res1"], inicio, ahora: a35, minutos: 60 })).toBe(false);
+    // Una guía de la primera tanda, sin bloque del resultado: no avisa.
+    expect(faltaElResultadoEnVivo({ agenda: agenda([abrir, cerrar]), hechas: [], inicio, ahora: a35, minutos: 60 })).toBe(false);
+  });
+
+  it("en preventa no hay propuesta sin una meta confirmada", () => {
+    expect(resultadoConfirmado({ metas: [] })).toBe(false);
+    expect(resultadoConfirmado({})).toBe(false);
+    expect(resultadoConfirmado({ metas: [{ objetivo: "Pasar de 4 a 7 cierres de cada 10" }] })).toBe(true);
+  });
+
+  it("si la reunión no dejó claro el resultado, el desafío queda sin confirmar y la siguiente guía arranca por ahí", () => {
+    const r = leerLoQueDejo({
+      content: [{ type: "tool_use", id: "t", name: HERRAMIENTA_DE_LO_QUE_DEJO, input: { desafio: "x", resultadoClaro: false, falta: [], retomar: [] } }],
+    } as unknown as Anthropic.Messages.Message);
+    expect(r?.desafio.sinConfirmar).toBe(true);
+    const lineas = retomarParaLaGuia([{ id: "s-a1", desafio: r!.desafio }, { id: "s-a2" }], "s-a2").retomar ?? [];
+    expect(lineas.some((l) => l.includes("SIN CONFIRMAR"))).toBe(true);
+  });
+
+  it("las tarjetas de lo que ya sabemos: lo vacío queda por averiguar y entra al pedido", () => {
+    const t = { retos: { texto: "Todo en Excel", fuente: "El traspaso" }, plazos: { texto: "  ", fuente: "x" } };
+    expect(porAveriguar(t)).toEqual(["resultado", "plazos", "presupuesto", "decide", "siNada"]);
+    const p = tarjetasParaLaGuia(t);
+    expect(p.sabido).toEqual(["Retos: Todo en Excel (fuente: El traspaso)"]);
+    const cuerpo = String(pedidoDeLaGuia(ctx({ contextoDeLaExploracion: { objetivo: "x", sabemos: null, tarjetas: p } })).messages[0].content);
+    expect(cuerpo).toContain("POR AVERIGUAR");
+    expect(cuerpo).toContain("Resultado que buscan");
+  });
+});
+
+describe("el bloque del resultado, sin romper la agenda (revisión, 2026-11-06)", () => {
+  const b = (titulo: string, desde: number, hasta: number, tipo: "apertura" | "cuerpo" | "cierre" = "cuerpo", central = false) => ({ titulo, desde, hasta, tipo, abre: "x", averiguar: [], ...(central ? { central: true as const } : {}) });
+
+  it("con seis bloques, toma el lugar del más corto que no es el central: sigue en seis y válida", () => {
+    const a = conBloqueDelResultado({ claves: ["x"], bloques: [b("A", 0, 5, "apertura"), b("B", 5, 15), b("C", 15, 35, "cuerpo", true), b("D", 35, 40), b("E", 40, 52), b("F", 52, 60, "cierre")] }, null);
+    expect(a.bloques).toHaveLength(6);
+    expect(a.bloques[3]).toMatchObject({ resultado: true, desde: 35, hasta: 40 });
+  });
+
+  it("sin un bloque largo, se corren todos: nada se solapa", () => {
+    const a = conBloqueDelResultado({ claves: ["x"], bloques: [b("A", 0, 5, "apertura"), b("B", 5, 15), b("C", 15, 20, "cierre")] }, null);
+    for (let k = 1; k < a.bloques.length; k++) expect(a.bloques[k].desde).toBeGreaterThanOrEqual(a.bloques[k - 1].hasta);
+  });
+
+  it("«Resultados de campañas» no es el bloque del resultado", () => {
+    const a = conBloqueDelResultado({ claves: ["x"], bloques: [b("A", 0, 5, "apertura"), b("Resultados de campañas", 5, 40), b("C", 40, 60, "cierre")] }, null);
+    expect(a.bloques.find((x) => x.titulo === "Resultados de campañas")?.resultado).toBeUndefined();
+    expect(a.bloques.filter((x) => x.resultado)).toHaveLength(1);
   });
 });

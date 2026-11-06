@@ -179,6 +179,7 @@ function ElAnalisis({ vista, pestana, puedeEditar }: { vista: ReunionDeVentaVist
 
           <BienYParaMejorar bien={lo.bien} mejorar={lo.recomendaciones} />
           {falta && <LoQueFalta lo={lo} falta={falta} delCliente={delCliente} />}
+          <ElResultado lo={lo} />
           <ElProcesoConsultivo lo={lo} juzgado={res.juicios.some((j) => j.punto === "etapa")} />
 
           <Confirmacion
@@ -335,6 +336,26 @@ function LoQueFalta({ lo, falta, delCliente }: { lo: LoDeLaSesion; falta: LoQueF
       )}
       {falta.items.length > 0 && lo.exploradas.length > 0 && <p className="text-[12.5px] text-fg-secondary">Se exploró a fondo: {enLista(lo.exploradas)}.</p>}
       {falta.sinTocar.length > 0 && <p className="text-[12.5px] text-fg-muted">No se tocó en esta sesión: {enLista(falta.sinTocar)}.</p>}
+    </div>
+  );
+}
+
+/** ¿Se averiguó el resultado que busca? (2026-11-06). Los análisis de antes no lo tienen: no se muestra. */
+function ElResultado({ lo }: { lo: LoDeLaSesion }) {
+  const r = lo.resultado;
+  if (!r) return null;
+  return (
+    <div className="space-y-1">
+      <Subtitulo>El resultado que busca</Subtitulo>
+      <ul className="divide-y divide-line">
+        <Fila
+          titulo="¿Se averiguó el resultado que busca?"
+          etiqueta={r.valor === "si" ? "Sí" : r.valor === "en_parte" ? "En parte" : "No"}
+          tono={r.valor === "si" ? "info" : r.valor === "en_parte" ? "neutro" : "aviso"}
+          lectura={r.lectura}
+          cita={r.citas[0] ?? null}
+        />
+      </ul>
     </div>
   );
 }

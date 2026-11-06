@@ -28,6 +28,7 @@ import {
   PROYECTO_DE_PIPELINE_CS_WHERE,
   PROYECTO_FACTURABLE_WHERE,
   PROYECTO_NAVEGABLE_WHERE,
+  esProyectoCerradoNavegable,
   esProyectoClasificable,
   esProyectoDeCartera,
   esProyectoDePipelineCS,
@@ -460,5 +461,49 @@ describe("el ALTA en curso: se ve, y no cobra (Tanda C)", () => {
     expect(parseEstadoDeAlta("pendiente_de_algo")).toBeNull();
     expect(fact({ altaEstado: "pendiente_de_algo" })).toBe(true);
     expect(cart({ altaEstado: "pendiente_de_algo" })).toBe(true);
+  });
+});
+
+describe("cerrado, pero a la vista: la ficha lo lista en «Cerrados» (2026-11-06, Spectrum)", () => {
+  /* La fila de Spectrum - MKT + SALES antes del arreglo del espejo: apagada, con la etapa y el estado de cuando
+     estaba abierta. Es también la forma de un fantasma, un fusionado o uno dado de baja: lo que el espejo apaga sin
+     haberlo visto terminar. */
+  const apagadoSinCierre = {
+    ...PROYECTO_BASE,
+    status: "inactive",
+    hubspotPipelineStageId: "1241442148", // Entrega
+    hubspotStatus: "delayed",
+  };
+  const cerrado = (p: Partial<typeof apagadoSinCierre>, c = CLIENTE_CON_PORTAL) =>
+    esProyectoCerradoNavegable({ ...apagadoSinCierre, ...p }, c);
+
+  it("un proyecto que terminó en HubSpot se ve, por la etapa o por el estado", () => {
+    expect(cerrado({ hubspotPipelineStageId: "1225193543" })).toBe(true); // Finalizado
+    expect(cerrado({ hubspotStatus: "completed" })).toBe(true);
+  });
+
+  it("el fantasma, el fusionado y el dado de baja siguen ocultos", () => {
+    // Guardan la etapa de cuando estaban abiertos: `decidirCierre` dice «abierto».
+    expect(cerrado({})).toBe(false);
+    // El fantasma «Proyecto {id}» sin servicio de HubSpot, aunque diga cerrado.
+    expect(cerrado({ hubspotServiceId: null, hubspotStatus: "completed" })).toBe(false);
+  });
+
+  it("sin pipeline de HubSpot (el «Proyecto principal» viejo) no se ve, aunque diga cerrado", () => {
+    expect(cerrado({ hubspotPipelineId: null, hubspotStatus: "completed" }, CLIENTE_SIN_PORTAL)).toBe(false);
+  });
+
+  it("un activo no es cerrado, y el cerrado no vuelve a ninguna lista que cuenta", () => {
+    expect(cerrado({ status: "active", hubspotStatus: "completed" })).toBe(false);
+    const fila = { ...apagadoSinCierre, hubspotStatus: "completed" };
+    expect(nav(fila)).toBe(false);
+    expect(cart(fila)).toBe(false);
+    expect(fact(fila)).toBe(false);
+    expect(esProyectoClasificable(fila)).toBe(false);
+  });
+
+  it("el centinela y lo pausado no se cuelan por acá", () => {
+    expect(cerrado({ serviceType: SENTINEL_SERVICE_TYPE, hubspotStatus: "completed" })).toBe(false);
+    expect(cerrado({ status: "paused", hubspotStatus: "completed" })).toBe(false);
   });
 });

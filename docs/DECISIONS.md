@@ -12832,3 +12832,356 @@ Elías: ese paso se maneja en la escala que ya está en la cuenta, la misma de l
 - **Solo la preventa y la de la cuenta:** la Exploración de un proyecto no se comparte, y lo hace cumplir el servidor, no solo el botón. La preventa y la cuenta tienen un enlace cada una.
 - **Sin lo del test:** sin «Estimado», sin otro test, sin agenda ni PDF. Varias áreas en juego son pestañas (`?area=`).
 - No usa la medición criterio por criterio, que sigue sin programar.
+
+## Artefactos: varias copias sin una oficial, cada una con su enlace (2026-10-29, V2 a V4 y los dos primeros tipos de V6)
+
+**El catálogo del 30 oct** (Elías probó los artefactos; la tabla vive en `docs/artefactos-plan.md`):
+
+- **Pocos artefactos, muchas plantillas.** «Integraciones» e «Integración técnica» son un solo Requerimiento técnico: el id
+  `integration` desaparece y el SQL `2026-10-30-artefactos-requerimiento-tecnico.sql` pasa las copias que existan. La campaña
+  no es un tipo: es una plantilla de la Planificación. El plan de adopción absorbe la capacitación. La escala salió de los tipos.
+- **Las plantillas que se suman a un tipo viejo son de las copias.** Viven en `lib/artefactos/tipos.ts`, no en
+  `lib/entregables/registro.ts`. *Por qué:* sumarlas al canon haría que la reconciliación le agregara secciones a todos los
+  documentos que ya existen.
+- **El contexto adicional es por artefacto** y va en la barra: las reuniones elegidas de una copia viven en su Json
+  (`__contexto`), sin columnas nuevas en `SessionProject`, y se cruzan con el chokepoint al leer. *Por qué:* las columnas son una
+  por tipo; una copia es una fila más, y agregar una columna por copia no existe.
+- **Ocultar y colapsar son dos controles, en todo el motor.** Antes ocultar encogía la sección. Ahora el control dice
+  «Ocultar» o «Mostrar», decide si la ve el cliente y no toca el tamaño; colapsar es de cada sección, solo para quien edita.
+- **El acceso general va solo en el Resumen;** cada documento trae su «Acceso» en la barra, con punto verde si está compartido
+  y gris si no. Los enlaces y las superficies ya publicadas no cambian: solo se mueve el botón.
+- **Borrar una sección de una copia se puede, menos la portada y el cierre,** y queda anotado en `__quitadas` para que
+  regenerar no la devuelva. En el documento de siempre se sigue ocultando: la reconciliación la volvería a crear.
+- **El cargador es el mismo en todo documento** (`components/canvas/VeloDeGeneracion.tsx`, salió del cronograma). En el
+  documento de siempre lo prende el botón de generar, así que una recarga a mitad de corrida no lo muestra.
+- **El Requerimiento técnico de siempre gana su enlace propio; la entrega de siempre no.** *Por qué:* Elías pidió que cada
+  artefacto se comparta desde su barra, y el enlace solo existe si una persona lo crea; la estimación no sale nunca. La entrega
+  de siempre sigue sin enlace y no se duplica, porque guarda en su Json objetivos propuestos con su evidencia.
+- **Una copia de la entrega es un informe de avance, sin la plantilla «Entrega».** Sus secciones calculadas (cumplimiento,
+  escala, pendientes) las llena el runner del documento de siempre, y `logros` lleva propuestas que el cliente no debe recibir.
+  El informe tiene sus tablas propias, sin nada escondido en el Json.
+- **Todo lleva copias menos el Resumen y el cronograma (30 oct, Elías, tras probar en el 3005).** Corrige «una exploración por
+  proyecto» de la tanda anterior. Exploración, Cuestionarios y Ejecución se crean varias veces y se les cambia el nombre, como
+  los entregables. La de siempre sigue siendo la de siempre: su exploración es la fila sin `canvasId`, y todo lo que busca «la
+  viva del proyecto» (la escala, la guía, el diagnóstico, el cuestionario) mira esa. Una copia guarda en su tabla de siempre
+  con su `canvasId` (`ExploracionDeVenta`, `Cuestionario`), abre la misma pantalla y nace en blanco: no se duplica, porque lo
+  escrito no vive en el canvas. Los agentes leen todas las exploraciones, con su nombre. Las personas de los cuestionarios
+  son del proyecto y sirven para todas las tandas. Los Cuestionarios de siempre no tienen canvas: al darles nombre toman uno,
+  con sus cuestionarios adentro. Archivar una tanda la apaga de verdad: el cliente deja de verla y los agentes de leerla, y
+  recuperarla la devuelve (`SIN_ARCHIVAR`). Cada kickoff ya tenía su enlace, su PDF y sus ocultas por id: eso no cambió.
+- **Lo que no se creó no sale de la lista (30 oct, Elías).** Sin «Activar» y sin «Ver N piezas más» de piezas vacías: de entrada
+  solo el Cronograma y el Kickoff, y todo lo demás se crea con el + de «Herramientas del proyecto» y «Entregables». *El primero
+  de un tipo es su documento de siempre* (`lib/artefactos/adoptar-server.ts`): crear una copia dejaba vacío el documento que
+  buscan por `slug` el «Qué sigue» y los botones de generar. Toma el vacío, le aplica la plantilla y le pone el nombre, y ese
+  nombre es lo que lo deja en la lista aunque siga vacío; nunca toma uno con algo escrito, publicado, con nombre o apagado. Lo
+  escrito a mano en una sección sembrada cuenta como tocado (`loadCanvasesTocados`): no se toma ni se esconde. La Entrega de
+  cierre solo se ofrece mientras ese documento esté libre: una copia no puede calcular sus secciones. Un servicio recurrente
+  conserva sus piezas: trabaja sobre ellas. La exploración cuenta como creada si alguien abrió su lienzo: su canvas queda vacío
+  aunque esté llena.
+- **Anclados, no «riel» ni ocultar (30 oct, Elías).** La palabra no se entendía. Desanclar se lleva la fila de verdad, también
+  si está abierta: la pantalla vuelve al Resumen y solo se ve en «Ver N sin anclar».
+- **El nombre va una sola vez (30 oct, Elías).** Se editaba en la barra y se repetía en el título. Ahora es el título, con
+  lápiz o doble clic, y en la barra lateral también con doble clic. Vale para todo menos el handoff, también para el cronograma.
+- **El acceso al portal es una alerta del Resumen, no una franja del kickoff (30 oct, Elías).** Sale con la regla de «Para
+  ti» (el kickoff lo pide y sigue pendiente) y con su ícono en la fila «Resumen». Dado, queda una línea en el mismo lugar con
+  la fecha y «Volver a pendiente». Si se marca sin que el kickoff lo pida todavía, esa línea es lo único que se ve.
+- **«Nuevo artefacto» funciona igual en todo proyecto.** Lo apagaba solo una condición de servicio recurrente en el panel;
+  Desarrollo y Sitios web no tenían ninguna.
+- **Las rutinas y el despliegue por olas se mudaron de la planificación al plan de adopción (30 oct, Elías).** Salieron del
+  canon y del prompt: una planificación nueva no las trae. Las que ya las tienen las conservan visibles y editables, también al
+  regenerar (`SECCIONES_MUDADAS_A_LA_ADOPCION`, sin pasar por las retiradas, que se ocultan). La modalidad de adopción se le pasa
+  ahora al plan de adopción.
+- **El kickoff viene en todos los proyectos (30 oct, Elías).** Corrige dos reglas viejas: en el riel ya no dice «opcional»
+  junto a su nombre (la cartera lo sigue diciendo: no se reclama), y un proyecto de Desarrollo también lo tiene (`exceptPipeline`
+  queda sin usuarios). Nace con cada proyecto nuevo (`seedPieces`); en los que ya existen no se creó en lote: el riel lo muestra
+  siempre (`PIEZAS_SIEMPRE_EN_EL_RIEL`) y el canvas nace al abrirlo. El selector de plantilla sale solo si nadie tocó el kickoff
+  (`lib/pieces/kickoff-sin-tocar.ts`: publicado o con algo escrito a mano abre el documento). En un servicio por ciclos se muestra
+  solo su plantilla, porque esa regla (M1) gana a cualquier elección.
+- **Ocultar una pieza vive en «Ver N piezas más» (30 oct, Elías).** El ojo de cada fila guardaba bien, pero la pieza abierta
+  se quedaba en su lugar y se veía igual: casi siempre se oculta lo que se está mirando. Ahora sale de la vista aunque esté
+  abierta (`lib/flow/reparto-del-riel.ts`); la oculta abierta se ve abajo, marcada, con «Mostrar».
+- **La exploración sin tarjeta «Próxima sesión» (30 oct, Elías).** Repetía la fila: «Preparar la sesión» y el estado de la
+  guía van en la fila de la próxima. Si la próxima no es fila (nada por delante, o agendada en HubSpot), sale debajo de la lista.
+- **Colapsar dice «Colapsar», y colapsada dice «Mostrar».** La sección conserva su fondo y su encabezado; solo se esconde el
+  cuerpo, y los controles no se mueven. El ojo de una sección oculta dice «Mostrar al cliente»: los dos «Mostrar» hacen cosas
+  distintas, y ese se guarda al instante.
+
+Elías respondió las ocho preguntas del plan (`docs/artefactos-plan.md` §5) y donde el plan proponía otra cosa se corrigió
+en su lugar. Lo que queda decidido:
+
+- **No hay copia oficial.** Un proyecto puede tener varias planificaciones, diagnósticos, kickoffs y exploraciones, cada
+  una con su nombre, su lugar (arrastrando) y su estado (en construcción o terminado). *Por qué:* «usar Nexus como un
+  depósito de las planificaciones que va creando»; y «cuando uno crea una entrega o la escala, pueden leer todos los
+  artefactos, cada uno con su nombre». El plan proponía una «principal» que leían los demás: se descartó.
+- **El documento de siempre conserva su `slug`; las copias no lo tienen y llevan `tipoArtefacto`.** *Por qué:* 105
+  búsquedas por tipo lo encuentran por `slug` y deciden a quién se le ESCRIBE (generar con su botón, publicar el
+  kickoff, re-anclar el cronograma). Escribir sigue yendo al de siempre; LEER va a todos. *Se descartó* numerar copias
+  con el mismo slug (el índice único parcial y las 105 búsquedas devolverían una cualquiera).
+- **`pieceForCanvas` devuelve null para una copia, y una copia nunca se llama como una pieza en `name`.** *Por qué:* así
+  ningún botón de la pieza le escribe al de siempre desde una copia, y la lectura doble por nombre de `canvasOf` no la
+  confunde. El nombre que se ve vive en una columna aparte, `titulo` (también para el de siempre: hay `name` viejos que
+  hoy no se muestran, y el riel no puede empezar a mostrarlos).
+- **Los lectores leen todas las copias, rotuladas con su nombre y su estado, lo terminado primero** (`loadCanvasContext`,
+  y los puntuales: el desafío y los objetivos que retoma la entrega, la posición en la escala del diagnóstico, los
+  procesos de la planificación). Con un solo documento del tipo, el texto que recibe el agente es byte a byte el de
+  antes. Los que necesitan un valor toman el terminado más reciente.
+- **Una copia se edita y se genera con su propio editor** (`ArtefactoWorkspace`), no con el de su tipo. *Por qué:* los
+  editores de siempre traen sus botones (generar por /analyze, el selector de plantilla, publicar), que buscan por
+  `slug`. El editor de una copia pinta el MISMO motor con el MISMO adaptador del tipo, que comparten la vista del enlace
+  y el PDF. Su generación (`lib/artefactos/generar-server.ts`) lee lo mismo que un documento de su tipo —el handoff con la
+  allowlist del tipo, el «Contexto adicional» del tipo por el chokepoint, la memoria y los documentos que lo alimentan—
+  con las instrucciones de ESA copia. La corrida va con `agentId: null` y `agentSlug: "artefacto:<tipo>"`, y la celda es
+  la del tipo.
+- **Una copia no lleva las secciones que leen el proyecto** (`ctxDriven`: el cronograma y los procesos del kickoff, la
+  estimación), salvo la portada y el cierre: pintarían lo mismo en cada copia.
+- **Las reuniones y notas elegidas siguen siendo POR TIPO** en esta tanda: las copias de un tipo comparten las de su tipo;
+  las instrucciones sí son de cada documento. La tabla `ReunionDelDocumento` es V3b. *Por qué:* el «Contexto adicional»
+  de la Planificación lo estaba cambiando otra sesión el mismo día.
+- **Cada documento de un tipo con barra tiene su propio enlace, VIVO** (`AccesoAlDocumento` +
+  `/external/documento/[token]`): las copias y también el de siempre de kickoff, diagnóstico y planificación. Sin
+  contraseña; muestra lo confirmado, sin lo oculto, sin lo interno. *Por qué vivo y no una foto:* CS lo usa para compartir
+  pantalla mientras trabaja, y la foto (`publishedSnapshot`) del de siempre ya la usan los mecanismos de publicar del
+  kickoff y la planificación. *Por qué no la entrega ni integraciones:* no tienen barra, y la entrega guarda en su Json lo
+  que el cliente no ve. Un proyecto de prueba no se comparte, y uno que pasa a serlo deja de abrir. INV64 se enmendó: un
+  enlace abre un documento de su empresa, de la empresa misma o de un proyecto suyo, nunca de una propuesta. Las superficies
+  de siempre no cambian.
+- **`canvasNotOf` ya no descarta las filas sin slug.** Era `NOT (slug = x OR …)`, que con slug NULL da NULL: las copias no
+  habrían salido nunca en el riel, y los canvases sueltos del CSE tampoco salían (el 30 oct, 0 filas así en producción).
+- **Lo ya presentado o publicado nace terminado.** El SQL pone `terminadoEn` en lo que el cliente ya vio (el diagnóstico
+  presentado o aprobado, lo publicado de kickoff, diagnóstico y planificación), una sola vez. *Por qué:* si no, en cuanto
+  un tipo tuviera una copia, la planificación leería un diagnóstico aprobado como borrador. *Pendiente de confirmar con
+  Elías:* es la opción por defecto de las dos que propuso la revisión; la otra era deducirlo en cada lectura.
+- **Una copia se genera con las reglas de su tipo y con todo lo que su documento de siempre lee aparte**: en el diagnóstico
+  no se reescribe lo revisado y las acciones quedan en el enfoque corto; en el kickoff, «Sin Escala» no lleva escala; y la
+  memoria le da lo que el documento de siempre lee por su cuenta (`tambienLeer`: la ficha y los procesos; los resultados del diagnóstico van con sus códigos), y
+  solo eso. Las propiedades de personas o plantillas no se pisan, y lo retirado de un documento viejo duplicado se oculta.
+- **Archivar pide confirmación y se deshace desde el aviso**; el enlace de la copia no vuelve (hay que crear uno nuevo).
+- **Los dos primeros tipos nuevos son el plan de adopción y la integración técnica** (Elías, respuesta 3), adelantados
+  de V6. La integración técnica presta las secciones del requerimiento técnico y suma el **mapa de integración** (campo de
+  origen ↔ propiedad de HubSpot, sentido, transformación, frecuencia), el identificador único, el alcance firmado y lo que
+  debe entregar el cliente o un tercero: el pedido de Elías de validar que existiera. Las tablas usan el renderer genérico
+  `tabla` con las columnas sembradas: ningún componente nuevo.
+- **En pantalla se llaman «artefactos»** («Nuevo artefacto» en el riel).
+
+## La Planificación lee las reuniones del proyecto, dice por qué quedó vacía una sección, trae el Brief y sugiere plantilla (2026-10-29)
+
+**Contexto.** Feedback de Elías del 29 oct, con la Planificación de Liliana en SmartAgro, más las preguntas 32 y 44 del
+roadmap.
+
+- **La causa de SmartAgro (solo lectura contra producción).** Desde la etapa 7 (2026-10-10) los documentos leen solo las
+  reuniones que una persona eligió. La migración de ese día eligió 6 reuniones por documento **ya existente**; una
+  Planificación nacida después arranca sin ninguna. La de SmartAgro nació el 28 oct: el proyecto tenía 11 reuniones suyas y
+  la Planificación no leía ninguna hasta que alguien tocara «Usar». Sacarlas y volver a ponerlas fue lo que las eligió:
+  por eso «se arregló». El diagnóstico ya había pasado por lo mismo (CEMACO, 24 oct) y sus reuniones entran solas; la
+  Planificación se quedó con la regla vieja. **No fue** el cliente interno (SmartAgro es cartera, con dominio propio, y las
+  11 reuniones estaban bien atribuidas), ni el chokepoint, ni el resumen del proyecto. *Lo que los datos no dicen:* no hay
+  ninguna corrida vacía. La primera corrida ya dejó contenido en 10 secciones y 6 quedaron vacías; el documento en blanco
+  que vio Liliana fue el recién activado (se creó antes de la primera corrida), y las elecciones no guardan fecha, así que
+  no se puede probar qué reuniones leyó cada corrida (`AgentRun.sourceSessionIds` queda vacío).
+- **Las reuniones del proyecto con texto entran solas a la Planificación**, con la misma regla del diagnóstico
+  (`DESTINOS_DONDE_ENTRAN_SOLAS`, lib/contexto/sugerencias-del-documento.ts): con el cliente, con transcripción o notas de
+  Gemini, ya ocurridas. «Sacar» la deja afuera. Las de puertas adentro siguen esperando un «Usar», porque la Planificación
+  la lee el cliente. Corrige en parte «Los documentos leen la memoria y solo las reuniones elegidas» para este documento;
+  los otros cuatro (ejecución, kickoff, integraciones, entrega) siguen como estaban. Topes de siempre: 6 enteras, las
+  demás en resumen, 24 como mucho; las elegidas a mano van primero (`primero: []`), si no los últimos seguimientos las
+  desplazan. Cada corrida deja en `AgentRun.sourceSessionIds` qué reuniones leyó.
+- **Una sección vacía dice por qué** (`__porQueVacia`, lib/landing/por-que-vacia.ts, razones en
+  lib/planificacion/por-que-vacia.ts). El agente devuelve `__vacias` con una frase por sección que no pudo llenar; la
+  instrucción va en el mensaje de la corrida y no en el `agentIntro`, porque «Mejorar con IA» también lo lee. Primero mandan
+  las razones ciertas: las curadas dicen quién las llena; «Las acciones, en detalle» sin diagnóstico y el
+  despliegue con adopción directa dicen su motivo. Es del EQUIPO: el motor la pinta solo en edición, con cara de aviso y
+  con «Quitar»; está en `NO_CONTENIDO`, en las listas que no van a otros agentes ni al papel, y se saca de la data que viaja
+  al enlace del cliente y de la foto al publicar. La primera edición con contenido la borra. Es una capacidad del motor,
+  pero solo la Planificación la escribe.
+- **Generar no pisa lo de una persona** (lo cazó la revisión). La corrida tarda minutos y una sección curada puede
+  recibir algo mientras tanto, también del cliente en su enlace: el porqué de las curadas se anota al final, releyendo el
+  bloque bajo `FOR UPDATE` (`anotarPorQueDeLaCurada`), y si falla no tumba la corrida. Una sección generable que una
+  persona escribió y el agente hoy deja vacía se queda como está, también si la escribió durante la corrida (se relee antes
+  de escribir): el agente no ve ese texto, y borrarla para decir «no encontré con qué llenarla» sería perderla y además
+  mentir. Un editor abierto desde antes de generar que crea la tarjeta de una curada usa la que solo trae el porqué en vez
+  de crear otra al lado (ruta de bloques, `esSoloElPorQue`).
+- **El Brief ya lleno entra a la Planificación tal cual, pestaña por pestaña** (`brief_importado`,
+  lib/planificacion/brief-importado.ts), como sección SOLO INTERNA y abierta. *Por qué no se reparte en las secciones:* la
+  hoja cambió de forma, y una lectura que se equivoca de columna escribe un dato falso en un documento que ve el cliente;
+  para las propiedades ya existe pegar la pestaña. *Por qué solo interna va en `hiddenKeysFrom` y no en un `hidden: true`:*
+  esa función la leen el enlace y el PDF, y un ojo que alguien abre no puede mandar la hoja afuera (trae correos, teléfonos
+  y notas). Además no entra a la foto al publicar (`seccionesParaLaFoto`), `loadCanvasContext` no se la da a ningún agente,
+  y no cuenta como contenido (`deriveCanvasesConContenido`, «¿Cuándo lo presentas?»): traerla no es generar. Se exporta
+  como .xlsx porque el CSV de Drive trae solo la primera pestaña, y se lee el valor con su formato (`cell.text` corre las
+  fechas un día en Costa Rica, muestra 0.5 por 50 % y repite las celdas combinadas). Se lee con la cuenta de quien la
+  pide. ⛔ Si el título no nombra al cliente NO se guarda hasta que alguien conteste «Sí, es de este cliente»: el Brief de
+  otra cuenta llegaría a la IA de esta (invariante #1), y un aviso que se va no alcanza. Se puede traer y quitar antes de
+  generar, en el selector de plantilla. La IA la lee con la regla de la frontera adelante y al final, con las celdas vacías
+  marcadas para que los valores no se corran de columna, y lo de la hoja es «acordado» solo si una reunión lo respalda.
+  *Las filas y columnas ocultas entran a propósito:* una hoja con un filtro puesto las deja ocultas, y perderlas en
+  silencio es peor que traer de más a una sección que solo ve el equipo.
+- **Traerlos en lote** (`scripts/traer-briefs-de-implementacion.ts`): Nexus no sabe qué hoja es de quién, y las hojas no
+  están en un solo lugar. `--buscar` propone el proyecto por el nombre del cliente, conservador (nombre entero; con dos
+  clientes o varios proyectos no propone), y deja un CSV que **una persona revisa**. El Brief de otro cliente es la misma falla que mezclar
+  sesiones. Después, simulacro y `--apply`.
+- **La plantilla sugerida** (lib/planificacion/plantilla-sugerida.ts): la lista sigue y Nexus marca una con su razón. Por
+  pilotos, desarrollo a medida, tres hubs o dos con más de 10 usuarios → completa; Brief traído o un hub con equipo chico →
+  esencial; lo demás, completa. Sugerir no escribe nada, y si alguien ya tocó una tarjeta la sugerencia no le cambia la
+  elección. *Pendiente de Elías:* el umbral de 10 usuarios es mío, y también que tener el Brief le gane a «dos hubs».
+
+*Lo que no garantiza esta tanda:* el editor no se probó con sesión. Leer una hoja real de Google no se probó: la prueba usa
+un libro armado, no Drive. Con la IA real tampoco se corrió: ni cómo escribe sus `__vacias`, ni que no copie algo de la
+hoja a una sección visible (la regla se lo prohíbe, nada lo impide), ni el costo de sumar reuniones y Brief. Las
+planificaciones ya generadas no cambian hasta regenerarlas, y una foto ya publicada conserva lo que tenía hasta volver a
+publicar (no tenía Brief: esto nace ahora). El Brief entero se repite en cada foto del documento (hasta 30). Con muchas
+reuniones, las más viejas entran en resumen o no entran: «todas» es todas las que el tope deja leer, y la línea de
+cobertura lo dice. Una generable con contenido que alguien edita mientras corre se sigue pisando, como siempre: queda en
+la foto «Antes de regenerar». El lote `--buscar` no corrió contra Drive.
+
+## Lo que lee una copia y lo que escribe cada plantilla (2026-10-31, validación antes del deploy de artefactos)
+
+Se generaron las 21 plantillas de «Nuevo artefacto» en dos clientes con datos reales, antes de que Elías le dijera al equipo
+que funcionan. Nada falló ni trajo datos de otra cuenta, pero en un cliente con poco escrito (kamalio, sin handoff) el
+diagnóstico salió con 352 caracteres y el kickoff con 587, aunque había reuniones. Lo que cambió, y por qué:
+
+- **Una copia sin reuniones elegidas lee las de su tipo** (`reunionesDeUnaCopiaSinElegidas`, lib/contexto/sugerencias-del-documento-server.ts):
+  lo que el equipo eligió en el «Contexto adicional» de su tipo y las del proyecto con texto y con el cliente que nadie sacó
+  de ahí, cada tipo con su columna. Una copia recién creada no pedía elegir nada y salía a ciegas. **Con elegidas, solo esas**:
+  elegirlas es decidir el foco de esa copia (una por frente).
+- **El cronograma y los cuestionarios, solo donde los lee su documento de siempre.** El cronograma: diagnóstico, planificación,
+  kickoff y lo que lee con sus reglas. La Entrega y su informe no: traería desviaciones internas a lo que lee el cliente (se
+  probó y la revisión lo paró). Los cuestionarios, solo diagnóstico y planificación: traen los niveles de la escala.
+- **Las plantillas de marketing y campaña escriben los canales, los formularios y los informes.** Esas secciones son curadas
+  en la planificación completa por el tope de tokens de la corrida; en una plantilla corta ese motivo no aplica y eran el
+  corazón del documento. Vive solo en sus templates (`ESCRITAS_POR_EL_AGENTE`): el documento de siempre no cambia.
+- **Lo que queda vacío dice por qué**, para el equipo: `__vacias` en toda copia y el porqué de las curadas en la planificación.
+  El enlace de una copia lo saca antes de llegar al navegador del cliente, como la planificación publicada.
+- **La plantilla por niveles escribe las olas aunque la modalidad sugerida sea directa**: elegirla ya decide eso.
+- **El informe de avance tiene su propio cierre**: el de la Entrega dice «Hasta acá llega este proyecto», y el informe se
+  manda con el proyecto abierto. No se tocó el cierre de la Entrega: cambiar esa semilla haría que todas las entregas vacías
+  se lean como tocadas y aparezcan en la barra. Sigue con voseo («escribinos»): corregirlo pide migrar esa semilla.
+
+`scripts/validar-plantillas-generar.ts` (gasta API, solo contra `nexus_local`) y `scripts/validar-documentos-en-la-barra.ts`
+(solo lectura, contra producción) repiten la validación. El segundo usa la lógica pura de la barra: hay que volver a correrlo
+cuando cambie la barra de los servicios recurrentes.
+
+## SmartLoop se lleva como cualquier proyecto: sin administrar ciclos (2026-10-31)
+
+**Contexto.** Elías, con la tanda de artefactos: «la diferencia principal de un proyecto SmartLoop a otro es que las etapas
+son un ciclo; todo lo demás es muy parecido». Nexus administraba ciclos con estructura propia y eso iba contra los proyectos
+maleables. No se volvió a discutir: lo decidió él.
+
+- **Se quitó:** editar tramo, fechas y meta; el cronograma aprobado por ciclo; la sesión de cierre; los ciclos anteriores; las
+  piezas Adopción y Aprendizaje; el traductor de propuestas a ciclos y las rutas `/ciclo`.
+- **No se cuentan vueltas.** Nexus muestra la etapa que trae HubSpot en el círculo de las cinco etapas. Sin HubSpot (prueba, o
+  mientras una persona lo mueve allá), la que se confirmó al pasar a recurrente.
+- **La barra arranca como la de cualquier proyecto:** Cronograma y Kickoff, sin el grupo «Ciclo · etapa» ni la excepción de
+  conservar piezas vacías. Lo que un proyecto ya tiene con contenido sigue visible.
+- **La teoría no pide nada.** La cadencia, las rutinas y qué se suele hacer en cada etapa van en «Cómo se suele llevar»,
+  plegado en el Resumen. No hay «Qué toca ahora» y no se crean pendientes, tareas ni avisos solos; agendar y crear tareas
+  siguen a mano. Los otros servicios recurrentes conservan su guía como estaba.
+- **«Qué sigue» sugiere, no exige:** dice la etapa y el artefacto que suele servir (`ARTEFACTO_DE_LA_ETAPA`). Si ya está
+  escrito, sigue con lo de rutina. Nunca dice «ciclo» y nunca cae al flujo de una implementación.
+- **Aprendizaje es una plantilla de Entrega** (`aprendizaje`), con el contexto del proyecto y sus reuniones.
+- **Las tablas se quedan.** `CicloDeProyecto` y `CasoDeUso` siguen en la base, sin DROP. «Pasar a recurrente» guarda ahí la
+  etapa. La escala anota el ciclo abierto si lo hay, y funciona sin él. Casos de uso de la cuenta sigue igual.
+- **La ruta del servicio sigue.** Se sube aunque no haya un ciclo vivo: la foto suma una entrada con la etapa de hoy, que no se
+  guarda. *Consecuencia aceptada:* sin administrar ciclos, una ruta nueva no trae fechas ni casos de uso, y la página dice
+  «Hoy estamos en Adopción. Las fechas aparecen aquí cuando las acordemos». Si se quiere llenar, es una decisión aparte.
+
+## La exploración guiada: contexto primero, la guía como agenda y lo que queda después (2026-11-06)
+
+Especificación de Elías del 6 de noviembre, en preventa y en clientes: la guía de antes era una lista larga de preguntas
+sin orden y el equipo no la podía usar con el cliente enfrente. La guía sirve para averiguar cosas, no para leer
+preguntas.
+
+- **Los cambios a una sesión van por campo (punto 18).** El «Equipo del cliente» elegido volvía a otro valor: la pantalla
+  guardaba cada cambio de una sesión mandando la LISTA ENTERA de sesiones armada con lo que veía, así que un cambio armado
+  con la sesión vieja (el objetivo, una casilla, un cambio de la sesión recién creada) se llevaba el equipo elegido
+  entretanto. Ahora `useEditarLaSesion` manda `editarSesion` (contenido.ts): solo los campos que cambian, aplicados sobre
+  lo último guardado; una sesión nueva entra con `agregarSesion`, y la pestaña que ya se volvió sesión no se crea dos
+  veces. La lista entera queda solo para cambios de la reunión de la sesión. *Por qué por campo y no un candado:* el
+  reintento de un 409 también es seguro así (`reintento.ts` mira solo esos campos).
+- **La guía es una agenda (puntos 6 a 14 y 17, `lib/exploraciones/agenda.ts`).** Arriba, el objetivo y de 3 a 4 claves
+  (siempre los retos, cómo los mide hoy y a dónde quiere llegar). Debajo, de 4 a 6 bloques con minutos, título y UNA
+  pregunta para abrir; uno central. En cada bloque, lo que se averigua (en el orden del proceso) con 1 o 2 preguntas
+  sugeridas y, en el cuerpo, cómo convertir lo que salga en impacto. No hay secciones de preguntas fuera de los bloques:
+  sin retos de la industria aparte ni «lo vendido» aparte (entran a los bloques). *El código decide lo que el modelo no
+  respeta:* el primer bloque es la apertura y el último el cierre, digan lo que digan; hay un solo central (el marcado o
+  el más largo); lo que apunta a algo que no está en «PARA» pierde el `para`.
+- **Las marcas son las de siempre.** Cada cosa se marca en `SesionPlaneada.hechas` (`av:<huella del texto>`); lo que ya
+  se sabía nace marcado y se desmarca con `!av:…`. Marcar una cosa con tema suma también el tema, así lo de después de la
+  sesión (lo ya preguntado, lo que no salió) cuenta igual. `preguntas` se sigue guardando, sacado de la agenda (una por
+  tema), para lo que todavía las lee: lo que cubre la guía, el correo de seguimiento, el análisis de la venta.
+- **Preguntas abiertas y de una sola cosa, verificado por código.** `preguntaCerrada` y `preguntaDoble` miran cómo abre
+  cada pregunta sugerida; si hay alguna, el mismo reintento del voseo la pide otra vez avisándolo, una sola vez, y se
+  queda la que tenga menos problemas sin más voseo. *Lo que se vio con IA real (2026-11-06, 12 llamadas):* el modelo
+  pega segundas preguntas con «, y cuántos…» y dejaba «[retos con sus palabras]» en el cierre; el detector las cuenta
+  como dobles y como huecos, y lo que el reintento no arregla el código lo parte en dos preguntas
+  (`partirPreguntaDoble`). Las cerradas que quedan («¿Hay algún hito…?») se ven: el reintento las baja pero no a cero.
+- **La apertura y el cierre son iguales en todas** y los arma el agente con sus reglas: saludo, lo que ya sabemos y otro
+  enfoque (o amplia si es la primera sin contexto); en preventa, la industria, por qué ahora, uno o dos clientes de
+  referencia de su industria (solo la lista de Audiencia: nunca otra cuenta ni sus datos) y cómo trabajamos, más la frase
+  para cuando piden un demo o precios. El cierre resume con sus palabras, valida y agenda; en preventa confirma fecha,
+  presupuesto, quién decide, quién más participa y contra qué nos comparan. No vende la implementación.
+- **Las guías de antes se ven como se armaron.** Sin `agenda`, la Preparación y «En vivo» muestran la lista de siempre.
+  No hay SQL: la agenda vive en el Json de la guía.
+- **Nexus no planifica por defecto (puntos 1 a 5, `contexto-de-la-exploracion.ts`).** Antes de armar una guía pide el
+  contexto de TODA la exploración (`contenido.contexto`: por qué la exploramos y lo que ya sabemos, con quién lo confirmó)
+  y el de la sesión (`SesionPlaneada.conQuien`, `espera`, `duracion`, más el objetivo, el nombre y la reunión que ya
+  existían). Sin el objetivo de la exploración, con quién es y el objetivo de la sesión, el botón espera y el servidor
+  rechaza la corrida (`faltaParaLaGuia`, en `armarLaGuiaSinGuardar`). *Lo que se apagó:* la guía de base (las preguntas
+  de siempre sin agente), el rearmado de la guía al final de cada preparación y de cada lectura, y las preguntas que se
+  proponían solas al guardar un objetivo (siguen solo para una guía de antes). *Por qué:* armar sin contexto producía la
+  lista larga que el equipo no podía usar, y gastaba IA sin que nadie lo pidiera.
+- **Lo que Nexus ya sabe se muestra cargado, sin IA.** `GET …/contexto` arma el borrador de «lo que ya sabemos»: en un
+  cliente, el traspaso (V0); en preventa, cómo llegó y las notas de HubSpot de la empresa; en los dos, lo que agregó el
+  equipo y el resumen de las sesiones leídas de ESTA exploración. Cada parte dice de dónde sale y nada se usa sin que la
+  persona lo confirme.
+- **El contacto previo es solo de la preventa y de la primera sesión.** «¿Ya hubo contacto?»; si no, Nexus redacta un
+  correo corto o un guion de 2 a 3 minutos (`POST …/contexto`, medido como `exploracion-mensaje-previo`): nos presenta,
+  nombra clientes de referencia de su industria (solo la lista de Audiencia) y explica la reunión. Se guarda en
+  `contenido.contactoPrevio` y lo manda una persona.
+- **Cuántas sesiones y cada cuánto lo decide la persona.** Nada nuevo impone sesiones: «+ Agregar sesión», el nombre y la
+  reunión siguen como estaban. «Armar la sesión N» del análisis pasa a «Preparar la sesión N»: crea la sesión con lo que
+  te llevaste y abre su Preparación, sin armar la guía.
+- **Después de cada sesión: el desafío principal y lo que hay que retomar (punto 15, `despues-de-la-sesion.ts`).** Vive
+  en la sesión (`SesionPlaneada.desafio` con lo que falta para confirmarlo, y `retomar`: de 3 a 5 temas, cada uno con
+  dónde). Lo escribe la persona o lo propone Nexus con «Proponer desde la reunión» (`POST …/despues`, medido como
+  `exploracion-lo-que-dejo-la-sesion`), que lee la LECTURA guardada de esa reunión en esta exploración, su agenda y sus
+  notas, no el transcript otra vez. Lo propuesto queda marcado hasta que alguien lo cambia. Alimenta la guía siguiente
+  (`retomarParaLaGuia`: solo lo de las sesiones de antes de la próxima).
+- **La escala después de la sesión (punto 14).** En el análisis, cada área en juego dice si está cubierta (todas sus
+  dimensiones con evidencia), a medias o pendiente (`coberturaDeLaEscala`). La hipótesis y lo marcado en el test no
+  cuentan como evidencia.
+- **Dónde quedó (punto 16).** El inicio de la Exploración abre con el objetivo de la exploración, la última sesión que
+  pasó, cuánto se averiguó de sus agendas, su desafío principal y los temas por retomar (`dondeQuedo`). Cualquiera que
+  pueda abrir la exploración lo ve: es para continuarla si quien la llevaba no puede.
+- **Segunda tanda (6 nov, Elías tras probar en el 3005): el resultado que busca el cliente es el eje.** En un roleplay,
+  Ventas nunca preguntó por el objetivo del cliente; la gente compra la solución a un problema o el camino a una meta.
+  (`lib/exploraciones/resultado.ts`)
+  - La primera clave de toda guía es el resultado (de dónde a dónde, con qué número y para cuándo), y toda agenda trae
+    el bloque FIJO «El resultado que buscan»: abre con «¿Qué tendría que pasar en 6 a 12 meses para que digas que esto
+    valió la pena?» y averigua seis cosas con ids estables (`av:res1`…`av:res6`: en sus palabras, cómo lo medirían, para
+    cuándo, quién lo pide, por qué ahora, qué pasa si no se logra). *El código manda:* toma el bloque que marca el
+    agente y le pone las seis cosas; si no hay ninguno, lo suma después de la apertura y se lo descuenta al bloque más
+    largo, así la sesión dura lo mismo. El cierre resume el resultado con sus palabras y lo confirma.
+  - En «En vivo», pasada la mitad sin marcar `av:res1`: «Todavía no sabes qué resultado busca». El reloj es la hora de
+    la reunión o, sin ella, cuando se abrió la pestaña.
+  - Después de la sesión, el desafío guarda el resultado en sus palabras y queda «sin confirmar» si la reunión no lo dejó
+    claro (lo propone Nexus con `resultadoClaro`, o lo marca la persona); la siguiente guía arranca por confirmarlo.
+  - El analizador de la venta suma el juicio «resultado» (si | en_parte | no, con cita). Va en el CRITERIO, que arma el
+    código y viaja en el mensaje (`RESULTADO_EN_EL_CRITERIO`, criterio 2026-11-06), y no en el prompt guardado en la base:
+    así no hace falta correr `crear-agente-analizador-venta.ts` (que no pisa un prompt distinto sin `--force`). Los
+    análisis de antes no lo tienen y no lo muestran.
+  - En preventa no se arma la propuesta sin el resultado confirmado: al menos una meta en «Metas» del resumen
+    (`resultadoConfirmado`). Lo frena `armarPropuesta` en el servidor (409 con qué falta) y la pantalla lo dice antes del
+    botón. *Por qué «Metas»:* es la casilla que ya define el resultado en cifras y la que lee la propuesta.
+- **«Lo que ya sabemos» son seis tarjetas, no un cuadro libre** (Retos · Resultado que buscan · Plazos · Presupuesto ·
+  Quién decide · Qué pasa si no hacen nada), cada una con su fuente. Nexus las propone una vez desde el traspaso, las
+  notas de HubSpot, lo que agregó el equipo y las reuniones leídas de la exploración o, si no hay, las minutas de las
+  últimas reuniones de la empresa tomadas por el chokepoint (`getClientSessions`); la propuesta queda en
+  `propuesta.contextoPropuesto` para no volver a pedirla, y sin ninguna fuente no gasta IA. Lo vacío queda «por
+  averiguar» y entra a la guía como algo por averiguar. Lo que cambia la persona pasa a «Lo escribió el equipo». El texto
+  libre de la primera tanda (`sabemos`) se sigue leyendo.
+- **Sin aviso amarillo de «falta contexto»: los recuadros del contexto ya lo piden.** Una guía con el formato de antes,
+  en la próxima sesión, no cuenta como guía: queda plegada abajo como «Guía anterior», solo lectura. Al armar la agenda
+  nueva, la vieja se guarda en `propuesta.guiasAnteriores` y sigue ahí.
+- **«+ Agregar sesión» de la barra se ve como menú** (con su flecha). No se encontró en el código un cambio que lo
+  volviera un enlace: la barra de la ficha monta el mismo menú `AgregarSesion` que la preventa, también en la carpeta de
+  prueba. Si sigue sin abrir el menú, falta reproducirlo con sesión iniciada.

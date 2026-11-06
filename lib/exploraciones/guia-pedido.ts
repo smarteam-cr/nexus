@@ -47,6 +47,7 @@ import { faltanAlCerrar, type PuntoDeCalidad } from "./calidad";
 import { avanceDeLaEstrategia, faltanDeLaEstrategia } from "./avance-del-proyecto";
 import { EQUIPOS, EQUIPOS_DEL_CLIENTE, esEquipo, leerTemaDeEquipo, nombreDelTemaDeEquipo, type ClaveDeEquipo } from "./equipos";
 import { saberParaElPedido, type SaberDelCliente } from "./lo-que-ya-sabemos";
+import { conBloqueDelResultado } from "./resultado";
 import {
   DURACION_POR_DEFECTO,
   idDeAveriguar,
@@ -57,6 +58,7 @@ import {
   MIN_BLOQUES,
   partirPreguntaDoble,
   preguntasDeLaAgenda,
+  sinHuecos,
   type AgendaDeLaGuia,
   type BloqueDeLaAgenda,
   type CosaPorAveriguar,
@@ -185,7 +187,7 @@ export interface ContextoDeLaGuia {
   /** Cuánto dura la sesión, en minutos (lo dice quien la prepara; sin eso, 60). */
   duracion?: number;
   /** Punto 2 (2026-11-06): por qué exploramos esta empresa y lo que ya sabemos, como lo confirmó el equipo. */
-  contextoDeLaExploracion?: { objetivo: string | null; sabemos: string | null };
+  contextoDeLaExploracion?: { objetivo: string | null; sabemos: string | null; tarjetas?: { sabido: string[]; porAveriguar: string[] } };
   /** Punto 4: con quién es la sesión, qué espera el cliente y su objetivo, como lo escribió el equipo. */
   contextoDeLaSesion?: { conQuien: string | null; espera: string | null; objetivo: string | null };
   /** Preventa: los clientes de referencia de Smarteam por industria (Audiencia), los únicos que la apertura puede nombrar. */
@@ -624,9 +626,10 @@ export function herramientaDeLaAgenda(ctx: ContextoDeLaGuia): Anthropic.Messages
                   "En un bloque del cuerpo: UNA pregunta abierta para abrir la conversación del bloque (25 palabras como mucho). En la apertura y el cierre: lo que se dice, en dos o tres frases que se puedan decir tal cual, sin espacios por completar.",
               },
               central: { type: "boolean", description: "true en UN solo bloque del cuerpo: el central, el que no se puede pasar rápido." },
+              resultado: { type: "boolean", description: "true SOLO en el bloque fijo «El resultado que buscan» (justo después de la apertura)." },
               averiguar: {
                 type: "array",
-                description: `Lo que hay que averiguar en el bloque, de 2 a ${MAX_AVERIGUAR_POR_BLOQUE} en el cuerpo (de 0 a 3 en la apertura y el cierre). Si el bloque explora un proceso, en el orden en que ocurre.`,
+                description: `Lo que hay que averiguar en el bloque, de 2 a ${MAX_AVERIGUAR_POR_BLOQUE} en el cuerpo (de 0 a 3 en la apertura y el cierre; en el bloque del resultado, sus seis cosas en su orden). Si el bloque explora un proceso, en el orden en que ocurre.`,
                 items: {
                   type: "object",
                   properties: {
@@ -721,7 +724,10 @@ function sistemaDeLaAgenda(marco: ClaveDeMarco = "venta"): string {
 La guía sirve para AVERIGUAR cosas, no para leer preguntas: las preguntas son el medio; lo que importa es lo que hay que saber al terminar. Se usa con el cliente enfrente, así que tiene que leerse de un vistazo: ante la duda, quita texto.
 
 Cómo se arma:
-- Arriba: el objetivo de la sesión en una o dos frases y de 3 a 4 «claves» que hay que tener claras al terminar. Siempre van los retos del cliente, cómo los mide hoy y a dónde quiere llegar, dichos para la persona de esta sesión. Ejemplo para un gerente general: hacia dónde quiere llevar la empresa en 2 o 3 años; qué espera de cada área y cómo sabe si lo cumple; qué problemas llegan a su escritorio y por qué no se resuelven antes; cómo se toman las decisiones.
+- El eje es EL RESULTADO QUE BUSCA EL CLIENTE: la gente compra la solución a un problema o el camino a una meta. La PRIMERA clave es siempre ese resultado: de dónde a dónde, con qué número y para cuándo.
+- Arriba: el objetivo de la sesión en una o dos frases y de 3 a 4 «claves» que hay que tener claras al terminar. Después del resultado van los retos del cliente y cómo los mide hoy, dichos para la persona de esta sesión.
+- Justo después de la apertura va el bloque FIJO «El resultado que buscan» (resultado: true), que abre con «¿Qué tendría que pasar en 6 a 12 meses para que digas que esto valió la pena?» (o una igual de abierta) y averigua estas seis cosas, en este orden: el resultado en sus palabras; cómo lo medirían; para cuándo; quién lo pide; por qué ahora; qué pasa si no se logra. Lo que ya se sabe de eso va con «sabido».
+- Si una sesión anterior dejó el resultado SIN CONFIRMAR, el objetivo de esta sesión empieza por confirmarlo. Ejemplo para un gerente general: hacia dónde quiere llevar la empresa en 2 o 3 años; qué espera de cada área y cómo sabe si lo cumple; qué problemas llegan a su escritorio y por qué no se resuelven antes; cómo se toman las decisiones.
 - La agenda: de ${MIN_BLOQUES} a ${MAX_BLOQUES} bloques que cubren la duración de la sesión. Cada bloque tiene sus minutos, un título y UNA sola pregunta para abrir. Uno del cuerpo es el central (el más largo): no se pasa rápido. No hay preguntas fuera de los bloques.
 - Dentro de cada bloque, lo que hay que averiguar («que»: lo que hay que saber, no una pregunta) y debajo 1 o 2 preguntas sugeridas. Así: que «Cómo se asignan los interesados» · pregunta «Cuéntame cómo se decide hoy a qué vendedor le toca cada interesado». Mal: que «¿Tienen reglas para asignar los interesados?».
 - Si un bloque explora un proceso, lo que hay que averiguar va en el orden en que ocurre. En ventas: cómo llega el interesado, cómo se asigna, cómo se le da seguimiento, cómo se convierte en venta y qué pasa con los que no compran.
@@ -749,7 +755,7 @@ La apertura (el primer bloque), igual en todas las guías:
 - Si es la primera sesión y no hay contexto, la apertura es más amplia: el negocio, los roles, qué venden y sus procesos.${aperturaDeVenta}
 
 El cierre (el último bloque), igual en todas las guías:
-- Resume los retos con las palabras del cliente, pregunta si los entendimos bien y deja el siguiente paso agendado con fecha.${cierreDeVenta}
+- Resume el resultado que busca con las palabras del cliente y confírmalo («Entonces lo que buscan es…; ¿lo dije bien?»), resume los retos, pregunta si los entendimos bien y deja el siguiente paso agendado con fecha.${cierreDeVenta}
 
 - Nunca inventes casos de otros clientes, historias de éxito, datos, cifras ni nombres.
 - Nunca nombres a otro cliente de Smarteam fuera de la lista de referencia, ni cuentes nada de su cuenta.
@@ -764,6 +770,8 @@ function contextoDadoPorLaPersona(ctx: ContextoDeLaGuia): string[] {
   if (x) {
     lineas.push("=== EL CONTEXTO DE TODA LA EXPLORACIÓN (lo escribió el equipo: manda sobre lo demás) ===");
     if (x.objetivo) lineas.push(`Por qué exploramos esta empresa y qué queremos lograr: ${x.objetivo}`);
+    if (x.tarjetas?.sabido.length) lineas.push("Lo que ya sabemos del cliente (confirmado por el equipo; va como «sabido», no se vuelve a preguntar):", ...x.tarjetas.sabido.map((t) => `- ${t}`));
+    if (x.tarjetas?.porAveriguar.length) lineas.push(`POR AVERIGUAR (no se sabe: cada uno entra a la guía como algo por averiguar): ${x.tarjetas.porAveriguar.join(", ")}.`);
     if (x.sabemos) lineas.push(`Lo que ya sabemos del cliente${ctx.marco === "cs" ? " (lo que entregó ventas en el traspaso)" : " (cómo llegó)"}: ${x.sabemos}`);
     lineas.push("");
   }
@@ -775,7 +783,7 @@ function contextoDadoPorLaPersona(ctx: ContextoDeLaGuia): string[] {
     if (s.objetivo) lineas.push(`El objetivo de la sesión: ${s.objetivo}`);
   }
   lineas.push(`Duración: ${ctx.duracion ?? DURACION_POR_DEFECTO} minutos.`);
-  const primera = ctx.proxima.numero === 1 && !ctx.confirmado.length && !ctx.loQueYaSabemos?.length && !x?.sabemos?.trim();
+  const primera = ctx.proxima.numero === 1 && !ctx.confirmado.length && !ctx.loQueYaSabemos?.length && !x?.sabemos?.trim() && !x?.tarjetas?.sabido.length;
   if (primera) lineas.push("Es la primera sesión y no hay contexto del cliente: la apertura es amplia (el negocio, los roles, qué venden y sus procesos).");
   if (ctx.marco !== "cs") {
     lineas.push(
@@ -811,6 +819,7 @@ function leerLaAgenda(input: Record<string, unknown>, ctx: ContextoDeLaGuia): Ag
     .slice(0, MAX_BLOQUES);
   const vistos = new Set<string>();
   const bloques: BloqueDeLaAgenda[] = [];
+  let marcado: number | null = null;
   for (const [i, b] of crudos.entries()) {
     const titulo = textoLimpio(b.titulo, 120);
     const abreLeido = textoLimpio(b.abre, 600);
@@ -818,7 +827,7 @@ function leerLaAgenda(input: Record<string, unknown>, ctx: ContextoDeLaGuia): Ag
     // La apertura y el cierre son el primero y el último, digan lo que digan.
     const tipo: TipoDeBloque = i === 0 ? "apertura" : i === crudos.length - 1 ? "cierre" : "cuerpo";
     // La pregunta para abrir un bloque del cuerpo es UNA: si vino doble, queda la primera.
-    const abre = tipo === "cuerpo" ? partirPreguntaDoble(abreLeido)[0] : abreLeido;
+    const abre = sinHuecos(tipo === "cuerpo" ? partirPreguntaDoble(abreLeido)[0] : abreLeido);
     const averiguar: CosaPorAveriguar[] = [];
     for (const c of Array.isArray(b.averiguar) ? b.averiguar : []) {
       if (!esObjeto(c)) continue;
@@ -843,6 +852,7 @@ function leerLaAgenda(input: Record<string, unknown>, ctx: ContextoDeLaGuia): Ag
     const desde = Number.isFinite(Number(b.desde)) ? Math.min(239, Math.max(0, Math.round(Number(b.desde)))) : 0;
     const hasta = Number.isFinite(Number(b.hasta)) ? Math.min(240, Math.max(desde + 1, Math.round(Number(b.hasta)))) : Math.min(240, desde + 5);
     const impacto = tipo === "cuerpo" ? textoLimpio(b.impacto, 400) : null;
+    if (b.resultado === true && tipo === "cuerpo" && marcado === null) marcado = bloques.length;
     bloques.push({ desde, hasta, titulo, tipo, abre, averiguar, ...(impacto ? { impacto } : {}), ...(b.central === true && tipo === "cuerpo" ? { central: true as const } : {}) });
   }
   if (bloques.length < 2) return null;
@@ -857,7 +867,8 @@ function leerLaAgenda(input: Record<string, unknown>, ctx: ContextoDeLaGuia): Ag
     .slice(0, MAX_CLAVES);
   if (!claves.length) return null;
   const fraseDeDemo = ctx.marco !== "cs" ? textoLimpio(input.fraseDeDemo, 500) : null;
-  return { claves, bloques, ...(fraseDeDemo ? { fraseDeDemo } : {}) };
+  // El resultado como eje (2026-11-06, segunda tanda): el bloque fijo con sus seis cosas, y primero en las claves.
+  return conBloqueDelResultado({ claves, bloques, ...(fraseDeDemo ? { fraseDeDemo } : {}) }, marcado);
 }
 
 /** La guía nueva desde la agenda: lo de siempre (temas, equipo, objetivo) y las preguntas de antes sacadas de la agenda. */

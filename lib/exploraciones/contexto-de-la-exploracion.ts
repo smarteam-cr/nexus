@@ -19,8 +19,10 @@ import type { SesionPlaneada } from "./guia";
 export interface ContextoDeLaExploracion {
   /** Por qué exploramos esta empresa y qué queremos lograr. */
   objetivo: string;
-  /** Lo que ya sabemos del cliente (cómo llegó, o lo que entregó ventas). Puede quedar vacío: no se sabe nada. */
+  /** Lo que ya sabemos del cliente, como texto libre: el formato de la primera tanda (se sigue leyendo). */
   sabemos?: string;
+  /** Lo que ya sabemos, en tarjetas con su fuente (2026-11-06). Lo que falta, por averiguar. */
+  tarjetas?: TarjetasDeLoQueSabemos;
   /** Quién lo confirmó y cuándo (lo pone el servidor). */
   por: string | null;
   en: string;
@@ -96,3 +98,44 @@ export interface ContactoPrevio {
 export const TIPOS_DE_MENSAJE_PREVIO = ["correo", "llamada"] as const;
 export type TipoDeMensajePrevio = (typeof TIPOS_DE_MENSAJE_PREVIO)[number];
 export const MAX_MENSAJE_PREVIO = 2500;
+
+// ── «Lo que ya sabemos» en tarjetas (2026-11-06, segunda tanda) ───────────────
+
+/**
+ * Lo que ya sabemos del cliente deja de ser un cuadro de texto libre: seis tarjetas cortas y editables, cada una con su
+ * fuente. Lo que no se encuentra queda «por averiguar» y entra a la guía como algo por averiguar.
+ */
+export const CLAVES_DE_LO_QUE_SABEMOS = ["retos", "resultado", "plazos", "presupuesto", "decide", "siNada"] as const;
+export type ClaveDeLoQueSabemos = (typeof CLAVES_DE_LO_QUE_SABEMOS)[number];
+
+export const NOMBRE_DE_LA_TARJETA: Readonly<Record<ClaveDeLoQueSabemos, string>> = {
+  retos: "Retos",
+  resultado: "Resultado que buscan",
+  plazos: "Plazos",
+  presupuesto: "Presupuesto",
+  decide: "Quién decide",
+  siNada: "Qué pasa si no hacen nada",
+};
+
+export interface TarjetaDeLoQueSabemos {
+  texto: string;
+  /** De dónde sale («El traspaso», «Las notas de HubSpot», «La reunión del 3 nov», «Lo escribió el equipo»). */
+  fuente: string;
+}
+export type TarjetasDeLoQueSabemos = Partial<Record<ClaveDeLoQueSabemos, TarjetaDeLoQueSabemos>>;
+
+export const MAX_TEXTO_DE_LA_TARJETA = 400;
+export const FUENTE_DEL_EQUIPO = "Lo escribió el equipo";
+
+/** Las tarjetas que siguen por averiguar (sin texto). */
+export function porAveriguar(t: TarjetasDeLoQueSabemos | undefined): ClaveDeLoQueSabemos[] {
+  return CLAVES_DE_LO_QUE_SABEMOS.filter((k) => !t?.[k]?.texto.trim());
+}
+
+/** Las tarjetas para el pedido de la guía: lo que se sabe, con su fuente, y lo que está por averiguar. */
+export function tarjetasParaLaGuia(t: TarjetasDeLoQueSabemos | undefined): { sabido: string[]; porAveriguar: string[] } {
+  return {
+    sabido: CLAVES_DE_LO_QUE_SABEMOS.filter((k) => t?.[k]?.texto.trim()).map((k) => `${NOMBRE_DE_LA_TARJETA[k]}: ${t![k]!.texto} (fuente: ${t![k]!.fuente})`),
+    porAveriguar: porAveriguar(t).map((k) => NOMBRE_DE_LA_TARJETA[k]),
+  };
+}

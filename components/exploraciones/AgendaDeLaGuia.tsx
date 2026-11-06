@@ -6,9 +6,12 @@
  * que hay que averiguar, cada cosa con su casilla y sus preguntas sugeridas. Se lee de un vistazo durante la reunión:
  * en la Preparación y en «En vivo» es la misma, con las mismas marcas.
  */
+import { useEffect, useState } from "react";
 import { cn } from "@/lib/cn";
+import { APERTURA_DEL_RESULTADO, faltaElResultadoEnVivo } from "@/lib/exploraciones/resultado";
 import { alternarAveriguada, avanceDeLaAgenda, estaAveriguada, minutosDelBloque, type AgendaDeLaGuia as Agenda, type CosaPorAveriguar } from "@/lib/exploraciones/agenda";
-import type { PestanaDeSesion } from "@/lib/exploraciones/guia";
+import type { GuiaDeLaSesion, PestanaDeSesion } from "@/lib/exploraciones/guia";
+import { diaCorto } from "@/lib/exploraciones/fechas";
 import type { MomentoDeLaSesion } from "./contexto";
 import { useLienzo } from "./contexto";
 import { Rotulo, useEditarLaSesion } from "./piezas-de-la-sesion";
@@ -60,6 +63,19 @@ export function AgendaDeLaGuia({
   const { sabidas, total } = avanceDeLaAgenda(agenda, hechas);
   const marcar = (c: CosaPorAveriguar) => void editar((x) => ({ ...x, hechas: alternarAveriguada(c, x.hechas) }));
   const duracion = agenda.bloques.length ? agenda.bloques[agenda.bloques.length - 1].hasta : 0;
+  /* «En vivo» (2026-11-06): pasada la mitad sin saber qué resultado busca, aviso. Empieza a la hora de la reunión o, sin
+     ella, cuando se abrió esta pestaña. Se mira cada 30 segundos. */
+  const enVivo = momento === "durante";
+  const [abierta] = useState(() => Date.now());
+  const [ahora, setAhora] = useState(() => Date.now());
+  useEffect(() => {
+    if (!enVivo) return;
+    const t = setInterval(() => setAhora(Date.now()), 30_000);
+    return () => clearInterval(t);
+  }, [enVivo]);
+  const inicioDeLaReunion = Date.parse(pestana.sesion?.evento?.inicio ?? pestana.sesion?.reunion?.inicio ?? "");
+  const inicio = Number.isFinite(inicioDeLaReunion) && inicioDeLaReunion <= ahora ? inicioDeLaReunion : abierta;
+  const sinResultado = enVivo && faltaElResultadoEnVivo({ agenda, hechas, inicio, ahora, minutos: duracion || 60 });
 
   return (
     <section data-recorrido="preventa.sesion.preguntas" className="overflow-hidden rounded-xl border border-line bg-surface">
@@ -85,6 +101,11 @@ export function AgendaDeLaGuia({
           </p>
         )}
       </header>
+      {sinResultado && (
+        <p role="status" className="border-b border-warn-line bg-warn-surface px-[18px] py-2.5 text-[13.5px] text-warn-ink">
+          <span className="font-semibold">Todavía no sabes qué resultado busca.</span> Vuelve a «{APERTURA_DEL_RESULTADO}»
+        </p>
+      )}
       <ol>
         {agenda.bloques.map((b, i) => (
           <li key={i} className={cn("flex gap-4 border-b border-line px-[18px] py-3.5 last:border-b-0", b.central && "bg-surface-muted")}>
@@ -108,5 +129,36 @@ export function AgendaDeLaGuia({
         ))}
       </ol>
     </section>
+  );
+}
+
+/**
+ * La guía con el formato de antes, plegada (2026-11-06, Elías): no se borra; queda como versión anterior mientras la
+ * nueva se arma con el contexto. Solo lectura.
+ */
+export function GuiaAnterior({ guia }: { guia: GuiaDeLaSesion }) {
+  return (
+    <details className="rounded-xl border border-line bg-surface">
+      <summary className="cursor-pointer select-none px-[18px] py-3.5 text-sm font-semibold text-fg">
+        Guía anterior <span className="text-[13px] font-normal text-fg-muted">· del {diaCorto(guia.en)}, con el formato de antes</span>
+      </summary>
+      <div className="space-y-2.5 border-t border-line px-[18px] py-3.5 text-[13.5px] leading-5">
+        {guia.objetivo && <p className="text-fg">{guia.objetivo}</p>}
+        {guia.apertura.map((a, i) => (
+          <p key={`a-${i}`} className="text-fg-secondary">
+            «{a.replace(/^«|»$/g, "")}»
+          </p>
+        ))}
+        <ol className="list-decimal space-y-1.5 pl-5">
+          {[...guia.preguntas.map((p) => ({ k: p.para, q: p.pregunta, r: p.repreguntas })), ...(guia.loVendido ?? []).map((v) => ({ k: v.id, q: v.pregunta, r: v.repreguntas }))].map((p) => (
+            <li key={p.k} className="text-fg">
+              {p.q}
+              {p.r.length > 0 && <span className="block text-[12.5px] text-fg-muted">{p.r.join(" · ")}</span>}
+            </li>
+          ))}
+        </ol>
+        {guia.cierre && <p className="text-fg-secondary">Cierre: {guia.cierre}</p>}
+      </div>
+    </details>
   );
 }

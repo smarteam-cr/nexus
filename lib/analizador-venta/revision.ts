@@ -43,6 +43,8 @@ export interface LoDeLaSesion {
   dolor: Juicio | null;
   casoDeUso: Juicio | null;
   bien: Observacion[];
+  /** ¿Se averiguó el resultado que busca? (2026-11-06). null en los análisis de antes. */
+  resultado: Juicio | null;
   recomendaciones: ResultadoDelAnalisis["recomendaciones"];
   enfoque: EnfoqueDeLaSesion | null;
 }
@@ -74,6 +76,7 @@ export function loDeLaSesion(r: ResultadoDelAnalisis): LoDeLaSesion {
     dolor: de("dolor")[0] ?? null,
     casoDeUso: de("caso_de_uso")[0] ?? null,
     bien: r.bien ?? [],
+    resultado: de("resultado")[0] ?? null,
     recomendaciones: r.recomendaciones,
     enfoque: r.enfoque ?? null,
   };

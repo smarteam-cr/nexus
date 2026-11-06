@@ -13,6 +13,7 @@ import { BotonAzul, BotonBlanco, BotonTexto, IconoDeSugerencia } from "@/compone
 import { cn } from "@/lib/cn";
 import { coberturaDeLaEscala, dondeQuedo, MAX_RETOMAR, type TemaPorRetomar } from "@/lib/exploraciones/despues-de-la-sesion";
 import { diaCorto } from "@/lib/exploraciones/fechas";
+import { resultadoAveriguado } from "@/lib/exploraciones/resultado";
 import { claveDeLaReunion } from "@/lib/exploraciones/contenido";
 import type { PestanaDeSesion } from "@/lib/exploraciones/guia";
 import { useLienzo } from "./contexto";
@@ -29,6 +30,10 @@ export function LoQueDejoLaSesion({ pestana, conLectura }: { pestana: PestanaDeS
   const [editando, setEditando] = useState(!s?.desafio);
   const [texto, setTexto] = useState(s?.desafio?.texto ?? "");
   const [falta, setFalta] = useState((s?.desafio?.falta ?? []).join("\n"));
+  // El resultado que busca (2026-11-06): si la reunión no lo dejó claro, el desafío queda sin confirmar.
+  const marcadoEnLaAgenda = resultadoAveriguado(s ? exp.estado.propuesta.guias[s.id]?.agenda : undefined, s?.hechas);
+  const [resultado, setResultado] = useState(s?.desafio?.resultado ?? "");
+  const [claro, setClaro] = useState(s?.desafio ? !s.desafio.sinConfirmar : marcadoEnLaAgenda !== false);
   const [retomar, setRetomar] = useState<TemaPorRetomar[]>(s?.retomar?.length ? s.retomar : [{ tema: "", donde: "" }]);
   // El texto que propuso Nexus: si la persona no lo cambia, queda marcado como propuesto.
   const [propuesto, setPropuesto] = useState<string | null>(s?.desafio?.propuesto ? s.desafio.texto : null);
@@ -47,11 +52,13 @@ export function LoQueDejoLaSesion({ pestana, conLectura }: { pestana: PestanaDeS
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ sesionId, reunion: claveDeLaReunion(pestana.reunion) }),
       });
-      const j = (await r.json().catch(() => ({}))) as { desafio?: { texto: string; falta: string[] }; retomar?: TemaPorRetomar[]; error?: string };
+      const j = (await r.json().catch(() => ({}))) as { desafio?: { texto: string; falta: string[]; resultado?: string; sinConfirmar?: true }; retomar?: TemaPorRetomar[]; error?: string };
       if (!r.ok || !j.desafio) return setError(j.error ?? "No se pudo proponer. Vuelve a intentarlo.");
       setTexto(j.desafio.texto);
       setPropuesto(j.desafio.texto);
       setFalta(j.desafio.falta.join("\n"));
+      setResultado(j.desafio.resultado ?? "");
+      setClaro(!j.desafio.sinConfirmar);
       setRetomar(j.retomar?.length ? j.retomar : [{ tema: "", donde: "" }]);
       setEditando(true);
     } finally {
@@ -74,7 +81,17 @@ export function LoQueDejoLaSesion({ pestana, conLectura }: { pestana: PestanaDeS
         void _r;
         return {
           ...resto,
-          ...(t ? { desafio: { texto: t, falta: lineas, ...(propuesto === t ? { propuesto: true as const } : {}) } } : {}),
+          ...(t
+            ? {
+                desafio: {
+                  texto: t,
+                  falta: lineas,
+                  ...(propuesto === t ? { propuesto: true as const } : {}),
+                  ...(resultado.trim() ? { resultado: resultado.trim().slice(0, 300) } : {}),
+                  ...(claro && resultado.trim() ? {} : { sinConfirmar: true as const }),
+                },
+              }
+            : {}),
           ...(temas.length ? { retomar: temas } : {}),
         };
       },
@@ -96,6 +113,13 @@ export function LoQueDejoLaSesion({ pestana, conLectura }: { pestana: PestanaDeS
         <p className="text-[14px] leading-5 text-fg">
           {s.desafio.propuesto && <IconoDeSugerencia className="mr-1 inline h-[13px] w-[13px] text-brand" />}
           {s.desafio.texto}
+        </p>
+        <p className="text-[13px] text-fg-secondary">
+          <span className="text-fg-muted">El resultado que buscan: </span>
+          {s.desafio.resultado ?? "no quedó dicho"}
+          {s.desafio.sinConfirmar && (
+            <span className="ml-2 rounded-full border border-warn-line bg-warn-surface px-2 py-0.5 text-[11px] font-medium text-warn-ink">Sin confirmar: la próxima guía arranca por ahí</span>
+          )}
         </p>
         {s.desafio.falta.length > 0 && (
           <p className="text-[13px] text-fg-secondary">
@@ -134,6 +158,15 @@ export function LoQueDejoLaSesion({ pestana, conLectura }: { pestana: PestanaDeS
       <label className="block space-y-1">
         <span className="text-xs font-medium text-fg-secondary">Desafío principal</span>
         <textarea value={texto} onChange={(e) => setTexto(e.target.value)} maxLength={500} rows={2} className={cn(CAMPO, "resize-y")} />
+      </label>
+      <label className="block space-y-1">
+        <span className="text-xs font-medium text-fg-secondary">El resultado que buscan, en sus palabras (de dónde a dónde, con qué número y para cuándo)</span>
+        <input value={resultado} onChange={(e) => setResultado(e.target.value)} maxLength={300} className={CAMPO} />
+      </label>
+      <label className="flex items-center gap-2 text-[13px] text-fg">
+        <input type="checkbox" checked={claro} onChange={(e) => setClaro(e.target.checked)} className="h-4 w-4 accent-brand" />
+        Quedó claro qué resultado busca
+        {!claro && <span className="text-xs text-warn-ink">· el desafío queda sin confirmar</span>}
       </label>
       <label className="block space-y-1">
         <span className="text-xs font-medium text-fg-secondary">Lo que falta para confirmarlo (una por línea)</span>

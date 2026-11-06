@@ -16,7 +16,7 @@
  */
 
 /** Sube cuando cambia el criterio: cada análisis guarda con cuál se hizo. */
-export const VERSION_DEL_CRITERIO = "2026-10-29";
+export const VERSION_DEL_CRITERIO = "2026-11-06";
 
 export const ETAPAS = ["identificar", "investigar", "conectar", "explorar", "asesorar"] as const;
 export type EtapaDelProceso = (typeof ETAPAS)[number];
@@ -74,7 +74,8 @@ export const PROCESO_CONSULTIVO: readonly EtapaDelCriterio[] = [
 
 /**
  * Los puntos que responde el análisis de cada reunión: los diez del plan y, desde el 29 oct, los dos de aterrizar y
- * expandir (el dolor del área y la base para un caso de uso) y lo que salió bien. El 3 lo calcula Nexus.
+ * expandir (el dolor del área y la base para un caso de uso) y lo que salió bien. Desde el 6 nov, si se averiguó el resultado que busca.
+ * El 3 lo calcula Nexus.
  */
 export const PUNTOS_DEL_ANALISIS = [
   { id: "consultiva", titulo: "Qué tan consultiva fue" },
@@ -90,8 +91,17 @@ export const PUNTOS_DEL_ANALISIS = [
   { id: "caso_de_uso", titulo: "Si ya hay base para ofrecer un caso de uso ligado a lo que más impacto le causa, o qué falta" },
   { id: "bien", titulo: "Lo que salió bien, cada cosa con su cita" },
   { id: "recomendaciones", titulo: "Para mejorar: dos o tres, cada una con su cita" },
+  // 2026-11-06 (roleplay de Ventas: nunca se preguntó por el objetivo del cliente). Viaja en el criterio, no en el prompt de la base.
+  { id: "resultado", titulo: "¿Se averiguó el resultado que busca?" },
 ] as const;
 export type PuntoDelAnalisis = (typeof PUNTOS_DEL_ANALISIS)[number]["id"];
+
+/**
+ * El punto «resultado» (2026-11-06): la gente compra la solución a un problema o el camino a una meta. Va en el criterio
+ * (que arma el código y viaja en el mensaje) para no tener que reescribir el prompt guardado en la base.
+ */
+export const RESULTADO_EN_EL_CRITERIO =
+  "UN JUICIO MÁS — resultado (si | en_parte | no): ¿se averiguó el resultado que busca el cliente: de dónde a dónde, con qué número y para cuándo? «si» si el cliente lo dijo con cifra o fecha; «en_parte» si lo dijo vago; «no» si nadie lo preguntó ni lo dijo (por ausencia, sin cita). Con «si» o «en_parte», cita el turno donde el cliente lo dice.";
 
 /** Lo que se le dice al agente cuando Smarteam todavía no escribió su position statement (K3). */
 export const SIN_POSICIONAMIENTO = "Sin posicionamiento escrito: Smarteam todavía no escribió su position statement. No juzgues este punto.";
@@ -106,5 +116,5 @@ export function criterioComoTexto(o: { positionStatement: string | null; propues
     ? `EL POSICIONAMIENTO DE SMARTEAM (position statement):\n${o.positionStatement.trim()}`
     : `EL POSICIONAMIENTO DE SMARTEAM: ${SIN_POSICIONAMIENTO}`;
   const valor = o.propuestaDeValor?.trim() ? `\nLA PROPUESTA DE VALOR DE SMARTEAM:\n${o.propuestaDeValor.trim()}` : "";
-  return `EL PROCESO CONSULTIVO DE SMARTEAM (criterio ${VERSION_DEL_CRITERIO}):\n${etapas}\n\n${posicionamiento}${valor}`;
+  return `EL PROCESO CONSULTIVO DE SMARTEAM (criterio ${VERSION_DEL_CRITERIO}):\n${etapas}\n\n${RESULTADO_EN_EL_CRITERIO}\n\n${posicionamiento}${valor}`;
 }

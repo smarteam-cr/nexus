@@ -40,10 +40,10 @@ import { useLienzo } from "./contexto";
 import { diaLargo, EtiquetaDePregunta, nombreDelPara, Rotulo, useCambiosDesdeLaGuia, useEditarLaSesion, useGuiaDeLaSesion } from "./piezas-de-la-sesion";
 import { AgregarPregunta, PreguntaDeLaGuia, Quitadas, useAjustarLaGuia, useTemasDeLaGuia } from "./PreguntaDeLaGuia";
 import { GuiaEnOrden } from "./GuiaEnOrden";
-import { AgendaDeLaGuia } from "./AgendaDeLaGuia";
+import { AgendaDeLaGuia, GuiaAnterior } from "./AgendaDeLaGuia";
 import { ContactoPrevio, ContextoDeLaSesion, ContextoDeTodaLaExploracion } from "./ContextoDeLaPreparacion";
 import { faltaParaLaGuia } from "@/lib/exploraciones/contexto-de-la-exploracion";
-import { PreguntasDelObjetivo, usePedirPreguntasDelObjetivo } from "./PreguntasDelObjetivo";
+import { usePedirPreguntasDelObjetivo } from "./PreguntasDelObjetivo";
 import { sugeridasVigentes } from "@/lib/exploraciones/ajustes-de-la-guia";
 import { LoQueCubreLaGuia } from "./LoQueCubreLaGuia";
 import { abrirElChatDeNexus } from "@/lib/nexus-chat/constantes";
@@ -76,9 +76,11 @@ function EstadoDeLaGuia({ pestana }: { pestana: PestanaDeSesion }) {
   // Nexus no planifica por defecto (2026-11-06): sin el contexto de la persona, el botón espera.
   const falta = faltaParaLaGuia(exp.estado.contenido.contexto, pestana.sesion);
   const { corrida, corriendo, lanzando, lanzar } = useCorrida();
-  const { guia, cambios } = useCambiosDesdeLaGuia(pestana);
+  const { guia: deLaSesion, cambios: cambiosDeLaSesion } = useCambiosDesdeLaGuia(pestana);
+  // La guía con el formato de antes no cuenta como guía: queda plegada abajo como «Guía anterior» (2026-11-06).
+  const guia = deLaSesion?.agenda ? deLaSesion : null;
+  const cambios = guia ? cambiosDeLaSesion : null;
   const armando = (corriendo && corrida?.modo === "guia") || lanzando;
-  const equipo = pestana.sesion?.equipo ?? null;
   const nombre = (para: string) => nombreDelPara(para, escala, marco);
 
   let titulo: string;
@@ -91,14 +93,13 @@ function EstadoDeLaGuia({ pestana }: { pestana: PestanaDeSesion }) {
     boton = "Armando…";
     tono = "info";
   } else if (falta.length) {
-    titulo = guia ? "Falta contexto para volver a armar la guía" : "Antes de armar la guía, Nexus necesita tu contexto";
-    detalle = `Falta ${enLista(falta)}. Nexus arma la guía solo con lo que le das${equipo ? `, para la sesión con ${EQUIPOS[equipo].nombre}` : ""}.`;
-    boton = guia ? "Volver a armarla" : "Armar la guía";
-    tono = "aviso";
+    // Sin el contexto no hay nada que decir acá: los recuadros del contexto ya lo piden (2026-11-06, Elías).
+    return null;
   } else if (!guia) {
     titulo = "Todavía no hay guía";
-    detalle =
-      "Nexus la arma con el contexto que le diste: con quién es, qué espera el cliente, el objetivo y lo que ya se sabe. Sale como una agenda de bloques, con lo que hay que averiguar en cada uno.";
+    detalle = `Nexus la arma con el contexto que le diste: con quién es, qué espera el cliente, el objetivo y lo que ya se sabe. Sale como una agenda de bloques, con lo que hay que averiguar en cada uno.${
+      deLaSesion ? " La guía anterior queda abajo, plegada." : ""
+    }`;
     boton = "Armar la guía";
     tono = "info";
   } else if (cambios) {
@@ -879,7 +880,10 @@ export default function AntesDeLaSesion({ pestana, esLaProxima }: { pestana: Pes
   const delObjetivo = usePedirPreguntasDelObjetivo();
   const traidos = pestana.sesion?.explorar ?? [];
   const conTest = exp.leido.tests.length > 0;
+  // En la próxima, una guía con el formato de antes se pliega abajo como «Guía anterior» (2026-11-06, Elías).
   const guiaDeAntes = !!guia && !guia.agenda;
+  const actual = esLaProxima && guiaDeAntes ? null : guia;
+  const anterior = esLaProxima ? (guiaDeAntes ? guia : pestana.sesion ? (exp.estado.propuesta.guiasAnteriores?.[pestana.sesion.id] ?? null) : null) : null;
 
   if (!esLaProxima && !guia) {
     return (
@@ -916,20 +920,20 @@ export default function AntesDeLaSesion({ pestana, esLaProxima }: { pestana: Pes
         sugerido={guia?.objetivo ?? null}
         preguntas={preguntas}
         alCambiarElObjetivo={() => {
-          // Las preguntas para el objetivo son de la guía de antes: la agenda se arma entera con el objetivo.
-          if (guiaDeAntes) void delObjetivo.pedir();
+          // Las preguntas para el objetivo eran de la guía de antes: la agenda se arma entera con el objetivo.
+          if (guiaDeAntes && !esLaProxima) void delObjetivo.pedir();
         }}
         pidiendo={delObjetivo.pidiendo}
       />
       {esLaProxima && <ContextoDeLaSesion key={pestana.clave} pestana={pestana} />}
-      {esLaProxima && guiaDeAntes && <PreguntasDelObjetivo pestana={pestana} pidiendo={delObjetivo.pidiendo} alPedirOtras={() => void delObjetivo.pedir()} />}
+
       {esLaProxima && <CuandoYConQuien pestana={pestana} />}
       {esLaProxima && <LoQueTraes pestana={pestana} />}
       {esLaProxima && <LoQueYaSabemos pestana={pestana} />}
       {/* Sin guía no hay guía de base: Nexus no planifica por defecto. */}
-      {guia && <LaGuia pestana={pestana} esLaProxima={esLaProxima} />}
-      {guia && <LoQueCubreLaGuia pestana={pestana} esLaProxima={esLaProxima} />}
-      {guia && <RetosDeLaIndustria pestana={pestana} esLaProxima={esLaProxima} />}
+      {actual && <LaGuia pestana={pestana} esLaProxima={esLaProxima} />}
+      {actual && <LoQueCubreLaGuia pestana={pestana} esLaProxima={esLaProxima} />}
+      {actual && <RetosDeLaIndustria pestana={pestana} esLaProxima={esLaProxima} />}
       {conTest && pestana.numero === 1 && (
         <details className="rounded-xl border border-line bg-surface">
           <summary className="cursor-pointer select-none px-[18px] py-3.5 text-sm font-semibold text-fg">Su plan: qué va primero (es lo que se lleva de esta reunión)</summary>
@@ -938,7 +942,8 @@ export default function AntesDeLaSesion({ pestana, esLaProxima }: { pestana: Pes
           </div>
         </details>
       )}
-      {guia && <SiSeResiste pestana={pestana} esLaProxima={esLaProxima} />}
+      {actual && <SiSeResiste pestana={pestana} esLaProxima={esLaProxima} />}
+      {anterior && <GuiaAnterior guia={anterior} />}
     </div>
   );
 }

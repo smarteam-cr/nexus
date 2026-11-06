@@ -46,6 +46,8 @@ export interface BloqueDeLaAgenda {
   abre: string;
   /** El bloque central: el que no se puede pasar rápido. Uno por agenda. */
   central?: true;
+  /** El bloque fijo del resultado que buscan (resultado.ts): sus seis cosas tienen ids estables. */
+  resultado?: true;
   averiguar: CosaPorAveriguar[];
   /** Qué datos conviene obtener y cómo convertirlos en impacto (costo, tiempo, ventas perdidas, seis meses más igual). */
   impacto?: string;
@@ -63,6 +65,8 @@ export const MIN_BLOQUES = 4;
 export const MAX_BLOQUES = 6;
 export const MAX_CLAVES = 4;
 export const MAX_AVERIGUAR_POR_BLOQUE = 5;
+/** El bloque del resultado trae seis cosas fijas (resultado.ts): el esquema guardado acepta hasta seis. */
+export const MAX_AVERIGUAR_GUARDADAS = 6;
 export const MAX_PREGUNTAS_SUGERIDAS = 2;
 export const DURACION_POR_DEFECTO = 60;
 
@@ -130,7 +134,8 @@ export function preguntaDoble(texto: string): boolean {
   return PEGADA.test(texto);
 }
 
-const PEGADA = /,\s*y\s+(qu[eé]|c[oó]mo|cu[aá]nt[oa]s?|qui[eé]n(es)?|d[oó]nde|por qu[eé]|cu[aá]ndo|para cu[aá]ndo|cu[aá]l(es)?)\b/i;
+// Sin `\b`: en JavaScript no ve las letras con tilde como letras («qué» seguido de un espacio no tiene límite de palabra).
+const PEGADA = /,\s*y\s+(qu[eé]|c[oó]mo|cu[aá]nt[oa]s?|qui[eé]n(es)?|d[oó]nde|por qu[eé]|cu[aá]ndo|para cu[aá]ndo|cu[aá]l(es)?)(?=[\s,;:¿?]|$)/i;
 
 /**
  * Una pregunta doble, partida en dos de una sola cosa (lo que el reintento no arregló): «¿A, y qué B?» → «¿A?» y «¿Qué B?»;
@@ -147,6 +152,11 @@ export function partirPreguntaDoble(texto: string): string[] {
   const segunda = resto.charAt(0).toUpperCase() + resto.slice(1);
   const cierra = (s: string) => (/[?.]$/.test(s) ? s : `${s}?`);
   return [primera.includes("¿") ? cierra(primera) : `${primera.replace(/[,.]$/, "")}.`, cierra(segunda.startsWith("¿") ? segunda : `¿${segunda}`)];
+}
+
+/** Lo que se dice, sin espacios por completar: «llegar a [resultado en sus palabras]» → «llegar a (resultado en sus palabras)». */
+export function sinHuecos(texto: string): string {
+  return texto.replace(/\[([^\]]+)\]/g, "($1)");
 }
 
 /** Un espacio por completar («[retos con sus palabras]»): lo que se dice tiene que poder decirse tal cual. */

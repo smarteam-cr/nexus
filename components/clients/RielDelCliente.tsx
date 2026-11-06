@@ -12,13 +12,14 @@
  *  · LA CUENTA: «Información del cliente», «Procesos», «La escala» y «Casos de uso» (2026-10-12: dónde está la
  *    empresa en la escala y lo que se hace con ella, venga o no de una preventa) y «Fuera de alcance» (2026-10-07:
  *    las solicitudes fuera de alcance de todos sus proyectos, con su seguimiento).
+ *  · CERRADOS (2026-11-06): los que terminaron en HubSpot, en un grupo plegado debajo de los activos. Se abren
+ *    como cualquiera —sus documentos siguen ahí— pero no pesan como un activo.
  *  · Al pie, «Traer proyectos de HubSpot».
  *
  * Copia medida por medida el riel de la preventa: filas de 14 px con un punto de 8 px, la pieza
  * abierta en azul sobre azul claro, lo colgado con una línea a la izquierda.
  */
-import { useRef, useState } from "react";
-import type { ReactNode } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import { cn } from "@/lib/cn";
 import { repartirElRiel } from "@/lib/flow/reparto-del-riel";
 import type { EstadoDePieza } from "@/components/canvas/SelectorDePiezas";
@@ -42,6 +43,7 @@ export interface ProyectoDelRiel {
 
 export default function RielDelCliente({
   proyectos,
+  cerrados = [],
   activo,
   proyectoDelRiel,
   onElegirProyecto,
@@ -52,6 +54,8 @@ export default function RielDelCliente({
   traer,
 }: {
   proyectos: ProyectoDelRiel[];
+  /** Los que terminaron en HubSpot: van plegados en «Cerrados», después de los activos. */
+  cerrados?: ProyectoDelRiel[];
   /** El proyecto abierto en el centro (null si se mira algo de la cuenta). */
   activo: string | null;
   /** El proyecto cuyas piezas se ven colgadas: el abierto, o el último que se abrió. */
@@ -65,6 +69,47 @@ export default function RielDelCliente({
   slotDePiezas: (el: HTMLDivElement | null) => void;
   traer: { visible: boolean; sincronizando: boolean; onClick: () => void };
 }) {
+  /* Plegado por default; abierto si el proyecto del riel es uno cerrado (se llegó por enlace o recién se eligió). */
+  const [verCerrados, setVerCerrados] = useState(false);
+  const cerradosAbiertos = verCerrados || cerrados.some((p) => p.id === proyectoDelRiel);
+
+  const fila = (p: ProyectoDelRiel, cerrado = false) => {
+    const abierto = p.id === proyectoDelRiel;
+    const enCentro = p.id === activo;
+    return (
+      <div key={p.id} className="flex flex-col gap-0.5">
+        <button
+          type="button"
+          onClick={() => onElegirProyecto(p.id)}
+          title={p.ayuda}
+          aria-current={enCentro ? "true" : undefined}
+          className="flex w-full items-start gap-2 rounded-lg px-2.5 py-2 text-left transition-colors hover:bg-surface-hover"
+        >
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            className={cn("mt-1 h-3 w-3 flex-shrink-0 text-fg-muted transition-transform", abierto && "rotate-90")}
+            aria-hidden="true"
+          >
+            <path d="M9 5l7 7-7 7" />
+          </svg>
+          <span className="flex min-w-0 flex-1 flex-col gap-px">
+            <span className={cn("text-sm leading-[1.35]", abierto ? "font-semibold text-fg" : cerrado ? "text-fg-muted" : "font-medium text-fg-secondary")}>{p.nombre}</span>
+            <span className={cn("text-xs leading-[1.35]", p.prueba ? "font-medium text-warn-ink" : "text-fg-muted")}>{cerrado ? `Cerrado · ${p.tipo}` : p.tipo}</span>
+          </span>
+          {p.encargado ? (
+            <Avatar name={p.encargado.nombre} src={p.encargado.foto ?? undefined} size="xs" neutro title={p.encargado.nombre} className="self-center" />
+          ) : (
+            !p.prueba && <span title="Sin encargado" className="h-6 w-6 flex-shrink-0 self-center rounded-full border border-dashed border-line" />
+          )}
+        </button>
+        {abierto && <div ref={slotDePiezas} />}
+      </div>
+    );
+  };
+
   return (
     <nav aria-label="Proyectos y piezas del cliente" data-recorrido="ficha.riel" className="flex h-full flex-col gap-4">
       <div className="flex flex-col gap-0.5">
@@ -72,42 +117,31 @@ export default function RielDelCliente({
         {proyectos.length === 0 && (
           <p className="px-2.5 py-1 text-[13px] text-fg-muted">Esta empresa todavía no tiene proyectos abiertos.</p>
         )}
-        {proyectos.map((p) => {
-          const abierto = p.id === proyectoDelRiel;
-          const enCentro = p.id === activo;
-          return (
-            <div key={p.id} className="flex flex-col gap-0.5">
-              <button
-                type="button"
-                onClick={() => onElegirProyecto(p.id)}
-                title={p.ayuda}
-                aria-current={enCentro ? "true" : undefined}
-                className="flex w-full items-start gap-2 rounded-lg px-2.5 py-2 text-left transition-colors hover:bg-surface-hover"
+        {proyectos.map((p) => fila(p))}
+        {cerrados.length > 0 && (
+          <div className="flex flex-col gap-0.5">
+            <button
+              type="button"
+              onClick={() => setVerCerrados((v) => !v)}
+              aria-expanded={cerradosAbiertos}
+              title="Los proyectos que terminaron en HubSpot. Sus documentos siguen acá; no cuentan en la cartera ni en Cobranza."
+              className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-xs text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg-secondary"
+            >
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                className={cn("h-3 w-3 flex-shrink-0 transition-transform", cerradosAbiertos && "rotate-90")}
+                aria-hidden="true"
               >
-                <svg
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  className={cn("mt-1 h-3 w-3 flex-shrink-0 text-fg-muted transition-transform", abierto && "rotate-90")}
-                  aria-hidden="true"
-                >
-                  <path d="M9 5l7 7-7 7" />
-                </svg>
-                <span className="flex min-w-0 flex-1 flex-col gap-px">
-                  <span className={cn("text-sm leading-[1.35]", abierto ? "font-semibold text-fg" : "font-medium text-fg-secondary")}>{p.nombre}</span>
-                  <span className={cn("text-xs leading-[1.35]", p.prueba ? "font-medium text-warn-ink" : "text-fg-muted")}>{p.tipo}</span>
-                </span>
-                {p.encargado ? (
-                  <Avatar name={p.encargado.nombre} src={p.encargado.foto ?? undefined} size="xs" neutro title={p.encargado.nombre} className="self-center" />
-                ) : (
-                  !p.prueba && <span title="Sin encargado" className="h-6 w-6 flex-shrink-0 self-center rounded-full border border-dashed border-line" />
-                )}
-              </button>
-              {abierto && <div ref={slotDePiezas} />}
-            </div>
-          );
-        })}
+                <path d="M9 5l7 7-7 7" />
+              </svg>
+              Cerrados ({cerrados.length})
+            </button>
+            {cerradosAbiertos && cerrados.map((p) => fila(p, true))}
+          </div>
+        )}
 
         <div className="mx-1 my-2.5 border-t border-line" />
         <p className={cn(ROTULO_DEL_SISTEMA, "px-2.5 pb-1.5")}>La cuenta</p>
