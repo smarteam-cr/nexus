@@ -34,6 +34,7 @@ import type { SaberDelCliente } from "./lo-que-ya-sabemos";
 import { planDeLaGuia, preguntaDeRespaldo, REPREGUNTAS_DEL_PASO, repiteLoSabido, type PasoDeLaPregunta, type PreguntaPlaneada } from "./plan-de-la-guia";
 import { sinCitaAdelante, type AjustesDeLaGuia, type OrigenDelAjuste } from "./ajustes-de-la-guia";
 import { esTemaDeEquipo, leerTemaDeEquipo, nombreDelTemaDeEquipo, type ClaveDeEquipo } from "./equipos";
+import type { AgendaDeLaGuia } from "./agenda";
 
 // ── Las sesiones ──────────────────────────────────────────────────────────────
 
@@ -880,6 +881,11 @@ export interface GuiaDeLaSesion {
    * después, cada una con su porqué. Las sugiere el agente; las agenda una persona.
    */
   sesionesSugeridas?: { equipo: ClaveDeEquipo; porque: string }[];
+  /**
+   * La guía como agenda por bloques (2026-11-06, agenda.ts): el formato de toda guía nueva. Con ella, la pantalla muestra
+   * la agenda; `preguntas` sale de la agenda (una por tema) para lo que todavía las lee. Sin ella, una guía de antes.
+   */
+  agenda?: AgendaDeLaGuia;
   /** Cómo abrir la conversación, desde algo de la empresa. */
   apertura: string[];
   /** La escala explicada en simple: solo cuando no hizo el test y todavía no se habló. */

@@ -10817,7 +10817,8 @@ determinado por el momento».
 - **Una hora, con tiempo para hablarle**: Abrir 0–5 · Preguntar 5–40 · Contarle 40–50 · Cerrar 50–60 (antes 45 minutos
   sin un momento para contarle nada). «Contarle» (`queContarle`) usa solo lo que Nexus sabe: dónde está su área en la
   escala y los casos de uso elegidos; nada de casos de otros clientes. Los retos de su industria quedan plegados y no
-  salen en una sesión con equipo.
+  salen en una sesión con equipo. *(Desde el 2026-11-06 una guía nueva es una agenda de 4 a 6 bloques que arma el agente
+  según la duración de la sesión; estos tramos fijos quedan para las guías de antes. Ver «La exploración guiada».)*
 - **El color del panel dice la verdad** (`estadoDeLaTarjeta`, `estado-de-las-tarjetas.ts`): verde completo, ámbar a medias
   (una meta sin cifra, quién decide sin quien aprueba, un texto que solo dice que no se sabe), azul sugerido, punteado
   falta, y un punto azul cuando una sesión trajo algo nuevo para una tarjeta que ya tenía algo (antes no se veía).
@@ -11169,7 +11170,8 @@ tuviera su investigación.
    sea de la empresa de esa preventa.
 6. **Lo que Smarteam dice de sí mismo** entra a la guía de la preventa por su lector (`lib/smarteam/contexto.ts`), solo
    la propuesta de valor y el position statement, en 900 caracteres como mucho y nada si no están: para la apertura y
-   «Contarle», nunca para nombrar a otros clientes.
+   «Contarle», nunca para nombrar a otros clientes. *(Corregido el 2026-11-06, «La exploración guiada»: la apertura de la
+   preventa sí nombra uno o dos clientes de REFERENCIA de su industria, solo de la lista que el equipo carga en Audiencia.)*
 
 **Volver atrás:** revertir el commit. No hay SQL: las guías viejas se siguen leyendo (los campos nuevos son opcionales).
 
@@ -12890,3 +12892,24 @@ preguntas.
   lo último guardado; una sesión nueva entra con `agregarSesion`, y la pestaña que ya se volvió sesión no se crea dos
   veces. La lista entera queda solo para cambios de la reunión de la sesión. *Por qué por campo y no un candado:* el
   reintento de un 409 también es seguro así (`reintento.ts` mira solo esos campos).
+- **La guía es una agenda (puntos 6 a 14 y 17, `lib/exploraciones/agenda.ts`).** Arriba, el objetivo y de 3 a 4 claves
+  (siempre los retos, cómo los mide hoy y a dónde quiere llegar). Debajo, de 4 a 6 bloques con minutos, título y UNA
+  pregunta para abrir; uno central. En cada bloque, lo que se averigua (en el orden del proceso) con 1 o 2 preguntas
+  sugeridas y, en el cuerpo, cómo convertir lo que salga en impacto. No hay secciones de preguntas fuera de los bloques:
+  sin retos de la industria aparte ni «lo vendido» aparte (entran a los bloques). *El código decide lo que el modelo no
+  respeta:* el primer bloque es la apertura y el último el cierre, digan lo que digan; hay un solo central (el marcado o
+  el más largo); lo que apunta a algo que no está en «PARA» pierde el `para`.
+- **Las marcas son las de siempre.** Cada cosa se marca en `SesionPlaneada.hechas` (`av:<huella del texto>`); lo que ya
+  se sabía nace marcado y se desmarca con `!av:…`. Marcar una cosa con tema suma también el tema, así lo de después de la
+  sesión (lo ya preguntado, lo que no salió) cuenta igual. `preguntas` se sigue guardando, sacado de la agenda (una por
+  tema), para lo que todavía las lee: lo que cubre la guía, el correo de seguimiento, el análisis de la venta.
+- **Preguntas abiertas y de una sola cosa, verificado por código.** `preguntaCerrada` y `preguntaDoble` miran cómo abre
+  cada pregunta sugerida; si hay alguna, el mismo reintento del voseo la pide otra vez avisándolo, una sola vez, y se
+  queda la que tenga menos problemas sin más voseo.
+- **La apertura y el cierre son iguales en todas** y los arma el agente con sus reglas: saludo, lo que ya sabemos y otro
+  enfoque (o amplia si es la primera sin contexto); en preventa, la industria, por qué ahora, uno o dos clientes de
+  referencia de su industria (solo la lista de Audiencia: nunca otra cuenta ni sus datos) y cómo trabajamos, más la frase
+  para cuando piden un demo o precios. El cierre resume con sus palabras, valida y agenda; en preventa confirma fecha,
+  presupuesto, quién decide, quién más participa y contra qué nos comparan. No vende la implementación.
+- **Las guías de antes se ven como se armaron.** Sin `agenda`, la Preparación y «En vivo» muestran la lista de siempre.
+  No hay SQL: la agenda vive en el Json de la guía.

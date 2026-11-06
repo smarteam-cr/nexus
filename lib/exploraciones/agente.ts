@@ -71,6 +71,7 @@ import { agendaRenovada, exploracionesQueLeenLaReunion, hayQueLeerAlPreparar, mi
 import { buildInternalDomainsSet } from "@/lib/sessions/categorize";
 import { hoyEnCostaRica } from "./fechas";
 import { bloqueDeInstrucciones } from "./notas-de-sesion";
+import { avisoDePreguntasCerradas, preguntasQueNoCumplen } from "./agenda";
 import { avisoDeVoseo, contextoDeLaGuia, leerLaGuiaDelAgente, notasParaLaGuia, pedidoDeLaGuia, voseoEnLaGuia } from "./guia-pedido";
 import {
   focoDeLaGuia,
@@ -954,10 +955,15 @@ export async function armarLaGuiaSinGuardar(
   if (!guia) return null;
   /* El vendedor lee la guía en voz alta: tiene que estar en tuteo. La de CreditForce (2026-10-01) salió
      en voseo («vivís», «podés») porque las fuentes lo estaban: si pasa, se pide una vez más avisándolo. */
-  const voseo = voseoEnLaGuia(guia);
-  if (voseo.length) {
-    const otra = leerLaGuiaDelAgente(await pedir(avisoDeVoseo(voseo)), ctx, runId, ahora);
-    if (otra && voseoEnLaGuia(otra).length < voseo.length) guia = otra;
+  /* La agenda (2026-11-06) además pide preguntas abiertas y de una sola cosa: si salen cerradas o dobles, va en el mismo
+     reintento. Una sola vez, y se queda la que tenga menos problemas. */
+  const problemas = (g: GuiaDeLaSesion) => ({ voseo: voseoEnLaGuia(g), cerradas: g.agenda ? preguntasQueNoCumplen(g.agenda) : [] });
+  const antes = problemas(guia);
+  if (antes.voseo.length || antes.cerradas.length) {
+    const aviso = `${antes.voseo.length ? avisoDeVoseo(antes.voseo) : ""}${antes.cerradas.length ? avisoDePreguntasCerradas(antes.cerradas) : ""}`;
+    const otra = leerLaGuiaDelAgente(await pedir(aviso), ctx, runId, ahora);
+    const despues = otra ? problemas(otra) : null;
+    if (otra && despues && despues.voseo.length <= antes.voseo.length && despues.voseo.length + despues.cerradas.length < antes.voseo.length + antes.cerradas.length) guia = otra;
   }
   // Lo que va a ver el vendedor: las preguntas del plan, con la de respaldo donde el agente repitió lo sabido.
   // La guía recién armada: cuenta todo lo leído (sin `hasta`).
@@ -1052,7 +1058,15 @@ export async function contextoParaLaGuia(exploracionId: string) {
             .catch(() => null),
         ])
       : [[], null];
-  const ctx = contextoDeLaGuia({
+  /* Los clientes de referencia de Smarteam por industria (Audiencia, 2026-11-06): los únicos que la apertura de la preventa
+     puede nombrar. Nunca otra cuenta: solo el nombre y la industria que el equipo cargó para esto. */
+  const referencias =
+    marco.clave === "venta"
+      ? await contextoDeSmarteam()
+          .then((c) => c.perfil.clientesDeReferencia.map((r) => `${r.industria}: ${r.nombre ?? "(sin nombre)"}${r.porque ? ` (${r.porque})` : ""}`).slice(0, 12))
+          .catch(() => [] as string[])
+      : [];
+  const ctxBase = contextoDeLaGuia({
     notasDeHubspot,
     smarteam,
     marco,
@@ -1075,6 +1089,7 @@ export async function contextoParaLaGuia(exploracionId: string) {
     tests: loLeido.tests,
     ...(marco.clave === "venta" ? { faltanParaProponer: listaParaProponer(estado, chequeoDe(escala, estado), hoyEnCostaRica(ahora)) } : {}),
   });
+  const ctx = { ...ctxBase, ...(referencias.length ? { referencias } : {}) };
   /* `delProyecto` (cada fuente con su id) y `memoriaDelProyecto` también los lee el asistente
      (lib/operaciones/guia-server.ts › `loEstableDeLaGuia`): sin F0, que el chat ya tiene en su contexto. */
   return { fila, estado, escala, general: escalaVig.general, posiciones, pendientes, loLeido, marco, ctx, ahora, delProyecto, memoriaDelProyecto: memoriaProyecto ?? "", automaticas };

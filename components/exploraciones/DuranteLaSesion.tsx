@@ -22,6 +22,7 @@ import { EQUIPOS } from "@/lib/exploraciones/equipos";
 import { claveDeNotaDePregunta, claveDeNotaDeSesion, MAX_NOTA_DE_SESION } from "@/lib/exploraciones/notas-de-sesion";
 import { IconoDeSugerencia } from "@/components/ui/sistema";
 import { SiSeResiste } from "./AntesDeLaSesion";
+import { AgendaDeLaGuia } from "./AgendaDeLaGuia";
 import { useLienzo } from "./contexto";
 import { EstadoDelGuardado, EtiquetaDePregunta, Rotulo, useEditarLaSesion, useGuiaDeLaSesion, useNotaQueSeGuarda } from "./piezas-de-la-sesion";
 import Segmentos from "./Segmentos";
@@ -124,7 +125,7 @@ function NotasLibres({ pestana }: { pestana: PestanaDeSesion }) {
 }
 
 export default function DuranteLaSesion({ pestana, esLaProxima }: { pestana: PestanaDeSesion; esLaProxima: boolean }) {
-  const { exp, marco } = useLienzo();
+  const { exp, marco, puedeEditar } = useLienzo();
   const { guia, enOrden } = useGuiaDeLaSesion(pestana, esLaProxima);
   const editar = useEditarLaSesion(pestana, "durante");
   const [filtro, setFiltro] = useState<Filtro>("todas");
@@ -162,47 +163,51 @@ export default function DuranteLaSesion({ pestana, esLaProxima }: { pestana: Pes
         </section>
       )}
       <NotasLibres pestana={pestana} />
-      <section data-recorrido="preventa.sesion.preguntas" className="min-w-0 overflow-hidden rounded-xl border border-line bg-surface">
-        <header className="flex flex-wrap items-center gap-2.5 border-b border-line px-[18px] py-3">
-          <h3 className="text-[15px] font-semibold text-fg">Preguntas</h3>
-          <span className="text-[12.5px] text-fg-muted">
-            {enOrden.filter((p) => hechas.has(p.para)).length} de {enOrden.length} hechas
-          </span>
-          <span className="flex-1" />
-          <Segmentos
-            etiqueta="Filtrar las preguntas"
-            opciones={[
-              { clave: "todas", nombre: "Todas", cuenta: enOrden.length },
-              ...(delEquipo.length ? [{ clave: "equipo" as const, nombre: s?.equipo ? EQUIPOS[s.equipo].nombre : "Sistemas y datos", cuenta: delEquipo.length }] : []),
-              { clave: "marco", nombre: marco.nombre, cuenta: delMarco.length },
-              { clave: "escala", nombre: "Escala de rendimiento", cuenta: deLaEscala.length },
-              ...(deLoVendido.length ? [{ clave: "vendido" as const, nombre: "Lo vendido", cuenta: deLoVendido.length }] : []),
-            ]}
-            valor={filtro}
-            onCambiar={setFiltro}
-          />
-        </header>
-        {visibles.length ? (
-          <ul>
-            {visibles.map((p) => (
-              <FilaDePregunta
-                key={p.para}
-                pestana={pestana}
-                p={p}
-                hecha={hechas.has(p.para)}
-                ahora={p.para === ahora}
-                conNota={!!s && !!notas[claveDeNotaDePregunta(s.id, p.para)]}
-                alMarcar={() => marcar(p.para)}
-                alElegir={() => setElegida(p.para)}
-              />
-            ))}
-          </ul>
-        ) : (
-          <p className="px-[18px] py-5 text-[13px] text-fg-muted">
-            {enOrden.length ? "No hay preguntas de esta sección en la guía." : "Esta sesión no tiene guía: anota lo que salga en las notas libres."}
-          </p>
-        )}
-      </section>
+      {guia?.agenda ? (
+        <AgendaDeLaGuia pestana={pestana} agenda={guia.agenda} objetivo={null} momento="durante" editable={puedeEditar} />
+      ) : (
+        <section data-recorrido="preventa.sesion.preguntas" className="min-w-0 overflow-hidden rounded-xl border border-line bg-surface">
+          <header className="flex flex-wrap items-center gap-2.5 border-b border-line px-[18px] py-3">
+            <h3 className="text-[15px] font-semibold text-fg">Preguntas</h3>
+            <span className="text-[12.5px] text-fg-muted">
+              {enOrden.filter((p) => hechas.has(p.para)).length} de {enOrden.length} hechas
+            </span>
+            <span className="flex-1" />
+            <Segmentos
+              etiqueta="Filtrar las preguntas"
+              opciones={[
+                { clave: "todas", nombre: "Todas", cuenta: enOrden.length },
+                ...(delEquipo.length ? [{ clave: "equipo" as const, nombre: s?.equipo ? EQUIPOS[s.equipo].nombre : "Sistemas y datos", cuenta: delEquipo.length }] : []),
+                { clave: "marco", nombre: marco.nombre, cuenta: delMarco.length },
+                { clave: "escala", nombre: "Escala de rendimiento", cuenta: deLaEscala.length },
+                ...(deLoVendido.length ? [{ clave: "vendido" as const, nombre: "Lo vendido", cuenta: deLoVendido.length }] : []),
+              ]}
+              valor={filtro}
+              onCambiar={setFiltro}
+            />
+          </header>
+          {visibles.length ? (
+            <ul>
+              {visibles.map((p) => (
+                <FilaDePregunta
+                  key={p.para}
+                  pestana={pestana}
+                  p={p}
+                  hecha={hechas.has(p.para)}
+                  ahora={p.para === ahora}
+                  conNota={!!s && !!notas[claveDeNotaDePregunta(s.id, p.para)]}
+                  alMarcar={() => marcar(p.para)}
+                  alElegir={() => setElegida(p.para)}
+                />
+              ))}
+            </ul>
+          ) : (
+            <p className="px-[18px] py-5 text-[13px] text-fg-muted">
+              {enOrden.length ? "No hay preguntas de esta sección en la guía." : "Esta sesión no tiene guía: anota lo que salga en las notas libres."}
+            </p>
+          )}
+        </section>
+      )}
       <SiSeResiste pestana={pestana} esLaProxima={esLaProxima} compacto />
     </div>
   );

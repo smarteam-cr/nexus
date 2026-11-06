@@ -70,6 +70,7 @@ import {
   type PropuestaDeExploracion,
   type Validador,
 } from "./contenido";
+import { MAX_AVERIGUAR_POR_BLOQUE, MAX_BLOQUES, MAX_CLAVES, MAX_PREGUNTAS_SUGERIDAS } from "./agenda";
 import {
   MAX_PREGUNTAS_EN_LA_GUIA,
   MAX_PARA_EXPLORAR,
@@ -544,6 +545,32 @@ const PreguntaDeLaGuiaSchema = z.object({
   investiga: textoDeGuia(200).optional(),
   pideVer: textoDeGuia(200).optional(),
 });
+const CosaPorAveriguarSchema = z.object({
+  id: z.string().regex(/^av:[a-z0-9]{1,12}$/),
+  que: textoDeGuia(200),
+  preguntas: z.array(textoDeGuia(300)).min(1).max(MAX_PREGUNTAS_SUGERIDAS),
+  para: z.string().min(1).max(40).optional(),
+  sabido: textoDeGuia(120).optional(),
+});
+const AgendaSchema = z.object({
+  claves: z.array(textoDeGuia(300)).min(1).max(MAX_CLAVES),
+  bloques: z
+    .array(
+      z.object({
+        desde: z.number().int().min(0).max(240),
+        hasta: z.number().int().min(1).max(240),
+        titulo: textoDeGuia(120),
+        tipo: z.enum(["apertura", "cuerpo", "cierre"]),
+        abre: textoDeGuia(600),
+        central: z.literal(true).optional(),
+        averiguar: z.array(CosaPorAveriguarSchema).max(MAX_AVERIGUAR_POR_BLOQUE),
+        impacto: textoDeGuia(400).optional(),
+      }),
+    )
+    .min(2)
+    .max(MAX_BLOQUES),
+  fraseDeDemo: textoDeGuia(500).optional(),
+});
 const GuiaSchema: z.ZodType<GuiaDeLaSesion> = z.object({
   en: z.string().max(40),
   corridaId: z.string().max(60).nullable(),
@@ -575,6 +602,7 @@ const GuiaSchema: z.ZodType<GuiaDeLaSesion> = z.object({
     .array(z.object({ equipo: z.enum(EQUIPOS_DEL_CLIENTE), porque: textoDeGuia(200) }))
     .max(4)
     .optional(),
+  agenda: AgendaSchema.optional(),
   apertura: z.array(textoDeGuia(400)).max(4),
   escalaEnSimple: textoDeGuia(800).nullable(),
   preguntas: z.array(PreguntaDeLaGuiaSchema).max(MAX_PREGUNTAS_EN_LA_GUIA),

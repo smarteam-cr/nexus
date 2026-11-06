@@ -40,6 +40,7 @@ import { useLienzo } from "./contexto";
 import { diaLargo, EtiquetaDePregunta, nombreDelPara, Rotulo, useCambiosDesdeLaGuia, useEditarLaSesion, useGuiaDeLaSesion } from "./piezas-de-la-sesion";
 import { AgregarPregunta, PreguntaDeLaGuia, Quitadas, useAjustarLaGuia, useTemasDeLaGuia } from "./PreguntaDeLaGuia";
 import { GuiaEnOrden } from "./GuiaEnOrden";
+import { AgendaDeLaGuia } from "./AgendaDeLaGuia";
 import { PreguntasDelObjetivo, usePedirPreguntasDelObjetivo } from "./PreguntasDelObjetivo";
 import { sugeridasVigentes } from "@/lib/exploraciones/ajustes-de-la-guia";
 import { LoQueCubreLaGuia } from "./LoQueCubreLaGuia";
@@ -621,6 +622,9 @@ function LaGuia({ pestana, esLaProxima }: { pestana: PestanaDeSesion; esLaProxim
     casos: Object.values(e.contenido.casosDeUso),
   });
   const columnas = 2 + (enProyecto ? 1 : 0) + (deEquipo.length ? 1 : 0);
+
+  // La guía nueva (2026-11-06): una agenda por bloques. Las de antes se siguen viendo como se armaron.
+  if (guia?.agenda) return <AgendaDeLaGuia pestana={pestana} agenda={guia.agenda} objetivo={null} momento="antes" editable={puedeEditar} />;
 
   return (
     <section data-recorrido="preventa.sesion.preguntas" className="overflow-hidden rounded-xl border border-line bg-surface">
