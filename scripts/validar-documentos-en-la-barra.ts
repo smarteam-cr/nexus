@@ -32,7 +32,6 @@ import { deriveCanvasesConContenido } from "@/lib/pieces/piece-content";
 import { mismoDato } from "@/lib/pieces/kickoff-sin-tocar";
 import { CANVAS_DEF_BY_SLUG } from "@/lib/canvas/canvas-defs";
 import { pieceBySlug } from "@/lib/pieces/registry";
-import { PIEZAS_DE_UN_SERVICIO_RECURRENTE, PIEZAS_PROPIAS_DEL_CICLO } from "@/lib/servicios/ciclo";
 import { resolvePipeline, SENTINEL_SERVICE_TYPE } from "@/lib/projects/kind";
 import { SECCIONES_MUDADAS_A_LA_ADOPCION, PLANIFICACION_TEMPLATE } from "@/components/landing/configs/planificacion.defs";
 import { CLAVE_DE_LA_PLANTILLA } from "@/lib/entregables/registro";
@@ -118,6 +117,7 @@ async function main() {
   const liliana = (await db.query<{ email: string }>(`SELECT email FROM "TeamMember" WHERE name ILIKE 'liliana%'`).catch(() => ({ rows: [] }))).rows.map((r) => r.email.toLowerCase());
 
   const documentos: Documento[] = [];
+  const recurrentes = new Set<string>();
   const contenedores: Array<{ cuenta: string; documento: string }> = [];
   const apagados: Array<{ cuenta: string; proyecto: string; documento: string }> = [];
 
@@ -145,14 +145,13 @@ async function main() {
     }
 
     const vivos = delProyecto.filter((c) => !c.disabledAt && c.slug !== "handoff");
-    const esRecurrente = !!resolvePipeline(p.hubspotPipelineId)?.servicioRecurrente;
+    if (resolvePipeline(p.hubspotPipelineId)?.servicioRecurrente) recurrentes.add(p.id);
     const sueltos = nCuestionarios.get(p.id) ?? 0;
     const estadoCuestionarios: RowState = sueltos ? "generada" : "vacia";
     const filas: PieceRow[] = buildPieceRows(
       vivos.map((c) => ({ ...c, hasContent: conContenido.has(c.id), tocado: tocados.has(c.id) })),
       {
-        sinCanvas: { [PIEZA_CUESTIONARIOS]: estadoCuestionarios, ...(esRecurrente ? Object.fromEntries(PIEZAS_PROPIAS_DEL_CICLO.map((s) => [s, "vacia" as const])) : {}) },
-        piezasDelServicio: esRecurrente ? PIEZAS_DE_UN_SERVICIO_RECURRENTE : undefined,
+        sinCanvas: { [PIEZA_CUESTIONARIOS]: estadoCuestionarios },
       },
     );
     const exploracionAbierta = exploraciones.some((e) => e.projectId === p.id);
@@ -160,15 +159,13 @@ async function main() {
     const riel = filas.map((row) => ({
       ...row,
       oculta: ocultas.includes(row.slug),
-      // Como components/clients/ProjectCanvasPanel.tsx: los cuestionarios y las piezas del ciclo tienen su regla.
+      // Como components/clients/ProjectCanvasPanel.tsx: los cuestionarios tienen su regla.
       estado:
         row.slug === PIEZA_CUESTIONARIOS
           ? sueltos
             ? ("generada" as const)
             : ("sin_crear" as const)
-          : (PIEZAS_PROPIAS_DEL_CICLO as readonly string[]).includes(row.slug)
-            ? ("pendiente" as const)
-            : estadoEnElRiel(row.slug === "exploration" && exploracionAbierta ? { ...row, conNombre: true } : row, { conVacias: esRecurrente }),
+          : estadoEnElRiel(row.slug === "exploration" && exploracionAbierta ? { ...row, conNombre: true } : row),
     }));
     const { existentes, ocultas: plegadas } = repartirElRiel(riel);
     const ubicar = (porFila: (f: (typeof riel)[number]) => boolean): Documento["donde"] =>
@@ -189,7 +186,7 @@ async function main() {
         documento: nombre,
         donde,
         ...(donde === "INVISIBLE"
-          ? { motivo: c.slug && !pieceBySlug(c.slug) ? `pieza que ya no existe («${c.slug}»)` : esRecurrente ? "servicio recurrente: la barra no lista esta pieza" : "sin fila en la barra" }
+          ? { motivo: c.slug && !pieceBySlug(c.slug) ? `pieza que ya no existe («${c.slug}»)` : "sin fila en la barra" }
           : {}),
       });
     }
@@ -211,6 +208,27 @@ async function main() {
   for (const d of plegados) console.log(`   · plegado: ${d.cuenta} › ${d.proyecto} › ${d.documento}`);
   console.log(`   Cemaco y los proyectos de Liliana Moreno (${porNombre.length} documentos):`);
   for (const d of porNombre) console.log(`     ${d.donde === "a la vista" ? "✓" : "✗"} ${d.cuenta} › ${d.proyecto} › ${d.documento} — ${d.donde}${d.motivo ? ` (${d.motivo})` : ""}`);
+  const deUnRecurrente = (d: Documento) => proyectos.some((p) => recurrentes.has(p.id) && p.name === d.proyecto && p.cuenta === d.cuenta);
+  const deRecurrentes = documentos.filter(deUnRecurrente);
+  console.log(`   Proyectos de servicio recurrente (${recurrentes.size}, ${deRecurrentes.length} documentos):`);
+  for (const d of deRecurrentes) console.log(`     ${d.donde === "a la vista" ? "✓" : "✗"} ${d.cuenta} › ${d.proyecto} › ${d.documento} — ${d.donde}`);
+  for (const p of proyectos.filter((x) => recurrentes.has(x.id) && !deRecurrentes.some((d) => d.proyecto === x.name && d.cuenta === x.cuenta))) {
+    console.log(`     · ${p.cuenta} › ${p.name}: sin documentos con contenido`);
+  }
+  /* Lo que escribió el equipo en las pantallas del ciclo, que SmartLoop quitó (la meta, la sesión de cierre, el cronograma
+     aprobado): las filas se quedan en la base, pero ya no hay pantalla que las muestre. */
+  const ciclos = (
+    await db.query<{ cuenta: string; proyecto: string; numero: number; meta: string | null; metaEvaluada: string | null; siguienteCiclo: string | null; cierre: unknown; cronogramaAprobado: unknown }>(
+      `SELECT c.name AS cuenta, p.name AS proyecto, k.numero, k.meta, k."metaEvaluada", k."siguienteCiclo", k.cierre, k."cronogramaAprobado"
+       FROM "CicloDeProyecto" k JOIN "Project" p ON p.id = k."projectId" JOIN "Client" c ON c.id = p."clientId" ORDER BY 1, 2, 3`,
+    )
+  ).rows;
+  const conAlgo = ciclos.filter((k) => k.meta?.trim() || k.metaEvaluada?.trim() || k.siguienteCiclo?.trim() || k.cierre || k.cronogramaAprobado);
+  console.log(`   Ciclos en la base: ${ciclos.length} · con algo escrito que ya no tiene pantalla: ${conAlgo.length}`);
+  for (const k of conAlgo) {
+    const que = [k.meta?.trim() && "meta", k.metaEvaluada?.trim() && "meta evaluada", k.siguienteCiclo?.trim() && "siguiente ciclo", k.cierre && "cierre", k.cronogramaAprobado && "cronograma aprobado"].filter(Boolean).join(", ");
+    console.log(`     · ${k.cuenta} › ${k.proyecto} › ciclo ${k.numero}: ${que}`);
+  }
   if (contenedores.length) console.log(`   En «Información del cliente», sin barra de proyecto, igual que hoy: ${contenedores.map((c) => `${c.cuenta} (${c.documento})`).join(", ")}`);
   if (apagados.length) console.log(`   Apagados a propósito, igual que hoy: ${apagados.map((a) => `${a.cuenta} › ${a.documento}`).join(", ")}`);
 

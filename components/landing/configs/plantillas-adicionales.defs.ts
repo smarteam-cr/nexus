@@ -183,11 +183,11 @@ export const PLANIFICACION_WHATSAPP_TEMPLATE = deLaPlanificacion(
   SECCIONES_DE_WHATSAPP,
 );
 
-/** El cierre de un informe de avance: el proyecto sigue abierto, así que no puede decir que terminó (el de la Entrega lo dice). */
+/** El cierre de un informe de avance y de un aprendizaje: el trabajo sigue, así que no puede decir que terminó (el de la Entrega lo dice). */
 export const CIERRE_DEL_INFORME_DE_AVANCE = {
   eyebrow: "Lo que sigue",
   headline: "Así vamos, y esto es lo que viene",
-  subhead: "Tu equipo de Smarteam sigue trabajando contigo. Cualquier duda sobre este avance, escríbenos.",
+  subhead: "Tu equipo de Smarteam sigue trabajando contigo. Cualquier duda sobre este documento, escríbenos.",
   buttonLabel: "",
   buttonUrl: "",
   buttonTarget: "_blank",

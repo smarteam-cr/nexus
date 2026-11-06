@@ -177,9 +177,9 @@ describe("generar una copia", () => {
     expect(JSON.stringify(bloque?.data)).toContain("La IA no escribe los formularios");
   });
 
-  it("el informe de avance no dice que el proyecto terminó", async () => {
+  it.each(["informe-de-avance", "aprendizaje"])("%s no dice que el proyecto terminó", async (plantillaId) => {
     const p = await proyecto();
-    const c = await crearCopia({ projectId: p.id, tipo: "delivery", plantillaId: "informe-de-avance", porEmail: null });
+    const c = await crearCopia({ projectId: p.id, tipo: "delivery", plantillaId, porEmail: null });
     const cierre = await prisma.canvasBlock.findFirst({ where: { section: { canvasId: c.canvasId, key: "cierre" } }, select: { data: true } });
     expect(JSON.stringify(cierre?.data)).toContain("Así vamos");
     expect(JSON.stringify(cierre?.data)).not.toContain("Hasta acá llega");
