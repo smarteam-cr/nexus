@@ -1307,7 +1307,8 @@ async function guardarGuia(exploracionId: string, guia: GuiaDeLaSesion, corrida:
     // Las de las últimas sesiones (hasta MAX_SESIONES): una por sesión, la nueva reemplaza a la vieja de la misma.
     const guias = sesionId ? Object.fromEntries(Object.entries({ ...actual.guias, [sesionId]: guia }).slice(-MAX_SESIONES)) : actual.guias;
     /* La guía con el formato de antes que reemplaza una agenda (2026-11-06) queda como «Guía anterior», sin borrarse. */
-    const vieja = sesionId ? actual.guias[sesionId] : undefined;
+    // La de la sesión o, si la próxima todavía no tenía la suya, la general (la que se mostraba).
+    const vieja = sesionId ? (actual.guias[sesionId] ?? (actual.guia && !actual.guia.agenda ? actual.guia : undefined)) : undefined;
     const guiasAnteriores =
       sesionId && vieja && !vieja.agenda && guia.agenda
         ? Object.fromEntries(Object.entries({ ...(actual.guiasAnteriores ?? {}), [sesionId]: vieja }).slice(-MAX_SESIONES))

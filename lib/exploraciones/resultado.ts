@@ -10,7 +10,7 @@
  *   · En preventa no se arma la propuesta sin el resultado confirmado: al menos una meta en «Metas» del resumen
  *     (`resultadoConfirmado`), mirado en el servidor.
  */
-import { estaAveriguada, type AgendaDeLaGuia, type BloqueDeLaAgenda, type CosaPorAveriguar } from "./agenda";
+import { estaAveriguada, MAX_BLOQUES, type AgendaDeLaGuia, type BloqueDeLaAgenda, type CosaPorAveriguar } from "./agenda";
 
 export const ID_DEL_RESULTADO = "av:res1";
 export const TITULO_DEL_BLOQUE_DEL_RESULTADO = "El resultado que buscan";
@@ -29,6 +29,21 @@ export const COSAS_DEL_RESULTADO: readonly { id: string; que: string; pregunta: 
 
 /** Cuántos minutos toma el bloque cuando el código tiene que sumarlo. */
 const MINUTOS_DEL_BLOQUE = 8;
+const ES_EL_TITULO = /resultado que busca/i;
+const ES_LA_CLAVE = /resultado que busca/i;
+
+function nuevoBloque(desde: number, hasta: number): BloqueDeLaAgenda {
+  return {
+    desde,
+    hasta,
+    titulo: TITULO_DEL_BLOQUE_DEL_RESULTADO,
+    tipo: "cuerpo",
+    abre: APERTURA_DEL_RESULTADO,
+    resultado: true,
+    averiguar: cosasDelResultado([]),
+    impacto: "Pon en números la distancia entre hoy y el resultado: cuánto vale llegar y cuánto cuesta cada mes que no llegan.",
+  };
+}
 
 /** Las cosas del bloque del resultado, con las preguntas que escribió el agente (por posición) o las de respaldo. */
 function cosasDelResultado(delAgente: readonly CosaPorAveriguar[]): CosaPorAveriguar[] {
@@ -45,34 +60,39 @@ function cosasDelResultado(delAgente: readonly CosaPorAveriguar[]): CosaPorAveri
  */
 export function conBloqueDelResultado(agenda: AgendaDeLaGuia, marcado: number | null): AgendaDeLaGuia {
   const bloques = agenda.bloques.map((b) => ({ ...b }));
-  let i = marcado !== null && bloques[marcado]?.tipo === "cuerpo" ? marcado : bloques.findIndex((b) => b.tipo === "cuerpo" && /resultado/i.test(b.titulo));
-  if (i >= 0) {
+  // Solo un título que es el del bloque («El resultado que buscan»): «Resultados de campañas» es otra cosa.
+  let i = marcado !== null && bloques[marcado]?.tipo === "cuerpo" ? marcado : bloques.findIndex((b) => b.tipo === "cuerpo" && ES_EL_TITULO.test(b.titulo));
+  if (i < 0 && bloques.length >= MAX_BLOQUES) {
+    /* La agenda ya tiene seis bloques (el tope del esquema): el bloque del resultado toma el lugar y los minutos del más
+       corto del cuerpo que no es el central. Así la guía sigue siendo válida y dura lo mismo. */
+    const cambiable = bloques.reduce((m, b, k) => (b.tipo === "cuerpo" && !b.central && (m < 0 || b.hasta - b.desde < bloques[m].hasta - bloques[m].desde) ? k : m), -1);
+    if (cambiable >= 0) {
+      const { desde, hasta } = bloques[cambiable];
+      bloques[cambiable] = { ...nuevoBloque(desde, hasta) };
+      i = cambiable;
+    }
+  }
+  if (i >= 0 && bloques[i].resultado) {
+    // Ya es el bloque del resultado (lo armó el código arriba).
+  } else if (i >= 0) {
     const b = bloques[i];
     bloques[i] = { ...b, resultado: true, abre: b.abre || APERTURA_DEL_RESULTADO, averiguar: cosasDelResultado(b.averiguar) };
   } else {
     const despues = bloques[0]?.tipo === "apertura" ? 1 : 0;
     const desde = bloques[despues - 1]?.hasta ?? 0;
-    const nuevo: BloqueDeLaAgenda = {
-      desde,
-      hasta: desde + MINUTOS_DEL_BLOQUE,
-      titulo: TITULO_DEL_BLOQUE_DEL_RESULTADO,
-      tipo: "cuerpo",
-      abre: APERTURA_DEL_RESULTADO,
-      resultado: true,
-      averiguar: cosasDelResultado([]),
-      impacto: "Pon en números la distancia entre hoy y el resultado: cuánto vale llegar y cuánto cuesta cada mes que no llegan.",
-    };
-    // Lo descuenta el bloque más largo del cuerpo; los de en medio se corren.
-    const largo = bloques.reduce((m, b, k) => (b.tipo === "cuerpo" && b.hasta - b.desde > (m < 0 ? -1 : bloques[m].hasta - bloques[m].desde) ? k : m), -1);
-    if (largo >= despues && bloques[largo].hasta - bloques[largo].desde >= MINUTOS_DEL_BLOQUE + 5) {
-      for (let k = despues; k <= largo; k++) {
-        bloques[k] = { ...bloques[k], desde: bloques[k].desde + MINUTOS_DEL_BLOQUE, hasta: k === largo ? bloques[k].hasta : bloques[k].hasta + MINUTOS_DEL_BLOQUE };
-      }
+    const nuevo = nuevoBloque(desde, desde + MINUTOS_DEL_BLOQUE);
+    /* Lo descuenta el bloque más largo del cuerpo y los de en medio se corren. Si ninguno alcanza, se corren todos los que
+       siguen: la sesión dura 8 minutos más, pero nada se solapa. */
+    const largo = bloques.reduce((m, b, k) => (k >= despues && b.tipo === "cuerpo" && (m < 0 || b.hasta - b.desde > bloques[m].hasta - bloques[m].desde) ? k : m), -1);
+    const cede = largo >= 0 && bloques[largo].hasta - bloques[largo].desde >= MINUTOS_DEL_BLOQUE + 5;
+    const hasta = cede ? largo : bloques.length - 1;
+    for (let k = despues; k <= hasta; k++) {
+      bloques[k] = { ...bloques[k], desde: bloques[k].desde + MINUTOS_DEL_BLOQUE, hasta: cede && k === largo ? bloques[k].hasta : bloques[k].hasta + MINUTOS_DEL_BLOQUE };
     }
     bloques.splice(despues, 0, nuevo);
     i = despues;
   }
-  const claves = /resultado/i.test(agenda.claves[0] ?? "") ? agenda.claves : [CLAVE_DEL_RESULTADO, ...agenda.claves.filter((c) => !/resultado/i.test(c))].slice(0, 4);
+  const claves = ES_LA_CLAVE.test(agenda.claves[0] ?? "") ? agenda.claves : [CLAVE_DEL_RESULTADO, ...agenda.claves.filter((c) => !ES_LA_CLAVE.test(c))].slice(0, 4);
   return { ...agenda, claves, bloques };
 }
 

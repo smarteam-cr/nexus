@@ -321,3 +321,24 @@ describe("el resultado como eje (segunda tanda, 2026-11-06)", () => {
     expect(cuerpo).toContain("Resultado que buscan");
   });
 });
+
+describe("el bloque del resultado, sin romper la agenda (revisión, 2026-11-06)", () => {
+  const b = (titulo: string, desde: number, hasta: number, tipo: "apertura" | "cuerpo" | "cierre" = "cuerpo", central = false) => ({ titulo, desde, hasta, tipo, abre: "x", averiguar: [], ...(central ? { central: true as const } : {}) });
+
+  it("con seis bloques, toma el lugar del más corto que no es el central: sigue en seis y válida", () => {
+    const a = conBloqueDelResultado({ claves: ["x"], bloques: [b("A", 0, 5, "apertura"), b("B", 5, 15), b("C", 15, 35, "cuerpo", true), b("D", 35, 40), b("E", 40, 52), b("F", 52, 60, "cierre")] }, null);
+    expect(a.bloques).toHaveLength(6);
+    expect(a.bloques[3]).toMatchObject({ resultado: true, desde: 35, hasta: 40 });
+  });
+
+  it("sin un bloque largo, se corren todos: nada se solapa", () => {
+    const a = conBloqueDelResultado({ claves: ["x"], bloques: [b("A", 0, 5, "apertura"), b("B", 5, 15), b("C", 15, 20, "cierre")] }, null);
+    for (let k = 1; k < a.bloques.length; k++) expect(a.bloques[k].desde).toBeGreaterThanOrEqual(a.bloques[k - 1].hasta);
+  });
+
+  it("«Resultados de campañas» no es el bloque del resultado", () => {
+    const a = conBloqueDelResultado({ claves: ["x"], bloques: [b("A", 0, 5, "apertura"), b("Resultados de campañas", 5, 40), b("C", 40, 60, "cierre")] }, null);
+    expect(a.bloques.find((x) => x.titulo === "Resultados de campañas")?.resultado).toBeUndefined();
+    expect(a.bloques.filter((x) => x.resultado)).toHaveLength(1);
+  });
+});

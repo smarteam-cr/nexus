@@ -37,6 +37,9 @@ const CAMPO =
 
 // ── El contexto de toda la exploración (punto 2) ─────────────────────────────
 
+/** Las exploraciones cuyas tarjetas ya se pidieron en esta pantalla (no se vuelve a gastar IA al reabrir). */
+const PEDIDAS = new Set<string>();
+
 export function ContextoDeTodaLaExploracion() {
   const { exp, marco, puedeEditar, cambiar, guardando } = useLienzo();
   const cx = exp.estado.contenido.contexto;
@@ -59,7 +62,9 @@ export function ContextoDeTodaLaExploracion() {
         const b = r.ok ? ((await r.json()) as { hayFuentes: boolean; propuesto: { tarjetas: TarjetasDeLoQueSabemos } | null }) : null;
         if (!vivo || !b) return;
         if (b.propuesto) return setTarjetas((t) => (Object.keys(t).length ? t : b.propuesto!.tarjetas));
-        if (!b.hayFuentes) return;
+        // Pedirla gasta IA: una vez por exploración en esta pantalla (cerrar a mitad de camino no la repite).
+        if (!b.hayFuentes || PEDIDAS.has(exp.id)) return;
+        PEDIDAS.add(exp.id);
         setProponiendo(true);
         const p = await fetch(`/api/sales/exploraciones/${exp.id}/contexto`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ proponer: true }) });
         const j = p.ok ? ((await p.json()) as { propuesto: { tarjetas: TarjetasDeLoQueSabemos } }) : null;
