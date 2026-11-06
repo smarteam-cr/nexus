@@ -6,8 +6,8 @@
  * Diseño aprobado por Elías el 2026-10-29 (Claude Design, tableros `Main`, `Movil` y `PdfHoja1`; la gramática de lo no
  * preguntado y de «No lo sé» sale del tablero `Variante`). La gramática es la de la teoría: un eje por dimensión (la
  * base operativa a la derecha, la producción a la izquierda, cada eje por el medio de su tramo: `angulosDeLosEjes`) y
- * un anillo poligonal por etapa, de Deficiente adentro a Óptimo afuera, del color de su nivel; Funcional punteado y con
- * su chip «La base». Encima, la empresa:
+ * un anillo poligonal por etapa, de Deficiente adentro a Óptimo afuera, en gris salvo Funcional, verde y punteado (el
+ * color de cada etapa y el chip «La base» salieron el 30 oct: Elías, mirando la aplicación vieja). Encima, la empresa:
  *   · cada vértice va EXACTO en el cruce de su eje con el anillo de la etapa de esa dimensión (no hay puntaje dentro
  *     del anillo: lo que se dice es la etapa);
  *   · lo que más frena lleva un halo y una flecha punteada hasta su objetivo, marcado con un aro punteado;
@@ -67,7 +67,6 @@ export interface MedidasDelRadar {
   rayas: { funcional: string; guia: string; noPreguntada: string };
   /** El nombre de cada etapa, en el hueco de arriba: su letra y cuánto baja del anillo. */
   etapa: { letra: number; baja: number; borde: number };
-  chipDeLaBase: { ancho: number; alto: number; letra: number; trazo: number; baja: number };
   /** El vértice: su radio, el de lo que más frena y su halo; el trazo blanco. */
   vertice: { r: number; rFrena: number; halo: number; trazo: number };
   /** Con «Ver puntajes»: un disco con el número adentro (y el halo de lo que más frena, si va). */
@@ -77,8 +76,6 @@ export interface MedidasDelRadar {
   /** El objetivo de lo que más frena y la flecha que llega a él (los radios, contados desde el vértice y el objetivo). */
   objetivo: { r: number; rPunto: number; trazo: number; raya: string };
   flecha: { desde: number; hasta: number; punta: number; base: number; medioAncho: number; trazo: number; raya: string };
-  /** Un punto gris chico en cada cruce sin vértice (null: no va). */
-  puntoGris: number | null;
   centro: { area: number; yArea: number; sub: number | null; ySub: number };
   /** Los rótulos de cada dimensión (null: van números en la punta del eje, el teléfono). */
   rotulo: {
@@ -108,30 +105,28 @@ export const GRANDE: MedidasDelRadar = {
   rGuia: 349,
   rAnillo: 135,
   paso: 46,
-  trazo: { anillo: 1.75, eje: 1.25, guia: 1, figura: 2.5 },
+  trazo: { anillo: 1.4, eje: 1.25, guia: 1, figura: 2.5 },
   rayas: { funcional: "7 5", guia: "2 4", noPreguntada: "4 5" },
-  etapa: { letra: 11, baja: 3.8, borde: 5 },
-  chipDeLaBase: { ancho: 64, alto: 22, letra: 11.5, trazo: 1.25, baja: 4 },
+  etapa: { letra: 13.5, baja: 3.8, borde: 3 },
   vertice: { r: 5.5, rFrena: 7, halo: 15, trazo: 1 },
   conPuntaje: { r: 14, letra: 11.5, baja: 4, trazo: 2.5, halo: 20 },
   noLoSe: { r: 10, letra: 12, baja: 4.2 },
   objetivo: { r: 10, rPunto: 3.5, trazo: 2, raya: "3 2.5" },
   flecha: { desde: 14, hasta: 16, punta: 12, base: 21, medioAncho: 5, trazo: 2, raya: "4 4" },
-  puntoGris: 2.6,
-  centro: { area: 28, yArea: -2, sub: 14, ySub: 23 },
-  rotulo: { r: 353, numero: 12.5, nombre: 16.5, renglon: 20.1, aire: 27, letrasPorRenglon: 18, chip: { ancho: 118, alto: 20, letra: 10.5, baja: 10, texto: 13.8 } },
+  centro: { area: 30, yArea: -2, sub: 15, ySub: 24 },
+  // Los rótulos, más grandes que en el diseño (Elías, 29 y 30 oct). 18 es el tope: con más, un nombre largo de un área de
+  // 3 + 5 dimensiones pisa la punta del radar (la guarda de radar-de-una-empresa.test.ts).
+  rotulo: { r: 353, numero: 14, nombre: 18, renglon: 22, aire: 28, letrasPorRenglon: 18, chip: { ancho: 126, alto: 21, letra: 11, baja: 10.5, texto: 14.4 } },
   numeroEnLaPunta: null,
-  mitad: { xIzquierda: 200, xDerecha: 1190, medio: 429, nombre: 28, renglon: 32, descripcion: 13.5, conNivel: true },
+  mitad: { xIzquierda: 200, xDerecha: 1190, medio: 429, nombre: 28, renglon: 32, descripcion: 14.5, conNivel: true },
 };
 
-/** La hoja 1 del PDF (horizontal): el tablero `PdfHoja1`, la misma geometría con letras un poco más grandes. */
+/** La hoja 1 del PDF (horizontal): el tablero `PdfHoja1`, la misma geometría con las letras que pide la hoja. */
 export const PDF: MedidasDelRadar = {
   ...GRANDE,
   caja: [40, 20, 1320, 790],
-  etapa: { letra: 11.5, baja: 3.8, borde: 5 },
-  chipDeLaBase: { ancho: 64, alto: 22, letra: 12, trazo: 1.25, baja: 4 },
-  vertice: { r: 8, rFrena: 9.5, halo: 17, trazo: 3 },
-  puntoGris: null,
+  etapa: { letra: 12.5, baja: 3.8, borde: 3 },
+  vertice: { r: 6, rFrena: 7.5, halo: 15, trazo: 1 },
   rotulo: { r: 353, numero: 13.5, nombre: 17.5, renglon: 21.1, aire: 27, letrasPorRenglon: 18, chip: { ancho: 124, alto: 21, letra: 11, baja: 11, texto: 14.5 } },
   mitad: { xIzquierda: 240, xDerecha: 1190, medio: 415, nombre: 28, renglon: 32, descripcion: 14, conNivel: false },
 };
@@ -149,14 +144,12 @@ export const COMPACTO: MedidasDelRadar = {
   paso: 20,
   trazo: { anillo: 1.4, eje: 1, guia: 0.8, figura: 2 },
   rayas: { funcional: "5 3.8", guia: "1.5 3", noPreguntada: "3 4" },
-  etapa: { letra: 10, baja: 3.3, borde: 4 },
-  chipDeLaBase: { ancho: 52, alto: 18, letra: 10, trazo: 1, baja: 3.4 },
+  etapa: { letra: 11, baja: 3.3, borde: 2.5 },
   vertice: { r: 4.4, rFrena: 5.4, halo: 11.5, trazo: 0.8 },
   conPuntaje: { r: 11, letra: 9.5, baja: 3.4, trazo: 2, halo: null },
   noLoSe: { r: 7.5, letra: 9.5, baja: 3.3 },
   objetivo: { r: 7.5, rPunto: 2.6, trazo: 1.5, raya: "2.2 1.9" },
   flecha: { desde: 10.4, hasta: 12, punta: 9, base: 15.75, medioAncho: 3.8, trazo: 1.5, raya: "3 3" },
-  puntoGris: null,
   centro: { area: 13, yArea: 4, sub: null, ySub: 0 },
   rotulo: null,
   numeroEnLaPunta: { r: 11.5, letra: 9.5, baja: 3.5 },
@@ -285,8 +278,6 @@ export interface DibujoDelRadar {
   ejes: EjeDelRadar[];
   anillos: { letra: Letra; puntos: Punto[] }[];
   etapas: { letra: Letra; x: number; y: number }[];
-  chipDeLaBase: Caja;
-  puntosGrises: Punto[];
   /** La figura de la empresa: sus vértices en el orden de los ejes; donde faltan, pasa por el centro. */
   figura: Punto[];
   vertices: VerticeDelRadar[];
@@ -327,8 +318,6 @@ export function dibujoDelRadar(
   const ejes = dims.map((d) => ({ clave: d.clave, grados: grados(d), desde: polarDe(m, grados(d), m.rEjeDesde), hasta: polarDe(m, grados(d), m.rEjeHasta), preguntada: d.preguntada }));
   const anillos = LETRAS.map((letra) => ({ letra, puntos: orden.map((d) => polarDe(m, grados(d), radioDeLaEtapa(m, letra))) }));
   const etapas = LETRAS.map((letra) => ({ letra, x: m.cx, y: yEnElCentro(m, todos, radioDeLaEtapa(m, letra), "arriba") + m.etapa.baja }));
-  const yBase = yEnElCentro(m, todos, radioDeLaEtapa(m, "F"), "abajo");
-  const chipDeLaBase = { x0: m.cx - m.chipDeLaBase.ancho / 2, x1: m.cx + m.chipDeLaBase.ancho / 2, y0: yBase - m.chipDeLaBase.alto / 2, y1: yBase + m.chipDeLaBase.alto / 2 };
 
   const conVertice = (d: DimensionDelRadar) => d.preguntada && !!d.nivel;
   const vertices: VerticeDelRadar[] = orden.filter(conVertice).map((d) => ({
@@ -377,17 +366,6 @@ export function dibujoDelRadar(
     };
   }
 
-  const puntosGrises: Punto[] = [];
-  if (m.puntoGris) {
-    for (const d of orden) {
-      if (!d.preguntada) continue;
-      for (const l of LETRAS) {
-        if (l === d.nivel || (d.clave === frena?.clave && l === frena.objetivo)) continue;
-        puntosGrises.push(polarDe(m, grados(d), radioDeLaEtapa(m, l)));
-      }
-    }
-  }
-
   const rotulos = m.rotulo ? dims.map((d) => rotuloDeLaDimension(m, d, grados(d), d.clave === frena?.clave, nombreDeNivel)) : [];
   const numeros = m.numeroEnLaPunta
     ? dims.map((d) => ({ clave: d.clave, numero: d.numero ?? d.clave, punto: polarDe(m, grados(d), m.rEjeHasta), frena: d.clave === frena?.clave, preguntada: d.preguntada }))
@@ -411,7 +389,7 @@ export function dibujoDelRadar(
   const y1 = afuera(vy + vh, cajas.map((c) => c.y1), false);
   const caja: [number, number, number, number] = [x0, y0, x1 - x0, y1 - y0];
 
-  return { m, caja, guias, ejes, anillos, etapas, chipDeLaBase, puntosGrises, figura, vertices, objetivo, rotulos, numeros, mitades };
+  return { m, caja, guias, ejes, anillos, etapas, figura, vertices, objetivo, rotulos, numeros, mitades };
 }
 
 /** El estado que dice el número de una dimensión. */

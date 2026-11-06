@@ -9,6 +9,9 @@
  * Si algo falla (la escala sin publicar, una preventa rara), el análisis sigue «sin guía»: nunca se cae por esto.
  * Lo que se esperaba explorar se ACOTA al área de la sesión (2026-10-27, alcance.ts): el equipo de la sesión o la guía
  * enfocada, y solo como último recurso las áreas en juego de la preventa (antes eran siempre esas: hasta 24 dimensiones).
+ * Con ese último recurso el agente dice hacia qué áreas fueron las preguntas y juzga solo esas (2026-10-29, analisis.ts).
+ * Los casos de uso que ya se eligieron en la preventa van al agente para que diga si responden al dolor explorado; el
+ * catálogo entero no (no inventa casos).
  */
 import "server-only";
 import { prisma } from "@/lib/db/prisma";
@@ -28,6 +31,10 @@ export interface GuiaDeLaReunion {
   dimensiones: { nombre: string; area: string; nivel: string | null }[];
   /** De dónde sale ese alcance, en una línea. */
   alcance: AlcanceDeLaSesion["descripcion"];
+  /** De dónde sale: con `equipo`, `temas_del_equipo` o `guia` el área de la sesión ya se sabe; con `areas_en_juego`, no. */
+  alcanceDe: AlcanceDeLaSesion["de"];
+  /** Los casos de uso ya elegidos en la preventa (título y por qué), para aterrizar y expandir. Nunca el catálogo entero. */
+  casos: { titulo: string; razon: string | null }[];
   /** La preventa tiene escala (aunque el alcance sean los temas de un equipo que la escala no mide). */
   conEscala: boolean;
 }
@@ -62,7 +69,16 @@ export async function guiaDeLaReunion(o: { clientId: string; sessionId: string; 
     // Lo que se esperaba explorar, acotado al área de la sesión (alcance.ts).
     const alcance = alcanceDeLaSesion({ equipo: sesion?.equipo, enfoque: guia?.enfoque ?? [], areasEnJuego: estado.areas, areas: escala.areas });
     const dimensiones = alcance.dimensiones.map((d) => ({ nombre: d.nombre, area: d.area, nivel: d.id ? (posiciones[d.id]?.nivel ?? null) : null }));
-    return { objetivo: sesion?.objetivo ?? guia?.objetivo ?? null, preguntas, dimensiones, alcance: alcance.descripcion, conEscala: escala.areas.length > 0 };
+    const casos = Object.values(estado.contenido.casosDeUso ?? {}).map((c) => ({ titulo: c.titulo, razon: c.razon ?? null }));
+    return {
+      objetivo: sesion?.objetivo ?? guia?.objetivo ?? null,
+      preguntas,
+      dimensiones,
+      alcance: alcance.descripcion,
+      alcanceDe: alcance.de,
+      conEscala: escala.areas.length > 0,
+      casos,
+    };
   } catch (e) {
     console.warn(`[analizador-venta] sin guía para ${o.sessionId}:`, e instanceof Error ? e.message : e);
     return null;

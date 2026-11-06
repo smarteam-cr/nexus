@@ -8,7 +8,7 @@ import path from "node:path";
 import { ETAPAS, PROCESO_CONSULTIVO, PUNTOS_DEL_ANALISIS, SIN_POSICIONAMIENTO, criterioComoTexto } from "./criterio";
 import { palabrasDe, quienHablo, reconocerAlEquipo } from "./quien-hablo";
 import { analizadorAutomaticoPrendido, delEquipoEnLaReunion, motivoAnalizadorApagado, porQueNoEsDeVenta, vendedoresDeLaReunion, veElAnalizador, veLaTendenciaDelEquipo } from "./reglas";
-import { HERRAMIENTA_DEL_ANALISIS, extraerDelTurno, leerElAnalisis, paraComparar, verificarCita, type TurnoNumerado } from "./analisis";
+import { HERRAMIENTA_DEL_ANALISIS, exploracionEnFoco, extraerDelTurno, leerElAnalisis, leerResultadoGuardado, paraComparar, separarArea, verificarCita, type TurnoNumerado } from "./analisis";
 import { AGENTES_CON_CAMINO_PROPIO, esAgenteRetirado } from "@/lib/agents/retirados";
 import { AGENTE_DEL_ANALIZADOR } from "./prompt";
 import { RevisionSchema } from "./schema";
@@ -28,7 +28,8 @@ describe("S1 · el criterio escrito", () => {
       expect(e.seHizo.length).toBeGreaterThan(0);
       expect(e.seSalto.length).toBeGreaterThan(0);
     }
-    expect(PUNTOS_DEL_ANALISIS).toHaveLength(11); // 2026-11-06: suma «¿Se averiguó el resultado que busca?»
+    // Los diez del plan, más el dolor, la base para un caso de uso y lo que salió bien (29 oct), y el resultado que busca (6 nov).
+    expect(PUNTOS_DEL_ANALISIS).toHaveLength(14);
   });
   it("con o sin position statement (K3)", () => {
     expect(criterioComoTexto({ positionStatement: null })).toContain(SIN_POSICIONAMIENTO);
@@ -163,7 +164,170 @@ describe("S3 · sin cita no hay juicio", () => {
     expect(descartados).toBe(2);
   });
   it("la herramienta pide cada punto juzgado y sus citas", () => {
-    expect(HERRAMIENTA_DEL_ANALISIS.input_schema.required).toEqual(["resumen", "juicios", "recomendaciones"]);
+    expect(HERRAMIENTA_DEL_ANALISIS.input_schema.required).toEqual(["resumen", "enfoque", "juicios", "bien", "recomendaciones"]);
+  });
+});
+
+describe("29 oct · citas del habla real, lo bien con su cita, aterrizar y expandir, y el foco", () => {
+  // Inventados, con la forma de hablar que deja la transcripción de Meet: muletillas, una palabra repetida, una frase
+  // partida en dos turnos con un «Claro.» de otro en medio. (Nada de una reunión real: las transcripciones no salen de la base.)
+  const REUNION: TurnoNumerado[] = [
+    { n: 143, hablante: "Diego Solís", texto: "¿Y cuánto les pesa eso hoy, digamos? Bueno, yo sé que vienes llegando al puesto, pero si si dices que antes todo pasaba por la jefatura anterior, este, ¿cuánto se atrasa una venta?" },
+    { n: 147, hablante: "Laura Méndez", texto: "que le decimos al cliente, «Espéreme, déjeme revisar con arriba» y se nos van dos," },
+    { n: 148, hablante: "Diego Solís", texto: "Claro." },
+    { n: 149, hablante: "Laura Méndez", texto: "tres semanas y el cliente compró en otro lado, pues, eh" },
+    { n: 233, hablante: "Diego Solís", texto: "Pero, ¿cómo mides al equipo de mercadeo? O sea, como dirección mida mercadeo hoy día, Laura." },
+  ];
+  it("la cita «limpia» del modelo (sin muletillas ni palabras repetidas) se encuentra, y se muestra lo que se dijo de verdad", () => {
+    const c = verificarCita({ turno: 143, texto: "si dices que antes todo pasaba por la jefatura anterior, ¿cuánto se atrasa una venta?" }, REUNION);
+    expect(c).toMatchObject({ turno: 143, hablante: "Diego Solís" });
+    expect(c!.texto).toContain("si si dices que antes");
+    expect(c!.texto).toContain("anterior, este, ¿cuánto se atrasa una venta?");
+    // Una letra distinta en una palabra larga («mide» por «mida»).
+    expect(verificarCita({ turno: 233, texto: "como dirección mide mercadeo hoy día" }, REUNION)?.turno).toBe(233);
+  });
+  it("una frase partida en dos turnos de la misma persona, con un «Claro.» de otro en medio, también", () => {
+    expect(verificarCita({ turno: 149, texto: "se nos van dos, tres semanas y el cliente compró en otro lado" }, REUNION)).toMatchObject({ turno: 147, hablante: "Laura Méndez" });
+  });
+  it("una pregunta corta de otro en medio no es interjección: la respuesta no se pega a lo de antes", () => {
+    const T: TurnoNumerado[] = [
+      { n: 1, hablante: "Laura Méndez", texto: "Hoy tenemos el CRM instalado en toda la empresa." },
+      { n: 2, hablante: "Diego Solís", texto: "¿Y lo usan todos?" },
+      { n: 3, hablante: "Laura Méndez", texto: "No, solo dos personas lo usan." },
+    ];
+    expect(verificarCita({ turno: 1, texto: "tenemos el CRM instalado en toda la empresa solo dos personas lo usan" }, T)).toBeNull();
+  });
+  it("lo que no se dijo sigue sin pasar: otras palabras, o las mismas desordenadas", () => {
+    expect(verificarCita({ turno: 149, texto: "perdimos muchísimas ventas por no tener un CRM" }, REUNION)).toBeNull();
+    expect(verificarCita({ turno: 149, texto: "el cliente compró en otro lado tres semanas" }, REUNION)).toBeNull();
+  });
+  it("⛔ una cita que cambia el sentido no pasa: otra cifra, un «no» de menos, un «no» de más o justo antes, un «poco» de más", () => {
+    const T: TurnoNumerado[] = [
+      { n: 1, hablante: "Laura Méndez", texto: "Eh, hoy por hoy perdemos unos 2.000 dólares al mes en cotizaciones que nadie sigue, ¿verdad?" },
+      { n: 2, hablante: "Laura Méndez", texto: "Y el presupuesto de este año no está aprobado todavía por la gerencia general." },
+      { n: 3, hablante: "Laura Méndez", texto: "Mire, el presupuesto de este año está aprobado desde enero por la junta directiva." },
+      { n: 4, hablante: "Laura Méndez", texto: "No, no está aprobado el presupuesto todavía para el proyecto." },
+      { n: 5, hablante: "Laura Méndez", texto: "Hoy el equipo usa el CRM para todo lo del pipeline comercial." },
+    ];
+    // «2.000» y «2000» son el mismo número; «3000», no.
+    expect(verificarCita({ turno: 1, texto: "perdemos unos 2000 dólares al mes en cotizaciones" }, T)?.turno).toBe(1);
+    expect(verificarCita({ turno: 1, texto: "perdemos unos 3000 dólares al mes en cotizaciones" }, T)).toBeNull();
+    // Sin el «no»: lo dicho tiene una negación dentro del tramo que la cita se saltó.
+    expect(verificarCita({ turno: 2, texto: "el presupuesto de este año está aprobado todavía por la gerencia" }, T)).toBeNull();
+    // Con un «no» de más: la negación de la cita tiene que estar.
+    expect(verificarCita({ turno: 3, texto: "el presupuesto de este año no está aprobado desde enero por la junta" }, T)).toBeNull();
+    // Con el «no» justo antes del pedazo citado.
+    expect(verificarCita({ turno: 4, texto: "está aprobado el presupuesto todavía para el proyecto" }, T)).toBeNull();
+    expect(verificarCita({ turno: 4, texto: "no está aprobado el presupuesto todavía para el proyecto" }, T)?.turno).toBe(4);
+    // Un «poco» que el cliente no dijo.
+    expect(verificarCita({ turno: 5, texto: "el equipo usa poco el CRM para todo lo del pipeline comercial" }, T)).toBeNull();
+    // Y lo mostrado empieza donde empieza la cita, no unas palabras antes.
+    expect(verificarCita({ turno: 2, texto: "el presupuesto de este año no está aprobado todavía" }, T)?.texto).toBe("el presupuesto de este año no está aprobado todavía");
+  });
+  it("lo que no cambia el sentido no tumba una cita cierta: «¿no?» de muletilla, «sin embargo», un número en letras", () => {
+    const T: TurnoNumerado[] = [
+      { n: 1, hablante: "Laura Méndez", texto: "Lo que necesitamos, ¿no?, es tener el dato en HubSpot para la gerencia." },
+      { n: 2, hablante: "Laura Méndez", texto: "Sin embargo, tenemos dos vendedores que cotizan desde el celular cada semana." },
+    ];
+    expect(verificarCita({ turno: 1, texto: "Lo que necesitamos es tener el dato en HubSpot para la gerencia" }, T)?.turno).toBe(1);
+    expect(verificarCita({ turno: 2, texto: "tenemos 2 vendedores que cotizan desde el celular cada semana" }, T)?.turno).toBe(2);
+  });
+  it("palabras comunes sueltas, juntadas de aquí y de allá, no hacen una cita", () => {
+    const T: TurnoNumerado[] = [{ n: 1, hablante: "Laura Méndez", texto: "que el equipo de la empresa que tiene en la zona de ventas lo que se hace para el cliente de la casa que" }];
+    expect(verificarCita({ turno: 1, texto: "el equipo que se hace la empresa de ventas para la casa" }, T)).toBeNull();
+  });
+  it("lo que salió bien y lo que hay que mejorar van con cita o no van", () => {
+    const { resultado, descartados } = leerElAnalisis(
+      {
+        resumen: "x",
+        enfoque: { areas: [], lectura: "" },
+        juicios: [],
+        bien: [
+          { texto: "Preguntaste por el impacto.", citas: [{ turno: 143, texto: "cuánto les pesa eso hoy, digamos" }] },
+          { texto: "Buena energía.", citas: [] },
+        ],
+        recomendaciones: [{ texto: "Haz más preguntas.", citas: [] }],
+      },
+      REUNION,
+    );
+    expect(resultado.bien.map((b) => b.texto)).toEqual(["Preguntaste por el impacto."]);
+    expect(resultado.recomendaciones).toEqual([]);
+    expect(descartados).toBe(2);
+  });
+  it("aterrizar y expandir: el dolor y el caso de uso; el caso solo si es uno de los ya elegidos en la preventa", () => {
+    const habia = { guia: true, escala: true, posicionamiento: true, casos: ["Sistematiza tu proceso comercial con HubSpot"] };
+    const { resultado } = leerElAnalisis(
+      {
+        resumen: "x",
+        juicios: [
+          { punto: "dolor", valor: "en_parte", lectura: "El resultado está, la causa no.", citas: [{ turno: 149, texto: "tres semanas y el cliente compró en otro lado" }] },
+          { punto: "caso_de_uso", valor: "falta", caso: "sistematiza tu proceso comercial con hubspot", lectura: "Falta el número.", citas: [{ turno: 149, texto: "tres semanas y el cliente compró" }] },
+        ],
+        recomendaciones: [],
+      },
+      REUNION,
+      habia,
+    );
+    expect(resultado.juicios.find((j) => j.punto === "caso_de_uso")?.caso).toBe("Sistematiza tu proceso comercial con HubSpot");
+    const inventado = leerElAnalisis(
+      { resumen: "x", juicios: [{ punto: "caso_de_uso", valor: "hay_base", caso: "Un caso que nadie eligió", lectura: "x", citas: [{ turno: 149, texto: "tres semanas y el cliente compró" }] }], recomendaciones: [] },
+      REUNION,
+      habia,
+    );
+    expect(inventado.resultado.juicios[0].caso).toBeNull();
+  });
+  it("la exploración solo sobre lo esperado; sin área fija, el foco es donde fueron las preguntas y del resto queda el nombre", () => {
+    const esperadas = [
+      { nombre: "Datos", area: "Ventas" },
+      { nombre: "Equipo y Gobierno", area: "Ventas" },
+      { nombre: "Datos", area: "Marketing" },
+      { nombre: "Datos", area: "Servicio" },
+    ];
+    const crudo = {
+      resumen: "x",
+      enfoque: { areas: ["ventas"], lectura: "Con Laura, gerente comercial: las preguntas fueron a Ventas." },
+      juicios: [
+        { punto: "exploracion", dimension: "Datos (Ventas)", valor: "tocado", lectura: "Se tocó.", citas: [{ turno: 149, texto: "tres semanas y el cliente compró" }] },
+        { punto: "exploracion", dimension: "Equipo y Gobierno (Ventas)", valor: "sin_explorar", lectura: "No.", citas: [] },
+        { punto: "exploracion", dimension: "Datos (Marketing)", valor: "sin_explorar", lectura: "No.", citas: [] },
+        // Fuera de lo esperado: no vale.
+        { punto: "exploracion", dimension: "Cobranza (Finanzas)", valor: "sin_explorar", lectura: "No.", citas: [] },
+      ],
+      recomendaciones: [],
+    };
+    const { resultado, descartados } = leerElAnalisis(crudo, REUNION, { guia: true, escala: true, posicionamiento: true, dimensiones: true, esperadas });
+    expect(resultado.enfoque).toEqual({ areas: ["Ventas"], sinTocar: ["Marketing", "Servicio"], lectura: "Con Laura, gerente comercial: las preguntas fueron a Ventas." });
+    // Se guarda todo lo juzgado (si el foco estuviera mal, el dato sigue); lo de fuera del foco se deja de mostrar.
+    expect(resultado.juicios.map((j) => `${j.dimension}/${j.area}/${j.valor}`)).toEqual(["Datos/Ventas/tocado", "Equipo y Gobierno/Ventas/sin_explorar", "Datos/Marketing/sin_explorar"]);
+    expect(exploracionEnFoco(resultado).map((j) => `${j.dimension}/${j.area}`)).toEqual(["Datos/Ventas", "Equipo y Gobierno/Ventas"]);
+    expect(descartados).toBe(1);
+    // Si el modelo no nombra un área válida y nada se tocó con cita, el foco son todas: no se esconde nada.
+    const sinFoco = leerElAnalisis(
+      { resumen: "x", enfoque: { areas: ["Logística"], lectura: "" }, juicios: crudo.juicios.slice(1, 3), recomendaciones: [] },
+      REUNION,
+      { guia: true, escala: true, posicionamiento: true, dimensiones: true, esperadas },
+    );
+    expect(sinFoco.resultado.enfoque?.areas).toEqual(["Ventas", "Marketing", "Servicio"]);
+    expect(exploracionEnFoco(sinFoco.resultado)).toHaveLength(2);
+    // Un área tocada con cita entra al foco aunque el modelo no la nombre.
+    const tocada = leerElAnalisis(
+      {
+        resumen: "x",
+        enfoque: { areas: ["Ventas"], lectura: "" },
+        juicios: [{ punto: "exploracion", dimension: "Datos (Marketing)", valor: "tocado", lectura: "Se tocó.", citas: [{ turno: 149, texto: "tres semanas y el cliente compró" }] }],
+        recomendaciones: [],
+      },
+      REUNION,
+      { guia: true, escala: true, posicionamiento: true, dimensiones: true, esperadas },
+    );
+    expect(tocada.resultado.enfoque?.areas).toEqual(["Ventas", "Marketing"]);
+    // Con el área fija (el equipo de la sesión), el foco es todo lo esperado, diga lo que diga el modelo.
+    const fija = leerElAnalisis(crudo, REUNION, { guia: true, escala: true, posicionamiento: true, dimensiones: true, esperadas, areaFija: true });
+    expect(fija.resultado.enfoque?.sinTocar).toEqual([]);
+    expect(separarArea("Líneas de máquinas y cotización (Ventas)")).toEqual({ nombre: "Líneas de máquinas y cotización", area: "Ventas" });
+  });
+  it("un análisis guardado de antes (sin lo bien ni el foco) se sigue leyendo", () => {
+    expect(leerResultadoGuardado({ resumen: "x", juicios: [], recomendaciones: [] })).toEqual({ resumen: "x", juicios: [], bien: [], recomendaciones: [], enfoque: null });
   });
 });
 

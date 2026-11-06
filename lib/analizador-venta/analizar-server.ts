@@ -28,7 +28,7 @@ import { dominiosDeLaCasa } from "@/lib/sessions/reuniones-para-seguimiento";
 import { duenoDeLaSesion, getClientSessions } from "@/lib/sessions/project-sources";
 import { claseDeTexto } from "@/lib/sessions/tiene-texto";
 import { DE_LA_PREVENTA } from "@/lib/exploraciones/marco";
-import { HERRAMIENTA_DEL_ANALISIS, leerElAnalisis, type ResultadoDelAnalisis, type TurnoNumerado } from "./analisis";
+import { HERRAMIENTA_DEL_ANALISIS, leerElAnalisis, type LoQueHabia, type ResultadoDelAnalisis, type TurnoNumerado } from "./analisis";
 import { VERSION_DEL_CRITERIO, criterioComoTexto } from "./criterio";
 import { guiaDeLaReunion, type GuiaDeLaReunion } from "./guia-de-la-reunion-server";
 import { AGENTE_DEL_ANALIZADOR, MODELO_DEL_ANALIZADOR, SLUG_DEL_ANALIZADOR } from "./prompt";
@@ -144,12 +144,21 @@ export function materialDelAnalisis(o: {
   const guia = o.guia?.preguntas.length
     ? `LA GUÍA DE LA PREVENTA QUE SE LLEVÓ${o.guia.objetivo ? ` (objetivo: ${o.guia.objetivo})` : ""}:\n${o.guia.preguntas.map((p) => `- ${p}`).join("\n")}`
     : "LA GUÍA DE LA PREVENTA: no había una guía armada antes de esta reunión (juzga guia = sin_guia).";
-  // Acotadas al área de la sesión (alcance.ts): juzga exploracion SOLO sobre estas, no sobre toda la escala.
+  // Acotadas al área de la sesión (alcance.ts): juzga exploracion SOLO sobre estas, no sobre toda la escala. Si el área
+  // no se sabía (las áreas en juego), solo en las áreas a las que fueron las preguntas (el enfoque, 2026-10-29).
+  const comoJuzgar =
+    o.guia?.alcanceDe === "areas_en_juego"
+      ? "Pon en enfoque.areas las áreas a las que fueron las preguntas y haz un juicio de exploracion por cada dimensión de ESAS áreas y de ninguna otra; las áreas a las que la conversación no fue no se juzgan por dimensión."
+      : "Es el área de la sesión: haz un juicio de exploracion por cada una y por ninguna otra.";
   const dimensiones = o.guia?.dimensiones.length
-    ? `LO QUE SE ESPERABA EXPLORAR EN ESTA SESIÓN (${o.guia.alcance} Haz un juicio de exploracion por cada una y por ninguna otra):\n${o.guia.dimensiones.map((d) => `- ${d.nombre} (${d.area})${d.nivel ? `, nivel que se cree hoy: ${d.nivel}` : ""}`).join("\n")}`
+    ? `LO QUE SE ESPERABA EXPLORAR EN ESTA SESIÓN (${o.guia.alcance} ${comoJuzgar} Escribe la dimensión tal como viene, con su área entre paréntesis):\n${o.guia.dimensiones.map((d) => `- ${d.nombre} (${d.area})${d.nivel ? `, nivel que se cree hoy: ${d.nivel}` : ""}`).join("\n")}`
     : o.guia?.conEscala
       ? "LO QUE SE ESPERABA EXPLORAR: la sesión no tiene un área definida (no hagas juicios de exploracion por dimensión)."
       : "LAS DIMENSIONES DE LA ESCALA: no hay una preventa con escala para esta empresa (juzga escala = sin_escala y no hagas juicios de exploracion por dimensión).";
+  // Solo los casos YA elegidos en la preventa: el agente no inventa casos ni recorre el catálogo.
+  const casos = o.guia?.casos.length
+    ? `LOS CASOS DE USO YA ELEGIDOS EN LA PREVENTA (en caso_de_uso, si uno responde al dolor explorado, pon su título en «caso»; no nombres otros):\n${o.guia.casos.map((c) => `- ${c.titulo}${c.razon ? `: ${c.razon}` : ""}`).join("\n")}`
+    : "LOS CASOS DE USO: todavía no hay casos elegidos en la preventa (en caso_de_uso no nombres ninguno: di si hay base y qué falta).";
   const quien = `QUIÉN HABLÓ (calculado por Nexus, no lo recalcules): ${quienHabloEnPalabras(o.quien)}\n${o.quien.personas
     .slice(0, 12)
     .map((p) => `- ${p.nombre} (${p.lado === "smarteam" ? "Smarteam" : "cliente"}): ${p.porcentaje} %`)
@@ -161,6 +170,7 @@ export function materialDelAnalisis(o: {
     o.criterio,
     guia,
     dimensiones,
+    casos,
     quien,
     `LA CONVERSACIÓN${o.recortada ? " (larga: se cortaron los últimos turnos)" : ""}:\n${conversacion}`,
   ].join("\n\n");
@@ -171,6 +181,80 @@ export function materialDelAnalisis(o: {
  * reunión que no es de venta o no tiene transcripción; la expansión de un cliente sin preventa, solo a mano.
  */
 export async function analizarReunionDeVenta(sessionId: string, o: { pedidoPor: string | null }): Promise<ResultadoDeAnalizar> {
+  const p = await prepararElAnalisis(sessionId, o);
+  if (!p.ok) return p;
+  const { r, turnos, guia, quien, habia, material } = p;
+
+  const agente = await prisma.agent.findUnique({ where: { id: AGENTE_DEL_ANALIZADOR }, select: { systemPrompt: true, status: true } });
+  if (!agente || agente.status !== "ACTIVE") return { ok: false, status: 503, error: "El agente del analizador no está sembrado (scripts/crear-agente-analizador-venta.ts)." };
+
+  const run = await prisma.agentRun.create({
+    data: {
+      agentId: AGENTE_DEL_ANALIZADOR,
+      agentSlug: SLUG_DEL_ANALIZADOR,
+      clientId: r.dueno.id,
+      status: "RUNNING",
+      stepLabel: "Análisis de la reunión de venta",
+      triggeredByEmail: o.pedidoPor,
+      sourceSessionIds: [sessionId],
+    },
+    select: { id: true },
+  });
+
+  try {
+    const crudo = await conContextoDeIA(
+      { agentSlug: SLUG_DEL_ANALIZADOR, agentRunId: run.id, clientId: r.dueno.id, triggeredByEmail: o.pedidoPor, origen: "analizador-venta", reunionId: sessionId },
+      () => pedirElAnalisis(agente.systemPrompt, material),
+    );
+    const { resultado, descartados } = leerElAnalisis(crudo, turnos, habia);
+    const datos = {
+      clientId: r.dueno.id,
+      estado: "PROPUESTO" as const,
+      resultado: resultado as unknown as Prisma.InputJsonValue,
+      quienHablo: quien as unknown as Prisma.InputJsonValue,
+      criterio: VERSION_DEL_CRITERIO,
+      descartados,
+      error: null,
+      agentRunId: run.id,
+      pedidoPor: o.pedidoPor,
+      analizadoAt: new Date(),
+      // Un análisis nuevo es otro: la confirmación del anterior no vale para él (S4).
+      ...SIN_CONFIRMAR,
+    };
+    await prisma.analisisDeVenta.upsert({ where: { sessionId }, create: { sessionId, ...datos }, update: datos });
+    await prisma.agentRun.update({
+      where: { id: run.id },
+      data: { status: "DONE", output: JSON.stringify({ juicios: resultado.juicios.length, recomendaciones: resultado.recomendaciones.length, descartados, alcance: guia?.alcance ?? null }) },
+    });
+    return { ok: true, analisis: resultado, descartados, runId: run.id };
+  } catch (e) {
+    const error = humanizeAgentError(e);
+    await prisma.agentRun.update({ where: { id: run.id }, data: { status: "ERROR", output: JSON.stringify({ error, raw: e instanceof Error ? e.message : String(e) }) } }).catch(() => {});
+    await anotarElError(sessionId, r.dueno.id, error, { agentRunId: run.id, pedidoPor: o.pedidoPor });
+    return { ok: false, status: 502, error };
+  }
+}
+
+/**
+ * Todo lo que se LEE para analizar una reunión, sin escribir nada ni llamar al modelo: si se puede analizar, el material
+ * para el modelo y lo que hace falta para leer su respuesta. Lo usa `analizarReunionDeVenta` y nada más escribe.
+ */
+export async function prepararElAnalisis(
+  sessionId: string,
+  o: { pedidoPor: string | null },
+): Promise<
+  | {
+      ok: true;
+      r: LaReunionDeVenta & { dueno: NonNullable<LaReunionDeVenta["dueno"]> };
+      turnos: TurnoNumerado[];
+      recortada: boolean;
+      guia: GuiaDeLaReunion | null;
+      quien: QuienHablo;
+      habia: LoQueHabia;
+      material: string;
+    }
+  | { ok: false; status: number; error: string }
+> {
   const r = await laReunionDeVenta(sessionId);
   if (!r) return { ok: false, status: 404, error: "Esa reunión no existe." };
   if (!r.dueno) return { ok: false, status: 409, error: "Primero elige de qué empresa es la reunión." };
@@ -180,9 +264,6 @@ export async function analizarReunionDeVenta(sessionId: string, o: { pedidoPor: 
   // Por el chokepoint: la reunión es de esta empresa y ya ocurrió.
   const [deLaEmpresa] = await getClientSessions(r.dueno.id, { ids: [sessionId] });
   if (!deLaEmpresa) return { ok: false, status: 404, error: "Esa reunión no es de esta empresa o todavía no ocurrió." };
-
-  const agente = await prisma.agent.findUnique({ where: { id: AGENTE_DEL_ANALIZADOR }, select: { systemPrompt: true, status: true } });
-  if (!agente || agente.status !== "ACTIVE") return { ok: false, status: 503, error: "El agente del analizador no está sembrado (scripts/crear-agente-analizador-venta.ts)." };
 
   const fila = await prisma.firefliesSession.findUnique({ where: { id: sessionId }, select: { transcript: true } });
   const transcript = fila?.transcript ?? "";
@@ -206,56 +287,16 @@ export async function analizarReunionDeVenta(sessionId: string, o: { pedidoPor: 
     recortada,
   });
 
-  const run = await prisma.agentRun.create({
-    data: {
-      agentId: AGENTE_DEL_ANALIZADOR,
-      agentSlug: SLUG_DEL_ANALIZADOR,
-      clientId: r.dueno.id,
-      status: "RUNNING",
-      stepLabel: "Análisis de la reunión de venta",
-      triggeredByEmail: o.pedidoPor,
-      sourceSessionIds: [sessionId],
-    },
-    select: { id: true },
-  });
-
-  try {
-    const crudo = await conContextoDeIA(
-      { agentSlug: SLUG_DEL_ANALIZADOR, agentRunId: run.id, clientId: r.dueno.id, triggeredByEmail: o.pedidoPor, origen: "analizador-venta", reunionId: sessionId },
-      () => pedirElAnalisis(agente.systemPrompt, material),
-    );
-    const { resultado, descartados } = leerElAnalisis(crudo, turnos, {
-      guia: !!guia?.preguntas.length,
-      escala: !!guia?.conEscala,
-      posicionamiento: !!perfil?.positionStatement?.trim(),
-      dimensiones: !!guia?.dimensiones.length,
-    });
-    const datos = {
-      clientId: r.dueno.id,
-      estado: "PROPUESTO" as const,
-      resultado: resultado as unknown as Prisma.InputJsonValue,
-      quienHablo: quien as unknown as Prisma.InputJsonValue,
-      criterio: VERSION_DEL_CRITERIO,
-      descartados,
-      error: null,
-      agentRunId: run.id,
-      pedidoPor: o.pedidoPor,
-      analizadoAt: new Date(),
-      // Un análisis nuevo es otro: la confirmación del anterior no vale para él (S4).
-      ...SIN_CONFIRMAR,
-    };
-    await prisma.analisisDeVenta.upsert({ where: { sessionId }, create: { sessionId, ...datos }, update: datos });
-    await prisma.agentRun.update({
-      where: { id: run.id },
-      data: { status: "DONE", output: JSON.stringify({ juicios: resultado.juicios.length, recomendaciones: resultado.recomendaciones.length, descartados }) },
-    });
-    return { ok: true, analisis: resultado, descartados, runId: run.id };
-  } catch (e) {
-    const error = humanizeAgentError(e);
-    await prisma.agentRun.update({ where: { id: run.id }, data: { status: "ERROR", output: JSON.stringify({ error, raw: e instanceof Error ? e.message : String(e) }) } }).catch(() => {});
-    await anotarElError(sessionId, r.dueno.id, error, { agentRunId: run.id, pedidoPor: o.pedidoPor });
-    return { ok: false, status: 502, error };
-  }
+  const habia: LoQueHabia = {
+    guia: !!guia?.preguntas.length,
+    escala: !!guia?.conEscala,
+    posicionamiento: !!perfil?.positionStatement?.trim(),
+    dimensiones: !!guia?.dimensiones.length,
+    esperadas: guia?.dimensiones.map((d) => ({ nombre: d.nombre, area: d.area })),
+    areaFija: !!guia && guia.alcanceDe !== "areas_en_juego",
+    casos: guia?.casos.map((c) => c.titulo) ?? [],
+  };
+  return { ok: true, r: { ...r, dueno: r.dueno }, turnos, recortada, guia, quien, habia, material };
 }
 
 /**

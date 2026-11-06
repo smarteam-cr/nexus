@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useCallback, useState } from "react";
+import { useEffect, useRef, useCallback, useState, useMemo } from "react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { useWorkspace } from "@/components/clients/WorkspaceContext";
 import { useToast } from "@/components/ui/Toast";
@@ -164,6 +164,7 @@ export interface SeededCanvas {
 export default function WorkspaceClient({
   clientId,
   projects,
+  closedProjects = [],
   hasHubspot,
   strategyProjectId,
   strategyCanvasId,
@@ -172,6 +173,8 @@ export default function WorkspaceClient({
 }: {
   clientId: string;
   projects: ProjectSummary[];
+  /** Los que terminaron en HubSpot (lib/projects/scope.ts › esProyectoCerradoNavegable): solo el riel los lista. */
+  closedProjects?: ProjectSummary[];
   hasHubspot: boolean;
   strategyProjectId: string;
   strategyCanvasId: string;
@@ -365,7 +368,7 @@ export default function WorkspaceClient({
      aviso con el motivo + Reintentar (antes era un cliente vacío y mudo, imposible de
      diagnosticar). Va arriba del centro del lienzo. */
   const avisoDeSync =
-    hasHubspot && projects.length === 0 && syncDone && !syncing ? (
+    hasHubspot && projects.length === 0 && closedProjects.length === 0 && syncDone && !syncing ? (
       /* ⚠ Escrito a mano con colores crudos hasta el 2026-08-05, y era ILEGIBLE en tema
          claro: la descripción daba 1,16:1 y el botón 1,00:1 —el mismo color que su fondo,
          literalmente invisible—. Ahora usa la primitiva, que pinta con tokens medidos en los dos
@@ -416,6 +419,7 @@ export default function WorkspaceClient({
         <ProjectSection
           clientId={clientId}
           projects={projects}
+          closedProjects={closedProjects}
           strategyProjectId={strategyProjectId}
           strategyCanvasId={strategyCanvasId}
           initialCanvases={initialCanvases}
@@ -435,6 +439,7 @@ export default function WorkspaceClient({
 function ProjectSection({
   clientId,
   projects,
+  closedProjects,
   strategyProjectId,
   strategyCanvasId,
   initialCanvases,
@@ -446,6 +451,7 @@ function ProjectSection({
 }: {
   clientId: string;
   projects: ProjectSummary[];
+  closedProjects: ProjectSummary[];
   strategyProjectId: string;
   strategyCanvasId: string;
   initialCanvases: SeededCanvas[] | null;
@@ -463,6 +469,9 @@ function ProjectSection({
   avisoDeSync: React.ReactNode;
 }) {
   const { activeProjectId, setActiveProjectId, gpsRefreshSignal, timelineRefreshSignal } = useWorkspace();
+  /* Los activos y los cerrados: se pueden abrir los dos. Lo que mira solo los activos (Notas, Tareas, «Esta cuenta
+     tiene otro proyecto») sigue usando `projects`. */
+  const abribles = useMemo(() => [...projects, ...closedProjects], [projects, closedProjects]);
   const router = useRouter();
   const searchParams = useSearchParams();
   const pathname = usePathname();
@@ -532,7 +541,7 @@ function ProjectSection({
     // useSearchParams puede venir vacío en el primer render → el restore no dispararía.
     const tab = new URLSearchParams(window.location.search).get("tab");
     if (!tab) return;
-    const valid = esDeLaCuenta(tab) || projects.some((p) => p.id === tab);
+    const valid = esDeLaCuenta(tab) || abribles.some((p) => p.id === tab);
     if (valid && tab !== activeProjectId) setActiveProjectId(tab);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -545,7 +554,7 @@ function ProjectSection({
   const tabDeLaUrl = searchParams.get("tab");
   useEffect(() => {
     if (!tabRestoredRef.current || !tabDeLaUrl || tabDeLaUrl === activeProjectId) return;
-    const valida = esDeLaCuenta(tabDeLaUrl) || projects.some((p) => p.id === tabDeLaUrl);
+    const valida = esDeLaCuenta(tabDeLaUrl) || abribles.some((p) => p.id === tabDeLaUrl);
     if (valida) setActiveProjectId(tabDeLaUrl);
     // Solo cuando cambia la URL: si dependiera de `activeProjectId`, un clic en una pestaña (que
     // fija la pestaña ANTES de escribir la URL) volvería a la anterior.
@@ -560,7 +569,8 @@ function ProjectSection({
   const isPersonas = activeProjectId === PERSONAS_TAB_ID;
   const isNotas = activeProjectId === NOTAS_TAB_ID;
   const isTareas = activeProjectId === TAREAS_TAB_ID;
-  const activeProject = projects.find((p) => p.id === activeProjectId);
+  const activeProject = abribles.find((p) => p.id === activeProjectId);
+  const activoCerrado = !!activeProject && closedProjects.some((p) => p.id === activeProject.id);
   const otrosProyectos = otrosProyectosDeLaCuenta(projects, activeProject?.id ?? null);
 
   /* El proyecto cuyas piezas cuelgan en el riel: el abierto o, mientras se mira algo de la cuenta
@@ -569,7 +579,7 @@ function ProjectSection({
      no recarga nada. Sin ninguno abierto todavía, los proyectos se ven plegados. */
   const [ultimoProyecto, setUltimoProyecto] = useState<string | null>(activeProject ? activeProject.id : null);
   if (activeProject && ultimoProyecto !== activeProject.id) setUltimoProyecto(activeProject.id);
-  const proyectoDelRiel = activeProject ?? projects.find((p) => p.id === ultimoProyecto) ?? null;
+  const proyectoDelRiel = activeProject ?? abribles.find((p) => p.id === ultimoProyecto) ?? null;
 
   /* Dónde se pintan las piezas (en el riel) y el contexto (en el panel derecho). Los dueños de
      cada vista los llenan por portal: el panel del proyecto sabe sus piezas y su «Qué sigue», la
@@ -648,7 +658,8 @@ function ProjectSection({
     );
   };
 
-  const filasDelRiel: ProyectoDelRiel[] = projects.map((p) => ({ id: p.id, nombre: p.name, ...claseDelProyecto(p, projects) }));
+  const filasDelRiel: ProyectoDelRiel[] = projects.map((p) => ({ id: p.id, nombre: p.name, ...claseDelProyecto(p, abribles) }));
+  const cerradosDelRiel: ProyectoDelRiel[] = closedProjects.map((p) => ({ id: p.id, nombre: p.name, ...claseDelProyecto(p, abribles) }));
 
   return (
     /* El lienzo de tres columnas, como la preventa (sistema «Nexus · interfaz interna»): a la
@@ -659,6 +670,7 @@ function ProjectSection({
       <aside className="border-b border-line bg-surface px-3 py-4 lg:sticky lg:top-0 lg:h-[calc(100vh-57px)] lg:self-start lg:overflow-y-auto lg:border-b-0 lg:border-r">
         <RielDelCliente
           proyectos={filasDelRiel}
+          cerrados={cerradosDelRiel}
           activo={activeProject?.id ?? null}
           proyectoDelRiel={proyectoDelRiel?.id ?? null}
           onElegirProyecto={selectTab}
@@ -719,6 +731,13 @@ function ProjectSection({
           <div role="note" className="border-b border-warn-line bg-warn-surface px-6 py-2 text-[13px] text-warn-ink">
             <span className="font-semibold">Proyecto de prueba.</span> Usa los datos reales de la empresa, pero no está
             en HubSpot, no cuenta en la cartera ni en Cobranza y el cliente no lo ve.
+          </div>
+        )}
+        {/* Un proyecto que terminó en HubSpot (2026-11-06): se abre como siempre, y dice que está cerrado. */}
+        {activoCerrado && (
+          <div role="note" className="border-b border-line bg-surface-muted px-6 py-2 text-[13px] text-fg-secondary">
+            <span className="font-semibold text-fg">Proyecto cerrado.</span> Terminó en HubSpot. Sus documentos se ven
+            y se editan como siempre, pero ya no cuenta en la cartera ni en Cobranza.
           </div>
         )}
         {/* Con varios proyectos, que se sepa que hay otros (Cemaco, 2026-10-19): quien entra a uno que no es el suyo lo

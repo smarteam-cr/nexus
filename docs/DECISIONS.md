@@ -11737,7 +11737,8 @@ vive en el RUNBOOK › «El corte de la aplicación vieja del test»; acá va el
     dice QUÉ HACER: qué priorizar para llegar al nivel siguiente (el de la IA o la descripción de ese nivel) y que falta
     información por corroborar. Lo que salió de «Ver detalles»: lo que respondió, los criterios del nivel siguiente y los
     riesgos (los riesgos ya tienen su sección). La tarjeta va del lado contrario del radar, a la altura del puntero: el
-    radar ocupa todo el ancho y al costado, como en la vieja, no hay lugar; así nunca tapa la dimensión que se mira. En
+    radar ocupa todo el ancho y al costado, como en la vieja, no hay lugar; así nunca tapa la dimensión que se mira (el
+    30 oct pasó a ir junto a la dimensión: abajo, «El radar de la empresa, más limpio»). En
     pantallas de menos de 1.100 px (tablet, teléfono) va en la otra mitad de la pantalla, con el alto que queda hasta el
     dedo, y se desplaza por dentro (`lib/tests-diagnostico/tarjeta-del-radar.ts`). Cada rótulo recibe el foco del
     teclado y muestra su tarjeta (`role="status"`): «cómo está» no queda solo para el cursor. «Qué priorizar» sin IA es
@@ -11762,6 +11763,45 @@ vive en el RUNBOOK › «El corte de la aplicación vieja del test»; acá va el
     agenda pasó de 560 a 500 px, lo que mide ese paso.
   - **El PDF:** el resumen nuevo en la hoja 1 y, en la hoja 3, qué priorizar debajo de cada barra. Sin tarjetas ni
     movimiento.
+- **El resultado, tercera vuelta (Elías lo probó en el 3004 el 29 oct).**
+  - **El resumen interpreta, no describe.** «Lo que hay es una descripción, no una interpretación»: ya no repite el nivel
+    (está en grande encima) ni nombra la industria (quien hizo el test la da por sentada). La IA escribe UNA frase con
+    lo que significa en la práctica operar así y lo que más frena; la página le agrega siempre «Es una estimación con
+    solo N preguntas: hay vacíos de información que conviene explorar para afinarla». La revisión descarta un resumen
+    que nombre cualquier nivel, la industria (por las palabras que la distinguen: «banca» delata «Banca y servicios
+    financieros»; una palabra corta cuenta entera, una larga por su raíz, para que «a pesar de» no cuente como
+    «pesado» — `nombraLaIndustria`) o que diga «estimación» (se leería dos veces). Sin IA, la interpretación sale de
+    cómo están las dos capas (`interpretacionSinIa`). *Por qué la frase de la estimación la pone la página y no la IA:*
+    la IA la olvidaba o se pasaba del largo. La industria va en un chip junto al título (página y PDF); «Otra», sin
+    chip. Las redacciones de antes de esta vuelta (sin `v: 2`) describían el resultado: la página no muestra su
+    resumen y usa la interpretación de los datos.
+  - **La tarjeta del radar, corta:** el nombre, el puntaje con su nivel, lo que le pasa al área por operar así según lo
+    que respondió (`impacto`, en palabras del cliente; sin IA, el costo de quedarse de la dimensión debajo de
+    Funcional, o lo que logra su nivel desde Funcional) y una línea de que es un estimado. Sale «En la escala, este
+    nivel es» y sus viñetas: nadie que llena el test tiene la escala en la cabeza.
+  - **El radar:** la base (Funcional) y las líneas grises más tenues; los rótulos de las dimensiones un poco más
+    grandes y el radar un poco más angosto (ese tope de 1.240 px salió el 30 oct: abajo); y el **imán** de la vieja (`anim.js › iniciarRadarFX`):
+    los vértices, la figura, el halo de lo que más frena y su flecha al objetivo (que se mueve con su vértice: si no, se
+    despegaba) se corren hasta 7 px hacia el cursor, con un piso de fuerza para que responda en toda la página
+    (`lib/tests-diagnostico/iman-del-radar.ts`). Solo con mouse y nunca con «reducir movimiento».
+  - **Las cajas de las capas, en el orden del radar:** Producción a la izquierda y Base operativa a la derecha.
+  - **Cada riesgo con subtítulo:** el nombre de la dimensión de la que sale (`dimensionDeCadaRiesgo`, con la escala).
+- **El radar de la empresa, más limpio (Elías, 30 oct, con una captura de la aplicación vieja).** «Se ve más limpio. No
+  sé si son por los colores.» Eran los colores: la figura y su centro pasan al azul de la vieja (`#0b58d3` al 16 %; el
+  fondo del centro es ese mismo azul sobre blanco, para que la figura no se corte), los vértices van en azul salvo el de
+  lo que más frena, y los anillos pasan a gris, más tenue el de las etapas sin uso, con Funcional como la única referencia
+  de color (verde y punteada). Salen el chip «La base» y los puntos grises de los cruces. Vale también para el PDF. La
+  letra: las etapas suben y los nombres llegan a 18 en el dibujo, que es el tope (con más, un nombre largo de un área de
+  3 + 5 dimensiones pisa la punta del radar); para que se vean más grandes, el radar vuelve a ocupar todo el ancho de su
+  tarjeta, sin el tope de la vuelta anterior. En el PDF el radar conserva su tamaño de la hoja y sus nombres; ahí crecen
+  solo las etapas. Con «Ver puntajes» los discos también van en azul, salvo lo que más frena y «No lo sé». **La tarjeta del hover va junto a la dimensión** y ya no del lado contrario
+  («súper alejado»): al costado de afuera del rótulo o, si ahí no cabe, encima o debajo de él; en una ventana baja, al
+  costado de adentro, sin taparlo nunca (`lib/tests-diagnostico/tarjeta-del-radar.ts`). En tablet y teléfono sigue en la
+  otra mitad de la pantalla. El jalón del vértice al pasar el cursor era del imán, no de la línea (medido en Chrome: los
+  dos iban juntos, a 0,07 px): con fuerza fija, al cruzar el cursor por encima del punto la dirección se invertía y el
+  vértice brincaba 11 px en un cuadro. Ahora la fuerza se apaga cerca del cursor (también cruzando rápido: menos de 4 px
+  por cuadro a 1500 px por segundo) y entra de a poco con el primer movimiento del mouse, y el vértice crece y se encoge
+  al ritmo de la línea, sin sombra.
 - **El PDF del resultado usa el motor de siempre, desde una ruta pública** (`GET /api/external/test/[token]/pdf`, que
   imprime `/external/test/resultado/imprimir?t=`): el token va en la consulta para que el log del motor no lo escriba, y
   `sinElToken` lo tapa en los errores. Como abre un Chromium sin login, además del semáforo único hay tope por dirección
@@ -11913,7 +11953,8 @@ el manejo de un cliente ni de una sesión: el análisis vive en la preventa (doc
    línea y la cita; agrupadas por equipo cuando hay más de uno), las etapas del proceso consultivo que se saltaron o se
    hicieron en parte, en tarjetas en una fila, y las recomendaciones escritas como «Para mejorar». Una persona confirma
    (con una nota opcional); volver a analizar borra la confirmación e INV62 vigila que ninguna quede sobre un análisis
-   que nadie leyó.
+   que nadie leyó. ⚠ 2026-10-29: las tarjetas pasaron a listas, lo que falta explorar va solo del área a la que fueron
+   las preguntas y lo que salió bien va al lado de «Para mejorar» (sección «El análisis de la venta, menos agresivo»).
 2. **Lo que se fue el 27 oct (Elías revisó la primera versión):** los comentarios del vendedor (comentar o discrepar), el
    siguiente paso (con fecha y dueño, sus citas y si tuvo continuidad) y «Para la próxima» (las casillas, los ítems
    automáticos «Explorar X» y «Profundizar en X», que repetían lo que faltó explorar, y el camino para llevarlo a la guía
@@ -12760,6 +12801,71 @@ en su lugar. Lo que queda decidido:
   debe entregar el cliente o un tercero: el pedido de Elías de validar que existiera. Las tablas usan el renderer genérico
   `tabla` con las columnas sembradas: ningún componente nuevo.
 - **En pantalla se llaman «artefactos»** («Nuevo artefacto» en el riel).
+
+## El análisis de la venta, menos agresivo: lo bien con su cita, aterrizar y expandir, y lo que falta explorar enfocado (2026-10-29)
+
+**Contexto.** Elías, 29 oct, con la reunión de Camosa de ese día («se preguntó más y fue por mucho mejor camino»): el
+análisis está muy agresivo; tiene que reconocer lo que está bien, aparte de «Para mejorar» (que se conserva); el resumen
+tiene que mirar la estrategia de aterrizar y expandir; nada de recomendaciones vacías, neutro y con evidencia. Y la sesión
+del 29 no traía «Lo que falta explorar», mientras las anteriores traían todas las dimensiones de los tres departamentos.
+
+**Por qué el 29 oct salió sin «Lo que falta explorar» (medido en producción, solo lectura).** El análisis corrió a las
+23:30 con la guía de esa sesión armada el 28 oct, enfocada en dos dimensiones de Ventas. El modelo devolvió 14 juicios
+y Nexus descartó 7: los dos de exploración, «qué tan consultiva fue», la escala y tres etapas. No por inventados: la
+verificación buscaba la cita como un pedazo EXACTO y el modelo la copia «limpia» (sin los «eh», los «este», las palabras
+repetidas, o uniendo una frase que la transcripción partió en dos turnos con un «Mhm» de otro en medio). Repetido sobre
+dos corridas del 29 oct: la búsqueda exacta aceptaba 16 de 46 y 29 de 61 citas; la nueva, 37 y 53. Cinco minutos
+después del análisis, la lectura de la reunión rehízo la guía de esa sesión; por eso, si hoy se vuelve a analizar, la
+guía ya es de después de la reunión, no cuenta (la regla de CreditForce) y el alcance cae a las áreas en juego: las 24
+dimensiones de Ventas, Marketing y Servicio, lo mismo que se veía en las del 23 y el 27.
+
+**Decisiones.**
+1. **La cita se verifica palabra por palabra** (`lib/analizador-venta/analisis.ts › verificarCita`): casi todas sus
+   palabras (85 %), en orden, casi todas pegadas a la anterior (70 %, a lo sumo una muletilla en medio), sin saltarse
+   más de 12 palabras de lo dicho entre una y otra, en un tramo no mucho más largo que la cita; una letra distinta en
+   una palabra larga cuenta igual; la frase puede seguir en el siguiente turno de la misma persona si en medio hay hasta
+   dos interjecciones de otro (hasta cuatro palabras). Lo que se MUESTRA es el tramo de la transcripción, con sus
+   muletillas, nunca lo que escribió el modelo. *Lo que nunca se tolera* (lo encontraron las dos vueltas de la revisión):
+   un número distinto («3000» por «2000»; «dos» y «2», «2.000» y «2000» sí son lo mismo); una palabra que cambia el
+   sentido que la cita se salta, que lo dicho tiene de más dentro del tramo o justo antes de él («no», «nunca», «sin»,
+   «ni», «tampoco», «nada», «jamás», «ningún», «nadie», «poco», «casi», «apenas», «menos»), salvo el «¿no?» de muletilla,
+   el «sin embargo» y la palabra repetida («no, no»); unir la respuesta a lo de antes por encima de una pregunta corta
+   de otro («¿Y lo usan todos?» no es un «Mhm»); y palabras comunes sueltas juntadas de aquí y de allá. Con la
+   transcripción real del 29 oct: 0 de 40 citas inventadas pasan, en menos de un tercio de segundo, y de las 50 citas de
+   una corrida pasan 43 (con la búsqueda exacta, 9). *Lo que todavía se cuela:* una palabra cambiada por su contraria que
+   no está en esa lista («rechazado» por «aprobado») si el resto de la cita calza; la pantalla muestra siempre lo dicho.
+2. **Lo que salió bien (`bien`) va aparte de «Para mejorar»**, al lado en pantalla ancha, y **los dos llevan cita
+   siempre**: lo que llega sin una cita que esté se descarta y se cuenta. Antes una recomendación podía ir sin cita («si
+   la hay»): así se colaban los consejos genéricos.
+3. **Aterrizar y expandir: dos puntos nuevos.** `dolor` (a fondo · en parte · sin explorar): el cliente dijo qué
+   resultado necesita Y por qué no lo tiene hoy. `caso_de_uso` (hay base · falta · sin base): si con lo explorado ya se
+   puede ofrecer un caso de uso ligado a lo que más impacto le causa, o qué falta. El agente solo ve los casos de uso YA
+   ELEGIDOS en la preventa (`contenido.casosDeUso`), nunca el catálogo, y el código solo guarda el nombre de un caso si es
+   uno de esos. El resumen dice las tres cosas: lo que salió bien, el dolor y la base para el caso.
+4. **El foco de la sesión (`enfoque`).** Con el área ya sabida (el equipo de la sesión o la guía enfocada) el foco es esa.
+   Sin ella (las áreas en juego), el agente dice hacia qué áreas fueron las preguntas y juzga la exploración solo ahí; el
+   código suma toda área donde algo se exploró o se tocó con cita (si el modelo no nombra ninguna válida y nada se tocó,
+   el foco son todas: no se esconde nada). Lo juzgado fuera del foco se GUARDA y solo se deja de mostrar
+   (`exploracionEnFoco`): si el foco estuviera mal, el dato sigue. La tendencia de cada vendedor cuenta con la misma
+   regla, así un análisis viejo (hasta 24 dimensiones) y uno nuevo miden lo mismo. Un juicio de exploración sobre algo
+   que no estaba en la lista se descarta. La dimensión se guarda sin el área en el nombre y con su
+   área aparte: «Datos» está en los tres departamentos (la lectura de conjunto los confundía).
+5. **La pantalla, en listas, no en tarjetas.** «Lo que falta explorar» dice con quién se habló y hacia dónde fueron las
+   preguntas, lista lo que se tocó sin profundizar y lo que no se tocó de esa área, y en una línea «No se tocó en esta
+   sesión: Marketing y Servicio». El proceso consultivo, también en lista. Los análisis de antes se leen igual: sin foco
+   guardado, el foco son las áreas donde algo se tocó con cita (en Camosa, el del 23 oct pasa de 19 filas a 11 y el del 27
+   de 23 a 15, de Ventas y Marketing; Servicio queda en una línea). El del 29 sigue vacío hasta volver a analizarlo.
+6. **Lo que sostiene las reglas vive en el código** (la herramienta, el material y la lectura), no solo en el prompt:
+   mientras el prompt de la base no se re-siembra, el agente igual recibe el foco, los casos elegidos y los campos
+   nuevos, y lo que llega sin cita igual se cae. El prompt nuevo (`lib/analizador-venta/prompt.ts`) se siembra con
+   `scripts/crear-agente-analizador-venta.ts --apply`, SIN `--force`: el script reemplaza solo un prompt que él mismo
+   sembró antes (`HUELLAS_DE_PROMPTS_ANTERIORES`); si alguien lo calibró a mano en /agents, avisa y no lo pisa. El de
+   producción es idéntico al anterior del código (comprobado el 29 oct). El criterio sube a `2026-10-29`.
+7. **No se re-analizan solos los análisis viejos.** Volver a analizar borra la confirmación; se hace a mano desde la sesión.
+
+**Costo.** Una corrida sigue en ~$0,16–0,18 (Sonnet 4.6, ~23–29 mil tokens de entrada y ~6 mil de salida): el foco
+ahorra los juicios de las áreas que no se tocaron y lo bien, el dolor y el caso los gastan.
+
 ## La Planificación lee las reuniones del proyecto, dice por qué quedó vacía una sección, trae el Brief y sugiere plantilla (2026-10-29)
 
 **Contexto.** Feedback de Elías del 29 oct, con la Planificación de Liliana en SmartAgro, más las preguntas 32 y 44 del

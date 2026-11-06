@@ -16,7 +16,7 @@ import Link from "next/link";
 import { Alert, Button, EmptyState, useToast } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import { lecturaDeConjunto, type DimensionEnJuego } from "@/lib/analizador-venta/conjunto";
-import { continuidadDelSiguientePaso, loDeLaSesion } from "@/lib/analizador-venta/revision";
+import { continuidadDelSiguientePaso, loDeLaSesion, loQueFaltaExplorar } from "@/lib/analizador-venta/revision";
 import type { ReunionDeVentaVista } from "@/lib/analizador-venta/reuniones-de-venta-server";
 import { nombreDeLaPestana, tituloDeLaSesion, type PestanaDeSesion } from "@/lib/exploraciones/guia";
 import { useLienzo } from "@/components/exploraciones/contexto";
@@ -151,6 +151,8 @@ export default function PasoAnalisis() {
             const p = pestanaDe(r.id);
             const deLaPropuesta = !!primeraPropuesta && r.fecha >= primeraPropuesta;
             const lo = r.detalle?.resultado ? loDeLaSesion(r.detalle.resultado) : null;
+            // Solo el área a la que fueron las preguntas; del resto, el nombre (Elías, 29 oct).
+            const falta = lo ? loQueFaltaExplorar(lo, () => null) : null;
             const t = TEXTO[r.texto];
             const continuidad = lo ? textoDeLaContinuidad(continuidadDelSiguientePaso({ siguientePaso: lo.siguientePaso, fecha: r.fecha, despues: reuniones.map((x) => x.fecha), ahora: new Date() })) : null;
             return (
@@ -200,11 +202,13 @@ export default function PasoAnalisis() {
                             <span className="font-semibold">Se exploró:</span> {lo.exploradas.join(", ")}.
                           </p>
                         )}
-                        {(lo.tocadas.length > 0 || lo.sinExplorar.length > 0) && (
+                        {falta && falta.items.length > 0 && (
                           <p className="text-fg">
-                            <span className="font-semibold text-warn-ink">Quedó sin explorar:</span> {[...lo.sinExplorar.map((x) => x.dimension), ...lo.tocadas.map((x) => `${x.dimension} (solo se tocó)`)].join(", ")}.
+                            <span className="font-semibold text-warn-ink">Quedó sin explorar{falta.foco.length ? ` en ${falta.foco.join(" y ")}` : ""}:</span>{" "}
+                            {falta.items.map((x) => (x.estado === "tocado" ? `${x.dimension} (solo se tocó)` : x.dimension)).join(", ")}.
                           </p>
                         )}
+                        {falta && falta.sinTocar.length > 0 && <p className="text-xs text-fg-muted">No se tocó en esta sesión: {falta.sinTocar.join(", ")}.</p>}
                         <p className="text-fg">
                           <span className="font-semibold">Siguiente paso:</span> {lo.siguientePaso?.lectura ?? "el análisis no lo juzgó."}
                         </p>

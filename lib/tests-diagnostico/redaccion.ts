@@ -5,15 +5,20 @@
  * incipiente: …») y le ponía a cada dimensión una evidencia redactada. Nexus hace lo mismo con una regla que no se
  * negocia: **la IA nunca mueve un número**. El nivel, las capas, lo que más frena y el puntaje salen del cálculo
  * (./resultado.ts); la IA solo los cuenta en palabras. Tres textos:
- *   · `resumen` — una o dos frases arriba de todo, con el nivel, las capas, lo que más frena y la industria;
- *   · por dimensión, `lectura` — cómo está (la tarjeta del radar);
+ *   · `resumen` — una o dos frases arriba de todo que INTERPRETAN el resultado: qué significa en la práctica operar así y
+ *     que es una estimación con pocas preguntas. No repite el nivel (está en grande encima) ni nombra la industria (va
+ *     en un chip junto al título): Elías, 29 oct, segunda prueba — «lo que hay es una descripción, no una interpretación»;
+ *   · por dimensión, `impacto` — lo que le pasa en la práctica al área por operar así, según lo que respondió, en
+ *     palabras del cliente (la tarjeta del radar; sin «En la escala, este nivel es»: nadie que llena el test tiene la
+ *     escala en la cabeza);
  *   · por dimensión, `prioridad` — qué priorizar para llegar al nivel siguiente («Ver detalles» de la barra).
  *
  * Se redacta UNA vez, al terminar el test (./redaccion-server.ts, con Haiku), y queda guardada con el resultado: una
  * visita no la recalcula. Lo que la IA devuelve pasa por `leerLaRedaccion`: un texto con cifras, con el nombre de un
- * nivel que no está en el resultado o demasiado largo se descarta, y en su lugar va el texto armado con los datos
- * (`resumenSinIa`, y en ./detalle-de-la-dimension.ts la descripción del nivel). Si la IA falla o tarda, todo sale de los
- * datos y la página se ve igual de completa.
+ * nivel que no es de lo suyo (el resumen no puede nombrar ninguno), con la industria (solo el resumen) o demasiado largo
+ * se descarta, y en su lugar va el texto armado con los datos (`resumenSinIa`, y en ./detalle-de-la-dimension.ts el
+ * costo de quedarse o lo que logra el nivel). Si la IA falla o tarda, todo sale de los datos y la página se ve igual
+ * de completa.
  * Las pruebas: redaccion.test.ts.
  */
 import type Anthropic from "@anthropic-ai/sdk";
@@ -32,14 +37,19 @@ export const SLUG_DE_LA_REDACCION = "resultado-del-test";
 export const ESPERA_DE_LA_REDACCION_MS = 10_000;
 
 /** Los topes de largo, en caracteres: lo que pasa de ahí se descarta (la IA se fue de tema). */
-export const TOPES = { resumen: 340, lectura: 280, prioridad: 220 } as const;
+export const TOPES = { resumen: 260, impacto: 200, prioridad: 220 } as const;
 
 export interface RedaccionDelResultado {
+  /**
+   * La forma de los textos: 2 desde la tercera vuelta (29 oct: el resumen interpreta, sin nivel ni industria, y cada
+   * dimensión trae `impacto`). Las de antes (sin `v`) describían el resultado: la página no las muestra.
+   */
+  v?: 2;
   modelo: string;
   /** Cuándo se redactó (ISO). */
   at: string;
   resumen: string | null;
-  dimensiones: Record<string, { lectura: string | null; prioridad: string | null }>;
+  dimensiones: Record<string, { impacto: string | null; prioridad: string | null }>;
 }
 
 /** Lo que ve la IA de cada dimensión preguntada y ubicada. */
@@ -51,24 +61,6 @@ interface DimensionParaLaIa {
   respondio: string | null;
   comoEsEsteNivel: string;
   siguiente: { nivel: string; comoEs: string; criterios: string[] } | null;
-}
-
-/**
- * Los niveles que puede nombrar el RESUMEN: el del área, los de sus capas, el de lo que más frena y su objetivo. Cada
- * texto se revisa contra los niveles de LO SUYO, no contra todos los del resultado: con una sola lista, «el área está en
- * Eficiente» pasaba porque alguna dimensión tenía Eficiente como siguiente (revisión del 29 oct).
- */
-export function nivelesDelResumen(r: Pick<ResultadoDelTest, "nivel" | "capas" | "dimensiones" | "recomendacion">): Set<Letra> {
-  const s = new Set<Letra>();
-  if (r.nivel) s.add(r.nivel);
-  for (const c of r.capas) if (c.nivel) s.add(c.nivel);
-  if (r.recomendacion?.tipo === "trabajar") {
-    s.add(r.recomendacion.objetivo);
-    const frena = r.recomendacion.dimensionId;
-    const nivel = r.dimensiones.find((d) => d.id === frena)?.nivel;
-    if (nivel) s.add(nivel);
-  }
-  return s;
 }
 
 /** Los niveles que puede nombrar el texto de una dimensión: el suyo y el siguiente. */
@@ -93,21 +85,22 @@ const REGLAS = `Redactas el resultado de un test de autodiagnóstico que una per
 
 Lo que NO puedes hacer (si lo haces, tu texto se descarta):
 - Escribir números de ningún tipo, ni en cifras ni en letras («cuatro», «diez»): ni cantidades, ni porcentajes, ni puntajes, ni plazos.
-- Nombrar un nivel de la escala que no esté en los datos ni cambiar el nivel de nada: el nivel lo calculó la escala y tú solo lo cuentas.
+- Cambiar el nivel de nada: el nivel lo calculó la escala y tú solo lo interpretas.
 - Inventar herramientas, personas o hechos que no estén en lo que respondió.
 - Prometer resultados, precios o servicios.
 
-Cómo escribes: español neutro, en tuteo («tu equipo», «tienes»), nunca voseo. Directo y concreto, sin adornos ni frases hechas. Sin markdown. Es una estimación: lo dijo la persona y nadie lo verificó todavía.`;
+Cómo escribes: español neutro, en tuteo («tu equipo», «tienes»), nunca voseo. Directo y concreto, sin adornos ni frases hechas. Sin markdown. Lo que respondió la persona nadie lo verificó todavía: no lo des por hecho.`;
 
 const SALIDA: Record<ParteDeLaRedaccion, string> = {
   resumen: `Devuelves SOLO este JSON: {"resumen": "..."}
-- resumen: una o dos frases (hasta 45 palabras) que empiezan con «El área de <área>». Cuenta en qué estado está el área, cómo están sus capas, qué es lo que más la frena y qué significa eso para una empresa de su industria (si la industria es «Otra» o no viene, no la nombres).
-- Los únicos niveles que el resumen puede nombrar son el del área, los de sus capas y el objetivo de lo que más frena. No nombres el nivel de cada dimensión, y no uses los nombres de los niveles como palabras comunes («un proceso eficiente», «un CRM funcional»).`,
+- resumen: UNA frase corta (hasta 30 palabras) que INTERPRETA el resultado para quien lo lee, en palabras simples: qué significa en la práctica que su área opere así hoy (lo que le pasa, lo que le cuesta), con lo que respondió y lo que más la frena. En presente y con frases naturales («lo que más te frena es…»). No digas que es una estimación: la página lo agrega después de tu frase.
+- No describas el resultado: el nivel ya se ve en grande encima. NO nombres ningún nivel de la escala ni uses esas palabras («deficiente», «inicial», «funcional», «eficiente», «óptimo») en ningún sentido.
+- NO nombres la industria (ya se muestra al lado del título); úsala solo para elegir de qué hablar.`,
   base: "",
   produccion: "",
 };
-SALIDA.base = SALIDA.produccion = `Devuelves SOLO este JSON: {"dimensiones": [{"id": "...", "lectura": "...", "prioridad": "..."}]}, una entrada por cada dimensión de los datos.
-- lectura: una o dos frases (hasta 30 palabras) de cómo está hoy esa parte, con lo que respondió la persona.
+SALIDA.base = SALIDA.produccion = `Devuelves SOLO este JSON: {"dimensiones": [{"id": "...", "impacto": "...", "prioridad": "..."}]}, una entrada por cada dimensión de los datos.
+- impacto: una o dos frases cortas (hasta 25 palabras), en palabras del cliente, de lo que le pasa en la práctica a su área por operar así, según lo que respondió (ejemplo de tono: «Si se va un vendedor, se lleva lo que sabe de cada negocio.»). No describas el nivel ni uses palabras de la escala.
 - prioridad: una frase en imperativo (hasta 22 palabras) con lo primero que conviene trabajar para llegar al nivel siguiente, sacada de cómo es ese nivel y sus criterios. Si la dimensión no tiene nivel siguiente, null.
 - Cada texto nombra, como mucho, el nivel de su propia dimensión o el siguiente: nunca el de otra.
 - No uses los nombres de los niveles como palabras comunes («un proceso eficiente», «un CRM funcional»).`;
@@ -223,7 +216,7 @@ export function textoValido(texto: string | null, o: { tope: number; permitidos:
  */
 export function leerLaRedaccion(
   respuestas: readonly (Pick<Anthropic.Messages.Message, "content"> | null)[],
-  o: { escala: Escala; r: ResultadoDelTest; parse: (texto: string) => Record<string, unknown>; ahora: Date },
+  o: { escala: Escala; r: ResultadoDelTest; parse: (texto: string) => Record<string, unknown>; ahora: Date; industria?: string | null },
 ): RedaccionDelResultado | null {
   // Cada respuesta trae su parte (el resumen o las dimensiones de una capa); una que falló llega en null.
   const partes = respuestas.flatMap((x) => (x ? [o.parse(x.content.map((b) => (b.type === "text" ? b.text : "")).join(""))] : []));
@@ -242,56 +235,91 @@ export function leerLaRedaccion(
     const nivel = nivelDe.get(id);
     if (!nivel || dimensiones[id]) continue;
     const regla = (tope: number) => ({ tope, permitidos: nombres(nivelesDeLaDimension(nivel)), todos });
-    const lectura = textoValido(limpio(d.lectura), regla(TOPES.lectura));
+    const impacto = textoValido(limpio(d.impacto), regla(TOPES.impacto));
     // En el nivel más alto no hay qué priorizar: la página dice que lo que sigue es sostenerlo.
     const prioridad = LETRAS[LETRAS.indexOf(nivel) + 1] ? textoValido(limpio(d.prioridad), regla(TOPES.prioridad)) : null;
-    if (lectura || prioridad) dimensiones[id] = { lectura, prioridad };
+    if (impacto || prioridad) dimensiones[id] = { impacto, prioridad };
   }
-  const resumen = textoValido(limpio(crudo.resumen), { tope: TOPES.resumen, permitidos: nombres(nivelesDelResumen(o.r)), todos });
+  // El resumen no nombra ningún nivel (ya está en grande encima), ni la industria (va en el chip), ni dice que es una
+  // estimación (la página lo agrega: dicho dos veces, se leía repetido).
+  const crudoDelResumen = limpio(crudo.resumen);
+  const resumen =
+    crudoDelResumen && (nombraLaIndustria(crudoDelResumen, o.industria ?? null) || /estimaci[oó]n|estimad[oa]/i.test(crudoDelResumen))
+      ? null
+      : textoValido(crudoDelResumen, { tope: TOPES.resumen, permitidos: new Set(), todos });
   if (!resumen && !Object.keys(dimensiones).length) return null;
-  return { modelo: MODELO_DE_LA_REDACCION, at: o.ahora.toISOString(), resumen, dimensiones };
+  return { v: 2, modelo: MODELO_DE_LA_REDACCION, at: o.ahora.toISOString(), resumen, dimensiones };
 }
 
 // ── Sin IA ──────────────────────────────────────────────────────────────────────
 
-/** «Turismo» → «turismo»; una industria que no es de la lista («Otra») no se nombra. */
-function sectorDe(industria: string | null): string | null {
-  const t = industria?.trim();
-  if (!t || t === OTRA_INDUSTRIA) return null;
-  return minus(t);
-}
+const sinTildes = (x: string) => minus(x).normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+/**
+ * Palabras de una industria que no la delatan: aparecen solas en cualquier texto del resultado («tu equipo», «Equipo y
+ * Gobierno», «Tecnología y Automatización», «los servicios»).
+ */
+const PALABRAS_COMUNES = new Set(["servicios", "equipo", "especializado", "gobierno", "tecnologia", "institucion", "pesado"]);
 
 /**
- * El resumen armado con los datos, para cuando no hay redacción de la IA: el nivel, las capas, lo que más frena y la
- * industria. Lo usa la página para todo resultado sin `redaccion.resumen` (también los de antes del 29 oct).
+ * ¿El texto nombra la industria? Por cada palabra que la distingue («Banca y servicios financieros» → banca,
+ * financieros) y no por el nombre entero: «para una empresa de banca» pasaba (revisión del 29 oct). Una palabra corta
+ * (hasta seis letras) cuenta entera o en plural; una larga, por su raíz sin la última letra («alimentos» → «alimento»,
+ * así «nadie alimenta el CRM» no cuenta). Con raíces más cortas, «a pesar de» contaba como «pesado» y «saludable» como
+ * «salud». «Otra» no se nombra nunca.
  */
-export function resumenSinIa(
-  r: Pick<ResultadoDelTest, "areaNombre" | "nivelNombre" | "capas" | "recomendacion">,
-  industria: string | null,
-): string {
-  if (!r.nivelNombre) return `Con lo que respondiste todavía no alcanza para ubicar el área de ${r.areaNombre}: en una sesión lo completamos juntos.`;
-  const sector = sectorDe(industria);
-  const medidas = r.capas.filter((c) => c.nivelNombre);
-  // Las dos capas en el mismo nivel que el área se dicen juntas: «Deficiente: la base … en Deficiente y la producción en
-  // Deficiente» repetía tres veces lo mismo.
-  const capas =
-    medidas.length === 2 && medidas.every((c) => c.nivelNombre === r.nivelNombre)
-      ? `, tanto en la ${minus(medidas[0].nombre)} como en la ${minus(medidas[1].nombre)}`
-      : medidas.length
-        ? `: la ${medidas.map((c, i) => `${minus(c.nombre)} ${i === 0 ? "está en" : "en"} ${c.nivelNombre}`).join(" y la ")}`
-        : "";
-  const primera = `${sector ? `En el sector de ${sector}, el` : "El"} área de ${r.areaNombre} está hoy en ${r.nivelNombre}${capas}.`;
-  const rec = r.recomendacion;
-  const segunda =
-    rec?.tipo === "trabajar"
-      ? `Lo que más la frena es «${rec.dimensionNombre}»: llevar esa parte a ${rec.objetivoNombre} es el primer paso.`
-      : rec?.tipo === "sostener"
-        ? "Ya llegó a donde apunta: lo que sigue es sostenerlo y volver a medir."
-        : "";
-  return [primera, segunda].filter(Boolean).join(" ");
+export function nombraLaIndustria(texto: string, industria: string | null): boolean {
+  if (!industria || industria.trim() === OTRA_INDUSTRIA) return false;
+  const distintivas = sinTildes(industria)
+    .split(/[^a-z]+/)
+    .filter((w) => w.length >= 4 && !PALABRAS_COMUNES.has(w));
+  const palabras = sinTildes(texto).split(/[^a-z]+/);
+  return distintivas.some((d) =>
+    palabras.some((w) => (d.length <= 6 ? w === d || w === `${d}s` || w === `${d}es` : w.startsWith(d.slice(0, -1)))),
+  );
 }
 
-/** El resumen de la página: el de la IA si pasó las reglas, o el de los datos. */
-export function resumenDelResultado(r: ResultadoDelTest, industria: string | null): string {
-  return r.redaccion?.resumen || resumenSinIa(r, industria);
+/** Lo que una capa en un nivel bajo (Deficiente o Inicial) significa en la práctica, sin nombrar el nivel. */
+const esBaja = (l: Letra | null) => l !== null && LETRAS.indexOf(l) < LETRAS.indexOf("F");
+
+/**
+ * La interpretación armada con los datos, para cuando no hay la de la IA: qué significa operar así, por cómo están sus
+ * dos capas, y qué es lo que más frena. Sin el nivel ni la industria, igual que la de la IA.
+ */
+export function interpretacionSinIa(r: Pick<ResultadoDelTest, "capas" | "recomendacion">): string {
+  const base = r.capas.find((c) => c.clave === "base")?.nivel ?? null;
+  const prod = r.capas.find((c) => c.clave === "produccion")?.nivel ?? null;
+  const practica =
+    base && prod
+      ? esBaja(base) && esBaja(prod)
+        ? "tu área depende más del esfuerzo de cada persona que de un sistema, y eso se nota en lo que entrega hacia afuera"
+        : esBaja(base)
+          ? "tu área entrega hacia afuera, pero se sostiene en el esfuerzo de cada persona más que en un sistema"
+          : esBaja(prod)
+            ? "tu área tiene su base montada, pero todavía no se traduce en lo que entrega hacia afuera"
+            : "tu área tiene su base montada y entrega bien hacia afuera; lo que sigue es afinarla"
+      : esBaja(base ?? prod)
+        ? "tu área depende más del esfuerzo de cada persona que de un sistema"
+        : "tu área tiene su base montada";
+  const rec = r.recomendacion;
+  return `Por lo que respondiste, ${practica}.${rec?.tipo === "trabajar" ? ` Lo que más la frena es «${rec.dimensionNombre}».` : ""}`;
+}
+
+/** Lo que el resumen dice SIEMPRE al final, con o sin IA: que es una estimación con pocas preguntas. */
+export const fraseDeLaEstimacion = (r: Pick<ResultadoDelTest, "preguntadas">) =>
+  `Es una estimación con solo ${r.preguntadas} preguntas: hay vacíos de información que conviene explorar para afinarla.`;
+
+/**
+ * El resumen sin IA: la interpretación de los datos y la frase de la estimación. Lo guarda el resultado (`sintesis`) y lo
+ * usa la página para todo resultado sin `redaccion.resumen`.
+ */
+export function resumenSinIa(r: Pick<ResultadoDelTest, "areaNombre" | "nivel" | "capas" | "recomendacion" | "preguntadas">): string {
+  if (!r.nivel) return `Con lo que respondiste todavía no alcanza para ubicar tu área de ${r.areaNombre}: en una sesión lo completamos juntos.`;
+  return `${interpretacionSinIa(r)} ${fraseDeLaEstimacion(r)}`;
+}
+
+/** El resumen de la página: la interpretación de la IA (si pasó las reglas) con la frase de la estimación, o el de los datos. */
+export function resumenDelResultado(r: ResultadoDelTest): string {
+  // Solo la de la forma nueva: una de antes describía el resultado (el nivel, la industria) y se leía repetida.
+  const ia = r.redaccion?.v === 2 ? r.redaccion.resumen : null;
+  return ia && r.nivel ? `${ia} ${fraseDeLaEstimacion(r)}` : resumenSinIa(r);
 }

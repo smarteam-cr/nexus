@@ -11,7 +11,7 @@
  * Lo de cada sesión cuenta aunque nadie lo haya confirmado todavía (es para preparar la próxima, no para evaluar): la
  * pantalla dice cuántas están confirmadas.
  */
-import { paraComparar, type ResultadoDelAnalisis } from "./analisis";
+import { paraComparar, separarArea, type Juicio, type ResultadoDelAnalisis } from "./analisis";
 import { PROCESO_CONSULTIVO, type EtapaDelProceso } from "./criterio";
 import type { QuienHablo } from "./quien-hablo";
 import { siguientePasoConFecha } from "./revision";
@@ -71,16 +71,24 @@ export function lecturaDeConjunto(sesiones: readonly SesionParaElConjunto[], enJ
   const posicion = contar(["asesor", "mixto", "vendedor_de_licencias"] as const, analizadas.map((s) => s.resultado!.juicios.find((j) => j.punto === "posicion")?.valor));
   const conSiguientePasoConFecha = analizadas.filter((s) => siguientePasoConFecha(s.resultado!.juicios.find((j) => j.punto === "siguiente_paso") ?? null)).length;
 
-  // Por nombre, sin tildes ni mayúsculas: el modelo nombra la dimensión como se la pasó el material.
+  // Por nombre y área, sin tildes ni mayúsculas: «Datos» está en Ventas, en Marketing y en Servicio. Los juicios de antes
+  // del 29 oct traen el área entre paréntesis en el nombre («Datos (Ventas)»), o no la traen: sin área, vale el nombre.
   const exploracion = de("exploracion").filter((j) => j.dimension);
-  const exploradas = new Set(exploracion.filter((j) => j.valor === "explorado").map((j) => paraComparar(j.dimension!)));
-  const tocadas = new Set(exploracion.filter((j) => j.valor === "tocado").map((j) => paraComparar(j.dimension!)));
-  const pendientes = enJuego.filter((d) => !d.diagnosticada && !exploradas.has(paraComparar(d.nombre)));
+  const clave = (j: Juicio) => {
+    const s = separarArea(j.dimension!);
+    const area = j.area ?? s.area;
+    return { nombre: paraComparar(s.nombre), area: area ? paraComparar(area) : null };
+  };
+  const exploradas = exploracion.filter((j) => j.valor === "explorado").map(clave);
+  const tocadas = exploracion.filter((j) => j.valor === "tocado").map(clave);
+  const esta = (d: DimensionEnJuego, en: readonly { nombre: string; area: string | null }[]) =>
+    en.some((k) => k.nombre === paraComparar(d.nombre) && (!k.area || k.area === paraComparar(d.area)));
+  const pendientes = enJuego.filter((d) => !d.diagnosticada && !esta(d, exploradas));
   const etapasHechas = new Set(de("etapa").filter((j) => j.valor === "se_hizo").map((j) => j.etapa));
 
   const falta = {
-    sinTocar: pendientes.filter((d) => !tocadas.has(paraComparar(d.nombre))).map(({ nombre, area }) => ({ nombre, area })),
-    soloTocadas: pendientes.filter((d) => tocadas.has(paraComparar(d.nombre))).map(({ nombre, area }) => ({ nombre, area })),
+    sinTocar: pendientes.filter((d) => !esta(d, tocadas)).map(({ nombre, area }) => ({ nombre, area })),
+    soloTocadas: pendientes.filter((d) => esta(d, tocadas)).map(({ nombre, area }) => ({ nombre, area })),
     etapas: analizadas.length ? PROCESO_CONSULTIVO.filter((e) => !etapasHechas.has(e.id)).map((e) => ({ id: e.id, nombre: e.nombre })) : [],
   };
 
@@ -103,7 +111,7 @@ export function lecturaDeConjunto(sesiones: readonly SesionParaElConjunto[], enJ
       faltan: enJuego.length ? falta.sinTocar.length + falta.soloTocadas.length : null,
     }),
     falta,
-    exploradas: [...new Set(exploracion.filter((j) => j.valor === "explorado").map((j) => j.dimension!))],
+    exploradas: [...new Set(exploracion.filter((j) => j.valor === "explorado").map((j) => separarArea(j.dimension!).nombre))],
   };
 }
 
