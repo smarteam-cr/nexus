@@ -804,7 +804,11 @@ function cuerpoDeLaAgenda(ctx: ContextoDeLaGuia): string {
 /** Lee la agenda que devolvió el agente. null si no sirve (menos de dos bloques o sin claves). */
 function leerLaAgenda(input: Record<string, unknown>, ctx: ContextoDeLaGuia): AgendaDeLaGuia | null {
   const permitidos = new Set([...ctx.huecos.map((h) => h.clave), ...ctx.enfoque.map((d) => d.id), ...(ctx.lentes ?? []).map((l) => l.para)]);
-  const crudos = (Array.isArray(input.bloques) ? input.bloques : []).filter(esObjeto).slice(0, MAX_BLOQUES);
+  // Solo los bloques con título y texto: la apertura y el cierre son el primero y el último de ESOS.
+  const crudos = (Array.isArray(input.bloques) ? input.bloques : [])
+    .filter(esObjeto)
+    .filter((b) => textoLimpio(b.titulo, 120) && textoLimpio(b.abre, 600))
+    .slice(0, MAX_BLOQUES);
   const vistos = new Set<string>();
   const bloques: BloqueDeLaAgenda[] = [];
   for (const [i, b] of crudos.entries()) {

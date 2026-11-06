@@ -336,6 +336,8 @@ export function useEditarLaSesion(pestana: PestanaDeSesion, momento: MomentoDeLa
     ops.push(...extra(nueva.id));
     if (!ops.length) return nueva.id;
     const ok = await cambiar(ops, opciones);
+    // Si no se pudo crear, la pestaña no quedó con sesión: el próximo cambio la vuelve a crear.
+    if (!ok && !existente) CREADAS_DESDE_LA_PANTALLA.delete(clave);
     if (ok && !existente) {
       seleccion.elegir(nueva.id);
       seleccion.ponerMomento(nueva.id, momento);

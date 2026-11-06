@@ -32,6 +32,8 @@ export async function proponerLoQueDejo(o: {
   const leida = estado.propuesta.lecturas[o.reunion];
   if (!leida?.resumen?.trim()) return { ok: false, status: 409, error: "Esta reunión todavía no se leyó: escribe tú el desafío, o léela primero." };
   const sesion = estado.contenido.sesiones.find((s) => s.id === o.sesionId) ?? null;
+  // La reunión tiene que ser la de esa sesión (si la sesión ya la tiene unida): no se mezcla una sesión con otra.
+  if (sesion?.reunion && `${sesion.reunion.origen}:${sesion.reunion.id}` !== o.reunion) return { ok: false, status: 400, error: "Esa reunión no es la de esta sesión." };
   const agenda = sesion ? estado.propuesta.guias[sesion.id]?.agenda : undefined;
   const cosas = agenda ? agenda.bloques.flatMap((b) => b.averiguar) : [];
   const personas = [

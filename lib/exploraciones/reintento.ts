@@ -99,7 +99,9 @@ function operacionSegura(op: Operacion, antes: EstadoDeExploracion, ahora: Estad
       // Cambia unos campos de UNA sesión sobre lo de ahora: se reintenta si esos campos no cambiaron entretanto.
       const a = ca.sesiones.find((s) => s.id === op.sesionId);
       const b = cb.sesiones.find((s) => s.id === op.sesionId);
-      if (!a || !b) return false;
+      if (!b) return false;
+      // Recién creada en esta pantalla (no estaba en lo que se veía): el cambio va por campo, no pisa nada.
+      if (!a) return true;
       return [...Object.keys(op.poner), ...op.quitar].every((k) => igual(a[k as keyof typeof a], b[k as keyof typeof b]));
     }
     case "evento":
