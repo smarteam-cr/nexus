@@ -170,6 +170,7 @@ function ElAnalisis({ vista, pestana, puedeEditar }: { vista: ReunionDeVentaVist
           )}
 
           <LoQueFalto lo={lo} faltas={faltas} />
+          <ElResultado lo={lo} />
           <ElProcesoConsultivo lo={lo} juzgado={res.juicios.some((j) => j.punto === "etapa")} />
 
           {lo.recomendaciones.length > 0 && (
@@ -275,6 +276,26 @@ function LoQueFalto({ lo, faltas }: { lo: LoDeLaSesion; faltas: ReturnType<typeo
           </div>
         ))
       )}
+    </div>
+  );
+}
+
+/** ¿Se averiguó el resultado que busca? (2026-11-06). Los análisis de antes no lo tienen: no se muestra. */
+function ElResultado({ lo }: { lo: LoDeLaSesion }) {
+  const r = lo.resultado;
+  if (!r) return null;
+  return (
+    <div className="space-y-2.5">
+      <Subtitulo>El resultado que busca</Subtitulo>
+      <ul className="grid gap-2.5 sm:grid-cols-2">
+        <Tarjeta
+          titulo="¿Se averiguó el resultado que busca?"
+          etiqueta={r.valor === "si" ? "Sí" : r.valor === "en_parte" ? "En parte" : "No"}
+          tono={r.valor === "si" ? "info" : r.valor === "en_parte" ? "neutro" : "aviso"}
+          lectura={r.lectura}
+          cita={r.citas[0] ?? null}
+        />
+      </ul>
     </div>
   );
 }

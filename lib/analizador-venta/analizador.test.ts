@@ -28,7 +28,7 @@ describe("S1 · el criterio escrito", () => {
       expect(e.seHizo.length).toBeGreaterThan(0);
       expect(e.seSalto.length).toBeGreaterThan(0);
     }
-    expect(PUNTOS_DEL_ANALISIS).toHaveLength(10);
+    expect(PUNTOS_DEL_ANALISIS).toHaveLength(11); // 2026-11-06: suma «¿Se averiguó el resultado que busca?»
   });
   it("con o sin position statement (K3)", () => {
     expect(criterioComoTexto({ positionStatement: null })).toContain(SIN_POSICIONAMIENTO);

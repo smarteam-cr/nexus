@@ -36,6 +36,8 @@ export interface LoDeLaSesion {
   /** Las etapas del proceso consultivo que se saltaron o se hicieron en parte. */
   etapasFlojas: { etapa: EtapaDelProceso; nombre: string; valor: string; lectura: string; citas: Cita[] }[];
   siguientePaso: Juicio | null;
+  /** ¿Se averiguó el resultado que busca? (2026-11-06). null en los análisis de antes. */
+  resultado: Juicio | null;
   recomendaciones: ResultadoDelAnalisis["recomendaciones"];
 }
 
@@ -56,6 +58,7 @@ export function loDeLaSesion(r: ResultadoDelAnalisis): LoDeLaSesion {
         .map((j) => ({ etapa: e.id, nombre: e.nombre, valor: j.valor!, lectura: j.lectura, citas: j.citas })),
     ),
     siguientePaso: de("siguiente_paso")[0] ?? null,
+    resultado: de("resultado")[0] ?? null,
     recomendaciones: r.recomendaciones,
   };
 }
