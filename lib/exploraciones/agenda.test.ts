@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type Anthropic from "@anthropic-ai/sdk";
-import { alternarAveriguada, avanceDeLaAgenda, conHueco, partirPreguntaDoble, estaAveriguada, idDeAveriguar, preguntaCerrada, preguntaDoble, preguntasQueNoCumplen, type AgendaDeLaGuia } from "./agenda";
+import { alternarAveriguada, avanceDeLaAgenda, conHueco, partirPreguntaDoble, sinHuecos, estaAveriguada, idDeAveriguar, preguntaCerrada, preguntaDoble, preguntasQueNoCumplen, type AgendaDeLaGuia } from "./agenda";
 import { HERRAMIENTA_DE_LA_GUIA, leerLaGuiaDelAgente, pedidoDeLaGuia, voseoEnLaGuia, type ContextoDeLaGuia } from "./guia-pedido";
 import { leerGuia, VALIDADOR_ESTRICTO } from "./esquemas";
 import { aplicarOperaciones, contenidoVacio, propuestaVacia } from "./contenido";
@@ -55,6 +55,9 @@ describe("la agenda: preguntas abiertas y de una sola cosa (punto 11)", () => {
     expect(preguntaDoble("¿De dónde vienen los clientes que cierran, y cuántos llegan por semana?")).toBe(true);
     expect(preguntaDoble("¿Qué le pides al área comercial hoy, y cómo sabes si te lo está cumpliendo?")).toBe(true);
     expect(preguntaDoble("¿Cómo deciden a quién le toca cada interesado y en qué orden?")).toBe(false);
+    // Con tilde al final de la palabra (validación del 2026-11-06, segunda tanda).
+    expect(preguntaDoble("¿Cuántos casos llegan en una semana típica, y por qué canal llegan más?")).toBe(true);
+    expect(preguntaDoble("¿Qué te frena hoy, y qué harías distinto?")).toBe(true);
   });
 
   it("la doble que quedó se parte en dos preguntas de una sola cosa", () => {
@@ -69,6 +72,7 @@ describe("la agenda: preguntas abiertas y de una sola cosa (punto 11)", () => {
   it("un texto con un espacio por completar no se puede decir tal cual", () => {
     expect(conHueco("Déjame resumir lo que escuché: [retos con las palabras del cliente]. ¿Lo entendí bien?")).toBe(true);
     expect(conHueco("Resume con sus palabras los dos o tres retos que salieron.")).toBe(false);
+    expect(sinHuecos("Entonces lo que buscan es llegar a [resultado en sus palabras]; ¿lo dije bien?")).toBe("Entonces lo que buscan es llegar a (resultado en sus palabras); ¿lo dije bien?");
   });
 });
 

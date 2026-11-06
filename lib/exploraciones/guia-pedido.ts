@@ -58,6 +58,7 @@ import {
   MIN_BLOQUES,
   partirPreguntaDoble,
   preguntasDeLaAgenda,
+  sinHuecos,
   type AgendaDeLaGuia,
   type BloqueDeLaAgenda,
   type CosaPorAveriguar,
@@ -826,7 +827,7 @@ function leerLaAgenda(input: Record<string, unknown>, ctx: ContextoDeLaGuia): Ag
     // La apertura y el cierre son el primero y el último, digan lo que digan.
     const tipo: TipoDeBloque = i === 0 ? "apertura" : i === crudos.length - 1 ? "cierre" : "cuerpo";
     // La pregunta para abrir un bloque del cuerpo es UNA: si vino doble, queda la primera.
-    const abre = tipo === "cuerpo" ? partirPreguntaDoble(abreLeido)[0] : abreLeido;
+    const abre = sinHuecos(tipo === "cuerpo" ? partirPreguntaDoble(abreLeido)[0] : abreLeido);
     const averiguar: CosaPorAveriguar[] = [];
     for (const c of Array.isArray(b.averiguar) ? b.averiguar : []) {
       if (!esObjeto(c)) continue;
