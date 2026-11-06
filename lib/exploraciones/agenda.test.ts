@@ -5,6 +5,7 @@ import { HERRAMIENTA_DE_LA_GUIA, leerLaGuiaDelAgente, pedidoDeLaGuia, voseoEnLaG
 import { leerGuia, VALIDADOR_ESTRICTO } from "./esquemas";
 import { aplicarOperaciones, contenidoVacio, propuestaVacia } from "./contenido";
 import { borradorDeLoQueSabemos, faltaParaLaGuia, textoDeConQuien } from "./contexto-de-la-exploracion";
+import { coberturaDeLaEscala, dondeQuedo, HERRAMIENTA_DE_LO_QUE_DEJO, leerLoQueDejo, retomarParaLaGuia } from "./despues-de-la-sesion";
 
 function ctx(cambios: Partial<ContextoDeLaGuia> = {}): ContextoDeLaGuia {
   return {
@@ -183,5 +184,59 @@ describe("el contexto antes de armar la guía (puntos 1 a 5)", () => {
     const r = aplicarOperaciones(base, [{ op: "contexto", valor: { objetivo: " Ver si les sirve ", sabemos: "" } }], v, VALIDADOR_ESTRICTO, quien);
     expect(r.ok && r.estado.contenido.contexto).toEqual({ objetivo: "Ver si les sirve", por: "ana@smarteam.co", en: "2026-11-06T12:00:00.000Z" });
     expect(aplicarOperaciones(base, [{ op: "contexto", valor: { objetivo: "  " } }], v, VALIDADOR_ESTRICTO, quien).ok).toBe(false);
+  });
+});
+
+describe("después de la sesión y dónde quedó (puntos 14 a 16)", () => {
+  const sesiones = [
+    { id: "s-a1", titulo: "Con Dirección", desafio: { texto: "El seguimiento depende de cada vendedor", falta: ["cuántos se enfrían"] }, retomar: [{ tema: "Cómo miden servicio", donde: "con la jefa de servicio" }] },
+    { id: "s-a2" },
+  ];
+
+  it("lo que dejaron las sesiones anteriores llega a la guía de la siguiente, y no lo de la misma ni las de después", () => {
+    const r = retomarParaLaGuia(sesiones, "s-a2").retomar ?? [];
+    expect(r[0]).toContain("El seguimiento depende de cada vendedor");
+    expect(r[1]).toContain("Retomar «Cómo miden servicio» — con la jefa de servicio");
+    expect(retomarParaLaGuia(sesiones, "s-a1")).toEqual({});
+  });
+
+  it("un área sin evidencia queda pendiente; la hipótesis no cuenta", () => {
+    const areas = [
+      { id: "1", nombre: "Ventas", dimensiones: [{ id: "1.1" }, { id: "1.2" }, { id: "1.3", aplica: false }] },
+      { id: "2", nombre: "Marketing", dimensiones: [{ id: "2.1" }] },
+      { id: "3", nombre: "Servicio", dimensiones: [{ id: "3.1" }] },
+    ];
+    const c = coberturaDeLaEscala(areas, ["1", "2"], { "1.1": { clase: "evidencia" }, "2.1": { clase: "hipotesis" } });
+    expect(c.map((a) => [a.nombre, a.estado, a.conEvidencia, a.total])).toEqual([
+      ["Ventas", "a medias", 1, 2],
+      ["Marketing", "pendiente", 0, 1],
+    ]);
+  });
+
+  it("dónde quedó: la última sesión que pasó, lo averiguado de sus agendas y lo que hay que retomar", () => {
+    const agenda: AgendaDeLaGuia = { claves: ["x"], bloques: [{ desde: 0, hasta: 60, titulo: "x", tipo: "cuerpo", abre: "x", averiguar: [{ id: "av:1", que: "a", preguntas: ["p"] }, { id: "av:2", que: "b", preguntas: ["p"], sabido: "el traspaso" }] }] };
+    const d = dondeQuedo(
+      [
+        { numero: 1, hecha: true, sesion: { ...sesiones[0], hechas: [] }, fecha: "2026-11-02" },
+        { numero: 2, hecha: false, sesion: sesiones[1], fecha: null },
+      ],
+      { "s-a1": { agenda } },
+    );
+    expect(d.ultima).toMatchObject({ numero: 1, titulo: "Con Dirección", fecha: "2026-11-02" });
+    expect(d.averiguado).toEqual({ sabidas: 1, total: 2 });
+    expect(d.retomar).toHaveLength(1);
+  });
+
+  it("lo que propone Nexus se lee con sus topes y queda marcado como propuesto", () => {
+    const r = leerLoQueDejo({
+      content: [{ type: "tool_use", id: "t", name: HERRAMIENTA_DE_LO_QUE_DEJO, input: { desafio: "Nadie ve los interesados que se enfrían", falta: ["a", "b", "c", "d", "e"], retomar: Array.from({ length: 7 }, (_, i) => ({ tema: `t${i}`, donde: "con Ventas" })) } }],
+    } as unknown as Anthropic.Messages.Message);
+    expect(r?.desafio).toMatchObject({ texto: "Nadie ve los interesados que se enfrían", propuesto: true });
+    expect(r?.desafio.falta).toHaveLength(4);
+    expect(r?.retomar).toHaveLength(5);
+  });
+
+  it("la guía de la siguiente sesión recibe lo que hay que retomar", () => {
+    expect(String(pedidoDeLaGuia(ctx({ retomar: ["Retomar «x» — con Ana"] })).messages[0].content)).toContain("LO QUE QUEDÓ POR RETOMAR");
   });
 });

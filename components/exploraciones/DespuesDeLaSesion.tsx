@@ -33,6 +33,7 @@ import { diaLargo, EtiquetaDePregunta, nombreDelPara, Rotulo, useEditarLaSesion,
 import { BotonUsarTodas, FilaSugerida, UsadasHoy } from "./Propuestas";
 import { useCorrida } from "./useCorrida";
 import { useSesiones } from "./useSesiones";
+import { LaEscalaDespuesDeLaSesion, LoQueDejoLaSesion } from "./LoQueDejoLaSesion";
 
 /** Lo que se lleva a la próxima sesión desde «Quedó abierto». */
 /** Un punto que se lleva a la próxima sesión: su texto, la sugerencia que se usa con él y, si se sabe, a qué apunta. */
@@ -591,6 +592,7 @@ export default function DespuesDeLaSesion({
     return (
       <div className="space-y-5">
         <QuePaso pestana={pestana} numeroSiguiente={numeroSiguiente} claveSiguiente={claveSiguiente} minutaAbierta={minutaAbierta} onMinuta={onMinuta} />
+        {pestana.sesion?.resultado !== "noSeHizo" && <LoQueDejoLaSesion key={pestana.clave} pestana={pestana} conLectura={false} />}
       </div>
     );
   }
@@ -598,6 +600,9 @@ export default function DespuesDeLaSesion({
   return (
     <div className="space-y-5">
       <LoQueLeyo pestana={pestana} lectura={lectura} />
+      {/* Puntos 14 y 15 (2026-11-06): el desafío principal, lo que hay que retomar y la escala hasta ahora. */}
+      <LoQueDejoLaSesion key={pestana.clave} pestana={pestana} conLectura={!!lectura} />
+      <LaEscalaDespuesDeLaSesion />
       <LoQueSugiere pestana={pestana} lectura={lectura} />
       <PasoYAvance pestana={pestana} lectura={lectura} />
       <QuedoAbierto pestana={pestana} lectura={lectura} numeroSiguiente={numeroSiguiente} llevar={(l) => armarLaSiguiente(l)} soltar={soltar} />
@@ -637,7 +642,7 @@ export default function DespuesDeLaSesion({
         <div className="sticky bottom-0 z-10 -mx-6 -mb-10 flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-line bg-surface px-6 py-3.5 xl:-mx-8 xl:px-8">
           <p className="min-w-0 flex-1 text-[13.5px] text-fg-secondary">
             {llevados > 0
-              ? `Llevas ${llevados === 1 ? "1 punto" : `${llevados} puntos`} a la sesión ${numeroSiguiente}. El agente arma su guía con ${llevados === 1 ? "él" : "ellos"} primero.`
+              ? `Llevas ${llevados === 1 ? "1 punto" : `${llevados} puntos`} a la sesión ${numeroSiguiente}. Su guía los toma primero cuando la armes.`
               : `Marca lo que quedó abierto para llevarlo a la sesión ${numeroSiguiente}.`}
           </p>
           <BotonAzul
@@ -645,7 +650,7 @@ export default function DespuesDeLaSesion({
             disabled={lanzando || corriendo || sesiones.length >= MAX_SESIONES}
             onClick={() => armarLaSiguiente()}
           >
-            {lanzando ? "Armando…" : `Armar la sesión ${numeroSiguiente}`}
+            {lanzando ? "Armando…" : `Preparar la sesión ${numeroSiguiente}`}
           </BotonAzul>
         </div>
       )}

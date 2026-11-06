@@ -36,6 +36,7 @@ import { sinCitaAdelante, type AjustesDeLaGuia, type OrigenDelAjuste } from "./a
 import { esTemaDeEquipo, leerTemaDeEquipo, nombreDelTemaDeEquipo, type ClaveDeEquipo } from "./equipos";
 import type { AgendaDeLaGuia } from "./agenda";
 import type { PersonaDeLaSesion } from "./contexto-de-la-exploracion";
+import type { DesafioDeLaSesion, TemaPorRetomar } from "./despues-de-la-sesion";
 
 // ── Las sesiones ──────────────────────────────────────────────────────────────
 
@@ -139,6 +140,10 @@ export interface SesionPlaneada {
   espera?: string;
   /** Cuánto dura, en minutos. Sin él, 60. */
   duracion?: number;
+  /** Punto 15 (despues-de-la-sesion.ts): el desafío principal que dejó la sesión y lo que falta para confirmarlo. */
+  desafio?: DesafioDeLaSesion;
+  /** Los temas por retomar (de 3 a 5), cada uno con dónde conviene: alimentan la guía de la siguiente. */
+  retomar?: TemaPorRetomar[];
 }
 
 /** Hasta cuántas sesiones tiene una exploración (subió de 12 a 20 en la etapa A: ahora se materializan más). */

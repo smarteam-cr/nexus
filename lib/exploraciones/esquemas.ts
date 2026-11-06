@@ -81,6 +81,7 @@ import {
   type ContactoPrevio,
   type ContextoDeLaExploracion,
 } from "./contexto-de-la-exploracion";
+import { MAX_FALTA_DEL_DESAFIO, MAX_RETOMAR, MAX_TEXTO_DEL_DESAFIO } from "./despues-de-la-sesion";
 import {
   MAX_PREGUNTAS_EN_LA_GUIA,
   MAX_PARA_EXPLORAR,
@@ -446,6 +447,13 @@ const SesionPlaneadaObjeto = z.object({
     .optional(),
   espera: textoLleno(MAX_LO_QUE_ESPERA).optional(),
   duracion: z.number().int().min(10).max(240).optional(),
+  desafio: z
+    .object({ texto: textoLleno(MAX_TEXTO_DEL_DESAFIO), falta: z.array(textoLleno(200)).max(MAX_FALTA_DEL_DESAFIO), propuesto: z.literal(true).optional() })
+    .optional(),
+  retomar: z
+    .array(z.object({ tema: textoLleno(200), donde: textoLleno(160) }))
+    .max(MAX_RETOMAR)
+    .optional(),
 });
 export const SesionPlaneadaSchema: z.ZodType<SesionPlaneada> = SesionPlaneadaObjeto;
 

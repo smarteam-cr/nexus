@@ -57,6 +57,7 @@ import { useCambiosDesdeLaGuia } from "./piezas-de-la-sesion";
 import { useCorrida } from "./useCorrida";
 import { useSesiones } from "./useSesiones";
 import LoQueSabes from "./LoQueSabes";
+import { DondeQuedo } from "./LoQueDejoLaSesion";
 
 const ORIGEN = { meet: "Google Meet", hubspot: "HubSpot", documento: "Sumada a mano" } as const;
 
@@ -485,6 +486,8 @@ export default function InicioDeLaExploracion() {
         <h2 className="text-[22px] font-bold leading-7 text-fg">Exploración</h2>
         <p className="text-[15px] text-fg-muted">{subtitulo}</p>
       </header>
+      {/* Punto 16 (2026-11-06): cualquiera del equipo ve en qué sesión quedó, qué se averiguó y qué falta. */}
+      <DondeQuedo />
       <LasSesiones />
       <div data-recorrido="preventa.inicio.fuentes" className="flex flex-wrap gap-4">
         <FuentesManuales />

@@ -73,6 +73,7 @@ import { hoyEnCostaRica } from "./fechas";
 import { bloqueDeInstrucciones } from "./notas-de-sesion";
 import { avisoDePreguntasCerradas, preguntasQueNoCumplen } from "./agenda";
 import { faltaParaLaGuia, textoDeConQuien } from "./contexto-de-la-exploracion";
+import { retomarParaLaGuia } from "./despues-de-la-sesion";
 import { avisoDeVoseo, contextoDeLaGuia, leerLaGuiaDelAgente, notasParaLaGuia, pedidoDeLaGuia, voseoEnLaGuia } from "./guia-pedido";
 import {
   focoDeLaGuia,
@@ -1105,6 +1106,8 @@ export async function contextoParaLaGuia(exploracionId: string) {
           ...(proximaSesion.duracion ? { duracion: proximaSesion.duracion } : {}),
         }
       : {}),
+    // Punto 15: lo que las sesiones anteriores dejaron por retomar y su desafío principal.
+    ...retomarParaLaGuia(estado.contenido.sesiones, proximaSesion?.id ?? null),
   };
   /* `delProyecto` (cada fuente con su id) y `memoriaDelProyecto` también los lee el asistente
      (lib/operaciones/guia-server.ts › `loEstableDeLaGuia`): sin F0, que el chat ya tiene en su contexto. */

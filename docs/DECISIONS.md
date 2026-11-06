@@ -12932,4 +12932,17 @@ preguntas.
   nombra clientes de referencia de su industria (solo la lista de Audiencia) y explica la reunión. Se guarda en
   `contenido.contactoPrevio` y lo manda una persona.
 - **Cuántas sesiones y cada cuánto lo decide la persona.** Nada nuevo impone sesiones: «+ Agregar sesión», el nombre y la
-  reunión siguen como estaban.
+  reunión siguen como estaban. «Armar la sesión N» del análisis pasa a «Preparar la sesión N»: crea la sesión con lo que
+  te llevaste y abre su Preparación, sin armar la guía.
+- **Después de cada sesión: el desafío principal y lo que hay que retomar (punto 15, `despues-de-la-sesion.ts`).** Vive
+  en la sesión (`SesionPlaneada.desafio` con lo que falta para confirmarlo, y `retomar`: de 3 a 5 temas, cada uno con
+  dónde). Lo escribe la persona o lo propone Nexus con «Proponer desde la reunión» (`POST …/despues`, medido como
+  `exploracion-lo-que-dejo-la-sesion`), que lee la LECTURA guardada de esa reunión en esta exploración, su agenda y sus
+  notas, no el transcript otra vez. Lo propuesto queda marcado hasta que alguien lo cambia. Alimenta la guía siguiente
+  (`retomarParaLaGuia`: solo lo de las sesiones de antes de la próxima).
+- **La escala después de la sesión (punto 14).** En el análisis, cada área en juego dice si está cubierta (todas sus
+  dimensiones con evidencia), a medias o pendiente (`coberturaDeLaEscala`). La hipótesis y lo marcado en el test no
+  cuentan como evidencia.
+- **Dónde quedó (punto 16).** El inicio de la Exploración abre con el objetivo de la exploración, la última sesión que
+  pasó, cuánto se averiguó de sus agendas, su desafío principal y los temas por retomar (`dondeQuedo`). Cualquiera que
+  pueda abrir la exploración lo ve: es para continuarla si quien la llevaba no puede.
