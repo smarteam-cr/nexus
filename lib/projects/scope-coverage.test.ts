@@ -453,8 +453,17 @@ const COLUMNAS_ESPEJO = [
  * SOLO estas claves, no tiene por qué traer el espejo entero.
  *   · `status`             — apagar un proyecto terminado o fantasma.
  *   · `hermanoCsProjectId` — `resolverHermanos`, que corre al final con todo ya en la base.
+ *   · la etapa y el estado del CIERRE (2026-11-06) — al apagar un proyecto terminado se guarda lo que lo cerró, para
+ *     que la ficha lo distinga de un fantasma o un fusionado (`esProyectoCerradoNavegable`, lib/projects/scope.ts).
  */
-const CLAVES_DE_ESCRITURA_PARCIAL = new Set(["status", "hermanoCsProjectId"]);
+const CLAVES_DE_ESCRITURA_PARCIAL = new Set([
+  "status",
+  "hermanoCsProjectId",
+  "hubspotPipelineStageId",
+  "hubspotPipelineStageLabel",
+  "hubspotStageSyncedAt",
+  "hubspotStatus",
+]);
 
 /** El objeto literal de una `const <nombre> = { … }`, con llaves balanceadas. */
 function objetoLiteral(codigo: string, nombre: string): string | null {

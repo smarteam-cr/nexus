@@ -26,7 +26,7 @@
  * integración (`scope.test.ts`) además los enfrenta contra una base de verdad.
  */
 import type { Prisma } from "@prisma/client";
-import { PROJECT_PIPELINES, SENTINEL_SERVICE_TYPE } from "./kind";
+import { PROJECT_PIPELINES, SENTINEL_SERVICE_TYPE, decidirCierre } from "./kind";
 import { ESTADOS_DE_ALTA, altaEnCurso, altaTerminada, parseEstadoDeAlta } from "./alta";
 
 // ── Las formas mínimas que necesita un filtro en memoria ─────────────────────
@@ -385,6 +385,34 @@ export const proyectoClasificableWhere = (extra?: Prisma.ProjectWhereInput) =>
 
 export const esProyectoNavegable = (p: ProyectoParaFiltro, c: ClienteParaFiltro): boolean =>
   NAVEGABLE.every((k) => k.cumple(p, c));
+
+/** La etapa y el estado guardados del proyecto: lo que `esProyectoCerradoNavegable` le pasa a `decidirCierre`. */
+export interface CierreGuardado {
+  hubspotPipelineStageId: string | null;
+  hubspotStatus: string | null;
+}
+
+/**
+ * CERRADO, PERO A LA VISTA (2026-11-06, Spectrum - MKT + SALES). Un proyecto que TERMINÓ en HubSpot se apaga
+ * (`inactive`) y salía de la ficha con todos sus documentos: el CSE no podía volver a su presentación de cierre.
+ * Este criterio lo devuelve al riel, en el grupo «Cerrados», y a NINGÚN otro lado: cartera, cobranza, alertas y
+ * accesos siguen pidiendo `ACTIVO`.
+ *
+ * Es NAVEGABLE con `inactive` en lugar de `ACTIVO`, más el cierre: el pipeline declarado y `decidirCierre` sobre la
+ * etapa y el estado guardados. Eso deja afuera lo que también es `inactive` y no terminó —el fantasma, el fusionado,
+ * el dado de baja—, porque su fila guarda la etapa de cuando estaba abierto (el espejo solo guarda la etapa del
+ * cierre desde esta fecha, lib/hubspot/sync-projects.ts), y lo que no tiene pipeline, como el «Proyecto principal»
+ * viejo. Solo en memoria a propósito: lo usa una pantalla, y un `where` invitaría a sumarlo a una lista que cuenta.
+ */
+export const esProyectoCerradoNavegable = (
+  p: ProyectoParaFiltro & CierreGuardado,
+  c: ClienteParaFiltro,
+): boolean =>
+  p.status === "inactive" &&
+  p.hubspotPipelineId !== null &&
+  NAVEGABLE.every((k) => k === ACTIVO || k.cumple(p, c)) &&
+  decidirCierre({ hubspotPipelineId: p.hubspotPipelineId, stageId: p.hubspotPipelineStageId, rawStatus: p.hubspotStatus }) ===
+    "cerrado";
 
 export const esProyectoDeCartera = (p: ProyectoParaFiltro, c: ClienteParaFiltro): boolean =>
   DE_CARTERA.every((k) => k.cumple(p, c));

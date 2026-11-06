@@ -8,7 +8,7 @@ import EspacioSesiones from "@/components/clients/EspacioSesiones";
 import { redirect, notFound } from "next/navigation";
 import { prisma } from "@/lib/db/prisma";
 import { ensureStrategyProject } from "@/lib/canvas/strategy-project";
-import { esProyectoNavegable } from "@/lib/projects/scope";
+import { esProyectoCerradoNavegable, esProyectoNavegable } from "@/lib/projects/scope";
 import WorkspaceClient, { type SeededCanvas } from "./WorkspaceClient";
 import { canvasNotOf, onlyEnabled } from "@/lib/pieces/canvas-query";
 import { loadCanvasesConContenido } from "@/lib/pieces/piece-content";
@@ -139,6 +139,8 @@ export default async function ClientPage({
         hubspotDealId: true,
         hubspotStatus: true,
         hubspotPipelineStageLabel: true,
+        // Con `hubspotStatus`, lo que `esProyectoCerradoNavegable` le pasa a `decidirCierre`.
+        hubspotPipelineStageId: true,
         hubspotUltimaActividad: true,
         createdAt: true,
         altaError: true,
@@ -187,6 +189,16 @@ export default async function ClientPage({
     ...fila,
     timelineProposalAutoria: autoriaPorProyecto.get(fila.id) ?? null,
   }));
+  /* Los que TERMINARON en HubSpot (2026-11-06, Spectrum): van al riel, en «Cerrados», para volver a sus documentos.
+     Aparte de `visibleProjects` a propósito: la pestaña inicial, «Esta cuenta tiene otro proyecto», Notas y Tareas
+     siguen mirando solo los activos. Sin propuesta de cronograma que avisar: el proyecto ya terminó. */
+  const closedProjects = projects
+    .filter((p) => esProyectoCerradoNavegable(p, paraFiltro))
+    .map((p) => {
+      const { timeline, ...fila } = p; // la propuesta guardada no viaja al navegador
+      void timeline;
+      return { ...fila, timelineProposalPending: false, timelineProposalAutoria: null };
+    });
 
   // Garantizar que el proyecto de estrategia existe (se crea al primer acceso)
   const strategyRef = await ensureStrategyProject(id);
@@ -199,7 +211,7 @@ export default async function ClientPage({
   // gana, si no el único proyecto activo.
   const tabParam = typeof sp.tab === "string" ? sp.tab : undefined;
   const initialProjectId =
-    tabParam && visibleProjects.some((p) => p.id === tabParam)
+    tabParam && (visibleProjects.some((p) => p.id === tabParam) || closedProjects.some((p) => p.id === tabParam))
       ? tabParam
       : /* El mismo criterio que el layout: con uno real, ése; con varios, el que le corresponde a quien mira
            (lib/clients/proyecto-inicial.ts). */
@@ -213,6 +225,7 @@ export default async function ClientPage({
     <WorkspaceClient
       clientId={id}
       projects={visibleProjects}
+      closedProjects={closedProjects}
       hasHubspot={hasHubspot}
       strategyProjectId={strategyRef.projectId}
       strategyCanvasId={strategyRef.canvasId}
