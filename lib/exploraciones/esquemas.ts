@@ -70,14 +70,17 @@ import {
   type PropuestaDeExploracion,
   type Validador,
 } from "./contenido";
-import { MAX_AVERIGUAR_POR_BLOQUE, MAX_BLOQUES, MAX_CLAVES, MAX_PREGUNTAS_SUGERIDAS } from "./agenda";
+import { MAX_AVERIGUAR_GUARDADAS, MAX_BLOQUES, MAX_CLAVES, MAX_PREGUNTAS_SUGERIDAS } from "./agenda";
 import {
   MAX_LO_QUE_ESPERA,
   MAX_LO_QUE_SABEMOS,
   MAX_MENSAJE_PREVIO,
   MAX_OBJETIVO_DE_LA_EXPLORACION,
   MAX_PERSONAS_DE_LA_SESION,
+  MAX_TEXTO_DE_LA_TARJETA,
+  CLAVES_DE_LO_QUE_SABEMOS,
   TIPOS_DE_MENSAJE_PREVIO,
+  type TarjetasDeLoQueSabemos,
   type ContactoPrevio,
   type ContextoDeLaExploracion,
 } from "./contexto-de-la-exploracion";
@@ -448,7 +451,13 @@ const SesionPlaneadaObjeto = z.object({
   espera: textoLleno(MAX_LO_QUE_ESPERA).optional(),
   duracion: z.number().int().min(10).max(240).optional(),
   desafio: z
-    .object({ texto: textoLleno(MAX_TEXTO_DEL_DESAFIO), falta: z.array(textoLleno(200)).max(MAX_FALTA_DEL_DESAFIO), propuesto: z.literal(true).optional() })
+    .object({
+      texto: textoLleno(MAX_TEXTO_DEL_DESAFIO),
+      falta: z.array(textoLleno(200)).max(MAX_FALTA_DEL_DESAFIO),
+      propuesto: z.literal(true).optional(),
+      resultado: textoLleno(300).optional(),
+      sinConfirmar: z.literal(true).optional(),
+    })
     .optional(),
   retomar: z
     .array(z.object({ tema: textoLleno(200), donde: textoLleno(160) }))
@@ -466,9 +475,13 @@ export const CambioDeSesionSchema = SesionEditable.partial().strict() as unknown
 const CAMPOS_EDITABLES = Object.keys(SesionEditable.shape) as [CampoDeSesionEditable, ...CampoDeSesionEditable[]];
 
 /** El contexto de la exploración y el contacto previo (contexto-de-la-exploracion.ts, 2026-11-06). */
+const TarjetasSchema = z
+  .object(Object.fromEntries(CLAVES_DE_LO_QUE_SABEMOS.map((k) => [k, z.object({ texto: textoLleno(MAX_TEXTO_DE_LA_TARJETA), fuente: textoLleno(120) }).optional()])))
+  .strict() as unknown as z.ZodType<TarjetasDeLoQueSabemos>;
 const ContextoDeLaExploracionSchema: z.ZodType<ContextoDeLaExploracion> = z.object({
   objetivo: textoLleno(MAX_OBJETIVO_DE_LA_EXPLORACION),
   sabemos: textoLleno(MAX_LO_QUE_SABEMOS).optional(),
+  tarjetas: TarjetasSchema.optional(),
   por: z.string().max(200).nullable(),
   en: FECHA_ISO,
 });
@@ -531,7 +544,15 @@ export const OperacionSchema = z.discriminatedUnion("op", [
   z.object({ op: z.literal("comoLlego"), valor: ComoLlegoSchema.nullable() }),
   z.object({
     op: z.literal("contexto"),
-    valor: z.object({ objetivo: textoLleno(MAX_OBJETIVO_DE_LA_EXPLORACION), sabemos: z.string().trim().max(MAX_LO_QUE_SABEMOS).optional() }).nullable(),
+    valor: z
+      .object({
+        objetivo: textoLleno(MAX_OBJETIVO_DE_LA_EXPLORACION),
+        sabemos: z.string().trim().max(MAX_LO_QUE_SABEMOS).optional(),
+        tarjetas: z
+          .record(z.enum(CLAVES_DE_LO_QUE_SABEMOS), z.object({ texto: z.string().trim().max(MAX_TEXTO_DE_LA_TARJETA), fuente: z.string().trim().max(120) }))
+          .optional(),
+      })
+      .nullable(),
   }),
   z.object({ op: z.literal("contactoPrevio"), valor: ContactoPrevioSchema.nullable() }),
   z.object({ op: z.literal("descartarAsociacion"), claves: z.array(CLAVE_DE_REUNION).min(1).max(20) }),
@@ -604,7 +625,8 @@ const AgendaSchema = z.object({
         tipo: z.enum(["apertura", "cuerpo", "cierre"]),
         abre: textoDeGuia(600),
         central: z.literal(true).optional(),
-        averiguar: z.array(CosaPorAveriguarSchema).max(MAX_AVERIGUAR_POR_BLOQUE),
+        resultado: z.literal(true).optional(),
+        averiguar: z.array(CosaPorAveriguarSchema).max(MAX_AVERIGUAR_GUARDADAS),
         impacto: textoDeGuia(400).optional(),
       }),
     )
@@ -880,6 +902,10 @@ export function leerPropuesta(raw: unknown): PropuestaDeExploracion {
   }
   p.guia = leerGuia(raw.guia);
   p.guias = registroValido(raw.guias, z.string().regex(/^s-[a-z0-9]{1,24}$/), GuiaSchema);
+  const anteriores = registroValido(raw.guiasAnteriores, z.string().regex(/^s-[a-z0-9]{1,24}$/), GuiaSchema);
+  if (Object.keys(anteriores).length) p.guiasAnteriores = anteriores;
+  const propuesto = z.object({ tarjetas: TarjetasSchema, en: FECHA_ISO }).safeParse(raw.contextoPropuesto);
+  if (propuesto.success) p.contextoPropuesto = propuesto.data;
   const tecnica = AlertaTecnicaSchema.safeParse(raw.alertaTecnica);
   p.alertaTecnica = tecnica.success ? tecnica.data : null;
   p.lecturas = Object.fromEntries(Object.entries(registroValido(raw.lecturas, CLAVE_DE_LECTURA, LecturaDeReunionSchema)).slice(-MAX_LECTURAS));

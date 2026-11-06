@@ -22,7 +22,7 @@ import { aFecha, hoyEnCostaRica } from "./fechas";
 import { MAX_SESIONES, type GuiaDeLaSesion, type SesionPlaneada } from "./guia";
 import { aplicarCambioDeLaGuia, hayAjustes, type CambioDeLaGuia } from "./ajustes-de-la-guia";
 import type { ComoLlego } from "./como-llego";
-import type { ContactoPrevio, ContextoDeLaExploracion } from "./contexto-de-la-exploracion";
+import type { ContactoPrevio, ContextoDeLaExploracion, TarjetasDeLoQueSabemos } from "./contexto-de-la-exploracion";
 import type { PosicionamientoDelProspecto } from "./posicionamiento";
 import type { ClaveDeEquipo } from "./equipos";
 import {
@@ -405,6 +405,13 @@ export interface PropuestaDeExploracion {
    * pasó muestra lo que se preparó (pedido de Elías, 2026-10-03: una pestaña por sesión).
    */
   guias: Record<string, GuiaDeLaSesion>;
+  /**
+   * La guía con el formato de antes que reemplazó una agenda nueva, por sesión (2026-11-06): queda plegada como «Guía
+   * anterior», sin borrarse.
+   */
+  guiasAnteriores?: Record<string, GuiaDeLaSesion>;
+  /** Lo que Nexus propuso para «Lo que ya sabemos» y nadie confirmó todavía (contexto-server.ts). */
+  contextoPropuesto?: { tarjetas: TarjetasDeLoQueSabemos; en: string } | null;
   /**
    * La última reunión que leyó el agente se puso técnica (Elías, 2026-10-06): el Resumen lo avisa.
    * La reemplaza cada lectura que dice algo de la reunión más reciente; null = no se puso técnica.
@@ -896,7 +903,7 @@ export type Operacion =
    */
   | { op: "editarSesion"; sesionId: string; poner: CambioDeSesion; quitar: CampoDeSesionEditable[] }
   /** Confirmar (o borrar) el contexto de la exploración. Quién y cuándo los pone quien aplica (el servidor). */
-  | { op: "contexto"; valor: { objetivo: string; sabemos?: string } | null }
+  | { op: "contexto"; valor: { objetivo: string; sabemos?: string; tarjetas?: TarjetasDeLoQueSabemos } | null }
   | { op: "contactoPrevio"; valor: ContactoPrevio | null }
   /**
    * Cambiar la guía de una sesión (2026-10-18, ajustes-de-la-guia.ts): sumar, cambiar, quitar o devolver una pregunta.
@@ -1481,7 +1488,18 @@ function aplicarUna(estado: EstadoDeExploracion, op: Operacion, validez: Validez
       const objetivo = op.valor.objetivo.trim();
       if (!objetivo) return { ok: false, error: "Falta el objetivo de la exploración." };
       const sabemos = op.valor.sabemos?.trim();
-      return { ok: true, estado: { ...estado, contenido: { ...resto, contexto: { objetivo, ...(sabemos ? { sabemos } : {}), por: quien.por, en: quien.en } } } };
+      const tarjetas = Object.fromEntries(
+        Object.entries(op.valor.tarjetas ?? {})
+          .filter(([, t]) => t && t.texto.trim())
+          .map(([k, t]) => [k, { texto: t!.texto.trim(), fuente: t!.fuente.trim() || "Lo escribió el equipo" }]),
+      );
+      return {
+        ok: true,
+        estado: {
+          ...estado,
+          contenido: { ...resto, contexto: { objetivo, ...(sabemos ? { sabemos } : {}), ...(Object.keys(tarjetas).length ? { tarjetas } : {}), por: quien.por, en: quien.en } },
+        },
+      };
     }
     case "contactoPrevio": {
       const { contactoPrevio: _antes, ...resto } = estado.contenido;

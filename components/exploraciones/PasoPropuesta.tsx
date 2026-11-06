@@ -13,6 +13,7 @@
  * preventa aunque haya nacido en Propuestas; la escritura es la misma que la del contexto de la
  * propuesta (PUT /api/business-cases/[id]/preventa).
  */
+import { FALTA_EL_RESULTADO_PARA_PROPONER, resultadoConfirmado } from "@/lib/exploraciones/resultado";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
@@ -75,6 +76,7 @@ function ArmarLaPropuesta({ negocios, alRecargar }: { negocios: Negocio[] | null
   const [nombre, setNombre] = useState(`Propuesta — ${exp.empresa.nombre}`);
   const [armando, setArmando] = useState(false);
   const faltan = listaParaProponer(exp.estado, chequeo).filter((p) => !p.cumplido).length;
+  const conResultado = resultadoConfirmado(exp.estado.contenido.casillas);
 
   async function armar() {
     setArmando(true);
@@ -160,8 +162,10 @@ function ArmarLaPropuesta({ negocios, alRecargar }: { negocios: Negocio[] | null
           Faltan {faltan} de los siete puntos de «lista para proponer». Puedes armarla igual: lo que falta queda a la vista arriba.
         </p>
       )}
+      {/* El resultado como eje (2026-11-06): sin él no se arma; el servidor también lo frena. */}
+      {!conResultado && <p className="rounded-lg border border-warn-line bg-warn-surface px-3 py-2 text-[13px] text-warn-ink">{FALTA_EL_RESULTADO_PARA_PROPONER}</p>}
       {puedeEditar && negocios && negocios.length > 0 && (
-        <Button variant="primary" loading={armando} disabled={!dealId || !nombre.trim() || guardando} onClick={() => void armar()}>
+        <Button variant="primary" loading={armando} disabled={!dealId || !nombre.trim() || guardando || !conResultado} onClick={() => void armar()}>
           Armar y generar la propuesta
         </Button>
       )}

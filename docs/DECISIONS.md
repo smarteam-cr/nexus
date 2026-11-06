@@ -12949,3 +12949,36 @@ preguntas.
 - **Dónde quedó (punto 16).** El inicio de la Exploración abre con el objetivo de la exploración, la última sesión que
   pasó, cuánto se averiguó de sus agendas, su desafío principal y los temas por retomar (`dondeQuedo`). Cualquiera que
   pueda abrir la exploración lo ve: es para continuarla si quien la llevaba no puede.
+- **Segunda tanda (6 nov, Elías tras probar en el 3005): el resultado que busca el cliente es el eje.** En un roleplay,
+  Ventas nunca preguntó por el objetivo del cliente; la gente compra la solución a un problema o el camino a una meta.
+  (`lib/exploraciones/resultado.ts`)
+  - La primera clave de toda guía es el resultado (de dónde a dónde, con qué número y para cuándo), y toda agenda trae
+    el bloque FIJO «El resultado que buscan»: abre con «¿Qué tendría que pasar en 6 a 12 meses para que digas que esto
+    valió la pena?» y averigua seis cosas con ids estables (`av:res1`…`av:res6`: en sus palabras, cómo lo medirían, para
+    cuándo, quién lo pide, por qué ahora, qué pasa si no se logra). *El código manda:* toma el bloque que marca el
+    agente y le pone las seis cosas; si no hay ninguno, lo suma después de la apertura y se lo descuenta al bloque más
+    largo, así la sesión dura lo mismo. El cierre resume el resultado con sus palabras y lo confirma.
+  - En «En vivo», pasada la mitad sin marcar `av:res1`: «Todavía no sabes qué resultado busca». El reloj es la hora de
+    la reunión o, sin ella, cuando se abrió la pestaña.
+  - Después de la sesión, el desafío guarda el resultado en sus palabras y queda «sin confirmar» si la reunión no lo dejó
+    claro (lo propone Nexus con `resultadoClaro`, o lo marca la persona); la siguiente guía arranca por confirmarlo.
+  - El analizador de la venta suma el juicio «resultado» (si | en_parte | no, con cita). Va en el CRITERIO, que arma el
+    código y viaja en el mensaje (`RESULTADO_EN_EL_CRITERIO`, criterio 2026-11-06), y no en el prompt guardado en la base:
+    así no hace falta correr `crear-agente-analizador-venta.ts` (que no pisa un prompt distinto sin `--force`). Los
+    análisis de antes no lo tienen y no lo muestran.
+  - En preventa no se arma la propuesta sin el resultado confirmado: al menos una meta en «Metas» del resumen
+    (`resultadoConfirmado`). Lo frena `armarPropuesta` en el servidor (409 con qué falta) y la pantalla lo dice antes del
+    botón. *Por qué «Metas»:* es la casilla que ya define el resultado en cifras y la que lee la propuesta.
+- **«Lo que ya sabemos» son seis tarjetas, no un cuadro libre** (Retos · Resultado que buscan · Plazos · Presupuesto ·
+  Quién decide · Qué pasa si no hacen nada), cada una con su fuente. Nexus las propone una vez desde el traspaso, las
+  notas de HubSpot, lo que agregó el equipo y las reuniones leídas de la exploración o, si no hay, las minutas de las
+  últimas reuniones de la empresa tomadas por el chokepoint (`getClientSessions`); la propuesta queda en
+  `propuesta.contextoPropuesto` para no volver a pedirla, y sin ninguna fuente no gasta IA. Lo vacío queda «por
+  averiguar» y entra a la guía como algo por averiguar. Lo que cambia la persona pasa a «Lo escribió el equipo». El texto
+  libre de la primera tanda (`sabemos`) se sigue leyendo.
+- **Sin aviso amarillo de «falta contexto»: los recuadros del contexto ya lo piden.** Una guía con el formato de antes,
+  en la próxima sesión, no cuenta como guía: queda plegada abajo como «Guía anterior», solo lectura. Al armar la agenda
+  nueva, la vieja se guarda en `propuesta.guiasAnteriores` y sigue ahí.
+- **«+ Agregar sesión» de la barra se ve como menú** (con su flecha). No se encontró en el código un cambio que lo
+  volviera un enlace: la barra de la ficha monta el mismo menú `AgregarSesion` que la preventa, también en la carpeta de
+  prueba. Si sigue sin abrir el menú, falta reproducirlo con sesión iniciada.

@@ -13,9 +13,15 @@ import { BotonAzul, BotonBlanco, BotonTexto } from "@/components/ui/sistema";
 import { cn } from "@/lib/cn";
 import {
   DURACIONES,
+  CLAVES_DE_LO_QUE_SABEMOS,
+  FUENTE_DEL_EQUIPO,
   MAX_LO_QUE_ESPERA,
-  MAX_LO_QUE_SABEMOS,
   MAX_OBJETIVO_DE_LA_EXPLORACION,
+  MAX_TEXTO_DE_LA_TARJETA,
+  NOMBRE_DE_LA_TARJETA,
+  porAveriguar,
+  type ClaveDeLoQueSabemos,
+  type TarjetasDeLoQueSabemos,
   MAX_PERSONAS_DE_LA_SESION,
   textoDeConQuien,
   type PersonaDeLaSesion,
@@ -37,48 +43,78 @@ export function ContextoDeTodaLaExploracion() {
   const cs = marco.clave === "cs";
   const [editando, setEditando] = useState(!cx);
   const [objetivo, setObjetivo] = useState(cx?.objetivo ?? "");
-  const [sabemos, setSabemos] = useState(cx?.sabemos ?? "");
-  const [de, setDe] = useState<string[]>([]);
-  const [cargado, setCargado] = useState(false);
-  const cargando = editando && puedeEditar && !cx?.sabemos && !cargado;
+  // Las tarjetas confirmadas o, si no hay, las que propone Nexus (2026-11-06, segunda tanda).
+  const [tarjetas, setTarjetas] = useState<TarjetasDeLoQueSabemos>(cx?.tarjetas ?? {});
+  const [cargado, setCargado] = useState(!!cx?.tarjetas);
+  const [proponiendo, setProponiendo] = useState(false);
 
-  // Lo que Nexus ya tiene, cargado para confirmar o completar (sin IA). Solo si no hay nada escrito.
+  /* Al abrir sin tarjetas: lo que Nexus ya propuso, o se lo pide una vez si tiene de dónde (el traspaso, las notas, las
+     reuniones leídas). Sin fuentes no gasta IA: todo queda por averiguar. */
   useEffect(() => {
-    if (!editando || !puedeEditar || cx?.sabemos || cargado) return;
+    if (!editando || !puedeEditar || cargado) return;
     let vivo = true;
-    fetch(`/api/sales/exploraciones/${exp.id}/contexto`)
-      .then((r) => (r.ok ? (r.json() as Promise<{ sabemos: string; de: string[] }>) : null))
-      .then((b) => {
+    void (async () => {
+      try {
+        const r = await fetch(`/api/sales/exploraciones/${exp.id}/contexto`);
+        const b = r.ok ? ((await r.json()) as { hayFuentes: boolean; propuesto: { tarjetas: TarjetasDeLoQueSabemos } | null }) : null;
         if (!vivo || !b) return;
-        setDe(b.de);
-        setSabemos((actual) => (actual.trim() ? actual : b.sabemos));
-      })
-      .catch(() => undefined)
-      .finally(() => vivo && setCargado(true));
+        if (b.propuesto) return setTarjetas((t) => (Object.keys(t).length ? t : b.propuesto!.tarjetas));
+        if (!b.hayFuentes) return;
+        setProponiendo(true);
+        const p = await fetch(`/api/sales/exploraciones/${exp.id}/contexto`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ proponer: true }) });
+        const j = p.ok ? ((await p.json()) as { propuesto: { tarjetas: TarjetasDeLoQueSabemos } }) : null;
+        if (vivo && j) setTarjetas((t) => (Object.keys(t).length ? t : j.propuesto.tarjetas));
+      } catch {
+        // Sin la propuesta, la persona las llena a mano.
+      } finally {
+        if (vivo) {
+          setCargado(true);
+          setProponiendo(false);
+        }
+      }
+    })();
     return () => {
       vivo = false;
     };
-  }, [editando, puedeEditar, cx?.sabemos, cargado, exp.id]);
+  }, [editando, puedeEditar, cargado, exp.id]);
+
+  const cambiarTarjeta = (k: ClaveDeLoQueSabemos, texto: string) =>
+    setTarjetas((t) => {
+      const antes = t[k];
+      // Lo que cambia la persona deja de ser de la fuente: lo escribió el equipo.
+      return { ...t, [k]: { texto, fuente: antes && antes.texto === texto ? antes.fuente : FUENTE_DEL_EQUIPO } };
+    });
 
   const confirmar = async () => {
-    const ok = await cambiar([{ op: "contexto", valor: { objetivo: objetivo.trim(), sabemos: sabemos.trim() } }], { exito: "Contexto de la exploración confirmado." });
+    const ok = await cambiar([{ op: "contexto", valor: { objetivo: objetivo.trim(), ...(cx?.sabemos ? { sabemos: cx.sabemos } : {}), tarjetas } }], {
+      exito: "Contexto de la exploración confirmado.",
+    });
     if (ok) setEditando(false);
   };
 
   if (!editando && cx) {
+    const faltan = porAveriguar(cx.tarjetas);
     return (
-      <section className="space-y-1.5 rounded-xl border border-line bg-surface px-[18px] py-3.5">
+      <section className="space-y-2 rounded-xl border border-line bg-surface px-[18px] py-3.5">
         <div className="flex items-center gap-2">
           <Rotulo className="flex-1">Contexto de la exploración</Rotulo>
           {puedeEditar && <BotonTexto onClick={() => setEditando(true)}>Editar</BotonTexto>}
         </div>
         <p className="text-[14px] leading-5 text-fg">{cx.objetivo}</p>
-        {cx.sabemos && (
-          <details>
-            <summary className="cursor-pointer select-none text-[13px] text-fg-secondary">Lo que ya sabemos del cliente</summary>
-            <p className="mt-1 whitespace-pre-line text-[13px] leading-[19px] text-fg-secondary">{cx.sabemos}</p>
-          </details>
+        {cx.tarjetas ? (
+          <ul className="grid gap-1.5 sm:grid-cols-2">
+            {CLAVES_DE_LO_QUE_SABEMOS.filter((k) => cx.tarjetas?.[k]).map((k) => (
+              <li key={k} className="rounded-lg border border-line bg-surface-muted px-2.5 py-1.5 text-[13px] leading-[18px]">
+                <span className="font-semibold text-fg">{NOMBRE_DE_LA_TARJETA[k]}: </span>
+                <span className="text-fg-secondary">{cx.tarjetas![k]!.texto}</span>
+                <span className="block text-[11px] text-fg-muted">{cx.tarjetas![k]!.fuente}</span>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          cx.sabemos && <p className="whitespace-pre-line text-[13px] leading-[19px] text-fg-secondary">{cx.sabemos}</p>
         )}
+        {faltan.length > 0 && <p className="text-[13px] text-fg-muted">Por averiguar: {faltan.map((k) => NOMBRE_DE_LA_TARJETA[k].toLowerCase()).join(", ")}. La guía lo pregunta.</p>}
         <p className="text-xs text-fg-muted">
           Confirmado{cx.por ? ` por ${cx.por}` : ""} el {diaCorto(cx.en)}. Todas las sesiones dependen de este objetivo.
         </p>
@@ -105,24 +141,32 @@ export function ContextoDeTodaLaExploracion() {
           className={cn(CAMPO, "resize-y")}
         />
       </label>
-      <label className="block space-y-1">
+      <div className="space-y-1.5">
         <span className="text-xs font-medium text-fg-secondary">
-          {cs
-            ? "Lo que ya sabemos: lo que entregó ventas en el traspaso (retos, objetivos, planes, plazos, consecuencias, presupuesto y quién decide)"
-            : "Lo que ya sabemos: cómo llegó (lo que se habló en el primer contacto o lo que contó quien lo refirió)"}
+          Lo que ya sabemos {cs ? "(del traspaso de ventas" : "(de cómo llegó"}, las notas y las reuniones). Lo vacío queda por averiguar y la guía lo pregunta.
         </span>
-        <textarea
-          value={sabemos}
-          onChange={(e) => setSabemos(e.target.value)}
-          maxLength={MAX_LO_QUE_SABEMOS}
-          rows={6}
-          placeholder={cargando ? "Cargando lo que Nexus ya tiene…" : "Si todavía no sabemos nada, déjalo vacío."}
-          className={cn(CAMPO, "resize-y leading-[1.5]")}
-        />
-        {de.length > 0 && <span className="text-xs text-fg-muted">Lo cargamos con lo que Nexus ya tenía ({de.join(", ").toLowerCase()}). Confírmalo o complétalo.</span>}
-      </label>
+        {proponiendo && <p className="text-[13px] text-fg-muted">Nexus está leyendo lo que ya tiene del cliente…</p>}
+        <div className="grid gap-2 sm:grid-cols-2">
+          {CLAVES_DE_LO_QUE_SABEMOS.map((k) => (
+            <label key={k} className="block space-y-1 rounded-lg border border-line bg-surface px-2.5 py-2">
+              <span className="flex items-center gap-2 text-xs font-semibold text-fg">
+                {NOMBRE_DE_LA_TARJETA[k]}
+                <span className="ml-auto text-[11px] font-normal text-fg-muted">{tarjetas[k]?.texto.trim() ? tarjetas[k]!.fuente : "Por averiguar"}</span>
+              </span>
+              <textarea
+                value={tarjetas[k]?.texto ?? ""}
+                onChange={(e) => cambiarTarjeta(k, e.target.value)}
+                maxLength={MAX_TEXTO_DE_LA_TARJETA}
+                rows={2}
+                placeholder="Por averiguar"
+                className={cn(CAMPO, "resize-y border-0 px-0 py-0 focus:border-0")}
+              />
+            </label>
+          ))}
+        </div>
+      </div>
       <div className="flex gap-2">
-        <BotonAzul disabled={guardando || !objetivo.trim()} onClick={() => void confirmar()}>
+        <BotonAzul disabled={guardando || proponiendo || !objetivo.trim()} onClick={() => void confirmar()}>
           Confirmar el contexto
         </BotonAzul>
         {cx && <BotonTexto onClick={() => setEditando(false)}>Cancelar</BotonTexto>}

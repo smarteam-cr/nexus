@@ -9,6 +9,7 @@
 import { getAnthropic } from "@/lib/anthropic";
 import { conContextoDeIA } from "@/lib/ai/contexto-de-corrida";
 import { estaAveriguada } from "./agenda";
+import { resultadoAveriguado } from "./resultado";
 import { textoDeConQuien } from "./contexto-de-la-exploracion";
 import { leerLoQueDejo, pedidoDeLoQueDejo, type DesafioDeLaSesion, type TemaPorRetomar } from "./despues-de-la-sesion";
 import { EQUIPOS } from "./equipos";
@@ -50,6 +51,7 @@ export async function proponerLoQueDejo(o: {
     sinAveriguar: cosas.filter((c) => !estaAveriguada(c, sesion?.hechas)).map((c) => c.que),
     notas: sesion ? (estado.contenido.notas[claveDeNotaDeSesion(sesion.id)] ?? "").slice(0, 2000) || null : null,
     personas: [...new Set(personas)].slice(0, 12),
+    resultadoSinMarcar: resultadoAveriguado(agenda, sesion?.hechas) === false,
   };
   const ia = { agentSlug: AGENTE_DE_LO_QUE_DEJO, clientId: fila.clientId, projectId: fila.projectId, triggeredByEmail: o.email, origen: "exploraciones/despues:lo-que-dejo" };
   const pedir = (aviso = "") => conContextoDeIA(ia, () => getAnthropic().messages.create(pedidoDeLoQueDejo(ctx, aviso)));

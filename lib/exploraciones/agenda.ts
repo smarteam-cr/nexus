@@ -46,6 +46,8 @@ export interface BloqueDeLaAgenda {
   abre: string;
   /** El bloque central: el que no se puede pasar rápido. Uno por agenda. */
   central?: true;
+  /** El bloque fijo del resultado que buscan (resultado.ts): sus seis cosas tienen ids estables. */
+  resultado?: true;
   averiguar: CosaPorAveriguar[];
   /** Qué datos conviene obtener y cómo convertirlos en impacto (costo, tiempo, ventas perdidas, seis meses más igual). */
   impacto?: string;
@@ -63,6 +65,8 @@ export const MIN_BLOQUES = 4;
 export const MAX_BLOQUES = 6;
 export const MAX_CLAVES = 4;
 export const MAX_AVERIGUAR_POR_BLOQUE = 5;
+/** El bloque del resultado trae seis cosas fijas (resultado.ts): el esquema guardado acepta hasta seis. */
+export const MAX_AVERIGUAR_GUARDADAS = 6;
 export const MAX_PREGUNTAS_SUGERIDAS = 2;
 export const DURACION_POR_DEFECTO = 60;
 
