@@ -113,28 +113,63 @@ export function avanceDeLaAgenda(agenda: AgendaDeLaGuia, hechas: readonly string
 export function preguntaCerrada(texto: string): boolean {
   const q = texto.trim().replace(/^[«"]+/, "");
   const cuerpo = q.includes("¿") ? q.slice(q.indexOf("¿") + 1) : q;
+  // «¿Puedes contarme…?» pide que cuente: es abierta.
+  if (/^(me\s+)?puedes\s+(contarme|contar|describirme|describir|explicarme|explicar|mostrarme|mostrar)\b/i.test(cuerpo.trim())) return false;
   return /^(tienen|tiene|tienes|hay|existe|existen|es|son|est[aá]n?|est[aá]s|usan|usas|usa|han|has|ha|pueden|puedes|puede|cuentan con|cuentas con|saben|sabes|lo|la|los|las|se|les|te|alguna vez|cu[aá]nt[oa]s?)\b/i.test(
     cuerpo.trim(),
   );
 }
 
-/** Una pregunta que pregunta dos cosas a la vez (punto 11): dos signos de pregunta. */
+/**
+ * Una pregunta que pregunta dos cosas a la vez (punto 11): dos signos de pregunta, o una segunda pregunta pegada con «, y
+ * qué…», «, y cómo…», «, y cuántos…» (la validación del 2026-11-06 las encontró así: «¿De dónde vienen los clientes, y
+ * cuántos llegan por mes?»).
+ */
 export function preguntaDoble(texto: string): boolean {
-  return (texto.match(/\?/g) ?? []).length > 1;
+  if ((texto.match(/\?/g) ?? []).length > 1) return true;
+  return PEGADA.test(texto);
 }
 
-/** Las preguntas sugeridas de una agenda que no cumplen: cerradas o dobles (para pedirla otra vez, como el voseo). */
+const PEGADA = /,\s*y\s+(qu[eé]|c[oó]mo|cu[aá]nt[oa]s?|qui[eé]n(es)?|d[oó]nde|por qu[eé]|cu[aá]ndo|para cu[aá]ndo|cu[aá]l(es)?)\b/i;
+
+/**
+ * Una pregunta doble, partida en dos de una sola cosa (lo que el reintento no arregló): «¿A, y qué B?» → «¿A?» y «¿Qué B?»;
+ * «¿A? ¿B?» → las dos. Una que no es doble queda igual.
+ */
+export function partirPreguntaDoble(texto: string): string[] {
+  const t = texto.trim();
+  const signos = t.match(/[^?]+\?/g);
+  if (signos && signos.length > 1) return signos.map((s) => s.trim()).filter(Boolean);
+  const m = PEGADA.exec(t);
+  if (!m) return [t];
+  const primera = t.slice(0, m.index).trim();
+  const resto = t.slice(m.index + m[0].length - m[1].length).trim();
+  const segunda = resto.charAt(0).toUpperCase() + resto.slice(1);
+  const cierra = (s: string) => (/[?.]$/.test(s) ? s : `${s}?`);
+  return [primera.includes("¿") ? cierra(primera) : `${primera.replace(/[,.]$/, "")}.`, cierra(segunda.startsWith("¿") ? segunda : `¿${segunda}`)];
+}
+
+/** Un espacio por completar («[retos con sus palabras]»): lo que se dice tiene que poder decirse tal cual. */
+export function conHueco(texto: string): boolean {
+  return /\[[^\]]*\]/.test(texto);
+}
+
+/**
+ * Lo que no cumple en una agenda, para pedirla otra vez (como el voseo): preguntas cerradas o dobles, y textos con un
+ * espacio por completar.
+ */
 export function preguntasQueNoCumplen(agenda: AgendaDeLaGuia): string[] {
-  const todas = agenda.bloques.flatMap((b) => [...(b.tipo === "cuerpo" ? [b.abre] : []), ...b.averiguar.flatMap((c) => c.preguntas)]);
-  return todas.filter((p) => preguntaCerrada(p) || preguntaDoble(p));
+  const preguntas = agenda.bloques.flatMap((b) => [...(b.tipo === "cuerpo" ? [b.abre] : []), ...b.averiguar.flatMap((c) => c.preguntas)]);
+  const textos = agenda.bloques.flatMap((b) => [b.abre, b.impacto ?? ""]);
+  return [...preguntas.filter((p) => preguntaCerrada(p) || preguntaDoble(p)), ...textos.filter(conHueco)];
 }
 
-/** El aviso para pedirla otra vez sin preguntas cerradas ni dobles. */
+/** El aviso para pedirla otra vez sin preguntas cerradas ni dobles ni espacios por completar. */
 export function avisoDePreguntasCerradas(malas: readonly string[]): string {
-  return `\n\nEn tu intento anterior hubo preguntas que se responden con sí, no o un número, o que preguntan dos cosas (${malas
-    .slice(0, 5)
+  return `\n\nEn tu intento anterior hubo preguntas que se responden con sí, no o un número, que preguntan dos cosas (dos signos de pregunta, o una segunda pegada con «, y qué…», «, y cuántos…»), o textos con un espacio por completar como «[…]» (${malas
+    .slice(0, 6)
     .map((p) => `«${p}»`)
-    .join(", ")}). Reescríbelas abiertas y de una sola cosa: «Cuéntame cómo…», «¿Cómo deciden…?», «¿Qué pasa cuando…?».`;
+    .join(", ")}). Reescríbelas: abiertas y de una sola cosa («Cuéntame cómo…», «¿Cómo deciden…?», «¿Qué pasa cuando…?»), y lo que se dice, escrito para decirse tal cual (en el cierre: «Resume con sus palabras los dos o tres retos que salieron»).`;
 }
 
 /**

@@ -55,6 +55,7 @@ import {
   MAX_CLAVES,
   MAX_PREGUNTAS_SUGERIDAS,
   MIN_BLOQUES,
+  partirPreguntaDoble,
   preguntasDeLaAgenda,
   type AgendaDeLaGuia,
   type BloqueDeLaAgenda,
@@ -713,7 +714,7 @@ function sistemaDeLaAgenda(marco: ClaveDeMarco = "venta"): string {
   const cierreDeVenta = cs
     ? " El cliente ya compró: sin presupuesto ni quién firma."
     : `
-- En preventa, el cierre también confirma la fecha en que el cliente necesita la solución, si tiene presupuesto, quién decide, quién más debería participar y con qué otras opciones nos está comparando. Lo que ya se sabe de eso va como «sabido».
+- En preventa, el cierre también confirma la fecha en que el cliente necesita la solución, si tiene presupuesto, quién decide, quién más debería participar y con qué otras opciones nos está comparando. Lo que ya se sabe de eso va como «sabido». También abiertas: «¿Qué fecha o qué evento marca cuándo necesitas tenerlo?», «¿Cómo suelen definir el presupuesto para algo así?», «¿Con qué otras opciones lo estás comparando?», «¿Quién más debería estar en la próxima conversación?»; nunca «¿Hay…?» ni «¿Están mirando…?».
 - El cierre alinea expectativas sobre el diagnóstico: no vende una implementación.`;
   return `Eres el coach de ${cs ? "Customer Success" : "ventas"} de Smarteam, una consultora que implementa HubSpot. Preparas a ${quien} para su PRÓXIMA sesión de exploración. ${meta}
 
@@ -734,7 +735,8 @@ Cómo se arma:
 
 Las preguntas:
 - Abiertas: no se pueden responder con sí, no o un número. Nada de «¿Tienen…?», «¿Hay…?», «¿Usan…?», «¿Cuántos…?». Un dato como cuántos vendedores tienen sale dentro de una pregunta más amplia («Cuéntame cómo está armado el equipo comercial»), no preguntándolo directo.
-- Una sola cosa por pregunta: un solo signo de pregunta, sin «y» que junte dos preguntas.
+- Una sola cosa por pregunta: un solo signo de pregunta, sin «, y qué…», «, y cómo…» ni «, y cuántos…» que pegue una segunda pregunta. Si hacen falta dos, son dos preguntas sugeridas.
+- Sin espacios por completar («[retos del cliente]»): lo que se dice va escrito para decirse tal cual; si depende de la reunión, di qué hacer («Resume con sus palabras los dos o tres retos que salieron»).
 - Cortas, en lenguaje del cliente, sin funciones de HubSpot${cs ? "" : ", licencias, precios ni demos (eso es vender antes de diagnosticar)"}.
 ${TUTEO}
 
@@ -807,24 +809,30 @@ function leerLaAgenda(input: Record<string, unknown>, ctx: ContextoDeLaGuia): Ag
   const bloques: BloqueDeLaAgenda[] = [];
   for (const [i, b] of crudos.entries()) {
     const titulo = textoLimpio(b.titulo, 120);
-    const abre = textoLimpio(b.abre, 600);
-    if (!titulo || !abre) continue;
+    const abreLeido = textoLimpio(b.abre, 600);
+    if (!titulo || !abreLeido) continue;
     // La apertura y el cierre son el primero y el último, digan lo que digan.
     const tipo: TipoDeBloque = i === 0 ? "apertura" : i === crudos.length - 1 ? "cierre" : "cuerpo";
+    // La pregunta para abrir un bloque del cuerpo es UNA: si vino doble, queda la primera.
+    const abre = tipo === "cuerpo" ? partirPreguntaDoble(abreLeido)[0] : abreLeido;
     const averiguar: CosaPorAveriguar[] = [];
     for (const c of Array.isArray(b.averiguar) ? b.averiguar : []) {
       if (!esObjeto(c)) continue;
       const que = textoLimpio(c.que, 200);
+      // Una sola cosa por pregunta (punto 11): la doble que quedó después del reintento se parte en dos.
       const preguntas = (Array.isArray(c.preguntas) ? c.preguntas : [])
         .map((p) => textoLimpio(p, 300))
         .filter((p): p is string => !!p)
+        .flatMap(partirPreguntaDoble)
         .slice(0, MAX_PREGUNTAS_SUGERIDAS);
       if (!que || !preguntas.length) continue;
       const id = idDeAveriguar(que);
       if (vistos.has(id)) continue;
       vistos.add(id);
       const para = typeof c.para === "string" && permitidos.has(c.para) ? c.para : undefined;
-      const sabido = textoLimpio(c.sabido, 120);
+      // De dónde se sabe, corto: se lee en una etiqueta al lado de la cosa.
+      const sabidoLargo = textoLimpio(c.sabido, 120);
+      const sabido = sabidoLargo && sabidoLargo.length > 60 ? `${sabidoLargo.slice(0, 60).replace(/\s+\S*$/, "")}…` : sabidoLargo;
       averiguar.push({ id, que, preguntas, ...(para ? { para } : {}), ...(sabido ? { sabido } : {}) });
       if (averiguar.length >= MAX_AVERIGUAR_POR_BLOQUE) break;
     }

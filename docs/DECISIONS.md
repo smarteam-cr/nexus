@@ -12907,7 +12907,10 @@ preguntas.
   tema), para lo que todavía las lee: lo que cubre la guía, el correo de seguimiento, el análisis de la venta.
 - **Preguntas abiertas y de una sola cosa, verificado por código.** `preguntaCerrada` y `preguntaDoble` miran cómo abre
   cada pregunta sugerida; si hay alguna, el mismo reintento del voseo la pide otra vez avisándolo, una sola vez, y se
-  queda la que tenga menos problemas sin más voseo.
+  queda la que tenga menos problemas sin más voseo. *Lo que se vio con IA real (2026-11-06, 12 llamadas):* el modelo
+  pega segundas preguntas con «, y cuántos…» y dejaba «[retos con sus palabras]» en el cierre; el detector las cuenta
+  como dobles y como huecos, y lo que el reintento no arregla el código lo parte en dos preguntas
+  (`partirPreguntaDoble`). Las cerradas que quedan («¿Hay algún hito…?») se ven: el reintento las baja pero no a cero.
 - **La apertura y el cierre son iguales en todas** y los arma el agente con sus reglas: saludo, lo que ya sabemos y otro
   enfoque (o amplia si es la primera sin contexto); en preventa, la industria, por qué ahora, uno o dos clientes de
   referencia de su industria (solo la lista de Audiencia: nunca otra cuenta ni sus datos) y cómo trabajamos, más la frase
