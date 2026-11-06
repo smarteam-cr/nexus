@@ -43,7 +43,8 @@ export default function AgregarSesion({ variante }: { variante: "boton" | "riel"
   const claseDelBoton =
     variante === "boton"
       ? "inline-flex h-8 items-center gap-1.5 rounded-lg border border-line bg-surface px-3 text-[13px] font-semibold text-fg-secondary transition-colors hover:bg-surface-hover hover:text-fg disabled:opacity-50"
-      : "w-full rounded-lg px-2.5 py-1.5 text-left text-[13px] text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg";
+      : // En la barra (también la de la ficha) se ve como lo que es: un menú, con su flecha (2026-11-06, Elías: parecía un enlace).
+        "flex w-full items-center justify-between gap-1.5 rounded-lg px-2.5 py-1.5 text-left text-[13px] text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg";
   if (lleno) {
     return variante === "boton" ? (
       <button type="button" disabled title={`Ya hay ${MAX_SESIONES} sesiones: saca una antes de agregar otra.`} className={claseDelBoton}>
@@ -62,11 +63,9 @@ export default function AgregarSesion({ variante }: { variante: "boton" | "riel"
         trigger={(abierto) => (
           <>
             + Agregar sesión
-            {variante === "boton" && (
-              <svg className={cn("h-3 w-3 transition-transform", abierto && "rotate-180")} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-                <path d="M6 9l6 6 6-6" />
-              </svg>
-            )}
+            <svg className={cn("h-3 w-3 transition-transform", abierto && "rotate-180")} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+              <path d="M6 9l6 6 6-6" />
+            </svg>
           </>
         )}
         items={[
