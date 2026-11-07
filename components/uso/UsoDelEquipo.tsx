@@ -5,8 +5,10 @@
  * Por persona, dos barras: los días que entró y las llamadas a la IA que disparó (con su costo; al pasar el mouse, los
  * agentes que más usó). Cada equipo cierra con su total. En orden alfabético dentro de cada equipo, sin ranking: sirve
  * para entender el uso, no para evaluar a nadie. Barras con divs y tokens: el estándar de gráficos de Nexus queda para
- * el rediseño.
+ * el rediseño. Las llamadas de un modelo sin tarifa no suman al costo: se dicen al lado («· 3 sin tarifa»). Quien ya no
+ * está aparece al final de su equipo si tuvo uso en el período (lib/uso/periodo.ts).
  */
+import type { ReactNode } from "react";
 import { EmptyState } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import type { UsoPorPeriodo } from "@/lib/uso/lectura-server";
@@ -23,6 +25,8 @@ export default function UsoDelEquipo({ datos }: { datos: UsoPorPeriodo }) {
     return <EmptyState title="Sin personas del equipo" description="No hay personas activas en el equipo para mostrar." />;
   }
   const empiezaAntes = datos.medidoDesde && datos.rango.desde < datos.medidoDesde;
+  // Con alguna llamada sin tarifa, la columna del texto se ensancha en todas las filas: las barras siguen comparables.
+  const anchoDeLaIa = datos.equipos.some((e) => e.total.sinTarifa > 0) ? "w-48" : "w-32";
   return (
     <section className="space-y-2" aria-labelledby="uso-del-periodo">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
@@ -53,7 +57,7 @@ export default function UsoDelEquipo({ datos }: { datos: UsoPorPeriodo }) {
             </p>
             <div className="space-y-1">
               {e.personas.map((p) => (
-                <FilaDePersona key={p.email} p={p} maximo={datos.maximo} />
+                <FilaDePersona key={p.email} p={p} maximo={datos.maximo} anchoDeLaIa={anchoDeLaIa} />
               ))}
             </div>
             <div className={cn(COLUMNAS, "mt-1 border-t border-line pt-1.5 text-xs text-fg-secondary")}>
@@ -63,6 +67,7 @@ export default function UsoDelEquipo({ datos }: { datos: UsoPorPeriodo }) {
               </span>
               <span className="tabular-nums">
                 {numero(e.total.llamadas)} llamadas · {usd(e.total.costo)}
+                <SinTarifa n={e.total.sinTarifa} />
               </span>
             </div>
           </div>
@@ -72,7 +77,7 @@ export default function UsoDelEquipo({ datos }: { datos: UsoPorPeriodo }) {
   );
 }
 
-function FilaDePersona({ p, maximo }: { p: UsoDeUnaPersona; maximo: { dias: number; llamadas: number } }) {
+function FilaDePersona({ p, maximo, anchoDeLaIa }: { p: UsoDeUnaPersona; maximo: { dias: number; llamadas: number }; anchoDeLaIa: string }) {
   const agentes = p.agentes.length
     ? `Los agentes que más usó:\n${p.agentes.map((a) => `· ${a.nombre}: ${numero(a.llamadas)}`).join("\n")}`
     : undefined;
@@ -80,12 +85,29 @@ function FilaDePersona({ p, maximo }: { p: UsoDeUnaPersona; maximo: { dias: numb
     <div className={cn(COLUMNAS, "text-[13px]")}>
       <span className="truncate text-fg">{p.nombre}</span>
       <Barra valor={p.dias} maximo={maximo.dias} texto={numero(p.dias)} anchoTexto="w-8" />
-      <Barra valor={p.llamadas} maximo={maximo.llamadas} texto={`${numero(p.llamadas)} · ${usd(p.costo)}`} anchoTexto="w-32" title={agentes} />
+      <Barra
+        valor={p.llamadas}
+        maximo={maximo.llamadas}
+        texto={
+          <>
+            {numero(p.llamadas)} · {usd(p.costo)}
+            <SinTarifa n={p.sinTarifa} />
+          </>
+        }
+        anchoTexto={anchoDeLaIa}
+        title={agentes}
+      />
     </div>
   );
 }
 
-function Barra({ valor, maximo, texto, anchoTexto, title }: { valor: number; maximo: number; texto: string; anchoTexto: string; title?: string }) {
+/** Las llamadas de un modelo sin tarifa: están en las llamadas, no en el costo. */
+function SinTarifa({ n }: { n: number }) {
+  if (!n) return null;
+  return <span className="text-fg-muted"> · {numero(n)} sin tarifa</span>;
+}
+
+function Barra({ valor, maximo, texto, anchoTexto, title }: { valor: number; maximo: number; texto: ReactNode; anchoTexto: string; title?: string }) {
   const ancho = maximo > 0 ? Math.max(valor > 0 ? 2 : 0, Math.round((valor / maximo) * 100)) : 0;
   return (
     <span className="flex min-w-0 items-center gap-2" title={title}>
