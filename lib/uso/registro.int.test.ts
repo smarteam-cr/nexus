@@ -52,7 +52,6 @@ describe("el registro de uso", { timeout: 30_000 }, () => {
     expect(ana.diasConUso).toBe(2);
     expect(ana.diasEstaSemana).toBe(2);
     expect(ana.equipo).toBe("Customer Success");
-    expect(ana.horaPrimera).toBe("09:00");
     expect(u.dias).toHaveLength(28);
     expect(u.dias[u.dias.length - 7]).toBe("2026-10-12");
     expect(u.medidoDesde).toBe("2026-10-15");

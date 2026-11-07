@@ -1,8 +1,8 @@
 /**
  * Loading de /para-ti/uso («Uso de Nexus»).
  *
- * FORMA REAL: PageHeader con «← Para ti» · las pestañas · tres números · el calendario de días con uso (una fila por
- * persona, agrupadas por equipo).
+ * FORMA REAL: PageHeader con «← Para ti» · las pestañas y el período · la lista de personas por equipo, con dos barras
+ * cada una (días que entró y uso de la IA).
  */
 import { PageHeaderSkeleton, Skeleton, SkeletonPanel } from "@/components/ui";
 import { SHELL_DEFAULT } from "@/lib/ui/page-shell";
@@ -19,19 +19,12 @@ export default function UsoDeNexusLoading() {
         <Skeleton className="h-4 w-24" delay={160} />
         <Skeleton className="h-4 w-36" delay={200} />
       </div>
-      <div className="grid gap-3 sm:grid-cols-3">
-        {[0, 1, 2].map((i) => (
-          <SkeletonPanel key={i} minH="min-h-[84px]" bodyClassName="px-4 py-3 space-y-2">
-            <Skeleton className="h-3 w-32" delay={i * 40} />
-            <Skeleton className="h-5 w-16" delay={i * 40 + 20} />
-          </SkeletonPanel>
-        ))}
-      </div>
       <SkeletonPanel minH="min-h-[420px]" bodyClassName="p-4 space-y-2">
         {Array.from({ length: 10 }, (_, i) => (
-          <div key={i} className="flex items-center gap-3">
+          <div key={i} className="flex items-center gap-4">
             <Skeleton className="h-3.5 w-40" delay={i * 30} />
             <Skeleton className="h-3 flex-1" delay={i * 30 + 15} />
+            <Skeleton className="h-3 flex-1" delay={i * 30 + 25} />
           </div>
         ))}
       </SkeletonPanel>

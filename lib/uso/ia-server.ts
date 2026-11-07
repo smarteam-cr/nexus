@@ -10,7 +10,8 @@
  * Lo propuesto sale de lib/lo-propuesto con UNA lectura (`itemsDeLoPropuesto`), que sirve para el cliente, el proceso y
  * el equipo.
  *
- * ⛔ Nada de costos de personas: el gasto de IA se muestra por proceso y por empresa, nunca por persona.
+ * El gasto de IA se muestra aquí por proceso y por empresa. Por persona va solo en la pestaña «Equipo»
+ * (lib/uso/lectura-server.ts), como lo dice docs/DECISIONS.md.
  */
 import "server-only";
 import { prisma } from "@/lib/db/prisma";

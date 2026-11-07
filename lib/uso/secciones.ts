@@ -63,11 +63,6 @@ export function esSeccionValida(clave: string): boolean {
   return seccionesDeNexus().some((s) => s.clave === clave);
 }
 
-/** El nombre de una sección para la pantalla. */
-export function nombreDeLaSeccion(clave: string): string {
-  return seccionesDeNexus().find((s) => s.clave === clave)?.nombre ?? clave;
-}
-
 export interface UltimaApertura {
   seccion: string;
   /** epoch ms */

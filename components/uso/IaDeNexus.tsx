@@ -3,8 +3,8 @@
  * Server Components: reciben los datos ya leídos (lib/uso/ia-server.ts) y no tienen estado; solo el gráfico semanal es
  * de cliente.
  *
- * ⛔ El gasto de IA va por proceso y por empresa, nunca por persona. Es una estimación con la tarifa de Anthropic, no
- * contabilidad, y cada bloque lo dice.
+ * El gasto de IA va aquí por proceso y por empresa; por persona va solo en la pestaña «Equipo» (docs/DECISIONS.md). Es
+ * una estimación con la tarifa de Anthropic, no contabilidad, y cada bloque lo dice.
  */
 import Link from "next/link";
 import { Alert, EmptyState } from "@/components/ui";
