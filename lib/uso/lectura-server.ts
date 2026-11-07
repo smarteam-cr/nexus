@@ -90,9 +90,15 @@ function sinLaTabla(e: unknown): null {
   throw e;
 }
 
-/** Las personas activas del equipo, sin las cuentas de prueba, por equipo y en orden alfabético dentro de cada uno. */
-async function personasDelEquipo(): Promise<{ email: string; nombre: string; equipo: string }[]> {
-  const miembros = await prisma.teamMember.findMany({ where: { deactivatedAt: null }, select: { email: true, name: true, area: true } });
+/**
+ * Las personas del equipo, sin las cuentas de prueba, por equipo y en orden alfabético dentro de cada uno. Solo las
+ * activas, salvo `conLasQueYaNoEstan` (la pestaña «Equipo»: su uso del período también cuenta).
+ */
+async function personasDelEquipo(conLasQueYaNoEstan = false): Promise<{ email: string; nombre: string; equipo: string; activo: boolean }[]> {
+  const miembros = await prisma.teamMember.findMany({
+    where: conLasQueYaNoEstan ? {} : { deactivatedAt: null },
+    select: { email: true, name: true, area: true, deactivatedAt: true },
+  });
   const ordenDelEquipo = new Map<string, number>(EQUIPOS.map((e, i) => [e.clave, i]));
   return miembros
     .filter((m) => !esCuentaDePrueba(m.name))
@@ -103,11 +109,12 @@ async function personasDelEquipo(): Promise<{ email: string; nombre: string; equ
         email,
         nombre: m.name,
         equipo: EQUIPOS.find((e) => e.clave === clave)?.nombre ?? "Sin equipo",
+        activo: !m.deactivatedAt,
         orden: ordenDelEquipo.get(clave) ?? EQUIPOS.length,
       };
     })
     .sort((a, b) => a.orden - b.orden || a.nombre.localeCompare(b.nombre))
-    .map(({ email, nombre, equipo }) => ({ email, nombre, equipo }));
+    .map(({ email, nombre, equipo, activo }) => ({ email, nombre, equipo, activo }));
 }
 
 export interface UsoPorPeriodo extends UsoDelPeriodo {
@@ -126,7 +133,7 @@ export async function usoPorPeriodo(periodo: Periodo, ahora = new Date()): Promi
   const rango = rangoDelPeriodo(periodo, diaEnCostaRica(ahora));
   const conPantallas = modeloDisponible(prisma.usoDeNexus);
   const [personas, dias, primera, llamadas, agentes] = await Promise.all([
-    personasDelEquipo(),
+    personasDelEquipo(true),
     conPantallas
       ? prisma.usoDeNexus.groupBy({ by: ["personaEmail", "dia"], where: { dia: { gte: rango.desde, lte: rango.hasta } } }).catch(sinLaTabla)
       : null,
@@ -134,7 +141,8 @@ export async function usoPorPeriodo(periodo: Periodo, ahora = new Date()): Promi
     prisma.llmCall.groupBy({
       by: ["triggeredByEmail", "agentSlug", "origen"],
       where: { at: { gte: rango.desdeInstante }, triggeredByEmail: { not: null } },
-      _count: { _all: true },
+      // `_count.costUsd` cuenta las que tienen costo: la resta son las de un modelo sin tarifa.
+      _count: { _all: true, costUsd: true },
       _sum: { costUsd: true },
     }),
     prisma.agent.findMany({ select: { id: true, name: true } }),
@@ -155,6 +163,7 @@ export async function usoPorPeriodo(periodo: Periodo, ahora = new Date()): Promi
       origen: l.origen,
       llamadas: l._count._all,
       costo: l._sum.costUsd ?? 0,
+      sinTarifa: l._count._all - l._count.costUsd,
     })),
     nombreDelAgente,
   );
