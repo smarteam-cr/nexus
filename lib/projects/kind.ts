@@ -351,6 +351,11 @@ export const PROJECT_PIPELINES: readonly PipelineDef[] = [
       { id: "1409932561", label: "Desarrollo", enLinea: true, terminal: false },
       { id: "1409932562", label: "Pruebas", enLinea: true, terminal: false },
       { id: "1409932563", label: "Entrega", enLinea: true, terminal: false },
+      /* Agregada en el portal antes del 2026-11-07 (INV11 la vio con 8 proyectos activos: sitios
+         y integraciones ya entregados). Mismo trato que «Continuidad» de Customer Success: es el
+         modo en que vive el servicio DESPUÉS de la entrega, no un paso más. Fuera de la línea y
+         SIN cerrar: el cliente sigue con nosotros. */
+      { id: "1464700820", label: "Recurrente", enLinea: false, terminal: false },
       { id: "1409932564", label: "Finalizado", enLinea: true, terminal: true },
       // Cierra el proyecto pero NO es avance: sale de la línea y no cuenta para "Etapa i/N".
       { id: "1409897657", label: "Cancelado", enLinea: false, terminal: true },
