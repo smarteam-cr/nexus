@@ -52,7 +52,7 @@ import { urlDeDocumentoEnManual } from "@/lib/manual/anclas";
 import ChatDelDocumento from "@/components/asistente/ChatDelDocumento";
 import { puedeConversar, PIEZA_CRONOGRAMA } from "@/lib/asistente/piezas";
 import { buildPieceRows } from "@/lib/flow/dropdown-rows";
-import { GRUPO_ENTREGABLES, GRUPO_HERRAMIENTAS, grupoDelRiel, ordenarPorGrupo } from "@/lib/flow/grupos-del-riel";
+import { GRUPO_HERRAMIENTAS, grupoDelRiel, ordenarPorGrupo } from "@/lib/flow/grupos-del-riel";
 import { AVISO_DESACTUALIZADA_LARGO } from "@/lib/pieces/piece-staleness";
 import { pieceReadiness } from "@/lib/flow/piece-readiness";
 import { ExternalAccessButton } from "./ExternalAccessPanel";
@@ -328,8 +328,8 @@ export default function ProjectCanvasPanel({
         : [],
     [canvases, tipoActivo],
   );
-  /** «Nuevo artefacto» / «Crear otra…»: abierto, con qué tipo ya elegido y desde qué grupo. */
-  const [nuevoArtefacto, setNuevoArtefacto] = useState<{ tipo: string | null; plantilla?: string; clase?: "entregable" | "herramienta" | null } | null>(null);
+  /** «Nuevo artefacto» / «Crear otra…»: abierto, y con qué tipo (y plantilla) ya elegido. Sin tipo, todos los tipos. */
+  const [nuevoArtefacto, setNuevoArtefacto] = useState<{ tipo: string | null; plantilla?: string } | null>(null);
   /** El acceso al portal del cliente, si el kickoff lo pide y sigue pendiente: alerta en el Resumen e ícono en su fila. */
   const { acceso: accesoAlPortal, setAcceso: setAccesoAlPortal } = useAccesoAlPortal(projectId, enResumen);
   /* Los Cuestionarios están en el riel con las mismas condiciones en que se veían cuando colgaban de la
@@ -876,7 +876,6 @@ export default function ProjectCanvasPanel({
               alerta: accesoAlPortal?.falta ? "Falta el acceso al portal de HubSpot del cliente" : null,
             }}
             grupoDelResumen={GRUPO_HERRAMIENTAS}
-            grupoAlFinal={GRUPO_ENTREGABLES}
             filas={ordenarPorGrupo(pieceRows).map((row): FilaDelRielDePiezas => {
               // ¿Esta pieza le corresponde a este proyecto, y están sus pasos previos?
               // Nunca bloquea: informa (lib/flow/piece-readiness).
@@ -972,7 +971,7 @@ export default function ProjectCanvasPanel({
               if (oculta && visible && !enResumen && abierta) irAlResumen();
             }}
             slotDeSesiones={setSlotDeSesiones}
-            onNuevoArtefacto={(grupo) => setNuevoArtefacto({ tipo: null, clase: grupo === "herramienta" || grupo === "entregable" ? grupo : null })}
+            onNuevoArtefacto={() => setNuevoArtefacto({ tipo: null })}
           />,
           slotDePiezas,
         )}
@@ -1224,7 +1223,6 @@ export default function ProjectCanvasPanel({
         onClose={() => setNuevoArtefacto(null)}
         tipoInicial={nuevoArtefacto?.tipo ?? null}
         plantillaInicial={nuevoArtefacto?.plantilla ?? null}
-        clase={nuevoArtefacto?.clase ?? null}
         libres={pieceRows.filter((r) => !r.esCopia && r.state !== "generada" && !r.conNombre).map((r) => r.slug)}
         documentos={canvases.flatMap((c) => {
           const t = tipoDelDocumento(c);
@@ -1232,7 +1230,8 @@ export default function ProjectCanvasPanel({
           return t && admiteCopias(t) && !(c.slug && tipoDeArtefacto(t)?.sinEnlaceElDeSiempre) ? [{ id: c.id, nombre: nombreDelArtefacto(c), tipo: t }] : [];
         })}
         onCreado={(id) => {
-          void refetchCanvases().then(() => switchCanvas(id));
+          // Creado mirando algo de la cuenta (el botón del riel está a la vista igual): se abre el proyecto en el nuevo.
+          void refetchCanvases().then(() => (visible ? switchCanvas(id) : onAbrirDesdeOculto?.(id)));
         }}
       />
 

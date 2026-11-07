@@ -7958,7 +7958,7 @@ le pregunta a la persona del cliente.
 > el equipo en Nexus y sugiere cambios o casos nuevos. Diseño aprobado: «Catálogo de casos de uso» (Claude Design,
 > tableros Main, EnLaEscala, Caso, Sugerir y Proponer).
 
-- **El catálogo vive en el repo** (`lib/casos-de-uso/catalogo.ts`, 26 casos), no en la tabla `UseCase`. *Por qué:* cada
+- **El catálogo vive en el repo** (`lib/casos-de-uso/catalogo.ts`, 38 casos desde el 2026-11-06), no en la tabla `UseCase`. *Por qué:* cada
   caso cita criterios de la escala y `catalogo.test.ts` verifica contra la escala del repo que existan, que caigan en una
   dimensión que el caso dice mover y entre su nivel de partida y el de llegada; en la base no hay prueba que lo sostenga.
   La tabla estaba vacía en producción (medido el 2026-10-11), así que su pantalla de administración se retiró; sus rutas
@@ -7968,8 +7968,11 @@ le pregunta a la persona del cliente.
 - **Dos vistas**: «Por tipo» (tarjetas con el salto de nivel por área, filtros por área, herramienta, tipo, servicio y
   nivel de partida, y un buscador que mira también lo que dice el cliente) y «En la escala» (cuántos casos suben cada
   dimensión, y los huecos). La vista y la dimensión van en la dirección. Cada caso tiene su página
-  (`/sales/use-cases/<id>`) con los criterios palabra por palabra de la escala PUBLICADA. La nota interna (`aviso`) no
-  sale en ninguna pantalla ni le llega al agente.
+  (`/sales/use-cases/<id>`) con los criterios palabra por palabra de la escala PUBLICADA. La nota interna para quien vende
+  se ve solo en esa ficha (interna) y nunca le llega al agente. Desde el 2026-11-06 vive en `lib/casos-de-uso/avisos-server.ts`
+  (`server-only`) y no en el catálogo: el catálogo lo importan componentes de cliente y la propuesta pública, y la nota
+  viajaba en el código que descarga el navegador. Los 14 casos renombrados ese día guardan sus nombres anteriores
+  (`NOMBRES_ANTERIORES`, `tituloVigente`): lo guardado con el nombre viejo sigue siendo el mismo caso.
 - **Se sugiere por Feedback, no se edita en Nexus (v1).** «Sugerir un cambio» abre el panel con el caso y la parte;
   «Proponer un caso nuevo», un formulario propio sin captura. Los dos son reportes comunes: el caso va escrito al
   principio del texto (`lib/casos-de-uso/feedback.ts`), sin columna nueva. *Por qué:* el catálogo es código; una edición
@@ -12870,7 +12873,7 @@ Elías: ese paso se maneja en la escala que ya está en la cuenta, la misma de l
   con sus cuestionarios adentro. Archivar una tanda la apaga de verdad: el cliente deja de verla y los agentes de leerla, y
   recuperarla la devuelve (`SIN_ARCHIVAR`). Cada kickoff ya tenía su enlace, su PDF y sus ocultas por id: eso no cambió.
 - **Lo que no se creó no sale de la lista (30 oct, Elías).** Sin «Activar» y sin «Ver N piezas más» de piezas vacías: de entrada
-  solo el Cronograma y el Kickoff, y todo lo demás se crea con el + de «Herramientas del proyecto» y «Entregables». *El primero
+  solo el Cronograma y el Kickoff, y todo lo demás se crea en «+ Nuevo artefacto». *El primero
   de un tipo es su documento de siempre* (`lib/artefactos/adoptar-server.ts`): crear una copia dejaba vacío el documento que
   buscan por `slug` el «Qué sigue» y los botones de generar. Toma el vacío, le aplica la plantilla y le pone el nombre, y ese
   nombre es lo que lo deja en la lista aunque siga vacío; nunca toma uno con algo escrito, publicado, con nombre o apagado. Lo
@@ -12878,6 +12881,13 @@ Elías: ese paso se maneja en la escala que ya está en la cuenta, la misma de l
   cierre solo se ofrece mientras ese documento esté libre: una copia no puede calcular sus secciones. Un servicio recurrente
   conserva sus piezas: trabaja sobre ellas. La exploración cuenta como creada si alguien abrió su lienzo: su canvas queda vacío
   aunque esté llena.
+- **Un solo «+ Nuevo artefacto», con todos los tipos (6 nov, Elías).** Hubo un + en «Herramientas del proyecto» y otro en
+  «Entregables», y cada uno abría el modal con los tipos de su grupo: Elías buscó las plantillas de la Planificación y del Plan
+  de adopción en el de Herramientas y no estaban, porque son entregables. Ahora hay un solo botón, la primera fila de las piezas
+  del proyecto, y «Qué necesitas» muestra todos los tipos en dos grupos, «Entregables · los ve el cliente» y «Herramientas ·
+  internas», con la etiqueta en cada uno. La clase informa qué ve el cliente; no esconde tipos. La etiqueta sale de la clase
+  y `tipos.test.ts` exige que coincida con `clientFacing` en todo lo que se crea. «Crear otra…» y «Crear en «Nuevo
+  artefacto»» del Resumen siguen abriendo el modal con el tipo (y la plantilla) ya elegidos, sin la lista.
 - **Anclados, no «riel» ni ocultar (30 oct, Elías).** La palabra no se entendía. Desanclar se lleva la fila de verdad, también
   si está abierta: la pantalla vuelve al Resumen y solo se ve en «Ver N sin anclar».
 - **El nombre va una sola vez (30 oct, Elías).** Se editaba en la barra y se repetía en el título. Ahora es el título, con

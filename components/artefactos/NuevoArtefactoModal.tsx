@@ -8,14 +8,18 @@
  * Las plantillas son las tarjetas de «Elegir plantilla», con su descripción y sus secciones (Elías, 30 oct). La elegida se
  * guarda por tipo y se deriva: volver a un tipo conserva lo elegido, y lo que se manda es siempre lo que está marcado.
  *
+ * Se abre con TODOS los tipos (Elías, 6 nov): «Qué necesitas» los agrupa en «Entregables · los ve el cliente» y
+ * «Herramientas · internas», y cada uno lleva su etiqueta. La clase informa; no esconde tipos (antes, un + por grupo
+ * filtraba, y quien buscaba la Planificación en Herramientas no la encontraba).
+ *
  * UI interna: primitivas de components/ui, tokens semánticos y tuteo.
  */
 import { useEffect, useMemo, useState } from "react";
-import { Button, Field, Input, Modal, Select } from "@/components/ui";
+import { Badge, Button, Field, Input, Modal, Select } from "@/components/ui";
 import { useToast } from "@/components/ui/Toast";
 import { TarjetaDePlantilla } from "@/components/canvas/ElegirPlantilla";
 import { seccionesDeUnaCopia } from "@/lib/artefactos/catalogo";
-import { plantillaDelTipo, plantillasDelTipo, rotuloDeCrearOtro, tipoDeArtefacto, tiposCreablesEnElProyecto } from "@/lib/artefactos/tipos";
+import { plantillaDelTipo, plantillasDelTipo, rotuloDeCrearOtro, tipoDeArtefacto, tiposCreablesPorClase } from "@/lib/artefactos/tipos";
 import { canvasDefForSlug } from "@/lib/canvas/canvas-defs";
 import { entregableDe } from "@/lib/entregables/registro";
 import { cn } from "@/lib/cn";
@@ -32,7 +36,6 @@ export default function NuevoArtefactoModal({
   onClose,
   tipoInicial,
   plantillaInicial,
-  clase,
   libres,
   documentos,
   onCreado,
@@ -44,16 +47,15 @@ export default function NuevoArtefactoModal({
   tipoInicial?: string | null;
   /** La plantilla ya marcada de ese tipo (la sugerencia del «Qué sigue»: el Aprendizaje no es la Entrega de cierre). */
   plantillaInicial?: string | null;
-  /** El grupo desde cuyo + se abrió: solo sus tipos. Sin él, todos. */
-  clase?: "entregable" | "herramienta" | null;
   /** Los tipos cuyo documento de siempre sigue sin usar: crear uno lo toma, y ofrece también sus plantillas de siempre. */
   libres: readonly string[];
   /** Los documentos del proyecto (de cualquier tipo: los que se pueden duplicar se filtran por el elegido). */
   documentos: readonly DocumentoParaDuplicar[];
   onCreado: (canvasId: string) => void;
 }) {
-  const tipos = useMemo(() => tiposCreablesEnElProyecto(clase ?? undefined), [clase]);
-  const primero = tipos[0]?.id ?? "";
+  const grupos = useMemo(() => tiposCreablesPorClase(), []);
+  // El primero que se ve en la lista: el primer entregable.
+  const primero = grupos.flatMap((g) => g.tipos)[0]?.id ?? "";
   const [tipo, setTipo] = useState<string>(tipoInicial ?? primero);
   const [elegidas, setElegidas] = useState<Record<string, string>>({});
   const [nombre, setNombre] = useState("");
@@ -135,21 +137,33 @@ export default function NuevoArtefactoModal({
         {!tipoInicial && (
           <div className="space-y-2 md:w-72 md:flex-shrink-0">
             <p className="text-xs text-fg-muted">Qué necesitas</p>
-            <div className="space-y-1.5">
-              {tipos.map((x) => (
-                <button
-                  key={x.id}
-                  type="button"
-                  onClick={() => elegirTipo(x.id)}
-                  aria-pressed={tipo === x.id}
-                  className={cn(
-                    "w-full rounded-lg border px-3 py-2 text-left transition-colors",
-                    tipo === x.id ? "border-brand bg-info-surface" : "border-line bg-surface hover:bg-surface-hover",
-                  )}
-                >
-                  <span className="block text-sm font-semibold text-fg">{x.nombre}</span>
-                  <span className="mt-0.5 block text-xs text-fg-muted">{x.paraQue}</span>
-                </button>
+            <div className="space-y-4">
+              {grupos.map((g) => (
+                <div key={g.clase} role="group" aria-label={`${g.titulo}: ${g.quienLoVe}`} className="space-y-1.5">
+                  <p className="text-xs font-semibold text-fg-secondary">
+                    {g.titulo} <span className="font-normal text-fg-muted">· {g.quienLoVe}</span>
+                  </p>
+                  {g.tipos.map((x) => (
+                    <button
+                      key={x.id}
+                      type="button"
+                      onClick={() => elegirTipo(x.id)}
+                      aria-pressed={tipo === x.id}
+                      className={cn(
+                        "w-full rounded-lg border px-3 py-2 text-left transition-colors",
+                        tipo === x.id ? "border-brand bg-info-surface" : "border-line bg-surface hover:bg-surface-hover",
+                      )}
+                    >
+                      <span className="flex items-start justify-between gap-2">
+                        <span className="text-sm font-semibold text-fg">{x.nombre}</span>
+                        <Badge size="xs" variant={g.clase === "entregable" ? "primary" : "default"} className="mt-px flex-shrink-0">
+                          {g.etiqueta}
+                        </Badge>
+                      </span>
+                      <span className="mt-0.5 block text-xs text-fg-muted">{x.paraQue}</span>
+                    </button>
+                  ))}
+                </div>
               ))}
             </div>
           </div>

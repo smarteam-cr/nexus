@@ -246,7 +246,8 @@ const PUNTO: Record<EstadoDePieza, string> = {
  * riel: el estado de cada pieza (generada, vacía, desactualizada) y su activación viven allá.
  *
  * El punto de color dice el estado y nunca solo: «desactualizado» va escrito, la propuesta lleva la
- * chispa, y lo que todavía no se creó no sale: se crea con el + de cada grupo (Elías, 30 oct). Lo que el equipo desancló
+ * chispa, y lo que todavía no se creó no sale: se crea con «+ Nuevo artefacto», arriba de todo (Elías, 6 nov: antes era un
+ * + por grupo, que filtraba por clase y escondía tipos; el modal muestra todos y dice cuáles ve el cliente). Lo que el equipo desancló
  * queda plegado en «Ver N sin anclar», y anclar o desanclar vive ahí mismo. Las novedades de las reuniones (etapa 6) llevan
  * la misma chispa con su número; el aviso que tapan va en el `title`.
  */
@@ -259,7 +260,6 @@ export function PiezasDelRiel({
   onOcultar,
   slotDeSesiones,
   grupoDelResumen,
-  grupoAlFinal,
   onNuevoArtefacto,
   onRenombrar,
 }: {
@@ -269,8 +269,6 @@ export function PiezasDelRiel({
    * las filas que siguen del mismo grupo no lo repiten. Sin él (un servicio recurrente), el Resumen va sin rótulo.
    */
   grupoDelResumen?: { id: string; titulo: string; detalle?: string | null };
-  /** El grupo que va siempre, aunque no le quede ninguna fila: su + es por donde se crea lo primero de él. */
-  grupoAlFinal?: { id: string; titulo: string };
   filas: FilaDelRielDePiezas[];
   porActivarAbiertas: boolean;
   onAlternarPorActivar: () => void;
@@ -282,8 +280,8 @@ export function PiezasDelRiel({
    * sesiones por portal, como la preventa las cuelga de su pieza (2026-10-07).
    */
   slotDeSesiones?: (el: HTMLDivElement | null) => void;
-  /** El + junto al título de cada grupo: crea un artefacto de ese grupo. Sin él, no se pinta. */
-  onNuevoArtefacto?: (grupo: string) => void;
+  /** «+ Nuevo artefacto», la primera fila: abre el modal con todos los tipos, entregables y herramientas. Sin él, no se pinta. */
+  onNuevoArtefacto?: () => void;
   /** Cambiar el nombre desde acá, con doble clic o con el lápiz que aparece al pasar el mouse. true si quedó guardado. */
   onRenombrar?: (canvasId: string | null, nombre: string) => Promise<boolean>;
 }) {
@@ -310,27 +308,32 @@ export function PiezasDelRiel({
       "flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-[13px] transition-colors",
       activa ? "bg-info-surface font-semibold text-brand" : "text-fg-secondary hover:bg-surface-hover hover:text-fg",
     );
-  const rotuloDeGrupo = (g: { id?: string; titulo: string; detalle?: string | null }) => (
+  const rotuloDeGrupo = (g: { titulo: string; detalle?: string | null }) => (
     <div className="flex items-center justify-between gap-2 px-2.5 pb-0.5 pt-2.5 text-[11px] font-semibold uppercase tracking-[0.06em] text-fg-muted">
       <span className="min-w-0 truncate" title={g.titulo}>
         {g.titulo}
       </span>
       {g.detalle && <span className="flex-shrink-0 font-normal normal-case tracking-normal">{g.detalle}</span>}
-      {g.id && onNuevoArtefacto && (
-        <button
-          type="button"
-          onClick={() => onNuevoArtefacto(g.id!)}
-          aria-label={`Nuevo artefacto en ${g.titulo}`}
-          title="Nuevo artefacto"
-          className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-md text-[15px] font-normal leading-none text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg"
-        >
-          +
-        </button>
-      )}
     </div>
   );
   return (
     <ul className="mb-1.5 ml-[18px] space-y-0.5 border-l border-line pl-2">
+      {onNuevoArtefacto && (
+        <li>
+          <button
+            type="button"
+            onClick={onNuevoArtefacto}
+            title="Crea en este proyecto un entregable (lo ve el cliente) o una herramienta (interna)"
+            className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-[13px] font-medium text-brand transition-colors hover:bg-surface-hover"
+          >
+            {/* 12 px de ícono en el lugar del punto de 8 px: el texto queda alineado con el de las filas. */}
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.25" className="-mx-0.5 h-3 w-3 flex-shrink-0" aria-hidden="true">
+              <path d="M12 5v14M5 12h14" />
+            </svg>
+            <span className="min-w-0 flex-1 truncate">Nuevo artefacto</span>
+          </button>
+        </li>
+      )}
       <li>
         {grupoDelResumen && rotuloDeGrupo(grupoDelResumen)}
         <button type="button" onClick={resumen.onClick} aria-current={resumen.activa ? "page" : undefined} className={clase(resumen.activa)}>
@@ -434,7 +437,6 @@ export function PiezasDelRiel({
           {esExploracion(f) && f.activa && slotDeSesiones && <div ref={slotDeSesiones} />}
         </li>
       ))}
-      {grupoAlFinal && !existentes.some((f) => f.grupo?.id === grupoAlFinal.id) && <li>{rotuloDeGrupo(grupoAlFinal)}</li>}
       {(plegadas > 0 || hayQueOcultar) && (
         <li>
           <button

@@ -480,6 +480,20 @@ export function tiposCreablesEnElProyecto(clase?: TipoDeArtefacto["clase"]): Tip
   return TIPOS.filter((t) => admiteCopias(t.id) && (!clase || t.clase === clase));
 }
 
+/**
+ * Cómo se presenta cada clase en «Nuevo artefacto» (Elías, 6 nov): la clase dice qué ve el cliente, no esconde tipos. Antes
+ * había un + por grupo que filtraba por clase, y las plantillas de la Planificación no estaban en el de Herramientas.
+ */
+export const CLASES_AL_CREAR = [
+  { clase: "entregable", titulo: "Entregables", quienLoVe: "los ve el cliente", etiqueta: "Lo ve el cliente" },
+  { clase: "herramienta", titulo: "Herramientas", quienLoVe: "internas", etiqueta: "Interna" },
+] as const satisfies readonly { clase: TipoDeArtefacto["clase"]; titulo: string; quienLoVe: string; etiqueta: string }[];
+
+/** Todos los tipos que se crean, en dos grupos: primero los entregables, después las herramientas. */
+export function tiposCreablesPorClase() {
+  return CLASES_AL_CREAR.map((c) => ({ ...c, tipos: tiposCreablesEnElProyecto(c.clase) }));
+}
+
 /** Las plantillas de un tipo: las suyas, o las de su entregable. La primera es la de siempre. */
 export function plantillasDelTipo(id: string): readonly PlantillaDeEntregable[] {
   const t = tipoDeArtefacto(id);

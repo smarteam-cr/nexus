@@ -54,7 +54,7 @@ function seccionesDeLaPlantilla(template: BcTemplateDef): string[] | null {
   return template.id === KICKOFF_RECURRENTE_TEMPLATE.id ? template.sections.map((d) => d.key) : null;
 }
 
-export const MENSAJE_SIN_KICKOFF = "Este proyecto no tiene el kickoff: créalo con el + de «Entregables» y vuelve a generarlo.";
+export const MENSAJE_SIN_KICKOFF = "Este proyecto no tiene el kickoff: créalo en «Nuevo artefacto» y vuelve a generarlo.";
 export const MENSAJE_KICKOFF_VACIO = "El agente devolvió bloques inválidos. Prueba de nuevo.";
 
 export async function runKickoffGeneration(opts: {

@@ -6,7 +6,7 @@
  */
 import { ARTEFACTO_DE_LA_ETAPA } from "@/lib/servicios/ciclo";
 import { describe, expect, it } from "vitest";
-import { TIPOS, TIPO_CUESTIONARIOS, admiteCopias, plantillaDelTipo, plantillasDelTipo, tipoDeArtefacto, tiposCreablesEnElProyecto } from "./tipos";
+import { TIPOS, TIPO_CUESTIONARIOS, admiteCopias, plantillaDelTipo, plantillasDelTipo, tipoDeArtefacto, tiposCreablesEnElProyecto, tiposCreablesPorClase } from "./tipos";
 import { piezasParaMostrar } from "@/lib/flow/orden-de-presentacion";
 import { canvasDefDeUnaCopia, catalogoDelTipo, defsDelTipo, handoffKeysDelTipo, seccionesDeUnaCopia, templateDelTipo } from "./catalogo";
 import { ENTREGABLES } from "@/lib/entregables/registro";
@@ -51,6 +51,19 @@ describe("tipos: el set y lo que admite cada uno", () => {
     }
     expect(tiposCreablesEnElProyecto("herramienta").map((t) => t.id)).toEqual(["exploration", "questionnaires", "implementation"]);
     expect(tiposCreablesEnElProyecto("entregable").map((t) => t.id)).not.toContain("exploration");
+  });
+
+  it("«Nuevo artefacto» ofrece todos los tipos en dos grupos, y la etiqueta de cada uno dice la verdad (Elías, 6 nov)", () => {
+    const grupos = tiposCreablesPorClase();
+    expect(grupos.map((g) => `${g.titulo} · ${g.quienLoVe}`)).toEqual(["Entregables · los ve el cliente", "Herramientas · internas"]);
+    // Nada queda escondido ni repetido: juntos son exactamente los que se crean.
+    const juntos = grupos.flatMap((g) => g.tipos.map((t) => t.id));
+    expect([...juntos].sort()).toEqual(tiposCreablesEnElProyecto().map((t) => t.id).sort());
+    expect(new Set(juntos).size).toBe(juntos.length);
+    // Las plantillas que Elías no encontró en el + de Herramientas están en los entregables.
+    expect(grupos[0].tipos.map((t) => t.id)).toEqual(expect.arrayContaining(["planning", "adoption-plan"]));
+    // «Lo ve el cliente» solo en lo que se comparte con él; «Interna» en lo que no.
+    for (const g of grupos) for (const t of g.tipos) expect(t.clientFacing, `${t.id} dice «${g.etiqueta}»`).toBe(g.clase === "entregable");
   });
 
   it("se crean: todos menos el cronograma y el handoff (la propuesta tiene su lugar; la escala no es un artefacto)", () => {

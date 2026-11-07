@@ -104,7 +104,17 @@ describe("los canvases sueltos del CSE", () => {
 describe("las herramientas también llevan copias (Elías, 30 oct)", () => {
   it("«Nuevo artefacto» no depende del tipo de proyecto", () => {
     const panel = fs.readFileSync(path.join(process.cwd(), "components/clients/ProjectCanvasPanel.tsx"), "utf8");
-    expect(panel).toContain("onNuevoArtefacto={(grupo) => setNuevoArtefacto(");
+    expect(panel).toContain("onNuevoArtefacto={() => setNuevoArtefacto({ tipo: null })}");
+  });
+
+  it("un solo «+ Nuevo artefacto», con todos los tipos: la clase informa qué ve el cliente, no esconde tipos (Elías, 6 nov)", () => {
+    const leer = (f: string) => fs.readFileSync(path.join(process.cwd(), f), "utf8");
+    // El modal lista todo, agrupado por clase; ya no recibe una clase que filtre.
+    const modal = leer("components/artefactos/NuevoArtefactoModal.tsx");
+    expect(modal).toContain("tiposCreablesPorClase()");
+    expect(modal).not.toMatch(/\bclase\?:/);
+    // El riel no vuelve a pintar un + por grupo.
+    expect(leer("components/clients/RielDelCliente.tsx")).not.toContain("Nuevo artefacto en ");
   });
 
   it("una copia de exploración sale debajo de la de siempre, y los cuestionarios sin canvas también tienen las suyas", () => {
