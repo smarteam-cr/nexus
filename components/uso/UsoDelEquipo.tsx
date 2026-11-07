@@ -33,7 +33,7 @@ export default function UsoDelEquipo({ datos }: { datos: UsoPorPeriodo }) {
           {datos.faltaLaTabla
             ? "Los días todavía no se miden: falta la tabla del registro de uso."
             : empiezaAntes
-              ? `El uso de pantallas se mide desde el ${fechaCorta(datos.medidoDesde!)}.`
+              ? `Las pantallas se miden desde el ${fechaCorta(datos.medidoDesde!)}; la IA por persona, desde agosto.`
               : "Días: días distintos en que entró. IA: llamadas que disparó."}
         </span>
       </div>
