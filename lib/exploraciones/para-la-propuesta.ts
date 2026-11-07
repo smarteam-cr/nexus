@@ -224,7 +224,9 @@ export function bloqueParaLaPropuesta(o: {
         // Un caso del catálogo de Smarteam suma lo que el cliente obtiene (nunca su nota interna).
         const delCatalogo = casoDeLaPreventa(id);
         const obtiene = delCatalogo ? ` Lo que obtiene: ${delCatalogo.obtienes.join(" ")}` : "";
-        return `- ${k.titulo}${nombreDeArea(k.areaId) ? ` (${nombreDeArea(k.areaId)})` : ""}${k.razon ? `: ${k.razon}` : ""}${k.descripcion ? ` Qué es: ${k.descripcion}` : ""}${obtiene}`;
+        // El nombre del catálogo, no el guardado: una preventa de antes del 2026-11-06 guardó el nombre viejo, y la IA
+        // recibiría dos nombres para el mismo caso (la sección «Casos de uso» ya muestra el de hoy).
+        return `- ${delCatalogo?.titulo ?? k.titulo}${nombreDeArea(k.areaId) ? ` (${nombreDeArea(k.areaId)})` : ""}${k.razon ? `: ${k.razon}` : ""}${k.descripcion ? ` Qué es: ${k.descripcion}` : ""}${obtiene}`;
       }),
     );
   }

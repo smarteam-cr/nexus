@@ -2,12 +2,17 @@
  * El catálogo de casos de uso contra la escala publicada: cada criterio citado existe, cae en una dimensión que el
  * caso dice mover y en un nivel entre el de partida y el de llegada; cada caso habla de resultados y en tuteo.
  */
-import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import { describe, expect, it, vi } from "vitest";
 import { leerArchivoDeLaEscala } from "@/lib/escala/documento/archivos";
 import { parsearEscala, todasLasDimensiones, todosLosCriterios } from "@/lib/escala/documento/parsear";
 import { LETRAS } from "@/lib/escala/documento/tipos";
 import { voseoEnProsa } from "@/lib/ui/voseo-formas";
-import { CATALOGO_DE_CASOS, SERVICIOS, type CasoDelCatalogo } from "./catalogo";
+import { avisoDelCaso, todosLosAvisos } from "./avisos-server";
+import { CATALOGO_DE_CASOS, NOMBRES_ANTERIORES, SERVICIOS, tituloVigente, type CasoDelCatalogo } from "./catalogo";
+
+vi.mock("server-only", () => ({}));
 
 const escala = parsearEscala(leerArchivoDeLaEscala("escala"));
 const criterios = new Map(todosLosCriterios(escala).map((c) => [c.id, c]));
@@ -18,7 +23,7 @@ const orden = (l: string) => LETRAS.indexOf(l as (typeof LETRAS)[number]);
 const VERBOS_DE_TRABAJO = /^(implementa|implementamos|configura|configuramos|diseña|diseñamos|instala|instalamos|construye|construimos|activa|activamos|documenta|documentamos|establece|creamos|crea|montamos|monta)\b/i;
 
 function textos(c: CasoDelCatalogo): string[] {
-  return [c.titulo, c.promesa, c.descripcion, ...c.sintomas, ...c.obtienes, c.cuandoConviene ?? "", c.aviso ?? ""];
+  return [c.titulo, c.promesa, c.descripcion, ...c.sintomas, ...c.obtienes, c.cuandoConviene ?? "", avisoDelCaso(c.id) ?? ""];
 }
 
 describe("el catálogo de casos de uso", () => {
@@ -79,7 +84,7 @@ describe("el catálogo de casos de uso", () => {
   it("los casos que nombra uno existen, y ninguno se nombra a sí mismo", () => {
     const ids = new Set(CATALOGO_DE_CASOS.map((c) => c.id));
     for (const c of CATALOGO_DE_CASOS) {
-      for (const r of [...(c.requiere ?? []), ...(c.dentroDe ? [c.dentroDe] : [])]) {
+      for (const r of [...(c.requiere ?? []), ...(c.requiereUnoDe ?? []), ...(c.dentroDe ? [c.dentroDe] : [])]) {
         expect(ids.has(r), `${c.id} nombra a ${r}`).toBe(true);
         expect(r).not.toBe(c.id);
       }
@@ -109,5 +114,34 @@ describe("el catálogo de casos de uso", () => {
       expect(c.titulo.length, c.id).toBeLessThanOrEqual(90);
       expect(c.promesa.length, c.id).toBeLessThanOrEqual(160);
     }
+  });
+});
+
+describe("lo interno del catálogo", () => {
+  it("cada nombre anterior lleva al nombre de hoy de su caso, y un título que no es de ninguno vuelve igual", () => {
+    for (const [id, viejos] of Object.entries(NOMBRES_ANTERIORES)) {
+      const caso = CATALOGO_DE_CASOS.find((c) => c.id === id);
+      expect(caso, id).toBeDefined();
+      for (const v of viejos) {
+        expect(v).not.toBe(caso!.titulo);
+        expect(tituloVigente(v)).toBe(caso!.titulo);
+        expect(tituloVigente(` ${v.toUpperCase()} `)).toBe(caso!.titulo);
+      }
+    }
+    expect(tituloVigente("Un caso libre de la preventa")).toBe("Un caso libre de la preventa");
+    expect(tituloVigente(CATALOGO_DE_CASOS[0].titulo)).toBe(CATALOGO_DE_CASOS[0].titulo);
+  });
+
+  it("ningún aviso trae horas: las horas viven en actividades y se calculan", () => {
+    for (const c of CATALOGO_DE_CASOS) expect(avisoDelCaso(c.id) ?? "", c.id).not.toMatch(/\d+(,\d+)? h\b/);
+  });
+
+  it("la nota para quien vende no vive en el catálogo, que llega al navegador y a la propuesta pública", () => {
+    const catalogo = readFileSync(join(process.cwd(), "lib/casos-de-uso/catalogo.ts"), "utf8");
+    expect(catalogo).not.toMatch(/^\s+aviso\??:/m);
+    for (const c of CATALOGO_DE_CASOS) expect(Object.keys(c), c.id).not.toContain("aviso");
+    const avisos = readFileSync(join(process.cwd(), "lib/casos-de-uso/avisos-server.ts"), "utf8");
+    expect(avisos).toContain('import "server-only";');
+    for (const id of Object.keys(todosLosAvisos())) expect(CATALOGO_DE_CASOS.some((c) => c.id === id), id).toBe(true);
   });
 });

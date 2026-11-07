@@ -3,16 +3,24 @@
  *
  * Lo que dice el cliente cuando lo necesita, lo que obtiene y los criterios de la escala que cumple al terminar,
  * palabra por palabra de la escala publicada. A la derecha, cuándo conviene, qué hace falta antes, los servicios y
- * dónde se usa. Las licencias y el precio llegan en la fase 2. La nota interna del caso (`aviso`) no se muestra.
+ * dónde se usa. Las licencias llegan en la fase 2.
+ *
+ * Desde el MVP de la biblioteca (2026-11-04), también cómo se arma (components/casos-de-uso/ComoSeArma.tsx): lo que
+ * se entrega, las actividades con sus horas y el precio de referencia, lo que necesitamos del cliente, lo que no
+ * incluye, la guía para quien vende (con la nota interna, `aviso`) y lo que queda por decidir. Todo eso es interno:
+ * esta pantalla la ve solo el equipo.
  */
 import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import { AccionesDelCaso } from "@/components/casos-de-uso/AccionesDelCaso";
+import { HorasYPrecio, LasActividades, LoQueNecesitamosDeTi, LoQueNoIncluye, LoQueSeEntrega, ParaQuienVende, PorDecidir } from "@/components/casos-de-uso/ComoSeArma";
 import { ChipDeHerramienta, PuntoDeNivel, Salto } from "@/components/casos-de-uso/piezas";
 import { PageHeader } from "@/components/ui";
 import { ROTULO_DEL_SISTEMA } from "@/components/ui/sistema";
 import { requireInternalUser } from "@/lib/auth/supabase";
 import { can } from "@/lib/auth/permissions/engine";
+import { actividadesDelCaso, bibliotecaDeActividades } from "@/lib/casos-de-uso/actividades-server";
+import { avisoDelCaso } from "@/lib/casos-de-uso/avisos-server";
 import { casoPorId } from "@/lib/casos-de-uso/catalogo";
 import { escalaDelCatalogo } from "@/lib/casos-de-uso/escala-server";
 import {
@@ -58,6 +66,9 @@ export default async function CasoDeUsoPage({ params }: { params: Promise<{ id: 
   const dimension = (d: string) => (escala ? nombreDeLaDimension(escala, d) : d);
   const saltos = saltosPorArea(caso);
   const requeridos = (caso.requiere ?? []).map((r) => casoPorId(r)).filter((c): c is NonNullable<typeof c> => !!c);
+  const unoDe = (caso.requiereUnoDe ?? []).map((r) => casoPorId(r)).filter((c): c is NonNullable<typeof c> => !!c);
+  const actividades = actividadesDelCaso(caso.id);
+  const tituloDe = (id: string) => casoPorId(id)?.titulo;
   const dentroDe = caso.dentroDe ? casoPorId(caso.dentroDe) : undefined;
   const primeraDimension = caso.mueve[0]?.dimension;
 
@@ -118,6 +129,9 @@ export default async function CasoDeUsoPage({ params }: { params: Promise<{ id: 
               </ul>
             </section>
 
+            {actividades && <LoQueSeEntrega actividades={actividades} />}
+            {actividades && <LasActividades actividades={actividades} />}
+
             <section className="flex flex-col gap-4 rounded-xl border border-line bg-surface p-5">
               <div className="flex flex-wrap items-baseline justify-between gap-2">
                 <div className="flex flex-col gap-0.5">
@@ -168,6 +182,8 @@ export default async function CasoDeUsoPage({ params }: { params: Promise<{ id: 
                 </div>
               ))}
             </section>
+
+            {actividades && <PorDecidir actividades={actividades} />}
           </div>
 
           <aside className="flex max-w-[340px] flex-[1_1_300px] flex-col gap-3">
@@ -178,6 +194,10 @@ export default async function CasoDeUsoPage({ params }: { params: Promise<{ id: 
               </section>
             )}
 
+            {actividades && <ParaQuienVende actividades={actividades} aviso={avisoDelCaso(caso.id)} />}
+
+            {actividades && <HorasYPrecio actividades={actividades} />}
+
             {requeridos.length > 0 && (
               <section className={LATERAL}>
                 <span className={ROTULO_DEL_SISTEMA}>Antes hace falta</span>
@@ -186,6 +206,18 @@ export default async function CasoDeUsoPage({ params }: { params: Promise<{ id: 
                 ))}
               </section>
             )}
+
+            {unoDe.length > 0 && (
+              <section className={LATERAL}>
+                <span className={ROTULO_DEL_SISTEMA}>Antes hace falta uno de</span>
+                {unoDe.map((r) => (
+                  <TarjetaDeOtroCaso key={r.id} caso={r} area={area} nombre={nombre} />
+                ))}
+              </section>
+            )}
+
+            {actividades && <LoQueNecesitamosDeTi actividades={actividades} biblioteca={bibliotecaDeActividades()} />}
+            {actividades && <LoQueNoIncluye actividades={actividades} tituloDe={tituloDe} />}
 
             {dentroDe && (
               <section className={LATERAL}>
@@ -205,10 +237,12 @@ export default async function CasoDeUsoPage({ params }: { params: Promise<{ id: 
               </div>
             </section>
 
-            <section className="flex flex-col gap-1 rounded-xl border border-dashed border-line bg-surface-muted p-4">
-              <span className={ROTULO_DEL_SISTEMA}>Licencias y precio</span>
-              <span className="text-[13px] text-fg-muted">Falta: llegan en la fase 2. Mientras tanto, los pone Ventas en la propuesta.</span>
-            </section>
+            {!actividades && (
+              <section className="flex flex-col gap-1 rounded-xl border border-dashed border-line bg-surface-muted p-4">
+                <span className={ROTULO_DEL_SISTEMA}>Licencias y precio</span>
+                <span className="text-[13px] text-fg-muted">Falta: llegan en la fase 2. Mientras tanto, los pone Ventas en la propuesta.</span>
+              </section>
+            )}
 
             <section className={LATERAL}>
               <span className={ROTULO_DEL_SISTEMA}>Dónde se usa</span>
@@ -216,7 +250,7 @@ export default async function CasoDeUsoPage({ params }: { params: Promise<{ id: 
             </section>
 
             <p className="px-1 text-xs text-fg-muted">
-              Catálogo v1 · se edita en el repositorio. Si algo no calza con un cliente, usa «Sugerir un cambio».
+              Catálogo · borrador del MVP del 4 de noviembre. Se edita en el repositorio; si algo no calza con un cliente, usa «Sugerir un cambio».
             </p>
           </aside>
         </div>

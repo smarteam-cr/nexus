@@ -12,7 +12,7 @@
  */
 import type { Letra } from "@/lib/escala/documento/tipos";
 import { caminoDeCrecimiento, type AreaParaElCamino } from "@/lib/casos-de-uso/camino";
-import { CATALOGO_DE_CASOS, type AreaDeLaEscala, type CasoDelCatalogo } from "@/lib/casos-de-uso/catalogo";
+import { CATALOGO_DE_CASOS, tituloVigente, type AreaDeLaEscala, type CasoDelCatalogo } from "@/lib/casos-de-uso/catalogo";
 import type { Hub } from "@/lib/cs/licencias";
 
 /** Un caso de uso que la empresa ya tiene (`CasoDeUso`): solo el título y el estado. */
@@ -69,9 +69,9 @@ export function loQueLeFaltaComprar(o: {
   max?: number;
 }): LoQueLeFaltaComprar {
   const max = o.max ?? 5;
-  const tiene = new Set(o.casos.filter((c) => ESTADOS_QUE_YA_TIENE.has(c.estado)).map((c) => normal(c.titulo)));
-  const descartados = new Set(o.casos.filter((c) => ESTADOS_DESCARTADOS.has(c.estado)).map((c) => normal(c.titulo)));
-  const sugeridos = new Set(o.casos.filter((c) => c.estado === "sugerido").map((c) => normal(c.titulo)));
+  const tiene = new Set(o.casos.filter((c) => ESTADOS_QUE_YA_TIENE.has(c.estado)).map((c) => normal(tituloVigente(c.titulo))));
+  const descartados = new Set(o.casos.filter((c) => ESTADOS_DESCARTADOS.has(c.estado)).map((c) => normal(tituloVigente(c.titulo))));
+  const sugeridos = new Set(o.casos.filter((c) => c.estado === "sugerido").map((c) => normal(tituloVigente(c.titulo))));
   const excluir = new Set(CATALOGO_DE_CASOS.filter((c) => tiene.has(normal(c.titulo)) || descartados.has(normal(c.titulo))).map((c) => c.id));
   const yaTiene = tiene.size;
 

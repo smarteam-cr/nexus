@@ -2,8 +2,11 @@
  * Lo que calculan las pantallas del catálogo: el salto de nivel por área, los filtros y quién sube cada dimensión.
  * También lo que llega a la preventa y a la bandeja de Feedback.
  */
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import { avisoDelCaso } from "./avisos-server";
 import { CATALOGO_DE_CASOS, casoPorId, type CasoDelCatalogo } from "./catalogo";
+
+vi.mock("server-only", () => ({}));
 import { casoDeLaPreventa, casosParaLasAreas, catalogoParaElAgente, dimensionesEnElArea, idEnLaPreventa } from "./en-la-preventa";
 import { cuerpoDeLaPropuesta, cuerpoDeLaSugerencia, propuestaIncompleta } from "./feedback";
 import { casosQueSuben, criteriosPorDimension, pasaLosFiltros, saltosPorArea, SIN_FILTROS, usaLaHerramienta } from "./vista";
@@ -13,9 +16,11 @@ const caso = (id: string): CasoDelCatalogo => casoPorId(id)!;
 describe("el salto de nivel de cada área", () => {
   it("va del nivel más bajo de partida al más alto de llegada, por área", () => {
     // Desde la 9.0, prospección con IA lleva Priorización de Leads hasta Eficiente: su criterio de Óptimo bajó a Eficiente.
-    expect(saltosPorArea(caso("prospeccion-ia"))).toEqual([{ area: "1", desde: "F", hasta: "E", dimensiones: 3 }]);
-    expect(saltosPorArea(caso("cobranza"))).toEqual([
-      { area: "1", desde: "F", hasta: "E", dimensiones: 1 },
+    // Con el MVP de la biblioteca (2026-11-04) el puntaje pasó a «Alinea Marketing y Ventas»: quedan dos dimensiones.
+    expect(saltosPorArea(caso("prospeccion-ia"))).toEqual([{ area: "1", desde: "F", hasta: "E", dimensiones: 2 }]);
+    // Integra tus sistemas (ver a cada cliente completo): Ventas parte de Inicial en una dimensión y de Funcional en otra; manda la más baja.
+    expect(saltosPorArea(caso("integracion-erp"))).toEqual([
+      { area: "1", desde: "I", hasta: "E", dimensiones: 2 },
       { area: "3", desde: "I", hasta: "E", dimensiones: 2 },
     ]);
   });
@@ -86,15 +91,16 @@ describe("en la preventa", () => {
 
   it("los casos de las áreas en juego, y las dimensiones del área elegida", () => {
     expect(casosParaLasAreas(["2"]).every((c) => c.areas.includes("2"))).toBe(true);
-    expect(dimensionesEnElArea(caso("cobranza"), "3")).toEqual(["3.3", "3.7"]);
-    expect(dimensionesEnElArea(caso("cobranza"), null)).toHaveLength(3);
+    expect(dimensionesEnElArea(caso("integracion-erp"), "3")).toEqual(["3.3", "3.2"]);
+    expect(dimensionesEnElArea(caso("integracion-erp"), null)).toHaveLength(4);
   });
 
   it("el agente lee el catálogo sin la nota interna ni los servicios", () => {
     const texto = catalogoParaElAgente(CATALOGO_DE_CASOS);
     for (const c of CATALOGO_DE_CASOS) {
       expect(texto).toContain(`[${c.id}] ${c.titulo}`);
-      if (c.aviso) expect(texto).not.toContain(c.aviso);
+      const aviso = avisoDelCaso(c.id);
+      if (aviso) expect(texto).not.toContain(aviso);
     }
     expect(texto).not.toContain("Implementación de CRM");
   });

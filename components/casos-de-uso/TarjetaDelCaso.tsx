@@ -21,7 +21,18 @@ const CHIP_DEL_TIPO: Record<TipoDeCaso, string> = {
 /** Cuántas dimensiones se nombran en la tarjeta antes de decir «+N». */
 const DIMENSIONES_EN_LA_TARJETA = 3;
 
-export function TarjetaDelCaso({ caso, escala, conTipo = true }: { caso: CasoDelCatalogo; escala: EscalaDelCatalogo | null; conTipo?: boolean }) {
+export function TarjetaDelCaso({
+  caso,
+  escala,
+  conTipo = true,
+  horas,
+}: {
+  caso: CasoDelCatalogo;
+  escala: EscalaDelCatalogo | null;
+  conTipo?: boolean;
+  /** Las horas por defecto del caso, ya escritas («28,5 h por defecto»): internas, solo para el equipo. */
+  horas?: string;
+}) {
   const dimensiones = [...new Set(caso.mueve.map((m) => (escala ? nombreDeLaDimension(escala, m.dimension) : m.dimension)))];
   const visibles = dimensiones.slice(0, DIMENSIONES_EN_LA_TARJETA);
   const resto = dimensiones.length - visibles.length;
@@ -51,8 +62,11 @@ export function TarjetaDelCaso({ caso, escala, conTipo = true }: { caso: CasoDel
               <ChipDeHerramienta key={h} herramienta={h} />
             ))}
         </div>
-        <span className="text-[15px] font-medium text-brand group-hover:text-brand-light">
-          Ver detalles <span aria-hidden="true">→</span>
+        <span className="flex items-baseline gap-3">
+          {horas && <span className="text-xs tabular-nums text-fg-muted">{horas}</span>}
+          <span className="text-[15px] font-medium text-brand group-hover:text-brand-light">
+            Ver detalles <span aria-hidden="true">→</span>
+          </span>
         </span>
       </div>
     </Link>

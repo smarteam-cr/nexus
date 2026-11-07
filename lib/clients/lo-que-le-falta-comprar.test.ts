@@ -5,7 +5,7 @@
 import { describe, expect, it } from "vitest";
 import type { Letra } from "@/lib/escala/documento/tipos";
 import type { AreaParaElCamino } from "@/lib/casos-de-uso/camino";
-import { casoPorId } from "@/lib/casos-de-uso/catalogo";
+import { casoPorId, NOMBRES_ANTERIORES } from "@/lib/casos-de-uso/catalogo";
 import { loQueLeFaltaComprar } from "./lo-que-le-falta-comprar";
 
 const OCHO = [1, 2, 3, 4, 5, 6, 7, 8];
@@ -40,6 +40,24 @@ describe("con la escala", () => {
     expect(descartado.casos.some((c) => c.casoId === primero.casoId)).toBe(false);
     const sugerido = loQueLeFaltaComprar({ escala: [area("1", "Ventas", "I", ["1.1", "1.2"])], casos: [{ titulo: primero.titulo, estado: "sugerido" }], hubsQueLeFaltan: [] });
     expect(sugerido.siguiente).toMatchObject({ casoId: primero.casoId, yaSugerido: true });
+  });
+
+  it("un caso guardado con su nombre de antes del 2026-11-06 es el mismo caso: no se vuelve a ofrecer", () => {
+    const todas = (id: string) => OCHO.map((n) => `${id}.${n}`);
+    const escala = (l: Letra) => [area("1", "Ventas", l, todas("1")), area("2", "Marketing", l, todas("2")), area("3", "Servicio", l, todas("3"))];
+    const ids = new Set<string>();
+    for (const nivel of ["D", "I", "F", "E"] as const) {
+      const r = loQueLeFaltaComprar({ escala: escala(nivel), casos: [], hubsQueLeFaltan: [], max: 20 });
+      for (const c of r.casos) if (NOMBRES_ANTERIORES[c.casoId]) ids.add(c.casoId);
+    }
+    expect(ids.size).toBeGreaterThan(0);
+    for (const id of ids) {
+      const viejo = NOMBRES_ANTERIORES[id][0];
+      for (const nivel of ["D", "I", "F", "E"] as const) {
+        const r = loQueLeFaltaComprar({ escala: escala(nivel), casos: [{ titulo: viejo, estado: "en_ciclo" }], hubsQueLeFaltan: [], max: 20 });
+        expect(r.casos.some((c) => c.casoId === id), `${id} · ${nivel}`).toBe(false);
+      }
+    }
   });
 
   it("nunca sugiere un complementario (la escala no lo mide)", () => {

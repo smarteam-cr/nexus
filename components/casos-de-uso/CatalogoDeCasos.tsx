@@ -10,9 +10,10 @@
  * página. El catálogo es de solo lectura: se edita en el repo (lib/casos-de-uso/catalogo.ts) y lo que se quiera cambiar
  * se sugiere por Feedback.
  */
+import Link from "next/link";
 import { useMemo, useState } from "react";
 import { useFeedback } from "@/components/feedback/FeedbackProvider";
-import { Button, PageHeader, Segmentado, Select, Tabs } from "@/components/ui";
+import { Button, buttonVariants, PageHeader, Segmentado, Select, Tabs } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import { CATALOGO_DE_CASOS, SERVICIOS, type AreaDeLaEscala, type Servicio, type TipoDeCaso } from "@/lib/casos-de-uso/catalogo";
 import {
@@ -60,7 +61,10 @@ export default function CatalogoDeCasos({
   vistaInicial,
   tipoInicial = "todos",
   dimensionInicial,
+  horasPorCaso = {},
 }: {
+  /** Las horas por defecto de cada caso, ya escritas (internas, MVP de la biblioteca de actividades). */
+  horasPorCaso?: Record<string, string>;
   /** La escala publicada; sin ella, los nombres de las dimensiones se muestran por su identificador. */
   escala: EscalaDelCatalogo | null;
   vistaInicial: VistaDelCatalogo;
@@ -99,6 +103,9 @@ export default function CatalogoDeCasos({
                 { clave: "escala", etiqueta: "En la escala" },
               ]}
             />
+            <Link href="/sales/use-cases/activities" className={cn(buttonVariants({ variant: "secondary" }), "text-[13px]")}>
+              Biblioteca de actividades
+            </Link>
             {proponer && (
               <Button variant="primary" className="text-[13px] font-semibold" onClick={proponer}>
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
@@ -112,7 +119,7 @@ export default function CatalogoDeCasos({
       />
 
       {vista === "tipo" ? (
-        <Lista niveles={niveles} escala={escala} tipoInicial={tipoInicial} onProponer={proponer} />
+        <Lista niveles={niveles} escala={escala} tipoInicial={tipoInicial} onProponer={proponer} horasPorCaso={horasPorCaso} />
       ) : (
         <EnLaEscala escala={escala} niveles={niveles} dimensionInicial={dimensionInicial} onProponer={proponer} />
       )}
@@ -169,7 +176,9 @@ function Lista({
   escala,
   tipoInicial,
   onProponer,
+  horasPorCaso,
 }: {
+  horasPorCaso: Record<string, string>;
   niveles: EscalaDelCatalogo["niveles"];
   escala: EscalaDelCatalogo | null;
   tipoInicial: PestanaDelCatalogo;
@@ -312,7 +321,7 @@ function Lista({
       ) : (
         <div className="grid grid-cols-[repeat(auto-fill,minmax(420px,1fr))] gap-5 max-sm:grid-cols-1">
           {visibles.map((c) => (
-            <TarjetaDelCaso key={c.id} caso={c} escala={escala} conTipo={pestana === "todos"} />
+            <TarjetaDelCaso key={c.id} caso={c} escala={escala} conTipo={pestana === "todos"} horas={horasPorCaso[c.id]} />
           ))}
         </div>
       )}

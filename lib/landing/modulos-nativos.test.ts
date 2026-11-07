@@ -3,8 +3,9 @@
  *
  * Correr: `npx vitest run lib/landing/modulos-nativos.test.ts --project unit`.
  */
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { coerceToSchema } from "@/lib/ai/section-schema";
+import { avisoDelCaso } from "@/lib/casos-de-uso/avisos-server";
 import { CATALOGO_DE_CASOS } from "@/lib/casos-de-uso/catalogo";
 import { CATALOGO_DE_SECCIONES, tipoCreable } from "./catalogo-de-secciones";
 import {
@@ -27,6 +28,8 @@ import {
   valorDeLicencia,
   valoresDeFila,
 } from "./modulos-nativos";
+
+vi.mock("server-only", () => ({}));
 
 describe("los tres módulos se pueden crear", () => {
   it("están en el catálogo de secciones creables, con su renderer", () => {
@@ -87,7 +90,8 @@ describe("casos de uso por proyecto", () => {
     for (const c of CATALOGO_DE_CASOS) {
       const caso = casoDesdeElCatalogo(c);
       const todo = JSON.stringify(caso);
-      if (c.aviso) expect(todo, `${c.id} copió su aviso interno`).not.toContain(c.aviso);
+      const aviso = avisoDelCaso(c.id);
+      if (aviso) expect(todo, `${c.id} copió su aviso interno`).not.toContain(aviso);
       for (const s of c.sintomas) expect(todo).not.toContain(s);
       expect(caso.titulo).toBe(c.titulo);
       expect(caso.resultado).toBe(c.promesa);

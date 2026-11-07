@@ -129,6 +129,7 @@ export const PAGE_SHELL_COVERAGE: Record<string, ShellDecl> = {
   sales: { custom: "delega el shell entero a SalesClient (candidata a SHELL_DEFAULT)" },
   "sales/use-cases": { shell: "SHELL_DEFAULT" },
   "sales/use-cases/[id]": { shell: "SHELL_DEFAULT" },
+  "sales/use-cases/activities": { shell: "SHELL_DEFAULT" },
   sessions: { custom: "layout propio de dos paneles (aside + detalle)" },
   "sessions/categories": { custom: "hereda el layout de sesiones" },
   settings: { shell: "SHELL_DEFAULT" },

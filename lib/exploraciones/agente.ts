@@ -21,7 +21,8 @@ import "server-only";
 import type Anthropic from "@anthropic-ai/sdk";
 import type { Prisma } from "@prisma/client";
 import { getAnthropic } from "@/lib/anthropic";
-import { casosParaLasAreas } from "@/lib/casos-de-uso/en-la-preventa";
+import { tituloVigente } from "@/lib/casos-de-uso/catalogo";
+import { casoDeLaPreventa, casosParaLasAreas } from "@/lib/casos-de-uso/en-la-preventa";
 import { humanizeAgentError } from "@/lib/agents/anthropic-error";
 import { estaColgada, MOTIVO_COLGADA } from "@/lib/agents/run-colgada";
 import { conContextoDeIA } from "@/lib/ai/contexto-de-corrida";
@@ -745,11 +746,13 @@ async function proponerCasos(
       .filter((a) => ex.estado.areas.includes(a.id))
       .map((a) => ({ id: a.id, nombre: a.nombre, dimensiones: a.dimensiones.filter((d) => d.aplica).map((d) => ({ id: d.id, nombre: d.nombre })) })),
     exploracion: exploracionParaLosCasos(ex.estado, ex.escala, pendientes),
+    // Con el nombre de hoy: lo guardado antes del 2026-11-06 puede traer el nombre viejo de un caso renombrado, y el
+    // agente lo vería libre y lo volvería a proponer (comparar es por nombre).
     yaEstan: [
-      ...Object.values(ex.estado.contenido.casosDeUso).map((c) => c.titulo),
-      ...pendientes.filter((it) => it.destino.tipo === "casoDeUso").map((it) => (it.valor as { titulo: string }).titulo),
+      ...Object.entries(ex.estado.contenido.casosDeUso).map(([id, c]) => casoDeLaPreventa(id)?.titulo ?? tituloVigente(c.titulo)),
+      ...pendientes.filter((it) => it.destino.tipo === "casoDeUso").map((it) => tituloVigente((it.valor as { titulo: string }).titulo)),
     ],
-    descartados: ex.estado.contenido.casosDescartados,
+    descartados: ex.estado.contenido.casosDescartados.map(tituloVigente),
     instrucciones: bloqueDeInstrucciones(ex.estado.contenido.notas, "casos"),
     catalogo: casosParaLasAreas(ex.estado.areas),
   };

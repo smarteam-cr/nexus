@@ -9,6 +9,7 @@ import { redirect } from "next/navigation";
 import CatalogoDeCasos from "@/components/casos-de-uso/CatalogoDeCasos";
 import { requireInternalUser } from "@/lib/auth/supabase";
 import { can } from "@/lib/auth/permissions/engine";
+import { horasDeCadaCaso } from "@/lib/casos-de-uso/actividades-server";
 import { escalaDelCatalogo } from "@/lib/casos-de-uso/escala-server";
 import { TIPOS_DE_CASO } from "@/lib/casos-de-uso/vista";
 import { SHELL_DEFAULT } from "@/lib/ui/page-shell";
@@ -24,7 +25,7 @@ export default async function CasosDeUsoPage({ searchParams }: { searchParams: P
   const [{ vista, tipo, dimension }, leida] = await Promise.all([searchParams, escalaDelCatalogo()]);
   return (
     <div className={SHELL_DEFAULT}>
-      <CatalogoDeCasos escala={leida?.escala ?? null} vistaInicial={vista === "escala" ? "escala" : "tipo"} tipoInicial={TIPOS_DE_CASO.find((t) => t.clave === tipo)?.clave ?? "todos"} dimensionInicial={dimension ?? null} />
+      <CatalogoDeCasos escala={leida?.escala ?? null} vistaInicial={vista === "escala" ? "escala" : "tipo"} tipoInicial={TIPOS_DE_CASO.find((t) => t.clave === tipo)?.clave ?? "todos"} dimensionInicial={dimension ?? null} horasPorCaso={horasDeCadaCaso()} />
     </div>
   );
 }
