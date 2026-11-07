@@ -91,6 +91,8 @@ vi.mock("@/lib/db/prisma", () => ({
   prisma: {
     client: {
       findUnique: async () => ({ id: "c1", name: "SmartAgro", company: null, hubspotCompanyId: "58804639346", ignoredHubspotServiceIds: [] }),
+      // Las fichas que comparten el dominio de esta (el TEC: AE y TAE). SmartAgro no tiene ninguna.
+      findMany: async () => [],
     },
     hubspotAccount: { findFirst: async () => null },
     teamMember: { findMany: async () => [{ email: "Tecnico@smarteam.com", roleEnum: "DEV" }, { email: "cse@smarteam.com", roleEnum: "CSE" }] },

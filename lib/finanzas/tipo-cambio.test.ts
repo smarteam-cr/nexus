@@ -338,9 +338,14 @@ describe("el candado de «Actualizar» (C6)", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
     vi.unstubAllEnvs();
+    vi.useRealTimers();
   });
 
   it("dos pedidos a la vez hacen UNA tanda a las fuentes y reciben el mismo resultado; terminada, se suelta", async () => {
+    // El día fijo: con el reloj real, el hueco desde el 4 de octubre crece cada día y la tanda pide más tramos del
+    // histórico (falló desde noviembre de 2026 sin que nada cambiara en el código).
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-10-06T12:00:00-06:00"));
     vi.stubEnv("BCCR_TOKEN", "");
     db.tipoCambioDia.findFirst.mockImplementation(async (q: { orderBy: { fecha: string } }) => ({
       fecha: q.orderBy.fecha === "asc" ? "2023-01-01" : "2026-10-04",
