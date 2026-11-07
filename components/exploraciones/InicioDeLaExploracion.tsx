@@ -312,6 +312,9 @@ function LasSesiones() {
         }
         accionExcluida="Agregar como sesión"
         sinTope
+        // Un clic en la fila entra a la sesión, igual que su ítem en el menú de la izquierda; la casilla solo elige.
+        alAbrir={(fila) => sesion.elegir(fila.id)}
+        etiquetaAbrir={(titulo) => `Entrar a la sesión «${titulo}»`}
       />
       {proximaFuera && <ProximaFueraDeLaLista p={proximaFuera} />}
       {pista && <p className="text-xs leading-[18px] text-fg-secondary">La próxima sesión: {pista}.</p>}

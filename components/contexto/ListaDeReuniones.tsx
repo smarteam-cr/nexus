@@ -10,7 +10,8 @@
  *
  * Arriba, la fila «Elegir todas» (a medias con una raya); con algo elegido se pinta de azul y ofrece
  * «Cancelar» y «Quitar las N». Debajo, la franja de deshacer (Ctrl+Z), la tarjeta con las filas —toda
- * la fila es la etiqueta de su casilla; la X de cada una aparece al pasar el mouse o con el teclado—,
+ * la fila es la etiqueta de su casilla, salvo con `alAbrir`, donde la fila abre y solo la casilla elige;
+ * la X de cada una aparece al pasar el mouse o con el teclado—,
  * el recuadro vacío y las excluidas, plegadas. El enlace «+ Buscar una reunión de Meet» y la cáscara
  * de la columna NO son de acá: son de todas las columnas (EnlaceDeContexto, ContextColumn).
  *
@@ -21,7 +22,7 @@
  * Los textos que dependen de la cuenta y los estados como «punto + texto» salen de
  * lib/contexto/lista-de-reuniones.ts.
  */
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type MouseEvent, type ReactNode } from "react";
 import { cn } from "@/lib/cn";
 import {
   barraDeEleccion,
@@ -157,6 +158,8 @@ export default function ListaDeReuniones({
   explicacionExcluidas,
   accionExcluida = "Volver a incluir",
   sinTope = false,
+  alAbrir,
+  etiquetaAbrir = (titulo) => `Abrir «${titulo}»`,
 }: {
   reuniones: ReunionDeLaLista[];
   /** Las que se sacaron a mano y siguen a la vista (los proyectos): van plegadas, con «Volver a incluir». */
@@ -196,6 +199,13 @@ export default function ListaDeReuniones({
   accionExcluida?: string;
   /** Sin el alto máximo: la lista entera a la vista (la exploración tiene hasta 20 sesiones). */
   sinTope?: boolean;
+  /**
+   * Un clic en la fila (o Enter con el foco en ella) la abre; la casilla queda solo para elegir varias y va
+   * centrada con la fila (la exploración, 2026-11-07). Sin esto, toda la fila es la etiqueta de su casilla.
+   */
+  alAbrir?: (r: ReunionDeLaLista) => void;
+  /** El nombre accesible de la fila que abre. */
+  etiquetaAbrir?: (titulo: string) => string;
 }) {
   const quitables = puedeEditar ? reuniones.filter((r) => r.quitable !== false).map((r) => r.id) : [];
   const e = useEleccionDeReuniones({ ids: quitables, escribir, restaurar });
@@ -318,17 +328,50 @@ export default function ListaDeReuniones({
               </span>
             );
             const delante = antes?.(r);
+            /* Con `alAbrir`, la fila entra y solo la casilla elige: un clic en un control propio (la casilla,
+               un botón de las acciones, la X) no abre; un clic en el resto de la fila, sí. */
+            const abrirDesdeLaFila = alAbrir
+              ? (ev: MouseEvent<HTMLDivElement>) => {
+                  if ((ev.target as HTMLElement).closest("button, a, input, label, select, textarea")) return;
+                  alAbrir(r);
+                }
+              : undefined;
             return (
               <div
                 key={r.id}
                 title={r.title}
+                onClick={abrirDesdeLaFila}
                 className={cn(
                   "group flex items-center gap-1 pr-1.5",
                   i > 0 && "border-t border-line",
+                  alAbrir && "cursor-pointer",
                   elegida ? "bg-info-surface" : "bg-surface hover:bg-surface-hover",
                 )}
               >
-                {conCasilla ? (
+                {alAbrir ? (
+                  <>
+                    {/* La casilla en su propia celda, centrada con la fila; la celda entera la marca. */}
+                    {conCasilla ? (
+                      <label className="flex flex-shrink-0 cursor-pointer items-center self-stretch py-[9px] pl-2.5 pr-1.5">
+                        <Casilla marcada={elegida} onCambiar={() => e.alternar(r.id)} etiqueta={`Elegir «${r.titulo}»`} />
+                      </label>
+                    ) : (
+                      hayCasillas && <span aria-hidden className="h-4 w-4 flex-shrink-0 ml-2.5 mr-1.5" />
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => alAbrir(r)}
+                      aria-label={etiquetaAbrir(r.titulo)}
+                      className={cn(
+                        "flex min-w-0 flex-1 items-center gap-2.5 rounded-md py-[9px] text-left focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-brand",
+                        !hayCasillas && "pl-2.5",
+                      )}
+                    >
+                      {delante}
+                      {texto}
+                    </button>
+                  </>
+                ) : conCasilla ? (
                   <label className="flex min-w-0 flex-1 cursor-pointer items-start gap-2.5 py-[9px] pl-2.5">
                     <Casilla marcada={elegida} onCambiar={() => e.alternar(r.id)} etiqueta={`Elegir «${r.titulo}»`} className="mt-0.5" />
                     {delante}
