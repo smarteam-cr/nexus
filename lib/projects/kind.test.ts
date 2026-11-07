@@ -444,9 +444,15 @@ describe("LAS ETAPAS — transcritas del portal, no derivadas", () => {
       { id: "1409932561", label: "Desarrollo", enLinea: true, terminal: false },
       { id: "1409932562", label: "Pruebas", enLinea: true, terminal: false },
       { id: "1409932563", label: "Entrega", enLinea: true, terminal: false },
+      { id: "1464700820", label: "Recurrente", enLinea: false, terminal: false },
       { id: "1409932564", label: "Finalizado", enLinea: true, terminal: true },
       { id: "1409897657", label: "Cancelado", enLinea: false, terminal: true },
     ]);
+  });
+
+  it("«Recurrente» de Development (2026-11-07): fuera de línea y NO cierra, como «Continuidad» de CS", () => {
+    expect(decidirCierre({ hubspotPipelineId: DEV, stageId: "1464700820", rawStatus: "on_track" })).toBe("abierto");
+    expect(lineaDeAvance(pipelineByKey("development")).map((s) => s.label)).not.toContain("Recurrente");
   });
 
   it("«Bloqueado» de Development (2026-10-16): fuera de línea, NO cierra y no cuenta en la línea", () => {
