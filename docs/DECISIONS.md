@@ -8981,8 +8981,14 @@ que tener su acción de la semana y su reunión agendada.
 ## Uso de Nexus: las seis pestañas (2026-10-17)
 
 - **Se suman IA por cliente, Procesos de IA y Conclusiones** a Equipo, Para qué se usa y Reuniones sin grabar. Solo
-  dirección. El gasto de IA se muestra por proceso y por empresa, nunca por persona. Una llamada sin empresa toma la de
-  su corrida o la de la reunión que la disparó; si no, queda en «Sin empresa».
+  dirección. El gasto de IA se muestra por proceso y por empresa. Una llamada sin empresa toma la de su corrida o la de
+  la reunión que la disparó; si no, queda en «Sin empresa».
+- **«Equipo» es una lista por persona y por equipo, por período (2026-11-07, pedido de Elías)**: mes, trimestre,
+  semestre o año en curso, con dos barras — los días que entró y las llamadas a la IA que disparó, con su costo y, al
+  pasar el mouse, los 3 agentes que más usó. Desde entonces la IA SÍ se ve por persona, solo en esta pestaña de
+  dirección; el avance que corre solo no cuenta como de nadie. Salieron el mapa por día, las tres cifras de arriba y la
+  matriz «Qué usa cada equipo»: no responden «¿cuánto usa Nexus cada persona y cada equipo?». Las barras son divs con
+  tokens a propósito: el estándar de gráficos de Nexus queda para el rediseño.
 - **El avance del cronograma que corre después de cada reunión cuenta como «corre solo»**, aunque la lectura la haya
   pedido una persona.
 - **Un agente sin familia va a «Otros» con su nombre técnico**; una llamada sin agente, a «No se sabe de qué proceso

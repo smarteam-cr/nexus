@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import { concluir, type EntradaDeConclusiones } from "./conclusiones";
 import { sumaVacia, type IaPorProceso } from "./ia";
 import { agruparLoPropuesto, decisionesPorEquipo } from "./agrupar";
-import { usoPorEquipo } from "./por-equipo";
 import type { ItemParaContar } from "@/lib/lo-propuesto/conteo";
 import type { ClaveDeTipo } from "@/lib/lo-propuesto/tipos";
 
@@ -113,17 +112,5 @@ describe("agrupar lo propuesto", () => {
     ]);
     expect(equipos.map((e) => e.equipo)).toEqual(["Customer Success", "Ventas"]);
     expect(equipos[1].porModulo.tareas).toEqual({ usados: 1, desestimados: 0 });
-  });
-});
-
-describe("usoPorEquipo", () => {
-  it("cuenta cuántas personas de cada equipo abrieron cada sección", () => {
-    const r = usoPorEquipo([
-      { equipo: "Ventas", secciones: [{ clave: "ventas", nombre: "Ventas", aperturas: 3, dias: 2 }] },
-      { equipo: "Ventas", secciones: [] },
-      { equipo: "Marketing", secciones: [{ clave: "marketing", nombre: "Marketing", aperturas: 1, dias: 1 }] },
-    ]);
-    expect(r.equipos[0]).toMatchObject({ equipo: "Ventas", personas: 2, porSeccion: { ventas: { personas: 1, dias: 2 } } });
-    expect(r.secciones.map((s) => s.clave).sort()).toEqual(["marketing", "ventas"]);
   });
 });

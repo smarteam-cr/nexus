@@ -1,11 +1,11 @@
 /**
  * /para-ti/uso — «Uso de Nexus», para dirección (etapa 4a de docs/mi-dia-plan.md, diseño «Uso de Nexus», v4).
  *
- * Seis pestañas: Equipo (las aperturas del latido, por persona, día y equipo), Para qué se usa (lo que propone Nexus y
- * qué pasó con eso, por módulo, tipo y equipo), IA por cliente (cuánta IA se gastó por empresa y qué se usó de lo que
- * propuso ahí), Procesos de IA (por proceso: costo, corridas, fallos y qué se usa), Conclusiones (una lectura con reglas)
- * y Reuniones sin grabar. Solo SUPER_ADMIN: el detalle por persona es dato sensible. En orden alfabético, sin ranking, y
- * el gasto de IA nunca por persona.
+ * Seis pestañas: Equipo (por persona y por equipo, en el mes, trimestre, semestre o año: los días que entró y la IA que
+ * disparó), Para qué se usa (lo que propone Nexus y qué pasó con eso, por módulo, tipo y equipo), IA por cliente (cuánta
+ * IA se gastó por empresa y qué se usó de lo que propuso ahí), Procesos de IA (por proceso: costo, corridas, fallos y qué
+ * se usa), Conclusiones (una lectura con reglas) y Reuniones sin grabar. Solo SUPER_ADMIN: el detalle por persona es
+ * dato sensible. En orden alfabético, sin ranking.
  */
 import { redirect } from "next/navigation";
 import Link from "next/link";
@@ -14,7 +14,15 @@ import { EmptyState, PageHeader } from "@/components/ui";
 import { ChipDeCabecera } from "@/components/cs/piezas";
 import { SHELL_DEFAULT } from "@/lib/ui/page-shell";
 import { cn } from "@/lib/cn";
-import { quienEsQuien, reunionesSinGrabar, usoDelEquipo, DIAS_DE_REUNIONES_SIN_GRABAR, type UsoDelEquipo as DatosDelEquipo } from "@/lib/uso/lectura-server";
+import {
+  quienEsQuien,
+  reunionesSinGrabar,
+  usoDelEquipo,
+  usoPorPeriodo,
+  DIAS_DE_REUNIONES_SIN_GRABAR,
+  type UsoDelEquipo as DatosDelEquipo,
+} from "@/lib/uso/lectura-server";
+import { esPeriodo, type Periodo } from "@/lib/uso/periodo";
 import { usoDeLoPropuesto, type ResumenDeUso } from "@/lib/lo-propuesto/uso-server";
 import { itemsDeLoPropuesto } from "@/lib/lo-propuesto/registro-server";
 import { NOMBRE_DEL_MODULO, type ModuloDeLoPropuesto } from "@/lib/lo-propuesto/tipos";
@@ -43,6 +51,8 @@ export default async function UsoDeNexusPage({ searchParams }: { searchParams: P
   const vista: VistaDeUso = VISTAS_DE_USO.includes(pedida as VistaDeUso) ? (pedida as VistaDeUso) : "equipo";
   const diasPedidos = Number(primero(sp.dias));
   const dias: DiasDeIa = DIAS_POSIBLES.includes(diasPedidos as DiasDeIa) ? (diasPedidos as DiasDeIa) : 30;
+  const periodoPedido = primero(sp.periodo);
+  const periodo: Periodo = esPeriodo(periodoPedido) ? periodoPedido : "mes";
   const ahora = new Date();
 
   const sinGrabar = await reunionesSinGrabar(ahora).catch(() => null);
@@ -56,8 +66,8 @@ export default async function UsoDeNexusPage({ searchParams }: { searchParams: P
         badges={<ChipDeCabecera>Solo dirección</ChipDeCabecera>}
         description="Cómo se usa Nexus, por equipo, por cliente y por proceso. Sirve para entender el uso, no para evaluar a nadie."
       />
-      <PestanasDeUso vista={vista} dias={dias} sinGrabar={sinGrabar?.organizadores.filter((o) => o.nombre).length ?? null} />
-      {vista === "equipo" && <UsoDelEquipo datos={await usoDelEquipo(ahora)} />}
+      <PestanasDeUso vista={vista} dias={dias} periodo={periodo} sinGrabar={sinGrabar?.organizadores.filter((o) => o.nombre).length ?? null} />
+      {vista === "equipo" && <UsoDelEquipo datos={await usoPorPeriodo(periodo, ahora)} />}
       {vista === "propuesto" && <ParaQueSeUsa ahora={ahora} />}
       {vista === "clientes" && <IaPorCliente datos={await datosDeIa(dias, ahora)} />}
       {vista === "procesos" && <ProcesosDeIa datos={await datosDeIa(dias, ahora)} />}

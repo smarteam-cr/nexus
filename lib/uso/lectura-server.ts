@@ -1,8 +1,10 @@
 /**
  * lib/uso/lectura-server.ts — lo que lee la pantalla «Uso de Nexus» (etapa 4a de docs/mi-dia-plan.md). Solo lectura.
  *
- * Dos lecturas:
- *   · `usoDelEquipo`: las aperturas del latido (`UsoDeNexus`) por persona, día y sección, de las últimas 4 semanas.
+ * Tres lecturas:
+ *   · `usoPorPeriodo`: la pestaña «Equipo»: los días que entró cada persona y las llamadas a la IA que disparó, en el
+ *     mes, trimestre, semestre o año en curso (la cuenta, en lib/uso/periodo.ts).
+ *   · `usoDelEquipo`: los días con uso de cada persona en las últimas 4 semanas, para «Conclusiones».
  *   · `reunionesSinGrabar`: las reuniones con clientes y prospectos de los últimos 30 días que no dejaron
  *     transcripción, por quien las organizó, para arreglarlo en Google Workspace.
  *
@@ -17,34 +19,20 @@ import { claveDeEquipo, EQUIPOS } from "@/lib/tareas/equipos";
 import { duenoDeLaSesion } from "@/lib/sessions/project-sources";
 import { esReunionDePuertasAdentro } from "@/lib/sessions/candidatas-internas";
 import { dominiosDeLaCasa } from "@/lib/sessions/reuniones-para-seguimiento";
-import { diaEnCostaRica, nombreDeLaSeccion } from "./secciones";
+import { diaEnCostaRica } from "./secciones";
+import { PROCESO_POR_CLAVE, procesoDeLaLlamada } from "./ia";
+import { rangoDelPeriodo, usoDelPeriodo, type Periodo, type RangoDelPeriodo, type UsoDelPeriodo } from "./periodo";
 
 const DIA_MS = 86_400_000;
 export const SEMANAS_DEL_USO = 4;
 export const DIAS_DE_REUNIONES_SIN_GRABAR = 30;
 
-export interface SeccionDeLaPersona {
-  clave: string;
-  nombre: string;
-  aperturas: number;
-  dias: number;
-}
-
 export interface UsoDeLaPersona {
   email: string;
   nombre: string;
   equipo: string;
-  /** Aperturas por día (AAAA-MM-DD); un día sin aperturas no viene. */
-  porDia: Record<string, number>;
   diasConUso: number;
   diasEstaSemana: number;
-  aperturas: number;
-  secciones: SeccionDeLaPersona[];
-  /** La hora en que suele abrir Nexus y la última del día (mediana, HH:MM en Costa Rica). */
-  horaPrimera: string | null;
-  horaUltima: string | null;
-  /** El último día con uso, aunque sea antes de las 4 semanas. */
-  ultimoDia: string | null;
 }
 
 export interface UsoDelEquipo {
@@ -55,16 +43,6 @@ export interface UsoDelEquipo {
   /** El primer día con algún registro en la tabla: desde cuándo se mide. */
   medidoDesde: string | null;
   personas: UsoDeLaPersona[];
-  /** Por sección, en la ventana: cuántas personas la abrieron y cuántas veces. */
-  porSeccion: { clave: string; nombre: string; personas: number; aperturas: number }[];
-}
-
-const hhmm = (d: Date) => new Date(d.getTime() - 6 * 3_600_000).toISOString().slice(11, 16);
-
-function mediana(xs: string[]): string | null {
-  if (!xs.length) return null;
-  const o = [...xs].sort();
-  return o[Math.floor((o.length - 1) / 2)];
 }
 
 /** El lunes de la semana de un día (AAAA-MM-DD). */
@@ -83,79 +61,104 @@ export async function usoDelEquipo(ahora = new Date()): Promise<UsoDelEquipo> {
   const dias = Array.from({ length: SEMANAS_DEL_USO * 7 }, (_, i) =>
     new Date(new Date(`${primerLunes}T12:00:00Z`).getTime() + i * DIA_MS).toISOString().slice(0, 10),
   );
-  const vacio: UsoDelEquipo = { faltaLaTabla: true, hoy, dias, medidoDesde: null, personas: [], porSeccion: [] };
+  const vacio: UsoDelEquipo = { faltaLaTabla: true, hoy, dias, medidoDesde: null, personas: [] };
   if (!modeloDisponible(prisma.usoDeNexus)) return vacio;
 
-  const [miembros, filas, primera, ultimos] = await Promise.all([
-    prisma.teamMember.findMany({ where: { deactivatedAt: null }, select: { email: true, name: true, area: true }, orderBy: { name: "asc" } }),
-    prisma.usoDeNexus.findMany({ where: { dia: { gte: primerLunes, lte: hoy } } }),
-    prisma.usoDeNexus.findFirst({ orderBy: { dia: "asc" }, select: { dia: true } }),
-    prisma.usoDeNexus.groupBy({ by: ["personaEmail"], _max: { dia: true } }),
-  ]).catch((e: unknown) => {
-    if (e && typeof e === "object" && "code" in e && (e.code === "P2021" || e.code === "P2022")) return null;
-    throw e;
-  }) ?? [null, null, null, null];
-  if (!miembros || !filas || !ultimos) return vacio;
-
-  const ultimoPorPersona = new Map(ultimos.map((u) => [u.personaEmail, u._max.dia]));
-  const ordenDelEquipo = new Map<string, number>(EQUIPOS.map((e, i) => [e.clave, i]));
-  const personas: (UsoDeLaPersona & { orden: number })[] = miembros
-    .filter((m) => !esCuentaDePrueba(m.name))
-    .map((m) => {
-      const email = m.email.toLowerCase();
-      const clave = claveDeEquipo(m.area, email);
-      const mias = filas.filter((f) => f.personaEmail === email);
-      const porDia: Record<string, number> = {};
-      const porSeccion = new Map<string, { aperturas: number; dias: Set<string> }>();
-      const primeras = new Map<string, Date>();
-      const ultimas = new Map<string, Date>();
-      for (const f of mias) {
-        porDia[f.dia] = (porDia[f.dia] ?? 0) + f.aperturas;
-        const s = porSeccion.get(f.seccion) ?? { aperturas: 0, dias: new Set<string>() };
-        s.aperturas += f.aperturas;
-        s.dias.add(f.dia);
-        porSeccion.set(f.seccion, s);
-        if (!primeras.has(f.dia) || f.primeraAt < primeras.get(f.dia)!) primeras.set(f.dia, f.primeraAt);
-        if (!ultimas.has(f.dia) || f.ultimaAt > ultimas.get(f.dia)!) ultimas.set(f.dia, f.ultimaAt);
-      }
-      const diasConUso = Object.keys(porDia).length;
-      return {
-        email,
-        nombre: m.name,
-        equipo: EQUIPOS.find((e) => e.clave === clave)?.nombre ?? "Sin equipo",
-        orden: ordenDelEquipo.get(clave) ?? EQUIPOS.length,
-        porDia,
-        diasConUso,
-        diasEstaSemana: Object.keys(porDia).filter((d) => d >= lunes).length,
-        aperturas: Object.values(porDia).reduce((a, b) => a + b, 0),
-        secciones: [...porSeccion.entries()]
-          .map(([c, s]) => ({ clave: c, nombre: nombreDeLaSeccion(c), aperturas: s.aperturas, dias: s.dias.size }))
-          .sort((a, b) => b.dias - a.dias || b.aperturas - a.aperturas || a.nombre.localeCompare(b.nombre)),
-        horaPrimera: mediana([...primeras.values()].map(hhmm)),
-        horaUltima: mediana([...ultimas.values()].map(hhmm)),
-        ultimoDia: ultimoPorPersona.get(email) ?? null,
-      };
-    });
-  personas.sort((a, b) => a.orden - b.orden || a.nombre.localeCompare(b.nombre));
-
-  const porSeccion = new Map<string, { personas: Set<string>; aperturas: number }>();
-  for (const f of filas) {
-    const s = porSeccion.get(f.seccion) ?? { personas: new Set<string>(), aperturas: 0 };
-    s.personas.add(f.personaEmail);
-    s.aperturas += f.aperturas;
-    porSeccion.set(f.seccion, s);
-  }
+  const [miembros, filas, primera] =
+    (await Promise.all([
+      personasDelEquipo(),
+      prisma.usoDeNexus.groupBy({ by: ["personaEmail", "dia"], where: { dia: { gte: primerLunes, lte: hoy } } }),
+      prisma.usoDeNexus.findFirst({ orderBy: { dia: "asc" }, select: { dia: true } }),
+    ]).catch(sinLaTabla)) ?? [null, null, null];
+  if (!miembros || !filas) return vacio;
 
   return {
     faltaLaTabla: false,
     hoy,
     dias,
     medidoDesde: primera?.dia ?? null,
-    personas: personas.map(({ orden: _o, ...p }) => (void _o, p)),
-    porSeccion: [...porSeccion.entries()]
-      .map(([clave, s]) => ({ clave, nombre: nombreDeLaSeccion(clave), personas: s.personas.size, aperturas: s.aperturas }))
-      .sort((a, b) => b.personas - a.personas || b.aperturas - a.aperturas),
+    personas: miembros.map((m) => {
+      const mios = filas.filter((f) => f.personaEmail === m.email).map((f) => f.dia);
+      return { ...m, diasConUso: mios.length, diasEstaSemana: mios.filter((d) => d >= lunes).length };
+    }),
   };
+}
+
+/** P2021/P2022: falta la tabla o una columna (el SQL no se aplicó todavía). Cualquier otro error sigue de largo. */
+function sinLaTabla(e: unknown): null {
+  if (e && typeof e === "object" && "code" in e && (e.code === "P2021" || e.code === "P2022")) return null;
+  throw e;
+}
+
+/** Las personas activas del equipo, sin las cuentas de prueba, por equipo y en orden alfabético dentro de cada uno. */
+async function personasDelEquipo(): Promise<{ email: string; nombre: string; equipo: string }[]> {
+  const miembros = await prisma.teamMember.findMany({ where: { deactivatedAt: null }, select: { email: true, name: true, area: true } });
+  const ordenDelEquipo = new Map<string, number>(EQUIPOS.map((e, i) => [e.clave, i]));
+  return miembros
+    .filter((m) => !esCuentaDePrueba(m.name))
+    .map((m) => {
+      const email = m.email.toLowerCase();
+      const clave = claveDeEquipo(m.area, email);
+      return {
+        email,
+        nombre: m.name,
+        equipo: EQUIPOS.find((e) => e.clave === clave)?.nombre ?? "Sin equipo",
+        orden: ordenDelEquipo.get(clave) ?? EQUIPOS.length,
+      };
+    })
+    .sort((a, b) => a.orden - b.orden || a.nombre.localeCompare(b.nombre))
+    .map(({ email, nombre, equipo }) => ({ email, nombre, equipo }));
+}
+
+export interface UsoPorPeriodo extends UsoDelPeriodo {
+  /** Falta la tabla de pantallas: los días no se pueden contar (la IA se muestra igual). */
+  faltaLaTabla: boolean;
+  rango: RangoDelPeriodo;
+  /** El primer día con algún registro de pantallas: desde cuándo se mide. */
+  medidoDesde: string | null;
+}
+
+/**
+ * «Uso de Nexus» › Equipo: los días que entró cada persona (`UsoDeNexus`) y las llamadas a la IA que disparó
+ * (`LlmCall.triggeredByEmail`, por `at`) en el período en curso. La cuenta, en lib/uso/periodo.ts.
+ */
+export async function usoPorPeriodo(periodo: Periodo, ahora = new Date()): Promise<UsoPorPeriodo> {
+  const rango = rangoDelPeriodo(periodo, diaEnCostaRica(ahora));
+  const conPantallas = modeloDisponible(prisma.usoDeNexus);
+  const [personas, dias, primera, llamadas, agentes] = await Promise.all([
+    personasDelEquipo(),
+    conPantallas
+      ? prisma.usoDeNexus.groupBy({ by: ["personaEmail", "dia"], where: { dia: { gte: rango.desde, lte: rango.hasta } } }).catch(sinLaTabla)
+      : null,
+    conPantallas ? prisma.usoDeNexus.findFirst({ orderBy: { dia: "asc" }, select: { dia: true } }).catch(sinLaTabla) : null,
+    prisma.llmCall.groupBy({
+      by: ["triggeredByEmail", "agentSlug", "origen"],
+      where: { at: { gte: rango.desdeInstante }, triggeredByEmail: { not: null } },
+      _count: { _all: true },
+      _sum: { costUsd: true },
+    }),
+    prisma.agent.findMany({ select: { id: true, name: true } }),
+  ]);
+  // El nombre de un agente: el del catálogo (`Agent`, cuando el slug es su id); si no, el de su proceso; si no, el slug.
+  const delCatalogo = new Map(agentes.map((a) => [a.id, a.name]));
+  const nombreDelAgente = (slug: string | null): string => {
+    if (!slug) return "Sin agente identificado";
+    const proceso = procesoDeLaLlamada({ agentSlug: slug, origen: null });
+    return delCatalogo.get(slug) ?? (proceso === "otros" ? slug : (PROCESO_POR_CLAVE.get(proceso)?.nombre ?? slug));
+  };
+  const uso = usoDelPeriodo(
+    personas,
+    dias ?? [],
+    llamadas.map((l) => ({
+      triggeredByEmail: l.triggeredByEmail,
+      agentSlug: l.agentSlug,
+      origen: l.origen,
+      llamadas: l._count._all,
+      costo: l._sum.costUsd ?? 0,
+    })),
+    nombreDelAgente,
+  );
+  return { ...uso, faltaLaTabla: dias === null, rango, medidoDesde: primera?.dia ?? null };
 }
 
 export interface OrganizadorSinGrabar {
