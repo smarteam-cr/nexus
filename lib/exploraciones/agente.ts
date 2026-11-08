@@ -77,6 +77,7 @@ import { duracionDeLaSesion, tarjetasParaLaGuia, textoDeConQuien } from "./conte
 import { conLoDeLaExploracion, FALTA_EL_OBJETIVO_DE_LA_SESION, objetivoAceptado, objetivoDeSmarteam } from "./objetivo-y-hallazgos";
 import { textoDeComoLlego } from "./como-llego";
 import { retomarParaLaGuia, ultimaReunionLeida } from "./despues-de-la-sesion";
+import { insumosDelAnalisisParaLaGuia } from "@/lib/analizador-venta/para-la-guia-server";
 import {
   avisoDeVoseo,
   contextoDeLaGuia,
@@ -1206,6 +1207,8 @@ export async function contextoParaLaGuia(exploracionId: string) {
           duracion: duracionDeLaSesion(proximaSesion),
         }
       : {}),
+    // 2026-11-08: lo que el análisis de la última sesión dejó abierto (números, decisión, demo). Solo la preventa.
+    ...(marco.clave === "venta" ? { delAnalisisDeLaVenta: await insumosDelAnalisisParaLaGuia(fila.clientId, estado.contenido.casillas as Record<string, unknown>) } : {}),
     // Punto 15: lo que las sesiones anteriores dejaron por retomar y su desafío principal.
     ...retomarParaLaGuia(
       estado.contenido.sesiones,

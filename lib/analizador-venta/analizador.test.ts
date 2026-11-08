@@ -164,7 +164,7 @@ describe("S3 · sin cita no hay juicio", () => {
     expect(descartados).toBe(2);
   });
   it("la herramienta pide cada punto juzgado y sus citas", () => {
-    expect(HERRAMIENTA_DEL_ANALISIS.input_schema.required).toEqual(["resumen", "enfoque", "juicios", "bien", "recomendaciones"]);
+    expect(HERRAMIENTA_DEL_ANALISIS.input_schema.required).toEqual(["resumen", "enfoque", "juicios", "bien", "recomendaciones", "fuera_del_objetivo", "numeros", "decision", "pasos", "demo"]);
   });
 });
 

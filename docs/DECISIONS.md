@@ -12825,9 +12825,88 @@ dimensiones de Ventas, Marketing y Servicio, lo mismo que se veía en las del 23
    sembró antes (`HUELLAS_DE_PROMPTS_ANTERIORES`); si alguien lo calibró a mano en /agents, avisa y no lo pisa. El de
    producción es idéntico al anterior del código (comprobado el 29 oct). El criterio sube a `2026-10-29`.
 7. **No se re-analizan solos los análisis viejos.** Volver a analizar borra la confirmación; se hace a mano desde la sesión.
+8. *2026-11-08:* el foco sigue igual para juzgar la exploración, pero lo importante que sale fuera del objetivo o del área ya
+   no se pierde: va en «Apareció fuera del objetivo» (ver «El análisis de la venta, más certero»).
 
 **Costo.** Una corrida sigue en ~$0,16–0,18 (Sonnet 4.6, ~23–29 mil tokens de entrada y ~6 mil de salida): el foco
 ahorra los juicios de las áreas que no se tocaron y lo bien, el dolor y el caso los gastan.
+
+## El análisis de la venta, más certero: fuera del objetivo, los números en tabla, qué falta para decidir y los pasos verificados (2026-11-08)
+
+**Contexto.** Elías, con Centauro Solutions (sesión 2, «CENTAURO SOLUTIONS | DIAGNOSTICO DE VENTAS», 6 nov): «que el
+vendedor lo lea en dos minutos y sepa qué tan buena fue su exploración y qué le falta para la próxima. No más secciones ni
+más texto: lo que ya muestra, más certero». Siete puntos; lo que funcionaba (resumen, cómo trabajó, quién habló, lo bien y
+para mejorar) se queda.
+
+**Por qué fallaba (medido con la reunión real, en seco, sin escribir en producción).**
+- *Los pasos equivocados:* la conversación pasaba el tope de 90 mil letras (92 mil) y se cortaba **por el final**: se
+  perdieron los últimos 33 turnos, justo el cierre, donde la sesión de Marketing pasó del martes al miércoles a las 2 con
+  Catalina y se agendó el lunes a las 9 con Luis. El modelo dijo lo último que vio: «el martes con Fernando».
+- *Lo de fuera del objetivo:* ningún código lo borraba; el prompt pedía juzgar «el dolor del área» y la exploración «solo
+  en las áreas del enfoque», así que los cortes por falta de pago (cobranza, otra área) no tenían dónde ir. Y el objetivo
+  de la sesión solo llegaba al modelo pegado a la guía si había preguntas armadas.
+- *Datos «sin tocar»:* el modelo marcó «sin explorar» sin buscar; además, la cita «si se les olvida calendar, no sé,
+  colocar de tarea…» no pasaba la verificación: el «no» del «no sé» de muletilla contaba como una negación saltada. Lo
+  mismo el «25 25» repetido (un número «de más») y la corrección «25.» (muy corta para ser cita).
+
+**Decisiones.**
+1. **La conversación no pierde el cierre** (`lib/analizador-venta/conversacion.ts`): tope de 120 mil letras (entra una
+   reunión larga de dos horas) y, si igual no entra, se omite un pedazo del MEDIO (el arranque y el último cuarto llegan
+   enteros); los turnos conservan su número.
+2. **Fuera del objetivo** (`fueraDelObjetivo`, hasta dos): lo importante que el cliente contó fuera del objetivo va con su
+   cita, que tiene que ser de alguien del cliente (`delCliente`, de quién habló). En pantalla, una fila «Apareció fuera
+   del objetivo» dentro de «Para aterrizar y expandir». El objetivo de la sesión viaja aparte, siempre que esté.
+3. **Los números, en una tabla** (`numeros`, hasta seis, solo volumen, conversión, ticket, costo de un problema,
+   frecuencia y clientes perdidos): meta · lo que pasa hoy · lo que falta saber (como pregunta). **Cada cifra tiene que
+   estar en la cita MÁS NUEVA de su celda**: si el cliente la corrigió y se cita la corrección, la cifra vieja no pasa. Un
+   turno de un solo número («25.») vale como cita de una cifra si es el turno entero; para un juicio sigue sin alcanzar.
+   La cifra va con dígitos y con lo que la multiplica («25 mil» no respalda «25 millones»; «un millón» sin dígitos no
+   pasa), y la cita tiene que ser de alguien del CLIENTE: un «¿cierran unos 30 al mes?» del vendedor no entra.
+   La tabla reemplaza en pantalla la fila «¿Se averiguó el resultado que busca?», que queda como etiqueta del título; su
+   lectura y su cita siguen en «Ver el análisis completo». Sin filas, la fila de antes se queda.
+4. **Tres estados por dimensión** (no se tocó · se mencionó sin profundizar · se exploró, los valores de siempre): un
+   «sin explorar» que trae una cita que está pasa a «tocado» en el código. El modelo recibe la regla de buscar en toda la
+   conversación antes de decir «sin explorar».
+5. **Qué falta para decidir** (`decision`, siempre los cuatro: quién decide, para cuándo, cuánto invertir, qué pasa si no
+   hacen nada). «Se sabe» necesita cita de esta reunión o que ya se supiera: lo que ya está en el resumen de la preventa
+   (las tarjetas autoridad, tiempos, presupuesto y consecuencias, salvo las que dicen que no se sabe: «No se discutió
+   presupuesto…»; «quién decide» solo con alguien que decide o aprueba, no con quien solo influye o a quien le afecta) y lo que sabían los análisis de las sesiones ANTERIORES de la misma empresa (por el chokepoint). Lo que
+   falta va como pregunta. En pantalla, una línea al pie de «Lo que falta explorar». *Límite:* el resumen de la preventa es
+   el de HOY: re-analizar una sesión vieja puede dar por sabido algo que se supo después.
+6. **Los próximos pasos verificados** (`pasos`): con cita; el día de la semana que dice el paso tiene que estar en lo dicho
+   a cuatro turnos de su cita; el «con quién», también (vale el apodo: «Cata» por Catalina), y si no se dijo ahí el paso
+   queda sin él; de dos versiones del mismo paso (`tema`) queda la de la cita más nueva. Si el juicio del siguiente paso
+   no vino o se cayó, los pasos verificados lo arman igual: si no, no se verían. **La lectura del
+   siguiente paso la arma el código con los pasos verificados** (la ven la pieza «Análisis» y el análisis completo), y un
+   «ninguno» con pasos verificados se corrige.
+7. **Coaching afilado** (`recomendaciones`): el modelo elige de la lista de errores comunes de la exploración (`error`,
+   no se muestra) y cada punto trae qué decir la próxima vez (`decir`, una línea «La próxima vez: «…»»).
+8. **Preguntas para el demo** (`demo`, hasta cinco): con la cita de la pregunta, que tiene que ser del cliente; quién
+   preguntó sale de la transcripción. Una línea al pie de «Lo que falta explorar».
+9. **Alimentan la guía de la siguiente sesión** (`lib/analizador-venta/para-la-guia.ts`, `insumosDelAnalisisParaLaGuia`):
+   del análisis más nuevo de la empresa que ya traiga estos campos, las preguntas de la tabla, los huecos abiertos y el
+   demo, como un bloque del pedido de la guía (`ContextoDeLaGuia.delAnalisisDeLaVenta`, solo la preventa). Un hueco que
+   el resumen de la preventa ya responde HOY no viaja. Lo del demo no se pregunta en la exploración.
+   Las dos lecturas que miran reuniones de la empresa (`para-la-guia-server.ts`) pasan por el chokepoint y buscan el
+   análisis con la misma empresa; lo cuida `para-la-guia-server.test.ts`.
+10. **La verificación de citas, afinada** (`analisis.ts`): el «no sé» (con tilde) entre comas es muletilla; el número
+    repetido («25 25») es repetición, salvo que lo siga un multiplicador («25, 25 mil» corrige); una cita que junta
+    frases se prueba frase por frase y vale SOLO si están todas (con una cierta y otra inventada, la cierta sostenía un
+    juicio que decía lo contrario: lo cazó la revisión). Lo que nunca se tolera sigue igual (un «no se» sin comas sigue contando, un número
+    distinto sigue sin pasar).
+11. **Las reglas viajan en el material** (`REGLAS_DEL_ANALISIS`, prompt.ts) y en la herramienta, no en el prompt de la
+    base: entran sin re-sembrar el agente. El criterio sube a `2026-11-08`. Los análisis viejos se leen igual: sin los
+    campos nuevos, la pantalla no muestra la tabla ni las líneas (no los da por vacíos) y la guía no los usa.
+
+**Con Centauro (en seco: `scripts/medir-analisis-de-venta.ts`, conexión de solo lectura).** Antes: los cortes por falta
+de pago no aparecían; Datos «sin explorar»; «el martes con Fernando» y sin la sesión del lunes con Luis. Después: «Apareció
+fuera del objetivo» con la cita de Fernando del 25 de diciembre; Datos «se mencionó sin profundizar» con «estamos como
+ciegos a información»; pasos: miércoles a las 2 con Catalina y lunes a las 9 con Luis; 25 cierres al mes (la corrección de
+Emiley sobre los 30 de Fernando); falta para decidir: cuánto pueden invertir; cuatro o cinco preguntas para el demo (varía de una corrida a otra).
+
+**Costo.** Antes US$ 0,25 por análisis (40 mil tokens de entrada, 6,7 mil de salida). Después US$ 0,28 (44 mil y 7,3 mil):
++11 %. La primera vuelta, con lecturas de dos frases, llegaba al tope de salida (10 mil, US$ 0,32, y se perdía el demo):
+por eso cada lectura es de una frase y cada cita de hasta 25 palabras.
 
 ## La escala que se le presenta al cliente: «Acceso» en La escala (2026-10-30)
 

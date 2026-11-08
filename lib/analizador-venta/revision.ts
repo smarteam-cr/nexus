@@ -16,7 +16,19 @@
  *     empresa en los días que siguieron. Lo usa la pieza «Análisis» del prospecto (S5), no la sesión.
  */
 import { EQUIPOS, type ClaveDeEquipo } from "@/lib/exploraciones/equipos";
-import { paraComparar, separarArea, type Cita, type EnfoqueDeLaSesion, type Juicio, type Observacion, type PuntoJuzgado, type ResultadoDelAnalisis } from "./analisis";
+import {
+  paraComparar,
+  separarArea,
+  type Cita,
+  type Decision,
+  type EnfoqueDeLaSesion,
+  type FilaDeNumeros,
+  type Juicio,
+  type Observacion,
+  type PreguntaDelDemo,
+  type PuntoJuzgado,
+  type ResultadoDelAnalisis,
+} from "./analisis";
 import { PROCESO_CONSULTIVO, type EtapaDelProceso } from "./criterio";
 
 /** Lo más largo que puede ser la nota de quien confirma. */
@@ -47,6 +59,11 @@ export interface LoDeLaSesion {
   resultado: Juicio | null;
   recomendaciones: ResultadoDelAnalisis["recomendaciones"];
   enfoque: EnfoqueDeLaSesion | null;
+  /* 2026-11-08 (Elías, con Centauro). Vacíos en los análisis de antes; `decision` null (no se sabe, no «no falta nada»). */
+  fueraDelObjetivo: Observacion[];
+  numeros: FilaDeNumeros[];
+  decision: Decision[] | null;
+  demo: PreguntaDelDemo[];
 }
 
 /** El nombre de la dimensión sin el área, y el área: la del juicio o, en los de antes del 29 oct, la del paréntesis. */
@@ -79,6 +96,10 @@ export function loDeLaSesion(r: ResultadoDelAnalisis): LoDeLaSesion {
     resultado: de("resultado")[0] ?? null,
     recomendaciones: r.recomendaciones,
     enfoque: r.enfoque ?? null,
+    fueraDelObjetivo: r.fueraDelObjetivo ?? [],
+    numeros: r.numeros ?? [],
+    decision: r.decision?.length ? r.decision : null,
+    demo: r.demo ?? [],
   };
 }
 

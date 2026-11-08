@@ -22,26 +22,35 @@ import { humanizeAgentError } from "@/lib/agents/anthropic-error";
 import { salesPresenceEmails } from "@/lib/handoff/sales-presence";
 import { empresaQueUsaNexus, perfilDe } from "@/lib/smarteam/contexto";
 import { esReunionDePuertasAdentro } from "@/lib/sessions/candidatas-internas";
-import { comprimirConversacion, conversacionComoTexto } from "@/lib/sessions/conversacion";
+import { conversacionComoTexto } from "@/lib/sessions/conversacion";
 import { diaEnCostaRica } from "@/lib/sessions/reunion-a-mano";
 import { dominiosDeLaCasa } from "@/lib/sessions/reuniones-para-seguimiento";
 import { duenoDeLaSesion, getClientSessions } from "@/lib/sessions/project-sources";
 import { claseDeTexto } from "@/lib/sessions/tiene-texto";
 import { DE_LA_PREVENTA } from "@/lib/exploraciones/marco";
-import { HERRAMIENTA_DEL_ANALISIS, leerElAnalisis, type LoQueHabia, type ResultadoDelAnalisis, type TurnoNumerado } from "./analisis";
+import {
+  HERRAMIENTA_DEL_ANALISIS,
+  HUECOS_DE_DECISION,
+  leerElAnalisis,
+  TEXTO_DEL_HUECO,
+  type HuecoDeDecision,
+  type LoQueHabia,
+  type ResultadoDelAnalisis,
+  type TurnoNumerado,
+} from "./analisis";
+import { conversacionDelAnalisis } from "./conversacion";
+import { loQueSeSupoEnSesionesAnteriores } from "./para-la-guia-server";
 import { VERSION_DEL_CRITERIO, criterioComoTexto } from "./criterio";
 import { guiaDeLaReunion, type GuiaDeLaReunion } from "./guia-de-la-reunion-server";
-import { AGENTE_DEL_ANALIZADOR, MODELO_DEL_ANALIZADOR, SLUG_DEL_ANALIZADOR } from "./prompt";
+import { AGENTE_DEL_ANALIZADOR, MODELO_DEL_ANALIZADOR, REGLAS_DEL_ANALISIS, SLUG_DEL_ANALIZADOR } from "./prompt";
 import { quienHablo, quienHabloEnPalabras, type QuienHablo } from "./quien-hablo";
 import { TEXTO_DE_POR_QUE_NO, delEquipoEnLaReunion, porQueNoEsDeVenta, seAnalizaAMano, vendedoresDeLaReunion, type PorQueNoEsDeVenta } from "./reglas";
 
 /** Lo que borra la confirmación de S4 (lib/analizador-venta/revision-server.ts) cuando el análisis cambia. */
 const SIN_CONFIRMAR = { confirmadoPor: null, confirmadoAt: null, notaDeConfirmacion: null, paraLaProxima: Prisma.DbNull };
 
-/** El tope de la conversación que se le manda al modelo (unas dos horas de reunión). */
-
-const TOPE_DE_LA_CONVERSACION = 90_000;
-const MAX_TOKENS = 8000;
+/** Con la tabla de números, la decisión, los pasos y el demo (2026-11-08), la respuesta es más larga. */
+const MAX_TOKENS = 10_000;
 
 export interface LaReunionDeVenta {
   sessionId: string;
@@ -139,11 +148,20 @@ export function materialDelAnalisis(o: {
   guia: GuiaDeLaReunion | null;
   quien: QuienHablo;
   turnos: readonly TurnoNumerado[];
-  recortada: boolean;
+  /** Se omitió un pedazo del medio de la conversación (conversacion.ts): el arranque y el cierre llegan enteros. */
+  omitidos: { desde: number; hasta: number } | null;
+  /** Lo que ya se sabía para decidir (la preventa y las sesiones anteriores de la empresa). */
+  yaSeSabe?: Partial<Record<HuecoDeDecision, string>>;
 }): string {
+  // El objetivo va aparte de la guía (2026-11-08): antes solo llegaba si había preguntas armadas.
+  const objetivo = o.guia?.objetivo
+    ? `EL OBJETIVO DE LA SESIÓN: ${o.guia.objetivo}\n(Lo importante que el cliente contó fuera de este objetivo NO se descarta: va en fuera_del_objetivo.)`
+    : "EL OBJETIVO DE LA SESIÓN: no estaba escrito.";
   const guia = o.guia?.preguntas.length
-    ? `LA GUÍA DE LA PREVENTA QUE SE LLEVÓ${o.guia.objetivo ? ` (objetivo: ${o.guia.objetivo})` : ""}:\n${o.guia.preguntas.map((p) => `- ${p}`).join("\n")}`
+    ? `LA GUÍA DE LA PREVENTA QUE SE LLEVÓ:\n${o.guia.preguntas.map((p) => `- ${p}`).join("\n")}`
     : "LA GUÍA DE LA PREVENTA: no había una guía armada antes de esta reunión (juzga guia = sin_guia).";
+  const sabido = HUECOS_DE_DECISION.filter((h) => o.yaSeSabe?.[h]).map((h) => `- ${h} (${TEXTO_DEL_HUECO[h]}): ${o.yaSeSabe![h]}`);
+  const paraDecidir = `LO QUE YA SE SABE PARA DECIDIR (de la preventa y de las sesiones anteriores con esta empresa; en «decision», esto es se_sabe):\n${sabido.length ? sabido.join("\n") : "(nada todavía)"}`;
   // Acotadas al área de la sesión (alcance.ts): juzga exploracion SOLO sobre estas, no sobre toda la escala. Si el área
   // no se sabía (las áreas en juego), solo en las áreas a las que fueron las preguntas (el enfoque, 2026-10-29).
   const comoJuzgar =
@@ -164,15 +182,25 @@ export function materialDelAnalisis(o: {
     .map((p) => `- ${p.nombre} (${p.lado === "smarteam" ? "Smarteam" : "cliente"}): ${p.porcentaje} %`)
     .join("\n")}`;
   // El mismo formato que cita el modelo en toda la app (lib/sessions/conversacion.ts): si cambia, cambia en los dos lados.
-  const conversacion = conversacionComoTexto(o.turnos);
+  const om = o.omitidos;
+  const conversacion = om
+    ? [
+        conversacionComoTexto(o.turnos.filter((t) => t.n < om.desde)),
+        `[… se omitieron los turnos ${om.desde} a ${om.hasta}: la reunión es muy larga …]`,
+        conversacionComoTexto(o.turnos.filter((t) => t.n > om.hasta)),
+      ].join("\n")
+    : conversacionComoTexto(o.turnos);
   return [
     `LA REUNIÓN: «${o.titulo}» con ${o.empresa}, el ${diaEnCostaRica(o.fecha)} (hora de Costa Rica).`,
     o.criterio,
+    REGLAS_DEL_ANALISIS,
+    objetivo,
     guia,
     dimensiones,
     casos,
+    paraDecidir,
     quien,
-    `LA CONVERSACIÓN${o.recortada ? " (larga: se cortaron los últimos turnos)" : ""}:\n${conversacion}`,
+    `LA CONVERSACIÓN${om ? " (muy larga: se omitió un pedazo del medio; el arranque y el cierre están enteros)" : ""}:\n${conversacion}`,
   ].join("\n\n");
 }
 
@@ -247,7 +275,7 @@ export async function prepararElAnalisis(
       ok: true;
       r: LaReunionDeVenta & { dueno: NonNullable<LaReunionDeVenta["dueno"]> };
       turnos: TurnoNumerado[];
-      recortada: boolean;
+      omitidos: { desde: number; hasta: number } | null;
       guia: GuiaDeLaReunion | null;
       quien: QuienHablo;
       habia: LoQueHabia;
@@ -267,14 +295,17 @@ export async function prepararElAnalisis(
 
   const fila = await prisma.firefliesSession.findUnique({ where: { id: sessionId }, select: { transcript: true } });
   const transcript = fila?.transcript ?? "";
-  const { turnos, recortada } = comprimirConversacion(transcript, TOPE_DE_LA_CONVERSACION);
+  const { turnos, omitidos } = conversacionDelAnalisis(transcript);
   if (!turnos.length) return { ok: false, status: 409, error: "La transcripción no trae turnos «Nombre: …» que leer." };
 
-  const [quien, guia, empresaNuestra] = await Promise.all([
+  const [quien, guia, empresaNuestra, deSesionesAnteriores] = await Promise.all([
     quienHabloEnLaReunion(sessionId, transcript),
     guiaDeLaReunion({ clientId: r.dueno.id, sessionId, titulo: r.titulo, fecha: r.fecha }),
     empresaQueUsaNexus(),
+    loQueSeSupoEnSesionesAnteriores(r.dueno.id, r.fecha, sessionId),
   ]);
+  // Lo del resumen de la preventa manda; lo de una sesión anterior completa lo que el resumen no tiene.
+  const yaSeSabe = { ...deSesionesAnteriores, ...(guia?.yaSeSabe ?? {}) };
   const perfil = empresaNuestra ? await perfilDe(empresaNuestra.id) : null;
   const material = materialDelAnalisis({
     empresa: r.dueno.nombre,
@@ -284,7 +315,8 @@ export async function prepararElAnalisis(
     guia,
     quien,
     turnos,
-    recortada,
+    omitidos,
+    yaSeSabe,
   });
 
   const habia: LoQueHabia = {
@@ -295,8 +327,10 @@ export async function prepararElAnalisis(
     esperadas: guia?.dimensiones.map((d) => ({ nombre: d.nombre, area: d.area })),
     areaFija: !!guia && guia.alcanceDe !== "areas_en_juego",
     casos: guia?.casos.map((c) => c.titulo) ?? [],
+    delCliente: quien.personas.filter((x) => x.lado === "cliente").map((x) => x.nombre),
+    yaSeSabe,
   };
-  return { ok: true, r: { ...r, dueno: r.dueno }, turnos, recortada, guia, quien, habia, material };
+  return { ok: true, r: { ...r, dueno: r.dueno }, turnos, omitidos, guia, quien, habia, material };
 }
 
 /**
