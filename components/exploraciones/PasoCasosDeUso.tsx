@@ -547,10 +547,10 @@ function CasosDeUso({ catalogo }: { catalogo: Caso[] }) {
               <strong>
                 El agente sugiere {propuestos.length} {propuestos.length === 1 ? "caso" : "casos"}
               </strong>
-              {nombresDeAreas ? ` para ${nombresDeAreas}` : ""}, según dónde está cada equipo. Parte del catálogo de Smarteam; todavía sin precio.
+              {nombresDeAreas ? ` para ${nombresDeAreas}` : ""}, según dónde está cada equipo. Parte del catálogo de Smarteam; cada uno con su precio mínimo por sus actividades.
             </>
           ) : (
-            <>El agente propone casos de uso del catálogo de Smarteam según dónde está cada equipo en la escala y lo que contó el cliente, y uno propio si ninguno calza. Todavía sin precio; cada tanda cuesta unos centavos.</>
+            <>El agente propone casos de uso del catálogo de Smarteam según dónde está cada equipo en la escala y lo que contó el cliente, y uno propio si ninguno calza, cada uno con sus actividades y su precio mínimo. Cada tanda cuesta unos centavos.</>
           )}
         </FranjaDeSugerencias>
       </div>

@@ -914,15 +914,25 @@ function leerPasos(v: unknown, turnos: readonly TurnoNumerado[]): { pasos: PasoA
   return { pasos: [...porTema.values()].sort((a, b) => a.cita.turno - b.cita.turno).slice(0, 5), caidos };
 }
 
+/**
+ * Un paso verificado en sus partes para mostrarlo: qué, cuándo y con quién (sin repetir el «con» si el qué ya lo dice).
+ * Lo usan `pasosEnPalabras` y la tarjeta «Siguiente paso acordado» de «Lo que dejó la sesión» (2026-11-08, sexta vuelta:
+ * esa tarjeta la escribía solo el agente que lee la reunión, sin cruzarla con lo verificado).
+ */
+export function partesDelPaso(p: PasoAcordado): { que: string; cuando: string | null; conQuien: string | null } {
+  const quien = p.quien?.replace(/^con\s+/i, "") ?? null;
+  // «Sesión con Catalina…» ya dice con quién: no se repite.
+  const yaLoDice = !!quien && paraComparar(p.que).includes(paraComparar(quien));
+  return { que: p.que.replace(/\.$/, ""), cuando: p.cuando, conQuien: quien && !yaLoDice ? quien : null };
+}
+
 /** El siguiente paso en palabras, armado con los pasos verificados (reemplaza la lectura del modelo). */
 export function pasosEnPalabras(pasos: readonly PasoAcordado[]): string {
   return (
     pasos
       .map((p) => {
-        const quien = p.quien?.replace(/^con\s+/i, "") ?? null;
-        // «Sesión con Catalina…» ya dice con quién: no se repite.
-        const yaLoDice = !!quien && paraComparar(p.que).includes(paraComparar(quien));
-        return [p.que.replace(/\.$/, ""), p.cuando, quien && !yaLoDice ? `con ${quien}` : null].filter(Boolean).join(", ");
+        const x = partesDelPaso(p);
+        return [x.que, x.cuando, x.conQuien ? `con ${x.conQuien}` : null].filter(Boolean).join(", ");
       })
       .join(". ") + "."
   );

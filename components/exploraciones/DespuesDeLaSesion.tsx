@@ -38,6 +38,8 @@ import {
 import { MAX_SESIONES, type PestanaDeSesion, type PreguntaParaMostrar, type ResultadoDeLaSesion } from "@/lib/exploraciones/guia";
 import { claveDeNotaDeSesion } from "@/lib/exploraciones/notas-de-sesion";
 import ComoTrabajasteEstaSesion from "@/components/analizador-venta/ComoTrabajasteEstaSesion";
+import { useAnalisisDeLaVenta } from "@/components/analizador-venta/useAnalisisDeLaVenta";
+import { partesDelPaso } from "@/lib/analizador-venta/analisis";
 import { Casilla } from "./Casilla";
 import { CorreoDeSeguimiento } from "./CorreoDeSeguimiento";
 import { useLienzo } from "./contexto";
@@ -317,9 +319,14 @@ function CorreoComoBoton({ pestana }: { pestana: PestanaDeSesion }) {
 // ── El siguiente paso y cuánto avanzó ─────────────────────────────────────────
 
 function PasoYAvance({ pestana, lectura }: { pestana: PestanaDeSesion; lectura: LecturaDeReunion | null }) {
-  const { exp, chequeo, marco } = useLienzo();
+  const { exp, chequeo, marco, veAnalisisDeVenta } = useLienzo();
   const enProyecto = marco.clave === "cs";
   const { todas } = useSesiones();
+  // El análisis de la venta ya se lee para «Cómo trabajaste esta sesión»: el almacén es compartido, no es otra lectura.
+  const analisis = useAnalisisDeLaVenta(exp.id, !enProyecto && !!veAnalisisDeVenta);
+  const reunion = pestana.reunion;
+  const verificados =
+    !enProyecto && reunion?.origen === "meet" ? (analisis.datos?.reuniones.find((x) => x.id === reunion.id)?.detalle?.resultado?.pasos ?? []) : [];
   const paso = exp.estado.contenido.casillas.siguientePaso as SiguientePaso | undefined;
   // El paso acordado es de la última sesión hecha antes de su fecha: ahí se acordó.
   const hechas = todas.filter((p) => p.hecha && !p.noSeHizo && p.fecha && (!paso?.fecha || p.fecha <= paso.fecha));
@@ -335,7 +342,26 @@ function PasoYAvance({ pestana, lectura }: { pestana: PestanaDeSesion; lectura: 
     <section className="grid gap-[18px] rounded-xl border border-line bg-surface px-[18px] py-4 sm:grid-cols-2">
       <div className="min-w-0">
         <Rotulo>Siguiente paso acordado</Rotulo>
-        {esDeEsta ? (
+        {verificados.length ? (
+          // Sexta vuelta (2026-11-08): con el análisis de la sesión, mandan los pasos verificados contra lo último que se
+          // acordó en la conversación (fecha, hora, con quién y cada sesión agendada), no la lectura libre de la reunión.
+          <>
+            <ul className="mt-1.5 space-y-1.5">
+              {verificados.map((p) => {
+                const x = partesDelPaso(p);
+                return (
+                  <li key={`${p.cita.turno}-${x.que}`}>
+                    <p className="text-[15px] font-semibold text-fg">{x.que}</p>
+                    {(x.cuando || x.conQuien) && (
+                      <p className="text-[13px] text-fg-secondary">{[x.cuando, x.conQuien ? `con ${x.conQuien}` : null].filter(Boolean).join(" · ")}</p>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+            <p className="mt-1.5 text-xs text-fg-muted">Verificado contra lo último que se acordó en la reunión.</p>
+          </>
+        ) : esDeEsta ? (
           <>
             <p className="mt-1.5 text-[15px] font-semibold text-fg">{paso!.que}</p>
             <p className="mt-0.5 text-[13px] text-fg-secondary">
