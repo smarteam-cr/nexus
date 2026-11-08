@@ -8003,16 +8003,23 @@ le pregunta a la persona del cliente.
     (`sinActividad`). *Por qué:* las actividades son el plan que ejecuta Customer Success; una inventada no se puede
     cotizar ni ejecutar.
   - **El argumento de valor es del vendedor** (`valorDeVenta`: palanca, argumento, números con su fuente, lo que falta
-    averiguar). Nunca llega a la propuesta del cliente. Lee también lo ya leído de las reuniones, los hallazgos y «Lo que
-    ya sabemos», solo para esto. *Sin cifras inventadas:* un número que no aparece en lo que se sabe de la empresa pasa a
-    «Falta averiguar».
+    averiguar). Nunca llega a la propuesta del cliente. Sale de una **llamada aparte** (`pedidoDelValor`), la única que lee
+    lo interno de la preventa (los resúmenes de las reuniones, los hallazgos, «Lo que ya sabemos», lo que respondió el
+    vendedor). *Por qué aparte:* la llamada de los casos escribe la descripción que ve el cliente, y lo interno puede traer
+    el presupuesto, quién decide u opiniones (revisión del 2026-11-08: una frase en el prompt no alcanzaba). *Sin cifras
+    inventadas:* un número vale solo si aparece en lo que se sabe, en una frase que hable de lo mismo («30 % de los leads»
+    no sale de «a los 30 días»); si no, pasa a «Falta averiguar».
+  - **El nombre de una actividad en el caso la concreta, no la cambia:** la pantalla muestra debajo la actividad de la
+    biblioteca de la que sale el tiempo, para que una integración no pase por «Configurar en HubSpot».
   - **Regenerar** (y la alerta «Regenera para actualizar» mientras haya casos sin armar): el agente vuelve a armar los
     elegidos y las sugerencias sin armar quedan aparte (`propuesta.casosAnteriores`). Al terminar, la pantalla que lo
     lanzó usa sola las versiones nuevas, menos las de casos editados a mano: esas quedan en su fila («Usar la nueva» o
-    «Quedarme con esta»). Un solo «Deshacer» (aviso, Ctrl+Z o el botón de la franja) devuelve los casos y las sugerencias
-    de antes. *Por qué en la pantalla y no en el servidor:* el agente nunca escribe lo confirmado (contenido.ts); lo
+    «Quedarme con esta»). Un solo «Deshacer» (aviso, Ctrl+Z o el botón de la franja, ese mismo día) devuelve los casos y
+    las sugerencias de antes. La alerta no cuenta los casos editados a mano (son del vendedor) ni los de un área fuera de
+    juego, y una respuesta cortada por el tope no cambia nada: lo dice y no aparta las sugerencias. *Por qué en la pantalla y no en el servidor:* el agente nunca escribe lo confirmado (contenido.ts); lo
     aplica la persona que apretó «Regenerar», con el «Usar» de siempre.
-  - Cuesta unos US$ 0,16 por corrida (medido con Centauro: 25 mil tokens de entrada y 5,6 mil de salida, Sonnet). Corre
+  - Cuesta unos US$ 0,19 por corrida, las dos llamadas juntas (medido con Centauro: 30 mil tokens de entrada y 6,4 mil de
+    salida, Sonnet). Corre
     solo con un clic, o sola la primera vez que se abre el paso, como antes. `scripts/simular-casos-de-uso.ts` muestra el
     antes y el después de una preventa sin escribir nada.
 

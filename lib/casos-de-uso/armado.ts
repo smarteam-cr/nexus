@@ -161,7 +161,8 @@ export function horasDeLaVenta(casos: readonly (readonly ActividadDelCaso[])[], 
       const lib = porId.get(a.actividadId);
       if (!lib) continue;
       const h = horasDeLaActividad(a, lib);
-      const sobre = (a.sobreQue ?? "").trim().toLowerCase();
+      // Sobre lo mismo, escrito igual: la misma regla que la ficha del catálogo (`horasCompartidas`).
+      const sobre = (a.sobreQue ?? "").trim();
       const clave = lib.comparte === "venta" ? a.actividadId : lib.comparte === "sobreQue" && sobre ? `${a.actividadId}|${sobre}` : null;
       if (!clave) horas += h;
       else compartidas.set(clave, Math.max(compartidas.get(clave) ?? 0, h));
@@ -253,14 +254,32 @@ export function numerosEn(t: string): string[] {
   return (t.match(/\d[\d.,]*/g) ?? []).map((n) => n.replace(/[.,](?=\d{3}(\D|$))/g, "").replace(/[.,]$/, "")).filter(Boolean);
 }
 
+const VACIAS = new Set(["sobre", "entre", "desde", "hasta", "cuando", "porque", "tiene", "tienen", "hacen", "están", "estan", "cliente", "clientes"]);
+const palabrasLargas = (t: string) =>
+  t
+    .toLowerCase()
+    .split(/[^\p{L}]+/u)
+    .filter((p) => p.length >= 5 && !VACIAS.has(p));
+
+/**
+ * ¿La cifra está en lo que se sabe CON el mismo sentido? Tiene que aparecer en una frase que comparta con el dato al menos
+ * una palabra de cinco letras o más: «30 % de los leads» no sale de «a los 30 días» (revisión del 2026-11-08).
+ */
+export function cifraDelCliente(cifra: string, dato: string, frases: readonly string[]): boolean {
+  const delDato = new Set(palabrasLargas(dato));
+  return frases.some((f) => numerosEn(f).includes(cifra) && palabrasLargas(f).some((p) => delDato.has(p)));
+}
+
 /**
  * El argumento de valor, sin cifras inventadas: un número que el agente cita y que no aparece en lo que se sabe de la
- * empresa (`contexto`) no vale como número del cliente; pasa a «lo que falta averiguar». Sin argumento, undefined.
+ * empresa (`contexto`), en una frase que hable de lo mismo, no vale como número del cliente: pasa a «lo que falta
+ * averiguar». Sin argumento, undefined.
  */
 export function validarValorDelAgente(raw: unknown, contexto: string): ValorDeVenta | undefined {
   if (!esObjeto(raw)) return undefined;
   const argumento = texto(raw.argumento, 800);
   if (!argumento) return undefined;
+  const frases = contexto.split(/\n|(?<=[.;!?])\s+/).filter((f) => /\d/.test(f));
   const conocidos = new Set(numerosEn(contexto));
   const falta = (Array.isArray(raw.falta) ? raw.falta : []).map((f) => texto(f, 300)).filter(Boolean);
   const numeros: ValorDeVenta["numeros"] = [];
@@ -271,8 +290,8 @@ export function validarValorDelAgente(raw: unknown, contexto: string): ValorDeVe
     const cifras = numerosEn(dato);
     // Un «número» sin cifras es un hecho, no un número: el argumento ya lo dice.
     if (!cifras.length) continue;
-    if (cifras.every((c) => conocidos.has(c))) numeros.push({ dato, fuente: texto(n.fuente, 120) });
-    else falta.push(`Confirmar con el cliente: ${dato}`);
+    if (cifras.every((c) => cifraDelCliente(c, dato, frases))) numeros.push({ dato, fuente: texto(n.fuente, 120) });
+    else falta.push(`Confirmar con el cliente: ${dato}`.slice(0, 300));
   }
   // Un argumento que se apoya en una cifra que no salió del cliente no se muestra como si la tuviera.
   // (Las cifras chicas —«3 meses», «2 pipelines»— no cuentan: son del trabajo, no del cliente.)
@@ -294,10 +313,28 @@ interface ConArmado {
 
 /**
  * Cuántos casos de la preventa todavía no se armaron con la biblioteca de actividades (elegidos y sugeridos): los de
- * antes del 2026-11-08 y los elegidos a mano desde la lista. Con alguno, el paso dice «Regenera para actualizar».
+ * antes del 2026-11-08 y los elegidos desde la lista. Con alguno, el paso dice «Regenera para actualizar». No cuentan
+ * (revisión del 2026-11-08: si no, la alerta no se iba nunca y cada intento costaba una corrida) los elegidos que el
+ * vendedor editó a mano —son suyos— ni los de un área que ya no está en juego (`areas`).
  */
-export function casosSinArmar(elegidos: readonly ConArmado[], sugeridos: readonly ConArmado[]): number {
-  return [...elegidos, ...sugeridos].filter((c) => !c.armado).length;
+export function casosSinArmar(elegidos: readonly (ConArmado & { aMano?: boolean; areaId?: string | null })[], sugeridos: readonly ConArmado[], areas?: readonly string[]): number {
+  const enJuego = (a: string | null | undefined) => !areas || !a || areas.includes(a);
+  return elegidos.filter((c) => !c.armado && !c.aMano && enJuego(c.areaId)).length + sugeridos.filter((c) => !c.armado).length;
+}
+
+/**
+ * Las versiones nuevas que «Regenerar» aplica solas al terminar: las de esa corrida, de casos ya elegidos que el vendedor
+ * NO editó a mano. Las de los editados a mano quedan en su fila para que él decida.
+ */
+export function versionesQueSeAplicanSolas<I extends { corridaId: string | null; destino: { tipo: string; useCaseId?: string } }>(
+  pendientes: readonly I[],
+  elegidos: Readonly<Record<string, { aMano?: boolean }>>,
+  corridaId: string,
+): I[] {
+  return pendientes.filter((it) => {
+    const id = it.destino.tipo === "casoDeUso" ? it.destino.useCaseId : undefined;
+    return it.corridaId === corridaId && !!id && id in elegidos && !elegidos[id].aMano;
+  });
 }
 
 /** Lo que reemplazó el último «Regenerar»: las sugerencias de casos de antes, para devolverlas con «Deshacer». */

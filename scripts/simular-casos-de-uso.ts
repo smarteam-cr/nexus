@@ -5,7 +5,8 @@
  *   - Antes: los casos elegidos y los sugeridos que tiene hoy la preventa, con sus actividades (las suyas o las de la
  *     ficha del catálogo), sus horas y su precio mínimo.
  *   - Después (con --llamar): lo que propondría «Regenerar» hoy, con el mismo pedido que arma el agente, sus actividades,
- *     su precio mínimo y su argumento de valor, y lo que costó la llamada. No guarda nada: es una llamada suelta.
+ *     su precio mínimo y su argumento de valor, y lo que costaron las dos llamadas (los casos y, aparte, el valor). No
+ *     guarda nada, y por eso ese gasto NO aparece en «Gasto de la IA» (el medidor no puede escribir en esta conexión).
  *
  *   npx tsx scripts/simular-casos-de-uso.ts --empresa "Centauro Solutions"
  *   npx tsx scripts/simular-casos-de-uso.ts --empresa "Centauro Solutions" --llamar
@@ -27,8 +28,8 @@ const PRECIO_POR_MTOK = { entrada: 3, salida: 15 };
 async function main() {
   const { prisma } = await import("@/lib/db/prisma");
   const { estadoDesdeFila, escalaParaExplorar, escalaDeLaExploracion } = await import("@/lib/exploraciones/servidor");
-  const { contextoDeLosCasos } = await import("@/lib/exploraciones/agente");
-  const { pedidoDeCasos, leerLosCasos } = await import("@/lib/exploraciones/agente-pedido");
+  const { contextoDeLosCasos, contextoDelValor } = await import("@/lib/exploraciones/agente");
+  const { pedidoDeCasos, leerLosCasos, pedidoDelValor, leerElValor, conElValor } = await import("@/lib/exploraciones/agente-pedido");
   const { getAnthropic } = await import("@/lib/anthropic");
   const { armadoParaLaPreventa } = await import("@/lib/casos-de-uso/armado-server");
   const { actividadesDelElegido, horasDelCaso, horasDeLaVenta, precioMinimo } = await import("@/lib/casos-de-uso/armado");
@@ -87,17 +88,20 @@ async function main() {
   const t0 = Date.now();
   const respuesta = await getAnthropic().messages.create(pedido);
   const r = leerLosCasos(respuesta, ctx, "simulacro");
-  const u = respuesta.usage;
+  const cv = contextoDelValor(estado, ctx.exploracion, fila.client.name, r.items);
+  const rv = await getAnthropic().messages.create(pedidoDelValor(cv));
+  const items = conElValor(r.items, leerElValor(rv, cv));
+  const u = { input_tokens: respuesta.usage.input_tokens + rv.usage.input_tokens, output_tokens: respuesta.usage.output_tokens + rv.usage.output_tokens };
   const costo = (u.input_tokens * PRECIO_POR_MTOK.entrada + u.output_tokens * PRECIO_POR_MTOK.salida) / 1e6;
   console.log("\n=== DESPUÉS: lo que propondría «Regenerar» (no se guardó) ===");
-  const despues = r.items.map((it) => {
+  const despues = items.map((it) => {
     const id = (it.destino as { useCaseId: string }).useCaseId;
     return linea(id, it.valor as Caso, id in estado.contenido.casosDeUso ? "rearma un elegido" : "nuevo");
   });
   const h = horasDeLaVenta(despues, porId);
   console.log(`  Todos juntos: ${formatoHoras(h)} · desde ${formatoUsd(precioMinimo(h, tarifa))}`);
   console.log(
-    `\nCosto: ${u.input_tokens} tokens de entrada + ${u.output_tokens} de salida = US$ ${costo.toFixed(3)} · ${Math.round((Date.now() - t0) / 1000)} s · ${r.descartadas} descartadas por el código · stop: ${respuesta.stop_reason}`,
+    `\nCosto: ${u.input_tokens} tokens de entrada + ${u.output_tokens} de salida = US$ ${costo.toFixed(3)} · ${Math.round((Date.now() - t0) / 1000)} s · ${r.descartadas} descartadas por el código · stop: ${respuesta.stop_reason} y ${rv.stop_reason} · casos ${respuesta.usage.input_tokens}+${respuesta.usage.output_tokens}, valor ${rv.usage.input_tokens}+${rv.usage.output_tokens}`,
   );
 }
 

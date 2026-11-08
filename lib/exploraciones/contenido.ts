@@ -844,12 +844,21 @@ export function esHipotesisDeNivel(it: ItemPropuesto): boolean {
  * anterior, salvo que pese menos (una hipótesis no pisa lo que dijo el cliente). Lo repetido junta
  * sus fuentes.
  */
+/**
+ * ¿Lo tapa una lápida? La versión nueva de un caso que YA está elegido no (2026-11-08): no es volver a sugerirlo, es
+ * actualizarlo, y una lápida vieja del mismo caso (lo descartó antes de elegirlo desde la lista) lo dejaba sin armar.
+ */
+function tapadoPorLapida(estado: EstadoDeExploracion, it: Pick<ItemPropuesto, "id" | "destino">, lapidas: ReadonlySet<string>): boolean {
+  if (!lapidas.has(it.id)) return false;
+  return !(it.destino.tipo === "casoDeUso" && it.destino.useCaseId in estado.contenido.casosDeUso);
+}
+
 export function fusionarPropuestas(estado: EstadoDeExploracion, nuevos: ItemPropuesto[]): PropuestaDeExploracion {
   const base = estado.propuesta;
   const lapidas = new Set(estado.contenido.descartadas);
   let items = [...estado.propuesta.items];
   for (const n of nuevos) {
-    if (lapidas.has(n.id) || yaEstaConfirmado(estado, n.destino, n.valor)) continue;
+    if (tapadoPorLapida(estado, n, lapidas) || yaEstaConfirmado(estado, n.destino, n.valor)) continue;
     const peso = pesoDelNivel(n);
     /* Una hipótesis no compite con lo que ya dijo el cliente: si el nivel confirmado tiene evidencia,
        la hipótesis sobra. */
@@ -906,7 +915,7 @@ export function propuestaVigente(estado: EstadoDeExploracion): ItemPropuesto[] {
   const conBase = laEscalaTieneBase(estado);
   return estado.propuesta.items.filter(
     (it) =>
-      !lapidas.has(it.id) &&
+      !tapadoPorLapida(estado, it, lapidas) &&
       !sinFundamentoDelCliente(it) &&
       (conBase || it.destino.tipo !== "casoDeUso") &&
       !yaEstaConfirmado(estado, it.destino, it.valor),

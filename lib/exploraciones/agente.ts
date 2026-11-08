@@ -36,6 +36,10 @@ import {
   leerLaIndustria,
   leerLaRespuesta,
   leerLosCasos,
+  conElValor,
+  leerElValor,
+  pedidoDelValor,
+  type ContextoDelValor,
   juntarCobertura,
   leerLosResumenes,
   pedidoDeCasos,
@@ -63,6 +67,7 @@ import {
   laEscalaTieneBase,
   MAX_LECTURAS,
   propuestaVigente,
+  type CasoDeUsoElegido,
   type EstadoDeExploracion,
   type ItemPropuesto,
   type LecturaDeReunion,
@@ -811,11 +816,32 @@ async function proponerCasos(
     },
     () => getAnthropic().messages.create(pedidoDeCasos(ctx)),
   );
+  /* Cortada por el tope, la lista llega a medias: al regenerar se apartarían las sugerencias de antes y volverían pocas
+     (revisión del 2026-11-08). Se avisa y no se guarda nada. */
+  if (respuesta.stop_reason === "max_tokens") {
+    throw new FalloDeLaExploracion("La respuesta del agente salió cortada (demasiados casos para una vez). No se cambió nada: vuelve a intentarlo, o quita algún caso elegido antes de regenerar.");
+  }
   const r = leerLosCasos(respuesta, ctx, runId);
+  /* El argumento de valor, en una llamada APARTE con lo interno de la preventa (pedidoDelValor): la de los casos no lo
+     ve, porque escribe lo que llega al cliente. Si falla, los casos se guardan igual, sin argumento. */
+  let items = r.items;
+  if (items.length) {
+    await fase(runId, "Pensando cómo subir el ticket de cada caso…");
+    const cv = contextoDelValor(ex.estado, ctx.exploracion, ex.fila.client.name, items);
+    try {
+      const rv = await conContextoDeIA(
+        { agentSlug: AGENTE_DE_LA_EXPLORACION, agentRunId: runId, clientId: ex.fila.clientId, triggeredByEmail: opts.triggeredByEmail, origen: "exploraciones/agente:casos-valor" },
+        () => getAnthropic().messages.create(pedidoDelValor(cv)),
+      );
+      items = conElValor(items, leerElValor(rv, cv));
+    } catch (e) {
+      console.error("[exploraciones/agente] el argumento de valor falló; los casos se guardan sin él", e);
+    }
+  }
   await fase(runId, "Guardando lo propuesto…");
   const propuestos = await guardar(
     exploracionId,
-    r.items,
+    items,
     {
       leyo: ["Dónde está cada equipo en la escala", "Lo que el cliente contó en las reuniones", "La biblioteca de casos y de actividades"],
       leidas: { sesiones: [], hubspot: [], documentos: [] },
@@ -827,6 +853,20 @@ async function proponerCasos(
     where: { id: runId },
     data: { status: "DONE", currentPhase: null, output: JSON.stringify({ propuestos, descartadas: r.descartadas, nadaNuevo: false, regenerar }) },
   });
+}
+
+/** Lo que lee la llamada del argumento de valor: lo de los casos, más lo interno de la preventa. */
+export function contextoDelValor(estado: EstadoDeExploracion, exploracion: string, empresa: string, items: readonly ItemPropuesto[]): ContextoDelValor {
+  return {
+    empresa,
+    exploracion,
+    interno: loQueSeSabeParaElValor(estado),
+    casos: items.flatMap((it) => {
+      if (it.destino.tipo !== "casoDeUso") return [];
+      const v = it.valor as CasoDeUsoElegido;
+      return [{ id: it.destino.useCaseId, titulo: v.titulo, actividades: (v.actividades ?? []).map((a) => (a.veces > 1 ? `${a.nombre} ×${a.veces}` : a.nombre)) }];
+    }),
+  };
 }
 
 /**
@@ -865,7 +905,6 @@ export function contextoDeLosCasos(
     catalogo,
     biblioteca: bibliotecaLigera(bibliotecaDeActividades()),
     porDefecto,
-    paraElValor: loQueSeSabeParaElValor(ex.estado),
     ...(regenerar
       ? {
           rearmar: Object.entries(ex.estado.contenido.casosDeUso).map(([id, c]) => ({

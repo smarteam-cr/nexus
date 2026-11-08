@@ -1231,17 +1231,11 @@ export interface ContextoDeCasos {
   catalogo?: readonly CasoDelCatalogo[];
   /**
    * 2026-11-08 (lib/casos-de-uso/armado.ts): la biblioteca de actividades. Con ella el agente arma cada caso con sus
-   * actividades (solo de aquí: el código descarta las demás) y propone cómo subir el ticket vendiendo por valor.
+   * actividades (solo de aquí: el código descarta las demás). El argumento de valor va en otra llamada (`pedidoDelValor`).
    */
   biblioteca?: readonly ActividadLigera[];
   /** Las actividades marcadas por defecto de cada caso del catálogo, por su id. */
   porDefecto?: Readonly<Record<string, ActividadDelCaso[]>>;
-  /**
-   * Lo que se sabe de la empresa para el argumento de valor (las reuniones leídas, los hallazgos, lo que ya sabemos).
-   * Es interno: el agente no lo cita en lo que ve el cliente. Una cifra del argumento vale solo si aparece aquí o en la
-   * exploración.
-   */
-  paraElValor?: string;
   /** «Regenerar»: los casos ya elegidos, para que el agente los vuelva a armar (con su id en `rearma`). */
   rearmar?: { id: string; titulo: string; areaId: string | null; actividades: ActividadDelCaso[] }[];
 }
@@ -1310,25 +1304,10 @@ export function pedidoDeCasos(ctx: ContextoDeCasos): Anthropic.Messages.MessageC
                       },
                     },
                     sinActividad: { type: "string", description: "Lo que el caso necesita y NINGUNA actividad de la biblioteca cubre. Vacío si todas calzan." },
-                    valor: {
-                      type: "object",
-                      description: "Para el vendedor (el cliente no lo ve): cómo subir el ticket vendiendo por valor.",
-                      properties: {
-                        palanca: { type: "string", enum: [...PALANCAS_DE_VALOR] },
-                        argumento: { type: "string", description: "Dos o tres frases: cuánto le cuesta hoy al cliente no tenerlo, con SUS números si los hay." },
-                        numeros: {
-                          type: "array",
-                          description: "Los números del cliente que usaste, copiados de lo que se sabe. Ninguno inventado.",
-                          items: { type: "object", properties: { dato: { type: "string" }, fuente: { type: "string" } }, required: ["dato", "fuente"] },
-                        },
-                        falta: { type: "array", items: { type: "string" }, description: "Los números que faltan averiguar para hacer la cuenta." },
-                      },
-                      required: ["palanca", "argumento", "numeros", "falta"],
-                    },
                   }
                 : {}),
             },
-            required: ["areaId", "titulo", "descripcion", "razon", ...(conBiblioteca ? ["actividades", "valor"] : [])],
+            required: ["areaId", "titulo", "descripcion", "razon", ...(conBiblioteca ? ["actividades"] : [])],
           },
         },
       },
@@ -1356,12 +1335,10 @@ Reglas:
 Cada caso se arma con ACTIVIDADES de la BIBLIOTECA DE SMARTEAM (abajo), que son el plan que ejecuta Customer Success y de donde sale el precio:
 - Solo actividades de la biblioteca, por su id. No inventes actividades: si el caso necesita algo que ninguna cubre, dilo en «sinActividad».
 - En un caso del catálogo, parte de sus actividades por defecto y ajústalas a esta empresa (quita lo que no aplica, suma lo que pide, cambia las veces). Un caso propio también se arma solo con actividades de la biblioteca.
-- El nombre de cada actividad dice la acción concreta en este caso.
-- «valor» es para el VENDEDOR, el cliente no lo ve: cómo subir el ticket vendiendo por valor (el costo de la mala calidad, el ingreso que se pierde, el tiempo del equipo). Usa los números del cliente que aparecen abajo, copiados tal cual, con su fuente. Si no hay números, NO inventes una cifra: escribe en «falta» qué número hay que averiguar (por ejemplo, «Cuántos tickets llegan por WhatsApp al mes y cuánto vale uno perdido»).
-- Lo de «PARA EL ARGUMENTO DE VALOR» es interno: úsalo solo en «valor», nunca en el título, la descripción ni la razón.${
+- El nombre de cada actividad dice la acción concreta en este caso, SIN cambiarle lo que es: es la misma actividad de la biblioteca, con el mismo tiempo. Si el trabajo es más grande que esa actividad (una integración con un ERP no es «Configurar en HubSpot»), no la uses: dilo en «sinActividad».${
           rearmar.length
             ? `
-- Vuelve a armar TODOS los casos YA ELEGIDOS (abajo), uno por uno, con su id en «rearma»: sus actividades para esta empresa y su valor. Mantén su título. Los nuevos van con «rearma» vacío.`
+- Vuelve a armar TODOS los casos YA ELEGIDOS (abajo), uno por uno, con su id en «rearma»: sus actividades para esta empresa. Mantén su título. Los nuevos van con «rearma» vacío.`
             : ""
         }`
       : ""
@@ -1383,7 +1360,6 @@ Cada caso se arma con ACTIVIDADES de la BIBLIOTECA DE SMARTEAM (abajo), que son 
         }`
       : "") +
     (conBiblioteca ? `\n\n=== LA BIBLIOTECA DE ACTIVIDADES (las únicas que se pueden usar) ===\n${bibliotecaParaElAgente(biblioteca)}` : "") +
-    (conBiblioteca && ctx.paraElValor ? `\n\n=== PARA EL ARGUMENTO DE VALOR (interno) ===\n${ctx.paraElValor}` : "") +
     (rearmar.length
       ? `\n\n=== YA ELEGIDOS (vuelve a armar cada uno, con su id en «rearma») ===\n${rearmar
           .map((r) => `- [${r.id}] ${r.titulo}${r.areaId ? ` (área ${r.areaId})` : ""}. Actividades hoy: ${actividadesParaElAgente(r.actividades) || "(ninguna)"}`)
@@ -1393,7 +1369,7 @@ Cada caso se arma con ACTIVIDADES de la BIBLIOTECA DE SMARTEAM (abajo), que son 
     `\n\n=== EL VENDEDOR LOS DESCARTÓ (no los vuelvas a proponer) ===\n${ctx.descartados.length ? ctx.descartados.map((t) => `- ${t}`).join("\n") : "(ninguno)"}`;
   return {
     model: MODELO_DE_LA_EXPLORACION,
-    // Con la biblioteca, cada caso trae sus actividades y su argumento de valor: unos 600 tokens por caso.
+    // Con la biblioteca, cada caso trae sus actividades: unos 500 tokens por caso.
     max_tokens: conBiblioteca ? 12000 : 3000,
     system: sistema,
     tools: [tool],
@@ -1417,7 +1393,6 @@ export function leerLosCasos(respuesta: Anthropic.Messages.Message, ctx: Context
   const porId = new Map((ctx.biblioteca ?? []).map((a) => [a.id, a]));
   const rearmar = new Map((ctx.rearmar ?? []).map((r) => [r.id, r]));
   const yaRearmados = new Set<string>();
-  const contexto = `${ctx.exploracion}\n${ctx.paraElValor ?? ""}`;
   const items: ItemPropuesto[] = [];
   let descartadas = 0;
   for (const x of lista(input.casos)) {
@@ -1444,7 +1419,7 @@ export function leerLosCasos(respuesta: Anthropic.Messages.Message, ctx: Context
     const pedidas = (Array.isArray(x.dimensiones) ? x.dimensiones : []).filter((d): d is string => typeof d === "string");
     const dimensiones = (delCaso && pedidas.length === 0 ? dimensionesEnElArea(delCaso, area?.id ?? null) : pedidas).filter((d) => deEstaArea.has(d)).slice(0, 8);
     const destino: DestinoDePropuesta = { tipo: "casoDeUso", useCaseId: elegido ? elegido.id : delCaso ? idEnLaPreventa(delCaso.id) : idDeCasoLibre(titulo) };
-    const armado = porId.size ? armarConLaBiblioteca(x, porId, delCaso ? (ctx.porDefecto?.[delCaso.id] ?? []) : (elegido?.actividades ?? []), contexto, ahora) : {};
+    const armado = porId.size ? armarConLaBiblioteca(x, porId, delCaso ? (ctx.porDefecto?.[delCaso.id] ?? []) : (elegido?.actividades ?? []), ahora) : {};
     const valor = VALIDADOR_ESTRICTO.valorDelDestino(destino, {
       titulo,
       areaId: area?.id ?? null,
@@ -1473,7 +1448,7 @@ function casoDelId(id: string, delCatalogo: ReadonlyMap<string, CasoDelCatalogo>
 }
 
 /**
- * Las actividades, lo que no cubre ninguna y el argumento de valor de un caso que devolvió el agente (armado.ts). Solo
+ * Las actividades y lo que no cubre ninguna de un caso que devolvió el agente (armado.ts). Solo
  * actividades de la biblioteca; si no dejó ninguna, las de la base (las por defecto del catálogo o las que ya tenía el
  * elegido). Una actividad que coincide con una de la base conserva las veces de sus partes.
  */
@@ -1481,7 +1456,6 @@ function armarConLaBiblioteca(
   x: Record<string, unknown>,
   porId: ReadonlyMap<string, ActividadLigera>,
   base: readonly ActividadDelCaso[],
-  contexto: string,
   ahora: Date,
 ) {
   const propias = validarActividadesDelAgente(x.actividades, porId).actividades.map((a) => {
@@ -1491,13 +1465,100 @@ function armarConLaBiblioteca(
   const actividades = propias.length ? propias : base.filter((b) => porId.has(b.actividadId));
   const sinActividad =
     (str(x.sinActividad) ?? "").slice(0, 400) || (actividades.length ? "" : "Ninguna actividad de la biblioteca calza con este caso: hay que definir cómo se hace antes de cotizarlo.");
-  const valorDeVenta = validarValorDelAgente(x.valor, contexto);
-  return {
-    actividades,
-    ...(sinActividad ? { sinActividad } : {}),
-    ...(valorDeVenta ? { valorDeVenta } : {}),
-    armado: ahora.toISOString(),
+  return { actividades, ...(sinActividad ? { sinActividad } : {}), armado: ahora.toISOString() };
+}
+
+// ── El argumento de valor: una llamada APARTE, interna (2026-11-08) ─────────────────────────────
+
+export const NOMBRE_DE_LA_HERRAMIENTA_DEL_VALOR = "argumentar_valor";
+
+/**
+ * Lo que lee la llamada del valor. Va APARTE de la de los casos a propósito (revisión del 2026-11-08): lo interno de la
+ * preventa —los resúmenes de las reuniones, los hallazgos, lo que respondió el vendedor— puede traer el presupuesto,
+ * quién decide u opiniones, y la llamada de los casos escribe la descripción que ve el cliente. Esta solo escribe el
+ * argumento de valor, que nunca llega a la propuesta.
+ */
+export interface ContextoDelValor {
+  empresa: string;
+  /** Lo mismo que lee la de los casos (lo que puede ver el cliente). */
+  exploracion: string;
+  /** Lo interno: las reuniones leídas, los hallazgos, «Lo que ya sabemos», lo que respondió el vendedor. */
+  interno: string;
+  casos: { id: string; titulo: string; actividades: string[] }[];
+}
+
+export function pedidoDelValor(ctx: ContextoDelValor): Anthropic.Messages.MessageCreateParamsNonStreaming {
+  const tool: Anthropic.Messages.Tool = {
+    name: NOMBRE_DE_LA_HERRAMIENTA_DEL_VALOR,
+    description: "Para cada caso, cómo subir el ticket vendiendo por valor. Llámala una sola vez.",
+    input_schema: {
+      type: "object",
+      properties: {
+        valores: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              id: { type: "string", enum: ctx.casos.map((c) => c.id) },
+              palanca: { type: "string", enum: [...PALANCAS_DE_VALOR] },
+              argumento: { type: "string", description: "Dos o tres frases: cuánto le cuesta hoy al cliente no tenerlo, con SUS números si los hay." },
+              numeros: {
+                type: "array",
+                description: "Los números del cliente que usaste, copiados tal cual de lo que se sabe, con la frase donde aparecen. Ninguno inventado.",
+                items: { type: "object", properties: { dato: { type: "string" }, fuente: { type: "string" } }, required: ["dato", "fuente"] },
+              },
+              falta: { type: "array", items: { type: "string" }, description: "Los números que faltan averiguar para hacer la cuenta." },
+            },
+            required: ["id", "palanca", "argumento", "numeros", "falta"],
+          },
+        },
+      },
+      required: ["valores"],
+    },
   };
+  const sistema = `Eres el analista de ventas de Smarteam, una consultora que implementa HubSpot. Para cada caso de uso de la propuesta, le dices al VENDEDOR cómo subir el ticket vendiendo por valor: el costo de la mala calidad, el ingreso que se pierde, el tiempo del equipo, el riesgo. El cliente no lee esto.
+
+Reglas:
+- Usa los números del cliente que aparecen abajo, copiados tal cual («~1.200 tickets al mes»), con su fuente (la reunión, «Metas», «Retos»). Cada número tiene que estar escrito abajo con el mismo sentido: «30 días» no es «30 % de los leads».
+- Si no hay números para hacer la cuenta, NO inventes una cifra ni la estimes: escribe en «falta» qué número hay que averiguar (por ejemplo, «Cuántos tickets llegan por WhatsApp al mes y cuánto vale uno perdido»).
+- Corto y concreto, en español neutro. Nada de opiniones sobre personas.`;
+  const cuerpo =
+    `Empresa: ${ctx.empresa}\n\n=== LO QUE SE SABE (lo que puede ver el cliente) ===\n${ctx.exploracion}\n\n` +
+    `=== LO QUE SE SABE (interno) ===\n${ctx.interno || "(nada)"}\n\n` +
+    `=== LOS CASOS ===\n${ctx.casos.map((c) => `- [${c.id}] ${c.titulo}. Actividades: ${c.actividades.join("; ") || "(ninguna)"}`).join("\n")}`;
+  return {
+    model: MODELO_DE_LA_EXPLORACION,
+    max_tokens: 6000,
+    system: sistema,
+    tools: [tool],
+    tool_choice: { type: "tool", name: tool.name },
+    messages: [{ role: "user", content: cuerpo }],
+  };
+}
+
+/** El argumento de valor de cada caso, por su id, ya validado (sin cifras que no salieron del cliente). */
+export function leerElValor(respuesta: Anthropic.Messages.Message, ctx: ContextoDelValor): Map<string, NonNullable<ReturnType<typeof validarValorDelAgente>>> {
+  const bloque = respuesta.content.find((b) => b.type === "tool_use" && b.name === NOMBRE_DE_LA_HERRAMIENTA_DEL_VALOR);
+  const input = bloque && bloque.type === "tool_use" && esObjeto(bloque.input) ? bloque.input : {};
+  const ids = new Set(ctx.casos.map((c) => c.id));
+  const contexto = `${ctx.exploracion}\n${ctx.interno}`;
+  const out = new Map<string, NonNullable<ReturnType<typeof validarValorDelAgente>>>();
+  for (const x of lista(input.valores)) {
+    const id = str(x.id);
+    if (!id || !ids.has(id) || out.has(id)) continue;
+    const v = validarValorDelAgente(x, contexto);
+    if (v) out.set(id, v);
+  }
+  return out;
+}
+
+/** Los casos con su argumento de valor (los que no lo tienen quedan igual). */
+export function conElValor(items: ItemPropuesto[], valores: ReadonlyMap<string, NonNullable<ReturnType<typeof validarValorDelAgente>>>): ItemPropuesto[] {
+  return items.map((it) => {
+    if (it.destino.tipo !== "casoDeUso") return it;
+    const v = valores.get(it.destino.useCaseId);
+    return v ? { ...it, valor: { ...(it.valor as object), valorDeVenta: v } } : it;
+  });
 }
 
 // ── «Actualizar escala»: ubicar la empresa con todo lo que Nexus sabe (2026-10-18) ────────────

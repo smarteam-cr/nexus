@@ -292,11 +292,13 @@ function PropuestasDeLaEmpresa({ propuestas, alCambiar }: { propuestas: Propuest
 
 export default function PasoPropuesta() {
   const { exp, irA, pendientesPara } = useLienzo();
-  /* 2026-11-08: si los casos se armaron antes de la biblioteca de actividades, la propuesta saldría sin su plan ni su
-     precio: se avisa aquí y se regeneran en Casos de uso. */
+  /* 2026-11-08: si los casos todavía no se armaron con la biblioteca de actividades, el vendedor no ve sus actividades,
+     su precio mínimo ni el argumento de valor antes de armar la propuesta: se avisa aquí y se regeneran en Casos de uso.
+     (La propuesta todavía no lleva las actividades ni el precio: lo dice el aviso.) */
   const sinArmar = casosSinArmar(
     Object.values(exp.estado.contenido.casosDeUso),
     pendientesPara((d) => d.tipo === "casoDeUso" && !(d.useCaseId in exp.estado.contenido.casosDeUso)).map((it) => it.valor as CasoDeUsoElegido),
+    exp.estado.areas,
   );
   const [negocios, setNegocios] = useState<Negocio[] | null | undefined>(undefined);
   const [propuestas, setPropuestas] = useState<PropuestaDeLaEmpresa[]>([]);
@@ -344,8 +346,9 @@ export default function PasoPropuesta() {
             </Button>
           }
         >
-          {sinArmar === 1 ? "Un caso de uso todavía no está armado" : `${sinArmar} casos de uso todavía no están armados`} con la biblioteca de actividades: sin su plan
-          ni su precio mínimo. Regenéralos en Casos de uso antes de armar la propuesta.
+          {sinArmar === 1 ? "Un caso de uso todavía no está armado" : `${sinArmar} casos de uso todavía no están armados`} con la biblioteca de actividades. Regenéralos
+          en Casos de uso para ver sus actividades, su precio mínimo y cómo subir el ticket antes de armar la propuesta. La propuesta todavía no lleva las
+          actividades ni el precio.
         </Alert>
       )}
       <PropuestasDeLaEmpresa propuestas={propuestas} alCambiar={() => setIntento((n) => n + 1)} />

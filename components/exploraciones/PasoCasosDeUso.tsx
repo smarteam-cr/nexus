@@ -39,6 +39,7 @@ import {
   precioMinimo,
   quitarActividad,
   sumarActividad,
+  versionesQueSeAplicanSolas,
   type ActividadDelCaso,
   type ActividadLigera,
   type TarifaDeLaEmpresa,
@@ -46,7 +47,7 @@ import {
 } from "@/lib/casos-de-uso/armado";
 import { ETAPAS_DE_ACTIVIDAD, formatoHoras, formatoUsd, sobreQueAparte } from "@/lib/casos-de-uso/actividades-puras";
 import Link from "next/link";
-import { Alert, Badge, Select } from "@/components/ui";
+import { Alert, Badge, IconButton, Select } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import { esCasoLibre, laEscalaTieneBase, type CasoDeUsoElegido, type DestinoDePropuesta, type ItemPropuesto } from "@/lib/exploraciones/contenido";
 import { useRecorridos } from "@/components/recorridos/contexto";
@@ -152,8 +153,10 @@ function ActividadesDelCaso({ id, caso, editable }: { id: string; caso: CasoDeUs
      actividades propias, deshacer lo devuelve a las de su ficha. */
   const guardar = (nuevo: CasoDeUsoElegido, que: string) => {
     if (nuevo === caso) return;
-    void cambiar([{ op: "casoDeUso", useCaseId: id, valor: nuevo }]);
-    pushUndo({ scope: `exploracion:${exp.id}`, label: que, undo: () => void cambiar([{ op: "casoDeUso", useCaseId: id, valor: caso }]) });
+    // Solo si se guardó: si chocó con otro cambio, Ctrl+Z pisaría lo de la otra persona con esta versión vieja.
+    void cambiar([{ op: "casoDeUso", useCaseId: id, valor: nuevo }]).then((ok) => {
+      if (ok) pushUndo({ scope: `exploracion:${exp.id}`, label: que, undo: () => void cambiar([{ op: "casoDeUso", useCaseId: id, valor: caso }]) });
+    });
   };
   const yaEstan = new Set(acts.map((a) => a.actividadId));
   return (
@@ -166,29 +169,29 @@ function ActividadesDelCaso({ id, caso, editable }: { id: string; caso: CasoDeUs
               <span className="min-w-0 flex-1 text-fg">
                 {a.nombre}
                 {a.sobreQue && sobreQueAparte({ nombre: a.nombre, sobreQue: a.sobreQue }) && <span className="text-fg-muted"> · {a.sobreQue}</span>}
+                {/* La actividad de la biblioteca detrás del nombre del caso: de ahí sale el tiempo. */}
+                {lib && lib.nombre !== a.nombre && <span className="block text-[11px] text-fg-muted">Biblioteca: {lib.nombre}</span>}
                 {!lib && <span className="text-danger-ink"> · ya no está en la biblioteca</span>}
               </span>
               {editable && lib?.seRepite ? (
                 <span className="flex items-center gap-1">
-                  <button
-                    type="button"
+                  <IconButton
+                    size="xs"
+                    variant="subtle"
                     aria-label={`Una vez menos «${a.nombre}»`}
+                    icon={<span aria-hidden="true">−</span>}
                     disabled={guardando || a.veces <= 1}
-                    className="h-5 w-5 rounded border border-line text-fg-secondary hover:bg-surface-hover disabled:opacity-40"
                     onClick={() => guardar(cambiarVeces(caso, acts, i, a.veces - 1), `Bajaste «${a.nombre}» a ${a.veces - 1}`)}
-                  >
-                    −
-                  </button>
+                  />
                   <span className="w-6 text-center tabular-nums text-fg-secondary">{a.veces}×</span>
-                  <button
-                    type="button"
+                  <IconButton
+                    size="xs"
+                    variant="subtle"
                     aria-label={`Una vez más «${a.nombre}»`}
+                    icon={<span aria-hidden="true">+</span>}
                     disabled={guardando}
-                    className="h-5 w-5 rounded border border-line text-fg-secondary hover:bg-surface-hover disabled:opacity-40"
                     onClick={() => guardar(cambiarVeces(caso, acts, i, a.veces + 1), `Subiste «${a.nombre}» a ${a.veces + 1}`)}
-                  >
-                    +
-                  </button>
+                  />
                 </span>
               ) : (
                 a.veces > 1 && <span className="tabular-nums text-fg-muted">{a.veces}×</span>
@@ -197,16 +200,14 @@ function ActividadesDelCaso({ id, caso, editable }: { id: string; caso: CasoDeUs
                 {lib ? (lib.horasPendientes ? (lib.quien.startsWith("Dev") ? "Dev" : "Diseño") : formatoHoras(horasDeLaActividad(a, lib))) : "—"}
               </span>
               {editable && (
-                <button
-                  type="button"
+                <IconButton
+                  size="xs"
                   aria-label={`Quitar «${a.nombre}»`}
                   title="Quitar la actividad"
+                  icon={<span aria-hidden="true">×</span>}
                   disabled={guardando}
-                  className="rounded px-1 text-fg-muted hover:bg-surface-hover hover:text-fg disabled:opacity-40"
                   onClick={() => guardar(quitarActividad(caso, acts, i), `Quitaste «${a.nombre}» de «${caso.titulo}»`)}
-                >
-                  ×
-                </button>
+                />
               )}
             </li>
           );
@@ -404,31 +405,42 @@ function CasosDeUso({ catalogo }: { catalogo: Caso[] }) {
   const sinArmar = casosSinArmar(
     elegidos.map(([, c]) => c),
     propuestos.map((it) => it.valor as CasoDeUsoElegido),
+    e.areas,
   );
   const anteriores = e.propuesta.casosAnteriores ?? null;
+  /* «Deshacer» del último «Regenerar» vale el mismo día: después ya deshacería lo que el vendedor eligió entretanto. */
+  const [abiertoEn] = useState(() => Date.now());
+  const anterioresRecientes = anteriores && abiertoEn - Date.parse(anteriores.en) < 12 * 3600_000 ? anteriores : null;
 
   /* «Regenerar» (2026-11-08): cuando termina la corrida que lanzó ESTA pestaña, las versiones nuevas de los casos
      elegidos se usan solas —menos las de los que el vendedor editó a mano— y todo se deshace junto: el aviso, Ctrl+Z o
      el botón «Deshacer» de la franja. */
   const esperando = useRef<string | null | undefined>(undefined);
+  /** La corrida que había al lanzar: si la que sigue termina con error, esta pestaña deja de esperar. */
+  const corridaAlLanzar = useRef<string | null>(null);
   /* `usadas`: las versiones nuevas que se usaron (su id); deshacer las devuelve con lo que había y después vuelven las
      sugerencias de antes. `deshacer` lee lo guardado al momento, no esta pantalla. */
   const deshacerRegenerar = useCallback(
-    async (corridaId: string, usadas: string[]) => {
-      if (usadas.length) await deshacer(usadas, "la versión nueva de los casos");
-      await cambiar([{ op: "devolverCasosAnteriores", corridaId }]);
+    async (corridaId: string, usadas: string[]): Promise<boolean> => {
+      // Si no se pudieron devolver los casos, no se traen las sugerencias de antes: quedaría deshecho a medias.
+      if (usadas.length && !(await deshacer(usadas, "la versión nueva de los casos"))) return false;
+      return cambiar([{ op: "devolverCasosAnteriores", corridaId }]);
     },
     [deshacer, cambiar],
   );
   useEffect(() => {
-    if (esperando.current === undefined || corriendo || !anteriores || anteriores.corridaId === esperando.current) return;
+    if (esperando.current === undefined || corriendo) return;
+    // La corrida que lanzó terminó con error: ya no espera (si no, aplicaría el «Regenerar» de otra pestaña).
+    if (corrida && corrida.id !== corridaAlLanzar.current && corrida.estado === "ERROR") {
+      esperando.current = undefined;
+      return;
+    }
+    if (!anteriores || anteriores.corridaId === esperando.current) return;
     esperando.current = undefined;
     const corridaId = anteriores.corridaId;
-    const aUsar = todosLosPropuestos.filter(
-      (it) => it.corridaId === corridaId && it.destino.tipo === "casoDeUso" && it.destino.useCaseId in e.contenido.casosDeUso && !e.contenido.casosDeUso[it.destino.useCaseId].aMano,
-    );
+    const aUsar = versionesQueSeAplicanSolas(todosLosPropuestos, e.contenido.casosDeUso, corridaId);
     void (async () => {
-      if (aUsar.length) await cambiar([{ op: "usarVarias", items: aUsar.map((it) => ({ itemId: it.id, valor: it.valor })) }]);
+      if (aUsar.length && !(await cambiar([{ op: "usarVarias", items: aUsar.map((it) => ({ itemId: it.id, valor: it.valor })) }]))) return;
       pushUndo({
         scope: `exploracion:${exp.id}`,
         label: aUsar.length ? `Regeneraste los casos: ${aUsar.length} ${aUsar.length === 1 ? "se actualizó" : "se actualizaron"}` : "Regeneraste los casos de uso",
@@ -438,13 +450,14 @@ function CasosDeUso({ catalogo }: { catalogo: Caso[] }) {
         ),
       });
     })();
-  }, [anteriores, corriendo, todosLosPropuestos, e.contenido.casosDeUso, cambiar, pushUndo, exp.id, deshacerRegenerar]);
+  }, [anteriores, corriendo, corrida, todosLosPropuestos, e.contenido.casosDeUso, cambiar, pushUndo, exp.id, deshacerRegenerar]);
   const regenerar = async () => {
     esperando.current = anteriores?.corridaId ?? null;
+    corridaAlLanzar.current = corrida?.id ?? null;
     const arranco = await lanzar("casos", { regenerar: true });
     if (!arranco) esperando.current = undefined;
   };
-  const usadasDelRegenerar = anteriores ? (e.contenido.usadas ?? []).filter((u) => u.item.corridaId === anteriores.corridaId).map((u) => u.id) : [];
+  const usadasDelRegenerar = anterioresRecientes ? (e.contenido.usadas ?? []).filter((u) => u.item.corridaId === anterioresRecientes.corridaId).map((u) => u.id) : [];
   // Del catálogo de Smarteam, solo los que tocan un área en juego; los de la tabla (con precio), todos.
   const libres = catalogo.filter((c) => !(c.id in e.contenido.casosDeUso) && (!c.areas || c.areas.some((a) => e.areas.includes(a))));
   const yaPropuso = e.propuesta.corridas.some((c) => c.modo === "casos");
@@ -558,10 +571,10 @@ function CasosDeUso({ catalogo }: { catalogo: Caso[] }) {
           con Ctrl+Z.
         </Alert>
       )}
-      {puedeEditar && anteriores && !corriendo && (
+      {puedeEditar && anterioresRecientes && !corriendo && (
         <p className="flex flex-wrap items-center gap-2 text-xs text-fg-muted">
-          Regeneraste los casos el {new Date(anteriores.en).toLocaleDateString("es-CR", { day: "numeric", month: "short" })}.
-          <BotonTexto disabled={guardando} onClick={() => void deshacerRegenerar(anteriores.corridaId, usadasDelRegenerar)}>
+          Regeneraste los casos hoy.
+          <BotonTexto disabled={guardando} onClick={() => void deshacerRegenerar(anterioresRecientes.corridaId, usadasDelRegenerar)}>
             Deshacer
           </BotonTexto>
         </p>
