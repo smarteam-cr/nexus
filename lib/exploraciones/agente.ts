@@ -80,14 +80,14 @@ import { agendaRenovada, exploracionesQueLeenLaReunion, hayQueLeerAlPreparar, mi
 import { buildInternalDomainsSet } from "@/lib/sessions/categorize";
 import { hoyEnCostaRica } from "./fechas";
 import { bloqueDeInstrucciones } from "./notas-de-sesion";
-import { avisoDePreguntasCerradas, preguntasQueNoCumplen } from "./agenda";
+import { preguntasQueNoCumplen } from "./agenda";
+import { aplicarElArreglo, leerElArreglo, pedidoDelArreglo, textosAArreglar } from "./arreglo-de-la-guia";
 import { duracionDeLaSesion, tarjetasParaLaGuia, textoDeConQuien } from "./contexto-de-la-exploracion";
 import { conLoDeLaExploracion, FALTA_EL_OBJETIVO_DE_LA_SESION, objetivoAceptado, objetivoDeSmarteam } from "./objetivo-y-hallazgos";
 import { textoDeComoLlego } from "./como-llego";
 import { retomarParaLaGuia, ultimaReunionLeida } from "./despues-de-la-sesion";
 import { insumosDelAnalisisParaLaGuia } from "@/lib/analizador-venta/para-la-guia-server";
 import {
-  avisoDeVoseo,
   contextoDeLaGuia,
   leerLaGuiaDelAgente,
   leerLoDeLaExploracion,
@@ -1112,7 +1112,7 @@ async function pedirLaGuia(
   /* El objetivo de la sesión lo decide el vendedor (Elías, 2026-11-08, cuarta vuelta): sin uno aceptado o escrito no se
      arma la guía. Es su instrucción para estructurar la sesión, y la de más peso del pedido. */
   if (!objetivoAceptado(ctx.contextoDeLaSesion?.objetivo)) throw new FalloDeLaExploracion(FALTA_EL_OBJETIVO_DE_LA_SESION);
-  const pedir = (aviso = "") =>
+  const pedir = () =>
     conContextoDeIA(
       {
         agentSlug: AGENTE_DE_LA_EXPLORACION,
@@ -1121,10 +1121,7 @@ async function pedirLaGuia(
         triggeredByEmail: opts.triggeredByEmail,
         origen: "exploraciones/agente:guia",
       },
-      () => {
-        const pedido = pedidoDeLaGuia(ctx);
-        return getAnthropic().messages.create(aviso ? { ...pedido, system: `${pedido.system as string}${aviso}` } : pedido);
-      },
+      () => getAnthropic().messages.create(pedidoDeLaGuia(ctx)),
     );
   let respuesta = await pedir();
   let guia = leerLaGuiaDelAgente(respuesta, ctx, runId, ahora);
@@ -1135,14 +1132,26 @@ async function pedirLaGuia(
      reintento. Una sola vez, y se queda la que tenga menos problemas. */
   const problemas = (g: GuiaDeLaSesion) => ({ voseo: voseoEnLaGuia(g), cerradas: g.agenda ? preguntasQueNoCumplen(g.agenda) : [] });
   const antes = problemas(guia);
-  if (antes.voseo.length || antes.cerradas.length) {
-    const aviso = `${antes.voseo.length ? avisoDeVoseo(antes.voseo) : ""}${antes.cerradas.length ? avisoDePreguntasCerradas(antes.cerradas) : ""}`;
-    const respuestaOtra = await pedir(aviso);
-    const otra = leerLaGuiaDelAgente(respuestaOtra, ctx, runId, ahora);
-    const despues = otra ? problemas(otra) : null;
-    if (otra && despues && despues.voseo.length <= antes.voseo.length && despues.voseo.length + despues.cerradas.length < antes.voseo.length + antes.cerradas.length) {
-      guia = otra;
-      respuesta = respuestaOtra;
+  /* Desde el 2026-11-08 no se pide la guía entera otra vez (tardaba unos 100 segundos más, y saltaba casi siempre): se
+     reescriben solo los textos con problema (lib/exploraciones/arreglo-de-la-guia.ts). Si el arreglo falla, queda la
+     primera, como cuando el reintento no mejoraba nada. */
+  const textos = antes.voseo.length || antes.cerradas.length ? textosAArreglar(respuesta, antes.cerradas, antes.voseo) : [];
+  if (textos.length) {
+    if (runId) await fase(runId, "Revisando que las preguntas queden abiertas y en tuteo…");
+    try {
+      const respuestaDelArreglo = await conContextoDeIA(
+        { agentSlug: AGENTE_DE_LA_EXPLORACION, agentRunId: runId, clientId: fila.clientId, triggeredByEmail: opts.triggeredByEmail, origen: "exploraciones/agente:guia-arreglo" },
+        () => getAnthropic().messages.create(pedidoDelArreglo(textos)),
+      );
+      const respuestaOtra = aplicarElArreglo(respuesta, leerElArreglo(respuestaDelArreglo, textos));
+      const otra = respuestaOtra === respuesta ? null : leerLaGuiaDelAgente(respuestaOtra, ctx, runId, ahora);
+      const despues = otra ? problemas(otra) : null;
+      if (otra && despues && despues.voseo.length <= antes.voseo.length && despues.voseo.length + despues.cerradas.length < antes.voseo.length + antes.cerradas.length) {
+        guia = otra;
+        respuesta = respuestaOtra;
+      }
+    } catch (e) {
+      console.error("[exploraciones/agente] el arreglo de la guía falló; queda la primera", e);
     }
   }
   // Lo que va a ver el vendedor: las preguntas del plan, con la de respaldo donde el agente repitió lo sabido.
