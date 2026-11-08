@@ -5839,7 +5839,8 @@ nombres, que las sesiones pasadas cambien la planificación de las que vienen, y
   pregunta la guía de la próxima sesión.
 - **La guía se pide en tuteo, y se revisa.** La de CreditForce salió en voseo («vivís», «podés») porque las
   fuentes estaban en voseo. Ahora el prompt pone ejemplos en tuteo. Si la guía igual trae voseo (`voseoEnLaGuia`,
-  que no cuenta el futuro), se pide una vez más, avisándolo: es una llamada de más, solo en ese caso. La regla del
+  que no cuenta el futuro), se reescriben esos textos (desde el 2026-11-08, el arreglo puntual: ver «Preguntas abiertas
+  y de una sola cosa», más abajo). La regla del
   voseo se separó del parser de TypeScript (`lib/ui/voseo-formas.ts`) para que el servidor la pueda usar.
 - **No lleva SQL.** Todo vive en los Json de la preventa (`contenido.sesiones`, `contenido.notas` y `propuesta`).
   La clave de una nota sube de 40 a 72 caracteres.
@@ -13242,8 +13243,13 @@ preguntas.
   sesión (lo ya preguntado, lo que no salió) cuenta igual. `preguntas` se sigue guardando, sacado de la agenda (una por
   tema), para lo que todavía las lee: lo que cubre la guía, el correo de seguimiento, el análisis de la venta.
 - **Preguntas abiertas y de una sola cosa, verificado por código.** `preguntaCerrada` y `preguntaDoble` miran cómo abre
-  cada pregunta sugerida; si hay alguna, el mismo reintento del voseo la pide otra vez avisándolo, una sola vez, y se
-  queda la que tenga menos problemas sin más voseo. *Lo que se vio con IA real (2026-11-06, 12 llamadas):* el modelo
+  cada pregunta sugerida. Si hay alguna, o voseo, se reescriben SOLO esos textos (hasta 30) en un pedido chico
+  (`lib/exploraciones/arreglo-de-la-guia.ts`, con tope de 45 s), se vuelven a meter en la misma respuesta y se queda la
+  que tenga menos problemas sin más voseo; si el arreglo falla, queda la primera. *Por qué no se pide la guía entera
+  otra vez (2026-11-08):* medido en producción, cada pedido de la guía tarda unos 95 a 100 s (unos 5.000 tokens de
+  salida desde que cada bloque trae su guía corta y «Para profundizar») y el reintento saltaba casi siempre: el
+  vendedor esperaba más de tres minutos después de elegir el objetivo. El arreglo solo toca la guía que se lee (no los
+  hallazgos, ni las preguntas para el vendedor, ni los identificadores como `para`). *Lo que se vio con IA real (2026-11-06, 12 llamadas):* el modelo
   pega segundas preguntas con «, y cuántos…» y dejaba «[retos con sus palabras]» en el cierre; el detector las cuenta
   como dobles y como huecos, y lo que el reintento no arregla el código lo parte en dos preguntas
   (`partirPreguntaDoble`). Las cerradas que quedan («¿Hay algún hito…?») se ven: el reintento las baja pero no a cero.

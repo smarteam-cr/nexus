@@ -1141,7 +1141,8 @@ async function pedirLaGuia(
     try {
       const respuestaDelArreglo = await conContextoDeIA(
         { agentSlug: AGENTE_DE_LA_EXPLORACION, agentRunId: runId, clientId: fila.clientId, triggeredByEmail: opts.triggeredByEmail, origen: "exploraciones/agente:guia-arreglo" },
-        () => getAnthropic().messages.create(pedidoDelArreglo(textos)),
+        // Con tope propio: un arreglo colgado no puede devolver la espera que se ganó.
+        () => getAnthropic().messages.create(pedidoDelArreglo(textos), { timeout: 45_000, maxRetries: 1 }),
       );
       const respuestaOtra = aplicarElArreglo(respuesta, leerElArreglo(respuestaDelArreglo, textos));
       const otra = respuestaOtra === respuesta ? null : leerLaGuiaDelAgente(respuestaOtra, ctx, runId, ahora);

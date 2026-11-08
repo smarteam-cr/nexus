@@ -31,12 +31,26 @@ const guia = mensaje(HERRAMIENTA_DE_LA_GUIA, {
 
 describe("el arreglo puntual de la guía", () => {
   it("junta solo los textos con problema, tal como salieron", () => {
-    const textos = textosAArreglar(guia, ["¿Tienen un proceso para calificar los leads?", "¿De dónde vienen los clientes, y cuántos llegan por mes?"], ["contás", "profundizá"]);
+    // La doble llega partida, como la deja la lectura de la agenda: la mitad cerrada encuentra su texto entero.
+    const textos = textosAArreglar(guia, ["¿Tienen un proceso para calificar los leads?", "¿Cuántos llegan por mes?"], ["contás", "profundizá"]);
     expect(textos).toEqual([
       "¿Tienen un proceso para calificar los leads?",
       "Si contás con tiempo, profundizá en el seguimiento.",
       "¿De dónde vienen los clientes, y cuántos llegan por mes?",
     ]);
+  });
+
+  it("no toca lo que no es la guía ni los identificadores", () => {
+    const conExtras = mensaje(HERRAMIENTA_DE_LA_GUIA, {
+      bloques: [{ abre: "¿Tienen CRM hoy?", averiguar: [{ para: "¿Tienen CRM hoy?", que: "x", preguntas: [] }] }],
+      faltaContexto: [{ pregunta: "¿Tienen CRM hoy?", opciones: ["Sí", "No"] }],
+    });
+    expect(textosAArreglar(conExtras, ["¿Tienen CRM hoy?"], [])).toEqual(["¿Tienen CRM hoy?"]);
+    const nueva = aplicarElArreglo(conExtras, new Map([["¿Tienen CRM hoy?", "Cuéntame qué usan hoy."]]));
+    const input = (nueva.content[0] as Anthropic.Messages.ToolUseBlock).input as { bloques: { abre: string; averiguar: { para: string }[] }[]; faltaContexto: { pregunta: string }[] };
+    expect(input.bloques[0].abre).toBe("Cuéntame qué usan hoy.");
+    expect(input.bloques[0].averiguar[0].para).toBe("¿Tienen CRM hoy?");
+    expect(input.faltaContexto[0].pregunta).toBe("¿Tienen CRM hoy?");
   });
 
   it("sin problemas no hay nada que arreglar", () => {

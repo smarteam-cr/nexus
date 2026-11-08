@@ -11,7 +11,7 @@
  */
 import type Anthropic from "@anthropic-ai/sdk";
 import { formasDeVoseo } from "@/lib/ui/voseo-formas";
-import { sinHuecos } from "./agenda";
+import { partirPreguntaDoble, sinHuecos } from "./agenda";
 import { HERRAMIENTA_DE_LA_GUIA, MODELO_DE_LA_GUIA } from "./guia-pedido";
 
 export const HERRAMIENTA_DEL_ARREGLO = "reescribir_textos";
@@ -22,11 +22,24 @@ const MAX_LARGO = 600;
 const esObjeto = (x: unknown): x is Record<string, unknown> => typeof x === "object" && x !== null && !Array.isArray(x);
 const normal = (t: string) => sinHuecos(t.trim()).replace(/\s+/g, " ");
 
-/** Cada texto (hoja de tipo string) del input de la herramienta, en orden y sin repetir. */
-function hojas(x: unknown, out: string[] = []): string[] {
-  if (typeof x === "string") out.push(x);
-  else if (Array.isArray(x)) x.forEach((y) => hojas(y, out));
-  else if (esObjeto(x)) Object.values(x).forEach((y) => hojas(y, out));
+/* Solo la guía que lee el vendedor: lo demás de la respuesta (los hallazgos, el ajuste al objetivo, las preguntas para el
+   vendedor con sus opciones, las sesiones por equipo) no se toca, y tampoco los identificadores (`para`, `tipo`, `abierto`),
+   que deciden a qué tarjeta o dimensión apunta cada cosa (revisión del 2026-11-08). */
+const RAIZ_DE_LA_GUIA = new Set(["objetivo", "claves", "bloques", "fraseDeDemo"]);
+const CLAVES_DE_TEXTO = new Set(["objetivo", "claves", "titulo", "abre", "guia", "profundizar", "impacto", "que", "preguntas", "fraseDeDemo"]);
+
+/** Recorre los textos de la guía (con su clave) y devuelve el input con cada uno cambiado por `f`. */
+function recorrer(x: unknown, f: (t: string) => string, clave: string | null = null, raiz = true): unknown {
+  if (typeof x === "string") return clave && CLAVES_DE_TEXTO.has(clave) ? f(x) : x;
+  if (Array.isArray(x)) return x.map((y) => recorrer(y, f, clave, false));
+  if (esObjeto(x)) return Object.fromEntries(Object.entries(x).map(([k, v]) => [k, raiz && !RAIZ_DE_LA_GUIA.has(k) ? v : recorrer(v, f, k, false)]));
+  return x;
+}
+
+/** Cada texto de la guía, en orden. */
+function hojas(input: unknown): string[] {
+  const out: string[] = [];
+  recorrer(input, (t) => (out.push(t), t));
   return out;
 }
 
@@ -48,7 +61,9 @@ export function textosAArreglar(respuesta: Anthropic.Messages.Message, noCumplen
     if (!t.trim()) continue;
     const n = normal(t);
     const voseado = conVoseo.size > 0 && formasDeVoseo(t).some((w) => conVoseo.has(w));
-    const noCumple = malos.some((m) => n === m || (m.length >= 20 && n.startsWith(m)) || (n.length >= 20 && m.startsWith(n)));
+    // Una pregunta doble la lectura la parte en dos: lo que no cumple puede ser una de sus mitades.
+    const piezas = [n, ...partirPreguntaDoble(n).map(normal)];
+    const noCumple = malos.some((m) => piezas.some((p) => p === m || (m.length >= 20 && p.startsWith(m)) || (p.length >= 20 && m.startsWith(p))));
     if (voseado || noCumple) out.push(t);
     if (out.length >= MAX_TEXTOS_A_ARREGLAR) break;
   }
@@ -107,20 +122,13 @@ export function leerElArreglo(respuesta: Anthropic.Messages.Message, textos: rea
   return out;
 }
 
-function reemplazar(x: unknown, cambios: ReadonlyMap<string, string>): unknown {
-  if (typeof x === "string") return cambios.get(x) ?? x;
-  if (Array.isArray(x)) return x.map((y) => reemplazar(y, cambios));
-  if (esObjeto(x)) return Object.fromEntries(Object.entries(x).map(([k, v]) => [k, reemplazar(v, cambios)]));
-  return x;
-}
-
 /** La misma respuesta del agente con los textos reescritos: se lee con `leerLaGuiaDelAgente` como cualquier otra. */
 export function aplicarElArreglo(respuesta: Anthropic.Messages.Message, cambios: ReadonlyMap<string, string>): Anthropic.Messages.Message {
   if (!cambios.size) return respuesta;
   return {
     ...respuesta,
     content: respuesta.content.map((b) =>
-      b.type === "tool_use" && b.name === HERRAMIENTA_DE_LA_GUIA ? { ...b, input: reemplazar(b.input, cambios) } : b,
+      b.type === "tool_use" && b.name === HERRAMIENTA_DE_LA_GUIA ? { ...b, input: recorrer(b.input, (t) => cambios.get(t) ?? t) } : b,
     ),
   };
 }

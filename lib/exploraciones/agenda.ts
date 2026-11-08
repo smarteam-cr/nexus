@@ -194,14 +194,6 @@ export function preguntasQueNoCumplen(agenda: AgendaDeLaGuia): string[] {
   return [...preguntas.filter((p) => preguntaCerrada(p) || preguntaDoble(p)), ...textos.filter(conHueco)];
 }
 
-/** El aviso para pedirla otra vez sin preguntas cerradas ni dobles ni espacios por completar. */
-export function avisoDePreguntasCerradas(malas: readonly string[]): string {
-  return `\n\nEn tu intento anterior hubo preguntas que se responden con sí, no o un número, que preguntan dos cosas (dos signos de pregunta, o una segunda pegada con «, y qué…», «, y cuántos…»), o textos con un espacio por completar como «[…]» (${malas
-    .slice(0, 6)
-    .map((p) => `«${p}»`)
-    .join(", ")}). Reescríbelas: abiertas y de una sola cosa («Cuéntame cómo…», «¿Cómo deciden…?», «¿Qué pasa cuando…?»), y lo que se dice, escrito para decirse tal cual (en el cierre: «Resume con sus palabras los dos o tres retos que salieron»).`;
-}
-
 /**
  * Las preguntas de antes, sacadas de la agenda: una por tema (la primera cosa que apunta a él), para lo que todavía las
  * lee (lo que cubre la guía, lo ya preguntado, el correo de seguimiento). La pantalla muestra la agenda, no estas.
