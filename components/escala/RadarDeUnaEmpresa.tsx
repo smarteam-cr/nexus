@@ -34,7 +34,8 @@
  *     cada una del suyo, con su leyenda. Eje por eje en el mismo lugar: la parte k de cada capa de un área va sobre la
  *     parte k de esa capa del área principal (la base se llama igual en las tres áreas; la producción, no: los nombres
  *     son los del área principal y la leyenda lo dice). Un vértice de otra área lleva el `data-d` de SU dimensión. La
- *     página del cliente no los pasa y se ve igual que siempre.
+ *     página del cliente no los pasa y se ve igual que siempre. Un área de `otras` con `fase` («entra» o «sale») se anima
+ *     sola al sumarla o sacarla (lib/escala/areas-superpuestas.ts); las demás piezas no se tocan.
  */
 import type { ReactNode } from "react";
 import type { ClaveDeCapa, Letra } from "@/lib/escala/documento/tipos";
@@ -54,6 +55,7 @@ import {
   type MedidasDelRadar,
   type RotuloDelRadar,
 } from "@/lib/escala/radar-de-una-empresa";
+import { alinearArea, type AreaAlineada, type AreaSuperpuesta } from "@/lib/escala/areas-superpuestas";
 import "./radar-de-una-empresa.css";
 
 export type { DimensionDelRadar, FrenoDelRadar } from "@/lib/escala/radar-de-una-empresa";
@@ -104,36 +106,7 @@ export interface CapaDelRadar {
   puntaje: number | null;
 }
 
-/** Otra área dibujada encima de la principal, con su color (`otras`). Sus dimensiones con SUS claves. */
-export interface AreaSuperpuesta {
-  area: string;
-  color: string;
-  dimensiones: readonly DimensionDelRadar[];
-}
-
-/** Un área superpuesta ya alineada con los ejes de la principal: `reales` lleva cada eje a la dimensión de esa área. */
-interface AreaAlineada {
-  area: string;
-  color: string;
-  dims: DimensionDelRadar[];
-  reales: Record<string, string>;
-}
-
-/** La parte k de cada capa de `otra` sobre la parte k de esa capa de la principal (sin la suya: eje sin vértice). */
-function alinear(dims: readonly DimensionDelRadar[], otra: AreaSuperpuesta): AreaAlineada {
-  const reales: Record<string, string> = {};
-  const vistos: Partial<Record<ClaveDeCapa, number>> = {};
-  const alineadas = dims.map((d): DimensionDelRadar => {
-    const k = vistos[d.capa] ?? 0;
-    vistos[d.capa] = k + 1;
-    const suya = otra.dimensiones.filter((x) => x.capa === d.capa)[k];
-    if (suya) reales[d.clave] = suya.clave;
-    return suya
-      ? { ...suya, clave: d.clave, nombre: d.nombre, numero: d.numero }
-      : { clave: d.clave, nombre: d.nombre, capa: d.capa, preguntada: false, nivel: null, puntaje: null };
-  });
-  return { area: otra.area, color: otra.color, dims: alineadas, reales };
-}
+export type { AreaSuperpuesta } from "@/lib/escala/areas-superpuestas";
 
 export interface PropsDelRadarDeUnaEmpresa {
   area: string;
@@ -174,10 +147,12 @@ export default function RadarDeUnaEmpresa({
       return `${d.nombre}, ${e.tipo === "noLoSe" ? `no lo sabías, ${notaDelNoLoSe(nombreDeNivel)}` : textoDelEstado(e, nombreDeNivel).toLowerCase()}${extra}`;
     })
     .join("; ")}.`;
-  const alineadas = otras.map((o) => alinear(dims, o));
+  const alineadas = otras.map((o) => alinearArea(dims, o));
+  /** La leyenda no nombra el área que está saliendo. */
+  const quedan = alineadas.filter((o) => o.fase !== "sale");
   const comun = { area, dims, capas, nombreDeNivel, resultado, frena, figura: color, otras: alineadas };
   const leyenda = (
-    <LeyendaDelRadar dims={dims} nombreDeNivel={nombreDeNivel} figura={color} areas={alineadas.length ? [{ area, color }, ...alineadas] : []} />
+    <LeyendaDelRadar dims={dims} nombreDeNivel={nombreDeNivel} figura={color} areas={quedan.length ? [{ area, color }, ...quedan] : []} />
   );
 
   if (formato === "pdf") {
@@ -395,11 +370,19 @@ function SvgDelRadar({
       {/* Las otras áreas, debajo de la principal y cada una de su color: su figura y sus vértices (un aro punteado si es
           una hipótesis). El vértice lleva la clave de SU dimensión y, en `data-eje`, la del eje donde está: el movimiento
           del radar (components/escala/movimiento-del-radar.ts) resalta con él el rótulo de ese eje y pone ahí la tarjeta.
-          Su resalte va del rótulo a SU vértice, de su color. */}
+          Su resalte va del rótulo a SU vértice, de su color. Con `fase` (al sumarla o sacarla en La escala) se anima sola:
+          crece desde el centro o se encoge y se apaga (radar-de-una-empresa.css); la que sale no recibe cursor ni foco. */}
       {otras.map((o) => {
         const od = dibujoDelRadar(m, o.dims, { frena: null, capas, nombreDeNivel });
+        const vivo = interactivo && o.fase !== "sale";
         return (
-          <g key={o.area} className="rde-otra">
+          <g
+            key={o.area}
+            className="rde-otra"
+            data-fase={o.fase}
+            aria-hidden={o.fase === "sale" || undefined}
+            style={o.fase ? { transformOrigin: `${f(m.cx)}px ${f(m.cy)}px` } : undefined}
+          >
             {od.figura.length > 1 && (
               <polygon
                 className="rde-figura rde-otra-figura"
@@ -411,7 +394,7 @@ function SvgDelRadar({
                 strokeLinejoin="round"
               />
             )}
-            {interactivo &&
+            {vivo &&
               od.vertices.map((v) => {
                 const e = od.ejes.find((x) => x.clave === v.clave);
                 if (!e || !o.reales[v.clave]) return null;
@@ -434,11 +417,11 @@ function SvgDelRadar({
               <circle
                 key={v.clave}
                 className="rde-vertice"
-                data-d={interactivo ? o.reales[v.clave] : undefined}
-                data-eje={interactivo && o.reales[v.clave] ? v.clave : undefined}
-                tabIndex={interactivo ? 0 : undefined}
-                role={interactivo ? "button" : undefined}
-                aria-label={interactivo ? `${o.area} · ${o.dims.find((x) => x.clave === v.clave)?.nombre ?? ""}` : undefined}
+                data-d={vivo ? o.reales[v.clave] : undefined}
+                data-eje={vivo && o.reales[v.clave] ? v.clave : undefined}
+                tabIndex={vivo ? 0 : undefined}
+                role={vivo ? "button" : undefined}
+                aria-label={vivo ? `${o.area} · ${o.dims.find((x) => x.clave === v.clave)?.nombre ?? ""}` : undefined}
                 cx={f(v.punto[0])}
                 cy={f(v.punto[1])}
                 r={m.vertice.r}

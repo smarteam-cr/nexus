@@ -13693,6 +13693,17 @@ Elías probó la tercera vuelta con Centauro Solutions («es un buen MVP») y pi
   áreas; la producción no, y la leyenda dice que los nombres son los de la principal. Tocar un nodo de otra área la
   vuelve la principal y abre su dimensión. La página del cliente no pasa `color` ni `otras`: se ve igual (lo cuida una
   prueba). La vista «Mapa» (la rueda) sigue siendo de un área.
+  - *Sumar o sacar un área solo mueve esa área (8 nov, Elías: «la animación de la escala como que se corta, empieza
+    desde cero… solo actualice la escala»).* La causa: el bloque del área y el radar llevaban `key` con el id de la
+    principal, y sumar un área la volvía la principal; el radar se volvía a montar y su entrada arrancaba de cero. Ahora
+    nada se vuelve a montar y la principal ya NO es la última elegida: se queda al sumar otra (la nueva entra encima) y
+    cambia al tocar un nodo de otra área o al sacar la principal. La que entra crece desde el centro y la que sale se
+    encoge y se apaga (≈350 ms, `fase` de `otras`, `areasAlCambiar` en lib/escala/areas-superpuestas.ts; con «reducir
+    movimiento», de una). Cada área va siempre de su color, también sola, para que la que queda no cambie de color. La
+    línea «Encima, …» pasó debajo del radar: arriba lo corría hacia abajo al sumar la primera.
+  - *Con varias áreas, la tarjeta del cursor es la del eje:* una sección por área con lo mismo que la de una (nivel,
+    puntaje, evidencia, cómo está, qué preguntar), cada una con su color, la principal primero (`partesPorEje`); se
+    resalta el vértice de cada área en ese eje. Con un área, igual que antes.
 - **Marketing se sugiere como hipótesis aunque no esté en juego.** En Centauro, «Ubicar con las reuniones» corrió
   (8 nov, 9 propuestas, 2 descartadas) y Marketing quedó vacío: la única reunión con transcripción fue con Ventas, y K11
   descartaba toda hipótesis de Marketing sacada de una reunión con otro equipo. Ahora K11 sigue frenando el NIVEL con

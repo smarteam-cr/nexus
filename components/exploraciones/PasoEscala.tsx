@@ -27,11 +27,12 @@
  * escala»), no «Ubicar con las reuniones». «Acceso» (30 oct, cuenta y preventa): el enlace con que el cliente la ve
  * (AccesoALaEscala.tsx).
  */
-import { useState, type CSSProperties, type KeyboardEvent, type MouseEvent, type ReactNode } from "react";
+import { useEffect, useState, type CSSProperties, type KeyboardEvent, type MouseEvent, type ReactNode } from "react";
 import { Alert, Button } from "@/components/ui";
 import { BOTON_DE_HERRAMIENTA, BOTON_DE_HERRAMIENTA_ACTIVO } from "@/components/ui/sistema";
 import { PUNTO_DE_NIVEL } from "@/components/escala/niveles";
 import RadarDeUnaEmpresa from "@/components/escala/RadarDeUnaEmpresa";
+import { areasAlCambiar, partesPorEje, SIN_CAMBIO, type AreaSuperpuesta, type CambioDeAreas } from "@/lib/escala/areas-superpuestas";
 import { cn } from "@/lib/cn";
 import type { AreaDelChequeo } from "@/lib/escala/chequeo";
 import type { ClaveDeCapa, Letra } from "@/lib/escala/documento/tipos";
@@ -583,39 +584,70 @@ function dimensionesDelRadar(area: AreaDelLienzo, calculo: AreaDelChequeo, posic
     });
 }
 
+/** Lo que dura la animación de un área que entra o sale (radar-de-una-empresa.css), con un margen. */
+const MS_DE_LA_ANIMACION = 400;
+
+/**
+ * Las áreas del radar con su `fase` mientras se animan: la recién sumada «entra», la recién sacada «sale» (se sigue
+ * dibujando, con su último dibujo, hasta que termina) y las demás quietas (lib/escala/areas-superpuestas.ts ›
+ * `areasAlCambiar`). Lo de antes se guarda en estado (no en un ref) y se compara al dibujar, como pide React.
+ */
+function useAreasConFase(ahora: readonly AreaSuperpuesta[]): AreaSuperpuesta[] {
+  const firma = JSON.stringify(ahora);
+  const [antes, setAntes] = useState({ firma, areas: ahora });
+  const [cambio, setCambio] = useState<CambioDeAreas<AreaSuperpuesta>>(SIN_CAMBIO);
+  if (antes.firma !== firma) {
+    setAntes({ firma, areas: ahora });
+    const nombres = (xs: readonly AreaSuperpuesta[]) => xs.map((a) => a.area).join("|");
+    if (nombres(antes.areas) !== nombres(ahora)) setCambio(areasAlCambiar(antes.areas, ahora, cambio));
+  }
+  useEffect(() => {
+    if (!cambio.entran.length && !cambio.salen.length) return;
+    const t = window.setTimeout(() => setCambio(SIN_CAMBIO), MS_DE_LA_ANIMACION);
+    return () => window.clearTimeout(t);
+  }, [cambio]);
+  return [...cambio.salen.map((a): AreaSuperpuesta => ({ ...a, fase: "sale" })), ...ahora.map((a): AreaSuperpuesta => (cambio.entran.includes(a.area) ? { ...a, fase: "entra" } : a))];
+}
+
 /**
  * El radar del diagnóstico de rendimiento (`RadarDeUnaEmpresa`, el mismo componente de la página del cliente) con lo que
  * dibuja el mapa: el área principal con sus nombres y, encima, las otras áreas elegidas, cada una de su color. Una
  * hipótesis va con aro punteado («por explorar»); lo que no tiene nada, con el eje punteado («Sin medir»). Al pasar el
- * cursor por una dimensión sale su tarjeta (TarjetaDelRadar.tsx); tocarla abre su detalle.
+ * cursor por una dimensión sale su tarjeta (TarjetaDelRadar.tsx), con una sección por área si hay varias en ese eje;
+ * tocarla abre su detalle. Sumar o sacar un área no vuelve a dibujar el radar desde cero: solo esa entra o sale.
  */
 function RadarDeLasAreas({ principal, otras, onElegir }: { principal: AreaDelLienzo; otras: readonly AreaDelLienzo[]; onElegir: (id: string) => void }) {
   const { mapa, escala } = useLienzo();
   const calculo = calculoDelArea(escala, principal, mapa.posiciones);
-  if (!calculo) return null;
-  const frena = loQueLaFrena(calculo);
-  const nombreDeCapa = (c: ClaveDeCapa) => escala.capas.find((x) => x.clave === c)?.nombre ?? c;
   const dibujadas = [principal, ...otras];
-  // Lo que muestra la tarjeta de cada dimensión dibujada, de cualquiera de las áreas.
+  // Lo que muestra la tarjeta de cada dimensión dibujada, de cualquiera de las áreas, y cada área como la dibuja el radar.
   const tarjetas: Record<string, DimensionDeLaTarjeta> = {};
-  const superpuestas = [];
-  for (const a of dibujadas) {
+  const areas: AreaSuperpuesta[] = [];
+  for (const a of calculo ? dibujadas : []) {
     const c = a.id === principal.id ? calculo : calculoDelArea(escala, a, mapa.posiciones);
     if (!c) continue;
+    const color = colorDelArea(a.id);
     for (const d of c.dimensiones) {
       const dl = a.dimensiones.find((x) => x.id === d.id);
       if (!dl?.aplica) continue;
       const p = mapa.posiciones[d.id];
-      tarjetas[d.id] = { id: d.id, nombre: d.nombre, area: a.nombre, nivel: d.nivel, puntaje: d.puntaje, clase: p?.clase ?? null, porQue: p?.porQue ?? null, pregunta: dl.pregunta };
+      tarjetas[d.id] = { id: d.id, nombre: d.nombre, area: a.nombre, color, nivel: d.nivel, puntaje: d.puntaje, clase: p?.clase ?? null, porQue: p?.porQue ?? null, pregunta: dl.pregunta };
     }
-    if (a.id !== principal.id) superpuestas.push({ area: a.nombre, color: colorDelArea(a.id), dimensiones: dimensionesDelRadar(a, c, mapa.posiciones) });
+    areas.push({ area: a.nombre, color, dimensiones: dimensionesDelRadar(a, c, mapa.posiciones) });
   }
+  // Con la principal adentro: si la sacan, se va como las demás.
+  const conFase = useAreasConFase(areas);
+  if (!calculo) return null;
+  const frena = loQueLaFrena(calculo);
+  const nombreDeCapa = (c: ClaveDeCapa) => escala.capas.find((x) => x.clave === c)?.nombre ?? c;
+  const dimsDeLaPrincipal = areas[0]?.dimensiones ?? [];
+  const superpuestas = conFase.filter((a) => a.area !== principal.nombre);
   const elegirDesde = (e: MouseEvent<HTMLDivElement> | KeyboardEvent<HTMLDivElement>) => {
     const id = (e.target as Element).closest("[data-d]")?.getAttribute("data-d");
     if (id && tarjetas[id]) onElegir(id);
   };
   return (
-    <ConTarjetas dimensiones={tarjetas}>
+    <ConTarjetas dimensiones={tarjetas} porEje={partesPorEje(dimsDeLaPrincipal, superpuestas)}>
       {/* El radar es SVG estático (sin JavaScript propio): el clic se lee del `data-d` del nodo, la porción o el nombre.
           El foco y el rol de botón los tiene cada nodo del SVG. */}
       <div
@@ -629,14 +661,16 @@ function RadarDeLasAreas({ principal, otras, onElegir }: { principal: AreaDelLie
         {/* Como mucho del ancho que tiene en la página del resultado: en una pantalla grande el radar crecía y sus rótulos
             (y con ellos la tarjeta) quedaban más lejos de los vértices que allá. */}
         <div className="mx-auto max-w-[1340px]">
+          {/* Cada área siempre de su color, también sola: al sacar las demás, la que queda no cambia de color. */}
           <RadarDeUnaEmpresa
             area={principal.nombre}
-            dimensiones={dimensionesDelRadar(principal, calculo, mapa.posiciones)}
+            dimensiones={dimsDeLaPrincipal}
             capas={(["base", "produccion"] as const).map((c) => ({ clave: c, nombre: nombreDeCapa(c), nivel: calculo.capas[c].nivel, puntaje: calculo.capas[c].puntaje }))}
             niveles={escala.niveles}
             resultado={{ nivel: calculo.nivel, puntaje: calculo.puntaje }}
             frena={frena?.dimensiones[0] && calculo.objetivo ? { clave: frena.dimensiones[0], objetivo: calculo.objetivo } : null}
-            {...(superpuestas.length ? { color: colorDelArea(principal.id), otras: superpuestas } : {})}
+            color={colorDelArea(principal.id)}
+            otras={superpuestas}
           />
         </div>
       </div>
@@ -705,11 +739,6 @@ function AreaConAlgo({
             {cuenta.conEvidencia} de {aplican} con evidencia · {cuenta.hipotesis} por explorar{cuenta.sinDato > 0 ? ` · ${cuenta.sinDato} sin dato` : ""}
             {!enJuego && ` · no está en juego ${DEL_LUGAR[lugar]}`}
           </p>
-          {otras.length > 0 && vista === "nodos" && (
-            <p className="text-xs text-fg-muted">
-              Encima, {enLista(otras.map((o) => o.nombre))}. Toca un nodo de otra área para ver su detalle.
-            </p>
-          )}
         </div>
         {puedeEditar && (
           <button type="button" disabled={guardando} onClick={onAlternar} className="px-1.5 py-1 text-xs font-semibold text-fg-muted hover:text-fg hover:underline">
@@ -739,7 +768,15 @@ function AreaConAlgo({
 
       {vista === "nodos" ? (
         <figure className="m-0 flex flex-col gap-2">
-          <RadarDeLasAreas key={area.id} principal={area} otras={otras} onElegir={onAbrir} />
+          {/* Sin `key`: sumar, sacar o cambiar la principal actualiza el radar sin volver a montarlo (antes la animación de
+              entrada arrancaba de cero en cada clic, 8 nov). */}
+          <RadarDeLasAreas principal={area} otras={otras} onElegir={onAbrir} />
+          {/* Debajo del radar y no arriba: sumar la primera área encima no corre el radar hacia abajo. */}
+          {otras.length > 0 && (
+            <p className="text-xs text-fg-muted">
+              Encima, {enLista(otras.map((o) => o.nombre))}. Toca un nodo de otra área para ver su detalle.
+            </p>
+          )}
           {!abierta && (
             <figcaption className="text-xs text-fg-muted">
               Pasa el cursor por una dimensión para ver cómo está y qué preguntar; tócala para ver sus cinco niveles. «Ver puntajes» muestra el puntaje de cada una.
@@ -881,22 +918,29 @@ function DondeEstaHoy() {
   const elegidas = ids.map((id) => escala.areas.find((a) => a.id === id)!);
   const conAlgo = (a: AreaDelLienzo) => enJuego.includes(a.id) || tieneAlgo(a, mapa.posiciones);
   const [principalId, setPrincipal] = useState<string | null>(null);
-  /* La principal es la última tocada; si no tiene nada, se muestra igual (con «Sumar…») y el radar sigue con la última
-     elegida que sí tiene algo (la revisión cazó que tocar Marketing vacía con Ventas elegida no mostraba nada). */
-  const tocada = elegidas.find((a) => a.id === principalId) ?? elegidas[elegidas.length - 1];
-  const vacia = tocada && !conAlgo(tocada) ? tocada : null;
-  const principal = vacia ? ([...elegidas].reverse().find(conAlgo) ?? null) : tocada;
+  const [vaciaId, setVacia] = useState<string | null>(null);
+  /* La principal (la de los nombres, el centro y el detalle) se queda al sumar otra área: la nueva entra encima y solo
+     cambia el radar (8 nov, Elías: «solo actualice la escala»). Cambia al tocar un nodo de otra área o al sacar la
+     principal (pasa a la última elegida con algo). Un área sin nada recién tocada se muestra igual, con «Sumar…». */
+  const principal = elegidas.find((a) => a.id === principalId && conAlgo(a)) ?? [...elegidas].reverse().find(conAlgo) ?? null;
+  const vacia = elegidas.find((a) => a.id === (vaciaId ?? elegidas[elegidas.length - 1]?.id) && !conAlgo(a)) ?? null;
   if (!principal && !vacia) return null;
   const otras = principal ? elegidas.filter((a) => a.id !== principal.id && conAlgo(a) && calculoDelArea(escala, a, mapa.posiciones)) : [];
   const orden = (id: string) => enJuego.indexOf(id) + 1;
   const elegir = (id: string) => {
-    setAbierta(null);
+    const area = escala.areas.find((a) => a.id === id);
+    if (!area) return;
     if (!ids.includes(id)) {
       setElegidas([...ids, id]);
-      setPrincipal(id);
+      // La principal no cambia; si todavía no hay ninguna (solo áreas sin nada), la que se suma lo es.
+      setPrincipal(principal?.id ?? id);
+      setVacia(conAlgo(area) ? null : id);
     } else if (ids.length > 1) {
       setElegidas(ids.filter((x) => x !== id));
-      if (tocada?.id === id) setPrincipal(null);
+      if (principal?.id === id) setPrincipal(null);
+      if (vacia?.id === id) setVacia(null);
+      // La dimensión abierta se cierra solo si era del área que sale.
+      if (abierta && area.dimensiones.some((d) => d.id === abierta)) setAbierta(null);
     }
   };
   // Tocar una dimensión de otra área la vuelve la principal y abre su detalle.
@@ -937,7 +981,6 @@ function DondeEstaHoy() {
       {vacia && <AreaFuera area={vacia} onSumar={() => alternar(vacia.id)} />}
       {principal && (
         <AreaConAlgo
-          key={principal.id}
           area={principal}
           otras={vista === "nodos" ? otras : []}
           enJuego={enJuego.includes(principal.id)}

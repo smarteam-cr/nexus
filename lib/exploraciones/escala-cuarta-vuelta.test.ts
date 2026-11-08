@@ -232,6 +232,30 @@ describe("el radar con varias áreas encima", () => {
     expect(html).not.toContain(">Marca<");
   });
 
+  it("el área que entra lleva su fase; la que sale se dibuja sin cursor ni foco y la leyenda ya no la nombra (8 nov)", () => {
+    const html = renderToStaticMarkup(
+      createElement(RadarDeUnaEmpresa, {
+        area: "Ventas",
+        dimensiones: dimsDe("1", ["Procesos", "Datos", "Propuesta", "Leads"], "I"),
+        capas,
+        niveles,
+        color: "#0b58d3",
+        otras: [
+          { area: "Marketing", color: "#db2777", fase: "sale", dimensiones: dimsDe("2", ["Procesos", "Datos", "Marca", "Canales"], "F") },
+          { area: "Servicio", color: "#0d9488", fase: "entra", dimensiones: dimsDe("3", ["Procesos", "Datos", "Casos", "Base"], "F") },
+        ],
+      }),
+    );
+    expect(html).toContain('class="rde-otra" data-fase="entra"');
+    expect(html).toContain('class="rde-otra" data-fase="sale" aria-hidden="true"');
+    expect(html).toContain('data-d="3.1"');
+    expect(html).not.toContain('data-d="2.1"');
+    // La leyenda nombra a Ventas y a Servicio, no a Marketing.
+    const leyenda = html.slice(html.indexOf('class="rde-leyenda"'));
+    expect(leyenda).toContain("Servicio");
+    expect(leyenda.slice(0, leyenda.indexOf("Los nombres de las partes"))).not.toContain("Marketing");
+  });
+
   it("⛔ sin `otras`, el radar del cliente no cambia: ni leyenda de áreas ni figuras de más", () => {
     const html = renderToStaticMarkup(createElement(RadarDeUnaEmpresa, { area: "Ventas", dimensiones: dimsDe("1", ["Procesos", "Datos", "Propuesta", "Leads"], "I"), capas, niveles }));
     expect(html).not.toContain("rde-otra");

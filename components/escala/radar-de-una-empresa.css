@@ -76,6 +76,21 @@
   .rde-interactivo .rde-empresa { transform-box: view-box; animation: rde-empresa-entra .9s cubic-bezier(.2, .7, .2, 1) .15s both; }
 }
 @keyframes rde-empresa-entra { from { transform: scale(.4); opacity: 0; } to { transform: none; opacity: 1; } }
+
+/* Al sumar o sacar un área en La escala (uso interno: `fase` de `otras`), solo esa se mueve: la que entra crece desde el
+   centro y la que sale se encoge y se apaga (8 nov, Elías: «que no se corte»). Las demás quedan quietas. Con «reducir
+   movimiento», la que entra aparece y la que sale se va de una. */
+.rde-otra[data-fase="sale"] { pointer-events: none; }
+@media (prefers-reduced-motion: no-preference) {
+  .rde-otra[data-fase] { transform-box: view-box; }
+  .rde-otra[data-fase="entra"] { animation: rde-otra-entra .35s cubic-bezier(.2, .7, .2, 1) both; }
+  .rde-otra[data-fase="sale"] { animation: rde-otra-sale .3s ease-in both; }
+}
+@keyframes rde-otra-entra { from { transform: scale(.55); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes rde-otra-sale { from { transform: none; opacity: 1; } to { transform: scale(.55); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .rde-otra[data-fase="sale"] { display: none; }
+}
 @media (prefers-reduced-motion: reduce) {
   .rde-eje-resalte, .rde-eje-resalte.is-activa, .rde-interactivo .rde-vertice, .rde-interactivo .rde-vertice.is-activa, .rde-interactivo .rde-rotulo, .rde-interactivo .rde-numero, .rde-interactivo .rde-rotulo-nombre { transition: none; }
 }

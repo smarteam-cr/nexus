@@ -9,9 +9,11 @@
  *
  * El movimiento es EL MISMO CÓDIGO de la página del diagnóstico (components/escala/movimiento-del-radar.ts, 8 nov): el
  * resalte del eje, el vértice y el rótulo, el fundido, el imán y la regla que la ubica junto a la dimensión sin taparla.
- * Se deja alcanzar: queda abierta mientras el cursor va del radar a ella. Con áreas superpuestas, el vértice de otra área
- * se resalta con el rótulo de su eje y la tarjeta va ahí. El texto sale de la última corrida de «Ubicar con las
- * reuniones»; sin corrida, del porqué del nivel y la pregunta de la escala.
+ * Se deja alcanzar: queda abierta mientras el cursor va del radar a ella. Con áreas superpuestas, la tarjeta es la del EJE:
+ * una sección por área, cada una con su color y lo mismo que la tarjeta de un área (8 nov, Elías: «si hago hover en una
+ * dimensión y tengo dos departamentos seleccionados, debe aparecer la información de cada departamento»); va junto al
+ * rótulo del eje. El texto sale de la última corrida de «Ubicar con las reuniones»; sin corrida, del porqué del nivel y
+ * la pregunta de la escala.
  */
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import { useToast } from "@/components/ui";
@@ -29,6 +31,8 @@ export interface DimensionDeLaTarjeta {
   id: string;
   nombre: string;
   area: string;
+  /** El color del área en el radar: con varias áreas en la tarjeta, cada sección lo lleva. */
+  color?: string;
   nivel: Letra | null;
   puntaje: number | null;
   clase: "evidencia" | "hipotesis" | null;
@@ -109,9 +113,19 @@ export function PreguntasDeLaDimension({ dimensionId, porQue, preguntaDeLaEscala
  * Envuelve el radar y le da el movimiento de la página de resultado del test (components/escala/movimiento-del-radar.ts,
  * el mismo código): al pasar el cursor (o enfocar, o tocar) una dimensión se resaltan su eje, su vértice y su rótulo,
  * entra su tarjeta con un fundido junto a la dimensión y los vértices se corren apenas hacia el cursor (el imán). La
- * tarjeta se deja alcanzar para tocar «Llevar a la sesión N». `dimensiones` trae las de todas las áreas dibujadas.
+ * tarjeta se deja alcanzar para tocar «Llevar a la sesión N». `dimensiones` trae las de todas las áreas dibujadas;
+ * `porEje`, las de cada eje (lib/escala/areas-superpuestas.ts › `partesPorEje`): con dos o más, la tarjeta las muestra
+ * todas, la principal primero.
  */
-export function ConTarjetas({ dimensiones, children }: { dimensiones: Readonly<Record<string, DimensionDeLaTarjeta>>; children: ReactNode }) {
+export function ConTarjetas({
+  dimensiones,
+  porEje,
+  children,
+}: {
+  dimensiones: Readonly<Record<string, DimensionDeLaTarjeta>>;
+  porEje?: Readonly<Record<string, readonly string[]>>;
+  children: ReactNode;
+}) {
   const [abierta, setAbierta] = useState<TarjetaPedida | null>(null);
   const caja = useRef<HTMLDivElement>(null);
   const tarjeta = useRef<HTMLDivElement>(null);
@@ -131,17 +145,18 @@ export function ConTarjetas({ dimensiones, children }: { dimensiones: Readonly<R
     };
   }, []);
 
-  const d = abierta ? dimensiones[abierta.clave] : undefined;
+  const ds = abierta ? (porEje?.[abierta.eje] ?? [abierta.clave]).map((id) => dimensiones[id]).filter((x): x is DimensionDeLaTarjeta => !!x) : [];
   return (
     <div ref={caja}>
       {children}
-      {abierta && d && <Tarjeta key={abierta.clave} ref={tarjeta} d={d} donde={abierta} />}
+      {/* La tarjeta de un eje con varias áreas es una sola: pasar de un vértice a otro del mismo eje no la vuelve a abrir. */}
+      {abierta && ds.length > 0 && <Tarjeta key={ds.length > 1 ? `eje:${abierta.eje}` : abierta.clave} ref={tarjeta} ds={ds} donde={abierta} />}
     </div>
   );
 }
 
-function Tarjeta({ d, donde, ref }: { d: DimensionDeLaTarjeta; donde: TarjetaPedida; ref: RefObject<HTMLDivElement | null> }) {
-  const { exp, nombreDeNivel, lugar } = useLienzo();
+function Tarjeta({ ds, donde, ref }: { ds: readonly DimensionDeLaTarjeta[]; donde: TarjetaPedida; ref: RefObject<HTMLDivElement | null> }) {
+  const { exp, lugar } = useLienzo();
 
   /* Se ubica al abrirse (cada dimensión es su propia tarjeta: `key`) y al reubicarla, con la misma regla que la del
      diagnóstico, escribiendo en el DOM: sin estado, sin un render de más. Después entra con el fundido. */
@@ -155,19 +170,45 @@ function Tarjeta({ d, donde, ref }: { d: DimensionDeLaTarjeta; donde: TarjetaPed
   }, [ref, donde]);
 
   const guardadas = exp.estado.propuesta.tarjetasDeLaEscala;
-  const t = tarjetaParaMostrar(guardadas?.porDimension[d.id], { porQue: d.porQue, preguntaDeLaEscala: d.pregunta, conNivel: !!d.nivel });
+  const varias = ds.length > 1;
+  const deAgente = ds.some((d) => tarjetaParaMostrar(guardadas?.porDimension[d.id], { porQue: d.porQue, preguntaDeLaEscala: d.pregunta, conNivel: !!d.nivel }).deAgente);
 
   return (
     <div
       ref={ref}
       data-tarjeta-interna=""
-      aria-label={`${d.nombre}: cómo está y qué preguntar`}
+      aria-label={varias ? `${ds[0].nombre}, en ${ds.map((d) => d.area).join(", ")}: cómo está y qué preguntar` : `${ds[0].nombre}: cómo está y qué preguntar`}
       style={{ left: 0, top: 0, visibility: "hidden" }}
       className="fixed z-50 flex w-[min(360px,calc(100vw-24px))] flex-col gap-2.5 overflow-y-auto overscroll-contain rounded-2xl border border-line bg-surface p-4 opacity-0 shadow-xl transition-opacity duration-150 ease-out data-[visible]:opacity-100 motion-reduce:transition-none"
     >
+      {ds.map((d, i) => (
+        <SeccionDeLaTarjeta key={d.id} d={d} conColor={varias} separada={i > 0} />
+      ))}
+      <p className="text-[11px] text-fg-muted">
+        {deAgente && guardadas
+          ? `Lo escribió Nexus con las reuniones el ${diaCorto(guardadas.en)}. `
+          : lugar === "preventa"
+            ? "Con «Ubicar con las reuniones», Nexus la escribe con lo que se habló. "
+            : ""}
+        Toca el nodo para ver los cinco niveles.
+      </p>
+    </div>
+  );
+}
+
+/**
+ * Lo de una dimensión en la tarjeta: área y clave, nombre, puntaje y nivel, evidencia o por explorar, «cómo está» y qué
+ * preguntar. Con varias áreas (`conColor`), cada sección lleva el color de su área y, desde la segunda, una línea arriba.
+ */
+function SeccionDeLaTarjeta({ d, conColor, separada }: { d: DimensionDeLaTarjeta; conColor: boolean; separada: boolean }) {
+  const { exp, nombreDeNivel } = useLienzo();
+  const t = tarjetaParaMostrar(exp.estado.propuesta.tarjetasDeLaEscala?.porDimension[d.id], { porQue: d.porQue, preguntaDeLaEscala: d.pregunta, conNivel: !!d.nivel });
+  return (
+    <section aria-label={`${d.area} · ${d.nombre}`} className={cn("flex flex-col gap-2.5", separada && "border-t border-line pt-3")}>
       <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-1">
         <div className="min-w-0">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-fg-muted">
+          <p className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-fg-muted">
+            {conColor && d.color && <span className="h-2.5 w-2.5 flex-shrink-0 rounded-[3px]" style={{ background: d.color }} aria-hidden="true" />}
             {d.area} · {d.id}
           </p>
           <p className="text-sm font-semibold text-fg">{d.nombre}</p>
@@ -204,14 +245,6 @@ function Tarjeta({ d, donde, ref }: { d: DimensionDeLaTarjeta; donde: TarjetaPed
           <PreguntasDeLaDimension dimensionId={d.id} porQue={d.porQue} preguntaDeLaEscala={d.pregunta} conNivel={!!d.nivel} />
         </div>
       )}
-      <p className="text-[11px] text-fg-muted">
-        {t.deAgente && guardadas
-          ? `Lo escribió Nexus con las reuniones el ${diaCorto(guardadas.en)}. `
-          : lugar === "preventa"
-            ? "Con «Ubicar con las reuniones», Nexus la escribe con lo que se habló. "
-            : ""}
-        Toca el nodo para ver los cinco niveles.
-      </p>
-    </div>
+    </section>
   );
 }
