@@ -7,18 +7,20 @@
  * escribe el agente («cómo está», en simple) y suma qué preguntar para explorarla más, cada pregunta con su botón para
  * llevarla a la próxima sesión (lib/exploraciones/tarjetas-de-la-escala.ts › `opsParaLlevar`).
  *
- * La ubica la misma regla que la del diagnóstico (lib/tests-diagnostico/tarjeta-del-radar.ts): junto a la dimensión,
- * sin taparla. A diferencia de esa, se puede tocar: queda abierta mientras el cursor va del radar a ella. El texto sale de
- * la última corrida de «Ubicar con las reuniones»; sin corrida, del porqué del nivel y la pregunta de la escala.
+ * El movimiento es EL MISMO CÓDIGO de la página del diagnóstico (components/escala/movimiento-del-radar.ts, 8 nov): el
+ * resalte del eje, el vértice y el rótulo, el fundido, el imán y la regla que la ubica junto a la dimensión sin taparla.
+ * Se deja alcanzar: queda abierta mientras el cursor va del radar a ella. Con áreas superpuestas, el vértice de otra área
+ * se resalta con el rótulo de su eje y la tarjeta va ahí. El texto sale de la última corrida de «Ubicar con las
+ * reuniones»; sin corrida, del porqué del nivel y la pregunta de la escala.
  */
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import { useToast } from "@/components/ui";
 import { PUNTO_DE_NIVEL } from "@/components/escala/niveles";
 import { cn } from "@/lib/cn";
 import type { Letra } from "@/lib/escala/documento/tipos";
 import { diaCorto } from "@/lib/exploraciones/fechas";
 import { llevadaDesdeLaEscala, opsParaLlevar, opsParaQuitar, tarjetaParaMostrar, yaLlevada } from "@/lib/exploraciones/tarjetas-de-la-escala";
-import { posicionDeLaTarjeta } from "@/lib/tests-diagnostico/tarjeta-del-radar";
+import { conIman, imanDelRadar, resaltarElRadar, ubicarLaTarjeta, type TarjetaPedida } from "@/components/escala/movimiento-del-radar";
 import { useLienzo } from "./contexto";
 import { useSesiones } from "./useSesiones";
 
@@ -103,132 +105,65 @@ export function PreguntasDeLaDimension({ dimensionId, porQue, preguntaDeLaEscala
   );
 }
 
-interface Abierta {
-  id: string;
-  x: number;
-  y: number;
-}
-
-/** Lo que espera para cerrarse: el cursor alcanza a ir del nodo a la tarjeta. */
-const CERRAR_MS = 450;
-
-/** El radar que se ve: se dibujan dos (el grande y el compacto) y el CSS esconde uno según el ancho. */
-const radarVisible = (caja: HTMLElement | null) => [...(caja?.querySelectorAll("svg.rde-svg") ?? [])].find((s) => s.getBoundingClientRect().width > 0) ?? null;
-
 /**
- * Envuelve el radar: escucha el cursor (y el foco del teclado) sobre los `[data-d]` y muestra la tarjeta de esa
- * dimensión. `dimensiones` trae las de todas las áreas dibujadas.
+ * Envuelve el radar y le da el movimiento de la página de resultado del test (components/escala/movimiento-del-radar.ts,
+ * el mismo código): al pasar el cursor (o enfocar, o tocar) una dimensión se resaltan su eje, su vértice y su rótulo,
+ * entra su tarjeta con un fundido junto a la dimensión y los vértices se corren apenas hacia el cursor (el imán). La
+ * tarjeta se deja alcanzar para tocar «Llevar a la sesión N». `dimensiones` trae las de todas las áreas dibujadas.
  */
 export function ConTarjetas({ dimensiones, children }: { dimensiones: Readonly<Record<string, DimensionDeLaTarjeta>>; children: ReactNode }) {
-  const [abierta, setAbierta] = useState<Abierta | null>(null);
+  const [abierta, setAbierta] = useState<TarjetaPedida | null>(null);
   const caja = useRef<HTMLDivElement>(null);
-  const cerrar = useRef<number | null>(null);
-  const cancelarCierre = useCallback(() => {
-    if (cerrar.current !== null) window.clearTimeout(cerrar.current);
-    cerrar.current = null;
-  }, []);
-  const cerrarLuego = useCallback(() => {
-    cancelarCierre();
-    cerrar.current = window.setTimeout(() => setAbierta(null), CERRAR_MS);
-  }, [cancelarCierre]);
-  useEffect(() => cancelarCierre, [cancelarCierre]);
-  // Escape la cierra, como todo lo que flota.
+  const tarjeta = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
-    if (!abierta) return;
-    const alTeclear = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setAbierta(null);
+    const raiz = caja.current;
+    if (!raiz) return;
+    const soltarElRadar = resaltarElRadar(raiz, {
+      mostrar: (t) => setAbierta(t),
+      ocultar: () => setAbierta(null),
+      abierta: () => tarjeta.current,
+    });
+    const soltarElIman = conIman() ? imanDelRadar(raiz) : () => undefined;
+    return () => {
+      soltarElRadar();
+      soltarElIman();
     };
-    window.addEventListener("keydown", alTeclear);
-    return () => window.removeEventListener("keydown", alTeclear);
-  }, [abierta]);
+  }, []);
 
-  const abrirDesde = (el: Element | null, x: number, y: number) => {
-    const id = el?.closest?.("[data-d]")?.getAttribute("data-d");
-    if (!id || !dimensiones[id]) return;
-    cancelarCierre();
-    setAbierta((a) => (a?.id === id ? a : { id, x, y }));
-  };
-
+  const d = abierta ? dimensiones[abierta.clave] : undefined;
   return (
-    <div
-      ref={caja}
-      onPointerOver={(e) => {
-        if (e.pointerType === "touch") return;
-        abrirDesde(e.target as Element, e.clientX, e.clientY);
-      }}
-      onPointerOut={(e) => {
-        if (e.pointerType === "touch") return;
-        const hacia = e.relatedTarget as Element | null;
-        if (hacia?.closest?.("[data-tarjeta-interna]") || hacia?.closest?.("[data-d]")) return;
-        cerrarLuego();
-      }}
-      onFocus={(e) => {
-        const r = (e.target as Element).getBoundingClientRect();
-        abrirDesde(e.target as Element, r.left + r.width / 2, r.top + r.height / 2);
-      }}
-      onBlur={(e) => {
-        if (!(e.relatedTarget as Element | null)?.closest?.("[data-tarjeta-interna]")) cerrarLuego();
-      }}
-    >
+    <div ref={caja}>
       {children}
-      {abierta && dimensiones[abierta.id] && (
-        <Tarjeta key={abierta.id} d={dimensiones[abierta.id]} donde={abierta} contenedor={caja} onEntrar={cancelarCierre} onSalir={cerrarLuego} />
-      )}
+      {abierta && d && <Tarjeta key={abierta.clave} ref={tarjeta} d={d} donde={abierta} />}
     </div>
   );
 }
 
-function Tarjeta({
-  d,
-  donde,
-  contenedor,
-  onEntrar,
-  onSalir,
-}: {
-  d: DimensionDeLaTarjeta;
-  donde: Abierta;
-  contenedor: RefObject<HTMLDivElement | null>;
-  onEntrar: () => void;
-  onSalir: () => void;
-}) {
+function Tarjeta({ d, donde, ref }: { d: DimensionDeLaTarjeta; donde: TarjetaPedida; ref: RefObject<HTMLDivElement | null> }) {
   const { exp, nombreDeNivel, lugar } = useLienzo();
-  const yo = useRef<HTMLDivElement>(null);
 
-  /* Se ubica una vez al abrirse (cada dimensión es su propia tarjeta: `key`), con el radar y el rótulo de ese momento,
-     escribiendo en el DOM como la del diagnóstico (AnimacionesDelResultado › ubicar): sin estado, sin un render de más. */
+  /* Se ubica al abrirse (cada dimensión es su propia tarjeta: `key`) y al reubicarla, con la misma regla que la del
+     diagnóstico, escribiendo en el DOM: sin estado, sin un render de más. Después entra con el fundido. */
   useLayoutEffect(() => {
-    const el = yo.current;
+    const el = ref.current;
     if (!el) return;
-    const svg = radarVisible(contenedor.current);
-    const radar = svg?.getBoundingClientRect();
-    const rotulo = svg?.querySelector(`.rde-rotulo[data-d="${CSS.escape(d.id)}"], .rde-numero[data-d="${CSS.escape(d.id)}"]`)?.getBoundingClientRect() ?? null;
-    const p = posicionDeLaTarjeta({
-      vw: window.innerWidth,
-      vh: window.innerHeight,
-      w: el.offsetWidth || 360,
-      h: el.offsetHeight || 260,
-      x: donde.x,
-      y: donde.y,
-      radar: radar ?? { left: donde.x, right: donde.x, top: donde.y, bottom: donde.y },
-      rotulo,
-    });
-    el.style.transform = `translate(${p.left}px, ${p.top}px)`;
-    if (p.altoMaximo !== null) el.style.maxHeight = `${p.altoMaximo}px`;
+    // `ubicarLaTarjeta` ya midió la tarjeta escondida (opacidad 0): desde ahí el fundido corre al marcarla visible.
+    ubicarLaTarjeta(el, donde);
     el.style.visibility = "visible";
-  }, [contenedor, d.id, donde.x, donde.y]);
+    el.setAttribute("data-visible", "");
+  }, [ref, donde]);
 
   const guardadas = exp.estado.propuesta.tarjetasDeLaEscala;
   const t = tarjetaParaMostrar(guardadas?.porDimension[d.id], { porQue: d.porQue, preguntaDeLaEscala: d.pregunta, conNivel: !!d.nivel });
 
   return (
     <div
-      ref={yo}
+      ref={ref}
       data-tarjeta-interna=""
       aria-label={`${d.nombre}: cómo está y qué preguntar`}
-      onPointerEnter={onEntrar}
-      onPointerLeave={onSalir}
       style={{ left: 0, top: 0, visibility: "hidden" }}
-      className="fixed z-50 flex w-[min(360px,calc(100vw-24px))] flex-col gap-2.5 overflow-y-auto rounded-2xl border border-line bg-surface p-4 shadow-xl"
+      className="fixed z-50 flex w-[min(360px,calc(100vw-24px))] flex-col gap-2.5 overflow-y-auto overscroll-contain rounded-2xl border border-line bg-surface p-4 opacity-0 shadow-xl transition-opacity duration-150 ease-out data-[visible]:opacity-100 motion-reduce:transition-none"
     >
       <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-1">
         <div className="min-w-0">

@@ -4,7 +4,19 @@
  * de la pantalla.
  */
 import { describe, expect, it } from "vitest";
-import { AIRE, ANCHO_PARA_IR_AL_COSTADO, LIBRE, posicionDeLaTarjeta, type Caja } from "./tarjeta-del-radar";
+import {
+  AIRE,
+  alEntrarEnUnaPieza,
+  ANCHO_PARA_IR_AL_COSTADO,
+  distanciaALaCaja,
+  ESPERA_AL_CRUZAR_MS,
+  GRACIA_AL_SALIR_MS,
+  GRACIA_PARA_LLEGAR_MS,
+  LIBRE,
+  posicionDeLaTarjeta,
+  vaHaciaLaTarjeta,
+  type Caja,
+} from "./tarjeta-del-radar";
 
 const tapa = (t: { left: number; top: number }, w: number, h: number, x: number, y: number) => x >= t.left && x <= t.left + w && y >= t.top && y <= t.top + h;
 const seCruzan = (t: { left: number; top: number }, w: number, h: number, c: Caja) => t.left < c.right && t.left + w > c.left && t.top < c.bottom && t.top + h > c.top;
@@ -82,5 +94,45 @@ describe("dónde va la tarjeta del radar", () => {
         expect(p.left).toBeGreaterThanOrEqual(8);
       }
     }
+  });
+});
+
+describe("el puente del cursor a la tarjeta (8 nov)", () => {
+  const tarjeta: Caja = { left: 600, right: 900, top: 100, bottom: 400 };
+
+  it("sabe si el cursor va rumbo a la tarjeta", () => {
+    expect(vaHaciaLaTarjeta({ x: 400, y: 250 }, { x: 450, y: 250 }, tarjeta)).toBe(true);
+    expect(vaHaciaLaTarjeta({ x: 450, y: 250 }, { x: 400, y: 250 }, tarjeta)).toBe(false);
+    // De lado, sin acercarse: no va rumbo a ella.
+    expect(vaHaciaLaTarjeta({ x: 400, y: 250 }, { x: 400, y: 300 }, tarjeta)).toBe(false);
+    expect(vaHaciaLaTarjeta(null, { x: 450, y: 250 }, tarjeta)).toBe(false);
+    expect(vaHaciaLaTarjeta({ x: 400, y: 250 }, { x: 450, y: 250 }, null)).toBe(false);
+    expect(distanciaALaCaja({ x: 700, y: 200 }, tarjeta)).toBe(0);
+  });
+
+  it("sin tarjeta abierta, la pieza abre la suya", () => {
+    expect(alEntrarEnUnaPieza(null, { clave: "1.2", eje: "1.2", deEje: true }, false)).toBe("abrir");
+  });
+
+  it("⛔ el camino por su propio eje no cambia la tarjeta: con áreas superpuestas, del nodo de Marketing a su rótulo sigue la de Marketing", () => {
+    const marketing = { clave: "2.4", eje: "1.4" };
+    for (const rumbo of [true, false]) {
+      expect(alEntrarEnUnaPieza(marketing, { clave: "1.4", eje: "1.4", deEje: true }, rumbo)).toBe("nada");
+    }
+    // El nodo de Ventas del mismo eje sí es otra dimensión.
+    expect(alEntrarEnUnaPieza(marketing, { clave: "1.4", eje: "1.4", deEje: false }, false)).toBe("abrir");
+  });
+
+  it("⛔ otra dimensión rumbo a la tarjeta espera a que el cursor se quede; sin ir rumbo a ella, cambia de una", () => {
+    const abierta = { clave: "1.1", eje: "1.1" };
+    expect(alEntrarEnUnaPieza(abierta, { clave: "1.2", eje: "1.2", deEje: true }, true)).toBe("esperar");
+    expect(alEntrarEnUnaPieza(abierta, { clave: "1.2", eje: "1.2", deEje: true }, false)).toBe("abrir");
+    expect(alEntrarEnUnaPieza(abierta, { clave: "1.1", eje: "1.1", deEje: false }, true)).toBe("nada");
+  });
+
+  it("las esperas son cortas: la tarjeta no queda pegada al dejar el radar", () => {
+    expect(GRACIA_PARA_LLEGAR_MS).toBeLessThanOrEqual(400);
+    expect(GRACIA_AL_SALIR_MS).toBeLessThanOrEqual(250);
+    expect(ESPERA_AL_CRUZAR_MS).toBeLessThanOrEqual(200);
   });
 });

@@ -393,19 +393,49 @@ function SvgDelRadar({
         cunasDelRadar(m, d.ejes).map((c) => <polygon key={`z${c.clave}`} className="rde-cuna" data-d={c.clave} points={puntosSvg(c.puntos)} fill="transparent" />)}
 
       {/* Las otras áreas, debajo de la principal y cada una de su color: su figura y sus vértices (un aro punteado si es
-          una hipótesis). El vértice lleva la clave de SU dimensión. */}
+          una hipótesis). El vértice lleva la clave de SU dimensión y, en `data-eje`, la del eje donde está: el movimiento
+          del radar (components/escala/movimiento-del-radar.ts) resalta con él el rótulo de ese eje y pone ahí la tarjeta.
+          Su resalte va del rótulo a SU vértice, de su color. */}
       {otras.map((o) => {
         const od = dibujoDelRadar(m, o.dims, { frena: null, capas, nombreDeNivel });
         return (
           <g key={o.area} className="rde-otra">
             {od.figura.length > 1 && (
-              <polygon points={puntosSvg(od.figura)} fill={o.color} fillOpacity={0.08} stroke={o.color} strokeWidth={m.trazo.figura} strokeLinejoin="round" />
+              <polygon
+                className="rde-figura rde-otra-figura"
+                points={puntosSvg(od.figura)}
+                fill={o.color}
+                fillOpacity={0.08}
+                stroke={o.color}
+                strokeWidth={m.trazo.figura}
+                strokeLinejoin="round"
+              />
             )}
+            {interactivo &&
+              od.vertices.map((v) => {
+                const e = od.ejes.find((x) => x.clave === v.clave);
+                if (!e || !o.reales[v.clave]) return null;
+                return (
+                  <line
+                    key={`h${v.clave}`}
+                    className="rde-eje-resalte"
+                    data-d={o.reales[v.clave]}
+                    data-eje={v.clave}
+                    x1={f(e.hasta[0])}
+                    y1={f(e.hasta[1])}
+                    x2={f(v.punto[0])}
+                    y2={f(v.punto[1])}
+                    pathLength={1}
+                    style={{ stroke: o.color }}
+                  />
+                );
+              })}
             {od.vertices.map((v) => (
               <circle
                 key={v.clave}
                 className="rde-vertice"
                 data-d={interactivo ? o.reales[v.clave] : undefined}
+                data-eje={interactivo && o.reales[v.clave] ? v.clave : undefined}
                 tabIndex={interactivo ? 0 : undefined}
                 role={interactivo ? "button" : undefined}
                 aria-label={interactivo ? `${o.area} · ${o.dims.find((x) => x.clave === v.clave)?.nombre ?? ""}` : undefined}
