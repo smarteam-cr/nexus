@@ -5,13 +5,74 @@
  * acceso de un proyecto (ExternalAccessPanel): verde activo, ámbar revocado, candado si todavía no se generó. Crea el
  * enlace con que la empresa ve su escala, una página como la del resultado del test, y lo revoca.
  * Datos: /api/sales/exploraciones/[id]/acceso. Lo que ve el cliente lo decide lib/exploraciones/escala-para-el-cliente.ts.
+ *
+ * «Qué equipos ve» (2026-11-08, Centauro Solutions): Nexus detecta de qué equipos se habló (equipos-de-la-escala.ts) y el
+ * vendedor elige cuáles salen, con una casilla por área. Sin elegir, salen las en juego con algo usado (como antes: un
+ * enlace ya enviado no suma áreas solo); las demás de las que se habló se suman con un clic. Un área sin nada usado no se
+ * puede elegir: no habría qué mostrarle.
  */
 import { useCallback, useEffect, useState } from "react";
 import { Alert, Modal, useToast } from "@/components/ui";
 import { BOTON_DE_HERRAMIENTA, BotonAzul, BotonBlanco, BotonEnlace } from "@/components/ui/sistema";
 import type { EstadoDelAcceso } from "@/lib/exploraciones/acceso-a-la-escala";
+import { areasParaElCliente, type AreaDeLaEscala } from "@/lib/exploraciones/equipos-de-la-escala";
 import { diaYHora } from "@/lib/exploraciones/fechas";
+import { useAreasDeLaEscala } from "./useAreasDeLaEscala";
 import { useLienzo } from "./contexto";
+
+/** Lo que se sabe de un área, en una línea: lo que vería el cliente o por qué no se puede elegir. */
+function loQueTiene(a: AreaDeLaEscala): string {
+  const usadas = [a.conEvidencia ? `${a.conEvidencia} con evidencia` : null, a.porExplorar ? `${a.porExplorar} por explorar` : null].filter(Boolean).join(" · ");
+  if (usadas) return `${usadas} de ${a.partes}`;
+  if (a.sugeridas) return `${a.sugeridas} ${a.sugeridas === 1 ? "sugerida" : "sugeridas"} sin usar: úsalas en La escala para que aparezca`;
+  return a.seHablo ? "se habló de ella, pero no tiene nada ubicado" : "todavía no se habló de ella";
+}
+
+/** Una casilla por área: Nexus marca las que tienen algo; el vendedor decide. */
+function EquiposQueVe() {
+  const { exp, cambiar, puedeEditar, guardando } = useLienzo();
+  const areas = useAreasDeLaEscala();
+  const elegidas = exp.estado.contenido.areasAlCliente;
+  const salen = areasParaElCliente(areas, elegidas);
+  const alternar = (id: string) => {
+    const base = elegidas ?? salen;
+    void cambiar([{ op: "areasAlCliente", areas: base.includes(id) ? base.filter((x) => x !== id) : [...base, id] }]);
+  };
+  return (
+    <fieldset className="space-y-1.5">
+      <legend className="text-xs font-semibold text-fg">Qué equipos ve</legend>
+      <p className="text-xs text-fg-muted">
+        {elegidas ? "Los elegiste tú." : "Por ahora salen las áreas en juego; suma las otras de las que se habló."} Lo por explorar sale marcado así: es lo que
+        creemos por lo conversado, para confirmarlo con ellos. Lo que el agente sugiere y nadie usó no sale.
+      </p>
+      <ul className="divide-y divide-line rounded-lg border border-line">
+        {areas.map((a) => {
+          const puede = a.conEvidencia + a.porExplorar > 0;
+          return (
+            <li key={a.id}>
+              <label className={`flex items-start gap-2.5 px-3 py-2 ${puede ? "cursor-pointer" : "opacity-60"}`}>
+                <input
+                  type="checkbox"
+                  className="mt-0.5 accent-[var(--color-brand)]"
+                  checked={salen.includes(a.id)}
+                  disabled={!puede || !puedeEditar || guardando}
+                  onChange={() => alternar(a.id)}
+                />
+                <span className="min-w-0">
+                  <span className="block text-[13px] font-medium text-fg">
+                    {a.nombre}
+                    {a.seHablo && <span className="ml-1.5 text-[11px] font-normal text-fg-muted">se habló en las reuniones</span>}
+                  </span>
+                  <span className="block text-xs text-fg-muted">{loQueTiene(a)}</span>
+                </span>
+              </label>
+            </li>
+          );
+        })}
+      </ul>
+    </fieldset>
+  );
+}
 
 const PUNTO = { activo: "bg-success-ink", revocado: "bg-warn-ink" } as const;
 const NOMBRE_DEL_ESTADO = { activo: "activo", revocado: "revocado", "sin-generar": "sin generar" } as const;
@@ -71,10 +132,11 @@ export default function AccesoALaEscala() {
   const estado = acceso?.estado ?? "sin-generar";
   const noAbre = estado === "activo" && acceso?.abre === false;
   const punto = estado === "sin-generar" ? null : noAbre ? PUNTO.revocado : PUNTO[estado];
+  const deEsas = acceso?.porExplorar ? ` (${acceso.porExplorar} por explorar)` : "";
   const cuanto =
     acceso && acceso.medidas < acceso.total
-      ? `Hoy vería ${acceso.medidas} de ${acceso.total} partes: las que tienen evidencia. Las hipótesis no llegan al cliente, y un área con partes sin medir no muestra su nivel general.`
-      : "Hoy vería todas las partes.";
+      ? `Hoy vería ${acceso.medidas} de ${acceso.total} partes${deEsas}. Un área con partes sin nada no muestra su nivel general.`
+      : `Hoy vería todas las partes${deEsas}.`;
 
   return (
     <>
@@ -89,11 +151,12 @@ export default function AccesoALaEscala() {
         )}
         Acceso
       </button>
-      <Modal open={abierto} onClose={() => { setAbierto(false); setRevocando(false); }} title="Acceso del cliente a la escala" description="Una página como la del resultado del test, con lo que la empresa ya tiene medido. Quien tenga el enlace la ve.">
+      <Modal open={abierto} onClose={() => { setAbierto(false); setRevocando(false); }} title="Acceso del cliente a la escala" description="Una página como la del resultado del test, con lo que la empresa ya tiene ubicado. Quien tenga el enlace la ve.">
         <div className="space-y-3">
           {error && <Alert variant="danger">{error}</Alert>}
           {noAbre && <Alert variant="warning">Este enlace ya no abre: esta escala se archivó. Revócalo y comparte la que siga viva.</Alert>}
-          {acceso && !noAbre && <p className="text-[13px] text-fg-secondary">{acceso.medidas ? cuanto : "Todavía no hay niveles con evidencia: la página no tendría nada que mostrar."}</p>}
+          {!noAbre && <EquiposQueVe />}
+          {acceso && !noAbre && <p className="text-[13px] text-fg-secondary">{acceso.medidas ? cuanto : "Todavía no hay niveles usados en los equipos elegidos: la página no tendría nada que mostrar."}</p>}
           {acceso?.enlace && (
             <>
               <input readOnly value={acceso.enlace} aria-label="Enlace para el cliente" onFocus={(e) => e.target.select()} className="w-full rounded-md border border-line bg-surface-muted px-2.5 py-1.5 text-[13px] text-fg-secondary" />

@@ -582,6 +582,7 @@ export const OperacionSchema = z.discriminatedUnion("op", [
   }),
   z.object({ op: z.literal("medicion"), medicion: MedicionSchema }),
   z.object({ op: z.literal("sinPortal"), valor: z.boolean() }),
+  z.object({ op: z.literal("areasAlCliente"), areas: z.array(ID_AREA).max(3).nullable() }),
   z.object({ op: z.literal("casoDeUso"), useCaseId: ID_CASO_DE_USO, valor: CasoDeUsoElegidoSchema.nullable() }),
   z.object({ op: z.literal("usar"), itemId: z.string().min(1).max(120), valor: z.unknown().optional() }),
   z.object({
@@ -834,6 +835,7 @@ export function leerContenido(raw: unknown): ContenidoDeExploracion {
   const med = MedicionSchema.safeParse(raw.medicion);
   if (med.success) c.medicion = med.data;
   c.sinPortal = raw.sinPortal === true;
+  if (Array.isArray(raw.areasAlCliente)) c.areasAlCliente = raw.areasAlCliente.filter((a): a is string => typeof a === "string" && ID_AREA.safeParse(a).success).slice(0, 3);
   c.reunionesElegidas = listaDeTextos(raw.reunionesElegidas, MAX_REUNIONES_ELEGIDAS).filter((id) => id.length <= MAX_ID_DE_REUNION);
   c.fuera = Array.isArray(raw.fuera)
     ? raw.fuera.filter((k): k is string => typeof k === "string" && CLAVE_DE_REUNION.safeParse(k).success).slice(-MAX_FUERA)

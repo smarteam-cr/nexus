@@ -67,7 +67,7 @@ import {
 } from "./contenido";
 import type { EscalaDelLienzo } from "./escala-del-lienzo";
 import { leerContenido, leerPropuesta } from "./esquemas";
-import { leerFuentes, reunionesDeLaExploracion, reunionesSinLeer, type LoQueSeLeyo, type LoQueSeRelee } from "./fuentes";
+import { leerFuentes, reunionesDeLaExploracion, reunionesSinLeer, transcripcionesDeLaExploracion, type LoQueSeLeyo, type LoQueSeRelee } from "./fuentes";
 import { agendaRenovada, exploracionesQueLeenLaReunion, hayQueLeerAlPreparar, mismaReunion } from "./lectura";
 import { buildInternalDomainsSet } from "@/lib/sessions/categorize";
 import { hoyEnCostaRica } from "./fechas";
@@ -549,6 +549,12 @@ async function correr(runId: string, exploracionId: string, modo: ModoDelAgente,
  * SOLO niveles, cada uno con la frase del cliente que lo respalda. No marca nada como leído, no toca la guía y no lee
  * una reunión: lo propuesto queda para usar en La cuenta › La escala (o en La escala de la exploración). Sin nada que el
  * cliente haya dicho o hecho, no llama al modelo: sin una pista del cliente no hay nivel.
+ *
+ * En la PREVENTA («Ubicar en la escala», 2026-11-08, Centauro Solutions) es el mismo agente con tres diferencias: lee
+ * las TRANSCRIPCIONES de las sesiones de la exploración (hasta 4, 40.000 caracteres cada una) en vez de las reuniones de
+ * la empresa en resumen; ubica las TRES áreas, no solo las en juego (si se habló de Marketing, Marketing se llena); y
+ * propone hipótesis «por explorar» para lo que no tiene una frase que lo respalde pero sí pistas. Lo lanza una persona
+ * desde La escala: nunca corre solo ni en cada visita.
  */
 async function posicionarLaEscala(
   runId: string,
@@ -563,6 +569,27 @@ async function posicionarLaEscala(
     : false;
   // En la cuenta, el proyecto de contexto (si se eligió uno) se lee como si fuera el suyo. Solo uno de esta empresa.
   const contexto = esContenedor ? await proyectoDeContextoDeLaEmpresa(fila.clientId, opts.proyectoDeContexto) : null;
+  const esPreventa = !fila.projectId;
+  const transcripciones = esPreventa
+    ? await transcripcionesDeLaExploracion({
+        exploracionId,
+        clientId: fila.clientId,
+        projectId: null,
+        creadaEn: fila.createdAt,
+        propuesta: estado.propuesta,
+        leido: leerLoLeido(fila.test),
+        sesiones: estado.contenido.sesiones,
+        fuera: estado.contenido.fuera,
+        elegidas: estado.contenido.reunionesElegidas,
+      }).catch((e) => {
+        console.error(`[exploraciones/agente] posicionar: no se pudieron leer las sesiones de ${exploracionId}`, e);
+        throw new FalloDeLaExploracion("No se pudieron leer las reuniones de las sesiones. Vuelve a intentarlo en un rato.");
+      })
+    : null;
+  // Lo que promete el botón son las reuniones: sin ninguna con texto, no se gasta IA ni se cae a otras fuentes.
+  if (transcripciones && !transcripciones.fuentes.length) {
+    throw new FalloDeLaExploracion("Ninguna sesión de esta preventa tiene transcripción o notas todavía: cuando la tenga, vuelve a ubicar la escala.");
+  }
   const leido = await fuentesParaPosicionar({
     clientId: fila.clientId,
     projectId: contexto ?? fila.projectId,
@@ -570,6 +597,7 @@ async function posicionarLaEscala(
     companyId: fila.client.hubspotCompanyId,
     ventaId: opts.ventaId ?? null,
     escala,
+    ...(transcripciones ? { reuniones: transcripciones } : {}),
   });
   const ctx: ContextoDelPedido = {
     modo: "leer",
@@ -577,7 +605,9 @@ async function posicionarLaEscala(
     empresa: fila.client.name,
     industria: fila.client.industry,
     escala,
-    areas: estado.areas,
+    // La preventa ubica las tres áreas: lo que se habló de Marketing llena Marketing aunque no esté en juego.
+    areas: esPreventa ? [] : estado.areas,
+    ...(esPreventa ? { conHipotesis: true, reuniones: transcripciones?.reuniones ?? [] } : {}),
     perfil: estado.perfilCierre && estado.perfilDespues ? `venta ${estado.perfilCierre} · relación ${estado.perfilDespues}` : null,
     contenido: estado.contenido,
     fuentes: leido.fuentes,
@@ -602,6 +632,8 @@ async function posicionarLaEscala(
           pedidoDePosicionar({ ...ctx, objetivo: opts.objetivo ?? (esContenedor ? "la cuenta entera (sin un proyecto en particular)" : fila.projectId ? "el proyecto" : "la preventa") }),
         ),
     );
+    // Una respuesta cortada por el largo no se lee entera: mejor un error claro que una corrida «sin nada nuevo».
+    if (respuesta.stop_reason === "max_tokens") throw new FalloDeLaExploracion("La respuesta del agente salió cortada. Vuelve a intentarlo.");
     const r = leerLaRespuesta(respuesta, ctx, runId);
     // Solo niveles: el pedido no pide otra cosa, y si llega, no se guarda.
     items = r.items.filter((it) => it.destino.tipo === "nivel");

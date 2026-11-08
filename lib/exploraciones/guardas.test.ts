@@ -308,3 +308,29 @@ describe("⛔ una reunión de HubSpot sin resumen se sigue avisando como pendien
     expect(ruta).toMatch(/loQueVieneDeLaAgenda\(leerLoLeido\(lectura\.fila\.test\)\)/);
   });
 });
+
+// ── «Ubicar con las reuniones» de la preventa (2026-11-08, La escala tercera vuelta) ──
+
+describe("⛔ «Ubicar con las reuniones» lee las transcripciones de las sesiones y ubica las tres áreas", () => {
+  const codigo = fs.readFileSync(path.join(RAIZ, "lib", "exploraciones", "agente.ts"), "utf8");
+  const posicionar = codigo.slice(codigo.indexOf("async function posicionarLaEscala"), codigo.indexOf("export async function nombresDelEquipo"));
+
+  it("en la preventa: las transcripciones (no los resúmenes), las tres áreas y las hipótesis", () => {
+    expect(posicionar).toMatch(/const transcripciones = esPreventa\s*\?\s*await transcripcionesDeLaExploracion\(/);
+    expect(posicionar).toMatch(/\.\.\.\(transcripciones \? \{ reuniones: transcripciones \} : \{\}\)/);
+    expect(posicionar).toMatch(/areas: esPreventa \? \[\] : estado\.areas/);
+    expect(posicionar).toMatch(/conHipotesis: true/);
+  });
+
+  it("sin transcripciones no gasta IA, y una respuesta cortada es un error, no una corrida vacía", () => {
+    expect(posicionar).toMatch(/if \(transcripciones && !transcripciones\.fuentes\.length\)/);
+    expect(posicionar).toMatch(/respuesta\.stop_reason === "max_tokens"/);
+  });
+
+  it("las transcripciones salen por el chokepoint de sesiones (invariante #1)", () => {
+    const fuentes = fs.readFileSync(path.join(RAIZ, "lib", "exploraciones", "fuentes.ts"), "utf8");
+    const tr = fuentes.slice(fuentes.indexOf("export async function transcripcionesDeLaExploracion"));
+    expect(tr).toMatch(/getClientSessions\(opts\.clientId, \{ ids: candidatas \}\)/);
+    expect(tr).toMatch(/where: \{ id: \{ in: \[\.\.\.deLaEmpresa\] \}, date: \{ lte: ahora \} \}/);
+  });
+});

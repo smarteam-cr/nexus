@@ -201,7 +201,7 @@ function ListaDeUnaMitad({
               {d.numero ?? d.clave}
             </b>{" "}
             {d.nombre}
-            {e.tipo !== "nivel" && <span className="rde-lista-estado"> · {textoDelEstado(e, nombreDeNivel).toLowerCase()}</span>}
+            {(e.tipo !== "nivel" || e.porExplorar) && <span className="rde-lista-estado"> · {e.tipo === "nivel" ? "por explorar" : textoDelEstado(e, nombreDeNivel).toLowerCase()}</span>}
           </li>
         );
       })}
@@ -213,7 +213,8 @@ function ListaDeUnaMitad({
 function LeyendaDelRadar({ dims, nombreDeNivel }: { dims: readonly DimensionDelRadar[]; nombreDeNivel: (l: Letra) => string }) {
   const sinPreguntar = dims.some((d) => !d.preguntada);
   const noLoSe = dims.some((d) => d.preguntada && d.nivel && d.noLoSe);
-  if (!sinPreguntar && !noLoSe) return null;
+  const porExplorar = dims.some((d) => d.preguntada && d.nivel && d.porExplorar && !d.noLoSe);
+  if (!sinPreguntar && !noLoSe && !porExplorar) return null;
   return (
     <div className="rde-leyenda">
       {sinPreguntar && (
@@ -233,6 +234,14 @@ function LeyendaDelRadar({ dims, nombreDeNivel }: { dims: readonly DimensionDelR
             </text>
           </svg>
           Contestaste «No lo sé»: {notaDelNoLoSe(nombreDeNivel)}
+        </span>
+      )}
+      {porExplorar && (
+        <span>
+          <svg width="20" height="20" viewBox="0 0 20 20" aria-hidden="true">
+            <circle cx="10" cy="10" r="6" fill={C.blanco} stroke={C.figura} strokeWidth="1.75" strokeDasharray="3 2.5" />
+          </svg>
+          Aro punteado: por explorar. Es lo que creemos por lo conversado; lo confirmamos contigo.
         </span>
       )}
     </div>
@@ -347,7 +356,20 @@ function SvgDelRadar({
             <circle className="rde-iman" cx={f(vertFrena.punto[0])} cy={f(vertFrena.punto[1])} r={m.vertice.halo} fill={COLOR_DEL_NIVEL.D} fillOpacity={0.12} />
           )}
           {d.vertices.map((v) =>
-            v.noLoSe ? (
+            v.porExplorar ? (
+              <circle
+                key={v.clave}
+                className="rde-vertice"
+                data-d={v.clave}
+                cx={f(v.punto[0])}
+                cy={f(v.punto[1])}
+                r={v.frena ? m.vertice.rFrena : m.vertice.r}
+                fill={C.blanco}
+                stroke={v.frena ? COLOR_DEL_NIVEL[v.nivel] : C.figura}
+                strokeWidth={m.objetivo.trazo}
+                strokeDasharray={m.objetivo.raya}
+              />
+            ) : v.noLoSe ? (
               <g key={v.clave} className="rde-vertice" data-d={v.clave}>
                 <circle
                   cx={f(v.punto[0])}
@@ -390,8 +412,8 @@ function SvgDelRadar({
                   r={m.conPuntaje.r}
                   fill={C.blanco}
                   stroke={v.frena || v.noLoSe ? COLOR_DEL_NIVEL[v.nivel] : C.figura}
-                  strokeWidth={v.noLoSe ? m.objetivo.trazo : m.conPuntaje.trazo}
-                  strokeDasharray={v.noLoSe ? m.objetivo.raya : undefined}
+                  strokeWidth={v.noLoSe || v.porExplorar ? m.objetivo.trazo : m.conPuntaje.trazo}
+                  strokeDasharray={v.noLoSe || v.porExplorar ? m.objetivo.raya : undefined}
                 />
                 <text x={f(v.punto[0])} y={f(v.punto[1] + m.conPuntaje.baja)} textAnchor="middle" fontSize={m.conPuntaje.letra} fontWeight={700} fill={C.tinta}>
                   {v.puntaje ?? ""}
@@ -580,7 +602,8 @@ function RotuloDeLaDimension({
         {`${r.numero} · `}
         {r.estado.tipo === "nivel" ? (
           <>
-            <tspan fill={COLOR_DEL_NIVEL[r.estado.letra]}>●</tspan> <tspan fill={C.texto}>{nombreDeNivel(r.estado.letra)}</tspan>
+            <tspan fill={COLOR_DEL_NIVEL[r.estado.letra]}>{r.estado.porExplorar ? "○" : "●"}</tspan> <tspan fill={C.texto}>{nombreDeNivel(r.estado.letra)}</tspan>
+            {r.estado.porExplorar && <tspan fill={C.apagado}> · por explorar</tspan>}
           </>
         ) : r.estado.tipo === "noLoSe" ? (
           <tspan fill={C.frenaTexto}>{textoDelEstado(r.estado, nombreDeNivel)}</tspan>

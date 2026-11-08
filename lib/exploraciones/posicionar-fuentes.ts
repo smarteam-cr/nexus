@@ -112,6 +112,11 @@ export async function fuentesParaPosicionar(o: {
   companyId: string | null;
   ventaId: string | null;
   escala: EscalaDelLienzo;
+  /**
+   * La preventa (2026-11-08): las transcripciones de SUS sesiones (fuentes.ts › `transcripcionesDeLaExploracion`) en vez
+   * de las reuniones de la empresa en resumen. Ya vienen por el chokepoint.
+   */
+  reuniones?: { fuentes: Fuente[]; sesiones: string[] };
 }): Promise<LoQueLeePosicionar> {
   const real = o.projectId && !o.esContenedor ? o.projectId : null;
   const [hubspot, delProyecto, cuenta, proyecto, ventas, propuestas, tareas, cronograma, reuniones] = await Promise.all([
@@ -124,11 +129,13 @@ export async function fuentesParaPosicionar(o: {
     seguro(tareasDeLaCuentaParaAgentes(o.clientId), [], "las tareas"),
     real ? seguro(cronogramaDelProyecto(real), "", "el cronograma") : Promise.resolve(""),
     // Primero las que alguien eligió en una sesión de cualquier exploración de la empresa (escala única, 2026-10-28).
-    seguro(
-      reunionesElegidasDeLaEmpresa(o.clientId).then((elegidas) => reunionesEnResumen(o.clientId, { elegidas })),
-      { fuentes: [] as Fuente[], sesiones: [] as string[] },
-      "las reuniones",
-    ),
+    o.reuniones
+      ? Promise.resolve(o.reuniones)
+      : seguro(
+          reunionesElegidasDeLaEmpresa(o.clientId).then((elegidas) => reunionesEnResumen(o.clientId, { elegidas })),
+          { fuentes: [] as Fuente[], sesiones: [] as string[] },
+          "las reuniones",
+        ),
   ]);
 
   const f = FUENTES_DE_POSICIONAR;

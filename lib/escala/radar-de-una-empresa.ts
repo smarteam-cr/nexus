@@ -40,6 +40,11 @@ export interface DimensionDelRadar {
   nivel: Letra | null;
   /** Contestó «No lo sé» (cuenta como el nivel más bajo). */
   noLoSe?: boolean;
+  /**
+   * La escala de una empresa (2026-11-08): el nivel es una HIPÓTESIS, «por explorar» (lo infiere Smarteam de las reuniones,
+   * no lo dijo el cliente). Vértice hueco con aro punteado y «por explorar» junto al nivel.
+   */
+  porExplorar?: boolean;
   /** El 0–100 del chequeo; solo se lee con «Ver puntajes». */
   puntaje: number | null;
 }
@@ -238,7 +243,7 @@ export interface Caja {
 export const seCruzan = (a: Caja, b: Caja) => a.x0 < b.x1 && b.x0 < a.x1 && a.y0 < b.y1 && b.y0 < a.y1;
 
 /** Lo que dice el número de una dimensión, después de su clave. */
-export type EstadoDelRotulo = { tipo: "nivel"; letra: Letra } | { tipo: "noLoSe" } | { tipo: "noPreguntada"; sinMedir?: boolean } | { tipo: "sinUbicar" };
+export type EstadoDelRotulo = { tipo: "nivel"; letra: Letra; porExplorar?: boolean } | { tipo: "noLoSe" } | { tipo: "noPreguntada"; sinMedir?: boolean } | { tipo: "sinUbicar" };
 
 export interface RotuloDelRadar {
   clave: string;
@@ -268,6 +273,8 @@ export interface VerticeDelRadar {
   punto: Punto;
   nivel: Letra;
   noLoSe: boolean;
+  /** Una hipótesis (`DimensionDelRadar.porExplorar`): vértice hueco con aro punteado. */
+  porExplorar: boolean;
   frena: boolean;
   puntaje: number | null;
 }
@@ -327,6 +334,7 @@ export function dibujoDelRadar(
     punto: polarDe(m, grados(d), radioDeLaEtapa(m, d.nivel!)),
     nivel: d.nivel!,
     noLoSe: !!d.noLoSe,
+    porExplorar: !!d.porExplorar && !d.noLoSe,
     frena: d.clave === frena?.clave,
     puntaje: d.puntaje !== null && Number.isFinite(d.puntaje) ? Math.round(d.puntaje) : null,
   }));
@@ -399,7 +407,7 @@ export function estadoDeLaDimension(d: DimensionDelRadar): EstadoDelRotulo {
   if (!d.preguntada) return { tipo: "noPreguntada", sinMedir: d.sinMedir };
   if (!d.nivel) return { tipo: "sinUbicar" };
   if (d.noLoSe) return { tipo: "noLoSe" };
-  return { tipo: "nivel", letra: d.nivel };
+  return d.porExplorar ? { tipo: "nivel", letra: d.nivel, porExplorar: true } : { tipo: "nivel", letra: d.nivel };
 }
 
 /**
@@ -457,7 +465,7 @@ export const notaDelNoLoSe = (nombreDeNivel: (l: Letra) => string) => `cuenta co
 
 /** El estado en palabras («Inicial», «No lo sabías», «No se preguntó»). */
 export function textoDelEstado(e: EstadoDelRotulo, nombreDeNivel: (l: Letra) => string): string {
-  if (e.tipo === "nivel") return nombreDeNivel(e.letra);
+  if (e.tipo === "nivel") return e.porExplorar ? `${nombreDeNivel(e.letra)} · por explorar` : nombreDeNivel(e.letra);
   if (e.tipo === "noLoSe") return "No lo sabías";
   if (e.tipo === "noPreguntada") return e.sinMedir ? "Sin medir" : "No se preguntó";
   return "Sin ubicar";

@@ -13,6 +13,7 @@ import {
   modeloDeNegocio,
   nivelesPropuestos,
   objetivosParaUbicar,
+  reunionesParaUbicar,
   textoDeLaPropuesta,
   textoDeLasTareas,
   textoDeLasVentas,
@@ -261,6 +262,99 @@ describe("pedidoDePosicionar", () => {
     const r = leerLaRespuesta(respuesta, ctx, "run");
     expect(r.items.map((it) => (it.destino as { dimensionId: string }).dimensionId)).toEqual(["1.2"]);
     expect(r.descartadas).toBe(1);
+  });
+
+  describe("en la preventa: «Ubicar con las reuniones» (2026-11-08)", () => {
+    const preventa: ContextoDelPedido & { objetivo: string } = {
+      ...ctx,
+      marco: "venta",
+      areas: [],
+      conHipotesis: true,
+      reuniones: [{ fuente: "S1", etiqueta: "Reunión del 3 oct: Diagnóstico de ventas", equipo: "ventas" }],
+      objetivo: "la preventa",
+    };
+    const conHipotesis = (input: unknown) =>
+      leerLaRespuesta({ content: [{ type: "tool_use", id: "t", name: "proponer", input }] } as unknown as Parameters<typeof leerLaRespuesta>[0], preventa, "run");
+
+    it("pide niveles con su frase Y hipótesis por explorar, de las tres áreas, con el equipo de cada reunión", () => {
+      const p = pedidoDePosicionar(preventa);
+      const props = (p.tools![0] as { input_schema: { properties: Record<string, unknown>; required: string[] } }).input_schema;
+      expect(Object.keys(props.properties)).toEqual(["niveles", "hipotesis"]);
+      expect(props.required).toEqual(["niveles", "hipotesis"]);
+      const cuerpo = String(p.messages[0].content);
+      expect(cuerpo).toContain("=== LA ESCALA (las tres áreas) ===");
+      expect(cuerpo).toContain("S1: Reunión del 3 oct: Diagnóstico de ventas · fue");
+      expect(String(p.system)).toMatch(/TRES áreas/);
+      // La cuenta no las pide: el pedido de siempre no cambia.
+      expect(Object.keys((pedidoDePosicionar(ctx).tools![0] as { input_schema: { properties: Record<string, unknown> } }).input_schema.properties)).toEqual(["niveles"]);
+    });
+
+    it("una hipótesis entra SIN cita, como hipótesis, con su porqué y una fuente del cliente", () => {
+      const r = conHipotesis({
+        niveles: [{ dimensionId: "1.2", nivel: "I", evidencia: "x", porQue: "Cada uno lleva lo suyo.", fuentes: [{ id: "S1", cita: "cada vendedor lleva su propio Excel de oportunidades" }] }],
+        hipotesis: [{ dimensionId: "1.3", nivel: "D", porQue: "Si cada uno lleva su Excel, no hay datos comunes.", fuentes: [{ id: "S1", cita: "inventada" }] }],
+      });
+      const porDim = Object.fromEntries(r.items.map((it) => [(it.destino as { dimensionId: string }).dimensionId, it]));
+      expect(porDim["1.2"].valor).toMatchObject({ nivel: "I", fuente: "reunion", evidencia: "cada vendedor lleva su propio Excel de oportunidades" });
+      expect(porDim["1.3"].valor).toMatchObject({ nivel: "D", fuente: "hipotesis", porQue: "Si cada uno lleva su Excel, no hay datos comunes." });
+      expect(porDim["1.3"].fuentes.every((f) => !f.cita)).toBe(true);
+    });
+
+    it("se descarta la hipótesis sin porqué, la que repite una dimensión con evidencia y la que solo se apoya en lo vendido", () => {
+      const r = conHipotesis({
+        niveles: [{ dimensionId: "1.2", nivel: "I", evidencia: "x", porQue: "y", fuentes: [{ id: "S1", cita: "cada vendedor lleva su propio Excel de oportunidades" }] }],
+        hipotesis: [
+          { dimensionId: "1.2", nivel: "D", porQue: "Repetida.", fuentes: [{ id: "S1" }] },
+          { dimensionId: "1.4", nivel: "D", fuentes: [{ id: "S1" }] },
+          { dimensionId: "1.5", nivel: "E", porQue: "Compró Sales Hub.", fuentes: [{ id: "G1" }] },
+        ],
+      });
+      expect(r.items.map((it) => (it.destino as { dimensionId: string }).dimensionId)).toEqual(["1.2"]);
+      expect(r.descartadas).toBe(3);
+    });
+
+    it("⛔ una hipótesis que solo se apoya en la reunión con otro equipo no ubica esta área (K11)", () => {
+      const ventas = ESCALA_DE_PRUEBA.areas[0];
+      const marketing = { ...ventas, id: "2", nombre: "Marketing", dimensiones: ventas.dimensiones.map((d) => ({ ...d, id: d.id.replace(/^1\./, "2.") })) };
+      const conMarketing: ContextoDelPedido & { objetivo: string } = {
+        ...preventa,
+        escala: { ...ESCALA_DE_PRUEBA, areas: [ventas, marketing] },
+        reuniones: [{ fuente: "S1", etiqueta: "Reunión con Marketing", equipo: "marketing" }],
+      };
+      const r = leerLaRespuesta(
+        { content: [{ type: "tool_use", id: "t", name: "proponer", input: { niveles: [], hipotesis: [{ dimensionId: "1.3", nivel: "D", porQue: "Lo que contó Marketing de Ventas.", fuentes: [{ id: "S1" }] }] } }] } as unknown as Parameters<typeof leerLaRespuesta>[0],
+        conMarketing,
+        "run",
+      );
+      expect(r.items).toEqual([]);
+      expect(r.descartadas).toBe(1);
+    });
+
+    it("lee las reuniones de Meet de una sesión con texto, la más nueva primero, hasta el tope", () => {
+      const r = (id: string, fecha: string, extra: Record<string, unknown> = {}) => ({ id, origen: "meet", fecha, ...extra });
+      const todas = [
+        r("vieja", "2026-11-01T15:00:00Z"),
+        r("nueva", "2026-11-06T15:00:00Z"),
+        r("media", "2026-11-05T15:00:00Z"),
+        r("sin-sesion", "2026-11-07T15:00:00Z"),
+        r("sin-texto", "2026-11-07T15:00:00Z", { texto: "nada" }),
+        r("cortada", "2026-11-07T15:00:00Z", { corta: { minutos: 2 } }),
+        r("interna", "2026-11-07T15:00:00Z", { puertasAdentro: true }),
+        { id: "de-hubspot", origen: "hubspot", fecha: "2026-11-07T15:00:00Z" },
+      ];
+      const deSesiones = new Set(["vieja", "nueva", "media", "sin-texto", "cortada", "interna"].map((id) => `meet:${id}`).concat("hubspot:de-hubspot"));
+      expect(reunionesParaUbicar(todas, deSesiones, 4)).toEqual(["nueva", "media", "vieja"]);
+      expect(reunionesParaUbicar(todas, deSesiones, 2)).toEqual(["nueva", "media"]);
+    });
+
+    it("fuera de la preventa, una lista de hipótesis no se lee", () => {
+      const r = leerLaRespuesta(
+        { content: [{ type: "tool_use", id: "t", name: "proponer", input: { niveles: [], hipotesis: [{ dimensionId: "1.3", nivel: "D", porQue: "x", fuentes: [{ id: "S1" }] }] } }] } as unknown as Parameters<typeof leerLaRespuesta>[0],
+        ctx,
+        "run",
+      );
+      expect(r.items).toEqual([]);
+    });
   });
 });
 

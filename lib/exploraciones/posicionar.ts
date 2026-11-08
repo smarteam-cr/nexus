@@ -378,3 +378,20 @@ export function reunionesElegidas(contenidos: readonly Pick<ContenidoDeExploraci
   }
   return [...new Set(ids)];
 }
+
+/**
+ * Qué reuniones lee «Ubicar con las reuniones» en la preventa (2026-11-08): las de Meet de una sesión (`deSesiones`, las
+ * claves `meet:<id>` que liga la pantalla), con texto que leer (ni sin texto, ni cortadas, ni de puertas adentro), la más
+ * nueva primero, hasta `cuantas`. Los ids pasan después por el chokepoint (fuentes.ts › `transcripcionesDeLaExploracion`).
+ */
+export function reunionesParaUbicar(
+  todas: readonly { id: string; origen: string; fecha: string; texto?: string; corta?: unknown; puertasAdentro?: true }[],
+  deSesiones: ReadonlySet<string>,
+  cuantas: number,
+): string[] {
+  return todas
+    .filter((r) => r.origen === "meet" && deSesiones.has(`meet:${r.id}`) && r.texto !== "nada" && !r.corta && !r.puertasAdentro)
+    .sort((a, b) => Date.parse(b.fecha) - Date.parse(a.fecha))
+    .slice(0, cuantas)
+    .map((r) => r.id);
+}

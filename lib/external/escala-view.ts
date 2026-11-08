@@ -4,8 +4,9 @@
  *
  * Fail-closed, en CADA render (la página es `force-dynamic`):
  *   1. el token tiene la forma de uno (64 hex) y existe un `AccesoALaEscala` con él, sin revocar;
- *   2. lo demás lo decide la puerta (`escalaParaElCliente`): exploración viva, de la misma empresa, solo con evidencia.
- * null = el 404 neutro; `resultados` vacío = el enlace sirve, pero la empresa ya no tiene nada con evidencia.
+ *   2. lo demás lo decide la puerta (`escalaParaElCliente`): exploración viva, de la misma empresa, solo lo que el
+ *      vendedor usó en las áreas que eligió (lo que era hipótesis, marcado «por explorar»).
+ * null = el 404 neutro; `resultados` vacío = el enlace sirve, pero la empresa ya no tiene nada que mostrar.
  */
 import "server-only";
 import { prisma } from "@/lib/db/prisma";

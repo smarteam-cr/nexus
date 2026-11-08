@@ -259,6 +259,11 @@ export interface ContenidoDeExploracion {
    * exploraciones de antes no lo tienen.
    */
   usadas?: UsoDeSugerencia[];
+  /**
+   * Las áreas que salen en la página que ve el cliente (2026-11-08, «Acceso» de La escala): las elige el vendedor entre
+   * las que Nexus detectó (equipos-de-la-escala.ts). undefined: no eligió todavía, y salen las que tienen algo confirmado.
+   */
+  areasAlCliente?: string[];
 }
 
 /**
@@ -958,6 +963,8 @@ export type Operacion =
   | { op: "evento"; sesionId: string; inicio?: string; fin?: string; titulo?: string; cancelada?: boolean; revisadoEn?: string }
   | { op: "medicion"; medicion: Medicion }
   | { op: "sinPortal"; valor: boolean }
+  /** Qué áreas ve el cliente en su página. null: vuelve a lo que propone Nexus. */
+  | { op: "areasAlCliente"; areas: string[] | null }
   | { op: "casoDeUso"; useCaseId: string; valor: CasoDeUsoElegido | null }
   | { op: "usar"; itemId: string; valor?: unknown }
   /** «Usar todas»: cada una por su cuenta; la que ya no está o ya no corresponde se salta. */
@@ -1474,6 +1481,17 @@ function aplicarUna(estado: EstadoDeExploracion, op: Operacion, validez: Validez
       return { ok: true, estado: { ...estado, contenido: { ...c, medicion: { ...c.medicion, ...op.medicion } } } };
     case "sinPortal":
       return { ok: true, estado: { ...estado, contenido: { ...c, sinPortal: op.valor } } };
+    case "areasAlCliente": {
+      if (op.areas === null) {
+        const { areasAlCliente: _fuera, ...sin } = c;
+        void _fuera;
+        return { ok: true, estado: { ...estado, contenido: sin } };
+      }
+      const areas = [...new Set(op.areas)];
+      const desconocida = areas.find((a) => !validez.areas.has(a));
+      if (desconocida) return { ok: false, error: `El área ${desconocida} no existe.` };
+      return { ok: true, estado: { ...estado, contenido: { ...c, areasAlCliente: areas } } };
+    }
     case "casoDeUso": {
       if (op.valor) return aplicarAlDestino(estado, { tipo: "casoDeUso", useCaseId: op.useCaseId }, op.valor, validez, validador);
       const casosDeUso = { ...c.casosDeUso };

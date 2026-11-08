@@ -37,7 +37,7 @@ export default async function EscalaDelClientePage({ params, searchParams }: { p
       agenda=""
       detalles={d.detalles}
       dimensionDelRiesgo={d.dimensionDelRiesgo}
-      deLaEscala={{ areas: d.areas.map((a) => ({ ...a, href: `/external/escala/${token}?area=${encodeURIComponent(a.id)}` })) }}
+      deLaEscala={{ areas: d.areas.map((a) => ({ ...a, href: `/external/escala/${token}?area=${encodeURIComponent(a.id)}` })), porExplorar: d.porExplorar[r.areaId] ?? [] }}
     />
   );
 }
