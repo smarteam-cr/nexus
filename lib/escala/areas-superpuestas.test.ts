@@ -1,0 +1,76 @@
+/**
+ * lib/escala/areas-superpuestas.test.ts — las otras áreas encima del radar (La escala de la preventa, 8 nov): cada una
+ * alineada eje por eje con la principal, la tarjeta de un eje con la dimensión de cada área, y al sumar o sacar un área
+ * solo esa se anima (Elías: «la animación de la escala como que se corta, empieza desde cero»).
+ */
+import { describe, expect, it } from "vitest";
+import { alinearArea, areasAlCambiar, partesPorEje, SIN_CAMBIO, type AreaSuperpuesta } from "./areas-superpuestas";
+import type { DimensionDelRadar } from "./radar-de-una-empresa";
+
+const dims = (area: string, capas: ("base" | "produccion")[]): DimensionDelRadar[] =>
+  capas.map((capa, i) => ({ clave: `${area}.${i + 1}`, nombre: `${area}-${i + 1}`, capa, preguntada: true, nivel: "I", puntaje: 30 }));
+
+const VENTAS = dims("1", ["base", "base", "produccion", "produccion"]);
+const MARKETING: AreaSuperpuesta = { area: "Marketing", color: "#db2777", dimensiones: dims("2", ["base", "base", "produccion"]) };
+const SERVICIO: AreaSuperpuesta = { area: "Servicio", color: "#0d9488", dimensiones: dims("3", ["produccion", "base", "base", "produccion"]) };
+
+describe("alinearArea: la parte k de cada capa sobre la parte k de la principal", () => {
+  it("lleva cada eje a la dimensión real del área, por capa y en orden", () => {
+    const a = alinearArea(VENTAS, SERVICIO);
+    // Servicio trae su producción primero: igual cae sobre la producción de Ventas.
+    expect(a.reales).toEqual({ "1.1": "3.2", "1.2": "3.3", "1.3": "3.1", "1.4": "3.4" });
+    // Con la clave y el nombre del eje de la principal.
+    expect(a.dims.map((d) => d.clave)).toEqual(["1.1", "1.2", "1.3", "1.4"]);
+    expect(a.dims[0].nombre).toBe("1-1");
+  });
+
+  it("un eje sin parte de esa área queda sin vértice y sin real", () => {
+    const a = alinearArea(VENTAS, MARKETING);
+    expect(a.reales["1.4"]).toBeUndefined();
+    expect(a.dims[3]).toMatchObject({ clave: "1.4", preguntada: false, nivel: null });
+  });
+});
+
+describe("partesPorEje: la tarjeta de un eje con la dimensión de cada área", () => {
+  it("la principal primero y después cada área en su orden; sin parte, no aparece", () => {
+    const p = partesPorEje(VENTAS, [MARKETING, SERVICIO]);
+    expect(p["1.1"]).toEqual(["1.1", "2.1", "3.2"]);
+    expect(p["1.4"]).toEqual(["1.4", "3.4"]);
+  });
+
+  it("con una sola área, cada eje tiene solo la suya (la tarjeta queda como siempre)", () => {
+    expect(partesPorEje(VENTAS, [])).toEqual({ "1.1": ["1.1"], "1.2": ["1.2"], "1.3": ["1.3"], "1.4": ["1.4"] });
+  });
+
+  it("⛔ el área que está saliendo no entra a la tarjeta", () => {
+    expect(partesPorEje(VENTAS, [{ ...MARKETING, fase: "sale" }])["1.1"]).toEqual(["1.1"]);
+  });
+});
+
+describe("areasAlCambiar: al sumar o sacar un área, solo esa se anima", () => {
+  const V = { area: "Ventas" };
+  const M = { area: "Marketing" };
+  const S = { area: "Servicio" };
+
+  it("sumar: entra la nueva y nada sale", () => {
+    expect(areasAlCambiar([V], [V, M])).toEqual({ entran: ["Marketing"], salen: [] });
+  });
+
+  it("sacar: sale la que estaba, con su último dibujo, y nada entra", () => {
+    const viejo = { area: "Marketing", dibujo: "el de antes" };
+    expect(areasAlCambiar([{ area: "Ventas", dibujo: "" }, viejo], [{ area: "Ventas", dibujo: "" }])).toEqual({ entran: [], salen: [viejo] });
+  });
+
+  it("⛔ cambiar cuál es la principal (el orden) no anima nada: las que estaban quedan quietas", () => {
+    expect(areasAlCambiar([V, M], [M, V])).toEqual(SIN_CAMBIO);
+  });
+
+  it("dos clics seguidos: lo que se animaba sigue, y lo que vuelve antes de terminar de salir entra de nuevo", () => {
+    const primero = areasAlCambiar([V, M], [V, M, S]);
+    expect(primero).toEqual({ entran: ["Servicio"], salen: [] });
+    const segundo = areasAlCambiar([V, M, S], [V, S], primero);
+    expect(segundo).toEqual({ entran: ["Servicio"], salen: [M] });
+    const tercero = areasAlCambiar([V, S], [V, S, M], segundo);
+    expect(tercero).toEqual({ entran: ["Servicio", "Marketing"], salen: [] });
+  });
+});

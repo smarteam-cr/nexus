@@ -9,8 +9,8 @@
  * Tres piezas:
  *   · `resaltarElRadar`: al pasar el cursor (o tocar, o enfocar) una dimensión se resaltan su eje, su vértice y su rótulo
  *     (`data-activa` en el SVG e `is-activa` en sus piezas; el aspecto, en radar-de-una-empresa.css) y aparece su tarjeta.
- *     Un vértice de un área superpuesta lleva `data-eje`, el eje donde está: se resalta él con el rótulo de ese eje, y la
- *     tarjeta va junto a ese rótulo. La tarjeta SE DEJA ALCANZAR en cualquier ancho (el puente, con las reglas de
+ *     Un vértice de un área superpuesta lleva `data-eje`, el eje donde está: se resalta todo ese eje (el vértice de cada
+ *     área, como la tarjeta, que las muestra todas) y la tarjeta va junto a su rótulo. La tarjeta SE DEJA ALCANZAR en cualquier ancho (el puente, con las reglas de
  *     lib/tests-diagnostico/tarjeta-del-radar.ts), sin nada invisible que tape otra dimensión y sin quedar pegada al
  *     salir del radar en otra dirección.
  *   · `imanDelRadar`: los vértices, sus figuras y el resalte se corren apenas hacia el cursor (lib/tests-diagnostico/
@@ -145,9 +145,10 @@ export function resaltarElRadar(raiz: HTMLElement, tarjetero: Tarjetero): () => 
     if (activa) limpiar(activa.svg);
     activa = { svg: p.svg, clave: p.clave, eje: p.eje };
     p.svg.dataset.activa = p.clave;
+    // Todo el eje: sus piezas, su rótulo y el vértice de CADA área que cae ahí (`data-eje`), como la tarjeta, que con varias
+    // áreas muestra todas (8 nov). En la página del cliente no hay `data-eje` y el eje es la misma dimensión.
     p.svg.querySelectorAll<SVGElement>("[data-d]").forEach((el) => {
-      const d = el.dataset.d;
-      if (d === p.clave || (d === p.eje && el.matches(".rde-rotulo, .rde-numero"))) el.classList.add("is-activa");
+      if (el.dataset.d === p.clave || el.dataset.d === p.eje || el.dataset.eje === p.eje) el.classList.add("is-activa");
     });
     tarjetero.mostrar({ clave: p.clave, eje: p.eje, svg: p.svg, x, y });
   };
