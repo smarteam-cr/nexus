@@ -21,7 +21,7 @@ import { Alert, Button, Field, Textarea, useToast } from "@/components/ui";
 import { BotonTexto } from "@/components/ui/sistema";
 import { cn } from "@/lib/cn";
 import { equipoDeLaDimension, loDeLaSesion, loQueFaltaExplorar, MAX_LETRAS_DE_LA_NOTA, type LoDeLaSesion, type LoQueFaltaExplorar } from "@/lib/analizador-venta/revision";
-import { TEXTO_DEL_VALOR, type Cita, type Juicio, type Observacion } from "@/lib/analizador-venta/analisis";
+import { TEXTO_DEL_HUECO, TEXTO_DEL_VALOR, type Cita, type CifraDicha, type Juicio, type Observacion } from "@/lib/analizador-venta/analisis";
 import type { ReunionDeVentaVista } from "@/lib/analizador-venta/reuniones-de-venta-server";
 import type { PestanaDeSesion } from "@/lib/exploraciones/guia";
 import { useLienzo } from "@/components/exploraciones/contexto";
@@ -179,7 +179,7 @@ function ElAnalisis({ vista, pestana, puedeEditar }: { vista: ReunionDeVentaVist
 
           <BienYParaMejorar bien={lo.bien} mejorar={lo.recomendaciones} />
           {falta && <LoQueFalta lo={lo} falta={falta} delCliente={delCliente} />}
-          <ElResultado lo={lo} />
+          {lo.numeros.length ? <LosNumeros lo={lo} /> : <ElResultado lo={lo} />}
           <ElProcesoConsultivo lo={lo} juzgado={res.juicios.some((j) => j.punto === "etapa")} />
 
           <Confirmacion
@@ -224,7 +224,7 @@ const TONO: Record<Tono, string> = {
 };
 
 /** Una fila de lista: a la izquierda qué y su etiqueta; a la derecha la lectura y la cita. Se lee de corrido. */
-function Fila({ titulo, rotulo, etiqueta, tono, lectura, cita }: { titulo: string; rotulo?: string | null; etiqueta: string; tono: Tono; lectura: string; cita: Cita | null }) {
+function Fila({ titulo, rotulo, etiqueta, tono, lectura, cita }: { titulo: string; rotulo?: string | null; etiqueta?: string; tono: Tono; lectura: string; cita: Cita | null }) {
   return (
     <li className="grid gap-x-4 gap-y-1 py-2.5 sm:grid-cols-[minmax(0,13rem)_minmax(0,1fr)]">
       <div className="min-w-0 space-y-1">
@@ -232,7 +232,7 @@ function Fila({ titulo, rotulo, etiqueta, tono, lectura, cita }: { titulo: strin
           {titulo}
           {rotulo && <span className="font-normal text-fg-muted"> · {rotulo}</span>}
         </p>
-        <span className={cn("inline-flex rounded-full px-2 py-0.5 text-[11px] font-semibold", TONO[tono])}>{etiqueta}</span>
+        {etiqueta && <span className={cn("inline-flex rounded-full px-2 py-0.5 text-[11px] font-semibold", TONO[tono])}>{etiqueta}</span>}
       </div>
       <div className="min-w-0">
         <p className="text-[12.5px] leading-[18px] text-fg-secondary">{lectura}</p>
@@ -248,7 +248,8 @@ function AterrizarYExpandir({ lo }: { lo: LoDeLaSesion }) {
     { titulo: "El dolor del área", j: lo.dolor },
     { titulo: "Base para un caso de uso", j: lo.casoDeUso },
   ].filter((f): f is { titulo: string; j: Juicio } => !!f.j);
-  if (!filas.length) return null;
+  const fuera = lo.fueraDelObjetivo;
+  if (!filas.length && !fuera.length) return null;
   const tono = (j: Juicio): Tono => (j.valor === "a_fondo" || j.valor === "hay_base" ? "info" : j.valor === "en_parte" || j.valor === "falta" ? "neutro" : "aviso");
   return (
     <div className="space-y-1">
@@ -265,6 +266,10 @@ function AterrizarYExpandir({ lo }: { lo: LoDeLaSesion }) {
             cita={j.citas[0] ?? null}
           />
         ))}
+        {/* 2026-11-08: lo importante que salió fuera del guion no se descarta (Centauro: los cortes por falta de pago). */}
+        {fuera.map((f, i) => (
+          <Fila key={`fuera-${i}`} titulo="Apareció fuera del objetivo" tono="aviso" lectura={f.texto} cita={f.citas[0] ?? null} />
+        ))}
       </ul>
     </div>
   );
@@ -280,6 +285,7 @@ function Observaciones({ titulo, items, punto }: { titulo: string; items: readon
             <span aria-hidden className={cn("mt-[7px] h-1.5 w-1.5 flex-shrink-0 rounded-full", punto)} />
             <div className="min-w-0">
               <p className="text-[13px] leading-[19px] text-fg">{x.texto}</p>
+              {x.decir && <p className="mt-1 text-[12.5px] leading-[18px] text-fg-secondary">La próxima vez: «{x.decir}»</p>}
               <Citas citas={x.citas.slice(0, 1)} />
             </div>
           </li>
@@ -322,7 +328,7 @@ function LoQueFalta({ lo, falta, delCliente }: { lo: LoDeLaSesion; falta: LoQueF
               key={`${f.estado}-${i}-${f.dimension}`}
               titulo={f.dimension}
               rotulo={varias ? f.area : null}
-              etiqueta={f.estado === "tocado" ? "Se tocó sin profundizar" : "No se tocó"}
+              etiqueta={f.estado === "tocado" ? "Se mencionó sin profundizar" : "No se tocó"}
               tono={f.estado === "tocado" ? "info" : "aviso"}
               lectura={f.lectura}
               cita={f.cita}
@@ -336,6 +342,80 @@ function LoQueFalta({ lo, falta, delCliente }: { lo: LoDeLaSesion; falta: LoQueF
       )}
       {falta.items.length > 0 && lo.exploradas.length > 0 && <p className="text-[12.5px] text-fg-secondary">Se exploró a fondo: {enLista(lo.exploradas)}.</p>}
       {falta.sinTocar.length > 0 && <p className="text-[12.5px] text-fg-muted">No se tocó en esta sesión: {enLista(falta.sinTocar)}.</p>}
+      <ParaDecidirYDemo lo={lo} />
+    </div>
+  );
+}
+
+/**
+ * Dos líneas al pie de lo que falta (2026-11-08): los huecos de decisión que siguen abiertos y las funciones por las que
+ * preguntó el cliente, para llevarlas al demo. Los análisis de antes no las traen: no se muestran.
+ */
+function ParaDecidirYDemo({ lo }: { lo: LoDeLaSesion }) {
+  const abiertos = lo.decision?.filter((d) => !d.seSabe) ?? null;
+  return (
+    <>
+      {abiertos && (
+        <p className="text-[12.5px] leading-[18px] text-fg-secondary">
+          <span className="font-semibold text-fg">Qué falta para decidir:</span>{" "}
+          {abiertos.length ? `${enLista(abiertos.map((d) => TEXTO_DEL_HUECO[d.hueco]))}.` : "nada: ya se sabe quién decide, para cuándo, cuánto pueden invertir y qué pasa si no hacen nada."}
+        </p>
+      )}
+      {lo.demo.length > 0 && (
+        <p className="text-[12.5px] leading-[18px] text-fg-secondary">
+          <span className="font-semibold text-fg">Preguntas para el demo:</span> {lo.demo.map((d) => `${d.pregunta} (${d.quien})`).join(" · ")}.
+        </p>
+      )}
+    </>
+  );
+}
+
+/**
+ * Los números del cliente en una tabla corta (2026-11-08): la meta, lo que pasa hoy y lo que falta saber. Reemplaza la fila
+ * «¿Se averiguó el resultado que busca?», que queda como etiqueta del título. La cita de cada cifra, al pasar el mouse.
+ */
+function LosNumeros({ lo }: { lo: LoDeLaSesion }) {
+  const r = lo.resultado;
+  const celda = (c: CifraDicha | null) =>
+    c ? (
+      <span title={`«${c.cita.texto}» — ${c.cita.hablante}, turno ${c.cita.turno}`} className="cursor-help underline decoration-line decoration-dotted underline-offset-2">
+        {c.texto}
+      </span>
+    ) : (
+      <span className="text-fg-muted">—</span>
+    );
+  return (
+    <div className="space-y-1.5">
+      <div className="flex flex-wrap items-center gap-2">
+        <Subtitulo>Los números del cliente</Subtitulo>
+        {r && (
+          <span className={cn("inline-flex rounded-full px-2 py-0.5 text-[11px] font-semibold", TONO[r.valor === "si" ? "info" : r.valor === "en_parte" ? "neutro" : "aviso"])}>
+            El resultado que busca: {r.valor === "si" ? "sí se averiguó" : r.valor === "en_parte" ? "en parte" : "no se averiguó"}
+          </span>
+        )}
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[34rem] text-left text-[12.5px] leading-[18px]">
+          <thead>
+            <tr className="border-b border-line text-xs text-fg-muted">
+              <th className="py-1.5 pr-3 font-medium"> </th>
+              <th className="py-1.5 pr-3 font-medium">Lo que dijo como meta</th>
+              <th className="py-1.5 pr-3 font-medium">Lo que pasa hoy</th>
+              <th className="py-1.5 font-medium">Lo que falta saber</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-line">
+            {lo.numeros.map((f, i) => (
+              <tr key={i} className="align-top">
+                <td className="py-2 pr-3 font-semibold text-fg">{f.que}</td>
+                <td className="py-2 pr-3 text-fg">{celda(f.meta)}</td>
+                <td className="py-2 pr-3 text-fg">{celda(f.realidad)}</td>
+                <td className="py-2 text-fg-secondary">{f.falta ?? <span className="text-fg-muted">—</span>}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

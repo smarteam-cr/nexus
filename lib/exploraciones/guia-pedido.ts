@@ -218,6 +218,11 @@ export interface ContextoDeLaGuia {
   referencias?: string[];
   /** Punto 15: lo que las sesiones anteriores dejaron por retomar, cada uno con dónde conviene. */
   retomar?: string[];
+  /**
+   * 2026-11-08 (lib/analizador-venta/para-la-guia.ts): del análisis de la última sesión, los números que faltan, los huecos
+   * de decisión abiertos y las preguntas para el demo, ya como líneas. Solo la preventa.
+   */
+  delAnalisisDeLaVenta?: string[];
 }
 
 const ESQUEMA_LAER = Object.fromEntries(PASOS_LAER.map((p) => [p.clave, { type: "string" }]));
@@ -916,6 +921,9 @@ function contextoDadoPorLaPersona(ctx: ContextoDeLaGuia): string[] {
   if (ctx.faltanAlCerrar?.length) lineas.push("", `El cierre pide también, si en la conversación no salió: ${ctx.faltanAlCerrar.join(", ")}.`);
   if (ctx.retomar?.length) {
     lineas.push("", "=== LO QUE QUEDÓ POR RETOMAR DE SESIONES ANTERIORES (con quién o dónde conviene) ===", ...ctx.retomar.map((r) => `- ${r}`));
+  }
+  if (ctx.delAnalisisDeLaVenta?.length) {
+    lineas.push("", "=== LO QUE DEJÓ ABIERTO EL ANÁLISIS DE LA ÚLTIMA SESIÓN (los números y la decisión se averiguan; lo del demo NO se pregunta) ===", ...ctx.delAnalisisDeLaVenta);
   }
   return lineas;
 }

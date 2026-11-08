@@ -59,6 +59,23 @@ TONO: español neutro con tuteo, directo. Habla de lo que se dijo, no de la pers
 Entrega todo con la herramienta registrar_analisis.`;
 
 /**
+ * Lo del 8 nov (Elías, con Centauro): viaja en el MATERIAL, no en el prompt de la base, igual que el criterio del
+ * resultado (criterio.ts): así entra sin re-sembrar el agente y un prompt calibrado a mano en /agents no lo pisa. Si choca
+ * con las instrucciones de la base, manda esto.
+ */
+export const REGLAS_DEL_ANALISIS = `CÓMO SE LEE ESTE ANÁLISIS (manda sobre tus instrucciones si chocan): el vendedor lo lee en dos minutos y tiene que saber qué tan buena fue su exploración y qué le falta para la próxima. No más texto: lo que va en un campo no se repite en prosa.
+
+1. LO QUE APARECE FUERA DEL OBJETIVO NO SE DESCARTA. En una exploración lo más valioso suele salir fuera del guion. Si el cliente contó un dolor fuerte que no estaba en el objetivo de la sesión (o en su área), va en «fuera_del_objetivo» con su cita, y cuenta para «dolor» y para el resumen.
+2. LOS NÚMEROS VAN EN LA TABLA («numeros»), no en prosa: nada de «falta cuantificar» en el resumen, en «caso_de_uso» ni en «Para mejorar». Solo los que justifican una propuesta: volumen, conversión, ticket, costo de un problema, frecuencia y clientes perdidos. Lo que falta saber, como pregunta lista para la próxima sesión. Si el cliente corrigió una cifra durante la sesión, usa la corregida y cita la corrección.
+3. TRES ESTADOS POR DIMENSIÓN. Antes de decir «sin_explorar», busca en TODA la conversación algo relacionado, aunque sea de pasada. Si se mencionó sin profundizar, es «tocado» con la cita. «sin_explorar» es solo si de verdad no se dijo nada relacionado.
+4. QUÉ FALTA PARA DECIDIR («decision»): quién decide, para cuándo lo necesitan, cuánto pueden invertir y qué pasa si no hacen nada. Lo que está en «lo que ya se sabe para decidir» NO falta: márcalo se_sabe.
+5. LOS PRÓXIMOS PASOS («pasos»): fechas, horas, responsables y sesiones agendadas como quedaron AL FINAL. Si se propuso un día y después se cambió, manda el último. Incluye toda sesión que se agendó, también con otras personas del cliente.
+6. «PARA MEJORAR» ES COACHING AFILADO: dos o tres, los más importantes de estos errores comunes de la exploración: explicar funciones de la herramienta sin que antes se haya hablado del dolor; prometer que todo se puede sin haberlo dimensionado; opinar sobre un número del cliente antes de conocer su meta; hacer preguntas que ya traen la respuesta; cerrar sin resumir y validar con el cliente cuáles son sus prioridades; que alguien del equipo de Smarteam esté en la reunión sin un rol. Cada uno con su cita y qué decir la próxima vez («decir»). «Lo que salió bien», también dos o tres.
+7. LAS PREGUNTAS PARA EL DEMO («demo»): si el cliente preguntó por funciones de la herramienta, cada una con la cita de su pregunta, para llevarlas al demo en lugar de responderlas en vivo.
+
+CADA CITA ES UN PEDAZO SEGUIDO de lo dicho, copiado tal cual: no juntes frases de lugares distintos ni resumas. Si lo importante está en dos lugares, van dos citas. Una cita que no aparece tal cual se cae, y con ella lo que respalda.`;
+
+/**
  * Las huellas (sha256) de los prompts que este archivo sembró antes. Si el de la base es uno de estos, nadie lo editó a
  * mano y scripts/crear-agente-analizador-venta.ts lo reemplaza sin `--force`; si no, es una calibración y no se pisa.
  */

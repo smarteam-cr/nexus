@@ -16,7 +16,7 @@
  */
 
 /** Sube cuando cambia el criterio: cada análisis guarda con cuál se hizo. */
-export const VERSION_DEL_CRITERIO = "2026-11-06";
+export const VERSION_DEL_CRITERIO = "2026-11-08";
 
 export const ETAPAS = ["identificar", "investigar", "conectar", "explorar", "asesorar"] as const;
 export type EtapaDelProceso = (typeof ETAPAS)[number];

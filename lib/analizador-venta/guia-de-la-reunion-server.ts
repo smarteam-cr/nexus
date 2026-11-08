@@ -21,6 +21,8 @@ import { aplicarAjustes, apuntaDelTema } from "@/lib/exploraciones/ajustes-de-la
 import { posicionesDelMapa } from "@/lib/exploraciones/mapa";
 import { DE_LA_PREVENTA, marcoDe } from "@/lib/exploraciones/marco";
 import { alcanceDeLaSesion, type AlcanceDeLaSesion } from "./alcance";
+import { HUECOS_DE_DECISION, type HuecoDeDecision } from "./analisis";
+import { tarjetaEnUnaLinea } from "./para-la-guia";
 
 export interface GuiaDeLaReunion {
   /** Lo que se buscaba en la sesión, si se sabe. */
@@ -37,7 +39,20 @@ export interface GuiaDeLaReunion {
   casos: { titulo: string; razon: string | null }[];
   /** La preventa tiene escala (aunque el alcance sean los temas de un equipo que la escala no mide). */
   conEscala: boolean;
+  /**
+   * Lo que la preventa ya tiene en el resumen para decidir (quién decide, tiempos, presupuesto, qué pasa si no actúan),
+   * 2026-11-08: el análisis no lo marca como faltante. Es el resumen de HOY: puede traer lo que salió de esta misma sesión.
+   */
+  yaSeSabe: Partial<Record<HuecoDeDecision, string>>;
 }
+
+/** Las tarjetas del resumen de la preventa que responden cada hueco de decisión. */
+const TARJETA_DEL_HUECO: Record<HuecoDeDecision, string> = {
+  quien_decide: "autoridad",
+  para_cuando: "tiempos",
+  cuanto_invertir: "presupuesto",
+  si_no_hacen_nada: "consecuencias",
+};
 
 /** Hasta cuántas preguntas de la guía se le pasan al agente. */
 const MAX_PREGUNTAS = 16;
@@ -70,6 +85,10 @@ export async function guiaDeLaReunion(o: { clientId: string; sessionId: string; 
     const alcance = alcanceDeLaSesion({ equipo: sesion?.equipo, enfoque: guia?.enfoque ?? [], areasEnJuego: estado.areas, areas: escala.areas });
     const dimensiones = alcance.dimensiones.map((d) => ({ nombre: d.nombre, area: d.area, nivel: d.id ? (posiciones[d.id]?.nivel ?? null) : null }));
     const casos = Object.values(estado.contenido.casosDeUso ?? {}).map((c) => ({ titulo: c.titulo, razon: c.razon ?? null }));
+    const casillas = estado.contenido.casillas as Record<string, unknown>;
+    const yaSeSabe = Object.fromEntries(
+      HUECOS_DE_DECISION.map((h) => [h, tarjetaEnUnaLinea(casillas[TARJETA_DEL_HUECO[h]])] as const).filter((x): x is readonly [HuecoDeDecision, string] => !!x[1]),
+    );
     return {
       objetivo: sesion?.objetivo ?? guia?.objetivo ?? null,
       preguntas,
@@ -78,6 +97,7 @@ export async function guiaDeLaReunion(o: { clientId: string; sessionId: string; 
       alcanceDe: alcance.de,
       conEscala: escala.areas.length > 0,
       casos,
+      yaSeSabe,
     };
   } catch (e) {
     console.warn(`[analizador-venta] sin guía para ${o.sessionId}:`, e instanceof Error ? e.message : e);
