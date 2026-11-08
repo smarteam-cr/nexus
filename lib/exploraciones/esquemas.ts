@@ -32,6 +32,7 @@ import {
   type TipoDeCasilla,
 } from "./casillas";
 import { MAX_FRASE } from "@/lib/smarteam/posicionamiento";
+import { MAX_ACTIVIDADES_POR_CASO, MAX_VECES } from "@/lib/casos-de-uso/armado";
 import { ESTADOS_DE_LA_CONDICION, MAX_HECHOS, MAX_LOGROS, TOPES, type PosicionamientoDelProspecto } from "./posicionamiento";
 import {
   contenidoVacio,
@@ -299,12 +300,34 @@ export const MedicionSchema: z.ZodType<Medicion> = z.object({
 /** El id de un caso de uso del catálogo. ⛔ Nunca `.cuid()`: en esta base conviven cuid y UUID. */
 const ID_CASO_DE_USO = z.string().min(1).max(60);
 
+/** Una actividad de la biblioteca en un caso elegido (lib/casos-de-uso/armado.ts). El servidor no mira si el id existe: lo hace la pantalla y el agente. */
+const ActividadDelCasoSchema = z.object({
+  actividadId: z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/).max(80),
+  nombre: textoLleno(200),
+  veces: z.number().int().min(1).max(MAX_VECES),
+  sobreQue: texto(120).optional(),
+  partes: z.record(z.string().max(40), z.number().int().min(0).max(MAX_VECES)).optional(),
+});
+
+const ValorDeVentaSchema = z.object({
+  palanca: texto(80),
+  argumento: textoLleno(900),
+  numeros: z.array(z.object({ dato: textoLleno(300), fuente: texto(120) })).max(6),
+  falta: z.array(textoLleno(300)).max(6),
+});
+
 export const CasoDeUsoElegidoSchema: z.ZodType<CasoDeUsoElegido> = z.object({
   titulo: textoLleno(200),
   areaId: ID_AREA.nullable(),
   razon: texto(400).optional(),
   descripcion: texto(800).optional(),
   dimensiones: z.array(ID_DIMENSION).max(8).optional(),
+  actividades: z.array(ActividadDelCasoSchema).max(MAX_ACTIVIDADES_POR_CASO).optional(),
+  sinActividad: texto(400).optional(),
+  valorDeVenta: ValorDeVentaSchema.optional(),
+  // (No FECHA_ISO: se declara más abajo y aquí todavía no existe.)
+  armado: z.string().min(10).max(40).optional(),
+  aMano: z.boolean().optional(),
 });
 
 const EscalaSugeridaSchema = z.object({
@@ -606,6 +629,7 @@ export const OperacionSchema = z.discriminatedUnion("op", [
   }),
   z.object({ op: z.literal("deshacerUso"), ids: z.array(z.string().min(1).max(120)).min(1).max(250) }),
   z.object({ op: z.literal("descartar"), itemIds: z.array(z.string().min(1).max(120)).min(1).max(250) }),
+  z.object({ op: z.literal("devolverCasosAnteriores"), corridaId: z.string().min(1).max(60) }),
   z.object({ op: z.literal("responsable"), email: z.string().email().max(200).nullable() }),
   z.object({ op: z.literal("alertaTecnicaVista") }),
   z.object({ op: z.literal("comoLlego"), valor: ComoLlegoSchema.nullable() }),
@@ -1030,6 +1054,14 @@ export function leerPropuesta(raw: unknown): PropuestaDeExploracion {
   // El armado respeta estos topes (posicionamiento.ts › TOPES): si igual no se puede leer, que quede dicho.
   if (!posicionamiento.success && raw.posicionamiento != null) console.warn("[exploraciones] el position statement guardado no se pudo leer", posicionamiento.error.issues[0]);
   p.posicionamiento = posicionamiento.success ? posicionamiento.data : null;
+  // 2026-11-08: las sugerencias de casos que reemplazó el último «Regenerar» (Deshacer las devuelve).
+  if (esObjeto(raw.casosAnteriores) && typeof raw.casosAnteriores.corridaId === "string" && typeof raw.casosAnteriores.en === "string" && Array.isArray(raw.casosAnteriores.items)) {
+    p.casosAnteriores = {
+      corridaId: raw.casosAnteriores.corridaId.slice(0, 60),
+      en: raw.casosAnteriores.en.slice(0, 40),
+      items: raw.casosAnteriores.items.map(leerItem).filter((it): it is ItemPropuesto => it !== null).slice(0, 120),
+    };
+  }
   if (!Array.isArray(raw.items)) return p;
   const items = raw.items.map(leerItem).filter((it): it is ItemPropuesto => it !== null);
   return { ...p, items };

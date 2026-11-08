@@ -23,6 +23,8 @@ import type { Prisma } from "@prisma/client";
 import { getAnthropic } from "@/lib/anthropic";
 import { tituloVigente } from "@/lib/casos-de-uso/catalogo";
 import { casoDeLaPreventa, casosParaLasAreas } from "@/lib/casos-de-uso/en-la-preventa";
+import { actividadesDelCaso, bibliotecaDeActividades } from "@/lib/casos-de-uso/actividades-server";
+import { actividadesDelElegido, actividadesPorDefecto, apartarCasosSinArmar, bibliotecaLigera, type ActividadDelCaso } from "@/lib/casos-de-uso/armado";
 import { humanizeAgentError } from "@/lib/agents/anthropic-error";
 import { estaColgada, MOTIVO_COLGADA } from "@/lib/agents/run-colgada";
 import { conContextoDeIA } from "@/lib/ai/contexto-de-corrida";
@@ -34,6 +36,10 @@ import {
   leerLaIndustria,
   leerLaRespuesta,
   leerLosCasos,
+  conElValor,
+  leerElValor,
+  pedidoDelValor,
+  type ContextoDelValor,
   juntarCobertura,
   leerLosResumenes,
   pedidoDeCasos,
@@ -42,13 +48,14 @@ import {
   pedidoDeLaIndustria,
   pedidoDeLosResumenes,
   propuestasDelTest,
+  type ContextoDeCasos,
   type ContextoDeLosResumenes,
   type ContextoDelPedido,
   type Lectura,
 } from "./agente-pedido";
 import { proponerALaFichaSinIA } from "@/lib/clients/ficha-propuesta";
 import { aportesDeLaPreparacion, ORIGEN_DE_LA_PREVENTA, propuestaParaLaFicha } from "./a-la-ficha";
-import { exploracionParaLosCasos } from "./casos-de-uso";
+import { exploracionParaLosCasos, loQueSeSabeParaElValor } from "./casos-de-uso";
 import { listaParaProponer } from "./calidad";
 import {
   cambioLoConfirmado,
@@ -60,6 +67,7 @@ import {
   laEscalaTieneBase,
   MAX_LECTURAS,
   propuestaVigente,
+  type CasoDeUsoElegido,
   type EstadoDeExploracion,
   type ItemPropuesto,
   type LecturaDeReunion,
@@ -229,6 +237,11 @@ interface OpcionesDeLaCorrida {
    * cuestionarios, cronograma y memoria se leen como contexto. Lo propuesto queda igual en la escala de la cuenta.
    */
   proyectoDeContexto?: string | null;
+  /**
+   * Para «casos» (2026-11-08): «Regenerar». El agente vuelve a armar los casos ya elegidos con la biblioteca de
+   * actividades, y las sugerencias de casos de antes (sin armar) quedan aparte para «Deshacer».
+   */
+  regenerar?: boolean;
 }
 
 /**
@@ -778,6 +791,8 @@ async function armarElPosicionamiento(
  * Los casos de uso: el agente parte del catálogo de Smarteam (lib/casos-de-uso, los que tocan las áreas en juego)
  * y propone uno propio solo si ninguno calza, a partir de dónde parece estar cada equipo, lo que le falta y sus
  * metas. Cada tanda no repite lo que ya está ni lo que el vendedor descartó. No lee HubSpot ni las reuniones.
+ * Desde el 2026-11-08 arma cada caso con actividades de la biblioteca y propone el argumento de valor, con lo que ya se
+ * leyó de las reuniones (sus resúmenes), los hallazgos y «Lo que ya sabemos». Con `regenerar`, vuelve a armar los elegidos.
  */
 async function proponerCasos(
   runId: string,
@@ -795,25 +810,9 @@ async function proponerCasos(
     throw new FalloDeLaExploracion("Todavía no hay sobre qué basarlos: los casos de uso se proponen cuando la escala tenga sus primeros niveles (el diagnóstico o la primera reunión).");
   }
   await fase(runId, "Mirando dónde está cada equipo…");
-  const pendientes = pendientesVigentes(ex.estado, ex.general, ex.escala);
-  const ctx = {
-    empresa: ex.fila.client.name,
-    edicion: ex.escala.edicion?.nombre ?? "escala general",
-    areas: ex.escala.areas
-      .filter((a) => ex.estado.areas.includes(a.id))
-      .map((a) => ({ id: a.id, nombre: a.nombre, dimensiones: a.dimensiones.filter((d) => d.aplica).map((d) => ({ id: d.id, nombre: d.nombre })) })),
-    exploracion: exploracionParaLosCasos(ex.estado, ex.escala, pendientes),
-    // Con el nombre de hoy: lo guardado antes del 2026-11-06 puede traer el nombre viejo de un caso renombrado, y el
-    // agente lo vería libre y lo volvería a proponer (comparar es por nombre).
-    yaEstan: [
-      ...Object.entries(ex.estado.contenido.casosDeUso).map(([id, c]) => casoDeLaPreventa(id)?.titulo ?? tituloVigente(c.titulo)),
-      ...pendientes.filter((it) => it.destino.tipo === "casoDeUso").map((it) => tituloVigente((it.valor as { titulo: string }).titulo)),
-    ],
-    descartados: ex.estado.contenido.casosDescartados.map(tituloVigente),
-    instrucciones: bloqueDeInstrucciones(ex.estado.contenido.notas, "casos"),
-    catalogo: casosParaLasAreas(ex.estado.areas),
-  };
-  await fase(runId, "Pensando casos de uso…");
+  const regenerar = opts.regenerar === true;
+  const ctx = contextoDeLosCasos(ex, regenerar);
+  await fase(runId, regenerar ? "Volviendo a armar los casos con la biblioteca de actividades…" : "Pensando casos de uso y sus actividades…");
   const respuesta = await conContextoDeIA(
     {
       agentSlug: AGENTE_DE_LA_EXPLORACION,
@@ -824,18 +823,106 @@ async function proponerCasos(
     },
     () => getAnthropic().messages.create(pedidoDeCasos(ctx)),
   );
+  /* Cortada por el tope, la lista llega a medias: al regenerar se apartarían las sugerencias de antes y volverían pocas
+     (revisión del 2026-11-08). Se avisa y no se guarda nada. */
+  if (respuesta.stop_reason === "max_tokens") {
+    throw new FalloDeLaExploracion("La respuesta del agente salió cortada (demasiados casos para una vez). No se cambió nada: vuelve a intentarlo, o quita algún caso elegido antes de regenerar.");
+  }
   const r = leerLosCasos(respuesta, ctx, runId);
+  /* El argumento de valor, en una llamada APARTE con lo interno de la preventa (pedidoDelValor): la de los casos no lo
+     ve, porque escribe lo que llega al cliente. Si falla, los casos se guardan igual, sin argumento. */
+  let items = r.items;
+  if (items.length) {
+    await fase(runId, "Pensando cómo subir el ticket de cada caso…");
+    const cv = contextoDelValor(ex.estado, ctx.exploracion, ex.fila.client.name, items);
+    try {
+      const rv = await conContextoDeIA(
+        { agentSlug: AGENTE_DE_LA_EXPLORACION, agentRunId: runId, clientId: ex.fila.clientId, triggeredByEmail: opts.triggeredByEmail, origen: "exploraciones/agente:casos-valor" },
+        () => getAnthropic().messages.create(pedidoDelValor(cv)),
+      );
+      items = conElValor(items, leerElValor(rv, cv));
+    } catch (e) {
+      console.error("[exploraciones/agente] el argumento de valor falló; los casos se guardan sin él", e);
+    }
+  }
   await fase(runId, "Guardando lo propuesto…");
   const propuestos = await guardar(
     exploracionId,
-    r.items,
-    { leyo: ["Dónde está cada equipo en la escala", "Lo que el cliente contó en las reuniones"], leidas: { sesiones: [], hubspot: [], documentos: [] }, foto: null },
-    { runId, modo: "casos", automatica: false },
+    items,
+    {
+      leyo: ["Dónde está cada equipo en la escala", "Lo que el cliente contó en las reuniones", "La biblioteca de casos y de actividades"],
+      leidas: { sesiones: [], hubspot: [], documentos: [] },
+      foto: null,
+    },
+    { runId, modo: "casos", automatica: false, regenerar },
   );
   await prisma.agentRun.update({
     where: { id: runId },
-    data: { status: "DONE", currentPhase: null, output: JSON.stringify({ propuestos, descartadas: r.descartadas, nadaNuevo: false }) },
+    data: { status: "DONE", currentPhase: null, output: JSON.stringify({ propuestos, descartadas: r.descartadas, nadaNuevo: false, regenerar }) },
   });
+}
+
+/** Lo que lee la llamada del argumento de valor: lo de los casos, más lo interno de la preventa. */
+export function contextoDelValor(estado: EstadoDeExploracion, exploracion: string, empresa: string, items: readonly ItemPropuesto[]): ContextoDelValor {
+  return {
+    empresa,
+    exploracion,
+    interno: loQueSeSabeParaElValor(estado),
+    casos: items.flatMap((it) => {
+      if (it.destino.tipo !== "casoDeUso") return [];
+      const v = it.valor as CasoDeUsoElegido;
+      return [{ id: it.destino.useCaseId, titulo: v.titulo, actividades: (v.actividades ?? []).map((a) => (a.veces > 1 ? `${a.nombre} ×${a.veces}` : a.nombre)) }];
+    }),
+  };
+}
+
+/**
+ * Lo que lee el agente de casos (exportado para el simulacro de scripts/simular-casos-de-uso.ts). `regenerar`: vuelve a
+ * armar los elegidos, y las sugerencias sin armar no cuentan como «ya están» (se van a reemplazar).
+ */
+export function contextoDeLosCasos(
+  ex: { fila: { client: { name: string } }; estado: EstadoDeExploracion; escala: EscalaDelLienzo; general: Escala },
+  regenerar: boolean,
+): ContextoDeCasos {
+  const pendientes = pendientesVigentes(ex.estado, ex.general, ex.escala);
+  /* 2026-11-08: la biblioteca de actividades y las de cada caso del catálogo (lib/casos-de-uso/armado.ts). Al regenerar,
+     las sugerencias sin armar se van a reemplazar: no cuentan como «ya están». */
+  const catalogo = casosParaLasAreas(ex.estado.areas);
+  const porDefecto: Record<string, ActividadDelCaso[]> = {};
+  for (const c of catalogo) {
+    const a = actividadesDelCaso(c.id);
+    if (a) porDefecto[c.id] = actividadesPorDefecto(a);
+  }
+  const pendientesQueSiguen = pendientes.filter((it) => it.destino.tipo === "casoDeUso" && (!regenerar || !!(it.valor as { armado?: string }).armado));
+  return {
+    empresa: ex.fila.client.name,
+    edicion: ex.escala.edicion?.nombre ?? "escala general",
+    areas: ex.escala.areas
+      .filter((a) => ex.estado.areas.includes(a.id))
+      .map((a) => ({ id: a.id, nombre: a.nombre, dimensiones: a.dimensiones.filter((d) => d.aplica).map((d) => ({ id: d.id, nombre: d.nombre })) })),
+    exploracion: exploracionParaLosCasos(ex.estado, ex.escala, pendientes),
+    // Con el nombre de hoy: lo guardado antes del 2026-11-06 puede traer el nombre viejo de un caso renombrado, y el
+    // agente lo vería libre y lo volvería a proponer (comparar es por nombre).
+    yaEstan: [
+      ...Object.entries(ex.estado.contenido.casosDeUso).map(([id, c]) => casoDeLaPreventa(id)?.titulo ?? tituloVigente(c.titulo)),
+      ...pendientesQueSiguen.map((it) => tituloVigente((it.valor as { titulo: string }).titulo)),
+    ],
+    descartados: ex.estado.contenido.casosDescartados.map(tituloVigente),
+    instrucciones: bloqueDeInstrucciones(ex.estado.contenido.notas, "casos"),
+    catalogo,
+    biblioteca: bibliotecaLigera(bibliotecaDeActividades()),
+    porDefecto,
+    ...(regenerar
+      ? {
+          rearmar: Object.entries(ex.estado.contenido.casosDeUso).map(([id, c]) => ({
+            id,
+            titulo: casoDeLaPreventa(id)?.titulo ?? tituloVigente(c.titulo),
+            areaId: c.areaId,
+            actividades: actividadesDelElegido(c, porDefecto[casoDeLaPreventa(id)?.id ?? ""]),
+          })),
+        }
+      : {}),
+  };
 }
 
 /** Las fuentes que bastan para saber qué hace la empresa: la ficha, los contactos, los negocios, el test y la actividad reciente, recortadas. */
@@ -1480,7 +1567,7 @@ async function guardar(
   exploracionId: string,
   items: ItemPropuesto[],
   leido: LoQueLeyoLaCorrida,
-  corrida: { runId: string; modo: ModoDelAgente; automatica: boolean },
+  corrida: { runId: string; modo: ModoDelAgente; automatica: boolean; regenerar?: boolean },
 ): Promise<number> {
   return prisma.$transaction(async (tx) => {
     await bloquearFila(tx, exploracionId);
@@ -1500,7 +1587,11 @@ async function guardar(
     });
     if (!fila) return 0;
     const ahora = new Date();
-    const estado = estadoDesdeFila(fila);
+    const leido0 = estadoDesdeFila(fila);
+    /* «Regenerar» en Casos de uso (2026-11-08): las sugerencias de casos sin armar salen y quedan aparte, para que
+       «Deshacer» las devuelva (op `devolverCasosAnteriores`). */
+    const apartado = corrida.regenerar ? apartarCasosSinArmar(leido0.propuesta.items, corrida.runId, ahora.toISOString()) : null;
+    const estado = apartado ? { ...leido0, propuesta: { ...leido0.propuesta, items: apartado.items } } : leido0;
     const antes = new Set(propuestaVigente(estado).map((it) => it.id));
     const fusion = fusionarPropuestas(estado, items);
     const union = (a: string[], b: string[]) => [...new Set([...a, ...b])].slice(-500);
@@ -1526,6 +1617,7 @@ async function guardar(
       ...(leido.posicionamiento !== undefined ? { posicionamiento: leido.posicionamiento } : {}),
       // La tarjeta de cada dimensión de La escala: la de esta corrida reemplaza a la anterior.
       ...(leido.tarjetasDeLaEscala ? { tarjetasDeLaEscala: leido.tarjetasDeLaEscala } : {}),
+      ...(apartado ? { casosAnteriores: apartado.casosAnteriores } : {}),
       corridas: [
         ...fusion.corridas,
         {

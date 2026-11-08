@@ -37,6 +37,7 @@ import {
 import type { PosicionamientoDelProspecto } from "./posicionamiento";
 import type { TarjetasDeLaEscala } from "./tarjetas-de-la-escala";
 import type { ClaveDeEquipo } from "./equipos";
+import type { ActividadDelCaso, CasosAnteriores, ValorDeVenta } from "@/lib/casos-de-uso/armado";
 import {
   definicionDe,
   esDeLista,
@@ -135,6 +136,20 @@ export interface CasoDeUsoElegido {
   descripcion?: string;
   /** Las dimensiones de la escala que mueve (ids). */
   dimensiones?: string[];
+  /**
+   * 2026-11-08 (lib/casos-de-uso/armado.ts): sus actividades de la biblioteca, cuando son suyas (las armó el agente o
+   * las cambió el vendedor). Sin ellas, un caso del catálogo usa las marcadas en su ficha. De ahí salen las horas y el
+   * precio mínimo.
+   */
+  actividades?: ActividadDelCaso[];
+  /** Lo que el caso necesita y ninguna actividad de la biblioteca cubre (lo dice el agente). */
+  sinActividad?: string;
+  /** Cómo subir el ticket vendiendo por valor. Interno: nunca llega a la propuesta del cliente. */
+  valorDeVenta?: ValorDeVenta;
+  /** Cuándo lo armó el agente con la biblioteca (ISO). Sin esto, el caso es de antes y «Regenerar» lo actualiza. */
+  armado?: string;
+  /** El vendedor cambió sus actividades: regenerar no lo pisa, deja la versión nueva al lado. */
+  aMano?: boolean;
 }
 
 /** El id de un caso de uso que propuso el agente sin el catálogo: sale del título. */
@@ -475,6 +490,11 @@ export interface PropuestaDeExploracion {
    * reemplaza a la anterior. Material de preparación: se muestra directo, sin «usar». null = todavía no se armó.
    */
   posicionamiento?: PosicionamientoDelProspecto | null;
+  /**
+   * 2026-11-08 (lib/casos-de-uso/armado.ts): las sugerencias de casos que reemplazó el último «Regenerar» (las que no
+   * se armaron con la biblioteca). «Deshacer» las devuelve a la lista (`devolverCasosAnteriores`).
+   */
+  casosAnteriores?: CasosAnteriores<ItemPropuesto> | null;
 }
 
 /** El correo de seguimiento de una reunión: qué entendimos, lo acordado, lo que quedó abierto y la próxima reunión. */
@@ -671,9 +691,12 @@ export function idDelItem(destino: DestinoDePropuesta, valor: unknown): string {
         : { nivel: valor.nivel }
       : destino.tipo === "falta" && esObjeto(valor)
         ? { estado: valor.estado }
-        : destino.tipo === "aExplorar" || destino.tipo === "area" || destino.tipo === "casoDeUso"
-          ? null
-          : valor;
+        : destino.tipo === "casoDeUso" && esObjeto(valor) && typeof valor.armado === "string"
+          ? // Armado con la biblioteca (2026-11-08): otro id que el de antes, para que una lápida vieja no tape el rearmado.
+            { armado: true }
+          : destino.tipo === "aExplorar" || destino.tipo === "area" || destino.tipo === "casoDeUso"
+            ? null
+            : valor;
   return `${claveDelDestino(destino)}:${fnv1a(canonico(valorQueCuenta))}`;
 }
 
@@ -746,8 +769,13 @@ export function yaEstaConfirmado(estado: EstadoDeExploracion, destino: DestinoDe
       const p = valor as { cierre: Cierre; despues: Despues };
       return estado.perfilCierre === p.cierre && estado.perfilDespues === p.despues;
     }
-    case "casoDeUso":
-      return destino.useCaseId in c.casosDeUso;
+    case "casoDeUso": {
+      /* Un caso ya elegido. Desde el 2026-11-08 el agente rearma los elegidos con la biblioteca (`armado`): esa versión
+         nueva se muestra mientras sea distinta de la elegida. La de antes, sin armar, no vuelve. */
+      const elegido = c.casosDeUso[destino.useCaseId];
+      if (!elegido) return false;
+      return !(esObjeto(valor) && typeof valor.armado === "string") || canonico(elegido) === canonico(valor);
+    }
   }
 }
 
@@ -822,12 +850,21 @@ export function esHipotesisDeNivel(it: ItemPropuesto): boolean {
  * anterior, salvo que pese menos (una hipótesis no pisa lo que dijo el cliente). Lo repetido junta
  * sus fuentes.
  */
+/**
+ * ¿Lo tapa una lápida? La versión nueva de un caso que YA está elegido no (2026-11-08): no es volver a sugerirlo, es
+ * actualizarlo, y una lápida vieja del mismo caso (lo descartó antes de elegirlo desde la lista) lo dejaba sin armar.
+ */
+function tapadoPorLapida(estado: EstadoDeExploracion, it: Pick<ItemPropuesto, "id" | "destino">, lapidas: ReadonlySet<string>): boolean {
+  if (!lapidas.has(it.id)) return false;
+  return !(it.destino.tipo === "casoDeUso" && it.destino.useCaseId in estado.contenido.casosDeUso);
+}
+
 export function fusionarPropuestas(estado: EstadoDeExploracion, nuevos: ItemPropuesto[]): PropuestaDeExploracion {
   const base = estado.propuesta;
   const lapidas = new Set(estado.contenido.descartadas);
   let items = [...estado.propuesta.items];
   for (const n of nuevos) {
-    if (lapidas.has(n.id) || yaEstaConfirmado(estado, n.destino, n.valor)) continue;
+    if (tapadoPorLapida(estado, n, lapidas) || yaEstaConfirmado(estado, n.destino, n.valor)) continue;
     const peso = pesoDelNivel(n);
     /* Una hipótesis no compite con lo que ya dijo el cliente: si el nivel confirmado tiene evidencia,
        la hipótesis sobra. */
@@ -884,7 +921,7 @@ export function propuestaVigente(estado: EstadoDeExploracion): ItemPropuesto[] {
   const conBase = laEscalaTieneBase(estado);
   return estado.propuesta.items.filter(
     (it) =>
-      !lapidas.has(it.id) &&
+      !tapadoPorLapida(estado, it, lapidas) &&
       !sinFundamentoDelCliente(it) &&
       (conBase || it.destino.tipo !== "casoDeUso") &&
       !yaEstaConfirmado(estado, it.destino, it.valor),
@@ -981,6 +1018,11 @@ export type Operacion =
    */
   | { op: "deshacerUso"; ids: string[] }
   | { op: "descartar"; itemIds: string[] }
+  /**
+   * 2026-11-08: «Deshacer» de «Regenerar» en Casos de uso: devuelve a la lista las sugerencias de casos que reemplazó
+   * esa corrida (`propuesta.casosAnteriores`, si es la suya) y quita las que dejó ella sin usar.
+   */
+  | { op: "devolverCasosAnteriores"; corridaId: string }
   | { op: "responsable"; email: string | null }
   /** «Entendido» en el aviso de que la última reunión se puso técnica. */
   | { op: "alertaTecnicaVista" }
@@ -1518,9 +1560,15 @@ function aplicarUna(estado: EstadoDeExploracion, op: Operacion, validez: Validez
       return deshacerUsos(estado, op.ids, validez);
     case "descartar": {
       const ids = new Set(op.itemIds);
+      /* La versión nueva de un caso que ya está elegido (la deja «Regenerar», 2026-11-08) sale sin lápida ni título
+         descartado: no se descarta el caso, se queda el que ya estaba. */
+      const actualizaciones = new Set(
+        estado.propuesta.items.filter((x) => ids.has(x.id) && x.destino.tipo === "casoDeUso" && x.destino.useCaseId in c.casosDeUso).map((x) => x.id),
+      );
+      const conLapida = [...ids].filter((id) => !actualizaciones.has(id));
       // El título de un caso de uso descartado queda anotado: la próxima tanda del agente no lo repite.
       const titulos = estado.propuesta.items
-        .filter((x) => ids.has(x.id) && x.destino.tipo === "casoDeUso" && esObjeto(x.valor) && typeof x.valor.titulo === "string")
+        .filter((x) => conLapida.includes(x.id) && x.destino.tipo === "casoDeUso" && esObjeto(x.valor) && typeof x.valor.titulo === "string")
         .map((x) => (x.valor as CasoDeUsoElegido).titulo);
       return {
         ok: true,
@@ -1530,11 +1578,21 @@ function aplicarUna(estado: EstadoDeExploracion, op: Operacion, validez: Validez
           contenido: {
             ...c,
             ...(c.usadas ? { usadas: soltarDeLaCadena(c.usadas, estado.propuesta.items, [...ids]) } : {}),
-            descartadas: [...c.descartadas.filter((d) => !ids.has(d)), ...ids].slice(-MAX_DESCARTADAS),
+            descartadas: [...c.descartadas.filter((d) => !ids.has(d)), ...conLapida].slice(-MAX_DESCARTADAS),
             ...(titulos.length ? { casosDescartados: [...c.casosDescartados.filter((t) => !titulos.includes(t)), ...titulos].slice(-MAX_CASOS_DESCARTADOS) } : {}),
           },
         },
       };
+    }
+    case "devolverCasosAnteriores": {
+      const p = estado.propuesta;
+      if (!p.casosAnteriores || p.casosAnteriores.corridaId !== op.corridaId) return { ok: false, error: "Eso ya se deshizo, o hubo otro «Regenerar» después." };
+      const lapidas = new Set(c.descartadas);
+      const devueltas = p.casosAnteriores.items.filter((it) => !lapidas.has(it.id));
+      const ids = new Set(devueltas.map((it) => it.id));
+      // Las sugerencias de casos que dejó esa corrida y nadie usó se van; las de antes vuelven a la lista.
+      const quedan = p.items.filter((it) => !(it.destino.tipo === "casoDeUso" && it.corridaId === op.corridaId) && !ids.has(it.id));
+      return { ok: true, estado: { ...estado, propuesta: { ...p, items: [...quedan, ...devueltas], casosAnteriores: null } } };
     }
     case "responsable":
       return { ok: true, estado: { ...estado, responsableEmail: op.email } };

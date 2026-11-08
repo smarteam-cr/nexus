@@ -31,6 +31,8 @@ const Cuerpo = z.object({
   hubspotId: z.string().regex(/^\d{1,30}$/).optional(),
   /** Con «leer»: ubicar la escala con todo lo que Nexus sabe aunque no haya una reunión nueva (ficha B). */
   posicionar: z.boolean().optional(),
+  /** Con «casos» (2026-11-08): «Regenerar», vuelve a armar los casos elegidos con la biblioteca de actividades. */
+  regenerar: z.boolean().optional(),
 });
 
 export async function POST(req: NextRequest, { params }: Ctx) {
@@ -47,11 +49,12 @@ export async function POST(req: NextRequest, { params }: Ctx) {
   const cuerpo = Cuerpo.safeParse(raw);
   if (!cuerpo.success) return cuerpoInvalido(cuerpo.error);
 
-  const { modo, sesionId, hubspotId, posicionar } = cuerpo.data;
+  const { modo, sesionId, hubspotId, posicionar, regenerar } = cuerpo.data;
   const r = await lanzarCorrida(id, modo, {
     triggeredByEmail: guard.email,
     sesionId: sesionId ?? null,
     ...(modo === "leer" && posicionar ? { posicionar: true } : {}),
+    ...(modo === "casos" && regenerar ? { regenerar: true } : {}),
     // Una reunión de HubSpot ya leída se vuelve a leer entera: propone y reemplaza lo que dijo de ella.
     ...(modo === "leer" && hubspotId ? { releer: { sesiones: [], hubspot: [hubspotId], documentos: [] }, completa: true } : {}),
   });

@@ -1,9 +1,11 @@
 /**
  * lib/exploraciones/casos-de-uso.ts — lo que lee el agente para proponer casos de uso. PURO.
  *
- * El modo «casos» es EXPERIMENTAL: propone casos de uso sin la biblioteca (hoy vacía), a partir de
- * dónde parece estar cada equipo en la escala (lo confirmado y, donde no hay, las hipótesis), lo que
- * le falta para Funcional y lo que contó el cliente.
+ * El modo «casos» propone casos de uso del catálogo de Smarteam (o propios) a partir de dónde parece
+ * estar cada equipo en la escala (lo confirmado y, donde no hay, las hipótesis), lo que le falta para
+ * Funcional y lo que contó el cliente. Desde el 2026-11-08 cada caso se arma con la biblioteca de
+ * actividades (lib/casos-de-uso/armado.ts) y lleva un argumento de valor para el vendedor, que lee
+ * además `loQueSeSabeParaElValor` (interno: nunca llega a la propuesta).
  *
  * ⛔ Solo entra lo que PUEDE ver el cliente (las casillas `alCliente`): lo que el agente propone acá
  * termina en la propuesta. Las hipótesis sobre personas, el presupuesto, quién decide, lo no
@@ -78,4 +80,29 @@ export function exploracionParaLosCasos(estado: EstadoDeExploracion, escala: Esc
     if (lineas.length) partes.push("", `## ${def.etiqueta}`, ...lineas);
   }
   return partes.join("\n");
+}
+
+/**
+ * Lo que se sabe de la empresa para el argumento de valor de cada caso (2026-11-08, lib/casos-de-uso/armado.ts): lo que
+ * dijo cada reunión leída, los hallazgos, «Lo que ya sabemos» (retos, resultado, qué pasa si no hacen nada) y lo que
+ * respondió el vendedor. Es INTERNO: el agente lo usa solo en el argumento de valor, que nunca llega a la propuesta.
+ * Una cifra del argumento vale solo si aparece aquí o en la exploración (`validarValorDelAgente`).
+ */
+export function loQueSeSabeParaElValor(estado: EstadoDeExploracion): string {
+  const p = estado.propuesta;
+  const c = estado.contenido;
+  const partes: string[] = [];
+  const lecturas = Object.values(p.lecturas)
+    .filter((l) => l.resumen)
+    .sort((a, b) => (a.fecha ?? a.en).localeCompare(b.fecha ?? b.en))
+    .slice(-8);
+  if (lecturas.length) partes.push("## Lo que dijo cada reunión", ...lecturas.map((l) => `- ${l.etiqueta}: ${l.resumen}`));
+  if (p.hallazgos?.lista.length) partes.push("", "## Lo más importante que se sabe", ...p.hallazgos.lista.map((h) => `- ${h}`));
+  const tarjetas = c.contexto?.tarjetas ?? {};
+  const deLoQueSabemos = (["retos", "resultado", "siNada", "plazos"] as const).flatMap((k) => (tarjetas[k]?.texto ? [`- ${k === "siNada" ? "Si no hacen nada" : k === "resultado" ? "Resultado que buscan" : k === "retos" ? "Retos" : "Plazos"}: ${tarjetas[k]!.texto} (${tarjetas[k]!.fuente})`] : []));
+  if (c.contexto?.sabemos) deLoQueSabemos.push(`- ${c.contexto.sabemos}`);
+  if (deLoQueSabemos.length) partes.push("", "## Lo que ya sabemos", ...deLoQueSabemos);
+  const respuestas = (c.respuestasParaLaGuia ?? []).slice(-6);
+  if (respuestas.length) partes.push("", "## Lo que respondió el vendedor", ...respuestas.map((r) => `- ${r.pregunta} → ${r.respuesta}`));
+  return partes.join("\n").slice(0, 12000);
 }

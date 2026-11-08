@@ -22,6 +22,8 @@ import { cn } from "@/lib/cn";
 import { listaParaProponer } from "@/lib/exploraciones/calidad";
 import { diaCorto } from "@/lib/exploraciones/fechas";
 import { useLienzo } from "./contexto";
+import { casosSinArmar } from "@/lib/casos-de-uso/armado";
+import type { CasoDeUsoElegido } from "@/lib/exploraciones/contenido";
 
 interface Negocio {
   id: string;
@@ -289,7 +291,15 @@ function PropuestasDeLaEmpresa({ propuestas, alCambiar }: { propuestas: Propuest
 }
 
 export default function PasoPropuesta() {
-  const { exp } = useLienzo();
+  const { exp, irA, pendientesPara } = useLienzo();
+  /* 2026-11-08: si los casos todavía no se armaron con la biblioteca de actividades, el vendedor no ve sus actividades,
+     su precio mínimo ni el argumento de valor antes de armar la propuesta: se avisa aquí y se regeneran en Casos de uso.
+     (La propuesta todavía no lleva las actividades ni el precio: lo dice el aviso.) */
+  const sinArmar = casosSinArmar(
+    Object.values(exp.estado.contenido.casosDeUso),
+    pendientesPara((d) => d.tipo === "casoDeUso" && !(d.useCaseId in exp.estado.contenido.casosDeUso)).map((it) => it.valor as CasoDeUsoElegido),
+    exp.estado.areas,
+  );
   const [negocios, setNegocios] = useState<Negocio[] | null | undefined>(undefined);
   const [propuestas, setPropuestas] = useState<PropuestaDeLaEmpresa[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -326,6 +336,21 @@ export default function PasoPropuesta() {
   return (
     <div className="space-y-4">
       {error && <Alert variant="danger">{error}</Alert>}
+      {sinArmar > 0 && (
+        <Alert
+          variant="warning"
+          title="Regenera para actualizar"
+          action={
+            <Button size="xs" variant="secondary" onClick={() => irA("casos")}>
+              Ir a Casos de uso
+            </Button>
+          }
+        >
+          {sinArmar === 1 ? "Un caso de uso todavía no está armado" : `${sinArmar} casos de uso todavía no están armados`} con la biblioteca de actividades. Regenéralos
+          en Casos de uso para ver sus actividades, su precio mínimo y cómo subir el ticket antes de armar la propuesta. La propuesta todavía no lleva las
+          actividades ni el precio.
+        </Alert>
+      )}
       <PropuestasDeLaEmpresa propuestas={propuestas} alCambiar={() => setIntento((n) => n + 1)} />
       <ListaParaProponer />
       {/* El recorrido la señala aunque HubSpot todavía no haya contestado: ahí va el esqueleto. */}

@@ -7984,6 +7984,44 @@ le pregunta a la persona del cliente.
   (`ia-…`) ni una fila de `UseCase`, así que no crea `BusinessCaseUseCase` y entra a la propuesta como contexto, con lo
   que el cliente obtiene. La lista «Del catálogo de Smarteam» muestra los de las áreas en juego, con enlace a su ficha.
 - **Fase 2, pendiente:** las licencias (hubs, ediciones y asientos) y el precio de cada caso.
+- **Casos de uso de la preventa armados con la biblioteca de actividades (2026-11-08, Elías con Centauro Solutions).**
+  Hasta ese día el agente leía el catálogo (título, promesa, síntomas, qué mueve) pero no las actividades: los casos
+  propios salían sin plan y ninguno tenía precio. Ahora (`lib/casos-de-uso/armado.ts`):
+  - **El paso «Casos de uso» es donde se personaliza la propuesta**; el paso «Propuesta» arma el entregable. Cada caso
+    elegido muestra sus actividades y se le quitan, se le ponen (de la biblioteca) y se le cambian las veces; las horas y
+    el precio se recalculan solos, y cada cambio se deshace (aviso y Ctrl+Z).
+  - **Un caso guarda sus actividades solo cuando son suyas** (`CasoDeUsoElegido.actividades`: las armó el agente o las
+    cambió el vendedor, `aMano`). Sin ellas, uno del catálogo usa las marcadas en su ficha. Cada actividad apunta a la
+    biblioteca por su id y guarda solo lo propio (nombre en el caso, veces, sobre qué, partes variables): las horas salen
+    de la biblioteca, como en docs/actividades-plan.md › «La actividad como dato».
+  - **Precio mínimo = horas × tarifa del segmento** (`Client.segmento`; sin segmento, la Estándar, y la pantalla lo dice).
+    Lo que define Dev o Diseño cuenta 0 y se nombra. El total de los elegidos cuenta una vez lo que se comparte en la
+    venta (el kickoff, un mismo canal).
+  - **El agente solo usa actividades de la biblioteca:** recibe la biblioteca y las actividades por defecto de cada caso
+    del catálogo, el esquema de su herramienta limita los ids, y el código descarta cualquier otro. Si no deja ninguna,
+    un caso del catálogo vuelve a las de su ficha; uno propio queda sin actividades y dice que hay que definirlo
+    (`sinActividad`). *Por qué:* las actividades son el plan que ejecuta Customer Success; una inventada no se puede
+    cotizar ni ejecutar.
+  - **El argumento de valor es del vendedor** (`valorDeVenta`: palanca, argumento, números con su fuente, lo que falta
+    averiguar). Nunca llega a la propuesta del cliente. Sale de una **llamada aparte** (`pedidoDelValor`), la única que lee
+    lo interno de la preventa (los resúmenes de las reuniones, los hallazgos, «Lo que ya sabemos», lo que respondió el
+    vendedor). *Por qué aparte:* la llamada de los casos escribe la descripción que ve el cliente, y lo interno puede traer
+    el presupuesto, quién decide u opiniones (revisión del 2026-11-08: una frase en el prompt no alcanzaba). *Sin cifras
+    inventadas:* un número vale solo si aparece en lo que se sabe, en una frase que hable de lo mismo («30 % de los leads»
+    no sale de «a los 30 días»); si no, pasa a «Falta averiguar».
+  - **El nombre de una actividad en el caso la concreta, no la cambia:** la pantalla muestra debajo la actividad de la
+    biblioteca de la que sale el tiempo, para que una integración no pase por «Configurar en HubSpot».
+  - **Regenerar** (y la alerta «Regenera para actualizar» mientras haya casos sin armar): el agente vuelve a armar los
+    elegidos y las sugerencias sin armar quedan aparte (`propuesta.casosAnteriores`). Al terminar, la pantalla que lo
+    lanzó usa sola las versiones nuevas, menos las de casos editados a mano: esas quedan en su fila («Usar la nueva» o
+    «Quedarme con esta»). Un solo «Deshacer» (aviso, Ctrl+Z o el botón de la franja, ese mismo día) devuelve los casos y
+    las sugerencias de antes. La alerta no cuenta los casos editados a mano (son del vendedor) ni los de un área fuera de
+    juego, y una respuesta cortada por el tope no cambia nada: lo dice y no aparta las sugerencias. *Por qué en la pantalla y no en el servidor:* el agente nunca escribe lo confirmado (contenido.ts); lo
+    aplica la persona que apretó «Regenerar», con el «Usar» de siempre.
+  - Cuesta unos US$ 0,19 por corrida, las dos llamadas juntas (medido con Centauro: 30 mil tokens de entrada y 6,4 mil de
+    salida, Sonnet). Corre
+    solo con un clic, o sola la primera vez que se abre el paso, como antes. `scripts/simular-casos-de-uso.ts` muestra el
+    antes y el después de una preventa sin escribir nada.
 
 ## Servicios recurrentes: el ciclo con los documentos de siempre (2026-10-12)
 

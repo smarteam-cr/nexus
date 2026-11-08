@@ -30,27 +30,13 @@
  * validación y las cuentas.
  */
 import { z } from "zod";
+import { ETAPAS_DE_ACTIVIDAD, formatoHoras, sobreQueAparte, type ComoSeComparte, type EtapaDeActividad } from "./actividades-puras";
 
-export const ETAPAS_DE_ACTIVIDAD = [
-  { clave: "sin-etapa", nombre: "De todo el proyecto" },
-  { clave: "01-diagnostico", nombre: "Diagnóstico" },
-  { clave: "02-planificacion", nombre: "Planificación" },
-  { clave: "03-implementacion", nombre: "Implementación" },
-  { clave: "04-adopcion", nombre: "Adopción" },
-  { clave: "05-aprendizaje", nombre: "Aprendizaje" },
-] as const;
-export type EtapaDeActividad = (typeof ETAPAS_DE_ACTIVIDAD)[number]["clave"];
+export { ETAPAS_DE_ACTIVIDAD, TARIFAS, formatoHoras, formatoUsd, sobreQueAparte, type ComoSeComparte, type EtapaDeActividad } from "./actividades-puras";
+
 const CLAVES_DE_ETAPA = ETAPAS_DE_ACTIVIDAD.map((e) => e.clave) as [EtapaDeActividad, ...EtapaDeActividad[]];
 
-/** Cómo se cobra dentro de una venta: una vez en toda la venta, una vez si es sobre lo mismo, o en cada caso. */
-export type ComoSeComparte = "venta" | "sobreQue" | "no";
 
-/** La tarifa por hora de cada segmento, en dólares. La gestión va dentro de la tarifa. */
-export const TARIFAS = [
-  { clave: "estandar", nombre: "Estándar", usdPorHora: 80 },
-  { clave: "corporativo", nombre: "Corporativo", usdPorHora: 100 },
-  { clave: "gobierno", nombre: "Gobierno", usdPorHora: 120 },
-] as const;
 
 const Comparte = z.enum(["venta", "sobreQue", "no"]);
 
@@ -315,19 +301,6 @@ export function sumarPorDefecto(caso: Pick<ActividadesDelCaso, "actividades">): 
   return caso.actividades.filter((f) => f.porDefecto).reduce((s, f) => s + horasDeLaFila(f), 0);
 }
 
-const ARTICULOS = new Set(["el", "la", "los", "las", "un", "una", "de", "del", "y", "a"]);
-
-/**
- * El «sobre qué» que vale la pena mostrar junto al nombre: vacío si el nombre ya lo dice («Revisar uso y resultados a
- * los 30 días» no repite «a los 30 días»). Lo que va entre «<…>» es un nombre por llenar y no cuenta.
- */
-export function sobreQueAparte(f: Pick<FilaDelCaso, "nombre" | "sobreQue">): string {
-  // Por palabras y sin artículos: «Importar los contactos y las empresas» ya dice «contactos y empresas».
-  const palabras = (s: string) => s.toLowerCase().replace(/<[^>]*>/g, " ").split(/[^\p{L}\d-]+/u).filter((p) => p && !ARTICULOS.has(p));
-  const nucleo = palabras(f.sobreQue);
-  const nombre = new Set(palabras(f.nombre));
-  return nucleo.length && nucleo.every((p) => nombre.has(p)) ? "" : f.sobreQue;
-}
 
 /**
  * Parte un texto en oraciones, para mostrarlo en viñetas: corta en un punto seguido de espacio y de una mayúscula, «,
@@ -357,16 +330,6 @@ export function filasPorEtapa(caso: Pick<ActividadesDelCaso, "actividades">) {
   return ETAPAS_DE_ACTIVIDAD.map((e) => ({ ...e, filas: caso.actividades.filter((f) => f.etapa === e.clave) })).filter((e) => e.filas.length > 0);
 }
 
-/** `28.5` → «28,5 h». Sin `toLocaleString`: el separador no puede depender del Node o del navegador. */
-export function formatoHoras(h: number): string {
-  const r = Math.round(h * 10) / 10;
-  return `${Number.isInteger(r) ? String(r) : r.toFixed(1).replace(".", ",")} h`;
-}
-
-/** `2280` → «2.280 USD». */
-export function formatoUsd(n: number): string {
-  return `${String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ".")} USD`;
-}
 
 /** Las veces y el tiempo de una fila: «1 h», «4 × 1 h», «Lo define Dev». */
 export function tiempoDeLaFila(f: Pick<FilaDelCaso, "veces" | "horasPorVez" | "horasPendientes" | "quien">): string {
