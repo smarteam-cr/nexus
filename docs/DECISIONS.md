@@ -13663,7 +13663,12 @@ veía como mapa y no como el diagnóstico, «Dónde está hoy» no decía qué s
   - las áreas son las que eligió el vendedor en «Acceso» › «Qué equipos ve» (`contenido.areasAlCliente`, operación
     `areasAlCliente`), con las de las que se habló señaladas («se habló en las reuniones»). Si no eligió, las EN JUEGO
     con algo usado, como antes (`areasParaElCliente`). *Por qué no todas las detectadas:* la revisión cazó que un enlace
-    ya enviado sumaría áreas solo con el deploy, sin que nadie lo decidiera. Un área sin nada usado no se puede elegir;
+    ya enviado sumaría áreas solo con el deploy, sin que nadie lo decidiera. Desde el 8 nov un área sin nada usado SÍ se
+    puede elegir y sale «En medición», sin barras ni «0 de N» (Elías: «debe aparecer que está en medición o que está
+    incompleta, pero también debería poder aparecer»); la elección vive también en el botón «Qué ve el cliente», arriba a
+    la derecha de La escala. La página abre en la primera con algo. *Lo aceptado:* un enlace ya enviado con un área
+    elegida muestra esa área «En medición» si después se le quita todo lo usado (antes se escondía sola); el vendedor la
+    eligió, y «Crear el acceso» se frena solo si no sale ningún equipo;
   - sale lo que el vendedor USÓ: con evidencia (también lo que contestó en el test: lo dijo el cliente), como nivel; la
     hipótesis del agente usada, como nivel «por explorar» (aro punteado, «· por explorar» en su barra, «N por explorar»
     arriba, una línea que lo explica y la misma línea en «Por dónde empezar» si sale de ella). Lo que el agente sugiere y

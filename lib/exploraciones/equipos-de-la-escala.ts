@@ -142,13 +142,16 @@ export function resumenDeLoExplorado(areas: readonly AreaDeLaEscala[]): string {
 /**
  * Las áreas que salen en la página del cliente, en orden (las en juego primero). `elegidas` es lo que eligió el vendedor
  * (undefined: no eligió todavía). Sin elegir, las EN JUEGO con algo confirmado, como antes del 8 nov: un enlace que ya se
- * mandó no suma áreas solo con el deploy (la revisión lo cazó). Las demás de las que se habló las ofrece «Acceso» y las
- * suma el vendedor con un clic. Elegida o no, un área sin nada confirmado no sale: no hay qué mostrarle.
+ * mandó no suma áreas solo con el deploy (la revisión lo cazó). Las demás las ofrece «Qué ve el cliente» y las suma el
+ * vendedor con un clic. Elegida por el vendedor, un área sin nada sale «En medición» (8 nov); sin elegir, no sale. Primero
+ * las que tienen algo (la página abre en la primera: no en una vacía), después las en juego.
  */
 export function areasParaElCliente(areas: readonly AreaDeLaEscala[], elegidas: readonly string[] | undefined): string[] {
   const conAlgo = (a: AreaDeLaEscala) => a.conEvidencia + a.porExplorar > 0;
-  const orden = [...areas].sort((x, y) => Number(y.enJuego) - Number(x.enJuego));
-  return orden.filter((a) => conAlgo(a) && (elegidas ? elegidas.includes(a.id) : a.enJuego)).map((a) => a.id);
+  const orden = [...areas].sort((x, y) => Number(conAlgo(y)) - Number(conAlgo(x)) || Number(y.enJuego) - Number(x.enJuego));
+  // Elegida por el vendedor, sale aunque no tenga nada: la página la muestra «En medición» (8 nov, Elías: «debe aparecer
+  // que está en medición o que está incompleta, pero también debería poder aparecer»). Sin elegir, como antes.
+  return orden.filter((a) => (elegidas ? elegidas.includes(a.id) : a.enJuego && conAlgo(a))).map((a) => a.id);
 }
 
 /** Cuántas hipótesis tiene un área: las usadas como «por explorar» y las que sugiere el agente sin una frase del cliente. */

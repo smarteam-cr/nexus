@@ -84,9 +84,24 @@ describe("la escala que ve el cliente", () => {
     expect(partesDeLaPagina(lienzo, elegida)).toBe(otra.dimensiones.filter((d) => d.aplica).length);
   });
 
-  it("sin nada usado no hay resultado; un área elegida sin nada no sale", () => {
+  it("sin nada usado y sin elegir no hay resultado; un área elegida sin nada sale «En medición» (8 nov)", () => {
     expect(resultadosDeLaEscala(escala, lienzo, estado({}))).toEqual([]);
-    expect(resultadosDeLaEscala(escala, lienzo, estado({ [a.id]: {} }, [area.id], [otra.id]))).toEqual([]);
+    const [x] = resultadosDeLaEscala(escala, lienzo, estado({ [a.id]: {} }, [area.id], [otra.id]));
+    expect(x.resultado.areaId).toBe(otra.id);
+    expect(x.resultado.preguntadas).toBe(0);
+    expect(x.resultado.nivel).toBeNull();
+    expect(x.resultado.recomendacion).toBeNull();
+    expect(x.resultado.capas.every((c) => c.nivel === null)).toBe(true);
+    expect(x.resultado.sintesis).toMatch(/Todavía no medimos tu área/);
+    const html = renderToStaticMarkup(
+      createElement(ResultadoDelTestVista, {
+        r: x.resultado,
+        empresa: "Una empresa",
+        agenda: "",
+        deLaEscala: { areas: [{ id: x.resultado.areaId, nombre: x.resultado.areaNombre, href: "#" }], porExplorar: [] },
+      }),
+    );
+    expect(html).toMatch(/En medición/);
   });
 
   it("el resumen no habla de respuestas, preguntas ni estimaciones", () => {

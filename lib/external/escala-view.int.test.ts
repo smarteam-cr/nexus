@@ -30,19 +30,21 @@ async function preventa(nombre: string, chequeo: Record<string, { nivel: string;
 }
 
 describe("el enlace de La escala", () => {
-  it("abre la escala de esa empresa, sin lo que es hipótesis, y revocar lo cierra", async () => {
+  it("abre la escala de esa empresa, con la hipótesis usada «por explorar», y revocar lo cierra", async () => {
     const { id } = await preventa("Empresa A (test)", {
       "1.1": { nivel: "I", fuente: "reunion", evidencia: "CITA INTERNA", porQue: "PORQUE INTERNO" },
       "1.2": { nivel: "O", fuente: "hipotesis" },
     });
     const creado = await crearAcceso(id, "ana@smarteam.test");
-    expect(creado).toMatchObject({ estado: "activo", medidas: 1 });
+    // Desde el 8 nov la hipótesis que el vendedor usó sale como nivel «por explorar» (escala-para-el-cliente.ts).
+    expect(creado).toMatchObject({ estado: "activo", medidas: 2, porExplorar: 1 });
     expect(creado.enlace).toMatch(/\/external\/escala\/[0-9a-f]{64}$/);
 
     const token = tokenDe(creado.enlace);
     const d = await escalaParaElToken(token);
     expect(d).toMatchObject({ empresa: "Empresa A (test)", areas: [{ id: "1" }] });
-    expect(d!.resultados[0].dimensiones.filter((x) => x.preguntada).map((x) => x.id)).toEqual(["1.1"]);
+    expect(d!.resultados[0].dimensiones.filter((x) => x.preguntada).map((x) => x.id)).toEqual(["1.1", "1.2"]);
+    expect(d!.porExplorar["1"]).toEqual(["1.2"]);
     // Se anota que se abrió, y nada interno sale en el enlace.
     expect((await estadoDelAcceso(id)).ultimaVista).not.toBeNull();
     expect(JSON.stringify(d)).not.toMatch(/ana@smarteam\.test|CITA INTERNA|PORQUE INTERNO/);
@@ -59,8 +61,8 @@ describe("el enlace de La escala", () => {
     expect(await escalaParaElToken(tokenDe(nuevo.enlace))).not.toBeNull();
   });
 
-  it("⛔ sin nada con evidencia no se crea; si la evidencia se va después, abre vacía", async () => {
-    const { id } = await preventa("Empresa B (test)", { "1.1": { nivel: "I", fuente: "hipotesis" } });
+  it("⛔ sin ningún equipo para mostrar no se crea; si lo usado se va después, abre vacía", async () => {
+    const { id } = await preventa("Empresa B (test)", {});
     await expect(crearAcceso(id, null)).rejects.toMatchObject({ status: 409 });
 
     await prisma.exploracionDeVenta.update({ where: { id }, data: { contenido: { chequeo: { "1.1": { nivel: "I", fuente: "reunion" } } } } });

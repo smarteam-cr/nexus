@@ -435,7 +435,7 @@ export default function ResultadoDelTestVista({
         {r.casos.length > 0 && <Casos casos={r.casos} />}
       </>,
       <>
-        <Barras r={r} detalles={detalles} enPdf />
+        {r.preguntadas > 0 && <Barras r={r} detalles={detalles} enPdf />}
         {agenda && (
           <section className="rd-tarjeta rd-agenda-pdf">
             <p className="rd-eyebrow">El siguiente paso</p>
@@ -541,6 +541,7 @@ export default function ResultadoDelTestVista({
                   con lo que respondiste{parcial}
                 </p>
               ) : (
+                r.preguntadas > 0 &&
                 (r.preguntadas < r.total || porExplorar.length > 0) && (
                   <p className="rd-estimado rd-entra">
                     {porExplorar.length > 0 && <span className="rd-pill">{porExplorar.length} por explorar</span>}
@@ -562,7 +563,8 @@ export default function ResultadoDelTestVista({
         {rec && <PorDondeEmpezar rec={rec} porExplorar={rec.tipo === "trabajar" && porExplorar.includes(rec.dimensionId)} />}
         {r.riesgos.length > 0 && <Riesgos riesgos={r.riesgos} dimensionDelRiesgo={dimensionDelRiesgo} />}
         {r.casos.length > 0 && <Casos casos={r.casos} />}
-        <Barras r={r} detalles={detalles} esEstimado={esEstimado} porExplorar={porExplorar} />
+        {/* Un equipo «En medición» (nada ubicado, 8 nov) no lleva la tarjeta: saldría vacía. */}
+        {r.preguntadas > 0 && <Barras r={r} detalles={detalles} esEstimado={esEstimado} porExplorar={porExplorar} />}
 
         {esEstimado && (
           <section className="rd-agenda" data-revela="">

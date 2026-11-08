@@ -42,6 +42,20 @@ function resultadoDelArea(escala: Escala, area: AreaDelLienzo, niveles: Record<s
   const aplican = area.dimensiones.filter((d) => d.aplica);
   const dimensiones = r.dimensiones.filter((d) => aplican.some((x) => x.id === d.id));
   const total = aplican.length;
+  if (r.preguntadas === 0) {
+    return {
+      ...r,
+      dimensiones,
+      total,
+      nivel: null,
+      nivelNombre: null,
+      puntaje: null,
+      capas: r.capas.map((c) => ({ ...c, nivel: null, nivelNombre: null, puntaje: null })),
+      recomendacion: null,
+      casos: [],
+      sintesis: `Todavía no medimos tu área de ${r.areaNombre}: la vamos a conocer en las próximas conversaciones, y aquí verás cómo está.`,
+    };
+  }
   if (r.preguntadas === total) {
     const nota = porExplorar.length
       ? ` ${porExplorar.length} de las ${total} partes ${plural(porExplorar.length, "está", "están")} por explorar: es lo que creemos por lo conversado, y lo confirmamos contigo.`
@@ -69,7 +83,7 @@ export function areasDeLaPagina(lienzo: EscalaDelLienzo, estado: Pick<EstadoDeEx
   return areasParaElCliente(cuentas, estado.contenido.areasAlCliente);
 }
 
-/** Un resultado por área de la página que tiene algo confirmado, con lo que está por explorar. */
+/** Un resultado por área de la página (la elegida sin nada, «En medición»), con lo que está por explorar. */
 export function resultadosDeLaEscala(escala: Escala, lienzo: EscalaDelLienzo, estado: Pick<EstadoDeExploracion, "areas" | "contenido">): ResultadoDeUnArea[] {
   const out: ResultadoDeUnArea[] = [];
   for (const areaId of areasDeLaPagina(lienzo, estado)) {
@@ -84,7 +98,7 @@ export function resultadosDeLaEscala(escala: Escala, lienzo: EscalaDelLienzo, es
       // Lo que contestó en el test lo dijo el cliente: no es «lo que creemos por lo conversado».
       if (e.fuente === "hipotesis") porExplorar.push(d.id);
     }
-    if (!Object.keys(niveles).length) continue;
+    // Sin nada, sale igual (solo llega acá si el vendedor la eligió): «En medición», con todos sus ejes sin medir.
     const resultado = resultadoDelArea(escala, area, niveles, porExplorar);
     if (resultado) out.push({ resultado, porExplorar });
   }

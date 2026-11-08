@@ -41,7 +41,7 @@ import type { AreaDelLienzo, DimensionDelLienzo, EscalaDelLienzo } from "@/lib/e
 import { ordenParaExplorar, partesParaExplorar, resumenDeLoExplorado } from "@/lib/exploraciones/equipos-de-la-escala";
 import { chequeoDelMapa, cuentaDelArea, loQueLaFrena, nivelDelVendedor, sinRiesgoSiSube, type PosicionEnElMapa } from "@/lib/exploraciones/mapa";
 import { diaCorto } from "@/lib/exploraciones/fechas";
-import AccesoALaEscala from "./AccesoALaEscala";
+import AccesoALaEscala, { QueVeElCliente } from "./AccesoALaEscala";
 import ListaQueSeAnima from "./ListaQueSeAnima";
 import { AL_LUGAR, DEL_LUGAR, useLienzo } from "./contexto";
 import FranjaDeSugerencias, { IconoDeSugerencia } from "./FranjaDeSugerencias";
@@ -493,14 +493,28 @@ const tieneAlgo = (area: AreaDelLienzo, posiciones: Readonly<Record<string, Posi
  * color del área, y una sombra interior que la hunde. La suelta queda apenas levantada (`shadow-sm`). El tinte se mezcla
  * con `--surface`, así que flipea con el tema.
  */
+/* Elegida se nota de lejos (8 nov, Elías: «todavía debería notarse más cuáles están seleccionados»): fondo con su color,
+   borde de su color y la marca ✓; la no elegida lleva el círculo vacío en el mismo lugar, así que no cambia de tamaño. */
 const presionada = (color: string): CSSProperties => ({
   borderColor: color,
-  background: `color-mix(in srgb, ${color} 9%, var(--surface))`,
-  boxShadow: `inset 0 2px 5px color-mix(in srgb, ${color} 24%, transparent)`,
+  background: `color-mix(in srgb, ${color} 16%, var(--surface))`,
+  boxShadow: `inset 0 2px 5px color-mix(in srgb, ${color} 28%, transparent)`,
 });
 
+function MarcaDeElegida({ elegida, color }: { elegida: boolean; color: string }) {
+  return elegida ? (
+    <span className="flex h-[18px] w-[18px] flex-shrink-0 items-center justify-center rounded-full" style={{ background: color }} aria-hidden="true">
+      <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="#ffffff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M2.5 6.3 5 8.7 9.5 3.5" />
+      </svg>
+    </span>
+  ) : (
+    <span className="h-[18px] w-[18px] flex-shrink-0 rounded-full border-[1.5px] border-line bg-surface" aria-hidden="true" />
+  );
+}
+
 /** Un área como botón que se presiona: su nivel y cuánto tiene con evidencia, o que está fuera. */
-function BotonDeArea({ area, elegida, conColor, orden, onElegir }: { area: AreaDelLienzo; elegida: boolean; conColor: boolean; orden: number; onElegir: () => void }) {
+function BotonDeArea({ area, elegida, orden, onElegir }: { area: AreaDelLienzo; elegida: boolean; orden: number; onElegir: () => void }) {
   const { mapa, escala, nombreDeNivel, lugar } = useLienzo();
   const conAlgo = tieneAlgo(area, mapa.posiciones);
   const calculo = orden > 0 || conAlgo ? calculoDelArea(escala, area, mapa.posiciones) : undefined;
@@ -524,8 +538,8 @@ function BotonDeArea({ area, elegida, conColor, orden, onElegir }: { area: AreaD
       style={elegida ? presionada(color) : undefined}
     >
       <span className="flex items-center justify-between gap-1.5">
-        <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-fg">
-          {elegida && conColor && <span className="h-2.5 w-2.5 rounded-[3px]" style={{ background: color }} aria-hidden="true" />}
+        <span className="inline-flex items-center gap-2 text-sm font-semibold text-fg">
+          <MarcaDeElegida elegida={elegida} color={color} />
           {area.nombre}
         </span>
         {orden > 0 ? (
@@ -996,7 +1010,7 @@ function DondeEstaHoy() {
       <p className="text-[13px] leading-[1.5] text-fg-secondary">{resumenDeLoExplorado(areas)}</p>
       <div data-recorrido="preventa.escala.areas" role="group" aria-label="Áreas que se ven en la escala" className="grid grid-cols-1 gap-2 sm:grid-cols-3">
         {escala.areas.map((a) => (
-          <BotonDeArea key={a.id} area={a} elegida={ids.includes(a.id)} conColor={ids.length > 1} orden={orden(a.id)} onElegir={() => elegir(a.id)} />
+          <BotonDeArea key={a.id} area={a} elegida={ids.includes(a.id)} orden={orden(a.id)} onElegir={() => elegir(a.id)} />
         ))}
       </div>
       <p className="text-xs text-fg-muted">Toca un área para sumarla a la escala o sacarla: varias se ven en el mismo radar, cada una de su color.</p>
@@ -1029,6 +1043,7 @@ export default function PasoEscala({ agente }: { agente?: ReactNode } = {}) {
       {lugar !== "proyecto" && (
         <div className="flex flex-wrap items-center justify-end gap-2">
           {lugar === "preventa" && <UbicarConLasReuniones />}
+          <QueVeElCliente />
           <AccesoALaEscala />
         </div>
       )}

@@ -8,8 +8,9 @@
  *
  * «Qué equipos ve» (2026-11-08, Centauro Solutions): Nexus detecta de qué equipos se habló (equipos-de-la-escala.ts) y el
  * vendedor elige cuáles salen, con una casilla por área. Sin elegir, salen las en juego con algo usado (como antes: un
- * enlace ya enviado no suma áreas solo); las demás de las que se habló se suman con un clic. Un área sin nada usado no se
- * puede elegir: no habría qué mostrarle.
+ * enlace ya enviado no suma áreas solo); las demás se suman con un clic. Desde el 8 nov un área sin nada usado también
+ * se puede elegir: la página la muestra «En medición» (Elías: «también debería poder aparecer»). La elección está en el
+ * botón «Qué ve el cliente» (arriba a la derecha, junto a «Acceso») y sigue dentro de «Acceso».
  */
 import { useCallback, useEffect, useState } from "react";
 import { Alert, Modal, useToast } from "@/components/ui";
@@ -24,8 +25,8 @@ import { useLienzo } from "./contexto";
 function loQueTiene(a: AreaDeLaEscala): string {
   const usadas = [a.conEvidencia ? `${a.conEvidencia} con evidencia` : null, a.porExplorar ? `${a.porExplorar} por explorar` : null].filter(Boolean).join(" · ");
   if (usadas) return `${usadas} de ${a.partes}`;
-  if (a.sugeridas) return `${a.sugeridas} ${a.sugeridas === 1 ? "sugerida" : "sugeridas"} sin usar: úsalas en La escala para que aparezca`;
-  return a.seHablo ? "se habló de ella, pero no tiene nada ubicado" : "todavía no se habló de ella";
+  if (a.sugeridas) return `${a.sugeridas} ${a.sugeridas === 1 ? "sugerida" : "sugeridas"} sin usar: sale «En medición»; úsalas en La escala para que tenga nivel`;
+  return a.seHablo ? "se habló de ella, pero no tiene nada ubicado: sale «En medición»" : "todavía no se habló de ella: sale «En medición»";
 }
 
 /** Una casilla por área: Nexus marca las que tienen algo; el vendedor decide. */
@@ -47,15 +48,14 @@ function EquiposQueVe() {
       </p>
       <ul className="divide-y divide-line rounded-lg border border-line">
         {areas.map((a) => {
-          const puede = a.conEvidencia + a.porExplorar > 0;
           return (
             <li key={a.id}>
-              <label className={`flex items-start gap-2.5 px-3 py-2 ${puede ? "cursor-pointer" : "opacity-60"}`}>
+              <label className={`flex items-start gap-2.5 px-3 py-2 ${puedeEditar ? "cursor-pointer" : ""}`}>
                 <input
                   type="checkbox"
                   className="mt-0.5 accent-[var(--color-brand)]"
                   checked={salen.includes(a.id)}
-                  disabled={!puede || !puedeEditar || guardando}
+                  disabled={!puedeEditar || guardando}
                   onChange={() => alternar(a.id)}
                 />
                 <span className="min-w-0">
@@ -71,6 +71,29 @@ function EquiposQueVe() {
         })}
       </ul>
     </fieldset>
+  );
+}
+
+/**
+ * «Qué ve el cliente» (8 nov, Elías: «desde la escala… debería seleccionarse cuáles se pueden ver en la página de
+ * resultados, como un CTA de los de arriba a la derecha»): el botón dice qué equipos salen y abre la misma elección.
+ */
+export function QueVeElCliente() {
+  const { exp } = useLienzo();
+  const areas = useAreasDeLaEscala();
+  const [abierto, setAbierto] = useState(false);
+  const salen = areasParaElCliente(areas, exp.estado.contenido.areasAlCliente);
+  const nombres = salen.map((id) => areas.find((a) => a.id === id)?.nombre).filter(Boolean).join(" · ");
+  return (
+    <>
+      <button type="button" onClick={() => setAbierto(true)} className={BOTON_DE_HERRAMIENTA} title="Qué equipos se ven en la página de resultados del cliente">
+        Qué ve el cliente
+        <span className="font-normal text-fg-muted">{nombres || "ningún equipo"}</span>
+      </button>
+      <Modal open={abierto} onClose={() => setAbierto(false)} title="Qué ve el cliente" description="Los equipos que salen en la página de resultados. Uno sin nada ubicado sale «En medición».">
+        <EquiposQueVe />
+      </Modal>
+    </>
   );
 }
 
@@ -156,7 +179,7 @@ export default function AccesoALaEscala() {
           {error && <Alert variant="danger">{error}</Alert>}
           {noAbre && <Alert variant="warning">Este enlace ya no abre: esta escala se archivó. Revócalo y comparte la que siga viva.</Alert>}
           {!noAbre && <EquiposQueVe />}
-          {acceso && !noAbre && <p className="text-[13px] text-fg-secondary">{acceso.medidas ? cuanto : "Todavía no hay niveles usados en los equipos elegidos: la página no tendría nada que mostrar."}</p>}
+          {acceso && !noAbre && <p className="text-[13px] text-fg-secondary">{acceso.medidas ? cuanto : "Los equipos elegidos todavía no tienen nada ubicado: la página los muestra «En medición»."}</p>}
           {acceso?.enlace && (
             <>
               <input readOnly value={acceso.enlace} aria-label="Enlace para el cliente" onFocus={(e) => e.target.select()} className="w-full rounded-md border border-line bg-surface-muted px-2.5 py-1.5 text-[13px] text-fg-secondary" />

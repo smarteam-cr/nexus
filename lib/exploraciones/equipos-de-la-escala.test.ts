@@ -83,10 +83,10 @@ describe("las áreas de la página del cliente", () => {
     expect(areasParaElCliente(areas, undefined)).toEqual(["3"]);
   });
 
-  it("elegidas por el vendedor: solo esas, en juego primero, y una sin nada usado no sale", () => {
+  it("elegidas por el vendedor: solo esas, en juego primero, y una sin nada usado sale igual («En medición», 8 nov)", () => {
     expect(areasParaElCliente(areas, ["1", "2", "3"])).toEqual(["3", "1", "2"]);
     expect(areasParaElCliente(areas, ["1"])).toEqual(["1"]);
     const sinNada = areasDeLaEscala({ areas: AREAS, enJuego: [], lo: conEvidencia("1.1"), areasDeLasSesiones: [] });
-    expect(areasParaElCliente(sinNada, ["1", "2"])).toEqual(["1"]);
+    expect(areasParaElCliente(sinNada, ["1", "2"])).toEqual(["1", "2"]);
   });
 });

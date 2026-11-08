@@ -7,7 +7,8 @@
  * ni quién la lleva. Sirve lo medido HOY: no hay foto.
  * null = no se muestra: la exploración está archivada, es la de un proyecto (solo la preventa y la de la cuenta se
  * comparten), o su contenedor hoy es de otra empresa (una fusión o una reasignación pueden dejarlos cruzados: invariante
- * #1). `resultados` vacío = la empresa no tiene nada con evidencia.
+ * #1). `resultados` vacío = no hay ningún equipo para mostrar (sin elegir y sin nada usado). Un equipo elegido sin nada
+ * ubicado viene igual, «En medición» (8 nov).
  */
 import "server-only";
 import { prisma } from "@/lib/db/prisma";

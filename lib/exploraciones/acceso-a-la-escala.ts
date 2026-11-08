@@ -39,9 +39,10 @@ export function enlaceDeLaEscala(token: string): string {
   return `${base}/external/escala/${token}`;
 }
 
-async function loQueVeElCliente(exploracionId: string): Promise<{ medidas: number; porExplorar: number; total: number; abre: boolean }> {
+async function loQueVeElCliente(exploracionId: string): Promise<{ medidas: number; porExplorar: number; total: number; abre: boolean; areas: number }> {
   const e = await escalaParaElCliente(exploracionId);
   return {
+    areas: e?.resultados.length ?? 0,
     medidas: (e?.resultados ?? []).reduce((n, r) => n + r.preguntadas, 0),
     porExplorar: Object.values(e?.porExplorar ?? {}).reduce((n, xs) => n + xs.length, 0),
     total: e?.partesEnJuego ?? 0,
@@ -64,10 +65,13 @@ export async function estadoDelAcceso(exploracionId: string): Promise<EstadoDelA
   };
 }
 
-/** Crea el enlace (o devuelve el vivo). Sin nada usado en las áreas elegidas no se crea: la página saldría vacía. */
+/**
+ * Crea el enlace (o devuelve el vivo). Sin ningún equipo en la página no se crea: saldría vacía. Un equipo elegido sin
+ * nada ubicado sí cuenta: sale «En medición» (8 nov), la misma regla que la página.
+ */
 export async function crearAcceso(exploracionId: string, porEmail: string | null): Promise<EstadoDelAcceso> {
-  if (!(await loQueVeElCliente(exploracionId)).medidas) {
-    throw new ErrorDelAcceso(409, "Todavía no hay niveles en las áreas elegidas: usa al menos uno de lo que sugiere Nexus para poder compartir la escala.");
+  if (!(await loQueVeElCliente(exploracionId)).areas) {
+    throw new ErrorDelAcceso(409, "Todavía no hay equipos para mostrar: elige al menos uno en «Qué ve el cliente», o usa algo de lo que sugiere Nexus.");
   }
   // Con dos personas a la vez, una sola crea o renueva: la otra se queda con el mismo enlace.
   const token = randomBytes(32).toString("hex");
