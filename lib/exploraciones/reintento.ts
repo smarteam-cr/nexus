@@ -107,6 +107,9 @@ function operacionSegura(op: Operacion, antes: EstadoDeExploracion, ahora: Estad
     case "evento":
       // Mueve la fecha del evento de UNA sesión: si su evento cambió entretanto, se recarga.
       return igual(ca.sesiones.find((s) => s.id === op.sesionId)?.evento, cb.sesiones.find((s) => s.id === op.sesionId)?.evento);
+    case "areasAlCliente":
+      // La lista entera se arma con lo que se veía: si cambió, se pisaría.
+      return igual(ca.areasAlCliente, cb.areasAlCliente);
     case "medicion":
       return Object.keys(op.medicion).every((k) => igual(ca.medicion[k as keyof typeof ca.medicion], cb.medicion[k as keyof typeof cb.medicion]));
     case "casoDeUso":

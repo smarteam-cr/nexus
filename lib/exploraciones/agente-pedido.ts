@@ -118,6 +118,11 @@ export interface ContextoDelPedido {
    * con uno de ellos en «Quién decide» se descarta (`esDelEquipoDeSmarteam`).
    */
   equipo?: string[];
+  /**
+   * «Ubicar en la escala» de la preventa (2026-11-08): además de los niveles con su cita, HIPÓTESIS por explorar para las
+   * dimensiones que las reuniones no dejan ver directo pero sí dejan pistas. Solo el pedido de posicionar las pide.
+   */
+  conHipotesis?: boolean;
 }
 
 /**
@@ -967,6 +972,20 @@ export function leerLaRespuesta(respuesta: Anthropic.Messages.Message, ctx: Cont
       { razon: porQue, exigeCita: true },
     );
   }
+  /* Las hipótesis de «Ubicar en la escala» (2026-11-08): sin cita, pero con su porqué y una fuente del cliente (la pista).
+     Nunca para una dimensión que ya trae un nivel con cita en esta respuesta, ni de un equipo que habló de otra área. */
+  const conNivel = new Set(items.flatMap((it) => (it.destino.tipo === "nivel" ? [it.destino.dimensionId] : [])));
+  for (const h of ctx.conHipotesis ? lista(input.hipotesis) : []) {
+    const dimensionId = str(h.dimensionId);
+    const porQue = str(h.porQue)?.slice(0, 600);
+    const fuentes = citar(h.fuentes).map((x) => ({ id: x.id, etiqueta: x.etiqueta }));
+    if (!dimensionId || !dims.has(dimensionId) || conNivel.has(dimensionId) || !porQue || deOtraArea(dimensionId, fuentes)) {
+      descartadas++;
+      continue;
+    }
+    conNivel.add(dimensionId);
+    agregar({ tipo: "nivel", dimensionId }, { nivel: str(h.nivel), fuente: "hipotesis", porQue }, fuentes, { razon: porQue });
+  }
   // Sin nada que haya dicho o hecho el cliente, tampoco hay indicios para profundizar en una dimensión.
   const hayAlgoDelCliente = ctx.fuentes.some((f) => esFuenteDelCliente(f.id));
   for (const x of lista(input.aExplorar)) {
@@ -1364,8 +1383,27 @@ export function pedidoDePosicionar(ctx: ContextoDelPedido & { objetivo: string }
             required: ["dimensionId", "nivel", "evidencia", "porQue", "fuentes"],
           },
         },
+        ...(ctx.conHipotesis
+          ? {
+              hipotesis: {
+                type: "array",
+                description:
+                  "Las dimensiones SIN una frase que las respalde pero con pistas en lo que contó el cliente (sus retos, cómo trabaja hoy, sus herramientas): el nivel que crees, por explorar. Nunca una dimensión que ya va en `niveles`.",
+                items: {
+                  type: "object",
+                  properties: {
+                    dimensionId: { type: "string", enum: dims.length ? dims : ["1.1"] },
+                    nivel: { type: "string", enum: [...NIVELES] },
+                    porQue: { type: "string", description: "La pista y por qué ese nivel, en una o dos frases llanas. Sin identificadores de la escala." },
+                    fuentes: FUENTES_SCHEMA(ids.length ? ids : ["E0"]),
+                  },
+                  required: ["dimensionId", "nivel", "porQue", "fuentes"],
+                },
+              },
+            }
+          : {}),
       },
-      required: ["niveles"],
+      required: ctx.conHipotesis ? ["niveles", "hipotesis"] : ["niveles"],
     },
   };
   const f = FUENTES_DE_POSICIONAR;
@@ -1380,7 +1418,14 @@ Reglas estrictas:
 - Las fechas: lo de antes de hoy ya ocurrió. Si una fuente vieja y una reciente se contradicen, vale la reciente.
 - No vuelvas a proponer lo que ya está confirmado igual (abajo). Si lo confirmado quedó viejo, proponer otro nivel está bien: di por qué en porQue.
 - El porQue en español neutro, en tercera persona sobre el cliente, sin identificadores de la escala.
-- Si no tienes nada con respaldo, manda la lista vacía. Es la respuesta correcta muchas veces.`;
+- Si no tienes nada con respaldo, manda la lista vacía. Es la respuesta correcta muchas veces.${
+    ctx.conHipotesis
+      ? `
+- Ubicas las TRES áreas (Ventas, Marketing y Servicio), no solo la que se eligió: si en las reuniones salió algo de Marketing, Marketing también se ubica.
+- Lees como un consultor de HubSpot con experiencia: entiendes los retos que contaron, cómo trabajan hoy y qué usan, y con eso eliges el nivel que mejor describe lo que ves. Lo que entregas es la ubicación en la escala de su industria, nada más.
+- Una dimensión con una frase del cliente que la respalda va en niveles. Una de la que no dijeron nada directo pero sí dejaron pistas va en hipotesis, sin cita: es lo que crees, para confirmarlo en la próxima reunión. Cada hipótesis nombra la reunión de donde sale la pista. Sin ninguna pista, no la propongas.`
+      : ""
+  }`;
   const cuerpo =
     lineaDeHoy(ctx) +
     `Empresa: ${ctx.empresa}${ctx.industria ? ` · Industria en HubSpot: ${ctx.industria}` : ""}${ctx.perfil ? ` · Perfil: ${ctx.perfil}` : ""}\n` +
@@ -1390,11 +1435,12 @@ Reglas estrictas:
     "\n" +
     bloqueDeInstrucciones(ctx.contenido.notas, "exploracion") +
     `=== LO QUE YA ESTÁ CONFIRMADO ===\n${confirmadoComoTexto(ctx)}\n\n` +
-    `=== LA ESCALA (las áreas en juego) ===\n${escalaComoTexto(ctx)}\n\n` +
+    `=== LA ESCALA (${ctx.areas.length ? "las áreas en juego" : "las tres áreas"}) ===\n${escalaComoTexto(ctx)}\n\n` +
+    bloqueDeLasReuniones({ reuniones: ctx.reuniones, escala: ctx.escala }) +
     ctx.fuentes.map((x) => `=== FUENTE ${x.id}: ${x.etiqueta} ===\n${x.texto}`).join("\n\n");
   return {
     model: MODELO_DE_LA_EXPLORACION,
-    max_tokens: 6000,
+    max_tokens: ctx.conHipotesis ? 8000 : 6000,
     system: sistemaDePosicionar,
     tools: [tool],
     tool_choice: { type: "tool", name: tool.name },

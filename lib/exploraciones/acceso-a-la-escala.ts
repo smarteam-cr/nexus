@@ -16,8 +16,9 @@ export interface EstadoDelAcceso {
   enlace: string | null;
   creadoEn: string | null;
   ultimaVista: string | null;
-  /** Lo que vería el cliente hoy: cuántas partes tienen evidencia, de cuántas hay en las áreas en juego. */
+  /** Lo que vería el cliente hoy: cuántas partes tienen nivel (de esas, cuántas por explorar), de cuántas hay en sus áreas. */
   medidas: number;
+  porExplorar: number;
   total: number;
   /** False: la exploración ya no se puede mostrar (se archivó, por ejemplo), y un enlace activo da 404. */
   abre: boolean;
@@ -38,9 +39,14 @@ export function enlaceDeLaEscala(token: string): string {
   return `${base}/external/escala/${token}`;
 }
 
-async function loQueVeElCliente(exploracionId: string): Promise<{ medidas: number; total: number; abre: boolean }> {
+async function loQueVeElCliente(exploracionId: string): Promise<{ medidas: number; porExplorar: number; total: number; abre: boolean }> {
   const e = await escalaParaElCliente(exploracionId);
-  return { medidas: (e?.resultados ?? []).reduce((n, r) => n + r.preguntadas, 0), total: e?.partesEnJuego ?? 0, abre: !!e };
+  return {
+    medidas: (e?.resultados ?? []).reduce((n, r) => n + r.preguntadas, 0),
+    porExplorar: Object.values(e?.porExplorar ?? {}).reduce((n, xs) => n + xs.length, 0),
+    total: e?.partesEnJuego ?? 0,
+    abre: !!e,
+  };
 }
 
 export async function estadoDelAcceso(exploracionId: string): Promise<EstadoDelAcceso> {
@@ -58,10 +64,10 @@ export async function estadoDelAcceso(exploracionId: string): Promise<EstadoDelA
   };
 }
 
-/** Crea el enlace (o devuelve el vivo). Sin nada con evidencia no se crea: la página saldría vacía. */
+/** Crea el enlace (o devuelve el vivo). Sin nada usado en las áreas elegidas no se crea: la página saldría vacía. */
 export async function crearAcceso(exploracionId: string, porEmail: string | null): Promise<EstadoDelAcceso> {
   if (!(await loQueVeElCliente(exploracionId)).medidas) {
-    throw new ErrorDelAcceso(409, "Todavía no hay niveles con evidencia: confirma al menos uno con lo que dijo el cliente para poder compartir la escala.");
+    throw new ErrorDelAcceso(409, "Todavía no hay niveles en las áreas elegidas: usa al menos uno de lo que sugiere Nexus para poder compartir la escala.");
   }
   // Con dos personas a la vez, una sola crea o renueva: la otra se queda con el mismo enlace.
   const token = randomBytes(32).toString("hex");

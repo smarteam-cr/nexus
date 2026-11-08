@@ -1044,3 +1044,57 @@ export async function reunionesEnResumen(
   }
   return { fuentes, sesiones };
 }
+
+/**
+ * Las TRANSCRIPCIONES de las sesiones de la exploración (2026-11-08, «Ubicar en la escala» de la preventa): las de Meet
+ * que son de una sesión (las mismas que liga la pantalla, `armarReuniones` + `pestanasDeSesiones`), la más nueva primero,
+ * con su texto entero hasta `caracteres`. Sin transcripción, las notas de Gemini. Las de puertas adentro no van: lo dicho
+ * entre el equipo no es palabra del cliente. Por el chokepoint (invariante #1): los ids salen de `getClientSessions` de
+ * esta empresa, y el techo de fecha se repite. No marca nada como leído: ubicar la escala no es leer una reunión.
+ * Cada una va como S1…Sn con el equipo de su sesión, si lo tiene (K11: lo que cuenta Marketing es de Marketing).
+ */
+export async function transcripcionesDeLaExploracion(
+  opts: {
+    exploracionId: string;
+    clientId: string;
+    projectId?: string | null;
+    creadaEn: Date;
+    propuesta: PropuestaDeExploracion;
+    leido?: LoLeidoDeHubspot;
+  } & DeLaFila,
+  o: { cuantas?: number; caracteres?: number } = {},
+  ahora = new Date(),
+): Promise<{ fuentes: Fuente[]; reuniones: { fuente: string; etiqueta: string; equipo?: ClaveDeEquipo }[]; sesiones: string[] }> {
+  const cuantas = o.cuantas ?? 4;
+  const caracteres = o.caracteres ?? 40_000;
+  const armadas = await armarReuniones(opts, 30, ahora);
+  const candidatas = armadas.todas
+    .filter((r) => r.origen === "meet" && armadas.deSesiones.has(claveDeReunion(r)) && r.texto !== "nada" && !r.corta && !r.puertasAdentro)
+    .sort((a, b) => Date.parse(b.fecha) - Date.parse(a.fecha))
+    .slice(0, cuantas);
+  if (!candidatas.length) return { fuentes: [], reuniones: [], sesiones: [] };
+  const deLaEmpresa = new Set((await getClientSessions(opts.clientId, { ids: candidatas.map((r) => r.id) })).map((s) => s.id));
+  const filas = await prisma.firefliesSession.findMany({
+    where: { id: { in: [...deLaEmpresa] }, date: { lte: ahora } },
+    select: { id: true, title: true, date: true, transcript: true, summary: true },
+    orderBy: { date: "desc" },
+  });
+  const fuentes: Fuente[] = [];
+  const leidas: ReunionLeida[] = [];
+  for (const s of filas) {
+    const transcripcion = (s.transcript ?? "").trim();
+    const texto = transcripcion || textoDeLasNotasDeGemini(s.summary);
+    if (!texto) continue;
+    const id = `S${fuentes.length + 1}`;
+    const etiqueta = `Reunión del ${fecha(s.date)}${transcripcion ? "" : ` (${queTieneSinTranscripcion(s.summary)})`}: ${s.title}`;
+    fuentes.push({ id, etiqueta, texto: texto.slice(0, caracteres) });
+    leidas.push({ fuente: id, clave: `meet:${s.id}`, etiqueta, id: s.id, origen: "meet", fecha: s.date.toISOString(), titulo: s.title });
+  }
+  const pestanas = pestanasDeSesiones(opts.sesiones ?? [], armadas.todas, hoyEnCostaRica(ahora), { automaticas: armadas.automaticas, fuera: new Set(opts.fuera ?? []) });
+  const equipos = equiposDeLasReuniones(leidas, pestanas);
+  return {
+    fuentes,
+    reuniones: leidas.map((r) => ({ fuente: r.fuente, etiqueta: r.etiqueta, ...(equipos[r.fuente] ? { equipo: equipos[r.fuente] } : {}) })),
+    sesiones: leidas.map((r) => r.id),
+  };
+}

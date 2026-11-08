@@ -57,6 +57,8 @@ const DESCRIPCION_DE_LA_CAPA: Record<string, string> = {
 /** El test es una estimación: lo dice cada tarjeta del radar y cada «Ver detalles». */
 const FALTAN_PREGUNTAS = "Es un estimado: faltan preguntas para ubicarlo con precisión.";
 const FALTA_CORROBORAR = "Falta información por corroborar: en la sesión lo revisamos contigo con evidencia.";
+/** La escala de una empresa (8 nov): una parte por explorar es lo que creemos por lo conversado, no algo que nos dijiste. */
+const POR_EXPLORAR = "Por explorar: es lo que creemos por lo conversado. Lo confirmamos contigo.";
 
 const fechaLarga = (iso: string) =>
   new Intl.DateTimeFormat("es-CR", { day: "numeric", month: "long", year: "numeric", timeZone: "America/Costa_Rica" }).format(new Date(iso));
@@ -169,11 +171,14 @@ function Barras({
   detalles = null,
   enPdf = false,
   esEstimado = true,
+  porExplorar = [],
 }: {
   r: ResultadoDelTest;
   detalles?: Record<string, DetalleDeLaDimension> | null;
   enPdf?: boolean;
   esEstimado?: boolean;
+  /** La escala de una empresa: las partes con un nivel por explorar (su chip lo dice). */
+  porExplorar?: readonly string[];
 }) {
   const frena = r.recomendacion?.tipo === "trabajar" ? r.recomendacion.dimensionId : null;
   return (
@@ -210,6 +215,7 @@ function Barras({
                     </span>
                     <span className="rd-chip" data-no-lo-se={d.noLoSe || undefined}>
                       {d.noLoSe ? "No lo sabías" : (d.nivelNombre ?? "Sin ubicar")}
+                      {porExplorar.includes(d.id) && " · por explorar"}
                     </span>
                     {det && !enPdf && <VerDetalles d={det} esEstimado={esEstimado} />}
                     {det && enPdf && <p className="rd-fila-prioridad">{`${textoDeLaPrioridad(det).titulo}: ${textoDeLaPrioridad(det).texto}`}</p>}
@@ -227,6 +233,7 @@ function Barras({
             : `Medimos ${r.preguntadas} de las ${r.total} partes del área; las otras todavía no.`}
         </p>
       )}
+      {porExplorar.length > 0 && <p className="rd-nota">{POR_EXPLORAR}</p>}
     </Tarjeta>
   );
 }
@@ -236,7 +243,7 @@ function Barras({
  * la de la dimensión bajo el cursor (o el dedo). Corta y legible (segunda prueba de Elías, 29 oct): el nombre, el
  * puntaje con su nivel, lo que le pasa al área por operar así y una línea de que es un estimado.
  */
-function TarjetaDeLaDimension({ d, det, esEstimado }: { d: DimensionDelResultado; det: DetalleDeLaDimension | undefined; esEstimado: boolean }) {
+function TarjetaDeLaDimension({ d, det, esEstimado, porExplorar = false }: { d: DimensionDelResultado; det: DetalleDeLaDimension | undefined; esEstimado: boolean; porExplorar?: boolean }) {
   const p = puntajeDeLaDimension(d.nivel, d.puntaje);
   return (
     <div className="rd-tip" data-tarjeta={d.id} data-nivel={d.preguntada ? (d.nivel ?? undefined) : undefined} role="status" hidden>
@@ -263,6 +270,7 @@ function TarjetaDeLaDimension({ d, det, esEstimado }: { d: DimensionDelResultado
             </p>
           )}
           {esEstimado && <p className="rd-tip-estimado">{FALTAN_PREGUNTAS}</p>}
+          {porExplorar && <p className="rd-tip-estimado">{POR_EXPLORAR}</p>}
         </>
       )}
     </div>
@@ -355,14 +363,16 @@ export default function ResultadoDelTestVista({
   dimensionDelRiesgo?: Record<string, string>;
   /**
    * La escala de una empresa, no un test (app/external/escala/[token]): está medida, así que se va todo lo del test (el
-   * «Estimado», otro test, la agenda). `areas`: las medidas; si son varias, cada una es un enlace arriba.
+   * «Estimado», otro test, la agenda). `areas`: las medidas; si son varias, cada una es un enlace arriba. `porExplorar`
+   * (8 nov): las partes de esta área con un nivel por explorar (una hipótesis que usó el vendedor).
    */
-  deLaEscala?: { areas: { id: string; nombre: string; href: string }[] } | null;
+  deLaEscala?: { areas: { id: string; nombre: string; href: string }[]; porExplorar?: readonly string[] } | null;
 }) {
   const enPdf = modo === "pdf";
   const nombreDeLaEmpresa = empresa || dominio || "";
   const rec = r.recomendacion;
   const esEstimado = !deLaEscala;
+  const porExplorar = deLaEscala?.porExplorar ?? [];
   const resumen = esEstimado ? resumenDelResultado(r) : r.sintesis;
   // La industria va en un chip junto al título, no en el resumen (quien hizo el test la da por sentada).
   const sector = industria && industria !== OTRA_INDUSTRIA ? etiquetaDeIndustria(industria) : null;
@@ -373,7 +383,17 @@ export default function ResultadoDelTestVista({
   const radar = (
     <RadarDeUnaEmpresa
       area={r.areaNombre}
-      dimensiones={r.dimensiones.map((d) => ({ clave: d.id, nombre: d.nombre, capa: d.capa, preguntada: d.preguntada, sinMedir: !esEstimado, nivel: d.nivel, noLoSe: d.noLoSe, puntaje: d.puntaje }))}
+      dimensiones={r.dimensiones.map((d) => ({
+        clave: d.id,
+        nombre: d.nombre,
+        capa: d.capa,
+        preguntada: d.preguntada,
+        sinMedir: !esEstimado,
+        nivel: d.nivel,
+        noLoSe: d.noLoSe,
+        porExplorar: porExplorar.includes(d.id),
+        puntaje: d.puntaje,
+      }))}
       capas={r.capas.map((c) => ({ clave: c.clave, nombre: c.nombre, descripcion: DESCRIPCION_DE_LA_CAPA[c.clave] ?? null, nivel: c.nivel, puntaje: c.puntaje }))}
       niveles={r.niveles}
       resultado={{ nivel: r.nivel, puntaje: r.puntaje }}
@@ -520,9 +540,10 @@ export default function ResultadoDelTestVista({
                   con lo que respondiste{parcial}
                 </p>
               ) : (
-                r.preguntadas < r.total && (
+                (r.preguntadas < r.total || porExplorar.length > 0) && (
                   <p className="rd-estimado rd-entra">
-                    Medido en {r.preguntadas} de {r.total} partes
+                    {porExplorar.length > 0 && <span className="rd-pill">{porExplorar.length} por explorar</span>}
+                    {r.preguntadas < r.total ? `Medido en ${r.preguntadas} de ${r.total} partes` : `Las ${r.total} partes, ${r.total - porExplorar.length} con lo que nos contaste`}
                   </p>
                 )
               )}
@@ -540,7 +561,7 @@ export default function ResultadoDelTestVista({
         {rec && <PorDondeEmpezar rec={rec} />}
         {r.riesgos.length > 0 && <Riesgos riesgos={r.riesgos} dimensionDelRiesgo={dimensionDelRiesgo} />}
         {r.casos.length > 0 && <Casos casos={r.casos} />}
-        <Barras r={r} detalles={detalles} esEstimado={esEstimado} />
+        <Barras r={r} detalles={detalles} esEstimado={esEstimado} porExplorar={porExplorar} />
 
         {esEstimado && (
           <section className="rd-agenda" data-revela="">
@@ -583,7 +604,7 @@ export default function ResultadoDelTestVista({
             posición fija no dependa de una animación. */}
         <div className="rd-tips">
           {r.dimensiones.map((d) => (
-            <TarjetaDeLaDimension key={d.id} d={d} det={detalles?.[d.id]} esEstimado={esEstimado} />
+            <TarjetaDeLaDimension key={d.id} d={d} det={detalles?.[d.id]} esEstimado={esEstimado} porExplorar={porExplorar.includes(d.id)} />
           ))}
         </div>
       </AnimacionesDelResultado>

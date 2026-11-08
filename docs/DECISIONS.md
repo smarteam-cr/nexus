@@ -12834,7 +12834,7 @@ ahorra los juicios de las áreas que no se tocaron y lo bien, el dolor y el caso
 Elías: ese paso se maneja en la escala que ya está en la cuenta, la misma de la preventa, con un acceso y una página como la del resultado del test. Ventas pidió lo mismo.
 
 - **No es un documento nuevo:** el botón «Acceso» de La escala (`AccesoALaEscala.tsx`, en la cuenta y en la preventa; no en la Exploración de un proyecto) crea un enlace y `/external/escala/[token]` pinta `ResultadoDelTestVista` con `deLaEscala`. Sale del mismo cálculo del test (`resultadoDeLosNiveles`), con los niveles de la exploración en vez de las respuestas.
-- **Solo lo confirmado con evidencia** (`lib/exploraciones/escala-para-el-cliente.ts`): la regla de `mapa.ts` de que una hipótesis no llega al cliente vale acá. Lo demás sale como «Sin medir». Un área o una capa incompleta no lleva nivel (la revisión lo cazó: con 1 de 8 confirmada en Óptimo, la página decía «Óptimo»), igual que el chequeo por dentro; dice «En medición · Medido en 3 de 8 partes», sin lo que más frena ni qué lo mueve. El «Acceso» dice cuántas partes vería el cliente, y sin ninguna con evidencia no se crea (409). Si la evidencia se va después, el enlace abre un aviso, no un error.
+- ⚠ *Reemplazado el 2026-11-08 (ver «La escala de la preventa, tercera vuelta»): las hipótesis que el vendedor usó salen como «por explorar» y el vendedor elige los equipos.* **Solo lo confirmado con evidencia** (`lib/exploraciones/escala-para-el-cliente.ts`): la regla de `mapa.ts` de que una hipótesis no llega al cliente vale acá. Lo demás sale como «Sin medir». Un área o una capa incompleta no lleva nivel (la revisión lo cazó: con 1 de 8 confirmada en Óptimo, la página decía «Óptimo»), igual que el chequeo por dentro; dice «En medición · Medido en 3 de 8 partes», sin lo que más frena ni qué lo mueve. El «Acceso» dice cuántas partes vería el cliente, y sin ninguna con evidencia no se crea (409). Si la evidencia se va después, el enlace abre un aviso, no un error.
 - **Viva, no una foto:** la página lee lo medido hoy (`lib/external/escala-view.ts`, chokepoint fail-closed en cada render). Es la escala de la cuenta: no hay nada que publicar. Por eso `AccesoALaEscala` no guarda foto, a diferencia de `AccesoAlDocumento`.
 - **Es la única página pública que lee una exploración, y tiene puerta propia:** `lectores.test.ts` prohibía que algo de `external` la leyera. Se le sumó el destino `escala-al-cliente`, cuya única entrada es `escalaParaElCliente` (`lib/exploraciones/escala-para-el-cliente-server.ts`); los documentos del cliente siguen sin poder leerla.
 - **La tabla no repite la empresa:** sale de la exploración, y una fusión de empresas mueve el enlace sin tocarlo. El chokepoint comprueba que el proyecto de la exploración sea de esa empresa.
@@ -13343,3 +13343,57 @@ después de esa vuelta.
   la lista. Un desafío «sin confirmar» sigue avisándole a la guía. Los retos y metas ya guardados quedan como de la
   empresa entera. La primera vez que se abre una exploración después del deploy se gasta una llamada para proponer el
   contexto (si tiene fuentes).
+
+## La escala de la preventa, tercera vuelta: verla como el diagnóstico, ubicarla con las reuniones y elegir qué ve el cliente (2026-11-08)
+
+Elías probó La escala con Centauro Solutions el 8 nov: sobraba información («Usadas hoy», «Qué explorar…»), la escala se
+veía como mapa y no como el diagnóstico, «Dónde está hoy» no decía qué se había explorado, y la página del cliente salía
+«en medición», con una sola área a medio llenar aunque en las reuniones se habló de Ventas, Servicio y algo de Marketing.
+
+- **El vendedor ve el radar del diagnóstico.** Cada área de «Dónde está hoy» se dibuja con `RadarDeUnaEmpresa`, el mismo
+  componente de la página del resultado del test: nodos, puntaje y nivel en el centro, con «Ver puntajes». No es un
+  componente nuevo parecido: se le pasa lo que dibuja el mapa (lo confirmado y lo sugerido sin usar), calculado con
+  `chequeoDelMapa` por área. La vista por defecto es «Nodos»; la rueda queda como «Mapa». Tocar un nodo, una porción o
+  un nombre abre la dimensión (se lee el `data-d` del SVG: el radar sigue sin JavaScript propio). En el tema oscuro el
+  radar va sobre su tarjeta blanca, como lo ve el cliente.
+- **Una hipótesis en el radar es un aro punteado, «por explorar».** `DimensionDelRadar.porExplorar` (el vértice hueco,
+  «Inicial · por explorar» junto al nombre y su línea en la leyenda). Vale para el vendedor y para el cliente.
+- **Se fueron «Usadas hoy» y «Qué explorar en la próxima sesión» del paso.** El aviso de cada uso ya deshace, y la guía
+  ya elige primero lo que no tiene evidencia; cada dimensión conserva «Explorarla a fondo». La franja de sugerencias dice
+  cuántas son con lo que dijo el cliente y cuántas por explorar, con «Pasar las N al mapa» (las dos juntas) y la lista
+  solo si se pide.
+- **«Dónde está hoy» es una frase de lo explorado** (`resumenDeLoExplorado`, lib/exploraciones/equipos-de-la-escala.ts):
+  «Hasta ahora se exploró sobre todo Ventas (2 sesiones con su equipo, 6 de 8 con evidencia): por eso su escala es la más
+  llena. De Servicio hay 2 de 8 con evidencia. De Marketing todavía no se habló.» Pesa la evidencia y las sesiones con el
+  equipo; una hipótesis sola no cuenta como haber explorado. El área que abre de entrada es la que tiene más evidencia.
+- **Un área con algo se ve aunque no esté en juego.** Si en las reuniones salió Marketing, su pestaña dice «salió en las
+  reuniones» y su escala se llena; «Sumar Marketing a la preventa» sigue siendo una decisión del vendedor (las áreas en
+  juego son las de la propuesta y el objetivo).
+- **El agente que ubica es el de «Actualizar escala», no uno nuevo** (modo `posicionar`, lib/exploraciones/agente.ts ›
+  `posicionarLaEscala`). En la preventa, «Ubicar con las reuniones» lo lanza con tres diferencias: lee las
+  TRANSCRIPCIONES de las sesiones de la exploración (`transcripcionesDeLaExploracion`: las de Meet ligadas a una sesión,
+  por el chokepoint, hasta 4 y 40.000 caracteres cada una, con el equipo de su sesión) en vez de las reuniones de la
+  empresa en resumen; ubica las TRES áreas (`areas: []`); y propone, además de los niveles con su cita, HIPÓTESIS por
+  explorar para lo que no tiene una frase pero sí pistas (`conHipotesis`, la lista `hipotesis` del pedido). Una hipótesis
+  necesita su porqué y una fuente del cliente; no repite una dimensión que ya trae un nivel con cita, ni ubica otra área
+  que la del equipo que habló (K11). La cuenta sigue con su pedido de siempre (solo niveles, áreas en juego). El lector
+  de cada sesión no cambió: sigue proponiendo niveles con cita al leer una reunión.
+  *Cuándo corre:* solo con el botón, nunca solo ni al abrir. *Cuánto cuesta:* Sonnet 4.6; el pedido sin fuentes pesa
+  ~25.000 caracteres (medido: las tres áreas con sus cinco niveles); con Centauro (2 sesiones), estimado, ~35.000 tokens de entrada y
+  hasta 8.000 de salida: ~US$ 0,15 por corrida, ~US$ 0,25 con cuatro sesiones largas. Con 2 o 3 corridas por
+  preventa, menos de US$ 1 por exploración.
+- **La página del cliente: el vendedor elige los equipos y lo por explorar sale marcado.** Corrige la sección del 30 oct
+  («Solo lo confirmado con evidencia»):
+  - las áreas son las que eligió el vendedor en «Acceso» › «Qué equipos ve» (`contenido.areasAlCliente`, operación
+    `areasAlCliente`) o, si no eligió, las que tienen algo usado, las en juego primero (`areasParaElCliente`). Un área
+    sin nada usado no se puede elegir;
+  - sale lo que el vendedor USÓ: con evidencia, como nivel; la hipótesis usada, como nivel «por explorar» (aro punteado,
+    «· por explorar» en su barra, «N por explorar» arriba y una línea que lo explica). Lo que el agente sugiere y nadie
+    usó NO sale: Nexus propone y el vendedor valida antes de que el cliente lo vea;
+  - con todas las partes ubicadas (con evidencia o por explorar) el área lleva nivel y la síntesis dice cuántas son por
+    explorar; con partes sin nada, sigue sin nivel general («Hasta ahora vimos 3 de las 8 partes…»).
+  - *Por qué la hipótesis usada sí y la sugerida no:* Elías pidió que lo que no tiene evidencia directa salga como
+    hipótesis por explorar; la regla de oro (el vendedor valida) decide cuál. La propuesta, el handoff y «lista para
+    proponer» siguen leyendo solo lo confirmado con evidencia (`chequeoConfirmado`, mapa.ts): esto es solo la página.
+- **Datos y SQL:** sin SQL. `areasAlCliente` vive en el Json de la exploración y es opcional: las exploraciones en curso
+  no cambian hasta que alguien elige.
