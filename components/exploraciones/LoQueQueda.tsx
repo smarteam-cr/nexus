@@ -19,6 +19,7 @@ import {
   type PendienteDeLaSesion,
 } from "@/lib/exploraciones/despues-de-la-sesion";
 import { separarPregunta, type PestanaDeSesion } from "@/lib/exploraciones/guia";
+import type { PreguntaConOpciones } from "@/lib/exploraciones/objetivo-y-hallazgos";
 import { resultadoAveriguado } from "@/lib/exploraciones/resultado";
 import { useLienzo } from "./contexto";
 import { useEditarLaSesion } from "./piezas-de-la-sesion";
@@ -60,6 +61,20 @@ export function useObjetivoDeLaSiguiente(pestana: PestanaDeSesion): string | nul
   if (!anterior || pestana.hecha) return null;
   const lectura = anterior.reunion ? exp.estado.propuesta.lecturas[claveDeLaReunion(anterior.reunion)] : undefined;
   return objetivoSugeridoDeLaSiguiente({ pendientes, objetivoSiguiente: lectura?.objetivoSiguiente ?? null, porAveriguar: falta });
+}
+
+/**
+ * Lo que la lectura de la sesión anterior que ya pasó dejó para preguntarle al vendedor antes de armar la guía de esta
+ * (sexta vuelta, 2026-11-08): la misma llamada que sugiere el objetivo. Las lecturas de antes no lo tienen.
+ */
+export function usePreguntasDeLaAnterior(pestana: PestanaDeSesion): PreguntaConOpciones[] {
+  const { exp } = useLienzo();
+  const { todas } = useSesiones();
+  if (pestana.hecha) return [];
+  const i = todas.findIndex((p) => p.clave === pestana.clave);
+  const anterior = [...todas.slice(0, i < 0 ? todas.length : i)].reverse().find((p) => p.hecha && !p.noSeHizo) ?? null;
+  const lectura = anterior?.reunion ? exp.estado.propuesta.lecturas[claveDeLaReunion(anterior.reunion)] : undefined;
+  return lectura?.preguntasParaLaSiguiente ?? [];
 }
 
 /** Lo que la exploración todavía tiene por averiguar de «lo que ya sabemos» («Presupuesto», «Quién decide»). */

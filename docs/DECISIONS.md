@@ -13550,11 +13550,27 @@ exploración pesa y se nota** en la guía. Lo que sigue es el estado después de
     cuarta, «Otra respuesta…», para escribir. Las opciones no pueden traer un nombre, cargo, fecha o cifra que no esté en
     las fuentes: lo elegido pasa a ser lo más confiable de la guía. Un clic en una tarjeta elige; lo escrito, con Enter
     (salir del campo no manda nada). Con todas elegidas se manda sola (`completaLasPreguntas`, `op: "responderParaLaGuia"`)
-    y la guía se rehace; el botón de abajo manda lo que haya, también lo escrito (`respuestasParaMandar`). Las preguntas de
-    antes, sin opciones, se responden escribiendo. Las respuestas quedan en
+    y la guía se rehace; el botón de abajo manda lo que haya, también lo escrito (`respuestasParaMandar`). Las respuestas quedan en
     `contenido.respuestasParaLaGuia` (las últimas 12; la misma pregunta se reemplaza) y entran a cada guía como lo más
     confiable: «LO QUE RESPONDIÓ EL EQUIPO… manda sobre las fuentes». La guía se arma igual con lo que hay; el espacio de
     la guía ya no repite las preguntas, apunta arriba.
+  - **Sexta vuelta (8 nov): las preguntas son de UNA sesión y siempre traen tarjetas.** Elías creó una sesión 3 nueva y vio
+    dos preguntas de una sesión 3 anterior ya borrada, sin tarjetas y bloqueadas. Ahora: (1) `PreguntasParaLaGuia.sesionId`
+    guarda la sesión cuya guía las dejó, y `preguntasDeLaSesion` solo las muestra ahí; lo guardado sin `sesionId` se sigue
+    leyendo pero no se muestra. (2) Se piden SIEMPRE 3 respuestas probables (`DESCRIPCION_DE_LAS_OPCIONES`); una pregunta
+    con menos de 2 no se lee, no se guarda ni se muestra (`preguntasConOpciones`, `MIN_OPCIONES_DE_LA_PREGUNTA`). (3) Una
+    sesión sin guía propia pregunta lo que dejó la lectura de la sesión anterior (`LecturaDeReunion.preguntasParaLaSiguiente`,
+    solo en la más reciente): es la misma llamada que sugiere su objetivo, sin llamada nueva; las lecturas de antes no lo
+    tienen. (4) Una corrida en curso ya no apaga las tarjetas: se elige igual y, si hay que rehacer la guía, se manda
+    cuando termina (sin objetivo aceptado se guarda al momento). El texto dice qué corre: «Rehaciendo la guía con tus
+    respuestas…» solo si la guía arrancó hasta 2 minutos después de la última respuesta (`vieneDeLasRespuestas`, las dos
+    fechas del servidor); si no, «Nexus está armando la guía…», «…leyendo las reuniones…», etc. Al guardar la guía se
+    sacan las preguntas que el equipo respondió mientras se armaba. Las respuestas ya dadas no se tocan. (5) **«Para el
+    demo»**: de los tres insumos que el análisis de la sesión le deja a la siguiente, las preguntas para el demo entraban
+    al pedido de la guía («lo del demo NO se pregunta») pero no se veían. Ahora la Preparación las muestra en un bloque
+    corto, cada una con quién la preguntó, aclarando que se llevan al demo y no se responden en vivo. Salen del mismo
+    análisis que alimenta la guía (`preguntasDelDemoParaLaPreparacion`, para-la-guia-server.ts, por el chokepoint de
+    sesiones) y llegan a la pantalla al abrir y al recargar (`ExploracionParaLaPantalla.paraElDemo`), sin IA. Solo en la preventa.
   - La misma llamada escribe los hallazgos y, si hace falta, el ajuste al objetivo (`leerLoDeLaExploracion`): no hay
     llamada aparte. El pedido lleva el objetivo de la sesión, el de Smarteam con su ajuste, cómo llegó con su pista, las
     respuestas del vendedor y los hallazgos de la guía anterior para actualizarlos. La agenda en bloques no cambió.

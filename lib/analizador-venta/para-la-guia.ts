@@ -21,6 +21,16 @@ export interface InsumosParaLaGuia {
   preguntasDelDemo: { pregunta: string; quien: string }[];
 }
 
+/**
+ * Las preguntas para el demo como las muestra la Preparación de la siguiente sesión (sexta vuelta, 2026-11-08): cada una
+ * con quién la preguntó, y de qué reunión salen. Se llevan al demo; no se responden en la exploración.
+ */
+export interface PreguntasDelDemo {
+  preguntas: { pregunta: string; quien: string }[];
+  /** «la reunión «Diagnóstico» del 6 nov». */
+  deLaReunion: string;
+}
+
 export const SIN_INSUMOS: InsumosParaLaGuia = { preguntasDeNumeros: [], huecosDeDecision: [], preguntasDelDemo: [] };
 
 /** Los tres insumos de un análisis guardado. Un análisis de antes del 8 nov no los tiene: vacíos. */

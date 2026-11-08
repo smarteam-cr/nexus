@@ -31,6 +31,7 @@ import {
   sumarRespuestas,
   type AjusteDelObjetivo,
   type HallazgosDeLaExploracion,
+  type PreguntaConOpciones,
   type PreguntasParaLaGuia,
   type RespuestaParaLaGuia,
 } from "./objetivo-y-hallazgos";
@@ -562,6 +563,11 @@ export interface LecturaDeReunion {
   cumplido?: Cumplimiento;
   paraLaProxima?: string[];
   objetivoSiguiente?: string;
+  /**
+   * Sexta vuelta (2026-11-08): solo en la más reciente, lo que Nexus necesita saber para armar la guía de la siguiente
+   * sesión, cada pregunta con sus respuestas probables. Se muestra en esa sesión mientras no tenga guía propia.
+   */
+  preguntasParaLaSiguiente?: PreguntaConOpciones[];
   en: string;
   corridaId: string;
 }

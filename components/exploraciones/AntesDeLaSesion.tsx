@@ -37,7 +37,7 @@ import { REUNIONES } from "@/lib/exploraciones/sesion";
 import { EQUIPOS } from "@/lib/exploraciones/equipos";
 import { queContarle } from "@/lib/exploraciones/contarle";
 import { useLienzo } from "./contexto";
-import { useObjetivoDeLaSiguiente } from "./LoQueQueda";
+import { useObjetivoDeLaSiguiente, usePreguntasDeLaAnterior } from "./LoQueQueda";
 import { EtiquetaDePregunta, nombreDelPara, Rotulo, useCambiosDesdeLaGuia, useEditarLaSesion, useGuiaDeLaSesion } from "./piezas-de-la-sesion";
 import { AgregarPregunta, PreguntaDeLaGuia, Quitadas, useAjustarLaGuia, useTemasDeLaGuia } from "./PreguntaDeLaGuia";
 import { GuiaEnOrden } from "./GuiaEnOrden";
@@ -50,7 +50,10 @@ import {
   mismoTexto,
   objetivoAceptado,
   objetivoDeSmarteam,
+  preguntasDeLaSesion,
   respuestasParaMandar,
+  vieneDeLasRespuestas,
+  type PreguntaConOpciones,
 } from "@/lib/exploraciones/objetivo-y-hallazgos";
 import { Input, Spinner } from "@/components/ui";
 import { usePedirPreguntasDelObjetivo } from "./PreguntasDelObjetivo";
@@ -185,30 +188,66 @@ function EstadoDeLaGuia({ pestana }: { pestana: PestanaDeSesion }) {
   );
 }
 
+/** Lo que hace Nexus mientras corre algo que NO lanzaron las respuestas (sexta vuelta): se dice tal cual. */
+const QUE_HACE_NEXUS: Record<string, string> = {
+  guia: "Nexus está armando la guía…",
+  leer: "Nexus está leyendo las reuniones…",
+  preparar: "Nexus está preparando la primera reunión…",
+  casos: "Nexus está proponiendo los casos de uso…",
+  posicionar: "Nexus está ubicando a la empresa en la escala…",
+};
+
+/**
+ * Las preguntas de Nexus de ESTA sesión (sexta vuelta, 2026-11-08): las de su guía o, sin guía propia, las que dejó la
+ * lectura de la sesión anterior. Todas con tarjetas; nunca las de otra sesión ni las ya respondidas.
+ */
+function usePreguntasParaLaGuia(pestana: PestanaDeSesion): PreguntaConOpciones[] {
+  const { exp } = useLienzo();
+  const deLaAnterior = usePreguntasDeLaAnterior(pestana);
+  const s = pestana.sesion;
+  return preguntasDeLaSesion({
+    pedido: exp.estado.propuesta.preguntasParaLaGuia,
+    sesionId: s?.id,
+    conGuiaPropia: !!(s && exp.estado.propuesta.guias[s.id]),
+    deLaLecturaAnterior: deLaAnterior,
+    respondidas: exp.estado.contenido.respuestasParaLaGuia ?? [],
+  });
+}
+
 /**
  * Lo que Nexus necesita saber para armar la guía (2026-11-08): de 1 a 3 preguntas. Desde la quinta vuelta (Elías: «más fácil
  * de responder») cada una trae sus respuestas probables como tarjetas en una fila, que se eligen de un clic, y una cuarta
  * para escribir la tuya. Salen de la misma llamada que arma la guía. Al responder todas, la guía se rehace sola (sin objetivo
- * aceptado, las respuestas solo se guardan: se usan al armarla). Las preguntas de antes, sin opciones, se responden escribiendo.
+ * aceptado, las respuestas solo se guardan: se usan al armarla).
+ *
+ * Sexta vuelta (2026-11-08, Elías no podía responder y leía «Rehaciendo la guía con tus respuestas…» sin haber respondido):
+ * las preguntas son de ESTA sesión y todas traen tarjetas (`usePreguntasParaLaGuia`). Mientras Nexus trabaja en otra cosa
+ * se puede elegir igual: lo elegido queda en pantalla y se manda con el botón cuando termina (o al momento, si no hace
+ * falta rehacer la guía). El texto dice lo que de verdad corre.
  */
-function PreguntasDeNexus({ conObjetivo }: { conObjetivo: boolean }) {
+function PreguntasDeNexus({ conObjetivo, lista }: { conObjetivo: boolean; lista: PreguntaConOpciones[] }) {
   const { exp, puedeEditar, guardando, cambiar } = useLienzo();
-  const { corriendo, lanzando, lanzar } = useCorrida();
-  const pedido = exp.estado.propuesta.preguntasParaLaGuia;
-  const preguntas = pedido?.preguntas ?? [];
+  const { corrida, corriendo, lanzando, lanzar } = useCorrida();
+  const preguntas = lista.map((x) => x.pregunta);
   // Por el TEXTO de la pregunta: si llegan otras con la pantalla abierta, lo elegido no queda debajo de otra pregunta.
   const [elegidas, setElegidas] = useState<Record<string, string>>({});
   const [libres, setLibres] = useState<Record<string, string>>({});
   const [abiertas, setAbiertas] = useState<Record<string, boolean>>({});
   const [enviando, setEnviando] = useState(false);
-  if (!preguntas.length) return null;
-  const ocupado = guardando || corriendo || lanzando || enviando;
-  const opcionesDe = (i: number) => pedido?.opciones?.[i] ?? [];
+  // Mientras sale el pedido de la guía que lanzaron las respuestas (después, lo dice la corrida: `vieneDeLasRespuestas`).
+  const [lanzandoLaMia, setLanzandoLaMia] = useState(false);
+  if (!lista.length) return null;
+  const trabajando = corriendo || lanzando;
+  // Lo que apaga las tarjetas: guardar. Una corrida no: lo elegido espera en pantalla.
+  const bloqueado = !puedeEditar || guardando || enviando;
+  // Con objetivo, mandar rehace la guía, y no se lanza una corrida encima de otra: se manda cuando termine.
+  const esperaLaCorrida = conObjetivo && trabajando;
+  const opcionesDe = (p: string) => lista.find((x) => x.pregunta === p)?.opciones ?? [];
 
   const enviar = async (respuestas: Record<string, string>) => {
     const listas = respuestasParaMandar(preguntas, respuestas, libres);
-    // Ni mientras se rehace la guía, ni dos veces.
-    if (!listas.length || ocupado) return;
+    // Ni dos veces, ni con una corrida en curso que haya que rehacer.
+    if (!listas.length || bloqueado || esperaLaCorrida) return;
     setEnviando(true);
     try {
       const ok = await cambiar([{ op: "responderParaLaGuia", respuestas: listas }], conObjetivo ? undefined : { exito: "Respuestas guardadas: Nexus las usa al armar la guía." });
@@ -217,7 +256,11 @@ function PreguntasDeNexus({ conObjetivo }: { conObjetivo: boolean }) {
         setLibres({});
         setAbiertas({});
         // Sin objetivo aceptado la guía no se arma: las respuestas esperan a que se arme.
-        if (conObjetivo) void lanzar("guia");
+        if (conObjetivo) {
+          setLanzandoLaMia(true);
+          setEnviando(false);
+          await lanzar("guia").finally(() => setLanzandoLaMia(false));
+        }
       }
     } finally {
       setEnviando(false);
@@ -226,18 +269,29 @@ function PreguntasDeNexus({ conObjetivo }: { conObjetivo: boolean }) {
   /** Elige una respuesta; con todas respondidas, se manda sola (la guía se rehace igual que con el botón). */
   const elegir = (pregunta: string, respuesta: string) => {
     const t = respuesta.trim().slice(0, MAX_RESPUESTA_PARA_LA_GUIA);
-    if (!t || ocupado) return;
+    if (!t || bloqueado) return;
     const siguiente = { ...elegidas, [pregunta]: t };
     setElegidas(siguiente);
     if (completaLasPreguntas(preguntas, siguiente)) void enviar(siguiente);
   };
   const algunas = respuestasParaMandar(preguntas, elegidas, libres).length > 0;
+  const lasMias =
+    lanzandoLaMia || (corriendo && corrida?.modo === "guia" && vieneDeLasRespuestas(corrida.empezo, exp.estado.contenido.respuestasParaLaGuia ?? []));
+  const queCorre = enviando
+    ? "Guardando tus respuestas…"
+    : !trabajando
+      ? null
+      : lasMias
+        ? "Rehaciendo la guía con tus respuestas…"
+        : `${!corriendo ? "Nexus está empezando…" : (QUE_HACE_NEXUS[corrida?.modo ?? ""] ?? "Nexus está trabajando en la preventa…")}${
+            esperaLaCorrida ? " Puedes elegir tus respuestas: las mandas cuando termine." : ""
+          }`;
   const TARJETA = "rounded-lg border px-3 py-2.5 text-left text-[13px] leading-[1.4] transition-colors disabled:opacity-60";
 
   return (
     <div className="w-full space-y-4 text-left">
-      {preguntas.map((p, i) => {
-        const opciones = opcionesDe(i);
+      {preguntas.map((p) => {
+        const opciones = opcionesDe(p);
         const elegida = elegidas[p];
         const libreAbierta = abiertas[p] || !opciones.length;
         const esLibre = !!elegida && !opciones.includes(elegida);
@@ -249,7 +303,7 @@ function PreguntasDeNexus({ conObjetivo }: { conObjetivo: boolean }) {
                 <button
                   key={o}
                   type="button"
-                  disabled={!puedeEditar || ocupado}
+                  disabled={bloqueado}
                   aria-pressed={elegida === o}
                   onClick={() => elegir(p, o)}
                   className={cn(TARJETA, elegida === o ? "border-brand bg-info-surface font-medium text-fg" : "border-line bg-surface text-fg-secondary hover:bg-surface-hover")}
@@ -278,7 +332,7 @@ function PreguntasDeNexus({ conObjetivo }: { conObjetivo: boolean }) {
                       if (e.key === "Enter") elegir(p, libres[p] ?? "");
                     }}
                     maxLength={MAX_RESPUESTA_PARA_LA_GUIA}
-                    disabled={!puedeEditar || ocupado}
+                    disabled={bloqueado}
                     placeholder={opciones.length ? "Tu respuesta y Enter" : "Tu respuesta, en una línea, y Enter"}
                     aria-label={`Tu respuesta a: ${p}`}
                   />
@@ -286,7 +340,7 @@ function PreguntasDeNexus({ conObjetivo }: { conObjetivo: boolean }) {
               ) : (
                 <button
                   type="button"
-                  disabled={!puedeEditar || ocupado}
+                  disabled={bloqueado}
                   onClick={() => setAbiertas((r) => ({ ...r, [p]: true }))}
                   className={cn(TARJETA, "border-dashed border-line bg-surface text-fg-muted hover:bg-surface-hover")}
                 >
@@ -299,14 +353,16 @@ function PreguntasDeNexus({ conObjetivo }: { conObjetivo: boolean }) {
       })}
       {puedeEditar && (
         <div className="flex flex-wrap items-center justify-end gap-3">
-          {enviando || (conObjetivo && (corriendo || lanzando)) ? (
-            <span className="flex items-center gap-2 text-[13px] text-fg-secondary">
+          {/* Lo que de verdad corre (sexta vuelta): «con tus respuestas» solo si lo lanzaron ellas. */}
+          {queCorre && (
+            <span role="status" className="flex items-center gap-2 text-[13px] text-fg-secondary">
               <Spinner size="sm" color="border-brand" />
-              {conObjetivo ? "Rehaciendo la guía con tus respuestas…" : "Guardando…"}
+              {queCorre}
             </span>
-          ) : (
-            // Siempre a mano (también con una pregunta sin opciones): manda lo elegido y lo escrito.
-            <BotonBlanco disabled={ocupado || !algunas} onClick={() => void enviar(elegidas)}>
+          )}
+          {/* Siempre a mano: manda lo elegido y lo escrito. Con una corrida en curso, espera a que termine. */}
+          {!enviando && !lasMias && (
+            <BotonBlanco disabled={bloqueado || esperaLaCorrida || !algunas} onClick={() => void enviar(elegidas)}>
               {!conObjetivo ? "Guardar respuestas" : "Responder y armar la guía"}
             </BotonBlanco>
           )}
@@ -344,13 +400,11 @@ function SirveAlObjetivoDeLaExploracion() {
  * guía. Dice qué falta (aceptar el objetivo de la sesión, o armarla con el botón de arriba), se ve mientras Nexus la arma y
  * muestra lo que le falta saber (sus preguntas). Desde la cuarta vuelta (2026-11-08) la guía no se arma sola.
  */
-function EspacioDeLaGuia({ pestana }: { pestana: PestanaDeSesion }) {
-  const { exp } = useLienzo();
+function EspacioDeLaGuia({ pestana, preguntas }: { pestana: PestanaDeSesion; preguntas: PreguntaConOpciones[] }) {
   const { corrida, corriendo, lanzando } = useCorrida();
   const conObjetivo = objetivoAceptado(pestana.sesion?.objetivo);
   const armando = (corriendo && corrida?.modo === "guia") || lanzando;
   const fallo = !armando && corrida?.modo === "guia" && corrida.estado === "ERROR" ? corrida.error : null;
-  const preguntas = exp.estado.propuesta.preguntasParaLaGuia?.preguntas ?? [];
   const conReunion = !!(pestana.sesion?.evento || pestana.sesion?.conQuien?.length);
   return (
     <section
@@ -375,7 +429,7 @@ function EspacioDeLaGuia({ pestana }: { pestana: PestanaDeSesion }) {
                   preguntas.length ? " Mientras, puedes responder arriba lo que Nexus necesita saber: lo usa al armarla." : ""
                 }`
               : preguntas.length
-                ? "Nexus necesita saber algo para armarla: respóndelo arriba, junto al objetivo, y la guía se rehace con tus respuestas."
+                ? "Nexus necesita saber algo para armarla: respóndelo arriba, junto al objetivo, y la guía se arma con tus respuestas."
                 : `Ármala con «Armar la guía», arriba. Nexus usa tu objetivo como la instrucción que más pesa${
                     conReunion ? ", y los participantes y la duración de la reunión" : ", para 60 minutos (si asocias la reunión del calendario, toma su duración)"
                   }.`}
@@ -617,6 +671,34 @@ function LoQueTraes({ pestana }: { pestana: PestanaDeSesion }) {
           </ul>
         </div>
       ))}
+    </section>
+  );
+}
+
+/**
+ * «Para el demo» (sexta vuelta, 2026-11-08, Elías: el análisis de la sesión alimenta la preparación de la siguiente con
+ * los números, los huecos de decisión y las preguntas para el demo). Los dos primeros ya entran a la guía; las del demo
+ * llegaban al pedido («lo del demo NO se pregunta») sin verse en ningún lado. Cada una con quién la preguntó. Salen del
+ * análisis de la última sesión, sin IA (`paraElDemo`, al abrir y al recargar). Solo en la preventa.
+ */
+function ParaElDemo() {
+  const { paraElDemo, marco } = useLienzo();
+  if (marco.clave === "cs" || !paraElDemo?.preguntas.length) return null;
+  return (
+    <section aria-label="Para el demo" className="overflow-hidden rounded-xl border border-line bg-surface">
+      <header className="border-b border-line px-[18px] py-3.5">
+        <h3 className="text-[15px] font-semibold text-fg">Para el demo</h3>
+        <p className="mt-0.5 text-[12.5px] text-fg-muted">
+          Lo que el cliente preguntó por funciones en {paraElDemo.deLaReunion}. Se lleva al demo: no se responde en vivo en esta sesión.
+        </p>
+      </header>
+      <ul className="space-y-[9px] px-[18px] py-3.5 text-[13px] leading-[19px] text-fg-secondary">
+        {paraElDemo.preguntas.map((p, i) => (
+          <li key={`${i}-${p.pregunta}`}>
+            {p.pregunta} <span className="text-fg-muted">· lo preguntó {p.quien}</span>
+          </li>
+        ))}
+      </ul>
     </section>
   );
 }
@@ -1048,6 +1130,8 @@ export default function AntesDeLaSesion({ pestana, esLaProxima }: { pestana: Pes
   const { exp, marco } = useLienzo();
   const { guia, preguntas } = useGuiaDeLaSesion(pestana, esLaProxima);
   const delObjetivo = usePedirPreguntasDelObjetivo();
+  // Sexta vuelta: solo las de esta sesión, todas con tarjetas.
+  const paraLaGuia = usePreguntasParaLaGuia(pestana);
   // 2026-11-07: sin guía todavía, Nexus sugiere el objetivo desde lo que quedó de la sesión anterior (sin otra IA).
   const deLaAnterior = useObjetivoDeLaSiguiente(pestana);
   const traidos = pestana.sesion?.explorar ?? [];
@@ -1096,7 +1180,7 @@ export default function AntesDeLaSesion({ pestana, esLaProxima }: { pestana: Pes
       />
       {esLaProxima && <SirveAlObjetivoDeLaExploracion />}
       {/* Quinta vuelta (2026-11-08): lo que Nexus necesita saber pide algo de ti, así que va arriba, junto al objetivo. */}
-      {esLaProxima && !!exp.estado.propuesta.preguntasParaLaGuia?.preguntas.length && (
+      {esLaProxima && paraLaGuia.length > 0 && (
         <section data-recorrido="preventa.sesion.lo-que-necesita" className="space-y-3 rounded-xl border border-info-line bg-info-surface px-[18px] py-4">
           <div>
             <p className="flex items-center gap-1.5 text-sm font-semibold text-fg">
@@ -1112,15 +1196,16 @@ export default function AntesDeLaSesion({ pestana, esLaProxima }: { pestana: Pes
                   : "Al responder todo, la guía se arma."}
             </p>
           </div>
-          <PreguntasDeNexus conObjetivo={objetivoAceptado(pestana.sesion?.objetivo)} />
+          <PreguntasDeNexus conObjetivo={objetivoAceptado(pestana.sesion?.objetivo)} lista={paraLaGuia} />
         </section>
       )}
       {/* Cuarta vuelta (2026-11-08): «Armar la guía» va debajo del objetivo y arriba de «Lo que ya sabemos». */}
       {esLaProxima && <EstadoDeLaGuia pestana={pestana} />}
       {esLaProxima && <LoQueTraes pestana={pestana} />}
+      {esLaProxima && <ParaElDemo />}
       {esLaProxima && <LoQueYaSabemos pestana={pestana} />}
       {/* Sin guía, su espacio grande (2026-11-08). Lo que Nexus necesita saber va arriba, junto al objetivo. */}
-      {esLaProxima && !actual && <EspacioDeLaGuia pestana={pestana} />}
+      {esLaProxima && !actual && <EspacioDeLaGuia pestana={pestana} preguntas={paraLaGuia} />}
       {actual && <LaGuia pestana={pestana} esLaProxima={esLaProxima} />}
       {actual && <LoQueCubreLaGuia pestana={pestana} esLaProxima={esLaProxima} />}
       {actual && <RetosDeLaIndustria pestana={pestana} esLaProxima={esLaProxima} />}

@@ -64,6 +64,7 @@ import { diaConAnio, diaYHora } from "./fechas";
 import { bloqueDeInstrucciones } from "./notas-de-sesion";
 import { EQUIPOS, type ClaveDeEquipo } from "./equipos";
 import { CUMPLIMIENTOS, MAX_PARA_LA_PROXIMA, type Cumplimiento } from "./despues-de-la-sesion";
+import { DESCRIPCION_DE_LAS_OPCIONES, leerPreguntasConOpciones, MAX_PREGUNTAS_PARA_LA_GUIA, type PreguntaConOpciones } from "./objetivo-y-hallazgos";
 import type { Fuente } from "./fuentes-tipos";
 import { leerTarjetasDelAgente, MAX_PREGUNTAS_DE_LA_TARJETA, type TarjetaDeLaDimension } from "./tarjetas-de-la-escala";
 
@@ -171,6 +172,8 @@ export interface LecturaDeUnaReunion {
   paraLaProxima?: string[];
   /** El objetivo que sugiere para la siguiente sesión. */
   objetivoSiguiente?: string;
+  /** Sexta vuelta (2026-11-08): lo que Nexus necesita saber para armar la guía de la siguiente sesión, con sus tarjetas. */
+  preguntasParaLaSiguiente?: PreguntaConOpciones[];
 }
 
 /** La línea de la fecha de hoy y de la próxima reunión, al principio del pedido. */
@@ -260,6 +263,18 @@ function propiedadDeReuniones(ctx: Pick<ContextoDelPedido, "reuniones" | "planea
         objetivoSiguiente: {
           type: "string",
           description: "Solo de la reunión más reciente: el objetivo de la siguiente sesión, en una frase (qué hay que salir sabiendo), desde lo que quedó pendiente.",
+        },
+        preguntasParaLaSiguiente: {
+          type: "array",
+          description: `Solo de la reunión más reciente, y solo si falta algo ESENCIAL para preparar la siguiente sesión que esta reunión no deja claro (con quién será, qué quiere tratar el cliente, algo que quedó contradicho): de 1 a ${MAX_PREGUNTAS_PARA_LA_GUIA} preguntas cortas PARA QUIEN LLEVA LA SESIÓN (no para el cliente), de una línea (20 palabras como mucho). Vacío si no falta nada.`,
+          items: {
+            type: "object",
+            properties: {
+              pregunta: { type: "string" },
+              opciones: { type: "array", description: DESCRIPCION_DE_LAS_OPCIONES, items: { type: "string" } },
+            },
+            required: ["pregunta", "opciones"],
+          },
         },
       },
       required: ["fuente", "resumen"],
@@ -1069,7 +1084,16 @@ function lasReuniones(x: unknown, ctx: Pick<ContextoDelPedido, "reuniones" | "pl
       .filter((x): x is string => !!x)
       .slice(0, MAX_PARA_LA_PROXIMA);
     const objetivoSiguiente = str(r.objetivoSiguiente)?.slice(0, 400);
-    out.push({ fuente, resumen, cobertura, ...(cumplido ? { cumplido } : {}), ...(paraLaProxima.length ? { paraLaProxima } : {}), ...(objetivoSiguiente ? { objetivoSiguiente } : {}) });
+    const preguntasParaLaSiguiente = leerPreguntasConOpciones(r.preguntasParaLaSiguiente);
+    out.push({
+      fuente,
+      resumen,
+      cobertura,
+      ...(cumplido ? { cumplido } : {}),
+      ...(paraLaProxima.length ? { paraLaProxima } : {}),
+      ...(objetivoSiguiente ? { objetivoSiguiente } : {}),
+      ...(preguntasParaLaSiguiente.length ? { preguntasParaLaSiguiente } : {}),
+    });
   }
   return out;
 }

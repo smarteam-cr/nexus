@@ -22,6 +22,7 @@ import { propuestasDeLaExploracion } from "./propuesta";
 import { posicionamientoDeSmarteam } from "@/lib/smarteam/contexto";
 import { armadoConOtraBase } from "./posicionamiento";
 import { versionAnteriorDeLaExploracion } from "./versiones-de-la-escala";
+import { preguntasDelDemoParaLaPreparacion } from "@/lib/analizador-venta/para-la-guia-server";
 import { paraLaPantalla, type ExploracionParaLaPantalla, type FilaDeExploracion, type LoQueSabeLaIA } from "./servidor";
 
 export async function paraLaPantallaCompleta(fila: FilaDeExploracion): Promise<ExploracionParaLaPantalla> {
@@ -29,7 +30,7 @@ export async function paraLaPantallaCompleta(fila: FilaDeExploracion): Promise<E
   // La exploración de un proyecto no le llega a otro handoff ni arma propuestas: eso es de la preventa.
   const delProyecto = !!fila.projectId;
   const ps = delProyecto ? null : exp.estado.propuesta.posicionamiento;
-  const [sinLeer, proyectos, documentos, propuestas, reuniones, sabe, escalaAnterior, posicionamientoAnterior] = await Promise.all([
+  const [sinLeer, proyectos, documentos, propuestas, reuniones, sabe, escalaAnterior, posicionamientoAnterior, paraElDemo] = await Promise.all([
     reunionesSinLeer({
       exploracionId: fila.id,
       clientId: fila.client.id,
@@ -84,6 +85,9 @@ export async function paraLaPantallaCompleta(fila: FilaDeExploracion): Promise<E
       console.error("[exploraciones] no se pudo comparar el position statement con el de hoy", e);
       return false;
     }),
+    /* Sexta vuelta: las preguntas para el demo del último análisis de la venta, para «Para el demo» de la Preparación.
+       Solo la preventa; sale del chokepoint de sesiones con la empresa de esta exploración (invariante 1). Sin IA. */
+    delProyecto ? Promise.resolve(null) : preguntasDelDemoParaLaPreparacion(fila.client.id),
   ]);
   const loQueSabeLaIA: LoQueSabeLaIA | undefined = sabe
     ? {
@@ -97,5 +101,5 @@ export async function paraLaPantallaCompleta(fila: FilaDeExploracion): Promise<E
         memoriaUrl: null,
       }
     : undefined;
-  return { ...exp, sinLeer, proyectos, documentos, propuestas, reuniones, escalaAnterior, posicionamientoAnterior, ...(loQueSabeLaIA ? { loQueSabeLaIA } : {}) };
+  return { ...exp, sinLeer, proyectos, documentos, propuestas, reuniones, escalaAnterior, posicionamientoAnterior, paraElDemo, ...(loQueSabeLaIA ? { loQueSabeLaIA } : {}) };
 }
