@@ -33,6 +33,9 @@ export const MAX_PORQUE_DEL_AJUSTE = 300;
 export const MAX_PREGUNTAS_PARA_LA_GUIA = 3;
 export const MAX_LARGO_DE_LA_PREGUNTA_PARA_LA_GUIA = 200;
 export const MAX_RESPUESTA_PARA_LA_GUIA = 500;
+/** Las respuestas probables de cada pregunta (2026-11-08, quinta vuelta): tres tarjetas y una cuarta para escribir. */
+export const MAX_OPCIONES_DE_LA_PREGUNTA = 3;
+export const MAX_LARGO_DE_LA_OPCION = 120;
 /** Las respuestas que se guardan (las últimas): son contexto de la exploración entera, no de una sesión. */
 export const MAX_RESPUESTAS_PARA_LA_GUIA = 12;
 
@@ -55,6 +58,8 @@ export interface HallazgosDeLaExploracion {
 /** Lo que Nexus necesita saber para armar la próxima guía (`propuesta.preguntasParaLaGuia`). */
 export interface PreguntasParaLaGuia {
   preguntas: string[];
+  /** Las respuestas probables de cada pregunta, en su mismo orden (quinta vuelta). Las de antes no las tienen. */
+  opciones?: string[][];
   en: string;
   corridaId: string | null;
 }
@@ -165,6 +170,25 @@ export function hallazgosParaMostrar(
   return { lista, de: "sesiones", en: null };
 }
 
+/**
+ * Lo que se manda al responder las preguntas de Nexus (quinta vuelta): por pregunta, la tarjeta elegida o, si no eligió
+ * ninguna, lo que escribió en «Otra respuesta…». Vacías no van. PURO.
+ */
+export function respuestasParaMandar(
+  preguntas: readonly string[],
+  elegidas: Readonly<Record<string, string>>,
+  escritas: Readonly<Record<string, string>>,
+): { pregunta: string; respuesta: string }[] {
+  return preguntas
+    .map((pregunta) => ({ pregunta, respuesta: (elegidas[pregunta] ?? escritas[pregunta] ?? "").trim().slice(0, MAX_RESPUESTA_PARA_LA_GUIA) }))
+    .filter((r) => r.respuesta);
+}
+
+/** ¿Elegir esta respuesta completa todas las preguntas? Entonces se manda sola, sin otro clic. PURO. */
+export function completaLasPreguntas(preguntas: readonly string[], elegidas: Readonly<Record<string, string>>): boolean {
+  return preguntas.length > 0 && preguntas.every((q) => !!elegidas[q]?.trim());
+}
+
 /** Las respuestas nuevas se suman a las de antes; una pregunta ya respondida se reemplaza. Las últimas `MAX_RESPUESTAS_PARA_LA_GUIA`. PURO. */
 export function sumarRespuestas(antes: readonly RespuestaParaLaGuia[], nuevas: readonly RespuestaParaLaGuia[]): RespuestaParaLaGuia[] {
   const otras = antes.filter((a) => !nuevas.some((n) => normal(n.pregunta) === normal(a.pregunta)));
@@ -194,6 +218,8 @@ export interface LoQueDejoLaGuia {
   hallazgos: string[];
   ajuste: { texto: string; porque: string | null } | null;
   preguntas: string[];
+  /** Las respuestas probables de cada pregunta, en su mismo orden. */
+  opciones?: string[][];
 }
 
 type ConLoDeLaExploracion = {
@@ -220,6 +246,13 @@ export function conLoDeLaExploracion<P extends ConLoDeLaExploracion>(
     ...p,
     ...(dejo.hallazgos.length ? { hallazgos: { lista: dejo.hallazgos.slice(0, MAX_HALLAZGOS), en: o.en, corridaId: o.corridaId } } : {}),
     ...(ajusteNuevo ? { ajusteDelObjetivo: { texto: ajusteNuevo.texto, porque: ajusteNuevo.porque, en: o.en, corridaId: o.corridaId } } : {}),
-    preguntasParaLaGuia: dejo.preguntas.length ? { preguntas: dejo.preguntas.slice(0, MAX_PREGUNTAS_PARA_LA_GUIA), en: o.en, corridaId: o.corridaId } : null,
+    preguntasParaLaGuia: dejo.preguntas.length
+      ? {
+          preguntas: dejo.preguntas.slice(0, MAX_PREGUNTAS_PARA_LA_GUIA),
+          ...(dejo.opciones?.some((x) => x.length) ? { opciones: dejo.opciones.slice(0, MAX_PREGUNTAS_PARA_LA_GUIA).map((x) => x.slice(0, MAX_OPCIONES_DE_LA_PREGUNTA)) } : {}),
+          en: o.en,
+          corridaId: o.corridaId,
+        }
+      : null,
   };
 }

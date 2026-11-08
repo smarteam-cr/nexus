@@ -13225,7 +13225,11 @@ empresa que da forma cómo llegó el lead; **el Resumen es un resumen** (en qué
 
 Ese mismo día, la cuarta vuelta: **el objetivo de la sesión lo decide el vendedor y es obligatorio** (la guía deja de
 armarse sola), y **el feedback de la sesión vuelve a la vista** en el Análisis: la primera vuelta lo había metido en un
-plegable y Elías pidió que no vuelva a pasar con ninguna mejora. Lo que sigue es el estado después de esa vuelta.
+plegable y Elías pidió que no vuelva a pasar con ninguna mejora.
+
+La quinta vuelta, también el 8 nov: **quitar una sesión** que todavía no pasó, con el diálogo de confirmación de la app;
+**lo que Nexus necesita saber** sube junto al objetivo, con respuestas para elegir de un clic; y **el objetivo de la
+exploración pesa y se nota** en la guía. Lo que sigue es el estado después de esa vuelta.
 
 - **Los tres niveles del contexto.** Antes, el mismo dato vivía en dos o tres lugares: las seis tarjetas de «Lo que ya
   sabemos» (2026-11-06) repetían seis casillas del Resumen (retos, metas, plazos, presupuesto, quién decide, qué pasa si
@@ -13290,7 +13294,10 @@ plegable y Elías pidió que no vuelva a pasar con ninguna mejora. Lo que sigue 
   `displayName`). Sin reunión, la guía se arma para 60 minutos (`duracionDeLaSesion`, `DURACION_POR_DEFECTO`). La guía
   no espera nada: el objetivo es el de Smarteam (desde el 2026-11-08; `faltaParaLaGuia`, que esperaba el objetivo de la
   exploración, se retiró), y con quién es y el objetivo de la sesión los sugiere la guía. Se fueron «Cuándo» y «Con quién» de la Preparación, y la fecha a mano de la
-  cabecera; lo único que queda a mano es quitar la sesión, con su confirmación. Si después alargan la reunión en el
+  cabecera; lo único que queda a mano es quitar la sesión: un botón «Quitar la sesión» junto a «Copiar
+  enlace», con el diálogo de confirmación de la app (`ConfirmDialog`), solo en la Preparación y solo en una sesión que
+  todavía no pasó (quinta vuelta; antes era un enlace junto a los minutos que abría una línea suelta). En «En vivo» no
+  aparece: se borraría lo marcado durante la llamada. Si después alargan la reunión en el
   calendario, la sesión se entera: `mirarCalendario` relee el inicio y el fin del evento, y la duración del evento manda
   sobre la guardada al asociarla (que queda para una reunión de HubSpot, que no trae el fin). Los participantes no se
   releen: son los del momento de asociarla.
@@ -13399,8 +13406,11 @@ plegable y Elías pidió que no vuelva a pasar con ninguna mejora. Lo que sigue 
     lo exige (`FALTA_EL_OBJETIVO_DE_LA_SESION`), y «Actualizar la guía» al cambiar el equipo no se ofrece sin él. *Por
     qué:* es la oportunidad del vendedor de decirle a Nexus cómo estructurar la sesión.
   - En el pedido, el objetivo de la sesión va PRIMERO, como «la instrucción que MÁS pesa»: la agenda se arma para
-    cumplirlo, y si dice cómo quiere la sesión (qué va primero, qué no tocar), se respeta. El contexto de la exploración
-    manda sobre las fuentes, no sobre ese objetivo.
+    cumplirlo, y si dice cómo quiere la sesión (qué va primero, qué no tocar), se respeta. Justo después, en su propio
+    bloque y segundo en peso (quinta vuelta), el objetivo de la EXPLORACIÓN: el de Smarteam más el ajuste de la empresa,
+    con cómo llegó; cada bloque del cuerpo lo acerca, y el sistema dice que la guía sirve a los dos. En la pantalla, una
+    línea debajo del objetivo de la sesión dice a qué objetivo de la exploración sirve (`SirveAlObjetivoDeLaExploracion`).
+    El contexto de la exploración (lo que ya sabemos) manda sobre las fuentes, no sobre esos objetivos.
   - La guía guarda con qué objetivo se armó (`GuiaDeLaSesion.objetivoAceptado`). Si el vendedor lo cambia después, la
     Preparación dice «Cambiaste el objetivo: la guía todavía es para el anterior» y ofrece «Actualizar la guía». El botón
     espera a que el objetivo recién aceptado llegue al servidor (`alDia`) antes de pedir la guía.
@@ -13415,12 +13425,19 @@ plegable y Elías pidió que no vuelva a pasar con ninguna mejora. Lo que sigue 
   - **Sin guía, su espacio se nota** (`EspacioDeLaGuia` en `AntesDeLaSesion.tsx`): un recuadro grande y punteado en el
     lugar de la guía. Sin objetivo dice «Falta aceptar el objetivo de la sesión N»; con él, «Falta la guía de la sesión
     N» y que se arma con el botón de arriba. Mientras Nexus la arma, la fase en que va.
-  - **Lo que le falta saber, en el mismo espacio.** La misma llamada de la guía puede dejar de 1 a 3 preguntas cortas para
-    el vendedor (`faltaContexto` → `propuesta.preguntasParaLaGuia`), del estilo «¿con quién es la sesión 3?». Se
-    responden en una línea, sin formulario (`op: "responderParaLaGuia"`), y la guía se rehace. Las respuestas quedan en
+  - **Lo que le falta saber, arriba, junto al objetivo.** La misma llamada de la guía puede dejar de 1 a 3 preguntas
+    cortas para el vendedor (`faltaContexto` → `propuesta.preguntasParaLaGuia`), del estilo «¿con quién es la sesión 3?».
+    Desde la quinta vuelta (Elías: «necesita algo del usuario, va arriba, y más fácil de responder») van debajo del
+    objetivo de la sesión, antes de «Armar la guía» y de «Lo que ya sabemos», y cada una trae hasta 3 respuestas probables
+    de la misma llamada (`PreguntasParaLaGuia.opciones`, en el orden de las preguntas) como tarjetas en una fila, más una
+    cuarta, «Otra respuesta…», para escribir. Las opciones no pueden traer un nombre, cargo, fecha o cifra que no esté en
+    las fuentes: lo elegido pasa a ser lo más confiable de la guía. Un clic en una tarjeta elige; lo escrito, con Enter
+    (salir del campo no manda nada). Con todas elegidas se manda sola (`completaLasPreguntas`, `op: "responderParaLaGuia"`)
+    y la guía se rehace; el botón de abajo manda lo que haya, también lo escrito (`respuestasParaMandar`). Las preguntas de
+    antes, sin opciones, se responden escribiendo. Las respuestas quedan en
     `contenido.respuestasParaLaGuia` (las últimas 12; la misma pregunta se reemplaza) y entran a cada guía como lo más
-    confiable: «LO QUE RESPONDIÓ EL EQUIPO… manda sobre las fuentes». La guía se arma igual con lo que hay; si hay guía y
-    preguntas, las preguntas van arriba de ella («Para afinar esta guía…»).
+    confiable: «LO QUE RESPONDIÓ EL EQUIPO… manda sobre las fuentes». La guía se arma igual con lo que hay; el espacio de
+    la guía ya no repite las preguntas, apunta arriba.
   - La misma llamada escribe los hallazgos y, si hace falta, el ajuste al objetivo (`leerLoDeLaExploracion`): no hay
     llamada aparte. El pedido lleva el objetivo de la sesión, el de Smarteam con su ajuste, cómo llegó con su pista, las
     respuestas del vendedor y los hallazgos de la guía anterior para actualizarlos. La agenda en bloques no cambió.

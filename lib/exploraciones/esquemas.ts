@@ -129,6 +129,8 @@ import { MAX_REFERIDO_POR, VIAS_DE_LLEGADA, type ComoLlego } from "./como-llego"
 import {
   MAX_AJUSTES_DESCARTADOS,
   MAX_HALLAZGOS,
+  MAX_LARGO_DE_LA_OPCION,
+  MAX_OPCIONES_DE_LA_PREGUNTA,
   MAX_LARGO_DE_LA_PREGUNTA_PARA_LA_GUIA,
   MAX_LARGO_DEL_HALLAZGO,
   MAX_PORQUE_DEL_AJUSTE,
@@ -527,6 +529,7 @@ const HallazgosSchema: z.ZodType<HallazgosDeLaExploracion> = z.object({
 });
 const PreguntasParaLaGuiaSchema: z.ZodType<PreguntasParaLaGuia> = z.object({
   preguntas: z.array(textoLleno(MAX_LARGO_DE_LA_PREGUNTA_PARA_LA_GUIA)).min(1).max(MAX_PREGUNTAS_PARA_LA_GUIA),
+  opciones: z.array(z.array(textoLleno(MAX_LARGO_DE_LA_OPCION)).max(MAX_OPCIONES_DE_LA_PREGUNTA)).max(MAX_PREGUNTAS_PARA_LA_GUIA).optional(),
   en: FECHA_ISO,
   corridaId: z.string().max(60).nullable(),
 });
