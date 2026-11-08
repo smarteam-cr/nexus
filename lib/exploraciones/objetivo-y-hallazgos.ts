@@ -306,6 +306,24 @@ export function sumarRespuestas(antes: readonly RespuestaParaLaGuia[], nuevas: r
 export function objetivoAceptado(objetivo: string | null | undefined): boolean {
   return !!objetivo?.trim();
 }
+/**
+ * Séptima vuelta (Elías, 2026-11-08: «pueden ser tres objetivos sugeridos y que el vendedor pueda editar cada uno o poner
+ * uno personalizado»): la lectura de la sesión anterior deja hasta tres, cada uno con un enfoque distinto, y la Preparación
+ * los muestra como tarjetas. Una lectura de antes trae uno solo: se muestra como una sola tarjeta.
+ */
+export const MAX_OBJETIVOS_SUGERIDOS = 3;
+
+/** Los objetivos sugeridos sin vacíos ni repetidos (mismo texto sin mirar mayúsculas ni espacios), en su orden y con su tope. PURO. */
+export function objetivosDistintos(xs: readonly (string | null | undefined)[], max = MAX_OBJETIVOS_SUGERIDOS): string[] {
+  const out: string[] = [];
+  for (const x of xs) {
+    const t = x?.trim().slice(0, 400);
+    if (t && !out.some((o) => mismoTexto(o, t))) out.push(t);
+    if (out.length >= max) break;
+  }
+  return out;
+}
+
 export const FALTA_EL_OBJETIVO_DE_LA_SESION = "Antes de armar la guía, acepta o escribe el objetivo de la sesión: es lo que más pesa al armarla.";
 
 /** Cuántos ajustes descartados se recuerdan (`propuesta.ajustesDescartados`): no se vuelven a sugerir. */

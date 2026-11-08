@@ -16,6 +16,7 @@
 import { avanceDeLaAgenda, idDeAveriguar } from "./agenda";
 import type { ItemPropuesto, LecturaDeReunion } from "./contenido";
 import type { GuiaDeLaSesion, SesionPlaneada } from "./guia";
+import { objetivosDistintos } from "./objetivo-y-hallazgos";
 
 /** La clave de una reunión en `lecturas` (la misma que contenido.ts › `claveDeLaReunion`, sin importarlo: esquemas.ts importa este archivo). */
 const claveDeLaReunion = (r: { origen: string; id: string }) => `${r.origen}:${r.id}`;
@@ -163,22 +164,35 @@ const corto = (t: string, max = 90) => {
  * (lo pensó con todo lo pendiente) o, si no, uno armado con lo que sigue marcado y lo que la exploración todavía no sabe.
  * null si no hay nada.
  */
-export function objetivoSugeridoDeLaSiguiente(o: {
+export function objetivoSugeridoDeLaSiguiente(o: Parameters<typeof objetivosSugeridosDeLaSiguiente>[0]): string | null {
+  return objetivosSugeridosDeLaSiguiente(o)[0] ?? null;
+}
+
+/**
+ * Séptima vuelta (2026-11-08, Elías: «tres objetivos sugeridos»): los que Nexus sugiere para la siguiente sesión, sin IA.
+ * Los de la lectura (hasta tres, cada uno con un enfoque distinto; una lectura de antes trae uno) si la persona no desmarcó
+ * nada; si desmarcó algo, uno solo armado con lo que sigue marcado y lo que la exploración no sabe (los de la lectura se
+ * pensaron con todo lo pendiente). Vacío si no hay nada.
+ */
+export function objetivosSugeridosDeLaSiguiente(o: {
   pendientes: readonly PendienteDeLaSesion[];
   /** El objetivo que sugirió la lectura de la reunión anterior. */
   objetivoSiguiente?: string | null;
+  /** Los que sugirió, hasta tres (el primero es `objetivoSiguiente`). */
+  objetivosSiguientes?: readonly string[] | null;
   /** Lo que la exploración todavía tiene por averiguar («presupuesto», «quién decide»). */
   porAveriguar?: readonly string[];
-}): string | null {
+}): string[] {
   const marcados = o.pendientes.filter((p) => p.marcado);
   const nadaDesmarcado = marcados.length === o.pendientes.length;
-  if (o.objetivoSiguiente?.trim() && nadaDesmarcado) return o.objetivoSiguiente.trim().slice(0, 400);
+  const deLaLectura = objetivosDistintos([...(o.objetivosSiguientes ?? []), o.objetivoSiguiente]);
+  if (deLaLectura.length && nadaDesmarcado) return deLaLectura;
   const partes: string[] = [];
   if (marcados.length) partes.push(`Retomar ${enLista(marcados.slice(0, 3).map((p) => `«${corto(p.texto)}»`))}`);
   const falta = (o.porAveriguar ?? []).slice(0, 3).map((x) => x.toLowerCase());
   if (falta.length) partes.push(`${partes.length ? "y averiguar" : "Averiguar"} ${enLista(falta)}`);
-  if (!partes.length) return null;
-  return `${partes.join(" ")}.`.slice(0, 400);
+  if (!partes.length) return [];
+  return [`${partes.join(" ")}.`.slice(0, 400)];
 }
 
 /** El nombre de una sesión en el pedido: «la sesión 2 «Con Dirección»». */
