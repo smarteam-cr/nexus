@@ -60,7 +60,7 @@ const Cuerpo = z.object({
 type CuerpoDeAgregar = z.infer<typeof Cuerpo>;
 
 /** Lo que une la sesión a su reunión (o nada, si es una sesión sin reunión). */
-type Union = Pick<SesionPlaneada, "reunion" | "evento" | "fecha" | "titulo">;
+type Union = Pick<SesionPlaneada, "reunion" | "evento" | "fecha" | "titulo" | "conQuien" | "duracion">;
 
 const error = (status: number, mensaje: string) => NextResponse.json({ error: mensaje }, { status });
 
@@ -83,7 +83,10 @@ async function unionPedida(c: CuerpoDeAgregar, fila: FilaDeExploracion, email: s
     if (!permitidos.has(calendario)) return { ok: false, status: 403, error: "Solo se puede unir una reunión de tu calendario o del de quien lleva la exploración." };
     const e = await eventoParaUnir(calendario, c.evento.id, { serie: c.evento.serie, clientId: fila.clientId });
     if (!e.ok) return e;
-    return { ok: true, union: { evento: e.evento, fecha: diaDe(e.evento.inicio) } };
+    return {
+      ok: true,
+      union: { evento: e.evento, fecha: diaDe(e.evento.inicio), ...(e.conQuien.length ? { conQuien: e.conQuien } : {}), ...(e.duracion ? { duracion: e.duracion } : {}) },
+    };
   }
   // Una que ya pasó.
   if (!c.sessionId) return { ok: false, status: 400, error: "Falta la reunión." };
@@ -128,6 +131,9 @@ function operaciones(estado: EstadoDeExploracion, c: CuerpoDeAgregar, union: Uni
     ...(union.evento ? { evento: union.evento } : {}),
     ...(union.fecha ? { fecha: union.fecha } : {}),
     ...(union.titulo && !resto.titulo ? { titulo: union.titulo } : {}),
+    // La reunión manda (2026-11-07): con quién es y cuánto dura salen de ella.
+    ...(union.conQuien ? { conQuien: union.conQuien } : {}),
+    ...(union.duracion ? { duracion: union.duracion } : {}),
   };
   return { ok: true, ops: [{ op: "sesiones", sesiones: estado.contenido.sesiones.map((s) => (s.id === unida.id ? unida : s)) }, ...sacarDeFuera] };
 }

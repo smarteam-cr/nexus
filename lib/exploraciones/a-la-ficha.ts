@@ -213,10 +213,41 @@ export function loNuevoParaLaFicha(antes: EstadoDeExploracion, despues: EstadoDe
     const fuente = fuenteDeLaPreventa(casilla, "confirmado");
     if (Array.isArray(d)) {
       const ya = new Set((Array.isArray(a) ? a : []).map((x) => JSON.stringify(x)));
-      for (const item of d) if (!ya.has(JSON.stringify(item))) out.push({ casilla, valor: item, fuente });
+      for (const item of d) if (!ya.has(JSON.stringify(item)) && !esDeUnEquipo(item)) out.push({ casilla, valor: item, fuente });
     } else if (JSON.stringify(a ?? null) !== JSON.stringify(d)) {
       out.push({ casilla, valor: d, fuente });
     }
   }
   return out;
+}
+
+/**
+ * Los tres niveles (2026-11-07, DECISIONS «La exploración desde el vendedor»): un reto o una meta de UN equipo del cliente
+ * es del equipo explorado y se queda en la exploración; a la ficha de la empresa solo sube lo de la empresa entera.
+ */
+export function esDeUnEquipo(item: unknown): boolean {
+  return !!item && typeof item === "object" && typeof (item as { equipo?: unknown }).equipo === "string";
+}
+
+/**
+ * A2 (2026-11-07): los campos de la ficha de la empresa que toca usar estas sugerencias, por su nombre en Información del
+ * cliente. La preventa sube las casillas con campo (lo de un equipo no). En un proyecto la estrategia pasa por la IA de la
+ * ficha (`proponerFichaDesdeLoAveriguado`), que decide el campo: el aviso nombra solo «Retos estratégicos», adonde van los
+ * retos y los obstáculos; los resultados que persigue salen de los resultados del proyecto, no de acá. PURO.
+ */
+export function camposDeLaFichaQueToca(
+  items: readonly { destino: { tipo: string; clave?: string }; valor: unknown }[],
+  o: { proyecto: boolean },
+): string[] {
+  const claves = new Set<ClaveDeFicha>();
+  for (const it of items) {
+    if (it.destino.tipo !== "casilla" || !it.destino.clave || esDeUnEquipo(it.valor)) continue;
+    const c = it.destino.clave;
+    if (o.proyecto) {
+      if (c === "retos" || c === "obstaculos") claves.add("retosEstrategicos");
+    } else if (esCasillaParaLaFicha(c)) {
+      claves.add(CASILLA_A_LA_FICHA[c]);
+    }
+  }
+  return [...claves].map((k) => campoDeFicha(k).etiqueta);
 }

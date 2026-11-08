@@ -228,14 +228,15 @@ describe("K11 · la lectura y la escala reciben el equipo", () => {
     expect(r.items.some((it) => it.destino.tipo === "nivel")).toBe(true);
   });
 
-  it("un reto que contó Marketing queda, sin la dimensión de Ventas que le puso el agente", () => {
+  it("un reto que contó Marketing queda como de Marketing, sin la dimensión de Ventas que le puso el agente", () => {
     const r = leerLaRespuesta(
       respuesta({ retos: [{ texto: "Nadie junta los números de la pauta", dimensionId: "1.2", fuentes: [{ id: "S1", cita: "nadie junta los números de la pauta" }] }] }),
       ctxDeLectura(),
       "run",
     );
     const reto = r.items.find((it) => it.destino.tipo === "casilla");
-    expect(reto?.valor).toEqual({ texto: "Nadie junta los números de la pauta" });
+    // Los tres niveles (2026-11-07): es un reto del equipo explorado, no de la empresa entera.
+    expect(reto?.valor).toEqual({ texto: "Nadie junta los números de la pauta", equipo: "marketing" });
   });
 
   it("una reunión sin equipo deja ubicar en cualquier área, como antes", () => {

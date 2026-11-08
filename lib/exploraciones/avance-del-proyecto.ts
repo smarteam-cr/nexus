@@ -102,9 +102,11 @@ export function loNuevoDeLaEstrategia(antes: EstadoDeExploracion, despues: Estad
   const lineas = (e: EstadoDeExploracion, k: PuntoDelProyecto["id"]): string[] => {
     const v = e.contenido.casillas[k] as unknown;
     if (!Array.isArray(v)) return [];
+    // Los tres niveles (2026-11-07): lo de un equipo del cliente se queda en la exploración; a la ficha va lo de la empresa.
+    const deLaEmpresa = (v as { equipo?: unknown }[]).filter((x) => !x || typeof x !== "object" || !x.equipo);
     return k === "metas"
-      ? (v as Meta[]).map((m) => [m.que, m.actual && `hoy: ${m.actual}`, m.objetivo && `meta: ${m.objetivo}`, m.para && `para: ${m.para}`].filter(Boolean).join(" · "))
-      : (v as Reto[]).map((r) => r.texto);
+      ? (deLaEmpresa as Meta[]).map((m) => [m.que, m.actual && `hoy: ${m.actual}`, m.objetivo && `meta: ${m.objetivo}`, m.para && `para: ${m.para}`].filter(Boolean).join(" · "))
+      : (deLaEmpresa as Reto[]).map((r) => r.texto);
   };
   const out: { pregunta: string; respuesta: string }[] = [];
   for (const k of ["retos", "metas", "obstaculos"] as const) {

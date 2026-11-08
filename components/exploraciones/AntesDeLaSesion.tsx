@@ -4,23 +4,23 @@
  * AntesDeLaSesion — la pestaña «Preparación» de una sesión (tableros «Antes · Sesión 3», en orden y
  * por sección, 2026-10-07; se llamaba «Antes» hasta el mismo día). De arriba hacia abajo: en qué
  * estado está la guía y qué hace actualizarla, el objetivo que sugiere el agente (se usa, se edita o
- * se descarta), cuándo y con quién (con lo que falta: quién firma, alguien técnico), lo que traes de
- * las sesiones anteriores, y la guía en tres tramos —abrir, preguntar, cerrar— con las preguntas en el
- * orden de la conversación o separadas en «Arquitectura de la venta» y «Escala de rendimiento». Abajo,
+ * se descarta), lo que traes de las sesiones anteriores, y la guía como agenda por bloques. Abajo,
  * plegado, qué hacer si se resiste.
+ *
+ * Sin formulario (2026-11-07, Elías): la sesión no pide «Cuándo», «Con quién» ni «Esta sesión». Arriba, en la cabecera,
+ * solo «asociar una reunión»: de ahí salen la fecha, la duración y los participantes. Sin reunión se prepara igual, para
+ * 60 minutos. El objetivo de la exploración se responde una vez, en el inicio; acá aparece solo mientras falta.
  */
 import { useState } from "react";
 import { BotonAzul, BotonBlanco, BotonTexto, IconoDeSugerencia } from "@/components/ui/sistema";
 import { cn } from "@/lib/cn";
 import { faltanAlCerrar, puntoQueSePregunta, listaParaProponer } from "@/lib/exploraciones/calidad";
-import { ETIQUETA_DEL_ROL, type Persona, type SiguientePaso } from "@/lib/exploraciones/casillas";
 import { esFuenteDeHipotesis } from "@/lib/exploraciones/contenido";
 import { diaCorto, diaYHora } from "@/lib/exploraciones/fechas";
 import {
   APERTURA_DE_BASE,
   CIERRE_DE_BASE,
   CONEXION_DE_BASE,
-  DURACION_DE_LA_SESION,
   ladoDeLaPregunta,
   loQueTraes,
   OBJECION,
@@ -38,12 +38,13 @@ import { EQUIPOS } from "@/lib/exploraciones/equipos";
 import { queContarle } from "@/lib/exploraciones/contarle";
 import { useLienzo } from "./contexto";
 import { useObjetivoDeLaSiguiente } from "./LoQueQueda";
-import { diaLargo, EtiquetaDePregunta, nombreDelPara, Rotulo, useCambiosDesdeLaGuia, useEditarLaSesion, useGuiaDeLaSesion } from "./piezas-de-la-sesion";
+import { EtiquetaDePregunta, nombreDelPara, Rotulo, useCambiosDesdeLaGuia, useEditarLaSesion, useGuiaDeLaSesion } from "./piezas-de-la-sesion";
 import { AgregarPregunta, PreguntaDeLaGuia, Quitadas, useAjustarLaGuia, useTemasDeLaGuia } from "./PreguntaDeLaGuia";
 import { GuiaEnOrden } from "./GuiaEnOrden";
 import { AgendaDeLaGuia, GuiaAnterior } from "./AgendaDeLaGuia";
-import { ContactoPrevio, ContextoDeLaSesion, ContextoDeTodaLaExploracion } from "./ContextoDeLaPreparacion";
-import { faltaParaLaGuia } from "@/lib/exploraciones/contexto-de-la-exploracion";
+import { ContactoPrevio } from "./ContextoDeLaPreparacion";
+import { ObjetivoDeLaExploracion } from "./ObjetivoYDesafio";
+import { duracionDeLaSesion, faltaParaLaGuia } from "@/lib/exploraciones/contexto-de-la-exploracion";
 import { usePedirPreguntasDelObjetivo } from "./PreguntasDelObjetivo";
 import { sugeridasVigentes } from "@/lib/exploraciones/ajustes-de-la-guia";
 import { LoQueCubreLaGuia } from "./LoQueCubreLaGuia";
@@ -74,8 +75,8 @@ function enLista(xs: readonly string[]): string {
  */
 function EstadoDeLaGuia({ pestana }: { pestana: PestanaDeSesion }) {
   const { exp, escala, marco, puedeEditar } = useLienzo();
-  // Nexus no planifica por defecto (2026-11-06): sin el contexto de la persona, el botón espera.
-  const falta = faltaParaLaGuia(exp.estado.contenido.contexto, pestana.sesion);
+  // Nexus no planifica por defecto (2026-11-06): sin el objetivo de la exploración, el botón espera (2026-11-07: solo eso).
+  const falta = faltaParaLaGuia(exp.estado.contenido.contexto);
   const { corrida, corriendo, lanzando, lanzar } = useCorrida();
   const { guia: deLaSesion, cambios: cambiosDeLaSesion } = useCambiosDesdeLaGuia(pestana);
   // La guía con el formato de antes no cuenta como guía: queda plegada abajo como «Guía anterior» (2026-11-06).
@@ -94,11 +95,13 @@ function EstadoDeLaGuia({ pestana }: { pestana: PestanaDeSesion }) {
     boton = "Armando…";
     tono = "info";
   } else if (falta.length) {
-    // Sin el contexto no hay nada que decir acá: los recuadros del contexto ya lo piden (2026-11-06, Elías).
+    // Sin el objetivo de la exploración no hay nada que decir acá: su tarjeta, arriba, lo pide.
     return null;
   } else if (!guia) {
     titulo = "Todavía no hay guía";
-    detalle = `Nexus la arma con el contexto que le diste: con quién es, qué espera el cliente, el objetivo y lo que ya se sabe. Sale como una agenda de bloques, con lo que hay que averiguar en cada uno.${
+    detalle = `Nexus la arma con el objetivo de la exploración, lo que ya se sabe y lo que quedó de la sesión anterior${
+      pestana.sesion?.evento || pestana.sesion?.conQuien?.length ? ", con los participantes y la duración de la reunión" : ", para 60 minutos (asocia la reunión del calendario y toma su duración)"
+    }. Sale como una agenda de bloques, cada uno con lo que hay que averiguar.${
       deLaSesion ? " La guía anterior queda abajo, plegada." : ""
     }`;
     boton = "Armar la guía";
@@ -347,69 +350,6 @@ function Objetivo({
   );
 }
 
-// ── Cuándo y con quién ────────────────────────────────────────────────────────
-
-function CuandoYConQuien({ pestana }: { pestana: PestanaDeSesion }) {
-  const { exp, marco } = useLienzo();
-  const { hoy, todas, proxima } = useSesiones();
-  const c = exp.estado.contenido.casillas;
-  const paso = c.siguientePaso as SiguientePaso | undefined;
-  const personas = ((c.autoridad as Persona[] | undefined) ?? []).slice(0, 3);
-  // Sin fecha propia, la de HubSpot: la cabecera ya la mostraba y acá decía «Sin agendar».
-  const deHubspot = !pestana.sesion?.fecha && !pestana.fecha && proxima.desde === "hubspot" ? proxima.fecha : null;
-  const fecha = pestana.sesion?.fecha ?? pestana.fecha ?? deHubspot;
-  const pasoVencido = !!paso?.fecha && paso.fecha < hoy;
-  const faltan: string[] = [];
-  // Quién firma es de la venta: en un proyecto el cliente ya compró.
-  if (marco.clave !== "cs" && !personas.some((p) => p.rol === "firma")) faltan.push("Falta: quién firma");
-  const t = exp.estado.propuesta.alertaTecnica;
-  if (t && !t.vista) {
-    const de = todas.find((p) => p.reunion && t.reunion.includes(p.reunion.titulo));
-    faltan.push(`Falta: alguien técnico${de && !de.noSeHizo ? ` · lo pidió la sesión ${de.numero}` : ""}`);
-  }
-  return (
-    <section className="grid gap-[18px] rounded-xl border border-line bg-surface px-[18px] py-4 sm:grid-cols-2">
-      <div className="min-w-0">
-        <Rotulo>Cuándo</Rotulo>
-        <p className="mt-1.5 text-sm text-fg">
-          {fecha ? (deHubspot && fecha.length > 10 ? diaYHora(fecha) : diaLargo(fecha)) : "Sin agendar"}
-          {deHubspot && <span className="text-[13px] text-fg-muted"> · agendada en HubSpot</span>}
-        </p>
-        {pasoVencido ? (
-          <p className="mt-0.5 text-xs text-warn-ink">No hay un siguiente paso vigente: el último era del {diaCorto(paso!.fecha!)}.</p>
-        ) : (
-          paso?.que && <p className="mt-0.5 text-xs text-fg-muted">Acordado: {paso.que}</p>
-        )}
-      </div>
-      <div className="min-w-0">
-        <Rotulo>Con quién</Rotulo>
-        {personas.length ? (
-          <p className="mt-1.5 text-sm text-fg">
-            {personas.map((p, i) => (
-              <span key={`${p.nombre}-${i}`}>
-                {i > 0 && ", "}
-                {p.nombre}
-                <span className="text-[13px] text-fg-muted"> · {p.cargo ?? ETIQUETA_DEL_ROL[p.rol]}</span>
-              </span>
-            ))}
-          </p>
-        ) : (
-          <p className="mt-1.5 text-sm text-fg-muted">Sin nadie confirmado todavía</p>
-        )}
-        {faltan.length > 0 && (
-          <div className="mt-1.5 flex flex-wrap gap-1.5">
-            {faltan.map((f) => (
-              <span key={f} className="rounded-full border border-dashed border-line bg-surface-muted px-[9px] py-0.5 text-xs text-fg-muted">
-                {f}
-              </span>
-            ))}
-          </div>
-        )}
-      </div>
-    </section>
-  );
-}
-
 // ── Lo que traes de las sesiones anteriores ───────────────────────────────────
 
 function LoQueTraes({ pestana }: { pestana: PestanaDeSesion }) {
@@ -639,7 +579,7 @@ function LaGuia({ pestana, esLaProxima }: { pestana: PestanaDeSesion; esLaProxim
       <header className="flex flex-wrap items-center gap-2.5 border-b border-line px-[18px] py-3.5">
         <h3 className="text-[15px] font-semibold text-fg">La guía</h3>
         <span className="text-[12.5px] text-fg-muted">
-          {DURACION_DE_LA_SESION} min · {preguntas.length} {preguntas.length === 1 ? "pregunta" : "preguntas"}
+          {duracionDeLaSesion(pestana.sesion)} min · {preguntas.length} {preguntas.length === 1 ? "pregunta" : "preguntas"}
         </span>
         <span className="flex-1" />
         {editable && conAsistente && (
@@ -912,9 +852,9 @@ export default function AntesDeLaSesion({ pestana, esLaProxima }: { pestana: Pes
 
   return (
     <div className="space-y-5">
-      {/* Lo que Nexus pide antes de armar una guía (2026-11-06): el contexto de la exploración, el contacto previo en
-          la primera de una preventa y el de la sesión. */}
-      {esLaProxima && <ContextoDeTodaLaExploracion />}
+      {/* Lo único que pide la guía (2026-11-07): el objetivo de la exploración, mientras falta. Y el contacto previo en la
+          primera de una preventa. */}
+      {esLaProxima && !exp.estado.contenido.contexto?.objetivo.trim() && <ObjetivoDeLaExploracion />}
       {esLaProxima && marco.clave !== "cs" && pestana.numero === 1 && !pestana.hecha && <ContactoPrevio />}
       {esLaProxima && <EstadoDeLaGuia pestana={pestana} />}
       <Objetivo
@@ -928,9 +868,6 @@ export default function AntesDeLaSesion({ pestana, esLaProxima }: { pestana: Pes
         }}
         pidiendo={delObjetivo.pidiendo}
       />
-      {esLaProxima && <ContextoDeLaSesion key={pestana.clave} pestana={pestana} />}
-
-      {esLaProxima && <CuandoYConQuien pestana={pestana} />}
       {esLaProxima && <LoQueTraes pestana={pestana} />}
       {esLaProxima && <LoQueYaSabemos pestana={pestana} />}
       {/* Sin guía no hay guía de base: Nexus no planifica por defecto. */}

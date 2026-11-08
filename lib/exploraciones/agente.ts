@@ -73,7 +73,7 @@ import { buildInternalDomainsSet } from "@/lib/sessions/categorize";
 import { hoyEnCostaRica } from "./fechas";
 import { bloqueDeInstrucciones } from "./notas-de-sesion";
 import { avisoDePreguntasCerradas, preguntasQueNoCumplen } from "./agenda";
-import { faltaParaLaGuia, tarjetasParaLaGuia, textoDeConQuien } from "./contexto-de-la-exploracion";
+import { duracionDeLaSesion, faltaParaLaGuia, tarjetasParaLaGuia, textoDeConQuien } from "./contexto-de-la-exploracion";
 import { retomarParaLaGuia, ultimaReunionLeida } from "./despues-de-la-sesion";
 import { avisoDeVoseo, contextoDeLaGuia, leerLaGuiaDelAgente, notasParaLaGuia, pedidoDeLaGuia, voseoEnLaGuia } from "./guia-pedido";
 import {
@@ -941,8 +941,8 @@ export async function armarLaGuiaSinGuardar(
   opts: Pick<OpcionesDeLaCorrida, "triggeredByEmail">,
 ): Promise<{ guia: GuiaDeLaSesion; ctx: ReturnType<typeof contextoDeLaGuia>; preguntas: PreguntaParaMostrar[] } | null> {
   const { fila, estado, escala, posiciones, loLeido, marco, ctx, ahora, automaticas } = await contextoParaLaGuia(exploracionId);
-  // Nexus no planifica por defecto (2026-11-06): sin el contexto de la persona no hay guía.
-  const falta = faltaParaLaGuia(estado.contenido.contexto, estado.contenido.sesiones.find((s) => s.id === ctx.proxima.sesionId) ?? null);
+  // Nexus no planifica por defecto (2026-11-06): sin el objetivo de la exploración no hay guía (2026-11-07: solo eso).
+  const falta = faltaParaLaGuia(estado.contenido.contexto);
   if (falta.length) throw new FalloDeLaExploracion(`Antes de armar la guía falta ${falta.join(", ")}.`);
   const pedir = (aviso = "") =>
     conContextoDeIA(
@@ -1096,8 +1096,10 @@ export async function contextoParaLaGuia(exploracionId: string) {
     tests: loLeido.tests,
     ...(marco.clave === "venta" ? { faltanParaProponer: listaParaProponer(estado, chequeoDe(escala, estado), hoyEnCostaRica(ahora)) } : {}),
   });
-  /* Lo que dio la persona (2026-11-06, contexto-de-la-exploracion.ts): el contexto de la exploración y el de la próxima
-     sesión. Sin eso no se arma la guía (`armarLaGuiaSinGuardar`). */
+  /* El contexto de la exploración (contexto-de-la-exploracion.ts) y el de la próxima sesión: con quién es y cuánto dura
+     salen de su reunión del calendario (2026-11-07); sin reunión, 60 minutos. Sin el objetivo de la exploración no se arma
+     la guía (`armarLaGuiaSinGuardar`). Las tarjetas (2026-11-06) se retiraron: las de una exploración vieja se siguen
+     leyendo. */
   const proximaSesion = estado.contenido.sesiones.find((s) => s.id === ctxBase.proxima.sesionId) ?? null;
   const cx = estado.contenido.contexto;
   const ctx = {
@@ -1107,7 +1109,7 @@ export async function contextoParaLaGuia(exploracionId: string) {
     ...(proximaSesion
       ? {
           contextoDeLaSesion: { conQuien: textoDeConQuien(proximaSesion.conQuien), espera: proximaSesion.espera ?? null, objetivo: proximaSesion.objetivo ?? null },
-          ...(proximaSesion.duracion ? { duracion: proximaSesion.duracion } : {}),
+          duracion: duracionDeLaSesion(proximaSesion),
         }
       : {}),
     // Punto 15: lo que las sesiones anteriores dejaron por retomar y su desafío principal.

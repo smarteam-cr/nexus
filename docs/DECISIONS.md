@@ -13137,7 +13137,9 @@ preguntas.
   presupuesto, quién decide, quién más participa y contra qué nos comparan. No vende la implementación.
 - **Las guías de antes se ven como se armaron.** Sin `agenda`, la Preparación y «En vivo» muestran la lista de siempre.
   No hay SQL: la agenda vive en el Json de la guía.
-- **Nexus no planifica por defecto (puntos 1 a 5, `contexto-de-la-exploracion.ts`).** Antes de armar una guía pide el
+- **Nexus no planifica por defecto (puntos 1 a 5, `contexto-de-la-exploracion.ts`).** *Cambió el 2026-11-07* (sección «La
+  exploración desde el vendedor»): la guía solo espera el objetivo de la exploración; con quién es y cuánto dura salen de
+  la reunión asociada y ya no hay formulario de la sesión. Lo de abajo es como nació. Antes de armar una guía pide el
   contexto de TODA la exploración (`contenido.contexto`: por qué la exploramos y lo que ya sabemos, con quién lo confirmó)
   y el de la sesión (`SesionPlaneada.conQuien`, `espera`, `duracion`, más el objetivo, el nombre y la reunión que ya
   existían). Sin el objetivo de la exploración, con quién es y el objetivo de la sesión, el botón espera y el servidor
@@ -13188,14 +13190,16 @@ preguntas.
   - En preventa no se arma la propuesta sin el resultado confirmado: al menos una meta en «Metas» del resumen
     (`resultadoConfirmado`). Lo frena `armarPropuesta` en el servidor (409 con qué falta) y la pantalla lo dice antes del
     botón. *Por qué «Metas»:* es la casilla que ya define el resultado en cifras y la que lee la propuesta.
-- **«Lo que ya sabemos» son seis tarjetas, no un cuadro libre** (Retos · Resultado que buscan · Plazos · Presupuesto ·
+- **«Lo que ya sabemos» son seis tarjetas, no un cuadro libre** *Reemplazado el 2026-11-07* (los tres niveles, sección «La
+  exploración desde el vendedor»: lo de la compra vive en las casillas del Resumen, lo de la empresa en su ficha). (Retos · Resultado que buscan · Plazos · Presupuesto ·
   Quién decide · Qué pasa si no hacen nada), cada una con su fuente. Nexus las propone una vez desde el traspaso, las
   notas de HubSpot, lo que agregó el equipo y las reuniones leídas de la exploración o, si no hay, las minutas de las
   últimas reuniones de la empresa tomadas por el chokepoint (`getClientSessions`); la propuesta queda en
   `propuesta.contextoPropuesto` para no volver a pedirla, y sin ninguna fuente no gasta IA. Lo vacío queda «por
   averiguar» y entra a la guía como algo por averiguar. Lo que cambia la persona pasa a «Lo escribió el equipo». El texto
   libre de la primera tanda (`sabemos`) se sigue leyendo.
-- **Sin aviso amarillo de «falta contexto»: los recuadros del contexto ya lo piden.** Una guía con el formato de antes,
+- **Sin aviso amarillo de «falta contexto»: los recuadros del contexto ya lo piden** (desde el 2026-11-07, la tarjeta del
+  objetivo de la exploración, mientras falta). Una guía con el formato de antes,
   en la próxima sesión, no cuenta como guía: queda plegada abajo como «Guía anterior», solo lectura. Al armar la agenda
   nueva, la vieja se guarda en `propuesta.guiasAnteriores` y sigue ahí.
 - **«+ Agregar sesión» de la barra se ve como menú** (con su flecha). No se encontró en el código un cambio que lo
@@ -13209,34 +13213,105 @@ siento complicado y con sobreingeniería… la idea es que el usuario no rellene
 pantalla responde una pregunta: ¿qué sé de este cliente, qué me falta y a qué voy en la próxima reunión? Nexus propone y
 el vendedor usa (✓), corrige (Editar) o descarta (✕). No hay campos vacíos que llenar.
 
-- **Inicio: el objetivo de la exploración y el desafío principal, propuestos** (`ObjetivoYDesafio.tsx`). Los dos salen
-  de la MISMA llamada que ya proponía «lo que ya sabemos» (`pedidoDeLasTarjetas` › `objetivo` y `desafio`). Es una sola
-  llamada por exploración: `contextoPropuesto.objetivo` en null quiere decir que se pidió y no había de dónde, y no se
-  vuelve a pedir (`faltaPedirElObjetivo`). Una exploración en curso sin esa clave la pide la primera vez que se abre, y
-  conserva las tarjetas que ya tenía propuestas. Sin fuentes no se gasta IA. El freno también está en el servidor
-  (`proponerLoQueSabemos`): con una propuesta que ya trae el objetivo no se llama a la IA, y si dos pestañas la piden a
-  la vez, la segunda no pisa a la primera (un desafío descartado no vuelve).
-- **El desafío principal vive en la ficha de la empresa**, en «Dolor principal» de Información del cliente
-  (`CAMPO_DEL_DESAFIO`). Ese campo ya guardaba, desde la preventa, las líneas «- Si no actúa: …» y «- Si lo logra: …»
-  (a-la-ficha.ts): el desafío es lo demás (`desafioEnElDolor`), y al validarlo se reemplaza solo el desafío y esas
-  líneas se conservan (`dolorConElDesafio`). Si hay una corrección propuesta, se muestra esa, «esperando que Customer
-  Success la confirme» (`desafioDeLaFichaGuardada`). Si la ficha lo tiene, se muestra de ahí y Nexus no lo propone. Si no lo tiene, Nexus lo propone (o
-  se ofrece el que dejó escrita una sesión) y al validarlo va a la ficha como PROPUESTA, por la puerta sin IA de la
-  preventa (`validarElDesafio` › `proponerALaFichaSinIA`). Lo confirma Customer Success, como todo lo que llega a la
-  ficha, y solo entonces va a HubSpot y a un documento del cliente. *Por qué propuesta y no confirmado:* es un campo
-  que ve el cliente y se sincroniza con HubSpot; validarlo en la exploración no reemplaza a quien cura la ficha. Elías
-  no contestó dónde se guarda: esto es la decisión por defecto.
+La misma tarde, en la segunda vuelta con Centauro, Elías decidió cuatro cosas más (las cuatro con la recomendación que
+se le presentó): el contexto vive en **tres niveles**; **una sesión sin reunión se prepara igual**; **«Usar todas»**
+aplica todo de un clic, con Deshacer; y **la guía va en bloques** como la imagen que trajo. Lo que sigue es el estado
+después de esa vuelta.
+
+- **Los tres niveles del contexto.** Antes, el mismo dato vivía en dos o tres lugares: las seis tarjetas de «Lo que ya
+  sabemos» (2026-11-06) repetían seis casillas del Resumen (retos, metas, plazos, presupuesto, quién decide, qué pasa si
+  no actúa), con otra forma y sin conexión, y retos, quién decide y qué pasa si no actúa también estaban en la ficha.
+  Además se pedía «¿Por qué exploramos esta empresa?» en cada sesión. Ahora:
+  - **La empresa**, en su ficha (Información del cliente): el desafío principal y el resultado del negocio. Se ven y se
+    validan arriba del inicio de la exploración (`ObjetivoYDesafio.tsx`).
+  - **El equipo explorado**, en las casillas de retos y metas, cada ítem con su equipo (`Reto.equipo`, `Meta.equipo`).
+    Lo pone el agente al leer: lo que dijo un equipo en su sesión queda como de ese equipo cuando TODAS sus fuentes son
+    reuniones con él (`equipoDeLasFuentes`, con cita si alguna la trae). El Resumen los agrupa («Ventas · …») después de
+    los de la empresa entera. Lo de un equipo NO sube a la ficha (`esDeUnEquipo` en `loNuevoParaLaFicha` para la
+    preventa, y el mismo filtro en `loNuevoDeLaEstrategia` para un proyecto): la ficha es de la empresa. Lo de la empresa
+    entera sube como antes.
+  - **La compra**, una sola vez, en las casillas del Resumen: tiempos, presupuesto, quién decide, qué pasa si no actúa
+    y qué cambia si lo logra. Y el objetivo de la exploración en `contenido.contexto.objetivo`, que se responde UNA vez
+    en el inicio; la Preparación lo muestra solo mientras falta (`ObjetivoDeLaExploracion`).
+  - Se retiraron el recuadro «Antes de armar cualquier guía» (con sus seis tarjetas) y el formulario «Esta sesión».
+    `contexto.tarjetas`, `contextoPropuesto.tarjetas`, `conQuien`, `espera` y `duracion` se siguen leyendo. Medido en
+    producción el 7 nov: 0 de 49 exploraciones tenían el contexto confirmado, tarjetas o datos de «Esta sesión», y solo
+    una tenía una propuesta guardada. No hubo nada que migrar. Sin SQL: todo vive en el Json y en `Client.ficha`.
+- **La llamada única que propone el contexto** (`contexto-pedido.ts` › `pedidoDelContexto` y `leerElContexto`;
+  `contexto-server.ts` › `proponerElContexto`). Desde lo que Nexus ya tiene del cliente (el traspaso, las notas de
+  HubSpot, las reuniones leídas), UNA llamada por exploración propone:
+  - el objetivo de la exploración;
+  - el desafío y el resultado del negocio, solo si la ficha no los tiene;
+  - en la preventa, lo de la compra.
+
+  El objetivo, el desafío y el resultado quedan en `propuesta.contextoPropuesto` para validarlos en el inicio. Lo de la
+  compra entra como sugerencias de sus casillas, con Usar y Descartar como todo lo que propone Nexus. Cada fuente lleva
+  su letra (el traspaso V0, las notas N0, las sesiones S0, las reuniones M0): lo que solo dijo el equipo o «cómo llegó»
+  no se propone en el marco (`sinFundamentoDelCliente`). La llamada solo LLENA lo vacío (`compraQueFalta`): una casilla
+  confirmada o con una sugerencia pendiente (de una reunión, con su cita) no recibe nada, y nadie de Smarteam entra como
+  decisor (`esDelEquipoDeSmarteam`, como en el agente de las reuniones). Una propuesta sin la clave `resultado` es de
+  antes y se pide otra vez, una sola (`faltaPedirLaPropuesta`), conservando el objetivo y el desafío que ya tenía: un
+  desafío descartado no vuelve. El freno está también en el servidor: con una propuesta al día no se llama a la IA, y si
+  dos pestañas la piden a la vez, gana la primera. Sin fuentes no se gasta IA.
+- **El desafío principal vive en la ficha**, en «Dolor principal» (`CAMPO_DEL_DESAFIO`). Ese campo ya guardaba, desde
+  la preventa, las líneas «- Si no actúa: …» y «- Si lo logra: …» (a-la-ficha.ts): el desafío es lo demás
+  (`desafioEnElDolor`). Al validarlo se reemplaza solo el desafío y esas líneas se conservan (`dolorConElDesafio`).
+- **El resultado del negocio también vive en la ficha.** La ficha no acepta nada de la preventa en «Resultados que
+  persigue»: sale de los resultados confirmados de cada proyecto (`deLosResultados`). Si los hay, la exploración muestra
+  esos y no los deja editar desde acá. Si no, el resultado validado en la exploración va a su propia línea de «Retos
+  estratégicos», «- Resultado que buscan: …» (`CAMPO_DEL_RESULTADO`, `retosConElResultado`): ahí ya iban las metas de la
+  preventa.
+- **Lo que se valida va a la ficha como PROPUESTA**, por la puerta sin IA de la preventa (`validarEnLaFicha` ›
+  `proponerALaFichaSinIA`). Lo confirma Customer Success, como todo lo que llega a la ficha, y solo entonces va a
+  HubSpot y a un documento del cliente. Mientras tanto se muestra la corrección propuesta, «esperando que Customer
+  Success lo confirme» (`desafioDeLaFichaGuardada`, `resultadoDeLaFichaGuardada`). *Por qué propuesta y no
+  confirmado:* son campos que ve el cliente y que se sincronizan con HubSpot; validarlos en la exploración no reemplaza a
+  quien cura la ficha. Elías no contestó dónde se guarda: es la decisión por defecto. Al usar en el lienzo algo que
+  sube a la ficha, un aviso nombra los campos tocados con un enlace a Información del cliente (`camposDeLaFichaQueToca`,
+  pedido de Elías del 7 nov).
+- **Lo propuesto se ve al instante.** Las tarjetas tardaban porque esperaban un GET que releía la exploración, las notas
+  y la ficha para mostrar algo que la página ya tenía. Ahora lo propuesto viaja con la exploración y el GET trae solo lo
+  de la ficha (`usePropuestaDelContexto`).
+- **«Cuerpo inválido» al confirmar el contexto** (Centauro, sesión 3): la operación `contexto` validaba las tarjetas con
+  `z.record(z.enum(...))`, que en Zod 4 exige TODAS las claves del enum. Cualquier tarjeta «por averiguar» lo rechazaba,
+  y sin el contexto confirmado tampoco se armaba la guía. Se arregló con `z.partialRecord`. Ojo para otros esquemas: en
+  Zod 4 un `record` con claves de un enum es exhaustivo.
+- **Una sesión sin reunión se prepara igual, sin formulario.** En la cabecera queda solo «asociar una reunión». Al
+  asociarla, la sesión toma de la reunión su fecha, su duración (`duracionDelEvento`) y sus participantes de la empresa
+  (`personasDeLaReunion`, con el nombre que trae el calendario o, si no, el del correo; `releerEventos` ahora pide
+  `displayName`). Sin reunión, la guía se arma para 60 minutos (`duracionDeLaSesion`, `DURACION_POR_DEFECTO`). La guía
+  solo espera el objetivo de la exploración (`faltaParaLaGuia`): con quién es y el objetivo de la sesión ya no se
+  piden, porque los sugiere la guía. Se fueron «Cuándo» y «Con quién» de la Preparación, y la fecha a mano de la
+  cabecera; lo único que queda a mano es quitar la sesión, con su confirmación. Si después alargan la reunión en el
+  calendario, la sesión se entera: `mirarCalendario` relee el inicio y el fin del evento, y la duración del evento manda
+  sobre la guardada al asociarla (que queda para una reunión de HubSpot, que no trae el fin). Los participantes no se
+  releen: son los del momento de asociarla.
+- **La guía en bloques** (`agenda.ts`, `AgendaDeLaGuia.tsx`, como la imagen de Elías). Cada bloque trae:
+  - un rango de minutos («10–25»). Lo reparte el código según la duración de la sesión (`repartirMinutos`), sin
+    confiar en que el modelo sume bien;
+  - de título, lo que hay que averiguar;
+  - la pregunta o intervención para abrirlo;
+  - una guía corta para el vendedor (`guia`);
+  - tres preguntas para profundizar (`profundizar`).
+
+  Lo que hay que averiguar, con sus casillas de «ya se sabe», queda debajo en un recuadro compacto: de ahí leen «En vivo»
+  y la lectura. En una guía de antes, las preguntas para profundizar son la primera de cada cosa por averiguar
+  (`paraProfundizar`). El bloque fijo del resultado, que arma el código, no tiene guía corta.
 - **Antes de la sesión, el objetivo se sugiere desde la anterior**, sin otra llamada (`useObjetivoDeLaSiguiente` ›
   `objetivoSugeridoDeLaSiguiente`). Si nadie desmarcó nada, se usa el objetivo que dejó la lectura de la reunión
   anterior (`LecturaDeReunion.objetivoSiguiente`). Si se desmarcó algo, el código arma uno con lo que sigue marcado y lo
-  que la exploración todavía no sabe. Las preguntas siguen saliendo del objetivo, como antes.
+  que la exploración todavía no sabe.
 - **La sesión que ya pasó, de unos diez bloques a tres:**
   - **«Qué pasó»**: el resumen y si se cumplió el objetivo (Sí · En parte · No). Lo sugiere la lectura
     (`LecturaDeReunion.cumplido`, solo si había objetivo) o, en una lectura de antes, cuántas preguntas planeadas se
     respondieron (`cumplimientoSugerido`). Un clic lo valida en `SesionPlaneada.cumplido`. Lo preguntado de la guía
-    queda plegado.
-  - **«Lo que aprendimos»**: lo que Nexus encontró en ESTA reunión, cada cosa con Usar o Descartar. Sale el lote «Pasar
-    las N…» y «Revisar una por una»: se decide mirando cada una.
+    queda plegado. Mientras Nexus vuelve a leer la reunión, el bloque lo dice en grande, con la fase en que va
+    (`Leyendo`; Elías no veía ningún indicador de carga). Solo en la sesión donde se tocó «Volver a leer»: otra corrida
+    del agente no tapa el resumen de las demás.
+  - **«Lo que aprendimos»**: lo que Nexus encontró en ESTA reunión, cada cosa con Usar o Descartar, y arriba «Usar todas
+    (N)»: todas de un clic, también las que reemplazan algo, y el aviso trae «Deshacer» unos segundos. En la primera
+    vuelta se había quitado el lote «Pasar las N…» para decidir una por una; Elías lo pidió de vuelta con 27 sugerencias
+    en Centauro.
   - **«Lo que queda para la próxima»** (`loQueQuedaParaLaProxima`): UNA lista que junta lo que antes eran «Quedó
     abierto», «Lo que falta para confirmarlo» y «Temas por retomar». La forman el resultado, si la agenda lo tenía y
     quedó sin marcar; lo que la lectura dejó pendiente (`paraLaProxima`); lo que no se preguntó; lo que el cliente dijo
@@ -13260,8 +13335,11 @@ el vendedor usa (✓), corrige (Editar) o descarta (✕). No hay campos vacíos 
   sugerencias filtradas por su reunión. Al agregar una sesión, cada sugerencia aparecía en los dos lados. Ahora, lo que
   sale de la lectura de una sesión que ya pasó y muestra «Lo que aprendimos» (`esDeUnaSesion`; no las cortadas, por otro
   canal o que no se hicieron, ni las reuniones sacadas de la exploración) se revisa en esa sesión. El
-  Resumen muestra lo acumulado y lo sugerido desde otras fuentes (el test, HubSpot, la preparación), con un enlace a la
-  sesión que tiene sugerencias. Lo usado en la sesión ya no figura como pendiente en ningún lado.
+  Resumen muestra lo acumulado y lo sugerido desde otras fuentes (el test, HubSpot, la preparación, la llamada única del
+  contexto), con un enlace a la sesión que tiene sugerencias. Lo usado en la sesión ya no figura como pendiente en ningún
+  lado.
 - **Exploraciones en curso: no se borra ni se migra nada, y no hay SQL** (todo vive en el Json). El desafío escrito a mano
   se muestra en «Lo que aprendimos» y se ofrece para la ficha. Lo que faltaba y los temas por retomar entran marcados en
-  la lista. Un desafío «sin confirmar» sigue avisándole a la guía.
+  la lista. Un desafío «sin confirmar» sigue avisándole a la guía. Los retos y metas ya guardados quedan como de la
+  empresa entera. La primera vez que se abre una exploración después del deploy se gasta una llamada para proponer el
+  contexto (si tiene fuentes).

@@ -2,13 +2,14 @@
 
 /**
  * ObjetivoYDesafio — arriba del inicio de la Exploración (2026-11-07, Elías: «el usuario no rellena forms: valida o
- * modifica sugerencias»). Dos tarjetas, ninguna vacía para llenar:
- *   · El objetivo de la exploración: lo confirmado o, si no hay, el que sugiere Nexus con lo que ya sabe (el traspaso,
- *     cómo llegó, las notas de HubSpot, las reuniones). Se usa tal cual o se corrige. Lo pide una sola vez por exploración
- *     (`usePropuestaDelContexto`, la misma llamada que «lo que ya sabemos»).
- *   · El desafío principal: se lee de la ficha de la empresa (Información del cliente › «Dolor principal»). Si la ficha
- *     no lo tiene, lo propone Nexus (o se ofrece el que dejó escrito una sesión) y, al validarlo, va a la ficha como
- *     propuesta: ahí lo confirma Customer Success, como todo lo que llega a la ficha.
+ * modifica sugerencias»; los tres niveles, misma fecha). Ninguna tarjeta vacía para llenar:
+ *   · El objetivo de la exploración, UNA vez para toda la exploración: lo confirmado o, si no hay, el que sugiere Nexus con
+ *     lo que ya sabe (el traspaso, cómo llegó, las notas de HubSpot, las reuniones). Lo pide una sola vez por exploración
+ *     (`usePropuestaDelContexto`). La Preparación lo muestra solo mientras falta (`ObjetivoDeLaExploracion`).
+ *   · Lo de la EMPRESA, de su ficha (Información del cliente): el desafío principal («Dolor principal») y el resultado del
+ *     negocio (los resultados de sus proyectos o, en la preventa, su línea de «Retos estratégicos»). Si la ficha no los
+ *     tiene, los propone Nexus y, al validarlos, van a la ficha como propuesta: ahí los confirma Customer Success.
+ * Lo de la compra y lo de cada equipo explorado viven en el Resumen.
  */
 import { useState } from "react";
 import { BotonAzul, BotonBlanco, BotonTexto, IconoDeSugerencia, ROTULO_DEL_SISTEMA } from "@/components/ui/sistema";
@@ -35,6 +36,7 @@ function TarjetaQueSeValida({
   max,
   usar,
   descartar,
+  editable = true,
 }: {
   rotulo: string;
   valido: { texto: string; pie: string } | null;
@@ -44,6 +46,8 @@ function TarjetaQueSeValida({
   max: number;
   usar: (texto: string) => Promise<boolean>;
   descartar?: () => Promise<boolean>;
+  /** false: lo que vale no se cambia desde acá (el resultado que sale de los proyectos). */
+  editable?: boolean;
 }) {
   const { puedeEditar, guardando } = useLienzo();
   const [editando, setEditando] = useState(false);
@@ -82,7 +86,7 @@ function TarjetaQueSeValida({
       <section className="flex flex-col gap-1.5 rounded-xl border border-line bg-surface px-[18px] py-4">
         <div className="flex items-center gap-2">
           <p className={cn(ROTULO_DEL_SISTEMA, "flex-1")}>{rotulo}</p>
-          {puedeEditar && <BotonTexto onClick={() => abrir(valido.texto)}>Editar</BotonTexto>}
+          {puedeEditar && editable && <BotonTexto onClick={() => abrir(valido.texto)}>Editar</BotonTexto>}
         </div>
         <p className="text-[15px] font-semibold leading-[1.4] text-fg">{valido.texto}</p>
         <p className="text-xs text-fg-muted">{valido.pie}</p>
@@ -127,39 +131,90 @@ function TarjetaQueSeValida({
   );
 }
 
-export default function ObjetivoYDesafio() {
-  const { exp, cambiar, marco } = useLienzo();
-  const { todas } = useSesiones();
-  const toast = useToast();
+/** Las tarjetas del objetivo y de la empresa, con la propuesta de Nexus. */
+function useElContexto() {
+  const { exp, cambiar } = useLienzo();
   const cx = exp.estado.contenido.contexto;
-  const { leida, proponiendo, validarDesafio } = usePropuestaDelContexto(true);
-  const propuesto = leida?.propuesto ?? null;
-
+  const propuesta = usePropuestaDelContexto(true);
   const usarObjetivo = (texto: string) =>
     cambiar([{ op: "contexto", valor: { objetivo: texto.slice(0, MAX_OBJETIVO_DE_LA_EXPLORACION), ...(cx?.sabemos ? { sabemos: cx.sabemos } : {}), ...(cx?.tarjetas ? { tarjetas: cx.tarjetas } : {}) } }], {
       exito: "Objetivo de la exploración confirmado.",
     });
+  return { cx, usarObjetivo, ...propuesta };
+}
+
+/** El objetivo de la exploración: se responde UNA vez, para toda la exploración (2026-11-07, Elías). */
+export function ObjetivoDeLaExploracion() {
+  const { marco } = useLienzo();
+  const { cx, propuesto, proponiendo, usarObjetivo } = useElContexto();
+  return (
+    <TarjetaQueSeValida
+      rotulo="Objetivo de la exploración"
+      valido={cx?.objetivo.trim() ? { texto: cx.objetivo, pie: `Confirmado${cx.por ? ` por ${cx.por}` : ""}. Vale para todas las sesiones.` } : null}
+      sugerido={propuesto?.objetivo ? { texto: propuesto.objetivo, pie: "Sale de lo que Nexus ya sabe de la empresa. Úsalo tal cual o corrígelo." } : null}
+      cargando={proponiendo}
+      vacio={
+        marco.clave === "cs"
+          ? "Nexus no tiene todavía de dónde sugerirlo: ¿para qué exploramos esta cuenta?"
+          : "Nexus no tiene todavía de dónde sugerirlo: ¿por qué exploramos esta empresa y qué queremos lograr?"
+      }
+      max={MAX_OBJETIVO_DE_LA_EXPLORACION}
+      usar={usarObjetivo}
+    />
+  );
+}
+
+/**
+ * Arriba del inicio: el objetivo de la exploración y lo de la EMPRESA (su ficha). Lo de la compra y lo de cada equipo
+ * explorado viven en el Resumen: acá solo se dice dónde.
+ */
+export default function ObjetivoYDesafio() {
+  const { marco, irA } = useLienzo();
+  const { todas } = useSesiones();
+  const toast = useToast();
+  const { cx, propuesto, empresa, proponiendo, validarEnLaFicha, usarObjetivo } = useElContexto();
 
   // El desafío que dejó escrito una sesión (2026-11-06, a mano o con «Proponer desde la reunión»): ya lo validó alguien.
   const deUnaSesion = [...todas].reverse().find((p) => p.sesion?.desafio?.texto) ?? null;
-  const ficha = leida?.desafioDeLaFicha ?? null;
   const desafioSugerido = propuesto?.desafio
     ? { texto: propuesto.desafio, pie: "Sale de lo que Nexus ya sabe de la empresa. Al usarlo, va a la ficha de la empresa." }
     : deUnaSesion?.sesion?.desafio
       ? { texto: deUnaSesion.sesion.desafio.texto, pie: `Lo dejó escrito la sesión ${deUnaSesion.numero}. Al usarlo, va a la ficha de la empresa.` }
       : null;
-  const usarDesafio = async (texto: string) => {
-    const ok = await validarDesafio(texto);
-    if (ok) toast.success("Quedó en la ficha de la empresa, para que Customer Success lo confirme.");
-    else toast.error("No se pudo guardar en la ficha de la empresa. Vuelve a intentarlo.");
-    return ok;
+  const resultadoSugerido = propuesto?.resultado ? { texto: propuesto.resultado, pie: "Sale de lo que Nexus ya sabe de la empresa. Al usarlo, va a la ficha de la empresa." } : null;
+  const aLaFicha = (que: "desafio" | "resultado") => async (texto: string) => {
+    const error = await validarEnLaFicha(que, texto);
+    if (error) {
+      toast.error(error);
+      return false;
+    }
+    toast.success("Quedó en la ficha de la empresa, para que Customer Success lo confirme.", {
+      action: { label: "Ver Información del cliente", onClick: () => irA("informacion") },
+    });
+    return true;
   };
+  const descartar = (que: "desafio" | "resultado") => async () => {
+    const error = await validarEnLaFicha(que, null);
+    if (error) toast.error(error);
+    return !error;
+  };
+  const deLaFicha = (x: { texto: string; confirmado: boolean; deLosProyectos?: true } | null | undefined) =>
+    x
+      ? {
+          texto: x.texto,
+          pie: x.deLosProyectos
+            ? "De los resultados confirmados de sus proyectos (Información del cliente)."
+            : x.confirmado
+              ? "De la ficha de la empresa (Información del cliente)."
+              : "En la ficha de la empresa, esperando que Customer Success lo confirme.",
+        }
+      : null;
 
   return (
-    <div className="grid gap-3 lg:grid-cols-2">
+    <div className="flex flex-col gap-3">
       <TarjetaQueSeValida
         rotulo="Objetivo de la exploración"
-        valido={cx?.objetivo.trim() ? { texto: cx.objetivo, pie: `Confirmado${cx.por ? ` por ${cx.por}` : ""}. Todas las sesiones dependen de este objetivo.` } : null}
+        valido={cx?.objetivo.trim() ? { texto: cx.objetivo, pie: `Confirmado${cx.por ? ` por ${cx.por}` : ""}. Vale para todas las sesiones.` } : null}
         sugerido={propuesto?.objetivo ? { texto: propuesto.objetivo, pie: "Sale de lo que Nexus ya sabe de la empresa. Úsalo tal cual o corrígelo." } : null}
         cargando={proponiendo}
         vacio={
@@ -170,20 +225,39 @@ export default function ObjetivoYDesafio() {
         max={MAX_OBJETIVO_DE_LA_EXPLORACION}
         usar={usarObjetivo}
       />
-      <TarjetaQueSeValida
-        rotulo="Desafío principal"
-        valido={
-          ficha
-            ? { texto: ficha.texto, pie: ficha.confirmado ? "De la ficha de la empresa (Información del cliente)." : "En la ficha de la empresa, esperando que Customer Success lo confirme." }
-            : null
-        }
-        sugerido={desafioSugerido}
-        cargando={proponiendo}
-        vacio="La ficha de la empresa no lo tiene y Nexus todavía no tiene de dónde sugerirlo: sale de las sesiones."
-        max={MAX_DESAFIO_PROPUESTO}
-        usar={usarDesafio}
-        descartar={propuesto?.desafio ? () => validarDesafio(null) : undefined}
-      />
+      <p className={cn(ROTULO_DEL_SISTEMA, "mt-1")}>La empresa · de su ficha</p>
+      <div className="grid gap-3 lg:grid-cols-2">
+        <TarjetaQueSeValida
+          rotulo="Desafío principal"
+          valido={deLaFicha(empresa?.desafio)}
+          sugerido={desafioSugerido}
+          cargando={proponiendo}
+          vacio="La ficha de la empresa no lo tiene y Nexus todavía no tiene de dónde sugerirlo: sale de las sesiones."
+          max={MAX_DESAFIO_PROPUESTO}
+          usar={aLaFicha("desafio")}
+          descartar={propuesto?.desafio ? descartar("desafio") : undefined}
+        />
+        <TarjetaQueSeValida
+          rotulo="Resultado del negocio"
+          valido={deLaFicha(empresa?.resultado)}
+          sugerido={resultadoSugerido}
+          cargando={proponiendo}
+          vacio="La ficha de la empresa no lo tiene y Nexus todavía no tiene de dónde sugerirlo: sale de las sesiones."
+          max={MAX_DESAFIO_PROPUESTO}
+          usar={aLaFicha("resultado")}
+          editable={!empresa?.resultado?.deLosProyectos}
+          descartar={propuesto?.resultado ? descartar("resultado") : undefined}
+        />
+      </div>
+      {marco.clave !== "cs" && (
+        <p className="text-[13px] text-fg-muted">
+          Lo de la compra (plazos, presupuesto, quién decide, qué pasa si no hacen nada y qué cambia si lo logran) y los retos y lo que busca cada equipo están en el{" "}
+          <button type="button" className="text-brand hover:underline" onClick={() => irA("resumen")}>
+            Resumen
+          </button>
+          .
+        </p>
+      )}
     </div>
   );
 }

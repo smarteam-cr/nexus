@@ -34,7 +34,7 @@ import type { SaberDelCliente } from "./lo-que-ya-sabemos";
 import { planDeLaGuia, preguntaDeRespaldo, REPREGUNTAS_DEL_PASO, repiteLoSabido, type PasoDeLaPregunta, type PreguntaPlaneada } from "./plan-de-la-guia";
 import { sinCitaAdelante, type AjustesDeLaGuia, type OrigenDelAjuste } from "./ajustes-de-la-guia";
 import { esTemaDeEquipo, leerTemaDeEquipo, nombreDelTemaDeEquipo, type ClaveDeEquipo } from "./equipos";
-import type { AgendaDeLaGuia } from "./agenda";
+import { DURACION_POR_DEFECTO, type AgendaDeLaGuia } from "./agenda";
 import type { PersonaDeLaSesion } from "./contexto-de-la-exploracion";
 import type { Cumplimiento, DesafioDeLaSesion, TemaPorRetomar } from "./despues-de-la-sesion";
 
@@ -1031,7 +1031,7 @@ export function guiaVieja(
  * (2026-10-23, Marco: «la sesión dura una hora y el cliente no solo quiere responder: también espera que le hablen y lo
  * entusiasmen»). Antes eran 45 minutos sin un momento para contarle nada.
  */
-export const DURACION_DE_LA_SESION = 60;
+export const DURACION_DE_LA_SESION = DURACION_POR_DEFECTO;
 export const TRAMOS_DE_LA_SESION = { abrir: [0, 5], preguntar: [5, 40], contar: [40, 50], cerrar: [50, 60] } as const;
 
 /**

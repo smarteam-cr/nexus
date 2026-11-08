@@ -13,6 +13,11 @@
  * La apertura y el cierre son iguales en todas las guías (el primer y el último bloque). Las guías de antes (sin
  * `agenda`) se siguen viendo como se armaron.
  *
+ * La guía en bloques (2026-11-07, Elías): el título de cada bloque es LO QUE HAY QUE AVERIGUAR («Cómo mide el rendimiento
+ * la empresa»), con su pregunta para abrir, una guía corta (`guia`) y tres preguntas para profundizar (`profundizar`). Los
+ * minutos se reparten en código según la duración de la sesión (`repartirMinutos`). Las agendas de antes, sin esos dos
+ * campos, se ven igual: las preguntas para profundizar salen de lo que hay que averiguar (`paraProfundizar`).
+ *
  * Las marcas viven en `SesionPlaneada.hechas`, como las de las preguntas de antes: `av:<huella>` marca una cosa; en una
  * que ya se sabía, `!av:<huella>` la desmarca. La huella sale del texto de lo que se averigua: una guía rearmada con la
  * misma cosa conserva su marca.
@@ -51,6 +56,13 @@ export interface BloqueDeLaAgenda {
   averiguar: CosaPorAveriguar[];
   /** Qué datos conviene obtener y cómo convertirlos en impacto (costo, tiempo, ventas perdidas, seis meses más igual). */
   impacto?: string;
+  /**
+   * 2026-11-07 (la guía en bloques): una guía corta para quien lleva la sesión, una o dos frases («Aquí exploramos su
+   * tablero gerencial, la frecuencia de revisión…»). Las guías de antes no la traen.
+   */
+  guia?: string;
+  /** Hasta tres preguntas para profundizar después de abrir. Sin ellas, salen de lo que hay que averiguar (`paraProfundizar`). */
+  profundizar?: string[];
 }
 
 export interface AgendaDeLaGuia {
@@ -69,6 +81,14 @@ export const MAX_AVERIGUAR_POR_BLOQUE = 5;
 export const MAX_AVERIGUAR_GUARDADAS = 6;
 export const MAX_PREGUNTAS_SUGERIDAS = 2;
 export const DURACION_POR_DEFECTO = 60;
+/** Las preguntas para profundizar de un bloque: tres como mucho. */
+export const MAX_PROFUNDIZAR = 3;
+/** El largo de la guía corta de un bloque (una o dos frases). */
+export const MAX_LARGO_DE_LA_GUIA_DEL_BLOQUE = 300;
+/** El largo de una pregunta para profundizar. */
+export const MAX_LARGO_DE_PROFUNDIZAR = 300;
+/** Ningún bloque dura menos que esto, salvo que la sesión no alcance para todos. */
+const MINUTOS_MINIMOS_POR_BLOQUE = 3;
 
 /** La huella de lo que se averigua: estable entre guías mientras el texto sea el mismo (sin mayúsculas ni espacios de más). */
 export function idDeAveriguar(que: string): string {
@@ -169,8 +189,8 @@ export function conHueco(texto: string): boolean {
  * espacio por completar.
  */
 export function preguntasQueNoCumplen(agenda: AgendaDeLaGuia): string[] {
-  const preguntas = agenda.bloques.flatMap((b) => [...(b.tipo === "cuerpo" ? [b.abre] : []), ...b.averiguar.flatMap((c) => c.preguntas)]);
-  const textos = agenda.bloques.flatMap((b) => [b.abre, b.impacto ?? ""]);
+  const preguntas = agenda.bloques.flatMap((b) => [...(b.tipo === "cuerpo" ? [b.abre] : []), ...(b.profundizar ?? []), ...b.averiguar.flatMap((c) => c.preguntas)]);
+  const textos = agenda.bloques.flatMap((b) => [b.abre, b.impacto ?? "", b.guia ?? ""]);
   return [...preguntas.filter((p) => preguntaCerrada(p) || preguntaDoble(p)), ...textos.filter(conHueco)];
 }
 
@@ -208,4 +228,66 @@ export function temasDeLaAgenda(agenda: AgendaDeLaGuia): string[] {
 /** «0–5 min». */
 export function minutosDelBloque(b: Pick<BloqueDeLaAgenda, "desde" | "hasta">): string {
   return `${b.desde}–${b.hasta} min`;
+}
+
+/** «10–25»: el rango de la columna de la izquierda, sin «min». */
+export function rangoDelBloque(b: Pick<BloqueDeLaAgenda, "desde" | "hasta">): string {
+  return `${b.desde}–${b.hasta}`;
+}
+
+/**
+ * Los minutos de la agenda repartidos en la duración de la sesión (2026-11-07, la guía en bloques). Los minutos que
+ * escribió el agente valen como PROPORCIÓN, no como reloj: el código los escala a la duración (30, 45, 60, 90…), los deja
+ * seguidos desde el minuto 0 y sin huecos ni solapes, y hace que el último termine justo en la duración. Ningún bloque
+ * queda con menos de 3 minutos (si la sesión alcanza). No confía en que el modelo sume bien. PURO.
+ */
+export function repartirMinutos<T extends Pick<BloqueDeLaAgenda, "desde" | "hasta">>(bloques: readonly T[], duracion: number): T[] {
+  const n = bloques.length;
+  if (!n) return [];
+  const pedida = Number.isFinite(duracion) && duracion > 0 ? Math.round(duracion) : DURACION_POR_DEFECTO;
+  const total = Math.min(240, Math.max(n, pedida));
+  const minimo = Math.max(1, Math.min(MINUTOS_MINIMOS_POR_BLOQUE, Math.floor(total / n)));
+  const pesos = bloques.map((b) => {
+    const largo = b.hasta - b.desde;
+    return Number.isFinite(largo) && largo > 0 ? largo : 1;
+  });
+  const suma = pesos.reduce((s, p) => s + p, 0);
+  const exactos = pesos.map((p) => (p / suma) * total);
+  const largos = exactos.map((x) => Math.max(minimo, Math.floor(x)));
+  let diferencia = total - largos.reduce((s, l) => s + l, 0);
+  // Lo que falta va a los de mayor resto (con empate, el primero); lo que sobra se le quita al más largo.
+  const porResto = exactos.map((x, i) => ({ i, resto: x - Math.floor(x) })).sort((a, b) => b.resto - a.resto || a.i - b.i);
+  for (let k = 0; diferencia > 0; k = (k + 1) % n, diferencia--) largos[porResto[k].i]++;
+  while (diferencia < 0) {
+    // Hay uno más largo que el mínimo: el total alcanza para n × mínimo.
+    const i = largos.reduce((m, l, k) => (l > largos[m] ? k : m), 0);
+    largos[i]--;
+    diferencia++;
+  }
+  let desde = 0;
+  return bloques.map((b, i) => {
+    const r = { ...b, desde, hasta: desde + largos[i] };
+    desde += largos[i];
+    return r;
+  });
+}
+
+const comparable = (t: string) => t.trim().replace(/^[«"]+|[»"]+$/g, "").toLowerCase();
+
+/**
+ * Las preguntas para profundizar de un bloque: las que escribió el agente o, en una guía de antes (sin `profundizar`),
+ * la primera pregunta de cada cosa por averiguar, sin repetir la que abre el bloque. Tres como mucho.
+ */
+export function paraProfundizar(b: Pick<BloqueDeLaAgenda, "abre" | "averiguar" | "profundizar">): string[] {
+  if (b.profundizar?.length) return b.profundizar.slice(0, MAX_PROFUNDIZAR);
+  const vistas = new Set([comparable(b.abre)]);
+  const out: string[] = [];
+  for (const c of b.averiguar) {
+    const p = c.preguntas[0];
+    if (!p || vistas.has(comparable(p))) continue;
+    vistas.add(comparable(p));
+    out.push(p);
+    if (out.length >= MAX_PROFUNDIZAR) break;
+  }
+  return out;
 }

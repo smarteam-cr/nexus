@@ -186,10 +186,10 @@ describe("el pedido de la agenda", () => {
 describe("el contexto antes de armar la guía (puntos 1 a 5)", () => {
   const cx = { objetivo: "Ver si ordenar el seguimiento les cambia los números", por: "ana@smarteam.co", en: "2026-11-06T12:00:00.000Z" };
 
-  it("sin el objetivo de la exploración, con quién es y el objetivo de la sesión, no hay guía", () => {
-    expect(faltaParaLaGuia(undefined, null)).toEqual(["el objetivo de la exploración", "con quién es la sesión", "el objetivo de la sesión"]);
-    expect(faltaParaLaGuia(cx, { conQuien: [{ nombre: "  " }], objetivo: "x" })).toEqual(["con quién es la sesión"]);
-    expect(faltaParaLaGuia(cx, { conQuien: [{ nombre: "Ana Pérez" }], objetivo: "Entender cómo decide" })).toEqual([]);
+  it("sin el objetivo de la exploración no hay guía; con quién es y el objetivo de la sesión ya no se piden (2026-11-07)", () => {
+    expect(faltaParaLaGuia(undefined)).toEqual(["el objetivo de la exploración"]);
+    expect(faltaParaLaGuia({ objetivo: "  " })).toEqual(["el objetivo de la exploración"]);
+    expect(faltaParaLaGuia(cx)).toEqual([]);
   });
 
   it("con quién se lee con su puesto y su área", () => {

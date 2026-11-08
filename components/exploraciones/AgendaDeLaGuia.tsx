@@ -2,43 +2,50 @@
 
 /**
  * AgendaDeLaGuia — la guía de una sesión como agenda por bloques (2026-11-06, lib/exploraciones/agenda.ts). Arriba, el
- * objetivo y lo que hay que tener claro al terminar; debajo, los bloques con sus minutos, su pregunta para abrir y lo
- * que hay que averiguar, cada cosa con su casilla y sus preguntas sugeridas. Se lee de un vistazo durante la reunión:
- * en la Preparación y en «En vivo» es la misma, con las mismas marcas.
+ * objetivo y lo que hay que tener claro al terminar; debajo, los bloques. Desde el 2026-11-07 (la guía en bloques, Elías)
+ * cada bloque se lee así: a la izquierda su rango de minutos, repartido según la duración de la sesión; de título, lo que
+ * hay que averiguar; la pregunta para abrir, en cursiva; una guía corta; y tres preguntas para profundizar. Lo que hay
+ * que averiguar sigue debajo, compacto, con sus casillas (las marcas de «En vivo» y de la lectura dependen de ellas).
+ * Se lee de un vistazo durante la reunión: en la Preparación y en «En vivo» es la misma, con las mismas marcas.
  */
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/cn";
 import { APERTURA_DEL_RESULTADO, faltaElResultadoEnVivo } from "@/lib/exploraciones/resultado";
-import { alternarAveriguada, avanceDeLaAgenda, estaAveriguada, minutosDelBloque, type AgendaDeLaGuia as Agenda, type CosaPorAveriguar } from "@/lib/exploraciones/agenda";
+import {
+  alternarAveriguada,
+  avanceDeLaAgenda,
+  estaAveriguada,
+  paraProfundizar,
+  rangoDelBloque,
+  repartirMinutos,
+  type AgendaDeLaGuia as Agenda,
+  type CosaPorAveriguar,
+} from "@/lib/exploraciones/agenda";
 import type { GuiaDeLaSesion, PestanaDeSesion } from "@/lib/exploraciones/guia";
+import { duracionDeLaSesion } from "@/lib/exploraciones/contexto-de-la-exploracion";
 import { diaCorto } from "@/lib/exploraciones/fechas";
 import type { MomentoDeLaSesion } from "./contexto";
 import { useLienzo } from "./contexto";
 import { Rotulo, useEditarLaSesion } from "./piezas-de-la-sesion";
 
+const sinComillas = (t: string) => t.replace(/^«|»$/g, "");
+
+/** Una cosa por averiguar, compacta: su casilla y lo que hay que saber (las preguntas ya están arriba, en el bloque). */
 function Cosa({ c, marcada, alMarcar, puede }: { c: CosaPorAveriguar; marcada: boolean; alMarcar: () => void; puede: boolean }) {
   return (
-    <li className="flex gap-2.5 py-1.5">
+    <li className="flex items-start gap-2 py-0.5">
       <input
         type="checkbox"
         checked={marcada}
         disabled={!puede}
         onChange={alMarcar}
         aria-label={`Ya se sabe: ${c.que}`}
-        className="mt-[3px] h-4 w-4 flex-shrink-0 accent-brand"
+        className="mt-[2px] h-3.5 w-3.5 flex-shrink-0 accent-brand"
       />
-      <div className="min-w-0 flex-1">
-        <p className={cn("text-[14px] font-semibold leading-5", marcada ? "text-fg-muted" : "text-fg")}>
-          {c.que}
-          {c.sabido && <span className="ml-2 rounded-full bg-surface-muted px-2 py-0.5 text-[11px] font-medium text-fg-muted">Ya se sabía · {c.sabido}</span>}
-        </p>
-        {!marcada &&
-          c.preguntas.map((p, i) => (
-            <p key={i} className="mt-0.5 text-[13px] leading-[19px] text-fg-secondary">
-              «{p.replace(/^«|»$/g, "")}»
-            </p>
-          ))}
-      </div>
+      <p className={cn("min-w-0 flex-1 text-[12.5px] leading-[18px]", marcada ? "text-fg-muted" : "text-fg-secondary")}>
+        {c.que}
+        {c.sabido && <span className="ml-2 rounded-full bg-surface-muted px-2 py-0.5 text-[11px] font-medium text-fg-muted">Ya se sabía · {c.sabido}</span>}
+      </p>
     </li>
   );
 }
@@ -62,7 +69,13 @@ export function AgendaDeLaGuia({
   const hechas = pestana.sesion?.hechas;
   const { sabidas, total } = avanceDeLaAgenda(agenda, hechas);
   const marcar = (c: CosaPorAveriguar) => void editar((x) => ({ ...x, hechas: alternarAveriguada(c, x.hechas) }));
-  const duracion = agenda.bloques.length ? agenda.bloques[agenda.bloques.length - 1].hasta : 0;
+  /* Los minutos, repartidos según la duración de la sesión (2026-11-07): si la cambiaron después de armar la guía, los
+     bloques se ajustan solos. La de la sesión sale de su reunión del calendario; sin ella ni duración guardada, la que
+     trae la agenda. */
+  const delaAgenda = agenda.bloques.length ? agenda.bloques[agenda.bloques.length - 1].hasta : 0;
+  const s = pestana.sesion;
+  const duracion = s?.duracion || s?.evento?.fin ? duracionDeLaSesion(s) : delaAgenda;
+  const bloques = duracion > 0 ? repartirMinutos(agenda.bloques, duracion) : agenda.bloques;
   /* «En vivo» (2026-11-06): pasada la mitad sin saber qué resultado busca, aviso. Empieza a la hora de la reunión o, sin
      ella, cuando se abrió esta pestaña. Se mira cada 30 segundos. */
   const enVivo = momento === "durante";
@@ -107,26 +120,48 @@ export function AgendaDeLaGuia({
         </p>
       )}
       <ol>
-        {agenda.bloques.map((b, i) => (
-          <li key={i} className={cn("flex gap-4 border-b border-line px-[18px] py-3.5 last:border-b-0", b.central && "bg-surface-muted")}>
-            <div className="w-[72px] flex-none pt-0.5 text-[12px] font-medium text-fg-muted">{minutosDelBloque(b)}</div>
-            <div className="min-w-0 flex-1 space-y-1.5">
-              <div className="flex flex-wrap items-center gap-2">
-                <h4 className="text-[14.5px] font-semibold text-fg">{b.titulo}</h4>
-                {b.central && <span className="rounded-full border border-info-line bg-info-surface px-2 py-0.5 text-[11px] font-semibold text-info-ink">Bloque central: sin prisa</span>}
+        {bloques.map((b, i) => {
+          const profundizar = paraProfundizar(b);
+          const sabidasDelBloque = b.averiguar.filter((c) => estaAveriguada(c, hechas)).length;
+          return (
+            <li key={i} className={cn("flex gap-4 border-b border-line px-[18px] py-4 last:border-b-0", b.central && "bg-surface-muted")}>
+              <div className="w-[52px] flex-none pt-[3px] text-[12.5px] font-medium tabular-nums text-fg-muted" aria-label={`Del minuto ${b.desde} al ${b.hasta}`}>
+                {rangoDelBloque(b)}
               </div>
-              <p className={cn("text-[14px] leading-5", b.tipo === "cuerpo" ? "font-medium text-brand" : "text-fg")}>«{b.abre.replace(/^«|»$/g, "")}»</p>
-              {b.averiguar.length > 0 && (
-                <ul>
-                  {b.averiguar.map((c) => (
-                    <Cosa key={c.id} c={c} marcada={estaAveriguada(c, hechas)} alMarcar={() => marcar(c)} puede={editable && !guardando} />
-                  ))}
-                </ul>
-              )}
-              {b.impacto && <p className="text-[12.5px] leading-[18px] text-fg-muted">Para medir el dolor: {b.impacto}</p>}
-            </div>
-          </li>
-        ))}
+              <div className="min-w-0 flex-1 space-y-1.5">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h4 className="text-[14.5px] font-semibold leading-5 text-fg">{b.titulo}</h4>
+                  {b.central && <span className="rounded-full border border-info-line bg-info-surface px-2 py-0.5 text-[11px] font-semibold text-info-ink">Bloque central: sin prisa</span>}
+                </div>
+                <p className="text-[14px] italic leading-[21px] text-fg">«{sinComillas(b.abre)}»</p>
+                {b.guia && <p className="text-[13.5px] leading-5 text-fg-secondary">{b.guia}</p>}
+                {profundizar.length > 0 && (
+                  <div className="pt-0.5">
+                    <p className="text-[11.5px] font-semibold uppercase tracking-wide text-fg-muted">Para profundizar</p>
+                    <ul className="mt-1 list-disc space-y-0.5 pl-5 text-[13px] leading-[19px] text-fg-secondary marker:text-fg-muted">
+                      {profundizar.map((p, k) => (
+                        <li key={k}>{sinComillas(p)}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {b.impacto && <p className="text-[12.5px] leading-[18px] text-fg-muted">Para medir el dolor: {b.impacto}</p>}
+                {b.averiguar.length > 0 && (
+                  <div className="rounded-lg border border-line px-2.5 py-1.5">
+                    <p className="text-[11.5px] font-medium text-fg-muted">
+                      Lo que hay que averiguar · {sabidasDelBloque} de {b.averiguar.length}
+                    </p>
+                    <ul className="mt-0.5">
+                      {b.averiguar.map((c) => (
+                        <Cosa key={c.id} c={c} marcada={estaAveriguada(c, hechas)} alMarcar={() => marcar(c)} puede={editable && !guardando} />
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            </li>
+          );
+        })}
       </ol>
     </section>
   );

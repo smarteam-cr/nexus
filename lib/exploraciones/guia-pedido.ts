@@ -54,10 +54,14 @@ import {
   MAX_AVERIGUAR_POR_BLOQUE,
   MAX_BLOQUES,
   MAX_CLAVES,
+  MAX_LARGO_DE_LA_GUIA_DEL_BLOQUE,
+  MAX_LARGO_DE_PROFUNDIZAR,
   MAX_PREGUNTAS_SUGERIDAS,
+  MAX_PROFUNDIZAR,
   MIN_BLOQUES,
   partirPreguntaDoble,
   preguntasDeLaAgenda,
+  repartirMinutos,
   sinHuecos,
   type AgendaDeLaGuia,
   type BloqueDeLaAgenda,
@@ -617,13 +621,27 @@ export function herramientaDeLaAgenda(ctx: ContextoDeLaGuia): Anthropic.Messages
             type: "object",
             properties: {
               desde: { type: "integer", description: "Minuto en que empieza." },
-              hasta: { type: "integer", description: "Minuto en que termina." },
-              titulo: { type: "string", description: "Título del bloque, de 2 a 6 palabras." },
+              hasta: { type: "integer", description: "Minuto en que termina. Lo que importa es cuánto dura cada bloque frente a los otros: el central, el más largo." },
+              titulo: {
+                type: "string",
+                description:
+                  "LO QUE HAY QUE AVERIGUAR en el bloque, dicho como lo que se sabrá al terminarlo (de 3 a 8 palabras): «Cómo mide el rendimiento la empresa», «Qué espera de cada área», «Dónde se traba la ejecución». No un tema suelto («Métricas», «Exploración») ni una pregunta.",
+              },
               tipo: { type: "string", enum: ["apertura", "cuerpo", "cierre"] },
               abre: {
                 type: "string",
                 description:
                   "En un bloque del cuerpo: UNA pregunta abierta para abrir la conversación del bloque (25 palabras como mucho). En la apertura y el cierre: lo que se dice, en dos o tres frases que se puedan decir tal cual, sin espacios por completar.",
+              },
+              guia: {
+                type: "string",
+                description:
+                  "Una guía corta para quien lleva la sesión, de una o dos frases (35 palabras como mucho): qué se explora en el bloque y qué se busca, no qué preguntar. Así: «Aquí exploramos su tablero gerencial, la frecuencia de revisión y qué tan confiables son los datos». Se lee, no se dice.",
+              },
+              profundizar: {
+                type: "array",
+                description: `${MAX_PROFUNDIZAR} preguntas para profundizar después de abrir (en la apertura y el cierre, de 0 a ${MAX_PROFUNDIZAR}): abiertas, de una sola cosa, 25 palabras como mucho cada una, sin repetir la que abre. Siguen el paso que toca (el último ejemplo real → cada cuánto pasa → qué efecto tiene → cómo lo miden → la causa).`,
+                items: { type: "string" },
               },
               central: { type: "boolean", description: "true en UN solo bloque del cuerpo: el central, el que no se puede pasar rápido." },
               resultado: { type: "boolean", description: "true SOLO en el bloque fijo «El resultado que buscan» (justo después de la apertura)." },
@@ -656,7 +674,7 @@ export function herramientaDeLaAgenda(ctx: ContextoDeLaGuia): Anthropic.Messages
                   "Solo en el cuerpo: qué datos conviene obtener en este bloque y cómo convertirlos en impacto (cuánto le cuesta, cuánto tiempo pierde, cuántas ventas se le escapan, qué pasa si sigue igual seis meses más). Una frase, 35 palabras como mucho.",
               },
             },
-            required: ["desde", "hasta", "titulo", "tipo", "abre", "averiguar"],
+            required: ["desde", "hasta", "titulo", "tipo", "abre", "guia", "profundizar", "averiguar"],
           },
         },
         ...(cs
@@ -729,6 +747,8 @@ Cómo se arma:
 - Justo después de la apertura va el bloque FIJO «El resultado que buscan» (resultado: true), que abre con «¿Qué tendría que pasar en 6 a 12 meses para que digas que esto valió la pena?» (o una igual de abierta) y averigua estas seis cosas, en este orden: el resultado en sus palabras; cómo lo medirían; para cuándo; quién lo pide; por qué ahora; qué pasa si no se logra. Lo que ya se sabe de eso va con «sabido».
 - Si una sesión anterior dejó el resultado SIN CONFIRMAR, el objetivo de esta sesión empieza por confirmarlo. Ejemplo para un gerente general: hacia dónde quiere llevar la empresa en 2 o 3 años; qué espera de cada área y cómo sabe si lo cumple; qué problemas llegan a su escritorio y por qué no se resuelven antes; cómo se toman las decisiones.
 - La agenda: de ${MIN_BLOQUES} a ${MAX_BLOQUES} bloques que cubren la duración de la sesión. Cada bloque tiene sus minutos, un título y UNA sola pregunta para abrir. Uno del cuerpo es el central (el más largo): no se pasa rápido. No hay preguntas fuera de los bloques.
+- El título de cada bloque es LO QUE HAY QUE AVERIGUAR en él, no un tema: «Cómo mide el rendimiento la empresa», «Qué espera de cada área», «Dónde se traba la ejecución». Mal: «Métricas», «Exploración de procesos».
+- Cada bloque lleva una «guia» corta para quien lleva la sesión (una o dos frases: qué se explora y qué se busca, por ejemplo «Aquí exploramos su tablero gerencial, la frecuencia de revisión y qué tan confiables son los datos») y ${MAX_PROFUNDIZAR} preguntas para «profundizar» después de abrir, que no repiten la que abre y siguen el paso que toca.
 - Dentro de cada bloque, lo que hay que averiguar («que»: lo que hay que saber, no una pregunta) y debajo 1 o 2 preguntas sugeridas. Así: que «Cómo se asignan los interesados» · pregunta «Cuéntame cómo se decide hoy a qué vendedor le toca cada interesado». Mal: que «¿Tienen reglas para asignar los interesados?».
 - Si un bloque explora un proceso, lo que hay que averiguar va en el orden en que ocurre. En ventas: cómo llega el interesado, cómo se asigna, cómo se le da seguimiento, cómo se convierte en venta y qué pasa con los que no compran.
 - Cada bloque del cuerpo dice en «impacto» qué datos conviene obtener y cómo convertirlos en impacto: cuánto le cuesta el problema, cuánto tiempo pierde, cuántas ventas se le escapan y qué pasa si todo sigue igual seis meses más.
@@ -852,8 +872,36 @@ function leerLaAgenda(input: Record<string, unknown>, ctx: ContextoDeLaGuia): Ag
     const desde = Number.isFinite(Number(b.desde)) ? Math.min(239, Math.max(0, Math.round(Number(b.desde)))) : 0;
     const hasta = Number.isFinite(Number(b.hasta)) ? Math.min(240, Math.max(desde + 1, Math.round(Number(b.hasta)))) : Math.min(240, desde + 5);
     const impacto = tipo === "cuerpo" ? textoLimpio(b.impacto, 400) : null;
+    // La guía en bloques (2026-11-07): la guía corta y hasta tres preguntas para profundizar, de una sola cosa, sin
+    // espacios por completar y sin repetir la que abre.
+    const guiaLeida = textoLimpio(b.guia, MAX_LARGO_DE_LA_GUIA_DEL_BLOQUE);
+    const guia = guiaLeida ? sinHuecos(guiaLeida) : null;
+    const yaVistas = new Set([abre.trim().toLowerCase()]);
+    const profundizar = (Array.isArray(b.profundizar) ? b.profundizar : [])
+      .map((p) => textoLimpio(p, MAX_LARGO_DE_PROFUNDIZAR))
+      .filter((p): p is string => !!p)
+      .flatMap(partirPreguntaDoble)
+      .map(sinHuecos)
+      .filter((p) => {
+        const k = p.trim().toLowerCase();
+        if (yaVistas.has(k)) return false;
+        yaVistas.add(k);
+        return true;
+      })
+      .slice(0, MAX_PROFUNDIZAR);
     if (b.resultado === true && tipo === "cuerpo" && marcado === null) marcado = bloques.length;
-    bloques.push({ desde, hasta, titulo, tipo, abre, averiguar, ...(impacto ? { impacto } : {}), ...(b.central === true && tipo === "cuerpo" ? { central: true as const } : {}) });
+    bloques.push({
+      desde,
+      hasta,
+      titulo,
+      tipo,
+      abre,
+      averiguar,
+      ...(impacto ? { impacto } : {}),
+      ...(guia ? { guia } : {}),
+      ...(profundizar.length ? { profundizar } : {}),
+      ...(b.central === true && tipo === "cuerpo" ? { central: true as const } : {}),
+    });
   }
   if (bloques.length < 2) return null;
   // Un solo bloque central: el primero marcado o, si ninguno, el más largo del cuerpo.
@@ -868,7 +916,10 @@ function leerLaAgenda(input: Record<string, unknown>, ctx: ContextoDeLaGuia): Ag
   if (!claves.length) return null;
   const fraseDeDemo = ctx.marco !== "cs" ? textoLimpio(input.fraseDeDemo, 500) : null;
   // El resultado como eje (2026-11-06, segunda tanda): el bloque fijo con sus seis cosas, y primero en las claves.
-  return conBloqueDelResultado({ claves, bloques, ...(fraseDeDemo ? { fraseDeDemo } : {}) }, marcado);
+  const conResultado = conBloqueDelResultado({ claves, bloques, ...(fraseDeDemo ? { fraseDeDemo } : {}) }, marcado);
+  /* Los minutos, en código (2026-11-07): los del agente valen como proporción y se reparten en la duración de la sesión,
+     seguidos y sin solapes (el bloque del resultado que suma el código puede correr el final más allá de la duración). */
+  return { ...conResultado, bloques: repartirMinutos(conResultado.bloques, ctx.duracion ?? DURACION_POR_DEFECTO) };
 }
 
 /** La guía nueva desde la agenda: lo de siempre (temas, equipo, objetivo) y las preguntas de antes sacadas de la agenda. */
@@ -921,7 +972,8 @@ export function pedidoDeLaGuia(ctx: ContextoDeLaGuia): Anthropic.Messages.Messag
   const tool = herramientaDeLaAgenda(ctx);
   return {
     model: MODELO_DE_LA_GUIA,
-    max_tokens: 6000,
+    // 8000 (antes 6000): cada bloque suma su guía corta y tres preguntas para profundizar (2026-11-07).
+    max_tokens: 8000,
     system: sistemaDeLaAgenda(ctx.marco),
     tools: [tool],
     tool_choice: { type: "tool", name: tool.name },
@@ -1105,7 +1157,7 @@ export function voseoEnLaGuia(guia: GuiaDeLaSesion): string[] {
     ...(guia.loVendido ?? []).flatMap((v) => [v.tema, v.pregunta, ...v.repreguntas]),
     ...guia.preguntas.flatMap((p) => [p.investiga ?? "", p.pideVer ?? ""]),
     ...(guia.sesionesSugeridas ?? []).map((x) => x.porque),
-    ...(guia.agenda ? [...guia.agenda.claves, guia.agenda.fraseDeDemo ?? "", ...guia.agenda.bloques.flatMap((b) => [b.titulo, b.abre, b.impacto ?? "", ...b.averiguar.flatMap((c) => [c.que, ...c.preguntas])])] : []),
+    ...(guia.agenda ? [...guia.agenda.claves, guia.agenda.fraseDeDemo ?? "", ...guia.agenda.bloques.flatMap((b) => [b.titulo, b.abre, b.impacto ?? "", b.guia ?? "", ...(b.profundizar ?? []), ...b.averiguar.flatMap((c) => [c.que, ...c.preguntas])])] : []),
   ];
   const palabras = textos.flatMap((t) => formasDeVoseo(t)).filter((w) => !/r[áa]s?$/i.test(w) && !/r[áa]n$/i.test(w));
   return [...new Set(palabras)];

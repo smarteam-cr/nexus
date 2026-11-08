@@ -23,8 +23,8 @@ import type { Operacion } from "@/lib/exploraciones/contenido";
 import { aFecha, diaConAnio, diaCorto, hoyEnCostaRica } from "@/lib/exploraciones/fechas";
 import { horario } from "@/lib/exploraciones/inicio";
 import { CLAVE_DE_LA_PROXIMA, conLaSesion, enlaceDeLaSesion, type DondeVive } from "@/lib/exploraciones/enlace-de-la-sesion";
+import { DURACION_POR_DEFECTO, duracionDeLaSesion } from "@/lib/exploraciones/contexto-de-la-exploracion";
 import {
-  DURACION_DE_LA_SESION,
   ETIQUETA_DEL_ESTADO,
   MAX_SESIONES,
   MAX_TITULO_DE_LA_SESION,
@@ -248,20 +248,23 @@ function EncabezadoDeLaSesion({
     if (hora) datos.push(hora);
     if (evento) datos.push("Google Meet");
   } else if (momento === "durante") {
-    const quien = ((e.contenido.casillas.autoridad as Persona[] | undefined) ?? [])[0]?.nombre;
+    // Con quién: los participantes de su reunión (2026-11-07) o, si no hay, quien decide.
+    const quien = s?.conQuien?.[0]?.nombre ?? ((e.contenido.casillas.autoridad as Persona[] | undefined) ?? [])[0]?.nombre;
     if (quien) datos.push(`Con ${quien}`);
-    datos.push(`${DURACION_DE_LA_SESION} min`, "se guarda solo");
+    datos.push(`${duracionDeLaSesion(s)} min`, "se guarda solo");
   } else if (s) {
-    // Cancelada en el calendario, la sesión vuelve a estar sin agendar (su guía sigue).
-    datos.push(s.fecha && !evento?.cancelada ? diaLargo(s.fecha) : "Sin agendar");
+    /* Sin formulario (2026-11-07, Elías): la fecha y la duración salen de la reunión asociada; sin ella, la línea de abajo
+       ofrece «asociar una reunión» y acá no se dice «Sin agendar». Lo único que queda a mano es quitar la sesión. */
+    if (s.fecha && !evento?.cancelada) datos.push(diaLargo(s.fecha));
     if (hora) datos.push(hora);
-    datos.push(`${DURACION_DE_LA_SESION} min`);
-    if (puedeEditar) datos.push(enlace(editando ? "listo" : "editar", () => setEditando((x) => !x)));
+    datos.push(`${duracionDeLaSesion(s)} min`);
+    if (puedeEditar) datos.push(enlace(editando ? "no quitarla" : "quitar la sesión", () => setEditando((x) => !x)));
   } else if (r) {
     // Un prospecto: la reunión entró sola como sesión (se vuelve sesión guardada cuando le escribes algo).
     datos.push(diaLargo(r.fecha), "entró sola como sesión");
   } else {
-    datos.push(proxima.desde === "hubspot" && proxima.fecha ? `agendada en HubSpot para el ${diaConAnio(proxima.fecha)}` : "Sin agendar", `${DURACION_DE_LA_SESION} min`);
+    if (proxima.desde === "hubspot" && proxima.fecha) datos.push(`agendada en HubSpot para el ${diaConAnio(proxima.fecha)}`);
+    datos.push(`${DURACION_POR_DEFECTO} min`);
     if (puedeEditar) datos.push(enlace("ponerle fecha", agregar));
   }
 
@@ -382,18 +385,11 @@ function EncabezadoDeLaSesion({
       {corrida?.estado === "ERROR" && corrida.modo === "leer" && <Alert variant="danger">{corrida.error}</Alert>}
 
       {editando && s && (
-        <div className="flex flex-wrap items-center gap-2">
-          <input
-            type="date"
-            className="h-9 rounded-lg border border-line bg-surface px-3 text-[13px] text-fg"
-            value={s.fecha ?? ""}
-            disabled={guardando}
-            aria-label={`Fecha de la sesión ${pestana.numero}`}
-            onChange={(ev) => cambiarSesion({ ...s, fecha: ev.target.value || undefined })}
-          />
+        <div className="flex flex-wrap items-center gap-2 text-[13px] text-fg-secondary">
+          <span>¿Quitar la sesión {pestana.numero}? Su guía se va con ella.</span>
           <button
             type="button"
-            className="text-xs text-fg-muted hover:text-fg hover:underline"
+            className="font-medium text-danger-ink hover:underline"
             disabled={guardando}
             onClick={() => {
               void guardar(sesiones.filter((x) => x.id !== s.id));
@@ -401,7 +397,7 @@ function EncabezadoDeLaSesion({
               setEditando(false);
             }}
           >
-            Quitar la sesión
+            Sí, quitarla
           </button>
         </div>
       )}

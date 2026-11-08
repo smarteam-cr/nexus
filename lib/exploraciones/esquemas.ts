@@ -70,7 +70,15 @@ import {
   type PropuestaDeExploracion,
   type Validador,
 } from "./contenido";
-import { MAX_AVERIGUAR_GUARDADAS, MAX_BLOQUES, MAX_CLAVES, MAX_PREGUNTAS_SUGERIDAS } from "./agenda";
+import {
+  MAX_AVERIGUAR_GUARDADAS,
+  MAX_BLOQUES,
+  MAX_CLAVES,
+  MAX_LARGO_DE_LA_GUIA_DEL_BLOQUE,
+  MAX_LARGO_DE_PROFUNDIZAR,
+  MAX_PREGUNTAS_SUGERIDAS,
+  MAX_PROFUNDIZAR,
+} from "./agenda";
 import {
   MAX_LO_QUE_ESPERA,
   MAX_LO_QUE_SABEMOS,
@@ -130,6 +138,7 @@ export const MetaSchema: z.ZodType<Meta> = z.object({
   actual: texto(160).optional(),
   objetivo: texto(160).optional(),
   para: texto(160).optional(),
+  equipo: z.enum(EQUIPOS_DEL_CLIENTE).optional(),
 });
 
 export const PersonaSchema: z.ZodType<Persona> = z.object({
@@ -142,6 +151,7 @@ export const PersonaSchema: z.ZodType<Persona> = z.object({
 export const RetoSchema: z.ZodType<Reto> = z.object({
   texto: textoLleno(400),
   dimensionId: z.string().trim().max(12).optional(),
+  equipo: z.enum(EQUIPOS_DEL_CLIENTE).optional(),
 });
 
 /** Una objeción que dijo el cliente (la casilla); la de la guía, con su respuesta LAER, es otra. */
@@ -551,8 +561,10 @@ export const OperacionSchema = z.discriminatedUnion("op", [
       .object({
         objetivo: textoLleno(MAX_OBJETIVO_DE_LA_EXPLORACION),
         sabemos: z.string().trim().max(MAX_LO_QUE_SABEMOS).optional(),
+        /* `partialRecord`: en Zod 4 un `record` con claves de un enum exige TODAS las claves, y una tarjeta «por averiguar»
+           no viaja. Con `record` cualquier contexto con una tarjeta vacía daba «Cuerpo inválido» (Centauro, 2026-11-07). */
         tarjetas: z
-          .record(z.enum(CLAVES_DE_LO_QUE_SABEMOS), z.object({ texto: z.string().trim().max(MAX_TEXTO_DE_LA_TARJETA), fuente: z.string().trim().max(120) }))
+          .partialRecord(z.enum(CLAVES_DE_LO_QUE_SABEMOS), z.object({ texto: z.string().trim().max(MAX_TEXTO_DE_LA_TARJETA), fuente: z.string().trim().max(120) }))
           .optional(),
       })
       .nullable(),
@@ -631,6 +643,9 @@ const AgendaSchema = z.object({
         resultado: z.literal(true).optional(),
         averiguar: z.array(CosaPorAveriguarSchema).max(MAX_AVERIGUAR_GUARDADAS),
         impacto: textoDeGuia(400).optional(),
+        // La guía en bloques (2026-11-07): opcionales, las agendas de antes no los traen.
+        guia: textoDeGuia(MAX_LARGO_DE_LA_GUIA_DEL_BLOQUE).optional(),
+        profundizar: z.array(textoDeGuia(MAX_LARGO_DE_PROFUNDIZAR)).max(MAX_PROFUNDIZAR).optional(),
       }),
     )
     .min(2)
@@ -915,6 +930,8 @@ export function leerPropuesta(raw: unknown): PropuestaDeExploracion {
       tarjetas: TarjetasSchema,
       objetivo: z.string().max(MAX_OBJETIVO_DE_LA_EXPLORACION).nullable().optional(),
       desafio: z.string().max(MAX_DESAFIO_PROPUESTO).nullable().optional(),
+      // 2026-11-07: sin esta clave la propuesta se leía como vieja y se volvía a pedir en cada visita.
+      resultado: z.string().max(MAX_DESAFIO_PROPUESTO).nullable().optional(),
       en: FECHA_ISO,
     })
     .safeParse(raw.contextoPropuesto);

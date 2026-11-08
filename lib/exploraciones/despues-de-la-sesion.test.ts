@@ -5,7 +5,7 @@
  */
 import { describe, expect, it } from "vitest";
 import type { ItemPropuesto, LecturaDeReunion } from "./contenido";
-import { desafioDeLaFichaGuardada, desafioEnElDolor, dolorConElDesafio, faltaPedirElObjetivo } from "./contexto-de-la-exploracion";
+import { desafioDeLaFichaGuardada, desafioEnElDolor, dolorConElDesafio, faltaPedirLaPropuesta } from "./contexto-de-la-exploracion";
 import { fichaVacia, fusionarPropuesta } from "@/lib/clients/ficha";
 import {
   claveDePendiente,
@@ -157,12 +157,11 @@ describe("cada sugerencia en un solo lugar", () => {
   });
 });
 
-describe("el objetivo de la exploración se pide una sola vez", () => {
-  it("se pide si no hay objetivo confirmado y nunca se pidió; null cuenta como pedido", () => {
-    expect(faltaPedirElObjetivo(undefined, null)).toBe(true);
-    expect(faltaPedirElObjetivo(undefined, { tarjetas: {}, en: "x" })).toBe(true);
-    expect(faltaPedirElObjetivo(undefined, { tarjetas: {}, objetivo: null, en: "x" })).toBe(false);
-    expect(faltaPedirElObjetivo({ objetivo: "Ver si les sirve" }, null)).toBe(false);
+describe("la propuesta del contexto se pide una sola vez", () => {
+  it("se pide si nunca se pidió o si es de antes del resultado del negocio; null cuenta como pedido", () => {
+    expect(faltaPedirLaPropuesta(null)).toBe(true);
+    expect(faltaPedirLaPropuesta({ tarjetas: {}, objetivo: "x", en: "x" })).toBe(true);
+    expect(faltaPedirLaPropuesta({ tarjetas: {}, objetivo: null, desafio: null, resultado: null, en: "x" })).toBe(false);
   });
 });
 

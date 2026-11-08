@@ -147,7 +147,7 @@ export async function eventosDelMes(email: string, desde: Date, hasta: Date): Pr
 /** Lo que dice el calendario hoy de un evento que ya se unió a una sesión. */
 export type EstadoDelEvento =
   /** `invitados`: los correos de quienes están invitados (con quien lo organiza), para mirar que siga siendo con la empresa. */
-  | { id: string; estado: "ok"; inicio: string; fin: string | null; titulo: string | null; invitados: string[] }
+  | { id: string; estado: "ok"; inicio: string; fin: string | null; titulo: string | null; invitados: string[]; nombres?: Record<string, string> }
   | { id: string; estado: "cancelado" }
   /** Ya no está en ese calendario (lo borraron, o quien lo unió dejó de estar invitado). */
   | { id: string; estado: "noExiste" };
@@ -170,7 +170,7 @@ export async function releerEventos(email: string, ids: readonly string[]): Prom
   const salida: EstadoDelEvento[] = [];
   for (const id of ids.slice(0, MAX_EVENTOS_A_RELEER)) {
     try {
-      const res = await cal.events.get({ calendarId: "primary", eventId: id, fields: "id,status,summary,start,end,attendees(email,resource),organizer(email)" });
+      const res = await cal.events.get({ calendarId: "primary", eventId: id, fields: "id,status,summary,start,end,attendees(email,resource,displayName),organizer(email)" });
       const e = res.data;
       if (e.status === "cancelled") {
         salida.push({ id, estado: "cancelado" });
@@ -184,7 +184,13 @@ export async function releerEventos(email: string, ids: readonly string[]): Prom
       const invitados = [...(e.attendees ?? []).filter((a) => !a.resource).map((a) => a.email ?? ""), e.organizer?.email ?? ""]
         .map((c) => c.trim().toLowerCase())
         .filter((c) => c.includes("@"));
-      salida.push({ id, estado: "ok", inicio, fin: isoDe(e.end), titulo: e.summary ?? null, invitados: [...new Set(invitados)] });
+      // El nombre con que aparece cada invitado, si el calendario lo trae (la sesión toma de ahí con quién es, 2026-11-07).
+      const nombres = Object.fromEntries(
+        (e.attendees ?? [])
+          .filter((a) => !a.resource && a.email && a.displayName?.trim())
+          .map((a) => [a.email!.trim().toLowerCase(), a.displayName!.trim().slice(0, 120)]),
+      );
+      salida.push({ id, estado: "ok", inicio, fin: isoDe(e.end), titulo: e.summary ?? null, invitados: [...new Set(invitados)], nombres });
     } catch (e) {
       const code = (e as { code?: number | string })?.code ?? (e as { response?: { status?: number } })?.response?.status;
       if (code === 404 || code === 410) {
