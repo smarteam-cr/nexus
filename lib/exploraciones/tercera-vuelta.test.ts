@@ -12,7 +12,9 @@ import { aplicarOperaciones, contenidoVacio, propuestaVacia, type EstadoDeExplor
 import { CambiosSchema, leerContenido, leerPropuesta, VALIDADOR_ESTRICTO } from "./esquemas";
 import {
   ajusteSugerido,
+  completaLasPreguntas,
   conLoDeLaExploracion,
+  respuestasParaMandar,
   FALTA_EL_OBJETIVO_DE_LA_SESION,
   objetivoAceptado,
   hallazgosParaMostrar,
@@ -292,8 +294,9 @@ describe("la guía se arma sola y pregunta lo que le falta", () => {
     );
     expect(r.hallazgos).toEqual(["CRM con duplicados", "1.200 tickets", "a", "b", "c"]);
     expect(r.ajuste).toEqual({ texto: "Confirmar si soporte es lo crítico", porque: "1.200 tickets al mes" });
-    expect(r.preguntas).toEqual(["¿Qué quieren ver en la demo?", "¿Quién decide?"]);
-    expect(leerLoDeLaExploracion({ content: [] } as unknown as Anthropic.Messages.Message, {})).toEqual({ hallazgos: [], ajuste: null, preguntas: [] });
+    // Las ya respondidas salen antes del tope: entran hasta 3 sin responder.
+    expect(r.preguntas).toEqual(["¿Qué quieren ver en la demo?", "¿Quién decide?", "¿Una cuarta?"]);
+    expect(leerLoDeLaExploracion({ content: [] } as unknown as Anthropic.Messages.Message, {})).toEqual({ hallazgos: [], ajuste: null, preguntas: [], opciones: [] });
   });
 
   it("responder suma las respuestas (la misma pregunta se reemplaza) y saca las preguntas; vacío no se guarda", () => {
@@ -445,7 +448,7 @@ describe("cuarta vuelta: el objetivo de la sesión lo decide el vendedor", () =>
     const objetivo = cuerpo.indexOf("EL OBJETIVO DE ESTA SESIÓN (lo decidió quien la lleva: es la instrucción que MÁS pesa)");
     expect(objetivo).toBeGreaterThan(-1);
     expect(cuerpo.indexOf("Mapear el proceso de ventas; dejar el soporte para el final")).toBeGreaterThan(objetivo);
-    expect(cuerpo.indexOf("EL CONTEXTO DE TODA LA EXPLORACIÓN")).toBeGreaterThan(objetivo);
+    expect(cuerpo.indexOf("EL OBJETIVO DE LA EXPLORACIÓN")).toBeGreaterThan(objetivo);
     // Una sola vez: ya no se repite en «Esta sesión».
     expect(cuerpo).not.toMatch(/El objetivo de la sesión: /);
     expect(cuerpo).toContain("Con quién es: Laura (jefa de ventas)");
@@ -470,5 +473,127 @@ describe("cuarta vuelta: la guía recuerda con qué objetivo se armó", () => {
     expect(antes).toContain("Cambiaste el objetivo: la guía todavía es para el anterior");
     // El botón espera a que el objetivo recién aceptado llegue al servidor.
     expect(antes).toMatch(/const armar = \(\) => void alDia\(\)\.then\(\(\) => lanzar\("guia"\)\)/);
+  });
+});
+
+describe("quinta vuelta (2026-11-08)", () => {
+  const respuestaDeLaGuia = (input: Record<string, unknown>): Anthropic.Messages.Message =>
+    ({ content: [{ type: "tool_use", id: "t1", name: HERRAMIENTA_DE_LA_GUIA, input }] }) as unknown as Anthropic.Messages.Message;
+
+  it("cada pregunta de Nexus trae hasta 3 respuestas probables, en su mismo orden; una pregunta suelta (de antes) se lee sin opciones", () => {
+    const r = leerLoDeLaExploracion(
+      respuestaDeLaGuia({
+        faltaContexto: [
+          { pregunta: "¿Laura sabe que la sesión es con ella?", opciones: ["Sí, ya lo sabe", "No, espera una grupal", "No lo sé", "Una cuarta de más"] },
+          "¿Quién más asiste?",
+          { pregunta: "¿laura sabe que la sesión es con ella?", opciones: ["repetida"] },
+        ],
+      }),
+      {},
+    );
+    expect(r.preguntas).toEqual(["¿Laura sabe que la sesión es con ella?", "¿Quién más asiste?"]);
+    expect(r.opciones).toEqual([["Sí, ya lo sabe", "No, espera una grupal", "No lo sé"], []]);
+  });
+
+  it("las opciones se guardan con su pregunta y siguen a su pregunta al responder otra", () => {
+    const guardado = conLoDeLaExploracion(propuestaVacia(), { hallazgos: [], ajuste: null, preguntas: ["A?", "B?"], opciones: [["a1", "a2", "a3"], ["b1"]] }, { confirmado: null, en: EN, corridaId: "r1" });
+    expect(guardado.preguntasParaLaGuia).toEqual({ preguntas: ["A?", "B?"], opciones: [["a1", "a2", "a3"], ["b1"]], en: EN, corridaId: "r1" });
+    expect(leerPropuesta({ preguntasParaLaGuia: guardado.preguntasParaLaGuia }).preguntasParaLaGuia?.opciones).toEqual([["a1", "a2", "a3"], ["b1"]]);
+    const r = aplicarOperaciones(estado({ propuesta: guardado }), [{ op: "responderParaLaGuia", respuestas: [{ pregunta: "A?", respuesta: "a2" }] }], validez, VALIDADOR_ESTRICTO, quien);
+    expect(r.ok && r.estado.propuesta.preguntasParaLaGuia).toMatchObject({ preguntas: ["B?"], opciones: [["b1"]] });
+  });
+
+  it("el objetivo de la exploración tiene su propio bloque, segundo en peso, y el sistema pide servir a los dos", () => {
+    const p = pedidoDeLaGuia({
+      empresa: "Centauro Solutions",
+      industria: "Turismo",
+      edicion: "general",
+      perfil: null,
+      hoy: "2026-11-08",
+      proxima: { numero: 3, titulo: null, fecha: null, sesionId: "s-a3" },
+      conTest: false,
+      desdeCero: false,
+      nivelesDeLaEscala: [],
+      paraConectar: null,
+      hubspotActual: null,
+      confirmado: [],
+      huecos: [],
+      enfoque: [],
+      noExplorado: [],
+      objecionesDichas: [],
+      paraExplorar: [],
+      contextoDeLaExploracion: { base: OBJETIVO_DE_SMARTEAM, objetivo: "Entender si el desorden del CRM es crítico", sabemos: null },
+      contextoDeLaSesion: { conQuien: null, espera: null, objetivo: "Mapear el proceso de Ventas" },
+      respuestas: [{ pregunta: "¿Con quién?", respuesta: "Laura" }],
+    });
+    const cuerpo = p.messages[0].content as string;
+    const sesion = cuerpo.indexOf("EL OBJETIVO DE ESTA SESIÓN");
+    const exploracion = cuerpo.indexOf("=== EL OBJETIVO DE LA EXPLORACIÓN (lo que toda sesión tiene que acercar; segundo en peso");
+    expect(sesion).toBeGreaterThan(-1);
+    expect(exploracion).toBeGreaterThan(sesion);
+    expect(cuerpo.indexOf(OBJETIVO_DE_SMARTEAM)).toBeGreaterThan(exploracion);
+    expect(cuerpo.indexOf("Entender si el desorden del CRM es crítico")).toBeGreaterThan(exploracion);
+    expect(cuerpo.indexOf("LO QUE RESPONDIÓ EL EQUIPO")).toBeGreaterThan(exploracion);
+    expect(cuerpo).toContain("Cada bloque del cuerpo acerca este objetivo");
+    expect(p.system as string).toMatch(/La guía sirve a DOS objetivos/);
+  });
+
+  it("quitar la sesión: con el diálogo de confirmación de la app y solo si todavía no pasó", () => {
+    const fuente = leer("components", "exploraciones", "SesionesDeExploracion.tsx");
+    expect(fuente).toMatch(/<ConfirmDialog/);
+    expect(fuente).toMatch(/const sePuedeQuitar = puedeEditar && !!s && !pestana\.hecha && estado !== "ocurrio" && !yaEmpezo\(pestana\) && momento === "antes";/);
+    // El botón y el diálogo solo salen con esa condición: ni el botón suelto, ni otro que abra el diálogo.
+    expect(fuente).toMatch(/\{sePuedeQuitar && \(\s*<Button[^>]*onClick=\{\(\) => setQuitando\(true\)\}/);
+    expect(fuente.match(/setQuitando\(true\)/g)).toHaveLength(1);
+    expect(fuente).not.toContain("Sí, quitarla");
+    expect(fuente).not.toContain("no quitarla");
+  });
+
+  it("lo que Nexus necesita saber va arriba, junto al objetivo: antes de «Armar la guía» y de «Lo que ya sabemos»", () => {
+    const fuente = leer("components", "exploraciones", "AntesDeLaSesion.tsx").replace(/\r\n/g, "\n");
+    const pantalla = fuente.slice(fuente.indexOf("export default function AntesDeLaSesion("));
+    const objetivo = pantalla.indexOf("<Objetivo\n");
+    const preguntas = pantalla.indexOf("<PreguntasDeNexus");
+    const barra = pantalla.indexOf("<EstadoDeLaGuia");
+    const sabemos = pantalla.indexOf("<LoQueYaSabemos");
+    expect(objetivo).toBeGreaterThan(-1);
+    expect(preguntas).toBeGreaterThan(objetivo);
+    expect(barra).toBeGreaterThan(preguntas);
+    expect(sabemos).toBeGreaterThan(barra);
+    // Una sola vez: el espacio de la guía ya no las repite.
+    expect(pantalla.split("<PreguntasDeNexus").length - 1).toBe(1);
+    expect(fuente.split("<PreguntasDeNexus").length - 1).toBe(1);
+  });
+});
+
+describe("quinta vuelta: qué se manda al responder las preguntas de Nexus", () => {
+  it("la tarjeta elegida manda; si no eligió, lo escrito; vacías no van", () => {
+    expect(respuestasParaMandar(["A?", "B?", "C?"], { "A?": "a1" }, { "A?": "escrito de A", "B?": "  escrito de B ", "C?": "  " })).toEqual([
+      { pregunta: "A?", respuesta: "a1" },
+      { pregunta: "B?", respuesta: "escrito de B" },
+    ]);
+  });
+
+  it("se manda sola solo cuando TODAS tienen una respuesta elegida (lo escrito sin Enter no cuenta)", () => {
+    expect(completaLasPreguntas(["A?", "B?"], { "A?": "a1" })).toBe(false);
+    expect(completaLasPreguntas(["A?", "B?"], { "A?": "a1", "B?": " " })).toBe(false);
+    expect(completaLasPreguntas(["A?", "B?"], { "A?": "a1", "B?": "b2" })).toBe(true);
+    expect(completaLasPreguntas([], {})).toBe(false);
+  });
+
+  it("salir del campo no elige nada: solo Enter, una tarjeta o el botón", () => {
+    const fuente = leer("components", "exploraciones", "AntesDeLaSesion.tsx");
+    const preguntas = fuente.slice(fuente.indexOf("function PreguntasDeNexus("), fuente.indexOf("function SirveAlObjetivoDeLaExploracion("));
+    expect(preguntas).not.toMatch(/onBlur/);
+    expect(preguntas).toMatch(/if \(completaLasPreguntas\(preguntas, siguiente\)\) void enviar\(siguiente\);/);
+  });
+
+  it("la IA da HASTA 3 opciones y no inventa nombres, cargos, fechas ni cifras", () => {
+    const t = JSON.stringify(herramientaDeLaAgenda({
+      empresa: "x", industria: null, edicion: "general", perfil: null, hoy: "2026-11-08", proxima: { numero: 1, titulo: null, fecha: null, sesionId: null },
+      conTest: false, desdeCero: false, nivelesDeLaEscala: [], paraConectar: null, hubspotActual: null, confirmado: [], huecos: [], enfoque: [], noExplorado: [], objecionesDichas: [], paraExplorar: [],
+    }));
+    expect(t).toMatch(/Hasta 3 respuestas probables/);
+    expect(t).toMatch(/NUNCA un nombre, un cargo, una fecha ni una cifra que no esté en ellas/);
   });
 });

@@ -15,8 +15,8 @@
  * la reunión abre el selector de «Agregar sesión» en modo «unir».
  */
 import { useEffect, useRef, useState } from "react";
-import { Link2, Pencil } from "lucide-react";
-import { Alert, Button, IconButton, Select, useToast } from "@/components/ui";
+import { Link2, Pencil, Trash2 } from "lucide-react";
+import { Alert, Button, ConfirmDialog, IconButton, Select, useToast } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import type { Persona } from "@/lib/exploraciones/casillas";
 import type { Operacion } from "@/lib/exploraciones/contenido";
@@ -162,7 +162,12 @@ function EncabezadoDeLaSesion({
   const estado = estadoDe(pestana);
   const s = pestana.sesion;
   const r = pestana.reunion;
-  const [editando, setEditando] = useState(false);
+  // «Quitar la sesión» (2026-11-08, quinta vuelta): con el diálogo de confirmación de la app, no una línea suelta.
+  const [quitando, setQuitando] = useState(false);
+  /* Solo una sesión guardada que todavía no pasó: ni la que ocurrió, ni la que ya empezó o espera su transcripción. Una que
+     ya pasó se marca «no se hizo» o se saca de la exploración, no se borra. Y solo en la Preparación, como el enlace de antes:
+     en «En vivo» se borraría lo marcado durante la llamada (revisión del 2026-11-08). */
+  const sePuedeQuitar = puedeEditar && !!s && !pestana.hecha && estado !== "ocurrio" && !yaEmpezo(pestana) && momento === "antes";
   const titulo = tituloDeLaSesion(pestana);
   const [renombrando, setRenombrando] = useState(false);
   const [nombre, setNombre] = useState("");
@@ -258,7 +263,6 @@ function EncabezadoDeLaSesion({
     if (s.fecha && !evento?.cancelada) datos.push(diaLargo(s.fecha));
     if (hora) datos.push(hora);
     datos.push(`${duracionDeLaSesion(s)} min`);
-    if (puedeEditar) datos.push(enlace(editando ? "no quitarla" : "quitar la sesión", () => setEditando((x) => !x)));
   } else if (r) {
     // Un prospecto: la reunión entró sola como sesión (se vuelve sesión guardada cuando le escribes algo).
     datos.push(diaLargo(r.fecha), "entró sola como sesión");
@@ -365,6 +369,12 @@ function EncabezadoDeLaSesion({
             Copiar enlace
           </Button>
         )}
+        {sePuedeQuitar && (
+          <Button variant="secondary" size="sm" disabled={guardando} onClick={() => setQuitando(true)} title="Quita esta sesión, que todavía no pasó, con su guía">
+            <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
+            Quitar la sesión
+          </Button>
+        )}
         {momento === "despues" && r && !r.leida && !r.corta && r.texto !== "nada" && puedeEditar && (
           <button
             type="button"
@@ -384,22 +394,19 @@ function EncabezadoDeLaSesion({
       )}
       {corrida?.estado === "ERROR" && corrida.modo === "leer" && <Alert variant="danger">{corrida.error}</Alert>}
 
-      {editando && s && (
-        <div className="flex flex-wrap items-center gap-2 text-[13px] text-fg-secondary">
-          <span>¿Quitar la sesión {pestana.numero}? Su guía se va con ella.</span>
-          <button
-            type="button"
-            className="font-medium text-danger-ink hover:underline"
-            disabled={guardando}
-            onClick={() => {
-              void guardar(sesiones.filter((x) => x.id !== s.id));
-              seleccion.elegir(claveDeLaProxima);
-              setEditando(false);
-            }}
-          >
-            Sí, quitarla
-          </button>
-        </div>
+      {s && (
+        <ConfirmDialog
+          open={quitando}
+          title={`¿Quitar la sesión ${pestana.numero}?`}
+          description="Se va con su guía, su objetivo y lo que preparaste para ella. Las sesiones que ya pasaron no se tocan."
+          confirmLabel="Quitar la sesión"
+          onCancel={() => setQuitando(false)}
+          onConfirm={async () => {
+            const ok = await guardar(sesiones.filter((x) => x.id !== s.id));
+            setQuitando(false);
+            if (ok) seleccion.elegir(claveDeLaProxima);
+          }}
+        />
       )}
     </header>
   );

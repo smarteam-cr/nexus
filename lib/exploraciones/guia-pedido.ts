@@ -45,6 +45,8 @@ import {
   MAX_LARGO_DE_LA_PREGUNTA_PARA_LA_GUIA,
   MAX_LARGO_DEL_HALLAZGO,
   MAX_PORQUE_DEL_AJUSTE,
+  MAX_LARGO_DE_LA_OPCION,
+  MAX_OPCIONES_DE_LA_PREGUNTA,
   MAX_PREGUNTAS_PARA_LA_GUIA,
   type LoQueDejoLaGuia,
 } from "./objetivo-y-hallazgos";
@@ -747,7 +749,18 @@ export function herramientaDeLaAgenda(ctx: ContextoDeLaGuia): Anthropic.Messages
         faltaContexto: {
           type: "array",
           description: `Solo si te falta algo ESENCIAL para que la guía sirva (con quién es la sesión, qué quiere tratar el cliente, algo que las fuentes contradicen): de 1 a ${MAX_PREGUNTAS_PARA_LA_GUIA} preguntas cortas PARA QUIEN LLEVA LA SESIÓN (no para el cliente), que se respondan en una línea (20 palabras como mucho). Nunca lo que ya respondió el equipo. Vacío si alcanza con lo que hay: arma la guía igual.`,
-          items: { type: "string" },
+          items: {
+            type: "object",
+            properties: {
+              pregunta: { type: "string" },
+              opciones: {
+                type: "array",
+                description: `Hasta ${MAX_OPCIONES_DE_LA_PREGUNTA} respuestas probables, distintas entre sí, para elegir de un clic (10 palabras como mucho cada una). Solo lo que las fuentes permiten suponer: NUNCA un nombre, un cargo, una fecha ni una cifra que no esté en ellas (si la pregunta es justo eso, opciones genéricas como «Con una sola persona» o «Todavía no lo sé», o ninguna). Quien lleva la sesión también puede escribir la suya.`,
+                items: { type: "string" },
+              },
+            },
+            required: ["pregunta", "opciones"],
+          },
         },
       },
       required: ["objetivo", "claves", "bloques"],
@@ -815,9 +828,9 @@ La apertura (el primer bloque), igual en todas las guías:
 El cierre (el último bloque), igual en todas las guías:
 - Resume el resultado que busca con las palabras del cliente y confírmalo («Entonces lo que buscan es…; ¿lo dije bien?»), resume los retos, pregunta si los entendimos bien y deja el siguiente paso agendado con fecha.${cierreDeVenta}
 
-El objetivo y lo que falta (además de la guía):
-- La guía sirve al objetivo de Smarteam con su ajuste para esta empresa, si hay uno confirmado. Lo que respondió el equipo para armar esta guía es lo más confiable que tienes: úsalo tal cual.
-- «hallazgos»: lo más importante que se sabe hasta hoy de la exploración entera. «ajusteDelObjetivo»: solo si hace falta enfocar el objetivo para esta empresa (por lo aprendido o por cómo llegó). «faltaContexto»: solo si sin eso la guía no sirve; la guía se arma igual.
+Los dos objetivos y lo que falta (además de la guía):
+- La guía sirve a DOS objetivos, en este orden de peso: el de ESTA SESIÓN (manda en cómo se estructura) y el de LA EXPLORACIÓN (el de Smarteam con su ajuste para esta empresa: hacia dónde acerca cada bloque). Si la sesión pide algo que no acerca el de la exploración, se cumple igual, y el cierre deja el paso que lo retoma. Lo que respondió el equipo para armar esta guía es lo más confiable que tienes: úsalo tal cual.
+- «hallazgos»: lo más importante que se sabe hasta hoy de la exploración entera. «ajusteDelObjetivo»: solo si hace falta enfocar el objetivo para esta empresa (por lo aprendido o por cómo llegó). «faltaContexto»: solo si sin eso la guía no sirve; la guía se arma igual. Cada pregunta lleva hasta 3 respuestas probables para elegir de un clic, sin inventar nombres, cargos, fechas ni cifras.
 
 - Nunca inventes casos de otros clientes, historias de éxito, datos, cifras ni nombres.
 - Nunca nombres a otro cliente de Smarteam fuera de la lista de referencia, ni cuentes nada de su cuenta.
@@ -851,10 +864,22 @@ export function leerLoDeLaExploracion(respuesta: Anthropic.Messages.Message, ctx
   const respondidas = new Set((ctx.respuestas ?? []).map((r) => r.pregunta.trim().toLowerCase()));
   const a = esObjeto(input.ajusteDelObjetivo) ? input.ajusteDelObjetivo : null;
   const texto = a ? textoLimpio(a.texto, MAX_OBJETIVO_DE_LA_EXPLORACION) : null;
+  /* Cada pregunta con sus respuestas probables (2026-11-08, quinta vuelta). Una pregunta sola (texto) se sigue leyendo,
+     sin opciones: así respondían las corridas de antes. */
+  const vistas = new Set<string>();
+  const conOpciones = (Array.isArray(input.faltaContexto) ? input.faltaContexto : []).flatMap((x) => {
+    const pregunta = textoLimpio(esObjeto(x) ? x.pregunta : x, MAX_LARGO_DE_LA_PREGUNTA_PARA_LA_GUIA);
+    if (!pregunta) return [];
+    const k = pregunta.toLowerCase();
+    if (vistas.has(k) || respondidas.has(k)) return [];
+    vistas.add(k);
+    return [{ pregunta, opciones: lista(esObjeto(x) ? x.opciones : [], MAX_OPCIONES_DE_LA_PREGUNTA, MAX_LARGO_DE_LA_OPCION) }];
+  }).slice(0, MAX_PREGUNTAS_PARA_LA_GUIA);
   return {
     hallazgos: lista(input.hallazgos, MAX_HALLAZGOS, MAX_LARGO_DEL_HALLAZGO),
     ajuste: texto ? { texto, porque: textoLimpio(a!.porque, MAX_PORQUE_DEL_AJUSTE) } : null,
-    preguntas: lista(input.faltaContexto, MAX_PREGUNTAS_PARA_LA_GUIA, MAX_LARGO_DE_LA_PREGUNTA_PARA_LA_GUIA).filter((q) => !respondidas.has(q.toLowerCase())),
+    preguntas: conOpciones.map((x) => x.pregunta),
+    opciones: conOpciones.map((x) => x.opciones),
   };
 }
 
@@ -873,15 +898,22 @@ function contextoDadoPorLaPersona(ctx: ContextoDeLaGuia): string[] {
     );
   }
   const x = ctx.contextoDeLaExploracion;
-  if (x) {
-    lineas.push("=== EL CONTEXTO DE TODA LA EXPLORACIÓN (lo escribió el equipo: manda sobre las fuentes; el objetivo de esta sesión manda sobre esto) ===");
-    if (x.base) lineas.push(`El objetivo de Smarteam en toda exploración: ${x.base}`);
+  /* El objetivo de la EXPLORACIÓN (2026-11-08, quinta vuelta: «la guía tiene que tomarlo en cuenta, que pese y se note»):
+     su propio bloque, justo después del de la sesión. El de la sesión manda en cómo se estructura; este, en hacia dónde
+     tiene que acercar cada bloque. */
+  if (x && (x.base || x.objetivo)) {
+    lineas.push("=== EL OBJETIVO DE LA EXPLORACIÓN (lo que toda sesión tiene que acercar; segundo en peso, después del de la sesión) ===");
+    if (x.base) lineas.push(`El de Smarteam, en toda exploración: ${x.base}`);
     if (x.objetivo) lineas.push(`${x.base ? "Su ajuste para esta empresa (lo confirmó el equipo)" : "Por qué exploramos esta empresa y qué queremos lograr"}: ${x.objetivo}`);
     else if (x.base) lineas.push("Para esta empresa todavía no hay un ajuste confirmado.");
     if (ctx.comoLlego) lineas.push(`Cómo llegó: ${ctx.comoLlego}`);
     if (ctx.ajustesDescartados?.length) {
       lineas.push(`Ajustes que el equipo descartó (no los vuelvas a sugerir, ni dichos de otra forma): ${ctx.ajustesDescartados.map((a) => `«${a}»`).join("; ")}`);
     }
+    lineas.push("Cada bloque del cuerpo acerca este objetivo: dónde está hoy en la escala, cuál es su dolor, cómo está hoy y por qué está ahí. Las «claves» lo dicen para esta sesión.", "");
+  }
+  if (x && (x.tarjetas?.sabido.length || x.tarjetas?.porAveriguar.length || x.sabemos)) {
+    lineas.push("=== EL CONTEXTO DE TODA LA EXPLORACIÓN (lo escribió el equipo: manda sobre las fuentes) ===");
     if (x.tarjetas?.sabido.length) lineas.push("Lo que ya sabemos del cliente (confirmado por el equipo; va como «sabido», no se vuelve a preguntar):", ...x.tarjetas.sabido.map((t) => `- ${t}`));
     if (x.tarjetas?.porAveriguar.length) lineas.push(`POR AVERIGUAR (no se sabe: cada uno entra a la guía como algo por averiguar): ${x.tarjetas.porAveriguar.join(", ")}.`);
     if (x.sabemos) lineas.push(`Lo que ya sabemos del cliente${ctx.marco === "cs" ? " (lo que entregó ventas en el traspaso)" : " (cómo llegó)"}: ${x.sabemos}`);

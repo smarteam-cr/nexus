@@ -44,7 +44,14 @@ import { GuiaEnOrden } from "./GuiaEnOrden";
 import { AgendaDeLaGuia, GuiaAnterior } from "./AgendaDeLaGuia";
 import { ContactoPrevio } from "./ContextoDeLaPreparacion";
 import { duracionDeLaSesion } from "@/lib/exploraciones/contexto-de-la-exploracion";
-import { MAX_RESPUESTA_PARA_LA_GUIA, mismoTexto, objetivoAceptado } from "@/lib/exploraciones/objetivo-y-hallazgos";
+import {
+  completaLasPreguntas,
+  MAX_RESPUESTA_PARA_LA_GUIA,
+  mismoTexto,
+  objetivoAceptado,
+  objetivoDeSmarteam,
+  respuestasParaMandar,
+} from "@/lib/exploraciones/objetivo-y-hallazgos";
 import { Input, Spinner } from "@/components/ui";
 import { usePedirPreguntasDelObjetivo } from "./PreguntasDelObjetivo";
 import { sugeridasVigentes } from "@/lib/exploraciones/ajustes-de-la-guia";
@@ -179,59 +186,156 @@ function EstadoDeLaGuia({ pestana }: { pestana: PestanaDeSesion }) {
 }
 
 /**
- * Lo que Nexus necesita saber para armar la guía (2026-11-08, objetivo-y-hallazgos.ts): de 1 a 3 preguntas cortas que se
- * responden en una línea, sin formulario. Al responder, la guía se rehace con esas respuestas, que mandan sobre las fuentes.
+ * Lo que Nexus necesita saber para armar la guía (2026-11-08): de 1 a 3 preguntas. Desde la quinta vuelta (Elías: «más fácil
+ * de responder») cada una trae sus respuestas probables como tarjetas en una fila, que se eligen de un clic, y una cuarta
+ * para escribir la tuya. Salen de la misma llamada que arma la guía. Al responder todas, la guía se rehace sola (sin objetivo
+ * aceptado, las respuestas solo se guardan: se usan al armarla). Las preguntas de antes, sin opciones, se responden escribiendo.
  */
 function PreguntasDeNexus({ conObjetivo }: { conObjetivo: boolean }) {
   const { exp, puedeEditar, guardando, cambiar } = useLienzo();
   const { corriendo, lanzando, lanzar } = useCorrida();
-  const preguntas = exp.estado.propuesta.preguntasParaLaGuia?.preguntas ?? [];
-  // Por el TEXTO de la pregunta: si llegan otras con la pantalla abierta, lo escrito no queda debajo de otra pregunta.
-  const [respuestas, setRespuestas] = useState<Record<string, string>>({});
+  const pedido = exp.estado.propuesta.preguntasParaLaGuia;
+  const preguntas = pedido?.preguntas ?? [];
+  // Por el TEXTO de la pregunta: si llegan otras con la pantalla abierta, lo elegido no queda debajo de otra pregunta.
+  const [elegidas, setElegidas] = useState<Record<string, string>>({});
+  const [libres, setLibres] = useState<Record<string, string>>({});
+  const [abiertas, setAbiertas] = useState<Record<string, boolean>>({});
   const [enviando, setEnviando] = useState(false);
   if (!preguntas.length) return null;
-  const listas = preguntas.map((pregunta) => ({ pregunta, respuesta: (respuestas[pregunta] ?? "").trim() })).filter((r) => r.respuesta);
-  const bloqueado = !listas.length || guardando || corriendo || lanzando || enviando;
-  const responder = async () => {
-    // Enter pasa por el mismo bloqueo que el botón: ni mientras se rehace la guía, ni dos veces.
-    if (bloqueado) return;
+  const ocupado = guardando || corriendo || lanzando || enviando;
+  const opcionesDe = (i: number) => pedido?.opciones?.[i] ?? [];
+
+  const enviar = async (respuestas: Record<string, string>) => {
+    const listas = respuestasParaMandar(preguntas, respuestas, libres);
+    // Ni mientras se rehace la guía, ni dos veces.
+    if (!listas.length || ocupado) return;
     setEnviando(true);
     try {
       const ok = await cambiar([{ op: "responderParaLaGuia", respuestas: listas }], conObjetivo ? undefined : { exito: "Respuestas guardadas: Nexus las usa al armar la guía." });
       if (ok) {
-        setRespuestas({});
-        // Sin objetivo aceptado la guía no se arma: las respuestas esperan a que se arme (revisión del 2026-11-08).
+        setElegidas({});
+        setLibres({});
+        setAbiertas({});
+        // Sin objetivo aceptado la guía no se arma: las respuestas esperan a que se arme.
         if (conObjetivo) void lanzar("guia");
       }
     } finally {
       setEnviando(false);
     }
   };
+  /** Elige una respuesta; con todas respondidas, se manda sola (la guía se rehace igual que con el botón). */
+  const elegir = (pregunta: string, respuesta: string) => {
+    const t = respuesta.trim().slice(0, MAX_RESPUESTA_PARA_LA_GUIA);
+    if (!t || ocupado) return;
+    const siguiente = { ...elegidas, [pregunta]: t };
+    setElegidas(siguiente);
+    if (completaLasPreguntas(preguntas, siguiente)) void enviar(siguiente);
+  };
+  const algunas = respuestasParaMandar(preguntas, elegidas, libres).length > 0;
+  const TARJETA = "rounded-lg border px-3 py-2.5 text-left text-[13px] leading-[1.4] transition-colors disabled:opacity-60";
+
   return (
-    <div className="w-full max-w-2xl space-y-3 text-left">
-      {preguntas.map((p) => (
-        <label key={p} className="block space-y-1">
-          <span className="text-sm font-medium text-fg">{p}</span>
-          <Input
-            value={respuestas[p] ?? ""}
-            onChange={(e) => setRespuestas((r) => ({ ...r, [p]: e.target.value }))}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") void responder();
-            }}
-            maxLength={MAX_RESPUESTA_PARA_LA_GUIA}
-            disabled={!puedeEditar}
-            placeholder="Tu respuesta, en una línea"
-          />
-        </label>
-      ))}
+    <div className="w-full space-y-4 text-left">
+      {preguntas.map((p, i) => {
+        const opciones = opcionesDe(i);
+        const elegida = elegidas[p];
+        const libreAbierta = abiertas[p] || !opciones.length;
+        const esLibre = !!elegida && !opciones.includes(elegida);
+        return (
+          <div key={p} className="space-y-2">
+            <p className="text-sm font-medium text-fg">{p}</p>
+            <div role="group" aria-label={p} className={cn("grid gap-2", opciones.length ? "sm:grid-cols-2 lg:grid-cols-4" : "")}>
+              {opciones.map((o) => (
+                <button
+                  key={o}
+                  type="button"
+                  disabled={!puedeEditar || ocupado}
+                  aria-pressed={elegida === o}
+                  onClick={() => elegir(p, o)}
+                  className={cn(TARJETA, elegida === o ? "border-brand bg-info-surface font-medium text-fg" : "border-line bg-surface text-fg-secondary hover:bg-surface-hover")}
+                >
+                  {o}
+                </button>
+              ))}
+              {libreAbierta ? (
+                <div className={cn("rounded-lg border px-2 py-1.5", esLibre ? "border-brand bg-info-surface" : "border-dashed border-line bg-surface")}>
+                  <Input
+                    autoFocus={opciones.length > 0}
+                    value={libres[p] ?? ""}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      setLibres((r) => ({ ...r, [p]: v }));
+                      // Escribir la tuya deja de lado la tarjeta elegida de esa pregunta (manda lo escrito).
+                      setElegidas((r) => {
+                        if (!r[p] || !opciones.includes(r[p])) return r;
+                        const { [p]: _antes, ...resto } = r;
+                        void _antes;
+                        return resto;
+                      });
+                    }}
+                    onKeyDown={(e) => {
+                      // Solo Enter elige lo escrito: salir del campo no manda nada (revisión del 2026-11-08).
+                      if (e.key === "Enter") elegir(p, libres[p] ?? "");
+                    }}
+                    maxLength={MAX_RESPUESTA_PARA_LA_GUIA}
+                    disabled={!puedeEditar || ocupado}
+                    placeholder={opciones.length ? "Tu respuesta y Enter" : "Tu respuesta, en una línea, y Enter"}
+                    aria-label={`Tu respuesta a: ${p}`}
+                  />
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  disabled={!puedeEditar || ocupado}
+                  onClick={() => setAbiertas((r) => ({ ...r, [p]: true }))}
+                  className={cn(TARJETA, "border-dashed border-line bg-surface text-fg-muted hover:bg-surface-hover")}
+                >
+                  Otra respuesta…
+                </button>
+              )}
+            </div>
+          </div>
+        );
+      })}
       {puedeEditar && (
-        <div className="flex justify-end">
-          <BotonAzul disabled={bloqueado} onClick={() => void responder()}>
-            {conObjetivo ? "Responder y rehacer la guía" : "Guardar respuestas"}
-          </BotonAzul>
+        <div className="flex flex-wrap items-center justify-end gap-3">
+          {enviando || (conObjetivo && (corriendo || lanzando)) ? (
+            <span className="flex items-center gap-2 text-[13px] text-fg-secondary">
+              <Spinner size="sm" color="border-brand" />
+              {conObjetivo ? "Rehaciendo la guía con tus respuestas…" : "Guardando…"}
+            </span>
+          ) : (
+            // Siempre a mano (también con una pregunta sin opciones): manda lo elegido y lo escrito.
+            <BotonBlanco disabled={ocupado || !algunas} onClick={() => void enviar(elegidas)}>
+              {!conObjetivo ? "Guardar respuestas" : "Responder y armar la guía"}
+            </BotonBlanco>
+          )}
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * A qué objetivo de la exploración sirve la sesión (2026-11-08, quinta vuelta: «que pese y se note»): el de Smarteam y el
+ * ajuste de la empresa, en una línea debajo del objetivo de la sesión. La guía los lleva en su pedido, después del de la sesión.
+ */
+function SirveAlObjetivoDeLaExploracion() {
+  const { exp, marco, sesion } = useLienzo();
+  const ajuste = exp.estado.contenido.contexto?.objetivo.trim();
+  return (
+    <p className="-mt-2 px-1 text-xs leading-[1.5] text-fg-muted">
+      <span className="font-semibold text-fg-secondary">Sirve al objetivo de la exploración:</span> {objetivoDeSmarteam(marco.clave)}
+      {ajuste ? (
+        <>
+          {" "}
+          <span className="font-semibold text-fg-secondary">Para {exp.empresa.nombre}:</span> {ajuste}
+        </>
+      ) : null}{" "}
+      <button type="button" className="text-brand hover:underline" onClick={sesion.irAlInicio}>
+        Verlo en el inicio
+      </button>
+    </p>
   );
 }
 
@@ -268,16 +372,15 @@ function EspacioDeLaGuia({ pestana }: { pestana: PestanaDeSesion }) {
           <p className="max-w-xl text-[13px] leading-[1.5] text-fg-secondary">
             {!conObjetivo
               ? `La guía no se arma hasta que aceptes o escribas el objetivo de la sesión, arriba. Es tu oportunidad de decirle a Nexus cómo estructurar la sesión.${
-                  preguntas.length ? " Mientras, puedes responder lo que Nexus necesita saber: lo usa al armarla." : ""
+                  preguntas.length ? " Mientras, puedes responder arriba lo que Nexus necesita saber: lo usa al armarla." : ""
                 }`
               : preguntas.length
-                ? "Para armarla, Nexus necesita saber esto. Responde en una línea y la guía se rehace con tus respuestas."
+                ? "Nexus necesita saber algo para armarla: respóndelo arriba, junto al objetivo, y la guía se rehace con tus respuestas."
                 : `Ármala con «Armar la guía», arriba. Nexus usa tu objetivo como la instrucción que más pesa${
                     conReunion ? ", y los participantes y la duración de la reunión" : ", para 60 minutos (si asocias la reunión del calendario, toma su duración)"
                   }.`}
           </p>
           {fallo && <p className="max-w-xl text-[13px] text-danger-ink">La última vez no se pudo armar: {fallo}</p>}
-          {preguntas.length > 0 && <PreguntasDeNexus conObjetivo={conObjetivo} />}
         </>
       )}
     </section>
@@ -991,21 +1094,33 @@ export default function AntesDeLaSesion({ pestana, esLaProxima }: { pestana: Pes
         }}
         pidiendo={delObjetivo.pidiendo}
       />
+      {esLaProxima && <SirveAlObjetivoDeLaExploracion />}
+      {/* Quinta vuelta (2026-11-08): lo que Nexus necesita saber pide algo de ti, así que va arriba, junto al objetivo. */}
+      {esLaProxima && !!exp.estado.propuesta.preguntasParaLaGuia?.preguntas.length && (
+        <section data-recorrido="preventa.sesion.lo-que-necesita" className="space-y-3 rounded-xl border border-info-line bg-info-surface px-[18px] py-4">
+          <div>
+            <p className="flex items-center gap-1.5 text-sm font-semibold text-fg">
+              <IconoDeSugerencia className="h-4 w-4 text-brand" />
+              {actual ? "Para afinar esta guía, Nexus necesita saber esto" : "Para armar la guía, Nexus necesita saber esto"}
+            </p>
+            <p className="mt-0.5 text-[12.5px] text-fg-muted">
+              Elige una respuesta de un clic o escribe la tuya.{" "}
+              {!objetivoAceptado(pestana.sesion?.objetivo)
+                ? "Se guardan y Nexus las usa al armar la guía, cuando el objetivo esté aceptado."
+                : actual
+                  ? "Al responder todo, la guía se rehace."
+                  : "Al responder todo, la guía se arma."}
+            </p>
+          </div>
+          <PreguntasDeNexus conObjetivo={objetivoAceptado(pestana.sesion?.objetivo)} />
+        </section>
+      )}
       {/* Cuarta vuelta (2026-11-08): «Armar la guía» va debajo del objetivo y arriba de «Lo que ya sabemos». */}
       {esLaProxima && <EstadoDeLaGuia pestana={pestana} />}
       {esLaProxima && <LoQueTraes pestana={pestana} />}
       {esLaProxima && <LoQueYaSabemos pestana={pestana} />}
-      {/* Sin guía, su espacio grande (2026-11-08). Con guía y algo que Nexus necesita saber, sus preguntas arriba de ella. */}
+      {/* Sin guía, su espacio grande (2026-11-08). Lo que Nexus necesita saber va arriba, junto al objetivo. */}
       {esLaProxima && !actual && <EspacioDeLaGuia pestana={pestana} />}
-      {esLaProxima && actual && !!exp.estado.propuesta.preguntasParaLaGuia?.preguntas.length && (
-        <section className="flex flex-col items-start gap-3 rounded-xl border border-info-line bg-info-surface px-[18px] py-4">
-          <p className="flex items-center gap-1.5 text-sm font-semibold text-fg">
-            <IconoDeSugerencia className="h-4 w-4 text-brand" />
-            Para afinar esta guía, Nexus necesita saber esto
-          </p>
-          <PreguntasDeNexus conObjetivo={objetivoAceptado(pestana.sesion?.objetivo)} />
-        </section>
-      )}
       {actual && <LaGuia pestana={pestana} esLaProxima={esLaProxima} />}
       {actual && <LoQueCubreLaGuia pestana={pestana} esLaProxima={esLaProxima} />}
       {actual && <RetosDeLaIndustria pestana={pestana} esLaProxima={esLaProxima} />}

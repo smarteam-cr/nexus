@@ -1607,13 +1607,18 @@ function aplicarUna(estado: EstadoDeExploracion, op: Operacion, validez: Validez
       if (!nuevas.length) return { ok: false, error: "Escribe al menos una respuesta." };
       // Salen las respondidas; una pregunta que llegó con la pantalla abierta se queda.
       const antes = estado.propuesta.preguntasParaLaGuia;
-      const quedan = antes ? antes.preguntas.filter((q) => !nuevas.some((n) => mismoTexto(n.pregunta, q))) : [];
+      const siguen = antes ? antes.preguntas.map((q, i) => ({ q, i })).filter(({ q }) => !nuevas.some((n) => mismoTexto(n.pregunta, q))) : [];
+      const quedan = siguen.map(({ q }) => q);
+      const opciones = antes?.opciones ? siguen.map(({ i }) => antes.opciones![i] ?? []) : undefined;
       return {
         ok: true,
         estado: {
           ...estado,
           contenido: { ...estado.contenido, respuestasParaLaGuia: sumarRespuestas(estado.contenido.respuestasParaLaGuia ?? [], nuevas) },
-          propuesta: { ...estado.propuesta, preguntasParaLaGuia: antes && quedan.length ? { ...antes, preguntas: quedan } : null },
+          propuesta: {
+            ...estado.propuesta,
+            preguntasParaLaGuia: antes && quedan.length ? { ...antes, preguntas: quedan, ...(opciones ? { opciones } : {}) } : null,
+          },
         },
       };
     }
