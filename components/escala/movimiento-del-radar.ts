@@ -160,6 +160,8 @@ export function resaltarElRadar(raiz: HTMLElement, tarjetero: Tarjetero): () => 
   };
 
   const alMover = (e: PointerEvent) => {
+    // Soltó el botón fuera de la ventana: el primer movimiento de vuelta, ya sin botón, cuenta como soltar.
+    if (arrastrando && e.type === "pointermove" && !e.buttons) alSoltar(e);
     const p = { x: e.clientX, y: e.clientY };
     if (!ahora || Math.hypot(p.x - ahora.x, p.y - ahora.y) > 3) {
       antes = ahora;
@@ -168,6 +170,8 @@ export function resaltarElRadar(raiz: HTMLElement, tarjetero: Tarjetero): () => 
   };
   const alPasar = (e: PointerEvent) => {
     alMover(e);
+    // Seleccionando texto de la tarjeta (botón apretado): el cursor que cruza el radar no la cambia ni la cierra.
+    if (arrastrando) return;
     const t = e.target;
     if (enLaTarjeta(t)) {
       bajo = null;
@@ -203,12 +207,18 @@ export function resaltarElRadar(raiz: HTMLElement, tarjetero: Tarjetero): () => 
     if (e.pointerType === "touch") return;
     alMover(e);
     const hacia = e.relatedTarget;
+    // Sale de la tarjeta con el botón apretado (seleccionando texto): se queda hasta soltarlo, vaya a donde vaya.
+    if (enLaTarjeta(e.target) && !enLaTarjeta(hacia) && e.buttons) {
+      bajo = null;
+      arrastrando = true;
+      cancelarCierre();
+      return;
+    }
     // Lo que sigue lo decide `alPasar` sobre donde llega el cursor.
     if (enLaTarjeta(hacia) || enElRadar(hacia)) return;
     if (enLaTarjeta(e.target)) {
       bajo = null;
-      if (e.buttons) arrastrando = true;
-      else cerrarLuego(GRACIA_AL_SALIR_MS);
+      cerrarLuego(GRACIA_AL_SALIR_MS);
     } else if (enElRadar(e.target)) {
       bajo = null;
       salir();

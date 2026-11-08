@@ -342,16 +342,27 @@ function PasoYAvance({ pestana, lectura }: { pestana: PestanaDeSesion; lectura: 
     <section className="grid gap-[18px] rounded-xl border border-line bg-surface px-[18px] py-4 sm:grid-cols-2">
       <div className="min-w-0">
         <Rotulo>Siguiente paso acordado</Rotulo>
-        {verificados.length ? (
-          // Sexta vuelta (2026-11-08): con el análisis de la sesión, mandan los pasos verificados contra lo último que se
-          // acordó en la conversación (fecha, hora, con quién y cada sesión agendada), no la lectura libre de la reunión.
+        {/* Lo que confirmó el vendedor manda (lo usan el correo, el handoff y Mi día). Sexta vuelta (2026-11-08): con el
+            análisis de la sesión, debajo van los pasos verificados contra lo último que se acordó en la conversación, para
+            ver de un vistazo si lo confirmado se quedó atrás (el ejemplo real: «martes con Fernando» cuando quedó el
+            miércoles con Catalina). Sin nada confirmado, lo verificado va solo. */}
+        {esDeEsta && (
           <>
-            <ul className="mt-1.5 space-y-1.5">
+            <p className="mt-1.5 text-[15px] font-semibold text-fg">{paso!.que}</p>
+            <p className="mt-0.5 text-[13px] text-fg-secondary">
+              {[paso!.fecha ? diaLargo(paso!.fecha) : "sin fecha", paso!.conQuien ? `con ${paso!.conQuien}` : null].filter(Boolean).join(" · ")}
+            </p>
+          </>
+        )}
+        {verificados.length > 0 && (
+          <div className={cn(esDeEsta && "mt-3 border-t border-line pt-2.5")}>
+            {esDeEsta && <p className="text-xs font-semibold text-fg-secondary">En la reunión quedó, al final:</p>}
+            <ul className={cn("space-y-1.5", esDeEsta ? "mt-1" : "mt-1.5")}>
               {verificados.map((p) => {
                 const x = partesDelPaso(p);
                 return (
                   <li key={`${p.cita.turno}-${x.que}`}>
-                    <p className="text-[15px] font-semibold text-fg">{x.que}</p>
+                    <p className={cn("font-semibold text-fg", esDeEsta ? "text-[13px]" : "text-[15px]")}>{x.que}</p>
                     {(x.cuando || x.conQuien) && (
                       <p className="text-[13px] text-fg-secondary">{[x.cuando, x.conQuien ? `con ${x.conQuien}` : null].filter(Boolean).join(" · ")}</p>
                     )}
@@ -359,18 +370,12 @@ function PasoYAvance({ pestana, lectura }: { pestana: PestanaDeSesion; lectura: 
                 );
               })}
             </ul>
-            <p className="mt-1.5 text-xs text-fg-muted">Verificado contra lo último que se acordó en la reunión.</p>
-          </>
-        ) : esDeEsta ? (
-          <>
-            <p className="mt-1.5 text-[15px] font-semibold text-fg">{paso!.que}</p>
-            <p className="mt-0.5 text-[13px] text-fg-secondary">
-              {[paso!.fecha ? diaLargo(paso!.fecha) : "sin fecha", paso!.conQuien ? `con ${paso!.conQuien}` : null].filter(Boolean).join(" · ")}
+            <p className="mt-1.5 text-xs text-fg-muted">
+              Verificado contra lo último que se acordó en la reunión.{esDeEsta ? " Si no coincide con lo de arriba, corrígelo en «Datos de la sesión»." : ""}
             </p>
-          </>
-        ) : (
-          <p className="mt-1.5 text-[13px] text-fg-muted">No quedó uno confirmado de esta reunión.</p>
+          </div>
         )}
+        {!esDeEsta && !verificados.length && <p className="mt-1.5 text-[13px] text-fg-muted">No quedó uno confirmado de esta reunión.</p>}
       </div>
       <div className="min-w-0">
         <Rotulo>Cuánto avanzó</Rotulo>

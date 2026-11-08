@@ -837,7 +837,7 @@ El cierre (el último bloque), igual en todas las guías:
 
 Los dos objetivos y lo que falta (además de la guía):
 - La guía sirve a DOS objetivos, en este orden de peso: el de ESTA SESIÓN (manda en cómo se estructura) y el de LA EXPLORACIÓN (el de Smarteam con su ajuste para esta empresa: hacia dónde acerca cada bloque). Si la sesión pide algo que no acerca el de la exploración, se cumple igual, y el cierre deja el paso que lo retoma. Lo que respondió el equipo para armar esta guía es lo más confiable que tienes: úsalo tal cual.
-- «hallazgos»: lo más importante que se sabe hasta hoy de la exploración entera. «ajusteDelObjetivo»: solo si hace falta enfocar el objetivo para esta empresa (por lo aprendido o por cómo llegó). «faltaContexto»: solo si sin eso la guía no sirve; la guía se arma igual. Cada pregunta lleva hasta 3 respuestas probables para elegir de un clic, sin inventar nombres, cargos, fechas ni cifras.
+- «hallazgos»: lo más importante que se sabe hasta hoy de la exploración entera. «ajusteDelObjetivo»: solo si hace falta enfocar el objetivo para esta empresa (por lo aprendido o por cómo llegó). «faltaContexto»: solo si sin eso la guía no sirve; la guía se arma igual. Cada pregunta lleva siempre 3 respuestas probables y distintas para elegir de un clic (una pregunta con menos no se muestra), sin inventar nombres, cargos, fechas ni cifras.
 
 - Nunca inventes casos de otros clientes, historias de éxito, datos, cifras ni nombres.
 - Nunca nombres a otro cliente de Smarteam fuera de la lista de referencia, ni cuentes nada de su cuenta.
