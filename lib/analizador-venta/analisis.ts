@@ -267,7 +267,7 @@ const CITAS = {
 /** Una cifra con su cita (una o varias: si se corrigió, la corrección también). */
 const CIFRA = {
   type: "object",
-  properties: { texto: { type: "string", description: "La cifra y su unidad, con las palabras del cliente: «25 cierres al mes»." }, citas: CITAS },
+  properties: { texto: { type: "string", description: "La cifra CON DÍGITOS y su unidad, como la dijo el cliente: «25 cierres al mes», «25 mil dólares». Solo lo que dijo el cliente, no lo que preguntó el vendedor." }, citas: CITAS },
   required: ["texto", "citas"],
 } as const;
 
@@ -473,11 +473,13 @@ function palabras(texto: string): Palabra[] {
     if (x.norm === "sin" && ps[i + 1]?.norm === "embargo") x.relleno = true;
     // 2026-11-08 (Centauro): el «no sé» de muletilla, entre comas («si se les olvida calendar, no sé, colocar…»), no niega.
     const se = ps[i + 1];
-    if (x.norm === "no" && se?.norm === "se" && /,\s*$/.test(texto.slice(Math.max(0, x.inicio - 2), x.inicio)) && /^\s*,/.test(texto.slice(se.fin, se.fin + 2))) x.relleno = true;
+    // Con la tilde («sé»): «la verdad, no se, usa mucho el CRM» sí niega (lo cazó la revisión).
+    if (x.norm === "no" && se?.norm === "se" && texto.slice(se.inicio, se.fin).toLowerCase() === "sé" && /,\s*$/.test(texto.slice(Math.max(0, x.inicio - 2), x.inicio)) && /^\s*,/.test(texto.slice(se.fin, se.fin + 2))) x.relleno = true;
     // La palabra repetida («no, no»).
     if (NEGACIONES.has(x.norm) && ps[i + 1]?.norm === x.norm) x.relleno = true;
     // Desde el 8 nov, el número repetido («Digamos que 25 25 la mitad»): la repetición, no el número.
-    if (conNumero(x.norm) && ps[i - 1]?.norm === x.norm) x.relleno = true;
+    // Pero no si lleva un multiplicador: en «25, 25 mil» el segundo corrige al primero.
+    if (conNumero(x.norm) && ps[i - 1]?.norm === x.norm && !MULTIPLICADORES.has(ps[i + 1]?.norm ?? "")) x.relleno = true;
   });
   return ps;
 }
@@ -728,7 +730,10 @@ const verificar = (citas: unknown, turnos: readonly TurnoNumerado[]): Cita[] => 
             .split(/(?<=[.;!?…])\s+/)
             .filter((p) => p.trim().split(/\s+/).length >= 5)
             .map((p) => verificarCita({ turno: x.turno, texto: p }, turnos));
-    for (const v of entera ? [entera] : pedazos.length > 1 ? pedazos : []) {
+    // Partida, vale solo si TODAS sus frases están: con una cierta y otra inventada («No tenemos ningún CRM. Usamos
+    // Excel…»), la cierta sostendría un juicio que dice lo contrario de lo que se dijo (lo cazó la revisión).
+    const todos = pedazos.length > 1 && pedazos.every(Boolean);
+    for (const v of entera ? [entera] : todos ? pedazos : []) {
       if (v && !out.some((o) => o.turno === v.turno && o.texto === v.texto)) out.push(v);
     }
   }
@@ -793,18 +798,31 @@ function turnoCortoConNumero(c: unknown, turnos: readonly TurnoNumerado[]): Cita
  * Una cifra de la tabla: vale si alguna de sus citas está y TODOS sus números están en la más nueva. Así, si el cliente
  * dijo «30» y después corrigió «25», una celda con «30» que cita la corrección no pasa, y una con «25» sí.
  */
-function leerCifra(v: unknown, turnos: readonly TurnoNumerado[]): CifraDicha | null {
+function leerCifra(v: unknown, turnos: readonly TurnoNumerado[], habia: LoQueHabia): CifraDicha | null {
   const x = objeto(v);
   const t = texto(x.texto, 160);
-  if (!t) return null;
-  const cita = laMasNueva([...verificar(x.citas, turnos), ...arreglo(x.citas).map((c) => turnoCortoConNumero(c, turnos)).filter((c): c is Cita => !!c)]);
+  // Con dígitos: «un millón» no se puede comparar con nada (la revisión: pasaba con cualquier cita).
+  if (!t || !numerosDe(t).length) return null;
+  // Es lo que dijo el CLIENTE: una cifra que solo dijo el vendedor («¿cierran unos 30 al mes?») no va.
+  const candidatas = [...verificar(x.citas, turnos), ...arreglo(x.citas).map((c) => turnoCortoConNumero(c, turnos)).filter((c): c is Cita => !!c)];
+  const cita = laMasNueva(candidatas.filter((c) => delCliente(c, habia)));
   if (!cita) return null;
-  const enLaCita = new Set(numerosDe(cita.texto));
-  if (!numerosDe(t).every((n) => enLaCita.has(n))) return null;
+  const enLaCita = new Set(cantidadesDe(cita.texto));
+  if (!cantidadesDe(t).every((n) => enLaCita.has(n))) return null;
   return { texto: t, cita };
 }
 
-function leerNumeros(v: unknown, turnos: readonly TurnoNumerado[]): { filas: FilaDeNumeros[]; caidas: number } {
+/** Lo que multiplica un número: «25 mil» no es «25 millones». */
+const MULTIPLICADORES = new Set(["mil", "millon", "millones", "k"]);
+const multiplicador = (p: Palabra | undefined) => (p && MULTIPLICADORES.has(p.norm) ? (p.norm === "millones" ? "millon" : p.norm) : "");
+
+/** Cada número con lo que lo multiplica («25 mil» → «25·mil»): así se comparan las cifras de la tabla. */
+export function cantidadesDe(texto: string): string[] {
+  const ps = palabras(texto);
+  return ps.flatMap((p, i) => (conNumero(p.norm) ? [`${p.norm}·${multiplicador(ps[i + 1])}`] : []));
+}
+
+function leerNumeros(v: unknown, turnos: readonly TurnoNumerado[], habia: LoQueHabia): { filas: FilaDeNumeros[]; caidas: number } {
   let caidas = 0;
   const filas: FilaDeNumeros[] = [];
   for (const r of arreglo(v)) {
@@ -815,8 +833,8 @@ function leerNumeros(v: unknown, turnos: readonly TurnoNumerado[]): { filas: Fil
       caidas++;
       continue;
     }
-    const meta = x.meta ? leerCifra(x.meta, turnos) : null;
-    const realidad = x.realidad ? leerCifra(x.realidad, turnos) : null;
+    const meta = x.meta ? leerCifra(x.meta, turnos, habia) : null;
+    const realidad = x.realidad ? leerCifra(x.realidad, turnos, habia) : null;
     if ((x.meta && !meta) || (x.realidad && !realidad)) caidas++;
     const falta = comoPregunta(texto(x.falta, 220));
     if (!meta && !realidad && !falta) continue;
@@ -882,7 +900,14 @@ function leerPasos(v: unknown, turnos: readonly TurnoNumerado[]): { pasos: PasoA
       caidos++;
       continue;
     }
-    const paso: PasoAcordado = { que, cuando, quien: texto(x.quien, 120) || null, cita };
+    // El «con quién», también contra lo dicho alrededor (la otra mitad de Centauro: «con Fernando» cuando fue con
+    // Catalina). Se acepta el apodo («Cata» por Catalina). Si no se dijo ahí, el paso queda sin «con quién».
+    const dicho = turnos.slice(Math.max(0, i - VENTANA_DEL_ACUERDO), i + VENTANA_DEL_ACUERDO + 1).flatMap((t) => [...palabras(t.texto), ...palabras(t.hablante)].map((p) => p.norm));
+    const nombrado = (n: string) => dicho.some((d) => d.length >= 4 && (d === n || n.startsWith(d) || d.startsWith(n.slice(0, 4))));
+    const dichoQuien = texto(x.quien, 120);
+    const nombres = palabras(dichoQuien).map((p) => p.norm).filter((n) => n.length >= 4 && n !== "con");
+    const quien = dichoQuien && nombres.some(nombrado) ? dichoQuien : null;
+    const paso: PasoAcordado = { que, cuando, quien, cita };
     const previo = porTema.get(tema);
     if (!previo || previo.cita.turno < cita.turno) porTema.set(tema, paso);
   }
@@ -1003,7 +1028,7 @@ export function leerElAnalisis(
 
   // Lo del 8 nov. Lo que no se sostiene se cae y se cuenta, como un juicio sin cita.
   const fuera = leerFueraDelObjetivo(o.fuera_del_objetivo, turnos, habia);
-  const numeros = leerNumeros(o.numeros, turnos);
+  const numeros = leerNumeros(o.numeros, turnos, habia);
   const decision = leerDecision(o.decision, turnos, habia);
   const pasos = leerPasos(o.pasos, turnos);
   const demo = leerDemo(o.demo, turnos, habia);
@@ -1014,15 +1039,13 @@ export function leerElAnalisis(
     const i = juicios.findIndex((j) => j.punto === "siguiente_paso");
     const conFecha = pasos.pasos.filter((p) => p.cuando);
     const valor = conFecha.some((p) => p.quien) ? "con_fecha_y_duenio" : conFecha.length ? "sin_duenio" : "sin_fecha";
+    const deLosPasos = { lectura: pasosEnPalabras(pasos.pasos), citas: pasos.pasos.map((p) => p.cita).slice(0, 3), porAusencia: false };
     if (i >= 0)
-      juicios[i] = {
-        ...juicios[i],
-        // «Ninguno» con pasos acordados se contradice: manda lo verificado.
-        valor: juicios[i].valor === "ninguno" ? valor : juicios[i].valor,
-        lectura: pasosEnPalabras(pasos.pasos),
-        citas: pasos.pasos.map((p) => p.cita).slice(0, 3),
-        porAusencia: false,
-      };
+      // «Ninguno» con pasos acordados se contradice: manda lo verificado.
+      juicios[i] = { ...juicios[i], ...deLosPasos, valor: juicios[i].valor === "ninguno" ? valor : juicios[i].valor };
+    // Sin el juicio (no vino, o se cayó por una cita que no está), los pasos verificados no pueden quedar sin pantalla:
+    // la pieza «Análisis» y el análisis completo leen el siguiente paso de acá (lo cazó la revisión).
+    else juicios.push({ punto: "siguiente_paso", etapa: null, dimension: null, valor, ...deLosPasos });
   }
   return {
     resultado: {

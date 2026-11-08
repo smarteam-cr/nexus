@@ -49,7 +49,8 @@ async function main() {
   const { costoDeLlamada } = await import("@/lib/ai/precios");
 
   try {
-    await prisma.$executeRawUnsafe("SET SESSION default_transaction_read_only = on");
+    // set_config de sesión (is_local = false): la conexión queda en solo lectura. Es un SELECT, no una escritura.
+    await prisma.$queryRawUnsafe("select set_config('default_transaction_read_only', 'on', false)");
     const prueba = await prisma.$queryRawUnsafe<{ ro: string }[]>("select current_setting('default_transaction_read_only') as ro");
     if (prueba[0]?.ro !== "on") throw new Error("La conexión no quedó en solo lectura: no sigo.");
     console.log("Conexión en solo lectura ✓");

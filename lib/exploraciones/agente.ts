@@ -1208,7 +1208,7 @@ export async function contextoParaLaGuia(exploracionId: string) {
         }
       : {}),
     // 2026-11-08: lo que el análisis de la última sesión dejó abierto (números, decisión, demo). Solo la preventa.
-    ...(marco.clave === "venta" ? { delAnalisisDeLaVenta: await insumosDelAnalisisParaLaGuia(fila.clientId) } : {}),
+    ...(marco.clave === "venta" ? { delAnalisisDeLaVenta: await insumosDelAnalisisParaLaGuia(fila.clientId, estado.contenido.casillas as Record<string, unknown>) } : {}),
     // Punto 15: lo que las sesiones anteriores dejaron por retomar y su desafío principal.
     ...retomarParaLaGuia(
       estado.contenido.sesiones,

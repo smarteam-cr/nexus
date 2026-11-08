@@ -7,7 +7,7 @@
 import { describe, expect, it } from "vitest";
 import { HERRAMIENTA_DEL_ANALISIS, leerElAnalisis, leerResultadoGuardado, numerosDe, verificarCita, type LoQueHabia, type TurnoNumerado } from "./analisis";
 import { conversacionDelAnalisis } from "./conversacion";
-import { diceQueNoSeSabe, insumosComoLineas, insumosParaLaGuia, tarjetaEnUnaLinea } from "./para-la-guia";
+import { diceQueNoSeSabe, insumosComoLineas, insumosParaLaGuia, tarjetaEnUnaLinea, yaSeSabeDeLasTarjetas } from "./para-la-guia";
 import { loDeLaSesion } from "./revision";
 import { REGLAS_DEL_ANALISIS } from "./prompt";
 
@@ -144,7 +144,7 @@ describe("4 · qué falta para decidir", () => {
     expect(diceQueNoSeSabe("No se discutió presupuesto en esta reunión.")).toBe(true);
     expect(diceQueNoSeSabe("Entre 15 y 20 mil dólares.")).toBe(false);
     expect(tarjetaEnUnaLinea("No se discutió presupuesto en esta reunión.")).toBeNull();
-    expect(tarjetaEnUnaLinea([{ nombre: "Fernando Segura", rol: "decide" }, "Por definir"])).toBe("Fernando Segura (decide)");
+    expect(tarjetaEnUnaLinea([{ nombre: "Fernando Segura", rol: "decide" }, "Por definir"])).toBe("Fernando Segura (Decide)");
   });
 });
 
@@ -256,6 +256,68 @@ describe("la verificación de citas, con lo que se vio en Centauro", () => {
     expect(resultado.numeros![0].realidad).toMatchObject({ texto: "25 al mes", cita: { turno: 4, hablante: "Emiley Calvo" } });
     // Como cita de un juicio, «25» sigue sin alcanzar.
     expect(verificarCita({ turno: 4, texto: "25" }, turnos)).toBeNull();
+  });
+});
+
+describe("lo que cazó la revisión (2026-11-08)", () => {
+  const turnos: TurnoNumerado[] = [
+    T(1, "Ana Mora", "Sí tenemos un CRM pero casi nadie lo abre. Usamos Excel para el seguimiento de todo."),
+    T(2, "Marco Salas", "¿Ustedes cierran unos 30 al mes, más o menos, verdad?"),
+    T(3, "Ana Mora", "Facturamos unos 25 mil al mes en promedio con los hoteles."),
+    T(4, "Ana Mora", "La verdad, no se, usa mucho el CRM el equipo de ventas."),
+    T(5, "Marco Salas", "Entonces la sesión con marketing queda el miércoles a las 2."),
+    T(6, "Ana Mora", "Perfecto, el miércoles a las 2 con Cata, ella confirma."),
+  ];
+  const habia: LoQueHabia = { guia: true, escala: true, posicionamiento: true, delCliente: ["Ana Mora"] };
+  const leerAca = (crudo: Record<string, unknown>) => leerElAnalisis({ resumen: "x", juicios: [], bien: [], recomendaciones: [], ...crudo }, turnos, habia);
+
+  it("una cita partida con una frase cierta y otra inventada no sostiene nada, y cuenta como descartada", () => {
+    const { resultado, descartados } = leerAca({
+      bien: [{ texto: "No tienen CRM.", citas: [{ turno: 1, texto: "No tenemos ningún CRM en la empresa hoy. Usamos Excel para el seguimiento de todo." }] }],
+      juicios: [{ punto: "consultiva", valor: "mucho", lectura: "No tienen CRM.", citas: [{ turno: 1, texto: "No tenemos ningún CRM en la empresa hoy. Usamos Excel para el seguimiento de todo." }] }],
+    });
+    expect(resultado.bien).toEqual([]);
+    expect(resultado.juicios).toEqual([]);
+    expect(descartados).toBe(2);
+  });
+  it("una cifra que solo dijo el vendedor no entra a la tabla", () => {
+    const { resultado } = leerAca({ numeros: [{ tema: "volumen", que: "Cierres", realidad: { texto: "30 al mes", citas: [{ turno: 2, texto: "¿Ustedes cierran unos 30 al mes, más o menos, verdad?" }] } }] });
+    expect(resultado.numeros).toEqual([]);
+  });
+  it("una cifra sin dígitos no se puede comparar; «25 mil» no respalda «25 millones»", () => {
+    const { resultado } = leerAca({
+      numeros: [
+        { tema: "ticket", que: "Facturación", realidad: { texto: "un millón al mes", citas: [{ turno: 3, texto: "Facturamos unos 25 mil al mes en promedio" }] } },
+        { tema: "ticket", que: "Facturación", realidad: { texto: "25 millones al mes", citas: [{ turno: 3, texto: "Facturamos unos 25 mil al mes en promedio" }] } },
+        { tema: "ticket", que: "Facturación", realidad: { texto: "25 mil al mes", citas: [{ turno: 3, texto: "Facturamos unos 25 mil al mes en promedio" }] } },
+      ],
+    });
+    expect(resultado.numeros!.map((f) => f.realidad?.texto)).toEqual(["25 mil al mes"]);
+  });
+  it("«25, 25 mil»: el segundo corrige al primero, no es repetición", () => {
+    const t: TurnoNumerado[] = [T(1, "Ana Mora", "Facturamos unos 25, 25 mil al mes en promedio.")];
+    expect(verificarCita({ turno: 1, texto: "Facturamos unos 25 al mes en promedio" }, t)).toBeNull();
+  });
+  it("un «no se» sin tilde entre comas sí niega", () => {
+    expect(verificarCita({ turno: 4, texto: "La verdad, usa mucho el CRM el equipo de ventas" }, turnos)).toBeNull();
+  });
+  it("sin el juicio del siguiente paso, los pasos verificados igual lo arman (si no, no se verían)", () => {
+    const { resultado } = leerAca({ pasos: [{ tema: "Marketing", que: "Sesión con Marketing", cuando: "miércoles a las 2", quien: "Catalina", citas: [{ turno: 5, texto: "la sesión con marketing queda el miércoles a las 2" }] }] });
+    const sp = resultado.juicios.find((j) => j.punto === "siguiente_paso");
+    expect(sp).toMatchObject({ valor: "con_fecha_y_duenio", lectura: "Sesión con Marketing, miércoles a las 2, con Catalina.", porAusencia: false });
+  });
+  it("el «con quién» se busca alrededor de la cita: un nombre que no se dijo ahí se quita (el apodo vale)", () => {
+    const { resultado } = leerAca({
+      pasos: [
+        { tema: "A", que: "Sesión con Marketing", cuando: "miércoles a las 2", quien: "Fernando", citas: [{ turno: 5, texto: "la sesión con marketing queda el miércoles a las 2" }] },
+        { tema: "B", que: "Confirmar con Marketing", cuando: "miércoles a las 2", quien: "Catalina", citas: [{ turno: 6, texto: "el miércoles a las 2 con Cata, ella confirma" }] },
+      ],
+    });
+    expect(resultado.pasos!.map((p) => p.quien)).toEqual([null, "Catalina"]);
+  });
+  it("«quién decide» solo se sabe con alguien que decide o aprueba, y con la etiqueta de pantalla", () => {
+    expect(yaSeSabeDeLasTarjetas({ autoridad: [{ nombre: "Laura", rol: "influye" }, { nombre: "Equipo", rol: "afectado" }] }).quien_decide).toBeUndefined();
+    expect(yaSeSabeDeLasTarjetas({ autoridad: [{ nombre: "Laura", rol: "influye" }, { nombre: "Fernando", rol: "firma" }], presupuesto: "No se discutió." })).toEqual({ quien_decide: "Fernando (Aprueba)" });
   });
 });
 

@@ -32,7 +32,6 @@ import {
   HERRAMIENTA_DEL_ANALISIS,
   HUECOS_DE_DECISION,
   leerElAnalisis,
-  leerResultadoGuardado,
   TEXTO_DEL_HUECO,
   type HuecoDeDecision,
   type LoQueHabia,
@@ -40,6 +39,7 @@ import {
   type TurnoNumerado,
 } from "./analisis";
 import { conversacionDelAnalisis } from "./conversacion";
+import { loQueSeSupoEnSesionesAnteriores } from "./para-la-guia-server";
 import { VERSION_DEL_CRITERIO, criterioComoTexto } from "./criterio";
 import { guiaDeLaReunion, type GuiaDeLaReunion } from "./guia-de-la-reunion-server";
 import { AGENTE_DEL_ANALIZADOR, MODELO_DEL_ANALIZADOR, REGLAS_DEL_ANALISIS, SLUG_DEL_ANALIZADOR } from "./prompt";
@@ -331,33 +331,6 @@ export async function prepararElAnalisis(
     yaSeSabe,
   };
   return { ok: true, r: { ...r, dueno: r.dueno }, turnos, omitidos, guia, quien, habia, material };
-}
-
-/**
- * Lo que los análisis de las sesiones ANTERIORES de la misma empresa ya sabían para decidir (2026-11-08). ⛔ Las sesiones
- * salen del chokepoint (invariante 1) con la empresa dueña de esta reunión, y el análisis tiene que ser de esa empresa.
- */
-async function loQueSeSupoEnSesionesAnteriores(clientId: string, fecha: Date, sessionId: string): Promise<Partial<Record<HuecoDeDecision, string>>> {
-  try {
-    const antes = (await getClientSessions(clientId, { before: fecha, take: 30 })).filter((s) => s.id !== sessionId && s.date < fecha.getTime());
-    if (!antes.length) return {};
-    const filas = await prisma.analisisDeVenta.findMany({
-      where: { sessionId: { in: antes.map((s) => s.id) }, clientId, estado: "PROPUESTO" },
-      select: { sessionId: true, resultado: true },
-    });
-    const fechaDe = new Map(antes.map((s) => [s.id, s.date]));
-    const out: Partial<Record<HuecoDeDecision, string>> = {};
-    // De la más nueva a la más vieja: lo último que se supo gana.
-    for (const f of filas.sort((a, b) => (fechaDe.get(b.sessionId) ?? 0) - (fechaDe.get(a.sessionId) ?? 0))) {
-      for (const d of leerResultadoGuardado(f.resultado)?.decision ?? []) {
-        if (d.seSabe && !out[d.hueco]) out[d.hueco] = d.texto;
-      }
-    }
-    return out;
-  } catch (e) {
-    console.warn(`[analizador-venta] sin sesiones anteriores para ${sessionId}:`, e instanceof Error ? e.message : e);
-    return {};
-  }
 }
 
 /**
