@@ -13516,10 +13516,11 @@ exploración pesa y se nota** en la guía. Lo que sigue es el estado después de
 - **La guía la arma el vendedor, con el objetivo de la sesión aceptado** (cuarta vuelta, 2026-11-08; `pedirLaGuia` en
   `agente.ts`, `objetivoAceptado`). *Cambió el mismo día:* en la tercera vuelta la guía se armaba sola al terminar de
   leer cada sesión; Elías la frenó: «el objetivo de la sesión lo decide el vendedor, y es obligatorio». Ahora:
-  - Al leer una sesión, Nexus deja SUGERIDO el objetivo de la siguiente (`LecturaDeReunion.objetivoSiguiente`, sin otra
-    llamada) y no arma la guía. La tarjeta dice «Objetivo sugerido», con Descartar · Editar · Aceptar.
-  - La guía no se arma hasta que el vendedor acepta, edita o escribe el objetivo (`SesionPlaneada.objetivo`): el botón
-    «Armar la guía» está debajo del objetivo y arriba de «Lo que ya sabemos», y se habilita con él; el servidor también
+  - Al leer una sesión, Nexus deja SUGERIDO el objetivo de la siguiente, sin otra llamada, y no arma la guía. *Desde la
+    séptima vuelta son tres, en tarjetas: ver el punto de la séptima vuelta, más abajo* (la tarjeta única con Descartar ·
+    Editar · Aceptar se retiró).
+  - La guía no se arma hasta que el vendedor elige, edita o escribe el objetivo (`SesionPlaneada.objetivo`): el botón
+    «Armar la guía» está debajo del objetivo y arriba de «Lo que ya sabemos», y solo aparece con él; el servidor también
     lo exige (`FALTA_EL_OBJETIVO_DE_LA_SESION`), y «Actualizar la guía» al cambiar el equipo no se ofrece sin él. *Por
     qué:* es la oportunidad del vendedor de decirle a Nexus cómo estructurar la sesión.
   - En el pedido, el objetivo de la sesión va PRIMERO, como «la instrucción que MÁS pesa»: la agenda se arma para
@@ -13540,7 +13541,7 @@ exploración pesa y se nota** en la guía. Lo que sigue es el estado después de
     corrida de la guía). Sin guía y sin preguntas, la corrida falla con su motivo. El seguimiento de la pantalla recarga
     cuando una corrida viva reemplaza a otra (`seguimiento-de-corrida.ts`).
   - **Sin guía, su espacio se nota** (`EspacioDeLaGuia` en `AntesDeLaSesion.tsx`): un recuadro grande y punteado en el
-    lugar de la guía. Sin objetivo dice «Falta aceptar el objetivo de la sesión N»; con él, «Falta la guía de la sesión
+    lugar de la guía. Sin objetivo dice «Falta elegir el objetivo de la sesión N»; con él, «Falta la guía de la sesión
     N» y que se arma con el botón de arriba. Mientras Nexus la arma, la fase en que va.
   - **Lo que le falta saber, arriba, junto al objetivo.** La misma llamada de la guía puede dejar de 1 a 3 preguntas
     cortas para el vendedor (`faltaContexto` → `propuesta.preguntasParaLaGuia`), del estilo «¿con quién es la sesión 3?».
@@ -13571,6 +13572,32 @@ exploración pesa y se nota** en la guía. Lo que sigue es el estado después de
     corto, cada una con quién la preguntó, aclarando que se llevan al demo y no se responden en vivo. Salen del mismo
     análisis que alimenta la guía (`preguntasDelDemoParaLaPreparacion`, para-la-guia-server.ts, por el chokepoint de
     sesiones) y llegan a la pantalla al abrir y al recargar (`ExploracionParaLaPantalla.paraElDemo`), sin IA. Solo en la preventa.
+  - **Séptima vuelta (8 nov): tres objetivos sugeridos en tarjetas, y la guía no existe hasta elegir uno.** Elías: «el
+    objetivo sugerido realmente pueden ser tres objetivos sugeridos y que el vendedor pueda editar cada uno o poner uno
+    personalizado, y que no aparezca la guía antes de eso». Ahora:
+    - La lectura de la sesión anterior pide 3 objetivos posibles, cada uno con un ENFOQUE distinto, no tres redacciones
+      de lo mismo (`LecturaDeReunion.objetivosSiguientes`, misma llamada; el primero sigue en `objetivoSiguiente`, el que
+      más recomienda). Una lectura de antes trae uno y se ve como una sola tarjeta (`objetivosSugeridosDeLaSiguiente`).
+      La primera sesión no tiene lectura anterior: solo «Escribe el tuyo».
+    - La Preparación los muestra como tarjetas en una fila (`ObjetivosSugeridos`), más una cuarta, «Escribe el tuyo»: el
+      mismo patrón que las preguntas de Nexus. Cada una se edita ahí mismo; elegirla guarda el objetivo y arma la guía en
+      ese momento (`alElegir` → `lanzar("guia")`). **Sin Descartar** (con tres más la tuya no hace falta; lo descartado
+      antes con `objetivoDescartado` no vuelve a salir) y **sin «Proponer preguntas»** (con la guía en bloques ya no hacía
+      nada en la próxima sesión; se borraron su componente, la ruta `…/guia/objetivo`, la llamada
+      `proponerPreguntasDelObjetivo` y su script de medición; las propuestas ya guardadas en `ajustesDeLaGuia` se siguen
+      leyendo).
+    - Sin objetivo elegido, en la Preparación no hay guía: ni la armada antes, ni «Guía anterior», ni la barra de «Armar la
+      guía». Se ven el objetivo de la exploración, las preguntas de Nexus, lo que traes, «Para el demo», «Lo que ya
+      sabemos» y el espacio de la guía. Una guía que no guardó su objetivo (armadas del 6 al 8 nov) cuenta como armada con
+      el de la sesión, sin aviso; solo se esconde mientras se arma la del objetivo elegido. Mientras la guía se arma, la
+      barra no muestra el botón. **En «En vivo» la guía sigue visible aunque no tenga objetivo:** durante la reunión no se
+      le esconde nada al vendedor.
+    - «Después de la sesión» ya no anuncia uno: dice cuántos sugiere Nexus para la siguiente y que se elige en su
+      Preparación.
+    - La guía, más legible: en la Preparación ya no van las casillas de «Lo que hay que averiguar» ni el conteo de
+      averiguadas (siguen en «En vivo», donde se marcan y de donde leen el aviso del resultado y el análisis); la pregunta,
+      la explicación y los títulos, un poco más grandes; «Para profundizar» plegable, cerrado en la Preparación y abierto
+      en «En vivo». Pruebas: `lib/exploraciones/septima-vuelta.test.ts`.
   - La misma llamada escribe los hallazgos y, si hace falta, el ajuste al objetivo (`leerLoDeLaExploracion`): no hay
     llamada aparte. El pedido lleva el objetivo de la sesión, el de Smarteam con su ajuste, cómo llegó con su pista, las
     respuestas del vendedor y los hallazgos de la guía anterior para actualizarlos. La agenda en bloques no cambió.

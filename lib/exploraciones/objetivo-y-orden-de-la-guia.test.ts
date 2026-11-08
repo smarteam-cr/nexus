@@ -1,7 +1,8 @@
 /**
  * lib/exploraciones/objetivo-y-orden-de-la-guia.test.ts — las tres mejoras de la guía de una sesión que pidió la revisión
  * de CEMACO con Liliana (2026-10-20), en el proyecto y en la preventa (el mismo lienzo):
- *   1. al guardar el objetivo, Nexus propone preguntas para ese objetivo (usar o descartar);
+ *   1. al guardar el objetivo, Nexus propone preguntas para ese objetivo (usar o descartar). Desde la séptima vuelta
+ *      (2026-11-08) ya no se piden: quedan las pruebas de cómo se guardan las propuestas que ya existen;
  *   2. al aplicar una lista del chat que toca la guía, la exploración abierta se vuelve a leer;
  *   3. las preguntas se arrastran y el orden elegido manda en todos lados.
  * Correr: `npx vitest run lib/exploraciones/objetivo-y-orden-de-la-guia.test.ts --project unit`.
@@ -30,15 +31,7 @@ import {
 } from "./ajustes-de-la-guia";
 import { CambioDeLaGuiaSchema, SesionPlaneadaSchema } from "./esquemas";
 import { aplicarOperaciones, VALIDADOR_LIBRE } from "./contenido";
-import {
-  HERRAMIENTA_DE_PREGUNTAS_DEL_OBJETIVO,
-  leerPreguntasDelObjetivo,
-  leerUnaPregunta,
-  HERRAMIENTA_DE_UNA_PREGUNTA,
-  pedidoDePreguntasDelObjetivo,
-  type EntradaDelObjetivo,
-  type EntradaDeUnaPregunta,
-} from "./guia-pregunta-pedido";
+import { leerUnaPregunta, HERRAMIENTA_DE_UNA_PREGUNTA, type EntradaDeUnaPregunta } from "./guia-pregunta-pedido";
 import { CUALQUIER_EXPLORACION, esParaEstaExploracion, exploracionesQueTocaLaLista } from "./aviso-de-la-guia";
 
 const VALIDEZ = { dimensiones: new Set<string>(), criterios: new Set<string>(), areas: new Set<string>(), ediciones: new Set<string>(), perfilesHabituales: {}, escalaVersion: "1" };
@@ -216,88 +209,18 @@ describe("al guardar el objetivo, Nexus propone preguntas para ese objetivo", ()
   });
 });
 
-function respuestaDelObjetivo(preguntas: unknown): Anthropic.Messages.Message {
-  return {
-    id: "m",
-    type: "message",
-    role: "assistant",
-    model: "x",
-    stop_reason: "tool_use",
-    stop_sequence: null,
-    usage: { input_tokens: 0, output_tokens: 0 },
-    content: [{ type: "tool_use", id: "t", name: HERRAMIENTA_DE_PREGUNTAS_DEL_OBJETIVO, input: { preguntas } }],
-  } as unknown as Anthropic.Messages.Message;
-}
-
-const ENTRADA_DEL_OBJETIVO: EntradaDelObjetivo = {
-  ctx: {
-    empresa: "Cemaco Internacional",
-    industria: "Retail",
-    marco: "cs",
-    loQueYaSabemos: ["Seguimiento: «Cuando un deal se enfría, el vendedor lo deja morir» (Reunión del 14 oct)"],
-    confirmado: [],
-    paraConectar: null,
-    instrucciones: "",
-  },
-  objetivo: OBJETIVO,
-  temas: [
-    { id: "metas", nombre: "Resultados en cifras" },
-    { id: "1.7", nombre: "Seguimiento (Ventas)" },
-  ],
-  guia: ["¿Para cuándo necesitan tenerlo resuelto?"],
-  yaPropuestas: ["¿Cuántos leads les llegan al mes?"],
-};
-
-describe("el pedido de las preguntas para el objetivo", () => {
-  it("lleva el objetivo, los temas, la guía y lo ya propuesto; en un proyecto le habla al CSE", () => {
-    const p = pedidoDePreguntasDelObjetivo(ENTRADA_DEL_OBJETIVO);
-    const cuerpo = String((p.messages[0] as { content: string }).content);
-    expect(cuerpo).toContain(OBJETIVO);
-    expect(cuerpo).toContain("metas · Resultados en cifras");
-    expect(cuerpo).toContain("¿Para cuándo necesitan tenerlo resuelto?");
-    expect(cuerpo).toContain("YA PROPUESTAS PARA ESTE OBJETIVO");
-    expect(String(p.system)).toContain("CSE");
-    expect(String(p.system)).toMatch(/tuteo/i);
-    expect(p.tool_choice).toEqual({ type: "tool", name: HERRAMIENTA_DE_PREGUNTAS_DEL_OBJETIVO });
-    const venta = pedidoDePreguntasDelObjetivo({ ...ENTRADA_DEL_OBJETIVO, ctx: { ...ENTRADA_DEL_OBJETIVO.ctx, marco: "venta" } });
-    expect(String(venta.system)).toContain("vendedor");
-    expect(String(venta.system)).not.toContain("CSE");
-  });
-
-  it("revisa cada una con las reglas de «Regenerar»: tuteo, corta, sin la cita adelante, sin repetir", () => {
-    const l = leerPreguntasDelObjetivo(
-      respuestaDelObjetivo([
-        { pregunta: "¿Cuántos leads les llegan al mes?", repreguntas: [], tema: "metas" }, // ya propuesta
-        { pregunta: "¿Qué tasa de conversión querés llegar a tener?", repreguntas: [] }, // voseo
-        { pregunta: `¿${"muy ".repeat(35)}larga?`, repreguntas: [] }, // larga
-        { pregunta: "Dijiste que el vendedor deja morir los deals. ¿Qué parte de los leads llega a una venta?", repreguntas: ["¿Y el mes pasado?"], tema: "metas" },
-        { pregunta: "¿Quién decide cuándo un lead pasa a ventas?", repreguntas: [], tema: "no-existe" },
-        { pregunta: "¿Cuánto tarda ventas en llamar a un lead nuevo?", repreguntas: [] },
-        { pregunta: "¿Una de más?", repreguntas: [] },
-      ]),
-      ENTRADA_DEL_OBJETIVO,
-    );
-    expect(l.preguntas).toEqual([
-      { pregunta: "¿Qué parte de los leads llega a una venta?", repreguntas: ["¿Y el mes pasado?"], para: "metas" },
-      { pregunta: "¿Quién decide cuándo un lead pasa a ventas?", repreguntas: [] },
-      { pregunta: "¿Cuánto tarda ventas en llamar a un lead nuevo?", repreguntas: [] },
-    ]);
-    expect(l.fallas.map((f) => f.motivo)).toEqual(["igual", "voseo", "larga"]);
-  });
-
-  it("descarta la que vuelve a preguntar lo que el cliente ya dijo", () => {
-    const l = leerPreguntasDelObjetivo(
-      respuestaDelObjetivo([{ pregunta: "¿Qué pasa cuando un deal se queda quieto?", repreguntas: [], tema: "1.7" }]),
-      { ...ENTRADA_DEL_OBJETIVO, ctx: { ...ENTRADA_DEL_OBJETIVO.ctx, marco: "venta" } },
-      ctxDelPlan.saber,
-    );
-    expect(l.preguntas).toEqual([]);
-    expect(l.fallas[0]?.motivo).toBe("repite");
-  });
-
+describe("«Regenerar» con la revisión compartida", () => {
   it("«Regenerar» sigue leyendo igual con la revisión compartida", () => {
     const entrada: EntradaDeUnaPregunta = {
-      ctx: ENTRADA_DEL_OBJETIVO.ctx,
+      ctx: {
+        empresa: "Cemaco Internacional",
+        industria: "Retail",
+        marco: "cs",
+        loQueYaSabemos: ["Seguimiento: «Cuando un deal se enfría, el vendedor lo deja morir» (Reunión del 14 oct)"],
+        confirmado: [],
+        paraConectar: null,
+        instrucciones: "",
+      },
       objetivo: { para: "metas", nombre: "Resultados en cifras", actual: "¿Qué resultado esperan?", repreguntas: [] },
       otras: [],
     };
@@ -356,17 +279,5 @@ describe("al aplicar una lista del chat que toca la guía, la exploración abier
     const lienzo = readFileSync(join(__dirname, "..", "..", "components", "exploraciones", "LienzoDeExploracion.tsx"), "utf8");
     expect(lienzo).toMatch(/addEventListener\(EVENTO_GUIA_CAMBIADA/);
     expect(lienzo).toMatch(/esParaEstaExploracion\(.*, expId\)\) void recargar\(\)/);
-  });
-});
-
-describe("las preguntas del objetivo no nombran al equipo de Smarteam (CEMACO, 2026-10-20)", () => {
-  it("una pregunta que nombra a Marco (de Smarteam) se descarta; una sin nombres pasa", async () => {
-    const { nombraAlEquipo } = await import("./guia-pregunta-pedido");
-    const equipo = ["Marco Salas", "Liliana Moreno"];
-    expect(nombraAlEquipo(["¿Cuál es hoy la tasa de conversión que maneja Marco como referencia?"], equipo)).toBe(true);
-    expect(nombraAlEquipo(["¿Cuántos leads entran al mes por todos los canales?"], equipo)).toBe(false);
-    // Palabra entera: «Marcos» o «marcos de referencia» no es Marco.
-    expect(nombraAlEquipo(["¿Qué marcos de referencia usan?"], equipo)).toBe(false);
-    expect(nombraAlEquipo(["¿Lo sabe Marco?"], [])).toBe(false);
   });
 });

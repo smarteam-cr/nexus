@@ -14,7 +14,7 @@ import {
   esDeLaReunion,
   esDeUnaSesion,
   loQueQuedaParaLaProxima,
-  objetivoSugeridoDeLaSiguiente,
+  objetivosSugeridosDeLaSiguiente,
   PENDIENTE_DEL_RESULTADO,
   retomarParaLaGuia,
   ultimaReunionLeida,
@@ -126,20 +126,20 @@ describe("el objetivo de la siguiente sesión, sin otra IA", () => {
   const pendientes = loQueQuedaParaLaProxima({ sesion: null, lectura: lectura({ paraLaProxima: ["Cuántos se enfrían", "Quién aprueba"] }) });
 
   it("usa el que sugirió la lectura si nadie desmarcó nada", () => {
-    expect(objetivoSugeridoDeLaSiguiente({ pendientes, objetivoSiguiente: "Medir cuántos interesados se pierden y quién decide" })).toBe(
+    expect(objetivosSugeridosDeLaSiguiente({ pendientes, objetivoSiguiente: "Medir cuántos interesados se pierden y quién decide" })).toEqual([
       "Medir cuántos interesados se pierden y quién decide",
-    );
+    ]);
   });
 
   it("si se desmarcó algo, lo arma con lo que sigue marcado y lo que la exploración no sabe", () => {
     const uno = pendientes.map((p, i) => (i === 1 ? { ...p, marcado: false } : p));
-    expect(objetivoSugeridoDeLaSiguiente({ pendientes: uno, objetivoSiguiente: "Algo que ya no vale", porAveriguar: ["Presupuesto", "Quién decide"] })).toBe(
+    expect(objetivosSugeridosDeLaSiguiente({ pendientes: uno, objetivoSiguiente: "Algo que ya no vale", porAveriguar: ["Presupuesto", "Quién decide"] })).toEqual([
       "Retomar «Cuántos se enfrían» y averiguar presupuesto y quién decide.",
-    );
+    ]);
   });
 
   it("sin nada pendiente ni por averiguar, no sugiere", () => {
-    expect(objetivoSugeridoDeLaSiguiente({ pendientes: [] })).toBeNull();
+    expect(objetivosSugeridosDeLaSiguiente({ pendientes: [] })).toEqual([]);
   });
 });
 
