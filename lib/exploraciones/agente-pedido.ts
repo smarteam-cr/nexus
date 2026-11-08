@@ -63,6 +63,7 @@ import { bloqueDeInstrucciones } from "./notas-de-sesion";
 import { EQUIPOS, type ClaveDeEquipo } from "./equipos";
 import { CUMPLIMIENTOS, MAX_PARA_LA_PROXIMA, type Cumplimiento } from "./despues-de-la-sesion";
 import type { Fuente } from "./fuentes-tipos";
+import { leerTarjetasDelAgente, MAX_PREGUNTAS_DE_LA_TARJETA, type TarjetaDeLaDimension } from "./tarjetas-de-la-escala";
 
 export const MODELO_DE_LA_EXPLORACION = "claude-sonnet-4-6";
 export const NOMBRE_DE_LA_HERRAMIENTA = "proponer";
@@ -782,6 +783,8 @@ export interface Lectura {
   tecnica?: Omit<AlertaTecnica, "en" | "corridaId"> | null;
   /** Al leer: lo que dijo de cada reunión (su resumen y qué se respondió de lo planeado). */
   reuniones?: LecturaDeUnaReunion[];
+  /** «Ubicar con las reuniones» (2026-11-08): la tarjeta de cada dimensión (tarjetas-de-la-escala.ts). */
+  tarjetas?: Record<string, TarjetaDeLaDimension>;
 }
 
 type Crudo = Record<string, unknown>;
@@ -973,13 +976,14 @@ export function leerLaRespuesta(respuesta: Anthropic.Messages.Message, ctx: Cont
     );
   }
   /* Las hipótesis de «Ubicar en la escala» (2026-11-08): sin cita, pero con su porqué y una fuente del cliente (la pista).
-     Nunca para una dimensión que ya trae un nivel con cita en esta respuesta, ni de un equipo que habló de otra área. */
+     Nunca para una dimensión que ya trae un nivel con cita en esta respuesta. K11 NO las descarta (cuarta vuelta, Elías con
+     Centauro): lo que Ventas contó de Marketing no es el nivel de Marketing, pero sí una pista para suponerlo y preguntarlo. */
   const conNivel = new Set(items.flatMap((it) => (it.destino.tipo === "nivel" ? [it.destino.dimensionId] : [])));
   for (const h of ctx.conHipotesis ? lista(input.hipotesis) : []) {
     const dimensionId = str(h.dimensionId);
     const porQue = str(h.porQue)?.slice(0, 600);
     const fuentes = citar(h.fuentes).map((x) => ({ id: x.id, etiqueta: x.etiqueta }));
-    if (!dimensionId || !dims.has(dimensionId) || conNivel.has(dimensionId) || !porQue || deOtraArea(dimensionId, fuentes)) {
+    if (!dimensionId || !dims.has(dimensionId) || conNivel.has(dimensionId) || !porQue) {
       descartadas++;
       continue;
     }
@@ -1010,6 +1014,7 @@ export function leerLaRespuesta(respuesta: Anthropic.Messages.Message, ctx: Cont
     items,
     descartadas,
     ...(ctx.modo === "leer" ? { tecnica: laConversacionTecnica(input.conversacionTecnica, citar), ...conReuniones(lasReuniones(input.reuniones, ctx)) } : {}),
+    ...(ctx.conHipotesis ? { tarjetas: leerTarjetasDelAgente(input.tarjetas, dims) } : {}),
   };
 }
 
@@ -1400,10 +1405,32 @@ export function pedidoDePosicionar(ctx: ContextoDelPedido & { objetivo: string }
                   required: ["dimensionId", "nivel", "porQue", "fuentes"],
                 },
               },
+              tarjetas: {
+                type: "array",
+                description:
+                  "Una tarjeta por cada dimensión de la escala de abajo, para el vendedor (no para el cliente): cómo está esa parte según lo explorado, en simple, y qué preguntarle para explorarla más.",
+                items: {
+                  type: "object",
+                  properties: {
+                    dimensionId: { type: "string", enum: dims.length ? dims : ["1.1"] },
+                    comoEsta: {
+                      type: "string",
+                      description:
+                        "En una o dos frases llanas (40 palabras como mucho): cómo está hoy esa parte de la empresa según lo que se habló, y si es lo que dijeron o lo que crees. Sin nada de lo que se habló, dilo: «Todavía no se habló de esto».",
+                    },
+                    preguntas: {
+                      type: "array",
+                      description: `De 1 a ${MAX_PREGUNTAS_DE_LA_TARJETA} preguntas para la próxima reunión, de una línea, abiertas y con las palabras de su negocio: las que confirmarían o moverían el nivel.`,
+                      items: { type: "string" },
+                    },
+                  },
+                  required: ["dimensionId", "comoEsta", "preguntas"],
+                },
+              },
             }
           : {}),
       },
-      required: ctx.conHipotesis ? ["niveles", "hipotesis"] : ["niveles"],
+      required: ctx.conHipotesis ? ["niveles", "hipotesis", "tarjetas"] : ["niveles"],
     },
   };
   const f = FUENTES_DE_POSICIONAR;
@@ -1421,7 +1448,9 @@ Reglas estrictas:
 - Si no tienes nada con respaldo, manda la lista vacía. Es la respuesta correcta muchas veces.${
     ctx.conHipotesis
       ? `
-- Ubicas las TRES áreas (Ventas, Marketing y Servicio), no solo la que se eligió: si en las reuniones salió algo de Marketing, Marketing también se ubica.
+- Ubicas las TRES áreas (Ventas, Marketing y Servicio), no solo la que se eligió: si en las reuniones salió algo de Marketing, Marketing también se ubica aunque no esté en juego, como hipótesis si no hay una frase de su propio equipo.
+- La regla del equipo de cada reunión vale para los niveles. Para las hipótesis no: lo que un equipo dejó ver de otra área (por ejemplo, Ventas contando de dónde les llegan los contactos o cómo los atiende Servicio) sí es una pista para suponer el nivel de esa área y preguntárselo.
+- En tarjetas va UNA por cada dimensión de la escala, tenga o no nivel: es lo que el vendedor lee al pasar el cursor. Las preguntas no repiten lo que el cliente ya respondió.
 - Lees como un consultor de HubSpot con experiencia: entiendes los retos que contaron, cómo trabajan hoy y qué usan, y con eso eliges el nivel que mejor describe lo que ves. Lo que entregas es la ubicación en la escala de su industria, nada más.
 - Una dimensión con una frase del cliente que la respalda va en niveles. Una de la que no dijeron nada directo pero sí dejaron pistas va en hipotesis, sin cita: es lo que crees, para confirmarlo en la próxima reunión. Cada hipótesis nombra la reunión de donde sale la pista. Sin ninguna pista, no la propongas.`
       : ""
@@ -1440,7 +1469,7 @@ Reglas estrictas:
     ctx.fuentes.map((x) => `=== FUENTE ${x.id}: ${x.etiqueta} ===\n${x.texto}`).join("\n\n");
   return {
     model: MODELO_DE_LA_EXPLORACION,
-    max_tokens: ctx.conHipotesis ? 12000 : 6000,
+    max_tokens: ctx.conHipotesis ? 16000 : 6000,
     system: sistemaDePosicionar,
     tools: [tool],
     tool_choice: { type: "tool", name: tool.name },

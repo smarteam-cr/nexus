@@ -140,6 +140,7 @@ import {
   type PreguntasParaLaGuia,
   type RespuestaParaLaGuia,
 } from "./objetivo-y-hallazgos";
+import { MAX_COMO_ESTA, MAX_PREGUNTA_DE_LA_TARJETA, MAX_PREGUNTAS_DE_LA_TARJETA, MAX_TARJETAS, type TarjetasDeLaEscala } from "./tarjetas-de-la-escala";
 import { MAX_ASUNTO_DEL_CORREO, MAX_CUERPO_DEL_CORREO, MAX_DESTINATARIOS } from "./correo-de-seguimiento";
 
 const texto = (max: number) => z.string().trim().max(max);
@@ -527,6 +528,17 @@ const HallazgosSchema: z.ZodType<HallazgosDeLaExploracion> = z.object({
 });
 const PreguntasParaLaGuiaSchema: z.ZodType<PreguntasParaLaGuia> = z.object({
   preguntas: z.array(textoLleno(MAX_LARGO_DE_LA_PREGUNTA_PARA_LA_GUIA)).min(1).max(MAX_PREGUNTAS_PARA_LA_GUIA),
+  en: FECHA_ISO,
+  corridaId: z.string().max(60).nullable(),
+});
+/** La tarjeta de cada dimensión de La escala (tarjetas-de-la-escala.ts). */
+const TarjetasDeLaEscalaSchema: z.ZodType<TarjetasDeLaEscala> = z.object({
+  porDimension: z
+    .record(
+      ID_DIMENSION,
+      z.object({ comoEsta: z.string().max(MAX_COMO_ESTA), preguntas: z.array(textoLleno(MAX_PREGUNTA_DE_LA_TARJETA)).max(MAX_PREGUNTAS_DE_LA_TARJETA) }),
+    )
+    .refine((r) => Object.keys(r).length <= MAX_TARJETAS),
   en: FECHA_ISO,
   corridaId: z.string().max(60).nullable(),
 });
@@ -1005,6 +1017,8 @@ export function leerPropuesta(raw: unknown): PropuestaDeExploracion {
   if (hallazgos.success) p.hallazgos = hallazgos.data;
   const preguntas = PreguntasParaLaGuiaSchema.safeParse(raw.preguntasParaLaGuia);
   if (preguntas.success) p.preguntasParaLaGuia = preguntas.data;
+  const tarjetas = TarjetasDeLaEscalaSchema.safeParse(raw.tarjetasDeLaEscala);
+  if (tarjetas.success) p.tarjetasDeLaEscala = tarjetas.data;
   const descartados = listaDeTextos(raw.ajustesDescartados, MAX_AJUSTES_DESCARTADOS).filter((t) => t.length <= MAX_OBJETIVO_DE_LA_EXPLORACION);
   if (descartados.length) p.ajustesDescartados = descartados;
   p.lecturas = Object.fromEntries(Object.entries(registroValido(raw.lecturas, CLAVE_DE_LECTURA, LecturaDeReunionSchema)).slice(-MAX_LECTURAS));

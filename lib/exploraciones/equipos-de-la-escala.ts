@@ -150,3 +150,29 @@ export function areasParaElCliente(areas: readonly AreaDeLaEscala[], elegidas: r
   const orden = [...areas].sort((x, y) => Number(y.enJuego) - Number(x.enJuego));
   return orden.filter((a) => conAlgo(a) && (elegidas ? elegidas.includes(a.id) : a.enJuego)).map((a) => a.id);
 }
+
+/** Cuántas hipótesis tiene un área: las usadas como «por explorar» y las que sugiere el agente sin una frase del cliente. */
+export const hipotesisDelArea = (a: AreaDeLaEscala) => a.porExplorar + (a.sugeridas - a.sugeridasConCita);
+
+/**
+ * «Para explorar más esta área» (cuarta vuelta, 2026-11-08): la sugerencia aparece por cada área elegida y se ordena por
+ * hipótesis. La regla de Elías: entre más hipótesis tiene un área, más se puede explorar. A igual número, la que tiene
+ * más partes sin dato. Un área sin hipótesis ni partes sin dato no lleva sugerencia: ya está explorada.
+ */
+export function ordenParaExplorar(areas: readonly AreaDeLaEscala[]): AreaDeLaEscala[] {
+  return areas
+    .filter((a) => hipotesisDelArea(a) + a.sinDato > 0)
+    .sort((x, y) => hipotesisDelArea(y) - hipotesisDelArea(x) || y.sinDato - x.sinDato);
+}
+
+/**
+ * Las partes de un área que se pueden explorar más, en orden: primero las hipótesis (lo que se cree y hay que confirmar)
+ * y después las que no tienen nada. Lo que tiene evidencia no va.
+ */
+export function partesParaExplorar<D extends { id: string; aplica: boolean }>(
+  dimensiones: readonly D[],
+  clase: (id: string) => "evidencia" | "hipotesis" | null,
+): { hipotesis: D[]; sinDato: D[] } {
+  const aplican = dimensiones.filter((d) => d.aplica);
+  return { hipotesis: aplican.filter((d) => clase(d.id) === "hipotesis"), sinDato: aplican.filter((d) => clase(d.id) === null) };
+}

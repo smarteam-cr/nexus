@@ -124,6 +124,7 @@ import {
   type PosicionamientoDelProspecto,
   type ValoresParaElPosicionamiento,
 } from "./posicionamiento";
+import type { TarjetasDeLaEscala } from "./tarjetas-de-la-escala";
 import { posicionesDelMapa } from "./mapa";
 import { DE_LA_PREVENTA, marcoDe, type Marco } from "./marco";
 import { avanceDeLaEstrategia } from "./avance-del-proyecto";
@@ -187,6 +188,8 @@ interface LoQueLeyoLaCorrida {
    * sin hechos): se borra el anterior, que quedaría mostrándose como válido. undefined = falló o no se pidió: queda el anterior.
    */
   posicionamiento?: PosicionamientoDelProspecto | null;
+  /** «Ubicar con las reuniones»: la tarjeta de cada dimensión. undefined = no trajo ninguna: queda la anterior. */
+  tarjetasDeLaEscala?: TarjetasDeLaEscala;
 }
 
 /** Un fallo con un mensaje que ya está escrito para el vendedor (no hace falta traducirlo). */
@@ -604,6 +607,7 @@ async function posicionarLaEscala(
   const hayDelCliente = leido.fuentes.some((f) => esFuenteDelCliente(f.id));
   let items: ItemPropuesto[] = [];
   let descartadas = 0;
+  let tarjetas: TarjetasDeLaEscala | undefined;
   if (hayDelCliente) {
     await fase(runId, "Ubicando cada dimensión…");
     const respuesta = await conContextoDeIA(
@@ -625,12 +629,14 @@ async function posicionarLaEscala(
     // Solo niveles: el pedido no pide otra cosa, y si llega, no se guarda.
     items = r.items.filter((it) => it.destino.tipo === "nivel");
     descartadas = r.descartadas + (r.items.length - items.length);
+    // La tarjeta de cada dimensión sale de esta misma llamada (2026-11-08): la nueva reemplaza entera a la anterior.
+    if (r.tarjetas && Object.keys(r.tarjetas).length) tarjetas = { porDimension: r.tarjetas, en: new Date().toISOString(), corridaId: runId };
   }
   await fase(runId, "Guardando lo propuesto…");
   const propuestos = await guardar(
     exploracionId,
     items,
-    { leyo: leido.fuentes.map((f) => f.etiqueta), leidas: { sesiones: [], hubspot: [], documentos: [] }, foto: null },
+    { leyo: leido.fuentes.map((f) => f.etiqueta), leidas: { sesiones: [], hubspot: [], documentos: [] }, foto: null, ...(tarjetas ? { tarjetasDeLaEscala: tarjetas } : {}) },
     { runId, modo: "posicionar", automatica: false },
   );
   await prisma.agentRun.update({
@@ -639,7 +645,7 @@ async function posicionarLaEscala(
       status: "DONE",
       currentPhase: null,
       sourceSessionIds: leido.sesionesUsadas,
-      output: JSON.stringify({ propuestos, descartadas, fuentes: leido.fuentes.length, sinPistaDelCliente: !hayDelCliente, nadaNuevo: !hayDelCliente }),
+      output: JSON.stringify({ propuestos, descartadas, tarjetas: tarjetas ? Object.keys(tarjetas.porDimension).length : 0, fuentes: leido.fuentes.length, sinPistaDelCliente: !hayDelCliente, nadaNuevo: !hayDelCliente }),
     },
   });
 }
@@ -1515,6 +1521,8 @@ async function guardar(
       ...(leido.lecturas ? { lecturas: Object.fromEntries(Object.entries({ ...fusion.lecturas, ...leido.lecturas }).slice(-MAX_LECTURAS)) } : {}),
       // El position statement del prospecto (K3): el de esta preparación reemplaza al anterior (null lo borra).
       ...(leido.posicionamiento !== undefined ? { posicionamiento: leido.posicionamiento } : {}),
+      // La tarjeta de cada dimensión de La escala: la de esta corrida reemplaza a la anterior.
+      ...(leido.tarjetasDeLaEscala ? { tarjetasDeLaEscala: leido.tarjetasDeLaEscala } : {}),
       corridas: [
         ...fusion.corridas,
         {

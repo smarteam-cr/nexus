@@ -30,6 +30,11 @@
  *   · `formato="pdf"`: solo el radar grande con las letras de la hoja, sin puntajes y sin interruptor.
  *   · Una dimensión con `preguntada: false` va con el eje punteado, sin vértice y «No se preguntó»; con `noLoSe`, «?» en
  *     un aro punteado y «No lo sabías · cuenta como Deficiente». Debajo, una leyenda que solo aparece si hay alguna.
+ *   · `color` y `otras` (2026-11-08, La escala de la preventa, uso INTERNO): la figura de un color y otras áreas encima,
+ *     cada una del suyo, con su leyenda. Eje por eje en el mismo lugar: la parte k de cada capa de un área va sobre la
+ *     parte k de esa capa del área principal (la base se llama igual en las tres áreas; la producción, no: los nombres
+ *     son los del área principal y la leyenda lo dice). Un vértice de otra área lleva el `data-d` de SU dimensión. La
+ *     página del cliente no los pasa y se ve igual que siempre.
  */
 import type { ReactNode } from "react";
 import type { ClaveDeCapa, Letra } from "@/lib/escala/documento/tipos";
@@ -99,6 +104,37 @@ export interface CapaDelRadar {
   puntaje: number | null;
 }
 
+/** Otra área dibujada encima de la principal, con su color (`otras`). Sus dimensiones con SUS claves. */
+export interface AreaSuperpuesta {
+  area: string;
+  color: string;
+  dimensiones: readonly DimensionDelRadar[];
+}
+
+/** Un área superpuesta ya alineada con los ejes de la principal: `reales` lleva cada eje a la dimensión de esa área. */
+interface AreaAlineada {
+  area: string;
+  color: string;
+  dims: DimensionDelRadar[];
+  reales: Record<string, string>;
+}
+
+/** La parte k de cada capa de `otra` sobre la parte k de esa capa de la principal (sin la suya: eje sin vértice). */
+function alinear(dims: readonly DimensionDelRadar[], otra: AreaSuperpuesta): AreaAlineada {
+  const reales: Record<string, string> = {};
+  const vistos: Partial<Record<ClaveDeCapa, number>> = {};
+  const alineadas = dims.map((d): DimensionDelRadar => {
+    const k = vistos[d.capa] ?? 0;
+    vistos[d.capa] = k + 1;
+    const suya = otra.dimensiones.filter((x) => x.capa === d.capa)[k];
+    if (suya) reales[d.clave] = suya.clave;
+    return suya
+      ? { ...suya, clave: d.clave, nombre: d.nombre, numero: d.numero }
+      : { clave: d.clave, nombre: d.nombre, capa: d.capa, preguntada: false, nivel: null, puntaje: null };
+  });
+  return { area: otra.area, color: otra.color, dims: alineadas, reales };
+}
+
 export interface PropsDelRadarDeUnaEmpresa {
   area: string;
   dimensiones: readonly DimensionDelRadar[];
@@ -110,6 +146,10 @@ export interface PropsDelRadarDeUnaEmpresa {
   resultado?: { nivel: Letra | null; puntaje: number | null };
   frena?: FrenoDelRadar | null;
   formato?: "pantalla" | "pdf";
+  /** El color de la figura; sin él, el azul de siempre. */
+  color?: string;
+  /** Otras áreas encima, cada una de su color (uso interno: ver el encabezado). */
+  otras?: readonly AreaSuperpuesta[];
 }
 
 const redondo = (n: number | null) => (n !== null && Number.isFinite(n) ? Math.round(n) : null);
@@ -122,6 +162,8 @@ export default function RadarDeUnaEmpresa({
   resultado = { nivel: null, puntaje: null },
   frena = null,
   formato = "pantalla",
+  color = C.figura,
+  otras = [],
 }: PropsDelRadarDeUnaEmpresa) {
   const nombreDeNivel = (l: Letra) => niveles.find((n) => n.letra === l)?.nombre ?? l;
   const dims = dimensiones.filter((d) => d.capa === "base" || d.capa === "produccion");
@@ -132,8 +174,11 @@ export default function RadarDeUnaEmpresa({
       return `${d.nombre}, ${e.tipo === "noLoSe" ? `no lo sabías, ${notaDelNoLoSe(nombreDeNivel)}` : textoDelEstado(e, nombreDeNivel).toLowerCase()}${extra}`;
     })
     .join("; ")}.`;
-  const comun = { area, dims, capas, nombreDeNivel, resultado, frena };
-  const leyenda = <LeyendaDelRadar dims={dims} nombreDeNivel={nombreDeNivel} />;
+  const alineadas = otras.map((o) => alinear(dims, o));
+  const comun = { area, dims, capas, nombreDeNivel, resultado, frena, figura: color, otras: alineadas };
+  const leyenda = (
+    <LeyendaDelRadar dims={dims} nombreDeNivel={nombreDeNivel} figura={color} areas={alineadas.length ? [{ area, color }, ...alineadas] : []} />
+  );
 
   if (formato === "pdf") {
     return (
@@ -210,13 +255,37 @@ function ListaDeUnaMitad({
 }
 
 /** Debajo del radar, solo si hace falta: qué es un eje punteado y qué es «?». */
-function LeyendaDelRadar({ dims, nombreDeNivel }: { dims: readonly DimensionDelRadar[]; nombreDeNivel: (l: Letra) => string }) {
+function LeyendaDelRadar({
+  dims,
+  nombreDeNivel,
+  figura,
+  areas,
+}: {
+  dims: readonly DimensionDelRadar[];
+  nombreDeNivel: (l: Letra) => string;
+  figura: string;
+  /** Con otras áreas encima: todas, la principal primero, con su color. */
+  areas: readonly { area: string; color: string }[];
+}) {
   const sinPreguntar = dims.some((d) => !d.preguntada);
   const noLoSe = dims.some((d) => d.preguntada && d.nivel && d.noLoSe);
   const porExplorar = dims.some((d) => d.preguntada && d.nivel && d.porExplorar && !d.noLoSe);
-  if (!sinPreguntar && !noLoSe && !porExplorar) return null;
+  if (!sinPreguntar && !noLoSe && !porExplorar && !areas.length) return null;
   return (
     <div className="rde-leyenda">
+      {areas.length > 0 && (
+        <span>
+          {areas.map((a) => (
+            <span key={a.area} style={{ display: "inline-flex", alignItems: "center", gap: 6, marginRight: 12 }}>
+              <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true">
+                <rect x="1" y="1" width="12" height="12" rx="3" fill={a.color} fillOpacity={0.25} stroke={a.color} strokeWidth="1.75" />
+              </svg>
+              {a.area}
+            </span>
+          ))}
+          Los nombres de las partes son los de {areas[0].area}: cada área mide la suya en el mismo lugar.
+        </span>
+      )}
       {sinPreguntar && (
         <span>
           <svg width="24" height="10" viewBox="0 0 24 10" aria-hidden="true">
@@ -239,7 +308,7 @@ function LeyendaDelRadar({ dims, nombreDeNivel }: { dims: readonly DimensionDelR
       {porExplorar && (
         <span>
           <svg width="20" height="20" viewBox="0 0 20 20" aria-hidden="true">
-            <circle cx="10" cy="10" r="6" fill={C.blanco} stroke={C.figura} strokeWidth="1.75" strokeDasharray="3 2.5" />
+            <circle cx="10" cy="10" r="6" fill={C.blanco} stroke={figura} strokeWidth="1.75" strokeDasharray="3 2.5" />
           </svg>
           Aro punteado: por explorar. Es lo que creemos por lo conversado; lo confirmamos contigo.
         </span>
@@ -262,7 +331,11 @@ function SvgDelRadar({
   etiqueta,
   conPuntajes,
   interactivo = false,
+  figura,
+  otras,
 }: {
+  figura: string;
+  otras: readonly AreaAlineada[];
   m: MedidasDelRadar;
   area: string;
   dims: readonly DimensionDelRadar[];
@@ -319,15 +392,42 @@ function SvgDelRadar({
       {interactivo &&
         cunasDelRadar(m, d.ejes).map((c) => <polygon key={`z${c.clave}`} className="rde-cuna" data-d={c.clave} points={puntosSvg(c.puntos)} fill="transparent" />)}
 
+      {/* Las otras áreas, debajo de la principal y cada una de su color: su figura y sus vértices (un aro punteado si es
+          una hipótesis). El vértice lleva la clave de SU dimensión. */}
+      {otras.map((o) => {
+        const od = dibujoDelRadar(m, o.dims, { frena: null, capas, nombreDeNivel });
+        return (
+          <g key={o.area} className="rde-otra">
+            {od.figura.length > 1 && (
+              <polygon points={puntosSvg(od.figura)} fill={o.color} fillOpacity={0.08} stroke={o.color} strokeWidth={m.trazo.figura} strokeLinejoin="round" />
+            )}
+            {od.vertices.map((v) => (
+              <circle
+                key={v.clave}
+                className="rde-vertice"
+                data-d={interactivo ? o.reales[v.clave] : undefined}
+                cx={f(v.punto[0])}
+                cy={f(v.punto[1])}
+                r={m.vertice.r}
+                fill={v.porExplorar ? C.blanco : o.color}
+                stroke={v.porExplorar ? o.color : C.blanco}
+                strokeWidth={v.porExplorar ? m.objetivo.trazo : m.vertice.trazo}
+                strokeDasharray={v.porExplorar ? m.objetivo.raya : undefined}
+              />
+            ))}
+          </g>
+        );
+      })}
+
       {/* La empresa: la figura y los vértices (en la página, crecen desde el centro al abrir: radar-de-una-empresa.css). */}
       <g className="rde-empresa" style={{ transformOrigin: `${f(m.cx)}px ${f(m.cy)}px` }}>
         {d.figura.length > 1 && (
           <polygon
             className="rde-figura"
             points={puntosSvg(d.figura)}
-            fill={C.figura}
+            fill={figura}
             fillOpacity={0.16}
-            stroke={C.figura}
+            stroke={figura}
             strokeWidth={m.trazo.figura}
             strokeLinejoin="round"
           />
@@ -365,7 +465,7 @@ function SvgDelRadar({
                 cy={f(v.punto[1])}
                 r={v.frena ? m.vertice.rFrena : m.vertice.r}
                 fill={C.blanco}
-                stroke={v.frena ? COLOR_DEL_NIVEL[v.nivel] : C.figura}
+                stroke={v.frena ? COLOR_DEL_NIVEL[v.nivel] : figura}
                 strokeWidth={m.objetivo.trazo}
                 strokeDasharray={m.objetivo.raya}
               />
@@ -392,7 +492,7 @@ function SvgDelRadar({
                 cx={f(v.punto[0])}
                 cy={f(v.punto[1])}
                 r={v.frena ? m.vertice.rFrena : m.vertice.r}
-                fill={v.frena ? COLOR_DEL_NIVEL[v.nivel] : C.figura}
+                fill={v.frena ? COLOR_DEL_NIVEL[v.nivel] : figura}
                 stroke={C.blanco}
                 strokeWidth={m.vertice.trazo}
               />
@@ -411,7 +511,7 @@ function SvgDelRadar({
                   cy={f(v.punto[1])}
                   r={m.conPuntaje.r}
                   fill={C.blanco}
-                  stroke={v.frena || v.noLoSe ? COLOR_DEL_NIVEL[v.nivel] : C.figura}
+                  stroke={v.frena || v.noLoSe ? COLOR_DEL_NIVEL[v.nivel] : figura}
                   strokeWidth={v.noLoSe || v.porExplorar ? m.objetivo.trazo : m.conPuntaje.trazo}
                   strokeDasharray={v.noLoSe || v.porExplorar ? m.objetivo.raya : undefined}
                 />

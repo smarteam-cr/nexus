@@ -156,3 +156,33 @@ export function loQueLaFrena(area: AreaDelChequeo): { capa: ClaveDeCapa; nivel: 
   const dimensiones = area.dimensiones.filter((d) => d.aplica && d.capa === capa && d.nivel === area.nivel).map((d) => d.id);
   return { capa, nivel: area.nivel, dimensiones };
 }
+
+/**
+ * Lo que guarda «¿Dónde está? Elige el nivel» cuando el vendedor marca un nivel (bug del 2026-11-08, Centauro: marcaba
+ * Eficiente u Óptimo y el radar se quedaba en Funcional). Un riesgo a la vista topa la dimensión en Funcional
+ * (chequeo.ts, paso 5); el vendedor que la pone por encima dice que ese riesgo ya no está, y el riesgo se quita. Debajo de
+ * Funcional, o en Funcional, el riesgo se conserva. null: ya está así y no hay nada que cambiar (no se pierde la frase
+ * que lo respalda).
+ */
+export function nivelDelVendedor(
+  nivel: Letra,
+  confirmado: EstimadoGuardado | undefined,
+  posicion: Pick<PosicionEnElMapa, "nivel" | "porQue" | "origen"> | undefined,
+): EstimadoGuardado | null {
+  const subeSobreElRiesgo = !!confirmado?.riesgo && estaDebajo("F", nivel);
+  if (confirmado?.nivel === nivel && posicion?.origen === "confirmado" && !subeSobreElRiesgo) return null;
+  return {
+    nivel,
+    fuente: "vendedor",
+    ...(posicion?.nivel === nivel && posicion.porQue ? { porQue: posicion.porQue } : {}),
+    ...(confirmado?.riesgo && !subeSobreElRiesgo ? { riesgo: true } : {}),
+  };
+}
+
+/** Lo que propone el agente, usado al marcar su mismo nivel: por encima de Funcional, sin el riesgo (`nivelDelVendedor`). */
+export function sinRiesgoSiSube(v: EstimadoGuardado): EstimadoGuardado {
+  if (!v.riesgo || !estaDebajo("F", v.nivel)) return v;
+  const resto = { ...v };
+  delete resto.riesgo;
+  return resto;
+}
