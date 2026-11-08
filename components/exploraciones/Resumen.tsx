@@ -21,6 +21,10 @@
  * Arriba de todo, si la última reunión que leyó el agente se puso técnica (Elías, 2026-10-06), un
  * aviso con de qué se habló y la frase que lo muestra: para sumar a alguien técnico a la próxima.
  * Solo avisa; «Entendido» lo cierra hasta que otra reunión vuelva a ponerse técnica.
+ *
+ * Un resumen de verdad (Elías, 2026-11-08, tercera vuelta con Centauro): arriba, en qué va la exploración (activa, en qué
+ * sesión va), los hallazgos generales y el botón del momento: «Analizar la sesión N» si la última ya pasó y no se leyó, o
+ * «Preparar la sesión N» (lib/exploraciones/objetivo-y-hallazgos.ts). Las tarjetas quedan debajo.
  */
 import {
   CASILLAS_DE_LAS_REUNIONES,
@@ -36,7 +40,9 @@ import { claveDeLaReunion, type DestinoDePropuesta, type ItemPropuesto, type Lec
 import type { PestanaDeSesion } from "@/lib/exploraciones/guia";
 import { EQUIPOS, EQUIPOS_DEL_CLIENTE, type ClaveDeEquipo } from "@/lib/exploraciones/equipos";
 import { esDeUnaSesion } from "@/lib/exploraciones/despues-de-la-sesion";
-import { BotonEnlace } from "@/components/ui/sistema";
+import { BotonAzul, BotonEnlace, ROTULO_DEL_SISTEMA } from "@/components/ui/sistema";
+import { diaCorto, diaYHora } from "@/lib/exploraciones/fechas";
+import { hallazgosParaMostrar, momentoDeLaExploracion } from "@/lib/exploraciones/objetivo-y-hallazgos";
 import { useSesiones } from "./useSesiones";
 import { cn } from "@/lib/cn";
 import { Casilla } from "./Casilla";
@@ -201,6 +207,65 @@ function AvisoTecnico() {
   );
 }
 
+/** Arriba del Resumen: en qué va la exploración, el botón del momento y los hallazgos generales. */
+function EstadoDeLaExploracion() {
+  const { exp, irA, sesion } = useLienzo();
+  const { todas, claveDeLaProxima, estadoDeLaReunion } = useSesiones();
+  const proxima = todas.find((p) => p.clave === claveDeLaProxima) ?? todas[todas.length - 1];
+  const momento = momentoDeLaExploracion(
+    todas.map((p) => ({ clave: p.clave, numero: p.numero, hecha: p.hecha, noSeHizo: p.noSeHizo, estado: estadoDeLaReunion(p), fecha: p.fecha })),
+    { clave: proxima.clave, numero: proxima.numero },
+    { archivada: exp.estado.archivada, diaCorto },
+  );
+  const leidas = todas.flatMap((p) => {
+    const l = p.hecha && p.reunion ? exp.estado.propuesta.lecturas[claveDeLaReunion(p.reunion)] : undefined;
+    return l?.resumen ? [{ numero: p.numero, resumen: l.resumen }] : [];
+  });
+  const hallazgos = hallazgosParaMostrar(exp.estado.propuesta.hallazgos, leidas);
+  const ir = (a: NonNullable<typeof momento.accion>) => {
+    irA("exploracion");
+    sesion.elegir(a.clave);
+    sesion.ponerMomento(a.clave, a.tipo === "analizar" ? "despues" : "antes");
+  };
+  return (
+    <section data-recorrido="preventa.resumen.estado" className="space-y-3 rounded-xl border border-line bg-surface px-[18px] py-4">
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="min-w-0 flex-[1_1_320px] space-y-0.5">
+          <p className={ROTULO_DEL_SISTEMA}>La exploración</p>
+          <p className="text-[15px] font-semibold text-fg">{momento.titulo}</p>
+          {momento.detalle && <p className="text-[13px] text-fg-secondary">{momento.detalle}</p>}
+        </div>
+        {momento.accion && (
+          <BotonAzul onClick={() => ir(momento.accion!)}>
+            {momento.accion.tipo === "analizar" ? "Analizar" : "Preparar"} la sesión {momento.accion.numero}
+          </BotonAzul>
+        )}
+      </div>
+      <div className="space-y-1.5 border-t border-line pt-3">
+        <p className={ROTULO_DEL_SISTEMA}>Hallazgos</p>
+        {hallazgos.lista.length ? (
+          <>
+            <ul className="list-disc space-y-1 pl-[18px] marker:text-fg-muted">
+              {hallazgos.lista.map((h) => (
+                <li key={h} className="text-sm leading-[1.5] text-fg">
+                  {h}
+                </li>
+              ))}
+            </ul>
+            <p className="text-xs text-fg-muted">
+              {hallazgos.de === "nexus"
+                ? `Los escribió Nexus al armar la última guía${hallazgos.en ? `, el ${diaYHora(hallazgos.en)}` : ""}, con todo lo que se sabe hasta hoy.`
+                : "Lo que dejó cada sesión. Nexus los junta al armar la próxima guía."}
+            </p>
+          </>
+        ) : (
+          <p className="text-[13px] text-fg-muted">Todavía no hay hallazgos: salen de las sesiones.</p>
+        )}
+      </div>
+    </section>
+  );
+}
+
 const esDelResumen = (d: DestinoDePropuesta) => d.tipo === "casilla" && definicionDe(d.clave).paso === "resumen";
 
 /**
@@ -258,6 +323,7 @@ export default function Resumen() {
 
   return (
     <div className="space-y-6">
+      <EstadoDeLaExploracion />
       <AvisoTecnico />
       {delResumen.length > 0 ? (
         <div data-recorrido="preventa.resumen.sugerencias" className="space-y-1.5">

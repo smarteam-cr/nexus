@@ -24,6 +24,16 @@ import { aplicarCambioDeLaGuia, hayAjustes, type CambioDeLaGuia } from "./ajuste
 import type { ComoLlego } from "./como-llego";
 import type { ContactoPrevio, ContextoDeLaExploracion, ContextoPropuesto, TarjetasDeLoQueSabemos } from "./contexto-de-la-exploracion";
 import type { Cumplimiento } from "./despues-de-la-sesion";
+import {
+  MAX_AJUSTES_DESCARTADOS,
+  MAX_RESPUESTA_PARA_LA_GUIA,
+  mismoTexto,
+  sumarRespuestas,
+  type AjusteDelObjetivo,
+  type HallazgosDeLaExploracion,
+  type PreguntasParaLaGuia,
+  type RespuestaParaLaGuia,
+} from "./objetivo-y-hallazgos";
 import type { PosicionamientoDelProspecto } from "./posicionamiento";
 import type { ClaveDeEquipo } from "./equipos";
 import {
@@ -226,8 +236,16 @@ export interface ContenidoDeExploracion {
    * de antes no lo tienen.
    */
   comoLlego?: ComoLlego;
-  /** Punto 2 (2026-11-06): el contexto de toda la exploración, confirmado por una persona. Sin él, Nexus no arma guías. */
+  /**
+   * Punto 2 (2026-11-06): el contexto de toda la exploración, confirmado por una persona. Desde el 2026-11-08 el objetivo
+   * de toda exploración es el de Smarteam (objetivo-y-hallazgos.ts) y `contexto.objetivo` es su AJUSTE para esta empresa.
+   */
   contexto?: ContextoDeLaExploracion;
+  /**
+   * 2026-11-08 (objetivo-y-hallazgos.ts): lo que respondió el vendedor cuando Nexus le preguntó algo para armar la guía.
+   * Es contexto de la exploración entera y entra a cada guía como lo más confiable. Las últimas 12.
+   */
+  respuestasParaLaGuia?: RespuestaParaLaGuia[];
   /** Punto 3, solo la preventa: si hubo contacto antes de la primera sesión y el mensaje que se redactó si no. */
   contactoPrevio?: ContactoPrevio;
   /**
@@ -413,6 +431,16 @@ export interface PropuestaDeExploracion {
   guiasAnteriores?: Record<string, GuiaDeLaSesion>;
   /** Lo que Nexus propuso para «Lo que ya sabemos» y nadie confirmó todavía (contexto-server.ts). */
   contextoPropuesto?: ContextoPropuesto | null;
+  /**
+   * 2026-11-08 (objetivo-y-hallazgos.ts), los tres los escribe la llamada que arma la guía: el ajuste al objetivo de
+   * Smarteam que sugiere para esta empresa (null = ninguno o ya se usó o descartó), lo más importante que se sabe hasta
+   * ahora, y lo que le falta saber para armar la próxima guía (null = nada).
+   */
+  ajusteDelObjetivo?: AjusteDelObjetivo | null;
+  hallazgos?: HallazgosDeLaExploracion | null;
+  preguntasParaLaGuia?: PreguntasParaLaGuia | null;
+  /** Los ajustes que el vendedor descartó: la guía no los vuelve a sugerir (los últimos 20). Es una lápida. */
+  ajustesDescartados?: string[];
   /**
    * La última reunión que leyó el agente se puso técnica (Elías, 2026-10-06): el Resumen lo avisa.
    * La reemplaza cada lectura que dice algo de la reunión más reciente; null = no se puso técnica.
@@ -945,6 +973,15 @@ export type Operacion =
   | { op: "alertaTecnicaVista" }
   /** K2: cómo llegó el prospecto, confirmado por una persona (null = volver a «sin confirmar»). */
   | { op: "comoLlego"; valor: ComoLlego | null }
+  /**
+   * 2026-11-08: el ajuste al objetivo de Smarteam para esta empresa, usado o escrito por una persona (null = quitarlo).
+   * `vista`: la sugerencia que tenía delante; solo ESA sale de lo propuesto (una más nueva que no vio se queda).
+   */
+  | { op: "ajusteDelObjetivo"; valor: string | null; vista?: string | null }
+  /** 2026-11-08: «Descartar» el ajuste que sugería Nexus (`texto`, el que se veía). Queda como lápida: no vuelve. */
+  | { op: "descartarAjusteDelObjetivo"; texto: string }
+  /** 2026-11-08: las respuestas a lo que preguntó Nexus para armar la guía. Las respondidas salen de lo propuesto. */
+  | { op: "responderParaLaGuia"; respuestas: { pregunta: string; respuesta: string }[] }
   /** K5: «No» a la pregunta «¿Es la sesión 2 con Marketing?»: esa reunión no se vuelve a sugerir. */
   | { op: "descartarAsociacion"; claves: string[] }
   /**
@@ -1519,6 +1556,48 @@ function aplicarUna(estado: EstadoDeExploracion, op: Operacion, validez: Validez
       const { comoLlego: _antes, ...resto } = estado.contenido;
       void _antes;
       return { ok: true, estado: { ...estado, contenido: op.valor ? { ...resto, comoLlego: op.valor } : resto } };
+    }
+    case "ajusteDelObjetivo":
+    case "descartarAjusteDelObjetivo": {
+      /* Sale de lo propuesto SOLO la sugerencia que se veía (la de la guía o la de la primera lectura): una más nueva que
+         llegó con la pantalla abierta se queda (revisión del 2026-11-08). */
+      const vista = op.op === "descartarAjusteDelObjetivo" ? op.texto : (op.vista ?? null);
+      const p = estado.propuesta;
+      const propuesta = {
+        ...p,
+        ...(p.ajusteDelObjetivo && mismoTexto(p.ajusteDelObjetivo.texto, vista) ? { ajusteDelObjetivo: null } : {}),
+        ...(p.contextoPropuesto && mismoTexto(p.contextoPropuesto.objetivo, vista) ? { contextoPropuesto: { ...p.contextoPropuesto, objetivo: null } } : {}),
+        ...(op.op === "descartarAjusteDelObjetivo" ? { ajustesDescartados: [...(p.ajustesDescartados ?? []), op.texto.trim()].slice(-MAX_AJUSTES_DESCARTADOS) } : {}),
+      };
+      if (op.op === "descartarAjusteDelObjetivo") return { ok: true, estado: { ...estado, propuesta } };
+      const { contexto: antes, ...resto } = estado.contenido;
+      const texto = op.valor?.trim().replace(/\s+/g, " ") ?? "";
+      /* Sin ajuste, el objetivo es el de Smarteam. Lo demás del contexto de una exploración de antes (lo que ya sabemos, sus
+         tarjetas) se conserva: quitar el ajuste no lo borra (revisión del 2026-11-08). */
+      const contexto = texto
+        ? { ...(antes ?? {}), objetivo: texto, por: quien.por, en: quien.en }
+        : antes && (antes.sabemos || antes.tarjetas)
+          ? { ...antes, objetivo: "", por: quien.por, en: quien.en }
+          : undefined;
+      return { ok: true, estado: { ...estado, propuesta, contenido: contexto ? { ...resto, contexto } : resto } };
+    }
+    case "responderParaLaGuia": {
+      const nuevas = op.respuestas
+        .map((r) => ({ pregunta: r.pregunta.trim(), respuesta: r.respuesta.trim().slice(0, MAX_RESPUESTA_PARA_LA_GUIA) }))
+        .filter((r) => r.pregunta && r.respuesta)
+        .map((r) => ({ ...r, por: quien.por, en: quien.en }));
+      if (!nuevas.length) return { ok: false, error: "Escribe al menos una respuesta." };
+      // Salen las respondidas; una pregunta que llegó con la pantalla abierta se queda.
+      const antes = estado.propuesta.preguntasParaLaGuia;
+      const quedan = antes ? antes.preguntas.filter((q) => !nuevas.some((n) => mismoTexto(n.pregunta, q))) : [];
+      return {
+        ok: true,
+        estado: {
+          ...estado,
+          contenido: { ...estado.contenido, respuestasParaLaGuia: sumarRespuestas(estado.contenido.respuestasParaLaGuia ?? [], nuevas) },
+          propuesta: { ...estado.propuesta, preguntasParaLaGuia: antes && quedan.length ? { ...antes, preguntas: quedan } : null },
+        },
+      };
     }
     case "asociarSola": {
       const c = estado.contenido;

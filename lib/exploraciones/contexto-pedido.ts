@@ -9,6 +9,7 @@ import { esDelEquipoDeSmarteam } from "./agente-pedido";
 import { claveDelDestino, idDelItem, sinFundamentoDelCliente, type DestinoDePropuesta, type EstadoDeExploracion, type FuenteCitada, type ItemPropuesto } from "./contenido";
 import { MAX_DESAFIO_PROPUESTO, MAX_OBJETIVO_DE_LA_EXPLORACION, type PiezaDelBorrador } from "./contexto-de-la-exploracion";
 import { VALIDADOR_ESTRICTO } from "./esquemas";
+import { objetivoDeSmarteam } from "./objetivo-y-hallazgos";
 
 const MODELO_DEL_CONTEXTO = "claude-sonnet-4-6";
 
@@ -51,10 +52,11 @@ export function pedidoDelContexto(
 ): Anthropic.Messages.MessageCreateParamsNonStreaming {
   const fuentes = piezas.map((p) => p.de);
   const conFuente = (props: Record<string, unknown>) => ({ type: "object", properties: { ...props, fuente: { type: "string", enum: fuentes } }, required: [...Object.keys(props), "fuente"] });
-  const para = o.cs ? "entender su estrategia y planificar mejor lo que vamos a implementar" : "ver si le podemos proponer algo que le cambie los números";
+  /* 2026-11-08 (objetivo-y-hallazgos.ts): el objetivo de toda exploración es el de Smarteam; lo que se propone acá es su
+     AJUSTE para esta empresa, sobre todo por cómo llegó (la pieza «Cómo llegó» trae cómo da forma al ajuste). */
   const lineas = [
     "Propones, para alguien de Smarteam (una consultora que implementa HubSpot), el contexto de la exploración de un cliente, desde lo que ya sabemos de él. La persona lo valida: nada se guarda sin ella.",
-    `- objetivo: el OBJETIVO DE LA EXPLORACIÓN, en una o dos frases (40 palabras como mucho): por qué exploramos esta empresa y qué queremos salir sabiendo, para ${para}. Desde lo que dicen las fuentes; si no dan para nada concreto, vacío.`,
+    `- objetivo: el objetivo de toda exploración es el de Smarteam: «${objetivoDeSmarteam(o.cs ? "cs" : "venta")}». Escribe solo su AJUSTE para esta empresa, en una o dos frases (40 palabras como mucho), en infinitivo: qué hay que enfocar o confirmar primero, según cómo llegó y lo que dicen las fuentes. Si el de Smarteam alcanza o las fuentes no dan para nada concreto, vacío.`,
     o.conDesafio
       ? "- desafio: el DESAFÍO PRINCIPAL de la empresa, en una o dos frases (50 palabras como mucho), con sus palabras si se puede. Un problema de su negocio, no una solución ni un producto. Solo si las fuentes lo dicen; si no, vacío."
       : null,

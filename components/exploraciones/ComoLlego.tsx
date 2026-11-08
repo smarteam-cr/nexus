@@ -58,7 +58,7 @@ export function ComoLlego({ contactos }: { contactos: readonly ContactoParaLaLle
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
           <h3 className="text-sm font-semibold text-fg">Cómo llegó</h3>
-          <p className="text-xs text-fg-muted">Lo propone Nexus desde HubSpot; lo confirmas tú. Con «En frío» o «Referido», la primera sesión es para abrir la puerta.</p>
+          <p className="text-xs text-fg-muted">Lo propone Nexus desde HubSpot; lo confirmas tú. Da forma al ajuste del objetivo de la exploración; con «En frío», «Referido» o ABM, la primera sesión es para abrir la puerta.</p>
         </div>
         {confirmado && !editando && puedeEditar && (
           <BotonTexto

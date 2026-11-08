@@ -32,7 +32,7 @@ describe("K2 · «Cómo llegó» lo propone Nexus desde HubSpot", () => {
     expect(viaDeLaFuenteDeLead("Diagnóstico Form")).toBe("test");
     expect(viaDeLaFuenteDeLead("Referidos")).toBe("referido");
     expect(viaDeLaFuenteDeLead("Prospección Linkedin")).toBe("frio");
-    expect(viaDeLaFuenteDeLead("ABM")).toBe("frio");
+    expect(viaDeLaFuenteDeLead("ABM")).toBe("abm");
     expect(viaDeLaFuenteDeLead("Google ADS")).toBe("web");
     expect(viaDeLaFuenteDeLead(null)).toBeNull();
     expect(viaDeLaFuenteDeLead("algo nuevo")).toBeNull();

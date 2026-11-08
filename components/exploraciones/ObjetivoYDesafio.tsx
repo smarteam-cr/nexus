@@ -3,9 +3,10 @@
 /**
  * ObjetivoYDesafio — arriba del inicio de la Exploración (2026-11-07, Elías: «el usuario no rellena forms: valida o
  * modifica sugerencias»; los tres niveles, misma fecha). Ninguna tarjeta vacía para llenar:
- *   · El objetivo de la exploración, UNA vez para toda la exploración: lo confirmado o, si no hay, el que sugiere Nexus con
- *     lo que ya sabe (el traspaso, cómo llegó, las notas de HubSpot, las reuniones). Lo pide una sola vez por exploración
- *     (`usePropuestaDelContexto`). La Preparación lo muestra solo mientras falta (`ObjetivoDeLaExploracion`).
+ *   · El objetivo de la exploración: desde el 2026-11-08 (tercera vuelta) es el de Smarteam, fijo y general
+ *     (lib/exploraciones/objetivo-y-hallazgos.ts). Debajo, su AJUSTE para esta empresa: el confirmado, o el que sugiere
+ *     Nexus desde cómo llegó (la primera lectura) o desde los hallazgos de las sesiones (cada guía), para usar o descartar.
+ *     La guía ya no lo espera.
  *   · Lo de la EMPRESA, de su ficha (Información del cliente): el desafío principal («Dolor principal») y el resultado del
  *     negocio (los resultados de sus proyectos o, en la preventa, su línea de «Retos estratégicos»). Si la ficha no los
  *     tiene, los propone Nexus y, al validarlos, van a la ficha como propuesta: ahí los confirma Customer Success.
@@ -15,6 +16,8 @@ import { useState } from "react";
 import { BotonAzul, BotonBlanco, BotonTexto, IconoDeSugerencia, ROTULO_DEL_SISTEMA } from "@/components/ui/sistema";
 import { useToast } from "@/components/ui/Toast";
 import { MAX_DESAFIO_PROPUESTO, MAX_OBJETIVO_DE_LA_EXPLORACION } from "@/lib/exploraciones/contexto-de-la-exploracion";
+import { ajusteSugerido, objetivoDeSmarteam } from "@/lib/exploraciones/objetivo-y-hallazgos";
+import { NOMBRE_DE_LA_VIA } from "@/lib/exploraciones/como-llego";
 import { cn } from "@/lib/cn";
 import { useLienzo } from "./contexto";
 import { usePropuestaDelContexto } from "./ContextoDeLaPreparacion";
@@ -133,34 +136,124 @@ function TarjetaQueSeValida({
 
 /** Las tarjetas del objetivo y de la empresa, con la propuesta de Nexus. */
 function useElContexto() {
-  const { exp, cambiar } = useLienzo();
+  const { exp } = useLienzo();
   const cx = exp.estado.contenido.contexto;
   const propuesta = usePropuestaDelContexto(true);
-  const usarObjetivo = (texto: string) =>
-    cambiar([{ op: "contexto", valor: { objetivo: texto.slice(0, MAX_OBJETIVO_DE_LA_EXPLORACION), ...(cx?.sabemos ? { sabemos: cx.sabemos } : {}), ...(cx?.tarjetas ? { tarjetas: cx.tarjetas } : {}) } }], {
-      exito: "Objetivo de la exploración confirmado.",
-    });
-  return { cx, usarObjetivo, ...propuesta };
+  return { cx, ...propuesta };
 }
 
-/** El objetivo de la exploración: se responde UNA vez, para toda la exploración (2026-11-07, Elías). */
+/**
+ * El objetivo de la exploración (2026-11-08, Elías): el de Smarteam, igual en todas, y debajo su ajuste para esta empresa.
+ * El ajuste sugerido sale de cómo llegó y de los hallazgos de las sesiones; el vendedor lo usa, lo corrige o lo descarta.
+ */
 export function ObjetivoDeLaExploracion() {
-  const { marco } = useLienzo();
-  const { cx, propuesto, proponiendo, usarObjetivo } = useElContexto();
+  const { exp, marco, puedeEditar, guardando, cambiar, irA } = useLienzo();
+  const { cx, proponiendo } = useElContexto();
+  const [editando, setEditando] = useState<string | null>(null);
+  const confirmado = cx?.objetivo.trim() ? cx : null;
+  const sugerido = ajusteSugerido(exp.estado.propuesta, confirmado?.objetivo);
+  const llego = exp.estado.contenido.comoLlego;
+  // Lleva la sugerencia que se veía: solo esa sale de lo propuesto (una más nueva que llegó entretanto se queda).
+  const guardar = (valor: string | null, exito: string) =>
+    cambiar([{ op: "ajusteDelObjetivo", valor: valor?.slice(0, MAX_OBJETIVO_DE_LA_EXPLORACION) ?? null, vista: sugerido?.texto ?? null }], { exito }).then((ok) => {
+      if (ok) setEditando(null);
+      return ok;
+    });
+  const descartar = (texto: string) => cambiar([{ op: "descartarAjusteDelObjetivo", texto }]);
+
   return (
-    <TarjetaQueSeValida
-      rotulo="Objetivo de la exploración"
-      valido={cx?.objetivo.trim() ? { texto: cx.objetivo, pie: `Confirmado${cx.por ? ` por ${cx.por}` : ""}. Vale para todas las sesiones.` } : null}
-      sugerido={propuesto?.objetivo ? { texto: propuesto.objetivo, pie: "Sale de lo que Nexus ya sabe de la empresa. Úsalo tal cual o corrígelo." } : null}
-      cargando={proponiendo}
-      vacio={
-        marco.clave === "cs"
-          ? "Nexus no tiene todavía de dónde sugerirlo: ¿para qué exploramos esta cuenta?"
-          : "Nexus no tiene todavía de dónde sugerirlo: ¿por qué exploramos esta empresa y qué queremos lograr?"
-      }
-      max={MAX_OBJETIVO_DE_LA_EXPLORACION}
-      usar={usarObjetivo}
-    />
+    <section className="flex flex-col gap-3 rounded-xl border border-line bg-surface px-[18px] py-4">
+      <div className="space-y-1.5">
+        <p className={ROTULO_DEL_SISTEMA}>Objetivo de la exploración</p>
+        <p className="text-[15px] font-semibold leading-[1.4] text-fg">{objetivoDeSmarteam(marco.clave)}</p>
+        <p className="text-xs text-fg-muted">El de Smarteam, igual en todas las exploraciones.</p>
+      </div>
+      <div className="space-y-2 border-t border-line pt-3">
+        <div className="flex items-center gap-2">
+          <p className={cn(ROTULO_DEL_SISTEMA, "flex-1")}>Para {exp.empresa.nombre}</p>
+          {confirmado && puedeEditar && editando === null && (
+            <>
+              <BotonTexto disabled={guardando} onClick={() => void guardar(null, "Quitaste el ajuste: vale el objetivo de Smarteam.")}>
+                Quitar
+              </BotonTexto>
+              <BotonTexto onClick={() => setEditando(confirmado.objetivo)}>Editar</BotonTexto>
+            </>
+          )}
+        </div>
+        {editando !== null ? (
+          <div className="flex flex-col gap-2">
+            <textarea
+              value={editando}
+              onChange={(e) => setEditando(e.target.value)}
+              maxLength={MAX_OBJETIVO_DE_LA_EXPLORACION}
+              rows={3}
+              autoFocus
+              aria-label={`Ajuste del objetivo para ${exp.empresa.nombre}`}
+              placeholder="Qué hay que enfocar o confirmar primero con esta empresa"
+              className={CAMPO}
+            />
+            <div className="flex justify-end gap-2">
+              <BotonTexto onClick={() => setEditando(null)}>Cancelar</BotonTexto>
+              <BotonAzul disabled={guardando || !editando.trim()} onClick={() => void guardar(editando.trim(), "Ajuste del objetivo guardado.")}>
+                Guardar
+              </BotonAzul>
+            </div>
+          </div>
+        ) : confirmado ? (
+          <>
+            <p className="text-sm leading-[1.5] text-fg">{confirmado.objetivo}</p>
+            <p className="text-xs text-fg-muted">Ajuste confirmado{confirmado.por ? ` por ${confirmado.por}` : ""}. Vale para todas las sesiones.</p>
+          </>
+        ) : (
+          !sugerido && (
+            <div className="flex flex-wrap items-center gap-3">
+              <p className="min-w-0 flex-1 text-[13px] text-fg-muted">
+                {proponiendo ? "Nexus está leyendo lo que ya sabe de la empresa…" : "Sin ajuste: vale el objetivo de Smarteam. Nexus sugiere uno cuando cómo llegó o una sesión lo piden."}
+              </p>
+              {puedeEditar && !proponiendo && <BotonBlanco onClick={() => setEditando("")}>Ajustarlo</BotonBlanco>}
+            </div>
+          )
+        )}
+        {sugerido && editando === null && (
+          <div className="flex flex-col gap-2 rounded-lg border border-info-line bg-info-surface px-3.5 py-3">
+            <p className={cn(ROTULO_DEL_SISTEMA, "flex items-center gap-1.5 text-brand")}>
+              <IconoDeSugerencia className="h-[13px] w-[13px]" />
+              {confirmado ? "Nexus sugiere cambiar el ajuste" : "Nexus sugiere un ajuste"}
+            </p>
+            <p className="text-sm font-semibold leading-[1.45] text-fg">{sugerido.texto}</p>
+            <p className="text-xs text-fg-muted">
+              {sugerido.porque
+                ? `Por qué: ${sugerido.porque}`
+                : sugerido.de === "llegada"
+                  ? `Sale de cómo llegó${llego ? ` (${NOMBRE_DE_LA_VIA[llego.via].toLowerCase()})` : ""} y de lo que Nexus ya sabe de la empresa.`
+                  : "Sale de los hallazgos de las sesiones."}
+            </p>
+            {puedeEditar && (
+              <div className="flex flex-wrap items-center justify-end gap-2">
+                <BotonTexto disabled={guardando} onClick={() => void descartar(sugerido.texto)}>
+                  Descartar
+                </BotonTexto>
+                <BotonBlanco disabled={guardando} onClick={() => setEditando(sugerido.texto)}>
+                  Editar
+                </BotonBlanco>
+                <BotonAzul disabled={guardando} onClick={() => void guardar(sugerido.texto, "Ajuste del objetivo guardado.")}>
+                  Usar
+                </BotonAzul>
+              </div>
+            )}
+          </div>
+        )}
+        {marco.clave !== "cs" && !llego && (
+          <p className="text-xs text-fg-muted">
+            Para que el ajuste tenga en cuenta cómo llegó el lead,{" "}
+            <button type="button" className="text-brand hover:underline" onClick={() => irA("preparacion")}>
+              confírmalo en Preparación
+            </button>
+            .
+          </p>
+        )}
+      </div>
+    </section>
   );
 }
 
@@ -172,7 +265,7 @@ export default function ObjetivoYDesafio() {
   const { marco, irA } = useLienzo();
   const { todas } = useSesiones();
   const toast = useToast();
-  const { cx, propuesto, empresa, proponiendo, validarEnLaFicha, usarObjetivo } = useElContexto();
+  const { propuesto, empresa, proponiendo, validarEnLaFicha } = useElContexto();
 
   // El desafío que dejó escrito una sesión (2026-11-06, a mano o con «Proponer desde la reunión»): ya lo validó alguien.
   const deUnaSesion = [...todas].reverse().find((p) => p.sesion?.desafio?.texto) ?? null;
@@ -212,19 +305,7 @@ export default function ObjetivoYDesafio() {
 
   return (
     <div className="flex flex-col gap-3">
-      <TarjetaQueSeValida
-        rotulo="Objetivo de la exploración"
-        valido={cx?.objetivo.trim() ? { texto: cx.objetivo, pie: `Confirmado${cx.por ? ` por ${cx.por}` : ""}. Vale para todas las sesiones.` } : null}
-        sugerido={propuesto?.objetivo ? { texto: propuesto.objetivo, pie: "Sale de lo que Nexus ya sabe de la empresa. Úsalo tal cual o corrígelo." } : null}
-        cargando={proponiendo}
-        vacio={
-          marco.clave === "cs"
-            ? "Nexus no tiene todavía de dónde sugerirlo: ¿para qué exploramos esta cuenta?"
-            : "Nexus no tiene todavía de dónde sugerirlo: ¿por qué exploramos esta empresa y qué queremos lograr?"
-        }
-        max={MAX_OBJETIVO_DE_LA_EXPLORACION}
-        usar={usarObjetivo}
-      />
+      <ObjetivoDeLaExploracion />
       <p className={cn(ROTULO_DEL_SISTEMA, "mt-1")}>La empresa · de su ficha</p>
       <div className="grid gap-3 lg:grid-cols-2">
         <TarjetaQueSeValida

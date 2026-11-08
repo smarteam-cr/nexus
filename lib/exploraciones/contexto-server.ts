@@ -19,7 +19,7 @@ import { conContextoDeIA } from "@/lib/ai/contexto-de-corrida";
 import { comunicacionesDeLaCuenta } from "@/lib/comunicaciones/lectura-server";
 import { contextoDeSmarteam } from "@/lib/smarteam/contexto";
 import { formasDeVoseo } from "@/lib/ui/voseo-formas";
-import { NOMBRE_DE_LA_VIA } from "./como-llego";
+import { textoDeComoLlego } from "./como-llego";
 import {
   borradorDeLoQueSabemos,
   desafioDeLaFichaGuardada,
@@ -70,7 +70,8 @@ export async function borradorDelContexto(exploracionId: string): Promise<{ sabe
     if (handoff) piezas.push({ de: "Lo que entregó ventas en el traspaso", texto: handoff.texto.slice(0, 2200) });
   } else {
     const llego = estado.contenido.comoLlego;
-    if (llego) piezas.push({ de: "Cómo llegó", texto: `${NOMBRE_DE_LA_VIA[llego.via]}${llego.referidoPor ? `: lo refirió ${llego.referidoPor}` : ""}.` });
+    // Con cómo da forma al ajuste del objetivo (como-llego.ts › PISTA_DEL_AJUSTE, 2026-11-08).
+    if (llego) piezas.push({ de: "Cómo llegó", texto: textoDeComoLlego(llego) });
     const notas = await comunicacionesDeLaCuenta(fila.clientId, { tope: 30, tipo: "nota" })
       .then((ns) => notasParaLaGuia(ns, 3, 500))
       .catch(() => []);
@@ -193,7 +194,7 @@ export async function redactarMensajePrevio(
     tipo,
     empresa: fila.client.name,
     industria: fila.client.industry,
-    objetivo: estado.contenido.contexto?.objetivo ?? null,
+    objetivo: estado.contenido.contexto?.objetivo.trim() || null,
     sabemos: estado.contenido.contexto?.sabemos ?? null,
     conQuien: textoDeConQuien(primera?.conQuien),
     referencias: (smarteam?.perfil.clientesDeReferencia ?? []).map((r) => `${r.industria}: ${r.nombre ?? "(sin nombre)"}`).slice(0, 12),

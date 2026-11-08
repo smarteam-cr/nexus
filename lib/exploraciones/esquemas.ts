@@ -126,6 +126,20 @@ import {
 } from "./ajustes-de-la-guia";
 import { MAX_CLAVE_DE_NOTA } from "./notas-de-sesion";
 import { MAX_REFERIDO_POR, VIAS_DE_LLEGADA, type ComoLlego } from "./como-llego";
+import {
+  MAX_AJUSTES_DESCARTADOS,
+  MAX_HALLAZGOS,
+  MAX_LARGO_DE_LA_PREGUNTA_PARA_LA_GUIA,
+  MAX_LARGO_DEL_HALLAZGO,
+  MAX_PORQUE_DEL_AJUSTE,
+  MAX_PREGUNTAS_PARA_LA_GUIA,
+  MAX_RESPUESTA_PARA_LA_GUIA,
+  MAX_RESPUESTAS_PARA_LA_GUIA,
+  type AjusteDelObjetivo,
+  type HallazgosDeLaExploracion,
+  type PreguntasParaLaGuia,
+  type RespuestaParaLaGuia,
+} from "./objetivo-y-hallazgos";
 import { MAX_ASUNTO_DEL_CORREO, MAX_CUERPO_DEL_CORREO, MAX_DESTINATARIOS } from "./correo-de-seguimiento";
 
 const texto = (max: number) => z.string().trim().max(max);
@@ -492,9 +506,33 @@ const TarjetasSchema = z
   .object(Object.fromEntries(CLAVES_DE_LO_QUE_SABEMOS.map((k) => [k, z.object({ texto: textoLleno(MAX_TEXTO_DE_LA_TARJETA), fuente: textoLleno(120) }).optional()])))
   .strict() as unknown as z.ZodType<TarjetasDeLoQueSabemos>;
 const ContextoDeLaExploracionSchema: z.ZodType<ContextoDeLaExploracion> = z.object({
-  objetivo: textoLleno(MAX_OBJETIVO_DE_LA_EXPLORACION),
+  // Vacío desde el 2026-11-08: se quitó el ajuste y quedó lo de antes del contexto (lo que ya sabemos, sus tarjetas).
+  objetivo: z.string().trim().max(MAX_OBJETIVO_DE_LA_EXPLORACION),
   sabemos: textoLleno(MAX_LO_QUE_SABEMOS).optional(),
   tarjetas: TarjetasSchema.optional(),
+  por: z.string().max(200).nullable(),
+  en: FECHA_ISO,
+});
+/* 2026-11-08 (objetivo-y-hallazgos.ts): el ajuste al objetivo, los hallazgos, lo que pregunta Nexus y lo que respondió el vendedor. */
+const AjusteDelObjetivoSchema: z.ZodType<AjusteDelObjetivo> = z.object({
+  texto: textoLleno(MAX_OBJETIVO_DE_LA_EXPLORACION),
+  porque: z.string().max(MAX_PORQUE_DEL_AJUSTE).nullable(),
+  en: FECHA_ISO,
+  corridaId: z.string().max(60).nullable(),
+});
+const HallazgosSchema: z.ZodType<HallazgosDeLaExploracion> = z.object({
+  lista: z.array(textoLleno(MAX_LARGO_DEL_HALLAZGO)).min(1).max(MAX_HALLAZGOS),
+  en: FECHA_ISO,
+  corridaId: z.string().max(60).nullable(),
+});
+const PreguntasParaLaGuiaSchema: z.ZodType<PreguntasParaLaGuia> = z.object({
+  preguntas: z.array(textoLleno(MAX_LARGO_DE_LA_PREGUNTA_PARA_LA_GUIA)).min(1).max(MAX_PREGUNTAS_PARA_LA_GUIA),
+  en: FECHA_ISO,
+  corridaId: z.string().max(60).nullable(),
+});
+const RespuestaParaLaGuiaSchema: z.ZodType<RespuestaParaLaGuia> = z.object({
+  pregunta: textoLleno(MAX_LARGO_DE_LA_PREGUNTA_PARA_LA_GUIA),
+  respuesta: textoLleno(MAX_RESPUESTA_PARA_LA_GUIA),
   por: z.string().max(200).nullable(),
   en: FECHA_ISO,
 });
@@ -555,6 +593,19 @@ export const OperacionSchema = z.discriminatedUnion("op", [
   z.object({ op: z.literal("responsable"), email: z.string().email().max(200).nullable() }),
   z.object({ op: z.literal("alertaTecnicaVista") }),
   z.object({ op: z.literal("comoLlego"), valor: ComoLlegoSchema.nullable() }),
+  z.object({
+    op: z.literal("ajusteDelObjetivo"),
+    valor: z.string().trim().max(MAX_OBJETIVO_DE_LA_EXPLORACION).nullable(),
+    vista: z.string().max(MAX_OBJETIVO_DE_LA_EXPLORACION).nullable().optional(),
+  }),
+  z.object({ op: z.literal("descartarAjusteDelObjetivo"), texto: textoLleno(MAX_OBJETIVO_DE_LA_EXPLORACION) }),
+  z.object({
+    op: z.literal("responderParaLaGuia"),
+    respuestas: z
+      .array(z.object({ pregunta: textoLleno(MAX_LARGO_DE_LA_PREGUNTA_PARA_LA_GUIA), respuesta: z.string().trim().max(MAX_RESPUESTA_PARA_LA_GUIA) }))
+      .min(1)
+      .max(MAX_PREGUNTAS_PARA_LA_GUIA),
+  }),
   z.object({
     op: z.literal("contexto"),
     valor: z
@@ -796,6 +847,13 @@ export function leerContenido(raw: unknown): ContenidoDeExploracion {
   if (llego.success) c.comoLlego = llego.data;
   const contexto = ContextoDeLaExploracionSchema.safeParse(raw.contexto);
   if (contexto.success) c.contexto = contexto.data;
+  if (Array.isArray(raw.respuestasParaLaGuia)) {
+    const respuestas = raw.respuestasParaLaGuia.flatMap((r) => {
+      const x = RespuestaParaLaGuiaSchema.safeParse(r);
+      return x.success ? [x.data] : [];
+    });
+    if (respuestas.length) c.respuestasParaLaGuia = respuestas.slice(-MAX_RESPUESTAS_PARA_LA_GUIA);
+  }
   const previo = ContactoPrevioSchema.safeParse(raw.contactoPrevio);
   if (previo.success) c.contactoPrevio = previo.data;
   if (Array.isArray(raw.asociacionesDescartadas)) {
@@ -938,6 +996,14 @@ export function leerPropuesta(raw: unknown): PropuestaDeExploracion {
   if (propuesto.success) p.contextoPropuesto = propuesto.data;
   const tecnica = AlertaTecnicaSchema.safeParse(raw.alertaTecnica);
   p.alertaTecnica = tecnica.success ? tecnica.data : null;
+  const ajuste = AjusteDelObjetivoSchema.safeParse(raw.ajusteDelObjetivo);
+  if (ajuste.success) p.ajusteDelObjetivo = ajuste.data;
+  const hallazgos = HallazgosSchema.safeParse(raw.hallazgos);
+  if (hallazgos.success) p.hallazgos = hallazgos.data;
+  const preguntas = PreguntasParaLaGuiaSchema.safeParse(raw.preguntasParaLaGuia);
+  if (preguntas.success) p.preguntasParaLaGuia = preguntas.data;
+  const descartados = listaDeTextos(raw.ajustesDescartados, MAX_AJUSTES_DESCARTADOS).filter((t) => t.length <= MAX_OBJETIVO_DE_LA_EXPLORACION);
+  if (descartados.length) p.ajustesDescartados = descartados;
   p.lecturas = Object.fromEntries(Object.entries(registroValido(raw.lecturas, CLAVE_DE_LECTURA, LecturaDeReunionSchema)).slice(-MAX_LECTURAS));
   p.correos = Object.fromEntries(Object.entries(registroValido(raw.correos, CLAVE_DE_LECTURA, CorreoDeSeguimientoSchema)).slice(-MAX_CORREOS));
   const posicionamiento = PosicionamientoDelProspectoSchema.safeParse(raw.posicionamiento);
