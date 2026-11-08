@@ -75,6 +75,9 @@ SDK · HubSpot/Google Workspace/Apify (versiones exactas: ARCHITECTURE Parte 0 �
   revisión: revisores por riesgo, verificación adversarial y lo que no queda garantizado). `/revisar` corre tsc, eslint,
   las pruebas y, si el cambio toca datos de clientes, `check:invariants`. El hook de commit que corre tsc y eslint vive
   fuera de git (`.claude/hooks/`): no está en todas las PCs ni ve un commit hecho desde PowerShell.
+- **Un rediseño no esconde lo que ya existía sin preguntar.** Antes de quitar, plegar o mover una pieza que estaba a la
+  vista, lista cada pieza del antes y su destino; lo que baja de visibilidad se le pregunta a Elías. El cierre del
+  rediseño trae esa lista (8 nov: el feedback de la sesión quedó plegado en «Más de esta sesión» sin que nadie lo dijera).
 - **No push hasta que el usuario lo pida.**
 - **El roadmap (`docs/roadmap.md`) lo edita solo la sesión que junta las ramas en `main`.** Una sesión de trabajo no lo
   toca: termina con un bloque «Para el roadmap» (qué cambió y las pruebas con número, pasos exactos y resultado esperado).
