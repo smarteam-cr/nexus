@@ -4,8 +4,8 @@
  * solo esa se anima (Elías: «la animación de la escala como que se corta, empieza desde cero»).
  */
 import { describe, expect, it } from "vitest";
-import { alinearArea, alTocarUnArea, alTocarUnNodo, areasAlCambiar, partesPorEje, principalYFuera, SIN_CAMBIO, type AreaSuperpuesta } from "./areas-superpuestas";
-import type { DimensionDelRadar } from "./radar-de-una-empresa";
+import { alinearArea, alTocarUnArea, alTocarUnNodo, areasAlCambiar, ordenConLasQueSalen, partesPorEje, piezasDeLaVista, vistaAlCambiar, vistaInicial, vistaQuieta, principalYFuera, SIN_CAMBIO, type AreaSuperpuesta } from "./areas-superpuestas";
+import { cajaQueAbarca, dibujoDelRadar, GRANDE, type DimensionDelRadar } from "./radar-de-una-empresa";
 
 const dims = (area: string, capas: ("base" | "produccion")[]): DimensionDelRadar[] =>
   capas.map((capa, i) => ({ clave: `${area}.${i + 1}`, nombre: `${area}-${i + 1}`, capa, preguntada: true, nivel: "I", puntaje: 30 }));
@@ -118,5 +118,65 @@ describe("areasAlCambiar: al sumar o sacar un área, solo esa se anima", () => {
     expect(segundo).toEqual({ entran: ["Servicio"], salen: [M] });
     const tercero = areasAlCambiar([V, S], [V, S, M], segundo);
     expect(tercero).toEqual({ entran: ["Servicio", "Marketing"], salen: [] });
+  });
+});
+
+describe("lo que no salta al cambiar de área (8 nov: «la altura sube porque hay más contenido o menos»)", () => {
+  it("la tarjeta que sale se pliega donde estaba, no al final", () => {
+    expect(ordenConLasQueSalen(["V", "M", "S"], ["V", "S"], ["M"])).toEqual(["V", "M", "S"]);
+    expect(ordenConLasQueSalen(["M", "V"], ["V"], ["M"])).toEqual(["M", "V"]);
+    expect(ordenConLasQueSalen(["V"], ["V", "S"], [])).toEqual(["V", "S"]);
+    // Una que sale y no estaba en lo de antes va al final; una que volvió no se repite.
+    expect(ordenConLasQueSalen(["V"], ["V"], ["X"])).toEqual(["V", "X"]);
+    expect(ordenConLasQueSalen(["V", "M"], ["V", "M"], ["M"])).toEqual(["V", "M"]);
+  });
+
+  it("el radar usa la caja que abarca a todas las áreas: cambiar la principal no le cambia el alto", () => {
+    const nombreDeNivel = (l: string) => l;
+    const corta = dims("A", ["base", "base", "produccion", "produccion"]);
+    const larga = dims("B", ["base", "base", "base", "produccion", "produccion", "produccion", "produccion", "produccion"]).map((d) => ({
+      ...d,
+      nombre: `${d.nombre} con un nombre larguísimo que empuja el rótulo para afuera`,
+    }));
+    const a = dibujoDelRadar(GRANDE, corta, { nombreDeNivel }).caja;
+    const b = dibujoDelRadar(GRANDE, larga, { nombreDeNivel }).caja;
+    const comun = cajaQueAbarca([a, b]);
+    expect(cajaQueAbarca([b, a])).toEqual(comun);
+    for (const c of [a, b]) {
+      expect(comun[0]).toBeLessThanOrEqual(c[0]);
+      expect(comun[1]).toBeLessThanOrEqual(c[1]);
+      expect(comun[0] + comun[2]).toBeGreaterThanOrEqual(c[0] + c[2]);
+      expect(comun[1] + comun[3]).toBeGreaterThanOrEqual(c[1] + c[3]);
+    }
+    expect(cajaQueAbarca([a])).toEqual(a);
+  });
+});
+
+describe("la lista que se anima, con clics rápidos", () => {
+  const ver = (v: Parameters<typeof piezasDeLaVista>[0]) => piezasDeLaVista(v).map((p) => (p.fase ? `${p.id}:${p.fase}` : p.id));
+
+  it("al abrir no se anima nada; sumar entra y sacar se pliega en su lugar", () => {
+    const v0 = vistaInicial(["V", "M", "S"]);
+    expect(ver(v0)).toEqual(["V", "M", "S"]);
+    const v1 = vistaAlCambiar(v0, ["V", "S"]);
+    expect(ver(v1)).toEqual(["V", "M:sale", "S"]);
+    expect(ver(vistaQuieta(v1))).toEqual(["V", "S"]);
+    expect(ver(vistaAlCambiar(vistaQuieta(v1), ["V", "S", "M"]))).toEqual(["V", "S", "M:entra"]);
+  });
+
+  it("sacar dos seguidas: las dos se pliegan donde estaban, sin repetirse", () => {
+    const v1 = vistaAlCambiar(vistaInicial(["V", "M", "S"]), ["V", "S"]);
+    const v2 = vistaAlCambiar(v1, ["V"]);
+    expect(ver(v2)).toEqual(["V", "M:sale", "S:sale"]);
+    expect(ver(vistaQuieta(v2))).toEqual(["V"]);
+  });
+
+  it("sacar y volver a sumar la misma antes de que termine: vuelve a entrar, una sola vez", () => {
+    const v1 = vistaAlCambiar(vistaInicial(["V", "M"]), ["V"]);
+    const v2 = vistaAlCambiar(v1, ["V", "M"]);
+    expect(ver(v2)).toEqual(["V", "M:entra"]);
+    const v3 = vistaAlCambiar(v2, ["V"]);
+    expect(ver(v3)).toEqual(["V", "M:sale"]);
+    expect(ver(vistaQuieta(v3))).toEqual(["V"]);
   });
 });

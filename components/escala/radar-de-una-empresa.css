@@ -28,6 +28,10 @@
 .rde-leyenda { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 8px 28px; padding-top: 8px; border-top: 1px solid #edf1f7; font-size: 13.5px; line-height: 1.4; color: #3d4b63; }
 .rde-leyenda > span { display: inline-flex; align-items: center; gap: 8px; }
 .rde-leyenda svg { flex: none; }
+/* La escala interna (`todasLasAreas`): la leyenda guarda dos renglones aunque esté vacía o tenga uno, así que sumar la
+   primera área encima (su renglón de colores) no le cambia el alto al radar (8 nov). Vacía, sin la raya de arriba. */
+.rde-leyenda-fija { min-height: 56px; }
+.rde-leyenda-fija:empty { border-top-color: transparent; }
 
 /* El teléfono: los nombres de las mitades arriba, el radar compacto y la lista de las dimensiones. */
 .rde-compacto { display: none; flex-direction: column; gap: 6px; }

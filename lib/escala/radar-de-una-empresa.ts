@@ -402,6 +402,20 @@ export function dibujoDelRadar(
   return { m, caja, guias, ejes, anillos, etapas, figura, vertices, objetivo, rotulos, numeros, mitades };
 }
 
+/**
+ * La caja que abarca a todas (La escala interna, 8 nov): cada área se dibuja en la misma caja, así que cambiar cuál es
+ * la principal no le cambia el alto al radar y la página no salta (Elías: «la altura sube porque hay más contenido o
+ * menos»). Cada caja es [x, y, ancho, alto], como la de `dibujoDelRadar`.
+ */
+export function cajaQueAbarca(cajas: readonly (readonly [number, number, number, number])[]): [number, number, number, number] {
+  if (!cajas.length) return [0, 0, 0, 0];
+  const x0 = Math.min(...cajas.map((c) => c[0]));
+  const y0 = Math.min(...cajas.map((c) => c[1]));
+  const x1 = Math.max(...cajas.map((c) => c[0] + c[2]));
+  const y1 = Math.max(...cajas.map((c) => c[1] + c[3]));
+  return [x0, y0, x1 - x0, y1 - y0];
+}
+
 /** El estado que dice el número de una dimensión. */
 export function estadoDeLaDimension(d: DimensionDelRadar): EstadoDelRotulo {
   if (!d.preguntada) return { tipo: "noPreguntada", sinMedir: d.sinMedir };

@@ -122,3 +122,59 @@ export function areasAlCambiar<T extends { area: string }>(
   for (const a of antes) if (!hoy.has(a.area)) salen.set(a.area, a);
   return { entran, salen: [...salen.values()] };
 }
+
+/**
+ * El orden de una lista que se anima al cambiar (las tarjetas debajo del radar, 8 nov): las de `ahora`, en su orden, y
+ * cada una de `salen` donde estaba en `antes` (después de la última de antes que sigue a la vista), para que se pliegue
+ * en su lugar y no salte al final. Una que sale y no estaba en `antes` va al final.
+ */
+export function ordenConLasQueSalen(antes: readonly string[], ahora: readonly string[], salen: readonly string[]): string[] {
+  const out = [...ahora];
+  for (const id of salen) {
+    if (out.includes(id)) continue;
+    const i = antes.indexOf(id);
+    if (i < 0) {
+      out.push(id);
+      continue;
+    }
+    let pos = 0;
+    for (let k = i - 1; k >= 0; k--) {
+      const j = out.indexOf(antes[k]);
+      if (j >= 0) {
+        pos = j + 1;
+        break;
+      }
+    }
+    out.splice(pos, 0, id);
+  }
+  return out;
+}
+
+/** Una lista que se anima (ListaQueSeAnima.tsx): lo que está, lo que se veía antes del último cambio y qué se mueve. */
+export interface VistaDeLista {
+  ids: readonly string[];
+  seVeia: readonly string[];
+  cambio: CambioDeAreas<{ area: string }>;
+}
+
+export const vistaInicial = (ids: readonly string[]): VistaDeLista => ({ ids: [...ids], seVeia: [...ids], cambio: SIN_CAMBIO });
+
+const comoClaves = (ids: readonly string[]) => ids.map((area) => ({ area }));
+
+/** Al cambiar la lista: lo que se veía (con lo que todavía salía en su lugar) y qué entra y qué sale ahora. */
+export function vistaAlCambiar(v: VistaDeLista, ids: readonly string[]): VistaDeLista {
+  const seVeia = ordenConLasQueSalen(v.seVeia, v.ids, v.cambio.salen.map((a) => a.area));
+  return { ids: [...ids], seVeia, cambio: areasAlCambiar(comoClaves(v.ids), comoClaves(ids), v.cambio) };
+}
+
+/** Cuando termina la animación: nada se mueve y lo que salió ya no se dibuja. */
+export const vistaQuieta = (v: VistaDeLista): VistaDeLista => ({ ids: v.ids, seVeia: [...v.ids], cambio: SIN_CAMBIO });
+
+/** Las piezas a dibujar, en orden, con su fase: las que están y, donde estaban, las que salen. */
+export function piezasDeLaVista(v: VistaDeLista): { id: string; fase?: "entra" | "sale" }[] {
+  const salen = v.cambio.salen.map((a) => a.area);
+  return ordenConLasQueSalen(v.seVeia, v.ids, salen).map((id) => ({
+    id,
+    fase: !v.ids.includes(id) ? "sale" : v.cambio.entran.includes(id) ? "entra" : undefined,
+  }));
+}

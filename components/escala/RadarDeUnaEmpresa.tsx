@@ -40,6 +40,7 @@
 import type { ReactNode } from "react";
 import type { ClaveDeCapa, Letra } from "@/lib/escala/documento/tipos";
 import {
+  cajaQueAbarca,
   COMPACTO,
   cunasDelRadar,
   dibujoDelRadar,
@@ -123,6 +124,12 @@ export interface PropsDelRadarDeUnaEmpresa {
   color?: string;
   /** Otras áreas encima, cada una de su color (uso interno: ver el encabezado). */
   otras?: readonly AreaSuperpuesta[];
+  /**
+   * Las dimensiones de cada área que puede ser la principal (uso interno, 8 nov): el radar se dibuja en la caja que las
+   * abarca a todas y la leyenda guarda su lugar aunque esté vacía, así que sumar, sacar o cambiar de área no le cambia
+   * el alto. La página del cliente no lo pasa.
+   */
+  todasLasAreas?: readonly { dimensiones: readonly DimensionDelRadar[]; frena?: FrenoDelRadar | null }[];
 }
 
 const redondo = (n: number | null) => (n !== null && Number.isFinite(n) ? Math.round(n) : null);
@@ -137,6 +144,7 @@ export default function RadarDeUnaEmpresa({
   formato = "pantalla",
   color = C.figura,
   otras = [],
+  todasLasAreas,
 }: PropsDelRadarDeUnaEmpresa) {
   const nombreDeNivel = (l: Letra) => niveles.find((n) => n.letra === l)?.nombre ?? l;
   const dims = dimensiones.filter((d) => d.capa === "base" || d.capa === "produccion");
@@ -150,9 +158,12 @@ export default function RadarDeUnaEmpresa({
   const alineadas = otras.map((o) => alinearArea(dims, o));
   /** La leyenda no nombra el área que está saliendo. */
   const quedan = alineadas.filter((o) => o.fase !== "sale");
-  const comun = { area, dims, capas, nombreDeNivel, resultado, frena, figura: color, otras: alineadas };
+  const mismaCaja = todasLasAreas
+    ?.map((a) => ({ dims: a.dimensiones.filter((d) => d.capa === "base" || d.capa === "produccion"), frena: a.frena ?? null }))
+    .filter((a) => a.dims.length);
+  const comun = { area, dims, capas, nombreDeNivel, resultado, frena, figura: color, otras: alineadas, mismaCaja };
   const leyenda = (
-    <LeyendaDelRadar dims={dims} nombreDeNivel={nombreDeNivel} figura={color} areas={quedan.length ? [{ area, color }, ...quedan] : []} />
+    <LeyendaDelRadar dims={dims} nombreDeNivel={nombreDeNivel} figura={color} areas={quedan.length ? [{ area, color }, ...quedan] : []} fija={!!todasLasAreas} />
   );
 
   if (formato === "pdf") {
@@ -235,19 +246,22 @@ function LeyendaDelRadar({
   nombreDeNivel,
   figura,
   areas,
+  fija = false,
 }: {
   dims: readonly DimensionDelRadar[];
   nombreDeNivel: (l: Letra) => string;
   figura: string;
   /** Con otras áreas encima: todas, la principal primero, con su color. */
   areas: readonly { area: string; color: string }[];
+  /** Guarda su lugar aunque no tenga nada (La escala interna: el radar no cambia de alto). */
+  fija?: boolean;
 }) {
   const sinPreguntar = dims.some((d) => !d.preguntada);
   const noLoSe = dims.some((d) => d.preguntada && d.nivel && d.noLoSe);
   const porExplorar = dims.some((d) => d.preguntada && d.nivel && d.porExplorar && !d.noLoSe);
-  if (!sinPreguntar && !noLoSe && !porExplorar && !areas.length) return null;
+  if (!fija && !sinPreguntar && !noLoSe && !porExplorar && !areas.length) return null;
   return (
-    <div className="rde-leyenda">
+    <div className={fija ? "rde-leyenda rde-leyenda-fija" : "rde-leyenda"}>
       {areas.length > 0 && (
         <span>
           {areas.map((a) => (
@@ -308,9 +322,12 @@ function SvgDelRadar({
   interactivo = false,
   figura,
   otras,
+  mismaCaja,
 }: {
   figura: string;
   otras: readonly AreaAlineada[];
+  /** Las otras áreas que pueden ser la principal (con lo que las frena): el dibujo usa la caja que abarca a todas. */
+  mismaCaja?: readonly { dims: readonly DimensionDelRadar[]; frena: FrenoDelRadar | null }[];
   m: MedidasDelRadar;
   area: string;
   dims: readonly DimensionDelRadar[];
@@ -327,13 +344,14 @@ function SvgDelRadar({
   interactivo?: boolean;
 }) {
   const d = dibujoDelRadar(m, dims, { frena, capas, nombreDeNivel });
+  const caja = mismaCaja?.length ? cajaQueAbarca([d.caja, ...mismaCaja.map((a) => dibujoDelRadar(m, a.dims, { frena: a.frena, capas, nombreDeNivel }).caja)]) : d.caja;
   const vertFrena = d.vertices.find((v) => v.frena);
   const puntajeDelArea = redondo(resultado.puntaje);
   /** Las etapas que tienen que ver con el resultado: donde cae algún vértice y el objetivo de lo que más frena. */
   const enElResultado = new Set<Letra>([...d.vertices.map((v) => v.nivel), ...(d.objetivo ? [d.objetivo.nivel] : [])]);
 
   return (
-    <svg viewBox={d.caja.map((v) => f(v)).join(" ")} role="img" aria-label={etiqueta} className={`rde-svg${interactivo ? " rde-interactivo" : ""}`}>
+    <svg viewBox={caja.map((v) => f(v)).join(" ")} role="img" aria-label={etiqueta} className={`rde-svg${interactivo ? " rde-interactivo" : ""}`}>
       {d.guias.map(([a, b], i) => (
         <line key={`g${i}`} x1={f(a[0])} y1={f(a[1])} x2={f(b[0])} y2={f(b[1])} stroke={C.guia} strokeWidth={m.trazo.guia} strokeDasharray={m.rayas.guia} />
       ))}

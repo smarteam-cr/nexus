@@ -42,6 +42,7 @@ import { ordenParaExplorar, partesParaExplorar, resumenDeLoExplorado } from "@/l
 import { chequeoDelMapa, cuentaDelArea, loQueLaFrena, nivelDelVendedor, sinRiesgoSiSube, type PosicionEnElMapa } from "@/lib/exploraciones/mapa";
 import { diaCorto } from "@/lib/exploraciones/fechas";
 import AccesoALaEscala from "./AccesoALaEscala";
+import ListaQueSeAnima from "./ListaQueSeAnima";
 import { AL_LUGAR, DEL_LUGAR, useLienzo } from "./contexto";
 import FranjaDeSugerencias, { IconoDeSugerencia } from "./FranjaDeSugerencias";
 import { ConQueSeMide } from "./Identificacion";
@@ -638,7 +639,16 @@ function RadarDeLasAreas({ principal, otras, onElegir }: { principal: AreaDelLie
   // Con la principal adentro: si la sacan, se va como las demás.
   const conFase = useAreasConFase(areas);
   if (!calculo) return null;
-  const frena = loQueLaFrena(calculo);
+  /* Cada área que puede ser la principal, para que el radar se dibuje en la caja que las abarca a todas: elegir otro equipo
+     no le cambia el alto (8 nov, Elías: «la altura sube porque hay más contenido o menos»). */
+  const frenoDe = (c: AreaDelChequeo) => {
+    const fr = loQueLaFrena(c);
+    return fr?.dimensiones[0] && c.objetivo ? { clave: fr.dimensiones[0], objetivo: c.objetivo } : null;
+  };
+  const todasLasAreas = escala.areas.flatMap((a) => {
+    const c = a.id === principal.id ? calculo : calculoDelArea(escala, a, mapa.posiciones);
+    return c ? [{ dimensiones: dimensionesDelRadar(a, c, mapa.posiciones), frena: frenoDe(c) }] : [];
+  });
   const nombreDeCapa = (c: ClaveDeCapa) => escala.capas.find((x) => x.clave === c)?.nombre ?? c;
   const dimsDeLaPrincipal = areas[0]?.dimensiones ?? [];
   const superpuestas = conFase.filter((a) => a.area !== principal.nombre);
@@ -668,9 +678,10 @@ function RadarDeLasAreas({ principal, otras, onElegir }: { principal: AreaDelLie
             capas={(["base", "produccion"] as const).map((c) => ({ clave: c, nombre: nombreDeCapa(c), nivel: calculo.capas[c].nivel, puntaje: calculo.capas[c].puntaje }))}
             niveles={escala.niveles}
             resultado={{ nivel: calculo.nivel, puntaje: calculo.puntaje }}
-            frena={frena?.dimensiones[0] && calculo.objetivo ? { clave: frena.dimensiones[0], objetivo: calculo.objetivo } : null}
+            frena={frenoDe(calculo)}
             color={colorDelArea(principal.id)}
             otras={superpuestas}
+            todasLasAreas={todasLasAreas}
           />
         </div>
       </div>
@@ -752,7 +763,8 @@ function AreaConAlgo({
 
       <div className="flex gap-2.5 rounded-lg border border-info-line bg-info-surface px-3 py-2.5">
         <IconoDeSugerencia className="mt-0.5 h-[15px] w-[15px] flex-shrink-0 text-brand" />
-        <div className="flex flex-col gap-1 text-[13px] leading-[1.45]">
+        {/* Con lugar para el rótulo y dos renglones: cambiar de principal no corre el radar por un renglón (8 nov). */}
+        <div className="flex min-h-[60px] flex-col gap-1 text-[13px] leading-[1.45]">
           <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-brand">Por qué está ahí</span>
           {calculo.nivel && frena ? (
             <span className="text-fg">
@@ -774,17 +786,12 @@ function AreaConAlgo({
           {/* Sin `key`: sumar, sacar o cambiar la principal actualiza el radar sin volver a montarlo (antes la animación de
               entrada arrancaba de cero en cada clic, 8 nov). */}
           <RadarDeLasAreas principal={area} otras={otras} onElegir={onAbrir} />
-          {/* Debajo del radar y no arriba: sumar la primera área encima no corre el radar hacia abajo. */}
-          {otras.length > 0 && (
-            <p className="text-xs text-fg-muted">
-              Encima, {enLista(otras.map((o) => o.nombre))}. Toca un nodo de otra área para ver su detalle.
-            </p>
-          )}
-          {!abierta && (
-            <figcaption className="text-xs text-fg-muted">
-              Pasa el cursor por una dimensión para ver cómo está y qué preguntar; tócala para ver sus cinco niveles. «Ver puntajes» muestra el puntaje de cada una.
-            </figcaption>
-          )}
+          {/* Debajo del radar y no arriba: sumar la primera área encima no corre el radar hacia abajo. Un solo texto con
+              lugar para dos renglones: que aparezca «Encima, …» no corre lo de abajo (8 nov). */}
+          <figcaption className="min-h-[2lh] text-xs text-fg-muted">
+            {otras.length > 0 && `Encima, ${enLista(otras.map((o) => o.nombre))}. Toca un nodo de otra área para ver su detalle. `}
+            {!abierta && "Pasa el cursor por una dimensión para ver cómo está y qué preguntar; tócala para ver sus cinco niveles. «Ver puntajes» muestra el puntaje de cada una."}
+          </figcaption>
         </figure>
       ) : (
         <figure className="m-0 flex flex-col gap-3">
@@ -840,13 +847,15 @@ function ParaExplorarMas({ elegidas }: { elegidas: readonly AreaDelLienzo[] }) {
   // Marketing elegida sin nada que explorar igual muestra su lectura de engagement.
   const conEngagement = !!escala.preparacion && ids.has(AREA_DEL_ENGAGEMENT);
   const lista = conEngagement && !enOrden.some((c) => c.id === AREA_DEL_ENGAGEMENT) ? [...enOrden, ...cuentas.filter((c) => c.id === AREA_DEL_ENGAGEMENT)] : enOrden;
-  if (!lista.length) return null;
   const tarjetas = exp.estado.propuesta.tarjetasDeLaEscala?.porDimension ?? {};
+  /* Cada tarjeta entra creciendo y sale plegándose en su lugar: sumar o sacar un área no hace saltar la página (8 nov).
+     La que sale se dibuja con lo de siempre (ya no está elegida, pero sus datos siguen). */
   return (
-    <section aria-label="Para explorar más" className="flex flex-col gap-2.5">
-      {lista.map((c) => {
-        const area = escala.areas.find((a) => a.id === c.id);
-        if (!area) return null;
+    <ListaQueSeAnima ids={lista.map((c) => c.id)} espacio={3} etiqueta="Para explorar más">
+      {(id) => {
+        const c = cuentas.find((x) => x.id === id);
+        const area = escala.areas.find((a) => a.id === id);
+        if (!c || !area) return null;
         const { hipotesis, sinDato } = partesParaExplorar(area.dimensiones, (id) => mapa.posiciones[id]?.clase ?? null);
         const nHip = hipotesis.length;
         return (
@@ -887,7 +896,7 @@ function ParaExplorarMas({ elegidas }: { elegidas: readonly AreaDelLienzo[] }) {
             {sinDato.length > 0 && (
               <p className="text-xs text-fg-muted">Sin dato todavía: {enLista(sinDato.map((d) => d.nombre))}.</p>
             )}
-            {c.id === AREA_DEL_ENGAGEMENT && conEngagement && (
+            {c.id === AREA_DEL_ENGAGEMENT && !!escala.preparacion && (
               <details className="group rounded-lg border border-line">
                 <summary className="cursor-pointer px-3 py-2 text-xs font-semibold text-fg-secondary hover:text-fg">Preparación para engagement avanzado</summary>
                 <div className="px-1 pb-1">
@@ -897,8 +906,8 @@ function ParaExplorarMas({ elegidas }: { elegidas: readonly AreaDelLienzo[] }) {
             )}
           </div>
         );
-      })}
-    </section>
+      }}
+    </ListaQueSeAnima>
   );
 }
 
@@ -956,8 +965,16 @@ function DondeEstaHoy() {
   };
   // Sumar o sacar se deshace con el mismo botón: la lista entera, en el orden en que se eligieron.
   const alternar = (id: string) => void cambiar([{ op: "areas", areas: enJuego.includes(id) ? enJuego.filter((a) => a !== id) : [...enJuego, id] }]);
-  // Debajo del radar y no arriba: sumar un área sin nada no corre la escala hacia abajo (8 nov).
-  const avisosDeFuera = fuera.length ? <div className="flex flex-col gap-3">{fuera.map((a) => <AreaFuera key={a.id} area={a} onSumar={() => alternar(a.id)} />)}</div> : null;
+  /* Debajo del radar y no arriba: sumar un área sin nada no corre la escala hacia abajo, y su «Sumar…» entra creciendo y
+     sale plegándose (8 nov). */
+  const avisosDeFuera = (
+    <ListaQueSeAnima ids={fuera.map((a) => a.id)} espacio={principal ? 4 : 3}>
+      {(id) => {
+        const a = escala.areas.find((x) => x.id === id);
+        return a ? <AreaFuera area={a} onSumar={() => alternar(a.id)} /> : null;
+      }}
+    </ListaQueSeAnima>
+  );
 
   return (
     <section aria-label="Dónde está hoy" className="flex flex-col gap-3">
