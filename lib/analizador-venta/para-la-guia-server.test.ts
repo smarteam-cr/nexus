@@ -30,7 +30,7 @@ vi.mock("server-only", () => ({}));
 vi.mock("@/lib/db/prisma", () => ({ prisma: h.prisma }));
 vi.mock("@/lib/sessions/project-sources", () => ({ getClientSessions: h.getClientSessions }));
 
-import { insumosDelAnalisisParaLaGuia, loQueSeSupoEnSesionesAnteriores } from "./para-la-guia-server";
+import { insumosDelAnalisisParaLaGuia, loQueSeSupoEnSesionesAnteriores, preguntasDelDemoParaLaPreparacion } from "./para-la-guia-server";
 
 const decision = (seSabe: Partial<Record<string, string>>) =>
   ["quien_decide", "para_cuando", "cuanto_invertir", "si_no_hacen_nada"].map((hueco) => ({
@@ -78,6 +78,32 @@ describe("los insumos del análisis para la guía", () => {
   it("un análisis de antes del 8 nov (sin los campos nuevos) no aporta nada", async () => {
     h.estado.filas = [{ sessionId: "s2", clientId: "centauro", estado: "PROPUESTO", resultado: { resumen: "x", juicios: [], recomendaciones: [] } }];
     expect(await insumosDelAnalisisParaLaGuia("centauro")).toEqual([]);
+  });
+});
+
+describe("las preguntas para el demo, para la Preparación (sexta vuelta)", () => {
+  it("salen del mismo análisis que alimenta la guía, con quién preguntó y de qué reunión; uno de otra empresa no entra", async () => {
+    h.estado.filas = [
+      { sessionId: "s2", clientId: "OTRA", estado: "PROPUESTO", resultado: resultado({ decision: decision({}), demo: [{ pregunta: "De otro cliente", quien: "X" }] }) },
+      {
+        sessionId: "s1",
+        clientId: "centauro",
+        estado: "PROPUESTO",
+        resultado: resultado({ decision: decision({}), demo: [{ pregunta: "¿Se puede ver el embudo por vendedor?", quien: "Laura" }] }),
+      },
+    ];
+    const demo = await preguntasDelDemoParaLaPreparacion("centauro");
+    expect(h.estado.pedidos.map((p) => p.clientId)).toEqual(["centauro"]);
+    expect(demo?.preguntas).toEqual([{ pregunta: "¿Se puede ver el embudo por vendedor?", quien: "Laura" }]);
+    expect(demo?.deLaReunion).toMatch(/«Primera»/);
+    // La guía recibe las mismas, marcadas para no preguntarlas.
+    expect((await insumosDelAnalisisParaLaGuia("centauro")).join("\n")).toMatch(/Para el demo \(lo preguntó Laura\).*No se responde en la exploración/);
+  });
+  it("sin preguntas para el demo, o con un análisis de antes del 8 nov, no hay nada que mostrar", async () => {
+    h.estado.filas = [{ sessionId: "s2", clientId: "centauro", estado: "PROPUESTO", resultado: resultado({ decision: decision({}) }) }];
+    expect(await preguntasDelDemoParaLaPreparacion("centauro")).toBeNull();
+    h.estado.filas = [{ sessionId: "s2", clientId: "centauro", estado: "PROPUESTO", resultado: { resumen: "x", juicios: [], recomendaciones: [] } }];
+    expect(await preguntasDelDemoParaLaPreparacion("centauro")).toBeNull();
   });
 });
 

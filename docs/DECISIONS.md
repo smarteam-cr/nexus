@@ -13565,7 +13565,12 @@ exploración pesa y se nota** en la guía. Lo que sigue es el estado después de
     cuando termina (sin objetivo aceptado se guarda al momento). El texto dice qué corre: «Rehaciendo la guía con tus
     respuestas…» solo si la guía arrancó hasta 2 minutos después de la última respuesta (`vieneDeLasRespuestas`, las dos
     fechas del servidor); si no, «Nexus está armando la guía…», «…leyendo las reuniones…», etc. Al guardar la guía se
-    sacan las preguntas que el equipo respondió mientras se armaba. Las respuestas ya dadas no se tocan.
+    sacan las preguntas que el equipo respondió mientras se armaba. Las respuestas ya dadas no se tocan. (5) **«Para el
+    demo»**: de los tres insumos que el análisis de la sesión le deja a la siguiente, las preguntas para el demo entraban
+    al pedido de la guía («lo del demo NO se pregunta») pero no se veían. Ahora la Preparación las muestra en un bloque
+    corto, cada una con quién la preguntó, aclarando que se llevan al demo y no se responden en vivo. Salen del mismo
+    análisis que alimenta la guía (`preguntasDelDemoParaLaPreparacion`, para-la-guia-server.ts, por el chokepoint de
+    sesiones) y llegan a la pantalla al abrir y al recargar (`ExploracionParaLaPantalla.paraElDemo`), sin IA. Solo en la preventa.
   - La misma llamada escribe los hallazgos y, si hace falta, el ajuste al objetivo (`leerLoDeLaExploracion`): no hay
     llamada aparte. El pedido lleva el objetivo de la sesión, el de Smarteam con su ajuste, cómo llegó con su pista, las
     respuestas del vendedor y los hallazgos de la guía anterior para actualizarlos. La agenda en bloques no cambió.

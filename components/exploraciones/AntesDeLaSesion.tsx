@@ -675,6 +675,34 @@ function LoQueTraes({ pestana }: { pestana: PestanaDeSesion }) {
   );
 }
 
+/**
+ * «Para el demo» (sexta vuelta, 2026-11-08, Elías: el análisis de la sesión alimenta la preparación de la siguiente con
+ * los números, los huecos de decisión y las preguntas para el demo). Los dos primeros ya entran a la guía; las del demo
+ * llegaban al pedido («lo del demo NO se pregunta») sin verse en ningún lado. Cada una con quién la preguntó. Salen del
+ * análisis de la última sesión, sin IA (`paraElDemo`, al abrir y al recargar). Solo en la preventa.
+ */
+function ParaElDemo() {
+  const { paraElDemo, marco } = useLienzo();
+  if (marco.clave === "cs" || !paraElDemo?.preguntas.length) return null;
+  return (
+    <section aria-label="Para el demo" className="overflow-hidden rounded-xl border border-line bg-surface">
+      <header className="border-b border-line px-[18px] py-3.5">
+        <h3 className="text-[15px] font-semibold text-fg">Para el demo</h3>
+        <p className="mt-0.5 text-[12.5px] text-fg-muted">
+          Lo que el cliente preguntó por funciones en {paraElDemo.deLaReunion}. Se lleva al demo: no se responde en vivo en esta sesión.
+        </p>
+      </header>
+      <ul className="space-y-[9px] px-[18px] py-3.5 text-[13px] leading-[19px] text-fg-secondary">
+        {paraElDemo.preguntas.map((p, i) => (
+          <li key={`${i}-${p.pregunta}`}>
+            {p.pregunta} <span className="text-fg-muted">· lo preguntó {p.quien}</span>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
 // ── Lo que ya sabemos ─────────────────────────────────────────────────────────
 
 /**
@@ -1174,6 +1202,7 @@ export default function AntesDeLaSesion({ pestana, esLaProxima }: { pestana: Pes
       {/* Cuarta vuelta (2026-11-08): «Armar la guía» va debajo del objetivo y arriba de «Lo que ya sabemos». */}
       {esLaProxima && <EstadoDeLaGuia pestana={pestana} />}
       {esLaProxima && <LoQueTraes pestana={pestana} />}
+      {esLaProxima && <ParaElDemo />}
       {esLaProxima && <LoQueYaSabemos pestana={pestana} />}
       {/* Sin guía, su espacio grande (2026-11-08). Lo que Nexus necesita saber va arriba, junto al objetivo. */}
       {esLaProxima && !actual && <EspacioDeLaGuia pestana={pestana} preguntas={paraLaGuia} />}

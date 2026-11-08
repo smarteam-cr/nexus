@@ -73,6 +73,8 @@ export interface Lienzo {
    * del lienzo no lo borra.
    */
   posicionamientoAnterior: string | null;
+  /** Las preguntas para el demo del último análisis de la venta (al abrir y al recargar), o null: «Para el demo». */
+  paraElDemo: NonNullable<ExploracionParaLaPantalla["paraElDemo"]> | null;
   puedeEditar: boolean;
   /** Armar y enlazar la propuesta comercial es de Ventas (`ventas.write`); Customer Success trabaja la preventa sin eso. */
   puedeProponer: boolean;

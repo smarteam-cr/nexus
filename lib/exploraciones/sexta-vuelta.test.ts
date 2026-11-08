@@ -174,6 +174,18 @@ describe("mientras corre algo, el texto dice lo que de verdad pasa", () => {
     expect(preguntas).toMatch(/lasMias\s*\?\s*"Rehaciendo la guía con tus respuestas…"/);
   });
 
+  it("«Para el demo»: la Preparación muestra las preguntas del demo con quién preguntó, y dice que no se responden en vivo", () => {
+    const fuente = fs.readFileSync(path.join(RAIZ, "components", "exploraciones", "AntesDeLaSesion.tsx"), "utf8");
+    const bloque = fuente.slice(fuente.indexOf("function ParaElDemo("), fuente.indexOf("// ── Lo que ya sabemos"));
+    expect(bloque).toContain("Para el demo");
+    expect(bloque).toMatch(/no se responde en vivo/);
+    expect(bloque).toMatch(/lo preguntó \{p\.quien\}/);
+    expect(fuente).toMatch(/\{esLaProxima && <ParaElDemo \/>\}/);
+    // Llegan por donde llega lo demás que cuesta una consulta (al abrir y al recargar), sin IA.
+    const pantalla = fs.readFileSync(path.join(RAIZ, "lib", "exploraciones", "pantalla.ts"), "utf8");
+    expect(pantalla).toMatch(/preguntasDelDemoParaLaPreparacion\(fila\.client\.id\)/);
+  });
+
   it("la pantalla toma las preguntas de la sesión, no las de toda la exploración", () => {
     const fuente = fs.readFileSync(path.join(RAIZ, "components", "exploraciones", "AntesDeLaSesion.tsx"), "utf8");
     expect(fuente.split("propuesta.preguntasParaLaGuia").length - 1).toBe(1);

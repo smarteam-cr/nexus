@@ -8,6 +8,7 @@
  * cambian lo mismo a la vez, la segunda recibe un 409 en vez de pisar a la primera.
  */
 import type { FotoDeLaEscala } from "./foto-de-la-escala";
+import type { PreguntasDelDemo } from "@/lib/analizador-venta/para-la-guia";
 import "server-only";
 import type { Prisma } from "@prisma/client";
 import type { ResultadoDelChequeo } from "@/lib/escala/chequeo";
@@ -413,6 +414,11 @@ export interface ExploracionParaLaPantalla {
    * pantalla pide volver a preparar. Igual que `sinLeer`: solo al abrir y al recargar.
    */
   posicionamientoAnterior?: boolean;
+  /**
+   * Las preguntas para el demo que dejó el análisis de la última sesión (sexta vuelta, 2026-11-08): la Preparación de la
+   * siguiente las muestra en «Para el demo». Solo en la preventa. Igual que `sinLeer`: solo al abrir y al recargar.
+   */
+  paraElDemo?: PreguntasDelDemo | null;
   creadaPor: string;
   creadaEn: string;
   actualizadaEn: string;
