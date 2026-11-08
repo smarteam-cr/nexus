@@ -27,7 +27,7 @@
  * escala»), no «Ubicar con las reuniones». «Acceso» (30 oct, cuenta y preventa): el enlace con que el cliente la ve
  * (AccesoALaEscala.tsx).
  */
-import { useState, type KeyboardEvent, type MouseEvent, type ReactNode } from "react";
+import { useState, type CSSProperties, type KeyboardEvent, type MouseEvent, type ReactNode } from "react";
 import { Alert, Button } from "@/components/ui";
 import { BOTON_DE_HERRAMIENTA, BOTON_DE_HERRAMIENTA_ACTIVO } from "@/components/ui/sistema";
 import { PUNTO_DE_NIVEL } from "@/components/escala/niveles";
@@ -486,6 +486,17 @@ const calculoDelArea = (escala: EscalaDelLienzo, area: AreaDelLienzo, posiciones
 
 const tieneAlgo = (area: AreaDelLienzo, posiciones: Readonly<Record<string, PosicionEnElMapa>>) => area.dimensiones.some((d) => d.aplica && posiciones[d.id]);
 
+/**
+ * Cómo se ve un área presionada (sexta vuelta, 8 nov; Elías: «casi no se nota»): borde de 2 px y fondo tintado con el
+ * color del área, y una sombra interior que la hunde. La suelta queda apenas levantada (`shadow-sm`). El tinte se mezcla
+ * con `--surface`, así que flipea con el tema.
+ */
+const presionada = (color: string): CSSProperties => ({
+  borderColor: color,
+  background: `color-mix(in srgb, ${color} 9%, var(--surface))`,
+  boxShadow: `inset 0 2px 5px color-mix(in srgb, ${color} 24%, transparent)`,
+});
+
 /** Un área como botón que se presiona: su nivel y cuánto tiene con evidencia, o que está fuera. */
 function BotonDeArea({ area, elegida, conColor, orden, onElegir }: { area: AreaDelLienzo; elegida: boolean; conColor: boolean; orden: number; onElegir: () => void }) {
   const { mapa, escala, nombreDeNivel, lugar } = useLienzo();
@@ -500,10 +511,15 @@ function BotonDeArea({ area, elegida, conColor, orden, onElegir }: { area: AreaD
       aria-pressed={elegida}
       onClick={onElegir}
       className={cn(
-        "flex flex-col items-stretch gap-1 rounded-xl px-3.5 py-3 text-left transition-colors",
-        elegida ? "border bg-surface" : calculo ? "border border-line bg-surface hover:bg-surface-hover" : "border border-dashed border-line bg-surface-muted hover:bg-surface-hover",
+        "flex flex-col items-stretch gap-1 rounded-xl text-left transition-[background-color,border-color,box-shadow] duration-150",
+        // Con el borde de 2 px, un píxel menos de relleno: el botón no cambia de tamaño al presionarlo.
+        elegida
+          ? "border-2 px-[13px] py-[11px]"
+          : calculo
+            ? "border border-line bg-surface px-3.5 py-3 shadow-sm hover:bg-surface-hover"
+            : "border border-dashed border-line bg-surface-muted px-3.5 py-3 hover:bg-surface-hover",
       )}
-      style={elegida ? { borderColor: color, boxShadow: `inset 0 0 0 1px ${color}` } : undefined}
+      style={elegida ? presionada(color) : undefined}
     >
       <span className="flex items-center justify-between gap-1.5">
         <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-fg">
@@ -610,15 +626,19 @@ function RadarDeLasAreas({ principal, otras, onElegir }: { principal: AreaDelLie
           if (e.key === "Enter" || e.key === " ") elegirDesde(e);
         }}
       >
-        <RadarDeUnaEmpresa
-          area={principal.nombre}
-          dimensiones={dimensionesDelRadar(principal, calculo, mapa.posiciones)}
-          capas={(["base", "produccion"] as const).map((c) => ({ clave: c, nombre: nombreDeCapa(c), nivel: calculo.capas[c].nivel, puntaje: calculo.capas[c].puntaje }))}
-          niveles={escala.niveles}
-          resultado={{ nivel: calculo.nivel, puntaje: calculo.puntaje }}
-          frena={frena?.dimensiones[0] && calculo.objetivo ? { clave: frena.dimensiones[0], objetivo: calculo.objetivo } : null}
-          {...(superpuestas.length ? { color: colorDelArea(principal.id), otras: superpuestas } : {})}
-        />
+        {/* Como mucho del ancho que tiene en la página del resultado: en una pantalla grande el radar crecía y sus rótulos
+            (y con ellos la tarjeta) quedaban más lejos de los vértices que allá. */}
+        <div className="mx-auto max-w-[1340px]">
+          <RadarDeUnaEmpresa
+            area={principal.nombre}
+            dimensiones={dimensionesDelRadar(principal, calculo, mapa.posiciones)}
+            capas={(["base", "produccion"] as const).map((c) => ({ clave: c, nombre: nombreDeCapa(c), nivel: calculo.capas[c].nivel, puntaje: calculo.capas[c].puntaje }))}
+            niveles={escala.niveles}
+            resultado={{ nivel: calculo.nivel, puntaje: calculo.puntaje }}
+            frena={frena?.dimensiones[0] && calculo.objetivo ? { clave: frena.dimensiones[0], objetivo: calculo.objetivo } : null}
+            {...(superpuestas.length ? { color: colorDelArea(principal.id), otras: superpuestas } : {})}
+          />
+        </div>
       </div>
     </ConTarjetas>
   );

@@ -51,7 +51,7 @@
 .rde-pdf .rde-leyenda { font-size: 11.5px; }
 
 /* ── La página: el cursor sobre una dimensión (como la aplicación vieja) ─────────────────────────────────────────────
-   AnimacionesDelResultado.tsx le pone al SVG `data-activa` y a las piezas de esa dimensión (`[data-d]`) la clase
+   components/escala/movimiento-del-radar.ts (la página del resultado y La escala interna) le pone al SVG `data-activa` y a las piezas de esa dimensión (`[data-d]`) la clase
    `is-activa`: su eje se dibuja desde el rótulo hasta su vértice, el vértice apenas crece y su nombre se pinta en azul; lo
    demás se apaga un poco (29 oct: antes la línea llegaba al centro y el vértice crecía de golpe). Solo las piezas de una dimensión y su cuña reciben el cursor. En el PDF no hay nada de esto. */
 .rde-interactivo * { pointer-events: none; }

@@ -13704,3 +13704,30 @@ Elías probó la tercera vuelta con Centauro Solutions («es un buen MVP») y pi
   - *Costo:* las tarjetas suman unos 3.000 tokens de salida por corrida (~US$ 0,05): ~US$ 0,20 por corrida.
 - **Datos y SQL:** sin SQL. `tarjetasDeLaEscala` es opcional en el Json de la propuesta: las exploraciones en curso
   muestran la tarjeta armada con lo que ya tienen hasta la próxima corrida.
+
+## La tarjeta del radar: un solo movimiento y se deja alcanzar (2026-11-08, sexta vuelta con Centauro Solutions)
+
+- **Qué pidió Elías:** en La escala interna, la tarjeta de cada dimensión salía «muy lejana», sin la animación de la
+  página de resultado del test, y desaparecía al llevarle el cursor (no se podía tocar «Llevar a la sesión N»).
+  «Aprovechar hasta todo el mismo código».
+- **La causa medida:** con el mismo radar y el mismo ancho de pantalla, la regla ponía la tarjeta a la MISMA distancia
+  que en el resultado (junto al rótulo, unos 240 px del vértice). Lo que cambiaba: (1) en la interna no había resalte
+  (ni la línea del rótulo al vértice, ni el rótulo en azul, ni lo demás apagado), así que la tarjeta aparecía junto a
+  un rótulo sin nada que la atara a la dimensión; (2) un vértice de un área superpuesta buscaba un rótulo con SU clave,
+  que no existe, y la tarjeta caía encima del cursor, tapando el radar; (3) la interna no se cerraba al desplazar la
+  página: la tarjeta fija se quedaba y el radar se iba; (4) sin tope de ancho, en una pantalla grande el radar crecía
+  más que en el resultado y los rótulos quedaban más lejos.
+- **La decisión:** el movimiento vive en `components/escala/movimiento-del-radar.ts` (resalte, imán, ubicación y el
+  puente del cursor) y lo usan las dos pantallas; cada una solo dice cómo muestra su tarjeta (la del resultado, escondida
+  en el HTML; la interna, de React con sus botones). Un vértice superpuesto lleva `data-eje` (el eje donde está): se
+  resalta él con el rótulo de ese eje, con su propia línea de su color, y la tarjeta va junto a ese rótulo. El radar
+  interno se queda en 1340 px como mucho, lo que mide en la página del resultado.
+- **El puente** (reglas puras en `lib/tests-diagnostico/tarjeta-del-radar.ts`, con pruebas): la tarjeta recibe el cursor
+  en cualquier ancho. Al salir de la dimensión rumbo a ella espera 350 ms; en otra dirección se cierra de una (nunca
+  queda pegada). Lo que es de todo el eje (porción, línea, rótulo, número) no cambia la tarjeta de ese eje, y otra
+  dimensión que se cruza rumbo a la tarjeta solo la cambia si el cursor se queda 160 ms. *Por qué no una franja
+  invisible entre el radar y la tarjeta:* taparía otras dimensiones; así, pasar por una con calma la abre.
+- **Lo que no cambió:** la regla de dónde va la tarjeta (junto al rótulo, sin taparlo; en angostas, en la otra mitad).
+- **El área elegida** (Ventas, Marketing, Servicio, arriba del radar): se veía casi igual que la suelta. Ahora la
+  presionada lleva borde de 2 px y fondo del color del área (`COLOR_DEL_AREA` mezclado con `--surface`, flipea con el
+  tema) y una sombra interior que la hunde; la suelta queda apenas levantada. El botón no cambia de tamaño.
