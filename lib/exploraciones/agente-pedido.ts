@@ -962,10 +962,15 @@ export function leerLaRespuesta(respuesta: Anthropic.Messages.Message, ctx: Cont
       continue;
     }
     const evidencia = fuentes.find((f) => f.cita)?.cita;
+    /* Con un riesgo a la vista no se estima por encima de Funcional (chequeo.ts, paso 5): la propuesta dice Funcional, lo
+       mismo que dibuja el radar. Antes decía Eficiente, el vendedor la usaba y el radar quedaba en Funcional sin
+       explicación (cuarta vuelta, 2026-11-08). El vendedor que sabe que el riesgo ya no está marca Eficiente a mano. */
+    const nivelPropuesto = str(n.nivel);
+    const topado = n.riesgo === true && (nivelPropuesto === "E" || nivelPropuesto === "O") ? "F" : nivelPropuesto;
     agregar(
       { tipo: "nivel", dimensionId },
       {
-        nivel: str(n.nivel),
+        nivel: topado,
         fuente: fuenteDelNivel(fuentes.filter((f) => f.cita).map((f) => f.id)),
         ...(evidencia ? { evidencia } : {}),
         ...(porQue ? { porQue } : {}),

@@ -170,7 +170,10 @@ export function nivelDelVendedor(
   posicion: Pick<PosicionEnElMapa, "nivel" | "porQue" | "origen"> | undefined,
 ): EstimadoGuardado | null {
   const subeSobreElRiesgo = !!confirmado?.riesgo && estaDebajo("F", nivel);
-  if (confirmado?.nivel === nivel && posicion?.origen === "confirmado" && !subeSobreElRiesgo) return null;
+  if (confirmado?.nivel === nivel && posicion?.origen === "confirmado") {
+    // Ya está en ese nivel: no se toca, salvo para quitar el riesgo, y entonces se queda con su frase y su fuente.
+    return subeSobreElRiesgo ? sinRiesgoSiSube(confirmado) : null;
+  }
   return {
     nivel,
     fuente: "vendedor",

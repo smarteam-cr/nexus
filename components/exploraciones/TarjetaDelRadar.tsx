@@ -17,7 +17,7 @@ import { PUNTO_DE_NIVEL } from "@/components/escala/niveles";
 import { cn } from "@/lib/cn";
 import type { Letra } from "@/lib/escala/documento/tipos";
 import { diaCorto } from "@/lib/exploraciones/fechas";
-import { opsParaLlevar, tarjetaParaMostrar, yaLlevada } from "@/lib/exploraciones/tarjetas-de-la-escala";
+import { llevadaDesdeLaEscala, opsParaLlevar, opsParaQuitar, tarjetaParaMostrar, yaLlevada } from "@/lib/exploraciones/tarjetas-de-la-escala";
 import { posicionDeLaTarjeta } from "@/lib/tests-diagnostico/tarjeta-del-radar";
 import { useLienzo } from "./contexto";
 import { useSesiones } from "./useSesiones";
@@ -35,43 +35,71 @@ export interface DimensionDeLaTarjeta {
 }
 
 /**
- * Llevar una pregunta a la exploración: a lo que se lleva la próxima sesión o, sin una planeada, a «explorar a fondo» de
- * su dimensión (`opsParaLlevar`). Lo usan la tarjeta y «Para explorar más». `puede` es false en la cuenta (no tiene
- * sesiones) o sin permiso de edición.
+ * Llevar una pregunta a la próxima sesión (`opsParaLlevar`) y deshacerlo (`opsParaQuitar`). Lo usan la tarjeta, el
+ * detalle de la dimensión y «Para explorar más». `puede` es false en la cuenta (no tiene sesiones) o sin permiso de
+ * edición; `sesion` null: no hay una próxima planeada.
  */
 export function useLlevarALaSesion() {
   const { exp, cambiar, puedeEditar, guardando, lugar } = useLienzo();
   const { proxima } = useSesiones();
   const toast = useToast();
   const sesion = proxima.sesionId ? (exp.estado.contenido.sesiones.find((s) => s.id === proxima.sesionId) ?? null) : null;
-  const destino = sesion ? `la sesión ${proxima.numero}` : "la próxima sesión";
-  const yaVa = (pregunta: string, dimensionId: string) => yaLlevada(pregunta, { sesion, razonDeExplorar: exp.estado.contenido.aExplorar[dimensionId]?.razon ?? null });
-  const llevar = async (pregunta: string, dimensionId: string) => {
-    const r = opsParaLlevar({ pregunta, dimensionId, sesion });
+  const destino = `la sesión ${proxima.numero}`;
+  const estado = (pregunta: string): "va" | "llevada" | "no" =>
+    llevadaDesdeLaEscala(pregunta, sesion) ? "llevada" : yaLlevada(pregunta, sesion) ? "va" : "no";
+  const aplicar = async (r: ReturnType<typeof opsParaLlevar>, ok: string) => {
     if (!r.ok) return void toast.error(r.error);
-    if (!r.ops.length) return;
-    if (await cambiar(r.ops)) toast.success(r.a === "sesion" ? `Va a ${destino}: la guía la toma al armarse.` : "Se explora a fondo en la próxima sesión, con esa pregunta.");
+    if (r.ops.length && (await cambiar(r.ops))) toast.success(ok);
   };
-  return { puede: lugar !== "cuenta" && puedeEditar, guardando, destino, yaVa, llevar };
+  const llevar = (pregunta: string, dimensionId: string) => aplicar(opsParaLlevar({ pregunta, dimensionId, sesion }), `Va a ${destino}: la guía la toma al armarse.`);
+  const quitar = (pregunta: string) => aplicar(opsParaQuitar({ pregunta, sesion }), `Ya no va a ${destino}.`);
+  return { puede: lugar !== "cuenta" && puedeEditar, hayProxima: !!sesion, guardando, destino, estado, llevar, quitar };
 }
 
-/** Una pregunta con su botón «Llevar a la sesión N» (o «✓ Va a la sesión N»). */
+/** Una pregunta con su botón «Llevar a la sesión N»; ya llevada, «✓ Va a la sesión N · Quitar». */
 export function PreguntaParaLlevar({ pregunta, dimensionId, llevar }: { pregunta: string; dimensionId: string; llevar: ReturnType<typeof useLlevarALaSesion> }) {
-  const va = llevar.yaVa(pregunta, dimensionId);
+  const estado = llevar.estado(pregunta);
   return (
     <li className="flex flex-col gap-1 rounded-lg border border-line bg-surface-muted px-2.5 py-2">
       <span className="text-[13px] font-medium leading-[1.45] text-fg">{pregunta}</span>
-      {llevar.puede && (
-        <button
-          type="button"
-          disabled={llevar.guardando || va}
-          onClick={() => void llevar.llevar(pregunta, dimensionId)}
-          className={cn("self-start text-xs font-semibold", va ? "text-success-ink" : "text-brand hover:underline disabled:opacity-60")}
-        >
-          {va ? `✓ Va a ${llevar.destino}` : `Llevar a ${llevar.destino}`}
-        </button>
-      )}
+      {llevar.puede &&
+        (!llevar.hayProxima ? (
+          <span className="text-xs text-fg-muted">Planea la próxima sesión en Exploración para llevarle preguntas.</span>
+        ) : estado === "no" ? (
+          <button
+            type="button"
+            disabled={llevar.guardando}
+            onClick={() => void llevar.llevar(pregunta, dimensionId)}
+            className="self-start text-xs font-semibold text-brand hover:underline disabled:opacity-60"
+          >
+            Llevar a {llevar.destino}
+          </button>
+        ) : (
+          <span className="inline-flex items-center gap-2 text-xs font-semibold text-success-ink">
+            ✓ Va a {llevar.destino}
+            {estado === "llevada" && (
+              <button type="button" disabled={llevar.guardando} onClick={() => void llevar.quitar(pregunta)} className="font-medium text-fg-muted hover:text-fg hover:underline">
+                Quitar
+              </button>
+            )}
+          </span>
+        ))}
     </li>
+  );
+}
+
+/** «Para explorar más, pregunta», con lo que escribió el agente (o la pregunta de la escala): en la tarjeta y en el detalle. */
+export function PreguntasDeLaDimension({ dimensionId, porQue, preguntaDeLaEscala, conNivel }: { dimensionId: string; porQue: string | null; preguntaDeLaEscala: string; conNivel: boolean }) {
+  const { exp } = useLienzo();
+  const llevar = useLlevarALaSesion();
+  const t = tarjetaParaMostrar(exp.estado.propuesta.tarjetasDeLaEscala?.porDimension[dimensionId], { porQue, preguntaDeLaEscala, conNivel });
+  if (!t.preguntas.length) return null;
+  return (
+    <ul className="flex flex-col gap-1.5">
+      {t.preguntas.map((q) => (
+        <PreguntaParaLlevar key={q} pregunta={q} dimensionId={dimensionId} llevar={llevar} />
+      ))}
+    </ul>
   );
 }
 
@@ -81,7 +109,11 @@ interface Abierta {
   y: number;
 }
 
-const CERRAR_MS = 220;
+/** Lo que espera para cerrarse: el cursor alcanza a ir del nodo a la tarjeta. */
+const CERRAR_MS = 450;
+
+/** El radar que se ve: se dibujan dos (el grande y el compacto) y el CSS esconde uno según el ancho. */
+const radarVisible = (caja: HTMLElement | null) => [...(caja?.querySelectorAll("svg.rde-svg") ?? [])].find((s) => s.getBoundingClientRect().width > 0) ?? null;
 
 /**
  * Envuelve el radar: escucha el cursor (y el foco del teclado) sobre los `[data-d]` y muestra la tarjeta de esa
@@ -100,6 +132,15 @@ export function ConTarjetas({ dimensiones, children }: { dimensiones: Readonly<R
     cerrar.current = window.setTimeout(() => setAbierta(null), CERRAR_MS);
   }, [cancelarCierre]);
   useEffect(() => cancelarCierre, [cancelarCierre]);
+  // Escape la cierra, como todo lo que flota.
+  useEffect(() => {
+    if (!abierta) return;
+    const alTeclear = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setAbierta(null);
+    };
+    window.addEventListener("keydown", alTeclear);
+    return () => window.removeEventListener("keydown", alTeclear);
+  }, [abierta]);
 
   const abrirDesde = (el: Element | null, x: number, y: number) => {
     const id = el?.closest?.("[data-d]")?.getAttribute("data-d");
@@ -151,7 +192,6 @@ function Tarjeta({
   onSalir: () => void;
 }) {
   const { exp, nombreDeNivel, lugar } = useLienzo();
-  const llevar = useLlevarALaSesion();
   const yo = useRef<HTMLDivElement>(null);
 
   /* Se ubica una vez al abrirse (cada dimensión es su propia tarjeta: `key`), con el radar y el rótulo de ese momento,
@@ -159,8 +199,9 @@ function Tarjeta({
   useLayoutEffect(() => {
     const el = yo.current;
     if (!el) return;
-    const radar = contenedor.current?.querySelector("svg")?.getBoundingClientRect();
-    const rotulo = contenedor.current?.querySelector(`.rde-rotulo[data-d="${CSS.escape(d.id)}"]`)?.getBoundingClientRect() ?? null;
+    const svg = radarVisible(contenedor.current);
+    const radar = svg?.getBoundingClientRect();
+    const rotulo = svg?.querySelector(`.rde-rotulo[data-d="${CSS.escape(d.id)}"], .rde-numero[data-d="${CSS.escape(d.id)}"]`)?.getBoundingClientRect() ?? null;
     const p = posicionDeLaTarjeta({
       vw: window.innerWidth,
       vh: window.innerHeight,
@@ -183,7 +224,7 @@ function Tarjeta({
     <div
       ref={yo}
       data-tarjeta-interna=""
-      role="status"
+      aria-label={`${d.nombre}: cómo está y qué preguntar`}
       onPointerEnter={onEntrar}
       onPointerLeave={onSalir}
       style={{ left: 0, top: 0, visibility: "hidden" }}
@@ -225,11 +266,7 @@ function Tarjeta({
       {t.preguntas.length > 0 && (
         <div className="flex flex-col gap-1.5">
           <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-fg-muted">Para explorar más, pregunta</p>
-          <ul className="flex flex-col gap-1.5">
-            {t.preguntas.map((q) => (
-              <PreguntaParaLlevar key={q} pregunta={q} dimensionId={d.id} llevar={llevar} />
-            ))}
-          </ul>
+          <PreguntasDeLaDimension dimensionId={d.id} porQue={d.porQue} preguntaDeLaEscala={d.pregunta} conNivel={!!d.nivel} />
         </div>
       )}
       <p className="text-[11px] text-fg-muted">

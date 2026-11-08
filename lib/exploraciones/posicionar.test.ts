@@ -343,6 +343,14 @@ describe("pedidoDePosicionar", () => {
       expect(r.descartadas).toBe(1);
     });
 
+    it("un nivel por encima de Funcional con un riesgo a la vista se propone en Funcional (lo que dibuja el radar)", () => {
+      const r = conHipotesis({
+        niveles: [{ dimensionId: "1.2", nivel: "O", evidencia: "x", riesgo: true, porQue: "y", fuentes: [{ id: "S1", cita: "cada vendedor lleva su propio Excel de oportunidades" }] }],
+        hipotesis: [],
+      });
+      expect(r.items[0].valor).toMatchObject({ nivel: "F", riesgo: true });
+    });
+
     it("lee la tarjeta de cada dimensión: solo dimensiones de la escala, sin vacías, hasta tres preguntas", () => {
       const r = conHipotesis({
         niveles: [],

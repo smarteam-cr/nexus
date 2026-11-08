@@ -37,7 +37,7 @@ import type { AreaDelChequeo } from "@/lib/escala/chequeo";
 import type { ClaveDeCapa, Letra } from "@/lib/escala/documento/tipos";
 import { esHipotesisDeNivel, type DestinoDePropuesta, type EstimadoGuardado, type ItemPropuesto } from "@/lib/exploraciones/contenido";
 import type { AreaDelLienzo, DimensionDelLienzo, EscalaDelLienzo } from "@/lib/exploraciones/escala-del-lienzo";
-import { hipotesisDelArea, ordenParaExplorar, partesParaExplorar, resumenDeLoExplorado } from "@/lib/exploraciones/equipos-de-la-escala";
+import { ordenParaExplorar, partesParaExplorar, resumenDeLoExplorado } from "@/lib/exploraciones/equipos-de-la-escala";
 import { chequeoDelMapa, cuentaDelArea, loQueLaFrena, nivelDelVendedor, sinRiesgoSiSube, type PosicionEnElMapa } from "@/lib/exploraciones/mapa";
 import { diaCorto } from "@/lib/exploraciones/fechas";
 import AccesoALaEscala from "./AccesoALaEscala";
@@ -52,7 +52,7 @@ import { QueVaPrimero } from "./QueVaPrimero";
 import RuedaDelEquipo from "./RuedaDelEquipo";
 import { useAreasDeLaEscala } from "./useAreasDeLaEscala";
 import { useCorrida } from "./useCorrida";
-import { ConTarjetas, PreguntaParaLlevar, useLlevarALaSesion, type DimensionDeLaTarjeta } from "./TarjetaDelRadar";
+import { ConTarjetas, PreguntaParaLlevar, PreguntasDeLaDimension, useLlevarALaSesion, type DimensionDeLaTarjeta } from "./TarjetaDelRadar";
 
 const LETRAS: Letra[] = ["D", "I", "F", "E", "O"];
 
@@ -205,6 +205,13 @@ function DetalleDeDimension({ d, onCerrar }: { d: DimensionDelLienzo; onCerrar: 
           </div>
         </div>
       </div>
+
+      {lugar !== "cuenta" && (
+        <div className="flex flex-col gap-1.5">
+          <Rotulo>Para explorar más, pregunta</Rotulo>
+          <PreguntasDeLaDimension dimensionId={d.id} porQue={p?.porQue ?? null} preguntaDeLaEscala={d.pregunta} conNivel={!!p} />
+        </div>
+      )}
 
       {p?.riesgo && (
         <Alert variant="warning" title={`Dejó ver un riesgo: por eso no se estima por encima de ${nombreDeNivel("F")}.`}>
@@ -779,7 +786,7 @@ function ParaExplorarMas({ elegidas }: { elegidas: readonly AreaDelLienzo[] }) {
         const area = escala.areas.find((a) => a.id === c.id);
         if (!area) return null;
         const { hipotesis, sinDato } = partesParaExplorar(area.dimensiones, (id) => mapa.posiciones[id]?.clase ?? null);
-        const nHip = hipotesisDelArea(c);
+        const nHip = hipotesis.length;
         return (
           <div key={c.id} className="flex flex-col gap-2.5 rounded-xl border border-line bg-surface p-4">
             <div className="flex flex-wrap items-baseline justify-between gap-2">
@@ -854,10 +861,13 @@ function DondeEstaHoy() {
   const elegidas = ids.map((id) => escala.areas.find((a) => a.id === id)!);
   const conAlgo = (a: AreaDelLienzo) => enJuego.includes(a.id) || tieneAlgo(a, mapa.posiciones);
   const [principalId, setPrincipal] = useState<string | null>(null);
-  const principal =
-    elegidas.find((a) => a.id === principalId && conAlgo(a)) ?? [...elegidas].reverse().find(conAlgo) ?? elegidas[elegidas.length - 1];
-  if (!principal) return null;
-  const otras = elegidas.filter((a) => a.id !== principal.id && conAlgo(a) && calculoDelArea(escala, a, mapa.posiciones));
+  /* La principal es la última tocada; si no tiene nada, se muestra igual (con «Sumar…») y el radar sigue con la última
+     elegida que sí tiene algo (la revisión cazó que tocar Marketing vacía con Ventas elegida no mostraba nada). */
+  const tocada = elegidas.find((a) => a.id === principalId) ?? elegidas[elegidas.length - 1];
+  const vacia = tocada && !conAlgo(tocada) ? tocada : null;
+  const principal = vacia ? ([...elegidas].reverse().find(conAlgo) ?? null) : tocada;
+  if (!principal && !vacia) return null;
+  const otras = principal ? elegidas.filter((a) => a.id !== principal.id && conAlgo(a) && calculoDelArea(escala, a, mapa.posiciones)) : [];
   const orden = (id: string) => enJuego.indexOf(id) + 1;
   const elegir = (id: string) => {
     setAbierta(null);
@@ -866,12 +876,12 @@ function DondeEstaHoy() {
       setPrincipal(id);
     } else if (ids.length > 1) {
       setElegidas(ids.filter((x) => x !== id));
-      if (principal.id === id) setPrincipal(null);
+      if (tocada?.id === id) setPrincipal(null);
     }
   };
   // Tocar una dimensión de otra área la vuelve la principal y abre su detalle.
   const abrir = (id: string | null) => {
-    if (id && !principal.dimensiones.some((d) => d.id === id)) {
+    if (id && principal && !principal.dimensiones.some((d) => d.id === id)) {
       const de = elegidas.find((a) => a.dimensiones.some((d) => d.id === id));
       if (de) setPrincipal(de.id);
     }
@@ -904,7 +914,8 @@ function DondeEstaHoy() {
         ))}
       </div>
       <p className="text-xs text-fg-muted">Toca un área para sumarla a la escala o sacarla: varias se ven en el mismo radar, cada una de su color.</p>
-      {conAlgo(principal) ? (
+      {vacia && <AreaFuera area={vacia} onSumar={() => alternar(vacia.id)} />}
+      {principal && (
         <AreaConAlgo
           key={principal.id}
           area={principal}
@@ -915,8 +926,6 @@ function DondeEstaHoy() {
           onAbrir={abrir}
           onAlternar={() => alternar(principal.id)}
         />
-      ) : (
-        <AreaFuera area={principal} onSumar={() => alternar(principal.id)} />
       )}
       <ParaExplorarMas elegidas={elegidas} />
     </section>

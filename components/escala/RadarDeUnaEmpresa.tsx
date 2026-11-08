@@ -406,6 +406,9 @@ function SvgDelRadar({
                 key={v.clave}
                 className="rde-vertice"
                 data-d={interactivo ? o.reales[v.clave] : undefined}
+                tabIndex={interactivo ? 0 : undefined}
+                role={interactivo ? "button" : undefined}
+                aria-label={interactivo ? `${o.area} · ${o.dims.find((x) => x.clave === v.clave)?.nombre ?? ""}` : undefined}
                 cx={f(v.punto[0])}
                 cy={f(v.punto[1])}
                 r={m.vertice.r}

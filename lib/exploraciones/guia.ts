@@ -97,7 +97,10 @@ export interface SesionPlaneada {
   evento?: EventoDeLaSesion;
   /** Lo que quedó de una sesión anterior para explorar en esta (lo que se dijo y nadie siguió). */
   explorar?: string[];
-  /** De qué sesión viene cada punto de `explorar` (su id): la guía dice «Quedó abierto en la sesión N». */
+  /**
+   * De qué sesión viene cada punto de `explorar` (su id): la guía dice «Quedó abierto en la sesión N». El id de ESTA
+   * misma sesión (2026-11-08) es lo que el vendedor llevó desde la tarjeta de La escala: «Lo llevaste desde La escala».
+   */
   explorarDe?: Record<string, string>;
   /**
    * A qué apunta cada punto de `explorar`, si se sabe al llevarlo (una pregunta planeada que no se
@@ -1045,13 +1048,18 @@ export const TRAMOS_DE_LA_SESION = { abrir: [0, 5], preguntar: [5, 40], contar: 
  * anterior y el vendedor lo marcó para llevar, o pasó de una sesión que se cortó.
  */
 export interface Procedencia {
-  tipo: "abierto" | "paso";
+  /** `escala` (2026-11-08): lo llevó el vendedor desde la tarjeta de una dimensión en La escala (`numero` 0). */
+  tipo: "abierto" | "paso" | "escala";
   numero: number;
 }
 
 export function textoDeLaProcedencia(p: Procedencia): string {
+  if (p.tipo === "escala") return "Lo llevaste desde La escala";
   return p.tipo === "abierto" ? `Quedó abierto en la sesión ${p.numero}` : `Pasó de la sesión ${p.numero}`;
 }
+
+/** El número de `procedencias.abiertos` como procedencia: 0 es lo llevado desde La escala. */
+export const procedenciaDelAbierto = (numero: number): Procedencia => (numero === 0 ? { tipo: "escala", numero: 0 } : { tipo: "abierto", numero });
 
 /**
  * K7 (2026-10-26): la pregunta que valida lo que marcó en el test, cuando el agente no escribió una (o la guía es de antes).
@@ -1141,6 +1149,11 @@ export function procedenciasDeLaSesion(
   const anteriorHecha = [...antes].reverse().find(conConversacion) ?? [...antes].reverse().find((p) => p.hecha);
   for (const t of activa.sesion?.explorar ?? []) {
     const de = activa.sesion?.explorarDe?.[t];
+    // Lo llevado desde La escala apunta a esta misma sesión: no quedó abierto en ninguna (0).
+    if (de && de === activa.sesion?.id) {
+      abiertos.set(t, 0);
+      continue;
+    }
     const origen = de ? pestanas.find((p) => p.sesion?.id === de) : null;
     const numero = origen && !origen.noSeHizo ? origen.numero : anteriorHecha?.numero;
     if (numero) abiertos.set(t, numero);
@@ -1197,7 +1210,7 @@ export function preguntasParaMostrar(
         const abierto = p.abierto && procedencias.abiertos.has(p.abierto) ? p.abierto : null;
         if (abierto) retomados.add(abierto);
         const procedencia: Procedencia | undefined = abierto
-          ? { tipo: "abierto", numero: procedencias.abiertos.get(abierto)! }
+          ? procedenciaDelAbierto(procedencias.abiertos.get(abierto)!)
           : pasoDe
             ? { tipo: "paso", numero: pasoDe }
             : undefined;
@@ -1226,7 +1239,7 @@ export function preguntasParaMostrar(
       if (abierto) retomados.add(abierto);
       const pasoDe = procedencias.pasaron.get(pl.para);
       const procedencia: Procedencia | undefined = abierto
-        ? { tipo: "abierto", numero: procedencias.abiertos.get(abierto)! }
+        ? procedenciaDelAbierto(procedencias.abiertos.get(abierto)!)
         : pasoDe
           ? { tipo: "paso", numero: pasoDe }
           : undefined;
@@ -1280,7 +1293,7 @@ export function preguntasParaMostrar(
       pregunta: pregunta ?? dicho,
       repreguntas: [],
       ...(pregunta && dicho ? { contexto: dicho } : {}),
-      procedencia: { tipo: "abierto", numero },
+      procedencia: procedenciaDelAbierto(numero),
       ...(apunta ? { apunta } : {}),
     });
   }

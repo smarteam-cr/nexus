@@ -13501,13 +13501,17 @@ Elías probó la tercera vuelta con Centauro Solutions («es un buen MVP») y pi
   (`EstimadoGuardado.riesgo`), y el chequeo topa en Funcional lo que deja ver un riesgo (chequeo.ts, paso 5); al marcar,
   el riesgo se copiaba al nivel nuevo. El botón quedaba en Óptimo y el radar en Funcional. *Arreglo:* el vendedor que
   pone la dimensión por encima de Funcional dice que ese riesgo ya no está, y el riesgo se quita (`nivelDelVendedor` y
-  `sinRiesgoSiSube`, mapa.ts). En Funcional o debajo se conserva. El aviso del riesgo lo dice: «Si ya no está, marca
-  Eficiente u Óptimo: el riesgo se quita y el radar sube». *Por qué no se apagó el tope:* sigue valiendo para lo que
-  estima el agente o el test; lo que cambia es que la marca del vendedor manda.
+  `sinRiesgoSiSube`, mapa.ts). En Funcional o debajo se conserva. Volver a marcar el mismo nivel para quitar el riesgo
+  conserva la frase y la fuente. El aviso del riesgo lo dice: «Si ya no está, marca Eficiente u Óptimo: el riesgo se
+  quita y el radar sube». Y el agente ya no propone Eficiente u Óptimo con un riesgo a la vista: lo propone en Funcional
+  (`leerLaRespuesta`), que es lo que dibuja el radar; antes el vendedor «usaba» un Eficiente que el radar mostraba en
+  Funcional. *Por qué no se apagó el tope:* sigue valiendo para lo que estima el agente o el test; lo que cambia es que
+  la marca del vendedor manda.
 - **Las áreas se presionan y se ven en el mismo radar.** Las tres áreas son botones (`aria-pressed`): un clic suma el
   área a la escala y otro la saca (siempre queda una). Con varias, `RadarDeUnaEmpresa` recibe `color` y `otras`: la
   principal (la última elegida con algo) lleva los nombres, el centro y el detalle, y las otras van encima, cada una de
-  su color (Ventas azul, Marketing rosa, Servicio verde azulado: ninguno es el color de un nivel), con su leyenda. Eje
+  su color (Ventas azul, Marketing rosa, Servicio verde azulado: ninguno es el color de un nivel), con su leyenda. Un
+  área elegida sin nada se muestra igual, con «Sumar…», encima del radar de las que sí tienen algo. Eje
   por eje en el mismo lugar: la parte k de cada capa sobre la parte k de la principal. La base se llama igual en las tres
   áreas; la producción no, y la leyenda dice que los nombres son los de la principal. Tocar un nodo de otra área la
   vuelve la principal y abre su dimensión. La página del cliente no pasa `color` ni `otras`: se ve igual (lo cuida una
@@ -13530,15 +13534,23 @@ Elías probó la tercera vuelta con Centauro Solutions («es un buen MVP») y pi
 - **Cada dimensión tiene su tarjeta al pasar el cursor** (TarjetaDelRadar.tsx), la de la página del resultado del
   diagnóstico para uso interno: nombre, puntaje, nivel, si es evidencia o por explorar, «cómo está» en simple y «Para
   explorar más, pregunta», cada pregunta con «Llevar a la sesión N». Se puede tocar (queda abierta mientras el cursor va
-  del radar a ella) y la ubica la misma regla que la del diagnóstico (tarjeta-del-radar.ts).
+  del radar a ella, Escape la cierra) y la ubica la misma regla que la del diagnóstico (tarjeta-del-radar.ts), midiendo
+  el radar que se ve (se dibujan dos: el grande y el compacto). Las mismas preguntas, con su botón, están en el detalle
+  de la dimensión: con el teclado o en una ventana angosta, ahí se alcanzan.
   - *De dónde sale el texto:* de la MISMA llamada de «Ubicar con las reuniones» (lista `tarjetas` del pedido, una por
     dimensión de las tres áreas), guardado en `propuesta.tarjetasDeLaEscala` (tarjetas-de-la-escala.ts); la corrida
     siguiente lo reemplaza entero. Ni una llamada por visita ni una por dimensión. Sin corrida todavía, la tarjeta se
     arma con el porqué del nivel y la pregunta de la escala, y no dice que la escribió Nexus.
-  - *Mandar una pregunta a la exploración usa lo que la guía ya lee* (`opsParaLlevar`): con próxima sesión planeada, la
-    pregunta entra a `SesionPlaneada.explorar` con su dimensión en `explorarPara` (operación `editarSesion`; la guía la
-    recibe en «paraExplorar» y la muestra con su número). Sin una sesión planeada, la dimensión se marca «explorar a
-    fondo» (`aExplorar`) con la pregunta como razón. Una pregunta que ya va no se repite; con 10 temas, avisa.
+  - *Mandar una pregunta a la exploración usa lo que la guía ya lee* (`opsParaLlevar`): la pregunta entra a lo que lleva
+    la próxima sesión (`SesionPlaneada.explorar`, operación `editarSesion`), con su dimensión en `explorarPara` y el id
+    de ESA MISMA sesión en `explorarDe`. Ese id propio es la marca de «lo llevaste desde La escala»: la guía la muestra
+    con ese origen (`Procedencia.tipo = "escala"`, guia.ts) aunque todavía no haya habido ninguna reunión, el pedido de
+    la guía la recibe en «paraExplorar» con su dimensión (también de un área fuera de juego), y el correo de seguimiento
+    no la cuenta como algo que quedó abierto. *Por qué no un campo nuevo:* la revisión cazó que sin marca la guía no la
+    mostraba (sin reunión anterior) o le ponía «Quedó abierto en la sesión 1»; el id propio cabe en el esquema que ya
+    había. Se deshace con el mismo botón («Quitar», `opsParaQuitar`, solo lo llevado desde La escala). Una pregunta que
+    ya va no se repite; con 10 temas, avisa. Sin una próxima sesión planeada no se lleva: lo dice. (Marcar «explorar a
+    fondo» con la pregunta como razón pisaba lo que ya estaba marcado y la guía no leía el texto.)
   - *Costo:* las tarjetas suman unos 3.000 tokens de salida por corrida (~US$ 0,05): ~US$ 0,20 por corrida.
 - **Datos y SQL:** sin SQL. `tarjetasDeLaEscala` es opcional en el Json de la propuesta: las exploraciones en curso
   muestran la tarjeta armada con lo que ya tienen hasta la próxima corrida.

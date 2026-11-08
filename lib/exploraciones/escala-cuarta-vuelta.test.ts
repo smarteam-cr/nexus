@@ -12,7 +12,8 @@ import { areasDeLaEscala, hipotesisDelArea, ordenParaExplorar, partesParaExplora
 import { ESCALA_DE_PRUEBA, estadoDePrueba, todasEn } from "./escala-de-prueba.test-helpers";
 import { leerPropuesta, OperacionSchema } from "./esquemas";
 import { chequeoDelMapa, nivelDelVendedor, posicionesDelMapa, sinRiesgoSiSube } from "./mapa";
-import { leerTarjetasDelAgente, opsParaLlevar, tarjetaParaMostrar, yaLlevada } from "./tarjetas-de-la-escala";
+import { leerTarjetasDelAgente, llevadaDesdeLaEscala, opsParaLlevar, opsParaQuitar, tarjetaParaMostrar, yaLlevada } from "./tarjetas-de-la-escala";
+import { procedenciasDeLaSesion, textoDeLaProcedencia, preguntasParaMostrar, type PestanaDeSesion } from "./guia";
 
 const nivelEnElRadar = (chequeo: Parameters<typeof estadoDePrueba>[0], id: string) => {
   const estado = estadoDePrueba(chequeo);
@@ -37,8 +38,10 @@ describe("bug: marcar Eficiente u Óptimo no se veía en el radar", () => {
   it("en Funcional o debajo, el riesgo se queda; marcar lo mismo que ya está no cambia nada", () => {
     expect(nivelDelVendedor("F", conRiesgo["1.3"], { nivel: "I", porQue: null, origen: "confirmado" })).toEqual({ nivel: "F", fuente: "vendedor", riesgo: true });
     expect(nivelDelVendedor("I", conRiesgo["1.3"], { nivel: "I", porQue: null, origen: "confirmado" })).toBeNull();
-    // Ya en Eficiente con el riesgo (radar en Funcional): volver a marcar Eficiente sí lo arregla.
-    expect(nivelDelVendedor("E", { nivel: "E", fuente: "vendedor", riesgo: true }, { nivel: "E", porQue: null, origen: "confirmado" })).toEqual({ nivel: "E", fuente: "vendedor" });
+    // Ya en Eficiente con el riesgo (radar en Funcional): volver a marcar Eficiente lo arregla, y conserva la frase del cliente.
+    expect(
+      nivelDelVendedor("E", { nivel: "E", fuente: "reunion", evidencia: "lo dijo", riesgo: true }, { nivel: "E", porQue: null, origen: "confirmado" }),
+    ).toEqual({ nivel: "E", fuente: "reunion", evidencia: "lo dijo" });
   });
 
   it("lo que propone el agente, usado en Eficiente, también sale sin el riesgo", () => {
@@ -133,27 +136,56 @@ describe("llevar una pregunta a la exploración (el mismo camino que ya lee la g
     const r = opsParaLlevar({ pregunta: " ¿Quién revisa los datos? ", dimensionId: "1.3", sesion });
     expect(r).toEqual({
       ok: true,
-      a: "sesion",
-      ops: [{ op: "editarSesion", sesionId: "s-tres", poner: { explorar: ["¿Quién revisa los datos?"], explorarPara: { "¿Quién revisa los datos?": "1.3" } }, quitar: [] }],
+      ops: [
+        {
+          op: "editarSesion",
+          sesionId: "s-tres",
+          poner: { explorar: ["¿Quién revisa los datos?"], explorarPara: { "¿Quién revisa los datos?": "1.3" }, explorarDe: { "¿Quién revisa los datos?": "s-tres" } },
+          quitar: [],
+        },
+      ],
     });
     if (r.ok) expect(OperacionSchema.safeParse(r.ops[0]).success).toBe(true);
   });
 
+  it("⛔ la guía la muestra «Lo llevaste desde La escala», aunque no haya habido ninguna reunión, con su dimensión", () => {
+    const q = "¿Quién revisa los datos?";
+    const conLaPregunta = { ...sesion, explorar: [q], explorarPara: { [q]: "1.3" }, explorarDe: { [q]: "s-tres" } };
+    const pestana = { clave: "s-tres", numero: 1, sesion: conLaPregunta, hecha: false } as unknown as PestanaDeSesion;
+    const proc = procedenciasDeLaSesion(pestana, [pestana]);
+    expect(proc.abiertos.get(q)).toBe(0);
+    const preguntas = preguntasParaMostrar(null, [], [], ESCALA_DE_PRUEBA, proc);
+    const llevada = preguntas.find((p) => p.pregunta === q);
+    expect(llevada?.procedencia && textoDeLaProcedencia(llevada.procedencia)).toBe("Lo llevaste desde La escala");
+    expect(llevada?.apunta?.para).toBe("1.3");
+  });
+
   it("no la repite, conserva lo que ya llevaba y avisa con la lista llena", () => {
-    const con = { ...sesion, explorar: ["Otra cosa"], explorarPara: { "Otra cosa": "1.1" } };
+    // Una clave vieja que ya no está en la lista se limpia (el esquema topa las claves en 10).
+    const con = { ...sesion, explorar: ["Otra cosa"], explorarPara: { "Otra cosa": "1.1", "Vieja": "1.4" }, explorarDe: { "Otra cosa": "s-uno" } };
     const r = opsParaLlevar({ pregunta: "¿Nueva?", dimensionId: "1.2", sesion: con });
-    expect(r.ok && r.ops[0]).toMatchObject({ poner: { explorar: ["Otra cosa", "¿Nueva?"], explorarPara: { "Otra cosa": "1.1", "¿Nueva?": "1.2" } } });
-    expect(opsParaLlevar({ pregunta: "otra  COSA", dimensionId: "1.1", sesion: con })).toEqual({ ok: true, a: "sesion", ops: [] });
-    expect(yaLlevada("otra cosa", { sesion: con })).toBe(true);
+    expect(r.ok && r.ops[0]).toMatchObject({
+      poner: { explorar: ["Otra cosa", "¿Nueva?"], explorarPara: { "Otra cosa": "1.1", "¿Nueva?": "1.2" }, explorarDe: { "Otra cosa": "s-uno", "¿Nueva?": "s-tres" } },
+    });
+    expect(opsParaLlevar({ pregunta: "otra  COSA", dimensionId: "1.1", sesion: con })).toEqual({ ok: true, ops: [] });
+    expect(yaLlevada("otra cosa", con)).toBe(true);
     const llena = { ...sesion, explorar: Array.from({ length: 10 }, (_, i) => `t${i}`) };
     expect(opsParaLlevar({ pregunta: "¿Una más?", dimensionId: "1.1", sesion: llena }).ok).toBe(false);
   });
 
-  it("sin próxima sesión planeada: la dimensión se explora a fondo, con la pregunta como razón", () => {
-    const r = opsParaLlevar({ pregunta: "¿Quién revisa los datos?", dimensionId: "1.3", sesion: null });
-    expect(r).toEqual({ ok: true, a: "aExplorar", ops: [{ op: "aExplorar", dimensionId: "1.3", valor: { motivo: "otro", razon: "¿Quién revisa los datos?" } }] });
+  it("sin próxima sesión planeada no se lleva (no pisa lo marcado para explorar a fondo): lo dice", () => {
+    expect(opsParaLlevar({ pregunta: "¿Quién revisa los datos?", dimensionId: "1.3", sesion: null }).ok).toBe(false);
+  });
+
+  it("se deshace: solo lo llevado desde La escala, y la sesión queda sin rastro", () => {
+    const q = "¿Quién revisa los datos?";
+    const llevada = { ...sesion, explorar: [q, "Abierta"], explorarPara: { [q]: "1.3" }, explorarDe: { [q]: "s-tres", Abierta: "s-uno" } };
+    expect(llevadaDesdeLaEscala(q, llevada)).toBe(true);
+    expect(llevadaDesdeLaEscala("Abierta", llevada)).toBe(false);
+    const r = opsParaQuitar({ pregunta: q, sesion: llevada });
+    expect(r.ok && r.ops[0]).toEqual({ op: "editarSesion", sesionId: "s-tres", poner: { explorar: ["Abierta"], explorarDe: { Abierta: "s-uno" } }, quitar: ["explorarPara"] });
     if (r.ok) expect(OperacionSchema.safeParse(r.ops[0]).success).toBe(true);
-    expect(yaLlevada("¿Quién revisa los datos?", { sesion: null, razonDeExplorar: "¿Quién revisa los datos?" })).toBe(true);
+    expect(opsParaQuitar({ pregunta: "Abierta", sesion: llevada })).toEqual({ ok: true, ops: [] });
   });
 });
 
