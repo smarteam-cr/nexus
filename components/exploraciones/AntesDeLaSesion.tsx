@@ -37,7 +37,7 @@ import { REUNIONES } from "@/lib/exploraciones/sesion";
 import { EQUIPOS } from "@/lib/exploraciones/equipos";
 import { queContarle } from "@/lib/exploraciones/contarle";
 import { useLienzo } from "./contexto";
-import { useObjetivoDeLaSiguiente, usePreguntasDeLaAnterior } from "./LoQueQueda";
+import { useObjetivosDeLaSiguiente, usePreguntasDeLaAnterior } from "./LoQueQueda";
 import { EtiquetaDePregunta, nombreDelPara, Rotulo, useCambiosDesdeLaGuia, useEditarLaSesion, useGuiaDeLaSesion } from "./piezas-de-la-sesion";
 import { AgregarPregunta, PreguntaDeLaGuia, Quitadas, useAjustarLaGuia, useTemasDeLaGuia } from "./PreguntaDeLaGuia";
 import { GuiaEnOrden } from "./GuiaEnOrden";
@@ -50,14 +50,13 @@ import {
   mismoTexto,
   objetivoAceptado,
   objetivoDeSmarteam,
+  objetivosDistintos,
   preguntasDeLaSesion,
   respuestasParaMandar,
   vieneDeLasRespuestas,
   type PreguntaConOpciones,
 } from "@/lib/exploraciones/objetivo-y-hallazgos";
 import { Input, Spinner } from "@/components/ui";
-import { usePedirPreguntasDelObjetivo } from "./PreguntasDelObjetivo";
-import { sugeridasVigentes } from "@/lib/exploraciones/ajustes-de-la-guia";
 import { LoQueCubreLaGuia } from "./LoQueCubreLaGuia";
 import { abrirElChatDeNexus } from "@/lib/nexus-chat/constantes";
 import { queCubreLaGuia } from "@/lib/exploraciones/que-cubre-la-guia";
@@ -116,13 +115,19 @@ function EstadoDeLaGuia({ pestana }: { pestana: PestanaDeSesion }) {
     detalle = conObjetivo
       ? "Nexus la arma con el objetivo de arriba como la instrucción que más pesa, lo que ya se sabe y lo que quedó de la sesión anterior. Sale en bloques, cada uno con lo que hay que averiguar."
       : puedeEditar
-        ? "Se habilita cuando el objetivo de la sesión, arriba, esté aceptado o escrito."
-        : "Se arma cuando quien lleva la preventa acepte el objetivo de la sesión.";
+        ? "Se arma cuando elijas o escribas el objetivo de la sesión, arriba."
+        : "Se arma cuando quien lleva la preventa elija el objetivo de la sesión.";
     boton = "Armar la guía";
     tono = "info";
   } else if (!conObjetivo) {
-    titulo = "Esta guía se armó sin un objetivo aceptado";
-    detalle = "Para rehacerla, acepta o escribe el objetivo de la sesión de arriba: Nexus la arma con él.";
+    titulo = "Esta guía se armó sin un objetivo elegido";
+    detalle = "Para rehacerla, elige o escribe el objetivo de la sesión de arriba: Nexus la arma con él.";
+    boton = "Actualizar la guía";
+    tono = "aviso";
+  } else if (!guia.objetivoAceptado) {
+    // Séptima vuelta: se armó antes de elegir el objetivo (elegirlo la rehace; si eso no salió, se dice acá).
+    titulo = "Esta guía se armó antes de elegir el objetivo";
+    detalle = "«Actualizar la guía» la rehace con el objetivo de arriba; tus ajustes a las preguntas se conservan.";
     boton = "Actualizar la guía";
     tono = "aviso";
   } else if (otroObjetivo) {
@@ -400,10 +405,9 @@ function SirveAlObjetivoDeLaExploracion() {
  * guía. Dice qué falta (aceptar el objetivo de la sesión, o armarla con el botón de arriba), se ve mientras Nexus la arma y
  * muestra lo que le falta saber (sus preguntas). Desde la cuarta vuelta (2026-11-08) la guía no se arma sola.
  */
-function EspacioDeLaGuia({ pestana, preguntas }: { pestana: PestanaDeSesion; preguntas: PreguntaConOpciones[] }) {
-  const { corrida, corriendo, lanzando } = useCorrida();
+function EspacioDeLaGuia({ pestana, preguntas, armando }: { pestana: PestanaDeSesion; preguntas: PreguntaConOpciones[]; armando: boolean }) {
+  const { corrida } = useCorrida();
   const conObjetivo = objetivoAceptado(pestana.sesion?.objetivo);
-  const armando = (corriendo && corrida?.modo === "guia") || lanzando;
   const fallo = !armando && corrida?.modo === "guia" && corrida.estado === "ERROR" ? corrida.error : null;
   const conReunion = !!(pestana.sesion?.evento || pestana.sesion?.conQuien?.length);
   return (
@@ -421,11 +425,11 @@ function EspacioDeLaGuia({ pestana, preguntas }: { pestana: PestanaDeSesion; pre
       ) : (
         <>
           <p className="text-lg font-semibold text-warn-ink">
-            {conObjetivo ? `Falta la guía de la sesión ${pestana.numero}` : `Falta aceptar el objetivo de la sesión ${pestana.numero}`}
+            {conObjetivo ? `Falta la guía de la sesión ${pestana.numero}` : `Falta elegir el objetivo de la sesión ${pestana.numero}`}
           </p>
           <p className="max-w-xl text-[13px] leading-[1.5] text-fg-secondary">
             {!conObjetivo
-              ? `La guía no se arma hasta que aceptes o escribas el objetivo de la sesión, arriba. Es tu oportunidad de decirle a Nexus cómo estructurar la sesión.${
+              ? `La guía se arma cuando elijas uno de los objetivos de arriba o escribas el tuyo. Es tu oportunidad de decirle a Nexus cómo estructurar la sesión.${
                   preguntas.length ? " Mientras, puedes responder arriba lo que Nexus necesita saber: lo usa al armarla." : ""
                 }`
               : preguntas.length
@@ -458,30 +462,35 @@ function siSaleBienEnElProyecto(faltan: number, cubre: number): string {
 }
 
 /**
- * El objetivo de la sesión. Al guardar uno nuevo en la próxima sesión (escrito o editado), Nexus propone preguntas para
- * ese objetivo (`alCambiarElObjetivo`, CEMACO 2026-10-20): no con cada tecla, al guardar. «Proponer preguntas» las vuelve
- * a pedir cuando no hay ninguna esperando.
+ * El objetivo de la sesión. Séptima vuelta (2026-11-08, Elías: «el objetivo sugerido realmente pueden ser tres objetivos
+ * sugeridos y que el vendedor pueda editar cada uno o poner uno personalizado, y que no aparezca la guía antes de eso»):
+ * sin objetivo, Nexus sugiere hasta tres (de la lectura de la sesión anterior, cada uno con un enfoque distinto) como
+ * tarjetas en una fila, más una cuarta para escribir el tuyo. Cada una se edita ahí mismo; elegir una la acepta y, en la
+ * próxima sesión, arma la guía en ese momento (`alElegir`). Con un objetivo elegido se ve el elegido, con «Editar».
+ *
+ * Antes (cuarta vuelta) era un solo objetivo sugerido con Descartar, Editar y Aceptar, y «Proponer preguntas» al lado del
+ * aceptado (ya no hacía nada en la próxima sesión: la guía en bloques se arma entera con el objetivo).
  */
 function Objetivo({
   pestana,
   esLaProxima,
-  sugerido,
+  sugeridos,
   preguntas,
-  alCambiarElObjetivo,
-  pidiendo,
+  alElegir,
 }: {
   pestana: PestanaDeSesion;
   esLaProxima: boolean;
-  sugerido: string | null;
+  sugeridos: readonly string[];
   preguntas: PreguntaParaMostrar[];
-  alCambiarElObjetivo: () => void;
-  pidiendo: boolean;
+  /** Al elegir un objetivo (no al editar uno ya elegido): guardarlo y, en la próxima sesión, armar la guía. */
+  alElegir: (objetivo: string, propio: boolean) => Promise<void>;
 }) {
   const { exp, chequeo, marco, puedeEditar, guardando } = useLienzo();
   const editar = useEditarLaSesion(pestana, "antes");
   const s = pestana.sesion;
   const confirmado = s?.objetivo ?? null;
-  const ofrecer = !confirmado && sugerido && sugerido !== s?.objetivoDescartado ? sugerido : null;
+  // El que se descartó con la pantalla de antes (un solo objetivo con «Descartar») no vuelve.
+  const ofrecer = confirmado ? [] : sugeridos.filter((o) => !mismoTexto(o, s?.objetivoDescartado));
   const [editando, setEditando] = useState(false);
   const [texto, setTexto] = useState("");
 
@@ -503,23 +512,19 @@ function Objetivo({
         ? siSaleBienEnElProyecto(faltanDelProyecto.length, cubreDelProyecto)
         : siSaleBien(faltan.length, cubre);
 
-  // Proponer preguntas es de la próxima sesión (la guía que se puede cambiar) y de un objetivo escrito por la persona.
-  const conPropuestas = esLaProxima && puedeEditar;
-  const esperando = sugeridasVigentes(s?.ajustesDeLaGuia, confirmado).length > 0;
-  const guardar = (valor: string, { proponer = true }: { proponer?: boolean } = {}) => {
+  /** Cambiar el objetivo ya elegido (no arma la guía: «Actualizar la guía», arriba, dice que cambió). */
+  const guardar = (valor: string) => {
     const t = valor.trim().slice(0, 400);
     const cambio = !!t && t !== (confirmado ?? "");
-    /* K11: el objetivo es propio si la persona lo escribió o lo cambió; el del agente usado tal cual, no (no cuenta para
-       sugerir el equipo). Guardar sin cambios deja lo que había. */
-    const propio = cambio ? t !== (sugerido ?? "").trim() : !!s?.objetivoPropio;
+    /* K11: el objetivo es propio si la persona lo escribió o lo cambió; uno de los sugeridos usado tal cual, no (no cuenta
+       para sugerir el equipo). Guardar sin cambios deja lo que había. */
+    const propio = cambio ? !sugeridos.some((o) => mismoTexto(o, t)) : !!s?.objetivoPropio;
     void editar((x) => {
       const { objetivoPropio: _antes, ...resto } = x;
       void _antes;
       return t ? { ...resto, objetivo: t, ...(propio ? { objetivoPropio: true } : {}) } : { ...resto, objetivo: undefined };
     }).then((ok) => {
-      if (!ok) return;
-      setEditando(false);
-      if (proponer && cambio && conPropuestas) alCambiarElObjetivo();
+      if (ok) setEditando(false);
     });
   };
 
@@ -556,79 +561,158 @@ function Objetivo({
           {esLaProxima && <p className="text-[13px] leading-[1.45] text-fg-secondary">{saleBien}</p>}
         </div>
         {puedeEditar && (
-          <div className="flex flex-none flex-col items-end gap-1">
-            <BotonBlanco
-              onClick={() => {
-                setTexto(confirmado);
-                setEditando(true);
-              }}
-            >
-              Editar
-            </BotonBlanco>
-            {conPropuestas && !esperando && (
-              <BotonTexto disabled={pidiendo} onClick={alCambiarElObjetivo}>
-                <span className="inline-flex items-center gap-1 text-brand">
-                  <IconoDeSugerencia className="h-3 w-3" />
-                  Proponer preguntas
-                </span>
-              </BotonTexto>
-            )}
-          </div>
+          <BotonBlanco
+            className="flex-none"
+            onClick={() => {
+              setTexto(confirmado);
+              setEditando(true);
+            }}
+          >
+            Editar
+          </BotonBlanco>
         )}
       </section>
     );
   }
 
-  if (ofrecer) {
-    return (
-      <section className="space-y-2.5 rounded-xl border border-info-line bg-info-surface px-[18px] py-4">
-        <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-brand">
-          <IconoDeSugerencia className="h-[13px] w-[13px]" />
-          Objetivo sugerido
-        </p>
-        <p className="text-[15px] font-semibold leading-[1.4] text-fg">{ofrecer}</p>
-        {esLaProxima && (
-          <p className="text-[13px] leading-[1.45] text-fg-secondary">
-            Acéptalo o edítalo: la guía no se arma sin él, y es la instrucción que más pesa. Si quieres, dile a Nexus cómo estructurar la sesión.
-          </p>
-        )}
-        {puedeEditar && (
-          <div className="flex items-center justify-end gap-2">
-            <BotonTexto disabled={guardando} onClick={() => void editar((x) => ({ ...x, objetivoDescartado: ofrecer }))}>
-              Descartar
-            </BotonTexto>
-            <BotonBlanco
-              onClick={() => {
-                setTexto(ofrecer);
-                setEditando(true);
-              }}
-            >
-              Editar
-            </BotonBlanco>
-            {/* El objetivo que sugiere el agente se armó con la guía: usarlo no pide preguntas nuevas. */}
-            <BotonAzul disabled={guardando} onClick={() => guardar(ofrecer, { proponer: false })}>
-              Aceptar
-            </BotonAzul>
-          </div>
-        )}
-      </section>
-    );
-  }
+  if (!puedeEditar && !ofrecer.length) return null;
+  return <ObjetivosSugeridos sugeridos={ofrecer} esLaProxima={esLaProxima} alElegir={alElegir} />;
+}
 
-  if (!puedeEditar) return null;
-  return (
-    <section className="flex items-center gap-3 rounded-xl border border-dashed border-line bg-surface px-[18px] py-3.5">
-      <p className="min-w-0 flex-1 text-[13px] text-fg-muted">
-        Sin objetivo todavía: ¿qué tienes que salir sabiendo de esta sesión?{esLaProxima ? " La guía no se arma sin él." : ""}
-      </p>
-      <BotonBlanco
-        onClick={() => {
-          setTexto("");
-          setEditando(true);
+/**
+ * Los objetivos sugeridos como tarjetas en una fila, más «Escribe el tuyo» (séptima vuelta). El mismo patrón que las
+ * preguntas de Nexus: un clic elige. «Editar» cambia el texto de una tarjeta ahí mismo antes de elegirla.
+ */
+function ObjetivosSugeridos({
+  sugeridos,
+  esLaProxima,
+  alElegir,
+}: {
+  sugeridos: readonly string[];
+  esLaProxima: boolean;
+  alElegir: (objetivo: string, propio: boolean) => Promise<void>;
+}) {
+  const { puedeEditar, guardando } = useLienzo();
+  // Lo que se edita: el índice de la tarjeta, o «propio» para la cuarta.
+  const [editando, setEditando] = useState<number | "propio" | null>(null);
+  const [texto, setTexto] = useState("");
+  const [eligiendo, setEligiendo] = useState<string | null>(null);
+  const bloqueado = !puedeEditar || guardando || !!eligiendo;
+
+  const elegir = async (valor: string) => {
+    const t = valor.trim().slice(0, 400);
+    if (!t || bloqueado) return;
+    setEligiendo(t);
+    try {
+      await alElegir(t, !sugeridos.some((o) => mismoTexto(o, t)));
+    } finally {
+      setEligiendo(null);
+    }
+  };
+  const abrir = (cual: number | "propio") => {
+    setTexto(cual === "propio" ? "" : (sugeridos[cual] ?? ""));
+    setEditando(cual);
+  };
+  const TARJETA = "flex min-h-[112px] flex-col rounded-lg border text-left transition-colors";
+
+  const editor = (etiqueta: string) => (
+    <div className={cn(TARJETA, "border-brand bg-surface p-2")}>
+      <textarea
+        value={texto}
+        onChange={(ev) => setTexto(ev.target.value)}
+        onKeyDown={(ev) => {
+          if (ev.key === "Enter" && !ev.shiftKey) {
+            ev.preventDefault();
+            void elegir(texto);
+          }
+          if (ev.key === "Escape") setEditando(null);
         }}
-      >
-        Escribirlo
-      </BotonBlanco>
+        maxLength={400}
+        rows={4}
+        autoFocus
+        aria-label={etiqueta}
+        placeholder="Qué tienes que salir sabiendo de esta sesión"
+        className="w-full flex-1 resize-none rounded-md bg-surface px-1.5 py-1 text-[13.5px] leading-[1.45] text-fg placeholder:text-fg-muted focus:outline-none"
+      />
+      <div className="mt-1.5 flex items-center justify-end gap-1.5">
+        <BotonTexto onClick={() => setEditando(null)}>Cancelar</BotonTexto>
+        <BotonAzul disabled={bloqueado || !texto.trim()} onClick={() => void elegir(texto)}>
+          Elegir
+        </BotonAzul>
+      </div>
+    </div>
+  );
+
+  return (
+    <section className="space-y-3 rounded-xl border border-info-line bg-info-surface px-[18px] py-4">
+      <div>
+        <p className="flex items-center gap-1.5 text-sm font-semibold text-fg">
+          <IconoDeSugerencia className="h-4 w-4 text-brand" />
+          Elige el objetivo de la sesión
+        </p>
+        <p className="mt-0.5 text-[12.5px] leading-[1.45] text-fg-muted">
+          {!puedeEditar
+            ? "Lo elige quien lleva la preventa: la guía se arma con él."
+            : `${
+                sugeridos.length > 1
+                  ? `Nexus sugiere ${sugeridos.length} enfoques distintos.`
+                  : sugeridos.length === 1
+                    ? "Nexus sugiere uno."
+                    : "Nexus todavía no tiene uno para sugerir: salen de la lectura de la sesión anterior."
+              } Edita el que quieras o escribe el tuyo.${
+                esLaProxima ? " Al elegirlo, Nexus arma la guía con él: es tu oportunidad de decirle cómo estructurar la sesión." : ""
+              }`}
+        </p>
+      </div>
+      <div role="group" aria-label="Objetivos sugeridos" className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+        {sugeridos.map((o, i) =>
+          editando === i ? (
+            <div key={o}>{editor(`Editar el objetivo ${i + 1}`)}</div>
+          ) : (
+            <div key={o} className={cn(TARJETA, eligiendo === o ? "border-brand bg-info-surface" : "border-line bg-surface hover:border-brand")}>
+              <button
+                type="button"
+                disabled={bloqueado}
+                onClick={() => void elegir(o)}
+                aria-label={`Elegir este objetivo: ${o}`}
+                className="flex-1 px-3 pt-2.5 pb-1.5 text-left text-[13.5px] leading-[1.45] text-fg disabled:opacity-60"
+              >
+                {i === 0 && sugeridos.length > 1 && <span className="mb-1 block text-[11px] font-semibold text-brand">El que más recomienda Nexus</span>}
+                {o}
+              </button>
+              {puedeEditar && (
+                <div className="flex items-center justify-between px-1.5 pb-1.5">
+                  <BotonTexto disabled={bloqueado} onClick={() => abrir(i)}>
+                    Editar
+                  </BotonTexto>
+                  <BotonTexto disabled={bloqueado} onClick={() => void elegir(o)} className="font-medium text-brand hover:text-brand-dark">
+                    Elegir
+                  </BotonTexto>
+                </div>
+              )}
+            </div>
+          ),
+        )}
+        {puedeEditar &&
+          (editando === "propio" ? (
+            editor("Tu objetivo para la sesión")
+          ) : (
+            <button
+              type="button"
+              disabled={bloqueado}
+              onClick={() => abrir("propio")}
+              className={cn(TARJETA, "items-center justify-center border-dashed border-line bg-surface px-3 py-2.5 text-center text-[13.5px] text-fg-muted hover:bg-surface-hover disabled:opacity-60")}
+            >
+              Escribe el tuyo
+            </button>
+          ))}
+      </div>
+      {eligiendo && (
+        <p role="status" className="flex items-center justify-end gap-2 text-[13px] text-fg-secondary">
+          <Spinner size="sm" color="border-brand" />
+          {esLaProxima ? "Guardando el objetivo y armando la guía…" : "Guardando el objetivo…"}
+        </p>
+      )}
     </section>
   );
 }
@@ -1127,19 +1211,48 @@ export function SiSeResiste({ pestana, esLaProxima, compacto = false }: { pestan
 }
 
 export default function AntesDeLaSesion({ pestana, esLaProxima }: { pestana: PestanaDeSesion; esLaProxima: boolean }) {
-  const { exp, marco } = useLienzo();
+  const { exp, marco, alDia } = useLienzo();
   const { guia, preguntas } = useGuiaDeLaSesion(pestana, esLaProxima);
-  const delObjetivo = usePedirPreguntasDelObjetivo();
+  const { corrida, corriendo, lanzando, lanzar } = useCorrida();
+  const editar = useEditarLaSesion(pestana, "antes");
   // Sexta vuelta: solo las de esta sesión, todas con tarjetas.
   const paraLaGuia = usePreguntasParaLaGuia(pestana);
-  // 2026-11-07: sin guía todavía, Nexus sugiere el objetivo desde lo que quedó de la sesión anterior (sin otra IA).
-  const deLaAnterior = useObjetivoDeLaSiguiente(pestana);
+  /* Séptima vuelta (2026-11-08): hasta tres objetivos sugeridos, de lo que quedó de la sesión anterior (sin otra IA). Sin
+     ellos, el de una guía armada antes de elegir el objetivo, como una tarjeta más. */
+  const deLaAnterior = useObjetivosDeLaSiguiente(pestana);
+  const sugeridos = objetivosDistintos([...deLaAnterior, guia?.objetivo]);
+  const [eligiendo, setEligiendo] = useState(false);
   const traidos = pestana.sesion?.explorar ?? [];
   const conTest = exp.leido.tests.length > 0;
+  const conObjetivo = objetivoAceptado(pestana.sesion?.objetivo);
   // En la próxima, una guía con el formato de antes se pliega abajo como «Guía anterior» (2026-11-06, Elías).
   const guiaDeAntes = !!guia && !guia.agenda;
-  const actual = esLaProxima && guiaDeAntes ? null : guia;
-  const anterior = esLaProxima ? (guiaDeAntes ? guia : pestana.sesion ? (exp.estado.propuesta.guiasAnteriores?.[pestana.sesion.id] ?? null) : null) : null;
+  /* Séptima vuelta (Elías: «que no aparezca la guía antes de eso, que la guía se arme luego de seleccionar eso»): en la
+     próxima, sin objetivo elegido no se ve ninguna guía. Una armada antes de elegirlo tampoco mientras se arma la del
+     objetivo elegido; si no se arma, se ve con el aviso de que se armó sin él (EstadoDeLaGuia). */
+  const armandoLaGuia = eligiendo || lanzando || (corriendo && corrida?.modo === "guia");
+  const armadaSinObjetivo = !!guia?.agenda && !guia.objetivoAceptado;
+  const actual = esLaProxima && (guiaDeAntes || !conObjetivo || (armadaSinObjetivo && armandoLaGuia)) ? null : guia;
+  const anterior =
+    esLaProxima && conObjetivo ? (guiaDeAntes ? guia : pestana.sesion ? (exp.estado.propuesta.guiasAnteriores?.[pestana.sesion.id] ?? null) : null) : null;
+
+  /** Elegir un objetivo lo guarda y, en la próxima sesión, arma la guía en ese momento (séptima vuelta). */
+  const alElegir = async (objetivo: string, propio: boolean) => {
+    setEligiendo(true);
+    try {
+      const ok = await editar((x) => {
+        const { objetivoPropio: _antes, ...resto } = x;
+        void _antes;
+        return { ...resto, objetivo, ...(propio ? { objetivoPropio: true } : {}) };
+      });
+      if (!ok || !esLaProxima) return;
+      // El objetivo recién elegido puede estar todavía en camino al servidor: la guía se pide cuando llegó.
+      await alDia();
+      await lanzar("guia");
+    } finally {
+      setEligiendo(false);
+    }
+  };
 
   if (!esLaProxima && !guia) {
     return (
@@ -1170,13 +1283,9 @@ export default function AntesDeLaSesion({ pestana, esLaProxima }: { pestana: Pes
       <Objetivo
         pestana={pestana}
         esLaProxima={esLaProxima}
-        sugerido={guia?.objetivo ?? deLaAnterior}
+        sugeridos={sugeridos}
         preguntas={preguntas}
-        alCambiarElObjetivo={() => {
-          // Las preguntas para el objetivo eran de la guía de antes: la agenda se arma entera con el objetivo.
-          if (guiaDeAntes && !esLaProxima) void delObjetivo.pedir();
-        }}
-        pidiendo={delObjetivo.pidiendo}
+        alElegir={alElegir}
       />
       {esLaProxima && <SirveAlObjetivoDeLaExploracion />}
       {/* Quinta vuelta (2026-11-08): lo que Nexus necesita saber pide algo de ti, así que va arriba, junto al objetivo. */}
@@ -1189,23 +1298,24 @@ export default function AntesDeLaSesion({ pestana, esLaProxima }: { pestana: Pes
             </p>
             <p className="mt-0.5 text-[12.5px] text-fg-muted">
               Elige una respuesta de un clic o escribe la tuya.{" "}
-              {!objetivoAceptado(pestana.sesion?.objetivo)
-                ? "Se guardan y Nexus las usa al armar la guía, cuando el objetivo esté aceptado."
+              {!conObjetivo
+                ? "Se guardan y Nexus las usa al armar la guía, cuando elijas el objetivo."
                 : actual
                   ? "Al responder todo, la guía se rehace."
                   : "Al responder todo, la guía se arma."}
             </p>
           </div>
-          <PreguntasDeNexus conObjetivo={objetivoAceptado(pestana.sesion?.objetivo)} lista={paraLaGuia} />
+          <PreguntasDeNexus conObjetivo={conObjetivo} lista={paraLaGuia} />
         </section>
       )}
-      {/* Cuarta vuelta (2026-11-08): «Armar la guía» va debajo del objetivo y arriba de «Lo que ya sabemos». */}
-      {esLaProxima && <EstadoDeLaGuia pestana={pestana} />}
+      {/* Cuarta vuelta (2026-11-08): «Armar la guía» va debajo del objetivo y arriba de «Lo que ya sabemos». Desde la séptima,
+          solo con un objetivo elegido: elegirlo ya arma la guía, y sin él no hay guía de qué hablar. */}
+      {esLaProxima && conObjetivo && <EstadoDeLaGuia pestana={pestana} />}
       {esLaProxima && <LoQueTraes pestana={pestana} />}
       {esLaProxima && <ParaElDemo />}
       {esLaProxima && <LoQueYaSabemos pestana={pestana} />}
       {/* Sin guía, su espacio grande (2026-11-08). Lo que Nexus necesita saber va arriba, junto al objetivo. */}
-      {esLaProxima && !actual && <EspacioDeLaGuia pestana={pestana} preguntas={paraLaGuia} />}
+      {esLaProxima && !actual && <EspacioDeLaGuia pestana={pestana} preguntas={paraLaGuia} armando={armandoLaGuia} />}
       {actual && <LaGuia pestana={pestana} esLaProxima={esLaProxima} />}
       {actual && <LoQueCubreLaGuia pestana={pestana} esLaProxima={esLaProxima} />}
       {actual && <RetosDeLaIndustria pestana={pestana} esLaProxima={esLaProxima} />}

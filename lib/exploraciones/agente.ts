@@ -1413,6 +1413,8 @@ function lecturasDeLaCorrida(
       ...(esLaUltima && d.cumplido && o.ctx.planeado?.objetivo ? { cumplido: d.cumplido } : {}),
       ...(esLaUltima && d.paraLaProxima?.length ? { paraLaProxima: d.paraLaProxima } : {}),
       ...(esLaUltima && d.objetivoSiguiente ? { objetivoSiguiente: d.objetivoSiguiente } : {}),
+      // Séptima vuelta: los tres objetivos posibles, para elegir uno en la Preparación de la siguiente.
+      ...(esLaUltima && d.objetivosSiguientes?.length ? { objetivosSiguientes: d.objetivosSiguientes } : {}),
       // Sexta vuelta: lo que Nexus necesita saber para armar la guía de la siguiente sesión (preguntasDeLaSesion).
       ...(esLaUltima && d.preguntasParaLaSiguiente?.length ? { preguntasParaLaSiguiente: d.preguntasParaLaSiguiente } : {}),
       ...(listosAntes ? { listosAntes } : {}),

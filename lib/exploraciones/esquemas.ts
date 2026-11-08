@@ -134,6 +134,7 @@ import {
   MAX_OPCIONES_DE_LA_PREGUNTA,
   MAX_LARGO_DE_LA_PREGUNTA_PARA_LA_GUIA,
   MAX_LARGO_DEL_HALLAZGO,
+  MAX_OBJETIVOS_SUGERIDOS,
   MAX_PORQUE_DEL_AJUSTE,
   MAX_PREGUNTAS_PARA_LA_GUIA,
   MAX_RESPUESTA_PARA_LA_GUIA,
@@ -946,6 +947,8 @@ const LecturaDeReunionSchema: z.ZodType<LecturaDeReunion> = z.object({
   cumplido: z.enum(CUMPLIMIENTOS).optional(),
   paraLaProxima: z.array(z.string().max(300)).max(MAX_PARA_LA_PROXIMA).optional(),
   objetivoSiguiente: z.string().max(400).optional(),
+  // Séptima vuelta: una lista que no calza se pierde sola (queda `objetivoSiguiente`).
+  objetivosSiguientes: z.array(z.string().max(400)).max(MAX_OBJETIVOS_SUGERIDOS).optional().catch(undefined),
   preguntasParaLaSiguiente: z
     .array(
       z.object({

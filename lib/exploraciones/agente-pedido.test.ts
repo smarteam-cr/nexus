@@ -921,7 +921,8 @@ describe("⭐ la lectura trae si se cumplió el objetivo y lo que queda, en la m
 
   it("pide si se cumplió (solo con objetivo), lo que queda para la próxima y el objetivo siguiente", () => {
     const props = JSON.stringify((herramienta(c).input_schema.properties as Record<string, unknown>).reuniones);
-    for (const k of ["cumplido", "paraLaProxima", "objetivoSiguiente"]) expect(props).toContain(`"${k}"`);
+    // Desde la séptima vuelta, tres objetivos posibles (septima-vuelta.test.ts).
+    for (const k of ["cumplido", "paraLaProxima", "objetivosSiguientes"]) expect(props).toContain(`"${k}"`);
     const sin = JSON.stringify((herramienta(ctx({ reuniones: [{ fuente: "S1", etiqueta: "Reunión del 1 oct" }], planeado: { objetivo: null, preguntas: [] } })).input_schema.properties as Record<string, unknown>).reuniones);
     expect(sin).not.toContain('"cumplido"');
     // El objetivo viaja en el pedido aunque no haya preguntas planeadas: sin él no se puede decir si se cumplió.

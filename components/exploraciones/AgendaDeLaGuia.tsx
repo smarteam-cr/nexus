@@ -7,6 +7,11 @@
  * hay que averiguar; la pregunta para abrir, en cursiva; una guía corta; y tres preguntas para profundizar. Lo que hay
  * que averiguar sigue debajo, compacto, con sus casillas (las marcas de «En vivo» y de la lectura dependen de ellas).
  * Se lee de un vistazo durante la reunión: en la Preparación y en «En vivo» es la misma, con las mismas marcas.
+ *
+ * Séptima vuelta (2026-11-08, Elías: «más simple y legible»): en la Preparación ya no van las casillas de lo que hay que
+ * averiguar ni el conteo de averiguadas (el título del bloque ya dice qué averiguar); siguen en «En vivo», donde se marcan
+ * y de donde las leen el aviso del resultado y el análisis de la sesión. La pregunta, la explicación y los títulos, un
+ * poco más grandes. «Para profundizar» se pliega: cerrado en la Preparación, abierto en «En vivo».
  */
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/cn";
@@ -68,6 +73,8 @@ export function AgendaDeLaGuia({
   const editar = useEditarLaSesion(pestana, momento);
   const hechas = pestana.sesion?.hechas;
   const { sabidas, total } = avanceDeLaAgenda(agenda, hechas);
+  // Las casillas de lo que hay que averiguar se marcan en «En vivo» (séptima vuelta): la Preparación no las muestra.
+  const conCasillas = momento === "durante";
   const marcar = (c: CosaPorAveriguar) => void editar((x) => ({ ...x, hechas: alternarAveriguada(c, x.hechas) }));
   /* Los minutos, repartidos según la duración de la sesión (2026-11-07): si la cambiaron después de armar la guía, los
      bloques se ajustan solos. La de la sesión sale de su reunión del calendario; sin ella ni duración guardada, la que
@@ -94,15 +101,15 @@ export function AgendaDeLaGuia({
     <section data-recorrido="preventa.sesion.preguntas" className="overflow-hidden rounded-xl border border-line bg-surface">
       <header className="space-y-2.5 border-b border-line px-[18px] py-3.5">
         <div className="flex flex-wrap items-center gap-2.5">
-          <h3 className="text-[15px] font-semibold text-fg">La guía</h3>
-          <span className="text-[12.5px] text-fg-muted">
-            {duracion} min · {agenda.bloques.length} bloques · {sabidas} de {total} averiguadas
+          <h3 className="text-base font-semibold text-fg">La guía</h3>
+          <span className="text-[13px] text-fg-muted">
+            {duracion} min · {agenda.bloques.length} bloques{conCasillas ? ` · ${sabidas} de ${total} averiguadas` : ""}
           </span>
         </div>
-        {objetivo && <p className="text-[14px] leading-5 text-fg">{objetivo}</p>}
+        {objetivo && <p className="text-[15px] leading-[22px] text-fg">{objetivo}</p>}
         <div>
           <Rotulo>Al terminar, tenemos que tener claro</Rotulo>
-          <ul className="mt-1 list-disc space-y-0.5 pl-5 text-[13.5px] leading-5 text-fg-secondary">
+          <ul className="mt-1 list-disc space-y-1 pl-5 text-[14.5px] leading-[22px] text-fg-secondary">
             {agenda.claves.map((c, i) => (
               <li key={i}>{c}</li>
             ))}
@@ -125,28 +132,33 @@ export function AgendaDeLaGuia({
           const sabidasDelBloque = b.averiguar.filter((c) => estaAveriguada(c, hechas)).length;
           return (
             <li key={i} className={cn("flex gap-4 border-b border-line px-[18px] py-4 last:border-b-0", b.central && "bg-surface-muted")}>
-              <div className="w-[52px] flex-none pt-[3px] text-[12.5px] font-medium tabular-nums text-fg-muted" aria-label={`Del minuto ${b.desde} al ${b.hasta}`}>
+              <div className="w-[52px] flex-none pt-[3px] text-[13px] font-medium tabular-nums text-fg-muted" aria-label={`Del minuto ${b.desde} al ${b.hasta}`}>
                 {rangoDelBloque(b)}
               </div>
-              <div className="min-w-0 flex-1 space-y-1.5">
+              <div className="min-w-0 flex-1 space-y-2">
                 <div className="flex flex-wrap items-center gap-2">
-                  <h4 className="text-[14.5px] font-semibold leading-5 text-fg">{b.titulo}</h4>
+                  <h4 className="text-base font-semibold leading-6 text-fg">{b.titulo}</h4>
                   {b.central && <span className="rounded-full border border-info-line bg-info-surface px-2 py-0.5 text-[11px] font-semibold text-info-ink">Bloque central: sin prisa</span>}
                 </div>
-                <p className="text-[14px] italic leading-[21px] text-fg">«{sinComillas(b.abre)}»</p>
-                {b.guia && <p className="text-[13.5px] leading-5 text-fg-secondary">{b.guia}</p>}
+                <p className="text-[15.5px] italic leading-[24px] text-fg">«{sinComillas(b.abre)}»</p>
+                {b.guia && <p className="text-[14.5px] leading-[22px] text-fg-secondary">{b.guia}</p>}
                 {profundizar.length > 0 && (
-                  <div className="pt-0.5">
-                    <p className="text-[11.5px] font-semibold uppercase tracking-wide text-fg-muted">Para profundizar</p>
-                    <ul className="mt-1 list-disc space-y-0.5 pl-5 text-[13px] leading-[19px] text-fg-secondary marker:text-fg-muted">
+                  // Plegado en la Preparación (séptima vuelta): se abre con un clic. En «En vivo», abierto.
+                  <details open={momento === "durante"} className="group pt-0.5">
+                    <summary className="flex w-fit cursor-pointer select-none list-none items-center gap-1.5 rounded text-[12px] font-semibold uppercase tracking-wide text-fg-muted hover:text-fg [&::-webkit-details-marker]:hidden">
+                      <span aria-hidden className="inline-block transition-transform group-open:rotate-90">›</span>
+                      Para profundizar
+                      <span className="font-normal normal-case tracking-normal">· {profundizar.length} {profundizar.length === 1 ? "pregunta" : "preguntas"}</span>
+                    </summary>
+                    <ul className="mt-1.5 list-disc space-y-1 pl-5 text-[14px] leading-[21px] text-fg-secondary marker:text-fg-muted">
                       {profundizar.map((p, k) => (
                         <li key={k}>{sinComillas(p)}</li>
                       ))}
                     </ul>
-                  </div>
+                  </details>
                 )}
-                {b.impacto && <p className="text-[12.5px] leading-[18px] text-fg-muted">Para medir el dolor: {b.impacto}</p>}
-                {b.averiguar.length > 0 && (
+                {b.impacto && <p className="text-[13px] leading-[19px] text-fg-muted">Para medir el dolor: {b.impacto}</p>}
+                {conCasillas && b.averiguar.length > 0 && (
                   <div className="rounded-lg border border-line px-2.5 py-1.5">
                     <p className="text-[11.5px] font-medium text-fg-muted">
                       Lo que hay que averiguar · {sabidasDelBloque} de {b.averiguar.length}

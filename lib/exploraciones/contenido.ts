@@ -564,6 +564,11 @@ export interface LecturaDeReunion {
   paraLaProxima?: string[];
   objetivoSiguiente?: string;
   /**
+   * Séptima vuelta (2026-11-08): los objetivos que sugiere para la siguiente sesión, hasta tres, cada uno con un enfoque
+   * distinto (el primero es `objetivoSiguiente`). La Preparación los muestra como tarjetas; sin esta lista, una sola.
+   */
+  objetivosSiguientes?: string[];
+  /**
    * Sexta vuelta (2026-11-08): solo en la más reciente, lo que Nexus necesita saber para armar la guía de la siguiente
    * sesión, cada pregunta con sus respuestas probables. Se muestra en esa sesión mientras no tenga guía propia.
    */

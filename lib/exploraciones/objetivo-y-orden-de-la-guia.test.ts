@@ -312,13 +312,15 @@ describe("el pedido de las preguntas para el objetivo", () => {
   });
 });
 
-describe("la pantalla pide las preguntas al guardar el objetivo, no con cada tecla (guarda estructural)", () => {
+describe("el objetivo de la sesión no pide nada con cada tecla (guarda estructural)", () => {
   const antes = readFileSync(join(__dirname, "..", "..", "components", "exploraciones", "AntesDeLaSesion.tsx"), "utf8");
-  it("se piden en el guardado del objetivo, solo si cambió, y no al usar el que sugirió el agente", () => {
-    expect(antes).toMatch(/if \(proponer && cambio && conPropuestas\) alCambiarElObjetivo\(\)/);
-    expect(antes).toMatch(/guardar\(ofrecer, \{ proponer: false \}\)/);
-    // El campo del objetivo no pide nada al escribir: solo guarda el texto en el estado.
+  /* Desde la séptima vuelta (2026-11-08) «Proponer preguntas» ya no está: con la guía en bloques no hacía nada en la
+     próxima sesión. Elegir un objetivo arma la guía; editar uno ya elegido solo lo guarda («Actualizar la guía» avisa). */
+  it("el campo solo guarda el texto en el estado; se manda al guardar o al elegir", () => {
     expect(antes).toMatch(/onChange=\{\(ev\) => setTexto\(ev\.target\.value\)\}/);
+    expect(antes).not.toContain("alCambiarElObjetivo");
+    // Solo queda nombrado en el comentario que cuenta por qué se fue.
+    expect(antes).not.toMatch(/^\s*Proponer preguntas\s*$/m);
   });
 });
 

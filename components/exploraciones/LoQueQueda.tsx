@@ -6,7 +6,7 @@
  * UNA lista que junta lo que antes eran tres bloques («Quedó abierto», «Lo que falta para confirmarlo» y «Temas por
  * retomar»): lo que la lectura dejó pendiente, lo que no se preguntó, lo que el cliente dijo y nadie siguió y lo que
  * dejaron las sesiones escritas a mano. Todo va marcado; se desmarca lo que no va (`SesionPlaneada.noLlevar`). Lo marcado
- * entra a la guía de la siguiente sesión y arma su objetivo (`useObjetivoDeLaSiguiente`, que usa la Preparación). Nada
+ * entra a la guía de la siguiente sesión y arma su objetivo (`useObjetivosDeLaSiguiente`, que usa la Preparación). Nada
  * que escribir.
  */
 import { claveDeLaReunion, type ItemPropuesto } from "@/lib/exploraciones/contenido";
@@ -15,7 +15,7 @@ import {
   DE_DONDE_SALE,
   esDeLaReunion,
   loQueQuedaParaLaProxima,
-  objetivoSugeridoDeLaSiguiente,
+  objetivosSugeridosDeLaSiguiente,
   type PendienteDeLaSesion,
 } from "@/lib/exploraciones/despues-de-la-sesion";
 import { separarPregunta, type PestanaDeSesion } from "@/lib/exploraciones/guia";
@@ -51,16 +51,22 @@ export function useLoQueQueda(pestana: PestanaDeSesion | null): { pendientes: Pe
  * El objetivo que Nexus sugiere para esta sesión desde lo que dejó la anterior que ya pasó y lo que la exploración
  * todavía no sabe (sin IA: sale de la lectura que ya se hizo). null si no hay una anterior o no dejó nada.
  */
-export function useObjetivoDeLaSiguiente(pestana: PestanaDeSesion): string | null {
+export function useObjetivosDeLaSiguiente(pestana: PestanaDeSesion): string[] {
   const { exp } = useLienzo();
   const { todas } = useSesiones();
   const i = todas.findIndex((p) => p.clave === pestana.clave);
   const anterior = [...todas.slice(0, i < 0 ? todas.length : i)].reverse().find((p) => p.hecha && !p.noSeHizo) ?? null;
   const { pendientes } = useLoQueQueda(anterior);
   const falta = usePorAveriguar();
-  if (!anterior || pestana.hecha) return null;
+  if (!anterior || pestana.hecha) return [];
   const lectura = anterior.reunion ? exp.estado.propuesta.lecturas[claveDeLaReunion(anterior.reunion)] : undefined;
-  return objetivoSugeridoDeLaSiguiente({ pendientes, objetivoSiguiente: lectura?.objetivoSiguiente ?? null, porAveriguar: falta });
+  // Séptima vuelta: hasta tres, para elegir en tarjetas.
+  return objetivosSugeridosDeLaSiguiente({
+    pendientes,
+    objetivoSiguiente: lectura?.objetivoSiguiente ?? null,
+    objetivosSiguientes: lectura?.objetivosSiguientes ?? null,
+    porAveriguar: falta,
+  });
 }
 
 /**
