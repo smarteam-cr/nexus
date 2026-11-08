@@ -165,7 +165,12 @@ function QuePasoEnLaReunion({ pestana, lectura }: { pestana: PestanaDeSesion; le
      pedido y la corrida hay un momento sin ninguna de las dos, y ahí no se tiene que ir. Se deriva: sin efecto. */
   const [pedidaEn, setPedidaEn] = useState<number | null>(null);
   const leyendo = corriendo && corrida?.modo === "leer";
-  const termino = !!corrida && corrida.modo === "leer" && corrida.estado !== "RUNNING" && pedidaEn !== null && Date.parse(corrida.empezo) >= pedidaEn - 5000;
+  /* También terminó si después arrancó la guía de la próxima sesión, que se arma sola al terminar de leer (2026-11-08). */
+  const termino =
+    !!corrida &&
+    pedidaEn !== null &&
+    Date.parse(corrida.empezo) >= pedidaEn - 5000 &&
+    (corrida.modo === "leer" ? corrida.estado !== "RUNNING" : corrida.modo === "guia");
   /* Volver a leerla aunque ya tenga lectura: la grabación de una reunión de HubSpot puede no haber estado
      cuando el agente la leyó (CreditForce, 28 sep: leyó la invitación y dijo que no hubo conversación). */
   const releer = puedeEditar && r && (r.origen === "meet" || r.origen === "hubspot");

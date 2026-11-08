@@ -13137,9 +13137,10 @@ preguntas.
   presupuesto, quién decide, quién más participa y contra qué nos comparan. No vende la implementación.
 - **Las guías de antes se ven como se armaron.** Sin `agenda`, la Preparación y «En vivo» muestran la lista de siempre.
   No hay SQL: la agenda vive en el Json de la guía.
-- **Nexus no planifica por defecto (puntos 1 a 5, `contexto-de-la-exploracion.ts`).** *Cambió el 2026-11-07* (sección «La
-  exploración desde el vendedor»): la guía solo espera el objetivo de la exploración; con quién es y cuánto dura salen de
-  la reunión asociada y ya no hay formulario de la sesión. Lo de abajo es como nació. Antes de armar una guía pide el
+- **Nexus no planifica por defecto (puntos 1 a 5, `contexto-de-la-exploracion.ts`).** *Cambió el 2026-11-07 y otra vez el
+  2026-11-08* (sección «La exploración desde el vendedor»): con quién es y cuánto dura salen de la reunión asociada y ya no
+  hay formulario de la sesión; el objetivo es el de Smarteam, así que la guía no espera nada, y se arma sola al terminar
+  de leer cada sesión. Lo de abajo es como nació. Antes de armar una guía pide el
   contexto de TODA la exploración (`contenido.contexto`: por qué la exploramos y lo que ya sabemos, con quién lo confirmó)
   y el de la sesión (`SesionPlaneada.conQuien`, `espera`, `duracion`, más el objetivo, el nombre y la reunión que ya
   existían). Sin el objetivo de la exploración, con quién es y el objetivo de la sesión, el botón espera y el servidor
@@ -13215,8 +13216,12 @@ el vendedor usa (✓), corrige (Editar) o descarta (✕). No hay campos vacíos 
 
 La misma tarde, en la segunda vuelta con Centauro, Elías decidió cuatro cosas más (las cuatro con la recomendación que
 se le presentó): el contexto vive en **tres niveles**; **una sesión sin reunión se prepara igual**; **«Usar todas»**
-aplica todo de un clic, con Deshacer; y **la guía va en bloques** como la imagen que trajo. Lo que sigue es el estado
-después de esa vuelta.
+aplica todo de un clic, con Deshacer; y **la guía va en bloques** como la imagen que trajo.
+
+El 8 nov, tercera vuelta con Centauro, tres cambios más: **el objetivo es el de Smarteam**, fijo, con un ajuste por
+empresa que da forma cómo llegó el lead; **el Resumen es un resumen** (en qué va, los hallazgos y el botón del momento); y
+**la guía se arma sola** al terminar de leer cada sesión, con preguntas al vendedor cuando a Nexus le falta contexto. Lo
+que sigue es el estado después de esa vuelta.
 
 - **Los tres niveles del contexto.** Antes, el mismo dato vivía en dos o tres lugares: las seis tarjetas de «Lo que ya
   sabemos» (2026-11-06) repetían seis casillas del Resumen (retos, metas, plazos, presupuesto, quién decide, qué pasa si
@@ -13231,16 +13236,15 @@ después de esa vuelta.
     preventa, y el mismo filtro en `loNuevoDeLaEstrategia` para un proyecto): la ficha es de la empresa. Lo de la empresa
     entera sube como antes.
   - **La compra**, una sola vez, en las casillas del Resumen: tiempos, presupuesto, quién decide, qué pasa si no actúa
-    y qué cambia si lo logra. Y el objetivo de la exploración en `contenido.contexto.objetivo`, que se responde UNA vez
-    en el inicio; la Preparación lo muestra solo mientras falta (`ObjetivoDeLaExploracion`).
+    y qué cambia si lo logra. El objetivo de la exploración: ver «El objetivo de Smarteam y su ajuste», abajo.
   - Se retiraron el recuadro «Antes de armar cualquier guía» (con sus seis tarjetas) y el formulario «Esta sesión».
     `contexto.tarjetas`, `contextoPropuesto.tarjetas`, `conQuien`, `espera` y `duracion` se siguen leyendo. Medido en
     producción el 7 nov: 0 de 49 exploraciones tenían el contexto confirmado, tarjetas o datos de «Esta sesión», y solo
     una tenía una propuesta guardada. No hubo nada que migrar. Sin SQL: todo vive en el Json y en `Client.ficha`.
 - **La llamada única que propone el contexto** (`contexto-pedido.ts` › `pedidoDelContexto` y `leerElContexto`;
   `contexto-server.ts` › `proponerElContexto`). Desde lo que Nexus ya tiene del cliente (el traspaso, las notas de
-  HubSpot, las reuniones leídas), UNA llamada por exploración propone:
-  - el objetivo de la exploración;
+  HubSpot, las reuniones leídas, cómo llegó), UNA llamada por exploración propone:
+  - el ajuste del objetivo de Smarteam para esta empresa (hasta el 2026-11-08, un objetivo entero);
   - el desafío y el resultado del negocio, solo si la ficha no los tiene;
   - en la preventa, lo de la compra.
 
@@ -13280,8 +13284,8 @@ después de esa vuelta.
   asociarla, la sesión toma de la reunión su fecha, su duración (`duracionDelEvento`) y sus participantes de la empresa
   (`personasDeLaReunion`, con el nombre que trae el calendario o, si no, el del correo; `releerEventos` ahora pide
   `displayName`). Sin reunión, la guía se arma para 60 minutos (`duracionDeLaSesion`, `DURACION_POR_DEFECTO`). La guía
-  solo espera el objetivo de la exploración (`faltaParaLaGuia`): con quién es y el objetivo de la sesión ya no se
-  piden, porque los sugiere la guía. Se fueron «Cuándo» y «Con quién» de la Preparación, y la fecha a mano de la
+  no espera nada: el objetivo es el de Smarteam (desde el 2026-11-08; `faltaParaLaGuia`, que esperaba el objetivo de la
+  exploración, se retiró), y con quién es y el objetivo de la sesión los sugiere la guía. Se fueron «Cuándo» y «Con quién» de la Preparación, y la fecha a mano de la
   cabecera; lo único que queda a mano es quitar la sesión, con su confirmación. Si después alargan la reunión en el
   calendario, la sesión se entera: `mirarCalendario` relee el inicio y el fin del evento, y la duración del evento manda
   sobre la guardada al asociarla (que queda para una reunión de HubSpot, que no trae el fin). Los participantes no se
@@ -13338,7 +13342,69 @@ después de esa vuelta.
   Resumen muestra lo acumulado y lo sugerido desde otras fuentes (el test, HubSpot, la preparación, la llamada única del
   contexto), con un enlace a la sesión que tiene sugerencias. Lo usado en la sesión ya no figura como pendiente en ningún
   lado.
-- **Exploraciones en curso: no se borra ni se migra nada, y no hay SQL** (todo vive en el Json). El desafío escrito a mano
+- **El objetivo de Smarteam y su ajuste** (2026-11-08, `objetivo-y-hallazgos.ts`, `ObjetivoDeLaExploracion`). El objetivo
+  de toda exploración es el de Smarteam, fijo y general: llevar a la empresa hacia el diagnóstico, ubicarla en la Escala
+  de Rendimiento, entender su dolor, cómo está hoy y por qué está ahí (en un proyecto, lo mismo antes de planificar lo que
+  se implementa). Lo que cambia por empresa es un AJUSTE, debajo, en la misma tarjeta («Para Centauro Solutions»):
+  - Lo sugiere Nexus de dos lados: la llamada única del contexto, desde cómo llegó y lo que ya sabe (queda en
+    `contextoPropuesto.objetivo`), y cada guía, desde los hallazgos de las sesiones (`propuesta.ajusteDelObjetivo`, con
+    su porqué). Gana el de la guía; el de la llegada solo se ofrece si nada está confirmado (`ajusteSugerido`).
+  - El vendedor lo usa, lo corrige o lo descarta (`op: "ajusteDelObjetivo"` y `"descartarAjusteDelObjetivo"`); con uno
+    confirmado puede quitarlo y vale el de Smarteam. Cada operación lleva la sugerencia que se veía y solo ESA sale de
+    lo propuesto: una más nueva que dejó otra guía con la pantalla abierta se queda. Lo descartado queda como lápida
+    (`propuesta.ajustesDescartados`, los últimos 20): la guía no lo vuelve a guardar (`conLoDeLaExploracion`) y su pedido
+    lo lista para que no lo sugiera de otra forma. Quitar el ajuste de una exploración de antes conserva lo que ya sabíamos
+    y sus tarjetas (por eso `contexto.objetivo` puede quedar vacío).
+  - El confirmado vive en `contenido.contexto.objetivo`, el campo de antes: lo que una exploración en curso ya confirmó
+    se lee como su ajuste. *Por qué no un campo nuevo:* el de Centauro ya era un ajuste («Entender si el desorden en su
+    CRM…»), y así no hay nada que migrar.
+  - **Cómo llegó da forma al ajuste, no al objetivo** (`como-llego.ts` › `PISTA_DEL_AJUSTE`). Las vías siguen la lista de
+    Elías: quiere implementar HubSpot, el test (el diagnóstico de rendimiento), el formulario o la web, ABM (lo presentó
+    una relación o un aliado), contratación estatal y referido (muchas veces por HubSpot); «Por un evento» y «En frío»
+    quedan para lo ya confirmado. Cada vía tiene su pista: con HubSpot, llevar la conversación de la herramienta al
+    resultado; con el test, partir de lo que marcó; con ABM, abrir la puerta; con una contratación estatal, separar el
+    pliego del dolor real. La fuente del lead «ABM» de HubSpot ya no se lee como «En frío», y ABM abre la puerta en la
+    primera sesión como en frío o referido. Cómo llegó se sigue confirmando en Preparación; la tarjeta del objetivo
+    enlaza ahí mientras no está.
+- **El Resumen arriba** (2026-11-08, Elías: «el Resumen tiene que ser un resumen de verdad»; `EstadoDeLaExploracion` en
+  `Resumen.tsx`, `momentoDeLaExploracion`). Antes de las tarjetas, que quedan debajo:
+  - En qué va: «Activa · va por la sesión 3 · la última fue la sesión 2 (6 nov)», o archivada.
+  - El botón del momento: «Analizar la sesión N» si la última que pasó no se leyó (sin leer, solo con notas, esperando
+    la transcripción o sin texto), o «Preparar la sesión N» con la próxima. Lleva a esa sesión, al «después» o al «antes».
+  - Los hallazgos generales: los que escribió la última guía (`propuesta.hallazgos`, de 2 a 5, con todo lo que se sabe) o,
+    mientras no hay, el resumen de cada sesión leída, de la más nueva a la más vieja (`hallazgosParaMostrar`).
+- **La guía se arma sola al terminar de leer una sesión** (2026-11-08, Elías eligió este momento; `correr` en
+  `agente.ts`). Cuando una lectura deja lo que dijo de alguna reunión (`lecturas`), y no fue un documento, lanza la guía
+  de la próxima en su propia corrida (`lanzarCorrida(…, "guia")`), que se cobra contra el mismo presupuesto que la
+  lectura (automático si la disparó una reunión nueva). La preparación sigue sin rearmarla. Tres reglas que dejó la
+  revisión del 8 nov:
+  - La guía arranca ANTES de que la lectura se marque terminada (`trasLa`: la corrida que la lanza no la frena). Lo
+    leído ya está guardado, y la pantalla pasa de una corrida viva a la otra: si arrancara después, una consulta en el
+    medio daba todo por terminado y la guía quedaba sin seguir. El seguimiento recarga en cuanto la lectura cede el lugar
+    a la guía y avisa al terminar esta (`seguimiento-de-corrida.ts`); el cartel «Nexus está leyendo» se va también.
+  - Una guía en curso no frena lo demás: una reunión que llega en ese rato, un documento o un clic en «Leer» o
+    «Preparar» corren igual (antes «una corrida a la vez» los dejaba sin hacer). Dos guías no corren a la vez por pedido,
+    pero si una lectura termina mientras otra guía corre, la que quedó vieja no se guarda (`armarGuia` mira la última
+    corrida de la guía).
+  - Sin guía y sin preguntas, la corrida falla con su motivo (antes el aviso decía «la guía está lista»). *Costo:* una llamada por sesión leída. Medido en producción (30 días al 8 nov): la
+  guía cuesta unos USD 0,06 por llamada y se leyeron 28 reuniones; la guía en bloques escribe más, así que se estima
+  entre USD 0,06 y 0,10 por sesión, unos USD 2 a 3 al mes al ritmo de hoy, más una llamada cada vez que el vendedor
+  responde las preguntas de Nexus.
+  - **Sin guía, su espacio se nota** (`EspacioDeLaGuia` en `AntesDeLaSesion.tsx`): un recuadro grande y punteado en el
+    lugar de la guía, «Falta la guía de la sesión N», con por qué falta y «Armar la guía ahora»; mientras Nexus la arma,
+    la fase en que va. El aviso de arriba ya no repite que falta: es solo de una guía que ya está.
+  - **Lo que le falta saber, en el mismo espacio.** La misma llamada de la guía puede dejar de 1 a 3 preguntas cortas para
+    el vendedor (`faltaContexto` → `propuesta.preguntasParaLaGuia`), del estilo «¿con quién es la sesión 3?». Se
+    responden en una línea, sin formulario (`op: "responderParaLaGuia"`), y la guía se rehace. Las respuestas quedan en
+    `contenido.respuestasParaLaGuia` (las últimas 12; la misma pregunta se reemplaza) y entran a cada guía como lo más
+    confiable: «LO QUE RESPONDIÓ EL EQUIPO… manda sobre las fuentes». La guía se arma igual con lo que hay; si hay guía y
+    preguntas, las preguntas van arriba de ella («Para afinar esta guía…»).
+  - La misma llamada escribe los hallazgos y, si hace falta, el ajuste al objetivo (`leerLoDeLaExploracion`): no hay
+    llamada aparte. El pedido lleva el objetivo de Smarteam, el ajuste confirmado, cómo llegó con su pista, las respuestas
+    del vendedor y los hallazgos de la guía anterior para actualizarlos. La agenda en bloques no cambió.
+- **Exploraciones en curso: no se borra ni se migra nada, y no hay SQL** (todo vive en el Json). El objetivo que ya
+  confirmaron se lee como su ajuste; los hallazgos, las preguntas y las respuestas son campos nuevos opcionales del Json,
+  y hasta que lean otra sesión o armen la guía, el Resumen muestra el resumen de cada sesión. El desafío escrito a mano
   se muestra en «Lo que aprendimos» y se ofrece para la ficha. Lo que faltaba y los temas por retomar entran marcados en
   la lista. Un desafío «sin confirmar» sigue avisándole a la guía. Los retos y metas ya guardados quedan como de la
   empresa entera. La primera vez que se abre una exploración después del deploy se gasta una llamada para proponer el

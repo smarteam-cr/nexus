@@ -43,8 +43,9 @@ import { AgregarPregunta, PreguntaDeLaGuia, Quitadas, useAjustarLaGuia, useTemas
 import { GuiaEnOrden } from "./GuiaEnOrden";
 import { AgendaDeLaGuia, GuiaAnterior } from "./AgendaDeLaGuia";
 import { ContactoPrevio } from "./ContextoDeLaPreparacion";
-import { ObjetivoDeLaExploracion } from "./ObjetivoYDesafio";
-import { duracionDeLaSesion, faltaParaLaGuia } from "@/lib/exploraciones/contexto-de-la-exploracion";
+import { duracionDeLaSesion } from "@/lib/exploraciones/contexto-de-la-exploracion";
+import { MAX_RESPUESTA_PARA_LA_GUIA } from "@/lib/exploraciones/objetivo-y-hallazgos";
+import { Input, Spinner } from "@/components/ui";
 import { usePedirPreguntasDelObjetivo } from "./PreguntasDelObjetivo";
 import { sugeridasVigentes } from "@/lib/exploraciones/ajustes-de-la-guia";
 import { LoQueCubreLaGuia } from "./LoQueCubreLaGuia";
@@ -74,9 +75,7 @@ function enLista(xs: readonly string[]): string {
  * la armada pero vieja, que dice QUÉ cambió desde entonces.
  */
 function EstadoDeLaGuia({ pestana }: { pestana: PestanaDeSesion }) {
-  const { exp, escala, marco, puedeEditar } = useLienzo();
-  // Nexus no planifica por defecto (2026-11-06): sin el objetivo de la exploración, el botón espera (2026-11-07: solo eso).
-  const falta = faltaParaLaGuia(exp.estado.contenido.contexto);
+  const { escala, marco, puedeEditar } = useLienzo();
   const { corrida, corriendo, lanzando, lanzar } = useCorrida();
   const { guia: deLaSesion, cambios: cambiosDeLaSesion } = useCambiosDesdeLaGuia(pestana);
   // La guía con el formato de antes no cuenta como guía: queda plegada abajo como «Guía anterior» (2026-11-06).
@@ -89,22 +88,12 @@ function EstadoDeLaGuia({ pestana }: { pestana: PestanaDeSesion }) {
   let detalle: string;
   let boton: string;
   let tono: "info" | "aviso" | "neutro";
+  // Sin guía, lo dice el espacio de la guía, grande, más abajo (2026-11-08): este aviso es de una guía que ya está.
+  if (!guia) return null;
   if (armando) {
-    titulo = "El agente está armando la guía";
+    titulo = "El agente está rehaciendo la guía";
     detalle = corrida?.fase ?? "Empezando…";
     boton = "Armando…";
-    tono = "info";
-  } else if (falta.length) {
-    // Sin el objetivo de la exploración no hay nada que decir acá: su tarjeta, arriba, lo pide.
-    return null;
-  } else if (!guia) {
-    titulo = "Todavía no hay guía";
-    detalle = `Nexus la arma con el objetivo de la exploración, lo que ya se sabe y lo que quedó de la sesión anterior${
-      pestana.sesion?.evento || pestana.sesion?.conQuien?.length ? ", con los participantes y la duración de la reunión" : ", para 60 minutos (asocia la reunión del calendario y toma su duración)"
-    }. Sale como una agenda de bloques, cada uno con lo que hay que averiguar.${
-      deLaSesion ? " La guía anterior queda abajo, plegada." : ""
-    }`;
-    boton = "Armar la guía";
     tono = "info";
   } else if (cambios) {
     const partes = [
@@ -152,14 +141,120 @@ function EstadoDeLaGuia({ pestana }: { pestana: PestanaDeSesion }) {
       </div>
       {puedeEditar &&
         (tono === "neutro" ? (
-          <BotonBlanco disabled={armando || corriendo || falta.length > 0} onClick={() => void lanzar("guia")}>
+          <BotonBlanco disabled={armando || corriendo} onClick={() => void lanzar("guia")}>
             {boton}
           </BotonBlanco>
         ) : (
-          <BotonAzul disabled={armando || corriendo || falta.length > 0} onClick={() => void lanzar("guia")}>
+          <BotonAzul disabled={armando || corriendo} onClick={() => void lanzar("guia")}>
             {boton}
           </BotonAzul>
         ))}
+    </section>
+  );
+}
+
+/**
+ * Lo que Nexus necesita saber para armar la guía (2026-11-08, objetivo-y-hallazgos.ts): de 1 a 3 preguntas cortas que se
+ * responden en una línea, sin formulario. Al responder, la guía se rehace con esas respuestas, que mandan sobre las fuentes.
+ */
+function PreguntasDeNexus() {
+  const { exp, puedeEditar, guardando, cambiar } = useLienzo();
+  const { corriendo, lanzando, lanzar } = useCorrida();
+  const preguntas = exp.estado.propuesta.preguntasParaLaGuia?.preguntas ?? [];
+  // Por el TEXTO de la pregunta: si llegan otras con la pantalla abierta, lo escrito no queda debajo de otra pregunta.
+  const [respuestas, setRespuestas] = useState<Record<string, string>>({});
+  const [enviando, setEnviando] = useState(false);
+  if (!preguntas.length) return null;
+  const listas = preguntas.map((pregunta) => ({ pregunta, respuesta: (respuestas[pregunta] ?? "").trim() })).filter((r) => r.respuesta);
+  const bloqueado = !listas.length || guardando || corriendo || lanzando || enviando;
+  const responder = async () => {
+    // Enter pasa por el mismo bloqueo que el botón: ni mientras se rehace la guía, ni dos veces.
+    if (bloqueado) return;
+    setEnviando(true);
+    try {
+      const ok = await cambiar([{ op: "responderParaLaGuia", respuestas: listas }]);
+      if (ok) {
+        setRespuestas({});
+        void lanzar("guia");
+      }
+    } finally {
+      setEnviando(false);
+    }
+  };
+  return (
+    <div className="w-full max-w-2xl space-y-3 text-left">
+      {preguntas.map((p) => (
+        <label key={p} className="block space-y-1">
+          <span className="text-sm font-medium text-fg">{p}</span>
+          <Input
+            value={respuestas[p] ?? ""}
+            onChange={(e) => setRespuestas((r) => ({ ...r, [p]: e.target.value }))}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") void responder();
+            }}
+            maxLength={MAX_RESPUESTA_PARA_LA_GUIA}
+            disabled={!puedeEditar}
+            placeholder="Tu respuesta, en una línea"
+          />
+        </label>
+      ))}
+      {puedeEditar && (
+        <div className="flex justify-end">
+          <BotonAzul disabled={bloqueado} onClick={() => void responder()}>
+            Responder y rehacer la guía
+          </BotonAzul>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * El espacio de la guía mientras no hay (2026-11-08, Elías: «se tiene que notar mucho que falta»): grande, en el lugar de la
+ * guía. Nexus la arma sola al terminar de leer la sesión anterior; acá se ve mientras la arma, lo que le falta saber (sus
+ * preguntas) o el botón para armarla ahora.
+ */
+function EspacioDeLaGuia({ pestana }: { pestana: PestanaDeSesion }) {
+  const { exp, puedeEditar } = useLienzo();
+  const { corrida, corriendo, lanzando, lanzar } = useCorrida();
+  const armando = (corriendo && corrida?.modo === "guia") || lanzando;
+  const fallo = !armando && corrida?.modo === "guia" && corrida.estado === "ERROR" ? corrida.error : null;
+  const preguntas = exp.estado.propuesta.preguntasParaLaGuia?.preguntas ?? [];
+  const conReunion = !!(pestana.sesion?.evento || pestana.sesion?.conQuien?.length);
+  return (
+    <section
+      aria-label={`La guía de la sesión ${pestana.numero}`}
+      role={armando ? "status" : undefined}
+      className="flex min-h-[320px] flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed border-warn-line bg-warn-surface px-6 py-10 text-center"
+    >
+      {armando ? (
+        <>
+          <Spinner size="lg" color="border-brand" />
+          <p className="text-lg font-semibold text-fg">Nexus está armando la guía de la sesión {pestana.numero}</p>
+          <p className="text-[13px] text-fg-secondary">{corrida?.fase ?? "Empezando…"}</p>
+        </>
+      ) : (
+        <>
+          <p className="text-lg font-semibold text-warn-ink">Falta la guía de la sesión {pestana.numero}</p>
+          <p className="max-w-xl text-[13px] leading-[1.5] text-fg-secondary">
+            {preguntas.length
+              ? "Para armarla, Nexus necesita saber esto. Responde en una línea y la guía se rehace con tus respuestas."
+              : `Nexus la arma sola cuando termina de leer la sesión anterior, con el objetivo de la exploración, lo que ya se sabe y lo que quedó pendiente${
+                  conReunion ? ", para los participantes y la duración de la reunión" : ", para 60 minutos (si asocias la reunión del calendario, toma su duración)"
+                }. Sale en bloques, cada uno con lo que hay que averiguar.`}
+          </p>
+          {fallo && <p className="max-w-xl text-[13px] text-danger-ink">La última vez no se pudo armar: {fallo}</p>}
+          {preguntas.length > 0 ? (
+            <PreguntasDeNexus />
+          ) : (
+            puedeEditar && (
+              <BotonAzul disabled={corriendo} onClick={() => void lanzar("guia")}>
+                Armar la guía ahora
+              </BotonAzul>
+            )
+          )}
+        </>
+      )}
     </section>
   );
 }
@@ -852,9 +947,7 @@ export default function AntesDeLaSesion({ pestana, esLaProxima }: { pestana: Pes
 
   return (
     <div className="space-y-5">
-      {/* Lo único que pide la guía (2026-11-07): el objetivo de la exploración, mientras falta. Y el contacto previo en la
-          primera de una preventa. */}
-      {esLaProxima && !exp.estado.contenido.contexto?.objetivo.trim() && <ObjetivoDeLaExploracion />}
+      {/* La guía ya no espera nada (2026-11-08): el objetivo es el de Smarteam. En la primera de una preventa, el contacto previo. */}
       {esLaProxima && marco.clave !== "cs" && pestana.numero === 1 && !pestana.hecha && <ContactoPrevio />}
       {esLaProxima && <EstadoDeLaGuia pestana={pestana} />}
       <Objetivo
@@ -870,7 +963,17 @@ export default function AntesDeLaSesion({ pestana, esLaProxima }: { pestana: Pes
       />
       {esLaProxima && <LoQueTraes pestana={pestana} />}
       {esLaProxima && <LoQueYaSabemos pestana={pestana} />}
-      {/* Sin guía no hay guía de base: Nexus no planifica por defecto. */}
+      {/* Sin guía, su espacio grande (2026-11-08). Con guía y algo que Nexus necesita saber, sus preguntas arriba de ella. */}
+      {esLaProxima && !actual && <EspacioDeLaGuia pestana={pestana} />}
+      {esLaProxima && actual && !!exp.estado.propuesta.preguntasParaLaGuia?.preguntas.length && (
+        <section className="flex flex-col items-start gap-3 rounded-xl border border-info-line bg-info-surface px-[18px] py-4">
+          <p className="flex items-center gap-1.5 text-sm font-semibold text-fg">
+            <IconoDeSugerencia className="h-4 w-4 text-brand" />
+            Para afinar esta guía, Nexus necesita saber esto
+          </p>
+          <PreguntasDeNexus />
+        </section>
+      )}
       {actual && <LaGuia pestana={pestana} esLaProxima={esLaProxima} />}
       {actual && <LoQueCubreLaGuia pestana={pestana} esLaProxima={esLaProxima} />}
       {actual && <RetosDeLaIndustria pestana={pestana} esLaProxima={esLaProxima} />}

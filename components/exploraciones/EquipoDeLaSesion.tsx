@@ -18,7 +18,6 @@ import { Menu } from "@/components/ui/Menu";
 import { useToast } from "@/components/ui";
 import { BotonAzul, BotonBlanco, BotonTexto, IconoDeSugerencia } from "@/components/ui/sistema";
 import { cn } from "@/lib/cn";
-import { faltaParaLaGuia } from "@/lib/exploraciones/contexto-de-la-exploracion";
 import { fraseAlCambiarElEquipo, queRehacerAlCambiarElEquipo, type QueRehacer } from "@/lib/exploraciones/al-cambiar-el-equipo";
 import { claveDeLaReunion } from "@/lib/exploraciones/contenido";
 import { areaQueSuma, DE_DONDE_SALE_EL_EQUIPO, EQUIPOS, EQUIPOS_DEL_CLIENTE, sugerirEquipoDeLaSesion, type ClaveDeEquipo } from "@/lib/exploraciones/equipos";
@@ -203,9 +202,7 @@ function AlCambiarElEquipo({
   const lectura = releible ? (exp.estado.propuesta.lecturas[claveDeLaReunion(r)] ?? null) : null;
   const vista = conAnalisis ? (analisis.datos?.reuniones.find((x) => x.id === r!.id) ?? null) : null;
   const estado = { equipo, recienCambiado, porPreparar, guia, lectura, analisis: !!vista?.analisis && vista.texto === "transcripcion" };
-  // Rehacer la guía pide el mismo contexto que armarla (2026-11-06): sin él no se ofrece.
-  const sinContexto = faltaParaLaGuia(exp.estado.contenido.contexto).length > 0;
-  const rehacer = queRehacerAlCambiarElEquipo(estado).filter((q) => !listo.includes(q) && !(q === "guia" && sinContexto));
+  const rehacer = queRehacerAlCambiarElEquipo(estado).filter((q) => !listo.includes(q));
   if (!rehacer.length) return null;
 
   const ocupado = corriendo || lanzando;

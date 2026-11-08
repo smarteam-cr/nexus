@@ -63,7 +63,7 @@ const CADA_MS = 3000;
 
 /** El aviso al terminar bien, según lo que hizo la corrida. */
 export function avisoAlTerminar(c: CorridaEnCurso): string {
-  if (c.modo === "guia") return "La guía de la próxima reunión está lista.";
+  if (c.modo === "guia") return c.nadaNuevo ? "Nexus no armó la guía: en la Preparación dejó lo que necesita saber." : "La guía de la próxima reunión está lista.";
   // «Actualizar escala» no lee reuniones nuevas: sin nada del cliente, no ubica nada (escala única, 2026-10-28).
   if (c.modo === "posicionar" && c.nadaNuevo) return "No hay nada que haya dicho o hecho el cliente para respaldar un nivel: la escala queda como está.";
   if (c.modo === "posicionar")
@@ -105,11 +105,17 @@ export function crearSeguimiento(deps: {
       return;
     }
     siguiendo = true;
+    /* La corrida viva que se venía siguiendo. Si aparece otra viva, la de antes terminó y otra arrancó detrás (la guía de
+       la próxima sesión se arma sola al terminar de leer una, 2026-11-08): se recarga para ver lo que dejó la primera, sin
+       aviso; el aviso es el de la última. */
+    let seguida: string | null = foto.corrida?.estado === "RUNNING" ? foto.corrida.id : null;
     try {
       for (let i = 0; i < VUELTAS && vivo(); i++) {
         const c = await deps.consultar();
         if (!vivo()) return;
         cambiar({ corrida: c });
+        if (c?.estado === "RUNNING" && seguida && c.id !== seguida) await conexion?.recargar();
+        if (c?.estado === "RUNNING") seguida = c.id;
         if (!c || c.estado !== "RUNNING") {
           if (c && c.id !== atendida) {
             atendida = c.id;

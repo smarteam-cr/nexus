@@ -17,16 +17,47 @@
  */
 import type { PerfilDeLaEmpresa } from "@/lib/smarteam/perfil";
 
-export const VIAS_DE_LLEGADA = ["test", "frio", "referido", "evento", "web"] as const;
+/**
+ * Las vías, en el orden de la lista de Elías (2026-11-08): quieren implementar HubSpot, llenaron el diagnóstico de
+ * rendimiento (el test), llegaron por el formulario, ABM (relaciones y aliados que nos los presentan), contratación
+ * estatal y referencias (muchas de HubSpot). «Por un evento» y «En frío» quedan para lo que ya estaba confirmado así.
+ */
+export const VIAS_DE_LLEGADA = ["hubspot", "test", "web", "abm", "estatal", "referido", "evento", "frio"] as const;
 export type ViaDeLlegada = (typeof VIAS_DE_LLEGADA)[number];
 
 export const NOMBRE_DE_LA_VIA: Readonly<Record<ViaDeLlegada, string>> = {
+  hubspot: "Quiere implementar HubSpot",
   test: "Por el test",
-  frio: "En frío",
+  web: "Por el formulario o la web",
+  abm: "ABM: lo presentó una relación o un aliado",
+  estatal: "Contratación estatal",
   referido: "Referido",
   evento: "Por un evento",
-  web: "Por la web o un anuncio",
+  frio: "En frío",
 };
+
+/**
+ * Cómo da forma cada vía al AJUSTE del objetivo de Smarteam para esa empresa (objetivo-y-hallazgos.ts): el objetivo base no
+ * cambia; lo que cambia es por dónde se entra y qué hay que confirmar primero. Lo leen la llamada del contexto y la guía.
+ */
+export const PISTA_DEL_AJUSTE: Readonly<Record<ViaDeLlegada, string>> = {
+  hubspot:
+    "Viene pidiendo una herramienta: el ajuste lleva la conversación de HubSpot al resultado que busca y averigua por qué ahora, qué usa hoy y qué le hizo pensar que la herramienta lo resuelve.",
+  test: "Ya respondió el diagnóstico de rendimiento: el ajuste parte de lo que marcó, lo valida con ejemplos reales y profundiza donde salió más bajo.",
+  web: "Llegó por el formulario o la web: el ajuste parte de lo que pidió ahí y averigua qué lo movió a escribir ahora.",
+  abm: "Nos lo presentó una relación o un aliado: el ajuste abre la puerta, entiende qué espera quien nos presentó y si hay un dolor real antes de diagnosticar.",
+  estatal:
+    "Es una contratación estatal: el ajuste entiende los términos de referencia, los plazos y quién evalúa, y separa lo que pide el pliego del dolor real de la institución.",
+  referido:
+    "Llegó referido (muchas veces por HubSpot): el ajuste parte de lo que ya conversó con quien lo refirió y no le vuelve a preguntar lo que ya contó.",
+  evento: "Lo conocimos en un evento: el ajuste retoma lo que le interesó ahí y averigua si hay un dolor concreto.",
+  frio: "Llegó en frío: no pidió nada todavía. El ajuste abre la puerta y escucha antes de diagnosticar.",
+};
+
+/** «Cómo llegó» en una línea para un pedido a la IA: la vía, quién lo refirió y su pista. */
+export function textoDeComoLlego(c: Pick<ComoLlego, "via" | "referidoPor">): string {
+  return `${NOMBRE_DE_LA_VIA[c.via]}${c.referidoPor ? ` (lo refirió ${c.referidoPor})` : ""}. ${PISTA_DEL_AJUSTE[c.via]}`;
+}
 
 /** Lo que se guarda en la exploración (`contenido.comoLlego`), confirmado por una persona. */
 export interface ComoLlego {
@@ -76,7 +107,9 @@ export function viaDeLaFuenteDeLead(valor: string | null | undefined): ViaDeLleg
   if (!v) return null;
   if (v.startsWith("diagnostico")) return "test";
   if (v.startsWith("referid")) return "referido";
-  if (v === "abm" || v.includes("prospeccion")) return "frio";
+  if (v === "abm") return "abm";
+  if (v.includes("prospeccion")) return "frio";
+  if (v.includes("licitaci") || v.includes("estatal") || v.includes("sicop")) return "estatal";
   if (v.includes("evento") || v.includes("webinar")) return "evento";
   if (v.includes("ads") || v.includes("form")) return "web";
   return null;
@@ -111,9 +144,9 @@ export function llegadaPropuesta(o: { contactos: readonly ContactoParaLaLlegada[
   return null;
 }
 
-/** ¿La vía pide abrir la puerta? En frío o referido: no pidió nada todavía. */
+/** ¿La vía pide abrir la puerta? En frío, referido o presentado por ABM: no pidió nada todavía. */
 export function viaQueAbreLaPuerta(via: ViaDeLlegada | null | undefined): boolean {
-  return via === "frio" || via === "referido";
+  return via === "frio" || via === "referido" || via === "abm";
 }
 
 /** Lo que hace falta de la exploración para saber si la sesión abre la puerta. */
@@ -162,7 +195,7 @@ export function presentacionDeSmarteam(perfil: Pick<PerfilDeLaEmpresa, "position
 
 /** El bloque del pedido de la guía para la primera sesión que abre la puerta. */
 export function bloqueDeAbrirLaPuerta(c: ComoLlego): string {
-  const quien = c.via === "referido" ? `referido${c.referidoPor ? ` por ${c.referidoPor}` : ""}` : "en frío";
+  const quien = c.via === "referido" ? `referido${c.referidoPor ? ` por ${c.referidoPor}` : ""}` : c.via === "abm" ? "presentado por una relación o un aliado" : "en frío";
   return [
     `=== LA PRIMERA SESIÓN ABRE LA PUERTA (el prospecto llegó ${quien}: no hizo el test ni pidió un diagnóstico) ===`,
     `- ${TRAMOS_DE_ABRIR_LA_PUERTA.presentar[0]}–${TRAMOS_DE_ABRIR_LA_PUERTA.presentar[1]} min: el vendedor presenta a Smarteam con lo que dice el bloque SMARTEAM (si no hay, sin inventar nada: quién es y qué hace). La «apertura» va a eso${c.via === "referido" && c.referidoPor ? `, y nombra a quien lo refirió` : ""}.`,

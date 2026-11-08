@@ -12,7 +12,6 @@ import { contenidoVacio, propuestaVacia, type EstadoDeExploracion } from "./cont
 import {
   duracionDeLaSesion,
   duracionDelEvento,
-  faltaParaLaGuia,
   personasDeLaReunion,
   resultadoDeLaFichaGuardada,
   resultadoEnLosRetos,
@@ -138,10 +137,6 @@ describe("una sesión sin formulario: lo que sale de su reunión", () => {
       (c) => tieneALaEmpresa([c], gente),
     );
     expect(personas.map((p) => p.nombre)).toEqual(["Ana", "Gerente Externo"]);
-  });
-
-  it("la guía solo espera el objetivo de la exploración", () => {
-    expect(faltaParaLaGuia({ objetivo: "Ver si les sirve" })).toEqual([]);
   });
 });
 

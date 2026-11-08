@@ -73,9 +73,20 @@ import { buildInternalDomainsSet } from "@/lib/sessions/categorize";
 import { hoyEnCostaRica } from "./fechas";
 import { bloqueDeInstrucciones } from "./notas-de-sesion";
 import { avisoDePreguntasCerradas, preguntasQueNoCumplen } from "./agenda";
-import { duracionDeLaSesion, faltaParaLaGuia, tarjetasParaLaGuia, textoDeConQuien } from "./contexto-de-la-exploracion";
+import { duracionDeLaSesion, tarjetasParaLaGuia, textoDeConQuien } from "./contexto-de-la-exploracion";
+import { conLoDeLaExploracion, objetivoDeSmarteam } from "./objetivo-y-hallazgos";
+import { textoDeComoLlego } from "./como-llego";
 import { retomarParaLaGuia, ultimaReunionLeida } from "./despues-de-la-sesion";
-import { avisoDeVoseo, contextoDeLaGuia, leerLaGuiaDelAgente, notasParaLaGuia, pedidoDeLaGuia, voseoEnLaGuia } from "./guia-pedido";
+import {
+  avisoDeVoseo,
+  contextoDeLaGuia,
+  leerLaGuiaDelAgente,
+  leerLoDeLaExploracion,
+  notasParaLaGuia,
+  pedidoDeLaGuia,
+  voseoEnLaGuia,
+  type LoDeLaExploracionEnLaGuia,
+} from "./guia-pedido";
 import {
   focoDeLaGuia,
   guiaDeAntesDeLaReunion,
@@ -210,6 +221,11 @@ interface OpcionesDeLaCorrida {
   ventaId?: string | null;
   objetivo?: string | null;
   /**
+   * 2026-11-08: la corrida que la lanza desde adentro y todavía no cerró (la lectura lanza la guía antes de marcarse
+   * terminada): esa no la frena. Así la pantalla pasa de una a otra sin un momento con ninguna viva.
+   */
+  trasLa?: string;
+  /**
    * Para «posicionar» sobre la escala de la cuenta (escala única, 2026-10-28): un proyecto de la empresa cuyo handoff,
    * cuestionarios, cronograma y memoria se leen como contexto. Lo propuesto queda igual en la escala de la cuenta.
    */
@@ -249,7 +265,12 @@ export async function lanzarCorrida(exploracionId: string, modo: ModoDelAgente, 
   const r = await prisma.$transaction(async (tx) => {
     await bloquearFila(tx, exploracionId);
     const ultima = await ultimaCorrida(exploracionId, clientId, tx);
-    if (ultima?.status === "RUNNING") {
+    /* Una guía en curso no frena lo demás (2026-11-08): se arma sola después de cada lectura y tarda, y una reunión que
+       llega en ese rato o un clic en «Leer» o «Preparar» no pueden quedar sin hacer. La guía que queda vieja no se guarda
+       (`armarGuia`). Ni la corrida que lanza esta desde adentro (`trasLa`). */
+    const modoVivo = (ultima?.filters as { modo?: string } | null)?.modo;
+    const cede = !!ultima && (ultima.id === opts.trasLa || (modoVivo === "guia" && modo !== "guia"));
+    if (ultima?.status === "RUNNING" && !cede) {
       if (!estaColgada(ultima)) return { runId: ultima.id, yaCorria: true };
       await tx.agentRun.update({
         where: { id: ultima.id },
@@ -303,9 +324,10 @@ async function correr(runId: string, exploracionId: string, modo: ModoDelAgente,
     if (modo === "guia") {
       await fase(runId, "Armando la guía de la próxima reunión…");
       const preguntas = await armarGuia(runId, exploracionId, opts, true);
+      // Sin guía (2026-11-08): Nexus dejó lo que necesita saber en el espacio de la guía; el aviso lo dice.
       await prisma.agentRun.update({
         where: { id: runId },
-        data: { status: "DONE", currentPhase: null, output: JSON.stringify({ propuestos: 0, guia: preguntas, nadaNuevo: false }) },
+        data: { status: "DONE", currentPhase: null, output: JSON.stringify({ propuestos: 0, guia: preguntas, nadaNuevo: preguntas === 0 }) },
       });
       return;
     }
@@ -477,8 +499,16 @@ async function correr(runId: string, exploracionId: string, modo: ModoDelAgente,
         if (r.status === "error") console.error(`[exploraciones/agente] la preparación no llegó a la ficha ${exploracionId}: ${r.error}`);
       }
     }
-    /* La guía ya no se rearma sola al leer o preparar (2026-11-06, «La exploración guiada»): Nexus no planifica por
-       defecto. Si lo nuevo la deja vieja, la Preparación lo avisa y la persona la vuelve a armar. */
+    /* La guía se arma sola al terminar de leer una sesión (Elías, 2026-11-08; DECISIONS «La exploración desde el
+       vendedor»): una llamada por sesión leída, en su propia corrida, y contra el mismo presupuesto que la lectura
+       (automática si la lanzó una reunión nueva). Arranca ANTES de que la lectura se marque terminada (`trasLa`): lo
+       leído ya está guardado, y la pantalla pasa de una corrida viva a la otra sin creer que todo terminó. Un documento no
+       la dispara: no es una sesión. La preparación no la rearma (2026-11-06). Si falla, la Preparación lo dice. */
+    if (modo === "leer" && !opts.documentoId && lecturas && Object.keys(lecturas).length > 0) {
+      await lanzarCorrida(exploracionId, "guia", { triggeredByEmail: opts.triggeredByEmail, automatica: opts.automatica === true, trasLa: runId }).catch((e) =>
+        console.error(`[exploraciones/agente] la guía de la próxima sesión no arrancó ${exploracionId}`, e),
+      );
+    }
 
     await prisma.agentRun.update({
       where: { id: runId },
@@ -923,11 +953,17 @@ async function escribirLoQueVaSolo(
  * Devuelve cuántas preguntas armó (0 si el agente no devolvió nada que sirva: queda la de base).
  */
 async function armarGuia(runId: string, exploracionId: string, opts: OpcionesDeLaCorrida, registrar: boolean): Promise<number> {
-  const armada = await armarLaGuiaSinGuardar(runId, exploracionId, opts);
-  if (!armada) return 0;
+  const { armada, extras, ctx, clientId } = await pedirLaGuia(runId, exploracionId, opts);
+  /* Otra guía arrancó después que esta (una lectura terminó mientras esta corría): esta quedó vieja y no se guarda, para
+     no pisar la más nueva (revisión del 2026-11-08). */
+  const ultimaGuia = await ultimaCorrida(exploracionId, clientId, prisma, "guia");
+  if (ultimaGuia && ultimaGuia.id !== runId) return armada?.guia.preguntas.length ?? 0;
+  // Sin guía que sirva igual quedan los hallazgos y lo que Nexus necesita saber (2026-11-08).
   // Se guarda como la de su sesión, si la próxima está planeada: así su «antes» queda aunque pase.
-  await guardarGuia(exploracionId, armada.guia, registrar ? { runId, automatica: opts.automatica === true } : null, armada.ctx.proxima.sesionId ?? null);
-  return armada.guia.preguntas.length;
+  await guardarGuia(exploracionId, armada?.guia ?? null, registrar ? { runId, automatica: opts.automatica === true } : null, ctx.proxima.sesionId ?? null, { ...extras, runId });
+  // Ni guía ni preguntas: es una falla, y así lo dice el aviso (no «dice qué necesita saber», que no hay nada).
+  if (!armada && !extras.preguntas.length) throw new FalloDeLaExploracion("Nexus no pudo armar una guía que sirva. Vuelve a intentarlo.");
+  return armada?.guia.preguntas.length ?? 0;
 }
 
 /**
@@ -939,11 +975,27 @@ export async function armarLaGuiaSinGuardar(
   runId: string | null,
   exploracionId: string,
   opts: Pick<OpcionesDeLaCorrida, "triggeredByEmail">,
-): Promise<{ guia: GuiaDeLaSesion; ctx: ReturnType<typeof contextoDeLaGuia>; preguntas: PreguntaParaMostrar[] } | null> {
+): Promise<{ guia: GuiaDeLaSesion; ctx: ReturnType<typeof contextoDeLaGuia>; preguntas: PreguntaParaMostrar[]; extras: LoDeLaExploracionEnLaGuia } | null> {
+  const { armada, extras } = await pedirLaGuia(runId, exploracionId, opts);
+  return armada ? { ...armada, extras } : null;
+}
+
+/**
+ * El pedido de la guía y su lectura: la guía (null si no vino nada que sirva) y lo que la misma llamada dice de la
+ * exploración entera (los hallazgos, el ajuste al objetivo y lo que le falta saber, 2026-11-08). Desde el 2026-11-08 la
+ * guía no espera nada: el objetivo de toda exploración es el de Smarteam.
+ */
+async function pedirLaGuia(
+  runId: string | null,
+  exploracionId: string,
+  opts: Pick<OpcionesDeLaCorrida, "triggeredByEmail">,
+): Promise<{
+  armada: { guia: GuiaDeLaSesion; ctx: ReturnType<typeof contextoDeLaGuia>; preguntas: PreguntaParaMostrar[] } | null;
+  extras: LoDeLaExploracionEnLaGuia;
+  ctx: ReturnType<typeof contextoDeLaGuia>;
+  clientId: string;
+}> {
   const { fila, estado, escala, posiciones, loLeido, marco, ctx, ahora, automaticas } = await contextoParaLaGuia(exploracionId);
-  // Nexus no planifica por defecto (2026-11-06): sin el objetivo de la exploración no hay guía (2026-11-07: solo eso).
-  const falta = faltaParaLaGuia(estado.contenido.contexto);
-  if (falta.length) throw new FalloDeLaExploracion(`Antes de armar la guía falta ${falta.join(", ")}.`);
   const pedir = (aviso = "") =>
     conContextoDeIA(
       {
@@ -958,8 +1010,9 @@ export async function armarLaGuiaSinGuardar(
         return getAnthropic().messages.create(aviso ? { ...pedido, system: `${pedido.system as string}${aviso}` } : pedido);
       },
     );
-  let guia = leerLaGuiaDelAgente(await pedir(), ctx, runId, ahora);
-  if (!guia) return null;
+  let respuesta = await pedir();
+  let guia = leerLaGuiaDelAgente(respuesta, ctx, runId, ahora);
+  if (!guia) return { armada: null, extras: leerLoDeLaExploracion(respuesta, ctx), ctx, clientId: fila.clientId };
   /* El vendedor lee la guía en voz alta: tiene que estar en tuteo. La de CreditForce (2026-10-01) salió
      en voseo («vivís», «podés») porque las fuentes lo estaban: si pasa, se pide una vez más avisándolo. */
   /* La agenda (2026-11-06) además pide preguntas abiertas y de una sola cosa: si salen cerradas o dobles, va en el mismo
@@ -968,15 +1021,19 @@ export async function armarLaGuiaSinGuardar(
   const antes = problemas(guia);
   if (antes.voseo.length || antes.cerradas.length) {
     const aviso = `${antes.voseo.length ? avisoDeVoseo(antes.voseo) : ""}${antes.cerradas.length ? avisoDePreguntasCerradas(antes.cerradas) : ""}`;
-    const otra = leerLaGuiaDelAgente(await pedir(aviso), ctx, runId, ahora);
+    const respuestaOtra = await pedir(aviso);
+    const otra = leerLaGuiaDelAgente(respuestaOtra, ctx, runId, ahora);
     const despues = otra ? problemas(otra) : null;
-    if (otra && despues && despues.voseo.length <= antes.voseo.length && despues.voseo.length + despues.cerradas.length < antes.voseo.length + antes.cerradas.length) guia = otra;
+    if (otra && despues && despues.voseo.length <= antes.voseo.length && despues.voseo.length + despues.cerradas.length < antes.voseo.length + antes.cerradas.length) {
+      guia = otra;
+      respuesta = respuestaOtra;
+    }
   }
   // Lo que va a ver el vendedor: las preguntas del plan, con la de respaldo donde el agente repitió lo sabido.
   // La guía recién armada: cuenta todo lo leído (sin `hasta`).
   const plan = ctx.saber ? planDeLaGuiaDeLaSesion(estado, loLeido.tests, escala, posiciones, ctx.proxima.sesionId ?? null, marco, { automaticas }) : null;
   const preguntas = preguntasParaMostrar(guia, guia.huecos, guia.enfoque, escala, undefined, marco, plan ?? undefined);
-  return { guia, ctx, preguntas };
+  return { armada: { guia, ctx, preguntas }, extras: leerLoDeLaExploracion(respuesta, ctx), ctx, clientId: fila.clientId };
 }
 
 /**
@@ -1097,15 +1154,26 @@ export async function contextoParaLaGuia(exploracionId: string) {
     ...(marco.clave === "venta" ? { faltanParaProponer: listaParaProponer(estado, chequeoDe(escala, estado), hoyEnCostaRica(ahora)) } : {}),
   });
   /* El contexto de la exploración (contexto-de-la-exploracion.ts) y el de la próxima sesión: con quién es y cuánto dura
-     salen de su reunión del calendario (2026-11-07); sin reunión, 60 minutos. Sin el objetivo de la exploración no se arma
-     la guía (`armarLaGuiaSinGuardar`). Las tarjetas (2026-11-06) se retiraron: las de una exploración vieja se siguen
-     leyendo. */
+     salen de su reunión del calendario (2026-11-07); sin reunión, 60 minutos. La guía no espera nada: el objetivo es el de
+     Smarteam, con su ajuste si hay uno (2026-11-08). Las tarjetas (2026-11-06) se retiraron: las de una exploración vieja
+     se siguen leyendo. */
   const proximaSesion = estado.contenido.sesiones.find((s) => s.id === ctxBase.proxima.sesionId) ?? null;
   const cx = estado.contenido.contexto;
   const ctx = {
     ...ctxBase,
     ...(referencias.length ? { referencias } : {}),
-    ...(cx ? { contextoDeLaExploracion: { objetivo: cx.objetivo, sabemos: cx.sabemos ?? null, ...(cx.tarjetas ? { tarjetas: tarjetasParaLaGuia(cx.tarjetas) } : {}) } } : {}),
+    /* 2026-11-08: el objetivo de toda exploración es el de Smarteam; `cx.objetivo` es su ajuste para esta empresa. Cómo
+       llegó da forma al ajuste; lo que respondió el vendedor manda (objetivo-y-hallazgos.ts). */
+    contextoDeLaExploracion: {
+      base: objetivoDeSmarteam(marco.clave),
+      objetivo: cx?.objetivo.trim() || null,
+      sabemos: cx?.sabemos ?? null,
+      ...(cx?.tarjetas ? { tarjetas: tarjetasParaLaGuia(cx.tarjetas) } : {}),
+    },
+    ...(estado.contenido.comoLlego && marco.clave !== "cs" ? { comoLlego: textoDeComoLlego(estado.contenido.comoLlego) } : {}),
+    ...(estado.contenido.respuestasParaLaGuia?.length ? { respuestas: estado.contenido.respuestasParaLaGuia.map((r) => ({ pregunta: r.pregunta, respuesta: r.respuesta })) } : {}),
+    ...(estado.propuesta.hallazgos?.lista.length ? { hallazgosAntes: estado.propuesta.hallazgos.lista } : {}),
+    ...(estado.propuesta.ajustesDescartados?.length ? { ajustesDescartados: estado.propuesta.ajustesDescartados } : {}),
     ...(proximaSesion
       ? {
           contextoDeLaSesion: { conQuien: textoDeConQuien(proximaSesion.conQuien), espera: proximaSesion.espera ?? null, objetivo: proximaSesion.objetivo ?? null },
@@ -1315,13 +1383,32 @@ async function guardarLecturas(exploracionId: string, lecturas: Record<string, L
   });
 }
 
-/** Guarda la guía con la fila bloqueada (solo la mitad del agente: lo confirmado no se toca). */
-async function guardarGuia(exploracionId: string, guia: GuiaDeLaSesion, corrida: { runId: string; automatica: boolean } | null, sesionId: string | null) {
+/**
+ * Guarda la guía con la fila bloqueada (solo la mitad del agente: lo confirmado no se toca), y lo que la misma llamada dijo
+ * de la exploración (2026-11-08): los hallazgos nuevos reemplazan a los de antes (sin ninguno, quedan los de antes); el
+ * ajuste al objetivo, si sugirió uno distinto del confirmado; y lo que le falta saber (sin nada, se borra lo de antes).
+ * Sin guía que sirva (`guia` null) solo se guarda eso.
+ */
+async function guardarGuia(
+  exploracionId: string,
+  guiaNueva: GuiaDeLaSesion | null,
+  corrida: { runId: string; automatica: boolean } | null,
+  sesionId: string | null,
+  extras?: LoDeLaExploracionEnLaGuia & { runId: string | null },
+) {
   await prisma.$transaction(async (tx) => {
     await bloquearFila(tx, exploracionId);
-    const fila = await tx.exploracionDeVenta.findUnique({ where: { id: exploracionId }, select: { propuesta: true } });
+    const fila = await tx.exploracionDeVenta.findUnique({ where: { id: exploracionId }, select: { propuesta: true, contenido: true } });
     if (!fila) return;
-    const actual = leerPropuesta(fila.propuesta);
+    const leida = leerPropuesta(fila.propuesta);
+    const actual = extras
+      ? conLoDeLaExploracion(leida, extras, { confirmado: leerContenido(fila.contenido).contexto?.objetivo, en: new Date().toISOString(), corridaId: extras.runId })
+      : leida;
+    if (!guiaNueva) {
+      await tx.exploracionDeVenta.update({ where: { id: exploracionId }, data: { propuesta: actual as unknown as Prisma.InputJsonValue } });
+      return;
+    }
+    const guia = guiaNueva;
     // Las de las últimas sesiones (hasta MAX_SESIONES): una por sesión, la nueva reemplaza a la vieja de la misma.
     const guias = sesionId ? Object.fromEntries(Object.entries({ ...actual.guias, [sesionId]: guia }).slice(-MAX_SESIONES)) : actual.guias;
     /* La guía con el formato de antes que reemplaza una agenda (2026-11-06) queda como «Guía anterior», sin borrarse. */

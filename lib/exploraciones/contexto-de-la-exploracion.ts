@@ -21,7 +21,7 @@ import { DURACION_POR_DEFECTO } from "./agenda";
 
 /** El contexto de toda la exploración, como lo confirmó una persona. */
 export interface ContextoDeLaExploracion {
-  /** Por qué exploramos esta empresa y qué queremos lograr. */
+  /** Desde el 2026-11-08, el AJUSTE para esta empresa del objetivo de Smarteam (objetivo-y-hallazgos.ts). Antes, el objetivo entero. */
   objetivo: string;
   /** Lo que ya sabemos del cliente, como texto libre: el formato de la primera tanda (se sigue leyendo). */
   sabemos?: string;
@@ -45,14 +45,11 @@ export const MAX_PERSONAS_DE_LA_SESION = 8;
 export const MAX_LO_QUE_ESPERA = 300;
 export const DURACIONES = [30, 45, 60, 90] as const;
 
-/**
- * Lo que falta para que Nexus arme la guía de una sesión, en palabras. Vacío = se puede armar. Desde el 2026-11-07 (Elías:
- * «una sesión sin reunión se prepara igual») solo el objetivo de la exploración: con quién es y cuánto dura salen de la
- * reunión del calendario al asociarla (sin ella, 60 minutos), y el objetivo de la sesión lo sugiere la guía.
+/*
+ * La guía ya no espera nada (2026-11-08): el objetivo de toda exploración es el de Smarteam (objetivo-y-hallazgos.ts), con
+ * quién es y cuánto dura salen de la reunión del calendario (sin ella, 60 minutos) y el objetivo de la sesión lo sugiere la
+ * guía. `faltaParaLaGuia`, que esperaba el objetivo de la exploración, se retiró.
  */
-export function faltaParaLaGuia(contexto: Pick<ContextoDeLaExploracion, "objetivo"> | undefined): string[] {
-  return contexto?.objetivo.trim() ? [] : ["el objetivo de la exploración"];
-}
 
 /** Cuánto dura una sesión sin reunión asociada (2026-11-07): el valor vive en agenda.ts, uno solo para todo. */
 export { DURACION_POR_DEFECTO };

@@ -137,6 +137,15 @@ function operacionSegura(op: Operacion, antes: EstadoDeExploracion, ahora: Estad
     case "comoLlego":
       // K2: se confirma sobre lo que se veía; si otra persona lo confirmó distinto entretanto, se recarga.
       return igual(ca.comoLlego, cb.comoLlego);
+    case "ajusteDelObjetivo":
+      // Como el contexto: se confirma sobre lo que se veía.
+      return igual(ca.contexto, cb.contexto);
+    case "descartarAjusteDelObjetivo":
+      // Lleva el texto que se veía: solo ese sale de lo propuesto, y queda como lápida. No pisa nada.
+      return true;
+    case "responderParaLaGuia":
+      // Suma respuestas: no pisa las de otro.
+      return true;
     case "sinPortal":
     case "descartar":
     // K5: suma lápidas, una por una: no pisa lo que hizo otro. Y la del job se fija sobre lo de ahora (no hace nada si cambió).
