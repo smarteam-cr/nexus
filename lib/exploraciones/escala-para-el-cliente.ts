@@ -6,13 +6,13 @@
  * empresa ya tiene medido en vez de lo que respondió. Sale del mismo cálculo (`resultadoDeLosNiveles`), un resultado por
  * área.
  *
- * Qué áreas (8 nov, Centauro Solutions): las que eligió el vendedor entre las que Nexus detectó, o, si no eligió, las que
- * tienen algo confirmado (`areasParaElCliente`, equipos-de-la-escala.ts). Ya no solo las «en juego»: en Centauro se habló
- * de Ventas, Servicio y algo de Marketing, y la página salía con una sola área a medio llenar.
+ * Qué áreas (8 nov, Centauro Solutions): las que eligió el vendedor entre las que Nexus detectó, o, si no eligió, las en
+ * juego con algo confirmado (`areasParaElCliente`, equipos-de-la-escala.ts). En Centauro se habló de Ventas, Servicio y
+ * algo de Marketing, y la página salía con una sola área: «Acceso» ofrece las demás.
  *
- * Qué partes: lo que el vendedor USÓ. Con evidencia (lo dijo el cliente, se vio o lo marcó el vendedor) sale como nivel;
- * la hipótesis que el vendedor usó sale como nivel «por explorar» (`porExplorar`), con su marca en el radar y en las
- * barras. Hasta el 8 nov una hipótesis no llegaba nunca al cliente y la página decía «En medición» casi siempre; Elías
+ * Qué partes: lo que el vendedor USÓ. Con evidencia (lo dijo el cliente, se vio, lo marcó el vendedor o lo contestó en
+ * el test) sale como nivel; la hipótesis del agente que el vendedor usó sale como nivel «por explorar» (`porExplorar`),
+ * con su marca en el radar, en las barras y en «Por dónde empezar» si sale de ella. Hasta el 8 nov una hipótesis no llegaba nunca al cliente y la página decía «En medición» casi siempre; Elías
  * pidió que lo que no tiene evidencia directa salga como hipótesis por explorar. Lo que el agente sugiere y nadie usó NO
  * sale: el vendedor valida antes de que el cliente lo vea.
  * ⛔ Del lienzo solo se lee el nivel: ni las citas, ni los porqués, ni la fuente salen de acá.
@@ -23,7 +23,7 @@
 import { interpretacionSinIa } from "@/lib/tests-diagnostico/redaccion";
 import { resultadoDeLosNiveles, type NivelDeLaDimension, type ResultadoDelTest } from "@/lib/tests-diagnostico/resultado";
 import type { Escala } from "@/lib/escala/documento/tipos";
-import { esFuenteDeHipotesis, type EstadoDeExploracion } from "./contenido";
+import type { EstadoDeExploracion } from "./contenido";
 import type { AreaDelLienzo, EscalaDelLienzo } from "./escala-del-lienzo";
 import { areasDeLaEscala, areasParaElCliente } from "./equipos-de-la-escala";
 
@@ -81,7 +81,8 @@ export function resultadosDeLaEscala(escala: Escala, lienzo: EscalaDelLienzo, es
       const e = estado.contenido.chequeo[d.id];
       if (!d.aplica || !e) continue;
       niveles[d.id] = { nivel: e.nivel, noLoSe: false, riesgo: !!e.riesgo };
-      if (esFuenteDeHipotesis(e.fuente)) porExplorar.push(d.id);
+      // Lo que contestó en el test lo dijo el cliente: no es «lo que creemos por lo conversado».
+      if (e.fuente === "hipotesis") porExplorar.push(d.id);
     }
     if (!Object.keys(niveles).length) continue;
     const resultado = resultadoDelArea(escala, area, niveles, porExplorar);

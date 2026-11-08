@@ -13364,8 +13364,9 @@ veía como mapa y no como el diagnóstico, «Dónde está hoy» no decía qué s
   solo si se pide.
 - **«Dónde está hoy» es una frase de lo explorado** (`resumenDeLoExplorado`, lib/exploraciones/equipos-de-la-escala.ts):
   «Hasta ahora se exploró sobre todo Ventas (2 sesiones con su equipo, 6 de 8 con evidencia): por eso su escala es la más
-  llena. De Servicio hay 2 de 8 con evidencia. De Marketing todavía no se habló.» Pesa la evidencia y las sesiones con el
-  equipo; una hipótesis sola no cuenta como haber explorado. El área que abre de entrada es la que tiene más evidencia.
+  llena. De Servicio hay 2 de 8 con evidencia. De Marketing todavía no se habló.» Pesa la evidencia (confirmada o
+  sugerida con su frase) y las sesiones con el equipo; una hipótesis sola, usada o sugerida, no cuenta como haber
+  explorado. El área que abre de entrada es la que tiene más evidencia.
 - **Un área con algo se ve aunque no esté en juego.** Si en las reuniones salió Marketing, su pestaña dice «salió en las
   reuniones» y su escala se llena; «Sumar Marketing a la preventa» sigue siendo una decisión del vendedor (las áreas en
   juego son las de la propuesta y el objetivo).
@@ -13377,19 +13378,24 @@ veía como mapa y no como el diagnóstico, «Dónde está hoy» no decía qué s
   explorar para lo que no tiene una frase pero sí pistas (`conHipotesis`, la lista `hipotesis` del pedido). Una hipótesis
   necesita su porqué y una fuente del cliente; no repite una dimensión que ya trae un nivel con cita, ni ubica otra área
   que la del equipo que habló (K11). La cuenta sigue con su pedido de siempre (solo niveles, áreas en juego). El lector
-  de cada sesión no cambió: sigue proponiendo niveles con cita al leer una reunión.
+  de cada sesión no cambió: sigue proponiendo niveles con cita al leer una reunión. Sin ninguna sesión con texto, la
+  corrida termina en error con el motivo y no llama a la IA (no cae a los resúmenes de la empresa: no es lo que promete
+  el botón); una respuesta cortada por el largo también es un error, no una corrida «sin nada nuevo». Qué reuniones lee
+  lo decide `reunionesParaUbicar` (posicionar.ts), y `guardas.test.ts` se pone rojo si se desconecta el cableado.
   *Cuándo corre:* solo con el botón, nunca solo ni al abrir. *Cuánto cuesta:* Sonnet 4.6; el pedido sin fuentes pesa
   ~25.000 caracteres (medido: las tres áreas con sus cinco niveles); con Centauro (2 sesiones), estimado, ~35.000 tokens de entrada y
-  hasta 8.000 de salida: ~US$ 0,15 por corrida, ~US$ 0,25 con cuatro sesiones largas. Con 2 o 3 corridas por
+  hasta 12.000 de salida (lo normal, 3.000 a 5.000): ~US$ 0,15 por corrida, ~US$ 0,25 con cuatro sesiones largas. Con 2 o 3 corridas por
   preventa, menos de US$ 1 por exploración.
 - **La página del cliente: el vendedor elige los equipos y lo por explorar sale marcado.** Corrige la sección del 30 oct
   («Solo lo confirmado con evidencia»):
   - las áreas son las que eligió el vendedor en «Acceso» › «Qué equipos ve» (`contenido.areasAlCliente`, operación
-    `areasAlCliente`) o, si no eligió, las que tienen algo usado, las en juego primero (`areasParaElCliente`). Un área
-    sin nada usado no se puede elegir;
-  - sale lo que el vendedor USÓ: con evidencia, como nivel; la hipótesis usada, como nivel «por explorar» (aro punteado,
-    «· por explorar» en su barra, «N por explorar» arriba y una línea que lo explica). Lo que el agente sugiere y nadie
-    usó NO sale: Nexus propone y el vendedor valida antes de que el cliente lo vea;
+    `areasAlCliente`), con las de las que se habló señaladas («se habló en las reuniones»). Si no eligió, las EN JUEGO
+    con algo usado, como antes (`areasParaElCliente`). *Por qué no todas las detectadas:* la revisión cazó que un enlace
+    ya enviado sumaría áreas solo con el deploy, sin que nadie lo decidiera. Un área sin nada usado no se puede elegir;
+  - sale lo que el vendedor USÓ: con evidencia (también lo que contestó en el test: lo dijo el cliente), como nivel; la
+    hipótesis del agente usada, como nivel «por explorar» (aro punteado, «· por explorar» en su barra, «N por explorar»
+    arriba, una línea que lo explica y la misma línea en «Por dónde empezar» si sale de ella). Lo que el agente sugiere y
+    nadie usó NO sale: Nexus propone y el vendedor valida antes de que el cliente lo vea;
   - con todas las partes ubicadas (con evidencia o por explorar) el área lleva nivel y la síntesis dice cuántas son por
     explorar; con partes sin nada, sigue sin nivel general («Hasta ahora vimos 3 de las 8 partes…»).
   - *Por qué la hipótesis usada sí y la sugerida no:* Elías pidió que lo que no tiene evidencia directa salga como

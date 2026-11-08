@@ -78,6 +78,7 @@ import {
   type ReunionSinLeer,
 } from "./lectura";
 import { leerLoLeido, type LoLeidoDeHubspot } from "./lo-leido";
+import { reunionesParaUbicar } from "./posicionar";
 import { REUNIONES } from "./sesion";
 import { leerSitioWeb } from "./sitio-web";
 import { hostDelSitio } from "./sitio-web-reglas";
@@ -1068,12 +1069,9 @@ export async function transcripcionesDeLaExploracion(
   const cuantas = o.cuantas ?? 4;
   const caracteres = o.caracteres ?? 40_000;
   const armadas = await armarReuniones(opts, 30, ahora);
-  const candidatas = armadas.todas
-    .filter((r) => r.origen === "meet" && armadas.deSesiones.has(claveDeReunion(r)) && r.texto !== "nada" && !r.corta && !r.puertasAdentro)
-    .sort((a, b) => Date.parse(b.fecha) - Date.parse(a.fecha))
-    .slice(0, cuantas);
+  const candidatas = reunionesParaUbicar(armadas.todas, armadas.deSesiones, cuantas);
   if (!candidatas.length) return { fuentes: [], reuniones: [], sesiones: [] };
-  const deLaEmpresa = new Set((await getClientSessions(opts.clientId, { ids: candidatas.map((r) => r.id) })).map((s) => s.id));
+  const deLaEmpresa = new Set((await getClientSessions(opts.clientId, { ids: candidatas })).map((s) => s.id));
   const filas = await prisma.firefliesSession.findMany({
     where: { id: { in: [...deLaEmpresa] }, date: { lte: ahora } },
     select: { id: true, title: true, date: true, transcript: true, summary: true },

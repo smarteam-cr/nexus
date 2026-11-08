@@ -553,9 +553,13 @@ async function posicionarLaEscala(
         elegidas: estado.contenido.reunionesElegidas,
       }).catch((e) => {
         console.error(`[exploraciones/agente] posicionar: no se pudieron leer las sesiones de ${exploracionId}`, e);
-        return null;
+        throw new FalloDeLaExploracion("No se pudieron leer las reuniones de las sesiones. Vuelve a intentarlo en un rato.");
       })
     : null;
+  // Lo que promete el botón son las reuniones: sin ninguna con texto, no se gasta IA ni se cae a otras fuentes.
+  if (transcripciones && !transcripciones.fuentes.length) {
+    throw new FalloDeLaExploracion("Ninguna sesión de esta preventa tiene transcripción o notas todavía: cuando la tenga, vuelve a ubicar la escala.");
+  }
   const leido = await fuentesParaPosicionar({
     clientId: fila.clientId,
     projectId: contexto ?? fila.projectId,
@@ -598,6 +602,8 @@ async function posicionarLaEscala(
           pedidoDePosicionar({ ...ctx, objetivo: opts.objetivo ?? (esContenedor ? "la cuenta entera (sin un proyecto en particular)" : fila.projectId ? "el proyecto" : "la preventa") }),
         ),
     );
+    // Una respuesta cortada por el largo no se lee entera: mejor un error claro que una corrida «sin nada nuevo».
+    if (respuesta.stop_reason === "max_tokens") throw new FalloDeLaExploracion("La respuesta del agente salió cortada. Vuelve a intentarlo.");
     const r = leerLaRespuesta(respuesta, ctx, runId);
     // Solo niveles: el pedido no pide otra cosa, y si llega, no se guarda.
     items = r.items.filter((it) => it.destino.tipo === "nivel");

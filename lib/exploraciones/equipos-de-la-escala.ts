@@ -42,6 +42,8 @@ export interface AreaDeLaEscala {
   porExplorar: number;
   /** Con algo que sugiere el agente y nadie usó todavía. */
   sugeridas: number;
+  /** De esas, las que traen una frase del cliente (evidencia por revisar): las otras son hipótesis. */
+  sugeridasConCita: number;
   /** Sin nada, ni confirmado ni sugerido. */
   sinDato: number;
   /** Sesiones que ya ocurrieron con el equipo de esta área. */
@@ -79,6 +81,7 @@ export function areasDeLaEscala(o: {
       conEvidencia: c.conEvidencia,
       porExplorar: c.porExplorar,
       sugeridas: c.sugeridas,
+      sugeridasConCita: c.sugeridaConCita,
       sinDato: c.sinDato,
       sesiones,
       enJuego: o.enJuego.includes(a.id),
@@ -87,8 +90,11 @@ export function areasDeLaEscala(o: {
   });
 }
 
-/** Lo que pesa lo explorado de un área: lo que dijo el cliente y las sesiones con su equipo. */
-const peso = (a: AreaDeLaEscala) => a.conEvidencia * 2 + a.sesiones * 3 + a.sugeridas;
+/**
+ * Lo que pesa lo explorado de un área: lo que dijo el cliente (confirmado o sugerido con su frase) y las sesiones con su
+ * equipo. Una hipótesis no pesa: el agente la deduce sin que nadie haya hablado de esa área.
+ */
+const peso = (a: AreaDeLaEscala) => a.conEvidencia * 2 + a.sesiones * 3 + a.sugeridasConCita;
 
 /** «A», «A y B», «A, B y C». */
 const enLista = (xs: string[]) => (xs.length <= 1 ? (xs[0] ?? "") : `${xs.slice(0, -1).join(", ")} y ${xs[xs.length - 1]}`);
@@ -107,7 +113,7 @@ function loDelArea(a: AreaDeLaEscala): string {
  * 2 de 8 con evidencia. De Marketing todavía no se habló.»
  */
 export function resumenDeLoExplorado(areas: readonly AreaDeLaEscala[]): string {
-  const conAlgo = areas.filter((a) => peso(a) > 0 || a.porExplorar > 0).sort((x, y) => peso(y) - peso(x) || y.porExplorar - x.porExplorar);
+  const conAlgo = areas.filter((a) => peso(a) > 0 || a.porExplorar > 0 || a.sugeridas > 0).sort((x, y) => peso(y) - peso(x) || y.porExplorar - x.porExplorar);
   if (!conAlgo.length) return "Todavía no hay nada de las reuniones en la escala: se llena con lo que cuente la empresa.";
   const [primera, ...resto] = conAlgo;
   const sesiones = (a: AreaDeLaEscala) => (a.sesiones ? `${a.sesiones} ${a.sesiones === 1 ? "sesión" : "sesiones"} con su equipo` : "");
@@ -135,11 +141,12 @@ export function resumenDeLoExplorado(areas: readonly AreaDeLaEscala[]): string {
 
 /**
  * Las áreas que salen en la página del cliente, en orden (las en juego primero). `elegidas` es lo que eligió el vendedor
- * (undefined: no eligió todavía). Sin elegir, las que tienen algo confirmado (con evidencia o por explorar). Elegida o no,
- * un área sin nada confirmado no sale: no hay qué mostrarle.
+ * (undefined: no eligió todavía). Sin elegir, las EN JUEGO con algo confirmado, como antes del 8 nov: un enlace que ya se
+ * mandó no suma áreas solo con el deploy (la revisión lo cazó). Las demás de las que se habló las ofrece «Acceso» y las
+ * suma el vendedor con un clic. Elegida o no, un área sin nada confirmado no sale: no hay qué mostrarle.
  */
 export function areasParaElCliente(areas: readonly AreaDeLaEscala[], elegidas: readonly string[] | undefined): string[] {
   const conAlgo = (a: AreaDeLaEscala) => a.conEvidencia + a.porExplorar > 0;
   const orden = [...areas].sort((x, y) => Number(y.enJuego) - Number(x.enJuego));
-  return orden.filter((a) => conAlgo(a) && (elegidas ? elegidas.includes(a.id) : true)).map((a) => a.id);
+  return orden.filter((a) => conAlgo(a) && (elegidas ? elegidas.includes(a.id) : a.enJuego)).map((a) => a.id);
 }

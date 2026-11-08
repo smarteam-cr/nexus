@@ -1440,7 +1440,7 @@ Reglas estrictas:
     ctx.fuentes.map((x) => `=== FUENTE ${x.id}: ${x.etiqueta} ===\n${x.texto}`).join("\n\n");
   return {
     model: MODELO_DE_LA_EXPLORACION,
-    max_tokens: ctx.conHipotesis ? 8000 : 6000,
+    max_tokens: ctx.conHipotesis ? 12000 : 6000,
     system: sistemaDePosicionar,
     tools: [tool],
     tool_choice: { type: "tool", name: tool.name },

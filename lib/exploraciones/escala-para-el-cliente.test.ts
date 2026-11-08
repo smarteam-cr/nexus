@@ -34,10 +34,10 @@ const estado = (chequeo: Record<string, Partial<EstimadoGuardado>>, areas = [are
 });
 
 describe("la escala que ve el cliente", () => {
-  it("la hipótesis que el vendedor usó llega como «por explorar»; la evidencia, como nivel", () => {
+  it("la hipótesis que el vendedor usó llega como «por explorar»; la evidencia y lo que contestó en el test, como nivel", () => {
     const [x] = resultadosDeLaEscala(escala, lienzo, estado({ [a.id]: { fuente: "reunion" }, [b.id]: { fuente: "hipotesis", nivel: "O" }, [c.id]: { fuente: "test", nivel: "E" } }));
     expect(x.resultado.dimensiones.filter((d) => d.preguntada).map((d) => d.id)).toEqual([a.id, b.id, c.id]);
-    expect(x.porExplorar).toEqual([b.id, c.id]);
+    expect(x.porExplorar).toEqual([b.id]);
     expect(x.resultado.dimensiones.find((d) => d.id === b.id)).toMatchObject({ preguntada: true, nivel: "O" });
     expect([x.resultado.preguntadas, x.resultado.total]).toEqual([3, queAplican.length]);
   });
@@ -75,10 +75,10 @@ describe("la escala que ve el cliente", () => {
     expect(html).toContain("por explorar");
   });
 
-  it("las áreas: sin elegir, las que tienen algo (aunque no estén en juego); elegidas, solo esas", () => {
+  it("las áreas: sin elegir, solo las en juego con algo; elegidas, esas (aunque no estén en juego)", () => {
     const e = estado({ [a.id]: {}, [deOtra.id]: { fuente: "hipotesis" } });
-    expect(areasDeLaPagina(lienzo, e)).toEqual([area.id, otra.id]);
-    expect(resultadosDeLaEscala(escala, lienzo, e).map((x) => x.resultado.areaId)).toEqual([area.id, otra.id]);
+    expect(areasDeLaPagina(lienzo, e)).toEqual([area.id]);
+    expect(resultadosDeLaEscala(escala, lienzo, estado({ [a.id]: {}, [deOtra.id]: {} }, [area.id], [area.id, otra.id])).map((x) => x.resultado.areaId)).toEqual([area.id, otra.id]);
     const elegida = estado({ [a.id]: {}, [deOtra.id]: {} }, [area.id], [otra.id]);
     expect(resultadosDeLaEscala(escala, lienzo, elegida).map((x) => x.resultado.areaId)).toEqual([otra.id]);
     expect(partesDeLaPagina(lienzo, elegida)).toBe(otra.dimensiones.filter((d) => d.aplica).length);

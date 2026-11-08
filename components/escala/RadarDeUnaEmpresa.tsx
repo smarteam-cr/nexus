@@ -356,16 +356,16 @@ function SvgDelRadar({
             <circle className="rde-iman" cx={f(vertFrena.punto[0])} cy={f(vertFrena.punto[1])} r={m.vertice.halo} fill={COLOR_DEL_NIVEL.D} fillOpacity={0.12} />
           )}
           {d.vertices.map((v) =>
-            v.porExplorar && !v.frena ? (
+            v.porExplorar ? (
               <circle
                 key={v.clave}
                 className="rde-vertice"
                 data-d={v.clave}
                 cx={f(v.punto[0])}
                 cy={f(v.punto[1])}
-                r={m.vertice.r}
+                r={v.frena ? m.vertice.rFrena : m.vertice.r}
                 fill={C.blanco}
-                stroke={C.figura}
+                stroke={v.frena ? COLOR_DEL_NIVEL[v.nivel] : C.figura}
                 strokeWidth={m.objetivo.trazo}
                 strokeDasharray={m.objetivo.raya}
               />

@@ -85,7 +85,7 @@ function Tarjeta({ titulo, className = "", children }: { titulo?: string; classN
   );
 }
 
-function PorDondeEmpezar({ rec }: { rec: NonNullable<ResultadoDelTest["recomendacion"]> }) {
+function PorDondeEmpezar({ rec, porExplorar = false }: { rec: NonNullable<ResultadoDelTest["recomendacion"]>; porExplorar?: boolean }) {
   return (
     <Tarjeta className={`rd-empezar${rec.tipo === "trabajar" && rec.costoDeQuedarse ? " con-costo" : ""}`}>
       <div className="rd-empezar-texto">
@@ -96,6 +96,7 @@ function PorDondeEmpezar({ rec }: { rec: NonNullable<ResultadoDelTest["recomenda
           </h2>
         )}
         <p className="rd-empezar-razon">{rec.razon}</p>
+        {porExplorar && <p className="rd-nota">{POR_EXPLORAR}</p>}
       </div>
       {rec.tipo === "trabajar" && rec.costoDeQuedarse && (
         <div className="rd-costo">
@@ -558,7 +559,7 @@ export default function ResultadoDelTestVista({
           </div>
         </section>
 
-        {rec && <PorDondeEmpezar rec={rec} />}
+        {rec && <PorDondeEmpezar rec={rec} porExplorar={rec.tipo === "trabajar" && porExplorar.includes(rec.dimensionId)} />}
         {r.riesgos.length > 0 && <Riesgos riesgos={r.riesgos} dimensionDelRiesgo={dimensionDelRiesgo} />}
         {r.casos.length > 0 && <Casos casos={r.casos} />}
         <Barras r={r} detalles={detalles} esEstimado={esEstimado} porExplorar={porExplorar} />

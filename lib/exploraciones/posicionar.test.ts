@@ -13,6 +13,7 @@ import {
   modeloDeNegocio,
   nivelesPropuestos,
   objetivosParaUbicar,
+  reunionesParaUbicar,
   textoDeLaPropuesta,
   textoDeLasTareas,
   textoDeLasVentas,
@@ -310,6 +311,40 @@ describe("pedidoDePosicionar", () => {
       });
       expect(r.items.map((it) => (it.destino as { dimensionId: string }).dimensionId)).toEqual(["1.2"]);
       expect(r.descartadas).toBe(3);
+    });
+
+    it("⛔ una hipótesis que solo se apoya en la reunión con otro equipo no ubica esta área (K11)", () => {
+      const ventas = ESCALA_DE_PRUEBA.areas[0];
+      const marketing = { ...ventas, id: "2", nombre: "Marketing", dimensiones: ventas.dimensiones.map((d) => ({ ...d, id: d.id.replace(/^1\./, "2.") })) };
+      const conMarketing: ContextoDelPedido & { objetivo: string } = {
+        ...preventa,
+        escala: { ...ESCALA_DE_PRUEBA, areas: [ventas, marketing] },
+        reuniones: [{ fuente: "S1", etiqueta: "Reunión con Marketing", equipo: "marketing" }],
+      };
+      const r = leerLaRespuesta(
+        { content: [{ type: "tool_use", id: "t", name: "proponer", input: { niveles: [], hipotesis: [{ dimensionId: "1.3", nivel: "D", porQue: "Lo que contó Marketing de Ventas.", fuentes: [{ id: "S1" }] }] } }] } as unknown as Parameters<typeof leerLaRespuesta>[0],
+        conMarketing,
+        "run",
+      );
+      expect(r.items).toEqual([]);
+      expect(r.descartadas).toBe(1);
+    });
+
+    it("lee las reuniones de Meet de una sesión con texto, la más nueva primero, hasta el tope", () => {
+      const r = (id: string, fecha: string, extra: Record<string, unknown> = {}) => ({ id, origen: "meet", fecha, ...extra });
+      const todas = [
+        r("vieja", "2026-11-01T15:00:00Z"),
+        r("nueva", "2026-11-06T15:00:00Z"),
+        r("media", "2026-11-05T15:00:00Z"),
+        r("sin-sesion", "2026-11-07T15:00:00Z"),
+        r("sin-texto", "2026-11-07T15:00:00Z", { texto: "nada" }),
+        r("cortada", "2026-11-07T15:00:00Z", { corta: { minutos: 2 } }),
+        r("interna", "2026-11-07T15:00:00Z", { puertasAdentro: true }),
+        { id: "de-hubspot", origen: "hubspot", fecha: "2026-11-07T15:00:00Z" },
+      ];
+      const deSesiones = new Set(["vieja", "nueva", "media", "sin-texto", "cortada", "interna"].map((id) => `meet:${id}`).concat("hubspot:de-hubspot"));
+      expect(reunionesParaUbicar(todas, deSesiones, 4)).toEqual(["nueva", "media", "vieja"]);
+      expect(reunionesParaUbicar(todas, deSesiones, 2)).toEqual(["nueva", "media"]);
     });
 
     it("fuera de la preventa, una lista de hipótesis no se lee", () => {

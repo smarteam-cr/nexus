@@ -62,7 +62,7 @@ function Rotulo({ children, className }: { children: React.ReactNode; className?
 /** De dónde sale lo dibujado, en palabras. */
 function deDonde(p: PosicionEnElMapa): string {
   if (p.fuente === "test") return "Lo marcó en el test (con la escala anterior).";
-  if (p.fuente === "hipotesis") return "Lo deduce el agente de lo que hay en HubSpot.";
+  if (p.fuente === "hipotesis") return "Lo deduce el agente (de las reuniones o de HubSpot), sin que el cliente lo dijera directo: por explorar.";
   if (p.fuente === "vendedor") return "Lo marcaste tú.";
   if (p.fuente === "portal") return "Se vio en su portal.";
   return p.origen === "propuesto" ? "Lo dijo en una reunión (el agente lo leyó de la transcripción)." : "Lo dijo en una reunión.";
@@ -423,10 +423,13 @@ function SugerenciasDeLaEscala() {
   const porExplorar = hipotesisPendientes(mapa.posiciones);
   const todas = [...conEvidencia, ...porExplorar];
   if (!todas.length) return null;
+  const niveles = conEvidencia.filter((it) => it.destino.tipo === "nivel").length;
+  const otras = conEvidencia.length - niveles;
   const partes = [
-    conEvidencia.length ? `${conEvidencia.length} con lo que dijo el cliente` : null,
+    niveles ? `${niveles} ${niveles === 1 ? "nivel" : "niveles"} con lo que dijo el cliente` : null,
     porExplorar.length ? `${porExplorar.length} por explorar` : null,
-  ].filter(Boolean);
+    otras ? `${otras} ${otras === 1 ? "cambio" : "cambios"} más (áreas, qué explorar, con qué se mide)` : null,
+  ].filter((x): x is string => !!x);
   return (
     <section aria-label="Lo que sugiere el agente" className="space-y-1.5">
       <FranjaDeSugerencias
@@ -441,7 +444,7 @@ function SugerenciasDeLaEscala() {
           </>
         }
       >
-        El agente sugiere {partes.join(" y ")} en La escala. Las por explorar son el aro punteado del radar. Nada se confirma solo.
+        El agente sugiere {partes.length > 1 ? `${partes.slice(0, -1).join(", ")} y ${partes[partes.length - 1]}` : partes[0]} en La escala. Las por explorar son el aro punteado del radar. Nada se confirma solo.
       </FranjaDeSugerencias>
       {verLista && (
         <ul className="space-y-1.5">
@@ -564,7 +567,7 @@ function RadarDelArea({ area, calculo, onElegir }: { area: AreaDelLienzo; calcul
         capas={(["base", "produccion"] as const).map((c) => ({ clave: c, nombre: nombreDeCapa(c), nivel: calculo.capas[c].nivel, puntaje: calculo.capas[c].puntaje }))}
         niveles={escala.niveles}
         resultado={{ nivel: calculo.nivel, puntaje: calculo.puntaje }}
-        frena={frena && frena.dimensiones[0] ? { clave: frena.dimensiones[0], objetivo: calculo.objetivo ?? "F" } : null}
+        frena={frena?.dimensiones[0] && calculo.objetivo ? { clave: frena.dimensiones[0], objetivo: calculo.objetivo } : null}
       />
     </div>
   );

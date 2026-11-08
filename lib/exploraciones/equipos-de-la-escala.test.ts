@@ -63,6 +63,13 @@ describe("«Dónde está hoy», en una frase", () => {
     expect(resumenDeLoExplorado(areasDeLaEscala({ areas: AREAS, enJuego: [], lo: porExplorar("1.1"), areasDeLasSesiones: [] }))).toContain("lo de Ventas es por explorar");
   });
 
+  it("⛔ lo que el agente solo supuso (sugerido sin frase) no cuenta como explorado", () => {
+    const lo = Object.fromEntries(["1.1", "1.2", "1.3"].map((id) => [id, { sugerido: { fuente: "hipotesis" as const, conCita: false } }]));
+    const frase = resumenDeLoExplorado(areasDeLaEscala({ areas: AREAS, enJuego: ["1"], lo, areasDeLasSesiones: [] }));
+    expect(frase).not.toContain("se exploró sobre todo");
+    expect(frase).toContain("Todavía no hay nada con evidencia");
+  });
+
   it("dos áreas igual de exploradas se nombran juntas", () => {
     const frase = resumenDeLoExplorado(areasDeLaEscala({ areas: AREAS, enJuego: [], lo: conEvidencia("1.1", "3.1"), areasDeLasSesiones: [] }));
     expect(frase).toContain("se exploraron por igual Ventas y Servicio");
@@ -72,11 +79,12 @@ describe("«Dónde está hoy», en una frase", () => {
 describe("las áreas de la página del cliente", () => {
   const areas = areasDeLaEscala({ areas: AREAS, enJuego: ["3"], lo: { ...conEvidencia("1.1"), ...porExplorar("2.1"), ...conEvidencia("3.1") }, areasDeLasSesiones: [] });
 
-  it("sin elegir: todas las que tienen algo usado, las en juego primero", () => {
-    expect(areasParaElCliente(areas, undefined)).toEqual(["3", "1", "2"]);
+  it("⛔ sin elegir: solo las en juego con algo usado (un enlace ya enviado no suma áreas solo)", () => {
+    expect(areasParaElCliente(areas, undefined)).toEqual(["3"]);
   });
 
-  it("elegidas por el vendedor: solo esas, y una sin nada usado no sale", () => {
+  it("elegidas por el vendedor: solo esas, en juego primero, y una sin nada usado no sale", () => {
+    expect(areasParaElCliente(areas, ["1", "2", "3"])).toEqual(["3", "1", "2"]);
     expect(areasParaElCliente(areas, ["1"])).toEqual(["1"]);
     const sinNada = areasDeLaEscala({ areas: AREAS, enJuego: [], lo: conEvidencia("1.1"), areasDeLasSesiones: [] });
     expect(areasParaElCliente(sinNada, ["1", "2"])).toEqual(["1"]);

@@ -7,8 +7,9 @@
  * Datos: /api/sales/exploraciones/[id]/acceso. Lo que ve el cliente lo decide lib/exploraciones/escala-para-el-cliente.ts.
  *
  * «Qué equipos ve» (2026-11-08, Centauro Solutions): Nexus detecta de qué equipos se habló (equipos-de-la-escala.ts) y el
- * vendedor elige cuáles salen, con una casilla por área. Sin elegir, salen las que tienen algo usado. Un área sin nada
- * usado no se puede elegir: no habría qué mostrarle.
+ * vendedor elige cuáles salen, con una casilla por área. Sin elegir, salen las en juego con algo usado (como antes: un
+ * enlace ya enviado no suma áreas solo); las demás de las que se habló se suman con un clic. Un área sin nada usado no se
+ * puede elegir: no habría qué mostrarle.
  */
 import { useCallback, useEffect, useState } from "react";
 import { Alert, Modal, useToast } from "@/components/ui";
@@ -41,8 +42,8 @@ function EquiposQueVe() {
     <fieldset className="space-y-1.5">
       <legend className="text-xs font-semibold text-fg">Qué equipos ve</legend>
       <p className="text-xs text-fg-muted">
-        {elegidas ? "Los elegiste tú." : "Nexus marcó los que tienen algo ubicado."} Lo por explorar sale marcado así: es lo que creemos por lo conversado, para
-        confirmarlo con ellos. Lo que el agente sugiere y nadie usó no sale.
+        {elegidas ? "Los elegiste tú." : "Por ahora salen las áreas en juego; suma las otras de las que se habló."} Lo por explorar sale marcado así: es lo que
+        creemos por lo conversado, para confirmarlo con ellos. Lo que el agente sugiere y nadie usó no sale.
       </p>
       <ul className="divide-y divide-line rounded-lg border border-line">
         {areas.map((a) => {
