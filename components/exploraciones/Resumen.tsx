@@ -14,6 +14,10 @@
  * particularidades de la cuenta, que el agente propone al leer cada sesión, como el cronograma
  * propone sus particularidades. Y, si ya hay un proyecto, a cuál le llega la exploración.
  *
+ * Cada cosa en un solo lugar (2026-11-07): lo que sugirió la lectura de una sesión se revisa en «Lo que aprendimos» de
+ * esa sesión; acá se ve lo acumulado (lo confirmado) y lo sugerido desde otras fuentes (el test, HubSpot, la preparación).
+ * Antes, al agregar una sesión, las mismas sugerencias aparecían en los dos lados. Lo usado en la sesión ya no es pendiente.
+ *
  * Arriba de todo, si la última reunión que leyó el agente se puso técnica (Elías, 2026-10-06), un
  * aviso con de qué se habló y la frase que lo muestra: para sumar a alguien técnico a la próxima.
  * Solo avisa; «Entendido» lo cierra hasta que otra reunión vuelva a ponerse técnica.
@@ -28,7 +32,11 @@ import {
   type Persona,
   type Reto,
 } from "@/lib/exploraciones/casillas";
-import type { DestinoDePropuesta, ItemPropuesto } from "@/lib/exploraciones/contenido";
+import { claveDeLaReunion, type DestinoDePropuesta, type ItemPropuesto, type LecturaDeReunion } from "@/lib/exploraciones/contenido";
+import type { PestanaDeSesion } from "@/lib/exploraciones/guia";
+import { esDeUnaSesion } from "@/lib/exploraciones/despues-de-la-sesion";
+import { BotonEnlace } from "@/components/ui/sistema";
+import { useSesiones } from "./useSesiones";
 import { cn } from "@/lib/cn";
 import { Casilla } from "./Casilla";
 import FranjaDeSugerencias, { BotonBlanco, IconoDeSugerencia } from "./FranjaDeSugerencias";
@@ -185,11 +193,58 @@ function AvisoTecnico() {
 
 const esDelResumen = (d: DestinoDePropuesta) => d.tipo === "casilla" && definicionDe(d.clave).paso === "resumen";
 
+/**
+ * Las lecturas que se ven en «Lo que aprendimos» de su sesión: la de una sesión que ya pasó y no quedó como «se cortó»,
+ * «otro canal» o «no se hizo». Lo de una reunión sacada de la exploración, o leída sin ser sesión, sigue en el Resumen.
+ */
+function useLecturasEnSusSesiones(): { lecturas: Record<string, LecturaDeReunion>; sesionDe: (it: ItemPropuesto) => PestanaDeSesion | null } {
+  const { exp } = useLienzo();
+  const { todas } = useSesiones();
+  const conLectura = todas.flatMap((p) => {
+    const l = p.hecha && !p.sesion?.resultado && p.reunion ? exp.estado.propuesta.lecturas[claveDeLaReunion(p.reunion)] : undefined;
+    return l ? [{ p, l, k: claveDeLaReunion(p.reunion!) }] : [];
+  });
+  return {
+    lecturas: Object.fromEntries(conLectura.map((x) => [x.k, x.l])),
+    sesionDe: (it) => [...conLectura].reverse().find((x) => it.fuentes.some((f) => f.etiqueta === x.l.etiqueta))?.p ?? null,
+  };
+}
+
+/** Las sugerencias que salieron de una sesión se revisan allá: cuántas hay y un enlace a la más reciente. */
+function EnLasSesiones({ items }: { items: ItemPropuesto[] }) {
+  const { sesion, irA } = useLienzo();
+  const { sesionDe } = useLecturasEnSusSesiones();
+  if (!items.length) return null;
+  const conAlguna = items.map(sesionDe).filter((p): p is PestanaDeSesion => !!p).sort((a, b) => b.numero - a.numero)[0] ?? null;
+  return (
+    <p className="text-[13px] text-fg-secondary">
+      {items.length === 1 ? "1 sugerencia de las sesiones espera" : `${items.length} sugerencias de las sesiones esperan`} en «Lo que aprendimos» de su sesión.{" "}
+      {conAlguna && (
+        <BotonEnlace
+          className="text-[13px]"
+          onClick={() => {
+            irA("exploracion");
+            sesion.elegir(conAlguna.clave);
+            sesion.ponerMomento(conAlguna.clave, "despues");
+          }}
+        >
+          Ir a la sesión {conAlguna.numero}
+        </BotonEnlace>
+      )}
+    </p>
+  );
+}
+
 export default function Resumen() {
   const { pendientesPara, abrirCasilla, abrirRevision } = useLienzo();
-  const deLaCasilla = (clave: ClaveDeCasilla) => pendientesPara((d) => d.tipo === "casilla" && d.clave === clave);
+  const { lecturas } = useLecturasEnSusSesiones();
+  // Lo que sugirió la lectura de una sesión se revisa en esa sesión: acá no se repite (2026-11-07).
+  const deOtraFuente = (it: ItemPropuesto) => !esDeUnaSesion(it, lecturas);
+  const deLaCasilla = (clave: ClaveDeCasilla) => pendientesPara((d) => d.tipo === "casilla" && d.clave === clave).filter(deOtraFuente);
   // Lo sugerido para las tarjetas y lo que sale de cada reunión: lo que se revisa en esta pieza.
-  const delResumen = pendientesPara(esDelResumen);
+  const todasDelResumen = pendientesPara(esDelResumen);
+  const delResumen = todasDelResumen.filter(deOtraFuente);
+  const deLasSesiones = todasDelResumen.filter((it) => !deOtraFuente(it));
 
   return (
     <div className="space-y-6">
@@ -209,8 +264,9 @@ export default function Resumen() {
         <UsadasHoy filtro={esDelResumen} />
         </div>
       ) : (
-        <UsadasHoy filtro={esDelResumen} sinPendientes />
+        <UsadasHoy filtro={esDelResumen} sinPendientes={!deLasSesiones.length} />
       )}
+      <EnLasSesiones items={deLasSesiones} />
 
       <div data-recorrido="preventa.resumen.marco" className="space-y-5">
         {BLOQUES.map((b) => (

@@ -1,13 +1,17 @@
 "use client";
 
 /**
- * DespuesDeLaSesion — la reunión que ya pasó (tableros «Después · Sesión 1» y «Sesión 2 sin
- * transcripción», 2026-10-07). Arriba, lo que leyó el agente: su resumen y, de lo que se planeó
- * preguntar, qué se respondió. Después, lo que sugiere de ESTA reunión (cada cosa con Usar o
- * Descartar), la alerta si se puso técnica, el siguiente paso acordado y cuánto avanzó la preventa, y
- * «Quedó abierto»: lo que no se preguntó y lo que se dijo sin explorar, con una casilla para llevarlo
- * a la próxima sesión (entra primero en su guía, con «Quedó abierto en la sesión N»). Al final, el correo
- * de seguimiento para el cliente (CorreoDeSeguimiento.tsx), que usa lo que se marcó ahí.
+ * DespuesDeLaSesion — la reunión que ya pasó. Desde el 2026-11-07 (Elías, tras probarla con Centauro Solutions: «lo
+ * siento complicado y con sobreingeniería… la idea es que el usuario no rellene forms, valide o modifique sugerencias»),
+ * tres bloques y ningún campo vacío:
+ *   · «Qué pasó»: el resumen que dejó la lectura y si se cumplió el objetivo (Sí · En parte · No), con lo que sugiere
+ *     Nexus marcado; un clic lo valida. Lo que se preguntó y lo que no, plegado.
+ *   · «Lo que aprendimos»: lo que Nexus encontró en ESTA reunión, cada cosa con Usar (va sola a su lugar en el Resumen) o
+ *     Descartar. Sin el lote «Pasar las N…»: se decide una por una, mirando cada una.
+ *   · «Lo que queda para la próxima» (LoQueQueda.tsx): una sola lista, todo marcado, que arma la guía y el objetivo de la
+ *     siguiente sesión.
+ * El correo de seguimiento queda como botón; cómo trabajaste la sesión, el siguiente paso, las casillas y tus notas,
+ * plegados a un clic.
  *
  * Una reunión que casi no tiene conversación (o una sesión sin reunión, o una que terminó sin transcripción
  * ni notas) no espera una lectura: pregunta qué pasó —se hizo por otro canal, se cortó y hay que
@@ -21,8 +25,16 @@ import { listaParaProponer } from "@/lib/exploraciones/calidad";
 import { type SiguientePaso } from "@/lib/exploraciones/casillas";
 import { avanceDeLaEstrategia, escalaConEvidencia } from "@/lib/exploraciones/avance-del-proyecto";
 import { definicionEnElMarco, type Marco } from "@/lib/exploraciones/marco";
-import { claveDeLaReunion, type DestinoDePropuesta, type ItemPropuesto, type LecturaDeReunion } from "@/lib/exploraciones/contenido";
-import { MAX_SESIONES, separarPregunta, type PestanaDeSesion, type PreguntaParaMostrar, type ResultadoDeLaSesion } from "@/lib/exploraciones/guia";
+import { claveDeLaReunion, type DestinoDePropuesta, type ItemPropuesto, type LecturaDeReunion, type Operacion } from "@/lib/exploraciones/contenido";
+import {
+  CUMPLIMIENTOS,
+  cumplimientoSugerido,
+  esDeLaReunion,
+  NOMBRE_DEL_CUMPLIMIENTO,
+  objetivoSugeridoDeLaSiguiente,
+  type Cumplimiento,
+} from "@/lib/exploraciones/despues-de-la-sesion";
+import { MAX_SESIONES, type PestanaDeSesion, type PreguntaParaMostrar, type ResultadoDeLaSesion } from "@/lib/exploraciones/guia";
 import { claveDeNotaDeSesion } from "@/lib/exploraciones/notas-de-sesion";
 import ComoTrabajasteEstaSesion from "@/components/analizador-venta/ComoTrabajasteEstaSesion";
 import { Casilla } from "./Casilla";
@@ -30,14 +42,11 @@ import { CorreoDeSeguimiento } from "./CorreoDeSeguimiento";
 import { useLienzo } from "./contexto";
 import SumarAMano from "./SumarAMano";
 import { diaLargo, EtiquetaDePregunta, nombreDelPara, Rotulo, useEditarLaSesion, useFocoDeLaGuia } from "./piezas-de-la-sesion";
-import { BotonUsarTodas, FilaSugerida, UsadasHoy } from "./Propuestas";
+import { FilaSugerida, UsadasHoy } from "./Propuestas";
 import { useCorrida } from "./useCorrida";
 import { useSesiones } from "./useSesiones";
-import { LaEscalaDespuesDeLaSesion, LoQueDejoLaSesion } from "./LoQueDejoLaSesion";
-
-/** Lo que se lleva a la próxima sesión desde «Quedó abierto». */
-/** Un punto que se lleva a la próxima sesión: su texto, la sugerencia que se usa con él y, si se sabe, a qué apunta. */
-export type Llevar = { texto: string; item: ItemPropuesto | null; para?: string };
+import { LaEscalaDespuesDeLaSesion } from "./LoQueDejoLaSesion";
+import { LoQueQuedaParaLaProxima, useLoQueQueda, usePorAveriguar } from "./LoQueQueda";
 
 /** Dónde aterriza lo propuesto, en una palabra o dos, sobre la fila. */
 function destinoCorto(d: DestinoDePropuesta, nombreDeDimension: (id: string) => string, marco: Marco): string {
@@ -61,75 +70,121 @@ function destinoCorto(d: DestinoDePropuesta, nombreDeDimension: (id: string) => 
   }
 }
 
-/** ¿Lo sugerido sale de esta reunión? Por cómo la nombró la lectura o, sin lectura, por su título. */
-function deEstaReunion(it: ItemPropuesto, lectura: LecturaDeReunion | null, titulo: string | null): boolean {
-  return it.fuentes.some((f) => (lectura ? f.etiqueta === lectura.etiqueta : !!titulo && f.etiqueta.includes(titulo)));
+// ── Qué pasó ──────────────────────────────────────────────────────────────────
+
+/** La conversación se puso técnica en esta reunión: de qué se habló y qué hacer. */
+function AvisoTecnico({ pestana }: { pestana: PestanaDeSesion }) {
+  const { exp, cambiar, puedeEditar, guardando } = useLienzo();
+  const t = exp.estado.propuesta.alertaTecnica;
+  const r = pestana.reunion;
+  if (!t || t.vista || !r || !t.reunion.includes(r.titulo)) return null;
+  return (
+    <div className="flex items-start gap-2.5 rounded-lg border border-warn-line bg-warn-surface px-3.5 py-2.5">
+      <span className="text-sm leading-5 text-warn-ink" aria-hidden="true">
+        !
+      </span>
+      <p className="min-w-0 flex-1 text-[13px] leading-[19px] text-warn-ink">
+        <strong className="font-semibold">La conversación se puso técnica{t.temas.length ? `: ${t.temas.join(", ").toLowerCase()}` : ""}.</strong> {t.momento ? `${t.momento}. ` : ""}
+        Suma a alguien técnico a la próxima sesión.
+      </p>
+      {puedeEditar && (
+        <button type="button" className="text-xs text-warn-ink hover:underline" disabled={guardando} onClick={() => void cambiar([{ op: "alertaTecnicaVista" }])}>
+          Entendido
+        </button>
+      )}
+    </div>
+  );
 }
 
-// ── Lo que leyó el agente ─────────────────────────────────────────────────────
-
-function cumplimiento(cobertura: LecturaDeReunion["cobertura"]): { texto: string; aviso: boolean } {
-  const si = cobertura.filter((c) => c.respondida).length;
-  const n = cobertura.length;
-  const de = `${si} de ${n} ${n === 1 ? "pregunta respondida" : "preguntas respondidas"}`;
-  if (si === n) return { texto: `Se cumplió: ${de}.`, aviso: false };
-  if (si === 0) return { texto: `No se cumplió: ${de}.`, aviso: true };
-  return { texto: `Se cumplió en parte: ${de}.`, aviso: true };
+/** ¿Se cumplió el objetivo? Sí · En parte · No, con lo que sugiere Nexus marcado: un clic lo valida. */
+function SeCumplio({ pestana, lectura }: { pestana: PestanaDeSesion; lectura: LecturaDeReunion }) {
+  const { puedeEditar, guardando } = useLienzo();
+  const editar = useEditarLaSesion(pestana, "despues");
+  const s = pestana.sesion;
+  const objetivo = s?.objetivo ?? lectura.objetivo ?? null;
+  const sugerido = cumplimientoSugerido(lectura);
+  if (!objetivo && !sugerido) return null;
+  const validado = s?.cumplido ?? null;
+  const elegido = validado ?? sugerido;
+  const elegir = (c: Cumplimiento) => void editar((x) => ({ ...x, cumplido: c }));
+  return (
+    <div className="flex flex-col gap-2 rounded-lg border border-info-line bg-surface px-3.5 py-3">
+      <p className="text-[13px] text-fg">
+        <span className="font-semibold">¿Se cumplió el objetivo?</span>
+        {objetivo && <span className="text-fg-secondary"> {objetivo}</span>}
+      </p>
+      <div className="flex flex-wrap items-center gap-2">
+        {CUMPLIMIENTOS.map((c) => {
+          const activo = elegido === c;
+          return (
+            <button
+              key={c}
+              type="button"
+              aria-pressed={activo}
+              disabled={!puedeEditar || guardando}
+              onClick={() => elegir(c)}
+              className={cn(
+                "inline-flex items-center gap-1 rounded-full border px-3 py-1 text-[13px] transition-colors disabled:opacity-60",
+                activo && validado ? "border-primary bg-primary text-primary-fg" : activo ? "border-brand bg-info-surface text-brand" : "border-line bg-surface text-fg-secondary hover:bg-surface-hover",
+              )}
+            >
+              {activo && !validado && <IconoDeSugerencia className="h-3 w-3" />}
+              {NOMBRE_DEL_CUMPLIMIENTO[c]}
+            </button>
+          );
+        })}
+        <span className="text-xs text-fg-muted">{validado ? "Lo validaste tú." : sugerido ? "Lo sugiere Nexus: tócalo para validarlo o elige otro." : "Elige cómo salió."}</span>
+      </div>
+    </div>
+  );
 }
 
-function LoQueLeyo({ pestana, lectura }: { pestana: PestanaDeSesion; lectura: LecturaDeReunion | null }) {
+function QuePasoEnLaReunion({ pestana, lectura }: { pestana: PestanaDeSesion; lectura: LecturaDeReunion | null }) {
   const { puedeEditar } = useLienzo();
   const { corriendo, lanzando, lanzar } = useCorrida();
   const r = pestana.reunion;
+  /* Volver a leerla aunque ya tenga lectura: la grabación de una reunión de HubSpot puede no haber estado
+     cuando el agente la leyó (CreditForce, 28 sep: leyó la invitación y dijo que no hubo conversación). */
+  const releer = puedeEditar && r && (r.origen === "meet" || r.origen === "hubspot");
+  const volverALeer = () => r && void lanzar("leer", r.origen === "meet" ? { sesionId: r.id } : { hubspotId: r.id });
   if (!lectura) {
     return (
       <section data-recorrido="preventa.sesion.salio" className="flex flex-wrap items-center gap-3 rounded-xl border border-dashed border-line bg-surface px-[18px] py-4">
         <p className="min-w-0 flex-1 text-[13px] text-fg-muted">
           {r?.leida
-            ? "El agente la leyó antes de que resumiera cada reunión: vuelve a leerla para ver qué se habló y qué se respondió."
-            : "Todavía sin leer: cuando el agente la lea, acá aparece qué se habló y qué se respondió de lo planeado."}
+            ? "El agente la leyó antes de que resumiera cada reunión: vuelve a leerla para ver qué pasó y qué quedó."
+            : "Todavía sin leer: cuando el agente la lea, acá aparece qué pasó, lo que aprendimos y lo que queda."}
         </p>
-        {puedeEditar && r?.leida && (r.origen === "meet" || r.origen === "hubspot") && (
-          <BotonBlanco
-            disabled={lanzando || corriendo}
-            onClick={() => void lanzar("leer", r.origen === "meet" ? { sesionId: r.id } : { hubspotId: r.id })}
-          >
+        {releer && r?.leida && (
+          <BotonBlanco disabled={lanzando || corriendo} onClick={volverALeer}>
             Volver a leer
           </BotonBlanco>
         )}
       </section>
     );
   }
-  const c = lectura.cobertura.length ? cumplimiento(lectura.cobertura) : null;
-  /* Volver a leerla aunque ya tenga lectura: la grabación de una reunión de HubSpot puede no haber estado
-     cuando el agente la leyó (CreditForce, 28 sep: leyó la invitación y dijo que no hubo conversación). */
-  const releer = puedeEditar && r && (r.origen === "meet" || r.origen === "hubspot");
+  const respondidas = lectura.cobertura.filter((c) => c.respondida).length;
   return (
     <section data-recorrido="preventa.sesion.salio" className="flex flex-col gap-3 rounded-xl border border-info-line bg-info-surface px-[18px] py-4">
       <div className="flex items-center gap-2">
-        <p className="flex flex-1 items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-brand">
-          <IconoDeSugerencia className="h-[13px] w-[13px]" />
-          Lo que leyó el agente
-        </p>
+        <h3 className="flex flex-1 items-center gap-1.5 text-[15px] font-semibold text-fg">
+          <IconoDeSugerencia className="h-[14px] w-[14px] text-brand" />
+          Qué pasó
+        </h3>
         {releer && (
-          <BotonTexto
-            disabled={lanzando || corriendo}
-            title="El agente la vuelve a leer entera: lo que dice de ella se reemplaza."
-            onClick={() => void lanzar("leer", r.origen === "meet" ? { sesionId: r.id } : { hubspotId: r.id })}
-          >
+          <BotonTexto disabled={lanzando || corriendo} title="El agente la vuelve a leer entera: lo que dice de ella se reemplaza." onClick={volverALeer}>
             Volver a leer
           </BotonTexto>
         )}
       </div>
       <p className="text-sm leading-[21px] text-fg">{lectura.resumen}</p>
-      {!c && <p className="text-[12.5px] text-fg-muted">No había una guía armada antes de esta reunión: no hay con qué comparar lo que se preguntó.</p>}
-      {c && (
-        <div className="flex flex-col gap-1.5 rounded-lg border border-info-line bg-surface px-3.5 py-3">
-          <div className="flex flex-wrap items-baseline gap-2">
-            {lectura.objetivo && <span className="text-[13px] font-semibold text-fg">Objetivo: {lectura.objetivo}</span>}
-            <span className={cn("text-[12.5px]", c.aviso ? "text-warn-ink" : "text-success-ink")}>{c.texto}</span>
-          </div>
-          <ul>
+      <SeCumplio pestana={pestana} lectura={lectura} />
+      {lectura.cobertura.length > 0 && (
+        <details className="rounded-lg border border-info-line bg-surface">
+          <summary className="cursor-pointer select-none px-3.5 py-2.5 text-[13px] text-fg-secondary">
+            Lo que se preguntó de la guía · {respondidas} de {lectura.cobertura.length} respondidas
+          </summary>
+          <ul className="border-t border-info-line px-3.5">
             {lectura.cobertura.map((x) => {
               const p: PreguntaParaMostrar = { para: x.para, tipo: /^\d/.test(x.para) ? "dimension" : x.para.startsWith("vendido:") ? "vendido" : "tarjeta", pregunta: x.pregunta, repreguntas: [] };
               return (
@@ -150,42 +205,42 @@ function LoQueLeyo({ pestana, lectura }: { pestana: PestanaDeSesion; lectura: Le
               );
             })}
           </ul>
-        </div>
+        </details>
       )}
+      <AvisoTecnico pestana={pestana} />
     </section>
   );
 }
 
-// ── Lo que sugiere de esta reunión ────────────────────────────────────────────
+// ── Lo que aprendimos ─────────────────────────────────────────────────────────
 
-function LoQueSugiere({ pestana, lectura }: { pestana: PestanaDeSesion; lectura: LecturaDeReunion | null }) {
-  const { exp, revisables, escala, marco, cambiar, puedeEditar, guardando, abrirRevision } = useLienzo();
+function LoQueAprendimos({ pestana, lectura }: { pestana: PestanaDeSesion; lectura: LecturaDeReunion | null }) {
+  const { revisables, escala, marco } = useLienzo();
   const [todas, setTodas] = useState(false);
   const r = pestana.reunion;
+  const s = pestana.sesion;
+  // Lo que el cliente dijo y nadie siguió va en «Lo que queda para la próxima»; los casos de uso, en su pieza.
   const deEsta = (d: DestinoDePropuesta, it: ItemPropuesto) =>
-    d.tipo !== "casoDeUso" && !(d.tipo === "casilla" && d.clave === "noExplorado") && deEstaReunion(it, lectura, r?.titulo ?? null);
+    d.tipo !== "casoDeUso" && !(d.tipo === "casilla" && d.clave === "noExplorado") && esDeLaReunion(it, lectura, r?.titulo ?? null);
   const items = revisables.filter((it) => deEsta(it.destino, it));
-  const visibles = todas ? items : items.slice(0, 6);
+  const visibles = todas ? items : items.slice(0, 8);
   const nombreDeDimension = (id: string) => escala.areas.flatMap((a) => a.dimensiones).find((d) => d.id === id)?.nombre ?? id;
-  const t = exp.estado.propuesta.alertaTecnica;
-  const tecnica = t && !t.vista && r && t.reunion.includes(r.titulo) ? t : null;
-  // K12: sin pendientes no desaparece de golpe: lo usado hoy de esta reunión queda a la vista.
-  if (!items.length && !tecnica) return <UsadasHoy filtro={deEsta} sinPendientes />;
   return (
-    <section className="flex flex-col gap-1.5">
-      {items.length > 0 && (
-        <div className="flex flex-wrap items-center gap-2.5 rounded-[10px] border border-info-line bg-info-surface px-3.5 py-2.5">
-          <IconoDeSugerencia className="h-[15px] w-[15px] text-brand" />
-          <span className="min-w-0 flex-1 text-[13.5px] text-fg">
-            El agente sugiere {items.length === 1 ? "1 cosa" : `${items.length} cosas`} de esta reunión. Nada se confirma solo.
-          </span>
-          {puedeEditar && (
-            <>
-              <BotonBlanco onClick={() => abrirRevision()}>Revisar una por una</BotonBlanco>
-              {items.length > 1 && <BotonUsarTodas items={items} lugar="sesion" />}
-            </>
-          )}
-        </div>
+    <section className="flex flex-col gap-2 rounded-xl border border-line bg-surface px-[18px] py-4">
+      <div>
+        <h3 className="text-[15px] font-semibold text-fg">Lo que aprendimos</h3>
+        <p className="mt-0.5 text-[12.5px] text-fg-muted">
+          {items.length
+            ? `Nexus encontró ${items.length === 1 ? "1 cosa" : `${items.length} cosas`} en esta reunión. «Usar» la pasa sola a su lugar en el Resumen; nada se confirma solo.`
+            : "Lo nuevo de esta reunión. El Resumen junta lo de todas las sesiones."}
+        </p>
+      </div>
+      {s?.desafio?.texto && (
+        <p className="rounded-lg border border-line bg-surface-muted px-3 py-2 text-[13px] text-fg">
+          <span className="text-fg-muted">Desafío principal que dejó esta sesión: </span>
+          {s.desafio.texto}
+          {s.desafio.resultado && <span className="block text-fg-secondary">El resultado que buscan: {s.desafio.resultado}</span>}
+        </p>
       )}
       {visibles.length > 0 && (
         <ul className="flex flex-col gap-1.5">
@@ -199,24 +254,24 @@ function LoQueSugiere({ pestana, lectura }: { pestana: PestanaDeSesion; lectura:
           Ver las {items.length - visibles.length} restantes
         </button>
       )}
-      {items.length > 0 && <UsadasHoy filtro={deEsta} />}
-      {tecnica && (
-        <div className="flex items-start gap-2.5 rounded-lg border border-warn-line bg-warn-surface px-3.5 py-2.5">
-          <span className="text-sm leading-5 text-warn-ink" aria-hidden="true">
-            !
-          </span>
-          <p className="min-w-0 flex-1 text-[13px] leading-[19px] text-warn-ink">
-            <strong className="font-semibold">La conversación se puso técnica{tecnica.temas.length ? `: ${tecnica.temas.join(", ").toLowerCase()}` : ""}.</strong>{" "}
-            {tecnica.momento ? `${tecnica.momento}. ` : ""}Suma a alguien técnico a la próxima sesión.
-          </p>
-          {puedeEditar && (
-            <button type="button" className="text-xs text-warn-ink hover:underline" disabled={guardando} onClick={() => void cambiar([{ op: "alertaTecnicaVista" }])}>
-              Entendido
-            </button>
-          )}
-        </div>
-      )}
+      <UsadasHoy filtro={deEsta} sinPendientes={!items.length} />
+      {!items.length && !s?.desafio?.texto && lectura && <p className="text-[13px] text-fg-muted">Nada nuevo por revisar de esta reunión.</p>}
     </section>
+  );
+}
+
+/** El correo de seguimiento, a un clic: se abre al pedirlo (o si ya está escrito). */
+function CorreoComoBoton({ pestana }: { pestana: PestanaDeSesion }) {
+  const { exp } = useLienzo();
+  const r = pestana.reunion;
+  const escrito = !!(r && exp.estado.propuesta.correos[claveDeLaReunion(r)]);
+  const [abierto, setAbierto] = useState(escrito);
+  if (abierto) return <CorreoDeSeguimiento pestana={pestana} />;
+  return (
+    <div className="flex flex-wrap items-center gap-3">
+      <BotonBlanco onClick={() => setAbierto(true)}>Correo de seguimiento para el cliente</BotonBlanco>
+      <span className="text-xs text-fg-muted">Lo que entendimos, lo acordado y lo que queda. Lo revisas y lo mandas tú.</span>
+    </div>
   );
 }
 
@@ -271,103 +326,6 @@ function PasoYAvance({ pestana, lectura }: { pestana: PestanaDeSesion; lectura: 
               : "Todavía no sumó: usa lo que sugirió el agente."}
         </p>
       </div>
-    </section>
-  );
-}
-
-// ── Quedó abierto ─────────────────────────────────────────────────────────────
-
-function QuedoAbierto({
-  pestana,
-  lectura,
-  numeroSiguiente,
-  llevar,
-  soltar,
-}: {
-  pestana: PestanaDeSesion;
-  lectura: LecturaDeReunion | null;
-  numeroSiguiente: number;
-  llevar: (l: Llevar) => void;
-  soltar: (texto: string) => void;
-}) {
-  const { exp, cambiar, puedeEditar, guardando, pendientesPara } = useLienzo();
-  const { todas } = useSesiones();
-  const r = pestana.reunion;
-  const enQue = (texto: string) => todas.find((p) => p.sesion?.explorar?.includes(texto));
-  const ultimaHecha = [...todas].reverse().find((p) => p.hecha && !p.noSeHizo);
-  const confirmados = ultimaHecha?.clave === pestana.clave ? ((exp.estado.contenido.casillas.noExplorado as string[] | undefined) ?? []) : [];
-  const sugeridos = pendientesPara((d) => d.tipo === "casilla" && d.clave === "noExplorado").filter((it) => deEstaReunion(it, lectura, r?.titulo ?? null));
-  const noPreguntadas = (lectura?.cobertura ?? []).filter((c) => !c.respondida);
-
-  type Fila = { clave: string; texto: string; titulo: string; sub: string | null; item: ItemPropuesto | null; para?: string; quitar?: () => void };
-  const filas: Fila[] = [
-    // Lo que no se preguntó sabe a qué apunta: la próxima guía lo muestra con su letra o su número.
-    ...noPreguntadas.map((c) => ({ clave: `np-${c.para}`, texto: `No se preguntó. Qué preguntar: ${c.pregunta}`, titulo: c.pregunta, sub: "No se preguntó", item: null, para: c.para })),
-    ...sugeridos.map((it) => {
-      const t = String(it.valor);
-      const { dicho, pregunta } = separarPregunta(t);
-      return { clave: it.id, texto: t, titulo: pregunta ?? dicho, sub: pregunta ? dicho : (it.razon ?? null), item: it };
-    }),
-    ...confirmados.map((t) => {
-      const { dicho, pregunta } = separarPregunta(t);
-      return {
-        clave: `c-${t}`,
-        texto: t,
-        titulo: pregunta ?? dicho,
-        sub: pregunta ? dicho : null,
-        item: null,
-        quitar: () => {
-          const resto = confirmados.filter((x) => x !== t);
-          void cambiar([{ op: "casilla", clave: "noExplorado", valor: resto.length ? resto : null }]);
-        },
-      };
-    }),
-  ];
-  if (!filas.length && !lectura) return null;
-  return (
-    <section className="overflow-hidden rounded-xl border border-line bg-surface">
-      <header className="border-b border-line px-[18px] py-3.5">
-        <h3 className="text-[15px] font-semibold text-fg">Quedó abierto</h3>
-        <p className="mt-0.5 text-[12.5px] text-fg-muted">
-          Lo que no se preguntó y lo que se dijo sin explorar. Lo que marques entra primero en la guía de la sesión {numeroSiguiente}
-          {pestana.noSeHizo ? "" : `, con la etiqueta «Quedó abierto en la sesión ${pestana.numero}»`}.
-        </p>
-      </header>
-      {filas.length === 0 ? (
-        <p className="px-[18px] py-4 text-[13px] text-fg-muted">Nada quedó abierto: se preguntó todo lo planeado.</p>
-      ) : (
-        <ul>
-          {filas.map((f) => {
-            const en = enQue(f.texto);
-            return (
-              <li key={f.clave} className="flex items-start gap-3 border-b border-surface-hover px-[18px] py-3 last:border-b-0">
-                <input
-                  type="checkbox"
-                  checked={!!en}
-                  disabled={!puedeEditar || guardando}
-                  aria-label={`Llevar «${f.titulo}» a la próxima sesión`}
-                  onChange={() => (en ? soltar(f.texto) : llevar({ texto: f.texto, item: f.item, ...(f.para ? { para: f.para } : {}) }))}
-                  className="mt-[3px] h-4 w-4 flex-shrink-0 accent-brand"
-                />
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-semibold text-fg">{f.titulo}</p>
-                  {(f.sub || en) && (
-                    <p className="mt-0.5 text-xs text-fg-muted">{[f.sub, en && !en.noSeHizo ? `en la sesión ${en.numero}` : null].filter(Boolean).join(" · ")}</p>
-                  )}
-                </div>
-                {puedeEditar && (f.item || f.quitar) && (
-                  <BotonTexto
-                    disabled={guardando}
-                    onClick={() => (f.item ? void cambiar([{ op: "descartar", itemIds: [f.item.id] }]) : f.quitar?.())}
-                  >
-                    {f.item ? "Descartar" : "Quitar"}
-                  </BotonTexto>
-                )}
-              </li>
-            );
-          })}
-        </ul>
-      )}
     </section>
   );
 }
@@ -561,9 +519,7 @@ export default function DespuesDeLaSesion({
   pestana,
   numeroSiguiente,
   claveSiguiente,
-  llevados,
   armarLaSiguiente,
-  soltar,
   minutaAbierta = false,
   onMinuta,
 }: {
@@ -574,15 +530,16 @@ export default function DespuesDeLaSesion({
   numeroSiguiente: number;
   /** La sesión siguiente, si ya existe (para ir a ella). */
   claveSiguiente: string | null;
-  /** Cuántos puntos de esta sesión ya se llevaron a la siguiente. */
-  llevados: number;
-  armarLaSiguiente: (llevar?: Llevar) => void;
-  soltar: (texto: string) => void;
+  /** Abre la siguiente sesión (o la crea) en su Preparación, con `extra` en el mismo cambio. */
+  armarLaSiguiente: (extra?: Operacion[]) => void;
 }) {
   const { exp, marco, puedeEditar } = useLienzo();
   const enProyecto = marco.clave === "cs";
   const { sesiones } = useSesiones();
   const { corriendo, lanzando } = useCorrida();
+  const { pendientes, sugeridas } = useLoQueQueda(pestana);
+  // El mismo objetivo que va a sugerir la Preparación de la siguiente (LoQueQueda.tsx › `useObjetivoDeLaSiguiente`).
+  const porAveriguarHoy = usePorAveriguar();
   const r = pestana.reunion;
   const lectura = r ? (exp.estado.propuesta.lecturas[claveDeLaReunion(r)] ?? null) : null;
   // Sin transcripción ni notas (etapa A) tampoco hay qué leer: se pregunta qué pasó y se suma la minuta.
@@ -592,33 +549,41 @@ export default function DespuesDeLaSesion({
     return (
       <div className="space-y-5">
         <QuePaso pestana={pestana} numeroSiguiente={numeroSiguiente} claveSiguiente={claveSiguiente} minutaAbierta={minutaAbierta} onMinuta={onMinuta} />
-        {pestana.sesion?.resultado !== "noSeHizo" && <LoQueDejoLaSesion key={pestana.clave} pestana={pestana} conLectura={false} />}
+        {pestana.sesion?.resultado !== "noSeHizo" && <LoQueQuedaParaLaProxima pestana={pestana} numeroSiguiente={numeroSiguiente} />}
       </div>
     );
   }
 
+  const objetivoDeLaSiguiente = objetivoSugeridoDeLaSiguiente({ pendientes, objetivoSiguiente: lectura?.objetivoSiguiente ?? null, porAveriguar: porAveriguarHoy });
+  /* Al preparar la siguiente, lo que el cliente dijo y nadie siguió (todavía sugerido) se usa si se ve marcado en la lista
+     y se descarta si se ve tachado: así no queda pendiente para siempre. Lo que no se ve en la lista (pasado el tope, o
+     repetido con otro renglón) no se toca. */
+  const vistas = new Map(pendientes.flatMap((p) => (p.itemId ? [[p.itemId, p.marcado] as const] : [])));
+  const tachadas = sugeridas.filter((it) => vistas.get(it.id) === false).map((it) => it.id);
+  const alPreparar: Operacion[] = [
+    ...sugeridas.filter((it) => vistas.get(it.id) === true).map((it) => ({ op: "usar" as const, itemId: it.id, valor: it.valor })),
+    ...(tachadas.length ? [{ op: "descartar" as const, itemIds: tachadas }] : []),
+  ];
+
   return (
     <div className="space-y-5">
-      <LoQueLeyo pestana={pestana} lectura={lectura} />
-      {/* Puntos 14 y 15 (2026-11-06): el desafío principal, lo que hay que retomar y la escala hasta ahora. */}
-      <LoQueDejoLaSesion key={pestana.clave} pestana={pestana} conLectura={!!lectura} />
-      <LaEscalaDespuesDeLaSesion />
-      <LoQueSugiere pestana={pestana} lectura={lectura} />
-      <PasoYAvance pestana={pestana} lectura={lectura} />
-      <QuedoAbierto pestana={pestana} lectura={lectura} numeroSiguiente={numeroSiguiente} llevar={(l) => armarLaSiguiente(l)} soltar={soltar} />
-      {/* S4 (2026-10-27): la autoevaluación de la sesión, APARTE de lo de arriba. Solo con el análisis de la venta a la vista. */}
-      {!enProyecto && <ComoTrabajasteEstaSesion pestana={pestana} />}
-
-      <CorreoDeSeguimiento pestana={pestana} />
+      <QuePasoEnLaReunion pestana={pestana} lectura={lectura} />
+      <LoQueAprendimos pestana={pestana} lectura={lectura} />
+      <LoQueQuedaParaLaProxima pestana={pestana} numeroSiguiente={numeroSiguiente} />
+      <CorreoComoBoton pestana={pestana} />
 
       <details className="rounded-xl border border-line bg-surface">
         <summary className="cursor-pointer select-none px-[18px] py-3.5 text-sm font-semibold text-fg">
-          Datos de la sesión{" "}
+          Más de esta sesión{" "}
           <span className="text-[13px] font-normal text-fg-muted">
-            {enProyecto ? "· siguiente paso, lo propio de la cuenta, tus notas" : "· siguiente paso, portal visto, apertura, producto mostrado, tus notas"}
+            {enProyecto ? "· siguiente paso, cuánto avanzó, la escala, lo propio de la cuenta, tus notas" : "· cómo trabajaste, siguiente paso, cuánto avanzó, la escala, portal, apertura, tus notas"}
           </span>
         </summary>
         <div className="space-y-4 border-t border-line p-4">
+          {/* S4 (2026-10-27): la autoevaluación de la sesión, aparte de lo de arriba. */}
+          {!enProyecto && <ComoTrabajasteEstaSesion pestana={pestana} />}
+          <PasoYAvance pestana={pestana} lectura={lectura} />
+          <LaEscalaDespuesDeLaSesion />
           <Casilla clave="siguientePaso" />
           {enProyecto ? (
             <Casilla clave="particularidades" />
@@ -641,14 +606,19 @@ export default function DespuesDeLaSesion({
       {puedeEditar && (
         <div className="sticky bottom-0 z-10 -mx-6 -mb-10 flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-line bg-surface px-6 py-3.5 xl:-mx-8 xl:px-8">
           <p className="min-w-0 flex-1 text-[13.5px] text-fg-secondary">
-            {llevados > 0
-              ? `Llevas ${llevados === 1 ? "1 punto" : `${llevados} puntos`} a la sesión ${numeroSiguiente}. Su guía los toma primero cuando la armes.`
-              : `Marca lo que quedó abierto para llevarlo a la sesión ${numeroSiguiente}.`}
+            {objetivoDeLaSiguiente ? (
+              <>
+                <span className="text-fg-muted">La sesión {numeroSiguiente} arranca con: </span>
+                {objetivoDeLaSiguiente}
+              </>
+            ) : (
+              `Lo que quede marcado arriba entra en la guía de la sesión ${numeroSiguiente}.`
+            )}
           </p>
           <BotonAzul
             className="rounded-lg px-4 py-[9px] text-[13px]"
             disabled={lanzando || corriendo || sesiones.length >= MAX_SESIONES}
-            onClick={() => armarLaSiguiente()}
+            onClick={() => armarLaSiguiente(alPreparar)}
           >
             {lanzando ? "Armando…" : `Preparar la sesión ${numeroSiguiente}`}
           </BotonAzul>

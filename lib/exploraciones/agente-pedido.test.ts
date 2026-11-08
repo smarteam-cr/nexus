@@ -915,6 +915,29 @@ describe("⭐ el agente resume cada reunión y dice qué se respondió (2026-10-
   });
 });
 
+describe("⭐ la lectura trae si se cumplió el objetivo y lo que queda, en la misma llamada (2026-11-07)", () => {
+  const planeado = { objetivo: "Entender cómo hacen el seguimiento", preguntas: [] };
+  const c = ctx({ reuniones: [{ fuente: "S1", etiqueta: "Reunión del 1 oct" }], planeado });
+
+  it("pide si se cumplió (solo con objetivo), lo que queda para la próxima y el objetivo siguiente", () => {
+    const props = JSON.stringify((herramienta(c).input_schema.properties as Record<string, unknown>).reuniones);
+    for (const k of ["cumplido", "paraLaProxima", "objetivoSiguiente"]) expect(props).toContain(`"${k}"`);
+    const sin = JSON.stringify((herramienta(ctx({ reuniones: [{ fuente: "S1", etiqueta: "Reunión del 1 oct" }], planeado: { objetivo: null, preguntas: [] } })).input_schema.properties as Record<string, unknown>).reuniones);
+    expect(sin).not.toContain('"cumplido"');
+    // El objetivo viaja en el pedido aunque no haya preguntas planeadas: sin él no se puede decir si se cumplió.
+    expect(String(pedidoDeLaExploracion(c).messages[0].content)).toContain("Objetivo: Entender cómo hacen el seguimiento");
+  });
+
+  it("lo lee con sus topes; sin objetivo, «cumplido» no vale", () => {
+    const entrada = { fuente: "S1", resumen: "Hablaron del seguimiento.", cumplido: "en_parte", paraLaProxima: ["a", "b", "c", "d", "e", "f"], objetivoSiguiente: "Medir lo que se pierde" };
+    const r = leerLaRespuesta(respuesta({ reuniones: [entrada] }), c, "run_1", AHORA);
+    expect(r.reuniones?.[0]).toMatchObject({ cumplido: "en_parte", objetivoSiguiente: "Medir lo que se pierde" });
+    expect(r.reuniones?.[0].paraLaProxima).toHaveLength(5);
+    const sinObjetivo = leerLaRespuesta(respuesta({ reuniones: [{ ...entrada, cumplido: "si" }] }), ctx({ reuniones: [{ fuente: "S1", etiqueta: "Reunión del 1 oct" }] }), "run_1", AHORA);
+    expect(sinObjetivo.reuniones?.[0].cumplido).toBeUndefined();
+  });
+});
+
 describe("⭐ nadie del equipo de Smarteam en «Quién decide» (2026-10-07)", () => {
   it("por nombre, contra el equipo: con dos palabras o más tienen que estar todas; una sola no alcanza", () => {
     const equipo = ["Andrés Felipe Pinzón", "Elías González"];
