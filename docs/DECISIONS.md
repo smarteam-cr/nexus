@@ -13534,7 +13534,8 @@ Elías probó La escala con Centauro Solutions el 8 nov: sobraba información (�
 veía como mapa y no como el diagnóstico, «Dónde está hoy» no decía qué se había explorado, y la página del cliente salía
 «en medición», con una sola área a medio llenar aunque en las reuniones se habló de Ventas, Servicio y algo de Marketing.
 
-- **El vendedor ve el radar del diagnóstico.** Cada área de «Dónde está hoy» se dibuja con `RadarDeUnaEmpresa`, el mismo
+- **El vendedor ve el radar del diagnóstico.** (Desde la cuarta vuelta las áreas se presionan y se superponen en el mismo
+  radar: ver la sección siguiente.) Cada área de «Dónde está hoy» se dibuja con `RadarDeUnaEmpresa`, el mismo
   componente de la página del resultado del test: nodos, puntaje y nivel en el centro, con «Ver puntajes». No es un
   componente nuevo parecido: se le pasa lo que dibuja el mapa (lo confirmado y lo sugerido sin usar), calculado con
   `chequeoDelMapa` por área. La vista por defecto es «Nodos»; la rueda queda como «Mapa». Tocar un nodo, una porción o
@@ -13560,15 +13561,15 @@ veía como mapa y no como el diagnóstico, «Dónde está hoy» no decía qué s
   por el chokepoint, hasta 4 y 40.000 caracteres cada una, con el equipo de su sesión) en vez de las reuniones de la
   empresa en resumen; ubica las TRES áreas (`areas: []`); y propone, además de los niveles con su cita, HIPÓTESIS por
   explorar para lo que no tiene una frase pero sí pistas (`conHipotesis`, la lista `hipotesis` del pedido). Una hipótesis
-  necesita su porqué y una fuente del cliente; no repite una dimensión que ya trae un nivel con cita, ni ubica otra área
-  que la del equipo que habló (K11). La cuenta sigue con su pedido de siempre (solo niveles, áreas en juego). El lector
+  necesita su porqué y una fuente del cliente y no repite una dimensión que ya trae un nivel con cita. (Hasta la cuarta
+  vuelta tampoco podía ubicar otra área que la del equipo que habló, K11: ver la sección siguiente.) La cuenta sigue con su pedido de siempre (solo niveles, áreas en juego). El lector
   de cada sesión no cambió: sigue proponiendo niveles con cita al leer una reunión. Sin ninguna sesión con texto, la
   corrida termina en error con el motivo y no llama a la IA (no cae a los resúmenes de la empresa: no es lo que promete
   el botón); una respuesta cortada por el largo también es un error, no una corrida «sin nada nuevo». Qué reuniones lee
   lo decide `reunionesParaUbicar` (posicionar.ts), y `guardas.test.ts` se pone rojo si se desconecta el cableado.
   *Cuándo corre:* solo con el botón, nunca solo ni al abrir. *Cuánto cuesta:* Sonnet 4.6; el pedido sin fuentes pesa
   ~25.000 caracteres (medido: las tres áreas con sus cinco niveles); con Centauro (2 sesiones), estimado, ~35.000 tokens de entrada y
-  hasta 12.000 de salida (lo normal, 3.000 a 5.000): ~US$ 0,15 por corrida, ~US$ 0,25 con cuatro sesiones largas. Con 2 o 3 corridas por
+  hasta 16.000 de salida desde la cuarta vuelta (lo normal, 5.000 a 8.000 con las tarjetas): ~US$ 0,20 por corrida, ~US$ 0,30 con cuatro sesiones largas. Con 2 o 3 corridas por
   preventa, menos de US$ 1 por exploración.
 - **La página del cliente: el vendedor elige los equipos y lo por explorar sale marcado.** Corrige la sección del 30 oct
   («Solo lo confirmado con evidencia»):
@@ -13587,3 +13588,65 @@ veía como mapa y no como el diagnóstico, «Dónde está hoy» no decía qué s
     proponer» siguen leyendo solo lo confirmado con evidencia (`chequeoConfirmado`, mapa.ts): esto es solo la página.
 - **Datos y SQL:** sin SQL. `areasAlCliente` vive en el Json de la exploración y es opcional: las exploraciones en curso
   no cambian hasta que alguien elige.
+
+## La escala de la preventa, cuarta vuelta: el radar que no subía, áreas superpuestas, para explorar más y la tarjeta de cada dimensión (2026-11-08)
+
+Elías probó la tercera vuelta con Centauro Solutions («es un buen MVP») y pidió cinco cosas.
+
+- **Bug: marcar Eficiente u Óptimo no se veía en el radar.** *Causa:* la dimensión tenía guardado un riesgo a la vista
+  (`EstimadoGuardado.riesgo`), y el chequeo topa en Funcional lo que deja ver un riesgo (chequeo.ts, paso 5); al marcar,
+  el riesgo se copiaba al nivel nuevo. El botón quedaba en Óptimo y el radar en Funcional. *Arreglo:* el vendedor que
+  pone la dimensión por encima de Funcional dice que ese riesgo ya no está, y el riesgo se quita (`nivelDelVendedor` y
+  `sinRiesgoSiSube`, mapa.ts). En Funcional o debajo se conserva. Volver a marcar el mismo nivel para quitar el riesgo
+  conserva la frase y la fuente. El aviso del riesgo lo dice: «Si ya no está, marca Eficiente u Óptimo: el riesgo se
+  quita y el radar sube». Y el agente ya no propone Eficiente u Óptimo con un riesgo a la vista: lo propone en Funcional
+  (`leerLaRespuesta`), que es lo que dibuja el radar; antes el vendedor «usaba» un Eficiente que el radar mostraba en
+  Funcional. *Por qué no se apagó el tope:* sigue valiendo para lo que estima el agente o el test; lo que cambia es que
+  la marca del vendedor manda.
+- **Las áreas se presionan y se ven en el mismo radar.** Las tres áreas son botones (`aria-pressed`): un clic suma el
+  área a la escala y otro la saca (siempre queda una). Con varias, `RadarDeUnaEmpresa` recibe `color` y `otras`: la
+  principal (la última elegida con algo) lleva los nombres, el centro y el detalle, y las otras van encima, cada una de
+  su color (Ventas azul, Marketing rosa, Servicio verde azulado: ninguno es el color de un nivel), con su leyenda. Un
+  área elegida sin nada se muestra igual, con «Sumar…», encima del radar de las que sí tienen algo. Eje
+  por eje en el mismo lugar: la parte k de cada capa sobre la parte k de la principal. La base se llama igual en las tres
+  áreas; la producción no, y la leyenda dice que los nombres son los de la principal. Tocar un nodo de otra área la
+  vuelve la principal y abre su dimensión. La página del cliente no pasa `color` ni `otras`: se ve igual (lo cuida una
+  prueba). La vista «Mapa» (la rueda) sigue siendo de un área.
+- **Marketing se sugiere como hipótesis aunque no esté en juego.** En Centauro, «Ubicar con las reuniones» corrió
+  (8 nov, 9 propuestas, 2 descartadas) y Marketing quedó vacío: la única reunión con transcripción fue con Ventas, y K11
+  descartaba toda hipótesis de Marketing sacada de una reunión con otro equipo. Ahora K11 sigue frenando el NIVEL con
+  cita (lo que cuenta Ventas no es el nivel de Marketing), pero no la hipótesis: lo que Ventas dejó ver de Marketing es
+  una pista para suponerlo y preguntarlo. El pedido lo dice («Marketing también se ubica aunque no esté en juego, como
+  hipótesis…»). Un área sin nada todavía ya no dice «no está en juego», sino «Todavía no hay nada de Marketing en las
+  reuniones», con qué hacer.
+- **«Preparación para engagement avanzado» dejó de ser un bloque fijo.** Debajo del radar sale «Para explorar más
+  {área}» por cada área elegida que tiene hipótesis o partes sin dato, ordenadas por hipótesis (`ordenParaExplorar`,
+  equipos-de-la-escala.ts; regla de Elías: «entre más hipótesis tiene un área, más se puede explorar»; hipótesis = las
+  usadas como por explorar más las sugeridas sin frase). Cada una lista sus hipótesis (hasta 4 a la vista) con su
+  primera pregunta y «Llevar a la sesión N», y las partes sin dato. La lectura de engagement (que lee el nivel de
+  Marketing) vive plegada dentro de la de Marketing: se ve al elegir Marketing. *Por qué ahí y no se borró:* es una
+  lectura de Marketing y la regla de CLAUDE.md pide no esconder lo que existe sin decirlo; bajó de visibilidad a
+  propósito.
+- **Cada dimensión tiene su tarjeta al pasar el cursor** (TarjetaDelRadar.tsx), la de la página del resultado del
+  diagnóstico para uso interno: nombre, puntaje, nivel, si es evidencia o por explorar, «cómo está» en simple y «Para
+  explorar más, pregunta», cada pregunta con «Llevar a la sesión N». Se puede tocar (queda abierta mientras el cursor va
+  del radar a ella, Escape la cierra) y la ubica la misma regla que la del diagnóstico (tarjeta-del-radar.ts), midiendo
+  el radar que se ve (se dibujan dos: el grande y el compacto). Las mismas preguntas, con su botón, están en el detalle
+  de la dimensión: con el teclado o en una ventana angosta, ahí se alcanzan.
+  - *De dónde sale el texto:* de la MISMA llamada de «Ubicar con las reuniones» (lista `tarjetas` del pedido, una por
+    dimensión de las tres áreas), guardado en `propuesta.tarjetasDeLaEscala` (tarjetas-de-la-escala.ts); la corrida
+    siguiente lo reemplaza entero. Ni una llamada por visita ni una por dimensión. Sin corrida todavía, la tarjeta se
+    arma con el porqué del nivel y la pregunta de la escala, y no dice que la escribió Nexus.
+  - *Mandar una pregunta a la exploración usa lo que la guía ya lee* (`opsParaLlevar`): la pregunta entra a lo que lleva
+    la próxima sesión (`SesionPlaneada.explorar`, operación `editarSesion`), con su dimensión en `explorarPara` y el id
+    de ESA MISMA sesión en `explorarDe`. Ese id propio es la marca de «lo llevaste desde La escala»: la guía la muestra
+    con ese origen (`Procedencia.tipo = "escala"`, guia.ts) aunque todavía no haya habido ninguna reunión, el pedido de
+    la guía la recibe en «paraExplorar» con su dimensión (también de un área fuera de juego), y el correo de seguimiento
+    no la cuenta como algo que quedó abierto. *Por qué no un campo nuevo:* la revisión cazó que sin marca la guía no la
+    mostraba (sin reunión anterior) o le ponía «Quedó abierto en la sesión 1»; el id propio cabe en el esquema que ya
+    había. Se deshace con el mismo botón («Quitar», `opsParaQuitar`, solo lo llevado desde La escala). Una pregunta que
+    ya va no se repite; con 10 temas, avisa. Sin una próxima sesión planeada no se lleva: lo dice. (Marcar «explorar a
+    fondo» con la pregunta como razón pisaba lo que ya estaba marcado y la guía no leía el texto.)
+  - *Costo:* las tarjetas suman unos 3.000 tokens de salida por corrida (~US$ 0,05): ~US$ 0,20 por corrida.
+- **Datos y SQL:** sin SQL. `tarjetasDeLaEscala` es opcional en el Json de la propuesta: las exploraciones en curso
+  muestran la tarjeta armada con lo que ya tienen hasta la próxima corrida.

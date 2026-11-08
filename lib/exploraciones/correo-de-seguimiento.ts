@@ -160,7 +160,8 @@ export function insumosDelCorreo(
   if (o.sesionId) {
     for (const s of c.sesiones) {
       for (const t of s.explorar ?? []) {
-        if (s.explorarDe?.[t] !== o.sesionId || esParaInterno(s.explorarPara?.[t])) continue;
+        // Lo llevado desde La escala apunta a su propia sesión (guia.ts › explorarDe): no quedó abierto en ninguna.
+        if (s.explorarDe?.[t] !== o.sesionId || s.explorarDe[t] === s.id || esParaInterno(s.explorarPara?.[t])) continue;
         candidatas.push(textoDeLaPreguntaAbierta(t));
       }
     }

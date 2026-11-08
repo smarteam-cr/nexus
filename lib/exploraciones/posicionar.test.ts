@@ -279,8 +279,8 @@ describe("pedidoDePosicionar", () => {
     it("pide niveles con su frase Y hipótesis por explorar, de las tres áreas, con el equipo de cada reunión", () => {
       const p = pedidoDePosicionar(preventa);
       const props = (p.tools![0] as { input_schema: { properties: Record<string, unknown>; required: string[] } }).input_schema;
-      expect(Object.keys(props.properties)).toEqual(["niveles", "hipotesis"]);
-      expect(props.required).toEqual(["niveles", "hipotesis"]);
+      expect(Object.keys(props.properties)).toEqual(["niveles", "hipotesis", "tarjetas"]);
+      expect(props.required).toEqual(["niveles", "hipotesis", "tarjetas"]);
       const cuerpo = String(p.messages[0].content);
       expect(cuerpo).toContain("=== LA ESCALA (las tres áreas) ===");
       expect(cuerpo).toContain("S1: Reunión del 3 oct: Diagnóstico de ventas · fue");
@@ -313,7 +313,7 @@ describe("pedidoDePosicionar", () => {
       expect(r.descartadas).toBe(3);
     });
 
-    it("⛔ una hipótesis que solo se apoya en la reunión con otro equipo no ubica esta área (K11)", () => {
+    it("cuarta vuelta: lo que otro equipo dejó ver de un área entra como HIPÓTESIS (K11 sigue frenando el nivel con cita)", () => {
       const ventas = ESCALA_DE_PRUEBA.areas[0];
       const marketing = { ...ventas, id: "2", nombre: "Marketing", dimensiones: ventas.dimensiones.map((d) => ({ ...d, id: d.id.replace(/^1\./, "2.") })) };
       const conMarketing: ContextoDelPedido & { objetivo: string } = {
@@ -322,12 +322,53 @@ describe("pedidoDePosicionar", () => {
         reuniones: [{ fuente: "S1", etiqueta: "Reunión con Marketing", equipo: "marketing" }],
       };
       const r = leerLaRespuesta(
-        { content: [{ type: "tool_use", id: "t", name: "proponer", input: { niveles: [], hipotesis: [{ dimensionId: "1.3", nivel: "D", porQue: "Lo que contó Marketing de Ventas.", fuentes: [{ id: "S1" }] }] } }] } as unknown as Parameters<typeof leerLaRespuesta>[0],
+        {
+          content: [
+            {
+              type: "tool_use",
+              id: "t",
+              name: "proponer",
+              input: {
+                niveles: [{ dimensionId: "1.2", nivel: "I", evidencia: "x", porQue: "Lo que contó Marketing de Ventas.", fuentes: [{ id: "S1", cita: "cada vendedor lleva su propio Excel de oportunidades" }] }],
+                hipotesis: [{ dimensionId: "1.3", nivel: "D", porQue: "Lo que contó Marketing de Ventas.", fuentes: [{ id: "S1" }] }],
+              },
+            },
+          ],
+        } as unknown as Parameters<typeof leerLaRespuesta>[0],
         conMarketing,
         "run",
       );
-      expect(r.items).toEqual([]);
+      // El nivel con cita de otro equipo se cae (K11); la hipótesis queda, por explorar.
+      expect(r.items.map((it) => [(it.destino as { dimensionId: string }).dimensionId, (it.valor as { fuente: string }).fuente])).toEqual([["1.3", "hipotesis"]]);
       expect(r.descartadas).toBe(1);
+    });
+
+    it("un nivel por encima de Funcional con un riesgo a la vista se propone en Funcional (lo que dibuja el radar)", () => {
+      const r = conHipotesis({
+        niveles: [{ dimensionId: "1.2", nivel: "O", evidencia: "x", riesgo: true, porQue: "y", fuentes: [{ id: "S1", cita: "cada vendedor lleva su propio Excel de oportunidades" }] }],
+        hipotesis: [],
+      });
+      expect(r.items[0].valor).toMatchObject({ nivel: "F", riesgo: true });
+    });
+
+    it("lee la tarjeta de cada dimensión: solo dimensiones de la escala, sin vacías, hasta tres preguntas", () => {
+      const r = conHipotesis({
+        niveles: [],
+        hipotesis: [],
+        tarjetas: [
+          { dimensionId: "1.2", comoEsta: "  Cada vendedor lleva su Excel.  ", preguntas: ["¿Dónde ves hoy tu pipeline?", "¿Dónde ves hoy tu pipeline?", "b", "c", "d"] },
+          { dimensionId: "9.9", comoEsta: "No existe.", preguntas: ["x"] },
+          { dimensionId: "1.3", comoEsta: "", preguntas: [] },
+        ],
+      });
+      expect(r.tarjetas).toEqual({ "1.2": { comoEsta: "Cada vendedor lleva su Excel.", preguntas: ["¿Dónde ves hoy tu pipeline?", "b", "c"] } });
+      // Fuera de la preventa no se leen.
+      const cuenta = leerLaRespuesta(
+        { content: [{ type: "tool_use", id: "t", name: "proponer", input: { niveles: [], tarjetas: [{ dimensionId: "1.2", comoEsta: "x", preguntas: ["y"] }] } }] } as unknown as Parameters<typeof leerLaRespuesta>[0],
+        ctx,
+        "run",
+      );
+      expect(cuenta.tarjetas).toBeUndefined();
     });
 
     it("lee las reuniones de Meet de una sesión con texto, la más nueva primero, hasta el tope", () => {

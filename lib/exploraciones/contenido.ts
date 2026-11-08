@@ -35,6 +35,7 @@ import {
   type RespuestaParaLaGuia,
 } from "./objetivo-y-hallazgos";
 import type { PosicionamientoDelProspecto } from "./posicionamiento";
+import type { TarjetasDeLaEscala } from "./tarjetas-de-la-escala";
 import type { ClaveDeEquipo } from "./equipos";
 import {
   definicionDe,
@@ -444,6 +445,11 @@ export interface PropuestaDeExploracion {
   ajusteDelObjetivo?: AjusteDelObjetivo | null;
   hallazgos?: HallazgosDeLaExploracion | null;
   preguntasParaLaGuia?: PreguntasParaLaGuia | null;
+  /**
+   * La tarjeta de cada dimensión de La escala (2026-11-08, tarjetas-de-la-escala.ts): cómo está en simple y qué preguntar.
+   * La escribe «Ubicar con las reuniones»; la corrida siguiente la reemplaza entera.
+   */
+  tarjetasDeLaEscala?: TarjetasDeLaEscala | null;
   /** Los ajustes que el vendedor descartó: la guía no los vuelve a sugerir (los últimos 20). Es una lápida. */
   ajustesDescartados?: string[];
   /**

@@ -538,7 +538,7 @@ function cuerpoDeLaGuia(ctx: ContextoDeLaGuia): string {
   if (ctx.paraExplorar.length) {
     lineas.push(
       "",
-      "=== LO QUE EL VENDEDOR SE LLEVÓ DE UNA SESIÓN ANTERIOR (va primero: cada punto en la pregunta de lo que corresponda, con su «abierto») ===",
+      "=== LO QUE EL VENDEDOR SE LLEVÓ DE UNA SESIÓN ANTERIOR O DESDE LA ESCALA (va primero: cada punto en la pregunta de lo que corresponda, con su «abierto») ===",
       ...ctx.paraExplorar.map((t, i) => {
         const apunta = ctx.paraExplorarApunta?.[i];
         return `- ${idDeAbierto(i)}: ${t}${apunta ? ` [apunta a: ${apunta}]` : ""}`;
@@ -1466,7 +1466,8 @@ export function contextoDeLaGuia(o: {
         ...marco.tarjetas.map((k) => ({ id: k as string, nombre: definicionEnElMarco(k, marco).etiqueta })),
         ...escala.areas.filter((a) => estado.areas.includes(a.id)).flatMap((a) => a.dimensiones.map((d) => ({ id: d.id, nombre: `${d.nombre} (${a.nombre})` }))),
       ];
-      const validos = new Set(ubicables.map((u) => u.id));
+      // A qué apunta lo llevado vale también para un área fuera de juego (lo llevado desde La escala puede ser de Marketing).
+      const validos = new Set([...ubicables.map((u) => u.id), ...escala.areas.flatMap((a) => a.dimensiones.map((d) => d.id))]);
       const apunta = paraExplorar.map((t) => {
         const p = s?.explorarPara?.[t];
         return p && validos.has(p) ? p : null;
