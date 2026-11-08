@@ -94,8 +94,14 @@ export function ubicarLaTarjeta(tip: HTMLElement, t: TarjetaPedida): PosicionDeL
   return p;
 }
 
-/** El resalte del radar, su tarjeta y el puente del cursor hacia ella. Devuelve cómo soltarlo. */
-export function resaltarElRadar(raiz: HTMLElement, tarjetero: Tarjetero): () => void {
+/**
+ * El resalte del radar, su tarjeta y el puente del cursor hacia ella. Devuelve cómo soltarlo, con `rearmar`: después de
+ * que la pantalla vuelve a dibujar el radar con otras piezas (La escala, al cambiar el área principal), limpia el resalte
+ * que quedó y abre de nuevo lo que está bajo el cursor. La página del resultado no lo usa.
+ */
+export function resaltarElRadar(raiz: HTMLElement, tarjetero: Tarjetero): (() => void) & { rearmar: () => void } {
+  /** Dónde quedó el cursor por última vez (sin el umbral de `ahora`): `rearmar` abre lo que hay ahí. */
+  let cursor: Punto | null = null;
   let activa: { svg: SVGSVGElement; clave: string; eje: string } | null = null;
   let cierre = 0;
   let cambio = 0;
@@ -164,6 +170,7 @@ export function resaltarElRadar(raiz: HTMLElement, tarjetero: Tarjetero): () => 
     // Soltó el botón fuera de la ventana: el primer movimiento de vuelta, ya sin botón, cuenta como soltar.
     if (arrastrando && e.type === "pointermove" && !e.buttons) alSoltar(e);
     const p = { x: e.clientX, y: e.clientY };
+    cursor = p;
     if (!ahora || Math.hypot(p.x - ahora.x, p.y - ahora.y) > 3) {
       antes = ahora;
       ahora = p;
@@ -274,7 +281,16 @@ export function resaltarElRadar(raiz: HTMLElement, tarjetero: Tarjetero): () => 
   document.addEventListener("focusout", alDesenfocar);
   document.addEventListener("keydown", alTeclear);
   window.addEventListener("scroll", alDesplazar, { passive: true });
-  return () => {
+  // React cambió las piezas del radar: el resalte puede haber quedado en piezas que ya son de otra dimensión (o que ya no
+  // están) y la tarjeta, con el eje de antes. Se limpia todo y se abre de nuevo lo que hay bajo el cursor, si hay algo.
+  const rearmar = () => {
+    cerrar();
+    raiz.querySelectorAll<SVGSVGElement>(SVG).forEach(limpiar);
+    if (!cursor) return;
+    const p = piezaDe(document.elementFromPoint(cursor.x, cursor.y));
+    if (p && enElRadar(p.el)) abrir(p, cursor.x, cursor.y);
+  };
+  const soltar = () => {
     document.removeEventListener("pointermove", alMover);
     document.removeEventListener("pointerover", alPasar);
     document.removeEventListener("pointerout", alSalir);
@@ -287,6 +303,7 @@ export function resaltarElRadar(raiz: HTMLElement, tarjetero: Tarjetero): () => 
     cancelarCambio();
     if (activa) limpiar(activa.svg);
   };
+  return Object.assign(soltar, { rearmar });
 }
 
 /** Lo que el imán escribió en un atributo (los puntos de una figura, la punta de una línea), para saber si React lo cambió. */
