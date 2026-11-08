@@ -305,15 +305,24 @@ function quienLaUso(por: string | null, miCorreo: string | null): string {
  * que la deshace y la devuelve a la lista. Si alguien cambió ese lugar después, no se revierte (lo dice). Con
  * `sinPendientes`, arriba dice «No quedan sugerencias»: la sección no desaparece de golpe al usar la última.
  */
-export function UsadasHoy({ filtro, sinPendientes = false }: { filtro: (d: DestinoDePropuesta, item: ItemPropuesto) => boolean; sinPendientes?: boolean }) {
+export function UsadasHoy({
+  filtro,
+  sinPendientes = false,
+  plegada = true,
+}: {
+  filtro: (d: DestinoDePropuesta, item: ItemPropuesto) => boolean;
+  sinPendientes?: boolean;
+  /**
+   * false (2026-11-08, Elías: «Lo que aprendimos» con «Usadas hoy» plegado no tiene sentido): lo usado se ve en la misma
+   * lista, debajo de lo que falta revisar, sin abrir nada.
+   */
+  plegada?: boolean;
+}) {
   const { usadasHoy, deshacer, exp, escala, nombreDeNivel, puedeEditar, guardando } = useLienzo();
   const me = useMe();
   const usadas = usadasHoy.filter((u) => filtro(u.item.destino, u.item));
   if (usadas.length === 0) return null;
-  return (
-    <div className="space-y-1.5">
-      {sinPendientes && <p className="text-sm text-fg-muted">No quedan sugerencias por revisar acá.</p>}
-      <CollapsibleSection title="Usadas hoy" count={usadas.length} defaultOpen={false}>
+  const lista = (
         <ul className="divide-y divide-line rounded-lg border border-line bg-surface">
           {usadas.map((u) => {
             const puede = sePuedeDeshacer(exp.estado, u);
@@ -340,6 +349,22 @@ export function UsadasHoy({ filtro, sinPendientes = false }: { filtro: (d: Desti
             );
           })}
         </ul>
+  );
+  if (!plegada) {
+    return (
+      <div className="space-y-1.5">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-fg-muted">
+          {sinPendientes ? "Ya usaste todo lo de esta reunión" : "Ya usaste"} · {usadas.length}
+        </p>
+        {lista}
+      </div>
+    );
+  }
+  return (
+    <div className="space-y-1.5">
+      {sinPendientes && <p className="text-sm text-fg-muted">No quedan sugerencias por revisar acá.</p>}
+      <CollapsibleSection title="Usadas hoy" count={usadas.length} defaultOpen={false}>
+        {lista}
       </CollapsibleSection>
     </div>
   );

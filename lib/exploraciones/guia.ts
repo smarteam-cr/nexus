@@ -877,6 +877,11 @@ export interface GuiaDeLaSesion {
   /** El objetivo de la sesión, en una frase: lo sugiere el agente y lo confirma el vendedor. */
   objetivo?: string | null;
   /**
+   * El objetivo que el vendedor había aceptado cuando se armó (2026-11-08, cuarta vuelta): si después lo cambia, la guía
+   * todavía es para el anterior y la Preparación lo dice. Las guías de antes no lo tienen.
+   */
+  objetivoAceptado?: string;
+  /**
    * Dónde va cada punto que el vendedor se llevó (su texto → la tarjeta o la dimensión a la que
    * apunta), según el agente: con eso la guía lo muestra con su letra o su número aunque ninguna
    * pregunta lo retome (Elías, 2026-10-07: «pensé que aparecían solo las letras… o el número»).

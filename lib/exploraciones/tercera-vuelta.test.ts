@@ -13,6 +13,8 @@ import { CambiosSchema, leerContenido, leerPropuesta, VALIDADOR_ESTRICTO } from 
 import {
   ajusteSugerido,
   conLoDeLaExploracion,
+  FALTA_EL_OBJETIVO_DE_LA_SESION,
+  objetivoAceptado,
   hallazgosParaMostrar,
   MAX_RESPUESTAS_PARA_LA_GUIA,
   momentoDeLaExploracion,
@@ -193,7 +195,7 @@ describe("el Resumen arriba: en qué va, el botón del momento y los hallazgos",
     const m = momentoDeLaExploracion([sesion(1, "leida"), sesion(2, "sinLeer")], { clave: "nueva", numero: 3 }, o);
     expect(m.accion).toEqual({ tipo: "analizar", numero: 2, clave: "s-2" });
     expect(m.titulo).toMatch(/sesión 2 ya pasó y falta analizarla/);
-    expect(m.detalle).toMatch(/arma solo la guía de la sesión 3/);
+    expect(m.detalle).toMatch(/sugiere el objetivo de la sesión 3/);
   });
 
   it("todo leído: «Preparar la sesión N» con la próxima (Centauro: la 3)", () => {
@@ -362,19 +364,16 @@ describe("la guía se arma sola y pregunta lo que le falta", () => {
     expect(JSON.stringify(p.messages)).toContain("Ajustes que el equipo descartó");
   });
 
-  it("la lectura lanza la guía ANTES de marcarse terminada (sin un momento sin corrida viva), no con un documento, y la guía ya no espera nada", () => {
+  it("cuarta vuelta (2026-11-08): la lectura ya no arma la guía; la guía pide el objetivo de la sesión aceptado", () => {
     const agente = leer("lib", "exploraciones", "agente.ts");
-    const lanza = agente.search(/modo === "leer" && !opts\.documentoId && lecturas && Object\.keys\(lecturas\)\.length > 0\)[\s\S]{0,60}lanzarCorrida\(exploracionId, "guia", \{[^}]*trasLa: runId/);
-    expect(lanza).toBeGreaterThan(0);
-    const termina = agente.indexOf('status: "DONE"', lanza);
-    expect(termina).toBeGreaterThan(lanza);
-    expect(agente.slice(lanza, termina)).toMatch(/await prisma\.agentRun\.update/);
+    expect(agente, "volvió la guía que se arma sola al leer").not.toMatch(/lanzarCorrida\(exploracionId, "guia"/);
+    expect(agente).toMatch(/if \(!objetivoAceptado\(ctx\.contextoDeLaSesion\?\.objetivo\)\) throw new FalloDeLaExploracion\(FALTA_EL_OBJETIVO_DE_LA_SESION\)/);
     expect(agente).not.toMatch(/faltaParaLaGuia/);
   });
 
   it("una guía en curso no frena una lectura ni una preparación, y la guía que quedó vieja no se guarda", () => {
     const agente = leer("lib", "exploraciones", "agente.ts");
-    expect(agente).toMatch(/const cede = !!ultima && \(ultima\.id === opts\.trasLa \|\| \(modoVivo === "guia" && modo !== "guia"\)\)/);
+    expect(agente).toMatch(/const cede = !!ultima && modoVivo === "guia" && modo !== "guia";/);
     expect(agente).toMatch(/if \(ultima\?\.status === "RUNNING" && !cede\)/);
     expect(agente).toMatch(/const ultimaGuia = await ultimaCorrida\(exploracionId, clientId, prisma, "guia"\);\s*if \(ultimaGuia && ultimaGuia\.id !== runId\) return/);
   });
@@ -406,5 +405,70 @@ describe("el seguimiento: cuando la guía arranca detrás de la lectura", () => 
     expect(recargar).toHaveBeenCalledTimes(2);
     expect(avisos.success).toHaveBeenCalledTimes(1);
     expect(avisos.success).toHaveBeenCalledWith("La guía de la próxima reunión está lista.");
+  });
+});
+
+describe("cuarta vuelta: el objetivo de la sesión lo decide el vendedor", () => {
+  function ctxDeLaSesion(objetivo: string | null): ContextoDeLaGuia {
+    return {
+      empresa: "Centauro Solutions",
+      industria: "Turismo",
+      edicion: "general",
+      perfil: null,
+      hoy: "2026-11-08",
+      proxima: { numero: 3, titulo: null, fecha: null, sesionId: "s-a3" },
+      conTest: false,
+      desdeCero: false,
+      nivelesDeLaEscala: [],
+      paraConectar: null,
+      hubspotActual: null,
+      confirmado: [],
+      huecos: [],
+      enfoque: [],
+      noExplorado: [],
+      objecionesDichas: [],
+      paraExplorar: [],
+      contextoDeLaExploracion: { base: OBJETIVO_DE_SMARTEAM, objetivo: null, sabemos: null },
+      contextoDeLaSesion: { conQuien: "Laura (jefa de ventas)", espera: null, objetivo },
+    };
+  }
+
+  it("solo un objetivo con texto cuenta como aceptado", () => {
+    expect(objetivoAceptado("Mapear el proceso de ventas")).toBe(true);
+    expect(objetivoAceptado("   ")).toBe(false);
+    expect(objetivoAceptado(null)).toBe(false);
+    expect(objetivoAceptado(undefined)).toBe(false);
+  });
+
+  it("el objetivo de la sesión va PRIMERO en el pedido, como la instrucción que más pesa, antes del contexto de la exploración", () => {
+    const cuerpo = (pedidoDeLaGuia(ctxDeLaSesion("Mapear el proceso de ventas; dejar el soporte para el final")).messages[0].content as string);
+    const objetivo = cuerpo.indexOf("EL OBJETIVO DE ESTA SESIÓN (lo decidió quien la lleva: es la instrucción que MÁS pesa)");
+    expect(objetivo).toBeGreaterThan(-1);
+    expect(cuerpo.indexOf("Mapear el proceso de ventas; dejar el soporte para el final")).toBeGreaterThan(objetivo);
+    expect(cuerpo.indexOf("EL CONTEXTO DE TODA LA EXPLORACIÓN")).toBeGreaterThan(objetivo);
+    // Una sola vez: ya no se repite en «Esta sesión».
+    expect(cuerpo).not.toMatch(/El objetivo de la sesión: /);
+    expect(cuerpo).toContain("Con quién es: Laura (jefa de ventas)");
+    expect(pedidoDeLaGuia(ctxDeLaSesion(null)).system as string).toMatch(/OBJETIVO DE ESTA SESIÓN lo decidió quien la lleva/);
+  });
+
+  it("sin objetivo, el pedido no inventa el bloque", () => {
+    expect(pedidoDeLaGuia(ctxDeLaSesion(null)).messages[0].content as string).not.toContain("EL OBJETIVO DE ESTA SESIÓN");
+  });
+
+  it("el aviso de lo que falta dice qué hacer", () => {
+    expect(FALTA_EL_OBJETIVO_DE_LA_SESION).toMatch(/acepta o escribe el objetivo de la sesión/);
+  });
+});
+
+describe("cuarta vuelta: la guía recuerda con qué objetivo se armó", () => {
+  it("se guarda el objetivo aceptado y se vuelve a leer; la Preparación avisa si cambió", () => {
+    expect(leer("lib", "exploraciones", "agente.ts")).toMatch(/if \(aceptado\) guia = \{ \.\.\.guia, objetivoAceptado: aceptado\.slice\(0, 400\) \}/);
+    expect(leer("lib", "exploraciones", "esquemas.ts")).toMatch(/objetivoAceptado: textoDeGuia\(400\)\.optional\(\)/);
+    const antes = leer("components", "exploraciones", "AntesDeLaSesion.tsx");
+    expect(antes).toMatch(/!mismoTexto\(guia\.objetivoAceptado, pestana\.sesion\?\.objetivo\)/);
+    expect(antes).toContain("Cambiaste el objetivo: la guía todavía es para el anterior");
+    // El botón espera a que el objetivo recién aceptado llegue al servidor.
+    expect(antes).toMatch(/const armar = \(\) => void alDia\(\)\.then\(\(\) => lanzar\("guia"\)\)/);
   });
 });

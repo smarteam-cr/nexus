@@ -2,8 +2,8 @@
  * lib/exploraciones/agente.ts — correr el agente de la exploración. SERVIDOR.
  *
  * Cuatro momentos: «preparar» (antes de la primera reunión), «leer» (después de cada una), «casos»
- * (los casos de uso, en modo experimental) y «guia» (la guía de la próxima reunión, que también se
- * rearma sola al final de cada preparación y de cada lectura). La corrida queda en `AgentRun` (creada ANTES de llamar
+ * (los casos de uso, en modo experimental) y «guia» (la guía de la próxima reunión: la arma la persona, con el objetivo
+ * de la sesión aceptado; ni la preparación ni la lectura la rearman, 2026-11-08). La corrida queda en `AgentRun` (creada ANTES de llamar
  * a nada: cualquier falla deja su causa) y corre en segundo plano; la pantalla sigue su fase.
  *
  * ⛔ El agente PROPONE: lo que guarda es `propuesta` (lo propuesto, lo que ya leyó y sus corridas) y
@@ -74,7 +74,7 @@ import { hoyEnCostaRica } from "./fechas";
 import { bloqueDeInstrucciones } from "./notas-de-sesion";
 import { avisoDePreguntasCerradas, preguntasQueNoCumplen } from "./agenda";
 import { duracionDeLaSesion, tarjetasParaLaGuia, textoDeConQuien } from "./contexto-de-la-exploracion";
-import { conLoDeLaExploracion, objetivoDeSmarteam } from "./objetivo-y-hallazgos";
+import { conLoDeLaExploracion, FALTA_EL_OBJETIVO_DE_LA_SESION, objetivoAceptado, objetivoDeSmarteam } from "./objetivo-y-hallazgos";
 import { textoDeComoLlego } from "./como-llego";
 import { retomarParaLaGuia, ultimaReunionLeida } from "./despues-de-la-sesion";
 import {
@@ -221,11 +221,6 @@ interface OpcionesDeLaCorrida {
   ventaId?: string | null;
   objetivo?: string | null;
   /**
-   * 2026-11-08: la corrida que la lanza desde adentro y todavía no cerró (la lectura lanza la guía antes de marcarse
-   * terminada): esa no la frena. Así la pantalla pasa de una a otra sin un momento con ninguna viva.
-   */
-  trasLa?: string;
-  /**
    * Para «posicionar» sobre la escala de la cuenta (escala única, 2026-10-28): un proyecto de la empresa cuyo handoff,
    * cuestionarios, cronograma y memoria se leen como contexto. Lo propuesto queda igual en la escala de la cuenta.
    */
@@ -265,11 +260,10 @@ export async function lanzarCorrida(exploracionId: string, modo: ModoDelAgente, 
   const r = await prisma.$transaction(async (tx) => {
     await bloquearFila(tx, exploracionId);
     const ultima = await ultimaCorrida(exploracionId, clientId, tx);
-    /* Una guía en curso no frena lo demás (2026-11-08): se arma sola después de cada lectura y tarda, y una reunión que
-       llega en ese rato o un clic en «Leer» o «Preparar» no pueden quedar sin hacer. La guía que queda vieja no se guarda
-       (`armarGuia`). Ni la corrida que lanza esta desde adentro (`trasLa`). */
+    /* Una guía en curso no frena lo demás (2026-11-08): tarda, y una reunión que llega en ese rato o un clic en «Leer» o
+       «Preparar» no pueden quedar sin hacer. La guía que queda vieja no se guarda (`armarGuia`). */
     const modoVivo = (ultima?.filters as { modo?: string } | null)?.modo;
-    const cede = !!ultima && (ultima.id === opts.trasLa || (modoVivo === "guia" && modo !== "guia"));
+    const cede = !!ultima && modoVivo === "guia" && modo !== "guia";
     if (ultima?.status === "RUNNING" && !cede) {
       if (!estaColgada(ultima)) return { runId: ultima.id, yaCorria: true };
       await tx.agentRun.update({
@@ -499,16 +493,9 @@ async function correr(runId: string, exploracionId: string, modo: ModoDelAgente,
         if (r.status === "error") console.error(`[exploraciones/agente] la preparación no llegó a la ficha ${exploracionId}: ${r.error}`);
       }
     }
-    /* La guía se arma sola al terminar de leer una sesión (Elías, 2026-11-08; DECISIONS «La exploración desde el
-       vendedor»): una llamada por sesión leída, en su propia corrida, y contra el mismo presupuesto que la lectura
-       (automática si la lanzó una reunión nueva). Arranca ANTES de que la lectura se marque terminada (`trasLa`): lo
-       leído ya está guardado, y la pantalla pasa de una corrida viva a la otra sin creer que todo terminó. Un documento no
-       la dispara: no es una sesión. La preparación no la rearma (2026-11-06). Si falla, la Preparación lo dice. */
-    if (modo === "leer" && !opts.documentoId && lecturas && Object.keys(lecturas).length > 0) {
-      await lanzarCorrida(exploracionId, "guia", { triggeredByEmail: opts.triggeredByEmail, automatica: opts.automatica === true, trasLa: runId }).catch((e) =>
-        console.error(`[exploraciones/agente] la guía de la próxima sesión no arrancó ${exploracionId}`, e),
-      );
-    }
+    /* Ni la preparación ni la lectura arman la guía (2026-11-06; otra vez desde el 2026-11-08, cuarta vuelta): la lectura
+       deja SUGERIDO el objetivo de la siguiente sesión (`LecturaDeReunion.objetivoSiguiente`) y la guía se arma cuando el
+       vendedor lo acepta o lo edita y toca «Armar la guía» (`pedirLaGuia` lo exige). */
 
     await prisma.agentRun.update({
       where: { id: runId },
@@ -1014,8 +1001,8 @@ export async function armarLaGuiaSinGuardar(
 
 /**
  * El pedido de la guía y su lectura: la guía (null si no vino nada que sirva) y lo que la misma llamada dice de la
- * exploración entera (los hallazgos, el ajuste al objetivo y lo que le falta saber, 2026-11-08). Desde el 2026-11-08 la
- * guía no espera nada: el objetivo de toda exploración es el de Smarteam.
+ * exploración entera (los hallazgos, el ajuste al objetivo y lo que le falta saber, 2026-11-08). Espera UNA cosa: el
+ * objetivo de la sesión aceptado por el vendedor (cuarta vuelta, 2026-11-08); el de la exploración es el de Smarteam.
  */
 async function pedirLaGuia(
   runId: string | null,
@@ -1028,6 +1015,9 @@ async function pedirLaGuia(
   clientId: string;
 }> {
   const { fila, estado, escala, posiciones, loLeido, marco, ctx, ahora, automaticas } = await contextoParaLaGuia(exploracionId);
+  /* El objetivo de la sesión lo decide el vendedor (Elías, 2026-11-08, cuarta vuelta): sin uno aceptado o escrito no se
+     arma la guía. Es su instrucción para estructurar la sesión, y la de más peso del pedido. */
+  if (!objetivoAceptado(ctx.contextoDeLaSesion?.objetivo)) throw new FalloDeLaExploracion(FALTA_EL_OBJETIVO_DE_LA_SESION);
   const pedir = (aviso = "") =>
     conContextoDeIA(
       {
@@ -1064,6 +1054,9 @@ async function pedirLaGuia(
   // Lo que va a ver el vendedor: las preguntas del plan, con la de respaldo donde el agente repitió lo sabido.
   // La guía recién armada: cuenta todo lo leído (sin `hasta`).
   const plan = ctx.saber ? planDeLaGuiaDeLaSesion(estado, loLeido.tests, escala, posiciones, ctx.proxima.sesionId ?? null, marco, { automaticas }) : null;
+  // Con qué objetivo se armó: si el vendedor lo cambia después, la Preparación avisa que la guía es para el anterior.
+  const aceptado = ctx.contextoDeLaSesion?.objetivo?.trim();
+  if (aceptado) guia = { ...guia, objetivoAceptado: aceptado.slice(0, 400) };
   const preguntas = preguntasParaMostrar(guia, guia.huecos, guia.enfoque, escala, undefined, marco, plan ?? undefined);
   return { armada: { guia, ctx, preguntas }, extras: leerLoDeLaExploracion(respuesta, ctx), ctx, clientId: fila.clientId };
 }
@@ -1186,7 +1179,8 @@ export async function contextoParaLaGuia(exploracionId: string) {
     ...(marco.clave === "venta" ? { faltanParaProponer: listaParaProponer(estado, chequeoDe(escala, estado), hoyEnCostaRica(ahora)) } : {}),
   });
   /* El contexto de la exploración (contexto-de-la-exploracion.ts) y el de la próxima sesión: con quién es y cuánto dura
-     salen de su reunión del calendario (2026-11-07); sin reunión, 60 minutos. La guía no espera nada: el objetivo es el de
+     salen de su reunión del calendario (2026-11-07); sin reunión, 60 minutos. La guía solo espera el objetivo de la sesión
+     aceptado (2026-11-08, cuarta vuelta); el de la exploración es el de
      Smarteam, con su ajuste si hay uno (2026-11-08). Las tarjetas (2026-11-06) se retiraron: las de una exploración vieja
      se siguen leyendo. */
   const proximaSesion = estado.contenido.sesiones.find((s) => s.id === ctxBase.proxima.sesionId) ?? null;

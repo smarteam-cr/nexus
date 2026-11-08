@@ -28,6 +28,7 @@ import { useLienzo, type MomentoDeLaSesion } from "./contexto";
 import { useEditarLaSesion } from "./piezas-de-la-sesion";
 import { useCorrida } from "./useCorrida";
 import { useSesiones } from "./useSesiones";
+import { objetivoAceptado } from "@/lib/exploraciones/objetivo-y-hallazgos";
 
 function sinEquipo(s: SesionPlaneada): SesionPlaneada {
   const { equipo: _antes, ...resto } = s;
@@ -202,7 +203,8 @@ function AlCambiarElEquipo({
   const lectura = releible ? (exp.estado.propuesta.lecturas[claveDeLaReunion(r)] ?? null) : null;
   const vista = conAnalisis ? (analisis.datos?.reuniones.find((x) => x.id === r!.id) ?? null) : null;
   const estado = { equipo, recienCambiado, porPreparar, guia, lectura, analisis: !!vista?.analisis && vista.texto === "transcripcion" };
-  const rehacer = queRehacerAlCambiarElEquipo(estado).filter((q) => !listo.includes(q));
+  // Rehacer la guía pide el objetivo de la sesión aceptado (2026-11-08, cuarta vuelta): sin él no se ofrece.
+  const rehacer = queRehacerAlCambiarElEquipo(estado).filter((q) => !listo.includes(q) && !(q === "guia" && !objetivoAceptado(s.objetivo)));
   if (!rehacer.length) return null;
 
   const ocupado = corriendo || lanzando;

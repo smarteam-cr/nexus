@@ -105,9 +105,8 @@ export function crearSeguimiento(deps: {
       return;
     }
     siguiendo = true;
-    /* La corrida viva que se venía siguiendo. Si aparece otra viva, la de antes terminó y otra arrancó detrás (la guía de
-       la próxima sesión se arma sola al terminar de leer una, 2026-11-08): se recarga para ver lo que dejó la primera, sin
-       aviso; el aviso es el de la última. */
+    /* La corrida viva que se venía siguiendo. Si aparece otra viva, otra arrancó detrás (una lectura que no espera a la
+       guía en curso, 2026-11-08): se recarga para ver lo que dejó la primera, sin aviso; el aviso es el de la última. */
     let seguida: string | null = foto.corrida?.estado === "RUNNING" ? foto.corrida.id : null;
     try {
       for (let i = 0; i < VUELTAS && vivo(); i++) {

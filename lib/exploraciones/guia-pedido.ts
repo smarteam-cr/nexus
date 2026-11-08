@@ -804,6 +804,7 @@ Las preguntas:
 ${TUTEO}
 
 Cada sesión con su propio enfoque:
+- El OBJETIVO DE ESTA SESIÓN lo decidió quien la lleva y es la instrucción que más pesa: la agenda se arma para cumplirlo. Si dice cómo estructurar la sesión, se respeta.
 - La guía se centra en la persona y el objetivo de ESTA sesión (con quién es, qué espera y para qué es), sin mezclarse con otras. Lo que se aprendió en sesiones anteriores sirve: si el gerente general dijo qué espera de servicio al cliente, la sesión con la jefa de servicio lo aprovecha, pero se arma para explorarla a ella.
 - Lo que una sesión anterior dejó por retomar con esta persona (o en esta sesión) va en el bloque que corresponda.
 
@@ -860,9 +861,20 @@ export function leerLoDeLaExploracion(respuesta: Anthropic.Messages.Message, ctx
 /** Lo que dio la persona (los puntos 2 y 4) y lo que va solo en la agenda, para el pedido. */
 function contextoDadoPorLaPersona(ctx: ContextoDeLaGuia): string[] {
   const lineas: string[] = [];
+  /* El objetivo de la sesión va PRIMERO (2026-11-08, cuarta vuelta): lo aceptó o lo escribió quien la lleva, y es su
+     instrucción de cómo estructurarla. */
+  const objetivoDeLaSesion = ctx.contextoDeLaSesion?.objetivo?.trim();
+  if (objetivoDeLaSesion) {
+    lineas.push(
+      "=== EL OBJETIVO DE ESTA SESIÓN (lo decidió quien la lleva: es la instrucción que MÁS pesa) ===",
+      objetivoDeLaSesion,
+      "La guía se estructura para cumplirlo: sus bloques, su orden, el central y el cierre. Si dice cómo quiere la sesión (qué va primero, qué no tocar, con quién), se respeta aunque lo demás sugiera otra cosa.",
+      "",
+    );
+  }
   const x = ctx.contextoDeLaExploracion;
   if (x) {
-    lineas.push("=== EL CONTEXTO DE TODA LA EXPLORACIÓN (lo escribió el equipo: manda sobre lo demás) ===");
+    lineas.push("=== EL CONTEXTO DE TODA LA EXPLORACIÓN (lo escribió el equipo: manda sobre las fuentes; el objetivo de esta sesión manda sobre esto) ===");
     if (x.base) lineas.push(`El objetivo de Smarteam en toda exploración: ${x.base}`);
     if (x.objetivo) lineas.push(`${x.base ? "Su ajuste para esta empresa (lo confirmó el equipo)" : "Por qué exploramos esta empresa y qué queremos lograr"}: ${x.objetivo}`);
     else if (x.base) lineas.push("Para esta empresa todavía no hay un ajuste confirmado.");
@@ -886,11 +898,10 @@ function contextoDadoPorLaPersona(ctx: ContextoDeLaGuia): string[] {
     lineas.push("=== LOS HALLAZGOS QUE DEJÓ LA GUÍA ANTERIOR (actualízalos con lo nuevo; no los copies si cambiaron) ===", ...ctx.hallazgosAntes.map((h) => `- ${h}`), "");
   }
   const s = ctx.contextoDeLaSesion;
-  if (s && (s.conQuien || s.espera || s.objetivo)) {
+  if (s && (s.conQuien || s.espera)) {
     lineas.push("=== ESTA SESIÓN (lo escribió el equipo) ===");
     if (s.conQuien) lineas.push(`Con quién es: ${s.conQuien}`);
     if (s.espera) lineas.push(`Qué espera el cliente de esta reunión: ${s.espera}`);
-    if (s.objetivo) lineas.push(`El objetivo de la sesión: ${s.objetivo}`);
   }
   lineas.push(`Duración: ${ctx.duracion ?? DURACION_POR_DEFECTO} minutos.`);
   const primera = ctx.proxima.numero === 1 && !ctx.confirmado.length && !ctx.loQueYaSabemos?.length && !x?.sabemos?.trim() && !x?.tarjetas?.sabido.length;

@@ -8,7 +8,7 @@
  *     dejaron las sesiones, y el vendedor lo usa o lo descarta. El confirmado vive en `contenido.contexto.objetivo` (el
  *     campo de siempre: lo que una exploración en curso ya confirmó pasa a leerse como su ajuste, sin migrar nada).
  *   · Los HALLAZGOS son lo más importante que se sabe hasta ahora, sumando todas las sesiones. Los escribe la misma llamada
- *     que arma la guía (una por sesión leída) y se muestran arriba del Resumen. Sin ellos todavía, el Resumen muestra el
+ *     que arma la guía (una por guía armada) y se muestran arriba del Resumen. Sin ellos todavía, el Resumen muestra el
  *     resumen de cada sesión leída.
  *   · Si a Nexus le falta contexto para la próxima guía, deja de 1 a 3 PREGUNTAS cortas en su espacio; el vendedor las
  *     responde en una línea y la guía se rehace con esas respuestas, que mandan sobre las fuentes.
@@ -137,7 +137,7 @@ export function momentoDeLaExploracion(
           ? `Esperando la transcripción de la reunión${fue}.`
           : ultima.estado === "sinTexto"
             ? `La reunión terminó sin transcripción${fue}: súmale las notas para que Nexus la lea.`
-            : `Nexus todavía no la leyó${fue}. Al leerla, arma solo la guía de la sesión ${proxima.numero}.`,
+            : `Nexus todavía no la leyó${fue}. Al leerla, sugiere el objetivo de la sesión ${proxima.numero}.`,
       accion: { tipo: "analizar", numero: ultima.numero, clave: ultima.clave },
     };
   }
@@ -170,6 +170,16 @@ export function sumarRespuestas(antes: readonly RespuestaParaLaGuia[], nuevas: r
   const otras = antes.filter((a) => !nuevas.some((n) => normal(n.pregunta) === normal(a.pregunta)));
   return [...otras, ...nuevas].slice(-MAX_RESPUESTAS_PARA_LA_GUIA);
 }
+
+/**
+ * El objetivo de la sesión lo decide el vendedor (Elías, 2026-11-08, cuarta vuelta): la lectura de la sesión anterior lo
+ * deja SUGERIDO y la guía no se arma hasta que el vendedor lo acepta o lo edita (`SesionPlaneada.objetivo`). Es su
+ * oportunidad de decirle a Nexus cómo estructurar la sesión: el pedido lo pone como la instrucción de más peso.
+ */
+export function objetivoAceptado(objetivo: string | null | undefined): boolean {
+  return !!objetivo?.trim();
+}
+export const FALTA_EL_OBJETIVO_DE_LA_SESION = "Antes de armar la guía, acepta o escribe el objetivo de la sesión: es lo que más pesa al armarla.";
 
 /** Cuántos ajustes descartados se recuerdan (`propuesta.ajustesDescartados`): no se vuelven a sugerir. */
 export const MAX_AJUSTES_DESCARTADOS = 20;
