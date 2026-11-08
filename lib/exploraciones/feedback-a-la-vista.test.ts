@@ -63,8 +63,12 @@ describe("⛔ el feedback de la sesión se ve en el Análisis", () => {
     expect(sinPlegables(loQueMuestraElAnalisis())).toMatch(/<PasoYAvance pestana=\{pestana\} lectura=\{lectura\} \/>/);
   });
 
-  it("lo usado de la reunión se ve en «Lo que aprendimos» sin abrir nada", () => {
-    expect(fuente).toMatch(/<UsadasHoy filtro=\{deEsta\} sinPendientes=\{!items\.length\} plegada=\{false\} \/>/);
+  it("lo usado de la reunión se ve en «Lo que aprendimos» sin abrir nada: la frase con cuántas y dónde quedaron", () => {
+    // 2026-11-08 (Elías: «lo que dice "ya usaste" es casi inviable leer»): a la vista queda «Ya usaste 14: 5 en la escala,
+    // 3 en retos…» y la lista se abre con «Ver cuáles». Con `grupo`, UsadasHoy no se pliega bajo «Usadas hoy».
+    expect(fuente).toMatch(/<UsadasHoy filtro=\{deEsta\} sinPendientes=\{!items\.length\} grupo=\{grupo\} \/>/);
+    const propuestas = fs.readFileSync(path.join(RAIZ, "components", "exploraciones", "Propuestas.tsx"), "utf8");
+    expect(propuestas).toMatch(/if \(grupo\) return <ResumenDeLoUsado /);
   });
 
   it("el componente del feedback no se pliega solo", () => {
