@@ -25,7 +25,7 @@ import { cn } from "@/lib/cn";
 import { listaParaProponer } from "@/lib/exploraciones/calidad";
 import { type SiguientePaso } from "@/lib/exploraciones/casillas";
 import { avanceDeLaEstrategia, escalaConEvidencia } from "@/lib/exploraciones/avance-del-proyecto";
-import { definicionEnElMarco, type Marco } from "@/lib/exploraciones/marco";
+import { grupoDelDestino, ordenarPorGrupo } from "@/lib/exploraciones/lo-que-aprendimos";
 import { claveDeLaReunion, type DestinoDePropuesta, type ItemPropuesto, type LecturaDeReunion, type Operacion } from "@/lib/exploraciones/contenido";
 import {
   CUMPLIMIENTOS,
@@ -45,33 +45,11 @@ import { CorreoDeSeguimiento } from "./CorreoDeSeguimiento";
 import { useLienzo } from "./contexto";
 import SumarAMano from "./SumarAMano";
 import { diaLargo, EtiquetaDePregunta, nombreDelPara, Rotulo, useEditarLaSesion, useFocoDeLaGuia } from "./piezas-de-la-sesion";
-import { FilaSugerida, UsadasHoy } from "./Propuestas";
+import { FilaCompacta, ListaCompacta, UsadasHoy } from "./Propuestas";
 import { useCorrida } from "./useCorrida";
 import { useSesiones } from "./useSesiones";
 import { LaEscalaDespuesDeLaSesion } from "./LoQueDejoLaSesion";
 import { LoQueQuedaParaLaProxima, useLoQueQueda, usePorAveriguar } from "./LoQueQueda";
-
-/** Dónde aterriza lo propuesto, en una palabra o dos, sobre la fila. */
-function destinoCorto(d: DestinoDePropuesta, nombreDeDimension: (id: string) => string, marco: Marco): string {
-  switch (d.tipo) {
-    case "casilla":
-      return definicionEnElMarco(d.clave, marco).etiqueta;
-    case "nivel":
-      return `Escala · ${nombreDeDimension(d.dimensionId)}`;
-    case "aExplorar":
-      return `Explorar · ${nombreDeDimension(d.dimensionId)}`;
-    case "falta":
-      return "Criterio de la escala";
-    case "area":
-      return "Área en juego";
-    case "edicion":
-      return "Escala";
-    case "perfil":
-      return "Perfil";
-    case "casoDeUso":
-      return "Caso de uso";
-  }
-}
 
 // ── Qué pasó ──────────────────────────────────────────────────────────────────
 
@@ -247,8 +225,7 @@ function QuePasoEnLaReunion({ pestana, lectura }: { pestana: PestanaDeSesion; le
 // ── Lo que aprendimos ─────────────────────────────────────────────────────────
 
 function LoQueAprendimos({ pestana, lectura }: { pestana: PestanaDeSesion; lectura: LecturaDeReunion | null }) {
-  const { revisables, escala, marco, usar, puedeEditar, guardando, usadasHoy } = useLienzo();
-  const [todas, setTodas] = useState(false);
+  const { revisables, marco, usar, puedeEditar, guardando, usadasHoy } = useLienzo();
   const r = pestana.reunion;
   const s = pestana.sesion;
   // Lo que el cliente dijo y nadie siguió va en «Lo que queda para la próxima»; los casos de uso, en su pieza.
@@ -256,8 +233,11 @@ function LoQueAprendimos({ pestana, lectura }: { pestana: PestanaDeSesion; lectu
     d.tipo !== "casoDeUso" && !(d.tipo === "casilla" && d.clave === "noExplorado") && esDeLaReunion(it, lectura, r?.titulo ?? null);
   const items = revisables.filter((it) => deEsta(it.destino, it));
   const usadasDeEsta = usadasHoy.filter((u) => deEsta(u.item.destino, u.item)).length;
-  const visibles = todas ? items : items.slice(0, 8);
-  const nombreDeDimension = (id: string) => escala.areas.flatMap((a) => a.dimensiones).find((d) => d.id === id)?.nombre ?? id;
+  // 2026-11-08 (Elías, con Centauro: «demasiado grande»): una línea por sugerencia, juntas por destino, y el destino a la
+  // izquierda en la primera de cada grupo. Sin el tope de 8 y «Ver las N restantes»: cada una ocupa una línea, y al
+  // juntarlas por destino el tope escondía grupos enteros (la escala, que suele venir al final).
+  const grupo = (it: ItemPropuesto) => grupoDelDestino(it.destino, marco);
+  const visibles = ordenarPorGrupo(items, grupo);
   return (
     <section className="flex flex-col gap-2 rounded-xl border border-line bg-surface px-[18px] py-4">
       <div className="flex flex-wrap items-start gap-3">
@@ -284,18 +264,13 @@ function LoQueAprendimos({ pestana, lectura }: { pestana: PestanaDeSesion; lectu
         </p>
       )}
       {visibles.length > 0 && (
-        <ul className="flex flex-col gap-1.5">
-          {visibles.map((it) => (
-            <FilaSugerida key={it.id} item={it} destino={destinoCorto(it.destino, nombreDeDimension, marco)} />
+        <ListaCompacta>
+          {visibles.map((it, i) => (
+            <FilaCompacta key={it.id} item={it} grupo={i === 0 || grupo(visibles[i - 1]).clave !== grupo(it).clave ? grupo(it).nombre : null} />
           ))}
-        </ul>
+        </ListaCompacta>
       )}
-      {items.length > visibles.length && (
-        <button type="button" className="self-start text-[13px] text-brand hover:underline" onClick={() => setTodas(true)}>
-          Ver las {items.length - visibles.length} restantes
-        </button>
-      )}
-      <UsadasHoy filtro={deEsta} sinPendientes={!items.length} plegada={false} />
+      <UsadasHoy filtro={deEsta} sinPendientes={!items.length} grupo={grupo} />
       {!items.length && !usadasDeEsta && !s?.desafio?.texto && lectura && <p className="text-[13px] text-fg-muted">Nada nuevo por revisar de esta reunión.</p>}
     </section>
   );

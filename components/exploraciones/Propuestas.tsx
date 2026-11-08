@@ -10,7 +10,10 @@
  * está confirmado al lado. Lo descartado no vuelve (queda su lápida).
  */
 import { useState } from "react";
+import { ChevronRight } from "lucide-react";
 import { BotonAzul, BotonTexto } from "./FranjaDeSugerencias";
+import { cn } from "@/lib/cn";
+import { dondeQuedoLoUsado, ordenarPorGrupo, type GrupoDeDestino } from "@/lib/exploraciones/lo-que-aprendimos";
 import { ConfirmDialog } from "@/components/ui";
 import CollapsibleSection from "@/components/ui/CollapsibleSection";
 import { BotonUsar, FilaSugerida as FilaSugeridaDelSistema } from "@/components/ui/sistema";
@@ -40,6 +43,7 @@ import {
   type EstadoDeCriterio,
   type EstimadoGuardado,
   type ItemPropuesto,
+  type UsoDeSugerencia,
 } from "@/lib/exploraciones/contenido";
 import type { EscalaDelLienzo } from "@/lib/exploraciones/escala-del-lienzo";
 import type { Letra } from "@/lib/escala/documento/tipos";
@@ -142,6 +146,120 @@ export function describirPropuesta(item: ItemPropuesto, escala: EscalaDelLienzo,
       return `${caso.titulo}${area ? ` · ${area}` : ""}`;
     }
   }
+}
+
+/**
+ * Lo propuesto en una línea corta, para las listas compactas de «Lo que aprendimos» (2026-11-08): sin la cita, la nota ni
+ * el porqué, que quedan a un clic. `antes` es la dimensión o el criterio (va primero: «Uso del CRM: Inicial»); `despues`,
+ * la dimensión de un reto.
+ */
+export function lineaCorta(item: ItemPropuesto, escala: EscalaDelLienzo, nombreDeNivel: (l: Letra) => string): { antes?: string; texto: string; despues?: string } {
+  const v = item.valor;
+  const d = item.destino;
+  switch (d.tipo) {
+    case "nivel": {
+      const e = v as EstimadoGuardado;
+      return { antes: nombreDeDimension(escala, d.dimensionId), texto: `${nombreDeNivel(e.nivel)}${esFuenteDeHipotesis(e.fuente) ? " (hipótesis)" : ""}` };
+    }
+    case "aExplorar":
+      return { antes: nombreDeDimension(escala, d.dimensionId), texto: "explorar a fondo" };
+    case "falta":
+      return { antes: "Criterio", texto: ESTADO_DEL_CRITERIO[(v as EstadoDeCriterio).estado] };
+    case "area":
+      return { antes: "Área en juego", texto: describirPropuesta(item, escala, nombreDeNivel) };
+    case "casilla":
+      if (d.clave === "retos") {
+        const r = v as Reto;
+        return { texto: r.texto, despues: r.dimensionId ? nombreDeDimension(escala, r.dimensionId) : undefined };
+      }
+      if (d.clave === "autoridad") {
+        const p = v as Persona;
+        return { texto: `${p.nombre}${p.cargo ? `, ${p.cargo}` : ""} — ${ETIQUETA_DEL_ROL[p.rol]}` };
+      }
+      return { texto: describirPropuesta(item, escala, nombreDeNivel) };
+    default:
+      return { texto: describirPropuesta(item, escala, nombreDeNivel) };
+  }
+}
+
+/** La línea corta como texto plano (para comparar con la completa y para el `title`). */
+function lineaCortaEnTexto(l: ReturnType<typeof lineaCorta>): string {
+  return `${l.antes ? `${l.antes}: ` : ""}${l.texto}${l.despues ? ` · ${l.despues}` : ""}`;
+}
+
+function LineaCorta({ l }: { l: ReturnType<typeof lineaCorta> }) {
+  return (
+    <>
+      {l.antes && <span className="text-fg-secondary">{l.antes}: </span>}
+      {l.texto}
+      {l.despues && <span className="text-fg-muted"> · {l.despues}</span>}
+    </>
+  );
+}
+
+/** El destino a la izquierda de una fila compacta: solo en la primera de su grupo (las demás dejan el hueco). */
+function ColumnaDelDestino({ nombre }: { nombre: string | null }) {
+  return (
+    <span className={cn("truncate text-xs font-semibold text-brand sm:w-[8.5rem] sm:flex-none", !nombre && "hidden sm:block")} title={nombre ?? undefined}>
+      {nombre}
+    </span>
+  );
+}
+
+/**
+ * Una sugerencia en UNA línea (2026-11-08, «Lo que aprendimos» con una reunión real era ilegible): a la izquierda a qué
+ * lugar va (`grupo`, solo en la primera fila de su grupo), lo aprendido en corto y «Descartar» / «Usar». Al pasar el
+ * cursor, lo completo y la cita; al tocar la línea se abre lo que antes estaba a la vista: el texto completo, «Al usarla»
+ * y de dónde sale, con el porqué. Va dentro de una lista azul (`ListaCompacta`).
+ */
+export function FilaCompacta({ item, grupo }: { item: ItemPropuesto; grupo: string | null }) {
+  const { escala, nombreDeNivel, cambiar, usar, queHace, puedeEditar, guardando } = useLienzo();
+  const [abierta, setAbierta] = useState(false);
+  const corta = lineaCorta(item, escala, nombreDeNivel);
+  const completa = describirPropuesta(item, escala, nombreDeNivel);
+  const origen = origenEnUnaLinea(item);
+  const pista = [completa, origen.cita ? `«${origen.cita}»` : null].filter(Boolean).join("\n");
+  return (
+    <li data-recorrido="preventa.sugerencia" className={cn("px-3 py-1", grupo && "border-t border-info-line first:border-t-0")}>
+      <div className="flex flex-col gap-0.5 sm:flex-row sm:items-center sm:gap-3">
+        <ColumnaDelDestino nombre={grupo} />
+        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 sm:flex-nowrap">
+          <button
+            type="button"
+            aria-expanded={abierta}
+            title={pista}
+            onClick={() => setAbierta((x) => !x)}
+            className="flex min-w-0 flex-1 basis-full items-center gap-1.5 text-left text-[13px] leading-5 text-fg sm:basis-auto"
+          >
+            <ChevronRight className={cn("h-3.5 w-3.5 flex-none text-fg-muted transition-transform", abierta && "rotate-90")} aria-hidden="true" />
+            <span className="min-w-0 sm:truncate">
+              <LineaCorta l={corta} />
+            </span>
+          </button>
+          {puedeEditar && (
+            <span className="ml-auto flex flex-none items-center gap-1">
+              <BotonTexto disabled={guardando} onClick={() => void cambiar([{ op: "descartar", itemIds: [item.id] }])}>
+                Descartar
+              </BotonTexto>
+              <BotonUsar disabled={guardando} title={queHace(item).texto} onClick={() => void usar([item])} />
+            </span>
+          )}
+        </div>
+      </div>
+      {abierta && (
+        <div className="pb-1 pl-5 sm:pl-[calc(8.5rem+0.75rem+1.25rem)]">
+          {completa !== lineaCortaEnTexto(corta) && <p className="mt-1 text-[13px] text-fg">{completa}</p>}
+          {puedeEditar && <LoQueHaceUsar item={item} />}
+          <DeDondeSale item={item} />
+        </div>
+      )}
+    </li>
+  );
+}
+
+/** La lista azul de las filas compactas: un solo recuadro, con una división entre grupos; no una tarjeta por sugerencia. */
+export function ListaCompacta({ children }: { children: React.ReactNode }) {
+  return <ul className="rounded-lg border border-info-line bg-info-surface">{children}</ul>;
 }
 
 /** De dónde sale, en una línea: la primera fuente con cita (o las fuentes, si ninguna trae cita). */
@@ -304,62 +422,103 @@ function quienLaUso(por: string | null, miCorreo: string | null): string {
  * K12: «Usadas hoy (N)», plegable: cada sugerencia usada hoy en este lugar —qué era, quién y a qué hora— y «Revertir»,
  * que la deshace y la devuelve a la lista. Si alguien cambió ese lugar después, no se revierte (lo dice). Con
  * `sinPendientes`, arriba dice «No quedan sugerencias»: la sección no desaparece de golpe al usar la última.
+ *
+ * Con `grupo` («Lo que aprendimos», 2026-11-08) no se pliega bajo «Usadas hoy»: a la vista queda una frase con cuántas y
+ * dónde quedaron («Ya usaste 14: 5 en la escala, 3 en retos…») y «Ver cuáles» abre la lista, una línea por cada una. Con
+ * tres o menos, la lista ya viene abierta.
  */
 export function UsadasHoy({
   filtro,
   sinPendientes = false,
-  plegada = true,
+  grupo,
 }: {
   filtro: (d: DestinoDePropuesta, item: ItemPropuesto) => boolean;
   sinPendientes?: boolean;
-  /**
-   * false (2026-11-08, Elías: «Lo que aprendimos» con «Usadas hoy» plegado no tiene sentido): lo usado se ve en la misma
-   * lista, debajo de lo que falta revisar, sin abrir nada.
-   */
-  plegada?: boolean;
+  grupo?: (item: ItemPropuesto) => GrupoDeDestino;
 }) {
-  const { usadasHoy, deshacer, exp, escala, nombreDeNivel, puedeEditar, guardando } = useLienzo();
-  const me = useMe();
+  const { usadasHoy } = useLienzo();
   const usadas = usadasHoy.filter((u) => filtro(u.item.destino, u.item));
   if (usadas.length === 0) return null;
-  const lista = (
-        <ul className="divide-y divide-line rounded-lg border border-line bg-surface">
-          {usadas.map((u) => {
-            const puede = sePuedeDeshacer(exp.estado, u);
+  if (grupo) return <ResumenDeLoUsado usadas={usadas} grupo={grupo} sinPendientes={sinPendientes} />;
+  return <UsadasHoyPlegadas usadas={usadas} sinPendientes={sinPendientes} />;
+}
+
+/** «Revertir», o por qué ya no se puede. */
+function RevertirUso({ u }: { u: UsoDeSugerencia }) {
+  const { deshacer, exp, puedeEditar, guardando } = useLienzo();
+  if (!puedeEditar) return null;
+  return sePuedeDeshacer(exp.estado, u) ? (
+    <BotonTexto disabled={guardando} title="Vuelve a dejar lo que había y devuelve la sugerencia a la lista" onClick={() => void deshacer([u.id])}>
+      Revertir
+    </BotonTexto>
+  ) : (
+    <span className="flex-shrink-0 py-[5px] text-xs text-fg-muted" title="Alguien lo cambió después de usarla: revertir pisaría ese cambio">
+      Cambió después
+    </span>
+  );
+}
+
+/** Lo usado de «Lo que aprendimos»: la frase con cuántas y dónde, y la lista corta a un clic. */
+function ResumenDeLoUsado({ usadas, grupo, sinPendientes }: { usadas: UsoDeSugerencia[]; grupo: (item: ItemPropuesto) => GrupoDeDestino; sinPendientes: boolean }) {
+  const { escala, nombreDeNivel } = useLienzo();
+  const me = useMe();
+  const [abierta, setAbierta] = useState(usadas.length <= 3);
+  const donde = dondeQuedoLoUsado(usadas.map((u) => grupo(u.item).nombre));
+  const ordenadas = ordenarPorGrupo(usadas, (u) => grupo(u.item));
+  return (
+    <div className="space-y-1.5">
+      <p className="text-[13px] text-fg-secondary">
+        <span className="font-semibold text-fg">{sinPendientes ? `Ya usaste todo lo de esta reunión · ${usadas.length}` : `Ya usaste ${usadas.length}`}</span>
+        {donde && `: ${donde}.`}{" "}
+        <button type="button" aria-expanded={abierta} className="text-brand hover:underline" onClick={() => setAbierta((x) => !x)}>
+          {abierta ? "Ocultar" : "Ver cuáles"}
+        </button>
+      </p>
+      {abierta && (
+        <ul className="rounded-lg border border-line bg-surface">
+          {ordenadas.map((u, i) => {
+            const g = grupo(u.item);
+            const primera = i === 0 || grupo(ordenadas[i - 1].item).clave !== g.clave;
+            const corta = lineaCorta(u.item, escala, nombreDeNivel);
+            const quien = `${quienLaUso(u.por, me?.email ?? null)} · ${horaDelUso(u.en)}${u.lote ? " · junto con otras" : ""}`;
             return (
-              <li key={`${u.id}-${u.en}`} className="flex items-start gap-3 px-3 py-2">
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm text-fg">{describirPropuesta(u.item, escala, nombreDeNivel)}</p>
-                  <p className="text-xs text-fg-muted">
-                    {quienLaUso(u.por, me?.email ?? null)} · {horaDelUso(u.en)}
-                    {u.lote ? " · junto con otras" : ""}
-                  </p>
+              <li key={`${u.id}-${u.en}`} className={cn("flex flex-col gap-0.5 px-3 py-1 sm:flex-row sm:items-center sm:gap-3", primera && "border-t border-line first:border-t-0")}>
+                <ColumnaDelDestino nombre={primera ? g.nombre : null} />
+                <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 sm:flex-nowrap">
+                  <span className="min-w-0 flex-1 basis-full text-[13px] leading-5 text-fg sm:basis-auto sm:truncate" title={describirPropuesta(u.item, escala, nombreDeNivel)}>
+                    <LineaCorta l={corta} />
+                  </span>
+                  <span className="ml-auto flex-none text-xs text-fg-muted">{quien}</span>
+                  <RevertirUso u={u} />
                 </div>
-                {puedeEditar &&
-                  (puede ? (
-                    <BotonTexto disabled={guardando} title="Vuelve a dejar lo que había y devuelve la sugerencia a la lista" onClick={() => void deshacer([u.id])}>
-                      Revertir
-                    </BotonTexto>
-                  ) : (
-                    <span className="flex-shrink-0 py-[5px] text-xs text-fg-muted" title="Alguien lo cambió después de usarla: revertir pisaría ese cambio">
-                      Cambió después
-                    </span>
-                  ))}
               </li>
             );
           })}
         </ul>
+      )}
+    </div>
   );
-  if (!plegada) {
-    return (
-      <div className="space-y-1.5">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-fg-muted">
-          {sinPendientes ? "Ya usaste todo lo de esta reunión" : "Ya usaste"} · {usadas.length}
-        </p>
-        {lista}
-      </div>
-    );
-  }
+}
+
+function UsadasHoyPlegadas({ usadas, sinPendientes }: { usadas: UsoDeSugerencia[]; sinPendientes: boolean }) {
+  const { escala, nombreDeNivel } = useLienzo();
+  const me = useMe();
+  const lista = (
+        <ul className="divide-y divide-line rounded-lg border border-line bg-surface">
+          {usadas.map((u) => (
+            <li key={`${u.id}-${u.en}`} className="flex items-start gap-3 px-3 py-2">
+              <div className="min-w-0 flex-1">
+                <p className="text-sm text-fg">{describirPropuesta(u.item, escala, nombreDeNivel)}</p>
+                <p className="text-xs text-fg-muted">
+                  {quienLaUso(u.por, me?.email ?? null)} · {horaDelUso(u.en)}
+                  {u.lote ? " · junto con otras" : ""}
+                </p>
+              </div>
+              <RevertirUso u={u} />
+            </li>
+          ))}
+        </ul>
+  );
   return (
     <div className="space-y-1.5">
       {sinPendientes && <p className="text-sm text-fg-muted">No quedan sugerencias por revisar acá.</p>}
