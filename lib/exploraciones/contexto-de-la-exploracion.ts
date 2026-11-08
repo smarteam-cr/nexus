@@ -13,6 +13,7 @@
  * En preventa, además, si no hubo contacto con el prospecto antes de la primera sesión, Nexus ofrece redactar un correo
  * corto o un guion de llamada de 2 a 3 minutos (contacto-previo.ts).
  */
+import { valorVigente, type FichaGuardada } from "@/lib/clients/ficha";
 import type { SesionPlaneada } from "./guia";
 
 /** El contexto de toda la exploración, como lo confirmó una persona. */
@@ -127,6 +128,27 @@ export type TarjetasDeLoQueSabemos = Partial<Record<ClaveDeLoQueSabemos, Tarjeta
 export const MAX_TEXTO_DE_LA_TARJETA = 400;
 export const FUENTE_DEL_EQUIPO = "Lo escribió el equipo";
 
+/**
+ * Lo que Nexus propuso para el contexto y nadie confirmó todavía (contexto-server.ts), en UNA llamada por exploración:
+ * las tarjetas y, desde el 2026-11-07, el objetivo de la exploración y el desafío principal (este solo si la ficha de la
+ * empresa no lo tiene). `objetivo: null` = se pidió y las fuentes no daban para uno: no se vuelve a pedir. Sin la clave
+ * `objetivo`, la propuesta es de antes y se pide una vez más. `desafio` se borra al validarlo (va a la ficha) o al descartarlo.
+ */
+export interface ContextoPropuesto {
+  tarjetas: TarjetasDeLoQueSabemos;
+  objetivo?: string | null;
+  desafio?: string | null;
+  en: string;
+}
+
+export const MAX_DESAFIO_PROPUESTO = 500;
+
+/** ¿Hay que pedirle a Nexus el objetivo? Sin objetivo confirmado y sin haberlo pedido nunca (una vez por exploración). */
+export function faltaPedirElObjetivo(contexto: Pick<ContextoDeLaExploracion, "objetivo"> | undefined, propuesto: ContextoPropuesto | null | undefined): boolean {
+  if (contexto?.objetivo.trim()) return false;
+  return !propuesto || !("objetivo" in propuesto);
+}
+
 /** Las tarjetas que siguen por averiguar (sin texto). */
 export function porAveriguar(t: TarjetasDeLoQueSabemos | undefined): ClaveDeLoQueSabemos[] {
   return CLAVES_DE_LO_QUE_SABEMOS.filter((k) => !t?.[k]?.texto.trim());
@@ -138,4 +160,37 @@ export function tarjetasParaLaGuia(t: TarjetasDeLoQueSabemos | undefined): { sab
     sabido: CLAVES_DE_LO_QUE_SABEMOS.filter((k) => t?.[k]?.texto.trim()).map((k) => `${NOMBRE_DE_LA_TARJETA[k]}: ${t![k]!.texto} (fuente: ${t![k]!.fuente})`),
     porAveriguar: porAveriguar(t).map((k) => NOMBRE_DE_LA_TARJETA[k]),
   };
+}
+
+// ── El desafío principal en la ficha de la empresa (2026-11-07) ───────────────
+
+/**
+ * «Dolor principal» de la ficha guarda el desafío y, desde la preventa, las líneas «- Si no actúa: …» y «- Si lo logra:
+ * …» (lib/exploraciones/a-la-ficha.ts). El desafío es lo demás.
+ */
+const LINEA_DE_LA_PREVENTA = /^\s*-\s*Si (no actúa|lo logra):/i;
+
+/** El desafío dentro del texto de «Dolor principal»: sin las líneas de consecuencias e implicaciones de la preventa. */
+export function desafioEnElDolor(dolor: string): string {
+  return dolor
+    .split("\n")
+    .filter((l) => !LINEA_DE_LA_PREVENTA.test(l))
+    .join("\n")
+    .trim();
+}
+
+/** «Dolor principal» con el desafío nuevo: reemplaza el desafío y conserva las líneas de la preventa. */
+export function dolorConElDesafio(dolor: string, desafio: string): string {
+  return [desafio.trim(), ...dolor.split("\n").filter((l) => LINEA_DE_LA_PREVENTA.test(l))].filter(Boolean).join("\n");
+}
+
+/**
+ * El desafío que muestra la exploración, de la ficha: lo propuesto si cambia el desafío (lo corrigió alguien y espera
+ * que Customer Success lo confirme), si no lo confirmado. null si la ficha no lo tiene.
+ */
+export function desafioDeLaFichaGuardada(ficha: FichaGuardada): { texto: string; confirmado: boolean } | null {
+  const confirmado = desafioEnElDolor(ficha.valores.dolorPrincipal ?? "");
+  const vigente = desafioEnElDolor(valorVigente(ficha, "dolorPrincipal"));
+  if (vigente && vigente !== confirmado) return { texto: vigente, confirmado: false };
+  return confirmado ? { texto: confirmado, confirmado: true } : null;
 }

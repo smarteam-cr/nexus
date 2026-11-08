@@ -37,6 +37,7 @@ import { REUNIONES } from "@/lib/exploraciones/sesion";
 import { EQUIPOS } from "@/lib/exploraciones/equipos";
 import { queContarle } from "@/lib/exploraciones/contarle";
 import { useLienzo } from "./contexto";
+import { useObjetivoDeLaSiguiente } from "./LoQueQueda";
 import { diaLargo, EtiquetaDePregunta, nombreDelPara, Rotulo, useCambiosDesdeLaGuia, useEditarLaSesion, useGuiaDeLaSesion } from "./piezas-de-la-sesion";
 import { AgregarPregunta, PreguntaDeLaGuia, Quitadas, useAjustarLaGuia, useTemasDeLaGuia } from "./PreguntaDeLaGuia";
 import { GuiaEnOrden } from "./GuiaEnOrden";
@@ -333,7 +334,7 @@ function Objetivo({
   if (!puedeEditar) return null;
   return (
     <section className="flex items-center gap-3 rounded-xl border border-dashed border-line bg-surface px-[18px] py-3.5">
-      <p className="min-w-0 flex-1 text-[13px] text-fg-muted">Sin objetivo todavía: lo sugiere el agente al armar la guía, o escríbelo tú.</p>
+      <p className="min-w-0 flex-1 text-[13px] text-fg-muted">Sin objetivo todavía: ¿qué tienes que salir sabiendo de esta sesión?</p>
       <BotonBlanco
         onClick={() => {
           setTexto("");
@@ -878,6 +879,8 @@ export default function AntesDeLaSesion({ pestana, esLaProxima }: { pestana: Pes
   const { exp, marco } = useLienzo();
   const { guia, preguntas } = useGuiaDeLaSesion(pestana, esLaProxima);
   const delObjetivo = usePedirPreguntasDelObjetivo();
+  // 2026-11-07: sin guía todavía, Nexus sugiere el objetivo desde lo que quedó de la sesión anterior (sin otra IA).
+  const deLaAnterior = useObjetivoDeLaSiguiente(pestana);
   const traidos = pestana.sesion?.explorar ?? [];
   const conTest = exp.leido.tests.length > 0;
   // En la próxima, una guía con el formato de antes se pliega abajo como «Guía anterior» (2026-11-06, Elías).
@@ -917,7 +920,7 @@ export default function AntesDeLaSesion({ pestana, esLaProxima }: { pestana: Pes
       <Objetivo
         pestana={pestana}
         esLaProxima={esLaProxima}
-        sugerido={guia?.objetivo ?? null}
+        sugerido={guia?.objetivo ?? deLaAnterior}
         preguntas={preguntas}
         alCambiarElObjetivo={() => {
           // Las preguntas para el objetivo eran de la guía de antes: la agenda se arma entera con el objetivo.

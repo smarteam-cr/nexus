@@ -22,7 +22,8 @@ import { aFecha, hoyEnCostaRica } from "./fechas";
 import { MAX_SESIONES, type GuiaDeLaSesion, type SesionPlaneada } from "./guia";
 import { aplicarCambioDeLaGuia, hayAjustes, type CambioDeLaGuia } from "./ajustes-de-la-guia";
 import type { ComoLlego } from "./como-llego";
-import type { ContactoPrevio, ContextoDeLaExploracion, TarjetasDeLoQueSabemos } from "./contexto-de-la-exploracion";
+import type { ContactoPrevio, ContextoDeLaExploracion, ContextoPropuesto, TarjetasDeLoQueSabemos } from "./contexto-de-la-exploracion";
+import type { Cumplimiento } from "./despues-de-la-sesion";
 import type { PosicionamientoDelProspecto } from "./posicionamiento";
 import type { ClaveDeEquipo } from "./equipos";
 import {
@@ -411,7 +412,7 @@ export interface PropuestaDeExploracion {
    */
   guiasAnteriores?: Record<string, GuiaDeLaSesion>;
   /** Lo que Nexus propuso para «Lo que ya sabemos» y nadie confirmó todavía (contexto-server.ts). */
-  contextoPropuesto?: { tarjetas: TarjetasDeLoQueSabemos; en: string } | null;
+  contextoPropuesto?: ContextoPropuesto | null;
   /**
    * La última reunión que leyó el agente se puso técnica (Elías, 2026-10-06): el Resumen lo avisa.
    * La reemplaza cada lectura que dice algo de la reunión más reciente; null = no se puso técnica.
@@ -494,6 +495,14 @@ export interface LecturaDeReunion {
    * Nexus sugiere volver a leerla (al-cambiar-el-equipo.ts).
    */
   equipo?: ClaveDeEquipo;
+  /**
+   * 2026-11-07 (la sesión en tres bloques, despues-de-la-sesion.ts): solo en la reunión más reciente, lo que la lectura
+   * dijo además del resumen: si se cumplió el objetivo con que se planeó (solo con objetivo), lo que quedó para la próxima
+   * (de 1 a 5 cosas) y el objetivo que sugiere para la siguiente sesión. Las lecturas de antes no lo tienen.
+   */
+  cumplido?: Cumplimiento;
+  paraLaProxima?: string[];
+  objetivoSiguiente?: string;
   en: string;
   corridaId: string;
 }

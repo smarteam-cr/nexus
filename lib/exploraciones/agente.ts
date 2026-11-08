@@ -74,7 +74,7 @@ import { hoyEnCostaRica } from "./fechas";
 import { bloqueDeInstrucciones } from "./notas-de-sesion";
 import { avisoDePreguntasCerradas, preguntasQueNoCumplen } from "./agenda";
 import { faltaParaLaGuia, tarjetasParaLaGuia, textoDeConQuien } from "./contexto-de-la-exploracion";
-import { retomarParaLaGuia } from "./despues-de-la-sesion";
+import { retomarParaLaGuia, ultimaReunionLeida } from "./despues-de-la-sesion";
 import { avisoDeVoseo, contextoDeLaGuia, leerLaGuiaDelAgente, notasParaLaGuia, pedidoDeLaGuia, voseoEnLaGuia } from "./guia-pedido";
 import {
   focoDeLaGuia,
@@ -87,6 +87,7 @@ import {
   preguntasParaMostrar,
   reunionDeLaSesion,
   type GuiaDeLaSesion,
+  type ReunionDeLaExploracion,
   type PreguntaParaMostrar,
 } from "./guia";
 import type { SaberDelCliente } from "./lo-que-ya-sabemos";
@@ -1110,7 +1111,15 @@ export async function contextoParaLaGuia(exploracionId: string) {
         }
       : {}),
     // Punto 15: lo que las sesiones anteriores dejaron por retomar y su desafío principal.
-    ...retomarParaLaGuia(estado.contenido.sesiones, proximaSesion?.id ?? null),
+    ...retomarParaLaGuia(
+      estado.contenido.sesiones,
+      proximaSesion?.id ?? null,
+      // La última reunión leída de la exploración (sesión o reunión que entró sola) y su sesión, como las une la pantalla.
+      ultimaReunionLeida(lecturasDeLaExploracion(estado.propuesta.lecturas, estado.contenido.sesiones, { automaticas, fuera: estado.contenido.fuera }), (r) => {
+        const como = { id: r.id, origen: r.origen as ReunionDeLaExploracion["origen"], titulo: r.lectura.titulo ?? r.lectura.etiqueta, fecha: r.fecha, leida: true };
+        return estado.contenido.sesiones.find((s) => reunionDeLaSesion(s, [como]) !== null) ?? null;
+      }),
+    ),
   };
   /* `delProyecto` (cada fuente con su id) y `memoriaDelProyecto` también los lee el asistente
      (lib/operaciones/guia-server.ts › `loEstableDeLaGuia`): sin F0, que el chat ya tiene en su contexto. */
@@ -1208,6 +1217,10 @@ function lecturasDeLaCorrida(
       resumen: d.resumen,
       ...(esLaUltima && o.ctx.planeado?.objetivo ? { objetivo: o.ctx.planeado.objetivo } : {}),
       cobertura: esLaUltima ? cobertura : [],
+      // 2026-11-07: si se cumplió el objetivo y lo que quedó para la próxima, solo de la más reciente (despues-de-la-sesion.ts).
+      ...(esLaUltima && d.cumplido && o.ctx.planeado?.objetivo ? { cumplido: d.cumplido } : {}),
+      ...(esLaUltima && d.paraLaProxima?.length ? { paraLaProxima: d.paraLaProxima } : {}),
+      ...(esLaUltima && d.objetivoSiguiente ? { objetivoSiguiente: d.objetivoSiguiente } : {}),
       ...(listosAntes ? { listosAntes } : {}),
       fecha: r.fecha,
       titulo: r.titulo.slice(0, 300),

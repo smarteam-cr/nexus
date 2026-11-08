@@ -36,7 +36,7 @@ import { sinCitaAdelante, type AjustesDeLaGuia, type OrigenDelAjuste } from "./a
 import { esTemaDeEquipo, leerTemaDeEquipo, nombreDelTemaDeEquipo, type ClaveDeEquipo } from "./equipos";
 import type { AgendaDeLaGuia } from "./agenda";
 import type { PersonaDeLaSesion } from "./contexto-de-la-exploracion";
-import type { DesafioDeLaSesion, TemaPorRetomar } from "./despues-de-la-sesion";
+import type { Cumplimiento, DesafioDeLaSesion, TemaPorRetomar } from "./despues-de-la-sesion";
 
 // ── Las sesiones ──────────────────────────────────────────────────────────────
 
@@ -144,6 +144,13 @@ export interface SesionPlaneada {
   desafio?: DesafioDeLaSesion;
   /** Los temas por retomar (de 3 a 5), cada uno con dónde conviene: alimentan la guía de la siguiente. */
   retomar?: TemaPorRetomar[];
+  /** 2026-11-07: si se cumplió el objetivo, como lo validó la persona (Nexus lo sugiere desde la lectura). */
+  cumplido?: Cumplimiento;
+  /**
+   * 2026-11-07: «Lo que queda para la próxima» va todo marcado; acá van las huellas de lo que la persona desmarcó
+   * (`claveDePendiente`, despues-de-la-sesion.ts). Lo demás alimenta la guía y el objetivo de la siguiente sesión.
+   */
+  noLlevar?: string[];
 }
 
 /** Hasta cuántas sesiones tiene una exploración (subió de 12 a 20 en la etapa A: ahora se materializan más). */

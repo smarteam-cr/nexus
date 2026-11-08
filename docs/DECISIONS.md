@@ -13156,7 +13156,7 @@ preguntas.
 - **Cuántas sesiones y cada cuánto lo decide la persona.** Nada nuevo impone sesiones: «+ Agregar sesión», el nombre y la
   reunión siguen como estaban. «Armar la sesión N» del análisis pasa a «Preparar la sesión N»: crea la sesión con lo que
   te llevaste y abre su Preparación, sin armar la guía.
-- **Después de cada sesión: el desafío principal y lo que hay que retomar (punto 15, `despues-de-la-sesion.ts`).** Vive
+- **Después de cada sesión: el desafío principal y lo que hay que retomar (punto 15, `despues-de-la-sesion.ts`).** *Reemplazado el 2026-11-07* (sección «La exploración desde el vendedor»): ya no se escribe ni se propone con otra llamada; lo de abajo describe las sesiones de antes, que se siguen leyendo. Vive
   en la sesión (`SesionPlaneada.desafio` con lo que falta para confirmarlo, y `retomar`: de 3 a 5 temas, cada uno con
   dónde). Lo escribe la persona o lo propone Nexus con «Proponer desde la reunión» (`POST …/despues`, medido como
   `exploracion-lo-que-dejo-la-sesion`), que lee la LECTURA guardada de esa reunión en esta exploración, su agenda y sus
@@ -13201,3 +13201,67 @@ preguntas.
 - **«+ Agregar sesión» de la barra se ve como menú** (con su flecha). No se encontró en el código un cambio que lo
   volviera un enlace: la barra de la ficha monta el mismo menú `AgregarSesion` que la preventa, también en la carpeta de
   prueba. Si sigue sin abrir el menú, falta reproducirlo con sesión iniciada.
+
+## La exploración desde el vendedor: Nexus propone, el vendedor valida (2026-11-07)
+
+Elías probó la exploración guiada con Centauro Solutions el 7 nov: «hay que ponerse desde la perspectiva del vendedor… lo
+siento complicado y con sobreingeniería… la idea es que el usuario no rellene forms, valide o modifique sugerencias». La
+pantalla responde una pregunta: ¿qué sé de este cliente, qué me falta y a qué voy en la próxima reunión? Nexus propone y
+el vendedor usa (✓), corrige (Editar) o descarta (✕). No hay campos vacíos que llenar.
+
+- **Inicio: el objetivo de la exploración y el desafío principal, propuestos** (`ObjetivoYDesafio.tsx`). Los dos salen
+  de la MISMA llamada que ya proponía «lo que ya sabemos» (`pedidoDeLasTarjetas` › `objetivo` y `desafio`). Es una sola
+  llamada por exploración: `contextoPropuesto.objetivo` en null quiere decir que se pidió y no había de dónde, y no se
+  vuelve a pedir (`faltaPedirElObjetivo`). Una exploración en curso sin esa clave la pide la primera vez que se abre, y
+  conserva las tarjetas que ya tenía propuestas. Sin fuentes no se gasta IA. El freno también está en el servidor
+  (`proponerLoQueSabemos`): con una propuesta que ya trae el objetivo no se llama a la IA, y si dos pestañas la piden a
+  la vez, la segunda no pisa a la primera (un desafío descartado no vuelve).
+- **El desafío principal vive en la ficha de la empresa**, en «Dolor principal» de Información del cliente
+  (`CAMPO_DEL_DESAFIO`). Ese campo ya guardaba, desde la preventa, las líneas «- Si no actúa: …» y «- Si lo logra: …»
+  (a-la-ficha.ts): el desafío es lo demás (`desafioEnElDolor`), y al validarlo se reemplaza solo el desafío y esas
+  líneas se conservan (`dolorConElDesafio`). Si hay una corrección propuesta, se muestra esa, «esperando que Customer
+  Success la confirme» (`desafioDeLaFichaGuardada`). Si la ficha lo tiene, se muestra de ahí y Nexus no lo propone. Si no lo tiene, Nexus lo propone (o
+  se ofrece el que dejó escrita una sesión) y al validarlo va a la ficha como PROPUESTA, por la puerta sin IA de la
+  preventa (`validarElDesafio` › `proponerALaFichaSinIA`). Lo confirma Customer Success, como todo lo que llega a la
+  ficha, y solo entonces va a HubSpot y a un documento del cliente. *Por qué propuesta y no confirmado:* es un campo
+  que ve el cliente y se sincroniza con HubSpot; validarlo en la exploración no reemplaza a quien cura la ficha. Elías
+  no contestó dónde se guarda: esto es la decisión por defecto.
+- **Antes de la sesión, el objetivo se sugiere desde la anterior**, sin otra llamada (`useObjetivoDeLaSiguiente` ›
+  `objetivoSugeridoDeLaSiguiente`). Si nadie desmarcó nada, se usa el objetivo que dejó la lectura de la reunión
+  anterior (`LecturaDeReunion.objetivoSiguiente`). Si se desmarcó algo, el código arma uno con lo que sigue marcado y lo
+  que la exploración todavía no sabe. Las preguntas siguen saliendo del objetivo, como antes.
+- **La sesión que ya pasó, de unos diez bloques a tres:**
+  - **«Qué pasó»**: el resumen y si se cumplió el objetivo (Sí · En parte · No). Lo sugiere la lectura
+    (`LecturaDeReunion.cumplido`, solo si había objetivo) o, en una lectura de antes, cuántas preguntas planeadas se
+    respondieron (`cumplimientoSugerido`). Un clic lo valida en `SesionPlaneada.cumplido`. Lo preguntado de la guía
+    queda plegado.
+  - **«Lo que aprendimos»**: lo que Nexus encontró en ESTA reunión, cada cosa con Usar o Descartar. Sale el lote «Pasar
+    las N…» y «Revisar una por una»: se decide mirando cada una.
+  - **«Lo que queda para la próxima»** (`loQueQuedaParaLaProxima`): UNA lista que junta lo que antes eran «Quedó
+    abierto», «Lo que falta para confirmarlo» y «Temas por retomar». La forman el resultado, si la agenda lo tenía y
+    quedó sin marcar; lo que la lectura dejó pendiente (`paraLaProxima`); lo que no se preguntó; lo que el cliente dijo
+    y nadie siguió; y lo que dejaron las sesiones escritas a mano. Todo va marcado. Lo que se desmarca queda en
+    `SesionPlaneada.noLlevar` (por huella). A la guía siguiente (`retomarParaLaGuia`) llega lo marcado de lo escrito a
+    mano y lo que dejó pendiente la ÚLTIMA reunión leída de la exploración (`ultimaReunionLeida`), sea sesión unida a mano,
+    por su evento o por la fecha, o una reunión que entró sola: solo la última, porque lo de una reunión anterior ya lo
+    retomó la que siguió. Lo que no se preguntó ya le llega por la historia de las sesiones y lo que nadie siguió por su
+    casilla: no se repite. Tachar algo de lo que nadie siguió que ya estaba confirmado lo saca de su casilla (el «Quitar»
+    de antes). Al preparar la siguiente, lo que nadie siguió y todavía era sugerencia se usa si se ve marcado y se
+    descarta si se ve tachado; lo que no se ve en la lista no se toca.
+  - El correo de seguimiento es un botón. «Cómo trabajaste», el siguiente paso, cuánto avanzó, la escala, las casillas y
+    las notas quedan plegados a un clic.
+- **Lo nuevo de la lectura sale de la lectura que ya se hace** (`propiedadDeReuniones`: `cumplido`, `paraLaProxima`,
+  `objetivoSiguiente`, solo de la reunión más reciente). No hay llamada nueva. Por eso se fue «Proponer desde la
+  reunión»: la ruta `POST …/despues`, `despues-server.ts` y su agente `exploracion-lo-que-dejo-la-sesion` ya no existen,
+  y con ellos los textareas de `LoQueDejoLaSesion`. Las lecturas de antes no traen estos campos: la lista se arma con lo
+  que no se preguntó y lo que nadie siguió, y el objetivo con lo marcado.
+- **Cada cosa en un solo lugar.** Lo duplicado estaba en el código: el Resumen mostraba como pendientes TODAS las
+  sugerencias de sus casillas (`pendientesPara(esDelResumen)`), y «Lo que sugiere» de la sesión mostraba esas mismas
+  sugerencias filtradas por su reunión. Al agregar una sesión, cada sugerencia aparecía en los dos lados. Ahora, lo que
+  sale de la lectura de una sesión que ya pasó y muestra «Lo que aprendimos» (`esDeUnaSesion`; no las cortadas, por otro
+  canal o que no se hicieron, ni las reuniones sacadas de la exploración) se revisa en esa sesión. El
+  Resumen muestra lo acumulado y lo sugerido desde otras fuentes (el test, HubSpot, la preparación), con un enlace a la
+  sesión que tiene sugerencias. Lo usado en la sesión ya no figura como pendiente en ningún lado.
+- **Exploraciones en curso: no se borra ni se migra nada, y no hay SQL** (todo vive en el Json). El desafío escrito a mano
+  se muestra en «Lo que aprendimos» y se ofrece para la ficha. Lo que faltaba y los temas por retomar entran marcados en
+  la lista. Un desafío «sin confirmar» sigue avisándole a la guía.

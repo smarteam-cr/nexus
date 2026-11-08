@@ -6,7 +6,7 @@ import { leerGuia, VALIDADOR_ESTRICTO } from "./esquemas";
 import { aplicarOperaciones, contenidoVacio, propuestaVacia } from "./contenido";
 import { borradorDeLoQueSabemos, faltaParaLaGuia, porAveriguar, tarjetasParaLaGuia, textoDeConQuien } from "./contexto-de-la-exploracion";
 import { CLAVE_DEL_RESULTADO, conBloqueDelResultado, faltaElResultadoEnVivo, resultadoConfirmado } from "./resultado";
-import { coberturaDeLaEscala, dondeQuedo, HERRAMIENTA_DE_LO_QUE_DEJO, leerLoQueDejo, retomarParaLaGuia } from "./despues-de-la-sesion";
+import { coberturaDeLaEscala, dondeQuedo, retomarParaLaGuia } from "./despues-de-la-sesion";
 
 function ctx(cambios: Partial<ContextoDeLaGuia> = {}): ContextoDeLaGuia {
   return {
@@ -226,7 +226,8 @@ describe("después de la sesión y dónde quedó (puntos 14 a 16)", () => {
   it("lo que dejaron las sesiones anteriores llega a la guía de la siguiente, y no lo de la misma ni las de después", () => {
     const r = retomarParaLaGuia(sesiones, "s-a2").retomar ?? [];
     expect(r[0]).toContain("El seguimiento depende de cada vendedor");
-    expect(r[1]).toContain("Retomar «Cómo miden servicio» — con la jefa de servicio");
+    expect(r.some((l) => l.includes("Retomar «cuántos se enfrían»"))).toBe(true);
+    expect(r.some((l) => l.includes("Retomar «Cómo miden servicio» — con la jefa de servicio"))).toBe(true);
     expect(retomarParaLaGuia(sesiones, "s-a1")).toEqual({});
   });
 
@@ -255,15 +256,6 @@ describe("después de la sesión y dónde quedó (puntos 14 a 16)", () => {
     expect(d.ultima).toMatchObject({ numero: 1, titulo: "Con Dirección", fecha: "2026-11-02" });
     expect(d.averiguado).toEqual({ sabidas: 1, total: 2 });
     expect(d.retomar).toHaveLength(1);
-  });
-
-  it("lo que propone Nexus se lee con sus topes y queda marcado como propuesto", () => {
-    const r = leerLoQueDejo({
-      content: [{ type: "tool_use", id: "t", name: HERRAMIENTA_DE_LO_QUE_DEJO, input: { desafio: "Nadie ve los interesados que se enfrían", falta: ["a", "b", "c", "d", "e"], retomar: Array.from({ length: 7 }, (_, i) => ({ tema: `t${i}`, donde: "con Ventas" })) } }],
-    } as unknown as Anthropic.Messages.Message);
-    expect(r?.desafio).toMatchObject({ texto: "Nadie ve los interesados que se enfrían", propuesto: true });
-    expect(r?.desafio.falta).toHaveLength(4);
-    expect(r?.retomar).toHaveLength(5);
   });
 
   it("la guía de la siguiente sesión recibe lo que hay que retomar", () => {
@@ -302,12 +294,8 @@ describe("el resultado como eje (segunda tanda, 2026-11-06)", () => {
     expect(resultadoConfirmado({ metas: [{ objetivo: "Pasar de 4 a 7 cierres de cada 10" }] })).toBe(true);
   });
 
-  it("si la reunión no dejó claro el resultado, el desafío queda sin confirmar y la siguiente guía arranca por ahí", () => {
-    const r = leerLoQueDejo({
-      content: [{ type: "tool_use", id: "t", name: HERRAMIENTA_DE_LO_QUE_DEJO, input: { desafio: "x", resultadoClaro: false, falta: [], retomar: [] } }],
-    } as unknown as Anthropic.Messages.Message);
-    expect(r?.desafio.sinConfirmar).toBe(true);
-    const lineas = retomarParaLaGuia([{ id: "s-a1", desafio: r!.desafio }, { id: "s-a2" }], "s-a2").retomar ?? [];
+  it("un desafío que quedó sin confirmar (escrito antes del 2026-11-07) hace que la siguiente guía arranque por ahí", () => {
+    const lineas = retomarParaLaGuia([{ id: "s-a1", desafio: { texto: "x", falta: [], sinConfirmar: true } }, { id: "s-a2" }], "s-a2").retomar ?? [];
     expect(lineas.some((l) => l.includes("SIN CONFIRMAR"))).toBe(true);
   });
 

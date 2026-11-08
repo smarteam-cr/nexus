@@ -26,7 +26,6 @@ import { CLAVE_DE_LA_PROXIMA, conLaSesion, enlaceDeLaSesion, type DondeVive } fr
 import {
   DURACION_DE_LA_SESION,
   ETIQUETA_DEL_ESTADO,
-  MAX_PARA_EXPLORAR,
   MAX_SESIONES,
   MAX_TITULO_DE_LA_SESION,
   nombreDeLaPestana,
@@ -39,7 +38,7 @@ import {
 } from "@/lib/exploraciones/guia";
 import { EVENTO_DEL_RECORRIDO, type AccionDelRecorrido } from "@/lib/recorridos/tipos";
 import AntesDeLaSesion from "./AntesDeLaSesion";
-import DespuesDeLaSesion, { type Llevar } from "./DespuesDeLaSesion";
+import DespuesDeLaSesion from "./DespuesDeLaSesion";
 import DuranteLaSesion from "./DuranteLaSesion";
 import { EquipoDeLaSesion } from "./EquipoDeLaSesion";
 import Segmentos from "./Segmentos";
@@ -410,20 +409,9 @@ function EncabezadoDeLaSesion({
   );
 }
 
-/** Sin los puntos que ya no están en `explorar`: el registro de dónde viene y a qué apunta cada uno no crece solo. */
-function soloLoQueSigue(s: SesionPlaneada): SesionPlaneada {
-  const sigue = ([t]: [string, string]) => !!s.explorar?.includes(t);
-  const de = Object.fromEntries(Object.entries(s.explorarDe ?? {}).filter(sigue));
-  const para = Object.fromEntries(Object.entries(s.explorarPara ?? {}).filter(sigue));
-  const { explorarDe: _de, explorarPara: _para, ...resto } = s;
-  void _de;
-  void _para;
-  return { ...resto, ...(Object.keys(de).length ? { explorarDe: de } : {}), ...(Object.keys(para).length ? { explorarPara: para } : {}) };
-}
-
 export default function SesionesDeExploracion() {
   const { exp, cambiar, sesion: seleccion } = useLienzo();
-  const { sesiones, hoy, pestanas, activa, esLaProxima, momento, guardar, estadoDeLaReunion } = useSesiones();
+  const { sesiones, hoy, pestanas, activa, esLaProxima, momento, estadoDeLaReunion } = useSesiones();
   /* «Sumar la minuta» abierto en el análisis de esta sesión (lo abre el enlace del encabezado o el de «¿Qué
      pasó?»). Vive acá porque sumar la minuta de una reunión suelta la vuelve sesión: cambia de pestaña. */
   const [minuta, setMinuta] = useState<string | null>(null);
@@ -448,55 +436,24 @@ export default function SesionesDeExploracion() {
   };
 
   /**
-   * Lleva un punto de «Quedó abierto» a la siguiente sesión (o, sin `llevar`, la abre y le pide la
-   * guía al agente). La siguiente es la próxima planeada después de esta o, si no hay, una nueva (con
-   * la fecha del siguiente paso, si se acordó). Cada punto recuerda de qué sesión viene: si esta es
-   * una reunión suelta, se vuelve sesión en el mismo cambio.
+   * Abre la siguiente sesión en su Preparación: la próxima planeada después de esta o, si no hay, una nueva (con la fecha
+   * del siguiente paso, si se acordó). `extra` va en el mismo cambio (lo que el cliente dijo y nadie siguió: se usa o se
+   * descarta, DespuesDeLaSesion.tsx). Lo que queda para la próxima no se copia: la guía lo lee de esta sesión.
    */
-  const armarLaSiguiente = async (llevar?: Llevar) => {
-    let lista: SesionPlaneada[] = [...sesiones];
-    let origenId = activa.sesion?.id ?? null;
-    if (llevar && !origenId && activa.reunion && lista.length < MAX_SESIONES) {
-      const r = activa.reunion;
-      const nueva: SesionPlaneada = { id: nuevoIdDeSesion(), reunion: { id: r.id, origen: r.origen }, fecha: hoyEnCostaRica(aFecha(r.fecha)) };
-      lista.push(nueva);
-      origenId = nueva.id;
-    }
+  const armarLaSiguiente = async (extra: Operacion[] = []) => {
     const siguiente = siguienteDe()?.sesion ?? null;
     const fechaAcordada = (exp.estado.contenido.casillas.siguientePaso as { fecha?: string } | undefined)?.fecha;
     const destino: SesionPlaneada = siguiente ?? { id: nuevoIdDeSesion(), ...(fechaAcordada && fechaAcordada >= hoy ? { fecha: fechaAcordada } : {}) };
-    const conLoLlevado = llevar
-      ? soloLoQueSigue({
-          ...destino,
-          explorar: [...(destino.explorar ?? []).filter((x) => x !== llevar.texto), llevar.texto].slice(-MAX_PARA_EXPLORAR),
-          explorarDe: { ...(destino.explorarDe ?? {}), ...(origenId ? { [llevar.texto]: origenId } : {}) },
-          explorarPara: { ...(destino.explorarPara ?? {}), ...(llevar.para ? { [llevar.texto]: llevar.para } : {}) },
-        })
-      : destino;
-    lista = siguiente ? lista.map((s) => (s.id === destino.id ? conLoLlevado : s)) : [...lista, conLoLlevado];
+    const lista = siguiente ? sesiones : [...sesiones, destino];
     if (lista.length > MAX_SESIONES) return;
-    const ops: Operacion[] = [...(llevar?.item ? [{ op: "usar" as const, itemId: llevar.item.id, valor: llevar.item.valor }] : []), { op: "sesiones", sesiones: lista }];
-    const ok = await cambiar(ops);
-    if (!ok) return;
-    if (llevar) {
-      // La reunión suelta se volvió sesión: queda elegida, en su análisis.
-      if (!activa.sesion && origenId) {
-        seleccion.elegir(origenId);
-        seleccion.ponerMomento(origenId, "despues");
-      }
-      return;
-    }
+    const ops: Operacion[] = [...extra, ...(siguiente ? [] : [{ op: "agregarSesion" as const, sesion: destino }])];
+    if (ops.length && !(await cambiar(ops))) return;
     seleccion.elegir(destino.id);
     seleccion.ponerMomento(destino.id, "antes");
     // La guía ya no se arma sola (2026-11-06): la Preparación pide el contexto de la sesión y la persona la arma.
   };
-  /** Desmarca un punto: sale de la sesión a la que se había llevado. */
-  const soltar = (texto: string) =>
-    void guardar(sesiones.map((s) => (s.explorar?.includes(texto) ? soloLoQueSigue({ ...s, explorar: s.explorar.filter((x) => x !== texto) }) : s)));
-
   const siguiente = siguienteDe();
   const numeroSiguiente = siguiente?.numero ?? Math.max(...pestanas.map((p) => p.numero), activa.numero) + 1;
-  const llevados = siguiente?.sesion && activa.sesion ? Object.values(siguiente.sesion.explorarDe ?? {}).filter((id) => id === activa.sesion?.id).length : 0;
 
   return (
     <div className="space-y-5">
@@ -525,9 +482,7 @@ export default function SesionesDeExploracion() {
           onMinuta={setMinuta}
           numeroSiguiente={numeroSiguiente}
           claveSiguiente={siguiente?.clave ?? null}
-          llevados={llevados}
-          armarLaSiguiente={(l) => void armarLaSiguiente(l)}
-          soltar={soltar}
+          armarLaSiguiente={(extra) => void armarLaSiguiente(extra)}
         />
       ) : (
         <p className="rounded-xl border border-dashed border-line bg-surface px-4 py-6 text-center text-[13px] text-fg-muted">

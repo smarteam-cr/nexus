@@ -14,6 +14,8 @@ import { cn } from "@/lib/cn";
 import {
   DURACIONES,
   CLAVES_DE_LO_QUE_SABEMOS,
+  faltaPedirElObjetivo,
+  type ContextoPropuesto,
   FUENTE_DEL_EQUIPO,
   MAX_LO_QUE_ESPERA,
   MAX_OBJETIVO_DE_LA_EXPLORACION,
@@ -37,61 +39,102 @@ const CAMPO =
 
 // ── El contexto de toda la exploración (punto 2) ─────────────────────────────
 
-/** Las exploraciones cuyas tarjetas ya se pidieron en esta pantalla (no se vuelve a gastar IA al reabrir). */
+// ── Lo que Nexus ya propuso para el contexto (una sola llamada por exploración) ──
+
+/** Lo que devuelve `GET …/contexto` y lo que se usa de ahí. */
+export interface PropuestaDelContexto {
+  hayFuentes: boolean;
+  propuesto: ContextoPropuesto | null;
+  /** El desafío principal que ya tiene la ficha de la empresa (Información del cliente). */
+  desafioDeLaFicha: { texto: string; confirmado: boolean } | null;
+}
+
+/** Las exploraciones cuya propuesta ya se pidió en esta pantalla (no se vuelve a gastar IA al reabrir). */
 const PEDIDAS = new Set<string>();
+/** Lo último que se leyó, por exploración: el inicio y la Preparación lo comparten. */
+const LEIDAS = new Map<string, PropuestaDelContexto>();
 
-export function ContextoDeTodaLaExploracion() {
-  const { exp, marco, puedeEditar, cambiar, guardando } = useLienzo();
+/**
+ * Lo que Nexus ya propuso para el contexto de la exploración (las tarjetas, el objetivo y el desafío) y el desafío de la
+ * ficha. Si falta y hay de dónde (el traspaso, las notas, las reuniones leídas), lo pide UNA vez por exploración: una
+ * llamada de IA. Sin fuentes no gasta IA. `activo` en false no lee nada.
+ */
+export function usePropuestaDelContexto(activo: boolean) {
+  const { exp, puedeEditar } = useLienzo();
   const cx = exp.estado.contenido.contexto;
-  const cs = marco.clave === "cs";
-  const [editando, setEditando] = useState(!cx);
-  const [objetivo, setObjetivo] = useState(cx?.objetivo ?? "");
-  // Las tarjetas confirmadas o, si no hay, las que propone Nexus (2026-11-06, segunda tanda).
-  const [tarjetas, setTarjetas] = useState<TarjetasDeLoQueSabemos>(cx?.tarjetas ?? {});
-  const [cargado, setCargado] = useState(!!cx?.tarjetas);
+  const [leida, setLeida] = useState<PropuestaDelContexto | null>(LEIDAS.get(exp.id) ?? null);
   const [proponiendo, setProponiendo] = useState(false);
-
-  /* Al abrir sin tarjetas: lo que Nexus ya propuso, o se lo pide una vez si tiene de dónde (el traspaso, las notas, las
-     reuniones leídas). Sin fuentes no gasta IA: todo queda por averiguar. */
+  const objetivoConfirmado = !!cx?.objetivo.trim();
+  // Lo que ya sabemos, confirmado en tarjetas o en el texto libre de la primera tanda: no se vuelve a proponer.
+  const conTarjetas = !!cx?.tarjetas || !!cx?.sabemos?.trim();
   useEffect(() => {
-    if (!editando || !puedeEditar || cargado) return;
+    if (!activo) return;
     let vivo = true;
     void (async () => {
       try {
         const r = await fetch(`/api/sales/exploraciones/${exp.id}/contexto`);
-        const b = r.ok ? ((await r.json()) as { hayFuentes: boolean; propuesto: { tarjetas: TarjetasDeLoQueSabemos } | null }) : null;
+        const b = r.ok ? ((await r.json()) as PropuestaDelContexto) : null;
         if (!vivo || !b) return;
-        if (b.propuesto) return setTarjetas((t) => (Object.keys(t).length ? t : b.propuesto!.tarjetas));
+        LEIDAS.set(exp.id, b);
+        setLeida(b);
+        const falta = faltaPedirElObjetivo(objetivoConfirmado ? { objetivo: "x" } : undefined, b.propuesto) || (!conTarjetas && !b.propuesto);
         // Pedirla gasta IA: una vez por exploración en esta pantalla (cerrar a mitad de camino no la repite).
-        if (!b.hayFuentes || PEDIDAS.has(exp.id)) return;
+        if (!puedeEditar || !falta || !b.hayFuentes || PEDIDAS.has(exp.id)) return;
         PEDIDAS.add(exp.id);
         setProponiendo(true);
         const p = await fetch(`/api/sales/exploraciones/${exp.id}/contexto`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ proponer: true }) });
-        const j = p.ok ? ((await p.json()) as { propuesto: { tarjetas: TarjetasDeLoQueSabemos } }) : null;
-        if (vivo && j) setTarjetas((t) => (Object.keys(t).length ? t : j.propuesto.tarjetas));
+        const j = p.ok ? ((await p.json()) as { propuesto: Omit<ContextoPropuesto, "en"> }) : null;
+        if (!vivo || !j) return;
+        const nueva = { ...b, propuesto: { ...j.propuesto, en: new Date().toISOString() } };
+        LEIDAS.set(exp.id, nueva);
+        setLeida(nueva);
       } catch {
-        // Sin la propuesta, la persona las llena a mano.
+        // Sin la propuesta, la persona escribe lo que sepa.
       } finally {
-        if (vivo) {
-          setCargado(true);
-          setProponiendo(false);
-        }
+        if (vivo) setProponiendo(false);
       }
     })();
     return () => {
       vivo = false;
     };
-  }, [editando, puedeEditar, cargado, exp.id]);
+  }, [activo, exp.id, puedeEditar, objetivoConfirmado, conTarjetas]);
 
-  const cambiarTarjeta = (k: ClaveDeLoQueSabemos, texto: string) =>
-    setTarjetas((t) => {
-      const antes = t[k];
-      // Lo que cambia la persona deja de ser de la fuente: lo escribió el equipo.
-      return { ...t, [k]: { texto, fuente: antes && antes.texto === texto ? antes.fuente : FUENTE_DEL_EQUIPO } };
-    });
+  /** Valida (o corrige) el desafío: va a la ficha de la empresa. Con null, se descarta. */
+  const validarDesafio = async (texto: string | null): Promise<boolean> => {
+    const r = await fetch(`/api/sales/exploraciones/${exp.id}/contexto`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ desafio: texto }) }).catch(() => null);
+    const j = r ? ((await r.json().catch(() => ({}))) as { desafioDeLaFicha?: PropuestaDelContexto["desafioDeLaFicha"] }) : {};
+    if (!r?.ok) return false;
+    const base = leida ?? { hayFuentes: false, propuesto: null, desafioDeLaFicha: null };
+    const nueva = { ...base, propuesto: base.propuesto ? { ...base.propuesto, desafio: null } : null, desafioDeLaFicha: j.desafioDeLaFicha ?? base.desafioDeLaFicha };
+    LEIDAS.set(exp.id, nueva);
+    setLeida(nueva);
+    return true;
+  };
+
+  return { leida, proponiendo, validarDesafio };
+}
+
+export function ContextoDeTodaLaExploracion() {
+  const { exp, marco, puedeEditar, cambiar, guardando } = useLienzo();
+  const cx = exp.estado.contenido.contexto;
+  const cs = marco.clave === "cs";
+  // Sin las tarjetas confirmadas (el objetivo se pudo validar en el inicio), se abre para confirmarlas ya cargadas.
+  const [editando, setEditando] = useState(puedeEditar && (!cx || (!cx.tarjetas && !cx.sabemos)));
+  // Lo escrito por la persona; mientras tanto, lo confirmado o lo que propuso Nexus (2026-11-07: nada vacío para llenar).
+  const [objetivo, setObjetivo] = useState<string | null>(cx?.objetivo ?? null);
+  const [tarjetas, setTarjetas] = useState<TarjetasDeLoQueSabemos | null>(cx?.tarjetas ?? null);
+  const { leida, proponiendo } = usePropuestaDelContexto(editando && puedeEditar);
+  const objetivoVisto = objetivo ?? leida?.propuesto?.objetivo ?? "";
+  const tarjetasVistas = tarjetas ?? leida?.propuesto?.tarjetas ?? {};
+
+  const cambiarTarjeta = (k: ClaveDeLoQueSabemos, texto: string) => {
+    const antes = tarjetasVistas[k];
+    // Lo que cambia la persona deja de ser de la fuente: lo escribió el equipo.
+    setTarjetas({ ...tarjetasVistas, [k]: { texto, fuente: antes && antes.texto === texto ? antes.fuente : FUENTE_DEL_EQUIPO } });
+  };
 
   const confirmar = async () => {
-    const ok = await cambiar([{ op: "contexto", valor: { objetivo: objetivo.trim(), ...(cx?.sabemos ? { sabemos: cx.sabemos } : {}), tarjetas } }], {
+    const ok = await cambiar([{ op: "contexto", valor: { objetivo: objetivoVisto.trim(), ...(cx?.sabemos ? { sabemos: cx.sabemos } : {}), tarjetas: tarjetasVistas } }], {
       exito: "Contexto de la exploración confirmado.",
     });
     if (ok) setEditando(false);
@@ -138,7 +181,7 @@ export function ContextoDeTodaLaExploracion() {
       <label className="block space-y-1">
         <span className="text-xs font-medium text-fg-secondary">¿Por qué exploramos esta empresa y qué queremos lograr?</span>
         <textarea
-          value={objetivo}
+          value={objetivoVisto}
           onChange={(e) => setObjetivo(e.target.value)}
           maxLength={MAX_OBJETIVO_DE_LA_EXPLORACION}
           rows={2}
@@ -156,10 +199,10 @@ export function ContextoDeTodaLaExploracion() {
             <label key={k} className="block space-y-1 rounded-lg border border-line bg-surface px-2.5 py-2">
               <span className="flex items-center gap-2 text-xs font-semibold text-fg">
                 {NOMBRE_DE_LA_TARJETA[k]}
-                <span className="ml-auto text-[11px] font-normal text-fg-muted">{tarjetas[k]?.texto.trim() ? tarjetas[k]!.fuente : "Por averiguar"}</span>
+                <span className="ml-auto text-[11px] font-normal text-fg-muted">{tarjetasVistas[k]?.texto.trim() ? tarjetasVistas[k]!.fuente : "Por averiguar"}</span>
               </span>
               <textarea
-                value={tarjetas[k]?.texto ?? ""}
+                value={tarjetasVistas[k]?.texto ?? ""}
                 onChange={(e) => cambiarTarjeta(k, e.target.value)}
                 maxLength={MAX_TEXTO_DE_LA_TARJETA}
                 rows={2}
@@ -171,7 +214,7 @@ export function ContextoDeTodaLaExploracion() {
         </div>
       </div>
       <div className="flex gap-2">
-        <BotonAzul disabled={guardando || proponiendo || !objetivo.trim()} onClick={() => void confirmar()}>
+        <BotonAzul disabled={guardando || proponiendo || !objetivoVisto.trim()} onClick={() => void confirmar()}>
           Confirmar el contexto
         </BotonAzul>
         {cx && <BotonTexto onClick={() => setEditando(false)}>Cancelar</BotonTexto>}

@@ -76,6 +76,7 @@ import {
   MAX_LO_QUE_SABEMOS,
   MAX_MENSAJE_PREVIO,
   MAX_OBJETIVO_DE_LA_EXPLORACION,
+  MAX_DESAFIO_PROPUESTO,
   MAX_PERSONAS_DE_LA_SESION,
   MAX_TEXTO_DE_LA_TARJETA,
   CLAVES_DE_LO_QUE_SABEMOS,
@@ -84,7 +85,7 @@ import {
   type ContactoPrevio,
   type ContextoDeLaExploracion,
 } from "./contexto-de-la-exploracion";
-import { MAX_FALTA_DEL_DESAFIO, MAX_RETOMAR, MAX_TEXTO_DEL_DESAFIO } from "./despues-de-la-sesion";
+import { CUMPLIMIENTOS, MAX_FALTA_DEL_DESAFIO, MAX_NO_LLEVAR, MAX_PARA_LA_PROXIMA, MAX_RETOMAR, MAX_TEXTO_DEL_DESAFIO } from "./despues-de-la-sesion";
 import {
   MAX_PREGUNTAS_EN_LA_GUIA,
   MAX_PARA_EXPLORAR,
@@ -463,6 +464,8 @@ const SesionPlaneadaObjeto = z.object({
     .array(z.object({ tema: textoLleno(200), donde: textoLleno(160) }))
     .max(MAX_RETOMAR)
     .optional(),
+  cumplido: z.enum(CUMPLIMIENTOS).optional(),
+  noLlevar: z.array(z.string().min(1).max(40)).max(MAX_NO_LLEVAR).optional(),
 });
 export const SesionPlaneadaSchema: z.ZodType<SesionPlaneada> = SesionPlaneadaObjeto;
 
@@ -823,6 +826,9 @@ const LecturaDeReunionSchema: z.ZodType<LecturaDeReunion> = z.object({
   fecha: z.string().max(40).optional(),
   titulo: z.string().max(300).optional(),
   equipo: z.enum(EQUIPOS_DEL_CLIENTE).optional(),
+  cumplido: z.enum(CUMPLIMIENTOS).optional(),
+  paraLaProxima: z.array(z.string().max(300)).max(MAX_PARA_LA_PROXIMA).optional(),
+  objetivoSiguiente: z.string().max(400).optional(),
   en: z.string().max(40),
   corridaId: z.string().max(60),
 });
@@ -904,7 +910,14 @@ export function leerPropuesta(raw: unknown): PropuestaDeExploracion {
   p.guias = registroValido(raw.guias, z.string().regex(/^s-[a-z0-9]{1,24}$/), GuiaSchema);
   const anteriores = registroValido(raw.guiasAnteriores, z.string().regex(/^s-[a-z0-9]{1,24}$/), GuiaSchema);
   if (Object.keys(anteriores).length) p.guiasAnteriores = anteriores;
-  const propuesto = z.object({ tarjetas: TarjetasSchema, en: FECHA_ISO }).safeParse(raw.contextoPropuesto);
+  const propuesto = z
+    .object({
+      tarjetas: TarjetasSchema,
+      objetivo: z.string().max(MAX_OBJETIVO_DE_LA_EXPLORACION).nullable().optional(),
+      desafio: z.string().max(MAX_DESAFIO_PROPUESTO).nullable().optional(),
+      en: FECHA_ISO,
+    })
+    .safeParse(raw.contextoPropuesto);
   if (propuesto.success) p.contextoPropuesto = propuesto.data;
   const tecnica = AlertaTecnicaSchema.safeParse(raw.alertaTecnica);
   p.alertaTecnica = tecnica.success ? tecnica.data : null;
