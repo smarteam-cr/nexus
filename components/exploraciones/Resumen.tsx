@@ -34,6 +34,7 @@ import {
 } from "@/lib/exploraciones/casillas";
 import { claveDeLaReunion, type DestinoDePropuesta, type ItemPropuesto, type LecturaDeReunion } from "@/lib/exploraciones/contenido";
 import type { PestanaDeSesion } from "@/lib/exploraciones/guia";
+import { EQUIPOS, EQUIPOS_DEL_CLIENTE, type ClaveDeEquipo } from "@/lib/exploraciones/equipos";
 import { esDeUnaSesion } from "@/lib/exploraciones/despues-de-la-sesion";
 import { BotonEnlace } from "@/components/ui/sistema";
 import { useSesiones } from "./useSesiones";
@@ -55,6 +56,15 @@ export const LETRA_DEL_MARCO: Record<(typeof CASILLAS_DEL_RESUMEN)[number], { le
   implicaciones: { letra: "I", marco: "Implications" },
 };
 
+/**
+ * Los tres niveles (2026-11-07): los retos y las metas de un equipo del cliente van juntos y con su nombre («Ventas · …»),
+ * después de los de la empresa entera.
+ */
+function porEquipo<T extends { equipo?: ClaveDeEquipo }>(xs: readonly T[], texto: (x: T) => string): string[] {
+  const orden = (x: T) => (x.equipo ? EQUIPOS_DEL_CLIENTE.indexOf(x.equipo) + 1 : 0);
+  return [...xs].sort((a, b) => orden(a) - orden(b)).map((x) => (x.equipo ? `${EQUIPOS[x.equipo].nombre} · ${texto(x)}` : texto(x)));
+}
+
 /** Lo confirmado de una casilla, en líneas cortas para la tarjeta. */
 export function lineasDe(clave: ClaveDeCasilla, valor: unknown): string[] {
   if (valor === undefined || valor === null) return [];
@@ -65,12 +75,12 @@ export function lineasDe(clave: ClaveDeCasilla, valor: unknown): string[] {
     case "lista":
       return valor as string[];
     case "metas":
-      return (valor as Meta[]).map((m) => {
+      return porEquipo(valor as Meta[], (m) => {
         const cifras = [m.actual && `de ${m.actual}`, m.objetivo && `a ${m.objetivo}`, m.para && `para ${m.para}`].filter(Boolean).join(" ");
         return cifras ? `${m.que}: ${cifras}` : m.que;
       });
     case "retos":
-      return (valor as Reto[]).map((r) => r.texto);
+      return porEquipo(valor as Reto[], (r) => r.texto);
     case "autoridad":
       return (valor as Persona[]).map((p) => `${p.nombre} · ${ETIQUETA_DEL_ROL[p.rol]}`);
     default:

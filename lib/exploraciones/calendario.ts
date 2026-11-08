@@ -33,6 +33,7 @@ import type { Operacion } from "./contenido";
 import { hoyEnCostaRica } from "./fechas";
 import { reunionesDeLaExploracion } from "./fuentes";
 import { opcionesDeLasPestanas, pestanasDeSesiones, type EventoDeLaSesion } from "./guia";
+import { duracionDelEvento, personasDeLaReunion, type PersonaDeLaSesion } from "./contexto-de-la-exploracion";
 import { leerLoLeido } from "./lo-leido";
 import { aplicarCambios, bloquearFila, escalaParaExplorar, estadoDesdeFila, leerExploracion, loQueVieneDeLaAgenda, type FilaDeExploracion } from "./servidor";
 
@@ -190,17 +191,21 @@ export async function eventoParaUnir(
   calendario: string,
   eventoId: string,
   o: { serie?: boolean; clientId: string },
-): Promise<{ ok: true; evento: EventoDeLaSesion } | { ok: false; status: number; error: string }> {
+): Promise<{ ok: true; evento: EventoDeLaSesion; conQuien: PersonaDeLaSesion[]; duracion: number | null } | { ok: false; status: number; error: string }> {
   const r = await releerEventos(calendario, [eventoId]);
   if (!r.ok) return { ok: false, status: r.motivo === "sin-google" ? 503 : 502, error: AVISO_DEL_MOTIVO[r.motivo] };
   const e = r.datos[0];
   if (!e || e.estado === "noExiste") return { ok: false, status: 404, error: "Esa reunión ya no está en el calendario." };
   if (e.estado === "cancelado") return { ok: false, status: 409, error: "Esa reunión se canceló en el calendario." };
-  if (!tieneALaEmpresa(e.invitados, await genteParaReconocer(o.clientId))) {
+  const gente = await genteParaReconocer(o.clientId);
+  if (!tieneALaEmpresa(e.invitados, gente)) {
     return { ok: false, status: 400, error: "Esa reunión no tiene a nadie de la empresa invitado: no se puede unir a esta exploración." };
   }
   return {
     ok: true,
+    // 2026-11-07 (Elías: «de ahí salen los datos»): con quién es y cuánto dura, de la reunión. Solo la gente de la empresa.
+    conQuien: personasDeLaReunion(e.invitados, e.nombres, (c) => tieneALaEmpresa([c], gente)),
+    duracion: duracionDelEvento(e.inicio, e.fin),
     evento: {
       id: eventoId,
       calendario,

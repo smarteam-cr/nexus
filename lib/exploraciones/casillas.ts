@@ -16,6 +16,8 @@
  * Lo que dice cada casilla lo escribe el vendedor o lo propone el agente; acá solo hay forma.
  */
 
+import type { ClaveDeEquipo } from "./equipos";
+
 // ── Las formas de los valores ─────────────────────────────────────────────────
 
 /** Una meta del cliente. «En cifras» = el objetivo trae un número (ver `metaEnCifras`). */
@@ -27,6 +29,11 @@ export interface Meta {
   objetivo?: string;
   /** Para cuándo («antes de diciembre»). */
   para?: string;
+  /**
+   * De qué equipo del cliente es (2026-11-07, los tres niveles): lo que busca ESE equipo, dicho en una sesión con él. Sin
+   * equipo, de la empresa entera. El resultado del negocio va a la ficha de la empresa, no acá.
+   */
+  equipo?: ClaveDeEquipo;
 }
 
 /**
@@ -60,6 +67,8 @@ export interface Persona {
 export interface Reto {
   texto: string;
   dimensionId?: string;
+  /** De qué equipo del cliente es el reto (2026-11-07, como `Meta.equipo`). Sin equipo, de la empresa entera. */
+  equipo?: ClaveDeEquipo;
 }
 
 export interface SiguientePaso {

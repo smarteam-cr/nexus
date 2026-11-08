@@ -20,6 +20,7 @@
  */
 import { useState } from "react";
 import { BotonAzul, BotonBlanco, BotonTexto, IconoDeSugerencia } from "@/components/ui/sistema";
+import { Spinner } from "@/components/ui/Spinner";
 import { cn } from "@/lib/cn";
 import { listaParaProponer } from "@/lib/exploraciones/calidad";
 import { type SiguientePaso } from "@/lib/exploraciones/casillas";
@@ -139,14 +140,43 @@ function SeCumplio({ pestana, lectura }: { pestana: PestanaDeSesion; lectura: Le
   );
 }
 
+/**
+ * A1 (2026-11-07, Elías: «no vi ningún indicador de carga»): mientras Nexus vuelve a leer la reunión, el bloque lo dice en
+ * grande, con la fase en que va, en el lugar donde va a aparecer lo nuevo.
+ */
+function Leyendo({ fase }: { fase: string | null }) {
+  return (
+    <section role="status" aria-live="polite" className="flex items-center gap-3 rounded-xl border border-info-line bg-info-surface px-[18px] py-5">
+      <Spinner size="md" color="border-brand" />
+      <div className="min-w-0 flex-1">
+        <p className="text-[15px] font-semibold text-fg">Nexus está leyendo la reunión</p>
+        <p className="mt-0.5 text-[13px] text-fg-secondary">{fase ?? "Empezando…"} Lo nuevo aparece acá en un minuto o dos.</p>
+      </div>
+    </section>
+  );
+}
+
 function QuePasoEnLaReunion({ pestana, lectura }: { pestana: PestanaDeSesion; lectura: LecturaDeReunion | null }) {
   const { puedeEditar } = useLienzo();
-  const { corriendo, lanzando, lanzar } = useCorrida();
+  const { corrida, corriendo, lanzando, lanzar } = useCorrida();
   const r = pestana.reunion;
+  // El cartel es de ESTA sesión: sale cuando se pidió volver a leer su reunión, no con cualquier corrida del agente.
+  /* Cuándo se tocó «Volver a leer» acá. El cartel se va cuando termina una lectura que empezó después de eso: entre el
+     pedido y la corrida hay un momento sin ninguna de las dos, y ahí no se tiene que ir. Se deriva: sin efecto. */
+  const [pedidaEn, setPedidaEn] = useState<number | null>(null);
+  const leyendo = corriendo && corrida?.modo === "leer";
+  const termino = !!corrida && corrida.modo === "leer" && corrida.estado !== "RUNNING" && pedidaEn !== null && Date.parse(corrida.empezo) >= pedidaEn - 5000;
   /* Volver a leerla aunque ya tenga lectura: la grabación de una reunión de HubSpot puede no haber estado
      cuando el agente la leyó (CreditForce, 28 sep: leyó la invitación y dijo que no hubo conversación). */
   const releer = puedeEditar && r && (r.origen === "meet" || r.origen === "hubspot");
-  const volverALeer = () => r && void lanzar("leer", r.origen === "meet" ? { sesionId: r.id } : { hubspotId: r.id });
+  const volverALeer = () => {
+    if (!r) return;
+    setPedidaEn(Date.now());
+    void lanzar("leer", r.origen === "meet" ? { sesionId: r.id } : { hubspotId: r.id }).then((ok) => {
+      if (!ok) setPedidaEn(null);
+    });
+  };
+  if (pedidaEn !== null && !termino) return <Leyendo fase={leyendo ? (corrida?.fase ?? null) : null} />;
   if (!lectura) {
     return (
       <section data-recorrido="preventa.sesion.salio" className="flex flex-wrap items-center gap-3 rounded-xl border border-dashed border-line bg-surface px-[18px] py-4">
@@ -215,7 +245,7 @@ function QuePasoEnLaReunion({ pestana, lectura }: { pestana: PestanaDeSesion; le
 // ── Lo que aprendimos ─────────────────────────────────────────────────────────
 
 function LoQueAprendimos({ pestana, lectura }: { pestana: PestanaDeSesion; lectura: LecturaDeReunion | null }) {
-  const { revisables, escala, marco } = useLienzo();
+  const { revisables, escala, marco, usar, puedeEditar, guardando } = useLienzo();
   const [todas, setTodas] = useState(false);
   const r = pestana.reunion;
   const s = pestana.sesion;
@@ -227,13 +257,21 @@ function LoQueAprendimos({ pestana, lectura }: { pestana: PestanaDeSesion; lectu
   const nombreDeDimension = (id: string) => escala.areas.flatMap((a) => a.dimensiones).find((d) => d.id === id)?.nombre ?? id;
   return (
     <section className="flex flex-col gap-2 rounded-xl border border-line bg-surface px-[18px] py-4">
-      <div>
-        <h3 className="text-[15px] font-semibold text-fg">Lo que aprendimos</h3>
-        <p className="mt-0.5 text-[12.5px] text-fg-muted">
-          {items.length
-            ? `Nexus encontró ${items.length === 1 ? "1 cosa" : `${items.length} cosas`} en esta reunión. «Usar» la pasa sola a su lugar en el Resumen; nada se confirma solo.`
-            : "Lo nuevo de esta reunión. El Resumen junta lo de todas las sesiones."}
-        </p>
+      <div className="flex flex-wrap items-start gap-3">
+        <div className="min-w-0 flex-1">
+          <h3 className="text-[15px] font-semibold text-fg">Lo que aprendimos</h3>
+          <p className="mt-0.5 text-[12.5px] text-fg-muted">
+            {items.length
+              ? `Nexus encontró ${items.length === 1 ? "1 cosa" : `${items.length} cosas`} en esta reunión. «Usar» la pasa sola a su lugar en el Resumen; nada se confirma solo.`
+              : "Lo nuevo de esta reunión. El Resumen junta lo de todas las sesiones."}
+          </p>
+        </div>
+        {/* A1 (2026-11-07, Elías): todas de un clic, también las que reemplazan algo; el aviso trae «Deshacer». */}
+        {puedeEditar && items.length > 1 && (
+          <BotonAzul disabled={guardando} onClick={() => void usar(items, { lugar: "sesion" })}>
+            Usar todas ({items.length})
+          </BotonAzul>
+        )}
       </div>
       {s?.desafio?.texto && (
         <p className="rounded-lg border border-line bg-surface-muted px-3 py-2 text-[13px] text-fg">

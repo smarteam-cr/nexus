@@ -204,7 +204,7 @@ function AlCambiarElEquipo({
   const vista = conAnalisis ? (analisis.datos?.reuniones.find((x) => x.id === r!.id) ?? null) : null;
   const estado = { equipo, recienCambiado, porPreparar, guia, lectura, analisis: !!vista?.analisis && vista.texto === "transcripcion" };
   // Rehacer la guía pide el mismo contexto que armarla (2026-11-06): sin él no se ofrece.
-  const sinContexto = faltaParaLaGuia(exp.estado.contenido.contexto, s).length > 0;
+  const sinContexto = faltaParaLaGuia(exp.estado.contenido.contexto).length > 0;
   const rehacer = queRehacerAlCambiarElEquipo(estado).filter((q) => !listo.includes(q) && !(q === "guia" && sinContexto));
   if (!rehacer.length) return null;
 

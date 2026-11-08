@@ -54,6 +54,7 @@ import {
   type Validez,
 } from "@/lib/exploraciones/contenido";
 import { avisoDelLote, queHaceUsar, usadasDeHoy, type LugarDelLote } from "@/lib/exploraciones/usar-sugerencias";
+import { camposDeLaFichaQueToca } from "@/lib/exploraciones/a-la-ficha";
 import { idsDeLaEscala, type EscalaDelLienzo } from "@/lib/exploraciones/escala-del-lienzo";
 import { chequeoConfirmado, chequeoDelMapa, posicionesDelMapa } from "@/lib/exploraciones/mapa";
 import { definicionEnElMarco, marcoDe } from "@/lib/exploraciones/marco";
@@ -430,6 +431,17 @@ export default function LienzoDeExploracion({
       const anotadas = new Set((confirmada.current.estado.contenido.usadas ?? []).map((u) => u.id));
       const ids = items.map((it) => it.id).filter((id) => anotadas.has(id));
       if (!ids.length) return true;
+      /* A2 (2026-11-07, Elías): lo que sube a la ficha de la empresa se dice, con el enlace a Información del cliente. Ahí
+         queda como propuesta: Customer Success la confirma. */
+      const campos = camposDeLaFichaQueToca(
+        items.filter((it) => ids.includes(it.id)),
+        { proyecto: !!inicial.projectId },
+      );
+      if (campos.length) {
+        toast.info(`Se propuso en la ficha de la empresa: ${campos.map((c) => `«${c}»`).join(", ")}.`, {
+          action: { label: "Ver Información del cliente", onClick: () => setPaso("informacion") },
+        });
+      }
       pushUndo({
         scope: scopeDelDeshacer,
         label: efecto ? `Usaste: ${efecto.texto}` : avisoDelLote(o.lugar ?? "otro", ids.length),
@@ -439,7 +451,7 @@ export default function LienzoDeExploracion({
       });
       return true;
     },
-    [cambiar, deshacer, escala, inicial.marco, pushUndo, scopeDelDeshacer],
+    [cambiar, deshacer, escala, inicial.marco, inicial.projectId, pushUndo, scopeDelDeshacer, toast, setPaso],
   );
 
   /** Espera a que salgan los cambios en fila (antes de armar la propuesta, por ejemplo). */
