@@ -25,21 +25,18 @@
  *     5»), y esa frase tiene que quedar al lado de la fila que la sufrió.
  *
  * ⚠ La mecánica del desplegable (position:fixed desde el trigger, cierre por scroll externo,
- * teclado) NO está acá: vive en `usePanelFlotante`, compartida con `Menu`.
+ * teclado) NO está acá: vive en `usePanelFlotante`, compartida con `Menu`. Y el panel (buscador sin
+ * tildes, grupos, marcas, Enter que elige la primera) es `PanelDeOpciones`, el mismo de `Selector`, el
+ * select de los formularios (2026-11-08): lo que cambia entre los dos es solo el botón.
  */
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useState } from "react";
 import { cn } from "@/lib/cn";
-import { coincideBusqueda } from "@/lib/ui/text-search";
+import { PanelDeOpciones, type OpcionDeLista } from "./PanelDeOpciones";
 import { usePanelFlotante } from "./usePanelFlotante";
 import { IconoDeSugerencia } from "./sistema";
 
-export interface OpcionDeCelda {
-  /** Lo que se manda al confirmar. Único dentro de la lista. */
-  value: string;
-  label: string;
-  /** Segunda línea opcional (ej. el email, para desempatar dos nombres iguales). */
-  hint?: string;
-}
+/** Una opción de la celda: valor, nombre y, si hace falta, segunda línea, grupo, marca o deshabilitada. */
+export type OpcionDeCelda = OpcionDeLista;
 
 export interface CeldaSelectProps {
   opciones: OpcionDeCelda[];
@@ -77,43 +74,11 @@ export function CeldaSelect({
 }: CeldaSelectProps) {
   const [guardando, setGuardando] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [busqueda, setBusqueda] = useState("");
-  const inputRef = useRef<HTMLInputElement>(null);
   const { abierto, setAbierto, alternar, pos, rootRef, btnRef, panelRef } = usePanelFlotante({
     selectorDeItems: '[role="option"]:not([disabled])',
   });
 
   const conBuscador = opciones.length >= minimoParaBuscar;
-
-  /* El buscador arranca limpio y con el foco puesto cada vez que se abre: reabrirlo con el
-     texto de la vez anterior esconde opciones sin que se vea por qué. */
-  useEffect(() => {
-    if (!abierto) {
-      setBusqueda("");
-      return;
-    }
-    if (conBuscador) inputRef.current?.focus();
-  }, [abierto, conBuscador]);
-
-  /**
-   * ⭐ BUSCA SIN TILDES, EN LOS DOS SENTIDOS: «Elias» encuentra a «Elías» y al revés.
-   *
-   * Pedido de Elías (2026-08-21) — y es el caso normal, no un borde: media plantilla tiene tilde
-   * en el nombre y nadie la escribe al buscar.
-   *
-   * ⚠ Usa `coincideBusqueda` de `lib/ui/text-search` en vez de un `toLowerCase()` propio, que es
-   * como estaba escrito. Ese módulo YA es «el filtrado por texto de las listas, en un solo
-   * lugar» y ya normaliza acentos; escribir la comparación de nuevo acá habría sido la copia
-   * número 21 del mismo `normalize("NFD")` — hay ~20 en el repo, y ésta al menos tenía dónde
-   * apoyarse.
-   */
-  const filtradas = useMemo(() => {
-    const q = busqueda.trim();
-    if (!q) return opciones;
-    return opciones.filter(
-      (o) => coincideBusqueda(o.label, q) || coincideBusqueda(o.hint ?? "", q),
-    );
-  }, [opciones, busqueda]);
 
   const propuesta = seleccion.length === 0 && sugerencia ? (opciones.find((o) => o.value === sugerencia) ?? null) : null;
   const etiquetaPropuesta = propuesta && (
@@ -193,61 +158,24 @@ export function CeldaSelect({
       </button>
 
       {abierto && pos && (
-        <div
-          ref={panelRef}
-          role="listbox"
-          aria-label={etiqueta}
-          onClick={(e) => e.stopPropagation()}
-          className="fixed z-50 w-60 overflow-y-auto rounded-xl border border-line bg-surface shadow-xl py-1"
-          style={{ ...pos, maxHeight: typeof pos.maxHeight === "number" ? `min(20rem, ${pos.maxHeight}px)` : "min(20rem, calc(100vh - 16px))" }}
-        >
-          {conBuscador && (
-            <div className="px-2 pb-1 border-b border-line">
-              <input
-                ref={inputRef}
-                value={busqueda}
-                onChange={(e) => setBusqueda(e.target.value)}
-                placeholder={placeholderBusqueda}
-                aria-label={placeholderBusqueda}
-                className="w-full rounded-lg border border-line bg-surface px-2 py-1.5 text-xs text-fg placeholder:text-fg-muted"
-              />
-            </div>
-          )}
-
-          <div className="overflow-y-auto" style={{ maxHeight: "16rem" }}>
-            {filtradas.length === 0 ? (
-              /* ⚠ Se DICE que la búsqueda no encontró nada. Una lista vacía sin explicación se
-                 lee como «no hay opciones», que es otra cosa. */
-              <p className="px-3 py-2 text-xs text-fg-muted">Nadie coincide con «{busqueda}».</p>
-            ) : (
-              filtradas.map((o) => {
-                const esActual = seleccion.includes(o.value);
-                const esPropuesta = propuesta?.value === o.value;
-                return (
-                  <button
-                    key={o.value}
-                    type="button"
-                    role="option"
-                    aria-selected={esActual}
-                    disabled={guardando !== null}
-                    onClick={() => void elegir(o)}
-                    className={cn(
-                      "w-full text-left px-3 py-1.5 text-sm transition-colors hover:bg-surface-hover disabled:opacity-60",
-                      esActual ? "font-semibold text-fg" : "text-fg-secondary",
-                    )}
-                  >
-                    <span className="block truncate">
-                      {o.label}
-                      {esActual && <span className="text-fg-muted"> · actual</span>}
-                      {esPropuesta && <span className="text-brand"> · lo propone Nexus</span>}
-                    </span>
-                    {o.hint && <span className="block truncate text-xs text-fg-muted">{o.hint}</span>}
-                  </button>
-                );
-              })
-            )}
-          </div>
-        </div>
+        /* El buscador (sin tildes: «Elias» encuentra a «Elías», pedido del 2026-08-21) y la lista viven en el panel
+           compartido; acá solo se dice qué está elegido y qué propone Nexus. */
+        <PanelDeOpciones
+          panelRef={panelRef}
+          pos={pos}
+          etiqueta={etiqueta}
+          opciones={opciones}
+          seleccion={seleccion}
+          propuesta={propuesta?.value ?? null}
+          conBuscador={conBuscador}
+          placeholderBusqueda={placeholderBusqueda}
+          ocupado={guardando !== null}
+          onElegir={(o) => void elegir(o)}
+          /* ⚠ Se DICE que la búsqueda no encontró nada. Una lista vacía sin explicación se lee como «no hay
+             opciones», que es otra cosa. */
+          sinCoincidencias={(q) => `Nadie coincide con «${q}».`}
+          ancho={256}
+        />
       )}
 
       {error && (

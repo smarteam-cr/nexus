@@ -212,7 +212,7 @@ corre migraciones ni seeds (cap. D + RUNBOOK).
 
 ### F. Los tests: cinco familias que se rompen por razones distintas
 
-**918**<!-- sync:test-files --> archivos `*.test.ts` (unit), todos bajo `lib/` — el project
+**919**<!-- sync:test-files --> archivos `*.test.ts` (unit), todos bajo `lib/` — el project
 `unit` de vitest solo incluye `lib/**`, así que un test puesto en otra carpeta NO corre y
 nada avisa. `npm test` es la suite unit. Desde el 2026-08-01 (F4) el project `integration`
 está VIVO: `npm run test:int` corre los `*.int.test.ts` contra la base LOCAL `nexus_test`
@@ -293,7 +293,7 @@ Espejo del slice de `lib/`: la FORMA estándar de una pantalla interna. Toda pan
 2. **Contenedor**: `page.tsx` y `loading.tsx` importan la MISMA constante `SHELL_*` de `lib/ui/page-shell.ts`. Un contenedor propio es legítimo solo con la razón escrita en el registro.
 3. **Cabecera**: `<PageHeader>` — el ÚNICO `h1 text-xl` de la pantalla. Detalle a profundidad 1 → `backHref`; profundidad 2+ → `crumbs` (el crumb del módulo sale de `moduleCrumb`/APP_NAV). Nunca ambos.
 4. **Navegación**: 1 entrada en `components/layout/nav-config.tsx` con su gate declarativo (+ el test de gates congelados). El gate del sidebar es cosmético: la seguridad vive en la página (`requirePermission`/`can()`) y en el endpoint.
-5. **Controles**: SOLO primitivas de `components/ui` — Button/IconButton, Input/Select/Textarea dentro de `<Field>`, `<Tabs>`, `<Menu>`, `<Alert>`, Modal/Drawer/ConfirmDialog, Table, EmptyState, Skeleton*, BackLink/Breadcrumbs, `<CeldaSelect>` (celda de listado EDITABLE: flechita + buscador + modo solo-lectura por permiso — su mecánica de panel la comparte con `<Menu>` vía `usePanelFlotante`, y hay guarda de que no se duplique). Si falta una forma, se AGREGA al vocabulario (con su ratchet), no se improvisa inline.
+5. **Controles**: SOLO primitivas de `components/ui` — Button/IconButton, Input/Select/Textarea dentro de `<Field>`, `<Tabs>`, `<Menu>`, `<Alert>`, Modal/Drawer/ConfirmDialog, Table, EmptyState, Skeleton*, BackLink/Breadcrumbs, `<Selector>` (EL select: botón que abre un panel con buscador, grupos, marcas y teclado — reemplaza al `<select>` nativo, cuyo conteo solo baja: ratchet en `lib/ui/selector.test.ts`), `<CeldaSelect>` (celda de listado EDITABLE: flechita + buscador + modo solo-lectura por permiso — el panel, `PanelDeOpciones`, es el mismo de `<Selector>`; la mecánica la comparte con `<Menu>` vía `usePanelFlotante`, y hay guarda de que no se duplique). Si falta una forma, se AGREGA al vocabulario (con su ratchet), no se improvisa inline.
 6. **Color**: SOLO tokens semánticos (invariante #5 de CLAUDE.md). El ratchet `token-vocab` frena el merge; el remap `html.light` es red de seguridad, no API.
 7. **Estados**: carga = skeleton estructural (doctrina en DECISIONS §Estados de carga); error persistente = `<Alert variant="danger">` o `error.tsx` de segmento; transitorio = `toast`; vacío = `<EmptyState>` con CTA.
 8. **Espaciado y tipografía**: página `space-y-6` · sección `space-y-4` · denso `space-y-2`; headings — `h1 text-xl` (solo PageHeader), `h2 text-sm font-semibold text-fg`, labels `text-xs text-fg-muted`. Normalización al tocar, no big-bang.
