@@ -712,6 +712,7 @@ const GuiaSchema: z.ZodType<GuiaDeLaSesion> = z.object({
   equipo: z.enum(EQUIPOS_DEL_CLIENTE).optional(),
   lentes: z.array(z.string().max(40)).max(20).optional(),
   objetivo: textoDeGuia(400).nullable().optional(),
+  objetivoAceptado: textoDeGuia(400).optional(),
   ubicaciones: z
     .record(z.string().max(600), z.string().min(1).max(40))
     .refine((r) => Object.keys(r).length <= MAX_PARA_EXPLORAR)

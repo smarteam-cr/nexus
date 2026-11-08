@@ -13139,8 +13139,9 @@ preguntas.
   No hay SQL: la agenda vive en el Json de la guía.
 - **Nexus no planifica por defecto (puntos 1 a 5, `contexto-de-la-exploracion.ts`).** *Cambió el 2026-11-07 y otra vez el
   2026-11-08* (sección «La exploración desde el vendedor»): con quién es y cuánto dura salen de la reunión asociada y ya no
-  hay formulario de la sesión; el objetivo es el de Smarteam, así que la guía no espera nada, y se arma sola al terminar
-  de leer cada sesión. Lo de abajo es como nació. Antes de armar una guía pide el
+  hay formulario de la sesión; el objetivo de la exploración es el de Smarteam, y la guía espera solo el objetivo de la
+  SESIÓN aceptado por el vendedor (en la tercera vuelta se armaba sola al leer cada sesión; la cuarta lo frenó). Lo de
+  abajo es como nació. Antes de armar una guía pide el
   contexto de TODA la exploración (`contenido.contexto`: por qué la exploramos y lo que ya sabemos, con quién lo confirmó)
   y el de la sesión (`SesionPlaneada.conQuien`, `espera`, `duracion`, más el objetivo, el nombre y la reunión que ya
   existían). Sin el objetivo de la exploración, con quién es y el objetivo de la sesión, el botón espera y el servidor
@@ -13220,8 +13221,11 @@ aplica todo de un clic, con Deshacer; y **la guía va en bloques** como la image
 
 El 8 nov, tercera vuelta con Centauro, tres cambios más: **el objetivo es el de Smarteam**, fijo, con un ajuste por
 empresa que da forma cómo llegó el lead; **el Resumen es un resumen** (en qué va, los hallazgos y el botón del momento); y
-**la guía se arma sola** al terminar de leer cada sesión, con preguntas al vendedor cuando a Nexus le falta contexto. Lo
-que sigue es el estado después de esa vuelta.
+**la guía se arma sola** al terminar de leer cada sesión, con preguntas al vendedor cuando a Nexus le falta contexto.
+
+Ese mismo día, la cuarta vuelta: **el objetivo de la sesión lo decide el vendedor y es obligatorio** (la guía deja de
+armarse sola), y **el feedback de la sesión vuelve a la vista** en el Análisis: la primera vuelta lo había metido en un
+plegable y Elías pidió que no vuelva a pasar con ninguna mejora. Lo que sigue es el estado después de esa vuelta.
 
 - **Los tres niveles del contexto.** Antes, el mismo dato vivía en dos o tres lugares: las seis tarjetas de «Lo que ya
   sabemos» (2026-11-06) repetían seis casillas del Resumen (retos, metas, plazos, presupuesto, quién decide, qué pasa si
@@ -13304,7 +13308,8 @@ que sigue es el estado después de esa vuelta.
 - **Antes de la sesión, el objetivo se sugiere desde la anterior**, sin otra llamada (`useObjetivoDeLaSiguiente` ›
   `objetivoSugeridoDeLaSiguiente`). Si nadie desmarcó nada, se usa el objetivo que dejó la lectura de la reunión
   anterior (`LecturaDeReunion.objetivoSiguiente`). Si se desmarcó algo, el código arma uno con lo que sigue marcado y lo
-  que la exploración todavía no sabe.
+  que la exploración todavía no sabe. Es solo una sugerencia: desde la cuarta vuelta la guía no se arma sin que el
+  vendedor lo acepte o lo edite (ver «La guía la arma el vendedor»).
 - **La sesión que ya pasó, de unos diez bloques a tres:**
   - **«Qué pasó»**: el resumen y si se cumplió el objetivo (Sí · En parte · No). Lo sugiere la lectura
     (`LecturaDeReunion.cumplido`, solo si había objetivo) o, en una lectura de antes, cuántas preguntas planeadas se
@@ -13315,7 +13320,8 @@ que sigue es el estado después de esa vuelta.
   - **«Lo que aprendimos»**: lo que Nexus encontró en ESTA reunión, cada cosa con Usar o Descartar, y arriba «Usar todas
     (N)»: todas de un clic, también las que reemplazan algo, y el aviso trae «Deshacer» unos segundos. En la primera
     vuelta se había quitado el lote «Pasar las N…» para decidir una por una; Elías lo pidió de vuelta con 27 sugerencias
-    en Centauro.
+    en Centauro. Lo usado hoy de esta reunión se ve en la misma tarjeta, debajo, con Revertir (`UsadasHoy` con
+    `plegada={false}`, cuarta vuelta): con «Usadas hoy» plegado, después de usar todas la tarjeta quedaba vacía.
   - **«Lo que queda para la próxima»** (`loQueQuedaParaLaProxima`): UNA lista que junta lo que antes eran «Quedó
     abierto», «Lo que falta para confirmarlo» y «Temas por retomar». La forman el resultado, si la agenda lo tenía y
     quedó sin marcar; lo que la lectura dejó pendiente (`paraLaProxima`); lo que no se preguntó; lo que el cliente dijo
@@ -13327,8 +13333,18 @@ que sigue es el estado después de esa vuelta.
     casilla: no se repite. Tachar algo de lo que nadie siguió que ya estaba confirmado lo saca de su casilla (el «Quitar»
     de antes). Al preparar la siguiente, lo que nadie siguió y todavía era sugerencia se usa si se ve marcado y se
     descarta si se ve tachado; lo que no se ve en la lista no se toca.
-  - El correo de seguimiento es un botón. «Cómo trabajaste», el siguiente paso, cuánto avanzó, la escala, las casillas y
-    las notas quedan plegados a un clic.
+  - **«Cómo trabajaste esta sesión»** (`ComoTrabajasteEstaSesion`, el feedback del analizador de venta, S4 del 27 oct)
+    va A LA VISTA, justo debajo de «Qué pasó». La primera vuelta lo había plegado en «Más de esta sesión» y nadie lo veía
+    (Elías: «Esto no debería pasar en ninguna mejora que hagamos»). Lo vigila `lib/exploraciones/feedback-a-la-vista.test.ts`:
+    se pone roja si vuelve a un plegable, si deja de montarse en el Análisis o si baja de su lugar. En producción, al 8
+    nov: 20 sesiones analizadas, 2 confirmadas; la de Centauro (sesión 2, «Diagnóstico de ventas», 6 nov) está propuesta.
+    La sesión 1 de Centauro es de HubSpot y no se analiza (no hay transcripción de Meet).
+  - **«Siguiente paso acordado» y «Cuánto avanzó»** (`PasoYAvance`) también vuelven a la vista: estaban así antes de la
+    primera vuelta y tienen datos (8 de 49 exploraciones con siguiente paso, al 8 nov).
+  - El correo de seguimiento es un botón. Plegado en «Datos de la sesión» queda lo que ya estaba plegado antes de la
+    primera vuelta (las casillas del siguiente paso, portal, apertura y producto, y tus notas: 1, 6 y 5 de 49
+    exploraciones con portal, apertura y producto; ninguna con notas de sesión) y «La escala hasta ahora», que repite «La
+    escala» del panel de la derecha y estuvo a la vista un solo día.
 - **Lo nuevo de la lectura sale de la lectura que ya se hace** (`propiedadDeReuniones`: `cumplido`, `paraLaProxima`,
   `objetivoSiguiente`, solo de la reunión más reciente). No hay llamada nueva. Por eso se fue «Proponer desde la
   reunión»: la ruta `POST …/despues`, `despues-server.ts` y su agente `exploracion-lo-que-dejo-la-sesion` ya no existen,
@@ -13373,26 +13389,32 @@ que sigue es el estado después de esa vuelta.
     la transcripción o sin texto), o «Preparar la sesión N» con la próxima. Lleva a esa sesión, al «después» o al «antes».
   - Los hallazgos generales: los que escribió la última guía (`propuesta.hallazgos`, de 2 a 5, con todo lo que se sabe) o,
     mientras no hay, el resumen de cada sesión leída, de la más nueva a la más vieja (`hallazgosParaMostrar`).
-- **La guía se arma sola al terminar de leer una sesión** (2026-11-08, Elías eligió este momento; `correr` en
-  `agente.ts`). Cuando una lectura deja lo que dijo de alguna reunión (`lecturas`), y no fue un documento, lanza la guía
-  de la próxima en su propia corrida (`lanzarCorrida(…, "guia")`), que se cobra contra el mismo presupuesto que la
-  lectura (automático si la disparó una reunión nueva). La preparación sigue sin rearmarla. Tres reglas que dejó la
-  revisión del 8 nov:
-  - La guía arranca ANTES de que la lectura se marque terminada (`trasLa`: la corrida que la lanza no la frena). Lo
-    leído ya está guardado, y la pantalla pasa de una corrida viva a la otra: si arrancara después, una consulta en el
-    medio daba todo por terminado y la guía quedaba sin seguir. El seguimiento recarga en cuanto la lectura cede el lugar
-    a la guía y avisa al terminar esta (`seguimiento-de-corrida.ts`); el cartel «Nexus está leyendo» se va también.
-  - Una guía en curso no frena lo demás: una reunión que llega en ese rato, un documento o un clic en «Leer» o
-    «Preparar» corren igual (antes «una corrida a la vez» los dejaba sin hacer). Dos guías no corren a la vez por pedido,
-    pero si una lectura termina mientras otra guía corre, la que quedó vieja no se guarda (`armarGuia` mira la última
-    corrida de la guía).
-  - Sin guía y sin preguntas, la corrida falla con su motivo (antes el aviso decía «la guía está lista»). *Costo:* una llamada por sesión leída. Medido en producción (30 días al 8 nov): la
-  guía cuesta unos USD 0,06 por llamada y se leyeron 28 reuniones; la guía en bloques escribe más, así que se estima
-  entre USD 0,06 y 0,10 por sesión, unos USD 2 a 3 al mes al ritmo de hoy, más una llamada cada vez que el vendedor
-  responde las preguntas de Nexus.
+- **La guía la arma el vendedor, con el objetivo de la sesión aceptado** (cuarta vuelta, 2026-11-08; `pedirLaGuia` en
+  `agente.ts`, `objetivoAceptado`). *Cambió el mismo día:* en la tercera vuelta la guía se armaba sola al terminar de
+  leer cada sesión; Elías la frenó: «el objetivo de la sesión lo decide el vendedor, y es obligatorio». Ahora:
+  - Al leer una sesión, Nexus deja SUGERIDO el objetivo de la siguiente (`LecturaDeReunion.objetivoSiguiente`, sin otra
+    llamada) y no arma la guía. La tarjeta dice «Objetivo sugerido», con Descartar · Editar · Aceptar.
+  - La guía no se arma hasta que el vendedor acepta, edita o escribe el objetivo (`SesionPlaneada.objetivo`): el botón
+    «Armar la guía» está debajo del objetivo y arriba de «Lo que ya sabemos», y se habilita con él; el servidor también
+    lo exige (`FALTA_EL_OBJETIVO_DE_LA_SESION`), y «Actualizar la guía» al cambiar el equipo no se ofrece sin él. *Por
+    qué:* es la oportunidad del vendedor de decirle a Nexus cómo estructurar la sesión.
+  - En el pedido, el objetivo de la sesión va PRIMERO, como «la instrucción que MÁS pesa»: la agenda se arma para
+    cumplirlo, y si dice cómo quiere la sesión (qué va primero, qué no tocar), se respeta. El contexto de la exploración
+    manda sobre las fuentes, no sobre ese objetivo.
+  - La guía guarda con qué objetivo se armó (`GuiaDeLaSesion.objetivoAceptado`). Si el vendedor lo cambia después, la
+    Preparación dice «Cambiaste el objetivo: la guía todavía es para el anterior» y ofrece «Actualizar la guía». El botón
+    espera a que el objetivo recién aceptado llegue al servidor (`alDia`) antes de pedir la guía.
+  - Sin objetivo aceptado, las preguntas de Nexus se pueden responder igual («Guardar respuestas»): quedan para cuando se
+    arme la guía. `scripts/medir-guia-de-preventa.ts` salta las preventas sin objetivo.
+  - *Costo:* una llamada por guía que alguien arma, como antes de la tercera vuelta, más una cada vez que el vendedor
+    responde las preguntas de Nexus. Medido en producción (30 días al 8 nov): unos USD 0,06 por guía.
+  - Una guía en curso no frena lo demás (revisión del 8 nov): una reunión que llega en ese rato, un documento o un clic en
+    «Leer» o «Preparar» corren igual. Si otra guía arrancó después, la vieja no se guarda (`armarGuia` mira la última
+    corrida de la guía). Sin guía y sin preguntas, la corrida falla con su motivo. El seguimiento de la pantalla recarga
+    cuando una corrida viva reemplaza a otra (`seguimiento-de-corrida.ts`).
   - **Sin guía, su espacio se nota** (`EspacioDeLaGuia` en `AntesDeLaSesion.tsx`): un recuadro grande y punteado en el
-    lugar de la guía, «Falta la guía de la sesión N», con por qué falta y «Armar la guía ahora»; mientras Nexus la arma,
-    la fase en que va. El aviso de arriba ya no repite que falta: es solo de una guía que ya está.
+    lugar de la guía. Sin objetivo dice «Falta aceptar el objetivo de la sesión N»; con él, «Falta la guía de la sesión
+    N» y que se arma con el botón de arriba. Mientras Nexus la arma, la fase en que va.
   - **Lo que le falta saber, en el mismo espacio.** La misma llamada de la guía puede dejar de 1 a 3 preguntas cortas para
     el vendedor (`faltaContexto` → `propuesta.preguntasParaLaGuia`), del estilo «¿con quién es la sesión 3?». Se
     responden en una línea, sin formulario (`op: "responderParaLaGuia"`), y la guía se rehace. Las respuestas quedan en
@@ -13400,8 +13422,8 @@ que sigue es el estado después de esa vuelta.
     confiable: «LO QUE RESPONDIÓ EL EQUIPO… manda sobre las fuentes». La guía se arma igual con lo que hay; si hay guía y
     preguntas, las preguntas van arriba de ella («Para afinar esta guía…»).
   - La misma llamada escribe los hallazgos y, si hace falta, el ajuste al objetivo (`leerLoDeLaExploracion`): no hay
-    llamada aparte. El pedido lleva el objetivo de Smarteam, el ajuste confirmado, cómo llegó con su pista, las respuestas
-    del vendedor y los hallazgos de la guía anterior para actualizarlos. La agenda en bloques no cambió.
+    llamada aparte. El pedido lleva el objetivo de la sesión, el de Smarteam con su ajuste, cómo llegó con su pista, las
+    respuestas del vendedor y los hallazgos de la guía anterior para actualizarlos. La agenda en bloques no cambió.
 - **Exploraciones en curso: no se borra ni se migra nada, y no hay SQL** (todo vive en el Json). El objetivo que ya
   confirmaron se lee como su ajuste; los hallazgos, las preguntas y las respuestas son campos nuevos opcionales del Json,
   y hasta que lean otra sesión o armen la guía, el Resumen muestra el resumen de cada sesión. El desafío escrito a mano

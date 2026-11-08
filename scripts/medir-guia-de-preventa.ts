@@ -99,7 +99,12 @@ async function main() {
       process.stdout.write(`· ${e.empresa}… `);
       const fila = await prisma.exploracionDeVenta.findUnique({ where: { id: e.id }, select: { propuesta: true } });
       const antes = leerPropuesta(fila?.propuesta).guia;
-      const armada = await armarLaGuiaSinGuardar(null, e.id, { triggeredByEmail: POR });
+      // Desde el 2026-11-08 la guía pide el objetivo de la sesión aceptado: la que no lo tiene se salta y sigue la siguiente.
+      const armada = await armarLaGuiaSinGuardar(null, e.id, { triggeredByEmail: POR }).catch((err: unknown) => {
+        console.log(`se salta: ${err instanceof Error ? err.message : String(err)}`);
+        return undefined;
+      });
+      if (armada === undefined) continue;
       if (!armada) {
         console.log("el agente no devolvió nada que sirva");
         continue;

@@ -46,9 +46,9 @@ export const MAX_LO_QUE_ESPERA = 300;
 export const DURACIONES = [30, 45, 60, 90] as const;
 
 /*
- * La guía ya no espera nada (2026-11-08): el objetivo de toda exploración es el de Smarteam (objetivo-y-hallazgos.ts), con
- * quién es y cuánto dura salen de la reunión del calendario (sin ella, 60 minutos) y el objetivo de la sesión lo sugiere la
- * guía. `faltaParaLaGuia`, que esperaba el objetivo de la exploración, se retiró.
+ * La guía no espera el objetivo de la exploración (2026-11-08): es el de Smarteam (objetivo-y-hallazgos.ts), y con quién es
+ * y cuánto dura salen de la reunión del calendario (sin ella, 60 minutos). `faltaParaLaGuia` se retiró. Lo que sí espera es
+ * el objetivo de la SESIÓN aceptado por el vendedor (cuarta vuelta, `objetivoAceptado`).
  */
 
 /** Cuánto dura una sesión sin reunión asociada (2026-11-07): el valor vive en agenda.ts, uno solo para todo. */

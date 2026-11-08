@@ -165,12 +165,7 @@ function QuePasoEnLaReunion({ pestana, lectura }: { pestana: PestanaDeSesion; le
      pedido y la corrida hay un momento sin ninguna de las dos, y ahí no se tiene que ir. Se deriva: sin efecto. */
   const [pedidaEn, setPedidaEn] = useState<number | null>(null);
   const leyendo = corriendo && corrida?.modo === "leer";
-  /* También terminó si después arrancó la guía de la próxima sesión, que se arma sola al terminar de leer (2026-11-08). */
-  const termino =
-    !!corrida &&
-    pedidaEn !== null &&
-    Date.parse(corrida.empezo) >= pedidaEn - 5000 &&
-    (corrida.modo === "leer" ? corrida.estado !== "RUNNING" : corrida.modo === "guia");
+  const termino = !!corrida && corrida.modo === "leer" && corrida.estado !== "RUNNING" && pedidaEn !== null && Date.parse(corrida.empezo) >= pedidaEn - 5000;
   /* Volver a leerla aunque ya tenga lectura: la grabación de una reunión de HubSpot puede no haber estado
      cuando el agente la leyó (CreditForce, 28 sep: leyó la invitación y dijo que no hubo conversación). */
   const releer = puedeEditar && r && (r.origen === "meet" || r.origen === "hubspot");
@@ -250,7 +245,7 @@ function QuePasoEnLaReunion({ pestana, lectura }: { pestana: PestanaDeSesion; le
 // ── Lo que aprendimos ─────────────────────────────────────────────────────────
 
 function LoQueAprendimos({ pestana, lectura }: { pestana: PestanaDeSesion; lectura: LecturaDeReunion | null }) {
-  const { revisables, escala, marco, usar, puedeEditar, guardando } = useLienzo();
+  const { revisables, escala, marco, usar, puedeEditar, guardando, usadasHoy } = useLienzo();
   const [todas, setTodas] = useState(false);
   const r = pestana.reunion;
   const s = pestana.sesion;
@@ -258,6 +253,7 @@ function LoQueAprendimos({ pestana, lectura }: { pestana: PestanaDeSesion; lectu
   const deEsta = (d: DestinoDePropuesta, it: ItemPropuesto) =>
     d.tipo !== "casoDeUso" && !(d.tipo === "casilla" && d.clave === "noExplorado") && esDeLaReunion(it, lectura, r?.titulo ?? null);
   const items = revisables.filter((it) => deEsta(it.destino, it));
+  const usadasDeEsta = usadasHoy.filter((u) => deEsta(u.item.destino, u.item)).length;
   const visibles = todas ? items : items.slice(0, 8);
   const nombreDeDimension = (id: string) => escala.areas.flatMap((a) => a.dimensiones).find((d) => d.id === id)?.nombre ?? id;
   return (
@@ -297,8 +293,8 @@ function LoQueAprendimos({ pestana, lectura }: { pestana: PestanaDeSesion; lectu
           Ver las {items.length - visibles.length} restantes
         </button>
       )}
-      <UsadasHoy filtro={deEsta} sinPendientes={!items.length} />
-      {!items.length && !s?.desafio?.texto && lectura && <p className="text-[13px] text-fg-muted">Nada nuevo por revisar de esta reunión.</p>}
+      <UsadasHoy filtro={deEsta} sinPendientes={!items.length} plegada={false} />
+      {!items.length && !usadasDeEsta && !s?.desafio?.texto && lectura && <p className="text-[13px] text-fg-muted">Nada nuevo por revisar de esta reunión.</p>}
     </section>
   );
 }
@@ -611,21 +607,25 @@ export default function DespuesDeLaSesion({
   return (
     <div className="space-y-5">
       <QuePasoEnLaReunion pestana={pestana} lectura={lectura} />
+      {/* ⛔ El feedback de la sesión (S4, 2026-10-27) va A LA VISTA, junto a «Qué pasó» (Elías, 2026-11-08: la primera vuelta
+          lo metió en un plegable y «desapareció»). Lo vigila lib/exploraciones/feedback-a-la-vista.test.ts. */}
+      {!enProyecto && <ComoTrabajasteEstaSesion pestana={pestana} />}
       <LoQueAprendimos pestana={pestana} lectura={lectura} />
+      {/* El siguiente paso acordado y cuánto avanzó: estaban a la vista antes de la primera vuelta y vuelven (2026-11-08). */}
+      <PasoYAvance pestana={pestana} lectura={lectura} />
       <LoQueQuedaParaLaProxima pestana={pestana} numeroSiguiente={numeroSiguiente} />
       <CorreoComoBoton pestana={pestana} />
 
+      {/* Plegado lo que ya estaba plegado antes de la primera vuelta («Datos de la sesión»), más la escala hasta ahora, que
+          repite «La escala» del panel de la derecha. */}
       <details className="rounded-xl border border-line bg-surface">
         <summary className="cursor-pointer select-none px-[18px] py-3.5 text-sm font-semibold text-fg">
-          Más de esta sesión{" "}
+          Datos de la sesión{" "}
           <span className="text-[13px] font-normal text-fg-muted">
-            {enProyecto ? "· siguiente paso, cuánto avanzó, la escala, lo propio de la cuenta, tus notas" : "· cómo trabajaste, siguiente paso, cuánto avanzó, la escala, portal, apertura, tus notas"}
+            {enProyecto ? "· la escala, siguiente paso, lo propio de la cuenta, tus notas" : "· la escala, siguiente paso, portal, apertura, producto mostrado, tus notas"}
           </span>
         </summary>
         <div className="space-y-4 border-t border-line p-4">
-          {/* S4 (2026-10-27): la autoevaluación de la sesión, aparte de lo de arriba. */}
-          {!enProyecto && <ComoTrabajasteEstaSesion pestana={pestana} />}
-          <PasoYAvance pestana={pestana} lectura={lectura} />
           <LaEscalaDespuesDeLaSesion />
           <Casilla clave="siguientePaso" />
           {enProyecto ? (

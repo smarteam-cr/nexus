@@ -44,7 +44,7 @@ import { GuiaEnOrden } from "./GuiaEnOrden";
 import { AgendaDeLaGuia, GuiaAnterior } from "./AgendaDeLaGuia";
 import { ContactoPrevio } from "./ContextoDeLaPreparacion";
 import { duracionDeLaSesion } from "@/lib/exploraciones/contexto-de-la-exploracion";
-import { MAX_RESPUESTA_PARA_LA_GUIA } from "@/lib/exploraciones/objetivo-y-hallazgos";
+import { MAX_RESPUESTA_PARA_LA_GUIA, mismoTexto, objetivoAceptado } from "@/lib/exploraciones/objetivo-y-hallazgos";
 import { Input, Spinner } from "@/components/ui";
 import { usePedirPreguntasDelObjetivo } from "./PreguntasDelObjetivo";
 import { sugeridasVigentes } from "@/lib/exploraciones/ajustes-de-la-guia";
@@ -75,7 +75,7 @@ function enLista(xs: readonly string[]): string {
  * la armada pero vieja, que dice QUÉ cambió desde entonces.
  */
 function EstadoDeLaGuia({ pestana }: { pestana: PestanaDeSesion }) {
-  const { escala, marco, puedeEditar } = useLienzo();
+  const { escala, marco, puedeEditar, guardando, alDia } = useLienzo();
   const { corrida, corriendo, lanzando, lanzar } = useCorrida();
   const { guia: deLaSesion, cambios: cambiosDeLaSesion } = useCambiosDesdeLaGuia(pestana);
   // La guía con el formato de antes no cuenta como guía: queda plegada abajo como «Guía anterior» (2026-11-06).
@@ -84,17 +84,42 @@ function EstadoDeLaGuia({ pestana }: { pestana: PestanaDeSesion }) {
   const armando = (corriendo && corrida?.modo === "guia") || lanzando;
   const nombre = (para: string) => nombreDelPara(para, escala, marco);
 
+  // El objetivo de la sesión lo decide el vendedor (2026-11-08, cuarta vuelta): sin uno aceptado, el botón espera.
+  const conObjetivo = objetivoAceptado(pestana.sesion?.objetivo);
+  // Se armó con otro objetivo (el vendedor lo cambió después): la guía todavía es para el anterior.
+  const otroObjetivo = !!guia?.objetivoAceptado && conObjetivo && !mismoTexto(guia.objetivoAceptado, pestana.sesion?.objetivo);
+  /* El objetivo recién aceptado puede estar todavía en camino al servidor (y la sesión, naciendo): el botón espera a que
+     salga y el pedido sale después (revisión del 2026-11-08). */
+  const armar = () => void alDia().then(() => lanzar("guia"));
+
   let titulo: string;
   let detalle: string;
   let boton: string;
   let tono: "info" | "aviso" | "neutro";
-  // Sin guía, lo dice el espacio de la guía, grande, más abajo (2026-11-08): este aviso es de una guía que ya está.
-  if (!guia) return null;
   if (armando) {
-    titulo = "El agente está rehaciendo la guía";
+    titulo = guia ? "El agente está rehaciendo la guía" : "El agente está armando la guía";
     detalle = corrida?.fase ?? "Empezando…";
     boton = "Armando…";
     tono = "info";
+  } else if (!guia) {
+    titulo = "Armar la guía";
+    detalle = conObjetivo
+      ? "Nexus la arma con el objetivo de arriba como la instrucción que más pesa, lo que ya se sabe y lo que quedó de la sesión anterior. Sale en bloques, cada uno con lo que hay que averiguar."
+      : puedeEditar
+        ? "Se habilita cuando el objetivo de la sesión, arriba, esté aceptado o escrito."
+        : "Se arma cuando quien lleva la preventa acepte el objetivo de la sesión.";
+    boton = "Armar la guía";
+    tono = "info";
+  } else if (!conObjetivo) {
+    titulo = "Esta guía se armó sin un objetivo aceptado";
+    detalle = "Para rehacerla, acepta o escribe el objetivo de la sesión de arriba: Nexus la arma con él.";
+    boton = "Actualizar la guía";
+    tono = "aviso";
+  } else if (otroObjetivo) {
+    titulo = "Cambiaste el objetivo: la guía todavía es para el anterior";
+    detalle = `Se armó para «${guia.objetivoAceptado}». «Actualizar la guía» la rehace con el objetivo de ahora; tus ajustes a las preguntas se conservan.`;
+    boton = "Actualizar la guía";
+    tono = "aviso";
   } else if (cambios) {
     const partes = [
       cambios.equipo
@@ -141,11 +166,11 @@ function EstadoDeLaGuia({ pestana }: { pestana: PestanaDeSesion }) {
       </div>
       {puedeEditar &&
         (tono === "neutro" ? (
-          <BotonBlanco disabled={armando || corriendo} onClick={() => void lanzar("guia")}>
+          <BotonBlanco disabled={armando || corriendo || guardando || !conObjetivo} onClick={armar}>
             {boton}
           </BotonBlanco>
         ) : (
-          <BotonAzul disabled={armando || corriendo} onClick={() => void lanzar("guia")}>
+          <BotonAzul disabled={armando || corriendo || guardando || !conObjetivo} onClick={armar}>
             {boton}
           </BotonAzul>
         ))}
@@ -157,7 +182,7 @@ function EstadoDeLaGuia({ pestana }: { pestana: PestanaDeSesion }) {
  * Lo que Nexus necesita saber para armar la guía (2026-11-08, objetivo-y-hallazgos.ts): de 1 a 3 preguntas cortas que se
  * responden en una línea, sin formulario. Al responder, la guía se rehace con esas respuestas, que mandan sobre las fuentes.
  */
-function PreguntasDeNexus() {
+function PreguntasDeNexus({ conObjetivo }: { conObjetivo: boolean }) {
   const { exp, puedeEditar, guardando, cambiar } = useLienzo();
   const { corriendo, lanzando, lanzar } = useCorrida();
   const preguntas = exp.estado.propuesta.preguntasParaLaGuia?.preguntas ?? [];
@@ -172,10 +197,11 @@ function PreguntasDeNexus() {
     if (bloqueado) return;
     setEnviando(true);
     try {
-      const ok = await cambiar([{ op: "responderParaLaGuia", respuestas: listas }]);
+      const ok = await cambiar([{ op: "responderParaLaGuia", respuestas: listas }], conObjetivo ? undefined : { exito: "Respuestas guardadas: Nexus las usa al armar la guía." });
       if (ok) {
         setRespuestas({});
-        void lanzar("guia");
+        // Sin objetivo aceptado la guía no se arma: las respuestas esperan a que se arme (revisión del 2026-11-08).
+        if (conObjetivo) void lanzar("guia");
       }
     } finally {
       setEnviando(false);
@@ -201,7 +227,7 @@ function PreguntasDeNexus() {
       {puedeEditar && (
         <div className="flex justify-end">
           <BotonAzul disabled={bloqueado} onClick={() => void responder()}>
-            Responder y rehacer la guía
+            {conObjetivo ? "Responder y rehacer la guía" : "Guardar respuestas"}
           </BotonAzul>
         </div>
       )}
@@ -211,12 +237,13 @@ function PreguntasDeNexus() {
 
 /**
  * El espacio de la guía mientras no hay (2026-11-08, Elías: «se tiene que notar mucho que falta»): grande, en el lugar de la
- * guía. Nexus la arma sola al terminar de leer la sesión anterior; acá se ve mientras la arma, lo que le falta saber (sus
- * preguntas) o el botón para armarla ahora.
+ * guía. Dice qué falta (aceptar el objetivo de la sesión, o armarla con el botón de arriba), se ve mientras Nexus la arma y
+ * muestra lo que le falta saber (sus preguntas). Desde la cuarta vuelta (2026-11-08) la guía no se arma sola.
  */
 function EspacioDeLaGuia({ pestana }: { pestana: PestanaDeSesion }) {
-  const { exp, puedeEditar } = useLienzo();
-  const { corrida, corriendo, lanzando, lanzar } = useCorrida();
+  const { exp } = useLienzo();
+  const { corrida, corriendo, lanzando } = useCorrida();
+  const conObjetivo = objetivoAceptado(pestana.sesion?.objetivo);
   const armando = (corriendo && corrida?.modo === "guia") || lanzando;
   const fallo = !armando && corrida?.modo === "guia" && corrida.estado === "ERROR" ? corrida.error : null;
   const preguntas = exp.estado.propuesta.preguntasParaLaGuia?.preguntas ?? [];
@@ -235,24 +262,22 @@ function EspacioDeLaGuia({ pestana }: { pestana: PestanaDeSesion }) {
         </>
       ) : (
         <>
-          <p className="text-lg font-semibold text-warn-ink">Falta la guía de la sesión {pestana.numero}</p>
+          <p className="text-lg font-semibold text-warn-ink">
+            {conObjetivo ? `Falta la guía de la sesión ${pestana.numero}` : `Falta aceptar el objetivo de la sesión ${pestana.numero}`}
+          </p>
           <p className="max-w-xl text-[13px] leading-[1.5] text-fg-secondary">
-            {preguntas.length
-              ? "Para armarla, Nexus necesita saber esto. Responde en una línea y la guía se rehace con tus respuestas."
-              : `Nexus la arma sola cuando termina de leer la sesión anterior, con el objetivo de la exploración, lo que ya se sabe y lo que quedó pendiente${
-                  conReunion ? ", para los participantes y la duración de la reunión" : ", para 60 minutos (si asocias la reunión del calendario, toma su duración)"
-                }. Sale en bloques, cada uno con lo que hay que averiguar.`}
+            {!conObjetivo
+              ? `La guía no se arma hasta que aceptes o escribas el objetivo de la sesión, arriba. Es tu oportunidad de decirle a Nexus cómo estructurar la sesión.${
+                  preguntas.length ? " Mientras, puedes responder lo que Nexus necesita saber: lo usa al armarla." : ""
+                }`
+              : preguntas.length
+                ? "Para armarla, Nexus necesita saber esto. Responde en una línea y la guía se rehace con tus respuestas."
+                : `Ármala con «Armar la guía», arriba. Nexus usa tu objetivo como la instrucción que más pesa${
+                    conReunion ? ", y los participantes y la duración de la reunión" : ", para 60 minutos (si asocias la reunión del calendario, toma su duración)"
+                  }.`}
           </p>
           {fallo && <p className="max-w-xl text-[13px] text-danger-ink">La última vez no se pudo armar: {fallo}</p>}
-          {preguntas.length > 0 ? (
-            <PreguntasDeNexus />
-          ) : (
-            puedeEditar && (
-              <BotonAzul disabled={corriendo} onClick={() => void lanzar("guia")}>
-                Armar la guía ahora
-              </BotonAzul>
-            )
-          )}
+          {preguntas.length > 0 && <PreguntasDeNexus conObjetivo={conObjetivo} />}
         </>
       )}
     </section>
@@ -402,10 +427,14 @@ function Objetivo({
       <section className="space-y-2.5 rounded-xl border border-info-line bg-info-surface px-[18px] py-4">
         <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-brand">
           <IconoDeSugerencia className="h-[13px] w-[13px]" />
-          El agente sugiere el objetivo de esta sesión
+          Objetivo sugerido
         </p>
         <p className="text-[15px] font-semibold leading-[1.4] text-fg">{ofrecer}</p>
-        {esLaProxima && <p className="text-[13px] leading-[1.45] text-fg-secondary">{saleBien}</p>}
+        {esLaProxima && (
+          <p className="text-[13px] leading-[1.45] text-fg-secondary">
+            Acéptalo o edítalo: la guía no se arma sin él, y es la instrucción que más pesa. Si quieres, dile a Nexus cómo estructurar la sesión.
+          </p>
+        )}
         {puedeEditar && (
           <div className="flex items-center justify-end gap-2">
             <BotonTexto disabled={guardando} onClick={() => void editar((x) => ({ ...x, objetivoDescartado: ofrecer }))}>
@@ -421,7 +450,7 @@ function Objetivo({
             </BotonBlanco>
             {/* El objetivo que sugiere el agente se armó con la guía: usarlo no pide preguntas nuevas. */}
             <BotonAzul disabled={guardando} onClick={() => guardar(ofrecer, { proponer: false })}>
-              Usar
+              Aceptar
             </BotonAzul>
           </div>
         )}
@@ -432,7 +461,9 @@ function Objetivo({
   if (!puedeEditar) return null;
   return (
     <section className="flex items-center gap-3 rounded-xl border border-dashed border-line bg-surface px-[18px] py-3.5">
-      <p className="min-w-0 flex-1 text-[13px] text-fg-muted">Sin objetivo todavía: ¿qué tienes que salir sabiendo de esta sesión?</p>
+      <p className="min-w-0 flex-1 text-[13px] text-fg-muted">
+        Sin objetivo todavía: ¿qué tienes que salir sabiendo de esta sesión?{esLaProxima ? " La guía no se arma sin él." : ""}
+      </p>
       <BotonBlanco
         onClick={() => {
           setTexto("");
@@ -947,9 +978,8 @@ export default function AntesDeLaSesion({ pestana, esLaProxima }: { pestana: Pes
 
   return (
     <div className="space-y-5">
-      {/* La guía ya no espera nada (2026-11-08): el objetivo es el de Smarteam. En la primera de una preventa, el contacto previo. */}
+      {/* La guía espera el objetivo de la sesión aceptado (2026-11-08, cuarta vuelta). En la primera de una preventa, el contacto previo. */}
       {esLaProxima && marco.clave !== "cs" && pestana.numero === 1 && !pestana.hecha && <ContactoPrevio />}
-      {esLaProxima && <EstadoDeLaGuia pestana={pestana} />}
       <Objetivo
         pestana={pestana}
         esLaProxima={esLaProxima}
@@ -961,6 +991,8 @@ export default function AntesDeLaSesion({ pestana, esLaProxima }: { pestana: Pes
         }}
         pidiendo={delObjetivo.pidiendo}
       />
+      {/* Cuarta vuelta (2026-11-08): «Armar la guía» va debajo del objetivo y arriba de «Lo que ya sabemos». */}
+      {esLaProxima && <EstadoDeLaGuia pestana={pestana} />}
       {esLaProxima && <LoQueTraes pestana={pestana} />}
       {esLaProxima && <LoQueYaSabemos pestana={pestana} />}
       {/* Sin guía, su espacio grande (2026-11-08). Con guía y algo que Nexus necesita saber, sus preguntas arriba de ella. */}
@@ -971,7 +1003,7 @@ export default function AntesDeLaSesion({ pestana, esLaProxima }: { pestana: Pes
             <IconoDeSugerencia className="h-4 w-4 text-brand" />
             Para afinar esta guía, Nexus necesita saber esto
           </p>
-          <PreguntasDeNexus />
+          <PreguntasDeNexus conObjetivo={objetivoAceptado(pestana.sesion?.objetivo)} />
         </section>
       )}
       {actual && <LaGuia pestana={pestana} esLaProxima={esLaProxima} />}
