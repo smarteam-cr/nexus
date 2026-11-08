@@ -9,8 +9,8 @@
  *   · «Lo que queda para la próxima» (`loQueQuedaParaLaProxima`): UNA lista que junta lo que quedó pendiente según la
  *     lectura, lo que no se preguntó, lo que el cliente dijo y nadie siguió, y lo que dejaron las sesiones de antes de este
  *     cambio (el desafío con lo que faltaba y los temas por retomar). Todo va marcado; lo que se desmarca queda en
- *     `SesionPlaneada.noLlevar`. Lo marcado alimenta la guía de la siguiente (`retomarParaLaGuia`) y su objetivo
- *     (`objetivoSugeridoDeLaSiguiente`), sin otra llamada de IA: lo sacó la lectura de la reunión que ya se hace.
+ *     `SesionPlaneada.noLlevar`. Lo marcado alimenta la guía de la siguiente (`retomarParaLaGuia`) y sus objetivos
+ *     sugeridos (`objetivosSugeridosDeLaSiguiente`, hasta tres), sin otra llamada de IA: los sacó la lectura de la reunión.
  *   · Qué áreas de la escala ya tienen evidencia (`coberturaDeLaEscala`) y dónde quedó la exploración (`dondeQuedo`).
  */
 import { avanceDeLaAgenda, idDeAveriguar } from "./agenda";
@@ -164,10 +164,6 @@ const corto = (t: string, max = 90) => {
  * (lo pensó con todo lo pendiente) o, si no, uno armado con lo que sigue marcado y lo que la exploración todavía no sabe.
  * null si no hay nada.
  */
-export function objetivoSugeridoDeLaSiguiente(o: Parameters<typeof objetivosSugeridosDeLaSiguiente>[0]): string | null {
-  return objetivosSugeridosDeLaSiguiente(o)[0] ?? null;
-}
-
 /**
  * Séptima vuelta (2026-11-08, Elías: «tres objetivos sugeridos»): los que Nexus sugiere para la siguiente sesión, sin IA.
  * Los de la lectura (hasta tres, cada uno con un enfoque distinto; una lectura de antes trae uno) si la persona no desmarcó

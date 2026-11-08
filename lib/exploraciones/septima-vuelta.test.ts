@@ -12,7 +12,7 @@ import path from "node:path";
 import type Anthropic from "@anthropic-ai/sdk";
 import { describe, expect, it } from "vitest";
 import { leerLosResumenes, pedidoDeLosResumenes } from "./agente-pedido";
-import { loQueQuedaParaLaProxima, objetivoSugeridoDeLaSiguiente, objetivosSugeridosDeLaSiguiente } from "./despues-de-la-sesion";
+import { loQueQuedaParaLaProxima, objetivosSugeridosDeLaSiguiente } from "./despues-de-la-sesion";
 import { leerPropuesta } from "./esquemas";
 import type { LecturaDeReunion } from "./contenido";
 import { MAX_OBJETIVOS_SUGERIDOS, objetivosDistintos } from "./objetivo-y-hallazgos";
@@ -90,7 +90,6 @@ describe("los que ve la Preparación de la siguiente sesión, sin IA", () => {
 
   it("una lectura de antes (uno solo) se muestra como una sola tarjeta", () => {
     expect(objetivosSugeridosDeLaSiguiente({ pendientes, objetivoSiguiente: TRES[1] })).toEqual([TRES[1]]);
-    expect(objetivoSugeridoDeLaSiguiente({ pendientes, objetivoSiguiente: TRES[1], objetivosSiguientes: TRES })).toBe(TRES[0]);
   });
 
   it("si se desmarcó algo, uno solo armado con lo que sigue marcado y lo que falta saber", () => {
@@ -127,15 +126,30 @@ describe("la Preparación: tres tarjetas, y la guía recién al elegir (guarda e
   it("sin objetivo elegido no se ve ninguna guía, ni la de antes ni «Armar la guía»", () => {
     expect(pantalla).toMatch(/const actual = esLaProxima && \(guiaDeAntes \|\| !conObjetivo \|\| \(armadaSinObjetivo && armandoLaGuia\)\) \? null : guia;/);
     expect(pantalla).toMatch(/const anterior =\n\s*esLaProxima && conObjetivo \?/);
-    expect(pantalla).toMatch(/\{esLaProxima && conObjetivo && <EstadoDeLaGuia pestana=\{pestana\} \/>\}/);
+    expect(pantalla).toMatch(/\{esLaProxima && conObjetivo && <EstadoDeLaGuia pestana=\{pestana\} armandoAlElegir=\{eligiendo\} \/>\}/);
     // Lo que sí se ve antes de elegir: el objetivo de la exploración, las preguntas de Nexus y «Lo que ya sabemos».
     expect(pantalla).toMatch(/\{esLaProxima && <SirveAlObjetivoDeLaExploracion \/>\}/);
     expect(pantalla).toMatch(/\{esLaProxima && <LoQueYaSabemos pestana=\{pestana\} \/>\}/);
     expect(pantalla).not.toMatch(/esLaProxima && conObjetivo && paraLaGuia\.length/);
   });
 
-  it("una guía armada antes de elegir el objetivo lo dice, si queda a la vista", () => {
-    expect(fuente).toContain("Esta guía se armó antes de elegir el objetivo");
+  it("una guía que no guardó su objetivo (6 al 8 nov) cuenta como armada con el de la sesión: sin aviso", () => {
+    expect(fuente).not.toContain("Esta guía se armó antes de elegir el objetivo");
+    expect(fuente).not.toMatch(/else if \(!guia\.objetivoAceptado\)/);
+  });
+
+  it("mientras se arma la guía, «Armar la guía» no se muestra (tampoco mientras se guarda la tarjeta elegida)", () => {
+    const estado = fuente.slice(fuente.indexOf("function EstadoDeLaGuia("), fuente.indexOf("/** Lo que hace Nexus mientras corre"));
+    expect(estado).toMatch(/const armando = \(corriendo && corrida\?\.modo === "guia"\) \|\| lanzando \|\| armandoAlElegir;/);
+    expect(estado).toMatch(/\{puedeEditar &&\n\s*!armando &&/);
+    expect(pantalla).toMatch(/<EstadoDeLaGuia pestana=\{pestana\} armandoAlElegir=\{eligiendo\} \/>/);
+  });
+
+  it("«Después de la sesión» dice cuántos objetivos sugiere para la siguiente, no uno", () => {
+    const despues = leer("components", "exploraciones", "DespuesDeLaSesion.tsx");
+    expect(despues).toMatch(/objetivosSugeridosDeLaSiguiente\(\{/);
+    expect(despues).toMatch(/objetivos para la sesión \$\{numeroSiguiente\}: elige uno en su Preparación\./);
+    expect(despues).not.toContain("arranca con:");
   });
 });
 

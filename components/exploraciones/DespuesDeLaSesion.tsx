@@ -32,7 +32,7 @@ import {
   cumplimientoSugerido,
   esDeLaReunion,
   NOMBRE_DEL_CUMPLIMIENTO,
-  objetivoSugeridoDeLaSiguiente,
+  objetivosSugeridosDeLaSiguiente,
   type Cumplimiento,
 } from "@/lib/exploraciones/despues-de-la-sesion";
 import { MAX_SESIONES, type PestanaDeSesion, type PreguntaParaMostrar, type ResultadoDeLaSesion } from "@/lib/exploraciones/guia";
@@ -583,7 +583,7 @@ export default function DespuesDeLaSesion({
   const { sesiones } = useSesiones();
   const { corriendo, lanzando } = useCorrida();
   const { pendientes, sugeridas } = useLoQueQueda(pestana);
-  // El mismo objetivo que va a sugerir la Preparación de la siguiente (LoQueQueda.tsx › `useObjetivoDeLaSiguiente`).
+  // Los mismos objetivos que va a sugerir la Preparación de la siguiente (LoQueQueda.tsx › `useObjetivosDeLaSiguiente`).
   const porAveriguarHoy = usePorAveriguar();
   const r = pestana.reunion;
   const lectura = r ? (exp.estado.propuesta.lecturas[claveDeLaReunion(r)] ?? null) : null;
@@ -599,7 +599,13 @@ export default function DespuesDeLaSesion({
     );
   }
 
-  const objetivoDeLaSiguiente = objetivoSugeridoDeLaSiguiente({ pendientes, objetivoSiguiente: lectura?.objetivoSiguiente ?? null, porAveriguar: porAveriguarHoy });
+  // Séptima vuelta: hasta tres; se eligen en la Preparación de la siguiente, así que acá solo se dice cuántos hay.
+  const objetivosDeLaSiguiente = objetivosSugeridosDeLaSiguiente({
+    pendientes,
+    objetivoSiguiente: lectura?.objetivoSiguiente ?? null,
+    objetivosSiguientes: lectura?.objetivosSiguientes ?? null,
+    porAveriguar: porAveriguarHoy,
+  });
   /* Al preparar la siguiente, lo que el cliente dijo y nadie siguió (todavía sugerido) se usa si se ve marcado en la lista
      y se descarta si se ve tachado: así no queda pendiente para siempre. Lo que no se ve en la lista (pasado el tope, o
      repetido con otro renglón) no se toca. */
@@ -655,10 +661,12 @@ export default function DespuesDeLaSesion({
       {puedeEditar && (
         <div className="sticky bottom-0 z-10 -mx-6 -mb-10 flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-line bg-surface px-6 py-3.5 xl:-mx-8 xl:px-8">
           <p className="min-w-0 flex-1 text-[13.5px] text-fg-secondary">
-            {objetivoDeLaSiguiente ? (
+            {objetivosDeLaSiguiente.length > 1 ? (
+              `Nexus sugiere ${objetivosDeLaSiguiente.length} objetivos para la sesión ${numeroSiguiente}: elige uno en su Preparación.`
+            ) : objetivosDeLaSiguiente.length === 1 ? (
               <>
-                <span className="text-fg-muted">La sesión {numeroSiguiente} arranca con: </span>
-                {objetivoDeLaSiguiente}
+                <span className="text-fg-muted">Nexus sugiere un objetivo para la sesión {numeroSiguiente}: </span>
+                {objetivosDeLaSiguiente[0]} <span className="text-fg-muted">Lo eliges o escribes el tuyo en su Preparación.</span>
               </>
             ) : (
               `Lo que quede marcado arriba entra en la guía de la sesión ${numeroSiguiente}.`

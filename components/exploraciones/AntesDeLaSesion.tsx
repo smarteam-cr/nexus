@@ -83,19 +83,21 @@ function enLista(xs: readonly string[]): string {
  * pasar el mouse). Tres casos: la de base (preguntas generales, sin el agente), la armada y al día, y
  * la armada pero vieja, que dice QUÉ cambió desde entonces.
  */
-function EstadoDeLaGuia({ pestana }: { pestana: PestanaDeSesion }) {
+function EstadoDeLaGuia({ pestana, armandoAlElegir }: { pestana: PestanaDeSesion; armandoAlElegir: boolean }) {
   const { escala, marco, puedeEditar, guardando, alDia } = useLienzo();
   const { corrida, corriendo, lanzando, lanzar } = useCorrida();
   const { guia: deLaSesion, cambios: cambiosDeLaSesion } = useCambiosDesdeLaGuia(pestana);
   // La guía con el formato de antes no cuenta como guía: queda plegada abajo como «Guía anterior» (2026-11-06).
   const guia = deLaSesion?.agenda ? deLaSesion : null;
   const cambios = guia ? cambiosDeLaSesion : null;
-  const armando = (corriendo && corrida?.modo === "guia") || lanzando;
+  // También mientras se guarda el objetivo elegido en una tarjeta, antes de que salga el pedido (revisión de la séptima vuelta).
+  const armando = (corriendo && corrida?.modo === "guia") || lanzando || armandoAlElegir;
   const nombre = (para: string) => nombreDelPara(para, escala, marco);
 
   // El objetivo de la sesión lo decide el vendedor (2026-11-08, cuarta vuelta): sin uno aceptado, el botón espera.
   const conObjetivo = objetivoAceptado(pestana.sesion?.objetivo);
-  // Se armó con otro objetivo (el vendedor lo cambió después): la guía todavía es para el anterior.
+  /* Se armó con otro objetivo (el vendedor lo cambió después): la guía todavía es para el anterior. Una guía que no guardó
+     su objetivo (las armadas del 6 al 8 nov, antes de que lo guardara) cuenta como armada con el de la sesión: sin aviso. */
   const otroObjetivo = !!guia?.objetivoAceptado && conObjetivo && !mismoTexto(guia.objetivoAceptado, pestana.sesion?.objetivo);
   /* El objetivo recién aceptado puede estar todavía en camino al servidor (y la sesión, naciendo): el botón espera a que
      salga y el pedido sale después (revisión del 2026-11-08). */
@@ -122,12 +124,6 @@ function EstadoDeLaGuia({ pestana }: { pestana: PestanaDeSesion }) {
   } else if (!conObjetivo) {
     titulo = "Esta guía se armó sin un objetivo elegido";
     detalle = "Para rehacerla, elige o escribe el objetivo de la sesión de arriba: Nexus la arma con él.";
-    boton = "Actualizar la guía";
-    tono = "aviso";
-  } else if (!guia.objetivoAceptado) {
-    // Séptima vuelta: se armó antes de elegir el objetivo (elegirlo la rehace; si eso no salió, se dice acá).
-    titulo = "Esta guía se armó antes de elegir el objetivo";
-    detalle = "«Actualizar la guía» la rehace con el objetivo de arriba; tus ajustes a las preguntas se conservan.";
     boton = "Actualizar la guía";
     tono = "aviso";
   } else if (otroObjetivo) {
@@ -179,13 +175,15 @@ function EstadoDeLaGuia({ pestana }: { pestana: PestanaDeSesion }) {
         <p className={cn("text-sm font-semibold", tono === "aviso" ? "text-warn-ink" : "text-fg")}>{titulo}</p>
         <p className="text-[13px] leading-[1.45] text-fg-secondary">{detalle}</p>
       </div>
+      {/* Mientras se arma, sin botón: el estado ya dice qué pasa (revisión de la séptima vuelta). */}
       {puedeEditar &&
+        !armando &&
         (tono === "neutro" ? (
-          <BotonBlanco disabled={armando || corriendo || guardando || !conObjetivo} onClick={armar}>
+          <BotonBlanco disabled={corriendo || guardando || !conObjetivo} onClick={armar}>
             {boton}
           </BotonBlanco>
         ) : (
-          <BotonAzul disabled={armando || corriendo || guardando || !conObjetivo} onClick={armar}>
+          <BotonAzul disabled={corriendo || guardando || !conObjetivo} onClick={armar}>
             {boton}
           </BotonAzul>
         ))}
@@ -1229,7 +1227,7 @@ export default function AntesDeLaSesion({ pestana, esLaProxima }: { pestana: Pes
   const guiaDeAntes = !!guia && !guia.agenda;
   /* Séptima vuelta (Elías: «que no aparezca la guía antes de eso, que la guía se arme luego de seleccionar eso»): en la
      próxima, sin objetivo elegido no se ve ninguna guía. Una armada antes de elegirlo tampoco mientras se arma la del
-     objetivo elegido; si no se arma, se ve con el aviso de que se armó sin él (EstadoDeLaGuia). */
+     objetivo elegido (después se ve como armada con el objetivo de la sesión: EstadoDeLaGuia). */
   const armandoLaGuia = eligiendo || lanzando || (corriendo && corrida?.modo === "guia");
   const armadaSinObjetivo = !!guia?.agenda && !guia.objetivoAceptado;
   const actual = esLaProxima && (guiaDeAntes || !conObjetivo || (armadaSinObjetivo && armandoLaGuia)) ? null : guia;
@@ -1310,7 +1308,7 @@ export default function AntesDeLaSesion({ pestana, esLaProxima }: { pestana: Pes
       )}
       {/* Cuarta vuelta (2026-11-08): «Armar la guía» va debajo del objetivo y arriba de «Lo que ya sabemos». Desde la séptima,
           solo con un objetivo elegido: elegirlo ya arma la guía, y sin él no hay guía de qué hablar. */}
-      {esLaProxima && conObjetivo && <EstadoDeLaGuia pestana={pestana} />}
+      {esLaProxima && conObjetivo && <EstadoDeLaGuia pestana={pestana} armandoAlElegir={eligiendo} />}
       {esLaProxima && <LoQueTraes pestana={pestana} />}
       {esLaProxima && <ParaElDemo />}
       {esLaProxima && <LoQueYaSabemos pestana={pestana} />}
