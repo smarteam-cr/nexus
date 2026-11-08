@@ -5,7 +5,7 @@
  * conversación que no pierde el cierre y los insumos para la guía de la siguiente sesión.
  */
 import { describe, expect, it } from "vitest";
-import { HERRAMIENTA_DEL_ANALISIS, leerElAnalisis, leerResultadoGuardado, numerosDe, verificarCita, type LoQueHabia, type TurnoNumerado } from "./analisis";
+import { HERRAMIENTA_DEL_ANALISIS, leerElAnalisis, leerResultadoGuardado, numerosDe, partesDelPaso, verificarCita, type LoQueHabia, type TurnoNumerado } from "./analisis";
 import { conversacionDelAnalisis } from "./conversacion";
 import { diceQueNoSeSabe, insumosComoLineas, insumosParaLaGuia, tarjetaEnUnaLinea, yaSeSabeDeLasTarjetas } from "./para-la-guia";
 import { loDeLaSesion } from "./revision";
@@ -180,6 +180,15 @@ describe("5 · los próximos pasos, con la última versión acordada", () => {
       pasos: [{ tema: "Luis", que: "Sesión con Luis", cuando: "lunes a las 9", quien: "Luis", citas: [{ turno: 13, texto: "el lunes a las 9 me sirve perfecto" }] }],
     });
     expect(resultado.juicios[0]).toMatchObject({ valor: "con_fecha_y_duenio", porAusencia: false });
+  });
+  it("la tarjeta «Siguiente paso acordado» muestra cada paso verificado en sus partes, sin repetir el «con»", () => {
+    const cita = { turno: 10, hablante: "Laura", texto: "x" };
+    expect(partesDelPaso({ que: "Sesión con Marketing.", cuando: "miércoles a las 2 de la tarde", quien: "con Catalina", cita })).toEqual({
+      que: "Sesión con Marketing",
+      cuando: "miércoles a las 2 de la tarde",
+      conQuien: "Catalina",
+    });
+    expect(partesDelPaso({ que: "Sesión con Luis", cuando: "lunes a las 9", quien: "Luis", cita })).toEqual({ que: "Sesión con Luis", cuando: "lunes a las 9", conQuien: null });
   });
 });
 
