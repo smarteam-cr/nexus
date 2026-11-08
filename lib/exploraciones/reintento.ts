@@ -149,6 +149,9 @@ function operacionSegura(op: Operacion, antes: EstadoDeExploracion, ahora: Estad
     case "responderParaLaGuia":
       // Suma respuestas: no pisa las de otro.
       return true;
+    case "devolverCasosAnteriores":
+      // Solo actúa si lo apartado sigue siendo de esa corrida (contenido.ts): si hubo otro «Regenerar», no hace nada.
+      return antes.propuesta.casosAnteriores?.corridaId === ahora.propuesta.casosAnteriores?.corridaId;
     case "sinPortal":
     case "descartar":
     // K5: suma lápidas, una por una: no pisa lo que hizo otro. Y la del job se fija sobre lo de ahora (no hace nada si cambió).

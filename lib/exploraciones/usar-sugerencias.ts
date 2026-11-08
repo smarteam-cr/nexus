@@ -96,8 +96,12 @@ export function queHaceUsar(
       if (esDeLista(TIPO_DE_CASILLA[d.clave])) return { texto: `Sumar a «${etiqueta}»` };
       return { texto: c.casillas[d.clave] !== undefined ? `Reemplazar lo que dice «${etiqueta}»` : `Escribirlo en «${etiqueta}»` };
     }
-    case "casoDeUso":
-      return { texto: `Sumar «${(item.valor as CasoDeUsoElegido).titulo}» a los casos de uso` };
+    case "casoDeUso": {
+      const titulo = (item.valor as CasoDeUsoElegido).titulo;
+      // La versión nueva de un caso ya elegido (2026-11-08, «Regenerar»): reemplaza la que está.
+      if (d.useCaseId in c.casosDeUso) return { texto: `Actualizar «${titulo}» con la versión nueva`, aviso: c.casosDeUso[d.useCaseId].aMano ? "Reemplaza las actividades que cambiaste a mano." : undefined };
+      return { texto: `Sumar «${titulo}» a los casos de uso` };
+    }
   }
 }
 

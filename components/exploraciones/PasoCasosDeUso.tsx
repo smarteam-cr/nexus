@@ -20,8 +20,31 @@
  * Los casos de uso del agente entran a la propuesta como contexto; la sección de casos de uso con
  * precio sale solo del catálogo, como siempre. Armar la propuesta es su propia pieza desde el
  * 2026-10-01 (PasoPropuesta.tsx).
+ *
+ * Desde el 2026-11-08 (pedido de Elías con Centauro Solutions; lib/casos-de-uso/armado.ts) aquí se PERSONALIZA la
+ * propuesta: cada caso se arma con actividades de la biblioteca (el agente las propone; un caso del catálogo elegido a
+ * mano trae las de su ficha), se quitan y se ponen actividades, y cada caso dice sus horas, su precio mínimo (horas ×
+ * tarifa del segmento) y, para el vendedor, cómo subir el ticket vendiendo por valor. Si hay casos sin armar (de
+ * antes), «Regenerar» los vuelve a armar: se aplica con un solo «Deshacer» (y Ctrl+Z), y lo editado a mano no se pisa.
  */
-import { useEffect, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { useUndo } from "@/components/ui/UndoProvider";
+import {
+  actividadesDelElegido,
+  cambiarVeces,
+  casosSinArmar,
+  horasDeLaActividad,
+  horasDeLaVenta,
+  horasDelCaso,
+  precioMinimo,
+  quitarActividad,
+  sumarActividad,
+  type ActividadDelCaso,
+  type ActividadLigera,
+  type TarifaDeLaEmpresa,
+  type ValorDeVenta,
+} from "@/lib/casos-de-uso/armado";
+import { ETAPAS_DE_ACTIVIDAD, formatoHoras, formatoUsd, sobreQueAparte } from "@/lib/casos-de-uso/actividades-puras";
 import Link from "next/link";
 import { Alert, Badge, Select } from "@/components/ui";
 import { cn } from "@/lib/cn";
@@ -50,6 +73,178 @@ interface DatosDelPaso {
   catalogo: Caso[];
 }
 
+/** Lo que llega con el paso para contar horas y precio (lib/casos-de-uso/armado-server.ts). */
+interface Armado {
+  biblioteca: ActividadLigera[];
+  porId: ReadonlyMap<string, ActividadLigera>;
+  /** Por el id del catálogo, sin `cat-`. */
+  porDefecto: Record<string, ActividadDelCaso[]>;
+  tarifa: TarifaDeLaEmpresa;
+}
+const ArmadoContexto = createContext<Armado | null>(null);
+
+/** Las actividades de un caso de la preventa: las suyas o, si es del catálogo y no tiene, las de su ficha. */
+function actividadesDe(id: string, caso: CasoDeUsoElegido, armado: Armado | null): ActividadDelCaso[] {
+  return actividadesDelElegido(caso, id.startsWith("cat-") ? armado?.porDefecto[id.slice(4)] : undefined);
+}
+
+/** «18 h · desde 1.440 USD» y lo que falta (Dev o Diseño, o que ninguna actividad calza). */
+function PrecioDelCaso({ id, caso }: { id: string; caso: CasoDeUsoElegido }) {
+  const armado = useContext(ArmadoContexto);
+  if (!armado) return null;
+  const acts = actividadesDe(id, caso, armado);
+  if (!acts.length) return <p className="text-xs text-fg-muted">{caso.sinActividad ?? "Sin actividades de la biblioteca: todavía sin precio."}</p>;
+  const { horas, sinTiempo } = horasDelCaso(acts, armado.porId);
+  return (
+    <p className="text-xs text-fg-secondary">
+      <span className="font-semibold text-fg">{formatoHoras(horas)}</span>
+      {" · "}
+      <span className="font-semibold text-fg">desde {formatoUsd(precioMinimo(horas, armado.tarifa))}</span>
+      {sinTiempo.length > 0 && <span className="text-fg-muted"> + lo que defina {sinTiempo.join(" y ")}</span>}
+      <span className="text-fg-muted">
+        {" "}
+        · {acts.length} {acts.length === 1 ? "actividad" : "actividades"}
+      </span>
+    </p>
+  );
+}
+
+/** Cómo subir el ticket: lo ve solo el vendedor (nunca llega a la propuesta del cliente). */
+function ValorDelCaso({ valor }: { valor: ValorDeVenta }) {
+  return (
+    <div className="space-y-1.5 rounded-lg border border-line bg-surface-muted px-3 py-2.5 text-[13px] leading-normal text-fg-secondary">
+      <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-fg-muted">
+        Para subir el ticket{valor.palanca ? ` · ${valor.palanca}` : ""} <span className="font-normal normal-case tracking-normal">(solo lo ves tú)</span>
+      </p>
+      <p>{valor.argumento}</p>
+      {valor.numeros.length > 0 && (
+        <ul className="space-y-0.5 text-xs">
+          {valor.numeros.map((n, i) => (
+            <li key={i}>
+              <span className="font-medium text-fg">{n.dato}</span>
+              {n.fuente && <span className="text-fg-muted"> · {n.fuente}</span>}
+            </li>
+          ))}
+        </ul>
+      )}
+      {valor.falta.length > 0 && (
+        <div className="text-xs">
+          <p className="font-medium text-fg">Falta averiguar</p>
+          <ul className="list-disc space-y-0.5 pl-4">
+            {valor.falta.map((f, i) => (
+              <li key={i}>{f}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** La lista de actividades de un caso. Editable en un caso elegido: quitar, poner de la biblioteca y cambiar las veces. */
+function ActividadesDelCaso({ id, caso, editable }: { id: string; caso: CasoDeUsoElegido; editable: boolean }) {
+  const armado = useContext(ArmadoContexto);
+  const { exp, cambiar, guardando } = useLienzo();
+  const { pushUndo } = useUndo();
+  if (!armado) return null;
+  const acts = actividadesDe(id, caso, armado);
+  /* Cada cambio se puede deshacer (el aviso y Ctrl+Z): vuelve el caso como estaba. Si es del catálogo y no tenía
+     actividades propias, deshacer lo devuelve a las de su ficha. */
+  const guardar = (nuevo: CasoDeUsoElegido, que: string) => {
+    if (nuevo === caso) return;
+    void cambiar([{ op: "casoDeUso", useCaseId: id, valor: nuevo }]);
+    pushUndo({ scope: `exploracion:${exp.id}`, label: que, undo: () => void cambiar([{ op: "casoDeUso", useCaseId: id, valor: caso }]) });
+  };
+  const yaEstan = new Set(acts.map((a) => a.actividadId));
+  return (
+    <div className="space-y-1.5">
+      <ul className="divide-y divide-line rounded-lg border border-line">
+        {acts.map((a, i) => {
+          const lib = armado.porId.get(a.actividadId);
+          return (
+            <li key={`${a.actividadId}-${a.sobreQue ?? ""}-${i}`} className="flex items-center gap-2 px-3 py-1.5 text-xs">
+              <span className="min-w-0 flex-1 text-fg">
+                {a.nombre}
+                {a.sobreQue && sobreQueAparte({ nombre: a.nombre, sobreQue: a.sobreQue }) && <span className="text-fg-muted"> · {a.sobreQue}</span>}
+                {!lib && <span className="text-danger-ink"> · ya no está en la biblioteca</span>}
+              </span>
+              {editable && lib?.seRepite ? (
+                <span className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    aria-label={`Una vez menos «${a.nombre}»`}
+                    disabled={guardando || a.veces <= 1}
+                    className="h-5 w-5 rounded border border-line text-fg-secondary hover:bg-surface-hover disabled:opacity-40"
+                    onClick={() => guardar(cambiarVeces(caso, acts, i, a.veces - 1), `Bajaste «${a.nombre}» a ${a.veces - 1}`)}
+                  >
+                    −
+                  </button>
+                  <span className="w-6 text-center tabular-nums text-fg-secondary">{a.veces}×</span>
+                  <button
+                    type="button"
+                    aria-label={`Una vez más «${a.nombre}»`}
+                    disabled={guardando}
+                    className="h-5 w-5 rounded border border-line text-fg-secondary hover:bg-surface-hover disabled:opacity-40"
+                    onClick={() => guardar(cambiarVeces(caso, acts, i, a.veces + 1), `Subiste «${a.nombre}» a ${a.veces + 1}`)}
+                  >
+                    +
+                  </button>
+                </span>
+              ) : (
+                a.veces > 1 && <span className="tabular-nums text-fg-muted">{a.veces}×</span>
+              )}
+              <span className="w-14 text-right tabular-nums text-fg-muted">
+                {lib ? (lib.horasPendientes ? (lib.quien.startsWith("Dev") ? "Dev" : "Diseño") : formatoHoras(horasDeLaActividad(a, lib))) : "—"}
+              </span>
+              {editable && (
+                <button
+                  type="button"
+                  aria-label={`Quitar «${a.nombre}»`}
+                  title="Quitar la actividad"
+                  disabled={guardando}
+                  className="rounded px-1 text-fg-muted hover:bg-surface-hover hover:text-fg disabled:opacity-40"
+                  onClick={() => guardar(quitarActividad(caso, acts, i), `Quitaste «${a.nombre}» de «${caso.titulo}»`)}
+                >
+                  ×
+                </button>
+              )}
+            </li>
+          );
+        })}
+        {acts.length === 0 && <li className="px-3 py-2 text-xs text-fg-muted">Sin actividades.</li>}
+      </ul>
+      {caso.sinActividad && acts.length > 0 && <p className="text-xs text-warning-fg">Falta en la biblioteca: {caso.sinActividad}</p>}
+      {editable && (
+        <Select
+          aria-label={`Agregar una actividad a «${caso.titulo}»`}
+          value=""
+          disabled={guardando}
+          onChange={(ev) => {
+            const lib = armado.porId.get(ev.target.value);
+            if (lib) guardar(sumarActividad(caso, acts, lib), `Agregaste «${lib.nombre}» a «${caso.titulo}»`);
+          }}
+        >
+          <option value="">Agregar una actividad de la biblioteca…</option>
+          {ETAPAS_DE_ACTIVIDAD.map((e) => {
+            const deLaEtapa = armado.biblioteca.filter((x) => x.etapa === e.clave);
+            if (!deLaEtapa.length) return null;
+            return (
+              <optgroup key={e.clave} label={e.nombre}>
+                {deLaEtapa.map((x) => (
+                  <option key={x.id} value={x.id}>
+                    {x.nombre}
+                    {yaEstan.has(x.id) ? (x.seRepite ? " (una vez más)" : " (ya está)") : ""}
+                  </option>
+                ))}
+              </optgroup>
+            );
+          })}
+        </Select>
+      )}
+    </div>
+  );
+}
+
 /** Las dimensiones que mueve un caso, por nombre. */
 function useMueve(caso: CasoDeUsoElegido): string[] {
   const { escala } = useLienzo();
@@ -57,28 +252,63 @@ function useMueve(caso: CasoDeUsoElegido): string[] {
   return (caso.dimensiones ?? []).map(nombreDim).filter((x): x is string => !!x);
 }
 
-/** Un caso elegido: una fila con su marca verde, el área y lo que mueve. */
-function FilaElegida({ id, caso, onQuitar }: { id: string; caso: CasoDeUsoElegido; onQuitar?: () => void }) {
-  const { escala, guardando } = useLienzo();
+/**
+ * Un caso elegido: una fila con su marca verde, el área, lo que mueve y su precio mínimo. Se abre para ver y cambiar
+ * sus actividades y el argumento de valor. Si «Regenerar» dejó una versión nueva, lo dice ahí mismo.
+ */
+function FilaElegida({ id, caso, onQuitar, nueva }: { id: string; caso: CasoDeUsoElegido; onQuitar?: () => void; nueva?: ItemPropuesto }) {
+  const { escala, guardando, puedeEditar, usar, cambiar } = useLienzo();
+  const [abierta, setAbierta] = useState(false);
   const mueve = useMueve(caso);
   const area = escala.areas.find((a) => a.id === caso.areaId)?.nombre ?? "Sin área";
   return (
-    <li className="flex items-center gap-3 rounded-xl border border-line bg-surface px-3.5 py-3">
-      <span className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-success-surface text-xs font-bold text-success-ink" aria-hidden="true">
-        ✓
-      </span>
-      <div className="min-w-0 flex-1">
-        <p className="text-sm font-semibold text-fg">{caso.titulo}</p>
-        <p className="text-xs text-fg-muted">
-          {area}
-          {!esCasoLibre(id) && " · del catálogo"}
-          {mueve.length > 0 && ` · Mueve: ${mueve.join(", ")}`}
-        </p>
+    <li className="rounded-xl border border-line bg-surface">
+      <div className="flex items-center gap-3 px-3.5 py-3">
+        <span className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-success-surface text-xs font-bold text-success-ink" aria-hidden="true">
+          ✓
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-semibold text-fg">
+            {caso.titulo}
+            {caso.aMano && <span className="ml-2 text-[11px] font-normal text-fg-muted">· actividades editadas a mano</span>}
+          </p>
+          <p className="text-xs text-fg-muted">
+            {area}
+            {!esCasoLibre(id) && " · del catálogo"}
+            {mueve.length > 0 && ` · Mueve: ${mueve.join(", ")}`}
+          </p>
+          <PrecioDelCaso id={id} caso={caso} />
+        </div>
+        <button type="button" aria-expanded={abierta} className="flex-shrink-0 text-xs font-medium text-brand hover:underline" onClick={() => setAbierta((x) => !x)}>
+          {abierta ? "Actividades ▴" : "Actividades ▾"}
+        </button>
+        {onQuitar && (
+          <BotonTexto className="flex-shrink-0" disabled={guardando} onClick={onQuitar}>
+            Quitar
+          </BotonTexto>
+        )}
       </div>
-      {onQuitar && (
-        <BotonTexto className="flex-shrink-0" disabled={guardando} onClick={onQuitar}>
-          Quitar
-        </BotonTexto>
+      {nueva && puedeEditar && (
+        <div className="flex flex-wrap items-center gap-2 border-t border-line bg-info-surface px-3.5 py-2 text-xs text-fg-secondary">
+          <IconoDeSugerencia className="h-3.5 w-3.5 text-brand" />
+          <span className="min-w-0 flex-1">
+            {caso.aMano
+              ? "Hay una versión nueva de este caso. Cambiaste sus actividades a mano: tu versión se queda hasta que elijas la nueva."
+              : "Hay una versión nueva de este caso, armada con la biblioteca de actividades."}
+          </span>
+          <BotonTexto disabled={guardando} onClick={() => void cambiar([{ op: "descartar", itemIds: [nueva.id] }])}>
+            Quedarme con esta
+          </BotonTexto>
+          <BotonAzul disabled={guardando} onClick={() => void usar([nueva], { lugar: "casos" })}>
+            Usar la nueva
+          </BotonAzul>
+        </div>
+      )}
+      {abierta && (
+        <div className="space-y-2 border-t border-line px-3.5 py-3">
+          <ActividadesDelCaso id={id} caso={caso} editable={!!onQuitar} />
+          {caso.valorDeVenta && <ValorDelCaso valor={caso.valorDeVenta} />}
+        </div>
       )}
     </li>
   );
@@ -93,7 +323,7 @@ function TarjetaSugerida({ item }: { item: ItemPropuesto }) {
   const area = escala.areas.find((a) => a.id === caso.areaId)?.nombre;
   const cita = item.fuentes.find((f) => f.cita);
   const porQue = caso.razon || item.razon;
-  const hayMas = !!porQue || !!cita || (caso.descripcion?.length ?? 0) > 120;
+  const hayMas = !!porQue || !!cita || (caso.descripcion?.length ?? 0) > 120 || !!caso.actividades || !!caso.valorDeVenta;
   return (
     <li className="flex flex-col rounded-xl border border-info-line bg-surface">
       <div className="flex flex-col gap-1.5 px-4 pb-3 pt-3.5">
@@ -106,6 +336,7 @@ function TarjetaSugerida({ item }: { item: ItemPropuesto }) {
         </p>
         <h3 className="text-[15px] font-semibold leading-[1.35] text-fg">{caso.titulo}</h3>
         {caso.descripcion && <p className={cn("text-[13px] leading-normal text-fg-secondary", !abierta && "line-clamp-2")}>{caso.descripcion}</p>}
+        <PrecioDelCaso id={item.destino.tipo === "casoDeUso" ? item.destino.useCaseId : ""} caso={caso} />
         {mueve.length > 0 && (
           <p className="flex flex-wrap items-center gap-1.5">
             <span className="text-[11px] text-fg-muted">Mueve</span>
@@ -131,11 +362,13 @@ function TarjetaSugerida({ item }: { item: ItemPropuesto }) {
             )}
           </div>
         )}
+        {abierta && caso.actividades && item.destino.tipo === "casoDeUso" && <ActividadesDelCaso id={item.destino.useCaseId} caso={caso} editable={false} />}
+        {abierta && caso.valorDeVenta && <ValorDelCaso valor={caso.valorDeVenta} />}
       </div>
       <div className="mt-auto flex items-center gap-1 border-t border-line py-2 pl-4 pr-2.5">
         {hayMas && (
           <button type="button" aria-expanded={abierta} className="text-xs font-medium text-brand hover:underline" onClick={() => setAbierta((x) => !x)}>
-            {abierta ? "Por qué ▴" : "Por qué ▾"}
+            {abierta ? "Por qué y actividades ▴" : "Por qué y actividades ▾"}
           </button>
         )}
         <span className="flex-1" />
@@ -157,12 +390,61 @@ function TarjetaSugerida({ item }: { item: ItemPropuesto }) {
 const esCaso = (d: DestinoDePropuesta) => d.tipo === "casoDeUso";
 
 function CasosDeUso({ catalogo }: { catalogo: Caso[] }) {
-  const { exp, escala, cambiar, puedeEditar, guardando, pendientesPara, mapa, nombreDeNivel } = useLienzo();
+  const { exp, escala, cambiar, puedeEditar, guardando, pendientesPara, mapa, nombreDeNivel, deshacer } = useLienzo();
   const { corrida, corriendo, lanzando, lanzar } = useCorrida();
+  const armado = useContext(ArmadoContexto);
+  const { pushUndo } = useUndo();
   const e = exp.estado;
   const elegidos = Object.entries(e.contenido.casosDeUso);
   const areas = escala.areas.filter((a) => e.areas.includes(a.id));
-  const propuestos = pendientesPara((d) => d.tipo === "casoDeUso");
+  const todosLosPropuestos = pendientesPara((d) => d.tipo === "casoDeUso");
+  /* La versión nueva de un caso ya elegido (la deja «Regenerar») va en su fila, no entre los sugeridos. */
+  const nuevaDe = new Map(todosLosPropuestos.flatMap((it) => (it.destino.tipo === "casoDeUso" && it.destino.useCaseId in e.contenido.casosDeUso ? [[it.destino.useCaseId, it] as const] : [])));
+  const propuestos = todosLosPropuestos.filter((it) => !(it.destino.tipo === "casoDeUso" && nuevaDe.has(it.destino.useCaseId)));
+  const sinArmar = casosSinArmar(
+    elegidos.map(([, c]) => c),
+    propuestos.map((it) => it.valor as CasoDeUsoElegido),
+  );
+  const anteriores = e.propuesta.casosAnteriores ?? null;
+
+  /* «Regenerar» (2026-11-08): cuando termina la corrida que lanzó ESTA pestaña, las versiones nuevas de los casos
+     elegidos se usan solas —menos las de los que el vendedor editó a mano— y todo se deshace junto: el aviso, Ctrl+Z o
+     el botón «Deshacer» de la franja. */
+  const esperando = useRef<string | null | undefined>(undefined);
+  /* `usadas`: las versiones nuevas que se usaron (su id); deshacer las devuelve con lo que había y después vuelven las
+     sugerencias de antes. `deshacer` lee lo guardado al momento, no esta pantalla. */
+  const deshacerRegenerar = useCallback(
+    async (corridaId: string, usadas: string[]) => {
+      if (usadas.length) await deshacer(usadas, "la versión nueva de los casos");
+      await cambiar([{ op: "devolverCasosAnteriores", corridaId }]);
+    },
+    [deshacer, cambiar],
+  );
+  useEffect(() => {
+    if (esperando.current === undefined || corriendo || !anteriores || anteriores.corridaId === esperando.current) return;
+    esperando.current = undefined;
+    const corridaId = anteriores.corridaId;
+    const aUsar = todosLosPropuestos.filter(
+      (it) => it.corridaId === corridaId && it.destino.tipo === "casoDeUso" && it.destino.useCaseId in e.contenido.casosDeUso && !e.contenido.casosDeUso[it.destino.useCaseId].aMano,
+    );
+    void (async () => {
+      if (aUsar.length) await cambiar([{ op: "usarVarias", items: aUsar.map((it) => ({ itemId: it.id, valor: it.valor })) }]);
+      pushUndo({
+        scope: `exploracion:${exp.id}`,
+        label: aUsar.length ? `Regeneraste los casos: ${aUsar.length} ${aUsar.length === 1 ? "se actualizó" : "se actualizaron"}` : "Regeneraste los casos de uso",
+        undo: () => deshacerRegenerar(
+          corridaId,
+          aUsar.map((it) => it.id),
+        ),
+      });
+    })();
+  }, [anteriores, corriendo, todosLosPropuestos, e.contenido.casosDeUso, cambiar, pushUndo, exp.id, deshacerRegenerar]);
+  const regenerar = async () => {
+    esperando.current = anteriores?.corridaId ?? null;
+    const arranco = await lanzar("casos", { regenerar: true });
+    if (!arranco) esperando.current = undefined;
+  };
+  const usadasDelRegenerar = anteriores ? (e.contenido.usadas ?? []).filter((u) => u.item.corridaId === anteriores.corridaId).map((u) => u.id) : [];
   // Del catálogo de Smarteam, solo los que tocan un área en juego; los de la tabla (con precio), todos.
   const libres = catalogo.filter((c) => !(c.id in e.contenido.casosDeUso) && (!c.areas || c.areas.some((a) => e.areas.includes(a))));
   const yaPropuso = e.propuesta.corridas.some((c) => c.modo === "casos");
@@ -226,6 +508,15 @@ function CasosDeUso({ catalogo }: { catalogo: Caso[] }) {
                 <BotonBlanco disabled={lanzando || corriendo || areas.length === 0 || !conBase} onClick={() => void lanzar("casos")}>
                   {lanzando ? "Pidiendo…" : yaPropuso || propuestos.length > 0 ? "Proponer otra tanda" : "Proponer casos de uso"}
                 </BotonBlanco>
+                {(elegidos.length > 0 || yaPropuso) && (
+                  <BotonBlanco
+                    disabled={lanzando || corriendo || areas.length === 0 || !conBase}
+                    title="Vuelve a armar los casos elegidos con la biblioteca de actividades y reemplaza las sugerencias sin armar. Se puede deshacer."
+                    onClick={() => void regenerar()}
+                  >
+                    Regenerar
+                  </BotonBlanco>
+                )}
                 {propuestos.length > 1 && <BotonUsarTodas items={propuestos} lugar="casos" />}
               </>
             )
@@ -252,6 +543,29 @@ function CasosDeUso({ catalogo }: { catalogo: Caso[] }) {
       </div>
 
       {corrida?.estado === "ERROR" && esPropia && <Alert variant="danger">{corrida.error}</Alert>}
+      {puedeEditar && conBase && sinArmar > 0 && !(corriendo && esPropia) && (
+        <Alert
+          variant="warning"
+          title="Regenera para actualizar"
+          action={
+            <BotonAzul disabled={lanzando || corriendo || areas.length === 0} onClick={() => void regenerar()}>
+              Regenerar
+            </BotonAzul>
+          }
+        >
+          {sinArmar === 1 ? "Un caso todavía no está armado" : `${sinArmar} casos todavía no están armados`} para esta empresa: sus actividades son las de la ficha (o
+          ninguna) y no tienen el argumento de valor. Regenerar los arma con la biblioteca de actividades; lo que cambiaste a mano no se pisa, y se puede deshacer
+          con Ctrl+Z.
+        </Alert>
+      )}
+      {puedeEditar && anteriores && !corriendo && (
+        <p className="flex flex-wrap items-center gap-2 text-xs text-fg-muted">
+          Regeneraste los casos el {new Date(anteriores.en).toLocaleDateString("es-CR", { day: "numeric", month: "short" })}.
+          <BotonTexto disabled={guardando} onClick={() => void deshacerRegenerar(anteriores.corridaId, usadasDelRegenerar)}>
+            Deshacer
+          </BotonTexto>
+        </p>
+      )}
       {areas.length === 0 && <p className="text-sm text-fg-muted">Elige primero las áreas en juego (en «La escala»): los casos de uso se proponen por área.</p>}
 
       {elegidos.length > 0 && (
@@ -259,9 +573,10 @@ function CasosDeUso({ catalogo }: { catalogo: Caso[] }) {
           <h2 className="text-[11px] font-semibold uppercase tracking-[0.08em] text-fg-muted">Elegidos · {elegidos.length}</h2>
           <ul className="space-y-2">
             {elegidos.map(([id, caso]) => (
-              <FilaElegida key={id} id={id} caso={caso} onQuitar={puedeEditar ? () => quitar(id) : undefined} />
+              <FilaElegida key={id} id={id} caso={caso} nueva={nuevaDe.get(id)} onQuitar={puedeEditar ? () => quitar(id) : undefined} />
             ))}
           </ul>
+          {armado && <TotalDeLaVenta elegidos={elegidos} armado={armado} />}
         </section>
       )}
 
@@ -368,9 +683,31 @@ function CasosDeUso({ catalogo }: { catalogo: Caso[] }) {
   );
 }
 
+/** El total mínimo de los elegidos: lo que se repite entre casos (el kickoff, un mismo canal) se cuenta una vez. */
+function TotalDeLaVenta({ elegidos, armado }: { elegidos: [string, CasoDeUsoElegido][]; armado: Armado }) {
+  const listas = elegidos.map(([id, c]) => actividadesDe(id, c, armado));
+  const horas = horasDeLaVenta(listas, armado.porId);
+  if (!horas) return null;
+  const sumaSuelta = listas.reduce((s, acts) => s + horasDelCaso(acts, armado.porId).horas, 0);
+  return (
+    <p className="px-1 text-xs text-fg-secondary">
+      Todos juntos: <span className="font-semibold text-fg">{formatoHoras(horas)}</span> ·{" "}
+      <span className="font-semibold text-fg">desde {formatoUsd(precioMinimo(horas, armado.tarifa))}</span>
+      {sumaSuelta > horas && <span className="text-fg-muted"> (lo que comparten se cuenta una vez: {formatoHoras(sumaSuelta - horas)} menos)</span>}
+      <span className="text-fg-muted">
+        {" "}
+        · Tarifa {armado.tarifa.nombre}, {armado.tarifa.usdPorHora} USD por hora
+        {armado.tarifa.supuesta ? " (la empresa no tiene segmento: se usa la Estándar; se elige en Información del cliente)" : ""}.
+      </span>
+    </p>
+  );
+}
+
 export default function PasoCasosDeUso() {
   const { exp, irA } = useLienzo();
   const [datos, setDatos] = useState<DatosDelPaso | null>(null);
+  const [armadoCrudo, setArmadoCrudo] = useState<Omit<Armado, "porId"> | null>(null);
+  const armado = useMemo<Armado | null>(() => (armadoCrudo ? { ...armadoCrudo, porId: new Map(armadoCrudo.biblioteca.map((a) => [a.id, a])) } : null), [armadoCrudo]);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -378,7 +715,7 @@ export default function PasoCasosDeUso() {
     void (async () => {
       try {
         const res = await fetch(`/api/sales/exploraciones/${exp.id}/propuesta`);
-        const data = (await res.json().catch(() => ({}))) as Partial<DatosDelPaso> & { error?: string };
+        const data = (await res.json().catch(() => ({}))) as Partial<DatosDelPaso> & Partial<Omit<Armado, "porId">> & { error?: string };
         if (!vivo) return;
         if (!res.ok) {
           setError(data.error ?? "No se pudo cargar el paso.");
@@ -386,6 +723,7 @@ export default function PasoCasosDeUso() {
         }
         setError(null);
         setDatos({ catalogo: data.catalogo ?? [] });
+        if (data.biblioteca && data.porDefecto && data.tarifa) setArmadoCrudo({ biblioteca: data.biblioteca, porDefecto: data.porDefecto, tarifa: data.tarifa });
       } catch {
         if (vivo) setError("No se pudo cargar el paso. Revisa tu conexión.");
       }
@@ -398,7 +736,9 @@ export default function PasoCasosDeUso() {
   return (
     <div className="space-y-4">
       {error && <Alert variant="danger">{error}</Alert>}
-      <CasosDeUso catalogo={datos?.catalogo ?? []} />
+      <ArmadoContexto.Provider value={armado}>
+        <CasosDeUso catalogo={datos?.catalogo ?? []} />
+      </ArmadoContexto.Provider>
       <p className="text-xs text-fg-muted">
         Con los casos elegidos, la propuesta se arma en{" "}
         <button type="button" className="text-brand hover:underline" onClick={() => irA("propuesta")}>

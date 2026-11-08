@@ -24,6 +24,8 @@ import { definicionEnElMarco, MARCO_DE_CS, type ClaveDeMarco } from "./marco";
 import type Anthropic from "@anthropic-ai/sdk";
 import type { CasoDelCatalogo } from "@/lib/casos-de-uso/catalogo";
 import { catalogoParaElAgente, dimensionesEnElArea, idEnLaPreventa } from "@/lib/casos-de-uso/en-la-preventa";
+import { validarActividadesDelAgente, validarValorDelAgente, type ActividadDelCaso, type ActividadLigera } from "@/lib/casos-de-uso/armado";
+import { ETAPAS_DE_ACTIVIDAD } from "@/lib/casos-de-uso/actividades";
 import { CIERRES, DESPUES, type Cierre, type Despues, type Letra } from "@/lib/escala/documento/tipos";
 import {
   CANALES_DE_CONEXION,
@@ -1227,12 +1229,48 @@ export interface ContextoDeCasos {
    * usa con su id y su título; si ninguno calza, propone uno propio. Sin catálogo, solo propios.
    */
   catalogo?: readonly CasoDelCatalogo[];
+  /**
+   * 2026-11-08 (lib/casos-de-uso/armado.ts): la biblioteca de actividades. Con ella el agente arma cada caso con sus
+   * actividades (solo de aquí: el código descarta las demás) y propone cómo subir el ticket vendiendo por valor.
+   */
+  biblioteca?: readonly ActividadLigera[];
+  /** Las actividades marcadas por defecto de cada caso del catálogo, por su id. */
+  porDefecto?: Readonly<Record<string, ActividadDelCaso[]>>;
+  /**
+   * Lo que se sabe de la empresa para el argumento de valor (las reuniones leídas, los hallazgos, lo que ya sabemos).
+   * Es interno: el agente no lo cita en lo que ve el cliente. Una cifra del argumento vale solo si aparece aquí o en la
+   * exploración.
+   */
+  paraElValor?: string;
+  /** «Regenerar»: los casos ya elegidos, para que el agente los vuelva a armar (con su id en `rearma`). */
+  rearmar?: { id: string; titulo: string; areaId: string | null; actividades: ActividadDelCaso[] }[];
+}
+
+const PALANCAS_DE_VALOR = ["Costo de la mala calidad", "Ingreso que se pierde", "Tiempo del equipo", "Riesgo", "Crecimiento"] as const;
+
+/** La biblioteca como la lee el agente: id, nombre, etapa, cómo se cuenta y para qué equipos. */
+export function bibliotecaParaElAgente(biblioteca: readonly ActividadLigera[]): string {
+  const etapa = (e: string) => ETAPAS_DE_ACTIVIDAD.find((x) => x.clave === e)?.nombre ?? e;
+  return biblioteca
+    .map(
+      (a) =>
+        `- [${a.id}] ${a.nombre} (${etapa(a.etapa)}; ${a.seRepite ? "se puede repetir" : "una vez por caso"}${a.comparte === "venta" ? "; una vez en la venta" : ""}). ${a.resumen} Equipos: ${a.equipos.join(", ")}.`,
+    )
+    .join("\n");
+}
+
+/** Las actividades de un caso como las lee el agente: «id×veces «cómo se llama ahí» sobre X». */
+function actividadesParaElAgente(acts: readonly ActividadDelCaso[]): string {
+  return acts.map((a) => `${a.actividadId}${a.veces > 1 ? `×${a.veces}` : ""} «${a.nombre}»${a.sobreQue ? ` sobre ${a.sobreQue}` : ""}`).join("; ");
 }
 
 export function pedidoDeCasos(ctx: ContextoDeCasos): Anthropic.Messages.MessageCreateParamsNonStreaming {
   const dims = ctx.areas.flatMap((a) => a.dimensiones.map((d) => d.id));
   const catalogo = ctx.catalogo ?? [];
   const conCatalogo = catalogo.length > 0;
+  const biblioteca = ctx.biblioteca ?? [];
+  const conBiblioteca = biblioteca.length > 0;
+  const rearmar = ctx.rearmar ?? [];
   const tool: Anthropic.Messages.Tool = {
     name: NOMBRE_DE_LA_HERRAMIENTA_DE_CASOS,
     description: "Propone casos de uso para la primera propuesta, por área. Llámala una sola vez.",
@@ -1252,8 +1290,45 @@ export function pedidoDeCasos(ctx: ContextoDeCasos): Anthropic.Messages.MessageC
               descripcion: { type: "string", description: "Qué consigue el cliente y cómo lo nota su equipo, en dos o tres frases: el resultado, no el trabajo." },
               dimensiones: { type: "array", items: { type: "string", enum: dims.length ? dims : ["0.0"] }, description: "Las dimensiones de la escala que mueve." },
               razon: { type: "string", description: "Una frase: qué de lo que le falta, o de su meta, resuelve." },
+              ...(conBiblioteca
+                ? {
+                    ...(rearmar.length
+                      ? { rearma: { type: "string", enum: ["", ...rearmar.map((r) => r.id)], description: "El id del caso YA ELEGIDO que vuelves a armar. Vacío si es un caso nuevo." } }
+                      : {}),
+                    actividades: {
+                      type: "array",
+                      description: "Las actividades del caso, SOLO de la biblioteca. En un caso del catálogo, parte de las suyas por defecto y quita o suma lo que esta empresa pide.",
+                      items: {
+                        type: "object",
+                        properties: {
+                          actividadId: { type: "string", enum: biblioteca.map((a) => a.id) },
+                          nombre: { type: "string", description: "Cómo se llama en este caso: la acción concreta («Configurar la aprobación de cotizaciones»)." },
+                          veces: { type: "integer", minimum: 1, maximum: 20 },
+                          sobreQue: { type: "string", description: "De qué trata cuando se comparte por «sobre qué» («WhatsApp»). Vacío si no aplica." },
+                        },
+                        required: ["actividadId", "nombre", "veces"],
+                      },
+                    },
+                    sinActividad: { type: "string", description: "Lo que el caso necesita y NINGUNA actividad de la biblioteca cubre. Vacío si todas calzan." },
+                    valor: {
+                      type: "object",
+                      description: "Para el vendedor (el cliente no lo ve): cómo subir el ticket vendiendo por valor.",
+                      properties: {
+                        palanca: { type: "string", enum: [...PALANCAS_DE_VALOR] },
+                        argumento: { type: "string", description: "Dos o tres frases: cuánto le cuesta hoy al cliente no tenerlo, con SUS números si los hay." },
+                        numeros: {
+                          type: "array",
+                          description: "Los números del cliente que usaste, copiados de lo que se sabe. Ninguno inventado.",
+                          items: { type: "object", properties: { dato: { type: "string" }, fuente: { type: "string" } }, required: ["dato", "fuente"] },
+                        },
+                        falta: { type: "array", items: { type: "string" }, description: "Los números que faltan averiguar para hacer la cuenta." },
+                      },
+                      required: ["palanca", "argumento", "numeros", "falta"],
+                    },
+                  }
+                : {}),
             },
-            required: ["areaId", "titulo", "descripcion", "razon"],
+            required: ["areaId", "titulo", "descripcion", "razon", ...(conBiblioteca ? ["actividades", "valor"] : [])],
           },
         },
       },
@@ -1274,7 +1349,23 @@ Reglas:
 - La razón nombra qué de lo que le falta, o de su meta, resuelve. Sin frases de venta, sin precios, sin montos de dinero.
 - Lo que propones lo puede ver el cliente en la propuesta: nada de opiniones sobre personas ni nada interno de Smarteam.
 - No repitas los casos que ya están ni los que el vendedor descartó (abajo). Si no hay nada nuevo que valga la pena, manda la lista vacía.
-- Español neutro, en tercera persona sobre el cliente. Nunca escribas los identificadores de la escala dentro de un texto: van en su campo.`;
+- Español neutro, en tercera persona sobre el cliente. Nunca escribas los identificadores de la escala dentro de un texto: van en su campo.${
+    conBiblioteca
+      ? `
+
+Cada caso se arma con ACTIVIDADES de la BIBLIOTECA DE SMARTEAM (abajo), que son el plan que ejecuta Customer Success y de donde sale el precio:
+- Solo actividades de la biblioteca, por su id. No inventes actividades: si el caso necesita algo que ninguna cubre, dilo en «sinActividad».
+- En un caso del catálogo, parte de sus actividades por defecto y ajústalas a esta empresa (quita lo que no aplica, suma lo que pide, cambia las veces). Un caso propio también se arma solo con actividades de la biblioteca.
+- El nombre de cada actividad dice la acción concreta en este caso.
+- «valor» es para el VENDEDOR, el cliente no lo ve: cómo subir el ticket vendiendo por valor (el costo de la mala calidad, el ingreso que se pierde, el tiempo del equipo). Usa los números del cliente que aparecen abajo, copiados tal cual, con su fuente. Si no hay números, NO inventes una cifra: escribe en «falta» qué número hay que averiguar (por ejemplo, «Cuántos tickets llegan por WhatsApp al mes y cuánto vale uno perdido»).
+- Lo de «PARA EL ARGUMENTO DE VALOR» es interno: úsalo solo en «valor», nunca en el título, la descripción ni la razón.${
+          rearmar.length
+            ? `
+- Vuelve a armar TODOS los casos YA ELEGIDOS (abajo), uno por uno, con su id en «rearma»: sus actividades para esta empresa y su valor. Mantén su título. Los nuevos van con «rearma» vacío.`
+            : ""
+        }`
+      : ""
+  }`;
   const cuerpo =
     `Empresa: ${ctx.empresa}\nEdición de la escala: ${ctx.edicion}\n` +
     `Áreas en juego: ${ctx.areas.map((a) => `${a.id} (${a.nombre})`).join(", ")}\n\n` +
@@ -1282,12 +1373,28 @@ Reglas:
     `=== LA EXPLORACIÓN ===\n${ctx.exploracion}\n\n` +
     `=== LAS DIMENSIONES (para el campo «dimensiones») ===\n` +
     ctx.areas.map((a) => `${a.nombre}: ${a.dimensiones.map((d) => `${d.id} ${d.nombre}`).join("; ")}`).join("\n") +
-    (conCatalogo ? `\n\n=== EL CATÁLOGO DE SMARTEAM (los que tocan estas áreas) ===\n${catalogoParaElAgente(catalogo)}` : "") +
+    (conCatalogo
+      ? `\n\n=== EL CATÁLOGO DE SMARTEAM (los que tocan estas áreas) ===\n${
+          conBiblioteca
+            ? catalogo
+                .map((c) => `${catalogoParaElAgente([c])}\n  Actividades por defecto: ${actividadesParaElAgente(ctx.porDefecto?.[c.id] ?? []) || "(ninguna)"}`)
+                .join("\n")
+            : catalogoParaElAgente(catalogo)
+        }`
+      : "") +
+    (conBiblioteca ? `\n\n=== LA BIBLIOTECA DE ACTIVIDADES (las únicas que se pueden usar) ===\n${bibliotecaParaElAgente(biblioteca)}` : "") +
+    (conBiblioteca && ctx.paraElValor ? `\n\n=== PARA EL ARGUMENTO DE VALOR (interno) ===\n${ctx.paraElValor}` : "") +
+    (rearmar.length
+      ? `\n\n=== YA ELEGIDOS (vuelve a armar cada uno, con su id en «rearma») ===\n${rearmar
+          .map((r) => `- [${r.id}] ${r.titulo}${r.areaId ? ` (área ${r.areaId})` : ""}. Actividades hoy: ${actividadesParaElAgente(r.actividades) || "(ninguna)"}`)
+          .join("\n")}`
+      : "") +
     `\n\n=== YA ESTÁN (no los repitas) ===\n${ctx.yaEstan.length ? ctx.yaEstan.map((t) => `- ${t}`).join("\n") : "(ninguno)"}` +
     `\n\n=== EL VENDEDOR LOS DESCARTÓ (no los vuelvas a proponer) ===\n${ctx.descartados.length ? ctx.descartados.map((t) => `- ${t}`).join("\n") : "(ninguno)"}`;
   return {
     model: MODELO_DE_LA_EXPLORACION,
-    max_tokens: 3000,
+    // Con la biblioteca, cada caso trae sus actividades y su argumento de valor: unos 600 tokens por caso.
+    max_tokens: conBiblioteca ? 12000 : 3000,
     system: sistema,
     tools: [tool],
     tool_choice: { type: "tool", name: tool.name },
@@ -1307,35 +1414,90 @@ export function leerLosCasos(respuesta: Anthropic.Messages.Message, ctx: Context
   const vistos = new Set([...ctx.yaEstan, ...ctx.descartados].map(normalizarTexto));
   const porArea = new Map<string, number>();
   const delCatalogo = new Map((ctx.catalogo ?? []).map((c) => [c.id, c]));
+  const porId = new Map((ctx.biblioteca ?? []).map((a) => [a.id, a]));
+  const rearmar = new Map((ctx.rearmar ?? []).map((r) => [r.id, r]));
+  const yaRearmados = new Set<string>();
+  const contexto = `${ctx.exploracion}\n${ctx.paraElValor ?? ""}`;
   const items: ItemPropuesto[] = [];
   let descartadas = 0;
   for (const x of lista(input.casos)) {
-    const areaId = str(x.areaId);
-    const area = areaId ? areas.get(areaId) : undefined;
-    // Del catálogo, y de un área que el caso toca: el título es el suyo, no el que escribió el modelo.
-    const caso = area ? delCatalogo.get(str(x.catalogo) ?? "") : undefined;
-    const delCaso = caso && caso.areas.includes(area!.id as (typeof caso.areas)[number]) ? caso : undefined;
-    const titulo = (delCaso?.titulo ?? str(x.titulo))?.slice(0, 200);
-    const descripcion = str(x.descripcion)?.slice(0, 800);
-    const razon = str(x.razon)?.slice(0, 400);
-    if (!area || !titulo || !descripcion || !razon || vistos.has(normalizarTexto(titulo)) || (porArea.get(area.id) ?? 0) >= MAX_CASOS_POR_AREA) {
+    // «Regenerar»: un caso ya elegido vuelve armado, con su id, su título y su área (no cuenta en el tope por área).
+    const elegido = rearmar.get(str(x.rearma) ?? "");
+    if (elegido && yaRearmados.has(elegido.id)) {
       descartadas++;
       continue;
     }
-    const deEstaArea = new Set(area.dimensiones.map((d) => d.id));
+    const areaId = elegido ? elegido.areaId : str(x.areaId);
+    const area = areaId ? areas.get(areaId) : undefined;
+    // Del catálogo, y de un área que el caso toca: el título es el suyo, no el que escribió el modelo.
+    const caso = elegido ? casoDelId(elegido.id, delCatalogo) : area ? delCatalogo.get(str(x.catalogo) ?? "") : undefined;
+    const delCaso = elegido ? caso : caso && caso.areas.includes(area!.id as (typeof caso.areas)[number]) ? caso : undefined;
+    const titulo = (elegido?.titulo ?? delCaso?.titulo ?? str(x.titulo))?.slice(0, 200);
+    const descripcion = str(x.descripcion)?.slice(0, 800);
+    const razon = str(x.razon)?.slice(0, 400);
+    const sinLugar = elegido ? !!areaId && !area : !area || vistos.has(normalizarTexto(titulo ?? "")) || (porArea.get(area.id) ?? 0) >= MAX_CASOS_POR_AREA;
+    if (!titulo || !descripcion || !razon || sinLugar) {
+      descartadas++;
+      continue;
+    }
+    const deEstaArea = new Set(area?.dimensiones.map((d) => d.id) ?? ctx.areas.flatMap((a) => a.dimensiones.map((d) => d.id)));
     const pedidas = (Array.isArray(x.dimensiones) ? x.dimensiones : []).filter((d): d is string => typeof d === "string");
-    const dimensiones = (delCaso && pedidas.length === 0 ? dimensionesEnElArea(delCaso, area.id) : pedidas).filter((d) => deEstaArea.has(d)).slice(0, 8);
-    const destino: DestinoDePropuesta = { tipo: "casoDeUso", useCaseId: delCaso ? idEnLaPreventa(delCaso.id) : idDeCasoLibre(titulo) };
-    const valor = VALIDADOR_ESTRICTO.valorDelDestino(destino, { titulo, areaId: area.id, razon, descripcion, ...(dimensiones.length ? { dimensiones } : {}) });
+    const dimensiones = (delCaso && pedidas.length === 0 ? dimensionesEnElArea(delCaso, area?.id ?? null) : pedidas).filter((d) => deEstaArea.has(d)).slice(0, 8);
+    const destino: DestinoDePropuesta = { tipo: "casoDeUso", useCaseId: elegido ? elegido.id : delCaso ? idEnLaPreventa(delCaso.id) : idDeCasoLibre(titulo) };
+    const armado = porId.size ? armarConLaBiblioteca(x, porId, delCaso ? (ctx.porDefecto?.[delCaso.id] ?? []) : (elegido?.actividades ?? []), contexto, ahora) : {};
+    const valor = VALIDADOR_ESTRICTO.valorDelDestino(destino, {
+      titulo,
+      areaId: area?.id ?? null,
+      razon,
+      descripcion,
+      ...(dimensiones.length ? { dimensiones } : {}),
+      ...armado,
+    });
     if (valor === null) {
       descartadas++;
       continue;
     }
-    vistos.add(normalizarTexto(titulo));
-    porArea.set(area.id, (porArea.get(area.id) ?? 0) + 1);
+    if (elegido) yaRearmados.add(elegido.id);
+    else {
+      vistos.add(normalizarTexto(titulo));
+      porArea.set(area!.id, (porArea.get(area!.id) ?? 0) + 1);
+    }
     items.push({ id: idDelItem(destino, valor), destino, valor, razon: razon.slice(0, 300), fuentes: [], corridaId, en: ahora.toISOString() });
   }
   return { items, descartadas };
+}
+
+/** El caso del catálogo detrás de un id de la preventa (`cat-…`), entre los que recibió el agente. */
+function casoDelId(id: string, delCatalogo: ReadonlyMap<string, CasoDelCatalogo>): CasoDelCatalogo | undefined {
+  return id.startsWith("cat-") ? delCatalogo.get(id.slice(4)) : undefined;
+}
+
+/**
+ * Las actividades, lo que no cubre ninguna y el argumento de valor de un caso que devolvió el agente (armado.ts). Solo
+ * actividades de la biblioteca; si no dejó ninguna, las de la base (las por defecto del catálogo o las que ya tenía el
+ * elegido). Una actividad que coincide con una de la base conserva las veces de sus partes.
+ */
+function armarConLaBiblioteca(
+  x: Record<string, unknown>,
+  porId: ReadonlyMap<string, ActividadLigera>,
+  base: readonly ActividadDelCaso[],
+  contexto: string,
+  ahora: Date,
+) {
+  const propias = validarActividadesDelAgente(x.actividades, porId).actividades.map((a) => {
+    const igual = base.find((b) => b.actividadId === a.actividadId && (b.sobreQue ?? "") === (a.sobreQue ?? ""));
+    return igual?.partes && !a.partes ? { ...a, partes: igual.partes } : a;
+  });
+  const actividades = propias.length ? propias : base.filter((b) => porId.has(b.actividadId));
+  const sinActividad =
+    (str(x.sinActividad) ?? "").slice(0, 400) || (actividades.length ? "" : "Ninguna actividad de la biblioteca calza con este caso: hay que definir cómo se hace antes de cotizarlo.");
+  const valorDeVenta = validarValorDelAgente(x.valor, contexto);
+  return {
+    actividades,
+    ...(sinActividad ? { sinActividad } : {}),
+    ...(valorDeVenta ? { valorDeVenta } : {}),
+    armado: ahora.toISOString(),
+  };
 }
 
 // ── «Actualizar escala»: ubicar la empresa con todo lo que Nexus sabe (2026-10-18) ────────────
