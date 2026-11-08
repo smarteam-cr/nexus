@@ -18,7 +18,15 @@ import { ConfirmDialog } from "@/components/ui";
 import CollapsibleSection from "@/components/ui/CollapsibleSection";
 import { BotonUsar, FilaSugerida as FilaSugeridaDelSistema } from "@/components/ui/sistema";
 import { useMe } from "@/hooks/useMe";
-import { etiquetaDelLote, horaDelUso, loQueVaAPasar, type LugarDelLote } from "@/lib/exploraciones/usar-sugerencias";
+import {
+  etiquetaDelLote,
+  horaDelUso,
+  loQueVaAPasar,
+  nombreDeLaDimension,
+  textoDelCriterio,
+  tituloDeUsar,
+  type LugarDelLote,
+} from "@/lib/exploraciones/usar-sugerencias";
 import {
   ETIQUETA_DE_LA_OBJECION,
   ETIQUETA_DEL_CANAL,
@@ -150,8 +158,9 @@ export function describirPropuesta(item: ItemPropuesto, escala: EscalaDelLienzo,
 
 /**
  * Lo propuesto en una línea corta, para las listas compactas de «Lo que aprendimos» (2026-11-08): sin la cita, la nota ni
- * el porqué, que quedan a un clic. `antes` es la dimensión o el criterio (va primero: «Uso del CRM: Inicial»); `despues`,
- * la dimensión de un reto.
+ * el porqué, que quedan a un clic. Siempre nombra QUÉ se marca (revisión del 2026-11-08: dos criterios decían los dos
+ * «Criterio: Lo tiene»): `antes` es la dimensión con su área («Ventas · Datos: Inicial») o el criterio por su texto;
+ * `despues`, la dimensión de un reto o de un criterio.
  */
 export function lineaCorta(item: ItemPropuesto, escala: EscalaDelLienzo, nombreDeNivel: (l: Letra) => string): { antes?: string; texto: string; despues?: string } {
   const v = item.valor;
@@ -159,18 +168,24 @@ export function lineaCorta(item: ItemPropuesto, escala: EscalaDelLienzo, nombreD
   switch (d.tipo) {
     case "nivel": {
       const e = v as EstimadoGuardado;
-      return { antes: nombreDeDimension(escala, d.dimensionId), texto: `${nombreDeNivel(e.nivel)}${esFuenteDeHipotesis(e.fuente) ? " (hipótesis)" : ""}` };
+      return { antes: nombreDeLaDimension(escala, d.dimensionId), texto: `${nombreDeNivel(e.nivel)}${esFuenteDeHipotesis(e.fuente) ? " (hipótesis)" : ""}` };
     }
     case "aExplorar":
-      return { antes: nombreDeDimension(escala, d.dimensionId), texto: "explorar a fondo" };
-    case "falta":
-      return { antes: "Criterio", texto: ESTADO_DEL_CRITERIO[(v as EstadoDeCriterio).estado] };
+      return { antes: nombreDeLaDimension(escala, d.dimensionId), texto: "explorar a fondo" };
+    case "falta": {
+      const dim = escala.areas.flatMap((a) => a.dimensiones).find((x) => x.funcional.some((c) => c.id === d.criterioId));
+      return {
+        antes: `«${textoDelCriterio(escala, d.criterioId)}»`,
+        texto: ESTADO_DEL_CRITERIO[(v as EstadoDeCriterio).estado],
+        despues: dim ? nombreDeLaDimension(escala, dim.id) : undefined,
+      };
+    }
     case "area":
       return { antes: "Área en juego", texto: describirPropuesta(item, escala, nombreDeNivel) };
     case "casilla":
       if (d.clave === "retos") {
         const r = v as Reto;
-        return { texto: r.texto, despues: r.dimensionId ? nombreDeDimension(escala, r.dimensionId) : undefined };
+        return { texto: r.texto, despues: r.dimensionId ? nombreDeLaDimension(escala, r.dimensionId) : undefined };
       }
       if (d.clave === "autoridad") {
         const p = v as Persona;
@@ -219,6 +234,7 @@ export function FilaCompacta({ item, grupo }: { item: ItemPropuesto; grupo: stri
   const completa = describirPropuesta(item, escala, nombreDeNivel);
   const origen = origenEnUnaLinea(item);
   const pista = [completa, origen.cita ? `«${origen.cita}»` : null].filter(Boolean).join("\n");
+  const q = queHace(item);
   return (
     <li data-recorrido="preventa.sugerencia" className={cn("px-3 py-1", grupo && "border-t border-info-line first:border-t-0")}>
       <div className="flex flex-col gap-0.5 sm:flex-row sm:items-center sm:gap-3">
@@ -238,10 +254,16 @@ export function FilaCompacta({ item, grupo }: { item: ItemPropuesto; grupo: stri
           </button>
           {puedeEditar && (
             <span className="ml-auto flex flex-none items-center gap-1">
+              {/* Revisión del 2026-11-08: lo que «Usar» pisa se ve ANTES de apretar, no solo a un clic. */}
+              {(q.pisa || q.aviso) && (
+                <span className="flex-none text-xs font-medium text-warn-ink" title={tituloDeUsar(q)}>
+                  ⚠ {q.aviso ? "Cambia algo más" : "Reemplaza"}
+                </span>
+              )}
               <BotonTexto disabled={guardando} onClick={() => void cambiar([{ op: "descartar", itemIds: [item.id] }])}>
                 Descartar
               </BotonTexto>
-              <BotonUsar disabled={guardando} title={queHace(item).texto} onClick={() => void usar([item])} />
+              <BotonUsar disabled={guardando} title={tituloDeUsar(q)} onClick={() => void usar([item])} />
             </span>
           )}
         </div>
@@ -342,7 +364,7 @@ export function FilaSugerida({ item, texto, destino }: { item: ItemPropuesto; te
             <BotonTexto disabled={guardando} onClick={() => void cambiar([{ op: "descartar", itemIds: [item.id] }])}>
               Descartar
             </BotonTexto>
-            <BotonUsar disabled={guardando} title={queHace(item).texto} onClick={() => void usar([item])} />
+            <BotonUsar disabled={guardando} title={tituloDeUsar(queHace(item))} onClick={() => void usar([item])} />
           </>
         ) : undefined
       }
@@ -363,7 +385,7 @@ export function BotonUsarTodas({ items, lugar }: { items: ItemPropuesto[]; lugar
   const etiqueta = etiquetaDelLote(lugar, items.length);
   if (items.length === 1) {
     return (
-      <BotonAzul disabled={guardando} title={queHace(items[0]).texto} onClick={() => void usar(items, { lugar })}>
+      <BotonAzul disabled={guardando} title={tituloDeUsar(queHace(items[0]))} onClick={() => void usar(items, { lugar })}>
         {etiqueta}
       </BotonAzul>
     );

@@ -36,7 +36,7 @@ export function nombreDeLaDimension(escala: EscalaDelLienzo, id: string): string
   return id;
 }
 
-function textoDelCriterio(escala: EscalaDelLienzo, id: string): string {
+export function textoDelCriterio(escala: EscalaDelLienzo, id: string): string {
   for (const a of escala.areas) {
     for (const d of a.dimensiones) {
       const c = d.funcional.find((x) => x.id === id);
@@ -52,6 +52,16 @@ export const nombreDelPerfil = (cierre: Cierre, despues: Despues) => `${ETIQUETA
 export interface LoQueHaceUsar {
   texto: string;
   aviso?: string;
+  /**
+   * «Usar» pisa algo que ya está (un nivel distinto, una casilla escrita, el perfil, un caso de uso elegido). La fila
+   * compacta de «Lo que aprendimos» lo marca con ⚠ antes de apretar (revisión del 2026-11-08).
+   */
+  pisa?: boolean;
+}
+
+/** Lo que dice el `title` de «Usar»: qué escribe y, si hay, el aviso de lo demás que cambia. */
+export function tituloDeUsar(q: LoQueHaceUsar): string {
+  return q.aviso ? `${q.texto}. ${q.aviso}` : q.texto;
 }
 
 export function queHaceUsar(
@@ -69,7 +79,7 @@ export function queHaceUsar(
       const dim = nombreDeLaDimension(escala, d.dimensionId);
       const hipotesis = esFuenteDeHipotesis(v.fuente) ? " (como hipótesis)" : "";
       const hoy = c.chequeo[d.dimensionId];
-      if (hoy && hoy.nivel !== v.nivel) return { texto: `Cambiar ${dim} de ${nombreDeNivel(hoy.nivel)} a ${nombreDeNivel(v.nivel)}${hipotesis}` };
+      if (hoy && hoy.nivel !== v.nivel) return { texto: `Cambiar ${dim} de ${nombreDeNivel(hoy.nivel)} a ${nombreDeNivel(v.nivel)}${hipotesis}`, pisa: true };
       return { texto: `Poner ${dim} en ${nombreDeNivel(v.nivel)}${hipotesis}` };
     }
     case "falta":
@@ -85,21 +95,21 @@ export function queHaceUsar(
       const habitual = edicion?.perfilHabitual;
       if (!habitual || (habitual.cierre === estado.perfilCierre && habitual.despues === estado.perfilDespues)) return { texto };
       const hoy = estado.perfilCierre && estado.perfilDespues ? ` (hoy: ${nombreDelPerfil(estado.perfilCierre, estado.perfilDespues)})` : "";
-      return { texto, aviso: `También cambia el perfil de cierre y de después a ${nombreDelPerfil(habitual.cierre, habitual.despues)}${hoy}.` };
+      return { texto, pisa: true, aviso: `También cambia el perfil de cierre y de después a ${nombreDelPerfil(habitual.cierre, habitual.despues)}${hoy}.` };
     }
     case "perfil": {
       const p = item.valor as { cierre: Cierre; despues: Despues };
-      return { texto: `Cambiar el perfil a ${nombreDelPerfil(p.cierre, p.despues)}` };
+      return { texto: `Cambiar el perfil a ${nombreDelPerfil(p.cierre, p.despues)}`, pisa: true };
     }
     case "casilla": {
       const etiqueta = (marco ? definicionEnElMarco(d.clave, marco) : definicionDe(d.clave)).etiqueta;
       if (esDeLista(TIPO_DE_CASILLA[d.clave])) return { texto: `Sumar a «${etiqueta}»` };
-      return { texto: c.casillas[d.clave] !== undefined ? `Reemplazar lo que dice «${etiqueta}»` : `Escribirlo en «${etiqueta}»` };
+      return c.casillas[d.clave] !== undefined ? { texto: `Reemplazar lo que dice «${etiqueta}»`, pisa: true } : { texto: `Escribirlo en «${etiqueta}»` };
     }
     case "casoDeUso": {
       const titulo = (item.valor as CasoDeUsoElegido).titulo;
       // La versión nueva de un caso ya elegido (2026-11-08, «Regenerar»): reemplaza la que está.
-      if (d.useCaseId in c.casosDeUso) return { texto: `Actualizar «${titulo}» con la versión nueva`, aviso: c.casosDeUso[d.useCaseId].aMano ? "Reemplaza las actividades que cambiaste a mano." : undefined };
+      if (d.useCaseId in c.casosDeUso) return { texto: `Actualizar «${titulo}» con la versión nueva`, pisa: true, aviso: c.casosDeUso[d.useCaseId].aMano ? "Reemplaza las actividades que cambiaste a mano." : undefined };
       return { texto: `Sumar «${titulo}» a los casos de uso` };
     }
   }
