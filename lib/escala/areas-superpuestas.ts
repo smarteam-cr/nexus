@@ -7,6 +7,8 @@
  *     departamento»).
  *   · `areasAlCambiar`: al sumar o sacar un área, cuál entra y cuál sale. Solo esas se animan; las demás quedan quietas
  *     (8 nov, Elías: «que se pueda ver como fluido dónde entra y se pone una… solo actualice la escala»).
+ *   · `principalYFuera`, `alTocarUnArea` y `alTocarUnNodo`: cuál es la principal (se queda al sumar otra; cambia al tocar
+ *     un nodo de otra o al sacarla) y qué elegidas sin nada se muestran con «Sumar…».
  */
 import type { ClaveDeCapa } from "./documento/tipos";
 import type { DimensionDelRadar } from "./radar-de-una-empresa";
@@ -55,6 +57,42 @@ export function alinearArea(dims: readonly DimensionDelRadar[], otra: AreaSuperp
 export function partesPorEje(dims: readonly DimensionDelRadar[], otras: readonly AreaSuperpuesta[]): Record<string, string[]> {
   const alineadas = otras.filter((o) => o.fase !== "sale").map((o) => alinearArea(dims, o));
   return Object.fromEntries(dims.map((d) => [d.clave, [d.clave, ...alineadas.flatMap((a) => (a.reales[d.clave] ? [a.reales[d.clave]] : []))]]));
+}
+
+/**
+ * Las áreas presionadas en La escala (en el orden en que se eligieron) y la que se pidió como principal: la de los
+ * nombres, el centro y el detalle. `principalId` es un pedido: solo vale si esa área está elegida y tiene algo.
+ */
+export interface EleccionDeAreas {
+  elegidas: readonly string[];
+  principalId: string | null;
+}
+
+/**
+ * Qué se ve con una elección: la principal (la pedida si está elegida y tiene algo; si no, la última elegida con algo) y
+ * las elegidas SIN nada, que se muestran cada una con «Sumar…» para que el botón presionado diga lo que hay (también la
+ * principal que se sacó y quedó sin nada: así se deshace con el mismo botón).
+ */
+export function principalYFuera(e: EleccionDeAreas, conAlgo: (id: string) => boolean): { principal: string | null; fuera: string[] } {
+  const principal = e.elegidas.find((id) => id === e.principalId && conAlgo(id)) ?? [...e.elegidas].reverse().find(conAlgo) ?? null;
+  return { principal, fuera: e.elegidas.filter((id) => !conAlgo(id)) };
+}
+
+/**
+ * Tocar el botón de un área (8 nov, Elías: «solo actualice la escala»): sumarla NO cambia la principal (la nueva entra
+ * encima; si todavía no hay principal, la sumada lo es); sacarla (si queda otra) suelta la principal solo si era ella,
+ * y entonces pasa a la última elegida con algo.
+ */
+export function alTocarUnArea(e: EleccionDeAreas, id: string, conAlgo: (id: string) => boolean): EleccionDeAreas {
+  const { principal } = principalYFuera(e, conAlgo);
+  if (!e.elegidas.includes(id)) return { elegidas: [...e.elegidas, id], principalId: principal ?? id };
+  if (e.elegidas.length <= 1) return e;
+  return { elegidas: e.elegidas.filter((x) => x !== id), principalId: principal === id || e.principalId === id ? null : e.principalId };
+}
+
+/** Tocar un nodo de otra área elegida la vuelve la principal. */
+export function alTocarUnNodo(e: EleccionDeAreas, areaId: string): EleccionDeAreas {
+  return e.elegidas.includes(areaId) ? { ...e, principalId: areaId } : e;
 }
 
 /** Lo que se está animando: los nombres de las áreas que entran y las áreas que salen (con lo último que se dibujó). */

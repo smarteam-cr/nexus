@@ -13688,7 +13688,8 @@ Elías probó la tercera vuelta con Centauro Solutions («es un buen MVP») y pi
   área a la escala y otro la saca (siempre queda una). Con varias, `RadarDeUnaEmpresa` recibe `color` y `otras`: la
   principal (la última elegida con algo) lleva los nombres, el centro y el detalle, y las otras van encima, cada una de
   su color (Ventas azul, Marketing rosa, Servicio verde azulado: ninguno es el color de un nivel), con su leyenda. Un
-  área elegida sin nada se muestra igual, con «Sumar…», encima del radar de las que sí tienen algo. Eje
+  área elegida sin nada se muestra igual, con «Sumar…», debajo del radar de las que sí tienen algo (arriba hasta el
+  8 nov: lo corría hacia abajo al sumarla). Eje
   por eje en el mismo lugar: la parte k de cada capa sobre la parte k de la principal. La base se llama igual en las tres
   áreas; la producción no, y la leyenda dice que los nombres son los de la principal. Tocar un nodo de otra área la
   vuelve la principal y abre su dimensión. La página del cliente no pasa `color` ni `otras`: se ve igual (lo cuida una
@@ -13700,7 +13701,11 @@ Elías probó la tercera vuelta con Centauro Solutions («es un buen MVP») y pi
     cambia al tocar un nodo de otra área o al sacar la principal. La que entra crece desde el centro y la que sale se
     encoge y se apaga (≈350 ms, `fase` de `otras`, `areasAlCambiar` en lib/escala/areas-superpuestas.ts; con «reducir
     movimiento», de una). Cada área va siempre de su color, también sola, para que la que queda no cambie de color. La
-    línea «Encima, …» pasó debajo del radar: arriba lo corría hacia abajo al sumar la primera.
+    línea «Encima, …» pasó debajo del radar: arriba lo corría hacia abajo al sumar la primera. Cada elegida sin nada
+    (también la principal que se saca y queda vacía) sale con su «Sumar…» debajo del radar: el botón presionado siempre
+    tiene algo a la vista y se deshace con el mismo botón (`principalYFuera`, `alTocarUnArea`, `alTocarUnNodo`). Al
+    cambiar la principal, el movimiento del radar se rearma (`rearmar`, movimiento-del-radar.ts): limpia el resalte que
+    quedaba en piezas de otra dimensión y abre la tarjeta del eje que está bajo el cursor, con todas sus áreas.
   - *Con varias áreas, la tarjeta del cursor es la del eje:* una sección por área con lo mismo que la de una (nivel,
     puntaje, evidencia, cómo está, qué preguntar), cada una con su color, la principal primero (`partesPorEje`); se
     resalta el vértice de cada área en ese eje. Con un área, igual que antes.

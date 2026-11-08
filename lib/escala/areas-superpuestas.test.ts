@@ -4,7 +4,7 @@
  * solo esa se anima (Elías: «la animación de la escala como que se corta, empieza desde cero»).
  */
 import { describe, expect, it } from "vitest";
-import { alinearArea, areasAlCambiar, partesPorEje, SIN_CAMBIO, type AreaSuperpuesta } from "./areas-superpuestas";
+import { alinearArea, alTocarUnArea, alTocarUnNodo, areasAlCambiar, partesPorEje, principalYFuera, SIN_CAMBIO, type AreaSuperpuesta } from "./areas-superpuestas";
 import type { DimensionDelRadar } from "./radar-de-una-empresa";
 
 const dims = (area: string, capas: ("base" | "produccion")[]): DimensionDelRadar[] =>
@@ -44,6 +44,52 @@ describe("partesPorEje: la tarjeta de un eje con la dimensión de cada área", (
 
   it("⛔ el área que está saliendo no entra a la tarjeta", () => {
     expect(partesPorEje(VENTAS, [{ ...MARKETING, fase: "sale" }])["1.1"]).toEqual(["1.1"]);
+  });
+});
+
+describe("cuál es la principal y qué se muestra con «Sumar…»", () => {
+  // Ventas (1) y Marketing (2) tienen algo; Servicio (3) no.
+  const conAlgo = (id: string) => id !== "3";
+
+  it("de entrada, la última elegida con algo; una elegida sin nada se muestra con «Sumar…»", () => {
+    expect(principalYFuera({ elegidas: ["1", "2"], principalId: null }, conAlgo)).toEqual({ principal: "2", fuera: [] });
+    expect(principalYFuera({ elegidas: ["1", "3"], principalId: null }, conAlgo)).toEqual({ principal: "1", fuera: ["3"] });
+  });
+
+  it("⛔ sumar un área NO cambia la principal: la nueva entra encima", () => {
+    const e = alTocarUnArea({ elegidas: ["1"], principalId: null }, "2", conAlgo);
+    expect(e).toEqual({ elegidas: ["1", "2"], principalId: "1" });
+    expect(principalYFuera(e, conAlgo).principal).toBe("1");
+    // Tampoco al sumar una sin nada: esa va con «Sumar…».
+    expect(principalYFuera(alTocarUnArea(e, "3", conAlgo), conAlgo)).toEqual({ principal: "1", fuera: ["3"] });
+  });
+
+  it("sin principal todavía (solo áreas sin nada), la que se suma lo es", () => {
+    const e = alTocarUnArea({ elegidas: ["3"], principalId: null }, "1", conAlgo);
+    expect(principalYFuera(e, conAlgo)).toEqual({ principal: "1", fuera: ["3"] });
+  });
+
+  it("tocar un nodo de otra área elegida la vuelve la principal; de una que no está elegida, nada", () => {
+    const e = { elegidas: ["1", "2"], principalId: "1" };
+    expect(principalYFuera(alTocarUnNodo(e, "2"), conAlgo).principal).toBe("2");
+    expect(alTocarUnNodo(e, "3")).toBe(e);
+  });
+
+  it("sacar la principal la pasa a la última elegida con algo; sacar otra no la toca; la última no se saca", () => {
+    const e = { elegidas: ["1", "2", "3"], principalId: "2" };
+    expect(principalYFuera(alTocarUnArea(e, "2", conAlgo), conAlgo)).toEqual({ principal: "1", fuera: ["3"] });
+    expect(alTocarUnArea(e, "1", conAlgo)).toEqual({ elegidas: ["2", "3"], principalId: "2" });
+    const sola = { elegidas: ["1"], principalId: "1" };
+    expect(alTocarUnArea(sola, "1", conAlgo)).toBe(sola);
+  });
+
+  it("⛔ la principal que se saca de la preventa y queda sin nada sigue a la vista con «Sumar…», y sumarla la devuelve", () => {
+    const e = { elegidas: ["1", "2"], principalId: "1" };
+    // «Sacar Ventas de la preventa» y Ventas no tenía nada más: deja de tener algo.
+    const sinVentas = (id: string) => id !== "1" && id !== "3";
+    expect(principalYFuera(e, sinVentas)).toEqual({ principal: "2", fuera: ["1"] });
+    // «Sumar Ventas…» (el mismo botón): vuelve a ser la principal, como antes.
+    expect(principalYFuera(e, conAlgo)).toEqual({ principal: "1", fuera: [] });
   });
 });
 

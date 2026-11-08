@@ -32,7 +32,7 @@ import { Alert, Button } from "@/components/ui";
 import { BOTON_DE_HERRAMIENTA, BOTON_DE_HERRAMIENTA_ACTIVO } from "@/components/ui/sistema";
 import { PUNTO_DE_NIVEL } from "@/components/escala/niveles";
 import RadarDeUnaEmpresa from "@/components/escala/RadarDeUnaEmpresa";
-import { areasAlCambiar, partesPorEje, SIN_CAMBIO, type AreaSuperpuesta, type CambioDeAreas } from "@/lib/escala/areas-superpuestas";
+import { alTocarUnArea, alTocarUnNodo, areasAlCambiar, partesPorEje, principalYFuera, SIN_CAMBIO, type AreaSuperpuesta, type CambioDeAreas } from "@/lib/escala/areas-superpuestas";
 import { cn } from "@/lib/cn";
 import type { AreaDelChequeo } from "@/lib/escala/chequeo";
 import type { ClaveDeCapa, Letra } from "@/lib/escala/documento/tipos";
@@ -647,7 +647,7 @@ function RadarDeLasAreas({ principal, otras, onElegir }: { principal: AreaDelLie
     if (id && tarjetas[id]) onElegir(id);
   };
   return (
-    <ConTarjetas dimensiones={tarjetas} porEje={partesPorEje(dimsDeLaPrincipal, superpuestas)}>
+    <ConTarjetas dimensiones={tarjetas} porEje={partesPorEje(dimsDeLaPrincipal, superpuestas)} principal={principal.id}>
       {/* El radar es SVG estático (sin JavaScript propio): el clic se lee del `data-d` del nodo, la porción o el nombre.
           El foco y el rol de botón los tiene cada nodo del SVG. */}
       <div
@@ -692,6 +692,7 @@ function AreaConAlgo({
   abierta: abiertaId,
   onAbrir,
   onAlternar,
+  debajoDelRadar,
 }: {
   area: AreaDelLienzo;
   otras: readonly AreaDelLienzo[];
@@ -700,6 +701,8 @@ function AreaConAlgo({
   abierta: string | null;
   onAbrir: (id: string | null) => void;
   onAlternar: () => void;
+  /** Las elegidas sin nada, con «Sumar…»: debajo del radar para que sumarlas no lo corra. */
+  debajoDelRadar?: ReactNode;
 }) {
   const { mapa, escala, nombreDeNivel, puedeEditar, guardando, lugar } = useLienzo();
   const calculo = calculoDelArea(escala, area, mapa.posiciones);
@@ -813,6 +816,8 @@ function AreaConAlgo({
         </figure>
       )}
 
+      {debajoDelRadar}
+
       {abierta ? <DetalleDeDimension key={abierta.id} d={abierta} onCerrar={() => onAbrir(null)} /> : <EvidenciaDelArea area={area} onElegir={onAbrir} />}
     </div>
   );
@@ -914,45 +919,45 @@ function DondeEstaHoy() {
      y la muestra en la escala; se pueden elegir varias»). La principal (la que tiene los nombres y el detalle) es la
      última elegida con algo dibujado. */
   const [elegidasIds, setElegidas] = useState<string[] | null>(null);
+  const [principalId, setPrincipal] = useState<string | null>(null);
   const ids = (elegidasIds ?? (deEntrada ? [deEntrada] : [])).filter((id) => escala.areas.some((a) => a.id === id));
   const elegidas = ids.map((id) => escala.areas.find((a) => a.id === id)!);
-  const conAlgo = (a: AreaDelLienzo) => enJuego.includes(a.id) || tieneAlgo(a, mapa.posiciones);
-  const [principalId, setPrincipal] = useState<string | null>(null);
-  const [vaciaId, setVacia] = useState<string | null>(null);
+  const conAlgo = (id: string) => {
+    const a = escala.areas.find((x) => x.id === id);
+    return !!a && (enJuego.includes(id) || tieneAlgo(a, mapa.posiciones));
+  };
   /* La principal (la de los nombres, el centro y el detalle) se queda al sumar otra área: la nueva entra encima y solo
      cambia el radar (8 nov, Elías: «solo actualice la escala»). Cambia al tocar un nodo de otra área o al sacar la
-     principal (pasa a la última elegida con algo). Un área sin nada recién tocada se muestra igual, con «Sumar…». */
-  const principal = elegidas.find((a) => a.id === principalId && conAlgo(a)) ?? [...elegidas].reverse().find(conAlgo) ?? null;
-  const vacia = elegidas.find((a) => a.id === (vaciaId ?? elegidas[elegidas.length - 1]?.id) && !conAlgo(a)) ?? null;
-  if (!principal && !vacia) return null;
-  const otras = principal ? elegidas.filter((a) => a.id !== principal.id && conAlgo(a) && calculoDelArea(escala, a, mapa.posiciones)) : [];
+     principal (pasa a la última elegida con algo). Cada elegida sin nada se muestra con «Sumar…», debajo del radar
+     (lib/escala/areas-superpuestas.ts › `principalYFuera`). */
+  const eleccion = { elegidas: ids, principalId };
+  const visto = principalYFuera(eleccion, conAlgo);
+  const principal = elegidas.find((a) => a.id === visto.principal) ?? null;
+  const fuera = elegidas.filter((a) => visto.fuera.includes(a.id));
+  if (!principal && !fuera.length) return null;
+  const otras = principal ? elegidas.filter((a) => a.id !== principal.id && conAlgo(a.id) && calculoDelArea(escala, a, mapa.posiciones)) : [];
   const orden = (id: string) => enJuego.indexOf(id) + 1;
   const elegir = (id: string) => {
     const area = escala.areas.find((a) => a.id === id);
     if (!area) return;
-    if (!ids.includes(id)) {
-      setElegidas([...ids, id]);
-      // La principal no cambia; si todavía no hay ninguna (solo áreas sin nada), la que se suma lo es.
-      setPrincipal(principal?.id ?? id);
-      setVacia(conAlgo(area) ? null : id);
-    } else if (ids.length > 1) {
-      setElegidas(ids.filter((x) => x !== id));
-      if (principal?.id === id) setPrincipal(null);
-      if (vacia?.id === id) setVacia(null);
-      // La dimensión abierta se cierra solo si era del área que sale.
-      if (abierta && area.dimensiones.some((d) => d.id === abierta)) setAbierta(null);
-    }
+    const nueva = alTocarUnArea(eleccion, id, conAlgo);
+    setElegidas([...nueva.elegidas]);
+    setPrincipal(nueva.principalId);
+    // La dimensión abierta se cierra solo si era del área que sale.
+    if (!nueva.elegidas.includes(id) && abierta && area.dimensiones.some((d) => d.id === abierta)) setAbierta(null);
   };
   // Tocar una dimensión de otra área la vuelve la principal y abre su detalle.
   const abrir = (id: string | null) => {
     if (id && principal && !principal.dimensiones.some((d) => d.id === id)) {
       const de = elegidas.find((a) => a.dimensiones.some((d) => d.id === id));
-      if (de) setPrincipal(de.id);
+      if (de) setPrincipal(alTocarUnNodo(eleccion, de.id).principalId);
     }
     setAbierta(id);
   };
   // Sumar o sacar se deshace con el mismo botón: la lista entera, en el orden en que se eligieron.
   const alternar = (id: string) => void cambiar([{ op: "areas", areas: enJuego.includes(id) ? enJuego.filter((a) => a !== id) : [...enJuego, id] }]);
+  // Debajo del radar y no arriba: sumar un área sin nada no corre la escala hacia abajo (8 nov).
+  const avisosDeFuera = fuera.length ? <div className="flex flex-col gap-3">{fuera.map((a) => <AreaFuera key={a.id} area={a} onSumar={() => alternar(a.id)} />)}</div> : null;
 
   return (
     <section aria-label="Dónde está hoy" className="flex flex-col gap-3">
@@ -978,8 +983,7 @@ function DondeEstaHoy() {
         ))}
       </div>
       <p className="text-xs text-fg-muted">Toca un área para sumarla a la escala o sacarla: varias se ven en el mismo radar, cada una de su color.</p>
-      {vacia && <AreaFuera area={vacia} onSumar={() => alternar(vacia.id)} />}
-      {principal && (
+      {principal ? (
         <AreaConAlgo
           area={principal}
           otras={vista === "nodos" ? otras : []}
@@ -988,7 +992,10 @@ function DondeEstaHoy() {
           abierta={abierta}
           onAbrir={abrir}
           onAlternar={() => alternar(principal.id)}
+          debajoDelRadar={avisosDeFuera}
         />
+      ) : (
+        avisosDeFuera
       )}
       <ParaExplorarMas elegidas={elegidas} />
     </section>

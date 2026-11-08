@@ -115,20 +115,33 @@ export function PreguntasDeLaDimension({ dimensionId, porQue, preguntaDeLaEscala
  * entra su tarjeta con un fundido junto a la dimensión y los vértices se corren apenas hacia el cursor (el imán). La
  * tarjeta se deja alcanzar para tocar «Llevar a la sesión N». `dimensiones` trae las de todas las áreas dibujadas;
  * `porEje`, las de cada eje (lib/escala/areas-superpuestas.ts › `partesPorEje`): con dos o más, la tarjeta las muestra
- * todas, la principal primero.
+ * todas, la principal primero. `principal`: el área de los ejes; al cambiar (tocar un nodo de otra área, sacarla), el
+ * radar se redibuja con otras claves y el movimiento se rearma: limpia el resalte viejo y abre la tarjeta del eje que
+ * queda bajo el cursor, con todas sus áreas.
  */
 export function ConTarjetas({
   dimensiones,
   porEje,
+  principal,
   children,
 }: {
   dimensiones: Readonly<Record<string, DimensionDeLaTarjeta>>;
   porEje?: Readonly<Record<string, readonly string[]>>;
+  principal?: string;
   children: ReactNode;
 }) {
   const [abierta, setAbierta] = useState<TarjetaPedida | null>(null);
   const caja = useRef<HTMLDivElement>(null);
   const tarjeta = useRef<HTMLDivElement>(null);
+  const rearmar = useRef<(() => void) | null>(null);
+  const principalDeAntes = useRef(principal);
+
+  // Después de que React dibujó el radar de la nueva principal (antes de pintar), el movimiento se rearma.
+  useLayoutEffect(() => {
+    if (principalDeAntes.current === principal) return;
+    principalDeAntes.current = principal;
+    rearmar.current?.();
+  }, [principal]);
 
   useEffect(() => {
     const raiz = caja.current;
@@ -138,8 +151,10 @@ export function ConTarjetas({
       ocultar: () => setAbierta(null),
       abierta: () => tarjeta.current,
     });
+    rearmar.current = soltarElRadar.rearmar;
     const soltarElIman = conIman() ? imanDelRadar(raiz) : () => undefined;
     return () => {
+      rearmar.current = null;
       soltarElRadar();
       soltarElIman();
     };
