@@ -21,7 +21,7 @@ import {
 import { CambiosSchema, leerContenido, VALIDADOR_ESTRICTO } from "./esquemas";
 import { sePuedeReintentar } from "./reintento";
 import { ESCALA_DE_PRUEBA } from "./escala-de-prueba.test-helpers";
-import { avisoDelLote, etiquetaDelLote, loQueVaAPasar, queHaceUsar, usadasDeHoy } from "./usar-sugerencias";
+import { avisoDelLote, etiquetaDelLote, loQueVaAPasar, queHaceUsar, tituloDeUsar, usadasDeHoy } from "./usar-sugerencias";
 
 const QUIEN = { por: "elias@smarteamcr.com", en: "2026-10-28T15:30:00.000Z" };
 const aplicarOperaciones = (e: EstadoDeExploracion, ops: Operacion[], quien: QuienCambia = QUIEN) => aplicar(e, ops, VALIDEZ, VALIDADOR_ESTRICTO, quien);
@@ -460,6 +460,22 @@ describe("lo que dice cada «Usar»", () => {
     expect(queHaceUsar({ destino: { tipo: "aExplorar", dimensionId: "1.7" }, valor: { motivo: "meta" } }, e, ESCALA_DE_PRUEBA, nombre).texto).toBe("Marcar Ventas · Dimensión 1.7 para explorar a fondo");
     expect(queHaceUsar({ destino: { tipo: "falta", criterioId: "1.3.F1" }, valor: { estado: "tiene" } }, e, ESCALA_DE_PRUEBA, nombre).texto).toBe("Marcar «Lo que pide 1.3»: lo tiene");
     expect(queHaceUsar({ destino: { tipo: "casoDeUso", useCaseId: "ia-1" }, valor: { titulo: "Tablero", areaId: null } }, e, ESCALA_DE_PRUEBA, nombre).texto).toBe("Sumar «Tablero» a los casos de uso");
+  });
+
+  it("marca cuándo «Usar» pisa lo que ya está, y solo entonces", () => {
+    const lleno = estado({ contenido: { ...contenidoVacio(), chequeo: { "1.3": { nivel: "D", fuente: "vendedor" } }, casillas: { presupuesto: "10 mil" } } });
+    const nivel = (n: "D" | "F") => queHaceUsar({ destino: { tipo: "nivel", dimensionId: "1.3" }, valor: { nivel: n, fuente: "reunion" } }, lleno, ESCALA_DE_PRUEBA, nombre);
+    expect(nivel("F").pisa).toBe(true);
+    expect(nivel("D").pisa).toBeUndefined();
+    expect(queHaceUsar({ destino: { tipo: "casilla", clave: "presupuesto" }, valor: "30 mil" }, lleno, ESCALA_DE_PRUEBA, nombre).pisa).toBe(true);
+    expect(queHaceUsar({ destino: { tipo: "casilla", clave: "presupuesto" }, valor: "30 mil" }, e, ESCALA_DE_PRUEBA, nombre).pisa).toBeUndefined();
+    expect(queHaceUsar({ destino: { tipo: "casilla", clave: "metas" }, valor: { que: "Más" } }, lleno, ESCALA_DE_PRUEBA, nombre).pisa).toBeUndefined();
+    expect(queHaceUsar({ destino: { tipo: "perfil" }, valor: { cierre: "mixta", despues: "única" } }, e, ESCALA_DE_PRUEBA, nombre).pisa).toBe(true);
+  });
+
+  it("el título de «Usar» trae el aviso de lo demás que cambia", () => {
+    expect(tituloDeUsar({ texto: "Medir con la escala de Banca", aviso: "También cambia el perfil." })).toBe("Medir con la escala de Banca. También cambia el perfil.");
+    expect(tituloDeUsar({ texto: "Sumar a «Retos»" })).toBe("Sumar a «Retos»");
   });
 
   it("al usar una industria avisa que también cambia el perfil, solo si cambia", () => {
