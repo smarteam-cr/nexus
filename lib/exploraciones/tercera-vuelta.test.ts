@@ -288,7 +288,10 @@ describe("la guía se arma sola y pregunta lo que le falta", () => {
       respuesta({
         hallazgos: ["CRM con duplicados", "crm con duplicados", "1.200 tickets", "a", "b", "c", "d"],
         ajusteDelObjetivo: { texto: "Confirmar si soporte es lo crítico", porque: "1.200 tickets al mes" },
-        faltaContexto: ["¿Con quién es la sesión 3?", "¿Qué quieren ver en la demo?", "¿Quién decide?", "¿Una cuarta?"],
+        faltaContexto: ["¿Con quién es la sesión 3?", "¿Qué quieren ver en la demo?", "¿Quién decide?", "¿Una cuarta?"].map((pregunta) => ({
+          pregunta,
+          opciones: ["Una", "Otra", "No lo sé"],
+        })),
       }),
       { respuestas: [{ pregunta: "¿Con quién es la sesión 3?", respuesta: "Laura" }] },
     );
@@ -347,12 +350,16 @@ describe("la guía se arma sola y pregunta lo que le falta", () => {
       preguntasParaLaGuia: { preguntas: ["¿Vieja?"], en: EN, corridaId: "r0" },
       ajustesDescartados: ["Enfocar en marketing"],
     };
-    const o = { confirmado: "Enfocar en soporte", en: "2026-11-08T13:00:00.000Z", corridaId: "r1" };
+    const o = { confirmado: "Enfocar en soporte", en: "2026-11-08T13:00:00.000Z", corridaId: "r1", sesionId: "s-3" };
     const nuevo = conLoDeLaExploracion(antes, { hallazgos: ["Nuevo"], ajuste: { texto: "Enfocar en ventas", porque: "Sesión 2" }, preguntas: [] }, o);
     expect(nuevo.hallazgos).toEqual({ lista: ["Nuevo"], en: o.en, corridaId: "r1" });
     expect(nuevo.ajusteDelObjetivo).toEqual({ texto: "Enfocar en ventas", porque: "Sesión 2", en: o.en, corridaId: "r1" });
     expect(nuevo.preguntasParaLaGuia).toBeNull();
-    const sinHallazgos = conLoDeLaExploracion(antes, { hallazgos: [], ajuste: { texto: "enfocar en SOPORTE", porque: null }, preguntas: ["¿Nueva?"] }, o);
+    const sinHallazgos = conLoDeLaExploracion(
+      antes,
+      { hallazgos: [], ajuste: { texto: "enfocar en SOPORTE", porque: null }, preguntas: ["¿Nueva?"], opciones: [["Sí", "No", "No lo sé"]] },
+      o,
+    );
     expect(sinHallazgos.hallazgos?.lista).toEqual(["Viejo"]);
     // Igual al confirmado: no se sugiere; queda el que había.
     expect(sinHallazgos.ajusteDelObjetivo?.texto).toBe("Ajuste viejo");
@@ -480,27 +487,33 @@ describe("quinta vuelta (2026-11-08)", () => {
   const respuestaDeLaGuia = (input: Record<string, unknown>): Anthropic.Messages.Message =>
     ({ content: [{ type: "tool_use", id: "t1", name: HERRAMIENTA_DE_LA_GUIA, input }] }) as unknown as Anthropic.Messages.Message;
 
-  it("cada pregunta de Nexus trae hasta 3 respuestas probables, en su mismo orden; una pregunta suelta (de antes) se lee sin opciones", () => {
+  it("cada pregunta de Nexus trae hasta 3 respuestas probables, en su mismo orden; una sin respuestas (o con una sola) no se lee", () => {
     const r = leerLoDeLaExploracion(
       respuestaDeLaGuia({
         faltaContexto: [
           { pregunta: "¿Laura sabe que la sesión es con ella?", opciones: ["Sí, ya lo sabe", "No, espera una grupal", "No lo sé", "Una cuarta de más"] },
           "¿Quién más asiste?",
-          { pregunta: "¿laura sabe que la sesión es con ella?", opciones: ["repetida"] },
+          { pregunta: "¿Hay presupuesto?", opciones: ["Solo una"] },
+          { pregunta: "¿laura sabe que la sesión es con ella?", opciones: ["repetida", "otra"] },
+          { pregunta: "¿Quién decide?", opciones: ["Laura", "El gerente general"] },
         ],
       }),
       {},
     );
-    expect(r.preguntas).toEqual(["¿Laura sabe que la sesión es con ella?", "¿Quién más asiste?"]);
-    expect(r.opciones).toEqual([["Sí, ya lo sabe", "No, espera una grupal", "No lo sé"], []]);
+    expect(r.preguntas).toEqual(["¿Laura sabe que la sesión es con ella?", "¿Quién decide?"]);
+    expect(r.opciones).toEqual([["Sí, ya lo sabe", "No, espera una grupal", "No lo sé"], ["Laura", "El gerente general"]]);
   });
 
   it("las opciones se guardan con su pregunta y siguen a su pregunta al responder otra", () => {
-    const guardado = conLoDeLaExploracion(propuestaVacia(), { hallazgos: [], ajuste: null, preguntas: ["A?", "B?"], opciones: [["a1", "a2", "a3"], ["b1"]] }, { confirmado: null, en: EN, corridaId: "r1" });
-    expect(guardado.preguntasParaLaGuia).toEqual({ preguntas: ["A?", "B?"], opciones: [["a1", "a2", "a3"], ["b1"]], en: EN, corridaId: "r1" });
-    expect(leerPropuesta({ preguntasParaLaGuia: guardado.preguntasParaLaGuia }).preguntasParaLaGuia?.opciones).toEqual([["a1", "a2", "a3"], ["b1"]]);
+    const guardado = conLoDeLaExploracion(
+      propuestaVacia(),
+      { hallazgos: [], ajuste: null, preguntas: ["A?", "B?"], opciones: [["a1", "a2", "a3"], ["b1", "b2"]] },
+      { confirmado: null, en: EN, corridaId: "r1", sesionId: "s-3" },
+    );
+    expect(guardado.preguntasParaLaGuia).toEqual({ preguntas: ["A?", "B?"], opciones: [["a1", "a2", "a3"], ["b1", "b2"]], sesionId: "s-3", en: EN, corridaId: "r1" });
+    expect(leerPropuesta({ preguntasParaLaGuia: guardado.preguntasParaLaGuia }).preguntasParaLaGuia).toEqual(guardado.preguntasParaLaGuia);
     const r = aplicarOperaciones(estado({ propuesta: guardado }), [{ op: "responderParaLaGuia", respuestas: [{ pregunta: "A?", respuesta: "a2" }] }], validez, VALIDADOR_ESTRICTO, quien);
-    expect(r.ok && r.estado.propuesta.preguntasParaLaGuia).toMatchObject({ preguntas: ["B?"], opciones: [["b1"]] });
+    expect(r.ok && r.estado.propuesta.preguntasParaLaGuia).toMatchObject({ preguntas: ["B?"], opciones: [["b1", "b2"]], sesionId: "s-3" });
   });
 
   it("el objetivo de la exploración tiene su propio bloque, segundo en peso, y el sistema pide servir a los dos", () => {
@@ -593,7 +606,7 @@ describe("quinta vuelta: qué se manda al responder las preguntas de Nexus", () 
       empresa: "x", industria: null, edicion: "general", perfil: null, hoy: "2026-11-08", proxima: { numero: 1, titulo: null, fecha: null, sesionId: null },
       conTest: false, desdeCero: false, nivelesDeLaEscala: [], paraConectar: null, hubspotActual: null, confirmado: [], huecos: [], enfoque: [], noExplorado: [], objecionesDichas: [], paraExplorar: [],
     }));
-    expect(t).toMatch(/Hasta 3 respuestas probables/);
+    expect(t).toMatch(/SIEMPRE exactamente 3 respuestas probables/);
     expect(t).toMatch(/NUNCA un nombre, un cargo, una fecha ni una cifra que no esté en ellas/);
   });
 });

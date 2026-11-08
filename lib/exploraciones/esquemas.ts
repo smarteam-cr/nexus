@@ -554,6 +554,8 @@ const HallazgosSchema: z.ZodType<HallazgosDeLaExploracion> = z.object({
 const PreguntasParaLaGuiaSchema: z.ZodType<PreguntasParaLaGuia> = z.object({
   preguntas: z.array(textoLleno(MAX_LARGO_DE_LA_PREGUNTA_PARA_LA_GUIA)).min(1).max(MAX_PREGUNTAS_PARA_LA_GUIA),
   opciones: z.array(z.array(textoLleno(MAX_LARGO_DE_LA_OPCION)).max(MAX_OPCIONES_DE_LA_PREGUNTA)).max(MAX_PREGUNTAS_PARA_LA_GUIA).optional(),
+  // Sexta vuelta: la sesión cuya guía las dejó. Las de antes no lo tienen: se leen igual y no se muestran.
+  sesionId: z.string().max(60).optional(),
   en: FECHA_ISO,
   corridaId: z.string().max(60).nullable(),
 });
@@ -944,6 +946,17 @@ const LecturaDeReunionSchema: z.ZodType<LecturaDeReunion> = z.object({
   cumplido: z.enum(CUMPLIMIENTOS).optional(),
   paraLaProxima: z.array(z.string().max(300)).max(MAX_PARA_LA_PROXIMA).optional(),
   objetivoSiguiente: z.string().max(400).optional(),
+  preguntasParaLaSiguiente: z
+    .array(
+      z.object({
+        pregunta: textoLleno(MAX_LARGO_DE_LA_PREGUNTA_PARA_LA_GUIA),
+        opciones: z.array(textoLleno(MAX_LARGO_DE_LA_OPCION)).max(MAX_OPCIONES_DE_LA_PREGUNTA),
+      }),
+    )
+    .max(MAX_PREGUNTAS_PARA_LA_GUIA)
+    .optional()
+    // Una lista que no calza se pierde sola: no se lleva la lectura entera (sexta vuelta).
+    .catch(undefined),
   en: z.string().max(40),
   corridaId: z.string().max(60),
 });

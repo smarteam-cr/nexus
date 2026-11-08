@@ -48,6 +48,8 @@ import {
   MAX_LARGO_DE_LA_OPCION,
   MAX_OPCIONES_DE_LA_PREGUNTA,
   MAX_PREGUNTAS_PARA_LA_GUIA,
+  DESCRIPCION_DE_LAS_OPCIONES,
+  preguntasConOpciones,
   type LoQueDejoLaGuia,
 } from "./objetivo-y-hallazgos";
 import { MAX_OBJETIVO_DE_LA_EXPLORACION } from "./contexto-de-la-exploracion";
@@ -760,7 +762,7 @@ export function herramientaDeLaAgenda(ctx: ContextoDeLaGuia): Anthropic.Messages
               pregunta: { type: "string" },
               opciones: {
                 type: "array",
-                description: `Hasta ${MAX_OPCIONES_DE_LA_PREGUNTA} respuestas probables, distintas entre sí, para elegir de un clic (10 palabras como mucho cada una). Solo lo que las fuentes permiten suponer: NUNCA un nombre, un cargo, una fecha ni una cifra que no esté en ellas (si la pregunta es justo eso, opciones genéricas como «Con una sola persona» o «Todavía no lo sé», o ninguna). Quien lleva la sesión también puede escribir la suya.`,
+                description: DESCRIPCION_DE_LAS_OPCIONES,
                 items: { type: "string" },
               },
             },
@@ -869,17 +871,21 @@ export function leerLoDeLaExploracion(respuesta: Anthropic.Messages.Message, ctx
   const respondidas = new Set((ctx.respuestas ?? []).map((r) => r.pregunta.trim().toLowerCase()));
   const a = esObjeto(input.ajusteDelObjetivo) ? input.ajusteDelObjetivo : null;
   const texto = a ? textoLimpio(a.texto, MAX_OBJETIVO_DE_LA_EXPLORACION) : null;
-  /* Cada pregunta con sus respuestas probables (2026-11-08, quinta vuelta). Una pregunta sola (texto) se sigue leyendo,
-     sin opciones: así respondían las corridas de antes. */
+  /* Cada pregunta con sus respuestas probables (2026-11-08, quinta vuelta). Sexta vuelta: una pregunta sin respuestas
+     probables (o con una sola) no se lee: se mostraba como una caja de texto suelta (`preguntasConOpciones`). */
   const vistas = new Set<string>();
-  const conOpciones = (Array.isArray(input.faltaContexto) ? input.faltaContexto : []).flatMap((x) => {
+  const leidas = (Array.isArray(input.faltaContexto) ? input.faltaContexto : []).flatMap((x) => {
     const pregunta = textoLimpio(esObjeto(x) ? x.pregunta : x, MAX_LARGO_DE_LA_PREGUNTA_PARA_LA_GUIA);
     if (!pregunta) return [];
     const k = pregunta.toLowerCase();
     if (vistas.has(k) || respondidas.has(k)) return [];
     vistas.add(k);
     return [{ pregunta, opciones: lista(esObjeto(x) ? x.opciones : [], MAX_OPCIONES_DE_LA_PREGUNTA, MAX_LARGO_DE_LA_OPCION) }];
-  }).slice(0, MAX_PREGUNTAS_PARA_LA_GUIA);
+  });
+  const conOpciones = preguntasConOpciones(
+    leidas.map((x) => x.pregunta),
+    leidas.map((x) => x.opciones),
+  );
   return {
     hallazgos: lista(input.hallazgos, MAX_HALLAZGOS, MAX_LARGO_DEL_HALLAZGO),
     ajuste: texto ? { texto, porque: textoLimpio(a!.porque, MAX_PORQUE_DEL_AJUSTE) } : null,

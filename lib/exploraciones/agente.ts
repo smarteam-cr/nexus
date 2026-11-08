@@ -1413,6 +1413,8 @@ function lecturasDeLaCorrida(
       ...(esLaUltima && d.cumplido && o.ctx.planeado?.objetivo ? { cumplido: d.cumplido } : {}),
       ...(esLaUltima && d.paraLaProxima?.length ? { paraLaProxima: d.paraLaProxima } : {}),
       ...(esLaUltima && d.objetivoSiguiente ? { objetivoSiguiente: d.objetivoSiguiente } : {}),
+      // Sexta vuelta: lo que Nexus necesita saber para armar la guía de la siguiente sesión (preguntasDeLaSesion).
+      ...(esLaUltima && d.preguntasParaLaSiguiente?.length ? { preguntasParaLaSiguiente: d.preguntasParaLaSiguiente } : {}),
       ...(listosAntes ? { listosAntes } : {}),
       fecha: r.fecha,
       titulo: r.titulo.slice(0, 300),
@@ -1523,9 +1525,18 @@ async function guardarGuia(
     const fila = await tx.exploracionDeVenta.findUnique({ where: { id: exploracionId }, select: { propuesta: true, contenido: true } });
     if (!fila) return;
     const leida = leerPropuesta(fila.propuesta);
-    const actual = extras
-      ? conLoDeLaExploracion(leida, extras, { confirmado: leerContenido(fila.contenido).contexto?.objetivo, en: new Date().toISOString(), corridaId: extras.runId })
-      : leida;
+    const contenidoActual = extras ? leerContenido(fila.contenido) : null;
+    // Las preguntas quedan con su sesión, sin las que el equipo respondió mientras la guía se armaba (sexta vuelta).
+    const actual =
+      extras && contenidoActual
+        ? conLoDeLaExploracion(leida, extras, {
+            confirmado: contenidoActual.contexto?.objetivo,
+            en: new Date().toISOString(),
+            corridaId: extras.runId,
+            sesionId,
+            respondidas: contenidoActual.respuestasParaLaGuia ?? [],
+          })
+        : leida;
     if (!guiaNueva) {
       await tx.exploracionDeVenta.update({ where: { id: exploracionId }, data: { propuesta: actual as unknown as Prisma.InputJsonValue } });
       return;
