@@ -26,16 +26,24 @@
  * mano trae las de su ficha), se quitan y se ponen actividades, y cada caso dice sus horas, su precio mínimo (horas ×
  * tarifa del segmento) y, para el vendedor, cómo subir el ticket vendiendo por valor. Si hay casos sin armar (de
  * antes), «Regenerar» los vuelve a armar: se aplica con un solo «Deshacer» (y Ctrl+Z), y lo editado a mano no se pisa.
+ *
+ * Desde la segunda vuelta del 2026-11-08 (Elías con Centauro: «Ventas tiene que entender qué actividades sí y cuáles no»)
+ * los casos van en el orden del plan del agente, cada uno dice por qué tiene sentido para esta empresa y cómo se arma
+ * (`PorQueYComo`), cada actividad tiene su ⓘ y «Cómo subir el ticket» habla en palabras simples.
  */
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { useUndo } from "@/components/ui/UndoProvider";
 import {
   actividadesDelElegido,
   cambiarVeces,
+  cambiosRespectoDeLaFicha,
   casosSinArmar,
+  enOrdenDelPlan,
   horasDeLaActividad,
   horasDeLaVenta,
   horasDelCaso,
+  lineaDeCambios,
+  palancaEnPalabras,
   precioMinimo,
   quitarActividad,
   sumarActividad,
@@ -45,7 +53,7 @@ import {
   type TarifaDeLaEmpresa,
   type ValorDeVenta,
 } from "@/lib/casos-de-uso/armado";
-import { ETAPAS_DE_ACTIVIDAD, formatoHoras, formatoUsd, sobreQueAparte } from "@/lib/casos-de-uso/actividades-puras";
+import { ETAPAS_DE_ACTIVIDAD, formatoHoras, formatoUsd, nombreVisible, sobreQueAparte } from "@/lib/casos-de-uso/actividades-puras";
 import Link from "next/link";
 import { Alert, Badge, IconButton, Select } from "@/components/ui";
 import { cn } from "@/lib/cn";
@@ -110,27 +118,39 @@ function PrecioDelCaso({ id, caso }: { id: string; caso: CasoDeUsoElegido }) {
   );
 }
 
-/** Cómo subir el ticket: lo ve solo el vendedor (nunca llega a la propuesta del cliente). */
+/**
+ * Cómo subir el ticket: lo ve solo el vendedor (nunca llega a la propuesta del cliente). Desde el 2026-11-08 (Elías con
+ * Centauro: «costo de la mala calidad» no se entendía) en palabras simples: de dónde sale el valor, la idea, lo que ya
+ * sabemos y las anclas (los datos) que faltan por averiguar con el cliente.
+ */
 function ValorDelCaso({ valor }: { valor: ValorDeVenta }) {
   return (
     <div className="space-y-1.5 rounded-lg border border-line bg-surface-muted px-3 py-2.5 text-[13px] leading-normal text-fg-secondary">
       <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-fg-muted">
-        Para subir el ticket{valor.palanca ? ` · ${valor.palanca}` : ""} <span className="font-normal normal-case tracking-normal">(solo lo ves tú)</span>
+        Cómo subir el ticket <span className="font-normal normal-case tracking-normal">(solo lo ves tú)</span>
       </p>
+      {valor.palanca && (
+        <p className="text-xs">
+          <span className="font-medium text-fg">De dónde sale el valor:</span> {palancaEnPalabras(valor.palanca)}.
+        </p>
+      )}
       <p>{valor.argumento}</p>
       {valor.numeros.length > 0 && (
-        <ul className="space-y-0.5 text-xs">
-          {valor.numeros.map((n, i) => (
-            <li key={i}>
-              <span className="font-medium text-fg">{n.dato}</span>
-              {n.fuente && <span className="text-fg-muted"> · {n.fuente}</span>}
-            </li>
-          ))}
-        </ul>
+        <div className="text-xs">
+          <p className="font-medium text-fg">Lo que ya sabemos</p>
+          <ul className="list-disc space-y-0.5 pl-4">
+            {valor.numeros.map((n, i) => (
+              <li key={i}>
+                {n.dato}
+                {n.fuente && <span className="text-fg-muted"> · {n.fuente}</span>}
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
       {valor.falta.length > 0 && (
         <div className="text-xs">
-          <p className="font-medium text-fg">Falta averiguar</p>
+          <p className="font-medium text-fg">Anclas por averiguar con el cliente</p>
           <ul className="list-disc space-y-0.5 pl-4">
             {valor.falta.map((f, i) => (
               <li key={i}>{f}</li>
@@ -138,6 +158,44 @@ function ValorDelCaso({ valor }: { valor: ValorDeVenta }) {
           </ul>
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * Por qué el caso y cómo se arma (2026-11-08, Elías con Centauro: «Ventas tiene que entender qué actividades sí y cuáles
+ * no»). Corto, para quien vende: su lugar en el plan, por qué para esta empresa, cómo se armó y, en uno del catálogo, qué
+ * cambió frente a su ficha (eso lo calcula la pantalla, así que sigue los cambios a mano).
+ */
+function PorQueYComo({ id, caso, conRazon }: { id: string; caso: CasoDeUsoElegido; conRazon: boolean }) {
+  const armado = useContext(ArmadoContexto);
+  /* La razón, solo si la escribió el agente para esta empresa: en un caso elegido a mano del catálogo es la descripción
+     genérica de la ficha (revisión del 2026-11-08). */
+  const porQue = caso.paraVentas?.porQue || (conRazon && caso.armado ? caso.razon : "");
+  const comoSeArma = caso.paraVentas?.comoSeArma ?? "";
+  const ficha = id.startsWith("cat-") ? armado?.porDefecto[id.slice(4)] : undefined;
+  const cambios = armado ? cambiosRespectoDeLaFicha(actividadesDe(id, caso, armado), ficha, (a) => armado.porId.get(a)?.nombre) : null;
+  const frente = cambios ? lineaDeCambios(cambios) : "";
+  if (!porQue && !comoSeArma && !frente && !caso.plan?.despuesDe) return null;
+  return (
+    <div className="mt-1.5 space-y-0.5 rounded-lg bg-surface-muted px-3 py-2 text-xs leading-normal text-fg-secondary">
+      {caso.plan?.despuesDe && (
+        <p>
+          <span className="font-medium text-fg">Por qué en este orden:</span> {caso.plan.despuesDe}
+        </p>
+      )}
+      {porQue && (
+        <p>
+          <span className="font-medium text-fg">Por qué para esta empresa:</span> {porQue}
+        </p>
+      )}
+      {comoSeArma && (
+        <p>
+          {/* Lo escribió el agente: si después cambiaste las actividades a mano, la línea de abajo es la de hoy. */}
+          <span className="font-medium text-fg">{caso.aMano ? "Cómo lo armó el agente (antes de tus cambios):" : "Cómo se arma:"}</span> {comoSeArma}
+        </p>
+      )}
+      {frente && <p className="text-fg-muted">{frente}</p>}
     </div>
   );
 }
@@ -164,13 +222,26 @@ function ActividadesDelCaso({ id, caso, editable }: { id: string; caso: CasoDeUs
       <ul className="divide-y divide-line rounded-lg border border-line">
         {acts.map((a, i) => {
           const lib = armado.porId.get(a.actividadId);
+          const nombre = nombreVisible(a, lib?.nombre);
           return (
             <li key={`${a.actividadId}-${a.sobreQue ?? ""}-${i}`} className="flex items-center gap-2 px-3 py-1.5 text-xs">
               <span className="min-w-0 flex-1 text-fg">
-                {a.nombre}
-                {a.sobreQue && sobreQueAparte({ nombre: a.nombre, sobreQue: a.sobreQue }) && <span className="text-fg-muted"> · {a.sobreQue}</span>}
+                {nombre}
+                {a.sobreQue && sobreQueAparte({ nombre, sobreQue: a.sobreQue }) && <span className="text-fg-muted"> · {a.sobreQue}</span>}
+                {/* Qué se hace en la actividad, en una frase de la biblioteca (2026-11-08): para quien vende. */}
+                {lib?.resumen && (
+                  <span
+                    tabIndex={0}
+                    role="img"
+                    aria-label={`Qué se hace en «${nombre}»: ${lib.resumen}`}
+                    title={lib.resumen}
+                    className="ml-1 inline-flex h-3.5 w-3.5 cursor-help items-center justify-center rounded-full border border-line align-[-1px] text-[9px] font-semibold leading-none text-fg-muted hover:border-brand hover:text-brand focus:outline-none focus-visible:ring-1 focus-visible:ring-brand"
+                  >
+                    i
+                  </span>
+                )}
                 {/* La actividad de la biblioteca detrás del nombre del caso: de ahí sale el tiempo. */}
-                {lib && lib.nombre !== a.nombre && <span className="block text-[11px] text-fg-muted">Biblioteca: {lib.nombre}</span>}
+                {lib && lib.nombre !== nombre && <span className="block text-[11px] text-fg-muted">Biblioteca: {lib.nombre}</span>}
                 {!lib && <span className="text-danger-ink"> · ya no está en la biblioteca</span>}
               </span>
               {editable && lib?.seRepite ? (
@@ -178,19 +249,19 @@ function ActividadesDelCaso({ id, caso, editable }: { id: string; caso: CasoDeUs
                   <IconButton
                     size="xs"
                     variant="subtle"
-                    aria-label={`Una vez menos «${a.nombre}»`}
+                    aria-label={`Una vez menos «${nombre}»`}
                     icon={<span aria-hidden="true">−</span>}
                     disabled={guardando || a.veces <= 1}
-                    onClick={() => guardar(cambiarVeces(caso, acts, i, a.veces - 1), `Bajaste «${a.nombre}» a ${a.veces - 1}`)}
+                    onClick={() => guardar(cambiarVeces(caso, acts, i, a.veces - 1), `Bajaste «${nombre}» a ${a.veces - 1}`)}
                   />
                   <span className="w-6 text-center tabular-nums text-fg-secondary">{a.veces}×</span>
                   <IconButton
                     size="xs"
                     variant="subtle"
-                    aria-label={`Una vez más «${a.nombre}»`}
+                    aria-label={`Una vez más «${nombre}»`}
                     icon={<span aria-hidden="true">+</span>}
                     disabled={guardando}
-                    onClick={() => guardar(cambiarVeces(caso, acts, i, a.veces + 1), `Subiste «${a.nombre}» a ${a.veces + 1}`)}
+                    onClick={() => guardar(cambiarVeces(caso, acts, i, a.veces + 1), `Subiste «${nombre}» a ${a.veces + 1}`)}
                   />
                 </span>
               ) : (
@@ -202,11 +273,11 @@ function ActividadesDelCaso({ id, caso, editable }: { id: string; caso: CasoDeUs
               {editable && (
                 <IconButton
                   size="xs"
-                  aria-label={`Quitar «${a.nombre}»`}
+                  aria-label={`Quitar «${nombre}»`}
                   title="Quitar la actividad"
                   icon={<span aria-hidden="true">×</span>}
                   disabled={guardando}
-                  onClick={() => guardar(quitarActividad(caso, acts, i), `Quitaste «${a.nombre}» de «${caso.titulo}»`)}
+                  onClick={() => guardar(quitarActividad(caso, acts, i), `Quitaste «${nombre}» de «${caso.titulo}»`)}
                 />
               )}
             </li>
@@ -257,7 +328,20 @@ function useMueve(caso: CasoDeUsoElegido): string[] {
  * Un caso elegido: una fila con su marca verde, el área, lo que mueve y su precio mínimo. Se abre para ver y cambiar
  * sus actividades y el argumento de valor. Si «Regenerar» dejó una versión nueva, lo dice ahí mismo.
  */
-function FilaElegida({ id, caso, onQuitar, nueva }: { id: string; caso: CasoDeUsoElegido; onQuitar?: () => void; nueva?: ItemPropuesto }) {
+function FilaElegida({
+  id,
+  caso,
+  onQuitar,
+  nueva,
+  paso,
+}: {
+  id: string;
+  caso: CasoDeUsoElegido;
+  onQuitar?: () => void;
+  nueva?: ItemPropuesto;
+  /** Su número en el plan, contado entre los elegidos (el del agente puede saltar uno que no se eligió). */
+  paso?: number;
+}) {
   const { escala, guardando, puedeEditar, usar, cambiar } = useLienzo();
   const [abierta, setAbierta] = useState(false);
   const mueve = useMueve(caso);
@@ -274,11 +358,13 @@ function FilaElegida({ id, caso, onQuitar, nueva }: { id: string; caso: CasoDeUs
             {caso.aMano && <span className="ml-2 text-[11px] font-normal text-fg-muted">· actividades editadas a mano</span>}
           </p>
           <p className="text-xs text-fg-muted">
+            {paso && <span className="font-medium text-fg-secondary">Paso {paso} · </span>}
             {area}
-            {!esCasoLibre(id) && " · del catálogo"}
+            {!esCasoLibre(id) && (caso.tituloDelCatalogo ? ` · del catálogo: «${caso.tituloDelCatalogo}»` : " · del catálogo")}
             {mueve.length > 0 && ` · Mueve: ${mueve.join(", ")}`}
           </p>
           <PrecioDelCaso id={id} caso={caso} />
+          <PorQueYComo id={id} caso={caso} conRazon />
         </div>
         <button type="button" aria-expanded={abierta} className="flex-shrink-0 text-xs font-medium text-brand hover:underline" onClick={() => setAbierta((x) => !x)}>
           {abierta ? "Actividades ▴" : "Actividades ▾"}
@@ -336,8 +422,10 @@ function TarjetaSugerida({ item }: { item: ItemPropuesto }) {
           {area && <span className="text-xs text-fg-muted">{area}</span>}
         </p>
         <h3 className="text-[15px] font-semibold leading-[1.35] text-fg">{caso.titulo}</h3>
+        {caso.tituloDelCatalogo && <p className="text-[11px] text-fg-muted">Del catálogo: «{caso.tituloDelCatalogo}»</p>}
         {caso.descripcion && <p className={cn("text-[13px] leading-normal text-fg-secondary", !abierta && "line-clamp-2")}>{caso.descripcion}</p>}
         <PrecioDelCaso id={item.destino.tipo === "casoDeUso" ? item.destino.useCaseId : ""} caso={caso} />
+        {item.destino.tipo === "casoDeUso" && <PorQueYComo id={item.destino.useCaseId} caso={caso} conRazon={false} />}
         {mueve.length > 0 && (
           <p className="flex flex-wrap items-center gap-1.5">
             <span className="text-[11px] text-fg-muted">Mueve</span>
@@ -396,12 +484,16 @@ function CasosDeUso({ catalogo }: { catalogo: Caso[] }) {
   const armado = useContext(ArmadoContexto);
   const { pushUndo } = useUndo();
   const e = exp.estado;
-  const elegidos = Object.entries(e.contenido.casosDeUso);
+  // En el orden del plan que armó el agente (2026-11-08): uno detrás de otro.
+  const elegidos = enOrdenDelPlan(Object.entries(e.contenido.casosDeUso), ([, c]) => c.plan?.paso);
   const areas = escala.areas.filter((a) => e.areas.includes(a.id));
   const todosLosPropuestos = pendientesPara((d) => d.tipo === "casoDeUso");
   /* La versión nueva de un caso ya elegido (la deja «Regenerar») va en su fila, no entre los sugeridos. */
   const nuevaDe = new Map(todosLosPropuestos.flatMap((it) => (it.destino.tipo === "casoDeUso" && it.destino.useCaseId in e.contenido.casosDeUso ? [[it.destino.useCaseId, it] as const] : [])));
-  const propuestos = todosLosPropuestos.filter((it) => !(it.destino.tipo === "casoDeUso" && nuevaDe.has(it.destino.useCaseId)));
+  const propuestos = enOrdenDelPlan(
+    todosLosPropuestos.filter((it) => !(it.destino.tipo === "casoDeUso" && nuevaDe.has(it.destino.useCaseId))),
+    (it) => (it.valor as CasoDeUsoElegido).plan?.paso,
+  );
   const sinArmar = casosSinArmar(
     elegidos.map(([, c]) => c),
     propuestos.map((it) => it.valor as CasoDeUsoElegido),
@@ -585,8 +677,15 @@ function CasosDeUso({ catalogo }: { catalogo: Caso[] }) {
         <section className="space-y-2">
           <h2 className="text-[11px] font-semibold uppercase tracking-[0.08em] text-fg-muted">Elegidos · {elegidos.length}</h2>
           <ul className="space-y-2">
-            {elegidos.map(([id, caso]) => (
-              <FilaElegida key={id} id={id} caso={caso} nueva={nuevaDe.get(id)} onQuitar={puedeEditar ? () => quitar(id) : undefined} />
+            {elegidos.map(([id, caso], i) => (
+              <FilaElegida
+                key={id}
+                id={id}
+                caso={caso}
+                nueva={nuevaDe.get(id)}
+                paso={caso.plan ? i + 1 : undefined}
+                onQuitar={puedeEditar ? () => quitar(id) : undefined}
+              />
             ))}
           </ul>
           {armado && <TotalDeLaVenta elegidos={elegidos} armado={armado} />}

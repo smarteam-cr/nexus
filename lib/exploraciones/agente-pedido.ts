@@ -24,8 +24,16 @@ import { definicionEnElMarco, MARCO_DE_CS, type ClaveDeMarco } from "./marco";
 import type Anthropic from "@anthropic-ai/sdk";
 import type { CasoDelCatalogo } from "@/lib/casos-de-uso/catalogo";
 import { catalogoParaElAgente, dimensionesEnElArea, idEnLaPreventa } from "@/lib/casos-de-uso/en-la-preventa";
-import { validarActividadesDelAgente, validarValorDelAgente, type ActividadDelCaso, type ActividadLigera } from "@/lib/casos-de-uso/armado";
+import {
+  validarActividadesDelAgente,
+  validarLugarDelAgente,
+  validarParaVentasDelAgente,
+  validarValorDelAgente,
+  type ActividadDelCaso,
+  type ActividadLigera,
+} from "@/lib/casos-de-uso/armado";
 import { ETAPAS_DE_ACTIVIDAD } from "@/lib/casos-de-uso/actividades";
+import { palabrasSinArticulos } from "@/lib/casos-de-uso/actividades-puras";
 import { CIERRES, DESPUES, type Cierre, type Despues, type Letra } from "@/lib/escala/documento/tipos";
 import {
   CANALES_DE_CONEXION,
@@ -1268,6 +1276,8 @@ export interface ContextoDeCasos {
   exploracion: string;
   /** Lo que ya está elegido o propuesto, y lo que el vendedor descartó: no se repite. */
   yaEstan: string[];
+  /** El paso más alto del plan entre lo que ya está (los casos nuevos de una tanda van después). 0 si ninguno lo tiene. */
+  ultimoPaso?: number;
   descartados: string[];
   /** Las instrucciones adicionales del vendedor (contexto de la preventa), ya como bloque, o "". */
   instrucciones?: string;
@@ -1284,7 +1294,7 @@ export interface ContextoDeCasos {
   /** Las actividades marcadas por defecto de cada caso del catálogo, por su id. */
   porDefecto?: Readonly<Record<string, ActividadDelCaso[]>>;
   /** «Regenerar»: los casos ya elegidos, para que el agente los vuelva a armar (con su id en `rearma`). */
-  rearmar?: { id: string; titulo: string; areaId: string | null; actividades: ActividadDelCaso[] }[];
+  rearmar?: { id: string; titulo: string; tituloDelCatalogo?: string; areaId: string | null; actividades: ActividadDelCaso[] }[];
 }
 
 const PALANCAS_DE_VALOR = ["Costo de la mala calidad", "Ingreso que se pierde", "Tiempo del equipo", "Riesgo", "Crecimiento"] as const;
@@ -1327,10 +1337,16 @@ export function pedidoDeCasos(ctx: ContextoDeCasos): Anthropic.Messages.MessageC
               ...(conCatalogo
                 ? { catalogo: { type: "string", enum: ["", ...catalogo.map((c) => c.id)], description: "El id del caso del catálogo, si es ese. Vacío si es uno propio." } }
                 : {}),
-              titulo: { type: "string", description: "El resultado que consigue el cliente, corto (máximo 80 caracteres). Si es del catálogo, su título tal cual." },
+              titulo: {
+                type: "string",
+                description: "El resultado que consigue el cliente, corto (máximo 80 caracteres). Si es del catálogo, su título tal cual o adaptado a esta empresa, con el mismo resultado.",
+              },
               descripcion: { type: "string", description: "Qué consigue el cliente y cómo lo nota su equipo, en dos o tres frases: el resultado, no el trabajo." },
               dimensiones: { type: "array", items: { type: "string", enum: dims.length ? dims : ["0.0"] }, description: "Las dimensiones de la escala que mueve." },
               razon: { type: "string", description: "Una frase: qué de lo que le falta, o de su meta, resuelve." },
+              paso: { type: "integer", minimum: 1, maximum: 40, description: "Su lugar en el plan: 1 es lo primero que se hace." },
+              despuesDe: { type: "string", description: "Una frase de 20 palabras como mucho: por qué va después del caso anterior del plan. Vacío en el primero." },
+              porQue: { type: "string", description: "Para el vendedor, UNA frase de 30 palabras como mucho: por qué este caso tiene sentido para ESTA empresa, con su contexto." },
               ...(conBiblioteca
                 ? {
                     ...(rearmar.length
@@ -1351,10 +1367,15 @@ export function pedidoDeCasos(ctx: ContextoDeCasos): Anthropic.Messages.MessageC
                       },
                     },
                     sinActividad: { type: "string", description: "Lo que el caso necesita y NINGUNA actividad de la biblioteca cubre. Vacío si todas calzan." },
+                    comoSeArma: {
+                      type: "string",
+                      description:
+                        "Para el vendedor, 40 palabras como mucho: qué actividades lleva y cuáles no, y por qué, nombrándolas por su nombre de la biblioteca. Tiene que coincidir con las actividades que mandas.",
+                    },
                   }
                 : {}),
             },
-            required: ["areaId", "titulo", "descripcion", "razon", ...(conBiblioteca ? ["actividades"] : [])],
+            required: ["areaId", "titulo", "descripcion", "razon", "paso", "porQue", ...(conBiblioteca ? ["actividades", "comoSeArma"] : [])],
           },
         },
       },
@@ -1367,10 +1388,17 @@ Reglas:
 - Un caso de uso dice el RESULTADO que obtiene el cliente, no el trabajo que hace Smarteam: «Ves en qué va cada negocio sin preguntar», no «Configuramos el pipeline». Nada de «capacitación» ni «consultoría» sueltas.${
     conCatalogo
       ? `
-- Parte del CATÁLOGO DE SMARTEAM (abajo). Si un caso del catálogo calza con lo que le falta, úsalo: su id en «catalogo» y su título tal cual; la descripción y la razón, para esta empresa. Propón uno propio (con «catalogo» vacío) solo si ninguno calza.`
+- Parte del CATÁLOGO DE SMARTEAM (abajo). Si un caso del catálogo calza con lo que le falta, úsalo con su id en «catalogo»; la descripción y la razón, para esta empresa. Su título va tal cual o, si así se entiende mejor, adaptado a esta empresa (su industria, su canal, lo que vende), sin cambiar el resultado que promete. Propón uno propio (con «catalogo» vacío) solo si ninguno calza.`
       : ""
   }
 - Empieza por lo que frena al área (sus dimensiones más bajas) y por lo que le falta para Funcional; después, lo que toca una meta con cifras.
+- Los casos son UN PLAN, uno detrás de otro, no una lista suelta: el primero es lo que hay que hacer antes que nada (lo que frena a los demás o la base que necesitan) y cada uno se apoya en los anteriores. Numera en «paso» todos los que mandas, de todas las áreas juntas (1, 2, 3…), y en «despuesDe» di en una frase por qué va después del anterior.${
+    (ctx.ultimoPaso ?? 0) > 0
+      ? `
+- El plan ya tiene ${ctx.ultimoPaso} pasos (los que YA ESTÁN, abajo): los casos nuevos van a continuación, desde el paso ${(ctx.ultimoPaso ?? 0) + 1}.`
+      : ""
+  }
+- «porQue» y «comoSeArma» son para el VENDEDOR (el cliente no los ve), y se leen de un vistazo: «porQue» es UNA frase de 30 palabras como mucho, «comoSeArma» 40 palabras como mucho. Palabras simples, con el contexto de esta empresa (lo que contó, su meta, cómo trabaja hoy). Sin cifras que no estén escritas abajo.
 - Como máximo ${MAX_CASOS_POR_AREA} por área. Menos es mejor si alcanza: una primera venta que el cliente pueda sostener.
 - La razón nombra qué de lo que le falta, o de su meta, resuelve. Sin frases de venta, sin precios, sin montos de dinero.
 - Lo que propones lo puede ver el cliente en la propuesta: nada de opiniones sobre personas ni nada interno de Smarteam.
@@ -1382,10 +1410,11 @@ Reglas:
 Cada caso se arma con ACTIVIDADES de la BIBLIOTECA DE SMARTEAM (abajo), que son el plan que ejecuta Customer Success y de donde sale el precio:
 - Solo actividades de la biblioteca, por su id. No inventes actividades: si el caso necesita algo que ninguna cubre, dilo en «sinActividad».
 - En un caso del catálogo, parte de sus actividades por defecto y ajústalas a esta empresa (quita lo que no aplica, suma lo que pide, cambia las veces). Un caso propio también se arma solo con actividades de la biblioteca.
-- El nombre de cada actividad dice la acción concreta en este caso, SIN cambiarle lo que es: es la misma actividad de la biblioteca, con el mismo tiempo. Si el trabajo es más grande que esa actividad (una integración con un ERP no es «Configurar en HubSpot»), no la uses: dilo en «sinActividad».${
+- El nombre de cada actividad dice la acción concreta en este caso, SIN cambiarle lo que es: es la misma actividad de la biblioteca, con el mismo tiempo. Si el trabajo es más grande que esa actividad (una integración con un ERP no es «Configurar en HubSpot»), no la uses: dilo en «sinActividad».
+- En «comoSeArma» di qué lleva y qué no, y por qué: lo que quitaste o sumaste respecto de la ficha del catálogo, o lo que eligiste en uno propio (por ejemplo: «Sin importar datos: ya trabajan en HubSpot. Dos sesiones de capacitación: son dos equipos.»). Solo lo que de verdad hiciste en «actividades»: si dices que una no va, no la mandes.${
           rearmar.length
             ? `
-- Vuelve a armar TODOS los casos YA ELEGIDOS (abajo), uno por uno, con su id en «rearma»: sus actividades para esta empresa. Mantén su título. Los nuevos van con «rearma» vacío.`
+- Vuelve a armar TODOS los casos YA ELEGIDOS (abajo), uno por uno, con su id en «rearma»: sus actividades para esta empresa y su lugar en el plan junto con los nuevos. Mantén su título. Los nuevos van con «rearma» vacío.`
             : ""
         }`
       : ""
@@ -1440,6 +1469,14 @@ export function leerLosCasos(respuesta: Anthropic.Messages.Message, ctx: Context
   const porId = new Map((ctx.biblioteca ?? []).map((a) => [a.id, a]));
   const rearmar = new Map((ctx.rearmar ?? []).map((r) => [r.id, r]));
   const yaRearmados = new Set<string>();
+  /* Las cifras que el agente puede citar sin inventar: lo que se sabe y los nombres de las actividades («revisar a los
+     30 días» no es una cifra del cliente, pero tampoco inventada). */
+  const deLasCifras = [
+    ctx.exploracion,
+    ...(ctx.biblioteca ?? []).map((a) => a.nombre),
+    ...Object.values(ctx.porDefecto ?? {}).flatMap((acts) => acts.map((a) => `${a.nombre} ${a.sobreQue ?? ""}`)),
+    ...(ctx.rearmar ?? []).flatMap((r) => r.actividades.map((a) => `${a.nombre} ${a.sobreQue ?? ""}`)),
+  ].join("\n");
   const items: ItemPropuesto[] = [];
   let descartadas = 0;
   for (const x of lista(input.casos)) {
@@ -1451,13 +1488,22 @@ export function leerLosCasos(respuesta: Anthropic.Messages.Message, ctx: Context
     }
     const areaId = elegido ? elegido.areaId : str(x.areaId);
     const area = areaId ? areas.get(areaId) : undefined;
-    // Del catálogo, y de un área que el caso toca: el título es el suyo, no el que escribió el modelo.
+    // Del catálogo, y de un área que el caso toca (si no, es uno propio).
     const caso = elegido ? casoDelId(elegido.id, delCatalogo) : area ? delCatalogo.get(str(x.catalogo) ?? "") : undefined;
     const delCaso = elegido ? caso : caso && caso.areas.includes(area!.id as (typeof caso.areas)[number]) ? caso : undefined;
-    const titulo = (elegido?.titulo ?? delCaso?.titulo ?? str(x.titulo))?.slice(0, 200);
+    /* 2026-11-08 (Elías con Centauro): el agente puede adaptar a esta empresa el título de un caso NUEVO del catálogo; el
+       del catálogo queda al lado (`tituloDelCatalogo`) y la identidad sigue siendo el id. Uno ya elegido conserva el suyo
+       (revisión del 2026-11-08): «Regenerar» aplica la versión nueva sin preguntar, y ese título lo ve el cliente en la
+       propuesta. Casi igual al del catálogo (otra mayúscula, un punto) es el del catálogo. */
+    const delAgente = str(x.titulo)?.slice(0, 200);
+    const comparable = (t: string) => palabrasSinArticulos(t).join(" ");
+    const igualAlCatalogo = !!delCaso && (!delAgente || comparable(delAgente) === comparable(delCaso.titulo));
+    const titulo = elegido ? elegido.titulo.slice(0, 200) : igualAlCatalogo ? delCaso!.titulo : delAgente;
+    const tituloDelCatalogo = elegido ? elegido.tituloDelCatalogo : delCaso && !igualAlCatalogo ? delCaso.titulo : undefined;
     const descripcion = str(x.descripcion)?.slice(0, 800);
     const razon = str(x.razon)?.slice(0, 400);
-    const sinLugar = elegido ? !!areaId && !area : !area || vistos.has(normalizarTexto(titulo ?? "")) || (porArea.get(area.id) ?? 0) >= MAX_CASOS_POR_AREA;
+    const repetido = [titulo, delCaso?.titulo].some((t) => !!t && vistos.has(normalizarTexto(t)));
+    const sinLugar = elegido ? !!areaId && !area : !area || repetido || (porArea.get(area.id) ?? 0) >= MAX_CASOS_POR_AREA;
     if (!titulo || !descripcion || !razon || sinLugar) {
       descartadas++;
       continue;
@@ -1467,6 +1513,8 @@ export function leerLosCasos(respuesta: Anthropic.Messages.Message, ctx: Context
     const dimensiones = (delCaso && pedidas.length === 0 ? dimensionesEnElArea(delCaso, area?.id ?? null) : pedidas).filter((d) => deEstaArea.has(d)).slice(0, 8);
     const destino: DestinoDePropuesta = { tipo: "casoDeUso", useCaseId: elegido ? elegido.id : delCaso ? idEnLaPreventa(delCaso.id) : idDeCasoLibre(titulo) };
     const armado = porId.size ? armarConLaBiblioteca(x, porId, delCaso ? (ctx.porDefecto?.[delCaso.id] ?? []) : (elegido?.actividades ?? []), ahora) : {};
+    const paraVentas = validarParaVentasDelAgente(x, deLasCifras);
+    const plan = validarLugarDelAgente(x, elegido ? 0 : (ctx.ultimoPaso ?? 0));
     const valor = VALIDADOR_ESTRICTO.valorDelDestino(destino, {
       titulo,
       areaId: area?.id ?? null,
@@ -1474,6 +1522,9 @@ export function leerLosCasos(respuesta: Anthropic.Messages.Message, ctx: Context
       descripcion,
       ...(dimensiones.length ? { dimensiones } : {}),
       ...armado,
+      ...(tituloDelCatalogo ? { tituloDelCatalogo } : {}),
+      ...(paraVentas ? { paraVentas } : {}),
+      ...(plan ? { plan } : {}),
     });
     if (valor === null) {
       descartadas++;
@@ -1482,6 +1533,7 @@ export function leerLosCasos(respuesta: Anthropic.Messages.Message, ctx: Context
     if (elegido) yaRearmados.add(elegido.id);
     else {
       vistos.add(normalizarTexto(titulo));
+      if (delCaso) vistos.add(normalizarTexto(delCaso.titulo));
       porArea.set(area!.id, (porArea.get(area!.id) ?? 0) + 1);
     }
     items.push({ id: idDelItem(destino, valor), destino, valor, razon: razon.slice(0, 300), fuentes: [], corridaId, en: ahora.toISOString() });
@@ -1548,13 +1600,21 @@ export function pedidoDelValor(ctx: ContextoDelValor): Anthropic.Messages.Messag
             properties: {
               id: { type: "string", enum: ctx.casos.map((c) => c.id) },
               palanca: { type: "string", enum: [...PALANCAS_DE_VALOR] },
-              argumento: { type: "string", description: "Dos o tres frases: cuánto le cuesta hoy al cliente no tenerlo, con SUS números si los hay." },
+              argumento: {
+                type: "string",
+                description:
+                  "Dos frases cortas y simples, 45 palabras como mucho, sin jerga: qué le cuesta hoy al cliente no tenerlo y cómo se lo muestras para que valga más que el precio mínimo. Con SUS números si los hay; sin cuentas con cifras que no estén abajo.",
+              },
               numeros: {
                 type: "array",
                 description: "Los números del cliente que usaste, copiados tal cual de lo que se sabe, con la frase donde aparecen. Ninguno inventado.",
                 items: { type: "object", properties: { dato: { type: "string" }, fuente: { type: "string" } }, required: ["dato", "fuente"] },
               },
-              falta: { type: "array", items: { type: "string" }, description: "Los números que faltan averiguar para hacer la cuenta." },
+              falta: {
+                type: "array",
+                items: { type: "string" },
+                description: "Las anclas que faltan: cada dato que hay que preguntarle al cliente para hacer la cuenta, como una pregunta corta («¿Cuántos tickets les entran por WhatsApp al mes?»). Máximo tres.",
+              },
             },
             required: ["id", "palanca", "argumento", "numeros", "falta"],
           },
@@ -1567,8 +1627,8 @@ export function pedidoDelValor(ctx: ContextoDelValor): Anthropic.Messages.Messag
 
 Reglas:
 - Usa los números del cliente que aparecen abajo, copiados tal cual («~1.200 tickets al mes»), con su fuente (la reunión, «Metas», «Retos»). Cada número tiene que estar escrito abajo con el mismo sentido: «30 días» no es «30 % de los leads».
-- Si no hay números para hacer la cuenta, NO inventes una cifra ni la estimes: escribe en «falta» qué número hay que averiguar (por ejemplo, «Cuántos tickets llegan por WhatsApp al mes y cuánto vale uno perdido»).
-- Corto y concreto, en español neutro. Nada de opiniones sobre personas.`;
+- Si no hay números para hacer la cuenta, NO inventes una cifra ni la estimes: en «falta» va cada dato que hay que preguntarle al cliente, como una pregunta corta y concreta («¿Cuántos tickets les entran por WhatsApp al mes?», «¿Cuánto vale una venta perdida?»). Son las anclas de la cuenta: máximo tres, las que más pesan.
+- Escribe como le hablarías a un vendedor nuevo: frases cortas, palabras de todos los días, sin jerga de consultoría («costo de la mala calidad», «palanca», «LTV»). Nada de opiniones sobre personas.`;
   const cuerpo =
     `Empresa: ${ctx.empresa}\n\n=== LO QUE SE SABE (lo que puede ver el cliente) ===\n${ctx.exploracion}\n\n` +
     `=== LO QUE SE SABE (interno) ===\n${ctx.interno || "(nada)"}\n\n` +

@@ -529,7 +529,7 @@ describe("los casos de uso que propone", () => {
     expect(cuerpo).not.toMatch(/catálogo/i);
   });
 
-  it("con el catálogo, lo manda y un caso suyo lleva su id `cat-` y su título, aunque el modelo escriba otro", () => {
+  it("con el catálogo, lo manda y un caso suyo lleva su id `cat-`; si el modelo le adapta el título, guarda también el del catálogo", () => {
     const catalogo = casosParaLasAreas(["1"]);
     const ctx = { ...CTX, catalogo };
     const cuerpo = String(pedidoDeCasos(ctx).messages[0].content);
@@ -547,7 +547,8 @@ describe("los casos de uso que propone", () => {
     );
     expect(r.items[0].destino).toEqual({ tipo: "casoDeUso", useCaseId: "cat-cobranza" });
     // Sin dimensiones del modelo, las del caso en esa área (y solo las de las áreas en juego del contexto).
-    expect(r.items[0].valor).toMatchObject({ titulo: casoPorId("cobranza")!.titulo });
+    // Desde el 2026-11-08 el modelo puede adaptar el título a la empresa (Elías con Centauro): el del catálogo queda al lado.
+    expect(r.items[0].valor).toMatchObject({ titulo: "Cobranza a tiempo", tituloDelCatalogo: casoPorId("cobranza")!.titulo });
     expect(r.items[1].destino).toEqual({ tipo: "casoDeUso", useCaseId: idDeCasoLibre("Uno propio") });
     // Un caso del catálogo que no toca el área se toma como propio, con el título que escribió el modelo.
     expect(r.items[2].destino).toEqual({ tipo: "casoDeUso", useCaseId: idDeCasoLibre("De otra área") });

@@ -10,6 +10,7 @@
  *
  *   npx tsx scripts/simular-casos-de-uso.ts --empresa "Centauro Solutions"
  *   npx tsx scripts/simular-casos-de-uso.ts --empresa "Centauro Solutions" --llamar
+ *   npx tsx scripts/simular-casos-de-uso.ts --empresa "Centauro Solutions" --llamar --crudo salida.json   (y lo que devolvió el modelo)
  */
 import "dotenv/config";
 import "./lib/permitir-server-only";
@@ -32,7 +33,8 @@ async function main() {
   const { pedidoDeCasos, leerLosCasos, pedidoDelValor, leerElValor, conElValor } = await import("@/lib/exploraciones/agente-pedido");
   const { getAnthropic } = await import("@/lib/anthropic");
   const { armadoParaLaPreventa } = await import("@/lib/casos-de-uso/armado-server");
-  const { actividadesDelElegido, horasDelCaso, horasDeLaVenta, precioMinimo } = await import("@/lib/casos-de-uso/armado");
+  const { actividadesDelElegido, cambiosRespectoDeLaFicha, horasDelCaso, horasDeLaVenta, lineaDeCambios, precioMinimo } = await import("@/lib/casos-de-uso/armado");
+  const { nombreVisible } = await import("@/lib/casos-de-uso/actividades-puras");
   const { formatoHoras, formatoUsd } = await import("@/lib/casos-de-uso/actividades");
   const { propuestaVigente } = await import("@/lib/exploraciones/contenido");
   type Caso = import("@/lib/exploraciones/contenido").CasoDeUsoElegido;
@@ -57,8 +59,15 @@ async function main() {
     const acts = actividadesDelElegido(c, id.startsWith("cat-") ? armado.porDefecto[id.slice(4)] : undefined);
     const h = horasDelCaso(acts, porId);
     const precio = acts.length ? `${formatoHoras(h.horas)} · desde ${formatoUsd(precioMinimo(h.horas, tarifa))}${h.sinTiempo.length ? ` + ${h.sinTiempo.join(" y ")}` : ""}` : "sin actividades: sin precio";
-    console.log(`  · [${origen}] ${c.titulo} — ${precio}`);
-    for (const a of acts) console.log(`      - ${a.nombre}${a.veces > 1 ? ` ×${a.veces}` : ""}${a.sobreQue ? ` (${a.sobreQue})` : ""}`);
+    console.log(`  · [${origen}]${c.plan ? ` paso ${c.plan.paso}` : ""} ${c.titulo} — ${precio}${c.tituloDelCatalogo ? `
+      (del catálogo: «${c.tituloDelCatalogo}»)` : ""}`);
+    if (c.plan?.despuesDe) console.log(`      > Va en el paso ${c.plan.paso}: ${c.plan.despuesDe}`);
+    if (c.paraVentas?.porQue) console.log(`      > Por qué para esta empresa: ${c.paraVentas.porQue}`);
+    if (c.paraVentas?.comoSeArma) console.log(`      > Cómo se arma: ${c.paraVentas.comoSeArma}`);
+    const ficha = id.startsWith("cat-") ? armado.porDefecto[id.slice(4)] : undefined;
+    const cambios = cambiosRespectoDeLaFicha(acts, ficha, (x) => porId.get(x)?.nombre);
+    if (cambios) console.log(`      > ${lineaDeCambios(cambios)}`);
+    for (const a of acts) console.log(`      - ${nombreVisible(a, porId.get(a.actividadId)?.nombre)}${a.veces > 1 ? ` ×${a.veces}` : ""}${a.sobreQue ? ` (${a.sobreQue})` : ""}`);
     if (c.sinActividad) console.log(`      ⚠ Falta en la biblioteca: ${c.sinActividad}`);
     if (c.valorDeVenta) {
       console.log(`      $ Para subir el ticket (${c.valorDeVenta.palanca}): ${c.valorDeVenta.argumento}`);
@@ -88,13 +97,17 @@ async function main() {
   const t0 = Date.now();
   const respuesta = await getAnthropic().messages.create(pedido);
   const r = leerLosCasos(respuesta, ctx, "simulacro");
+  // --crudo <archivo>: lo que devolvió el modelo tal cual, para comparar lo que dice con lo que manda.
+  const crudo = arg("--crudo");
+  if (crudo) (await import("node:fs")).writeFileSync(crudo, JSON.stringify(respuesta.content, null, 2));
   const cv = contextoDelValor(estado, ctx.exploracion, fila.client.name, r.items);
   const rv = await getAnthropic().messages.create(pedidoDelValor(cv));
   const items = conElValor(r.items, leerElValor(rv, cv));
   const u = { input_tokens: respuesta.usage.input_tokens + rv.usage.input_tokens, output_tokens: respuesta.usage.output_tokens + rv.usage.output_tokens };
   const costo = (u.input_tokens * PRECIO_POR_MTOK.entrada + u.output_tokens * PRECIO_POR_MTOK.salida) / 1e6;
   console.log("\n=== DESPUÉS: lo que propondría «Regenerar» (no se guardó) ===");
-  const despues = items.map((it) => {
+  const { enOrdenDelPlan } = await import("@/lib/casos-de-uso/armado");
+  const despues = enOrdenDelPlan(items, (it) => (it.valor as Caso).plan?.paso).map((it) => {
     const id = (it.destino as { useCaseId: string }).useCaseId;
     return linea(id, it.valor as Caso, id in estado.contenido.casosDeUso ? "rearma un elegido" : "nuevo");
   });

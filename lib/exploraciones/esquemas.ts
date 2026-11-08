@@ -329,6 +329,9 @@ export const CasoDeUsoElegidoSchema: z.ZodType<CasoDeUsoElegido> = z.object({
   // (No FECHA_ISO: se declara más abajo y aquí todavía no existe.)
   armado: z.string().min(10).max(40).optional(),
   aMano: z.boolean().optional(),
+  tituloDelCatalogo: texto(200).optional(),
+  paraVentas: z.object({ porQue: texto(400), comoSeArma: texto(500) }).optional(),
+  plan: z.object({ paso: z.number().int().min(1).max(40), despuesDe: texto(300).optional() }).optional(),
 });
 
 const EscalaSugeridaSchema = z.object({

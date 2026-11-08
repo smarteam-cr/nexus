@@ -22,9 +22,9 @@ import type Anthropic from "@anthropic-ai/sdk";
 import type { Prisma } from "@prisma/client";
 import { getAnthropic } from "@/lib/anthropic";
 import { tituloVigente } from "@/lib/casos-de-uso/catalogo";
-import { casoDeLaPreventa, casosParaLasAreas } from "@/lib/casos-de-uso/en-la-preventa";
+import { casoDeLaPreventa, casosParaLasAreas, titulosDelCaso } from "@/lib/casos-de-uso/en-la-preventa";
 import { actividadesDelCaso, bibliotecaDeActividades } from "@/lib/casos-de-uso/actividades-server";
-import { actividadesDelElegido, actividadesPorDefecto, apartarCasosSinArmar, bibliotecaLigera, type ActividadDelCaso } from "@/lib/casos-de-uso/armado";
+import { actividadesDelElegido, actividadesPorDefecto, apartarCasosSinArmar, bibliotecaLigera, ultimoPasoDelPlan, type ActividadDelCaso } from "@/lib/casos-de-uso/armado";
 import { humanizeAgentError } from "@/lib/agents/anthropic-error";
 import { estaColgada, MOTIVO_COLGADA } from "@/lib/agents/run-colgada";
 import { conContextoDeIA } from "@/lib/ai/contexto-de-corrida";
@@ -903,10 +903,13 @@ export function contextoDeLosCasos(
     exploracion: exploracionParaLosCasos(ex.estado, ex.escala, pendientes),
     // Con el nombre de hoy: lo guardado antes del 2026-11-06 puede traer el nombre viejo de un caso renombrado, y el
     // agente lo vería libre y lo volvería a proponer (comparar es por nombre).
+    // Un caso del catálogo con el título adaptado a la empresa (2026-11-08) va con los dos: el agente compara por nombre.
     yaEstan: [
-      ...Object.entries(ex.estado.contenido.casosDeUso).map(([id, c]) => casoDeLaPreventa(id)?.titulo ?? tituloVigente(c.titulo)),
-      ...pendientesQueSiguen.map((it) => tituloVigente((it.valor as { titulo: string }).titulo)),
+      ...Object.entries(ex.estado.contenido.casosDeUso).flatMap(([id, c]) => titulosDelCaso(id, c)),
+      ...pendientesQueSiguen.flatMap((it) => titulosDelCaso((it.destino as { useCaseId: string }).useCaseId, it.valor as CasoDeUsoElegido)),
     ],
+    // Una tanda más sigue el plan que ya está; «Regenerar» lo vuelve a armar entero, desde el paso 1.
+    ultimoPaso: ultimoPasoDelPlan([...Object.values(ex.estado.contenido.casosDeUso), ...pendientesQueSiguen.map((it) => it.valor as CasoDeUsoElegido)], regenerar),
     descartados: ex.estado.contenido.casosDescartados.map(tituloVigente),
     instrucciones: bloqueDeInstrucciones(ex.estado.contenido.notas, "casos"),
     catalogo,
@@ -916,7 +919,8 @@ export function contextoDeLosCasos(
       ? {
           rearmar: Object.entries(ex.estado.contenido.casosDeUso).map(([id, c]) => ({
             id,
-            titulo: casoDeLaPreventa(id)?.titulo ?? tituloVigente(c.titulo),
+            titulo: c.tituloDelCatalogo ? c.titulo : (casoDeLaPreventa(id)?.titulo ?? tituloVigente(c.titulo)),
+            ...(c.tituloDelCatalogo ? { tituloDelCatalogo: c.tituloDelCatalogo } : {}),
             areaId: c.areaId,
             actividades: actividadesDelElegido(c, porDefecto[casoDeLaPreventa(id)?.id ?? ""]),
           })),
