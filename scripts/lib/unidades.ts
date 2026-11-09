@@ -44,5 +44,17 @@ export const EMPRESAS_EN_UNIDADES: Readonly<Record<string, SeparacionEnUnidades>
     empresa: "CEMACO",
     principal: { clave: "CR", id: "cmu0qg14g000107n3bwavv7i6", nombre: "Cemaco · Costa Rica", siglas: ["CR"], esperaDominio: "cemaco.co.cr" },
     unidades: [{ clave: "EC", nombre: "Cemaco · Ecuador", siglas: ["EC"], dominios: ["sukasa.com", "comohogar.com"] }],
+    /* Elías, 9 nov, después del simulacro: las cuatro de sep–oct sin gente del cliente (solo Smarteam o HubSpot) son de
+       Costa Rica, de antes de Ecuador; «Platiquemos sobre HubSpot» del 30 oct (5 de Cemaco CR, 3 de Sukasa, 1 de
+       Comohogar) abre el diagnóstico de Ecuador y va a Ecuador. Los proyectos, la propuesta y las preventas se quedan. */
+    aMano: {
+      reuniones: {
+        gmeet_1lrm115rdcu302o3mj0spsmadl: "CR", // CEMACO INTERNACIONAL | DESPEGANDO CON HUBSPOT (24 sep)
+        gmeet_7f1memgvvbn0jtbgpskp13chbf: "CR", // Sales & Service Handoff | CEMACO (1 oct)
+        gmeet_64rql2qsju8i8hla0jhijtl8qe: "CR", // Alineación CEMACO (5 oct)
+        gmeet_67m38r5gluopkmr9dfk33bh88h: "CR", // Caso CEMACO (19 oct)
+        gmeet_6f5eocn45660qts2s8jpkeu4la: "EC", // Platiquemos sobre HubSpot | SUKASA + CEMACO + COMOHOGAR (30 oct)
+      },
+    },
   },
 };
