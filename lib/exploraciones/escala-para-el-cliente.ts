@@ -18,24 +18,28 @@
  * ⛔ Del lienzo solo se lee el nivel: ni las citas, ni los porqués, ni la fuente salen de acá.
  * ⛔ Un área o una capa con partes sin nada NO lleva nivel (igual que el chequeo por dentro, que exige todas las que
  * aplican): con 1 de 8 en Óptimo, la página decía «Óptimo». Tampoco lleva lo que más frena ni qué lo mueve. Con todas las
- * partes ubicadas (con evidencia o por explorar) sí lleva nivel, y la página dice cuántas son por explorar.
+ * partes ubicadas (con evidencia o por explorar) sí lleva nivel.
+ * La descripción bajo «Resultado general» (`sintesis`) la decide `descripcionDelArea` (./descripcion-de-la-escala.ts, 8
+ * nov): la del agente o la escrita a mano mientras los niveles sigan siendo los de cuando se escribió, o una de respaldo
+ * armada con los datos. Sin conteos de partes ni «lo confirmamos contigo»: lo por explorar ya lo muestra el radar.
  */
-import { interpretacionSinIa } from "@/lib/tests-diagnostico/redaccion";
 import { resultadoDeLosNiveles, type NivelDeLaDimension, type ResultadoDelTest } from "@/lib/tests-diagnostico/resultado";
 import type { Escala } from "@/lib/escala/documento/tipos";
 import type { EstadoDeExploracion } from "./contenido";
 import type { AreaDelLienzo, EscalaDelLienzo } from "./escala-del-lienzo";
 import { areasDeLaEscala, areasParaElCliente } from "./equipos-de-la-escala";
+import { descripcionDelArea, type DescripcionDelArea } from "./descripcion-de-la-escala";
 
 export interface ResultadoDeUnArea {
   resultado: ResultadoDelTest;
   /** Las dimensiones con un nivel por explorar (una hipótesis que el vendedor usó). */
   porExplorar: string[];
+  /** La descripción bajo «Resultado general» (la misma que `resultado.sintesis`) y de dónde salió: para la pantalla interna. */
+  descripcion: DescripcionDelArea;
 }
 
-const plural = (n: number, uno: string, varios: string) => (n === 1 ? uno : varios);
-
-function resultadoDelArea(escala: Escala, area: AreaDelLienzo, niveles: Record<string, NivelDeLaDimension>, porExplorar: readonly string[]): ResultadoDelTest | null {
+/** El resultado del área, con `sintesis` vacía: la pone `descripcionDelArea`. */
+function resultadoDelArea(escala: Escala, area: AreaDelLienzo, niveles: Record<string, NivelDeLaDimension>): ResultadoDelTest | null {
   // `version` es del test: esta página no la usa.
   const r = resultadoDeLosNiveles({ escala, areaId: area.id, version: "marketing", preguntadas: new Set(Object.keys(niveles)), niveles, orden: area.paraChequeo.orden });
   if (!r) return null;
@@ -53,15 +57,10 @@ function resultadoDelArea(escala: Escala, area: AreaDelLienzo, niveles: Record<s
       capas: r.capas.map((c) => ({ ...c, nivel: null, nivelNombre: null, puntaje: null })),
       recomendacion: null,
       casos: [],
-      sintesis: `Todavía no medimos tu área de ${r.areaNombre}: la vamos a conocer en las próximas conversaciones, y aquí verás cómo está.`,
+      sintesis: "",
     };
   }
-  if (r.preguntadas === total) {
-    const nota = porExplorar.length
-      ? ` ${porExplorar.length} de las ${total} partes ${plural(porExplorar.length, "está", "están")} por explorar: es lo que creemos por lo conversado, y lo confirmamos contigo.`
-      : "";
-    return { ...r, dimensiones, total, sintesis: interpretacionSinIa(r, porExplorar.length ? "Por lo que hemos visto hasta ahora" : "Por lo que hemos visto") + nota };
-  }
+  if (r.preguntadas === total) return { ...r, dimensiones, total, sintesis: "" };
   return {
     ...r,
     dimensiones,
@@ -72,7 +71,7 @@ function resultadoDelArea(escala: Escala, area: AreaDelLienzo, niveles: Record<s
     capas: r.capas.map((c) => (aplican.some((d) => d.capa === c.clave && !niveles[d.id]) ? { ...c, nivel: null, nivelNombre: null, puntaje: null } : c)),
     recomendacion: null,
     casos: [],
-    sintesis: `Hasta ahora vimos ${r.preguntadas} de las ${total} partes de tu área de ${r.areaNombre}. Cuando estén todas, aquí verás su nivel general.`,
+    sintesis: "",
   };
 }
 
@@ -83,8 +82,16 @@ export function areasDeLaPagina(lienzo: EscalaDelLienzo, estado: Pick<EstadoDeEx
   return areasParaElCliente(cuentas, estado.contenido.areasAlCliente);
 }
 
-/** Un resultado por área de la página (la elegida sin nada, «En medición»), con lo que está por explorar. */
-export function resultadosDeLaEscala(escala: Escala, lienzo: EscalaDelLienzo, estado: Pick<EstadoDeExploracion, "areas" | "contenido">): ResultadoDeUnArea[] {
+/**
+ * Un resultado por área de la página (la elegida sin nada, «En medición»), con lo que está por explorar y su descripción.
+ * La edición y el perfil entran en la firma de la descripción guardada: cambian qué partes aplican.
+ */
+export function resultadosDeLaEscala(
+  escala: Escala,
+  lienzo: EscalaDelLienzo,
+  estado: Pick<EstadoDeExploracion, "areas" | "contenido"> & Partial<Pick<EstadoDeExploracion, "edicion" | "perfilCierre" | "perfilDespues">>,
+): ResultadoDeUnArea[] {
+  const entorno = { edicion: estado.edicion, perfilCierre: estado.perfilCierre, perfilDespues: estado.perfilDespues, escalaVersion: escala.version };
   const out: ResultadoDeUnArea[] = [];
   for (const areaId of areasDeLaPagina(lienzo, estado)) {
     const area = lienzo.areas.find((a) => a.id === areaId);
@@ -99,8 +106,10 @@ export function resultadosDeLaEscala(escala: Escala, lienzo: EscalaDelLienzo, es
       if (e.fuente === "hipotesis") porExplorar.push(d.id);
     }
     // Sin nada, sale igual (solo llega acá si el vendedor la eligió): «En medición», con todos sus ejes sin medir.
-    const resultado = resultadoDelArea(escala, area, niveles, porExplorar);
-    if (resultado) out.push({ resultado, porExplorar });
+    const r = resultadoDelArea(escala, area, niveles);
+    if (!r) continue;
+    const descripcion = descripcionDelArea(estado.contenido, r, entorno);
+    out.push({ resultado: { ...r, sintesis: descripcion.texto }, porExplorar, descripcion });
   }
   return out;
 }

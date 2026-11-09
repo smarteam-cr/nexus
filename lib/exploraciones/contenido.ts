@@ -37,6 +37,7 @@ import {
 } from "./objetivo-y-hallazgos";
 import type { PosicionamientoDelProspecto } from "./posicionamiento";
 import type { TarjetasDeLaEscala } from "./tarjetas-de-la-escala";
+import { firmaDelArea, TOPE_DE_LA_DESCRIPCION_A_MANO, type DescripcionGuardada } from "./descripcion-de-la-escala";
 import type { ClaveDeEquipo } from "./equipos";
 import type { ActividadDelCaso, CasosAnteriores, LugarEnElPlan, ParaVentas, ValorDeVenta } from "@/lib/casos-de-uso/armado";
 import { vuelveASugeridos, type Personalizacion, type RevisionDeLosCasos } from "@/lib/casos-de-uso/personalizar";
@@ -296,6 +297,12 @@ export interface ContenidoDeExploracion {
    * las que Nexus detectó (equipos-de-la-escala.ts). undefined: no eligió todavía, y salen las que tienen algo confirmado.
    */
   areasAlCliente?: string[];
+  /**
+   * La descripción de cada equipo bajo «Resultado general» de la escala que ve el cliente (2026-11-08,
+   * ./descripcion-de-la-escala.ts), por área: la del agente o la escrita a mano. Sale solo mientras los niveles del área
+   * sean los de cuando se escribió. No sube la versión (como las lápidas): es un texto por área, gana el último.
+   */
+  descripcionesDeLaEscala?: Record<string, DescripcionGuardada>;
 }
 
 /**
@@ -1045,6 +1052,11 @@ export type Operacion =
   | { op: "sinPortal"; valor: boolean }
   /** Qué áreas ve el cliente en su página. null: vuelve a lo que propone Nexus. */
   | { op: "areasAlCliente"; areas: string[] | null }
+  /**
+   * La descripción de un equipo en la escala que ve el cliente, escrita a mano (2026-11-08). null o vacía: se borra la
+   * guardada (también la del agente) y sale la de respaldo.
+   */
+  | { op: "descripcionDeLaEscala"; areaId: string; texto: string | null }
   | { op: "casoDeUso"; useCaseId: string; valor: CasoDeUsoElegido | null }
   /**
    * 2026-11-08 (pedido 4 de Elías): quitar un caso elegido. El que propuso el agente vuelve a los sugeridos con su porqué
@@ -1628,6 +1640,19 @@ function aplicarUna(estado: EstadoDeExploracion, op: Operacion, validez: Validez
       if (desconocida) return { ok: false, error: `El área ${desconocida} no existe.` };
       return { ok: true, estado: { ...estado, contenido: { ...c, areasAlCliente: areas } } };
     }
+    case "descripcionDeLaEscala": {
+      if (!validez.areas.has(op.areaId)) return { ok: false, error: `El área ${op.areaId} no existe.` };
+      const texto = op.texto?.replace(/\s+/g, " ").trim() ?? "";
+      if (texto.length > TOPE_DE_LA_DESCRIPCION_A_MANO) return { ok: false, error: `La descripción pasa de ${TOPE_DE_LA_DESCRIPCION_A_MANO} caracteres.` };
+      const { [op.areaId]: _antes, ...otras } = c.descripcionesDeLaEscala ?? {};
+      void _antes;
+      const descripciones: Record<string, DescripcionGuardada> = texto
+        ? { ...otras, [op.areaId]: { texto, origen: "mano", firma: firmaDelArea(c.chequeo, op.areaId, { ...estado, escalaVersion: validez.escalaVersion }), at: quien.en, por: quien.por } }
+        : otras;
+      const { descripcionesDeLaEscala: _fuera, ...sin } = c;
+      void _fuera;
+      return { ok: true, estado: { ...estado, contenido: Object.keys(descripciones).length ? { ...sin, descripcionesDeLaEscala: descripciones } : sin } };
+    }
     case "casoDeUso": {
       if (op.valor) {
         const r = aplicarAlDestino(estado, { tipo: "casoDeUso", useCaseId: op.useCaseId }, op.valor, validez, validador);
@@ -1895,7 +1920,9 @@ export function aplicarOperaciones(
 /** ¿Lo que cambió es lo confirmado (sube la versión) o solo lo pendiente? */
 export function cambioLoConfirmado(antes: EstadoDeExploracion, despues: EstadoDeExploracion): boolean {
   // Las lápidas (y los títulos de los casos descartados) son de lo propuesto: no suben la versión. Tampoco el registro de las usadas.
-  const sinLapidas = (c: ContenidoDeExploracion) => exacto({ ...c, descartadas: [], casosDescartados: [], asociacionesDescartadas: undefined, usadas: undefined });
+  // Ni la descripción de la escala que ve el cliente: un texto por área, gana el último (2026-11-08).
+  const sinLapidas = (c: ContenidoDeExploracion) =>
+    exacto({ ...c, descartadas: [], casosDescartados: [], asociacionesDescartadas: undefined, usadas: undefined, descripcionesDeLaEscala: undefined });
   return (
     sinLapidas(antes.contenido) !== sinLapidas(despues.contenido) ||
     exacto(antes.areas) !== exacto(despues.areas) ||

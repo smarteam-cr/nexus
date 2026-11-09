@@ -111,6 +111,11 @@ const CENSO: Record<string, { destino: Destino; motivo: string }> = {
     destino: "escala-al-cliente",
     motivo: "El chokepoint de /external/escala/[token]: del token a lo que deja pasar la puerta. No toca la exploración.",
   },
+  "app/api/sales/exploraciones/[id]/escala/descripcion/route.ts": {
+    destino: "ventas",
+    motivo:
+      "La descripción de cada equipo en la escala que ve el cliente (2026-11-08): verla, regenerarla con el agente o escribirla a mano. Pantalla interna, con la guardia de la exploración; al cliente le llega solo por escalaParaElCliente.",
+  },
   "app/api/sales/exploraciones/[id]/acceso/route.ts": {
     destino: "ventas",
     motivo: "El «Acceso» de La escala, en la cuenta y en la preventa: crear y revocar el enlace. Pantalla interna, con la guardia de la exploración.",

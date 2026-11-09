@@ -147,6 +147,7 @@ import {
 } from "./objetivo-y-hallazgos";
 import { MAX_COMO_ESTA, MAX_PREGUNTA_DE_LA_TARJETA, MAX_PREGUNTAS_DE_LA_TARJETA, MAX_TARJETAS, type TarjetasDeLaEscala } from "./tarjetas-de-la-escala";
 import { MAX_ASUNTO_DEL_CORREO, MAX_CUERPO_DEL_CORREO, MAX_DESTINATARIOS } from "./correo-de-seguimiento";
+import { TOPE_DE_LA_DESCRIPCION_A_MANO, type DescripcionGuardada } from "./descripcion-de-la-escala";
 
 const texto = (max: number) => z.string().trim().max(max);
 const textoLleno = (max: number) => z.string().trim().min(1).max(max);
@@ -270,6 +271,15 @@ export function esquemaDeLoPropuesto(tipo: TipoDeCasilla): z.ZodType<unknown> {
 const ID_DIMENSION = z.string().regex(/^\d+\.\d+$/);
 const ID_CRITERIO = z.string().regex(/^\d+\.\d+\.[DIFEO]\d+$/);
 const ID_AREA = z.string().regex(/^\d+$/);
+
+/** La descripción de un equipo en la escala que ve el cliente (./descripcion-de-la-escala.ts). */
+const DescripcionGuardadaSchema: z.ZodType<DescripcionGuardada> = z.object({
+  texto: z.string().min(1).max(TOPE_DE_LA_DESCRIPCION_A_MANO),
+  origen: z.enum(["agente", "mano"]),
+  firma: z.string().max(2000),
+  at: z.string().max(40),
+  por: z.string().max(320).nullable().optional(),
+});
 
 const ENUM_CIERRE = z.enum(CIERRES as unknown as [Cierre, ...Cierre[]]);
 const ENUM_DESPUES = z.enum(DESPUES as unknown as [Despues, ...Despues[]]);
@@ -650,6 +660,7 @@ export const OperacionSchema = z.discriminatedUnion("op", [
   z.object({ op: z.literal("medicion"), medicion: MedicionSchema }),
   z.object({ op: z.literal("sinPortal"), valor: z.boolean() }),
   z.object({ op: z.literal("areasAlCliente"), areas: z.array(ID_AREA).max(3).nullable() }),
+  z.object({ op: z.literal("descripcionDeLaEscala"), areaId: ID_AREA, texto: z.string().max(TOPE_DE_LA_DESCRIPCION_A_MANO + 200).nullable() }),
   z.object({ op: z.literal("casoDeUso"), useCaseId: ID_CASO_DE_USO, valor: CasoDeUsoElegidoSchema.nullable() }),
   z.object({ op: z.literal("quitarCaso"), useCaseId: ID_CASO_DE_USO, descartar: z.boolean().optional() }),
   z.object({ op: z.literal("usar"), itemId: z.string().min(1).max(120), valor: z.unknown().optional() }),
@@ -905,6 +916,8 @@ export function leerContenido(raw: unknown): ContenidoDeExploracion {
   const med = MedicionSchema.safeParse(raw.medicion);
   if (med.success) c.medicion = med.data;
   c.sinPortal = raw.sinPortal === true;
+  const descripciones = registroValido(raw.descripcionesDeLaEscala, ID_AREA, DescripcionGuardadaSchema);
+  if (Object.keys(descripciones).length) c.descripcionesDeLaEscala = descripciones;
   if (Array.isArray(raw.areasAlCliente)) c.areasAlCliente = raw.areasAlCliente.filter((a): a is string => typeof a === "string" && ID_AREA.safeParse(a).success).slice(0, 3);
   c.reunionesElegidas = listaDeTextos(raw.reunionesElegidas, MAX_REUNIONES_ELEGIDAS).filter((id) => id.length <= MAX_ID_DE_REUNION);
   c.fuera = Array.isArray(raw.fuera)

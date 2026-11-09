@@ -46,16 +46,18 @@ describe("la escala que ve el cliente", () => {
     const [{ resultado: r }] = resultadosDeLaEscala(escala, lienzo, estado({ [a.id]: { nivel: "O" } }));
     expect(r).toMatchObject({ nivel: null, nivelNombre: null, puntaje: null, recomendacion: null, casos: [] });
     expect(r.capas.every((c) => c.nivel === null)).toBe(true);
-    expect(r.sintesis).toContain(`1 de las ${queAplican.length} partes`);
+    // Sin conteos de partes (8 nov): dice qué falta conocer para darle un nivel general.
+    expect(r.sintesis).toContain("nivel general");
+    expect(r.sintesis).not.toMatch(/\d/);
   });
 
-  it("con todas las partes ubicadas, aunque algunas sean por explorar, hay nivel y la síntesis lo dice", () => {
+  it("con todas las partes ubicadas, aunque algunas sean por explorar, hay nivel; la síntesis no lo repite (lo muestra el radar)", () => {
     const todas = Object.fromEntries(queAplican.map((d, i) => [d.id, { nivel: "F" as const, fuente: i < 2 ? ("hipotesis" as const) : ("reunion" as const) }]));
     const [x] = resultadosDeLaEscala(escala, lienzo, estado(todas));
     expect(x.resultado.nivel).toBe("F");
     expect(x.porExplorar).toHaveLength(2);
-    expect(x.resultado.sintesis).toContain("2 de las");
-    expect(x.resultado.sintesis).toContain("por explorar");
+    expect(x.resultado.sintesis).not.toMatch(/de las|por explorar|confirmamos|lo que creemos/);
+    expect(x.descripcion).toMatchObject({ origen: "respaldo", texto: x.resultado.sintesis });
   });
 
   it("⛔ la vista no trae nada del test, y marca lo que está por explorar", () => {
@@ -92,7 +94,7 @@ describe("la escala que ve el cliente", () => {
     expect(x.resultado.nivel).toBeNull();
     expect(x.resultado.recomendacion).toBeNull();
     expect(x.resultado.capas.every((c) => c.nivel === null)).toBe(true);
-    expect(x.resultado.sintesis).toMatch(/Todavía no medimos tu área/);
+    expect(x.resultado.sintesis).toMatch(/Todavía no conocemos cómo trabaja tu equipo/);
     const html = renderToStaticMarkup(
       createElement(ResultadoDelTestVista, {
         r: x.resultado,
@@ -106,8 +108,8 @@ describe("la escala que ve el cliente", () => {
 
   it("el resumen no habla de respuestas, preguntas ni estimaciones", () => {
     const [{ resultado: r }] = resultadosDeLaEscala(escala, lienzo, estado(Object.fromEntries(queAplican.map((d) => [d.id, {}]))));
-    expect(r.sintesis).toContain("Por lo que hemos visto");
-    expect(r.sintesis).not.toMatch(/respondiste|pregunta|estimaci/i);
+    expect(r.sintesis).toContain(`Tu equipo de ${r.areaNombre}`);
+    expect(r.sintesis).not.toMatch(/respondiste|pregunta|estimaci|hemos visto|hasta ahora/i);
   });
 
   it("en el radar, lo que falta dice «Sin medir» y una hipótesis dice «por explorar»", () => {

@@ -51,7 +51,7 @@ export type FilaParaLasReuniones = Pick<FilaDeExploracion, "id" | "clientId" | "
  * ninguna sesión (revisión del 2026-11-08: antes se tomaban las 6 últimas de la empresa, y en un cliente con Customer
  * Success activo entraban sus seguimientos semanales).
  */
-async function minutasRecientes(fila: FilaParaLasReuniones, estado: EstadoDeExploracion): Promise<string> {
+export async function minutasRecientes(fila: FilaParaLasReuniones, estado: EstadoDeExploracion): Promise<string> {
   const fuera = new Set(estado.contenido.fuera);
   const todas = await reunionesDeLaExploracion({
     exploracionId: fila.id,
