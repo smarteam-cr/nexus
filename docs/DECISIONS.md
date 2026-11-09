@@ -14034,3 +14034,12 @@ Elías probó la Preparación en producción con Centauro Solutions › Sesión 
   guarda aparte, en el mismo orden (`descripciones`), así lo guardado antes se lee igual; `leerOpciones` acepta también
   el texto solo de antes. Una lista de descripciones que no calza se pierde sola, sin llevarse las preguntas.
 - **Datos y SQL:** sin SQL; todo vive en el Json de la exploración. El modelo de la guía no cambió (otra sesión mide Haiku).
+- **Lo que ajustó la revisión:** la instrucción va solo al pedido de la guía, no al de los hallazgos y las preguntas
+  (`pedidoDeLoDeLaExploracion(ctxBase)`); la guía de base es la que muestra la pantalla (la de la sesión o, sin una, la
+  general); el texto escrito en «Editar con IA» no se borra si la corrida falla; y el aviso, el botón junto al objetivo y
+  el estado de la guía usan UNA regla (`useGuiaDeOtroObjetivo`).
+- **Lo aceptado: una versión anterior contra la misma base pierde lo nuevo.** La de producción hasta el deploy acepta 3
+  respuestas por pregunta y no conoce `instruccion`: si lee preguntas guardadas con 4, las descarta, y al guardar esa
+  preventa se borran; la instrucción la ignora y la pierde al guardar. *Regla:* esta rama no se prueba en el 3004 antes
+  del deploy, y una vuelta atrás pierde lo guardado en ese rato (las preguntas vuelven al rehacer la guía; la instrucción
+  hay que escribirla otra vez). *Por qué no un deploy previo que tolere 4:* la ventana es corta y lo que se pierde se rehace.
