@@ -1376,6 +1376,47 @@ Decisiones ya tomadas, con el porqué. Si vas a cambiar una, primero entendé po
   `text-white`→`text-fg` · `text-gray-200/300`→`text-fg-secondary` · `text-gray-400/500/600`→
   `text-fg-muted` · sólidos con texto blanco→pares `bg-primary`/`bg-destructive` con su `*-fg`.
 
+## Letra de las pantallas internas: los tamaños fijos suben un punto (2026-11-08)
+**Contexto.** Elías, segunda vez: «Estoy buscando que este sistema guíe, y la guía es corta, y es mejor
+que se vea un poco más grande». El `html { font-size: 1.15em }` ya agrandaba las clases rem (`text-xs`
+≈ 13,8 px, `text-sm` ≈ 16 px), pero ~3.100 tamaños FIJOS en px (`text-[13px]`, `[11px]`, `[10px]`…,
+~420 archivos; el sistema «Nexus · interfaz interna» habla en 13 y 11 px) quedaban donde estaban.
+- **Suben un punto, desde `app/globals.css`, sin tocar componentes**, todo el tramo de 9 a 15,5 px con
+  sus medias: 9→10 · 10→11 · 11→12 · 12→13 · 13→14 · 14→15 · 15→16 (y 10,5→11,5 … 15,5→16,5). Los
+  interlineados fijos (`leading-[13px]` … `leading-[22px]`) suben uno también: 14/20 respira como
+  respiraba 13/19. De 17 px para arriba no se toca (títulos grandes, cifras). Tocar las clases a mano
+  chocaba con las sesiones que editan esas mismas pantallas, y la próxima clase nueva habría vuelto a
+  nacer chica.
+- **Por qué hasta 15,5 y no solo lo chico**: la primera versión subía hasta 13,5 y la revisión cazó que
+  13 alcanzaba a los títulos de 14 y 13,5 a los de 14,5 (17 archivos: la escala de la cuenta, «Antes de
+  la sesión», la guía de la agenda). Subiendo todo el tramo, cada par título/texto conserva su distancia.
+- **Las rem NO suben.** `text-sm` ya es ~16 px, un cuerpo grande; subir el `html` agranda también
+  todos los espaciados y anchos en rem y aprieta tablas, el sidebar y los paneles. Lo que se leía chico
+  eran los px.
+- **Ámbito: solo con el shell interno en la página** (`html:has([data-nx-shell])`; la marca es un
+  `<span hidden>` en `app/(shell)/layout.tsx`, no un contenedor, para alcanzar también los portales:
+  modales, menús, el panel del Selector, los tooltips). **Nunca dentro de un documento del cliente que
+  el CSE ve en su editor**: `.stl`, `.kickoff-landing`, `.rde`, `.dr`, `.cp-root` y
+  `[data-external-surface]` quedan excluidos regla por regla, porque el CSE tiene que ver EXACTAMENTE lo
+  que ve el cliente (§1-WEB). `app/external`, `print/`, el PDF y el login no tienen el shell. Un
+  navegador sin `:has()` (Firefox < 121, Safari < 15.4) ve la letra de antes: cae a lo que había.
+- **Especificidad justa**: todo el selector va en `:where()` salvo la clase → (0,1,0), la misma que la
+  utilidad; gana por venir después en la capa `utilities`. Sin `!important`. El costo: también le
+  ganaría a un `md:text-sm` en el mismo elemento; hoy no hay ninguno y la prueba L4 lo frena en los
+  literales (no ve lo que se arma en `cn()` ni lo que llega por prop). Las variantes arbitrarias
+  (`[&>button]:text-[12.5px]`, el segmentado del editor de procesos) tienen más especificidad y llevan
+  su propia regla con la misma forma (L5).
+- **Lo apretado que no sube**: las fechas y «límite» de la cabecera de semanas del Gantt
+  (`[data-recorrido="cronograma.gantt"]`): columnas de ~30 px que «14 ago» a 9 px ya llena (L6). Lo
+  demás (contadores `h-4`, chips, celdas) se revisó y aguanta. Si algo se desborda, se ajusta con un
+  ámbito así de chico en el mismo bloque, nunca excluyendo media app.
+- **Guarda**: `lib/ui/letra-del-shell.test.ts` — cada tamaño sube exactamente uno (L1), cada regla
+  excluye las raíces de los documentos y esas raíces siguen existiendo con ese nombre (L2), la marca
+  vive solo en el layout interno (L3), ningún literal mezcla un tamaño que sube con otro tamaño con
+  variante o `!` (L4), cada variante arbitraria tiene su regla (L5) y el Gantt conserva su excepción (L6).
+- **Para código nuevo**: se sigue escribiendo la medida del diseño (`text-[13px]`); la pantalla la
+  muestra a 14. No escribas `text-[14px]` «para compensar»: quedaría fuera de la escala.
+
 ## Infra
 - **Una sola Supabase** (local == PROD). Migraciones a mano. Scripts destructivos/masivos
   dry-run-first; el usuario aprueba el `--apply`.

@@ -8,7 +8,16 @@ import AppShell from "@/components/layout/AppShell";
  *
  * Los guards por página (requireInternalUser / redirects por rol) se QUEDAN en
  * cada page: esto es solo presentación, no autorización.
+ *
+ * `data-nx-shell`: la marca de «esta página es interna» que lee app/globals.css (`html:has(...)`)
+ * para subir un punto los tamaños fijos de letra (DECISIONS › «Letra de las pantallas internas»).
+ * Es un elemento oculto y no un contenedor para que la regla alcance también los portales.
  */
 export default function ShellLayout({ children }: { children: React.ReactNode }) {
-  return <AppShell>{children}</AppShell>;
+  return (
+    <>
+      <span hidden data-nx-shell />
+      <AppShell>{children}</AppShell>
+    </>
+  );
 }

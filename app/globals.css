@@ -182,6 +182,70 @@ html {
   font-size: 1.15em;
 }
 
+/* ── Letra de las pantallas internas: los tamaños fijos chicos suben un punto ──────────────────
+ * (Elías, 8 nov 2026: «la guía es corta, y es mejor que se vea un poco más grande»). Las clases rem
+ * (`text-xs`, `text-sm`) ya escalan con el 1.15em de arriba; los tamaños en px (`text-[13px]`, ~2.900
+ * usos en ~420 archivos) no escalaban. Acá suben UNO, sin tocar los componentes: de 9 a 15,5 px, medias
+ * incluidas (9→10 … 13→14 … 15,5→16,5). Sube todo el tramo y no solo lo chico para que ningún par
+ * título/texto se aplaste (14 sobre 13 tiene que seguir siendo un punto más). De 17 px para arriba no se
+ * toca. Los interlineados fijos (`leading-[13px]` … `leading-[22px]`) suben también uno: 14/20 respira
+ * como respiraba 13/19.
+ *
+ * ÁMBITO: solo si en la página está el shell interno (`data-nx-shell`, lo pone app/(shell)/layout.tsx).
+ * Va por `html:has(...)` y no por un contenedor para alcanzar también lo que se monta en un portal
+ * (modales, menús, el panel del Selector, los tooltips). NUNCA dentro de un documento del cliente que
+ * el CSE ve en su editor: el motor de documentos (`.stl`), el kickoff (`.kickoff-landing`), el radar
+ * (`.rde`), el test y su resultado (`.dr`), la hoja de impresión (`.cp-root`) y cualquier superficie
+ * externa (`[data-external-surface]`) quedan iguales, porque el CSE tiene que ver EXACTAMENTE lo que
+ * ve el cliente (ARCHITECTURE §1-WEB). Las páginas del cliente, el PDF y el login no tienen el shell.
+ *
+ * ESPECIFICIDAD: todo el selector va en `:where()` salvo la clase misma → (0,1,0), igual que la
+ * utilidad de Tailwind; gana por venir después en la misma capa `utilities`. Sin `!important`. El costo:
+ * también le ganaría a un `md:text-sm` puesto en el mismo elemento (la media query no suma
+ * especificidad). Hoy no hay ninguno; lib/ui/letra-del-shell.test.ts (L4) lo frena en los literales,
+ * pero no ve las clases que se arman en `cn()` ni las que llegan por prop. Las variantes arbitrarias
+ * (`[&>button]:text-[12.5px]`) tienen más especificidad y van con su propia regla abajo (L5).
+ * Registro: DECISIONS › «Letra de las pantallas internas». */
+@layer utilities {
+  :where(html:has([data-nx-shell])) .text-\[9px\]:where(:not(:is(.stl, .kickoff-landing, .rde, .dr, .cp-root, [data-external-surface]) *)) { font-size: 10px; }
+  :where(html:has([data-nx-shell])) .text-\[10px\]:where(:not(:is(.stl, .kickoff-landing, .rde, .dr, .cp-root, [data-external-surface]) *)) { font-size: 11px; }
+  :where(html:has([data-nx-shell])) .text-\[10\.5px\]:where(:not(:is(.stl, .kickoff-landing, .rde, .dr, .cp-root, [data-external-surface]) *)) { font-size: 11.5px; }
+  :where(html:has([data-nx-shell])) .text-\[11px\]:where(:not(:is(.stl, .kickoff-landing, .rde, .dr, .cp-root, [data-external-surface]) *)) { font-size: 12px; }
+  :where(html:has([data-nx-shell])) .text-\[11\.5px\]:where(:not(:is(.stl, .kickoff-landing, .rde, .dr, .cp-root, [data-external-surface]) *)) { font-size: 12.5px; }
+  :where(html:has([data-nx-shell])) .text-\[12px\]:where(:not(:is(.stl, .kickoff-landing, .rde, .dr, .cp-root, [data-external-surface]) *)) { font-size: 13px; }
+  :where(html:has([data-nx-shell])) .text-\[12\.5px\]:where(:not(:is(.stl, .kickoff-landing, .rde, .dr, .cp-root, [data-external-surface]) *)) { font-size: 13.5px; }
+  :where(html:has([data-nx-shell])) .text-\[13px\]:where(:not(:is(.stl, .kickoff-landing, .rde, .dr, .cp-root, [data-external-surface]) *)) { font-size: 14px; }
+  :where(html:has([data-nx-shell])) .text-\[13\.5px\]:where(:not(:is(.stl, .kickoff-landing, .rde, .dr, .cp-root, [data-external-surface]) *)) { font-size: 14.5px; }
+  :where(html:has([data-nx-shell])) .text-\[14px\]:where(:not(:is(.stl, .kickoff-landing, .rde, .dr, .cp-root, [data-external-surface]) *)) { font-size: 15px; }
+  :where(html:has([data-nx-shell])) .text-\[14\.5px\]:where(:not(:is(.stl, .kickoff-landing, .rde, .dr, .cp-root, [data-external-surface]) *)) { font-size: 15.5px; }
+  :where(html:has([data-nx-shell])) .text-\[15px\]:where(:not(:is(.stl, .kickoff-landing, .rde, .dr, .cp-root, [data-external-surface]) *)) { font-size: 16px; }
+  :where(html:has([data-nx-shell])) .text-\[15\.5px\]:where(:not(:is(.stl, .kickoff-landing, .rde, .dr, .cp-root, [data-external-surface]) *)) { font-size: 16.5px; }
+
+  :where(html:has([data-nx-shell])) .leading-\[13px\]:where(:not(:is(.stl, .kickoff-landing, .rde, .dr, .cp-root, [data-external-surface]) *)) { line-height: 14px; }
+  :where(html:has([data-nx-shell])) .leading-\[14px\]:where(:not(:is(.stl, .kickoff-landing, .rde, .dr, .cp-root, [data-external-surface]) *)) { line-height: 15px; }
+  :where(html:has([data-nx-shell])) .leading-\[15px\]:where(:not(:is(.stl, .kickoff-landing, .rde, .dr, .cp-root, [data-external-surface]) *)) { line-height: 16px; }
+  :where(html:has([data-nx-shell])) .leading-\[16px\]:where(:not(:is(.stl, .kickoff-landing, .rde, .dr, .cp-root, [data-external-surface]) *)) { line-height: 17px; }
+  :where(html:has([data-nx-shell])) .leading-\[17px\]:where(:not(:is(.stl, .kickoff-landing, .rde, .dr, .cp-root, [data-external-surface]) *)) { line-height: 18px; }
+  :where(html:has([data-nx-shell])) .leading-\[18px\]:where(:not(:is(.stl, .kickoff-landing, .rde, .dr, .cp-root, [data-external-surface]) *)) { line-height: 19px; }
+  :where(html:has([data-nx-shell])) .leading-\[19px\]:where(:not(:is(.stl, .kickoff-landing, .rde, .dr, .cp-root, [data-external-surface]) *)) { line-height: 20px; }
+  :where(html:has([data-nx-shell])) .leading-\[20px\]:where(:not(:is(.stl, .kickoff-landing, .rde, .dr, .cp-root, [data-external-surface]) *)) { line-height: 21px; }
+  :where(html:has([data-nx-shell])) .leading-\[21px\]:where(:not(:is(.stl, .kickoff-landing, .rde, .dr, .cp-root, [data-external-surface]) *)) { line-height: 22px; }
+  :where(html:has([data-nx-shell])) .leading-\[22px\]:where(:not(:is(.stl, .kickoff-landing, .rde, .dr, .cp-root, [data-external-surface]) *)) { line-height: 23px; }
+
+  /* Lo apretado que NO sube: la cabecera de semanas del Gantt (components/canvas/TimelineGantt.tsx).
+     Cada columna mide ~30 px y la fecha («14 ago») o «límite» a 9 px ya la llenan; a 10 px se montan
+     sobre la semana de al lado. El rótulo «S12» sí sube (cabe de sobra). */
+  :where(html:has([data-nx-shell])) [data-recorrido="cronograma.gantt"] .text-center.leading-tight > .text-\[9px\] { font-size: 9px; }
+
+  /* Variantes arbitrarias: (0,1,1) en Tailwind, así que cada una lleva su regla con la misma forma.
+     Hoy, el segmentado del editor del mapa de procesos (components/procesos/EditorDelMapa.tsx). */
+  :where(html:has([data-nx-shell])) .\[\&\>button\]\:text-\[12\.5px\]:where(:not(:is(.stl, .kickoff-landing, .rde, .dr, .cp-root, [data-external-surface]) *)) > button { font-size: 13.5px; }
+
+  @media (width >= 64rem) {
+    :where(html:has([data-nx-shell])) .lg\:text-\[13px\]:where(:not(:is(.stl, .kickoff-landing, .rde, .dr, .cp-root, [data-external-surface]) *)) { font-size: 14px; }
+  }
+}
+
 /* ─────────────────────────────────────────────────────────────────────────────── */
 /* ── Semantic color tokens ───────────────────────────────────────────────────── */
 /* ─────────────────────────────────────────────────────────────────────────────── */
