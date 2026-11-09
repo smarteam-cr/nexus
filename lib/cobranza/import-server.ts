@@ -16,7 +16,7 @@
  */
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
-import { computeAmbiguousNameTokens, effectiveDomainsForClient } from "@/lib/sessions/categorize";
+import { computeAmbiguousNameTokens, effectiveDomainsForClient, type ClienteParaAmbiguas } from "@/lib/sessions/categorize";
 import { importFilaCanonicaSchema, type ImportCampoCanonico } from "./schema";
 import { aplicarMapeo, esDominioCompartido, nombreEnSkipList, warningsFila } from "./import-core";
 import { CLIENT_KIND_META, CS_CLIENT_WHERE } from "@/lib/clients/kind";
@@ -72,7 +72,7 @@ export interface DedupIndices {
   /** nombre normalizado (lowercase, sin acentos) → cliente. Señal ADVISORY. */
   byNombre: Map<string, ClienteRef>;
   /** Los clientes existentes (para computeAmbiguousNameTokens). */
-  existentes: Array<{ name: string; company: string | null }>;
+  existentes: ClienteParaAmbiguas[];
   /** Todas las empresas, de cualquier tipo: contra ellas se avisa de las parecidas. */
   empresas: EmpresaExistente[];
 }
@@ -90,7 +90,7 @@ export async function buildDedupIndices(): Promise<DedupIndices> {
   const [clients, empresas] = await Promise.all([
     prisma.client.findMany({
       where: { ...CS_CLIENT_WHERE },
-      select: { id: true, name: true, company: true, emailDomains: true, source: true, sourceExternalId: true },
+      select: { id: true, name: true, company: true, emailDomains: true, source: true, sourceExternalId: true, comparteDominioConId: true },
     }),
     cargarEmpresasExistentes(),
   ]);
@@ -111,7 +111,7 @@ export async function buildDedupIndices(): Promise<DedupIndices> {
     byFuenteId,
     byDomain,
     byNombre,
-    existentes: clients.map((c) => ({ name: c.name, company: c.company })),
+    existentes: clients.map((c) => ({ id: c.id, name: c.name, company: c.company, comparteDominioConId: c.comparteDominioConId })),
     empresas,
   };
 }
@@ -214,7 +214,7 @@ export async function revalidarImport(
   });
   const idx = await buildDedupIndices();
 
-  const nuevosNombres: Array<{ name: string; company: string | null }> = [];
+  const nuevosNombres: ClienteParaAmbiguas[] = [];
   const updates: Prisma.PrismaPromise<unknown>[] = [
     prisma.importacionCobranza.update({
       where: { id: importId },
@@ -226,7 +226,7 @@ export async function revalidarImport(
     const canonico = aplicarMapeo(fila.raw as Record<string, unknown>, mapeo);
     const ev = evaluarCanonico(canonico, idx);
     if (ev.estado === "VALIDA" && !ev.dedup && typeof canonico.clienteNombre === "string") {
-      nuevosNombres.push({ name: canonico.clienteNombre, company: null });
+      nuevosNombres.push({ id: `nueva:${nuevosNombres.length}`, name: canonico.clienteNombre, company: null, comparteDominioConId: null });
     }
     updates.push(
       prisma.importacionFila.update({ where: { id: fila.id }, data: filaUpdateData(canonico, ev) }),

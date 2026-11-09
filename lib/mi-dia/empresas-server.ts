@@ -12,6 +12,7 @@ import { prisma } from "@/lib/db/prisma";
 import { modeloDisponible } from "@/lib/db/esquema";
 import { dominiosDeLaCasa } from "@/lib/sessions/reuniones-para-seguimiento";
 import { indiceDeClientes, type IndiceDeClientes } from "@/lib/sessions/clientes-por-texto";
+import { armarMapasDeLaGente } from "./mapas-de-empresas";
 import type { RepartoDeEntidades } from "./agenda";
 
 export interface MapasDeEmpresas {
@@ -41,32 +42,8 @@ async function leer(): Promise<MapasDeEmpresas> {
       : Promise.resolve([]),
     dominiosDeLaCasa(),
   ]);
-  const porDominio = new Map<string, string[]>();
-  for (const c of clientes) {
-    for (const d of c.emailDomains ?? []) {
-      const k = d.trim().toLowerCase();
-      if (k) porDominio.set(k, [...new Set([...(porDominio.get(k) ?? []), c.id])]);
-    }
-  }
-  const porCorreo = new Map<string, string[]>();
-  for (const c of contactos) {
-    if (!c.email) continue;
-    const k = c.email.trim().toLowerCase();
-    porCorreo.set(k, [...new Set([...(porCorreo.get(k) ?? []), c.clientId])]);
-  }
-  /* Una ficha que comparte dominio no tiene dominios ni contactos propios: su gente es la de la dueña. Un invitado del
-     dominio es de las dos, y la reunión no cuenta para ninguna hasta que el título diga cuál. Nunca, por defecto, de la dueña. */
-  const grupoDe = new Map<string, string>();
-  for (const c of clientes) {
-    const duena = c.comparteDominioConId;
-    if (!duena || duena === c.id) continue;
-    grupoDe.set(c.id, duena);
-    grupoDe.set(duena, duena);
-    for (const mapa of [porDominio, porCorreo]) {
-      for (const [k, ids] of mapa) if (ids.includes(duena) && !ids.includes(c.id)) mapa.set(k, [...ids, c.id]);
-    }
-  }
-  const indiceDeNombres = indiceDeClientes(clientes.map((c) => ({ id: c.id, name: c.name, company: c.company, siglas: c.siglas })));
+  const { porDominio, porCorreo, grupoDe } = armarMapasDeLaGente(clientes, contactos);
+  const indiceDeNombres = indiceDeClientes(clientes.map((c) => ({ id: c.id, name: c.name, company: c.company, siglas: c.siglas, comparteDominioConId: c.comparteDominioConId })));
   return {
     porCorreo,
     porDominio,

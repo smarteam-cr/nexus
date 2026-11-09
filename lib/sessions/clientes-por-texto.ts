@@ -12,7 +12,16 @@
  * o a la persona, nunca para elegir solo.
  */
 import { clientePorTitulo, tituloNombraSigla, tokensDelCliente, tokensDelTitulo, type ClienteParaMatch } from "./match-por-titulo";
-import { TITLE_MATCH_STOPWORDS, computeAmbiguousNameTokens, isTestClient, normalize } from "./categorize";
+import {
+  TITLE_MATCH_STOPWORDS,
+  computeAmbiguousNameTokens,
+  isTestClient,
+  normalize,
+  palabrasQueNoDistinguenEnSuEmpresa,
+  clientesQueValenEnElTitulo,
+  unidadQueNombraElTitulo,
+  unidadesDeLaEmpresa,
+} from "./categorize";
 import { palabrasSinSufijoLegal } from "@/lib/clients/gemelas";
 
 export interface ClientesDeUnTexto {
@@ -27,22 +36,30 @@ export interface IndiceDeClientes {
   ambiguos: ReadonlySet<string>;
 }
 
-/** Se arma una vez por lectura (los tokens ambiguos se calculan sobre todo el conjunto). */
+/**
+ * Se arma una vez por lectura (los tokens ambiguos se calculan sobre todo el conjunto). Con `comparteDominioConId`, las
+ * unidades de una empresa siguen las reglas de categorize.ts (2026-11-07): la marca («cemaco») no es ambigua por ellas
+ * ni nombra a una, y sus siglas valen solo junto a la marca.
+ */
 export function indiceDeClientes(clientes: readonly ClienteParaMatch[]): IndiceDeClientes {
-  return { clientes: clientes.filter((c) => !isTestClient(c.name)), ambiguos: computeAmbiguousNameTokens(clientes.map((c) => ({ name: c.name, company: c.company }))) };
+  const ambiguos = computeAmbiguousNameTokens(clientes.map((c) => ({ id: c.id, name: c.name, company: c.company, comparteDominioConId: c.comparteDominioConId ?? null })));
+  return { clientes: clientes.filter((c) => !isTestClient(c.name)), ambiguos };
 }
 
 export function clientesDeUnTexto(texto: string, indice: IndiceDeClientes, esLaCasa?: (c: ClienteParaMatch) => boolean): ClientesDeUnTexto {
   const skip = (w: string) => TITLE_MATCH_STOPWORDS.has(w) || indice.ambiguos.has(w);
-  const r = clientePorTitulo(texto, indice.clientes, { modo: "mejor-fraccion", skip, normalize, esClienteDePrueba: isTestClient, esLaCasa });
+  const r = clientePorTitulo(texto, clientesQueValenEnElTitulo(texto, indice.clientes), { modo: "mejor-fraccion", skip, normalize, esClienteDePrueba: isTestClient, esLaCasa });
+  /* Si cae en una unidad, decide cuál como la cascada (por la sigla o por lo que la distingue); la marca sola no sugiere. */
+  const empresa = r.cliente ? unidadesDeLaEmpresa(r.cliente.id, indice.clientes) : null;
+  const sugerido = empresa ? unidadQueNombraElTitulo(texto, empresa, indice.ambiguos).clientId : (r.cliente?.id ?? null);
   const palabras = [...tokensDelTitulo(texto, skip, normalize)];
   const laxos = indice.clientes.filter((c) => {
     if (esLaCasa?.(c)) return false;
     const { delNombre } = tokensDelCliente(c, skip, normalize);
     return [...delNombre].some((t) => t.length >= 5 && palabras.some((w) => w.length >= 5 && (w.startsWith(t) || t.startsWith(w))));
   });
-  const candidatos = [...new Set([...r.candidatos.map((c) => c.id), ...laxos.map((c) => c.id)])];
-  return { sugerido: r.cliente?.id ?? null, candidatos };
+  const candidatos = [...new Set([...r.candidatos.map((c) => c.id), ...(empresa ?? []).map((c) => c.id), ...laxos.map((c) => c.id)])];
+  return { sugerido, candidatos };
 }
 
 /**
@@ -69,15 +86,18 @@ export function clientesNombradosEnteros(textoCrudo: string, indice: IndiceDeCli
   // Los signos que el corte de palabras del título no conoce («Automáticos:», «demo/ACCESOS») no pegan nada a la palabra.
   const texto = textoCrudo.replace(/[^\p{L}\p{M}\p{N}]+/gu, " ");
   const skip = (w: string) => TITLE_MATCH_STOPWORDS.has(w) || indice.ambiguos.has(w);
-  const r = clientePorTitulo(texto, indice.clientes, { modo: "una-palabra", skip, normalize, esClienteDePrueba: isTestClient });
+  const r = clientePorTitulo(texto, clientesQueValenEnElTitulo(texto, indice.clientes), { modo: "una-palabra", skip, normalize, esClienteDePrueba: isTestClient });
   const palabras = tokensDelTitulo(texto, skip, normalize);
   const porNombre = new Map<string, string>();
   for (const c of r.candidatos) {
+    /* Una unidad no se nombra por la marca que comparte con las otras («Alineación CEMACO» no es Costa Rica). */
+    const noDistingue = palabrasQueNoDistinguenEnSuEmpresa(c.id, indice.clientes);
+    const skipDe = (w: string) => skip(w) || noDistingue.has(w);
     // Las palabras del nombre sin sufijo legal: «Plastimex S.A.» se nombra con «Plastimex» («s.a.» no distingue).
-    const delNombre = new Set(palabrasSinSufijoLegal(c.name).split(" ").filter((w) => w.length >= 4 && !skip(w)));
+    const delNombre = new Set(palabrasSinSufijoLegal(c.name).split(" ").filter((w) => w.length >= 4 && !skipDe(w)));
     const entero =
       tituloNombraSigla(texto, c.siglas, normalize) ||
-      (delNombre.size > 0 && [...delNombre].every((t) => palabras.has(t)) && (delNombre.size > 1 || nombraElNombrePropio(texto, c.name, skip)));
+      (delNombre.size > 0 && [...delNombre].every((t) => palabras.has(t)) && (delNombre.size > 1 || nombraElNombrePropio(texto, c.name, skipDe)));
     if (!entero) continue;
     const k = normalize(c.name);
     if (!porNombre.has(k)) porNombre.set(k, c.id);

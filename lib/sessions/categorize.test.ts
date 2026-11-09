@@ -56,8 +56,8 @@ function cliente(
   id: string,
   name: string,
   opts: { company?: string | null; emailDomains?: string[] } = {}
-): CategorizeContext["clients"][number] {
-  return { id, name, company: opts.company ?? null, emailDomains: opts.emailDomains ?? [] };
+): CategorizeContext["clients"][number] & { comparteDominioConId: string | null } {
+  return { id, name, company: opts.company ?? null, emailDomains: opts.emailDomains ?? [], comparteDominioConId: null };
 }
 
 function categoria(

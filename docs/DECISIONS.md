@@ -13,6 +13,9 @@ Decisiones ya tomadas, con el porqué. Si vas a cambiar una, primero entendé po
   (`emailDomains` + `company`) → categoría → **HubSpot→Client** (dominio→company ligada vía
   `Client.hubspotCompanyId`) → título (fallback débil) → orphan. El **dominio manda antes que
   el título**.
+- **Dos fichas que comparten dominio** (el TEC, 2026-10-29) y **una empresa con varias unidades** (2026-11-07): en los
+  pasos de dominio y HubSpot, la reunión se reparte entre la ficha principal y sus unidades por nombre y después por
+  gente; sin pista, por decidir. Cada unidad es una ficha. Ver las dos secciones al final.
 - **HubSpot→Client es ADITIVO, no "corte":** si la company de HubSpot NO está ligada a un Client,
   en la materialización cae al título (no a null). *Por qué:* el "corte" perdía sesiones
   legítimas de clientes cuyo dominio real está en HubSpot pero NO registrado en el Client
@@ -14183,3 +14186,180 @@ puede editar».
   vértices mientras se arrastraba, y sin la entrada de las secciones al desplazarse. La pantalla interna se desplaza en
   su propio contenedor y no en la ventana, así que lo de abajo quedaba escondido.
 - **Datos y SQL:** sin SQL. Los dos campos son opcionales en el Json de la exploración.
+## Dos fichas que comparten dominio: el TEC se separa en AE y TAE (2026-10-29)
+
+> Restaurada el 2026-11-07: se perdió al resolver un conflicto cuando la rama del TEC se juntó con las otras (30 oct).
+> La generaliza «Una empresa con varias unidades», justo abajo.
+
+Elías, 29 oct: «Que el TEC se separe en dos clientes, uno para el AE y otro para el TAE, cada uno con sus sesiones y
+proyectos. Hoy Nexus los mezcla y no se puede ver bien cómo va cada uno.» Cambia lo que había dicho el 28 oct («con la
+separación de proyectos debería bastar»). Plan y números: `docs/empresas-con-dominio-compartido-plan.md`.
+
+- **Dos fichas: «TEC · TAE» (la vieja «TEC») y «TEC · AE» (la vieja «TEC- AE»).** TAE se queda con los dominios
+  (`itcr.ac.cr`, `tec.ac.cr`), la empresa de HubSpot del ITCR y todo lo que es de la cuenta (contactos, correos, tickets,
+  negocios). AE recibe su proyecto, lo que cuelga de él y la propuesta «AE - Smartloop» con su preventa. *Por qué la vieja es TAE:* ahí está la historia y la empresa
+  de HubSpot; AE nació vacía.
+- **AE no tiene dominio propio: COMPARTE el de TAE (`Client.comparteDominioConId`).** Registrar el mismo dominio en las
+  dos fichas rompía INV37 y los ~30 lugares que arman «dominio → ficha» (cobranza, Partner, exploraciones…), que se
+  quedarían con la primera. Con la marca, solo el resolver de reuniones sabe que el dominio es de las dos.
+- **La regla vive en el resolver único (`categorize.ts`), en los pasos 3 (dominio) y 5 (HubSpot), y en ningún otro
+  lado:** cuando la ficha que dio el dominio es de un grupo, la reunión se reparte entre la dueña y sus entidades.
+  1. El **nombre** de la reunión (las `siglas` de cada ficha: «AE», «TAE»; o su nombre). Si nombra a dos, por decidir.
+  2. La **gente**: si todas las personas de afuera que se conocen son de la misma entidad, es de esa. La gente se
+     aprende SOLO del nombre de las reuniones. Las que decidió la gente no enseñan: un error no se alimenta a sí mismo.
+     Las asignadas a mano tampoco: `reResolveSession` escribe solo esa reunión, y si enseñaran cambiarían el dueño de otras
+     sin que nadie las vuelva a resolver (medido: asignar una por decidir movía 5). Quien estuvo en las dos cuenta para
+     la que tiene al menos el doble: una reunión cruzada no borra a quien lleva decenas en la otra. Parejo, no cuenta.
+     La gente de Smarteam tampoco cuenta.
+  3. Si no hay pista, **por decidir**: `resolvedClientId` null, a la vista en /sessions para asignarla a mano.
+  *Por qué no a la ficha más vieja:* es exactamente la mezcla que se quería cortar; una reunión sin dueño se ve, una
+  mal puesta no.
+- **Lo asignado a mano gana siempre** (paso 1, como siempre). Las 4 reuniones del TEC asignadas a mano dicen «TAE» en el
+  título y quedan en TAE.
+- **AE se queda SIN empresa de HubSpot (`hubspotCompanyId` null).** La suya (56463266574) se fusionó en el ITCR y responde
+  200 con los datos de la que sobrevive (comprobado con un GET), así que cada lector y escritor de la empresa (la ficha,
+  las notas, los datos, el siguiente paso, el encargado) cruzaba con TAE en los dos sentidos. Taparlos uno por uno dejaba
+  caminos abiertos; sin empresa, todos se apagan solos. Reapuntarla no se puede: la del ITCR ya es de TAE (una empresa es de
+  una sola ficha, R7b), y HubSpot no separa las escuelas. El registro de Partner del portal de AE y su cuenta de cobro no
+  dependen de esto. La propuesta «AE - Smartloop» también suelta la empresa del ITCR: regenerarla metería en el prompt la
+  actividad de HubSpot de todo el instituto.
+- **Lo que viene de la empresa de HubSpot sigue llegando a TAE**: los negocios (incluido el trato de AE), los contactos,
+  correos y tickets. El proyecto de AE no vuelve a TAE: la copia de proyectos nunca cambia el `clientId` de un proyecto
+  que ya existe.
+- **La copia de proyectos de las dos corre contra la empresa de la dueña, y cada una toca solo lo suyo**
+  (`lib/hubspot/entidades-en-la-copia.ts`). Copiar uno por uno se descartó: sin la corrida normal se perdían la
+  reconciliación y la reactivación (un proyecto apagado una vez no volvía). La dueña se salta los proyectos de sus
+  entidades, también los que una persona borró allá: si los escribiera ella, el pase de la entidad no vería el cambio.
+  Un proyecto NUEVO del instituto lo copia la dueña; un alta hecha desde la entidad cuelga de la empresa de la dueña.
+  El trabajo diario y los eventos de HubSpot incluyen a la entidad aunque no tenga empresa.
+- **La agenda reparte igual** (`lib/mi-dia/agenda.ts`): un invitado del dominio es de las dos fichas; la reunión es de
+  la que nombra el título, y sin nombre no cuenta para ninguna. Nunca, por defecto, de la dueña.
+- **La gente se aprende sin mirar lo materializado** (`resolvedClientId`): de las reuniones asignadas a mano y de las que
+  traen una pista en el título. *Por qué:* si dependiera de quién es hoy la dueña, una corrida cambiaría lo aprendido y la
+  siguiente daría otro resultado (INV2 en rojo).
+- **Las siglas valen en toda la cascada**, también para las reuniones internas: «Hand Off | AE» es de AE. El flujo de
+  separar por eso mira todas las reuniones, no solo las del grupo. (En una empresa con marca, como CEMACO, solo junto a
+  la marca: ver «Una empresa con varias unidades».)
+- **Una propuesta de una ficha que comparte dominio no suma reuniones sin dueño por dominio** (`lib/business-cases/feeding.ts`):
+  ahí están las por decidir. La propuesta «AE - Smartloop» y su preventa no tienen proyecto y pasan a AE por el título
+  de la propuesta.
+- **Mudanza en un solo paso, después del deploy:** `scripts/separar-en-unidades.ts --empresa tec` (desde el 7 nov; antes
+  eran `separar-tec.ts` y `reubicar-reuniones-compartidas.ts`, que nunca se aplicaron): nombres, siglas, la marca, el
+  proyecto de AE, cada reunión del grupo al dueño que dice el resolver, con sus vínculos a proyectos, y cada fila con
+  `clientId`. La reunión manda sobre el proyecto: un hecho de una reunión de AE que estaba en el proyecto de TAE va a AE.
+  Lo de una reunión por decidir se queda donde está y se lista. La reunión que no queda vinculada al único proyecto de
+  trabajo de su ficha se vincula, como el atajo del clasificador: el proyecto lee por vínculo. Simulacro por defecto y
+  respaldo en JSON (`backups/`).
+- **Fusionar a la dueña pasa sus entidades a la ficha que sigue** (`scripts/merge-duplicate-clients.ts`): con el SET NULL
+  de la llave, el grupo se disolvería sin aviso.
+- **Etapa futura, no ahora: el grupo arriba, para la reportería.** Ver el TEC entero (AE + TAE) en un solo número
+  —cartera, rentabilidad, uso de Nexus— pide una vista de grupo por encima de las fichas. Hoy no existe y nada la lee:
+  cada ficha se reporta por su lado.
+
+## Una empresa con varias unidades: cada unidad es una ficha (2026-11-07)
+
+Elías, 6 nov: «Que una empresa (un dominio) pueda tener varias unidades, y que cada unidad funcione en Nexus como un
+cliente propio […] Nunca debe adivinar en silencio». Generaliza lo del TEC (la sección de arriba) a cualquier empresa:
+TEC (AE y TAE) y CEMACO (Costa Rica y Ecuador) son los primeros. kölbi, que venía en el pedido, se midió y es un cliente
+con proyectos (abajo). Plan, números y etapas: `docs/empresas-con-dominio-compartido-plan.md`, parte 2.
+
+- **Unidad o proyecto: tres preguntas sobre el cliente.** ¿Decide y paga la misma gente? ¿Trabajamos con la misma gente
+  de su lado? ¿Lo de uno se le puede mostrar al otro? Las tres en sí, un cliente con proyectos; si no, unidades. *Por qué
+  no alcanzan las jefaturas:* kölbi (7 nov, 77 transcripciones leídas) tiene Ventas y Marketing con jefes distintos y aun
+  así es un cliente: una sola persona negocia los dos contratos y pidió unirlos desde enero, se cobra con una cuenta, todo
+  vive en un HubSpot donde Marketing genera los leads de Ventas, y nadie pide separar información. Separarlo habría
+  partido la memoria que a las dos áreas les sirve. Lo suyo es que el título mande el proyecto (etapa U6 del plan).
+
+- **Una unidad es una ficha (`Client`); la empresa es la ficha principal más las que le cuelgan
+  (`comparteDominioConId`).** No hay tabla de empresas. *Por qué:* todo en Nexus ya se separa por ficha (el chokepoint de
+  reuniones, la memoria de la cuenta, los documentos, la escala, la cobranza), así que una unidad nueva queda aislada sin
+  enseñarle la pared a cada lector, y un lector nuevo nace bien. Una empresa con una sola unidad es una ficha sin nadie
+  que le cuelgue: para ella nada cambia.
+- **La principal es la que tiene el dominio y la empresa de HubSpot.** Una unidad con dominio propio (Ecuador con
+  `sukasa.com` y `comohogar.com`) lo registra en su ficha y el paso de dominio la resuelve sola; una sin dominio propio
+  comparte el de la principal y la reparte la regla de la sección de arriba (título → gente → por decidir).
+  - Construido el 7 nov en el resolver (`categorize.ts › viveEnElDominioDeLaPrincipal`). Una unidad con dominio propio NO
+    vive en el de la principal: `cemaco.co.cr` es solo de Costa Rica. Dentro de la empresa, cada persona de afuera cuenta
+    para la unidad de su dominio, y la gente de dos unidades deja la reunión por decidir (la del 30 oct de CEMACO).
+    *Por qué:* si Ecuador viviera también en `cemaco.co.cr`, las 19 reuniones de Costa Rica quedarían por decidir, porque
+    sus títulos dicen «Cemaco» y no la unidad. La agenda de «Mi día» usa la misma regla del dominio (el de la principal
+    ya no incluye a una unidad con dominio propio); su reparto por el título solo actúa entre unidades del mismo dominio.
+  - Cuando el título cae en una unidad (pasos 2 y 6), la reunión se reparte entre las unidades, como por dominio. La
+    palabra que está en el nombre de todas (la **marca**, «cemaco») no nombra a ninguna: «Alineación CEMACO» queda por
+    decidir. Y la marca no vuelve ambigua esa palabra para el resto de la base (`computeAmbiguousNameTokens` no compara
+    unidades de la misma empresa). *Por qué:* si fuera ambigua, «Alineación CEMACO» se iría a las internas, donde nadie
+    la busca.
+- **Cada unidad tiene lo suyo:** contexto, memoria, ficha del cliente, contactos aprendidos, escala y cuenta de cobro.
+  *Por qué la cobranza también:* los negocios de una empresa facturan aparte (otra razón social, otro país); sumar es
+  trabajo de la vista de la empresa, no de la cuenta.
+- **La vista de la empresa es de solo lectura y no la lee ningún agente:** junta las unidades (proyectos, horas,
+  cobranza, la escala de cada una) para ver el TEC entero o los dos negocios de CEMACO. *Por qué:* lo que se junta para
+  mirar no puede volver a juntarse para escribir; un documento de una unidad nunca lee de otra por ese camino.
+- **Una reunión de dos unidades va a una sola, elegida por una persona, y la otra puede elegirla para un documento.** Es
+  la única puerta entre unidades: misma empresa y elección explícita de una persona en el contexto adicional del
+  documento. El chokepoint la deja pasar con esas dos condiciones y con ninguna otra.
+- **HubSpot no se reorganiza.** Con una empresa de HubSpot para todas las unidades, esa empresa vive en la principal y
+  sus correos, contactos y tickets llegan ahí; los proyectos nuevos van a la unidad cuyas siglas abren su nombre
+  («AE | …»), y sin siglas, aviso para elegir. Con una empresa por unidad, cada unidad la suya (una empresa es de una sola
+  ficha, R7b).
+- **Las siglas de una unidad son su llave en los títulos**: puede tener varias («Marketing», «Campañas») y valen como
+  palabra entera, solo dentro de su empresa. La convención que se le comunica al equipo: «<unidad> | <tema>».
+  - Cómo se cumple «solo dentro de su empresa» (7 nov): en una empresa con marca, la sigla de una unidad vale en un
+    título solo junto a la marca («Cemaco CR |» sí, «Ride CR |» no). Sin marca (el TEC: «TEC · AE» y «TEC · TAE» no
+    tienen palabras de 4 letras), la sigla vale sola en toda la cascada, como se decidió el 29 oct. *Por qué:* «CR» suelto
+    está en 27 títulos de otros clientes («Ride CR», «Claro CR», «Pago de Nómina en CR y NIC»); como sigla de toda la
+    cascada se los habría llevado a Costa Rica. Vale igual al decidir ENTRE las unidades: «Ride CR | Landing» con gente de
+    Ecuador es de Ecuador (la sigla sin marca no le gana al dominio). Y vale en el reconocimiento de clientes en un texto
+    de Tareas y de «Mi día» (`lib/sessions/clientes-por-texto.ts` usa las funciones de `categorize.ts`, invariante 2).
+  - **Sin la marca en el título, una unidad no se nombra por título entre todos los clientes** (revisión del 8 nov,
+    `clientesQueValenEnElTitulo`): ni sus siglas ni las palabras de su nombre. *Por qué:* con «Cemaco · Ecuador», la
+    palabra «ecuador» sola mandaba a Cemaco una interna («Planificación expansión Ecuador») o un prospecto
+    («Distribuidora Ecuador» con un invitado de Gmail): la fuga de «para» con otra cara. «Costa» y «Rica» se salvaban
+    solo porque «Honda Costa Rica» las vuelve ambiguas. Adentro de la empresa (el dominio ya dijo que es Cemaco),
+    «Ecuador» sí distingue: «Ecuador | Kickoff» con gente de cemaco.co.cr es de Ecuador. La marca se busca cortando
+    también en «:» y «/» («CEMACO: CR handoff»). Por lo mismo, las siglas de una empresa con marca no van solas a la
+    consulta de la gente de las unidades (`pistasDeTitulo`): «cr» y «ec» traían casi toda la tabla.
+  - El cálculo de las palabras ambiguas pide `id` y `comparteDominioConId` de cada ficha (obligatorios): sin ellos, el
+    aviso de Cobranza contaba las unidades como empresas distintas y no veía cuándo una ficha nueva vuelve ambigua la
+    marca. En Tareas, el índice suma las otras unidades de una empresa que se ve a medias, solo para la regla (nunca
+    se sugieren), tanto si se ve una unidad como si se ve la principal; en «Mi día», el contacto que HubSpot guarda en una
+    ficha del grupo es de la ficha dueña del dominio de su correo, en los dos sentidos, como lo decide el resolver
+    (`lib/mi-dia/mapas-de-empresas.ts`). La marca sale de los nombres cortados en todo signo: renombrar a
+    «Cemaco-Costa Rica» no apaga la regla.
+  - El guardado del clasificador nunca deja una reunión sin principal: si lo propuesto como principal es un proyecto que
+    una persona dejó de secundario, toma el mejor libre, y sin uno libre no cambia nada (antes borraba el principal
+    virgen). Por lo mismo, el atajo del título no corre sobre un proyecto con candado que no es el principal.
+- **El aviso de «este dominio parece tener varios clientes» es una revisión, no una regla del resolver:** grupos de gente
+  de afuera que nunca coinciden en una reunión, o proyectos y propuestas con nombres que abren distinto. Propone; separar
+  lo decide una persona.
+- **Separar es un solo flujo con simulacro** (lo de `separar-tec.ts` y `reubicar-reuniones-compartidas.ts`, sin nombres
+  fijos): Nexus propone a qué unidad va cada reunión, proyecto, propuesta, tarea y hecho y por qué; una persona confirma;
+  lo dudoso queda por decidir en /sessions.
+  - Construido el 7 nov: `scripts/separar-en-unidades.ts --empresa <clave>`, con cada empresa en `scripts/lib/unidades.ts`
+    y la lógica en `lib/sessions/separar-en-unidades.ts`. Las reuniones las decide el resolver con las fichas como
+    quedarán; el flujo solo lee el porqué. Un proyecto o una propuesta se mueve si lo dice su título o una persona
+    (`aMano` en `scripts/lib/unidades.ts`); lo que propone la gente de sus reuniones queda marcado «confirmar» y no se
+    mueve sin `aMano`. *Por qué:* «nunca debe adivinar en silencio»; una reunión mal puesta se arregla en /sessions, un
+    proyecto mudado arrastra su handoff, sus tareas y sus hechos.
+  - Una reunión que quedaría por decidir con un vínculo que puso, revisó o excluyó una persona frena el `--apply` hasta
+    que alguien la asigne en `aMano.reuniones` (la tabla sugiere la unidad de ese proyecto). *Por qué:* soltar ese vínculo
+    tiraría una decisión humana («Sales & Service Handoff | CEMACO», vinculada a mano a su proyecto de CRM).
+  - El simulacro corre con la conexión de solo lectura y deja la tabla en `backups/`. Antes del SQL de la columna simula
+    la separación en memoria. Se puede correr otra vez después del `--apply`: reconoce la unidad que ya creó.
+- **Dentro de un cliente, el título manda el proyecto** (U6, 7 nov; `lib/sessions/proyecto-por-titulo.ts`). Antes de la
+  IA del clasificador: si el título nombra a UN proyecto de la ficha, la reunión es de ese, como principal, y los
+  vínculos que había puesto la IA a otros proyectos se sueltan (los de una persona, no). Nombrar es traer TODAS las
+  palabras propias del nombre del proyecto, como palabras enteras: sin las del cliente, sin números sueltos, sin las
+  genéricas de cualquier proyecto («Integración», «HubSpot», «Implementación») y sin las que comparte con otro proyecto de
+  la ficha. Dos o ninguno: la IA de siempre. *Por qué:* en kölbi, 20 de 45 personas del ICE van a Ventas y a Marketing; la
+  IA ve correos y no puede separarlas, el título sí. «Sales» no nombra a «Ventas»: sin sinónimos, a propósito (un
+  sinónimo es una adivinanza).
+  - *Por qué todas y no una* (revisión del 7 nov, medido en los 23 clientes con dos o más proyectos): con una alcanzaba,
+    «RCI - Hubspot CRM» se iba a «WEBs * RCI», «STL: Propuesta» a «SECURE TITLE SERVICE HUB | STL» y «Sitio web
+    Smarteam» a «Integración con Reportes web»: el nombre corto del cliente y las palabras de oficio están en títulos de
+    todos sus proyectos. Con todas, sobre las 1.095 reuniones con proyecto principal, el título decide 90, coincide en 76
+    y contradice a una persona en 1 (Secure Title; el vínculo de la persona no se toca y el del título entra secundario).
+    Se mide antes de cada deploy que toque la regla con `scripts/medir-proyecto-por-titulo.ts` (solo lee).
+  - Las reuniones viejas sin proyecto se reparten con `scripts/repartir-reuniones-sin-proyecto.ts`: título, después la
+    IA (con `--con-ia`), y lo dudoso (la IA no propone, o con confianza menor a 0,6) queda para asignar a mano. El
+    `--apply` escribe el plan que dejó el simulacro, sin volver a llamar a la IA: lo que una persona vio.

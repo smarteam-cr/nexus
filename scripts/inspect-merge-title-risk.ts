@@ -28,18 +28,17 @@ const PAIRS = [
 async function main() {
   console.log("READ-ONLY — riesgo de title-match tras el merge (des-ambiguación de tokens)\n");
 
-  const clients = await prisma.client.findMany({ select: { id: true, name: true, company: true, emailDomains: true } });
+  const clients = await prisma.client.findMany({ select: { id: true, name: true, company: true, emailDomains: true, comparteDominioConId: true } });
   const nameById = new Map(clients.map((c) => [c.id, c.name]));
   const dupIds = new Set(PAIRS.map((p) => p.dupId));
 
   // Set ambiguo ACTUAL.
-  const ambiguousNow = computeAmbiguousNameTokens(clients.map((c) => ({ name: c.name, company: c.company })));
+  const ambiguousNow = computeAmbiguousNameTokens(clients);
 
   // Set ambiguo POST-merge: quitar dups, foldear dominios del dup en el canónico (no cambia
   // tokens de nombre, pero sí refleja el universo de clients reducido).
   const postClients = clients
-    .filter((c) => !dupIds.has(c.id))
-    .map((c) => ({ name: c.name, company: c.company }));
+    .filter((c) => !dupIds.has(c.id));
   const ambiguousPost = computeAmbiguousNameTokens(postClients);
 
   // Tokens que pasan de ambiguo → NO ambiguo por el merge (los que "se activan").

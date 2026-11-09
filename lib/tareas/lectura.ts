@@ -313,12 +313,27 @@ async function candidatasPara(duenos: readonly string[], equipoDeLaLectura: stri
  */
 export async function clientesDeLasLineas(lineas: readonly LineaDeProximosPasos[], clientes: ClientesQueVes): Promise<Map<string, ClientesDeUnTexto>> {
   const salida = new Map<string, ClientesDeUnTexto>();
-  const filas = await prisma.client.findMany({ where: { id: { in: [...clientes.ids] } }, select: { id: true, name: true, company: true, siglas: true, emailDomains: true, kind: true } });
-  const indice = indiceDeClientes(filas.filter((c) => c.kind !== "INTERNO").map((c) => ({ id: c.id, name: c.name, company: c.company, siglas: c.siglas })));
+  const select = { id: true, name: true, company: true, siglas: true, emailDomains: true, kind: true, comparteDominioConId: true } as const;
+  const filas = await prisma.client.findMany({ where: { id: { in: [...clientes.ids] } }, select });
+  /* Las otras unidades de una empresa que se ve a medias (revisión del 8 nov): sin la principal en el índice, la regla de
+     la marca no se arma y «Llamar a Cemaco» sugería Ecuador. Entran para la regla, nunca como sugerencia. */
+  /* Las dos puntas: se ve una unidad (falta su principal) o se ve la principal (faltan sus unidades). */
+  const empresas = [...new Set(filas.filter((c) => c.comparteDominioConId).map((c) => c.comparteDominioConId!))];
+  const parientes = await prisma.client.findMany({
+    where: { OR: [{ id: { in: empresas } }, { comparteDominioConId: { in: [...empresas, ...filas.map((c) => c.id)] } }], id: { notIn: [...clientes.ids] } },
+    select,
+  });
+  const indice = indiceDeClientes([...filas, ...parientes].filter((c) => c.kind !== "INTERNO").map((c) => ({ id: c.id, name: c.name, company: c.company, siglas: c.siglas, comparteDominioConId: c.comparteDominioConId })));
   const internos = new Set(filas.filter((c) => c.kind === "INTERNO").map((c) => c.id));
   const dominiosInternos = new Set(filas.filter((c) => internos.has(c.id)).flatMap((c) => effectiveDomainsForClient(c)));
   const esLaCasa = (c: { id: string }) => internos.has(c.id) || effectiveDomainsForClient(filas.find((f) => f.id === c.id) ?? { emailDomains: [], company: null }).some((d) => dominiosInternos.has(d));
-  for (const linea of lineas) salida.set(linea.id, clientesDeUnTexto(`${linea.titulo} ${linea.detalle ?? ""}`, indice, esLaCasa));
+  for (const linea of lineas) {
+    const r = clientesDeUnTexto(`${linea.titulo} ${linea.detalle ?? ""}`, indice, esLaCasa);
+    salida.set(linea.id, {
+      sugerido: r.sugerido && clientes.ids.has(r.sugerido) ? r.sugerido : null,
+      candidatos: r.candidatos.filter((id) => clientes.ids.has(id)),
+    });
+  }
   return salida;
 }
 

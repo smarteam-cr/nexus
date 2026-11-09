@@ -1,4 +1,137 @@
-# Empresas que comparten dominio sin compartir contexto — plan
+# Empresas con varias unidades — plan
+
+> **Estado (2026-11-07):** plan aprobado con las recomendaciones (kölbi corregido: es un cliente con proyectos, medido en
+> sus 77 transcripciones). **U1 y U6 construidas** en la rama `claude/unidades-u1-u6-f29d44`, sin deploy ni `--apply`:
+> `scripts/separar-en-unidades.ts` (TEC y CEMACO, simulacros corridos) y la regla del título en el clasificador, con
+> `scripts/repartir-reuniones-sin-proyecto.ts` para kölbi. La parte 1 (el TEC en dos
+> fichas, 29 oct) está en main desde el 6 nov y sube con la ola 1, apagada: no actúa hasta separar el TEC, y esa
+> separación espera la etapa U1 de este plan. DECISIONS: «Dos fichas que comparten dominio» y «Una empresa con varias
+> unidades».
+
+## Parte 2 · Cualquier empresa con varias unidades (pedido del 6 nov)
+
+Elías, 6 nov: «Hoy Nexus asume que un dominio de correo es un cliente. Eso falla cuando, bajo el mismo dominio, hay
+varios clientes que para nosotros son distintos […] la solución tiene que servir para cualquiera, no solo para estos
+tres […] Debe [ser] lo más fácil e intuitivo que Nexus identifique esto y lo separe automáticamente.» Eligió las
+recomendaciones de este plan sin cambios.
+
+### En una frase
+
+Una **unidad** es una ficha de Nexus; una **empresa** es su ficha principal (la del dominio y la empresa de HubSpot)
+más las unidades que le cuelgan. Como todo en Nexus ya se separa por ficha, cada unidad queda aislada sola. Lo nuevo es
+poco: separar con un solo flujo, el aviso de que un dominio parece tener varios clientes, la vista de la empresa entera y
+la convención de títulos.
+
+### Unidad o proyecto: la regla
+
+Tres preguntas, sobre el cliente y no sobre cómo trabajamos nosotros:
+
+1. ¿Decide y paga la misma gente (el mismo contrato o la misma negociación)?
+2. ¿Del lado del cliente trabajamos con la misma gente?
+3. ¿Lo de uno se le puede mostrar al otro sin problema?
+
+Las tres en sí: **un cliente con proyectos**. Una en no, y sobre todo la 1 o la 3: **unidades**. Que el cliente tenga
+áreas internas con jefes distintos no alcanza: en kölbi, Ventas y Marketing tienen jefaturas propias y son un solo
+cliente (abajo). La gente es la señal con que Nexus sospecha (U3) y reparte una reunión sin nombre; la decisión es de una
+persona, con estas tres preguntas.
+
+### Lo medido en producción (solo lectura, 2026-11-06)
+
+| Empresa | Hoy en Nexus | Lo que separa | Lo que queda para una persona |
+|---|---|---|---|
+| **TEC** | «TEC» (`tec.ac.cr`, `itcr.ac.cr`, 188 reuniones, 2 proyectos) y «TEC- AE» vacía | El nombre decide 86 %; la gente separa perfecto (0 de 41 personas en las dos) | 5 reuniones de las dos (simulacro del 30 oct: AE 90, TAE 122) |
+| **CEMACO** | «Cemaco Internacional» (`cemaco.co.cr`, 28 reuniones, 2 proyectos, 1 propuesta) | Las del diagnóstico de Ecuador («SUKASA + CEMACO + COMOHOGAR \| TI, Cobranza, Ecommerce, Marketing») traen gente de `sukasa.com` y `comohogar.com`, nadie de `cemaco.co.cr`: con su ficha, el dominio las separa solo | La del 30 oct, con los tres dominios |
+| **kölbi** | «kölbi» (`ice.go.cr`, 230 reuniones, 3 proyectos: Ventas, Marketing, InfoClic); 145 reuniones sin proyecto | No son unidades (decisión 5). Entre sus proyectos, solo el título separa: 20 de 45 personas del ICE van a Ventas y a Marketing | Las que no nombran ningún proyecto (U6) |
+
+### Las decisiones (tomadas el 7 nov, con la recomendación)
+
+1. **Unidad = ficha propia.** Sin tabla de empresas. La ficha principal es la del dominio y la empresa de HubSpot.
+2. **Qué se comparte entre unidades: nada de lo que alimenta a un agente.** Contexto, memoria, ficha del cliente,
+   contactos aprendidos, escala y cuenta de cobro son de cada unidad. La vista de la empresa junta para mirar.
+3. **Una reunión de dos unidades** va a una sola, elegida por una persona, y la otra unidad puede elegirla a mano para un
+   documento (misma empresa y elección explícita: la única puerta entre unidades).
+4. **HubSpot no se reorganiza.** Una empresa de HubSpot para todas: vive en la principal, y sus correos, contactos y
+   tickets llegan ahí. Una empresa por unidad: cada unidad la suya. Los proyectos nuevos van a la unidad que nombran al
+   inicio; sin nombre, aviso.
+5. **kölbi es UN cliente con tres proyectos: Ventas, Marketing e InfoClic** (Elías, 7 nov, después de leer sus 77
+   transcripciones, sep 2025 a nov 2026). Las tres preguntas: decide y negocia una sola persona (Priscilla Sanabria,
+   jefa de Publicidad y Marca); hubo dos contratos con dos partidas (Marketing desde oct 2025, Ventas como anexo desde
+   feb 2026), pero el 5 nov ella pidió uno solo desde enero y se cobra con una sola cuenta; trabajan en un solo HubSpot,
+   con los mismos pipelines, Marketing genera los leads que atiende Ventas y nadie pide separar información. Ventas
+   (Diana Villalobos y Catalina Díaz, bajo un director comercial) y Marketing (Grace Camacho, Breyssy Martínez y César
+   Vargas) son áreas del mismo cliente. Lo que kölbi necesita es U6, no unidades.
+6. **CEMACO son «Cemaco · Costa Rica» (la principal, `cemaco.co.cr`) y «Cemaco · Ecuador» (`sukasa.com`,
+   `comohogar.com`).** El proyecto de Desarrollo y la propuesta «CRM + ERP» se proponen en el simulacro (por su gente,
+   hoy son de Costa Rica).
+7. **Quién separa:** el TEC y CEMACO, Claude con simulacro y el OK de Elías. El botón «Separar en unidades» llega con
+   el aviso (U3).
+
+### La convención de títulos (para el equipo)
+
+- **La unidad (o el proyecto) primero, después «|» y el tema:** «TAE | Reportes», «AE | Limpieza de base», «Cemaco CR |
+  Sales Hub», «Cemaco EC | Marketing». En un cliente con varios proyectos, el proyecto: «kölbi Ventas | Pipelines»,
+  «kölbi Marketing | Campaña de recargas», «kölbi InfoClic | Integración».
+- **Interna:** «[Interna] AE | …».
+- **De dos unidades:** «Cemaco CR + EC | Kickoff». Queda por decidir y una persona la asigna (decisión 3).
+- **El nombre de una unidad solo va en los títulos de sus reuniones.**
+
+### Etapas
+
+Cada una cierra con `tsc`, `eslint`, la suite, `/revisar` y `check:invariants`; las escrituras van en simulacro primero.
+
+**U0 · Que suba lo del TEC.** Viene con la ola 1 (SQL `2026-10-29-dominio-compartido.sql` antes del deploy). Los scripts
+`separar-tec` y `reubicar-reuniones-compartidas` NO se aplican: los reemplaza U1.
+*Terminado cuando:* producción corre el resolver con `comparteDominioConId` y ninguna ficha lo tiene puesto.
+
+**U1 · Separar en unidades, para cualquier empresa.** `separar-tec.ts` sin nombres fijos: recibe la ficha principal y
+las unidades (nombre, siglas, dominios propios) y propone, para cada proyecto, propuesta, preventa, reunión, tarea y
+hecho, a qué unidad va y por qué (título, gente, dominio, a mano). El simulacro deja una tabla para Elías; con su OK,
+`--apply` mueve todo junto (la reubicación de reuniones de `reubicar-reuniones-compartidas.ts` corre en el mismo paso).
+Las reuniones sin pista quedan por decidir en /sessions. Se corre en el TEC y después en CEMACO.
+*Terminado cuando:* en las dos empresas INV1 e INV2 no marcan nada, cada proyecto ve solo reuniones de su unidad y lo
+por decidir está a la vista en /sessions.
+*Construido (7 nov):* `scripts/separar-en-unidades.ts --empresa tec|cemaco`, con las empresas en `scripts/lib/unidades.ts`.
+Simulacro en producción, solo lectura y con la separación en memoria: el TEC da AE 91, TAE 124 y 5 por decidir (igual que
+el 30 oct); CEMACO da Costa Rica 19, Ecuador 4 (las «SUKASA + CEMACO + COMOHOGAR», por el dominio) y 5 por decidir (la
+del 30 oct y cuatro que solo dicen «CEMACO»). El resolver suma tres reglas: una unidad con dominio propio vive en el suyo,
+el título que cae en una unidad se reparte, y en una empresa con marca la sigla vale solo junto a la marca (DECISIONS).
+
+**U2 · La puerta de las reuniones de dos unidades.** El chokepoint (`lib/sessions/project-sources.ts`) deja pasar a un
+documento una reunión de otra unidad de la misma empresa solo si una persona la eligió en su contexto adicional. Prueba
+de integración: la misma reunión, sin elegir, no pasa; de otra empresa, no pasa aunque se elija.
+*Terminado cuando:* esas pruebas están en verde y `check:invariants` no cambia.
+
+**U3 · El aviso y el botón.** Una revisión semanal mira cada dominio con una sola ficha: grupos de gente de afuera que
+nunca coinciden en una reunión (cada grupo con 5 reuniones o más) o proyectos y propuestas cuyo nombre abre distinto
+(«AE |», «TAE |»). Le avisa a Elías en «Para ti», con la razón, «Separar en unidades» (abre el simulacro de U1) y «Es
+una sola» (no vuelve a avisar por esa empresa).
+*Terminado cuando:* contra producción, en solo lectura, el TEC de antes de separarse sale en la lista y una empresa
+normal (con un solo grupo de gente) no.
+
+**U4 · Los proyectos nuevos de HubSpot, a su unidad.** La copia de proyectos de la principal reparte por las siglas al
+inicio del nombre del proyecto; sin siglas, el proyecto queda en la principal con un aviso para moverlo.
+*Terminado cuando:* la prueba de la copia con un HubSpot simulado manda «AE | X» a AE y avisa por «Proyecto Y».
+
+**U5 · La vista de la empresa.** Arriba de cada unidad, «Parte de TEC · 2 unidades», con enlace a una página de solo
+lectura: cada unidad con sus proyectos, las horas dedicadas, la cobranza sumada y su escala. Ningún agente la lee.
+*Terminado cuando:* la página existe con su `loading.tsx` y sus registros (§1-UI), y un escaneo prueba que ningún agente
+importa su lectura.
+
+**U6 · Dentro de un cliente, el título manda el proyecto.** Antes de la IA que reparte una reunión entre los proyectos
+de su ficha (`classify-session-project.ts`), una regla: si el título nombra a un solo proyecto activo de esa ficha (las
+palabras propias de su nombre, sin el nombre del cliente: «Ventas», «Marketing», «InfoClic»), la reunión va a ese
+proyecto como principal; si nombra a dos o a ninguno, sigue la IA de hoy. Después, el mismo flujo de propuesta y
+confirmación de U1 reparte las 145 reuniones de kölbi que no tienen proyecto: título, después la IA, y lo dudoso a la
+vista para asignar a mano.
+*Terminado cuando:* una prueba manda «kölbi Marketing | Campaña» al proyecto de Marketing aunque la gente sea la de
+Ventas, y en kölbi no queda ninguna reunión del último trimestre sin proyecto ni propuesta.
+
+**Lo que no se construye:** una tabla de empresas, reescribir los lectores de contexto, reorganizar HubSpot, repartir
+los correos y tickets de HubSpot entre unidades (hasta que haga falta) y una IA que decida la unidad.
+
+---
+
+## Parte 1 · El TEC en dos fichas (29 oct)
 
 > Estado: **el TEC se separa en dos fichas** (decisión del 29 oct). Código y scripts en la rama
 > `claude/tec-ae-tae-202486`; el SQL, el deploy y los `--apply` van en el orden de la sección 6. Grupo INVE, Honda/Faco
@@ -14,7 +147,7 @@
 > los mezcla y no se puede ver bien cómo va cada uno.» Es la forma B, sin el grupo arriba por ahora (etapa futura).
 > DECISIONS: «Dos fichas que comparten dominio».
 
-## En una frase
+### En una frase
 
 El TEC pasa a ser **dos fichas**: «TEC · TAE» (la vieja «TEC», con los dominios y la empresa de HubSpot) y «TEC · AE»
 (la vieja «TEC- AE»), cada una con su proyecto y sus reuniones. AE no tiene dominio propio: **comparte** el de TAE
@@ -27,11 +160,11 @@ entera, el chokepoint) ya se separa por ficha, así que la sección 4 deja de ha
 
 ---
 
-## 1. Lo que encontré
+### 1. Lo que encontré
 
 Medido el 28 oct, antes de la decisión del 29. Donde dice «el plan», es la forma A (una ficha).
 
-### 1.1 Cómo decide Nexus de quién es una reunión, y dónde se mezcla un caso como el del TEC
+#### 1.1 Cómo decide Nexus de quién es una reunión, y dónde se mezcla un caso como el del TEC
 
 | # | Lugar | Qué hace hoy | Qué pasa con dos entidades en una ficha |
 |---|---|---|---|
@@ -50,7 +183,7 @@ cosas**: que el clasificador no cruce (puntos 3 y 5), y que lo que se lee «de l
 (puntos 7 y 8). La primera sola no alcanza: con una clasificación perfecta, el diagnóstico de AE igual leería los
 hechos, compromisos y correos de TAE por la memoria de la cuenta.
 
-### 1.2 Los casos
+#### 1.2 Los casos
 
 Medido el 2026-10-28. «Reuniones con los dos» = reuniones con gente de los dominios de las dos fichas.
 
@@ -103,7 +236,7 @@ Medido el 2026-10-28. «Reuniones con los dos» = reuniones con gente de los dom
 Y «STLA TRUST SERVICES S.A.» (ficha manual del 5 oct, sin dominio, 2 reuniones), del grupo de Secure Title.
 DISTELSA y Distribuidora Larce tienen fichas y dominios propios y no comparten reuniones: siguen bien como están.
 
-### 1.3 ¿Alcanza el nombre de la reunión? Medido en el TEC
+#### 1.3 ¿Alcanza el nombre de la reunión? Medido en el TEC
 
 Elías propuso que pese primero el nombre y después las personas (Ivania en AE, Marco en el otro). Medido sobre las 185
 reuniones de «TEC»:
@@ -121,16 +254,16 @@ reuniones de «TEC»:
 Con la regla «nombre → gente → por decidir», **las 25 reuniones que hoy están en los dos proyectos habrían quedado
 en uno solo**: 17 por el nombre y 8 por la gente.
 
-## 2. Las formas de modelarlo
+### 2. Las formas de modelarlo
 
-### A · Una ficha, con el proyecto como pared (la que se eligió el 28 oct, descartada el 29)
+#### A · Una ficha, con el proyecto como pared (la que se eligió el 28 oct, descartada el 29)
 
 AE y TAE seguían en «TEC», con la marca «contexto por proyecto»: el clasificador de proyecto decidía por nombre y
 gente, y los lectores «de la cuenta» (las 11 partes de la memoria y los 21 archivos de `getClientSessions`) aprendían a
 leer solo el proyecto. Era lo que menos tocaba HubSpot, pero el trabajo grande estaba en enseñarle la pared a cada
 lector, y un lector nuevo nacía leyendo la cuenta entera.
 
-### B · Cada entidad es su propia ficha (la que eligió Elías el 29 oct)
+#### B · Cada entidad es su propia ficha (la que eligió Elías el 29 oct)
 
 - **Gana:** el aislamiento sale gratis, porque todo ya se separa por ficha. Cada una tiene su cartera, su color, su
   memoria y sus documentos, y se ve cómo va cada una.
@@ -145,9 +278,9 @@ lector, y un lector nuevo nacía leyendo la cuenta entera.
 - **El grupo arriba, para la reportería, queda como etapa futura** (sección 6, E3): hoy nada necesita ver el TEC entero
   en un número, y cada ficha se reporta por su lado.
 
-## 3. La regla de las reuniones
+### 3. La regla de las reuniones
 
-### 3.1 Cómo decide el resolver (lo construido)
+#### 3.1 Cómo decide el resolver (lo construido)
 
 Vive en `lib/sessions/categorize.ts`, el resolver único (invariante 2), en los pasos 3 (dominio) y 5 (HubSpot), y en
 ningún otro lado. Solo actúa cuando la ficha que dio el dominio es de un **grupo**: una dueña y las fichas que tienen
@@ -167,14 +300,14 @@ ningún otro lado. Solo actúa cuando la ficha que dio el dominio es de un **gru
 Los contactos de HubSpot asociados al trato o al proyecto (la segunda fuente de gente que proponía la forma A) no se
 usaron: el nombre y la gente de las reuniones ya deciden casi todo (sección 6).
 
-### 3.2 Lo que Elías preguntó si se le escapa
+#### 3.2 Lo que Elías preguntó si se le escapa
 
 - **El nombre pesa, pero no es todo:** sin la gente, 26 reuniones del TEC quedarían por decidir. Con la gente bajan a 5.
 - **Algunas reuniones son de verdad de las dos** (FUNDATEC, un evento, la del dominio de HubSpot). Quedan por decidir y
   las asigna una persona.
 - **HubSpot sigue con una empresa para las dos.** Sus correos, tickets y contactos llegan a TAE. AE no los ve.
 
-## 4. Lo que la forma A tenía que cerrar, y por qué ya no hace falta para el TEC
+### 4. Lo que la forma A tenía que cerrar, y por qué ya no hace falta para el TEC
 
 La tabla de la versión del 28 oct (la memoria de la cuenta, los 21 lectores de `getClientSessions`, la entrega
 publicada de otro proyecto, lo aprendido en la preventa, lo fuera de alcance, las notas) era el trabajo de enseñarle
@@ -184,7 +317,7 @@ sigue compartido es lo que llega por la empresa de HubSpot (sección 5), y eso q
 Si Grupo INVE o Honda/Faco terminan siendo una ficha con proyectos separados (sección 7), la forma A vuelve a aplicar
 para ellos, y esta sección es su punto de partida.
 
-## 5. Qué pasa con «TEC- AE» y su empresa fusionada
+### 5. Qué pasa con «TEC- AE» y su empresa fusionada
 
 - La ficha «TEC- AE» **no se fusiona**: es la ficha de AE («TEC · AE»). La pregunta 35 del roadmap («¿fusiono las dos
   TEC?») pasa a **no**, y la 6 (reapuntar «TEC- AE») se cierra sin reapuntar.
@@ -194,12 +327,16 @@ para ellos, y esta sección es su punto de partida.
   queda **sin empresa**. El registro de Partner del portal de AE (51047287) y su cuenta de cobro ya cuelgan de esta ficha
   y no dependen de eso. INV13 e INV54, que marcaban «TEC- AE», se ponen en verde solas.
 
-## 6. Etapas
+### 6. Etapas
 
 Cada etapa se cierra con `tsc`, `eslint`, la suite, `/revisar` y `check:invariants`. Las escrituras van en simulacro
 primero.
 
-### E1 · El TEC en dos fichas (construido el 29 oct)
+#### E1 · El TEC en dos fichas (construido el 29 oct)
+
+> ⚠ `scripts/separar-tec.ts` y `scripts/reubicar-reuniones-compartidas.ts` ya no existen (7 nov): los reemplaza
+> `scripts/separar-en-unidades.ts --empresa tec`, que hace las dos cosas en un solo paso, con simulacro (etapa U1). Lo de
+> abajo queda como historia de qué movía cada uno.
 
 - SQL aditivo `scripts/sql/2026-10-29-dominio-compartido.sql`: `Client.comparteDominioConId` (llave a `Client`, SET
   NULL) y su índice. Va ANTES del deploy: el resolver lee la columna.
@@ -228,17 +365,20 @@ primero.
 - **Terminado cuando:** después de los `--apply`, INV1 e INV2 no marcan nada del TEC, el proyecto de AE ve sus
   reuniones y el de TAE no ve ninguna de AE.
 
-### E2 · Lo que llega por la empresa de HubSpot, repartido (si hace falta)
+#### E2 · Lo que llega por la empresa de HubSpot, repartido (si hace falta)
 
 - Los negocios, contactos, correos y tickets del ITCR llegan a TAE. Si AE necesita ver los suyos, se reparten por la
   gente de cada ficha (la misma que aprende el resolver). No se construye hasta que Elías lo pida.
 
-### E3 · El grupo arriba, para la reportería (futuro)
+#### E3 · El grupo arriba, para la reportería (futuro)
 
 - Una vista por encima de las fichas («Instituto Tecnológico»: AE + TAE) para la cartera, la rentabilidad y el uso de
   Nexus, sin mezclar el contexto de los documentos. Hoy no existe y nada la necesita.
 
-## 7. Preguntas que siguen abiertas
+### 7. Preguntas de la parte 1
+
+Respondidas el 7 nov por la parte 2: la 1 es la etapa U4; la 2 y la 3 se deciden cuando el aviso de U3 las muestre, con
+el mismo flujo de U1; la 4 sigue abierta.
 
 1. **Un proyecto nuevo del ITCR en HubSpot:** lo copia TAE. ¿Alcanza con moverlo a mano cuando es de AE, o quieres que
    la copia lo decida por el nombre («AE |»)?
