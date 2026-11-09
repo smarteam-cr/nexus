@@ -166,7 +166,7 @@ export default function DuranteLaSesion({ pestana, esLaProxima }: { pestana: Pes
       )}
       <NotasLibres pestana={pestana} />
       {guia?.agenda ? (
-        <AgendaDeLaGuia pestana={pestana} agenda={guia.agenda} objetivo={null} momento="durante" editable={puedeEditar} />
+        <AgendaDeLaGuia pestana={pestana} agenda={guia.agenda} guiaEn={guia.en} objetivo={null} momento="durante" editable={puedeEditar} />
       ) : (
         <section data-recorrido="preventa.sesion.preguntas" className="min-w-0 overflow-hidden rounded-xl border border-line bg-surface">
           <header className="flex flex-wrap items-center gap-2.5 border-b border-line px-[18px] py-3">

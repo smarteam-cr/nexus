@@ -37,7 +37,7 @@ import { REUNIONES } from "@/lib/exploraciones/sesion";
 import { EQUIPOS } from "@/lib/exploraciones/equipos";
 import { queContarle } from "@/lib/exploraciones/contarle";
 import { useLienzo } from "./contexto";
-import { useObjetivosDeLaSiguiente, usePreguntasDeLaAnterior } from "./LoQueQueda";
+import { useObjetivosDeLaPrimera, useObjetivosDeLaSiguiente, usePreguntasDeLaAnterior } from "./LoQueQueda";
 import { EtiquetaDePregunta, nombreDelPara, Rotulo, useCambiosDesdeLaGuia, useEditarLaSesion, useGuiaDeLaSesion } from "./piezas-de-la-sesion";
 import { AgregarPregunta, PreguntaDeLaGuia, Quitadas, useAjustarLaGuia, useTemasDeLaGuia } from "./PreguntaDeLaGuia";
 import { GuiaEnOrden } from "./GuiaEnOrden";
@@ -56,7 +56,7 @@ import {
   vieneDeLasRespuestas,
   type PreguntaConOpciones,
 } from "@/lib/exploraciones/objetivo-y-hallazgos";
-import { Input, Spinner } from "@/components/ui";
+import { Input, Skeleton, Spinner } from "@/components/ui";
 import { LoQueCubreLaGuia } from "./LoQueCubreLaGuia";
 import { abrirElChatDeNexus } from "@/lib/nexus-chat/constantes";
 import { queCubreLaGuia } from "@/lib/exploraciones/que-cubre-la-guia";
@@ -475,6 +475,7 @@ function Objetivo({
   sugeridos,
   preguntas,
   alElegir,
+  deLaPrimera,
 }: {
   pestana: PestanaDeSesion;
   esLaProxima: boolean;
@@ -482,6 +483,8 @@ function Objetivo({
   preguntas: PreguntaParaMostrar[];
   /** Al elegir un objetivo (no al editar uno ya elegido): guardarlo y, en la próxima sesión, armar la guía. */
   alElegir: (objetivo: string, propio: boolean) => Promise<void>;
+  /** Si es la primera sesión (sin anterior que sugiera) y si Nexus está pensando los suyos. */
+  deLaPrimera: { primera: boolean; pensando: boolean; fallo: boolean };
 }) {
   const { exp, chequeo, marco, puedeEditar, guardando } = useLienzo();
   const editar = useEditarLaSesion(pestana, "antes");
@@ -574,7 +577,7 @@ function Objetivo({
   }
 
   if (!puedeEditar && !ofrecer.length) return null;
-  return <ObjetivosSugeridos sugeridos={ofrecer} esLaProxima={esLaProxima} alElegir={alElegir} />;
+  return <ObjetivosSugeridos sugeridos={ofrecer} esLaProxima={esLaProxima} alElegir={alElegir} deLaPrimera={deLaPrimera} />;
 }
 
 /**
@@ -585,10 +588,12 @@ function ObjetivosSugeridos({
   sugeridos,
   esLaProxima,
   alElegir,
+  deLaPrimera,
 }: {
   sugeridos: readonly string[];
   esLaProxima: boolean;
   alElegir: (objetivo: string, propio: boolean) => Promise<void>;
+  deLaPrimera: { primera: boolean; pensando: boolean; fallo: boolean };
 }) {
   const { puedeEditar, guardando } = useLienzo();
   // Lo que se edita: el índice de la tarjeta, o «propio» para la cuarta.
@@ -656,7 +661,13 @@ function ObjetivosSugeridos({
                   ? `Nexus sugiere ${sugeridos.length} enfoques distintos.`
                   : sugeridos.length === 1
                     ? "Nexus sugiere uno."
-                    : "Nexus todavía no tiene uno para sugerir: salen de la lectura de la sesión anterior."
+                    : deLaPrimera.pensando
+                      ? "Nexus está pensando tres objetivos con lo que sabe de la empresa."
+                      : deLaPrimera.fallo
+                        ? "Nexus no pudo sugerir objetivos ahora (recarga para volver a intentarlo)."
+                        : deLaPrimera.primera
+                        ? "Nexus no tuvo de dónde sugerir uno para esta primera sesión."
+                        : "Nexus todavía no tiene uno para sugerir: salen de la lectura de la sesión anterior."
               } Edita el que quieras o escribe el tuyo.${
                 esLaProxima ? " Al elegirlo, Nexus arma la guía con él: es tu oportunidad de decirle cómo estructurar la sesión." : ""
               }`}
@@ -691,6 +702,14 @@ function ObjetivosSugeridos({
             </div>
           ),
         )}
+        {/* Mientras Nexus piensa los de la primera sesión, sus tres lugares (sin texto: no hay nada que leer todavía). */}
+        {deLaPrimera.pensando &&
+          !sugeridos.length &&
+          [0, 1, 2].map((k) => (
+            <div key={`pensando-${k}`} aria-hidden>
+              <Skeleton rounded="lg" delay={k * 80} className="min-h-[112px] w-full" />
+            </div>
+          ))}
         {puedeEditar &&
           (editando === "propio" ? (
             editor("Tu objetivo para la sesión")
@@ -965,7 +984,7 @@ function LaGuia({ pestana, esLaProxima }: { pestana: PestanaDeSesion; esLaProxim
   const columnas = 2 + (enProyecto ? 1 : 0) + (deEquipo.length ? 1 : 0);
 
   // La guía nueva (2026-11-06): una agenda por bloques. Las de antes se siguen viendo como se armaron.
-  if (guia?.agenda) return <AgendaDeLaGuia pestana={pestana} agenda={guia.agenda} objetivo={null} momento="antes" editable={puedeEditar} />;
+  if (guia?.agenda) return <AgendaDeLaGuia pestana={pestana} agenda={guia.agenda} guiaEn={guia.en} objetivo={null} momento="antes" editable={puedeEditar} />;
 
   return (
     <section data-recorrido="preventa.sesion.preguntas" className="overflow-hidden rounded-xl border border-line bg-surface">
@@ -1218,6 +1237,8 @@ export default function AntesDeLaSesion({ pestana, esLaProxima }: { pestana: Pes
   /* Séptima vuelta (2026-11-08): hasta tres objetivos sugeridos, de lo que quedó de la sesión anterior (sin otra IA). Sin
      ellos, el de una guía armada antes de elegir el objetivo, como una tarjeta más. */
   const deLaAnterior = useObjetivosDeLaSiguiente(pestana);
+  // La primera sesión no tiene anterior: Nexus le sugiere los suyos con lo que sabe de la empresa (2026-11-08).
+  const deLaPrimera = useObjetivosDeLaPrimera(pestana);
   const sugeridos = objetivosDistintos([...deLaAnterior, guia?.objetivo]);
   const [eligiendo, setEligiendo] = useState(false);
   const traidos = pestana.sesion?.explorar ?? [];
@@ -1284,6 +1305,7 @@ export default function AntesDeLaSesion({ pestana, esLaProxima }: { pestana: Pes
         sugeridos={sugeridos}
         preguntas={preguntas}
         alElegir={alElegir}
+        deLaPrimera={deLaPrimera}
       />
       {esLaProxima && <SirveAlObjetivoDeLaExploracion />}
       {/* Quinta vuelta (2026-11-08): lo que Nexus necesita saber pide algo de ti, así que va arriba, junto al objetivo. */}

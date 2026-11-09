@@ -463,6 +463,12 @@ export interface PropuestaDeExploracion {
   /** Lo que Nexus propuso para «Lo que ya sabemos» y nadie confirmó todavía (contexto-server.ts). */
   contextoPropuesto?: ContextoPropuesto | null;
   /**
+   * Los tres objetivos sugeridos para la PRIMERA sesión (2026-11-08, objetivos-de-la-primera.ts): la primera no tiene una
+   * lectura anterior que los sugiera, así que salen de lo que hay (la ficha, la industria, cómo llegó, el traspaso, las
+   * notas de HubSpot). Se piden una vez por preventa, al abrir la Preparación de su primera sesión.
+   */
+  objetivosDeLaPrimera?: { en: string; objetivos: string[] } | null;
+  /**
    * 2026-11-08 (objetivo-y-hallazgos.ts), los tres los escribe la llamada que arma la guía: el ajuste al objetivo de
    * Smarteam que sugiere para esta empresa (null = ninguno o ya se usó o descartó), lo más importante que se sabe hasta
    * ahora, y lo que le falta saber para armar la próxima guía (null = nada).

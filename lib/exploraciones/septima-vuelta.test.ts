@@ -163,7 +163,7 @@ describe("la guía, más fácil de leer (guarda estructural)", () => {
   });
 
   it("«Para profundizar» se pliega: cerrado en la Preparación, abierto en «En vivo»", () => {
-    expect(agenda).toMatch(/<details open=\{momento === "durante"\}/);
+    expect(agenda).toMatch(/<details\s+open=\{momento === "durante"\}/);
     expect(agenda).toMatch(/<summary[^>]*>[\s\S]*?Para profundizar/);
   });
 
