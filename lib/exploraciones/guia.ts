@@ -913,6 +913,12 @@ export interface GuiaDeLaSesion {
    * la agenda; `preguntas` sale de la agenda (una por tema) para lo que todavía las lee. Sin ella, una guía de antes.
    */
   agenda?: AgendaDeLaGuia;
+  /**
+   * Décima vuelta (2026-11-08, Elías: «editar la guía con IA»): la instrucción libre con que quien lleva la sesión la
+   * rehízo («más corta», «empieza por el presupuesto»). Se conserva al actualizarla después (con otro objetivo, o porque
+   * cambió lo que se sabe) hasta que se cambie o se quite. Las guías de antes no la tienen.
+   */
+  instruccion?: string;
   /** Cómo abrir la conversación, desde algo de la empresa. */
   apertura: string[];
   /** La escala explicada en simple: solo cuando no hizo el test y todavía no se habló. */
@@ -952,6 +958,8 @@ export const MAX_RETOS_DE_LA_INDUSTRIA = 3;
 
 export const REPREGUNTAS_POR_PREGUNTA = 3;
 export const MAX_PREGUNTAS_EN_LA_GUIA = 12;
+/** La instrucción libre para rehacer la guía con IA (décima vuelta). */
+export const MAX_INSTRUCCION_DE_LA_GUIA = 600;
 
 /** Qué cambió desde que se armó la guía. null = está al día. */
 export interface CambiosDesdeLaGuia {

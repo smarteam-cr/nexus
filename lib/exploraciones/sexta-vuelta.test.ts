@@ -71,9 +71,10 @@ describe("las preguntas de Nexus son de la sesión cuya guía las dejó", () => 
 });
 
 describe("toda pregunta trae respuestas probables", () => {
-  it("se juntan con su pregunta; una con menos de 2 se cae, y van hasta 3", () => {
-    expect(preguntasConOpciones(["A?", "B?", "C?"], [["a1", "a2", "a3", "a4"], ["b1"], [" ", "c1", "c2"]])).toEqual([
-      { pregunta: "A?", opciones: ["a1", "a2", "a3"] },
+  // Décima vuelta (2026-11-08): hasta 4 (eran 3), cada una con su descripción.
+  it("se juntan con su pregunta; una con menos de 2 se cae, y van hasta 4", () => {
+    expect(preguntasConOpciones(["A?", "B?", "C?"], [["a1", "a2", "a3", "a4", "a5"], ["b1"], [" ", "c1", "c2"]])).toEqual([
+      { pregunta: "A?", opciones: ["a1", "a2", "a3", "a4"] },
       { pregunta: "C?", opciones: ["c1", "c2"] },
     ]);
   });
@@ -109,10 +110,11 @@ describe("la lectura de la sesión deja las preguntas para la siguiente (sin otr
   const fuentes = [{ id: "H1", etiqueta: reuniones[0].etiqueta, texto: "Laura contó que el CRM está desordenado." }];
   const ctx = { empresa: "Centauro Solutions", fuentes, reuniones };
 
-  it("la misma llamada que sugiere el objetivo las pide, con sus 3 respuestas probables", () => {
+  it("la misma llamada que sugiere el objetivo las pide, con sus 4 respuestas probables y su descripción (décima vuelta)", () => {
     const t = JSON.stringify(pedidoDeLosResumenes(ctx).tools);
     expect(t).toContain("preguntasParaLaSiguiente");
-    expect(t).toMatch(/SIEMPRE exactamente 3 respuestas probables/);
+    expect(t).toMatch(/SIEMPRE exactamente 4 respuestas probables/);
+    expect(t).toMatch(/"required":\["etiqueta","descripcion"\]/);
   });
 
   it("se leen con sus tarjetas; las que no traen respuestas se caen", () => {
@@ -163,8 +165,8 @@ describe("mientras corre algo, el texto dice lo que de verdad pasa", () => {
   });
 
   it("las tarjetas no se apagan por una corrida, y el texto sale de lo que corre", () => {
-    const fuente = fs.readFileSync(path.join(RAIZ, "components", "exploraciones", "AntesDeLaSesion.tsx"), "utf8");
-    const preguntas = fuente.slice(fuente.indexOf("function PreguntasDeNexus("), fuente.indexOf("function SirveAlObjetivoDeLaExploracion("));
+    // Décima vuelta: las preguntas viven en su propio archivo.
+    const preguntas = fs.readFileSync(path.join(RAIZ, "components", "exploraciones", "PreguntasParaLaGuia.tsx"), "utf8");
     expect(preguntas).toMatch(/const bloqueado = !puedeEditar \|\| guardando \|\| enviando;/);
     expect(preguntas).not.toMatch(/disabled=\{[^}]*corriendo/);
     expect(preguntas).toMatch(/vieneDeLasRespuestas\(/);

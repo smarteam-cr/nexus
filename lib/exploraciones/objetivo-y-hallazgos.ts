@@ -33,19 +33,39 @@ export const MAX_PORQUE_DEL_AJUSTE = 300;
 export const MAX_PREGUNTAS_PARA_LA_GUIA = 3;
 export const MAX_LARGO_DE_LA_PREGUNTA_PARA_LA_GUIA = 200;
 export const MAX_RESPUESTA_PARA_LA_GUIA = 500;
-/** Las respuestas probables de cada pregunta (2026-11-08, quinta vuelta): tres tarjetas y una cuarta para escribir. */
-export const MAX_OPCIONES_DE_LA_PREGUNTA = 3;
+/**
+ * Las respuestas probables de cada pregunta (2026-11-08, quinta vuelta: tres tarjetas y una para escribir). Décima vuelta
+ * (Elías: «como las preguntas de Claude Code»): cuatro, cada una con su descripción de una línea, más «Otra respuesta…».
+ */
+export const MAX_OPCIONES_DE_LA_PREGUNTA = 4;
+/** La descripción de una línea de cada respuesta probable (décima vuelta): qué quiere decir elegirla. */
+export const MAX_LARGO_DE_LA_DESCRIPCION_DE_LA_OPCION = 160;
 /**
  * Sexta vuelta (2026-11-08, Elías vio preguntas que solo traían una caja de texto): una pregunta sin respuestas probables
  * no se guarda ni se muestra. Se le piden 3 a la IA; con 2 todavía se elige de un clic, así que esa no se pierde.
  */
 export const MIN_OPCIONES_DE_LA_PREGUNTA = 2;
 /**
- * Cómo se le piden a la IA las respuestas probables de cada pregunta: siempre 3 (sexta vuelta). La comparten la guía
- * (guia-pedido.ts › `faltaContexto`) y la lectura de la sesión (agente-pedido.ts › `preguntasParaLaSiguiente`).
+ * Cómo se le piden a la IA las respuestas probables de cada pregunta: siempre 4 desde la décima vuelta (eran 3), cada una
+ * con su etiqueta y su descripción. La comparten la guía (guia-pedido.ts › `faltaContexto`) y la lectura de la sesión
+ * (agente-pedido.ts › `preguntasParaLaSiguiente`), con el mismo esquema (`ESQUEMA_DE_LAS_OPCIONES`).
  */
-export const DESCRIPCION_DE_LAS_OPCIONES = `SIEMPRE exactamente ${MAX_OPCIONES_DE_LA_PREGUNTA} respuestas probables, distintas entre sí, para elegir de un clic (10 palabras como mucho cada una); quien lleva la sesión también puede escribir la suya. Solo lo que las fuentes permiten suponer: NUNCA un nombre, un cargo, una fecha ni una cifra que no esté en ellas. Si la pregunta es justo eso, opciones genéricas (por ejemplo «Con una sola persona», «Con todo el equipo», «Todavía no lo sé»). Una pregunta sin respuestas probables no se muestra.`;
+export const DESCRIPCION_DE_LAS_OPCIONES = `SIEMPRE exactamente ${MAX_OPCIONES_DE_LA_PREGUNTA} respuestas probables, distintas entre sí, para elegir de un clic; quien lleva la sesión también puede escribir la suya. Cada una con su «etiqueta» (la respuesta, 10 palabras como mucho) y su «descripcion» (una línea de 15 palabras como mucho: qué quiere decir elegirla o qué cambia en la guía, sin repetir la etiqueta). Solo lo que las fuentes permiten suponer: NUNCA un nombre, un cargo, una fecha ni una cifra que no esté en ellas. Si la pregunta es justo eso, opciones genéricas (por ejemplo «Con una sola persona», «Con todo el equipo», «Todavía no lo sé»). Una pregunta sin respuestas probables no se muestra.`;
 export const MAX_LARGO_DE_LA_OPCION = 120;
+
+/** El esquema (JSON Schema de la herramienta) de las respuestas probables de una pregunta: etiqueta y descripción. */
+export const ESQUEMA_DE_LAS_OPCIONES = {
+  type: "array",
+  description: DESCRIPCION_DE_LAS_OPCIONES,
+  items: {
+    type: "object",
+    properties: {
+      etiqueta: { type: "string", description: "La respuesta, 10 palabras como mucho." },
+      descripcion: { type: "string", description: "Una línea, 15 palabras como mucho: qué quiere decir elegirla." },
+    },
+    required: ["etiqueta", "descripcion"],
+  },
+};
 /** Las respuestas que se guardan (las últimas): son contexto de la exploración entera, no de una sesión. */
 export const MAX_RESPUESTAS_PARA_LA_GUIA = 12;
 
@@ -74,16 +94,20 @@ export interface PreguntasParaLaGuia {
   preguntas: string[];
   /** Las respuestas probables de cada pregunta, en su mismo orden (quinta vuelta). Las de antes no las tienen. */
   opciones?: string[][];
+  /** La descripción de cada respuesta probable, en el mismo orden que `opciones` (décima vuelta; "" si no trae). */
+  descripciones?: string[][];
   /** La sesión cuya guía las dejó (sexta vuelta, 2026-11-08). Las de antes no lo tienen y ya no se muestran. */
   sesionId?: string;
   en: string;
   corridaId: string | null;
 }
 
-/** Una pregunta de Nexus con sus respuestas probables, como se muestra: tarjetas en una fila y una cuarta para escribir. */
+/** Una pregunta de Nexus con sus respuestas probables, como se muestra: una tarjeta por respuesta y «Otra respuesta…». */
 export interface PreguntaConOpciones {
   pregunta: string;
   opciones: string[];
+  /** La descripción de una línea de cada opción, en su mismo orden (décima vuelta). Las de antes no la traen. */
+  descripciones?: string[];
 }
 
 /** Lo que respondió el vendedor (`contenido.respuestasParaLaGuia`): entra a cada guía como lo más confiable. */
@@ -215,11 +239,45 @@ export function completaLasPreguntas(preguntas: readonly string[], elegidas: Rea
  * Junta cada pregunta con sus respuestas probables y deja solo las que traen al menos `MIN_OPCIONES_DE_LA_PREGUNTA`
  * (hasta `MAX_PREGUNTAS_PARA_LA_GUIA`, con hasta `MAX_OPCIONES_DE_LA_PREGUNTA` cada una). PURO.
  */
-export function preguntasConOpciones(preguntas: readonly string[], opciones: readonly (readonly string[])[] | undefined): PreguntaConOpciones[] {
+export function preguntasConOpciones(
+  preguntas: readonly string[],
+  opciones: readonly (readonly string[])[] | undefined,
+  descripciones?: readonly (readonly string[])[],
+): PreguntaConOpciones[] {
   return preguntas
-    .map((pregunta, i) => ({ pregunta, opciones: (opciones?.[i] ?? []).filter((o) => !!o.trim()).slice(0, MAX_OPCIONES_DE_LA_PREGUNTA) }))
+    .map((pregunta, i) => {
+      // La descripción viaja pegada a su opción: se filtra junto con ella.
+      const pares = (opciones?.[i] ?? [])
+        .map((o, k) => ({ o, d: (descripciones?.[i]?.[k] ?? "").trim() }))
+        .filter((x) => !!x.o.trim())
+        .slice(0, MAX_OPCIONES_DE_LA_PREGUNTA);
+      return {
+        pregunta,
+        opciones: pares.map((x) => x.o),
+        ...(pares.some((x) => x.d) ? { descripciones: pares.map((x) => x.d) } : {}),
+      };
+    })
     .filter((x) => !!x.pregunta.trim() && x.opciones.length >= MIN_OPCIONES_DE_LA_PREGUNTA)
     .slice(0, MAX_PREGUNTAS_PARA_LA_GUIA);
+}
+
+/**
+ * Las respuestas probables de una pregunta como las devuelve la IA: `{ etiqueta, descripcion }` (décima vuelta) o un texto
+ * solo (las de antes). Sin repetidas, con sus topes de largo y hasta `MAX_OPCIONES_DE_LA_PREGUNTA`. PURO.
+ */
+export function leerOpciones(x: unknown): { opciones: string[]; descripciones: string[] } {
+  const texto = (t: unknown, max: number) => (typeof t === "string" ? t.trim().replace(/\s+/g, " ").slice(0, max) : "");
+  const opciones: string[] = [];
+  const descripciones: string[] = [];
+  for (const y of Array.isArray(x) ? x : []) {
+    const o = y && typeof y === "object" ? (y as { etiqueta?: unknown; descripcion?: unknown }) : null;
+    const op = texto(o ? o.etiqueta : y, MAX_LARGO_DE_LA_OPCION);
+    if (!op || opciones.some((v) => normal(v) === normal(op))) continue;
+    opciones.push(op);
+    descripciones.push(o ? texto(o.descripcion, MAX_LARGO_DE_LA_DESCRIPCION_DE_LA_OPCION) : "");
+    if (opciones.length >= MAX_OPCIONES_DE_LA_PREGUNTA) break;
+  }
+  return { opciones, descripciones };
 }
 
 /**
@@ -235,16 +293,12 @@ export function leerPreguntasConOpciones(x: unknown): PreguntaConOpciones[] {
     const pregunta = texto(o.pregunta, MAX_LARGO_DE_LA_PREGUNTA_PARA_LA_GUIA);
     if (!pregunta || vistas.has(normal(pregunta))) return [];
     vistas.add(normal(pregunta));
-    const opciones: string[] = [];
-    for (const t of Array.isArray(o.opciones) ? o.opciones : []) {
-      const op = texto(t, MAX_LARGO_DE_LA_OPCION);
-      if (op && !opciones.some((v) => normal(v) === normal(op))) opciones.push(op);
-    }
-    return [{ pregunta, opciones }];
+    return [{ pregunta, ...leerOpciones(o.opciones) }];
   });
   return preguntasConOpciones(
     leidas.map((l) => l.pregunta),
     leidas.map((l) => l.opciones),
+    leidas.map((l) => l.descripciones),
   );
 }
 
@@ -264,7 +318,7 @@ export function preguntasDeLaSesion(o: {
 }): PreguntaConOpciones[] {
   if (!o.sesionId) return [];
   const respondida = (q: string) => (o.respondidas ?? []).some((r) => normal(r.pregunta) === normal(q));
-  const propias = o.pedido?.sesionId === o.sesionId ? preguntasConOpciones(o.pedido.preguntas, o.pedido.opciones) : [];
+  const propias = o.pedido?.sesionId === o.sesionId ? preguntasConOpciones(o.pedido.preguntas, o.pedido.opciones, o.pedido.descripciones) : [];
   const deLaLectura = o.deLaLecturaAnterior ?? [];
   const lista =
     propias.length || o.conGuiaPropia
@@ -272,6 +326,7 @@ export function preguntasDeLaSesion(o: {
       : preguntasConOpciones(
           deLaLectura.map((x) => x.pregunta),
           deLaLectura.map((x) => x.opciones),
+          deLaLectura.map((x) => x.descripciones ?? []),
         );
   return lista.filter((x) => !respondida(x.pregunta));
 }
@@ -341,6 +396,8 @@ export interface LoQueDejoLaGuia {
   preguntas: string[];
   /** Las respuestas probables de cada pregunta, en su mismo orden. */
   opciones?: string[][];
+  /** La descripción de cada respuesta probable (décima vuelta). */
+  descripciones?: string[][];
 }
 
 type ConLoDeLaExploracion = {
@@ -366,14 +423,21 @@ export function conLoDeLaExploracion<P extends ConLoDeLaExploracion>(
   const descartado = (t: string) => (p.ajustesDescartados ?? []).some((d) => mismoTexto(d, t));
   const ajusteNuevo = dejo.ajuste && !mismoTexto(dejo.ajuste.texto, o.confirmado) && !descartado(dejo.ajuste.texto) ? dejo.ajuste : null;
   const respondida = (q: string) => (o.respondidas ?? []).some((r) => normal(r.pregunta) === normal(q));
-  const quedan = o.sesionId ? preguntasConOpciones(dejo.preguntas, dejo.opciones).filter((x) => !respondida(x.pregunta)) : [];
+  const quedan = o.sesionId ? preguntasConOpciones(dejo.preguntas, dejo.opciones, dejo.descripciones).filter((x) => !respondida(x.pregunta)) : [];
   return {
     ...p,
     ...(dejo.hallazgos.length ? { hallazgos: { lista: dejo.hallazgos.slice(0, MAX_HALLAZGOS), en: o.en, corridaId: o.corridaId } } : {}),
     ...(ajusteNuevo ? { ajusteDelObjetivo: { texto: ajusteNuevo.texto, porque: ajusteNuevo.porque, en: o.en, corridaId: o.corridaId } } : {}),
     preguntasParaLaGuia:
       quedan.length && o.sesionId
-        ? { preguntas: quedan.map((x) => x.pregunta), opciones: quedan.map((x) => x.opciones), sesionId: o.sesionId, en: o.en, corridaId: o.corridaId }
+        ? {
+            preguntas: quedan.map((x) => x.pregunta),
+            opciones: quedan.map((x) => x.opciones),
+            ...(quedan.some((x) => x.descripciones) ? { descripciones: quedan.map((x) => x.descripciones ?? x.opciones.map(() => "")) } : {}),
+            sesionId: o.sesionId,
+            en: o.en,
+            corridaId: o.corridaId,
+          }
         : null,
   };
 }

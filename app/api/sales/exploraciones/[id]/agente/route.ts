@@ -5,6 +5,8 @@
  *   grabación, el resumen de IA de HubSpot, puede no haber estado cuando la leyó).
  *   Lanza el agente de la exploración en segundo plano (lib/exploraciones/agente.ts). 202 con la
  *   corrida. Si ya hay una viva, devuelve esa: dos corridas a la vez se pisarían lo leído.
+ *   `instruccion` (con «guia», décima vuelta, «Editar con IA»): la instrucción libre con que se rehace la guía; `null`
+ *   la rehace sin la de antes. Sin el campo, la guía conserva la que tenía.
  *   Pide `ventas.write` (gasta IA).
  *
  * GET /api/sales/exploraciones/[id]/agente
@@ -19,6 +21,7 @@ import { parseRunError } from "@/lib/agents/run-error";
 import { estaColgada, MOTIVO_COLGADA } from "@/lib/agents/run-colgada";
 import { lanzarCorrida, ultimaCorrida } from "@/lib/exploraciones/agente";
 import { MODOS_DE_LA_CORRIDA, type ModoDeLaCorrida } from "@/lib/exploraciones/contenido";
+import { MAX_INSTRUCCION_DE_LA_GUIA } from "@/lib/exploraciones/guia";
 import { leerExploracion } from "@/lib/exploraciones/servidor";
 import type { CorridaEnCurso } from "@/lib/exploraciones/seguimiento-de-corrida";
 
@@ -35,6 +38,8 @@ const Cuerpo = z.object({
   regenerar: z.boolean().optional(),
   /** Con «casos» (2026-11-08): «Revisar», vuelve a mirar los casos con lo que se sabe hoy y dice qué cambió, sin tocar lo elegido. */
   revisar: z.boolean().optional(),
+  /** Con «guia» (décima vuelta): la instrucción libre para rehacerla; `null`, sin la de antes. */
+  instruccion: z.string().trim().min(1).max(MAX_INSTRUCCION_DE_LA_GUIA).nullable().optional(),
 });
 
 export async function POST(req: NextRequest, { params }: Ctx) {
@@ -51,13 +56,14 @@ export async function POST(req: NextRequest, { params }: Ctx) {
   const cuerpo = Cuerpo.safeParse(raw);
   if (!cuerpo.success) return cuerpoInvalido(cuerpo.error);
 
-  const { modo, sesionId, hubspotId, posicionar, regenerar, revisar } = cuerpo.data;
+  const { modo, sesionId, hubspotId, posicionar, regenerar, revisar, instruccion } = cuerpo.data;
   const r = await lanzarCorrida(id, modo, {
     triggeredByEmail: guard.email,
     sesionId: sesionId ?? null,
     ...(modo === "leer" && posicionar ? { posicionar: true } : {}),
     ...(modo === "casos" && regenerar ? { regenerar: true } : {}),
     ...(modo === "casos" && revisar ? { revisar: true } : {}),
+    ...(modo === "guia" && instruccion !== undefined ? { instruccion } : {}),
     // Una reunión de HubSpot ya leída se vuelve a leer entera: propone y reemplaza lo que dijo de ella.
     ...(modo === "leer" && hubspotId ? { releer: { sesiones: [], hubspot: [hubspotId], documentos: [] }, completa: true } : {}),
   });
