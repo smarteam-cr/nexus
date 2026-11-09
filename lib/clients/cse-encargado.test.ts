@@ -59,6 +59,15 @@ const CELDA = soloCodigo(fs.readFileSync(path.join(RAIZ, "components/ui/CeldaSel
 const PANEL = soloCodigo(
   fs.readFileSync(path.join(RAIZ, "components/ui/usePanelFlotante.ts"), "utf8"),
 );
+/**
+ * ⚠ EL PANEL DE OPCIONES TAMBIÉN SE MUDÓ (2026-11-08): el buscador y la lista ahora son `PanelDeOpciones`, compartido
+ * con `Selector` (el select de los formularios), y el filtro es `filtrarOpciones` en `lib/ui/opciones.ts`. Mismo
+ * motivo que arriba: la guarda mira donde vive el código, no la cáscara que quedó.
+ */
+const LISTA = soloCodigo(
+  fs.readFileSync(path.join(RAIZ, "components/ui/PanelDeOpciones.tsx"), "utf8"),
+);
+const FILTRO = soloCodigo(fs.readFileSync(path.join(RAIZ, "lib/ui/opciones.ts"), "utf8"));
 
 describe("⭐ el endpoint que reasigna el CSE de una cuenta", () => {
   it("⛔ solo escribe proyectos del pipeline de CS — nunca los hijos de Desarrollo", () => {
@@ -208,14 +217,17 @@ describe("⭐ el select de la columna", () => {
 
     /* La edición que la pone en rojo: volver al `o.label.toLowerCase().includes(q)` propio. */
     expect(
-      CELDA.includes("coincideBusqueda(o.label, q)"),
+      FILTRO.includes("coincideBusqueda(o.label, q)"),
       "CeldaSelect volvió a comparar con su propio toLowerCase(): buscar «Elias» deja de " +
         "encontrar a «Elías»",
     ).toBe(true);
     expect(
-      CELDA.includes('coincideBusqueda(o.hint ?? "", q)'),
+      FILTRO.includes('coincideBusqueda(o.hint ?? "", q)'),
       "el filtro dejó de mirar el `hint` sin tildes",
     ).toBe(true);
+    /* Y el panel de verdad filtra con esa función, no con una propia. */
+    expect(LISTA, "el panel de opciones dejó de filtrar con `filtrarOpciones`").toContain("filtrarOpciones(opciones, busqueda)");
+    expect(CELDA, "CeldaSelect dejó de usar el panel compartido").toContain("<PanelDeOpciones");
   });
 
   it("⭐ y buscador cuando hay muchas opciones", () => {
@@ -223,6 +235,7 @@ describe("⭐ el select de la columna", () => {
        anotada la deuda del selector de 169 clientes SIN buscador.
        La edición que la pone en rojo: borrar el `<input>` del panel. */
     expect(CELDA).toContain("minimoParaBuscar");
+    expect(LISTA, "el panel perdió el buscador").toContain("<input");
     /* ⚠ Lo del `hint` lo cubre el test de tildes, de arriba: ahí se afirma sobre la llamada
        real (`coincideBusqueda(o.hint ?? "", q)`). Repetirlo acá con la implementación vieja
        dejaría una guarda que se pone roja por un refactor correcto. */
@@ -258,9 +271,11 @@ describe("⭐ el select de la columna", () => {
        evitar — y la copia se olvida justo del detalle que la original aprendió a los golpes.
        La edición que la pone en rojo: volver a implementar los listeners en cualquiera de los dos. */
     const menu = soloCodigo(fs.readFileSync(path.join(RAIZ, "components/ui/Menu.tsx"), "utf8"));
+    const selector = soloCodigo(fs.readFileSync(path.join(RAIZ, "components/ui/Selector.tsx"), "utf8"));
     for (const [nombre, src] of [
       ["Menu", menu],
       ["CeldaSelect", CELDA],
+      ["Selector", selector],
     ] as const) {
       expect(
         src.includes("usePanelFlotante"),

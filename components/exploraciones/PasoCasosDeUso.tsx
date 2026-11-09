@@ -55,7 +55,7 @@ import {
 } from "@/lib/casos-de-uso/armado";
 import { ETAPAS_DE_ACTIVIDAD, formatoHoras, formatoUsd, nombreVisible, sobreQueAparte } from "@/lib/casos-de-uso/actividades-puras";
 import Link from "next/link";
-import { Alert, Badge, IconButton, Select } from "@/components/ui";
+import { Alert, Badge, IconButton, Select, Selector } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import { esCasoLibre, laEscalaTieneBase, type CasoDeUsoElegido, type DestinoDePropuesta, type ItemPropuesto } from "@/lib/exploraciones/contenido";
 import { useRecorridos } from "@/components/recorridos/contexto";
@@ -287,31 +287,29 @@ function ActividadesDelCaso({ id, caso, editable }: { id: string; caso: CasoDeUs
       </ul>
       {caso.sinActividad && acts.length > 0 && <p className="text-xs text-warning-fg">Falta en la biblioteca: {caso.sinActividad}</p>}
       {editable && (
-        <Select
-          aria-label={`Agregar una actividad a «${caso.titulo}»`}
-          value=""
+        /* El select de Nexus, con buscador: la biblioteca es larga y el nativo no se podía buscar. Lo que ya está sin
+           «sobre qué» y no se repite se ve, pero no se elige: sumarla no cambiaba nada (la misma regla de `sumarActividad`). */
+        <Selector
+          etiqueta={`Agregar una actividad a «${caso.titulo}»`}
+          placeholder="Agregar una actividad de la biblioteca…"
+          placeholderBusqueda="Buscar actividad o etapa…"
           disabled={guardando}
-          onChange={(ev) => {
-            const lib = armado.porId.get(ev.target.value);
+          opciones={ETAPAS_DE_ACTIVIDAD.flatMap((e) =>
+            armado.biblioteca
+              .filter((x) => x.etapa === e.clave)
+              .map((x) => ({
+                value: x.id,
+                label: x.nombre,
+                grupo: e.nombre,
+                marca: yaEstan.has(x.id) ? (x.seRepite ? "una vez más" : "ya está") : undefined,
+                deshabilitada: !x.seRepite && acts.some((a) => a.actividadId === x.id && !(a.sobreQue ?? "").trim()),
+              })),
+          )}
+          onElegir={(value) => {
+            const lib = armado.porId.get(value);
             if (lib) guardar(sumarActividad(caso, acts, lib), `Agregaste «${lib.nombre}» a «${caso.titulo}»`);
           }}
-        >
-          <option value="">Agregar una actividad de la biblioteca…</option>
-          {ETAPAS_DE_ACTIVIDAD.map((e) => {
-            const deLaEtapa = armado.biblioteca.filter((x) => x.etapa === e.clave);
-            if (!deLaEtapa.length) return null;
-            return (
-              <optgroup key={e.clave} label={e.nombre}>
-                {deLaEtapa.map((x) => (
-                  <option key={x.id} value={x.id}>
-                    {x.nombre}
-                    {yaEstan.has(x.id) ? (x.seRepite ? " (una vez más)" : " (ya está)") : ""}
-                  </option>
-                ))}
-              </optgroup>
-            );
-          })}
-        </Select>
+        />
       )}
     </div>
   );

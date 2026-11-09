@@ -47,6 +47,11 @@ export { CeldaSelect } from "./CeldaSelect";
 export type { CeldaSelectProps, OpcionDeCelda } from "./CeldaSelect";
 export { usePanelFlotante } from "./usePanelFlotante";
 
+/* EL select de Nexus (2026-11-08): un botón que abre un panel con buscador, grupos y marcas. Reemplaza al
+   `<select>` nativo; el panel (`PanelDeOpciones`) es el mismo de `CeldaSelect`. */
+export { Selector } from "./Selector";
+export type { SelectorProps, OpcionDeSelector } from "./Selector";
+
 export { Spinner }   from "./Spinner";
 
 export { Modal }     from "./Modal";
