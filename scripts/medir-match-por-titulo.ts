@@ -20,12 +20,13 @@ import {
   buildInternalDomainsSet,
   TITLE_MATCH_STOPWORDS,
   isTestClient,
+  clientesQueValenEnElTitulo,
 } from "@/lib/sessions/categorize";
 import { clientePorTitulo, type ClienteParaMatch } from "@/lib/sessions/match-por-titulo";
 
 async function main() {
   const [clientes, categorias, sesiones] = await Promise.all([
-    prisma.client.findMany({ select: { id: true, name: true, company: true, emailDomains: true } }),
+    prisma.client.findMany({ select: { id: true, name: true, company: true, emailDomains: true, siglas: true, comparteDominioConId: true } }),
     prisma.sessionCategory.findMany(),
     prisma.firefliesSession.findMany({
       select: {
@@ -37,10 +38,10 @@ async function main() {
   ]);
 
   const nombre = new Map(clientes.map((c) => [c.id, c.name]));
-  const ambiguos = computeAmbiguousNameTokens(clientes as never);
+  const ambiguos = computeAmbiguousNameTokens(clientes);
   const internos = buildInternalDomainsSet(categorias as never);
   const skip = (w: string) => TITLE_MATCH_STOPWORDS.has(w) || ambiguos.has(w);
-  const paraMatch: ClienteParaMatch[] = clientes.map((c) => ({ id: c.id, name: c.name, company: c.company }));
+  const todos: ClienteParaMatch[] = clientes.map((c) => ({ id: c.id, name: c.name, company: c.company, siglas: c.siglas, comparteDominioConId: c.comparteDominioConId }));
 
   // Solo las que el título decide: con participantes y sin NADIE de afuera.
   const afectadas = sesiones.filter((s) => {
@@ -67,6 +68,8 @@ async function main() {
   const empates: typeof afectadas = [];
 
   for (const s of afectadas) {
+    /* La regla de la marca de producción: una unidad sin la marca en el título no participa. */
+    const paraMatch = clientesQueValenEnElTitulo(s.title, todos);
     const viejo = clientePorTitulo(s.title, paraMatch, { ...opts, modo: "una-palabra" });
     const nuevo = clientePorTitulo(s.title, paraMatch, { ...opts, modo: MODO });
     const a = viejo.cliente?.id ?? null;

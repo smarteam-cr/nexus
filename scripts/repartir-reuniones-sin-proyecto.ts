@@ -133,7 +133,7 @@ async function main() {
             : "el título no nombra un proyecto entero";
       propuestas.push({ ...base, via: "para-la-ia", vinculos: [], porQue });
     } else if (r.status === "skipped") {
-      propuestas.push({ ...base, via: "dudosa", vinculos: [], porQue: `lo decidió una persona: ${r.reason ?? "sin motivo"}` });
+      propuestas.push({ ...base, via: "dudosa", vinculos: [], porQue: `el clasificador la saltó: ${r.reason ?? "sin motivo"}` });
     } else if (r.status !== "ok") {
       propuestas.push({ ...base, via: "dudosa", vinculos: [], porQue: `el clasificador no pudo: ${r.reason ?? r.status}` });
     } else if ((r.via === "titulo" || r.via === "unico") && principal) {
@@ -220,7 +220,15 @@ async function aplicar() {
   let vinculos = 0;
   for (const p of aEscribir) {
     if (!siguen.has(p.sessionId) || !vigentes.has(principalDe(p))) continue;
-    await prisma.$transaction(async (tx) => {
+    const creados = await prisma.$transaction(async (tx) => {
+      /* Solo los vínculos que faltan: uno que ya existe (o que una persona apagó) no se toca. Sin nada que crear, ni
+         corrida ni cuenta: no queda rastro de algo que no pasó, y repetir el --apply no la vuelve a anotar. */
+      const faltan: ClassifyProposal[] = [];
+      for (const v of p.vinculos.filter((x) => vigentes.has(x.projectId))) {
+        const ya = await tx.sessionProject.findUnique({ where: { sessionId_projectId: { sessionId: p.sessionId, projectId: v.projectId } } });
+        if (!ya) faltan.push(v);
+      }
+      if (!faltan.length) return 0;
       /* Lo que decidió la IA queda con su corrida (ARCHITECTURE §6 regla 5): la del simulacro no se guardó (solo lectura).
          La salida es la del plan, la que una persona confirmó. Lo del título, como en el clasificador, sin corrida. */
       const run =
@@ -236,17 +244,15 @@ async function aplicar() {
               },
             })
           : null;
-      for (const v of p.vinculos.filter((x) => vigentes.has(x.projectId))) {
-        /* Un vínculo apagado por una persona (included=false) no se reabre: el upsert no lo toca. */
-        const ya = await tx.sessionProject.findUnique({ where: { sessionId_projectId: { sessionId: p.sessionId, projectId: v.projectId } } });
-        if (ya) continue;
+      for (const v of faltan) {
         await tx.sessionProject.create({
           data: { sessionId: p.sessionId, projectId: v.projectId, isPrimary: v.isPrimary, source: "agent", confidence: v.confidence, rationale: v.rationale, generatedByAgentRunId: run?.id ?? null },
         });
-        vinculos++;
       }
+      return faltan.length;
     });
-    reuniones++;
+    vinculos += creados;
+    if (creados) reuniones++;
   }
   console.log(`✓ ${reuniones} reunión(es) de «${plan.cliente}» con proyecto (${vinculos} vínculos). Saltadas por haber cambiado: ${aEscribir.length - reuniones}.`);
   for (const p of conProyectoQueYaNoEs) console.log(`  ⚠ ${p.fecha} · ${p.titulo}: su proyecto ya no es de «${plan.cliente}» o se cerró (no se escribe)`);

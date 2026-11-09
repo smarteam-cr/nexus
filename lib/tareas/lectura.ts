@@ -317,10 +317,12 @@ export async function clientesDeLasLineas(lineas: readonly LineaDeProximosPasos[
   const filas = await prisma.client.findMany({ where: { id: { in: [...clientes.ids] } }, select });
   /* Las otras unidades de una empresa que se ve a medias (revisión del 8 nov): sin la principal en el índice, la regla de
      la marca no se arma y «Llamar a Cemaco» sugería Ecuador. Entran para la regla, nunca como sugerencia. */
+  /* Las dos puntas: se ve una unidad (falta su principal) o se ve la principal (faltan sus unidades). */
   const empresas = [...new Set(filas.filter((c) => c.comparteDominioConId).map((c) => c.comparteDominioConId!))];
-  const parientes = empresas.length
-    ? await prisma.client.findMany({ where: { OR: [{ id: { in: empresas } }, { comparteDominioConId: { in: empresas } }], id: { notIn: [...clientes.ids] } }, select })
-    : [];
+  const parientes = await prisma.client.findMany({
+    where: { OR: [{ id: { in: empresas } }, { comparteDominioConId: { in: [...empresas, ...filas.map((c) => c.id)] } }], id: { notIn: [...clientes.ids] } },
+    select,
+  });
   const indice = indiceDeClientes([...filas, ...parientes].filter((c) => c.kind !== "INTERNO").map((c) => ({ id: c.id, name: c.name, company: c.company, siglas: c.siglas, comparteDominioConId: c.comparteDominioConId })));
   const internos = new Set(filas.filter((c) => c.kind === "INTERNO").map((c) => c.id));
   const dominiosInternos = new Set(filas.filter((c) => internos.has(c.id)).flatMap((c) => effectiveDomainsForClient(c)));

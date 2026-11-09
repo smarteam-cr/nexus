@@ -156,6 +156,39 @@ describe("dentro de un cliente, el título manda el proyecto — DB real", () =>
     expect(v).toContainEqual(expect.objectContaining({ projectId: marketing.id, isPrimary: false, source: "manual" }));
   });
 
+  it("si la IA elige de principal el proyecto que una persona dejó de secundario, toma el mejor libre o no toca nada", async () => {
+    /* Revisión del 8 nov: el guardado se saltaba el vínculo con candado y borraba el principal virgen. */
+    const { cliente, ventas, marketing, infoclic, reunion } = await kolbi();
+    const conVinculos = async (id: string) => {
+      await reunion(id, "Seguimiento semanal");
+      await prisma.sessionProject.createMany({
+        data: [
+          { sessionId: id, projectId: ventas.id, isPrimary: true, source: "agent", confidence: 0.6 },
+          { sessionId: id, projectId: marketing.id, isPrimary: false, source: "manual" },
+        ],
+      });
+    };
+    await conVinculos("s8");
+    crear.mockResolvedValue({
+      content: [{ type: "text", text: JSON.stringify({ assignments: [
+        { projectId: marketing.id, isPrimary: true, confidence: 0.9, rationale: "Campaña" },
+        { projectId: infoclic.id, isPrimary: false, confidence: 0.5, rationale: "Integración" },
+      ] }) }],
+    });
+    expect(await classifySessionToProjects("s8", cliente.id)).toMatchObject({ status: "ok", primaryProjectId: infoclic.id });
+    const v8 = await vinculos("s8");
+    expect(v8.filter((x) => x.isPrimary).map((x) => x.projectId)).toEqual([infoclic.id]);
+    expect(v8).toContainEqual(expect.objectContaining({ projectId: marketing.id, isPrimary: false, source: "manual" }));
+
+    await conVinculos("s9");
+    crear.mockResolvedValue({
+      content: [{ type: "text", text: JSON.stringify({ assignments: [{ projectId: marketing.id, isPrimary: true, confidence: 0.9, rationale: "Campaña" }] }) }],
+    });
+    expect(await classifySessionToProjects("s9", cliente.id)).toMatchObject({ status: "skipped" });
+    const v9 = await vinculos("s9");
+    expect(v9.filter((x) => x.isPrimary).map((x) => x.projectId)).toEqual([ventas.id]);
+  });
+
   it("en simulacro no escribe nada", async () => {
     const { cliente, marketing, reunion } = await kolbi();
     await reunion("s4", "Sesión Marketing - Lead Scoring | KOLBI & SMARTEAM");

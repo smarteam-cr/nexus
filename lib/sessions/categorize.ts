@@ -417,8 +417,10 @@ const marcaPorGrupo = new WeakMap<readonly ConEmpresa[], Set<string>>();
 function marcaDelGrupo(grupo: readonly ConEmpresa[]): Set<string> {
   const hecha = marcaPorGrupo.get(grupo);
   if (hecha) return hecha;
-  const skip = (w: string) => TITLE_MATCH_STOPWORDS.has(w);
-  const [primera, ...resto] = grupo.map((c) => tokensDelCliente(c, skip, normalize).delNombre);
+  /* Cortando en todo signo, como la marca en el título: «Cemaco-Costa Rica» o «Cemaco/CR» no apagan la regla. */
+  const [primera, ...resto] = grupo.map(
+    (c) => new Set(normalize(c.name).split(/[^\p{L}\p{N}]+/u).filter((w) => w.length >= 4 && !TITLE_MATCH_STOPWORDS.has(w))),
+  );
   const marca = new Set([...(primera ?? [])].filter((t) => resto.every((r) => r.has(t))));
   marcaPorGrupo.set(grupo, marca);
   return marca;

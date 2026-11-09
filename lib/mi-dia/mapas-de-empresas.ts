@@ -47,22 +47,37 @@ export function armarMapasDeLaGente(
     sumar(porCorreo, c.email.trim().toLowerCase(), c.clientId);
   }
   const grupoDe = new Map<string, string>();
+  const grupos = new Map<string, FichaParaMapas[]>();
+  const porId = new Map(clientes.map((c) => [c.id, c]));
   for (const c of clientes) {
     const duena = c.comparteDominioConId;
     if (!duena || duena === c.id) continue;
     grupoDe.set(c.id, duena);
     grupoDe.set(duena, duena);
-    if (viveEnElDominioDeLaPrincipal(c)) {
-      for (const mapa of [porDominio, porCorreo]) {
-        for (const [k, ids] of mapa) if (ids.includes(duena) && !ids.includes(c.id)) mapa.set(k, [...ids, c.id]);
-      }
-      continue;
+    const principal = porId.get(duena);
+    if (!grupos.has(duena)) grupos.set(duena, principal ? [principal] : []);
+    grupos.get(duena)!.push(c);
+  }
+  /* Primero, el dominio del correo manda dentro de la empresa, en los dos sentidos (revisión del 8 nov): el contacto que
+     HubSpot guarda en una ficha del grupo es de la ficha dueña de su dominio, si es una sola. Así «Mi día» dice lo
+     mismo que el resolver, y el orden en que llegan las fichas no cambia nada. */
+  for (const grupo of grupos.values()) {
+    const ids = new Set(grupo.map((c) => c.id));
+    const duenaDe = new Map<string, string[]>();
+    for (const c of grupo) for (const d of effectiveDomainsForClient(c)) duenaDe.set(d, [...(duenaDe.get(d) ?? []), c.id]);
+    for (const [correo, de] of porCorreo) {
+      if (!de.some((id) => ids.has(id))) continue;
+      const duenas = duenaDe.get(correo.split("@")[1] ?? "");
+      if (duenas?.length !== 1) continue;
+      porCorreo.set(correo, [...new Set(de.map((id) => (ids.has(id) ? duenas[0]! : id)))]);
     }
-    /* Con dominio propio: el contacto de la principal con correo de ese dominio es de la unidad. */
-    const propios = new Set(effectiveDomainsForClient(c));
-    for (const [correo, ids] of porCorreo) {
-      if (!ids.includes(duena) || !propios.has(correo.split("@")[1] ?? "")) continue;
-      porCorreo.set(correo, [...new Set(ids.map((id) => (id === duena ? c.id : id)))]);
+  }
+  /* Después, la unidad sin dominio propio (el TEC · AE) se suma a todo lo de la principal: su gente es de las dos. */
+  for (const c of clientes) {
+    const duena = c.comparteDominioConId;
+    if (!duena || duena === c.id || !viveEnElDominioDeLaPrincipal(c)) continue;
+    for (const mapa of [porDominio, porCorreo]) {
+      for (const [k, de] of mapa) if (de.includes(duena) && !de.includes(c.id)) mapa.set(k, [...de, c.id]);
     }
   }
   return { porDominio, porCorreo, grupoDe };

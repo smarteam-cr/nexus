@@ -13947,8 +13947,13 @@ con proyectos (abajo). Plan, números y etapas: `docs/empresas-con-dominio-compa
   - El cálculo de las palabras ambiguas pide `id` y `comparteDominioConId` de cada ficha (obligatorios): sin ellos, el
     aviso de Cobranza contaba las unidades como empresas distintas y no veía cuándo una ficha nueva vuelve ambigua la
     marca. En Tareas, el índice suma las otras unidades de una empresa que se ve a medias, solo para la regla (nunca
-    se sugieren); en «Mi día», el contacto de la principal con correo del dominio propio de una unidad es de la unidad,
-    como lo decide el resolver (`lib/mi-dia/mapas-de-empresas.ts`).
+    se sugieren), tanto si se ve una unidad como si se ve la principal; en «Mi día», el contacto que HubSpot guarda en una
+    ficha del grupo es de la ficha dueña del dominio de su correo, en los dos sentidos, como lo decide el resolver
+    (`lib/mi-dia/mapas-de-empresas.ts`). La marca sale de los nombres cortados en todo signo: renombrar a
+    «Cemaco-Costa Rica» no apaga la regla.
+  - El guardado del clasificador nunca deja una reunión sin principal: si lo propuesto como principal es un proyecto que
+    una persona dejó de secundario, toma el mejor libre, y sin uno libre no cambia nada (antes borraba el principal
+    virgen). Por lo mismo, el atajo del título no corre sobre un proyecto con candado que no es el principal.
 - **El aviso de «este dominio parece tener varios clientes» es una revisión, no una regla del resolver:** grupos de gente
   de afuera que nunca coinciden en una reunión, o proyectos y propuestas con nombres que abren distinto. Propone; separar
   lo decide una persona.

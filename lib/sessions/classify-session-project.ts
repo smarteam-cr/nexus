@@ -364,7 +364,17 @@ async function persistirAsignaciones(
   const primary =
     assignments.find((a) => a.isPrimary === true) ??
     [...assignments].sort((a, b) => (b.confidence ?? 0) - (a.confidence ?? 0))[0];
-  const primaryProjectId = lockedPrimary ? lockedPrimary.projectId : (primary.projectId ?? null);
+  /* El principal propuesto con candado (una persona lo dejó como secundario) no se escribe: se toma el mejor libre, y sin
+     uno libre no se toca nada. Si no, el guardado se saltaba ese y borraba el principal virgen: la reunión quedaba sin
+     principal (revisión del 8 nov). */
+  let primaryProjectId = lockedPrimary ? lockedPrimary.projectId : (primary.projectId ?? null);
+  if (!lockedPrimary && primaryProjectId && lockedByProject.has(primaryProjectId)) {
+    const libre = [...assignments].filter((a) => !lockedByProject.has(a.projectId!)).sort((a, b) => (b.confidence ?? 0) - (a.confidence ?? 0))[0];
+    if (!libre) {
+      return { status: "skipped", reason: "Lo que propone ya lo tocó una persona: no se cambia nada", primaryProjectId: null, ...(dryRun ? { proposals: [] } : {}) };
+    }
+    primaryProjectId = libre.projectId!;
+  }
 
   const proposals: ClassifyProposal[] = assignments.map((a) => ({
     projectId: a.projectId!,

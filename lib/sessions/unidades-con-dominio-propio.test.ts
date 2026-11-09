@@ -210,3 +210,13 @@ describe("las siglas de una empresa con marca no van solas a la consulta de la b
     expect(pistasDeTitulo([TAE, AE])).toEqual(expect.arrayContaining(["ae", "tae"]));
   });
 });
+
+describe("la marca no se apaga por cómo se escribe el nombre (revisión del 8 nov)", () => {
+  it("con «Cemaco-Costa Rica» y «Cemaco/Ecuador», «Planificación expansión Ecuador» sigue siendo interna", () => {
+    const CR2 = { ...CR, name: "Cemaco-Costa Rica" };
+    const EC2 = { ...EC, name: "Cemaco/Ecuador" };
+    const c = ctx({ clients: [HONDA, LIBRERIA, TAE, CR2, AE, EC2] });
+    expect(duenoDe(reunion("Planificación expansión Ecuador", []), c)).toBe("(category: Interna)");
+    expect(duenoDe(reunion("Ride CR | Landing", []), c)).not.toBe("cr");
+  });
+});

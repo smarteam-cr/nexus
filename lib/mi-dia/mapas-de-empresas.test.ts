@@ -31,3 +31,21 @@ describe("las unidades de una empresa en «Mi día»", () => {
     expect(m.porCorreo.get("ana@itcr.ac.cr")).toEqual(["tae", "ae"]);
   });
 });
+
+describe("el dominio del correo manda dentro de la empresa (revisión del 8 nov)", () => {
+  it("un contacto de Costa Rica que HubSpot guarda en Ecuador es de Costa Rica, como dice el resolver", () => {
+    const m = armarMapasDeLaGente([CR, EC], [{ email: "luis@cemaco.co.cr", clientId: "ec" }]);
+    expect(m.porCorreo.get("luis@cemaco.co.cr")).toEqual(["cr"]);
+  });
+
+  it("con una unidad sin dominio y otra con dominio propio, el orden de las fichas no cambia nada", () => {
+    const AE_CEMACO: FichaParaMapas = { id: "ae2", name: "Cemaco · Tienda", company: null, emailDomains: [], comparteDominioConId: "cr" };
+    const contactos = [{ email: "ana@sukasa.com", clientId: "cr" }, { email: "luis@cemaco.co.cr", clientId: "cr" }];
+    const a = armarMapasDeLaGente([CR, AE_CEMACO, EC], contactos);
+    const b = armarMapasDeLaGente([CR, EC, AE_CEMACO], contactos);
+    expect(a.porCorreo.get("ana@sukasa.com")).toEqual(["ec"]);
+    expect(b.porCorreo.get("ana@sukasa.com")).toEqual(["ec"]);
+    expect(a.porCorreo.get("luis@cemaco.co.cr")).toEqual(["cr", "ae2"]);
+    expect(b.porCorreo.get("luis@cemaco.co.cr")).toEqual(["cr", "ae2"]);
+  });
+});
