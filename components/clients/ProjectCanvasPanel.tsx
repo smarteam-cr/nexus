@@ -1112,7 +1112,10 @@ export default function ProjectCanvasPanel({
           {/* Los cuestionarios tienen su propio enlace por persona: el acceso del proyecto no va ahí. */}
           {/* Un proyecto de prueba nunca se comparte: sin «Acceso». */}
           {/* Elías, 30 oct: el acceso general va solo en el Resumen; cada documento trae el suyo en su barra. */}
-          {enResumen && !esPrueba && <ExternalAccessButton projectId={projectId} />}
+          {/* La Entrega de siempre es la excepción (9 nov, Juan Carlos en Construtecho: «ya no me dan la opción de presentar»):
+              no tiene enlace propio (`sinEnlaceElDeSiempre`, lib/artefactos/tipos.ts) y se le muestra al cliente publicándola
+              en este acceso; sin el botón en su barra, desde el 30 oct no había cómo hacerlo desde el documento. */}
+          {(enResumen || (activeSlug === "delivery" && !copiaActiva)) && !esPrueba && <ExternalAccessButton projectId={projectId} />}
         </div>
       </div>
 
