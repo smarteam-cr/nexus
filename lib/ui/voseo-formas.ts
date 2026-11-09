@@ -59,6 +59,8 @@ export const NO_SON_VOSEO: ReadonlySet<string> = new Set([
   "individuales", "especiales", "funcionales", "finales", "locales", "legales", "materiales", "empresariales",
   "ambientales", "gubernamentales", "laborales", "profesionales", "presenciales", "personales", "digitales",
   "modales", "textiles",
+  // …y el adjetivo («para quedarte tranquila»: una pregunta para profundizar de la preventa, 2026-11-08)
+  "tranquila", "tranquilo", "tranquilas", "tranquilos",
   // Tercera persona y subjuntivo
   "permite", "admite", "repite", "compite", "transmite", "compromete", "promete", "equivale", "imprime", "congela",
   "congele", "revela", "señala", "iguala", "cancela", "asimila", "vigila", "necesite", "habilite", "interprete",
