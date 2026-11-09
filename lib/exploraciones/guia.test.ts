@@ -8,6 +8,7 @@ import { OBJECIONES_COMUNES, PASOS_LAER, QUE_ES_CADA_PASO } from "./objeciones-c
 import { conEspaciosComunes, diaConAnio, diaCorto, diaYHora } from "./fechas";
 import type { ClaveDeCapa, Letra } from "@/lib/escala/documento/tipos";
 import { claveDeInstrucciones } from "./notas-de-sesion";
+import { sacarDeLaExploracion } from "./inicio";
 import { contenidoVacio, idDelItem, NIVELES, propuestaVacia, type EstadoDeExploracion, type ItemPropuesto } from "./contenido";
 import type { DimensionDelLienzo, EscalaDelLienzo } from "./escala-del-lienzo";
 import { CambiosSchema, leerContenido, leerPropuesta } from "./esquemas";
@@ -937,5 +938,65 @@ describe("⭐ «Fuera de la exploración» y lo que llega a los documentos (etap
     expect(Object.keys(lecturasDeLaExploracion(lecturas, [{ id: "s-x", fecha: "2026-10-03" }], { automaticas: false, fuera: [] })).sort()).toEqual(["documento:d1", "meet:m3"]);
     // En un prospecto, todo menos lo sacado.
     expect(Object.keys(lecturasDeLaExploracion(lecturas, [], { automaticas: true, fuera: ["meet:m1"] })).sort()).toEqual(["documento:d1", "meet:m2", "meet:m3"]);
+  });
+});
+
+describe("la gemela de HubSpot de la reunión de una sesión no sale como otra sesión (9 nov, Centauro)", () => {
+  const PROSPECTO = { automaticas: true, fuera: new Set<string>() };
+  // La sesión de Marco con su evento del calendario; Meet todavía sin texto, y la misma reunión registrada en HubSpot.
+  const sesion: SesionPlaneada = {
+    id: "s-cs",
+    fecha: "2026-11-09",
+    evento: { id: "ev1", inicio: "2026-11-09T15:00:00.000Z", fin: "2026-11-09T16:00:00.000Z", titulo: "CENTAURO | CS - EXPLORACION", calendario: "msalas@smarteamcr.com" },
+  };
+  const meet: ReunionDeLaExploracion = { id: "gmeet_ev1", titulo: "CENTAURO | CS - EXPLORACION", fecha: "2026-11-09T15:00:00.000Z", origen: "meet", leida: false, texto: "nada", eventoId: "ev1" };
+  const hubspot: ReunionDeLaExploracion = { id: "h9", titulo: "CENTAURO | CS - EXPLORACION", fecha: "2026-11-09T15:00:00.000Z", origen: "hubspot", leida: false };
+  const otra: ReunionDeLaExploracion = { id: "h11", titulo: "CENTAURO | MARKETING", fecha: "2026-11-11T20:00:00.000Z", origen: "hubspot", leida: false };
+
+  it("con el evento y su fila de Meet, la de HubSpot a la misma hora es de esa sesión", () => {
+    const p = pestanasDeSesiones([sesion], [meet, hubspot, otra], "2026-11-12", PROSPECTO);
+    expect(p.map((x) => x.clave)).toEqual(["s-cs", "r-hubspot-h11"]);
+    expect(p[0].reunion?.id).toBe("gmeet_ev1");
+    // Cuenta una vez: los documentos y la guía leen la de Meet, no también la de HubSpot.
+    expect(clavesDeLasSesiones([sesion], [meet, hubspot, otra]).has("hubspot:h9")).toBe(false);
+  });
+
+  it("otra reunión de la empresa esa tarde, con otro título, no se pega a la sesión", () => {
+    const tarde: ReunionDeLaExploracion = { id: "h-tarde", titulo: "CENTAURO | MARKETING", fecha: "2026-11-09T16:45:00.000Z", origen: "hubspot", leida: false };
+    const p = pestanasDeSesiones([sesion], [meet, tarde], "2026-11-12", PROSPECTO);
+    expect(p.map((x) => x.clave)).toEqual(["s-cs", "r-hubspot-h-tarde"]);
+  });
+
+  it("una sola gemela por sesión: la del mismo título", () => {
+    const repetida: ReunionDeLaExploracion = { ...hubspot, id: "h9b", fecha: "2026-11-09T15:05:00.000Z", titulo: "Otra cosa" };
+    const p = pestanasDeSesiones([sesion], [meet, repetida, hubspot], "2026-11-12", PROSPECTO);
+    expect(p.map((x) => x.clave)).toEqual(["s-cs", "r-hubspot-h9b"]);
+  });
+
+  it("la que alguien sacó sigue en «Fuera de la exploración»", () => {
+    const o = { automaticas: true, fuera: new Set(["hubspot:h9"]) };
+    expect(pestanasDeSesiones([sesion], [meet, hubspot], "2026-11-12", o).map((x) => x.clave)).toEqual(["s-cs"]);
+    expect(reunionesFueraDeLaExploracion([sesion], [meet, hubspot], o).map((r) => r.id)).toEqual(["h9"]);
+  });
+
+  it("al sacar la sesión, su gemela sale con ella y no vuelve sola", () => {
+    const reuniones = [meet, hubspot, otra];
+    const antes = pestanasDeSesiones([sesion], reuniones, "2026-11-12", PROSPECTO);
+    const { ops } = sacarDeLaExploracion(antes, ["s-cs"], true, reuniones);
+    const fuera = new Set(ops.flatMap((op) => (op.op === "fuera" ? op.claves : [])));
+    expect([...fuera].sort()).toEqual(["hubspot:h9", "meet:gmeet_ev1"]);
+    const despues = pestanasDeSesiones([], reuniones, "2026-11-12", { automaticas: true, fuera });
+    expect(despues.map((x) => x.clave)).toEqual(["r-hubspot-h11"]);
+  });
+
+  it("sin fila de Meet, la de HubSpot es la reunión de la sesión (como antes)", () => {
+    const p = pestanasDeSesiones([sesion], [hubspot], "2026-11-12", PROSPECTO);
+    expect(p.map((x) => [x.clave, x.reunion?.id])).toEqual([["s-cs", "h9"]]);
+  });
+
+  it("con el evento cancelado, la de HubSpot entra sola", () => {
+    const cancelada: SesionPlaneada = { ...sesion, evento: { ...sesion.evento!, cancelada: true } };
+    const p = pestanasDeSesiones([cancelada], [hubspot], "2026-11-12", PROSPECTO);
+    expect(p.map((x) => x.clave)).toContain("r-hubspot-h9");
   });
 });

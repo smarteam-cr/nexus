@@ -175,7 +175,7 @@ function NumeroDeLaSesion({ p, estado, esLaProxima }: { p: PestanaDeSesion; esta
 }
 
 function LasSesiones() {
-  const { exp, puedeEditar, cambiar, sesion } = useLienzo();
+  const { exp, puedeEditar, cambiar, reuniones, sesion } = useLienzo();
   const { pestanas, todas, claveDeLaProxima, estadoDeLaReunion, fuera } = useSesiones();
   const { corriendo, lanzando, lanzar } = useCorrida();
   const automaticas = exp.automaticas;
@@ -205,7 +205,7 @@ function LasSesiones() {
      sacado (el deshacer) o, desde «Fuera de la exploración», vuelve a agregar la reunión como sesión. */
   const escribir: EscribirReuniones = async (ids, incluir) => {
     if (!incluir) {
-      const { ops, sacadas: lo } = sacarDeLaExploracion(pestanas, ids, automaticas);
+      const { ops, sacadas: lo } = sacarDeLaExploracion(pestanas, ids, automaticas, reuniones);
       if (!ops.length) return false;
       const ok = await cambiar(ops);
       if (ok) for (const s of lo) sacadas.current.set(s.clave, s);

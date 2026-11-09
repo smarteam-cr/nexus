@@ -11,7 +11,7 @@
  */
 import type { Operacion } from "./contenido";
 import { aFecha, diaConSemana, hoyEnCostaRica } from "./fechas";
-import { claveDeReunion, type CambiosDesdeLaGuia, type EstadoDeLaReunion, type PestanaDeSesion, type ReunionDeLaExploracion, type SesionPlaneada } from "./guia";
+import { claveDeReunion, gemelaDeHubspot, type CambiosDesdeLaGuia, type EstadoDeLaReunion, type PestanaDeSesion, type ReunionDeLaExploracion, type SesionPlaneada } from "./guia";
 
 const SEIS_HORAS = 6 * 60 * 60 * 1000;
 
@@ -179,6 +179,8 @@ export function sacarDeLaExploracion(
   pestanas: readonly PestanaDeSesion[],
   claves: readonly string[],
   automaticas: boolean,
+  /** Las reuniones de la exploración: la gemela de HubSpot de la sesión (`gemelaDeHubspot`) sale con ella, o volvería sola. */
+  reuniones: readonly ReunionDeLaExploracion[] = [],
 ): { ops: Operacion[]; sacadas: LoSacado[] } {
   const elegidas = new Set(claves);
   const sacadas: LoSacado[] = pestanas
@@ -188,6 +190,7 @@ export function sacarDeLaExploracion(
         ? [
             ...(p.reunion && p.reunion.origen !== "documento" ? [claveDeReunion(p.reunion)] : []),
             ...(p.sesion?.evento ? [`meet:gmeet_${p.sesion.evento.id}`] : []),
+            ...[gemelaDeHubspot(p.sesion ?? { id: p.clave }, p.reunion, reuniones)].flatMap((g) => (g ? [claveDeReunion(g)] : [])),
           ]
         : [];
       return { clave: p.clave, sesion: p.sesion, fuera: [...new Set(fuera)] };

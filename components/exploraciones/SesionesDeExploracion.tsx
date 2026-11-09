@@ -15,13 +15,13 @@
  * la reunión abre el selector de «Agregar sesión» en modo «unir».
  */
 import { useEffect, useRef, useState } from "react";
-import { Link2, Pencil, Trash2 } from "lucide-react";
+import { Link2, LogOut, Pencil, Trash2 } from "lucide-react";
 import { Alert, Button, ConfirmDialog, IconButton, Select, useToast } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import type { Persona } from "@/lib/exploraciones/casillas";
 import type { Operacion } from "@/lib/exploraciones/contenido";
 import { aFecha, diaConAnio, diaCorto, hoyEnCostaRica } from "@/lib/exploraciones/fechas";
-import { horario } from "@/lib/exploraciones/inicio";
+import { devolverALaExploracion, horario, sacarDeLaExploracion } from "@/lib/exploraciones/inicio";
 import { CLAVE_DE_LA_PROXIMA, conLaSesion, enlaceDeLaSesion, type DondeVive } from "@/lib/exploraciones/enlace-de-la-sesion";
 import { DURACION_POR_DEFECTO, duracionDeLaSesion } from "@/lib/exploraciones/contexto-de-la-exploracion";
 import {
@@ -155,7 +155,7 @@ function EncabezadoDeLaSesion({
   alMomento: (m: MomentoDeLaSesion) => void;
   onSumarMinuta: () => void;
 }) {
-  const { exp, lugar, puedeEditar, guardando, sesion: seleccion } = useLienzo();
+  const { exp, lugar, puedeEditar, guardando, cambiar, reuniones, sesion: seleccion } = useLienzo();
   const { todas, sesiones, guardar, claveDeLaProxima, proxima, agregar, estadoDe, yaEmpezo } = useSesiones();
   const toast = useToast();
   const { corrida, corriendo, lanzando, lanzar } = useCorrida();
@@ -168,6 +168,23 @@ function EncabezadoDeLaSesion({
      ya pasó se marca «no se hizo» o se saca de la exploración, no se borra. Y solo en la Preparación, como el enlace de antes:
      en «En vivo» se borraría lo marcado durante la llamada (revisión del 2026-11-08). */
   const sePuedeQuitar = puedeEditar && !!s && !pestana.hecha && estado !== "ocurrio" && !yaEmpezo(pestana) && momento === "antes";
+  /* «Sacar de la exploración» (9 nov, Elías: «salen 2 sesiones, y no se puede borrar»): la que ya pasó, o la reunión que
+     entró sola, se saca desde su propia cabecera y no solo con la X que aparece al pasar el cursor en el inicio de
+     Exploración. Lo mismo que esa X (lib/exploraciones/inicio.ts › sacarDeLaExploracion): la reunión no se borra, en un
+     prospecto pasa a «Fuera de la exploración», y se deshace desde el aviso. Con confirmación: se va lo que se preparó para
+     ella. Ni en la próxima ni «En vivo» (ahí se borraría lo marcado durante la llamada, revisión del 9 nov). */
+  const sePuedeSacar =
+    puedeEditar && !sePuedeQuitar && momento !== "durante" && pestana.clave !== CLAVE_DE_LA_PROXIMA && pestana.clave !== claveDeLaProxima && (!!r || estado === "ocurrio");
+  const [sacando, setSacando] = useState(false);
+  const sacar = async () => {
+    setSacando(false);
+    const { ops, sacadas } = sacarDeLaExploracion(todas, [pestana.clave], exp.automaticas, reuniones);
+    if (!ops.length || !(await cambiar(ops))) return;
+    seleccion.elegir(claveDeLaProxima);
+    toast.success("Sacaste la sesión de la exploración. La reunión no se borra.", {
+      action: { label: "Deshacer", onClick: () => void cambiar(devolverALaExploracion(sacadas)) },
+    });
+  };
   const titulo = tituloDeLaSesion(pestana);
   const [renombrando, setRenombrando] = useState(false);
   const [nombre, setNombre] = useState("");
@@ -375,6 +392,12 @@ function EncabezadoDeLaSesion({
             Quitar la sesión
           </Button>
         )}
+        {sePuedeSacar && (
+          <Button variant="secondary" size="sm" disabled={guardando} onClick={() => setSacando(true)} title="Saca esta sesión de la exploración. La reunión no se borra">
+            <LogOut className="h-3.5 w-3.5" aria-hidden="true" />
+            Sacar de la exploración
+          </Button>
+        )}
         {momento === "despues" && r && !r.leida && !r.corta && r.texto !== "nada" && puedeEditar && (
           <button
             type="button"
@@ -394,6 +417,18 @@ function EncabezadoDeLaSesion({
       )}
       {corrida?.estado === "ERROR" && corrida.modo === "leer" && <Alert variant="danger">{corrida.error}</Alert>}
 
+      <ConfirmDialog
+        open={sacando}
+        title={`¿Sacar «${titulo ?? nombreDeLaPestana(pestana)}» de la exploración?`}
+        description={
+          exp.automaticas
+            ? "La reunión no se borra: pasa a «Fuera de la exploración». Lo que preparaste para esta sesión se va con ella; lo puedes recuperar con «Deshacer» en el aviso."
+            : "La reunión no se borra. Lo que preparaste para esta sesión se va con ella; lo puedes recuperar con «Deshacer» en el aviso."
+        }
+        confirmLabel="Sacar de la exploración"
+        onCancel={() => setSacando(false)}
+        onConfirm={() => void sacar()}
+      />
       {s && (
         <ConfirmDialog
           open={quitando}

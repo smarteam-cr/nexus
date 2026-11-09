@@ -283,6 +283,37 @@ export function reunionDeLaSesion(
   return r ? { reunion: r, como: "fecha" } : null;
 }
 
+/** Hasta cuántos minutos de diferencia una reunión de HubSpot con OTRO título todavía es la misma de la sesión. */
+const MINUTOS_DE_LA_GEMELA_SIN_TITULO = 15;
+
+const mismoTitulo = (a: string, b: string | undefined) => !!b && a.trim().toLowerCase() === b.trim().toLowerCase();
+
+/**
+ * La gemela de HubSpot de la reunión de una sesión (9 nov, Centauro: la «CS - Exploración» salía dos veces, la sesión de
+ * Marco con su evento y la misma reunión registrada en HubSpot; la gemela se descartaba solo contra una de Meet CON texto,
+ * fuentes.ts, y mientras Gemini no entregaba entraba sola como otra sesión). Una sola por sesión: de las de HubSpot que
+ * empiezan a menos de dos horas de su evento (no cancelado) o de su reunión de Meet, la del mismo título; sin ese título,
+ * solo la que empieza a la misma hora (15 min): otra reunión de la empresa esa tarde no se pega. Nunca la que alguien
+ * sacó (`fuera`): sigue en «Fuera de la exploración». La usan la lista (no se muestra aparte) y «Sacar de la exploración»
+ * (sale con su sesión, o volvería sola).
+ */
+export function gemelaDeHubspot(
+  s: SesionPlaneada,
+  ligada: ReunionDeLaExploracion | null,
+  reuniones: readonly ReunionDeLaExploracion[],
+  fuera: ReadonlySet<string> = new Set(),
+): ReunionDeLaExploracion | null {
+  const inicio = s.evento ? (s.evento.cancelada ? null : s.evento.inicio) : ligada?.origen === "meet" ? ligada.fecha : null;
+  if (!inicio) return null;
+  const titulo = s.evento?.titulo ?? ligada?.titulo;
+  const minutos = (r: ReunionDeLaExploracion) => Math.abs(Date.parse(r.fecha) - Date.parse(inicio)) / 60_000;
+  const candidatas = reuniones
+    .filter((r) => r.origen === "hubspot" && r !== ligada && !fuera.has(claveDeReunion(r)) && mismaReunion(r.fecha, inicio))
+    .filter((r) => mismoTitulo(r.titulo, titulo) || minutos(r) <= MINUTOS_DE_LA_GEMELA_SIN_TITULO)
+    .sort((a, b) => Number(mismoTitulo(b.titulo, titulo)) - Number(mismoTitulo(a.titulo, titulo)) || minutos(a) - minutos(b));
+  return candidatas[0] ?? null;
+}
+
 /**
  * Liga cada sesión con su reunión: primero las elegidas a mano y después, entre las que nadie eligió, las
  * de su evento o del mismo día (dos sesiones no se quedan con la misma reunión). Devuelve, por índice de
@@ -292,7 +323,7 @@ function ligarSesiones(
   sesiones: readonly SesionPlaneada[],
   reuniones: readonly ReunionDeLaExploracion[],
   fuera: ReadonlySet<string>,
-): { ligadas: Map<number, ReunionLigada>; usadas: Set<string> } {
+): { ligadas: Map<number, ReunionLigada>; usadas: Set<string>; gemelas: Set<string> } {
   const ligadas = new Map<number, ReunionLigada>();
   const usadas = new Set<string>();
   sesiones.forEach((s, i) => {
@@ -315,7 +346,14 @@ function ligarSesiones(
       usadas.add(claveDeReunion(l.reunion));
     }
   });
-  return { ligadas, usadas };
+  /* La gemela de HubSpot de la reunión de una sesión (9 nov, Centauro): no se lista aparte (`gemelaDeHubspot`). Va en
+     `gemelas` y no en `usadas`: los documentos y la guía no la leen además de la de Meet (cuenta una vez, como en fuentes.ts). */
+  const gemelas = new Set<string>();
+  sesiones.forEach((s, i) => {
+    const g = gemelaDeHubspot(s, ligadas.get(i)?.reunion ?? null, reuniones.filter((r) => !usadas.has(claveDeReunion(r)) && !gemelas.has(claveDeReunion(r))), fuera);
+    if (g) gemelas.add(claveDeReunion(g));
+  });
+  return { ligadas, usadas, gemelas };
 }
 
 /**
@@ -408,9 +446,9 @@ export function pestanasDeSesiones(
   hoy: string,
   o: OpcionesDeLasPestanas = SIN_AUTOMATICAS,
 ): PestanaDeSesion[] {
-  const { ligadas, usadas } = ligarSesiones(sesiones, reuniones, o.fuera);
+  const { ligadas, usadas, gemelas } = ligarSesiones(sesiones, reuniones, o.fuera);
   const sueltas = o.automaticas
-    ? reuniones.filter((r) => !usadas.has(claveDeReunion(r)) && r.origen !== "documento" && !r.legado && !o.fuera.has(claveDeReunion(r)))
+    ? reuniones.filter((r) => !usadas.has(claveDeReunion(r)) && !gemelas.has(claveDeReunion(r)) && r.origen !== "documento" && !r.legado && !o.fuera.has(claveDeReunion(r)))
     : [];
   const todas = [
     ...sesiones.map((s, i) => {
@@ -466,9 +504,9 @@ export function reunionesFueraDeLaExploracion(
   reuniones: readonly ReunionDeLaExploracion[],
   o: OpcionesDeLasPestanas,
 ): ReunionDeLaExploracion[] {
-  const { usadas } = ligarSesiones(sesiones, reuniones, o.fuera);
+  const { usadas, gemelas } = ligarSesiones(sesiones, reuniones, o.fuera);
   return reuniones
-    .filter((r) => !usadas.has(claveDeReunion(r)) && r.origen !== "documento")
+    .filter((r) => !usadas.has(claveDeReunion(r)) && !gemelas.has(claveDeReunion(r)) && r.origen !== "documento")
     .filter((r) => (o.automaticas ? o.fuera.has(claveDeReunion(r)) : !!r.legado))
     .sort((a, b) => b.fecha.localeCompare(a.fecha));
 }
