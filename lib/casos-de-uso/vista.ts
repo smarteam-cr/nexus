@@ -7,7 +7,7 @@
  */
 import type { Letra } from "@/lib/escala/documento/tipos";
 import { LETRAS } from "@/lib/escala/documento/tipos";
-import type { AreaDeLaEscala, CasoDelCatalogo, Herramienta, Movimiento, Servicio, TipoDeCaso } from "./catalogo";
+import { NOMBRES_ANTERIORES, type AreaDeLaEscala, type CasoDelCatalogo, type Herramienta, type Movimiento, type Servicio, type TipoDeCaso } from "./catalogo";
 
 export const TIPOS_DE_CASO: readonly { clave: TipoDeCaso; titulo: string; descripcion: string }[] = [
   { clave: "aterrizar", titulo: "Aterrizar un área", descripcion: "Llevan un área a Funcional, la base de la escala. Suelen ser el primer proyecto con un cliente." },
@@ -105,7 +105,10 @@ export function usaLaHerramienta(caso: Pick<CasoDelCatalogo, "herramientas">, h:
   return caso.herramientas.includes(h);
 }
 
-/** El buscador mira el título, la promesa, lo que dice el cliente y lo que obtiene. */
+/**
+ * El buscador mira el título, la promesa, lo que dice el cliente y lo que obtiene. También los nombres anteriores del caso
+ * (2026-11-08: los 38 títulos cambiaron, y quien busca «prospección» o «Sistematiza» lo sigue encontrando).
+ */
 export function pasaLosFiltros(caso: CasoDelCatalogo, f: FiltrosDelCatalogo): boolean {
   if (f.area && !caso.areas.includes(f.area)) return false;
   if (f.herramienta && !usaLaHerramienta(caso, f.herramienta)) return false;
@@ -115,7 +118,7 @@ export function pasaLosFiltros(caso: CasoDelCatalogo, f: FiltrosDelCatalogo): bo
   if ((f.nivel === "F" || f.nivel === "E") && !caso.mueve.some((m) => m.desde === f.nivel)) return false;
   const q = normalizar(f.texto.trim());
   if (q) {
-    const donde = normalizar([caso.titulo, caso.promesa, ...caso.sintomas, ...caso.obtienes].join(" "));
+    const donde = normalizar([caso.titulo, ...(NOMBRES_ANTERIORES[caso.id] ?? []), caso.promesa, ...caso.sintomas, ...caso.obtienes].join(" "));
     if (!q.split(/\s+/).every((palabra) => donde.includes(palabra))) return false;
   }
   return true;

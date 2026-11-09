@@ -34,7 +34,7 @@ import {
 } from "@/lib/casos-de-uso/armado";
 import { ETAPAS_DE_ACTIVIDAD } from "@/lib/casos-de-uso/actividades";
 import { palabrasSinArticulos } from "@/lib/casos-de-uso/actividades-puras";
-import { REGLAS_DEL_TITULO } from "@/lib/casos-de-uso/orden";
+import { juntaDosIdeas, primeraIdea, REGLAS_DEL_TITULO } from "@/lib/casos-de-uso/orden";
 import { CIERRES, DESPUES, type Cierre, type Despues, type Letra } from "@/lib/escala/documento/tipos";
 import {
   CANALES_DE_CONEXION,
@@ -1544,7 +1544,12 @@ export function leerLosCasos(respuesta: Anthropic.Messages.Message, ctx: Context
        del catálogo queda al lado (`tituloDelCatalogo`) y la identidad sigue siendo el id. Uno ya elegido conserva el suyo
        (revisión del 2026-11-08): «Regenerar» aplica la versión nueva sin preguntar, y ese título lo ve el cliente en la
        propuesta. Casi igual al del catálogo (otra mayúscula, un punto) es el del catálogo. */
-    const delAgente = str(x.titulo)?.slice(0, 200);
+    const escrito = str(x.titulo)?.slice(0, 200);
+    /* Una sola idea (pedido de Elías, 2026-11-08: «Cada asesor vende en el CRM y ves en qué va cada negocio» eran dos).
+       Un título que junta dos no se adapta: un caso del catálogo se queda con el suyo, que cumple las reglas
+       (catalogo.test.ts); uno propio se queda con su primera idea. Si la primera no se sostiene sola (menos de 4
+       palabras), queda como vino: perder la sugerencia entera es peor que una «y» de más (revisión del 2026-11-08). */
+    const delAgente = escrito && juntaDosIdeas(escrito) ? (delCaso ? undefined : (primeraIdea(escrito) ?? escrito)) : escrito;
     const comparable = (t: string) => palabrasSinArticulos(t).join(" ");
     const igualAlCatalogo = !!delCaso && (!delAgente || comparable(delAgente) === comparable(delCaso.titulo));
     const titulo = elegido ? elegido.titulo.slice(0, 200) : igualAlCatalogo ? delCaso!.titulo : delAgente;

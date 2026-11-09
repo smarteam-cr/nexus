@@ -55,7 +55,10 @@ export interface Movimiento {
 export interface CasoDelCatalogo {
   /** Estable: no cambia aunque cambie el título. */
   id: string;
-  /** El resultado, en imperativo y en tuteo. */
+  /**
+   * Lo que cambia en el trabajo del equipo, en tuteo y con las reglas que sigue el agente de la preventa
+   * (`REGLAS_DEL_TITULO`, orden.ts): de 4 a 10 palabras, una sola idea, sin metáforas. `catalogo.test.ts` lo verifica.
+   */
   titulo: string;
   /** Lo que gana el cliente, en una frase. */
   promesa: string;
@@ -86,7 +89,7 @@ export const CATALOGO_DE_CASOS: readonly CasoDelCatalogo[] = [
   // ─── Aterrizar por hub (las implementaciones por licencia) ──────────────────────────────────────────────────
   {
     id: "sistematiza-ventas",
-    titulo: "Sistematiza tu proceso comercial con HubSpot",
+    titulo: "Tu equipo comercial vende con un mismo proceso en HubSpot",
     promesa:
       "Tu equipo comercial vende con un mismo proceso en el CRM y ves en qué va cada negocio sin tener que preguntar.",
     descripcion:
@@ -129,7 +132,7 @@ export const CATALOGO_DE_CASOS: readonly CasoDelCatalogo[] = [
   },
   {
     id: "sistematiza-marketing",
-    titulo: "Sistematiza tu marketing con HubSpot",
+    titulo: "Tu marketing funciona en HubSpot sin depender de una persona",
     promesa:
       "Tu marketing deja de depender de una persona: sabes de dónde viene cada lead y cuánto te cuesta en cada canal.",
     descripcion:
@@ -173,7 +176,7 @@ export const CATALOGO_DE_CASOS: readonly CasoDelCatalogo[] = [
   },
   {
     id: "sistematiza-servicio",
-    titulo: "Sistematiza tu servicio con HubSpot",
+    titulo: "Cada caso de servicio se atiende igual en HubSpot",
     promesa:
       "Tu servicio deja de depender de una persona: cada caso se atiende igual, con la historia del cliente a la vista.",
     descripcion:
@@ -217,7 +220,7 @@ export const CATALOGO_DE_CASOS: readonly CasoDelCatalogo[] = [
   // ─── Llegar a HubSpot o rescatarlo ──────────────────────────────────────────────────────────────────────────
   {
     id: "migra-a-hubspot",
-    titulo: "Migra a HubSpot sin perder tu historial ni dejar de vender",
+    titulo: "Cambia a HubSpot sin perder la historia de tus clientes",
     promesa: "Cambias de CRM sin dejar de vender ni de atender, y llegas a HubSpot con la historia de cada cliente.",
     descripcion:
       "Tu información pasa del CRM actual a HubSpot con su historia: contactos, negocios, casos y conversaciones, cada uno con su responsable y su fecha original. El equipo sigue vendiendo y atendiendo mientras se hace el cambio.",
@@ -251,7 +254,7 @@ export const CATALOGO_DE_CASOS: readonly CasoDelCatalogo[] = [
   },
   {
     id: "reactiva-hubspot",
-    titulo: "Reactiva el HubSpot que ya pagas",
+    titulo: "Tu equipo vuelve a usar el HubSpot que ya pagas",
     promesa: "El HubSpot que ya pagas vuelve a ser la herramienta de trabajo del equipo, no una carga administrativa.",
     descripcion:
       "El HubSpot que pagas vuelve a usarse: se revisa qué se usa y qué no, se quita lo que estorba y el equipo vuelve a trabajar ahí cada día. Recuperas el valor de las licencias antes de pensar en comprar más.",
@@ -293,7 +296,7 @@ export const CATALOGO_DE_CASOS: readonly CasoDelCatalogo[] = [
   },
   {
     id: "limpieza-datos",
-    titulo: "Limpia tu base de datos y mantenla limpia",
+    titulo: "Cada cliente aparece una sola vez en tu base",
     promesa:
       "Cada cliente está una sola vez, con sus datos escritos igual, y tu base tiene reglas para no volver a ensuciarse.",
     descripcion:
@@ -329,7 +332,7 @@ export const CATALOGO_DE_CASOS: readonly CasoDelCatalogo[] = [
   },
   {
     id: "objetos-personalizados",
-    titulo: "Gestiona lo único de tu negocio en HubSpot",
+    titulo: "Tus contratos o programas tienen su propio registro en HubSpot",
     promesa:
       "HubSpot habla el idioma de tu negocio: tus unidades, contratos o programas viven en el CRM, con su estado, junto a cada cliente.",
     descripcion:
@@ -363,7 +366,7 @@ export const CATALOGO_DE_CASOS: readonly CasoDelCatalogo[] = [
   },
   {
     id: "marcas-y-paises",
-    titulo: "Ordena tus marcas, países o unidades de negocio en un solo HubSpot",
+    titulo: "Todas tus marcas o países trabajan en un solo HubSpot",
     promesa:
       "Cada marca o país trabaja en el mismo HubSpot con su equipo, su moneda y sus correos, y la dirección del grupo ve a todas con los mismos números.",
     descripcion:
@@ -399,7 +402,7 @@ export const CATALOGO_DE_CASOS: readonly CasoDelCatalogo[] = [
   // ─── Ventas: casos para crecer ──────────────────────────────────────────────────────────────────────────────
   {
     id: "cotizaciones",
-    titulo: "Estandariza y controla tus cotizaciones comerciales",
+    titulo: "Cada cotización sale de HubSpot con la misma plantilla",
     promesa: "Cada cotización sale del sistema con la misma estructura, los precios vigentes y el alcance validado.",
     descripcion:
       "Cada cotización sale de HubSpot con tu plantilla, tu catálogo con los precios al día y, si se sale de lo normal, el visto bueno de quien corresponde. Dejas de mandar propuestas distintas a clientes parecidos y ves qué se cotizó en cada negocio.",
@@ -433,7 +436,7 @@ export const CATALOGO_DE_CASOS: readonly CasoDelCatalogo[] = [
   },
   {
     id: "cobros-en-linea",
-    titulo: "Cobra en línea en el momento de cerrar la venta",
+    titulo: "Tu cliente paga en línea al aceptar la cotización",
     promesa:
       "Tu cliente paga en línea al aceptar la cotización o con un link de pago, y ves en HubSpot qué se cobró sin pedir comprobantes.",
     descripcion:
@@ -461,7 +464,7 @@ export const CATALOGO_DE_CASOS: readonly CasoDelCatalogo[] = [
   },
   {
     id: "playbooks-secuencias",
-    titulo: "Vende con el mismo guion y un seguimiento que no se olvida",
+    titulo: "Seguimiento a prospectos con la misma cadencia para todos",
     promesa:
       "Cada vendedor califica con las mismas preguntas, sigue la misma cadencia de contacto y llama desde HubSpot, y todo queda en la ficha del cliente.",
     descripcion:
@@ -498,7 +501,7 @@ export const CATALOGO_DE_CASOS: readonly CasoDelCatalogo[] = [
   },
   {
     id: "prospeccion-ia",
-    titulo: "Prioriza y acelera tu prospección B2B con IA",
+    titulo: "La IA le dice a cada vendedor a quién contactar",
     promesa:
       "Cada vendedor sabe cada mañana a quién contactar primero, y la IA le prepara el primer mensaje para que él lo revise y lo envíe.",
     descripcion:
@@ -532,7 +535,7 @@ export const CATALOGO_DE_CASOS: readonly CasoDelCatalogo[] = [
   },
   {
     id: "pronostico",
-    titulo: "Pronostica tus ventas con confianza",
+    titulo: "Un pronóstico de ventas que se acerca a lo real",
     promesa: "Comprometes un número de ventas sabiendo que el pronóstico se acerca a lo que de verdad pasa.",
     descripcion:
       "El pronóstico sale de tus negocios al día, por categorías que consensúa tu equipo, y no de lo que cada vendedor calcula a ojo. Ves en qué etapa se caen y cuándo uno se traba, y comprometes un número que se acerca a lo que de verdad pasa.",
@@ -567,7 +570,7 @@ export const CATALOGO_DE_CASOS: readonly CasoDelCatalogo[] = [
   },
   {
     id: "reuniones-con-ia",
-    titulo: "Haz que cada reunión deje su resumen en HubSpot",
+    titulo: "Cada reunión con un cliente deja su resumen en HubSpot",
     promesa:
       "Cada reunión de tu equipo con un cliente deja en su ficha de HubSpot el resumen y los próximos pasos, sin que nadie los escriba.",
     descripcion:
@@ -604,7 +607,7 @@ export const CATALOGO_DE_CASOS: readonly CasoDelCatalogo[] = [
   // ─── Marketing: casos para crecer ───────────────────────────────────────────────────────────────────────────
   {
     id: "alinea-marketing-ventas",
-    titulo: "Alinea Marketing y Ventas para que cada lead calificado llegue a tiempo",
+    titulo: "Cada lead calificado le llega al vendedor que corresponde",
     promesa:
       "Marketing y Ventas usan la misma definición de lead calificado, y cada lead listo le llega al vendedor que corresponde, con su historia.",
     descripcion:
@@ -641,7 +644,7 @@ export const CATALOGO_DE_CASOS: readonly CasoDelCatalogo[] = [
   },
   {
     id: "atribucion",
-    titulo: "Descubre qué canal te trae ventas y cuánto te cuesta cada una",
+    titulo: "Sabes cuánto te cuesta cada venta por canal",
     promesa: "Sabes qué canal te trae ventas y cuánto te cuesta cada una, y mueves el presupuesto hacia donde rinde.",
     descripcion:
       "Cada lead y cada venta quedan con el canal y la campaña que los trajeron, también lo que llega por WhatsApp, referidos o eventos. Ves cuánto te cuesta un lead y una venta por canal y mueves el presupuesto hacia lo que rinde.",
@@ -674,7 +677,7 @@ export const CATALOGO_DE_CASOS: readonly CasoDelCatalogo[] = [
   },
   {
     id: "marketing-ia-breeze",
-    titulo: "Produce más campañas y contenido con IA que suena a tu marca",
+    titulo: "La IA escribe tus campañas con tu voz de marca",
     promesa:
       "Tu equipo produce más campañas y contenido con una IA que escribe con tu voz de marca y conoce a tus buyer personas.",
     descripcion:
@@ -710,7 +713,7 @@ export const CATALOGO_DE_CASOS: readonly CasoDelCatalogo[] = [
   },
   {
     id: "nutricion-agente",
-    titulo: "Acompaña a cada lead hasta que esté listo para comprar",
+    titulo: "Los leads que aún no compran reciben correos personalizados",
     promesa:
       "Cada lead que todavía no está listo recibe mensajes escritos para él, con tu voz de marca, y le llega a Ventas cuando muestra interés de compra.",
     descripcion:
@@ -744,7 +747,7 @@ export const CATALOGO_DE_CASOS: readonly CasoDelCatalogo[] = [
   },
   {
     id: "abm",
-    titulo: "Gana tus cuentas clave con Marketing y Ventas trabajando juntos",
+    titulo: "Marketing y Ventas trabajan juntos tus cuentas clave",
     promesa:
       "Marketing y Ventas trabajan juntos las mismas empresas grandes: saben quién decide en cada una y ven qué cuentas se están moviendo.",
     descripcion:
@@ -780,7 +783,7 @@ export const CATALOGO_DE_CASOS: readonly CasoDelCatalogo[] = [
   // ─── Web y contenido ────────────────────────────────────────────────────────────────────────────────────────
   {
     id: "seo-aeo",
-    titulo: "Haz que te encuentren en Google y en los asistentes de IA",
+    titulo: "Te encuentran en Google y en los asistentes de IA",
     promesa:
       "Tu sitio y tu contenido quedan listos para que Google y la IA te encuentren cuando buscan lo que vendes, y sabes cuántas veces apareces frente a tu competencia.",
     descripcion:
@@ -813,7 +816,7 @@ export const CATALOGO_DE_CASOS: readonly CasoDelCatalogo[] = [
   },
   {
     id: "presencia-web",
-    titulo: "Lanza un sitio que trae contactos y que cambias sin programador",
+    titulo: "Un sitio en HubSpot que cambias sin programador",
     promesa:
       "Tu sitio dice lo mismo que tu equipo, convierte visitas en contactos y lo administras sin depender de un programador.",
     descripcion:
@@ -849,7 +852,7 @@ export const CATALOGO_DE_CASOS: readonly CasoDelCatalogo[] = [
   // ─── Servicio y conversaciones ──────────────────────────────────────────────────────────────────────────────
   {
     id: "whatsapp",
-    titulo: "Integra WhatsApp y unifica tus conversaciones en HubSpot",
+    titulo: "Las conversaciones de WhatsApp quedan registradas en HubSpot",
     promesa:
       "Lo que tu equipo habla por WhatsApp queda en la ficha del cliente, en una sola bandeja, y nadie se queda sin respuesta.",
     descripcion:
@@ -887,7 +890,7 @@ export const CATALOGO_DE_CASOS: readonly CasoDelCatalogo[] = [
   },
   {
     id: "agentes-ia-atencion",
-    titulo: "Resuelve las consultas de siempre con un agente de IA",
+    titulo: "Un agente de IA responde las consultas de siempre",
     promesa:
       "Un agente de IA resuelve las consultas de siempre en tus canales y le pasa a una persona, con todo el contexto, lo que no puede resolver.",
     descripcion:
@@ -926,7 +929,7 @@ export const CATALOGO_DE_CASOS: readonly CasoDelCatalogo[] = [
   },
   {
     id: "base-conocimiento-portal",
-    titulo: "Haz que tus clientes encuentren solos sus respuestas y vean en qué va su caso",
+    titulo: "Tus clientes encuentran solos las respuestas de siempre",
     promesa:
       "Tus clientes encuentran solos las respuestas de siempre y ven en qué va su caso, y tu equipo deja de escribir lo mismo cada día.",
     descripcion:
@@ -961,7 +964,7 @@ export const CATALOGO_DE_CASOS: readonly CasoDelCatalogo[] = [
   },
   {
     id: "customer-success",
-    titulo: "Retén a tus clientes y haz crecer cada cuenta",
+    titulo: "Sabes a tiempo qué clientes están por irse",
     promesa:
       "Sabes qué cliente está sano, cuál se puede ir y cuál está listo para comprarte más, antes de que te lo diga.",
     descripcion:
@@ -1004,7 +1007,7 @@ export const CATALOGO_DE_CASOS: readonly CasoDelCatalogo[] = [
   // ─── Datos e integraciones ──────────────────────────────────────────────────────────────────────────────────
   {
     id: "integracion-erp",
-    titulo: "Integra tus sistemas con HubSpot para ver a cada cliente completo",
+    titulo: "Lo que compra cada cliente se ve en HubSpot",
     promesa:
       "Ventas y Servicio ven en la ficha de cada cliente lo que te compra y lo que tiene contratado, sin pedírselo a nadie.",
     descripcion:
@@ -1044,7 +1047,7 @@ export const CATALOGO_DE_CASOS: readonly CasoDelCatalogo[] = [
   },
   {
     id: "cobranza",
-    titulo: "Acelera y controla tu cobranza con HubSpot",
+    titulo: "Los avisos de cobro salen solos desde HubSpot",
     promesa:
       "Cobras a tiempo sin perseguir a nadie a mano, y Ventas y Servicio ven en la ficha quién debe antes de venderle o atenderlo.",
     descripcion:
@@ -1075,7 +1078,7 @@ export const CATALOGO_DE_CASOS: readonly CasoDelCatalogo[] = [
   },
   {
     id: "data-lake",
-    titulo: "Convierte tus datos en un activo confiable",
+    titulo: "Los datos de todos tus sistemas en un solo lugar",
     promesa:
       "Los datos de todos tus sistemas se juntan en un solo lugar confiable, y lo que se calcula ahí vuelve a la ficha de HubSpot.",
     descripcion:
@@ -1116,7 +1119,7 @@ export const CATALOGO_DE_CASOS: readonly CasoDelCatalogo[] = [
   },
   {
     id: "power-bi",
-    titulo: "Lleva los datos de HubSpot a Power BI o a tu BI corporativo",
+    titulo: "Los datos de HubSpot llegan solos a tu Power BI",
     promesa:
       "Los números de HubSpot llegan solos a tu Power BI, con el mismo significado que en el CRM, para que la dirección los mire junto al resto de la empresa.",
     descripcion:
@@ -1147,7 +1150,7 @@ export const CATALOGO_DE_CASOS: readonly CasoDelCatalogo[] = [
   },
   {
     id: "tablero-direccion",
-    titulo: "Dirige tu empresa con los números a la vista",
+    titulo: "La gerencia ve cada área contra su meta",
     promesa:
       "La gerencia ve en un tablero cómo va cada área que trabaja en HubSpot contra su meta, con números que salen solos de HubSpot.",
     descripcion:
@@ -1184,7 +1187,7 @@ export const CATALOGO_DE_CASOS: readonly CasoDelCatalogo[] = [
   // ─── La IA para tu equipo ───────────────────────────────────────────────────────────────────────────────────
   {
     id: "asistente-ia-conectado",
-    titulo: "Consulta y actualiza tu HubSpot desde ChatGPT o Claude",
+    titulo: "Tu equipo usa HubSpot desde ChatGPT o Claude",
     promesa:
       "Tu equipo consulta sus clientes y negocios y registra su trabajo en HubSpot desde el asistente de IA que ya usa, y cada uno ve y cambia solo lo que le toca.",
     descripcion:
@@ -1212,7 +1215,7 @@ export const CATALOGO_DE_CASOS: readonly CasoDelCatalogo[] = [
   },
   {
     id: "agentes-ia-internos",
-    titulo: "Pon a un agente de IA a hacer el trabajo repetitivo de tu equipo",
+    titulo: "Un agente de IA hace en HubSpot las tareas repetitivas",
     promesa:
       "Tu equipo deja de perder horas en lo que repite cada semana: un agente de IA lo hace en HubSpot, una persona revisa lo que importa y sabes cuánto te cuesta.",
     descripcion:
@@ -1251,7 +1254,7 @@ export const CATALOGO_DE_CASOS: readonly CasoDelCatalogo[] = [
   // ─── Insider (personalización y recompra) ───────────────────────────────────────────────────────────────────
   {
     id: "personalizacion-web",
-    titulo: "Personaliza tu sitio y tu app para cada visitante con Insider",
+    titulo: "Cada visitante ve tu sitio según lo que hizo antes",
     promesa:
       "Cada visitante ve en tu sitio y tu app lo que le corresponde según lo que hizo antes, sin que nadie arme un segmento para él.",
     descripcion:
@@ -1284,7 +1287,7 @@ export const CATALOGO_DE_CASOS: readonly CasoDelCatalogo[] = [
   },
   {
     id: "carritos-abandonados",
-    titulo: "Recupera carritos y compras a medias",
+    titulo: "Quien deja una compra a medias recibe su recordatorio",
     promesa: "Quien deja una compra a medias recibe a tiempo el recordatorio correcto, por correo, WhatsApp o la app, sin que nadie lo mande.",
     descripcion:
       "Quien deja una compra a medias recibe el recordatorio correcto, a tiempo y sin que nadie lo mande. El mensaje combina correo, WhatsApp y notificaciones, y sabes cuántas compras recupera cada uno.",
@@ -1314,7 +1317,7 @@ export const CATALOGO_DE_CASOS: readonly CasoDelCatalogo[] = [
   },
   {
     id: "recompra",
-    titulo: "Haz que tus clientes vuelvan a comprar",
+    titulo: "Cada cliente recibe su oferta justo cuando le toca volver",
     promesa: "Cada cliente recibe el recordatorio o la oferta para volver a comprar justo cuando le toca.",
     descripcion:
       "Con Insider o con HubSpot, cada cliente recibe su recordatorio, su recomendación o su oferta justo cuando le toca volver, según el ciclo de lo que compró. Sabes cuántos clientes vuelven a comprar y con qué mensaje.",
@@ -1344,7 +1347,7 @@ export const CATALOGO_DE_CASOS: readonly CasoDelCatalogo[] = [
   },
   {
     id: "ficha-unica",
-    titulo: "Une la ficha de cada cliente entre tu sitio, tu app y tu tienda con Insider",
+    titulo: "Cada cliente tiene una sola ficha en todos tus canales",
     promesa:
       "Reconoces a cada cliente como una sola persona aunque compre en la tienda, navegue en el sitio y abra la app.",
     descripcion:
@@ -1378,7 +1381,7 @@ export const CATALOGO_DE_CASOS: readonly CasoDelCatalogo[] = [
   // ─── Sostener lo que ya funciona ────────────────────────────────────────────────────────────────────────────
   {
     id: "equipo-tecnico",
-    titulo: "Haz que tu equipo técnico sostenga y extienda HubSpot sin depender de terceros",
+    titulo: "Tu equipo técnico mantiene HubSpot sin depender de terceros",
     promesa:
       "Tu equipo técnico entiende cómo está conectado HubSpot y puede mantenerlo y hacerlo crecer por su cuenta.",
     descripcion:
@@ -1403,7 +1406,7 @@ export const CATALOGO_DE_CASOS: readonly CasoDelCatalogo[] = [
   },
   {
     id: "hubspot-administrado",
-    titulo: "Ten tu HubSpot administrado y al día cada mes",
+    titulo: "Los cambios que pide tu equipo se hacen cada mes",
     promesa:
       "Tu HubSpot sigue al día: cada mes se hacen los cambios que tu equipo prioriza y sabes de una falla antes de que te la muestre un reporte.",
     descripcion:
@@ -1437,25 +1440,50 @@ export function casoPorId(id: string): CasoDelCatalogo | undefined {
 }
 
 /**
- * Los nombres que tuvieron los casos hasta el 2026-11-06, cuando 14 se renombraron al sumar sus actividades. Lo que se
+ * Los nombres que tuvieron los casos: hasta el 2026-11-06, cuando 14 se renombraron al sumar sus actividades, y hasta el
+ * 2026-11-08, cuando los 38 pasaron a las reglas del título del agente (una sola idea, de 4 a 10 palabras). Lo que se
  * guardó con el nombre viejo (un caso de la empresa, uno elegido o descartado en una preventa) sigue siendo el mismo
  * caso: `tituloVigente` lo traduce, y así «Lo que le falta comprar» y el agente de la preventa no lo ofrecen de nuevo.
  */
 export const NOMBRES_ANTERIORES: Readonly<Record<string, readonly string[]>> = {
-  "reactiva-hubspot": ["Reactiva tu inversión en HubSpot"],
-  "migra-a-hubspot": ["Migra a HubSpot sin perder datos ni continuidad"],
-  "marketing-ia-breeze": ["Acelera tu marketing con IA y Breeze"],
-  "seo-aeo": ["Optimiza tu SEO y tu AEO"],
-  "presencia-web": ["Evoluciona tu presencia web sobre HubSpot"],
-  "agentes-ia-atencion": ["Automatiza la atención al cliente con agentes de IA"],
-  "customer-success": ["Expande tus cuentas con Customer Success en HubSpot"],
-  "data-lake": ["Convierte tus datos en un activo confiable e integra tu stack"],
-  "integracion-erp": ["Integra HubSpot con tu ERP y tu backoffice"],
-  "objetos-personalizados": ["Mapea tu operación única en HubSpot con objetos personalizados"],
-  "personalizacion-web": ["Personaliza la experiencia web de tus visitantes con Insider"],
-  "carritos-abandonados": ["Recupera carritos y compras a medias con Insider"],
-  "recompra": ["Haz que tus clientes vuelvan a comprar con Insider"],
-  "ficha-unica": ["Une la ficha de cada cliente entre tu sitio, tu app y tu tienda"],
+  "sistematiza-ventas": ["Sistematiza tu proceso comercial con HubSpot"],
+  "sistematiza-marketing": ["Sistematiza tu marketing con HubSpot"],
+  "sistematiza-servicio": ["Sistematiza tu servicio con HubSpot"],
+  "migra-a-hubspot": ["Migra a HubSpot sin perder datos ni continuidad", "Migra a HubSpot sin perder tu historial ni dejar de vender"],
+  "reactiva-hubspot": ["Reactiva tu inversión en HubSpot", "Reactiva el HubSpot que ya pagas"],
+  "limpieza-datos": ["Limpia tu base de datos y mantenla limpia"],
+  "objetos-personalizados": ["Mapea tu operación única en HubSpot con objetos personalizados", "Gestiona lo único de tu negocio en HubSpot"],
+  "marcas-y-paises": ["Ordena tus marcas, países o unidades de negocio en un solo HubSpot"],
+  "cotizaciones": ["Estandariza y controla tus cotizaciones comerciales"],
+  "cobros-en-linea": ["Cobra en línea en el momento de cerrar la venta"],
+  "playbooks-secuencias": ["Vende con el mismo guion y un seguimiento que no se olvida"],
+  "prospeccion-ia": ["Prioriza y acelera tu prospección B2B con IA"],
+  "pronostico": ["Pronostica tus ventas con confianza"],
+  "reuniones-con-ia": ["Haz que cada reunión deje su resumen en HubSpot"],
+  "alinea-marketing-ventas": ["Alinea Marketing y Ventas para que cada lead calificado llegue a tiempo"],
+  "atribucion": ["Descubre qué canal te trae ventas y cuánto te cuesta cada una"],
+  "marketing-ia-breeze": ["Acelera tu marketing con IA y Breeze", "Produce más campañas y contenido con IA que suena a tu marca"],
+  "nutricion-agente": ["Acompaña a cada lead hasta que esté listo para comprar"],
+  "abm": ["Gana tus cuentas clave con Marketing y Ventas trabajando juntos"],
+  "seo-aeo": ["Optimiza tu SEO y tu AEO", "Haz que te encuentren en Google y en los asistentes de IA"],
+  "presencia-web": ["Evoluciona tu presencia web sobre HubSpot", "Lanza un sitio que trae contactos y que cambias sin programador"],
+  "whatsapp": ["Integra WhatsApp y unifica tus conversaciones en HubSpot"],
+  "agentes-ia-atencion": ["Automatiza la atención al cliente con agentes de IA", "Resuelve las consultas de siempre con un agente de IA"],
+  "base-conocimiento-portal": ["Haz que tus clientes encuentren solos sus respuestas y vean en qué va su caso"],
+  "customer-success": ["Expande tus cuentas con Customer Success en HubSpot", "Retén a tus clientes y haz crecer cada cuenta"],
+  "integracion-erp": ["Integra HubSpot con tu ERP y tu backoffice", "Integra tus sistemas con HubSpot para ver a cada cliente completo"],
+  "cobranza": ["Acelera y controla tu cobranza con HubSpot"],
+  "data-lake": ["Convierte tus datos en un activo confiable e integra tu stack", "Convierte tus datos en un activo confiable"],
+  "power-bi": ["Lleva los datos de HubSpot a Power BI o a tu BI corporativo"],
+  "tablero-direccion": ["Dirige tu empresa con los números a la vista"],
+  "asistente-ia-conectado": ["Consulta y actualiza tu HubSpot desde ChatGPT o Claude"],
+  "agentes-ia-internos": ["Pon a un agente de IA a hacer el trabajo repetitivo de tu equipo"],
+  "personalizacion-web": ["Personaliza la experiencia web de tus visitantes con Insider", "Personaliza tu sitio y tu app para cada visitante con Insider"],
+  "carritos-abandonados": ["Recupera carritos y compras a medias con Insider", "Recupera carritos y compras a medias"],
+  "recompra": ["Haz que tus clientes vuelvan a comprar con Insider", "Haz que tus clientes vuelvan a comprar"],
+  "ficha-unica": ["Une la ficha de cada cliente entre tu sitio, tu app y tu tienda", "Une la ficha de cada cliente entre tu sitio, tu app y tu tienda con Insider"],
+  "equipo-tecnico": ["Haz que tu equipo técnico sostenga y extienda HubSpot sin depender de terceros"],
+  "hubspot-administrado": ["Ten tu HubSpot administrado y al día cada mes"],
 };
 
 const comparable = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/\s+/g, " ").trim();
@@ -1470,4 +1498,13 @@ const VIGENTE_POR_NOMBRE_ANTERIOR: ReadonlyMap<string, string> = new Map(
 /** El nombre de hoy de un caso guardado con un nombre anterior; cualquier otro título vuelve igual. */
 export function tituloVigente(titulo: string): string {
   return VIGENTE_POR_NOMBRE_ANTERIOR.get(comparable(titulo)) ?? titulo;
+}
+
+/**
+ * La clave para saber si dos títulos guardados son el mismo caso: con el nombre de hoy y en minúsculas. Los casos de una
+ * empresa (`CasoDeUso`) se guardan por título, sin el id del catálogo: comparar sin esto ofrece de nuevo, o duplica, uno
+ * guardado con un nombre anterior (revisión del 2026-11-08, cuando cambiaron los 38).
+ */
+export function claveDelTitulo(titulo: string): string {
+  return tituloVigente(titulo.trim()).trim().toLowerCase();
 }

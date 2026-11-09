@@ -53,6 +53,7 @@ import {
 import { ETIQUETA_DEL_MOMENTO, MOMENTOS_DE_LA_VERSION, type MomentoDeLaVersion } from "@/lib/exploraciones/posicionar";
 import type { VersionGuardada } from "@/lib/exploraciones/versiones-de-la-escala";
 import type { Letra } from "@/lib/escala/documento/tipos";
+import { claveDelTitulo } from "@/lib/casos-de-uso/catalogo";
 
 type Datos = EscalaDeLaEmpresa & {
   puede?: { preventa: boolean; exploracion: boolean };
@@ -311,7 +312,7 @@ function CaminoDeCrecimiento({
             {p.casos.length > 0 && (
               <ul className="flex flex-col gap-1.5">
                 {p.casos.map((c) => {
-                  const ya = casos.titulos.has(c.caso.titulo.trim().toLowerCase());
+                  const ya = casos.titulos.has(claveDelTitulo(c.caso.titulo));
                   return (
                     <li key={c.caso.id} className="flex items-start gap-2.5 rounded-lg border border-info-line bg-info-surface px-3 py-2">
                       <IconoDeSugerencia className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-brand" />
@@ -583,7 +584,7 @@ export default function EscalaDeLaCuenta({
     const r = await fetch(`/api/clients/${clientId}/casos-de-uso`, { cache: "no-store" }).catch(() => null);
     if (!r?.ok) return;
     const j = (await r.json().catch(() => null)) as { casos?: { titulo: string; estado: string }[]; puedeEditar?: boolean } | null;
-    setCasos({ titulos: new Set((j?.casos ?? []).filter((c) => c.estado !== "descartado").map((c) => c.titulo.trim().toLowerCase())), puedeEditar: !!j?.puedeEditar });
+    setCasos({ titulos: new Set((j?.casos ?? []).filter((c) => c.estado !== "descartado").map((c) => claveDelTitulo(c.titulo))), puedeEditar: !!j?.puedeEditar });
   }, [clientId]);
 
   useEffect(() => {

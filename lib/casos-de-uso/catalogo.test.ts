@@ -10,7 +10,8 @@ import { parsearEscala, todasLasDimensiones, todosLosCriterios } from "@/lib/esc
 import { LETRAS } from "@/lib/escala/documento/tipos";
 import { voseoEnProsa } from "@/lib/ui/voseo-formas";
 import { avisoDelCaso, todosLosAvisos } from "./avisos-server";
-import { CATALOGO_DE_CASOS, NOMBRES_ANTERIORES, SERVICIOS, tituloVigente, type CasoDelCatalogo } from "./catalogo";
+import { CATALOGO_DE_CASOS, claveDelTitulo, NOMBRES_ANTERIORES, SERVICIOS, tituloVigente, type CasoDelCatalogo } from "./catalogo";
+import { juntaDosIdeas } from "./orden";
 
 vi.mock("server-only", () => ({}));
 
@@ -115,6 +116,18 @@ describe("el catálogo de casos de uso", () => {
       expect(c.promesa.length, c.id).toBeLessThanOrEqual(160);
     }
   });
+
+  it("los títulos siguen las reglas del agente de la preventa: de 4 a 10 palabras, 70 caracteres, una sola idea", () => {
+    // 2026-11-08 (Elías): «Del catálogo de Smarteam» y la ficha del caso muestran estos títulos tal cual.
+    for (const c of CATALOGO_DE_CASOS) {
+      const palabras = c.titulo.split(/\s+/).length;
+      expect(palabras, `${c.id}: «${c.titulo}»`).toBeGreaterThanOrEqual(4);
+      expect(palabras, `${c.id}: «${c.titulo}»`).toBeLessThanOrEqual(10);
+      expect(c.titulo.length, c.id).toBeLessThanOrEqual(70);
+      expect(juntaDosIdeas(c.titulo), `${c.id}: «${c.titulo}»`).toBe(false);
+      for (const vago of ["transforma", "potencia", "siguiente nivel", "que no se olvida"]) expect(c.titulo.toLowerCase(), c.id).not.toContain(vago);
+    }
+  });
 });
 
 describe("lo interno del catálogo", () => {
@@ -128,6 +141,16 @@ describe("lo interno del catálogo", () => {
         expect(tituloVigente(` ${v.toUpperCase()} `)).toBe(caso!.titulo);
       }
     }
+    // Un nombre anterior nunca es el título de hoy de OTRO caso (se traduciría al caso equivocado).
+    const deHoy = new Set(CATALOGO_DE_CASOS.map((c) => c.titulo.toLowerCase()));
+    for (const viejos of Object.values(NOMBRES_ANTERIORES)) for (const v of viejos) expect(deHoy.has(v.toLowerCase()), v).toBe(false);
+    // Los del 2026-11-08: lo guardado con el título de antes sigue siendo el mismo caso.
+    expect(tituloVigente("Sistematiza tu proceso comercial con HubSpot")).toBe(CATALOGO_DE_CASOS.find((c) => c.id === "sistematiza-ventas")!.titulo);
+    expect(tituloVigente("Reactiva tu inversión en HubSpot")).toBe(CATALOGO_DE_CASOS.find((c) => c.id === "reactiva-hubspot")!.titulo);
+    // Los casos de una empresa se guardan por título: el nombre de antes y el de hoy son la misma clave.
+    expect(claveDelTitulo(" Sistematiza tu proceso comercial con HubSpot ")).toBe(claveDelTitulo(CATALOGO_DE_CASOS.find((c) => c.id === "sistematiza-ventas")!.titulo));
+    expect(claveDelTitulo("Integra WhatsApp y unifica tus conversaciones en HubSpot")).toBe("las conversaciones de whatsapp quedan registradas en hubspot");
+    expect(claveDelTitulo("Un caso libre")).toBe("un caso libre");
     expect(tituloVigente("Un caso libre de la preventa")).toBe("Un caso libre de la preventa");
     expect(tituloVigente(CATALOGO_DE_CASOS[0].titulo)).toBe(CATALOGO_DE_CASOS[0].titulo);
   });

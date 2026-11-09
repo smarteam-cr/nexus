@@ -11,10 +11,11 @@ import { leerActividades } from "./actividades";
 import { bibliotecaLigera, horasDeLaActividad, repartoDeLaActividad, repartoDelCaso, type ActividadDelCaso } from "./armado";
 import { casosParaLasAreas } from "./en-la-preventa";
 import { aplicarMejora, diferenciaDeActividades, leerPropuestaDeMejora, MAX_SUGERIDAS, resumenDeLaMejora } from "./mejorar";
-import { enElOrden, REGLAS_DEL_TITULO, tituloSoloDelCaso, validarOrdenDelAgente, type CandidatoAlOrden } from "./orden";
-import { pedidoDeCasos, type ContextoDeCasos } from "@/lib/exploraciones/agente-pedido";
+import { casoPorId } from "./catalogo";
+import { enElOrden, juntaDosIdeas, primeraIdea, REGLAS_DEL_TITULO, tituloSoloDelCaso, validarOrdenDelAgente, type CandidatoAlOrden } from "./orden";
+import { leerLosCasos, pedidoDeCasos, type ContextoDeCasos } from "@/lib/exploraciones/agente-pedido";
 import { candidatosAlOrden } from "@/lib/exploraciones/casos-de-uso";
-import { idDelItem, type CasoDeUsoElegido, type DestinoDePropuesta, type ItemPropuesto } from "@/lib/exploraciones/contenido";
+import { idDeCasoLibre, idDelItem, type CasoDeUsoElegido, type DestinoDePropuesta, type ItemPropuesto } from "@/lib/exploraciones/contenido";
 import { ESCALA_DE_PRUEBA, estadoDePrueba, todasEn } from "@/lib/exploraciones/escala-de-prueba.test-helpers";
 import { leerPropuesta } from "@/lib/exploraciones/esquemas";
 import { leerLaMejora, pedidoDeMejorar, type ContextoDeMejorar } from "@/lib/exploraciones/mejorar-pedido";
@@ -50,6 +51,87 @@ describe("1 · títulos claros", () => {
     const p = pedidoDeCasos(ctx);
     expect(p.system).toContain(REGLAS_DEL_TITULO);
     expect(p.system).toContain("solo si ya cumple las reglas del TÍTULO");
+  });
+});
+
+describe("1b · una sola idea: el código no deja pasar un título que junta dos (Elías, 2026-11-08)", () => {
+  it("una coma, o una «y» entre dos frases, son dos ideas; un par de nombres o una pareja que repite la forma, una", () => {
+    for (const dos of [
+      "Cada asesor vende en el CRM y ves en qué va cada negocio",
+      "Vende con el mismo guion y un seguimiento que no se olvida",
+      "Retén a tus clientes y haz crecer cada cuenta",
+      "Descubre qué canal te trae ventas y cuánto te cuesta cada una",
+      "Tu equipo vende igual, y tú ves el avance",
+      "Ordena tu proceso comercial, mide cada etapa",
+    ])
+      expect(juntaDosIdeas(dos), dos).toBe(true);
+    for (const una of [
+      "Seguimiento a prospectos con la misma cadencia para todos",
+      "Las conversaciones de WhatsApp quedan registradas en HubSpot",
+      "Saber por qué se ganan y se pierden los negocios",
+      "Te encuentran en Google y en los asistentes de IA",
+      "Marketing y Ventas trabajan juntos tus cuentas clave",
+      "Gana tus cuentas clave con Marketing y Ventas trabajando juntos",
+      "Recupera carritos y compras a medias",
+      // Los que la revisión del 2026-11-08 vio partidos: una pareja dentro de la misma idea.
+      "Tus vendedores registran llamadas y correos en HubSpot",
+      "Tus leads de ferias y eventos llegan al CRM",
+      "Tu equipo atiende WhatsApp y el correo desde HubSpot",
+      "Cada cotización sale con precios y plantillas al día",
+      "Tu equipo responde rápido y con la historia del cliente",
+      "Ventas, Marketing y Servicio usan el mismo HubSpot",
+      "Pronóstico, metas y tablero",
+    ])
+      expect(juntaDosIdeas(una), una).toBe(false);
+  });
+
+  it("la primera idea se queda si se sostiene sola (4 palabras o más); si no, null", () => {
+    expect(primeraIdea("Cada asesor vende en el CRM y ves en qué va cada negocio")).toBe("Cada asesor vende en el CRM");
+    expect(primeraIdea("Tu equipo vende igual, y tú ves el avance")).toBe("Tu equipo vende igual");
+    expect(primeraIdea("Ordena tu venta, mide cada etapa del embudo")).toBeNull();
+    expect(primeraIdea("  Saber por qué se ganan y se pierden los negocios ")).toBe("Saber por qué se ganan y se pierden los negocios");
+  });
+
+  const ctx: ContextoDeCasos = {
+    empresa: "Centauro",
+    edicion: "escala general",
+    areas: [{ id: "1", nombre: "Ventas", dimensiones: [{ id: "1.1", nombre: "Proceso" }] }],
+    exploracion: "",
+    yaEstan: [],
+    descartados: [],
+    catalogo: casosParaLasAreas(["1"]),
+  };
+  const caso = (titulo: string, extra: Record<string, unknown> = {}) => ({ areaId: "1", titulo, descripcion: "Qué consigue", razon: "Por qué", ...extra });
+  const titulos = (r: ReturnType<typeof leerLosCasos>) => r.items.map((i) => i.valor as CasoDeUsoElegido);
+
+  it("el agente que sugiere: uno del catálogo con dos ideas se queda con el del catálogo; uno propio, con su primera idea, y nunca se pierde", () => {
+    const r = leerLosCasos(
+      respuesta("proponer_casos", {
+        casos: [
+          caso("Cada asesor vende en el CRM y ves en qué va cada negocio", { catalogo: "sistematiza-ventas" }),
+          caso("Cada cotización sale con su aprobación, y ves qué se cotizó"),
+          caso("Tu equipo vende y cotiza desde HubSpot"),
+        ],
+      }),
+      ctx,
+      "run",
+      AHORA,
+    );
+    const [delCatalogo, propio] = titulos(r);
+    expect(delCatalogo.titulo).toBe(casoPorId("sistematiza-ventas")!.titulo);
+    expect(delCatalogo.tituloDelCatalogo).toBeUndefined();
+    expect(propio.titulo).toBe("Cada cotización sale con su aprobación");
+    expect(r.items[1].destino).toEqual({ tipo: "casoDeUso", useCaseId: idDeCasoLibre("Cada cotización sale con su aprobación") });
+    // «Tu equipo vende» no se sostiene solo: el caso queda con el título como vino (perderlo entero es peor).
+    expect(r.items).toHaveLength(3);
+    expect(titulos(r)[2].titulo).toBe("Tu equipo vende y cotiza desde HubSpot");
+    expect(r.descartadas).toBe(0);
+  });
+
+  it("el agente que ordena: un título claro con dos ideas no vale y queda el del catálogo", () => {
+    const candidatos: CandidatoAlOrden[] = [{ id: "cat-c", titulo: "Reactiva el HubSpot que ya pagas", origen: "escala", area: "Ventas", queResuelve: "" }];
+    const o = validarOrdenDelAgente([{ id: "cat-c", porQue: "x", titulo: "El equipo vuelve a usar el HubSpot y ves en qué va cada negocio" }], candidatos, "r")!;
+    expect(o.casos[0].titulo).toBeUndefined();
   });
 });
 

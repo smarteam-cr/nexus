@@ -8144,7 +8144,29 @@ le pregunta a la persona del cliente.
     palabras, una sola idea, qué cambia en el trabajo del equipo, sin metáforas, con ejemplos buenos y malos (los dos de
     Centauro que no se entendían). El agente que sugiere ya no se queda con el título del catálogo si no las cumple: lo
     escribe de nuevo, con el del catálogo al lado. La personalización no renombra (sigue sin tocar lo que ve el cliente).
-    El catálogo mismo no se tocó: sus títulos se ven tal cual en «Del catálogo de Smarteam» y en la ficha del caso.
+    **El catálogo sigue las mismas reglas (2026-11-08, Elías: «Del catálogo de Smarteam» y la ficha del caso mostraban
+    «Sistematiza tu proceso comercial con HubSpot» o «Reactiva el HubSpot que ya pagas»).** Los 38 títulos se reescribieron
+    con esas reglas y `catalogo.test.ts` lo verifica (de 4 a 10 palabras, 70 caracteres, una sola idea). Los de antes quedan
+    en `NOMBRES_ANTERIORES`: lo guardado con el nombre viejo (un caso de la empresa, uno descartado en una preventa) sigue
+    siendo el mismo caso, y el buscador del catálogo también los mira. ⚠ Los casos de una empresa (`CasoDeUso`) se guardan
+    por TÍTULO, sin el id del catálogo: toda comparación entre un título guardado y uno del catálogo pasa por
+    `claveDelTitulo` (catalogo.ts). La usan «El camino de crecimiento» de la escala de la cuenta, el porqué de la
+    recurrencia y los casos que suma una propuesta recurrente al proyecto; sin ella, un caso con el nombre viejo se ofrecía
+    de nuevo o se duplicaba (revisión del 2026-11-08). Los títulos guardados en la base no se reescribieron: se ven con el
+    nombre con que se guardaron. Las menciones entre comillas de los textos de la
+    biblioteca de actividades y de las notas internas pasaron al título nuevo; los apodos de una palabra («el Sistematiza
+    del área», «Reactiva», «Migra») quedaron como están. La propiedad `nexus_siguiente_caso` de HubSpot va por id: sus
+    etiquetas cambian solo al volver a correr `scripts/hubspot-crear-propiedades-empresa.ts`.
+  - **Una sola idea, en el código** (`juntaDosIdeas` y `primeraIdea`, orden.ts): una coma, o una «y» con tres palabras o más
+    de cada lado, son dos ideas, salvo una pareja dentro de la misma idea: dos nombres propios o una herramienta y lo que
+    sigue («Marketing y Ventas», «WhatsApp y el correo»), dos plurales («llamadas y correos»), otro complemento
+    («rápido y con la historia») o la forma de antes repetida («se ganan y se pierden»). Una enumeración con coma
+    («Ventas, Marketing y Servicio») es una idea. *Por qué tan permisiva:* partir una buena es peor que dejar pasar una
+    dudosa (la revisión del 2026-11-08 vio «Tus vendedores registran llamadas y correos en HubSpot» cortado en
+    «llamadas»). El agente que sugiere no adapta el título de un caso del catálogo con dos ideas (queda el del catálogo);
+    uno propio se queda con su primera idea si tiene 4 palabras o más, y si no, como vino: perder la sugerencia entera es
+    peor que una «y» de más. El que ordena descarta el título claro con dos ideas. *Por qué no pedirle que lo rehaga:* sería
+    otra llamada por caso, y el del catálogo ya cumple. Lo ya guardado antes no se corrige solo: cambia con «Revisar».
   - **Una sola lista, un caso por fila** (antes: sugeridos en dos columnas, «Usadas hoy» plegable, elegidos en filas y
     «Sugeridos por la escala» en dos columnas). Los elegidos, los del agente y los de la biblioteca que sugiere la escala
     van uno debajo de otro, con una etiqueta de origen («Elegido», «Sugerido por el agente», «De la biblioteca · por la
