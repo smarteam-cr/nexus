@@ -6,7 +6,7 @@
  * como `BusinessCaseUseCase`). El de `cat-` no tiene precio todavía (fase 2): entra a la propuesta como contexto,
  * con lo que el cliente obtiene. La nota interna del caso (`aviso`) nunca sale de acá.
  */
-import { CATALOGO_DE_CASOS, casoPorId, type CasoDelCatalogo } from "./catalogo";
+import { CATALOGO_DE_CASOS, casoPorId, tituloVigente, type CasoDelCatalogo } from "./catalogo";
 
 const PREFIJO = "cat-";
 
@@ -17,6 +17,16 @@ export function idEnLaPreventa(casoId: string): string {
 /** El caso del catálogo detrás de un id de la preventa, si lo es. */
 export function casoDeLaPreventa(useCaseId: string): CasoDelCatalogo | undefined {
   return useCaseId.startsWith(PREFIJO) ? casoPorId(useCaseId.slice(PREFIJO.length)) : undefined;
+}
+
+/**
+ * Los títulos con que el agente reconoce un caso que ya está (compara por nombre): el del catálogo de hoy (lo guardado
+ * antes del 2026-11-06 puede traer el nombre viejo) y, si se adaptó a la empresa (2026-11-08), también el adaptado.
+ */
+export function titulosDelCaso(useCaseId: string, c: { titulo: string; tituloDelCatalogo?: string }): string[] {
+  const delCatalogo = casoDeLaPreventa(useCaseId)?.titulo;
+  if (c.tituloDelCatalogo) return [...new Set([c.titulo, delCatalogo ?? c.tituloDelCatalogo])];
+  return [delCatalogo ?? tituloVigente(c.titulo)];
 }
 
 /** Los casos que tocan alguna de las áreas en juego (los complementarios también: acompañan a cualquiera). */

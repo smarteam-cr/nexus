@@ -38,7 +38,7 @@ import {
 import type { PosicionamientoDelProspecto } from "./posicionamiento";
 import type { TarjetasDeLaEscala } from "./tarjetas-de-la-escala";
 import type { ClaveDeEquipo } from "./equipos";
-import type { ActividadDelCaso, CasosAnteriores, ValorDeVenta } from "@/lib/casos-de-uso/armado";
+import type { ActividadDelCaso, CasosAnteriores, LugarEnElPlan, ParaVentas, ValorDeVenta } from "@/lib/casos-de-uso/armado";
 import {
   definicionDe,
   esDeLista,
@@ -151,6 +151,15 @@ export interface CasoDeUsoElegido {
   armado?: string;
   /** El vendedor cambió sus actividades: regenerar no lo pisa, deja la versión nueva al lado. */
   aMano?: boolean;
+  /**
+   * 2026-11-08: el título del catálogo cuando el agente lo personalizó para esta empresa (`titulo` es el personalizado).
+   * Sin esto, el título es el del catálogo (o uno propio).
+   */
+  tituloDelCatalogo?: string;
+  /** Para quien vende: por qué tiene sentido para esta empresa y cómo se armó. Nunca llega a la propuesta del cliente. */
+  paraVentas?: ParaVentas;
+  /** Su lugar en el plan que propuso el agente (uno detrás de otro). */
+  plan?: LugarEnElPlan;
 }
 
 /** El id de un caso de uso que propuso el agente sin el catálogo: sale del título. */
@@ -1580,7 +1589,11 @@ function aplicarUna(estado: EstadoDeExploracion, op: Operacion, validez: Validez
       // El título de un caso de uso descartado queda anotado: la próxima tanda del agente no lo repite.
       const titulos = estado.propuesta.items
         .filter((x) => conLapida.includes(x.id) && x.destino.tipo === "casoDeUso" && esObjeto(x.valor) && typeof x.valor.titulo === "string")
-        .map((x) => (x.valor as CasoDeUsoElegido).titulo);
+        // Personalizado, también el del catálogo: el agente compara por nombre y lo volvería a proponer con otro.
+        .flatMap((x) => {
+          const v = x.valor as CasoDeUsoElegido;
+          return v.tituloDelCatalogo && v.tituloDelCatalogo !== v.titulo ? [v.titulo, v.tituloDelCatalogo] : [v.titulo];
+        });
       return {
         ok: true,
         estado: {

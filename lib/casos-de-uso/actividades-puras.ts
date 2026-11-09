@@ -24,7 +24,34 @@ export const TARIFAS = [
   { clave: "gobierno", nombre: "Gobierno", usdPorHora: 120 },
 ] as const;
 
-const ARTICULOS = new Set(["el", "la", "los", "las", "un", "una", "de", "del", "y", "a"]);
+/**
+ * Los nombres que tuvo una actividad de la biblioteca antes de renombrarla, por su id (2026-11-08, Elías con Centauro:
+ * «Capacitar» y «Entregar» no le decían nada a quien vende). Lo guardado con el nombre viejo (los casos de la preventa
+ * copian el nombre de la biblioteca al sumarla) se muestra con el de hoy; el id no cambia y las horas tampoco.
+ */
+export const NOMBRES_ANTERIORES_DE_ACTIVIDAD: Readonly<Record<string, readonly string[]>> = {
+  capacitar: ["Capacitar"],
+  entregar: ["Entregar"],
+};
+
+/**
+ * Cómo se muestra una actividad de un caso: su nombre en el caso, salvo que sea un nombre viejo de la biblioteca
+ * (entonces, el de hoy).
+ */
+export function nombreVisible(a: { actividadId: string; nombre: string }, nombreDeHoy: string | undefined): string {
+  if (!nombreDeHoy) return a.nombre;
+  return (NOMBRES_ANTERIORES_DE_ACTIVIDAD[a.actividadId] ?? []).includes(a.nombre.trim()) ? nombreDeHoy : a.nombre;
+}
+
+const ARTICULOS = new Set(["el", "la", "los", "las", "un", "una", "unos", "unas", "de", "del", "y", "a"]);
+
+/** Las palabras de un texto, en minúsculas y sin artículos: «Las etapas del ciclo» → ["etapas", "ciclo"]. */
+export function palabrasSinArticulos(t: string): string[] {
+  return t
+    .toLowerCase()
+    .split(/[^\p{L}\d-]+/u)
+    .filter((p) => p && !ARTICULOS.has(p));
+}
 
 /**
  * El «sobre qué» que vale la pena mostrar junto al nombre: vacío si el nombre ya lo dice («Revisar uso y resultados a
@@ -32,7 +59,7 @@ const ARTICULOS = new Set(["el", "la", "los", "las", "un", "una", "de", "del", "
  */
 export function sobreQueAparte(f: { nombre: string; sobreQue: string }): string {
   // Por palabras y sin artículos: «Importar los contactos y las empresas» ya dice «contactos y empresas».
-  const palabras = (s: string) => s.toLowerCase().replace(/<[^>]*>/g, " ").split(/[^\p{L}\d-]+/u).filter((p) => p && !ARTICULOS.has(p));
+  const palabras = (s: string) => palabrasSinArticulos(s.replace(/<[^>]*>/g, " "));
   const nucleo = palabras(f.sobreQue);
   const nombre = new Set(palabras(f.nombre));
   return nucleo.length && nucleo.every((p) => nombre.has(p)) ? "" : f.sobreQue;

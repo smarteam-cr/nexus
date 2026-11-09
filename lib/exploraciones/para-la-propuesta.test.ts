@@ -15,7 +15,7 @@ import { leerPosicion } from "@/lib/escala/posicion";
 import { contenidoVacio, propuestaVacia, type EstadoDeExploracion } from "./contenido";
 import { escalaParaElLienzo, type EscalaDelLienzo } from "./escala-del-lienzo";
 import { bloqueParaElHandoff, internoParaElCse, TOPE_DEL_BLOQUE_DEL_HANDOFF } from "./para-el-handoff";
-import { bloqueParaLaPropuesta, posicionDesdeElChequeo } from "./para-la-propuesta";
+import { bloqueParaLaPropuesta, casosElegidosParaLaPropuesta, posicionDesdeElChequeo } from "./para-la-propuesta";
 
 const general = parsearEscala(leerArchivoDeLaEscala("escala"));
 const PERFIL = { cierre: "con equipo" as const, despues: "continua" as const };
@@ -121,7 +121,17 @@ describe("el bloque de contexto para la generación", () => {
       siguientePaso: { que: "PASO_INTERNO" },
     },
     falta: { [criterio.id]: { estado: "no_tiene" } },
-    casosDeUso: { uc1: { titulo: "Pipeline de ventas", areaId: "1", razon: "Deja las etapas definidas" } },
+    casosDeUso: {
+      uc1: {
+        titulo: "Pipeline de ventas",
+        areaId: "1",
+        razon: "Deja las etapas definidas",
+        // Lo de quien vende (2026-11-08): nunca llega a la propuesta del cliente.
+        paraVentas: { porQue: "PORQUE_INTERNO", comoSeArma: "COMO_INTERNO" },
+        plan: { paso: 2, despuesDe: "ORDEN_INTERNO" },
+        valorDeVenta: { palanca: "Riesgo", argumento: "VALOR_INTERNO", numeros: [{ dato: "DATO_INTERNO 12", fuente: "x" }], falta: ["FALTA_INTERNA"] },
+      },
+    },
   });
   const chequeo = chequeoDe(escala, e);
 
@@ -137,8 +147,23 @@ describe("el bloque de contexto para la generación", () => {
 
   it("nada interno y ningún id de la escala: la propuesta la ve el cliente", () => {
     const b = bloqueParaLaPropuesta({ estado: e, escala, chequeo, conEscala: true });
-    for (const interno of ["HIPOTESIS_INTERNA", "PRESUPUESTO_INTERNO", "PERSONA_INTERNA", "NO_EXPLORADO_INTERNO", "CONTEXTO_INTERNO", "PASO_INTERNO"]) {
+    const casos = JSON.stringify(casosElegidosParaLaPropuesta(e.contenido));
+    for (const interno of [
+      "HIPOTESIS_INTERNA",
+      "PRESUPUESTO_INTERNO",
+      "PERSONA_INTERNA",
+      "NO_EXPLORADO_INTERNO",
+      "CONTEXTO_INTERNO",
+      "PASO_INTERNO",
+      "PORQUE_INTERNO",
+      "COMO_INTERNO",
+      "ORDEN_INTERNO",
+      "VALOR_INTERNO",
+      "DATO_INTERNO",
+      "FALTA_INTERNA",
+    ]) {
       expect(b).not.toContain(interno);
+      expect(casos).not.toContain(interno);
     }
     expect(b).not.toContain(criterio.id);
     expect(b).not.toMatch(/\b\d\.\d\b/);

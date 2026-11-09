@@ -206,7 +206,7 @@
    "id": "auditar-el-portal",
    "nombre": "Auditar el portal",
    "etapa": "01-diagnostico",
-   "resumen": "Revisa el HubSpot que ya tiene el cliente: una lista fija con semáforo y un panel con sus datos reales, que «Entregar» vuelve a mostrar al cierre.",
+   "resumen": "Revisa el HubSpot que ya tiene el cliente: una lista fija con semáforo y un panel con sus datos reales, que «Entrega del proyecto» vuelve a mostrar al cierre.",
    "incluye": [
     "Semáforo del modelo de datos, las propiedades, las etapas del ciclo de vida y los pipelines",
     "Semáforo de automatizaciones con error, apagadas o sin dueño, formularios sin envíos y reportes confiables",
@@ -725,7 +725,7 @@
     "Uno por equipo en la venta, aunque traiga varios casos para ese equipo.",
     "Se hace de nuevo en cada venta: lo que dejó una venta anterior no se descuenta.",
     "Ventas propone la estructura en la venta; el CSE crea el plan con eso en la planificación y puede cambiarlo.",
-    "De este plan salen las veces de «Capacitar».",
+    "De este plan salen las veces de «Capacitación del equipo».",
     "Si el mismo caso entra dos veces, cada equipo lleva su plan con su nombre («Ventas: B2B», «Servicio: Costa Rica»)."
    ],
    "noEs": [],
@@ -1892,9 +1892,9 @@
   },
   {
    "id": "capacitar",
-   "nombre": "Capacitar",
+   "nombre": "Capacitación del equipo",
    "etapa": "04-adopcion",
-   "resumen": "Capacitar en HubSpot a un grupo de hasta 8 personas de un mismo rol, y dejar una guía de una página por rol.",
+   "resumen": "Una sesión para enseñar HubSpot a un grupo de hasta 8 personas de un mismo rol, con su guía de una página.",
    "incluye": [
     "Capacitar a cada grupo como dice el plan: todo el grupo, un formador o un piloto",
     "Acompañar la primera campaña o la primera reunión de revisión",
@@ -1927,7 +1927,7 @@
    "reglas": [
     "Una sesión por cada grupo de hasta 8 personas de cada rol, más la del líder y la de quien administra.",
     "Las veces salen del plan de adopción que arma Ventas; el CSE las ajusta en «Crear el plan de adopción».",
-    "La guía por rol es una para toda la venta y entra en la guía del portal de «Entregar».",
+    "La guía por rol es una para toda la venta y entra en la guía del portal de «Entrega del proyecto».",
     "La da el CSE; Diseño o Dev, cuando enseñan lo que construyeron."
    ],
    "noEs": [],
@@ -1938,9 +1938,9 @@
   },
   {
    "id": "entregar",
-   "nombre": "Entregar",
+   "nombre": "Entrega del proyecto",
    "etapa": "04-adopcion",
-   "resumen": "Cerrar la venta con quien decide: el inicio contra el cierre, lo que se entrega como recibido y los casos siguientes.",
+   "resumen": "La sesión de cierre con quien decide: se revisa lo prometido contra lo que quedó, se da por recibido y se proponen los casos siguientes.",
    "incluye": [
     "Revisar el resumen que arma Nexus: el inicio contra el cierre y los casos siguientes",
     "Hacer la sesión con quien decide, con los semáforos y el panel del portal si hubo auditoría",
@@ -2123,7 +2123,7 @@
     "admisiones"
    ],
    "paraQuienVende": "Se vende como la implementación de Sales Hub, una vez por cada subequipo de ventas (B2B, B2C…): con dos, el caso entra dos veces en la venta, cada uno con su nombre («Ventas: B2B», «Ventas: B2C»), y lo que es de toda la venta no se repite. El plan de adopción lo arma Ventas en la venta, con los subequipos, los roles y cuántas personas hay en cada uno: de ahí salen las capacitaciones, y el CSE lo ajusta. La sesión semanal con el líder durante el proyecto la suma la venta, no este caso. Si ya tiene HubSpot, se audita el portal, que deja el panel de su estado con sus datos reales; la base no se rehace, se ajusta, y el ciclo de vida se consensúa solo si la auditoría lo muestra mal usado. Si ya tenía su proceso en HubSpot y lo dejó de usar, conviene «Reactiva el HubSpot que ya pagas». La cartera en hojas y las herramientas sueltas se llevan aquí; si viene de otro CRM, va junto con «Migra a HubSpot sin perder tu historial ni dejar de vender». Si vende por WhatsApp, va junto con «Integra WhatsApp y unifica tus conversaciones en HubSpot». Una marca o un país más que comparte el equipo y el proceso es la mejora «Configurar una unidad de negocio» de este caso; dos o más, o una con su propio equipo, dominio de envío, ley de datos o portal, es «Ordena tus marcas, países o unidades de negocio en un solo HubSpot»; una que vende con otro proceso es este caso otra vez, con su nombre. La grabación y las notas de reuniones con IA son una mejora de este caso; para un HubSpot que ya funciona, es «Haz que cada reunión deje su resumen en HubSpot». Licencia: el espacio de ventas pide Sales Hub Professional y el reparto y las tareas automáticas no corren en Starter (si compra Starter, se dice por escrito qué sale); la grabación y las notas automáticas también dependen de la licencia, y algunas funciones gastan créditos del cliente. Se agranda con casos anidados: el mismo guion, cotizaciones, pronóstico o la visión completa con SAP.",
-   "escenarioBase": "Un subequipo de ventas, portal nuevo (sin HubSpot), vendido solo, segmento estándar (80 USD/h). Por defecto suma 32 h (unos 2.560 USD): 15 h que se cuentan una vez por venta (Kickoff, base del portal, el ciclo de vida, Entregar y las dos revisiones) y 17 h del subequipo. La sesión semanal con el líder la suma la venta, aparte.",
+   "escenarioBase": "Un subequipo de ventas, portal nuevo (sin HubSpot), vendido solo, segmento estándar (80 USD/h). Por defecto suma 32 h (unos 2.560 USD): 15 h que se cuentan una vez por venta (Kickoff, base del portal, el ciclo de vida, Entrega del proyecto y las dos revisiones) y 17 h del subequipo. La sesión semanal con el líder la suma la venta, aparte.",
    "loQueSeEntrega": [
     "La revisión de tu HubSpot con su semáforo y un panel con tus datos reales, para que veas su estado: cómo lo usa cada persona de tu equipo, tus contactos en cada etapa del ciclo de vida, los negocios sin mover y los workflows y tableros que se usan.",
     "El plan de trabajo, el mapa de cómo vendes hoy y el diseño de tu proceso comercial en HubSpot, consensuados contigo antes de configurar nada: etapas, datos obligatorios, razones de pérdida, quién hace qué y quién ve y edita cada dato.",
@@ -2285,7 +2285,7 @@
      "queSeHace": "Ventas arma el plan de adopción en la venta con la estructura del equipo comercial: subequipos, roles (vendedor, líder, quien administra el portal) y cuántas personas hay en cada uno, y cómo se capacita (todo el grupo, un formador o un piloto). El CSE lo revisa en la planificación y lo ajusta: qué se espera de cada rol, la revisión semanal de negocios, cómo se mide el uso y el anuncio del líder con la fecha desde la que los negocios viven solo en HubSpot.",
      "veces": 1,
      "porDefecto": true,
-     "cuandoCambia": "Con el caso dos veces en la venta (dos subequipos), Nexus nombra el plan de cada uno («Ventas: B2B», «Ventas: B2C»). Si la venta trae una migración, el día del cambio entra en este plan. De este plan salen las veces de Capacitar.",
+     "cuandoCambia": "Con el caso dos veces en la venta (dos subequipos), Nexus nombra el plan de cada uno («Ventas: B2B», «Ventas: B2C»). Si la venta trae una migración, el día del cambio entra en este plan. De este plan salen las veces de Capacitación del equipo.",
      "sobreQue": "Ventas",
      "sostiene": [
       10
@@ -2483,7 +2483,7 @@
     },
     {
      "actividadId": "capacitar",
-     "nombre": "Capacitar",
+     "nombre": "Capacitación del equipo",
      "queSeHace": "Una sesión con el equipo (etapas, negocios, registro de actividad, correo, calendario y enlace de reuniones, espacio de ventas y la IA que ya trae su licencia: el resumen del negocio y del contacto y el asistente para preparar un correo o una llamada) y otra con el líder y quien administra el portal (tablero, revisión semanal, altas y bajas de usuarios y cómo atender un pedido de acceso o de borrado de datos).",
      "veces": 2,
      "porDefecto": true,
@@ -2497,7 +2497,7 @@
     },
     {
      "actividadId": "entregar",
-     "nombre": "Entregar",
+     "nombre": "Entrega del proyecto",
      "queSeHace": "Resumen de lo implementado con los resultados de inicio contra los de cierre y la guía del portal (Nexus los arma, el CSE los revisa), y sesión con quien compró y con Ventas, donde se proponen los casos siguientes (de la lista priorizada, si hubo diagnóstico estratégico): el mismo guion, cotizaciones o pronóstico.",
      "veces": 1,
      "porDefecto": true,
@@ -2545,7 +2545,7 @@
     },
     {
      "nombre": "Con prospección antes del negocio",
-     "cambia": "Si alguien califica los leads antes de pasarlos a un vendedor (objeto Lead, con su pipeline de leads): Diseñar el proceso de ventas en HubSpot +1 e Implementar el proceso de ventas en HubSpot +1 (+6 h), y el ciclo de vida suma MQL y SQL antes de la Oportunidad, sin horas nuevas. Si la prospección la hace otra gente, también una sesión más en Mapear el proceso de ventas actual y Capacitar +1 (+2,5 h)."
+     "cambia": "Si alguien califica los leads antes de pasarlos a un vendedor (objeto Lead, con su pipeline de leads): Diseñar el proceso de ventas en HubSpot +1 e Implementar el proceso de ventas en HubSpot +1 (+6 h), y el ciclo de vida suma MQL y SQL antes de la Oportunidad, sin horas nuevas. Si la prospección la hace otra gente, también una sesión más en Mapear el proceso de ventas actual y Capacitación del equipo +1 (+2,5 h)."
     },
     {
      "nombre": "Trae su cartera en Excel o usa herramientas sueltas",
@@ -2565,7 +2565,7 @@
     },
     {
      "nombre": "Equipo de más de 8 personas",
-     "cambia": "Como diga el plan de adopción que arma Ventas: Capacitar +1 (1,5 h) por cada grupo de 8 personas más en la sesión con el equipo; con 20 vendedores, esa sesión se da tres veces. La sesión con el líder y quien administra no sube."
+     "cambia": "Como diga el plan de adopción que arma Ventas: Capacitación del equipo +1 (1,5 h) por cada grupo de 8 personas más en la sesión con el equipo; con 20 vendedores, esa sesión se da tres veces. La sesión con el líder y quien administra no sube."
     }
    ],
    "preguntas": [
@@ -2588,7 +2588,7 @@
     "Context Home"
    ],
    "paraQuienVende": "Casi siempre es un solo equipo de marketing; si hay dos con su propio líder, el caso entra dos veces en la venta, cada uno con su nombre («Marketing: <equipo>»), como los subequipos de Ventas, y lo que es de la venta no se repite. El plan de adopción lo arma Ventas en la venta, con los roles del equipo y cuántas personas hay en cada uno: de ahí salen las capacitaciones, y el CSE lo ajusta. La sesión semanal con el líder durante el proyecto la suma la venta, no este caso. Smarteam no gestiona las campañas ni la pauta: planifica la primera con el equipo y la acompaña; la lanza el equipo. El cliente ideal, las buyer personas y la voz de marca quedan en el Context Home, el contexto que usa la IA de HubSpot para crear. Si ya tiene HubSpot, se audita el portal, que deja el panel de su estado con sus datos reales; la base no se rehace, se ajusta, y el ciclo de vida se consensúa solo si la auditoría lo muestra mal usado. Las campañas de cada mes con los agentes de HubSpot son de «Produce más campañas y contenido con IA que suena a tu marca», la nutrición de «Acompaña a cada lead hasta que esté listo para comprar» y los envíos por WhatsApp de «Integra WhatsApp y unifica tus conversaciones en HubSpot». Importar la base desde hojas o llevar Mailchimp u otra herramienta suelta, publicar en redes desde HubSpot y conectar la tienda en línea son opcionales de este caso. Una marca o un país más que comparte el equipo es la mejora «Configurar una unidad de negocio» de este caso; dos o más, o una con su propio equipo, dominio de envío, ley de datos o portal, es «Ordena tus marcas, países o unidades de negocio en un solo HubSpot». Licencia: dos reportes del tablero (contactos que Ventas no tomó y leads calificados contra clientes ganados) piden Marketing Hub Professional.",
-   "escenarioBase": "Un equipo de marketing, portal nuevo, sin cliente ideal, buyer personas ni voz de marca escritos, con pauta en una cuenta de anuncios, vendido solo, segmento estándar (80 USD/h). Por defecto suma 43 h (unos 3.440 USD), sin assets de Diseño: 18,5 h que se cuentan una vez por venta (Kickoff, base del portal, el ciclo de vida, el Context Home, Entregar y las dos revisiones) y 24,5 h del equipo. La sesión semanal con el líder la suma la venta, aparte.",
+   "escenarioBase": "Un equipo de marketing, portal nuevo, sin cliente ideal, buyer personas ni voz de marca escritos, con pauta en una cuenta de anuncios, vendido solo, segmento estándar (80 USD/h). Por defecto suma 43 h (unos 3.440 USD), sin assets de Diseño: 18,5 h que se cuentan una vez por venta (Kickoff, base del portal, el ciclo de vida, el Context Home, Entrega del proyecto y las dos revisiones) y 24,5 h del equipo. La sesión semanal con el líder la suma la venta, aparte.",
    "loQueSeEntrega": [
     "La revisión de tu HubSpot con su semáforo y un panel con tus datos reales, para que veas su estado: cómo lo usa cada persona de tu equipo, tus contactos en cada etapa del ciclo de vida, los formularios y los correos que funcionan y los workflows que se usan.",
     "El plan de trabajo, el mapa de cómo haces marketing hoy y el diseño de tu proceso de marketing en HubSpot, consensuados contigo: por dónde entran tus leads, cómo se segmentan, cuándo pasan a Ventas, cómo se arma una campaña y quién ve y edita cada dato, con la plantilla de tu calendario de campañas.",
@@ -2778,7 +2778,7 @@
      "queSeHace": "Ventas arma el plan de adopción en la venta con la estructura del equipo de marketing: roles (quien crea el contenido, quien publica, quien administra la base) y cuántas personas hay en cada uno, y cómo se capacita (todo el grupo, un formador o acompañando la primera campaña). El CSE lo revisa en la planificación y lo ajusta: qué se espera de cada rol, la reunión de resultados, cómo se mide el uso y el anuncio del líder con la fecha desde la que los formularios y los correos salen solo de HubSpot.",
      "veces": 1,
      "porDefecto": true,
-     "cuandoCambia": "Si la venta trae una migración, el día del cambio entra en este plan. Con el caso dos veces en la venta (un segundo equipo con su propio líder), Nexus nombra el plan de cada uno («Marketing: <equipo>»). De este plan salen las veces de Capacitar.",
+     "cuandoCambia": "Si la venta trae una migración, el día del cambio entra en este plan. Con el caso dos veces en la venta (un segundo equipo con su propio líder), Nexus nombra el plan de cada uno («Marketing: <equipo>»). De este plan salen las veces de Capacitación del equipo.",
      "sobreQue": "Marketing",
      "sostiene": [
       10
@@ -3015,7 +3015,7 @@
     },
     {
      "actividadId": "capacitar",
-     "nombre": "Capacitar",
+     "nombre": "Capacitación del equipo",
      "queSeHace": "Una sesión con el equipo (contactos, listas, formularios, correos, la plantilla del calendario de campañas y la IA que ya trae su licencia para escribir correos, landings y publicaciones con su voz de marca), una acompañando la primera campaña (la arma y la lanza el equipo) y una con el líder y quien administra el portal (tablero, metas, reunión de resultados, altas y bajas y cómo atender un pedido de acceso o de borrado de datos).",
      "veces": 3,
      "porDefecto": true,
@@ -3029,7 +3029,7 @@
     },
     {
      "actividadId": "entregar",
-     "nombre": "Entregar",
+     "nombre": "Entrega del proyecto",
      "queSeHace": "Resumen de lo implementado con los resultados de inicio contra los de cierre y la guía del portal (Nexus los arma, el CSE los revisa), y sesión con quien compró y con Ventas, donde se proponen los casos siguientes (de la lista priorizada, si hubo diagnóstico estratégico): la nutrición con un agente, alinear Marketing y Ventas o más campañas con IA.",
      "veces": 1,
      "porDefecto": true,
@@ -3081,7 +3081,7 @@
     },
     {
      "nombre": "Acompañar la campaña de punta a punta",
-     "cambia": "Capacitar +1 (+1,5 h) para leer su cierre con el equipo, y Diseñar un asset de marketing en la fila de cada plantilla que haga Diseño (la de correo y la de landing, con su línea; horas de Diseño)."
+     "cambia": "Capacitación del equipo +1 (+1,5 h) para leer su cierre con el equipo, y Diseñar un asset de marketing en la fila de cada plantilla que haga Diseño (la de correo y la de landing, con su línea; horas de Diseño)."
     },
     {
      "nombre": "Una marca o un país más, con el mismo equipo",
@@ -3097,7 +3097,7 @@
     },
     {
      "nombre": "Equipo de más de 8 personas",
-     "cambia": "Como diga el plan de adopción que arma Ventas: Capacitar +1 (1,5 h) por cada grupo de 8 personas más en la sesión con el equipo; con 20, esa sesión se da tres veces. La que acompaña la primera campaña y la del líder y quien administra no suben."
+     "cambia": "Como diga el plan de adopción que arma Ventas: Capacitación del equipo +1 (1,5 h) por cada grupo de 8 personas más en la sesión con el equipo; con 20, esa sesión se da tres veces. La que acompaña la primera campaña y la del líder y quien administra no suben."
     }
    ],
    "preguntas": [
@@ -3120,7 +3120,7 @@
     "Zendesk"
    ],
    "paraQuienVende": "Se vende una vez por cada equipo de servicio con su propio líder (por país o por producto): con dos, el caso entra dos veces en la venta, cada uno con su nombre («Servicio: Costa Rica»), y lo que es de la venta no se repite. El plan de adopción lo arma Ventas en la venta, con los roles del equipo y cuántas personas hay en cada uno: de ahí salen las capacitaciones, y el CSE lo ajusta. La sesión semanal con el líder durante el proyecto la suma la venta, no este caso. Confirma la edición de Service Hub antes de prometer la bandeja: en cuentas creadas desde abril de 2024 el correo y los formularios crean casos solo por el escritorio de ayuda, que pide Service Hub Professional con un asiento por cada persona que atiende; los tiempos comprometidos también piden Professional, y la IA de la bandeja y la grabación dependen de la licencia y pueden gastar créditos. Si ya tiene HubSpot, se audita el portal, que deja el panel de su estado con sus datos reales; la base no se rehace, se ajusta, y el ciclo de vida de servicio se consensúa solo si la auditoría lo muestra mal usado. Aquí son opcionales el arranque de clientes nuevos y, como mejoras, los tiempos de respuesta, la IA de la bandeja, el asistente, la grabación y una unidad de negocio; también atender por teléfono (antes, confirma que HubSpot da números en su país), por WhatsApp o por el chat, importar los clientes desde hojas y llevar Zendesk u otra herramienta suelta. La base de conocimiento y el portal de clientes son de «Haz que tus clientes encuentren solos sus respuestas y vean en qué va su caso»; todas las encuestas, de «Retén a tus clientes y haz crecer cada cuenta»; el agente que contesta solo, de «Resuelve las consultas de siempre con un agente de IA». Si WhatsApp lo atienden también Ventas o Marketing, va «Integra WhatsApp y unifica tus conversaciones en HubSpot». Una marca o un país más que comparte el equipo es la mejora «Configurar una unidad de negocio»; dos o más, o una con su propio equipo, correo, ley de datos o portal, es «Ordena tus marcas, países o unidades de negocio en un solo HubSpot».",
-   "escenarioBase": "Un equipo de servicio que atiende por correo, un solo tipo de caso, portal nuevo, vendido solo, segmento estándar (80 USD/h). Por defecto suma 34 h (unos 2.720 USD): 15 h que se cuentan una vez por venta (Kickoff, base del portal, el ciclo de vida de servicio, Entregar y las dos revisiones) y 19 h del equipo. La sesión semanal con el líder la suma la venta, aparte.",
+   "escenarioBase": "Un equipo de servicio que atiende por correo, un solo tipo de caso, portal nuevo, vendido solo, segmento estándar (80 USD/h). Por defecto suma 34 h (unos 2.720 USD): 15 h que se cuentan una vez por venta (Kickoff, base del portal, el ciclo de vida de servicio, Entrega del proyecto y las dos revisiones) y 19 h del equipo. La sesión semanal con el líder la suma la venta, aparte.",
    "loQueSeEntrega": [
     "La revisión de tu HubSpot con su semáforo y un panel con tus datos reales, para que veas su estado: cómo lo usa cada persona de tu equipo, tus casos abiertos y atrasados, los canales que se desconectaron y los workflows y tableros que se usan.",
     "El plan de trabajo, el mapa de cómo atiendes hoy y el diseño de tu proceso de atención en HubSpot, consensuados contigo: tipos de caso, prioridades, etapas, quién atiende qué y quién ve y edita cada dato.",
@@ -3286,7 +3286,7 @@
      "queSeHace": "Ventas arma el plan de adopción en la venta con la estructura del equipo de servicio: roles (quien atiende, el líder, quien administra el portal) y cuántas personas hay en cada uno, y cómo se capacita (todo el grupo, un formador o un piloto). El CSE lo revisa en la planificación y lo ajusta: qué se espera de cada rol, la reunión de equipo, cómo se mide el uso (casos que entran por un canal contra los creados a mano, casos atrasados) y el anuncio del líder con la fecha desde la que los casos se atienden solo en HubSpot.",
      "veces": 1,
      "porDefecto": true,
-     "cuandoCambia": "Si la venta trae una migración, el día del cambio entra en este plan. Con el caso dos veces en la venta (dos equipos con su propio líder, por país o por producto), Nexus nombra el plan de cada uno («Servicio: Costa Rica») y también el correo de soporte de cada equipo («correo de soporte: Costa Rica»). De este plan salen las veces de Capacitar.",
+     "cuandoCambia": "Si la venta trae una migración, el día del cambio entra en este plan. Con el caso dos veces en la venta (dos equipos con su propio líder, por país o por producto), Nexus nombra el plan de cada uno («Servicio: Costa Rica») y también el correo de soporte de cada equipo («correo de soporte: Costa Rica»). De este plan salen las veces de Capacitación del equipo.",
      "sobreQue": "Servicio",
      "sostiene": [
       11
@@ -3565,7 +3565,7 @@
     },
     {
      "actividadId": "capacitar",
-     "nombre": "Capacitar",
+     "nombre": "Capacitación del equipo",
      "queSeHace": "Una sesión con quienes atienden (bandeja, casos, vistas, respuestas guardadas, rutina diaria y la IA que ya trae su licencia: el resumen de cada caso y el asistente para redactar una respuesta) y otra con el líder y quien administra el portal (tablero, casos atrasados, reunión de equipo, altas y bajas y cómo atender un pedido de acceso o de borrado de datos).",
      "veces": 2,
      "porDefecto": true,
@@ -3579,7 +3579,7 @@
     },
     {
      "actividadId": "entregar",
-     "nombre": "Entregar",
+     "nombre": "Entrega del proyecto",
      "queSeHace": "Resumen de lo implementado con los resultados de inicio contra los de cierre y la guía del portal (Nexus los arma, el CSE los revisa), y sesión con quien compró y con Ventas, donde se proponen los casos siguientes (de la lista priorizada, si hubo diagnóstico estratégico): la base de conocimiento y el portal, el agente de atención o Customer Success.",
      "veces": 1,
      "porDefecto": true,
@@ -3627,7 +3627,7 @@
     },
     {
      "nombre": "Con arranque de clientes nuevos",
-     "cambia": "Entran Diseñar e Implementar el proceso de arranque de clientes nuevos en HubSpot (+6 h) y una sesión más en Mapear el proceso de atención actual (+1 h); Capacitar +1 (+1,5 h) si lo atiende otra gente. Aparece el entregable del arranque."
+     "cambia": "Entran Diseñar e Implementar el proceso de arranque de clientes nuevos en HubSpot (+6 h) y una sesión más en Mapear el proceso de atención actual (+1 h); Capacitación del equipo +1 (+1,5 h) si lo atiende otra gente. Aparece el entregable del arranque."
     },
     {
      "nombre": "Dos tipos de caso",
@@ -3635,7 +3635,7 @@
     },
     {
      "nombre": "Atiende por WhatsApp, chat o redes",
-     "cambia": "Entra Conectar un canal en la fila de cada canal, con su nombre: «WhatsApp» o «chat del sitio» (2 h cada uno; Messenger o Instagram, en una fila igual con su nombre), y Capacitar +1 (+1,5 h) si cambia la rutina de quien atiende. Nexus escribe en el entregable por cuáles canales entran los casos. WhatsApp pide la verificación de Meta, que tramita el cliente. Si el número viene de otra plataforma (Atomchat, Treble, Wati u otra), liberarlo va dentro de conectarlo, y sus contactos con su permiso son una importación («permisos de WhatsApp», 6 h), en su fila. Si WhatsApp lo atienden también Ventas o Marketing, o se unen varios canales con reglas propias, va «Integra WhatsApp y unifica tus conversaciones en HubSpot»."
+     "cambia": "Entra Conectar un canal en la fila de cada canal, con su nombre: «WhatsApp» o «chat del sitio» (2 h cada uno; Messenger o Instagram, en una fila igual con su nombre), y Capacitación del equipo +1 (+1,5 h) si cambia la rutina de quien atiende. Nexus escribe en el entregable por cuáles canales entran los casos. WhatsApp pide la verificación de Meta, que tramita el cliente. Si el número viene de otra plataforma (Atomchat, Treble, Wati u otra), liberarlo va dentro de conectarlo, y sus contactos con su permiso son una importación («permisos de WhatsApp», 6 h), en su fila. Si WhatsApp lo atienden también Ventas o Marketing, o se unen varios canales con reglas propias, va «Integra WhatsApp y unifica tus conversaciones en HubSpot»."
     },
     {
      "nombre": "Trae sus clientes en hojas o viene de Zendesk",
@@ -3651,7 +3651,7 @@
     },
     {
      "nombre": "Equipo de más de 8 personas",
-     "cambia": "Como diga el plan de adopción que arma Ventas: Capacitar +1 (1,5 h) por cada grupo de 8 personas más en la sesión con quienes atienden; con 20, esa sesión se da tres veces. La sesión con el líder y quien administra no sube."
+     "cambia": "Como diga el plan de adopción que arma Ventas: Capacitación del equipo +1 (1,5 h) por cada grupo de 8 personas más en la sesión con quienes atienden; con 20, esa sesión se da tres veces. La sesión con el líder y quien administra no sube."
     }
    ],
    "preguntas": [
@@ -3674,7 +3674,7 @@
     "unir portales"
    ],
    "paraQuienVende": "Cuando el cliente deja otro CRM (Salesforce, Zoho, Pipedrive, Dynamics o uno propio) o junta en uno dos HubSpot de la misma empresa. Vendida sola copia el proceso como está; si quiere ordenarlo, va con el «Sistematiza» del área y aquí quedan las importaciones y la conexión de los sistemas que escribían en el CRM anterior. Lleva por defecto el consenso de las etapas del ciclo de vida: cada contacto que llega necesita su etapa. Si no tiene CRM y trae su base en hojas, o lo que trae son herramientas sueltas (Mailchimp, Calendly, Zendesk), no es este caso: va dentro del «Sistematiza» de su área. Si el HubSpot que se une es de otra marca o país del grupo, es «Ordena tus marcas, países o unidades de negocio en un solo HubSpot».",
-   "escenarioBase": "Por defecto suma 44,5 h (unos 3.560 USD): 14 h que se cuentan una vez por venta (Kickoff, base del portal, Entregar y las dos revisiones), 1 h del ciclo de vida (una vez por venta por sobre qué) y 29,5 h de la migración (el mapeo del proceso actual 2 h, el plan de adopción 2 h, el proceso de ventas 3 h, tres importaciones de 6 h, los reportes 3 h y la capacitación 1,5 h). Un equipo de ventas deja otro CRM y llega a un portal de HubSpot nuevo, vendido solo (copiando su proceso como está), segmento estándar, con un equipo de hasta 8 personas. El CSE importa desde un archivo o con una herramienta de migración tres grupos de datos, cada uno en su fila: contactos y empresas con su responsable, negocios, e historial de actividades; sin archivos adjuntos y sin sistemas que reconectar, sin horas pendientes en lo marcado. Con los adjuntos, 50,5 h; con un sistema que reconectar con su app, 49,5 h. «Importar datos» se cuenta por grupo de datos, como propone la biblioteca: contada por sistema, bajaría a 32,5 h.",
+   "escenarioBase": "Por defecto suma 44,5 h (unos 3.560 USD): 14 h que se cuentan una vez por venta (Kickoff, base del portal, Entrega del proyecto y las dos revisiones), 1 h del ciclo de vida (una vez por venta por sobre qué) y 29,5 h de la migración (el mapeo del proceso actual 2 h, el plan de adopción 2 h, el proceso de ventas 3 h, tres importaciones de 6 h, los reportes 3 h y la capacitación 1,5 h). Un equipo de ventas deja otro CRM y llega a un portal de HubSpot nuevo, vendido solo (copiando su proceso como está), segmento estándar, con un equipo de hasta 8 personas. El CSE importa desde un archivo o con una herramienta de migración tres grupos de datos, cada uno en su fila: contactos y empresas con su responsable, negocios, e historial de actividades; sin archivos adjuntos y sin sistemas que reconectar, sin horas pendientes en lo marcado. Con los adjuntos, 50,5 h; con un sistema que reconectar con su app, 49,5 h. «Importar datos» se cuenta por grupo de datos, como propone la biblioteca: contada por sistema, bajaría a 32,5 h.",
    "loQueSeEntrega": [
     "El plan de la migración aprobado por ti: qué se trae, desde qué fecha, dónde queda cada dato y qué día se deja el sistema anterior.",
     "Tus contactos y empresas en HubSpot con su responsable y su etapa del ciclo de vida como la consensuamos contigo, sin repetir a nadie con el mismo correo ni a una empresa con el mismo dominio.",
@@ -4071,7 +4071,7 @@
     },
     {
      "actividadId": "capacitar",
-     "nombre": "Capacitar",
+     "nombre": "Capacitación del equipo",
      "queSeHace": "Sesión con el equipo: dónde quedó cada dato, cómo encontrar la historia de un cliente y cómo registrar su trabajo desde el primer día.",
      "veces": 1,
      "porDefecto": true,
@@ -4086,7 +4086,7 @@
     },
     {
      "actividadId": "entregar",
-     "nombre": "Entregar",
+     "nombre": "Entrega del proyecto",
      "queSeHace": "Presentar a quien decide el informe de cierre (lo que había contra lo que llegó), el equipo trabajando, la guía del portal y lo que sigue (por ejemplo, ordenar el proceso con el Sistematiza).",
      "veces": 1,
      "porDefecto": true,
@@ -4139,7 +4139,7 @@
     },
     {
      "nombre": "Con el Sistematiza del área (lo más común)",
-     "cambia": "Salen el mapeo del proceso actual, «Implementar el proceso de ventas en HubSpot», los reportes, «Crear el plan de adopción», Capacitar, las automatizaciones que se rehacen y las dos revisiones: los trae el Sistematiza, y el día del cambio entra en su plan de adopción. Kickoff, base del portal, el consenso del ciclo de vida y Entregar se hacen una vez. Quedan las importaciones (18 h), los adjuntos si se piden, la conexión de los sistemas que escribían en el CRM anterior y «Limpiar los datos» si hace falta."
+     "cambia": "Salen el mapeo del proceso actual, «Implementar el proceso de ventas en HubSpot», los reportes, «Crear el plan de adopción», Capacitación del equipo, las automatizaciones que se rehacen y las dos revisiones: los trae el Sistematiza, y el día del cambio entra en su plan de adopción. Kickoff, base del portal, el consenso del ciclo de vida y Entrega del proyecto se hacen una vez. Quedan las importaciones (18 h), los adjuntos si se piden, la conexión de los sistemas que escribían en el CRM anterior y «Limpiar los datos» si hace falta."
     },
     {
      "nombre": "Si ya tiene HubSpot (suma otro CRM al portal)",
@@ -4159,11 +4159,11 @@
     },
     {
      "nombre": "Dos equipos o más",
-     "cambia": "El mapeo del proceso actual, «Crear el plan de adopción» (uno por equipo, con su nombre) y Capacitar suben una vez por equipo."
+     "cambia": "El mapeo del proceso actual, «Crear el plan de adopción» (uno por equipo, con su nombre) y Capacitación del equipo suben una vez por equipo."
     },
     {
      "nombre": "Equipo de más de 8 personas",
-     "cambia": "Capacitar +1 por cada grupo de 8 personas de cada rol, según el plan de adopción que arma Ventas (1,5 h cada sesión); el refuerzo, si se deja vendido, también."
+     "cambia": "Capacitación del equipo +1 por cada grupo de 8 personas de cada rol, según el plan de adopción que arma Ventas (1,5 h cada sesión); el refuerzo, si se deja vendido, también."
     }
    ],
    "preguntas": [
@@ -4184,7 +4184,7 @@
     "licencias sin uso"
    ],
    "paraQuienVende": "Arregla el uso: corrige lo que encontró la auditoría, capacita de nuevo y revisa el uso con el líder. También es la reimplementación de un cliente que vuelve después de meses: el mapeo mira si sigue el mismo equipo y la auditoría, la adopción, los canales que se desconectaron y los workflows y tableros que se usan. Si hay que rehacer el proceso entero, ya no es reactivar: conviene el «Sistematiza» del área en su forma «Si ya tiene HubSpot» (diseñar e implementar el proceso en HubSpot en lugar de corregir hallazgos). Si lo que traba son los datos sucios y hacen falta reglas, se suma «Limpia tu base de datos y mantenla limpia». Si lo que quiere es que cada reunión de toda la empresa deje su resumen en HubSpot, es «Haz que cada reunión deje su resumen en HubSpot».",
-   "escenarioBase": "Por defecto suma 28 h (unos 2.240 USD): 15 h que se cuentan una vez por venta (Kickoff, auditoría del portal con su panel, diagnóstico estratégico, Entregar y las dos revisiones) y 13 h del equipo (el mapeo del proceso actual 2 h, el plan de adopción 2 h, cuatro hallazgos corregidos 6 h y dos capacitaciones 3 h). Un equipo (por ejemplo, Ventas) con un HubSpot que paga y no usa, o que vuelve después de meses, vendido solo, segmento estándar, sin limpieza de datos y sin venir de otro partner. El vendedor fija cuatro hallazgos en la venta; el diagnóstico estratégico los prioriza con el líder y se corrigen directo. Sin horas pendientes en lo marcado. Con el diagnóstico de rendimiento de Ventas, 30 h; con una pasada de limpieza, 32 h; si viene de otro partner, 29,5 h más lo que defina Dev por cada integración que haya que documentar.",
+   "escenarioBase": "Por defecto suma 28 h (unos 2.240 USD): 15 h que se cuentan una vez por venta (Kickoff, auditoría del portal con su panel, diagnóstico estratégico, Entrega del proyecto y las dos revisiones) y 13 h del equipo (el mapeo del proceso actual 2 h, el plan de adopción 2 h, cuatro hallazgos corregidos 6 h y dos capacitaciones 3 h). Un equipo (por ejemplo, Ventas) con un HubSpot que paga y no usa, o que vuelve después de meses, vendido solo, segmento estándar, sin limpieza de datos y sin venir de otro partner. El vendedor fija cuatro hallazgos en la venta; el diagnóstico estratégico los prioriza con el líder y se corrigen directo. Sin horas pendientes en lo marcado. Con el diagnóstico de rendimiento de Ventas, 30 h; con una pasada de limpieza, 32 h; si viene de otro partner, 29,5 h más lo que defina Dev por cada integración que haya que documentar.",
    "loQueSeEntrega": [
     "Un diagnóstico de tu HubSpot, presentado a quien decide: un panel con tus datos reales (quién lo usa y qué registra cada persona, los canales que se desconectaron, los workflows y tableros que se usan y los que no), un semáforo por área (datos, automatizaciones, integraciones con su dueño, usuarios y seguridad, licencias), cuánto te cuesta hoy lo que no se usa, las mejoras en orden de prioridad y qué agentes de IA de HubSpot te sirven hoy y qué le falta a tus datos para encenderlos.",
     "Las mejoras que consensuamos contigo en el diagnóstico para esta propuesta, funcionando en tu HubSpot: se quita lo que estorba y cada persona ve qué le toca hacer, probadas con tu líder en casos reales antes de capacitar a tu equipo.",
@@ -4348,7 +4348,7 @@
      "queSeHace": "Aplicar en el portal cada hallazgo que el diagnóstico estratégico dejó consensuado y priorizado, por ejemplo: menos etapas y campos obligatorios, la asignación de leads, las vistas y tareas de cada persona, reconectar un canal que se desconectó, apagar o arreglar los workflows que nadie usa, rehacer un tablero que nadie mira o reasignar licencias. Cada uno se prueba con el líder en casos reales antes de capacitar.",
      "veces": 4,
      "porDefecto": true,
-     "cuandoCambia": "El vendedor fija las veces en la venta, con la revisión que hace para vender (4 por defecto, hasta 6). El diagnóstico estratégico los ordena y consensúa cuáles entran en esta propuesta; los demás quedan propuestos en «Entregar» (otro caso o «Ten tu HubSpot administrado y al día cada mes»). Un hallazgo que aparece después, en la sesión semanal, se consensúa ahí y suma una vez más. Si pasan de 6 o hay que rehacer un proceso entero, conviene el Sistematiza del área, en su forma «Si ya tiene HubSpot». Suma siempre.",
+     "cuandoCambia": "El vendedor fija las veces en la venta, con la revisión que hace para vender (4 por defecto, hasta 6). El diagnóstico estratégico los ordena y consensúa cuáles entran en esta propuesta; los demás quedan propuestos en «Entrega del proyecto» (otro caso o «Ten tu HubSpot administrado y al día cada mes»). Un hallazgo que aparece después, en la sesión semanal, se consensúa ahí y suma una vez más. Si pasan de 6 o hay que rehacer un proceso entero, conviene el Sistematiza del área, en su forma «Si ya tiene HubSpot». Suma siempre.",
      "sobreQue": "un hallazgo de la auditoría",
      "sostiene": [
       1
@@ -4392,7 +4392,7 @@
     },
     {
      "actividadId": "capacitar",
-     "nombre": "Capacitar",
+     "nombre": "Capacitación del equipo",
      "queSeHace": "Una sesión con el equipo (su día a día en HubSpot con lo corregido) y otra con el líder y quien administra (cómo revisar el uso por persona y dirigir con el panel).",
      "veces": 2,
      "porDefecto": true,
@@ -4407,7 +4407,7 @@
     },
     {
      "actividadId": "entregar",
-     "nombre": "Entregar",
+     "nombre": "Entrega del proyecto",
      "queSeHace": "El antes y el después del uso y de los semáforos del portal con quien decide, con las tareas que el equipo dejó de hacer a mano, la guía del portal y lo que sigue (los hallazgos que no entraron en esta propuesta, limpiar la base o un caso para crecer).",
      "veces": 1,
      "porDefecto": true,
@@ -4452,7 +4452,7 @@
    "variantes": [
     {
      "nombre": "Dos o tres equipos (Ventas, Marketing, Servicio)",
-     "cambia": "El mapeo del proceso actual (con el nombre de cada proceso), «Crear el plan de adopción» (uno por equipo, con su nombre) y Capacitar suben por equipo, y los hallazgos unos 3 o 4 por equipo. El diagnóstico estratégico es uno por venta; el de rendimiento, si se marca, uno por área. Si la auditoría muestra el ciclo de vida mal usado, se marca «Consensuar las etapas del ciclo de vida» (1 h por sobre qué; con Servicio, también «servicio al cliente»). La auditoría, el kickoff, la entrega y las revisiones siguen siendo una."
+     "cambia": "El mapeo del proceso actual (con el nombre de cada proceso), «Crear el plan de adopción» (uno por equipo, con su nombre) y Capacitación del equipo suben por equipo, y los hallazgos unos 3 o 4 por equipo. El diagnóstico estratégico es uno por venta; el de rendimiento, si se marca, uno por área. Si la auditoría muestra el ciclo de vida mal usado, se marca «Consensuar las etapas del ciclo de vida» (1 h por sobre qué; con Servicio, también «servicio al cliente»). La auditoría, el kickoff, la entrega y las revisiones siguen siendo una."
     },
     {
      "nombre": "Vienes de otro partner",
@@ -4460,7 +4460,7 @@
     },
     {
      "nombre": "Equipo grande o le cuesta volver a usarlo",
-     "cambia": "Capacitar sube 1 por cada grupo más de 8 personas de cada rol, según el plan de adopción (1,5 h c/u: 29,5 h con un grupo más), y 1 más si se deja vendido el refuerzo para quien se quede atrás en la revisión de los 30 días (31 h con los dos). Los hallazgos pueden subir hasta 6 (1,5 h c/u): 34 h con todo. Si pasan de 6, conviene el Sistematiza del área. El acompañamiento de cada semana lo da la sesión semanal que suma la venta."
+     "cambia": "Capacitación del equipo sube 1 por cada grupo más de 8 personas de cada rol, según el plan de adopción (1,5 h c/u: 29,5 h con un grupo más), y 1 más si se deja vendido el refuerzo para quien se quede atrás en la revisión de los 30 días (31 h con los dos). Los hallazgos pueden subir hasta 6 (1,5 h c/u): 34 h con todo. Si pasan de 6, conviene el Sistematiza del área. El acompañamiento de cada semana lo da la sesión semanal que suma la venta."
     }
    ],
    "preguntas": [
@@ -4482,7 +4482,7 @@
     "Data Hub"
    ],
    "paraQuienVende": "Si basta una pasada sin reglas, va dentro de «Reactiva el HubSpot que ya pagas» o de «Migra a HubSpot sin perder tu historial ni dejar de vender». No se pisa con «Convierte tus datos en un activo confiable» (un almacén de datos fuera de HubSpot) ni con «Une la ficha de cada cliente entre tu sitio, tu app y tu tienda con Insider» (la misma persona entre la tienda, el sitio y la app). Vendida con una migración, se limpia en HubSpot apenas termina la carga, nunca en el sistema viejo.",
-   "escenarioBase": "Por defecto suma 32,5 h (unos 2.600 USD): 15 h que se cuentan una vez por venta (Kickoff, auditoría del portal con su panel, diagnóstico estratégico, Entregar y las dos revisiones) y 17,5 h de la limpieza (una pasada por contactos y empresas 4 h, tres reglas de calidad 9 h, el tablero de calidad 3 h y la capacitación de quien cuida los datos 1,5 h). Un portal de HubSpot con la base de contactos y empresas sucia, un equipo, licencia Professional, vendido solo, segmento estándar, sin completar datos con IA y sin horas pendientes. Con el agente de datos, 36,5 h (40 h si además hay que consensuar el Context Home, del que el agente usa la parte de empresa y cliente ideal); con el enriquecimiento de HubSpot, 34 h. Vendida con una migración, suma 16,5 h a esa migración (sin auditoría, con dos reglas y con el Kickoff, la entrega y las revisiones de la migración).",
+   "escenarioBase": "Por defecto suma 32,5 h (unos 2.600 USD): 15 h que se cuentan una vez por venta (Kickoff, auditoría del portal con su panel, diagnóstico estratégico, Entrega del proyecto y las dos revisiones) y 17,5 h de la limpieza (una pasada por contactos y empresas 4 h, tres reglas de calidad 9 h, el tablero de calidad 3 h y la capacitación de quien cuida los datos 1,5 h). Un portal de HubSpot con la base de contactos y empresas sucia, un equipo, licencia Professional, vendido solo, segmento estándar, sin completar datos con IA y sin horas pendientes. Con el agente de datos, 36,5 h (40 h si además hay que consensuar el Context Home, del que el agente usa la parte de empresa y cliente ideal); con el enriquecimiento de HubSpot, 34 h. Vendida con una migración, suma 16,5 h a esa migración (sin auditoría, con dos reglas y con el Kickoff, la entrega y las revisiones de la migración).",
    "loQueSeEntrega": [
     "Un informe de cómo está tu base hoy, con un panel de tus datos reales (duplicados, datos que faltan, propiedades que sobran, contactos mal ubicados en el ciclo de vida), si alcanza para encender agentes de IA y lo que se va a limpiar, aprobado por ti.",
     "Cada contacto y cada empresa una sola vez, con toda su historia junta y sus datos clave escritos igual (país, teléfono, cargo, industria), y solo las propiedades que se usan.",
@@ -4742,7 +4742,7 @@
     },
     {
      "actividadId": "capacitar",
-     "nombre": "Capacitar",
+     "nombre": "Capacitación del equipo",
      "queSeHace": "Con la persona responsable de los datos: leer el tablero, unir los duplicados dudosos y hacer la revisión de cada mes.",
      "veces": 1,
      "porDefecto": true,
@@ -4770,7 +4770,7 @@
     },
     {
      "actividadId": "entregar",
-     "nombre": "Entregar",
+     "nombre": "Entrega del proyecto",
      "queSeHace": "El antes y el después de la base con quien decide, y lo que sigue.",
      "veces": 1,
      "porDefecto": true,
@@ -4835,7 +4835,7 @@
     "matrículas"
    ],
    "paraQuienVende": "Casi siempre con su propio proceso con estados. Condición: licencia Enterprise (cualquier Hub) y Ventas o Servicio funcionando en HubSpot (basta el área que usa el registro: la deja su «Sistematiza», «Reactiva el HubSpot que ya pagas» o «Migra a HubSpot sin perder tu historial ni dejar de vender», o ya funciona y lo confirma la auditoría de su HubSpot). Lo que solo trae una integración (pedidos, facturas, saldos) es «Integra tus sistemas con HubSpot para ver a cada cliente completo», no este caso; un objeto sin estados se vende aquí solo si se crea y se actualiza en HubSpot.",
-   "escenarioBase": "Por defecto suma 22,5 h (unos 1.800 USD): 4 h que se cuentan una vez por venta (Entregar y la revisión de los 60-90 días) y 18,5 h del objeto (el mapeo de cómo lo llevan hoy 2 h, su diseño 3 h, su implementación 3 h, la importación de sus registros 6 h, el reporte de lo disponible 3 h y la capacitación 1,5 h). Venta posterior sobre un HubSpot que ya funciona, con Ventas o Servicio funcionando (su Sistematiza, «Reactiva» o «Migra») y licencia Enterprise. Un objeto con estados (por ejemplo, las unidades de un proyecto) cuyos registros hoy viven en una hoja. Sin la importación de la hoja, 16,5 h; con los registros llegando de un sistema con app, 21,5 h. Sin horas pendientes en lo marcado.",
+   "escenarioBase": "Por defecto suma 22,5 h (unos 1.800 USD): 4 h que se cuentan una vez por venta (Entrega del proyecto y la revisión de los 60-90 días) y 18,5 h del objeto (el mapeo de cómo lo llevan hoy 2 h, su diseño 3 h, su implementación 3 h, la importación de sus registros 6 h, el reporte de lo disponible 3 h y la capacitación 1,5 h). Venta posterior sobre un HubSpot que ya funciona, con Ventas o Servicio funcionando (su Sistematiza, «Reactiva» o «Migra») y licencia Enterprise. Un objeto con estados (por ejemplo, las unidades de un proyecto) cuyos registros hoy viven en una hoja. Sin la importación de la hoja, 16,5 h; con los registros llegando de un sistema con app, 21,5 h. Sin horas pendientes en lo marcado.",
    "loQueSeEntrega": [
     "El diseño de tu nuevo registro aprobado por ti: qué datos lleva, sus estados, quién lo mueve y con qué se conecta (contactos, empresas o negocios).",
     "Tus unidades, contratos o programas viviendo en HubSpot, cada uno con su estado, junto a su cliente y al día cuando se gana un negocio, probados con tu líder con registros reales antes de capacitar a tu equipo.",
@@ -4999,7 +4999,7 @@
     },
     {
      "actividadId": "capacitar",
-     "nombre": "Capacitar",
+     "nombre": "Capacitación del equipo",
      "queSeHace": "Con el equipo que lo usa: crear, mover y consultar los registros desde la ficha del cliente.",
      "veces": 1,
      "porDefecto": true,
@@ -5013,7 +5013,7 @@
     },
     {
      "actividadId": "entregar",
-     "nombre": "Entregar",
+     "nombre": "Entrega del proyecto",
      "queSeHace": "Mostrar a quien decide lo que quedó funcionando y lo que sigue.",
      "veces": 1,
      "porDefecto": true,
@@ -5421,7 +5421,7 @@
     },
     {
      "actividadId": "capacitar",
-     "nombre": "Capacitar",
+     "nombre": "Capacitación del equipo",
      "queSeHace": "Una sesión con el equipo de cada marca que llega y su líder: su día a día en HubSpot, qué ve y qué no, y el tablero del grupo con el filtro de su marca. Quien administra el portal en el grupo entra a la primera, para dar de alta a una persona en su marca, con su equipo y sus permisos.",
      "veces": 2,
      "porDefecto": true,
@@ -5435,7 +5435,7 @@
     },
     {
      "actividadId": "entregar",
-     "nombre": "Entregar",
+     "nombre": "Entrega del proyecto",
      "queSeHace": "Con la dirección del grupo y los líderes de cada marca: cómo estaba cada una y cómo queda, el tablero del grupo con los números del mes, lo que quedó por corregir con su fecha y lo que conviene hacer después (otra marca, el tablero de dirección o unir otro portal).",
      "veces": 1,
      "porDefecto": true,
@@ -5463,15 +5463,15 @@
    "variantes": [
     {
      "nombre": "Una sola marca o país más, con su equipo",
-     "cambia": "Para una marca que llega con su propio equipo y líder, su dominio, la ley de otro país o con el tablero del grupo. Bajan a 1 su mapeo, «Consensuar cada marca o país como unidad de negocio», «Configurar cada marca o país como unidad de negocio», «Configurar el equipo y el reparto de cada marca o país», «Conectar un canal», «Crear el plan de adopción» y «Capacitar»: 19 h (12 h de la marca y 7 h del grupo). Si la marca solo necesita su identidad, su moneda y sus vistas sobre el mismo equipo y el mismo proceso, no es este caso: es «Consensuar una unidad de negocio» y «Configurar una unidad de negocio» dentro del Sistematiza del área (3 h entre las dos)."
+     "cambia": "Para una marca que llega con su propio equipo y líder, su dominio, la ley de otro país o con el tablero del grupo. Bajan a 1 su mapeo, «Consensuar cada marca o país como unidad de negocio», «Configurar cada marca o país como unidad de negocio», «Configurar el equipo y el reparto de cada marca o país», «Conectar un canal», «Crear el plan de adopción» y «Capacitación del equipo»: 19 h (12 h de la marca y 7 h del grupo). Si la marca solo necesita su identidad, su moneda y sus vistas sobre el mismo equipo y el mismo proceso, no es este caso: es «Consensuar una unidad de negocio» y «Configurar una unidad de negocio» dentro del Sistematiza del área (3 h entre las dos)."
     },
     {
      "nombre": "Tres marcas o países o más",
-     "cambia": "Por cada marca o país más suben su mapeo, su unidad de negocio, su equipo y su reparto, «Conectar un canal» si envía correo de marketing con su dominio, «Crear el plan de adopción» y «Capacitar»: unas 12 h por marca (43 h con tres). Con tres o más conviene el cuestionario antes de mapear (0,5 h)."
+     "cambia": "Por cada marca o país más suben su mapeo, su unidad de negocio, su equipo y su reparto, «Conectar un canal» si envía correo de marketing con su dominio, «Crear el plan de adopción» y «Capacitación del equipo»: unas 12 h por marca (43 h con tres). Con tres o más conviene el cuestionario antes de mapear (0,5 h)."
     },
     {
      "nombre": "Las marcas ya están en el portal, mezcladas",
-     "cambia": "Entra «Auditar el portal» (5 h, con su panel) para ver qué ya separa por marca y qué las mezcla. Salen los planes de adopción (los equipos ya trabajan en HubSpot) y «Conectar un canal» si los dominios ya están conectados, y «Capacitar» puede bajar a una sesión para todas. Poner la marca en los registros que ya existen va dentro de su unidad de negocio. Total: 26,5 h. Si la auditoría muestra el ciclo de vida mal usado, se marca su consenso (1 h)."
+     "cambia": "Entra «Auditar el portal» (5 h, con su panel) para ver qué ya separa por marca y qué las mezcla. Salen los planes de adopción (los equipos ya trabajan en HubSpot) y «Conectar un canal» si los dominios ya están conectados, y «Capacitación del equipo» puede bajar a una sesión para todas. Poner la marca en los registros que ya existen va dentro de su unidad de negocio. Total: 26,5 h. Si la auditoría muestra el ciclo de vida mal usado, se marca su consenso (1 h)."
     },
     {
      "nombre": "Una marca llega con su propio portal de HubSpot",
@@ -5499,8 +5499,8 @@
     "lista de precios",
     "descuentos"
    ],
-   "paraQuienVende": "En la venta se mira cómo llega el catálogo: corto y en un solo archivo limpio, o con variantes, varias listas o varias hojas (entonces se marca «Importar el catálogo de productos»). Y se valida la licencia: aprobar en varios pasos y tener una lista de precios por segmento piden una edición más alta de HubSpot (según el cotizador, Enterprise). Las 19,5 h del caso valen para ese catálogo corto: en el cotizador, el catálogo salió de una tarea de 2 h y terminó en 14,5 h junto con la cotización; con la importación desde un archivo («Importar datos», 6 h) son 25,5 h. El plan de adopción lo deja Ventas en la venta (quién cotiza, quién aprueba y cuántos son): de ahí salen las sesiones de «Capacitar».",
-   "escenarioBase": "Por defecto suma 19,5 h (unos 1.560 USD): venta posterior y sola sobre un HubSpot que ya funciona con «Sistematiza tu proceso comercial» hecho, con un equipo comercial que cotiza, un catálogo corto y sin variantes que el cliente entrega en un solo archivo limpio, una plantilla y una regla de aprobación; segmento estándar (80 USD/h). Mapear cómo cotizan hoy 2, el catálogo de productos, la plantilla de cotización y la aprobación de cotizaciones 3 cada uno (1 de consenso y 2 de configuración), Armar los reportes de cotizaciones 3, Capacitar 1,5, Entregar 2 y la revisión de los 60-90 días 2. Si el catálogo trae variantes, varias listas o varias hojas, se marca «Importar el catálogo de productos» (6 h): 25,5 h.",
+   "paraQuienVende": "En la venta se mira cómo llega el catálogo: corto y en un solo archivo limpio, o con variantes, varias listas o varias hojas (entonces se marca «Importar el catálogo de productos»). Y se valida la licencia: aprobar en varios pasos y tener una lista de precios por segmento piden una edición más alta de HubSpot (según el cotizador, Enterprise). Las 19,5 h del caso valen para ese catálogo corto: en el cotizador, el catálogo salió de una tarea de 2 h y terminó en 14,5 h junto con la cotización; con la importación desde un archivo («Importar datos», 6 h) son 25,5 h. El plan de adopción lo deja Ventas en la venta (quién cotiza, quién aprueba y cuántos son): de ahí salen las sesiones de «Capacitación del equipo».",
+   "escenarioBase": "Por defecto suma 19,5 h (unos 1.560 USD): venta posterior y sola sobre un HubSpot que ya funciona con «Sistematiza tu proceso comercial» hecho, con un equipo comercial que cotiza, un catálogo corto y sin variantes que el cliente entrega en un solo archivo limpio, una plantilla y una regla de aprobación; segmento estándar (80 USD/h). Mapear cómo cotizan hoy 2, el catálogo de productos, la plantilla de cotización y la aprobación de cotizaciones 3 cada uno (1 de consenso y 2 de configuración), Armar los reportes de cotizaciones 3, Capacitación del equipo 1,5, Entrega del proyecto 2 y la revisión de los 60-90 días 2. Si el catálogo trae variantes, varias listas o varias hojas, se marca «Importar el catálogo de productos» (6 h): 25,5 h.",
    "loQueSeEntrega": [
     "Tu catálogo de productos y servicios en HubSpot, con los precios vigentes y lo que incluye cada uno.",
     "Una plantilla de cotización con tu marca, que cada vendedor arma desde el negocio con la misma estructura y las mismas condiciones.",
@@ -5701,7 +5701,7 @@
     },
     {
      "actividadId": "capacitar",
-     "nombre": "Capacitar",
+     "nombre": "Capacitación del equipo",
      "queSeHace": "Sesión con quienes cotizan y quien aprueba: buscar productos, armar la cotización desde el negocio, pedir aprobación, enviarla, darle seguimiento y mantener los precios al día.",
      "veces": 1,
      "porDefecto": true,
@@ -5714,7 +5714,7 @@
     },
     {
      "actividadId": "entregar",
-     "nombre": "Entregar",
+     "nombre": "Entrega del proyecto",
      "queSeHace": "Resumen de Nexus revisado por el CSE y sesión con quien compró: cómo cotizaban antes y cómo cotizan ahora, y lo que sigue (por ejemplo, cobrar en línea).",
      "veces": 1,
      "porDefecto": true,
@@ -5743,7 +5743,7 @@
    "variantes": [
     {
      "nombre": "Dos subequipos que cotizan distinto",
-     "cambia": "Una sesión más en «Mapear cómo cotizan hoy», «Consensuar la plantilla de cotización» y «Configurar la plantilla de cotización» suben a 2 (una segunda plantilla) y +1 «Capacitar»: 25 h."
+     "cambia": "Una sesión más en «Mapear cómo cotizan hoy», «Consensuar la plantilla de cotización» y «Configurar la plantilla de cotización» suben a 2 (una segunda plantilla) y +1 «Capacitación del equipo»: 25 h."
     }
    ],
    "preguntas": [],
@@ -5761,8 +5761,8 @@
     "suscripciones",
     "Commerce Hub"
    ],
-   "paraQuienVende": "Que el procesador de pagos de HubSpot o Stripe opere en el país del cliente se confirma en la venta, antes de prometerlo. Si no opera, ver la variante «País sin procesador compatible» y la pregunta para Elías. Las suscripciones, las facturas de HubSpot y los contratos son configuraciones aparte, cada una con su consenso: se marcan solo si el cliente cobra así, y en la venta se confirma qué edición pide cada una. El plan de adopción lo deja Ventas en la venta (quién vende, quién administra los cobros y cuántos son): de ahí salen las sesiones de «Capacitar».",
-   "escenarioBase": "Por defecto suma 18,5 h (unos 1.480 USD): venta posterior y sola sobre un HubSpot con «Estandariza y controla tus cotizaciones» hecho, en un país donde opera el procesador de HubSpot o Stripe, con cobros únicos (sin suscripciones, facturas de HubSpot ni contratos), un equipo comercial y quien administra los cobros; segmento estándar (80 USD/h). Mapear cómo cobran hoy 2, Conectar el procesador de pagos 5, Consensuar el cobro en línea 1, Activar el cobro en línea 2, Armar los reportes de cobros 3, Capacitar 1,5, Entregar 2 y la revisión de los 60-90 días 2. Las suscripciones, las facturas de HubSpot y los contratos son tres configuraciones opcionales de 3 h cada una, con su consenso: 21,5 h con una, 24,5 h con dos y 27,5 h con las tres.",
+   "paraQuienVende": "Que el procesador de pagos de HubSpot o Stripe opere en el país del cliente se confirma en la venta, antes de prometerlo. Si no opera, ver la variante «País sin procesador compatible» y la pregunta para Elías. Las suscripciones, las facturas de HubSpot y los contratos son configuraciones aparte, cada una con su consenso: se marcan solo si el cliente cobra así, y en la venta se confirma qué edición pide cada una. El plan de adopción lo deja Ventas en la venta (quién vende, quién administra los cobros y cuántos son): de ahí salen las sesiones de «Capacitación del equipo».",
+   "escenarioBase": "Por defecto suma 18,5 h (unos 1.480 USD): venta posterior y sola sobre un HubSpot con «Estandariza y controla tus cotizaciones» hecho, en un país donde opera el procesador de HubSpot o Stripe, con cobros únicos (sin suscripciones, facturas de HubSpot ni contratos), un equipo comercial y quien administra los cobros; segmento estándar (80 USD/h). Mapear cómo cobran hoy 2, Conectar el procesador de pagos 5, Consensuar el cobro en línea 1, Activar el cobro en línea 2, Armar los reportes de cobros 3, Capacitación del equipo 1,5, Entrega del proyecto 2 y la revisión de los 60-90 días 2. Las suscripciones, las facturas de HubSpot y los contratos son tres configuraciones opcionales de 3 h cada una, con su consenso: 21,5 h con una, 24,5 h con dos y 27,5 h con las tres.",
    "loQueSeEntrega": [
     "Tu cliente paga en línea al aceptar la cotización o con un link de pago, con tus medios de pago, tu moneda y tus impuestos. Cuando paga, el negocio avanza solo y tu equipo recibe el aviso, sin pedir comprobantes; si los pagos dejan de registrarse, el aviso le llega a quien administra los cobros. Probado contigo con un cobro real y aprobado por quien administra los cobros antes de capacitar a tu equipo.",
     "Tus cobros recurrentes salen solos cada mes o cada año, y ves cuáles fallaron.",
@@ -5978,7 +5978,7 @@
     },
     {
      "actividadId": "capacitar",
-     "nombre": "Capacitar",
+     "nombre": "Capacitación del equipo",
      "queSeHace": "Sesión con el equipo comercial y quien administra los cobros: cobrar desde la cotización, mandar un link de pago, ver el pago en la ficha, qué hacer con un pago rechazado o un reembolso y, si se marcaron, las suscripciones, las facturas y los contratos.",
      "veces": 1,
      "porDefecto": true,
@@ -5991,7 +5991,7 @@
     },
     {
      "actividadId": "entregar",
-     "nombre": "Entregar",
+     "nombre": "Entrega del proyecto",
      "queSeHace": "Resumen de Nexus revisado por el CSE y sesión con quien compró: cuánto tardaban en cobrar antes y ahora, y lo que sigue (por ejemplo, la cobranza de lo vencido).",
      "veces": 1,
      "porDefecto": true,
@@ -6041,8 +6041,8 @@
     "telefonía",
     "plantillas de correo"
    ],
-   "paraQuienVende": "En la venta se valida la licencia: que el guion guarde las respuestas pide Sales Hub Enterprise, y las secuencias, Professional con un asiento de ventas y el correo conectado por vendedor. Inscribir en una secuencia desde un workflow (por ejemplo, todos los contactos de una campaña de temporada) pide Enterprise: con Professional cada vendedor inscribe a mano, de a 50 contactos. Si el cliente piensa en campañas grandes por temporada, eso decide la edición. El plan de adopción lo deja Ventas en la venta (cuántos vendedores y en qué subequipos): de ahí salen las sesiones de «Capacitar».",
-   "escenarioBase": "Por defecto suma 25 h (unos 2.000 USD): venta posterior y sola sobre un HubSpot con «Sistematiza tu proceso comercial» hecho (pipeline y correo de cada vendedor conectado), con un equipo comercial, un guion, una secuencia y llamadas con la telefonía de HubSpot; segmento estándar (80 USD/h). Mapear cómo prospectan y dan seguimiento hoy 2, Conectar el teléfono 2, Armar el tablero de actividad comercial 3, el guion de ventas, la secuencia de seguimiento y los resultados de llamada 3 cada uno (1 de consenso y 2 de configuración), Escribir los textos de la secuencia 2, Capacitar 2 × 1,5, Entregar 2 y la revisión de los 60-90 días 2. Si el portal no tiene el Context Home de la empresa y el cliente ideal y se quiere que la IA escriba los textos con él, se marcan las dos filas del Context Home: 28,5 h.",
+   "paraQuienVende": "En la venta se valida la licencia: que el guion guarde las respuestas pide Sales Hub Enterprise, y las secuencias, Professional con un asiento de ventas y el correo conectado por vendedor. Inscribir en una secuencia desde un workflow (por ejemplo, todos los contactos de una campaña de temporada) pide Enterprise: con Professional cada vendedor inscribe a mano, de a 50 contactos. Si el cliente piensa en campañas grandes por temporada, eso decide la edición. El plan de adopción lo deja Ventas en la venta (cuántos vendedores y en qué subequipos): de ahí salen las sesiones de «Capacitación del equipo».",
+   "escenarioBase": "Por defecto suma 25 h (unos 2.000 USD): venta posterior y sola sobre un HubSpot con «Sistematiza tu proceso comercial» hecho (pipeline y correo de cada vendedor conectado), con un equipo comercial, un guion, una secuencia y llamadas con la telefonía de HubSpot; segmento estándar (80 USD/h). Mapear cómo prospectan y dan seguimiento hoy 2, Conectar el teléfono 2, Armar el tablero de actividad comercial 3, el guion de ventas, la secuencia de seguimiento y los resultados de llamada 3 cada uno (1 de consenso y 2 de configuración), Escribir los textos de la secuencia 2, Capacitación del equipo 2 × 1,5, Entrega del proyecto 2 y la revisión de los 60-90 días 2. Si el portal no tiene el Context Home de la empresa y el cliente ideal y se quiere que la IA escriba los textos con él, se marcan las dos filas del Context Home: 28,5 h.",
    "loQueSeEntrega": [
     "Un guion de descubrimiento y calificación dentro de la ficha del negocio, con las respuestas a las objeciones de siempre; lo que contesta el prospecto queda guardado donde lo necesitas.",
     "Una secuencia de seguimiento, con sus correos y sus pasos de llamada o de mensaje, que corre sola hasta que el prospecto responde o agenda.",
@@ -6294,7 +6294,7 @@
     },
     {
      "actividadId": "capacitar",
-     "nombre": "Capacitar",
+     "nombre": "Capacitación del equipo",
      "queSeHace": "Dos sesiones con el equipo comercial: el guion y las llamadas desde la ficha (tipificar el resultado y agendar el siguiente paso); y la secuencia (inscribir, personalizar un paso y leer sus resultados).",
      "veces": 2,
      "porDefecto": true,
@@ -6320,7 +6320,7 @@
     },
     {
      "actividadId": "entregar",
-     "nombre": "Entregar",
+     "nombre": "Entrega del proyecto",
      "queSeHace": "Resumen de Nexus revisado por el CSE y sesión con quien compró: intentos, respuestas y reuniones antes y después, y lo que sigue.",
      "veces": 1,
      "porDefecto": true,
@@ -6349,11 +6349,11 @@
    "variantes": [
     {
      "nombre": "Sin llamadas (vende por WhatsApp o correo)",
-     "cambia": "Se quitan «Configurar los resultados de llamada» con su consenso y «Conectar el teléfono», y «Capacitar» baja a 1: 18,5 h. Salen el entregable de las llamadas y, de «Lo que necesitamos de ti», el número desde el que llama tu equipo. El hito dice «primeras conversaciones» en lugar de «primeras llamadas». Los pasos de WhatsApp quedan como tareas de la secuencia; para tener WhatsApp en la bandeja se vende «Integra WhatsApp»."
+     "cambia": "Se quitan «Configurar los resultados de llamada» con su consenso y «Conectar el teléfono», y «Capacitación del equipo» baja a 1: 18,5 h. Salen el entregable de las llamadas y, de «Lo que necesitamos de ti», el número desde el que llama tu equipo. El hito dice «primeras conversaciones» en lugar de «primeras llamadas». Los pasos de WhatsApp quedan como tareas de la secuencia; para tener WhatsApp en la bandeja se vende «Integra WhatsApp»."
     },
     {
      "nombre": "Solo secuencias",
-     "cambia": "Además de lo de «Sin llamadas», se quita «Configurar el guion de ventas» con su consenso: quedan el mapeo, la secuencia con sus textos, el tablero, una sesión de «Capacitar», la entrega y la revisión: 15,5 h. El hito queda en «Sabremos que funciona cuando 8 de cada 10 prospectos nuevos entren a la secuencia»."
+     "cambia": "Además de lo de «Sin llamadas», se quita «Configurar el guion de ventas» con su consenso: quedan el mapeo, la secuencia con sus textos, el tablero, una sesión de «Capacitación del equipo», la entrega y la revisión: 15,5 h. El hito queda en «Sabremos que funciona cuando 8 de cada 10 prospectos nuevos entren a la secuencia»."
     },
     {
      "nombre": "Con central telefónica o proveedor propio",
@@ -6361,7 +6361,7 @@
     },
     {
      "nombre": "Dos líneas de negocio o segmentos con seguimiento distinto",
-     "cambia": "Una sesión más en «Mapear cómo prospectan y dan seguimiento hoy» y una segunda secuencia («Consensuar la secuencia de seguimiento», «Configurar la secuencia de seguimiento» y «Escribir los textos de la secuencia» suben a 2, cada secuencia con su nombre): 31 h; +1 «Capacitar» si son equipos distintos: 32,5 h."
+     "cambia": "Una sesión más en «Mapear cómo prospectan y dan seguimiento hoy» y una segunda secuencia («Consensuar la secuencia de seguimiento», «Configurar la secuencia de seguimiento» y «Escribir los textos de la secuencia» suben a 2, cada secuencia con su nombre): 31 h; +1 «Capacitación del equipo» si son equipos distintos: 32,5 h."
     },
     {
      "nombre": "Campañas comerciales por temporada",
@@ -6390,8 +6390,8 @@
     "SDR",
     "outbound"
    ],
-   "paraQuienVende": "Antes de venderlo se estiman los créditos de HubSpot que va a gastar el agente y se confirma que la licencia los cubre. El agente lee el Context Home (el contexto que usa la IA de HubSpot): si el portal ya tiene la parte de la empresa y el cliente ideal y sigue al día, se desmarcan sus dos filas. El plan de adopción lo deja Ventas en la venta (cuántos vendedores prospectan y si el piloto del agente arranca con unos pocos): de ahí salen las sesiones de «Capacitar».",
-   "escenarioBase": "Por defecto suma 20 h (unos 1.600 USD): venta posterior y sola sobre un HubSpot con «Sistematiza tu proceso comercial» hecho y sin el Context Home de la empresa y el cliente ideal (lo normal si no se vendió «Sistematiza tu marketing» ni esa parte opcional en Ventas), con un equipo que prospecta empresas con su cliente ideal claro, sus cuentas objetivo ya en HubSpot con los datos completos y un agente de prospección de HubSpot con créditos suficientes en la licencia; segmento estándar (80 USD/h). Mapear cómo prospectan hoy 2, Diseñar el agente de prospección 2, Configurar el agente de prospección 2, Armar los reportes de la prospección 3, el Context Home 3,5 (consensuarlo 3 y cargarlo 0,5), Capacitar 1,5, Entregar 2 y las revisiones de los 30 y de los 60-90 días 2 cada una. Si el Context Home ya está (lo deja otro caso de la venta o una venta anterior y sigue al día), salen sus dos filas: 16,5 h.",
+   "paraQuienVende": "Antes de venderlo se estiman los créditos de HubSpot que va a gastar el agente y se confirma que la licencia los cubre. El agente lee el Context Home (el contexto que usa la IA de HubSpot): si el portal ya tiene la parte de la empresa y el cliente ideal y sigue al día, se desmarcan sus dos filas. El plan de adopción lo deja Ventas en la venta (cuántos vendedores prospectan y si el piloto del agente arranca con unos pocos): de ahí salen las sesiones de «Capacitación del equipo».",
+   "escenarioBase": "Por defecto suma 20 h (unos 1.600 USD): venta posterior y sola sobre un HubSpot con «Sistematiza tu proceso comercial» hecho y sin el Context Home de la empresa y el cliente ideal (lo normal si no se vendió «Sistematiza tu marketing» ni esa parte opcional en Ventas), con un equipo que prospecta empresas con su cliente ideal claro, sus cuentas objetivo ya en HubSpot con los datos completos y un agente de prospección de HubSpot con créditos suficientes en la licencia; segmento estándar (80 USD/h). Mapear cómo prospectan hoy 2, Diseñar el agente de prospección 2, Configurar el agente de prospección 2, Armar los reportes de la prospección 3, el Context Home 3,5 (consensuarlo 3 y cargarlo 0,5), Capacitación del equipo 1,5, Entrega del proyecto 2 y las revisiones de los 30 y de los 60-90 días 2 cada una. Si el Context Home ya está (lo deja otro caso de la venta o una venta anterior y sigue al día), salen sus dos filas: 16,5 h.",
    "loQueSeEntrega": [
     "Un agente de prospección trabajando sobre tus cuentas objetivo, cada una con su vendedor: investiga cada cuenta, detecta las señales de interés consensuadas contigo y le prepara al vendedor un primer mensaje pensado para su segmento.",
     "Un agente de IA que responde, de cada cuenta objetivo, la pregunta que más te importa para priorizarla (por ejemplo, «¿está contratando vendedores?»). Arranca con una parte de tus cuentas y un tope de créditos, y se abre a todas cuando revisamos juntos sus respuestas y su gasto.",
@@ -6637,7 +6637,7 @@
     },
     {
      "actividadId": "capacitar",
-     "nombre": "Capacitar",
+     "nombre": "Capacitación del equipo",
      "queSeHace": "Sesión con los vendedores: la lista del día, cómo revisar, editar y aprobar los mensajes de la IA y cómo pasar al prospecto a su pipeline.",
      "veces": 1,
      "porDefecto": true,
@@ -6650,7 +6650,7 @@
     },
     {
      "actividadId": "entregar",
-     "nombre": "Entregar",
+     "nombre": "Entrega del proyecto",
      "queSeHace": "Resumen de Nexus revisado por el CSE y sesión con quien compró: cuentas trabajadas, respuestas y reuniones contra lo gastado en créditos, y lo que sigue.",
      "veces": 1,
      "porDefecto": true,
@@ -6710,8 +6710,8 @@
     "probabilidad de cierre",
     "agente de negocios"
    ],
-   "paraQuienVende": "En la venta se valida la licencia: el pronóstico pide Sales Hub Professional y un asiento de ventas por cada vendedor con meta. El caso promete el pronóstico por categorías; si la licencia trae el pronóstico calculado con IA (Sales Hub Enterprise) y hay historia, el CSE lo enciende en la misma configuración, sin prometerlo. Si se sabe que hay muchos negocios sin monto, sin fecha o vencidos, se marca «Recorrer con el equipo los negocios incompletos». El plan de adopción lo deja Ventas en la venta (el líder, cuántos vendedores tiene y si se capacitan por separado): de ahí salen las sesiones de «Capacitar».",
-   "escenarioBase": "Por defecto suma 13,5 h (unos 1.080 USD): venta posterior y sola sobre un HubSpot con «Sistematiza tu proceso comercial» hecho y unos meses de negocios con monto y fecha de cierre al día, con un pipeline, un líder y su equipo; segmento estándar (80 USD/h). Mapear cómo pronostican hoy 2, el pronóstico 3 (1 de consenso y 2 de configuración), Armar los reportes del pronóstico 3, Capacitar 1,5, Entregar 2 y la revisión de los 60-90 días 2. Si hay muchos negocios sin monto, sin fecha o vencidos, se marca «Recorrer con el equipo los negocios incompletos»: 15 h. Con el agente de negocios (opcional): 19,5 h.",
+   "paraQuienVende": "En la venta se valida la licencia: el pronóstico pide Sales Hub Professional y un asiento de ventas por cada vendedor con meta. El caso promete el pronóstico por categorías; si la licencia trae el pronóstico calculado con IA (Sales Hub Enterprise) y hay historia, el CSE lo enciende en la misma configuración, sin prometerlo. Si se sabe que hay muchos negocios sin monto, sin fecha o vencidos, se marca «Recorrer con el equipo los negocios incompletos». El plan de adopción lo deja Ventas en la venta (el líder, cuántos vendedores tiene y si se capacitan por separado): de ahí salen las sesiones de «Capacitación del equipo».",
+   "escenarioBase": "Por defecto suma 13,5 h (unos 1.080 USD): venta posterior y sola sobre un HubSpot con «Sistematiza tu proceso comercial» hecho y unos meses de negocios con monto y fecha de cierre al día, con un pipeline, un líder y su equipo; segmento estándar (80 USD/h). Mapear cómo pronostican hoy 2, el pronóstico 3 (1 de consenso y 2 de configuración), Armar los reportes del pronóstico 3, Capacitación del equipo 1,5, Entrega del proyecto 2 y la revisión de los 60-90 días 2. Si hay muchos negocios sin monto, sin fecha o vencidos, se marca «Recorrer con el equipo los negocios incompletos»: 15 h. Con el agente de negocios (opcional): 19,5 h.",
    "loQueSeEntrega": [
     "Categorías de pronóstico y un criterio escrito para ubicar cada negocio, igual para todos los vendedores.",
     "El pronóstico del mes y del trimestre en HubSpot, con la vista de tu líder lista para la reunión semanal.",
@@ -6888,7 +6888,7 @@
     },
     {
      "actividadId": "capacitar",
-     "nombre": "Capacitar",
+     "nombre": "Capacitación del equipo",
      "queSeHace": "Sesión con el líder y su equipo: cómo ubicar cada negocio en su categoría, cómo se revisa y ajusta el pronóstico en la reunión semanal y qué hacer con un aviso de negocio trabado o con un negocio incompleto; si se marcó el agente de negocios, cómo aprobar o corregir lo que propone.",
      "veces": 1,
      "porDefecto": true,
@@ -6928,7 +6928,7 @@
     },
     {
      "actividadId": "entregar",
-     "nombre": "Entregar",
+     "nombre": "Entrega del proyecto",
      "queSeHace": "Resumen de Nexus revisado por el CSE y sesión con quien compró: cómo pronosticaban antes y cómo ahora, y lo que sigue.",
      "veces": 1,
      "porDefecto": true,
@@ -6970,7 +6970,7 @@
    "variantes": [
     {
      "nombre": "Dos pipelines o líneas de negocio",
-     "cambia": "«Consensuar el pronóstico» y «Configurar el pronóstico» suben a 2: 16,5 h; +1 «Capacitar» si los líderes son distintos: 18 h."
+     "cambia": "«Consensuar el pronóstico» y «Configurar el pronóstico» suben a 2: 16,5 h; +1 «Capacitación del equipo» si los líderes son distintos: 18 h."
     },
     {
      "nombre": "Con el agente de negocios",
@@ -6979,7 +6979,7 @@
    ],
    "preguntas": [
     "Sumé como opcional el agente de negocios de HubSpot (después de cada reunión o correo le propone al vendedor la etapa, el monto y la fecha de cierre, y él los aprueba): era el agente listo que no tenía caso. ¿Lo dejamos aquí o va como opcional en «Sistematiza tu proceso comercial»?",
-    "Acompañar las dos primeras reuniones semanales del líder con su equipo pasó de dos sesiones de seguimiento a dos sesiones opcionales de «Capacitar» (3 h). ¿Las dejamos así, o eso ya lo cubre la sesión semanal del proyecto y se borran?"
+    "Acompañar las dos primeras reuniones semanales del líder con su equipo pasó de dos sesiones de seguimiento a dos sesiones opcionales de «Capacitación del equipo» (3 h). ¿Las dejamos así, o eso ya lo cubre la sesión semanal del proyecto y se borran?"
    ],
    "requisito": "sistematiza-ventas"
   },
@@ -6997,7 +6997,7 @@
     "calendario conectado"
    ],
    "paraQuienVende": "Para un cliente que ya tiene HubSpot: una re-implementación o la base de clientes que Smarteam ya atiende. En una implementación nueva no se vende: va dentro del Sistematiza del área (las reglas globales van en la base del portal y el calendario de cada usuario, al implementar el proceso). Esquema mixto: quien administra el portal define una sola vez las reglas globales (el aviso a quien participa y quién puede grabar) y cada usuario conecta obligatoriamente su propio calendario y su correo; sin eso, sus reuniones no quedan. Se vende por equipo: con Ventas y Servicio, la configuración de la grabación, el plan de adopción y la capacitación suben por equipo. Algunas funciones piden Professional o gastan créditos del cliente: confirmar en la venta qué permite la licencia y qué asientos pide. Las llamadas se graban solo si el equipo ya llama desde HubSpot; conectar el teléfono es «Vende con el mismo guion y un seguimiento que no se olvida». Si el equipo no trabaja en HubSpot, antes va «Reactiva el HubSpot que ya pagas».",
-   "escenarioBase": "Por defecto suma 11 h (unos 880 USD): venta posterior y sola para un cliente de la base de Smarteam con HubSpot funcionando (ya tuvo su kickoff y su portal lo implementó o lo auditó Smarteam), un equipo de ventas de hasta 8 personas con su líder y una licencia que trae la grabación y las notas; segmento estándar (80 USD/h). Mapear cómo registran hoy sus reuniones y llamadas 2, Crear el plan de adopción 2, Activar la grabación y las notas de reuniones con IA 1,5, Capacitar 1,5, Entregar 2 y la revisión de los 30 días 2. Con el kickoff (primera venta con Smarteam o un sponsor nuevo): 13 h. Re-implementación de un portal que armó otro y que nadie auditó (kickoff y «Auditar el portal»): 18 h.",
+   "escenarioBase": "Por defecto suma 11 h (unos 880 USD): venta posterior y sola para un cliente de la base de Smarteam con HubSpot funcionando (ya tuvo su kickoff y su portal lo implementó o lo auditó Smarteam), un equipo de ventas de hasta 8 personas con su líder y una licencia que trae la grabación y las notas; segmento estándar (80 USD/h). Mapear cómo registran hoy sus reuniones y llamadas 2, Crear el plan de adopción 2, Activar la grabación y las notas de reuniones con IA 1,5, Capacitación del equipo 1,5, Entrega del proyecto 2 y la revisión de los 30 días 2. Con el kickoff (primera venta con Smarteam o un sponsor nuevo): 13 h. Re-implementación de un portal que armó otro y que nadie auditó (kickoff y «Auditar el portal»): 18 h.",
    "loQueSeEntrega": [
     "Las reglas de grabación de tu empresa, definidas una sola vez en HubSpot: el aviso a quien participa y quién puede grabar.",
     "Tu equipo con su calendario y su correo conectados a HubSpot, persona por persona, y la grabación con aviso y las notas automáticas encendidas.",
@@ -7085,7 +7085,7 @@
      "queSeHace": "Ventas arma el plan en la venta con la estructura del equipo: subequipos, roles y cuántas personas hay en cada uno, y cómo se capacita (todo el grupo, un formador o un piloto). El CSE lo ajusta y le suma qué se espera de cada rol (conectar su calendario y su correo la primera semana, grabar con aviso sus reuniones con clientes y revisar el resumen que deja la IA), cómo se mide el uso (qué parte de las reuniones deja su resumen en la ficha) y el anuncio del líder.",
      "veces": 1,
      "porDefecto": true,
-     "cuandoCambia": "Uno por equipo: sube 1 por cada equipo más que lo enciende, cada uno con su nombre («Servicio», «Ventas: <subequipo>»). De este plan salen las veces de «Capacitar». En la misma venta que el Sistematiza del área es el mismo plan y no se suma.",
+     "cuandoCambia": "Uno por equipo: sube 1 por cada equipo más que lo enciende, cada uno con su nombre («Servicio», «Ventas: <subequipo>»). De este plan salen las veces de «Capacitación del equipo». En la misma venta que el Sistematiza del área es el mismo plan y no se suma.",
      "sobreQue": "Ventas",
      "sostiene": [
       3
@@ -7112,7 +7112,7 @@
     },
     {
      "actividadId": "capacitar",
-     "nombre": "Capacitar",
+     "nombre": "Capacitación del equipo",
      "queSeHace": "Sesión con el equipo y su líder: conectar el calendario y el correo de quien todavía no lo hizo, grabar una reunión con el aviso a quien participa, revisar y completar en la ficha las notas y el resumen que deja la IA, encontrar lo que se habló con un cliente antes de volver a contactarlo, y cómo revisa el líder las reuniones de su equipo.",
      "veces": 1,
      "porDefecto": true,
@@ -7126,7 +7126,7 @@
     },
     {
      "actividadId": "entregar",
-     "nombre": "Entregar",
+     "nombre": "Entrega del proyecto",
      "queSeHace": "Resumen de Nexus revisado por el CSE y sesión con quien compró: cuántas reuniones dejaban registro antes y cuántas ahora, el tiempo que ya no se va en minutas y lo que sigue.",
      "veces": 1,
      "porDefecto": true,
@@ -7143,7 +7143,7 @@
      "queSeHace": "A los 30 días: qué porcentaje de las reuniones del equipo con clientes deja su resumen en la ficha, medido contra la meta; quién no conectó su calendario o no graba, los créditos que gastó si la licencia los cobra, y lo que sigue (encenderlo en otro equipo o usar lo que se habla en las reuniones con un agente).",
      "veces": 1,
      "porDefecto": true,
-     "cuandoCambia": "No se quita: es donde se mide la meta. Si la cifra no llega, se propone una sesión más de «Capacitar» con quienes quedaron atrás.",
+     "cuandoCambia": "No se quita: es donde se mide la meta. Si la cifra no llega, se propone una sesión más de «Capacitación del equipo» con quienes quedaron atrás.",
      "sobreQue": "a los 30 días",
      "sostiene": [
       4,
@@ -7155,11 +7155,11 @@
    "variantes": [
     {
      "nombre": "Ventas y Servicio (dos equipos)",
-     "cambia": "+1 «Crear el plan de adopción» («Servicio»), +1 «Activar la grabación y las notas de reuniones con IA» («Servicio») y +1 «Capacitar»: 16 h. Las reglas globales se definen una sola vez. Si los dos equipos registran distinto, las sesiones del mapeo suben a 2: 17 h."
+     "cambia": "+1 «Crear el plan de adopción» («Servicio»), +1 «Activar la grabación y las notas de reuniones con IA» («Servicio») y +1 «Capacitación del equipo»: 16 h. Las reglas globales se definen una sola vez. Si los dos equipos registran distinto, las sesiones del mapeo suben a 2: 17 h."
     },
     {
      "nombre": "Equipo de más de 8 personas",
-     "cambia": "+1 «Capacitar» por cada grupo de 8 más, según el plan de adopción: 12,5 h con 9 a 16 personas."
+     "cambia": "+1 «Capacitación del equipo» por cada grupo de 8 más, según el plan de adopción: 12,5 h con 9 a 16 personas."
     },
     {
      "nombre": "Re-implementación de un portal que armó otro",
@@ -7447,7 +7447,7 @@
     },
     {
      "actividadId": "capacitar",
-     "nombre": "Capacitar",
+     "nombre": "Capacitación del equipo",
      "queSeHace": "Sesión con vendedores y Marketing juntos: cómo llega un lead, cómo se lee el puntaje, cómo se acepta o se descarta a tiempo y cómo se lee el tablero del embudo.",
      "veces": 1,
      "porDefecto": true,
@@ -7461,7 +7461,7 @@
     },
     {
      "actividadId": "entregar",
-     "nombre": "Entregar",
+     "nombre": "Entrega del proyecto",
      "queSeHace": "Sesión con los dos líderes y quien decide: el traspaso funcionando, el tiempo de respuesta antes y después, y el siguiente caso (por ejemplo, la nutrición con agente para los leads que todavía no están listos).",
      "veces": 1,
      "porDefecto": true,
@@ -7513,7 +7513,7 @@
     },
     {
      "nombre": "Dos o más subequipos de ventas reciben leads",
-     "cambia": "«Capacitar» y las sesiones de «Mapear el proceso actual de traspaso de leads» suben una por subequipo, y se marca «Crear el plan de adopción de Ventas» (2 h, sobre el plan que armó quien vendió). Con dos subequipos: 24 h. Si cada uno recibe leads con reglas distintas, «Diseñar el proceso de traspaso de leads en HubSpot» e «Implementar el proceso de traspaso de leads en HubSpot» suben a 2: 30 h."
+     "cambia": "«Capacitación del equipo» y las sesiones de «Mapear el proceso actual de traspaso de leads» suben una por subequipo, y se marca «Crear el plan de adopción de Ventas» (2 h, sobre el plan que armó quien vendió). Con dos subequipos: 24 h. Si cada uno recibe leads con reglas distintas, «Diseñar el proceso de traspaso de leads en HubSpot» e «Implementar el proceso de traspaso de leads en HubSpot» suben a 2: 30 h."
     }
    ],
    "preguntas": [
@@ -7750,7 +7750,7 @@
     },
     {
      "actividadId": "capacitar",
-     "nombre": "Capacitar",
+     "nombre": "Capacitación del equipo",
      "queSeHace": "Con el equipo de Marketing: registrar lo que no deja rastro, usar la convención en todos los canales, cargar los costos del mes y leer los reportes. La primera revisión del presupuesto se hace juntos.",
      "veces": 1,
      "porDefecto": true,
@@ -7778,7 +7778,7 @@
     },
     {
      "actividadId": "entregar",
-     "nombre": "Entregar",
+     "nombre": "Entrega del proyecto",
      "queSeHace": "Sesión con quien decide el presupuesto: qué canal trae ventas y cuánto cuesta cada una, cómo se compara con el punto de partida, qué conviene mover y el siguiente caso.",
      "veces": 1,
      "porDefecto": true,
@@ -7796,7 +7796,7 @@
      "queSeHace": "A los 60-90 días, con ventas ya cerradas: qué canal rindió, si el equipo mantiene la convención y el registro de lo que no deja rastro, y cuánto presupuesto se movió.",
      "veces": 1,
      "porDefecto": true,
-     "cuandoCambia": "Va una, a los 60-90 días: antes no hay suficientes ventas cerradas. Si el cliente quiere que estemos en la segunda revisión del presupuesto, se marca la sesión más de «Capacitar».",
+     "cuandoCambia": "Va una, a los 60-90 días: antes no hay suficientes ventas cerradas. Si el cliente quiere que estemos en la segunda revisión del presupuesto, se marca la sesión más de «Capacitación del equipo».",
      "sobreQue": "a los 60-90 días",
      "sostiene": [
       3,
@@ -8124,7 +8124,7 @@
     },
     {
      "actividadId": "capacitar",
-     "nombre": "Capacitar",
+     "nombre": "Capacitación del equipo",
      "queSeHace": "(Una vez) Una sesión para usar los agentes y aprobar lo que preparan, y otra para acompañar la primera campaña hecha con ellos.",
      "veces": 2,
      "porDefecto": true,
@@ -8139,7 +8139,7 @@
     },
     {
      "actividadId": "entregar",
-     "nombre": "Entregar",
+     "nombre": "Entrega del proyecto",
      "queSeHace": "Al cerrar la puesta en marcha (mes 1), con quien decide: los agentes funcionando, la primera campaña, el tablero y el plan de cada mes.",
      "veces": 1,
      "porDefecto": true,
@@ -8452,7 +8452,7 @@
     },
     {
      "actividadId": "capacitar",
-     "nombre": "Capacitar",
+     "nombre": "Capacitación del equipo",
      "queSeHace": "Con Marketing: leer el recorrido, revisar una muestra de lo que escribió el agente, ajustar un texto base y leer los resultados.",
      "veces": 1,
      "porDefecto": true,
@@ -8466,7 +8466,7 @@
     },
     {
      "actividadId": "entregar",
-     "nombre": "Entregar",
+     "nombre": "Entrega del proyecto",
      "queSeHace": "Sesión con quien decide: el recorrido funcionando, los primeros resultados contra el punto de partida, los créditos gastados y el siguiente caso.",
      "veces": 1,
      "porDefecto": true,
@@ -8842,7 +8842,7 @@
     },
     {
      "actividadId": "capacitar",
-     "nombre": "Capacitar",
+     "nombre": "Capacitación del equipo",
      "queSeHace": "Una sesión con los vendedores (su vista de cuentas, el comité, los avisos y las tareas) y otra con Marketing (listas por nivel, audiencias y reportes), acompañando el lanzamiento de la primera campaña.",
      "veces": 2,
      "porDefecto": true,
@@ -8856,7 +8856,7 @@
     },
     {
      "actividadId": "entregar",
-     "nombre": "Entregar",
+     "nombre": "Entrega del proyecto",
      "queSeHace": "Sesión con los dos líderes y quien decide: las cuentas clave trabajándose, los primeros movimientos contra el punto de partida y el siguiente caso.",
      "veces": 1,
      "porDefecto": true,
@@ -8900,7 +8900,7 @@
    "variantes": [
     {
      "nombre": "Liderado por Ventas, pocas cuentas y sin campaña",
-     "cambia": "Se quitan «Planificar la primera campaña a cuentas clave» y «Conectar los anuncios de LinkedIn»; «Capacitar» y las sesiones de «Mapear cómo se trabajan hoy las cuentas grandes» bajan a 1. El entregable de la campaña sale del cronograma; de la línea fija de «Lo que no incluye» sale lo de la pauta y sale la línea de las piezas, y el acceso a LinkedIn sale solo de «Lo que necesitamos de ti», con su fila. Total: 18,5 h."
+     "cambia": "Se quitan «Planificar la primera campaña a cuentas clave» y «Conectar los anuncios de LinkedIn»; «Capacitación del equipo» y las sesiones de «Mapear cómo se trabajan hoy las cuentas grandes» bajan a 1. El entregable de la campaña sale del cronograma; de la línea fija de «Lo que no incluye» sale lo de la pauta y sale la línea de las piezas, y el acceso a LinkedIn sale solo de «Lo que necesitamos de ti», con su fila. Total: 18,5 h."
     },
     {
      "nombre": "Sin anuncios en LinkedIn",
@@ -9198,7 +9198,7 @@
     },
     {
      "actividadId": "entregar",
-     "nombre": "Entregar",
+     "nombre": "Entrega del proyecto",
      "queSeHace": "Mostrar el antes y el después (cómo encontraban al cliente en Google y en la IA al empezar y cómo lo encuentran hoy), lo corregido y lo publicado, y proponer lo que sigue: más temas o un SmartLoop de contenido.",
      "veces": 1,
      "porDefecto": true,
@@ -9619,7 +9619,7 @@
     },
     {
      "actividadId": "entregar",
-     "nombre": "Entregar",
+     "nombre": "Entrega del proyecto",
      "queSeHace": "Mostrar el sitio publicado y el antes y el después con los datos que haya (visitas, contactos y, si se auditó el sitio anterior, su velocidad en el celular frente a la del nuevo), y proponer lo que sigue (por ejemplo, SEO y AEO, o la nutrición de leads).",
      "veces": 1,
      "porDefecto": true,
@@ -9656,7 +9656,7 @@
     },
     {
      "nombre": "Dos idiomas, otra marca u otro país",
-     "cambia": "«Diseñar y publicar un sitio» cuenta cada página en cada idioma: 12 páginas en dos idiomas son 24. Un segundo sitio con su propio dominio suma sus páginas, la importación de su blog si conviene traerlo (sube a 2) y, si se audita, «Auditar el sitio web» sube a 2 (una por sitio, 3 h más). Si es otra marca, la plantilla de landing sube a 2 y, si la marca cuenta otra historia o tiene su propia voz, el Context Home sube a 2 (3,5 h más): con las veces, Nexus resta solo lo repetido y no descuenta lo de la segunda marca contra la primera. Si cada marca tiene que verse aparte en HubSpot (su remitente, sus suscripciones, sus vistas), es una unidad de negocio: va en «Ordena tus marcas, países o unidades de negocio en un solo HubSpot», y antes hay que confirmar en la venta qué permite la licencia. «Capacitar» sube si lo administran equipos distintos."
+     "cambia": "«Diseñar y publicar un sitio» cuenta cada página en cada idioma: 12 páginas en dos idiomas son 24. Un segundo sitio con su propio dominio suma sus páginas, la importación de su blog si conviene traerlo (sube a 2) y, si se audita, «Auditar el sitio web» sube a 2 (una por sitio, 3 h más). Si es otra marca, la plantilla de landing sube a 2 y, si la marca cuenta otra historia o tiene su propia voz, el Context Home sube a 2 (3,5 h más): con las veces, Nexus resta solo lo repetido y no descuenta lo de la segunda marca contra la primera. Si cada marca tiene que verse aparte en HubSpot (su remitente, sus suscripciones, sus vistas), es una unidad de negocio: va en «Ordena tus marcas, países o unidades de negocio en un solo HubSpot», y antes hay que confirmar en la venta qué permite la licencia. «Capacitación del equipo» sube si lo administran equipos distintos."
     }
    ],
    "preguntas": [
@@ -10055,7 +10055,7 @@
     },
     {
      "actividadId": "capacitar",
-     "nombre": "Capacitar",
+     "nombre": "Capacitación del equipo",
      "queSeHace": "Sesión con el equipo: atender desde la bandeja y desde la app del celular, recibir lo que pasa el agente, usar plantillas y respuestas guardadas, reasignar una conversación y pasarla a negocio o caso, y las reglas para que Meta no limite ni bloquee el número (permiso antes de escribir, plantillas aprobadas, nada masivo sin permiso).",
      "veces": 1,
      "porDefecto": true,
@@ -10070,7 +10070,7 @@
     },
     {
      "actividadId": "entregar",
-     "nombre": "Entregar",
+     "nombre": "Entrega del proyecto",
      "queSeHace": "Sesión con quien decide: cómo se atiende ahora, los números del tablero contra lo de antes, lo que atendió el agente y los casos que siguen (por ejemplo, el agente de atención o el servicio en HubSpot).",
      "veces": 1,
      "porDefecto": true,
@@ -10122,7 +10122,7 @@
     },
     {
      "nombre": "Ventas y servicio atienden por WhatsApp",
-     "cambia": "Suben a 2 las sesiones del mapeo de cómo atienden hoy, el diseño y la implementación del proceso de atención de conversaciones y «Capacitar», y se marca el plan de adopción de «Servicio»: 46,5 h; con un tablero por equipo («Armar reportes» ×2), 49,5 h. Si nadie consensuó todavía las etapas del ciclo de vida de las dos áreas, se marcan sus dos filas (1 h cada una). Si Servicio ya atiende en HubSpot con «Sistematiza tu servicio», su parte no es un segundo proceso ni lleva su plan: WhatsApp entra a su bandeja con «Consensuar cómo entra WhatsApp a la bandeja» y «Sumar WhatsApp a una bandeja que ya funciona» (1 + 2 h). Si el agente también tiene que resolver lo que pregunta quien ya tiene algo con el cliente (su pedido, su caso, su trámite, su cuenta), va en el caso del agente de atención."
+     "cambia": "Suben a 2 las sesiones del mapeo de cómo atienden hoy, el diseño y la implementación del proceso de atención de conversaciones y «Capacitación del equipo», y se marca el plan de adopción de «Servicio»: 46,5 h; con un tablero por equipo («Armar reportes» ×2), 49,5 h. Si nadie consensuó todavía las etapas del ciclo de vida de las dos áreas, se marcan sus dos filas (1 h cada una). Si Servicio ya atiende en HubSpot con «Sistematiza tu servicio», su parte no es un segundo proceso ni lleva su plan: WhatsApp entra a su bandeja con «Consensuar cómo entra WhatsApp a la bandeja» y «Sumar WhatsApp a una bandeja que ya funciona» (1 + 2 h). Si el agente también tiene que resolver lo que pregunta quien ya tiene algo con el cliente (su pedido, su caso, su trámite, su cuenta), va en el caso del agente de atención."
     },
     {
      "nombre": "El WhatsApp viene de otra plataforma (Atomchat, Treble, Wati u otra)",
@@ -10130,7 +10130,7 @@
     },
     {
      "nombre": "Con envíos por WhatsApp a un segmento",
-     "cambia": "Pide Marketing Hub Professional (según el cotizador, sin verificar: confirmar en la venta qué permite la licencia). Se marcan «Planificar una campaña» (2 h) y «Capacitar» +1 para acompañar el primer envío: 39,5 h, con el entregable del primer envío."
+     "cambia": "Pide Marketing Hub Professional (según el cotizador, sin verificar: confirmar en la venta qué permite la licencia). Se marcan «Planificar una campaña» (2 h) y «Capacitación del equipo» +1 para acompañar el primer envío: 39,5 h, con el entregable del primer envío."
     }
    ],
    "preguntas": [
@@ -10433,7 +10433,7 @@
     },
     {
      "actividadId": "capacitar",
-     "nombre": "Capacitar",
+     "nombre": "Capacitación del equipo",
      "queSeHace": "Sesión con el equipo y su líder: cómo llegan las conversaciones que pasa el agente, cómo revisar una muestra de sus respuestas y cómo corregir sus fuentes.",
      "veces": 1,
      "porDefecto": true,
@@ -10448,7 +10448,7 @@
     },
     {
      "actividadId": "entregar",
-     "nombre": "Entregar",
+     "nombre": "Entrega del proyecto",
      "queSeHace": "Con quien decide: qué resolvió el agente contra la línea base, cuánto gastó en créditos y qué sigue.",
      "veces": 1,
      "porDefecto": true,
@@ -10507,7 +10507,7 @@
     "portal de distribuidores"
    ],
    "paraQuienVende": "Antes de vender un agente de IA de atención, este caso es la base de la que aprende. Aquí quien pregunta busca solo la respuesta; si se quiere que un agente le conteste en el chat o en WhatsApp, es «Resuelve las consultas de siempre con un agente de IA», que aprende de esta base. Con distribuidores o socios: si el distribuidor ve sus registros (casos, pedidos, facturas), es el portal de clientes de este caso; si ve contenido por grupo (páginas, catálogos, documentos), es la zona privada del sitio de «Lanza un sitio que trae contactos y que cambias sin programador».",
-   "escenarioBase": "Por defecto suma 27,5 h (unos 2.200 USD): Mapear cómo responden hoy las preguntas de siempre 2 + Diseñar el proceso de la base 3 + Implementar el proceso de la base 3 + Consensuar qué ve el cliente en su portal 1 + Activar el portal de clientes 2 + Escribir las respuestas de 4 temas 8 + Armar el reporte de artículos y casos 3 + Capacitar 1,5 + Entregar 2 + Revisar uso y resultados a los 60-90 días 2. Supone una venta posterior: «Sistematiza tu servicio» ya funciona (el escritorio de ayuda recibe los casos), con Service Hub Professional y un subdominio para la base. Un público y un idioma, y un equipo de hasta 8 personas. El cliente tiene material de ayuda (manuales, respuestas guardadas) pero ningún artículo publicado, y no tiene el agente de atención ni distribuidores con acceso propio. Base con sus primeros 10 artículos en 4 temas, y portal de clientes; vendido solo; segmento estándar.",
+   "escenarioBase": "Por defecto suma 27,5 h (unos 2.200 USD): Mapear cómo responden hoy las preguntas de siempre 2 + Diseñar el proceso de la base 3 + Implementar el proceso de la base 3 + Consensuar qué ve el cliente en su portal 1 + Activar el portal de clientes 2 + Escribir las respuestas de 4 temas 8 + Armar el reporte de artículos y casos 3 + Capacitación del equipo 1,5 + Entrega del proyecto 2 + Revisar uso y resultados a los 60-90 días 2. Supone una venta posterior: «Sistematiza tu servicio» ya funciona (el escritorio de ayuda recibe los casos), con Service Hub Professional y un subdominio para la base. Un público y un idioma, y un equipo de hasta 8 personas. El cliente tiene material de ayuda (manuales, respuestas guardadas) pero ningún artículo publicado, y no tiene el agente de atención ni distribuidores con acceso propio. Base con sus primeros 10 artículos en 4 temas, y portal de clientes; vendido solo; segmento estándar.",
    "loQueSeEntrega": [
     "Tu base de conocimiento publicada en tu dominio, ordenada por temas y con buscador, con tus primeros 10 artículos: las preguntas que más te hacen, respondidas y aprobadas por tu equipo.",
     "Un portal donde tus clientes entran con su cuenta, ven sus casos y en qué va cada uno, y abren uno nuevo.",
@@ -10750,7 +10750,7 @@
     },
     {
      "actividadId": "capacitar",
-     "nombre": "Capacitar",
+     "nombre": "Capacitación del equipo",
      "queSeHace": "Sesión con el equipo: cómo escribir y publicar un artículo, cómo insertarlo al responder un caso y qué ve el cliente en el portal.",
      "veces": 1,
      "porDefecto": true,
@@ -10764,7 +10764,7 @@
     },
     {
      "actividadId": "entregar",
-     "nombre": "Entregar",
+     "nombre": "Entrega del proyecto",
      "queSeHace": "Con quien decide: la base y el portal funcionando, qué se lee y qué casos bajaron, y lo que sigue (por ejemplo, el agente de atención).",
      "veces": 1,
      "porDefecto": true,
@@ -10793,7 +10793,7 @@
    "variantes": [
     {
      "nombre": "Solo portal de clientes",
-     "cambia": "Quedan «Mapear cómo responden hoy las preguntas de siempre», «Consensuar qué ve el cliente en su portal», «Activar el portal de clientes», «Armar el reporte de artículos y casos», «Capacitar», «Entregar» y la revisión de los 60-90 días: 13,5 h. Se desmarcan el diseño y la implementación del proceso de la base y «Escribir las respuestas de un tema», y salen solos los entregables de la base. «Armar el reporte de artículos y casos» se queda para medir el portal: su línea pasa a «Un reporte de los casos que tus clientes abren desde el portal y de los que siguen llegando por correo o por teléfono.» y el hito a «Sabremos que funciona cuando, en ese reporte, 3 de cada 10 casos nuevos se abran desde el portal.»"
+     "cambia": "Quedan «Mapear cómo responden hoy las preguntas de siempre», «Consensuar qué ve el cliente en su portal», «Activar el portal de clientes», «Armar el reporte de artículos y casos», «Capacitación del equipo», «Entrega del proyecto» y la revisión de los 60-90 días: 13,5 h. Se desmarcan el diseño y la implementación del proceso de la base y «Escribir las respuestas de un tema», y salen solos los entregables de la base. «Armar el reporte de artículos y casos» se queda para medir el portal: su línea pasa a «Un reporte de los casos que tus clientes abren desde el portal y de los que siguen llegando por correo o por teléfono.» y el hito a «Sabremos que funciona cuando, en ese reporte, 3 de cada 10 casos nuevos se abran desde el portal.»"
     },
     {
      "nombre": "Portal para distribuidores o socios",
@@ -10819,7 +10819,7 @@
     "churn"
    ],
    "paraQuienVende": "Todas las encuestas viven en este caso: si el cliente solo quiere la que sale al cerrar cada caso (una institución o un servicio sin cartera que cuidar), va sola, con la variante «Solo la encuesta al cerrar el caso (gobierno o un servicio sin cartera)». El agente de IA que vigila la salud de cada cliente también va aquí, en filas opcionales, y gasta créditos del cliente: se estiman antes de proponerlo. Si el equipo que atiende también vende (como un contact center), las oportunidades se quedan con quien atiende en vez de pasar a Ventas. Si las revisiones con los clientes clave no dejan su resumen en HubSpot, ofrece «Haz que cada reunión deje su resumen en HubSpot»: el responsable y el agente de salud leen ahí lo que se habló.",
-   "escenarioBase": "Por defecto suma 24,5 h (unos 1.960 USD): Mapear cómo cuidan hoy la cartera 2 + Diseñar el proceso de Customer Success 3 + Crear el plan de adopción 2 + Implementar el proceso de Customer Success 3 + Armar el tablero de la cartera 3 + Consensuar el paso de oportunidades a Ventas 1 + Configurar el paso de oportunidades a Ventas 2 + Consensuar la encuesta de relación 1 + Configurar la encuesta de relación 2 + Capacitar 1,5 + Entregar 2 + Revisar uso y resultados a los 60-90 días 2. Supone una venta posterior: «Sistematiza tu servicio» ya funciona y dejó consensuado el ciclo de vida de servicio al cliente, cada cliente tiene responsable y la relación es continua (contratos o suscripciones). Service Hub Professional con asiento para cada responsable de cuenta; un equipo de hasta 8 personas cuida la cartera; los tipos de cliente y los clientes clave ya están definidos; el uso del producto no está en HubSpot; la expansión se trabaja en el pipeline de ventas que ya existe; con la encuesta de relación (NPS cada trimestre) y sin la del cierre del caso; vendido solo; segmento estándar. Sin encuestas, 21,5 h; con las dos, 27,5 h; con el agente de salud del cliente, 34 h; solo la encuesta al cerrar el caso, 13,5 h.",
+   "escenarioBase": "Por defecto suma 24,5 h (unos 1.960 USD): Mapear cómo cuidan hoy la cartera 2 + Diseñar el proceso de Customer Success 3 + Crear el plan de adopción 2 + Implementar el proceso de Customer Success 3 + Armar el tablero de la cartera 3 + Consensuar el paso de oportunidades a Ventas 1 + Configurar el paso de oportunidades a Ventas 2 + Consensuar la encuesta de relación 1 + Configurar la encuesta de relación 2 + Capacitación del equipo 1,5 + Entrega del proyecto 2 + Revisar uso y resultados a los 60-90 días 2. Supone una venta posterior: «Sistematiza tu servicio» ya funciona y dejó consensuado el ciclo de vida de servicio al cliente, cada cliente tiene responsable y la relación es continua (contratos o suscripciones). Service Hub Professional con asiento para cada responsable de cuenta; un equipo de hasta 8 personas cuida la cartera; los tipos de cliente y los clientes clave ya están definidos; el uso del producto no está en HubSpot; la expansión se trabaja en el pipeline de ventas que ya existe; con la encuesta de relación (NPS cada trimestre) y sin la del cierre del caso; vendido solo; segmento estándar. Sin encuestas, 21,5 h; con las dos, 27,5 h; con el agente de salud del cliente, 34 h; solo la encuesta al cerrar el caso, 13,5 h.",
    "loQueSeEntrega": [
     "Un indicador de salud en la ficha de cada cliente, armado con sus casos y las demás señales que consensuemos contigo (como su satisfacción), probado con tu líder sobre clientes que ya sabe cómo están, antes de capacitar a tu equipo.",
     "Tu cartera a la vista en un espacio de trabajo para revisarla cada semana: cada responsable ve quién está sano, quién en riesgo y quién tiene potencial, y tus clientes clave tienen un responsable dedicado.",
@@ -11157,7 +11157,7 @@
     },
     {
      "actividadId": "capacitar",
-     "nombre": "Capacitar",
+     "nombre": "Capacitación del equipo",
      "queSeHace": "Sesión con los responsables de cuenta y su líder: el espacio de Customer Success, la revisión semanal, qué hacer con un cliente en riesgo o con una mala nota, y cómo pasar una oportunidad a Ventas.",
      "veces": 1,
      "porDefecto": true,
@@ -11171,7 +11171,7 @@
     },
     {
      "actividadId": "entregar",
-     "nombre": "Entregar",
+     "nombre": "Entrega del proyecto",
      "queSeHace": "Con quien decide: cuántos clientes están sanos, en riesgo y con potencial, contra cómo se sabía antes, y lo que sigue.",
      "veces": 1,
      "porDefecto": true,
@@ -11213,7 +11213,7 @@
    "variantes": [
     {
      "nombre": "Solo la encuesta al cerrar el caso (gobierno o un servicio sin cartera)",
-     "cambia": "Para quien solo quiere medir cada atención, como una institución o un servicio sin cartera que cuidar. Quedan «Mapear cómo cuidan hoy la cartera» (ahí, cómo miden hoy la satisfacción), «Consensuar la encuesta al cerrar el caso», «Configurar la encuesta al cerrar el caso», «Armar el tablero de la cartera» (aquí, el tablero de satisfacción: encuestas enviadas y respondidas, y las malas calificaciones con su seguimiento), «Capacitar» (cómo dar seguimiento a una mala calificación), «Entregar» y la revisión de los 60-90 días: 13,5 h. Se desmarcan el diseño y la implementación del proceso de la cartera, el paso de oportunidades a Ventas, la encuesta de relación y el plan de adopción, y en «Lo que se entrega» quedan solas la encuesta del cierre, el tablero con la entrega y el hito. El hito pasa a «Sabremos que funciona cuando, en tu tablero de satisfacción, 8 de cada 10 casos cerrados reciban su encuesta y 8 de cada 10 malas calificaciones tengan su seguimiento en el plazo consensuado.» La promesa pasa a «Sabes cómo califica cada persona la atención de su caso, y ninguna mala calificación se queda sin seguimiento.». En «Lo que no incluye» no aparecen la del uso del producto ni la del agente de salud, porque suponen una cartera que cuidar."
+     "cambia": "Para quien solo quiere medir cada atención, como una institución o un servicio sin cartera que cuidar. Quedan «Mapear cómo cuidan hoy la cartera» (ahí, cómo miden hoy la satisfacción), «Consensuar la encuesta al cerrar el caso», «Configurar la encuesta al cerrar el caso», «Armar el tablero de la cartera» (aquí, el tablero de satisfacción: encuestas enviadas y respondidas, y las malas calificaciones con su seguimiento), «Capacitación del equipo» (cómo dar seguimiento a una mala calificación), «Entrega del proyecto» y la revisión de los 60-90 días: 13,5 h. Se desmarcan el diseño y la implementación del proceso de la cartera, el paso de oportunidades a Ventas, la encuesta de relación y el plan de adopción, y en «Lo que se entrega» quedan solas la encuesta del cierre, el tablero con la entrega y el hito. El hito pasa a «Sabremos que funciona cuando, en tu tablero de satisfacción, 8 de cada 10 casos cerrados reciban su encuesta y 8 de cada 10 malas calificaciones tengan su seguimiento en el plazo consensuado.» La promesa pasa a «Sabes cómo califica cada persona la atención de su caso, y ninguna mala calificación se queda sin seguimiento.». En «Lo que no incluye» no aparecen la del uso del producto ni la del agente de salud, porque suponen una cartera que cuidar."
     },
     {
      "nombre": "Con el agente de salud del cliente",
@@ -11222,7 +11222,7 @@
    ],
    "preguntas": [
     "El uso del producto casi siempre vive fuera de HubSpot. ¿El indicador de salud arranca sin uso (con los casos, la encuesta de relación y los datos de la ficha) y la conexión se marca solo si el cliente la pide, como lo dejé, o va marcada por defecto?",
-    "¿El CSE acompaña por defecto la primera revisión trimestral del cliente con uno de sus clientes clave? Sería una sesión más de «Capacitar» (1,5 h).",
+    "¿El CSE acompaña por defecto la primera revisión trimestral del cliente con uno de sus clientes clave? Sería una sesión más de «Capacitación del equipo» (1,5 h).",
     "La oportunidad de crecer, ¿se trabaja en el pipeline de ventas que ya existe, como lo dejé, o en un pipeline propio de expansión?",
     "El ciclo de vida de servicio al cliente (quién es cliente, quién se fue y quién es un lead calificado por servicio) lo dejé opcional porque «Sistematiza tu servicio» ya lo deja consensuado. ¿Va marcado por defecto en este caso?"
    ],
@@ -11240,7 +11240,7 @@
     "vista 360"
    ],
    "paraQuienVende": "Si el inventario y el contenido de los packs viven en el ERP (por ejemplo, un club de vinos con tienda en línea), pregunta si quien vende o atiende tiene que verlos antes de ofrecer: la conexión trae los productos con su disponibilidad y lo que trae cada pack, y «Usar el dato del ERP en el proceso» los pone a la vista (confirmar en la preventa qué trae la app). Si el equipo de servicio también vende (un contact center), también necesita ver rápido qué compró cada cliente: cuenta como un equipo más en el plan de adopción y en «Usar el dato del ERP en el proceso». Las facturas, los pagos y los saldos de SAP de finanzas van con «Acelera y controla tu cobranza con HubSpot».",
-   "escenarioBase": "Por defecto suma 15,5 h (unos 1.240 USD): Mapear cómo consultan hoy el dato del ERP 2 + Conectar el sistema con su app del Marketplace 5 + Armar los reportes del cruce con el ERP 3 + Capacitar 1,5 + Entregar 2 + Revisar uso y resultados a los 60-90 días 2, sin horas por definir. Supone una venta posterior sobre un HubSpot que ya funciona («Sistematiza tu proceso comercial» hecho), un sistema (el ERP) con una app del Marketplace que cubre los objetos, un equipo que usa el dato, segmento estándar. A la medida sale «Conectar el sistema con su app del Marketplace» y entran la arquitectura y la conexión de Dev, con las horas que defina: el CSE queda en 10,5 h (11,5 h con SAP estándar, que mapea con TI y con Ventas), y la sesión semanal mientras Dev construye la suma la venta.",
+   "escenarioBase": "Por defecto suma 15,5 h (unos 1.240 USD): Mapear cómo consultan hoy el dato del ERP 2 + Conectar el sistema con su app del Marketplace 5 + Armar los reportes del cruce con el ERP 3 + Capacitación del equipo 1,5 + Entrega del proyecto 2 + Revisar uso y resultados a los 60-90 días 2, sin horas por definir. Supone una venta posterior sobre un HubSpot que ya funciona («Sistematiza tu proceso comercial» hecho), un sistema (el ERP) con una app del Marketplace que cubre los objetos, un equipo que usa el dato, segmento estándar. A la medida sale «Conectar el sistema con su app del Marketplace» y entran la arquitectura y la conexión de Dev, con las horas que defina: el CSE queda en 10,5 h (11,5 h con SAP estándar, que mapea con TI y con Ventas), y la sesión semanal mientras Dev construye la suma la venta.",
    "loQueSeEntrega": [
     "El plan de integración aprobado contigo: qué sistemas se conectan, qué datos pasan, cada cuánto y hasta dónde llega, y qué se puede traer y qué no según tu sistema.",
     "Tu ERP, o el sistema que consensuamos contigo, conectado a HubSpot y sincronizando solo: la ficha de cada cliente muestra lo que quedó en el plan (por ejemplo, sus pedidos, sus facturas o lo que tiene contratado), y tus reportes lo cruzan con lo que vendes.",
@@ -11461,7 +11461,7 @@
     },
     {
      "actividadId": "capacitar",
-     "nombre": "Capacitar",
+     "nombre": "Capacitación del equipo",
      "queSeHace": "Sesión con quienes usan la ficha y con quien administra la conexión: qué dato viene de dónde, cada cuánto se actualiza y qué hacer si falla.",
      "veces": 1,
      "porDefecto": true,
@@ -11476,7 +11476,7 @@
     },
     {
      "actividadId": "entregar",
-     "nombre": "Entregar",
+     "nombre": "Entrega del proyecto",
      "queSeHace": "Mostrar la ficha completa y el cruce de lo comercial con lo que trae el otro sistema, con casos reales, frente a cómo se pedía antes el dato, y proponer lo que sigue (cobranza, tablero de dirección).",
      "veces": 1,
      "porDefecto": true,
@@ -11515,11 +11515,11 @@
     },
     {
      "nombre": "Dos o más sistemas (por ejemplo, ERP y tienda en línea)",
-     "cambia": "«Mapear cómo consultan hoy el dato del ERP» con una sesión más por sistema y «Conectar el sistema con su app del Marketplace» +1 por cada uno con app, cada uno sobre su sistema: con un segundo sistema con app, 21,5 h. Si dos sistemas cambian el mismo dato, esa conexión va a la medida. «Capacitar» +1 si otro equipo usa el dato."
+     "cambia": "«Mapear cómo consultan hoy el dato del ERP» con una sesión más por sistema y «Conectar el sistema con su app del Marketplace» +1 por cada uno con app, cada uno sobre su sistema: con un segundo sistema con app, 21,5 h. Si dos sistemas cambian el mismo dato, esa conexión va a la medida. «Capacitación del equipo» +1 si otro equipo usa el dato."
     },
     {
      "nombre": "Con el inventario y los packs del ERP",
-     "cambia": "Si el inventario y el contenido de los packs viven en el ERP (por ejemplo, un club de vinos con tienda en línea) y quien vende o atiende tiene que verlos antes de ofrecer: la conexión trae los productos con su disponibilidad y lo que trae cada pack (confirmar en la preventa qué trae la app), y se marcan «Consensuar cómo se usa el dato del ERP en el proceso» y «Usar el dato del ERP en el proceso» (1 + 2 h) para ponerlos a la vista: 18,5 h. Si la app no los trae, van en la conexión a la medida o en una tarjeta en la ficha que consulta el ERP en vivo (las dos de Dev). Si el equipo de servicio también vende, «Capacitar» +1 para ese equipo: 20 h. Si en HubSpot todavía no hay catálogo de productos, su estructura se consensúa con «Consensuar el catálogo de productos» y se deja con «Configurar el catálogo de productos», de «Estandariza y controla tus cotizaciones comerciales»."
+     "cambia": "Si el inventario y el contenido de los packs viven en el ERP (por ejemplo, un club de vinos con tienda en línea) y quien vende o atiende tiene que verlos antes de ofrecer: la conexión trae los productos con su disponibilidad y lo que trae cada pack (confirmar en la preventa qué trae la app), y se marcan «Consensuar cómo se usa el dato del ERP en el proceso» y «Usar el dato del ERP en el proceso» (1 + 2 h) para ponerlos a la vista: 18,5 h. Si la app no los trae, van en la conexión a la medida o en una tarjeta en la ficha que consulta el ERP en vivo (las dos de Dev). Si el equipo de servicio también vende, «Capacitación del equipo» +1 para ese equipo: 20 h. Si en HubSpot todavía no hay catálogo de productos, su estructura se consensúa con «Consensuar el catálogo de productos» y se deja con «Configurar el catálogo de productos», de «Estandariza y controla tus cotizaciones comerciales»."
     }
    ],
    "preguntas": [
@@ -11541,7 +11541,7 @@
     "Revenue Agent"
    ],
    "paraQuienVende": "Cobranza recupera lo vencido y no crea facturas legales: las trae del ERP por «Integra tus sistemas con HubSpot para ver a cada cliente completo», usa las de HubSpot que dejó «Cobra en línea en el momento de cerrar la venta» o, si no las dejó, las deja con «Consensuar las facturas de HubSpot» y «Configurar las facturas de HubSpot». Ese par es uno solo por venta: con «Cobra en línea» en la misma venta, Nexus lo cuenta una vez. El agente de recaudación (Revenue Agent) no entra en una propuesta hasta confirmar que está en el portal del cliente.",
-   "escenarioBase": "Por defecto suma 16,5 h (unos 1.320 USD): Mapear el proceso de cobranza actual 2 + Diseñar el proceso de cobranza 3 + Implementar el proceso de cobranza 3 + Armar el tablero de cobranza 3 + Capacitar 1,5 + Entregar 2 + Revisar uso y resultados a los 60-90 días 2. Supone una venta posterior sobre un HubSpot con la visión completa hecha: las facturas, los pagos y los saldos ya llegan del ERP. Un equipo de cobranza, avisos por correo, sin agente, segmento estándar. Con el agente: + Diseñar 2 + Configurar 2 + la revisión de los 30 días 2 = 22,5 h (más 3,5 h del Context Home, salvo que una venta anterior ya lo haya dejado). Si el ERP está conectado con su app pero sin las facturas, + «Sumar facturas y saldos a la conexión del ERP» 1,5 h; con SAP de finanzas, + la arquitectura y la conexión de Dev, con sus horas (la sesión semanal mientras Dev construye la suma la venta). Si las facturas van a nacer en HubSpot y «Cobra en línea» no las dejó hechas, + «Consensuar las facturas de HubSpot» 1 h y «Configurar las facturas de HubSpot» 2 h; con «Cobra en línea» en la misma venta, Nexus las cuenta una vez.",
+   "escenarioBase": "Por defecto suma 16,5 h (unos 1.320 USD): Mapear el proceso de cobranza actual 2 + Diseñar el proceso de cobranza 3 + Implementar el proceso de cobranza 3 + Armar el tablero de cobranza 3 + Capacitación del equipo 1,5 + Entrega del proyecto 2 + Revisar uso y resultados a los 60-90 días 2. Supone una venta posterior sobre un HubSpot con la visión completa hecha: las facturas, los pagos y los saldos ya llegan del ERP. Un equipo de cobranza, avisos por correo, sin agente, segmento estándar. Con el agente: + Diseñar 2 + Configurar 2 + la revisión de los 30 días 2 = 22,5 h (más 3,5 h del Context Home, salvo que una venta anterior ya lo haya dejado). Si el ERP está conectado con su app pero sin las facturas, + «Sumar facturas y saldos a la conexión del ERP» 1,5 h; con SAP de finanzas, + la arquitectura y la conexión de Dev, con sus horas (la sesión semanal mientras Dev construye la suma la venta). Si las facturas van a nacer en HubSpot y «Cobra en línea» no las dejó hechas, + «Consensuar las facturas de HubSpot» 1 h y «Configurar las facturas de HubSpot» 2 h; con «Cobra en línea» en la misma venta, Nexus las cuenta una vez.",
    "loQueSeEntrega": [
     "Tu proceso de cobranza consensuado contigo: etapas de una factura vencida, quién llama, cuándo se escala y qué se le dice al cliente.",
     "Tus facturas, pagos y saldos llegando solos desde tu sistema contable, con un aviso a tu responsable si la sincronización falla, y el código y las llaves a nombre de tu empresa.",
@@ -11805,7 +11805,7 @@
     },
     {
      "actividadId": "capacitar",
-     "nombre": "Capacitar",
+     "nombre": "Capacitación del equipo",
      "queSeHace": "Sesión con Cobranza: trabajar la cartera, registrar promesas de pago y leer el tablero; cómo ven el aviso Ventas y Servicio.",
      "veces": 1,
      "porDefecto": true,
@@ -11821,7 +11821,7 @@
     },
     {
      "actividadId": "entregar",
-     "nombre": "Entregar",
+     "nombre": "Entrega del proyecto",
      "queSeHace": "Mostrar la cartera vencida contra la línea base y proponer lo que sigue (el agente, «Cobra en línea»).",
      "veces": 1,
      "porDefecto": true,
@@ -11892,7 +11892,7 @@
     "Data Hub"
    ],
    "paraQuienVende": "Si solo quiere ver el ERP en la ficha, es «Integra tus sistemas con HubSpot para ver a cada cliente completo»; si solo quiere HubSpot en su BI, es «Lleva los datos de HubSpot a Power BI o a tu BI corporativo».",
-   "escenarioBase": "Por defecto suma 15 h (unos 1.200 USD) de CSE: Mapear 3 + Diccionario 2 + Cálculo en la ficha 1,5 + Reportes 3 + Capacitar 1,5 + Entregar 2 + Revisar 2; más Dev (la arquitectura y la conexión de cada sistema, y el cálculo), con las horas que defina en la preventa técnica. Escenario: venta posterior sobre un HubSpot que ya funciona (nivel Eficiente), sin almacén previo: entran HubSpot y el ERP, un cálculo vuelve a la ficha y la dirección mira en HubSpot; un grupo de líderes, segmento estándar. La sesión semanal con el líder y TI mientras Dev construye la suma la venta.",
+   "escenarioBase": "Por defecto suma 15 h (unos 1.200 USD) de CSE: Mapear 3 + Diccionario 2 + Cálculo en la ficha 1,5 + Reportes 3 + Capacitación del equipo 1,5 + Entrega del proyecto 2 + Revisar 2; más Dev (la arquitectura y la conexión de cada sistema, y el cálculo), con las horas que defina en la preventa técnica. Escenario: venta posterior sobre un HubSpot que ya funciona (nivel Eficiente), sin almacén previo: entran HubSpot y el ERP, un cálculo vuelve a la ficha y la dirección mira en HubSpot; un grupo de líderes, segmento estándar. La sesión semanal con el líder y TI mientras Dev construye la suma la venta.",
    "loQueSeEntrega": [
     "El mapa de tus datos aprobado contigo: qué sistemas entran al almacén, qué se calcula y adónde vuelve.",
     "Un diccionario de datos consensuado contigo: qué significa cada número, de qué sistema sale y quién lo cuida.",
@@ -12125,7 +12125,7 @@
     },
     {
      "actividadId": "capacitar",
-     "nombre": "Capacitar",
+     "nombre": "Capacitación del equipo",
      "queSeHace": "Sesión con los líderes: qué significa cada dato nuevo, cómo usarlo para decidir y a quién avisar si no cuadra.",
      "veces": 1,
      "porDefecto": true,
@@ -12140,7 +12140,7 @@
     },
     {
      "actividadId": "entregar",
-     "nombre": "Entregar",
+     "nombre": "Entrega del proyecto",
      "queSeHace": "Mostrar los cálculos en la ficha y en los reportes con casos reales, y proponer lo que sigue (más cálculos, Power BI).",
      "veces": 1,
      "porDefecto": true,
@@ -12193,7 +12193,7 @@
     "inteligencia de negocios"
    ],
    "paraQuienVende": "Si la dirección quiere mirar en HubSpot, es «Dirige tu empresa con los números a la vista»; si el número junta sistemas fuera de HubSpot, es «Convierte tus datos en un activo confiable».",
-   "escenarioBase": "Por defecto suma 14,5 h (unos 1.160 USD): Mapear 2 + Diccionario 2 + Conectar 5 + Capacitar 1,5 + Entregar 2 + Revisar 2, sin horas por definir. Escenario: venta posterior sobre un HubSpot que ya funciona, vendido solo (sin almacén), un BI corporativo con conector del Marketplace; el tablero lo arma el equipo de BI del cliente; segmento estándar.",
+   "escenarioBase": "Por defecto suma 14,5 h (unos 1.160 USD): Mapear 2 + Diccionario 2 + Conectar 5 + Capacitación del equipo 1,5 + Entrega del proyecto 2 + Revisar 2, sin horas por definir. Escenario: venta posterior sobre un HubSpot que ya funciona, vendido solo (sin almacén), un BI corporativo con conector del Marketplace; el tablero lo arma el equipo de BI del cliente; segmento estándar.",
    "loQueSeEntrega": [
     "Lo que vas a ver en tu BI, consensuado contigo: qué números de HubSpot, junto a qué datos y cada cuánto se actualizan.",
     "Un diccionario de métricas: qué significa cada número que llega y de qué dato de HubSpot sale.",
@@ -12330,7 +12330,7 @@
     },
     {
      "actividadId": "capacitar",
-     "nombre": "Capacitar",
+     "nombre": "Capacitación del equipo",
      "queSeHace": "Sesión con el equipo de BI: qué llega, cada cuánto, cómo cruzarlo con el resto y qué hacer si no cuadra.",
      "veces": 1,
      "porDefecto": true,
@@ -12345,7 +12345,7 @@
     },
     {
      "actividadId": "entregar",
-     "nombre": "Entregar",
+     "nombre": "Entrega del proyecto",
      "queSeHace": "Mostrar los números de HubSpot en el BI junto al resto de la empresa, frente al exporte a mano de antes, y proponer lo que sigue.",
      "veces": 1,
      "porDefecto": true,
@@ -12391,7 +12391,7 @@
     "reporte gerencial"
    ],
    "paraQuienVende": "Si la dirección mira en Power BI, es «Lleva los datos de HubSpot a Power BI o a tu BI corporativo», y el diccionario se reusa. Los números de fondo (margen, valor de vida) piden la facturación en HubSpot («Integra tus sistemas con HubSpot para ver a cada cliente completo») o el almacén («Convierte tus datos en un activo confiable»); con la visión completa en la misma venta, su cruce de lo vendido contra lo facturado entra en este tablero.",
-   "escenarioBase": "Por defecto suma 19 h (unos 1.520 USD): Mapear 2 + Plan de adopción 2 + Diccionario 2 + Reportes 2×3 + Capacitar 2×1,5 + Entregar 2 + Revisar 2. Con un área sola, 16 h; con las tres, 22 h. Escenario: venta posterior sobre un HubSpot que ya funciona, con Ventas y Marketing sistematizados por Smarteam; una gerencia; dos áreas en el tablero; sin huecos de datos; segmento estándar.",
+   "escenarioBase": "Por defecto suma 19 h (unos 1.520 USD): Mapear 2 + Plan de adopción 2 + Diccionario 2 + Reportes 2×3 + Capacitación del equipo 2×1,5 + Entrega del proyecto 2 + Revisar 2. Con un área sola, 16 h; con las tres, 22 h. Escenario: venta posterior sobre un HubSpot que ya funciona, con Ventas y Marketing sistematizados por Smarteam; una gerencia; dos áreas en el tablero; sin huecos de datos; segmento estándar.",
    "loQueSeEntrega": [
     "Las métricas de tu empresa consensuadas con tus líderes: qué significa cada número, de dónde sale y contra qué meta se compara.",
     "Un tablero de dirección en HubSpot con cómo va cada área contra su meta, que llega solo a tu correo.",
@@ -12545,7 +12545,7 @@
     },
     {
      "actividadId": "capacitar",
-     "nombre": "Capacitar",
+     "nombre": "Capacitación del equipo",
      "queSeHace": "Una sesión con la gerencia y los líderes para leer el tablero y mantener sus números al día, y otra para acompañar la primera reunión de revisión.",
      "veces": 2,
      "porDefecto": true,
@@ -12560,7 +12560,7 @@
     },
     {
      "actividadId": "entregar",
-     "nombre": "Entregar",
+     "nombre": "Entrega del proyecto",
      "queSeHace": "Mostrar el tablero con los números del mes frente a cómo se armaba antes el reporte, y proponer lo que sigue (pronóstico, Power BI, almacén).",
      "veces": 1,
      "porDefecto": true,
@@ -12606,7 +12606,7 @@
     "Gemini"
    ],
    "paraQuienVende": "Sirve también para un HubSpot que implementó otro. Si el equipo no usa HubSpot, primero «Reactiva el HubSpot que ya pagas»: el asistente no arregla un proceso que nadie sigue. La prueba de una línea: si la IA está afuera (el ChatGPT o el Claude de la empresa) y la persona la usa para trabajar en HubSpot, es este caso; si la IA trabaja dentro de HubSpot (un agente o el asistente de HubSpot), es el caso de ese agente, «Pon a un agente de IA a hacer el trabajo repetitivo de tu equipo» o el asistente del proceso que diseña y configura el Sistematiza («Diseñar un asistente» y «Configurar un asistente»); si otro sistema manda sus datos a HubSpot, es «Integra tus sistemas con HubSpot para ver a cada cliente completo». En gobierno, el visto bueno escrito de TI va en el documento de accesos y cambios que pide el contrato; sin él, el caso queda fuera.",
-   "escenarioBase": "Por defecto suma 12 h (unos 960 USD): Mapear 2 + Conectar 1,5 + Reportes 3 + Capacitar 1,5 + Entregar 2 + Revisar 2, sin horas por definir. Escenario: vendido solo, sobre un HubSpot en uso cuyos permisos por rol ya sirven (lo implementó Smarteam o se auditó hace poco), así que no es la primera compra del cliente. La empresa ya paga cuentas de empresa de Claude, cuyo conector oficial lee y escribe; un equipo de hasta 8 personas; segmento estándar. Vendido con otros casos (o en un SmartLoop), la entrega y la revisión son las de la venta y Nexus las cuenta una vez: el caso suma 8 h. Si es la primera venta con Smarteam o firma otro sponsor, la venta suma el Kickoff y la revisión de los 30 días (+4 h). Con un HubSpot que no implementó Smarteam y que nadie auditó, la venta suma la auditoría (+5 h); con los permisos de todo el portal por ordenar, +1,5 h.",
+   "escenarioBase": "Por defecto suma 12 h (unos 960 USD): Mapear 2 + Conectar 1,5 + Reportes 3 + Capacitación del equipo 1,5 + Entrega del proyecto 2 + Revisar 2, sin horas por definir. Escenario: vendido solo, sobre un HubSpot en uso cuyos permisos por rol ya sirven (lo implementó Smarteam o se auditó hace poco), así que no es la primera compra del cliente. La empresa ya paga cuentas de empresa de Claude, cuyo conector oficial lee y escribe; un equipo de hasta 8 personas; segmento estándar. Vendido con otros casos (o en un SmartLoop), la entrega y la revisión son las de la venta y Nexus las cuenta una vez: el caso suma 8 h. Si es la primera venta con Smarteam o firma otro sponsor, la venta suma el Kickoff y la revisión de los 30 días (+4 h). Con un HubSpot que no implementó Smarteam y que nadie auditó, la venta suma la auditoría (+5 h); con los permisos de todo el portal por ordenar, +1,5 h.",
    "loQueSeEntrega": [
     "Qué puede consultar y qué puede cambiar cada rol desde el asistente, revisado contigo y con tu TI al conectarlo: el asistente respeta los permisos de tu HubSpot, y desde ahí no se borra nada ni se sacan listas de contactos.",
     "Tu HubSpot conectado al ChatGPT o al Claude de tu empresa con el conector oficial de HubSpot: cada persona entra con su propio usuario y ve y cambia solo lo que sus permisos de HubSpot le dejan.",
@@ -12725,7 +12725,7 @@
     },
     {
      "actividadId": "capacitar",
-     "nombre": "Capacitar",
+     "nombre": "Capacitación del equipo",
      "queSeHace": "Sesión con el equipo (hasta 8 personas): conectar su usuario, preguntar por sus clientes y sus negocios, dejar notas, tareas y avances desde el asistente, revisar lo que quedó registrado y saber qué no se hace desde ahí. Se graba, con aviso a quienes asisten, y con la grabación Nexus escribe la guía de una página por rol, con las preguntas que más le sirven a cada uno.",
      "veces": 1,
      "porDefecto": true,
@@ -12739,7 +12739,7 @@
     },
     {
      "actividadId": "entregar",
-     "nombre": "Entregar",
+     "nombre": "Entrega del proyecto",
      "queSeHace": "Sesión con quien decide: cuánto registra el equipo en HubSpot antes y después, cuánto de eso entra desde el asistente, las reglas aprobadas y lo que sigue; quien decide marca en Nexus lo entregado como recibido.",
      "veces": 1,
      "porDefecto": true,
@@ -12768,7 +12768,7 @@
    "variantes": [
     {
      "nombre": "Más de 8 personas o un segundo equipo (Servicio o Marketing)",
-     "cambia": "«Capacitar» sube 1 por cada 8 personas más o por cada equipo que lo use distinto, y las sesiones de «Mapear cómo usa hoy el equipo la IA y HubSpot» suben 1 si el otro equipo lo usa distinto; «Armar reportes» sube 1 si ese equipo quiere su propio reporte. Los permisos del nuevo rol se revisan al conectar. Con un segundo equipo que lo usa distinto y quiere su reporte: 17,5 h."
+     "cambia": "«Capacitación del equipo» sube 1 por cada 8 personas más o por cada equipo que lo use distinto, y las sesiones de «Mapear cómo usa hoy el equipo la IA y HubSpot» suben 1 si el otro equipo lo usa distinto; «Armar reportes» sube 1 si ese equipo quiere su propio reporte. Los permisos del nuevo rol se revisan al conectar. Con un segundo equipo que lo usa distinto y quiere su reporte: 17,5 h."
     },
     {
      "nombre": "Solo consultas (el conector del asistente solo lee, o no se aprueba que escriba)",
@@ -12794,7 +12794,7 @@
     "handoff"
    ],
    "paraQuienVende": "Va cuando Ventas o Servicio ya trabajan en HubSpot y el cliente acepta pagar los créditos del agente. La prueba: si el agente trabaja puertas adentro para el equipo y su tarea no es la de un agente que ya tiene su caso, es este. Si le escribe a un cliente o a un prospecto, o es el de atención, prospección, calificación, nutrición, datos, negocios, recaudación o salud del cliente, va en el suyo; cualquier agente de Marketing (contenido, campañas, redes u otro) va en «Produce más campañas y contenido con IA que suena a tu marca». Resumir una llamada o una reunión lo hace la IA que ya trae HubSpot (confirmar en la venta qué permite la licencia): es «Haz que cada reunión deje su resumen en HubSpot» (o, dentro de un Sistematiza, la configuración «Activar la grabación y las notas de reuniones con IA»); resumir un caso de servicio es «Activar la IA de la bandeja de servicio», de «Sistematiza tu servicio con HubSpot». Investigar cuentas para escribirles primero es «Prioriza y acelera tu prospección B2B con IA», y completar los datos de cada cuenta, el agente de datos. Si una persona le pregunta a ChatGPT o a Claude y él consulta HubSpot, es «Consulta y actualiza tu HubSpot desde ChatGPT o Claude»: aquí el agente trabaja solo, cada vez que pasa algo. Un agente del Marketplace de HubSpot que cabe aquí (el del traspaso, el de negocios perdidos) lleva las mismas filas y el mismo tiempo; están en beta.",
-   "escenarioBase": "Por defecto suma 20 h (unos 1.600 USD): Mapear 2 + Diseñar el agente 2 + Context Home 3,5 + Configurar el agente 2 + Reportes 3 + Capacitar 1,5 + Entregar 2 + Revisar 2 + 2, sin horas por definir. Escenario: venta posterior, el área ya trabaja en HubSpot (por ejemplo, después de «Sistematiza tu proceso comercial»). Un agente hecho con el creador de agentes para una tarea interna de un solo equipo que no necesita otra herramienta ni código: por ejemplo, revisar cada negocio perdido y dejar en la ficha por qué se perdió y si conviene retomarlo. Nadie dejó cargado el Context Home (si ya lo dejó «Sistematiza tu marketing», otro caso de la venta o una venta anterior, se desmarca, y con él su entregable: 16,5 h). Vendido solo; segmento estándar.",
+   "escenarioBase": "Por defecto suma 20 h (unos 1.600 USD): Mapear 2 + Diseñar el agente 2 + Context Home 3,5 + Configurar el agente 2 + Reportes 3 + Capacitación del equipo 1,5 + Entrega del proyecto 2 + Revisar 2 + 2, sin horas por definir. Escenario: venta posterior, el área ya trabaja en HubSpot (por ejemplo, después de «Sistematiza tu proceso comercial»). Un agente hecho con el creador de agentes para una tarea interna de un solo equipo que no necesita otra herramienta ni código: por ejemplo, revisar cada negocio perdido y dejar en la ficha por qué se perdió y si conviene retomarlo. Nadie dejó cargado el Context Home (si ya lo dejó «Sistematiza tu marketing», otro caso de la venta o una venta anterior, se desmarca, y con él su entregable: 16,5 h). Vendido solo; segmento estándar.",
    "loQueSeEntrega": [
     "La tarea de tu agente consensuada contigo: qué hace y cuándo, qué lee y qué deja en HubSpot, qué nunca hace sin que lo apruebe una persona, quién de tu equipo revisa lo que deja y cuántos créditos de HubSpot se estima que gaste al mes.",
     "El contexto que usa la IA de HubSpot (el Context Home), con lo que vendes y a quién se lo vendes, escrito contigo y cargado en HubSpot, para que este agente y los que vengan lo usen.",
@@ -13011,7 +13011,7 @@
     },
     {
      "actividadId": "capacitar",
-     "nombre": "Capacitar",
+     "nombre": "Capacitación del equipo",
      "queSeHace": "Sesión con el equipo que trabaja con el agente: dónde encuentra lo que dejó, cómo revisarlo y corregirlo, qué hacer si se equivoca o no arrancó y a quién avisar.",
      "veces": 1,
      "porDefecto": true,
@@ -13025,7 +13025,7 @@
     },
     {
      "actividadId": "entregar",
-     "nombre": "Entregar",
+     "nombre": "Entrega del proyecto",
      "queSeHace": "Con quien decide: el agente trabajando, cuánto hizo y cuánto tiempo ahorró contra la línea base, lo que gastó contra lo estimado y lo que sigue (abrirlo a otro equipo, otra tarea u otro agente).",
      "veces": 1,
      "porDefecto": true,
@@ -13068,7 +13068,7 @@
    "variantes": [
     {
      "nombre": "Cambia el trabajo de otro equipo (el traspaso de Ventas a Servicio, por ejemplo)",
-     "cambia": "Las sesiones de «Mapear cómo se hace hoy la tarea del agente» suben a 2, «Capacitar» sube 1 y se marca «Crear el plan de adopción» para el equipo que recibe, con el anuncio del líder: 4,5 h más (24,5 h). Si ese equipo necesita algo escrito que no existe (qué necesita saber de cada negocio ganado, por ejemplo), se marca «Escribir las respuestas de un tema» con su tema (2 h más)."
+     "cambia": "Las sesiones de «Mapear cómo se hace hoy la tarea del agente» suben a 2, «Capacitación del equipo» sube 1 y se marca «Crear el plan de adopción» para el equipo que recibe, con el anuncio del líder: 4,5 h más (24,5 h). Si ese equipo necesita algo escrito que no existe (qué necesita saber de cada negocio ganado, por ejemplo), se marca «Escribir las respuestas de un tema» con su tema (2 h más)."
     }
    ],
    "preguntas": [],
@@ -13086,7 +13086,7 @@
     "ecommerce"
    ],
    "paraQuienVende": "La lectura de preparación tiene que decir «Lista»: tráfico suficiente (hoy, 50.000 visitas al mes o más, umbral provisional), al menos 5.000 contactos con permiso y Marketing funcionando, con «Sistematiza tu marketing» o en otra herramienta. Si dice «Casi lista», aquí solo frena el catálogo al día en un solo lugar: lo que hace cada persona en el sitio ya lo une a su ficha la etiqueta de Insider, y lo que se muestra en el sitio no pide permiso por canal. Si el catálogo vive en varios sistemas y lo junta el TI del cliente, la validación del sitio suma 1; si lo junta Dev de Smarteam, se marcan la arquitectura y el desarrollo del catálogo. Si la dirección tiene que justificar la inversión, se marca el diagnóstico estratégico (uno por venta). Con menos tráfico no hay volumen para medir lo que ve quien todavía no dejó sus datos: se personaliza por lista con el contenido inteligente de HubSpot (Marketing Hub Pro), como una configuración más de «Sistematiza tu marketing».",
-   "escenarioBase": "Por defecto suma 23,5 h (unos 1.880 USD): Mapear cómo compra hoy un visitante 2 + Diseñar 6 (la personalización del sitio 3; lo que ve cada cliente en la app y en su cuenta 3) + Conectar HubSpot con Insider 5 + Validar lo que monta Insider 2 (una por experiencia) + Armar reportes 3 + Capacitar 1,5 + Entregar 2 + Revisar a los 60-90 días 2. Venta posterior (expandir) a un cliente que ya trabaja su marketing en HubSpot y contrata Insider para su sitio y su app. Insider instala su etiqueta y su SDK, lee el catálogo y monta las experiencias (va en el aviso); sus horas y su licencia no cuentan. Un equipo (tienda en línea), dos experiencias (el sitio; la app y la cuenta del cliente), vendido solo, segmento estándar, a 80 USD/h.",
+   "escenarioBase": "Por defecto suma 23,5 h (unos 1.880 USD): Mapear cómo compra hoy un visitante 2 + Diseñar 6 (la personalización del sitio 3; lo que ve cada cliente en la app y en su cuenta 3) + Conectar HubSpot con Insider 5 + Validar lo que monta Insider 2 (una por experiencia) + Armar reportes 3 + Capacitación del equipo 1,5 + Entrega del proyecto 2 + Revisar a los 60-90 días 2. Venta posterior (expandir) a un cliente que ya trabaja su marketing en HubSpot y contrata Insider para su sitio y su app. Insider instala su etiqueta y su SDK, lee el catálogo y monta las experiencias (va en el aviso); sus horas y su licencia no cuentan. Un equipo (tienda en línea), dos experiencias (el sitio; la app y la cuenta del cliente), vendido solo, segmento estándar, a 80 USD/h.",
    "loQueSeEntrega": [
     "Tu plan de personalización, consensuado contigo: qué ve cada tipo de visitante, dónde lo ve y qué no se toca.",
     "Lo que ya sabes de cada cliente en HubSpot, como su etapa y lo que le interesa, sirve para personalizar lo que ve.",
@@ -13345,7 +13345,7 @@
     },
     {
      "actividadId": "capacitar",
-     "nombre": "Capacitar",
+     "nombre": "Capacitación del equipo",
      "queSeHace": "El equipo aprende a leer los resultados de cada versión, a decidir qué cambiar y a proponer la siguiente prueba.",
      "veces": 1,
      "porDefecto": true,
@@ -13358,7 +13358,7 @@
     },
     {
      "actividadId": "entregar",
-     "nombre": "Entregar",
+     "nombre": "Entrega del proyecto",
      "queSeHace": "Mostrar con quien decide cuánto vendía el sitio antes y cuánto ahora, contra quien no vio la personalización; quien decide marca lo recibido y se propone el siguiente caso (carritos o recompra).",
      "veces": 1,
      "porDefecto": true,
@@ -13407,7 +13407,7 @@
     "WooCommerce"
    ],
    "paraQuienVende": "Marketing funcionando, con «Sistematiza tu marketing» o en otra herramienta. Con Insider, para tiendas grandes y con app, con permiso para escribirle a cada persona por al menos dos canales: la lectura de preparación tiene que decir «Lista». Si dice «Casi lista», se suma antes lo que falte de los cimientos: el permiso por canal es «Registrar el permiso de cada persona por canal»; el catálogo en varios sistemas suma 1 a la validación si lo junta el TI del cliente, o la arquitectura y el desarrollo del catálogo si lo construye Dev; lo que hace cada persona en el sitio ya lo une a su ficha la etiqueta de Insider. Una tienda chica sin Insider lo hace solo con HubSpot (variante «Solo con HubSpot (tienda chica)»), si ya envía su correo de marketing desde HubSpot con Marketing Hub Pro y después de confirmar qué datos del carrito trae la app de su tienda.",
-   "escenarioBase": "Por defecto suma 27,5 h (unos 2.200 USD): Mapear cómo se pierden y se recuperan hoy las compras a medias 2 + Diseñar los recorridos 6 (carrito abandonado y compra a medias) + Escribir los textos de los recorridos 4 + Conectar HubSpot con Insider 5 + Validar los recorridos que monta Insider 2 + Armar reportes 3 + Capacitar 1,5 + Entregar 2 + Revisar a los 60-90 días 2. Venta posterior (expandir) a una tienda en línea que ya trabaja su marketing en HubSpot y contrata Insider. Insider instala su etiqueta y su SDK, recibe el catálogo y lo que pasa en el carrito, conecta los canales y monta los recorridos (va en el aviso); sus horas y su licencia no cuentan. Dos recorridos por correo, WhatsApp y notificaciones, un equipo, vendido solo, segmento estándar, a 80 USD/h. Solo con HubSpot (tienda chica, el recorrido del carrito): Mapear 2 + Diseñar 3 + Textos 2 + Conectar la app de la tienda 5 + Implementar el recorrido en HubSpot 3 + Reportes 3 + Capacitar 1,5 + Entregar 2 + Revisar 2 = 23,5 h, unos 1.880 USD.",
+   "escenarioBase": "Por defecto suma 27,5 h (unos 2.200 USD): Mapear cómo se pierden y se recuperan hoy las compras a medias 2 + Diseñar los recorridos 6 (carrito abandonado y compra a medias) + Escribir los textos de los recorridos 4 + Conectar HubSpot con Insider 5 + Validar los recorridos que monta Insider 2 + Armar reportes 3 + Capacitación del equipo 1,5 + Entrega del proyecto 2 + Revisar a los 60-90 días 2. Venta posterior (expandir) a una tienda en línea que ya trabaja su marketing en HubSpot y contrata Insider. Insider instala su etiqueta y su SDK, recibe el catálogo y lo que pasa en el carrito, conecta los canales y monta los recorridos (va en el aviso); sus horas y su licencia no cuentan. Dos recorridos por correo, WhatsApp y notificaciones, un equipo, vendido solo, segmento estándar, a 80 USD/h. Solo con HubSpot (tienda chica, el recorrido del carrito): Mapear 2 + Diseñar 3 + Textos 2 + Conectar la app de la tienda 5 + Implementar el recorrido en HubSpot 3 + Reportes 3 + Capacitación del equipo 1,5 + Entrega del proyecto 2 + Revisar 2 = 23,5 h, unos 1.880 USD.",
    "loQueSeEntrega": [
     "Tus recorridos para recuperar compras, consensuados contigo: cuándo sale cada recordatorio, por qué canal, qué dice y cuándo se detiene.",
     "Quien deja un carrito o una compra a medias recibe sus recordatorios solos y a tiempo, por los canales consensuados.",
@@ -13679,7 +13679,7 @@
     },
     {
      "actividadId": "capacitar",
-     "nombre": "Capacitar",
+     "nombre": "Capacitación del equipo",
      "queSeHace": "El equipo aprende a leer cuánto recupera cada mensaje y cada canal, y a decidir qué texto, espera o incentivo cambiar.",
      "veces": 1,
      "porDefecto": true,
@@ -13692,7 +13692,7 @@
     },
     {
      "actividadId": "entregar",
-     "nombre": "Entregar",
+     "nombre": "Entrega del proyecto",
      "queSeHace": "Mostrar con quien decide cuánto se recuperaba antes y cuánto ahora, por canal; quien decide marca lo recibido y se propone el siguiente caso (recompra o personalización).",
      "veces": 1,
      "porDefecto": true,
@@ -13749,7 +13749,7 @@
     "Shopify"
    ],
    "paraQuienVende": "Marketing funcionando, con «Sistematiza tu marketing» o en otra herramienta. Con Insider, para tiendas grandes y con app: la lectura de preparación tiene que decir «Lista». Si dice «Casi lista», se suma antes lo que falte de los cimientos: el permiso por canal es «Registrar el permiso de cada persona por canal»; el catálogo en varios sistemas suma 1 a la validación si lo junta el TI del cliente, o la arquitectura y el desarrollo del catálogo si lo construye Dev; lo que hace cada persona en el sitio ya lo une a su ficha la etiqueta de Insider. Una tienda chica sin Insider lo hace solo con HubSpot (variante «Solo con HubSpot (tienda chica)»), si ya envía su correo de marketing desde HubSpot con Marketing Hub Pro y después de confirmar qué datos de cada compra trae la app de su tienda. Si vende por suscripción o club (cliente, socio y ex socio, como un club de vinos), se marca «Consensuar las etapas del ciclo de vida» sobre «clientes y suscriptores». Frontera: si cada cliente tiene contrato y un responsable que cuida su cuenta, el caso es «Retén a tus clientes y haz crecer cada cuenta»; si el equipo de servicio también vende y necesita ver rápido en HubSpot qué compró cada cliente, es «Integra tus sistemas con HubSpot para ver a cada cliente completo».",
-   "escenarioBase": "Por defecto suma 29,5 h (unos 2.360 USD): Mapear cómo vuelven a comprar hoy los clientes 2 + Diseñar los recorridos de recompra 6 + Medir el ciclo de recompra 2 + Escribir los textos de los recorridos 4 + Conectar HubSpot con Insider 5 + Validar los recorridos que monta Insider 2 + Armar reportes 3 + Capacitar 1,5 + Entregar 2 + Revisar a los 60-90 días 2. Venta posterior (expandir) a una tienda que ya trabaja su marketing en HubSpot, contrata Insider y vende productos que se reponen. Insider instala su etiqueta y su SDK, recibe el catálogo y las compras, conecta los canales y monta los recorridos (va en el aviso); sus horas y su licencia no cuentan. Dos recorridos (después de cada compra y «ya le toca volver»), tres canales, un equipo, vendido solo, segmento estándar, a 80 USD/h. Solo con HubSpot (tienda chica, los dos recorridos montados por Smarteam): Mapear 2 + Diseñar 6 + Ciclo 2 + Textos 4 + Conectar la app de la tienda 5 + Implementar los recorridos en HubSpot 6 + Reportes 3 + Capacitar 1,5 + Entregar 2 + Revisar 2 = 33,5 h, unos 2.680 USD; con solo el de «ya le toca volver», 25,5 h, unos 2.040 USD.",
+   "escenarioBase": "Por defecto suma 29,5 h (unos 2.360 USD): Mapear cómo vuelven a comprar hoy los clientes 2 + Diseñar los recorridos de recompra 6 + Medir el ciclo de recompra 2 + Escribir los textos de los recorridos 4 + Conectar HubSpot con Insider 5 + Validar los recorridos que monta Insider 2 + Armar reportes 3 + Capacitación del equipo 1,5 + Entrega del proyecto 2 + Revisar a los 60-90 días 2. Venta posterior (expandir) a una tienda que ya trabaja su marketing en HubSpot, contrata Insider y vende productos que se reponen. Insider instala su etiqueta y su SDK, recibe el catálogo y las compras, conecta los canales y monta los recorridos (va en el aviso); sus horas y su licencia no cuentan. Dos recorridos (después de cada compra y «ya le toca volver»), tres canales, un equipo, vendido solo, segmento estándar, a 80 USD/h. Solo con HubSpot (tienda chica, los dos recorridos montados por Smarteam): Mapear 2 + Diseñar 6 + Ciclo 2 + Textos 4 + Conectar la app de la tienda 5 + Implementar los recorridos en HubSpot 6 + Reportes 3 + Capacitación del equipo 1,5 + Entrega del proyecto 2 + Revisar 2 = 33,5 h, unos 2.680 USD; con solo el de «ya le toca volver», 25,5 h, unos 2.040 USD.",
    "loQueSeEntrega": [
     "Cada cuánto vuelven a comprar tus clientes, medido por producto o categoría con tu historia de ventas.",
     "Tus recorridos para que vuelvan a comprar, consensuados contigo: qué recibe cada cliente después de comprar y cuando ya le toca volver.",
@@ -13875,7 +13875,7 @@
      "queSeHace": "Planificar la campaña para recuperar a los clientes que dejaron de comprar: objetivo, a quién, oferta, canales y meta.",
      "veces": 1,
      "porDefecto": false,
-     "cuandoCambia": "Se marca si hay muchos clientes dormidos y el cliente quiere una campaña aparte del recorrido. El equipo la lanza y Smarteam acompaña el primer envío («Capacitar» sube 1).",
+     "cuandoCambia": "Se marca si hay muchos clientes dormidos y el cliente quiere una campaña aparte del recorrido. El equipo la lanza y Smarteam acompaña el primer envío («Capacitación del equipo» sube 1).",
      "sobreQue": "",
      "sostiene": [
       2
@@ -14057,7 +14057,7 @@
     },
     {
      "actividadId": "capacitar",
-     "nombre": "Capacitar",
+     "nombre": "Capacitación del equipo",
      "queSeHace": "El equipo aprende a leer qué mensaje y qué oferta traen de vuelta a más clientes, y a decidir qué oferta o qué plazo cambiar.",
      "veces": 1,
      "porDefecto": true,
@@ -14070,7 +14070,7 @@
     },
     {
      "actividadId": "entregar",
-     "nombre": "Entregar",
+     "nombre": "Entrega del proyecto",
      "queSeHace": "Mostrar con quien decide cuántos clientes volvían antes y cuántos ahora; quien decide marca lo recibido y se propone el siguiente caso.",
      "veces": 1,
      "porDefecto": true,
@@ -14133,7 +14133,7 @@
     "programa de lealtad"
    ],
    "paraQuienVende": "Se vende cuando la misma persona compra por más de un canal sin vendedor (tienda física, sitio y app). No es la base de los otros casos de Insider: la conexión con HubSpot se hace una vez para todos. Si la dirección tiene que justificar la inversión, se marca el diagnóstico estratégico (uno por venta). Frontera: si lo que se quiere es ver en HubSpot los pedidos y las facturas del cliente (por ejemplo, para que el equipo de servicio que también vende vea rápido qué compró cada uno), el caso es «Integra tus sistemas con HubSpot para ver a cada cliente completo»; si son duplicados dentro de HubSpot, «Limpia tu base de datos».",
-   "escenarioBase": "Por defecto suma 23,5 h (unos 1.880 USD): Mapear cómo se reconoce hoy al cliente en cada canal 3 + Diseñar las reglas para reconocer al cliente 3 + Crear el plan de adopción de las tiendas 2 + Conectar HubSpot con Insider 5 + Validar las fuentes que integra Insider 2 + Armar reportes 3 + Capacitar 1,5 + Entregar 2 + Revisar a los 60-90 días 2. Venta posterior (expandir) a una cadena con tienda física, sitio y app, que ya trabaja su marketing en HubSpot y contrata Insider. Insider integra el sitio, la app y las ventas de la tienda y une las fichas (va en el aviso); sus horas y su licencia no cuentan. Un sistema de tienda (caja o ERP) que ya puede mandarle sus ventas a Insider, la ficha unida solo en Insider, un equipo de tiendas con su formador, vendido solo, segmento estándar, a 80 USD/h.",
+   "escenarioBase": "Por defecto suma 23,5 h (unos 1.880 USD): Mapear cómo se reconoce hoy al cliente en cada canal 3 + Diseñar las reglas para reconocer al cliente 3 + Crear el plan de adopción de las tiendas 2 + Conectar HubSpot con Insider 5 + Validar las fuentes que integra Insider 2 + Armar reportes 3 + Capacitación del equipo 1,5 + Entrega del proyecto 2 + Revisar a los 60-90 días 2. Venta posterior (expandir) a una cadena con tienda física, sitio y app, que ya trabaja su marketing en HubSpot y contrata Insider. Insider integra el sitio, la app y las ventas de la tienda y une las fichas (va en el aviso); sus horas y su licencia no cuentan. Un sistema de tienda (caja o ERP) que ya puede mandarle sus ventas a Insider, la ficha unida solo en Insider, un equipo de tiendas con su formador, vendido solo, segmento estándar, a 80 USD/h.",
    "loQueSeEntrega": [
     "Las reglas para reconocer a cada cliente en tu tienda, tu sitio y tu app, consensuadas contigo: con qué dato se une su ficha, cómo se le pide su permiso y cuándo se juntan dos.",
     "Cada cliente tiene una sola ficha en Insider que junta lo que hace en tu sitio, tu app y tu tienda, también lo que hizo antes de dejar sus datos.",
@@ -14416,7 +14416,7 @@
     },
     {
      "actividadId": "capacitar",
-     "nombre": "Capacitar",
+     "nombre": "Capacitación del equipo",
      "queSeHace": "Capacitar a los formadores de tienda: por qué pedir el dato, cómo registrarlo en la caja con su permiso y cómo se ve su avance en el tablero.",
      "veces": 1,
      "porDefecto": true,
@@ -14430,7 +14430,7 @@
     },
     {
      "actividadId": "entregar",
-     "nombre": "Entregar",
+     "nombre": "Entrega del proyecto",
      "queSeHace": "Mostrar con quien decide qué parte de las ventas tenía cliente antes y cuál ahora; quien decide marca lo recibido y se propone el siguiente caso (recompra o personalización).",
      "veces": 1,
      "porDefecto": true,
@@ -14461,7 +14461,7 @@
    "variantes": [
     {
      "nombre": "Sin tienda física (sitio y app)",
-     "cambia": "Las sesiones de «Mapear cómo se reconoce hoy al cliente en cada canal» bajan a 1, y «Validar las fuentes que integra Insider» baja a 1. «Crear el plan de adopción» pasa a opcional (si se marca, es el plan de «Tienda en línea») y «Capacitar» queda en 1, para marketing: usar la ficha unida y leer el tablero. El hito pasa a las fichas repetidas, que el tablero ya cuenta, porque en línea casi toda venta ya trae a su cliente: «Sabremos que funciona cuando las fichas repetidas entre tu sitio y tu app bajen al menos un 50 % frente al punto de partida». Por defecto suma 19,5 h (unos 1.560 USD)."
+     "cambia": "Las sesiones de «Mapear cómo se reconoce hoy al cliente en cada canal» bajan a 1, y «Validar las fuentes que integra Insider» baja a 1. «Crear el plan de adopción» pasa a opcional (si se marca, es el plan de «Tienda en línea») y «Capacitación del equipo» queda en 1, para marketing: usar la ficha unida y leer el tablero. El hito pasa a las fichas repetidas, que el tablero ya cuenta, porque en línea casi toda venta ya trae a su cliente: «Sabremos que funciona cuando las fichas repetidas entre tu sitio y tu app bajen al menos un 50 % frente al punto de partida». Por defecto suma 19,5 h (unos 1.560 USD)."
     },
     {
      "nombre": "La caja no puede mandarle sus ventas a Insider",
@@ -14488,7 +14488,7 @@
     "capacitación técnica"
    ],
    "paraQuienVende": "Suele ir con «Integra tus sistemas con HubSpot para ver a cada cliente completo» o con «Convierte tus datos en un activo confiable».",
-   "escenarioBase": "Por defecto suma 19 h (unos 1.520 USD): Mapear 2 + Auditar 5 + Plan de adopción 2 + Capacitar 4×1,5 + Entregar 2 + Revisar 2. Escenario: complementario vendido solo, después de una integración que hizo Smarteam (su Requerimiento técnico o su mapa de campos ya existen), sobre un portal que implementó otro o que se implementó hace tiempo: por eso la auditoría va marcada y es la base de la documentación. Equipo técnico de hasta 5 personas, segmento estándar. La sesión semanal con TI mientras dura el proyecto la suma la venta.",
+   "escenarioBase": "Por defecto suma 19 h (unos 1.520 USD): Mapear 2 + Auditar 5 + Plan de adopción 2 + Capacitación del equipo 4×1,5 + Entrega del proyecto 2 + Revisar 2. Escenario: complementario vendido solo, después de una integración que hizo Smarteam (su Requerimiento técnico o su mapa de campos ya existen), sobre un portal que implementó otro o que se implementó hace tiempo: por eso la auditoría va marcada y es la base de la documentación. Equipo técnico de hasta 5 personas, segmento estándar. La sesión semanal con TI mientras dura el proyecto la suma la venta.",
    "loQueSeEntrega": [
     "La documentación técnica a fondo de tu HubSpot: cómo está armado, qué se conecta con qué, qué hace cada workflow, por qué se hizo así y qué hacer si algo falla.",
     "Reglas para cambiar HubSpot sin romperlo: quién puede cambiar qué, cómo se nombra y cómo se prueba antes.",
@@ -14608,7 +14608,7 @@
     },
     {
      "actividadId": "capacitar",
-     "nombre": "Capacitar",
+     "nombre": "Capacitación del equipo",
      "queSeHace": "Tres sesiones por tema (arquitectura y reglas de cambio; integraciones y qué hacer si fallan; workflows con código, API y apps privadas) y una práctica con un cambio real. Nexus arma la guía de cada sesión.",
      "veces": 4,
      "porDefecto": true,
@@ -14638,7 +14638,7 @@
     },
     {
      "actividadId": "entregar",
-     "nombre": "Entregar",
+     "nombre": "Entrega del proyecto",
      "queSeHace": "Entregar la documentación a fondo que junta Nexus (auditoría, Requerimientos técnicos, planificaciones, reglas y la guía de cada sesión), además de la guía corta del portal que deja toda entrega, y revisar con TI el cambio que hicieron solos.",
      "veces": 1,
      "porDefecto": true,
@@ -14799,7 +14799,7 @@
      "queSeHace": "(Cuatro al mes) Hacer en el portal cada cambio consensuado: una propiedad, una vista, un aviso, un formulario, las altas y bajas de usuarios del mes, o el arreglo de un reporte o de una integración que se hace desde HubSpot o su app (reconectarla, ajustar un campo, renovar una llave), y probarlo con quien lo pidió. En el primer mes, dejar el aviso de falla y de silencio en las integraciones que no lo tienen, como uno de los cambios del mes (los formularios sin envíos los marca la salud del portal).",
      "veces": 12,
      "porDefecto": true,
-     "cuandoCambia": "Cuatro al mes por defecto (12 en el trimestre). El vendedor fija cuántos (2 en un tamaño chico, 8 en uno grande) y la revisión del trimestre lo sube o lo baja. Las altas y bajas de un mes cuentan uno. Un arreglo no espera la reunión fija: se hace cuando llega el aviso y cuenta como uno de los cambios del mes. Si un mes se piden menos, los que sobran van a lo que mostró la salud del portal y no pasan al mes siguiente; lo que no cabe espera al mes siguiente. Lo que no quedó como se consensuó en un caso recién entregado se corrige con fecha en su «Entregar» y no gasta cambios. Lo que no cabe en un cambio (un proceso nuevo, un agente, conectar otro sistema) se vende como caso: no se estira el mismo.",
+     "cuandoCambia": "Cuatro al mes por defecto (12 en el trimestre). El vendedor fija cuántos (2 en un tamaño chico, 8 en uno grande) y la revisión del trimestre lo sube o lo baja. Las altas y bajas de un mes cuentan uno. Un arreglo no espera la reunión fija: se hace cuando llega el aviso y cuenta como uno de los cambios del mes. Si un mes se piden menos, los que sobran van a lo que mostró la salud del portal y no pasan al mes siguiente; lo que no cabe espera al mes siguiente. Lo que no quedó como se consensuó en un caso recién entregado se corrige con fecha en su «Entrega del proyecto» y no gasta cambios. Lo que no cabe en un cambio (un proceso nuevo, un agente, conectar otro sistema) se vende como caso: no se estira el mismo.",
      "sobreQue": "los cambios del mes",
      "sostiene": [
       0,
@@ -14812,7 +14812,7 @@
     },
     {
      "actividadId": "capacitar",
-     "nombre": "Capacitar",
+     "nombre": "Capacitación del equipo",
      "queSeHace": "Una sesión de hasta 8 personas para quienes entraron al equipo en el trimestre o para enseñar lo nuevo que se activó; con la grabación, Nexus pone al día su guía por rol.",
      "veces": 1,
      "porDefecto": false,
@@ -14944,7 +14944,7 @@
   {
    "tema": "Qué llena Ventas del plan de adopción",
    "pregunta": "¿Qué datos del plan de adopción llena Ventas en la venta?",
-   "propuesta": "Tres por equipo: los subequipos y roles, cuántas personas hay en cada uno y cómo se capacita. Con eso Nexus calcula las sesiones de «Capacitar»; el resto lo suma el CSE."
+   "propuesta": "Tres por equipo: los subequipos y roles, cuántas personas hay en cada uno y cómo se capacita. Con eso Nexus calcula las sesiones de «Capacitación del equipo»; el resto lo suma el CSE."
   },
   {
    "tema": "Editar los casos desde Nexus",

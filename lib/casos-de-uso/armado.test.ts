@@ -7,14 +7,23 @@ import { describe, expect, it } from "vitest";
 import type Anthropic from "@anthropic-ai/sdk";
 import datos from "./actividades-de-los-casos.json";
 import { leerActividades } from "./actividades";
+import { nombreVisible } from "./actividades-puras";
 import {
   actividadesDelElegido,
   actividadesPorDefecto,
   apartarCasosSinArmar,
   bibliotecaLigera,
   cambiarVeces,
+  cambiosRespectoDeLaFicha,
   casosSinArmar,
   cifraDelCliente,
+  enOrdenDelPlan,
+  lineaDeCambios,
+  palancaEnPalabras,
+  recortarSinCortarFrases,
+  ultimoPasoDelPlan,
+  validarLugarDelAgente,
+  validarParaVentasDelAgente,
   horasDeLaVenta,
   horasDelCaso,
   precioMinimo,
@@ -26,7 +35,7 @@ import {
   versionesQueSeAplicanSolas,
   type ActividadDelCaso,
 } from "./armado";
-import { casosParaLasAreas } from "./en-la-preventa";
+import { casosParaLasAreas, titulosDelCaso } from "./en-la-preventa";
 import {
   conElValor,
   leerElValor,
@@ -51,6 +60,7 @@ import {
   leerPropuesta,
   VALIDADOR_ESTRICTO,
 } from "@/lib/exploraciones/esquemas";
+import { casosElegidosParaLaPropuesta } from "@/lib/exploraciones/para-la-propuesta";
 
 const TODO = leerActividades(datos);
 const BIBLIOTECA = bibliotecaLigera(TODO.biblioteca);
@@ -481,6 +491,7 @@ describe("el agente solo usa actividades de la biblioteca", () => {
       tipo: "casoDeUso",
       useCaseId: "ia-123",
     });
+    // El título de un elegido lo ve el cliente y «Regenerar» lo aplica sin preguntar: el agente no lo cambia.
     expect((r.items[0].valor as CasoDeUsoElegido).titulo).toBe("Mi caso");
   });
 });
@@ -730,5 +741,281 @@ describe("regenerar y deshacer", () => {
     );
     expect(leida.items[0].valor).toEqual(valor);
     expect(leida.casosAnteriores?.items[0].valor).toEqual(valor);
+  });
+});
+
+describe("el plan, el porqué y el cómo para Ventas (2026-11-08, Elías con Centauro)", () => {
+  const POR_DEFECTO = Object.fromEntries(TODO.casos.map((c) => [c.id, actividadesPorDefecto(c)]));
+  const CTX = {
+    empresa: "Centauro",
+    edicion: "escala general",
+    areas: [{ id: "1", nombre: "Ventas", dimensiones: [{ id: "1.1", nombre: "Proceso" }] }],
+    exploracion: "Venden software a 500 hospedajes. Hacen 25 reuniones por semana.",
+    yaEstan: [] as string[],
+    descartados: [] as string[],
+    catalogo: casosParaLasAreas(["1"]),
+    biblioteca: BIBLIOTECA,
+    porDefecto: POR_DEFECTO,
+  };
+  const respuesta = (casos: unknown[]) =>
+    ({ content: [{ type: "tool_use", id: "tu", name: "proponer_casos", input: { casos } }] }) as unknown as Anthropic.Messages.Message;
+  const TITULO = "Sistematiza tu proceso comercial con HubSpot";
+
+  it("el agente adapta el título del catálogo, y el caso guarda el original, su lugar en el plan y el porqué y el cómo", () => {
+    const r = leerLosCasos(
+      respuesta([
+        {
+          areaId: "1",
+          catalogo: "sistematiza-ventas",
+          titulo: "Ordena la venta de software a hospedajes en HubSpot",
+          descripcion: "Qué consigue",
+          razon: "Por qué",
+          paso: 1,
+          despuesDe: "No va después de nada.",
+          porQue: "Venden a 500 hospedajes sin un proceso escrito.",
+          comoSeArma: "Sin la base del portal: ya tienen HubSpot. Con 3 capacitaciones para 40 vendedores.",
+          actividades: [{ actividadId: "kickoff", nombre: "Kickoff", veces: 1 }],
+        },
+        {
+          // El mismo caso del catálogo con otro título: no entra dos veces.
+          areaId: "1",
+          catalogo: "sistematiza-ventas",
+          titulo: "Otro nombre del mismo caso",
+          descripcion: "d",
+          razon: "r",
+          paso: 2,
+          actividades: [{ actividadId: "kickoff", nombre: "Kickoff", veces: 1 }],
+        },
+      ]),
+      CTX,
+      "run-1",
+      AHORA,
+    );
+    expect(r.items).toHaveLength(1);
+    const v = r.items[0].valor as CasoDeUsoElegido;
+    expect(r.items[0].destino).toEqual({ tipo: "casoDeUso", useCaseId: "cat-sistematiza-ventas" });
+    expect(v.titulo).toBe("Ordena la venta de software a hospedajes en HubSpot");
+    expect(v.tituloDelCatalogo).toBe(TITULO);
+    // El primero del plan no dice después de qué va.
+    expect(v.plan).toEqual({ paso: 1 });
+    expect(v.paraVentas?.porQue).toBe("Venden a 500 hospedajes sin un proceso escrito.");
+    // «40 vendedores» no está en lo que se sabe: se marca para confirmarlo (las cifras chicas no cuentan).
+    expect(v.paraVentas?.comoSeArma).toMatch(/Ojo: hay cifras que no salieron del cliente/);
+    // Lo que ya está con el título del catálogo tampoco vuelve con uno adaptado.
+    const otra = leerLosCasos(
+      respuesta([{ areaId: "1", catalogo: "sistematiza-ventas", titulo: "Un nombre nuevo", descripcion: "d", razon: "r", actividades: [] }]),
+      { ...CTX, yaEstan: [TITULO] },
+      "run-2",
+      AHORA,
+    );
+    expect(otra.items).toEqual([]);
+  });
+
+  it("con el título del catálogo tal cual no guarda el original aparte; lo de Ventas sobrevive a guardar y leer", () => {
+    const r = leerLosCasos(
+      respuesta([
+        {
+          areaId: "1",
+          catalogo: "sistematiza-ventas",
+          titulo: TITULO,
+          descripcion: "d",
+          razon: "r",
+          paso: 3,
+          despuesDe: "Necesita los datos ya en HubSpot.",
+          porQue: "p",
+          comoSeArma: "c",
+          actividades: [],
+        },
+      ]),
+      CTX,
+      "run-1",
+      AHORA,
+    );
+    const v = r.items[0].valor as CasoDeUsoElegido;
+    expect(v.tituloDelCatalogo).toBeUndefined();
+    expect(v.plan).toEqual({ paso: 3, despuesDe: "Necesita los datos ya en HubSpot." });
+    const leida = leerPropuesta(JSON.parse(JSON.stringify({ ...propuestaVacia(), items: r.items })));
+    expect(leida.items[0].valor).toEqual(v);
+  });
+
+  it("el pedido pide un plan, el porqué y el cómo, y una tanda más sigue el plan que ya está", () => {
+    const p = pedidoDeCasos({ ...CTX, ultimoPaso: 3 });
+    expect(p.system).toMatch(/UN PLAN, uno detrás de otro/);
+    expect(p.system).toMatch(/desde el paso 4/);
+    const tool = p.tools![0] as Anthropic.Messages.Tool;
+    const items = (tool.input_schema.properties as Record<string, { items: { required: string[] } }>).casos.items;
+    expect(items.required).toEqual(expect.arrayContaining(["paso", "porQue", "comoSeArma"]));
+    expect(pedidoDeCasos(CTX).system).not.toMatch(/desde el paso/);
+  });
+
+  it("qué actividades sí y cuáles no, frente a la ficha del catálogo", () => {
+    const ficha = POR_DEFECTO["sistematiza-ventas"];
+    const nombreDe = (id: string) => POR_ID.get(id)?.nombre;
+    expect(lineaDeCambios(cambiosRespectoDeLaFicha(ficha, ficha, nombreDe)!)).toBe("Lleva las actividades de la ficha del catálogo, sin cambios.");
+    // Renombrar una actividad dentro del caso no es un cambio.
+    const renombrada = ficha.map((a) => (a.actividadId === "kickoff" ? { ...a, nombre: "Kickoff con Fernando" } : a));
+    expect(cambiosRespectoDeLaFicha(renombrada, ficha, nombreDe)).toEqual({ suma: [], quita: [], veces: [] });
+    let caso: { actividades?: ActividadDelCaso[]; aMano?: boolean } = {};
+    caso = quitarActividad(caso, ficha, ficha.findIndex((a) => a.actividadId === "configurar-la-base-del-portal"));
+    caso = sumarActividad(caso, caso.actividades!, lib("conectar-un-canal"), "WhatsApp");
+    const i = caso.actividades!.findIndex((a) => a.actividadId === "capacitar");
+    caso = cambiarVeces(caso, caso.actividades!, i, 3);
+    const c = cambiosRespectoDeLaFicha(caso.actividades!, ficha, nombreDe)!;
+    expect(c).toEqual({
+      suma: ["Conectar un canal (WhatsApp)"],
+      quita: ["Configurar la base del portal"],
+      veces: ["Capacitación del equipo (3 en vez de 2)"],
+    });
+    expect(lineaDeCambios(c)).toBe(
+      "Frente a la ficha del catálogo: suma «Conectar un canal (WhatsApp)»; sin «Configurar la base del portal»; cambia «Capacitación del equipo (3 en vez de 2)».",
+    );
+    // Un caso propio no tiene ficha.
+    expect(cambiosRespectoDeLaFicha(ficha, undefined, nombreDe)).toBeNull();
+    // Con muchos, cuatro y «N más».
+    expect(lineaDeCambios({ suma: ["a", "b", "c", "d", "e", "f"], quita: [], veces: [] })).toBe("Frente a la ficha del catálogo: suma «a», «b», «c», «d» y 2 más.");
+  });
+
+  it("los casos van en el orden del plan; los que no tienen lugar, al final, como estaban", () => {
+    const casos = [{ t: "sin lugar A" }, { t: "tercero", paso: 3 }, { t: "primero", paso: 1 }, { t: "sin lugar B" }, { t: "también tercero", paso: 3 }];
+    expect(enOrdenDelPlan(casos, (c) => c.paso).map((c) => c.t)).toEqual(["primero", "tercero", "también tercero", "sin lugar A", "sin lugar B"]);
+    // La propuesta los lleva en ese orden, con el título adaptado si lo hay (y el del catálogo si no).
+    const enLaPropuesta = casosElegidosParaLaPropuesta({
+      casosDeUso: {
+        "cat-sistematiza-ventas": { titulo: "Nombre viejo guardado", areaId: "1", plan: { paso: 2 } },
+        "ia-1": { titulo: "Ordena tu migración", areaId: "1", plan: { paso: 1 } },
+        "cat-otro": { titulo: "Adaptado a la empresa", tituloDelCatalogo: "Del catálogo", areaId: "1" },
+      },
+    });
+    expect(enLaPropuesta.map((c) => c.title)).toEqual(["Ordena tu migración", TITULO, "Adaptado a la empresa"]);
+  });
+
+  it("descartar un caso con el título adaptado anota los dos títulos, para que el agente no lo vuelva a proponer", () => {
+    const destino: DestinoDePropuesta = { tipo: "casoDeUso", useCaseId: "cat-sistematiza-ventas" };
+    const valor: CasoDeUsoElegido = { titulo: "Adaptado", tituloDelCatalogo: TITULO, areaId: "1", armado: AHORA.toISOString() };
+    const it: ItemPropuesto = { id: idDelItem(destino, valor), destino, valor, fuentes: [], corridaId: "r", en: AHORA.toISOString() };
+    const e0: EstadoDeExploracion = {
+      contenido: { ...contenidoVacio(), chequeo: { "1.1": { nivel: "I", fuente: "reunion" } } },
+      propuesta: { ...propuestaVacia(), items: [it] },
+      areas: ["1"],
+      edicion: null,
+      perfilCierre: null,
+      perfilDespues: null,
+      responsableEmail: null,
+      archivada: false,
+    };
+    const VALIDEZ: Validez = { dimensiones: new Set(["1.1"]), criterios: new Set(), areas: new Set(["1"]), ediciones: new Set(), escalaVersion: "9" };
+    const r = aplicarOperaciones(e0, [{ op: "descartar", itemIds: [it.id] }], VALIDEZ, VALIDADOR_ESTRICTO, { por: "v@smarteam.cr", en: AHORA.toISOString() });
+    if (!r.ok) throw new Error(r.error);
+    expect(r.estado.contenido.casosDescartados).toEqual(["Adaptado", TITULO]);
+  });
+
+  it("las palabras del vendedor: la palanca de valor y los nombres renombrados de la biblioteca", () => {
+    expect(palancaEnPalabras("Costo de la mala calidad")).toBe("lo que hoy le cuestan los errores");
+    expect(palancaEnPalabras("Otra cosa")).toBe("Otra cosa");
+    // Lo guardado antes del cambio de nombre se lee con el de hoy; un nombre concretado en el caso queda igual.
+    expect(lib("capacitar").nombre).toBe("Capacitación del equipo");
+    expect(lib("entregar").nombre).toBe("Entrega del proyecto");
+    expect(nombreVisible({ actividadId: "capacitar", nombre: "Capacitar" }, lib("capacitar").nombre)).toBe("Capacitación del equipo");
+    expect(nombreVisible({ actividadId: "entregar", nombre: "Entregar" }, lib("entregar").nombre)).toBe("Entrega del proyecto");
+    expect(nombreVisible({ actividadId: "capacitar", nombre: "Capacitar a los formadores" }, lib("capacitar").nombre)).toBe("Capacitar a los formadores");
+    // Cada actividad de la biblioteca trae la frase de su ⓘ.
+    for (const a of BIBLIOTECA) expect(a.resumen.length).toBeGreaterThan(20);
+  });
+});
+
+describe("lo que escribe el agente para Ventas se lee de un vistazo", () => {
+  it("se recorta en la última oración que cabe, nunca a media palabra", () => {
+    expect(recortarSinCortarFrases("Corto.", 50)).toBe("Corto.");
+    expect(recortarSinCortarFrases("Primera oración entera. Segunda que no cabe en el tope", 40)).toBe("Primera oración entera.");
+    expect(recortarSinCortarFrases("Una sola oración larguísima que no cabe en el tope pedido", 30)).toBe("Una sola oración larguísima…");
+  });
+
+  it("un «sobre qué» escrito con o sin artículo no cuenta como cambio frente a la ficha", () => {
+    const ficha: ActividadDelCaso[] = [{ actividadId: "consensuar-una-configuracion", nombre: "Consensuar", veces: 1, sobreQue: "las etapas del ciclo de vida" }];
+    const caso: ActividadDelCaso[] = [{ actividadId: "consensuar-una-configuracion", nombre: "Consensuar", veces: 1, sobreQue: "Etapas del ciclo de vida" }];
+    expect(cambiosRespectoDeLaFicha(caso, ficha, () => "Consensuar una configuración")).toEqual({ suma: [], quita: [], veces: [] });
+  });
+});
+
+describe("arreglos de la revisión del 2026-11-08", () => {
+  const POR_DEFECTO = Object.fromEntries(TODO.casos.map((c) => [c.id, actividadesPorDefecto(c)]));
+  const CTX = {
+    empresa: "Centauro",
+    edicion: "escala general",
+    areas: [{ id: "1", nombre: "Ventas", dimensiones: [{ id: "1.1", nombre: "Proceso" }] }],
+    exploracion: "Venden software a hospedajes.",
+    yaEstan: [] as string[],
+    descartados: [] as string[],
+    catalogo: casosParaLasAreas(["1"]),
+    biblioteca: BIBLIOTECA,
+    porDefecto: POR_DEFECTO,
+  };
+  const respuesta = (casos: unknown[]) =>
+    ({ content: [{ type: "tool_use", id: "tu", name: "proponer_casos", input: { casos } }] }) as unknown as Anthropic.Messages.Message;
+  const TITULO = "Sistematiza tu proceso comercial con HubSpot";
+
+  it("«Regenerar» no le cambia el título a un caso elegido (lo ve el cliente), y conserva el del catálogo si estaba adaptado", () => {
+    const r = leerLosCasos(
+      respuesta([{ rearma: "cat-sistematiza-ventas", areaId: "1", titulo: "Un título nuevo del modelo", descripcion: "d", razon: "r", actividades: [] }]),
+      { ...CTX, rearmar: [{ id: "cat-sistematiza-ventas", titulo: "Adaptado antes", tituloDelCatalogo: TITULO, areaId: "1", actividades: [] }] },
+      "run-1",
+      AHORA,
+    );
+    const v = r.items[0].valor as CasoDeUsoElegido;
+    expect(v.titulo).toBe("Adaptado antes");
+    expect(v.tituloDelCatalogo).toBe(TITULO);
+  });
+
+  it("un título casi igual al del catálogo (otra mayúscula, un punto) es el del catálogo", () => {
+    const r = leerLosCasos(
+      respuesta([{ areaId: "1", catalogo: "sistematiza-ventas", titulo: "sistematiza tu proceso comercial con HubSpot.", descripcion: "d", razon: "r", actividades: [] }]),
+      CTX,
+      "run-1",
+      AHORA,
+    );
+    const v = r.items[0].valor as CasoDeUsoElegido;
+    expect(v.titulo).toBe(TITULO);
+    expect(v.tituloDelCatalogo).toBeUndefined();
+  });
+
+  it("una tanda más va después de lo que ya está, aunque el modelo numere desde 1", () => {
+    expect(validarLugarDelAgente({ paso: 1 }, 3)).toEqual({ paso: 4 });
+    expect(validarLugarDelAgente({ paso: 5, despuesDe: "x" }, 3)).toEqual({ paso: 5, despuesDe: "x" });
+    expect(validarLugarDelAgente({ paso: 2 }, 0)).toEqual({ paso: 2 });
+    expect(validarLugarDelAgente({})).toBeUndefined();
+    expect(ultimoPasoDelPlan([{ plan: { paso: 2 } }, {}, { plan: { paso: 5 } }], false)).toBe(5);
+    expect(ultimoPasoDelPlan([{ plan: { paso: 2 } }], true)).toBe(0);
+    expect(ultimoPasoDelPlan([], false)).toBe(0);
+    const r = leerLosCasos(
+      respuesta([{ areaId: "1", catalogo: "sistematiza-ventas", titulo: TITULO, descripcion: "d", razon: "r", paso: 1, actividades: [] }]),
+      { ...CTX, ultimoPaso: 2 },
+      "run-1",
+      AHORA,
+    );
+    expect((r.items[0].valor as CasoDeUsoElegido).plan).toEqual({ paso: 3 });
+  });
+
+  it("el agente reconoce un caso que ya está por sus dos títulos", () => {
+    expect(titulosDelCaso("cat-sistematiza-ventas", { titulo: "Adaptado", tituloDelCatalogo: TITULO })).toEqual(["Adaptado", TITULO]);
+    expect(titulosDelCaso("cat-sistematiza-ventas", { titulo: "Nombre viejo" })).toEqual([TITULO]);
+    expect(titulosDelCaso("ia-1", { titulo: "Propio" })).toEqual(["Propio"]);
+  });
+
+  it("los nombres de las actividades no cuentan como cifras inventadas", () => {
+    // Así lo arma leerLosCasos: lo que se sabe más los nombres de las actividades (las de la ficha dicen «a los 30 días»).
+    const contexto = ["Nada con números.", ...BIBLIOTECA.map((a) => a.nombre), ...POR_DEFECTO["sistematiza-ventas"].map((a) => `${a.nombre} ${a.sobreQue ?? ""}`)].join("\n");
+    const v = validarParaVentasDelAgente({ porQue: "p", comoSeArma: "Con las revisiones a los 30 días y a los 60-90 días." }, contexto)!;
+    expect(v.comoSeArma).not.toMatch(/Ojo/);
+  });
+
+  it("completar un «sobre qué» por llenar de la ficha no es sumar ni quitar", () => {
+    const ficha: ActividadDelCaso[] = [{ actividadId: "consensuar-una-configuracion", nombre: "Consensuar la unidad de negocio", veces: 1, sobreQue: "la unidad de negocio: <marca o país>" }];
+    const caso: ActividadDelCaso[] = [
+      { actividadId: "consensuar-una-configuracion", nombre: "Consensuar Costa Rica", veces: 1, sobreQue: "Costa Rica" },
+      { actividadId: "consensuar-una-configuracion", nombre: "Consensuar Guatemala", veces: 1, sobreQue: "Guatemala" },
+    ];
+    const c = cambiosRespectoDeLaFicha(caso, ficha, () => "Consensuar una configuración")!;
+    expect(c).toEqual({ suma: [], quita: [], veces: ["Consensuar una configuración (2 en vez de 1)"] });
+    expect(lineaDeCambios(c)).not.toContain("<");
   });
 });

@@ -17,7 +17,7 @@
  *   en lo que se sabe de la empresa (`validarValorDelAgente`); si no, pasa a «lo que falta averiguar».
  */
 import type { ActividadDeLaBiblioteca, ActividadesDelCaso } from "./actividades";
-import { TARIFAS, type ComoSeComparte, type EtapaDeActividad } from "./actividades-puras";
+import { palabrasSinArticulos, TARIFAS, type ComoSeComparte, type EtapaDeActividad } from "./actividades-puras";
 
 // ── Los datos ────────────────────────────────────────────────────────────────────────────────────
 
@@ -44,6 +44,38 @@ export interface ValorDeVenta {
   numeros: { dato: string; fuente: string }[];
   /** Los números que faltan averiguar para hacer la cuenta. */
   falta: string[];
+}
+
+/**
+ * La palanca de valor en palabras de quien vende (pedido de Elías del 2026-11-08: «costo de la mala calidad» no se
+ * entendía). Lo guardado sigue con la palanca de siempre; esto es solo cómo se lee.
+ */
+const PALANCA_EN_PALABRAS: Readonly<Record<string, string>> = {
+  "costo de la mala calidad": "lo que hoy le cuestan los errores",
+  "ingreso que se pierde": "las ventas que hoy se le escapan",
+  "tiempo del equipo": "las horas que hoy pierde su equipo",
+  riesgo: "el riesgo que corre hoy",
+  crecimiento: "lo que puede crecer",
+};
+
+export function palancaEnPalabras(palanca: string): string {
+  return PALANCA_EN_PALABRAS[palanca.trim().toLowerCase()] ?? palanca.trim();
+}
+
+/**
+ * Para quien vende (2026-11-08): por qué el caso tiene sentido para ESTA empresa y cómo se armó con las actividades
+ * (cuáles sí y cuáles no). Interno: nunca llega a la propuesta del cliente.
+ */
+export interface ParaVentas {
+  porQue: string;
+  comoSeArma: string;
+}
+
+/** El caso en el plan que propuso el agente (2026-11-08): su lugar (1 = el primero) y por qué va ahí. */
+export interface LugarEnElPlan {
+  paso: number;
+  /** Por qué va después del anterior; vacío en el primero. */
+  despuesDe?: string;
 }
 
 /** La actividad de la biblioteca como la necesita la pantalla: sin lo que pesa (reglas, incluye…). */
@@ -211,6 +243,95 @@ export function cambiarVeces<T extends CasoConActividades>(caso: T, actuales: re
   return { ...caso, actividades: actuales.map((a, j) => (j === i ? { ...a, veces: v } : a)), aMano: true };
 }
 
+// ── Cómo se armó y en qué orden ──────────────────────────────────────────────────────────────────
+
+/** Lo que cambió un caso respecto de las actividades por defecto de su ficha del catálogo, por nombre de la biblioteca. */
+export interface CambiosRespectoDeLaFicha {
+  suma: string[];
+  quita: string[];
+  /** Las que siguen pero con otras veces: «Capacitación del equipo (2 en vez de 1)». */
+  veces: string[];
+}
+
+/**
+ * Qué actividades sí y cuáles no, comparado con la ficha del catálogo: se agrupa por actividad de la biblioteca (y lo
+ * que trata, si se comparte por eso), así que un nombre concretado en el caso no cuenta como cambio. Un caso propio (sin
+ * ficha) devuelve null: todas sus actividades las eligió el agente.
+ */
+export function cambiosRespectoDeLaFicha(
+  actuales: readonly ActividadDelCaso[],
+  porDefecto: readonly ActividadDelCaso[] | undefined,
+  nombreDe: (actividadId: string) => string | undefined,
+): CambiosRespectoDeLaFicha | null {
+  if (!porDefecto) return null;
+  /* «las etapas del ciclo de vida» y «etapas del ciclo de vida» son lo mismo: sin artículos ni mayúsculas. Una fila de la
+     ficha con un «sobre qué» por llenar («la unidad de negocio: <marca o país>») recibe lo que sobra de esa actividad:
+     completarlo con «Costa Rica» y «Guatemala» no es sumar ni quitar, es la misma dos veces (revisión del 2026-11-08). */
+  const porLlenar = (a: ActividadDelCaso) => /<[^>]*>/.test(a.sobreQue ?? "");
+  const clave = (a: ActividadDelCaso) => (porLlenar(a) ? `${a.actividadId}|*` : `${a.actividadId}|${palabrasSinArticulos(a.sobreQue ?? "").join(" ")}`);
+  const contar = (lista: readonly ActividadDelCaso[]) => {
+    const m = new Map<string, { a: ActividadDelCaso; veces: number }>();
+    for (const a of lista) {
+      const k = clave(a);
+      m.set(k, { a, veces: (m.get(k)?.veces ?? 0) + a.veces });
+    }
+    return m;
+  };
+  const antes = contar(porDefecto);
+  const ahora = contar(actuales);
+  // Lo que no calza con una fila concreta va a la fila por llenar de su actividad, si la ficha la tiene.
+  for (const [k, x] of [...ahora]) {
+    const llenar = `${x.a.actividadId}|*`;
+    if (antes.has(k) || k === llenar || !antes.has(llenar)) continue;
+    ahora.delete(k);
+    ahora.set(llenar, { a: ahora.get(llenar)?.a ?? x.a, veces: (ahora.get(llenar)?.veces ?? 0) + x.veces });
+  }
+  const nombre = (k: string, a: ActividadDelCaso) => {
+    const base = nombreDe(a.actividadId) ?? a.nombre;
+    const sobre = k.endsWith("|*") ? "" : (a.sobreQue ?? "").trim();
+    return sobre ? `${base} (${sobre})` : base;
+  };
+  const suma: string[] = [];
+  const quita: string[] = [];
+  const veces: string[] = [];
+  for (const [k, x] of ahora) {
+    const y = antes.get(k);
+    if (!y) suma.push(nombre(k, x.a));
+    else if (y.veces !== x.veces) veces.push(`${nombre(k, x.a)} (${x.veces} en vez de ${y.veces})`);
+  }
+  for (const [k, y] of antes) if (!ahora.has(k)) quita.push(nombre(k, y.a));
+  return { suma: [...new Set(suma)], quita: [...new Set(quita)], veces: [...new Set(veces)] };
+}
+
+/** «A», «B» y «C»; con más de cuatro, las cuatro primeras «y N más». */
+function listaCorta(nombres: readonly string[]): string {
+  const vistos = nombres.slice(0, 4).map((n) => `«${n}»`);
+  const resto = nombres.length - vistos.length;
+  if (resto > 0) return `${vistos.join(", ")} y ${resto} más`;
+  return vistos.length === 1 ? vistos[0] : `${vistos.slice(0, -1).join(", ")} y ${vistos[vistos.length - 1]}`;
+}
+
+/** Los cambios frente a la ficha en una línea: «Frente a la ficha del catálogo: suma «A»; sin «B».». */
+export function lineaDeCambios(c: CambiosRespectoDeLaFicha): string {
+  const partes = [
+    ...(c.suma.length ? [`suma ${listaCorta(c.suma)}`] : []),
+    ...(c.quita.length ? [`sin ${listaCorta(c.quita)}`] : []),
+    ...(c.veces.length ? [`cambia ${listaCorta(c.veces)}`] : []),
+  ];
+  return partes.length ? `Frente a la ficha del catálogo: ${partes.join("; ")}.` : "Lleva las actividades de la ficha del catálogo, sin cambios.";
+}
+
+/**
+ * Los casos en el orden del plan: primero los que tienen su lugar (por `paso`), después los demás, como estaban. Estable:
+ * dos con el mismo paso (de corridas distintas) quedan en el orden en que llegaron.
+ */
+export function enOrdenDelPlan<T>(casos: readonly T[], pasoDe: (c: T) => number | undefined): T[] {
+  return casos
+    .map((c, i) => ({ c, i, p: pasoDe(c) }))
+    .sort((x, y) => (x.p ?? Number.POSITIVE_INFINITY) - (y.p ?? Number.POSITIVE_INFINITY) || x.i - y.i)
+    .map((x) => x.c);
+}
+
 // ── Lo que devuelve el agente ─────────────────────────────────────────────────────────────────────
 
 const esObjeto = (x: unknown): x is Record<string, unknown> => typeof x === "object" && x !== null && !Array.isArray(x);
@@ -302,6 +423,58 @@ export function validarValorDelAgente(raw: unknown, contexto: string): ValorDeVe
     numeros: numeros.slice(0, 6),
     falta: [...new Set(falta)].slice(0, 6),
   };
+}
+
+/**
+ * Un texto del agente con su tope de largo, sin cortarlo a media frase: hasta la última oración que cabe y, si ni la
+ * primera cabe, hasta la última palabra, con «…».
+ */
+export function recortarSinCortarFrases(t: string, max: number): string {
+  const limpio = t.trim().replace(/\s+/g, " ");
+  if (limpio.length <= max) return limpio;
+  const corte = limpio.slice(0, max);
+  const fin = Math.max(corte.lastIndexOf(". "), corte.lastIndexOf("? "), corte.lastIndexOf("! "));
+  if (fin >= max / 3) return corte.slice(0, fin + 1);
+  const espacio = corte.lastIndexOf(" ");
+  return `${corte.slice(0, espacio > 0 ? espacio : max - 1).replace(/[,;:]$/, "")}…`;
+}
+
+/** Un texto del agente que cita una cifra de 10 o más que no está en lo que se sabe: se marca para confirmarla. */
+function marcarCifrasAjenas(t: string, conocidos: ReadonlySet<string>): string {
+  if (!t) return t;
+  return numerosEn(t).some((c) => Number(c) >= 10 && !conocidos.has(c)) ? `${t} (Ojo: hay cifras que no salieron del cliente; confírmalas.)` : t;
+}
+
+/**
+ * Lo de quien vende que devolvió el agente con cada caso: por qué para esta empresa y cómo se arma, cortos y sin cifras
+ * inventadas (`contexto` es lo que leyó el agente). Sin ninguno de los dos, undefined.
+ */
+export function validarParaVentasDelAgente(x: Record<string, unknown>, contexto: string): ParaVentas | undefined {
+  const conocidos = new Set(numerosEn(contexto));
+  const porQue = marcarCifrasAjenas(recortarSinCortarFrases(typeof x.porQue === "string" ? x.porQue : "", 260), conocidos);
+  const comoSeArma = marcarCifrasAjenas(recortarSinCortarFrases(typeof x.comoSeArma === "string" ? x.comoSeArma : "", 340), conocidos);
+  return porQue || comoSeArma ? { porQue, comoSeArma } : undefined;
+}
+
+/**
+ * El lugar del caso en el plan que devolvió el agente: un paso de 1 a 40 y, si no es el primero, por qué va ahí. Un caso
+ * nuevo de una tanda más va después de lo que ya está (`desde`, el último paso del plan): si el modelo lo numeró desde 1,
+ * se corre, para no meterse delante de lo elegido.
+ */
+export function validarLugarDelAgente(x: Record<string, unknown>, desde = 0): LugarEnElPlan | undefined {
+  if (typeof x.paso !== "number" || !Number.isFinite(x.paso)) return undefined;
+  const pedido = Math.max(1, Math.round(x.paso));
+  const paso = Math.min(40, desde > 0 && pedido <= desde ? desde + pedido : pedido);
+  const despuesDe = paso > 1 && typeof x.despuesDe === "string" ? recortarSinCortarFrases(x.despuesDe, 220) : "";
+  return { paso, ...(despuesDe ? { despuesDe } : {}) };
+}
+
+/**
+ * El último paso del plan entre lo que ya está (elegidos y sugeridos que siguen): una tanda más numera desde el
+ * siguiente. «Regenerar» rearma el plan entero, desde el 1.
+ */
+export function ultimoPasoDelPlan(casos: readonly { plan?: LugarEnElPlan }[], regenerar: boolean): number {
+  return regenerar ? 0 : Math.max(0, ...casos.map((c) => c.plan?.paso ?? 0));
 }
 
 // ── Regenerar ────────────────────────────────────────────────────────────────────────────────────

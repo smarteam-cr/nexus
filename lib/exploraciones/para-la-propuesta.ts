@@ -11,6 +11,7 @@
  *     el idioma de la propuesta.
  */
 import { casoDeLaPreventa } from "@/lib/casos-de-uso/en-la-preventa";
+import { enOrdenDelPlan } from "@/lib/casos-de-uso/armado";
 import type { ResultadoDelChequeo } from "@/lib/escala/chequeo";
 import type { ClaveDeCapa, Letra } from "@/lib/escala/documento/tipos";
 import type { AreaEnLaEscala, PosicionEnLaEscala } from "@/lib/escala/posicion";
@@ -214,7 +215,7 @@ export function bloqueParaLaPropuesta(o: {
     );
   }
 
-  const casos = Object.entries(c.casosDeUso);
+  const casos = casosEnOrden(c.casosDeUso);
   if (casos.length) {
     const nombreDeArea = (id: string | null) => (id ? (escala.areas.find((a) => a.id === id)?.nombre ?? null) : null);
     partes.push(
@@ -224,9 +225,7 @@ export function bloqueParaLaPropuesta(o: {
         // Un caso del catálogo de Smarteam suma lo que el cliente obtiene (nunca su nota interna).
         const delCatalogo = casoDeLaPreventa(id);
         const obtiene = delCatalogo ? ` Lo que obtiene: ${delCatalogo.obtienes.join(" ")}` : "";
-        // El nombre del catálogo, no el guardado: una preventa de antes del 2026-11-06 guardó el nombre viejo, y la IA
-        // recibiría dos nombres para el mismo caso (la sección «Casos de uso» ya muestra el de hoy).
-        return `- ${delCatalogo?.titulo ?? k.titulo}${nombreDeArea(k.areaId) ? ` (${nombreDeArea(k.areaId)})` : ""}${k.razon ? `: ${k.razon}` : ""}${k.descripcion ? ` Qué es: ${k.descripcion}` : ""}${obtiene}`;
+        return `- ${tituloParaLaPropuesta(id, k)}${nombreDeArea(k.areaId) ? ` (${nombreDeArea(k.areaId)})` : ""}${k.razon ? `: ${k.razon}` : ""}${k.descripcion ? ` Qué es: ${k.descripcion}` : ""}${obtiene}`;
       }),
     );
   }
@@ -241,8 +240,22 @@ export function bloqueParaLaPropuesta(o: {
  * Sin precio: es la fase 2.
  */
 export function casosElegidosParaLaPropuesta(c: Pick<ContenidoDeExploracion, "casosDeUso">): { id: string; title: string; detail: string; price: string }[] {
-  return Object.entries(c.casosDeUso).map(([id, k]) => {
+  return casosEnOrden(c.casosDeUso).map(([id, k]) => {
     const delCatalogo = casoDeLaPreventa(id);
-    return { id, title: delCatalogo?.titulo ?? k.titulo, detail: delCatalogo?.promesa ?? k.descripcion ?? "", price: "" };
+    return { id, title: tituloParaLaPropuesta(id, k), detail: delCatalogo?.promesa ?? k.descripcion ?? "", price: "" };
   });
+}
+
+/** Los casos elegidos en el orden del plan que armó el agente (2026-11-08); los que no tienen lugar, al final. */
+function casosEnOrden(casos: ContenidoDeExploracion["casosDeUso"]) {
+  return enOrdenDelPlan(Object.entries(casos), ([, k]) => k.plan?.paso);
+}
+
+/**
+ * El título de un caso elegido en la propuesta. El del catálogo, no el guardado: una preventa de antes del 2026-11-06
+ * guardó el nombre viejo, y la IA recibiría dos nombres para el mismo caso. Salvo que el agente lo haya adaptado a la
+ * empresa (2026-11-08, `tituloDelCatalogo`): entonces el adaptado.
+ */
+function tituloParaLaPropuesta(id: string, k: ContenidoDeExploracion["casosDeUso"][string]): string {
+  return k.tituloDelCatalogo ? k.titulo : (casoDeLaPreventa(id)?.titulo ?? k.titulo);
 }

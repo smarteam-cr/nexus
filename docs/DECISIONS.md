@@ -7980,8 +7980,8 @@ le pregunta a la persona del cliente.
   en pantalla no tendría dónde guardarse.
 - **Lo ve quien tiene Preventa** (`preventa.read`, también en el menú), además de Ventas: lo usa la preventa.
 - **La preventa parte del catálogo.** El agente de casos recibe los casos que tocan las áreas en juego y usa uno si calza
-  (su id en `catalogo` y su título tal cual: el código pone el título, no el modelo); propone uno propio solo si ninguno
-  calza. Un caso del catálogo se guarda como `cat-<id>` (`lib/casos-de-uso/en-la-preventa.ts`): no es un caso libre
+  (su id en `catalogo`); propone uno propio solo si ninguno calza. Hasta el 2026-11-08 el código ponía el título del
+  catálogo tal cual; desde ese día el agente puede adaptarlo a la empresa (abajo, «El plan y el porqué para Ventas»). Un caso del catálogo se guarda como `cat-<id>` (`lib/casos-de-uso/en-la-preventa.ts`): no es un caso libre
   (`ia-…`) ni una fila de `UseCase`, así que no crea `BusinessCaseUseCase` y entra a la propuesta como contexto, con lo
   que el cliente obtiene. La lista «Del catálogo de Smarteam» muestra los de las áreas en juego, con enlace a su ficha.
 - **Fase 2, pendiente:** las licencias (hubs, ediciones y asientos) y el precio de cada caso.
@@ -8019,9 +8019,31 @@ le pregunta a la persona del cliente.
     las sugerencias de antes. La alerta no cuenta los casos editados a mano (son del vendedor) ni los de un área fuera de
     juego, y una respuesta cortada por el tope no cambia nada: lo dice y no aparta las sugerencias. *Por qué en la pantalla y no en el servidor:* el agente nunca escribe lo confirmado (contenido.ts); lo
     aplica la persona que apretó «Regenerar», con el «Usar» de siempre.
+  - **El plan y el porqué para Ventas (2026-11-08, Elías con Centauro: «Ventas tiene que entender qué actividades sí y
+    cuáles no»).** El agente piensa los casos como UN PLAN, uno detrás de otro: cada caso trae su lugar (`plan.paso`) y por
+    qué va después del anterior (`plan.despuesDe`); una tanda más sigue desde el último paso y «Regenerar» lo rearma desde
+    el 1. Los elegidos, los sugeridos y la propuesta del cliente van en ese orden; en pantalla el número es la posición
+    entre los elegidos (el del agente puede saltar uno que no se eligió). Cada caso trae, para el vendedor (`paraVentas`,
+    nunca llega a la propuesta), por qué tiene sentido para ESTA empresa (una frase) y cómo se arma (qué actividades sí y
+    cuáles no), y la pantalla suma una línea que calcula ella misma: lo que cambió frente a la ficha del catálogo
+    (`cambiosRespectoDeLaFicha`), así que sigue los cambios a mano. *Por qué la línea calculada:* el texto del agente
+    puede contradecir sus propias actividades; la línea no. Los textos del agente se recortan en la última oración que cabe
+    y una cifra que no está en lo que se sabe se marca para confirmarla.
+  - **El agente puede adaptar el título de un caso NUEVO del catálogo a la empresa** (pedido de Elías): el del catálogo
+    queda al lado (`tituloDelCatalogo`) y la identidad sigue siendo el id `cat-…`. Uno ya elegido conserva su título al
+    regenerar (revisión del 2026-11-08: «Regenerar» aplica la versión nueva sin preguntar y ese título lo ve el cliente);
+    uno casi igual al del catálogo cuenta como el del catálogo. La propuesta del cliente usa el adaptado; sin
+    adaptar, el del catálogo (lo de los nombres viejos sigue igual). Para no repetirlo, el agente recibe los dos títulos de
+    lo que ya está y descartar anota los dos.
+  - **Cada actividad tiene su ⓘ** con el `resumen` de la biblioteca (qué se hace, para quien vende). «Capacitar» y
+    «Entregar» se llaman «Capacitación del equipo» y «Entrega del proyecto» (mismos ids y horas;
+    `NOMBRES_ANTERIORES_DE_ACTIVIDAD` muestra con el nombre nuevo lo guardado antes).
+  - **«Cómo subir el ticket» en palabras simples:** de dónde sale el valor (la palanca en palabras de quien vende,
+    `palancaEnPalabras`), la idea en dos frases, lo que ya sabemos y las anclas por averiguar con el cliente, cada una como
+    pregunta corta. Lo guardado antes se lee igual, con los rótulos nuevos.
   - Cuesta unos US$ 0,19 por corrida, las dos llamadas juntas (medido con Centauro: 30 mil tokens de entrada y 6,4 mil de
-    salida, Sonnet). Corre
-    solo con un clic, o sola la primera vez que se abre el paso, como antes. `scripts/simular-casos-de-uso.ts` muestra el
+    salida, Sonnet). Con el plan y el porqué (2026-11-08), US$ 0,17 y 79 s con Centauro (31 mil de entrada, 5,3 mil de
+    salida). Corre solo con un clic, o sola la primera vez que se abre el paso, como antes. `scripts/simular-casos-de-uso.ts` muestra el
     antes y el después de una preventa sin escribir nada.
 
 ## Servicios recurrentes: el ciclo con los documentos de siempre (2026-10-12)
