@@ -12,8 +12,14 @@
  * averiguar ni el conteo de averiguadas (el título del bloque ya dice qué averiguar); siguen en «En vivo», donde se marcan
  * y de donde las leen el aviso del resultado y el análisis de la sesión. La pregunta, la explicación y los títulos, un
  * poco más grandes. «Para profundizar» se pliega: cerrado en la Preparación, abierto en «En vivo».
+ *
+ * «Para profundizar» a pedido (2026-11-08, Elías: «tarda mucho haciendo la guía»): la guía sale sin esas preguntas; al
+ * abrir el plegable de un bloque se piden solo las de ese bloque (en «En vivo», las de todos los que falten, en una
+ * llamada) y quedan guardadas en la guía (`usePreguntasParaProfundizar`). Quien no puede editar ve las de lo que hay que
+ * averiguar (`paraProfundizar`), como en las guías de antes.
  */
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Spinner } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import { APERTURA_DEL_RESULTADO, faltaElResultadoEnVivo } from "@/lib/exploraciones/resultado";
 import {
@@ -55,21 +61,71 @@ function Cosa({ c, marcada, alMarcar, puede }: { c: CosaPorAveriguar; marcada: b
   );
 }
 
+/**
+ * Las preguntas para profundizar que se piden al abrir el plegable (2026-11-08): las recién pedidas, por bloque. `pedir`
+ * no repite un bloque que ya se pidió para esta guía. Sin permiso de edición no pide nada.
+ */
+function usePreguntasParaProfundizar(exploracionId: string, sesionId: string | null, guiaEn: string | null, puede: boolean) {
+  const [traidas, setTraidas] = useState<Record<number, string[]>>({});
+  const [pidiendo, setPidiendo] = useState<ReadonlySet<number>>(new Set());
+  const [fallidas, setFallidas] = useState<ReadonlySet<number>>(new Set());
+  const pedidas = useRef(new Set<number>());
+  // Otra guía (otra corrida): lo traído era de la anterior.
+  const [deLaGuia, setDeLaGuia] = useState(guiaEn);
+  if (deLaGuia !== guiaEn) {
+    setDeLaGuia(guiaEn);
+    setTraidas({});
+    setFallidas(new Set());
+  }
+  useEffect(() => {
+    pedidas.current = new Set();
+  }, [guiaEn]);
+  const pedir = useCallback(
+    async (indices: readonly number[]) => {
+      const nuevos = indices.filter((i) => !pedidas.current.has(i));
+      if (!puede || !guiaEn || !nuevos.length) return;
+      for (const i of nuevos) pedidas.current.add(i);
+      setPidiendo((x) => new Set([...x, ...nuevos]));
+      try {
+        const r = await fetch(`/api/sales/exploraciones/${exploracionId}/guia/profundizar`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ sesionId, en: guiaEn, bloques: nuevos }),
+        });
+        const j = r.ok ? ((await r.json()) as { preguntas?: Record<string, string[]> }) : null;
+        if (!j?.preguntas) throw new Error("sin preguntas");
+        const leidas = Object.fromEntries(Object.entries(j.preguntas).map(([k, v]) => [Number(k), v]));
+        setTraidas((x) => ({ ...x, ...leidas }));
+      } catch {
+        setFallidas((x) => new Set([...x, ...nuevos]));
+      } finally {
+        setPidiendo((x) => new Set([...x].filter((i) => !nuevos.includes(i))));
+      }
+    },
+    [exploracionId, sesionId, guiaEn, puede],
+  );
+  return { traidas, pidiendo, fallidas, pedir };
+}
+
 export function AgendaDeLaGuia({
   pestana,
   agenda,
   objetivo,
   momento,
   editable,
+  guiaEn,
 }: {
   pestana: PestanaDeSesion;
   agenda: Agenda;
+  /** El `en` de la guía que se muestra: con él se piden y se guardan sus preguntas para profundizar. */
+  guiaEn: string | null;
   objetivo: string | null;
   momento: MomentoDeLaSesion;
   /** Se pueden marcar las cosas (quien puede editar la exploración). */
   editable: boolean;
 }) {
-  const { guardando } = useLienzo();
+  const { exp, guardando } = useLienzo();
+  const profundizar = usePreguntasParaProfundizar(exp.id, pestana.sesion?.id ?? null, guiaEn, editable);
   const editar = useEditarLaSesion(pestana, momento);
   const hechas = pestana.sesion?.hechas;
   const { sabidas, total } = avanceDeLaAgenda(agenda, hechas);
@@ -95,6 +151,12 @@ export function AgendaDeLaGuia({
   }, [enVivo]);
   const inicioDeLaReunion = Date.parse(pestana.sesion?.evento?.inicio ?? pestana.sesion?.reunion?.inicio ?? "");
   const inicio = Number.isFinite(inicioDeLaReunion) && inicioDeLaReunion <= ahora ? inicioDeLaReunion : abierta;
+  // En «En vivo» salen abiertas: se piden las de todos los bloques que no las tienen, en una sola llamada.
+  const faltan = agenda.bloques.flatMap((b, i) => (b.profundizar === undefined ? [i] : [])).join(",");
+  const { pedir } = profundizar;
+  useEffect(() => {
+    if (enVivo && faltan) void pedir(faltan.split(",").map(Number));
+  }, [enVivo, faltan, pedir]);
   const sinResultado = enVivo && faltaElResultadoEnVivo({ agenda, hechas, inicio, ahora, minutos: duracion || 60 });
 
   return (
@@ -128,7 +190,12 @@ export function AgendaDeLaGuia({
       )}
       <ol>
         {bloques.map((b, i) => {
-          const profundizar = paraProfundizar(b);
+          /* Las de la guía, las recién pedidas o, sin permiso para pedirlas (o si falló el pedido), las de lo que hay que
+             averiguar. null: todavía no están y se piden al abrir. */
+          const propias = b.profundizar ?? profundizar.traidas[i];
+          // Sin ninguna que cumpla (revisión del 8 nov), también las de lo que hay que averiguar: el plegable no se esfuma.
+          const preguntas = propias?.length ? propias : propias || !editable || profundizar.fallidas.has(i) ? paraProfundizar(b) : null;
+          const pensando = profundizar.pidiendo.has(i);
           const sabidasDelBloque = b.averiguar.filter((c) => estaAveriguada(c, hechas)).length;
           return (
             <li key={i} className={cn("flex gap-4 border-b border-line px-[18px] py-4 last:border-b-0", b.central && "bg-surface-muted")}>
@@ -142,19 +209,34 @@ export function AgendaDeLaGuia({
                 </div>
                 <p className="text-[15.5px] italic leading-[24px] text-fg">«{sinComillas(b.abre)}»</p>
                 {b.guia && <p className="text-[14.5px] leading-[22px] text-fg-secondary">{b.guia}</p>}
-                {profundizar.length > 0 && (
+                {(preguntas === null || preguntas.length > 0) && (
                   // Plegado en la Preparación (séptima vuelta): se abre con un clic. En «En vivo», abierto.
-                  <details open={momento === "durante"} className="group pt-0.5">
+                  <details
+                    open={momento === "durante"}
+                    onToggle={(ev) => {
+                      if (ev.currentTarget.open && preguntas === null) void profundizar.pedir([i]);
+                    }}
+                    className="group pt-0.5"
+                  >
                     <summary className="flex w-fit cursor-pointer select-none list-none items-center gap-1.5 rounded text-[12px] font-semibold uppercase tracking-wide text-fg-muted hover:text-fg [&::-webkit-details-marker]:hidden">
                       <span aria-hidden className="inline-block transition-transform group-open:rotate-90">›</span>
                       Para profundizar
-                      <span className="font-normal normal-case tracking-normal">· {profundizar.length} {profundizar.length === 1 ? "pregunta" : "preguntas"}</span>
+                      {preguntas && (
+                        <span className="font-normal normal-case tracking-normal">· {preguntas.length} {preguntas.length === 1 ? "pregunta" : "preguntas"}</span>
+                      )}
                     </summary>
-                    <ul className="mt-1.5 list-disc space-y-1 pl-5 text-[14px] leading-[21px] text-fg-secondary marker:text-fg-muted">
-                      {profundizar.map((p, k) => (
-                        <li key={k}>{sinComillas(p)}</li>
-                      ))}
-                    </ul>
+                    {preguntas ? (
+                      <ul className="mt-1.5 list-disc space-y-1 pl-5 text-[14px] leading-[21px] text-fg-secondary marker:text-fg-muted">
+                        {preguntas.map((p, k) => (
+                          <li key={k}>{sinComillas(p)}</li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p role="status" className="mt-1.5 flex items-center gap-2 text-[13px] text-fg-muted">
+                        <Spinner size="sm" color="border-brand" />
+                        {pensando ? "Nexus está pensando las preguntas de este bloque…" : "Un momento…"}
+                      </p>
+                    )}
                   </details>
                 )}
                 {b.impacto && <p className="text-[13px] leading-[19px] text-fg-muted">Para medir el dolor: {b.impacto}</p>}

@@ -26,7 +26,7 @@ import {
   type SesionParaElResumen,
 } from "./objetivo-y-hallazgos";
 import { abreLaPuerta, NOMBRE_DE_LA_VIA, PISTA_DEL_AJUSTE, textoDeComoLlego, VIAS_DE_LLEGADA, viaDeLaFuenteDeLead } from "./como-llego";
-import { HERRAMIENTA_DE_LA_GUIA, herramientaDeLaAgenda, leerLoDeLaExploracion, pedidoDeLaGuia, type ContextoDeLaGuia } from "./guia-pedido";
+import { HERRAMIENTA_DE_LA_GUIA, HERRAMIENTA_DE_LO_DE_LA_EXPLORACION, herramientaDeLaAgenda, leerLoDeLaExploracion, pedidoDeLaGuia, pedidoDeLoDeLaExploracion, type ContextoDeLaGuia } from "./guia-pedido";
 import { pedidoDelContexto } from "./contexto-pedido";
 import { crearSeguimiento, type CorridaEnCurso } from "./seguimiento-de-corrida";
 import { sePuedeReintentar } from "./reintento";
@@ -273,14 +273,33 @@ describe("la guía se arma sola y pregunta lo que le falta", () => {
     expect(cuerpo).toContain(PISTA_DEL_AJUSTE.hubspot);
     expect(cuerpo).toContain("¿Con quién es la sesión 3? → Con Laura, jefa de ventas");
     expect(cuerpo).toContain("LOS HALLAZGOS QUE DEJÓ LA GUÍA ANTERIOR");
-    expect(p.system as string).toMatch(/faltaContexto/);
+    // 2026-11-08: los hallazgos y lo que falta saber van en su propia llamada, en paralelo, con el mismo contexto.
+    const deLaExploracion = pedidoDeLoDeLaExploracion(
+      ctx({ contextoDeLaExploracion: { base: OBJETIVO_DE_SMARTEAM, objetivo: "Confirmar si el desborde de soporte es lo crítico", sabemos: null }, hallazgosAntes: ["CRM con duplicados"] }),
+    );
+    expect(deLaExploracion.system as string).toMatch(/faltaContexto/);
+    expect(JSON.stringify(deLaExploracion.messages)).toContain("LOS HALLAZGOS QUE DEJÓ LA GUÍA ANTERIOR");
   });
 
-  it("la herramienta trae los hallazgos, el ajuste y lo que falta saber, sin dejar de exigir la agenda en bloques", () => {
+  it("la guía ya no trae los hallazgos, el ajuste ni lo que falta saber: los trae su propia llamada (2026-11-08)", () => {
     const t = herramientaDeLaAgenda(ctx());
     const props = (t.input_schema as { properties: Record<string, unknown>; required: string[] }).properties;
-    expect(Object.keys(props)).toEqual(expect.arrayContaining(["hallazgos", "ajusteDelObjetivo", "faltaContexto", "bloques"]));
+    expect(Object.keys(props)).not.toEqual(expect.arrayContaining(["hallazgos"]));
+    expect(Object.keys(props)).toContain("bloques");
     expect((t.input_schema as { required: string[] }).required).toEqual(["objetivo", "claves", "bloques"]);
+    const otra = pedidoDeLoDeLaExploracion(ctx());
+    const tool = otra.tools![0] as { name: string; input_schema: { properties: Record<string, unknown> } };
+    expect(tool.name).toBe(HERRAMIENTA_DE_LO_DE_LA_EXPLORACION);
+    expect(Object.keys(tool.input_schema.properties)).toEqual(["hallazgos", "ajusteDelObjetivo", "faltaContexto"]);
+    expect(otra.tool_choice).toEqual({ type: "tool", name: HERRAMIENTA_DE_LO_DE_LA_EXPLORACION });
+  });
+
+  it("lee los hallazgos también de la respuesta de su propia llamada", () => {
+    const r = leerLoDeLaExploracion(
+      { content: [{ type: "tool_use", id: "t2", name: HERRAMIENTA_DE_LO_DE_LA_EXPLORACION, input: { hallazgos: ["CRM con duplicados"] } }] } as unknown as Anthropic.Messages.Message,
+      {},
+    );
+    expect(r.hallazgos).toEqual(["CRM con duplicados"]);
   });
 
   it("lee los hallazgos, el ajuste y hasta 3 preguntas, sin repetidas ni las que ya respondió el equipo", () => {
@@ -602,10 +621,11 @@ describe("quinta vuelta: qué se manda al responder las preguntas de Nexus", () 
   });
 
   it("la IA da HASTA 3 opciones y no inventa nombres, cargos, fechas ni cifras", () => {
-    const t = JSON.stringify(herramientaDeLaAgenda({
+    // Desde el 2026-11-08 lo que falta saber va en su propia llamada (`pedidoDeLoDeLaExploracion`).
+    const t = JSON.stringify(pedidoDeLoDeLaExploracion({
       empresa: "x", industria: null, edicion: "general", perfil: null, hoy: "2026-11-08", proxima: { numero: 1, titulo: null, fecha: null, sesionId: null },
       conTest: false, desdeCero: false, nivelesDeLaEscala: [], paraConectar: null, hubspotActual: null, confirmado: [], huecos: [], enfoque: [], noExplorado: [], objecionesDichas: [], paraExplorar: [],
-    }));
+    } as unknown as ContextoDeLaGuia).tools);
     expect(t).toMatch(/SIEMPRE exactamente 3 respuestas probables/);
     expect(t).toMatch(/NUNCA un nombre, un cargo, una fecha ni una cifra que no esté en ellas/);
   });

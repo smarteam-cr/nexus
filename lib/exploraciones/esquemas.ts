@@ -1055,6 +1055,8 @@ export function leerPropuesta(raw: unknown): PropuestaDeExploracion {
     })
     .safeParse(raw.contextoPropuesto);
   if (propuesto.success) p.contextoPropuesto = propuesto.data;
+  const deLaPrimera = z.object({ en: FECHA_ISO, objetivos: z.array(z.string().min(1).max(400)).max(MAX_OBJETIVOS_SUGERIDOS) }).safeParse(raw.objetivosDeLaPrimera);
+  if (deLaPrimera.success) p.objetivosDeLaPrimera = deLaPrimera.data;
   const tecnica = AlertaTecnicaSchema.safeParse(raw.alertaTecnica);
   p.alertaTecnica = tecnica.success ? tecnica.data : null;
   const ajuste = AjusteDelObjetivoSchema.safeParse(raw.ajusteDelObjetivo);

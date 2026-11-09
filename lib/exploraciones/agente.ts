@@ -89,10 +89,12 @@ import { retomarParaLaGuia, ultimaReunionLeida } from "./despues-de-la-sesion";
 import { insumosDelAnalisisParaLaGuia } from "@/lib/analizador-venta/para-la-guia-server";
 import {
   contextoDeLaGuia,
+  faseDeLaGuiaParcial,
   leerLaGuiaDelAgente,
   leerLoDeLaExploracion,
   notasParaLaGuia,
   pedidoDeLaGuia,
+  pedidoDeLoDeLaExploracion,
   voseoEnLaGuia,
   type LoDeLaExploracionEnLaGuia,
 } from "./guia-pedido";
@@ -1070,14 +1072,14 @@ async function escribirLoQueVaSolo(
  * Devuelve cuántas preguntas armó (0 si el agente no devolvió nada que sirva: queda la de base).
  */
 async function armarGuia(runId: string, exploracionId: string, opts: OpcionesDeLaCorrida, registrar: boolean): Promise<number> {
-  const { armada, extras, ctx, clientId } = await pedirLaGuia(runId, exploracionId, opts);
+  const { armada, extras, extrasFallaron, ctx, clientId } = await pedirLaGuia(runId, exploracionId, opts);
   /* Otra guía arrancó después que esta (una lectura terminó mientras esta corría): esta quedó vieja y no se guarda, para
      no pisar la más nueva (revisión del 2026-11-08). */
   const ultimaGuia = await ultimaCorrida(exploracionId, clientId, prisma, "guia");
   if (ultimaGuia && ultimaGuia.id !== runId) return armada?.guia.preguntas.length ?? 0;
   // Sin guía que sirva igual quedan los hallazgos y lo que Nexus necesita saber (2026-11-08).
   // Se guarda como la de su sesión, si la próxima está planeada: así su «antes» queda aunque pase.
-  await guardarGuia(exploracionId, armada?.guia ?? null, registrar ? { runId, automatica: opts.automatica === true } : null, ctx.proxima.sesionId ?? null, { ...extras, runId });
+  await guardarGuia(exploracionId, armada?.guia ?? null, registrar ? { runId, automatica: opts.automatica === true } : null, ctx.proxima.sesionId ?? null, extrasFallaron ? undefined : { ...extras, runId });
   // Ni guía ni preguntas: es una falla, y así lo dice el aviso (no «dice qué necesita saber», que no hay nada).
   if (!armada && !extras.preguntas.length) throw new FalloDeLaExploracion("Nexus no pudo armar una guía que sirva. Vuelve a intentarlo.");
   return armada?.guia.preguntas.length ?? 0;
@@ -1109,6 +1111,8 @@ async function pedirLaGuia(
 ): Promise<{
   armada: { guia: GuiaDeLaSesion; ctx: ReturnType<typeof contextoDeLaGuia>; preguntas: PreguntaParaMostrar[] } | null;
   extras: LoDeLaExploracionEnLaGuia;
+  /** La llamada de lo de la exploración falló: `extras` viene vacío y no se guarda. */
+  extrasFallaron: boolean;
   ctx: ReturnType<typeof contextoDeLaGuia>;
   clientId: string;
 }> {
@@ -1116,20 +1120,47 @@ async function pedirLaGuia(
   /* El objetivo de la sesión lo decide el vendedor (Elías, 2026-11-08, cuarta vuelta): sin uno aceptado o escrito no se
      arma la guía. Es su instrucción para estructurar la sesión, y la de más peso del pedido. */
   if (!objetivoAceptado(ctx.contextoDeLaSesion?.objetivo)) throw new FalloDeLaExploracion(FALTA_EL_OBJETIVO_DE_LA_SESION);
+  const ia = { agentSlug: AGENTE_DE_LA_EXPLORACION, agentRunId: runId, clientId: fila.clientId, triggeredByEmail: opts.triggeredByEmail };
+  /* Más rápida (2026-11-08, Elías: «tarda mucho haciendo la guía»; medido: unos 95 s): la guía llega por streaming y la fase
+     dice en qué bloque va; los hallazgos y lo que le falta saber a Nexus van en su propia llamada, en paralelo, y si esa
+     falla la guía queda igual. «Para profundizar» se pide al abrir cada bloque (profundizar-server.ts). */
+  const deLaExploracion = conContextoDeIA({ ...ia, origen: "exploraciones/agente:guia-hallazgos" }, () =>
+    // Con tope propio (revisión del 8 nov): la guía ya escrita no puede quedar esperando a esta llamada.
+    getAnthropic().messages.create(pedidoDeLoDeLaExploracion(ctx), { timeout: 60_000, maxRetries: 1 }),
+  ).catch(
+    (e: unknown) => {
+      console.error("[exploraciones/agente] los hallazgos de la guía fallaron; la guía sigue", e);
+      return null;
+    },
+  );
+  let ultimaFase: string | null = null;
   const pedir = () =>
-    conContextoDeIA(
-      {
-        agentSlug: AGENTE_DE_LA_EXPLORACION,
-        agentRunId: runId,
-        clientId: fila.clientId,
-        triggeredByEmail: opts.triggeredByEmail,
-        origen: "exploraciones/agente:guia",
-      },
-      () => getAnthropic().messages.create(pedidoDeLaGuia(ctx)),
-    );
-  let respuesta = await pedir();
+    conContextoDeIA({ ...ia, origen: "exploraciones/agente:guia" }, () => {
+      const stream = getAnthropic().messages.stream(pedidoDeLaGuia(ctx));
+      if (runId)
+        stream.on("inputJson", (_parcial, foto) => {
+          const texto = faseDeLaGuiaParcial(foto);
+          // Solo cuando cambia (un bloque nuevo o su título): una escritura cada tanto, no una por token.
+          if (texto && texto !== ultimaFase) {
+            ultimaFase = texto;
+            void fase(runId, texto);
+          }
+        });
+      return stream.finalMessage();
+    });
+  // Si la guía falla, no se espera a la otra llamada: el aviso del error sale ya (la otra termina sola).
+  let respuesta: Anthropic.Messages.Message = await pedir();
+  /* Cortada por el tope de largo (revisión del 8 nov): leerla guardaría los bloques completos con el último como cierre,
+     aunque no lo sea. Mejor decirlo. */
+  if (respuesta.stop_reason === "max_tokens") throw new FalloDeLaExploracion("La guía salió cortada: vuelve a intentarlo.");
   let guia = leerLaGuiaDelAgente(respuesta, ctx, runId, ahora);
-  if (!guia) return { armada: null, extras: leerLoDeLaExploracion(respuesta, ctx), ctx, clientId: fila.clientId };
+  if (runId && guia) await fase(runId, "Juntando la guía con lo que se sabe de la exploración…");
+  const respuestaDeLaExploracion = await deLaExploracion;
+  /* Si esa llamada falló, `extrasFallaron`: no se guarda nada de lo de la exploración (ni se borran las preguntas que le
+     quedaban a Nexus), en vez de guardar una lista vacía. */
+  const extrasFallaron = !respuestaDeLaExploracion;
+  const extras = leerLoDeLaExploracion(respuestaDeLaExploracion ?? respuesta, ctx);
+  if (!guia) return { armada: null, extras, extrasFallaron, ctx, clientId: fila.clientId };
   /* El vendedor lee la guía en voz alta: tiene que estar en tuteo. La de CreditForce (2026-10-01) salió
      en voseo («vivís», «podés») porque las fuentes lo estaban: si pasa, se pide una vez más avisándolo. */
   /* La agenda (2026-11-06) además pide preguntas abiertas y de una sola cosa: si salen cerradas o dobles, va en el mismo
@@ -1166,7 +1197,7 @@ async function pedirLaGuia(
   const aceptado = ctx.contextoDeLaSesion?.objetivo?.trim();
   if (aceptado) guia = { ...guia, objetivoAceptado: aceptado.slice(0, 400) };
   const preguntas = preguntasParaMostrar(guia, guia.huecos, guia.enfoque, escala, undefined, marco, plan ?? undefined);
-  return { armada: { guia, ctx, preguntas }, extras: leerLoDeLaExploracion(respuesta, ctx), ctx, clientId: fila.clientId };
+  return { armada: { guia, ctx, preguntas }, extras, extrasFallaron, ctx, clientId: fila.clientId };
 }
 
 /**

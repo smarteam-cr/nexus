@@ -13321,6 +13321,7 @@ preguntas.
   referencia de su industria (solo la lista de Audiencia: nunca otra cuenta ni sus datos) y cómo trabajamos, más la frase
   para cuando piden un demo o precios. El cierre resume con sus palabras, valida y agenda; en preventa confirma fecha,
   presupuesto, quién decide, quién más participa y contra qué nos comparan. No vende la implementación.
+- **«Para profundizar» se pide al abrirlo (2026-11-08).** La guía ya no lo trae (ver «La guía más rápida…», abajo).
 - **Las guías de antes se ven como se armaron.** Sin `agenda`, la Preparación y «En vivo» muestran la lista de siempre.
   No hay SQL: la agenda vive en el Json de la guía.
 - **Nexus no planifica por defecto (puntos 1 a 5, `contexto-de-la-exploracion.ts`).** *Cambió el 2026-11-07 y otra vez el
@@ -13647,7 +13648,8 @@ exploración pesa y se nota** en la guía. Lo que sigue es el estado después de
     - La lectura de la sesión anterior pide 3 objetivos posibles, cada uno con un ENFOQUE distinto, no tres redacciones
       de lo mismo (`LecturaDeReunion.objetivosSiguientes`, misma llamada; el primero sigue en `objetivoSiguiente`, el que
       más recomienda). Una lectura de antes trae uno y se ve como una sola tarjeta (`objetivosSugeridosDeLaSiguiente`).
-      La primera sesión no tiene lectura anterior: solo «Escribe el tuyo».
+      La primera sesión no tiene lectura anterior: *hasta el 2026-11-08* solo traía «Escribe el tuyo»; desde ese día trae
+      los suyos (ver «La guía más rápida y los objetivos de la primera sesión», abajo).
     - La Preparación los muestra como tarjetas en una fila (`ObjetivosSugeridos`), más una cuarta, «Escribe el tuyo»: el
       mismo patrón que las preguntas de Nexus. Cada una se edita ahí mismo; elegirla guarda el objetivo y arma la guía en
       ese momento (`alElegir` → `lanzar("guia")`). **Sin Descartar** (con tres más la tuya no hace falta; lo descartado
@@ -13667,8 +13669,8 @@ exploración pesa y se nota** en la guía. Lo que sigue es el estado después de
       averiguadas (siguen en «En vivo», donde se marcan y de donde leen el aviso del resultado y el análisis); la pregunta,
       la explicación y los títulos, un poco más grandes; «Para profundizar» plegable, cerrado en la Preparación y abierto
       en «En vivo». Pruebas: `lib/exploraciones/septima-vuelta.test.ts`.
-  - La misma llamada escribe los hallazgos y, si hace falta, el ajuste al objetivo (`leerLoDeLaExploracion`): no hay
-    llamada aparte. El pedido lleva el objetivo de la sesión, el de Smarteam con su ajuste, cómo llegó con su pista, las
+  - Los hallazgos y, si hace falta, el ajuste al objetivo los escribe la llamada de la guía (`leerLoDeLaExploracion`).
+    *Cambió el 2026-11-08:* van en su propia llamada, en paralelo (ver «La guía más rápida…», abajo). El pedido lleva el objetivo de la sesión, el de Smarteam con su ajuste, cómo llegó con su pista, las
     respuestas del vendedor y los hallazgos de la guía anterior para actualizarlos. La agenda en bloques no cambió.
 - **Exploraciones en curso: no se borra ni se migra nada, y no hay SQL** (todo vive en el Json). El objetivo que ya
   confirmaron se lee como su ajuste; los hallazgos, las preguntas y las respuestas son campos nuevos opcionales del Json,
@@ -13677,6 +13679,52 @@ exploración pesa y se nota** en la guía. Lo que sigue es el estado después de
   la lista. Un desafío «sin confirmar» sigue avisándole a la guía. Los retos y metas ya guardados quedan como de la
   empresa entera. La primera vez que se abre una exploración después del deploy se gasta una llamada para proponer el
   contexto (si tiene fuentes).
+
+## La guía más rápida y los objetivos de la primera sesión (2026-11-08)
+
+Elías: «veo que Nexus tarda mucho haciendo la guía». Medido en producción con Centauro Solutions (4 guías del 8 nov):
+cada pedido tardaba de 94 a 103 s y escribía unos 5.000 tokens (USD 0,12). La salida es lo que tarda: el modelo escribe a
+unos 50 tokens por segundo. Lo que pesa en una guía guardada: lo que hay que averiguar (45 %), «Para profundizar» (11 %),
+la guía corta de cada bloque (10 %), los hallazgos y las preguntas para el vendedor (11 %).
+
+- **«Para profundizar» se pide al abrirlo.** La guía sale sin esas preguntas (en la Preparación van plegadas y casi
+  nadie las abre). Al abrir el plegable de un bloque se piden las de ese bloque, en una llamada chica
+  (`lib/exploraciones/profundizar-pedido.ts`, ruta `…/guia/profundizar`), y quedan guardadas en ESA guía (se reconoce
+  por su `en`; si ya hay otra, 409 y no se escribe nada). En «En vivo», donde salen abiertas, se piden las de todos los
+  bloques que falten en UNA llamada. Las mismas reglas que el resto: tuteo, abiertas, de una sola cosa, sin espacios por
+  completar y sin repetir la que abre. Si alguna no cumple se pide una vez más avisándolo, y lo que siga sin cumplir no
+  se muestra (la apertura y el cierre sin preguntas no piden un segundo intento; si el segundo falla, queda el primero).
+  Un bloque sin ninguna buena queda con `profundizar: []`, no se vuelve a pedir y muestra las de lo que hay que averiguar.
+  Si dos pestañas piden el mismo bloque a la vez, las dos ven las que quedaron guardadas. Quien no puede editar, o
+  si el pedido falla, ve las de lo que hay que averiguar (`paraProfundizar`), como en las guías de antes. No lee sesiones
+  ni fuentes: el bloque ya trae lo que se sabe del cliente.
+- **Los hallazgos van en su propia llamada, en paralelo** (`pedidoDeLoDeLaExploracion`, origen
+  `exploraciones/agente:guia-hallazgos`), con tope de 60 s: la guía ya escrita no la espera más. Leen el mismo contexto y
+  las mismas reglas que importan para lo que se sabe (lo del test es «a validar», ningún otro cliente fuera de la lista
+  de referencia, las reglas del equipo). Si esa llamada falla, la guía queda igual y no se guarda nada de lo de la
+  exploración: ni hallazgos vacíos ni se borran las preguntas que le quedaban a Nexus. Una guía cortada por el tope de
+  largo (`stop_reason: max_tokens`) falla con su aviso en vez de guardarse con el último bloque como cierre. *Costo:* una lectura más del contexto (medido: 10.000 tokens de entrada, 15 s en paralelo,
+  USD 0,04).
+- **La espera se ve.** La guía llega por streaming y la fase dice en qué bloque va, con su título
+  (`faseDeLaGuiaParcial`): «Escribiendo el bloque 3 de la agenda: «Cuánto cuesta el desorden»…». Se escribe en la
+  corrida solo cuando cambia.
+- **Lo que no se tocó:** lo que hay que averiguar y sus preguntas sugeridas siguen en la guía (las leen el análisis de
+  la venta, el correo de seguimiento y lo que cubre la guía), y el modelo es el mismo.
+- **Medido después, con IA real (Centauro, 8 nov, una corrida sin guardar):** la guía tardó 91 s y escribió 4.600 tokens
+  (USD 0,11), más 7 s del arreglo de tuteo y preguntas abiertas; los hallazgos, 15 s en paralelo. **No bajó a la mitad:**
+  sin «Para profundizar» ni los hallazgos, el modelo sigue escribiendo casi lo mismo en lo que hay que averiguar. La
+  próxima palanca es de Elías: un modelo más rápido para la guía (Haiku, con su prueba de calidad) o menos cosas por
+  bloque. «Para profundizar» de un bloque: 4 s y USD 0,008. Los objetivos de la primera: 4 s y USD 0,007.
+- **Los tres objetivos de la primera sesión.** La primera no tiene una lectura anterior que los sugiera. Ahora, al abrir
+  su Preparación sin objetivo, se piden UNA vez por preventa (`lib/exploraciones/objetivos-de-la-primera.ts`, ruta
+  `…/objetivos-de-la-primera`) y quedan en `propuesta.objetivosDeLaPrimera` (vacío también se guarda, para no gastar en
+  cada visita). Salen de lo que hay: el objetivo de la exploración con su ajuste, la ficha (desafío y resultado), cómo
+  llegó, el traspaso, las notas de HubSpot, lo que agregó el equipo, las minutas de sus reuniones (por el chokepoint de
+  sesiones, `borradorDelContexto`) y la investigación de su industria marcada como hipótesis. Las mismas reglas que los
+  de la lectura: en infinitivo, cada uno con un enfoque distinto, el primero el más recomendado, en tuteo. Se ven en las
+  mismas tarjetas; mientras se piensan, tres lugares vacíos. «La primera» es la que no tiene ninguna sesión hecha antes
+  (`esLaPrimeraSinAnterior`). Si no se puede leer lo que se sabe de la empresa, falla sin guardar (no quedan unos
+  genéricos para siempre), y la pantalla dice que no pudo, no que no había de dónde.
 
 ## La escala de la preventa, tercera vuelta: verla como el diagnóstico, ubicarla con las reuniones y elegir qué ve el cliente (2026-11-08)
 

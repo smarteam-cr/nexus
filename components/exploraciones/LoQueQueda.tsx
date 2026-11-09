@@ -21,6 +21,8 @@ import {
 import { separarPregunta, type PestanaDeSesion } from "@/lib/exploraciones/guia";
 import type { PreguntaConOpciones } from "@/lib/exploraciones/objetivo-y-hallazgos";
 import { resultadoAveriguado } from "@/lib/exploraciones/resultado";
+import { esLaPrimeraSinAnterior } from "@/lib/exploraciones/objetivos-de-la-primera";
+import { useEffect, useState } from "react";
 import { useLienzo } from "./contexto";
 import { useEditarLaSesion } from "./piezas-de-la-sesion";
 import { useSesiones } from "./useSesiones";
@@ -58,7 +60,9 @@ export function useObjetivosDeLaSiguiente(pestana: PestanaDeSesion): string[] {
   const anterior = [...todas.slice(0, i < 0 ? todas.length : i)].reverse().find((p) => p.hecha && !p.noSeHizo) ?? null;
   const { pendientes } = useLoQueQueda(anterior);
   const falta = usePorAveriguar();
-  if (!anterior || pestana.hecha) return [];
+  if (pestana.hecha) return [];
+  // La primera no tiene anterior: los suyos los sugirió Nexus con lo que sabe de la empresa (2026-11-08).
+  if (!anterior) return exp.estado.propuesta.objetivosDeLaPrimera?.objetivos ?? [];
   const lectura = anterior.reunion ? exp.estado.propuesta.lecturas[claveDeLaReunion(anterior.reunion)] : undefined;
   // Séptima vuelta: hasta tres, para elegir en tarjetas.
   return objetivosSugeridosDeLaSiguiente({
@@ -67,6 +71,37 @@ export function useObjetivosDeLaSiguiente(pestana: PestanaDeSesion): string[] {
     objetivosSiguientes: lectura?.objetivosSiguientes ?? null,
     porAveriguar: falta,
   });
+}
+
+/** Los objetivos de la primera que se pidieron en esta pestaña del navegador, por preventa (gasta IA: una vez). */
+const OBJETIVOS_PEDIDOS = new Map<string, "pidiendo" | "listo" | "fallo">();
+
+/**
+ * Los tres objetivos de la PRIMERA sesión (2026-11-08, lib/exploraciones/objetivos-de-la-primera.ts): si es la primera, no
+ * tiene objetivo y nunca se pidieron, se piden UNA vez (el servidor tampoco los repite) y se recarga. `pensando` mientras.
+ */
+export function useObjetivosDeLaPrimera(pestana: PestanaDeSesion): { primera: boolean; pensando: boolean; fallo: boolean } {
+  const { exp, puedeEditar, recargar } = useLienzo();
+  const { todas } = useSesiones();
+  const primera = esLaPrimeraSinAnterior(todas, pestana.clave, pestana.hecha);
+  const falta = primera && !pestana.sesion?.objetivo?.trim() && !exp.estado.propuesta.objetivosDeLaPrimera;
+  // Solo para volver a pintar cuando termina el pedido (el estado vive en OBJETIVOS_PEDIDOS).
+  const [, setVuelta] = useState(0);
+  useEffect(() => {
+    if (!falta || !puedeEditar || OBJETIVOS_PEDIDOS.has(exp.id)) return;
+    OBJETIVOS_PEDIDOS.set(exp.id, "pidiendo");
+    // Si falla (presupuesto, el servidor), queda «Escribe el tuyo» y se dice que falló, no que no había de dónde.
+    void fetch(`/api/sales/exploraciones/${exp.id}/objetivos-de-la-primera`, { method: "POST" })
+      .then(async (r) => {
+        if (!r.ok) throw new Error(String(r.status));
+        await recargar();
+        OBJETIVOS_PEDIDOS.set(exp.id, "listo");
+      })
+      .catch(() => OBJETIVOS_PEDIDOS.set(exp.id, "fallo"))
+      .finally(() => setVuelta((v) => v + 1));
+  }, [falta, puedeEditar, exp.id, recargar]);
+  const estado = OBJETIVOS_PEDIDOS.get(exp.id);
+  return { primera, pensando: falta && puedeEditar && (!estado || estado === "pidiendo"), fallo: falta && estado === "fallo" };
 }
 
 /**

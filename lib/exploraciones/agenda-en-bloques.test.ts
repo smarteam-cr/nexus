@@ -170,10 +170,13 @@ describe("leer la guía en bloques que devuelve el agente", () => {
     expect(preguntasQueNoCumplen(agenda)).toEqual(["¿Tienen un tablero?", "Revisa [lo que dijo]"]);
   });
 
-  it("el pedido pide la guía, las preguntas para profundizar y el título como lo que hay que averiguar", () => {
+  it("el pedido pide la guía corta y el título como lo que hay que averiguar; «Para profundizar» ya no (se pide al abrirlo)", () => {
     const tool = herramientaDeLaAgenda(ctx());
     const bloque = (tool.input_schema.properties as Record<string, { items: { properties: Record<string, { description?: string }>; required: string[] } }>).bloques.items;
-    expect(bloque.required).toEqual(expect.arrayContaining(["guia", "profundizar"]));
+    expect(bloque.required).toEqual(expect.arrayContaining(["guia"]));
+    // 2026-11-08: la guía sale sin «Para profundizar» (lib/exploraciones/profundizar-pedido.ts) para tardar menos.
+    expect(bloque.required).not.toContain("profundizar");
+    expect(Object.keys(bloque.properties)).not.toContain("profundizar");
     expect(bloque.properties.titulo.description).toContain("LO QUE HAY QUE AVERIGUAR");
     const sistema = String(pedidoDeLaGuia(ctx()).system);
     expect(sistema).toContain("El título de cada bloque es LO QUE HAY QUE AVERIGUAR");
