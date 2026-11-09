@@ -1,7 +1,7 @@
 /**
  * lib/sessions/reubicar-entre-entidades.ts — QUÉ SE MUEVE CUANDO UNA REUNIÓN CAMBIA DE ENTIDAD. PURO.
  *
- * Lo usan scripts/separar-tec.ts y scripts/reubicar-reuniones-compartidas.ts (2026-10-29): el TEC se separa en
+ * Lo usa scripts/separar-en-unidades.ts (antes, separar-tec y reubicar-reuniones-compartidas, 2026-10-29): el TEC se separa en
  * «TEC · AE» y «TEC · TAE», y cada reunión pasa a la entidad que dice el resolver (lib/sessions/categorize.ts ›
  * `decidirEntreEntidades`). Lo que cuelga de la reunión (vínculos con proyectos, hechos, tareas…) tiene que ir con ella:
  * un hecho de una reunión de AE que se queda en la ficha de TAE es el contexto de una entidad alimentando a la otra.

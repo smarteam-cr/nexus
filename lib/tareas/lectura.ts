@@ -313,8 +313,8 @@ async function candidatasPara(duenos: readonly string[], equipoDeLaLectura: stri
  */
 export async function clientesDeLasLineas(lineas: readonly LineaDeProximosPasos[], clientes: ClientesQueVes): Promise<Map<string, ClientesDeUnTexto>> {
   const salida = new Map<string, ClientesDeUnTexto>();
-  const filas = await prisma.client.findMany({ where: { id: { in: [...clientes.ids] } }, select: { id: true, name: true, company: true, siglas: true, emailDomains: true, kind: true } });
-  const indice = indiceDeClientes(filas.filter((c) => c.kind !== "INTERNO").map((c) => ({ id: c.id, name: c.name, company: c.company, siglas: c.siglas })));
+  const filas = await prisma.client.findMany({ where: { id: { in: [...clientes.ids] } }, select: { id: true, name: true, company: true, siglas: true, emailDomains: true, kind: true, comparteDominioConId: true } });
+  const indice = indiceDeClientes(filas.filter((c) => c.kind !== "INTERNO").map((c) => ({ id: c.id, name: c.name, company: c.company, siglas: c.siglas, comparteDominioConId: c.comparteDominioConId })));
   const internos = new Set(filas.filter((c) => c.kind === "INTERNO").map((c) => c.id));
   const dominiosInternos = new Set(filas.filter((c) => internos.has(c.id)).flatMap((c) => effectiveDomainsForClient(c)));
   const esLaCasa = (c: { id: string }) => internos.has(c.id) || effectiveDomainsForClient(filas.find((f) => f.id === c.id) ?? { emailDomains: [], company: null }).some((d) => dominiosInternos.has(d));

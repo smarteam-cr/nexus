@@ -90,4 +90,31 @@ describe("dos fichas que comparten dominio — DB real", () => {
     expect((await resolveAllSessions({ dryRun: true })).changed).toBe(0);
     expect((await getClientSessions(tae.id)).length).toBe(6);
   });
+
+  it("CEMACO: una unidad con dominio propio la decide su dominio; la de gente de los dos países queda por decidir", async () => {
+    await prisma.sessionCategory.create({ data: { name: "Interna", slug: "interna", kind: "internal", domains: ["smarteamcr.com"] } });
+    const cr = await prisma.client.create({
+      data: { name: "Cemaco · Costa Rica", emailDomains: ["cemaco.co.cr"], siglas: ["CR"], createdAt: new Date("2026-09-14T00:00:00Z") },
+    });
+    const ec = await prisma.client.create({
+      data: { name: "Cemaco · Ecuador", emailDomains: ["sukasa.com", "comohogar.com"], siglas: ["EC"], comparteDominioConId: cr.id },
+    });
+    const reunion = (id: string, title: string, gente: string[]) =>
+      prisma.firefliesSession.create({
+        data: { id, title, date: new Date("2026-11-05T15:00:00Z"), participants: ["aortega@smarteamcr.com", ...gente], resolvedClientId: cr.id },
+      });
+    await reunion("cr-sales", "Cemaco | Sales Hub", ["jose@cemaco.co.cr"]);
+    await reunion("ec-ti", "SUKASA + CEMACO + COMOHOGAR | TI", ["ana@sukasa.com"]);
+    await reunion("dos-paises", "Platiquemos sobre HubSpot | SUKASA + CEMACO + COMOHOGAR", ["ana@sukasa.com", "jose@cemaco.co.cr"]);
+    await reunion("interna-cr", "Cemaco CR | Handoff", []);
+
+    await resolveAllSessions({ reclassify: false });
+
+    const dueno = Object.fromEntries(
+      (await prisma.firefliesSession.findMany({ select: { id: true, resolvedClientId: true } })).map((s) => [s.id, s.resolvedClientId]),
+    );
+    expect(dueno).toEqual({ "cr-sales": cr.id, "ec-ti": ec.id, "dos-paises": null, "interna-cr": cr.id });
+    expect((await getClientSessions(ec.id)).map((s) => s.id)).toEqual(["ec-ti"]);
+    expect((await resolveAllSessions({ dryRun: true })).changed).toBe(0);
+  });
 });

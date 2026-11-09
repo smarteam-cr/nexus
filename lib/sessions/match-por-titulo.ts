@@ -46,6 +46,8 @@ export interface ClienteParaMatch {
    * ninguno. Caso que lo motivó: «[Sales & Service handoff] CAV» (2026-09-15) quedó sin dueño.
    */
   siglas?: readonly string[] | null;
+  /** La principal de su empresa, si es una unidad (`Client.comparteDominioConId`): la regla de la marca la usa. */
+  comparteDominioConId?: string | null;
 }
 
 /** Las palabras del título SIN el piso de 4 letras: solo para cotejar siglas declaradas. */

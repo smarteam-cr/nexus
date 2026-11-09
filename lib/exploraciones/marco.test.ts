@@ -280,6 +280,10 @@ describe("⛔ una exploración de proyecto no es una preventa", () => {
        propósito: son de la misma empresa), y de cuál parte (la preventa o la de un proyecto que midió algo, la más
        reciente; nunca la de la cuenta misma). */
     "lib/exploraciones/escala-de-la-cuenta.ts",
+    /* Separar una empresa en unidades (U1, 2026-11-07): lee a propósito las DOS clases de la empresa, porque las dos se
+       mudan de ficha: la preventa va con su propuesta y la exploración de un proyecto va con su proyecto. Nunca las
+       mezcla: cada una sigue a lo suyo (lib/sessions/separar-en-unidades.ts › destinosDePreventas). */
+    "scripts/separar-en-unidades.ts",
   ]);
   function archivos(dir: string): string[] {
     const abs = path.join(RAIZ, dir);
