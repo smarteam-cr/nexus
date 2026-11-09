@@ -41,6 +41,8 @@ import {
   ESTADOS_DEL_CRITERIO,
   FUENTES_DEL_NIVEL,
   MAX_CASOS_DESCARTADOS,
+  MAX_CONTEXTO_DE_LA_ESCALA,
+  MAX_TEXTO_DEL_RADAR,
   MAX_CORREOS,
   MAX_ASOCIACIONES_DESCARTADAS,
   MAX_DESCARTADAS,
@@ -679,6 +681,12 @@ export const OperacionSchema = z.discriminatedUnion("op", [
   z.object({ op: z.literal("sinPortal"), valor: z.boolean() }),
   z.object({ op: z.literal("areasAlCliente"), areas: z.array(ID_AREA).max(3).nullable() }),
   z.object({ op: z.literal("descripcionDeLaEscala"), areaId: ID_AREA, texto: z.string().max(TOPE_DE_LA_DESCRIPCION_A_MANO + 200).nullable() }),
+  z.object({
+    op: z.literal("textoDelRadar"),
+    dimensionId: ID_DIMENSION,
+    valor: z.object({ texto: z.string().max(MAX_TEXTO_DEL_RADAR), nivel: z.enum(NIVELES) }).nullable(),
+  }),
+  z.object({ op: z.literal("contextoDeLaEscala"), areaId: ID_AREA, texto: z.string().max(MAX_CONTEXTO_DE_LA_ESCALA).nullable() }),
   z.object({ op: z.literal("casoDeUso"), useCaseId: ID_CASO_DE_USO, valor: CasoDeUsoElegidoSchema.nullable() }),
   z.object({ op: z.literal("quitarCaso"), useCaseId: ID_CASO_DE_USO, descartar: z.boolean().optional() }),
   z.object({ op: z.literal("usar"), itemId: z.string().min(1).max(120), valor: z.unknown().optional() }),
@@ -938,6 +946,10 @@ export function leerContenido(raw: unknown): ContenidoDeExploracion {
   const descripciones = registroValido(raw.descripcionesDeLaEscala, ID_AREA, DescripcionGuardadaSchema);
   if (Object.keys(descripciones).length) c.descripcionesDeLaEscala = descripciones;
   if (Array.isArray(raw.areasAlCliente)) c.areasAlCliente = raw.areasAlCliente.filter((a): a is string => typeof a === "string" && ID_AREA.safeParse(a).success).slice(0, 3);
+  const textos = registroValido(raw.textosDelRadar, ID_DIMENSION, z.object({ texto: z.string().trim().min(1).max(MAX_TEXTO_DEL_RADAR), nivel: z.enum(NIVELES) }));
+  if (Object.keys(textos).length) c.textosDelRadar = textos;
+  const contextoDeLaEscala = registroValido(raw.contextoDeLaEscala, ID_AREA, z.string().trim().min(1).max(MAX_CONTEXTO_DE_LA_ESCALA));
+  if (Object.keys(contextoDeLaEscala).length) c.contextoDeLaEscala = contextoDeLaEscala;
   c.reunionesElegidas = listaDeTextos(raw.reunionesElegidas, MAX_REUNIONES_ELEGIDAS).filter((id) => id.length <= MAX_ID_DE_REUNION);
   c.fuera = Array.isArray(raw.fuera)
     ? raw.fuera.filter((k): k is string => typeof k === "string" && CLAVE_DE_REUNION.safeParse(k).success).slice(-MAX_FUERA)

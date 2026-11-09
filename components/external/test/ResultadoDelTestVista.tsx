@@ -34,6 +34,7 @@
  * navegador y la agenda de HubSpot quedaba en blanco; con una carga completa vuelve bien (probado el 28 oct).
  */
 import type { ReactNode } from "react";
+import type { Letra } from "@/lib/escala/documento/tipos";
 import type { DetalleDeLaDimension } from "@/lib/tests-diagnostico/detalle-de-la-dimension";
 import { etiquetaDeIndustria, OTRA_INDUSTRIA } from "@/lib/tests-diagnostico/direccion-publica";
 import { ENLACE_DE_OTRA_EMPRESA, enlaceDeOtraArea, puntajeDeLaDimension } from "@/lib/tests-diagnostico/pagina-del-resultado";
@@ -244,7 +245,23 @@ function Barras({
  * la de la dimensión bajo el cursor (o el dedo). Corta y legible (segunda prueba de Elías, 29 oct): el nombre, el
  * puntaje con su nivel, lo que le pasa al área por operar así y una línea de que es un estimado.
  */
-function TarjetaDeLaDimension({ d, det, esEstimado, porExplorar = false }: { d: DimensionDelResultado; det: DetalleDeLaDimension | undefined; esEstimado: boolean; porExplorar?: boolean }) {
+function TarjetaDeLaDimension({
+  d,
+  det,
+  esEstimado,
+  porExplorar = false,
+  pie = null,
+  texto,
+}: {
+  d: DimensionDelResultado;
+  det: DetalleDeLaDimension | undefined;
+  esEstimado: boolean;
+  porExplorar?: boolean;
+  /** Solo en la pantalla interna (`edicion.pieDeLaTarjeta`): lo que no ve el cliente, al final. */
+  pie?: ReactNode;
+  /** Solo en la pantalla interna (`edicion.textoDeLaTarjeta`): lo que le pasa al área, editable en su lugar. */
+  texto?: ReactNode;
+}) {
   const p = puntajeDeLaDimension(d.nivel, d.puntaje);
   return (
     <div className="rd-tip" data-tarjeta={d.id} data-nivel={d.preguntada ? (d.nivel ?? undefined) : undefined} role="status" hidden>
@@ -264,16 +281,21 @@ function TarjetaDeLaDimension({ d, det, esEstimado, porExplorar = false }: { d: 
         <p className="rd-tip-lectura">{esEstimado ? "Esta parte no se preguntó en este test: la vemos juntos en la sesión." : "Esta parte todavía no se midió."}</p>
       ) : (
         <>
-          {(d.noLoSe || det?.impacto) && (
-            <p className="rd-tip-lectura">
-              {d.noLoSe ? "Contestaste «No lo sé». " : ""}
-              {det?.impacto}
-            </p>
+          {texto ? (
+            <div className="rd-tip-lectura">{texto}</div>
+          ) : (
+            (d.noLoSe || det?.impacto) && (
+              <p className="rd-tip-lectura">
+                {d.noLoSe ? "Contestaste «No lo sé». " : ""}
+                {det?.impacto}
+              </p>
+            )
           )}
           {esEstimado && <p className="rd-tip-estimado">{FALTAN_PREGUNTAS}</p>}
           {porExplorar && <p className="rd-tip-estimado">{POR_EXPLORAR}</p>}
         </>
       )}
+      {pie}
     </div>
   );
 }
@@ -306,6 +328,32 @@ function vinetasDeLaSesion(area: string): string[] {
     "Por dónde empezar: qué atacar primero en tu operación y qué esperar de cada paso.",
     "Un primer paso claro, por escrito: te lo llevas aunque no trabajemos juntos.",
   ];
+}
+
+/**
+ * La página como artefacto que se edita (La escala interna, 8 nov; Elías: «la página de resultados debe verse igual
+ * externo que interno, pero interno debe funcionar como un artefacto que se puede editar»). Es ESTA MISMA vista, con lo
+ * mismo que ve el cliente: la pantalla interna (components/exploraciones/PaginaDeLaEscala.tsx) le pasa, en estos huecos,
+ * las piezas que editan. La página pública no lo pasa y no cambia.
+ */
+export interface EdicionDeLaPagina {
+  /** Las pestañas de las áreas son botones: cambian de área sin salir de la pantalla. */
+  alElegirArea: (id: string) => void;
+  /** En el lugar de la descripción de «Resultado general»: la misma, editable. */
+  descripcion?: ReactNode;
+  /**
+   * En la tarjeta de cada dimensión ubicada, en el lugar de «lo que le pasa al área»: el mismo texto, editable en su lugar
+   * (Elías, 8 nov: «se le da clic, se cambia el texto y se guarda»). Recibe la dimensión y el texto que ve el cliente.
+   */
+  textoDeLaTarjeta?: (dimensionId: string, actual: string | null) => ReactNode;
+  /** Envuelve el radar: el arrastre de los niveles. */
+  radar?: (radar: ReactNode) => ReactNode;
+  /** Mientras se arrastra: el nivel que va a quedar, por dimensión (el radar lo dibuja ya). */
+  nivelesEnVivo?: Readonly<Record<string, Letra>>;
+  /** Al final de la tarjeta de cada dimensión, lo que solo se ve adentro. */
+  pieDeLaTarjeta?: (dimensionId: string) => ReactNode;
+  /** La ayuda debajo del radar, con lo que se puede hacer adentro. */
+  ayudaDelRadar?: string;
 }
 
 /** La escala de una empresa cuyo enlace sirve, pero que hoy no tiene nada con evidencia que mostrar. */
@@ -342,6 +390,7 @@ export default function ResultadoDelTestVista({
   detalles = null,
   dimensionDelRiesgo = {},
   deLaEscala = null,
+  edicion = null,
 }: {
   r: ResultadoDelTest;
   empresa: string | null;
@@ -367,7 +416,13 @@ export default function ResultadoDelTestVista({
    * «Estimado», otro test, la agenda). `areas`: las medidas; si son varias, cada una es un enlace arriba. `porExplorar`
    * (8 nov): las partes de esta área con un nivel por explorar (una hipótesis que usó el vendedor).
    */
-  deLaEscala?: { areas: { id: string; nombre: string; href: string }[]; porExplorar?: readonly string[] } | null;
+  deLaEscala?: {
+    /** `oculta`: solo en la pantalla interna, el área que el cliente no ve (su pestaña va marcada). */
+    areas: { id: string; nombre: string; href: string; oculta?: boolean }[];
+    porExplorar?: readonly string[];
+  } | null;
+  /** La pantalla interna que la edita (ver `EdicionDeLaPagina`). La página pública no lo pasa. */
+  edicion?: EdicionDeLaPagina | null;
 }) {
   const enPdf = modo === "pdf";
   const nombreDeLaEmpresa = empresa || dominio || "";
@@ -384,17 +439,21 @@ export default function ResultadoDelTestVista({
   const radar = (
     <RadarDeUnaEmpresa
       area={r.areaNombre}
-      dimensiones={r.dimensiones.map((d) => ({
-        clave: d.id,
-        nombre: d.nombre,
-        capa: d.capa,
-        preguntada: d.preguntada,
-        sinMedir: !esEstimado,
-        nivel: d.nivel,
-        noLoSe: d.noLoSe,
-        porExplorar: porExplorar.includes(d.id),
-        puntaje: d.puntaje,
-      }))}
+      dimensiones={r.dimensiones.map((d) => {
+        // Mientras se arrastra (solo adentro), el nivel que va a quedar.
+        const enVivo = edicion?.nivelesEnVivo?.[d.id];
+        return {
+          clave: d.id,
+          nombre: d.nombre,
+          capa: d.capa,
+          preguntada: d.preguntada || !!enVivo,
+          sinMedir: !esEstimado,
+          nivel: enVivo ?? d.nivel,
+          noLoSe: enVivo ? false : d.noLoSe,
+          porExplorar: !enVivo && porExplorar.includes(d.id),
+          puntaje: d.puntaje,
+        };
+      })}
       capas={r.capas.map((c) => ({ clave: c.clave, nombre: c.nombre, descripcion: DESCRIPCION_DE_LA_CAPA[c.clave] ?? null, nivel: c.nivel, puntaje: c.puntaje }))}
       niveles={r.niveles}
       resultado={{ nivel: r.nivel, puntaje: r.puntaje }}
@@ -402,11 +461,13 @@ export default function ResultadoDelTestVista({
       formato={modo}
     />
   );
+  // Dentro de la pantalla interna no es el título de la página: esa ya tiene el suyo (un solo h1 por pantalla).
+  const TituloDelNivel = edicion ? "p" : "h1";
   const nivelGrande = (
-    <h1 className="rd-nivel" data-nivel={r.nivel ?? undefined}>
+    <TituloDelNivel className="rd-nivel" data-nivel={r.nivel ?? undefined}>
       <span className="rd-punto" aria-hidden="true" />
       {r.nivelNombre ?? (deLaEscala ? "En medición" : "Sin determinar")}
-    </h1>
+    </TituloDelNivel>
   );
 
   if (enPdf) {
@@ -472,8 +533,8 @@ export default function ResultadoDelTestVista({
   }
 
   return (
-    <div className="dr rd-v3">
-      <AnimacionesDelResultado className="rd">
+    <div className={`dr rd-v3${edicion ? " rd-editable" : ""}`}>
+      <AnimacionesDelResultado className="rd" quieta={!!edicion}>
         <header className="rd-arriba">
           {deLaEscala ? (
             <>
@@ -483,11 +544,26 @@ export default function ResultadoDelTestVista({
               </span>
               {deLaEscala.areas.length > 1 && (
                 <nav className="rd-acciones" aria-label="Áreas">
-                  {deLaEscala.areas.map((a) => (
-                    <a key={a.id} className={`rd-btn ${a.id === r.areaId ? "rd-btn-primary" : "rd-btn-ghost"}`} href={a.href} aria-current={a.id === r.areaId ? "page" : undefined}>
-                      {a.nombre}
-                    </a>
-                  ))}
+                  {deLaEscala.areas.map((a) => {
+                    const clase = `rd-btn ${a.id === r.areaId ? "rd-btn-primary" : "rd-btn-ghost"}${a.oculta ? " rd-btn-oculta" : ""}`;
+                    return edicion ? (
+                      <button
+                        key={a.id}
+                        type="button"
+                        className={clase}
+                        aria-pressed={a.id === r.areaId}
+                        title={a.oculta ? "El cliente no ve esta área: súmala en «Qué ve el cliente»." : undefined}
+                        onClick={() => edicion.alElegirArea(a.id)}
+                      >
+                        {a.nombre}
+                        {a.oculta && <span className="rd-btn-nota">no la ve el cliente</span>}
+                      </button>
+                    ) : (
+                      <a key={a.id} className={clase} href={a.href} aria-current={a.id === r.areaId ? "page" : undefined}>
+                        {a.nombre}
+                      </a>
+                    );
+                  })}
                 </nav>
               )}
             </>
@@ -534,7 +610,7 @@ export default function ResultadoDelTestVista({
               {fecha && <p className="rd-fecha rd-entra">{fechaLarga(fecha)}</p>}
               <p className="rd-label rd-entra">Resultado general</p>
               <div className="rd-entra">{nivelGrande}</div>
-              <p className="rd-resumen rd-entra">{resumen}</p>
+              {edicion?.descripcion ? <div className="rd-resumen rd-entra">{edicion.descripcion}</div> : <p className="rd-resumen rd-entra">{resumen}</p>}
               {esEstimado ? (
                 <p className="rd-estimado rd-entra">
                   <span className="rd-pill">Estimado</span>
@@ -555,8 +631,8 @@ export default function ResultadoDelTestVista({
             </div>
           </div>
           <div className="rd-radar rd-entra">
-            {radar}
-            <p className="rd-radar-ayuda">Pasa el cursor (o toca) una parte del radar para ver qué le pasa hoy a tu área en esa parte.</p>
+            {edicion?.radar ? edicion.radar(radar) : radar}
+            <p className="rd-radar-ayuda">{edicion?.ayudaDelRadar ?? "Pasa el cursor (o toca) una parte del radar para ver qué le pasa hoy a tu área en esa parte."}</p>
           </div>
         </section>
 
@@ -607,7 +683,9 @@ export default function ResultadoDelTestVista({
             posición fija no dependa de una animación. */}
         <div className="rd-tips">
           {r.dimensiones.map((d) => (
-            <TarjetaDeLaDimension key={d.id} d={d} det={detalles?.[d.id]} esEstimado={esEstimado} porExplorar={porExplorar.includes(d.id)} />
+            <TarjetaDeLaDimension key={d.id} d={d} det={detalles?.[d.id]} esEstimado={esEstimado} porExplorar={porExplorar.includes(d.id)} pie={edicion?.pieDeLaTarjeta?.(d.id)}
+              texto={d.preguntada && d.nivel ? edicion?.textoDeLaTarjeta?.(d.id, detalles?.[d.id]?.impacto ?? null) : undefined}
+            />
           ))}
         </div>
       </AnimacionesDelResultado>

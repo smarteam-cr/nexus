@@ -120,6 +120,10 @@ const CENSO: Record<string, { destino: Destino; motivo: string }> = {
     destino: "ventas",
     motivo: "El «Acceso» de La escala, en la cuenta y en la preventa: crear y revocar el enlace. Pantalla interna, con la guardia de la exploración.",
   },
+  "app/api/sales/exploraciones/[id]/pagina-de-la-escala/route.ts": {
+    destino: "ventas",
+    motivo: "La escala interna editable (8 nov): la página del cliente, por el mismo cálculo (`paginaParaElCse`), para editarla. Pantalla interna, con la guardia de la exploración.",
+  },
   "lib/artefactos/copias-server.ts": { destino: "exploracion-del-proyecto", motivo: "2026-10-30: archiva y reactiva la exploración de una copia junto con ella (por canvasId). No lee ninguna." },
   "lib/artefactos/adoptar-server.ts": { destino: "exploracion-del-proyecto", motivo: "2026-10-30: solo si la exploración de siempre ya se abrió, para no tomarla al crear otra." },
   "app/api/projects/[projectId]/canvases/route.ts": { destino: "exploracion-del-proyecto", motivo: "2026-10-30: solo si la exploración de siempre ya se abrió, para que su fila se quede en la lista." },

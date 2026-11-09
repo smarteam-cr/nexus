@@ -15,7 +15,10 @@
  * con su marca en el radar, en las barras y en «Por dónde empezar» si sale de ella. Hasta el 8 nov una hipótesis no llegaba nunca al cliente y la página decía «En medición» casi siempre; Elías
  * pidió que lo que no tiene evidencia directa salga como hipótesis por explorar. Lo que el agente sugiere y nadie usó NO
  * sale: el vendedor valida antes de que el cliente lo vea.
- * ⛔ Del lienzo solo se lee el nivel: ni las citas, ni los porqués, ni la fuente salen de acá.
+ * ⛔ Del lienzo solo se lee el nivel: ni las citas, ni los porqués, ni la fuente salen de acá. Lo único escrito que sale
+ * es lo que una persona escribió PARA el cliente en La escala interna editable (8 nov): el texto de la tarjeta de una
+ * dimensión (`textosDelRadar`, solo en el nivel para el que se escribió). El contexto de un área (`contextoDeLaEscala`)
+ * NO sale: lo lee el agente de la descripción (Elías, 8 nov).
  * ⛔ Un área o una capa con partes sin nada NO lleva nivel (igual que el chequeo por dentro, que exige todas las que
  * aplican): con 1 de 8 en Óptimo, la página decía «Óptimo». Tampoco lleva lo que más frena ni qué lo mueve. Con todas las
  * partes ubicadas (con evidencia o por explorar) sí lleva nivel.
@@ -36,6 +39,32 @@ export interface ResultadoDeUnArea {
   porExplorar: string[];
   /** La descripción bajo «Resultado general» (la misma que `resultado.sintesis`) y de dónde salió: para la pantalla interna. */
   descripcion: DescripcionDelArea;
+}
+
+/**
+ * LA regla del texto de una tarjeta escrito por una persona: vale mientras la dimensión siga ubicada en el nivel para el
+ * que se escribió (habla de cómo opera el área en ESE nivel); con otro nivel, o sin nivel, no vale y vuelve el de la escala.
+ * La usan la página (`redaccionDeLasPersonas`) y la pantalla interna (el pie de la tarjeta y su editor): una sola regla.
+ */
+export function textoVigenteDelRadar(
+  textos: EstadoDeExploracion["contenido"]["textosDelRadar"],
+  d: Pick<ResultadoDelTest["dimensiones"][number], "id" | "preguntada" | "nivel">,
+): string | null {
+  const t = textos?.[d.id];
+  return t && d.preguntada && d.nivel === t.nivel ? t.texto : null;
+}
+
+/**
+ * Lo que una persona escribió para la tarjeta de cada dimensión, como lo lee la página: el `impacto` de `redaccion`
+ * (lib/tests-diagnostico/detalle-de-la-dimension.ts lo prefiere al de la escala), con `textoVigenteDelRadar`.
+ */
+export function redaccionDeLasPersonas(r: Pick<ResultadoDelTest, "dimensiones">, textos: EstadoDeExploracion["contenido"]["textosDelRadar"]): ResultadoDelTest["redaccion"] {
+  const dimensiones: NonNullable<ResultadoDelTest["redaccion"]>["dimensiones"] = {};
+  for (const d of r.dimensiones) {
+    const texto = textoVigenteDelRadar(textos, d);
+    if (texto) dimensiones[d.id] = { impacto: texto, prioridad: null };
+  }
+  return Object.keys(dimensiones).length ? { v: 2, modelo: "persona", at: "", resumen: null, dimensiones } : null;
 }
 
 /** El resultado del área, con `sintesis` vacía: la pone `descripcionDelArea`. */
@@ -84,16 +113,18 @@ export function areasDeLaPagina(lienzo: EscalaDelLienzo, estado: Pick<EstadoDeEx
 
 /**
  * Un resultado por área de la página (la elegida sin nada, «En medición»), con lo que está por explorar y su descripción.
- * La edición y el perfil entran en la firma de la descripción guardada: cambian qué partes aplican.
+ * La edición y el perfil entran en la firma de la descripción guardada: cambian qué partes aplican. `areas`: las de la
+ * pantalla interna, que las muestra todas (las que el cliente no ve, marcadas); sin él, las que ve el cliente.
  */
 export function resultadosDeLaEscala(
   escala: Escala,
   lienzo: EscalaDelLienzo,
   estado: Pick<EstadoDeExploracion, "areas" | "contenido"> & Partial<Pick<EstadoDeExploracion, "edicion" | "perfilCierre" | "perfilDespues">>,
+  areas: readonly string[] = areasDeLaPagina(lienzo, estado),
 ): ResultadoDeUnArea[] {
   const entorno = { edicion: estado.edicion, perfilCierre: estado.perfilCierre, perfilDespues: estado.perfilDespues, escalaVersion: escala.version };
   const out: ResultadoDeUnArea[] = [];
-  for (const areaId of areasDeLaPagina(lienzo, estado)) {
+  for (const areaId of areas) {
     const area = lienzo.areas.find((a) => a.id === areaId);
     if (!area) continue;
     const niveles: Record<string, NivelDeLaDimension> = {};
@@ -109,7 +140,8 @@ export function resultadosDeLaEscala(
     const r = resultadoDelArea(escala, area, niveles);
     if (!r) continue;
     const descripcion = descripcionDelArea(estado.contenido, r, entorno);
-    out.push({ resultado: { ...r, sintesis: descripcion.texto }, porExplorar, descripcion });
+    const redaccion = redaccionDeLasPersonas(r, estado.contenido.textosDelRadar);
+    out.push({ resultado: { ...r, sintesis: descripcion.texto, ...(redaccion ? { redaccion } : {}) }, porExplorar, descripcion });
   }
   return out;
 }
