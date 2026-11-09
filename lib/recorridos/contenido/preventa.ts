@@ -244,7 +244,7 @@ export const PREVENTA: Recorrido = {
     {
       ancla: "preventa.casos.agente",
       titulo: "Casos de uso",
-      texto: "El agente propone casos según dónde está cada equipo. «Usar» los pasa a elegidos, y los elegidos entran a la propuesta.",
+      texto: "El agente propone casos según dónde está cada equipo y los ordena en una sola lista. «Aceptar» los pasa a elegidos, y los elegidos entran a la propuesta.",
       lado: "bottom-start",
       accion: pieza("casos"),
     },

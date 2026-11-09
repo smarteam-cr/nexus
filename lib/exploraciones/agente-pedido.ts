@@ -34,6 +34,7 @@ import {
 } from "@/lib/casos-de-uso/armado";
 import { ETAPAS_DE_ACTIVIDAD } from "@/lib/casos-de-uso/actividades";
 import { palabrasSinArticulos } from "@/lib/casos-de-uso/actividades-puras";
+import { REGLAS_DEL_TITULO } from "@/lib/casos-de-uso/orden";
 import { CIERRES, DESPUES, type Cierre, type Despues, type Letra } from "@/lib/escala/documento/tipos";
 import {
   CANALES_DE_CONEXION,
@@ -1345,7 +1346,8 @@ export function pedidoDeCasos(ctx: ContextoDeCasos): Anthropic.Messages.MessageC
                 : {}),
               titulo: {
                 type: "string",
-                description: "El resultado que consigue el cliente, corto (máximo 80 caracteres). Si es del catálogo, su título tal cual o adaptado a esta empresa, con el mismo resultado.",
+                description:
+                  "Qué cambia en el trabajo de su equipo, en palabras simples: de 4 a 10 palabras, 70 caracteres como mucho, una sola idea, sin metáforas (las reglas del TÍTULO, arriba). Si es del catálogo, el mismo resultado que promete su ficha.",
               },
               descripcion: { type: "string", description: "Qué consigue el cliente y cómo lo nota su equipo, en dos o tres frases: el resultado, no el trabajo." },
               dimensiones: { type: "array", items: { type: "string", enum: dims.length ? dims : ["0.0"] }, description: "Las dimensiones de la escala que mueve." },
@@ -1419,7 +1421,7 @@ Reglas:
 - Un caso de uso dice el RESULTADO que obtiene el cliente, no el trabajo que hace Smarteam: «Ves en qué va cada negocio sin preguntar», no «Configuramos el pipeline». Nada de «capacitación» ni «consultoría» sueltas.${
     conCatalogo
       ? `
-- Parte del CATÁLOGO DE SMARTEAM (abajo). Si un caso del catálogo calza con lo que le falta, úsalo con su id en «catalogo»; la descripción y la razón, para esta empresa. Su título va tal cual o, si así se entiende mejor, adaptado a esta empresa (su industria, su canal, lo que vende), sin cambiar el resultado que promete. Propón uno propio (con «catalogo» vacío) solo si ninguno calza.`
+- Parte del CATÁLOGO DE SMARTEAM (abajo). Si un caso del catálogo calza con lo que le falta, úsalo con su id en «catalogo»; la descripción y la razón, para esta empresa. Su título del catálogo va tal cual solo si ya cumple las reglas del TÍTULO (abajo); si no, escríbelo de nuevo con esas reglas, para esta empresa (su canal, lo que vende), sin cambiar el resultado que promete. Propón uno propio (con «catalogo» vacío) solo si ninguno calza.`
       : ""
   }
 - Empieza por lo que frena al área (sus dimensiones más bajas) y por lo que le falta para Funcional; después, lo que toca una meta con cifras.
@@ -1434,7 +1436,9 @@ Reglas:
 - La razón nombra qué de lo que le falta, o de su meta, resuelve. Sin frases de venta, sin precios, sin montos de dinero.
 - Lo que propones lo puede ver el cliente en la propuesta: nada de opiniones sobre personas ni nada interno de Smarteam.
 - No repitas los casos que ya están ni los que el vendedor descartó (abajo). Si no hay nada nuevo que valga la pena, manda la lista vacía.
-- Español neutro, en tercera persona sobre el cliente. Nunca escribas los identificadores de la escala dentro de un texto: van en su campo.${
+- Español neutro, en tercera persona sobre el cliente. Nunca escribas los identificadores de la escala dentro de un texto: van en su campo.
+
+${REGLAS_DEL_TITULO}${
     conBiblioteca
       ? `
 

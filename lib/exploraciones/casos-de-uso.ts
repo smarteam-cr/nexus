@@ -13,9 +13,12 @@
  */
 import type { Letra } from "@/lib/escala/documento/tipos";
 import { CASILLAS, type Meta, type Reto } from "./casillas";
-import type { EstadoDeExploracion, ItemPropuesto } from "./contenido";
+import type { CasoDeUsoElegido, EstadoDeExploracion, ItemPropuesto } from "./contenido";
 import type { EscalaDelLienzo } from "./escala-del-lienzo";
-import { chequeoDelMapa, loQueLaFrena, posicionesDelMapa } from "./mapa";
+import type { ResultadoDelChequeo } from "@/lib/escala/chequeo";
+import { casosParaElArea, type AreaParaElCamino, type CasoEnElCamino } from "@/lib/casos-de-uso/camino";
+import { MAX_CASOS_EN_EL_ORDEN, type CandidatoAlOrden } from "@/lib/casos-de-uso/orden";
+import { chequeoDelMapa, loQueLaFrena, posicionesDelMapa, type PosicionEnElMapa } from "./mapa";
 
 export function exploracionParaLosCasos(estado: EstadoDeExploracion, escala: EscalaDelLienzo, pendientes: readonly ItemPropuesto[]): string {
   const c = estado.contenido;
@@ -105,4 +108,77 @@ export function loQueSeSabeParaElValor(estado: EstadoDeExploracion): string {
   const respuestas = (c.respuestasParaLaGuia ?? []).slice(-6);
   if (respuestas.length) partes.push("", "## Lo que respondió el vendedor", ...respuestas.map((r) => `- ${r.pregunta} → ${r.respuesta}`));
   return partes.join("\n").slice(0, 12000);
+}
+
+// ── La lista entera del paso (décima vuelta, 2026-11-08) ────────────────────────────────────────────
+
+/** Un caso de la biblioteca que sugiere la escala para un área (sin IA: sale del mapa y del catálogo). */
+export interface CasoPorLaEscala extends CasoEnElCamino {
+  area: { id: string; nombre: string };
+}
+
+/**
+ * Ficha B (2026-10-17): los casos de la biblioteca que mueven a cada área en juego desde donde parece estar hoy, los que
+ * destraban lo que la frena primero (lib/casos-de-uso/camino.ts). Antes vivía en la pantalla; desde la décima vuelta la
+ * usa también el agente que ordena la lista, así que los dos ven los mismos.
+ */
+export function casosPorLaEscala(o: {
+  escala: Pick<EscalaDelLienzo, "areas">;
+  areas: readonly string[];
+  mapa: { posiciones: Readonly<Record<string, PosicionEnElMapa>>; chequeo: ResultadoDelChequeo };
+  /** Los ids del catálogo (sin `cat-`) que ya están en la lista: elegidos o sugeridos por el agente. */
+  excluir: ReadonlySet<string>;
+  nombreDeNivel?: (l: Letra) => string;
+}): CasoPorLaEscala[] {
+  return o.escala.areas
+    .filter((a) => o.areas.includes(a.id))
+    .flatMap((a) => {
+      const calculo = o.mapa.chequeo.areas.find((x) => x.id === a.id);
+      if (!calculo?.nivel) return [];
+      const paraElCamino: AreaParaElCamino = {
+        id: a.id,
+        nombre: a.nombre,
+        nivel: calculo.nivel,
+        objetivo: calculo.objetivo,
+        frena: loQueLaFrena(calculo),
+        capas: {
+          base: { nombre: "", nivel: calculo.capas.base.nivel },
+          produccion: { nombre: "", nivel: calculo.capas.produccion.nivel },
+        },
+        dimensiones: calculo.dimensiones.map((d) => ({ id: d.id, nombre: d.nombre, aplica: d.aplica, nivel: d.nivel, clase: o.mapa.posiciones[d.id]?.clase ?? null })),
+      };
+      return casosParaElArea(paraElCamino, { excluir: o.excluir, nombreDeNivel: o.nombreDeNivel }).map((c) => ({ ...c, area: { id: a.id, nombre: a.nombre } }));
+    });
+}
+
+/**
+ * Todos los casos del paso para el agente que ordena: los elegidos, los sugeridos por el agente (los de antes y los de
+ * esta vuelta) y los de la biblioteca que sugiere la escala. Un caso de la escala que ya está elegido o sugerido no se
+ * repite (la pantalla tampoco lo muestra dos veces).
+ */
+export function candidatosAlOrden(estado: EstadoDeExploracion, escala: EscalaDelLienzo, pendientes: readonly ItemPropuesto[], nuevos: readonly ItemPropuesto[]): CandidatoAlOrden[] {
+  const areaDe = (id: string | null | undefined) => escala.areas.find((a) => a.id === id)?.nombre ?? null;
+  const fuera: CandidatoAlOrden[] = [];
+  const vistos = new Set<string>();
+  const sumar = (c: CandidatoAlOrden) => {
+    if (vistos.has(c.id)) return;
+    vistos.add(c.id);
+    fuera.push(c);
+  };
+  for (const [id, c] of Object.entries(estado.contenido.casosDeUso)) {
+    sumar({ id, titulo: c.titulo, origen: "elegido", area: areaDe(c.areaId), queResuelve: c.paraVentas?.porQue || c.razon || "" });
+  }
+  for (const it of [...pendientes, ...nuevos]) {
+    if (it.destino.tipo !== "casoDeUso") continue;
+    const c = it.valor as CasoDeUsoElegido;
+    sumar({ id: it.destino.useCaseId, titulo: c.titulo, origen: "agente", area: areaDe(c.areaId), queResuelve: c.paraVentas?.porQue || c.razon || it.razon || "" });
+  }
+  const excluir = new Set([...vistos].filter((id) => id.startsWith("cat-")).map((id) => id.slice(4)));
+  const posiciones = posicionesDelMapa(estado, pendientes);
+  const mapa = { posiciones, chequeo: chequeoDelMapa(escala, estado.areas, posiciones) };
+  const nombreDeNivel = (l: Letra) => escala.niveles.find((n) => n.letra === l)?.nombre ?? l;
+  for (const c of casosPorLaEscala({ escala, areas: estado.areas, mapa, excluir, nombreDeNivel })) {
+    sumar({ id: `cat-${c.caso.id}`, titulo: c.caso.titulo, origen: "escala", area: c.area.nombre, queResuelve: `${c.caso.promesa} ${c.razon}`.trim() });
+  }
+  return fuera.slice(0, MAX_CASOS_EN_EL_ORDEN);
 }

@@ -89,7 +89,13 @@ export interface ActividadLigera {
   comparte: ComoSeComparte;
   quien: string;
   equipos: string[];
-  partes: { clave: string; horas: number; veces: number; variable: boolean }[];
+  /**
+   * De qué está hecho su tiempo. `nombre` y `conElCliente` (décima vuelta, 2026-11-08): el reparto que se ve en el paso
+   * («1 h con el cliente · 1 h interna»). Opcionales: lo armado a mano en las pruebas no los trae.
+   */
+  partes: { clave: string; horas: number; veces: number; variable: boolean; nombre?: string; conElCliente?: boolean }[];
+  /** Qué incluye, en sus líneas de la biblioteca (el ⓘ de cada actividad). */
+  incluye?: string[];
 }
 
 export function bibliotecaLigera(biblioteca: readonly ActividadDeLaBiblioteca[]): ActividadLigera[] {
@@ -103,7 +109,8 @@ export function bibliotecaLigera(biblioteca: readonly ActividadDeLaBiblioteca[])
     comparte: a.comparte,
     quien: a.quien,
     equipos: [...a.equipos],
-    partes: a.partes.map((p) => ({ clave: p.clave, horas: p.horas, veces: p.veces, variable: p.variable })),
+    partes: a.partes.map((p) => ({ clave: p.clave, horas: p.horas, veces: p.veces, variable: p.variable, nombre: p.nombre, conElCliente: p.conElCliente })),
+    incluye: [...a.incluye],
   }));
 }
 
@@ -134,6 +141,43 @@ export function horasPorVez(a: Pick<ActividadDelCaso, "partes">, lib: Pick<Activ
 
 export function horasDeLaActividad(a: ActividadDelCaso, lib: Pick<ActividadLigera, "horasPendientes" | "partes">): number {
   return a.veces * horasPorVez(a, lib);
+}
+
+/** Las horas de la actividad en este caso, repartidas: con el cliente (sesiones) e internas (Smarteam a solas). */
+export interface RepartoDeLaActividad {
+  conElCliente: number;
+  internas: number;
+  /** Cada parte con sus horas en este caso (las veces de la actividad incluidas). */
+  partes: { nombre: string; horas: number; conElCliente: boolean }[];
+}
+
+/**
+ * El reparto de una actividad en este caso (décima vuelta, 2026-11-08: Elías quiere ver cómo se reparte el tiempo de
+ * cada actividad). Una parte sin el dato cuenta como interna. Vacío si la define Diseño o Dev.
+ */
+export function repartoDeLaActividad(a: ActividadDelCaso, lib: Pick<ActividadLigera, "horasPendientes" | "partes">): RepartoDeLaActividad {
+  if (lib.horasPendientes) return { conElCliente: 0, internas: 0, partes: [] };
+  const partes = lib.partes
+    .map((p) => ({ nombre: p.nombre ?? p.clave, horas: a.veces * p.horas * (p.variable ? (a.partes?.[p.clave] ?? p.veces) : p.veces), conElCliente: p.conElCliente === true }))
+    .filter((p) => p.horas > 0);
+  const suma = (xs: typeof partes) => xs.reduce((s, p) => s + p.horas, 0);
+  return { conElCliente: suma(partes.filter((p) => p.conElCliente)), internas: suma(partes.filter((p) => !p.conElCliente)), partes };
+}
+
+/** El reparto de todo el caso: la suma del de cada actividad (las que define Diseño o Dev no cuentan). */
+export function repartoDelCaso(
+  actividades: readonly ActividadDelCaso[],
+  porId: ReadonlyMap<string, Pick<ActividadLigera, "horasPendientes" | "partes">>,
+): { conElCliente: number; internas: number } {
+  return actividades.reduce(
+    (s, a) => {
+      const lib = porId.get(a.actividadId);
+      if (!lib) return s;
+      const r = repartoDeLaActividad(a, lib);
+      return { conElCliente: s.conElCliente + r.conElCliente, internas: s.internas + r.internas };
+    },
+    { conElCliente: 0, internas: 0 },
+  );
 }
 
 export interface HorasDelCaso {
