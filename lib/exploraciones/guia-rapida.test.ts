@@ -62,6 +62,13 @@ describe("«Para profundizar» a pedido", () => {
     expect(sistema).toContain("Abiertas");
     expect(sistema).toContain("Una sola cosa por pregunta");
     expect(p.tool_choice).toEqual({ type: "tool", name: HERRAMIENTA_DE_PROFUNDIZAR });
+    // Lo que descartaba el primer intento (medido el 8 nov), dicho con sus formas, y una de repuesto.
+    expect(sistema).toContain("«¿Hay algo…?»");
+    expect(sistema).toContain("«¿Cuánto tiempo…?»");
+    expect(sistema).toContain("«cuéntame» (con ue)");
+    expect(sistema).not.toContain("cada cuánto pasa");
+    expect(sistema).toContain("escribe 4 preguntas");
+    expect(sistema).toContain("la última es de repuesto");
     // Una llamada chica: cuanto más bloques, un poco más de espacio.
     expect(p.max_tokens).toBeLessThan(1000);
   });
@@ -90,6 +97,18 @@ describe("«Para profundizar» a pedido", () => {
     expect(avisoDeProfundizar(l.conProblema)).toContain("está en voseo");
   });
 
+  it("muestra tres como mucho aunque vengan cuatro (la de repuesto), y lee la lista que llega como texto", () => {
+    const e = entrada();
+    const cuatro = ["¿Qué pasó la última vez?", "¿Qué tan seguido se repite?", "¿Qué le cuesta al equipo?", "¿Cómo lo miden hoy?"];
+    expect(leerProfundizar(respuesta(HERRAMIENTA_DE_PROFUNDIZAR, { bloques: [{ bloque: 0, preguntas: cuatro }] }), e).porBloque).toEqual({ 0: cuatro.slice(0, 3) });
+    // Medido el 8 nov: a veces `bloques` llega como texto con la lista en JSON.
+    const comoTexto = JSON.stringify([{ bloque: 0, preguntas: cuatro }], null, 2);
+    expect(leerProfundizar(respuesta(HERRAMIENTA_DE_PROFUNDIZAR, { bloques: comoTexto }), e).porBloque).toEqual({ 0: cuatro.slice(0, 3) });
+    expect(leerProfundizar(respuesta(HERRAMIENTA_DE_PROFUNDIZAR, { bloques: [{ bloque: 0, preguntas: JSON.stringify(cuatro) }] }), e).porBloque).toEqual({ 0: cuatro.slice(0, 3) });
+    // Un texto que no es una lista no se inventa nada.
+    expect(leerProfundizar(respuesta(HERRAMIENTA_DE_PROFUNDIZAR, { bloques: "[roto" }), e).porBloque).toEqual({});
+  });
+
   it("detecta cada problema", () => {
     expect(problemaDeProfundizar("¿Cuéntame qué pasó la última vez?")).toBeNull();
     expect(problemaDeProfundizar("¿Hay alguien a cargo?")).toBe("cerrada");
@@ -98,6 +117,10 @@ describe("«Para profundizar» a pedido", () => {
     expect(problemaDeProfundizar("¿Qué tenés que revisar?")).toBe("voseo");
     // El futuro tiene la forma del voseo y es tuteo.
     expect(problemaDeProfundizar("¿Qué revisarás primero?")).toBeNull();
+    // Un adjetivo con la forma del pronombre pegado («contala») no es voseo.
+    expect(problemaDeProfundizar("¿Qué necesitas saber para quedarte tranquila?")).toBeNull();
+    // Después de una coma también cuenta cómo arranca lo que sigue al «¿».
+    expect(problemaDeProfundizar("Cuando pasa, ¿cuánto tiempo pierden?")).toBe("cerrada");
   });
 
   it("del segundo intento se queda, por bloque, la lectura con más preguntas", () => {
@@ -128,7 +151,19 @@ describe("«Para profundizar» se guarda en ESA guía (revisión del 8 nov)", ()
     const e = { bloques: g.agenda!.bloques.map((b, i) => ({ i, bloque: b })) };
     expect(hayQueReintentar({ porBloque: { 1: ["¿Qué pasó?"] }, conProblema: [] }, e)).toBe(false);
     expect(hayQueReintentar({ porBloque: { 0: ["¿Qué pasó?"] }, conProblema: [] }, e)).toBe(true);
-    expect(hayQueReintentar({ porBloque: { 1: ["¿Qué pasó?"] }, conProblema: [{ pregunta: "¿Hay?", problema: "cerrada" }] }, e)).toBe(true);
+    expect(hayQueReintentar({ porBloque: { 1: ["¿Qué pasó?"] }, conProblema: [{ bloque: 1, pregunta: "¿Hay?", problema: "cerrada" }] }, e)).toBe(true);
+  });
+
+  it("la de repuesto evita el segundo intento: solo hace falta si un bloque quedó corto por una que no cumplía", () => {
+    const g = guia("e1");
+    const e = { bloques: g.agenda!.bloques.map((b, i) => ({ i, bloque: b })) };
+    const tres = ["¿Qué pasó?", "¿Qué tan seguido?", "¿Qué le cuesta?"];
+    // Una cerrada en el cuerpo, pero quedaron tres buenas: no hace falta.
+    expect(hayQueReintentar({ porBloque: { 0: tres, 1: tres, 2: tres }, conProblema: [{ bloque: 1, pregunta: "¿Hay?", problema: "cerrada" }] }, e)).toBe(false);
+    // La apertura quedó con dos por una de voseo: sí.
+    expect(hayQueReintentar({ porBloque: { 0: tres.slice(0, 2), 1: tres }, conProblema: [{ bloque: 0, pregunta: "¿Qué querés?", problema: "voseo" }] }, e)).toBe(true);
+    // La apertura con dos porque el modelo escribió dos (sin ninguna mala): no.
+    expect(hayQueReintentar({ porBloque: { 0: tres.slice(0, 2), 1: tres }, conProblema: [] }, e)).toBe(false);
   });
 
   it("escribe en las dos copias de la guía (la de la sesión y la general) y en ninguna otra", () => {

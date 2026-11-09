@@ -13782,8 +13782,10 @@ la guía corta de cada bloque (10 %), los hallazgos y las preguntas para el vend
   (`lib/exploraciones/profundizar-pedido.ts`, ruta `…/guia/profundizar`), y quedan guardadas en ESA guía (se reconoce
   por su `en`; si ya hay otra, 409 y no se escribe nada). En «En vivo», donde salen abiertas, se piden las de todos los
   bloques que falten en UNA llamada. Las mismas reglas que el resto: tuteo, abiertas, de una sola cosa, sin espacios por
-  completar y sin repetir la que abre. Si alguna no cumple se pide una vez más avisándolo, y lo que siga sin cumplir no
-  se muestra (la apertura y el cierre sin preguntas no piden un segundo intento; si el segundo falla, queda el primero).
+  completar y sin repetir la que abre. Se piden cuatro por bloque y se muestran las tres primeras que cumplen (la cuarta
+  es de repuesto). Solo si un bloque se queda con menos de tres por una que no cumplía, o uno del cuerpo vuelve vacío, se
+  pide una vez más avisándolo, y lo que siga sin cumplir no se muestra (la apertura y el cierre sin preguntas no piden un
+  segundo intento; si el segundo falla, queda el primero).
   Un bloque sin ninguna buena queda con `profundizar: []`, no se vuelve a pedir y muestra las de lo que hay que averiguar.
   Si dos pestañas piden el mismo bloque a la vez, las dos ven las que quedaron guardadas. Quien no puede editar, o
   si el pedido falla, ve las de lo que hay que averiguar (`paraProfundizar`), como en las guías de antes. No lee sesiones
@@ -13805,6 +13807,20 @@ la guía corta de cada bloque (10 %), los hallazgos y las preguntas para el vend
   sin «Para profundizar» ni los hallazgos, el modelo sigue escribiendo casi lo mismo en lo que hay que averiguar. La
   próxima palanca es de Elías: un modelo más rápido para la guía (Haiku, con su prueba de calidad) o menos cosas por
   bloque. «Para profundizar» de un bloque: 4 s y USD 0,008. Los objetivos de la primera: 4 s y USD 0,007.
+- **«Para profundizar» en el primer intento** (medido el 8 nov con `scripts/medir-profundizar.ts`, solo lectura, sobre
+  las mismas guías de Centauro, CAMOSA y Polaris, 51 aperturas de bloque y 9 pedidos de todos los bloques por lado). El
+  segundo intento salía en 3 de cada 10 bloques y en casi todos los pedidos de «En vivo» (8 de 9), y duplicaba la espera.
+  Tres causas: (1) el propio pedido empujaba a lo que la lectura descarta: la escalera decía «cada cuánto pasa» y el efecto
+  «en horas», y el modelo escribía «¿Cuánto tiempo…?», cerrada; las reglas ahora dicen con qué arranca lo que sigue al
+  «¿», nombran las que se caen («¿Hay algo…?», «¿Cuánto tiempo…?», también después de una coma) y cómo preguntar por el
+  tiempo o la plata sin pedir un número. (2) Lo que el modelo igual escribe mal de vez en cuando (un voseo suelto, un «¿Hay
+  alguna…?» en la apertura) lo cubre la pregunta de repuesto, sin aflojar la regla: la que no cumple sigue sin mostrarse.
+  (3) A veces el modelo manda la lista de bloques como TEXTO con el JSON adentro; la lectura la daba vacía. Ahora la lee
+  (`lista`, en profundizar-pedido.ts). De paso, «tranquila» y «tranquilo» entraron a las palabras que no son voseo
+  (`NO_SON_VOSEO`): tienen la forma de un pronombre pegado. Resultado: 51 de 51 bloques y 9 de 9 pedidos en un intento;
+  un bloque de 4,9 a 4,4 s (el más lento, de 11,1 a 6,4 s) y de USD 0,0098 a 0,0091; todos los bloques de 28 a 19 s y de
+  USD 0,041 a 0,026. «Para afinar esta guía» sigue con Sonnet: va en la misma llamada que los hallazgos y el ajuste del
+  objetivo, y separarla para que use Haiku saldría más caro (otra lectura del contexto) sin acortar la espera.
 - **Los tres objetivos de la primera sesión.** La primera no tiene una lectura anterior que los sugiera. Ahora, al abrir
   su Preparación sin objetivo, se piden UNA vez por preventa (`lib/exploraciones/objetivos-de-la-primera.ts`, ruta
   `…/objetivos-de-la-primera`) y quedan en `propuesta.objetivosDeLaPrimera` (vacío también se guarda, para no gastar en
