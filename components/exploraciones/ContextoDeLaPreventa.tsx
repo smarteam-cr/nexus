@@ -10,7 +10,8 @@
  * creer al vendedor que esa pieza las usaba.
  *   · `preparacion` — la preparación lee las 3 sesiones más recientes de Exploración, las fuentes
  *     manuales (que se suman acá o en Exploración) y sus instrucciones.
- *   · `casos` — los casos de uso no leen reuniones: salen del lienzo. Solo sus instrucciones.
+ *   · `casos` — los casos de uso salen del lienzo. Desde el 2026-11-09 sus instrucciones son «Tu lectura del cliente»,
+ *     arriba de la lista del paso (LecturaDelConsultor.tsx); aquí queda dónde encontrarla.
  *   · `sinAgente` — La escala no tiene agente propio: solo la explicación.
  * Las instrucciones son de cada pieza (`instrucciones:<pieza>` en `contenido.notas`, sin SQL) y no son
  * evidencia.
@@ -61,7 +62,7 @@ export default function ContextoDeLaPreventa({ modo }: { modo: ModoDelContexto }
     modo === "preparacion"
       ? `lee las 3 sesiones más recientes · ${documentos.length} ${documentos.length === 1 ? "fuente manual" : "fuentes manuales"}${activas}`
       : modo === "casos"
-        ? `lee el lienzo · ${leidas} ${leidas === 1 ? "sesión leída" : "sesiones leídas"}${activas}`
+        ? `lee el lienzo · ${leidas} ${leidas === 1 ? "sesión leída" : "sesiones leídas"}${instrucciones.trim() ? " · con tu lectura" : ""}`
         : "sin agente propio";
 
   return (
@@ -79,7 +80,7 @@ export default function ContextoDeLaPreventa({ modo }: { modo: ModoDelContexto }
               <p className="min-w-0 flex-[1_1_420px] text-[13px] leading-[19px] text-fg-secondary">
                 {modo === "preparacion"
                   ? "Lee las 3 sesiones más recientes de Exploración y las fuentes manuales."
-                  : "Esta pieza no lee reuniones. Los casos salen de lo que quedó en el lienzo después de leer las sesiones: dónde está cada equipo, lo que le falta para Funcional y lo confirmado del Resumen."}
+                  : "Los casos salen de lo que quedó en el lienzo después de leer las sesiones: dónde está cada equipo, lo que le falta para Funcional y lo confirmado del Resumen. Con tu lectura del cliente escrita, Nexus lee además las transcripciones para avisarte lo que se te pasó."}
               </p>
               <button type="button" onClick={verLasSesiones} className="flex-none text-[13px] font-semibold text-brand hover:text-brand-light">
                 {modo === "preparacion" ? "Ver las sesiones" : "Ver las sesiones en Exploración"}
@@ -90,7 +91,15 @@ export default function ContextoDeLaPreventa({ modo }: { modo: ModoDelContexto }
                 <SumarAMano />
               </ContextColumn>
             )}
-            {pieza && (
+            {/* 2026-11-09 (Marco): en Casos de uso, las instrucciones pasaron a «Tu lectura del cliente», arriba de la
+                lista del paso (la misma nota: lo escrito antes aparece allá). */}
+            {modo === "casos" && (
+              <p className="rounded-xl border border-dashed border-line px-3.5 py-3 text-[13px] leading-[19px] text-fg-secondary">
+                Lo que quieras pedirle a la IA de esta pieza va en «Tu lectura del cliente», arriba de la lista de casos: qué casos crees que necesita el
+                cliente. Lo que habías escrito como instrucciones está ahí.
+              </p>
+            )}
+            {pieza && pieza !== "casos" && (
               <InstruccionesAdicionales
                 key={pieza}
                 guardadas={instrucciones}

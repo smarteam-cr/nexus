@@ -18,7 +18,47 @@ import type { EscalaDelLienzo } from "./escala-del-lienzo";
 import type { ResultadoDelChequeo } from "@/lib/escala/chequeo";
 import { casosParaElArea, type AreaParaElCamino, type CasoEnElCamino } from "@/lib/casos-de-uso/camino";
 import { MAX_CASOS_EN_EL_ORDEN, type CandidatoAlOrden } from "@/lib/casos-de-uso/orden";
+import { capaDelCaso, casosQueNoCalzanConSuCrm, conexionesEnLaLista, laCasa, loQueTieneDeHubspot, type CasaDelArea, type SuHubspot } from "@/lib/casos-de-uso/capas";
 import { chequeoDelMapa, loQueLaFrena, posicionesDelMapa, type PosicionEnElMapa } from "./mapa";
+import { PREFIJO_DE_LO_QUE_SABES } from "./lo-que-sabes";
+
+// ── La casa (2026-11-09, lib/casos-de-uso/capas.ts) ─────────────────────────────────────────────────
+
+/** Lo que se sabe de su HubSpot: «Su CRM actualmente» y, si no dice, «Lo que ya sabemos». */
+export function suHubspotDe(estado: EstadoDeExploracion): SuHubspot {
+  const c = estado.contenido;
+  const crm = c.casillas.hubspotActual;
+  const otros = [c.contexto?.sabemos ?? "", ...Object.entries(c.notas).flatMap(([k, v]) => (k.startsWith(PREFIJO_DE_LO_QUE_SABES) ? [v] : []))];
+  return loQueTieneDeHubspot({ crmActual: typeof crm === "string" ? crm : null, otros });
+}
+
+/** La casa de cada área en juego: su nivel en el mapa de la escala (el mismo que ve la pantalla) y su HubSpot. */
+export function casaDeLaExploracion(
+  estado: EstadoDeExploracion,
+  escala: Pick<EscalaDelLienzo, "areas">,
+  chequeo: Pick<ResultadoDelChequeo, "areas">,
+): { hubspot: SuHubspot; casa: CasaDelArea[] } {
+  const hubspot = suHubspotDe(estado);
+  const areas = escala.areas
+    .filter((a) => estado.areas.includes(a.id))
+    .map((a) => ({ id: a.id, nombre: a.nombre, nivel: chequeo.areas.find((x) => x.id === a.id)?.nivel ?? null }));
+  return { hubspot, casa: laCasa(areas, hubspot) };
+}
+
+/**
+ * Qué hace la empresa, para que el título se arme con su negocio (Marco, 2026-11-09: «… de tus servicios SaaS»): lo de la
+ * empresa misma en la radiografía (qué hace, su sector y su modelo), sin la conexión ni los hitos. Va aparte de
+ * `exploracionParaLosCasos` para no cambiar la huella de lo que lee el agente (novedades-de-los-casos.ts).
+ */
+export function negocioParaLosCasos(estado: EstadoDeExploracion): string {
+  const r = estado.contenido.casillas.radiografia;
+  return [r?.resumen, r?.sector ? `Sector: ${r.sector}.` : "", r?.modelos?.length ? `Modelo: ${r.modelos.join(", ")}.` : ""].filter(Boolean).join(" ");
+}
+
+/** Con las posiciones de hoy (para el agente, que no tiene el mapa armado). */
+export function casaConLoPendiente(estado: EstadoDeExploracion, escala: EscalaDelLienzo, pendientes: readonly ItemPropuesto[]) {
+  return casaDeLaExploracion(estado, escala, chequeoDelMapa(escala, estado.areas, posicionesDelMapa(estado, pendientes)));
+}
 
 export function exploracionParaLosCasos(estado: EstadoDeExploracion, escala: EscalaDelLienzo, pendientes: readonly ItemPropuesto[]): string {
   const c = estado.contenido;
@@ -173,12 +213,23 @@ export function candidatosAlOrden(estado: EstadoDeExploracion, escala: EscalaDel
     const c = it.valor as CasoDeUsoElegido;
     sumar({ id: it.destino.useCaseId, titulo: c.titulo, origen: "agente", area: areaDe(c.areaId), queResuelve: c.paraVentas?.porQue || c.razon || it.razon || "" });
   }
-  const excluir = new Set([...vistos].filter((id) => id.startsWith("cat-")).map((id) => id.slice(4)));
+  // 2026-11-09 (capas.ts): tampoco lo que no calza con su CRM de hoy (reactivar un HubSpot que no tiene).
+  const excluir = new Set([...[...vistos].filter((id) => id.startsWith("cat-")).map((id) => id.slice(4)), ...casosQueNoCalzanConSuCrm(suHubspotDe(estado))]);
   const posiciones = posicionesDelMapa(estado, pendientes);
   const mapa = { posiciones, chequeo: chequeoDelMapa(escala, estado.areas, posiciones) };
   const nombreDeNivel = (l: Letra) => escala.niveles.find((n) => n.letra === l)?.nombre ?? l;
   for (const c of casosPorLaEscala({ escala, areas: estado.areas, mapa, excluir, nombreDeNivel })) {
     sumar({ id: `cat-${c.caso.id}`, titulo: c.caso.titulo, origen: "escala", area: c.area.nombre, queResuelve: `${c.caso.promesa} ${c.razon}`.trim() });
   }
-  return fuera.slice(0, MAX_CASOS_EN_EL_ORDEN);
+  // 2026-11-09 (capas.ts): la capa de cada uno y en cuáles de la lista se apoya o a cuáles alimenta.
+  const lista = fuera.slice(0, MAX_CASOS_EN_EL_ORDEN);
+  const ids = new Set(lista.map((c) => c.id));
+  const delCaso = (id: string): CasoDeUsoElegido | undefined =>
+    (estado.contenido.casosDeUso[id] ??
+      [...pendientes, ...nuevos].find((it) => it.destino.tipo === "casoDeUso" && it.destino.useCaseId === id)?.valor) as CasoDeUsoElegido | undefined;
+  return lista.map((c) => {
+    const caso = delCaso(c.id);
+    const conexiones = conexionesEnLaLista(c.id, caso?.conexiones, ids).map(({ con, tipo }) => ({ con, tipo }));
+    return { ...c, capa: capaDelCaso(c.id, caso?.capa), ...(conexiones.length ? { conexiones } : {}) };
+  });
 }

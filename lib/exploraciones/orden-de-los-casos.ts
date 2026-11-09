@@ -11,11 +11,12 @@ import "server-only";
 import { getAnthropic } from "@/lib/anthropic";
 import { conContextoDeIA } from "@/lib/ai/contexto-de-corrida";
 import type { OrdenDeLosCasos } from "@/lib/casos-de-uso/orden";
-import { candidatosAlOrden, exploracionParaLosCasos, loQueSeSabeParaElValor } from "./casos-de-uso";
+import { candidatosAlOrden, casaConLoPendiente, exploracionParaLosCasos, loQueSeSabeParaElValor, negocioParaLosCasos } from "./casos-de-uso";
+import { casaParaElAgente } from "@/lib/casos-de-uso/capas";
 import type { EstadoDeExploracion, ItemPropuesto } from "./contenido";
 import type { EscalaDelLienzo } from "./escala-del-lienzo";
 import { minutasRecientes, type FilaParaLasReuniones } from "./minutas-de-la-preventa";
-import { bloqueDeInstrucciones } from "./notas-de-sesion";
+import { bloqueDeLaLectura } from "./notas-de-sesion";
 import { objetivoDeSmarteam } from "./objetivo-y-hallazgos";
 import { leerElOrden, pedidoDelOrden, type ContextoDelOrden } from "./orden-pedido";
 
@@ -39,8 +40,14 @@ export async function contextoDelOrden(o: {
     exploracion: exploracionParaLosCasos(o.estado, o.escala, o.pendientes),
     interno: loQueSeSabeParaElValor(o.estado),
     reuniones: await minutasRecientes(o.fila, o.estado),
-    instrucciones: bloqueDeInstrucciones(o.estado.contenido.notas, "casos"),
+    instrucciones: bloqueDeLaLectura(o.estado.contenido.notas),
     candidatos: candidatosAlOrden(o.estado, o.escala, o.pendientes, o.nuevos),
+    // 2026-11-09 (lib/casos-de-uso/capas.ts): la casa manda en el orden, y el título se arma con su negocio.
+    casa: (() => {
+      const { hubspot, casa } = casaConLoPendiente(o.estado, o.escala, o.pendientes);
+      return casaParaElAgente(casa, hubspot, (l) => o.escala.niveles.find((n) => n.letra === l)?.nombre ?? l);
+    })(),
+    negocio: negocioParaLosCasos(o.estado),
   };
 }
 

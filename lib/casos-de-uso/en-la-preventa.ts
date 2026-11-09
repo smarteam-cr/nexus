@@ -47,7 +47,10 @@ export function catalogoParaElAgente(casos: readonly CasoDelCatalogo[]): string 
   return casos
     .map((c) => {
       const mueve = c.mueve.length ? c.mueve.map((m) => `${m.dimension} ${m.desde}→${m.hasta}`).join(", ") : "no mueve la escala";
-      return `- [${c.id}] ${c.titulo}. ${c.promesa} Áreas: ${c.areas.join(", ")}. Mueve: ${mueve}. Lo dice así: ${c.sintomas.map((s) => `«${s}»`).join(" ")}`;
+      // 2026-11-09 (capas.ts): su capa y en qué se apoya o a qué alimenta, para que el agente arme el plan en orden.
+      const apoyo = [...(c.requiere ?? []), ...(c.requiereUnoDe ?? []), ...(c.seApoyaEn ?? [])];
+      const conexiones = [apoyo.length ? `se apoya en ${apoyo.join(", ")}` : "", c.alimenta?.length ? `alimenta ${c.alimenta.join(", ")}` : ""].filter(Boolean).join("; ");
+      return `- [${c.id}] ${c.titulo}. ${c.promesa} Áreas: ${c.areas.join(", ")}. Capa: ${c.capa}.${conexiones ? ` Conexiones: ${conexiones}.` : ""} Mueve: ${mueve}. Lo dice así: ${c.sintomas.map((s) => `«${s}»`).join(" ")}`;
     })
     .join("\n");
 }

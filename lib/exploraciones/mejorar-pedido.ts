@@ -10,6 +10,7 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import type { ActividadDelCaso, ActividadLigera } from "@/lib/casos-de-uso/armado";
 import { leerPropuestaDeMejora, MAX_SUGERIDAS, type PropuestaDeMejora } from "@/lib/casos-de-uso/mejorar";
+import { REGLAS_DE_LAS_ACTIVIDADES } from "@/lib/casos-de-uso/orden";
 import { actividadesParaElAgente, bibliotecaParaElAgente, MODELO_DE_LA_EXPLORACION } from "./agente-pedido";
 import { idsPorNombres, type ContextoDePersonalizar } from "./personalizar-pedido";
 
@@ -72,6 +73,9 @@ Reglas:
 - Si la instrucción pide algo que ninguna actividad de la biblioteca cubre (o un trabajo más grande que la actividad, como una integración con un ERP), NO lo fuerces en «actividades»: ponlo en «sugeridas» con «actividadId» vacío.
 - «sugeridas» es lo que, con esta instrucción, queda por fuera y conviene sumar (por ejemplo: quitó la capacitación y nadie le enseña al equipo a usar lo nuevo). De la biblioteca si hay una; nueva si no. Cada una con su porqué. Nunca repitas una que ya está en la lista, y nunca vuelvas a sugerir lo que la instrucción pidió quitar: si quitarlo deja un riesgo, dilo en una línea de «cambios». Si no falta nada, vacío: no sugieras por sugerir.
 - El nombre de cada actividad dice la acción concreta en este caso, SIN cambiarle lo que es: es la misma actividad de la biblioteca, con el mismo tiempo.
+
+${REGLAS_DE_LAS_ACTIVIDADES}
+
 - En los textos, las actividades van por su NOMBRE, nunca por su id. Palabras simples. Sin cifras que no estén escritas abajo. Nada de opiniones sobre personas.`;
   const ficha = ctx.ficha ? `=== LA FICHA DEL CATÁLOGO ===\n${ctx.ficha.texto}\nActividades por defecto: ${actividadesParaElAgente(ctx.ficha.actividades) || "(ninguna)"}\n\n` : "";
   const cuerpo =

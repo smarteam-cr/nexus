@@ -82,6 +82,28 @@ export function esClaveDeInstrucciones(clave: string): boolean {
   return clave === CLAVE_DE_INSTRUCCIONES || clave.startsWith(`${CLAVE_DE_INSTRUCCIONES}:`);
 }
 
+/**
+ * El texto de «La lectura del consultor» del paso Casos de uso (2026-11-09, lib/casos-de-uso/lectura-del-consultor.ts):
+ * vive en la misma nota que las instrucciones de esa pieza, así que lo escrito antes como instrucción se lee igual.
+ */
+export function textoDeLaLectura(notas: Readonly<Record<string, string>>): string {
+  return (notas[claveDeInstrucciones("casos")] ?? "").trim();
+}
+
+/**
+ * El bloque que reciben los agentes de los casos (el que sugiere, el que ordena y el que personaliza), o "" si el
+ * consultor no escribió nada. Puede ser su lectura («Ventas: estandarizar el proceso…») o una instrucción de antes
+ * («Enfócate en Servicio»): las dos pesan más que lo demás, y ninguna es palabra del cliente.
+ */
+export function bloqueDeLaLectura(notas: Readonly<Record<string, string>>): string {
+  const texto = textoDeLaLectura(notas);
+  if (!texto) return "";
+  return (
+    `=== LA LECTURA DEL CONSULTOR (qué casos cree que necesita el cliente, o cómo quiere que los armes) ===\n${texto}\n` +
+    "(Es lo que entendió el consultor que estuvo en las reuniones: parte de aquí y pesa más que lo demás. Si un caso que nombra calza con uno del catálogo, usa ese. No son palabras del cliente: no las cites ni las uses para dar un nivel.)\n\n"
+  );
+}
+
 /** El bloque que recibe el agente de esa pieza, o "" si no hay instrucciones. */
 export function bloqueDeInstrucciones(notas: Readonly<Record<string, string>>, pieza: PiezaConInstrucciones): string {
   const texto = (notas[claveDeInstrucciones(pieza)] ?? "").trim();

@@ -52,6 +52,10 @@ export { usePanelFlotante } from "./usePanelFlotante";
 export { Selector } from "./Selector";
 export type { SelectorProps, OpcionDeSelector } from "./Selector";
 
+/* Dictar en vez de escribir (2026-11-09): el reconocimiento de voz del navegador; sin él, no se muestra. */
+export { BotonDeDictado } from "./BotonDeDictado";
+export type { BotonDeDictadoProps } from "./BotonDeDictado";
+
 export { Spinner }   from "./Spinner";
 
 export { Modal }     from "./Modal";

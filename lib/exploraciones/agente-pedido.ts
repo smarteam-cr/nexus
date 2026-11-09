@@ -34,7 +34,8 @@ import {
 } from "@/lib/casos-de-uso/armado";
 import { ETAPAS_DE_ACTIVIDAD } from "@/lib/casos-de-uso/actividades";
 import { palabrasSinArticulos } from "@/lib/casos-de-uso/actividades-puras";
-import { juntaDosIdeas, primeraIdea, REGLAS_DEL_TITULO } from "@/lib/casos-de-uso/orden";
+import { juntaDosIdeas, primeraIdea, REGLAS_DE_LAS_ACTIVIDADES, REGLAS_DEL_TITULO } from "@/lib/casos-de-uso/orden";
+import { CAPAS_DEL_CASO, esCapa, REGLAS_DE_LA_CASA, TIPOS_DE_CONEXION, validarConexionesDelAgente } from "@/lib/casos-de-uso/capas";
 import { CIERRES, DESPUES, type Cierre, type Despues, type Letra } from "@/lib/escala/documento/tipos";
 import {
   CANALES_DE_CONEXION,
@@ -61,6 +62,7 @@ import {
   normalizarTexto,
   sinFundamentoDelCliente,
   type AlertaTecnica,
+  type CasoDeUsoElegido,
   type ContenidoDeExploracion,
   type DestinoDePropuesta,
   type FuenteCitada,
@@ -1301,6 +1303,15 @@ export interface ContextoDeCasos {
    * para que el agente diga cuáles cambian o ya no hacen falta con lo que se sabe hoy. No los toca: solo lo dice.
    */
   revisar?: { useCaseId: string; titulo: string; elegido: boolean; porQue: string }[];
+  /**
+   * 2026-11-09 (lib/casos-de-uso/capas.ts): los casos que ya están en la lista del paso (elegidos, sugeridos y los de la
+   * escala), con su id, para que un caso nuevo diga en cuál se apoya o a cuál alimenta.
+   */
+  enLaLista?: { id: string; titulo: string }[];
+  /** Cómo está la casa de cada área (qué tiene de HubSpot y si llegó a Funcional), en una o dos frases. */
+  casa?: string;
+  /** Qué hace la empresa (de su radiografía), para armar el título con su negocio. */
+  negocio?: string;
 }
 
 export const PALANCAS_DE_VALOR = ["Costo de la mala calidad", "Ingreso que se pierde", "Tiempo del equipo", "Riesgo", "Crecimiento"] as const;
@@ -1347,7 +1358,7 @@ export function pedidoDeCasos(ctx: ContextoDeCasos): Anthropic.Messages.MessageC
               titulo: {
                 type: "string",
                 description:
-                  "Qué cambia en el trabajo de su equipo, en palabras simples: de 4 a 10 palabras, 70 caracteres como mucho, una sola idea, sin metáforas (las reglas del TÍTULO, arriba). Si es del catálogo, el mismo resultado que promete su ficha.",
+                  "El nombre de lo que el cliente compra, con su negocio: un verbo en infinitivo con lo que se le entrega («Estandarizar el proceso comercial de tus servicios SaaS»). De 4 a 12 palabras, una sola idea, sin metáforas (las reglas del TÍTULO, arriba). Si es del catálogo, lo mismo que entrega su ficha.",
               },
               descripcion: { type: "string", description: "Qué consigue el cliente y cómo lo nota su equipo, en dos o tres frases: el resultado, no el trabajo." },
               dimensiones: { type: "array", items: { type: "string", enum: dims.length ? dims : ["0.0"] }, description: "Las dimensiones de la escala que mueve." },
@@ -1358,6 +1369,25 @@ export function pedidoDeCasos(ctx: ContextoDeCasos): Anthropic.Messages.MessageC
                 type: "string",
                 description:
                   "Para el vendedor, UNA frase de 30 palabras como mucho: por qué este caso tiene sentido para ESTA empresa, con un HECHO suyo (lo que contó, cómo trabaja hoy, su meta). Nada genérico.",
+              },
+              capa: {
+                type: "string",
+                enum: [...CAPAS_DEL_CASO],
+                description: "Su capa en el plan (las reglas de la CASA, arriba). En uno del catálogo, la de su ficha.",
+              },
+              conexiones: {
+                type: "array",
+                description:
+                  "Los casos en los que este se apoya o a los que alimenta: de esta misma respuesta (por su id del catálogo, o su título exacto si es propio) o de los que YA ESTÁN EN LA LISTA (por su id). Vacío si va suelto.",
+                items: {
+                  type: "object",
+                  properties: {
+                    con: { type: "string", description: "El id del otro caso («sistematiza-servicio», «cat-whatsapp») o su título exacto." },
+                    tipo: { type: "string", enum: [...TIPOS_DE_CONEXION], description: "«seApoyaEn»: necesita que el otro exista. «alimenta»: lo que produce entra en el otro." },
+                    porQue: { type: "string", description: "Para el vendedor, 20 palabras como mucho: qué le pasa uno al otro en esta empresa." },
+                  },
+                  required: ["con", "tipo", "porQue"],
+                },
               },
               ...(conBiblioteca
                 ? {
@@ -1387,7 +1417,7 @@ export function pedidoDeCasos(ctx: ContextoDeCasos): Anthropic.Messages.MessageC
                   }
                 : {}),
             },
-            required: ["areaId", "titulo", "descripcion", "razon", "paso", "porQue", ...(conBiblioteca ? ["actividades", "comoSeArma"] : [])],
+            required: ["areaId", "titulo", "descripcion", "razon", "paso", "porQue", "capa", ...(conBiblioteca ? ["actividades", "comoSeArma"] : [])],
           },
         },
         ...(revisar.length
@@ -1425,7 +1455,11 @@ Reglas:
       : ""
   }
 - Empieza por lo que frena al área (sus dimensiones más bajas) y por lo que le falta para Funcional; después, lo que toca una meta con cifras.
-- Los casos son UN PLAN, uno detrás de otro, no una lista suelta: el primero es lo que hay que hacer antes que nada (lo que frena a los demás o la base que necesitan) y cada uno se apoya en los anteriores. Numera en «paso» todos los que mandas, de todas las áreas juntas (1, 2, 3…), y en «despuesDe» di en una frase por qué va después del anterior.${
+
+${REGLAS_DE_LA_CASA}${ctx.casa ? `\nHoy: ${ctx.casa}` : ""}
+
+- Los casos son UN PLAN, uno detrás de otro, no una lista suelta: el primero es lo que hay que hacer antes que nada (lo que frena a los demás o la base que necesitan) y cada uno se apoya en los anteriores. Numera en «paso» todos los que mandas, de todas las áreas juntas (1, 2, 3…), y en «despuesDe» di en una frase por qué va después del anterior.
+- Un caso puede APOYARSE en otro o ALIMENTARLO: dilo en «conexiones» y ponlo después de él en el plan. Por ejemplo, en Servicio primero se estructura el centro de ayuda (un canal de entrada estandarizado y el reparto por horario y tipo de solicitud); encima va un agente de WhatsApp que filtra por tipo de solicitud y alimenta ese mismo centro de ayuda. Solo conexiones reales para esta empresa: un caso suelto va sin conexiones.${
     (ctx.ultimoPaso ?? 0) > 0
       ? `
 - El plan ya tiene ${ctx.ultimoPaso} pasos (los que YA ESTÁN, abajo): los casos nuevos van a continuación, desde el paso ${(ctx.ultimoPaso ?? 0) + 1}.`
@@ -1446,6 +1480,9 @@ Cada caso se arma con ACTIVIDADES de la BIBLIOTECA DE SMARTEAM (abajo), que son 
 - Solo actividades de la biblioteca, por su id. No inventes actividades: si el caso necesita algo que ninguna cubre, dilo en «sinActividad».
 - En un caso del catálogo, parte de sus actividades por defecto y ajústalas a esta empresa (quita lo que no aplica, suma lo que pide, cambia las veces). Un caso propio también se arma solo con actividades de la biblioteca.
 - El nombre de cada actividad dice la acción concreta en este caso, SIN cambiarle lo que es: es la misma actividad de la biblioteca, con el mismo tiempo. Si el trabajo es más grande que esa actividad (una integración con un ERP no es «Configurar en HubSpot»), no la uses: dilo en «sinActividad».
+
+${REGLAS_DE_LAS_ACTIVIDADES}
+
 - En «comoSeArma» di qué lleva y qué no, y por qué: lo que quitaste o sumaste respecto de la ficha del catálogo, o lo que eligiste en uno propio (por ejemplo: «Sin importar datos: ya trabajan en HubSpot. Dos sesiones de capacitación: son dos equipos.»). Solo lo que de verdad hiciste en «actividades»: si dices que una no va, no la mandes.${
           rearmar.length
             ? `
@@ -1466,6 +1503,7 @@ El vendedor te pide REVISAR lo que ya está con lo que se sabe hoy (abajo, «PAR
     `Empresa: ${ctx.empresa}\nEdición de la escala: ${ctx.edicion}\n` +
     `Áreas en juego: ${ctx.areas.map((a) => `${a.id} (${a.nombre})`).join(", ")}\n\n` +
     (ctx.instrucciones ?? "") +
+    (ctx.negocio ? `=== SU NEGOCIO (para armar el título con lo que vende) ===\n${ctx.negocio}\n\n` : "") +
     `=== LA EXPLORACIÓN ===\n${ctx.exploracion}\n\n` +
     `=== LAS DIMENSIONES (para el campo «dimensiones») ===\n` +
     ctx.areas.map((a) => `${a.nombre}: ${a.dimensiones.map((d) => `${d.id} ${d.nombre}`).join("; ")}`).join("\n") +
@@ -1490,6 +1528,9 @@ El vendedor te pide REVISAR lo que ya está con lo que se sabe hoy (abajo, «PAR
           .join("\n")}`
       : "") +
     `\n\n=== YA ESTÁN (no los repitas) ===\n${ctx.yaEstan.length ? ctx.yaEstan.map((t) => `- ${t}`).join("\n") : "(ninguno)"}` +
+    (ctx.enLaLista?.length
+      ? `\n\n=== YA ESTÁN EN LA LISTA (para «conexiones», por su id) ===\n${ctx.enLaLista.map((c) => `- [${c.id}] ${c.titulo}`).join("\n")}`
+      : "") +
     `\n\n=== EL VENDEDOR LOS DESCARTÓ (no los vuelvas a proponer) ===\n${ctx.descartados.length ? ctx.descartados.map((t) => `- ${t}`).join("\n") : "(ninguno)"}`;
   return {
     model: MODELO_DE_LA_EXPLORACION,
@@ -1527,6 +1568,8 @@ export function leerLosCasos(respuesta: Anthropic.Messages.Message, ctx: Context
     ...(ctx.rearmar ?? []).flatMap((r) => r.actividades.map((a) => `${a.nombre} ${a.sobreQue ?? ""}`)),
   ].join("\n");
   const items: ItemPropuesto[] = [];
+  /** Lo que pidió de conexiones cada caso que quedó, en el mismo orden que `items`. */
+  const conexionesPedidas: unknown[] = [];
   let descartadas = 0;
   for (const x of lista(input.casos)) {
     // «Regenerar»: un caso ya elegido vuelve armado, con su id, su título y su área (no cuenta en el tope por área).
@@ -1569,6 +1612,8 @@ export function leerLosCasos(respuesta: Anthropic.Messages.Message, ctx: Context
     const armado = porId.size ? armarConLaBiblioteca(x, porId, delCaso ? (ctx.porDefecto?.[delCaso.id] ?? []) : (elegido?.actividades ?? []), ahora) : {};
     const paraVentas = validarParaVentasDelAgente(x, deLasCifras);
     const plan = validarLugarDelAgente(x, elegido ? 0 : (ctx.ultimoPaso ?? 0));
+    // 2026-11-09 (capas.ts): la capa la guarda solo un caso propio; uno del catálogo usa la de su ficha.
+    const capa = !delCaso && esCapa(x.capa) ? x.capa : undefined;
     const valor = VALIDADOR_ESTRICTO.valorDelDestino(destino, {
       titulo,
       areaId: area?.id ?? null,
@@ -1579,6 +1624,7 @@ export function leerLosCasos(respuesta: Anthropic.Messages.Message, ctx: Context
       ...(tituloDelCatalogo ? { tituloDelCatalogo } : {}),
       ...(paraVentas ? { paraVentas } : {}),
       ...(plan ? { plan } : {}),
+      ...(capa ? { capa } : {}),
     });
     if (valor === null) {
       descartadas++;
@@ -1591,8 +1637,34 @@ export function leerLosCasos(respuesta: Anthropic.Messages.Message, ctx: Context
       porArea.set(area!.id, (porArea.get(area!.id) ?? 0) + 1);
     }
     items.push({ id: idDelItem(destino, valor), destino, valor, razon: razon.slice(0, 300), fuentes: [], corridaId, en: ahora.toISOString() });
+    conexionesPedidas.push(x.conexiones);
   }
-  return { items, descartadas };
+  /* 2026-11-09 (capas.ts): las conexiones, cuando ya se sabe qué casos quedaron. Cada una apunta a otro de esta respuesta
+     (por su id del catálogo o su título) o a uno que ya está en la lista (por su id); las que no apuntan a nada se caen. */
+  const porTitulo = new Map<string, string>();
+  const ids = new Set<string>();
+  for (const c of ctx.enLaLista ?? []) {
+    ids.add(c.id);
+    porTitulo.set(normalizarTexto(c.titulo), c.id);
+  }
+  for (const it of items) {
+    const id = (it.destino as { useCaseId: string }).useCaseId;
+    ids.add(id);
+    porTitulo.set(normalizarTexto((it.valor as CasoDeUsoElegido).titulo), id);
+    const delCatalogo = (it.valor as CasoDeUsoElegido).tituloDelCatalogo;
+    if (delCatalogo) porTitulo.set(normalizarTexto(delCatalogo), id);
+  }
+  const resolver = (ref: string): string | null => {
+    const limpio = ref.replace(/^\[|\]$/g, "").trim();
+    if (ids.has(limpio)) return limpio;
+    if (ids.has(`cat-${limpio}`)) return `cat-${limpio}`;
+    return porTitulo.get(normalizarTexto(limpio.replace(/^«|»$/g, ""))) ?? null;
+  };
+  const conConexiones = items.map((it, i) => {
+    const conexiones = validarConexionesDelAgente(conexionesPedidas[i], (it.destino as { useCaseId: string }).useCaseId, resolver);
+    return conexiones.length ? { ...it, valor: { ...(it.valor as CasoDeUsoElegido), conexiones } } : it;
+  });
+  return { items: conConexiones, descartadas };
 }
 
 /** El caso del catálogo detrás de un id de la preventa (`cat-…`), entre los que recibió el agente. */

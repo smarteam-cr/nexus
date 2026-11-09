@@ -25,7 +25,7 @@ import { AGENTE_DE_LA_EXPLORACION, pendientesVigentes } from "./agente";
 import { exploracionParaLosCasos, loQueSeSabeParaElValor } from "./casos-de-uso";
 import type { CasoDeUsoElegido, EstadoDeExploracion, ItemPropuesto } from "./contenido";
 import { leerContenido, leerPropuesta } from "./esquemas";
-import { bloqueDeInstrucciones } from "./notas-de-sesion";
+import { bloqueDeLaLectura } from "./notas-de-sesion";
 import { minutasRecientes, type FilaParaLasReuniones } from "./minutas-de-la-preventa";
 import { casoPersonalizado, conLaVersionPersonalizada, leerLaPersonalizacion, pedidoDePersonalizar, type ContextoDePersonalizar } from "./personalizar-pedido";
 import { bloquearFila, escalaDeLaExploracion, escalaParaExplorar, estadoDesdeFila, leerExploracion } from "./servidor";
@@ -64,7 +64,7 @@ export async function contextoDePersonalizar(o: {
     exploracion: o.exploracion,
     interno: loQueSeSabeParaElValor(o.estado),
     reuniones: await minutasRecientes(o.fila, o.estado),
-    instrucciones: bloqueDeInstrucciones(o.estado.contenido.notas, "casos"),
+    instrucciones: bloqueDeLaLectura(o.estado.contenido.notas),
   };
 }
 
