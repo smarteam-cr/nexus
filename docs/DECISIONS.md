@@ -8138,6 +8138,44 @@ le pregunta a la persona del cliente.
     US$ 0,17 y 79 s); cada aceptación US$ 0,048-0,051 y 22-27 s (9,5 mil de entrada, 1,3-1,5 mil de salida). Sugerir y
     aceptar dos: unos US$ 0,16. La primera corrida mostró ids de actividades en el texto y líneas de 30 palabras: el
     pedido pide 15 palabras y nombres, y el código cambia un id que se cuele por su nombre (`idsPorNombres`).
+- **Décima vuelta del 2026-11-08 (Elías con Centauro): títulos claros, una sola lista, actividades legibles y «Mejorar
+  con IA».** Esto reemplaza lo de arriba donde lo contradice:
+  - **Títulos para compradores con muchas reuniones** (`REGLAS_DEL_TITULO`, lib/casos-de-uso/orden.ts): de 4 a 10
+    palabras, una sola idea, qué cambia en el trabajo del equipo, sin metáforas, con ejemplos buenos y malos (los dos de
+    Centauro que no se entendían). El agente que sugiere ya no se queda con el título del catálogo si no las cumple: lo
+    escribe de nuevo, con el del catálogo al lado. La personalización no renombra (sigue sin tocar lo que ve el cliente).
+    El catálogo mismo no se tocó: sus títulos se ven tal cual en «Del catálogo de Smarteam» y en la ficha del caso.
+  - **Una sola lista, un caso por fila** (antes: sugeridos en dos columnas, «Usadas hoy» plegable, elegidos en filas y
+    «Sugeridos por la escala» en dos columnas). Los elegidos, los del agente y los de la biblioteca que sugiere la escala
+    van uno debajo de otro, con una etiqueta de origen («Elegido», «Sugerido por el agente», «De la biblioteca · por la
+    escala») y el número de su lugar. Un caso de la escala que ya está elegido o sugerido no se repite. «Usadas hoy»
+    quedó en la fila del elegido («Aceptado hoy a las…», con su «Revertir», que deshace el ÚLTIMO uso: la personalización
+    que se aplicó sola, o la aceptación). *Por qué no bastaba «Quitar»:* saca el caso entero; la revisión del 2026-11-08
+    vio que sin «Revertir» no había cómo volver de una personalización aplicada sola.
+  - **El orden lo propone un agente aparte** (`pedidoDelOrden`, lib/exploraciones/orden-pedido.ts; servidor en
+    orden-de-los-casos.ts), en la misma vuelta de «Sugerir» o «Revisar» y con la misma corrida y medidor. Lee la escala,
+    lo interno de la preventa, las minutas de sus reuniones (`minutasRecientes`, del chokepoint), el objetivo de la
+    exploración y el contexto adicional, y devuelve el orden de TODA la lista con el porqué de cada lugar («Por qué va
+    aquí») y el título claro de los de la escala. Se guarda por id (`propuesta.ordenDeLosCasos`): aceptar no cambia el
+    lugar; lo que llega después va al final. *Por qué aparte:* la llamada que sugiere escribe lo que ve el cliente y no
+    lee lo interno; esta solo escribe para el vendedor, salvo el título de un caso de la escala, que SÍ puede llegar al
+    cliente: el pedido lo dice y el código descarta uno con cifras o con un nombre propio que no esté en el caso
+    (`tituloSoloDelCaso`; queda el del catálogo). Si falla o la respuesta llega cortada, la vuelta se guarda igual con el
+    orden de antes. Sin orden, la lista va en el del plan (`plan.paso`).
+  - **Las actividades se leen como tabla:** por etapa, con quién, veces, horas y cómo se reparten (con el cliente /
+    internas, de las partes de la biblioteca: `repartoDeLaActividad`), y el total del caso. El ⓘ ya no es solo un
+    tooltip: abre debajo qué se hace, qué incluye, quién la hace y de qué está hecho su tiempo.
+  - **«Mejorar con IA» de las actividades** (lib/casos-de-uso/mejorar.ts; `pedidoDeMejorar`; `POST …/casos/mejorar`):
+    el CSE escribe una instrucción y el agente devuelve la lista como queda (solo de la biblioteca; la instrucción manda)
+    y, aparte, hasta 4 sugeridas con su porqué (de la biblioteca o nuevas). No guarda nada: el CSE ve la diferencia en
+    `<AgentProposal>` (entra, sale, cambia, horas antes → después), marca las sugeridas que van y aplica (un cambio a
+    mano del caso, con «Deshacer») o descarta. Una sugerida nueva, sin horas, queda en «Falta en la biblioteca». Lo que
+    la instrucción quitó no vuelve como sugerida (en el simulacro lo hacía). `AgentRun` + medidor, como la
+    personalización.
+  - **Medido con Centauro** (`scripts/simular-casos-de-uso.ts --llamar --desde-cero --orden --mejorar "…"`, solo
+    lectura): sugerir con las reglas nuevas US$ 0,068 y 46 s (7 casos desde cero; 12 mil de entrada); ordenar 10 casos
+    US$ 0,033 y 13 s (6,9 mil de entrada, 0,8 mil de salida); mejorar US$ 0,046 y 15 s (10,3 mil de entrada, 1 mil de
+    salida).
 
 ## Servicios recurrentes: el ciclo con los documentos de siempre (2026-10-12)
 

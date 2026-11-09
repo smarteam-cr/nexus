@@ -34,6 +34,7 @@ import {
 import { MAX_FRASE } from "@/lib/smarteam/posicionamiento";
 import { MAX_ACTIVIDADES_POR_CASO, MAX_VECES } from "@/lib/casos-de-uso/armado";
 import { LARGO_DE_UNA_LINEA_DE_CAMBIOS, MAX_LINEAS_DE_CAMBIOS, VEREDICTOS_DE_LA_REVISION } from "@/lib/casos-de-uso/personalizar";
+import { MAX_CASOS_EN_EL_ORDEN, MAX_LARGO_DEL_PORQUE_DEL_ORDEN, MAX_LARGO_DEL_TITULO } from "@/lib/casos-de-uso/orden";
 import { ESTADOS_DE_LA_CONDICION, MAX_HECHOS, MAX_LOGROS, TOPES, type PosicionamientoDelProspecto } from "./posicionamiento";
 import {
   contenidoVacio,
@@ -357,6 +358,15 @@ const RevisionDeLosCasosSchema = z.object({
       }),
     )
     .max(60),
+});
+
+/** El orden de la lista entera de casos (lib/casos-de-uso/orden.ts › OrdenDeLosCasos). */
+const OrdenDeLosCasosSchema = z.object({
+  en: z.string().min(10).max(40),
+  corridaId: z.string().min(1).max(60),
+  casos: z
+    .array(z.object({ id: ID_CASO_DE_USO, porQue: texto(MAX_LARGO_DEL_PORQUE_DEL_ORDEN + 20), titulo: texto(MAX_LARGO_DEL_TITULO + 20).optional() }))
+    .max(MAX_CASOS_EN_EL_ORDEN),
 });
 
 const EscalaSugeridaSchema = z.object({
@@ -1120,6 +1130,9 @@ export function leerPropuesta(raw: unknown): PropuestaDeExploracion {
   // 2026-11-08: la última vez que el agente miró los casos (sugerir o «Revisar»).
   const revision = RevisionDeLosCasosSchema.safeParse(raw.revisionDeLosCasos);
   if (revision.success) p.revisionDeLosCasos = revision.data;
+  // Décima vuelta (2026-11-08): el orden de la lista entera de casos.
+  const orden = OrdenDeLosCasosSchema.safeParse(raw.ordenDeLosCasos);
+  if (orden.success) p.ordenDeLosCasos = orden.data;
   if (!Array.isArray(raw.items)) return p;
   const items = raw.items.map(leerItem).filter((it): it is ItemPropuesto => it !== null);
   return { ...p, items };

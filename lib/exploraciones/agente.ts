@@ -26,6 +26,9 @@ import { casoDeLaPreventa, casosParaLasAreas, titulosDelCaso } from "@/lib/casos
 import { actividadesDelCaso, bibliotecaDeActividades } from "@/lib/casos-de-uso/actividades-server";
 import { actividadesDelElegido, actividadesPorDefecto, apartarCasosSinArmar, bibliotecaLigera, ultimoPasoDelPlan, type ActividadDelCaso } from "@/lib/casos-de-uso/armado";
 import { huellaDeLoQueLee, type RevisionDeLosCasos } from "@/lib/casos-de-uso/personalizar";
+import type { OrdenDeLosCasos } from "@/lib/casos-de-uso/orden";
+import type { FilaParaLasReuniones } from "./minutas-de-la-preventa";
+import { ordenarLosCasos } from "./orden-de-los-casos";
 import { leerLaRevision, porQueDelCaso } from "./personalizar-pedido";
 import { humanizeAgentError } from "@/lib/agents/anthropic-error";
 import { estaColgada, MOTIVO_COLGADA } from "@/lib/agents/run-colgada";
@@ -814,7 +817,7 @@ async function proponerCasos(
   runId: string,
   exploracionId: string,
   ex: {
-    fila: { clientId: string; client: { name: string } };
+    fila: FilaParaLasReuniones & { client: { name: string } };
     estado: EstadoDeExploracion;
     escala: EscalaDelLienzo;
     general: Escala;
@@ -868,6 +871,27 @@ async function proponerCasos(
       console.error("[exploraciones/agente] el argumento de valor falló; los casos se guardan sin él", e);
     }
   }
+  /* Décima vuelta (2026-11-08, lib/casos-de-uso/orden.ts): el orden de TODA la lista del paso (los elegidos, los
+     sugeridos y los de la escala), en una llamada aparte que sí lee lo interno y las minutas. Si falla, se guarda lo
+     demás y queda el orden de antes. */
+  let orden: OrdenDeLosCasos | null = null;
+  if (!regenerar) {
+    await fase(runId, "Ordenando la lista con todo lo que se sabe de la empresa…");
+    try {
+      orden = await ordenarLosCasos({
+        runId,
+        fila: ex.fila,
+        estado: ex.estado,
+        escala: ex.escala,
+        pendientes: pendientesVigentes(ex.estado, ex.general, ex.escala),
+        nuevos: items,
+        email: opts.triggeredByEmail,
+        agentSlug: AGENTE_DE_LA_EXPLORACION,
+      });
+    } catch (e) {
+      console.error("[exploraciones/agente] el orden de los casos falló; se guarda lo demás con el orden de antes", e);
+    }
+  }
   await fase(runId, "Guardando lo propuesto…");
   const propuestos = await guardar(
     exploracionId,
@@ -885,6 +909,7 @@ async function proponerCasos(
       automatica: false,
       regenerar,
       revision: { en: new Date().toISOString(), corridaId: runId, huella: huellaDeLoQueLee(ctx.exploracion, ex.estado.areas), revisada: revisar, cambios },
+      orden,
     },
   );
   await prisma.agentRun.update({
@@ -1684,7 +1709,15 @@ async function guardar(
   exploracionId: string,
   items: ItemPropuesto[],
   leido: LoQueLeyoLaCorrida,
-  corrida: { runId: string; modo: ModoDelAgente; automatica: boolean; regenerar?: boolean; revision?: Omit<RevisionDeLosCasos, "nuevos"> },
+  corrida: {
+    runId: string;
+    modo: ModoDelAgente;
+    automatica: boolean;
+    regenerar?: boolean;
+    revision?: Omit<RevisionDeLosCasos, "nuevos">;
+    /** Casos de uso (décima vuelta): el orden de la lista entera. null o ausente: queda el de antes. */
+    orden?: OrdenDeLosCasos | null;
+  },
 ): Promise<number> {
   return prisma.$transaction(async (tx) => {
     await bloquearFila(tx, exploracionId);
@@ -1744,6 +1777,7 @@ async function guardar(
             },
           }
         : {}),
+      ...(corrida.orden ? { ordenDeLosCasos: corrida.orden } : {}),
       corridas: [
         ...fusion.corridas,
         {

@@ -13,10 +13,6 @@
  * Desde el 2026-10-12 el agente parte del catálogo de Smarteam (lib/casos-de-uso, ids `cat-…`) y la lista «Del catálogo
  * de Smarteam» muestra los casos que tocan las áreas en juego, con un enlace a su ficha.
  *
- * Se ve como en el diseño del 2026-10-03: una franja azul arriba (cuántos sugiere el agente, otra
- * tanda, usar todos), los elegidos como filas con su marca verde, y los sugeridos en dos columnas de
- * tarjetas compactas con el porqué plegado.
- *
  * Los casos de uso del agente entran a la propuesta como contexto; la sección de casos de uso con
  * precio sale solo del catálogo, como siempre. Armar la propuesta es su propia pieza desde el
  * 2026-10-01 (PasoPropuesta.tsx).
@@ -24,20 +20,22 @@
  * Desde el 2026-11-08 (pedido de Elías con Centauro Solutions; lib/casos-de-uso/armado.ts) aquí se PERSONALIZA la
  * propuesta: cada caso se arma con actividades de la biblioteca (el agente las propone; un caso del catálogo elegido a
  * mano trae las de su ficha), se quitan y se ponen actividades, y cada caso dice sus horas, su precio mínimo (horas ×
- * tarifa del segmento) y, para el vendedor, cómo subir el ticket vendiendo por valor. Si hay casos sin armar (de
- * antes), «Regenerar» los vuelve a armar: se aplica con un solo «Deshacer» (y Ctrl+Z), y lo editado a mano no se pisa.
+ * tarifa del segmento) y, para el vendedor, cómo subir el ticket vendiendo por valor.
  *
- * Desde la segunda vuelta del 2026-11-08 (Elías con Centauro: «Ventas tiene que entender qué actividades sí y cuáles no»)
- * los casos van en el orden del plan del agente, cada uno dice por qué tiene sentido para esta empresa y cómo se arma
- * (`PorQueYComo`), cada actividad tiene su ⓘ y «Cómo subir el ticket» habla en palabras simples.
+ * Desde la tercera vuelta del 2026-11-08 (lib/casos-de-uso/personalizar.ts): al ACEPTAR un sugerido, el agente
+ * personaliza sus actividades para la empresa y la fila dice qué cambió frente a la ficha; «REVISAR» vuelve a mirar todo
+ * con lo que se sabe hoy y dice qué cambió, sin tocar lo elegido. Nada corre solo al entrar. Quitar un elegido lo devuelve
+ * a los sugeridos.
  *
- * Desde la tercera vuelta del 2026-11-08 (Elías: «lo más importante es ver qué casos se sugieren y por qué; luego, que la
- * persona los acepte y ya aparezcan las actividades personalizadas»; lib/casos-de-uso/personalizar.ts) el paso va en tres
- * tiempos: arriba los SUGERIDOS con su porqué a la vista; al ACEPTAR uno, el agente personaliza sus actividades para la
- * empresa y la fila dice qué cambió frente a la ficha en dos o tres líneas; y «REVISAR» vuelve a mirar todo con lo que se
- * sabe hoy y dice qué cambió (o que nada), sin tocar lo elegido. Nada corre solo al entrar: si llegó algo nuevo desde la
- * última mirada (reuniones, la escala), un aviso arriba lo dice y ofrece revisar. Quitar un elegido lo devuelve a los
- * sugeridos. «Regenerar» y «Proponer otra tanda» se fueron: los reemplazan «Revisar» y «Personalizar» de cada caso.
+ * Desde la décima vuelta del 2026-11-08 (Elías con Centauro; lib/casos-de-uso/orden.ts y mejorar.ts):
+ *   - UNA sola lista, un caso por fila: los elegidos, los que sugiere el agente y los de la biblioteca que sugiere la
+ *     escala, en el orden que propone el agente con todo lo que se sabe de la empresa. Una etiqueta dice de dónde viene
+ *     cada uno (ya no hay grillas separadas ni «Usadas hoy» aparte: el elegido dice en su fila cuándo se aceptó). Cada
+ *     fila usa el ancho: a la izquierda el título y los porqués, a la derecha el precio, lo que mueve y las acciones.
+ *   - Las actividades de un caso, por etapa, con quién la hace, las veces, las horas y cómo se reparten (con el cliente /
+ *     internas); el ⓘ abre qué se hace, qué incluye y de qué está hecho su tiempo.
+ *   - «Mejorar con IA»: el CSE escribe una instrucción y el agente propone cómo quedan las actividades y lo que conviene
+ *     sumar aparte; se revisa en `<AgentProposal>` y se aplica (con «Deshacer») o se descarta.
  */
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { useUndo } from "@/components/ui/UndoProvider";
@@ -53,6 +51,8 @@ import {
   palancaEnPalabras,
   precioMinimo,
   quitarActividad,
+  repartoDeLaActividad,
+  repartoDelCaso,
   sumarActividad,
   type ActividadDelCaso,
   type ActividadLigera,
@@ -60,10 +60,15 @@ import {
   type ValorDeVenta,
 } from "@/lib/casos-de-uso/armado";
 import { ETAPAS_DE_ACTIVIDAD, formatoHoras, formatoUsd, nombreVisible, sobreQueAparte } from "@/lib/casos-de-uso/actividades-puras";
+import { enElOrden, type CasoEnElOrden } from "@/lib/casos-de-uso/orden";
+import { aplicarMejora, diferenciaDeActividades, MAX_LARGO_DE_LA_INSTRUCCION, resumenDeLaMejora, type PropuestaDeMejora } from "@/lib/casos-de-uso/mejorar";
 import Link from "next/link";
-import { Alert, Badge, IconButton, Select, Selector, useToast } from "@/components/ui";
+import { AgentProposal } from "@/components/ai/AgentProposal";
+import { Alert, Badge, IconButton, Select, Selector, Textarea, useToast } from "@/components/ui";
 import { cn } from "@/lib/cn";
-import { esCasoLibre, laEscalaTieneBase, type CasoDeUsoElegido, type DestinoDePropuesta, type ItemPropuesto } from "@/lib/exploraciones/contenido";
+import { useMe } from "@/hooks/useMe";
+import { esCasoLibre, laEscalaTieneBase, sePuedeDeshacer, type CasoDeUsoElegido, type ItemPropuesto } from "@/lib/exploraciones/contenido";
+import { casosPorLaEscala, type CasoPorLaEscala } from "@/lib/exploraciones/casos-de-uso";
 import {
   nadaCambio,
   novedadesEnUnaFrase,
@@ -74,11 +79,9 @@ import {
   type NovedadesDeLosCasos,
 } from "@/lib/casos-de-uso/personalizar";
 import { useLienzo } from "./contexto";
-import { casosParaElArea, type AreaParaElCamino } from "@/lib/casos-de-uso/camino";
-import { loQueLaFrena } from "@/lib/exploraciones/mapa";
 import FranjaDeSugerencias, { BotonAzul, BotonBlanco, BotonTexto, IconoDeSugerencia } from "./FranjaDeSugerencias";
 import { useCorrida } from "./useCorrida";
-import { BotonUsarTodas, UsadasHoy } from "./Propuestas";
+import { BotonUsarTodas } from "./Propuestas";
 
 interface Caso {
   id: string;
@@ -110,9 +113,19 @@ function actividadesDe(id: string, caso: CasoDeUsoElegido, armado: Armado | null
   return actividadesDelElegido(caso, id.startsWith("cat-") ? armado?.porDefecto[id.slice(4)] : undefined);
 }
 
+/** «CSE (Dev si enseña…)» → «CSE»: en la columna, lo corto; lo largo va en el ⓘ. */
+const quienCorto = (quien: string) => quien.split(" (")[0];
+
+/** «9 h con el cliente · 16 h internas», o la mitad que tenga. */
+function repartoEnPalabras(r: { conElCliente: number; internas: number }): string {
+  const partes = [r.conElCliente > 0 ? `${formatoHoras(r.conElCliente)} con el cliente` : "", r.internas > 0 ? `${formatoHoras(r.internas)} ${r.internas === 1 ? "interna" : "internas"}` : ""];
+  return partes.filter(Boolean).join(" · ");
+}
+
 /**
- * «18 h · desde 1.440 USD» y lo que falta (Dev o Diseño, o que ninguna actividad calza). `conLaFicha`: un sugerido sin
- * personalizar, cuyo precio sale de la ficha del catálogo (al aceptarlo, el agente lo ajusta a la empresa).
+ * El precio del caso en la columna de la derecha: desde cuánto, las horas, cuántas actividades y cómo se reparten. Lo que
+ * falta (Dev o Diseño, o que ninguna actividad calza) va debajo. `conLaFicha`: un sugerido sin personalizar, cuyo precio
+ * sale de la ficha del catálogo (al aceptarlo, el agente lo ajusta a la empresa).
  */
 function PrecioDelCaso({ id, caso, conLaFicha = false }: { id: string; caso: CasoDeUsoElegido; conLaFicha?: boolean }) {
   const armado = useContext(ArmadoContexto);
@@ -120,23 +133,22 @@ function PrecioDelCaso({ id, caso, conLaFicha = false }: { id: string; caso: Cas
   const acts = actividadesDe(id, caso, armado);
   if (!acts.length)
     return (
-      <p className="text-xs text-fg-muted">
+      <p className="text-xs leading-normal text-fg-muted">
         {caso.sinActividad ?? (conLaFicha ? "Sin ficha en el catálogo: el precio sale al aceptarlo, cuando el agente arme sus actividades." : "Sin actividades de la biblioteca: todavía sin precio.")}
       </p>
     );
   const { horas, sinTiempo } = horasDelCaso(acts, armado.porId);
+  const reparto = repartoEnPalabras(repartoDelCaso(acts, armado.porId));
   return (
-    <p className="text-xs text-fg-secondary">
-      {conLaFicha && <span className="text-fg-muted">Con la ficha del catálogo: </span>}
-      <span className="font-semibold text-fg">{formatoHoras(horas)}</span>
-      {" · "}
-      <span className="font-semibold text-fg">desde {formatoUsd(precioMinimo(horas, armado.tarifa))}</span>
-      {sinTiempo.length > 0 && <span className="text-fg-muted"> + lo que defina {sinTiempo.join(" y ")}</span>}
-      <span className="text-fg-muted">
-        {" "}
-        · {acts.length} {acts.length === 1 ? "actividad" : "actividades"}
-      </span>
-    </p>
+    <div className="space-y-0.5">
+      {conLaFicha && <p className="text-[11px] text-fg-muted">Con la ficha del catálogo</p>}
+      <p className="text-base font-semibold tabular-nums text-fg">desde {formatoUsd(precioMinimo(horas, armado.tarifa))}</p>
+      <p className="text-xs tabular-nums text-fg-secondary">
+        {formatoHoras(horas)} · {acts.length} {acts.length === 1 ? "actividad" : "actividades"}
+      </p>
+      {reparto && <p className="text-[11px] tabular-nums text-fg-muted">{reparto}</p>}
+      {sinTiempo.length > 0 && <p className="text-[11px] text-fg-muted">+ lo que defina {sinTiempo.join(" y ")}</p>}
+    </div>
   );
 }
 
@@ -185,34 +197,21 @@ function ValorDelCaso({ valor }: { valor: ValorDeVenta }) {
 }
 
 /**
- * Por qué el caso y cómo se arma (2026-11-08, Elías con Centauro: «Ventas tiene que entender qué actividades sí y cuáles
- * no»). Corto, para quien vende: su lugar en el plan, por qué para esta empresa, cómo se armó y, en uno del catálogo, qué
- * cambió frente a su ficha (eso lo calcula la pantalla, así que sigue los cambios a mano).
+ * Cómo se arma un caso elegido (2026-11-08, Elías con Centauro: «Ventas tiene que entender qué actividades sí y cuáles
+ * no»): cómo se armó y, en uno del catálogo, qué cambió frente a su ficha (eso lo calcula la pantalla, así que sigue los
+ * cambios a mano). El porqué y el lugar en la lista van arriba, en la fila.
  */
-function PorQueYComo({ id, caso, conRazon }: { id: string; caso: CasoDeUsoElegido; conRazon: boolean }) {
+function ComoSeArma({ id, caso }: { id: string; caso: CasoDeUsoElegido }) {
   const armado = useContext(ArmadoContexto);
-  /* La razón, solo si la escribió el agente para esta empresa: en un caso elegido a mano del catálogo es la descripción
-     genérica de la ficha (revisión del 2026-11-08). */
-  const porQue = caso.paraVentas?.porQue || (conRazon && caso.armado ? caso.razon : "");
   const comoSeArma = caso.paraVentas?.comoSeArma ?? "";
   const ficha = id.startsWith("cat-") ? armado?.porDefecto[id.slice(4)] : undefined;
   const cambios = armado ? cambiosRespectoDeLaFicha(actividadesDe(id, caso, armado), ficha, (a) => armado.porId.get(a)?.nombre) : null;
   /* Personalizado y sin tocar a mano, el resumen del agente (`LoPersonalizado`) ya dice qué cambió frente a la ficha: la
      línea calculada sería la misma dos veces. Si lo cambiaron a mano, la calculada es la de hoy. */
   const frente = cambios && (!caso.personalizado || caso.aMano) ? lineaDeCambios(cambios) : "";
-  if (!porQue && !comoSeArma && !frente && !caso.plan?.despuesDe) return null;
+  if (!comoSeArma && !frente) return null;
   return (
-    <div className="mt-1.5 space-y-0.5 rounded-lg bg-surface-muted px-3 py-2 text-xs leading-normal text-fg-secondary">
-      {caso.plan?.despuesDe && (
-        <p>
-          <span className="font-medium text-fg">Por qué en este orden:</span> {caso.plan.despuesDe}
-        </p>
-      )}
-      {porQue && (
-        <p>
-          <span className="font-medium text-fg">Por qué para esta empresa:</span> {porQue}
-        </p>
-      )}
+    <div className="space-y-0.5 rounded-lg bg-surface-muted px-3 py-2 text-xs leading-normal text-fg-secondary">
       {comoSeArma && (
         <p>
           {/* Lo escribió el agente: si después cambiaste las actividades a mano, la línea de abajo es la de hoy. */}
@@ -224,11 +223,62 @@ function PorQueYComo({ id, caso, conRazon }: { id: string; caso: CasoDeUsoElegid
   );
 }
 
-/** La lista de actividades de un caso. Editable en un caso elegido: quitar, poner de la biblioteca y cambiar las veces. */
+/** El ⓘ abierto de una actividad: qué se hace, qué incluye, quién la hace y de qué está hecho su tiempo. */
+function DetalleDeLaActividad({ a, lib }: { a: ActividadDelCaso; lib: ActividadLigera }) {
+  const reparto = repartoDeLaActividad(a, lib);
+  return (
+    <div className="space-y-1.5 rounded-md bg-surface-muted px-3 py-2 text-xs leading-normal text-fg-secondary">
+      <p className="text-fg">{lib.resumen}</p>
+      {lib.incluye && lib.incluye.length > 0 && (
+        <div>
+          <p className="font-medium text-fg">Incluye</p>
+          <ul className="list-disc space-y-0.5 pl-4">
+            {lib.incluye.map((x) => (
+              <li key={x}>{x}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+      <p>
+        <span className="font-medium text-fg">Quién la hace:</span> {lib.quien}
+      </p>
+      {lib.horasPendientes ? (
+        <p>
+          <span className="font-medium text-fg">Su tiempo:</span> lo define {quienCorto(lib.quien)} al ver el alcance.
+        </p>
+      ) : (
+        reparto.partes.length > 0 && (
+          <div>
+            <p className="font-medium text-fg">
+              Su tiempo en este caso{a.veces > 1 ? ` (${a.veces} veces)` : ""}: {formatoHoras(reparto.conElCliente + reparto.internas)}
+            </p>
+            <ul className="space-y-0.5">
+              {reparto.partes.map((p) => (
+                <li key={p.nombre} className="flex gap-2">
+                  <span className="w-12 flex-shrink-0 text-right tabular-nums">{formatoHoras(p.horas)}</span>
+                  <span className="min-w-0 flex-1">
+                    {p.nombre} <span className="text-fg-muted">· {p.conElCliente ? "con el cliente" : "interna"}</span>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )
+      )}
+    </div>
+  );
+}
+
+/**
+ * La lista de actividades de un caso (décima vuelta: legible de un vistazo). Por etapa, cada una con quién la hace, las
+ * veces, sus horas y cómo se reparten; el ⓘ abre su detalle debajo. Editable en un caso elegido: quitar, poner de la
+ * biblioteca y cambiar las veces. Abajo, el total con su reparto.
+ */
 function ActividadesDelCaso({ id, caso, editable }: { id: string; caso: CasoDeUsoElegido; editable: boolean }) {
   const armado = useContext(ArmadoContexto);
   const { exp, cambiar, guardando } = useLienzo();
   const { pushUndo } = useUndo();
+  const [detalle, setDetalle] = useState<number | null>(null);
   if (!armado) return null;
   const acts = actividadesDe(id, caso, armado);
   /* Cada cambio se puede deshacer (el aviso y Ctrl+Z): vuelve el caso como estaba. Si es del catálogo y no tenía
@@ -241,74 +291,146 @@ function ActividadesDelCaso({ id, caso, editable }: { id: string; caso: CasoDeUs
     });
   };
   const yaEstan = new Set(acts.map((a) => a.actividadId));
+  const filas = acts.map((a, i) => ({ a, i, lib: armado.porId.get(a.actividadId) }));
+  // Por etapa, en el orden del proyecto; lo que ya no está en la biblioteca, al final.
+  const grupos = [
+    ...ETAPAS_DE_ACTIVIDAD.map((e) => ({ clave: e.clave, nombre: e.nombre, filas: filas.filter((f) => f.lib?.etapa === e.clave) })),
+    { clave: "fuera", nombre: "Ya no están en la biblioteca", filas: filas.filter((f) => !f.lib) },
+  ].filter((g) => g.filas.length > 0);
+  const { horas } = horasDelCaso(acts, armado.porId);
+  const reparto = repartoEnPalabras(repartoDelCaso(acts, armado.porId));
+  const columnas = cn("grid items-center gap-x-3", editable ? "grid-cols-[minmax(0,1fr)_auto_auto]" : "grid-cols-[minmax(0,1fr)_auto]", "sm:grid-cols-[minmax(0,1fr)_6.5rem_5.5rem_6rem]", editable && "sm:grid-cols-[minmax(0,1fr)_6.5rem_5.5rem_6rem_1.75rem]");
   return (
-    <div className="space-y-1.5">
-      <ul className="divide-y divide-line rounded-lg border border-line">
-        {acts.map((a, i) => {
-          const lib = armado.porId.get(a.actividadId);
-          const nombre = nombreVisible(a, lib?.nombre);
-          return (
-            <li key={`${a.actividadId}-${a.sobreQue ?? ""}-${i}`} className="flex items-center gap-2 px-3 py-1.5 text-xs">
-              <span className="min-w-0 flex-1 text-fg">
-                {nombre}
-                {a.sobreQue && sobreQueAparte({ nombre, sobreQue: a.sobreQue }) && <span className="text-fg-muted"> · {a.sobreQue}</span>}
-                {/* Qué se hace en la actividad, en una frase de la biblioteca (2026-11-08): para quien vende. */}
-                {lib?.resumen && (
-                  <span
-                    tabIndex={0}
-                    role="img"
-                    aria-label={`Qué se hace en «${nombre}»: ${lib.resumen}`}
-                    title={lib.resumen}
-                    className="ml-1 inline-flex h-3.5 w-3.5 cursor-help items-center justify-center rounded-full border border-line align-[-1px] text-[9px] font-semibold leading-none text-fg-muted hover:border-brand hover:text-brand focus:outline-none focus-visible:ring-1 focus-visible:ring-brand"
-                  >
-                    i
-                  </span>
-                )}
-                {/* La actividad de la biblioteca detrás del nombre del caso: de ahí sale el tiempo. */}
-                {lib && lib.nombre !== nombre && <span className="block text-[11px] text-fg-muted">Biblioteca: {lib.nombre}</span>}
-                {!lib && <span className="text-danger-ink"> · ya no está en la biblioteca</span>}
-              </span>
-              {editable && lib?.seRepite ? (
-                <span className="flex items-center gap-1">
-                  <IconButton
-                    size="xs"
-                    variant="subtle"
-                    aria-label={`Una vez menos «${nombre}»`}
-                    icon={<span aria-hidden="true">−</span>}
-                    disabled={guardando || a.veces <= 1}
-                    onClick={() => guardar(cambiarVeces(caso, acts, i, a.veces - 1), `Bajaste «${nombre}» a ${a.veces - 1}`)}
-                  />
-                  <span className="w-6 text-center tabular-nums text-fg-secondary">{a.veces}×</span>
-                  <IconButton
-                    size="xs"
-                    variant="subtle"
-                    aria-label={`Una vez más «${nombre}»`}
-                    icon={<span aria-hidden="true">+</span>}
-                    disabled={guardando}
-                    onClick={() => guardar(cambiarVeces(caso, acts, i, a.veces + 1), `Subiste «${nombre}» a ${a.veces + 1}`)}
-                  />
-                </span>
-              ) : (
-                a.veces > 1 && <span className="tabular-nums text-fg-muted">{a.veces}×</span>
-              )}
-              <span className="w-14 text-right tabular-nums text-fg-muted">
-                {lib ? (lib.horasPendientes ? (lib.quien.startsWith("Dev") ? "Dev" : "Diseño") : formatoHoras(horasDeLaActividad(a, lib))) : "—"}
-              </span>
-              {editable && (
-                <IconButton
-                  size="xs"
-                  aria-label={`Quitar «${nombre}»`}
-                  title="Quitar la actividad"
-                  icon={<span aria-hidden="true">×</span>}
-                  disabled={guardando}
-                  onClick={() => guardar(quitarActividad(caso, acts, i), `Quitaste «${nombre}» de «${caso.titulo}»`)}
-                />
-              )}
-            </li>
-          );
-        })}
-        {acts.length === 0 && <li className="px-3 py-2 text-xs text-fg-muted">Sin actividades.</li>}
-      </ul>
+    <div className="space-y-2">
+      <div className="overflow-hidden rounded-lg border border-line">
+        <div className={cn(columnas, "border-b border-line bg-surface-muted px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.06em] text-fg-muted")}>
+          <span>Actividad</span>
+          <span className="hidden sm:block">Quién</span>
+          <span className={cn("text-center", !editable && "hidden sm:block")}>Veces</span>
+          <span className="text-right">Horas</span>
+          {editable && <span className="hidden sm:block" />}
+        </div>
+        {grupos.map((g) => (
+          <div key={g.clave}>
+            <p className="border-b border-line bg-surface px-3 pb-1 pt-2 text-[11px] font-semibold text-fg-muted">{g.nombre}</p>
+            <ul className="divide-y divide-line">
+              {g.filas.map(({ a, i, lib }) => {
+                const nombre = nombreVisible(a, lib?.nombre);
+                const sobre = a.sobreQue ? sobreQueAparte({ nombre, sobreQue: a.sobreQue }) : "";
+                const rep = lib ? repartoDeLaActividad(a, lib) : null;
+                const abierto = detalle === i;
+                return (
+                  <li key={`${a.actividadId}-${a.sobreQue ?? ""}-${i}`} className="px-3 py-2">
+                    <div className={columnas}>
+                      <div className="min-w-0">
+                        <p className="flex items-start gap-1.5 text-[13px] leading-snug text-fg">
+                          <span className="min-w-0">
+                            {nombre}
+                            {sobre && <span className="text-fg-muted"> · {sobre}</span>}
+                          </span>
+                          {lib && (
+                            <button
+                              type="button"
+                              aria-expanded={abierto}
+                              aria-label={abierto ? `Cerrar el detalle de «${nombre}»` : `Qué se hace en «${nombre}»`}
+                              title={abierto ? "Cerrar el detalle" : lib.resumen}
+                              onClick={() => setDetalle(abierto ? null : i)}
+                              className={cn(
+                                "mt-[1px] inline-flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-full border text-[10px] font-semibold leading-none transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-brand",
+                                abierto ? "border-brand bg-brand text-primary-fg" : "border-line text-fg-muted hover:border-brand hover:text-brand",
+                              )}
+                            >
+                              i
+                            </button>
+                          )}
+                        </p>
+                        {/* La actividad de la biblioteca detrás del nombre del caso: de ahí sale el tiempo. */}
+                        {lib && lib.nombre !== nombre && <p className="text-[11px] text-fg-muted">De la biblioteca: {lib.nombre}</p>}
+                        {!lib && <p className="text-[11px] text-danger-ink">Ya no está en la biblioteca: sin horas.</p>}
+                        {lib && <p className="text-[11px] text-fg-muted sm:hidden">{quienCorto(lib.quien)}</p>}
+                      </div>
+                      <span className="hidden truncate text-xs text-fg-secondary sm:block" title={lib?.quien}>
+                        {lib ? quienCorto(lib.quien) : "—"}
+                      </span>
+                      {editable && lib?.seRepite ? (
+                        <span className="flex items-center justify-center gap-0.5">
+                          <IconButton
+                            size="xs"
+                            variant="subtle"
+                            aria-label={`Una vez menos «${nombre}»`}
+                            icon={<span aria-hidden="true">−</span>}
+                            disabled={guardando || a.veces <= 1}
+                            onClick={() => guardar(cambiarVeces(caso, acts, i, a.veces - 1), `Bajaste «${nombre}» a ${a.veces - 1}`)}
+                          />
+                          <span className="w-6 text-center text-xs tabular-nums text-fg">{a.veces}×</span>
+                          <IconButton
+                            size="xs"
+                            variant="subtle"
+                            aria-label={`Una vez más «${nombre}»`}
+                            icon={<span aria-hidden="true">+</span>}
+                            disabled={guardando}
+                            onClick={() => guardar(cambiarVeces(caso, acts, i, a.veces + 1), `Subiste «${nombre}» a ${a.veces + 1}`)}
+                          />
+                        </span>
+                      ) : (
+                        <span className={cn("text-center text-xs tabular-nums text-fg-secondary", !editable && "hidden sm:block")}>{a.veces > 1 ? `${a.veces}×` : "1"}</span>
+                      )}
+                      <span className="text-right">
+                        <span className="block text-[13px] tabular-nums text-fg">
+                          {lib ? (lib.horasPendientes ? `Lo define ${quienCorto(lib.quien)}` : formatoHoras(horasDeLaActividad(a, lib))) : "—"}
+                        </span>
+                        {rep && rep.conElCliente > 0 && rep.internas > 0 && (
+                          <span className="block text-[11px] tabular-nums text-fg-muted">
+                            {formatoHoras(rep.conElCliente).replace(" h", "")} cliente · {formatoHoras(rep.internas).replace(" h", "")} int.
+                          </span>
+                        )}
+                        {rep && (rep.conElCliente > 0) !== (rep.internas > 0) && (
+                          <span className="block text-[11px] text-fg-muted">{rep.conElCliente > 0 ? "con el cliente" : "interna"}</span>
+                        )}
+                      </span>
+                      {editable && (
+                        <span className="hidden justify-end sm:flex">
+                          <IconButton
+                            size="xs"
+                            aria-label={`Quitar «${nombre}»`}
+                            title="Quitar la actividad"
+                            icon={<span aria-hidden="true">×</span>}
+                            disabled={guardando}
+                            onClick={() => guardar(quitarActividad(caso, acts, i), `Quitaste «${nombre}» de «${caso.titulo}»`)}
+                          />
+                        </span>
+                      )}
+                    </div>
+                    {editable && (
+                      // En el teléfono, «Quitar» va debajo: la fila no da para una quinta columna.
+                      <BotonTexto className="mt-0.5 -ml-1.5 sm:hidden" disabled={guardando} onClick={() => guardar(quitarActividad(caso, acts, i), `Quitaste «${nombre}» de «${caso.titulo}»`)}>
+                        Quitar
+                      </BotonTexto>
+                    )}
+                    {abierto && lib && (
+                      <div className="mt-2">
+                        <DetalleDeLaActividad a={a} lib={lib} />
+                      </div>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        ))}
+        {acts.length === 0 && <p className="px-3 py-2 text-xs text-fg-muted">Sin actividades.</p>}
+        {acts.length > 0 && (
+          <p className="flex flex-wrap items-baseline justify-between gap-x-3 border-t border-line bg-surface-muted px-3 py-1.5 text-xs text-fg-secondary">
+            <span>
+              Total · {acts.length} {acts.length === 1 ? "actividad" : "actividades"}
+            </span>
+            <span className="tabular-nums">
+              <span className="font-semibold text-fg">{formatoHoras(horas)}</span>
+              {reparto && <span className="text-fg-muted"> · {reparto}</span>}
+            </span>
+          </p>
+        )}
+      </div>
       {caso.sinActividad && acts.length > 0 && <p className="text-xs text-warning-fg">Falta en la biblioteca: {caso.sinActividad}</p>}
       {editable && (
         /* El select de Nexus, con buscador: la biblioteca es larga y el nativo no se podía buscar. Lo que ya está sin
@@ -339,16 +461,238 @@ function ActividadesDelCaso({ id, caso, editable }: { id: string; caso: CasoDeUs
   );
 }
 
+/**
+ * «Mejorar con IA» de las actividades de un caso elegido (décima vuelta, lib/casos-de-uso/mejorar.ts): el CSE escribe
+ * una instrucción, el agente propone cómo queda la lista y lo que conviene sumar aparte, y el CSE lo revisa en
+ * `<AgentProposal>`: aplica (con «Deshacer») o descarta. Nada se guarda hasta aplicar.
+ */
+function MejorarConIA({ id, caso }: { id: string; caso: CasoDeUsoElegido }) {
+  const armado = useContext(ArmadoContexto);
+  const { exp, cambiar, guardando } = useLienzo();
+  const { pushUndo } = useUndo();
+  const toast = useToast();
+  const [abierto, setAbierto] = useState(false);
+  const [instruccion, setInstruccion] = useState("");
+  const [pidiendo, setPidiendo] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [propuesta, setPropuesta] = useState<{ p: PropuestaDeMejora; base: ActividadDelCaso[]; instruccion: string } | null>(null);
+  const [elegidas, setElegidas] = useState<ReadonlySet<number>>(new Set());
+  const [aplicando, setAplicando] = useState(false);
+  if (!armado) return null;
+  const acts = actividadesDe(id, caso, armado);
+
+  const pedir = async () => {
+    const texto = instruccion.trim();
+    if (texto.length < 3 || pidiendo) return;
+    setPidiendo(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/sales/exploraciones/${exp.id}/casos/mejorar`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ useCaseId: id, instruccion: texto }),
+      });
+      const data = (await res.json().catch(() => ({}))) as { propuesta?: PropuestaDeMejora; error?: string };
+      if (!res.ok || !data.propuesta) {
+        setError(data.error ?? "No se pudo pedir la mejora.");
+        return;
+      }
+      setPropuesta({ p: data.propuesta, base: acts, instruccion: texto });
+      setElegidas(new Set());
+    } catch {
+      setError("No se pudo pedir la mejora. Revisa tu conexión.");
+    } finally {
+      setPidiendo(false);
+    }
+  };
+  const cerrar = () => {
+    setPropuesta(null);
+    setAbierto(false);
+    setInstruccion("");
+    setError(null);
+  };
+  const aplicar = async () => {
+    if (!propuesta) return;
+    setAplicando(true);
+    try {
+      const nuevo = aplicarMejora(caso, propuesta.p, elegidas, armado.porId);
+      const ok = await cambiar([{ op: "casoDeUso", useCaseId: id, valor: nuevo }]);
+      if (!ok) return;
+      pushUndo({ scope: `exploracion:${exp.id}`, label: `Aplicaste la mejora a «${caso.titulo}»`, undo: () => void cambiar([{ op: "casoDeUso", useCaseId: id, valor: caso }]) });
+      toast.success(`Las actividades de «${caso.titulo}» quedaron con la mejora.`);
+      cerrar();
+    } finally {
+      setAplicando(false);
+    }
+  };
+
+  if (!abierto)
+    return (
+      <BotonBlanco className="inline-flex items-center gap-1.5" disabled={guardando} onClick={() => setAbierto(true)}>
+        <IconoDeSugerencia className="h-3.5 w-3.5 text-brand" />
+        Mejorar con IA
+      </BotonBlanco>
+    );
+
+  if (propuesta) {
+    const filas = diferenciaDeActividades(propuesta.base, propuesta.p.actividades);
+    const r = resumenDeLaMejora(filas);
+    const cambian = filas.filter((f) => f.estado !== "igual");
+    const iguales = filas.filter((f) => f.estado === "igual");
+    const antes = horasDelCaso(propuesta.base, armado.porId).horas;
+    const despues = horasDelCaso(aplicarMejora(caso, propuesta.p, elegidas, armado.porId).actividades ?? [], armado.porId).horas;
+    const cambioMientras = JSON.stringify(propuesta.base) !== JSON.stringify(acts);
+    const nombreDe = (a: ActividadDelCaso) => nombreVisible(a, armado.porId.get(a.actividadId)?.nombre);
+    const horasDe = (a: ActividadDelCaso) => {
+      const lib = armado.porId.get(a.actividadId);
+      return lib && !lib.horasPendientes ? formatoHoras(horasDeLaActividad(a, lib)) : "";
+    };
+    return (
+      <AgentProposal
+        title="Propuesta para las actividades"
+        subtitle={`Tu instrucción: «${propuesta.instruccion}»`}
+        summary={[
+          r.nuevas ? `${r.nuevas} ${r.nuevas === 1 ? "entra" : "entran"}` : "",
+          r.quitadas ? `${r.quitadas} ${r.quitadas === 1 ? "sale" : "salen"}` : "",
+          r.cambiadas ? `${r.cambiadas} ${r.cambiadas === 1 ? "cambia" : "cambian"}` : "",
+          antes !== despues ? `${formatoHoras(antes)} → ${formatoHoras(despues)} (desde ${formatoUsd(precioMinimo(despues, armado.tarifa))})` : "mismas horas",
+        ].filter(Boolean)}
+        reasoning={propuesta.p.cambios.join(" ")}
+        warnings={cambioMientras ? ["Las actividades cambiaron mientras el agente trabajaba: al aplicar, quedan las de esta propuesta."] : undefined}
+        applyLabel="Aplicar"
+        discardLabel="Descartar"
+        applying={aplicando || guardando}
+        onApply={aplicar}
+        onDiscard={cerrar}
+      >
+        <div className="space-y-3 text-xs">
+          {cambian.length === 0 ? (
+            <p className="text-fg-secondary">La lista queda igual{propuesta.p.sugeridas.length ? ": lo que propone está en las sugeridas de abajo." : "."}</p>
+          ) : (
+            <ul className="divide-y divide-line rounded-lg border border-line bg-surface">
+              {cambian.map((f, i) => (
+                <li key={`${f.actividad.actividadId}-${i}`} className="flex items-center gap-2 px-3 py-1.5">
+                  <span
+                    aria-hidden="true"
+                    className={cn("w-4 flex-shrink-0 text-center font-semibold", f.estado === "nueva" ? "text-success-ink" : f.estado === "quitada" ? "text-danger-ink" : "text-brand")}
+                  >
+                    {f.estado === "nueva" ? "+" : f.estado === "quitada" ? "−" : "~"}
+                  </span>
+                  <span className={cn("min-w-0 flex-1 text-[13px]", f.estado === "quitada" ? "text-fg-muted line-through" : "text-fg")}>
+                    {nombreDe(f.actividad)}
+                    {f.estado === "cambiada" && f.antes && (
+                      <span className="ml-1 text-xs text-fg-muted no-underline">
+                        {f.antes.veces !== f.actividad.veces ? `(${f.antes.veces}× → ${f.actividad.veces}×)` : `(antes: ${nombreDe(f.antes)})`}
+                      </span>
+                    )}
+                  </span>
+                  <span className="sr-only">{f.estado === "nueva" ? "entra" : f.estado === "quitada" ? "sale" : "cambia"}</span>
+                  <span className="tabular-nums text-fg-muted">{horasDe(f.actividad)}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+          {iguales.length > 0 && (
+            <p className="text-fg-muted">
+              <span className="font-medium text-fg-secondary">Sin cambios ({iguales.length}):</span> {iguales.map((f) => nombreDe(f.actividad)).join(" · ")}
+            </p>
+          )}
+          {propuesta.p.sugeridas.length > 0 && (
+            <div className="space-y-1.5">
+              <p className="font-semibold text-fg">También te sugiere sumar · marca las que van</p>
+              <ul className="space-y-1.5">
+                {propuesta.p.sugeridas.map((s, i) => {
+                  const lib = s.actividadId ? armado.porId.get(s.actividadId) : undefined;
+                  const marcada = elegidas.has(i);
+                  return (
+                    <li key={`${s.nombre}-${i}`}>
+                      <label className="flex cursor-pointer items-start gap-2 rounded-lg border border-line bg-surface px-3 py-2">
+                        <input
+                          type="checkbox"
+                          className="mt-0.5 h-3.5 w-3.5 flex-shrink-0"
+                          checked={marcada}
+                          onChange={() =>
+                            setElegidas((x) => {
+                              const n = new Set(x);
+                              if (n.has(i)) n.delete(i);
+                              else n.add(i);
+                              return n;
+                            })
+                          }
+                        />
+                        <span className="min-w-0 flex-1">
+                          <span className="block text-[13px] text-fg">
+                            {s.nombre}
+                            {s.sobreQue && <span className="text-fg-muted"> · {s.sobreQue}</span>}
+                          </span>
+                          {s.porQue && <span className="block text-fg-secondary">{s.porQue}</span>}
+                          <span className="block text-[11px] text-fg-muted">
+                            {lib
+                              ? `De la biblioteca: ${lib.nombre}${lib.horasPendientes ? ` · lo define ${quienCorto(lib.quien)}` : ` · ${formatoHoras(horasDeLaActividad({ actividadId: lib.id, nombre: lib.nombre, veces: 1 }, lib))}`}`
+                              : "Nueva: no está en la biblioteca, así que no tiene horas. Si la marcas, queda anotada en «Falta en la biblioteca»."}
+                          </span>
+                        </span>
+                      </label>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          )}
+        </div>
+      </AgentProposal>
+    );
+  }
+
+  return (
+    <div className="space-y-2 rounded-lg border border-info-line bg-info-surface px-3 py-2.5">
+      <p className="flex items-center gap-1.5 text-xs font-medium text-fg">
+        <IconoDeSugerencia className="h-3.5 w-3.5 text-brand" />
+        Mejorar con IA las actividades de este caso
+      </p>
+      <Textarea
+        aria-label="Qué quieres cambiar en las actividades"
+        rows={2}
+        maxLength={MAX_LARGO_DE_LA_INSTRUCCION}
+        placeholder="Por ejemplo: quita la capacitación y suma la integración con WhatsApp."
+        value={instruccion}
+        disabled={pidiendo}
+        onChange={(e) => setInstruccion(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) void pedir();
+        }}
+      />
+      {error && <p className="text-xs text-danger-ink">{error}</p>}
+      <div className="flex flex-wrap items-center gap-2">
+        {pidiendo ? (
+          <p role="status" className="flex items-center gap-1.5 text-xs text-brand">
+            <IconoDeSugerencia className="h-3.5 w-3.5" />
+            El agente está revisando las actividades con tu instrucción… (unos 20 segundos)
+          </p>
+        ) : (
+          <>
+            <BotonAzul disabled={instruccion.trim().length < 3} onClick={() => void pedir()}>
+              Proponer cambios
+            </BotonAzul>
+            <BotonTexto onClick={cerrar}>Cancelar</BotonTexto>
+            <span className="text-[11px] text-fg-muted">No cambia nada hasta que apliques la propuesta.</span>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 /** Las dimensiones que mueve un caso, por nombre. */
-function useMueve(caso: CasoDeUsoElegido): string[] {
+function useMueve(dimensiones: readonly string[] | undefined): string[] {
   const { escala } = useLienzo();
   const nombreDim = (id: string) => escala.areas.flatMap((a) => a.dimensiones).find((d) => d.id === id)?.nombre;
-  return (caso.dimensiones ?? []).map(nombreDim).filter((x): x is string => !!x);
+  return (dimensiones ?? []).map(nombreDim).filter((x): x is string => !!x);
 }
 
 /**
  * Personalizar un caso aceptado (2026-11-08, lib/casos-de-uso/personalizar.ts): la llamada al agente, cuáles están en
- * curso y qué dijo la última revisión de cada caso. Lo comparten las filas, las tarjetas y la lista del catálogo.
+ * curso y qué dijo la última revisión de cada caso. Lo comparten todas las filas.
  */
 interface Personalizar {
   personalizando: ReadonlySet<string>;
@@ -361,7 +705,7 @@ const PersonalizarContexto = createContext<Personalizar>({ personalizando: new S
 /** Lo que dijo «Revisar» de un caso que ya estaba: cambia o ya no hace falta, y por qué. */
 function NotaDeLaRevision({ cambio, children }: { cambio: CambioDeLaRevision; children?: React.ReactNode }) {
   return (
-    <div className="mt-1.5 flex flex-wrap items-center gap-2 rounded-lg border border-warning bg-surface-muted px-3 py-1.5 text-xs text-fg-secondary">
+    <div className="flex flex-wrap items-center gap-2 rounded-lg border border-warning bg-surface-muted px-3 py-1.5 text-xs text-fg-secondary">
       <span className="min-w-0 flex-1">
         <span className="font-medium text-fg">{cambio.veredicto === "cambia" ? "Con lo nuevo, cambiaría:" : "Con lo nuevo, ya no parece hacer falta:"}</span> {cambio.motivo}
       </span>
@@ -374,7 +718,7 @@ function NotaDeLaRevision({ cambio, children }: { cambio: CambioDeLaRevision; ch
 function LoPersonalizado({ caso }: { caso: CasoDeUsoElegido }) {
   if (!caso.personalizado) return null;
   return (
-    <div className="mt-1.5 rounded-lg border border-info-line bg-info-surface px-3 py-2 text-xs leading-normal text-fg-secondary">
+    <div className="rounded-lg border border-info-line bg-info-surface px-3 py-2 text-xs leading-normal text-fg-secondary">
       <p className="flex items-center gap-1.5 font-medium text-fg">
         <IconoDeSugerencia className="h-3.5 w-3.5 text-brand" />
         {caso.aMano ? "Lo que personalizó el agente (antes de tus cambios)" : "Personalizado para esta empresa"}
@@ -388,62 +732,232 @@ function LoPersonalizado({ caso }: { caso: CasoDeUsoElegido }) {
   );
 }
 
-/**
- * Un caso elegido: una fila con su marca verde, el área, lo que mueve y su precio mínimo. Al aceptarlo se personalizan sus
- * actividades (dice «Personalizando…» mientras tanto) y después muestra qué cambió frente a la ficha. Se abre para ver y
- * cambiar sus actividades y el argumento de valor. Si quedó una versión nueva (la personalizada, cuando se tocó el caso
- * mientras tanto), lo dice ahí mismo. Quitarlo lo devuelve a los sugeridos.
- */
-function FilaElegida({
-  id,
-  caso,
-  onQuitar,
-  nueva,
-  paso,
+// ── La lista: un caso por fila ───────────────────────────────────────────────────────────────────
+
+/** Una fila de la lista: un caso elegido, uno que sugiere el agente o uno de la biblioteca que sugiere la escala. */
+type Fila =
+  | { tipo: "elegido"; id: string; caso: CasoDeUsoElegido }
+  | { tipo: "agente"; id: string; item: ItemPropuesto }
+  | { tipo: "escala"; id: string; c: CasoPorLaEscala };
+
+/** De dónde viene el caso: la etiqueta de su fila. */
+function EtiquetaDeOrigen({ tipo }: { tipo: Fila["tipo"] }) {
+  if (tipo === "elegido")
+    return (
+      <span className="inline-flex items-center gap-1 rounded-full bg-success-surface py-0.5 pl-1.5 pr-2 text-[11px] font-semibold leading-none text-success-ink">
+        <span aria-hidden="true">✓</span>
+        Elegido
+      </span>
+    );
+  if (tipo === "agente")
+    return (
+      <span className="inline-flex items-center gap-1 rounded-full border border-info-line bg-info-surface py-0.5 pl-1.5 pr-2 text-[11px] font-semibold leading-none text-brand">
+        <IconoDeSugerencia className="h-[13px] w-[13px]" />
+        Sugerido por el agente
+      </span>
+    );
+  return (
+    <span className="inline-flex items-center rounded-full border border-line bg-surface-muted px-2 py-0.5 text-[11px] font-semibold leading-none text-fg-secondary">
+      De la biblioteca · por la escala
+    </span>
+  );
+}
+
+/** El marco de toda fila: número, etiqueta y título a la izquierda; precio, lo que mueve y las acciones a la derecha. */
+function MarcoDeLaFila({
+  numero,
+  tipo,
+  area,
+  titulo,
+  subtitulo,
+  cuerpo,
+  precio,
+  mueve,
+  acciones,
+  desplegable,
+  abierta,
+  alAbrir,
+  etiquetaDelDesplegable,
+  pie,
 }: {
-  id: string;
-  caso: CasoDeUsoElegido;
-  onQuitar?: () => void;
-  nueva?: ItemPropuesto;
-  /** Su número en el plan, contado entre los elegidos (el del agente puede saltar uno que no se eligió). */
-  paso?: number;
+  numero: number;
+  tipo: Fila["tipo"];
+  area: string | null;
+  titulo: string;
+  subtitulo?: React.ReactNode;
+  cuerpo: React.ReactNode;
+  precio: React.ReactNode;
+  mueve: string[];
+  acciones: React.ReactNode;
+  desplegable: React.ReactNode | null;
+  abierta: boolean;
+  alAbrir: () => void;
+  etiquetaDelDesplegable: [string, string];
+  pie?: React.ReactNode;
 }) {
+  /* Lo de adentro queda montado después de abrirlo una vez (revisión del 2026-11-08): plegar la fila mientras «Mejorar con
+     IA» espera al agente perdía la propuesta, ya pagada. */
+  const [montado, setMontado] = useState(abierta);
+  if (abierta && !montado) setMontado(true);
+  return (
+    <li className={cn("rounded-xl border bg-surface", tipo === "agente" ? "border-info-line" : "border-line")}>
+      <div className="grid gap-x-6 gap-y-3 px-4 py-3.5 md:grid-cols-[minmax(0,1fr)_15rem]">
+        <div className="min-w-0 space-y-1.5">
+          <p className="flex flex-wrap items-center gap-x-2 gap-y-1">
+            <span
+              className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-surface-hover px-1 text-[11px] font-semibold tabular-nums text-fg-secondary"
+              aria-label={`Lugar ${numero} en la lista`}
+            >
+              {numero}
+            </span>
+            <EtiquetaDeOrigen tipo={tipo} />
+            {area && <span className="text-xs text-fg-muted">{area}</span>}
+          </p>
+          <h3 className="text-[15px] font-semibold leading-[1.35] text-fg">{titulo}</h3>
+          {subtitulo}
+          {cuerpo}
+        </div>
+        <div className="flex flex-col gap-2.5 border-line md:border-l md:pl-5">
+          {precio}
+          {mueve.length > 0 && (
+            <div className="space-y-1">
+              <p className="text-[11px] text-fg-muted">Mueve</p>
+              <p className="flex flex-wrap gap-1">
+                {mueve.map((m) => (
+                  <span key={m} className="rounded-md border border-line bg-surface-hover px-1.5 py-0.5 text-[11px] font-medium text-fg-secondary">
+                    {m}
+                  </span>
+                ))}
+              </p>
+            </div>
+          )}
+          <div className="mt-auto flex flex-wrap items-center justify-end gap-1 pt-1">
+            {desplegable && (
+              <button type="button" aria-expanded={abierta} className="mr-auto text-xs font-medium text-brand hover:underline" onClick={alAbrir}>
+                {abierta ? `${etiquetaDelDesplegable[1]} ▴` : `${etiquetaDelDesplegable[0]} ▾`}
+              </button>
+            )}
+            {acciones}
+          </div>
+        </div>
+      </div>
+      {pie}
+      {montado && desplegable && (
+        <div hidden={!abierta} className="space-y-3 border-t border-line px-4 py-3.5">
+          {desplegable}
+        </div>
+      )}
+    </li>
+  );
+}
+
+/** «Por qué:» y «Por qué va aquí:», las dos líneas que se leen primero en cada fila. */
+function LosPorques({ porQue, lugar }: { porQue: string; lugar: string }) {
+  if (!porQue && !lugar) return null;
+  return (
+    <div className="space-y-1 text-[13px] leading-normal text-fg-secondary">
+      {porQue && (
+        <p>
+          <span className="font-medium text-fg">Por qué: </span>
+          {porQue}
+        </p>
+      )}
+      {lugar && (
+        <p className="text-xs">
+          <span className="font-medium text-fg">Por qué va aquí: </span>
+          {lugar}
+        </p>
+      )}
+    </div>
+  );
+}
+
+/**
+ * «Aceptado hoy a las 14:05 · tú» y «Revertir»: lo que antes decía «Usadas hoy», ahora en la fila del caso. La hora es la
+ * de la primera vez que se usó hoy (la aceptación); «Revertir» deshace el ÚLTIMO uso (la personalización que se aplicó
+ * sola o «Usar la nueva», si los hubo; si no, la aceptación, y el caso vuelve a los sugeridos), como el «Revertir» de
+ * antes. Si alguien lo cambió después, no se revierte y lo dice.
+ */
+function AceptadoHoy({ id }: { id: string }) {
+  const { usadasHoy, exp, deshacer, puedeEditar, guardando } = useLienzo();
+  const me = useMe();
+  const usos = usadasHoy.filter((x) => x.item.destino.tipo === "casoDeUso" && x.item.destino.useCaseId === id).sort((a, b) => a.en.localeCompare(b.en));
+  if (!usos.length) return null;
+  const primero = usos[0];
+  const ultimo = usos[usos.length - 1];
+  const hora = (en: string) => new Date(en).toLocaleTimeString("es-CR", { hour: "2-digit", minute: "2-digit" });
+  const quien = !primero.por ? "Nexus" : me?.email && primero.por.toLowerCase() === me.email.toLowerCase() ? "tú" : primero.por.split("@")[0];
+  return (
+    <p className="flex flex-wrap items-center gap-x-1 text-[11px] text-fg-muted">
+      <span>
+        Aceptado hoy a las {hora(primero.en)} · {quien}
+        {usos.length > 1 && ` · cambió por sugerencia a las ${hora(ultimo.en)}`}
+      </span>
+      {puedeEditar &&
+        (sePuedeDeshacer(exp.estado, ultimo) ? (
+          <BotonTexto
+            className="py-0 text-[11px]"
+            disabled={guardando}
+            title={usos.length > 1 ? "Deshace el último cambio que llegó por sugerencia y deja el caso como estaba antes" : "Deshace la aceptación: el caso vuelve a los sugeridos"}
+            onClick={() => void deshacer([ultimo.id])}
+          >
+            Revertir
+          </BotonTexto>
+        ) : (
+          <span title="Alguien lo cambió después de usarla: revertir pisaría ese cambio">· cambió después</span>
+        ))}
+    </p>
+  );
+}
+
+/**
+ * Un caso elegido. Al aceptarlo se personalizan sus actividades (dice «Personalizando…» mientras tanto) y después muestra
+ * qué cambió frente a la ficha. Se abre para ver y cambiar sus actividades (a mano o con «Mejorar con IA») y el argumento
+ * de valor. Si quedó una versión nueva (la personalizada, cuando se tocó el caso mientras tanto), lo dice ahí mismo.
+ * Quitarlo lo devuelve a los sugeridos.
+ */
+function FilaElegida({ numero, id, caso, lugar, nueva, onQuitar }: { numero: number; id: string; caso: CasoDeUsoElegido; lugar?: CasoEnElOrden; nueva?: ItemPropuesto; onQuitar?: () => void }) {
   const { escala, guardando, puedeEditar, usar, cambiar } = useLienzo();
   const { personalizando, personalizar, revisionDe } = useContext(PersonalizarContexto);
   const [abierta, setAbierta] = useState(false);
-  const mueve = useMueve(caso);
+  const mueve = useMueve(caso.dimensiones);
   const area = escala.areas.find((a) => a.id === caso.areaId)?.nombre ?? "Sin área";
   const enCurso = personalizando.has(id);
   const revision = revisionDe.get(id);
   // Los de antes que armó «Regenerar» (`armado`) ya tienen sus actividades para la empresa: no se ofrecen de nuevo.
   const sinPersonalizar = !caso.personalizado && !caso.armado && !caso.aMano;
+  /* La razón, solo si la escribió el agente para esta empresa: en un caso elegido a mano del catálogo es la descripción
+     genérica de la ficha (revisión del 2026-11-08). */
+  const porQue = caso.paraVentas?.porQue || (caso.armado ? (caso.razon ?? "") : "");
   return (
-    <li className="rounded-xl border border-line bg-surface">
-      <div className="flex items-center gap-3 px-3.5 py-3">
-        <span className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-success-surface text-xs font-bold text-success-ink" aria-hidden="true">
-          ✓
-        </span>
-        <div className="min-w-0 flex-1">
-          <p className="text-sm font-semibold text-fg">
-            {caso.titulo}
-            {caso.aMano && <span className="ml-2 text-[11px] font-normal text-fg-muted">· actividades editadas a mano</span>}
-          </p>
-          <p className="text-xs text-fg-muted">
-            {paso && <span className="font-medium text-fg-secondary">Paso {paso} · </span>}
-            {area}
-            {!esCasoLibre(id) && (caso.tituloDelCatalogo ? ` · del catálogo: «${caso.tituloDelCatalogo}»` : " · del catálogo")}
-            {mueve.length > 0 && ` · Mueve: ${mueve.join(", ")}`}
-          </p>
-          <PrecioDelCaso id={id} caso={caso} />
+    <MarcoDeLaFila
+      numero={numero}
+      tipo="elegido"
+      area={area}
+      titulo={caso.titulo}
+      subtitulo={
+        <>
+          {(caso.tituloDelCatalogo || !esCasoLibre(id) || caso.aMano) && (
+            <p className="text-[11px] text-fg-muted">
+              {!esCasoLibre(id) && (caso.tituloDelCatalogo ? `Del catálogo: «${caso.tituloDelCatalogo}»` : "Del catálogo")}
+              {caso.aMano && `${esCasoLibre(id) ? "" : " · "}actividades editadas a mano`}
+            </p>
+          )}
+          <AceptadoHoy id={id} />
+        </>
+      }
+      cuerpo={
+        <>
+          <LosPorques porQue={porQue} lugar={lugar?.porQue || caso.plan?.despuesDe || ""} />
           {enCurso ? (
-            <p role="status" className="mt-1.5 flex items-center gap-1.5 text-xs text-brand">
+            <p role="status" className="flex items-center gap-1.5 text-xs text-brand">
               <IconoDeSugerencia className="h-3.5 w-3.5" />
               Personalizando sus actividades con lo que sabemos de la empresa… (unos 30 segundos)
             </p>
           ) : (
             sinPersonalizar &&
             puedeEditar && (
-              <p className="mt-1.5 flex flex-wrap items-center gap-2 text-xs text-fg-muted">
+              <p className="flex flex-wrap items-center gap-2 text-xs text-fg-muted">
                 Todavía con las actividades de la ficha del catálogo{esCasoLibre(id) ? " (o ninguna)" : ""}.
                 <BotonTexto disabled={guardando} onClick={() => personalizar(id)}>
                   Personalizar
@@ -452,7 +966,6 @@ function FilaElegida({
             )
           )}
           <LoPersonalizado caso={caso} />
-          <PorQueYComo id={id} caso={caso} conRazon />
           {revision && (
             <NotaDeLaRevision cambio={revision}>
               {puedeEditar && revision.veredicto === "cambia" && (
@@ -462,39 +975,49 @@ function FilaElegida({
               )}
             </NotaDeLaRevision>
           )}
-        </div>
-        <button type="button" aria-expanded={abierta} className="flex-shrink-0 text-xs font-medium text-brand hover:underline" onClick={() => setAbierta((x) => !x)}>
-          {abierta ? "Actividades ▴" : "Actividades ▾"}
-        </button>
-        {onQuitar && (
-          <BotonTexto className="flex-shrink-0" disabled={guardando} title="Lo saca de los elegidos y vuelve a los sugeridos" onClick={onQuitar}>
+        </>
+      }
+      precio={<PrecioDelCaso id={id} caso={caso} />}
+      mueve={mueve}
+      acciones={
+        onQuitar && (
+          <BotonTexto disabled={guardando} title="Lo saca de los elegidos y vuelve a los sugeridos" onClick={onQuitar}>
             Quitar
           </BotonTexto>
-        )}
-      </div>
-      {nueva && puedeEditar && (
-        <div className="flex flex-wrap items-center gap-2 border-t border-line bg-info-surface px-3.5 py-2 text-xs text-fg-secondary">
-          <IconoDeSugerencia className="h-3.5 w-3.5 text-brand" />
-          <span className="min-w-0 flex-1">
-            {(nueva.valor as CasoDeUsoElegido).personalizado
-              ? caso.aMano
-                ? "Está lista la versión personalizada para esta empresa. Cambiaste sus actividades a mano: tu versión se queda hasta que elijas la nueva."
-                : "Está lista la versión personalizada para esta empresa."
-              : caso.aMano
-                ? "Hay una versión nueva de este caso. Cambiaste sus actividades a mano: tu versión se queda hasta que elijas la nueva."
-                : "Hay una versión nueva de este caso, armada con la biblioteca de actividades."}
-          </span>
-          <BotonTexto disabled={guardando} onClick={() => void cambiar([{ op: "descartar", itemIds: [nueva.id] }])}>
-            Quedarme con esta
-          </BotonTexto>
-          <BotonAzul disabled={guardando} onClick={() => void usar([nueva], { lugar: "casos" })}>
-            Usar la nueva
-          </BotonAzul>
-        </div>
-      )}
-      {abierta && (
-        <div className="space-y-2 border-t border-line px-3.5 py-3">
+        )
+      }
+      abierta={abierta}
+      alAbrir={() => setAbierta((x) => !x)}
+      etiquetaDelDesplegable={["Actividades", "Actividades"]}
+      pie={
+        nueva &&
+        puedeEditar && (
+          <div className="flex flex-wrap items-center gap-2 border-t border-line bg-info-surface px-4 py-2 text-xs text-fg-secondary">
+            <IconoDeSugerencia className="h-3.5 w-3.5 text-brand" />
+            <span className="min-w-0 flex-1">
+              {(nueva.valor as CasoDeUsoElegido).personalizado
+                ? caso.aMano
+                  ? "Está lista la versión personalizada para esta empresa. Cambiaste sus actividades a mano: tu versión se queda hasta que elijas la nueva."
+                  : "Está lista la versión personalizada para esta empresa."
+                : caso.aMano
+                  ? "Hay una versión nueva de este caso. Cambiaste sus actividades a mano: tu versión se queda hasta que elijas la nueva."
+                  : "Hay una versión nueva de este caso, armada con la biblioteca de actividades."}
+            </span>
+            <BotonTexto disabled={guardando} onClick={() => void cambiar([{ op: "descartar", itemIds: [nueva.id] }])}>
+              Quedarme con esta
+            </BotonTexto>
+            <BotonAzul disabled={guardando} onClick={() => void usar([nueva], { lugar: "casos" })}>
+              Usar la nueva
+            </BotonAzul>
+          </div>
+        )
+      }
+      desplegable={
+        <>
+          <ComoSeArma id={id} caso={caso} />
           <ActividadesDelCaso id={id} caso={caso} editable={!!onQuitar} />
+          {/* Montado también mientras se personaliza: una propuesta abierta no se pierde (al aplicar, avisa si cambió). */}
+          {onQuitar && <MejorarConIA id={id} caso={caso} />}
           {caso.valorDeVenta && <ValorDelCaso valor={caso.valorDeVenta} />}
           {puedeEditar && !sinPersonalizar && !enCurso && (
             <p className="text-xs text-fg-muted">
@@ -504,94 +1027,48 @@ function FilaElegida({
               con lo que se sabe hoy{caso.aMano ? " (tus cambios se quedan hasta que elijas la versión nueva)" : ""}.
             </p>
           )}
-        </div>
-      )}
-    </li>
+        </>
+      }
+    />
   );
 }
 
 /**
- * Un caso sugerido: tarjeta compacta con su PORQUÉ a la vista (lo primero que hay que ver, pedido 8 de Elías), «Descartar»
- * en texto y «Aceptar». Al aceptarlo se personalizan sus actividades. «Ver más» abre la descripción entera, la cita, las
- * actividades de la ficha y el valor, si los tiene: el desplegable ya no es una tabla grande (pedido 5).
+ * Un caso que sugiere el agente: su PORQUÉ a la vista (lo primero que hay que ver, pedido 8 de Elías), «Descartar» y
+ * «Aceptar». Al aceptarlo se personalizan sus actividades. «Ver más» abre la descripción entera, la cita, las actividades
+ * de la ficha y el valor, si los tiene.
  */
-function TarjetaSugerida({ item, onAceptar }: { item: ItemPropuesto; onAceptar: (item: ItemPropuesto) => void }) {
+function FilaSugerida({ numero, item, lugar, onAceptar }: { numero: number; item: ItemPropuesto; lugar?: CasoEnElOrden; onAceptar: (item: ItemPropuesto) => void }) {
   const { escala, cambiar, queHace, puedeEditar, guardando } = useLienzo();
   const { revisionDe } = useContext(PersonalizarContexto);
   const [abierta, setAbierta] = useState(false);
   const caso = item.valor as CasoDeUsoElegido;
   const useCaseId = item.destino.tipo === "casoDeUso" ? item.destino.useCaseId : "";
-  const mueve = useMueve(caso);
-  const area = escala.areas.find((a) => a.id === caso.areaId)?.nombre;
+  const mueve = useMueve(caso.dimensiones);
+  const area = escala.areas.find((a) => a.id === caso.areaId)?.nombre ?? null;
   const cita = item.fuentes.find((f) => f.cita);
-  const porQue = caso.paraVentas?.porQue || caso.razon || item.razon;
+  const porQue = caso.paraVentas?.porQue || caso.razon || item.razon || "";
   const revision = revisionDe.get(useCaseId);
-  const hayMas = !!cita || (caso.descripcion?.length ?? 0) > 120 || (porQue?.length ?? 0) > 200 || useCaseId.startsWith("cat-") || !!caso.actividades || !!caso.valorDeVenta;
+  const conActividades = !!useCaseId && (useCaseId.startsWith("cat-") || !!caso.actividades);
+  const hayMas = !!cita || (caso.descripcion?.length ?? 0) > 160 || conActividades || !!caso.valorDeVenta || !!caso.personalizado;
   return (
-    <li className="flex flex-col rounded-xl border border-info-line bg-surface">
-      <div className="flex flex-col gap-1.5 px-4 pb-3 pt-3.5">
-        <p className="flex items-center gap-1.5">
-          <span className="inline-flex items-center gap-1 rounded-full border border-info-line bg-info-surface py-0.5 pl-1.5 pr-2 text-[11px] font-semibold leading-none text-brand">
-            <IconoDeSugerencia className="h-[13px] w-[13px]" />
-            Sugerido
-          </span>
-          {area && <span className="text-xs text-fg-muted">{area}</span>}
-          {caso.plan && <span className="text-xs text-fg-muted">· Paso {caso.plan.paso}</span>}
-        </p>
-        <h3 className="text-[15px] font-semibold leading-[1.35] text-fg">{caso.titulo}</h3>
-        {caso.tituloDelCatalogo && <p className="text-[11px] text-fg-muted">Del catálogo: «{caso.tituloDelCatalogo}»</p>}
-        {porQue && (
-          <p className={cn("text-[13px] leading-normal text-fg-secondary", !abierta && "line-clamp-3")}>
-            <span className="font-medium text-fg">Por qué: </span>
-            {porQue}
-          </p>
-        )}
-        {caso.plan?.despuesDe && (
-          <p className={cn("text-xs leading-normal text-fg-secondary", !abierta && "line-clamp-2")}>
-            <span className="font-medium text-fg">Por qué en este orden:</span> {caso.plan.despuesDe}
-          </p>
-        )}
-        {revision && <NotaDeLaRevision cambio={revision} />}
-        {caso.descripcion && <p className={cn("text-xs leading-normal text-fg-muted", !abierta && "line-clamp-2")}>{caso.descripcion}</p>}
-        <PrecioDelCaso id={useCaseId} caso={caso} conLaFicha={!caso.personalizado && !caso.armado} />
-        {mueve.length > 0 && (
-          <p className="flex flex-wrap items-center gap-1.5">
-            <span className="text-[11px] text-fg-muted">Mueve</span>
-            {mueve.map((m) => (
-              <span key={m} className="rounded-md border border-line bg-surface-hover px-2 py-0.5 text-[11px] font-medium text-fg-secondary">
-                {m}
-              </span>
-            ))}
-          </p>
-        )}
-        {abierta && (
-          <div className="mt-1 space-y-2">
-            {cita?.cita && (
-              <p className="text-xs italic text-fg-muted">
-                «{cita.cita}» · {cita.etiqueta}
-              </p>
-            )}
-            <LoPersonalizado caso={caso} />
-            {useCaseId && (useCaseId.startsWith("cat-") || caso.actividades) && (
-              <div className="space-y-1">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-fg-muted">
-                  {caso.personalizado || caso.armado ? "Sus actividades" : "Las actividades de la ficha"}
-                </p>
-                <ActividadesDelCaso id={useCaseId} caso={caso} editable={false} />
-              </div>
-            )}
-            {caso.valorDeVenta && <ValorDelCaso valor={caso.valorDeVenta} />}
-          </div>
-        )}
-      </div>
-      <div className="mt-auto flex items-center gap-1 border-t border-line py-2 pl-4 pr-2.5">
-        {hayMas && (
-          <button type="button" aria-expanded={abierta} className="text-xs font-medium text-brand hover:underline" onClick={() => setAbierta((x) => !x)}>
-            {abierta ? "Ver menos ▴" : "Ver más ▾"}
-          </button>
-        )}
-        <span className="flex-1" />
-        {puedeEditar && (
+    <MarcoDeLaFila
+      numero={numero}
+      tipo="agente"
+      area={area}
+      titulo={caso.titulo}
+      subtitulo={caso.tituloDelCatalogo && <p className="text-[11px] text-fg-muted">Del catálogo: «{caso.tituloDelCatalogo}»</p>}
+      cuerpo={
+        <>
+          <LosPorques porQue={porQue} lugar={lugar?.porQue || caso.plan?.despuesDe || ""} />
+          {revision && <NotaDeLaRevision cambio={revision} />}
+          {caso.descripcion && <p className={cn("text-xs leading-normal text-fg-muted", !abierta && "line-clamp-2")}>{caso.descripcion}</p>}
+        </>
+      }
+      precio={<PrecioDelCaso id={useCaseId} caso={caso} conLaFicha={!caso.personalizado && !caso.armado} />}
+      mueve={mueve}
+      acciones={
+        puedeEditar && (
           <>
             <BotonTexto disabled={guardando} onClick={() => void cambiar([{ op: "descartar", itemIds: [item.id] }])}>
               Descartar
@@ -604,13 +1081,88 @@ function TarjetaSugerida({ item, onAceptar }: { item: ItemPropuesto; onAceptar: 
               Aceptar
             </BotonAzul>
           </>
-        )}
-      </div>
-    </li>
+        )
+      }
+      abierta={abierta}
+      alAbrir={() => setAbierta((x) => !x)}
+      etiquetaDelDesplegable={["Ver más", "Ver menos"]}
+      desplegable={
+        hayMas ? (
+          <>
+            {cita?.cita && (
+              <p className="text-xs italic text-fg-muted">
+                «{cita.cita}» · {cita.etiqueta}
+              </p>
+            )}
+            <LoPersonalizado caso={caso} />
+            {conActividades && (
+              <div className="space-y-1.5">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-fg-muted">
+                  {caso.personalizado || caso.armado ? "Sus actividades" : "Las actividades de la ficha"}
+                </p>
+                <ActividadesDelCaso id={useCaseId} caso={caso} editable={false} />
+              </div>
+            )}
+            {caso.valorDeVenta && <ValorDelCaso valor={caso.valorDeVenta} />}
+          </>
+        ) : null
+      }
+    />
   );
 }
 
-const esCaso = (d: DestinoDePropuesta) => d.tipo === "casoDeUso";
+/**
+ * Un caso de la biblioteca que sugiere la escala (Ficha B, 2026-10-17; sin IA: sale del mapa y del catálogo). Con el
+ * título claro que le dio el agente al ordenar la lista, si lo tiene (el del catálogo queda al lado). «Elegir para» lo
+ * suma a los elegidos en esa área y lo personaliza.
+ */
+function FilaDeLaEscala({ numero, c, lugar, onElegir }: { numero: number; c: CasoPorLaEscala; lugar?: CasoEnElOrden; onElegir: (c: CasoPorLaEscala, titulo: string) => void }) {
+  const { puedeEditar, guardando } = useLienzo();
+  const [abierta, setAbierta] = useState(false);
+  const id = `cat-${c.caso.id}`;
+  const titulo = lugar?.titulo || c.caso.titulo;
+  const dimensiones = c.caso.mueve.map((m) => m.dimension).filter((d) => d.split(".")[0] === c.area.id);
+  const mueve = useMueve(dimensiones);
+  const caso: CasoDeUsoElegido = { titulo, areaId: c.area.id };
+  return (
+    <MarcoDeLaFila
+      numero={numero}
+      tipo="escala"
+      area={c.area.nombre}
+      titulo={titulo}
+      subtitulo={titulo !== c.caso.titulo && <p className="text-[11px] text-fg-muted">Del catálogo: «{c.caso.titulo}»</p>}
+      cuerpo={
+        <>
+          <LosPorques porQue={c.razon} lugar={lugar?.porQue ?? ""} />
+          <p className="text-xs leading-normal text-fg-muted">{c.caso.promesa}</p>
+        </>
+      }
+      precio={<PrecioDelCaso id={id} caso={caso} conLaFicha />}
+      mueve={mueve}
+      acciones={
+        <>
+          <Link href={"/sales/use-cases/" + c.caso.id} target="_blank" className="px-1.5 py-[5px] text-xs text-brand hover:text-brand-light">
+            Ver el caso
+          </Link>
+          {puedeEditar && (
+            <BotonBlanco disabled={guardando} onClick={() => onElegir(c, titulo)}>
+              Elegir para {c.area.nombre}
+            </BotonBlanco>
+          )}
+        </>
+      }
+      abierta={abierta}
+      alAbrir={() => setAbierta((x) => !x)}
+      etiquetaDelDesplegable={["Actividades", "Actividades"]}
+      desplegable={
+        <div className="space-y-1.5">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-fg-muted">Las actividades de la ficha</p>
+          <ActividadesDelCaso id={id} caso={caso} editable={false} />
+        </div>
+      }
+    />
+  );
+}
 
 /** Cuántas personalizaciones a la vez, al aceptar varias juntas: cada una es una llamada al agente. */
 const PERSONALIZACIONES_A_LA_VEZ = 3;
@@ -622,7 +1174,7 @@ function CasosDeUso({ catalogo, novedades }: { catalogo: Caso[]; novedades: Nove
   const { pushUndo } = useUndo();
   const toast = useToast();
   const e = exp.estado;
-  // En el orden del plan que armó el agente (2026-11-08): uno detrás de otro.
+  // En el orden del plan que armó el agente (2026-11-08): la base de la lista cuando no hay un orden propuesto.
   const elegidos = enOrdenDelPlan(Object.entries(e.contenido.casosDeUso), ([, c]) => c.plan?.paso);
   const areas = escala.areas.filter((a) => e.areas.includes(a.id));
   const todosLosPropuestos = pendientesPara((d) => d.tipo === "casoDeUso");
@@ -724,46 +1276,46 @@ function CasosDeUso({ catalogo, novedades }: { catalogo: Caso[]; novedades: Nove
       });
     });
   };
-  const elegirDelCatalogo = (caso: Caso, areaId: string | null) => {
+  const elegirDelCatalogo = (caso: Caso, areaId: string | null, tituloClaro?: string) => {
     // Las dimensiones que mueve en el área elegida (sin área, todas): así el caso dice qué sube, como los del agente.
     const dimensiones = (caso.dimensiones ?? []).filter((d) => !areaId || d.split(".")[0] === areaId).slice(0, 8);
+    // El título claro que le dio el agente al ordenar (décima vuelta); el del catálogo queda al lado, como en los suyos.
+    const conTitulo = tituloClaro && tituloClaro !== caso.titulo ? { titulo: tituloClaro, tituloDelCatalogo: caso.titulo } : { titulo: caso.titulo };
     void cambiar([
       {
         op: "casoDeUso",
         useCaseId: caso.id,
-        valor: { titulo: caso.titulo, areaId, razon: caso.descripcion.slice(0, 400), ...(dimensiones.length ? { dimensiones } : {}) },
+        valor: { ...conTitulo, areaId, razon: caso.descripcion.slice(0, 400), ...(dimensiones.length ? { dimensiones } : {}) },
       },
     ]).then((ok) => {
       // Elegido a mano también es aceptado: se personaliza igual (los de la tabla vieja, sin ficha, no).
       if (ok && caso.id.startsWith("cat-")) personalizar(caso.id);
     });
   };
+  const elegirDeLaEscala = (c: CasoPorLaEscala, titulo: string) =>
+    elegirDelCatalogo({ id: "cat-" + c.caso.id, titulo: c.caso.titulo, descripcion: c.caso.descripcion, precio: null, dimensiones: c.caso.mueve.map((m) => m.dimension) }, c.area.id, titulo);
   const revisar = () => void lanzar("casos", { revisar: true });
   const sinPersonalizar = elegidos.filter(([id, c]) => !c.personalizado && !c.armado && !c.aMano && !personalizando.has(id) && (!c.areaId || e.areas.includes(c.areaId)) && !nuevaDe.has(id));
 
-  /* Ficha B (2026-10-17): los casos de la biblioteca que mueven a cada área desde donde parece estar hoy (lo confirmado
-     y, donde no hay, las hipótesis), los que destraban lo que la frena primero. Sin IA: sale del mapa y del catálogo
-     (lib/casos-de-uso/camino.ts). */
-  const yaElegidos = new Set(elegidos.map(([id]) => (id.startsWith("cat-") ? id.slice(4) : id)));
-  const porLaEscala = conBase
-    ? areas.flatMap((a) => {
-        const calculo = mapa.chequeo.areas.find((x) => x.id === a.id);
-        if (!calculo?.nivel) return [];
-        const paraElCamino: AreaParaElCamino = {
-          id: a.id,
-          nombre: a.nombre,
-          nivel: calculo.nivel,
-          objetivo: calculo.objetivo,
-          frena: loQueLaFrena(calculo),
-          capas: {
-            base: { nombre: "", nivel: calculo.capas.base.nivel },
-            produccion: { nombre: "", nivel: calculo.capas.produccion.nivel },
-          },
-          dimensiones: calculo.dimensiones.map((d) => ({ id: d.id, nombre: d.nombre, aplica: d.aplica, nivel: d.nivel, clase: mapa.posiciones[d.id]?.clase ?? null })),
-        };
-        return casosParaElArea(paraElCamino, { excluir: yaElegidos, nombreDeNivel }).map((c) => ({ ...c, area: a }));
-      })
-    : [];
+  /* Ficha B (2026-10-17): los casos de la biblioteca que mueven a cada área desde donde parece estar hoy. Desde la décima
+     vuelta no repiten lo que ya está en la lista (elegido o sugerido por el agente) y comparten la cuenta con el agente
+     que ordena (lib/exploraciones/casos-de-uso.ts › casosPorLaEscala). */
+  const enLaLista = new Set([...elegidos.map(([id]) => id), ...propuestos.map(idDe)].filter((id) => id.startsWith("cat-")).map((id) => id.slice(4)));
+  const porLaEscala = conBase ? casosPorLaEscala({ escala, areas: e.areas, mapa, excluir: enLaLista, nombreDeNivel }) : [];
+
+  /* La lista entera, uno por fila (décima vuelta): en el orden que propuso el agente; lo que llegó después de su última
+     vuelta va al final, en el orden de antes (elegidos, sugeridos, escala). */
+  const orden = e.propuesta.ordenDeLosCasos ?? null;
+  const lugarDe = new Map((orden?.casos ?? []).map((c) => [c.id, c]));
+  const filas = enElOrden<Fila>(
+    [
+      ...elegidos.map(([id, caso]): Fila => ({ tipo: "elegido", id, caso })),
+      ...propuestos.map((item): Fila => ({ tipo: "agente", id: idDe(item), item })),
+      ...porLaEscala.map((c): Fila => ({ tipo: "escala", id: `cat-${c.caso.id}`, c })),
+    ],
+    (f) => f.id,
+    orden,
+  );
   const sinPoder = lanzando || corriendo || areas.length === 0 || !conBase;
 
   return (
@@ -775,10 +1327,11 @@ function CasosDeUso({ catalogo, novedades }: { catalogo: Caso[]; novedades: Nove
               puedeEditar && (
                 <>
                   {/* Nada corre solo al entrar (pedido 4b de Elías: cada vuelta cuesta). La primera vez, «Sugerir casos»;
-                      después, «Revisar»: vuelve a mirar, sugiere lo nuevo y dice qué cambió, sin tocar lo elegido. */}
+                      después, «Revisar»: vuelve a mirar, sugiere lo nuevo, reordena la lista y dice qué cambió, sin tocar
+                      lo elegido. */}
                   <BotonBlanco
                     disabled={sinPoder}
-                    title={yaPropuso ? "Vuelve a mirar los casos con lo que se sabe hoy y te dice qué cambió. No toca lo elegido." : undefined}
+                    title={yaPropuso ? "Vuelve a mirar los casos con lo que se sabe hoy, ordena la lista y te dice qué cambió. No toca lo elegido." : undefined}
                     onClick={() => (yaPropuso ? revisar() : void lanzar("casos"))}
                   >
                     {lanzando ? "Pidiendo…" : yaPropuso ? "Revisar" : "Sugerir casos de uso"}
@@ -805,8 +1358,8 @@ function CasosDeUso({ catalogo, novedades }: { catalogo: Caso[]; novedades: Nove
               </>
             ) : (
               <>
-                El agente sugiere casos de uso del catálogo de Smarteam según dónde está cada equipo en la escala y lo que contó el cliente, cada uno con su porqué.
-                Al aceptar uno, personaliza sus actividades para esta empresa. Cada vuelta cuesta unos centavos.
+                El agente sugiere casos de uso del catálogo de Smarteam según dónde está cada equipo en la escala y lo que contó el cliente, cada uno con su porqué,
+                y ordena la lista. Al aceptar uno, personaliza sus actividades para esta empresa. Cada vuelta cuesta unos centavos.
               </>
             )}
           </FranjaDeSugerencias>
@@ -830,7 +1383,7 @@ function CasosDeUso({ catalogo, novedades }: { catalogo: Caso[]; novedades: Nove
           <Alert variant={nadaCambio(revisionDeHoy) ? "success" : "info"} title="Revisaste los casos" onDismiss={() => setRevisionCerrada(revisionDeHoy.corridaId)}>
             {revisionEnUnaFrase(revisionDeHoy)}
             {revisionDeHoy.nuevos.length > 0 && <span className="block">Nuevos: {revisionDeHoy.nuevos.map((t) => `«${t}»`).join(", ")}.</span>}
-            {cambiosVigentes.length > 0 && <span className="block">Cada caso que cambia lo dice en su tarjeta.</span>}
+            {cambiosVigentes.length > 0 && <span className="block">Cada caso que cambia lo dice en su fila.</span>}
           </Alert>
         )}
         {puedeEditar && sinPersonalizar.length > 0 && (
@@ -849,74 +1402,37 @@ function CasosDeUso({ catalogo, novedades }: { catalogo: Caso[]; novedades: Nove
         )}
         {areas.length === 0 && <p className="text-sm text-fg-muted">Elige primero las áreas en juego (en «La escala»): los casos de uso se sugieren por área.</p>}
 
-        {propuestos.length > 0 ? (
+        {filas.length > 0 && (
           <section className="space-y-2">
-            <h2 className="text-[11px] font-semibold uppercase tracking-[0.08em] text-fg-muted">Sugeridos por el agente · {propuestos.length}</h2>
-            <ul className="grid items-start gap-3 xl:grid-cols-2">
-              {propuestos.map((it) => (
-                <TarjetaSugerida key={it.id} item={it} onAceptar={(x) => void aceptar(x)} />
-              ))}
-            </ul>
-            <UsadasHoy filtro={esCaso} />
-          </section>
-        ) : (
-          <UsadasHoy filtro={esCaso} sinPendientes />
-        )}
-
-        {elegidos.length > 0 && (
-          <section className="space-y-2">
-            <h2 className="text-[11px] font-semibold uppercase tracking-[0.08em] text-fg-muted">Elegidos · {elegidos.length}</h2>
-            <ul className="space-y-2">
-              {elegidos.map(([id, caso], i) => (
-                <FilaElegida
-                  key={id}
-                  id={id}
-                  caso={caso}
-                  nueva={nuevaDe.get(id)}
-                  paso={caso.plan ? i + 1 : undefined}
-                  onQuitar={puedeEditar ? () => quitar(id) : undefined}
-                />
-              ))}
-            </ul>
-            {armado && <TotalDeLaVenta elegidos={elegidos} armado={armado} />}
-          </section>
-        )}
-
-        {porLaEscala.length > 0 && (
-          <section className="space-y-2" data-recorrido="preventa.casos.biblioteca">
-            <h2 className="text-[11px] font-semibold uppercase tracking-[0.08em] text-fg-muted">Sugeridos por la escala · de la biblioteca · {porLaEscala.length}</h2>
-            <ul className="grid items-start gap-3 xl:grid-cols-2">
-              {porLaEscala.map((c) => (
-                <li key={c.area.id + c.caso.id} className="flex flex-col gap-1.5 rounded-xl border border-info-line bg-info-surface p-3.5">
-                  <p className="flex items-start gap-2 text-sm font-medium text-fg">
-                    <IconoDeSugerencia className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-brand" />
-                    <span className="min-w-0 flex-1">{c.caso.titulo}</span>
-                  </p>
-                  <p className="text-xs text-fg-secondary">{c.caso.promesa}</p>
-                  <p className="text-xs text-brand">
-                    {c.area.nombre}: {c.razon}
-                  </p>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Link href={"/sales/use-cases/" + c.caso.id} target="_blank" className="text-xs text-brand hover:text-brand-light">
-                      Ver el caso
-                    </Link>
-                    {puedeEditar && (
-                      <BotonBlanco
-                        disabled={guardando}
-                        onClick={() =>
-                          elegirDelCatalogo(
-                            { id: "cat-" + c.caso.id, titulo: c.caso.titulo, descripcion: c.caso.descripcion, precio: null, dimensiones: c.caso.mueve.map((m) => m.dimension) },
-                            c.area.id,
-                          )
-                        }
-                      >
-                        Elegir para {c.area.nombre}
-                      </BotonBlanco>
-                    )}
-                  </div>
-                </li>
-              ))}
-            </ul>
+            <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+              <h2 className="text-[11px] font-semibold uppercase tracking-[0.08em] text-fg-muted">
+                Los casos · {filas.length}
+                {elegidos.length > 0 && <span className="font-normal normal-case tracking-normal"> · {elegidos.length} elegidos</span>}
+              </h2>
+              <p className="text-[11px] text-fg-muted">
+                {orden ? "En el orden que sugiere el agente con lo que se sabe de la empresa" : "«Revisar» los ordena con todo lo que se sabe de la empresa"}
+              </p>
+            </div>
+            <ol className="space-y-3">
+              {filas.map((f, i) =>
+                f.tipo === "elegido" ? (
+                  <FilaElegida
+                    key={`e-${f.id}`}
+                    numero={i + 1}
+                    id={f.id}
+                    caso={f.caso}
+                    lugar={lugarDe.get(f.id)}
+                    nueva={nuevaDe.get(f.id)}
+                    onQuitar={puedeEditar ? () => quitar(f.id) : undefined}
+                  />
+                ) : f.tipo === "agente" ? (
+                  <FilaSugerida key={`a-${f.item.id}`} numero={i + 1} item={f.item} lugar={lugarDe.get(f.id)} onAceptar={(x) => void aceptar(x)} />
+                ) : (
+                  <FilaDeLaEscala key={`s-${f.c.area.id}-${f.c.caso.id}`} numero={i + 1} c={f.c} lugar={lugarDe.get(f.id)} onElegir={elegirDeLaEscala} />
+                ),
+              )}
+            </ol>
+            {armado && elegidos.length > 0 && <TotalDeLaVenta elegidos={elegidos} armado={armado} />}
           </section>
         )}
 
@@ -980,7 +1496,7 @@ function TotalDeLaVenta({ elegidos, armado }: { elegidos: [string, CasoDeUsoEleg
   const sumaSuelta = listas.reduce((s, acts) => s + horasDelCaso(acts, armado.porId).horas, 0);
   return (
     <p className="px-1 text-xs text-fg-secondary">
-      Todos juntos: <span className="font-semibold text-fg">{formatoHoras(horas)}</span> ·{" "}
+      Los elegidos juntos: <span className="font-semibold text-fg">{formatoHoras(horas)}</span> ·{" "}
       <span className="font-semibold text-fg">desde {formatoUsd(precioMinimo(horas, armado.tarifa))}</span>
       {sumaSuelta > horas && <span className="text-fg-muted"> (lo que comparten se cuenta una vez: {formatoHoras(sumaSuelta - horas)} menos)</span>}
       <span className="text-fg-muted">

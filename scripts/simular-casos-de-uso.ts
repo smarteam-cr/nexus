@@ -13,6 +13,11 @@
  *   npx tsx scripts/simular-casos-de-uso.ts --empresa "Centauro Solutions" --llamar --personalizar 2
  *   npx tsx scripts/simular-casos-de-uso.ts --empresa "Centauro Solutions" --llamar --revisar
  *   npx tsx scripts/simular-casos-de-uso.ts --empresa "Centauro Solutions" --llamar --crudo salida.json   (y lo que devolvió el modelo)
+ *
+ * Décima vuelta (2026-11-08, lib/casos-de-uso/orden.ts y mejorar.ts):
+ *   --desde-cero   sugiere como si no hubiera nada elegido ni sugerido (para comparar los títulos de los mismos casos).
+ *   --orden        además, el orden de la lista entera que propondría el agente, con el título claro de los de la escala.
+ *   --mejorar "…"  además, «Mejorar con IA» con esa instrucción sobre el primer caso elegido.
  */
 import "dotenv/config";
 import "./lib/permitir-server-only";
@@ -94,7 +99,8 @@ async function main() {
   /* 2026-11-08 (lib/casos-de-uso/personalizar.ts): el paso va en tres tiempos, y cada uno se mide por su lado.
      Sugerir (o «Revisar», con --revisar) es UNA llamada por vuelta; personalizar es UNA llamada por caso aceptado. */
   const revisar = process.argv.includes("--revisar");
-  const ctx = contextoDeLosCasos({ fila, estado, escala, general: vig.general }, { revisar });
+  const ctx0 = contextoDeLosCasos({ fila, estado, escala, general: vig.general }, { revisar });
+  const ctx = process.argv.includes("--desde-cero") ? { ...ctx0, yaEstan: [], ultimoPaso: 0, descartados: [] } : ctx0;
   const pedido = pedidoDeCasos(ctx);
   console.log(`\nEl pedido de «${revisar ? "Revisar" : "Sugerir"}»: ~${Math.round(JSON.stringify(pedido).length / 4 / 1000)} mil tokens de entrada (estimado), ${ctx.revisar?.length ?? 0} casos para revisar.`);
   if (!process.argv.includes("--llamar")) {
@@ -119,6 +125,54 @@ async function main() {
   }
   const uS = respuesta.usage;
   console.log(`\nCosto de ${revisar ? "revisar" : "sugerir"}: ${uS.input_tokens} + ${uS.output_tokens} tokens = US$ ${costoDe(uS).toFixed(3)} · ${segSugerir} s · ${r.descartadas} descartadas · stop: ${respuesta.stop_reason}`);
+
+  /* --orden: el orden de la lista entera (décima vuelta), con los sugeridos de esta vuelta como «nuevos». */
+  if (process.argv.includes("--orden")) {
+    const { contextoDelOrden } = await import("@/lib/exploraciones/orden-de-los-casos");
+    const { leerElOrden, pedidoDelOrden } = await import("@/lib/exploraciones/orden-pedido");
+    const { pendientesVigentes } = await import("@/lib/exploraciones/agente");
+    const co = await contextoDelOrden({ fila, estado, escala, pendientes: pendientesVigentes(estado, vig.general, escala), nuevos: r.items });
+    const t2 = Date.now();
+    const ro = await getAnthropic().messages.create(pedidoDelOrden(co));
+    const seg = Math.round((Date.now() - t2) / 1000);
+    const orden = leerElOrden(ro, co, "simulacro");
+    const minutas = co.reuniones ? co.reuniones.split(/\r?\n/).length : 0;
+    console.log(`\n=== ORDEN de la lista entera (no se guardó) · ${co.candidatos.length} casos, ${minutas} minutas leídas ===`);
+    for (const [i, c] of (orden?.casos ?? []).entries()) {
+      const cand = co.candidatos.find((x) => x.id === c.id)!;
+      console.log(`  ${i + 1}. [${cand.origen}] ${c.titulo ?? cand.titulo}${c.titulo ? `  (catálogo: «${cand.titulo}»)` : ""}`);
+      if (c.porQue) console.log(`      > ${c.porQue}`);
+    }
+    console.log(`  Costo del orden: ${ro.usage.input_tokens} + ${ro.usage.output_tokens} tokens = US$ ${costoDe(ro.usage).toFixed(3)} · ${seg} s · stop: ${ro.stop_reason}`);
+  }
+
+  /* --mejorar "instrucción": «Mejorar con IA» sobre el primer caso elegido (décima vuelta). */
+  const instruccion = arg("--mejorar");
+  const primero = Object.entries(estado.contenido.casosDeUso)[0];
+  if (instruccion && primero) {
+    const { pedidoDeMejorar, leerLaMejora } = await import("@/lib/exploraciones/mejorar-pedido");
+    const { diferenciaDeActividades } = await import("@/lib/casos-de-uso/mejorar");
+    const [id, caso] = primero;
+    const base = await contextoDePersonalizar({
+      fila,
+      empresa: fila.client.name,
+      estado,
+      exploracion: ctx.exploracion,
+      useCaseId: id,
+      caso,
+      nombreDelArea: escala.areas.find((a) => a.id === caso.areaId)?.nombre ?? null,
+    });
+    const cm = { ...base, actuales: actividadesDelElegido(caso, base.ficha?.actividades), instruccion };
+    const t3 = Date.now();
+    const rm = await getAnthropic().messages.create(pedidoDeMejorar(cm));
+    const seg = Math.round((Date.now() - t3) / 1000);
+    const m = leerLaMejora(rm, cm);
+    console.log(`\n=== MEJORAR «${caso.titulo}» con «${instruccion}» (no se guardó) ===`);
+    for (const c of m.cambios) console.log(`  * ${c}`);
+    for (const f of diferenciaDeActividades(cm.actuales, m.actividades)) if (f.estado !== "igual") console.log(`  ${f.estado === "nueva" ? "+" : f.estado === "quitada" ? "-" : "~"} ${f.actividad.nombre}${f.antes ? ` (antes ${f.antes.veces}×, ahora ${f.actividad.veces}×)` : ""}`);
+    for (const sg of m.sugeridas) console.log(`  ? sugiere ${sg.actividadId ? `[${sg.actividadId}]` : "[nueva]"} ${sg.nombre}: ${sg.porQue}`);
+    console.log(`  Costo de mejorar: ${rm.usage.input_tokens} + ${rm.usage.output_tokens} tokens = US$ ${costoDe(rm.usage).toFixed(3)} · ${seg} s · stop: ${rm.stop_reason}`);
+  }
 
   /* --personalizar N: acepta los N primeros sugeridos (o, sin sugeridos, los N primeros elegidos) y los personaliza, uno
      por uno, como al apretar «Aceptar». */

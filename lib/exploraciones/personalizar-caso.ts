@@ -24,61 +24,17 @@ import { casoDeLaPreventa, catalogoParaElAgente } from "@/lib/casos-de-uso/en-la
 import { AGENTE_DE_LA_EXPLORACION, pendientesVigentes } from "./agente";
 import { exploracionParaLosCasos, loQueSeSabeParaElValor } from "./casos-de-uso";
 import type { CasoDeUsoElegido, EstadoDeExploracion, ItemPropuesto } from "./contenido";
-import { reunionesDeLaExploracion } from "./fuentes";
-import { claveDeReunion } from "./guia";
-import { leerLoLeido } from "./lo-leido";
 import { leerContenido, leerPropuesta } from "./esquemas";
-import { diaConAnio } from "./fechas";
 import { bloqueDeInstrucciones } from "./notas-de-sesion";
+import { minutasRecientes, type FilaParaLasReuniones } from "./minutas-de-la-preventa";
 import { casoPersonalizado, conLaVersionPersonalizada, leerLaPersonalizacion, pedidoDePersonalizar, type ContextoDePersonalizar } from "./personalizar-pedido";
-import { bloquearFila, escalaDeLaExploracion, escalaParaExplorar, estadoDesdeFila, leerExploracion, type FilaDeExploracion } from "./servidor";
+import { bloquearFila, escalaDeLaExploracion, escalaParaExplorar, estadoDesdeFila, leerExploracion } from "./servidor";
 
-/** Cuántas reuniones recientes lee y cuánto de cada minuta: alcanza para el contexto sin inflar el pedido. */
-const REUNIONES_QUE_LEE = 6;
-const LARGO_DE_UNA_MINUTA = 1500;
+export type { FilaParaLasReuniones };
 
 export type ResultadoDePersonalizar =
   | { ok: true; item: ItemPropuesto; seUsaSola: boolean; segundos: number }
   | { ok: false; status: number; error: string };
-
-/** Lo de la fila que hace falta para saber cuáles son las reuniones de la preventa. */
-export type FilaParaLasReuniones = Pick<FilaDeExploracion, "id" | "clientId" | "projectId" | "createdAt" | "test">;
-
-/**
- * Las minutas de las reuniones más recientes DE LA PREVENTA, con la misma regla con que la preventa decide cuáles son
- * suyas (`reunionesDeLaExploracion`, que las toma del chokepoint de sesiones: invariante 1): las de sus sesiones y, en un
- * prospecto, las que entraron solas. Sin las de puertas adentro, sin las que se sacaron ni las de antes que ya no son de
- * ninguna sesión (revisión del 2026-11-08: antes se tomaban las 6 últimas de la empresa, y en un cliente con Customer
- * Success activo entraban sus seguimientos semanales).
- */
-async function minutasRecientes(fila: FilaParaLasReuniones, estado: EstadoDeExploracion): Promise<string> {
-  const fuera = new Set(estado.contenido.fuera);
-  const todas = await reunionesDeLaExploracion({
-    exploracionId: fila.id,
-    clientId: fila.clientId,
-    projectId: fila.projectId,
-    creadaEn: fila.createdAt,
-    propuesta: estado.propuesta,
-    leido: leerLoLeido(fila.test),
-    sesiones: estado.contenido.sesiones,
-    fuera: estado.contenido.fuera,
-    elegidas: estado.contenido.reunionesElegidas,
-  }).catch(() => []);
-  const reuniones = todas
-    .filter((r) => r.origen === "meet" && !r.legado && !r.puertasAdentro && !fuera.has(claveDeReunion(r)))
-    .sort((a, b) => b.fecha.localeCompare(a.fecha))
-    .slice(0, REUNIONES_QUE_LEE)
-    .map((r) => ({ id: r.id, title: r.titulo, date: r.fecha }));
-  if (!reuniones.length) return "";
-  const minutas = await prisma.sessionMinute
-    .findMany({ where: { sessionId: { in: reuniones.map((r) => r.id) } }, select: { sessionId: true, summary: true } })
-    .catch(() => []);
-  return reuniones
-    .map((r) => ({ r, m: minutas.find((x) => x.sessionId === r.id)?.summary?.trim() }))
-    .filter((x) => x.m)
-    .map((x) => `- ${x.r.title} (${diaConAnio(x.r.date)}): ${x.m!.slice(0, LARGO_DE_UNA_MINUTA)}`)
-    .join("\n");
-}
 
 /** Lo que lee el agente para personalizar (exportado para el simulacro de scripts/simular-casos-de-uso.ts). */
 export async function contextoDePersonalizar(o: {

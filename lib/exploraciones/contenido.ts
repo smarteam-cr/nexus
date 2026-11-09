@@ -40,6 +40,7 @@ import type { TarjetasDeLaEscala } from "./tarjetas-de-la-escala";
 import type { ClaveDeEquipo } from "./equipos";
 import type { ActividadDelCaso, CasosAnteriores, LugarEnElPlan, ParaVentas, ValorDeVenta } from "@/lib/casos-de-uso/armado";
 import { vuelveASugeridos, type Personalizacion, type RevisionDeLosCasos } from "@/lib/casos-de-uso/personalizar";
+import type { OrdenDeLosCasos } from "@/lib/casos-de-uso/orden";
 import {
   definicionDe,
   esDeLista,
@@ -522,6 +523,12 @@ export interface PropuestaDeExploracion {
    * la huella de lo que leyó (para avisar si cambió algo desde entonces) y, si fue «Revisar», qué cambió.
    */
   revisionDeLosCasos?: RevisionDeLosCasos | null;
+  /**
+   * Décima vuelta (2026-11-08, lib/casos-de-uso/orden.ts): el orden de TODA la lista del paso «Casos de uso» (elegidos,
+   * sugeridos y los de la escala) que propuso el agente en su última vuelta, con el porqué de cada lugar y el título
+   * claro de los de la biblioteca.
+   */
+  ordenDeLosCasos?: OrdenDeLosCasos | null;
 }
 
 /** El correo de seguimiento de una reunión: qué entendimos, lo acordado, lo que quedó abierto y la próxima reunión. */

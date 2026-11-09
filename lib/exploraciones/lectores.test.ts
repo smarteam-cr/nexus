@@ -183,6 +183,10 @@ const CENSO: Record<string, { destino: Destino; motivo: string }> = {
     destino: "ventas",
     motivo: "Personalizar un caso de uso aceptado (2026-11-08): actividades, qué cambió y cómo subir el ticket, para el vendedor. Nada llega al cliente.",
   },
+  "app/api/sales/exploraciones/[id]/casos/mejorar/route.ts": {
+    destino: "ventas",
+    motivo: "«Mejorar con IA» las actividades de un caso elegido (décima vuelta, 2026-11-08): devuelve una propuesta para el vendedor y no guarda nada. Nada llega al cliente.",
+  },
   "app/api/sales/exploraciones/[id]/documentos/route.ts": { destino: "ventas", motivo: "Sumar a mano una sesión o un documento, y listarlos." },
   "app/api/sales/exploraciones/[id]/documentos/[documentoId]/route.ts": { destino: "ventas", motivo: "Quitar lo que se sumó a mano." },
   "app/api/sales/exploraciones/[id]/preparacion/route.ts": { destino: "ventas", motivo: "Los hechos de HubSpot de la pieza Preparación." },
