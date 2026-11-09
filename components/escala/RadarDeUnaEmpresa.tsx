@@ -163,7 +163,13 @@ export default function RadarDeUnaEmpresa({
     .filter((a) => a.dims.length);
   const comun = { area, dims, capas, nombreDeNivel, resultado, frena, figura: color, otras: alineadas, mismaCaja };
   const leyenda = (
-    <LeyendaDelRadar dims={dims} nombreDeNivel={nombreDeNivel} figura={color} areas={quedan.length ? [{ area, color }, ...quedan] : []} fija={!!todasLasAreas} />
+    <LeyendaDelRadar
+      dims={dims}
+      nombreDeNivel={nombreDeNivel}
+      figura={color}
+      areas={quedan.length || todasLasAreas ? [{ area, color }, ...quedan] : []}
+      fija={!!todasLasAreas}
+    />
   );
 
   if (formato === "pdf") {
@@ -260,21 +266,21 @@ function LeyendaDelRadar({
   const noLoSe = dims.some((d) => d.preguntada && d.nivel && d.noLoSe);
   const porExplorar = dims.some((d) => d.preguntada && d.nivel && d.porExplorar && !d.noLoSe);
   if (!fija && !sinPreguntar && !noLoSe && !porExplorar && !areas.length) return null;
-  return (
-    <div className={fija ? "rde-leyenda rde-leyenda-fija" : "rde-leyenda"}>
-      {areas.length > 0 && (
-        <span>
-          {areas.map((a) => (
-            <span key={a.area} style={{ display: "inline-flex", alignItems: "center", gap: 6, marginRight: 12 }}>
-              <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true">
-                <rect x="1" y="1" width="12" height="12" rx="3" fill={a.color} fillOpacity={0.25} stroke={a.color} strokeWidth="1.75" />
-              </svg>
-              {a.area}
-            </span>
-          ))}
-          Los nombres de las partes son los de {areas[0].area}: cada área mide la suya en el mismo lugar.
+  const deAreas = areas.length > 0 && (
+    <span className={fija ? "rde-leyenda-areas" : undefined}>
+      {areas.map((a) => (
+        <span key={a.area} style={{ display: "inline-flex", alignItems: "center", gap: 6, marginRight: 12 }}>
+          <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true">
+            <rect x="1" y="1" width="12" height="12" rx="3" fill={a.color} fillOpacity={0.25} stroke={a.color} strokeWidth="1.75" />
+          </svg>
+          {a.area}
         </span>
-      )}
+      ))}
+      {areas.length > 1 && `Los nombres de las partes son los de ${areas[0].area}: cada área mide la suya en el mismo lugar.`}
+    </span>
+  );
+  const simbolos = (
+    <>
       {sinPreguntar && (
         <span>
           <svg width="24" height="10" viewBox="0 0 24 10" aria-hidden="true">
@@ -302,6 +308,22 @@ function LeyendaDelRadar({
           Aro punteado: por explorar. Es lo que creemos por lo conversado; lo confirmamos contigo.
         </span>
       )}
+    </>
+  );
+  /* La escala interna (`fija`, novena vuelta, 8 nov): dos renglones de alto fijo. Arriba, las áreas que se ven (siempre,
+     también una sola), en UN renglón que no se parte; abajo, los símbolos. Sumar Marketing ya no le suma un renglón a la
+     leyenda ni corre lo de abajo (antes el renglón de las áreas aparecía al sumar la segunda y podía partirse en dos). */
+  if (fija)
+    return (
+      <div className="rde-leyenda rde-leyenda-fija">
+        {deAreas}
+        <span className="rde-leyenda-simbolos">{simbolos}</span>
+      </div>
+    );
+  return (
+    <div className="rde-leyenda">
+      {deAreas}
+      {simbolos}
     </div>
   );
 }

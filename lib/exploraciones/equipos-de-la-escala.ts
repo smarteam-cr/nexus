@@ -179,3 +179,17 @@ export function partesParaExplorar<D extends { id: string; aplica: boolean }>(
   const aplican = dimensiones.filter((d) => d.aplica);
   return { hipotesis: aplican.filter((d) => clase(d.id) === "hipotesis"), sinDato: aplican.filter((d) => clase(d.id) === null) };
 }
+
+/**
+ * La frase de «Lo que más frena a cada equipo» (La escala, novena vuelta, 2026-11-08): con nivel y lo que lo frena,
+ * «Lo frena «Datos», en Inicial: lo más débil de su base operativa.»; sin nivel (faltan partes), cuántas faltan.
+ */
+export function fraseDelFreno(o: { conNivel: boolean; frena: { nombres: readonly string[]; nivel: string; capa: string } | null; faltan: number }): string {
+  const enLista = (xs: readonly string[]) => (xs.length <= 1 ? (xs[0] ?? "") : `${xs.slice(0, -1).join(", ")} y ${xs[xs.length - 1]}`);
+  if (o.conNivel && o.frena && o.frena.nombres.length) {
+    const { nombres, nivel, capa } = o.frena;
+    return `${nombres.length === 1 ? "Lo frena" : "Lo frenan"} ${enLista(nombres.map((n) => `«${n}»`))}, en ${nivel}: lo más débil de su ${capa.toLowerCase()}.`;
+  }
+  const n = Math.max(o.faltan, 1);
+  return `${n === 1 ? "Falta una parte" : `Faltan ${n} partes`} sin dato: sin todas no se sabe cuál lo frena. Pregúntalas en la reunión.`;
+}

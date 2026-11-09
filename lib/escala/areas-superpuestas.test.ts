@@ -4,7 +4,7 @@
  * solo esa se anima (Elías: «la animación de la escala como que se corta, empieza desde cero»).
  */
 import { describe, expect, it } from "vitest";
-import { alinearArea, alTocarUnArea, alTocarUnNodo, areasAlCambiar, ordenConLasQueSalen, partesPorEje, piezasDeLaVista, vistaAlCambiar, vistaInicial, vistaQuieta, principalYFuera, SIN_CAMBIO, type AreaSuperpuesta } from "./areas-superpuestas";
+import { alinearArea, alTocarUnArea, alTocarUnNodo, areasAlCambiar, ordenConLasQueSalen, partesPorEje, piezasDeLaVista, vistaAlCambiar, vistaInicial, vistaQuieta, principalYFuera, SIN_CAMBIO, areasDelResumen, sinNingunaElegida, type AreaSuperpuesta } from "./areas-superpuestas";
 import { cajaQueAbarca, dibujoDelRadar, GRANDE, type DimensionDelRadar } from "./radar-de-una-empresa";
 
 const dims = (area: string, capas: ("base" | "produccion")[]): DimensionDelRadar[] =>
@@ -75,12 +75,29 @@ describe("cuál es la principal y qué se muestra con «Sumar…»", () => {
     expect(alTocarUnNodo(e, "3")).toBe(e);
   });
 
-  it("sacar la principal la pasa a la última elegida con algo; sacar otra no la toca; la última no se saca", () => {
+  it("sacar la principal la pasa a la última elegida con algo; sacar otra no la toca", () => {
     const e = { elegidas: ["1", "2", "3"], principalId: "2" };
     expect(principalYFuera(alTocarUnArea(e, "2", conAlgo), conAlgo)).toEqual({ principal: "1", fuera: ["3"] });
     expect(alTocarUnArea(e, "1", conAlgo)).toEqual({ elegidas: ["2", "3"], principalId: "2" });
+  });
+
+  it("⛔ la última también se saca (novena vuelta): sin ninguna, no hay principal ni «Sumar…», y tocar otra la vuelve la principal", () => {
     const sola = { elegidas: ["1"], principalId: "1" };
-    expect(alTocarUnArea(sola, "1", conAlgo)).toBe(sola);
+    const ninguna = alTocarUnArea(sola, "1", conAlgo);
+    expect(ninguna).toEqual({ elegidas: [], principalId: null });
+    expect(sinNingunaElegida(ninguna)).toBe(true);
+    expect(principalYFuera(ninguna, conAlgo)).toEqual({ principal: null, fuera: [] });
+    const otraVez = alTocarUnArea(ninguna, "2", conAlgo);
+    expect(otraVez).toEqual({ elegidas: ["2"], principalId: "2" });
+    expect(sinNingunaElegida(otraVez)).toBe(false);
+    // Una sin nada como la única: se suelta igual.
+    expect(alTocarUnArea({ elegidas: ["3"], principalId: null }, "3", conAlgo)).toEqual({ elegidas: [], principalId: null });
+  });
+
+  it("⛔ lo de debajo del radar no depende de la elección: en juego o con algo, en el orden de la escala", () => {
+    const areas = [{ id: "1" }, { id: "2" }, { id: "3" }];
+    expect(areasDelResumen(areas, ["1"], (a) => a.id === "2").map((a) => a.id)).toEqual(["1", "2"]);
+    expect(areasDelResumen(areas, ["3", "1"], () => false).map((a) => a.id)).toEqual(["1", "3"]);
   });
 
   it("⛔ la principal que se saca de la preventa y queda sin nada sigue a la vista con «Sumar…», y sumarla la devuelve", () => {

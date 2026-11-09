@@ -170,6 +170,14 @@ export function ConTarjetas({
   );
 }
 
+/** El ancho de la tarjeta según cuántas áreas caen en el eje: cada una con su columna de ~320 px. */
+const ANCHO_DE_LA_TARJETA = {
+  1: "w-[min(360px,calc(100vw-24px))]",
+  2: "w-[min(660px,calc(100vw-24px))]",
+  3: "w-[min(960px,calc(100vw-24px))]",
+} as const;
+const COLUMNAS_DE_LA_TARJETA = { 1: "", 2: "md:grid-cols-2 md:gap-5", 3: "md:grid-cols-3 md:gap-5" } as const;
+
 function Tarjeta({ ds, donde, ref }: { ds: readonly DimensionDeLaTarjeta[]; donde: TarjetaPedida; ref: RefObject<HTMLDivElement | null> }) {
   const { exp, lugar } = useLienzo();
 
@@ -194,11 +202,18 @@ function Tarjeta({ ds, donde, ref }: { ds: readonly DimensionDeLaTarjeta[]; dond
       data-tarjeta-interna=""
       aria-label={varias ? `${ds[0].nombre}, en ${ds.map((d) => d.area).join(", ")}: cómo está y qué preguntar` : `${ds[0].nombre}: cómo está y qué preguntar`}
       style={{ left: 0, top: 0, visibility: "hidden" }}
-      className="fixed z-50 flex w-[min(360px,calc(100vw-24px))] flex-col gap-2.5 overflow-y-auto overscroll-contain rounded-2xl border border-line bg-surface p-4 opacity-0 shadow-xl transition-opacity duration-150 ease-out data-[visible]:opacity-100 motion-reduce:transition-none"
+      className={cn(
+        "fixed z-50 flex flex-col gap-2.5 overflow-y-auto overscroll-contain rounded-2xl border border-line bg-surface p-4 opacity-0 shadow-xl transition-opacity duration-150 ease-out data-[visible]:opacity-100 motion-reduce:transition-none",
+        ANCHO_DE_LA_TARJETA[Math.min(ds.length, 3) as 1 | 2 | 3],
+      )}
     >
-      {ds.map((d, i) => (
-        <SeccionDeLaTarjeta key={d.id} d={d} conColor={varias} separada={i > 0} />
-      ))}
+      {/* Con varias áreas en el eje, una al lado de la otra en la misma fila (novena vuelta, 8 nov, Elías: «deben aparecer
+          los dos departamentos en un mismo row»); en una ventana angosta, una debajo de la otra. */}
+      <div className={cn("grid grid-cols-1 gap-3", COLUMNAS_DE_LA_TARJETA[Math.min(ds.length, 3) as 1 | 2 | 3])}>
+        {ds.map((d, i) => (
+          <SeccionDeLaTarjeta key={d.id} d={d} separada={i > 0} />
+        ))}
+      </div>
       <p className="text-[11px] text-fg-muted">
         {deAgente && guardadas
           ? `Lo escribió Nexus con las reuniones el ${diaCorto(guardadas.en)}. `
@@ -212,20 +227,26 @@ function Tarjeta({ ds, donde, ref }: { ds: readonly DimensionDeLaTarjeta[]; dond
 }
 
 /**
- * Lo de una dimensión en la tarjeta: área y clave, nombre, puntaje y nivel, evidencia o por explorar, «cómo está» y qué
- * preguntar. Con varias áreas (`conColor`), cada sección lleva el color de su área y, desde la segunda, una línea arriba.
+ * Lo de una dimensión en la tarjeta: el DEPARTAMENTO en grande y con su color (novena vuelta, 8 nov, Elías: «el nombre del
+ * departamento mucho más grande, que se note más»), la dimensión, puntaje y nivel, evidencia o por explorar, «cómo está»
+ * y qué preguntar. Con varias áreas, cada una es una columna; desde la segunda, una línea a su izquierda (o arriba, si se
+ * apilan en una ventana angosta).
  */
-function SeccionDeLaTarjeta({ d, conColor, separada }: { d: DimensionDeLaTarjeta; conColor: boolean; separada: boolean }) {
+function SeccionDeLaTarjeta({ d, separada }: { d: DimensionDeLaTarjeta; separada: boolean }) {
   const { exp, nombreDeNivel } = useLienzo();
   const t = tarjetaParaMostrar(exp.estado.propuesta.tarjetasDeLaEscala?.porDimension[d.id], { porQue: d.porQue, preguntaDeLaEscala: d.pregunta, conNivel: !!d.nivel });
   return (
-    <section aria-label={`${d.area} · ${d.nombre}`} className={cn("flex flex-col gap-2.5", separada && "border-t border-line pt-3")}>
+    <section
+      aria-label={`${d.area} · ${d.nombre}`}
+      className={cn("flex min-w-0 flex-col gap-2.5", separada && "border-t border-line pt-3 md:border-l md:border-t-0 md:pl-5 md:pt-0")}
+    >
+      <p className="flex items-center gap-2 text-xl font-bold leading-tight text-fg">
+        {d.color && <span className="h-3.5 w-3.5 flex-shrink-0 rounded-[4px]" style={{ background: d.color }} aria-hidden="true" />}
+        {d.area}
+      </p>
       <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-1">
         <div className="min-w-0">
-          <p className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-fg-muted">
-            {conColor && d.color && <span className="h-2.5 w-2.5 flex-shrink-0 rounded-[3px]" style={{ background: d.color }} aria-hidden="true" />}
-            {d.area} · {d.id}
-          </p>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-fg-muted">{d.id}</p>
           <p className="text-sm font-semibold text-fg">{d.nombre}</p>
         </div>
         {d.nivel && (
