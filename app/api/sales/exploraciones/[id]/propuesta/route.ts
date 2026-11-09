@@ -4,7 +4,8 @@
  *   elegir el de la propuesta), el catálogo de casos de uso y las propuestas de la EMPRESA —las que
  *   usan esta preventa y las que no, para usarla en una que ya existe (2026-10-05). Pide
  *   `ventas.read`. Solo lee. Desde el 2026-11-08 trae también la biblioteca de actividades, las de cada caso del
- *   catálogo y la tarifa del segmento de la empresa: con eso el paso «Casos de uso» cuenta horas y precio mínimo.
+ *   catálogo y la tarifa del segmento de la empresa: con eso el paso «Casos de uso» cuenta horas y precio mínimo. Y
+ *   `novedades`: lo que llegó desde la última vez que el agente miró los casos (reuniones, cambios en la escala).
  *
  * POST /api/sales/exploraciones/[id]/propuesta   body: { dealId, nombre? }
  *   Arma la Propuesta de Nexus (lib/exploraciones/propuesta.ts) y devuelve su id; el texto lo
@@ -19,6 +20,7 @@ import { armarPropuesta, catalogoDeCasosDeUso, negociosDeLaEmpresa } from "@/lib
 import { propuestasDeLaEmpresa } from "@/lib/exploraciones/en-las-propuestas";
 import { leerExploracion } from "@/lib/exploraciones/servidor";
 import { armadoParaLaPreventa } from "@/lib/casos-de-uso/armado-server";
+import { novedadesDeLosCasos } from "@/lib/exploraciones/novedades-de-los-casos";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -35,13 +37,15 @@ export async function GET(_req: NextRequest, { params }: Ctx) {
   const lectura = await leerExploracion(id);
   if (lectura.estado !== "ok") return NextResponse.json({ error: "Esa preventa no existe." }, { status: 404 });
   const companyId = lectura.fila.client.hubspotCompanyId;
-  const [negocios, catalogo, propuestas, armado] = await Promise.all([
+  const [negocios, catalogo, propuestas, armado, novedades] = await Promise.all([
     companyId ? negociosDeLaEmpresa(companyId) : Promise.resolve([]),
     catalogoDeCasosDeUso(),
     propuestasDeLaEmpresa(id),
     armadoParaLaPreventa(lectura.fila.clientId),
+    // Lo nuevo desde que el agente miró los casos (2026-11-08): el paso lo avisa y ofrece «Revisar». Si falla, no se avisa.
+    novedadesDeLosCasos(lectura.fila).catch(() => null),
   ]);
-  return NextResponse.json({ negocios, catalogo, propuestas, ...armado });
+  return NextResponse.json({ negocios, catalogo, propuestas, ...armado, novedades });
 }
 
 export async function POST(req: NextRequest, { params }: Ctx) {

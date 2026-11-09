@@ -4,12 +4,14 @@
  *
  *   - Antes: los casos elegidos y los sugeridos que tiene hoy la preventa, con sus actividades (las suyas o las de la
  *     ficha del catálogo), sus horas y su precio mínimo.
- *   - Después (con --llamar): lo que propondría «Regenerar» hoy, con el mismo pedido que arma el agente, sus actividades,
- *     su precio mínimo y su argumento de valor, y lo que costaron las dos llamadas (los casos y, aparte, el valor). No
- *     guarda nada, y por eso ese gasto NO aparece en «Gasto de la IA» (el medidor no puede escribir en esta conexión).
+ *   - Después (con --llamar, desde el 2026-11-08: lib/casos-de-uso/personalizar.ts): lo que SUGERIRÍA hoy (o, con
+ *     --revisar, lo que diría «Revisar» de lo que ya está) y, con --personalizar N, lo que dejaría ACEPTAR los N primeros:
+ *     sus actividades personalizadas, qué cambió frente a la ficha y cómo subir el ticket. Cada llamada dice su costo y su
+ *     tiempo. No guarda nada, y por eso ese gasto NO aparece en «Gasto de la IA» (el medidor no escribe en esta conexión).
  *
  *   npx tsx scripts/simular-casos-de-uso.ts --empresa "Centauro Solutions"
- *   npx tsx scripts/simular-casos-de-uso.ts --empresa "Centauro Solutions" --llamar
+ *   npx tsx scripts/simular-casos-de-uso.ts --empresa "Centauro Solutions" --llamar --personalizar 2
+ *   npx tsx scripts/simular-casos-de-uso.ts --empresa "Centauro Solutions" --llamar --revisar
  *   npx tsx scripts/simular-casos-de-uso.ts --empresa "Centauro Solutions" --llamar --crudo salida.json   (y lo que devolvió el modelo)
  */
 import "dotenv/config";
@@ -29,8 +31,11 @@ const PRECIO_POR_MTOK = { entrada: 3, salida: 15 };
 async function main() {
   const { prisma } = await import("@/lib/db/prisma");
   const { estadoDesdeFila, escalaParaExplorar, escalaDeLaExploracion } = await import("@/lib/exploraciones/servidor");
-  const { contextoDeLosCasos, contextoDelValor } = await import("@/lib/exploraciones/agente");
-  const { pedidoDeCasos, leerLosCasos, pedidoDelValor, leerElValor, conElValor } = await import("@/lib/exploraciones/agente-pedido");
+  const { contextoDeLosCasos } = await import("@/lib/exploraciones/agente");
+  const { pedidoDeCasos, leerLosCasos } = await import("@/lib/exploraciones/agente-pedido");
+  const { casoPersonalizado, leerLaPersonalizacion, leerLaRevision, pedidoDePersonalizar } = await import("@/lib/exploraciones/personalizar-pedido");
+  const { contextoDePersonalizar } = await import("@/lib/exploraciones/personalizar-caso");
+  const { revisionEnUnaFrase } = await import("@/lib/casos-de-uso/personalizar");
   const { getAnthropic } = await import("@/lib/anthropic");
   const { armadoParaLaPreventa } = await import("@/lib/casos-de-uso/armado-server");
   const { actividadesDelElegido, cambiosRespectoDeLaFicha, horasDelCaso, horasDeLaVenta, lineaDeCambios, precioMinimo } = await import("@/lib/casos-de-uso/armado");
@@ -86,36 +91,66 @@ async function main() {
     console.log(`  Elegidos juntos: ${formatoHoras(h)} · desde ${formatoUsd(precioMinimo(h, tarifa))}`);
   }
 
-  const ctx = contextoDeLosCasos({ fila, estado, escala, general: vig.general }, true);
+  /* 2026-11-08 (lib/casos-de-uso/personalizar.ts): el paso va en tres tiempos, y cada uno se mide por su lado.
+     Sugerir (o «Revisar», con --revisar) es UNA llamada por vuelta; personalizar es UNA llamada por caso aceptado. */
+  const revisar = process.argv.includes("--revisar");
+  const ctx = contextoDeLosCasos({ fila, estado, escala, general: vig.general }, { revisar });
   const pedido = pedidoDeCasos(ctx);
-  const largo = JSON.stringify(pedido).length;
-  console.log(`\nEl pedido de «Regenerar»: ~${Math.round(largo / 4 / 1000)} mil tokens de entrada (estimado), ${ctx.rearmar?.length ?? 0} elegidos para rearmar.`);
+  console.log(`\nEl pedido de «${revisar ? "Revisar" : "Sugerir"}»: ~${Math.round(JSON.stringify(pedido).length / 4 / 1000)} mil tokens de entrada (estimado), ${ctx.revisar?.length ?? 0} casos para revisar.`);
   if (!process.argv.includes("--llamar")) {
     console.log("Sin --llamar no se consulta al modelo.");
     return;
   }
+  const costoDe = (u: { input_tokens: number; output_tokens: number }) => (u.input_tokens * PRECIO_POR_MTOK.entrada + u.output_tokens * PRECIO_POR_MTOK.salida) / 1e6;
   const t0 = Date.now();
   const respuesta = await getAnthropic().messages.create(pedido);
+  const segSugerir = Math.round((Date.now() - t0) / 1000);
   const r = leerLosCasos(respuesta, ctx, "simulacro");
+  const cambios = leerLaRevision(respuesta, ctx);
   // --crudo <archivo>: lo que devolvió el modelo tal cual, para comparar lo que dice con lo que manda.
   const crudo = arg("--crudo");
   if (crudo) (await import("node:fs")).writeFileSync(crudo, JSON.stringify(respuesta.content, null, 2));
-  const cv = contextoDelValor(estado, ctx.exploracion, fila.client.name, r.items);
-  const rv = await getAnthropic().messages.create(pedidoDelValor(cv));
-  const items = conElValor(r.items, leerElValor(rv, cv));
-  const u = { input_tokens: respuesta.usage.input_tokens + rv.usage.input_tokens, output_tokens: respuesta.usage.output_tokens + rv.usage.output_tokens };
-  const costo = (u.input_tokens * PRECIO_POR_MTOK.entrada + u.output_tokens * PRECIO_POR_MTOK.salida) / 1e6;
-  console.log("\n=== DESPUÉS: lo que propondría «Regenerar» (no se guardó) ===");
   const { enOrdenDelPlan } = await import("@/lib/casos-de-uso/armado");
-  const despues = enOrdenDelPlan(items, (it) => (it.valor as Caso).plan?.paso).map((it) => {
-    const id = (it.destino as { useCaseId: string }).useCaseId;
-    return linea(id, it.valor as Caso, id in estado.contenido.casosDeUso ? "rearma un elegido" : "nuevo");
-  });
-  const h = horasDeLaVenta(despues, porId);
-  console.log(`  Todos juntos: ${formatoHoras(h)} · desde ${formatoUsd(precioMinimo(h, tarifa))}`);
-  console.log(
-    `\nCosto: ${u.input_tokens} tokens de entrada + ${u.output_tokens} de salida = US$ ${costo.toFixed(3)} · ${Math.round((Date.now() - t0) / 1000)} s · ${r.descartadas} descartadas por el código · stop: ${respuesta.stop_reason} y ${rv.stop_reason} · casos ${respuesta.usage.input_tokens}+${respuesta.usage.output_tokens}, valor ${rv.usage.input_tokens}+${rv.usage.output_tokens}`,
-  );
+  console.log(`\n=== ${revisar ? "REVISAR" : "SUGERIR"}: lo que sugeriría hoy (no se guardó) ===`);
+  for (const it of enOrdenDelPlan(r.items, (x) => (x.valor as Caso).plan?.paso)) linea((it.destino as { useCaseId: string }).useCaseId, it.valor as Caso, "sugerido");
+  if (revisar) {
+    console.log(`\n  ${revisionEnUnaFrase({ nuevos: r.items.map((it) => (it.valor as Caso).titulo), cambios })}`);
+    for (const c of cambios) console.log(`  ~ ${c.titulo} (${c.elegido ? "elegido" : "sugerido"}): ${c.veredicto === "cambia" ? "cambiaría" : "ya no hace falta"} — ${c.motivo}`);
+  }
+  const uS = respuesta.usage;
+  console.log(`\nCosto de ${revisar ? "revisar" : "sugerir"}: ${uS.input_tokens} + ${uS.output_tokens} tokens = US$ ${costoDe(uS).toFixed(3)} · ${segSugerir} s · ${r.descartadas} descartadas · stop: ${respuesta.stop_reason}`);
+
+  /* --personalizar N: acepta los N primeros sugeridos (o, sin sugeridos, los N primeros elegidos) y los personaliza, uno
+     por uno, como al apretar «Aceptar». */
+  const n = Number(arg("--personalizar") ?? 0);
+  if (!n) return;
+  const aAceptar: [string, Caso][] = (r.items.length
+    ? enOrdenDelPlan(r.items, (x) => (x.valor as Caso).plan?.paso).map((it) => [(it.destino as { useCaseId: string }).useCaseId, it.valor as Caso] as [string, Caso])
+    : Object.entries(estado.contenido.casosDeUso)
+  ).slice(0, n);
+  const exploracionTexto = ctx.exploracion;
+  let total = 0;
+  for (const [id, caso] of aAceptar) {
+    const cp = await contextoDePersonalizar({
+      fila,
+      empresa: fila.client.name,
+      estado,
+      exploracion: exploracionTexto,
+      useCaseId: id,
+      caso,
+      nombreDelArea: escala.areas.find((a) => a.id === caso.areaId)?.nombre ?? null,
+    });
+    const t1 = Date.now();
+    const rp = await getAnthropic().messages.create(pedidoDePersonalizar(cp));
+    const seg = Math.round((Date.now() - t1) / 1000);
+    const personalizado = casoPersonalizado(caso, leerLaPersonalizacion(rp, cp));
+    console.log(`\n=== ACEPTAR «${caso.titulo}»: lo personalizado (no se guardó) ===`);
+    for (const c of personalizado.personalizado?.cambios ?? []) console.log(`  * ${c}`);
+    linea(id, personalizado, "personalizado");
+    total += costoDe(rp.usage);
+    console.log(`  Costo: ${rp.usage.input_tokens} + ${rp.usage.output_tokens} tokens = US$ ${costoDe(rp.usage).toFixed(3)} · ${seg} s · stop: ${rp.stop_reason} · ${cp.reuniones ? cp.reuniones.split("\n").length : 0} minutas leídas`);
+  }
+  console.log(`\nTotal: ${revisar ? "revisar" : "sugerir"} US$ ${costoDe(uS).toFixed(3)} + ${aAceptar.length} aceptados US$ ${total.toFixed(3)} = US$ ${(costoDe(uS) + total).toFixed(3)}`);
 }
 
 main()

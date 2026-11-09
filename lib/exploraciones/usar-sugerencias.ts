@@ -136,7 +136,7 @@ export function etiquetaDelLote(lugar: LugarDelLote, n: number): string {
     case "escala":
       return `Pasar las ${n} al mapa`;
     case "casos":
-      return `Sumar los ${n} casos`;
+      return `Aceptar los ${n} casos`;
     case "resumen":
       return `Pasar las ${n} al resumen`;
     case "sesion":
@@ -153,7 +153,7 @@ export function avisoDelLote(lugar: LugarDelLote, n: number): string {
     case "escala":
       return `Pasaste ${cuantas} al mapa`;
     case "casos":
-      return n === 1 ? "Sumaste un caso de uso" : `Sumaste ${n} casos de uso`;
+      return n === 1 ? "Aceptaste un caso de uso" : `Aceptaste ${n} casos de uso`;
     case "resumen":
       return `Pasaste ${cuantas} al resumen`;
     case "sesion":

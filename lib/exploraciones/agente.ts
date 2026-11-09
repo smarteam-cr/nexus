@@ -25,6 +25,8 @@ import { tituloVigente } from "@/lib/casos-de-uso/catalogo";
 import { casoDeLaPreventa, casosParaLasAreas, titulosDelCaso } from "@/lib/casos-de-uso/en-la-preventa";
 import { actividadesDelCaso, bibliotecaDeActividades } from "@/lib/casos-de-uso/actividades-server";
 import { actividadesDelElegido, actividadesPorDefecto, apartarCasosSinArmar, bibliotecaLigera, ultimoPasoDelPlan, type ActividadDelCaso } from "@/lib/casos-de-uso/armado";
+import { huellaDeLoQueLee, type RevisionDeLosCasos } from "@/lib/casos-de-uso/personalizar";
+import { leerLaRevision, porQueDelCaso } from "./personalizar-pedido";
 import { humanizeAgentError } from "@/lib/agents/anthropic-error";
 import { estaColgada, MOTIVO_COLGADA } from "@/lib/agents/run-colgada";
 import { conContextoDeIA } from "@/lib/ai/contexto-de-corrida";
@@ -242,6 +244,11 @@ interface OpcionesDeLaCorrida {
    * actividades, y las sugerencias de casos de antes (sin armar) quedan aparte para «Deshacer».
    */
   regenerar?: boolean;
+  /**
+   * Para «casos» (2026-11-08, lib/casos-de-uso/personalizar.ts): «Revisar». El agente vuelve a mirar lo que ya está con lo
+   * que se sabe hoy, sugiere lo nuevo y DICE qué cambia de lo de antes, sin tocar lo elegido.
+   */
+  revisar?: boolean;
 }
 
 /**
@@ -811,8 +818,12 @@ async function proponerCasos(
   }
   await fase(runId, "Mirando dónde está cada equipo…");
   const regenerar = opts.regenerar === true;
-  const ctx = contextoDeLosCasos(ex, regenerar);
-  await fase(runId, regenerar ? "Volviendo a armar los casos con la biblioteca de actividades…" : "Pensando casos de uso y sus actividades…");
+  const revisar = !regenerar && opts.revisar === true;
+  const ctx = contextoDeLosCasos(ex, { regenerar, revisar });
+  await fase(
+    runId,
+    regenerar ? "Volviendo a armar los casos con la biblioteca de actividades…" : revisar ? "Revisando los casos con lo que se sabe hoy…" : "Pensando qué casos de uso sugerir y por qué…",
+  );
   const respuesta = await conContextoDeIA(
     {
       agentSlug: AGENTE_DE_LA_EXPLORACION,
@@ -829,10 +840,13 @@ async function proponerCasos(
     throw new FalloDeLaExploracion("La respuesta del agente salió cortada (demasiados casos para una vez). No se cambió nada: vuelve a intentarlo, o quita algún caso elegido antes de regenerar.");
   }
   const r = leerLosCasos(respuesta, ctx, runId);
+  // «Revisar»: lo que dijo de los que ya estaban. Solo se cuenta: lo elegido no se toca.
+  const cambios = leerLaRevision(respuesta, ctx);
   /* El argumento de valor, en una llamada APARTE con lo interno de la preventa (pedidoDelValor): la de los casos no lo
-     ve, porque escribe lo que llega al cliente. Si falla, los casos se guardan igual, sin argumento. */
+     ve, porque escribe lo que llega al cliente. Si falla, los casos se guardan igual, sin argumento. Desde el 2026-11-08
+     solo en «Regenerar» (que arma actividades): al sugerir, el valor llega al aceptar el caso, con su personalización. */
   let items = r.items;
-  if (items.length) {
+  if (items.length && regenerar) {
     await fase(runId, "Pensando cómo subir el ticket de cada caso…");
     const cv = contextoDelValor(ex.estado, ctx.exploracion, ex.fila.client.name, items);
     try {
@@ -850,16 +864,32 @@ async function proponerCasos(
     exploracionId,
     items,
     {
-      leyo: ["Dónde está cada equipo en la escala", "Lo que el cliente contó en las reuniones", "La biblioteca de casos y de actividades"],
+      leyo: regenerar
+        ? ["Dónde está cada equipo en la escala", "Lo que el cliente contó en las reuniones", "La biblioteca de casos y de actividades"]
+        : ["Dónde está cada equipo en la escala", "Lo que el cliente contó en las reuniones", "El catálogo de casos de uso"],
       leidas: { sesiones: [], hubspot: [], documentos: [] },
       foto: null,
     },
-    { runId, modo: "casos", automatica: false, regenerar },
+    {
+      runId,
+      modo: "casos",
+      automatica: false,
+      regenerar,
+      revision: { en: new Date().toISOString(), corridaId: runId, huella: huellaDeLoQueLee(ctx.exploracion, ex.estado.areas), revisada: revisar, cambios },
+    },
   );
   await prisma.agentRun.update({
     where: { id: runId },
-    data: { status: "DONE", currentPhase: null, output: JSON.stringify({ propuestos, descartadas: r.descartadas, nadaNuevo: false, regenerar }) },
+    data: { status: "DONE", currentPhase: null, output: JSON.stringify({ propuestos, descartadas: r.descartadas, nadaNuevo: false, regenerar, revisar, cambios: cambios.length }) },
   });
+}
+
+/**
+ * La huella de lo que leería hoy el agente de casos (lib/casos-de-uso/personalizar.ts): si es otra que la de su última
+ * mirada, cambió la escala o lo que se sabe del cliente, y el paso lo avisa arriba.
+ */
+export function huellaDeLosCasosHoy(ex: { estado: EstadoDeExploracion; escala: EscalaDelLienzo; general: Escala }): string {
+  return huellaDeLoQueLee(exploracionParaLosCasos(ex.estado, ex.escala, pendientesVigentes(ex.estado, ex.general, ex.escala)), ex.estado.areas);
 }
 
 /** Lo que lee la llamada del argumento de valor: lo de los casos, más lo interno de la preventa. */
@@ -877,22 +907,37 @@ export function contextoDelValor(estado: EstadoDeExploracion, exploracion: strin
 }
 
 /**
- * Lo que lee el agente de casos (exportado para el simulacro de scripts/simular-casos-de-uso.ts). `regenerar`: vuelve a
- * armar los elegidos, y las sugerencias sin armar no cuentan como «ya están» (se van a reemplazar).
+ * Lo que lee el agente de casos (exportado para el simulacro de scripts/simular-casos-de-uso.ts).
+ *   - Sugerir (sin opciones, desde el 2026-11-08): qué casos y por qué. SIN la biblioteca de actividades: las arma la
+ *     personalización al aceptar cada caso (lib/casos-de-uso/personalizar.ts). Pide la mitad y tarda menos.
+ *   - `revisar`: lo mismo, más los casos que ya están con su id, para que diga cuáles cambian o ya no hacen falta.
+ *   - `regenerar` (el de antes, ya sin botón en la pantalla): vuelve a armar los elegidos con la biblioteca, y las
+ *     sugerencias sin armar no cuentan como «ya están» (se van a reemplazar).
  */
 export function contextoDeLosCasos(
   ex: { fila: { client: { name: string } }; estado: EstadoDeExploracion; escala: EscalaDelLienzo; general: Escala },
-  regenerar: boolean,
+  o: { regenerar?: boolean; revisar?: boolean } = {},
 ): ContextoDeCasos {
+  const regenerar = o.regenerar === true;
   const pendientes = pendientesVigentes(ex.estado, ex.general, ex.escala);
-  /* 2026-11-08: la biblioteca de actividades y las de cada caso del catálogo (lib/casos-de-uso/armado.ts). Al regenerar,
-     las sugerencias sin armar se van a reemplazar: no cuentan como «ya están». */
   const catalogo = casosParaLasAreas(ex.estado.areas);
   const porDefecto: Record<string, ActividadDelCaso[]> = {};
-  for (const c of catalogo) {
-    const a = actividadesDelCaso(c.id);
-    if (a) porDefecto[c.id] = actividadesPorDefecto(a);
-  }
+  if (regenerar)
+    for (const c of catalogo) {
+      const a = actividadesDelCaso(c.id);
+      if (a) porDefecto[c.id] = actividadesPorDefecto(a);
+    }
+  const elegidos = Object.entries(ex.estado.contenido.casosDeUso);
+  const sugeridos = pendientes.filter((it) => it.destino.tipo === "casoDeUso" && !((it.destino as { useCaseId: string }).useCaseId in ex.estado.contenido.casosDeUso));
+  const revisar = o.revisar
+    ? [
+        ...elegidos.map(([useCaseId, c]) => ({ useCaseId, titulo: c.titulo, elegido: true, porQue: porQueDelCaso(c) })),
+        ...sugeridos.map((it) => {
+          const c = it.valor as CasoDeUsoElegido;
+          return { useCaseId: (it.destino as { useCaseId: string }).useCaseId, titulo: c.titulo, elegido: false, porQue: porQueDelCaso(c) };
+        }),
+      ]
+    : [];
   const pendientesQueSiguen = pendientes.filter((it) => it.destino.tipo === "casoDeUso" && (!regenerar || !!(it.valor as { armado?: string }).armado));
   return {
     empresa: ex.fila.client.name,
@@ -913,8 +958,8 @@ export function contextoDeLosCasos(
     descartados: ex.estado.contenido.casosDescartados.map(tituloVigente),
     instrucciones: bloqueDeInstrucciones(ex.estado.contenido.notas, "casos"),
     catalogo,
-    biblioteca: bibliotecaLigera(bibliotecaDeActividades()),
-    porDefecto,
+    ...(regenerar ? { biblioteca: bibliotecaLigera(bibliotecaDeActividades()), porDefecto } : {}),
+    ...(revisar.length ? { revisar } : {}),
     ...(regenerar
       ? {
           rearmar: Object.entries(ex.estado.contenido.casosDeUso).map(([id, c]) => ({
@@ -1584,7 +1629,7 @@ async function guardarGuia(
 }
 
 /** Lo pendiente que sigue teniendo dónde ir con la escala de la exploración. */
-function pendientesVigentes(estado: EstadoDeExploracion, general: Escala, escala: EscalaDelLienzo): ItemPropuesto[] {
+export function pendientesVigentes(estado: EstadoDeExploracion, general: Escala, escala: EscalaDelLienzo): ItemPropuesto[] {
   const validez = validezPara(general, escala);
   return propuestaVigente(estado).filter((it) => destinoValido(it.destino, validez));
 }
@@ -1594,7 +1639,7 @@ async function guardar(
   exploracionId: string,
   items: ItemPropuesto[],
   leido: LoQueLeyoLaCorrida,
-  corrida: { runId: string; modo: ModoDelAgente; automatica: boolean; regenerar?: boolean },
+  corrida: { runId: string; modo: ModoDelAgente; automatica: boolean; regenerar?: boolean; revision?: Omit<RevisionDeLosCasos, "nuevos"> },
 ): Promise<number> {
   return prisma.$transaction(async (tx) => {
     await bloquearFila(tx, exploracionId);
@@ -1645,6 +1690,15 @@ async function guardar(
       // La tarjeta de cada dimensión de La escala: la de esta corrida reemplaza a la anterior.
       ...(leido.tarjetasDeLaEscala ? { tarjetasDeLaEscala: leido.tarjetasDeLaEscala } : {}),
       ...(apartado ? { casosAnteriores: apartado.casosAnteriores } : {}),
+      // Casos de uso (2026-11-08): la última mirada del agente, con los casos nuevos que de verdad quedaron sugeridos.
+      ...(corrida.revision
+        ? {
+            revisionDeLosCasos: {
+              ...corrida.revision,
+              nuevos: nuevas.flatMap((it) => (it.destino.tipo === "casoDeUso" ? [(it.valor as CasoDeUsoElegido).titulo] : [])).slice(0, 40),
+            },
+          }
+        : {}),
       corridas: [
         ...fusion.corridas,
         {

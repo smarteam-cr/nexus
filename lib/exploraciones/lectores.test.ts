@@ -179,6 +179,10 @@ const CENSO: Record<string, { destino: Destino; motivo: string }> = {
   "app/api/sales/exploraciones/[id]/route.ts": { destino: "ventas", motivo: "Leer y cambiar el lienzo." },
   "app/api/sales/exploraciones/[id]/agente/route.ts": { destino: "ventas", motivo: "Lanzar y seguir al agente." },
   "app/api/sales/exploraciones/[id]/propuesta/route.ts": { destino: "ventas", motivo: "Armar la propuesta desde el lienzo." },
+  "app/api/sales/exploraciones/[id]/casos/personalizar/route.ts": {
+    destino: "ventas",
+    motivo: "Personalizar un caso de uso aceptado (2026-11-08): actividades, qué cambió y cómo subir el ticket, para el vendedor. Nada llega al cliente.",
+  },
   "app/api/sales/exploraciones/[id]/documentos/route.ts": { destino: "ventas", motivo: "Sumar a mano una sesión o un documento, y listarlos." },
   "app/api/sales/exploraciones/[id]/documentos/[documentoId]/route.ts": { destino: "ventas", motivo: "Quitar lo que se sumó a mano." },
   "app/api/sales/exploraciones/[id]/preparacion/route.ts": { destino: "ventas", motivo: "Los hechos de HubSpot de la pieza Preparación." },

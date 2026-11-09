@@ -130,6 +130,8 @@ describe("el bloque de contexto para la generación", () => {
         paraVentas: { porQue: "PORQUE_INTERNO", comoSeArma: "COMO_INTERNO" },
         plan: { paso: 2, despuesDe: "ORDEN_INTERNO" },
         valorDeVenta: { palanca: "Riesgo", argumento: "VALOR_INTERNO", numeros: [{ dato: "DATO_INTERNO 12", fuente: "x" }], falta: ["FALTA_INTERNA"] },
+        // Lo que dejó la personalización al aceptarlo (2026-11-08): tampoco.
+        personalizado: { en: "2026-11-08T15:00:00.000Z", cambios: ["CAMBIO_INTERNO"] },
       },
     },
   });
@@ -161,6 +163,7 @@ describe("el bloque de contexto para la generación", () => {
       "VALOR_INTERNO",
       "DATO_INTERNO",
       "FALTA_INTERNA",
+      "CAMBIO_INTERNO",
     ]) {
       expect(b).not.toContain(interno);
       expect(casos).not.toContain(interno);

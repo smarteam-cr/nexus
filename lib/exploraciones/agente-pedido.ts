@@ -1295,9 +1295,14 @@ export interface ContextoDeCasos {
   porDefecto?: Readonly<Record<string, ActividadDelCaso[]>>;
   /** «Regenerar»: los casos ya elegidos, para que el agente los vuelva a armar (con su id en `rearma`). */
   rearmar?: { id: string; titulo: string; tituloDelCatalogo?: string; areaId: string | null; actividades: ActividadDelCaso[] }[];
+  /**
+   * «Revisar» (2026-11-08, lib/casos-de-uso/personalizar.ts): los casos que ya están (elegidos y sugeridos), con su id,
+   * para que el agente diga cuáles cambian o ya no hacen falta con lo que se sabe hoy. No los toca: solo lo dice.
+   */
+  revisar?: { useCaseId: string; titulo: string; elegido: boolean; porQue: string }[];
 }
 
-const PALANCAS_DE_VALOR = ["Costo de la mala calidad", "Ingreso que se pierde", "Tiempo del equipo", "Riesgo", "Crecimiento"] as const;
+export const PALANCAS_DE_VALOR = ["Costo de la mala calidad", "Ingreso que se pierde", "Tiempo del equipo", "Riesgo", "Crecimiento"] as const;
 
 /** La biblioteca como la lee el agente: id, nombre, etapa, cómo se cuenta y para qué equipos. */
 export function bibliotecaParaElAgente(biblioteca: readonly ActividadLigera[]): string {
@@ -1311,7 +1316,7 @@ export function bibliotecaParaElAgente(biblioteca: readonly ActividadLigera[]): 
 }
 
 /** Las actividades de un caso como las lee el agente: «id×veces «cómo se llama ahí» sobre X». */
-function actividadesParaElAgente(acts: readonly ActividadDelCaso[]): string {
+export function actividadesParaElAgente(acts: readonly ActividadDelCaso[]): string {
   return acts.map((a) => `${a.actividadId}${a.veces > 1 ? `×${a.veces}` : ""} «${a.nombre}»${a.sobreQue ? ` sobre ${a.sobreQue}` : ""}`).join("; ");
 }
 
@@ -1322,6 +1327,7 @@ export function pedidoDeCasos(ctx: ContextoDeCasos): Anthropic.Messages.MessageC
   const biblioteca = ctx.biblioteca ?? [];
   const conBiblioteca = biblioteca.length > 0;
   const rearmar = ctx.rearmar ?? [];
+  const revisar = ctx.revisar ?? [];
   const tool: Anthropic.Messages.Tool = {
     name: NOMBRE_DE_LA_HERRAMIENTA_DE_CASOS,
     description: "Propone casos de uso para la primera propuesta, por área. Llámala una sola vez.",
@@ -1346,7 +1352,11 @@ export function pedidoDeCasos(ctx: ContextoDeCasos): Anthropic.Messages.MessageC
               razon: { type: "string", description: "Una frase: qué de lo que le falta, o de su meta, resuelve." },
               paso: { type: "integer", minimum: 1, maximum: 40, description: "Su lugar en el plan: 1 es lo primero que se hace." },
               despuesDe: { type: "string", description: "Una frase de 20 palabras como mucho: por qué va después del caso anterior del plan. Vacío en el primero." },
-              porQue: { type: "string", description: "Para el vendedor, UNA frase de 30 palabras como mucho: por qué este caso tiene sentido para ESTA empresa, con su contexto." },
+              porQue: {
+                type: "string",
+                description:
+                  "Para el vendedor, UNA frase de 30 palabras como mucho: por qué este caso tiene sentido para ESTA empresa, con un HECHO suyo (lo que contó, cómo trabaja hoy, su meta). Nada genérico.",
+              },
               ...(conBiblioteca
                 ? {
                     ...(rearmar.length
@@ -1378,8 +1388,29 @@ export function pedidoDeCasos(ctx: ContextoDeCasos): Anthropic.Messages.MessageC
             required: ["areaId", "titulo", "descripcion", "razon", "paso", "porQue", ...(conBiblioteca ? ["actividades", "comoSeArma"] : [])],
           },
         },
+        ...(revisar.length
+          ? {
+              revision: {
+                type: "array",
+                description: "Los casos que YA ESTÁN (abajo, con su id) que, con lo que se sabe hoy, cambian o ya no hacen falta. Los que siguen igual NO van.",
+                items: {
+                  type: "object",
+                  properties: {
+                    id: { type: "string", enum: revisar.map((r) => r.useCaseId) },
+                    veredicto: {
+                      type: "string",
+                      enum: ["cambia", "ya_no"],
+                      description: "«cambia»: sigue, pero distinto (otro alcance, otro orden, otra área). «ya_no»: ya no hace falta.",
+                    },
+                    motivo: { type: "string", description: "Para el vendedor, UNA frase de 25 palabras como mucho, con el hecho de la empresa que lo cambia." },
+                  },
+                  required: ["id", "veredicto", "motivo"],
+                },
+              },
+            }
+          : {}),
       },
-      required: ["casos"],
+      required: ["casos", ...(revisar.length ? ["revision"] : [])],
     },
   };
   const sistema = `Eres el analista de ventas de Smarteam, una consultora que implementa HubSpot. Ayudas a un vendedor a armar la PRIMERA propuesta de un prospecto: casos de uso que llevan cada área en juego a Funcional en la Escala de Rendimiento, empezando por lo que va primero.
@@ -1418,6 +1449,14 @@ Cada caso se arma con ACTIVIDADES de la BIBLIOTECA DE SMARTEAM (abajo), que son 
             : ""
         }`
       : ""
+  }${
+    revisar.length
+      ? `
+
+El vendedor te pide REVISAR lo que ya está con lo que se sabe hoy (abajo, «PARA REVISAR»):
+- En «revision» van SOLO los casos que ya están y que, con lo que se sabe hoy, cambian (otro alcance, otro orden, otra área) o ya no hacen falta, con el hecho de la empresa que lo explica. Si siguen igual, no los mandes: una revisión sin cambios es una respuesta válida.
+- En «casos» van solo los NUEVOS que hoy valen la pena y no están. Si no hay ninguno, la lista vacía.`
+      : ""
   }`;
   const cuerpo =
     `Empresa: ${ctx.empresa}\nEdición de la escala: ${ctx.edicion}\n` +
@@ -1441,12 +1480,18 @@ Cada caso se arma con ACTIVIDADES de la BIBLIOTECA DE SMARTEAM (abajo), que son 
           .map((r) => `- [${r.id}] ${r.titulo}${r.areaId ? ` (área ${r.areaId})` : ""}. Actividades hoy: ${actividadesParaElAgente(r.actividades) || "(ninguna)"}`)
           .join("\n")}`
       : "") +
+    (revisar.length
+      ? `\n\n=== PARA REVISAR (los que ya están, con su id) ===\n${revisar
+          .map((r) => `- [${r.useCaseId}] ${r.titulo} (${r.elegido ? "elegido por el vendedor" : "sugerido, sin elegir"})${r.porQue ? `. Por qué se propuso: ${r.porQue}` : ""}`)
+          .join("\n")}`
+      : "") +
     `\n\n=== YA ESTÁN (no los repitas) ===\n${ctx.yaEstan.length ? ctx.yaEstan.map((t) => `- ${t}`).join("\n") : "(ninguno)"}` +
     `\n\n=== EL VENDEDOR LOS DESCARTÓ (no los vuelvas a proponer) ===\n${ctx.descartados.length ? ctx.descartados.map((t) => `- ${t}`).join("\n") : "(ninguno)"}`;
   return {
     model: MODELO_DE_LA_EXPLORACION,
-    // Con la biblioteca, cada caso trae sus actividades: unos 500 tokens por caso.
-    max_tokens: conBiblioteca ? 12000 : 3000,
+    // Con la biblioteca, cada caso trae sus actividades: unos 500 tokens por caso. Sin ella (sugerir y revisar, desde el
+    // 2026-11-08) unos 250, hasta cuatro por área, más la revisión.
+    max_tokens: conBiblioteca ? 12000 : 6000,
     system: sistema,
     tools: [tool],
     tool_choice: { type: "tool", name: tool.name },
@@ -1551,7 +1596,7 @@ function casoDelId(id: string, delCatalogo: ReadonlyMap<string, CasoDelCatalogo>
  * actividades de la biblioteca; si no dejó ninguna, las de la base (las por defecto del catálogo o las que ya tenía el
  * elegido). Una actividad que coincide con una de la base conserva las veces de sus partes.
  */
-function armarConLaBiblioteca(
+export function armarConLaBiblioteca(
   x: Record<string, unknown>,
   porId: ReadonlyMap<string, ActividadLigera>,
   base: readonly ActividadDelCaso[],
