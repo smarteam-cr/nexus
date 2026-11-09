@@ -17,6 +17,7 @@ vi.mock("@/lib/exploraciones/servidor", async (original) => {
 import { prisma } from "@/lib/db/prisma";
 import { SENTINEL_SERVICE_TYPE } from "@/lib/projects/kind";
 import { crearAcceso, estadoDelAcceso, revocarAcceso } from "@/lib/exploraciones/acceso-a-la-escala";
+import { paginaParaElCse } from "@/lib/exploraciones/escala-para-el-cliente-server";
 import { escalaParaElToken } from "./escala-view";
 
 const tokenDe = (enlace: string | null) => (enlace ?? "").split("/").pop() ?? "";
@@ -93,5 +94,55 @@ describe("el enlace de La escala", () => {
     expect(await escalaParaElToken(token)).toBeNull();
     expect(await escalaParaElToken("no-es-un-token")).toBeNull();
     expect(await escalaParaElToken("0".repeat(64))).toBeNull();
+  });
+});
+
+describe("la escala interna editable (8 nov): la misma página, por el mismo cálculo", () => {
+  async function conEdicion(nombre: string) {
+    const p = await preventa(nombre, { "1.1": { nivel: "I", fuente: "reunion" }, "1.2": { nivel: "F", fuente: "vendedor" } });
+    await prisma.exploracionDeVenta.update({
+      where: { id: p.id },
+      data: {
+        contenido: {
+          chequeo: { "1.1": { nivel: "I", fuente: "reunion" }, "1.2": { nivel: "F", fuente: "vendedor" } },
+          textosDelRadar: { "1.1": { texto: "TEXTO DEL EQUIPO", nivel: "I" }, "1.2": { texto: "TEXTO VIEJO", nivel: "O" } },
+          contextoDeLaEscala: { "1": "CONTEXTO DEL EQUIPO" },
+        },
+      },
+    });
+    return p;
+  }
+
+  it("lo que se edita adentro es lo que abre el enlace (el texto de la tarjeta, en su nivel); el contexto no sale", async () => {
+    const { id } = await conEdicion("Empresa D (test)");
+    const token = tokenDe((await crearAcceso(id, null)).enlace);
+    const afuera = await escalaParaElToken(token);
+    const adentro = await paginaParaElCse(id);
+    expect(afuera!.detalles["1.1"].impacto).toBe("TEXTO DEL EQUIPO");
+    expect(afuera!.detalles["1.2"].impacto).not.toBe("TEXTO VIEJO");
+    // El contexto lo lee el agente de la descripción: ni afuera ni en la página de adentro.
+    expect(JSON.stringify(afuera)).not.toContain("CONTEXTO DEL EQUIPO");
+    expect(JSON.stringify(adentro)).not.toContain("CONTEXTO DEL EQUIPO");
+    // Adentro, lo de las áreas que ve el cliente es IGUAL a lo de afuera; además vienen las otras, y cuáles ve.
+    expect(adentro!.alCliente).toEqual(["1"]);
+    expect(adentro!.areas.map((a) => a.id)).toEqual(expect.arrayContaining(["1", "2", "3"]));
+    expect(adentro!.resultados.find((r) => r.areaId === "1")).toEqual(afuera!.resultados[0]);
+    expect(adentro!.detalles["1.1"]).toEqual(afuera!.detalles["1.1"]);
+  });
+
+  it("⛔ adentro tampoco cruza de empresa: con su contenedor en otra empresa no hay página; archivada sí (es interna)", async () => {
+    const a = await conEdicion("Empresa E (test)");
+    const otra = await prisma.client.create({ data: { name: "Otra empresa E (test)", kind: "PROSPECTO" } });
+    const ajeno = await prisma.project.create({ data: { name: "Información de otra", clientId: otra.id, serviceType: SENTINEL_SERVICE_TYPE } });
+    await prisma.exploracionDeVenta.update({ where: { id: a.id }, data: { projectId: ajeno.id } });
+    expect(await paginaParaElCse(a.id)).toBeNull();
+
+    // La de un proyecto de su empresa no se comparte, pero adentro se ve y se edita.
+    const proyecto = await prisma.project.create({ data: { name: "Un proyecto E", clientId: a.clientId } });
+    await prisma.exploracionDeVenta.update({ where: { id: a.id }, data: { projectId: proyecto.id } });
+    expect((await paginaParaElCse(a.id))?.empresa).toBe("Empresa E (test)");
+
+    await prisma.exploracionDeVenta.update({ where: { id: a.id }, data: { projectId: null, archivadaEn: new Date() } });
+    expect((await paginaParaElCse(a.id))?.empresa).toBe("Empresa E (test)");
   });
 });

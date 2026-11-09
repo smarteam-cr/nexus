@@ -221,15 +221,15 @@ export const PREVENTA: Recorrido = {
     },
     {
       ancla: "preventa.escala.areas",
-      titulo: "Las áreas, como pestañas",
-      texto: "Cada área con su nivel. La que no está en juego se suma desde su pestaña, y la que está se saca igual de fácil.",
+      titulo: "La escala, como la ve el cliente",
+      texto: "La misma página que abre su enlace, con una pestaña por área: la punteada no la ve el cliente. Arriba, cuánto tiene cada área y cómo sumarla o sacarla. La descripción y el contexto se editan en su lugar.",
       lado: "bottom-start",
       accion: pieza("escala"),
     },
     {
       ancla: "preventa.escala.dimensiones",
       titulo: "Dónde está cada dimensión",
-      texto: "Cada porción se pinta hasta su nivel: ✓ es evidencia y ? es hipótesis. Toca una para ver qué preguntar y elegir el nivel con un clic.",
+      texto: "Arrastra una parte por su eje para cambiar su nivel. Tócala para editar lo que dice su tarjeta, ver qué preguntar y elegir el nivel con un clic.",
       lado: "top",
       accion: pieza("escala"),
     },

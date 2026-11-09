@@ -19,6 +19,12 @@
  * «reducir movimiento» no se anima nada. «Llegar» es que su borde de arriba entró en la pantalla, se mire con el scroll
  * (no con IntersectionObserver: con un salto, a un enlace o arrastrando la barra, lo que se pasó de largo quedaba
  * escondido para siempre). Es el `<main>` de la página; el PDF no lo usa.
+ *
+ * `quieta` (La escala interna editable, 8 nov): la misma página dentro de la pantalla que la edita. Ahí solo queda el
+ * resalte del radar y su tarjeta: sin el imán (corría los vértices mientras se arrastra un nivel) y sin la entrada de las
+ * secciones (la pantalla interna se desplaza en su propio contenedor, no en la ventana: lo de abajo quedaba escondido).
+ * Ahí tampoco es el `<main>` (la pantalla ya tiene el suyo), y una tarjeta cuyo texto se está editando
+ * (`data-fijada`, TextoEditableDeLaPagina) no se cierra ni la reemplaza otra hasta terminar.
  */
 import { useEffect, useRef, type ReactNode } from "react";
 import { conIman, imanDelRadar, resaltarElRadar, ubicarLaTarjeta, type Tarjetero } from "@/components/escala/movimiento-del-radar";
@@ -54,8 +60,10 @@ function cargar(barra: HTMLElement | null, num: HTMLElement | null, retraso: num
  */
 function tarjetasDeLaPagina(raiz: HTMLElement): Tarjetero {
   let visible: HTMLElement | null = null;
+  // Se está editando su texto (solo adentro): se queda abierta y en su lugar.
+  const fijada = () => visible?.dataset.fijada === "1";
   const esconder = () => {
-    if (!visible) return;
+    if (!visible || fijada()) return;
     visible.classList.remove("is-visible");
     visible.hidden = true;
     visible = null;
@@ -63,6 +71,7 @@ function tarjetasDeLaPagina(raiz: HTMLElement): Tarjetero {
   return {
     mostrar: (t) => {
       const tip = raiz.querySelector<HTMLElement>(`[data-tarjeta="${CSS.escape(t.clave)}"]`);
+      if (fijada() && visible !== tip) return;
       if (visible !== tip) esconder();
       if (!tip) return;
       visible = tip;
@@ -76,14 +85,14 @@ function tarjetasDeLaPagina(raiz: HTMLElement): Tarjetero {
   };
 }
 
-export default function AnimacionesDelResultado({ className, children }: { className?: string; children: ReactNode }) {
-  const ref = useRef<HTMLElement>(null);
+export default function AnimacionesDelResultado({ className, quieta = false, children }: { className?: string; quieta?: boolean; children: ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const raiz = ref.current;
     if (!raiz) return;
     const soltarElRadar = resaltarElRadar(raiz, tarjetasDeLaPagina(raiz));
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return soltarElRadar;
+    if (quieta || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return soltarElRadar;
     const soltarElIman = conIman() ? imanDelRadar(raiz) : () => undefined;
 
     const secciones = [...raiz.querySelectorAll<HTMLElement>("[data-revela]")].filter(debajoDeLaPantalla);
@@ -146,11 +155,17 @@ export default function AnimacionesDelResultado({ className, children }: { class
       soltarElIman();
       completar();
     };
-  }, []);
+  }, [quieta]);
 
   return (
-    <main ref={ref} className={className}>
-      {children}
-    </main>
+    quieta ? (
+      <div ref={ref} className={className}>
+        {children}
+      </div>
+    ) : (
+      <main ref={ref} className={className}>
+        {children}
+      </main>
+    )
   );
 }

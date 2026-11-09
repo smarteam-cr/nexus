@@ -13996,3 +13996,53 @@ escalas, en los departamentos, y cómo eso se traduce en casos de uso».
   `useSyncExternalStore` para no desajustar el HTML del servidor). Lo guardado se lee con tolerancia: áreas que ya no
   existen se descartan, y si no queda ninguna de las guardadas, vuelve la de entrada.
 - **Datos y SQL:** sin SQL ni cambios de datos.
+
+## La escala interna se ve como la página del cliente, y se edita ahí (2026-11-08)
+
+Elías: «la página de resultados debe verse igual externo que interno, pero interno debe funcionar como un artefacto que se
+puede editar».
+
+- **La misma vista, no una copia.** «Dónde está hoy» abre en «Como lo ve el cliente» (`PaginaDeLaEscala.tsx`), que pinta
+  `ResultadoDelTestVista`, el componente de `/external/escala/[token]`, con su tema de hex literal. Lo que edita entra por
+  los huecos de `EdicionDeLaPagina` (pestañas como botones, descripción, texto de cada tarjeta, radar, pie de cada
+  tarjeta). La página pública no los pasa, y `escala-interna-editable.test.ts` falla si algo de `app/external` monta una
+  pieza que edita. Adentro la página no es el `<main>` ni lleva otro `h1`: la pantalla ya tiene los suyos.
+- **Toda la edición es en su lugar** (Elías, 8 nov: «nada más se le da clic, se cambia el texto y se guarda»). Ningún
+  texto se edita en un panel aparte. El panel que se abre al tocar una parte del radar es para LEER lo interno: evidencia
+  o hipótesis, qué preguntar, «Llevar a la sesión N», los cinco niveles y «Explorarla a fondo».
+- **El mismo cálculo.** Los datos los arma `armarLaPagina` (escala-para-el-cliente-server.ts) para las dos puertas:
+  `escalaParaElCliente` (la pública, sin cambios de regla) y `paginaParaElCse` (GET `/api/sales/exploraciones/[id]/pagina-de-la-escala`,
+  con la guardia de la exploración). La interna trae las tres áreas, con `alCliente`: la que el cliente no ve va punteada
+  y dice «no la ve el cliente». Tampoco se frena por archivada ni por ser de un proyecto (no se comparte, pero se ve).
+  Mantiene la regla de la empresa: si su contenedor es de otra empresa, no hay página. La prueba de integración compara
+  lo de adentro con lo de afuera, campo por campo.
+- **Qué se edita:**
+  - *La descripción de «Resultado general»*: en su lugar, con «Rehacer con IA». La guarda y la genera la ruta de
+    la descripción (`/escala/descripcion`, otra sesión del mismo 8 nov); acá no se genera nada. Sin esa ruta (o en la
+    exploración de un proyecto, que responde 409), la descripción se ve pero no se edita.
+  - *«Contexto para la descripción»* (Elías eligió que «agregar contexto» sea esto): un texto por área que lee el AGENTE
+    de la descripción, como el «Contexto adicional» de los otros artefactos. El cliente NO lo ve: va arriba de la página,
+    fuera de ella (`contenido.contextoDeLaEscala`, operación `contextoDeLaEscala`; el campo es de esta pieza y el agente
+    de la descripción solo lo lee). Guardarlo no rehace la descripción: ofrece «Rehacer la descripción con IA».
+  - *Lo que dice cada tarjeta del radar*: dentro de la tarjeta, en su lugar (`contenido.textosDelRadar`, operación
+    `textoDelRadar`). Mientras se edita, la tarjeta queda fija (`data-fijada`): no se cierra al mover el cursor. Se guarda
+    con el nivel para el que se escribió y sale solo mientras la parte siga en ese nivel, porque habla de cómo opera el
+    área ahí; con otro nivel vuelve el de la escala y el editor ofrece «Usar tu texto de …». Una sola regla
+    (`textoVigenteDelRadar`) para la página, el pie de la tarjeta y el editor. Entra a la página como el `impacto` de
+    `redaccion` (detalle-de-la-dimension.ts ya lo prefería al de la escala). Lo que Nexus anotó para el vendedor
+    (`tarjetasDeLaEscala.comoEsta`) se ofrece como «Usar lo que anotó Nexus», que lo lleva al cuadro: nunca sale solo.
+  - *El nivel*: se arrastra cada parte por su eje (`ArrastreDelRadar`, regla pura en lib/escala/arrastre-del-radar.ts: el
+    anillo más cercano a lo largo del eje). Escribe por `useMarcarNivel`, lo mismo que los cinco niveles del detalle, que
+    ahora vive en `DetalleDeLaDimension.tsx` y se abre en un panel lateral al tocar la parte.
+- **Lo que propone el agente y nadie usó no se dibuja** en esta vista: el cliente no lo ve. Sigue en la franja de
+  sugerencias y en «Comparar áreas».
+- **No se escondió nada.** Las dos vistas de antes siguen enteras al lado: «Comparar áreas» (el selector con ✓, las áreas
+  superpuestas, las hipótesis sugeridas y la tarjeta con «Llevar a la sesión N») y «Mapa» (la rueda). Lo que decían los
+  botones de las áreas (cuántas con evidencia, por explorar, sin dato, en juego) pasó también a «Lo que más frena a cada
+  equipo», que está en las tres vistas.
+- **En pantallas táctiles**, deslizar sobre una parte del radar interno la arrastra en vez de desplazar la página
+  (`touch-action: none`, solo con `.rd-editable`). *Lo aceptado:* sobre el radar, la página se desplaza fuera de él.
+- **En la pantalla interna, la página va quieta** (`AnimacionesDelResultado` con `quieta`): sin imán, que corría los
+  vértices mientras se arrastraba, y sin la entrada de las secciones al desplazarse. La pantalla interna se desplaza en
+  su propio contenedor y no en la ventana, así que lo de abajo quedaba escondido.
+- **Datos y SQL:** sin SQL. Los dos campos son opcionales en el Json de la exploración.

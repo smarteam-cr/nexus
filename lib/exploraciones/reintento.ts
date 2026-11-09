@@ -110,6 +110,11 @@ function operacionSegura(op: Operacion, antes: EstadoDeExploracion, ahora: Estad
     case "areasAlCliente":
       // La lista entera se arma con lo que se veía: si cambió, se pisaría.
       return igual(ca.areasAlCliente, cb.areasAlCliente);
+    // El texto de una tarjeta o el contexto de un área se escribió sobre lo que se veía: si alguien lo cambió, se recarga.
+    case "textoDelRadar":
+      return igual(ca.textosDelRadar?.[op.dimensionId], cb.textosDelRadar?.[op.dimensionId]);
+    case "contextoDeLaEscala":
+      return igual(ca.contextoDeLaEscala?.[op.areaId], cb.contextoDeLaEscala?.[op.areaId]);
     case "medicion":
       return Object.keys(op.medicion).every((k) => igual(ca.medicion[k as keyof typeof ca.medicion], cb.medicion[k as keyof typeof cb.medicion]));
     case "casoDeUso":

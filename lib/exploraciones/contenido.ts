@@ -296,7 +296,25 @@ export interface ContenidoDeExploracion {
    * las que Nexus detectó (equipos-de-la-escala.ts). undefined: no eligió todavía, y salen las que tienen algo confirmado.
    */
   areasAlCliente?: string[];
+  /**
+   * La escala interna editable (2026-11-08): lo que dice la tarjeta de una dimensión en la página del cliente, escrito por
+   * una persona, con el nivel para el que se escribió. Si la dimensión cambia de nivel, deja de mostrarse (el texto habla
+   * de cómo opera el área en ESE nivel) y vuelve el de la escala. Sin entrada: el de la escala.
+   */
+  textosDelRadar?: Record<string, TextoDelRadar>;
+  /** El contexto que agrega una persona a la página del cliente, por área: va debajo de «Resultado general». */
+  contextoDeLaEscala?: Record<string, string>;
 }
+
+/** El texto de la tarjeta de una dimensión que escribió una persona, y el nivel para el que lo escribió. */
+export interface TextoDelRadar {
+  texto: string;
+  nivel: Letra;
+}
+
+/** Los topes de lo que se escribe en la página del cliente. */
+export const MAX_TEXTO_DEL_RADAR = 600;
+export const MAX_CONTEXTO_DE_LA_ESCALA = 1200;
 
 /**
  * Una sugerencia usada. `antes` y `despues` son su LUGAR (`lugarDe`): la casilla, el nivel de la dimensión, el área
@@ -1045,6 +1063,10 @@ export type Operacion =
   | { op: "sinPortal"; valor: boolean }
   /** Qué áreas ve el cliente en su página. null: vuelve a lo que propone Nexus. */
   | { op: "areasAlCliente"; areas: string[] | null }
+  /** El texto de la tarjeta de una dimensión en la página del cliente (null: vuelve el de la escala). */
+  | { op: "textoDelRadar"; dimensionId: string; valor: TextoDelRadar | null }
+  /** El contexto de un área en la página del cliente (null o vacío: se quita). */
+  | { op: "contextoDeLaEscala"; areaId: string; texto: string | null }
   | { op: "casoDeUso"; useCaseId: string; valor: CasoDeUsoElegido | null }
   /**
    * 2026-11-08 (pedido 4 de Elías): quitar un caso elegido. El que propuso el agente vuelve a los sugeridos con su porqué
@@ -1627,6 +1649,21 @@ function aplicarUna(estado: EstadoDeExploracion, op: Operacion, validez: Validez
       const desconocida = areas.find((a) => !validez.areas.has(a));
       if (desconocida) return { ok: false, error: `El área ${desconocida} no existe.` };
       return { ok: true, estado: { ...estado, contenido: { ...c, areasAlCliente: areas } } };
+    }
+    case "textoDelRadar": {
+      if (!validez.dimensiones.has(op.dimensionId)) return { ok: false, error: `La dimensión ${op.dimensionId} no existe.` };
+      const { [op.dimensionId]: _antes, ...resto } = c.textosDelRadar ?? {};
+      void _antes;
+      const texto = op.valor?.texto.trim().slice(0, MAX_TEXTO_DEL_RADAR);
+      const textosDelRadar = op.valor && texto ? { ...resto, [op.dimensionId]: { texto, nivel: op.valor.nivel } } : resto;
+      return { ok: true, estado: { ...estado, contenido: { ...c, textosDelRadar } } };
+    }
+    case "contextoDeLaEscala": {
+      if (!validez.areas.has(op.areaId)) return { ok: false, error: `El área ${op.areaId} no existe.` };
+      const { [op.areaId]: _antes, ...resto } = c.contextoDeLaEscala ?? {};
+      void _antes;
+      const texto = op.texto?.trim().slice(0, MAX_CONTEXTO_DE_LA_ESCALA);
+      return { ok: true, estado: { ...estado, contenido: { ...c, contextoDeLaEscala: texto ? { ...resto, [op.areaId]: texto } : resto } } };
     }
     case "casoDeUso": {
       if (op.valor) {

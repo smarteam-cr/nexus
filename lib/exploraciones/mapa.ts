@@ -129,6 +129,11 @@ export interface CuentaDelArea {
 }
 
 /** Cuántas dimensiones del área (de las que aplican) tienen evidencia, son hipótesis o no tienen nada. */
+/** «6 con evidencia · 2 por explorar · 1 sin dato» (con `de`, «6 de 8 con evidencia…»): una sola redacción para La escala. */
+export function fraseDeLaCuenta(c: CuentaDelArea, de?: number): string {
+  return `${c.conEvidencia}${de !== undefined ? ` de ${de}` : ""} con evidencia · ${c.hipotesis} por explorar${c.sinDato > 0 ? ` · ${c.sinDato} sin dato` : ""}`;
+}
+
 export function cuentaDelArea(area: AreaDelChequeo, posiciones: Readonly<Record<string, PosicionEnElMapa>>): CuentaDelArea {
   const c: CuentaDelArea = { conEvidencia: 0, hipotesis: 0, sinDato: 0 };
   for (const d of area.dimensiones) {
