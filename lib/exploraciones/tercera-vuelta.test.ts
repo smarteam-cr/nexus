@@ -495,7 +495,8 @@ describe("cuarta vuelta: la guía recuerda con qué objetivo se armó", () => {
     expect(leer("lib", "exploraciones", "agente.ts")).toMatch(/if \(aceptado\) guia = \{ \.\.\.guia, objetivoAceptado: aceptado\.slice\(0, 400\) \}/);
     expect(leer("lib", "exploraciones", "esquemas.ts")).toMatch(/objetivoAceptado: textoDeGuia\(400\)\.optional\(\)/);
     const antes = leer("components", "exploraciones", "AntesDeLaSesion.tsx");
-    expect(antes).toMatch(/!mismoTexto\(guia\.objetivoAceptado, pestana\.sesion\?\.objetivo\)/);
+    // Décima vuelta: una sola regla para el aviso, el botón junto al objetivo y el estado de la guía.
+    expect(antes).toMatch(/!mismoTexto\(guia\.objetivoAceptado, objetivo\)/);
     expect(antes).toContain("Cambiaste el objetivo: la guía todavía es para el anterior");
     // El botón espera a que el objetivo recién aceptado llegue al servidor.
     expect(antes).toMatch(/const armar = \(\) => void alDia\(\)\.then\(\(\) => lanzar\("guia"\)\)/);
@@ -506,11 +507,12 @@ describe("quinta vuelta (2026-11-08)", () => {
   const respuestaDeLaGuia = (input: Record<string, unknown>): Anthropic.Messages.Message =>
     ({ content: [{ type: "tool_use", id: "t1", name: HERRAMIENTA_DE_LA_GUIA, input }] }) as unknown as Anthropic.Messages.Message;
 
-  it("cada pregunta de Nexus trae hasta 3 respuestas probables, en su mismo orden; una sin respuestas (o con una sola) no se lee", () => {
+  // Décima vuelta (2026-11-08): hasta 4 respuestas probables (eran 3).
+  it("cada pregunta de Nexus trae hasta 4 respuestas probables, en su mismo orden; una sin respuestas (o con una sola) no se lee", () => {
     const r = leerLoDeLaExploracion(
       respuestaDeLaGuia({
         faltaContexto: [
-          { pregunta: "¿Laura sabe que la sesión es con ella?", opciones: ["Sí, ya lo sabe", "No, espera una grupal", "No lo sé", "Una cuarta de más"] },
+          { pregunta: "¿Laura sabe que la sesión es con ella?", opciones: ["Sí, ya lo sabe", "No, espera una grupal", "No lo sé", "Tal vez", "Una quinta de más"] },
           "¿Quién más asiste?",
           { pregunta: "¿Hay presupuesto?", opciones: ["Solo una"] },
           { pregunta: "¿laura sabe que la sesión es con ella?", opciones: ["repetida", "otra"] },
@@ -520,7 +522,7 @@ describe("quinta vuelta (2026-11-08)", () => {
       {},
     );
     expect(r.preguntas).toEqual(["¿Laura sabe que la sesión es con ella?", "¿Quién decide?"]);
-    expect(r.opciones).toEqual([["Sí, ya lo sabe", "No, espera una grupal", "No lo sé"], ["Laura", "El gerente general"]]);
+    expect(r.opciones).toEqual([["Sí, ya lo sabe", "No, espera una grupal", "No lo sé", "Tal vez"], ["Laura", "El gerente general"]]);
   });
 
   it("las opciones se guardan con su pregunta y siguen a su pregunta al responder otra", () => {
@@ -585,7 +587,8 @@ describe("quinta vuelta (2026-11-08)", () => {
     const fuente = leer("components", "exploraciones", "AntesDeLaSesion.tsx").replace(/\r\n/g, "\n");
     const pantalla = fuente.slice(fuente.indexOf("export default function AntesDeLaSesion("));
     const objetivo = pantalla.indexOf("<Objetivo\n");
-    const preguntas = pantalla.indexOf("<PreguntasDeNexus");
+    // Décima vuelta: las preguntas son su propio componente (PreguntasParaLaGuia.tsx).
+    const preguntas = pantalla.indexOf("<PreguntasParaLaGuia");
     const barra = pantalla.indexOf("<EstadoDeLaGuia");
     const sabemos = pantalla.indexOf("<LoQueYaSabemos");
     expect(objetivo).toBeGreaterThan(-1);
@@ -593,8 +596,8 @@ describe("quinta vuelta (2026-11-08)", () => {
     expect(barra).toBeGreaterThan(preguntas);
     expect(sabemos).toBeGreaterThan(barra);
     // Una sola vez: el espacio de la guía ya no las repite.
-    expect(pantalla.split("<PreguntasDeNexus").length - 1).toBe(1);
-    expect(fuente.split("<PreguntasDeNexus").length - 1).toBe(1);
+    expect(pantalla.split("<PreguntasParaLaGuia").length - 1).toBe(1);
+    expect(fuente.split("<PreguntasParaLaGuia").length - 1).toBe(1);
   });
 });
 
@@ -606,27 +609,32 @@ describe("quinta vuelta: qué se manda al responder las preguntas de Nexus", () 
     ]);
   });
 
-  it("se manda sola solo cuando TODAS tienen una respuesta elegida (lo escrito sin Enter no cuenta)", () => {
+  it("está todo respondido solo cuando TODAS tienen una respuesta (décima vuelta: activa el botón)", () => {
     expect(completaLasPreguntas(["A?", "B?"], { "A?": "a1" })).toBe(false);
     expect(completaLasPreguntas(["A?", "B?"], { "A?": "a1", "B?": " " })).toBe(false);
     expect(completaLasPreguntas(["A?", "B?"], { "A?": "a1", "B?": "b2" })).toBe(true);
     expect(completaLasPreguntas([], {})).toBe(false);
   });
 
-  it("salir del campo no elige nada: solo Enter, una tarjeta o el botón", () => {
-    const fuente = leer("components", "exploraciones", "AntesDeLaSesion.tsx");
-    const preguntas = fuente.slice(fuente.indexOf("function PreguntasDeNexus("), fuente.indexOf("function SirveAlObjetivoDeLaExploracion("));
+  /* Décima vuelta (2026-11-08, Elías: «el botón se activa al responder todo»): elegir la última ya no manda sola; se manda
+     con el botón, que se activa con todas respondidas (lo escrito en «Otra respuesta…» cuenta). Salir del campo no manda. */
+  it("salir del campo no manda nada, y elegir la última tampoco: manda el botón, activo con todo respondido", () => {
+    const preguntas = leer("components", "exploraciones", "PreguntasParaLaGuia.tsx");
     expect(preguntas).not.toMatch(/onBlur/);
-    expect(preguntas).toMatch(/if \(completaLasPreguntas\(preguntas, siguiente\)\) void enviar\(siguiente\);/);
+    expect(preguntas).not.toMatch(/void enviar\(siguiente\)/);
+    expect(preguntas).toMatch(/const completas = completaLasPreguntas\(preguntas, respuestas\);/);
+    expect(preguntas).toMatch(/disabled=\{bloqueado \|\| esperaLaCorrida \|\| !completas\}/);
+    expect(preguntas).toMatch(/if \(!completas \|\| !listas\.length \|\| bloqueado \|\| esperaLaCorrida\) return;/);
   });
 
-  it("la IA da HASTA 3 opciones y no inventa nombres, cargos, fechas ni cifras", () => {
+  it("la IA da 4 opciones con su descripción y no inventa nombres, cargos, fechas ni cifras", () => {
     // Desde el 2026-11-08 lo que falta saber va en su propia llamada (`pedidoDeLoDeLaExploracion`).
     const t = JSON.stringify(pedidoDeLoDeLaExploracion({
       empresa: "x", industria: null, edicion: "general", perfil: null, hoy: "2026-11-08", proxima: { numero: 1, titulo: null, fecha: null, sesionId: null },
       conTest: false, desdeCero: false, nivelesDeLaEscala: [], paraConectar: null, hubspotActual: null, confirmado: [], huecos: [], enfoque: [], noExplorado: [], objecionesDichas: [], paraExplorar: [],
     } as unknown as ContextoDeLaGuia).tools);
-    expect(t).toMatch(/SIEMPRE exactamente 3 respuestas probables/);
+    expect(t).toMatch(/SIEMPRE exactamente 4 respuestas probables/);
+    expect(t).toMatch(/su «descripcion» \(una línea/);
     expect(t).toMatch(/NUNCA un nombre, un cargo, una fecha ni una cifra que no esté en ellas/);
   });
 });

@@ -91,6 +91,7 @@ import { retomarParaLaGuia, ultimaReunionLeida } from "./despues-de-la-sesion";
 import { insumosDelAnalisisParaLaGuia } from "@/lib/analizador-venta/para-la-guia-server";
 import {
   contextoDeLaGuia,
+  conLaInstruccion,
   faseDeLaGuiaParcial,
   leerLaGuiaDelAgente,
   leerLoDeLaExploracion,
@@ -251,6 +252,12 @@ interface OpcionesDeLaCorrida {
    * que se sabe hoy, sugiere lo nuevo y DICE qué cambia de lo de antes, sin tocar lo elegido.
    */
   revisar?: boolean;
+  /**
+   * Para «guia» (décima vuelta, 2026-11-08: «Editar con IA»): la instrucción libre con que quien lleva la sesión rehace la
+   * guía. Un texto: la nueva (reemplaza a la de antes). `null`: rehacerla sin la de antes. Sin el campo: se conserva la
+   * que tenía la guía de la sesión.
+   */
+  instruccion?: string | null;
 }
 
 /**
@@ -306,7 +313,7 @@ export async function lanzarCorrida(exploracionId: string, modo: ModoDelAgente, 
           opts.releer && !opts.completa ? "Preventa: resumir las reuniones ya leídas" : ((delProyecto ? ETIQUETA_DEL_PROYECTO[modo] : null) ?? ETIQUETA[modo]),
         currentPhase: "Empezando…",
         triggeredByEmail: opts.triggeredByEmail,
-        filters: { exploracionId, modo, ...(opts.automatica ? { automatica: true } : {}), ...(opts.releer && !opts.completa ? { soloResumen: true } : {}), ...(modo === "posicionar" ? { ventaId: opts.ventaId ?? null, ...(opts.proyectoDeContexto ? { proyectoDeContexto: opts.proyectoDeContexto } : {}) } : {}) } as Prisma.InputJsonValue,
+        filters: { exploracionId, modo, ...(opts.automatica ? { automatica: true } : {}), ...(opts.releer && !opts.completa ? { soloResumen: true } : {}), ...(modo === "guia" && opts.instruccion !== undefined ? { instruccion: opts.instruccion } : {}), ...(modo === "posicionar" ? { ventaId: opts.ventaId ?? null, ...(opts.proyectoDeContexto ? { proyectoDeContexto: opts.proyectoDeContexto } : {}) } : {}) } as Prisma.InputJsonValue,
       },
       select: { id: true },
     });
@@ -1138,7 +1145,7 @@ async function armarGuia(runId: string, exploracionId: string, opts: OpcionesDeL
 export async function armarLaGuiaSinGuardar(
   runId: string | null,
   exploracionId: string,
-  opts: Pick<OpcionesDeLaCorrida, "triggeredByEmail">,
+  opts: Pick<OpcionesDeLaCorrida, "triggeredByEmail" | "instruccion">,
 ): Promise<{ guia: GuiaDeLaSesion; ctx: ReturnType<typeof contextoDeLaGuia>; preguntas: PreguntaParaMostrar[]; extras: LoDeLaExploracionEnLaGuia } | null> {
   const { armada, extras } = await pedirLaGuia(runId, exploracionId, opts);
   return armada ? { ...armada, extras } : null;
@@ -1152,7 +1159,7 @@ export async function armarLaGuiaSinGuardar(
 async function pedirLaGuia(
   runId: string | null,
   exploracionId: string,
-  opts: Pick<OpcionesDeLaCorrida, "triggeredByEmail">,
+  opts: Pick<OpcionesDeLaCorrida, "triggeredByEmail" | "instruccion">,
 ): Promise<{
   armada: { guia: GuiaDeLaSesion; ctx: ReturnType<typeof contextoDeLaGuia>; preguntas: PreguntaParaMostrar[] } | null;
   extras: LoDeLaExploracionEnLaGuia;
@@ -1161,7 +1168,12 @@ async function pedirLaGuia(
   ctx: ReturnType<typeof contextoDeLaGuia>;
   clientId: string;
 }> {
-  const { fila, estado, escala, posiciones, loLeido, marco, ctx, ahora, automaticas } = await contextoParaLaGuia(exploracionId);
+  const { fila, estado, escala, posiciones, loLeido, marco, ctx: ctxBase, ahora, automaticas } = await contextoParaLaGuia(exploracionId);
+  /* «Editar con IA» (décima vuelta): la instrucción de quien lleva la sesión, con la guía de ahora como base. Sin una nueva,
+     la que ya tenía la guía de la sesión se conserva (`instruccionDeLaGuia`). */
+  // La que la pantalla muestra para la sesión (`useGuiaDeLaSesion`): la suya o, si todavía no tiene, la general.
+  const actualDeLaSesion = (ctxBase.proxima.sesionId ? estado.propuesta.guias[ctxBase.proxima.sesionId] : undefined) ?? estado.propuesta.guia;
+  const { ctx, instruccion } = conLaInstruccion(ctxBase, opts.instruccion, actualDeLaSesion);
   /* El objetivo de la sesión lo decide el vendedor (Elías, 2026-11-08, cuarta vuelta): sin uno aceptado o escrito no se
      arma la guía. Es su instrucción para estructurar la sesión, y la de más peso del pedido. */
   if (!objetivoAceptado(ctx.contextoDeLaSesion?.objetivo)) throw new FalloDeLaExploracion(FALTA_EL_OBJETIVO_DE_LA_SESION);
@@ -1171,7 +1183,8 @@ async function pedirLaGuia(
      falla la guía queda igual. «Para profundizar» se pide al abrir cada bloque (profundizar-server.ts). */
   const deLaExploracion = conContextoDeIA({ ...ia, origen: "exploraciones/agente:guia-hallazgos" }, () =>
     // Con tope propio (revisión del 8 nov): la guía ya escrita no puede quedar esperando a esta llamada.
-    getAnthropic().messages.create(pedidoDeLoDeLaExploracion(ctx), { timeout: 60_000, maxRetries: 1 }),
+    // Sin la instrucción de «Editar con IA» (revisión de la décima vuelta): es sobre la guía, no sobre los hallazgos.
+    getAnthropic().messages.create(pedidoDeLoDeLaExploracion(ctxBase), { timeout: 60_000, maxRetries: 1 }),
   ).catch(
     (e: unknown) => {
       console.error("[exploraciones/agente] los hallazgos de la guía fallaron; la guía sigue", e);
@@ -1241,6 +1254,7 @@ async function pedirLaGuia(
   // Con qué objetivo se armó: si el vendedor lo cambia después, la Preparación avisa que la guía es para el anterior.
   const aceptado = ctx.contextoDeLaSesion?.objetivo?.trim();
   if (aceptado) guia = { ...guia, objetivoAceptado: aceptado.slice(0, 400) };
+  if (instruccion) guia = { ...guia, instruccion };
   const preguntas = preguntasParaMostrar(guia, guia.huecos, guia.enfoque, escala, undefined, marco, plan ?? undefined);
   return { armada: { guia, ctx, preguntas }, extras, extrasFallaron, ctx, clientId: fila.clientId };
 }

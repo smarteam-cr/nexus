@@ -114,6 +114,7 @@ export function AgendaDeLaGuia({
   momento,
   editable,
   guiaEn,
+  acciones,
 }: {
   pestana: PestanaDeSesion;
   agenda: Agenda;
@@ -123,6 +124,8 @@ export function AgendaDeLaGuia({
   momento: MomentoDeLaSesion;
   /** Se pueden marcar las cosas (quien puede editar la exploración). */
   editable: boolean;
+  /** A la derecha del título (décima vuelta: «Editar con IA» en la Preparación). Puede abrir su panel debajo, a lo ancho. */
+  acciones?: React.ReactNode;
 }) {
   const { exp, guardando } = useLienzo();
   const profundizar = usePreguntasParaProfundizar(exp.id, pestana.sesion?.id ?? null, guiaEn, editable);
@@ -167,6 +170,7 @@ export function AgendaDeLaGuia({
           <span className="text-[13px] text-fg-muted">
             {duracion} min · {agenda.bloques.length} bloques{conCasillas ? ` · ${sabidas} de ${total} averiguadas` : ""}
           </span>
+          {acciones}
         </div>
         {objetivo && <p className="text-[15px] leading-[22px] text-fg">{objetivo}</p>}
         <div>

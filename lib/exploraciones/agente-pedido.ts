@@ -73,7 +73,7 @@ import { bloqueDeInstrucciones } from "./notas-de-sesion";
 import { EQUIPOS, type ClaveDeEquipo } from "./equipos";
 import { CUMPLIMIENTOS, MAX_PARA_LA_PROXIMA, type Cumplimiento } from "./despues-de-la-sesion";
 import {
-  DESCRIPCION_DE_LAS_OPCIONES,
+  ESQUEMA_DE_LAS_OPCIONES,
   leerPreguntasConOpciones,
   MAX_OBJETIVOS_SUGERIDOS,
   MAX_PREGUNTAS_PARA_LA_GUIA,
@@ -289,7 +289,7 @@ function propiedadDeReuniones(ctx: Pick<ContextoDelPedido, "reuniones" | "planea
             type: "object",
             properties: {
               pregunta: { type: "string" },
-              opciones: { type: "array", description: DESCRIPCION_DE_LAS_OPCIONES, items: { type: "string" } },
+              opciones: ESQUEMA_DE_LAS_OPCIONES,
             },
             required: ["pregunta", "opciones"],
           },

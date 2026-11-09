@@ -1778,6 +1778,7 @@ function aplicarUna(estado: EstadoDeExploracion, op: Operacion, validez: Validez
       const siguen = antes ? antes.preguntas.map((q, i) => ({ q, i })).filter(({ q }) => !nuevas.some((n) => mismoTexto(n.pregunta, q))) : [];
       const quedan = siguen.map(({ q }) => q);
       const opciones = antes?.opciones ? siguen.map(({ i }) => antes.opciones![i] ?? []) : undefined;
+      const descripciones = antes?.descripciones ? siguen.map(({ i }) => antes.descripciones![i] ?? []) : undefined;
       return {
         ok: true,
         estado: {
@@ -1785,7 +1786,7 @@ function aplicarUna(estado: EstadoDeExploracion, op: Operacion, validez: Validez
           contenido: { ...estado.contenido, respuestasParaLaGuia: sumarRespuestas(estado.contenido.respuestasParaLaGuia ?? [], nuevas) },
           propuesta: {
             ...estado.propuesta,
-            preguntasParaLaGuia: antes && quedan.length ? { ...antes, preguntas: quedan, ...(opciones ? { opciones } : {}) } : null,
+            preguntasParaLaGuia: antes && quedan.length ? { ...antes, preguntas: quedan, ...(opciones ? { opciones } : {}), ...(descripciones ? { descripciones } : {}) } : null,
           },
         },
       };

@@ -22,6 +22,7 @@ import {
   focoDeLaGuia,
   huecosDelResumen,
   idDeLoVendido,
+  MAX_INSTRUCCION_DE_LA_GUIA,
   MAX_PREGUNTAS_DE_LO_VENDIDO,
   MAX_PREGUNTAS_EN_LA_GUIA,
   MAX_RETOS_DE_LA_INDUSTRIA,
@@ -45,10 +46,10 @@ import {
   MAX_LARGO_DE_LA_PREGUNTA_PARA_LA_GUIA,
   MAX_LARGO_DEL_HALLAZGO,
   MAX_PORQUE_DEL_AJUSTE,
-  MAX_LARGO_DE_LA_OPCION,
   MAX_OPCIONES_DE_LA_PREGUNTA,
   MAX_PREGUNTAS_PARA_LA_GUIA,
-  DESCRIPCION_DE_LAS_OPCIONES,
+  ESQUEMA_DE_LAS_OPCIONES,
+  leerOpciones,
   preguntasConOpciones,
   type LoQueDejoLaGuia,
 } from "./objetivo-y-hallazgos";
@@ -218,6 +219,11 @@ export interface ContextoDeLaGuia {
   ajustesDescartados?: string[];
   /** Punto 4: con quién es la sesión, qué espera el cliente y su objetivo, como lo escribió el equipo. */
   contextoDeLaSesion?: { conQuien: string | null; espera: string | null; objetivo: string | null };
+  /**
+   * Décima vuelta (2026-11-08, «Editar con IA»): la instrucción libre de quien lleva la sesión para rehacer la guía, y la
+   * guía de ahora en texto (solo cuando la instrucción es nueva: es la base que se ajusta). Pesa como el objetivo.
+   */
+  instruccion?: { texto: string; guiaActual: string | null };
   /** Preventa: los clientes de referencia de Smarteam por industria (Audiencia), los únicos que la apertura puede nombrar. */
   referencias?: string[];
   /** Punto 15: lo que las sesiones anteriores dejaron por retomar, cada uno con dónde conviene. */
@@ -847,17 +853,19 @@ export function leerLoDeLaExploracion(respuesta: Anthropic.Messages.Message, ctx
     const k = pregunta.toLowerCase();
     if (vistas.has(k) || respondidas.has(k)) return [];
     vistas.add(k);
-    return [{ pregunta, opciones: lista(esObjeto(x) ? x.opciones : [], MAX_OPCIONES_DE_LA_PREGUNTA, MAX_LARGO_DE_LA_OPCION) }];
+    return [{ pregunta, ...leerOpciones(esObjeto(x) ? x.opciones : []) }];
   });
   const conOpciones = preguntasConOpciones(
     leidas.map((x) => x.pregunta),
     leidas.map((x) => x.opciones),
+    leidas.map((x) => x.descripciones),
   );
   return {
     hallazgos: lista(input.hallazgos, MAX_HALLAZGOS, MAX_LARGO_DEL_HALLAZGO),
     ajuste: texto ? { texto, porque: textoLimpio(a!.porque, MAX_PORQUE_DEL_AJUSTE) } : null,
     preguntas: conOpciones.map((x) => x.pregunta),
     opciones: conOpciones.map((x) => x.opciones),
+    ...(conOpciones.some((x) => x.descripciones) ? { descripciones: conOpciones.map((x) => x.descripciones ?? x.opciones.map(() => "")) } : {}),
   };
 }
 
@@ -874,6 +882,24 @@ function contextoDadoPorLaPersona(ctx: ContextoDeLaGuia): string[] {
       "La guía se estructura para cumplirlo: sus bloques, su orden, el central y el cierre. Si dice cómo quiere la sesión (qué va primero, qué no tocar, con quién), se respeta aunque lo demás sugiera otra cosa.",
       "",
     );
+  }
+  /* «Editar con IA» (décima vuelta): la instrucción va junto al objetivo, con el mismo peso. El formato no cambia: es la
+     misma herramienta, así que cada bloque sigue con lo que hay que averiguar y su pregunta para abrir. */
+  const instruccion = ctx.instruccion?.texto.trim();
+  if (instruccion) {
+    lineas.push(
+      "=== CÓMO QUIERE LA GUÍA QUIEN LLEVA LA SESIÓN (su instrucción: pesa tanto como el objetivo de la sesión) ===",
+      instruccion,
+      "Cúmplela al pie de la letra en lo que pide (qué cambiar, qué quitar, qué sumar, el tono, el largo). En lo que no toca, arma la guía como siempre. Si choca con una regla del formato (los bloques, la apertura y el cierre, las preguntas abiertas y de una sola cosa, el tuteo), manda el formato y cumple la instrucción hasta donde se pueda.",
+      "",
+    );
+    if (ctx.instruccion?.guiaActual) {
+      lineas.push(
+        "=== LA GUÍA DE AHORA (la base que se ajusta con la instrucción: conserva lo que la instrucción no toca) ===",
+        ctx.instruccion.guiaActual,
+        "",
+      );
+    }
   }
   const x = ctx.contextoDeLaExploracion;
   /* El objetivo de la EXPLORACIÓN (2026-11-08, quinta vuelta: «la guía tiene que tomarlo en cuenta, que pese y se note»):
@@ -1082,6 +1108,48 @@ function guiaDesdeLaAgenda(input: Record<string, unknown>, agenda: AgendaDeLaGui
  * El pedido de la guía. Desde el 2026-11-06 toda guía nueva es una AGENDA (agenda.ts); `herramientaDeLaGuia` y
  * `sistemaDeLaGuia` quedan para leer y medir las de antes.
  */
+/**
+ * La instrucción con que se rehace la guía (décima vuelta, «Editar con IA»): la nueva si viene una (`null` la quita), o la
+ * que ya tenía la guía de la sesión. Con su tope de largo; vacía no cuenta. PURO.
+ */
+export function instruccionDeLaGuia(nueva: string | null | undefined, deLaGuia: string | null | undefined): string | null {
+  const t = (nueva === undefined ? deLaGuia : nueva)?.trim().replace(/\s+/g, " ").slice(0, MAX_INSTRUCCION_DE_LA_GUIA);
+  return t || null;
+}
+
+/**
+ * El contexto de la guía con la instrucción de «Editar con IA» (décima vuelta): la que se usa (`instruccionDeLaGuia`) y, solo
+ * si es NUEVA y la guía de ahora tiene bloques, esa guía en texto como base. Sin instrucción, el contexto tal cual. `actual`
+ * es la guía que la pantalla muestra para la sesión. PURO.
+ */
+export function conLaInstruccion<C extends ContextoDeLaGuia>(
+  ctx: C,
+  nueva: string | null | undefined,
+  actual: Pick<GuiaDeLaSesion, "objetivo" | "agenda" | "instruccion"> | null | undefined,
+): { ctx: C; instruccion: string | null } {
+  const instruccion = instruccionDeLaGuia(nueva, actual?.instruccion);
+  if (!instruccion) return { ctx, instruccion: null };
+  const guiaActual = nueva && actual?.agenda ? textoDeLaGuiaActual(actual) : null;
+  return { ctx: { ...ctx, instruccion: { texto: instruccion, guiaActual } }, instruccion };
+}
+
+/**
+ * La guía de ahora en texto, para que la instrucción la ajuste (décima vuelta): el objetivo, las claves y, por bloque, su
+ * título, la pregunta que lo abre y lo que hay que averiguar. Sin «Para profundizar» (se piden al abrir cada bloque). PURO.
+ */
+export function textoDeLaGuiaActual(guia: Pick<GuiaDeLaSesion, "objetivo" | "agenda">): string | null {
+  const a = guia.agenda;
+  if (!a?.bloques.length) return null;
+  const l: string[] = [];
+  if (guia.objetivo) l.push(`Objetivo: ${guia.objetivo}`);
+  if (a.claves.length) l.push(`Al terminar, tener claro: ${a.claves.join(" · ")}`);
+  a.bloques.forEach((b, i) => {
+    l.push(`${i + 1}. ${b.titulo} (${b.desde}–${b.hasta} min, ${b.tipo}${b.central ? ", central" : ""}) — abre con: «${b.abre.replace(/^«|»$/g, "")}»`);
+    for (const c of b.averiguar) l.push(`   - Averiguar: ${c.que}${c.preguntas.length ? ` (${c.preguntas.join(" / ")})` : ""}`);
+  });
+  return l.join("\n");
+}
+
 export function pedidoDeLaGuia(ctx: ContextoDeLaGuia): Anthropic.Messages.MessageCreateParamsNonStreaming {
   const tool = herramientaDeLaAgenda(ctx);
   return {
@@ -1110,7 +1178,7 @@ export function pedidoDeLoDeLaExploracion(ctx: ContextoDeLaGuia): Anthropic.Mess
     max_tokens: 2000,
     system: `Eres el coach de ${cs ? "Customer Success" : "ventas"} de Smarteam, una consultora que implementa HubSpot. Mientras otro arma la guía de la PRÓXIMA sesión de exploración, tú escribes lo que se sabe de la exploración entera y lo que le falta saber a Nexus para que esa guía sirva.
 
-- «hallazgos»: lo más importante que se sabe hasta hoy de la exploración entera. «ajusteDelObjetivo»: solo si hace falta enfocar el objetivo para esta empresa (por lo aprendido o por cómo llegó). «faltaContexto»: solo si sin eso la guía no sirve; la guía se arma igual. Cada pregunta lleva siempre 3 respuestas probables y distintas para elegir de un clic (una pregunta con menos no se muestra), sin inventar nombres, cargos, fechas ni cifras.
+- «hallazgos»: lo más importante que se sabe hasta hoy de la exploración entera. «ajusteDelObjetivo»: solo si hace falta enfocar el objetivo para esta empresa (por lo aprendido o por cómo llegó). «faltaContexto»: solo si sin eso la guía no sirve; la guía se arma igual. Cada pregunta lleva siempre ${MAX_OPCIONES_DE_LA_PREGUNTA} respuestas probables y distintas para elegir de un clic, cada una con su etiqueta y su descripción de una línea (una pregunta con menos de dos no se muestra), sin inventar nombres, cargos, fechas ni cifras.
 - Lo que respondió el equipo para armar esta guía es lo más confiable que tienes: úsalo tal cual y no lo vuelvas a preguntar.${cs ? "" : `
 - LO QUE MARCÓ EN EL TEST en línea (lo «A VALIDAR») no lo dijo en una reunión: eligió una opción. Un hallazgo no lo da por cierto: dice que lo marcó y que falta validarlo.`}
 - Lo que se investigó en internet sobre su industria NO lo dijo el cliente: nunca es un hallazgo de esta empresa.
@@ -1145,11 +1213,7 @@ ${REGLAS_DEL_EQUIPO}
                 type: "object",
                 properties: {
                   pregunta: { type: "string" },
-                  opciones: {
-                    type: "array",
-                    description: DESCRIPCION_DE_LAS_OPCIONES,
-                    items: { type: "string" },
-                  },
+                  opciones: ESQUEMA_DE_LAS_OPCIONES,
                 },
                 required: ["pregunta", "opciones"],
               },

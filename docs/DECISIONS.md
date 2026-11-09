@@ -13996,3 +13996,41 @@ escalas, en los departamentos, y cómo eso se traduce en casos de uso».
   `useSyncExternalStore` para no desajustar el HTML del servidor). Lo guardado se lee con tolerancia: áreas que ya no
   existen se descartan, y si no queda ninguna de las guardadas, vuelve la de entrada.
 - **Datos y SQL:** sin SQL ni cambios de datos.
+
+## La Preparación de una sesión, décima vuelta: editar la guía con IA, el aviso del objetivo y las preguntas para armarla (2026-11-08)
+
+Elías probó la Preparación en producción con Centauro Solutions › Sesión 3 y pidió tres cambios.
+
+- **«Editar con IA» en la cabecera de la guía.** Ya había existido como «Mejorar con el asistente» (abre el chat de
+  Nexus), pero solo en la guía con el formato de antes; la guía en bloques del 6 nov no lo trajo. Ahora es una
+  instrucción libre («hazla más corta», «empieza por el presupuesto») que rehace la guía con la MISMA corrida que la arma
+  (`lanzar("guia", { instruccion })`, ruta `…/agente`): la instrucción entra justo después del objetivo de la sesión y
+  pesa igual, y la guía de ahora va de base en texto (`textoDeLaGuiaActual`). El formato no puede cambiar porque la
+  herramienta y el sistema son los mismos: por bloque, lo que hay que averiguar, la pregunta para abrir y «Para
+  profundizar» (se pide al abrirlo, como desde el 8 nov). Si la instrucción choca con el formato, manda el formato.
+  *Por qué no el assist de documento con `<AgentProposal>`* (lib/ai/assist.ts): ese propone cambios por sección para
+  aceptarlos de a uno sobre bloques editables; la guía se escribe entera en una corrida de fondo de ~95 s con su fase a
+  la vista, y no tiene bloques editables a mano que revisar. *Lo aceptado:* no hay «Deshacer»: la guía rehecha reemplaza
+  a la anterior, como al actualizarla.
+- **La instrucción queda en la guía** (`GuiaDeLaSesion.instruccion`) y se conserva al actualizarla después (otro
+  objetivo, una reunión leída): `instruccionDeLaGuia(nueva, deLaGuia)`: un texto la reemplaza, `null` la quita («Rehacerla
+  sin esta instrucción»), sin el campo se conserva. *Por qué:* sin esto, «Actualizar la guía» tras cambiar el objetivo
+  borraba en silencio lo que la persona había pedido.
+- **Cambiar el objetivo: «Actualizar la guía» ahí mismo.** Al guardar un objetivo distinto, si la guía se armó para el
+  anterior, debajo del objetivo sale «Objetivo guardado. La guía todavía es para el anterior» con «Actualizar la guía» y
+  «Ahora no». Con «Ahora no» (o al volver después) el aviso amarillo sale ARRIBA de todo, con su X
+  (`AvisoDeOtroObjetivo`, `<Alert onDismiss>`). Cerrado por sesión y por objetivo en el navegador (`localStorage` con
+  try/catch, leído con `useSyncExternalStore`): un objetivo nuevo vuelve a avisar. Abajo, el estado de la guía ya no lo
+  repite en amarillo: queda en calma («Guía armada el … para el objetivo anterior») con su botón, por si se cerró el aviso.
+- **«Responde esto para armar la guía»: las preguntas de Nexus como las de Claude Code** (`PreguntasParaLaGuia.tsx`).
+  Una pregunta por fila; en cada una, cuatro respuestas probables (eran 3) como tarjetas elegibles en dos columnas, con
+  su etiqueta y una descripción de una línea, y «Otra respuesta…» a lo ancho. La elegida se nota: borde, fondo y anillo
+  azules y el círculo lleno con su marca (`role="radio"`). El botón «Responder y armar la guía» se activa con todo
+  respondido, y elegir la última ya NO manda sola (antes sí): se revisa antes de mandar. *Por qué dos columnas y no una
+  lista:* cinco tarjetas con descripción en una lista suman unos 15 renglones para tres preguntas; en dos columnas se leen
+  igual y la pregunta sigue entera a la vista.
+- **La descripción la escribe la misma llamada.** La guía (`faltaContexto`) y la lectura de la sesión
+  (`preguntasParaLaSiguiente`) piden `{ etiqueta, descripcion }` con el mismo esquema (`ESQUEMA_DE_LAS_OPCIONES`). Se
+  guarda aparte, en el mismo orden (`descripciones`), así lo guardado antes se lee igual; `leerOpciones` acepta también
+  el texto solo de antes. Una lista de descripciones que no calza se pierde sola, sin llevarse las preguntas.
+- **Datos y SQL:** sin SQL; todo vive en el Json de la exploración. El modelo de la guía no cambió (otra sesión mide Haiku).

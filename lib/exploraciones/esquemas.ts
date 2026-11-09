@@ -97,6 +97,7 @@ import {
 } from "./contexto-de-la-exploracion";
 import { CUMPLIMIENTOS, MAX_FALTA_DEL_DESAFIO, MAX_NO_LLEVAR, MAX_PARA_LA_PROXIMA, MAX_RETOMAR, MAX_TEXTO_DEL_DESAFIO } from "./despues-de-la-sesion";
 import {
+  MAX_INSTRUCCION_DE_LA_GUIA,
   MAX_PREGUNTAS_EN_LA_GUIA,
   MAX_PARA_EXPLORAR,
   MAX_PREGUNTAS_DE_LO_VENDIDO,
@@ -132,6 +133,7 @@ import {
   MAX_AJUSTES_DESCARTADOS,
   MAX_HALLAZGOS,
   MAX_LARGO_DE_LA_OPCION,
+  MAX_LARGO_DE_LA_DESCRIPCION_DE_LA_OPCION,
   MAX_OPCIONES_DE_LA_PREGUNTA,
   MAX_LARGO_DE_LA_PREGUNTA_PARA_LA_GUIA,
   MAX_LARGO_DEL_HALLAZGO,
@@ -581,6 +583,12 @@ const HallazgosSchema: z.ZodType<HallazgosDeLaExploracion> = z.object({
 const PreguntasParaLaGuiaSchema: z.ZodType<PreguntasParaLaGuia> = z.object({
   preguntas: z.array(textoLleno(MAX_LARGO_DE_LA_PREGUNTA_PARA_LA_GUIA)).min(1).max(MAX_PREGUNTAS_PARA_LA_GUIA),
   opciones: z.array(z.array(textoLleno(MAX_LARGO_DE_LA_OPCION)).max(MAX_OPCIONES_DE_LA_PREGUNTA)).max(MAX_PREGUNTAS_PARA_LA_GUIA).optional(),
+  // Décima vuelta: la descripción de cada opción, en su mismo orden ("" si no trae). Una lista que no calza se pierde sola.
+  descripciones: z
+    .array(z.array(z.string().max(MAX_LARGO_DE_LA_DESCRIPCION_DE_LA_OPCION)).max(MAX_OPCIONES_DE_LA_PREGUNTA))
+    .max(MAX_PREGUNTAS_PARA_LA_GUIA)
+    .optional()
+    .catch(undefined),
   // Sexta vuelta: la sesión cuya guía las dejó. Las de antes no lo tienen: se leen igual y no se muestran.
   sesionId: z.string().max(60).optional(),
   en: FECHA_ISO,
@@ -806,6 +814,7 @@ const GuiaSchema: z.ZodType<GuiaDeLaSesion> = z.object({
     .max(4)
     .optional(),
   agenda: AgendaSchema.optional(),
+  instruccion: textoDeGuia(MAX_INSTRUCCION_DE_LA_GUIA).optional(),
   apertura: z.array(textoDeGuia(400)).max(4),
   escalaEnSimple: textoDeGuia(800).nullable(),
   preguntas: z.array(PreguntaDeLaGuiaSchema).max(MAX_PREGUNTAS_EN_LA_GUIA),
@@ -981,6 +990,7 @@ const LecturaDeReunionSchema: z.ZodType<LecturaDeReunion> = z.object({
       z.object({
         pregunta: textoLleno(MAX_LARGO_DE_LA_PREGUNTA_PARA_LA_GUIA),
         opciones: z.array(textoLleno(MAX_LARGO_DE_LA_OPCION)).max(MAX_OPCIONES_DE_LA_PREGUNTA),
+        descripciones: z.array(z.string().max(MAX_LARGO_DE_LA_DESCRIPCION_DE_LA_OPCION)).max(MAX_OPCIONES_DE_LA_PREGUNTA).optional(),
       }),
     )
     .max(MAX_PREGUNTAS_PARA_LA_GUIA)
