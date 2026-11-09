@@ -378,14 +378,15 @@ export function FilaSugerida({ item, texto, destino }: { item: ItemPropuesto; te
  * K12: el botón que usa todas juntas («Pasar las N al mapa» en La escala). Con más de una pide confirmación con la lista
  * corta de lo que va a pasar; el aviso de después deshace el lote entero.
  */
-export function BotonUsarTodas({ items, lugar }: { items: ItemPropuesto[]; lugar: LugarDelLote }) {
+/** `alUsar`: lo que sigue después de usarlas (Casos de uso, 2026-11-08: personalizar cada caso aceptado). */
+export function BotonUsarTodas({ items, lugar, alUsar }: { items: ItemPropuesto[]; lugar: LugarDelLote; alUsar?: (items: ItemPropuesto[]) => void }) {
   const { usar, queHace, puedeEditar, guardando } = useLienzo();
   const [abierto, setAbierto] = useState(false);
   if (!puedeEditar || items.length === 0) return null;
   const etiqueta = etiquetaDelLote(lugar, items.length);
   if (items.length === 1) {
     return (
-      <BotonAzul disabled={guardando} title={tituloDeUsar(queHace(items[0]))} onClick={() => void usar(items, { lugar })}>
+      <BotonAzul disabled={guardando} title={tituloDeUsar(queHace(items[0]))} onClick={() => void usar(items, { lugar }).then((ok) => ok && alUsar?.(items))}>
         {etiqueta}
       </BotonAzul>
     );
@@ -403,7 +404,7 @@ export function BotonUsarTodas({ items, lugar }: { items: ItemPropuesto[]; lugar
         onCancel={() => setAbierto(false)}
         onConfirm={async () => {
           setAbierto(false);
-          await usar(items, { lugar });
+          if (await usar(items, { lugar })) alUsar?.(items);
         }}
         description={<LoQueVaAPasar items={items} />}
       />

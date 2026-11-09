@@ -33,6 +33,8 @@ const Cuerpo = z.object({
   posicionar: z.boolean().optional(),
   /** Con «casos» (2026-11-08): «Regenerar», vuelve a armar los casos elegidos con la biblioteca de actividades. */
   regenerar: z.boolean().optional(),
+  /** Con «casos» (2026-11-08): «Revisar», vuelve a mirar los casos con lo que se sabe hoy y dice qué cambió, sin tocar lo elegido. */
+  revisar: z.boolean().optional(),
 });
 
 export async function POST(req: NextRequest, { params }: Ctx) {
@@ -49,12 +51,13 @@ export async function POST(req: NextRequest, { params }: Ctx) {
   const cuerpo = Cuerpo.safeParse(raw);
   if (!cuerpo.success) return cuerpoInvalido(cuerpo.error);
 
-  const { modo, sesionId, hubspotId, posicionar, regenerar } = cuerpo.data;
+  const { modo, sesionId, hubspotId, posicionar, regenerar, revisar } = cuerpo.data;
   const r = await lanzarCorrida(id, modo, {
     triggeredByEmail: guard.email,
     sesionId: sesionId ?? null,
     ...(modo === "leer" && posicionar ? { posicionar: true } : {}),
     ...(modo === "casos" && regenerar ? { regenerar: true } : {}),
+    ...(modo === "casos" && revisar ? { revisar: true } : {}),
     // Una reunión de HubSpot ya leída se vuelve a leer entera: propone y reemplaza lo que dijo de ella.
     ...(modo === "leer" && hubspotId ? { releer: { sesiones: [], hubspot: [hubspotId], documentos: [] }, completa: true } : {}),
   });

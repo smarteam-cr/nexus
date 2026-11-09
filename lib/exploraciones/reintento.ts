@@ -113,6 +113,8 @@ function operacionSegura(op: Operacion, antes: EstadoDeExploracion, ahora: Estad
     case "medicion":
       return Object.keys(op.medicion).every((k) => igual(ca.medicion[k as keyof typeof ca.medicion], cb.medicion[k as keyof typeof cb.medicion]));
     case "casoDeUso":
+    // Quitar un caso (2026-11-08) lo devuelve a los sugeridos tal como se veía: si cambió entretanto, se recarga.
+    case "quitarCaso":
       return destinoIgual({ tipo: "casoDeUso", useCaseId: op.useCaseId }, antes, ahora);
     case "responsable":
       return antes.responsableEmail === ahora.responsableEmail;

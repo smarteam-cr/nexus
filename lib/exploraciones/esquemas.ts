@@ -33,6 +33,7 @@ import {
 } from "./casillas";
 import { MAX_FRASE } from "@/lib/smarteam/posicionamiento";
 import { MAX_ACTIVIDADES_POR_CASO, MAX_VECES } from "@/lib/casos-de-uso/armado";
+import { LARGO_DE_UNA_LINEA_DE_CAMBIOS, MAX_LINEAS_DE_CAMBIOS, VEREDICTOS_DE_LA_REVISION } from "@/lib/casos-de-uso/personalizar";
 import { ESTADOS_DE_LA_CONDICION, MAX_HECHOS, MAX_LOGROS, TOPES, type PosicionamientoDelProspecto } from "./posicionamiento";
 import {
   contenidoVacio,
@@ -332,6 +333,28 @@ export const CasoDeUsoElegidoSchema: z.ZodType<CasoDeUsoElegido> = z.object({
   tituloDelCatalogo: texto(200).optional(),
   paraVentas: z.object({ porQue: texto(400), comoSeArma: texto(500) }).optional(),
   plan: z.object({ paso: z.number().int().min(1).max(40), despuesDe: texto(300).optional() }).optional(),
+  // 2026-11-08 (lib/casos-de-uso/personalizar.ts): lo que dejó la personalización al aceptarlo.
+  personalizado: z.object({ en: z.string().min(10).max(40), cambios: z.array(textoLleno(LARGO_DE_UNA_LINEA_DE_CAMBIOS + 80)).max(MAX_LINEAS_DE_CAMBIOS) }).optional(),
+});
+
+/** La última mirada del agente a los casos (lib/casos-de-uso/personalizar.ts › RevisionDeLosCasos). */
+const RevisionDeLosCasosSchema = z.object({
+  en: z.string().min(10).max(40),
+  corridaId: z.string().min(1).max(60),
+  huella: z.string().max(40),
+  revisada: z.boolean(),
+  nuevos: z.array(texto(200)).max(40),
+  cambios: z
+    .array(
+      z.object({
+        useCaseId: ID_CASO_DE_USO,
+        titulo: texto(200),
+        elegido: z.boolean(),
+        veredicto: z.enum(VEREDICTOS_DE_LA_REVISION),
+        motivo: textoLleno(400),
+      }),
+    )
+    .max(60),
 });
 
 const EscalaSugeridaSchema = z.object({
@@ -628,6 +651,7 @@ export const OperacionSchema = z.discriminatedUnion("op", [
   z.object({ op: z.literal("sinPortal"), valor: z.boolean() }),
   z.object({ op: z.literal("areasAlCliente"), areas: z.array(ID_AREA).max(3).nullable() }),
   z.object({ op: z.literal("casoDeUso"), useCaseId: ID_CASO_DE_USO, valor: CasoDeUsoElegidoSchema.nullable() }),
+  z.object({ op: z.literal("quitarCaso"), useCaseId: ID_CASO_DE_USO, descartar: z.boolean().optional() }),
   z.object({ op: z.literal("usar"), itemId: z.string().min(1).max(120), valor: z.unknown().optional() }),
   z.object({
     op: z.literal("usarVarias"),
@@ -1083,6 +1107,9 @@ export function leerPropuesta(raw: unknown): PropuestaDeExploracion {
       items: raw.casosAnteriores.items.map(leerItem).filter((it): it is ItemPropuesto => it !== null).slice(0, 120),
     };
   }
+  // 2026-11-08: la última vez que el agente miró los casos (sugerir o «Revisar»).
+  const revision = RevisionDeLosCasosSchema.safeParse(raw.revisionDeLosCasos);
+  if (revision.success) p.revisionDeLosCasos = revision.data;
   if (!Array.isArray(raw.items)) return p;
   const items = raw.items.map(leerItem).filter((it): it is ItemPropuesto => it !== null);
   return { ...p, items };

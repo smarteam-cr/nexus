@@ -39,6 +39,7 @@ import type { PosicionamientoDelProspecto } from "./posicionamiento";
 import type { TarjetasDeLaEscala } from "./tarjetas-de-la-escala";
 import type { ClaveDeEquipo } from "./equipos";
 import type { ActividadDelCaso, CasosAnteriores, LugarEnElPlan, ParaVentas, ValorDeVenta } from "@/lib/casos-de-uso/armado";
+import { vuelveASugeridos, type Personalizacion, type RevisionDeLosCasos } from "@/lib/casos-de-uso/personalizar";
 import {
   definicionDe,
   esDeLista,
@@ -160,6 +161,11 @@ export interface CasoDeUsoElegido {
   paraVentas?: ParaVentas;
   /** Su lugar en el plan que propuso el agente (uno detrás de otro). */
   plan?: LugarEnElPlan;
+  /**
+   * 2026-11-08 (lib/casos-de-uso/personalizar.ts): lo personalizó el agente al aceptarlo, con el contexto de la empresa:
+   * cuándo y qué cambió frente a la ficha del catálogo. Interno: nunca llega a la propuesta del cliente.
+   */
+  personalizado?: Personalizacion;
 }
 
 /** El id de un caso de uso que propuso el agente sin el catálogo: sale del título. */
@@ -511,6 +517,11 @@ export interface PropuestaDeExploracion {
    * se armaron con la biblioteca). «Deshacer» las devuelve a la lista (`devolverCasosAnteriores`).
    */
   casosAnteriores?: CasosAnteriores<ItemPropuesto> | null;
+  /**
+   * 2026-11-08 (lib/casos-de-uso/personalizar.ts): la última vez que el agente miró los casos (sugerir o «Revisar»), con
+   * la huella de lo que leyó (para avisar si cambió algo desde entonces) y, si fue «Revisar», qué cambió.
+   */
+  revisionDeLosCasos?: RevisionDeLosCasos | null;
 }
 
 /** El correo de seguimiento de una reunión: qué entendimos, lo acordado, lo que quedó abierto y la próxima reunión. */
@@ -1035,6 +1046,11 @@ export type Operacion =
   /** Qué áreas ve el cliente en su página. null: vuelve a lo que propone Nexus. */
   | { op: "areasAlCliente"; areas: string[] | null }
   | { op: "casoDeUso"; useCaseId: string; valor: CasoDeUsoElegido | null }
+  /**
+   * 2026-11-08 (pedido 4 de Elías): quitar un caso elegido. El que propuso el agente vuelve a los sugeridos con su porqué
+   * (y sus actividades, si ya se personalizó); con `descartar`, se descarta: no vuelve ni lo repite el agente.
+   */
+  | { op: "quitarCaso"; useCaseId: string; descartar?: boolean }
   | { op: "usar"; itemId: string; valor?: unknown }
   /** «Usar todas»: cada una por su cuenta; la que ya no está o ya no corresponde se salta. */
   | { op: "usarVarias"; items: { itemId: string; valor?: unknown }[] }
@@ -1415,6 +1431,52 @@ function deshacerUsos(estado: EstadoDeExploracion, ids: readonly string[], valid
   };
 }
 
+/**
+ * Quitar un caso elegido (2026-11-08, pedido 4 de Elías: «quité los casos que ya estaban seleccionados y no volvieron a
+ * los sugeridos; deberían»). El que propuso el agente vuelve a la lista de sugeridos tal como estaba (su porqué, su lugar
+ * en el plan y, si ya se personalizó, sus actividades: aceptarlo de nuevo no vuelve a gastar). Uno elegido a mano del
+ * catálogo vuelve solo a la lista del catálogo. Con `descartar`, sale del todo: queda su lápida y su título descartado,
+ * para que el agente no lo vuelva a sugerir.
+ */
+function quitarCaso(estado: EstadoDeExploracion, useCaseId: string, descartar: boolean, en: string): ResultadoDeOperaciones {
+  const c = estado.contenido;
+  const caso = c.casosDeUso[useCaseId];
+  if (!caso) return { ok: true, estado };
+  const casosDeUso = { ...c.casosDeUso };
+  delete casosDeUso[useCaseId];
+  const destino: DestinoDePropuesta = { tipo: "casoDeUso", useCaseId };
+  const id = idDelItem(destino, caso);
+  // La versión nueva que hubiera al lado (una personalización sin usar) sale con él: queda la que vuelve, o ninguna.
+  const sinLasDelCaso = estado.propuesta.items.filter((it) => !(it.destino.tipo === "casoDeUso" && it.destino.useCaseId === useCaseId));
+  if (descartar) {
+    const titulos = caso.tituloDelCatalogo && caso.tituloDelCatalogo !== caso.titulo ? [caso.titulo, caso.tituloDelCatalogo] : [caso.titulo];
+    return {
+      ok: true,
+      estado: {
+        ...estado,
+        propuesta: { ...estado.propuesta, items: sinLasDelCaso },
+        contenido: {
+          ...c,
+          casosDeUso,
+          descartadas: [...c.descartadas.filter((d) => d !== id), id].slice(-MAX_DESCARTADAS),
+          casosDescartados: [...c.casosDescartados.filter((t) => !titulos.includes(t)), ...titulos].slice(-MAX_CASOS_DESCARTADOS),
+        },
+      },
+    };
+  }
+  if (!vuelveASugeridos(useCaseId, caso)) return { ok: true, estado: { ...estado, contenido: { ...c, casosDeUso } } };
+  const item: ItemPropuesto = { id, destino, valor: caso, ...(caso.razon ? { razon: caso.razon.slice(0, 300) } : {}), fuentes: [], corridaId: null, en };
+  return {
+    ok: true,
+    estado: {
+      ...estado,
+      propuesta: { ...estado.propuesta, items: [...sinLasDelCaso, item] },
+      // Si una lápida vieja tenía el mismo id (una versión que alguien descartó), no lo taparía: quitarlo no es descartarlo.
+      contenido: { ...c, casosDeUso, descartadas: c.descartadas.filter((d) => d !== id) },
+    },
+  };
+}
+
 function aplicarUna(estado: EstadoDeExploracion, op: Operacion, validez: Validez, validador: Validador, quien: QuienCambia): ResultadoDeOperaciones {
   const c = estado.contenido;
   switch (op.op) {
@@ -1567,11 +1629,23 @@ function aplicarUna(estado: EstadoDeExploracion, op: Operacion, validez: Validez
       return { ok: true, estado: { ...estado, contenido: { ...c, areasAlCliente: areas } } };
     }
     case "casoDeUso": {
-      if (op.valor) return aplicarAlDestino(estado, { tipo: "casoDeUso", useCaseId: op.useCaseId }, op.valor, validez, validador);
+      if (op.valor) {
+        const r = aplicarAlDestino(estado, { tipo: "casoDeUso", useCaseId: op.useCaseId }, op.valor, validez, validador);
+        if (!r.ok) return r;
+        /* Una sugerencia de ese caso igual a lo que quedó elegido sobra (revisión del 2026-11-08): «Deshacer» de «Quitar»
+           devuelve el caso, y su copia en sugeridos quedaba escondida; al editarlo a mano aparecía como «versión nueva». */
+        const elegido = r.estado.contenido.casosDeUso[op.useCaseId];
+        const items = r.estado.propuesta.items.filter(
+          (it) => !(it.destino.tipo === "casoDeUso" && it.destino.useCaseId === op.useCaseId && canonico(it.valor) === canonico(elegido)),
+        );
+        return items.length === r.estado.propuesta.items.length ? r : { ok: true, estado: { ...r.estado, propuesta: { ...r.estado.propuesta, items } } };
+      }
       const casosDeUso = { ...c.casosDeUso };
       delete casosDeUso[op.useCaseId];
       return { ok: true, estado: { ...estado, contenido: { ...c, casosDeUso } } };
     }
+    case "quitarCaso":
+      return quitarCaso(estado, op.useCaseId, !!op.descartar, quien.en);
     case "usar":
       return usarUna(estado, op, validez, validador, quien, false);
     case "usarVarias": {

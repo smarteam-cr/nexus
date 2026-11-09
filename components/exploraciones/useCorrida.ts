@@ -40,7 +40,7 @@ export function useCorrida() {
    * Devuelve si el agente arrancó con este pedido (no si ya corría otro, ni si falló).
    */
   const lanzar = useCallback(
-    async (modo: ModoDeLaCorrida, opciones: { sesionId?: string; hubspotId?: string; regenerar?: boolean } = {}): Promise<boolean> => {
+    async (modo: ModoDeLaCorrida, opciones: { sesionId?: string; hubspotId?: string; regenerar?: boolean; revisar?: boolean } = {}): Promise<boolean> => {
       s.ponerLanzando(true);
       try {
         const res = await fetch(`/api/sales/exploraciones/${exp.id}/agente`, {
@@ -51,6 +51,7 @@ export function useCorrida() {
             ...(opciones.sesionId ? { sesionId: opciones.sesionId } : {}),
             ...(opciones.hubspotId ? { hubspotId: opciones.hubspotId } : {}),
             ...(opciones.regenerar ? { regenerar: true } : {}),
+            ...(opciones.revisar ? { revisar: true } : {}),
           }),
         });
         const data = (await res.json().catch(() => ({}))) as { error?: string; yaCorria?: boolean };

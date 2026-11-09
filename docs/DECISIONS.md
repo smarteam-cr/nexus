@@ -8053,7 +8053,8 @@ le pregunta a la persona del cliente.
     no sale de «a los 30 días»); si no, pasa a «Falta averiguar».
   - **El nombre de una actividad en el caso la concreta, no la cambia:** la pantalla muestra debajo la actividad de la
     biblioteca de la que sale el tiempo, para que una integración no pase por «Configurar en HubSpot».
-  - **Regenerar** (y la alerta «Regenera para actualizar» mientras haya casos sin armar): el agente vuelve a armar los
+  - **Regenerar** (⚠ sin botón desde la tercera vuelta del 2026-11-08, abajo: lo reemplazan «Revisar» y «Personalizar»;
+    el camino del servidor sigue para lo guardado antes) (y la alerta «Regenera para actualizar» mientras haya casos sin armar): el agente vuelve a armar los
     elegidos y las sugerencias sin armar quedan aparte (`propuesta.casosAnteriores`). Al terminar, la pantalla que lo
     lanzó usa sola las versiones nuevas, menos las de casos editados a mano: esas quedan en su fila («Usar la nueva» o
     «Quedarme con esta»). Un solo «Deshacer» (aviso, Ctrl+Z o el botón de la franja, ese mismo día) devuelve los casos y
@@ -8086,6 +8087,57 @@ le pregunta a la persona del cliente.
     salida, Sonnet). Con el plan y el porqué (2026-11-08), US$ 0,17 y 79 s con Centauro (31 mil de entrada, 5,3 mil de
     salida). Corre solo con un clic, o sola la primera vez que se abre el paso, como antes. `scripts/simular-casos-de-uso.ts` muestra el
     antes y el después de una preventa sin escribir nada.
+- **Sugerir, aceptar y personalizar (tercera vuelta del 2026-11-08, Elías después de probar: «lo más importante es ver
+  qué casos de uso se sugieren y por qué; luego, que la persona los acepte y ya aparezcan las actividades personalizadas.
+  Tiene que ser un agente que revise el contexto, las actividades y los casos de uso, y personalice esto»).** La
+  biblioteca de casos y de actividades es una arquitectura de contexto para que un agente personalice al prospecto. El
+  paso va en tres tiempos (`lib/casos-de-uso/personalizar.ts`); esto reemplaza lo de arriba donde lo contradice:
+  - **Sugerir** (el agente de casos, sin la biblioteca de actividades): qué casos y por qué, con un HECHO de la empresa en
+    «Por qué» (lo que contó, cómo trabaja hoy, su meta), su lugar en el plan y por qué va ahí. Arriba del paso, cada
+    tarjeta con su porqué a la vista; el precio sale de la ficha del catálogo y lo dice («Con la ficha del catálogo»).
+    Ya no trae «cómo se arma» ni el valor: eso es de la personalización. *Por qué sin actividades:* armarlas para cada
+    sugerencia gastaba en casos que el vendedor no iba a elegir.
+  - **Aceptar = personalizar** (`pedidoDePersonalizar`, lib/exploraciones/personalizar-pedido.ts; servidor en
+    personalizar-caso.ts; `POST …/casos/personalizar`): una llamada por caso aceptado, que lee el caso como se aceptó, su
+    ficha con las actividades por defecto, la biblioteca, lo que puede ver el cliente, lo interno de la preventa y las
+    minutas de las 6 reuniones más recientes **de la preventa**, con la misma regla con que ella decide cuáles son suyas
+    (`reunionesDeLaExploracion`, que sale del chokepoint de sesiones; sin las de puertas adentro ni las que se sacaron).
+    *Por qué no las 6 últimas de la empresa:* en un cliente con Customer Success activo entraban sus seguimientos
+    semanales (revisión del 2026-11-08). Devuelve las actividades, «qué cambió frente a la ficha» en 1 a 3 líneas con
+    el hecho que lo explica (`personalizado.cambios`; sin líneas, la calcula el código), cómo se arma y cómo subir el
+    ticket. *Por qué puede leer lo interno:* no toca el título ni la descripción (lo que ve el cliente); escribe solo lo
+    del vendedor. Elegir a mano un caso del catálogo también lo personaliza; «Aceptar los N» personaliza de a tres.
+  - **Lo personalizado se guarda como propuesta del caso**, no sobre lo elegido (el agente nunca escribe lo confirmado):
+    la pantalla que lo pidió la usa sola si nadie tocó el caso mientras tanto; si se tocó a mano, o se cerró la pestaña,
+    queda en la fila como «Está lista la versión personalizada» con «Usar la nueva» / «Quedarme con esta». La lápida de
+    ese mismo id se va: el vendedor la pidió ahora.
+  - **Quitar un elegido lo devuelve a los sugeridos** (pedido 4, op `quitarCaso`) tal como estaba: su porqué, su lugar y,
+    si se personalizó, sus actividades (aceptarlo de nuevo no vuelve a gastar). Vuelve el que propuso el agente (trae
+    descripción o plan, o es `ia-…`); uno elegido a mano del catálogo vuelve solo a la lista del catálogo. Para que no
+    vuelva, «Descartar» en su tarjeta (lápida y título descartado; la op acepta `descartar`, sin botón propio). Se deshace
+    con el aviso o Ctrl+Z, y elegir un caso se lleva la sugerencia igual a él (si no, quedaba escondida y reaparecía
+    como «versión nueva» al editarlo a mano).
+  - **«Revisar» dice qué cambió, sin pisar lo elegido** (pedido 4b): el agente de casos recibe lo que ya está (elegidos y
+    sugeridos, con su id) y devuelve los nuevos que valgan la pena y, en `revision`, solo los que ya estaban y cambian o
+    ya no hacen falta, con el hecho que lo explica. Arriba sale el resultado en una frase («Nada cambió…» o «1 caso
+    nuevo, 1 cambiaría») y cada caso afectado lo dice en su tarjeta o fila (un elegido que cambia ofrece «Volver a
+    personalizar»). Lo nuevo queda sugerido; lo elegido no se toca.
+  - **Proactivo sin gastar solo:** nada corre al entrar al paso (antes la primera tanda se lanzaba sola). Cada mirada del
+    agente guarda la huella de lo que leyó (`propuesta.revisionDeLosCasos.huella`); al abrir el paso,
+    `novedadesDeLosCasos` cuenta las reuniones de la preventa que el agente LEYÓ después (`propuesta.lecturas`) y compara
+    la huella de hoy. Si hay algo, un aviso arriba lo dice y ofrece «Revisar». *Por qué solo las leídas:* «Revisar» lee
+    la escala, lo que falta, metas y retos, que es lo que mueve una reunión leída; una sin leer le ofrecía una corrida
+    que respondía «Nada cambió».
+  - **El desplegable de la tarjeta sugerida ya no es una tabla** (pedido 5): «Ver más» abre la descripción, la cita y, al
+    final, las actividades de la ficha. Lo primero que se lee del porqué de las actividades son las 2-3 líneas de
+    «Personalizado para esta empresa». La línea calculada frente a la ficha se muestra solo si el caso se cambió a mano
+    (si no, dice lo mismo que esas líneas).
+  - Sin SQL: todo vive en el Json de la preventa (`personalizado`, `revisionDeLosCasos`).
+  - **Medido con Centauro** (`scripts/simular-casos-de-uso.ts --llamar --personalizar 2`, solo lectura, dos corridas):
+    sugerir US$ 0,057-0,058 y 33-35 s (11,6 mil tokens de entrada, 1,5 mil de salida; antes, con actividades y valor,
+    US$ 0,17 y 79 s); cada aceptación US$ 0,048-0,051 y 22-27 s (9,5 mil de entrada, 1,3-1,5 mil de salida). Sugerir y
+    aceptar dos: unos US$ 0,16. La primera corrida mostró ids de actividades en el texto y líneas de 30 palabras: el
+    pedido pide 15 palabras y nombres, y el código cambia un id que se cuele por su nombre (`idsPorNombres`).
 
 ## Servicios recurrentes: el ciclo con los documentos de siempre (2026-10-12)
 

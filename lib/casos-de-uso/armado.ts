@@ -334,7 +334,7 @@ export function enOrdenDelPlan<T>(casos: readonly T[], pasoDe: (c: T) => number 
 
 // ── Lo que devuelve el agente ─────────────────────────────────────────────────────────────────────
 
-const esObjeto = (x: unknown): x is Record<string, unknown> => typeof x === "object" && x !== null && !Array.isArray(x);
+export const esObjeto = (x: unknown): x is Record<string, unknown> => typeof x === "object" && x !== null && !Array.isArray(x);
 const texto = (x: unknown, max: number): string => (typeof x === "string" ? x.trim().slice(0, max) : "");
 
 /**
@@ -440,7 +440,7 @@ export function recortarSinCortarFrases(t: string, max: number): string {
 }
 
 /** Un texto del agente que cita una cifra de 10 o más que no está en lo que se sabe: se marca para confirmarla. */
-function marcarCifrasAjenas(t: string, conocidos: ReadonlySet<string>): string {
+export function marcarCifrasAjenas(t: string, conocidos: ReadonlySet<string>): string {
   if (!t) return t;
   return numerosEn(t).some((c) => Number(c) >= 10 && !conocidos.has(c)) ? `${t} (Ojo: hay cifras que no salieron del cliente; confírmalas.)` : t;
 }
