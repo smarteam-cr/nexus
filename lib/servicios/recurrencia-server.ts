@@ -26,6 +26,7 @@ import { contextoDeTareas, equipoDe, ErrorDeTareas } from "@/lib/tareas/servidor
 import { clientesQueVesParaTareas } from "@/lib/tareas/clientes";
 import { crearTarea, urlDeLaTarea } from "@/lib/tareas/mutaciones";
 import { guiaDeServicio } from "./index";
+import { claveDelTitulo } from "@/lib/casos-de-uso/catalogo";
 import {
   aQuienLeLlegaLaRecomendacion,
   calificaParaRecurrencia,
@@ -163,11 +164,11 @@ export async function armarPorque(clientId: string, o: { verAdopcion: boolean })
   const camino = caminoDeCrecimiento(areas, nombreDeNivel, { casosPorArea: 2 });
 
   const casos: CasoDelPorque[] = casosDeLaCuenta.map((c) => ({ titulo: c.titulo, razon: c.resultado ?? c.porque ?? null, deDonde: "cuenta" }));
-  const yaEstan = new Set(casos.map((c) => c.titulo.trim().toLowerCase()));
+  const yaEstan = new Set(casos.map((c) => claveDelTitulo(c.titulo)));
   for (const paso of camino) {
     for (const c of paso.casos) {
-      if (casos.length >= 4 || yaEstan.has(c.caso.titulo.trim().toLowerCase())) continue;
-      yaEstan.add(c.caso.titulo.trim().toLowerCase());
+      if (casos.length >= 4 || yaEstan.has(claveDelTitulo(c.caso.titulo))) continue;
+      yaEstan.add(claveDelTitulo(c.caso.titulo));
       casos.push({ titulo: c.caso.titulo, razon: c.razon, deDonde: "catalogo" });
     }
   }

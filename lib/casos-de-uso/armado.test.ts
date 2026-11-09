@@ -62,6 +62,7 @@ import {
 } from "@/lib/exploraciones/esquemas";
 import { casosElegidosParaLaPropuesta } from "@/lib/exploraciones/para-la-propuesta";
 
+import { casoPorId } from "./catalogo";
 const TODO = leerActividades(datos);
 const BIBLIOTECA = bibliotecaLigera(TODO.biblioteca);
 const POR_ID = new Map(BIBLIOTECA.map((a) => [a.id, a]));
@@ -759,7 +760,7 @@ describe("el plan, el porqué y el cómo para Ventas (2026-11-08, Elías con Cen
   };
   const respuesta = (casos: unknown[]) =>
     ({ content: [{ type: "tool_use", id: "tu", name: "proponer_casos", input: { casos } }] }) as unknown as Anthropic.Messages.Message;
-  const TITULO = "Sistematiza tu proceso comercial con HubSpot";
+  const TITULO = casoPorId("sistematiza-ventas")!.titulo;
 
   it("el agente adapta el título del catálogo, y el caso guarda el original, su lugar en el plan y el porqué y el cómo", () => {
     const r = leerLosCasos(
@@ -952,7 +953,7 @@ describe("arreglos de la revisión del 2026-11-08", () => {
   };
   const respuesta = (casos: unknown[]) =>
     ({ content: [{ type: "tool_use", id: "tu", name: "proponer_casos", input: { casos } }] }) as unknown as Anthropic.Messages.Message;
-  const TITULO = "Sistematiza tu proceso comercial con HubSpot";
+  const TITULO = casoPorId("sistematiza-ventas")!.titulo;
 
   it("«Regenerar» no le cambia el título a un caso elegido (lo ve el cliente), y conserva el del catálogo si estaba adaptado", () => {
     const r = leerLosCasos(
@@ -968,7 +969,7 @@ describe("arreglos de la revisión del 2026-11-08", () => {
 
   it("un título casi igual al del catálogo (otra mayúscula, un punto) es el del catálogo", () => {
     const r = leerLosCasos(
-      respuesta([{ areaId: "1", catalogo: "sistematiza-ventas", titulo: "sistematiza tu proceso comercial con HubSpot.", descripcion: "d", razon: "r", actividades: [] }]),
+      respuesta([{ areaId: "1", catalogo: "sistematiza-ventas", titulo: `${TITULO.toLowerCase()}.`, descripcion: "d", razon: "r", actividades: [] }]),
       CTX,
       "run-1",
       AHORA,

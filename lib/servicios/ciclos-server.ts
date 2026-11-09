@@ -19,6 +19,7 @@ import {
   type MovimientoEnLaEscala,
 } from "@/lib/servicios/ciclo";
 import { servicioDelCatalogo } from "@/lib/servicios/catalogo";
+import { claveDelTitulo } from "@/lib/casos-de-uso/catalogo";
 import type { ArranqueDelCiclo } from "@/lib/servicios/arranque-del-ciclo";
 import { arranqueDelCiclo } from "@/lib/servicios/arranque-del-ciclo-server";
 
@@ -285,8 +286,8 @@ export async function sumarCasosDeLaPropuestaEnTx(
 ): Promise<number> {
   if (!d.casos.length) return 0;
   const ya = await tx.casoDeUso.findMany({ where: { projectId: d.projectId }, select: { titulo: true } });
-  const vistos = new Set(ya.map((c) => c.titulo.trim().toLowerCase()));
-  const nuevos = d.casos.filter((c) => !vistos.has(c.titulo.trim().toLowerCase()));
+  const vistos = new Set(ya.map((c) => claveDelTitulo(c.titulo)));
+  const nuevos = d.casos.filter((c) => !vistos.has(claveDelTitulo(c.titulo)));
   if (!nuevos.length) return 0;
   await tx.casoDeUso.createMany({
     data: nuevos.map((c, i) => ({
