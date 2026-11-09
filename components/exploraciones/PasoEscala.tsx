@@ -16,8 +16,10 @@
  *      van encima con su color. La rueda queda como segunda vista («Mapa»), de un área. Un área con algo se ve aunque no
  *      esté en juego. Al pasar el cursor por una dimensión sale su TARJETA (TarjetaDelRadar.tsx: cómo está y qué
  *      preguntar, con «Llevar a la sesión N»); tocarla abre la dimensión con sus cinco niveles.
- *      Debajo, «Para explorar más» cada área elegida, ordenadas por hipótesis: ahí vive ahora la lectura «Preparación
- *      para engagement avanzado» (en Marketing), que antes era un bloque fijo.
+ *      Debajo, «Lo que más frena a cada equipo» con el puente a «Casos de uso», y «Para explorar más» cada equipo,
+ *      ordenados por hipótesis: ahí vive la lectura «Preparación para engagement avanzado» (en Marketing). Novena vuelta
+ *      (8 nov): lo de debajo del radar no depende de las áreas elegidas (elegir Marketing ya no corre nada), se pueden
+ *      soltar todas («Selecciona un departamento») y se fue «De dónde sale cada nivel» (Elías: «me parece irrelevante»).
  *   4. Con qué se mide, qué va primero y el agente, al pie.
  * Se fue «Qué explorar en la próxima sesión»: la guía ya elige primero lo que no tiene evidencia, y cada dimensión
  * conserva «Explorarla a fondo».
@@ -27,18 +29,31 @@
  * escala»), no «Ubicar con las reuniones». «Acceso» (30 oct, cuenta y preventa): el enlace con que el cliente la ve
  * (AccesoALaEscala.tsx).
  */
-import { useEffect, useState, type CSSProperties, type KeyboardEvent, type MouseEvent, type ReactNode } from "react";
+import { useEffect, useState, useSyncExternalStore, type CSSProperties, type KeyboardEvent, type MouseEvent, type ReactNode } from "react";
 import { Alert, Button } from "@/components/ui";
 import { BOTON_DE_HERRAMIENTA, BOTON_DE_HERRAMIENTA_ACTIVO } from "@/components/ui/sistema";
 import { PUNTO_DE_NIVEL } from "@/components/escala/niveles";
 import RadarDeUnaEmpresa from "@/components/escala/RadarDeUnaEmpresa";
-import { alTocarUnArea, alTocarUnNodo, areasAlCambiar, partesPorEje, principalYFuera, SIN_CAMBIO, type AreaSuperpuesta, type CambioDeAreas } from "@/lib/escala/areas-superpuestas";
+import {
+  alTocarUnArea,
+  alTocarUnNodo,
+  areasAlCambiar,
+  areasDelResumen,
+  partesPorEje,
+  principalYFuera,
+  sinNingunaElegida,
+  SIN_CAMBIO,
+  type AreaSuperpuesta,
+  type CambioDeAreas,
+  type EleccionDeAreas,
+} from "@/lib/escala/areas-superpuestas";
+import { claveDeLaEleccion, guardarLaEleccion, leerLaEleccion, suscribirseALoGuardado, textoGuardado } from "@/lib/escala/eleccion-guardada";
 import { cn } from "@/lib/cn";
 import type { AreaDelChequeo } from "@/lib/escala/chequeo";
 import type { ClaveDeCapa, Letra } from "@/lib/escala/documento/tipos";
 import { esHipotesisDeNivel, type DestinoDePropuesta, type EstimadoGuardado, type ItemPropuesto } from "@/lib/exploraciones/contenido";
 import type { AreaDelLienzo, DimensionDelLienzo, EscalaDelLienzo } from "@/lib/exploraciones/escala-del-lienzo";
-import { ordenParaExplorar, partesParaExplorar, resumenDeLoExplorado } from "@/lib/exploraciones/equipos-de-la-escala";
+import { fraseDelFreno, ordenParaExplorar, partesParaExplorar, resumenDeLoExplorado } from "@/lib/exploraciones/equipos-de-la-escala";
 import { chequeoDelMapa, cuentaDelArea, loQueLaFrena, nivelDelVendedor, sinRiesgoSiSube, type PosicionEnElMapa } from "@/lib/exploraciones/mapa";
 import { diaCorto } from "@/lib/exploraciones/fechas";
 import AccesoALaEscala, { QueVeElCliente } from "./AccesoALaEscala";
@@ -64,15 +79,6 @@ const enLista = (xs: string[]) => (xs.length <= 1 ? (xs[0] ?? "") : `${xs.slice(
 /** El rótulo chico en mayúsculas del tablero. */
 function Rotulo({ children, className }: { children: React.ReactNode; className?: string }) {
   return <span className={cn("block text-[11px] font-semibold uppercase tracking-[0.08em] text-fg-muted", className)}>{children}</span>;
-}
-
-/** De dónde sale lo dibujado, en palabras. */
-function deDonde(p: PosicionEnElMapa): string {
-  if (p.fuente === "test") return "Lo marcó en el test (con la escala anterior).";
-  if (p.fuente === "hipotesis") return "Lo deduce el agente (de las reuniones o de HubSpot), sin que el cliente lo dijera directo: por explorar.";
-  if (p.fuente === "vendedor") return "Lo marcaste tú.";
-  if (p.fuente === "portal") return "Se vio en su portal.";
-  return p.origen === "propuesto" ? "Lo dijo en una reunión (el agente lo leyó de la transcripción)." : "Lo dijo en una reunión.";
 }
 
 /** Dónde cae una sugerencia de esta pieza, en una línea: «Ventas · Datos», «Áreas», «Con qué se mide». */
@@ -175,13 +181,8 @@ function DetalleDeDimension({ d, onCerrar }: { d: DimensionDelLienzo; onCerrar: 
                   <span className="inline-flex rounded-full border border-warn-line bg-warn-surface px-2 py-px text-[11px] font-semibold text-warn-ink">○ Hipótesis</span>
                 )}
               </p>
-              <p className="text-[13px] text-fg-secondary">{deDonde(p)}</p>
-              {p.porQue && <p className="text-[13px] text-fg-secondary">{p.porQue}</p>}
-              {p.citas.map((c, i) => (
-                <p key={`${c.id}-${i}`} className="text-[13px] italic text-fg-secondary">
-                  «{c.cita}» <span className="not-italic text-fg-muted">— {c.etiqueta}</span>
-                </p>
-              ))}
+              {/* Sin de dónde sale, su porqué ni la frase (novena vuelta, 8 nov, Elías: «toda la parte de dónde sale cada
+                  nivel me parece irrelevante»): el nivel y si está confirmado o por explorar. */}
               {p.origen === "propuesto" && p.clase === "hipotesis" && puedeEditar && p.pendiente && (
                 <button
                   type="button"
@@ -312,55 +313,6 @@ function DetalleDeDimension({ d, onCerrar }: { d: DimensionDelLienzo; onCerrar: 
           </button>
         </div>
       )}
-    </div>
-  );
-}
-
-/**
- * De dónde sale cada nivel, de un vistazo (ficha B, 2026-10-17: «pintar la escala con su evidencia»): cada dimensión
- * con su nivel, si es evidencia o hipótesis, de dónde sale y la frase que lo respalda. Tocar una abre su detalle.
- */
-function EvidenciaDelArea({ area, onElegir }: { area: AreaDelLienzo; onElegir: (id: string) => void }) {
-  const { mapa, nombreDeNivel } = useLienzo();
-  const dims = area.dimensiones.filter((d) => d.aplica);
-  return (
-    <div data-recorrido="preventa.escala.evidencia" className="flex flex-col gap-1.5 border-t border-line pt-4">
-      <Rotulo>De dónde sale cada nivel</Rotulo>
-      <ul className="flex flex-col divide-y divide-line">
-        {dims.map((d) => {
-          const p = mapa.posiciones[d.id];
-          const cita = p?.citas[0]?.cita;
-          return (
-            <li key={d.id}>
-              <button type="button" onClick={() => onElegir(d.id)} className="flex w-full flex-col gap-0.5 py-1.5 text-left hover:bg-surface-hover">
-                <span className="flex flex-wrap items-center justify-between gap-2 text-[13px]">
-                  <span className="text-fg-secondary">
-                    <span className="tabular-nums text-fg-muted">{d.id}</span> {d.nombre}
-                  </span>
-                  {p ? (
-                    <span className="inline-flex items-center gap-1.5 font-medium text-fg">
-                      <span className={cn("h-2 w-2 rounded-full", PUNTO_DE_NIVEL[p.nivel])} aria-hidden="true" />
-                      {nombreDeNivel(p.nivel)}
-                      <span className={cn("text-[11px] font-semibold", p.clase === "evidencia" ? "text-success-ink" : "text-warn-ink")}>
-                        {p.clase === "evidencia" ? "✓ evidencia" : "○ hipótesis"}
-                      </span>
-                      {p.origen === "propuesto" && <span className="text-[11px] font-semibold text-brand">sugerido</span>}
-                    </span>
-                  ) : (
-                    <span className="text-xs text-fg-muted">Sin dato: pregúntalo</span>
-                  )}
-                </span>
-                {p && (
-                  <span className="text-xs text-fg-muted">
-                    {deDonde(p)}
-                    {cita ? <span className="italic text-fg-secondary">{" «" + (cita.length > 140 ? cita.slice(0, 139) + "…" : cita) + "»"}</span> : null}
-                  </span>
-                )}
-              </button>
-            </li>
-          );
-        })}
-      </ul>
     </div>
   );
 }
@@ -706,8 +658,8 @@ function RadarDeLasAreas({ principal, otras, onElegir }: { principal: AreaDelLie
 type Vista = "nodos" | "mapa";
 
 /**
- * El área principal (la última elegida con algo): su nivel, por qué está ahí, el radar con las otras elegidas encima (o
- * la rueda) y la dimensión abierta.
+ * El área principal (la de los nombres y el detalle): su nivel, el radar con las otras elegidas encima (o la rueda) y la
+ * dimensión abierta. Lo que la frena va debajo, con los otros equipos (`LoQueFrenaACadaEquipo`).
  */
 function AreaConAlgo({
   area,
@@ -717,7 +669,6 @@ function AreaConAlgo({
   abierta: abiertaId,
   onAbrir,
   onAlternar,
-  debajoDelRadar,
 }: {
   area: AreaDelLienzo;
   otras: readonly AreaDelLienzo[];
@@ -726,18 +677,13 @@ function AreaConAlgo({
   abierta: string | null;
   onAbrir: (id: string | null) => void;
   onAlternar: () => void;
-  /** Las elegidas sin nada, con «Sumar…»: debajo del radar para que sumarlas no lo corra. */
-  debajoDelRadar?: ReactNode;
 }) {
   const { mapa, escala, nombreDeNivel, puedeEditar, guardando, lugar } = useLienzo();
   const calculo = calculoDelArea(escala, area, mapa.posiciones);
   if (!calculo) return null;
   const cuenta = cuentaDelArea(calculo, mapa.posiciones);
-  const frena = loQueLaFrena(calculo);
   const nombreDeCapa = (c: string) => escala.capas.find((x) => x.clave === c)?.nombre ?? c;
   const nombresDeCapa = { base: nombreDeCapa("base"), produccion: nombreDeCapa("produccion") } as Record<ClaveDeCapa, string>;
-  const dimDeLaFrena = frena?.dimensiones.map((id) => area.dimensiones.find((d) => d.id === id)).filter((d): d is DimensionDelLienzo => !!d) ?? [];
-  const porQueDelAgente = dimDeLaFrena.map((d) => mapa.posiciones[d.id]?.porQue).find(Boolean);
   const todoConEvidencia = cuenta.hipotesis === 0 && cuenta.sinDato === 0;
   const verbo = todoConEvidencia ? "está en" : "parece estar en";
   const aplican = area.dimensiones.filter((d) => d.aplica).length;
@@ -748,7 +694,8 @@ function AreaConAlgo({
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex flex-col gap-0.5">
           <p className="flex flex-wrap items-center gap-2 text-[15px] font-semibold text-fg">
-            {otras.length > 0 && <span className="h-3 w-3 rounded-[3px]" style={{ background: colorDelArea(area.id) }} aria-hidden="true" />}
+            {/* El cuadro del color siempre, también sola: que aparezca al sumar otra área corría el título. */}
+            <span className="h-3 w-3 rounded-[3px]" style={{ background: colorDelArea(area.id) }} aria-hidden="true" />
             {area.nombre}
             {calculo.nivel ? (
               <>
@@ -775,36 +722,17 @@ function AreaConAlgo({
         )}
       </div>
 
-      <div className="flex gap-2.5 rounded-lg border border-info-line bg-info-surface px-3 py-2.5">
-        <IconoDeSugerencia className="mt-0.5 h-[15px] w-[15px] flex-shrink-0 text-brand" />
-        {/* Con lugar para el rótulo y dos renglones: cambiar de principal no corre el radar por un renglón (8 nov). */}
-        <div className="flex min-h-[60px] flex-col gap-1 text-[13px] leading-[1.45]">
-          <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-brand">Por qué está ahí</span>
-          {calculo.nivel && frena ? (
-            <span className="text-fg">
-              {dimDeLaFrena.length === 1 ? "Lo frena " : "Lo frenan "}
-              {enLista(dimDeLaFrena.map((d) => `«${d.nombre}»`))}, en {nombreDeNivel(frena.nivel)}: {dimDeLaFrena.length === 1 ? "es" : "son"} lo más débil de su{" "}
-              {nombreDeCapa(frena.capa).toLowerCase()}, y la escala ubica al equipo en su capa más baja.
-            </span>
-          ) : (
-            <span className="text-fg">
-              {calculo.faltan.length === 1 ? "Falta una dimensión" : `Faltan ${calculo.faltan.length} dimensiones`} sin dato: pregúntalas en la reunión. Sin las ocho no se sabe cuál es la más débil.
-            </span>
-          )}
-          {porQueDelAgente && <span className="text-fg-secondary">{porQueDelAgente}</span>}
-        </div>
-      </div>
-
+      {/* «Por qué está ahí» bajó a «Lo que más frena a cada equipo», debajo del radar y de los tres equipos (novena vuelta):
+          arriba del radar no queda nada que cambie de alto al elegir o soltar un área. */}
       {vista === "nodos" ? (
         <figure className="m-0 flex flex-col gap-2">
           {/* Sin `key`: sumar, sacar o cambiar la principal actualiza el radar sin volver a montarlo (antes la animación de
               entrada arrancaba de cero en cada clic, 8 nov). */}
           <RadarDeLasAreas principal={area} otras={otras} onElegir={onAbrir} />
-          {/* Debajo del radar y no arriba: sumar la primera área encima no corre el radar hacia abajo. Un solo texto con
-              lugar para dos renglones: que aparezca «Encima, …» no corre lo de abajo (8 nov). */}
-          <figcaption className="min-h-[2lh] text-xs text-fg-muted">
-            {otras.length > 0 && `Encima, ${enLista(otras.map((o) => o.nombre))}. Toca un nodo de otra área para ver su detalle. `}
-            {!abierta && "Pasa el cursor por una dimensión para ver cómo está y qué preguntar; tócala para ver sus cinco niveles. «Ver puntajes» muestra el puntaje de cada una."}
+          {/* Siempre el mismo texto (novena vuelta): «Encima, Marketing…» le sumaba un renglón al elegir Marketing y corría lo
+              de abajo. Qué áreas se ven lo dice la leyenda, en su renglón fijo. */}
+          <figcaption className="text-xs text-fg-muted">
+            Pasa el cursor por una dimensión para ver cómo está en cada área elegida y qué preguntar; tócala para ver sus cinco niveles. «Ver puntajes» muestra el puntaje de cada una.
           </figcaption>
         </figure>
       ) : (
@@ -837,28 +765,101 @@ function AreaConAlgo({
         </figure>
       )}
 
-      {debajoDelRadar}
-
-      {abierta ? <DetalleDeDimension key={abierta.id} d={abierta} onCerrar={() => onAbrir(null)} /> : <EvidenciaDelArea area={area} onElegir={onAbrir} />}
+      {abierta && <DetalleDeDimension key={abierta.id} d={abierta} onCerrar={() => onAbrir(null)} />}
     </div>
+  );
+}
+
+/**
+ * Lo que más frena a cada equipo y el puente a «Casos de uso» (novena vuelta, 8 nov, Elías: «piensa en lo que necesita
+ * ver una persona que haya explorado: dónde se posiciona el cliente en todas las escalas, en los departamentos, y cómo
+ * eso se traduce en casos de uso»). Antes era «Por qué está ahí», arriba del radar y solo de la principal. Ahora va
+ * debajo, con un renglón por equipo en juego o con algo (`areasDelResumen`): no depende de cuáles están elegidos, así
+ * que elegir o soltar un área no lo cambia de alto.
+ */
+/** Los equipos que se resumen debajo del radar: UNA regla para los dos bloques (en juego o con algo, elegidos o no). */
+function useAreasDelResumen(): AreaDelLienzo[] {
+  const { exp, escala, mapa } = useLienzo();
+  return areasDelResumen(escala.areas, exp.estado.areas, (a) => tieneAlgo(a, mapa.posiciones));
+}
+
+function LoQueFrenaACadaEquipo() {
+  const { escala, mapa, nombreDeNivel, lugar, irA } = useLienzo();
+  const areas = useAreasDelResumen();
+  if (!areas.length) return null;
+  const nombreDeCapa = (c: string) => escala.capas.find((x) => x.clave === c)?.nombre ?? c;
+  return (
+    <section aria-label="Lo que más frena a cada equipo" className="flex flex-col gap-3 rounded-xl border border-line bg-surface p-5">
+      <div className="flex flex-col gap-0.5">
+        <h4 className="text-sm font-semibold text-fg">Lo que más frena a cada equipo</h4>
+        <p className="text-xs text-fg-muted">La escala ubica a cada equipo en su capa más baja: subir lo que lo frena es lo que lo mueve.</p>
+      </div>
+      <ul className="flex flex-col divide-y divide-line">
+        {areas.map((area) => {
+          const calculo = calculoDelArea(escala, area, mapa.posiciones);
+          if (!calculo) return null;
+          const frena = loQueLaFrena(calculo);
+          const dims = frena?.dimensiones.map((id) => area.dimensiones.find((d) => d.id === id)).filter((d): d is DimensionDelLienzo => !!d) ?? [];
+          return (
+            <li key={area.id} className="flex flex-col gap-1 py-2.5 first:pt-0 last:pb-0 sm:flex-row sm:items-baseline sm:gap-4">
+              <span className="inline-flex flex-shrink-0 items-center gap-2 text-sm font-semibold text-fg sm:w-[240px]">
+                <span className="h-3 w-3 flex-shrink-0 rounded-[3px]" style={{ background: colorDelArea(area.id) }} aria-hidden="true" />
+                {area.nombre}
+                {calculo.nivel ? (
+                  <span className="inline-flex items-center gap-1.5 font-medium">
+                    <span className={cn("h-2 w-2 rounded-full", PUNTO_DE_NIVEL[calculo.nivel])} aria-hidden="true" />
+                    {nombreDeNivel(calculo.nivel)}
+                    {calculo.puntaje !== null && <span className="text-xs font-normal tabular-nums text-fg-muted">{Math.round(calculo.puntaje)}/100</span>}
+                  </span>
+                ) : (
+                  <span className="text-xs font-normal text-fg-muted">sin ubicar</span>
+                )}
+              </span>
+              <span className="text-[13px] leading-[1.45] text-fg-secondary">
+                {fraseDelFreno({
+                  conNivel: !!calculo.nivel,
+                  frena: frena ? { nombres: dims.map((d) => d.nombre), nivel: nombreDeNivel(frena.nivel), capa: nombreDeCapa(frena.capa) } : null,
+                  faltan: calculo.faltan.length,
+                })}
+              </span>
+            </li>
+          );
+        })}
+      </ul>
+      {lugar === "preventa" && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-info-line bg-info-surface px-3 py-2.5">
+          <p className="flex items-start gap-2 text-[13px] leading-[1.45] text-fg">
+            <IconoDeSugerencia className="mt-0.5 h-[15px] w-[15px] flex-shrink-0 text-brand" />
+            Los casos de uso salen de aquí: lo que se le puede proponer según dónde está cada equipo y lo que lo frena.
+          </p>
+          <Button size="sm" variant="primary" onClick={() => irA("casos")}>
+            Ver los casos de uso →
+          </Button>
+        </div>
+      )}
+    </section>
   );
 }
 
 const MAX_HIPOTESIS_A_LA_VISTA = 4;
 
 /**
- * «Para explorar más esta área» (cuarta vuelta, 2026-11-08): una sugerencia por cada área elegida que tiene hipótesis o
- * partes sin dato, ordenadas por hipótesis (Elías: «entre más hipótesis tiene un área, más se puede explorar»). Cada
- * hipótesis con su primera pregunta y «Llevar a la sesión N». La lectura «Preparación para engagement avanzado» (antes un
- * bloque fijo debajo de «Con qué se mide») vive en la de Marketing: es una lectura de Marketing.
+ * «Para explorar más esta área» (cuarta vuelta, 2026-11-08): una sugerencia por cada equipo en juego o con algo que tiene
+ * hipótesis o partes sin dato, ordenadas por hipótesis (Elías: «entre más hipótesis tiene un área, más se puede
+ * explorar»). Desde la novena vuelta no depende de las áreas elegidas en el radar. Cada hipótesis con su primera pregunta
+ * y «Llevar a la sesión N». La lectura «Preparación para engagement avanzado» (antes un bloque fijo debajo de «Con qué se
+ * mide») vive en la de Marketing: es una lectura de Marketing.
  */
-function ParaExplorarMas({ elegidas }: { elegidas: readonly AreaDelLienzo[] }) {
+function ParaExplorarMas() {
   const { escala, mapa, exp, nombreDeNivel } = useLienzo();
   const cuentas = useAreasDeLaEscala();
   const llevar = useLlevarALaSesion();
-  const ids = new Set(elegidas.map((a) => a.id));
+  /* Los equipos en juego o con algo, elegidos o no (novena vuelta): elegir Marketing hacía entrar su tarjeta, a veces
+     ANTES de la de Ventas (van por hipótesis), y corría lo de abajo. */
+  const deLaLista = useAreasDelResumen();
+  const ids = new Set(deLaLista.map((a) => a.id));
   const enOrden = ordenParaExplorar(cuentas.filter((c) => ids.has(c.id)));
-  // Marketing elegida sin nada que explorar igual muestra su lectura de engagement.
+  // Marketing (en juego o con algo) sin nada que explorar igual muestra su lectura de engagement.
   const conEngagement = !!escala.preparacion && ids.has(AREA_DEL_ENGAGEMENT);
   const lista = conEngagement && !enOrden.some((c) => c.id === AREA_DEL_ENGAGEMENT) ? [...enOrden, ...cuentas.filter((c) => c.id === AREA_DEL_ENGAGEMENT)] : enOrden;
   const tarjetas = exp.estado.propuesta.tarjetasDeLaEscala?.porDimension ?? {};
@@ -876,7 +877,7 @@ function ParaExplorarMas({ elegidas }: { elegidas: readonly AreaDelLienzo[] }) {
           <div key={c.id} className="flex flex-col gap-2.5 rounded-xl border border-line bg-surface p-4">
             <div className="flex flex-wrap items-baseline justify-between gap-2">
               <h4 className="inline-flex items-center gap-1.5 text-sm font-semibold text-fg">
-                {elegidas.length > 1 && <span className="h-2.5 w-2.5 rounded-[3px]" style={{ background: colorDelArea(c.id) }} aria-hidden="true" />}
+                <span className="h-2.5 w-2.5 rounded-[3px]" style={{ background: colorDelArea(c.id) }} aria-hidden="true" />
                 Para explorar más {area.nombre}
               </h4>
               <span className="text-xs text-fg-muted">
@@ -929,7 +930,7 @@ function ParaExplorarMas({ elegidas }: { elegidas: readonly AreaDelLienzo[] }) {
 const AREA_DEL_ENGAGEMENT = "2";
 
 function DondeEstaHoy() {
-  const { exp, escala, mapa, cambiar, nombreDeNivel, lugar } = useLienzo();
+  const { exp, escala, mapa, cambiar, nombreDeNivel, lugar, puedeEditar, guardando } = useLienzo();
   const enJuego = exp.estado.areas;
   const [vista, setVista] = useState<Vista>("nodos");
   const [abierta, setAbierta] = useState<string | null>(null);
@@ -941,9 +942,21 @@ function DondeEstaHoy() {
   /* Las áreas presionadas, en el orden en que se eligieron (cuarta vuelta, Elías: «un clic en un área la deja presionada
      y la muestra en la escala; se pueden elegir varias»). La principal (la que tiene los nombres y el detalle) es la
      última elegida con algo dibujado. */
-  const [elegidasIds, setElegidas] = useState<string[] | null>(null);
-  const [principalId, setPrincipal] = useState<string | null>(null);
-  const ids = (elegidasIds ?? (deEntrada ? [deEntrada] : [])).filter((id) => escala.areas.some((a) => a.id === id));
+  /* La elección sobrevive a recargar (novena vuelta: volvía a una sola), en ESTE navegador y por exploración
+     (lib/escala/eleccion-guardada.ts): es de quien mira, no de la exploración. Gana lo elegido en esta visita; si no,
+     lo guardado; si no, la de entrada. Lo guardado se lee con `useSyncExternalStore`: el servidor no tiene el navegador
+     (da `null`) y React no confunde el HTML del servidor con el de la pantalla. */
+  const [enEstaVisita, setEnEstaVisita] = useState<EleccionDeAreas | null>(null);
+  const clave = claveDeLaEleccion(lugar, exp.id);
+  const texto = useSyncExternalStore(suscribirseALoGuardado, () => textoGuardado(clave), () => null);
+  const guardada = leerLaEleccion(texto, escala.areas.map((a) => a.id));
+  const actual = enEstaVisita ?? guardada;
+  const principalId = actual?.principalId ?? null;
+  const ids = (actual ? actual.elegidas : deEntrada ? [deEntrada] : []).filter((id) => escala.areas.some((a) => a.id === id));
+  const fijar = (e: EleccionDeAreas) => {
+    setEnEstaVisita({ elegidas: [...e.elegidas], principalId: e.principalId });
+    guardarLaEleccion(clave, e);
+  };
   const elegidas = ids.map((id) => escala.areas.find((a) => a.id === id)!);
   const conAlgo = (id: string) => {
     const a = escala.areas.find((x) => x.id === id);
@@ -957,15 +970,15 @@ function DondeEstaHoy() {
   const visto = principalYFuera(eleccion, conAlgo);
   const principal = elegidas.find((a) => a.id === visto.principal) ?? null;
   const fuera = elegidas.filter((a) => visto.fuera.includes(a.id));
-  if (!principal && !fuera.length) return null;
+  // Se pueden soltar todas (novena vuelta): sin ninguna, no hay radar y arriba se pide elegir un departamento.
+  const ninguna = sinNingunaElegida(eleccion);
   const otras = principal ? elegidas.filter((a) => a.id !== principal.id && conAlgo(a.id) && calculoDelArea(escala, a, mapa.posiciones)) : [];
   const orden = (id: string) => enJuego.indexOf(id) + 1;
   const elegir = (id: string) => {
     const area = escala.areas.find((a) => a.id === id);
     if (!area) return;
     const nueva = alTocarUnArea(eleccion, id, conAlgo);
-    setElegidas([...nueva.elegidas]);
-    setPrincipal(nueva.principalId);
+    fijar(nueva);
     // La dimensión abierta se cierra solo si era del área que sale.
     if (!nueva.elegidas.includes(id) && abierta && area.dimensiones.some((d) => d.id === abierta)) setAbierta(null);
   };
@@ -973,16 +986,16 @@ function DondeEstaHoy() {
   const abrir = (id: string | null) => {
     if (id && principal && !principal.dimensiones.some((d) => d.id === id)) {
       const de = elegidas.find((a) => a.dimensiones.some((d) => d.id === id));
-      if (de) setPrincipal(alTocarUnNodo(eleccion, de.id).principalId);
+      if (de) fijar(alTocarUnNodo(eleccion, de.id));
     }
     setAbierta(id);
   };
   // Sumar o sacar se deshace con el mismo botón: la lista entera, en el orden en que se eligieron.
   const alternar = (id: string) => void cambiar([{ op: "areas", areas: enJuego.includes(id) ? enJuego.filter((a) => a !== id) : [...enJuego, id] }]);
-  /* Debajo del radar y no arriba: sumar un área sin nada no corre la escala hacia abajo, y su «Sumar…» entra creciendo y
-     sale plegándose (8 nov). */
+  /* Solo cuando NINGUNA elegida tiene algo: ocupan el lugar del radar. Con radar, una elegida sin nada se dice en el
+     renglón de alto fijo de arriba, con su «Sumar…» (novena vuelta: debajo del radar corría lo de abajo). */
   const avisosDeFuera = (
-    <ListaQueSeAnima ids={fuera.map((a) => a.id)} espacio={principal ? 4 : 3}>
+    <ListaQueSeAnima ids={fuera.map((a) => a.id)} espacio={3}>
       {(id) => {
         const a = escala.areas.find((x) => x.id === id);
         return a ? <AreaFuera area={a} onSumar={() => alternar(a.id)} /> : null;
@@ -1013,8 +1026,35 @@ function DondeEstaHoy() {
           <BotonDeArea key={a.id} area={a} elegida={ids.includes(a.id)} orden={orden(a.id)} onElegir={() => elegir(a.id)} />
         ))}
       </div>
-      <p className="text-xs text-fg-muted">Toca un área para sumarla a la escala o sacarla: varias se ven en el mismo radar, cada una de su color.</p>
-      {principal ? (
+      {/* El mismo renglón con o sin áreas elegidas (alto fijo): pedir un departamento no corre lo de abajo más de lo que
+          se va con el radar. */}
+      <p role="status" className="flex h-5 items-center gap-2 overflow-hidden whitespace-nowrap text-xs leading-5 text-fg-muted">
+        {ninguna ? (
+          <span className="text-[13px] font-semibold text-brand">Selecciona un departamento para ver dónde está en la escala.</span>
+        ) : principal && fuera.length > 0 ? (
+          <>
+            <span
+              className="truncate"
+              title={
+                lugar === "preventa"
+                  ? "Si se habló de ella, «Ubicar con las reuniones» la llena con hipótesis por explorar, aunque no esté en juego."
+                  : "Al sumarla, el agente la ubica en la escala con lo que ya sabe."
+              }
+            >
+              {enLista(fuera.map((a) => a.nombre))} todavía no {fuera.length === 1 ? "tiene" : "tienen"} nada de las reuniones: no se dibuja.
+            </span>
+            {puedeEditar &&
+              fuera.map((a) => (
+                <button key={a.id} type="button" disabled={guardando} onClick={() => alternar(a.id)} className="flex-shrink-0 font-semibold text-brand hover:underline disabled:opacity-60">
+                  Sumar {a.nombre} {AL_LUGAR[lugar]}
+                </button>
+              ))}
+          </>
+        ) : (
+          "Toca un área para sumarla a la escala o sacarla: varias se ven en el mismo radar, cada una de su color."
+        )}
+      </p>
+      {ninguna ? null : principal ? (
         <AreaConAlgo
           area={principal}
           otras={vista === "nodos" ? otras : []}
@@ -1023,12 +1063,12 @@ function DondeEstaHoy() {
           abierta={abierta}
           onAbrir={abrir}
           onAlternar={() => alternar(principal.id)}
-          debajoDelRadar={avisosDeFuera}
         />
       ) : (
         avisosDeFuera
       )}
-      <ParaExplorarMas elegidas={elegidas} />
+      <LoQueFrenaACadaEquipo />
+      <ParaExplorarMas />
     </section>
   );
 }

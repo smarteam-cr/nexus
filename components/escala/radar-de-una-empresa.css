@@ -28,10 +28,15 @@
 .rde-leyenda { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 8px 28px; padding-top: 8px; border-top: 1px solid #edf1f7; font-size: 13.5px; line-height: 1.4; color: #3d4b63; }
 .rde-leyenda > span { display: inline-flex; align-items: center; gap: 8px; }
 .rde-leyenda svg { flex: none; }
-/* La escala interna (`todasLasAreas`): la leyenda guarda dos renglones aunque esté vacía o tenga uno, así que sumar la
-   primera área encima (su renglón de colores) no le cambia el alto al radar (8 nov). Vacía, sin la raya de arriba. */
-.rde-leyenda-fija { min-height: 56px; }
-.rde-leyenda-fija:empty { border-top-color: transparent; }
+/* La escala interna (`todasLasAreas`, novena vuelta, 8 nov): dos renglones de alto fijo. Arriba, las áreas que se ven en
+   UN renglón que nunca se parte (lo que no cabe se corta); abajo, los símbolos, que dependen solo del área principal.
+   Sumar o sacar un área no le cambia el alto (antes el renglón de las áreas aparecía con la segunda y podía partirse). */
+.rde-leyenda-fija { flex-direction: column; flex-wrap: nowrap; align-items: stretch; gap: 6px; }
+.rde-leyenda-fija > .rde-leyenda-areas { display: block; height: 20px; line-height: 20px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; text-align: center; }
+.rde-leyenda-areas svg { vertical-align: -2px; }
+/* Con la clase de la leyenda fija adelante: `.rde-leyenda > span` (8 px de separación) le ganaba. */
+.rde-leyenda-fija > .rde-leyenda-simbolos { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 8px 28px; min-height: 20px; }
+.rde-leyenda-simbolos > span { display: inline-flex; align-items: center; gap: 8px; }
 
 /* El teléfono: los nombres de las mitades arriba, el radar compacto y la lista de las dimensiones. */
 .rde-compacto { display: none; flex-direction: column; gap: 6px; }

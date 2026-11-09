@@ -13718,7 +13718,7 @@ Elías probó la tercera vuelta con Centauro Solutions («es un buen MVP») y pi
   Funcional. *Por qué no se apagó el tope:* sigue valiendo para lo que estima el agente o el test; lo que cambia es que
   la marca del vendedor manda.
 - **Las áreas se presionan y se ven en el mismo radar.** Las tres áreas son botones (`aria-pressed`): un clic suma el
-  área a la escala y otro la saca (siempre queda una). Con varias, `RadarDeUnaEmpresa` recibe `color` y `otras`: la
+  área a la escala y otro la saca (desde la novena vuelta se pueden soltar todas: ver la sección de la novena vuelta). Con varias, `RadarDeUnaEmpresa` recibe `color` y `otras`: la
   principal (la última elegida con algo) lleva los nombres, el centro y el detalle, y las otras van encima, cada una de
   su color (Ventas azul, Marketing rosa, Servicio verde azulado: ninguno es el color de un nivel), con su leyenda. Un
   área elegida sin nada se muestra igual, con «Sumar…», debajo del radar de las que sí tienen algo (arriba hasta el
@@ -13750,11 +13750,12 @@ Elías probó la tercera vuelta con Centauro Solutions («es un buen MVP») y pi
   hipótesis…»). Un área sin nada todavía ya no dice «no está en juego», sino «Todavía no hay nada de Marketing en las
   reuniones», con qué hacer.
 - **«Preparación para engagement avanzado» dejó de ser un bloque fijo.** Debajo del radar sale «Para explorar más
-  {área}» por cada área elegida que tiene hipótesis o partes sin dato, ordenadas por hipótesis (`ordenParaExplorar`,
+  {área}» por cada área que tiene hipótesis o partes sin dato (las elegidas hasta la novena vuelta; desde ahí, las en
+  juego o con algo, elegidas o no), ordenadas por hipótesis (`ordenParaExplorar`,
   equipos-de-la-escala.ts; regla de Elías: «entre más hipótesis tiene un área, más se puede explorar»; hipótesis = las
   usadas como por explorar más las sugeridas sin frase). Cada una lista sus hipótesis (hasta 4 a la vista) con su
   primera pregunta y «Llevar a la sesión N», y las partes sin dato. La lectura de engagement (que lee el nivel de
-  Marketing) vive plegada dentro de la de Marketing: se ve al elegir Marketing. *Por qué ahí y no se borró:* es una
+  Marketing) vive plegada dentro de la de Marketing (desde la novena vuelta se ve sin tener que elegir Marketing). *Por qué ahí y no se borró:* es una
   lectura de Marketing y la regla de CLAUDE.md pide no esconder lo que existe sin decirlo; bajó de visibilidad a
   propósito.
 - **Cada dimensión tiene su tarjeta al pasar el cursor** (TarjetaDelRadar.tsx), la de la página del resultado del
@@ -13807,3 +13808,50 @@ Elías probó la tercera vuelta con Centauro Solutions («es un buen MVP») y pi
 - **El área elegida** (Ventas, Marketing, Servicio, arriba del radar): se veía casi igual que la suelta. Ahora la
   presionada lleva borde de 2 px y fondo del color del área (`COLOR_DEL_AREA` mezclado con `--surface`, flipea con el
   tema) y una sombra interior que la hunde; la suelta queda apenas levantada. El botón no cambia de tamaño.
+
+## La escala de la preventa, novena vuelta: elegir Marketing no mueve nada, se sueltan todas y la pantalla se enfoca (2026-11-08)
+
+Elías probó con Centauro Solutions y pidió cuatro cosas: (1) «cuando se selecciona Marketing hay un desplazamiento
+vertical aún»; (2) «si está Ventas seleccionado debería poder darle clic y deseleccionarlo»; (3) en la tarjeta del cursor,
+los departamentos en una misma fila y su nombre «mucho más grande»; (4) «toda la parte de dónde sale cada nivel me parece
+irrelevante. Piensa en lo que necesita ver una persona que haya explorado: dónde se posiciona el cliente en todas las
+escalas, en los departamentos, y cómo eso se traduce en casos de uso».
+
+- **El salto, medido.** Con el radar real en un navegador (dibujo a 1040–1500 px de ancho, una, dos y tres áreas), el
+  radar y su leyenda ya no cambiaban de alto desde el 8 nov (misma caja y leyenda de 65 px en los tres casos). Lo que se
+  movía era lo de alrededor, todo DEBAJO del radar y colgado de la elección: el texto de debajo sumaba «Encima,
+  Marketing. Toca un nodo de otra área…» (un renglón más con ventanas medianas), y «Para explorar más» sumaba la tarjeta de
+  Marketing, a veces ANTES de la de Ventas (van por hipótesis), corriendo todo lo de abajo.
+- **La regla:** elegir o soltar un área cambia SOLO el radar. Una elegida sin nada ya no sale con su caja «Sumar…»
+  debajo del radar (empujaba lo de abajo, lo cazó la revisión): con radar, lo dice el renglón de alto fijo de arriba
+  («Servicio todavía no tiene nada de las reuniones: no se dibuja.» y «Sumar Servicio a la preventa»; la explicación de
+  «Ubicar con las reuniones» queda en su `title`). Solo si ninguna elegida tiene algo, la caja va en el lugar del radar.
+  Lo demás no depende de la elección: el texto de debajo del radar es siempre el mismo; «Lo que más frena a cada equipo» y
+  «Para explorar más» muestran los equipos en juego o con algo, elegidos o no (`areasDelResumen`,
+  lib/escala/areas-superpuestas.ts); el cuadro del color del título está siempre; la leyenda interna son dos renglones de
+  alto fijo (`.rde-leyenda-fija`): arriba las áreas que se ven (también una sola), en un renglón que no se parte; abajo
+  los símbolos, que dependen solo de la principal. La página del cliente no pasa `todasLasAreas` y no cambia (lo cuida
+  `escala-novena-vuelta.test.ts`, con el escaneo que impide volver a pasarle las elegidas a lo de debajo).
+- **Se sueltan todas.** `alTocarUnArea` ya no frena la última. Sin ninguna, no hay radar y, en el mismo renglón de la
+  ayuda (alto fijo), dice «Selecciona un departamento para ver dónde está en la escala.». Lo de debajo sigue.
+- **La tarjeta del cursor, en fila.** Con varias áreas en un eje, una columna por área (dos o tres, de ~320 px cada una;
+  en una ventana angosta se apilan), cada una con el nombre del departamento en grande (text-xl, con su cuadro de color)
+  arriba de la dimensión. Con un área, el mismo encabezado grande.
+- **Se fue «de dónde sale cada nivel».** La lista «De dónde sale cada nivel» (`EvidenciaDelArea`, ficha B del 17 oct)
+  y, en el detalle de una dimensión, la línea de dónde sale («Lo dijo en una reunión…», `deDonde`), su porqué y la frase
+  del cliente. También el porqué del agente que acompañaba a «Por qué está ahí». Se quedan el nivel y si está con
+  evidencia o por explorar (dice qué tan firme es, no de dónde salió), y «Descartar esta hipótesis». Lo que el agente
+  escribió sigue guardado y la página del cliente no cambió. *Si vuelve a hacer falta* (por ejemplo, para defender un
+  nivel ante el cliente): las citas siguen en `PosicionEnElMapa.citas`.
+- **«Por qué está ahí» pasó a «Lo que más frena a cada equipo»**, debajo del radar: un renglón por equipo (nivel,
+  puntaje y la parte que lo frena, o cuántas faltan), y en la preventa el puente «Ver los casos de uso →»
+  (`irA("casos")`): «Los casos de uso salen de aquí». Antes era de la principal sola y arriba del radar.
+- **La elección sobrevive a recargar** (lo había cazado una revisión del 8 nov: volvía a una sola). Se guarda en el
+  NAVEGADOR, por lugar y por exploración (`lib/escala/eleccion-guardada.ts`, `localStorage` envuelto en try/catch): las
+  áreas, en su orden, y la principal; también soltarlas todas. *Por qué no en el estado de la exploración:* es lo que mira
+  cada persona, no un dato de la preventa; compartido, lo que elige un vendedor le cambiaría la vista a otro, y cada clic
+  sería una escritura al servidor. *Lo aceptado:* en otra computadora o en una ventana privada vuelve a la de entrada, y
+  al cargar el servidor pinta la de entrada y un instante después el radar pasa a la guardada (se lee con
+  `useSyncExternalStore` para no desajustar el HTML del servidor). Lo guardado se lee con tolerancia: áreas que ya no
+  existen se descartan, y si no queda ninguna de las guardadas, vuelve la de entrada.
+- **Datos y SQL:** sin SQL ni cambios de datos.

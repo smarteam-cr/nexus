@@ -8,7 +8,8 @@
  *   · `areasAlCambiar`: al sumar o sacar un área, cuál entra y cuál sale. Solo esas se animan; las demás quedan quietas
  *     (8 nov, Elías: «que se pueda ver como fluido dónde entra y se pone una… solo actualice la escala»).
  *   · `principalYFuera`, `alTocarUnArea` y `alTocarUnNodo`: cuál es la principal (se queda al sumar otra; cambia al tocar
- *     un nodo de otra o al sacarla) y qué elegidas sin nada se muestran con «Sumar…».
+ *     un nodo de otra o al sacarla) y qué elegidas sin nada se muestran con «Sumar…». Se pueden soltar todas.
+ *   · `areasDelResumen`: lo que va debajo del radar, que no depende de la elección.
  */
 import type { ClaveDeCapa } from "./documento/tipos";
 import type { DimensionDelRadar } from "./radar-de-una-empresa";
@@ -80,14 +81,27 @@ export function principalYFuera(e: EleccionDeAreas, conAlgo: (id: string) => boo
 
 /**
  * Tocar el botón de un área (8 nov, Elías: «solo actualice la escala»): sumarla NO cambia la principal (la nueva entra
- * encima; si todavía no hay principal, la sumada lo es); sacarla (si queda otra) suelta la principal solo si era ella,
- * y entonces pasa a la última elegida con algo.
+ * encima; si todavía no hay principal, la sumada lo es); sacarla suelta la principal solo si era ella, y entonces pasa a
+ * la última elegida con algo. También se saca la última (novena vuelta, 8 nov, Elías: «si está Ventas seleccionado
+ * debería poder darle clic y deseleccionarlo»): sin ninguna, La escala dice «Selecciona un departamento».
  */
 export function alTocarUnArea(e: EleccionDeAreas, id: string, conAlgo: (id: string) => boolean): EleccionDeAreas {
   const { principal } = principalYFuera(e, conAlgo);
   if (!e.elegidas.includes(id)) return { elegidas: [...e.elegidas, id], principalId: principal ?? id };
-  if (e.elegidas.length <= 1) return e;
   return { elegidas: e.elegidas.filter((x) => x !== id), principalId: principal === id || e.principalId === id ? null : e.principalId };
+}
+
+/** Sin ninguna área elegida: La escala no dibuja radar y pide «Selecciona un departamento». */
+export const sinNingunaElegida = (e: EleccionDeAreas): boolean => e.elegidas.length === 0;
+
+/**
+ * Las áreas que se resumen DEBAJO del radar («Lo que más frena a cada equipo» y «Para explorar más»): las que están en
+ * juego o tienen algo, en el orden de la escala. NO dependen de cuáles están elegidas (novena vuelta, 8 nov): elegir o
+ * soltar un área solo cambia el radar, y lo de debajo no crece ni se reordena (Elías: «cuando se selecciona Marketing hay
+ * un desplazamiento vertical aún»).
+ */
+export function areasDelResumen<A extends { id: string }>(areas: readonly A[], enJuego: readonly string[], tieneAlgo: (a: A) => boolean): A[] {
+  return areas.filter((a) => enJuego.includes(a.id) || tieneAlgo(a));
 }
 
 /** Tocar un nodo de otra área elegida la vuelve la principal. */
