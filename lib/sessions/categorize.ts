@@ -25,6 +25,15 @@
  * entre la dueña y sus entidades: primero por el nombre de la reunión, después por la gente de
  * cada una, y sin pista queda POR DECIDIR (orphan → `resolvedClientId` null), nunca en la ficha
  * más vieja. Ver `decidirEntreEntidades` y DECISIONS «Dos fichas que comparten dominio».
+ *
+ * ⚠ Una empresa con varias unidades (2026-11-07, CEMACO: Costa Rica y Ecuador). Lo mismo, con tres reglas más:
+ *  · Una unidad con dominio propio (Ecuador: sukasa.com, comohogar.com) NO vive en el dominio de la principal: su
+ *    dominio la decide solo, y el de la principal deja de ser de las dos (`viveEnElDominioDeLaPrincipal`).
+ *  · Cuando el título (pasos 2 y 6) cae en una unidad, se reparte igual que por dominio: «Alineación CEMACO» nombra a
+ *    la empresa, no a una unidad, y queda por decidir.
+ *  · En una empresa con MARCA (una palabra que está en el nombre de todas sus unidades: «Cemaco»), la sigla de una
+ *    unidad solo vale en un título junto a la marca: «Cemaco CR |» sí, «Ride CR |» no. Sin marca (el TEC), sola.
+ * DECISIONS «Una empresa con varias unidades».
  */
 
 import type { Client, SessionCategory } from "@prisma/client";
@@ -98,7 +107,7 @@ export const ORDEN_DE_CLIENTES_PARA_ATRIBUIR = [{ createdAt: "asc" as const }, {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-import { clientePorTitulo, tokensDelCliente } from "./match-por-titulo";
+import { clientePorTitulo, tokensDelCliente, tokensDelTitulo, type ClienteParaMatch, type ResultadoDeMatch } from "./match-por-titulo";
 
 export function normalize(s: string): string {
   return s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().trim();
@@ -233,10 +242,16 @@ const EMPTY_TOKEN_SET: Set<string> = new Set();
  * DUPLICADOS de la misma empresa (un set ⊆ el otro, ej. "Ministerio de Economía" ⊆
  * "Ministerio de Economía (MINEC)", o dos "Construtecho") NO cuentan como ambiguos — si no,
  * romperían su propia resolución por título. Se computa una vez por contexto (no por sesión).
+ *
+ * Las UNIDADES de una misma empresa (`comparteDominioConId`) tampoco cuentan como empresas distintas entre sí:
+ * «Cemaco · Costa Rica» y «Cemaco · Ecuador» comparten «cemaco» porque son la misma empresa. Si contaran, «cemaco»
+ * quedaría ignorado en todo título y «Alineación CEMACO» se iría a las internas en vez de quedar por decidir entre las
+ * dos. Entre las unidades lo desempata `decidirEntreEntidades`, que no usa la palabra que comparten.
  */
 export function computeAmbiguousNameTokens(
-  clients: Pick<Client, "name" | "company">[],
+  clients: (Pick<Client, "name" | "company"> & { id?: string; comparteDominioConId?: string | null })[],
 ): Set<string> {
+  const empresaDe = clients.map((c, i) => c.comparteDominioConId ?? c.id ?? `#${i}`);
   const sets = clients.map((c) => {
     const s = new Set<string>();
     for (const p of normalize(c.name).split(/[\s.\-_]+/)) {
@@ -267,6 +282,7 @@ export function computeAmbiguousNameTokens(
     let distinct = false;
     outer: for (let a = 0; a < idxs.length; a++) {
       for (let b = a + 1; b < idxs.length; b++) {
+        if (empresaDe[idxs[a]] === empresaDe[idxs[b]]) continue;
         const A = sets[idxs[a]];
         const B = sets[idxs[b]];
         if (!isSubset(A, B) && !isSubset(B, A)) {
@@ -303,38 +319,62 @@ export function computeAmbiguousNameTokens(
  */
 function findClientByTitleMatch(
   title: string,
-  clients: (Pick<Client, "id" | "name" | "company"> & { siglas?: string[] | null })[],
+  clients: CategorizeContext["clients"],
   ambiguous: Set<string>,
   internalDomains: Set<string>,
-): Pick<Client, "id" | "name" | "company"> | null {
-  /* La CASA se deriva de los dominios internos (la SessionCategory kind="internal"), no de un
-     nombre hardcodeado: «Cliente & Smarteam» es el formato estándar de los títulos del equipo, y
-     Smarteam es un Client más en la base — nombraba su identidad entera y empataba con todos. */
-  const esLaCasa = (c: { name: string; company: string | null }) =>
-    effectiveDomainsForClient(c as Pick<Client, "name" | "company" | "emailDomains">).some((d) =>
-      internalDomains.has(d),
-    );
-
-  const r = clientePorTitulo(title, clients, {
+): ResultadoDeMatch {
+  return clientePorTitulo(title, siglasQueValenEnElTitulo(title, clients), {
     modo: "mejor-fraccion",
     skip: (w) => TITLE_MATCH_STOPWORDS.has(w) || ambiguous.has(w),
     normalize,
     esClienteDePrueba: isTestClient,
-    esLaCasa,
+    esLaCasa: esLaCasa(internalDomains),
   });
-  return (r.cliente as Pick<Client, "id" | "name" | "company"> | null) ?? null;
+}
+
+/* La CASA se deriva de los dominios internos (la SessionCategory kind="internal"), no de un
+   nombre hardcodeado: «Cliente & Smarteam» es el formato estándar de los títulos del equipo, y
+   Smarteam es un Client más en la base — nombraba su identidad entera y empataba con todos. */
+const esLaCasa = (internalDomains: Set<string>) => (c: { name: string; company: string | null }) =>
+  effectiveDomainsForClient(c as Pick<Client, "name" | "company" | "emailDomains">).some((d) => internalDomains.has(d));
+
+/**
+ * El dueño por el título (pasos 2 y 6). Si cae en una unidad de una empresa, o empatan solo unidades de la misma
+ * empresa, la reunión se reparte entre sus unidades como cuando llega por el dominio: el título nombró a la empresa, y
+ * de cuál unidad es lo decide `decidirEntreEntidades` (o queda por decidir). Null: el título no nombra a nadie.
+ */
+function duenoPorElTitulo(
+  session: CategorizableSession,
+  externalDomains: Set<string>,
+  ctx: CategorizeContext,
+  ambiguous: Set<string>,
+): SessionGroup | null {
+  const r = findClientByTitleMatch(session.title, ctx.clients, ambiguous, ctx.internalDomains);
+  if (r.cliente) {
+    const c = r.cliente;
+    return repartirEntreEntidades(c.id, session, externalDomains, ctx) ?? { kind: "client", id: c.id, label: c.name, company: c.company };
+  }
+  if (r.motivo === "empate") {
+    const casa = esLaCasa(ctx.internalDomains);
+    const grupos = new Set(r.candidatos.filter((c) => !casa(c)).map((c) => entidadesDelDominio(c.id, ctx)));
+    const [grupo] = grupos;
+    if (grupos.size === 1 && grupo) return repartirEntreEntidades(grupo[0]!.id, session, externalDomains, ctx);
+  }
+  return null;
 }
 
 // ── Entidades que comparten dominio ──────────────────────────────────────────
 
 type ClienteDelCtx = CategorizeContext["clients"][number];
+/** Lo mínimo que hace falta para saber de qué empresa es una ficha (también lo usan Tareas y «Mi día»). */
+type ConEmpresa = ClienteParaMatch & { comparteDominioConId?: string | null };
 
-/** Por cada ficha de un grupo: la dueña y sus entidades, en el orden del ctx. Se arma una vez por lista de clientes. */
-const gruposPorLista = new WeakMap<readonly ClienteDelCtx[], Map<string, ClienteDelCtx[]>>();
+/** Por cada ficha de un grupo: la dueña y sus entidades, en el orden de la lista. Se arma una vez por lista de clientes. */
+const gruposPorLista = new WeakMap<readonly ConEmpresa[], Map<string, ConEmpresa[]>>();
 
-function gruposDeEntidades(clients: readonly ClienteDelCtx[]): Map<string, ClienteDelCtx[]> {
+function gruposDeEntidades<C extends ConEmpresa>(clients: readonly C[]): Map<string, C[]> {
   const hecho = gruposPorLista.get(clients);
-  if (hecho) return hecho;
+  if (hecho) return hecho as Map<string, C[]>;
   const porId = new Map(clients.map((c) => [c.id, c]));
   const entidadesDe = new Map<string, Set<string>>();
   for (const c of clients) {
@@ -343,7 +383,7 @@ function gruposDeEntidades(clients: readonly ClienteDelCtx[]): Map<string, Clien
     if (!duena || duena.id === c.id || duena.comparteDominioConId) continue;
     entidadesDe.set(duena.id, (entidadesDe.get(duena.id) ?? new Set()).add(c.id));
   }
-  const out = new Map<string, ClienteDelCtx[]>();
+  const out = new Map<string, C[]>();
   for (const [duenaId, entidades] of entidadesDe) {
     const grupo = clients.filter((c) => c.id === duenaId || entidades.has(c.id));
     for (const c of grupo) out.set(c.id, grupo);
@@ -357,8 +397,118 @@ export function entidadesDelDominio(clientId: string, ctx: Pick<CategorizeContex
   return gruposDeEntidades(ctx.clients).get(clientId) ?? null;
 }
 
+/**
+ * ¿Esta unidad vive en el dominio de su principal? Solo si comparte dominio y NO tiene uno propio (2026-11-07): AE (sin
+ * dominio) vive en el del TEC; Ecuador (sukasa.com, comohogar.com) vive en el suyo, y el de Costa Rica no la incluye.
+ */
+export function viveEnElDominioDeLaPrincipal(c: Pick<ClienteDelCtx, "comparteDominioConId" | "emailDomains" | "company">): boolean {
+  return !!c.comparteDominioConId && effectiveDomainsForClient(c).length === 0;
+}
+
+/** Las palabras del nombre (≥4 letras, sin stopwords) que están en TODAS las unidades del grupo: «cemaco». */
+const marcaPorGrupo = new WeakMap<readonly ConEmpresa[], Set<string>>();
+function marcaDelGrupo(grupo: readonly ConEmpresa[]): Set<string> {
+  const hecha = marcaPorGrupo.get(grupo);
+  if (hecha) return hecha;
+  const skip = (w: string) => TITLE_MATCH_STOPWORDS.has(w);
+  const [primera, ...resto] = grupo.map((c) => tokensDelCliente(c, skip, normalize).delNombre);
+  const marca = new Set([...(primera ?? [])].filter((t) => resto.every((r) => r.has(t))));
+  marcaPorGrupo.set(grupo, marca);
+  return marca;
+}
+
+/** Las palabras que no distinguen a una unidad de otra DENTRO de su empresa: las del nombre de dos o más («cemaco»). */
+const compartidasPorGrupo = new WeakMap<readonly ConEmpresa[], Set<string>>();
+function palabrasCompartidasDelGrupo(grupo: readonly ConEmpresa[]): Set<string> {
+  const hechas = compartidasPorGrupo.get(grupo);
+  if (hechas) return hechas;
+  const vistas = new Map<string, number>();
+  for (const c of grupo) {
+    for (const t of tokensDelCliente(c, (w) => TITLE_MATCH_STOPWORDS.has(w), normalize).todos) vistas.set(t, (vistas.get(t) ?? 0) + 1);
+  }
+  const out = new Set([...vistas].filter(([, n]) => n >= 2).map(([t]) => t));
+  compartidasPorGrupo.set(grupo, out);
+  return out;
+}
+
+/**
+ * Las palabras del nombre de `clientId` que no lo distinguen de otra unidad de su empresa (vacío si no es de una).
+ * Las usa el reconocimiento de clientes en un texto (lib/sessions/clientes-por-texto.ts) para no nombrar una unidad
+ * por la marca: es la misma regla que este archivo, en un solo lugar (invariante 2).
+ */
+export function palabrasQueNoDistinguenEnSuEmpresa(clientId: string, clients: readonly ConEmpresa[]): ReadonlySet<string> {
+  const grupo = gruposDeEntidades(clients).get(clientId);
+  return grupo ? palabrasCompartidasDelGrupo(grupo) : EMPTY_TOKEN_SET;
+}
+
+/** La empresa (la dueña y sus unidades) de `clientId`, o null. Para el reconocimiento de clientes en un texto. */
+export function unidadesDeLaEmpresa<C extends ConEmpresa>(clientId: string, clients: readonly C[]): C[] | null {
+  return gruposDeEntidades(clients).get(clientId) ?? null;
+}
+
+/**
+ * Los clientes para un match de título, con las siglas de cada unidad SOLO si valen en este título: en una empresa con
+ * marca, junto a la marca («Cemaco CR |»). Medido el 2026-11-07: «CR» suelto está en 27 títulos de otros («Ride CR»,
+ * «Claro CR», «Pago de Nómina en CR y NIC»); como sigla de toda la cascada se los habría llevado, y entre las unidades
+ * le ganaría al dominio («Ride CR | Landing» con gente de Ecuador). Sin marca (el TEC: «TEC · AE» y «TEC · TAE» no
+ * tienen palabras de 4 letras), la sigla vale sola, como se decidió el 29 oct. Sin grupos devuelve la misma lista.
+ * La usan la cascada, la decisión entre unidades y el reconocimiento de clientes en un texto (Tareas, «Mi día»).
+ */
+export function siglasQueValenEnElTitulo<C extends ConEmpresa>(title: string, clients: readonly C[]): readonly C[] {
+  const grupos = gruposDeEntidades(clients);
+  if (grupos.size === 0) return clients;
+  let palabras: Set<string> | null = null;
+  let cambio = false;
+  const out = clients.map((c) => {
+    const grupo = grupos.get(c.id);
+    if (!grupo || !c.siglas?.length) return c;
+    const marca = marcaDelGrupo(grupo);
+    if (marca.size === 0) return c;
+    palabras ??= tokensDelTitulo(title, () => false, normalize);
+    if ([...marca].some((m) => palabras!.has(m))) return c;
+    cambio = true;
+    return { ...c, siglas: [] };
+  });
+  return cambio ? out : clients;
+}
+
+/**
+ * ¿Qué unidad de la empresa nombra el título? Sus siglas (con la regla de la marca) o las palabras de su nombre que la
+ * distinguen de las otras unidades. PURO. Es el paso 1 de `decidirEntreEntidades`; el reconocimiento de clientes en un
+ * texto lo usa igual.
+ */
+export function unidadQueNombraElTitulo<C extends ConEmpresa>(
+  title: string,
+  grupo: readonly C[],
+  ambiguous: ReadonlySet<string> = EMPTY_TOKEN_SET,
+): { clientId: string | null; candidatos: number } {
+  const compartidas = palabrasCompartidasDelGrupo(grupo);
+  const r = clientePorTitulo(title, siglasQueValenEnElTitulo(title, grupo), {
+    modo: "mejor-fraccion",
+    skip: (w) => TITLE_MATCH_STOPWORDS.has(w) || ambiguous.has(w) || compartidas.has(w),
+    normalize,
+    esClienteDePrueba: isTestClient,
+  });
+  return { clientId: r.cliente?.id ?? null, candidatos: r.candidatos.length };
+}
+
+/**
+ * Qué unidad puede ser la de cada dominio del grupo: el de la principal, la principal y las unidades que viven en él
+ * (`viveEnElDominioDeLaPrincipal`); el propio de una unidad, solo esa.
+ */
+function unidadesPorDominio(grupo: readonly ClienteDelCtx[]): Map<string, Set<string>> {
+  const out = new Map<string, Set<string>>();
+  const enLaPrincipal = grupo.filter((c) => viveEnElDominioDeLaPrincipal(c)).map((c) => c.id);
+  for (const c of grupo) {
+    const propios = effectiveDomainsForClient(c);
+    const duenas = c.comparteDominioConId ? [c.id] : [c.id, ...enLaPrincipal];
+    for (const d of propios) out.set(d, new Set([...(out.get(d) ?? []), ...duenas]));
+  }
+  return out;
+}
+
 export type DecisionEntreEntidades =
-  | { clientId: string; por: "nombre" | "gente" }
+  | { clientId: string; por: "nombre" | "gente" | "dominio" }
   | { clientId: null; por: "dos-nombres" | "gente-de-varias" | "sin-pista" };
 
 /** Los correos de la reunión que no son de la casa ni de un calendario, en minúsculas. */
@@ -374,11 +524,13 @@ function correosDeAfuera(participants: string[], internalDomains: Set<string>): 
 
 /**
  * De cuál de las entidades que comparten dominio es la reunión. PURO.
- *  1. El NOMBRE de la reunión: si nombra a UNA sola entidad (sus `siglas` o su nombre, con el mismo matcher del
- *     paso 6 acotado al grupo), es de esa. Si nombra a dos, por decidir: la gente no desempata un título que dice
- *     las dos cosas.
- *  2. La GENTE: si todas las personas de afuera que se conocen (`personasDeEntidades`) son de la misma entidad,
- *     es de esa.
+ *  1. El NOMBRE de la reunión (`unidadQueNombraElTitulo`): si nombra a UNA sola entidad (sus `siglas`, con la regla de
+ *     la marca, o su nombre, con el mismo matcher del paso 6 acotado al grupo), es de esa. Si nombra a dos, por
+ *     decidir: la gente no desempata un título que dice las dos cosas. La palabra que comparten las unidades
+ *     («cemaco») no nombra a ninguna.
+ *  2. La GENTE y el DOMINIO: cada persona de afuera cuenta para la unidad de su dominio, si el dominio es de una sola
+ *     (el propio de Ecuador; el de Costa Rica, si ninguna unidad vive en él), o para la que dice `personasDeEntidades`.
+ *     Si todas las que se conocen son de la misma unidad, es de esa.
  *  3. Si no, por decidir.
  * La gente de Smarteam no cuenta: lleva las dos (en el TEC, Heiver).
  */
@@ -387,27 +539,29 @@ export function decidirEntreEntidades(
   entidades: readonly ClienteDelCtx[],
   ctx: Pick<CategorizeContext, "internalDomains" | "ambiguousNameTokens" | "personasDeEntidades">,
 ): DecisionEntreEntidades {
-  const ambiguous = ctx.ambiguousNameTokens ?? EMPTY_TOKEN_SET;
-  const r = clientePorTitulo(session.title, entidades, {
-    modo: "mejor-fraccion",
-    skip: (w) => TITLE_MATCH_STOPWORDS.has(w) || ambiguous.has(w),
-    normalize,
-    esClienteDePrueba: isTestClient,
-  });
-  if (r.cliente) return { clientId: r.cliente.id, por: "nombre" };
-  if (r.candidatos.length > 1) return { clientId: null, por: "dos-nombres" };
+  const t = unidadQueNombraElTitulo(session.title, entidades, ctx.ambiguousNameTokens ?? EMPTY_TOKEN_SET);
+  if (t.clientId) return { clientId: t.clientId, por: "nombre" };
+  if (t.candidatos > 1) return { clientId: null, por: "dos-nombres" };
 
   const personas = ctx.personasDeEntidades;
-  if (personas && personas.size > 0) {
-    const ids = new Set(entidades.map((e) => e.id));
-    const de = new Set<string>();
-    for (const correo of correosDeAfuera(session.participants, ctx.internalDomains)) {
-      const id = personas.get(correo);
-      if (id && ids.has(id)) de.add(id);
+  const porDominio = unidadesPorDominio(entidades);
+  const ids = new Set(entidades.map((e) => e.id));
+  const de = new Set<string>();
+  let porLaGente = false;
+  for (const correo of correosDeAfuera(session.participants, ctx.internalDomains)) {
+    const delDominio = porDominio.get(correo.split("@")[1]!);
+    if (delDominio?.size === 1) {
+      de.add([...delDominio][0]!);
+      continue;
     }
-    if (de.size === 1) return { clientId: [...de][0]!, por: "gente" };
-    if (de.size > 1) return { clientId: null, por: "gente-de-varias" };
+    const id = personas?.get(correo);
+    if (id && ids.has(id)) {
+      de.add(id);
+      porLaGente = true;
+    }
   }
+  if (de.size === 1) return { clientId: [...de][0]!, por: porLaGente ? "gente" : "dominio" };
+  if (de.size > 1) return { clientId: null, por: "gente-de-varias" };
   return { clientId: null, por: "sin-pista" };
 }
 
@@ -521,15 +675,8 @@ export function categorizeSession(
   // clientes: una sesión interna cuyo título contiene el nombre del cliente
   // (ej. "Hand Off | WHEREX") debe ir al bucket de ese cliente, no a Internal.
   if (participantDomains.size > 0 && externalDomains.size === 0) {
-    const titleMatchedClient = findClientByTitleMatch(session.title, clients, ambiguous, internalDomains);
-    if (titleMatchedClient) {
-      return {
-        kind: "client",
-        id: titleMatchedClient.id,
-        label: titleMatchedClient.name,
-        company: titleMatchedClient.company,
-      };
-    }
+    const porTitulo = duenoPorElTitulo(session, externalDomains, ctx, ambiguous);
+    if (porTitulo) return porTitulo;
     // Sin match por título → grupo Internal real
     const internalCat = categories.find((c) => c.kind === "internal");
     if (internalCat) {
@@ -614,15 +761,8 @@ export function categorizeSession(
   }
 
   // ── 6. Title matching con Client (fallback débil) ─────────────────────────
-  const titleMatched = findClientByTitleMatch(session.title, clients, ambiguous, internalDomains);
-  if (titleMatched) {
-    return {
-      kind: "client",
-      id: titleMatched.id,
-      label: titleMatched.name,
-      company: titleMatched.company,
-    };
-  }
+  const porTitulo = duenoPorElTitulo(session, externalDomains, ctx, ambiguous);
+  if (porTitulo) return porTitulo;
 
   // ── 7. Orphan ─────────────────────────────────────────────────────────────
   if (externalDomains.size === 0) {

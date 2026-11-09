@@ -12,8 +12,10 @@
  *     mañana aparece un segundo proyecto la re-clasificación debe poder revisarla
  *     (caso RC Inmobiliaria: 5 sesiones pegadas al único proyecto 3 minutos antes
  *     de crearse el segundo, y nunca reconsideradas). No llama a Claude.
- *   - Si tiene 2+ → llama al agente IA `agent-session-project-classifier` y
- *     persiste sus assignments.
+ *   - Si tiene 2+ → primero el TÍTULO (U6, 2026-11-07): si nombra a UN solo proyecto
+ *     (lib/sessions/proyecto-por-titulo.ts: «kölbi Marketing | Campaña» → Marketing), la
+ *     reunión es de ese, como principal, sin llamar a Claude. Si nombra a dos o a ninguno,
+ *     llama al agente IA `agent-session-project-classifier` y persiste sus assignments.
  *
  * LOCKS POR LINK (no por sesión): el clasificador NUNCA modifica ni borra un link
  * con `source="manual"` | `reviewedAt != null` | `included=false` | `handoffOverride != null`
@@ -29,6 +31,7 @@ import { conContextoDeIA } from "@/lib/ai/contexto-de-corrida";
 import { getSystemHubspotClient } from "@/lib/hubspot/client";
 import { isLockedLink, WHERE_VINCULO_VIRGEN } from "@/lib/sessions/session-project-locks";
 import { proyectoClasificableWhere } from "@/lib/projects/scope";
+import { proyectoQueNombraElTitulo } from "@/lib/sessions/proyecto-por-titulo";
 
 export { isLockedLink } from "@/lib/sessions/session-project-locks";
 
@@ -57,6 +60,8 @@ export interface ClassifyResult {
   assignmentsCreated?: number;
   /** Con dryRun: lo que el clasificador HABRÍA escrito (para el diff del backfill). */
   proposals?: ClassifyProposal[];
+  /** Quién decidió: el único proyecto de la ficha, el título (U6) o la IA. */
+  via?: "unico" | "titulo" | "ia";
 }
 
 /**
@@ -69,7 +74,8 @@ export async function classifySessionToProjects(
   clientId: string,
   /** `signal`: el corte del tope de la lectura de seguimiento (lib/lecturas/leer.ts); corta la llamada al modelo. */
   /** `modelo`: solo para scripts/comparar-modelo-del-clasificador.ts (en simulacro, con `dryRun`). */
-  opts: { dryRun?: boolean; signal?: AbortSignal; modelo?: string } = {},
+  /** `soloTitulo`: sin la IA (scripts/repartir-reuniones-sin-proyecto.ts sin `--con-ia`): si el título no decide, se salta. */
+  opts: { dryRun?: boolean; signal?: AbortSignal; modelo?: string; soloTitulo?: boolean } = {},
 ): Promise<ClassifyResult> {
   const dryRun = opts.dryRun === true;
   // 1. Cargar los proyectos a los que se le puede colgar una sesión. El criterio es el
@@ -140,7 +146,7 @@ export async function classifySessionToProjects(
       confidence: 0.7,
       rationale: "Único proyecto activo del cliente (asignación provisional)",
     };
-    if (dryRun) return { status: "ok", primaryProjectId: p.id, assignmentsCreated: 0, proposals: [proposal] };
+    if (dryRun) return { status: "ok", primaryProjectId: p.id, assignmentsCreated: 0, proposals: [proposal], via: "unico" };
     if (!lockedByProject.has(p.id)) {
       await prisma.sessionProject.upsert({
         where: { sessionId_projectId: { sessionId, projectId: p.id } },
@@ -160,10 +166,10 @@ export async function classifySessionToProjects(
         },
       });
     }
-    return { status: "ok", primaryProjectId: p.id, assignmentsCreated: 1 };
+    return { status: "ok", primaryProjectId: p.id, assignmentsCreated: 1, via: "unico" };
   }
 
-  // 4. 2+ proyectos → llamar al clasificador IA
+  // 4. 2+ proyectos → primero el título; si no decide, el clasificador IA
   const session = await prisma.firefliesSession.findUnique({
     where: { id: sessionId },
     select: {
@@ -179,9 +185,20 @@ export async function classifySessionToProjects(
 
   const client = await prisma.client.findUnique({
     where: { id: clientId },
-    select: { name: true },
+    select: { name: true, company: true, siglas: true },
   });
   if (!client) return { status: "error", reason: "Client not found" };
+
+  // 4a. El título manda (U6): si nombra a UN solo proyecto de la ficha, es de ese, sin Claude. Si una persona excluyó
+  //     ese proyecto para esta reunión (tombstone), no se insiste: decide la IA, que tampoco lo propone.
+  const delTitulo = proyectoQueNombraElTitulo(session.title, projects, client);
+  const nombrado = delTitulo.proyectoId && !tombstoned.has(delTitulo.proyectoId) ? delTitulo.nombrados[0]! : null;
+  if (nombrado) {
+    const p = projects.find((x) => x.id === nombrado.proyectoId)!;
+    const porTitulo = [{ projectId: p.id, isPrimary: true, confidence: 0.9, rationale: `El título nombra el proyecto «${p.name.trim()}» («${nombrado.palabra}»)` }];
+    return persistirAsignaciones(sessionId, porTitulo, { lockedByProject, lockedPrimary, dryRun, run: null, via: "titulo" });
+  }
+  if (opts.soloTitulo) return { status: "skipped", reason: "El título no nombra a un solo proyecto (sin la IA)" };
 
   const agent = await prisma.agent.findUnique({
     where: { id: AGENT_ID_SESSION_PROJECT_CLASSIFIER },
@@ -294,12 +311,47 @@ export async function classifySessionToProjects(
     return true;
   });
 
+  // Persistir AgentRun para trazabilidad (solo con algo que escribir y fuera de un simulacro, como siempre).
+  const run =
+    assignments.length > 0 && !dryRun
+      ? await prisma.agentRun.create({
+          data: {
+            agentId: AGENT_ID_SESSION_PROJECT_CLASSIFIER,
+            clientId,
+            status: "DONE",
+            stepLabel: "Clasificación sesión→proyecto",
+            output: JSON.stringify(parsed),
+            sourceSessionIds: [sessionId],
+          },
+        })
+      : null;
+  return persistirAsignaciones(sessionId, assignments, { lockedByProject, lockedPrimary, dryRun, run, via: "ia" });
+}
+
+type Asignacion = NonNullable<ClassifierOutput["assignments"]>[number];
+
+/**
+ * Escribe lo que decidió el título o la IA: exactamente UN primario, sin tocar los vínculos que tocó una persona, y
+ * borrando los vírgenes que ya no se proponen.
+ */
+async function persistirAsignaciones(
+  sessionId: string,
+  assignments: readonly Asignacion[],
+  o: {
+    lockedByProject: ReadonlyMap<string, unknown>;
+    lockedPrimary: { projectId: string } | undefined;
+    dryRun: boolean;
+    run: { id: string } | null;
+    via: "titulo" | "ia";
+  },
+): Promise<ClassifyResult> {
+  const { lockedByProject, lockedPrimary, dryRun, run, via } = o;
   if (assignments.length === 0) {
-    return { status: "ok", primaryProjectId: null, assignmentsCreated: 0, ...(dryRun ? { proposals: [] } : {}) };
+    return { status: "ok", primaryProjectId: null, assignmentsCreated: 0, via, ...(dryRun ? { proposals: [] } : {}) };
   }
 
   // Garantizar exactamente UN primario. Si un humano ya fijó el primario (link
-  // bloqueado con isPrimary), se respeta: las propuestas de la IA entran como
+  // bloqueado con isPrimary), se respeta: las propuestas entran como
   // secundarias y no se lo disputan.
   const primary =
     assignments.find((a) => a.isPrimary === true) ??
@@ -314,25 +366,13 @@ export async function classifySessionToProjects(
   }));
 
   if (dryRun) {
-    return { status: "ok", primaryProjectId, assignmentsCreated: 0, proposals };
+    return { status: "ok", primaryProjectId, assignmentsCreated: 0, proposals, via };
   }
-
-  // Persistir AgentRun para trazabilidad
-  const run = await prisma.agentRun.create({
-    data: {
-      agentId: AGENT_ID_SESSION_PROJECT_CLASSIFIER,
-      clientId,
-      status: "DONE",
-      stepLabel: "Clasificación sesión→proyecto",
-      output: JSON.stringify(parsed),
-      sourceSessionIds: [sessionId],
-    },
-  });
 
   let count = 0;
   for (const p of proposals) {
     // Link bloqueado (manual/revisado/override): un humano lo dejó así — no se toca.
-    // La propuesta de la IA sobre ese proyecto se descarta silenciosamente.
+    // La propuesta sobre ese proyecto se descarta silenciosamente.
     if (lockedByProject.has(p.projectId)) continue;
     await prisma.sessionProject.upsert({
       where: {
@@ -345,14 +385,14 @@ export async function classifySessionToProjects(
         source: "agent",
         confidence: p.confidence,
         rationale: p.rationale,
-        generatedByAgentRunId: run.id,
+        generatedByAgentRunId: run?.id ?? null,
       },
       update: {
         isPrimary: p.isPrimary,
         source: "agent",
         confidence: p.confidence,
         rationale: p.rationale,
-        generatedByAgentRunId: run.id,
+        generatedByAgentRunId: run?.id ?? null,
       },
     });
     count++;
@@ -379,6 +419,7 @@ export async function classifySessionToProjects(
     status: "ok",
     primaryProjectId,
     assignmentsCreated: count,
+    via,
   };
 }
 
