@@ -179,7 +179,10 @@ function ElAnalisis({ vista, pestana, puedeEditar }: { vista: ReunionDeVentaVist
 
           <BienYParaMejorar bien={lo.bien} mejorar={lo.recomendaciones} />
           {falta && <LoQueFalta lo={lo} falta={falta} delCliente={delCliente} />}
-          {lo.numeros.length ? <LosNumeros lo={lo} /> : <ElResultado lo={lo} />}
+          {/* «El resultado que busca» a la vista siempre, con su lectura y su cita (8 nov, Elías: estaba solo como etiqueta y
+              su porqué había bajado a «Ver el análisis completo»). Los números, debajo, si los hay. */}
+          <ElResultado lo={lo} />
+          {lo.numeros.length > 0 && <LosNumeros lo={lo} />}
           <ElProcesoConsultivo lo={lo} juzgado={res.juicios.some((j) => j.punto === "etapa")} />
 
           <Confirmacion
@@ -371,11 +374,10 @@ function ParaDecidirYDemo({ lo }: { lo: LoDeLaSesion }) {
 }
 
 /**
- * Los números del cliente en una tabla corta (2026-11-08): la meta, lo que pasa hoy y lo que falta saber. Reemplaza la fila
- * «¿Se averiguó el resultado que busca?», que queda como etiqueta del título. La cita de cada cifra, al pasar el mouse.
+ * Los números del cliente en una tabla corta (2026-11-08): la meta, lo que pasa hoy y lo que falta saber. Va debajo de
+ * «El resultado que busca» (otra vez a la vista desde el 8 nov). La cita de cada cifra, al pasar el mouse.
  */
 function LosNumeros({ lo }: { lo: LoDeLaSesion }) {
-  const r = lo.resultado;
   const celda = (c: CifraDicha | null) =>
     c ? (
       <span title={`«${c.cita.texto}» — ${c.cita.hablante}, turno ${c.cita.turno}`} className="cursor-help underline decoration-line decoration-dotted underline-offset-2">
@@ -388,11 +390,6 @@ function LosNumeros({ lo }: { lo: LoDeLaSesion }) {
     <div className="space-y-1.5">
       <div className="flex flex-wrap items-center gap-2">
         <Subtitulo>Los números del cliente</Subtitulo>
-        {r && (
-          <span className={cn("inline-flex rounded-full px-2 py-0.5 text-[11px] font-semibold", TONO[r.valor === "si" ? "info" : r.valor === "en_parte" ? "neutro" : "aviso"])}>
-            El resultado que busca: {r.valor === "si" ? "sí se averiguó" : r.valor === "en_parte" ? "en parte" : "no se averiguó"}
-          </span>
-        )}
       </div>
       <div className="overflow-x-auto">
         <table className="w-full min-w-[34rem] text-left text-[12.5px] leading-[18px]">
