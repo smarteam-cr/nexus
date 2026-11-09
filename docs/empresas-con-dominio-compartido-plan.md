@@ -334,6 +334,10 @@ primero.
 
 #### E1 · El TEC en dos fichas (construido el 29 oct)
 
+> ⚠ `scripts/separar-tec.ts` y `scripts/reubicar-reuniones-compartidas.ts` ya no existen (7 nov): los reemplaza
+> `scripts/separar-en-unidades.ts --empresa tec`, que hace las dos cosas en un solo paso, con simulacro (etapa U1). Lo de
+> abajo queda como historia de qué movía cada uno.
+
 - SQL aditivo `scripts/sql/2026-10-29-dominio-compartido.sql`: `Client.comparteDominioConId` (llave a `Client`, SET
   NULL) y su índice. Va ANTES del deploy: el resolver lee la columna.
 - La regla de la sección 3.1 en `categorize.ts`, con su carga en `resolve-client.ts` y en /sessions

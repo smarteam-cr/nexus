@@ -17,6 +17,8 @@
  *      mueve hasta que alguien lo ponga en `aMano` (scripts/lib/unidades.ts).
  *   4. Los vínculos reunión–proyecto y cada fila con `clientId` (tareas, hechos, alertas, handoff, telemetría…): con
  *      la reunión de la que salieron, o con su proyecto, preventa o propuesta (lib/sessions/reubicar-entre-entidades.ts).
+ *      Solo las del grupo: lo que cuelga en OTRA ficha de una reunión que pasa al grupo NO se mueve (sería mover datos
+ *      entre dos clientes) y el simulacro lo lista en «Se quedan en otra ficha» para revisarlo a mano (revisión del 8 nov).
  *
  * Simulacro por defecto, en SOLO LECTURA (la conexión nace read-only): imprime la tabla y la deja en
  * `backups/<fecha>-separar-en-unidades/<empresa>-simulacro.md`. Si la base todavía no tiene `comparteDominioConId`
@@ -459,6 +461,20 @@ async function main() {
     });
     if (plan.length) planesDeFilas.push({ tabla, plan, total: filas.length });
   }
+  /* Lo que cuelga en otra ficha de una reunión que pasa al grupo: no se mueve, se lista para revisarlo a mano. */
+  const llegan = seMueven.filter((d) => !d.s.resolvedClientId || !idsDeLaSeparacion.has(d.s.resolvedClientId)).map((d) => d.s.id);
+  const enOtraFicha: { tabla: string; n: number; fichas: string[] }[] = [];
+  if (llegan.length) {
+    for (const tabla of TABLAS_QUE_CUELGAN) {
+      if (!ESQUEMA.get(tabla)!.has("sessionId")) continue;
+      const filas = (await delegado(prisma, tabla).findMany({
+        where: { sessionId: { in: llegan }, clientId: { notIn: idsAntes } },
+        select: { id: true, clientId: true },
+      })) as unknown as { id: string; clientId: string }[];
+      if (filas.length) enOtraFicha.push({ tabla, n: filas.length, fichas: [...new Set(filas.map((f) => f.clientId))] });
+    }
+  }
+
   log("\n## 7. Lo que cuelga con `clientId` (tareas, hechos, alertas, handoff…)\n");
   if (!planesDeFilas.length) log("(nada que mover)");
   else {
@@ -474,6 +490,12 @@ async function main() {
     log(`| ${tabla} | ${mueven.length} | ${[...por].map(([m, n]) => `con su ${m}: ${n}`).join(" · ")} | ${[...quedan].map(([m, n]) => `${m}: ${n}`).join(" · ")} |`);
   }
   for (const [t, por] of Object.entries(NO_SE_MUEVEN).slice(4)) log(`- ${t}: no se mueve — ${por}`);
+  if (enOtraFicha.length) {
+    log("\n### ⚠ Se quedan en otra ficha (revisar a mano)\n");
+    log("Salieron de reuniones que ahora pasan a esta empresa, pero cuelgan de otra ficha. No se mueven: sería mover datos");
+    log("entre dos clientes. Decidir a mano si son de esta empresa.\n");
+    for (const x of enOtraFicha) log(`- ${x.tabla}: ${x.n} (en ${x.fichas.map((id) => nombre(id)).join(", ")})`);
+  }
 
   const fichasQueCambian = fichas.filter(fichaCambia);
   const proyectosQueSeMueven = destinosP.filter(seMueve);

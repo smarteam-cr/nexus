@@ -12,7 +12,8 @@
  *   3. Lo DUDOSO (la IA no propone nada, o lo propone con confianza menor a 0,6) no se escribe: queda en la tabla para
  *      asignarlo a mano en la ficha del cliente.
  *
- * Simulacro por defecto, en SOLO LECTURA: ni el medidor de la IA puede anotar (cada intento deja un aviso). Deja la
+ * Simulacro por defecto, en SOLO LECTURA: ni el medidor de la IA puede anotar (cada intento deja un aviso: el gasto de
+ * `--con-ia` no llega al panel de Gasto de la IA; se mira en la consola de Anthropic). Deja la
  * tabla en `backups/<fecha>-repartir-reuniones-sin-proyecto/<ficha>-con-ia-simulacro.md` (o `-solo-titulo-`) y lo que
  * propone en `<ficha>-con-ia.plan.json`. El `--apply` escribe EXACTAMENTE ese plan (no vuelve a llamar a la IA): lo que
  * una persona vio y confirmó.
@@ -37,9 +38,9 @@ import { guardarRespaldoJson } from "./lib/respaldo-json";
 import { prisma } from "@/lib/db/prisma";
 import { proyectoClasificableWhere } from "@/lib/projects/scope";
 import { proyectoQueNombraElTitulo } from "@/lib/sessions/proyecto-por-titulo";
-import { classifySessionToProjects, type ClassifyProposal } from "@/lib/sessions/classify-session-project";
+import { AGENT_ID_SESSION_PROJECT_CLASSIFIER, SALTO_SIN_LA_IA, classifySessionToProjects, type ClassifyProposal } from "@/lib/sessions/classify-session-project";
 
-const APPLY = resolverApply({ tablas: ["SessionProject"] });
+const APPLY = resolverApply({ tablas: ["SessionProject", "AgentRun"] });
 
 /** Con menos confianza que esto, la propuesta de la IA es dudosa: no se escribe, se asigna a mano. */
 const CONFIANZA_MINIMA = 0.6;
@@ -119,10 +120,20 @@ async function main() {
     const r = await classifySessionToProjects(s.id, clientId, { dryRun: true, soloTitulo: !conIa });
     const vinculos = [...(r.proposals ?? [])].sort((a, b) => Number(b.isPrimary) - Number(a.isPrimary));
     const principal = vinculos[0];
-    if (r.status === "skipped" && !conIa) {
+    if (r.status === "skipped" && r.reason === SALTO_SIN_LA_IA) {
+      /* Solo este salto es «para la IA»; los otros los decidió una persona (revisión del 8 nov: la tabla decía «no
+         nombra un proyecto entero» de una reunión cuyo proyecto una persona había excluido o ya había tocado). */
       const delTitulo = proyectoQueNombraElTitulo(s.title, proyectos, cliente);
-      const varios = delTitulo.nombrados.length > 1 ? `el título nombra a ${delTitulo.nombrados.map((n) => `«${nombreDelProyecto.get(n.proyectoId)}»`).join(" y ")}` : "el título no nombra un proyecto entero";
-      propuestas.push({ ...base, via: "para-la-ia", vinculos: [], porQue: varios });
+      const nombres = delTitulo.nombrados.map((n) => `«${nombreDelProyecto.get(n.proyectoId)}»`);
+      const porQue =
+        nombres.length > 1
+          ? `el título nombra a ${nombres.join(" y ")}`
+          : nombres.length === 1
+            ? `el título nombra ${nombres[0]}, pero una persona ya lo excluyó o lo tocó en esta reunión`
+            : "el título no nombra un proyecto entero";
+      propuestas.push({ ...base, via: "para-la-ia", vinculos: [], porQue });
+    } else if (r.status === "skipped") {
+      propuestas.push({ ...base, via: "dudosa", vinculos: [], porQue: `lo decidió una persona: ${r.reason ?? "sin motivo"}` });
     } else if (r.status !== "ok") {
       propuestas.push({ ...base, via: "dudosa", vinculos: [], porQue: `el clasificador no pudo: ${r.reason ?? r.status}` });
     } else if ((r.via === "titulo" || r.via === "unico") && principal) {
@@ -210,12 +221,27 @@ async function aplicar() {
   for (const p of aEscribir) {
     if (!siguen.has(p.sessionId) || !vigentes.has(principalDe(p))) continue;
     await prisma.$transaction(async (tx) => {
+      /* Lo que decidió la IA queda con su corrida (ARCHITECTURE §6 regla 5): la del simulacro no se guardó (solo lectura).
+         La salida es la del plan, la que una persona confirmó. Lo del título, como en el clasificador, sin corrida. */
+      const run =
+        p.via === "ia"
+          ? await tx.agentRun.create({
+              data: {
+                agentId: AGENT_ID_SESSION_PROJECT_CLASSIFIER,
+                clientId: plan.clientId,
+                status: "DONE",
+                stepLabel: "Clasificación sesión→proyecto (repartir, plan confirmado)",
+                output: JSON.stringify({ assignments: p.vinculos, plan: ruta, simulacro: plan.hecho }),
+                sourceSessionIds: [p.sessionId],
+              },
+            })
+          : null;
       for (const v of p.vinculos.filter((x) => vigentes.has(x.projectId))) {
         /* Un vínculo apagado por una persona (included=false) no se reabre: el upsert no lo toca. */
         const ya = await tx.sessionProject.findUnique({ where: { sessionId_projectId: { sessionId: p.sessionId, projectId: v.projectId } } });
         if (ya) continue;
         await tx.sessionProject.create({
-          data: { sessionId: p.sessionId, projectId: v.projectId, isPrimary: v.isPrimary, source: "agent", confidence: v.confidence, rationale: v.rationale },
+          data: { sessionId: p.sessionId, projectId: v.projectId, isPrimary: v.isPrimary, source: "agent", confidence: v.confidence, rationale: v.rationale, generatedByAgentRunId: run?.id ?? null },
         });
         vinculos++;
       }

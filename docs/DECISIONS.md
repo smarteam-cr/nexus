@@ -13936,6 +13936,19 @@ con proyectos (abajo). Plan, números y etapas: `docs/empresas-con-dominio-compa
     cascada se los habría llevado a Costa Rica. Vale igual al decidir ENTRE las unidades: «Ride CR | Landing» con gente de
     Ecuador es de Ecuador (la sigla sin marca no le gana al dominio). Y vale en el reconocimiento de clientes en un texto
     de Tareas y de «Mi día» (`lib/sessions/clientes-por-texto.ts` usa las funciones de `categorize.ts`, invariante 2).
+  - **Sin la marca en el título, una unidad no se nombra por título entre todos los clientes** (revisión del 8 nov,
+    `clientesQueValenEnElTitulo`): ni sus siglas ni las palabras de su nombre. *Por qué:* con «Cemaco · Ecuador», la
+    palabra «ecuador» sola mandaba a Cemaco una interna («Planificación expansión Ecuador») o un prospecto
+    («Distribuidora Ecuador» con un invitado de Gmail): la fuga de «para» con otra cara. «Costa» y «Rica» se salvaban
+    solo porque «Honda Costa Rica» las vuelve ambiguas. Adentro de la empresa (el dominio ya dijo que es Cemaco),
+    «Ecuador» sí distingue: «Ecuador | Kickoff» con gente de cemaco.co.cr es de Ecuador. La marca se busca cortando
+    también en «:» y «/» («CEMACO: CR handoff»). Por lo mismo, las siglas de una empresa con marca no van solas a la
+    consulta de la gente de las unidades (`pistasDeTitulo`): «cr» y «ec» traían casi toda la tabla.
+  - El cálculo de las palabras ambiguas pide `id` y `comparteDominioConId` de cada ficha (obligatorios): sin ellos, el
+    aviso de Cobranza contaba las unidades como empresas distintas y no veía cuándo una ficha nueva vuelve ambigua la
+    marca. En Tareas, el índice suma las otras unidades de una empresa que se ve a medias, solo para la regla (nunca
+    se sugieren); en «Mi día», el contacto de la principal con correo del dominio propio de una unidad es de la unidad,
+    como lo decide el resolver (`lib/mi-dia/mapas-de-empresas.ts`).
 - **El aviso de «este dominio parece tener varios clientes» es una revisión, no una regla del resolver:** grupos de gente
   de afuera que nunca coinciden en una reunión, o proyectos y propuestas con nombres que abren distinto. Propone; separar
   lo decide una persona.

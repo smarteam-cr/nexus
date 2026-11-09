@@ -191,14 +191,19 @@ export async function classifySessionToProjects(
 
   // 4a. El título manda (U6): si nombra a UN solo proyecto de la ficha, es de ese, sin Claude. Si una persona excluyó
   //     ese proyecto para esta reunión (tombstone), no se insiste: decide la IA, que tampoco lo propone.
+  //     Si una persona ya tocó el vínculo con ese proyecto y no es el principal (revisión del 8 nov), el atajo tampoco
+  //     corre: el guardado no toca un vínculo con candado y borraba el principal virgen, y la reunión quedaba sin
+  //     principal. Sigue la IA, como antes de esta regla.
   const delTitulo = proyectoQueNombraElTitulo(session.title, projects, client);
-  const nombrado = delTitulo.proyectoId && !tombstoned.has(delTitulo.proyectoId) ? delTitulo.nombrados[0]! : null;
+  const conCandadoSinPrincipal = (id: string) => !lockedPrimary && lockedByProject.has(id) && !lockedByProject.get(id)!.isPrimary;
+  const nombrado =
+    delTitulo.proyectoId && !tombstoned.has(delTitulo.proyectoId) && !conCandadoSinPrincipal(delTitulo.proyectoId) ? delTitulo.nombrados[0]! : null;
   if (nombrado) {
     const p = projects.find((x) => x.id === nombrado.proyectoId)!;
     const porTitulo = [{ projectId: p.id, isPrimary: true, confidence: 0.9, rationale: `El título nombra el proyecto «${p.name.trim()}» («${nombrado.palabra}»)` }];
     return persistirAsignaciones(sessionId, porTitulo, { lockedByProject, lockedPrimary, dryRun, run: null, via: "titulo" });
   }
-  if (opts.soloTitulo) return { status: "skipped", reason: "El título no nombra a un solo proyecto (sin la IA)" };
+  if (opts.soloTitulo) return { status: "skipped", reason: SALTO_SIN_LA_IA };
 
   const agent = await prisma.agent.findUnique({
     where: { id: AGENT_ID_SESSION_PROJECT_CLASSIFIER },
@@ -329,6 +334,9 @@ export async function classifySessionToProjects(
 }
 
 type Asignacion = NonNullable<ClassifierOutput["assignments"]>[number];
+
+/** El motivo con que `soloTitulo` deja una reunión para la IA. Los demás saltos son otra cosa (lo decidió una persona). */
+export const SALTO_SIN_LA_IA = "El título no nombra a un solo proyecto (sin la IA)";
 
 /**
  * Escribe lo que decidió el título o la IA: exactamente UN primario, sin tocar los vínculos que tocó una persona, y

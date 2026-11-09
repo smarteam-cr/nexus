@@ -134,6 +134,28 @@ describe("dentro de un cliente, el título manda el proyecto — DB real", () =>
     );
   });
 
+  it("si una persona ya agregó el proyecto del título como secundario, el título no lo toma: la reunión no queda sin principal", async () => {
+    /* Revisión del 8 nov: el guardado no toca un vínculo con candado y borraba el principal virgen (Ventas). */
+    const { cliente, ventas, marketing, reunion } = await kolbi();
+    await reunion("s7", "kölbi Marketing | Campaña");
+    await prisma.sessionProject.createMany({
+      data: [
+        { sessionId: "s7", projectId: ventas.id, isPrimary: true, source: "agent", confidence: 0.6 },
+        { sessionId: "s7", projectId: marketing.id, isPrimary: false, source: "manual" },
+      ],
+    });
+    crear.mockResolvedValue({
+      content: [{ type: "text", text: JSON.stringify({ assignments: [{ projectId: ventas.id, isPrimary: true, confidence: 0.7, rationale: "Leads" }] }) }],
+    });
+
+    const r = await classifySessionToProjects("s7", cliente.id);
+
+    expect(r).toMatchObject({ via: "ia" });
+    const v = await vinculos("s7");
+    expect(v.filter((x) => x.isPrimary)).toHaveLength(1);
+    expect(v).toContainEqual(expect.objectContaining({ projectId: marketing.id, isPrimary: false, source: "manual" }));
+  });
+
   it("en simulacro no escribe nada", async () => {
     const { cliente, marketing, reunion } = await kolbi();
     await reunion("s4", "Sesión Marketing - Lead Scoring | KOLBI & SMARTEAM");

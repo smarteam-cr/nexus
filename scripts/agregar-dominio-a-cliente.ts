@@ -44,7 +44,7 @@ async function main() {
 
   const [clients, categories, sesiones] = await Promise.all([
     prisma.client.findMany({
-      select: { id: true, name: true, company: true, emailDomains: true, hubspotCompanyId: true },
+      select: { id: true, name: true, company: true, emailDomains: true, hubspotCompanyId: true, siglas: true, comparteDominioConId: true },
     }),
     prisma.sessionCategory.findMany({
       select: { id: true, name: true, slug: true, domains: true, kind: true, color: true },

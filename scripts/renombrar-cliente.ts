@@ -70,7 +70,7 @@ async function main() {
      de cómo se tokeniza el nombre contra cientos de títulos, y de si el token nuevo choca con
      otro cliente (ahí `computeAmbiguousNameTokens` lo anula y el rename no sirve de nada). */
   const [clientes, categorias, sesiones] = await Promise.all([
-    prisma.client.findMany({ select: { id: true, name: true, company: true, emailDomains: true, hubspotCompanyId: true } }),
+    prisma.client.findMany({ select: { id: true, name: true, company: true, emailDomains: true, hubspotCompanyId: true, siglas: true, comparteDominioConId: true } }),
     prisma.sessionCategory.findMany({ select: { id: true, name: true, slug: true, domains: true, kind: true, color: true } }),
     prisma.firefliesSession.findMany({ select: { id: true, title: true, participants: true, manualClientId: true, resolvedClientId: true } }),
   ]);

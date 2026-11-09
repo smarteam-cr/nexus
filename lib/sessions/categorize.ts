@@ -107,7 +107,7 @@ export const ORDEN_DE_CLIENTES_PARA_ATRIBUIR = [{ createdAt: "asc" as const }, {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-import { clientePorTitulo, tokensDelCliente, tokensDelTitulo, type ClienteParaMatch, type ResultadoDeMatch } from "./match-por-titulo";
+import { clientePorTitulo, tokensDelCliente, type ClienteParaMatch, type ResultadoDeMatch } from "./match-por-titulo";
 
 export function normalize(s: string): string {
   return s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().trim();
@@ -248,10 +248,17 @@ const EMPTY_TOKEN_SET: Set<string> = new Set();
  * quedaría ignorado en todo título y «Alineación CEMACO» se iría a las internas en vez de quedar por decidir entre las
  * dos. Entre las unidades lo desempata `decidirEntreEntidades`, que no usa la palabra que comparten.
  */
+/**
+ * Lo que necesita el cálculo de las palabras ambiguas. `id` y `comparteDominioConId` son OBLIGATORIOS (revisión del
+ * 8 nov): con ellos, las unidades de una empresa no se cuentan como empresas distintas. Opcionales, el aviso de
+ * Cobranza calculaba otra cosa que el resolver y dejaba pasar sin aviso una ficha que vuelve ambigua la marca.
+ */
+export type ClienteParaAmbiguas = Pick<Client, "name" | "company"> & { id: string; comparteDominioConId: string | null | undefined };
+
 export function computeAmbiguousNameTokens(
-  clients: (Pick<Client, "name" | "company"> & { id?: string; comparteDominioConId?: string | null })[],
+  clients: readonly ClienteParaAmbiguas[],
 ): Set<string> {
-  const empresaDe = clients.map((c, i) => c.comparteDominioConId ?? c.id ?? `#${i}`);
+  const empresaDe = clients.map((c) => c.comparteDominioConId ?? c.id);
   const sets = clients.map((c) => {
     const s = new Set<string>();
     for (const p of normalize(c.name).split(/[\s.\-_]+/)) {
@@ -323,7 +330,7 @@ function findClientByTitleMatch(
   ambiguous: Set<string>,
   internalDomains: Set<string>,
 ): ResultadoDeMatch {
-  return clientePorTitulo(title, siglasQueValenEnElTitulo(title, clients), {
+  return clientePorTitulo(title, clientesQueValenEnElTitulo(title, clients), {
     modo: "mejor-fraccion",
     skip: (w) => TITLE_MATCH_STOPWORDS.has(w) || ambiguous.has(w),
     normalize,
@@ -452,23 +459,59 @@ export function unidadesDeLaEmpresa<C extends ConEmpresa>(clientId: string, clie
  * «Claro CR», «Pago de Nómina en CR y NIC»); como sigla de toda la cascada se los habría llevado, y entre las unidades
  * le ganaría al dominio («Ride CR | Landing» con gente de Ecuador). Sin marca (el TEC: «TEC · AE» y «TEC · TAE» no
  * tienen palabras de 4 letras), la sigla vale sola, como se decidió el 29 oct. Sin grupos devuelve la misma lista.
- * La usan la cascada, la decisión entre unidades y el reconocimiento de clientes en un texto (Tareas, «Mi día»).
+ * La usa la decisión entre las unidades de UNA empresa (`unidadQueNombraElTitulo`). Para buscar entre todos los
+ * clientes, `clientesQueValenEnElTitulo`.
  */
 export function siglasQueValenEnElTitulo<C extends ConEmpresa>(title: string, clients: readonly C[]): readonly C[] {
+  return filtrarPorLaMarca(title, clients, false);
+}
+
+/**
+ * Los clientes para un match de título entre TODOS (la cascada, pasos 2 y 6, y el reconocimiento de clientes en un
+ * texto: Tareas, «Mi día»). En una empresa con marca, una unidad solo participa si el título dice la marca: sin
+ * «Cemaco», ni sus siglas ni las palabras de su nombre la nombran. *Por qué* (revisión del 8 nov): «Cemaco · Ecuador»
+ * hacía que «Planificación expansión Ecuador», una interna, o «Distribuidora Ecuador», un prospecto, terminaran en la
+ * ficha de Cemaco. Es la fuga de «para» con otra cara: una palabra de país, de rubro o de lugar no es el nombre de la
+ * empresa. «Costa» y «Rica» se salvaban solo porque «Honda Costa Rica» las vuelve ambiguas. Adentro de la empresa
+ * (cuando el dominio ya dijo que es Cemaco), «Ecuador» sí distingue: eso lo decide `decidirEntreEntidades`.
+ */
+export function clientesQueValenEnElTitulo<C extends ConEmpresa>(title: string, clients: readonly C[]): readonly C[] {
+  return filtrarPorLaMarca(title, clients, true);
+}
+
+/**
+ * Las palabras del título para buscar la marca: cortadas en todo signo, también «:» y «/» («CEMACO: CR handoff»,
+ * «Cemaco/CR»). El corte del match por título no los corta, y cambiarlo movería el resto de la cascada.
+ */
+function palabrasParaLaMarca(title: string): Set<string> {
+  return new Set(normalize(title).split(/[^\p{L}\p{N}]+/u).filter(Boolean));
+}
+
+function filtrarPorLaMarca<C extends ConEmpresa>(title: string, clients: readonly C[], sinMarcaNoParticipa: boolean): readonly C[] {
   const grupos = gruposDeEntidades(clients);
   if (grupos.size === 0) return clients;
   let palabras: Set<string> | null = null;
   let cambio = false;
-  const out = clients.map((c) => {
+  const out: C[] = [];
+  for (const c of clients) {
     const grupo = grupos.get(c.id);
-    if (!grupo || !c.siglas?.length) return c;
+    if (!grupo || (!sinMarcaNoParticipa && !c.siglas?.length)) {
+      out.push(c);
+      continue;
+    }
     const marca = marcaDelGrupo(grupo);
-    if (marca.size === 0) return c;
-    palabras ??= tokensDelTitulo(title, () => false, normalize);
-    if ([...marca].some((m) => palabras!.has(m))) return c;
+    if (marca.size === 0) {
+      out.push(c);
+      continue;
+    }
+    palabras ??= palabrasParaLaMarca(title);
+    if ([...marca].some((m) => palabras!.has(m))) {
+      out.push(c);
+      continue;
+    }
     cambio = true;
-    return { ...c, siglas: [] };
-  });
+    if (!sinMarcaNoParticipa) out.push({ ...c, siglas: [] });
+  }
   return cambio ? out : clients;
 }
 
@@ -593,8 +636,13 @@ function repartirEntreEntidades(
 export function pistasDeTitulo(clients: readonly ClienteDelCtx[], ambiguous: Set<string> = EMPTY_TOKEN_SET): string[] {
   const skip = (w: string) => TITLE_MATCH_STOPWORDS.has(w) || ambiguous.has(w);
   const out = new Set<string>();
+  const grupos = gruposDeEntidades(clients);
   for (const c of clients) {
-    for (const s of c.siglas ?? []) out.add(normalize(s).replace(/\s+/g, ""));
+    /* En una empresa con marca, la sigla vale solo junto a la marca, que ya es pista: como pista sola, «cr» y «ec» traen
+       casi toda la tabla («CRM», «proyecto») en cada armado del contexto (revisión del 8 nov). */
+    const grupo = grupos.get(c.id);
+    const siglaSola = !grupo || marcaDelGrupo(grupo).size === 0;
+    if (siglaSola) for (const s of c.siglas ?? []) out.add(normalize(s).replace(/\s+/g, ""));
     for (const t of tokensDelCliente(c, skip, normalize).todos) out.add(t);
     for (const p of `${c.name} ${c.company ?? ""}`.toLowerCase().split(/[\s.\-_]+/)) {
       if (p.length >= 4 && !skip(normalize(p))) out.add(p);

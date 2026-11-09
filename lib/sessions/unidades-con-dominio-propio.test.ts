@@ -16,17 +16,18 @@ import {
   categorizeSession,
   computeAmbiguousNameTokens,
   decidirEntreEntidades,
+  pistasDeTitulo,
   viveEnElDominioDeLaPrincipal,
   type CategorizableSession,
   type CategorizeContext,
 } from "./categorize";
 import { clientesDeUnTexto, clientesNombradosEnteros, indiceDeClientes } from "./clientes-por-texto";
 
-const CR = { id: "cr", name: "Cemaco · Costa Rica", company: "Cemaco Internacional", emailDomains: ["cemaco.co.cr"], siglas: ["CR"] };
+const CR = { id: "cr", name: "Cemaco · Costa Rica", company: "Cemaco Internacional", emailDomains: ["cemaco.co.cr"], siglas: ["CR"], comparteDominioConId: null };
 const EC = { id: "ec", name: "Cemaco · Ecuador", company: null, emailDomains: ["sukasa.com", "comohogar.com"], siglas: ["EC"], comparteDominioConId: "cr" };
-const HONDA = { id: "honda", name: "Honda Costa Rica", company: null, emailDomains: ["hondafaco.com"] };
-const LIBRERIA = { id: "libreria", name: "Librería Internacional", company: null, emailDomains: ["libreriainternacional.com"] };
-const TAE = { id: "tae", name: "TEC · TAE", company: "tec.ac.cr", emailDomains: ["itcr.ac.cr"], siglas: ["TAE"] };
+const HONDA = { id: "honda", name: "Honda Costa Rica", company: null, emailDomains: ["hondafaco.com"], comparteDominioConId: null };
+const LIBRERIA = { id: "libreria", name: "Librería Internacional", company: null, emailDomains: ["libreriainternacional.com"], comparteDominioConId: null };
+const TAE = { id: "tae", name: "TEC · TAE", company: "tec.ac.cr", emailDomains: ["itcr.ac.cr"], siglas: ["TAE"], comparteDominioConId: null };
 const AE = { id: "ae", name: "TEC · AE", company: "TEC- AE", emailDomains: [], siglas: ["AE"], comparteDominioConId: "tae" };
 
 function ctx(over: Partial<CategorizeContext> = {}): CategorizeContext {
@@ -36,7 +37,7 @@ function ctx(over: Partial<CategorizeContext> = {}): CategorizeContext {
     categories: [{ id: "int", name: "Interna", slug: "interna", domains: ["smarteamcr.com"], kind: "internal", color: null }],
     hubspotCompaniesByDomain: new Map(),
     internalDomains: new Set(["smarteamcr.com"]),
-    ambiguousNameTokens: computeAmbiguousNameTokens(clients),
+    ambiguousNameTokens: computeAmbiguousNameTokens(clients.map((c) => ({ ...c, comparteDominioConId: c.comparteDominioConId ?? null }))),
     ...over,
   };
 }
@@ -161,5 +162,51 @@ describe("Tareas y «Mi día» reconocen las unidades con la misma regla (lib/se
 
   it("la marca no queda ambigua en el índice por sus unidades", () => {
     expect(indice.ambiguos.has("cemaco")).toBe(false);
+  });
+});
+
+describe("una palabra del nombre de una unidad, sin la marca, no nombra a la empresa (revisión del 8 nov)", () => {
+  /* «Cemaco · Ecuador» hacía que «ecuador» sola mandara a Cemaco una interna o un prospecto: la fuga de «para» con
+     otra cara. Sin «Cemaco» en el título, la unidad no participa del match entre todos los clientes. */
+  it("«Planificación expansión Ecuador» (solo Smarteam) es interna, no de Cemaco · Ecuador", () => {
+    expect(duenoDe(reunion("Planificación expansión Ecuador", []))).toBe("(category: Interna)");
+  });
+
+  it("«Demo HubSpot | Distribuidora Ecuador» con un invitado de Gmail no es de Cemaco", () => {
+    expect(duenoDe(reunion("Demo HubSpot | Distribuidora Ecuador", ["x@gmail.com"]))).not.toBe("ec");
+  });
+
+  it("«Kickoff Costa Rica» (solo Smarteam) no se va a Costa Rica aunque «Honda Costa Rica» no exista", () => {
+    const sinHonda = ctx({ clients: [LIBRERIA, TAE, CR, AE, EC] });
+    expect(duenoDe(reunion("Kickoff Costa Rica", []), sinHonda)).toBe("(category: Interna)");
+  });
+
+  it("con la marca, el nombre de la unidad sí decide: «Cemaco Ecuador | Kickoff» es de Ecuador", () => {
+    expect(duenoDe(reunion("Cemaco Ecuador | Kickoff", []))).toBe("ec");
+  });
+
+  it("adentro de la empresa (el dominio ya dijo que es Cemaco), «Ecuador» sí distingue", () => {
+    expect(duenoDe(reunion("Ecuador | Kickoff", ["ana@cemaco.co.cr"]))).toBe("ec");
+  });
+
+  it("la marca se reconoce también con «:» o «/»: «CEMACO: CR handoff» y «Cemaco/CR handoff» son de Costa Rica", () => {
+    expect(duenoDe(reunion("CEMACO: CR handoff", []))).toBe("cr");
+    expect(duenoDe(reunion("Cemaco/CR handoff", []))).toBe("cr");
+  });
+
+  it("Tareas y «Mi día» siguen la misma regla", () => {
+    const indice = indiceDeClientes([HONDA, LIBRERIA, TAE, CR, AE, EC]);
+    expect(clientesDeUnTexto("Planificación expansión Ecuador", indice).sugerido).toBeNull();
+    expect(clientesNombradosEnteros("Planificación expansión Ecuador", indice)).toEqual([]);
+  });
+});
+
+describe("las siglas de una empresa con marca no van solas a la consulta de la base (revisión del 8 nov)", () => {
+  it("las pistas de Cemaco no traen «cr» ni «ec» (estarían en todo «CRM» y «proyecto»); las del TEC sí traen sus siglas", () => {
+    const pistas = pistasDeTitulo([CR, EC]);
+    expect(pistas).toContain("cemaco");
+    expect(pistas).not.toContain("cr");
+    expect(pistas).not.toContain("ec");
+    expect(pistasDeTitulo([TAE, AE])).toEqual(expect.arrayContaining(["ae", "tae"]));
   });
 });

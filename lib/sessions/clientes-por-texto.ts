@@ -18,7 +18,7 @@ import {
   isTestClient,
   normalize,
   palabrasQueNoDistinguenEnSuEmpresa,
-  siglasQueValenEnElTitulo,
+  clientesQueValenEnElTitulo,
   unidadQueNombraElTitulo,
   unidadesDeLaEmpresa,
 } from "./categorize";
@@ -48,7 +48,7 @@ export function indiceDeClientes(clientes: readonly ClienteParaMatch[]): IndiceD
 
 export function clientesDeUnTexto(texto: string, indice: IndiceDeClientes, esLaCasa?: (c: ClienteParaMatch) => boolean): ClientesDeUnTexto {
   const skip = (w: string) => TITLE_MATCH_STOPWORDS.has(w) || indice.ambiguos.has(w);
-  const r = clientePorTitulo(texto, siglasQueValenEnElTitulo(texto, indice.clientes), { modo: "mejor-fraccion", skip, normalize, esClienteDePrueba: isTestClient, esLaCasa });
+  const r = clientePorTitulo(texto, clientesQueValenEnElTitulo(texto, indice.clientes), { modo: "mejor-fraccion", skip, normalize, esClienteDePrueba: isTestClient, esLaCasa });
   /* Si cae en una unidad, decide cuál como la cascada (por la sigla o por lo que la distingue); la marca sola no sugiere. */
   const empresa = r.cliente ? unidadesDeLaEmpresa(r.cliente.id, indice.clientes) : null;
   const sugerido = empresa ? unidadQueNombraElTitulo(texto, empresa, indice.ambiguos).clientId : (r.cliente?.id ?? null);
@@ -86,7 +86,7 @@ export function clientesNombradosEnteros(textoCrudo: string, indice: IndiceDeCli
   // Los signos que el corte de palabras del título no conoce («Automáticos:», «demo/ACCESOS») no pegan nada a la palabra.
   const texto = textoCrudo.replace(/[^\p{L}\p{M}\p{N}]+/gu, " ");
   const skip = (w: string) => TITLE_MATCH_STOPWORDS.has(w) || indice.ambiguos.has(w);
-  const r = clientePorTitulo(texto, siglasQueValenEnElTitulo(texto, indice.clientes), { modo: "una-palabra", skip, normalize, esClienteDePrueba: isTestClient });
+  const r = clientePorTitulo(texto, clientesQueValenEnElTitulo(texto, indice.clientes), { modo: "una-palabra", skip, normalize, esClienteDePrueba: isTestClient });
   const palabras = tokensDelTitulo(texto, skip, normalize);
   const porNombre = new Map<string, string>();
   for (const c of r.candidatos) {
