@@ -11,6 +11,12 @@
  * escala. Si no apunta a ninguna, nace con la escala general y la preparación —que lee todo lo que
  * hay de la empresa— la elige (lib/exploraciones/agente.ts). En los dos casos se ve quién la eligió
  * y por qué, y el vendedor la cambia con un clic: desde ahí, nadie más la toca.
+ *
+ * Una UNIDAD de una empresa (DECISIONS «Una empresa con varias unidades», 9 nov) se abre SIEMPRE por su
+ * ficha (`crearExploracionDeLaUnidad`), nunca por una empresa de HubSpot: esa puerta resuelve a quien
+ * tenga la empresa viva y abriría la preventa de la principal. Lo que llega por la empresa de HubSpot es
+ * de la principal; la preventa de una unidad sin empresa propia no lo lee (todo lo que lee HubSpot sale
+ * de `client.hubspotCompanyId` de la ficha de la preventa, que en esa unidad es null).
  */
 import "server-only";
 import type { Prisma } from "@prisma/client";
@@ -40,22 +46,55 @@ export async function crearExploracion(companyId: string, email: string): Promis
   });
   if (!cliente.ok) return { ok: false, status: 409, error: cliente.mensaje };
 
+  return abrirEnLaFicha({ clientId: cliente.clientId, industria: empresa.industria, deDonde: "de la empresa en HubSpot", email });
+}
+
+/**
+ * Por dónde se abre una opción de «Planificar con una empresa»: una unidad (`clientId`) por su ficha, todo lo demás
+ * por su empresa de HubSpot. Es la bifurcación que separa Ecuador de Costa Rica: tiene su prueba (crear-unidad.test.ts).
+ */
+export function abrirPreventaDeLaOpcion(o: { companyId?: string; clientId?: string }, email: string): Promise<ResultadoDelAlta> {
+  if (o.clientId) return crearExploracionDeLaUnidad(o.clientId, email);
+  if (o.companyId) return crearExploracion(o.companyId, email);
+  return Promise.resolve({ ok: false, status: 400, error: "Elige una empresa o una unidad." });
+}
+
+/**
+ * La preventa de una unidad, por su ficha, tenga o no empresa propia en HubSpot (si la suya se fusionara con la de la
+ * principal, la puerta de la empresa abriría la de la principal). Solo una unidad (`comparteDominioConId`): cualquier
+ * otra ficha entra por su empresa de HubSpot, que resuelve fusiones y crea el prospecto.
+ */
+export async function crearExploracionDeLaUnidad(clientId: string, email: string): Promise<ResultadoDelAlta> {
+  const ficha = await prisma.client.findUnique({
+    where: { id: clientId },
+    select: { id: true, industry: true, comparteDominioConId: true },
+  });
+  if (!ficha) return { ok: false, status: 404, error: "Esa ficha no existe." };
+  if (!ficha.comparteDominioConId) {
+    return { ok: false, status: 400, error: "Esa ficha no es la unidad de una empresa: elígela por su empresa de HubSpot." };
+  }
+  return abrirEnLaFicha({ clientId: ficha.id, industria: ficha.industry, deDonde: "de la ficha", email });
+}
+
+/** Abre la preventa viva de la ficha o la crea. `industria` es la de ESA ficha; `deDonde`, para el porqué de la edición. */
+async function abrirEnLaFicha(o: { clientId: string; industria: string | null; deDonde: string; email: string }): Promise<ResultadoDelAlta> {
+  const { clientId, email } = o;
   const viva = await prisma.exploracionDeVenta.findFirst({
-    where: { clientId: cliente.clientId, archivadaEn: null, ...DE_LA_PREVENTA },
+    where: { clientId, archivadaEn: null, ...DE_LA_PREVENTA },
     select: { id: true },
   });
   if (viva) return { ok: true, id: viva.id, existia: true };
 
-  // La edición que apunta la industria de HubSpot, con su perfil habitual. Si no apunta a ninguna, la elige la preparación.
+  // La edición que apunta la industria, con su perfil habitual. Si no apunta a ninguna, la elige la preparación.
   const contenido: ContenidoDeExploracion = contenidoVacio();
   let edicion: { slug: string; perfil: { cierre: string; despues: string } | null } | null = null;
   const escala = await escalaParaExplorar();
   if (escala.estado === "ok") {
-    const slug = sugerirEdicion(empresa.industria, escala.general.ediciones.map((e) => e.slug));
+    const slug = sugerirEdicion(o.industria, escala.general.ediciones.map((e) => e.slug));
     const ed = slug ? escala.general.ediciones.find((e) => e.slug === slug) : null;
     if (ed) {
       edicion = { slug: ed.slug, perfil: ed.perfilHabitual };
-      const razon = `La industria de la empresa en HubSpot es «${industriaLegible(empresa.industria)}».`;
+      const razon = `La industria ${o.deDonde} es «${industriaLegible(o.industria)}».`;
       contenido.edicionElegida = {
         por: "industria",
         razon,
@@ -67,7 +106,7 @@ export async function crearExploracion(companyId: string, email: string): Promis
   try {
     const creada = await prisma.exploracionDeVenta.create({
       data: {
-        clientId: cliente.clientId,
+        clientId,
         creadaPor: email,
         responsableEmail: email,
         edicion: edicion?.slug ?? null,
@@ -83,7 +122,7 @@ export async function crearExploracion(companyId: string, email: string): Promis
     // Dos altas a la vez para la misma empresa: el índice único parcial deja pasar una sola.
     if (esUnicoViolado(e)) {
       const otra = await prisma.exploracionDeVenta.findFirst({
-        where: { clientId: cliente.clientId, archivadaEn: null, ...DE_LA_PREVENTA },
+        where: { clientId, archivadaEn: null, ...DE_LA_PREVENTA },
         select: { id: true },
       });
       if (otra) return { ok: true, id: otra.id, existia: true };

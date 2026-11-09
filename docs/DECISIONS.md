@@ -14363,3 +14363,14 @@ con proyectos (abajo). Plan, números y etapas: `docs/empresas-con-dominio-compa
   - Las reuniones viejas sin proyecto se reparten con `scripts/repartir-reuniones-sin-proyecto.ts`: título, después la
     IA (con `--con-ia`), y lo dudoso (la IA no propone, o con confianza menor a 0,6) queda para asignar a mano. El
     `--apply` escribe el plan que dejó el simulacro, sin volver a llamar a la IA: lo que una persona vio.
+- **La preventa de una unidad se elige y vive en su ficha** (9 nov). En «Planificar con una empresa», una empresa de
+  HubSpot cuya ficha tiene unidades sale como una opción por ficha: la principal con su nombre de Nexus (el de HubSpot,
+  chico) y debajo cada unidad; buscar por el nombre o las siglas de una unidad la encuentra aunque HubSpot no la conozca
+  (`lib/exploraciones/unidades-en-la-lista.ts`). La principal se abre por su empresa de HubSpot; una unidad, SIEMPRE por
+  su ficha (`crearExploracionDeLaUnidad`, solo fichas con `comparteDominioConId`), tenga o no empresa propia. *Por qué no
+  por la empresa:* la puerta de Ventas resuelve la empresa a quien la tenga viva: sin empresa propia, a la principal; y
+  si la propia de una unidad se fusiona con la de la principal (le pasó a la vieja de AE), también. La preventa de una
+  unidad sin empresa propia no lee nada de HubSpot (contactos, actividad, negocios, la investigación en internet): todo
+  sale de `client.hubspotCompanyId` de su ficha, que es null, y lo de la empresa de HubSpot es de la principal (arriba). Por eso no puede armar la propuesta comercial hasta tener su
+  propia empresa en HubSpot, y el paso lo dice. La propuesta manual (Propuestas › Nueva) sigue entrando por el dominio de
+  HubSpot: elige siempre la principal.

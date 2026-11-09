@@ -1,8 +1,11 @@
 /**
- * POST /api/sales/exploraciones   body: { companyId, empezar? }
+ * POST /api/sales/exploraciones   body: { companyId | clientId, empezar? }
  *
  * Abre la exploración de venta de una empresa del HubSpot de Smarteam (lib/exploraciones/crear.ts):
  * si ya hay una viva para esa empresa, devuelve esa. Pide `preventa.write`.
+ *
+ * `clientId` es solo para la UNIDAD de una empresa («Cemaco · Ecuador»): abre la preventa de esa ficha. Por
+ * la empresa de HubSpot se abriría la de la principal.
  *
  * `empezar: "transcripcion"` es el flujo liviano (Elías, 2026-10-06) para quien no llegó por el
  * diagnóstico: no se prepara sola; el vendedor suma la transcripción de la llamada y el agente la lee.
@@ -14,13 +17,16 @@ import { guardPermission } from "@/lib/auth/api-guards";
 import { modeloDisponible } from "@/lib/db/esquema";
 import { prisma } from "@/lib/db/prisma";
 import { lanzarCorrida } from "@/lib/exploraciones/agente";
-import { crearExploracion } from "@/lib/exploraciones/crear";
+import { abrirPreventaDeLaOpcion } from "@/lib/exploraciones/crear";
 import { SQL_DE_EXPLORACIONES } from "@/lib/exploraciones/servidor";
 
-const Cuerpo = z.object({
-  companyId: z.string().trim().regex(/^\d+$/, "Id de empresa de HubSpot inválido"),
-  empezar: z.enum(["preparar", "transcripcion"]).optional(),
-});
+const Cuerpo = z
+  .object({
+    companyId: z.string().trim().regex(/^\d+$/, "Id de empresa de HubSpot inválido").optional(),
+    clientId: z.string().trim().min(1).max(40).optional(),
+    empezar: z.enum(["preparar", "transcripcion"]).optional(),
+  })
+  .refine((c) => (c.companyId ? 1 : 0) + (c.clientId ? 1 : 0) === 1, { message: "Elige una empresa o una unidad (solo una)." });
 
 export async function POST(req: NextRequest) {
   const guard = await guardPermission("preventa", "write");
@@ -39,7 +45,7 @@ export async function POST(req: NextRequest) {
   if (!cuerpo.success) return cuerpoInvalido(cuerpo.error);
 
   const email = guard.user.email ?? "";
-  const r = await crearExploracion(cuerpo.data.companyId, email);
+  const r = await abrirPreventaDeLaOpcion(cuerpo.data, email);
   if (!r.ok) return NextResponse.json({ error: r.error }, { status: r.status });
   /* Una exploración NUEVA arranca preparándose sola: el vendedor la abre y el agente ya está leyendo
      HubSpot, el test y las reuniones. Si no se puede lanzar, la exploración queda igual (el botón

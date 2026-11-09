@@ -78,6 +78,19 @@ async function deLaTabla(): Promise<CasoDelCatalogo[]> {
   }
 }
 
+/**
+ * Sin empresa propia en HubSpot no hay negocio que elegir. Le pasa a una UNIDAD de una empresa («Cemaco · Ecuador»):
+ * la empresa de HubSpot y sus negocios son de la principal (DECISIONS «Una empresa con varias unidades», decisión 4) y
+ * la preventa de la unidad no los toma como suyos.
+ */
+export const SIN_EMPRESA_EN_HUBSPOT = "Esta ficha no tiene empresa propia en HubSpot, y la propuesta se une al proyecto por un negocio de su empresa.";
+
+/** Si la ficha es una unidad, el nombre de su principal: el aviso dice de quién es lo que hay en HubSpot. */
+export async function principalDeLaUnidad(clientId: string): Promise<string | null> {
+  const f = await prisma.client.findUnique({ where: { id: clientId }, select: { comparteDominioCon: { select: { name: true } } } });
+  return f?.comparteDominioCon?.name ?? null;
+}
+
 /** Los negocios de la empresa en HubSpot (ganados primero). null si HubSpot no respondió. */
 export async function negociosDeLaEmpresa(companyId: string): Promise<AvailableDeal[] | null> {
   try {
@@ -113,7 +126,7 @@ export async function armarPropuesta(o: { exploracionId: string; dealId: string;
   // El resultado como eje (2026-11-06): sin el resultado que busca el cliente, confirmado, no hay propuesta.
   if (!resultadoConfirmado(estadoDesdeFila(fila).contenido.casillas)) return { ok: false, status: 409, error: FALTA_EL_RESULTADO_PARA_PROPONER };
   const companyId = fila.client.hubspotCompanyId;
-  if (!companyId) return { ok: false, status: 409, error: "La empresa no está vinculada a HubSpot: no se puede elegir su negocio." };
+  if (!companyId) return { ok: false, status: 409, error: SIN_EMPRESA_EN_HUBSPOT };
 
   const tipo = bcTypeOrNull(TIPO_DE_LA_PROPUESTA);
   if (!tipo?.enabled) return { ok: false, status: 400, error: "La implementación de HubSpot no está disponible." };
