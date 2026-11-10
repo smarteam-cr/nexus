@@ -419,7 +419,6 @@
 .dr.rd-editable .rde-interactivo [data-d] { cursor: grab; }
 /* En pantallas táctiles, deslizar sobre una parte del radar la arrastra (no desplaza la página): solo adentro. */
 .dr.rd-editable .rde-interactivo [data-d] { touch-action: none; }
-.dr .rd-tip[data-fijada] .rd-editor textarea { min-height: 120px; }
 .dr.rd-editable.rd-arrastrando, .dr.rd-editable.rd-arrastrando * { cursor: grabbing !important; user-select: none; }
 .dr.rd-editable.rd-arrastrando .rd-tip { display: none; }
 .dr .rd-editable-texto { position: relative; border-radius: 10px; margin: -4px -8px; padding: 4px 8px; cursor: text; transition: background .15s, box-shadow .15s; }
@@ -429,7 +428,9 @@
 .dr .rd-editable-texto:hover .rd-editable-lapiz, .dr .rd-editable-texto:focus-visible .rd-editable-lapiz { opacity: 1; }
 .dr .rd-editable-origen { display: block; margin-top: 4px; font-size: 11.5px; line-height: 16px; color: var(--v3-apagado); }
 .dr .rd-editor { display: grid; gap: 8px; }
-.dr .rd-editor textarea { width: 100%; box-sizing: border-box; resize: vertical; min-height: 96px; font: inherit; color: var(--v3-texto); background: #ffffff; border: 1px solid var(--v3-azul); border-radius: 10px; padding: 8px 10px; box-shadow: 0 0 0 3px rgba(59, 130, 246, .15); outline: none; }
+/* El cuadro ocupa el lugar exacto del texto (9 nov): el mismo corrimiento que `.rd-editable-texto` (margen -4/-8 px, relleno
+   4/8 px con el borde de 1 px adentro), la misma letra y el alto de lo escrito (TextoEditableDeLaPagina › `ajustarAlto`). */
+.dr .rd-editor textarea { display: block; width: calc(100% + 16px); box-sizing: border-box; margin: -4px -8px; resize: none; overflow: hidden; field-sizing: content; min-height: 0; font: inherit; letter-spacing: inherit; color: inherit; background: #ffffff; border: 1px solid var(--v3-azul); border-radius: 10px; padding: 3px 7px; box-shadow: 0 0 0 3px rgba(59, 130, 246, .15); outline: none; }
 .dr .rd-editor-botones { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .dr .rd-editor-botones .rd-btn { padding: 7px 12px; font-size: 12.5px; }
 .dr .rd-editor-nota { font-size: 12px; color: var(--v3-apagado); }
@@ -439,3 +440,81 @@
 .dr .rd-btn-enlace { font: inherit; font-weight: 600; color: var(--v3-marca); background: none; border: 0; padding: 0; cursor: pointer; }
 .dr .rd-btn-enlace:hover { text-decoration: underline; }
 .dr .rd-btn-enlace:disabled { opacity: .7; cursor: progress; text-decoration: none; }
+
+/* ── El Resumen de la escala (9 nov, ResumenDeLaEscalaVista): la portada que presenta el vendedor. Hex literal, como el
+      resto de la página. ─────────────────────────────────────────────────────────────────────────────────────────── */
+.dr .rs-cabecera { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; padding: 8px 8px 0; }
+.dr .rs-cabecera > .rd-eyebrow { margin-top: 6px; }
+.dr .rs-titulo { margin: 0; font-family: var(--font-body); font-size: 44px; line-height: 50px; font-weight: 300; letter-spacing: -.025em; color: var(--v3-tinta); }
+.dr .rs-ruta { display: flex; flex-wrap: wrap; gap: 8px; margin: 6px 0 0; padding: 0; list-style: none; }
+.dr .rs-ruta a { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px 6px 6px; border-radius: 999px; background: #ffffff; border: 1px solid var(--v3-borde-fuerte); font-size: 13px; font-weight: 500; color: var(--v3-secundario); text-decoration: none; }
+.dr .rs-ruta a:hover { background: var(--v3-fondo); color: var(--v3-tinta); }
+.dr .rs-ruta-n { display: grid; place-items: center; width: 22px; height: 22px; border-radius: 999px; background: #e6f0ff; color: var(--v3-marca); font-size: 12px; font-weight: 700; }
+
+/* Los datos rojos: lo que se le escapa a la empresa, arriba y en grande. */
+.dr .rs-rojos { display: grid; gap: 12px; }
+.dr .rs-eyebrow-rojo { color: #b5342a; }
+.dr .rs-rojos-lista { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }
+.dr .rs-rojo { position: relative; display: flex; flex-direction: column; gap: 8px; background: #fff7f6; border: 1px solid #f6d3cf; border-left: 4px solid #dc2626; border-radius: 18px; padding: 22px 24px; box-shadow: var(--v3-sombra); min-width: 0; }
+.dr .rs-rojo-icono { position: absolute; top: 18px; right: 18px; color: #dc2626; }
+.dr .rs-rojo-cifra { font-size: 40px; line-height: 46px; font-weight: 600; letter-spacing: -.02em; color: #b5342a; padding-right: 26px; }
+.dr .rs-rojo-texto { font-size: 16px; line-height: 23px; color: var(--v3-texto); }
+.dr .rs-rojo-pie { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; margin-top: auto; padding-top: 6px; font-size: 12.5px; color: var(--v3-apagado); }
+
+/* 1 · Lo que hicimos. */
+.dr .rs-numeros { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; }
+.dr .rs-numero { display: flex; flex-direction: column; gap: 2px; padding: 14px 16px; border-radius: 14px; background: var(--v3-fondo); }
+.dr .rs-numero b { font-size: 30px; line-height: 36px; font-weight: 600; letter-spacing: -.015em; color: var(--v3-tinta); }
+.dr .rs-numero b small { font-size: 14px; font-weight: 500; color: var(--v3-apagado); letter-spacing: 0; }
+.dr .rs-numero b.rs-numero-texto { font-size: 18px; line-height: 24px; padding-top: 6px; }
+.dr .rs-numero span { font-size: 13px; color: var(--v3-apagado); }
+.dr .rs-parrafo { max-width: 860px; font-size: 17px; line-height: 25px; color: var(--v3-secundario); }
+
+/* 2 · Lo que encontramos: una columna por equipo. */
+.dr .rs-areas { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
+.dr .rs-area { display: flex; flex-direction: column; gap: 10px; padding: 18px 20px; border: 1px solid var(--v3-borde); border-radius: 16px; min-width: 0; }
+.dr .rs-area-nombre { display: inline-flex; align-items: center; gap: 8px; font-size: 18px; font-weight: 600; color: var(--v3-tinta); }
+.dr .rs-hallazgos { display: grid; gap: 12px; margin: 0; padding: 0 0 0 18px; }
+.dr .rs-hallazgos li { font-size: 15.5px; line-height: 22px; color: var(--v3-texto); }
+.dr .rs-parte { display: inline-block; margin-top: 4px; border-radius: 999px; padding: 1px 9px; background: #eef3fb; font-size: 11.5px; font-weight: 600; color: var(--v3-secundario); }
+.dr .rs-vacio { font-size: 14px; color: var(--v3-apagado); }
+.dr .rs-agregar { font-size: 14px; }
+.dr .rs-enlace { align-self: flex-start; font: inherit; font-size: 13.5px; font-weight: 600; color: var(--v3-marca); background: none; border: 0; padding: 0; cursor: pointer; text-decoration: none; }
+.dr .rs-enlace:hover { text-decoration: underline; }
+.dr .rs-area > .rs-enlace { margin-top: auto; }
+
+/* 3 · Dónde quedan: el nivel en grande y por qué. */
+.dr .rs-quedan { display: grid; gap: 0; }
+.dr .rs-queda { display: grid; grid-template-columns: minmax(180px, 240px) minmax(0, 1fr); gap: 20px; padding: 18px 0; border-top: 1px solid var(--v3-borde); }
+.dr .rs-queda:first-child { border-top: 0; padding-top: 4px; }
+.dr .rs-queda-nivel { display: flex; flex-direction: column; gap: 4px; }
+.dr .rs-queda-area { font-size: 10.5px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; color: var(--v3-apagado); }
+.dr .rs-queda-v { display: inline-flex; align-items: center; gap: 10px; font-size: 30px; line-height: 36px; font-weight: 300; letter-spacing: -.02em; color: var(--v3-tinta); }
+.dr .rs-queda-v .rd-punto { width: 11px; height: 11px; }
+.dr .rs-queda-porque { display: flex; flex-direction: column; gap: 8px; font-size: 16px; line-height: 24px; color: var(--v3-secundario); }
+
+/* 4 · La validación. */
+.dr .rs-validacion { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; }
+.dr .rs-preguntas h2 { font-size: 24px; line-height: 30px; }
+.dr .rs-intro { margin-top: 4px; font-size: 14px; color: var(--v3-apagado); }
+.dr .rs-preguntas ul { display: grid; gap: 10px; margin: 12px 0 0; padding: 0 0 0 18px; }
+.dr .rs-preguntas li { font-size: 16px; line-height: 23px; color: var(--v3-texto); }
+.dr .rs-preguntas .rs-agregar { margin-top: 10px; }
+
+/* Solo adentro: la barra de armar y de dónde sale cada cosa. */
+.dr .rs-barra { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px; padding: 12px 16px; border: 1px dashed #c9d3e1; border-radius: 14px; background: #ffffff; font-size: 13px; color: var(--v3-secundario); }
+.dr .rs-barra p { flex: 1 1 360px; }
+.dr .rs-descartados { flex-basis: 100%; font-size: 12.5px; }
+.dr .rs-descartados summary { cursor: pointer; font-weight: 600; color: var(--v3-secundario); }
+.dr .rs-descartados ul { margin: 6px 0 0; padding-left: 18px; display: grid; gap: 2px; }
+.dr .rs-citas { margin-top: 6px; padding: 8px 10px; border-radius: 10px; background: #f6f8fc; border: 1px dashed var(--v3-borde-fuerte); font-size: 12.5px; line-height: 18px; color: var(--v3-secundario); }
+.dr .rs-citas ul { margin: 2px 0 0; padding-left: 16px; display: grid; gap: 4px; }
+.dr .rs-citas li span { color: var(--v3-apagado); }
+.dr .rs-citas-k { font-size: 11.5px; font-weight: 600; color: var(--v3-apagado); }
+
+@media (max-width: 720px) {
+  .dr .rs-titulo { font-size: 32px; line-height: 38px; }
+  .dr .rs-rojo-cifra { font-size: 32px; line-height: 38px; }
+  .dr .rs-queda { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+  .dr .rs-validacion { grid-template-columns: minmax(0, 1fr); }
+}

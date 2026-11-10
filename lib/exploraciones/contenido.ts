@@ -39,6 +39,7 @@ import type { PosicionamientoDelProspecto } from "./posicionamiento";
 import type { TarjetasDeLaEscala } from "./tarjetas-de-la-escala";
 import { firmaDelArea, TOPE_DE_LA_DESCRIPCION_A_MANO, type DescripcionGuardada } from "./descripcion-de-la-escala";
 import type { ClaveDeEquipo } from "./equipos";
+import { editarElResumen, type ResumenGuardado } from "./resumen-de-la-escala";
 import type { ActividadDelCaso, CasosAnteriores, LugarEnElPlan, ParaVentas, ValorDeVenta } from "@/lib/casos-de-uso/armado";
 import { vuelveASugeridos, type Personalizacion, type RevisionDeLosCasos } from "@/lib/casos-de-uso/personalizar";
 import type { OrdenDeLosCasos } from "@/lib/casos-de-uso/orden";
@@ -321,6 +322,12 @@ export interface ContenidoDeExploracion {
   textosDelRadar?: Record<string, TextoDelRadar>;
   /** El contexto que escribe una persona por área para el agente de la descripción (./descripcion-de-la-escala.ts). NO lo ve el cliente. */
   contextoDeLaEscala?: Record<string, string>;
+  /**
+   * El Resumen de la escala que ve el cliente (2026-11-09, ./resumen-de-la-escala.ts): lo que hicimos, los datos rojos con
+   * su cita, los hallazgos, por qué cada equipo está donde está y la validación. Lo arma el agente y se edita en su lugar.
+   * No sube la versión (como la descripción): un texto a la vez, gana el último.
+   */
+  resumenDeLaEscala?: ResumenGuardado;
 }
 
 /** El texto de la tarjeta de una dimensión que escribió una persona, y el nivel para el que lo escribió. */
@@ -1100,6 +1107,8 @@ export type Operacion =
   | { op: "textoDelRadar"; dimensionId: string; valor: TextoDelRadar | null }
   /** El contexto de un área para el agente de la descripción; no lo ve el cliente (null o vacío: se quita). */
   | { op: "contextoDeLaEscala"; areaId: string; texto: string | null }
+  /** Un texto del Resumen de la escala, editado en su lugar (`editarElResumen`, ./resumen-de-la-escala.ts). null: se quita o vuelve al de los datos. */
+  | { op: "resumenDeLaEscala"; clave: string; texto: string | null }
   | { op: "casoDeUso"; useCaseId: string; valor: CasoDeUsoElegido | null }
   /**
    * 2026-11-08 (pedido 4 de Elías): quitar un caso elegido. El que propuso el agente vuelve a los sugeridos con su porqué
@@ -1704,6 +1713,16 @@ function aplicarUna(estado: EstadoDeExploracion, op: Operacion, validez: Validez
       const textosDelRadar = op.valor && texto ? { ...resto, [op.dimensionId]: { texto, nivel: op.valor.nivel } } : resto;
       return { ok: true, estado: { ...estado, contenido: { ...c, textosDelRadar } } };
     }
+    case "resumenDeLaEscala": {
+      if (!c.resumenDeLaEscala) return { ok: false, error: "Esta escala todavía no tiene Resumen: ármalo primero." };
+      const r = editarElResumen(c.resumenDeLaEscala, op.clave, op.texto, {
+        firmaDe: (a) => firmaDelArea(c.chequeo, a, { ...estado, escalaVersion: validez.escalaVersion }),
+        areas: validez.areas,
+        en: quien.en,
+      });
+      if (!r.ok) return r;
+      return { ok: true, estado: { ...estado, contenido: { ...c, resumenDeLaEscala: r.resumen } } };
+    }
     case "contextoDeLaEscala": {
       if (!validez.areas.has(op.areaId)) return { ok: false, error: `El área ${op.areaId} no existe.` };
       const { [op.areaId]: _antes, ...resto } = c.contextoDeLaEscala ?? {};
@@ -1979,9 +1998,9 @@ export function aplicarOperaciones(
 /** ¿Lo que cambió es lo confirmado (sube la versión) o solo lo pendiente? */
 export function cambioLoConfirmado(antes: EstadoDeExploracion, despues: EstadoDeExploracion): boolean {
   // Las lápidas (y los títulos de los casos descartados) son de lo propuesto: no suben la versión. Tampoco el registro de las usadas.
-  // Ni la descripción de la escala que ve el cliente: un texto por área, gana el último (2026-11-08).
+  // Ni la descripción de la escala que ve el cliente: un texto por área, gana el último (2026-11-08). Ni su Resumen (9 nov).
   const sinLapidas = (c: ContenidoDeExploracion) =>
-    exacto({ ...c, descartadas: [], casosDescartados: [], asociacionesDescartadas: undefined, usadas: undefined, descripcionesDeLaEscala: undefined });
+    exacto({ ...c, descartadas: [], casosDescartados: [], asociacionesDescartadas: undefined, usadas: undefined, descripcionesDeLaEscala: undefined, resumenDeLaEscala: undefined });
   return (
     sinLapidas(antes.contenido) !== sinLapidas(despues.contenido) ||
     exacto(antes.areas) !== exacto(despues.areas) ||

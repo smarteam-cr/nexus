@@ -9,6 +9,7 @@
  *   - el validador estricto que el servidor le pasa a `aplicarOperaciones`.
  */
 import { z } from "zod";
+import { CLAVE_DEL_RESUMEN, TOPE_A_MANO, TOPE_DE_LA_CIFRA, type ResumenGuardado } from "./resumen-de-la-escala";
 import { CIERRES, DESPUES, type Cierre, type Despues } from "@/lib/escala/documento/tipos";
 import {
   CANALES_DE_CONEXION,
@@ -720,6 +721,7 @@ export const OperacionSchema = z.discriminatedUnion("op", [
     valor: z.object({ texto: z.string().max(MAX_TEXTO_DEL_RADAR), nivel: z.enum(NIVELES) }).nullable(),
   }),
   z.object({ op: z.literal("contextoDeLaEscala"), areaId: ID_AREA, texto: z.string().max(MAX_CONTEXTO_DE_LA_ESCALA).nullable() }),
+  z.object({ op: z.literal("resumenDeLaEscala"), clave: z.string().regex(CLAVE_DEL_RESUMEN).max(60), texto: z.string().max(TOPE_A_MANO + 200).nullable() }),
   z.object({ op: z.literal("casoDeUso"), useCaseId: ID_CASO_DE_USO, valor: CasoDeUsoElegidoSchema.nullable() }),
   z.object({ op: z.literal("quitarCaso"), useCaseId: ID_CASO_DE_USO, descartar: z.boolean().optional() }),
   z.object({ op: z.literal("usar"), itemId: z.string().min(1).max(120), valor: z.unknown().optional() }),
@@ -905,6 +907,93 @@ export function leerGuia(raw: unknown): GuiaDeLaSesion | null {
 
 const esObjeto = (x: unknown): x is Record<string, unknown> => typeof x === "object" && x !== null && !Array.isArray(x);
 
+/**
+ * El Resumen de la escala (./resumen-de-la-escala.ts), leído tolerante PIEZA POR PIEZA (revisión del 9 nov): un dato, un
+ * hallazgo, una pregunta, una sesión o una clave de lo quitado que no cuadra se descarta solo; el Resumen entero solo se
+ * ignora si le falta lo de base (v, at, lo que hicimos). Antes, una clave larga de lo quitado tumbaba todo, y la edición
+ * siguiente lo borraba para siempre.
+ */
+const CitaDelResumenSchema = z.object({
+  reunion: z.string().max(120),
+  fecha: z.string().max(40),
+  turno: z.number().int(),
+  hablante: z.string().max(200),
+  texto: z.string().max(2000),
+  confirmo: z.object({ hablante: z.string().max(200), texto: z.string().max(2000) }).optional(),
+});
+const IdDelResumen = z.string().regex(/^[\w-]{1,20}$/);
+const OrigenDelResumen = z.string().max(200).optional();
+const SesionHechaSchema = z.object({
+  fecha: z.string().max(40),
+  equipo: z.string().max(60).nullable(),
+  minutos: z.number().nonnegative().nullable(),
+  areaId: ID_AREA.nullable().optional(),
+  quienes: z.array(z.string().max(200)).max(60).optional(),
+});
+const DatoRojoSchema = z.object({
+  id: IdDelResumen,
+  cifra: z.string().max(TOPE_DE_LA_CIFRA),
+  texto: z.string().max(TOPE_A_MANO),
+  areaId: ID_AREA,
+  dimensionId: ID_DIMENSION.nullable(),
+  citas: z.array(CitaDelResumenSchema).max(3),
+  mano: z.boolean().optional(),
+  origen: OrigenDelResumen,
+});
+const HallazgoSchema = z.object({
+  id: IdDelResumen,
+  texto: z.string().max(TOPE_A_MANO),
+  dimensionId: ID_DIMENSION.nullable(),
+  citas: z.array(CitaDelResumenSchema).max(3),
+  mano: z.boolean().optional(),
+  origen: OrigenDelResumen,
+});
+const PreguntaSchema = z.object({ id: IdDelResumen, texto: z.string().max(TOPE_A_MANO), mano: z.boolean().optional() });
+const BaseDelResumen = z.object({
+  v: z.literal(1),
+  at: z.string().max(40),
+  por: z.string().max(200).nullable(),
+  modelo: z.string().max(80),
+  agentRunId: z.string().max(60).nullable(),
+  hicimos: z.object({ personas: z.number().int().nonnegative(), texto: z.string().max(TOPE_A_MANO).nullable() }),
+});
+
+/** Los elementos de una lista que tienen la forma, hasta `max`. */
+function cadaUno<T>(raw: unknown, s: z.ZodType<T>, max: number): T[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.flatMap((x) => {
+    const r = s.safeParse(x);
+    return r.success ? [r.data] : [];
+  }).slice(0, max);
+}
+
+/** El Resumen guardado, pieza por pieza. undefined: no hay, o le falta lo de base. */
+export function leerResumenGuardado(raw: unknown): ResumenGuardado | undefined {
+  const base = BaseDelResumen.safeParse(raw);
+  if (!base.success || !esObjeto(raw)) return undefined;
+  const r = raw as Record<string, unknown>;
+  const hicimos = esObjeto(r.hicimos) ? (r.hicimos as Record<string, unknown>) : {};
+  const areas: ResumenGuardado["areas"] = {};
+  if (esObjeto(r.areas)) {
+    for (const [id, a] of Object.entries(r.areas as Record<string, unknown>)) {
+      if (!ID_AREA.safeParse(id).success || !esObjeto(a)) continue;
+      const x = a as Record<string, unknown>;
+      const porque = z.object({ texto: z.string().max(TOPE_A_MANO), firma: z.string().max(4000), mano: z.boolean().optional() }).safeParse(x.porque);
+      areas[id] = { hallazgos: cadaUno(x.hallazgos, HallazgoSchema, 40), porque: porque.success ? porque.data : null };
+    }
+  }
+  const quitados = cadaUno(r.quitados, z.string().max(400), 200);
+  return {
+    ...base.data,
+    hicimos: { ...base.data.hicimos, sesiones: cadaUno(hicimos.sesiones, SesionHechaSchema, 200) },
+    datosRojos: cadaUno(r.datosRojos, DatoRojoSchema, 12),
+    areas,
+    entendimos: cadaUno(r.entendimos, PreguntaSchema, 40),
+    falta: cadaUno(r.falta, PreguntaSchema, 40),
+    ...(quitados.length ? { quitados } : {}),
+  };
+}
+
 function registroValido<T>(raw: unknown, clave: z.ZodType<string>, valor: z.ZodType<T>): Record<string, T> {
   const out: Record<string, T> = {};
   if (!esObjeto(raw)) return out;
@@ -983,6 +1072,8 @@ export function leerContenido(raw: unknown): ContenidoDeExploracion {
   if (Object.keys(textos).length) c.textosDelRadar = textos;
   const contextoDeLaEscala = registroValido(raw.contextoDeLaEscala, ID_AREA, z.string().trim().min(1).max(MAX_CONTEXTO_DE_LA_ESCALA));
   if (Object.keys(contextoDeLaEscala).length) c.contextoDeLaEscala = contextoDeLaEscala;
+  const resumen = leerResumenGuardado(raw.resumenDeLaEscala);
+  if (resumen) c.resumenDeLaEscala = resumen;
   c.reunionesElegidas = listaDeTextos(raw.reunionesElegidas, MAX_REUNIONES_ELEGIDAS).filter((id) => id.length <= MAX_ID_DE_REUNION);
   c.fuera = Array.isArray(raw.fuera)
     ? raw.fuera.filter((k): k is string => typeof k === "string" && CLAVE_DE_REUNION.safeParse(k).success).slice(-MAX_FUERA)

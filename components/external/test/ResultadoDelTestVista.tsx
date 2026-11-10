@@ -42,6 +42,7 @@ import { resumenDelResultado } from "@/lib/tests-diagnostico/redaccion";
 import type { DimensionDelResultado, ResultadoDelTest } from "@/lib/tests-diagnostico/resultado";
 import RadarDeUnaEmpresa from "@/components/escala/RadarDeUnaEmpresa";
 import AnimacionesDelResultado from "./AnimacionesDelResultado";
+import { ArribaDeLaEscala, PESTANA_DEL_RESUMEN, type PestanaDeLaEscala } from "./ArribaDeLaEscala";
 import CalendarioDeHubspot from "./CalendarioDeHubspot";
 import DescargarPdfDelResultado from "./DescargarPdfDelResultado";
 import "./diagnostico.css";
@@ -337,7 +338,7 @@ function vinetasDeLaSesion(area: string): string[] {
  * las piezas que editan. La página pública no lo pasa y no cambia.
  */
 export interface EdicionDeLaPagina {
-  /** Las pestañas de las áreas son botones: cambian de área sin salir de la pantalla. */
+  /** Las pestañas (el Resumen y las áreas) son botones: cambian de pestaña sin salir de la pantalla. */
   alElegirArea: (id: string) => void;
   /** En el lugar de la descripción de «Resultado general»: la misma, editable. */
   descripcion?: ReactNode;
@@ -418,8 +419,10 @@ export default function ResultadoDelTestVista({
    */
   deLaEscala?: {
     /** `oculta`: solo en la pantalla interna, el área que el cliente no ve (su pestaña va marcada). */
-    areas: { id: string; nombre: string; href: string; oculta?: boolean }[];
+    areas: PestanaDeLaEscala[];
     porExplorar?: readonly string[];
+    /** La pestaña «Resumen» (9 nov), la primera: dónde está la portada. Sin él, no hay pestaña de Resumen. */
+    resumen?: { href: string } | null;
   } | null;
   /** La pantalla interna que la edita (ver `EdicionDeLaPagina`). La página pública no lo pasa. */
   edicion?: EdicionDeLaPagina | null;
@@ -535,57 +538,30 @@ export default function ResultadoDelTestVista({
   return (
     <div className={`dr rd-v3${edicion ? " rd-editable" : ""}`}>
       <AnimacionesDelResultado className="rd" quieta={!!edicion}>
-        <header className="rd-arriba">
-          {deLaEscala ? (
-            <>
-              <span className="rd-logo">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={LOGO_DE_COLOR} alt="Smarteam" height={34} />
-              </span>
-              {deLaEscala.areas.length > 1 && (
-                <nav className="rd-acciones" aria-label="Áreas">
-                  {deLaEscala.areas.map((a) => {
-                    const clase = `rd-btn ${a.id === r.areaId ? "rd-btn-primary" : "rd-btn-ghost"}${a.oculta ? " rd-btn-oculta" : ""}`;
-                    return edicion ? (
-                      <button
-                        key={a.id}
-                        type="button"
-                        className={clase}
-                        aria-pressed={a.id === r.areaId}
-                        title={a.oculta ? "El cliente no ve esta área: súmala en «Qué ve el cliente»." : undefined}
-                        onClick={() => edicion.alElegirArea(a.id)}
-                      >
-                        {a.nombre}
-                        {a.oculta && <span className="rd-btn-nota">no la ve el cliente</span>}
-                      </button>
-                    ) : (
-                      <a key={a.id} className={clase} href={a.href} aria-current={a.id === r.areaId ? "page" : undefined}>
-                        {a.nombre}
-                      </a>
-                    );
-                  })}
-                </nav>
-              )}
-            </>
-          ) : (
-            <>
-              <a className="rd-logo" href={otraArea} title="Hacer otro diagnóstico">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={LOGO_DE_COLOR} alt="Smarteam" height={34} />
+        {deLaEscala ? (
+          <ArribaDeLaEscala
+            pestanas={[...(deLaEscala.resumen ? [{ id: PESTANA_DEL_RESUMEN, nombre: "Resumen", href: deLaEscala.resumen.href }] : []), ...deLaEscala.areas]}
+            actual={r.areaId}
+            alElegir={edicion?.alElegirArea}
+          />
+        ) : (
+          <header className="rd-arriba">
+            <a className="rd-logo" href={otraArea} title="Hacer otro diagnóstico">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={LOGO_DE_COLOR} alt="Smarteam" height={34} />
+            </a>
+            <div className="rd-acciones">
+              <a className="rd-btn rd-btn-ghost" href={otraArea}>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M3 12a9 9 0 1 0 3-6.7" />
+                  <path d="M3 4v5h5" />
+                </svg>
+                Hacer otro test
               </a>
-              <div className="rd-acciones">
-                <a className="rd-btn rd-btn-ghost" href={otraArea}>
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                    <path d="M3 12a9 9 0 1 0 3-6.7" />
-                    <path d="M3 4v5h5" />
-                  </svg>
-                  Hacer otro test
-                </a>
-                {pdf && <DescargarPdfDelResultado href={pdf} />}
-              </div>
-            </>
-          )}
-        </header>
+              {pdf && <DescargarPdfDelResultado href={pdf} />}
+            </div>
+          </header>
+        )}
 
         {aviso && <p className="rd-aviso">{aviso}</p>}
 

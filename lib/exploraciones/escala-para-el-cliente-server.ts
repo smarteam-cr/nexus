@@ -23,6 +23,7 @@ import { detallesDelResultado, dimensionDeCadaRiesgo, type DetalleDeLaDimension 
 import type { ResultadoDelTest } from "@/lib/tests-diagnostico/resultado";
 import { SENTINEL_SERVICE_TYPE } from "@/lib/projects/kind";
 import { areasDeLaPagina, partesDeLaPagina, resultadosDeLaEscala } from "./escala-para-el-cliente";
+import { resumenParaLaPagina, type ResumenDeLaPagina } from "./resumen-de-la-escala";
 import type { EstadoDeExploracion } from "./contenido";
 import type { EscalaDelLienzo } from "./escala-del-lienzo";
 import { escalaDeLaExploracion, escalaParaExplorar, estadoDesdeFila, leerExploracion } from "./servidor";
@@ -41,6 +42,11 @@ export interface EscalaParaElCliente {
   partesEnJuego: number;
   detalles: Record<string, DetalleDeLaDimension>;
   dimensionDelRiesgo: Record<string, string>;
+  /**
+   * La portada «Resumen» (9 nov, ./resumen-de-la-escala.ts): de las áreas que ve el cliente. En la página pública, SIN las
+   * citas (`conCitas: false`); en la interna, con ellas, para verificar de dónde sale cada cifra.
+   */
+  resumen: ResumenDeLaPagina;
 }
 
 /** La página como la ve la pantalla interna: todas las áreas, y cuáles ve el cliente. */
@@ -88,6 +94,7 @@ async function armarLaPagina(
     partesEnJuego: 0,
     detalles: {},
     dimensionDelRiesgo: {},
+    resumen: resumenParaLaPagina(null, [], {}, {}, { conCitas: false }),
   };
   const general = await escalaParaExplorar();
   if (general.estado !== "ok") return { pagina: vacio, lienzo: null, estado };
@@ -96,6 +103,9 @@ async function armarLaPagina(
   const deLasAreas = resultadosDeLaEscala(escala, lienzo, estado, o.areas?.(lienzo, estado));
   if (!deLasAreas.length) return { pagina: vacio, lienzo, estado };
   const resultados = deLasAreas.map((x) => x.resultado);
+  // El Resumen va con las áreas que VE el cliente, también en la pantalla interna (que trae todas para editarlas).
+  const alCliente = new Set(o.publica ? resultados.map((r) => r.areaId) : areasDeLaPagina(lienzo, estado));
+  const entorno = { edicion: estado.edicion, perfilCierre: estado.perfilCierre, perfilDespues: estado.perfilDespues, escalaVersion: escala.version };
   const medida = (await ultimaMedicionDe([fila.id])).get(fila.id) ?? fila.updatedAt;
   return {
     lienzo,
@@ -109,6 +119,10 @@ async function armarLaPagina(
       partesEnJuego: partesDeLaPagina(lienzo, estado),
       detalles: Object.assign({}, ...resultados.map((r) => detallesDelResultado(escala, r))),
       dimensionDelRiesgo: Object.assign({}, ...resultados.map((r) => dimensionDeCadaRiesgo(escala, r))),
+      resumen: resumenParaLaPagina(estado.contenido.resumenDeLaEscala, resultados.filter((r) => alCliente.has(r.areaId)), estado.contenido.chequeo, entorno, {
+        conCitas: !o.publica,
+        areasFuera: lienzo.areas.filter((a) => !alCliente.has(a.id)).map((a) => a.nombre),
+      }),
     },
   };
 }

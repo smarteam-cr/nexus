@@ -71,7 +71,7 @@ export async function estadoDelAcceso(exploracionId: string): Promise<EstadoDelA
  */
 export async function crearAcceso(exploracionId: string, porEmail: string | null): Promise<EstadoDelAcceso> {
   if (!(await loQueVeElCliente(exploracionId)).areas) {
-    throw new ErrorDelAcceso(409, "Todavía no hay equipos para mostrar: elige al menos uno en «Qué ve el cliente», o usa algo de lo que sugiere Nexus.");
+    throw new ErrorDelAcceso(409, "Todavía no hay equipos para mostrar: elige al menos uno en «Qué equipos ve», o usa algo de lo que sugiere Nexus.");
   }
   // Con dos personas a la vez, una sola crea o renueva: la otra se queda con el mismo enlace.
   const token = randomBytes(32).toString("hex");

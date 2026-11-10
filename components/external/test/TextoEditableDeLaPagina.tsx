@@ -11,8 +11,19 @@
  * respeta AnimacionesDelResultado): no se cierra al mover el cursor. Lo guardado se sigue viendo hasta que llega la
  * página nueva (antes asomaba un instante el texto viejo). Hex literal por las clases de resultado.css: la página no
  * tiene tema.
+ *
+ * El cuadro ocupa EXACTAMENTE el lugar del texto (9 nov, Elías: «al hacer clic, el cuadro cambia de tamaño y la información
+ * queda cortada»): la misma letra, el mismo margen y el alto de lo escrito, que crece y se achica mientras se escribe
+ * (`ajustarAlto`). Antes tenía un alto fijo y lo largo se cortaba con una barra.
  */
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+
+/** El alto del cuadro: el de lo escrito (sin barra), y nunca menos que el texto que reemplazó. */
+export function ajustarAlto(el: HTMLTextAreaElement, minimo = 0): void {
+  el.style.height = "auto";
+  const bordes = el.offsetHeight - el.clientHeight;
+  el.style.height = `${Math.max(el.scrollHeight + bordes, minimo)}px`;
+}
 
 export default function TextoEditableDeLaPagina({
   valor,
@@ -45,6 +56,9 @@ export default function TextoEditableDeLaPagina({
   /** Lo recién guardado, con el valor que había: se muestra mientras la página no traiga uno nuevo. */
   const [recien, setRecien] = useState<{ texto: string | null; sobre: string | null } | null>(null);
   const caja = useRef<HTMLDivElement>(null);
+  const cuadro = useRef<HTMLTextAreaElement>(null);
+  /** El alto del texto al tocarlo: el cuadro arranca de ese tamaño. */
+  const altoDelTexto = useRef(0);
 
   useEffect(() => {
     const tip = caja.current?.closest<HTMLElement>(".rd-tip");
@@ -57,7 +71,12 @@ export default function TextoEditableDeLaPagina({
   }, [editando]);
 
   const visible = recien && recien.sobre === valor ? recien.texto : valor;
+  useLayoutEffect(() => {
+    if (editando && cuadro.current) ajustarAlto(cuadro.current, altoDelTexto.current);
+  }, [editando, borrador]);
+
   const abrir = () => {
+    altoDelTexto.current = caja.current?.querySelector<HTMLElement>(".rd-editable-texto")?.offsetHeight ?? 0;
     setBorrador(visible ?? "");
     setEditando(true);
   };
@@ -74,6 +93,8 @@ export default function TextoEditableDeLaPagina({
     return (
       <div ref={caja} className="rd-editor">
         <textarea
+          ref={cuadro}
+          rows={1}
           aria-label={etiqueta}
           autoFocus
           value={borrador}

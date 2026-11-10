@@ -13,8 +13,8 @@
  *      PRESIONAN (cuarta vuelta, 2026-11-08: «se pueden elegir varias, y se ven en el mismo radar, una sobre otra, cada
  *      una de un color»). Se ven con el RADAR DEL DIAGNÓSTICO (`RadarDeUnaEmpresa`, el mismo de la página del cliente:
  *      nodos, puntaje y nivel en el centro); la principal (la última elegida) lleva los nombres y el detalle, las otras
- *      van encima con su color. La rueda queda como segunda vista («Mapa»), de un área. Un área con algo se ve aunque no
- *      esté en juego. Al pasar el cursor por una dimensión sale su TARJETA (TarjetaDelRadar.tsx: cómo está y qué
+ *      van encima con su color. Un área con algo se ve aunque no esté en juego. (La rueda, la vista «Mapa», se quitó el 9
+ *      nov: Elías pidió sacarla; lo que solo ella mostraba está en DECISIONS.) Al pasar el cursor por una dimensión sale su TARJETA (TarjetaDelRadar.tsx: cómo está y qué
  *      preguntar, con «Llevar a la sesión N»); tocarla abre la dimensión con sus cinco niveles.
  *      Debajo, «Lo que más frena a cada equipo» con el puente a «Casos de uso», y «Para explorar más» cada equipo,
  *      ordenados por hipótesis: ahí vive la lectura «Preparación para engagement avanzado» (en Marketing). Novena vuelta
@@ -27,14 +27,16 @@
  * LA PÁGINA DEL CLIENTE, EDITABLE (8 nov; Elías: «la página de resultados debe verse igual externo que interno, pero
  * interno debe funcionar como un artefacto que se puede editar»): «Dónde está hoy» abre en «Como lo ve el cliente»
  * (PaginaDeLaEscala.tsx): la misma página pública, con los mismos datos, donde se edita en su lugar la descripción, lo que
- * dice cada tarjeta y el nivel de cada parte (arrastrándolo en el radar). Las dos vistas de antes siguen enteras al lado:
+ * dice cada tarjeta y el nivel de cada parte (arrastrándolo en el radar). La vista de antes sigue entera al lado:
  * «Comparar áreas» (el selector con ✓, las áreas superpuestas, las hipótesis sugeridas dibujadas y la tarjeta con
- * «Llevar a la sesión N») y «Mapa» (la rueda). Lo de debajo (lo que frena a cada equipo, para explorar más) es de las tres.
+ * «Llevar a la sesión N»). Lo de debajo (lo que frena a cada equipo, para explorar más) es de las dos. Desde el 9 nov la
+ * página abre en su pestaña «Resumen» (la portada que presenta el vendedor) y no hay botón «Qué ve el cliente»: qué
+ * equipos ve se elige en «Acceso».
  *
  * ESCALA ÚNICA (2026-10-28): la misma pieza es La cuenta › La escala de la ficha del cliente (`lugar = "cuenta"`). Ahí
  * no va «Explorarla a fondo» (la cuenta no tiene sesiones), y el agente es el de la ficha (`agente`: «Actualizar
- * escala»), no «Ubicar con las reuniones». «Acceso» (30 oct, cuenta y preventa): el enlace con que el cliente la ve
- * (AccesoALaEscala.tsx).
+ * escala»), no «Ubicar con las reuniones». «Acceso» (30 oct, cuenta y preventa): el enlace con que el cliente la ve y
+ * qué equipos ve (AccesoALaEscala.tsx).
  */
 import { useEffect, useState, useSyncExternalStore, type CSSProperties, type KeyboardEvent, type MouseEvent, type ReactNode } from "react";
 import { Button } from "@/components/ui";
@@ -63,7 +65,7 @@ import type { AreaDelLienzo, DimensionDelLienzo, EscalaDelLienzo } from "@/lib/e
 import { fraseDelFreno, ordenParaExplorar, partesParaExplorar, resumenDeLoExplorado } from "@/lib/exploraciones/equipos-de-la-escala";
 import { chequeoDelMapa, cuentaDelArea, fraseDeLaCuenta, loQueLaFrena, type PosicionEnElMapa } from "@/lib/exploraciones/mapa";
 import { diaCorto } from "@/lib/exploraciones/fechas";
-import AccesoALaEscala, { QueVeElCliente } from "./AccesoALaEscala";
+import AccesoALaEscala from "./AccesoALaEscala";
 import ListaQueSeAnima from "./ListaQueSeAnima";
 import { AL_LUGAR, DEL_LUGAR, useLienzo } from "./contexto";
 import FranjaDeSugerencias, { IconoDeSugerencia } from "./FranjaDeSugerencias";
@@ -73,7 +75,6 @@ import { piezaDelDestino } from "./piezas";
 import { BotonUsarTodas, FilaSugerida } from "./Propuestas";
 import PreparacionParaEngagement from "./PreparacionParaEngagement";
 import { QueVaPrimero } from "./QueVaPrimero";
-import RuedaDelEquipo from "./RuedaDelEquipo";
 import { useAreasDeLaEscala } from "./useAreasDeLaEscala";
 import { useCorrida } from "./useCorrida";
 import { ConTarjetas, PreguntaParaLlevar, useLlevarALaSesion, type DimensionDeLaTarjeta } from "./TarjetaDelRadar";
@@ -442,19 +443,18 @@ function RadarDeLasAreas({ principal, otras, onElegir }: { principal: AreaDelLie
   );
 }
 
-/** «pagina»: como lo ve el cliente, editable (la de entrada); «nodos»: comparar áreas en el radar; «mapa»: la rueda. */
-type Vista = "pagina" | "nodos" | "mapa";
-const NOMBRE_DE_LA_VISTA: Record<Vista, string> = { pagina: "Como lo ve el cliente", nodos: "Comparar áreas", mapa: "Mapa" };
+/** «pagina»: como lo ve el cliente, editable (la de entrada); «nodos»: comparar áreas en el radar. */
+type Vista = "pagina" | "nodos";
+const NOMBRE_DE_LA_VISTA: Record<Vista, string> = { pagina: "Como lo ve el cliente", nodos: "Comparar áreas" };
 
 /**
- * El área principal (la de los nombres y el detalle): su nivel, el radar con las otras elegidas encima (o la rueda) y la
- * dimensión abierta. Lo que la frena va debajo, con los otros equipos (`LoQueFrenaACadaEquipo`).
+ * El área principal (la de los nombres y el detalle): su nivel, el radar con las otras elegidas encima y la dimensión
+ * abierta. Lo que la frena va debajo, con los otros equipos (`LoQueFrenaACadaEquipo`).
  */
 function AreaConAlgo({
   area,
   otras,
   enJuego,
-  vista,
   abierta: abiertaId,
   onAbrir,
   onAlternar,
@@ -462,7 +462,6 @@ function AreaConAlgo({
   area: AreaDelLienzo;
   otras: readonly AreaDelLienzo[];
   enJuego: boolean;
-  vista: Exclude<Vista, "pagina">;
   abierta: string | null;
   onAbrir: (id: string | null) => void;
   onAlternar: () => void;
@@ -471,8 +470,6 @@ function AreaConAlgo({
   const calculo = calculoDelArea(escala, area, mapa.posiciones);
   if (!calculo) return null;
   const cuenta = cuentaDelArea(calculo, mapa.posiciones);
-  const nombreDeCapa = (c: string) => escala.capas.find((x) => x.clave === c)?.nombre ?? c;
-  const nombresDeCapa = { base: nombreDeCapa("base"), produccion: nombreDeCapa("produccion") } as Record<ClaveDeCapa, string>;
   const todoConEvidencia = cuenta.hipotesis === 0 && cuenta.sinDato === 0;
   const verbo = todoConEvidencia ? "está en" : "parece estar en";
   const aplican = area.dimensiones.filter((d) => d.aplica).length;
@@ -513,46 +510,16 @@ function AreaConAlgo({
 
       {/* «Por qué está ahí» bajó a «Lo que más frena a cada equipo», debajo del radar y de los tres equipos (novena vuelta):
           arriba del radar no queda nada que cambie de alto al elegir o soltar un área. */}
-      {vista === "nodos" ? (
-        <figure className="m-0 flex flex-col gap-2">
-          {/* Sin `key`: sumar, sacar o cambiar la principal actualiza el radar sin volver a montarlo (antes la animación de
-              entrada arrancaba de cero en cada clic, 8 nov). */}
-          <RadarDeLasAreas principal={area} otras={otras} onElegir={onAbrir} />
-          {/* Siempre el mismo texto (novena vuelta): «Encima, Marketing…» le sumaba un renglón al elegir Marketing y corría lo
-              de abajo. Qué áreas se ven lo dice la leyenda, en su renglón fijo. */}
-          <figcaption className="text-xs text-fg-muted">
-            Pasa el cursor por una dimensión para ver cómo está en cada área elegida y qué preguntar; tócala para ver sus cinco niveles. «Ver puntajes» muestra el puntaje de cada una.
-          </figcaption>
-        </figure>
-      ) : (
-        <figure className="m-0 flex flex-col gap-3">
-          <RuedaDelEquipo
-            area={area}
-            posiciones={mapa.posiciones}
-            niveles={escala.niveles}
-            nombresDeCapa={nombresDeCapa}
-            nivelDelArea={calculo.nivel}
-            verbo={verbo}
-            elegida={abierta?.id ?? null}
-            onElegir={onAbrir}
-          />
-          <figcaption data-recorrido="preventa.escala.leyenda" className="flex flex-wrap items-center gap-x-[18px] gap-y-2 border-t border-line pt-3 text-xs text-fg-secondary">
-            <span className="text-fg-muted">Cada porción se pinta hasta el nivel en que está esa dimensión.</span>
-            <span className="inline-flex items-center gap-1.5">
-              <span className="flex h-[18px] w-[18px] items-center justify-center rounded-full border-[1.5px] border-success bg-surface text-[11px] font-bold text-success-ink" aria-hidden="true">
-                ✓
-              </span>
-              Con evidencia: lo dijo el cliente o se vio
-            </span>
-            <span className="inline-flex items-center gap-1.5">
-              <span className="flex h-[18px] w-[18px] items-center justify-center rounded-full border-[1.5px] border-dashed border-warning bg-surface text-[11px] font-bold text-warn-ink" aria-hidden="true">
-                ?
-              </span>
-              Hipótesis: color más claro, se confirma en la reunión
-            </span>
-          </figcaption>
-        </figure>
-      )}
+      <figure className="m-0 flex flex-col gap-2">
+        {/* Sin `key`: sumar, sacar o cambiar la principal actualiza el radar sin volver a montarlo (antes la animación de
+            entrada arrancaba de cero en cada clic, 8 nov). */}
+        <RadarDeLasAreas principal={area} otras={otras} onElegir={onAbrir} />
+        {/* Siempre el mismo texto (novena vuelta): «Encima, Marketing…» le sumaba un renglón al elegir Marketing y corría lo
+            de abajo. Qué áreas se ven lo dice la leyenda, en su renglón fijo. */}
+        <figcaption className="text-xs text-fg-muted">
+          Pasa el cursor por una dimensión para ver cómo está en cada área elegida y qué preguntar; tócala para ver sus cinco niveles. «Ver puntajes» muestra el puntaje de cada una.
+        </figcaption>
+      </figure>
 
       {abierta && <DetalleDeDimension key={abierta.id} d={abierta} onCerrar={() => onAbrir(null)} />}
     </div>
@@ -810,7 +777,7 @@ function DondeEstaHoy() {
             {lugar === "preventa" ? "Objetivo de la primera venta" : "El objetivo"}: llevar cada área en juego a {nombreDeNivel("F")}
           </span>
           <div role="radiogroup" aria-label="Cómo se ve la escala" className="inline-flex gap-1">
-            {(["pagina", "nodos", "mapa"] as const).map((v) => (
+            {(["pagina", "nodos"] as const).map((v) => (
               <button key={v} type="button" role="radio" aria-checked={vista === v} onClick={() => setVista(v)} className={vista === v ? BOTON_DE_HERRAMIENTA_ACTIVO : BOTON_DE_HERRAMIENTA}>
                 {NOMBRE_DE_LA_VISTA[v]}
               </button>
@@ -859,9 +826,8 @@ function DondeEstaHoy() {
       {ninguna ? null : principal ? (
         <AreaConAlgo
           area={principal}
-          otras={vista === "nodos" ? otras : []}
+          otras={otras}
           enJuego={enJuego.includes(principal.id)}
-          vista={vista}
           abierta={abierta}
           onAbrir={abrir}
           onAlternar={() => alternar(principal.id)}
@@ -887,7 +853,6 @@ export default function PasoEscala({ agente }: { agente?: ReactNode } = {}) {
       {lugar !== "proyecto" && (
         <div className="flex flex-wrap items-center justify-end gap-2">
           {lugar === "preventa" && <UbicarConLasReuniones />}
-          <QueVeElCliente />
           <AccesoALaEscala />
         </div>
       )}
