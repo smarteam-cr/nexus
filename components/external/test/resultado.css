@@ -441,8 +441,9 @@
 .dr .rd-btn-enlace:hover { text-decoration: underline; }
 .dr .rd-btn-enlace:disabled { opacity: .7; cursor: progress; text-decoration: none; }
 
-/* ── El Resumen de la escala (9 nov, ResumenDeLaEscalaVista): la portada que presenta el vendedor. Hex literal, como el
-      resto de la página. ─────────────────────────────────────────────────────────────────────────────────────────── */
+/* ── El Resumen de la escala (9 nov; resumen ejecutivo desde el 10 nov, ResumenDeLaEscalaVista): la portada que presenta
+      el vendedor. Hex literal, como el resto de la página. El rojo solo marca lo respaldado por evidencia (los retos y lo
+      que se traba); las cifras van en tinta, con su estado en palabras. ──────────────────────────────────────────────── */
 .dr .rs-cabecera { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; padding: 8px 8px 0; }
 .dr .rs-cabecera > .rd-eyebrow { margin-top: 6px; }
 .dr .rs-titulo { margin: 0; font-family: var(--font-body); font-size: 44px; line-height: 50px; font-weight: 300; letter-spacing: -.025em; color: var(--v3-tinta); }
@@ -450,60 +451,103 @@
 .dr .rs-ruta a { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px 6px 6px; border-radius: 999px; background: #ffffff; border: 1px solid var(--v3-borde-fuerte); font-size: 13px; font-weight: 500; color: var(--v3-secundario); text-decoration: none; }
 .dr .rs-ruta a:hover { background: var(--v3-fondo); color: var(--v3-tinta); }
 .dr .rs-ruta-n { display: grid; place-items: center; width: 22px; height: 22px; border-radius: 999px; background: #e6f0ff; color: var(--v3-marca); font-size: 12px; font-weight: 700; }
+.dr .rs-seccion { display: flex; flex-direction: column; gap: 14px; }
+.dr .rs-intro { margin: 0; font-size: 14.5px; line-height: 21px; color: var(--v3-apagado); max-width: 760px; }
+.dr .rs-bloque-k { margin: 0; font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--v3-apagado); }
+.dr .rs-lista { display: grid; gap: 8px; margin: 0; padding: 0 0 0 18px; }
+.dr .rs-lista li { font-size: 15px; line-height: 22px; color: var(--v3-texto); }
+.dr .rs-parte { display: inline-block; margin-left: 6px; border-radius: 999px; padding: 0 8px; background: #eef3fb; font-size: 11px; font-weight: 600; line-height: 18px; color: var(--v3-secundario); vertical-align: 1px; }
+.dr .rs-vacio { margin: 0; font-size: 14px; color: var(--v3-apagado); }
+.dr .rs-agregar { font-size: 14px; }
+.dr .rs-enlace { align-self: flex-start; font: inherit; font-size: 13.5px; font-weight: 600; color: var(--v3-marca); background: none; border: 0; padding: 0; cursor: pointer; text-decoration: none; }
+.dr .rs-enlace:hover { text-decoration: underline; }
 
-/* Los datos rojos: lo que se le escapa a la empresa, arriba y en grande. */
-.dr .rs-rojos { display: grid; gap: 12px; }
-.dr .rs-eyebrow-rojo { color: #b5342a; }
-.dr .rs-rojos-lista { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }
-.dr .rs-rojo { position: relative; display: flex; flex-direction: column; gap: 8px; background: #fff7f6; border: 1px solid #f6d3cf; border-left: 4px solid #dc2626; border-radius: 18px; padding: 22px 24px; box-shadow: var(--v3-sombra); min-width: 0; }
-.dr .rs-rojo-icono { position: absolute; top: 18px; right: 18px; color: #dc2626; }
-.dr .rs-rojo-cifra { font-size: 40px; line-height: 46px; font-weight: 600; letter-spacing: -.02em; color: #b5342a; padding-right: 26px; }
-.dr .rs-rojo-texto { font-size: 16px; line-height: 23px; color: var(--v3-texto); }
-.dr .rs-rojo-pie { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; margin-top: auto; padding-top: 6px; font-size: 12.5px; color: var(--v3-apagado); }
+/* La señal de cómo se sabe una cifra: símbolo y texto, nunca solo color. */
+.dr .rs-estado { display: inline-flex; align-items: center; gap: 5px; border-radius: 999px; padding: 1px 9px 1px 7px; font-size: 11.5px; font-weight: 600; line-height: 18px; white-space: nowrap; }
+.dr .rs-estado-declarado { background: #e8f1ff; color: #24539e; }
+.dr .rs-estado-estimado { background: #fdf3e3; color: #8a4f0c; }
+.dr .rs-estado-pendiente { background: #eef1f5; color: #4a5770; }
 
-/* 1 · Lo que hicimos. */
+/* 1 · El negocio: seis partes cortas, comparables. */
+.dr .rs-negocio { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 18px 28px; }
+.dr .rs-negocio-parte { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.dr .rs-negocio-lista { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.dr .rs-negocio-lista li { font-size: 15.5px; line-height: 23px; color: var(--v3-texto); }
+.dr .rs-pendiente-txt { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 0; font-size: 14px; color: var(--v3-apagado); }
+
+/* 2 · Qué hicimos. */
 .dr .rs-numeros { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; }
 .dr .rs-numero { display: flex; flex-direction: column; gap: 2px; padding: 14px 16px; border-radius: 14px; background: var(--v3-fondo); }
 .dr .rs-numero b { font-size: 30px; line-height: 36px; font-weight: 600; letter-spacing: -.015em; color: var(--v3-tinta); }
 .dr .rs-numero b small { font-size: 14px; font-weight: 500; color: var(--v3-apagado); letter-spacing: 0; }
-.dr .rs-numero b.rs-numero-texto { font-size: 18px; line-height: 24px; padding-top: 6px; }
 .dr .rs-numero span { font-size: 13px; color: var(--v3-apagado); }
-.dr .rs-parrafo { max-width: 860px; font-size: 17px; line-height: 25px; color: var(--v3-secundario); }
+.dr .rs-exploradas { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.dr .rs-exploradas li { display: inline-flex; align-items: center; gap: 8px; padding: 7px 14px 7px 10px; border-radius: 999px; font-size: 13.5px; }
+.dr .rs-exploradas li span:last-child { color: var(--v3-apagado); }
+.dr .rs-explorada { background: #ecf8f2; border: 1px solid #cfeadc; color: var(--v3-tinta); }
+.dr .rs-explorada .rs-explorada-marca { color: #177a4f; font-weight: 700; }
+.dr .rs-por-explorar { background: #ffffff; border: 1px dashed #b9c4d4; color: var(--v3-secundario); }
+.dr .rs-por-explorar .rs-explorada-marca { color: #8a97ab; }
+.dr .rs-parrafo { max-width: 860px; font-size: 16px; line-height: 24px; color: var(--v3-secundario); }
 
-/* 2 · Lo que encontramos: una columna por equipo. */
-.dr .rs-areas { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
-.dr .rs-area { display: flex; flex-direction: column; gap: 10px; padding: 18px 20px; border: 1px solid var(--v3-borde); border-radius: 16px; min-width: 0; }
-.dr .rs-area-nombre { display: inline-flex; align-items: center; gap: 8px; font-size: 18px; font-weight: 600; color: var(--v3-tinta); }
-.dr .rs-hallazgos { display: grid; gap: 12px; margin: 0; padding: 0 0 0 18px; }
-.dr .rs-hallazgos li { font-size: 15.5px; line-height: 22px; color: var(--v3-texto); }
-.dr .rs-parte { display: inline-block; margin-top: 4px; border-radius: 999px; padding: 1px 9px; background: #eef3fb; font-size: 11.5px; font-weight: 600; color: var(--v3-secundario); }
-.dr .rs-vacio { font-size: 14px; color: var(--v3-apagado); }
-.dr .rs-agregar { font-size: 14px; }
-.dr .rs-enlace { align-self: flex-start; font: inherit; font-size: 13.5px; font-weight: 600; color: var(--v3-marca); background: none; border: 0; padding: 0; cursor: pointer; text-decoration: none; }
-.dr .rs-enlace:hover { text-decoration: underline; }
-.dr .rs-area > .rs-enlace { margin-top: auto; }
+/* 3 · El recorrido: horizontal en escritorio, vertical en el teléfono. */
+.dr .rs-recorrido { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 0; margin: 4px 0 0; padding: 0; list-style: none; }
+.dr .rs-etapa { position: relative; display: flex; flex-direction: column; gap: 6px; padding: 0 22px 0 0; min-width: 0; }
+.dr .rs-etapa::after { content: ""; position: absolute; top: 13px; left: 34px; right: 0; height: 2px; background: #d6dee9; }
+.dr .rs-etapa:last-child::after { display: none; }
+.dr .rs-etapa-n { position: relative; z-index: 1; display: grid; place-items: center; width: 28px; height: 28px; border-radius: 999px; background: #e6f0ff; color: var(--v3-marca); font-size: 13px; font-weight: 700; }
+.dr .rs-etapa-nombre { margin: 4px 0 0; font-size: 15.5px; line-height: 21px; font-weight: 600; color: var(--v3-tinta); }
+.dr .rs-etapa-quien { align-self: flex-start; border-radius: 999px; padding: 0 8px; background: var(--v3-fondo); font-size: 11.5px; font-weight: 600; line-height: 19px; color: var(--v3-secundario); }
+.dr .rs-etapa-texto { font-size: 14px; line-height: 20px; color: var(--v3-secundario); }
+.dr .rs-friccion { margin-top: 2px; padding: 7px 10px; border-radius: 10px; background: #fff6f5; border-left: 3px solid #e2665c; font-size: 13px; line-height: 19px; color: #6b2620; }
+.dr .rs-friccion-k { font-weight: 700; color: #b5342a; }
+.dr .rs-friccion-vacia { background: transparent; border-left-color: #e6ebf2; }
 
-/* 3 · Dónde quedan: el nivel en grande y por qué. */
-.dr .rs-quedan { display: grid; gap: 0; }
-.dr .rs-queda { display: grid; grid-template-columns: minmax(180px, 240px) minmax(0, 1fr); gap: 20px; padding: 18px 0; border-top: 1px solid var(--v3-borde); }
-.dr .rs-queda:first-child { border-top: 0; padding-top: 4px; }
-.dr .rs-queda-nivel { display: flex; flex-direction: column; gap: 4px; }
-.dr .rs-queda-area { font-size: 10.5px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; color: var(--v3-apagado); }
-.dr .rs-queda-v { display: inline-flex; align-items: center; gap: 10px; font-size: 30px; line-height: 36px; font-weight: 300; letter-spacing: -.02em; color: var(--v3-tinta); }
-.dr .rs-queda-v .rd-punto { width: 11px; height: 11px; }
-.dr .rs-queda-porque { display: flex; flex-direction: column; gap: 8px; font-size: 16px; line-height: 24px; color: var(--v3-secundario); }
+/* 4 · Qué encontramos: una tarjeta por área operativa, comparables. */
+.dr .rs-areas { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 18px; align-items: start; }
+.dr .rs-area { display: flex; flex-direction: column; gap: 16px; padding: 22px 24px; background: #ffffff; border: 1px solid var(--v3-borde); border-radius: 20px; box-shadow: var(--v3-sombra); min-width: 0; }
+.dr .rs-area-cabeza { display: flex; flex-direction: column; gap: 6px; }
+.dr .rs-area-nombre { margin: 0; font-size: 22px; line-height: 28px; font-weight: 600; letter-spacing: -.01em; color: var(--v3-tinta); }
+.dr .rs-nivel-chip { display: inline-flex; align-self: flex-start; align-items: center; gap: 7px; font-size: 12.5px; color: var(--v3-apagado); }
+.dr .rs-nivel-chip b { font-weight: 600; color: #8a4f0c; }
+.dr .rs-magnitud { display: grid; gap: 10px; }
+.dr .rs-cifra { display: flex; flex-direction: column; gap: 4px; padding: 14px 16px; border-radius: 14px; background: var(--v3-fondo); }
+.dr .rs-cifra-n { font-size: 30px; line-height: 36px; font-weight: 600; letter-spacing: -.02em; color: var(--v3-tinta); }
+.dr .rs-cifra-texto { font-size: 14.5px; line-height: 21px; color: var(--v3-texto); }
+.dr .rs-cifra-pie { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin-top: 2px; font-size: 12px; color: var(--v3-apagado); }
+.dr .rs-cifra-nota { font-size: 12.5px; line-height: 18px; color: var(--v3-apagado); }
+.dr .rs-cifra-fuera { opacity: .75; border: 1px dashed #d6a3a0; }
+.dr .rs-sin-cifra { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; padding: 12px 14px; border-radius: 14px; border: 1px dashed #c7d1df; font-size: 14px; line-height: 20px; color: var(--v3-secundario); }
+.dr .rs-sin-cifra-k { font-weight: 600; color: var(--v3-tinta); }
+.dr .rs-bloque { display: flex; flex-direction: column; gap: 6px; }
+.dr .rs-bloque-bien .rs-lista { list-style: none; padding-left: 0; }
+.dr .rs-bloque-bien .rs-lista li { position: relative; padding-left: 22px; }
+.dr .rs-bloque-bien .rs-lista li::before { content: "✓"; position: absolute; left: 2px; top: 0; font-weight: 700; color: #177a4f; }
+.dr .rs-retos { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; counter-reset: reto; }
+.dr .rs-retos li { position: relative; padding-left: 30px; font-size: 15px; line-height: 22px; color: var(--v3-texto); counter-increment: reto; }
+.dr .rs-retos li::before { content: counter(reto); position: absolute; left: 0; top: 1px; display: grid; place-items: center; width: 20px; height: 20px; border-radius: 999px; background: #fdecec; color: #b5342a; font-size: 11.5px; font-weight: 700; }
+.dr .rs-porque { border-top: 1px solid var(--v3-borde); padding-top: 10px; }
+.dr .rs-porque > summary { cursor: pointer; list-style: none; font-size: 13.5px; font-weight: 600; color: var(--v3-secundario); }
+.dr .rs-porque > summary::-webkit-details-marker { display: none; }
+.dr .rs-porque > summary::before { content: "▸"; display: inline-block; margin-right: 6px; transition: transform .15s; }
+.dr .rs-porque[open] > summary::before { transform: rotate(90deg); }
+.dr .rs-porque > summary:focus-visible { outline: 2px solid var(--v3-azul); outline-offset: 3px; border-radius: 6px; }
+.dr .rs-porque-cuerpo { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; font-size: 14.5px; line-height: 21px; color: var(--v3-secundario); }
+.dr .rs-provisional { margin: 0; font-size: 13px; line-height: 19px; color: #8a4f0c; }
+.dr .rs-cta { align-self: flex-start; display: inline-flex; align-items: center; gap: 6px; margin-top: auto; padding: 9px 16px; border-radius: 999px; border: 1px solid #c9d8f0; background: #f3f7fe; font: inherit; font-size: 14px; font-weight: 600; color: var(--v3-marca); cursor: pointer; text-decoration: none; }
+.dr .rs-cta:hover { background: #e6f0ff; }
 
-/* 4 · La validación. */
-.dr .rs-validacion { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; }
-.dr .rs-preguntas h2 { font-size: 24px; line-height: 30px; }
-.dr .rs-intro { margin-top: 4px; font-size: 14px; color: var(--v3-apagado); }
-.dr .rs-preguntas ul { display: grid; gap: 10px; margin: 12px 0 0; padding: 0 0 0 18px; }
-.dr .rs-preguntas li { font-size: 16px; line-height: 23px; color: var(--v3-texto); }
-.dr .rs-preguntas .rs-agregar { margin-top: 10px; }
+/* 5 · Qué falta validar. */
+.dr .rs-pendientes { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
+.dr .rs-pendiente { display: flex; flex-direction: column; gap: 4px; padding: 12px 14px; border-radius: 14px; background: var(--v3-fondo); font-size: 15px; line-height: 22px; color: var(--v3-texto); }
+.dr .rs-pendiente-tipo { align-self: flex-start; border-radius: 999px; padding: 0 9px; background: #ffffff; border: 1px solid var(--v3-borde-fuerte); font-size: 11px; font-weight: 700; letter-spacing: .04em; line-height: 19px; color: var(--v3-secundario); }
+.dr .rs-pendiente-contradiccion .rs-pendiente-tipo { border-color: #f0c9a0; color: #8a4f0c; }
+.dr .rs-entendimos { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; padding-top: 18px; border-top: 1px solid var(--v3-borde); }
+.dr .rs-entendimos h2 { font-size: 22px; line-height: 28px; }
+.dr .rs-entendimos ul { display: grid; gap: 8px; margin: 6px 0 0; padding: 0 0 0 18px; }
+.dr .rs-entendimos li { font-size: 15.5px; line-height: 23px; color: var(--v3-texto); }
 
-/* Solo adentro: la barra de armar y de dónde sale cada cosa. */
-/* Solo adentro: una cifra que el cliente no ve (su cita no la sostiene). Se ve apagada y con su porqué. */
-.dr .rs-rojo-fuera { opacity: 0.72; border-style: dashed; }
+/* Solo adentro: una cifra que el cliente no ve (su cita no la sostiene) y de dónde sale cada cosa. */
 .dr .rs-rojo-aviso { margin: 6px 0 0; padding: 6px 10px; border-radius: 10px; background: #fff4e5; color: #8a4b00; font-size: 12.5px; font-weight: 600; line-height: 1.4; }
 .dr .rs-citas { margin-top: 6px; padding: 8px 10px; border-radius: 10px; background: #f6f8fc; border: 1px dashed var(--v3-borde-fuerte); font-size: 12.5px; line-height: 18px; color: var(--v3-secundario); }
 .dr .rs-citas ul { margin: 2px 0 0; padding-left: 16px; display: grid; gap: 4px; }
@@ -512,7 +556,12 @@
 
 @media (max-width: 720px) {
   .dr .rs-titulo { font-size: 32px; line-height: 38px; }
-  .dr .rs-rojo-cifra { font-size: 32px; line-height: 38px; }
-  .dr .rs-queda { grid-template-columns: minmax(0, 1fr); gap: 8px; }
-  .dr .rs-validacion { grid-template-columns: minmax(0, 1fr); }
+  .dr .rs-recorrido { grid-auto-flow: row; grid-auto-columns: auto; gap: 18px; }
+  .dr .rs-etapa { padding: 0 0 0 42px; }
+  .dr .rs-etapa-n { position: absolute; left: 0; top: 0; }
+  .dr .rs-etapa-nombre { margin-top: 3px; }
+  .dr .rs-etapa::after { top: 34px; bottom: -14px; left: 13px; right: auto; width: 2px; height: auto; }
+  .dr .rs-areas { grid-template-columns: minmax(0, 1fr); }
+  .dr .rs-area { padding: 18px; }
+  .dr .rs-cifra-n { font-size: 26px; line-height: 32px; }
 }

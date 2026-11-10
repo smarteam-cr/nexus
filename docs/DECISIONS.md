@@ -14434,6 +14434,10 @@ con proyectos (abajo). Plan, números y etapas: `docs/empresas-con-dominio-compa
 
 ## El Resumen de la escala que ve el cliente, con sus datos rojos (2026-11-09)
 
+> ⚠ Rehecho el 10 nov como resumen ejecutivo (ver «El Resumen de la escala, rehecho como resumen ejecutivo»): las cinco
+> partes y las tarjetas por área operativa reemplazan la banda de datos rojos y las cuatro partes de abajo. Lo de las citas,
+> la edición en su lugar y lo que no sale al cliente sigue valiendo.
+
 Elías, para la presentación de Marco a Centauro Solutions (jueves 12 nov, 15 a 20 minutos): la página de la escala abría
 directo en un departamento. Ahora abre en **«Resumen»**, la primera pestaña, en las dos caras (la del cliente,
 `/external/escala/[token]`, y «Como lo ve el cliente» dentro de La escala). La portada guía en cuatro partes y arriba lleva
@@ -14517,4 +14521,103 @@ los datos rojos.
   cliente dejó de ver no sale; cada corrida marca sus ids (desde una pantalla vieja no se toca otra pieza); si falla la
   llamada chica del arreglo, se guarda lo ya pagado; el Json se lee pieza por pieza (una pieza rota se cae sola, nunca el
   Resumen entero); el código de una parte («(3.6)») no sale.
+- Sin SQL: vive en el Json `contenido.resumenDeLaEscala`.
+
+## El Resumen de la escala, rehecho como resumen ejecutivo (2026-11-10)
+
+Elías, para la presentación de Marco a Centauro Solutions (jueves 12 nov): el Resumen del 9 nov se leía como una alarma
+(la banda de datos rojos arriba) y como una lista de hallazgos por equipo de la escala. El objetivo nuevo es que la dirección
+del cliente lo lea en 2 o 3 minutos y diga «entendieron cómo funciona mi negocio, cómo están organizadas mis áreas y qué
+problemas tenemos que resolver». Es un cambio de presentación: los criterios y las fórmulas de la escala no se tocan.
+
+- **Cinco partes, en este orden** (`ResumenDeLaEscalaVista`): 1 «Qué entendimos de tu negocio» (qué vende y a quién, cómo
+  gana, qué abarca el diagnóstico, qué queda fuera, qué los movió y qué buscan; lo que no se habló dice «No lo conversamos
+  todavía», nunca se completa); 2 «Qué hicimos» (sesiones, tiempo, personas y los equipos de la escala explorados frente a
+  los pendientes, con ✓ / ○ y texto); 3 «Cómo funciona tu operación hoy» (el recorrido del cliente entre áreas, horizontal en
+  escritorio y vertical en el teléfono, con «Se traba:» donde la empresa contó una fricción; solo lo de hoy); 4 «Qué
+  encontramos por área» (una tarjeta por área OPERATIVA); 5 «Qué falta validar» (cada pendiente con su tipo) y «¿Entendimos
+  bien?» como texto con invitación, sin formulario.
+- **Una tarjeta por área operativa, no por equipo de la escala**: Soporte y Customer Success van separadas aunque las dos
+  sean Servicio (`AreaOperativa.areaId`). Cada tarjeta: las cifras arriba, cómo está organizada (por rol, nunca por nombre),
+  lo que ya hace bien (con ✓), lo que le impide rendir más, 2 o 3 retos por prioridad y «Ver diagnóstico de Servicio →». El
+  nivel de su equipo es una etiqueta discreta; el «por qué este nivel» va en un `<details>`, solo en la primera tarjeta de
+  su equipo. Un equipo con sesión o con nivel que el agente no describió sale igual, con su nivel (sin Resumen armado, solo
+  los que tienen nivel).
+- **Los datos rojos dejan de ser una banda**: son las cifras de cada tarjeta, en tinta y no en rojo, con su estado en
+  palabras y un símbolo (nunca solo color): «✓ Lo dijiste tú» (declarado), «≈ Estimado» (con su base) y «? Por confirmar».
+  El rojo queda para los retos y lo que se traba, que tienen cita: la página no se ve toda en rojo.
+- ⛔ **Cómo se sabe una cifra lo decide el código** (`estadoDeLaCifra`), no solo el agente: si el número grande no lo dijo
+  la empresa (lo resumió Smarteam y ella confirmó con «Ajá. Exacto.»), es ESTIMADA aunque el agente diga «declarado», y
+  lleva su nota («Lo resumimos en la reunión y lo confirmaste: falta validarlo con tus datos»). Una declarada dicha con dudas
+  («si no me equivoco», «no tengo el dato exacto») lleva «Lo dijiste de memoria: falta confirmar el dato exacto y su
+  período». Centauro: «25 clientes y se nos van 14» sale estimada; el 2,8 % mensual de Emiley, declarado y por validar.
+- ⛔ **Toda afirmación lleva cita**, con la misma vara del 9 nov (`citaVerificada`, `cifrasDeMas`, las confirmaciones), y
+  además: una herramienta nombrada (HubSpot, Salesforce, WhatsApp, Excel…) tiene que estar en lo citado (`herramientasDeMas`,
+  regla 6: no asumir herramientas, integraciones ni compras); un texto sin cita propia (un «por qué», un pendiente, una
+  afirmación para confirmar) solo puede traer números y herramientas que la empresa dijo. Una contradicción se sostiene con
+  sus dos citas. Las casillas del equipo que pueden ir al cliente (retos, metas, planes y su CRM: `guiaDelEquipo`) le
+  llegan al agente como guía, marcadas como «no es evidencia»; «Particularidades» no, porque es interna y un pendiente sin
+  cita podría repetirla (revisión del 10 nov).
+- **Las reglas de contenido van al prompt** (y donde se pudo, al código): no preguntar no es «no lo tienen»; metas separadas
+  de resultados; no mezclar períodos, poblaciones ni canales; ningún riesgo típico de la escala como hecho del cliente;
+  reconocer lo que ya existe; separar la operación de hoy, lo que quieren y lo que propondríamos (esto último no va); el
+  nivel que depende de una parte por explorar se dice provisional.
+- **El nivel provisional** (`nivelProvisional`, en lib/external/pagina-del-resumen.ts para que lo use también el detalle):
+  si TODAS las partes que determinan el nivel general (las que están en ese nivel) son por explorar, el nivel es provisional
+  y depende de ellas. Sale en la etiqueta de la tarjeta, en el «por qué» de respaldo («Es un nivel provisional: depende de
+  «Aprendizaje de Ganadas y Perdidas», que todavía es una hipótesis por confirmar contigo»), en «Qué falta validar» y en el
+  detalle del área, junto a «Resultado general» («Provisional · depende de confirmar…»). El cálculo es el mismo.
+- **Un equipo sin explorar nunca es un mal resultado**: «Qué falta validar» lo dice solo («Todavía no conversamos con
+  Marketing: su lugar en la escala queda por medir contigo, no es un mal resultado»), sin tarjeta. Lo calcula la página con
+  las sesiones (no el agente); un Resumen viejo cuyas sesiones no dicen su equipo no marca ninguno.
+- **Qué hicimos, de registros reales**: la gente de otra empresa no es «persona de tu equipo» ni dice cifras de la empresa
+  (`esDeOtraEmpresa`, por los correos de los invitados: en Centauro, Michael, de HubSpot, contaba como persona de Centauro;
+  ahora son 3, no 4). La sesión de HubSpot del 5 nov (`120567193522`, «Centauro & HubSpot | Conversación Exploratoria») se
+  revisó: no es un duplicado (otro día, otro contenido, sin grabación en Meet: la conversación inicial donde se propuso el
+  diagnóstico); cuenta como sesión, sin equipo y sin duración, y por eso el tiempo dice «más de» y aclara que una sesión no
+  registró su duración. Las sesiones futuras y las de puertas adentro ya no contaban (9 nov).
+- **Los dos formatos conviven** (`ResumenGuardado.v`: 1 el del 9 nov, 2 este): la lectura del Json acepta los dos pieza por
+  pieza y el formato 2 es opcional; `resumenParaLaPagina` pinta el 1 en el mismo molde (una tarjeta por equipo con sus
+  hallazgos como retos y sus datos rojos como cifras, sin negocio ni recorrido) y se sigue editando con sus claves de
+  siempre. «Rehacer con IA» sobre uno del formato 1 lo pasa al 2 y conserva lo escrito a mano (los hallazgos y las cifras
+  van a la tarjeta de su equipo; el «por qué», «Qué hicimos» y lo de confirmar, igual).
+- **Se edita en su lugar, pieza por pieza**: cada pieza llega a la página con su clave (`negocio:<parte>:<id>`,
+  `etapa:<id>:nombre|texto|friccion`, `op:<id>:nombre|falta`, `op:<id>:org|bien|frena|reto:<id>`,
+  `op:<id>:cifra:<id>:cifra|texto|nota`, `pendiente:<id>`; sin campo, se quita), así la vista no sabe de formatos. Debajo de
+  cada pieza, adentro, «de dónde sale». Una cifra que su cita no sostiene (también por un número de su nota) no sale afuera.
+  Al rehacer: lo de la persona se queda (en su lugar, en el recorrido; un área renombrada se reconoce por el nombre que le
+  puso el agente, `nombreDelAgente`), y lo quitado no vuelve: una pieza se recuerda por su parte y su cita
+  (`<parte>|cita:<reunión>:<turno>`), así quitar «lo que ya hace bien» no se lleva la etapa que cita el mismo turno.
+- **El detalle de cada área** (lo que pidió el brief): «Reactivar el uso del HubSpot que ya pagas» solo se recomienda con
+  HubSpot CONFIRMADO en uso (`casosQueNoCalzanConSuCrm`: antes, sin saber el CRM, no excluía nada; en Inicial la escala lo
+  recomendaba a Centauro), también en el resultado del test, con lo que marcó la persona; los riesgos de la escala, en la
+  página de una empresa, se titulan «Lo que suele poner en riesgo a un área en este nivel» (no «Lo que hoy pone en riesgo
+  a tu área»: son típicos del nivel, no algo que la empresa contó); y el nivel general provisional, arriba.
+- **El agente** sigue siendo UNO, Sonnet 4.6, a pedido, más la llamada chica del arreglo. El primer simulacro pedía hasta
+  tres citas largas por pieza y se cortó a los 12 mil tokens de salida (4 minutos): ahora una o dos citas cortas por pieza
+  (de 6 a 25 palabras) y menos piezas por área, con tope de 14 mil. *Medido con Centauro (10 nov, simulacros sin guardar):*
+  unos 67 mil tokens de entrada y 8,5 a 9,3 mil de salida, 166 a 183 s y 0,33 a 0,34 USD por armado (el del 9 nov: 45 a
+  57 s y 0,22). Seis simulacros en total el 10 nov; los cuatro primeros sirvieron para ajustar las reglas de abajo.
+  Escribe tres veces más porque cada pieza lleva su cita. La franja interna dice «tarda unos tres minutos».
+- **El arreglo chico rescata lo de forma** (`pedidoDelArreglo`): una cifra con su cita verificada que se cayó por un texto
+  más largo que su tope o por un número que la cita no dice se pide corregida una vez (en Centauro, el 2,8 % se perdía por
+  una cifra de 49 caracteres). Lo de fondo (una persona, voseo, una herramienta) se descarta. Una meta sola («llegar a 500
+  hospedajes») no es una cifra de hoy; «25 de 50 reuniones» sí. Una nota que cita lo dicho o dice quién lo dijo («la
+  supervisora lo aporta con reserva») se cambia por la del código. «Tarifa» y «precio» valen cuando la empresa los dijo en
+  lo citado (en Centauro son las tarifas de sus hoteles).
+- **Una conclusión que nadie dijo no sale** (`concluyeDeMas`: «lo que limita», «crecimiento», «saldo neto ajustado»…, salvo
+  que lo citado hable de lo mismo): en una cifra, la cola que concluye se corta (`sinLaConclusion`: «…mientras se van 14, lo
+  que deja el saldo neto muy ajustado» queda «…mientras se van 14.»); si no se puede cortar, se pide corregida; en «¿Entendimos
+  bien?», se descarta. Una palabra del código («porExplorar») nunca sale. Una parte del negocio sin dato verificado dice «?
+  Por confirmar · Lo vemos contigo» (puede haberse hablado y no haber pasado la cita).
+- **Al agente se le dicen los nombres que no puede usar** (`noNombrar`) y que un equipo sin reunión propia no lleva tarjeta;
+  si igual la escribe, la página no la muestra (Marketing en Centauro).
+- **Lo que no queda garantizado**: que la frase diga solo lo que dice su cita (el código verifica la cita, los números y las
+  herramientas, no el sentido: por eso adentro se ve de dónde sale cada pieza y se quita con un clic); que el agente separe
+  bien las áreas operativas (si junta Soporte y Customer Success, se puede renombrar o quitar la tarjeta, pero no partirla
+  en dos); que el estado de una cifra escrita a mano sea el correcto (no se edita: lo decide el código con sus citas).
+- **Lo que endureció la revisión del 10 nov:** «Quitar esta cifra / área / etapa» (el botón manda null con la clave de un
+  campo) quita la pieza entera, como en el formato 1; un correo de la casa o personal (Gmail) no dice que alguien sea de otra
+  empresa; un hallazgo quitado en el formato 1 no vuelve como reto al rehacer; dentro de las tarjetas tampoco sale un equipo
+  que el cliente dejó de ver; lo escrito a mano no entra en el registro de lo que escribió la IA.
 - Sin SQL: vive en el Json `contenido.resumenDeLaEscala`.

@@ -35,6 +35,7 @@
  */
 import type { ReactNode } from "react";
 import type { Letra } from "@/lib/escala/documento/tipos";
+import { nivelProvisional } from "@/lib/external/pagina-del-resumen";
 import type { DetalleDeLaDimension } from "@/lib/tests-diagnostico/detalle-de-la-dimension";
 import { etiquetaDeIndustria, OTRA_INDUSTRIA } from "@/lib/tests-diagnostico/direccion-publica";
 import { ENLACE_DE_OTRA_EMPRESA, enlaceDeOtraArea, puntajeDeLaDimension } from "@/lib/tests-diagnostico/pagina-del-resultado";
@@ -110,10 +111,14 @@ function PorDondeEmpezar({ rec, porExplorar = false }: { rec: NonNullable<Result
   );
 }
 
-/** Los riesgos, cada uno con el nombre de la dimensión de la que sale como subtítulo (Elías, 29 oct). */
-function Riesgos({ riesgos, dimensionDelRiesgo }: { riesgos: readonly string[]; dimensionDelRiesgo: Record<string, string> }) {
+/**
+ * Los riesgos, cada uno con el nombre de la dimensión de la que sale como subtítulo (Elías, 29 oct). En la escala de una
+ * empresa (`deLaEscala`) son los riesgos TÍPICOS del nivel, no algo que la empresa contó (10 nov, regla 4: ningún riesgo
+ * genérico de la escala presentado como hecho del cliente): el título lo dice.
+ */
+function Riesgos({ riesgos, dimensionDelRiesgo, tipicos = false }: { riesgos: readonly string[]; dimensionDelRiesgo: Record<string, string>; tipicos?: boolean }) {
   return (
-    <Tarjeta titulo="Lo que hoy pone en riesgo a tu área">
+    <Tarjeta titulo={tipicos ? "Lo que suele poner en riesgo a un área en este nivel" : "Lo que hoy pone en riesgo a tu área"}>
       <ul className="rd-riesgos">
         {riesgos.map((x) => (
           <li key={x}>
@@ -432,6 +437,8 @@ export default function ResultadoDelTestVista({
   const rec = r.recomendacion;
   const esEstimado = !deLaEscala;
   const porExplorar = deLaEscala?.porExplorar ?? [];
+  // El nivel general que determina una parte por explorar es provisional (10 nov): solo cambia cómo se presenta.
+  const provisional = deLaEscala ? nivelProvisional(r, porExplorar) : null;
   const resumen = esEstimado ? resumenDelResultado(r) : r.sintesis;
   // La industria va en un chip junto al título, no en el resumen (quien hizo el test la da por sentada).
   const sector = industria && industria !== OTRA_INDUSTRIA ? etiquetaDeIndustria(industria) : null;
@@ -586,6 +593,12 @@ export default function ResultadoDelTestVista({
               {fecha && <p className="rd-fecha rd-entra">{fechaLarga(fecha)}</p>}
               <p className="rd-label rd-entra">Resultado general</p>
               <div className="rd-entra">{nivelGrande}</div>
+              {provisional && (
+                <p className="rd-estimado rd-entra">
+                  <span className="rd-pill">Provisional</span>
+                  depende de confirmar {provisional.map((x) => `«${x}»`).join(", ")}
+                </p>
+              )}
               {edicion?.descripcion ? <div className="rd-resumen rd-entra">{edicion.descripcion}</div> : <p className="rd-resumen rd-entra">{resumen}</p>}
               {esEstimado ? (
                 <p className="rd-estimado rd-entra">
@@ -613,7 +626,7 @@ export default function ResultadoDelTestVista({
         </section>
 
         {rec && <PorDondeEmpezar rec={rec} porExplorar={rec.tipo === "trabajar" && porExplorar.includes(rec.dimensionId)} />}
-        {r.riesgos.length > 0 && <Riesgos riesgos={r.riesgos} dimensionDelRiesgo={dimensionDelRiesgo} />}
+        {r.riesgos.length > 0 && <Riesgos riesgos={r.riesgos} dimensionDelRiesgo={dimensionDelRiesgo} tipicos={!esEstimado} />}
         {r.casos.length > 0 && <Casos casos={r.casos} />}
         {/* Un equipo «En medición» (nada ubicado, 8 nov) no lleva la tarjeta: saldría vacía. */}
         {r.preguntadas > 0 && <Barras r={r} detalles={detalles} esEstimado={esEstimado} porExplorar={porExplorar} />}

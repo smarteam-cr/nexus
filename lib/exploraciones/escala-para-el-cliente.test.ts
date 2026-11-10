@@ -126,3 +126,20 @@ describe("la escala que ve el cliente", () => {
     expect(delTest.sintesis).toBe(resumenSinIa(delTest));
   });
 });
+
+describe("los casos del detalle de cada área (10 nov, Centauro)", () => {
+  it("«Reactivar el uso del HubSpot que ya pagas» no sale sin HubSpot confirmado en uso; con él, no se ofrece migrar a HubSpot", () => {
+    // En Inicial es donde la escala lo recomendaba (con Centauro, el 9 nov).
+    const todasEnInicial = Object.fromEntries(queAplican.map((d) => [d.id, { nivel: "I" as const }]));
+    const ids = (contenido: Record<string, unknown> = {}) => {
+      const e = estado(todasEnInicial);
+      return resultadosDeLaEscala(escala, lienzo, { ...e, contenido: { ...e.contenido, ...contenido } }).flatMap((x) => x.resultado.casos.map((c) => c.id));
+    };
+    // Sin saber qué CRM usa, y con el de Centauro (un CRM sin nombre), nunca.
+    expect(ids()).not.toContain("reactiva-hubspot");
+    expect(ids({ casillas: { hubspotActual: "Luis lleva las interacciones de Customer Success en el CRM actual como tareas." } })).not.toContain("reactiva-hubspot");
+    const conHubspot = ids({ casillas: { hubspotActual: "Usan HubSpot Sales Hub desde 2023." } });
+    expect(conHubspot).toContain("reactiva-hubspot");
+    expect(conHubspot).not.toContain("migra-a-hubspot");
+  });
+});
