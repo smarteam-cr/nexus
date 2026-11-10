@@ -109,16 +109,27 @@ export default function LecturaDelConsultor({
           ) : (
             <>
               <Field label={PREGUNTA_DE_LA_LECTURA} hint={aviso ?? "Uno por renglón, como lo dirías en voz alta: qué área, qué cambia y para qué."}>
-                <Textarea
-                  value={texto}
-                  onChange={(e) => onCambiar(e.target.value.slice(0, tope))}
-                  onBlur={() => {
-                    if (sinGuardar) void guardar();
-                  }}
-                  rows={4}
-                  maxLength={tope}
-                  placeholder={"Ej.:\n- Ventas: estandarizar el proceso comercial y la cotización\n- Soporte: un centro de ayuda con WhatsApp conectado"}
-                />
+                <div className="relative">
+                  <Textarea
+                    className="pr-11"
+                    value={texto}
+                    onChange={(e) => onCambiar(e.target.value.slice(0, tope))}
+                    onBlur={() => {
+                      if (sinGuardar) void guardar();
+                    }}
+                    rows={4}
+                    maxLength={tope}
+                    placeholder={"Ej.:\n- Ventas: estandarizar el proceso comercial y la cotización\n- Soporte: un centro de ayuda con WhatsApp conectado"}
+                  />
+                  {/* El micrófono en la esquina del cuadro (10 nov): se escribe, y dictar queda a mano. */}
+                  <BotonDeDictado
+                    variante="icono"
+                    className="absolute bottom-2 right-2"
+                    onTexto={dictado}
+                    onError={(m) => toast.error(m)}
+                    disabled={guardando}
+                  />
+                </div>
               </Field>
               {ejemplos.length > 0 && (
                 <div className="space-y-1.5">
@@ -137,8 +148,7 @@ export default function LecturaDelConsultor({
                   </div>
                 </div>
               )}
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <BotonDeDictado onTexto={dictado} onError={(m) => toast.error(m)} disabled={guardando} />
+              <div className="flex justify-end">
                 <Button size="sm" variant="primary" onClick={() => void guardar()} disabled={guardando || !sinGuardar}>
                   {guardando ? "Guardando…" : "Guardar"}
                 </Button>
