@@ -316,8 +316,9 @@ export default function PaginaDeLaEscala() {
       deDonde: (citas, d) => <DeDondeSale citas={citas} noSostiene={d?.noSostiene} />,
     };
     // Las cifras que el cliente no ve (Elías, 9 nov): adentro salen marcadas, con el porqué, para corregirlas o quitarlas.
-    const queNoSalen = res.datosRojos.filter((d) => d.noSale).length;
-    const queSalen = res.datosRojos.length - queNoSalen;
+    const cifras = res.tarjetas.flatMap((t) => t.cifras);
+    const queNoSalen = cifras.filter((d) => d.noSale).length;
+    const queSalen = cifras.length - queNoSalen;
     return (
       <div data-recorrido="preventa.escala.areas" className="flex flex-col gap-2">
         {/* La franja interna: lo que solo ve el equipo va acá, FUERA del marco que imita la página del cliente. */}
@@ -330,8 +331,9 @@ export default function PaginaDeLaEscala() {
             <p className="min-w-0 flex-1">
               {res.at
                 ? `Armado el ${diaCorto(res.at)} con lo que se habló en las sesiones. Cada texto se cambia con un clic; lo que escribas se queda al rehacerlo.`
-                : "Todavía no hay Resumen: Nexus lo arma con las transcripciones de las sesiones (tarda alrededor de un minuto). Sin él, el cliente ve solo «Dónde quedan»."}
-              {res.at && !res.datosRojos.length && " Ninguna cifra de pérdida pasó la verificación: los datos rojos no salen."}
+                : "Todavía no hay Resumen: Nexus lo arma con las transcripciones de las sesiones (tarda unos tres minutos). Sin él, el cliente ve solo cada equipo con su nivel."}
+              {res.at && res.formato === 1 && " Está armado con el formato del 9 nov (datos rojos y hallazgos): «Rehacer con IA» lo pasa al resumen ejecutivo y conserva lo que escribiste."}
+              {res.at && res.formato === 2 && !cifras.length && " Ninguna cifra pasó la verificación: las tarjetas dicen qué dato falta."}
               {queNoSalen > 0 &&
                 (queSalen
                   ? ` ${queNoSalen === 1 ? "Una cifra no sale" : `${queNoSalen} cifras no salen`} al cliente porque su cita no la sostiene: está marcada abajo.`

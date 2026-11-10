@@ -3,7 +3,7 @@
  * (lib/exploraciones/resumen-de-la-escala.ts, 2026-11-09). En la cuenta y en la preventa; la exploración de un proyecto
  * no se comparte (409).
  *
- *   POST → el agente lee las reuniones de las sesiones y arma el Resumen (unos 30-60 s). Lo escrito a mano se queda.
+ *   POST → el agente lee las reuniones de las sesiones y arma el Resumen (unos 3 minutos desde el 10 nov: el resumen ejecutivo escribe más). Lo escrito a mano se queda.
  *          Responde { resumen, descartados, segundos }: `descartados`, lo que escribió y no pasó la verificación (una
  *          cifra sin su cita, por ejemplo).
  * Los textos se editan con la operación `resumenDeLaEscala` del PATCH de la exploración. Armar pide poder cambiarla

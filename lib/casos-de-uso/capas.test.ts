@@ -8,6 +8,7 @@ import { CATALOGO_DE_CASOS, casoPorId } from "./catalogo";
 import {
   capaDelCaso,
   casaParaElAgente,
+  casosQueNoCalzanConSuCrm,
   conexionesDelCatalogo,
   conexionesEnLaLista,
   explicacionDelOrden,
@@ -367,5 +368,15 @@ describe("el agente que sugiere: capa, conexiones y la casa", () => {
     const cuerpo = p.messages[0].content as string;
     expect(cuerpo).toContain("capa proceso; alimenta [cat-sistematiza-servicio]");
     expect(cuerpo).toContain("=== SU NEGOCIO ===\nHoteles");
+  });
+});
+
+describe("«Reactivar el uso del HubSpot que ya pagas» solo con HubSpot confirmado en uso (10 nov, Centauro)", () => {
+  it("sin saber qué CRM usa, o usando otro, no se ofrece; usando HubSpot, no se ofrece migrar a HubSpot", () => {
+    expect([...casosQueNoCalzanConSuCrm({ usa: null })]).toEqual(["reactiva-hubspot"]);
+    expect([...casosQueNoCalzanConSuCrm({ usa: false })]).toEqual(["reactiva-hubspot"]);
+    expect([...casosQueNoCalzanConSuCrm({ usa: true })]).toEqual(["migra-a-hubspot"]);
+    // La casilla de Centauro describe su CRM sin nombrar HubSpot: no lo usa.
+    expect(loQueTieneDeHubspot({ crmActual: "Luis lleva las interacciones de Customer Success en el CRM actual como tareas, no como tickets." }).usa).toBe(false);
   });
 });

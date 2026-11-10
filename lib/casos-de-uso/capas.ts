@@ -119,14 +119,13 @@ export function loQueTieneDeHubspot(o: { crmActual?: string | null; otros?: read
 }
 
 /**
- * Los casos del catálogo que no calzan con su CRM de hoy: «Reactivar el uso del HubSpot que ya pagas» a quien no trabaja
- * en HubSpot (con Centauro, el 9 nov, la escala lo sugería igual) y «Migrar a HubSpot» a quien ya trabaja en él. Sin
- * saber qué CRM usa, ninguno.
+ * Los casos del catálogo que no calzan con su CRM de hoy: «Reactivar el uso del HubSpot que ya pagas» SOLO con HubSpot
+ * confirmado en uso (10 nov: en Centauro nadie dijo que usaran HubSpot y el detalle de cada área lo recomendaba; sin
+ * saber qué CRM usa, tampoco sale) y «Migrar a HubSpot» nunca a quien ya trabaja en él.
  */
-export function casosQueNoCalzanConSuCrm(hubspot: SuHubspot): ReadonlySet<string> {
-  if (hubspot.usa === false) return new Set(["reactiva-hubspot"]);
+export function casosQueNoCalzanConSuCrm(hubspot: Pick<SuHubspot, "usa">): ReadonlySet<string> {
   if (hubspot.usa === true) return new Set(["migra-a-hubspot"]);
-  return new Set();
+  return new Set(["reactiva-hubspot"]);
 }
 
 // ── La casa de cada área ──────────────────────────────────────────────────────────────────────────

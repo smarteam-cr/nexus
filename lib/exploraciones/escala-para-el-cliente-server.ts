@@ -122,6 +122,7 @@ async function armarLaPagina(
       resumen: resumenParaLaPagina(estado.contenido.resumenDeLaEscala, resultados.filter((r) => alCliente.has(r.areaId)), estado.contenido.chequeo, entorno, {
         conCitas: !o.publica,
         areasFuera: lienzo.areas.filter((a) => !alCliente.has(a.id)).map((a) => a.nombre),
+        porExplorar: Object.fromEntries(deLasAreas.map((x) => [x.resultado.areaId, x.porExplorar])),
       }),
     },
   };

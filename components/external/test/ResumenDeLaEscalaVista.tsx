@@ -1,23 +1,40 @@
 /**
- * components/external/test/ResumenDeLaEscalaVista.tsx — LA PORTADA «Resumen» de la escala que ve el cliente (Elías, 9 nov).
- * Es la primera pestaña, antes de Ventas, Servicio y Marketing, y la página abre en ella. Tema de documento (hex literal
- * de resultado.css: la página no tiene tema) y en tuteo, como la página de cada área.
+ * components/external/test/ResumenDeLaEscalaVista.tsx — LA PORTADA «Resumen» de la escala que ve el cliente (Elías, 9 nov;
+ * rehecha el 10 nov como resumen ejecutivo). Es la primera pestaña, antes de Ventas, Servicio y Marketing, y la página
+ * abre en ella. Tema de documento (hex literal de resultado.css: la página no tiene tema) y en tuteo.
  *
- * Marco la presenta en 15 a 20 minutos, en este orden:
- *   · arriba, los DATOS ROJOS: dos o tres cifras de lo que la empresa está perdiendo, cada una con el equipo y la parte que
- *     explica (se entra a su pestaña) y la fecha de la reunión de donde sale. Sin datos verificados, no sale;
- *   · 1 «Lo que hicimos»: sesiones, tiempo invertido y equipos (reconoce su esfuerzo);
- *   · 2 «Lo que encontramos»: los hallazgos de cada equipo, con «Ver el detalle»;
- *   · 3 «Dónde quedan»: el nivel de cada equipo y por qué está ahí y no un nivel arriba o abajo;
- *   · 4 «¿Entendimos bien?» y «¿Falta algo?».
+ * Se recorre en 2 o 3 minutos, en cinco partes:
+ *   1 «Qué entendimos de tu negocio»: qué vende, cómo gana, qué abarca y qué queda fuera, qué lo movió y qué busca. Lo
+ *     que no se habló dice «Pendiente», no se completa;
+ *   2 «Qué hicimos»: sesiones, tiempo, personas y los equipos explorados frente a los pendientes;
+ *   3 «Cómo funciona tu operación hoy»: el recorrido del cliente entre áreas, horizontal en escritorio y vertical en el
+ *     teléfono, con lo que se traba;
+ *   4 «Qué encontramos por área»: una tarjeta por área OPERATIVA, comparables entre sí: cifras con su estado en palabras
+ *     (lo dijiste tú · estimado · por confirmar), cómo está organizada, lo que ya hace bien, lo que la frena y sus retos.
+ *     El nivel de la escala es una etiqueta discreta («provisional» si depende de partes por explorar) y el «por qué» va
+ *     en un desplegable. «Ver diagnóstico de…» lleva a su pestaña;
+ *   5 «Qué falta validar» (cada pendiente con su tipo) y «¿Entendimos bien?».
+ * El rojo solo marca lo respaldado por evidencia (los retos y lo que se traba): la página no se ve toda en rojo.
  * Lo que decide qué sale es `resumenParaLaPagina` (lib/exploraciones/resumen-de-la-escala.ts); acá solo se pinta. La
  * pantalla interna (components/exploraciones/PaginaDeLaEscala.tsx) pasa `edicion`: cada texto se edita en su lugar y debajo
- * de cada dato y hallazgo va de dónde sale (las citas, que el cliente nunca ve). «Armar / Rehacer con IA» y su aviso NO van
- * acá: van en la franja interna, fuera de este marco (Elías, 9 nov). Una cifra que no sale al cliente (`noSale`) solo
- * llega a la página interna, y acá se pinta marcada con su porqué.
+ * de cada pieza va de dónde sale (las citas, que el cliente nunca ve). «Armar / Rehacer con IA» y su aviso NO van acá:
+ * van en la franja interna, fuera de este marco (Elías, 9 nov). Nada depende del hover: lo complementario va en `<details>`.
  */
 import type { ReactNode } from "react";
-import { enHoras, TOPE_A_MANO, TOPE_DE_LA_CIFRA, type CitaDelResumen, type ResumenDeLaPagina } from "@/lib/external/pagina-del-resumen";
+import {
+  enHoras,
+  ETIQUETA_DEL_ESTADO,
+  ETIQUETA_DEL_PENDIENTE,
+  TOPE_A_MANO,
+  TOPE_DE_LA_CIFRA,
+  TOPE_DE_UN_NOMBRE,
+  type CifraDeLaPagina,
+  type CitaDelResumen,
+  type EstadoDeLaCifra,
+  type ListaDeLaPagina,
+  type ResumenDeLaPagina,
+  type TarjetaDeLaPagina,
+} from "@/lib/external/pagina-del-resumen";
 import AnimacionesDelResultado from "./AnimacionesDelResultado";
 import { ArribaDeLaEscala, PESTANA_DEL_RESUMEN, type PestanaDeLaEscala } from "./ArribaDeLaEscala";
 import "./diagnostico.css";
@@ -30,21 +47,24 @@ const fechaCorta = (iso: string) => new Intl.DateTimeFormat("es-CR", { day: "num
 
 /** Lo que pasa la pantalla interna para editar el Resumen en su lugar. La página pública no lo pasa. */
 export interface EdicionDelResumen {
-  /** Las pestañas y los «Ver el detalle» son botones: cambian de área sin salir de la pantalla. */
+  /** Las pestañas y los «Ver diagnóstico de…» son botones: cambian de área sin salir de la pantalla. */
   alElegir: (id: string) => void;
   /** Un texto que se edita en su lugar. `valor` null: la invitación (`vacio`). */
   texto: (o: { clave: string; valor: string | null; vacio: string; etiqueta: string; tope: number; quitar?: string | null }) => ReactNode;
-  /** Debajo de un dato o un hallazgo, solo adentro: de dónde sale. `noSostiene`: la cita ya no dice la cifra. */
+  /** Debajo de una pieza, solo adentro: de dónde sale. `noSostiene`: la cita ya no dice la cifra. */
   deDonde?: (citas: readonly CitaDelResumen[], o?: { noSostiene?: boolean }) => ReactNode;
 }
 
-const IconoAlerta = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-    <path d="M12 3 2.5 20h19L12 3Z" />
-    <path d="M12 10v4" />
-    <path d="M12 17.5h.01" />
-  </svg>
-);
+/** La señal de cómo se sabe una cifra: un símbolo y su texto, nunca solo el color. */
+const SIMBOLO_DEL_ESTADO: Record<EstadoDeLaCifra, string> = { declarado: "✓", estimado: "≈", pendiente: "?" };
+function Estado({ estado }: { estado: EstadoDeLaCifra }) {
+  return (
+    <span className={`rs-estado rs-estado-${estado}`}>
+      <span aria-hidden="true">{SIMBOLO_DEL_ESTADO[estado]}</span>
+      {ETIQUETA_DEL_ESTADO[estado]}
+    </span>
+  );
+}
 
 /** «A», «A y B», «A, B y C». */
 const enLista = (xs: readonly string[]) => (xs.length <= 1 ? (xs[0] ?? "") : `${xs.slice(0, -1).join(", ")} y ${xs[xs.length - 1]}`);
@@ -69,7 +89,8 @@ export default function ResumenDeLaEscalaVista({
   const hrefDe = (id: string) => pestanas.find((p) => p.id === id)?.href ?? "#";
   /** Un texto: editable adentro, plano afuera. */
   const texto = (o: Parameters<EdicionDelResumen["texto"]>[0]) => (edicion ? edicion.texto(o) : o.valor);
-  /** «Ver el detalle de Ventas»: su pestaña. */
+  const deDonde = (citas: readonly CitaDelResumen[] | undefined, o?: { noSostiene?: boolean }) => (edicion?.deDonde && citas ? edicion.deDonde(citas, o) : null);
+  /** «Ver diagnóstico de Servicio»: su pestaña. */
   const alDetalle = (areaId: string, contenido: ReactNode, className = "rs-enlace") =>
     edicion ? (
       <button type="button" className={className} onClick={() => edicion.alElegir(areaId)}>
@@ -80,17 +101,142 @@ export default function ResumenDeLaEscalaVista({
         {contenido}
       </a>
     );
+  /** Una lista de piezas: cada una editable, con de dónde sale, y la invitación a agregar (solo adentro). */
+  const piezas = (l: ListaDeLaPagina, etiqueta: string, o: { clase?: string; vacio?: ReactNode; agregar?: string; ordenada?: boolean } = {}) => {
+    const Lista = o.ordenada ? "ol" : "ul";
+    return (
+      <>
+        {l.piezas.length > 0 ? (
+          <Lista className={o.clase ?? "rs-lista"}>
+            {l.piezas.map((p) => (
+              <li key={p.id}>
+                {texto({ clave: p.clave, valor: p.texto, vacio: "+ Escribir", etiqueta, tope: TOPE_A_MANO, quitar: "Quitar" })}
+                {p.dimensionNombre && <span className="rs-parte">{p.dimensionNombre}</span>}
+                {deDonde(p.citas)}
+              </li>
+            ))}
+          </Lista>
+        ) : (
+          !edicion && o.vacio
+        )}
+        {edicion && l.nueva && (
+          <div key={`nuevo-${l.piezas.length}`} className="rs-agregar">
+            {texto({ clave: l.nueva, valor: null, vacio: o.agregar ?? "+ Agregar", etiqueta, tope: TOPE_A_MANO })}
+          </div>
+        )}
+      </>
+    );
+  };
+
   const h = resumen.hicimos;
-  const conHallazgos = resumen.areas.some((a) => a.hallazgos.length) || !!edicion;
   const armado = !!resumen.at;
-  const conValidacion = armado && (resumen.entendimos.length > 0 || resumen.falta.length > 0 || !!edicion);
+  const negocio = resumen.negocio;
+  const recorrido = resumen.recorrido;
+  const conRecorrido = !!recorrido && (recorrido.length > 0 || !!edicion);
+  const conValidar = resumen.pendientes.length > 0 || resumen.entendimos.length > 0 || (armado && !!edicion);
   const partes = [
-    h ? { id: "rs-hicimos", nombre: "Lo que hicimos" } : null,
-    armado && conHallazgos ? { id: "rs-encontramos", nombre: "Lo que encontramos" } : null,
-    { id: "rs-quedan", nombre: "Dónde quedan" },
-    conValidacion ? { id: "rs-validacion", nombre: "¿Entendimos bien?" } : null,
+    negocio ? { id: "rs-negocio", nombre: "Tu negocio" } : null,
+    h ? { id: "rs-hicimos", nombre: "Qué hicimos" } : null,
+    conRecorrido ? { id: "rs-operacion", nombre: "Tu operación" } : null,
+    resumen.tarjetas.length ? { id: "rs-areas", nombre: "Qué encontramos" } : null,
+    conValidar ? { id: "rs-validar", nombre: "Qué falta validar" } : null,
   ].filter((x): x is { id: string; nombre: string } => !!x);
+  const numero = (id: string) => partes.findIndex((p) => p.id === id) + 1;
   const TituloDeLaPagina = edicion ? "p" : "h1";
+  const nivelDe = (areaId: string) => resumen.areas.find((a) => a.areaId === areaId);
+
+  const cifra = (c: CifraDeLaPagina) => (
+    <div key={c.id} className={`rs-cifra${c.noSale ? " rs-cifra-fuera" : ""}`}>
+      <div className="rs-cifra-n">{texto({ clave: `${c.clave}:cifra`, valor: c.cifra, vacio: "+ La cifra", etiqueta: "La cifra", tope: TOPE_DE_LA_CIFRA })}</div>
+      <div className="rs-cifra-texto">{texto({ clave: `${c.clave}:texto`, valor: c.texto, vacio: "+ Qué significa", etiqueta: `Qué significa ${c.cifra}`, tope: TOPE_A_MANO, quitar: "Quitar esta cifra" })}</div>
+      <div className="rs-cifra-pie">
+        <Estado estado={c.estado} />
+        {c.fecha && !c.noSale && <span>De la sesión del {fechaCorta(c.fecha)}</span>}
+      </div>
+      {(c.nota || (edicion && c.conNota)) && (
+        <div className="rs-cifra-nota">
+          {c.conNota ? texto({ clave: `${c.clave}:nota`, valor: c.nota, vacio: "+ Su base o lo que falta validar", etiqueta: "La base de la cifra", tope: TOPE_A_MANO, quitar: c.nota ? "Quitar la nota" : null }) : c.nota}
+        </div>
+      )}
+      {c.noSale && <p className="rs-rojo-aviso">{c.noSale}</p>}
+      {deDonde(c.citas, { noSostiene: !!c.noSale })}
+    </div>
+  );
+
+  const tarjeta = (t: TarjetaDeLaPagina) => {
+    const nivel = nivelDe(t.areaId);
+    const conOrganizacion = t.organizacion.piezas.length > 0 || (!!edicion && !!t.organizacion.nueva);
+    const conBien = t.bien.piezas.length > 0 || (!!edicion && !!t.bien.nueva);
+    const conFrena = t.frena.piezas.length > 0 || (!!edicion && !!t.frena.nueva);
+    const conRetos = t.retos.piezas.length > 0 || (!!edicion && !!t.retos.nueva);
+    const vacia = !conOrganizacion && !conBien && !conFrena && !conRetos && !t.cifras.length && !t.falta;
+    return (
+      <article key={t.id} className="rs-area" data-nivel={t.nivel ?? undefined}>
+        <header className="rs-area-cabeza">
+          <h3 className="rs-area-nombre">
+            {t.claveDelNombre ? texto({ clave: t.claveDelNombre, valor: t.nombre, vacio: "+ Nombre del área", etiqueta: "Nombre del área", tope: TOPE_DE_UN_NOMBRE, quitar: "Quitar esta área" }) : t.nombre}
+          </h3>
+          <span className="rs-nivel-chip">
+            <span className="rd-punto" aria-hidden="true" />
+            {t.nombre !== t.areaNombre ? `${t.areaNombre} · ` : ""}
+            {t.nivelNombre ?? "En medición"}
+            {t.provisional && <b> · provisional</b>}
+          </span>
+        </header>
+
+        {(t.cifras.length > 0 || t.falta || (edicion && t.claveDeLaFalta)) && (
+          <div className="rs-magnitud">
+            {t.cifras.map(cifra)}
+            {!t.cifras.length && (t.falta || edicion) && (
+              <div className="rs-sin-cifra">
+                <Estado estado="pendiente" />
+                <span className="rs-sin-cifra-k">Sin cifra todavía. Para medirlo falta:</span>
+                <span>{t.claveDeLaFalta ? texto({ clave: t.claveDeLaFalta, valor: t.falta, vacio: "+ Qué dato falta", etiqueta: "Qué dato falta", tope: TOPE_A_MANO, quitar: t.falta ? "Quitar" : null }) : t.falta}</span>
+              </div>
+            )}
+          </div>
+        )}
+
+        {conOrganizacion && (
+          <div className="rs-bloque">
+            <p className="rs-bloque-k">Cómo está organizada</p>
+            {piezas(t.organizacion, `Cómo está organizada ${t.nombre}`, { agregar: "+ Agregar" })}
+          </div>
+        )}
+        {conBien && (
+          <div className="rs-bloque rs-bloque-bien">
+            <p className="rs-bloque-k">Lo que ya hace bien</p>
+            {piezas(t.bien, `Lo que ya hace bien ${t.nombre}`, { agregar: "+ Agregar" })}
+          </div>
+        )}
+        {conFrena && (
+          <div className="rs-bloque">
+            <p className="rs-bloque-k">Lo que le impide rendir más</p>
+            {piezas(t.frena, `Lo que frena a ${t.nombre}`, { agregar: "+ Agregar" })}
+          </div>
+        )}
+        {conRetos && (
+          <div className="rs-bloque rs-bloque-retos">
+            <p className="rs-bloque-k">Los retos, por prioridad</p>
+            {piezas(t.retos, `Reto de ${t.nombre}`, { clase: "rs-retos", ordenada: true, agregar: "+ Agregar un reto" })}
+          </div>
+        )}
+        {vacia && !edicion && <p className="rs-vacio">Todavía no conversamos lo suficiente con esta área: lo completamos contigo.</p>}
+
+        {t.conPorque && nivel?.porque && (
+          <details className="rs-porque">
+            <summary>Por qué {nivel.nombre} está en {nivel.nivelNombre}{nivel.provisional ? " (provisional)" : ""}</summary>
+            <div className="rs-porque-cuerpo">
+              {texto({ clave: `porque:${t.areaId}`, valor: nivel.porque, vacio: "+ Por qué está ahí", etiqueta: `Por qué ${nivel.nombre} está en ${nivel.nivelNombre}`, tope: TOPE_A_MANO, quitar: nivel.origenDelPorque === "mano" ? "Volver al de los datos" : null })}
+              {edicion && nivel.porqueViejo && <span className="rd-editable-origen">Los niveles cambiaron desde que se escribió: sale el de los datos. Rehaz el Resumen o escríbelo.</span>}
+            </div>
+          </details>
+        )}
+        {t.provisional && !t.conPorque && <p className="rs-provisional">Nivel provisional: depende de confirmar {enLista(t.provisional.map((x) => `«${x}»`))}.</p>}
+        {alDetalle(t.areaId, `Ver diagnóstico de ${t.areaNombre} →`, "rs-cta")}
+      </article>
+    );
+  };
 
   return (
     <div className={`dr rd-v3${edicion ? " rd-editable" : ""}`}>
@@ -129,38 +275,34 @@ export default function ResumenDeLaEscalaVista({
           )}
         </section>
 
-        {resumen.datosRojos.length > 0 && (
-          <section className="rs-rojos" aria-label="Lo que hoy se te escapa" data-revela="">
-            <p className="rd-eyebrow rs-eyebrow-rojo">Lo que hoy se te escapa</p>
-            <div className="rs-rojos-lista">
-              {resumen.datosRojos.map((d) => (
-                <article key={d.id} className={`rs-rojo${d.noSale ? " rs-rojo-fuera" : ""}`}>
-                  <span className="rs-rojo-icono">
-                    <IconoAlerta />
-                  </span>
-                  <div className="rs-rojo-cifra">{texto({ clave: `rojo:${d.id}:cifra`, valor: d.cifra, vacio: "+ La cifra", etiqueta: "La cifra del dato", tope: TOPE_DE_LA_CIFRA })}</div>
-                  <div className="rs-rojo-texto">
-                    {texto({ clave: `rojo:${d.id}:texto`, valor: d.texto, vacio: "+ Qué significa", etiqueta: `Qué significa ${d.cifra}`, tope: TOPE_A_MANO, quitar: "Quitar este dato" })}
-                  </div>
-                  <p className="rs-rojo-pie">
-                    {alDetalle(d.areaId, `${d.areaNombre}${d.dimensionNombre ? ` · ${d.dimensionNombre}` : ""} →`)}
-                    {d.fecha && !d.noSale && <span>De la sesión del {fechaCorta(d.fecha)}</span>}
-                  </p>
-                  {d.noSale && <p className="rs-rojo-aviso">{d.noSale}</p>}
-                  {edicion?.deDonde && d.citas && edicion.deDonde(d.citas, { noSostiene: !!d.noSale })}
-                </article>
+        {negocio && (
+          <section id="rs-negocio" className="rd-tarjeta" data-revela="">
+            <p className="rd-eyebrow">{numero("rs-negocio")} · Qué entendimos de tu negocio</p>
+            <div className="rs-negocio">
+              {negocio.map((p) => (
+                <div key={p.tipo} className="rs-negocio-parte">
+                  <p className="rs-bloque-k">{p.titulo}</p>
+                  {piezas(p.lista, p.titulo, {
+                    clase: "rs-negocio-lista",
+                    vacio: (
+                      <p className="rs-pendiente-txt">
+                        <Estado estado="pendiente" /> Lo vemos contigo.
+                      </p>
+                    ),
+                  })}
+                </div>
               ))}
             </div>
           </section>
         )}
 
         {h && (
-          <section id="rs-hicimos" className="rd-tarjeta rs-hicimos" data-revela="">
-            <p className="rd-eyebrow">1 · Lo que hicimos</p>
+          <section id="rs-hicimos" className="rd-tarjeta" data-revela="">
+            <p className="rd-eyebrow">{numero("rs-hicimos")} · Qué hicimos</p>
             <div className="rs-numeros">
               <div className="rs-numero">
                 <b>{h.sesiones}</b>
-                <span>{h.sesiones === 1 ? "sesión" : "sesiones"} de diagnóstico</span>
+                <span>{h.sesiones === 1 ? "sesión" : "sesiones"} contigo</span>
               </div>
               {h.minutos > 0 && (
                 <div className="rs-numero">
@@ -168,114 +310,113 @@ export default function ResumenDeLaEscalaVista({
                     {h.sinDuracion ? <small>más de </small> : null}
                     {enHoras(h.minutos)}
                   </b>
-                  <span>de tu tiempo con nosotros</span>
+                  <span>de conversación{h.sinDuracion ? ` (${h.sinDuracion === 1 ? "una sesión no registró" : `${h.sinDuracion} sesiones no registraron`} su duración)` : ""}</span>
                 </div>
               )}
-              {h.personas > 1 && (
+              {h.personas > 0 && (
                 <div className="rs-numero">
                   <b>{h.personas}</b>
-                  <span>personas de tu equipo</span>
-                </div>
-              )}
-              {h.equipos.length > 0 && (
-                <div className="rs-numero">
-                  <b className="rs-numero-texto">{enLista(h.equipos)}</b>
-                  <span>{h.equipos.length === 1 ? "el equipo" : "los equipos"} con que conversamos</span>
+                  <span>{h.personas === 1 ? "persona de tu equipo" : "personas de tu equipo"}</span>
                 </div>
               )}
             </div>
-            <div className="rs-parrafo">{texto({ clave: "hicimos", valor: h.texto, vacio: "+ Lo que hicimos", etiqueta: "Lo que hicimos", tope: TOPE_A_MANO, quitar: h.mano ? "Volver al de los datos" : null })}</div>
+            {h.areas.length > 0 && (
+              <ul className="rs-exploradas" aria-label="Las áreas que exploramos y las pendientes">
+                {h.areas.map((a) => (
+                  <li key={a.areaId} className={a.sesiones ? "rs-explorada" : "rs-por-explorar"}>
+                    <span className="rs-explorada-marca" aria-hidden="true">
+                      {a.sesiones ? "✓" : "○"}
+                    </span>
+                    <b>{a.nombre}</b>
+                    <span>{a.sesiones ? `${a.sesiones} ${a.sesiones === 1 ? "sesión" : "sesiones"}${a.minutos ? ` · ${enHoras(a.minutos)}` : ""}` : "Por explorar"}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <div className="rs-parrafo">{texto({ clave: "hicimos", valor: h.texto, vacio: "+ Qué hicimos", etiqueta: "Qué hicimos", tope: TOPE_A_MANO, quitar: h.mano ? "Volver al de los datos" : null })}</div>
           </section>
         )}
 
-        {armado && conHallazgos && (
-          <section id="rs-encontramos" className="rd-tarjeta" data-revela="">
-            <p className="rd-eyebrow">2 · Lo que encontramos</p>
-            <div className="rs-areas">
-              {resumen.areas.map((a) => (
-                <div key={a.areaId} className="rs-area" data-nivel={a.nivel ?? undefined}>
-                  <p className="rs-area-nombre">
-                    <span className="rd-punto" aria-hidden="true" />
-                    {a.nombre}
-                  </p>
-                  {a.hallazgos.length ? (
-                    <ul className="rs-hallazgos">
-                      {a.hallazgos.map((x) => (
-                        <li key={x.id}>
-                          {texto({ clave: `hallazgo:${a.areaId}:${x.id}`, valor: x.texto, vacio: "+ Un hallazgo", etiqueta: `Hallazgo de ${a.nombre}`, tope: TOPE_A_MANO, quitar: "Quitar" })}
-                          {x.dimensionNombre && <span className="rs-parte">{x.dimensionNombre}</span>}
-                          {edicion?.deDonde && x.citas && edicion.deDonde(x.citas)}
-                        </li>
-                      ))}
-                    </ul>
-                  ) : (
-                    !edicion && <p className="rs-vacio">Todavía no conversamos lo suficiente con este equipo.</p>
-                  )}
-                  {edicion && (
-                    <div key={`nuevo-${a.hallazgos.length}`} className="rs-agregar">
-                      {texto({ clave: `hallazgo:${a.areaId}:nuevo`, valor: null, vacio: "+ Agregar un hallazgo", etiqueta: `Nuevo hallazgo de ${a.nombre}`, tope: TOPE_A_MANO })}
-                    </div>
-                  )}
-                  {alDetalle(a.areaId, `Ver el detalle de ${a.nombre} →`)}
-                </div>
-              ))}
-            </div>
-          </section>
-        )}
-
-        <section id="rs-quedan" className="rd-tarjeta" data-revela="">
-          <p className="rd-eyebrow">{partes.findIndex((p) => p.id === "rs-quedan") + 1} · Dónde quedan</p>
-          <div className="rs-quedan">
-            {resumen.areas.map((a) => (
-              <div key={a.areaId} className="rs-queda" data-nivel={a.nivel ?? undefined}>
-                <div className="rs-queda-nivel">
-                  <span className="rs-queda-area">{a.nombre}</span>
-                  <span className="rs-queda-v">
-                    <span className="rd-punto" aria-hidden="true" />
-                    {a.nivelNombre ?? "En medición"}
-                  </span>
-                </div>
-                <div className="rs-queda-porque">
-                  {a.nivel
-                    ? texto({ clave: `porque:${a.areaId}`, valor: a.porque, vacio: "+ Por qué está ahí", etiqueta: `Por qué ${a.nombre} está en ${a.nivelNombre}`, tope: TOPE_A_MANO, quitar: a.origenDelPorque === "mano" ? "Volver al de los datos" : null })
-                    : "Todavía nos faltan partes de este equipo para darle un nivel: lo completamos contigo."}
-                  {edicion && a.porqueViejo && <span className="rd-editable-origen">Los niveles cambiaron desde que se escribió: sale el de los datos. Rehaz el Resumen o escríbelo.</span>}
-                  {alDetalle(a.areaId, `Ver ${a.nombre} →`)}
-                </div>
+        {conRecorrido && recorrido && (
+          <section id="rs-operacion" className="rd-tarjeta" data-revela="">
+            <p className="rd-eyebrow">{numero("rs-operacion")} · Cómo funciona tu operación hoy</p>
+            <p className="rs-intro">Cómo pasa un cliente por tus áreas, tal como nos lo contaste. Es lo de hoy, no lo que proponemos.</p>
+            {recorrido.length > 0 && (
+              <ol className="rs-recorrido">
+                {recorrido.map((e, i) => (
+                  <li key={e.id} className="rs-etapa">
+                    <span className="rs-etapa-n" aria-hidden="true">
+                      {i + 1}
+                    </span>
+                    <p className="rs-etapa-nombre">{texto({ clave: `${e.clave}:nombre`, valor: e.nombre, vacio: "+ La etapa", etiqueta: "Nombre de la etapa", tope: TOPE_DE_UN_NOMBRE })}</p>
+                    {e.quien && <span className="rs-etapa-quien">{e.quien}</span>}
+                    <div className="rs-etapa-texto">{texto({ clave: `${e.clave}:texto`, valor: e.texto || null, vacio: "+ Qué pasa ahí", etiqueta: `Qué pasa en ${e.nombre}`, tope: TOPE_A_MANO, quitar: "Quitar esta etapa" })}</div>
+                    {(e.friccion || edicion) && (
+                      <div className={e.friccion ? "rs-friccion" : "rs-friccion rs-friccion-vacia"}>
+                        {e.friccion && <span className="rs-friccion-k">Se traba:</span>}{" "}
+                        {texto({ clave: `${e.clave}:friccion`, valor: e.friccion, vacio: "+ Lo que se traba", etiqueta: `Lo que se traba en ${e.nombre}`, tope: TOPE_A_MANO, quitar: e.friccion ? "Quitar" : null })}
+                      </div>
+                    )}
+                    {deDonde(e.citas)}
+                  </li>
+                ))}
+              </ol>
+            )}
+            {edicion && resumen.etapaNueva && (
+              <div key={`nueva-${recorrido.length}`} className="rs-agregar">
+                {texto({ clave: resumen.etapaNueva, valor: null, vacio: "+ Agregar una etapa", etiqueta: "Nueva etapa", tope: TOPE_DE_UN_NOMBRE })}
               </div>
-            ))}
-          </div>
-        </section>
+            )}
+          </section>
+        )}
 
-        {conValidacion && (
-          <section id="rs-validacion" className="rd-tarjeta" data-revela="">
-            <p className="rd-eyebrow">{partes.findIndex((p) => p.id === "rs-validacion") + 1} · La validación</p>
-            <div className="rs-validacion">
-              {(
-                [
-                  ["entendimos", "¿Entendimos bien?", "Confírmalo o corrígenos:", resumen.entendimos],
-                  ["falta", "¿Falta algo?", "Lo que todavía no alcanzamos a ver:", resumen.falta],
-                ] as const
-              )
-                // Una columna sin nada no sale afuera (revisión del 9 nov: quedaba el título y la frase sin preguntas).
-                .filter(([, , , lista]) => lista.length > 0 || !!edicion)
-                .map(([k, titulo, intro, lista]) => (
-                <div key={k} className="rs-preguntas">
-                  <h2>{titulo}</h2>
-                  <p className="rs-intro">{intro}</p>
-                  <ul>
-                    {lista.map((p) => (
-                      <li key={p.id}>{texto({ clave: `${k}:${p.id}`, valor: p.texto, vacio: "+ Una pregunta", etiqueta: titulo, tope: TOPE_A_MANO, quitar: "Quitar" })}</li>
-                    ))}
-                  </ul>
-                  {edicion && (
-                    <div key={`nuevo-${lista.length}`} className="rs-agregar">
-                      {texto({ clave: `${k}:nuevo`, valor: null, vacio: k === "entendimos" ? "+ Agregar algo para confirmar" : "+ Agregar una pregunta", etiqueta: titulo, tope: TOPE_A_MANO })}
-                    </div>
-                  )}
-                </div>
-              ))}
+        {resumen.tarjetas.length > 0 && (
+          <section id="rs-areas" className="rs-seccion" data-revela="">
+            <p className="rd-eyebrow">{numero("rs-areas")} · Qué encontramos por área</p>
+            <div className="rs-areas">
+              {resumen.tarjetas.map(tarjeta)}
             </div>
+          </section>
+        )}
+
+        {conValidar && (
+          <section id="rs-validar" className="rd-tarjeta" data-revela="">
+            <p className="rd-eyebrow">{numero("rs-validar")} · Qué falta validar</p>
+            {(resumen.pendientes.length > 0 || edicion) && (
+              <>
+                <p className="rs-intro">Lo que todavía puede cambiar este diagnóstico:</p>
+                <ul className="rs-pendientes">
+                  {resumen.pendientes.map((p) => (
+                    <li key={p.id} className={`rs-pendiente rs-pendiente-${p.tipo}`}>
+                      <span className="rs-pendiente-tipo">{ETIQUETA_DEL_PENDIENTE[p.tipo]}</span>
+                      <span>{p.clave ? texto({ clave: p.clave, valor: p.texto, vacio: "+ Lo que falta", etiqueta: "Lo que falta validar", tope: TOPE_A_MANO, quitar: "Quitar" }) : p.texto}</span>
+                      {deDonde(p.citas)}
+                    </li>
+                  ))}
+                </ul>
+                {edicion && resumen.pendienteNuevo && (
+                  <div key={`nuevo-${resumen.pendientes.length}`} className="rs-agregar">
+                    {texto({ clave: resumen.pendienteNuevo, valor: null, vacio: "+ Agregar algo por validar", etiqueta: "Lo que falta validar", tope: TOPE_A_MANO })}
+                  </div>
+                )}
+              </>
+            )}
+            {(resumen.entendimos.length > 0 || (armado && edicion)) && (
+              <div className="rs-entendimos">
+                <h2>¿Entendimos bien?</h2>
+                <p className="rs-intro">Esto es lo que más nos importa haber entendido. Si algo no es así, dínoslo cuando lo revisemos juntos.</p>
+                <ul>
+                  {resumen.entendimos.map((p) => (
+                    <li key={p.id}>{texto({ clave: `entendimos:${p.id}`, valor: p.texto, vacio: "+ Algo para confirmar", etiqueta: "¿Entendimos bien?", tope: TOPE_A_MANO, quitar: "Quitar" })}</li>
+                  ))}
+                </ul>
+                {edicion && (
+                  <div key={`nuevo-${resumen.entendimos.length}`} className="rs-agregar">
+                    {texto({ clave: "entendimos:nuevo", valor: null, vacio: "+ Agregar algo para confirmar", etiqueta: "¿Entendimos bien?", tope: TOPE_A_MANO })}
+                  </div>
+                )}
+              </div>
+            )}
           </section>
         )}
 

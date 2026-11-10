@@ -1,13 +1,15 @@
 /**
  * scripts/simular-resumen-de-la-escala.ts — el Resumen de la escala que ve el cliente, SIN escribir nada (2026-11-09;
- * lib/exploraciones/resumen-de-la-escala.ts). SOLO LECTURA: la conexión va con `default_transaction_read_only`.
+ * resumen ejecutivo desde el 10 nov; lib/exploraciones/resumen-de-la-escala.ts). SOLO LECTURA: la conexión va con
+ * `default_transaction_read_only`.
  *
- *   - «Lo que hicimos» (las reuniones de las sesiones, con su duración real) y lo que leería el agente.
- *   - Con --llamar: lo que escribiría el agente, con la CITA de cada dato rojo y cada hallazgo para revisarla a mano, lo que
+ *   - «Qué hicimos» (las reuniones de las sesiones, con su duración real) y lo que leería el agente.
+ *   - Con --llamar: lo que escribiría el agente, parte por parte, con la CITA de cada pieza para revisarla a mano, lo que
  *     se descartó y por qué, el tiempo y el costo. No lo guarda: ese gasto NO aparece en «Gasto de la IA».
  *   - Con --modelo <id>: otro modelo, para comparar (por ejemplo claude-haiku-4-5).
  *   - Con --guardar-crudo <archivo>: deja la respuesta del agente en ese archivo; con --desde <archivo>, la relee de ahí
  *     sin llamar (para revisar la verificación sin volver a gastar).
+ *   - Con --pagina <archivo>: lo que vería el cliente, lo que se ve adentro y el Resumen como se guardaría (formato 2).
  *
  *   npx tsx scripts/simular-resumen-de-la-escala.ts --exploracion cmw3wmh7w0sl108ppdf5mujjt --llamar
  */
@@ -21,6 +23,11 @@ const arg = (n: string) => {
   const i = process.argv.indexOf(n);
   return i >= 0 ? process.argv[i + 1] : undefined;
 };
+
+type Cita = { fecha: string; turno: number; hablante: string; texto: string; confirmo?: { hablante: string; texto: string } };
+const NL = "\n";
+const citas = (cs: readonly Cita[]) =>
+  cs.map((c) => `${NL}      ${c.fecha.slice(0, 10)} t${c.turno} ${c.hablante}: «${c.texto}»${c.confirmo ? `  → lo confirmó ${c.confirmo.hablante}: «${c.confirmo.texto}»` : ""}`).join("");
 
 async function main() {
   const id = arg("--exploracion");
@@ -36,11 +43,11 @@ async function main() {
   console.log(`═══ ${l.fila.client.name} · ${l.deLasAreas.map((x) => `${x.resultado.areaNombre} (${x.resultado.nivelNombre ?? "En medición"})`).join(" · ")}`);
   const t0 = Date.now();
   const le = await loQueLeeElResumen(l);
-  console.log(`\nLeer las reuniones: ${Math.round((Date.now() - t0) / 100) / 10} s`);
-  console.log("\n── Lo que hicimos");
-  for (const s of le.hicimos.sesiones) console.log(`  ${s.fecha.slice(0, 10)} · ${s.equipo ?? "sin equipo"} · ${s.minutos ?? "?"} min`);
+  console.log(`${NL}Leer las reuniones: ${Math.round((Date.now() - t0) / 100) / 10} s`);
+  console.log(`${NL}── Qué hicimos`);
+  for (const s of le.hicimos.sesiones) console.log(`  ${s.fecha.slice(0, 10)} · ${s.equipo ?? "sin equipo"} · ${s.minutos ?? "?"} min · ${s.quienes?.join(", ") || "-"}`);
   console.log(`  ${loQueHicimos(le.hicimos)?.texto}`);
-  console.log(`\n── Reuniones que lee: ${le.ctx.reuniones.map((r) => `${r.clave} ${r.fecha.slice(0, 10)} ${r.equipo ?? ""} (${r.turnos.length} turnos; del cliente: ${r.delCliente.join(", ") || "?"})`).join(" · ")}`);
+  console.log(`${NL}── Reuniones que lee: ${le.ctx.reuniones.map((r) => `${r.clave} ${r.fecha.slice(0, 10)} ${r.equipo ?? ""} (${r.turnos.length} turnos; del cliente: ${r.delCliente.join(", ") || "?"})`).join(" · ")}`);
   if (!process.argv.includes("--llamar")) return;
 
   const modelo = arg("--modelo");
@@ -52,8 +59,12 @@ async function main() {
   const escrito = await escribirElResumen(le, async (p) => {
     // Con --desde, las respuestas guardadas en el mismo orden en que se pidieron (el Resumen, y el arreglo si lo hubo).
     if (desde) return guardados.shift();
+    const t = Date.now();
     const r = await getAnthropic().messages.create(modelo ? { ...p, model: modelo } : p);
     crudos.push(r);
+    console.log(`  (llamada: ${Math.round((Date.now() - t) / 1000)} s · ${r.usage.output_tokens} tokens de salida · ${r.stop_reason})`);
+    // Cada respuesta se guarda apenas llega: si la corrida se corta, lo pagado no se pierde.
+    if (arg("--guardar-crudo")) fs.writeFileSync(arg("--guardar-crudo")!, JSON.stringify(crudos, null, 1));
     return r;
   });
   const guardarEn = arg("--guardar-crudo");
@@ -61,40 +72,63 @@ async function main() {
   const seg = Math.round((Date.now() - t1) / 1000);
   const uso = escrito.usos.reduce((a, u) => ({ inputTokens: a.inputTokens + u.input_tokens, outputTokens: a.outputTokens + u.output_tokens }), { inputTokens: 0, outputTokens: 0 });
   const costo = costoDeLlamada(modelo ?? "claude-sonnet-4-6", uso);
-  console.log(`\n── El agente (${modelo ?? "claude-sonnet-4-6"}): ${seg} s · ${uso.inputTokens} tokens de entrada, ${uso.outputTokens} de salida · ${costo === null ? "?" : `${costo.toFixed(3)} USD`}${escrito.usos.length > 1 ? ` · ${escrito.usos.length} llamadas` : ""}`);
+  console.log(`${NL}── El agente (${modelo ?? "claude-sonnet-4-6"}): ${seg} s · ${uso.inputTokens} tokens de entrada, ${uso.outputTokens} de salida · ${costo === null ? "?" : `${costo.toFixed(3)} USD`}${escrito.usos.length > 1 ? ` · ${escrito.usos.length} llamadas` : ""}${escrito.cortado ? " · ⚠ CORTADO (no se guardaría)" : ""}`);
   const nombreDeArea = (a: string) => l.deLasAreas.find((x) => x.resultado.areaId === a)?.resultado.areaNombre ?? a;
-  console.log("\n── Datos rojos");
-  for (const d of escrito.datosRojos) {
-    console.log(`  [${nombreDeArea(d.areaId)} · ${d.dimensionId ?? "-"}] ${d.cifra} — ${d.texto}`);
-    for (const c of d.citas) console.log(`      ${c.fecha.slice(0, 10)} t${c.turno} ${c.hablante}: «${c.texto}»${c.confirmo ? `  → lo confirmó ${c.confirmo.hablante}: «${c.confirmo.texto}»` : ""}`);
+
+  console.log(`${NL}── 1 · El negocio`);
+  for (const [tipo, ps] of Object.entries(escrito.negocio)) for (const p of ps ?? []) console.log(`  [${tipo}] ${p.texto}${citas(p.citas)}`);
+  console.log(`${NL}── 3 · El recorrido`);
+  for (const e of escrito.recorrido) console.log(`  ${e.nombre} (${e.quien ?? "-"}): ${e.texto}${e.friccion ? `${NL}      ⚠ ${e.friccion}` : ""}${citas(e.citas)}`);
+  for (const op of escrito.operativas) {
+    console.log(`${NL}── 4 · ${op.nombre} (${nombreDeArea(op.areaId)})`);
+    for (const [k, xs] of [
+      ["organización", op.organizacion],
+      ["bien", op.bien],
+      ["frena", op.frena],
+      ["reto", op.retos],
+    ] as const)
+      for (const p of xs) console.log(`  · ${k}: ${p.texto}${citas(p.citas)}`);
+    for (const c of op.cifras) console.log(`  # ${c.cifra} [${c.estado}] ${c.texto}${c.nota ? ` — nota: ${c.nota}` : ""}${citas(c.citas)}`);
+    if (op.falta) console.log(`  falta: ${op.falta}`);
   }
-  for (const [a, x] of Object.entries(escrito.areas)) {
-    console.log(`\n── ${nombreDeArea(a)}`);
-    for (const h of x.hallazgos) console.log(`  • [${h.dimensionId ?? "-"}] ${h.texto}${h.citas.map((c) => `\n      ${c.fecha.slice(0, 10)} t${c.turno} ${c.hablante}: «${c.texto}»`).join("")}`);
-    console.log(`  Por qué: ${x.porque?.texto ?? "(sin)"}`);
-  }
-  console.log(`\n── ¿Entendimos bien?\n${escrito.entendimos.map((p) => `  • ${p.texto}`).join("\n")}`);
-  console.log(`── ¿Falta algo?\n${escrito.falta.map((p) => `  • ${p.texto}`).join("\n")}`);
-  console.log(`\n── Descartado (${escrito.descartados.length})\n${escrito.descartados.map((d) => `  - ${d}`).join("\n")}`);
-  const conCitas = resumenParaLaPagina(
-    { v: 1, at: new Date().toISOString(), por: null, modelo: "", agentRunId: null, hicimos: le.hicimos, datosRojos: escrito.datosRojos, areas: escrito.areas, entendimos: escrito.entendimos, falta: escrito.falta },
-    l.deLasAreas.map((x) => x.resultado),
-    l.estado.contenido.chequeo,
-    { edicion: l.fila.edicion, perfilCierre: l.fila.perfilCierre, perfilDespues: l.fila.perfilDespues, escalaVersion: l.escala.version },
-    { conCitas: true },
-  );
-  const pagina = resumenParaLaPagina(
-    { v: 1, at: conCitas.at ?? "", por: null, modelo: "", agentRunId: null, hicimos: le.hicimos, datosRojos: escrito.datosRojos, areas: escrito.areas, entendimos: escrito.entendimos, falta: escrito.falta },
-    l.deLasAreas.map((x) => x.resultado),
-    l.estado.contenido.chequeo,
-    { edicion: l.fila.edicion, perfilCierre: l.fila.perfilCierre, perfilDespues: l.fila.perfilDespues, escalaVersion: l.escala.version },
-    { conCitas: false },
-  );
-  // Con --pagina <archivo>: lo que vería el cliente y lo que se ve adentro, para pintarlo.
+  console.log(`${NL}── Por qué`);
+  for (const [a, x] of Object.entries(escrito.areas)) console.log(`  ${nombreDeArea(a)}: ${x.porque?.texto ?? "(sin)"}`);
+  console.log(`${NL}── 5 · Pendientes`);
+  for (const p of escrito.pendientes) console.log(`  [${p.tipo}] ${p.texto}${citas(p.citas)}`);
+  console.log(`── ¿Entendimos bien?${NL}${escrito.entendimos.map((p) => `  • ${p.texto}`).join(NL)}`);
+  console.log(`${NL}── Descartado (${escrito.descartados.length})${NL}${escrito.descartados.map((d) => `  - ${d}`).join(NL)}`);
+
+  const guardado = {
+    v: 2 as const,
+    at: new Date().toISOString(),
+    por: null,
+    modelo: modelo ?? "claude-sonnet-4-6",
+    agentRunId: null,
+    hicimos: le.hicimos,
+    datosRojos: [],
+    areas: escrito.areas,
+    entendimos: escrito.entendimos,
+    falta: [],
+    negocio: escrito.negocio,
+    recorrido: escrito.recorrido,
+    operativas: escrito.operativas,
+    pendientes: escrito.pendientes,
+  };
+  const entorno = { edicion: l.fila.edicion, perfilCierre: l.fila.perfilCierre, perfilDespues: l.fila.perfilDespues, escalaVersion: l.escala.version };
+  const porExplorar = Object.fromEntries(l.deLasAreas.map((x) => [x.resultado.areaId, x.porExplorar]));
+  const resultados = l.deLasAreas.map((x) => x.resultado);
+  const adentro = resumenParaLaPagina(guardado, resultados, l.estado.contenido.chequeo, entorno, { conCitas: true, porExplorar });
+  const afuera = resumenParaLaPagina(guardado, resultados, l.estado.contenido.chequeo, entorno, { conCitas: false, porExplorar });
+  // Con --pagina <archivo>: lo que vería el cliente y lo que se ve adentro, para pintarlo; y el guardado, para cargarlo.
   const paginaEn = arg("--pagina");
-  if (paginaEn) fs.writeFileSync(paginaEn, JSON.stringify({ empresa: l.fila.client.name, afuera: pagina, adentro: conCitas, areas: l.deLasAreas.map((x) => ({ id: x.resultado.areaId, nombre: x.resultado.areaNombre })) }, null, 1));
-  console.log("\n── Dónde quedan (lo que ve el cliente)");
-  for (const a of pagina.areas) console.log(`  ${a.nombre}: ${a.nivelNombre ?? "En medición"} — ${a.porque ?? "(sin)"} [${a.origenDelPorque}]`);
+  if (paginaEn)
+    fs.writeFileSync(paginaEn, JSON.stringify({ empresa: l.fila.client.name, afuera, adentro, guardado, areas: l.deLasAreas.map((x) => ({ id: x.resultado.areaId, nombre: x.resultado.areaNombre })) }, null, 1));
+  console.log(`${NL}── Lo que ve el cliente: niveles y lo que falta validar`);
+  for (const a of afuera.areas) console.log(`  ${a.nombre}: ${a.nivelNombre ?? "En medición"}${a.provisional ? ` (provisional: ${a.provisional.join(", ")})` : ""} — ${a.porque ?? "(sin)"} [${a.origenDelPorque}]`);
+  for (const p of afuera.pendientes) console.log(`  [${p.tipo}] ${p.texto}`);
+  console.log(`  Qué hicimos: ${afuera.hicimos?.texto}`);
+  console.log(`  Equipos: ${afuera.hicimos?.areas.map((a) => `${a.nombre} ${a.sesiones ? `${a.sesiones} sesiones` : "por explorar"}`).join(" · ")}`);
+  console.log(`  Cifras que sale al cliente: ${afuera.tarjetas.flatMap((t) => t.cifras.map((c) => `${t.nombre}: ${c.cifra} [${c.estado}]`)).join(" · ") || "ninguna"}`);
 }
 
 main()

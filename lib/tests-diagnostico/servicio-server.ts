@@ -132,7 +132,7 @@ async function terminarUnaVez(token: string, publicas: Record<string, { opcion: 
   const faltan = i.preguntas.filter((p) => !respuestas[p.id]).length;
   if (faltan) throw new ErrorDelTest(`Falta${faltan === 1 ? "" : "n"} ${faltan} ${faltan === 1 ? "pregunta" : "preguntas"} por responder.`, 400);
   const { escala } = await escalaParaLaIndustria(i.industria);
-  const calculado = resultadoDelTest({ escala, areaId: i.area, version: i.version, preguntas: i.preguntas, respuestas });
+  const calculado = resultadoDelTest({ escala, areaId: i.area, version: i.version, preguntas: i.preguntas, respuestas, usaHubspot: i.usoDeCrm ? i.usoDeCrm === "HubSpot" : null });
   if (!calculado) throw new ErrorDelTest("La escala publicada ya no tiene esta área.", 503);
   // Los textos de la IA (./redaccion.ts), una sola vez y guardados con el resultado. Sin ellos (falló o tardó), la página
   // usa los de los datos. La IA no toca ningún número: solo redacta lo calculado.

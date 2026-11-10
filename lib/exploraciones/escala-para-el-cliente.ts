@@ -32,6 +32,7 @@ import type { EstadoDeExploracion } from "./contenido";
 import type { AreaDelLienzo, EscalaDelLienzo } from "./escala-del-lienzo";
 import { areasDeLaEscala, areasParaElCliente } from "./equipos-de-la-escala";
 import { descripcionDelArea, type DescripcionDelArea } from "./descripcion-de-la-escala";
+import { suHubspotDe } from "./casos-de-uso";
 
 export interface ResultadoDeUnArea {
   resultado: ResultadoDelTest;
@@ -68,9 +69,9 @@ export function redaccionDeLasPersonas(r: Pick<ResultadoDelTest, "dimensiones">,
 }
 
 /** El resultado del área, con `sintesis` vacía: la pone `descripcionDelArea`. */
-function resultadoDelArea(escala: Escala, area: AreaDelLienzo, niveles: Record<string, NivelDeLaDimension>): ResultadoDelTest | null {
-  // `version` es del test: esta página no la usa.
-  const r = resultadoDeLosNiveles({ escala, areaId: area.id, version: "marketing", preguntadas: new Set(Object.keys(niveles)), niveles, orden: area.paraChequeo.orden });
+function resultadoDelArea(escala: Escala, area: AreaDelLienzo, niveles: Record<string, NivelDeLaDimension>, usaHubspot: boolean | null = null): ResultadoDelTest | null {
+  // `version` es del test: esta página no la usa. Los casos solo ofrecen reactivar HubSpot si se confirmó que lo usan.
+  const r = resultadoDeLosNiveles({ escala, areaId: area.id, version: "marketing", preguntadas: new Set(Object.keys(niveles)), niveles, orden: area.paraChequeo.orden, usaHubspot });
   if (!r) return null;
   const aplican = area.dimensiones.filter((d) => d.aplica);
   const dimensiones = r.dimensiones.filter((d) => aplican.some((x) => x.id === d.id));
@@ -137,7 +138,7 @@ export function resultadosDeLaEscala(
       if (e.fuente === "hipotesis") porExplorar.push(d.id);
     }
     // Sin nada, sale igual (solo llega acá si el vendedor la eligió): «En medición», con todos sus ejes sin medir.
-    const r = resultadoDelArea(escala, area, niveles);
+    const r = resultadoDelArea(escala, area, niveles, suHubspotDe(estado).usa);
     if (!r) continue;
     const descripcion = descripcionDelArea(estado.contenido, r, entorno);
     const redaccion = redaccionDeLasPersonas(r, estado.contenido.textosDelRadar);

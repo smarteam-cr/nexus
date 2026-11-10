@@ -9,7 +9,8 @@
  *   - el validador estricto que el servidor le pasa a `aplicarOperaciones`.
  */
 import { z } from "zod";
-import { CLAVE_DEL_RESUMEN, TOPE_A_MANO, TOPE_DE_LA_CIFRA, type ResumenGuardado } from "./resumen-de-la-escala";
+import { CLAVE_DEL_RESUMEN, TIPOS_DE_PENDIENTE, TOPE_A_MANO, TOPE_DE_LA_CIFRA, TOPE_DE_UN_NOMBRE, type AreaOperativa, type ResumenGuardado } from "./resumen-de-la-escala";
+import { ESTADOS_DE_LA_CIFRA, TIPOS_DEL_NEGOCIO, type TipoDelNegocio } from "@/lib/external/pagina-del-resumen";
 import { CIERRES, DESPUES, type Cierre, type Despues } from "@/lib/escala/documento/tipos";
 import {
   CANALES_DE_CONEXION,
@@ -949,8 +950,62 @@ const HallazgoSchema = z.object({
   origen: OrigenDelResumen,
 });
 const PreguntaSchema = z.object({ id: IdDelResumen, texto: z.string().max(TOPE_A_MANO), mano: z.boolean().optional() });
+/** Formato 2 (10 nov): una afirmación con su cita, una cifra con su estado, una etapa, un área operativa, un pendiente. */
+const PiezaSchema = z.object({
+  id: IdDelResumen,
+  texto: z.string().max(TOPE_A_MANO),
+  citas: z.array(CitaDelResumenSchema).max(3),
+  mano: z.boolean().optional(),
+  origen: OrigenDelResumen,
+});
+const RetoDelResumenSchema = PiezaSchema.extend({ dimensionId: ID_DIMENSION.nullable() });
+const CifraSchema = PiezaSchema.extend({
+  cifra: z.string().max(TOPE_DE_LA_CIFRA),
+  estado: z.enum(ESTADOS_DE_LA_CIFRA as unknown as [string, ...string[]]),
+  nota: z.string().max(TOPE_A_MANO).nullable(),
+  dimensionId: ID_DIMENSION.nullable(),
+});
+const EtapaSchema = PiezaSchema.extend({
+  texto: z.string().max(TOPE_A_MANO),
+  nombre: z.string().max(TOPE_DE_UN_NOMBRE),
+  quien: z.string().max(TOPE_DE_UN_NOMBRE).nullable(),
+  friccion: z.string().max(TOPE_A_MANO).nullable(),
+});
+const PendienteSchema = z.object({
+  id: IdDelResumen,
+  tipo: z.enum(TIPOS_DE_PENDIENTE as unknown as [string, ...string[]]),
+  texto: z.string().max(TOPE_A_MANO),
+  areaId: ID_AREA.nullable(),
+  citas: z.array(CitaDelResumenSchema).max(3),
+  mano: z.boolean().optional(),
+});
+const BaseDeLaOperativa = z.object({
+  id: IdDelResumen,
+  nombre: z.string().max(TOPE_DE_UN_NOMBRE),
+  areaId: ID_AREA,
+  nombreMano: z.boolean().optional(),
+  nombreDelAgente: z.string().max(TOPE_DE_UN_NOMBRE).optional(),
+  falta: z.string().max(TOPE_A_MANO).nullable(),
+  faltaMano: z.boolean().optional(),
+});
+
+/** Un área operativa, pieza por pieza: un reto o una cifra rota se cae sola, no el área. */
+function leerOperativa(raw: unknown): AreaOperativa | null {
+  const base = BaseDeLaOperativa.safeParse(raw);
+  if (!base.success) return null;
+  const r = raw as Record<string, unknown>;
+  return {
+    ...base.data,
+    organizacion: cadaUno(r.organizacion, PiezaSchema, 40),
+    bien: cadaUno(r.bien, PiezaSchema, 40),
+    frena: cadaUno(r.frena, PiezaSchema, 40),
+    retos: cadaUno(r.retos, RetoDelResumenSchema, 40),
+    cifras: cadaUno(r.cifras, CifraSchema, 40) as AreaOperativa["cifras"],
+  };
+}
+
 const BaseDelResumen = z.object({
-  v: z.literal(1),
+  v: z.union([z.literal(1), z.literal(2)]),
   at: z.string().max(40),
   por: z.string().max(200).nullable(),
   modelo: z.string().max(80),
@@ -983,7 +1038,25 @@ export function leerResumenGuardado(raw: unknown): ResumenGuardado | undefined {
     }
   }
   const quitados = cadaUno(r.quitados, z.string().max(400), 200);
+  // El formato 2 (10 nov) es opcional en la lectura: un Resumen del 9 nov no lo trae y se sigue leyendo entero.
+  const negocio: Partial<Record<TipoDelNegocio, z.infer<typeof PiezaSchema>[]>> = {};
+  if (esObjeto(r.negocio)) {
+    for (const tipo of TIPOS_DEL_NEGOCIO) {
+      const ps = cadaUno((r.negocio as Record<string, unknown>)[tipo], PiezaSchema, 40);
+      if (ps.length) negocio[tipo] = ps;
+    }
+  }
+  const v2 =
+    base.data.v === 2
+      ? {
+          negocio,
+          recorrido: cadaUno(r.recorrido, EtapaSchema, 40),
+          operativas: (Array.isArray(r.operativas) ? r.operativas : []).flatMap((x) => leerOperativa(x) ?? []).slice(0, 20),
+          pendientes: cadaUno(r.pendientes, PendienteSchema, 40) as NonNullable<ResumenGuardado["pendientes"]>,
+        }
+      : {};
   return {
+    ...v2,
     ...base.data,
     hicimos: { ...base.data.hicimos, sesiones: cadaUno(hicimos.sesiones, SesionHechaSchema, 200) },
     datosRojos: cadaUno(r.datosRojos, DatoRojoSchema, 12),

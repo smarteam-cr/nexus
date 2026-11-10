@@ -20,6 +20,7 @@ import { nombreDeNivel } from "@/lib/escala/documento/parsear";
 import type { ClaveDeCapa, Escala, Letra } from "@/lib/escala/documento/tipos";
 import { LETRAS } from "@/lib/escala/documento/tipos";
 import { casosParaElArea, type AreaParaElCamino } from "@/lib/casos-de-uso/camino";
+import { casosQueNoCalzanConSuCrm } from "@/lib/casos-de-uso/capas";
 import { resumenSinIa, type RedaccionDelResultado } from "./redaccion";
 import { NO_LO_SE, type PreguntaDelBanco, type RespuestasDelTest, type VersionDelTest } from "./tipos";
 
@@ -105,11 +106,14 @@ export function resultadoDelTest(o: {
   version: VersionDelTest;
   preguntas: readonly PreguntaDelBanco[];
   respuestas: RespuestasDelTest;
+  /** ¿Trabaja en HubSpot? (lo que marcó en el formulario). null: no se sabe. */
+  usaHubspot?: boolean | null;
 }): ResultadoDelTest | null {
   return resultadoDeLosNiveles({
     escala: o.escala,
     areaId: o.areaId,
     version: o.version,
+    usaHubspot: o.usaHubspot ?? null,
     preguntadas: new Set(o.preguntas.map((p) => p.dimensionId)),
     niveles: nivelesDeLasRespuestas(o.preguntas, o.respuestas),
   });
@@ -130,6 +134,11 @@ export function resultadoDeLosNiveles(o: {
   niveles: Record<string, NivelDeLaDimension>;
   /** El orden de dependencias de cada capa (desempata lo que más frena). El test no lo sabe: va por identificador. */
   orden?: AreaParaChequeo["orden"];
+  /**
+   * ¿Trabaja en HubSpot? Sin confirmarlo (null) o sin usarlo, los casos no ofrecen «Reactivar el uso del HubSpot que ya
+   * pagas» (10 nov, Centauro); usándolo, no ofrecen migrar a HubSpot (`casosQueNoCalzanConSuCrm`).
+   */
+  usaHubspot?: boolean | null;
 }): ResultadoDelTest | null {
   const { escala, niveles, preguntadas } = o;
   const area = escala.areas.find((a) => a.id === o.areaId);
@@ -216,7 +225,7 @@ export function resultadoDeLosNiveles(o: {
     capas: { base: { nombre: capas[0].nombre, nivel: capas[0].nivel }, produccion: { nombre: capas[1].nombre, nivel: capas[1].nivel } },
     dimensiones: dimensiones.map((d) => ({ id: d.id, nombre: d.nombre, aplica: d.preguntada, nivel: d.nivel, clase: d.nivel ? ("hipotesis" as const) : null })),
   };
-  const casos = casosParaElArea(paraElCamino, { max: 3, nombreDeNivel: (l) => nombreDeNivel(escala, l) }).map((c) => ({
+  const casos = casosParaElArea(paraElCamino, { max: 3, nombreDeNivel: (l) => nombreDeNivel(escala, l), excluir: casosQueNoCalzanConSuCrm({ usa: o.usaHubspot ?? null }) }).map((c) => ({
     id: c.caso.id,
     titulo: c.caso.titulo,
     promesa: c.caso.promesa,

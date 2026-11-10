@@ -3,10 +3,13 @@
 - **Sesión** (`FirefliesSession`): una reunión de Google Meet (el modelo conserva el nombre
   "Fireflies" por historia — esa integración se eliminó el 2026-06-04). Tiene
   `participants` (emails), `transcript`, `summary`, `organizerEmail`. ~16k filas.
-- **Resumen de la escala** y **datos rojos** (`lib/exploraciones/resumen-de-la-escala.ts`, desde el 2026-11-09): la
-  primera pestaña de la escala que ve el cliente (lo que hicimos, lo que encontramos, dónde queda cada equipo y la
-  validación). Los datos rojos son las cifras de lo que la empresa pierde, arriba de todo; cada una sale de una cita de sus
-  reuniones verificada contra la transcripción, y sin cita no hay cifra.
+- **Resumen de la escala** (`lib/exploraciones/resumen-de-la-escala.ts`, desde el 2026-11-09; resumen ejecutivo desde el
+  10 nov): la primera pestaña de la escala que ve el cliente, en cinco partes (su negocio, qué hicimos, cómo funciona su
+  operación, qué encontramos por **área operativa** y qué falta validar). Cada afirmación sale de una cita de sus reuniones
+  verificada contra la transcripción; sin cita no sale. Un **área operativa** es un equipo como la empresa se organiza
+  (Soporte, Customer Success), colgado de su equipo de la escala (Servicio). Cada **cifra** dice cómo se sabe: *declarada*
+  (la dijo la empresa), *estimada* (la resumimos o calculamos, con su base) o *por confirmar*. Los **datos rojos** son las
+  cifras del formato del 9 nov, que se siguen leyendo hasta rehacer el Resumen.
 - **Preparar una reunión** (`/para-ti/reunion/[evento]?cliente=…`, `lib/mi-dia`, desde el 2026-10-16): el resumen de una
   cuenta antes de una reunión de hoy, que se abre con «Preparar» desde la agenda de «Para ti»: quién viene (con nombre y
   cargo), la última vez, lo que se dijo antes de lo que dice el título, lo pendiente de los dos lados, el siguiente paso,

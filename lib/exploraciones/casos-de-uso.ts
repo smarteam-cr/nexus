@@ -25,7 +25,7 @@ import { PREFIJO_DE_LO_QUE_SABES } from "./lo-que-sabes";
 // ── La casa (2026-11-09, lib/casos-de-uso/capas.ts) ─────────────────────────────────────────────────
 
 /** Lo que se sabe de su HubSpot: «Su CRM actualmente» y, si no dice, «Lo que ya sabemos». */
-export function suHubspotDe(estado: EstadoDeExploracion): SuHubspot {
+export function suHubspotDe(estado: Pick<EstadoDeExploracion, "contenido">): SuHubspot {
   const c = estado.contenido;
   const crm = c.casillas.hubspotActual;
   const otros = [c.contexto?.sabemos ?? "", ...Object.entries(c.notas).flatMap(([k, v]) => (k.startsWith(PREFIJO_DE_LO_QUE_SABES) ? [v] : []))];

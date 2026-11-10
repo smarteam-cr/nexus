@@ -30,6 +30,8 @@ import type { Escala, Letra } from "@/lib/escala/documento/tipos";
 import { LETRAS } from "@/lib/escala/documento/tipos";
 import { SENTINEL_SERVICE_TYPE } from "@/lib/projects/kind";
 import { whereBelongsToClient } from "@/lib/sessions/project-sources";
+import { dominiosDeLaCasa } from "@/lib/sessions/reuniones-para-seguimiento";
+import { DOMINIOS_GENERICOS } from "./agendadas";
 import { AGENTE_DE_LA_EXPLORACION, nombresDelEquipo } from "./agente";
 import type { EstadoDeExploracion } from "./contenido";
 import { contextoDelEquipo, firmaDelArea } from "./descripcion-de-la-escala";
@@ -42,6 +44,8 @@ import { bloqueDeInstrucciones } from "./notas-de-sesion";
 import {
   conIdsDeLaCorrida,
   delClienteDe,
+  esDeOtraEmpresa,
+  guiaDelEquipo,
   NO_ES_UNA_PERSONA,
   escribirElResumen,
   juntarConLoEditado,
@@ -158,16 +162,23 @@ export async function loQueLeeElResumen(l: Extract<Lectura, { ok: true }>, ahora
       (r.origen === "hubspot" || (r.origen === "meet" && r.texto !== "nada" && !r.corta)),
   );
   const idsDeMeet = hechas.filter((r) => r.origen === "meet").map((r) => r.id);
-  const [filas, quien, equipo] = await Promise.all([
+  const [filas, quien, equipo, cliente, casa] = await Promise.all([
     idsDeMeet.length
       ? prisma.firefliesSession.findMany({
           where: { ...whereBelongsToClient(fila.clientId), id: { in: idsDeMeet }, date: { lte: ahora } },
-          select: { id: true, duration: true, conferenciaInicio: true, conferenciaFin: true, transcript: true },
+          select: { id: true, duration: true, conferenciaInicio: true, conferenciaFin: true, transcript: true, participants: true },
         })
       : Promise.resolve([]),
     quienHabloEnLasReuniones(conTexto.sesiones),
     nombresDelEquipo(),
+    prisma.client.findUnique({ where: { id: fila.clientId }, select: { emailDomains: true } }),
+    dominiosDeLaCasa(),
   ]);
+  /* La gente de OTRA empresa (la de HubSpot en Centauro, 10 nov) no es «persona de tu equipo» ni dice cifras de la
+     empresa: se reconoce por los correos de los invitados de cada reunión. */
+  const correosDe = new Map(filas.map((f) => [f.id, f.participants ?? []]));
+  const noCuentan = new Set([...casa, ...DOMINIOS_GENERICOS]);
+  const deOtraEn = (id: string) => (nombre: string) => esDeOtraEmpresa(nombre, correosDe.get(id) ?? [], cliente?.emailDomains ?? [], noCuentan);
   /* Solo se cita una TRANSCRIPCIÓN: las notas de Gemini no dicen quién habló, y sus títulos («Pérdida de clientes: …») se
      leían como si fueran una persona de la empresa (revisión del 9 nov). */
   const conTranscripcion = new Set(filas.filter((f) => !!f.transcript?.trim()).map((f) => f.id));
@@ -178,7 +189,7 @@ export async function loQueLeeElResumen(l: Extract<Lectura, { ok: true }>, ahora
   const quienesDe = (id: string) =>
     quien
       .get(id)
-      ?.personas.filter((p) => p.lado === "cliente" && p.palabras >= PALABRAS_DE_QUIEN_PARTICIPO && !NO_ES_UNA_PERSONA.test(p.nombre))
+      ?.personas.filter((p) => p.lado === "cliente" && p.palabras >= PALABRAS_DE_QUIEN_PARTICIPO && !NO_ES_UNA_PERSONA.test(p.nombre) && !deOtraEn(id)(p.nombre))
       .map((p) => paraComparar(p.nombre)) ?? [];
 
   // El equipo de cada reunión: el que le da la exploración a las que tienen texto; si no, el de la sesión a la que se unió.
@@ -220,7 +231,7 @@ export async function loQueLeeElResumen(l: Extract<Lectura, { ok: true }>, ahora
       fecha: fechas.get(r.id) ?? "",
       equipo: r.equipo ? (EQUIPOS[r.equipo]?.nombre ?? null) : null,
       turnos,
-      delCliente: delClienteDe(q?.personas),
+      delCliente: delClienteDe(q?.personas, deOtraEn(r.id)),
     });
   }
 
@@ -236,6 +247,7 @@ export async function loQueLeeElResumen(l: Extract<Lectura, { ok: true }>, ahora
     areas: l.deLasAreas.map((x) => areaParaElResumen(escala, x, contextoDelEquipo(fila.contenido ?? {}, x.resultado.areaId))),
     reuniones,
     instrucciones: bloqueDeInstrucciones(estado.contenido.notas, "exploracion"),
+    guia: guiaDelEquipo(estado.contenido.casillas as Record<string, unknown>),
   };
   const entorno = entornoDe(fila, escala);
   const firmas = Object.fromEntries(l.deLasAreas.map((x) => [x.resultado.areaId, firmaDelArea(estado.contenido.chequeo, x.resultado.areaId, entorno)]));
@@ -251,7 +263,11 @@ export async function leerParaElResumen(exploracionId: string): Promise<Lectura>
 function comoLoVeElCse(l: Extract<Lectura, { ok: true }>, guardado: ResumenGuardado | null | undefined): ResumenDeLaPagina {
   const vistas = new Set(l.deLasAreas.map((x) => x.resultado.areaId));
   const areasFuera = l.escala.areas.filter((a) => !vistas.has(a.id)).map((a) => a.nombre);
-  return resumenParaLaPagina(guardado, l.deLasAreas.map((x) => x.resultado), l.estado.contenido.chequeo, entornoDe(l.fila, l.escala), { conCitas: true, areasFuera });
+  return resumenParaLaPagina(guardado, l.deLasAreas.map((x) => x.resultado), l.estado.contenido.chequeo, entornoDe(l.fila, l.escala), {
+    conCitas: true,
+    areasFuera,
+    porExplorar: Object.fromEntries(l.deLasAreas.map((x) => [x.resultado.areaId, x.porExplorar])),
+  });
 }
 
 /** Arma (o rehace) el Resumen y lo guarda. */
@@ -294,16 +310,20 @@ export async function generarElResumenDeLaEscala(o: { exploracionId: string; ema
       return { ok: false, status: 502, error };
     }
     const nuevo: ResumenGuardado = {
-      v: 1,
+      v: 2,
       at: new Date().toISOString(),
       por: o.email,
       modelo: MODELO_DEL_RESUMEN,
       agentRunId: run.id,
       hicimos: le.hicimos,
-      datosRojos: escrito.datosRojos,
+      datosRojos: [],
       areas: escrito.areas,
       entendimos: escrito.entendimos,
-      falta: escrito.falta,
+      falta: [],
+      negocio: escrito.negocio,
+      recorrido: escrito.recorrido,
+      operativas: escrito.operativas,
+      pendientes: escrito.pendientes,
     };
     const guardado = await guardar(o.exploracionId, nuevo);
     await prisma.agentRun.update({
