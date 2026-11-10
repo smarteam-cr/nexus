@@ -10,10 +10,11 @@
  * empresa sin que nadie lo notara. Si la empresa ya tiene una exploración viva, se abre esa; si no,
  * «Planificar» la crea y arranca su preparación.
  *
- * Una empresa con varias unidades (9 nov) sale como una opción por ficha: la principal con su nombre
- * de Nexus («Cemaco · Costa Rica», el de HubSpot chico) y debajo cada unidad («Cemaco · Ecuador»).
- * Cada opción abre la preventa de SU ficha: la ruta arma las opciones
- * (lib/exploraciones/unidades-en-la-lista.ts) y dice por dónde se abre cada una.
+ * Una empresa con varias unidades (9 nov) sale con una cabecera con el nombre de la empresa
+ * («Cemaco», sin botón: solo agrupa) y debajo, al mismo nivel, una opción por ficha («Cemaco · Costa
+ * Rica», con el nombre de HubSpot chico, y «Cemaco · Ecuador»). Cada opción abre la preventa de
+ * SU ficha: la ruta arma las filas (lib/exploraciones/unidades-en-la-lista.ts) y dice por dónde se
+ * abre cada una.
  */
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
@@ -23,8 +24,18 @@ import { sumarPagina } from "@/lib/exploraciones/unidades-en-la-lista";
 import { diaCorto } from "@/lib/exploraciones/fechas";
 import { BotonBlanco } from "./FranjaDeSugerencias";
 
+/** La cabecera de una empresa con unidades: solo agrupa. */
+interface Grupo {
+  tipo: "grupo";
+  clave: string;
+  nombre: string;
+  unidades: number;
+  dominio: string | null;
+}
+
 /** Una opción de la lista: una empresa de HubSpot, o una ficha de una empresa con unidades. */
 interface Empresa {
+  tipo: "opcion";
   clave: string;
   /** Se abre por la empresa de HubSpot… */
   companyId: string | null;
@@ -33,8 +44,8 @@ interface Empresa {
   sinEmpresaPropia: boolean;
   nombre: string;
   enHubspot: string | null;
-  unidadDe: string | null;
-  conUnidades: boolean;
+  /** Una de las unidades de una empresa: va debajo de su cabecera. */
+  enGrupo: boolean;
   dominio: string | null;
   industria: string | null;
   pais: string | null;
@@ -44,7 +55,7 @@ interface Empresa {
 }
 
 interface Pagina {
-  empresas?: Empresa[];
+  empresas?: (Grupo | Empresa)[];
   siguiente?: string | null;
   error?: string;
 }
@@ -52,7 +63,7 @@ interface Pagina {
 export default function EmpresasDeHubspot({ puedeEditar }: { puedeEditar: boolean }) {
   const router = useRouter();
   const [q, setQ] = useState("");
-  const [empresas, setEmpresas] = useState<Empresa[] | null>(null);
+  const [empresas, setEmpresas] = useState<(Grupo | Empresa)[] | null>(null);
   const [siguiente, setSiguiente] = useState<string | null>(null);
   const [cargando, setCargando] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -163,42 +174,51 @@ export default function EmpresasDeHubspot({ puedeEditar }: { puedeEditar: boolea
         <p className="text-sm text-fg-muted">{buscando ? "No hay empresas con ese nombre o dominio en HubSpot." : "No hay empresas con actividad en HubSpot."}</p>
       ) : (
         <ul className="divide-y divide-line rounded-lg border border-line">
-          {(empresas ?? []).map((e) => (
-            <li key={e.clave} className={cn("flex items-center justify-between gap-3 py-2.5 pr-3", e.unidadDe ? "pl-8" : "pl-3")}>
-              <div className="min-w-0">
-                <p className="truncate text-sm font-medium text-fg">
-                  {e.nombre}
-                  {e.enHubspot && <span className="ml-2 text-xs font-normal text-fg-muted">en HubSpot: {e.enHubspot}</span>}
+          {(empresas ?? []).map((e) =>
+            e.tipo === "grupo" ? (
+              <li key={e.clave} className="bg-surface-muted px-3 py-2">
+                <p className="truncate text-sm font-semibold text-fg">{e.nombre}</p>
+                <p className="truncate text-xs text-fg-muted">
+                  {[e.unidades === 1 ? "1 unidad" : `${e.unidades} unidades`, e.dominio].filter(Boolean).join(" · ")}
                 </p>
-                <p className="truncate text-xs text-fg-muted">{subtitulo(e)}</p>
-              </div>
-              <div className="flex flex-shrink-0 items-center gap-2">
-                {e.esCliente && (
-                  <span className="rounded-full border border-line bg-surface-hover px-2 py-px text-[11px] font-medium text-fg-secondary">Cliente</span>
-                )}
-                {e.exploracionId ? (
-                  <BotonBlanco onClick={() => void abrir(e)}>Abrir preventa</BotonBlanco>
-                ) : (
-                  puedeEditar && (
-                    <>
-                      <button
-                        type="button"
-                        disabled={abriendo !== null}
-                        title="Para quien no llegó por el diagnóstico: abre la preventa sin prepararla y suma la transcripción de la llamada"
-                        onClick={() => void abrir(e, "transcripcion")}
-                        className="px-1.5 py-1 text-xs font-semibold text-brand hover:underline disabled:opacity-50"
-                      >
-                        Con una transcripción
-                      </button>
-                      <BotonBlanco disabled={abriendo !== null} onClick={() => void abrir(e)}>
-                        {abriendo === e.clave ? "Abriendo…" : "Planificar"}
-                      </BotonBlanco>
-                    </>
-                  )
-                )}
-              </div>
-            </li>
-          ))}
+              </li>
+            ) : (
+              <li key={e.clave} className={cn("flex items-center justify-between gap-3 py-2.5 pr-3", e.enGrupo ? "pl-8" : "pl-3")}>
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-medium text-fg">
+                    {e.nombre}
+                    {e.enHubspot && <span className="ml-2 text-xs font-normal text-fg-muted">en HubSpot: {e.enHubspot}</span>}
+                  </p>
+                  <p className="truncate text-xs text-fg-muted">{subtitulo(e)}</p>
+                </div>
+                <div className="flex flex-shrink-0 items-center gap-2">
+                  {e.esCliente && (
+                    <span className="rounded-full border border-line bg-surface-hover px-2 py-px text-[11px] font-medium text-fg-secondary">Cliente</span>
+                  )}
+                  {e.exploracionId ? (
+                    <BotonBlanco onClick={() => void abrir(e)}>Abrir preventa</BotonBlanco>
+                  ) : (
+                    puedeEditar && (
+                      <>
+                        <button
+                          type="button"
+                          disabled={abriendo !== null}
+                          title="Para quien no llegó por el diagnóstico: abre la preventa sin prepararla y suma la transcripción de la llamada"
+                          onClick={() => void abrir(e, "transcripcion")}
+                          className="px-1.5 py-1 text-xs font-semibold text-brand hover:underline disabled:opacity-50"
+                        >
+                          Con una transcripción
+                        </button>
+                        <BotonBlanco disabled={abriendo !== null} onClick={() => void abrir(e)}>
+                          {abriendo === e.clave ? "Abriendo…" : "Planificar"}
+                        </BotonBlanco>
+                      </>
+                    )
+                  )}
+                </div>
+              </li>
+            ),
+          )}
         </ul>
       )}
 
@@ -218,14 +238,12 @@ export default function EmpresasDeHubspot({ puedeEditar }: { puedeEditar: boolea
   );
 }
 
-/** La línea chica de cada opción. Una unidad dice de quién es y nunca muestra datos de HubSpot de la principal. */
+/** La línea chica de cada opción. Una unidad sin empresa propia lo dice y nunca muestra datos de HubSpot de otra ficha. */
 function subtitulo(e: Empresa): string {
-  if (e.unidadDe) {
-    const datos = [e.dominio, e.industria].filter(Boolean).join(" · ");
-    const hubspot = e.sinEmpresaPropia ? " · sin empresa propia en HubSpot" : "";
-    return `Unidad de ${e.unidadDe}${hubspot}${datos ? ` · ${datos}` : ""}`;
+  if (e.sinEmpresaPropia) {
+    return ["sin empresa propia en HubSpot", e.dominio, e.industria].filter(Boolean).join(" · ");
   }
   const datos = [e.dominio, e.industria, e.pais].filter(Boolean).join(" · ") || "Sin dominio ni industria en HubSpot";
   const actividad = e.ultimaActividad ? ` · última actividad ${diaCorto(e.ultimaActividad)}` : "";
-  return `${e.conUnidades ? "Empresa con unidades · " : ""}${datos}${actividad}`;
+  return `${datos}${actividad}`;
 }

@@ -14418,8 +14418,11 @@ con proyectos (abajo). Plan, números y etapas: `docs/empresas-con-dominio-compa
     IA (con `--con-ia`), y lo dudoso (la IA no propone, o con confianza menor a 0,6) queda para asignar a mano. El
     `--apply` escribe el plan que dejó el simulacro, sin volver a llamar a la IA: lo que una persona vio.
 - **La preventa de una unidad se elige y vive en su ficha** (9 nov). En «Planificar con una empresa», una empresa de
-  HubSpot cuya ficha tiene unidades sale como una opción por ficha: la principal con su nombre de Nexus (el de HubSpot,
-  chico) y debajo cada unidad; buscar por el nombre o las siglas de una unidad la encuentra aunque HubSpot no la conozca
+  HubSpot cuya ficha tiene unidades sale con una cabecera con el nombre de la empresa («Cemaco», «TEC»: sin botón, solo
+  agrupa) y debajo, al mismo nivel, una opción por ficha, la principal con el nombre de HubSpot chico. Elías, al probarlo:
+  Costa Rica y Ecuador son hijas de Cemaco, no Ecuador de Costa Rica. El nombre es lo que va antes del « · » en los
+  nombres de las fichas, que la separación pone «Empresa · Unidad» (una prueba lo vigila contra scripts/lib/unidades.ts).
+  Buscar por el nombre o las siglas de cualquier ficha encuentra el grupo entero aunque HubSpot no lo conozca
   (`lib/exploraciones/unidades-en-la-lista.ts`). La principal se abre por su empresa de HubSpot; una unidad, SIEMPRE por
   su ficha (`crearExploracionDeLaUnidad`, solo fichas con `comparteDominioConId`), tenga o no empresa propia. *Por qué no
   por la empresa:* la puerta de Ventas resuelve la empresa a quien la tenga viva: sin empresa propia, a la principal; y

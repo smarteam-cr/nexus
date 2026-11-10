@@ -6,8 +6,10 @@
  * empresa: buscando «cema» devolvía «Cemaco Internacional» y no había cómo planificar la preventa de «Cemaco ·
  * Ecuador». Acá la lista de HubSpot se vuelve una lista de OPCIONES, una por ficha:
  *
- *   - Una empresa de HubSpot cuya ficha tiene unidades (o es una unidad) trae al grupo entero, en su lugar: la
- *     principal con su nombre de Nexus (el de HubSpot, chico, si difiere) y debajo cada unidad.
+ *   - Una empresa de HubSpot cuya ficha tiene unidades (o es una unidad) trae al grupo entero, en su lugar: una
+ *     CABECERA con el nombre de la empresa («Cemaco», sin botón: solo agrupa) y debajo, al mismo nivel, cada ficha
+ *     («Cemaco · Costa Rica», con el nombre de HubSpot chico si difiere, y «Cemaco · Ecuador»). Elías, 9 nov: la
+ *     principal no es la madre de las otras; las dos son unidades de Cemaco.
  *   - Buscar por el nombre de una unidad («Ecuador», «AE») o sus siglas encuentra su grupo aunque HubSpot no lo
  *     conozca: va arriba, solo en la primera página.
  *   - Cada opción abre o crea la preventa de SU ficha (invariante 1): la principal por su empresa de HubSpot
@@ -43,7 +45,21 @@ export interface FichaDeLaLista {
   exploracionId: string | null;
 }
 
+/** La cabecera de una empresa con unidades: solo agrupa, no se planifica. */
+export interface CabeceraDeGrupo {
+  tipo: "grupo";
+  /** `grupo:<id de la principal>`. */
+  clave: string;
+  /** El nombre de la empresa: «Cemaco», «TEC» (`nombreDelGrupo`). */
+  nombre: string;
+  /** Cuántas opciones lleva debajo. */
+  unidades: number;
+  /** El dominio que comparten (el de la principal). */
+  dominio: string | null;
+}
+
 export interface OpcionDeEmpresa {
+  tipo: "opcion";
   /** Única en la lista: el id de la ficha si la hay, si no el de la empresa de HubSpot. */
   clave: string;
   /** Se abre por la empresa de HubSpot (la puerta de Ventas resuelve su ficha). Nunca en una unidad. */
@@ -55,10 +71,8 @@ export interface OpcionDeEmpresa {
   nombre: string;
   /** El nombre de la empresa en HubSpot cuando la opción muestra el de Nexus y no coinciden. */
   enHubspot: string | null;
-  /** El nombre de la principal, si la opción es una unidad. */
-  unidadDe: string | null;
-  /** La opción es la principal de una empresa con unidades. */
-  conUnidades: boolean;
+  /** La opción es una de las unidades de una empresa (va debajo de su cabecera). */
+  enGrupo: boolean;
   dominio: string | null;
   industria: string | null;
   pais: string | null;
@@ -88,13 +102,32 @@ export function laBusquedaNombraALaFicha(q: string, ficha: Pick<FichaDeLaLista, 
   return ficha.siglas.some((s) => plano(s) === t);
 }
 
+/**
+ * El nombre de la empresa de un grupo. La separación en unidades nombra cada ficha «Empresa · Unidad»
+ * (scripts/lib/unidades.ts; la prueba lo vigila contra cada entrada): el nombre es lo que va antes del « · » cuando
+ * TODAS las fichas del grupo lo comparten. Si no lo comparten, el nombre de la empresa de HubSpot de la principal, y
+ * si no hay, el de la principal.
+ */
+export function nombreDelGrupo(nombres: readonly string[], deHubspot: string | null): string {
+  const antes = nombres.map((n) => {
+    const i = n.indexOf(" · ");
+    return i > 0 ? n.slice(0, i).trim() : null;
+  });
+  const primero = antes[0];
+  if (primero && antes.every((a) => a !== null && plano(a) === plano(primero))) return primero;
+  return deHubspot ?? nombres[0] ?? "";
+}
+
+/** Una fila de la lista: la cabecera de una empresa con unidades, o una opción que se planifica. */
+export type FilaDeLaLista = CabeceraDeGrupo | OpcionDeEmpresa;
+
 export function armarOpciones(o: {
   empresas: EmpresaEnLaLista[];
   fichas: FichaDeLaLista[];
   /** Lo buscado; solo se usa en la primera página para sumar los grupos que HubSpot no encontró. */
   q: string;
   primeraPagina: boolean;
-}): OpcionDeEmpresa[] {
+}): FilaDeLaLista[] {
   const porId = new Map(o.fichas.map((f) => [f.id, f]));
   const porEmpresa = new Map(o.fichas.filter((f) => f.hubspotCompanyId).map((f) => [f.hubspotCompanyId!, f]));
   const unidadesDe = (raizId: string) =>
@@ -105,7 +138,7 @@ export function armarOpciones(o: {
     return unidadesDe(f.id).length > 0 ? f : null;
   };
 
-  const salida: OpcionDeEmpresa[] = [];
+  const salida: FilaDeLaLista[] = [];
   const gruposPuestos = new Set<string>();
 
   const deLaFicha = (f: FichaDeLaLista, empresa: EmpresaEnLaLista | null, raiz: FichaDeLaLista): OpcionDeEmpresa | null => {
@@ -113,14 +146,14 @@ export function armarOpciones(o: {
     // La principal se abre por su empresa de HubSpot; sin una, no hay puerta (la de la ficha es solo para unidades).
     if (!esUnidad && !f.hubspotCompanyId) return null;
     return {
+      tipo: "opcion",
       clave: f.id,
       companyId: esUnidad ? null : f.hubspotCompanyId,
       clientId: esUnidad ? f.id : null,
       sinEmpresaPropia: !f.hubspotCompanyId,
       nombre: f.name,
       enHubspot: empresa && plano(empresa.nombre) !== plano(f.name) ? empresa.nombre : null,
-      unidadDe: esUnidad ? raiz.name : null,
-      conUnidades: !esUnidad,
+      enGrupo: true,
       dominio: empresa?.dominio ?? f.emailDomains[0] ?? null,
       industria: empresa?.industria ?? industriaLegible(f.industry),
       pais: empresa?.pais ?? null,
@@ -130,9 +163,21 @@ export function armarOpciones(o: {
     };
   };
 
-  const ponerGrupo = (raiz: FichaDeLaLista, destino: OpcionDeEmpresa[]) => {
+  const ponerGrupo = (raiz: FichaDeLaLista, destino: FilaDeLaLista[]) => {
     gruposPuestos.add(raiz.id);
-    for (const f of [raiz, ...unidadesDe(raiz.id)]) {
+    const fichas = [raiz, ...unidadesDe(raiz.id)];
+    const deHubspot = raiz.hubspotCompanyId ? (o.empresas.find((e) => e.id === raiz.hubspotCompanyId)?.nombre ?? null) : null;
+    destino.push({
+      tipo: "grupo",
+      clave: `grupo:${raiz.id}`,
+      nombre: nombreDelGrupo(
+        fichas.map((f) => f.name),
+        deHubspot,
+      ),
+      unidades: fichas.filter((f) => f.id !== raiz.id || f.hubspotCompanyId).length,
+      dominio: raiz.emailDomains[0] ?? null,
+    });
+    for (const f of fichas) {
       // Los datos de HubSpot solo los lleva la ficha DUEÑA de esa empresa en la página: nunca la principal se los presta a una unidad.
       const empresa = f.hubspotCompanyId ? (o.empresas.find((e) => e.id === f.hubspotCompanyId) ?? null) : null;
       const op = deLaFicha(f, empresa, raiz);
@@ -148,14 +193,14 @@ export function armarOpciones(o: {
       continue;
     }
     salida.push({
+      tipo: "opcion",
       clave: ficha?.id ?? `hs:${e.id}`,
       companyId: e.id,
       clientId: null,
       sinEmpresaPropia: false,
       nombre: e.nombre,
       enHubspot: null,
-      unidadDe: null,
-      conUnidades: false,
+      enGrupo: false,
       dominio: e.dominio,
       industria: e.industria,
       pais: e.pais,
@@ -167,7 +212,7 @@ export function armarOpciones(o: {
 
   // Los grupos que la búsqueda nombra por Nexus y HubSpot no trajo («Ecuador»): arriba, porque calzan por nombre.
   if (o.primeraPagina && o.q.trim().length >= 2) {
-    const arriba: OpcionDeEmpresa[] = [];
+    const arriba: FilaDeLaLista[] = [];
     for (const f of o.fichas) {
       if (!laBusquedaNombraALaFicha(o.q, f)) continue;
       const raiz = raizDe(f);
