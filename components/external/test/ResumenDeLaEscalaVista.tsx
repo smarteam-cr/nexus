@@ -11,8 +11,10 @@
  *   · 3 «Dónde quedan»: el nivel de cada equipo y por qué está ahí y no un nivel arriba o abajo;
  *   · 4 «¿Entendimos bien?» y «¿Falta algo?».
  * Lo que decide qué sale es `resumenParaLaPagina` (lib/exploraciones/resumen-de-la-escala.ts); acá solo se pinta. La
- * pantalla interna (components/exploraciones/PaginaDeLaEscala.tsx) pasa `edicion`: cada texto se edita en su lugar, arriba
- * va «Armar / Rehacer con IA» y debajo de cada dato y hallazgo, de dónde sale (las citas, que el cliente nunca ve).
+ * pantalla interna (components/exploraciones/PaginaDeLaEscala.tsx) pasa `edicion`: cada texto se edita en su lugar y debajo
+ * de cada dato y hallazgo va de dónde sale (las citas, que el cliente nunca ve). «Armar / Rehacer con IA» y su aviso NO van
+ * acá: van en la franja interna, fuera de este marco (Elías, 9 nov). Una cifra que no sale al cliente (`noSale`) solo
+ * llega a la página interna, y acá se pinta marcada con su porqué.
  */
 import type { ReactNode } from "react";
 import { enHoras, TOPE_A_MANO, TOPE_DE_LA_CIFRA, type CitaDelResumen, type ResumenDeLaPagina } from "@/lib/external/pagina-del-resumen";
@@ -32,10 +34,8 @@ export interface EdicionDelResumen {
   alElegir: (id: string) => void;
   /** Un texto que se edita en su lugar. `valor` null: la invitación (`vacio`). */
   texto: (o: { clave: string; valor: string | null; vacio: string; etiqueta: string; tope: number; quitar?: string | null }) => ReactNode;
-  /** Arriba de todo, solo adentro: armar o rehacer con IA y de cuándo es. */
-  barra?: ReactNode;
-  /** Debajo de un dato o un hallazgo, solo adentro: de dónde sale. */
-  deDonde?: (citas: readonly CitaDelResumen[]) => ReactNode;
+  /** Debajo de un dato o un hallazgo, solo adentro: de dónde sale. `noSostiene`: la cita ya no dice la cifra. */
+  deDonde?: (citas: readonly CitaDelResumen[], o?: { noSostiene?: boolean }) => ReactNode;
 }
 
 const IconoAlerta = () => (
@@ -99,7 +99,6 @@ export default function ResumenDeLaEscalaVista({
         <div data-recorrido={edicion ? "preventa.escala.dimensiones" : undefined}>
           <ArribaDeLaEscala pestanas={pestanas} actual={PESTANA_DEL_RESUMEN} alElegir={edicion?.alElegir} />
         </div>
-        {edicion?.barra}
 
         <section className="rs-cabecera">
           {nombreDeLaEmpresa && (
@@ -135,7 +134,7 @@ export default function ResumenDeLaEscalaVista({
             <p className="rd-eyebrow rs-eyebrow-rojo">Lo que hoy se te escapa</p>
             <div className="rs-rojos-lista">
               {resumen.datosRojos.map((d) => (
-                <article key={d.id} className="rs-rojo">
+                <article key={d.id} className={`rs-rojo${d.noSale ? " rs-rojo-fuera" : ""}`}>
                   <span className="rs-rojo-icono">
                     <IconoAlerta />
                   </span>
@@ -145,9 +144,10 @@ export default function ResumenDeLaEscalaVista({
                   </div>
                   <p className="rs-rojo-pie">
                     {alDetalle(d.areaId, `${d.areaNombre}${d.dimensionNombre ? ` · ${d.dimensionNombre}` : ""} →`)}
-                    {d.fecha && <span>De la sesión del {fechaCorta(d.fecha)}</span>}
+                    {d.fecha && !d.noSale && <span>De la sesión del {fechaCorta(d.fecha)}</span>}
                   </p>
-                  {edicion?.deDonde && d.citas && edicion.deDonde(d.citas)}
+                  {d.noSale && <p className="rs-rojo-aviso">{d.noSale}</p>}
+                  {edicion?.deDonde && d.citas && edicion.deDonde(d.citas, { noSostiene: !!d.noSale })}
                 </article>
               ))}
             </div>

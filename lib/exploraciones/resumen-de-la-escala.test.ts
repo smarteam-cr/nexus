@@ -577,15 +577,19 @@ describe("7 · lo que encontró la revisión del 9 nov", () => {
 
   const o = { firmaDe: () => "f", areas: new Set(["1", "2", "3"]), en: "2026-11-10T10:00:00.000Z" };
 
-  it("una cifra editada a mano que la cita ya no sostiene pierde la cita (y la fecha que ve el cliente)", () => {
+  it("una cifra editada a mano que la cita ya no sostiene no sale al cliente; adentro sale marcada, con la cita que tenía", () => {
     const g = guardado();
     const r = editarElResumen(g, "rojo:r1:cifra", "20 de 25", o);
-    expect(r.ok && r.resumen.datosRojos[0]).toMatchObject({ cifra: "20 de 25", citas: [], mano: true });
-    const afuera = r.ok ? resumenParaLaPagina(r.resumen, [VENTAS, SERVICIO], CHEQUEO, ENTORNO, { conCitas: false }) : null;
-    expect(afuera?.datosRojos[0].fecha).toBeNull();
-    // Con los mismos números, la cita sigue.
+    if (!r.ok) throw new Error(r.error);
+    expect(r.resumen.datosRojos[0]).toMatchObject({ cifra: "20 de 25", mano: true });
+    const afuera = resumenParaLaPagina(r.resumen, [VENTAS, SERVICIO], CHEQUEO, ENTORNO, { conCitas: false });
+    expect(afuera.datosRojos).toEqual([]);
+    const adentro = resumenParaLaPagina(r.resumen, [VENTAS, SERVICIO], CHEQUEO, ENTORNO, { conCitas: true });
+    expect(adentro.datosRojos[0]).toMatchObject({ cifra: "20 de 25", fecha: null });
+    expect(adentro.datosRojos[0].noSale).toMatch(/No sale al cliente: «20» no está/);
+    // Con los mismos números, sale.
     const igual = editarElResumen(g, "rojo:r1:texto", "Ganas 25 clientes y se van 14.", o);
-    expect(igual.ok && igual.resumen.datosRojos[0].citas).toHaveLength(1);
+    expect(igual.ok && resumenParaLaPagina(igual.resumen, [VENTAS, SERVICIO], CHEQUEO, ENTORNO, { conCitas: false }).datosRojos.map((d) => d.cifra)).toEqual(["14 de 25"]);
   });
 
   it("lo que una persona quitó no vuelve al rehacer con IA", () => {
@@ -699,7 +703,7 @@ describe("8 · la segunda revisión del 9 nov", () => {
     const g = guardado();
     const r = editarElResumen(g, "rojo:r1:cifra", "12 de 25", o);
     if (!r.ok) throw new Error(r.error);
-    expect(r.resumen.datosRojos[0]).toMatchObject({ citas: [], origen: "gmeet_servicio:170" });
+    expect(r.resumen.datosRojos[0]).toMatchObject({ mano: true, origen: "gmeet_servicio:170" });
     const j = juntarConLoEditado(guardado(), r.resumen);
     expect(j.datosRojos.map((d) => d.cifra)).toEqual(["12 de 25", "3 de 4"]);
   });
@@ -796,5 +800,76 @@ describe("6 · lo que se quitó el 9 nov", () => {
     expect(paso).not.toMatch(/QueVeElCliente|RuedaDelEquipo|"mapa"/);
     expect(acceso).not.toMatch(/export function QueVeElCliente/);
     expect(fs.existsSync(path.join(RAIZ, "components/exploraciones/RuedaDelEquipo.tsx"))).toBe(false);
+  });
+});
+
+describe("9 · lo que pidió Elías al probarla (9 nov)", () => {
+  const sinComentarios = (codigo: string) => codigo.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+  const o = { firmaDe: () => "f", areas: new Set(["1", "2", "3"]), en: "2026-11-10T10:00:00.000Z" };
+  const PESTANAS = [
+    { id: "resumen", nombre: "Resumen", href: "#" },
+    { id: "3", nombre: "Servicio", href: "#" },
+  ];
+
+  it("una cifra escrita a mano que su cita no sostiene nunca llega al cliente: ni en los datos ni en la página pintada", () => {
+    const r = editarElResumen(guardado(), "rojo:r1:cifra", "20 de 25", o);
+    if (!r.ok) throw new Error(r.error);
+    const afuera = resumenParaLaPagina(r.resumen, [VENTAS, SERVICIO], CHEQUEO, ENTORNO, { conCitas: false });
+    const json = JSON.stringify(afuera);
+    expect(json).not.toContain("20 de 25");
+    expect(json).not.toContain("noSale");
+    const html = renderToStaticMarkup(createElement(ResumenDeLaEscalaVista, { resumen: afuera, empresa: "Centauro Solutions", pestanas: PESTANAS }));
+    expect(html).not.toContain("20 de 25");
+    expect(html).not.toContain("No sale al cliente");
+    // Sin cifras que salgan, la sección de los datos rojos no aparece.
+    expect(html).not.toContain("Lo que hoy se te escapa");
+  });
+
+  it("sin cita no sale; con un número en palabras que la cita no dice, tampoco", () => {
+    const sinCita = { ...guardado(), datosRojos: [{ ...guardado().datosRojos[0], citas: [], mano: true }] };
+    expect(resumenParaLaPagina(sinCita, [VENTAS, SERVICIO], CHEQUEO, ENTORNO, { conCitas: false }).datosRojos).toEqual([]);
+    expect(resumenParaLaPagina(sinCita, [VENTAS, SERVICIO], CHEQUEO, ENTORNO, { conCitas: true }).datosRojos[0].noSale).toMatch(/no tiene una cita/);
+    const r = editarElResumen(guardado(), "rojo:r1:texto", "Pierdes la mitad de tus clientes, 14 de 25.", o);
+    if (!r.ok) throw new Error(r.error);
+    expect(resumenParaLaPagina(r.resumen, [VENTAS, SERVICIO], CHEQUEO, ENTORNO, { conCitas: false }).datosRojos).toEqual([]);
+  });
+
+  it("adentro la cifra sale marcada con su porqué y la cita que tenía; al corregirla con lo que dijo la empresa, vuelve a salir", () => {
+    const r = editarElResumen(guardado(), "rojo:r1:cifra", "20 de 25", o);
+    if (!r.ok) throw new Error(r.error);
+    const adentro = resumenParaLaPagina(r.resumen, [VENTAS, SERVICIO], CHEQUEO, ENTORNO, { conCitas: true });
+    const html = renderToStaticMarkup(
+      createElement(ResumenDeLaEscalaVista, {
+        resumen: adentro,
+        empresa: "Centauro Solutions",
+        pestanas: PESTANAS,
+        edicion: { alElegir: () => {}, texto: (x) => x.valor, deDonde: (citas, d) => (d?.noSostiene ? `TENIA:${citas.length}` : `SALE:${citas.length}`) },
+      }),
+    );
+    expect(html).toContain("rs-rojo-fuera");
+    expect(html).toContain("No sale al cliente: «20» no está en lo que dijo la empresa");
+    expect(html).toContain("TENIA:1");
+    expect(html).not.toContain("De la sesión del");
+    const corregida = editarElResumen(r.resumen, "rojo:r1:cifra", "14 de 25", o);
+    if (!corregida.ok) throw new Error(corregida.error);
+    const otraVez = resumenParaLaPagina(corregida.resumen, [VENTAS, SERVICIO], CHEQUEO, ENTORNO, { conCitas: false });
+    expect(otraVez.datosRojos.map((d) => [d.cifra, d.fecha])).toEqual([["14 de 25", "2026-11-09T15:00:00.000Z"]]);
+  });
+
+  it("«Armar / Rehacer con IA» y su aviso van en la franja interna, fuera del marco que imita la página del cliente", () => {
+    const vista = sinComentarios(fs.readFileSync(path.join(RAIZ, "components/external/test/ResumenDeLaEscalaVista.tsx"), "utf8"));
+    expect(vista).not.toMatch(/barra|Armar el Resumen|Rehacer con IA|Todavía no hay Resumen|está leyendo/);
+    const pagina = fs.readFileSync(path.join(RAIZ, "components/exploraciones/PaginaDeLaEscala.tsx"), "utf8");
+    const resumen = pagina.slice(pagina.indexOf("if (enElResumen) {"), pagina.indexOf("const nivelesEnVivo"));
+    const marco = resumen.indexOf("<ResumenDeLaEscalaVista");
+    for (const control of ["Armar el Resumen con IA", "Todavía no hay Resumen", "Nexus está leyendo las reuniones", "no pasó la verificación ("]) {
+      const donde = resumen.indexOf(control);
+      expect(donde, control).toBeGreaterThan(-1);
+      expect(donde, control).toBeLessThan(marco);
+    }
+    // Y la franja es de la app (tokens y Button), no del documento del cliente.
+    expect(resumen).not.toMatch(/rs-barra|rd-btn/);
+    const css = fs.readFileSync(path.join(RAIZ, "components/external/test/resultado.css"), "utf8");
+    expect(css).not.toContain("rs-barra");
   });
 });

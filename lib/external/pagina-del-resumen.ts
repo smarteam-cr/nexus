@@ -67,6 +67,11 @@ export interface DatoRojoDeLaPagina {
   /** Solo adentro (`conCitas`). */
   citas?: CitaDelResumen[];
   mano?: boolean;
+  /**
+   * Solo adentro: por qué esta cifra NO sale al cliente (se escribió a mano con un número que su cita no dice, o no tiene
+   * cita). La página del cliente nunca la lleva (Elías, 9 nov).
+   */
+  noSale?: string;
 }
 
 export interface AreaDelResumenDeLaPagina {

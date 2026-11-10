@@ -9,7 +9,8 @@
  * /external/escala/[token]. Toda la edición es EN SU LUGAR (Elías: «se le da clic, se cambia el texto y se guarda»), y
  * entra por los huecos de `EdicionDeLaPagina`:
  *   · la página abre en «Resumen» (9 nov), la portada que presenta el vendedor (ResumenDeLaEscalaVista): «Armar el Resumen» /
- *     «Rehacer con IA» la pide al agente (/api/sales/exploraciones/[id]/escala/resumen) y cada texto se edita en su lugar
+ *     «Rehacer con IA» la pide al agente (/api/sales/exploraciones/[id]/escala/resumen), en la franja interna de arriba,
+ *     FUERA del marco que imita la página del cliente (Elías, 9 nov), y cada texto se edita en su lugar
  *     (la operación `resumenDeLaEscala`); debajo de cada dato rojo y cada hallazgo, de dónde sale (solo adentro);
  *   · las pestañas de los departamentos son las de la página, con todas las áreas: la que el cliente no ve va punteada
  *     y dice «no la ve el cliente» (se elige en «Acceso» › «Qué equipos ve»);
@@ -198,12 +199,15 @@ function ContextoParaLaDescripcion({ areaId, nombre, onRehacer, rehaciendo }: { 
   );
 }
 
-/** De dónde sale un dato rojo o un hallazgo: lo dicho, quién y cuándo (y quién lo confirmó). Solo adentro. */
-function DeDondeSale({ citas }: { citas: readonly CitaDelResumen[] }) {
+/**
+ * De dónde sale un dato rojo o un hallazgo: lo dicho, quién y cuándo (y quién lo confirmó). Solo adentro. `noSostiene`:
+ * la cifra se cambió a mano y la cita ya no la dice (la cita queda para corregirla con lo que dijo la empresa).
+ */
+function DeDondeSale({ citas, noSostiene = false }: { citas: readonly CitaDelResumen[]; noSostiene?: boolean }) {
   if (!citas.length) return <p className="rs-citas-k">Lo escribió tu equipo: no tiene cita.</p>;
   return (
     <div className="rs-citas">
-      <p className="rs-citas-k">Solo lo ves tú · de dónde sale:</p>
+      <p className="rs-citas-k">{noSostiene ? "Solo lo ves tú · la cita que tenía (no dice esta cifra):" : "Solo lo ves tú · de dónde sale:"}</p>
       <ul>
         {citas.map((c) => (
           <li key={`${c.reunion}-${c.turno}`}>
@@ -309,24 +313,40 @@ export default function PaginaDeLaEscala() {
         ) : (
           o.valor
         ),
-      deDonde: (citas) => <DeDondeSale citas={citas} />,
-      barra: (
-        <div className="rs-barra">
+      deDonde: (citas, d) => <DeDondeSale citas={citas} noSostiene={d?.noSostiene} />,
+    };
+    // Las cifras que el cliente no ve (Elías, 9 nov): adentro salen marcadas, con el porqué, para corregirlas o quitarlas.
+    const queNoSalen = res.datosRojos.filter((d) => d.noSale).length;
+    const queSalen = res.datosRojos.length - queNoSalen;
+    return (
+      <div data-recorrido="preventa.escala.areas" className="flex flex-col gap-2">
+        {/* La franja interna: lo que solo ve el equipo va acá, FUERA del marco que imita la página del cliente. */}
+        <div className="flex flex-col gap-2 text-xs text-fg-muted">
           <p>
-            {res.at
-              ? `Armado el ${diaCorto(res.at)} con lo que se habló en las sesiones. Cada texto se cambia con un clic; lo que escribas se queda al rehacerlo.`
-              : "Todavía no hay Resumen: Nexus lo arma con las transcripciones de las sesiones (tarda alrededor de un minuto). Sin él, el cliente ve solo «Dónde quedan»."}
-            {res.at && !res.datosRojos.length && " Ninguna cifra de pérdida pasó la verificación: los datos rojos no salen."}
+            <span className="font-semibold text-fg">Resumen</span> · lo primero que ve el cliente al abrir el enlace. Sale de los equipos que ve:{" "}
+            {pagina.areas.filter((a) => pagina.alCliente.includes(a.id)).map((a) => a.nombre).join(" · ") || "ninguno todavía (elígelos en «Acceso»)"}.
           </p>
-          {puedeEditar && (
-            <button type="button" className={`rd-btn ${res.at ? "rd-btn-ghost" : "rd-btn-primary"}`} disabled={armando} aria-busy={armando || undefined} onClick={() => void armar()}>
-              {armando ? "Nexus está leyendo las reuniones…" : res.at ? "Rehacer con IA" : "Armar el Resumen con IA"}
-            </button>
-          )}
+          <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+            <p className="min-w-0 flex-1">
+              {res.at
+                ? `Armado el ${diaCorto(res.at)} con lo que se habló en las sesiones. Cada texto se cambia con un clic; lo que escribas se queda al rehacerlo.`
+                : "Todavía no hay Resumen: Nexus lo arma con las transcripciones de las sesiones (tarda alrededor de un minuto). Sin él, el cliente ve solo «Dónde quedan»."}
+              {res.at && !res.datosRojos.length && " Ninguna cifra de pérdida pasó la verificación: los datos rojos no salen."}
+              {queNoSalen > 0 &&
+                (queSalen
+                  ? ` ${queNoSalen === 1 ? "Una cifra no sale" : `${queNoSalen} cifras no salen`} al cliente porque su cita no la sostiene: está marcada abajo.`
+                  : " Ninguna cifra sale al cliente: sus citas no las sostienen. Están marcadas abajo.")}
+            </p>
+            {puedeEditar && (
+              <Button size="sm" variant={res.at ? "secondary" : "primary"} loading={armando} onClick={() => void armar()}>
+                {armando ? "Nexus está leyendo las reuniones…" : res.at ? "Rehacer con IA" : "Armar el Resumen con IA"}
+              </Button>
+            )}
+          </div>
           {descartados && descartados.length > 0 && (
-            <details className="rs-descartados">
-              <summary>Lo que Nexus escribió y no pasó la verificación ({descartados.length})</summary>
-              <ul>
+            <details>
+              <summary className="cursor-pointer font-semibold text-fg-secondary">Lo que Nexus escribió y no pasó la verificación ({descartados.length})</summary>
+              <ul className="mt-1 list-disc space-y-0.5 pl-5">
                 {descartados.map((d) => (
                   <li key={d}>{d}</li>
                 ))}
@@ -334,14 +354,6 @@ export default function PaginaDeLaEscala() {
             </details>
           )}
         </div>
-      ),
-    };
-    return (
-      <div data-recorrido="preventa.escala.areas" className="flex flex-col gap-2">
-        <p className="text-xs text-fg-muted">
-          <span className="font-semibold text-fg">Resumen</span> · lo primero que ve el cliente al abrir el enlace. Sale de los equipos que ve:{" "}
-          {pagina.areas.filter((a) => pagina.alCliente.includes(a.id)).map((a) => a.nombre).join(" · ") || "ninguno todavía (elígelos en «Acceso»)"}.
-        </p>
         {error && (
           <Alert variant="warning" title="No se pudo traer la página al día">
             Lo que guardaste quedó guardado; esta vista puede estar atrasada.{" "}

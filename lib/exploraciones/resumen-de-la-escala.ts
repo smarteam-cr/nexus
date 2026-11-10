@@ -629,9 +629,22 @@ function nombraA(texto: string, areas: readonly string[] = []): boolean {
 }
 
 /**
+ * Por qué una cifra NO sale al cliente; null si sale. Elías (9 nov): una cifra escrita a mano que pierde su cita no se
+ * muestra. Sale solo si tiene cita y todos los números de su cifra y su texto están en lo citado (`cifrasDeMas`, la misma
+ * vara que al armarla). La cita se guarda aunque la cifra cambie: así, al corregirla con lo que dijo la empresa, vuelve.
+ */
+export function porQueNoSaleLaCifra(d: { cifra: string; texto: string; citas: readonly { texto: string }[] }): string | null {
+  if (!d.citas.length) return "No sale al cliente: no tiene una cita de las reuniones que la sostenga. Si no va, quítala.";
+  const sobran = cifrasDeMas(`${d.cifra} ${d.texto}`, d.citas.map((c) => c.texto).join(" ")).map((s) => `«${s.replace(/·$/, "").replace("·", " ")}»`);
+  if (!sobran.length) return null;
+  return `No sale al cliente: ${enLista(sobran)} ${sobran.length === 1 ? "no está" : "no están"} en lo que dijo la empresa. Corrígela con lo que dice la cita o quítala.`;
+}
+
+/**
  * EL ÚNICO que decide qué sale en el Resumen, en la página del cliente y en la interna. Solo de las áreas de la página
  * (`resultados`); el nivel sale del cálculo. `conCitas`: solo la pantalla interna (Marco verifica de dónde sale cada
- * cifra); la página del cliente nunca las lleva.
+ * cifra); la página del cliente nunca las lleva. Sin `conCitas` (la del cliente) tampoco sale una cifra que su cita no
+ * sostiene (`porQueNoSaleLaCifra`); adentro sale marcada con `noSale`.
  */
 export function resumenParaLaPagina(
   guardado: ResumenGuardado | null | undefined,
@@ -661,7 +674,10 @@ export function resumenParaLaPagina(
   });
   const datosRojos = (guardado?.datosRojos ?? [])
     .filter((d) => deLaPagina.has(d.areaId))
-    .map((d) =>
+    .map((d) => ({ d, noSale: porQueNoSaleLaCifra(d) }))
+    // ⛔ Afuera, una cifra sin cita que la sostenga no sale nunca (Elías, 9 nov).
+    .filter((x) => o.conCitas || !x.noSale)
+    .map(({ d, noSale }) =>
       conCita(
         {
           id: d.id,
@@ -670,10 +686,10 @@ export function resumenParaLaPagina(
           areaId: d.areaId,
           areaNombre: resultados.find((r) => r.areaId === d.areaId)?.areaNombre ?? "",
           dimensionNombre: nombreDeLaParte(d.dimensionId),
-          fecha: d.citas[0]?.fecha ?? null,
+          fecha: noSale ? null : (d.citas[0]?.fecha ?? null),
           ...(d.mano ? { mano: true } : {}),
         },
-        { citas: d.citas },
+        { citas: d.citas, ...(noSale ? { noSale } : {}) },
       ),
     );
   return {
@@ -761,11 +777,10 @@ export function editarElResumen(
         if (b === "cifra" || (b === "texto" && texto)) return { ok: false, error: "La cifra no puede quedar vacía." };
         return { ok: true, resumen: quitar({ ...g, datosRojos: g.datosRojos.filter((x) => x.id !== a) }, clavesDeQuitado("rojo", d)) };
       }
+      // La cita se queda aunque ya no diga lo escrito: si no lo sostiene, la cifra no sale al cliente y adentro sale marcada
+      // (`porQueNoSaleLaCifra`, Elías 9 nov); al corregirla con lo que dijo la empresa, vuelve a salir.
       const cambiado = { ...d, [b]: texto, mano: true, origen: origenDe(d) };
-      // Si lo que quedó trae un número que la cita no dice, la cita ya no lo sostiene: se va (y con ella, la fecha que ve
-      // el cliente). Revisión del 9 nov: con «20 de 25», adentro seguía la cita del 14 como si estuviera verificada.
-      const sigue = !cifrasDeMas(`${cambiado.cifra} ${cambiado.texto}`, d.citas.map((c) => c.texto).join(" ")).length;
-      return { ok: true, resumen: { ...g, datosRojos: g.datosRojos.map((x) => (x.id === a ? { ...cambiado, citas: sigue ? d.citas : [] } : x)) } };
+      return { ok: true, resumen: { ...g, datosRojos: g.datosRojos.map((x) => (x.id === a ? cambiado : x)) } };
     }
     case "hallazgo": {
       if (!o.areas.has(a)) return { ok: false, error: `El área ${a} no existe.` };
