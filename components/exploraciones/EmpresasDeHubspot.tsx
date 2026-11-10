@@ -9,16 +9,32 @@
  * elija: tomar la primera, como hacía el buscador de propuestas, abría la exploración de otra
  * empresa sin que nadie lo notara. Si la empresa ya tiene una exploración viva, se abre esa; si no,
  * «Planificar» la crea y arranca su preparación.
+ *
+ * Una empresa con varias unidades (9 nov) sale como una opción por ficha: la principal con su nombre
+ * de Nexus («Cemaco · Costa Rica», el de HubSpot chico) y debajo cada unidad («Cemaco · Ecuador»).
+ * Cada opción abre la preventa de SU ficha: la ruta arma las opciones
+ * (lib/exploraciones/unidades-en-la-lista.ts) y dice por dónde se abre cada una.
  */
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { Alert, Skeleton } from "@/components/ui";
+import { cn } from "@/lib/cn";
+import { sumarPagina } from "@/lib/exploraciones/unidades-en-la-lista";
 import { diaCorto } from "@/lib/exploraciones/fechas";
 import { BotonBlanco } from "./FranjaDeSugerencias";
 
+/** Una opción de la lista: una empresa de HubSpot, o una ficha de una empresa con unidades. */
 interface Empresa {
-  id: string;
+  clave: string;
+  /** Se abre por la empresa de HubSpot… */
+  companyId: string | null;
+  /** …o por la ficha (una unidad, siempre). */
+  clientId: string | null;
+  sinEmpresaPropia: boolean;
   nombre: string;
+  enHubspot: string | null;
+  unidadDe: string | null;
+  conUnidades: boolean;
   dominio: string | null;
   industria: string | null;
   pais: string | null;
@@ -61,7 +77,8 @@ export default function EmpresasDeHubspot({ puedeEditar }: { puedeEditar: boolea
         setError(data.error ?? "No se pudo consultar HubSpot.");
         return;
       }
-      setEmpresas((antes) => (after ? [...(antes ?? []), ...(data.empresas ?? [])] : (data.empresas ?? [])));
+      // Sin repetir: un grupo de unidades puede volver en otra página (lib/exploraciones/unidades-en-la-lista.ts).
+      setEmpresas((antes) => (after ? sumarPagina(antes ?? [], data.empresas ?? []) : (data.empresas ?? [])));
       setSiguiente(data.siguiente ?? null);
     } catch {
       if (n === pedido.current) setError("No se pudo consultar HubSpot. Revisa tu conexión.");
@@ -89,13 +106,14 @@ export default function EmpresasDeHubspot({ puedeEditar }: { puedeEditar: boolea
       router.push(`/sales/exploraciones/${e.exploracionId}`);
       return;
     }
-    setAbriendo(e.id);
+    setAbriendo(e.clave);
     setError(null);
     try {
       const res = await fetch("/api/sales/exploraciones", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ companyId: e.id, empezar }),
+        // Cada opción por su puerta: una unidad, por su ficha; nunca por una empresa de HubSpot.
+        body: JSON.stringify(e.clientId ? { clientId: e.clientId, empezar } : { companyId: e.companyId, empezar }),
       });
       const data = (await res.json().catch(() => ({}))) as { id?: string; error?: string };
       if (!res.ok || !data.id) {
@@ -146,13 +164,13 @@ export default function EmpresasDeHubspot({ puedeEditar }: { puedeEditar: boolea
       ) : (
         <ul className="divide-y divide-line rounded-lg border border-line">
           {(empresas ?? []).map((e) => (
-            <li key={e.id} className="flex items-center justify-between gap-3 px-3 py-2.5">
+            <li key={e.clave} className={cn("flex items-center justify-between gap-3 py-2.5 pr-3", e.unidadDe ? "pl-8" : "pl-3")}>
               <div className="min-w-0">
-                <p className="truncate text-sm font-medium text-fg">{e.nombre}</p>
-                <p className="truncate text-xs text-fg-muted">
-                  {[e.dominio, e.industria, e.pais].filter(Boolean).join(" · ") || "Sin dominio ni industria en HubSpot"}
-                  {e.ultimaActividad ? ` · última actividad ${diaCorto(e.ultimaActividad)}` : ""}
+                <p className="truncate text-sm font-medium text-fg">
+                  {e.nombre}
+                  {e.enHubspot && <span className="ml-2 text-xs font-normal text-fg-muted">en HubSpot: {e.enHubspot}</span>}
                 </p>
+                <p className="truncate text-xs text-fg-muted">{subtitulo(e)}</p>
               </div>
               <div className="flex flex-shrink-0 items-center gap-2">
                 {e.esCliente && (
@@ -173,7 +191,7 @@ export default function EmpresasDeHubspot({ puedeEditar }: { puedeEditar: boolea
                         Con una transcripción
                       </button>
                       <BotonBlanco disabled={abriendo !== null} onClick={() => void abrir(e)}>
-                        {abriendo === e.id ? "Abriendo…" : "Planificar"}
+                        {abriendo === e.clave ? "Abriendo…" : "Planificar"}
                       </BotonBlanco>
                     </>
                   )
@@ -198,4 +216,16 @@ export default function EmpresasDeHubspot({ puedeEditar }: { puedeEditar: boolea
       )}
     </section>
   );
+}
+
+/** La línea chica de cada opción. Una unidad dice de quién es y nunca muestra datos de HubSpot de la principal. */
+function subtitulo(e: Empresa): string {
+  if (e.unidadDe) {
+    const datos = [e.dominio, e.industria].filter(Boolean).join(" · ");
+    const hubspot = e.sinEmpresaPropia ? " · sin empresa propia en HubSpot" : "";
+    return `Unidad de ${e.unidadDe}${hubspot}${datos ? ` · ${datos}` : ""}`;
+  }
+  const datos = [e.dominio, e.industria, e.pais].filter(Boolean).join(" · ") || "Sin dominio ni industria en HubSpot";
+  const actividad = e.ultimaActividad ? ` · última actividad ${diaCorto(e.ultimaActividad)}` : "";
+  return `${e.conUnidades ? "Empresa con unidades · " : ""}${datos}${actividad}`;
 }

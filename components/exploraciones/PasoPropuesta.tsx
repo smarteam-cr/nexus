@@ -69,7 +69,16 @@ export function ListaParaProponer() {
   );
 }
 
-function ArmarLaPropuesta({ negocios, alRecargar }: { negocios: Negocio[] | null; alRecargar: () => void }) {
+function ArmarLaPropuesta({
+  negocios,
+  sinEmpresa,
+  alRecargar,
+}: {
+  negocios: Negocio[] | null;
+  /** La ficha no tiene empresa propia en HubSpot; `unidadDe`, su principal si es una unidad. */
+  sinEmpresa: { unidadDe: string | null } | null;
+  alRecargar: () => void;
+}) {
   const router = useRouter();
   const toast = useToast();
   const { exp, chequeo, puedeProponer: puedeEditar, puedeEditar: trabajaLaPreventa, guardando, alDia } = useLienzo();
@@ -133,6 +142,13 @@ function ArmarLaPropuesta({ negocios, alRecargar }: { negocios: Negocio[] | null
           <button type="button" className="underline" onClick={alRecargar}>
             Volver a intentar
           </button>
+        </Alert>
+      ) : negocios.length === 0 && sinEmpresa ? (
+        <Alert variant="warning" title="Esta ficha no tiene empresa propia en HubSpot">
+          La propuesta se une al proyecto por un negocio de su empresa en HubSpot.{" "}
+          {sinEmpresa.unidadDe
+            ? `Es una unidad de «${sinEmpresa.unidadDe}»: la empresa de HubSpot y sus negocios son de «${sinEmpresa.unidadDe}» y no se usan para esta unidad. Para proponerle, esta unidad necesita su propia empresa en HubSpot vinculada a su ficha.`
+            : "Para proponerle, la ficha necesita su empresa en HubSpot vinculada."}
         </Alert>
       ) : negocios.length === 0 ? (
         <Alert variant="warning" title="La empresa no tiene negocios en HubSpot">
@@ -301,6 +317,7 @@ export default function PasoPropuesta() {
     exp.estado.areas,
   );
   const [negocios, setNegocios] = useState<Negocio[] | null | undefined>(undefined);
+  const [sinEmpresa, setSinEmpresa] = useState<{ unidadDe: string | null } | null>(null);
   const [propuestas, setPropuestas] = useState<PropuestaDeLaEmpresa[]>([]);
   const [error, setError] = useState<string | null>(null);
   // Cada «volver a intentar» vuelve a pedir los negocios (se leen de HubSpot).
@@ -313,6 +330,7 @@ export default function PasoPropuesta() {
         const res = await fetch(`/api/sales/exploraciones/${exp.id}/propuesta`);
         const data = (await res.json().catch(() => ({}))) as {
           negocios?: Negocio[] | null;
+          sinEmpresaEnHubspot?: { unidadDe: string | null } | null;
           propuestas?: PropuestaDeLaEmpresa[];
           error?: string;
         };
@@ -323,6 +341,7 @@ export default function PasoPropuesta() {
         }
         setError(null);
         setNegocios(data.negocios ?? null);
+        setSinEmpresa(data.sinEmpresaEnHubspot ?? null);
         setPropuestas(data.propuestas ?? []);
       } catch {
         if (vivo) setError("No se pudo cargar la propuesta. Revisa tu conexión.");
@@ -361,7 +380,7 @@ export default function PasoPropuesta() {
             <Skeleton className="h-10 w-full" />
           </div>
         ) : negocios !== undefined ? (
-          <ArmarLaPropuesta key={negocios?.map((n) => n.id).join(",") ?? "sin"} negocios={negocios} alRecargar={() => setIntento((n) => n + 1)} />
+          <ArmarLaPropuesta key={negocios?.map((n) => n.id).join(",") ?? "sin"} negocios={negocios} sinEmpresa={sinEmpresa} alRecargar={() => setIntento((n) => n + 1)} />
         ) : null}
       </div>
     </div>
