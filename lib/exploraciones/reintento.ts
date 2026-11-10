@@ -108,7 +108,8 @@ function operacionSegura(op: Operacion, antes: EstadoDeExploracion, ahora: Estad
       // Mueve la fecha del evento de UNA sesión: si su evento cambió entretanto, se recarga.
       return igual(ca.sesiones.find((s) => s.id === op.sesionId)?.evento, cb.sesiones.find((s) => s.id === op.sesionId)?.evento);
     case "descripcionDeLaEscala":
-      // Un texto por área que no sube la versión: gana el último.
+    // Un texto por área (o del Resumen) que no sube la versión: gana el último.
+    case "resumenDeLaEscala":
       return true;
     case "areasAlCliente":
       // La lista entera se arma con lo que se veía: si cambió, se pisaría.

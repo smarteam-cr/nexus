@@ -158,6 +158,12 @@ const CENSO: Record<string, { clase: Clase; motivo: string; indirecto?: true }> 
       "El chat de Nexus (ficha H) le describe al MODELO las reuniones recientes de la cuenta y le lee una entera: solo las " +
       "que ya ocurrieron (una agendada no tiene nada que leer), siempre por whereBelongsToClient.",
   },
+  "lib/exploraciones/resumen-de-la-escala-server.ts": {
+    clase: "contexto",
+    motivo:
+      "El Resumen de la escala que ve el cliente (2026-11-09): la duración de las reuniones de las sesiones que ya pasaron, " +
+      "para «Lo que hicimos». Las reuniones salen del chokepoint (transcripcionesDeLaExploracion) y la consulta corta por fecha y por whereBelongsToClient.",
+  },
   "lib/exploraciones/historia-de-las-sesiones-server.ts": {
     clase: "contexto",
     motivo:
@@ -465,6 +471,7 @@ const CORTAN_POR_FECHA = [
   "lib/mi-dia/servicio-server.ts",
   "lib/nexus-chat/lecturas-server.ts",
   "lib/exploraciones/historia-de-las-sesiones-server.ts",
+  "lib/exploraciones/resumen-de-la-escala-server.ts",
   "lib/carga/queries.ts",
   "lib/projects/analyze-participants.ts",
   "lib/lifecycle/load.ts",

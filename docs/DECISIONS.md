@@ -14176,10 +14176,10 @@ puede editar».
     ahora vive en `DetalleDeLaDimension.tsx` y se abre en un panel lateral al tocar la parte.
 - **Lo que propone el agente y nadie usó no se dibuja** en esta vista: el cliente no lo ve. Sigue en la franja de
   sugerencias y en «Comparar áreas».
-- **No se escondió nada.** Las dos vistas de antes siguen enteras al lado: «Comparar áreas» (el selector con ✓, las áreas
-  superpuestas, las hipótesis sugeridas y la tarjeta con «Llevar a la sesión N») y «Mapa» (la rueda). Lo que decían los
-  botones de las áreas (cuántas con evidencia, por explorar, sin dato, en juego) pasó también a «Lo que más frena a cada
-  equipo», que está en las tres vistas.
+- **No se escondió nada.** La vista de antes sigue entera al lado: «Comparar áreas» (el selector con ✓, las áreas
+  superpuestas, las hipótesis sugeridas y la tarjeta con «Llevar a la sesión N»). «Mapa» (la rueda) se quitó el 9 nov a
+  pedido de Elías (ver «El Resumen de la escala que ve el cliente»). Lo que decían los botones de las áreas (cuántas con
+  evidencia, por explorar, sin dato, en juego) pasó también a «Lo que más frena a cada equipo», que está en las dos.
 - **En pantallas táctiles**, deslizar sobre una parte del radar interno la arrastra en vez de desplazar la página
   (`touch-action: none`, solo con `.rd-editable`). *Lo aceptado:* sobre el radar, la página se desplaza fuera de él.
 - **En la pantalla interna, la página va quieta** (`AnimacionesDelResultado` con `quieta`): sin imán, que corría los
@@ -14363,3 +14363,84 @@ con proyectos (abajo). Plan, números y etapas: `docs/empresas-con-dominio-compa
   - Las reuniones viejas sin proyecto se reparten con `scripts/repartir-reuniones-sin-proyecto.ts`: título, después la
     IA (con `--con-ia`), y lo dudoso (la IA no propone, o con confianza menor a 0,6) queda para asignar a mano. El
     `--apply` escribe el plan que dejó el simulacro, sin volver a llamar a la IA: lo que una persona vio.
+
+## El Resumen de la escala que ve el cliente, con sus datos rojos (2026-11-09)
+
+Elías, para la presentación de Marco a Centauro Solutions (jueves 12 nov, 15 a 20 minutos): la página de la escala abría
+directo en un departamento. Ahora abre en **«Resumen»**, la primera pestaña, en las dos caras (la del cliente,
+`/external/escala/[token]`, y «Como lo ve el cliente» dentro de La escala). La portada guía en cuatro partes y arriba lleva
+los datos rojos.
+
+- **Las cuatro partes** (`ResumenDeLaEscalaVista`): 1 «Lo que hicimos» (sesiones, la duración REAL de las reuniones —la
+  conferencia de Meet; sin ella, el evento; una reunión de HubSpot no tiene duración y el tiempo dice «más de»— y con qué
+  equipos; reconoce su esfuerzo); 2 «Lo que encontramos» (hasta tres hallazgos por equipo); 3 «Dónde quedan» (el nivel,
+  del cálculo, y por qué está ahí y no uno arriba o abajo); 4 «¿Entendimos bien?» y «¿Falta algo?». Desde cada equipo se
+  entra a su pestaña. Sin Resumen armado, la portada muestra solo «Dónde quedan».
+- **Los datos rojos** (Marco: «convencen más que cualquier nivel», y es lo que espera la CEO): hasta tres cifras de lo que
+  la empresa pierde, cada una con su equipo y su parte de la escala. ⛔ **Ninguna cifra sin su cita**: el agente devuelve
+  de qué reunión y turno sale; el código la busca en la transcripción con `verificarCita` (la del analizador de la venta),
+  exige que todos los números del texto estén en lo citado (`cantidadesDe`: «25 mil» no es «25») y que lo haya dicho
+  alguien de la empresa (sin saber quién habló —notas de Gemini, una reunión sin hablantes— nadie cuenta como de la
+  empresa, y solo se citan transcripciones). *Lo que se aceptó:* una cifra que resume alguien de Smarteam vale si la
+  PRIMERA respuesta de la empresa después de su última parte es una confirmación corta («Ajá. Exacto.»; «Okay», «Ajá» o
+  «Sí, no,» no confirman), y si entre sus partes nadie de la empresa dijo que no (la revisión del 9 nov encontró que un
+  «Sí, correcto» a la mitad confirmaba una cifra que la empresa negó después). Los números en palabras («trece», «la
+  mitad») también se comparan. Es justo el caso de Centauro: Marco dijo «25 clientes y se nos van 14» y Emiley respondió «Ajá. Exacto.».
+  El «1800 al mes» que Marco calculó en voz alta y nadie confirmó no sale. Sin un dato que pase, la sección no sale.
+  Un volumen no es un dato rojo: el agente dice qué se le escapa a la empresa (`seEscapa`) o el dato no sale.
+- **El arreglo de una cifra** (`pedidoDelArreglo`): una cifra con su cita verificada que se cayó solo por un número de más
+  (en Centauro, una corrida escribió «11», la resta 25 − 14, y la cifra que más importa se perdía) se pide UNA vez
+  corregida, con sus citas y sin las transcripciones (unos cientos de tokens), y se vuelve a verificar igual. «1 800» con
+  espacio es «1800».
+- **Hallazgos con cita también**, y el «por qué» y las preguntas no pueden traer un número que la empresa no dijo (sus turnos
+  y los de Smarteam que ella confirmó: `dichoPorLaEmpresa`). Una cita de menos de cuatro palabras no sostiene nada («como
+  una carga»).
+- ⛔ **El cliente nunca ve las citas** ni quién habló: `resumenParaLaPagina(..., { conCitas: false })` en la puerta pública
+  (`armarLaPagina` con `publica`), solo la fecha de la reunión de cada dato. Adentro, debajo de cada dato y hallazgo, «Solo
+  lo ves tú · de dónde sale» con la cita y quién la confirmó, para que Marco lo verifique antes de presentarlo.
+- **El agente** (`resumen-de-la-escala-server.ts`): lee las transcripciones de las reuniones de las sesiones por
+  `transcripcionesDeLaExploracion` (chokepoint de su empresa, invariante 1) y la duración con `whereBelongsToClient`; quién
+  habló de cada lado con `quienHabloEnLasReuniones` (sin el grabador, que aparecía como alguien de la empresa). Una sola
+  llamada a **Sonnet 4.6**; si no devuelve nada legible, una más. Parseo con `parseObject`. `AgentRun` con las reuniones
+  leídas y el medidor (`conContextoDeIA`). *Medido con Centauro (9 nov, seis simulacros sin guardar):* 2 reuniones con
+  texto (Ventas 6 nov y Servicio 9 nov), unos 63 mil tokens de entrada y 2 mil de salida, 43 a 57 s y 0,22 a 0,23 USD por
+  armado (con el arreglo, una llamada chica más). Haiku 4.5 costó 0,07 USD y tardó 24 s, pero perdió la cifra de las
+  reuniones y un hallazgo se sostenía en una cita de tres palabras: para algo que lee la dirección del cliente, Sonnet.
+  *Lo que no queda garantizado:* que la frase alrededor de una cifra o de un hallazgo diga solo lo que dice la cita (el
+  código verifica la cita y los números, no el sentido). Por eso adentro se ve de dónde sale cada cosa y se quita con un
+  clic.
+- **Cuándo corre:** solo a pedido («Armar el Resumen con IA» / «Rehacer con IA», `POST /api/sales/exploraciones/[id]/escala/resumen`).
+  No se arma solo al crear el «Acceso», como la descripción: lo que lee la dirección del cliente lo mira antes una persona.
+  Nunca al visitar la página. Si la respuesta vuelve cortada dos veces, no se guarda nada (no pisa el Resumen que había).
+- **Solo los equipos que ve el cliente:** el agente no lee las reuniones de un equipo de la escala que el cliente no ve,
+  ningún texto puede nombrarlo, y «Lo que hicimos» no cuenta sus sesiones, su tiempo ni su gente. Una sesión es una
+  reunión que pasó y en la que se conversó: no un documento subido, ni una de Meet sin texto.
+- **Se edita en su lugar** (como la página de cada área): cada texto con un clic (`TextoEditableDeLaPagina`), con la
+  operación `resumenDeLaEscala` (`editarElResumen`: cambiar, quitar o agregar, hasta 8 por lista). Lo editado queda `mano`
+  y «Rehacer con IA» no lo pisa (`juntarConLoEditado`); lo que alguien quitó tampoco vuelve (`quitados`). Una cifra
+  editada a mano que su cita ya no sostiene pierde la cita y la fecha: adentro dice «Lo escribió tu equipo: no tiene
+  cita». *Pregunta abierta para Elías:* si una cifra escrita a mano puede salir sin cita (hoy sí, a criterio de quien la
+  escribe). La lectura del Json acepta más que los topes de escritura: un Resumen que se pasa no se pierde entero. No sube la versión, como la descripción. El «por qué» guardado lleva la firma de los
+  niveles (`firmaDelArea`): si cambian, sale el de los datos y adentro se avisa.
+- **El cuadro de texto ocupa el lugar exacto del texto** (bug de Elías: al hacer clic cambiaba de tamaño y cortaba lo
+  escrito): la misma letra, el mismo corrimiento y el alto de lo escrito, que crece al escribir (`ajustarAlto`). Vale para
+  todo lo editable de la página (descripción, tarjetas del radar, Resumen).
+- **Lo que se quitó** (Elías, 9 nov): el botón «Qué ve el cliente» (repetía el CTA de «Acceso»: qué equipos ve se elige
+  solo dentro de «Acceso») y la vista «Mapa» de La escala (la rueda, `RuedaDelEquipo.tsx`, que solo vivía ahí). Lo que
+  solo mostraba el Mapa: la rueda con cada porción pintada hasta su nivel y su tooltip por celda de nivel, y la leyenda ✓
+  (evidencia) / ? (hipótesis). Los cinco niveles de cada parte siguen al tocarla en «Comparar áreas» o en la página
+  (`DetalleDeDimension`), y lo por explorar se ve en el radar con su aro punteado.
+- **De las dos ramas que nunca se juntaron** se miró qué servía. `claude/escala-empresa-362248` (radares encimados, qué está
+  diagnosticado, la estrategia con su fuente): los radares encimados ya están en «Comparar áreas»; la estrategia (retos y
+  dolor confirmados de la ficha y la preventa) no entra al Resumen porque el Resumen sale de lo que la empresa dijo en las
+  reuniones, con cita. `claude/diagnostico-rendimiento-8f6119` (página por área editable con «Mejorar con IA» y su propia
+  tabla): main ya edita la página en su lugar sobre el Json de la exploración; de ahí se tomó la idea de que un texto
+  escrito con otra lectura del mapa no salga (aquí, la firma del «por qué»). Ninguna se juntó.
+- **Lo que endureció la segunda revisión (9 nov):** entre las partes de una cifra que dijo Smarteam, la empresa solo pudo
+  decir acuses o confirmaciones («Menos.» la niega sin decir «no»), y «¿Sí?» es duda; «un millón», «mil», «una cuarta
+  parte» también se comparan con la cita; lo corregido o quitado a mano se reconoce al rehacer por la cita de la que nació
+  (`origen`), y una pregunta quitada, también si vuelve con otras palabras; una pregunta que nombra un equipo que el
+  cliente dejó de ver no sale; cada corrida marca sus ids (desde una pantalla vieja no se toca otra pieza); si falla la
+  llamada chica del arreglo, se guarda lo ya pagado; el Json se lee pieza por pieza (una pieza rota se cae sola, nunca el
+  Resumen entero); el código de una parte («(3.6)») no sale.
+- Sin SQL: vive en el Json `contenido.resumenDeLaEscala`.

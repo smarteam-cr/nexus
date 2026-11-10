@@ -9,8 +9,8 @@
  * «Qué equipos ve» (2026-11-08, Centauro Solutions): Nexus detecta de qué equipos se habló (equipos-de-la-escala.ts) y el
  * vendedor elige cuáles salen, con una casilla por área. Sin elegir, salen las en juego con algo usado (como antes: un
  * enlace ya enviado no suma áreas solo); las demás se suman con un clic. Desde el 8 nov un área sin nada usado también
- * se puede elegir: la página la muestra «En medición» (Elías: «también debería poder aparecer»). La elección está en el
- * botón «Qué ve el cliente» (arriba a la derecha, junto a «Acceso») y sigue dentro de «Acceso».
+ * se puede elegir: la página la muestra «En medición» (Elías: «también debería poder aparecer»). La elección vive SOLO
+ * dentro de «Acceso»: el botón «Qué ve el cliente» que la repetía al lado se quitó el 9 nov (Elías: repetía el CTA).
  */
 import { useCallback, useEffect, useState } from "react";
 import { Alert, Modal, useToast } from "@/components/ui";
@@ -71,29 +71,6 @@ function EquiposQueVe() {
         })}
       </ul>
     </fieldset>
-  );
-}
-
-/**
- * «Qué ve el cliente» (8 nov, Elías: «desde la escala… debería seleccionarse cuáles se pueden ver en la página de
- * resultados, como un CTA de los de arriba a la derecha»): el botón dice qué equipos salen y abre la misma elección.
- */
-export function QueVeElCliente() {
-  const { exp } = useLienzo();
-  const areas = useAreasDeLaEscala();
-  const [abierto, setAbierto] = useState(false);
-  const salen = areasParaElCliente(areas, exp.estado.contenido.areasAlCliente);
-  const nombres = salen.map((id) => areas.find((a) => a.id === id)?.nombre).filter(Boolean).join(" · ");
-  return (
-    <>
-      <button type="button" onClick={() => setAbierto(true)} className={BOTON_DE_HERRAMIENTA} title="Qué equipos se ven en la página de resultados del cliente">
-        Qué ve el cliente
-        <span className="font-normal text-fg-muted">{nombres || "ningún equipo"}</span>
-      </button>
-      <Modal open={abierto} onClose={() => setAbierto(false)} title="Qué ve el cliente" description="Los equipos que salen en la página de resultados. Uno sin nada ubicado sale «En medición».">
-        <EquiposQueVe />
-      </Modal>
-    </>
   );
 }
 

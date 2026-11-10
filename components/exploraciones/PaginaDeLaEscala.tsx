@@ -8,8 +8,11 @@
  * arma `paginaParaElCse` (lib/exploraciones/escala-para-el-cliente-server.ts), el mismo cálculo que sirve
  * /external/escala/[token]. Toda la edición es EN SU LUGAR (Elías: «se le da clic, se cambia el texto y se guarda»), y
  * entra por los huecos de `EdicionDeLaPagina`:
+ *   · la página abre en «Resumen» (9 nov), la portada que presenta el vendedor (ResumenDeLaEscalaVista): «Armar el Resumen» /
+ *     «Rehacer con IA» la pide al agente (/api/sales/exploraciones/[id]/escala/resumen) y cada texto se edita en su lugar
+ *     (la operación `resumenDeLaEscala`); debajo de cada dato rojo y cada hallazgo, de dónde sale (solo adentro);
  *   · las pestañas de los departamentos son las de la página, con todas las áreas: la que el cliente no ve va punteada
- *     y dice «no la ve el cliente» (se elige en «Qué ve el cliente»);
+ *     y dice «no la ve el cliente» (se elige en «Acceso» › «Qué equipos ve»);
  *   · la descripción de «Resultado general» se edita donde está y se rehace con IA (la guarda y la genera
  *     /api/sales/exploraciones/[id]/escala/descripcion, de la sesión que hizo la descripción: acá no se genera nada);
  *   · lo que dice la tarjeta de cada dimensión se edita dentro de la tarjeta (`textoDelRadar`, solo para el nivel en que
@@ -25,12 +28,16 @@
 import { useEffect, useState } from "react";
 import { Alert, Button, Drawer, Field, Skeleton, Textarea, useToast } from "@/components/ui";
 import ArrastreDelRadar from "@/components/escala/ArrastreDelRadar";
+import { PESTANA_DEL_RESUMEN } from "@/components/external/test/ArribaDeLaEscala";
 import ResultadoDelTestVista, { type EdicionDeLaPagina } from "@/components/external/test/ResultadoDelTestVista";
+import ResumenDeLaEscalaVista, { type EdicionDelResumen } from "@/components/external/test/ResumenDeLaEscalaVista";
 import TextoEditableDeLaPagina from "@/components/external/test/TextoEditableDeLaPagina";
 import type { Letra } from "@/lib/escala/documento/tipos";
 import { MAX_CONTEXTO_DE_LA_ESCALA, MAX_TEXTO_DEL_RADAR } from "@/lib/exploraciones/contenido";
 import { textoVigenteDelRadar } from "@/lib/exploraciones/escala-para-el-cliente";
 import type { PaginaParaElCse } from "@/lib/exploraciones/escala-para-el-cliente-server";
+import { diaCorto } from "@/lib/exploraciones/fechas";
+import type { CitaDelResumen } from "@/lib/exploraciones/resumen-de-la-escala";
 import { chequeoDelMapa, cuentaDelArea, fraseDeLaCuenta } from "@/lib/exploraciones/mapa";
 import { AL_LUGAR, DEL_LUGAR, useLienzo } from "./contexto";
 import { DetalleDeDimension, useMarcarNivel } from "./DetalleDeLaDimension";
@@ -80,7 +87,7 @@ function useDescripciones(id: string, version: number) {
   return { data, otraVez: () => setPedido((n) => n + 1) };
 }
 
-/** El área que abre: la primera que ve el cliente con algo; si no, la primera con algo; si no, la primera. */
+/** El área de una pestaña que ya no está: la primera que ve el cliente con algo; si no, la primera con algo; si no, la primera. */
 function areaDeEntrada(p: PaginaParaElCse): string | null {
   const conAlgo = (id: string) => (p.resultados.find((r) => r.areaId === id)?.preguntadas ?? 0) > 0;
   return p.alCliente.find(conAlgo) ?? p.areas.find((a) => conAlgo(a.id))?.id ?? p.alCliente[0] ?? p.areas[0]?.id ?? null;
@@ -121,7 +128,7 @@ function LineaDelArea({ areaId, alCliente }: { areaId: string; alCliente: boolea
     <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 text-xs text-fg-muted">
       <span>
         <span className="font-semibold text-fg">{area.nombre}</span>
-        {alCliente ? " · la ve el cliente" : " · el cliente no la ve: súmala en «Qué ve el cliente»"}
+        {alCliente ? " · la ve el cliente" : " · el cliente no la ve: súmala en «Acceso» › «Qué equipos ve»"}
         {cuenta && ` · ${fraseDeLaCuenta(cuenta)}`}
         {!enJuego && ` · no está en juego ${DEL_LUGAR[lugar]}`}
       </span>
@@ -191,6 +198,31 @@ function ContextoParaLaDescripcion({ areaId, nombre, onRehacer, rehaciendo }: { 
   );
 }
 
+/** De dónde sale un dato rojo o un hallazgo: lo dicho, quién y cuándo (y quién lo confirmó). Solo adentro. */
+function DeDondeSale({ citas }: { citas: readonly CitaDelResumen[] }) {
+  if (!citas.length) return <p className="rs-citas-k">Lo escribió tu equipo: no tiene cita.</p>;
+  return (
+    <div className="rs-citas">
+      <p className="rs-citas-k">Solo lo ves tú · de dónde sale:</p>
+      <ul>
+        {citas.map((c) => (
+          <li key={`${c.reunion}-${c.turno}`}>
+            «{c.texto}» <span>— {c.hablante}, {diaCorto(c.fecha)}</span>
+            {c.confirmo && <span> · lo confirmó {c.confirmo.hablante}: «{c.confirmo.texto}»</span>}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+/** Lo que responde la ruta del Resumen al armarlo. */
+interface ResumenArmado {
+  descartados?: string[];
+  segundos?: number;
+  error?: string;
+}
+
 export default function PaginaDeLaEscala() {
   const { exp, cambiar, puedeEditar, recargar, nombreDeNivel } = useLienzo();
   const toast = useToast();
@@ -199,10 +231,20 @@ export default function PaginaDeLaEscala() {
   const [elegida, setElegida] = useState<string | null>(null);
   const [abierta, setAbierta] = useState<string | null>(null);
   const [rehaciendo, setRehaciendo] = useState(false);
+  const [armando, setArmando] = useState(false);
+  /** Lo que el agente escribió y no pasó la verificación la última vez que se armó (para revisarlo). */
+  const [descartados, setDescartados] = useState<string[] | null>(null);
   /* El nivel que va a quedar mientras se arrastra, y después de soltar hasta que llega la página nueva: se guarda con la
      página contra la que se dibujó, así que la página nueva lo borra sola. */
   const [enVivo, setEnVivo] = useState<{ de: PaginaParaElCse | null; niveles: Record<string, Letra> }>({ de: null, niveles: {} });
   const marcar = useMarcarNivel();
+  /* El Resumen que se armó en otra pantalla (otra pestaña, otra persona) llega con la página, no con el lienzo: sin
+     ponerlo al día, la primera edición no lo encontraría. Corre una vez por cambio (las dependencias son booleanos). */
+  const resumenEnLaPagina = !!pagina?.resumen.at;
+  const resumenEnElLienzo = !!exp.estado.contenido.resumenDeLaEscala;
+  useEffect(() => {
+    if (resumenEnLaPagina && !resumenEnElLienzo) void recargar();
+  }, [resumenEnLaPagina, resumenEnElLienzo, recargar]);
 
   if (!pagina)
     return error ? (
@@ -215,17 +257,115 @@ export default function PaginaDeLaEscala() {
     ) : (
       <Skeleton className="h-[720px] w-full" rounded="lg" />
     );
-  const areaId = elegida && pagina.areas.some((a) => a.id === elegida) ? elegida : areaDeEntrada(pagina);
-  const r = pagina.resultados.find((x) => x.areaId === areaId) ?? null;
-  if (!r || !areaId)
+  if (!pagina.resultados.length)
     return (
       <Alert variant="info" title="Esta escala todavía no tiene áreas">
         Cuando la escala tenga sus áreas, aquí se ve la página tal como la verá el cliente.
       </Alert>
     );
+  // La página abre en el Resumen (9 nov), como la del cliente.
+  const enElResumen = !elegida || elegida === PESTANA_DEL_RESUMEN;
+  const areaId = !enElResumen && pagina.areas.some((a) => a.id === elegida) ? elegida : areaDeEntrada(pagina);
+  const r = pagina.resultados.find((x) => x.areaId === areaId) ?? pagina.resultados[0];
+  const pestanasDeLasAreas = pagina.areas.map((a) => ({ ...a, href: "#", oculta: !pagina.alCliente.includes(a.id) }));
+  const elegir = (id: string) => {
+    setElegida(id);
+    setAbierta(null);
+  };
+
+  if (enElResumen) {
+    const armar = async () => {
+      setArmando(true);
+      const res = await fetch(`/api/sales/exploraciones/${exp.id}/escala/resumen`, { method: "POST" }).catch(() => null);
+      const data = ((await res?.json().catch(() => ({}))) ?? {}) as ResumenArmado;
+      setArmando(false);
+      if (!res?.ok) {
+        toast.error(data.error ?? "No se pudo armar el Resumen.");
+        return;
+      }
+      setDescartados(data.descartados ?? []);
+      // El Resumen se guarda por su propia ruta: el lienzo se pone al día, o la primera edición no lo encontraría.
+      await recargar();
+      toast.success(`Listo en ${data.segundos ?? 0} s.${data.descartados?.length ? ` ${data.descartados.length} cosas no pasaron la verificación.` : ""}`);
+      otraVez();
+    };
+    const res = pagina.resumen;
+    const edicionDelResumen: EdicionDelResumen = {
+      alElegir: elegir,
+      texto: (o) =>
+        puedeEditar && res.at ? (
+          <TextoEditableDeLaPagina
+            valor={o.valor}
+            vacio={o.vacio}
+            max={o.tope}
+            etiqueta={o.etiqueta}
+            quitar={o.quitar ?? null}
+            onGuardar={async (texto) => {
+              const ok = await cambiar([{ op: "resumenDeLaEscala", clave: o.clave, texto }]);
+              if (ok) otraVez();
+              return ok;
+            }}
+          />
+        ) : (
+          o.valor
+        ),
+      deDonde: (citas) => <DeDondeSale citas={citas} />,
+      barra: (
+        <div className="rs-barra">
+          <p>
+            {res.at
+              ? `Armado el ${diaCorto(res.at)} con lo que se habló en las sesiones. Cada texto se cambia con un clic; lo que escribas se queda al rehacerlo.`
+              : "Todavía no hay Resumen: Nexus lo arma con las transcripciones de las sesiones (tarda alrededor de un minuto). Sin él, el cliente ve solo «Dónde quedan»."}
+            {res.at && !res.datosRojos.length && " Ninguna cifra de pérdida pasó la verificación: los datos rojos no salen."}
+          </p>
+          {puedeEditar && (
+            <button type="button" className={`rd-btn ${res.at ? "rd-btn-ghost" : "rd-btn-primary"}`} disabled={armando} aria-busy={armando || undefined} onClick={() => void armar()}>
+              {armando ? "Nexus está leyendo las reuniones…" : res.at ? "Rehacer con IA" : "Armar el Resumen con IA"}
+            </button>
+          )}
+          {descartados && descartados.length > 0 && (
+            <details className="rs-descartados">
+              <summary>Lo que Nexus escribió y no pasó la verificación ({descartados.length})</summary>
+              <ul>
+                {descartados.map((d) => (
+                  <li key={d}>{d}</li>
+                ))}
+              </ul>
+            </details>
+          )}
+        </div>
+      ),
+    };
+    return (
+      <div data-recorrido="preventa.escala.areas" className="flex flex-col gap-2">
+        <p className="text-xs text-fg-muted">
+          <span className="font-semibold text-fg">Resumen</span> · lo primero que ve el cliente al abrir el enlace. Sale de los equipos que ve:{" "}
+          {pagina.areas.filter((a) => pagina.alCliente.includes(a.id)).map((a) => a.nombre).join(" · ") || "ninguno todavía (elígelos en «Acceso»)"}.
+        </p>
+        {error && (
+          <Alert variant="warning" title="No se pudo traer la página al día">
+            Lo que guardaste quedó guardado; esta vista puede estar atrasada.{" "}
+            <button type="button" className="font-semibold underline" onClick={otraVez}>
+              Volver a intentar
+            </button>
+          </Alert>
+        )}
+        <div className="overflow-hidden rounded-xl border border-line">
+          <ResumenDeLaEscalaVista
+            resumen={res}
+            empresa={pagina.empresa}
+            dominio={pagina.dominio}
+            fecha={pagina.fecha}
+            pestanas={[{ id: PESTANA_DEL_RESUMEN, nombre: "Resumen", href: "#" }, ...pestanasDeLasAreas]}
+            edicion={edicionDelResumen}
+          />
+        </div>
+      </div>
+    );
+  }
 
   const nivelesEnVivo = enVivo.de === pagina ? enVivo.niveles : {};
-  const descripcion = descripciones.data?.areas.find((a) => a.areaId === areaId)?.descripcion ?? null;
+  const descripcion = descripciones.data?.areas.find((a) => a.areaId === r.areaId)?.descripcion ?? null;
   const textos = exp.estado.contenido.textosDelRadar;
   const anotado = exp.estado.propuesta.tarjetasDeLaEscala?.porDimension ?? {};
 
@@ -234,14 +374,14 @@ export default function PaginaDeLaEscala() {
     const res = await fetch(`/api/sales/exploraciones/${exp.id}/escala/descripcion`, {
       method: rehacer ? "POST" : "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(rehacer ? { areaId } : { areaId, texto }),
+      body: JSON.stringify(rehacer ? { areaId: r.areaId } : { areaId: r.areaId, texto }),
     }).catch(() => null);
     const data = (await res?.json().catch(() => ({}))) as (DescripcionesDeLaEscala & { error?: string }) | undefined;
     if (!res?.ok) {
       toast.error(data?.error ?? "No se pudo guardar la descripción.");
       return false;
     }
-    const motivos = data?.descartadas?.find((x) => x.areaId === areaId)?.motivos ?? [];
+    const motivos = data?.descartadas?.find((x) => x.areaId === r.areaId)?.motivos ?? [];
     if (motivos.length) toast.error(`La descripción nueva no quedó: ${motivos.join(" · ")}`);
     // La descripción se guarda en la exploración por su propia ruta: el lienzo se pone al día para no chocar después.
     await recargar();
@@ -255,10 +395,7 @@ export default function PaginaDeLaEscala() {
   };
 
   const edicion: EdicionDeLaPagina = {
-    alElegirArea: (id) => {
-      setElegida(id);
-      setAbierta(null);
-    },
+    alElegirArea: elegir,
     descripcion:
       puedeEditar && descripcion ? (
         <TextoEditableDeLaPagina
@@ -326,7 +463,7 @@ export default function PaginaDeLaEscala() {
           });
         }}
       >
-        {/* El ancla del recorrido «Dónde está cada dimensión» (en «Mapa», la lleva la rueda). */}
+        {/* El ancla del recorrido «Dónde está cada dimensión». */}
         <div data-recorrido="preventa.escala.dimensiones">{radar}</div>
       </ArrastreDelRadar>
     ),
@@ -369,8 +506,9 @@ export default function PaginaDeLaEscala() {
           detalles={pagina.detalles}
           dimensionDelRiesgo={pagina.dimensionDelRiesgo}
           deLaEscala={{
-            areas: pagina.areas.map((a) => ({ ...a, href: "#", oculta: !pagina.alCliente.includes(a.id) })),
+            areas: pestanasDeLasAreas,
             porExplorar: pagina.porExplorar[r.areaId] ?? [],
+            resumen: { href: "#" },
           }}
           edicion={edicion}
         />

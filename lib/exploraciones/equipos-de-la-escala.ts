@@ -142,7 +142,7 @@ export function resumenDeLoExplorado(areas: readonly AreaDeLaEscala[]): string {
 /**
  * Las áreas que salen en la página del cliente, en orden (las en juego primero). `elegidas` es lo que eligió el vendedor
  * (undefined: no eligió todavía). Sin elegir, las EN JUEGO con algo confirmado, como antes del 8 nov: un enlace que ya se
- * mandó no suma áreas solo con el deploy (la revisión lo cazó). Las demás las ofrece «Qué ve el cliente» y las suma el
+ * mandó no suma áreas solo con el deploy (la revisión lo cazó). Las demás las ofrece «Acceso» (su «Qué equipos ve») y las suma el
  * vendedor con un clic. Elegida por el vendedor, un área sin nada sale «En medición» (8 nov); sin elegir, no sale. Primero
  * las que tienen algo (la página abre en la primera: no en una vacía), después las en juego.
  */
