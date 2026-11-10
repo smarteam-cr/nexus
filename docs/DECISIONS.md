@@ -14475,6 +14475,9 @@ los datos rojos.
   código verifica la cita y los números, no el sentido). Por eso adentro se ve de dónde sale cada cosa y se quita con un
   clic.
 - **Cuándo corre:** solo a pedido («Armar el Resumen con IA» / «Rehacer con IA», `POST /api/sales/exploraciones/[id]/escala/resumen`).
+  El botón, el aviso de cuándo se armó y lo que no pasó la verificación van en la franja interna de arriba, FUERA del
+  marco que imita la página del cliente (Elías, 9 nov: adentro parecía parte de lo que ve Centauro). Dentro del marco
+  solo queda lo que se edita en su lugar y, debajo de cada pieza, de dónde sale.
   No se arma solo al crear el «Acceso», como la descripción: lo que lee la dirección del cliente lo mira antes una persona.
   Nunca al visitar la página. Si la respuesta vuelve cortada dos veces, no se guarda nada (no pisa el Resumen que había).
 - **Solo los equipos que ve el cliente:** el agente no lee las reuniones de un equipo de la escala que el cliente no ve,
@@ -14482,10 +14485,13 @@ los datos rojos.
   reunión que pasó y en la que se conversó: no un documento subido, ni una de Meet sin texto.
 - **Se edita en su lugar** (como la página de cada área): cada texto con un clic (`TextoEditableDeLaPagina`), con la
   operación `resumenDeLaEscala` (`editarElResumen`: cambiar, quitar o agregar, hasta 8 por lista). Lo editado queda `mano`
-  y «Rehacer con IA» no lo pisa (`juntarConLoEditado`); lo que alguien quitó tampoco vuelve (`quitados`). Una cifra
-  editada a mano que su cita ya no sostiene pierde la cita y la fecha: adentro dice «Lo escribió tu equipo: no tiene
-  cita». *Pregunta abierta para Elías:* si una cifra escrita a mano puede salir sin cita (hoy sí, a criterio de quien la
-  escribe). La lectura del Json acepta más que los topes de escritura: un Resumen que se pasa no se pierde entero. No sube la versión, como la descripción. El «por qué» guardado lleva la firma de los
+  y «Rehacer con IA» no lo pisa (`juntarConLoEditado`); lo que alguien quitó tampoco vuelve (`quitados`). ⛔ **Una cifra
+  escrita a mano que su cita no sostiene NO sale al cliente** (Elías, 9 nov, al probarla): `porQueNoSaleLaCifra` (sin
+  cita, o con un número que lo citado no dice, la misma vara que al armarla) la saca de la página del cliente en
+  `resumenParaLaPagina` sin `conCitas`; adentro sale apagada, con el porqué («No sale al cliente: «20» no está en lo que
+  dijo la empresa») y «la cita que tenía», para corregirla o quitarla. La cita se guarda aunque la cifra cambie: al
+  corregirla con lo que dijo la empresa, vuelve a salir. Un hallazgo no entra en esta regla: escrito a mano es prosa del
+  equipo, como uno agregado con «+ Agregar un hallazgo», y sale. La lectura del Json acepta más que los topes de escritura: un Resumen que se pasa no se pierde entero. No sube la versión, como la descripción. El «por qué» guardado lleva la firma de los
   niveles (`firmaDelArea`): si cambian, sale el de los datos y adentro se avisa.
 - **El cuadro de texto ocupa el lugar exacto del texto** (bug de Elías: al hacer clic cambiaba de tamaño y cortaba lo
   escrito): la misma letra, el mismo corrimiento y el alto de lo escrito, que crece al escribir (`ajustarAlto`). Vale para
