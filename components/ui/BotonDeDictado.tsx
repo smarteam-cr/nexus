@@ -10,6 +10,9 @@
  * `onTexto`; quien lo usa decide dónde la pone. Un clic arranca y
  * otro para; también para solo cuando la persona se queda callada un rato. En un navegador sin reconocimiento de voz
  * (Firefox, Safari viejo) el botón no se muestra: el teclado sigue estando.
+ *
+ * Dos formas: `variante="boton"` (ícono + «Dictar») y `variante="icono"` (solo el micrófono, para ponerlo DENTRO de un
+ * cuadro de texto, en su esquina: 10 nov, Elías quiere que la persona escriba y el dictado quede a mano, sin competir).
  */
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { cn } from "@/lib/cn";
@@ -41,6 +44,8 @@ export interface BotonDeDictadoProps {
   disabled?: boolean;
   /** El idioma del reconocimiento. */
   idioma?: string;
+  /** «boton»: ícono y la palabra «Dictar». «icono»: solo el micrófono, para la esquina de un cuadro de texto. */
+  variante?: "boton" | "icono";
   className?: string;
 }
 
@@ -53,7 +58,9 @@ const MENSAJE_DEL_ERROR: Record<string, string> = {
 
 const sinSuscripcion = () => () => {};
 
-export function BotonDeDictado({ onTexto, onError, disabled, idioma = "es-CR", className }: BotonDeDictadoProps) {
+const AYUDA_DE_PRIVACIDAD = "El dictado lo hace tu navegador: en Chrome, la voz pasa por el servicio de Google; en Edge, por el de Microsoft.";
+
+export function BotonDeDictado({ onTexto, onError, disabled, idioma = "es-CR", variante = "boton", className }: BotonDeDictadoProps) {
   // Solo en el navegador: en el servidor no existe (false), y así el primer render coincide.
   const disponible = useSyncExternalStore(sinSuscripcion, () => constructorDelNavegador() !== null, () => false);
   const [escuchando, setEscuchando] = useState(false);
@@ -108,13 +115,45 @@ export function BotonDeDictado({ onTexto, onError, disabled, idioma = "es-CR", c
     }
   };
 
+  const microfono = (
+    <svg className={variante === "icono" ? "h-4 w-4" : "h-3.5 w-3.5"} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <rect x="9" y="3" width="6" height="11" rx="3" />
+      <path d="M5 11a7 7 0 0 0 14 0M12 18v3" />
+    </svg>
+  );
+
+  if (variante === "icono") {
+    const accion = escuchando ? "Escuchando: toca para parar el dictado" : "Dictar en vez de escribir";
+    return (
+      <button
+        type="button"
+        // Dentro del cuadro, el clic no le quita el foco: el cursor sigue donde estaba y el guardado al salir del cuadro
+        // no deshabilita el botón antes de que llegue el clic.
+        onMouseDown={(e) => e.preventDefault()}
+        onClick={alternar}
+        disabled={disabled}
+        aria-pressed={escuchando}
+        aria-label={accion}
+        title={`${accion}. ${AYUDA_DE_PRIVACIDAD}`}
+        className={cn(
+          "inline-flex h-7 w-7 items-center justify-center rounded-full transition-colors",
+          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/50 disabled:pointer-events-none disabled:opacity-50",
+          escuchando ? "bg-brand-soft text-brand-dark" : "text-fg-muted hover:bg-surface-hover hover:text-fg",
+          className,
+        )}
+      >
+        {microfono}
+      </button>
+    );
+  }
+
   return (
     <button
       type="button"
       onClick={alternar}
       disabled={disabled}
       aria-pressed={escuchando}
-      title="El dictado lo hace tu navegador: en Chrome, la voz pasa por el servicio de Google; en Edge, por el de Microsoft."
+      title={AYUDA_DE_PRIVACIDAD}
       className={cn(
         "inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-semibold transition-colors",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/50 disabled:pointer-events-none disabled:opacity-50",
@@ -122,10 +161,7 @@ export function BotonDeDictado({ onTexto, onError, disabled, idioma = "es-CR", c
         className,
       )}
     >
-      <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-        <rect x="9" y="3" width="6" height="11" rx="3" />
-        <path d="M5 11a7 7 0 0 0 14 0M12 18v3" />
-      </svg>
+      {microfono}
       {escuchando ? "Escuchando… toca para parar" : "Dictar"}
     </button>
   );
