@@ -35,6 +35,13 @@ import { MAX_FRASE } from "@/lib/smarteam/posicionamiento";
 import { MAX_ACTIVIDADES_POR_CASO, MAX_VECES } from "@/lib/casos-de-uso/armado";
 import { LARGO_DE_UNA_LINEA_DE_CAMBIOS, MAX_LINEAS_DE_CAMBIOS, VEREDICTOS_DE_LA_REVISION } from "@/lib/casos-de-uso/personalizar";
 import { MAX_CASOS_EN_EL_ORDEN, MAX_LARGO_DEL_PORQUE_DEL_ORDEN, MAX_LARGO_DEL_TITULO } from "@/lib/casos-de-uso/orden";
+import { CAPAS_DEL_CASO, MAX_CONEXIONES_POR_CASO, MAX_LARGO_DEL_PORQUE_DE_LA_CONEXION, TIPOS_DE_CONEXION } from "@/lib/casos-de-uso/capas";
+import {
+  MAX_CASOS_POR_AREA_EN_LA_LECTURA,
+  MAX_LARGO_DE_LA_CITA,
+  MAX_LARGO_DE_UN_CASO_EN_LA_LECTURA,
+  MAX_SE_LE_PASO,
+} from "@/lib/casos-de-uso/lectura-del-consultor";
 import { ESTADOS_DE_LA_CONDICION, MAX_HECHOS, MAX_LOGROS, TOPES, type PosicionamientoDelProspecto } from "./posicionamiento";
 import {
   contenidoVacio,
@@ -350,6 +357,32 @@ export const CasoDeUsoElegidoSchema: z.ZodType<CasoDeUsoElegido> = z.object({
   plan: z.object({ paso: z.number().int().min(1).max(40), despuesDe: texto(300).optional() }).optional(),
   // 2026-11-08 (lib/casos-de-uso/personalizar.ts): lo que dejó la personalización al aceptarlo.
   personalizado: z.object({ en: z.string().min(10).max(40), cambios: z.array(textoLleno(LARGO_DE_UNA_LINEA_DE_CAMBIOS + 80)).max(MAX_LINEAS_DE_CAMBIOS) }).optional(),
+  // 2026-11-09 (lib/casos-de-uso/capas.ts): su capa en el plan y los casos en los que se apoya o a los que alimenta.
+  capa: z.enum(CAPAS_DEL_CASO).optional(),
+  conexiones: z
+    .array(z.object({ con: ID_CASO_DE_USO, tipo: z.enum(TIPOS_DE_CONEXION), porQue: texto(MAX_LARGO_DEL_PORQUE_DE_LA_CONEXION + 20).optional() }))
+    .max(MAX_CONEXIONES_POR_CASO)
+    .optional(),
+});
+
+/** La lectura del consultor que miró el agente al generar (lib/casos-de-uso/lectura-del-consultor.ts). */
+const LecturaDelConsultorSchema = z.object({
+  en: z.string().min(10).max(40),
+  corridaId: z.string().min(1).max(60),
+  huella: z.string().max(40),
+  porArea: z
+    .array(z.object({ areaId: ID_AREA.nullable(), casos: z.array(textoLleno(MAX_LARGO_DE_UN_CASO_EN_LA_LECTURA + 20)).max(MAX_CASOS_POR_AREA_EN_LA_LECTURA) }))
+    .max(12),
+  seLePaso: z
+    .array(
+      z.object({
+        que: textoLleno(MAX_LARGO_DE_UN_CASO_EN_LA_LECTURA + 20),
+        areaId: ID_AREA.nullable(),
+        cita: textoLleno(MAX_LARGO_DE_LA_CITA + 20),
+        reunion: textoLleno(220),
+      }),
+    )
+    .max(MAX_SE_LE_PASO),
 });
 
 /** La última mirada del agente a los casos (lib/casos-de-uso/personalizar.ts › RevisionDeLosCasos). */
@@ -1158,6 +1191,9 @@ export function leerPropuesta(raw: unknown): PropuestaDeExploracion {
   // Décima vuelta (2026-11-08): el orden de la lista entera de casos.
   const orden = OrdenDeLosCasosSchema.safeParse(raw.ordenDeLosCasos);
   if (orden.success) p.ordenDeLosCasos = orden.data;
+  // 2026-11-09: la lectura del consultor que miró el agente al generar los casos.
+  const lectura = LecturaDelConsultorSchema.safeParse(raw.lecturaDelConsultor);
+  if (lectura.success) p.lecturaDelConsultor = lectura.data;
   if (!Array.isArray(raw.items)) return p;
   const items = raw.items.map(leerItem).filter((it): it is ItemPropuesto => it !== null);
   return { ...p, items };

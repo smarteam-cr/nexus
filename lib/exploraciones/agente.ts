@@ -27,6 +27,9 @@ import { actividadesDelCaso, bibliotecaDeActividades } from "@/lib/casos-de-uso/
 import { actividadesDelElegido, actividadesPorDefecto, apartarCasosSinArmar, bibliotecaLigera, ultimoPasoDelPlan, type ActividadDelCaso } from "@/lib/casos-de-uso/armado";
 import { huellaDeLoQueLee, type RevisionDeLosCasos } from "@/lib/casos-de-uso/personalizar";
 import type { OrdenDeLosCasos } from "@/lib/casos-de-uso/orden";
+import { casaParaElAgente, casosQueNoCalzanConSuCrm } from "@/lib/casos-de-uso/capas";
+import type { LecturaDelConsultor } from "@/lib/casos-de-uso/lectura-del-consultor";
+import { CARACTERES_DE_LA_LECTURA, leerLaLectura, pedidoDeLaLectura, SESIONES_DE_LA_LECTURA, type ContextoDeLaLectura } from "./lectura-del-consultor-pedido";
 import type { FilaParaLasReuniones } from "./minutas-de-la-preventa";
 import { ordenarLosCasos } from "./orden-de-los-casos";
 import { leerLaRevision, porQueDelCaso } from "./personalizar-pedido";
@@ -60,7 +63,7 @@ import {
 } from "./agente-pedido";
 import { proponerALaFichaSinIA } from "@/lib/clients/ficha-propuesta";
 import { aportesDeLaPreparacion, ORIGEN_DE_LA_PREVENTA, propuestaParaLaFicha } from "./a-la-ficha";
-import { exploracionParaLosCasos, loQueSeSabeParaElValor } from "./casos-de-uso";
+import { candidatosAlOrden, casaConLoPendiente, exploracionParaLosCasos, loQueSeSabeParaElValor, negocioParaLosCasos, suHubspotDe } from "./casos-de-uso";
 import { listaParaProponer } from "./calidad";
 import {
   cambioLoConfirmado,
@@ -84,7 +87,7 @@ import { leerFuentes, reunionesDeLaExploracion, reunionesSinLeer, transcripcione
 import { agendaRenovada, exploracionesQueLeenLaReunion, hayQueLeerAlPreparar, mismaReunion } from "./lectura";
 import { buildInternalDomainsSet } from "@/lib/sessions/categorize";
 import { hoyEnCostaRica } from "./fechas";
-import { bloqueDeInstrucciones } from "./notas-de-sesion";
+import { bloqueDeLaLectura, textoDeLaLectura } from "./notas-de-sesion";
 import { preguntasQueNoCumplen } from "./agenda";
 import { aplicarElArreglo, leerElArreglo, pedidoDelArreglo, textosAArreglar } from "./arreglo-de-la-guia";
 import { duracionDeLaSesion, tarjetasParaLaGuia, textoDeConQuien } from "./contexto-de-la-exploracion";
@@ -836,16 +839,26 @@ async function proponerCasos(
     runId,
     regenerar ? "Volviendo a armar los casos con la biblioteca de actividades…" : revisar ? "Revisando los casos con lo que se sabe hoy…" : "Pensando qué casos de uso sugerir y por qué…",
   );
-  const respuesta = await conContextoDeIA(
-    {
-      agentSlug: AGENTE_DE_LA_EXPLORACION,
-      agentRunId: runId,
-      clientId: ex.fila.clientId,
-      triggeredByEmail: opts.triggeredByEmail,
-      origen: "exploraciones/agente:casos",
-    },
-    () => getAnthropic().messages.create(pedidoDeCasos(ctx)),
-  );
+  /* 2026-11-09 (lib/casos-de-uso/lectura-del-consultor.ts): con la lectura del consultor escrita, en paralelo, otra
+     llamada la ordena por departamento y busca en las transcripciones lo que se le pasó. Si falla, queda la de antes. */
+  const [respuesta, lectura] = await Promise.all([
+    conContextoDeIA(
+      {
+        agentSlug: AGENTE_DE_LA_EXPLORACION,
+        agentRunId: runId,
+        clientId: ex.fila.clientId,
+        triggeredByEmail: opts.triggeredByEmail,
+        origen: "exploraciones/agente:casos",
+      },
+      () => getAnthropic().messages.create(pedidoDeCasos(ctx)),
+    ),
+    regenerar
+      ? Promise.resolve(undefined)
+      : leerLaLecturaDelConsultor(runId, ex, opts).catch((e) => {
+          console.error("[exploraciones/agente] la lectura del consultor falló; queda la de antes", e);
+          return undefined;
+        }),
+  ]);
   /* Cortada por el tope, la lista llega a medias: al regenerar se apartarían las sugerencias de antes y volverían pocas
      (revisión del 2026-11-08). Se avisa y no se guarda nada. */
   if (respuesta.stop_reason === "max_tokens") {
@@ -910,12 +923,53 @@ async function proponerCasos(
       regenerar,
       revision: { en: new Date().toISOString(), corridaId: runId, huella: huellaDeLoQueLee(ctx.exploracion, ex.estado.areas), revisada: revisar, cambios },
       orden,
+      lectura,
     },
   );
   await prisma.agentRun.update({
     where: { id: runId },
     data: { status: "DONE", currentPhase: null, output: JSON.stringify({ propuestos, descartadas: r.descartadas, nadaNuevo: false, regenerar, revisar, cambios: cambios.length }) },
   });
+}
+
+/**
+ * «La lectura del consultor» (2026-11-09, lib/casos-de-uso/lectura-del-consultor.ts): lo que dijo, por departamento, y lo
+ * que se le pasó con su cita. null si no escribió nada (borra la de antes: ya no hay lectura que mostrar).
+ * ⛔ Invariante 1: las transcripciones salen de `transcripcionesDeLaExploracion` (chokepoint de sesiones de su empresa).
+ */
+async function leerLaLecturaDelConsultor(
+  runId: string,
+  ex: { fila: FilaParaLasReuniones & { client: { name: string } }; estado: EstadoDeExploracion; escala: EscalaDelLienzo },
+  opts: OpcionesDeLaCorrida,
+): Promise<LecturaDelConsultor | null> {
+  const texto = textoDeLaLectura(ex.estado.contenido.notas);
+  if (!texto) return null;
+  const c = ex.estado.contenido;
+  const { fuentes } = await transcripcionesDeLaExploracion(
+    {
+      exploracionId: ex.fila.id,
+      clientId: ex.fila.clientId,
+      projectId: ex.fila.projectId,
+      creadaEn: ex.fila.createdAt,
+      propuesta: ex.estado.propuesta,
+      leido: leerLoLeido(ex.fila.test),
+      sesiones: c.sesiones,
+      fuera: c.fuera,
+      elegidas: c.reunionesElegidas,
+    },
+    { cuantas: SESIONES_DE_LA_LECTURA, caracteres: CARACTERES_DE_LA_LECTURA },
+  );
+  const ctx: ContextoDeLaLectura = {
+    empresa: ex.fila.client.name,
+    texto,
+    areas: ex.escala.areas.filter((a) => ex.estado.areas.includes(a.id)).map((a) => ({ id: a.id, nombre: a.nombre })),
+    fuentes,
+  };
+  const respuesta = await conContextoDeIA(
+    { agentSlug: AGENTE_DE_LA_EXPLORACION, agentRunId: runId, clientId: ex.fila.clientId, triggeredByEmail: opts.triggeredByEmail, origen: "exploraciones/agente:casos-lectura" },
+    () => getAnthropic().messages.create(pedidoDeLaLectura(ctx)),
+  );
+  return leerLaLectura(respuesta, ctx, runId);
 }
 
 /**
@@ -954,7 +1008,10 @@ export function contextoDeLosCasos(
 ): ContextoDeCasos {
   const regenerar = o.regenerar === true;
   const pendientes = pendientesVigentes(ex.estado, ex.general, ex.escala);
-  const catalogo = casosParaLasAreas(ex.estado.areas);
+  /* 2026-11-09 (capas.ts): sin lo que no calza con su CRM de hoy (reactivar un HubSpot que no tiene, migrar al que ya
+     usa), salvo lo que ya está elegido: «Regenerar» lo rearmaría sin su ficha (revisión del 2026-11-09). */
+  const noCalzan = casosQueNoCalzanConSuCrm(suHubspotDe(ex.estado));
+  const catalogo = casosParaLasAreas(ex.estado.areas).filter((c) => !noCalzan.has(c.id) || `cat-${c.id}` in ex.estado.contenido.casosDeUso);
   const porDefecto: Record<string, ActividadDelCaso[]> = {};
   if (regenerar)
     for (const c of catalogo) {
@@ -990,7 +1047,14 @@ export function contextoDeLosCasos(
     // Una tanda más sigue el plan que ya está; «Regenerar» lo vuelve a armar entero, desde el paso 1.
     ultimoPaso: ultimoPasoDelPlan([...Object.values(ex.estado.contenido.casosDeUso), ...pendientesQueSiguen.map((it) => it.valor as CasoDeUsoElegido)], regenerar),
     descartados: ex.estado.contenido.casosDescartados.map(tituloVigente),
-    instrucciones: bloqueDeInstrucciones(ex.estado.contenido.notas, "casos"),
+    instrucciones: bloqueDeLaLectura(ex.estado.contenido.notas),
+    // 2026-11-09 (lib/casos-de-uso/capas.ts): la casa de cada área, su negocio y lo que ya está en la lista (con su id).
+    casa: (() => {
+      const { hubspot, casa } = casaConLoPendiente(ex.estado, ex.escala, pendientes);
+      return casaParaElAgente(casa, hubspot, (l) => ex.escala.niveles.find((n) => n.letra === l)?.nombre ?? l);
+    })(),
+    negocio: negocioParaLosCasos(ex.estado),
+    enLaLista: candidatosAlOrden(ex.estado, ex.escala, pendientes, []).map((c) => ({ id: c.id, titulo: c.titulo })),
     catalogo,
     ...(regenerar ? { biblioteca: bibliotecaLigera(bibliotecaDeActividades()), porDefecto } : {}),
     ...(revisar.length ? { revisar } : {}),
@@ -1717,6 +1781,8 @@ async function guardar(
     revision?: Omit<RevisionDeLosCasos, "nuevos">;
     /** Casos de uso (décima vuelta): el orden de la lista entera. null o ausente: queda el de antes. */
     orden?: OrdenDeLosCasos | null;
+    /** Casos de uso (2026-11-09): la lectura del consultor. null la borra; ausente (undefined), queda la de antes. */
+    lectura?: LecturaDelConsultor | null;
   },
 ): Promise<number> {
   return prisma.$transaction(async (tx) => {
@@ -1778,6 +1844,7 @@ async function guardar(
           }
         : {}),
       ...(corrida.orden ? { ordenDeLosCasos: corrida.orden } : {}),
+      ...(corrida.lectura !== undefined ? { lecturaDelConsultor: corrida.lectura } : {}),
       corridas: [
         ...fusion.corridas,
         {

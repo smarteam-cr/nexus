@@ -126,7 +126,22 @@ describe("el catálogo de casos de uso", () => {
       expect(c.titulo.length, c.id).toBeLessThanOrEqual(70);
       expect(juntaDosIdeas(c.titulo), `${c.id}: «${c.titulo}»`).toBe(false);
       for (const vago of ["transforma", "potencia", "siguiente nivel", "que no se olvida"]) expect(c.titulo.toLowerCase(), c.id).not.toContain(vago);
+      // 2026-11-09 (Marco): el nombre de lo que el cliente compra empieza con un verbo en infinitivo.
+      expect(c.titulo, `${c.id}: «${c.titulo}»`).toMatch(/^\p{Lu}\p{Ll}+(ar|er|ir)\s/u);
     }
+  });
+
+  it("cada caso dice su capa en el plan: la base, lo de encima, la IA o sostener (Marco, 2026-11-09)", () => {
+    const capa = (id: string) => CATALOGO_DE_CASOS.find((c) => c.id === id)!.capa;
+    for (const id of ["sistematiza-ventas", "sistematiza-servicio", "sistematiza-marketing", "migra-a-hubspot", "reactiva-hubspot"]) expect(capa(id), id).toBe("casa");
+    for (const id of ["agentes-ia-atencion", "prospeccion-ia", "agentes-ia-internos", "marketing-ia-breeze"]) expect(capa(id), id).toBe("ia");
+    for (const id of ["playbooks-secuencias", "whatsapp", "cotizaciones"]) expect(capa(id), id).toBe("proceso");
+    // Un caso de IA o de agentes nunca es la base: subiría al primer grupo de una empresa sin HubSpot.
+    for (const c of CATALOGO_DE_CASOS) if (/(^|-)ia(-|$)|agente/.test(c.id)) expect(c.capa, c.id).not.toBe("casa");
+    // Ni uno que se apoya en otro o lo alimenta (la base no va encima de nada).
+    for (const c of CATALOGO_DE_CASOS) if (c.capa === "casa") expect([...(c.requiere ?? []), ...(c.alimenta ?? [])], c.id).toEqual([]);
+    // Lo que sostiene lo que ya funciona va al final.
+    for (const c of CATALOGO_DE_CASOS) if (c.tipo === "complementario" && c.areas.length === 3 && c.id !== "asistente-ia-conectado") expect(c.capa, c.id).toBe("sostener");
   });
 });
 
@@ -149,7 +164,11 @@ describe("lo interno del catálogo", () => {
     expect(tituloVigente("Reactiva tu inversión en HubSpot")).toBe(CATALOGO_DE_CASOS.find((c) => c.id === "reactiva-hubspot")!.titulo);
     // Los casos de una empresa se guardan por título: el nombre de antes y el de hoy son la misma clave.
     expect(claveDelTitulo(" Sistematiza tu proceso comercial con HubSpot ")).toBe(claveDelTitulo(CATALOGO_DE_CASOS.find((c) => c.id === "sistematiza-ventas")!.titulo));
-    expect(claveDelTitulo("Integra WhatsApp y unifica tus conversaciones en HubSpot")).toBe("las conversaciones de whatsapp quedan registradas en hubspot");
+    expect(claveDelTitulo("Integra WhatsApp y unifica tus conversaciones en HubSpot")).toBe("registrar las conversaciones de whatsapp en hubspot");
+    // Los del 2026-11-09 (Marco): el título del 8 nov también es el mismo caso.
+    expect(tituloVigente("Tu equipo comercial vende con un mismo proceso en HubSpot")).toBe("Estandarizar el proceso comercial en HubSpot");
+    expect(tituloVigente("Seguimiento a prospectos con la misma cadencia para todos")).toBe("Automatizar la cadencia de seguimiento a prospectos");
+    expect(claveDelTitulo("Las conversaciones de WhatsApp quedan registradas en HubSpot")).toBe("registrar las conversaciones de whatsapp en hubspot");
     expect(claveDelTitulo("Un caso libre")).toBe("un caso libre");
     expect(tituloVigente("Un caso libre de la preventa")).toBe("Un caso libre de la preventa");
     expect(tituloVigente(CATALOGO_DE_CASOS[0].titulo)).toBe(CATALOGO_DE_CASOS[0].titulo);

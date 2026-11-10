@@ -8201,6 +8201,60 @@ le pregunta a la persona del cliente.
     lectura): sugerir con las reglas nuevas US$ 0,068 y 46 s (7 casos desde cero; 12 mil de entrada); ordenar 10 casos
     US$ 0,033 y 13 s (6,9 mil de entrada, 0,8 mil de salida); mejorar US$ 0,046 y 15 s (10,3 mil de entrada, 1 mil de
     salida).
+- **2026-11-09 (Marco y Elías, con Centauro Solutions antes de presentarle el 12 nov): nombres de lo que se compra, la
+  casa primero, casos conectados y la lectura del consultor.** Reemplaza lo de arriba donde lo contradice:
+  - **El título es el NOMBRE de lo que el cliente compra** (`REGLAS_DEL_TITULO`, orden.ts): un verbo en infinitivo con lo
+    que se le entrega y su negocio, «Estandarizar el proceso comercial de tus servicios SaaS». *Por qué cambió otra vez a
+    un día del arreglo anterior:* «Seguimiento a prospectos con la misma cadencia para todos» se entendía, pero describía
+    un efecto: el cliente no sabía qué se llevaba. Siguen la sola idea, sin metáforas, y el largo (de 4 a 12 palabras con
+    el negocio; el catálogo, de 4 a 10). El negocio es lo que vende, no cómo se organiza («de tus tres marcas» no). Los 38
+    del catálogo se reescribieron así (`catalogo.test.ts` exige el infinitivo); los del 8 nov quedaron en
+    `NOMBRES_ANTERIORES`, y las 373 menciones de la biblioteca y de los avisos pasaron al nuevo. El agente recibe «SU
+    NEGOCIO» de la radiografía (`negocioParaLosCasos`), aparte de `exploracionParaLosCasos` para no cambiar la huella de
+    novedades.
+  - **Las actividades, igual de concretas** (`REGLAS_DE_LAS_ACTIVIDADES`): el objeto de esta empresa, nunca el nombre
+    general de la biblioteca solo. Las leen el que sugiere, el que personaliza y «Mejorar con IA». La base de un área de
+    una empresa que no trabaja en HubSpot trae la importación de sus cuentas. Medido: la base de Centauro salió con
+    «Importar las cuentas de hospedajes con su asesor asignado», «Configurar la asignación automática de leads por marca»
+    e «Implementar el proceso de ventas multimarca con cotización de Host PMS».
+  - **La casa primero** (lib/casos-de-uso/capas.ts, `planDeLosCasos`): cada caso tiene una capa (`CasoDelCatalogo.capa`;
+    uno propio, la que dice el agente): «casa» (la base: arquitectura y proceso), «proceso» (lo de encima), «ia» y
+    «sostener». La casa de un área está ordenada si llegó a Funcional en el mapa de la escala Y trabaja en HubSpot con su
+    hub (`loQueTieneDeHubspot`, de «Su CRM actualmente» y «Lo que ya sabemos»: una casilla que describe su CRM sin nombrar
+    HubSpot dice que no lo usa). Sin ordenar, sus casos van casa → proceso → ia → sostener; ordenada, manda el agente
+    (sostener siempre al final). Lo decide el CÓDIGO, no el agente: el agente que ordena solo desempata dentro de cada
+    capa. *Por qué en código:* el 9 nov el agente puso el guion y WhatsApp antes que la base; es la regla de la escala
+    (primero Funcional, después IA) y no puede depender de que el modelo la recuerde. La pantalla dice por qué va así
+    (`explicacionDelOrden`) y cada fila su capa. La propuesta comercial usa el mismo orden, con la casa del MISMO mapa
+    que ve el paso (lo confirmado más lo pendiente), no del chequeo confirmado: si no, un área en Funcional solo por una
+    hipótesis salía ordenada en el paso y por organizar en la propuesta (revisión del 2026-11-09). Tampoco se sugiere
+    «Reactivar el HubSpot que ya pagas» a quien no lo usa ni «Migrar a HubSpot» a quien sí (`casosQueNoCalzanConSuCrm`;
+    lo ya elegido se queda). «No lo usa» sale de negarlo, quererlo o evaluarlo; «Migraron de Salesforce a HubSpot» o
+    «pasar a HubSpot Enterprise» dicen que sí lo usa.
+  - **Casos conectados** (`ConexionDelCaso`: «seApoyaEn» o «alimenta», con su porqué): el que se apoya en otro o lo
+    alimenta va después de él (WhatsApp alimenta el centro de ayuda: va encima). Salen del catálogo (`requiere`,
+    `requiereUnoDe`, y los nuevos `seApoyaEn` y `alimenta`) y del agente que sugiere, que los propone con el id o el
+    título del otro (`validarConexionesDelAgente`; lo que no apunta a un caso de la lista se cae). Si el agente dijo los
+    suyos, del catálogo quedan solo los requisitos (un «alimenta» genérico no valía para el WhatsApp de ventas de Centauro).
+    La fila dice «Se apoya en n.º 4 «…»». Una prueba recorre el catálogo entero: sin conexiones rotas ni contradicciones
+    (encontró que el ERP «alimentaba» cobranza, que lo requiere).
+  - **La lectura del consultor** (lib/casos-de-uso/lectura-del-consultor.ts, `LecturaDelConsultor.tsx`): un paso opcional
+    arriba de la lista, «¿Qué casos de uso crees que necesita el cliente?», con ejemplos de un clic (sus planes y lo que
+    sugiere la escala) y dictado con el reconocimiento de voz del navegador (`BotonDeDictado`, sin costo para Nexus; en un
+    navegador sin él, no aparece). ⚠ El audio no pasa por Nexus pero sí sale del equipo: en Chrome lo procesa Google y en
+    Edge Microsoft; el botón lo dice en su ayuda (pendiente que Elías decida si basta). Reemplaza a las «Instrucciones adicionales» de este paso y vive en la MISMA nota
+    (`instrucciones:casos`): lo escrito antes aparece ahí, sin migrar. Al generar, en paralelo con la sugerencia, una
+    llamada aparte la ordena por departamento y busca en las transcripciones (`transcripcionesDeLaExploracion`, por el
+    chokepoint) lo que se le pasó, con la cita. *Por qué por renglón y no por área:* sin ids, el modelo dejó afuera dos de
+    tres renglones; ahora va cada renglón (R1…) y el que no ubica entra tal cual, al área que dicen sus palabras. La cita
+    se verifica palabra por palabra (tolera muletillas, como el analizador de la venta) y se muestra sin horas ni nombres;
+    lo que el consultor ya dijo con otras palabras no cuenta como «se te pasó» (`yaLoDijo`). Se guarda en
+    `propuesta.lecturaDelConsultor`; si cambia el texto, dice que es de la lectura anterior.
+  - **Medido con Centauro** (`scripts/simular-casos-de-uso.ts --llamar --desde-cero --orden --personalizar 1 --lectura
+    "…"`, solo lectura; `main` de hoy entre paréntesis): sugerir US$ 0,081-0,094 y 48-59 s (0,071 y 46 s); la lectura
+    US$ 0,08 y 13-16 s (24 mil de entrada: dos transcripciones), en paralelo, solo si el consultor escribió; ordenar
+    US$ 0,037 y 10-11 s (0,035 y 12 s); aceptar uno US$ 0,06 y 29-32 s (0,054 y 26 s). Una vuelta con lectura, unos
+    US$ 0,20 (antes 0,11) en el mismo minuto.
 
 ## Servicios recurrentes: el ciclo con los documentos de siempre (2026-10-12)
 

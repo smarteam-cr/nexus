@@ -11,6 +11,7 @@
  */
 import type Anthropic from "@anthropic-ai/sdk";
 import { REGLAS_DEL_TITULO, validarOrdenDelAgente, type CandidatoAlOrden, type OrdenDeLosCasos } from "@/lib/casos-de-uso/orden";
+import { REGLAS_DE_LA_CASA } from "@/lib/casos-de-uso/capas";
 import { MODELO_DE_LA_EXPLORACION } from "./agente-pedido";
 
 export const NOMBRE_DE_LA_HERRAMIENTA_DEL_ORDEN = "ordenar_casos";
@@ -25,9 +26,13 @@ export interface ContextoDelOrden {
   interno: string;
   /** Las minutas de sus reuniones más recientes (del chokepoint de sesiones). */
   reuniones: string;
-  /** Las instrucciones adicionales del vendedor (contexto de la preventa), ya como bloque, o "". */
+  /** La lectura del consultor (o sus instrucciones de antes), ya como bloque, o "". */
   instrucciones: string;
   candidatos: CandidatoAlOrden[];
+  /** 2026-11-09 (lib/casos-de-uso/capas.ts): cómo está la casa de cada área, en una o dos frases. */
+  casa?: string;
+  /** Qué hace la empresa: el título claro de los de la biblioteca se puede armar con su negocio. */
+  negocio?: string;
 }
 
 const ETIQUETA: Record<CandidatoAlOrden["origen"], string> = { elegido: "elegido por el vendedor", agente: "sugerido por el agente", escala: "biblioteca" };
@@ -65,7 +70,10 @@ export function pedidoDelOrden(ctx: ContextoDelOrden): Anthropic.Messages.Messag
   };
   const sistema = `Eres el analista de ventas de Smarteam, una consultora que implementa HubSpot. En la primera propuesta de un prospecto, el vendedor tiene una lista de casos de uso: los que ya eligió, los que sugirió el agente y los de la biblioteca que sugiere la escala. Ordénalos TODOS en una sola lista, del que más le conviene a esta empresa ahora al que menos. «porQue» lo lee solo el vendedor; «titulo» lo puede ver el cliente (abajo).
 
-Cómo ordenar, en este orden de peso:
+${REGLAS_DE_LA_CASA}${ctx.casa ? `\nHoy: ${ctx.casa}` : ""}
+- Un caso que se apoya en otro, o que lo alimenta (dice «se apoya en» o «alimenta» en la lista), va después de él.
+
+Dentro de eso, cómo ordenar, en este orden de peso:
 1. Lo que frena a cada área en la escala (sus dimensiones más bajas) y la base que los demás casos necesitan van antes.
 2. Lo que toca un dolor o una meta que el cliente dijo en sus reuniones, con un hecho suyo.
 3. El objetivo de la exploración y las instrucciones del vendedor, si las hay.
@@ -76,12 +84,18 @@ Cómo ordenar, en este orden de peso:
 - «titulo» solo en los de la «biblioteca»: su título del catálogo, escrito de nuevo si no cumple las reglas del TÍTULO (si ya las cumple, vacío). En los demás, siempre vacío. ⚠ Ese título SÍ lo puede ver el cliente (si el vendedor elige el caso, va a su propuesta): escríbelo SOLO con lo que dice el caso en la lista (su título y lo que resuelve), nunca con lo interno ni con las reuniones: sin nombres de personas, sin cifras, sin opiniones, sin nada que el cliente no haya visto.
 
 ${REGLAS_DEL_TITULO}`;
+  const conexiones = (c: CandidatoAlOrden) =>
+    (c.conexiones ?? []).map((x) => `${x.tipo === "alimenta" ? "alimenta" : "se apoya en"} [${x.con}]`).join(", ");
   const lista = ctx.candidatos
-    .map((c) => `- [${c.id}] «${c.titulo}» (${ETIQUETA[c.origen]}${c.area ? `; área ${c.area}` : ""})${c.queResuelve ? `. ${c.queResuelve}` : ""}`)
+    .map(
+      (c) =>
+        `- [${c.id}] «${c.titulo}» (${ETIQUETA[c.origen]}${c.area ? `; área ${c.area}` : ""}${c.capa ? `; capa ${c.capa}` : ""}${conexiones(c) ? `; ${conexiones(c)}` : ""})${c.queResuelve ? `. ${c.queResuelve}` : ""}`,
+    )
     .join("\n");
   const cuerpo =
     `Empresa: ${ctx.empresa}\n\n` +
     (ctx.instrucciones ?? "") +
+    (ctx.negocio ? `=== SU NEGOCIO ===\n${ctx.negocio}\n\n` : "") +
     `=== EL OBJETIVO DE LA EXPLORACIÓN ===\n${ctx.objetivo || "(sin ajuste)"}\n\n` +
     `=== DÓNDE ESTÁ CADA EQUIPO Y LO QUE SE SABE ===\n${ctx.exploracion || "(nada)"}\n\n` +
     `=== LO QUE SE SABE (interno) ===\n${ctx.interno || "(nada)"}\n\n` +
@@ -99,8 +113,8 @@ ${REGLAS_DEL_TITULO}`;
 }
 
 /** Lo que devolvió, validado (`validarOrdenDelAgente`): null si no ordenó ninguno. */
-export function leerElOrden(respuesta: Anthropic.Messages.Message, ctx: Pick<ContextoDelOrden, "candidatos">, corridaId: string, ahora = new Date()): OrdenDeLosCasos | null {
+export function leerElOrden(respuesta: Anthropic.Messages.Message, ctx: Pick<ContextoDelOrden, "candidatos" | "negocio">, corridaId: string, ahora = new Date()): OrdenDeLosCasos | null {
   const bloque = respuesta.content.find((b) => b.type === "tool_use" && b.name === NOMBRE_DE_LA_HERRAMIENTA_DEL_ORDEN);
   const x = bloque && bloque.type === "tool_use" && typeof bloque.input === "object" && bloque.input !== null ? (bloque.input as Record<string, unknown>) : {};
-  return validarOrdenDelAgente(x.orden, ctx.candidatos, corridaId, ahora);
+  return validarOrdenDelAgente(x.orden, ctx.candidatos, corridaId, ahora, { negocio: ctx.negocio });
 }

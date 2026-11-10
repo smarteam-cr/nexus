@@ -12,11 +12,13 @@
  */
 import { casoDeLaPreventa } from "@/lib/casos-de-uso/en-la-preventa";
 import { enOrdenDelPlan } from "@/lib/casos-de-uso/armado";
+import { capaDelCaso, conexionesEnLaLista, planDeLosCasos } from "@/lib/casos-de-uso/capas";
+import { casaConLoPendiente } from "./casos-de-uso";
 import type { ResultadoDelChequeo } from "@/lib/escala/chequeo";
 import type { ClaveDeCapa, Letra } from "@/lib/escala/documento/tipos";
 import type { AreaEnLaEscala, PosicionEnLaEscala } from "@/lib/escala/posicion";
 import { CASILLAS, type Meta, type Reto } from "./casillas";
-import type { ContenidoDeExploracion, EstadoDeExploracion } from "./contenido";
+import { propuestaVigente, type ContenidoDeExploracion, type EstadoDeExploracion } from "./contenido";
 import type { EscalaDelLienzo } from "./escala-del-lienzo";
 
 /**
@@ -215,7 +217,7 @@ export function bloqueParaLaPropuesta(o: {
     );
   }
 
-  const casos = casosEnOrden(c.casosDeUso);
+  const casos = casosEnOrden(c.casosDeUso, { estado, escala });
   if (casos.length) {
     const nombreDeArea = (id: string | null) => (id ? (escala.areas.find((a) => a.id === id)?.nombre ?? null) : null);
     partes.push(
@@ -239,16 +241,32 @@ export function bloqueParaLaPropuesta(o: {
  * catálogo, lo que gana (su promesa); de uno libre, su descripción. Nunca la razón interna ni el aviso del catálogo.
  * Sin precio: es la fase 2.
  */
-export function casosElegidosParaLaPropuesta(c: Pick<ContenidoDeExploracion, "casosDeUso">): { id: string; title: string; detail: string; price: string }[] {
-  return casosEnOrden(c.casosDeUso).map(([id, k]) => {
+export function casosElegidosParaLaPropuesta(
+  c: Pick<ContenidoDeExploracion, "casosDeUso">,
+  conLaCasa?: { estado: EstadoDeExploracion; escala: EscalaDelLienzo },
+): { id: string; title: string; detail: string; price: string }[] {
+  return casosEnOrden(c.casosDeUso, conLaCasa).map(([id, k]) => {
     const delCatalogo = casoDeLaPreventa(id);
     return { id, title: tituloParaLaPropuesta(id, k), detail: delCatalogo?.promesa ?? k.descripcion ?? "", price: "" };
   });
 }
 
-/** Los casos elegidos en el orden del plan que armó el agente (2026-11-08); los que no tienen lugar, al final. */
-function casosEnOrden(casos: ContenidoDeExploracion["casosDeUso"]) {
-  return enOrdenDelPlan(Object.entries(casos), ([, k]) => k.plan?.paso);
+/**
+ * Los casos elegidos en el orden del plan que armó el agente (2026-11-08); los que no tienen lugar, al final. Con la
+ * escala de la empresa (2026-11-09, lib/casos-de-uso/capas.ts), en el mismo orden que la lista del paso: primero la casa,
+ * cada uno después del que lo sostiene y, dentro de eso, el orden que sugirió el agente. La casa sale del MISMO mapa que
+ * ve el paso (lo confirmado más lo pendiente: `casaConLoPendiente`), no del chequeo confirmado de la propuesta: si no, un
+ * área en Funcional solo por una hipótesis quedaba ordenada en el paso y por organizar aquí (revisión del 2026-11-09).
+ */
+export function casosEnOrden(casos: ContenidoDeExploracion["casosDeUso"], conLaCasa?: { estado: EstadoDeExploracion; escala: EscalaDelLienzo }) {
+  const porPlan = enOrdenDelPlan(Object.entries(casos), ([, k]) => k.plan?.paso);
+  if (!conLaCasa) return porPlan;
+  const { casa } = casaConLoPendiente(conLaCasa.estado, conLaCasa.escala, propuestaVigente(conLaCasa.estado));
+  const ids = new Set(porPlan.map(([id]) => id));
+  return planDeLosCasos(porPlan, ([id, k]) => ({ id, capa: capaDelCaso(id, k.capa), areaId: k.areaId, conexiones: conexionesEnLaLista(id, k.conexiones, ids) }), {
+    casa,
+    ordenDelAgente: conLaCasa.estado.propuesta.ordenDeLosCasos?.casos.map((x) => x.id),
+  }).filas;
 }
 
 /**

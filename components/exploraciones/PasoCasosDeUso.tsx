@@ -60,7 +60,22 @@ import {
   type ValorDeVenta,
 } from "@/lib/casos-de-uso/armado";
 import { ETAPAS_DE_ACTIVIDAD, formatoHoras, formatoUsd, nombreVisible, sobreQueAparte } from "@/lib/casos-de-uso/actividades-puras";
-import { enElOrden, type CasoEnElOrden } from "@/lib/casos-de-uso/orden";
+import type { CasoEnElOrden } from "@/lib/casos-de-uso/orden";
+import {
+  capaDelCaso,
+  casosQueNoCalzanConSuCrm,
+  conexionesEnLaLista,
+  explicacionDelOrden,
+  NOMBRE_DE_LA_CAPA,
+  planDeLosCasos,
+  QUE_ES_LA_CAPA,
+  VERBO_DE_LA_CONEXION,
+  type CapaDelCaso,
+  type TipoDeConexion,
+} from "@/lib/casos-de-uso/capas";
+import { ejemplosParaLaLectura } from "@/lib/casos-de-uso/lectura-del-consultor";
+import { claveDeInstrucciones, MAX_NOTA_DE_SESION, textoDeLaLectura } from "@/lib/exploraciones/notas-de-sesion";
+import LecturaDelConsultor from "./LecturaDelConsultor";
 import { aplicarMejora, diferenciaDeActividades, MAX_LARGO_DE_LA_INSTRUCCION, resumenDeLaMejora, type PropuestaDeMejora } from "@/lib/casos-de-uso/mejorar";
 import Link from "next/link";
 import { AgentProposal } from "@/components/ai/AgentProposal";
@@ -68,7 +83,7 @@ import { Alert, Badge, IconButton, Select, Selector, Textarea, useToast } from "
 import { cn } from "@/lib/cn";
 import { useMe } from "@/hooks/useMe";
 import { esCasoLibre, laEscalaTieneBase, sePuedeDeshacer, type CasoDeUsoElegido, type ItemPropuesto } from "@/lib/exploraciones/contenido";
-import { casosPorLaEscala, type CasoPorLaEscala } from "@/lib/exploraciones/casos-de-uso";
+import { casaDeLaExploracion, casosPorLaEscala, suHubspotDe, type CasoPorLaEscala } from "@/lib/exploraciones/casos-de-uso";
 import {
   nadaCambio,
   novedadesEnUnaFrase,
@@ -765,6 +780,7 @@ function EtiquetaDeOrigen({ tipo }: { tipo: Fila["tipo"] }) {
 
 /** El marco de toda fila: número, etiqueta y título a la izquierda; precio, lo que mueve y las acciones a la derecha. */
 function MarcoDeLaFila({
+  id,
   numero,
   tipo,
   area,
@@ -794,7 +810,10 @@ function MarcoDeLaFila({
   alAbrir: () => void;
   etiquetaDelDesplegable: [string, string];
   pie?: React.ReactNode;
+  /** El id del caso en la lista: con él la fila muestra su capa y sus conexiones (PlanContexto). */
+  id: string;
 }) {
+  const lugarEnElPlan = useContext(PlanContexto).get(id);
   /* Lo de adentro queda montado después de abrirlo una vez (revisión del 2026-11-08): plegar la fila mientras «Mejorar con
      IA» espera al agente perdía la propuesta, ya pagada. */
   const [montado, setMontado] = useState(abierta);
@@ -812,9 +831,11 @@ function MarcoDeLaFila({
             </span>
             <EtiquetaDeOrigen tipo={tipo} />
             {area && <span className="text-xs text-fg-muted">{area}</span>}
+            {lugarEnElPlan && <EtiquetaDeLaCapa capa={lugarEnElPlan.capa} />}
           </p>
           <h3 className="text-[15px] font-semibold leading-[1.35] text-fg">{titulo}</h3>
           {subtitulo}
+          {lugarEnElPlan && lugarEnElPlan.conexiones.length > 0 && <LasConexiones conexiones={lugarEnElPlan.conexiones} />}
           {cuerpo}
         </div>
         <div className="flex flex-col gap-2.5 border-line md:border-l md:pl-5">
@@ -848,6 +869,43 @@ function MarcoDeLaFila({
         </div>
       )}
     </li>
+  );
+}
+
+/** Lo que cada fila sabe de su lugar en el plan (2026-11-09, lib/casos-de-uso/capas.ts): su capa y sus conexiones. */
+interface LugarEnElPlanDeLaFila {
+  capa: CapaDelCaso;
+  conexiones: { tipo: TipoDeConexion; numero: number; titulo: string; porQue?: string }[];
+}
+const PlanContexto = createContext<ReadonlyMap<string, LugarEnElPlanDeLaFila>>(new Map());
+
+/** La capa del caso en el plan: «Organizar la casa», «Sobre la base», «Agentes e IA» o «Sostener». */
+function EtiquetaDeLaCapa({ capa }: { capa: CapaDelCaso }) {
+  return (
+    <span
+      title={QUE_ES_LA_CAPA[capa]}
+      className={cn(
+        "inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium leading-none",
+        capa === "casa" ? "border-brand/30 bg-brand/10 text-brand" : "border-line bg-surface text-fg-muted",
+      )}
+    >
+      {NOMBRE_DE_LA_CAPA[capa]}
+    </span>
+  );
+}
+
+/** «Se apoya en n.º 1 «…»» y «Alimenta n.º 2 «…»»: el caso no va suelto. */
+function LasConexiones({ conexiones }: { conexiones: LugarEnElPlanDeLaFila["conexiones"] }) {
+  return (
+    <ul className="space-y-0.5 text-xs text-fg-secondary">
+      {conexiones.map((c) => (
+        <li key={`${c.tipo}-${c.numero}`}>
+          <span aria-hidden="true">↳ </span>
+          <span className="font-medium text-fg">{VERBO_DE_LA_CONEXION[c.tipo]}</span> n.º {c.numero} «{c.titulo}»
+          {c.porQue && <span className="text-fg-muted">: {c.porQue}</span>}
+        </li>
+      ))}
+    </ul>
   );
 }
 
@@ -931,6 +989,7 @@ function FilaElegida({ numero, id, caso, lugar, nueva, onQuitar }: { numero: num
   const porQue = caso.paraVentas?.porQue || (caso.armado ? (caso.razon ?? "") : "");
   return (
     <MarcoDeLaFila
+      id={id}
       numero={numero}
       tipo="elegido"
       area={area}
@@ -1053,6 +1112,7 @@ function FilaSugerida({ numero, item, lugar, onAceptar }: { numero: number; item
   const hayMas = !!cita || (caso.descripcion?.length ?? 0) > 160 || conActividades || !!caso.valorDeVenta || !!caso.personalizado;
   return (
     <MarcoDeLaFila
+      id={useCaseId}
       numero={numero}
       tipo="agente"
       area={area}
@@ -1126,6 +1186,7 @@ function FilaDeLaEscala({ numero, c, lugar, onElegir }: { numero: number; c: Cas
   const caso: CasoDeUsoElegido = { titulo, areaId: c.area.id };
   return (
     <MarcoDeLaFila
+      id={id}
       numero={numero}
       tipo="escala"
       area={c.area.nombre}
@@ -1294,33 +1355,102 @@ function CasosDeUso({ catalogo, novedades }: { catalogo: Caso[]; novedades: Nove
   };
   const elegirDeLaEscala = (c: CasoPorLaEscala, titulo: string) =>
     elegirDelCatalogo({ id: "cat-" + c.caso.id, titulo: c.caso.titulo, descripcion: c.caso.descripcion, precio: null, dimensiones: c.caso.mueve.map((m) => m.dimension) }, c.area.id, titulo);
-  const revisar = () => void lanzar("casos", { revisar: true });
+  const revisar = () => void generar({ revisar: true });
   const sinPersonalizar = elegidos.filter(([id, c]) => !c.personalizado && !c.armado && !c.aMano && !personalizando.has(id) && (!c.areaId || e.areas.includes(c.areaId)) && !nuevaDe.has(id));
 
   /* Ficha B (2026-10-17): los casos de la biblioteca que mueven a cada área desde donde parece estar hoy. Desde la décima
      vuelta no repiten lo que ya está en la lista (elegido o sugerido por el agente) y comparten la cuenta con el agente
      que ordena (lib/exploraciones/casos-de-uso.ts › casosPorLaEscala). */
-  const enLaLista = new Set([...elegidos.map(([id]) => id), ...propuestos.map(idDe)].filter((id) => id.startsWith("cat-")).map((id) => id.slice(4)));
+  // 2026-11-09 (capas.ts): tampoco lo que no calza con su CRM de hoy (reactivar un HubSpot que no tiene).
+  const enLaLista = new Set([
+    ...[...elegidos.map(([id]) => id), ...propuestos.map(idDe)].filter((id) => id.startsWith("cat-")).map((id) => id.slice(4)),
+    ...casosQueNoCalzanConSuCrm(suHubspotDe(e)),
+  ]);
   const porLaEscala = conBase ? casosPorLaEscala({ escala, areas: e.areas, mapa, excluir: enLaLista, nombreDeNivel }) : [];
 
-  /* La lista entera, uno por fila (décima vuelta): en el orden que propuso el agente; lo que llegó después de su última
-     vuelta va al final, en el orden de antes (elegidos, sugeridos, escala). */
+  /* La lista entera, uno por fila (décima vuelta). Desde el 2026-11-09 (Marco; lib/casos-de-uso/capas.ts): primero la
+     casa de cada área que no está ordenada (sin HubSpot, sin su hub o debajo de Funcional), cada caso después del que lo
+     sostiene o al que alimenta y, dentro de eso, el orden que propuso el agente; lo que llegó después de su última vuelta
+     va al final de su grupo, en el orden de antes (elegidos, sugeridos, escala). */
   const orden = e.propuesta.ordenDeLosCasos ?? null;
   const lugarDe = new Map((orden?.casos ?? []).map((c) => [c.id, c]));
-  const filas = enElOrden<Fila>(
-    [
-      ...elegidos.map(([id, caso]): Fila => ({ tipo: "elegido", id, caso })),
-      ...propuestos.map((item): Fila => ({ tipo: "agente", id: idDe(item), item })),
-      ...porLaEscala.map((c): Fila => ({ tipo: "escala", id: `cat-${c.caso.id}`, c })),
-    ],
-    (f) => f.id,
-    orden,
+  const { hubspot, casa } = casaDeLaExploracion(e, escala, mapa.chequeo);
+  const todas: Fila[] = [
+    ...elegidos.map(([id, caso]): Fila => ({ tipo: "elegido", id, caso })),
+    ...propuestos.map((item): Fila => ({ tipo: "agente", id: idDe(item), item })),
+    ...porLaEscala.map((c): Fila => ({ tipo: "escala", id: `cat-${c.caso.id}`, c })),
+  ];
+  const idsDeLaLista = new Set(todas.map((f) => f.id));
+  const delCaso = (f: Fila): CasoDeUsoElegido | null => (f.tipo === "elegido" ? f.caso : f.tipo === "agente" ? (f.item.valor as CasoDeUsoElegido) : null);
+  const plan = planDeLosCasos(
+    todas,
+    (f) => {
+      const c = delCaso(f);
+      return {
+        id: f.id,
+        capa: capaDelCaso(f.id, c?.capa),
+        areaId: f.tipo === "escala" ? f.c.area.id : (c?.areaId ?? null),
+        conexiones: conexionesEnLaLista(f.id, c?.conexiones, idsDeLaLista),
+      };
+    },
+    { casa, ordenDelAgente: orden?.casos.map((c) => c.id) },
   );
+  const filas = plan.filas;
+  const numeroDe = new Map(filas.map((f, i) => [f.id, i + 1]));
+  const tituloDe = (f: Fila) =>
+    f.tipo === "escala" ? lugarDe.get(f.id)?.titulo || f.c.caso.titulo : f.tipo === "elegido" ? f.caso.titulo : (f.item.valor as CasoDeUsoElegido).titulo;
+  const porId = new Map(filas.map((f) => [f.id, f]));
+  const lugaresEnElPlan = new Map<string, LugarEnElPlanDeLaFila>(
+    filas.map((f) => {
+      const conexiones = conexionesEnLaLista(f.id, delCaso(f)?.conexiones, idsDeLaLista).flatMap((x) => {
+        const otra = porId.get(x.con);
+        return otra ? [{ tipo: x.tipo, numero: numeroDe.get(x.con) ?? 0, titulo: tituloDe(otra), ...(x.porQue ? { porQue: x.porQue } : {}) }] : [];
+      });
+      return [f.id, { capa: plan.lugar.get(f.id)?.capa ?? "proceso", conexiones }];
+    }),
+  );
+  const explicacion = explicacionDelOrden(exp.empresa.nombre, casa, hubspot, nombreDeNivel);
+
+  /* «Tu lectura del cliente» (2026-11-09, lib/casos-de-uso/lectura-del-consultor.ts): la misma nota que las
+     «Instrucciones adicionales» de este paso. Se guarda al salir de la caja y, si quedó sin guardar, antes de generar. */
+  const lecturaGuardada = textoDeLaLectura(e.contenido.notas);
+  const [lecturaTexto, setLecturaTexto] = useState(lecturaGuardada);
+  const [lecturaBase, setLecturaBase] = useState(lecturaGuardada);
+  if (lecturaGuardada !== lecturaBase) {
+    setLecturaBase(lecturaGuardada);
+    // Lo que llega de afuera (otra pestaña) reemplaza lo escrito solo si no había cambios propios.
+    if (lecturaTexto.trim() === lecturaBase.trim()) setLecturaTexto(lecturaGuardada);
+  }
+  const guardarLectura = () => cambiar([{ op: "nota", paso: claveDeInstrucciones("casos"), texto: lecturaTexto.trim() }]);
+  const ejemplos = ejemplosParaLaLectura({
+    planes: Array.isArray(e.contenido.casillas.planes) ? e.contenido.casillas.planes : [],
+    porLaEscala: porLaEscala.map((c) => c.caso.titulo),
+    yaEscrito: lecturaTexto,
+  });
+  /** «Sugerir» o «Revisar»: antes, la lectura sin guardar se guarda (el agente la lee de la base). */
+  const generar = async (o?: { revisar: true }) => {
+    if (puedeEditar && lecturaTexto.trim() !== lecturaGuardada && !(await guardarLectura())) return;
+    void lanzar("casos", o);
+  };
   const sinPoder = lanzando || corriendo || areas.length === 0 || !conBase;
 
   return (
     <PersonalizarContexto.Provider value={contexto}>
+      <PlanContexto.Provider value={lugaresEnElPlan}>
       <div className="space-y-6">
+        {conBase && areas.length > 0 && (
+          <LecturaDelConsultor
+            texto={lecturaTexto}
+            guardado={lecturaGuardada}
+            onCambiar={setLecturaTexto}
+            onGuardar={guardarLectura}
+            ejemplos={ejemplos}
+            lectura={e.propuesta.lecturaDelConsultor ?? null}
+            nombreDeArea={(id) => (id ? (escala.areas.find((a) => a.id === id)?.nombre ?? "Otra área") : "Sin área en juego")}
+            soloLectura={!puedeEditar}
+            tope={MAX_NOTA_DE_SESION}
+          />
+        )}
         <div data-recorrido="preventa.casos.agente">
           <FranjaDeSugerencias
             acciones={
@@ -1332,7 +1462,7 @@ function CasosDeUso({ catalogo, novedades }: { catalogo: Caso[]; novedades: Nove
                   <BotonBlanco
                     disabled={sinPoder}
                     title={yaPropuso ? "Vuelve a mirar los casos con lo que se sabe hoy, ordena la lista y te dice qué cambió. No toca lo elegido." : undefined}
-                    onClick={() => (yaPropuso ? revisar() : void lanzar("casos"))}
+                    onClick={() => (yaPropuso ? revisar() : void generar())}
                   >
                     {lanzando ? "Pidiendo…" : yaPropuso ? "Revisar" : "Sugerir casos de uso"}
                   </BotonBlanco>
@@ -1410,9 +1540,10 @@ function CasosDeUso({ catalogo, novedades }: { catalogo: Caso[]; novedades: Nove
                 {elegidos.length > 0 && <span className="font-normal normal-case tracking-normal"> · {elegidos.length} elegidos</span>}
               </h2>
               <p className="text-[11px] text-fg-muted">
-                {orden ? "En el orden que sugiere el agente con lo que se sabe de la empresa" : "«Revisar» los ordena con todo lo que se sabe de la empresa"}
+                {orden ? "Dentro de cada capa, en el orden que sugiere el agente" : "«Revisar» los ordena con todo lo que se sabe de la empresa"}
               </p>
             </div>
+            {explicacion && <p className="text-xs leading-normal text-fg-secondary">{explicacion}</p>}
             <ol className="space-y-3">
               {filas.map((f, i) =>
                 f.tipo === "elegido" ? (
@@ -1484,6 +1615,7 @@ function CasosDeUso({ catalogo, novedades }: { catalogo: Caso[]; novedades: Nove
           </details>
         )}
       </div>
+      </PlanContexto.Provider>
     </PersonalizarContexto.Provider>
   );
 }

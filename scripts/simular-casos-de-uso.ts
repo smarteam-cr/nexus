@@ -18,6 +18,11 @@
  *   --desde-cero   sugiere como si no hubiera nada elegido ni sugerido (para comparar los títulos de los mismos casos).
  *   --orden        además, el orden de la lista entera que propondría el agente, con el título claro de los de la escala.
  *   --mejorar "…"  además, «Mejorar con IA» con esa instrucción sobre el primer caso elegido.
+ *
+ * 2026-11-09 (Marco; lib/casos-de-uso/capas.ts y lectura-del-consultor.ts):
+ *   --lectura "…"  la lectura del consultor, solo en memoria: la leen los agentes y se mide la llamada que la ordena por
+ *                  departamento y busca en las transcripciones lo que se le pasó.
+ *   Con --llamar, al final la lista en su orden (la casa, la capa de cada caso y sus conexiones), como la vería el vendedor.
  */
 import "dotenv/config";
 import "./lib/permitir-server-only";
@@ -99,8 +104,22 @@ async function main() {
   /* 2026-11-08 (lib/casos-de-uso/personalizar.ts): el paso va en tres tiempos, y cada uno se mide por su lado.
      Sugerir (o «Revisar», con --revisar) es UNA llamada por vuelta; personalizar es UNA llamada por caso aceptado. */
   const revisar = process.argv.includes("--revisar");
-  const ctx0 = contextoDeLosCasos({ fila, estado, escala, general: vig.general }, { revisar });
-  const ctx = process.argv.includes("--desde-cero") ? { ...ctx0, yaEstan: [], ultimoPaso: 0, descartados: [] } : ctx0;
+  /* --lectura "texto" (2026-11-09, lib/casos-de-uso/lectura-del-consultor.ts): como si el consultor la hubiera escrito
+     (solo en memoria): la leen los agentes y, con --llamar, se mide la llamada que la ordena y busca lo que se le pasó. */
+  // En Windows, npx corta un argumento en el primer salto de línea: los renglones van separados por «\n» escrito.
+  const lecturaDada = arg("--lectura")?.replace(/\\n/g, "\n");
+  if (lecturaDada !== undefined) {
+    const { claveDeInstrucciones } = await import("@/lib/exploraciones/notas-de-sesion");
+    estado.contenido.notas = { ...estado.contenido.notas, [claveDeInstrucciones("casos")]: lecturaDada };
+  }
+  // --desde-cero (2026-11-09): como una preventa sin casos, también para el orden y la lista final (solo en memoria).
+  if (process.argv.includes("--desde-cero")) {
+    estado.contenido.casosDeUso = {};
+    estado.contenido.casosDescartados = [];
+    estado.propuesta.items = estado.propuesta.items.filter((it) => it.destino.tipo !== "casoDeUso");
+    estado.propuesta.ordenDeLosCasos = null;
+  }
+  const ctx = contextoDeLosCasos({ fila, estado, escala, general: vig.general }, { revisar });
   const pedido = pedidoDeCasos(ctx);
   console.log(`\nEl pedido de «${revisar ? "Revisar" : "Sugerir"}»: ~${Math.round(JSON.stringify(pedido).length / 4 / 1000)} mil tokens de entrada (estimado), ${ctx.revisar?.length ?? 0} casos para revisar.`);
   if (!process.argv.includes("--llamar")) {
@@ -108,9 +127,47 @@ async function main() {
     return;
   }
   const costoDe = (u: { input_tokens: number; output_tokens: number }) => (u.input_tokens * PRECIO_POR_MTOK.entrada + u.output_tokens * PRECIO_POR_MTOK.salida) / 1e6;
+  // La lectura del consultor va en paralelo con la sugerencia, como en agente.ts › proponerCasos.
+  const { textoDeLaLectura } = await import("@/lib/exploraciones/notas-de-sesion");
+  const textoLectura = textoDeLaLectura(estado.contenido.notas);
+  const medirLaLectura = async () => {
+    if (!textoLectura) return null;
+    const { transcripcionesDeLaExploracion } = await import("@/lib/exploraciones/fuentes");
+    const { leerLoLeido } = await import("@/lib/exploraciones/lo-leido");
+    const { pedidoDeLaLectura, leerLaLectura, SESIONES_DE_LA_LECTURA, CARACTERES_DE_LA_LECTURA } = await import("@/lib/exploraciones/lectura-del-consultor-pedido");
+    const c = estado.contenido;
+    const { fuentes } = await transcripcionesDeLaExploracion(
+      {
+        exploracionId: fila.id,
+        clientId: fila.clientId,
+        projectId: fila.projectId,
+        creadaEn: fila.createdAt,
+        propuesta: estado.propuesta,
+        leido: leerLoLeido(fila.test),
+        sesiones: c.sesiones,
+        fuera: c.fuera,
+        elegidas: c.reunionesElegidas,
+      },
+      { cuantas: SESIONES_DE_LA_LECTURA, caracteres: CARACTERES_DE_LA_LECTURA },
+    );
+    const cl = { empresa: fila.client.name, texto: textoLectura, areas: escala.areas.filter((a) => estado.areas.includes(a.id)).map((a) => ({ id: a.id, nombre: a.nombre })), fuentes };
+    const t = Date.now();
+    const rl = await getAnthropic().messages.create(pedidoDeLaLectura(cl));
+    const crudoDeLaLectura = arg("--crudo");
+    if (crudoDeLaLectura) (await import("node:fs")).writeFileSync(`${crudoDeLaLectura}.lectura.json`, JSON.stringify(rl.content, null, 2));
+    return { lectura: leerLaLectura(rl, cl, "simulacro"), uso: rl.usage, seg: Math.round((Date.now() - t) / 1000), stop: rl.stop_reason, reuniones: fuentes.map((f) => f.etiqueta) };
+  };
   const t0 = Date.now();
-  const respuesta = await getAnthropic().messages.create(pedido);
+  const [respuesta, medida] = await Promise.all([getAnthropic().messages.create(pedido), medirLaLectura()]);
   const segSugerir = Math.round((Date.now() - t0) / 1000);
+  if (medida) {
+    const nombreDe = (id: string | null) => (id ? (escala.areas.find((a) => a.id === id)?.nombre ?? id) : "Sin área");
+    console.log(`\n=== LA LECTURA DEL CONSULTOR (no se guardó) · ${medida.reuniones.length} reuniones leídas ===`);
+    for (const r of medida.reuniones) console.log(`  · ${r}`);
+    for (const a of medida.lectura?.porArea ?? []) console.log(`  ${nombreDe(a.areaId)}: ${a.casos.join(" · ")}`);
+    for (const s of medida.lectura?.seLePaso ?? []) console.log(`  ! Se te pasó: ${s.que} (${nombreDe(s.areaId)})\n      «${s.cita}» — ${s.reunion}`);
+    console.log(`  Costo de la lectura: ${medida.uso.input_tokens} + ${medida.uso.output_tokens} tokens = US$ ${costoDe(medida.uso).toFixed(3)} · ${medida.seg} s · stop: ${medida.stop}`);
+  }
   const r = leerLosCasos(respuesta, ctx, "simulacro");
   const cambios = leerLaRevision(respuesta, ctx);
   // --crudo <archivo>: lo que devolvió el modelo tal cual, para comparar lo que dice con lo que manda.
@@ -127,6 +184,8 @@ async function main() {
   console.log(`\nCosto de ${revisar ? "revisar" : "sugerir"}: ${uS.input_tokens} + ${uS.output_tokens} tokens = US$ ${costoDe(uS).toFixed(3)} · ${segSugerir} s · ${r.descartadas} descartadas · stop: ${respuesta.stop_reason}`);
 
   /* --orden: el orden de la lista entera (décima vuelta), con los sugeridos de esta vuelta como «nuevos». */
+  let ordenDelAgente: string[] | null = null;
+  let titulosClaros = new Map<string, string>();
   if (process.argv.includes("--orden")) {
     const { contextoDelOrden } = await import("@/lib/exploraciones/orden-de-los-casos");
     const { leerElOrden, pedidoDelOrden } = await import("@/lib/exploraciones/orden-pedido");
@@ -144,6 +203,36 @@ async function main() {
       if (c.porQue) console.log(`      > ${c.porQue}`);
     }
     console.log(`  Costo del orden: ${ro.usage.input_tokens} + ${ro.usage.output_tokens} tokens = US$ ${costoDe(ro.usage).toFixed(3)} · ${seg} s · stop: ${ro.stop_reason}`);
+    ordenDelAgente = orden?.casos.map((c) => c.id) ?? null;
+    titulosClaros = new Map((orden?.casos ?? []).flatMap((c) => (c.titulo ? [[c.id, c.titulo] as const] : [])));
+  }
+
+  /* 2026-11-09 (lib/casos-de-uso/capas.ts): la lista como la vería el vendedor, con la casa, las capas y las conexiones. */
+  {
+    const { casaConLoPendiente, candidatosAlOrden } = await import("@/lib/exploraciones/casos-de-uso");
+    const { pendientesVigentes } = await import("@/lib/exploraciones/agente");
+    const { planDeLosCasos, explicacionDelOrden, NOMBRE_DE_LA_CAPA, VERBO_DE_LA_CONEXION } = await import("@/lib/casos-de-uso/capas");
+    const pend = pendientesVigentes(estado, vig.general, escala);
+    const { hubspot, casa } = casaConLoPendiente(estado, escala, pend);
+    const nombreDeNivel = (l: string) => escala.niveles.find((x) => x.letra === l)?.nombre ?? l;
+    const lista = candidatosAlOrden(estado, escala, pend, r.items);
+    const plan = planDeLosCasos(lista, (c) => ({ id: c.id, capa: c.capa ?? "proceso", areaId: escala.areas.find((a) => a.nombre === c.area)?.id ?? null, conexiones: c.conexiones ?? [] }), {
+      casa,
+      ordenDelAgente: ordenDelAgente ?? r.items.map((it) => (it.destino as { useCaseId: string }).useCaseId),
+    });
+    const numero = new Map(plan.filas.map((c, i) => [c.id, i + 1]));
+    const titulo = (c: (typeof lista)[number]) => titulosClaros.get(c.id) ?? c.titulo;
+    console.log(`\n=== LA LISTA EN SU ORDEN (lo que vería el vendedor) · ${hubspot.porQue} ===`);
+    console.log(`  ${explicacionDelOrden(fila.client.name, casa, hubspot, nombreDeNivel as never)}`);
+    for (const [i, c] of plan.filas.entries()) {
+      console.log(`  ${i + 1}. [${NOMBRE_DE_LA_CAPA[c.capa ?? "proceso"]} · ${c.origen} · ${c.area ?? "sin área"}] ${titulo(c)}`);
+      const propias = r.items.find((it) => (it.destino as { useCaseId: string }).useCaseId === c.id)?.valor as Caso | undefined;
+      for (const x of c.conexiones ?? []) {
+        const otro = lista.find((o) => o.id === x.con);
+        const porQue = propias?.conexiones?.find((p) => p.con === x.con)?.porQue;
+        console.log(`      ↳ ${VERBO_DE_LA_CONEXION[x.tipo]} n.º ${numero.get(x.con)} «${otro ? titulo(otro) : x.con}»${porQue ? `: ${porQue}` : ""}`);
+      }
+    }
   }
 
   /* --mejorar "instrucción": «Mejorar con IA» sobre el primer caso elegido (décima vuelta). */

@@ -42,6 +42,8 @@ import type { ClaveDeEquipo } from "./equipos";
 import type { ActividadDelCaso, CasosAnteriores, LugarEnElPlan, ParaVentas, ValorDeVenta } from "@/lib/casos-de-uso/armado";
 import { vuelveASugeridos, type Personalizacion, type RevisionDeLosCasos } from "@/lib/casos-de-uso/personalizar";
 import type { OrdenDeLosCasos } from "@/lib/casos-de-uso/orden";
+import type { CapaDelCaso, ConexionDelCaso } from "@/lib/casos-de-uso/capas";
+import type { LecturaDelConsultor } from "@/lib/casos-de-uso/lectura-del-consultor";
 import {
   definicionDe,
   esDeLista,
@@ -168,6 +170,13 @@ export interface CasoDeUsoElegido {
    * cuándo y qué cambió frente a la ficha del catálogo. Interno: nunca llega a la propuesta del cliente.
    */
   personalizado?: Personalizacion;
+  /**
+   * 2026-11-09 (Marco; lib/casos-de-uso/capas.ts): su capa en el plan, la que dijo el agente en un caso propio (uno del
+   * catálogo usa la de su ficha): «casa» (la base), «proceso» (lo que se monta encima), «ia» o «sostener».
+   */
+  capa?: CapaDelCaso;
+  /** 2026-11-09: los casos de esta preventa en los que se apoya o a los que alimenta (los propone el agente). Va después de ellos. */
+  conexiones?: ConexionDelCaso[];
 }
 
 /** El id de un caso de uso que propuso el agente sin el catálogo: sale del título. */
@@ -554,6 +563,11 @@ export interface PropuestaDeExploracion {
    * claro de los de la biblioteca.
    */
   ordenDeLosCasos?: OrdenDeLosCasos | null;
+  /**
+   * 2026-11-09 (Marco; lib/casos-de-uso/lectura-del-consultor.ts): la última lectura del consultor que miró el agente al
+   * generar: lo que dijo, por departamento, y lo que se le pasó con su cita de la reunión. Interno, para el vendedor.
+   */
+  lecturaDelConsultor?: LecturaDelConsultor | null;
 }
 
 /** El correo de seguimiento de una reunión: qué entendimos, lo acordado, lo que quedó abierto y la próxima reunión. */

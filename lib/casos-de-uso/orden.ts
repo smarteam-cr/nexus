@@ -12,28 +12,59 @@
  *
  * El orden se guarda por id del caso (`cat-…` o el id de un caso propio): aceptar un sugerido no le cambia el lugar. Lo
  * que no está en el orden (llegó después de la última vuelta del agente) va al final, en el orden de antes.
+ *
+ * 2026-11-09 (Marco): el orden del agente es el desempate; manda la casa y las conexiones (capas.ts › planDeLosCasos).
  */
+import type { CapaDelCaso, TipoDeConexion } from "./capas";
 
-/** Las reglas del título de un caso, con ejemplos buenos y malos. Las lee el agente tal cual. */
-export const REGLAS_DEL_TITULO = `El TÍTULO lo lee un comprador con muchas reuniones y muchos temas en la cabeza: tiene que entenderse a la primera, leído solo, sin contexto.
-- Dice en palabras simples QUÉ cambia en el trabajo de su equipo: lo concreto que van a tener, nombrando la herramienta o el canal si eso lo hace concreto (HubSpot, WhatsApp, el correo).
-- De 4 a 10 palabras (70 caracteres como mucho). Una sola idea: sin comas y sin una «y» que junte dos frases; si necesitas juntar dos cosas, elige la que importa.
-- Sin metáforas, sin juegos de palabras, sin promesas vagas («transforma», «potencia», «lleva al siguiente nivel», «que no se olvida»). Tampoco el nombre técnico del trabajo de Smarteam («Configuración de secuencias»).
-- Puede tener vida, pero gana lo claro: entre un título ingenioso y uno que se entiende, el que se entiende.
+/**
+ * Las reglas del título de un caso, con ejemplos buenos y malos. Las lee el agente tal cual.
+ *
+ * 2026-11-09 (Marco, con Centauro): el título es el NOMBRE de lo que el cliente compra, armado con su negocio. «Vende con
+ * el mismo guion y un seguimiento que no se olvida» y también «Seguimiento a prospectos con la misma cadencia para todos»
+ * (el arreglo del 8 nov) describían un efecto: el cliente no sabía qué se llevaba. Ahora: un verbo en infinitivo con lo
+ * que se le entrega y su negocio («Estandarizar el proceso comercial de tus servicios SaaS»). Siguen valiendo la sola
+ * idea, sin metáforas, y el largo (con dos palabras más para el negocio).
+ */
+export const REGLAS_DEL_TITULO = `El TÍTULO es el NOMBRE de lo que el cliente compra. Lo lee un comprador con muchas reuniones y muchos temas en la cabeza: tiene que saber a la primera, leído solo y sin contexto, qué se lleva.
+- Empieza con un verbo en infinitivo que dice lo que se le entrega (Estandarizar, Estructurar, Registrar, Integrar, Automatizar, Medir…) y sigue con lo concreto: el proceso, el canal o los datos («el proceso comercial», «el centro de ayuda», «las conversaciones de WhatsApp»).
+- Se arma con SU negocio: lo que vende (su producto o su servicio: «de tus servicios SaaS», «de tus seguros», «de tus hospedajes») o a qué equipo va («de tu equipo de soporte»), cuando eso lo hace más concreto. Lo que vende, no cómo se organiza: «de tus servicios SaaS», no «de tus tres marcas». Nombra la herramienta o el canal si ayuda (HubSpot, WhatsApp).
+- El verbo es lo que el cliente consigue, no la tarea técnica de Smarteam: «Estandarizar el proceso comercial», no «Configurar el pipeline» ni «Configuración de secuencias».
+- De 4 a 12 palabras (90 caracteres como mucho). Una sola idea: sin comas y sin una «y» que junte dos frases; si necesitas juntar dos cosas, elige la que importa.
+- Sin metáforas, sin juegos de palabras, sin promesas vagas («transforma», «potencia», «lleva al siguiente nivel», «que no se olvida»).
 Buenos:
-- «Seguimiento a prospectos con la misma cadencia para todos»
-- «Las conversaciones de WhatsApp quedan registradas en HubSpot»
-- «Saber por qué se ganan y se pierden los negocios»
+- «Estandarizar el proceso comercial de tus servicios SaaS»
+- «Estructurar el centro de ayuda de tu equipo de soporte»
+- «Registrar las conversaciones de WhatsApp en HubSpot»
+- «Medir cuánto cuesta cada venta por canal»
 Malos (y cómo quedarían):
-- «Vende con el mismo guion y un seguimiento que no se olvida» → metáfora y dos ideas: «Seguimiento a prospectos con la misma cadencia para todos».
-- «Integra WhatsApp y unifica tus conversaciones en HubSpot» → dos verbos para lo mismo: «Las conversaciones de WhatsApp quedan registradas en HubSpot».
-- «Reactiva el HubSpot que ya pagas» → no dice qué cambia: «El equipo vuelve a trabajar en el HubSpot que ya paga».
-- «Cada asesor vende en el CRM y ves en qué va cada negocio» → dos ideas unidas con «y»: «Tu equipo comercial vende con un mismo proceso en HubSpot».`;
+- «Vende con el mismo guion y un seguimiento que no se olvida» → no dice qué compra, metáfora y dos ideas: «Estandarizar el proceso comercial de tus servicios SaaS».
+- «Seguimiento a prospectos con la misma cadencia para todos» → describe un efecto, no lo que compra: «Automatizar la cadencia de seguimiento a tus prospectos».
+- «Integra WhatsApp y unifica tus conversaciones en HubSpot» → dos verbos para lo mismo: «Registrar las conversaciones de WhatsApp en HubSpot».
+- «Configuración de secuencias en HubSpot» → el nombre técnico del trabajo: «Automatizar la cadencia de seguimiento a tus prospectos».
+- «Cada asesor vende en el CRM y ves en qué va cada negocio» → dos ideas unidas con «y», y no dice qué compra: «Estandarizar el proceso comercial en HubSpot».`;
+
+/**
+ * Las reglas del NOMBRE de cada actividad de un caso (Marco, 2026-11-09): tan concretas como el título. Para
+ * «Estandarizar el proceso comercial de tus servicios SaaS» son la importación de cuentas, la asignación de ejecutivos,
+ * el proceso de negocio y la cotización, no «Configurar en HubSpot» o «Consensuar una configuración». Las lee el agente
+ * que sugiere (al regenerar), el que personaliza al aceptar y el de «Mejorar con IA».
+ */
+export const REGLAS_DE_LAS_ACTIVIDADES = `El NOMBRE de cada actividad dice el trabajo concreto con lo de ESTA empresa: qué datos, qué proceso, qué regla o qué canal. Nunca el nombre general de la biblioteca solo («Configurar en HubSpot», «Consensuar una configuración», «Importar datos»): ese va en «actividadId».
+- Empieza con el verbo de la actividad y nombra el objeto de esta empresa: sus cuentas, sus marcas, su cotización, su canal.
+- Es la MISMA actividad de la biblioteca, con el mismo tiempo: el nombre no la agranda.
+- En la base de un área (la implementación del proceso) de una empresa que todavía no trabaja en HubSpot, trae lo que ya tiene: sus cuentas o su cartera con el dueño de cada una (Importar datos), salvo que la venta ya lleve la migración desde otro CRM.
+Por ejemplo, en una empresa que vende un software por suscripción a hoteles, con tres marcas, el caso «Estandarizar el proceso comercial de tus servicios SaaS» lleva:
+- «Importar las cuentas de hospedajes con su ejecutivo» (Importar datos)
+- «Configurar la asignación de ejecutivos por marca» (Configurar en HubSpot)
+- «Implementar el proceso de negocio de cada marca» (Implementar el proceso en HubSpot)
+- «Configurar la cotización por módulos» (Configurar en HubSpot)
+Malos: «Configurar en HubSpot», «Consensuar una configuración (guion de ventas)», «Importar datos».`;
 
 /** El largo máximo de un título claro (el de las reglas, con aire para los acentos y las comillas). */
 export const MAX_LARGO_DEL_TITULO = 90;
 
-/** Lo mínimo para que un título se sostenga solo (las reglas piden de 4 a 10 palabras). */
+/** Lo mínimo para que un título se sostenga solo (las reglas piden de 4 a 12 palabras). */
 const MIN_PALABRAS_DE_UNA_IDEA = 4;
 
 const palabrasDe = (t: string): string[] => t.split(/\s+/).filter(Boolean);
@@ -120,6 +151,9 @@ export interface CandidatoAlOrden {
   area: string | null;
   /** Qué resuelve, en una frase: el porqué del agente o la razón de la escala. */
   queResuelve: string;
+  /** 2026-11-09 (capas.ts): su capa en el plan y los ids de la lista en los que se apoya o a los que alimenta. */
+  capa?: CapaDelCaso;
+  conexiones?: { con: string; tipo: TipoDeConexion }[];
 }
 
 /** El lugar de un caso en la lista. */
@@ -149,9 +183,10 @@ const NOMBRES_PERMITIDOS = new Set(["hubspot", "whatsapp", "crm", "erp", "ia"]);
  * palabra con mayúscula (salvo la primera) tiene que estar en el caso o ser una herramienta: así no se cuela el nombre
  * de una persona, de un competidor o de algo que solo se dijo puertas adentro.
  */
-export function tituloSoloDelCaso(titulo: string, c: Pick<CandidatoAlOrden, "titulo" | "queResuelve" | "area">): boolean {
+export function tituloSoloDelCaso(titulo: string, c: Pick<CandidatoAlOrden, "titulo" | "queResuelve" | "area">, negocio = ""): boolean {
   if (/\d/.test(titulo)) return false;
-  const delCaso = new Set(`${c.titulo} ${c.queResuelve} ${c.area ?? ""}`.toLowerCase().split(/[^\p{L}]+/u).filter(Boolean));
+  // 2026-11-09 (Marco): el título se arma con el negocio del cliente («… de tus servicios SaaS»): sus palabras también valen.
+  const delCaso = new Set(`${c.titulo} ${c.queResuelve} ${c.area ?? ""} ${negocio}`.toLowerCase().split(/[^\p{L}]+/u).filter(Boolean));
   const palabras = titulo.split(/[^\p{L}]+/u).filter(Boolean);
   return palabras.slice(1).every((p) => p[0] === p[0].toLowerCase() || NOMBRES_PERMITIDOS.has(p.toLowerCase()) || delCaso.has(p.toLowerCase()));
 }
@@ -160,7 +195,13 @@ export function tituloSoloDelCaso(titulo: string, c: Pick<CandidatoAlOrden, "tit
  * Lo que devolvió el agente, validado: solo ids de la lista, sin repetir, con su porqué; el título solo en los de la
  * escala. Los que no ordenó van al final, en el orden en que llegaron (nadie se pierde). null si no ordenó ninguno.
  */
-export function validarOrdenDelAgente(raw: unknown, candidatos: readonly CandidatoAlOrden[], corridaId: string, ahora = new Date()): OrdenDeLosCasos | null {
+export function validarOrdenDelAgente(
+  raw: unknown,
+  candidatos: readonly CandidatoAlOrden[],
+  corridaId: string,
+  ahora = new Date(),
+  o: { negocio?: string } = {},
+): OrdenDeLosCasos | null {
   const porId = new Map(candidatos.map((c) => [c.id, c]));
   const vistos = new Set<string>();
   const casos: CasoEnElOrden[] = [];
@@ -173,7 +214,7 @@ export function validarOrdenDelAgente(raw: unknown, candidatos: readonly Candida
     vistos.add(id);
     const titulo = c.origen === "escala" ? recortar(r.titulo, MAX_LARGO_DEL_TITULO) : "";
     // Uno que junta dos ideas no vale: queda el del catálogo, que cumple las reglas (catalogo.test.ts).
-    const valeElTitulo = !!titulo && titulo !== c.titulo && tituloSoloDelCaso(titulo, c) && !juntaDosIdeas(titulo);
+    const valeElTitulo = !!titulo && titulo !== c.titulo && tituloSoloDelCaso(titulo, c, o.negocio) && !juntaDosIdeas(titulo);
     casos.push({ id, porQue: recortar(r.porQue, MAX_LARGO_DEL_PORQUE_DEL_ORDEN), ...(valeElTitulo ? { titulo } : {}) });
   }
   if (!casos.length) return null;

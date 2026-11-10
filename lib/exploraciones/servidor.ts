@@ -322,7 +322,7 @@ export async function paraLaPropuesta(
   const datos = await exploracionParaLaPropuesta(exploracionId);
   if (!datos) return null;
   return {
-    casos: casosElegidosParaLaPropuesta(datos.estado.contenido),
+    casos: casosElegidosParaLaPropuesta(datos.estado.contenido, datos),
     areas: [...datos.estado.areas],
     bloque: bloqueParaLaPropuesta({ ...datos, conEscala }),
     posicion: (lang) => posicionDesdeElChequeo(datos.chequeo, datos.escala, lang),

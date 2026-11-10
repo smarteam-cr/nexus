@@ -242,9 +242,16 @@ export const PREVENTA: Recorrido = {
     },
     // Casos de uso
     {
+      ancla: "preventa.casos.lectura",
+      titulo: "Tu lectura del cliente",
+      texto: "Antes de generar, di qué casos crees que necesita (puedes dictarlo o tocar un ejemplo). Nexus parte de ahí, lo ordena por departamento y te avisa si se te pasó algo de las reuniones, con la cita.",
+      lado: "bottom-start",
+      accion: pieza("casos"),
+    },
+    {
       ancla: "preventa.casos.agente",
       titulo: "Casos de uso",
-      texto: "El agente propone casos según dónde está cada equipo y los ordena en una sola lista. «Aceptar» los pasa a elegidos, y los elegidos entran a la propuesta.",
+      texto: "El agente propone casos y la lista va en orden: primero la base de cada área, después lo que va encima y al final la IA. «Aceptar» los pasa a elegidos, que entran a la propuesta.",
       lado: "bottom-start",
       accion: pieza("casos"),
     },

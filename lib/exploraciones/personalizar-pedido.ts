@@ -25,6 +25,7 @@ import {
   type ValorDeVenta,
 } from "@/lib/casos-de-uso/armado";
 import { laPersonalizacionSeUsaSola, validarCambiosDelAgente, validarRevisionDelAgente, type CambioDeLaRevision, type Personalizacion } from "@/lib/casos-de-uso/personalizar";
+import { REGLAS_DE_LAS_ACTIVIDADES } from "@/lib/casos-de-uso/orden";
 import {
   actividadesParaElAgente,
   armarConLaBiblioteca,
@@ -112,6 +113,9 @@ Reglas:
 - Solo actividades de la BIBLIOTECA (abajo), por su id: son el plan que ejecuta Customer Success y de ahí sale el precio. No inventes actividades: si el caso necesita algo que ninguna cubre, dilo en «sinActividad».
 - ${ctx.ficha ? "Parte de las actividades de la FICHA DEL CATÁLOGO" : "Es un caso propio, sin ficha: ármalo solo con actividades de la biblioteca"}${ctx.actuales ? " (o de las que tiene HOY, si están abajo)" : ""} y ajústalas con lo que sabes de esta empresa: quita lo que no aplica, suma lo que pide, cambia las veces. Cada cambio se apoya en un HECHO de la empresa (algo que contó en una reunión, cómo trabaja hoy, su meta). Sin un hecho, deja la actividad como está: no cambies por cambiar.
 - El nombre de cada actividad dice la acción concreta en este caso, SIN cambiarle lo que es: es la misma actividad de la biblioteca, con el mismo tiempo. Si el trabajo es más grande que esa actividad (una integración con un ERP no es «Configurar en HubSpot»), no la uses: dilo en «sinActividad».
+
+${REGLAS_DE_LAS_ACTIVIDADES}
+
 - «cambios» es lo primero que lee el vendedor: de una a tres líneas de 15 palabras como mucho, cada una con lo que cambió y el hecho que lo explica («Sin importar datos: ya trabajan en HubSpot.»). Solo lo que de verdad hiciste en «actividades».
 - En los textos, las actividades van por su NOMBRE («Limpiar los datos»), nunca por su id («limpiar-los-datos»): el id va solo en «actividadId».
 - Para subir el ticket: los números del cliente copiados tal cual de abajo, con su fuente. Si no hay números para la cuenta, NO inventes ni estimes una cifra: en «falta» van las preguntas para conseguirlos.
