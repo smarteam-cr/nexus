@@ -99,6 +99,7 @@ import { canvasOf, canvasOfNested } from "@/lib/pieces/canvas-query";
 import { instruccionesDelDocumento } from "@/lib/contexto/material-del-documento";
 import { pieceByAgentGroup } from "@/lib/pieces/registry";
 import { piezaAplica, pieceReadiness } from "@/lib/flow/piece-readiness";
+import { deSiempreArchivado } from "@/lib/artefactos/archivados-server";
 
 // ── Reparación de JSON truncado por límite de tokens ──────────────────────────
 // Cuenta brackets/braces abiertos y cierra los que faltan.
@@ -3211,7 +3212,9 @@ async function persistTimelineFromAgentOutput(
           piezaAplica("tech-requirements", {
             tags: proj?.tags ?? [],
             hubspotPipelineId: proj?.hubspotPipelineId ?? null,
-          })
+          }) &&
+          // Archivado por el equipo (12 nov): el encadenado no crea ni genera otro.
+          !(await deSiempreArchivado(bodyProjectId, "tech-requirements").catch(() => false))
         ) {
           const pid = bodyProjectId;
           // Crear el canvas SINCRÓNICAMENTE (rápido: find-or-create + reconcile) antes de que

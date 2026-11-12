@@ -3,7 +3,8 @@
  */
 import { esquemaDesactualizado } from "@/lib/db/esquema";
 import { pieceByName } from "@/lib/pieces/registry";
-import { admiteCopias } from "@/lib/artefactos/tipos";
+import { admiteCopias, tipoDeArtefacto } from "@/lib/artefactos/tipos";
+import { ARCHIVADO_EL_DE_SIEMPRE } from "@/lib/artefactos/copias";
 import { cumple, viola, type Invariante } from "./contrato";
 
 /**
@@ -11,7 +12,8 @@ import { cumple, viola, type Invariante } from "./contrato";
  * de cada tipo conserva su `slug` y lo buscan 105 lugares. Cuatro cosas que, rotas, hacen que una copia se lea como si fuera
  * el documento de siempre (y los botones de la pieza escriban sobre el que no es) o que quede colgando de nada:
  *   1. tiene `slug` (la base lo impide con el CHECK ProjectCanvas_copia_sin_slug, que es NOT VALID: esto mira lo de antes);
- *   2. su tipo no existe o no admite copias (lib/artefactos/tipos.ts);
+ *   2. su tipo no existe o no admite copias (lib/artefactos/tipos.ts), salvo el documento de siempre archivado de un tipo
+ *      sin copias (el cronograma, 12 nov): archivar le suelta el lugar y lo deja como copia apagada, y así no vuelve;
  *   3. no es de un proyecto (las copias de la empresa todavía no existen);
  *   4. se llama como una pieza («Kickoff», «Planificación»…): la lectura doble por nombre de lib/pieces/canvas-query.ts
  *      la confundiría con el documento de siempre (lib/artefactos/copias.ts › nombreGuardableDeUnaCopia lo evita al guardar).
@@ -20,11 +22,11 @@ export const INV65: Invariante = {
   id: "65",
   nombre: "cada copia de un artefacto es una copia sana",
   async correr(db) {
-    let filas: Array<{ id: string; slug: string | null; tipoArtefacto: string | null; projectId: string | null; name: string }>;
+    let filas: Array<{ id: string; slug: string | null; tipoArtefacto: string | null; projectId: string | null; name: string; disabledAt: Date | null; disabledReason: string | null }>;
     try {
       filas = await db.projectCanvas.findMany({
         where: { tipoArtefacto: { not: null } },
-        select: { id: true, slug: true, tipoArtefacto: true, projectId: true, name: true },
+        select: { id: true, slug: true, tipoArtefacto: true, projectId: true, name: true, disabledAt: true, disabledReason: true },
       });
     } catch (e) {
       if (esquemaDesactualizado(e)) return viola("✗ INV65 VIOLADO: falta aplicar scripts/sql/2026-10-29-artefactos-copias.sql (la columna tipoArtefacto).");
@@ -43,9 +45,17 @@ export const INV65: Invariante = {
 };
 
 /** Por qué una copia no es sana, o null. */
-export function motivoDeLaCopia(f: { slug: string | null; tipoArtefacto: string | null; projectId: string | null; name: string }): string | null {
+export function motivoDeLaCopia(f: {
+  slug: string | null;
+  tipoArtefacto: string | null;
+  projectId: string | null;
+  name: string;
+  disabledAt?: Date | null;
+  disabledReason?: string | null;
+}): string | null {
   if (f.slug) return "tiene slug";
-  if (!admiteCopias(f.tipoArtefacto)) return `el tipo «${f.tipoArtefacto}» no admite copias`;
+  const archivadoDeSiempre = !!f.disabledAt && f.disabledReason === ARCHIVADO_EL_DE_SIEMPRE && !!tipoDeArtefacto(f.tipoArtefacto);
+  if (!admiteCopias(f.tipoArtefacto) && !archivadoDeSiempre) return `el tipo «${f.tipoArtefacto}» no admite copias`;
   if (!f.projectId) return "no es de un proyecto";
   if (pieceByName(f.name.trim())) return `se llama como una pieza («${f.name}»)`;
   return null;

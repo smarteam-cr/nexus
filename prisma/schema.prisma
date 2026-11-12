@@ -620,6 +620,10 @@ model Project {
   // Las piezas que el equipo ocultó del riel de este proyecto (2026-10-12, pedido de Elías): sus slugs. No
   // borra nada ni apaga la pieza: quedan en «Ver N piezas más». Es del proyecto, no de una persona.
   piezasOcultas            String[]  @default([])
+  // El orden de la lista de artefactos del proyecto (2026-11-12, Elías: arrastrar en la lista): las claves de sus filas
+  // (`kickoff`, `copia:<id>`, `custom:<id>`…), cada grupo en su orden. Lo que no está va al final de su grupo, en el orden
+  // de siempre. Es del proyecto: lo ven todos igual (lib/flow/grupos-del-riel.ts › ordenarPorGrupo).
+  ordenDelRiel             String[]  @default([])
   // El HECHO de la asociación proyecto↔proyecto en HubSpot (typeId 1254), en ids de
   // HubSpot. Se guarda SIEMPRE, aunque el otro proyecto todavía no exista en Nexus:
   // así el orden de llegada deja de importar.

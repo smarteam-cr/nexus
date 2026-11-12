@@ -17,6 +17,7 @@
  * Shape LIMPIO: solo { key, blocks{blockType,content,data} } — sin source/status.
  */
 import { prisma } from "@/lib/db/prisma";
+import { selloDelDeSiempreVigente } from "@/lib/artefactos/archivados-server";
 import { resolveActiveAccess, touchAccess } from "./access";
 import { getBrandLogos } from "./smarteam-logo";
 import type { DesarrolloSectionRow } from "@/components/canvas/desarrollo-landing-adapter";
@@ -49,9 +50,12 @@ export async function getDesarrolloForToken(credencial: string, accesoId: string
     /* `sections` es el Json del canvas: de ahí sale qué secciones están OCULTAS. Se lee acá y no
        en el workspace porque éste es el chokepoint — el dev ve exactamente lo que este archivo
        devuelve, y una sección apagada que igual llegue no la filtra nadie después. */
-    select: { id: true, sections: true },
+    select: { id: true, sections: true, createdAt: true },
   });
   if (!canvas) return null;
+  /* Se lee en vivo: ¿el sello es de ESTE requerimiento? El de antes pudo archivarse (12 nov, archivar suelta el lugar)
+     dejando el sello del proyecto. Hasta que alguien lo comparta de nuevo, no se muestra. */
+  if (!(await selloDelDeSiempreVigente(projectId, "tech-requirements", access.project.desarrolloPublishedAt, canvas))) return null;
 
   /**
    * ⛔ EL OJO DEL EDITOR TIENE QUE APAGAR LA SECCIÓN ACÁ TAMBIÉN.

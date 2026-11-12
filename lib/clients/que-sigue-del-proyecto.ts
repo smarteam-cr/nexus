@@ -46,6 +46,11 @@ export interface PiezaParaQueSigue {
   novedades?: number;
   /** El tipo del documento (lib/artefactos/tipos.ts), el de siempre o una copia. Sin él, cuenta su slug. */
   tipo?: string;
+  /**
+   * El equipo archivó el documento de siempre de este tipo y nadie ocupó su lugar (12 nov,
+   * lib/artefactos/archivados-server.ts): no se vuelve a pedir, ni como pieza ni como artefacto nuevo.
+   */
+  archivada?: boolean;
 }
 
 export type AccionDeQueSigue =
@@ -127,9 +132,10 @@ function queSueleServir(
   piezas: readonly PiezaParaQueSigue[],
 ): QueSigueDelProyecto | null {
   const escrito = (tipo: string) => piezas.some((p) => (p.tipo ?? p.slug) === tipo && p.estado === "generada");
+  const archivado = (tipo: string) => piezas.some((p) => p.archivada && p.slug === tipo);
   const explorar = ciclo.etapa === "diagnostico" && ciclo.arranque?.lecturasDeExploracion === 0 && !escrito("diagnosis") && !escrito("exploration");
   const s: (typeof ARTEFACTO_DE_LA_ETAPA)[EtapaDelCiclo] = explorar ? { tipo: "exploration", texto: "una exploración" } : ARTEFACTO_DE_LA_ETAPA[ciclo.etapa];
-  if (escrito(s.tipo)) return null;
+  if (escrito(s.tipo) || archivado(s.tipo)) return null;
   const pieza = s.nuevo ? undefined : piezas.find((p) => p.slug === s.tipo);
   return {
     texto: `Estás en ${ciclo.corto}: ${s.texto} suele servir aquí.`,
@@ -161,6 +167,9 @@ export function queSigueDelProyecto(i: {
    */
   recurrencia?: { texto: string } | null;
 }): QueSigueDelProyecto {
+  // Lo archivado a propósito no se pide (12 nov); el recurrente lo mira con su marca, en `queSueleServir`.
+  const todas = i.piezas;
+  i = { ...i, piezas: i.piezas.filter((p) => !p.archivada) };
   if (i.sesionesSinRevisar > 0) {
     const n = i.sesionesSinRevisar;
     return {
@@ -177,7 +186,7 @@ export function queSigueDelProyecto(i: {
   }
 
   if (i.ciclo) {
-    const sugerencia = queSueleServir(i.ciclo, i.piezas);
+    const sugerencia = queSueleServir(i.ciclo, todas);
     if (sugerencia) return sugerencia;
   }
 

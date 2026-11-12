@@ -395,8 +395,13 @@ export async function loadCanvasContext(
     // Import dinámico: el módulo es solo del servidor y este archivo lo cargan también las pruebas.
     const { textoDeLaExploracionDelProyecto } = await import("@/lib/exploraciones/del-proyecto");
     const nueva = await textoDeLaExploracionDelProyecto(projectId).catch(() => "");
-    const viva = nueva || (await textoDeLaGuia(projectId));
-    if (viva) return viva;
+    if (nueva) return nueva;
+    /* La guía vieja era del documento de siempre: si el equipo lo archivó (12 nov), se fue con él. Sin esto, archivar la
+       única exploración haría que los agentes volvieran a leer la guía de antes. */
+    const { deSiempreArchivado } = await import("@/lib/artefactos/archivados-server");
+    if (await deSiempreArchivado(projectId, "exploration").catch(() => false)) return "";
+    const guia = await textoDeLaGuia(projectId);
+    if (guia) return guia;
   }
   const canvas = await prisma.projectCanvas.findFirst({
     where: { projectId, ...canvasOf(canvasSlug) },

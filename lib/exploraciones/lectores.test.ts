@@ -129,7 +129,12 @@ const CENSO: Record<string, { destino: Destino; motivo: string }> = {
     destino: "ventas",
     motivo: "La escala interna editable (8 nov): la página del cliente, por el mismo cálculo (`paginaParaElCse`), para editarla. Pantalla interna, con la guardia de la exploración.",
   },
-  "lib/artefactos/copias-server.ts": { destino: "exploracion-del-proyecto", motivo: "2026-10-30: archiva y reactiva la exploración de una copia junto con ella (por canvasId). No lee ninguna." },
+  "lib/artefactos/copias-server.ts": {
+    destino: "exploracion-del-proyecto",
+    motivo:
+      "2026-10-30: archiva y reactiva la exploración de una copia junto con ella (por canvasId). 2026-11-12: también la de siempre al archivar su documento, y mira si ya hay otra abierta antes de devolverla a su lugar. No lee ninguna.",
+  },
+  "lib/artefactos/archivados-server.ts": { destino: "exploracion-del-proyecto", motivo: "2026-11-12: solo si hay una exploración de siempre abierta, para saber si el tipo sigue archivado. No lee ninguna." },
   "lib/artefactos/adoptar-server.ts": { destino: "exploracion-del-proyecto", motivo: "2026-10-30: solo si la exploración de siempre ya se abrió, para no tomarla al crear otra." },
   "app/api/projects/[projectId]/canvases/route.ts": { destino: "exploracion-del-proyecto", motivo: "2026-10-30: solo si la exploración de siempre ya se abrió, para que su fila se quede en la lista." },
   "lib/escala/prueba/calculo.ts": {

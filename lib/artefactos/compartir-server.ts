@@ -10,7 +10,7 @@
  * Mismo mecanismo que los documentos de la empresa (`AccesoAlDocumento`, la URL es el secreto: 256 bits, sin contraseña,
  * `/external/documento/[token]`), con una diferencia a propósito: muestra el documento VIVO, sin publicar (ver
  * lib/external/artefacto-view.ts). Compartir crea el enlace; dejar de compartir lo revoca; volver a compartir crea uno
- * NUEVO (el viejo pudo circular a quien ya no debía verlo). Archivar una copia lo revoca también (`archivarCopia`, en la
+ * NUEVO (el viejo pudo circular a quien ya no debía verlo). Archivar un documento lo revoca también (`archivarArtefacto`, en la
  * misma transacción que la archiva). Un proyecto de prueba no se comparte.
  */
 import "server-only";

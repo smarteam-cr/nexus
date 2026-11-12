@@ -28,6 +28,7 @@
  */
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
+import { selloDelDeSiempreVigente } from "@/lib/artefactos/archivados-server";
 import { resolveActiveAccess, touchAccess } from "./access";
 import { readPublishedClientTimeline } from "./timeline-view";
 import { readClientProcesos } from "@/lib/canvas/read-procesos";
@@ -82,9 +83,12 @@ export async function getPublishedKickoffForToken(
   // 3. Canvas Kickoff del proyecto (se identifica por nombre, igual que el panel interno).
   const canvas = await prisma.projectCanvas.findFirst({
     where: { projectId, ...canvasOf("kickoff") },
-    select: { id: true, publishedSnapshot: true },
+    select: { id: true, publishedSnapshot: true, createdAt: true },
   });
   if (!canvas) return null;
+  /* Sin foto propia, ¿el sello es de ESTE kickoff? El de antes pudo archivarse (12 nov, archivar suelta el lugar) dejando el
+     sello del proyecto: el backfill de abajo congelaría el borrador del nuevo y se lo mostraría al cliente. */
+  if (!canvas.publishedSnapshot && !(await selloDelDeSiempreVigente(projectId, "kickoff", access.project.kickoffPublishedAt, canvas))) return null;
 
   // 4. STAGING (D.3): el cliente ve SOLO el SNAPSHOT congelado al último "Subir"
   //    (secciones + bloques CONFIRMED + procesos confirmados). Editar/guardar NO lo

@@ -11,6 +11,7 @@ import { guardAccessToProject, guardProjectHandoffAccess } from "@/lib/auth/api-
 import { prisma } from "@/lib/db/prisma";
 import { sanitizeTags, SERVICE_TO_PRODUCT } from "@/lib/tags/catalog";
 import { ensurePieceCanvas } from "@/lib/pieces/ensure-canvas";
+import { tiposConElDeSiempreArchivado } from "@/lib/artefactos/archivados-server";
 import { proposedPieces, resolvePieceStates } from "@/lib/pieces/piece-state";
 
 // GET: tags del proyecto (auto-deriva un producto desde serviceType si está vacío). Lectura abierta.
@@ -72,7 +73,9 @@ export async function PUT(
     select: { id: true, slug: true, name: true, disabledAt: true },
   });
   const piezasEncendidas: string[] = [];
-  for (const pieza of proposedPieces(resolvePieceStates({ tags, canvases }))) {
+  // Lo que el equipo archivó (12 nov) tampoco se enciende: archivar suelta el lugar, y sin esto nacería uno nuevo.
+  const archivados = await tiposConElDeSiempreArchivado(projectId).catch(() => new Set<string>());
+  for (const pieza of proposedPieces(resolvePieceStates({ tags, canvases })).filter((p) => !archivados.has(p.slug))) {
     try {
       const r = await ensurePieceCanvas(projectId, pieza.slug);
       if (r.outcome !== "sin-cambios") piezasEncendidas.push(pieza.slug);

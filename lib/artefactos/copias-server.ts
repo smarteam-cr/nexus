@@ -4,8 +4,8 @@
  *
  * Lo que vale para todos:
  *   · todo va POR ID y con el proyecto en el `where`: un id de otro proyecto es «no encontrado», nunca un documento ajeno;
- *   · el documento de siempre (el que tiene `slug`) es uno más para el nombre, el orden y el estado, pero NO se archiva
- *     desde acá (lo leen 105 lugares: apagarlo es una decisión de la pieza, no de una copia);
+ *   · el documento de siempre (el que tiene `slug`) es uno más para el nombre, el orden y el estado; al archivarlo suelta su
+ *     lugar y queda como una copia archivada (`archivarArtefacto`, Elías 12 nov);
  *   · una copia nace con `slug = NULL` y `tipoArtefacto`, y sin las secciones que leen el proyecto (`ctxDriven`): pintarían
  *     lo mismo en cada copia (lib/artefactos/catalogo.ts › seccionesDeUnaCopia).
  */
@@ -13,13 +13,15 @@ import "server-only";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { canvasOf } from "@/lib/pieces/canvas-query";
+import { pieceBySlug } from "@/lib/pieces/registry";
 import { conPlantillaAnotada } from "@/lib/entregables/registro";
-import { archivarExploracionDeLaCopia, reactivarExploracionDeLaCopia } from "@/lib/exploraciones/del-proyecto";
+import { archivarExploracionDeLaCopia, hayExploracionAbierta, reactivarExploracionDeLaCopia } from "@/lib/exploraciones/del-proyecto";
 import { esCustomKey } from "@/lib/landing/custom-sections";
 import { CLAVE_OCULTAS_DEL_EDITOR, ocultasDelBorrador, ocultasEnElEditor } from "@/lib/kickoff/ocultas-del-editor";
 import { kickoffHiddenKey } from "@/components/canvas/kickoff-landing-adapter";
 import { admiteCopias, plantillaDelTipo, plantillaGuardadaDelTipo, seRenombra, tipoDeArtefacto, TIPO_CUESTIONARIOS } from "./tipos";
 import {
+  ARCHIVADO_EL_DE_SIEMPRE,
   esCopia,
   nombreGuardableDeUnaCopia,
   nombreParaUnaCopiaNueva,
@@ -52,6 +54,7 @@ const SELECT_DEL_ARTEFACTO = {
   terminadoEn: true,
   terminadoPor: true,
   disabledAt: true,
+  disabledReason: true,
 } as const satisfies Prisma.ProjectCanvasSelect;
 
 type FilaDelArtefacto = Prisma.ProjectCanvasGetPayload<{ select: typeof SELECT_DEL_ARTEFACTO }>;
@@ -296,44 +299,146 @@ export async function marcarTerminado(projectId: string, canvasId: string, termi
 }
 
 /**
- * Archiva una COPIA: sale del riel y de lo que leen los agentes, sin borrar nada (`disabledAt`), y su enlace deja de abrir.
- * El documento de siempre no se archiva desde acá.
+ * ARCHIVA un documento del proyecto (Elías, 12 nov: todo menos el Resumen): sale de la lista y de lo que leen los agentes,
+ * sin borrar nada (`disabledAt`), y su enlace deja de abrir.
+ *
+ * ⛔ El documento de siempre SUELTA SU LUGAR: queda como una copia archivada (`slug` NULL, `tipoArtefacto`, un `name` que
+ * nunca se resuelve como pieza y el nombre que se veía en `titulo`). Así los más de cien lugares que lo buscan por `slug`
+ * (el «Qué sigue», generar, publicar, el portal, el cronograma) ven lo mismo que en un proyecto que nunca lo tuvo, un estado
+ * que ya saben llevar, y nunca le escriben a un archivado ni lo reencienden sin querer (`ensurePieceCanvas` reencendía uno
+ * apagado). Las copias vivas siguen como estaban, y el próximo documento que se cree del tipo es el de siempre
+ * (lib/artefactos/adoptar-server.ts). Su exploración (la fila sin `canvasId`) se va con él. Lo del proyecto no se toca: ni
+ * las fechas ni el cobro del cronograma, ni los sellos de publicado (las etapas los leen).
  */
-export async function archivarCopia(projectId: string, canvasId: string, porEmail: string | null): Promise<void> {
+export async function archivarArtefacto(projectId: string, canvasId: string, porEmail: string | null): Promise<void> {
   const c = await documentoDelProyecto(projectId, canvasId);
-  if (!esCopia(c)) throw new ErrorDelArtefacto(409, "El documento de siempre de un tipo no se archiva desde acá.");
+  if (c.disabledAt) return;
+  if (c.tipo === "handoff" || (c.slug && !tipoDeArtefacto(c.slug))) throw new ErrorDelArtefacto(400, "Ese documento no se archiva desde acá.");
   const ahora = new Date();
-  await prisma.$transaction([
-    prisma.projectCanvas.update({ where: { id: canvasId }, data: { disabledAt: ahora, disabledBy: porEmail, disabledReason: "archivada" } }),
-    prisma.accesoAlDocumento.updateMany({ where: { canvasId, revokedAt: null }, data: { revokedAt: ahora } }),
-    archivarExploracionDeLaCopia(canvasId, ahora),
-  ]);
-}
-
-/** Deshace archivar: la copia vuelve al riel y a lo que leen los agentes. Su enlace no vuelve: hay que crear uno nuevo. */
-export async function reactivarCopia(projectId: string, canvasId: string): Promise<void> {
-  const c = await documentoDelProyecto(projectId, canvasId);
-  if (!esCopia(c)) throw new ErrorDelArtefacto(409, "Ese documento no se archiva desde acá.");
-  await prisma.$transaction([
-    prisma.projectCanvas.update({ where: { id: canvasId }, data: { disabledAt: null, disabledBy: null, disabledReason: null } }),
-    reactivarExploracionDeLaCopia(canvasId),
-  ]);
+  const revocar = prisma.accesoAlDocumento.updateMany({ where: { canvasId, revokedAt: null }, data: { revokedAt: ahora } });
+  // El de siempre: el que tiene `slug`, o una fila vieja sin él que se resuelve por su nombre (lib/pieces/canvas-query.ts).
+  const tipo = c.slug ?? (!c.tipoArtefacto && c.tipo ? c.tipo : null);
+  if (!tipo) {
+    await prisma.$transaction([
+      prisma.projectCanvas.update({ where: { id: canvasId }, data: { disabledAt: ahora, disabledBy: porEmail, disabledReason: "archivada" } }),
+      revocar,
+      archivarExploracionDeLaCopia(canvasId, ahora),
+    ]);
+    return;
+  }
+  const visible = nombreDelArtefacto(c);
+  const pasos: Prisma.PrismaPromise<unknown>[] = [
+    prisma.projectCanvas.update({
+      where: { id: canvasId },
+      data: {
+        slug: null,
+        tipoArtefacto: tipo,
+        name: nombreGuardableDeUnaCopia(visible) || `${tipo} · archivado`,
+        titulo: c.titulo?.trim() ? c.titulo : visible,
+        disabledAt: ahora,
+        disabledBy: porEmail,
+        disabledReason: ARCHIVADO_EL_DE_SIEMPRE,
+      },
+    }),
+    revocar,
+  ];
+  // La exploración de siempre vive afuera del canvas (sin `canvasId`): se va con él, como la de una copia.
+  if (tipo === "exploration") {
+    pasos.push(prisma.exploracionDeVenta.updateMany({ where: { projectId, canvasId: null, archivadaEn: null }, data: { canvasId, archivadaEn: ahora } }));
+  }
+  await prisma.$transaction(pasos);
 }
 
 /**
- * El ORDEN de los documentos de un tipo (arrastrar). Tienen que venir TODOS los vivos del tipo, cada uno una vez: un orden
- * a medias dejaría dos con el mismo lugar.
+ * Deshace archivar. Una copia vuelve a la lista y a lo que leen los agentes; su enlace no vuelve (hay que crear uno nuevo).
+ * El que era el de siempre vuelve a SU LUGAR si sigue libre; si mientras tanto se creó otro del tipo, vuelve como copia
+ * (el cronograma y la entrega no vuelven así: 409). Lo oculto de un kickoff que vuelve como copia pasa a su Json, como
+ * al duplicarlo: si no, reaparecería por su enlace.
  */
-export async function ordenarDelTipo(projectId: string, tipo: string, ids: readonly string[]): Promise<void> {
-  const vivos = await documentosDelTipo(projectId, tipo);
-  const esperados = new Set(vivos.map((v) => v.id));
-  if (ids.length !== esperados.size || new Set(ids).size !== ids.length || ids.some((id) => !esperados.has(id))) {
-    throw new ErrorDelArtefacto(409, "La lista cambió mientras la ordenabas. Recarga y vuelve a intentarlo.");
+export async function reactivarArtefacto(projectId: string, canvasId: string): Promise<{ comoCopia: boolean }> {
+  const c = await documentoDelProyecto(projectId, canvasId);
+  if (!c.disabledAt) return { comoCopia: !c.slug };
+  const reactivar = { disabledAt: null, disabledBy: null, disabledReason: null };
+  const tipo = c.disabledReason === ARCHIVADO_EL_DE_SIEMPRE && !c.slug ? c.tipoArtefacto : null;
+  if (!tipo) {
+    // Un documento de siempre apagado por otro camino no se enciende desde acá.
+    if (c.slug) throw new ErrorDelArtefacto(409, "Ese documento no está archivado desde acá.");
+    await prisma.$transaction([prisma.projectCanvas.update({ where: { id: canvasId }, data: reactivar }), reactivarExploracionDeLaCopia(canvasId)]);
+    return { comoCopia: true };
   }
-  /* Los documentos del tipo se reparten LOS MISMOS lugares que ya ocupaban: `order` es también el orden del listado de
-     documentos del proyecto, y arrastrar adentro de un tipo no puede mover a otro tipo de lugar. */
-  const lugares = vivos.map((v) => v.order).sort((a, b) => a - b);
-  const repetidos = new Set(lugares).size !== lugares.length;
-  const slots = repetidos ? lugares.map((_, i) => (lugares[0] ?? 0) + i) : lugares;
-  await prisma.$transaction(ids.map((id, i) => prisma.projectCanvas.update({ where: { id }, data: { order: slots[i] } })));
+  const ocupado = await prisma.projectCanvas.findFirst({ where: { projectId, ...canvasOf(tipo) }, select: { id: true } });
+  const exploracionOcupada = tipo === "exploration" && (await hayExploracionAbierta(projectId));
+  if (!ocupado && !exploracionOcupada) {
+    const deFabrica = pieceBySlug(tipo)?.label ?? tipoDeArtefacto(tipo)?.nombre ?? c.name;
+    await prisma.$transaction([
+      prisma.projectCanvas.update({
+        where: { id: canvasId },
+        data: { ...reactivar, slug: tipo, tipoArtefacto: null, name: deFabrica, titulo: c.titulo?.trim() === deFabrica ? null : c.titulo },
+      }),
+      prisma.exploracionDeVenta.updateMany({ where: { canvasId, archivadaEn: { not: null } }, data: { canvasId: null, archivadaEn: null } }),
+    ]);
+    return { comoCopia: false };
+  }
+  /* El cronograma no lleva copias, y una entrega que fue la de siempre guarda en su Json lo que el cliente no ve: como copia
+     se podría compartir con su enlace propio (`sinEnlaceElDeSiempre` solo mira el `slug`). Ninguno de los dos vuelve. */
+  if (!admiteCopias(tipo) || tipoDeArtefacto(tipo)?.sinEnlaceElDeSiempre) {
+    throw new ErrorDelArtefacto(409, `Este proyecto ya tiene otro ${(tipoDeArtefacto(tipo)?.nombre ?? "documento").toLowerCase()}: este no puede volver.`);
+  }
+  const sections = tipo === "kickoff" ? await seccionesConLasOcultasDelKickoff(projectId, canvasId) : undefined;
+  await prisma.$transaction([
+    prisma.projectCanvas.update({ where: { id: canvasId }, data: { ...reactivar, ...(sections ? { sections } : {}) } }),
+    reactivarExploracionDeLaCopia(canvasId),
+  ]);
+  return { comoCopia: true };
+}
+
+/** El Json de un kickoff que fue el de siempre, con sus secciones ocultas (que vivían en el proyecto) marcadas `hidden`. */
+async function seccionesConLasOcultasDelKickoff(projectId: string, canvasId: string): Promise<Prisma.InputJsonValue | undefined> {
+  const [c, p] = await Promise.all([
+    prisma.projectCanvas.findUniqueOrThrow({ where: { id: canvasId }, select: { sections: true, canvasSections: { select: { id: true, key: true, label: true } } } }),
+    prisma.project.findUniqueOrThrow({ where: { id: projectId }, select: { hiddenKickoffKeys: true } }),
+  ]);
+  const ocultas = new Set(ocultasEnElEditor(p.hiddenKickoffKeys ?? [], ocultasDelBorrador(c.sections)));
+  const marcar = c.canvasSections.filter((s) => ocultas.has(kickoffHiddenKey(s.key, s.id)));
+  if (!marcar.length) return undefined;
+  const entradas = (Array.isArray(c.sections) ? (c.sections as unknown[]) : []).filter(
+    (e): e is Record<string, unknown> => !!e && typeof e === "object" && (e as { key?: unknown }).key !== CLAVE_OCULTAS_DEL_EDITOR,
+  );
+  for (const s of marcar) {
+    const i = entradas.findIndex((e) => e.key === s.key);
+    if (i >= 0) entradas[i] = { ...entradas[i], hidden: true };
+    else entradas.push({ key: s.key, label: s.label, hidden: true });
+  }
+  return entradas as unknown as Prisma.InputJsonValue;
+}
+
+/**
+ * El orden de quien los lee, alineado con el de la lista después de arrastrar en ella (Elías, 12 nov): los documentos de
+ * cada tipo que vienen en `ids` se reparten LOS MISMOS lugares que ya ocupaban, en el orden en que vienen. Los que no vienen
+ * (un documento desanclado, o de otro proyecto) no se tocan, y un tipo con un solo documento tampoco.
+ */
+export async function ordenarSegunLaLista(projectId: string, ids: readonly string[]): Promise<void> {
+  const filas = await prisma.projectCanvas.findMany({
+    where: { projectId, id: { in: [...new Set(ids)] }, disabledAt: null },
+    select: { id: true, slug: true, tipoArtefacto: true, name: true, businessCaseId: true, order: true, createdAt: true },
+  });
+  const porId = new Map(filas.map((f) => [f.id, f]));
+  const porTipo = new Map<string, typeof filas>();
+  for (const id of new Set(ids)) {
+    const f = porId.get(id);
+    const tipo = f ? tipoDelDocumento(f) : null;
+    if (!f || !tipo) continue;
+    porTipo.set(tipo, [...(porTipo.get(tipo) ?? []), f]);
+  }
+  const cambios: { id: string; order: number }[] = [];
+  for (const lista of porTipo.values()) {
+    if (lista.length < 2) continue;
+    const lugares = ordenarArtefactos(lista).map((v) => v.order);
+    const repetidos = new Set(lugares).size !== lugares.length;
+    const slots = repetidos ? lugares.map((_, i) => (lugares[0] ?? 0) + i) : lugares;
+    lista.forEach((f, i) => {
+      if (f.order !== slots[i]) cambios.push({ id: f.id, order: slots[i] });
+    });
+  }
+  if (cambios.length) await prisma.$transaction(cambios.map((c) => prisma.projectCanvas.update({ where: { id: c.id }, data: { order: c.order } })));
 }

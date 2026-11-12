@@ -19,7 +19,10 @@
  * Copia medida por medida el riel de la preventa: filas de 14 px con un punto de 8 px, la pieza
  * abierta en azul sobre azul claro, lo colgado con una línea a la izquierda.
  */
-import { useRef, useState, type ReactNode } from "react";
+import { Fragment, useRef, useState, type ReactNode } from "react";
+import { closestCenter, DndContext, KeyboardSensor, PointerSensor, useSensor, useSensors, type Announcements, type DragEndEvent } from "@dnd-kit/core";
+import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import { cn } from "@/lib/cn";
 import { repartirElRiel } from "@/lib/flow/reparto-del-riel";
 import type { EstadoDePieza } from "@/components/canvas/SelectorDePiezas";
@@ -235,6 +238,63 @@ export interface FilaDelRielDePiezas {
   esCopia?: boolean;
 }
 
+/** El asa de arrastrar: seis puntos, como en «Ordenar» y en las secciones del motor. */
+function IconoDeAsa() {
+  return (
+    <svg viewBox="0 0 10 16" className="h-3.5 w-2.5" fill="currentColor" aria-hidden="true">
+      <circle cx="2.5" cy="3" r="1.3" />
+      <circle cx="7.5" cy="3" r="1.3" />
+      <circle cx="2.5" cy="8" r="1.3" />
+      <circle cx="7.5" cy="8" r="1.3" />
+      <circle cx="2.5" cy="13" r="1.3" />
+      <circle cx="7.5" cy="13" r="1.3" />
+    </svg>
+  );
+}
+
+/**
+ * Una fila que se arrastra adentro de su grupo (Elías, 12 nov). El asa aparece al pasar el mouse, en el lugar del punto, como
+ * el lápiz a la derecha; con teclado se llega con Tab: Espacio o Enter la levanta, las flechas la mueven, Espacio o Enter la
+ * deja y Escape cancela. Sin `ordenable`, la fila es la de siempre.
+ */
+function FilaOrdenable({ id, etiqueta, ordenable, children }: { id: string; etiqueta: string; ordenable: boolean; children: (asa: ReactNode) => ReactNode }) {
+  const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({ id, disabled: !ordenable });
+  return (
+    <li ref={setNodeRef} style={{ transform: CSS.Translate.toString(transform), transition }} className={cn(isDragging && "relative z-10 rounded-lg bg-surface shadow-lg")}>
+      {children(
+        ordenable && (
+        <button
+          type="button"
+          ref={setActivatorNodeRef}
+          {...attributes}
+          {...listeners}
+          aria-label={`Mover «${etiqueta}»`}
+          title="Arrastra para cambiar el orden"
+          data-asa-de-la-fila=""
+          className="absolute left-0.5 top-1/2 z-10 flex h-6 w-5 -translate-y-1/2 cursor-grab touch-none items-center justify-center rounded text-fg-muted opacity-0 transition-opacity hover:bg-surface-hover hover:text-fg focus-visible:bg-surface focus-visible:opacity-100 group-hover/fila:opacity-100 active:cursor-grabbing"
+        >
+          <IconoDeAsa />
+        </button>
+        ),
+      )}
+    </li>
+  );
+}
+
+/** Lo que el lector de pantalla dice al arrastrar una fila, en español y con los nombres de las filas. */
+function anunciosDelOrden(nombre: (id: string | number) => string): Announcements {
+  return {
+    onDragStart: ({ active }) => `Levantaste «${nombre(active.id)}».`,
+    onDragOver: ({ active, over }) => (over ? `«${nombre(active.id)}» está sobre «${nombre(over.id)}».` : `«${nombre(active.id)}» está fuera de la lista.`),
+    onDragEnd: ({ active, over }) => (over ? `Dejaste «${nombre(active.id)}» en el lugar de «${nombre(over.id)}».` : `Dejaste «${nombre(active.id)}» donde estaba.`),
+    onDragCancel: ({ active }) => `Cancelaste: «${nombre(active.id)}» vuelve a su lugar.`,
+  };
+}
+
+const INSTRUCCIONES_DEL_ORDEN = {
+  draggable: "Para mover este artefacto, pulsa Espacio o Enter. Muévelo con las flechas y vuelve a pulsar Espacio o Enter para dejarlo. Escape cancela.",
+};
+
 const PUNTO: Record<EstadoDePieza, string> = {
   generada: "bg-success",
   pendiente: "bg-fg-muted/30",
@@ -262,6 +322,7 @@ export function PiezasDelRiel({
   grupoDelResumen,
   onNuevoArtefacto,
   onRenombrar,
+  onOrdenar,
 }: {
   resumen: { activa: boolean; meta?: string | null; onClick: () => void; /** Algo del proyecto pide atención: va como ícono, con esta frase. */ alerta?: string | null };
   /**
@@ -284,6 +345,11 @@ export function PiezasDelRiel({
   onNuevoArtefacto?: () => void;
   /** Cambiar el nombre desde acá, con doble clic o con el lápiz que aparece al pasar el mouse. true si quedó guardado. */
   onRenombrar?: (canvasId: string | null, nombre: string) => Promise<boolean>;
+  /**
+   * Arrastrar para ordenar adentro de un grupo (Elías, 12 nov): llegan las filas del grupo en su orden nuevo. Sin él, no hay
+   * asa. El Resumen no es una fila: queda fijo arriba.
+   */
+  onOrdenar?: (filasDelGrupo: FilaDelRielDePiezas[]) => void;
 }) {
   const [renombrando, setRenombrando] = useState<{ slug: string; canvasId: string | null; nombre: string; original: string } | null>(null);
   const seRenombra = (f: FilaDelRielDePiezas) => !!onRenombrar && (!!f.canvasId || !!f.renombrable);
@@ -300,6 +366,27 @@ export function PiezasDelRiel({
   };
   const { existentes, ocultasALaVista, ocultables, plegadas } = repartirElRiel(filas, porActivarAbiertas);
   const hayQueOcultar = !!onOcultar && ocultables.length > 0;
+  const sensores = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
+  /* Los tramos de filas seguidas del mismo grupo: cada uno se ordena aparte (Entregables con Entregables, Herramientas con
+     Herramientas), con su propio contexto, así una fila no se suelta en el otro grupo. */
+  const tramos: { clave: string; filas: { f: FilaDelRielDePiezas; k: number }[] }[] = [];
+  existentes.forEach((f, k) => {
+    const clave = f.grupo?.id ?? "";
+    const ultimo = tramos[tramos.length - 1];
+    if (ultimo && (ultimo.filas[0].f.grupo?.id ?? "") === clave) ultimo.filas.push({ f, k });
+    else tramos.push({ clave: `${clave}:${tramos.length}`, filas: [{ f, k }] });
+  });
+  const nombreDeLaFila = (id: string | number) => existentes.find((f) => f.slug === id)?.etiqueta ?? "el artefacto";
+  const alSoltar = (filasDelTramo: FilaDelRielDePiezas[]) => (e: DragEndEvent) => {
+    if (!onOrdenar || !e.over || e.active.id === e.over.id) return;
+    const de = filasDelTramo.findIndex((f) => f.slug === e.active.id);
+    const a = filasDelTramo.findIndex((f) => f.slug === e.over!.id);
+    if (de < 0 || a < 0) return;
+    onOrdenar(arrayMove(filasDelTramo, de, a));
+  };
   const esExploracion = (f: FilaDelRielDePiezas) => (f.tipo ?? f.slug) === "exploration";
   // Con una exploración ya abierta, el clic vuelve a su página de inicio (lo escucha LienzoDeExploracion).
   const elegir = (f: FilaDelRielDePiezas) => (esExploracion(f) && f.activa ? window.dispatchEvent(new Event("exploracion:inicio")) : onElegir(f.slug));
@@ -349,10 +436,23 @@ export function PiezasDelRiel({
           {resumen.meta && <span className={cn("flex-shrink-0 text-[11.5px]", resumen.activa ? "" : "text-fg-muted")}>{resumen.meta}</span>}
         </button>
       </li>
-      {existentes.map((f, k) => (
-        <li key={f.slug}>
-          {f.grupo && f.grupo.id !== (k === 0 ? grupoDelResumen : existentes[k - 1]?.grupo)?.id && rotuloDeGrupo(f.grupo)}
+      {tramos.map((t) => (
+        <DndContext
+          key={t.clave}
+          sensors={sensores}
+          collisionDetection={closestCenter}
+          onDragEnd={alSoltar(t.filas.map((x) => x.f))}
+          accessibility={{ announcements: anunciosDelOrden(nombreDeLaFila), screenReaderInstructions: INSTRUCCIONES_DEL_ORDEN }}
+        >
+          <SortableContext items={t.filas.map((x) => x.f.slug)} strategy={verticalListSortingStrategy}>
+      {t.filas.map(({ f, k }) => (
+        <Fragment key={f.slug}>
+        {/* El rótulo del grupo va en su propia fila, fuera de la que se arrastra: si no, se iba con ella. */}
+        {f.grupo && f.grupo.id !== (k === 0 ? grupoDelResumen : existentes[k - 1]?.grupo)?.id && <li>{rotuloDeGrupo(f.grupo)}</li>}
+        <FilaOrdenable id={f.slug} etiqueta={f.etiqueta} ordenable={!!onOrdenar && t.filas.length > 1 && renombrando?.slug !== f.slug}>
+          {(asa) => (<>
           <div className="group/fila relative flex items-center">
+          {asa}
           {renombrando?.slug === f.slug ? (
             <form
               className="w-full px-1 py-0.5"
@@ -390,7 +490,14 @@ export function PiezasDelRiel({
             }
             className={cn(clase(f.activa), seRenombra(f) && "pr-7")}
           >
-            <span className={cn("h-2 w-2 flex-shrink-0 rounded-full", f.activa ? "bg-brand" : PUNTO[f.estado as EstadoDePieza])} aria-hidden="true" />
+            <span
+              className={cn(
+                "h-2 w-2 flex-shrink-0 rounded-full",
+                f.activa ? "bg-brand" : PUNTO[f.estado as EstadoDePieza],
+                !!onOrdenar && t.filas.length > 1 && "transition-opacity group-hover/fila:opacity-0",
+              )}
+              aria-hidden="true"
+            />
             <span className="min-w-0 flex-1 truncate">{f.etiqueta}</span>
             {f.propuesta ? (
               <span
@@ -435,7 +542,12 @@ export function PiezasDelRiel({
           )}
           </div>
           {esExploracion(f) && f.activa && slotDeSesiones && <div ref={slotDeSesiones} />}
-        </li>
+          </>)}
+        </FilaOrdenable>
+        </Fragment>
+      ))}
+          </SortableContext>
+        </DndContext>
       ))}
       {(plegadas > 0 || hayQueOcultar) && (
         <li>

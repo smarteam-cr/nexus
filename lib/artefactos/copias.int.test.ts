@@ -13,7 +13,7 @@ import { canvasNotOf, canvasOf, onlyEnabled } from "@/lib/pieces/canvas-query";
 import { plantillaDelDocumento } from "@/lib/entregables/registro";
 import { piezaDeLasNotas } from "./contexto-de-la-copia";
 import { SECCIONES_DEL_PLAN_DE_ADOPCION_COMERCIAL } from "./tipos";
-import { archivarCopia, crearCopia, documentosDelTipo, marcarTerminado, ordenarDelTipo, reactivarCopia, renombrarArtefacto } from "./copias-server";
+import { archivarArtefacto, crearCopia, documentosDelTipo, marcarTerminado, ordenarSegunLaLista, reactivarArtefacto, renombrarArtefacto } from "./copias-server";
 import { artefactoParaElToken } from "@/lib/external/artefacto-view";
 import { compartirArtefacto } from "./compartir-server";
 import { nombreDelArtefacto } from "./copias";
@@ -168,32 +168,37 @@ describe("varias copias de un tipo en un proyecto", () => {
     expect(ds).toMatchObject({ name: "Planificación", titulo: "Plan general", slug: "planning" });
     await expect(renombrarArtefacto(otro.proyecto.id, a.canvasId, "x")).rejects.toMatchObject({ status: 404 });
 
-    // Ordenar: todos los del tipo, cada uno una vez, en los lugares que ya ocupaban.
+    // Ordenar arrastrando en la lista: los del tipo que vienen, en los lugares que ya ocupaban.
     const vivos = await documentosDelTipo(proyecto.id, "planning");
     expect(vivos[0].id).toBe(deSiempre.id);
     const nuevoOrden = [d.canvasId, deSiempre.id, a.canvasId, b.canvasId, k.canvasId];
-    await ordenarDelTipo(proyecto.id, "planning", nuevoOrden);
+    await ordenarSegunLaLista(proyecto.id, nuevoOrden);
     expect((await documentosDelTipo(proyecto.id, "planning")).map((x) => x.id)).toEqual(nuevoOrden);
     const lugares = vivos.map((v) => v.order).sort((x, y) => x - y);
     expect((await documentosDelTipo(proyecto.id, "planning")).map((x) => x.order)).toEqual(lugares);
-    await expect(ordenarDelTipo(proyecto.id, "planning", nuevoOrden.slice(1))).rejects.toMatchObject({ status: 409 });
+    // Una lista a medias (un documento desanclado no viene): los que vienen se reparten SUS lugares; el que falta no se mueve.
+    const sinElPrimero = [b.canvasId, a.canvasId];
+    const lugarDeD = (await prisma.projectCanvas.findUniqueOrThrow({ where: { id: d.canvasId }, select: { order: true } })).order;
+    await ordenarSegunLaLista(proyecto.id, sinElPrimero);
+    expect((await prisma.projectCanvas.findUniqueOrThrow({ where: { id: d.canvasId }, select: { order: true } })).order).toBe(lugarDeD);
+    const ordenDe = async (id: string) => (await prisma.projectCanvas.findUniqueOrThrow({ where: { id }, select: { order: true } })).order;
+    expect(await ordenDe(b.canvasId)).toBeLessThan(await ordenDe(a.canvasId));
+    await ordenarSegunLaLista(proyecto.id, nuevoOrden);
 
     // Terminada y de vuelta a en construcción.
     expect((await marcarTerminado(proyecto.id, a.canvasId, true, "ana@smarteam.test")).terminadoEn).not.toBeNull();
     expect(await prisma.projectCanvas.findUniqueOrThrow({ where: { id: a.canvasId }, select: { terminadoPor: true } })).toEqual({ terminadoPor: "ana@smarteam.test" });
     expect((await marcarTerminado(proyecto.id, a.canvasId, false, null)).terminadoEn).toBeNull();
 
-    // Archivar: la copia sale de los vivos y su enlace deja de abrir; el de siempre no se archiva.
+    // Archivar: la copia sale de los vivos y su enlace deja de abrir.
     await prisma.accesoAlDocumento.create({ data: { canvasId: b.canvasId, clientId: proyecto.clientId, accessToken: "b".repeat(64) } });
-    await archivarCopia(proyecto.id, b.canvasId, "ana@smarteam.test");
+    await archivarArtefacto(proyecto.id, b.canvasId, "ana@smarteam.test");
     expect((await documentosDelTipo(proyecto.id, "planning")).map((x) => x.id)).not.toContain(b.canvasId);
     expect((await prisma.accesoAlDocumento.findUniqueOrThrow({ where: { canvasId: b.canvasId } })).revokedAt).not.toBeNull();
-    await expect(archivarCopia(proyecto.id, deSiempre.id, null)).rejects.toMatchObject({ status: 409 });
     // Deshacer: vuelve a los vivos; su enlace no.
-    await reactivarCopia(proyecto.id, b.canvasId);
+    await reactivarArtefacto(proyecto.id, b.canvasId);
     expect((await documentosDelTipo(proyecto.id, "planning")).map((x) => x.id)).toContain(b.canvasId);
     expect((await prisma.accesoAlDocumento.findUniqueOrThrow({ where: { canvasId: b.canvasId } })).revokedAt).not.toBeNull();
-    await expect(reactivarCopia(proyecto.id, deSiempre.id)).rejects.toMatchObject({ status: 409 });
 
     // El documento de siempre: mismo id, mismo slug, mismo contenido.
     const despues = await prisma.projectCanvas.findUniqueOrThrow({ where: { id: deSiempre.id } });
