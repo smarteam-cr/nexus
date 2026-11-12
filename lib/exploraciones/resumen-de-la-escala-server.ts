@@ -132,7 +132,7 @@ interface LoQueLee {
  * Lo que lee el agente: las reuniones de las sesiones (con texto y numeradas), «Lo que hicimos» y las reglas. Exportado
  * para el simulacro (scripts/simular-resumen-de-la-escala.ts), que no guarda nada.
  */
-export async function loQueLeeElResumen(l: Extract<Lectura, { ok: true }>, ahora = new Date()): Promise<LoQueLee> {
+export async function loQueLeeElResumen(l: Extract<Lectura, { ok: true }>, ahora = new Date(), o: { completas?: boolean } = {}): Promise<LoQueLee> {
   const { fila, estado, escala } = l;
   const deLaFila = {
     exploracionId: fila.id,
@@ -218,7 +218,8 @@ export async function loQueLeeElResumen(l: Extract<Lectura, { ok: true }>, ahora
     conTranscripcion,
     vistas,
   );
-  const tope = Math.min(TOPE_DE_UNA, Math.floor(TOPE_DE_TODAS / Math.max(1, conTurnos.length)));
+  // `completas`: sin recortar el medio de ninguna reunión (la auditoría del simulacro relee cada cita en su turno).
+  const tope = o.completas ? Number.MAX_SAFE_INTEGER : Math.min(TOPE_DE_UNA, Math.floor(TOPE_DE_TODAS / Math.max(1, conTurnos.length)));
   const fechas = new Map(hechas.map((r) => [r.id, r.fecha]));
   const reuniones: ReunionParaElResumen[] = [];
   for (const r of conTurnos) {
@@ -230,6 +231,7 @@ export async function loQueLeeElResumen(l: Extract<Lectura, { ok: true }>, ahora
       clave: `R${reuniones.length + 1}`,
       fecha: fechas.get(r.id) ?? "",
       equipo: r.equipo ? (EQUIPOS[r.equipo]?.nombre ?? null) : null,
+      areaId: r.areaId,
       turnos,
       delCliente: delClienteDe(q?.personas, deOtraEn(r.id)),
     });
@@ -324,6 +326,10 @@ export async function generarElResumenDeLaEscala(o: { exploracionId: string; ema
       recorrido: escrito.recorrido,
       operativas: escrito.operativas,
       pendientes: escrito.pendientes,
+      // Con la firma de los niveles de hoy: si la escala cambia, la pantalla interna avisa que el Resumen quedó viejo.
+      firmas: le.firmas,
+      confirmar: escrito.confirmar,
+      avisos: escrito.avisos,
     };
     const guardado = await guardar(o.exploracionId, nuevo);
     await prisma.agentRun.update({

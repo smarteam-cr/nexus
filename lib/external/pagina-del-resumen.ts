@@ -5,10 +5,11 @@
  * (lib/exploraciones/lectores.test.ts: la escala al cliente solo entra por su puerta). Quien decide qué sale es
  * `resumenParaLaPagina` (lib/exploraciones/resumen-de-la-escala.ts).
  *
- * Las cinco partes (10 nov): 1 Qué entendimos del negocio · 2 Qué hicimos · 3 Cómo funciona la operación · 4 Qué
- * encontramos por área (una tarjeta por área OPERATIVA) · 5 Qué falta validar. Un Resumen del formato 1 (el del 9 nov)
- * se pinta en el mismo molde: sin negocio ni recorrido, y una tarjeta por equipo de la escala con sus hallazgos y sus
- * datos rojos.
+ * Las partes (10 nov; segunda vuelta el 11 nov): arriba, las tres cifras de lo que hicimos · 1 Qué entendimos del
+ * negocio · 2 Cómo funciona la operación · 3 Qué encontramos, una tarjeta por EQUIPO DE LA ESCALA con sus subequipos
+ * adentro (Soporte y Customer Success dentro de Servicio) · 4 Qué falta validar, tres líneas simples. Sin «provisional»
+ * y sin «¿Entendimos bien?» (Elías, 11 nov). Un Resumen del formato 1 (el del 9 nov) se pinta en el mismo molde: sin
+ * negocio ni recorrido, y un subequipo por equipo con sus hallazgos y sus datos rojos.
  *
  * Cada pieza lleva su `clave` de edición (la operación `resumenDeLaEscala`): la vista no sabe de formatos, solo pinta.
  */
@@ -163,23 +164,14 @@ export interface ParteDelNegocio {
 }
 
 /**
- * Una tarjeta de «Qué encontramos»: un área OPERATIVA (Soporte y Customer Success van separadas aunque las dos sean
- * Servicio en la escala). El nivel de su equipo de la escala va como etiqueta discreta.
+ * Un subequipo dentro de la tarjeta de su equipo de la escala (Soporte y Customer Success dentro de Servicio; 11 nov). Si
+ * el equipo no tiene subequipos, hay uno solo con su mismo nombre y la tarjeta no repite el título.
  */
-export interface TarjetaDeLaPagina {
+export interface SubequipoDeLaPagina {
   id: string;
   nombre: string;
   /** La clave para cambiar el nombre (null: es el del equipo de la escala, formato 1). */
   claveDelNombre: string | null;
-  /** Su equipo de la escala: a su pestaña lleva el «Ver diagnóstico de…». */
-  areaId: string;
-  areaNombre: string;
-  nivel: Letra | null;
-  nivelNombre: string | null;
-  /** El nivel depende de partes por explorar: de cuáles (por su nombre). null: no es provisional. */
-  provisional: string[] | null;
-  /** El «por qué este nivel» va en un desplegable, solo en la primera tarjeta de su equipo de la escala. */
-  conPorque: boolean;
   organizacion: ListaDeLaPagina;
   bien: ListaDeLaPagina;
   frena: ListaDeLaPagina;
@@ -190,6 +182,25 @@ export interface TarjetaDeLaPagina {
   /** Sin cifra: qué dato falta para medirlo. */
   falta: string | null;
   claveDeLaFalta: string | null;
+}
+
+/**
+ * Una tarjeta de «Qué encontramos»: un EQUIPO DE LA ESCALA (Ventas, Marketing, Servicio) con sus subequipos adentro
+ * (Elías, 11 nov: las tarjetas son las áreas de la escala). El nivel va normal, sin «provisional». Un equipo sin sesiones
+ * sale como «Por explorar», sin nivel y sin contenido: nunca como malo.
+ */
+export interface TarjetaDeLaPagina {
+  id: string;
+  /** Su equipo de la escala: a su pestaña lleva el «Ver diagnóstico de…». */
+  areaId: string;
+  nombre: string;
+  nivel: Letra | null;
+  nivelNombre: string | null;
+  /** El «por qué este nivel» va en un desplegable. */
+  conPorque: boolean;
+  /** No tuvo sesiones: la tarjeta dice «Por explorar» y su pestaña no se abre. */
+  porExplorar: boolean;
+  subequipos: SubequipoDeLaPagina[];
 }
 
 /** Los tipos de lo que falta validar (10 nov). `por-confirmar`: una pregunta del formato 1, sin tipo. */
@@ -257,9 +268,17 @@ export interface ResumenDeLaPagina {
   /** La clave para agregar una etapa (null: no se agrega). */
   etapaNueva: string | null;
   tarjetas: TarjetaDeLaPagina[];
+  /** «Qué falta validar»: tres líneas como mucho, en palabras simples (el tipo solo sirve adentro). */
   pendientes: PendienteDeLaPagina[];
   pendienteNuevo: string | null;
+  /** Desde el 11 nov no sale: siempre vacío (se lee lo guardado, no se muestra). */
   entendimos: PreguntaDelResumen[];
+  /** Los equipos de la escala sin sesiones: su pestaña dice «Por explorar» y no se abre. */
+  sinExplorar: string[];
+  /** Solo adentro: los niveles cambiaron desde que se armó el Resumen (compara la firma de los niveles). */
+  escalaCambio?: boolean;
+  /** Solo adentro: lo que el código vio al armarlo (un equipo con reunión que no está en el recorrido). */
+  avisos?: string[];
   /** Los equipos de la escala que ve el cliente, con su nivel (la etiqueta de cada tarjeta y los sin tarjeta). */
   areas: AreaDelResumenDeLaPagina[];
   /** Formato 1: los datos rojos (también van en la tarjeta de su equipo). */

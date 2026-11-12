@@ -42,7 +42,7 @@
 .dr.rd-v3 .rd-punto { flex: none; display: inline-block; width: 9px; height: 9px; border-radius: 999px; background: var(--nc, transparent); border: 1.5px dashed #a9b5c7; }
 .dr.rd-v3 [data-nivel] .rd-punto { border: 0; }
 
-.dr .rd { width: 100%; max-width: 1440px; margin: 0 auto; padding: 20px 24px 48px; display: grid; gap: 20px; }
+.dr .rd { width: 100%; max-width: 1440px; margin: 0 auto; padding: 20px 24px 48px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 20px; }
 
 /* Arriba: el logo de color a la izquierda; rehacer y el PDF (en el azul de Nexus) a la derecha. */
 .dr .rd-arriba { display: flex; justify-content: space-between; align-items: center; gap: 12px 20px; flex-wrap: wrap; padding: 4px 0 8px; }
@@ -300,7 +300,8 @@
   .dr .rd-arriba { gap: 12px; padding: 2px 0 4px; }
   .dr .rd-logo img { height: 28px; }
   .dr .rd-acciones { gap: 8px; width: 100%; }
-  .dr .rd-acciones .rd-btn { flex: 1 1 0; }
+  /* Con cuatro pestañas (Resumen y tres equipos) no caben en una fila: bajan a otra (11 nov; con `1 1 0` desbordaban la página). */
+  .dr .rd-acciones .rd-btn { flex: 1 1 auto; }
   .dr .rd-btn { min-height: 44px; padding: 0 14px; font-size: 14px; }
   .dr .rd-cabecera { gap: 14px; padding: 6px 0 0; }
   .dr .rd-cabecera .rd-radar { margin: 0; }
@@ -416,6 +417,9 @@
 .dr.rd-editable { border-radius: 16px; }
 .dr .rd-btn-oculta { border-style: dashed; opacity: .78; }
 .dr .rd-btn-nota { font-size: 11px; font-weight: 500; opacity: .85; }
+/* Un equipo sin sesiones (11 nov): la pestaña está, punteada, y afuera no se abre. */
+.dr .rd-btn-por-explorar { border-style: dashed; opacity: .7; cursor: default; }
+.dr span.rd-btn-por-explorar { display: inline-flex; align-items: center; gap: 6px; }
 .dr.rd-editable .rde-interactivo [data-d] { cursor: grab; }
 /* En pantallas táctiles, deslizar sobre una parte del radar la arrastra (no desplaza la página): solo adentro. */
 .dr.rd-editable .rde-interactivo [data-d] { touch-action: none; }
@@ -536,6 +540,18 @@
 .dr .rs-provisional { margin: 0; font-size: 13px; line-height: 19px; color: #8a4f0c; }
 .dr .rs-cta { align-self: flex-start; display: inline-flex; align-items: center; gap: 6px; margin-top: auto; padding: 9px 16px; border-radius: 999px; border: 1px solid #c9d8f0; background: #f3f7fe; font: inherit; font-size: 14px; font-weight: 600; color: var(--v3-marca); cursor: pointer; text-decoration: none; }
 .dr .rs-cta:hover { background: #e6f0ff; }
+
+/* Segunda vuelta (11 nov): las cifras de lo que hicimos van en la cabecera; cada tarjeta es un equipo de la escala con sus
+   subequipos adentro; un equipo sin sesiones va punteado y dice «Por explorar». */
+.dr .rs-cabecera .rs-numeros { width: 100%; max-width: 760px; margin-top: 4px; }
+.dr .rs-cabecera .rs-numero { background: #ffffff; border: 1px solid var(--v3-borde); }
+.dr .rs-area-ancha { grid-column: 1 / -1; }
+.dr .rs-subequipos { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; }
+.dr .rs-subequipo { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.dr .rs-subequipos .rs-subequipo { padding: 16px 18px; border-radius: 16px; background: var(--v3-fondo); }
+.dr .rs-subequipos .rs-subequipo .rs-cifra { background: #ffffff; }
+.dr .rs-subequipo-nombre { margin: 0; font-size: 16px; line-height: 22px; font-weight: 600; color: var(--v3-tinta); }
+.dr .rs-area-por-explorar { background: transparent; box-shadow: none; border: 1.5px dashed var(--v3-borde-fuerte); }
 
 /* 5 · Qué falta validar. */
 .dr .rs-pendientes { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }

@@ -34,8 +34,10 @@ export default async function EscalaDelClientePage({ params, searchParams }: { p
   if (!d) notFound();
   if (!d.resultados.length) return <EscalaSinMedir />;
   const base = `/external/escala/${token}`;
-  const areas = d.areas.map((a) => ({ ...a, href: `${base}?area=${encodeURIComponent(a.id)}` }));
-  const r = typeof area === "string" && area !== PESTANA_DEL_RESUMEN ? d.resultados.find((x) => x.areaId === area) : undefined;
+  // Un equipo sin sesiones dice «Por explorar» y no se abre, tampoco con su dirección directa (Elías, 11 nov).
+  const sinExplorar = new Set(d.resumen.sinExplorar);
+  const areas = d.areas.map((a) => ({ ...a, href: `${base}?area=${encodeURIComponent(a.id)}`, ...(sinExplorar.has(a.id) ? { porExplorar: true } : {}) }));
+  const r = typeof area === "string" && area !== PESTANA_DEL_RESUMEN && !sinExplorar.has(area) ? d.resultados.find((x) => x.areaId === area) : undefined;
   if (!r)
     return (
       <ResumenDeLaEscalaVista
