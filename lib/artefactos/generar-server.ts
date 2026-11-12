@@ -58,7 +58,8 @@ import { servicioDelProyecto, servicioParaElKickoff } from "@/lib/servicios/cata
 import { piezaDeLasNotas, reunionesDeLaCopia, seccionesQuitadas } from "./contexto-de-la-copia";
 import { plantillaGuardadaDelTipo, tipoDeArtefacto, type TipoDeArtefacto } from "./tipos";
 import { nombreDelArtefacto, tipoDelDocumento } from "./copias";
-import { handoffKeysDelTipo, seccionesDeUnaCopia, templateDelTipo } from "./catalogo";
+import { defsDelTipo, handoffKeysDelTipo, seccionesDeUnaCopia, templateDelTipo } from "./catalogo";
+import { seccionesAgregadas, templateConLasAgregadas } from "@/lib/canvas/secciones-agregadas";
 import { ErrorDelArtefacto } from "./copias-server";
 import { fuenteConTope, mensajeDeLaCopia, TIPOS_QUE_LO_ALIMENTAN } from "./mensaje";
 
@@ -118,7 +119,9 @@ export async function generarCopia(o: {
 }): Promise<{ sectionCount: number }> {
   const { canvas, tipo } = await copiaParaGenerar(o.projectId, o.canvasId);
   const { plantilla } = plantillaGuardadaDelTipo(tipo.id, canvas.sections);
-  const base = templateDelTipo(tipo.id, plantilla?.id ?? null);
+  /* Las secciones del catálogo que una persona agregó a la copia («+ Agregar sección», 2026-11-12) entran al template:
+     la de una plantilla liviana no las trae, y sin esto la IA las dejaba vacías. */
+  const base = templateConLasAgregadas(templateDelTipo(tipo.id, plantilla?.id ?? null), defsDelTipo(tipo.id) ?? [], seccionesAgregadas(canvas.sections));
   /* Las secciones de su plantilla que la copia no tiene (una duplicada de un documento viejo): se crean, como reconcilia el
      documento de siempre. Las nuevas van al final; el motor mantiene el cierre abajo. */
   const yaTiene = new Set(canvas.canvasSections.map((s) => s.key));

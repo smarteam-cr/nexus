@@ -31,6 +31,8 @@ import EstadoDelDocumento from "./EstadoDelDocumento";
 import { DESAFIO_KEY, lineaDelDocumento, MENSAJE_APROBADO, revisarParaPresentar, type EstadoVista } from "@/lib/canvas/estado-del-documento";
 import { POLITICA_RECTORA_KEY } from "@/components/landing/configs/diagnostico.defs";
 import ElegirPlantilla from "./ElegirPlantilla";
+import AgregarSeccion from "./AgregarSeccion";
+import BorrarSeccionPropia from "./BorrarSeccionPropia";
 import { AntesDeGenerarElDiagnostico, useLoConfirmado } from "./AntesDeGenerarElDiagnostico";
 import { CANVAS_PRIMARY_AGENT } from "@/lib/agents/canvas-agents";
 import { rotuloVigente } from "@/lib/canvas/canvas-defs";
@@ -468,9 +470,26 @@ export default function DiagnosticoWorkspace({
           const ordered = [heroId, ...contentIds].filter((x): x is string => !!x);
           if (ordered.length) cs.reorderSections(ordered);
         }}
+        onDuplicate={(key) => {
+          const id = idByKey.get(key);
+          if (id) void cs.duplicateSection(id);
+        }}
+        // «✕ Borrar» solo en las secciones de la persona: propias, copias y las del catálogo que agregó (2026-11-12).
+        renderOverlay={(key) => <BorrarSeccionPropia section={cs.sections.find((s) => s.key === key)} onBorrar={cs.removeSection} />}
       />
       )}
     </div>
+    {/* «+ Agregar sección» (2026-11-12): las del catálogo (la IA las escribe al generar) o una propia. */}
+    {verDocumento && !aprobado && (
+      <AgregarSeccion
+        projectId={projectId}
+        canvasId={canvasId}
+        cuantasSecciones={cs.sections.length}
+        seMuestra={(k) => buildDiagnosticoConfig([k]).sections.some((d) => d.key === k)}
+        onAgregarDelCatalogo={(k) => cs.addCatalogSection(k)}
+        onAgregarPropia={(nombre, tipo) => cs.addSection(nombre, tipo)}
+      />
+    )}
     </>
   );
 }

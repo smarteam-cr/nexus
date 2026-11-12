@@ -29,7 +29,7 @@ import {
   type SeccionActual,
   type CompletadorDeItem,
 } from "@/lib/canvas/operaciones-de-documento";
-import { esCustomKey } from "@/lib/landing/custom-sections";
+import { defDeLaCopia, esCustomKey } from "@/lib/landing/custom-sections";
 import { customDef } from "@/lib/landing/catalogo-de-secciones";
 import { schemaParaElChat } from "@/lib/canvas/capacidades-de-documento";
 import { datosDeSeccion, formatoDeSeccion } from "@/lib/landing/formato-de-seccion";
@@ -73,7 +73,8 @@ export function seccionesParaElEjecutor(
   defsByKey: DefsParaEjecutar,
 ): SeccionActual[] {
   return filas.map((s) => {
-    const def = defsByKey[s.key] ?? (esCustomKey(s.key) ? customDef(s.key, s.label) : undefined);
+    // Una copia (2026-11-12) tiene la def de su original: el mismo esquema, así el chat la puede editar.
+    const def = defsByKey[s.key] ?? defDeLaCopia(s.key, (k) => defsByKey[k]) ?? (esCustomKey(s.key) ? customDef(s.key, s.label) : undefined);
     const card = s.blocks.find((b) => b.blockType === "CARD");
     return {
       id: s.id,

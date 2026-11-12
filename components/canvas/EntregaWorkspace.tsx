@@ -25,6 +25,8 @@ import LandingView, { type LandingSectionData } from "@/components/landing/Landi
 import type { LandingContext } from "@/components/landing/types";
 import { useCanvasSections } from "./useCanvasSections";
 import { buildEntregaConfig, buildEntregaSections } from "./entrega-landing-adapter";
+import AgregarSeccion from "./AgregarSeccion";
+import BorrarSeccionPropia from "./BorrarSeccionPropia";
 import DocumentAssist from "@/components/ai/DocumentAssist";
 
 const MAXW = 860;
@@ -149,6 +151,7 @@ export default function EntregaWorkspace({
   }
 
   return (
+    <>
     <div className="stl">
       {cs.error && (
         <div style={{ position: "sticky", top: 0, zIndex: 50, display: "flex", alignItems: "center", gap: 10, padding: "10px 16px", background: "#fef2f2", borderBottom: "1px solid #fecaca", color: "#b91c1c", fontSize: 13 }}>
@@ -250,7 +253,25 @@ export default function EntregaWorkspace({
           const ordered = [heroId, ...contentIds].filter((x): x is string => !!x);
           if (ordered.length) cs.reorderSections(ordered);
         }}
+        onDuplicate={(key) => {
+          const id = idByKey.get(key);
+          if (id) void cs.duplicateSection(id);
+        }}
+        // «✕ Borrar» solo en las secciones de la persona: propias, copias y las del catálogo que agregó (2026-11-12).
+        renderOverlay={(key) => <BorrarSeccionPropia section={cs.sections.find((s) => s.key === key)} onBorrar={cs.removeSection} />}
       />
     </div>
+    {/* «+ Agregar sección» (2026-11-12): las del catálogo (la IA las escribe al generar) o una propia. */}
+    {(
+      <AgregarSeccion
+        projectId={projectId}
+        canvasId={canvasId}
+        cuantasSecciones={cs.sections.length}
+        seMuestra={(k) => buildEntregaConfig([k]).sections.some((d) => d.key === k)}
+        onAgregarDelCatalogo={(k) => cs.addCatalogSection(k)}
+        onAgregarPropia={(nombre, tipo) => cs.addSection(nombre, tipo)}
+      />
+    )}
+    </>
   );
 }

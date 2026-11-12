@@ -46,6 +46,7 @@ import { kickoffHiddenKey } from "@/components/canvas/kickoff-landing-adapter";
 import { conOcultasDelBorrador, mismasOcultas, ocultasDelBorrador, ocultasEnElEditor } from "@/lib/kickoff/ocultas-del-editor";
 import { conOcultasPorLaPlantilla, fueraDeLaPlantilla, ocultasPorLaPlantilla, ocultasSegunLaPlantilla } from "@/lib/kickoff/plantilla-del-kickoff";
 import { resolvePipeline } from "@/lib/projects/kind";
+import { conLasAgregadas, sinMarcaLasDeLaPlantilla } from "@/lib/canvas/secciones-agregadas";
 import { servicioDelProyecto, servicioParaElKickoff } from "@/lib/servicios/catalogo";
 import { estadoDelCicloParaElRiel } from "@/lib/servicios/ciclos-server";
 
@@ -269,11 +270,14 @@ export async function prepararKickoffEnBlanco(projectId: string, plantilla: BcTe
 /**
  * EL KICKOFF QUEDA CON LAS SECCIONES DE SU PLANTILLA (M1, 2026-10-25). Las del canon (el de siempre más las del servicio)
  * que la plantilla no tiene: vacías, se borran; con algo, se ocultan en el editor. Las de la plantilla que había ocultado
- * otra plantilla vuelven a verse. Las creadas por una persona (`custom:*`) no se tocan. Nada cambia para el cliente hasta
- * que alguien toca «Subir».
+ * otra plantilla vuelven a verse. Las creadas por una persona (`custom:*`) no se tocan, ni las del canon que una persona
+ * agregó desde «+ Agregar sección» (2026-11-12): cuentan como de la plantilla. Nada cambia para el cliente hasta que
+ * alguien toca «Subir».
  */
 async function ajustarElKickoffALaPlantilla(projectId: string, canvasId: string, secciones: readonly string[] | null): Promise<void> {
-  const deLaPlantilla = new Set(canonDelKickoff(secciones).map((s) => s.key));
+  const c0 = await prisma.projectCanvas.findUnique({ where: { id: canvasId }, select: { sections: true } });
+  const propiasDeLaPlantilla = new Set(canonDelKickoff(secciones).map((s) => s.key));
+  const deLaPlantilla = conLasAgregadas(propiasDeLaPlantilla, c0?.sections);
   const delCanon = new Set([...canonDelKickoff(null), ...KICKOFF_SECCIONES_DEL_SERVICIO].map((s) => s.key));
   const filas = await prisma.canvasSection.findMany({
     where: { canvasId },
@@ -306,7 +310,9 @@ async function ajustarElKickoffALaPlantilla(projectId: string, canvasId: string,
       (x) => !(x && typeof x === "object" && borradas.has(String((x as { key?: unknown }).key))),
     );
     const borrador = mismasOcultas(ocultas, publicadas) ? null : ocultas;
-    const json = conOcultasPorLaPlantilla(conOcultasDelBorrador(sinLasBorradas, borrador, "plantilla", new Date().toISOString()), porLaPlantilla);
+    const conOcultas = conOcultasPorLaPlantilla(conOcultasDelBorrador(sinLasBorradas, borrador, "plantilla", new Date().toISOString()), porLaPlantilla);
+    // Una agregada que esta plantilla ya trae deja de llevar la marca (lib/canvas/secciones-agregadas.ts).
+    const json = sinMarcaLasDeLaPlantilla(conOcultas, propiasDeLaPlantilla).cambio ? sinMarcaLasDeLaPlantilla(conOcultas, propiasDeLaPlantilla).entradas : conOcultas;
     await tx.projectCanvas.update({ where: { id: canvasId }, data: { sections: json as object[] } });
   });
 }

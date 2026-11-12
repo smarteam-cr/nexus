@@ -28,6 +28,8 @@ import SugerirParticularidad from "@/components/canvas/SugerirParticularidad";
 import { useMe } from "@/hooks/useMe";
 import { useCanvasSections } from "./useCanvasSections";
 import { buildDesarrolloConfig, buildDesarrolloSections } from "./desarrollo-landing-adapter";
+import AgregarSeccion from "./AgregarSeccion";
+import BorrarSeccionPropia from "./BorrarSeccionPropia";
 import type { DevEstimateCtx } from "@/components/landing/types";
 
 const MAXW = 860;
@@ -287,7 +289,24 @@ export default function DesarrolloWorkspace({
           const ordered = [heroId, ...contentIds].filter((x): x is string => !!x);
           if (ordered.length) cs.reorderSections(ordered);
         }}
+        onDuplicate={(key) => {
+          const id = idByKey.get(key);
+          if (id) void cs.duplicateSection(id);
+        }}
+        // «✕ Borrar» solo en las secciones de la persona: propias, copias y las del catálogo que agregó (2026-11-12).
+        renderOverlay={(key) => <BorrarSeccionPropia section={cs.sections.find((s) => s.key === key)} onBorrar={cs.removeSection} />}
       />
+      {/* «+ Agregar sección» (2026-11-12): las del catálogo (la IA las escribe al generar) o una propia. */}
+      {(
+        <AgregarSeccion
+          projectId={projectId}
+          canvasId={canvasId}
+          cuantasSecciones={cs.sections.length}
+          seMuestra={(k) => buildDesarrolloConfig([k]).sections.some((d) => d.key === k)}
+          onAgregarDelCatalogo={(k) => cs.addCatalogSection(k)}
+          onAgregarPropia={(nombre, tipo) => cs.addSection(nombre, tipo)}
+        />
+      )}
     </div>
   );
 }

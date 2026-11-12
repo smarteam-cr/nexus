@@ -3,7 +3,7 @@
 import { preserveNonSchemaKeys } from "@/lib/ai/section-schema";
 import { useToast } from "@/components/ui/Toast";
 import { templateDefsByKey } from "@/components/landing/configs/templates.defs";
-import { esCustomKey } from "@/lib/landing/custom-sections";
+import { defDeLaCopia, esCustomKey } from "@/lib/landing/custom-sections";
 import { customDef } from "@/lib/landing/catalogo-de-secciones";
 import { useCanvasSections, type SectionWithBlocks } from "@/components/canvas/useCanvasSections";
 import { useState } from "react";
@@ -63,7 +63,7 @@ export default function SectionTools({
      `agentGenerated` daría `undefined !== false` = TRUE (o sea, se ofrecería ✨IA sobre
      una sección que el server rechaza), y "Limpiar" escribiría `{}` en vez del `empty`
      real — dejando la sección con un shape que el componente no espera. */
-  const def = defs[section.key] ?? (esCustomKey(section.key) ? customDef(section.key, section.label) : undefined);
+  const def = defs[section.key] ?? defDeLaCopia(section.key, (k) => defs[k]) ?? (esCustomKey(section.key) ? customDef(section.key, section.label) : undefined);
   const tipoModulo = tipoGuardable(section.key);
   const datos = (block.data && typeof block.data === "object" ? block.data : {}) as Record<string, unknown>;
   const htmlDeLaSeccion = typeof datos.html === "string" ? datos.html : "";
@@ -123,7 +123,8 @@ export default function SectionTools({
             ✨ Adaptar a esta empresa
           </button>
         )}
-        {esCustomKey(section.key) && (
+        {/* Una del catálogo que agregó una persona (2026-11-12) también: la trajo ella y nada la vuelve a crear. */}
+        {(esCustomKey(section.key) || section.agregadaPorPersona === true) && (
           <button
             style={{ ...pill, color: "#b91c1c" }}
             onClick={borrar}

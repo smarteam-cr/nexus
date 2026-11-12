@@ -57,7 +57,7 @@ import type { DuenoDeDocumento } from "./hilo";
 import { PIEZA_ROL } from "@/lib/asistente/piezas";
 import type { BCSectionDef } from "@/components/landing/configs/business-case.defs";
 import { customDef } from "@/lib/landing/catalogo-de-secciones";
-import { esCustomKey } from "@/lib/landing/custom-sections";
+import { defDeLaCopia, esCustomKey } from "@/lib/landing/custom-sections";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { sectionDefsForDocType } from "@/lib/roles/doc-type";
@@ -888,7 +888,7 @@ export async function contextoDeDocumento(
     porDef: Record<string, BCSectionDef | undefined>,
     key: string,
     label: string,
-  ) => porDef[key] ?? (esCustomKey(key) ? customDef(key, label) : undefined);
+  ) => porDef[key] ?? defDeLaCopia(key, (k) => porDef[k]) ?? (esCustomKey(key) ? customDef(key, label) : undefined);
 
   /* ⚠ El bloque CARD, no el primero: una sección puede arrastrar un TEXT legacy adelante, y ahí
      el contenido —y las anclas que se calculan de él— saldrían del objeto equivocado. */

@@ -19,6 +19,7 @@ import { Alert, Button, ConfirmDialog } from "@/components/ui";
 import VeloDeGeneracion from "@/components/canvas/VeloDeGeneracion";
 import { useToast } from "@/components/ui/Toast";
 import { adaptadorDelTipo } from "./adaptadores";
+import AgregarSeccion from "@/components/canvas/AgregarSeccion";
 import { tipoDeArtefacto } from "@/lib/artefactos/tipos";
 
 /** La píldora del chrome del motor: el mismo look que «Ocultar» (components/business-cases/SectionTools.tsx). */
@@ -314,8 +315,23 @@ export default function ArtefactoWorkspace({
             const ids = [portada ? idPorKey.get(portada) : undefined, ...keys.map((k) => idPorKey.get(k))].filter((x): x is string => !!x);
             if (ids.length) cs.reorderSections(ids);
           }}
+          onDuplicate={(key) => {
+            const id = idPorKey.get(key);
+            if (id) void cs.duplicateSection(id);
+          }}
         />
       </div>
+      {/* «+ Agregar sección» (2026-11-12): las del catálogo de su tipo (la IA las escribe al generar) o una propia. */}
+      {!generando && (
+        <AgregarSeccion
+          projectId={projectId}
+          canvasId={canvasId}
+          cuantasSecciones={cs.sections.length}
+          seMuestra={(k) => adaptador.config([k]).sections.some((d) => d.key === k)}
+          onAgregarDelCatalogo={(k) => cs.addCatalogSection(k)}
+          onAgregarPropia={(nombre, tipo) => cs.addSection(nombre, tipo)}
+        />
+      )}
     </div>
   );
 }
