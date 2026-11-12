@@ -19,6 +19,7 @@ import { PLANIFICACION_DEF_BY_KEY } from "@/components/landing/configs/planifica
 import { conLasSeccionesDelCliente, SECCIONES_DEL_CLIENTE } from "@/lib/planificacion/lo-del-cliente";
 import type { LandingSectionRow } from "@/components/landing/build-landing";
 import { sinPorQueVacia } from "@/lib/landing/por-que-vacia";
+import { sinLoTecnicoDeLaPlanificacion } from "@/lib/planificacion/secciones";
 import { resolveActiveAccess } from "./access";
 import { vistaDelSnapshot, type DocumentoPublicadoViewData } from "./snapshot-de-documento";
 
@@ -36,13 +37,14 @@ export async function getPlanificacionForToken(credencial: string, accesoId: str
 
 /**
  * El porqué de una sección vacía (`__porQueVacia`, lib/landing/por-que-vacia.ts) es del EQUIPO: el modo lectura ya no lo
- * pinta, y acá se saca de la data para que tampoco viaje al navegador del cliente.
+ * pinta, y acá se saca de la data para que tampoco viaje al navegador del cliente. Lo mismo el detalle técnico de las
+ * automatizaciones (2026-11-12): una foto publicada antes de ese día todavía lo trae.
  */
 export function sinLosAvisosDelEquipo(rows: LandingSectionRow[]): LandingSectionRow[] {
   return rows.map((r) => ({
     ...r,
     blocks: r.blocks.map((b) =>
-      b.data && typeof b.data === "object" && !Array.isArray(b.data) ? { ...b, data: sinPorQueVacia(b.data as object) } : b,
+      b.data && typeof b.data === "object" && !Array.isArray(b.data) ? { ...b, data: sinLoTecnicoDeLaPlanificacion(r.key, sinPorQueVacia(b.data as object)) } : b,
     ),
   }));
 }

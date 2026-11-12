@@ -54,6 +54,7 @@ import {
   informesVacia,
 } from "@/lib/planificacion/brief";
 import { BRIEF_IMPORTADO_KEY, BRIEF_IMPORTADO_VACIO, briefImportadoVacio } from "@/lib/planificacion/brief-importado";
+import { ETAPAS_DE_HUBSPOT } from "@/lib/planificacion/secciones";
 
 const str = { type: "string" } as const;
 const strArray = { type: "array", items: { type: "string" } } as const;
@@ -352,6 +353,9 @@ export const PLANIFICACION_SECTION_DEFS: BCSectionDef[] = [
     },
   },
   {
+    /* 2026-11-12 (Elías, la planificación de marketing de Cemaco): SIEMPRE las 7 etapas de HubSpot, en su orden. El
+       agente no crea, renombra ni quita etapas: lo propio del cliente es la condición para entrar a una, o un estado del
+       lead. Lo hace cumplir `normalizarCicloDeVida` (lib/planificacion/secciones.ts) al guardar lo generado. */
     key: "ciclo_vida_crm",
     label: "Etapas del ciclo de vida",
     eyebrow: "Del lead al cliente",
@@ -359,17 +363,23 @@ export const PLANIFICACION_SECTION_DEFS: BCSectionDef[] = [
     sectionType: "ciclo_vida_tabla",
     agentGenerated: true,
     empty: { intro: "", etapas: [] },
-    agentHint: "Una fila por etapa: cuándo entra, qué la mueve, si es nueva/se mantiene/se renombra, y su origen.",
+    agentHint: "Las 7 etapas de HubSpot, siempre: cuándo entra un contacto a cada una para este cliente y quién la mueve.",
     brief:
-      "Las etapas del ciclo de vida del CRM del CLIENTE (suscriptor → lead → … → cliente), como van a quedar. `intro`: de dónde parte ('Tu portal arranca desde cero' o 'Hoy tu portal usa N etapas; proponemos M'). " +
-      "`etapas`: una por etapa — `etapa` = su nombre ('Lead calificado'); `entraCuando` = UNA línea con el criterio de entrada; `laMueve` = quién o qué la mueve ('El agente', 'Automatización al ganar el negocio'); " +
-      "`cambio` = UNO de: nueva | se_mantiene | renombrada | se_quita; " + ORIGEN_BRIEF + " " +
-      "Si el portal ya tiene etapas (vienen en el contexto), parte de esas y propone SOLO los cambios que los procesos justifican. No renombres por gusto.",
+      "Las etapas del ciclo de vida del CRM del cliente. Son SIEMPRE las 7 etapas por defecto de HubSpot, exactamente estas, en este orden y con este nombre: " +
+      ETAPAS_DE_HUBSPOT.map((e) => `'${e.etapa}'`).join(" → ") + ". " +
+      "NUNCA crees, renombres ni quites etapas, aunque el portal o las reuniones usen otros nombres. Lo propio del cliente ('contacto base', 'depurado', 'cliente activo') NO es una etapa: " +
+      "si dice cuándo alguien llega a una etapa, va en el `entraCuando` de esa etapa ('Compró en los últimos 12 meses (lo que llaman «cliente activo»)'); si es un estado de trabajo del lead (en contacto, depurado, descartado), va en `estadosLead`. " +
+      "`intro`: una frase con de dónde parte ('Tu portal arranca desde cero' o 'Hoy tu portal usa otras etapas: las acomodamos en las de HubSpot'). " +
+      "`etapas`: las 7 — `etapa` = el nombre de arriba, tal cual; `entraCuando` = UNA línea con el criterio de entrada para ESTE cliente; `laMueve` = quién o qué la mueve. " +
+      "LOS EQUIPOS: si Marketing genera el contacto (un formulario, una campaña, un evento), entra como MQL; pasa a SQL cuando una persona de Ventas lo acepta — es una validación humana: quien recibe el MQL lo cambia a SQL para decir que lo acepta; si Ventas lo genera o lo valida directamente, entra como SQL. " +
+      ORIGEN_BRIEF + " " +
+      "`estadosLead`: los estados de trabajo del lead que el cliente usa (`estado`, `significa` en una línea, `origen`), solo si se hablaron; si no, vacío.",
     schema: {
       type: "object",
       properties: {
         intro: str,
-        etapas: arrayOf({ etapa: str, entraCuando: str, laMueve: str, cambio: str, origen: str }, ["etapa"]),
+        etapas: arrayOf({ etapa: str, entraCuando: str, laMueve: str, origen: str }, ["etapa"]),
+        estadosLead: arrayOf({ estado: str, significa: str, origen: str }, ["estado"]),
       },
       required: ["etapas"],
     },
@@ -609,7 +619,7 @@ export const PLANIFICACION_TEMPLATE: BcTemplateDef = {
     "TU MÉTODO: parte del DIAGNÓSTICO (la parte teórica: une todo con CÓDIGOS —síntomas S1…, causas F1…, objetivos OBJ-01…, acciones AC-01…—, y trae el ENFOQUE DE LA SOLUCIÓN y las ACCIONES con sus herramientas). Esta planificación es la parte práctica: baja esas acciones a lo que se configura en HubSpot, respetando el enfoque de la solución. El diagnóstico trae las acciones en una línea: el detalle de cada una (qué se configura, grupo, hub, quick win y alcance) lo escribes tú en «Las acciones, en detalle», una fila por acción. Si no hay diagnóstico, trabaja con las reuniones de tu contexto. No inventes códigos.\n\n" +
     "DE DÓNDE SALE CADA COSA: cada paso, etapa, propiedad, pipeline, automatización y conversación lleva su `origen`. 'acordado' SOLO si una reunión con el cliente lo respalda (y la nombras en `fuente`); 'propuesta' si es diseño de Smarteam; 'supuesto' si das por hecho algo del cliente que nadie dijo. Lo que solo aparece en una nota interna o en el handoff NO cuenta como acordado. Prefiere menos cosas bien respaldadas a muchas supuestas.\n\n" +
     "LOS MAPAS DE PROCESOS son una fuente más, no la verdad: un sistema, un paso o un rol que el mapa trae y que ninguna reunión menciona es, a lo sumo, un supuesto.\n\n" +
-    "EL CICLO DE VIDA: si el portal ya tiene etapas (vienen en el contexto), parte de esas y propone SOLO los cambios que los procesos justifican. Renombrar etapas sin motivo es trabajo que el equipo del cliente paga después.\n\n" +
+    "EL CICLO DE VIDA: son SIEMPRE las 7 etapas por defecto de HubSpot (Suscriptor, Lead, MQL, SQL, Oportunidad, Cliente, Promotor). Nunca crees, renombres ni quites etapas: si el portal o las reuniones usan otros nombres, acomódalos como la condición para entrar a la etapa que corresponde o como un estado del lead. Las etapas del portal que vienen en el contexto sirven para entender cómo trabaja hoy el cliente, no para copiarlas.\n\n" +
     "SIN FECHAS: ni semanas ni duraciones. El calendario vive en el Cronograma.\n\n" +
     "LO QUE TE LLEGA DEL HANDOFF ES APTO PARA EL CLIENTE: recibes solo el alcance, el dolor, las expectativas, los resultados que persigue el cliente, los interesados y el desarrollo. Este documento se le comparte al cliente por enlace y se exporta a PDF entero, así que lo que Smarteam escribió para adentro (riesgos, motivación de la compra, promesas de la venta) NO te llega a propósito: no lo supongas ni lo menciones.\n\n" +
     "DISCIPLINA ANTI-ALUCINACIÓN: NUNCA inventes sistemas, integraciones, personas, nombres internos de propiedades ni procesos. Lo no definido va con `⚠️ Por definir` (en `falta` donde exista) y `pending: 'si'` en la arquitectura. Si el contexto es delgado, el plan sale más corto — corto y cierto gana a largo e inventado.\n\n" +

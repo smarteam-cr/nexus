@@ -19,7 +19,7 @@
  * `origenId = planificacion:<canvas>:<grupo>`, así mandarla dos veces no la duplica.
  */
 import { adoptarFormularios, adoptarInformes, adoptarUsuariosPermisos, adoptarCotizaciones, cotizacionesVacia } from "./brief";
-import { adoptarAutomatizaciones, adoptarCicloDeVida, adoptarConversaciones, adoptarPipelines } from "./secciones";
+import { adoptarAutomatizaciones, adoptarCicloDeVida, adoptarConversaciones, adoptarPipelines, condicionesPropiasDelCiclo } from "./secciones";
 import { claveDeFila, normalizarObjeto, type FilaPropiedad } from "./propiedades";
 
 export const ESTADOS_DE_CONSTRUCCION = [
@@ -185,12 +185,19 @@ export function cosasParaConstruir(secciones: readonly SeccionDeLaPlanificacion[
   // El ciclo de vida: una sola cosa, si cambia algo.
   const ciclo = adoptarCicloDeVida(data("ciclo_vida_crm"));
   const cambios = ciclo.etapas.filter((e) => lleno(e.etapa) && e.cambio && e.cambio !== "se_mantiene");
-  if (cambios.length || ciclo.estadosLead?.some((e) => lleno(e.estado))) {
+  /* Desde el 2026-11-12 las etapas son las 7 de HubSpot y no llevan `cambio`: lo que se construye es la condición propia
+     del cliente para entrar a cada una (la que no es la definición de HubSpot). */
+  const propias = condicionesPropiasDelCiclo(ciclo.etapas);
+  if (cambios.length || propias || ciclo.estadosLead?.some((e) => lleno(e.estado))) {
     con("ciclo_vida_crm", {
       clave: "ciclo-de-vida",
       tipo: "ciclo",
       nombre: "Etapas del ciclo de vida y estado del lead",
-      detalle: cambios.length ? `${cambios.length} ${cambios.length === 1 ? "etapa cambia" : "etapas cambian"}` : "El estado del lead",
+      detalle: cambios.length
+        ? `${cambios.length} ${cambios.length === 1 ? "etapa cambia" : "etapas cambian"}`
+        : propias
+          ? `Las condiciones para entrar a ${propias} ${propias === 1 ? "etapa" : "etapas"}`
+          : "El estado del lead",
       grupo: "ciclo",
     });
   }

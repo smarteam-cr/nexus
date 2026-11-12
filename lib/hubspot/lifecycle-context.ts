@@ -2,10 +2,10 @@
  * lib/hubspot/lifecycle-context.ts — las etapas del ciclo de vida REALES del portal
  * del cliente, serializadas para un agente.
  *
- * La Planificación define las etapas del ciclo de vida del CRM del cliente. La regla de
- * negocio es PARTIR de lo que el portal usa hoy (etiquetas reales, cuántos contactos hay
- * en cada una, qué workflows las mueven) y proponer solo cambios justificados — no
- * renombrar por gusto.
+ * La Planificación escribe el ciclo de vida del CRM del cliente. Desde el 2026-11-12 son SIEMPRE las 7
+ * etapas de HubSpot (lib/planificacion/secciones.ts, `ETAPAS_DE_HUBSPOT`): lo que el portal usa hoy
+ * (etiquetas reales, cuántos contactos hay en cada una, qué workflows las mueven) sirve para entender
+ * cómo trabaja el cliente y acomodarlo como condición de entrada, no para copiar sus etapas.
  *
  * Deliberadamente NO usa `buildLifecycleSnapshot`: ese camino arrastra el análisis de
  * asignación por owner (loop mensual con pausas contra la API de HubSpot — minutos que

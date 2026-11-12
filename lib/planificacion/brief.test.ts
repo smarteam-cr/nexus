@@ -36,7 +36,13 @@ import {
   CotizacionesSection,
   InformesSection,
 } from "@/components/landing/sections-planificacion-brief";
-import { CicloDeVidaSection, PropiedadesObjetoSection, ConversacionesSection, AutomatizacionesSection } from "@/components/landing/sections-planificacion";
+import {
+  CicloDeVidaSection,
+  PropiedadesObjetoSection,
+  ConversacionesSection,
+  AutomatizacionesSection,
+  DetalleDeAutomatizacion,
+} from "@/components/landing/sections-planificacion";
 import type { LandingContext } from "@/components/landing/types";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -239,7 +245,10 @@ describe("las secciones nuevas se pintan y, vacías, no aparecen al cliente", ()
 
   it("el guion del bot y las ramas de una automatización", () => {
     expect(html(ConversacionesSection, { items: [{ nombre: "Chatbot del sitio", responde: "chatbot", guion: ["Hola, soy el asistente", "¿Qué te interesa?"] }] })).toContain("Paso 1");
-    const out = html(AutomatizacionesSection, { items: [{ nombre: "Asignar el lead", condicion: "Contacto con propietario", siCumple: "Estado «Re ingreso»", noCumple: "Estado «Nuevo»" }] });
+    // Desde el 2026-11-12 las ramas van plegadas en «Ver detalle», solo para el equipo (ciclo-y-automatizaciones.test.ts).
+    const a = { nombre: "Asignar el lead", condicion: "Contacto con propietario", siCumple: "Estado «Re ingreso»", noCumple: "Estado «Nuevo»" };
+    expect(html(AutomatizacionesSection, { items: [a] }, { ctx: { planificacion: { delEquipo: true } } })).toContain("Ver detalle");
+    const out = renderToStaticMarkup(createElement(DetalleDeAutomatizacion, { a, onCambio: () => {} }));
     expect(out).toContain("Se cumple");
     expect(out).toContain("Estado «Nuevo»");
   });

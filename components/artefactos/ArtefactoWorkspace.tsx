@@ -184,6 +184,8 @@ export default function ArtefactoWorkspace({
       ...(marca ?? {}),
       ...delTipo,
       ...(resultados && delTipo.diagnostico ? { diagnostico: { ...delTipo.diagnostico, resultados } } : {}),
+      // El editor de una copia es del equipo: ve lo que el cliente no (el detalle técnico de las automatizaciones).
+      planificacion: { ...delTipo.planificacion, delEquipo: true },
     };
   }, [adaptador, clientName, marca, resultados, sections]);
   const conDeLaIa = cs.sections.some((s) => s.blocks.some((b) => b.source === "AGENT"));

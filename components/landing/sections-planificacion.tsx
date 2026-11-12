@@ -10,7 +10,7 @@
  *   · `ciclo_vida_tabla`     — las etapas del ciclo de vida: cuándo entra un contacto y qué lo mueve.
  *   · `propiedades_objeto`   — las propiedades por objeto, una pestaña por objeto.
  *   · `pipelines_horizontal` — los pipelines de leads, ventas y servicio, con las etapas de izquierda a derecha.
- *   · `automatizaciones`     — qué la dispara, qué hace, qué resuelve.
+ *   · `automatizaciones`     — una fila por automatización; lo técnico, plegado y solo para el equipo.
  *   · `conversaciones`       — mensajería instantánea: quién responde (persona, chatbot o agente de IA).
  *
  * Todo lo que se configura dice de dónde sale: acordado en una reunión, propuesta de Smarteam o
@@ -39,6 +39,7 @@ import {
   CIERRES_DE_ETAPA,
   QUIEN_RESPONDE,
   ESTADOS_DEL_LEAD_DE_SIEMPRE,
+  CAMPOS_TECNICOS_DE_AUTOMATIZACION,
   type EstadoDelLead,
   type ProcesosFuturoData,
   type ProcesoFuturo,
@@ -189,6 +190,9 @@ export const CicloDeVidaSection: FC<SectionProps<CicloDeVidaData>> = ({ data, ed
   const setEtapa = (i: number, patch: Partial<EtapaDeCiclo>) => set({ etapas: replaceAt(etapas, i, { ...etapas[i], ...patch }) });
   const setEstado = (i: number, patch: Partial<EstadoDelLead>) => set({ estadosLead: replaceAt(estados, i, { ...estados[i], ...patch }) });
   if (!editable && !etapas.length && !estados.length) return null;
+  /* Desde el 2026-11-12 las etapas son siempre las 7 de HubSpot y se mantienen: la columna «Cambio» solo aparece si una
+     fila escrita antes (o a mano) dice que algo cambia. */
+  const conCambio = etapas.some((e) => (e.cambio ?? "").trim() !== "" && e.cambio !== "se_mantiene");
   const celda = (i: number, campo: keyof EtapaDeCiclo, placeholder: string, className?: string) => (
     <Editable as="span" className={className} editable={editable} value={etapas[i][campo] ?? ""} placeholder={placeholder} onCommit={(v) => setEtapa(i, { [campo]: v })} />
   );
@@ -201,7 +205,7 @@ export const CicloDeVidaSection: FC<SectionProps<CicloDeVidaData>> = ({ data, ed
               <th>Etapa</th>
               <th>Entra cuando</th>
               <th>Lo mueve</th>
-              <th>Cambio</th>
+              {conCambio && <th>Cambio</th>}
               <th>Origen</th>
               {editable && <th className="stl-props-actions" aria-label="Acciones" />}
             </tr>
@@ -212,7 +216,7 @@ export const CicloDeVidaSection: FC<SectionProps<CicloDeVidaData>> = ({ data, ed
                 <td>{celda(i, "etapa", "Lead", "stl-accion-titulo")}</td>
                 <td>{celda(i, "entraCuando", "Cuándo entra un contacto…")}</td>
                 <td>{celda(i, "laMueve", "Una persona o una automatización…")}</td>
-                <td><InlineSelect value={e.cambio ?? ""} options={CAMBIOS_DE_ETAPA} editable={editable} onCommit={(v) => setEtapa(i, { cambio: v })} ariaLabel="Qué cambia en esta etapa" /></td>
+                {conCambio && <td><InlineSelect value={e.cambio ?? ""} options={CAMBIOS_DE_ETAPA} editable={editable} onCommit={(v) => setEtapa(i, { cambio: v })} ariaLabel="Qué cambia en esta etapa" /></td>}
                 <td><OrigenChip value={e.origen} editable={editable} onCommit={(v) => setEtapa(i, { origen: v })} /></td>
                 {editable && (
                   <td className="stl-props-actions">
@@ -585,45 +589,159 @@ export const PipelinesSection: FC<SectionProps<PipelinesData>> = ({ data, editab
 
 /* ── Automatizaciones ───────────────────────────────────────────────────────── */
 
-export const AutomatizacionesSection: FC<SectionProps<AutomatizacionesData>> = ({ data, editable, onChange }) => {
+/* 2026-11-12 (Elías, al revisar la planificación de marketing de Cemaco): las tarjetas con CUANDO / HACE / SI… / SE CUMPLE /
+   NO SE CUMPLE / RESUELVE / VISTA / TEN EN CUENTA / FALTA no se leían. Ahora una FILA por automatización con lo que entiende
+   el cliente (Automatización · Cuándo pasa · Qué hace · Para qué sirve · Estado). Lo técnico queda plegado en «Ver detalle»,
+   SOLO para el equipo (`ctx.planificacion.delEquipo`): nunca en el enlace del cliente ni en el PDF, y la foto publicada se
+   guarda sin esos campos (`sinLoTecnicoDeLaPlanificacion`). Los datos son los mismos: nada se borra. */
+
+/** El detalle técnico de una automatización, en el orden en que se lee. Los campos son `CAMPOS_TECNICOS_DE_AUTOMATIZACION`. */
+const DETALLE_DE_AUTOMATIZACION: ReadonlyArray<{ campo: (typeof CAMPOS_TECNICOS_DE_AUTOMATIZACION)[number]; rotulo: string; placeholder: string; aviso?: boolean }> = [
+  { campo: "condicion", rotulo: "Si…", placeholder: "La condición que la bifurca (opcional)…" },
+  { campo: "siCumple", rotulo: "Se cumple", placeholder: "Qué pasa si se cumple…" },
+  { campo: "noCumple", rotulo: "No se cumple", placeholder: "Qué pasa si no…" },
+  { campo: "vista", rotulo: "Vista", placeholder: "La vista o el filtro que deja (Leads nuevos · Formulario del sitio)…" },
+  { campo: "considerar", rotulo: "Ten en cuenta", placeholder: "Lo que hay que considerar al construirla…" },
+  { campo: "falta", rotulo: "Falta", placeholder: "Lo que todavía no está definido…", aviso: true },
+  { campo: "fuente", rotulo: "Reunión que la respalda", placeholder: "La reunión donde se habló…" },
+];
+
+/** Lo plegado de una automatización: solo lo ve el equipo. */
+export function DetalleDeAutomatizacion({ a, editable, onCambio }: { a: Automatizacion; editable?: boolean; onCambio: (patch: Partial<Automatizacion>) => void }) {
+  return (
+    <div className="stl-plan-auto-detalle">
+      <span className="stl-plan-solo-equipo">Solo lo ve el equipo</span>
+      <dl className="stl-plan-campos stl-plan-campos--ancho">
+        {DETALLE_DE_AUTOMATIZACION.map((c) => (
+          <Campo key={c.campo} rotulo={c.rotulo} value={a[c.campo]} editable={editable} placeholder={c.placeholder} onCommit={(v) => onCambio({ [c.campo]: v })} aviso={c.aviso} />
+        ))}
+      </dl>
+    </div>
+  );
+}
+
+function FilaDeAutomatizacion({
+  a,
+  editable,
+  delEquipo,
+  columnas,
+  abierta,
+  onAlternar,
+  onCambio,
+  onQuitar,
+}: {
+  a: Automatizacion;
+  editable?: boolean;
+  delEquipo: boolean;
+  columnas: number;
+  abierta: boolean;
+  onAlternar: () => void;
+  onCambio: (patch: Partial<Automatizacion>) => void;
+  onQuitar: () => void;
+}) {
+  const conDetalle = CAMPOS_TECNICOS_DE_AUTOMATIZACION.some((k) => (a[k] ?? "").trim());
+  const falta = (a.falta ?? "").trim() !== "";
+  const celda = (campo: "cuando" | "hace" | "resuelve", placeholder: string) => (
+    <Editable as="span" editable={editable} value={a[campo] ?? ""} placeholder={placeholder} onCommit={(v) => onCambio({ [campo]: v })} />
+  );
+  return (
+    <>
+      <tr className={abierta ? "stl-plan-auto-abierta" : undefined}>
+        <td>
+          <Editable as="span" className="stl-accion-titulo" editable={editable} value={a.nombre} placeholder="Nombre de la automatización…" onCommit={(v) => onCambio({ nombre: v })} />
+          {(editable || a.donde) && (
+            <Editable as="div" className="stl-plan-grupo" editable={editable} value={a.donde ?? ""} placeholder="Objeto · Hub…" onCommit={(v) => onCambio({ donde: v })} />
+          )}
+          {delEquipo && (editable || conDetalle) && (
+            <button
+              type="button"
+              className={`stl-plan-ver-detalle${falta ? " stl-plan-ver-detalle--falta" : ""}`}
+              aria-expanded={abierta}
+              onClick={onAlternar}
+            >
+              {abierta ? "Ocultar detalle" : falta ? "Ver detalle · falta definir algo" : "Ver detalle"}
+            </button>
+          )}
+        </td>
+        <td>{celda("cuando", "Qué la dispara…")}</td>
+        <td>{celda("hace", "Qué hace…")}</td>
+        <td>{celda("resuelve", "Qué problema resuelve…")}</td>
+        <td>
+          <OrigenChip value={a.origen} editable={editable} onCommit={(v) => onCambio({ origen: v })} />
+        </td>
+        {editable && (
+          <td className="stl-props-actions">
+            <RemoveBtn onClick={onQuitar} title="Quitar esta automatización" />
+          </td>
+        )}
+      </tr>
+      {delEquipo && abierta && (
+        <tr className="stl-plan-auto-fila-detalle">
+          <td colSpan={columnas}>
+            <DetalleDeAutomatizacion a={a} editable={editable} onCambio={onCambio} />
+          </td>
+        </tr>
+      )}
+    </>
+  );
+}
+
+export const AutomatizacionesSection: FC<SectionProps<AutomatizacionesData>> = ({ data, ctx, editable, onChange }) => {
   const d = adoptarAutomatizaciones(data);
   const items = d.items;
   const set = (next: Partial<AutomatizacionesData>) => onChange?.({ ...partesDe(data), intro: d.intro, items: d.items, ...next });
   const setItem = (i: number, patch: Partial<Automatizacion>) => set({ items: replaceAt(items, i, { ...items[i], ...patch }) });
+  /* Qué detalles están abiertos, por posición. Vive en la sección (no en la fila) para que quitar una automatización no
+     deje abierto el detalle de la que pasa a ocupar su lugar. */
+  const [abiertas, setAbiertas] = useState<ReadonlySet<number>>(() => new Set());
   if (!editable && !items.length) return null;
+  const alternar = (i: number) =>
+    setAbiertas((prev) => {
+      const sig = new Set(prev);
+      if (sig.has(i)) sig.delete(i);
+      else sig.add(i);
+      return sig;
+    });
+  const quitar = (i: number) => {
+    setAbiertas((prev) => new Set([...prev].filter((j) => j !== i).map((j) => (j > i ? j - 1 : j))));
+    set({ items: removeAt(items, i) });
+  };
+  // El detalle técnico es del equipo: ni el enlace del cliente ni el PDF lo pintan, aunque la data lo traiga.
+  const delEquipo = ctx?.planificacion?.delEquipo === true && !ctx?.pdfMode;
+  const columnas = editable ? 6 : 5;
   return (
     <ConIntro data={{ ...(data as object), intro: d.intro }} editable={editable} onCambios={(c) => set(c as unknown as Partial<AutomatizacionesData>)} placeholder="Una frase que enmarca las automatizaciones…">
-      <div className="stl-plan-cards">
-        {items.map((a, i) => (
-          <div key={i} className={`stl-plan-card stl-item${(a.falta ?? "").trim() || normalizarOrigen(a.origen) === "supuesto" ? " stl-plan-card--aviso" : ""}`}>
-            {editable && <RemoveBtn onClick={() => set({ items: removeAt(items, i) })} title="Quitar esta automatización" />}
-            <div className="stl-plan-card-h">
-              <div>
-                <Editable as="div" className="stl-plan-card-t" editable={editable} value={a.nombre} placeholder="Nombre de la automatización…" onCommit={(v) => setItem(i, { nombre: v })} />
-                {(editable || a.donde) && (
-                  <Editable as="div" className="stl-plan-fuente" editable={editable} value={a.donde ?? ""} placeholder="Objeto · Hub…" onCommit={(v) => setItem(i, { donde: v })} />
-                )}
-              </div>
-              <OrigenChip value={a.origen} editable={editable} onCommit={(v) => setItem(i, { origen: v })} />
-            </div>
-            <dl className="stl-plan-campos">
-              <Campo rotulo="Cuando" value={a.cuando} editable={editable} placeholder="Qué la dispara…" onCommit={(v) => setItem(i, { cuando: v })} />
-              <Campo rotulo="Hace" value={a.hace} editable={editable} placeholder="Qué hace…" onCommit={(v) => setItem(i, { hace: v })} />
-              {/* 2026-10-25 — las ramas del Brief («bifurcación», «cumple / no cumple con criterio»). */}
-              <Campo rotulo="Si…" value={a.condicion} editable={editable} placeholder="La condición que la bifurca (opcional)…" onCommit={(v) => setItem(i, { condicion: v })} />
-              <Campo rotulo="Se cumple" value={a.siCumple} editable={editable} placeholder="Qué pasa si se cumple…" onCommit={(v) => setItem(i, { siCumple: v })} />
-              <Campo rotulo="No se cumple" value={a.noCumple} editable={editable} placeholder="Qué pasa si no…" onCommit={(v) => setItem(i, { noCumple: v })} />
-              <Campo rotulo="Resuelve" value={a.resuelve} editable={editable} placeholder="Qué problema resuelve…" onCommit={(v) => setItem(i, { resuelve: v })} />
-              <Campo rotulo="Vista" value={a.vista} editable={editable} placeholder="La vista o el filtro que deja (Leads nuevos · Formulario del sitio)…" onCommit={(v) => setItem(i, { vista: v })} />
-              <Campo rotulo="Ten en cuenta" value={a.considerar} editable={editable} placeholder="Lo que hay que considerar al construirla…" onCommit={(v) => setItem(i, { considerar: v })} />
-              <Campo rotulo="Falta" value={a.falta} editable={editable} placeholder="Lo que todavía no está definido…" onCommit={(v) => setItem(i, { falta: v })} aviso />
-            </dl>
-            {(editable || a.fuente) && (
-              <Editable as="div" className="stl-plan-fuente" editable={editable} value={a.fuente ?? ""} placeholder="Reunión que la respalda…" onCommit={(v) => setItem(i, { fuente: v })} />
-            )}
-          </div>
-        ))}
-      </div>
+      {items.length > 0 && (
+        <div className="stl-props-scroll">
+          <table className="stl-props stl-plan-tabla stl-plan-autos">
+            <thead>
+              <tr>
+                <th>Automatización</th>
+                <th>Cuándo pasa</th>
+                <th>Qué hace</th>
+                <th>Para qué sirve</th>
+                <th>Estado</th>
+                {editable && <th className="stl-props-actions" aria-label="Acciones" />}
+              </tr>
+            </thead>
+            <tbody>
+              {items.map((a, i) => (
+                <FilaDeAutomatizacion
+                  key={i}
+                  a={a}
+                  editable={editable}
+                  delEquipo={delEquipo}
+                  columnas={columnas}
+                  abierta={abiertas.has(i)}
+                  onAlternar={() => alternar(i)}
+                  onCambio={(patch) => setItem(i, patch)}
+                  onQuitar={() => quitar(i)}
+                />
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
       {editable && <AddBtn label="Agregar automatización" onClick={() => set({ items: appendItem(items, { nombre: "", donde: "", cuando: "", hace: "", resuelve: "", falta: "", origen: "", fuente: "" }) })} />}
     </ConIntro>
   );

@@ -14,6 +14,8 @@
  * Puro: sin React ni Prisma.
  */
 
+import { normalizarOrigen } from "./origen";
+
 const arr = <T,>(v: unknown): T[] => (Array.isArray(v) ? (v as T[]) : []);
 const txt = (v: unknown): string => (typeof v === "string" ? v : "");
 const sinTildes = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "");
@@ -87,6 +89,216 @@ export interface CicloDeVidaData {
 
 /** Los cuatro estados del lead que trae el Brief, para empezar sin escribirlos. */
 export const ESTADOS_DEL_LEAD_DE_SIEMPRE = ["Nuevo", "En contacto", "Descartado", "Re ingreso"] as const;
+
+/**
+ * LAS 7 ETAPAS DE HUBSPOT (Elías, 12 nov 2026, al revisar la planificación de marketing de Cemaco): el ciclo de vida de
+ * la Planificación son SIEMPRE las etapas por defecto de HubSpot, en este orden. El agente nunca crea, renombra ni quita
+ * etapas: lo propio del cliente («contacto base», «depurado», «cliente activo») es la condición para entrar a una de
+ * estas, o un estado del lead. Antes el formato permitía etapas nuevas y salieron inventadas («Contacto base»,
+ * «Depurado»). `entraCuando` y `laMueve` son lo que HubSpot entiende por cada una: se usan solo si el agente no la llenó.
+ */
+export const ETAPAS_DE_HUBSPOT = [
+  {
+    id: "suscriptor",
+    etapa: "Suscriptor",
+    entraCuando: "Se suscribe al blog o al boletín: todavía no pidió nada",
+    laMueve: "El formulario de suscripción",
+  },
+  {
+    id: "lead",
+    etapa: "Lead",
+    entraCuando: "Deja sus datos o entra a la base, y todavía nadie lo calificó",
+    laMueve: "Un formulario, una importación o una persona",
+  },
+  {
+    id: "mql",
+    etapa: "MQL (Lead calificado por marketing)",
+    entraCuando: "Marketing lo genera o lo califica: cumple el perfil o mostró interés",
+    laMueve: "Marketing: un formulario, una campaña o una automatización",
+  },
+  {
+    id: "sql",
+    etapa: "SQL (Lead calificado por ventas)",
+    entraCuando: "Una persona de Ventas acepta el MQL, o Ventas lo genera o lo valida directamente",
+    laMueve: "Una persona de Ventas, al aceptarlo",
+  },
+  { id: "oportunidad", etapa: "Oportunidad", entraCuando: "Se le abre un negocio", laMueve: "Una automatización al crear el negocio" },
+  { id: "cliente", etapa: "Cliente", entraCuando: "Gana su primer negocio", laMueve: "Una automatización al ganar el negocio" },
+  { id: "promotor", etapa: "Promotor", entraCuando: "Recomienda o refiere a otros", laMueve: "Una persona o una encuesta de satisfacción" },
+] as const;
+
+export type EtapaDeHubspot = (typeof ETAPAS_DE_HUBSPOT)[number]["id"];
+
+const minusculas = (s: string) => sinTildes(s).toLowerCase().replace(/\s+/g, " ").trim();
+
+/** Los nombres que ya son el de HubSpot (en español o en inglés): con estos no hace falta decir cómo lo llamaba el agente. */
+const NOMBRES_DE_HUBSPOT = new Set(
+  [
+    ...ETAPAS_DE_HUBSPOT.map((e) => e.etapa),
+    "suscriptor", "subscriber", "lead", "mql", "sql", "lead calificado por marketing", "lead calificado por ventas",
+    "marketing qualified lead", "sales qualified lead", "oportunidad", "opportunity", "cliente", "customer", "promotor", "evangelist",
+  ].map(minusculas),
+);
+
+/**
+ * Un nombre de SALIDA del embudo («Lead descalificado», «Lead descartado», «Cliente perdido», «Ex cliente»): no es la
+ * condición para ENTRAR a ninguna etapa. Va al estado del lead, que es donde HubSpot lo deja («Descartado»). Sin esto,
+ * «descalificado» caía en MQL por contener «calificad», y la fila decía «no cumple el perfil» como condición de entrada.
+ */
+export function esSalidaDelEmbudo(nombre: unknown): boolean {
+  return /descalific|no calificad|descart|perdid|\bex[ -]?cliente|churn|rechazad|dad[oa] de baja/.test(minusculas(txt(nombre)));
+}
+
+/** A cuál de las 7 corresponde un nombre de etapa. `null` si no es ninguna («Contacto base», «Depurado», «Otro»). */
+export function etapaDeHubspot(nombre: unknown): EtapaDeHubspot | null {
+  const t = minusculas(txt(nombre));
+  if (!t || esSalidaDelEmbudo(t)) return null;
+  if (/\bsql\b|calificad[oa] por ventas|aceptad[oa] por ventas|sales qualified/.test(t)) return "sql";
+  if (/\bmql\b|calificad[oa] por marketing|marketing qualified/.test(t)) return "mql";
+  if (/oportunidad|opportunit/.test(t)) return "oportunidad";
+  if (/promotor|evangel|embajador|advocate/.test(t)) return "promotor";
+  if (/suscri|subscri/.test(t)) return "suscriptor";
+  if (/cliente potencial|prospect|\bleads?\b/.test(t)) return /calificad/.test(t) ? "mql" : "lead";
+  if (/\bclientes?\b|customer/.test(t)) return "cliente";
+  return null;
+}
+
+/** «Nombre: criterio», o solo uno de los dos. */
+const conNombre = (nombre: string, criterio: string) => (criterio ? (nombre ? `«${nombre}»: ${criterio}` : criterio) : nombre ? `«${nombre}»` : "");
+
+/** Lo más débil manda: una fila con algo supuesto es un supuesto, aunque el resto se haya acordado. "" = no se sabe. */
+const PESO_DEL_ORIGEN: Record<string, number> = { supuesto: 1, propuesta: 2, acordado: 3 };
+function origenMasDebil(origenes: readonly string[]): string {
+  let mejor = "";
+  for (const o of origenes) {
+    const n = normalizarOrigen(o);
+    if (n && (!mejor || PESO_DEL_ORIGEN[n] < PESO_DEL_ORIGEN[mejor])) mejor = n;
+  }
+  return mejor;
+}
+
+const unicos = (xs: readonly string[]) => xs.filter((x, i) => x && xs.findIndex((y) => minusculas(y) === minusculas(x)) === i);
+
+/**
+ * Lo que devolvió el agente → las 7 etapas de HubSpot, en su orden. Se aplica al GENERAR o REGENERAR, nunca al leer: lo
+ * que una persona escribió a mano en un documento se sigue viendo como está.
+ *
+ *  · Una fila que nombra una de las 7 le da su criterio y quién la mueve. Si el nombre era otro («Cliente activo»), el
+ *    criterio lo dice: «Cliente activo»: compró en los últimos 12 meses.
+ *  · Una fila que no es ninguna («Contacto base», «Depurado») no se pierde: pasa al criterio de la etapa que tenía antes
+ *    en la lista (o a Lead, si era de las primeras), como «También «Depurado»: …», y quién la mueve se suma al de la etapa.
+ *  · Una SALIDA del embudo («Lead descalificado», «Cliente perdido») no es condición de entrada: pasa al estado del lead.
+ *  · Una etapa que el agente no escribió lleva la definición de HubSpot, como propuesta.
+ *  · El origen de cada fila es el más débil de lo que la forma (un supuesto sumado a algo acordado la deja en supuesto).
+ *  · Los estados del lead: los de antes se quedan y se suman los nuevos que no estaban (por nombre).
+ *  · El `cambio` (nueva / se renombra / se quita) ya no aplica: las 7 se mantienen siempre.
+ */
+export function normalizarCicloDeVida(nuevo: unknown, previo?: unknown): CicloDeVidaData {
+  const d = (nuevo ?? {}) as Record<string, unknown>;
+  const filas = arr<Record<string, unknown>>(d.etapas).filter((e) => e && typeof e === "object");
+  const ids = filas.map((f) => etapaDeHubspot(f.etapa));
+  const lugar = (x: EtapaDeHubspot) => ETAPAS_DE_HUBSPOT.findIndex((e) => e.id === x);
+
+  type Base = { entraCuando: string; laMueve: string[]; origenes: string[]; extras: string[]; tiene: boolean };
+  const porEtapa = new Map<EtapaDeHubspot, Base>(
+    ETAPAS_DE_HUBSPOT.map((e) => [e.id, { entraCuando: "", laMueve: [], origenes: [], extras: [], tiene: false }]),
+  );
+  const salidas: EstadoDelLead[] = [];
+  filas.forEach((f, i) => {
+    const nombre = txt(f.etapa).trim();
+    const criterio = txt(f.entraCuando).trim();
+    const mueve = txt(f.laMueve).trim();
+    const origen = txt(f.origen).trim();
+    if (!nombre && !criterio) return;
+    if (esSalidaDelEmbudo(nombre)) {
+      salidas.push({ estado: nombre, significa: [criterio, mueve && `la mueve: ${mueve}`].filter(Boolean).join(" · "), origen });
+      return;
+    }
+    const id = ids[i];
+    if (id) {
+      const b = porEtapa.get(id)!;
+      const propio = NOMBRES_DE_HUBSPOT.has(minusculas(nombre)) ? criterio : conNombre(nombre, criterio);
+      if (!b.tiene) {
+        b.tiene = true;
+        b.entraCuando = propio;
+        b.laMueve.unshift(mueve); // Quien mueve la etapa misma va primero; lo sumado, después.
+      } else {
+        if (propio) b.extras.push(propio);
+        b.laMueve.push(mueve);
+      }
+      b.origenes.push(origen);
+      return;
+    }
+    /* No es ninguna de las 7: va a la etapa que tenía antes en la lista. Si era de las primeras, a Lead (donde entra todo
+       contacto), salvo que la de después sea anterior a Lead (Suscriptor). Con Cemaco, «Contacto en base» iba antes de
+       «Cliente activo»: mandarla a la de después la hacía cliente. */
+    const antes = ids.slice(0, i).reverse().find((x) => x);
+    const despues = ids.slice(i + 1).find((x) => x);
+    const destino = porEtapa.get(antes ?? (despues && lugar(despues) < lugar("lead") ? despues : "lead"))!;
+    destino.extras.push(`También ${conNombre(nombre, criterio)}`);
+    destino.laMueve.push(mueve);
+    destino.origenes.push(origen);
+  });
+
+  const etapas: EtapaDeCiclo[] = ETAPAS_DE_HUBSPOT.map((e) => {
+    const b = porEtapa.get(e.id)!;
+    const mueven = unicos(b.laMueve);
+    return {
+      etapa: e.etapa,
+      entraCuando: [b.entraCuando || e.entraCuando, ...b.extras].join(" · "),
+      laMueve: mueven.length ? mueven.join(" · ") : e.laMueve,
+      // La que no escribió nadie es la definición de HubSpot: una propuesta, que pesa junto con lo que se le sumó.
+      origen: origenMasDebil([...b.origenes, ...(b.tiene && b.entraCuando ? [] : ["propuesta"])]),
+    };
+  });
+
+  const previos = arr<EstadoDelLead>(((previo ?? {}) as Record<string, unknown>).estadosLead).filter((e) => e && typeof e === "object");
+  const vistos = new Set(previos.map((e) => minusculas(txt(e.estado))).filter(Boolean));
+  const nuevos = [...arr<EstadoDelLead>(d.estadosLead), ...salidas].filter((e) => {
+    const k = minusculas(txt(e?.estado));
+    if (!k || vistos.has(k)) return false;
+    vistos.add(k);
+    return true;
+  });
+
+  return { ...d, intro: txt(d.intro), etapas, estadosLead: [...previos, ...nuevos] };
+}
+
+/**
+ * Lo que se guarda del ciclo de vida al generar: las 7 etapas (`normalizarCicloDeVida`). Salvo un caso: si el agente no
+ * devolvió ninguna etapa y el documento ya tenía, se queda lo que había (escrito a mano o no) y solo se le suman los estados
+ * del lead nuevos. Rellenar con la definición de HubSpot, o dejarlo vacío, pisaría lo que ya estaba.
+ */
+export function cicloDeVidaGenerado(nuevo: unknown, previo?: unknown): unknown {
+  const conEtapas = (v: unknown) =>
+    arr<Record<string, unknown>>((v as Record<string, unknown> | null)?.etapas).some((e) => txt(e?.etapa).trim() || txt(e?.entraCuando).trim());
+  const p = (previo ?? {}) as Record<string, unknown>;
+  if (!conEtapas(nuevo) && (conEtapas(p) || arr(p.items).length > 0)) {
+    const previos = arr<EstadoDelLead>(p.estadosLead).filter((e) => e && typeof e === "object");
+    const vistos = new Set(previos.map((e) => minusculas(txt(e.estado))).filter(Boolean));
+    const nuevos = arr<EstadoDelLead>(((nuevo ?? {}) as Record<string, unknown>).estadosLead).filter((e) => {
+      const k = minusculas(txt(e?.estado));
+      if (!k || vistos.has(k)) return false;
+      vistos.add(k);
+      return true;
+    });
+    return { ...p, estadosLead: [...previos, ...nuevos] };
+  }
+  return normalizarCicloDeVida(nuevo, previo);
+}
+
+/**
+ * Cuántas de las 7 etapas de HubSpot traen una condición PROPIA del cliente (no la definición de HubSpot): es lo que hay
+ * que configurar. Solo cuenta filas con el nombre exacto de una de las 7 (un documento de antes, con sus etapas, se mide
+ * por su `cambio`, como siempre).
+ */
+export function condicionesPropiasDelCiclo(etapas: readonly EtapaDeCiclo[]): number {
+  return etapas.filter((e) => {
+    const h = ETAPAS_DE_HUBSPOT.find((x) => x.etapa === txt(e?.etapa).trim());
+    const c = txt(e?.entraCuando).trim();
+    return !!h && !!c && c !== h.entraCuando;
+  }).length;
+}
 
 /** La prosa vieja (`items` título + detalle) → tabla. El detalle entero queda en «entra cuando». */
 export function adoptarCicloDeVida(data: unknown): CicloDeVidaData {
@@ -210,6 +422,31 @@ export interface Automatizacion {
 export interface AutomatizacionesData {
   intro?: string;
   items: Automatizacion[];
+}
+
+/**
+ * LO TÉCNICO DE UNA AUTOMATIZACIÓN (Elías, 12 nov 2026: las tarjetas con CUANDO / HACE / SI… / SE CUMPLE… no se leían).
+ * La sección pasa a una fila por automatización (Automatización · Cuándo pasa · Qué hace · Para qué sirve · Estado), y
+ * estos campos quedan plegados en «Ver detalle», SOLO para el equipo: nunca en el enlace del cliente, en el PDF ni en la
+ * foto publicada. Se guardan igual (nada se borra): cambia lo que se ve.
+ */
+export const CAMPOS_TECNICOS_DE_AUTOMATIZACION = ["condicion", "siCumple", "noCumple", "vista", "considerar", "falta", "fuente"] as const satisfies ReadonlyArray<keyof Automatizacion>;
+
+/**
+ * Lo que sale hacia el cliente (la foto al publicar, el enlace): las automatizaciones sin su detalle técnico. Las demás
+ * secciones pasan igual. Se saca de la DATA, no solo del render, para que no viaje al navegador del cliente.
+ */
+export function sinLoTecnicoDeLaPlanificacion<T>(key: string, data: T): T {
+  if (key !== "automatizaciones" || !data || typeof data !== "object" || Array.isArray(data)) return data;
+  const d = data as Record<string, unknown>;
+  if (!Array.isArray(d.items)) return data;
+  const tecnicos = new Set<string>(CAMPOS_TECNICOS_DE_AUTOMATIZACION);
+  return {
+    ...d,
+    items: d.items.map((i) =>
+      i && typeof i === "object" && !Array.isArray(i) ? Object.fromEntries(Object.entries(i).filter(([k]) => !tecnicos.has(k))) : i,
+    ),
+  } as T;
 }
 
 /** Los «procesos de marketing» de Ejecución (prosa título + detalle) → automatizaciones. */

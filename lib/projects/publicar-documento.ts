@@ -29,6 +29,7 @@ import { urlDeProyecto } from "@/lib/agents/run-url";
 import { PLANIFICACION_DEF_BY_KEY } from "@/components/landing/configs/planificacion.defs";
 import { SECCIONES_SOLO_INTERNAS } from "@/lib/business-cases/section-briefs";
 import { sinPorQueVacia } from "@/lib/landing/por-que-vacia";
+import { sinLoTecnicoDeLaPlanificacion } from "@/lib/planificacion/secciones";
 
 export type DocumentoPublicable = "diagnostico" | "planificacion";
 
@@ -95,8 +96,8 @@ async function publicarDiagnosticoPresentado(projectId: string) {
 }
 
 /**
- * Lo que entra a la foto que ve el cliente (2026-10-29): sin las secciones SOLO INTERNAS (el Brief traído de la hoja) y sin
- * el porqué de las vacías, que es un aviso del equipo. Se saca ACÁ y no solo al servir: lo que no está en la foto no se
+ * Lo que entra a la foto que ve el cliente (2026-10-29): sin las secciones SOLO INTERNAS (el Brief traído de la hoja), sin
+ * el porqué de las vacías, que es un aviso del equipo, y sin el detalle técnico de las automatizaciones (2026-11-12). Se saca ACÁ y no solo al servir: lo que no está en la foto no se
  * puede filtrar por un olvido en el enlace o en el PDF.
  */
 export function seccionesParaLaFoto<S extends { key: string; blocks: Array<{ data: unknown }> }>(secciones: readonly S[]): S[] {
@@ -104,7 +105,9 @@ export function seccionesParaLaFoto<S extends { key: string; blocks: Array<{ dat
     .filter((s) => !SECCIONES_SOLO_INTERNAS.has(s.key))
     .map((s) => ({
       ...s,
-      blocks: s.blocks.map((b) => (b.data && typeof b.data === "object" && !Array.isArray(b.data) ? { ...b, data: sinPorQueVacia(b.data as object) } : b)),
+      blocks: s.blocks.map((b) =>
+        b.data && typeof b.data === "object" && !Array.isArray(b.data) ? { ...b, data: sinLoTecnicoDeLaPlanificacion(s.key, sinPorQueVacia(b.data as object)) } : b,
+      ),
     }));
 }
 

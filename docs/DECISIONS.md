@@ -14766,3 +14766,62 @@ queda va a reparación en vez de tirarse.
 - **Lo que no queda garantizado:** un error de la transcripción se copia fiel («15 lits» por «15 mil» salió como «~15
   contactos»); una cifra cuya cita trae tres números o más sale «por confirmar» con el texto del agente; un turno de un
   solo número depende de la pregunta que respondía, que no queda en lo citado.
+
+## La Planificación: el ciclo de vida son las 7 etapas de HubSpot y las automatizaciones van en filas (2026-11-12)
+
+> Pedido de Elías al revisar la «Planificación de marketing» que Liliana generó para Cemaco · Costa Rica (plantilla «Cómo
+> debería funcionar el marketing»). Aplica a TODAS las plantillas de la Planificación. Enmienda dos puntos de «La
+> Planificación es lo que va a quedar configurado en HubSpot» (2026-10-02) y uno de «La Planificación con lo que pide el
+> Brief de implementación» (2026-10-25).
+
+- **El ciclo de vida son SIEMPRE las 7 etapas por defecto de HubSpot**, en este orden: Suscriptor, Lead, MQL (Lead
+  calificado por marketing), SQL (Lead calificado por ventas), Oportunidad, Cliente, Promotor (`ETAPAS_DE_HUBSPOT`,
+  lib/planificacion/secciones.ts). El agente nunca crea, renombra ni quita etapas: con el formato anterior (que permitía
+  «nueva / se renombra / se quita») salieron inventadas («Contacto en base», «Contacto depurado», «Cliente activo»). Lo
+  propio del cliente es la condición para entrar a una etapa (`entraCuando`) o, si es un estado de trabajo, un estado del
+  lead. Reemplaza la regla del 2026-10-02 «parte de las etapas del portal y propone solo los cambios»: las etapas del
+  portal siguen llegando al agente, pero para entender cómo trabaja el cliente, no para copiarlas.
+- **La regla de los equipos**, en la guía de la sección: si Marketing genera el contacto es MQL; pasa a SQL cuando una
+  persona de Ventas lo acepta (validación humana: quien recibe el MQL lo cambia a SQL para decir que lo acepta); si Ventas
+  lo genera o lo valida directamente, es SQL.
+- **Se hace cumplir en el código, no solo en el prompt**: `normalizarCicloDeVida` corre al guardar lo que devuelve el
+  agente (la planificación de siempre y sus copias). Deja las 7 en su orden; lo que nombra una de ellas le da su criterio
+  (con el nombre del cliente adelante si era otro: «Cliente activo»: …); lo que no calza con ninguna pasa al criterio de
+  la etapa que tenía antes en la lista, o a Lead si iba primero (con Cemaco, «Contacto en base» mandado a la de después la
+  hacía cliente), y quién la mueve se suma al de esa etapa; una SALIDA del embudo («Lead descalificado», «Cliente
+  perdido», «Ex cliente») no es condición de entrada y pasa al estado del lead (antes «descalificado» caía en MQL por
+  contener «calificad»); una etapa que nadie escribió lleva la definición de HubSpot, como propuesta. El origen de cada
+  fila es el más débil de lo que la forma: un supuesto sumado a algo acordado la deja en supuesto. **Al leer no se
+  aplica**: lo que una persona escribió a mano se sigue viendo como está. Si el agente no devuelve ninguna etapa y el
+  documento ya tenía, se queda lo que había y solo se le suman los estados del lead nuevos.
+- **El estado del lead entra al esquema del agente** (antes solo lo escribía una persona): hace falta para que lo propio
+  del cliente que es un estado de trabajo tenga dónde ir. Al regenerar, los estados que ya estaban se quedan y se suman
+  los nuevos que no estaban (por nombre). Enmienda el «fuera del esquema» del 2026-10-25. El costo, aceptado: un estado
+  que escribió la IA tampoco se reemplaza al regenerar (si hoy dice «Contactado» y mañana «En contacto», quedan los dos;
+  se borra a mano), porque no hay cómo distinguir el de la IA del de una persona.
+- **La lista de construcción** suma el ciclo de vida cuando alguna de las 7 trae una condición propia del cliente (no la
+  definición de HubSpot): `condicionesPropiasDelCiclo`. Antes lo sumaba el `cambio`, que ya no se escribe.
+- **La columna «Cambio» solo aparece si una fila dice que algo cambia** (un documento de antes o una fila escrita a
+  mano): con las 7 de HubSpot todas se mantienen y la columna no decía nada. El `cambio` sale del esquema del agente.
+- **Las automatizaciones, en filas**: Automatización (con su objeto · hub) · Cuándo pasa · Qué hace · Para qué sirve ·
+  Estado (el origen). Las tarjetas con CUANDO / HACE / SI… / SE CUMPLE / NO SE CUMPLE / VISTA / TEN EN CUENTA / FALTA /
+  Reunión que la respalda no se leían. Lo técnico (`CAMPOS_TECNICOS_DE_AUTOMATIZACION`) queda plegado en «Ver detalle»
+  por fila, visible y editable SOLO para el equipo (`ctx.planificacion.delEquipo`, que pasan los dos editores: el de la
+  planificación de siempre y el de las copias). «Ver detalle · falta definir algo» avisa en ámbar. Nada se borra: son los
+  mismos datos.
+- **Lo técnico no llega al cliente por ningún camino**: ni el enlace (`/external/*`), ni el PDF (no pasa la marca y además
+  `pdfMode` lo apaga), ni la foto publicada. Se saca de la DATA, no solo del render (`sinLoTecnicoDeLaPlanificacion`): en
+  `seccionesParaLaFoto` al publicar, en `sinLosAvisosDelEquipo` al servir la planificación (una foto de antes de hoy lo
+  trae) y en la vista del enlace propio de una copia (`artefacto-view.ts`). **Baja de visibilidad para el cliente** lo que
+  antes veía en la tarjeta: la condición y sus ramas, la vista, «Ten en cuenta», «Falta» y la reunión que la respalda.
+- **Rehacer solo esa sección en un documento ya generado**: `scripts/rehacer-ciclo-de-vida.ts --canvas <id>` (simulacro
+  por defecto; le pide al agente que acomode el contenido actual con la guía nueva y lo normaliza; deja la propuesta en un
+  archivo para aplicar exactamente lo revisado con `--apply --propuesta <archivo>`; guarda una versión antes de escribir).
+  Para Cemaco, después del deploy.
+
+*Lo que no garantiza:* el editor no se probó con sesión (el navegador del preview no está logueado). La impresión
+genérica de tarjetas (`/print/canvas/**`, solo con sesión del equipo; la Planificación usa la del motor) imprime toda la
+data, también el detalle técnico. «Mejorar con IA» y el
+chat de la sección no pasan por el normalizador: si alguien le pide al chat una etapa nueva, la escribe (es un pedido de
+una persona). Las automatizaciones de Cemaco nombran las etapas viejas («Contacto en base», «Cliente activo») en su texto:
+rehacer solo el ciclo de vida no las corrige.

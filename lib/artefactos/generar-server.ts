@@ -48,6 +48,7 @@ import { POLITICA_RECTORA_KEY, SECCIONES_RETIRADAS_DEL_DIAGNOSTICO } from "@/com
 import { SECCIONES_RETIRADAS_DE_PLANIFICACION } from "@/components/landing/configs/planificacion.defs";
 import { ocultarSeccionesRetiradas } from "@/lib/canvas/retirar-secciones";
 import { fusionarFilas, type FilaPropiedad } from "@/lib/planificacion/propiedades";
+import { cicloDeVidaGenerado } from "@/lib/planificacion/secciones";
 import { escalaParaPosicionar, posicionDeLaPropuesta, SECCION_DE_ESCALA } from "@/lib/escala/contexto";
 import { tagLabels } from "@/lib/tags/catalog";
 import { resultadosDelProyecto } from "@/lib/handoff/resultados";
@@ -253,6 +254,10 @@ export async function generarCopia(o: {
     const nuevas = (s.data as { filas?: FilaPropiedad[] }).filas ?? [];
     const previas = ((prevDataByKey.propiedades as { filas?: FilaPropiedad[] } | undefined)?.filas ?? []).filter((f) => f && typeof f === "object");
     s.data = { ...(s.data as object), filas: fusionarFilas(previas, Array.isArray(nuevas) ? nuevas : []) };
+  }
+  // El ciclo de vida son siempre las 7 etapas de HubSpot (2026-11-12), como en la planificación de siempre.
+  for (const s of gen.sections) {
+    if (s.key === "ciclo_vida_crm" && tipo.id === "planning") s.data = cicloDeVidaGenerado(s.data, prevDataByKey.ciclo_vida_crm);
   }
 
   await guardarVersionDelDocumento(o.canvasId, { origen: "Antes de regenerar" });

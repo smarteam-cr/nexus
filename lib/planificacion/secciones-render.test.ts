@@ -16,6 +16,7 @@ import {
   ConversacionesSection,
 } from "@/components/landing/sections-planificacion";
 import type { LandingContext } from "@/components/landing/types";
+import type { AutomatizacionesData } from "./secciones";
 
 const ctx = (pdfMode = false) => ({ clientName: "FUNDAUNA", pdfMode }) as unknown as LandingContext;
 
@@ -94,11 +95,16 @@ describe("pipelines", () => {
 });
 
 describe("automatizaciones y conversaciones", () => {
-  it("los procesos de marketing viejos se leen como automatizaciones; lo que falta, marcado", () => {
-    const out = html(AutomatizacionesSection, { items: [{ title: "Scoring", detail: "Suma puntos" }, { nombre: "Seguimiento", falta: "Cada cuánto" }] });
+  it("los procesos de marketing viejos se leen como automatizaciones; lo que falta, marcado para el equipo y nunca para el cliente", () => {
+    const data = { items: [{ title: "Scoring", detail: "Suma puntos" }, { nombre: "Seguimiento", falta: "Cada cuánto" }] };
+    const out = html(AutomatizacionesSection, data);
     expect(out).toContain("Scoring");
     expect(out).toContain("Suma puntos");
-    expect(out).toContain("stl-plan-falta");
+    expect(out).not.toContain("Cada cuánto");
+    const delEquipo = renderToStaticMarkup(
+      createElement(AutomatizacionesSection, { data: data as unknown as AutomatizacionesData, ctx: { clientName: "FUNDAUNA", planificacion: { delEquipo: true } } as LandingContext }),
+    );
+    expect(delEquipo).toContain("stl-plan-ver-detalle--falta");
   });
   it("conversaciones dice quién responde", () => {
     const out = html(ConversacionesSection, { items: [{ nombre: "Agente de IA en WhatsApp", responde: "agente_ia" }] });
