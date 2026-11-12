@@ -307,7 +307,7 @@ Devuelves SOLO este JSON (P = {"texto":"…","citas":[C]}; C = {"reunion":"R1","
  "confirmar":[{"dimension":"<id de una parte con porExplorar>","texto":"…"}],
  "pendientes":[{"tipo":"sin-dato|hipotesis|contradiccion","area":"<id o null>","texto":"…","citas":[C]}]}
 
-LA REGLA DE TODO: cada afirmación sobre la empresa (su negocio, su organización, sus etapas, sus retos, sus cifras) lleva en «citas» lo que dijo alguien de la EMPRESA que la sostiene: una cita, o dos si la afirmación junta cosas dichas en turnos distintos. Cada cita es el pedazo más corto que la sostenga, de 6 a 25 palabras seguidas de UNA intervención, copiado palabra por palabra como está en la transcripción (con sus números en cifras o en letras, como aparezcan), con su reunión y su turno. Todo lo que escribas tiene que estar en tus citas: cada número, cada herramienta y cada detalle; si ninguna cita lo dice, sácalo de la frase. Si lo dijo alguien de Smarteam, solo vale si alguien de la empresa lo confirmó justo después («Exacto», «Sí, correcto»): cita entonces lo que dijo Smarteam. Lo que no puedas citar, no lo escribas. Nada de lecturas nuestras presentadas como dichas por ellos: no califiques lo que contaron («evitable», «innecesario», «se podría automatizar», «recuperable») si ellos no lo dijeron así. La «guia» del equipo de Smarteam te orienta sobre qué buscar; no es evidencia: nada sale de ella sin una cita de la transcripción.
+LA REGLA DE TODO: cada afirmación sobre la empresa (su negocio, su organización, sus etapas, sus retos, sus cifras) lleva en «citas» lo que dijo alguien de la EMPRESA que la sostiene: una cita, o dos si la afirmación junta cosas dichas en turnos distintos. Cada cita es el pedazo más corto que la sostenga, de 6 a 25 palabras seguidas de UNA intervención, copiado palabra por palabra como está en la transcripción (con sus repeticiones y muletillas, y sus números en cifras o en letras, como aparezcan), con su reunión y su turno. Nunca pegues pedazos con «;», «…» o «...» ni saltes palabras: si necesitas dos pedazos, son dos citas. Dentro de cualquier texto del JSON nunca escribas comillas dobles ("): si lo dicho las trae, usa « ». Todo lo que escribas tiene que estar en tus citas: cada número, cada herramienta y cada detalle; si ninguna cita lo dice, sácalo de la frase. Si lo dijo alguien de Smarteam, solo vale si alguien de la empresa lo confirmó justo después («Exacto», «Sí, correcto»): cita entonces lo que dijo Smarteam. Lo que no puedas citar, no lo escribas. Nada de lecturas nuestras presentadas como dichas por ellos: no califiques lo que contaron («evitable», «innecesario», «se podría automatizar», «recuperable») si ellos no lo dijeron así. La «guia» del equipo de Smarteam te orienta sobre qué buscar; no es evidencia: nada sale de ella sin una cita de la transcripción.
 
 1 NEGOCIO (cada parte, 0 o 1 frase corta): «vende»: qué vende y a quién; «ingresos»: cómo gana dinero (proyectos, suscripción, comisión por transacción…); «abarca»: qué cubre este diagnóstico (unidad, marcas, países, equipos); «fuera»: lo que la empresa dijo que queda fuera (otra división, otra línea de negocio); «motivo»: qué los movió a buscar ayuda; «busca»: el resultado que quieren. Nada corporativo ni genérico. Si una parte no se habló, déjala vacía: no la completes con suposiciones ni con lo que sabes de la industria.
 
@@ -318,16 +318,16 @@ LA REGLA DE TODO: cada afirmación sobre la empresa (su negocio, su organizació
 - «bien» (1 o 2): lo que ya hace o ya tiene (procesos, materiales, rutinas, mediciones), aunque sea a mano. Reconócelo siempre que la empresa lo haya dicho.
 - «frena» (0 o 1): qué le impide rendir más.
 - «retos» (2 o 3, el más respaldado primero): qué pasa, dónde y qué consecuencia tiene, en una frase concreta de ESTA empresa. Nunca «falta automatización» o «no tiene una vista 360» sueltos, ni un riesgo típico de la escala que la empresa no contó.
-- «cifras» (0 a 2): la magnitud de lo que pasa HOY, primero lo que se pierde o se escapa (clientes que se van, casos que esperan, tiempo en retrabajo) antes que un volumen. UNA CIFRA ES UN SOLO DATO: todos los números de «cifra» y de «texto» salen de UNA misma cita; dos datos dichos en momentos distintos (un porcentaje y una comparación) son dos cifras aparte, cada una con su estado. «cifra» es lo que va en grande: el número con su unidad corta, hasta 28 caracteres («2,8 % al mes», «14 de 25», «8 días a 1 mes»); el período y el contexto van en «texto». «estado»: «declarado» si lo dijo la empresa; «estimado» si es un cálculo o un resumen de Smarteam que la empresa confirmó (en «nota», la base y los supuestos); «pendiente» si se mencionó y hay que confirmarlo. «nota» le habla a la empresa («Falta confirmar el período y cómo se calcula»): nunca cita lo dicho ni dice quién lo dijo. Si lo dijeron con dudas («si no me equivoco», «no tengo el dato exacto»), «nota» dice qué falta validar. Escribe la cifra como la dijeron («14 de 25», nunca la resta «11»): no calcules porcentajes, ni sumes, ni redondees. Si los números de una cita no cuadran entre sí (una parte más grande que el total, una suma que no da, una frase cortada), no la uses como cifra: va como pendiente («confirmar el total de…»). Una meta («quieren llegar a 50») no es una cifra de hoy: no la pongas sola; si la usas, que la cifra sea el resultado de hoy frente a la meta («25 de 50 reuniones»). Una comparación entre dos números que resumió Smarteam y la empresa confirmó («captan 25 y se van 14») es una cifra «estimado» valiosa: inclúyela con su base, sin sacar conclusiones. No saques conclusiones que la cifra no dice («tu cartera no crece»). Nunca inventes pérdidas en dinero.
+- «cifras» (0 a 2): la magnitud de lo que pasa HOY, primero lo que se pierde o se escapa (clientes que se van, casos que esperan, tiempo en retrabajo) antes que un volumen. UNA CIFRA ES UN SOLO DATO: todos los números de «cifra» y de «texto» salen de UNA misma cita; dos datos dichos en momentos distintos (un porcentaje y una comparación) son dos cifras aparte, cada una con su estado. Una cifra mide cuánto pasa (clientes, casos, días, un porcentaje): una definición («consideras activo a quien abrió en los últimos 6 meses») no es una cifra. «cifra» es lo que va en grande: el número con su unidad corta, hasta 28 caracteres («2,8 % al mes», «14 de 25», «8 días a 1 mes»); el período y el contexto van en «texto». «estado»: «declarado» si lo dijo la empresa; «estimado» si es un cálculo o un resumen de Smarteam que la empresa confirmó (en «nota», la base y los supuestos); «pendiente» si se mencionó y hay que confirmarlo. «nota» le habla a la empresa («Falta confirmar el período y cómo se calcula»): nunca cita lo dicho ni dice quién lo dijo. Si lo dijeron con dudas («si no me equivoco», «no tengo el dato exacto»), «nota» dice qué falta validar. Escribe la cifra como la dijeron («14 de 25», nunca la resta «11»): no calcules porcentajes, ni sumes, ni redondees. Si los números de una cita no cuadran entre sí (una parte más grande que el total, una suma que no da, una frase cortada), no la uses como cifra: va como pendiente («confirmar el total de…»). Una meta («quieren llegar a 50») no es una cifra de hoy: no la pongas sola; si la usas, que la cifra sea el resultado de hoy frente a la meta («25 de 50 reuniones»). Una comparación entre dos números que resumió Smarteam y la empresa confirmó («captan 25 y se van 14») es una cifra «estimado» valiosa: inclúyela con su base, sin sacar conclusiones. No saques conclusiones que la cifra no dice («tu cartera no crece»). Nunca inventes pérdidas en dinero.
 - «falta»: si el área no tiene cifras, qué dato faltaría para medir el impacto (una frase); si no, null.
 
 4 PORQUE (uno por equipo de la escala con nivel): una o dos frases (hasta 50 palabras) de por qué está en su nivel y no uno arriba ni uno abajo, con las partes por su nombre. Usa SOLO los niveles que te damos. Nunca escribas «provisional» ni «hipótesis»: si el nivel lo determina una parte con «porExplorar», di qué mide esa parte y no la presentes como un hecho («no existe»).
 
 5 CONFIRMAR (una por cada parte con «porExplorar» que determina el nivel de su equipo): una línea simple que diga qué falta confirmar, sin tono de duda y terminando con qué se logra. Ejemplo: «Confirmar cómo registran por qué ganan o pierden una venta; con eso terminamos de ubicar Ventas».
 
-6 PENDIENTES (0 a 2, solo lo que podría cambiar el diagnóstico): una línea cada uno, en palabras simples, dicha como lo que hay que hacer («Confirmar cuántos casos recibe Soporte al mes en total»). «sin-dato»: se preguntó y no hubo dato; «hipotesis»: algo que creemos y falta validar; «contradiccion»: dos cosas dichas que no cuadran (con las dos citas). Un equipo con el que no se conversó NO va aquí (se agrega solo) y nunca se presenta como de bajo rendimiento; lo de «confirmar» tampoco se repite aquí.
+6 PENDIENTES (0 a 2, solo lo que podría cambiar el diagnóstico): una línea cada uno, en palabras simples, dicha como lo que hay que hacer («Confirmar cuántos casos recibe Soporte al mes en total»). «sin-dato»: se preguntó y no hubo dato; «hipotesis»: algo que creemos y falta validar; «contradiccion»: dos cosas dichas que no cuadran (con las dos citas). Un equipo con el que no se conversó NO va aquí (se agrega solo) y nunca se presenta como de bajo rendimiento; lo de «confirmar» tampoco se repite aquí. Nunca cuentes cómo se armó una cifra ni qué se dijo en qué momento de la reunión («se construyó combinando…», «se dijo con dudas»): di solo qué hay que confirmar.
 
-CÓMO DISTINGUIR: que algo no se haya preguntado no significa que no lo tengan: «no tienen X» solo si la empresa lo dijo. Separa lo que hacen hoy (organización, recorrido, retos, cifras), lo que quieren (busca, metas) y lo que propondríamos nosotros (eso no va aquí). No asumas herramientas, integraciones ni compras: una herramienta se nombra solo si la empresa la nombró en lo citado.
+CÓMO DISTINGUIR: que algo no se haya preguntado no significa que no lo tengan: «no tienen X» solo si la empresa lo dijo. Separa lo que hacen hoy (organización, recorrido, retos, cifras), lo que quieren (busca, metas) y lo que propondríamos nosotros (eso no va aquí). No asumas herramientas, integraciones ni compras: una herramienta se nombra solo si la empresa la nombró en sus reuniones.
 
 Cómo escribes: español neutro, en tuteo, hablándole a la empresa («tu equipo», «tus clientes»), nunca voseo. Frases cortas (cada texto de 8 a 25 palabras; un pendiente o un «confirmar», hasta 25; un «porque», hasta 50), en presente, sin markdown ni frases hechas. Nunca el código de una parte («3.6»): su nombre. Nunca escribas el nombre de una persona (ni de la empresa ni de Smarteam): di su rol («quien lleva Customer Success», «la jefatura de ventas»). No nombres a Smarteam, no hables de precios, presupuestos ni de lo que Smarteam vende, no recomiendes herramientas. Habla SOLO de los equipos de los datos.`;
 
@@ -405,7 +405,7 @@ export function textoValido(crudo: unknown, tope: number, o: ReglasDelResumen, c
   const enLoCitado = paraComparar(citado);
   const prohibido = [...t.matchAll(new RegExp(PROHIBIDO.source, "g"))].map((m) => m[0]).find((x) => !(DE_SU_NEGOCIO.test(x) && enLoCitado.includes(x)));
   if (prohibido) return { ok: false, motivo: `habla de «${prohibido}»` };
-  const voseo = voseoEnProsa(texto);
+  const voseo = voseoDelResumen(texto);
   if (voseo.length) return { ok: false, motivo: `está en voseo (${voseo.join(", ")})` };
   // Quién lo dijo no le llega al cliente (11 nov: «La supervisora identificó que…»): se dice lo que pasa, no quién lo contó.
   const quien = t.match(QUIEN_LO_DIJO);
@@ -429,6 +429,29 @@ export function textoValido(crudo: unknown, tope: number, o: ReglasDelResumen, c
   return { ok: true, texto };
 }
 
+/** Futuros que terminan en -rás (iguales en tuteo). */
+const FUTUROS = new Set(["podras", "tendras", "haras", "sabras", "querras", "pondras", "saldras", "vendras", "diras", "habras", "valdras", "cabras", "veras", "seras", "estaras", "iras", "daras"]);
+
+/** Nombres que terminan como un verbo en voseo: con mayúscula al empezar una frase son nombres, no voseo. */
+const NOMBRES_AGUDOS = new Set(["tomas", "andres", "ines", "jesus", "matias", "elias", "tobias", "nicolas", "moises", "jonas", "isaias", "lucas", "ulises", "dionis", "paris", "pais", "anis", "seis", "ademas", "despues", "atras", "jamas", "quizas", "detras", "demas", "interes", "ingles", "frances", "japones", "portugues", "mes", "tres", "tambien", "ningun", "algun", "estres", "expres", "cortes", "traves", "reves", "marques", "lograras", "recibiras"]);
+
+/**
+ * El voseo de lo que escribe el agente para el cliente (12 nov, Centauro: «Considerás activo a quien…» pasó): lo que caza
+ * `voseoEnProsa` y, además, el verbo agudo en -ás, -és o -ís con mayúscula al empezar una frase, que ella deja pasar
+ * porque suele ser un nombre. Aquí no van nombres de personas, y los que terminan así están en la lista de arriba.
+ */
+export function voseoDelResumen(texto: string): string[] {
+  const out = new Set(voseoEnProsa(texto));
+  for (const m of texto.matchAll(/(?:^|[.!?¿¡:;]\s*|\n\s*)(\p{Lu}\p{Ll}{2,}(?:ás|és|ís))(?!\p{L})/gu)) {
+    const w = m[1];
+    if (!NOMBRES_AGUDOS.has(paraComparar(w)) && !FUTUROS.has(paraComparar(w))) out.add(w);
+  }
+  // El presente en -rás («considerás», «registrás») que `voseoEnProsa` deja pasar por el futuro («podrás»): aquí se escribe
+  // en presente, así que solo se perdonan los futuros irregulares de la lista.
+  for (const m of texto.matchAll(/(?<!\p{L})(\p{Ll}{3,}r(?:ás|és|ís))(?!\p{L})/gu)) if (!FUTUROS.has(paraComparar(m[1])) && !NOMBRES_AGUDOS.has(paraComparar(m[1]))) out.add(m[1]);
+  return [...out];
+}
+
 /** Un texto que cuenta quién dijo algo («la supervisora identificó», «el responsable mencionó»). */
 const QUIEN_LO_DIJO = /\b(la|el|los|las|su|tu|segun la|segun el)\s+(supervisora?|responsables?|jef[ae]s?|jefatura|gerentes?|directora?|dueñ[oa]s?|duen[oa]s?|lider(es)?|encargad[oa]s?|coordinador[a]?|asesor[a]?|vendedor[a]?)\b[^.]{0,60}?\b(dijo|dijeron|comento|comentaron|menciono|mencionaron|identifico|identificaron|explico|aclaro|reporto|senalo|indico|conto|aporta|aporto)\b/;
 
@@ -448,10 +471,55 @@ const CANTIDADES_EN_PALABRAS: Readonly<Record<string, string | null>> = {
   mitad: null, tercio: null, tercera: null, cuarta: null, quinta: null, doble: null, triple: null, cuadruple: null, porcentaje: null,
 };
 
-/** Los números de `texto` que no están en `fuente`, con lo que los multiplica: «25 mil» no es «25» ni «25 millones». */
-export function cifrasDeMas(texto: string, fuente: string): string[] {
-  const hay = new Set(cantidadesDe(sinEspaciosDeMiles(fuente)));
-  const enCifras = cantidadesDe(sinEspaciosDeMiles(texto)).filter((c) => !hay.has(c));
+/**
+ * Una cantidad con su multiplicador en su forma de número: «23 mil» (`23·mil`) es «23 000» (`23000·`); «2,5 mil», 2500
+ * (12 nov, Centauro: «~23 000 contactos» se caía porque la cita decía «23 mil»).
+ */
+function enNumero(c: string): string {
+  const [n, m] = c.split("·");
+  if (m !== "mil") return c;
+  const v = Number(n.replace(",", "."));
+  return Number.isFinite(v) && v > 0 ? `${Math.round(v * 1000)}·` : c;
+}
+const conMilesDecimales = (x: string) => x.replace(/(\d+)[.,](\d{1,2})\s*mil(?!\p{L})/giu, (_, a: string, b: string) => String(Math.round(Number(`${a}.${b}`) * 1000)));
+const cantidadesNormales = (x: string) => cantidadesDe(sinEspaciosDeMiles(conMilesDecimales(x))).map(enNumero);
+
+/** Un número chico (hasta 12: «dos marcas», «tres asesores»). */
+const ES_CHICO = (c: string) => /^(\d{1,2})·$/.test(c) && Number(c.slice(0, -1)) <= 12;
+/** Un año. */
+const ES_ANIO = (c: string) => /^(19|20)\d\d·$/.test(c);
+
+/** Lo que vale además de la cita corta: los turnos vecinos (números chicos) y los años de las reuniones (12 nov). */
+export interface ContextoDeLaCita {
+  /** Lo dicho por la empresa en los turnos cercanos a las citas: de ahí valen los números chicos. */
+  chicos?: string;
+  /** Los años de las reuniones y los que la empresa dijo como año («en 2025», «desde 2024»). */
+  anios?: string;
+}
+
+/**
+ * «1 mes» con «un mes» en la fuente: el 1 en letras vale solo con la misma palabra al lado (12 nov, la revisión: un «un»
+ * cualquiera sostenía cualquier 1).
+ */
+function unoEnLetras(texto: string, fuente: string): boolean {
+  const f = paraComparar(fuente);
+  const unos = [...paraComparar(texto).matchAll(/(?:^|\s)1\s+(\p{L}+)/gu)];
+  return unos.length > 0 && unos.every((m) => new RegExp(`(^|\\s)(un|una|uno)\\s+${m[1]}(\\s|$)`, "u").test(f));
+}
+
+/**
+ * Los números de `texto` que no están en `fuente`, con lo que los multiplica: «25 mil» no es «25» ni «25 millones».
+ * `tambien` (12 nov): un número chico vale si la empresa lo dijo en los turnos cercanos a la cita («tus dos marcas»); un
+ * año, si es de una reunión o la empresa lo dijo como año. Una magnitud, siempre, tiene que estar en la cita misma.
+ */
+export function cifrasDeMas(texto: string, fuente: string, tambien: ContextoDeLaCita = {}): string[] {
+  const hay = new Set(cantidadesNormales(fuente));
+  const chicos = tambien.chicos ? new Set(cantidadesNormales(tambien.chicos)) : null;
+  const anios = tambien.anios ? new Set((tambien.anios.match(/(?<!\d)(19|20)\d\d(?!\d)/g) ?? []).map((a) => `${a}·`)) : null;
+  const uno = unoEnLetras(texto, fuente);
+  const enCifras = cantidadesNormales(texto).filter(
+    (c) => !hay.has(c) && !(chicos && ES_CHICO(c) && chicos.has(c)) && !(anios && ES_ANIO(c) && anios.has(c)) && !(c === "1·" && uno),
+  );
   const palabrasDeLaFuente = new Set(paraComparar(fuente).split(" "));
   const delTexto = paraComparar(sinEspaciosDeMiles(texto)).split(" ");
   const enPalabras = delTexto
@@ -468,9 +536,10 @@ export function cifrasDeMas(texto: string, fuente: string): string[] {
  * compras). Centauro nunca dijo que usara HubSpot: un texto que diga «tu HubSpot» sin que la empresa lo nombre no sale.
  */
 const HERRAMIENTAS = /\b(hubspot|salesforce|zoho|pipedrive|dynamics|odoo|monday|jira|zendesk|freshdesk|intercom|excel|google forms|google sheets|whatsapp|slack|mailchimp|shopify)\b/g;
-export function herramientasDeMas(texto: string, fuente: string): string[] {
-  const f = paraComparar(fuente);
-  return [...new Set(paraComparar(texto).match(HERRAMIENTAS) ?? [])].filter((h) => !f.includes(h));
+export function herramientasDeMas(texto: string, fuente: string, tambien = ""): string[] {
+  // 12 nov (Centauro): «WhatsApp» o «Excel» los nombró la empresa en otra parte de la reunión; lo que no nombró, nunca.
+  const f = paraComparar(`${fuente} ${tambien}`);
+  return [...new Set(paraComparar(texto).match(HERRAMIENTAS) ?? [])].filter((h) => !new RegExp(`(^|[^a-z0-9])${h}([^a-z0-9]|$)`).test(f));
 }
 
 /**
@@ -543,7 +612,38 @@ function finDeLaCita(r: ReunionParaElResumen, c: { turno: number; hablante: stri
  * del «por qué», de los pendientes y de las preguntas (Centauro: «1800 al mes» lo calculó Marco y nadie lo confirmó).
  */
 export function dichoPorLaEmpresa(reuniones: readonly ReunionParaElResumen[]): string {
-  return reuniones.flatMap((r) => r.turnos.filter((t) => esDelCliente(r, t.hablante) || confirmacion(r, t.n)).map((t) => t.texto)).join("\n");
+  return reuniones.map(dichoEnLaReunion).join("\n");
+}
+
+const DICHO_EN_LA_REUNION = new WeakMap<ReunionParaElResumen, string>();
+/** Lo que dijo la empresa en UNA reunión (sus turnos y los de Smarteam que confirmó), guardado: se mira en cada pieza. */
+export function dichoEnLaReunion(r: ReunionParaElResumen): string {
+  let d = DICHO_EN_LA_REUNION.get(r);
+  if (d === undefined) {
+    d = r.turnos.filter((t) => esDelCliente(r, t.hablante) || confirmacion(r, t.n)).map((t) => t.texto).join("\n");
+    DICHO_EN_LA_REUNION.set(r, d);
+  }
+  return d;
+}
+
+/** Los turnos vecinos a una cita que cuentan para sus números chicos: cuatro antes y cuatro después. */
+const VECINOS = 4;
+
+/**
+ * Lo que vale además de la cita corta (12 nov): lo dicho por la empresa en los turnos vecinos a cada cita (los números
+ * chicos), y los años: los de las reuniones («este año» es «2026») y los que la empresa dijo como año («en 2025»).
+ */
+export function loDeSusReuniones(citas: readonly Pick<CitaDelResumen, "reunion" | "turno">[], reuniones: readonly ReunionParaElResumen[]): ContextoDeLaCita {
+  const chicos = citas.flatMap((c) => {
+    const r = reuniones.find((x) => x.id === c.reunion || x.clave === c.reunion);
+    return r ? r.turnos.filter((t) => Math.abs(t.n - c.turno) <= VECINOS && esDelCliente(r, t.hablante)).map((t) => t.texto) : [];
+  });
+  return { chicos: chicos.join("\n"), anios: aniosDe(reuniones, reuniones.map((r) => r.turnos.filter((t) => esDelCliente(r, t.hablante)).map((t) => t.texto).join("\n")).join("\n")) };
+}
+
+/** Lo dicho por la empresa en las reuniones de unas citas (las herramientas de su equipo, no las de otro). */
+export function dichoEnSusReuniones(citas: readonly Pick<CitaDelResumen, "reunion">[], reuniones: readonly ReunionParaElResumen[]): string {
+  return reuniones.filter((r) => citas.some((c) => c.reunion === r.id || c.reunion === r.clave)).map(dichoEnLaReunion).join("\n");
 }
 
 /** De qué reunión y turno sale algo: con eso se reconoce al rehacer, aunque se reescriba. */
@@ -563,6 +663,67 @@ export function citaVerificada(v: unknown, reuniones: readonly ReunionParaElResu
   if (esDelCliente(r, c.hablante)) return base;
   const confirmo = confirmacion(r, c.turno, finDeLaCita(r, c));
   return confirmo ? { ...base, confirmo } : null;
+}
+
+/** Lo que separa los pedazos de una cita pegada («…», «...» o «;»). */
+const ENTRE_PEDAZOS = /\s*(?:…|\.\.\.|;)\s*/;
+
+/**
+ * Un turno corto que es solo un número («25.»), dicho por la empresa: la cifra de una respuesta (12 nov, Centauro: «25»
+ * era la respuesta a cuántas reuniones logran por semana). Vale solo como cita de una cifra y si es el turno entero.
+ */
+function turnoConSoloUnNumero(v: unknown, reuniones: readonly ReunionParaElResumen[]): CitaDelResumen | null {
+  const x = objeto(v);
+  const r = reuniones.find((y) => y.clave === cadena(x.reunion).toUpperCase());
+  const t = r?.turnos.find((u) => u.n === Number(x.turno));
+  if (!r || !t || !esDelCliente(r, t.hablante)) return null;
+  const solo = paraComparar(t.texto).trim();
+  if (!/^\d+([.,]\d+)?( ?%)?$/.test(solo.replace(/\s+/g, " ")) || solo !== paraComparar(cadena(x.texto)).trim()) return null;
+  // Solo como corrección de una cantidad dicha en los dos turnos de antes («cerramos unos 30» · «25.»): sin eso, no se sabe
+  // a qué pregunta responde (la revisión del 12 nov: «¿cuántos años llevan?» · «25.»).
+  const antes = r.turnos.filter((u) => u.n < t.n && u.n >= t.n - 2);
+  if (!antes.some((u) => cantidadesDe(u.texto).length > 0)) return null;
+  return { reunion: r.id, fecha: r.fecha, turno: t.n, hablante: t.hablante, texto: t.texto.trim() };
+}
+
+/**
+ * Las citas verificadas de lo que devolvió el agente (12 nov). Muchas veces pega dos o tres pedazos de lo dicho en una
+ * sola cita, con «;» o «…» («mantenemos informado al cliente cuando él pregunta; lo escalamos, puede tardar…»): cada
+ * pedazo está en la reunión, la cita entera no. Si la cita entera no se encuentra, se busca cada pedazo de 4 palabras o
+ * más en la misma reunión; vale solo si TODOS esos pedazos están, y cada uno queda como su propia cita. Lo que un pedazo
+ * más corto diga (un número) no queda en lo citado: la regla de los números lo caza. `cifra`: acepta un turno que es solo
+ * un número. Con hasta `max` citas.
+ */
+export function citasVerificadas(vs: readonly unknown[], reuniones: readonly ReunionParaElResumen[], o: { cifra?: boolean; max?: number } = {}): CitaDelResumen[] {
+  const out: CitaDelResumen[] = [];
+  for (const v of vs.slice(0, 3)) {
+    const entera = citaVerificada(v, reuniones) ?? (o.cifra ? turnoConSoloUnNumero(v, reuniones) : null);
+    if (entera) {
+      out.push(entera);
+      continue;
+    }
+    const x = objeto(v);
+    const pedazos = cadena(x.texto).split(ENTRE_PEDAZOS).filter((p) => p.split(" ").filter(Boolean).length >= PALABRAS_DE_UNA_CITA);
+    if (pedazos.length >= 2) {
+      const verificados = pedazos.map((p) => citaVerificada({ ...x, texto: p }, reuniones));
+      if (verificados.every((c): c is CitaDelResumen => !!c)) out.push(...verificados);
+      continue;
+    }
+    // Sin separador: la frase puede empezar en un turno y seguir en el de otra persona de la empresa («son 10 reuniones a
+    // la semana» · «por asesor, pero son 50 a la semana en grupal», 12 nov). Se prueba partida en dos, cada parte en su turno.
+    const ps = cadena(x.texto).split(" ").filter(Boolean);
+    for (let k = PALABRAS_DE_UNA_CITA; k <= ps.length - PALABRAS_DE_UNA_CITA; k++) {
+      const a = citaVerificada({ ...x, texto: ps.slice(0, k).join(" ") }, reuniones);
+      const b = a && citaVerificada({ ...x, turno: Number(x.turno) + 1, texto: ps.slice(k).join(" ") }, reuniones);
+      if (a && b && b.reunion === a.reunion && b.turno >= a.turno && b.turno - a.turno <= 4) {
+        out.push(a, b);
+        break;
+      }
+    }
+  }
+  // Sin repetir el mismo pedazo dos veces.
+  const vistas = new Set<string>();
+  return out.filter((c) => !vistas.has(`${c.reunion}:${c.turno}:${c.texto}`) && !!vistas.add(`${c.reunion}:${c.turno}:${c.texto}`)).slice(0, o.max ?? 4);
 }
 
 /** Una nota que cita lo dicho o dice quién lo dijo (comillas de cualquier tipo, o el rol de quien habló). */
@@ -661,6 +822,18 @@ export interface LoQueEscribioElAgente {
   porArreglar: DatoPorArreglar[];
   /** Las etapas con su cita verificada que se cayeron por algo de forma: se piden corregidas (`pedidoDeLasEtapas`). */
   etapasPorArreglar: EtapaPorArreglar[];
+  /** Las piezas de las listas con su cita verificada que se cayeron por algo de forma (12 nov): `pedidoDeLasPiezas`. */
+  piezasPorArreglar: PiezaPorArreglar[];
+}
+
+/** Una pieza de una lista por corregir (el negocio, la organización, lo que hace bien, lo que frena, un reto). */
+export interface PiezaPorArreglar {
+  /** Dónde va: `negocio:<parte>` o `<id del área operativa>:<lista>`. */
+  lugar: string;
+  texto: string;
+  citas: CitaDelResumen[];
+  problema: string;
+  dimensionId?: string | null;
 }
 
 /** Una etapa por corregir: lo que escribió el agente, sus citas tal como las devolvió y por qué se cayó. */
@@ -693,7 +866,61 @@ const dimensionDelArea = (ctx: ContextoDelResumen, areaId: string, v: unknown): 
   return ctx.areas.find((a) => a.id === areaId)?.dimensiones.some((d) => d.id === id) ? id : null;
 };
 
-type Reglas = ReglasDelResumen & { parse: (texto: string) => Record<string, unknown>; firmas: Readonly<Record<string, string>> };
+type Reglas = ReglasDelResumen & {
+  parse: (texto: string) => Record<string, unknown>;
+  firmas: Readonly<Record<string, string>>;
+  /** Lo dicho por la empresa en todas las reuniones (las herramientas): `leerElResumen` lo calcula una vez. */
+  dicho?: string;
+};
+
+/**
+ * Lo que tiene una cifra contra sus citas, con la misma vara en la lectura, en el arreglo y en la auditoría: números que la
+ * cita no dice, herramientas que la empresa no nombró, una conclusión, una lectura nuestra, números de otro dicho y un total
+ * colado. Vacío = pasa.
+ */
+export function problemasDeLaCifra(
+  d: { cifra: string; texto: string; nota: string | null; citas: readonly CitaDelResumen[] },
+  dicho: string,
+  reuniones: readonly ReunionParaElResumen[] = [],
+): string[] {
+  const lo = d.citas.map((c) => c.texto).join(" ");
+  const todo = `${d.cifra} ${d.texto} ${d.nota ?? ""}`;
+  // Los años valen si son de una reunión o los dijo la empresa; los números chicos, no: en una cifra cada número cuenta.
+  const sobran = cifrasDeMas(todo, lo, { anios: aniosDe(reuniones, dicho) });
+  const conclusion = concluyeDeMas(`${d.texto} ${d.nota ?? ""}`, lo);
+  const lectura = lecturaNuestra(`${d.cifra} ${d.texto}`, lo);
+  const otro = numerosDeOtroDicho(d.cifra, d.texto, d.citas);
+  const herramientas = herramientasDeMas(todo, lo, reuniones.length ? dichoEnSusReuniones(d.citas, reuniones) : dicho);
+  const total = TOTAL.test(paraComparar(d.texto)) && cifrasDeMas(d.texto, d.cifra).length > 0;
+  const comoNumero = (xs: string[]) => xs.map((x) => x.replace(/·$/, "").replace("·", " ")).join(", ");
+  return [
+    ...(conclusion ? [`saca una conclusión que la cita no dice («${conclusion}»): quítala`] : []),
+    ...(lectura ? [`califica con una lectura nuestra («${lectura}»): di solo lo que dijeron`] : []),
+    ...(otro.length ? [`junta números de otro dicho (${comoNumero(otro)}): una cifra es un solo dato, deja solo los de su cita`] : []),
+    ...(total ? ["suma un total que no es la cifra: quítalo (si hace falta, va aparte como pendiente)"] : []),
+    ...(sobran.length ? [`trae números que no están en lo citado (${comoNumero(sobran)})`] : []),
+    ...(herramientas.length ? [`nombra herramientas que la empresa no nombró (${herramientas.join(", ")})`] : []),
+  ];
+}
+
+/** Los años de las reuniones y los que dijo la empresa («en 2025»): solo eso vale en una cifra además de su cita. */
+function aniosDe(reuniones: readonly ReunionParaElResumen[], dicho: string): string {
+  // Solo dichos como año («en 2025», «desde 2024», «el año 2023»): «2000 clientes» no es un año (la revisión del 12 nov).
+  const comoAnio = [...paraComparar(dicho).matchAll(/(?:^|\s)(?:en|desde|hasta|del|de|ano|el)\s+((?:19|20)\d\d)(?!\d)/g)].map((m) => m[1]);
+  return [...reuniones.map((r) => r.fecha.slice(0, 4)), ...comoAnio].join(" ");
+}
+
+/**
+ * Una «cifra» que es una definición y no una magnitud (12 nov, Centauro: «~6 meses de actividad: consideras activo a quien
+ * abrió o interactuó…»): no mide cuánto pasa, dice cómo se cuenta algo.
+ */
+const ES_UNA_DEFINICION = /\bconsidera(s|n|mos)?\b|\bse considera\b|\bse define\b|\bdefine(s|n)?\b|\bcuenta(s|n)? como\b|\bse cuenta como\b|\bcriterio\b/;
+
+/**
+ * Un pendiente que cuenta cómo se armó una cifra (12 nov: «la cifra de 1.800 se construyó combinando estimaciones dadas con
+ * dudas en dos momentos distintos de la reunión»): eso es cocina nuestra, no lo que hay que validar con la empresa.
+ */
+const COCINA = /\bse constru(y|i)\w*|\bcombinand\w*|\bestimaciones\b|\bmomentos distintos\b|\bdos momentos\b|\bse arm(o|aron)\b|\bcon dudas\b|\bde memoria\b|\bla cifra de\b|\bdadas?\b.*\bdudas?\b|\btranscripci\w*/;
 
 /**
  * Una pieza con su cita: el texto pasa las reglas, alguna cita está en su reunión (dicha o confirmada por la empresa), sus
@@ -708,38 +935,37 @@ function conSuCita(
   donde: string,
   tope = TOPE_DEL_TEXTO_DEL_RESUMEN,
   extras: readonly string[] = [],
+  porArreglar?: (x: { texto: string; citas: CitaDelResumen[]; problema: string }) => void,
 ): { texto: string; citas: CitaDelResumen[] } | null {
   const x = objeto(v);
-  const citas = [...arreglo(x.citas), ...(x.cita ? [x.cita] : [])]
-    .slice(0, 3)
-    .map((c) => citaVerificada(c, ctx.reuniones))
-    .filter((c): c is CitaDelResumen => !!c);
-  const t = textoValido(typeof v === "string" ? v : x.texto, tope, o, citas.map((c) => c.texto).join(" "));
-  if (!t.ok) {
-    descartados.push(`${donde}: ${t.motivo}`);
+  const citas = citasVerificadas([...arreglo(x.citas), ...(x.cita ? [x.cita] : [])], ctx.reuniones);
+  const lo = citas.map((c) => c.texto).join(" ");
+  const crudo = cadena(typeof v === "string" ? v : x.texto);
+  // Una conclusión en la cola («…, lo que limita el crecimiento») se corta antes de mirar el resto.
+  const sinCola = citas.length ? (sinLaConclusion(crudo, lo) ?? crudo) : crudo;
+  const t = textoValido(sinCola, tope, o, lo);
+  // Lo de forma, con alguna cita verificada, se pide corregido (12 nov: se tiraba entero).
+  const caer = (motivo: string, texto: string) => {
+    descartados.push(`${donde}: ${motivo}`);
+    if (porArreglar && citas.length && ES_DE_FORMA.test(motivo)) porArreglar({ texto, citas, problema: motivo });
     return null;
-  }
+  };
+  if (!t.ok) return caer(t.motivo, crudo);
   if (!citas.length) {
     descartados.push(`${donde} sin una cita que esté en la reunión («${t.texto.slice(0, 60)}…»)`);
     return null;
   }
-  const lo = citas.map((c) => c.texto).join(" ");
   const todo = [t.texto, ...extras].join(" ");
-  const sobran = cifrasDeMas(todo, lo);
-  if (sobran.length) {
-    descartados.push(`${donde} con números que no están en su cita (${sobran.join(", ")})`);
-    return null;
-  }
-  const herramientas = herramientasDeMas(todo, lo);
-  if (herramientas.length) {
-    descartados.push(`${donde} nombra herramientas que la empresa no nombró en lo citado (${herramientas.join(", ")})`);
-    return null;
-  }
+  const suReunion = loDeSusReuniones(citas, ctx.reuniones);
+  const sobran = cifrasDeMas(todo, lo, suReunion);
+  if (sobran.length) return caer(`números que no están en su cita (${sobran.map((s) => s.replace(/·$/, "").replace("·", " ")).join(", ")})`, t.texto);
+  const herramientas = herramientasDeMas(todo, lo, dichoEnSusReuniones(citas, ctx.reuniones));
+  if (herramientas.length) return caer(`nombra herramientas que la empresa no nombró en sus reuniones (${herramientas.join(", ")})`, t.texto);
   const lectura = lecturaNuestra(todo, lo);
-  if (lectura) {
-    descartados.push(`${donde} califica con una lectura nuestra que la empresa no dijo («${lectura}»)`);
-    return null;
-  }
+  if (lectura) return caer(`califica con una lectura nuestra que la empresa no dijo («${lectura}»)`, t.texto);
+  // La misma vara que la auditoría (12 nov: «busca… crecer» pasó la lectura y la auditoría lo marcó ya guardado).
+  const conclusion = concluyeDeMas(todo, lo);
+  if (conclusion) return caer(`saca una conclusión que la cita no dice («${conclusion}»)`, t.texto);
   return { texto: t.texto, citas };
 }
 
@@ -771,6 +997,11 @@ export function leerElResumen(respuesta: Pick<Anthropic.Messages.Message, "conte
   const crudo = o.parse(respuesta.content.map((b) => (b.type === "text" ? b.text : "")).join(""));
   const descartados: string[] = [];
   const todoLoDicho = dichoPorLaEmpresa(ctx.reuniones);
+  o = { ...o, dicho: todoLoDicho };
+  // Lo que no lleva cita propia: sus números los dijo la empresa misma, no un cálculo de Smarteam que confirmó.
+  const dichoPorElla = ctx.reuniones.map((r) => r.turnos.filter((t) => esDelCliente(r, t.hablante)).map((t) => t.texto).join("\n")).join("\n");
+  const piezasPorArreglar: PiezaPorArreglar[] = [];
+  const arreglarEn = (lugar: string, dimensionId?: string | null) => (x: { texto: string; citas: CitaDelResumen[]; problema: string }) => piezasPorArreglar.push({ lugar, ...x, dimensionId });
   const deLasAreas = new Set(ctx.areas.map((a) => a.id));
   const nombreDelArea = (id: string) => ctx.areas.find((a) => a.id === id)?.nombre ?? id;
 
@@ -781,7 +1012,7 @@ export function leerElResumen(respuesta: Pick<Anthropic.Messages.Message, "conte
     const piezas: PiezaDelResumen[] = [];
     for (const v of arreglo(objeto(crudo.negocio)[tipo])) {
       if (piezas.length >= MAX_POR_PARTE_DEL_NEGOCIO) break;
-      const p = conSuCita(v, ctx, o, descartados, `«${TITULO_DEL_NEGOCIO[tipo]}»`);
+      const p = conSuCita(v, ctx, o, descartados, `«${TITULO_DEL_NEGOCIO[tipo]}»`, TOPE_DEL_TEXTO_DEL_RESUMEN, [], arreglarEn(`negocio:${tipo}`));
       if (p) piezas.push({ id: `n${++n}`, ...p, origen: origenDeLaCita(p.citas[0]) });
     }
     if (piezas.length) negocio[tipo] = piezas;
@@ -820,11 +1051,11 @@ export function leerElResumen(respuesta: Pick<Anthropic.Messages.Message, "conte
     if (operativas.some((a) => paraComparar(a.nombre) === paraComparar(nombre.texto))) continue;
     const id = `o${operativas.length + 1}`;
     const donde = (que: string) => `${que} de ${nombre.texto}`;
-    const lista = (crudoDeLista: unknown, prefijo: string, que: string, max: number): PiezaDelResumen[] => {
+    const lista = (crudoDeLista: unknown, prefijo: string, que: string, max: number, campo: string): PiezaDelResumen[] => {
       const out: PiezaDelResumen[] = [];
       for (const y of arreglo(crudoDeLista)) {
         if (out.length >= max) break;
-        const p = conSuCita(y, ctx, o, descartados, donde(que));
+        const p = conSuCita(y, ctx, o, descartados, donde(que), TOPE_DEL_TEXTO_DEL_RESUMEN, [], arreglarEn(`${id}:${campo}`));
         if (p) out.push({ id: `${prefijo}${out.length + 1}`, ...p, origen: origenDeLaCita(p.citas[0]) });
       }
       return out;
@@ -832,7 +1063,7 @@ export function leerElResumen(respuesta: Pick<Anthropic.Messages.Message, "conte
     const retos: RetoDelResumen[] = [];
     for (const y of arreglo(x.retos)) {
       if (retos.length >= MAX_RETOS) break;
-      const p = conSuCita(y, ctx, o, descartados, donde("un reto"));
+      const p = conSuCita(y, ctx, o, descartados, donde("un reto"), TOPE_DEL_TEXTO_DEL_RESUMEN, [], arreglarEn(`${id}:retos`, dimensionDelArea(ctx, areaId, objeto(y).dimension)));
       if (p) retos.push({ id: `t${retos.length + 1}`, ...p, dimensionId: dimensionDelArea(ctx, areaId, objeto(y).dimension), origen: origenDeLaCita(p.citas[0]) });
     }
     const cifras: CifraDelResumen[] = [];
@@ -847,10 +1078,7 @@ export function leerElResumen(respuesta: Pick<Anthropic.Messages.Message, "conte
         descartados.push(`la nota de «${crudas.cifra}» cita lo dicho: sale la del código`);
         crudas.nota = null;
       }
-      const citas = arreglo(c.citas)
-        .slice(0, 3)
-        .map((z) => citaVerificada(z, ctx.reuniones))
-        .filter((z): z is CitaDelResumen => !!z);
+      const citas = citasVerificadas(arreglo(c.citas), ctx.reuniones, { cifra: true });
       const citado = citas.map((z) => z.texto).join(" ");
       const nombre = `${donde("la cifra")} «${crudas.cifra}»`;
       if (!cifrasDeMas(crudas.cifra, "").length) {
@@ -866,7 +1094,7 @@ export function leerElResumen(respuesta: Pick<Anthropic.Messages.Message, "conte
          la empresa no nombró) se descarta. Centauro, 10 nov: el 2,8 % y «14 de 25» se perdían por una cifra de 49
          caracteres. */
       const notaRevisada = crudas.nota !== null ? textoValido(crudas.nota, TOPE_DE_UNA_PREGUNTA, o, citado) : null;
-      const deForma = (r: ReturnType<typeof textoValido>) => !r.ok && r.motivo.startsWith("es demasiado largo");
+      const deForma = (r: ReturnType<typeof textoValido>) => !r.ok && (r.motivo.startsWith("es demasiado largo") || r.motivo.startsWith("está en voseo"));
       if (notaRevisada && !notaRevisada.ok && !deForma(notaRevisada)) {
         descartados.push(`${nombre}: la nota ${notaRevisada.motivo}; sale la del código`);
         crudas.nota = null;
@@ -878,28 +1106,19 @@ export function leerElResumen(respuesta: Pick<Anthropic.Messages.Message, "conte
       ] as const;
       const deFondo = revisadas.find(([, r]) => !r.ok && !deForma(r));
       const todo = `${crudas.cifra} ${crudas.texto} ${crudas.nota ?? ""}`;
-      const herramientas = herramientasDeMas(todo, citado);
       if (deFondo && !deFondo[1].ok) {
         descartados.push(`${nombre}: ${deFondo[1].motivo}`);
         continue;
       }
-      if (herramientas.length) {
-        descartados.push(`${nombre} nombra herramientas que la empresa no nombró en lo citado (${herramientas.join(", ")})`);
+      const sobran = cifrasDeMas(todo, citado, { anios: aniosDe(ctx.reuniones, todoLoDicho) });
+      const problemas = [
+        ...problemasDeLaCifra({ ...crudas, citas }, todoLoDicho, ctx.reuniones),
+        ...revisadas.filter(([, r]) => deForma(r)).map(([que, r]) => `${que} ${!r.ok ? r.motivo : ""}`),
+      ];
+      if (ES_UNA_DEFINICION.test(paraComparar(`${crudas.cifra} ${crudas.texto}`))) {
+        descartados.push(`${nombre}: es una definición (cómo se cuenta algo), no una magnitud`);
         continue;
       }
-      const sobran = cifrasDeMas(todo, citado);
-      const conclusion = concluyeDeMas(`${crudas.texto} ${crudas.nota ?? ""}`, citado);
-      const lectura = lecturaNuestra(`${crudas.cifra} ${crudas.texto}`, citado);
-      const deOtroDicho = numerosDeOtroDicho(crudas.cifra, crudas.texto, citas);
-      const totalAparte = TOTAL.test(paraComparar(crudas.texto)) && cifrasDeMas(crudas.texto, crudas.cifra).length > 0;
-      const problemas = [
-        ...(conclusion ? [`saca una conclusión que la cita no dice («${conclusion}»): quítala`] : []),
-        ...(lectura ? [`califica con una lectura nuestra («${lectura}»): di solo lo que dijeron`] : []),
-        ...(deOtroDicho.length ? [`junta números de otro dicho (${deOtroDicho.map((x) => x.replace(/·$/, "").replace("·", " ")).join(", ")}): una cifra es un solo dato, deja solo los de su cita`] : []),
-        ...(totalAparte ? ["suma un total que no es la cifra: quítalo (si hace falta, va aparte como pendiente)"] : []),
-        ...revisadas.filter(([, r]) => deForma(r)).map(([que, r]) => `${que} ${!r.ok ? r.motivo : ""}`),
-        ...(sobran.length ? [`trae números que no están en lo citado (${sobran.map((x) => x.replace(/·$/, "").replace("·", " ")).join(", ")})`] : []),
-      ];
       // Una meta sola («llegar a 500») no es una cifra de hoy (regla 2): la cifra tiene que traer el resultado frente a ella.
       const deLaCifra = paraComparar(`${crudas.texto} ${crudas.nota ?? ""}`);
       if (ES_UNA_META.test(deLaCifra) && !ES_DE_HOY.test(deLaCifra) && cifrasDeMas(crudas.cifra, "").length < 2) {
@@ -916,20 +1135,20 @@ export function leerElResumen(respuesta: Pick<Anthropic.Messages.Message, "conte
       const e = estadoDeLaCifra({ estado: c.estado, cifra: crudas.cifra, nota: crudas.nota, citas });
       cifras.push({ id: `c${cifras.length + 1}`, cifra: crudas.cifra, texto: crudas.texto, ...e, dimensionId, citas, origen: origenDeLaCita(citas[0]) });
     }
-    const falta = nulo(x.falta) ? null : sinCitaPropia(x.falta, TOPE_DE_UNA_PREGUNTA, o, todoLoDicho, descartados, donde("lo que falta"));
+    const falta = nulo(x.falta) ? null : sinCitaPropia(x.falta, TOPE_DE_UNA_PREGUNTA, o, dichoPorElla, descartados, donde("lo que falta"));
     const area: AreaOperativa = {
       id,
       nombre: nombre.texto,
       areaId,
-      organizacion: lista(x.organizacion, "g", "la organización", MAX_PIEZAS_POR_LISTA),
-      bien: lista(x.bien, "b", "lo que ya hace bien", MAX_PIEZAS_POR_LISTA),
-      frena: lista(x.frena, "f", "lo que la frena", 2),
+      organizacion: lista(x.organizacion, "g", "la organización", MAX_PIEZAS_POR_LISTA, "organizacion"),
+      bien: lista(x.bien, "b", "lo que ya hace bien", MAX_PIEZAS_POR_LISTA, "bien"),
+      frena: lista(x.frena, "f", "lo que la frena", 2, "frena"),
       retos,
       cifras,
       falta,
     };
     const conAlgo = area.organizacion.length + area.bien.length + area.frena.length + area.retos.length + area.cifras.length > 0;
-    if (!conAlgo && !porArreglar.some((p) => p.operativa === id)) {
+    if (!conAlgo && !porArreglar.some((p) => p.operativa === id) && !piezasPorArreglar.some((p) => p.lugar.startsWith(`${id}:`))) {
       descartados.push(`el área «${nombre.texto}» quedó sin nada que pasara la verificación`);
       continue;
     }
@@ -942,7 +1161,7 @@ export function leerElResumen(respuesta: Pick<Anthropic.Messages.Message, "conte
     const x = objeto(v);
     const area = ctx.areas.find((a) => a.id === cadena(x.area));
     if (!area || !area.nivel || areas[area.id].porque || nulo(x.texto)) continue;
-    const t = sinCitaPropia(x.texto, TOPE_DEL_PORQUE, o, todoLoDicho, descartados, `por qué de ${area.nombre}`);
+    const t = sinCitaPropia(x.texto, TOPE_DEL_PORQUE, o, dichoPorElla, descartados, `por qué de ${area.nombre}`);
     if (t) areas[area.id] = { hallazgos: [], porque: { texto: t, firma: o.firmas[area.id] ?? "" } };
   }
 
@@ -956,12 +1175,13 @@ export function leerElResumen(respuesta: Pick<Anthropic.Messages.Message, "conte
       descartados.push(`pendiente sin un tipo que se reconozca («${cadena(x.tipo)}»)`);
       continue;
     }
-    const t = sinCitaPropia(x.texto, TOPE_DE_UNA_PREGUNTA, o, todoLoDicho, descartados, `pendiente (${tipo})`);
+    const t = sinCitaPropia(x.texto, TOPE_DE_UNA_PREGUNTA, o, dichoPorElla, descartados, `pendiente (${tipo})`);
     if (!t) continue;
-    const citas = arreglo(x.citas)
-      .slice(0, 3)
-      .map((c) => citaVerificada(c, ctx.reuniones))
-      .filter((c): c is CitaDelResumen => !!c);
+    if (COCINA.test(paraComparar(t))) {
+      descartados.push(`pendiente que cuenta cómo se armó una cifra («${t.slice(0, 60)}…»)`);
+      continue;
+    }
+    const citas = citasVerificadas(arreglo(x.citas), ctx.reuniones);
     // Una contradicción se sostiene con las dos cosas dichas.
     if (tipo === "contradiccion" && citas.length < 2) {
       descartados.push(`contradicción sin sus dos citas («${t.slice(0, 60)}…»)`);
@@ -977,15 +1197,15 @@ export function leerElResumen(respuesta: Pick<Anthropic.Messages.Message, "conte
     const x = objeto(v);
     const dim = cadena(x.dimension);
     if (!porExplorar.has(dim) || confirmar[dim]) continue;
-    const t = sinCitaPropia(x.texto, TOPE_DE_UNA_PREGUNTA, o, todoLoDicho, descartados, `qué falta confirmar de ${dim}`);
+    const t = sinCitaPropia(x.texto, TOPE_DE_UNA_PREGUNTA, o, dichoPorElla, descartados, `qué falta confirmar de ${dim}`);
     if (t) confirmar[dim] = t;
   }
   const avisos = avisosDelRecorrido(recorrido, operativas, ctx);
-  return { negocio, recorrido, operativas, areas, pendientes, entendimos: [], confirmar, avisos, descartados, porArreglar, etapasPorArreglar };
+  return { negocio, recorrido, operativas, areas, pendientes, entendimos: [], confirmar, avisos, descartados, porArreglar, etapasPorArreglar, piezasPorArreglar };
 }
 
 /** Lo que se puede corregir sin volver a leer las reuniones: largo, lo prohibido que la cita no dice, números, herramientas. */
-const ES_DE_FORMA = /demasiado largo|habla de «|numeros|números|herramientas|lectura nuestra|conclusi/;
+const ES_DE_FORMA = /demasiado largo|habla de «|numeros|números|herramientas|lectura nuestra|conclusi|voseo/;
 
 /**
  * Una etapa del recorrido, con su cita: el nombre, la fricción y el texto pasan las reglas y lo que dicen está en lo citado.
@@ -998,7 +1218,7 @@ function etapaVerificada(
 ): { ok: true; etapa: Omit<EtapaDelResumen, "id"> } | { ok: false; motivo: string; deForma: Omit<EtapaPorArreglar, "orden" | "problema"> | null } {
   const x = objeto(v);
   const crudas = { etapa: cadena(x.etapa ?? x.nombre), quien: nulo(x.quien) ? null : cadena(x.quien), texto: cadena(x.texto), friccion: nulo(x.friccion) ? null : cadena(x.friccion), citas: arreglo(x.citas) };
-  const verificadas = crudas.citas.slice(0, 3).map((c) => citaVerificada(c, ctx.reuniones)).filter((c): c is CitaDelResumen => !!c);
+  const verificadas = citasVerificadas(crudas.citas, ctx.reuniones);
   const citado = verificadas.map((c) => c.texto).join(" ");
   const caida = (motivo: string) => ({ ok: false as const, motivo, deForma: verificadas.length && ES_DE_FORMA.test(motivo) && crudas.etapa ? crudas : null });
   const nombre = textoValido(crudas.etapa, TOPE_DE_UN_NOMBRE, o, citado);
@@ -1070,13 +1290,122 @@ export function avisosDelRecorrido(
   operativas: readonly Pick<AreaOperativa, "nombre" | "areaId">[],
   ctx: { areas: readonly { id: string; nombre: string }[]; reuniones: readonly Pick<ReunionParaElResumen, "areaId">[] },
 ): string[] {
-  const conReunion = [...new Set(ctx.reuniones.flatMap((r) => (r.areaId ? [r.areaId] : [])))];
-  const nombres = (areaId: string) => [ctx.areas.find((a) => a.id === areaId)?.nombre ?? "", ...operativas.filter((o) => o.areaId === areaId).map((o) => o.nombre)].map(paraComparar).filter(Boolean);
-  const enEtapas = recorrido.map((e) => paraComparar(`${e.quien ?? ""} ${e.nombre}`));
-  return conReunion
-    .filter((id) => ctx.areas.some((a) => a.id === id))
-    .filter((id) => !enEtapas.some((e) => nombres(id).some((n) => e.includes(n))))
+  return equiposSinEtapa(recorrido, operativas, ctx)
     .map((id) => `El recorrido no tiene ninguna etapa de ${ctx.areas.find((a) => a.id === id)!.nombre}, y hubo una reunión con ese equipo: revísalo o rehaz el Resumen.`);
+}
+
+// ── El arreglo de las piezas de las listas (12 nov) ─────────────────────────────
+
+const REGLAS_DE_LAS_PIEZAS = `Corriges frases para una página que Smarteam le presenta a una empresa. Cada una se descartó por un problema de forma, que te digo en «problema»: dice algo que sus citas no dicen (un número, una herramienta, una conclusión, una calificación nuestra), o es demasiado larga.
+
+Reescribe «texto» (una frase de 8 a 25 palabras, en tuteo, hablándole a la empresa: «tu equipo», «tus clientes»; nunca voseo) usando SOLO lo que dicen sus «citas». Quita lo que las citas no digan; no lo reemplaces por otra palabra que lo insinúe. Si con las citas no se puede decir nada, omítela.
+
+Devuelves SOLO este JSON: {"piezas":[{"i":<el número de la pieza>,"texto":"…"}]}`;
+
+/** El pedido del arreglo de las piezas: solo las caídas, con sus citas. Sin las transcripciones. */
+export function pedidoDeLasPiezas(xs: readonly PiezaPorArreglar[]): Anthropic.Messages.MessageCreateParamsNonStreaming {
+  const datos = xs.map((x, i) => ({ i, texto: x.texto, problema: x.problema, citas: x.citas.map((c) => c.texto) }));
+  return { model: MODELO_DEL_RESUMEN, max_tokens: 2000, system: REGLAS_DE_LAS_PIEZAS, messages: [{ role: "user", content: JSON.stringify(datos, null, 1) }] };
+}
+
+/** Lee el arreglo de las piezas y vuelve a verificar cada una con sus mismas citas (la vara de siempre). */
+export function leerLasPiezas(
+  respuesta: Pick<Anthropic.Messages.Message, "content">,
+  xs: readonly PiezaPorArreglar[],
+  ctx: ContextoDelResumen,
+  o: Reglas,
+): { piezas: (PiezaPorArreglar & { ok: true })[]; descartados: string[] } {
+  const crudo = o.parse(respuesta.content.map((b) => (b.type === "text" ? b.text : "")).join(""));
+  const piezas: (PiezaPorArreglar & { ok: true })[] = [];
+  const descartados: string[] = [];
+  const usados = new Set<number>();
+  for (const v of arreglo(crudo.piezas)) {
+    const x = objeto(v);
+    const i = typeof x.i === "number" ? x.i : Number(x.i);
+    const de = xs[i];
+    if (!de || usados.has(i)) continue;
+    usados.add(i);
+    // Las citas ya están verificadas: se vuelven a pasar como el agente las dio (reunión, turno y texto).
+    const citas = de.citas.map((c) => ({ reunion: ctx.reuniones.find((r) => r.id === c.reunion)?.clave ?? c.reunion, turno: c.turno, texto: c.texto }));
+    const p = conSuCita({ texto: x.texto, citas }, ctx, o, descartados, `pieza corregida (${de.lugar})`);
+    if (p) piezas.push({ ...de, texto: p.texto, citas: p.citas, ok: true });
+  }
+  return { piezas, descartados };
+}
+
+/** Pone cada pieza corregida en su lugar (el negocio o la lista de su área), sin pasar los topes ni repetir. */
+export function conLasPiezas<T extends Pick<LoQueEscribioElAgente, "negocio" | "operativas">>(e: T, piezas: readonly PiezaPorArreglar[]): T {
+  const negocio: Partial<Record<TipoDelNegocio, PiezaDelResumen[]>> = Object.fromEntries(Object.entries(e.negocio).map(([k, v]) => [k, [...(v ?? [])]]));
+  const operativas = e.operativas.map((a) => ({ ...a, organizacion: [...a.organizacion], bien: [...a.bien], frena: [...a.frena], retos: [...a.retos] }));
+  const nuevoId = (prefijo: string, xs: readonly { id: string }[]) => {
+    let k = xs.length + 1;
+    while (xs.some((y) => y.id === `${prefijo}${k}`)) k++;
+    return `${prefijo}${k}`;
+  };
+  const repetida = (xs: readonly { texto: string }[], t: string) => xs.some((y) => paraComparar(y.texto) === paraComparar(t));
+  for (const p of piezas) {
+    const [donde, campo] = p.lugar.split(":");
+    const base = { texto: p.texto, citas: p.citas, origen: origenDeLaCita(p.citas[0]) };
+    if (donde === "negocio") {
+      const tipo = campo as TipoDelNegocio;
+      const xs = (negocio[tipo] ??= []);
+      if (xs.length < MAX_POR_PARTE_DEL_NEGOCIO && !repetida(xs, p.texto)) xs.push({ id: nuevoId("nx", xs), ...base });
+      continue;
+    }
+    const a = operativas.find((y) => y.id === donde);
+    if (!a) continue;
+    if (campo === "retos") {
+      if (a.retos.length < MAX_RETOS && !repetida(a.retos, p.texto)) a.retos.push({ id: nuevoId("tx", a.retos), ...base, dimensionId: p.dimensionId ?? null });
+    } else if (campo === "organizacion" || campo === "bien" || campo === "frena") {
+      const xs = a[campo];
+      const max = campo === "frena" ? 2 : MAX_PIEZAS_POR_LISTA;
+      if (xs.length < max && !repetida(xs, p.texto)) xs.push({ id: nuevoId(`${campo[0]}x`, xs), ...base });
+    }
+  }
+  return { ...e, negocio, operativas };
+}
+
+// ── La etapa del equipo que falta en el recorrido (12 nov) ──────────────────────
+
+const REGLAS_DE_LA_ETAPA_QUE_FALTA = `Completas el recorrido de un cliente para una página que Smarteam le presenta a una empresa. Hubo una reunión con un equipo que no aparece en ninguna etapa. Lees esa reunión y el recorrido que ya existe.
+
+Si en esa reunión la empresa contó cómo pasa HOY un cliente (o un prospecto) por ese equipo, devuelve esa etapa: «etapa» (hasta 5 palabras), «quien» (el equipo), «texto» (una línea, en tuteo), «friccion» (lo que se traba, o null), «antesDe» (el nombre exacto de la etapa del recorrido que va justo después, o null si va al final) y «citas» (1 o 2: lo dicho por alguien de la empresa, de 6 a 25 palabras seguidas de UNA intervención, copiado palabra por palabra, con su reunión y su turno; nunca pegues pedazos con «;» o «…»). Todo lo que escribas tiene que estar en tus citas. Si la reunión no describe una etapa del recorrido de un cliente, no la inventes: devuelve una lista vacía.
+
+Devuelves SOLO este JSON: {"etapas":[{"etapa":"…","quien":"…","texto":"…","friccion":"… o null","antesDe":"… o null","citas":[{"reunion":"R1","turno":12,"texto":"…"}]}]}`;
+
+/** El pedido de la etapa de un equipo que tuvo reunión y no quedó en el recorrido: solo su reunión y el recorrido de hoy. */
+export function pedidoDeLaEtapaQueFalta(equipo: string, reunion: ReunionParaElResumen, recorrido: readonly Pick<EtapaDelResumen, "nombre" | "quien">[]): Anthropic.Messages.MessageCreateParamsNonStreaming {
+  const contenido = [
+    `El equipo sin etapa: ${equipo}`,
+    `El recorrido de hoy, en orden: ${recorrido.map((e, i) => `${i + 1}. ${e.nombre}${e.quien ? ` (${e.quien})` : ""}`).join(" · ") || "(vacío)"}`,
+    `La reunión con ese equipo (cada línea es un turno: [número] quien habla: lo que dijo):\n### ${reunion.clave} · ${reunion.fecha.slice(0, 10)}\n${reunion.turnos.map((t) => `[${t.n}] ${t.hablante}: ${t.texto}`).join("\n")}`,
+  ].join("\n\n");
+  return { model: MODELO_DEL_RESUMEN, max_tokens: 1200, system: REGLAS_DE_LA_ETAPA_QUE_FALTA, messages: [{ role: "user", content: contenido }] };
+}
+
+/** Lee la etapa que faltaba, la verifica como cualquier otra y la pone antes de la que dijo (o al final). */
+export function conLaEtapaQueFalta(
+  respuesta: Pick<Anthropic.Messages.Message, "content">,
+  recorrido: readonly (EtapaDelResumen & { orden?: number })[],
+  ctx: ContextoDelResumen,
+  o: Reglas,
+): { recorrido: (EtapaDelResumen & { orden?: number })[]; descartados: string[] } {
+  const crudo = o.parse(respuesta.content.map((b) => (b.type === "text" ? b.text : "")).join(""));
+  const descartados: string[] = [];
+  const out = [...recorrido];
+  for (const v of arreglo(crudo.etapas).slice(0, 1)) {
+    if (out.length >= MAX_ETAPAS) break;
+    const r = etapaVerificada(v, ctx, o);
+    if (!r.ok) {
+      descartados.push(`etapa del equipo que faltaba: ${r.motivo}`);
+      continue;
+    }
+    const antes = paraComparar(cadena(objeto(v).antesDe));
+    const k = antes ? out.findIndex((e) => paraComparar(e.nombre) === antes) : -1;
+    out.splice(k >= 0 ? k : out.length, 0, { ...r.etapa, id: "sx" });
+  }
+  // Los `orden` de nuevo en secuencia, para que `conLasEtapas` respete la posición.
+  return { recorrido: out.map((e, i) => ({ ...e, orden: i })), descartados };
 }
 
 // ── El arreglo de las cifras ────────────────────────────────────────────────────
@@ -1097,7 +1426,7 @@ export function pedidoDelArreglo(xs: readonly DatoPorArreglar[]): Anthropic.Mess
 export function leerElArreglo(
   respuesta: Pick<Anthropic.Messages.Message, "content">,
   xs: readonly DatoPorArreglar[],
-  o: ReglasDelResumen & { parse: (texto: string) => Record<string, unknown> },
+  o: ReglasDelResumen & { parse: (texto: string) => Record<string, unknown>; dicho?: string; reuniones?: readonly ReunionParaElResumen[] },
 ): { cifras: (Omit<CifraDelResumen, "id"> & { operativa: string })[]; descartados: string[] } {
   const crudo = o.parse(respuesta.content.map((b) => (b.type === "text" ? b.text : "")).join(""));
   const cifras: (Omit<CifraDelResumen, "id"> & { operativa: string })[] = [];
@@ -1117,12 +1446,10 @@ export function leerElArreglo(
       descartados.push(`cifra corregida «${cadena(x.cifra)}»: ${!cifra.ok ? cifra.motivo : !texto.ok ? texto.motivo : nota && !nota.ok ? nota.motivo : "sin número"}`);
       continue;
     }
-    const lo = de.citas.map((c) => c.texto).join(" ");
-    const todo = `${cifra.texto} ${texto.texto} ${nota?.ok ? nota.texto : ""}`;
-    const sobran = cifrasDeMas(todo, lo);
-    const otroDicho = numerosDeOtroDicho(cifra.texto, texto.texto, de.citas);
-    if (sobran.length || otroDicho.length || herramientasDeMas(todo, lo).length || concluyeDeMas(`${texto.texto} ${nota?.ok ? nota.texto : ""}`, lo) || lecturaNuestra(todo, lo) || (TOTAL.test(paraComparar(texto.texto)) && cifrasDeMas(texto.texto, cifra.texto).length)) {
-      descartados.push(`cifra corregida «${cifra.texto}»: sigue con números o herramientas que no están en lo citado (${sobran.join(", ")})`);
+    const motivos = problemasDeLaCifra({ cifra: cifra.texto, texto: texto.texto, nota: nota?.ok ? nota.texto : null, citas: de.citas }, o.dicho ?? "", o.reuniones);
+    if (motivos.length) {
+      // 12 nov: decía «sigue con números… ()» con la lista vacía cuando el motivo era otro. Ahora dice cuál.
+      descartados.push(`cifra corregida «${cifra.texto}»: ${motivos.join("; ")}`);
       continue;
     }
     const e = estadoDeLaCifra({ estado: de.estado, cifra: cifra.texto, nota: nota?.ok ? nota.texto : null, citas: de.citas });
@@ -1876,7 +2203,7 @@ export async function escribirElResumen(
   le: { ctx: ContextoDelResumen; personas: readonly string[]; firmas: Readonly<Record<string, string>>; areasFuera?: readonly string[] },
   pedir: (p: Anthropic.Messages.MessageCreateParamsNonStreaming) => Promise<Respuesta>,
 ): Promise<LoQueEscribioElAgente & { usos: Anthropic.Messages.Usage[]; cortado: boolean }> {
-  const reglas = { personas: le.personas, areasFuera: le.areasFuera ?? [], parse: parseObject, firmas: le.firmas };
+  const reglas: Reglas = { personas: le.personas, areasFuera: le.areasFuera ?? [], parse: parseObject, firmas: le.firmas, dicho: dichoPorLaEmpresa(le.ctx.reuniones) };
   const usos: Anthropic.Messages.Usage[] = [];
   const mal = (r: Respuesta, e: LoQueEscribioElAgente) => r.stop_reason === "max_tokens" || (!e.operativas.length && le.ctx.areas.length > 0);
   // Los nombres de pila que `textoValido` rechazaría: se le dicen, así no gasta piezas que se caen.
@@ -1902,7 +2229,7 @@ export async function escribirElResumen(
     try {
       const r3 = await pedir(pedidoDelArreglo(e.porArreglar));
       usos.push(r3.usage);
-      const a = leerElArreglo(r3, e.porArreglar, reglas);
+      const a = leerElArreglo(r3, e.porArreglar, { ...reglas, reuniones: ctx.reuniones });
       e = { ...e, operativas: conLoArreglado(e.operativas, a.cifras), descartados: [...e.descartados, ...a.descartados] };
     } catch {
       e = { ...e, descartados: [...e.descartados, "el arreglo de las cifras falló: quedaron fuera"] };
@@ -1918,9 +2245,61 @@ export async function escribirElResumen(
       e = { ...e, descartados: [...e.descartados, "el arreglo de las etapas falló: quedaron fuera"] };
     }
   }
+  // Las piezas de las listas que se cayeron por algo de forma se piden corregidas (12 nov: se tiraban enteras).
+  if (!cortado && e.piezasPorArreglar.length) {
+    try {
+      const r5 = await pedir(pedidoDeLasPiezas(e.piezasPorArreglar));
+      usos.push(r5.usage);
+      const a = leerLasPiezas(r5, e.piezasPorArreglar, ctx, reglas);
+      e = { ...e, ...conLasPiezas(e, a.piezas), descartados: [...e.descartados, ...a.descartados] };
+    } catch {
+      e = { ...e, descartados: [...e.descartados, "el arreglo de las piezas falló: quedaron fuera"] };
+    }
+  }
+  // Un equipo que tuvo reunión y no quedó en el recorrido: se le pide su etapa leyendo solo esa reunión, sin forzarla.
+  if (!cortado) {
+    for (const areaId of equiposSinEtapa(conLasEtapas(e.recorrido, []), e.operativas, ctx)) {
+      const reunion = ctx.reuniones.find((x) => x.areaId === areaId);
+      const equipo = ctx.areas.find((x) => x.id === areaId)?.nombre;
+      if (!reunion || !equipo) continue;
+      try {
+        const r6 = await pedir(pedidoDeLaEtapaQueFalta(equipo, reunion, conLasEtapas(e.recorrido, [])));
+        usos.push(r6.usage);
+        const a = conLaEtapaQueFalta(r6, conLasEtapas(e.recorrido, []), ctx, reglas);
+        e = { ...e, recorrido: a.recorrido, descartados: [...e.descartados, ...a.descartados] };
+      } catch {
+        e = { ...e, descartados: [...e.descartados, `la etapa de ${equipo} falló: quedó fuera`] };
+      }
+    }
+  }
   // Las etapas sin el orden interno, y los avisos con el recorrido final.
   const recorrido = conLasEtapas(e.recorrido, []);
-  return { ...e, recorrido, avisos: avisosDelRecorrido(recorrido, e.operativas, ctx), usos, cortado };
+  // Lo que la auditoría marcaría NO llega a la página (12 nov): se quita antes de guardar.
+  const revisado = quitarLoQueNoPasa({ negocio: e.negocio, recorrido, operativas: e.operativas, pendientes: e.pendientes }, ctx.reuniones);
+  // Un área que se quedó sin nada (sus piezas se cayeron y no volvieron) no llega vacía a la página.
+  const conAlgo = (a: AreaOperativa) => a.organizacion.length + a.bien.length + a.frena.length + a.retos.length + a.cifras.length > 0 || !!a.falta;
+  const limpio = { ...revisado, resumen: { ...revisado.resumen, operativas: revisado.resumen.operativas.filter(conAlgo) } };
+  return {
+    ...e,
+    ...limpio.resumen,
+    recorrido: limpio.resumen.recorrido,
+    descartados: [...e.descartados, ...limpio.quitados.map((q) => `antes de guardar, ${q.donde}: ${q.problema}`)],
+    avisos: avisosDelRecorrido(limpio.resumen.recorrido, limpio.resumen.operativas, ctx),
+    usos,
+    cortado,
+  };
+}
+
+/** Los equipos con reunión que no tienen ninguna etapa en el recorrido (la regla de `avisosDelRecorrido`). */
+export function equiposSinEtapa(
+  recorrido: readonly Pick<EtapaDelResumen, "quien" | "nombre">[],
+  operativas: readonly Pick<AreaOperativa, "nombre" | "areaId">[],
+  ctx: { areas: readonly { id: string; nombre: string }[]; reuniones: readonly Pick<ReunionParaElResumen, "areaId">[] },
+): string[] {
+  const conReunion = [...new Set(ctx.reuniones.flatMap((r) => (r.areaId ? [r.areaId] : [])))];
+  const nombres = (areaId: string) => [ctx.areas.find((a) => a.id === areaId)?.nombre ?? "", ...operativas.filter((o) => o.areaId === areaId).map((o) => o.nombre)].map(paraComparar).filter(Boolean);
+  const enEtapas = recorrido.map((e) => paraComparar(`${e.quien ?? ""} ${e.nombre}`));
+  return conReunion.filter((id) => ctx.areas.some((a) => a.id === id)).filter((id) => !enEtapas.some((e) => nombres(id).some((n) => e.includes(n))));
 }
 
 // ── Qué reuniones lee y quién es de la empresa ─────────────────────────────────
@@ -1983,57 +2362,130 @@ export interface ProblemaDeVeracidad {
  * (`--auditar`) sobre lo que está en producción.
  */
 export function auditarElResumen(g: ResumenGuardado, reuniones: readonly ReunionParaElResumen[], areas: readonly { id: string; nombre: string }[]): ProblemaDeVeracidad[] {
-  const out: ProblemaDeVeracidad[] = [];
-  const mal = (donde: string, problema: string) => out.push({ donde, problema });
-  const citasValidas = (donde: string, citas: readonly CitaDelResumen[]) => {
+  const out: ProblemaDeVeracidad[] = revisarLasPiezas(g, reuniones).map(({ donde, problema }) => ({ donde, problema }));
+  for (const a of avisosDelRecorrido(g.recorrido ?? [], g.operativas ?? [], { areas, reuniones })) out.push({ donde: "Recorrido", problema: a });
+  return out;
+}
+
+/** Dónde está una pieza del Resumen, para quitarla. */
+type LugarDeLaPieza =
+  | { tipo: "negocio"; parte: string; id: string }
+  | { tipo: "etapa"; id: string }
+  | { tipo: "lista"; operativa: string; campo: "organizacion" | "bien" | "frena" | "retos"; id: string }
+  | { tipo: "cifra"; operativa: string; id: string }
+  | { tipo: "pendiente"; id: string };
+
+type ParaRevisar = Pick<ResumenGuardado, "negocio" | "recorrido" | "operativas" | "pendientes">;
+
+/**
+ * La revisión de cada pieza contra las transcripciones, con la misma vara que la lectura (12 nov: la auditoría marcaba lo
+ * que la lectura había dejado pasar, como «crecer» en «busca»). Lo escrito a mano no se revisa: la responsabilidad es de
+ * quien lo escribió.
+ */
+function revisarLasPiezas(g: ParaRevisar, reuniones: readonly ReunionParaElResumen[]): (ProblemaDeVeracidad & { lugar: LugarDeLaPieza })[] {
+  const out: (ProblemaDeVeracidad & { lugar: LugarDeLaPieza })[] = [];
+  const dicho = dichoPorLaEmpresa(reuniones);
+  let lugar: LugarDeLaPieza = { tipo: "etapa", id: "" };
+  const mal = (donde: string, problema: string) => out.push({ donde, problema, lugar });
+  const citasValidas = revisarLasCitas(reuniones, mal);
+  const pieza = (donde: string, texto: string, citas: readonly CitaDelResumen[], extras = "", mano = false) => {
+    if (!citas.length || mano) return;
+    citasValidas(donde, citas);
+    const lo = citas.map((c) => c.texto).join(" ");
+    const todo = `${texto} ${extras}`;
+    const sobran = cifrasDeMas(todo, lo, loDeSusReuniones(citas, reuniones));
+    if (sobran.length) mal(donde, `números que no están en lo citado (${sobran.join(", ")})`);
+    const h = herramientasDeMas(todo, lo, dichoEnSusReuniones(citas, reuniones));
+    if (h.length) mal(donde, `nombra herramientas que la empresa no nombró (${h.join(", ")})`);
+    const l = lecturaNuestra(todo, lo);
+    if (l) mal(donde, `una lectura nuestra que no dijeron («${l}»)`);
+    const c = concluyeDeMas(todo, lo);
+    if (c) mal(donde, `una conclusión que la cita no dice («${c}»)`);
+    if (/\bprovisional|\bhipotesis\b/.test(paraComparar(todo))) mal(donde, "dice «provisional» o «hipótesis»");
+    const voseo = voseoDelResumen(todo);
+    if (voseo.length) mal(donde, `está en voseo (${voseo.join(", ")})`);
+  };
+  for (const [tipo, ps] of Object.entries(g.negocio ?? {}))
+    for (const p of ps ?? []) {
+      lugar = { tipo: "negocio", parte: tipo, id: p.id };
+      pieza(`Negocio · ${tipo}`, p.texto, p.citas, "", p.mano);
+    }
+  for (const e of g.recorrido ?? []) {
+    lugar = { tipo: "etapa", id: e.id };
+    pieza(`Recorrido · ${e.nombre}`, `${e.nombre} ${e.texto}`, e.citas, e.friccion ?? "", e.mano);
+  }
+  for (const op of g.operativas ?? []) {
+    for (const [k, campo, xs] of [
+      ["organización", "organizacion", op.organizacion],
+      ["lo que hace bien", "bien", op.bien],
+      ["lo que frena", "frena", op.frena],
+      ["reto", "retos", op.retos],
+    ] as const)
+      for (const p of xs) {
+        lugar = { tipo: "lista", operativa: op.id, campo, id: p.id };
+        pieza(`${op.nombre} · ${k}`, p.texto, p.citas, "", p.mano);
+      }
+    for (const c of op.cifras) {
+      if (c.mano) continue;
+      lugar = { tipo: "cifra", operativa: op.id, id: c.id };
+      const donde = `${op.nombre} · cifra «${c.cifra}»`;
+      citasValidas(donde, c.citas);
+      for (const problema of problemasDeLaCifra(c, dicho, reuniones)) mal(donde, problema);
+      if (voseoDelResumen(`${c.cifra} ${c.texto} ${c.nota ?? ""}`).length) mal(donde, "está en voseo");
+      if (/\bprovisional|\bhipotesis\b/.test(paraComparar(`${c.texto} ${c.nota ?? ""}`))) mal(donde, "dice «provisional» o «hipótesis»");
+      const e = estadoDeLaCifra({ estado: c.estado, cifra: c.cifra, nota: c.nota, citas: c.citas, mano: c.mano });
+      if (e.estado !== c.estado) mal(donde, `está guardada como «${c.estado}» y con sus citas es «${e.estado}»`);
+      if (c.nota && CITA_EN_LA_NOTA.test(c.nota)) mal(donde, "la nota cita lo dicho o dice quién lo dijo");
+    }
+  }
+  for (const p of g.pendientes ?? []) {
+    if (p.mano) continue;
+    lugar = { tipo: "pendiente", id: p.id };
+    const t = paraComparar(p.texto);
+    if (/\bprovisional|\bhipotesis\b/.test(t)) mal(`Pendiente «${p.texto.slice(0, 40)}…»`, "dice «provisional» o «hipótesis»");
+    if (COCINA.test(t)) mal(`Pendiente «${p.texto.slice(0, 40)}…»`, "cuenta cómo se armó una cifra");
+    if (voseoDelResumen(p.texto).length) mal(`Pendiente «${p.texto.slice(0, 40)}…»`, "está en voseo");
+  }
+  return out;
+}
+
+/**
+ * Lo que la revisión marca, fuera ANTES de guardar (12 nov, Elías: lo que marca la auditoría nunca queda en la página del
+ * cliente). Devuelve el Resumen sin esas piezas y qué se quitó.
+ */
+export function quitarLoQueNoPasa<T extends ParaRevisar>(g: T, reuniones: readonly ReunionParaElResumen[]): { resumen: T; quitados: ProblemaDeVeracidad[] } {
+  const problemas = revisarLasPiezas(g, reuniones);
+  if (!problemas.length) return { resumen: g, quitados: [] };
+  const fuera = (l: LugarDeLaPieza) => problemas.some((p) => JSON.stringify(p.lugar) === JSON.stringify(l));
+  const resumen: T = {
+    ...g,
+    negocio: Object.fromEntries(Object.entries(g.negocio ?? {}).map(([parte, ps]) => [parte, (ps ?? []).filter((p) => !fuera({ tipo: "negocio", parte, id: p.id }))])),
+    recorrido: (g.recorrido ?? []).filter((e) => !fuera({ tipo: "etapa", id: e.id })),
+    operativas: (g.operativas ?? []).map((op) => ({
+      ...op,
+      organizacion: op.organizacion.filter((p) => !fuera({ tipo: "lista", operativa: op.id, campo: "organizacion", id: p.id })),
+      bien: op.bien.filter((p) => !fuera({ tipo: "lista", operativa: op.id, campo: "bien", id: p.id })),
+      frena: op.frena.filter((p) => !fuera({ tipo: "lista", operativa: op.id, campo: "frena", id: p.id })),
+      retos: op.retos.filter((p) => !fuera({ tipo: "lista", operativa: op.id, campo: "retos", id: p.id })),
+      cifras: op.cifras.filter((c) => !fuera({ tipo: "cifra", operativa: op.id, id: c.id })),
+    })),
+    pendientes: (g.pendientes ?? []).filter((p) => !fuera({ tipo: "pendiente", id: p.id })),
+  };
+  return { resumen, quitados: problemas.map(({ donde, problema }) => ({ donde, problema })) };
+}
+
+/** La revisión de las citas de una pieza: en su reunión y dichas (o confirmadas) por la empresa. */
+function revisarLasCitas(reuniones: readonly ReunionParaElResumen[], mal: (donde: string, problema: string) => void) {
+  return (donde: string, citas: readonly CitaDelResumen[]) => {
     for (const c of citas) {
       const r = reuniones.find((x) => x.id === c.reunion);
       if (!r) {
         mal(donde, `cita de una reunión que no se leyó (${c.reunion})`);
         continue;
       }
-      const v = verificarCita({ turno: c.turno, texto: c.texto }, r.turnos);
+      const v = verificarCita({ turno: c.turno, texto: c.texto }, r.turnos) ?? (paraComparar(r.turnos.find((t) => t.n === c.turno)?.texto ?? "").trim() === paraComparar(c.texto).trim() ? { turno: c.turno, hablante: r.turnos.find((t) => t.n === c.turno)!.hablante, texto: c.texto } : null);
       if (!v) mal(donde, `la cita no está en la reunión («${c.texto.slice(0, 50)}…»)`);
       else if (!esDelCliente(r, v.hablante) && !confirmacion(r, v.turno, finDeLaCita(r, v))) mal(donde, `la cita la dijo alguien de Smarteam y nadie de la empresa la confirmó («${c.texto.slice(0, 50)}…»)`);
     }
   };
-  const pieza = (donde: string, texto: string, citas: readonly CitaDelResumen[], extras = "") => {
-    if (!citas.length) return;
-    citasValidas(donde, citas);
-    const lo = citas.map((c) => c.texto).join(" ");
-    const todo = `${texto} ${extras}`;
-    const sobran = cifrasDeMas(todo, lo);
-    if (sobran.length) mal(donde, `números que no están en lo citado (${sobran.join(", ")})`);
-    const h = herramientasDeMas(todo, lo);
-    if (h.length) mal(donde, `nombra herramientas que no están en lo citado (${h.join(", ")})`);
-    const l = lecturaNuestra(todo, lo);
-    if (l) mal(donde, `una lectura nuestra que no dijeron («${l}»)`);
-    const c = concluyeDeMas(todo, lo);
-    if (c) mal(donde, `una conclusión que la cita no dice («${c}»)`);
-    if (/\bprovisional|\bhipotesis\b/.test(paraComparar(todo))) mal(donde, "dice «provisional» o «hipótesis»");
-  };
-  for (const [tipo, ps] of Object.entries(g.negocio ?? {})) for (const p of ps ?? []) pieza(`Negocio · ${tipo}`, p.texto, p.citas);
-  for (const e of g.recorrido ?? []) pieza(`Recorrido · ${e.nombre}`, `${e.nombre} ${e.texto}`, e.citas, e.friccion ?? "");
-  for (const op of g.operativas ?? []) {
-    for (const [k, xs] of [
-      ["organización", op.organizacion],
-      ["lo que hace bien", op.bien],
-      ["lo que frena", op.frena],
-      ["reto", op.retos],
-    ] as const)
-      for (const p of xs) pieza(`${op.nombre} · ${k}`, p.texto, p.citas);
-    for (const c of op.cifras) {
-      const donde = `${op.nombre} · cifra «${c.cifra}»`;
-      pieza(donde, `${c.cifra} ${c.texto}`, c.citas, c.nota ?? "");
-      const otro = numerosDeOtroDicho(c.cifra, c.texto, c.citas);
-      if (otro.length) mal(donde, `junta números de otro dicho (${otro.join(", ")}): una cifra es un solo dato`);
-      if (TOTAL.test(paraComparar(c.texto)) && cifrasDeMas(c.texto, c.cifra).length) mal(donde, "suma un total que no es la cifra");
-      const e = estadoDeLaCifra({ estado: c.estado, cifra: c.cifra, nota: c.nota, citas: c.citas, mano: c.mano });
-      if (e.estado !== c.estado) mal(donde, `está guardada como «${c.estado}» y con sus citas es «${e.estado}»`);
-      if (c.nota && CITA_EN_LA_NOTA.test(c.nota)) mal(donde, "la nota cita lo dicho o dice quién lo dijo");
-    }
-  }
-  for (const p of g.pendientes ?? []) if (/\bprovisional|\bhipotesis\b/.test(paraComparar(p.texto))) mal(`Pendiente «${p.texto.slice(0, 40)}…»`, "dice «provisional» o «hipótesis»");
-  for (const a of avisosDelRecorrido(g.recorrido ?? [], g.operativas ?? [], { areas, reuniones })) mal("Recorrido", a);
-  return out;
 }

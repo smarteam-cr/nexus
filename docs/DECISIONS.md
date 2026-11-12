@@ -14720,3 +14720,49 @@ artefacto «Escala de Centauro · Sistema 2» como medida. Lo aplica `.rd-s2` en
 - **Lo que no queda garantizado:** cómo se ve un logo muy alto o casi cuadrado (se probó con uno ancho); la página
   interna también lleva el Sistema 2 (es la misma página), pero sin el desplazamiento suave, para no cambiar cómo se
   mueve el resto de Nexus.
+
+## El Resumen de la escala: la verificación justa y lo que se repara (2026-11-12)
+
+Al rehacer el Resumen de Centauro en producción se descartaron 28 piezas, entre ellas el 2,8 % de churn que Elías pidió,
+y quedaron guardadas cosas que la auditoría marcaba (el voseo «Considerás», «crecer» sin cita, un pendiente que contaba
+cómo se armó una cifra). Medido con la misma respuesta del agente: la primera pasada bajó de 31 descartes a 16, y lo que
+queda va a reparación en vez de tirarse.
+
+- **La causa principal eran las citas pegadas.** El agente une dos o tres pedazos de lo dicho con «;» o «…», o una frase
+  que empieza en un turno y sigue en el de otra persona de la empresa. Cada pedazo está en la reunión; la cita entera no.
+  Ahora `citasVerificadas` busca cada pedazo (o la frase partida en dos turnos seguidos) y la acepta solo si TODOS están:
+  cada uno queda como su propia cita. Un pedazo inventado tumba la cita entera. El prompt pide no pegar pedazos.
+- **Falsos positivos corregidos, sin abrir la puerta a cifras inventadas:**
+  - «23 mil» es «23 000» y «2,5 mil», 2 500; «un mes» sostiene «1 mes» solo con la misma palabra al lado;
+  - en las piezas de texto (no en las cifras), un número chico (hasta 12: «tus dos marcas») vale si la empresa lo dijo en
+    los cuatro turnos de antes o de después de la cita; un año, si es de una reunión o la empresa lo dijo como año («en
+    2025»: «2000 clientes» no es un año); una magnitud tiene que estar en la cita misma;
+  - una herramienta vale si la empresa la nombró en las reuniones de esas citas, como palabra entera («excelente» no es
+    «Excel»); una que nunca nombró, no;
+  - un turno que es solo un número vale como cita de una cifra si corrige una cantidad dicha en los dos turnos de antes
+    («cerramos unos 30» · «25.»); sin eso no se sabe a qué pregunta responde.
+- **La revisión del 12 nov endureció lo anterior** (venía más suelto: cualquier número chico o año de la reunión, «un»
+  suelto, herramientas de cualquier reunión). Con la misma respuesta del agente, la primera pasada queda en 19 o 20
+  descartes en vez de 16: esos van a reparación con sus citas, no se tiran.
+- **El «()» vacío** era un mensaje: la cifra corregida caía por otro motivo y se imprimía la lista de números. Ahora
+  `problemasDeLaCifra` dice el motivo, y es la misma vara en la lectura, el arreglo y la auditoría.
+- **Lo de forma se repara:** una pieza de una lista (el negocio, la organización, lo que hace bien, lo que frena, un reto)
+  con su cita verificada que se cae por un número, una herramienta, una conclusión o el largo se pide corregida en una
+  llamada chica (`pedidoDeLasPiezas`), como ya pasaba con las cifras y las etapas.
+- **Lo que la auditoría marcaría no se guarda:** `quitarLoQueNoPasa` corre la misma revisión antes de guardar y quita
+  esas piezas (lo escrito a mano no se toca). La lectura mira también las conclusiones en todas las piezas.
+- **Voseo:** `voseoDelResumen` caza además el verbo con mayúscula al empezar una frase («Considerás») y el presente en
+  -rás que la regla general deja pasar por el futuro. Como un futuro del tuteo («lograrás») puede caer ahí, el voseo es
+  de forma: la pieza se pide corregida en tuteo, no se pierde. «Estrés», «exprés» y «Cortés» no cuentan.
+- **Un área que se queda sin nada** (sus piezas se cayeron y no volvieron) no llega vacía a la página.
+- **Lo que falta validar no expone cocina:** un pendiente que cuenta cómo se armó una cifra («se construyó combinando
+  estimaciones…») se descarta (pedir «confirmar cómo se calcula» sí sale), y los números de un pendiente, un «por qué» o un «confirmar» los tuvo que decir la empresa
+  misma, no un cálculo de Smarteam que confirmó.
+- **Una cifra mide una magnitud:** una definición («consideras activo a quien abrió en los últimos 6 meses») no sale.
+- **El recorrido con cada equipo que tuvo reunión:** si después de todo falta uno, se le pide su etapa leyendo solo esa
+  reunión (`pedidoDeLaEtapaQueFalta`), y si la reunión no describe una etapa, no se inventa.
+- **El JSON con comillas dobles adentro** (una cita copiada tal cual) hacía repetir la llamada entera: el doble de costo.
+  El prompt pide « » dentro de los textos.
+- **Lo que no queda garantizado:** un error de la transcripción se copia fiel («15 lits» por «15 mil» salió como «~15
+  contactos»); una cifra cuya cita trae tres números o más sale «por confirmar» con el texto del agente; un turno de un
+  solo número depende de la pregunta que respondía, que no queda en lo citado.

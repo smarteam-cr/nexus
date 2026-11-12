@@ -63,9 +63,19 @@ import {
   reunionesQueLee,
   textoValido,
   type AreaOperativa,
+  type LoQueEscribioElAgente,
   type ContextoDelResumen,
   type ResumenGuardado,
   type ReunionParaElResumen,
+} from "./resumen-de-la-escala";
+import {
+  loDeSusReuniones,
+  citasVerificadas,
+  conLasPiezas,
+  equiposSinEtapa,
+  problemasDeLaCifra,
+  quitarLoQueNoPasa,
+  voseoDelResumen,
 } from "./resumen-de-la-escala";
 
 const RAIZ = process.cwd();
@@ -165,7 +175,7 @@ describe("1 · ninguna afirmación sin su cita", () => {
   it("todos los números del texto tienen que estar en lo citado, con lo que los multiplica", () => {
     expect(cifrasDeMas("14 de 25", "25 clientes y se nos van 14")).toEqual([]);
     expect(cifrasDeMas("56 % se va", "25 clientes y se nos van 14")).toEqual(["56·"]);
-    expect(cifrasDeMas("25 mil al mes", "facturamos 25 al mes")).toEqual(["25·mil"]);
+    expect(cifrasDeMas("25 mil al mes", "facturamos 25 al mes")).toEqual(["25000·"]);
     expect(cifrasDeMas("dos de cada tres", "son 2 de cada 3")).toEqual([]);
     expect(cifrasDeMas("1 800 tickets al mes", "Okay. 1800 al mes.")).toEqual([]);
   });
@@ -1428,5 +1438,128 @@ describe("20 · el Sistema 2 de la escala (12 nov)", () => {
     expect(test).not.toContain("rd-s2");
     expect(test).not.toContain("cdn.test");
     expect(test).not.toContain("partes de Ventas");
+  });
+});
+
+describe("21 · la verificación justa y lo que se repara (12 nov, Centauro en producción)", () => {
+  it("«23 mil» es «23 000», y «un mes» sostiene «1 mes»", () => {
+    expect(cifrasDeMas("~23 000 contactos", "tenemos como 23 mil contactos en la base")).toEqual([]);
+    expect(cifrasDeMas("8 días a 1 mes", "puede tardar de 8 días a un mes")).toEqual([]);
+    expect(cifrasDeMas("8 días a 2 meses", "puede tardar de 8 días a un mes")).toEqual(["2·"]);
+  });
+
+  it("un número chico o un año valen si la empresa los dijo en la reunión; una magnitud, solo si está en la cita", () => {
+    expect(cifrasDeMas("Tus dos marcas captan leads.", "captamos leads con las marcas", { chicos: "tenemos dos marcas de captación" })).toEqual([]);
+    expect(cifrasDeMas("Entran 150 leads al mes.", "entran leads al mes", { chicos: "a veces entran 150" })).toEqual(["150·"]);
+    expect(cifrasDeMas("Desde 2026 se mide.", "ahora sí se mide", { anios: "2026" })).toEqual([]);
+    expect(cifrasDeMas("Tus dos marcas captan leads.", "captamos leads con las marcas")).toEqual(["2·"]);
+  });
+
+  it("lo que encontró la revisión: ni «2000 clientes» es un año, ni «un» cualquiera sostiene un 1, y «2,5 mil» es 2500", () => {
+    const r: ReunionParaElResumen = { ...R1, turnos: [...R1.turnos, { n: 400, hablante: "Fernando Segura", texto: "tenemos 2000 clientes activos en toda la región, desde 2024 crecimos" }] };
+    const anios = loDeSusReuniones([], [r]).anios;
+    expect(cifrasDeMas("2000 tickets al mes", "llegan tickets", { anios })).toEqual(["2000·"]);
+    expect(cifrasDeMas("Desde 2024 se mide.", "ahora se mide", { anios })).toEqual([]);
+    expect(cifrasDeMas("1 % al mes", "algo como un 2,8% si no me equivoco")).toEqual(["1·"]);
+    expect(cifrasDeMas("2500 contactos", "tenemos 2,5 mil contactos")).toEqual([]);
+    expect(cifrasDeMas("5000 contactos", "tenemos 2,5 mil contactos")).toEqual(["5000·"]);
+    expect(herramientasDeMas("Llevan todo en Excel.", "lo llevan a mano", "el servicio es excelente")).toEqual(["excel"]);
+    // Un número chico de un turno lejano no sostiene nada: solo los vecinos de la cita.
+    const cita = { reunion: R1.id, turno: 20 };
+    expect(loDeSusReuniones([cita], [R1]).chicos).toContain("vendemos productos");
+    expect(loDeSusReuniones([cita], [R1]).chicos).not.toContain("Cada asesor tiene su propio celular");
+  });
+
+  it("una herramienta vale si la empresa la nombró en sus reuniones, aunque no en la cita corta; una que nunca nombró, no", () => {
+    expect(herramientasDeMas("Los casos llegan por WhatsApp.", "los casos llegan a la bandeja", "nos escriben por WhatsApp")).toEqual([]);
+    expect(herramientasDeMas("Llevan todo en Excel.", "llevan todo a mano", "nos escriben por WhatsApp")).toEqual(["excel"]);
+  });
+
+  it("el voseo con mayúscula al empezar una frase también se caza; «Además» o un nombre, no", () => {
+    expect(voseoDelResumen("Considerás activo a quien abrió un correo en los últimos 6 meses.")).toEqual(["Considerás"]);
+    expect(voseoDelResumen("Tenés 500 clientes.")).toEqual(["Tenés"]);
+    expect(voseoDelResumen("Además, tu equipo revisa cada caso. Después lo cierra.")).toEqual([]);
+    expect(voseoDelResumen("El estrés del equipo sube. Envío exprés.")).toEqual([]);
+    expect(textoValido("Considerás activo a quien abrió un correo.", 200, { personas: [] })).toMatchObject({ ok: false });
+  });
+
+  it("una cita pegada con «;» vale si cada pedazo está en la reunión, y queda partida; si un pedazo no está, no vale", () => {
+    const pegada = C("R1", 20, "vendemos productos para hospedajes, hoteles pequeños y medianos; la parte de desarrollo de software es otra división");
+    const citas = citasVerificadas([pegada], CTX.reuniones);
+    expect(citas.map((c) => c.texto).join(" ")).toMatch(/hospedajes[\s\S]*otra división/);
+    const conInventado = C("R1", 20, "vendemos productos para hospedajes, hoteles pequeños y medianos; también vendemos seguros de viaje a los turistas");
+    expect(citasVerificadas([conInventado], CTX.reuniones)).toEqual([]);
+  });
+
+  it("un turno que es solo un número vale como cita de una cifra si corrige una cantidad dicha justo antes", () => {
+    const r: ReunionParaElResumen = { ...R1, turnos: [...R1.turnos, { n: 264, hablante: "Fernando Segura", texto: "En este momento cerramos unos 30 al mes." }, { n: 265, hablante: "Emiley Calvo Jiménez", texto: "25." }] };
+    expect(citasVerificadas([C("R1", 265, "25")], [r], { cifra: true })).toHaveLength(1);
+    expect(citasVerificadas([C("R1", 265, "25")], [r])).toEqual([]);
+    const sinCantidad: ReunionParaElResumen = { ...R1, turnos: [...R1.turnos, { n: 264, hablante: "Marco Salas", texto: "¿Cuántos años llevan en el mercado?" }, { n: 265, hablante: "Emiley Calvo Jiménez", texto: "25." }] };
+    expect(citasVerificadas([C("R1", 265, "25")], [sinCantidad], { cifra: true })).toEqual([]);
+  });
+
+  it("el motivo de una cifra corregida que no pasa se dice (antes salía «()» vacío)", () => {
+    const cita = { reunion: R2.id, fecha: R2.fecha, turno: 161, hablante: "Emiley Calvo Jiménez", texto: "si tenemos algo como un 2,8% si no me equivoco, por ahí." };
+    const problemas = problemasDeLaCifra({ cifra: "2,8 % al mes", texto: "Se van 2,8 % de tus clientes; con 500 son 14 bajas.", nota: null, citas: [cita, { ...cita, turno: 59, texto: "si son 500 clientes y solo uno atendiendo tickets" }] }, "", [R2]);
+    expect(problemas.join(" ")).toMatch(/otro dicho \(14\)|lo citado \(14\)/);
+    expect(problemasDeLaCifra({ cifra: "2,8 % al mes", texto: "De tus clientes se dan de baja cada mes.", nota: null, citas: [cita] }, "", [R2])).toEqual([]);
+  });
+
+  it("una cifra que es una definición no sale; un pendiente que cuenta cómo se armó una cifra, tampoco", () => {
+    const e = leerElResumen(
+      responde({
+        areas: [area({ cifras: [{ cifra: "~6 meses", texto: "Consideras activo a quien abrió o interactuó en los últimos 6 meses.", estado: "declarado", nota: null, dimension: null, citas: [C("R2", 161, "si tenemos algo como un 2,8% si no me equivoco, por ahí.")] }] })],
+        pendientes: [{ tipo: "sin-dato", area: "3", texto: "Confirmar el total de casos: la cifra de 1.800 se construyó combinando estimaciones dadas con dudas.", citas: [] }],
+      }),
+      CTX,
+      REGLAS,
+    );
+    expect(e.descartados.join(" ")).toMatch(/definición/);
+    expect(e.pendientes).toEqual([]);
+    // Un pendiente que solo dice que algo no se recordó en la reunión no es cocina: sale.
+    const otro = leerElResumen(
+      responde({ areas: [area({})], pendientes: [{ tipo: "sin-dato", area: "1", texto: "Confirmar qué herramienta usan para las listas de prospectos; en la reunión no se recordó el nombre.", citas: [] }] }),
+      CTX,
+      REGLAS,
+    );
+    expect(otro.pendientes).toHaveLength(1);
+  });
+
+  it("lo que la revisión marcaría se quita antes de guardar (y lo escrito a mano no se toca)", () => {
+    const cita = { reunion: R1.id, fecha: R1.fecha, turno: 20, hablante: "Fernando Segura", texto: "vendemos productos para hospedajes, hoteles pequeños y medianos" };
+    const g = {
+      negocio: {
+        vende: [{ id: "n1", texto: "Vendes productos para hospedajes pequeños y medianos.", citas: [cita] }],
+        busca: [{ id: "n2", texto: "Quieres crecer tu cartera de hospedajes.", citas: [cita] }, { id: "n3", texto: "Quieres crecer, lo escribió Marco.", citas: [cita], mano: true }],
+      },
+      recorrido: [],
+      operativas: [],
+      pendientes: [{ id: "p1", tipo: "sin-dato" as const, texto: "La cifra de 1.800 se construyó combinando estimaciones.", areaId: null, citas: [] }],
+    };
+    const r = quitarLoQueNoPasa(g, [R1, R2]);
+    expect(r.resumen.negocio.vende?.map((p) => p.id)).toEqual(["n1"]);
+    expect(r.resumen.negocio.busca?.map((p) => p.id)).toEqual(["n3"]);
+    expect(r.resumen.pendientes).toEqual([]);
+    expect(r.quitados.length).toBe(2);
+  });
+
+  it("una pieza corregida vuelve a su lugar, sin pasar el tope ni repetirse", () => {
+    const cita = { reunion: R1.id, fecha: R1.fecha, turno: 369, hablante: "Fernando Segura", texto: "WhatsApp desde celular" };
+    const op: AreaOperativa = { id: "o1", nombre: "Ventas", areaId: "1", organizacion: [], bien: [], frena: [], retos: [], cifras: [], falta: null };
+    const vacio: Pick<LoQueEscribioElAgente, "negocio" | "operativas"> = { negocio: {}, operativas: [op] };
+    const e = conLasPiezas(vacio, [
+      { lugar: "o1:organizacion", texto: "Cada asesor escribe por WhatsApp desde su celular.", citas: [cita], problema: "x" },
+      { lugar: "o1:organizacion", texto: "Cada asesor escribe por WhatsApp desde su celular.", citas: [cita], problema: "x" },
+      { lugar: "negocio:vende", texto: "Vendes productos para hospedajes.", citas: [cita], problema: "x" },
+    ]);
+    expect(e.operativas[0].organizacion.map((p) => p.texto)).toEqual(["Cada asesor escribe por WhatsApp desde su celular."]);
+    expect(e.negocio.vende).toHaveLength(1);
+  });
+
+  it("un equipo con reunión y sin etapa se reconoce (para pedirle su etapa)", () => {
+    const ctx = { areas: [{ id: "1", nombre: "Ventas" }, { id: "2", nombre: "Marketing" }], reuniones: [{ areaId: "1" }, { areaId: "2" }] };
+    expect(equiposSinEtapa([{ nombre: "Demo y cierre", quien: "Ventas" }], [], ctx)).toEqual(["2"]);
+    expect(equiposSinEtapa([{ nombre: "Captación", quien: "Marketing" }, { nombre: "Demo", quien: "Ventas" }], [], ctx)).toEqual([]);
   });
 });
