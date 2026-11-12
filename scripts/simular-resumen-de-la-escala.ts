@@ -1,7 +1,7 @@
 /**
  * scripts/simular-resumen-de-la-escala.ts — el Resumen de la escala que ve el cliente, SIN escribir nada (2026-11-09;
  * resumen ejecutivo desde el 10 nov; lib/exploraciones/resumen-de-la-escala.ts). SOLO LECTURA: la conexión va con
- * `default_transaction_read_only`.
+ * `default_transaction_read_only`, salvo con `--guardar --apply`.
  *
  *   - «Qué hicimos» (las reuniones de las sesiones, con su duración real) y lo que leería el agente.
  *   - Con --llamar: lo que escribiría el agente, parte por parte, con la CITA de cada pieza para revisarla a mano, lo que
@@ -11,13 +11,21 @@
  *     sin llamar (para revisar la verificación sin volver a gastar).
  *   - Con --pagina <archivo>: lo que vería el cliente, lo que se ve adentro y el Resumen como se guardaría (formato 2).
  *   - Con --auditar: relee el Resumen GUARDADO pieza por pieza contra las transcripciones (`auditarElResumen`), sin IA.
+ *   - Con --guardar (12 nov): lo MISMO que el botón «Rehacer con IA» (`generarElResumenDeLaEscala`: el mismo agente, el
+ *     mismo guardado, lo escrito a mano se queda, su corrida en «Gasto de la IA»). Sin --apply dice qué haría y no llama a
+ *     la IA; con --apply y ALLOW_PROD_WRITE=1 lo hace (respalda antes la tabla ExploracionDeVenta) y audita lo guardado.
+ *     `--por <correo>` queda como quien lo pidió (sin él, nadie).
+ *
+ *   ALLOW_PROD_WRITE=1 npx tsx scripts/simular-resumen-de-la-escala.ts --exploracion cmw3wmh7w0sl108ppdf5mujjt --guardar --apply
  *
  *   npx tsx scripts/simular-resumen-de-la-escala.ts --exploracion cmw3wmh7w0sl108ppdf5mujjt --llamar
  */
 import "dotenv/config";
 import "./lib/permitir-server-only";
 
-process.env.PGOPTIONS = [process.env.PGOPTIONS, "-c default_transaction_read_only=on -c statement_timeout=60000"].filter(Boolean).join(" ");
+// Solo `--guardar --apply` escribe; todo lo demás va por una conexión de solo lectura.
+const GUARDA = process.argv.includes("--guardar") && process.argv.includes("--apply");
+process.env.PGOPTIONS = [process.env.PGOPTIONS, `${GUARDA ? "" : "-c default_transaction_read_only=on "}-c statement_timeout=60000`].filter(Boolean).join(" ");
 process.env.DB_POOL_MAX ??= "2";
 
 const arg = (n: string) => {
@@ -33,6 +41,9 @@ const citas = (cs: readonly Cita[]) =>
 async function main() {
   const id = arg("--exploracion");
   if (!id) throw new Error("Falta --exploracion <id>");
+  // El guard corre antes de tocar la base: sin ALLOW_PROD_WRITE=1 aborta, y respalda lo que se va a escribir.
+  const { resolverApply } = await import("./lib/guard");
+  const aplicar = process.argv.includes("--guardar") && resolverApply({ tablas: ["ExploracionDeVenta"] });
 
   const { leerParaElResumen, loQueLeeElResumen } = await import("@/lib/exploraciones/resumen-de-la-escala-server");
   const { escribirElResumen, loQueHicimos, resumenParaLaPagina } = await import("@/lib/exploraciones/resumen-de-la-escala");
@@ -49,6 +60,44 @@ async function main() {
   for (const s of le.hicimos.sesiones) console.log(`  ${s.fecha.slice(0, 10)} · ${s.equipo ?? "sin equipo"} · ${s.minutos ?? "?"} min · ${s.quienes?.join(", ") || "-"}`);
   console.log(`  ${loQueHicimos(le.hicimos)?.texto}`);
   console.log(`${NL}── Reuniones que lee: ${le.ctx.reuniones.map((r) => `${r.clave} ${r.fecha.slice(0, 10)} ${r.equipo ?? ""} (${r.turnos.length} turnos; del cliente: ${r.delCliente.join(", ") || "?"})`).join(" · ")}`);
+  // Con --guardar: lo que hace el botón «Rehacer con IA», con la misma función.
+  if (process.argv.includes("--guardar")) {
+    const antes = l.estado.contenido.resumenDeLaEscala;
+    console.log(`${NL}── Rehacer con IA (lo mismo que el botón)`);
+    console.log(`  Resumen guardado hoy: ${antes ? `v${antes.v}, del ${antes.at.slice(0, 16).replace("T", " ")}` : "ninguno"}`);
+    // Lo que frenaría al botón, dicho antes de aplicar (las mismas condiciones de `generarElResumenDeLaEscala`).
+    const freno = l.fila.archivadaEn
+      ? "la exploración está archivada"
+      : !l.deLasAreas.length
+        ? "no hay equipos en la página del cliente (elígelos en «Acceso»)"
+        : !le.ctx.reuniones.length
+          ? "ninguna sesión tiene transcripción"
+          : null;
+    if (freno) {
+      console.log(`  No se guardaría: ${freno}.`);
+      return;
+    }
+    if (!aplicar) {
+      console.log(`  Simulacro: no se llamó a la IA ni se escribió nada. Con --apply el agente lee estas ${le.ctx.reuniones.length} reuniones`);
+      console.log("  (unos 4 minutos y medio dólar), arma el Resumen y lo guarda en esta exploración: lo escrito a mano se queda.");
+      console.log("  Para ver antes lo que escribiría, sin guardar: --llamar (es otra corrida, con su costo).");
+      return;
+    }
+    const { generarElResumenDeLaEscala } = await import("@/lib/exploraciones/resumen-de-la-escala-server");
+    const r = await generarElResumenDeLaEscala({ exploracionId: id, email: arg("--por") ?? null });
+    if (!r.ok) throw new Error(`No se guardó (${r.status}): ${r.error}`);
+    console.log(`  Guardado en ${r.segundos} s · ${r.uso.entrada} tokens de entrada, ${r.uso.salida} de salida · ${r.descartados.length} piezas descartadas por la verificación`);
+    for (const d of r.descartados) console.log(`    - ${d}`);
+    const despues = await leerParaElResumen(id);
+    if (despues.ok && despues.estado.contenido.resumenDeLaEscala) {
+      const { auditarElResumen } = await import("@/lib/exploraciones/resumen-de-la-escala");
+      const completas = await loQueLeeElResumen(despues, new Date(), { completas: true });
+      const problemas = auditarElResumen(despues.estado.contenido.resumenDeLaEscala, completas.ctx.reuniones, despues.escala.areas.map((a) => ({ id: a.id, nombre: a.nombre })));
+      console.log(`  Auditoría de lo guardado: ${problemas.length} problemas`);
+      for (const x of problemas) console.log(`    - ${x.donde}: ${x.problema}`);
+    }
+    return;
+  }
   // Con --auditar: lo que está GUARDADO, pieza por pieza contra las transcripciones, con las reglas de hoy (no llama a la IA).
   if (process.argv.includes("--auditar")) {
     const { auditarElResumen } = await import("@/lib/exploraciones/resumen-de-la-escala");

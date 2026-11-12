@@ -30,6 +30,9 @@
  * El PDF va en hojas horizontales (carta, 1056 × 816): la 1 con la cabecera (y el resumen) y el radar grande, la 2 con
  * las tres piezas y la 3 con las barras (cada una con qué priorizar) y el enlace para agendar. Sin botones, sin
  * calendario, sin puntajes en el radar, sin tarjetas y sin movimiento.
+ * La escala de una empresa (`deLaEscala`) lleva el Sistema 2 desde el 12 nov (`.rd-s2`, resultado.css): la cabecera en
+ * un bloque con degradado y el logo de la empresa, el radar en su tarjeta con su título, las capas con lo que mide cada
+ * una. El resultado del test público y su PDF no lo llevan: se ven como antes.
  * Las salidas a la portada son enlaces comunes y no `<Link>`: al volver con «Atrás», Next revivía la página en el
  * navegador y la agenda de HubSpot quedaba en blanco; con una carga completa vuelve bien (probado el 28 oct).
  */
@@ -42,7 +45,7 @@ import { resumenDelResultado } from "@/lib/tests-diagnostico/redaccion";
 import type { DimensionDelResultado, ResultadoDelTest } from "@/lib/tests-diagnostico/resultado";
 import RadarDeUnaEmpresa from "@/components/escala/RadarDeUnaEmpresa";
 import AnimacionesDelResultado from "./AnimacionesDelResultado";
-import { ArribaDeLaEscala, PESTANA_DEL_RESUMEN, type PestanaDeLaEscala } from "./ArribaDeLaEscala";
+import { ArribaDeLaEscala, EmpresaDeLaEscala, PESTANA_DEL_RESUMEN, type PestanaDeLaEscala } from "./ArribaDeLaEscala";
 import CalendarioDeHubspot from "./CalendarioDeHubspot";
 import DescargarPdfDelResultado from "./DescargarPdfDelResultado";
 import "./diagnostico.css";
@@ -309,7 +312,7 @@ function TarjetaDeLaDimension({
  * Las dos capas, con su nivel (o que no se midió). Producción a la izquierda y base a la derecha, como en el radar
  * (Elías, 29 oct: «en la misma posición que en la escala»).
  */
-function Capas({ r }: { r: ResultadoDelTest }) {
+function Capas({ r, conDescripcion = false }: { r: ResultadoDelTest; conDescripcion?: boolean }) {
   const enElOrdenDelRadar = [...r.capas].sort((a, b) => (a.clave === "produccion" ? -1 : 0) - (b.clave === "produccion" ? -1 : 0));
   return (
     <div className="rd-capas">
@@ -320,6 +323,10 @@ function Capas({ r }: { r: ResultadoDelTest }) {
             <span className="rd-punto" aria-hidden="true" />
             {c.nivelNombre ?? (r.dimensiones.some((d) => d.capa === c.clave && d.preguntada) ? "Sin ubicar" : "No se midió")}
           </p>
+          {/* En la escala de una empresa (Sistema 2), qué mide cada capa: la primera letra en mayúscula. */}
+          {conDescripcion && DESCRIPCION_DE_LA_CAPA[c.clave] && (
+            <p className="rd-capa-d">{DESCRIPCION_DE_LA_CAPA[c.clave].charAt(0).toUpperCase() + DESCRIPCION_DE_LA_CAPA[c.clave].slice(1)}</p>
+          )}
         </div>
       ))}
     </div>
@@ -395,6 +402,7 @@ export default function ResultadoDelTestVista({
   detalles = null,
   dimensionDelRiesgo = {},
   deLaEscala = null,
+  logo = null,
   edicion = null,
 }: {
   r: ResultadoDelTest;
@@ -428,6 +436,8 @@ export default function ResultadoDelTestVista({
     /** La pestaña «Resumen» (9 nov), la primera: dónde está la portada. Sin él, no hay pestaña de Resumen. */
     resumen?: { href: string } | null;
   } | null;
+  /** Solo en la escala de una empresa: el logo de la ficha del cliente (`logoQueSeSirve`). Sin él, la inicial. */
+  logo?: string | null;
   /** La pantalla interna que la edita (ver `EdicionDeLaPagina`). La página pública no lo pasa. */
   edicion?: EdicionDeLaPagina | null;
 }) {
@@ -540,7 +550,7 @@ export default function ResultadoDelTestVista({
   }
 
   return (
-    <div className={`dr rd-v3${edicion ? " rd-editable" : ""}`}>
+    <div className={`dr rd-v3${deLaEscala ? " rd-s2" : ""}${edicion ? " rd-editable" : ""}`}>
       <AnimacionesDelResultado className="rd" quieta={!!edicion}>
         {deLaEscala ? (
           <ArribaDeLaEscala
@@ -572,17 +582,7 @@ export default function ResultadoDelTestVista({
         <section className="rd-cabecera">
           <div className="rd-head-arriba">
             <div className="rd-head-texto">
-              {nombreDeLaEmpresa && (
-                <span className="rd-empresa rd-entra">
-                  <span className="rd-empresa-logo" aria-hidden="true">
-                    {nombreDeLaEmpresa.trim().charAt(0).toUpperCase()}
-                  </span>
-                  <span className="rd-empresa-txt">
-                    <b>{nombreDeLaEmpresa}</b>
-                    {dominio && dominio !== nombreDeLaEmpresa && <small>{dominio}</small>}
-                  </span>
-                </span>
-              )}
+              <EmpresaDeLaEscala nombre={nombreDeLaEmpresa} dominio={dominio} logo={deLaEscala ? logo : null} />
               <p className="rd-eyebrow rd-entra rd-eyebrow-con-sector">
                 {esEstimado ? "Diagnóstico de rendimiento" : "Escala de rendimiento"} · {r.areaNombre}
                 {chipDelSector}
@@ -608,10 +608,15 @@ export default function ResultadoDelTestVista({
               )}
             </div>
             <div className="rd-entra">
-              <Capas r={r} />
+              <Capas r={r} conDescripcion={!!deLaEscala} />
             </div>
           </div>
           <div className="rd-radar rd-entra">
+            {deLaEscala && (
+              <p className="rd-eyebrow rd-radar-titulo">
+                Las {r.total} partes de {r.areaNombre}
+              </p>
+            )}
             {edicion?.radar ? edicion.radar(radar) : radar}
             <p className="rd-radar-ayuda">{edicion?.ayudaDelRadar ?? "Pasa el cursor (o toca) una parte del radar para ver qué le pasa hoy a tu área en esa parte."}</p>
           </div>

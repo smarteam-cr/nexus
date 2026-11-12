@@ -4,8 +4,14 @@
  * área (ResultadoDelTestVista) y la portada (ResumenDeLaEscalaVista): las mismas pestañas en las dos.
  * Afuera son enlaces (cada pestaña es una dirección, `?area=`); adentro (`alElegir`), botones que cambian de pestaña sin
  * salir de la pantalla. Un área que el cliente no ve va punteada y lo dice (solo adentro: `oculta`). Un equipo sin sesiones
- * se ve deshabilitado, sin texto, y afuera no se abre (`porExplorar`, 11 nov).
+ * se ve deshabilitado, sin texto, y afuera no se abre (`porExplorar`, 11 nov). Desde el 12 nov se ve más apagado y va
+ * siempre al final, después de las que se abren; si no debe salir, se desmarca en «Acceso» › «Qué equipos ve».
+ *
+ * `EmpresaDeLaEscala`: el nombre de la empresa con su logo (el de la ficha del cliente) o, sin logo, el círculo con la
+ * inicial. La usan la página de cada área y el Resumen.
  */
+import type { ReactNode } from "react";
+
 const LOGO_DE_COLOR = "/logo-smarteam.png";
 
 /** La pestaña del Resumen: no es un área (las áreas son números). */
@@ -24,7 +30,13 @@ export interface PestanaDeLaEscala {
   porExplorar?: boolean;
 }
 
+/** Las que se abren primero, en su orden; las de un equipo sin sesiones, al final (Elías, 12 nov). */
+export function enSuOrden<T extends { porExplorar?: boolean }>(pestanas: readonly T[]): T[] {
+  return [...pestanas.filter((p) => !p.porExplorar), ...pestanas.filter((p) => p.porExplorar)];
+}
+
 export function ArribaDeLaEscala({ pestanas, actual, alElegir }: { pestanas: readonly PestanaDeLaEscala[]; actual: string; alElegir?: (id: string) => void }) {
+  pestanas = enSuOrden(pestanas);
   return (
     <header className="rd-arriba">
       <span className="rd-logo">
@@ -60,5 +72,29 @@ export function ArribaDeLaEscala({ pestanas, actual, alElegir }: { pestanas: rea
         </nav>
       )}
     </header>
+  );
+}
+
+/**
+ * La empresa arriba de la página: su logo (sin deformarlo: entra entero en el alto del chip) o el círculo con la inicial.
+ * `logo` es la dirección que ya sirve la ficha del cliente (`logoQueSeSirve`); un logo que no carga deja el nombre igual.
+ */
+export function EmpresaDeLaEscala({ nombre, dominio, logo = null, className = "rd-empresa rd-entra" }: { nombre: string; dominio?: string | null; logo?: string | null; className?: string }): ReactNode {
+  if (!nombre) return null;
+  return (
+    <span className={`${className}${logo ? " rd-empresa-con-logo" : ""}`}>
+      {logo ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img className="rd-empresa-img" src={logo} alt="" />
+      ) : (
+        <span className="rd-empresa-logo" aria-hidden="true">
+          {nombre.trim().charAt(0).toUpperCase()}
+        </span>
+      )}
+      <span className="rd-empresa-txt">
+        <b>{nombre}</b>
+        {dominio && dominio !== nombre && <small>{dominio}</small>}
+      </span>
+    </span>
   );
 }

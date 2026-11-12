@@ -22,7 +22,7 @@ import { aplicarEdicion } from "@/lib/escala/documento/edicion";
 import { detallesDelResultado, dimensionDeCadaRiesgo, type DetalleDeLaDimension } from "@/lib/tests-diagnostico/detalle-de-la-dimension";
 import type { ResultadoDelTest } from "@/lib/tests-diagnostico/resultado";
 import { SENTINEL_SERVICE_TYPE } from "@/lib/projects/kind";
-import { areasDeLaPagina, partesDeLaPagina, resultadosDeLaEscala } from "./escala-para-el-cliente";
+import { areasDeLaPagina, logoQueSeSirve, partesDeLaPagina, resultadosDeLaEscala } from "./escala-para-el-cliente";
 import { resumenParaLaPagina, type ResumenDeLaPagina } from "./resumen-de-la-escala";
 import type { EstadoDeExploracion } from "./contenido";
 import type { EscalaDelLienzo } from "./escala-del-lienzo";
@@ -32,6 +32,11 @@ import { ultimaMedicionDe } from "./versiones-de-la-escala";
 export interface EscalaParaElCliente {
   empresa: string;
   dominio: string | null;
+  /**
+   * El logo de la ficha del cliente (`Client.logoUrl`, el bucket público que ya sirven el kickoff y el cronograma), o null:
+   * la página muestra el círculo con la inicial (12 nov). Solo una dirección https: nada que no se sirva hoy.
+   */
+  logo: string | null;
   fecha: string | null;
   /** Las áreas con algo medido, en orden: si son varias, la página las pone como pestañas. */
   areas: { id: string; nombre: string }[];
@@ -79,7 +84,7 @@ async function armarLaPagina(
   }
   const cliente = await prisma.client.findUnique({
     where: { id: fila.clientId },
-    select: { name: true, emailDomains: true },
+    select: { name: true, emailDomains: true, logoUrl: true },
   });
   if (!cliente) return null;
 
@@ -87,6 +92,7 @@ async function armarLaPagina(
   const vacio: EscalaParaElCliente = {
     empresa: cliente.name,
     dominio: cliente.emailDomains[0] ?? null,
+    logo: logoQueSeSirve(cliente.logoUrl),
     fecha: null,
     areas: [],
     resultados: [],
