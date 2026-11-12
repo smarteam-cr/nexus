@@ -61,6 +61,7 @@ import { suggestAdoptionMode } from "@/lib/lifecycle/stage-engine";
 import { tagLabels } from "@/lib/tags/catalog";
 import { canvasOfNested } from "@/lib/pieces/canvas-query";
 import { fusionarFilas, type FilaPropiedad } from "@/lib/planificacion/propiedades";
+import { cicloDeVidaGenerado } from "@/lib/planificacion/secciones";
 import { memoriaDelDocumento } from "@/lib/memoria";
 import { reunionesQueEntranSolasALaPlanificacion } from "@/lib/contexto/sugerencias-del-documento-server";
 import { isBlank } from "@/lib/landing/is-blank";
@@ -297,6 +298,11 @@ export async function runPlanificacionGeneration(opts: {
       (f) => f && typeof f === "object",
     );
     s.data = { ...(s.data as object), filas: fusionarFilas(previas, Array.isArray(nuevas) ? nuevas : []) };
+  }
+  /* El ciclo de vida son siempre las 7 etapas de HubSpot (2026-11-12): lo que el agente haya inventado pasa a la condición
+     de entrada, y los estados del lead de una persona se quedan. */
+  for (const s of gen.sections) {
+    if (s.key === "ciclo_vida_crm") s.data = cicloDeVidaGenerado(s.data, prevDataByKey.ciclo_vida_crm);
   }
 
   /* EL PORQUÉ DE LAS VACÍAS (2026-10-29, Elías: «en vez de entregarlas en blanco, deberían por lo menos explicar por

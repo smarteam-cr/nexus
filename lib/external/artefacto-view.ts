@@ -30,6 +30,7 @@ import { applyAssignments, HORARIOS_KEY, normalizeAssignments } from "@/lib/kick
 import { resultadosDelProyecto } from "@/lib/handoff/resultados";
 import { brandLogoMap, getBrandLogos } from "./smarteam-logo";
 import { seccionesQueSalenPorElEnlace, tipoCompartible } from "@/lib/artefactos/secciones-del-enlace";
+import { sinLoTecnicoDeLaPlanificacion } from "@/lib/planificacion/secciones";
 
 export interface ArtefactoViewData {
   /** El tipo del documento (lib/artefactos/tipos.ts): elige su adaptador del motor. */
@@ -124,12 +125,16 @@ export async function artefactoParaElToken(token: string): Promise<ArtefactoView
         blockType: b.blockType,
         content: b.content,
         data: sinAvisoDelEquipo(
-          sinLoInterno(
-            asignaciones && s.key === HORARIOS_KEY
-              ? applyAssignments(b.data, asignaciones)
-              : dropProseCompara && s.key !== COMPARA_KEY
-                ? stripProseCompara(b.data)
-                : b.data,
+          // Una planificación: sin el detalle técnico de las automatizaciones (2026-11-12), que es del equipo.
+          sinLoTecnicoDeLaPlanificacion(
+            tipo === "planning" ? s.key : "",
+            sinLoInterno(
+              asignaciones && s.key === HORARIOS_KEY
+                ? applyAssignments(b.data, asignaciones)
+                : dropProseCompara && s.key !== COMPARA_KEY
+                  ? stripProseCompara(b.data)
+                  : b.data,
+            ),
           ),
         ),
       })),

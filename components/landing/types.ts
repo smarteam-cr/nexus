@@ -386,6 +386,11 @@ export interface LandingContext {
    * enlace del cliente: ahí el formulario muestra los nombres que guardó.
    */
   planificacion?: {
+    /**
+     * Solo los editores del EQUIPO (la planificación de siempre y sus copias, 2026-11-12): muestra lo que el cliente no ve,
+     * como el detalle técnico de cada automatización («Ver detalle»). Ausente en el enlace del cliente y en el PDF.
+     */
+    delEquipo?: boolean;
     propiedades?: FilaPropiedad[];
     /** Las etiquetas del proyecto: los hubs vendidos, que la ficha ofrece marcar. */
     etiquetasDelProyecto?: string[];

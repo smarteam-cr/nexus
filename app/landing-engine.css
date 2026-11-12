@@ -2767,6 +2767,25 @@
 .stl .stl-plan-campos dd { margin: 0; color: var(--text-2); }
 .stl .stl-plan-campos dd.stl-plan-falta { color: var(--flag, #B45309); font-weight: 600; }
 
+/* Automatizaciones en filas (2026-11-12): lo que lee el cliente en columnas; lo técnico, plegado y solo para el equipo. */
+.stl .stl-plan-autos td:first-child { min-width: 190px; }
+.stl .stl-plan-autos .stl-plan-grupo { margin-top: 2px; }
+.stl .stl-plan-ver-detalle {
+  display: inline-block; margin-top: 6px; padding: 0; border: none; background: none; cursor: pointer;
+  font: inherit; font-size: 12px; font-weight: 600; color: var(--text-2); text-decoration: underline; text-underline-offset: 3px;
+}
+.stl .stl-plan-ver-detalle:hover { color: var(--text); }
+.stl .stl-plan-ver-detalle--falta { color: var(--flag, #B45309); }
+.stl .stl-props tbody tr.stl-plan-auto-abierta td { border-bottom: none; }
+.stl .stl-props tbody tr.stl-plan-auto-fila-detalle,
+.stl .stl-props tbody tr.stl-plan-auto-fila-detalle:hover { background: var(--bg-soft); }
+.stl .stl-plan-auto-detalle { padding: 2px 0 6px; }
+.stl .stl-plan-auto-detalle .stl-plan-campos--ancho { grid-template-columns: 170px minmax(0, 1fr); margin-top: 8px; }
+.stl .stl-plan-solo-equipo {
+  display: inline-flex; font-size: 11px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase;
+  color: var(--text-muted); border: 1px dashed var(--border-strong); border-radius: 999px; padding: 1px 9px;
+}
+
 @media (max-width: 860px) {
   .stl .stl-plan-flujo, .stl .stl-plan-etapas { grid-auto-flow: row; gap: 22px; }
   .stl .stl-plan-paso + .stl-plan-paso::before,

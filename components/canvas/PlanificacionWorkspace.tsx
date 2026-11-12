@@ -189,7 +189,7 @@ export default function PlanificacionWorkspace({
   const ctx: LandingContext = useMemo(
     () => ({
       clientName: "",
-      planificacion: { propiedades: propiedadesDelPlan, etiquetasDelProyecto: etiquetasClave ? etiquetasClave.split(",") : [], asientos, fechas, traerBrief },
+      planificacion: { delEquipo: true, propiedades: propiedadesDelPlan, etiquetasDelProyecto: etiquetasClave ? etiquetasClave.split(",") : [], asientos, fechas, traerBrief },
     }),
     [propiedadesDelPlan, etiquetasClave, asientos, fechas, traerBrief],
   );
