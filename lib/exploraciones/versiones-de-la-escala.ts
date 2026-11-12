@@ -22,6 +22,7 @@ import "server-only";
 import type { Prisma } from "@prisma/client";
 import { esquemaDesactualizado, modeloDisponible } from "@/lib/db/esquema";
 import { prisma } from "@/lib/db/prisma";
+import { exploracionVivaDelProyecto } from "./del-proyecto";
 import { hoyEnCostaRica } from "./fechas";
 import { ordenarVersiones, type MomentoDeLaVersion } from "./posicionar";
 import { fotoDeLaExploracion, huellaDeLaFoto, leerFoto, type FotoDeLaEscala, type OrigenDeLaVersion } from "./foto-de-la-escala";
@@ -176,8 +177,10 @@ export function anotarVersionDelCambio(exploracionId: string, email: string | nu
 export async function guardarVersionDelDiagnostico(projectId: string, email: string | null): Promise<ResultadoDeGuardar> {
   if (!hayTabla() || !modeloDisponible(prisma.exploracionDeVenta)) return { estado: "sin-tabla" };
   try {
-    const exp = await prisma.exploracionDeVenta.findFirst({ where: { projectId, canvasId: null, archivadaEn: null }, select: { id: true } });
-    if (!exp) return { estado: "no-existe" };
+    // La de siempre, o la primera copia viva si el equipo la archivó (lib/exploraciones/del-proyecto.ts).
+    const expId = await exploracionVivaDelProyecto(projectId);
+    if (!expId) return { estado: "no-existe" };
+    const exp = { id: expId };
     const ciclo = modeloDisponible(prisma.cicloDeProyecto)
       ? await prisma.cicloDeProyecto.findFirst({ where: { projectId, estado: "abierto" }, select: { id: true } }).catch(() => null)
       : null;

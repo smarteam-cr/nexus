@@ -33,12 +33,35 @@ export function grupoDelRiel(slug: string): GrupoDelRiel {
 }
 
 /**
- * Las filas con las herramientas primero y los entregables después; estable adentro de cada grupo. Una COPIA de un tipo
- * (etapa V3) va en el grupo de su tipo (`tipo`), no en el de su slug de fila (`copia:<id>`).
+ * Las filas con las herramientas primero y los entregables después. Una COPIA de un tipo (etapa V3) va en el grupo de su
+ * tipo (`tipo`), no en el de su slug de fila (`copia:<id>`).
+ *
+ * Adentro de cada grupo manda el orden que la persona dejó arrastrando (`orden`, `Project.ordenDelRiel`, Elías 12 nov):
+ * mezcla tipos. Lo que no está en esa lista (un documento creado después, o un proyecto que nadie ordenó) va al final de
+ * su grupo, en el orden de siempre. Sin lista, es el orden de siempre tal cual.
  */
-export function ordenarPorGrupo<T extends { slug: string; tipo?: string }>(filas: readonly T[]): T[] {
+export function ordenarPorGrupo<T extends { slug: string; tipo?: string }>(filas: readonly T[], orden: readonly string[] = []): T[] {
   const grupo = (f: T) => grupoDelRiel(f.tipo ?? f.slug).id;
+  const lugar = new Map(orden.map((k, i) => [k, i]));
+  const enSuOrden = (lista: T[]) =>
+    lista
+      .map((f, i) => ({ f, i, l: lugar.get(f.slug) ?? Number.POSITIVE_INFINITY }))
+      .sort((a, b) => a.l - b.l || a.i - b.i)
+      .map((x) => x.f);
   const herramientas = filas.filter((f) => grupo(f) === "herramienta");
   const entregables = filas.filter((f) => grupo(f) === "entregable");
-  return [...herramientas, ...entregables];
+  return [...enSuOrden(herramientas), ...enSuOrden(entregables)];
 }
+
+/**
+ * El orden nuevo del proyecto después de arrastrar en un grupo: las claves de ese grupo, en su orden nuevo, y después las
+ * que ya estaban (del otro grupo, o desancladas), sin repetir. Arrastrar en «Entregables» no mueve «Herramientas».
+ */
+export function conOrdenDelGrupo(anterior: readonly string[], delGrupo: readonly string[]): string[] {
+  const nuevas = [...new Set(delGrupo)];
+  const puestas = new Set(nuevas);
+  return [...nuevas, ...anterior.filter((k) => !puestas.has(k))].slice(0, TOPE_DEL_ORDEN);
+}
+
+/** Cuántas claves guarda el orden de un proyecto, como mucho. */
+export const TOPE_DEL_ORDEN = 300;

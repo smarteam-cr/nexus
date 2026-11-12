@@ -34,6 +34,12 @@ export function tipoDelDocumento(c: CanvasConTipo): string | null {
   return pieceByName(c.name)?.slug ?? null;
 }
 
+/**
+ * El motivo (`disabledReason`) con que se archiva el documento de siempre (Elías, 12 nov): suelta su lugar y queda como una
+ * copia apagada; al recuperarlo, dice que puede volver a su lugar (lib/artefactos/copias-server.ts › archivarArtefacto).
+ */
+export const ARCHIVADO_EL_DE_SIEMPRE = "archivada-de-siempre";
+
 /** ¿Es una copia (y no el documento de siempre de su tipo)? */
 export function esCopia(c: Pick<CanvasConTipo, "slug" | "tipoArtefacto">): boolean {
   return !c.slug && !!c.tipoArtefacto;

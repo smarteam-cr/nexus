@@ -52,7 +52,7 @@ import { urlDeDocumentoEnManual } from "@/lib/manual/anclas";
 import ChatDelDocumento from "@/components/asistente/ChatDelDocumento";
 import { puedeConversar, PIEZA_CRONOGRAMA } from "@/lib/asistente/piezas";
 import { buildPieceRows } from "@/lib/flow/dropdown-rows";
-import { GRUPO_HERRAMIENTAS, grupoDelRiel, ordenarPorGrupo } from "@/lib/flow/grupos-del-riel";
+import { conOrdenDelGrupo, GRUPO_HERRAMIENTAS, grupoDelRiel, ordenarPorGrupo } from "@/lib/flow/grupos-del-riel";
 import { AVISO_DESACTUALIZADA_LARGO } from "@/lib/pieces/piece-staleness";
 import { pieceReadiness } from "@/lib/flow/piece-readiness";
 import { ExternalAccessButton } from "./ExternalAccessPanel";
@@ -68,8 +68,9 @@ import type { NovedadEnElTurno } from "@/lib/asistente/alcance";
 import { usePantallaDelRecorrido } from "@/components/recorridos/contexto";
 import ArtefactoWorkspace from "@/components/artefactos/ArtefactoWorkspace";
 import BarraDelArtefacto from "@/components/artefactos/BarraDelArtefacto";
+import { MenuDeArchivar, useArchivarArtefacto } from "@/components/artefactos/ArchivarArtefacto";
 import NuevoArtefactoModal from "@/components/artefactos/NuevoArtefactoModal";
-import { esCopia, nombreDelArtefacto, ordenarArtefactos, tipoDelDocumento } from "@/lib/artefactos/copias";
+import { esCopia, nombreDelArtefacto, tipoDelDocumento } from "@/lib/artefactos/copias";
 import { admiteCopias, seRenombra, TIPO_CUESTIONARIOS, TIPO_REQUERIMIENTO_TECNICO, tipoDeArtefacto } from "@/lib/artefactos/tipos";
 import NombreEditable from "@/components/artefactos/NombreEditable";
 import AlertaDeAccesoAlPortal, { useAccesoAlPortal } from "./AlertaDeAccesoAlPortal";
@@ -270,6 +271,10 @@ export default function ProjectCanvasPanel({
   const [estadoCiclo, setEstadoCiclo] = useState<CicloParaElRiel | null>(null);
   /** Las piezas que el equipo ocultó del riel (2026-10-12): quedan en «Ver N piezas más». */
   const [piezasOcultas, setPiezasOcultas] = useState<string[]>([]);
+  /** El orden que el equipo dejó arrastrando en la lista (Elías, 12 nov): claves de fila, cada grupo en su orden. */
+  const [ordenDelRiel, setOrdenDelRiel] = useState<string[]>([]);
+  /** Los tipos con su documento de siempre archivado (12 nov): su fila no vuelve como «por crear» ni el «Qué sigue» la pide. */
+  const [archivados, setArchivados] = useState<string[]>([]);
   /** Alguien ya abrió la exploración de siempre: se escribe en su lienzo, así que el canvas vacío no dice que nadie la creó. */
   const [exploracionAbierta, setExploracionAbierta] = useState(false);
   /** Si el kickoff sigue como nació y qué plantilla le toca (lib/entregables/generar-server.ts). null = todavía no se sabe: el documento. */
@@ -317,17 +322,6 @@ export default function ProjectCanvasPanel({
   /* Una copia de Exploración o de Cuestionarios abre su herramienta: no es un documento del motor. */
   const copiaDelMotor = copiaActiva && !tipoDeArtefacto(tipoActivo)?.sinDuplicar ? copiaActiva : null;
   const esExploracionAbierta = activeSlug === "exploration" || tipoActivo === "exploration";
-  const delTipoActivo = useMemo(
-    () =>
-      tipoActivo
-        ? ordenarArtefactos(
-            canvases
-              .filter((c) => tipoDelDocumento(c) === tipoActivo)
-              .map((c) => ({ ...c, order: c.order ?? 0, createdAt: c.createdAt ?? 0 })),
-          ).map((c) => ({ id: c.id, nombre: nombreDelArtefacto(c), terminado: !!c.terminadoEn }))
-        : [],
-    [canvases, tipoActivo],
-  );
   /** «Nuevo artefacto» / «Crear otra…»: abierto, y con qué tipo (y plantilla) ya elegido. Sin tipo, todos los tipos. */
   const [nuevoArtefacto, setNuevoArtefacto] = useState<{ tipo: string | null; plantilla?: string } | null>(null);
   /** El acceso al portal del cliente, si el kickoff lo pide y sigue pendiente: alerta en el Resumen e ícono en su fila. */
@@ -462,6 +456,8 @@ export default function ProjectCanvasPanel({
         setCuestionariosLeidos(true);
         setEstadoCiclo((d.ciclo as CicloParaElRiel | null | undefined) ?? null);
         if (Array.isArray(d.piezasOcultas)) setPiezasOcultas(d.piezasOcultas as string[]);
+        if (Array.isArray(d.ordenDelRiel)) setOrdenDelRiel(d.ordenDelRiel as string[]);
+        if (Array.isArray(d.archivados)) setArchivados(d.archivados as string[]);
         setSelectorKickoff((d.selectorKickoff as { sinTocar: boolean; plantillaDelServicio: string | null } | null | undefined) ?? null);
         setExploracionAbierta(d.exploracionAbierta === true);
         setActiveCanvasId((prev) => {
@@ -564,6 +560,29 @@ export default function ProjectCanvasPanel({
   }, [projectId, refetchCanvases, switchCanvas, toast, visible, onAbrirDesdeOculto]);
 
   /** Cambia el nombre de un documento. Sin canvas son los Cuestionarios de siempre: toman uno, con sus cuestionarios adentro. */
+  /** Ordenar arrastrando en la lista: se ve al instante y vuelve atrás si no se pudo guardar. */
+  const ordenarElGrupo = useCallback(
+    async (filasDelGrupo: { slug: string; canvasId?: string | null }[]) => {
+      const claves = filasDelGrupo.map((f) => f.slug);
+      setOrdenDelRiel((o) => conOrdenDelGrupo(o, claves));
+      try {
+        const documentos = filasDelGrupo.map((f) => pieceRows.find((r) => r.slug === f.slug)?.canvasId).filter((id): id is string => !!id);
+        const r = await fetch(`/api/projects/${projectId}/orden-del-riel`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ claves, documentos }),
+        });
+        const j = await r.json().catch(() => null);
+        if (!r.ok) throw new Error(j?.error ?? "No se pudo guardar el orden.");
+        if (Array.isArray(j?.ordenDelRiel)) setOrdenDelRiel(j.ordenDelRiel as string[]);
+      } catch (e) {
+        // Vuelve a lo guardado (no a una foto de antes: otro arrastre pudo guardarse mientras tanto).
+        void refetchCanvases();
+        toast.error(e instanceof Error ? e.message : "No se pudo guardar el orden.");
+      }
+    },
+    [pieceRows, projectId, refetchCanvases, toast],
+  );
   const renombrar = useCallback(
     async (canvasId: string | null, nombre: string): Promise<boolean> => {
       const r = await fetch(`/api/projects/${projectId}/artefactos${canvasId ? `/${canvasId}` : ""}`, {
@@ -582,6 +601,26 @@ export default function ProjectCanvasPanel({
     },
     [piezaSinCanvas, projectId, refetchCanvases, switchCanvas, toast, visible],
   );
+
+  /* Archivar lo que no tiene barra (12 nov): el cronograma y los Cuestionarios de siempre. Los Cuestionarios no tienen
+     documento: primero toman uno con sus cuestionarios adentro, como al cambiarles el nombre, y ese se archiva. */
+  const archivo = useArchivarArtefacto({
+    projectId,
+    onArchivada: () => {
+      void refetchCanvases();
+      irAlResumen();
+    },
+    onRecuperada: () => refetchCanvases(),
+  });
+  const crearLaTandaDeCuestionarios = useCallback(async (): Promise<string | null> => {
+    const r = await fetch(`/api/projects/${projectId}/artefactos`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ tipo: TIPO_CUESTIONARIOS, nombre: pieceLabel(PIEZA_CUESTIONARIOS), conLosSueltos: true }),
+    }).catch(() => null);
+    const j = r?.ok ? ((await r.json().catch(() => null)) as { canvasId?: string } | null) : null;
+    return j?.canvasId ?? null;
+  }, [projectId]);
 
   // Primer load + refetch cuando la señal genérica de canvases bumpea (canvas
   // auto-creado por un agente). La señal es el punto de escalabilidad: cualquier
@@ -662,8 +701,18 @@ export default function ProjectCanvasPanel({
     setAvisosDePiezas((prev) => (JSON.stringify(prev) === JSON.stringify(a) ? prev : a));
   }, []);
   const piezasParaQueSigue = useMemo<PiezaParaQueSigue[]>(
-    () => pieceRows.map((r) => ({ slug: r.slug, etiqueta: r.label, estado: r.state, stale: !!r.stale, novedades: nNovedades(r.slug), tipo: r.tipo })),
-    [pieceRows, nNovedades],
+    () =>
+      pieceRows.map((r) => ({
+        slug: r.slug,
+        etiqueta: r.label,
+        estado: r.state,
+        stale: !!r.stale,
+        novedades: nNovedades(r.slug),
+        tipo: r.tipo,
+        // Lo que el equipo archivó no se vuelve a pedir: sin documento en su lugar, la fila no cuenta.
+        archivada: !r.canvasId && archivados.includes(r.slug),
+      })),
+    [pieceRows, nNovedades, archivados],
   );
   const abrirPieza = useCallback(
     (slug: string) => {
@@ -876,7 +925,7 @@ export default function ProjectCanvasPanel({
               alerta: accesoAlPortal?.falta ? "Falta el acceso al portal de HubSpot del cliente" : null,
             }}
             grupoDelResumen={GRUPO_HERRAMIENTAS}
-            filas={ordenarPorGrupo(pieceRows).map((row): FilaDelRielDePiezas => {
+            filas={ordenarPorGrupo(pieceRows, ordenDelRiel).map((row): FilaDelRielDePiezas => {
               // ¿Esta pieza le corresponde a este proyecto, y están sus pasos previos?
               // Nunca bloquea: informa (lib/flow/piece-readiness).
               const readiness = pieceReadiness(row.slug, {
@@ -914,7 +963,11 @@ export default function ProjectCanvasPanel({
                 grupo,
                 oculta,
                 tipo: row.tipo,
-                estado: estadoEnElRiel(row.slug === "exploration" && exploracionAbierta ? { ...row, conNombre: true } : row, { activa: activaLaFila }),
+                // Archivado a propósito (12 nov): el cronograma y el kickoff no vuelven a la lista como «por crear».
+                estado:
+                  !row.canvasId && archivados.includes(row.slug)
+                    ? "sin_crear"
+                    : estadoEnElRiel(row.slug === "exploration" && exploracionAbierta ? { ...row, conNombre: true } : row, { activa: activaLaFila }),
                 activa: activaLaFila,
                 /* El aviso COMPRIMIDO ("Sin tag X" / "Antes: Y"); la frase completa va en el title.
                    Si no, el de «el handoff corrió después»: el encadenado ya NO reescribe solo
@@ -943,6 +996,7 @@ export default function ProjectCanvasPanel({
               };
             })}
             onRenombrar={renombrar}
+            onOrdenar={(filasDelGrupo) => void ordenarElGrupo(filasDelGrupo)}
             porActivarAbiertas={porActivarAbiertas}
             onAlternarPorActivar={() => setPorActivarAbiertas((v) => !v)}
             onElegir={(slug) => {
@@ -1067,6 +1121,14 @@ export default function ProjectCanvasPanel({
           {(activeSlug === "timeline" || activeSlug === "tech-requirements") && (
             <div ref={setCanvasHeaderSlot} className="flex items-center gap-2" />
           )}
+          {/* Archivar lo que no tiene barra (12 nov): el cronograma y los Cuestionarios de siempre. */}
+          {!enResumen && activeSlug === PIEZA_CRONOGRAMA && activeCanvas && activeCanvasId && !copiaActiva && (
+            <MenuDeArchivar onArchivar={() => archivo.pedir({ nombre: nombreDelArtefacto(activeCanvas), canvasId: activeCanvasId, esCronograma: true })} />
+          )}
+          {!enResumen && piezaSinCanvas === PIEZA_CUESTIONARIOS && (estadoCuestionarios?.sueltos ?? 0) > 0 && (
+            <MenuDeArchivar onArchivar={() => archivo.pedir({ nombre: pieceLabel(PIEZA_CUESTIONARIOS), crear: crearLaTandaDeCuestionarios })} />
+          )}
+          {archivo.dialogo}
           {/* Aviso (nunca bloqueo): en clientes multi-proyecto, links de IA sin revisar
               pueden mezclar contexto de otro proyecto en el handoff/kickoff. */}
           {(activeSlug === "handoff" || activeSlug === "kickoff") && (
@@ -1183,7 +1245,6 @@ export default function ProjectCanvasPanel({
           nombre={nombreDelArtefacto(activeCanvas)}
           esCopia={!!copiaActiva}
           terminado={!!activeCanvas.terminadoEn}
-          delTipo={delTipoActivo}
           compartible={!esPrueba}
           contextoDeSiempre={
             docConContexto && activeSlug !== "exploration" ? (

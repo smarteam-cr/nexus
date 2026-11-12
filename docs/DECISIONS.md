@@ -13322,6 +13322,51 @@ en su lugar. Lo que queda decidido:
   memoria le da lo que el documento de siempre lee por su cuenta (`tambienLeer`: la ficha y los procesos; los resultados del diagnóstico van con sus códigos), y
   solo eso. Las propiedades de personas o plantillas no se pisan, y lo retirado de un documento viejo duplicado se oculta.
 - **Archivar pide confirmación y se deshace desde el aviso**; el enlace de la copia no vuelve (hay que crear uno nuevo).
+- **Se archiva todo menos el Resumen, también el documento de siempre (12 nov, Elías).** Corrige «archivar es solo de las
+  copias». *La regla:* el de siempre archivado SUELTA SU LUGAR. Queda como una copia apagada (`slug` NULL, `tipoArtefacto`,
+  un `name` que nunca se resuelve como pieza, el nombre que se veía en `titulo` y `disabledReason = "archivada-de-siempre"`,
+  `lib/artefactos/copias-server.ts › archivarArtefacto`). *Por qué así y no apagarlo con su `slug`:* `ensurePieceCanvas`
+  reenciende sin preguntar lo que encuentra apagado por `slug`, y lo llaman generar, las etiquetas y el encadenado del
+  handoff; con el lugar libre, los más de cien lectores por `slug` ven un proyecto que nunca lo tuvo, un estado que ya
+  saben llevar, y nunca le escriben a un archivado. *Se descartó* que la primera copia viva tomara su lugar: el de siempre
+  guarda cosas afuera del canvas por tipo (las reuniones elegidas en `SessionProject`, las notas con `pieza = slug`, lo oculto
+  del kickoff en el proyecto, los sellos de publicado) y la copia ascendida heredaría las del otro. Lo que queda decidido:
+  - Las copias vivas siguen como copias. El próximo documento que se cree del tipo es el de siempre (adoptar, generar).
+  - La exploración de siempre (la fila sin `canvasId`) se va con su documento. Quien necesita UNA exploración viva (la foto
+    de la escala al presentar el diagnóstico) toma la de la primera copia viva (`exploracionVivaDelProyecto`), y los agentes
+    no vuelven a la guía de exploración vieja: era del de siempre.
+  - Los Cuestionarios de siempre no tienen documento: primero toman uno con sus cuestionarios, como al darles nombre, y ese
+    se archiva (el cliente deja de verlos, como una tanda).
+  - Lo del proyecto no se toca: el cronograma archivado conserva sus fechas, el cobro, las alertas, lo que leen los agentes
+    y lo que el cliente ya ve de él (todos leen `ProjectTimeline`, no el documento). Lo que sí se apaga son sus
+    «Instrucciones adicionales», que viven en el documento: la confirmación lo dice. La de un entregable avisa que sale del
+    portal del cliente; los sellos de publicado (`kickoffPublishedAt`…)
+    quedan, porque las etapas los leen. Por eso el portal del kickoff (sin foto propia) y el del requerimiento técnico (que
+    se lee en vivo) preguntan si el sello sigue siendo del documento que está en el lugar (`selloDelDeSiempreVigente`): no,
+    si el de siempre se archivó después de publicarse, o si el que está nació después del sello y hay una copia de antes
+    (el que se publicó, recuperado como copia). Si no, el sello del archivado publicaría el borrador del nuevo. Compartir
+    antes de que exista el documento sigue valiendo. El kickoff vuelve a verse al subirlo; el requerimiento, al
+    compartirlo otra vez.
+  - Lo que ante «no existe» lo pediría o lo crearía solo pregunta `tiposConElDeSiempreArchivado`
+    (`lib/artefactos/archivados-server.ts`): la lista no vuelve a mostrar el cronograma y el kickoff como «por crear», el
+    «Qué sigue» no los pide, y las etiquetas y el encadenado del handoff no crean otro requerimiento técnico. Generar a mano,
+    «Nuevo artefacto» y el chat sí crean uno nuevo: es lo que se pidió.
+  - Recuperarlo («Deshacer» del aviso) lo devuelve a su lugar si sigue libre; si ya hay otro, vuelve como copia, con lo oculto
+    del kickoff pasado a su Json. El cronograma y la entrega no vuelven como copia (409): el cronograma no lleva copias, y la
+    entrega guarda en su Json lo que el cliente no ve y como copia se podría compartir.
+  - Las notas del de siempre (`pieza = slug`) y su «Contexto adicional» son del tipo: se quedan para el próximo de siempre.
+  - Una fila vieja del de siempre sin `slug` (de antes del backfill, se resuelve por nombre) se archiva igual que el de
+    siempre: también suelta su lugar.
+  - Pendiente, a sabiendas: el selector de proyectos del portal todavía lista un kickoff archivado con el sello puesto (abre
+    «sin acceso»), y el botón de compartir del requerimiento técnico nuevo dice «compartido» hasta que se vuelve a compartir.
+- **El orden se arrastra en la lista, no en «Más › Ordenar» (12 nov, Elías).** Al pasar el mouse por un artefacto aparece un
+  asa en el lugar del punto (como el lápiz a la derecha), también con teclado (dnd-kit: Espacio o Enter, las flechas,
+  Escape). Se ordena adentro de «Entregables» y adentro de «Herramientas», mezclando tipos; el Resumen queda fijo arriba.
+  El orden es del proyecto (`Project.ordenDelRiel`, claves de fila; SQL `2026-11-12-orden-del-riel.sql`): lo ven todos igual.
+  Lo que no está en la lista (un documento nuevo) va al final de su grupo. Arrastrar también deja los documentos de un mismo
+  tipo en ese orden para quien los lee (`ordenarSegunLaLista`, en los lugares que ya ocupaban). «Más › Ordenar» y
+  `PUT /artefactos/orden` se retiraron: ordenaban solo adentro de un tipo y, con la lista ordenada, no se habría visto el
+  cambio.
 - **Los dos primeros tipos nuevos son el plan de adopción y la integración técnica** (Elías, respuesta 3), adelantados
   de V6. La integración técnica presta las secciones del requerimiento técnico y suma el **mapa de integración** (campo de
   origen ↔ propiedad de HubSpot, sentido, transformación, frecuencia), el identificador único, el alcance firmado y lo que

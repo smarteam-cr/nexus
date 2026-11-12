@@ -41,6 +41,21 @@ async function laViva(projectId: string, canvasId: string | null): Promise<strin
 /** Lee la exploración de un documento sin crearla. */
 export const exploracionVivaDelDocumento = laViva;
 
+/**
+ * LA exploración viva del proyecto, para quien necesita UNA (la foto de la escala al presentar el diagnóstico): la de siempre
+ * y, si el equipo la archivó (12 nov), la de la primera copia viva en el orden de la lista. null si no hay ninguna.
+ */
+export async function exploracionVivaDelProyecto(projectId: string): Promise<string | null> {
+  const deSiempre = await laViva(projectId, null);
+  if (deSiempre) return deSiempre;
+  const copias = await prisma.exploracionDeVenta.findMany({
+    where: { projectId, archivadaEn: null, canvas: { disabledAt: null, slug: null, tipoArtefacto: "exploration" } },
+    select: { id: true, canvas: { select: { order: true, createdAt: true } } },
+  });
+  const [primera] = copias.sort((a, b) => (a.canvas?.order ?? 0) - (b.canvas?.order ?? 0) || (a.canvas?.createdAt.getTime() ?? 0) - (b.canvas?.createdAt.getTime() ?? 0));
+  return primera?.id ?? null;
+}
+
 /** Archiva la exploración de una copia junto con ella: si no, los agentes la seguirían leyendo. Va adentro de una transacción. */
 export const archivarExploracionDeLaCopia = (canvasId: string, ahora: Date) =>
   prisma.exploracionDeVenta.updateMany({ where: { canvasId, archivadaEn: null }, data: { archivadaEn: ahora } });

@@ -14,7 +14,7 @@ import { cargarEstadoDeCuestionarios } from "@/lib/pieces/estado-de-cuestionario
 import { ensurePieceCanvas } from "@/lib/pieces/ensure-canvas";
 import { loadCanvasesTocados } from "@/lib/pieces/piece-content";
 import { adoptarElDeSiempre } from "./adoptar-server";
-import { archivarCopia, crearCopia, ErrorDelArtefacto, reactivarCopia, renombrarArtefacto } from "./copias-server";
+import { archivarArtefacto, crearCopia, ErrorDelArtefacto, reactivarArtefacto, renombrarArtefacto } from "./copias-server";
 
 async function proyecto() {
   const c = await prisma.client.create({ data: { name: "Cliente herramientas (test)", kind: "CLIENTE" } });
@@ -51,9 +51,9 @@ describe("varias exploraciones en un proyecto", () => {
     expect(texto).toContain("# Exploración: Marketing");
     expect(texto).toContain("Reto de marketing");
 
-    await archivarCopia(p.id, copia.canvasId, null);
+    await archivarArtefacto(p.id, copia.canvasId, null);
     expect(await textoDeLaExploracionDelProyecto(p.id)).not.toContain("Reto de marketing");
-    await reactivarCopia(p.id, copia.canvasId);
+    await reactivarArtefacto(p.id, copia.canvasId);
     expect(await textoDeLaExploracionDelProyecto(p.id)).toContain("Reto de marketing");
   });
 
@@ -87,11 +87,11 @@ describe("varias tandas de cuestionarios", () => {
     await crearTactico(p.id, null, null, tanda.canvasId);
     expect((await obtenerCuestionarios(p.id)).cuestionarios).toHaveLength(2);
 
-    await archivarCopia(p.id, tanda.canvasId, null);
+    await archivarArtefacto(p.id, tanda.canvasId, null);
     expect((await obtenerCuestionarios(p.id)).cuestionarios).toHaveLength(1);
     expect((await cargarEstadoDeCuestionarios(p.id, null))?.total).toBe(1);
 
-    await reactivarCopia(p.id, tanda.canvasId);
+    await reactivarArtefacto(p.id, tanda.canvasId);
     expect((await obtenerCuestionarios(p.id)).cuestionarios).toHaveLength(2);
   });
 });

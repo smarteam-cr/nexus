@@ -1,4 +1,5 @@
 import { hayExploracionAbierta } from "@/lib/exploraciones/del-proyecto";
+import { tiposConElDeSiempreArchivado } from "@/lib/artefactos/archivados-server";
 import { selectorDelKickoff } from "@/lib/entregables/generar-server";
 import { NextRequest, NextResponse } from "next/server";
 import { guardAccessToProject, guardHandoffAccess } from "@/lib/auth/api-guards";
@@ -70,7 +71,7 @@ export async function GET(
   /* Los Cuestionarios (2026-10-11) no viven en un canvas: su fila del riel sale de sus propias tablas.
      El «Ahora no» de su sugerencia está en las secciones del Kickoff, que ya vienen en esta lista. */
   const kickoff = canvases.find((c) => slugForCanvas(c) === "kickoff");
-  const [handoffCambioAt, novedades, estadoCuestionarios, puedeEditarCuestionarios, ciclo, piezasOcultas, selectorKickoff, exploracionAbierta] = await Promise.all([
+  const [handoffCambioAt, novedades, estadoCuestionarios, puedeEditarCuestionarios, ciclo, piezasOcultas, selectorKickoff, exploracionAbierta, ordenDelRiel, archivados] = await Promise.all([
     ultimoCambioDelHandoff(projectId),
     conteoDeNovedadesDelProyecto(
       projectId,
@@ -93,6 +94,15 @@ export async function GET(
     selectorDelKickoff(projectId).catch(() => null),
     /* La exploración se escribe en su lienzo, no en el canvas: abierta alguna vez cuenta como creada, aunque el canvas siga vacío. */
     hayExploracionAbierta(projectId).catch(() => false),
+    /* El orden que el equipo dejó arrastrando en la lista (2026-11-12). Sin la columna todavía, el de siempre. */
+    prisma.project
+      .findUnique({ where: { id: projectId }, select: { ordenDelRiel: true } })
+      .then((p) => p?.ordenDelRiel ?? [])
+      .catch(() => [] as string[]),
+    /* Los tipos con su documento de siempre archivado (2026-11-12): la lista no los vuelve a mostrar ni el «Qué sigue» los pide. */
+    tiposConElDeSiempreArchivado(projectId)
+      .then((t) => [...t])
+      .catch(() => [] as string[]),
   ]);
   const cuestionarios = estadoCuestionarios ? { ...estadoCuestionarios, puedeEditar: puedeEditarCuestionarios } : null;
 
@@ -100,6 +110,8 @@ export async function GET(
     cuestionarios,
     ciclo,
     piezasOcultas,
+    ordenDelRiel,
+    archivados,
     selectorKickoff,
     exploracionAbierta,
     canvases: canvases.map((c) => ({

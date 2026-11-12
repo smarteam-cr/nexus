@@ -174,6 +174,11 @@ No tropezar dos veces. Si pisás uno nuevo, agregalo acá.
   *Guarda:* antes de archivar o limpiar copias, quitar los enlaces con `rmdir` (borra solo el enlace, no el destino):
   `for d in .claude/worktrees/*/; do cmd //c "rmdir $(cygpath -w "${d}node_modules")"; done`. Si ya pasó: `npm ci` y
   `npx prisma generate` en el main, y reiniciar el servidor local.
+- **`npx prisma generate` en una copia de trabajo cambia el cliente de Prisma del main.** *Causa:* las copias no tienen
+  `node_modules` propio (o lo enlazan al del main) y el cliente se genera en el del main: con una columna nueva de la rama,
+  el servidor del main, al reiniciar, la pide a una base que no la tiene (P2022 en toda lectura de esa tabla). *Guarda:*
+  generar, correr tsc o las pruebas, y en el mismo comando volver a generar desde el main
+  (`(cd /d/Proyectos/nexus && npx prisma generate)`). Visto el 2026-11-12 con `Project.ordenDelRiel`.
 - **Una sesión de Claude Code se queda sin contexto a las pocas horas.** *Causa:* `CLAUDE.md` importaba con `@` el
   DECISIONS, el GLOSSARY y el RUNBOOK: 411.000 tokens (41 % de la ventana) cargados antes del primer mensaje, medido el
   2026-10-20. *Guarda:* esos tres son punteros con su condición; con `@` solo van ARCHITECTURE y este archivo. Antes de

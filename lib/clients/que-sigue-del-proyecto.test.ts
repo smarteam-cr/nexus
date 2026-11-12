@@ -242,6 +242,14 @@ describe("qué sigue en un servicio recurrente (2026-10-12)", () => {
     expect(para("adopcion", { piezas: conPlan }).accion).toBeNull();
   });
 
+  it("⛔ lo que el equipo archivó no se vuelve a pedir, ni como pieza ni como artefacto nuevo (12 nov)", () => {
+    const conDiagnosticoArchivado = piezas.map((p) => (p.slug === "diagnosis" ? { ...p, estado: "por_activar" as const, archivada: true } : p));
+    expect(para("diagnostico", { piezas: conDiagnosticoArchivado }).texto).not.toMatch(/diagnóstico suele servir/);
+    const planArchivado = piezas.map((p) => (p.slug === "planning" ? { ...p, archivada: true } : p));
+    expect(para("planificacion", { piezas: planArchivado }).accion).not.toEqual({ tipo: "pieza", slug: "planning", etiqueta: "Planificación" });
+    expect(para("planificacion", { piezas: planArchivado }).accion?.tipo).not.toBe("artefacto");
+  });
+
   it("nunca cae al flujo de una implementación", () => {
     const conDiagnostico = piezas.map((p) => (p.slug === "diagnosis" ? { ...p, estado: "generada" as const } : p));
     const q = para("diagnostico", { piezas: conDiagnostico, etapa: etapa("x", "Diagnóstico") });
