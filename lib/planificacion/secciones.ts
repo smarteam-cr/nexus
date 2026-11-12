@@ -73,6 +73,12 @@ export interface EtapaDeCiclo {
   laMueve?: string;
   cambio?: string;
   origen?: string;
+  /**
+   * 'no' = esta etapa de HubSpot no se usa en el modelo de venta del cliente (Elías y Lili, 12 nov: CEMACO es retail, sus
+   * asesores no trabajan en el CRM y no hay negocios: MQL, SQL y Oportunidad no aplican). Su `entraCuando` dice por qué.
+   * Vacío o 'si' = se usa (todo documento de antes).
+   */
+  seUsa?: string;
 }
 /** El estado del lead (Nuevo, En contacto…): en el Brief va al lado del ciclo de vida. Lo escribe una persona. */
 export interface EstadoDelLead {
@@ -163,6 +169,25 @@ export function etapaDeHubspot(nombre: unknown): EtapaDeHubspot | null {
   return null;
 }
 
+/** ¿La etapa no se usa en el modelo de venta del cliente? (`seUsa` = 'no'; lo de antes, sin el campo, se usa). */
+export function etapaSinUso(e: { seUsa?: unknown } | null | undefined): boolean {
+  // El agente a veces escribe «No aplica» o «N/A» en vez de «no»: es lo mismo.
+  return /^(no|false|no aplica|no se usa|n\/a)$/i.test(txt(e?.seUsa).trim());
+}
+
+/** El porqué de una etapa que no se usa cuando nadie lo escribió. */
+export const NO_SE_USA = "No se usa en este modelo de venta";
+
+/**
+ * La etapa con el uso cambiado a mano (el botón de la tabla). Al apagarla, el criterio y quién la mueve dejan de valer: queda
+ * el porqué. Al encenderla, el porqué deja de valer: vuelve la definición de HubSpot de esa etapa (si es una de las 7).
+ */
+export function conUsoCambiado(e: EtapaDeCiclo, usar: boolean): EtapaDeCiclo {
+  if (!usar) return { ...e, seUsa: "no", entraCuando: NO_SE_USA, laMueve: "" };
+  const h = ETAPAS_DE_HUBSPOT.find((x) => x.id === etapaDeHubspot(e.etapa));
+  return { ...e, seUsa: "si", entraCuando: h?.entraCuando ?? "", laMueve: h?.laMueve ?? "" };
+}
+
 /** «Nombre: criterio», o solo uno de los dos. */
 const conNombre = (nombre: string, criterio: string) => (criterio ? (nombre ? `«${nombre}»: ${criterio}` : criterio) : nombre ? `«${nombre}»` : "");
 
@@ -192,6 +217,9 @@ const unicos = (xs: readonly string[]) => xs.filter((x, i) => x && xs.findIndex(
  *  · El origen de cada fila es el más débil de lo que la forma (un supuesto sumado a algo acordado la deja en supuesto).
  *  · Los estados del lead: los de antes se quedan y se suman los nuevos que no estaban (por nombre).
  *  · El `cambio` (nueva / se renombra / se quita) ya no aplica: las 7 se mantienen siempre.
+ *  · Una etapa que el agente marcó `seUsa: 'no'` (venta directa sin vendedores en el CRM: MQL, SQL, Oportunidad) se
+ *    queda en la lista con su porqué, sin quién la mueve ni la definición de HubSpot, y no recibe filas ajenas: una que no
+ *    es ninguna de las 7 va a la etapa anterior que SÍ se usa.
  */
 export function normalizarCicloDeVida(nuevo: unknown, previo?: unknown): CicloDeVidaData {
   const d = (nuevo ?? {}) as Record<string, unknown>;
@@ -199,12 +227,39 @@ export function normalizarCicloDeVida(nuevo: unknown, previo?: unknown): CicloDe
   const ids = filas.map((f) => etapaDeHubspot(f.etapa));
   const lugar = (x: EtapaDeHubspot) => ETAPAS_DE_HUBSPOT.findIndex((e) => e.id === x);
 
-  type Base = { entraCuando: string; laMueve: string[]; origenes: string[]; extras: string[]; tiene: boolean };
+  type Base = { entraCuando: string; laMueve: string[]; origenes: string[]; extras: string[]; tiene: boolean; sinUso: boolean };
   const porEtapa = new Map<EtapaDeHubspot, Base>(
-    ETAPAS_DE_HUBSPOT.map((e) => [e.id, { entraCuando: "", laMueve: [], origenes: [], extras: [], tiene: false }]),
+    ETAPAS_DE_HUBSPOT.map((e) => [e.id, { entraCuando: "", laMueve: [], origenes: [], extras: [], tiene: false, sinUso: false }]),
   );
+  /* Primero, qué etapas no se usan: una fila que nombra la etapa y la marca `seUsa: 'no'` le da su porqué. Va antes que
+     el resto para que ninguna fila caiga en una etapa apagada por venir antes en la lista (revisión del 12 nov). */
+  const marcadas = new Set<number>();
+  filas.forEach((f, i) => {
+    const id = ids[i];
+    if (!id || !etapaSinUso(f) || esSalidaDelEmbudo(f.etapa)) return;
+    marcadas.add(i);
+    const b = porEtapa.get(id)!;
+    if (b.sinUso) return;
+    b.sinUso = true;
+    b.entraCuando = txt(f.entraCuando).trim();
+    b.origenes.push(txt(f.origen).trim());
+  });
+  const usada = (x: EtapaDeHubspot | null | undefined): x is EtapaDeHubspot => !!x && !porEtapa.get(x)!.sinUso;
+  /* Dónde va lo que no es una etapa que se usa: a la anterior en la lista que SÍ se usa. Si era de las primeras, a Lead
+     (donde entra todo contacto), salvo que la de después sea anterior a Lead (Suscriptor); con Lead apagada, a la primera
+     que se usa desde Lead. Con Cemaco, «Contacto en base» iba antes de «Cliente activo»: mandarla a la de después la hacía
+     cliente. */
+  const destinoDe = (i: number): Base => {
+    const antes = ids.slice(0, i).reverse().find(usada);
+    if (antes) return porEtapa.get(antes)!;
+    const despues = ids.slice(i + 1).find(usada);
+    if (despues && lugar(despues) < lugar("lead")) return porEtapa.get(despues)!;
+    const desdeLead = ETAPAS_DE_HUBSPOT.slice(lugar("lead")).find((e) => usada(e.id)) ?? ETAPAS_DE_HUBSPOT.find((e) => usada(e.id));
+    return porEtapa.get(desdeLead?.id ?? "lead")!;
+  };
   const salidas: EstadoDelLead[] = [];
   filas.forEach((f, i) => {
+    if (marcadas.has(i)) return;
     const nombre = txt(f.etapa).trim();
     const criterio = txt(f.entraCuando).trim();
     const mueve = txt(f.laMueve).trim();
@@ -215,7 +270,7 @@ export function normalizarCicloDeVida(nuevo: unknown, previo?: unknown): CicloDe
       return;
     }
     const id = ids[i];
-    if (id) {
+    if (usada(id)) {
       const b = porEtapa.get(id)!;
       const propio = NOMBRES_DE_HUBSPOT.has(minusculas(nombre)) ? criterio : conNombre(nombre, criterio);
       if (!b.tiene) {
@@ -229,12 +284,8 @@ export function normalizarCicloDeVida(nuevo: unknown, previo?: unknown): CicloDe
       b.origenes.push(origen);
       return;
     }
-    /* No es ninguna de las 7: va a la etapa que tenía antes en la lista. Si era de las primeras, a Lead (donde entra todo
-       contacto), salvo que la de después sea anterior a Lead (Suscriptor). Con Cemaco, «Contacto en base» iba antes de
-       «Cliente activo»: mandarla a la de después la hacía cliente. */
-    const antes = ids.slice(0, i).reverse().find((x) => x);
-    const despues = ids.slice(i + 1).find((x) => x);
-    const destino = porEtapa.get(antes ?? (despues && lugar(despues) < lugar("lead") ? despues : "lead"))!;
+    // No es ninguna de las 7, o es una que no se usa («Lead calificado» con MQL apagada): a la anterior que se usa.
+    const destino = destinoDe(i);
     destino.extras.push(`También ${conNombre(nombre, criterio)}`);
     destino.laMueve.push(mueve);
     destino.origenes.push(origen);
@@ -243,6 +294,15 @@ export function normalizarCicloDeVida(nuevo: unknown, previo?: unknown): CicloDe
   const etapas: EtapaDeCiclo[] = ETAPAS_DE_HUBSPOT.map((e) => {
     const b = porEtapa.get(e.id)!;
     const mueven = unicos(b.laMueve);
+    if (b.sinUso) {
+      return {
+        etapa: e.etapa,
+        seUsa: "no",
+        entraCuando: [b.entraCuando || NO_SE_USA, ...b.extras].join(" · "),
+        laMueve: "",
+        origen: origenMasDebil(b.origenes.length ? b.origenes : ["propuesta"]),
+      };
+    }
     return {
       etapa: e.etapa,
       entraCuando: [b.entraCuando || e.entraCuando, ...b.extras].join(" · "),
@@ -296,7 +356,8 @@ export function condicionesPropiasDelCiclo(etapas: readonly EtapaDeCiclo[]): num
   return etapas.filter((e) => {
     const h = ETAPAS_DE_HUBSPOT.find((x) => x.etapa === txt(e?.etapa).trim());
     const c = txt(e?.entraCuando).trim();
-    return !!h && !!c && c !== h.entraCuando;
+    // Una etapa que no se usa no se configura: su texto es el porqué, no una condición.
+    return !!h && !!c && c !== h.entraCuando && !etapaSinUso(e);
   }).length;
 }
 

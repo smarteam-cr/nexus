@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { fuenteConTope, mensajeDeLaCopia, TIPOS_QUE_LO_ALIMENTAN, type PartesDelMensaje } from "./mensaje";
+import { bloqueDeResultados, fuenteConTope, mensajeDeLaCopia, tieneFoco, TIPOS_QUE_LO_ALIMENTAN, type PartesDelMensaje } from "./mensaje";
 import { tipoDeArtefacto, tiposCreablesEnElProyecto } from "./tipos";
 
 const base = (over: Partial<PartesDelMensaje> = {}): PartesDelMensaje => ({
@@ -85,6 +85,41 @@ describe("el mensaje con que se genera una copia", () => {
     expect(r).not.toContain("[Sección: B]");
     expect(r).toContain("se recortó por largo");
     expect(fuenteConTope("corto", 120)).toBe("corto");
+  });
+
+  it("las reuniones elegidas van antes del handoff como la fuente principal, y el handoff queda como límite", () => {
+    const m = mensajeDeLaCopia(base({ reuniones: "SESIONES DE MARKETING" }));
+    expect(m.indexOf("SESIONES DE MARKETING")).toBeLessThan(m.indexOf("=== HANDOFF"));
+    expect(m).toContain("la fuente PRINCIPAL de este documento");
+    expect(m).toContain("es el LÍMITE de lo que este documento puede prometer");
+    expect(m).not.toContain("tu fuente ancla");
+    // ⛔ la frontera va delante de las reuniones elegidas aunque no haya documentos que alimenten
+    expect(m.indexOf("⛔ REGLA")).toBeGreaterThan(-1);
+    expect(m.indexOf("⛔ REGLA")).toBeLessThan(m.indexOf("SESIONES DE MARKETING"));
+  });
+
+  it("las reuniones que entraron solas siguen detrás del handoff, que sigue siendo la fuente ancla", () => {
+    const m = mensajeDeLaCopia(base({ reuniones: "SESIONES", reunionesSolas: true }));
+    expect(m.indexOf("=== HANDOFF")).toBeLessThan(m.indexOf("SESIONES"));
+    expect(m).toContain("tu fuente ancla");
+  });
+
+  it("los resultados del handoff: con foco, solo los que lo tocan; sin resultados, nada", () => {
+    expect(bloqueDeResultados("", "Diagnóstico de marketing")).toBe("");
+    const conFoco = bloqueDeResultados("- R1 · Vista 360", "Diagnóstico de marketing");
+    expect(conFoco).toContain("«Diagnóstico de marketing»");
+    expect(conFoco).toContain("SOLO los que tocan ese foco");
+    expect(conFoco).toContain("- R1 · Vista 360");
+    expect(bloqueDeResultados("- R1 · Vista 360", null)).not.toContain("foco");
+  });
+
+  it("elegidas sin texto: sin foco en el mensaje ni en los resultados (una sola regla)", () => {
+    expect(tieneFoco({ reuniones: "  ", reunionesSolas: false })).toBe(false);
+    expect(tieneFoco({ reuniones: "R", reunionesSolas: true })).toBe(false);
+    expect(tieneFoco({ reuniones: "R" })).toBe(true);
+    const m = mensajeDeLaCopia(base({ reuniones: "", avisoSinReuniones: "AVISO SIN REUNIONES" }));
+    expect(m).toContain("AVISO SIN REUNIONES");
+    expect(m).toContain("tu fuente ancla");
   });
 
   it("la frontera va al final, después de las reuniones", () => {

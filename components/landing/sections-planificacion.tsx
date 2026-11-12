@@ -29,6 +29,8 @@ import { ORIGENES, normalizarOrigen, etiquetaDeOrigen } from "@/lib/planificacio
 import {
   adoptarProcesos,
   adoptarCicloDeVida,
+  conUsoCambiado,
+  etapaSinUso,
   adoptarPipelines,
   adoptarAutomatizaciones,
   adoptarConversaciones,
@@ -212,8 +214,18 @@ export const CicloDeVidaSection: FC<SectionProps<CicloDeVidaData>> = ({ data, ed
           </thead>
           <tbody>
             {etapas.map((e, i) => (
-              <tr key={i}>
-                <td>{celda(i, "etapa", "Lead", "stl-accion-titulo")}</td>
+              /* 12 nov: una etapa de HubSpot que no se usa en el modelo de venta del cliente (retail: MQL, SQL,
+                 Oportunidad) se queda en la tabla, apagada y con su porqué en «Entra cuando». */
+              <tr key={i} className={etapaSinUso(e) ? "stl-etapa-sin-uso" : undefined}>
+                <td>
+                  {celda(i, "etapa", "Lead", "stl-accion-titulo")}
+                  {etapaSinUso(e) && <span className="stl-etapa-no-se-usa">No se usa</span>}
+                  {editable && (
+                    <button type="button" className="stl-plan-mini stl-etapa-uso-btn" onClick={() => set({ etapas: replaceAt(etapas, i, conUsoCambiado(etapas[i], etapaSinUso(e))) })}>
+                      {etapaSinUso(e) ? "Volver a usarla" : "Marcar que no se usa"}
+                    </button>
+                  )}
+                </td>
                 <td>{celda(i, "entraCuando", "Cuándo entra un contacto…")}</td>
                 <td>{celda(i, "laMueve", "Una persona o una automatización…")}</td>
                 {conCambio && <td><InlineSelect value={e.cambio ?? ""} options={CAMBIOS_DE_ETAPA} editable={editable} onCommit={(v) => setEtapa(i, { cambio: v })} ariaLabel="Qué cambia en esta etapa" /></td>}

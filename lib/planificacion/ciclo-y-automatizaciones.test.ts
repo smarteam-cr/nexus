@@ -15,6 +15,9 @@ import {
   normalizarCicloDeVida,
   cicloDeVidaGenerado,
   condicionesPropiasDelCiclo,
+  etapaSinUso,
+  conUsoCambiado,
+  NO_SE_USA,
   sinLoTecnicoDeLaPlanificacion,
 } from "./secciones";
 import { AutomatizacionesSection, CicloDeVidaSection, DetalleDeAutomatizacion } from "@/components/landing/sections-planificacion";
@@ -215,6 +218,94 @@ describe("el ciclo de vida: siempre las 7 etapas de HubSpot", () => {
     expect(out).toContain("Contacto base");
     // Hay una fila que cambia: la columna se ve.
     expect(out).toContain("Cambio");
+  });
+
+  it("venta directa (CEMACO, retail): MQL, SQL y Oportunidad quedan en la lista como «no se usa», con su porqué y sin quién las mueve", () => {
+    const porque = "Los asesores de tienda no trabajan en el CRM y no hay negocios";
+    const c = normalizarCicloDeVida({
+      etapas: [
+        { etapa: "Suscriptor", seUsa: "si", entraCuando: "Se suscribe al boletín" },
+        { etapa: "Lead", seUsa: "si", entraCuando: "Llega del ERP con cédula válida" },
+        { etapa: "MQL (Lead calificado por marketing)", seUsa: "no", entraCuando: porque, laMueve: "nadie" },
+        { etapa: "Contacto depurado", entraCuando: "Tiene los campos mínimos" },
+        { etapa: "SQL (Lead calificado por ventas)", seUsa: "no", entraCuando: porque },
+        { etapa: "Oportunidad", seUsa: "NO", entraCuando: "" },
+        { etapa: "Cliente", seUsa: "si", entraCuando: "Se sincroniza su primera factura del ERP" },
+        { etapa: "Promotor", entraCuando: "Recomienda" },
+      ],
+    });
+    expect(c.etapas.map((e) => e.etapa)).toEqual(LAS_7);
+    const por = Object.fromEntries(c.etapas.map((e) => [e.etapa, e]));
+    for (const k of ["MQL (Lead calificado por marketing)", "SQL (Lead calificado por ventas)", "Oportunidad"]) {
+      expect(etapaSinUso(por[k]), k).toBe(true);
+      expect(por[k].laMueve).toBe("");
+    }
+    expect(por["MQL (Lead calificado por marketing)"].entraCuando).toBe(porque);
+    // Sin porqué, lo dice igual; nunca la definición de HubSpot («Se le abre un negocio»).
+    expect(por.Oportunidad.entraCuando).toBe("No se usa en este modelo de venta");
+    // Lo que no es ninguna de las 7 va a la anterior que SÍ se usa (Lead), no a MQL.
+    expect(por.Lead.entraCuando).toContain("«Contacto depurado»");
+    expect(por["MQL (Lead calificado por marketing)"].entraCuando).not.toContain("depurado");
+    expect(etapaSinUso(por.Cliente)).toBe(false);
+    expect(etapaSinUso(por.Promotor)).toBe(false);
+    // Las que no se usan no se configuran.
+    expect(condicionesPropiasDelCiclo(c.etapas)).toBe(4);
+    // Normalizar dos veces da lo mismo.
+    expect(normalizarCicloDeVida(c)).toEqual(c);
+  });
+
+  it("una fila propia que se parece a una etapa apagada («Lead calificado» con MQL apagada) va a la anterior que se usa", () => {
+    const c = normalizarCicloDeVida({
+      etapas: [
+        { etapa: "Lead", entraCuando: "Llega del ERP" },
+        { etapa: "Lead calificado", entraCuando: "Tiene cédula y correo válidos", laMueve: "Workflow de depuración" },
+        { etapa: "MQL (Lead calificado por marketing)", seUsa: "No aplica", entraCuando: "Sin vendedores en el CRM" },
+      ],
+    });
+    const por = Object.fromEntries(c.etapas.map((e) => [e.etapa, e]));
+    expect(etapaSinUso(por["MQL (Lead calificado por marketing)"])).toBe(true);
+    expect(por["MQL (Lead calificado por marketing)"].entraCuando).toBe("Sin vendedores en el CRM");
+    expect(por.Lead.entraCuando).toContain("«Lead calificado»");
+    expect(por.Lead.laMueve).toContain("Workflow de depuración");
+  });
+
+  it("con Suscriptor y Lead apagadas, lo que no es una etapa va a la primera que se usa desde Lead", () => {
+    const c = normalizarCicloDeVida({
+      etapas: [
+        { etapa: "Suscriptor", seUsa: "no" },
+        { etapa: "Lead", seUsa: "no" },
+        { etapa: "Contacto en base", entraCuando: "Llega del ERP", laMueve: "La integración" },
+        { etapa: "Cliente", entraCuando: "Primera factura" },
+      ],
+    });
+    const por = Object.fromEntries(c.etapas.map((e) => [e.etapa, e]));
+    expect(por.Lead.entraCuando).not.toContain("Contacto en base");
+    expect(por["MQL (Lead calificado por marketing)"].entraCuando).toContain("«Contacto en base»");
+  });
+
+  it("el botón de la tabla: al apagarla queda el porqué sin quién la mueve; al encenderla vuelve la definición de HubSpot", () => {
+    const apagada = conUsoCambiado({ etapa: "Oportunidad", entraCuando: "Se le abre un negocio", laMueve: "Ventas" }, false);
+    expect(apagada).toMatchObject({ seUsa: "no", entraCuando: NO_SE_USA, laMueve: "" });
+    const encendida = conUsoCambiado({ etapa: "Oportunidad", seUsa: "no", entraCuando: "No hay negocios", laMueve: "" }, true);
+    const h = ETAPAS_DE_HUBSPOT.find((e) => e.id === "oportunidad")!;
+    expect(encendida).toMatchObject({ seUsa: "si", entraCuando: h.entraCuando, laMueve: h.laMueve });
+    expect(etapaSinUso(encendida)).toBe(false);
+  });
+
+  it("la tabla pinta la que no se usa apagada, con «No se usa», y la guía del agente explica los dos modelos", () => {
+    const out = renderToStaticMarkup(
+      createElement(CicloDeVidaSection as unknown as FC<Record<string, unknown>>, {
+        data: normalizarCicloDeVida({ etapas: [{ etapa: "Oportunidad", seUsa: "no", entraCuando: "No hay negocios" }] }),
+        ctx: { clientName: "Cemaco" },
+      }),
+    );
+    expect(out).toContain("stl-etapa-sin-uso");
+    expect(out).toContain("No se usa");
+    expect(out).not.toContain("Volver a usarla"); // el botón es del editor
+    const def = PLANIFICACION_DEF_BY_KEY.ciclo_vida_crm;
+    expect(def.brief).toMatch(/VENTA DIRECTA SIN VENDEDORES/);
+    const props = (def.schema as { properties: Record<string, { items?: { properties?: Record<string, unknown> } }> }).properties;
+    expect(Object.keys(props.etapas.items!.properties!)).toContain("seUsa");
   });
 
   it("con las 7 de HubSpot, la columna «Cambio» no aparece", () => {

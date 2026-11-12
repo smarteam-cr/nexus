@@ -13467,6 +13467,18 @@ diagnóstico salió con 352 caracteres y el kickoff con 587, aunque había reuni
   manda con el proyecto abierto. No se tocó el cierre de la Entrega: cambiar esa semilla haría que todas las entregas vacías
   se lean como tocadas y aparezcan en la barra. Sigue con voseo («escribinos»): corregirlo pide migrar esa semilla.
 
+- **Con reuniones elegidas, esas mandan** (2026-11-12, la prueba del diagnóstico de marketing de CEMACO con Liliana): la copia
+  sí leía solo las tres sesiones de marketing, pero el mensaje rotulaba el handoff como «tu fuente ancla» y las reuniones como
+  «precisan el alcance», y la guía de los objetivos pedía «uno por cada resultado medible del handoff»: los objetivos salieron
+  del proyecto CRM entero (la vista 360 de la fase 1). Ahora, en una copia con elegidas, las reuniones van antes del handoff
+  como la fuente PRINCIPAL (con la frontera delante), el handoff queda como el LÍMITE de lo que se puede prometer, y los
+  resultados del handoff se le pasan al diagnóstico con la regla de que solo los que tocan el foco de la copia son objetivos
+  (`bloqueDeResultados`, lib/artefactos/mensaje.ts). Sin elegidas no cambia nada.
+- **El diagnóstico promete solo lo contratado** (mismo día: prometía «medir marketing por retorno real» a un cliente que dejó
+  los pipelines de negocios para una fase 2). La guía del agente lo dice en dos lugares, la general y la de los objetivos:
+  lo que necesita algo no contratado no es objetivo; se nombra en la acción que deja la base lista, con su condición. Aplica
+  también al diagnóstico de siempre (es la misma plantilla). Solo prompt: no hay cómo verificarlo en código.
+
 `scripts/validar-plantillas-generar.ts` (gasta API, solo contra `nexus_local`) y `scripts/validar-documentos-en-la-barra.ts`
 (solo lectura, contra producción) repiten la validación. El segundo usa la lógica pura de la barra: hay que volver a correrlo
 cuando cambie la barra de los servicios recurrentes.
@@ -14829,6 +14841,15 @@ queda va a reparación en vez de tirarse.
 - **La regla de los equipos**, en la guía de la sección: si Marketing genera el contacto es MQL; pasa a SQL cuando una
   persona de Ventas lo acepta (validación humana: quien recibe el MQL lo cambia a SQL para decir que lo acepta); si Ventas
   lo genera o lo valida directamente, es SQL.
+- **Las 7 se mantienen, pero cuáles se USAN depende de cómo vende el cliente** (enmienda del mismo 12 nov, tras la prueba
+  con Liliana: CEMACO es retail, sus asesores no trabajan en el CRM y no hay negocios, así que MQL y SQL casi no aplican).
+  El agente decide primero el modelo con las fuentes: (a) con vendedores en el CRM y negocios, se usan las 7 con la regla
+  de los equipos; (b) venta directa sin vendedores ni negocios en el CRM (retail, e-commerce), MQL, SQL y Oportunidad van
+  con `seUsa: 'no'` y su porqué en `entraCuando`, y Cliente entra con la primera compra o factura. Sin claridad, (a) con
+  ⚠️ Por validar. **No se quitan de la tabla**: HubSpot las tiene y el cliente debe ver que se decidió no usarlas (se
+  pintan apagadas, con «No se usa»; en el editor, un botón la marca o la vuelve a usar). `normalizarCicloDeVida` respeta
+  la marca: la etapa sin uso no lleva quién la mueve ni la definición de HubSpot, no recibe filas ajenas (una que no es
+  ninguna de las 7 va a la anterior que SÍ se usa) y no cuenta como condición a configurar.
 - **Se hace cumplir en el código, no solo en el prompt**: `normalizarCicloDeVida` corre al guardar lo que devuelve el
   agente (la planificación de siempre y sus copias). Deja las 7 en su orden; lo que nombra una de ellas le da su criterio
   (con el nombre del cliente adelante si era otro: «Cliente activo»: …); lo que no calza con ninguna pasa al criterio de

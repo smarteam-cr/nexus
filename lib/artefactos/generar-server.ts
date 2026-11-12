@@ -61,7 +61,7 @@ import { nombreDelArtefacto, tipoDelDocumento } from "./copias";
 import { defsDelTipo, handoffKeysDelTipo, seccionesDeUnaCopia, templateDelTipo } from "./catalogo";
 import { seccionesAgregadas, templateConLasAgregadas } from "@/lib/canvas/secciones-agregadas";
 import { ErrorDelArtefacto } from "./copias-server";
-import { fuenteConTope, mensajeDeLaCopia, TIPOS_QUE_LO_ALIMENTAN } from "./mensaje";
+import { bloqueDeResultados, fuenteConTope, mensajeDeLaCopia, tieneFoco, TIPOS_QUE_LO_ALIMENTAN } from "./mensaje";
 
 /**
  * El lector de la memoria de cada tipo (lib/memoria/consumidores.ts): el mismo que el documento de siempre de ese tipo,
@@ -205,6 +205,7 @@ export async function generarCopia(o: {
         }\n\n`
       : "";
 
+  const reunionesSolas = solas.todas.length > 0;
   const mensaje = mensajeDeLaCopia({
     pedido: `${modalidad}${bloqueDeInstruccionesDelPedido(o.instrucciones)}`,
     // Las instrucciones de ESTA copia: las del documento de siempre son de otro documento.
@@ -219,8 +220,13 @@ export async function generarCopia(o: {
       tipo.id === "kickoff"
         ? [servicio ? servicioParaElKickoff(servicio, null) : "", escala?.texto ?? ""].filter(Boolean).join("\n\n")
         : tipo.id === "diagnosis"
-          ? // Los resultados con sus códigos, también los sin confirmar: los objetivos los citan (como el diagnóstico de siempre).
-            resultadosParaPrompt((await resultadosDelProyecto(o.projectId).catch(() => null))?.resultados ?? [])
+          ? /* Los resultados con sus códigos, también los sin confirmar: los objetivos los citan (como el diagnóstico de
+               siempre). Con reuniones elegidas, solo los que tocan el foco de la copia (12 nov). */
+            bloqueDeResultados(
+              resultadosParaPrompt((await resultadosDelProyecto(o.projectId).catch(() => null))?.resultados ?? []),
+              // Con la MISMA regla que el mensaje (`conFoco`): elegidas con texto. Elegidas sin texto = sin foco.
+              tieneFoco({ reuniones: material?.reuniones ?? "", reunionesSolas }) ? nombreDelArtefacto(canvas) : null,
+            )
           : "",
     frontera: fronteraDeLaPieza(tipo.id),
     handoff,
@@ -229,7 +235,7 @@ export async function generarCopia(o: {
     notas: material?.notas ?? "",
     memoria: memoria?.texto ?? "",
     alimentan: [...alimentan, { tipo: "timeline", texto: fuenteConTope(cronograma) }, { tipo: TIPO_CUESTIONARIOS, texto: fuenteConTope(cuestionarios) }],
-    reunionesSolas: solas.todas.length > 0,
+    reunionesSolas,
     cierreDeFrontera: material?.cierreDeFrontera ?? "",
   });
 

@@ -363,22 +363,26 @@ export const PLANIFICACION_SECTION_DEFS: BCSectionDef[] = [
     sectionType: "ciclo_vida_tabla",
     agentGenerated: true,
     empty: { intro: "", etapas: [] },
-    agentHint: "Las 7 etapas de HubSpot, siempre: cuándo entra un contacto a cada una para este cliente y quién la mueve.",
+    agentHint: "Las 7 etapas de HubSpot, siempre: cuáles se usan según cómo vende el cliente, cuándo entra un contacto a cada una y quién la mueve.",
     brief:
       "Las etapas del ciclo de vida del CRM del cliente. Son SIEMPRE las 7 etapas por defecto de HubSpot, exactamente estas, en este orden y con este nombre: " +
       ETAPAS_DE_HUBSPOT.map((e) => `'${e.etapa}'`).join(" → ") + ". " +
       "NUNCA crees, renombres ni quites etapas, aunque el portal o las reuniones usen otros nombres. Lo propio del cliente ('contacto base', 'depurado', 'cliente activo') NO es una etapa: " +
       "si dice cuándo alguien llega a una etapa, va en el `entraCuando` de esa etapa ('Compró en los últimos 12 meses (lo que llaman «cliente activo»)'); si es un estado de trabajo del lead (en contacto, depurado, descartado), va en `estadosLead`. " +
       "`intro`: una frase con de dónde parte ('Tu portal arranca desde cero' o 'Hoy tu portal usa otras etapas: las acomodamos en las de HubSpot'). " +
-      "`etapas`: las 7 — `etapa` = el nombre de arriba, tal cual; `entraCuando` = UNA línea con el criterio de entrada para ESTE cliente; `laMueve` = quién o qué la mueve. " +
-      "LOS EQUIPOS: si Marketing genera el contacto (un formulario, una campaña, un evento), entra como MQL; pasa a SQL cuando una persona de Ventas lo acepta — es una validación humana: quien recibe el MQL lo cambia a SQL para decir que lo acepta; si Ventas lo genera o lo valida directamente, entra como SQL. " +
+      "`etapas`: las 7, SIEMPRE las 7 — `etapa` = el nombre de arriba, tal cual; `seUsa` = 'si' o 'no' (abajo); `entraCuando` = UNA línea con el criterio de entrada para ESTE cliente; `laMueve` = quién o qué la mueve. " +
+      "PRIMERO DECIDE CÓMO VENDE EL CLIENTE, con las fuentes: " +
+      "(a) CON VENDEDORES QUE TRABAJAN EN EL CRM Y NEGOCIOS (vende a empresas, cotiza, tiene un ciclo de venta): se usan las 7. Los equipos: si Marketing genera el contacto (un formulario, una campaña, un evento), entra como MQL; pasa a SQL cuando una persona de Ventas lo acepta — es una validación humana: quien recibe el MQL lo cambia a SQL para decir que lo acepta; si Ventas lo genera o lo valida directamente, entra como SQL. " +
+      "(b) VENTA DIRECTA SIN VENDEDORES NI NEGOCIOS EN EL CRM (retail, e-commerce, tiendas: el asesor no trabaja en el CRM y la compra llega como factura u orden): MQL, SQL y Oportunidad llevan `seUsa` = 'no', con `entraCuando` = por qué no se usa en una línea ('Los asesores de tienda no trabajan en el CRM y no hay negocios') y `laMueve` vacío; Cliente entra con la primera compra o factura ('Se sincroniza su primera factura del ERP'). Suscriptor, Lead y Promotor se usan si las fuentes los respaldan. " +
+      "Si las fuentes no dejan claro cuál es, usa (a) y marca la duda con ⚠️ Por validar en la `intro`. Una etapa con `seUsa` = 'no' igual va en la lista: HubSpot la tiene y el cliente debe ver que se decidió no usarla. " +
+      "Los segmentos del cliente ('cliente de alto valor', 'cliente segmentado') no son etapas: van al `entraCuando` de la etapa donde ocurren o se dejan para las listas. " +
       ORIGEN_BRIEF + " " +
       "`estadosLead`: los estados de trabajo del lead que el cliente usa (`estado`, `significa` en una línea, `origen`), solo si se hablaron; si no, vacío.",
     schema: {
       type: "object",
       properties: {
         intro: str,
-        etapas: arrayOf({ etapa: str, entraCuando: str, laMueve: str, origen: str }, ["etapa"]),
+        etapas: arrayOf({ etapa: str, seUsa: str, entraCuando: str, laMueve: str, origen: str }, ["etapa"]),
         estadosLead: arrayOf({ estado: str, significa: str, origen: str }, ["estado"]),
       },
       required: ["etapas"],

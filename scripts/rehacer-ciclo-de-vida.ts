@@ -41,7 +41,7 @@ function argumento(nombre: string): string | null {
 /** La huella del contenido actual: la propuesta guardada solo se aplica sobre lo mismo que se leyó. */
 const huella = (data: unknown) => createHash("sha256").update(JSON.stringify(data ?? null)).digest("hex").slice(0, 16);
 
-type Etapa = { etapa?: string; entraCuando?: string; laMueve?: string; origen?: string; cambio?: string };
+type Etapa = { etapa?: string; entraCuando?: string; laMueve?: string; origen?: string; cambio?: string; seUsa?: string };
 type Estado = { estado?: string; significa?: string };
 
 function mostrar(titulo: string, data: unknown) {
@@ -49,7 +49,7 @@ function mostrar(titulo: string, data: unknown) {
   console.log(`\n── ${titulo} ──`);
   if (d.intro) console.log(`intro: ${d.intro}`);
   for (const e of d.etapas ?? []) {
-    console.log(`  · ${e.etapa ?? "(sin nombre)"}${e.cambio ? ` [${e.cambio}]` : ""}${e.origen ? ` (${e.origen})` : ""}`);
+    console.log(`  · ${e.etapa ?? "(sin nombre)"}${e.seUsa === "no" ? " [NO SE USA]" : ""}${e.cambio ? ` [${e.cambio}]` : ""}${e.origen ? ` (${e.origen})` : ""}`);
     if (e.entraCuando) console.log(`      entra cuando: ${e.entraCuando}`);
     if (e.laMueve) console.log(`      la mueve: ${e.laMueve}`);
   }
