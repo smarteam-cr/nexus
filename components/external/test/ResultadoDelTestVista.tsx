@@ -35,7 +35,6 @@
  */
 import type { ReactNode } from "react";
 import type { Letra } from "@/lib/escala/documento/tipos";
-import { nivelProvisional } from "@/lib/external/pagina-del-resumen";
 import type { DetalleDeLaDimension } from "@/lib/tests-diagnostico/detalle-de-la-dimension";
 import { etiquetaDeIndustria, OTRA_INDUSTRIA } from "@/lib/tests-diagnostico/direccion-publica";
 import { ENLACE_DE_OTRA_EMPRESA, enlaceDeOtraArea, puntajeDeLaDimension } from "@/lib/tests-diagnostico/pagina-del-resultado";
@@ -437,8 +436,6 @@ export default function ResultadoDelTestVista({
   const rec = r.recomendacion;
   const esEstimado = !deLaEscala;
   const porExplorar = deLaEscala?.porExplorar ?? [];
-  // El nivel general que determina una parte por explorar es provisional (10 nov): solo cambia cómo se presenta.
-  const provisional = deLaEscala ? nivelProvisional(r, porExplorar) : null;
   const resumen = esEstimado ? resumenDelResultado(r) : r.sintesis;
   // La industria va en un chip junto al título, no en el resumen (quien hizo el test la da por sentada).
   const sector = industria && industria !== OTRA_INDUSTRIA ? etiquetaDeIndustria(industria) : null;
@@ -593,12 +590,7 @@ export default function ResultadoDelTestVista({
               {fecha && <p className="rd-fecha rd-entra">{fechaLarga(fecha)}</p>}
               <p className="rd-label rd-entra">Resultado general</p>
               <div className="rd-entra">{nivelGrande}</div>
-              {provisional && (
-                <p className="rd-estimado rd-entra">
-                  <span className="rd-pill">Provisional</span>
-                  depende de confirmar {provisional.map((x) => `«${x}»`).join(", ")}
-                </p>
-              )}
+
               {edicion?.descripcion ? <div className="rd-resumen rd-entra">{edicion.descripcion}</div> : <p className="rd-resumen rd-entra">{resumen}</p>}
               {esEstimado ? (
                 <p className="rd-estimado rd-entra">

@@ -54,6 +54,7 @@ import {
   type PiezaDeLaPagina,
   type PreguntaDelResumen,
   type ResumenDeLaPagina,
+  type SubequipoDeLaPagina,
   type TarjetaDeLaPagina,
   type TipoDelNegocio,
 } from "@/lib/external/pagina-del-resumen";
@@ -203,6 +204,20 @@ export interface ResumenGuardado {
   recorrido?: EtapaDelResumen[];
   operativas?: AreaOperativa[];
   pendientes?: PendienteDelResumen[];
+  /**
+   * La firma de los niveles de cada equipo cuando se armó (`firmaDelArea`, 11 nov): si cambian, la pantalla interna avisa
+   * «La escala cambió desde este resumen».
+   */
+  firmas?: Record<string, string>;
+  /**
+   * Qué falta confirmar de cada parte por explorar que determina el nivel de su equipo (11 nov: «provisional» se veía
+   * inseguro). Una línea simple, por parte: «Confirmar cómo registran por qué ganan o pierden una venta; con eso…».
+   */
+  confirmar?: Record<string, string>;
+  /** Las partes cuyo «confirmar» cambió o quitó una persona: «Rehacer con IA» no las pisa. */
+  confirmarMano?: string[];
+  /** Lo que el código vio al armarlo y conviene revisar adentro (un equipo con reunión que no está en el recorrido). */
+  avisos?: string[];
 }
 
 /** Los topes de lo que escribe el agente. */
@@ -215,7 +230,9 @@ export const MAX_AREAS_OPERATIVAS = 6;
 export const MAX_RETOS = 3;
 export const MAX_CIFRAS_POR_AREA = 3;
 export const MAX_PIEZAS_POR_LISTA = 3;
-export const MAX_PENDIENTES = 4;
+export const MAX_PENDIENTES = 2;
+/** Lo que ve el cliente en «Qué falta validar» (11 nov): tres líneas como mucho. */
+export const MAX_LINEAS_POR_VALIDAR = 3;
 /**
  * Lo que puede tener una lista con lo que agrega una persona: más que lo del agente, pero con tope. La lectura del Json
  * (esquemas.ts) acepta más, así un Resumen nunca se pierde entero por pasarse.
@@ -237,6 +254,8 @@ export interface ReunionParaElResumen {
   clave: string;
   fecha: string;
   equipo: string | null;
+  /** El equipo de la escala de la reunión («1» Ventas): con él se mira que cada equipo con reunión esté en el recorrido. */
+  areaId?: string | null;
   turnos: TurnoNumerado[];
   /**
    * Los que hablaron del lado del cliente (quien-hablo.ts), sin el grabador ni la gente de otra empresa (la de HubSpot en
@@ -278,39 +297,39 @@ export const MODELO_DEL_RESUMEN = "claude-sonnet-4-6";
  */
 export const MAX_TOKENS_DEL_RESUMEN = 14000;
 
-const REGLAS = `Preparas el RESUMEN EJECUTIVO que Smarteam (una consultora de HubSpot) le presenta a una empresa después de las reuniones de diagnóstico de sus equipos. Lo lee la dirección de la empresa en 2 o 3 minutos y tiene que pensar: «entendieron cómo funciona mi negocio, cómo están organizadas mis áreas y qué problemas tenemos que resolver». Lees las transcripciones (numeradas por turno), lo que ya se ubicó de cada equipo en la escala y una guía que anotó el equipo de Smarteam.
+const REGLAS = `Preparas el RESUMEN EJECUTIVO que Smarteam (una consultora de HubSpot) le presenta a una empresa después de las reuniones de diagnóstico de sus equipos. Lo lee la dirección de la empresa en 2 o 3 minutos y tiene que pensar: «entendieron cómo funciona mi negocio, cómo están organizadas mis áreas y qué problemas tenemos que resolver». En este entregable LA VERACIDAD ES LO MÁS IMPORTANTE: cada cosa tiene que ser exactamente lo que la empresa dijo. Lees las transcripciones (numeradas por turno), lo que ya se ubicó de cada equipo en la escala y una guía que anotó el equipo de Smarteam.
 
 Devuelves SOLO este JSON (P = {"texto":"…","citas":[C]}; C = {"reunion":"R1","turno":12,"texto":"lo dicho, palabra por palabra"}):
 {"negocio":{"vende":[P],"ingresos":[P],"abarca":[P],"fuera":[P],"motivo":[P],"busca":[P]},
- "recorrido":[{"etapa":"…","quien":"<área operativa>","texto":"…","friccion":"… o null","citas":[C]}],
+ "recorrido":[{"etapa":"…","quien":"<equipo o equipos>","texto":"…","friccion":"… o null","citas":[C]}],
  "areas":[{"nombre":"…","area":"<id del equipo de la escala>","organizacion":[P],"bien":[P],"frena":[P],"retos":[{"texto":"…","dimension":"<id o null>","citas":[C]}],"cifras":[{"cifra":"…","texto":"…","estado":"declarado|estimado|pendiente","nota":"… o null","dimension":"<id o null>","citas":[C]}],"falta":"… o null"}],
  "porque":[{"area":"<id del equipo>","texto":"…"}],
- "pendientes":[{"tipo":"sin-dato|hipotesis|contradiccion","area":"<id o null>","texto":"…","citas":[C]}],
- "entendimos":["…"]}
+ "confirmar":[{"dimension":"<id de una parte con porExplorar>","texto":"…"}],
+ "pendientes":[{"tipo":"sin-dato|hipotesis|contradiccion","area":"<id o null>","texto":"…","citas":[C]}]}
 
-LA REGLA DE TODO: cada afirmación sobre la empresa (su negocio, su organización, sus etapas, sus retos, sus cifras) lleva en «citas» lo que dijo alguien de la EMPRESA que la sostiene: una cita, o dos si la afirmación junta cosas dichas en turnos distintos. Cada cita es el pedazo más corto que la sostenga, de 6 a 25 palabras seguidas de UNA intervención, copiado palabra por palabra como está en la transcripción (con sus números en cifras o en letras, como aparezcan), con su reunión y su turno. Todo lo que escribas tiene que estar en tus citas: cada número, cada herramienta y cada detalle; si ninguna cita lo dice, sácalo de la frase. Si lo dijo alguien de Smarteam, solo vale si alguien de la empresa lo confirmó justo después («Exacto», «Sí, correcto»): cita entonces lo que dijo Smarteam. Lo que no puedas citar, no lo escribas: déjalo fuera o como pendiente. Cada número que escribas tiene que estar en tus citas, tal como se dijo. La «guia» del equipo de Smarteam te orienta sobre qué buscar; no es evidencia: nada sale de ella sin una cita de la transcripción.
+LA REGLA DE TODO: cada afirmación sobre la empresa (su negocio, su organización, sus etapas, sus retos, sus cifras) lleva en «citas» lo que dijo alguien de la EMPRESA que la sostiene: una cita, o dos si la afirmación junta cosas dichas en turnos distintos. Cada cita es el pedazo más corto que la sostenga, de 6 a 25 palabras seguidas de UNA intervención, copiado palabra por palabra como está en la transcripción (con sus números en cifras o en letras, como aparezcan), con su reunión y su turno. Todo lo que escribas tiene que estar en tus citas: cada número, cada herramienta y cada detalle; si ninguna cita lo dice, sácalo de la frase. Si lo dijo alguien de Smarteam, solo vale si alguien de la empresa lo confirmó justo después («Exacto», «Sí, correcto»): cita entonces lo que dijo Smarteam. Lo que no puedas citar, no lo escribas. Nada de lecturas nuestras presentadas como dichas por ellos: no califiques lo que contaron («evitable», «innecesario», «se podría automatizar», «recuperable») si ellos no lo dijeron así. La «guia» del equipo de Smarteam te orienta sobre qué buscar; no es evidencia: nada sale de ella sin una cita de la transcripción.
 
 1 NEGOCIO (cada parte, 0 o 1 frase corta): «vende»: qué vende y a quién; «ingresos»: cómo gana dinero (proyectos, suscripción, comisión por transacción…); «abarca»: qué cubre este diagnóstico (unidad, marcas, países, equipos); «fuera»: lo que la empresa dijo que queda fuera (otra división, otra línea de negocio); «motivo»: qué los movió a buscar ayuda; «busca»: el resultado que quieren. Nada corporativo ni genérico. Si una parte no se habló, déjala vacía: no la completes con suposiciones ni con lo que sabes de la industria.
 
-2 RECORRIDO (3 a 5 etapas, en orden): cómo pasa HOY un cliente entre las áreas, de la captación a la venta, la puesta en marcha, la atención y la retención. Solo etapas que la empresa describió, una por cada paso que lleva un área distinta (la puesta en marcha, el soporte y el acompañamiento de Customer Success van separados si los llevan áreas distintas). «etapa»: su nombre corto (hasta 5 palabras). «quien»: el área que la lleva. «texto»: qué pasa ahí, en una línea. «friccion»: lo que se traba en esa etapa o al pasar a la siguiente (null si no se vio). Nada de cómo debería ser: lo deseado va en «busca».
+2 RECORRIDO (3 a 6 etapas, en orden): sigue a UN cliente desde el primer contacto hasta el servicio continuo, como pasa HOY: la captación y la venta, el cierre (el pago, el contrato, los datos que se piden), la puesta en marcha (configuración, capacitación), la atención y el acompañamiento o la retención. Una etapa en CADA traspaso de un equipo a otro, aunque ahí no se trabe nada: si el cliente pasa de Ventas a Operaciones y de Operaciones a Soporte, cada paso es una etapa. Cada equipo que tuvo una reunión aparece por lo menos en una etapa. «etapa»: su nombre corto (hasta 5 palabras). «quien»: el equipo o los equipos que la llevan («Ventas», «Soporte y Customer Success»). «texto»: qué pasa ahí, en una línea. «friccion»: lo que se traba en esa etapa o al pasar a la siguiente (null si no se vio). Cada etapa con su cita. Solo lo que hacen hoy: lo que desean o planean (un link de pago, una automatización que todavía no existe) no es una etapa; va en «busca».
 
-3 AREAS: una por área OPERATIVA, como la empresa se organiza de verdad: si dos equipos distintos cuelgan del mismo equipo de la escala (Soporte y Customer Success, los dos de «Servicio»), van separados, cada uno con el id de ese equipo en «area». Solo áreas de equipos con los que hubo una reunión: un equipo sin reunión propia (aunque otro lo mencione) no lleva área; va como pendiente. En cada una:
+3 AREAS: una entrada por subequipo de cada equipo de la escala con el que hubo reunión. Si un equipo tiene subequipos que trabajan distinto (Soporte y Customer Success dentro de «Servicio»), una entrada por subequipo, cada una con el id de ese equipo en «area»; si no, una sola entrada con el nombre del equipo. Un equipo sin reunión propia (aunque otro lo mencione) no lleva entrada. En cada una:
 - «organizacion» (1 o 2): quién la lleva (por su rol, nunca por su nombre), cuántos son, qué hace, sus rutinas y herramientas solo si ayudan a entender.
 - «bien» (1 o 2): lo que ya hace o ya tiene (procesos, materiales, rutinas, mediciones), aunque sea a mano. Reconócelo siempre que la empresa lo haya dicho.
 - «frena» (0 o 1): qué le impide rendir más.
 - «retos» (2 o 3, el más respaldado primero): qué pasa, dónde y qué consecuencia tiene, en una frase concreta de ESTA empresa. Nunca «falta automatización» o «no tiene una vista 360» sueltos, ni un riesgo típico de la escala que la empresa no contó.
-- «cifras» (0 a 2): la magnitud de lo que pasa HOY, primero lo que se pierde o se escapa (clientes que se van, casos que esperan, tiempo en retrabajo) antes que un volumen. «cifra» es lo que va en grande: el número con su unidad corta, hasta 28 caracteres («2,8 % al mes», «14 de 25», «8 días a 1 mes»); el período y el contexto van en «texto». «estado»: «declarado» si lo dijo la empresa; «estimado» si es un cálculo o un resumen de Smarteam que la empresa confirmó (en «nota», la base y los supuestos); «pendiente» si se mencionó y hay que confirmarlo. Si lo dijeron con dudas («si no me equivoco», «no tengo el dato exacto»), «nota» dice qué falta validar (el cálculo, el período). «nota» le habla a la empresa («Falta confirmar el período y cómo se calcula»): nunca cita lo dicho ni dice quién lo dijo. Una comparación entre dos números que resumió Smarteam y la empresa confirmó («captan 25 y se van 14») es una cifra «estimado» valiosa: inclúyela con su base, sin sacar conclusiones. Escribe la cifra como la dijeron («14 de 25», nunca la resta «11»): no calcules porcentajes, ni sumes, ni redondees. No juntes en una cifra números de períodos, poblaciones o canales distintos. Una meta («quieren llegar a 50») no es una cifra de hoy: no la pongas sola; si la usas, que la cifra sea el resultado de hoy frente a la meta («25 de 50 reuniones»). No saques conclusiones que la cifra no dice («tu cartera no crece»). Nunca inventes pérdidas en dinero.
+- «cifras» (0 a 2): la magnitud de lo que pasa HOY, primero lo que se pierde o se escapa (clientes que se van, casos que esperan, tiempo en retrabajo) antes que un volumen. UNA CIFRA ES UN SOLO DATO: todos los números de «cifra» y de «texto» salen de UNA misma cita; dos datos dichos en momentos distintos (un porcentaje y una comparación) son dos cifras aparte, cada una con su estado. «cifra» es lo que va en grande: el número con su unidad corta, hasta 28 caracteres («2,8 % al mes», «14 de 25», «8 días a 1 mes»); el período y el contexto van en «texto». «estado»: «declarado» si lo dijo la empresa; «estimado» si es un cálculo o un resumen de Smarteam que la empresa confirmó (en «nota», la base y los supuestos); «pendiente» si se mencionó y hay que confirmarlo. «nota» le habla a la empresa («Falta confirmar el período y cómo se calcula»): nunca cita lo dicho ni dice quién lo dijo. Si lo dijeron con dudas («si no me equivoco», «no tengo el dato exacto»), «nota» dice qué falta validar. Escribe la cifra como la dijeron («14 de 25», nunca la resta «11»): no calcules porcentajes, ni sumes, ni redondees. Si los números de una cita no cuadran entre sí (una parte más grande que el total, una suma que no da, una frase cortada), no la uses como cifra: va como pendiente («confirmar el total de…»). Una meta («quieren llegar a 50») no es una cifra de hoy: no la pongas sola; si la usas, que la cifra sea el resultado de hoy frente a la meta («25 de 50 reuniones»). Una comparación entre dos números que resumió Smarteam y la empresa confirmó («captan 25 y se van 14») es una cifra «estimado» valiosa: inclúyela con su base, sin sacar conclusiones. No saques conclusiones que la cifra no dice («tu cartera no crece»). Nunca inventes pérdidas en dinero.
 - «falta»: si el área no tiene cifras, qué dato faltaría para medir el impacto (una frase); si no, null.
 
-4 PORQUE (uno por equipo de la escala con nivel): una o dos frases (hasta 50 palabras) de por qué está en su nivel y no uno arriba ni uno abajo, con las partes por su nombre. Usa SOLO los niveles que te damos. Si el nivel lo determina una parte con «porExplorar», dilo así: el nivel es provisional y depende de confirmar esa parte; nunca la presentes como un hecho («no existe»).
+4 PORQUE (uno por equipo de la escala con nivel): una o dos frases (hasta 50 palabras) de por qué está en su nivel y no uno arriba ni uno abajo, con las partes por su nombre. Usa SOLO los niveles que te damos. Nunca escribas «provisional» ni «hipótesis»: si el nivel lo determina una parte con «porExplorar», di qué mide esa parte y no la presentes como un hecho («no existe»).
 
-5 PENDIENTES (1 a 4, solo lo que podría cambiar el diagnóstico): «sin-dato»: se preguntó y no hubo dato; «hipotesis»: algo que creemos y falta validar; «contradiccion»: dos cosas dichas que no cuadran (con las dos citas). Un equipo con el que no se conversó NO va aquí (se agrega solo) y nunca se presenta como de bajo rendimiento.
+5 CONFIRMAR (una por cada parte con «porExplorar» que determina el nivel de su equipo): una línea simple que diga qué falta confirmar, sin tono de duda y terminando con qué se logra. Ejemplo: «Confirmar cómo registran por qué ganan o pierden una venta; con eso terminamos de ubicar Ventas».
 
-6 ENTENDIMOS (2 o 3): afirmaciones cortas para que la empresa confirme o corrija lo más importante de lo que contó; sin conclusiones ni comparaciones que nadie dijo.
+6 PENDIENTES (0 a 2, solo lo que podría cambiar el diagnóstico): una línea cada uno, en palabras simples, dicha como lo que hay que hacer («Confirmar cuántos casos recibe Soporte al mes en total»). «sin-dato»: se preguntó y no hubo dato; «hipotesis»: algo que creemos y falta validar; «contradiccion»: dos cosas dichas que no cuadran (con las dos citas). Un equipo con el que no se conversó NO va aquí (se agrega solo) y nunca se presenta como de bajo rendimiento; lo de «confirmar» tampoco se repite aquí.
 
 CÓMO DISTINGUIR: que algo no se haya preguntado no significa que no lo tengan: «no tienen X» solo si la empresa lo dijo. Separa lo que hacen hoy (organización, recorrido, retos, cifras), lo que quieren (busca, metas) y lo que propondríamos nosotros (eso no va aquí). No asumas herramientas, integraciones ni compras: una herramienta se nombra solo si la empresa la nombró en lo citado.
 
-Cómo escribes: español neutro, en tuteo, hablándole a la empresa («tu equipo», «tus clientes»), nunca voseo. Frases cortas (cada texto de 8 a 25 palabras; un pendiente o una afirmación para confirmar, hasta 30; un «porque», hasta 50), en presente, sin markdown ni frases hechas. Nunca el código de una parte («3.6»): su nombre. Nunca escribas el nombre de una persona (ni de la empresa ni de Smarteam): di su rol («quien lleva Customer Success», «la jefatura de ventas»). No nombres a Smarteam, no hables de precios, presupuestos ni de lo que Smarteam vende, no recomiendes herramientas. Habla SOLO de los equipos de los datos.`;
+Cómo escribes: español neutro, en tuteo, hablándole a la empresa («tu equipo», «tus clientes»), nunca voseo. Frases cortas (cada texto de 8 a 25 palabras; un pendiente o un «confirmar», hasta 25; un «porque», hasta 50), en presente, sin markdown ni frases hechas. Nunca el código de una parte («3.6»): su nombre. Nunca escribas el nombre de una persona (ni de la empresa ni de Smarteam): di su rol («quien lleva Customer Success», «la jefatura de ventas»). No nombres a Smarteam, no hables de precios, presupuestos ni de lo que Smarteam vende, no recomiendes herramientas. Habla SOLO de los equipos de los datos.`;
 
 /** El pedido al agente. `aviso`: por qué no sirvió el intento anterior. */
 export function pedidoDelResumen(ctx: ContextoDelResumen, aviso = ""): Anthropic.Messages.MessageCreateParamsNonStreaming {
@@ -388,6 +407,12 @@ export function textoValido(crudo: unknown, tope: number, o: ReglasDelResumen, c
   if (prohibido) return { ok: false, motivo: `habla de «${prohibido}»` };
   const voseo = voseoEnProsa(texto);
   if (voseo.length) return { ok: false, motivo: `está en voseo (${voseo.join(", ")})` };
+  // Quién lo dijo no le llega al cliente (11 nov: «La supervisora identificó que…»): se dice lo que pasa, no quién lo contó.
+  const quien = t.match(QUIEN_LO_DIJO);
+  if (quien) return { ok: false, motivo: `cuenta quién lo dijo («${quien[0]}»)` };
+  // «Provisional» e «hipótesis» se ven inseguros (Elías, 11 nov): lo que falta se dice como lo que hay que confirmar.
+  const duda = t.match(/\bprovisional(es)?\b|\bhipotesis\b/);
+  if (duda) return { ok: false, motivo: `dice «${duda[0]}»` };
   // Una palabra del código («porExplorar», «hubspotActual») es de adentro.
   const interna = texto.match(/\b[a-z]+[A-Z]\w*\b/);
   if (interna) return { ok: false, motivo: `trae una palabra interna («${interna[0]}»)` };
@@ -403,6 +428,9 @@ export function textoValido(crudo: unknown, tope: number, o: ReglasDelResumen, c
   }
   return { ok: true, texto };
 }
+
+/** Un texto que cuenta quién dijo algo («la supervisora identificó», «el responsable mencionó»). */
+const QUIEN_LO_DIJO = /\b(la|el|los|las|su|tu|segun la|segun el)\s+(supervisora?|responsables?|jef[ae]s?|jefatura|gerentes?|directora?|dueñ[oa]s?|duen[oa]s?|lider(es)?|encargad[oa]s?|coordinador[a]?|asesor[a]?|vendedor[a]?)\b[^.]{0,60}?\b(dijo|dijeron|comento|comentaron|menciono|mencionaron|identifico|identificaron|explico|aclaro|reporto|senalo|indico|conto|aporta|aporto)\b/;
 
 /** «1 800» (con un espacio, también el fino) es «1800»: así lo escribe el modelo y así no lo dice la transcripción. */
 const sinEspaciosDeMiles = (x: string) => x.replace(/(\d)[   ](?=\d{3}(?!\d))/g, "$1");
@@ -443,6 +471,31 @@ const HERRAMIENTAS = /\b(hubspot|salesforce|zoho|pipedrive|dynamics|odoo|monday|
 export function herramientasDeMas(texto: string, fuente: string): string[] {
   const f = paraComparar(fuente);
   return [...new Set(paraComparar(texto).match(HERRAMIENTAS) ?? [])].filter((h) => !f.includes(h));
+}
+
+/**
+ * Una lectura nuestra presentada como dicha por ellos (11 nov: «200 tickets evitables» salió como declarado). Vale solo si
+ * lo citado dice lo mismo.
+ */
+const LECTURA_NUESTRA = /\bevitabl\w*|\binnecesari\w*|\brecuperabl\w*|\bdesperdici\w*|\bautomatizabl\w*|\bpodrian? (evitar|resolver|automatizar)\w*/;
+export function lecturaNuestra(texto: string, citado: string): string | null {
+  const m = paraComparar(texto).match(LECTURA_NUESTRA);
+  if (!m) return null;
+  // La misma palabra, sin el plural: «evitable» o «evitables» en la cita; «podría» suelto no sostiene «podría evitarse».
+  const raiz = m[0].replace(/(es|s)$/, "");
+  return paraComparar(citado).includes(raiz) ? null : m[0];
+}
+
+/**
+ * UNA CIFRA ES UN SOLO DATO (11 nov: el 2,8 % y «14 de 25» quedaron fundidos en una cifra «declarada»). Las citas que
+ * sostienen la cifra grande son las que traen alguno de sus números; los números del texto tienen que estar en ESAS
+ * citas. «25 de 50» con el 25 de un turno y el 50 de otro vale: es un dato y su meta. Devuelve los números que salen de
+ * otro dicho, o [] si no hay.
+ */
+export function numerosDeOtroDicho(cifra: string, texto: string, citas: readonly { texto: string }[]): string[] {
+  const deLaCifra = citas.filter((c) => cifrasDeMas(cifra, c.texto).length < cifrasDeMas(cifra, "").length);
+  if (!deLaCifra.length) return [];
+  return cifrasDeMas(texto, `${cifra} ${deLaCifra.map((c) => c.texto).join(" ")}`);
 }
 
 /** Lo mínimo de una cita: con menos, cualquier frase «está» en la reunión. */
@@ -538,6 +591,12 @@ export function sinLaConclusion(texto: string, citado: string): string | null {
   return concluyeDeMas(corto, citado) || corto.split(" ").length < 5 ? null : corto;
 }
 
+/** Un total que se cuela en el texto de una cifra (11 nov: «400 a 500 por WhatsApp… un total aproximado de 1.008»). */
+const TOTAL = /\ben total\b|\bun total\b|\bsumando\b|\bsuman\b/;
+
+/** Lo que dice «provisional» o «hipótesis»: se ve inseguro (Elías, 11 nov). */
+const DICE_DUDA = /\bprovisional|\bhipotesis\b/;
+
 /** Lo que habla de una meta; y lo que dice qué pasa hoy (con eso, la cifra es un resultado frente a la meta). */
 const ES_UNA_META = /\bmeta\b|\bobjetivo\b|\bquieren llegar\b|\bdeberia\b|\btiene que haber\b/;
 const ES_DE_HOY = /\bhoy\b|\bactual|\bhace(s|n)?\b|\blogra|\balcanza|\bse quedan?\b|\bsolo\b|\bmitad\b/;
@@ -546,13 +605,20 @@ const ES_DE_HOY = /\bhoy\b|\bactual|\bhace(s|n)?\b|\blogra|\balcanza|\bse quedan
 const CON_DUDAS = /si no me equivoco|no tengo el dato|no se exacto|mas o menos|aproximad|por ahi|no estoy segur|creo que/;
 export const NOTA_DE_LO_RESUMIDO = "Lo resumimos en la reunión y lo confirmaste: falta validarlo con tus datos.";
 export const NOTA_DE_MEMORIA = "Lo dijiste de memoria: falta confirmar el dato exacto y su período.";
+export const NOTA_DE_VARIOS_NUMEROS = "Se dijeron varios números juntos: falta confirmar este dato con tus registros.";
 
 /**
  * Cómo se sabe una cifra, con la regla en el código (10 nov): no es «declarada» si su número grande no lo dijo la empresa
  * (lo resumió Smarteam y ella confirmó: «25 clientes y se nos van 14» es ESTIMADA); una estimada sin base dice de dónde
  * sale; una declarada dicha con dudas («si no me equivoco») dice qué falta validar.
  */
-export function estadoDeLaCifra(o: { estado: unknown; cifra: string; nota: string | null; citas: readonly CitaDelResumen[] }): { estado: EstadoDeLaCifra; nota: string | null } {
+/** Las cantidades distintas de un texto, sin años («2025») y con un decimal como un solo número («2,8»). */
+export function numerosDistintos(texto: string): number {
+  const xs = (sinEspaciosDeMiles(texto).match(/\d+(?:[.,]\d+)?/g) ?? []).filter((x) => !/^(19|20)\d\d$/.test(x)).map((x) => x.replace(",", "."));
+  return new Set(xs).size;
+}
+
+export function estadoDeLaCifra(o: { estado: unknown; cifra: string; nota: string | null; citas: readonly CitaDelResumen[]; mano?: boolean }): { estado: EstadoDeLaCifra; nota: string | null } {
   let estado: EstadoDeLaCifra = ESTADOS_DE_LA_CIFRA.includes(o.estado as EstadoDeLaCifra) ? (o.estado as EstadoDeLaCifra) : "pendiente";
   let nota = o.nota;
   const deLaEmpresa = o.citas.filter((c) => !c.confirmo);
@@ -563,24 +629,49 @@ export function estadoDeLaCifra(o: { estado: unknown; cifra: string; nota: strin
   if (estado === "estimado" && !nota && loDijoLaEmpresa) estado = "declarado";
   if (estado === "estimado" && !nota) nota = NOTA_DE_LO_RESUMIDO;
   if (estado === "declarado" && !nota && deLaEmpresa.some((c) => CON_DUDAS.test(paraComparar(c.texto)))) nota = NOTA_DE_MEMORIA;
+  /* Una cita que dice tres números o más juntos («400 a 500… correo son 13… para llegar a los 1008», 11 nov) no sostiene
+     ninguno como declarado: puede ser un total, una parte o una frase cortada. */
+  const deLaCifra = o.citas.filter((c) => cifrasDeMas(o.cifra, c.texto).length < cifrasDeMas(o.cifra, "").length);
+  // Una cifra que corrigió una persona queda con su estado y su nota: la responsabilidad es suya (revisión del 11 nov).
+  if (!o.mano && estado !== "pendiente" && deLaCifra.some((c) => numerosDistintos(c.texto) >= 3)) {
+    estado = "pendiente";
+    nota = NOTA_DE_VARIOS_NUMEROS;
+  }
   return { estado, nota };
 }
 
 /** Lo que el agente escribió y quedó, y lo que se descartó (con su motivo, para el registro de la corrida). */
 export interface LoQueEscribioElAgente {
   negocio: Partial<Record<TipoDelNegocio, PiezaDelResumen[]>>;
-  recorrido: EtapaDelResumen[];
   operativas: AreaOperativa[];
+  /** `orden`: dónde la puso el agente (para volver a ordenar las etapas corregidas). */
+  recorrido: (EtapaDelResumen & { orden?: number })[];
   /** Solo el «por qué» de cada equipo de la escala (los hallazgos son del formato 1). */
   areas: Record<string, AreaDelResumenGuardada>;
   pendientes: PendienteDelResumen[];
+  /** Desde el 11 nov el agente ya no escribe «¿Entendimos bien?»: siempre vacío. */
   entendimos: PreguntaDelResumen[];
+  confirmar: Record<string, string>;
+  avisos: string[];
   descartados: string[];
   /**
    * Las cifras con su cita verificada que se cayeron solo porque traen un número que la cita no dice (una resta, un
    * porcentaje, «1 800»): se piden una vez más, corregidas (`pedidoDelArreglo`).
    */
   porArreglar: DatoPorArreglar[];
+  /** Las etapas con su cita verificada que se cayeron por algo de forma: se piden corregidas (`pedidoDeLasEtapas`). */
+  etapasPorArreglar: EtapaPorArreglar[];
+}
+
+/** Una etapa por corregir: lo que escribió el agente, sus citas tal como las devolvió y por qué se cayó. */
+export interface EtapaPorArreglar {
+  orden: number;
+  etapa: string;
+  quien: string | null;
+  texto: string;
+  friccion: string | null;
+  citas: unknown[];
+  problema: string;
 }
 
 export interface DatoPorArreglar {
@@ -644,6 +735,11 @@ function conSuCita(
     descartados.push(`${donde} nombra herramientas que la empresa no nombró en lo citado (${herramientas.join(", ")})`);
     return null;
   }
+  const lectura = lecturaNuestra(todo, lo);
+  if (lectura) {
+    descartados.push(`${donde} califica con una lectura nuestra que la empresa no dijo («${lectura}»)`);
+    return null;
+  }
   return { texto: t.texto, citas };
 }
 
@@ -691,26 +787,19 @@ export function leerElResumen(respuesta: Pick<Anthropic.Messages.Message, "conte
     if (piezas.length) negocio[tipo] = piezas;
   }
 
-  // 2 · El recorrido.
-  const recorrido: EtapaDelResumen[] = [];
-  for (const v of arreglo(crudo.recorrido)) {
-    if (recorrido.length >= MAX_ETAPAS) break;
-    const x = objeto(v);
-    const nombre = textoValido(x.etapa ?? x.nombre, TOPE_DE_UN_NOMBRE, o);
-    if (!nombre.ok) {
-      descartados.push(`etapa del recorrido: ${nombre.motivo}`);
-      continue;
+  // 2 · El recorrido. Una etapa con su cita verificada que se cayó por algo de FORMA (dice «tarifa» o un número que la
+  // cita no dice, o es larga) se pide corregida (`pedidoDeLasEtapas`): en Centauro, cada corrida perdía otro equipo.
+  const recorrido: (EtapaDelResumen & { orden: number })[] = [];
+  const etapasPorArreglar: EtapaPorArreglar[] = [];
+  arreglo(crudo.recorrido).forEach((v, orden) => {
+    if (recorrido.length + etapasPorArreglar.length >= MAX_ETAPAS) return;
+    const r = etapaVerificada(v, ctx, o);
+    if (r.ok) recorrido.push({ ...r.etapa, id: `s${recorrido.length + 1}`, orden });
+    else {
+      descartados.push(r.motivo);
+      if (r.deForma) etapasPorArreglar.push({ ...r.deForma, orden, problema: r.motivo });
     }
-    const friccion = nulo(x.friccion) ? null : textoValido(x.friccion, TOPE_DEL_TEXTO_DEL_RESUMEN, o);
-    if (friccion && !friccion.ok) {
-      descartados.push(`la fricción de «${nombre.texto}»: ${friccion.motivo}`);
-      continue;
-    }
-    const quien = nulo(x.quien) ? null : textoValido(x.quien, TOPE_DE_UN_NOMBRE, o);
-    const p = conSuCita(x, ctx, o, descartados, `etapa «${nombre.texto}»`, TOPE_DEL_TEXTO_DEL_RESUMEN, [nombre.texto, friccion?.ok ? friccion.texto : ""]);
-    if (!p) continue;
-    recorrido.push({ id: `s${recorrido.length + 1}`, nombre: nombre.texto, quien: quien?.ok ? quien.texto : null, ...p, friccion: friccion?.ok ? friccion.texto : null, origen: origenDeLaCita(p.citas[0]) });
-  }
+  });
 
   // 3 · Las áreas operativas.
   const operativas: AreaOperativa[] = [];
@@ -776,12 +865,17 @@ export function leerElResumen(respuesta: Pick<Anthropic.Messages.Message, "conte
          corregido en una llamada chica, con sus citas ya verificadas; lo de FONDO (una persona, voseo, una herramienta que
          la empresa no nombró) se descarta. Centauro, 10 nov: el 2,8 % y «14 de 25» se perdían por una cifra de 49
          caracteres. */
+      const notaRevisada = crudas.nota !== null ? textoValido(crudas.nota, TOPE_DE_UNA_PREGUNTA, o, citado) : null;
+      const deForma = (r: ReturnType<typeof textoValido>) => !r.ok && r.motivo.startsWith("es demasiado largo");
+      if (notaRevisada && !notaRevisada.ok && !deForma(notaRevisada)) {
+        descartados.push(`${nombre}: la nota ${notaRevisada.motivo}; sale la del código`);
+        crudas.nota = null;
+      }
       const revisadas = [
         ["la cifra", textoValido(crudas.cifra, TOPE_DE_LA_CIFRA, o, citado)],
         ["el texto", textoValido(crudas.texto, TOPE_DEL_TEXTO_DEL_RESUMEN, o, citado)],
         ...(crudas.nota !== null ? [["la nota", textoValido(crudas.nota, TOPE_DE_UNA_PREGUNTA, o, citado)] as const] : []),
       ] as const;
-      const deForma = (r: ReturnType<typeof textoValido>) => !r.ok && r.motivo.startsWith("es demasiado largo");
       const deFondo = revisadas.find(([, r]) => !r.ok && !deForma(r));
       const todo = `${crudas.cifra} ${crudas.texto} ${crudas.nota ?? ""}`;
       const herramientas = herramientasDeMas(todo, citado);
@@ -795,8 +889,14 @@ export function leerElResumen(respuesta: Pick<Anthropic.Messages.Message, "conte
       }
       const sobran = cifrasDeMas(todo, citado);
       const conclusion = concluyeDeMas(`${crudas.texto} ${crudas.nota ?? ""}`, citado);
+      const lectura = lecturaNuestra(`${crudas.cifra} ${crudas.texto}`, citado);
+      const deOtroDicho = numerosDeOtroDicho(crudas.cifra, crudas.texto, citas);
+      const totalAparte = TOTAL.test(paraComparar(crudas.texto)) && cifrasDeMas(crudas.texto, crudas.cifra).length > 0;
       const problemas = [
         ...(conclusion ? [`saca una conclusión que la cita no dice («${conclusion}»): quítala`] : []),
+        ...(lectura ? [`califica con una lectura nuestra («${lectura}»): di solo lo que dijeron`] : []),
+        ...(deOtroDicho.length ? [`junta números de otro dicho (${deOtroDicho.map((x) => x.replace(/·$/, "").replace("·", " ")).join(", ")}): una cifra es un solo dato, deja solo los de su cita`] : []),
+        ...(totalAparte ? ["suma un total que no es la cifra: quítalo (si hace falta, va aparte como pendiente)"] : []),
         ...revisadas.filter(([, r]) => deForma(r)).map(([que, r]) => `${que} ${!r.ok ? r.motivo : ""}`),
         ...(sobran.length ? [`trae números que no están en lo citado (${sobran.map((x) => x.replace(/·$/, "").replace("·", " ")).join(", ")})`] : []),
       ];
@@ -870,22 +970,120 @@ export function leerElResumen(respuesta: Pick<Anthropic.Messages.Message, "conte
     const areaId = deLasAreas.has(cadena(x.area)) ? cadena(x.area) : null;
     pendientes.push({ id: `p${pendientes.length + 1}`, tipo, texto: t, areaId, citas });
   }
-  const entendimos: PreguntaDelResumen[] = [];
-  for (const v of arreglo(crudo.entendimos)) {
-    if (entendimos.length >= MAX_PREGUNTAS) break;
-    const t = sinCitaPropia(v, TOPE_DE_UNA_PREGUNTA, o, todoLoDicho, descartados, "«¿Entendimos bien?»");
-    const conclusion = t ? concluyeDeMas(t, todoLoDicho) : null;
-    if (conclusion) descartados.push(`«¿Entendimos bien?» saca una conclusión que nadie dijo («${conclusion}»)`);
-    else if (t) entendimos.push({ id: `e${entendimos.length + 1}`, texto: t });
+  // Qué falta confirmar de cada parte por explorar (en vez de decir «provisional»).
+  const porExplorar = new Set(ctx.areas.flatMap((a) => a.dimensiones.filter((d) => d.porExplorar).map((d) => d.id)));
+  const confirmar: Record<string, string> = {};
+  for (const v of arreglo(crudo.confirmar)) {
+    const x = objeto(v);
+    const dim = cadena(x.dimension);
+    if (!porExplorar.has(dim) || confirmar[dim]) continue;
+    const t = sinCitaPropia(x.texto, TOPE_DE_UNA_PREGUNTA, o, todoLoDicho, descartados, `qué falta confirmar de ${dim}`);
+    if (t) confirmar[dim] = t;
   }
-  return { negocio, recorrido, operativas, areas, pendientes, entendimos, descartados, porArreglar };
+  const avisos = avisosDelRecorrido(recorrido, operativas, ctx);
+  return { negocio, recorrido, operativas, areas, pendientes, entendimos: [], confirmar, avisos, descartados, porArreglar, etapasPorArreglar };
+}
+
+/** Lo que se puede corregir sin volver a leer las reuniones: largo, lo prohibido que la cita no dice, números, herramientas. */
+const ES_DE_FORMA = /demasiado largo|habla de «|numeros|números|herramientas|lectura nuestra|conclusi/;
+
+/**
+ * Una etapa del recorrido, con su cita: el nombre, la fricción y el texto pasan las reglas y lo que dicen está en lo citado.
+ * Si se cae por algo de forma y tiene alguna cita verificada, devuelve lo necesario para pedirla corregida.
+ */
+function etapaVerificada(
+  v: unknown,
+  ctx: ContextoDelResumen,
+  o: Reglas,
+): { ok: true; etapa: Omit<EtapaDelResumen, "id"> } | { ok: false; motivo: string; deForma: Omit<EtapaPorArreglar, "orden" | "problema"> | null } {
+  const x = objeto(v);
+  const crudas = { etapa: cadena(x.etapa ?? x.nombre), quien: nulo(x.quien) ? null : cadena(x.quien), texto: cadena(x.texto), friccion: nulo(x.friccion) ? null : cadena(x.friccion), citas: arreglo(x.citas) };
+  const verificadas = crudas.citas.slice(0, 3).map((c) => citaVerificada(c, ctx.reuniones)).filter((c): c is CitaDelResumen => !!c);
+  const citado = verificadas.map((c) => c.texto).join(" ");
+  const caida = (motivo: string) => ({ ok: false as const, motivo, deForma: verificadas.length && ES_DE_FORMA.test(motivo) && crudas.etapa ? crudas : null });
+  const nombre = textoValido(crudas.etapa, TOPE_DE_UN_NOMBRE, o, citado);
+  if (!nombre.ok) return caida(`etapa del recorrido «${crudas.etapa}»: ${nombre.motivo}`);
+  const friccion = crudas.friccion === null ? null : textoValido(crudas.friccion, TOPE_DEL_TEXTO_DEL_RESUMEN, o, citado);
+  if (friccion && !friccion.ok) return caida(`la fricción de «${nombre.texto}»: ${friccion.motivo}`);
+  const quien = crudas.quien === null ? null : textoValido(crudas.quien, TOPE_DE_UN_NOMBRE, o);
+  const motivos: string[] = [];
+  const p = conSuCita(x, ctx, o, motivos, `etapa «${nombre.texto}»`, TOPE_DEL_TEXTO_DEL_RESUMEN, [nombre.texto, friccion?.ok ? friccion.texto : ""]);
+  if (!p) return caida(motivos[0] ?? `etapa «${nombre.texto}» sin cita`);
+  return { ok: true, etapa: { nombre: nombre.texto, quien: quien?.ok ? quien.texto : null, ...p, friccion: friccion?.ok ? friccion.texto : null, origen: origenDeLaCita(p.citas[0]) } };
+}
+
+const REGLAS_DE_LAS_ETAPAS = `Corriges etapas del recorrido de un cliente para una página que Smarteam le presenta a una empresa. Cada una se descartó por un problema de forma, que te digo en «problema»: dice algo que sus citas no dicen (un precio, una tarifa, un número, una herramienta), o es demasiado larga.
+
+Reescribe «etapa» (hasta 5 palabras), «texto» (una línea: qué pasa ahí hoy, en tuteo) y «friccion» (lo que se traba, o null) usando SOLO lo que dicen sus «citas». Quita lo que las citas no digan; no lo reemplaces por otra palabra que lo insinúe. Si con las citas no se puede decir qué pasa en la etapa, omítela.
+
+Devuelves SOLO este JSON: {"etapas":[{"i":<el número de la etapa>,"etapa":"…","texto":"…","friccion":"… o null"}]}`;
+
+/** El pedido del arreglo de las etapas: solo las caídas, con sus citas. Sin las transcripciones. */
+export function pedidoDeLasEtapas(xs: readonly EtapaPorArreglar[]): Anthropic.Messages.MessageCreateParamsNonStreaming {
+  const datos = xs.map((x, i) => ({ i, etapa: x.etapa, quien: x.quien, texto: x.texto, friccion: x.friccion, problema: x.problema, citas: x.citas.map((c) => cadena(objeto(c).texto)) }));
+  return { model: MODELO_DEL_RESUMEN, max_tokens: 1500, system: REGLAS_DE_LAS_ETAPAS, messages: [{ role: "user", content: JSON.stringify(datos, null, 1) }] };
+}
+
+/** Lee el arreglo de las etapas y vuelve a verificar cada una con sus mismas citas (la vara de siempre). */
+export function leerLasEtapas(
+  respuesta: Pick<Anthropic.Messages.Message, "content">,
+  xs: readonly EtapaPorArreglar[],
+  ctx: ContextoDelResumen,
+  o: Reglas,
+): { etapas: (Omit<EtapaDelResumen, "id"> & { orden: number })[]; descartados: string[] } {
+  const crudo = o.parse(respuesta.content.map((b) => (b.type === "text" ? b.text : "")).join(""));
+  const etapas: (Omit<EtapaDelResumen, "id"> & { orden: number })[] = [];
+  const descartados: string[] = [];
+  const usados = new Set<number>();
+  for (const v of arreglo(crudo.etapas)) {
+    const x = objeto(v);
+    const i = typeof x.i === "number" ? x.i : Number(x.i);
+    const de = xs[i];
+    if (!de || usados.has(i)) continue;
+    usados.add(i);
+    const r = etapaVerificada({ etapa: x.etapa, quien: de.quien, texto: x.texto, friccion: x.friccion, citas: de.citas }, ctx, o);
+    if (r.ok) etapas.push({ ...r.etapa, orden: de.orden });
+    else descartados.push(`etapa corregida: ${r.motivo}`);
+  }
+  return { etapas, descartados };
+}
+
+/** Las etapas en el orden en que las puso el agente, con las corregidas en su lugar y los ids de nuevo en orden. */
+export function conLasEtapas(recorrido: readonly (EtapaDelResumen & { orden?: number })[], corregidas: readonly (Omit<EtapaDelResumen, "id"> & { orden: number })[]): EtapaDelResumen[] {
+  return [...recorrido, ...corregidas]
+    .sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0))
+    .slice(0, MAX_ETAPAS)
+    .map((e, k) => {
+      const { orden, ...resto } = e as EtapaDelResumen & { orden?: number };
+      void orden;
+      return { ...resto, id: `s${k + 1}` };
+    });
+}
+
+/**
+ * Cada equipo que tuvo una reunión tiene que aparecer en alguna etapa del recorrido (11 nov: en Centauro salieron dos
+ * etapas, las dos de Ventas). Se reconoce por el nombre del equipo o de uno de sus subequipos en «quien». Lo que falta va
+ * como aviso en la pantalla interna: rehacer cuesta otra corrida entera.
+ */
+export function avisosDelRecorrido(
+  recorrido: readonly Pick<EtapaDelResumen, "quien" | "nombre">[],
+  operativas: readonly Pick<AreaOperativa, "nombre" | "areaId">[],
+  ctx: { areas: readonly { id: string; nombre: string }[]; reuniones: readonly Pick<ReunionParaElResumen, "areaId">[] },
+): string[] {
+  const conReunion = [...new Set(ctx.reuniones.flatMap((r) => (r.areaId ? [r.areaId] : [])))];
+  const nombres = (areaId: string) => [ctx.areas.find((a) => a.id === areaId)?.nombre ?? "", ...operativas.filter((o) => o.areaId === areaId).map((o) => o.nombre)].map(paraComparar).filter(Boolean);
+  const enEtapas = recorrido.map((e) => paraComparar(`${e.quien ?? ""} ${e.nombre}`));
+  return conReunion
+    .filter((id) => ctx.areas.some((a) => a.id === id))
+    .filter((id) => !enEtapas.some((e) => nombres(id).some((n) => e.includes(n))))
+    .map((id) => `El recorrido no tiene ninguna etapa de ${ctx.areas.find((a) => a.id === id)!.nombre}, y hubo una reunión con ese equipo: revísalo o rehaz el Resumen.`);
 }
 
 // ── El arreglo de las cifras ────────────────────────────────────────────────────
 
 const REGLAS_DEL_ARREGLO = `Corriges cifras para una página que Smarteam le presenta a una empresa. Cada una se descartó por un problema de forma, que te digo en «problemas»: un texto más largo que su tope, un número que NO está en lo que la empresa dijo (sus «citas»): una resta, una suma, un porcentaje calculado o un número de otra parte; o una conclusión que las citas no dicen (quítala).
 
-Reescribe «cifra» (hasta 28 caracteres, lo que va en grande, con su unidad), «texto» (una línea con su período y su contexto, en tuteo, hablándole a la empresa: «tus clientes», «tu equipo») y «nota» (la base y los supuestos, o null) usando SOLO los números que aparecen en sus citas, tal como aparecen. No restes, no sumes, no calcules porcentajes, no redondees. Si con esos números no se puede decir la magnitud, omítela.
+Reescribe «cifra» (hasta 28 caracteres, lo que va en grande, con su unidad), «texto» (una línea con su período y su contexto, en tuteo, hablándole a la empresa: «tus clientes», «tu equipo») y «nota» (la base y los supuestos, o null) usando SOLO los números que aparecen en sus citas, tal como aparecen. No restes, no sumes, no calcules porcentajes, no redondees. Lo que quites no lo reemplaces por una palabra que lo insinúe («la mitad», «el doble»): la frase tiene que seguir siendo cierta. Si con esos números no se puede decir la magnitud, omítela.
 
 Devuelves SOLO este JSON: {"cifras":[{"i":<el número de la cifra>,"cifra":"…","texto":"…","nota":"… o null"}]}`;
 
@@ -922,7 +1120,8 @@ export function leerElArreglo(
     const lo = de.citas.map((c) => c.texto).join(" ");
     const todo = `${cifra.texto} ${texto.texto} ${nota?.ok ? nota.texto : ""}`;
     const sobran = cifrasDeMas(todo, lo);
-    if (sobran.length || herramientasDeMas(todo, lo).length || concluyeDeMas(`${texto.texto} ${nota?.ok ? nota.texto : ""}`, lo)) {
+    const otroDicho = numerosDeOtroDicho(cifra.texto, texto.texto, de.citas);
+    if (sobran.length || otroDicho.length || herramientasDeMas(todo, lo).length || concluyeDeMas(`${texto.texto} ${nota?.ok ? nota.texto : ""}`, lo) || lecturaNuestra(todo, lo) || (TOTAL.test(paraComparar(texto.texto)) && cifrasDeMas(texto.texto, cifra.texto).length)) {
       descartados.push(`cifra corregida «${cifra.texto}»: sigue con números o herramientas que no están en lo citado (${sobran.join(", ")})`);
       continue;
     }
@@ -1003,8 +1202,8 @@ const idx = (l: Letra) => LETRAS.indexOf(l);
 const nombresEntreComillas = (xs: readonly string[]) => enLista(xs.map((x) => `«${x}»`));
 
 /**
- * Por qué el área está en su nivel, armado con los datos (sin IA): lo que la frena para subir y lo que la sostiene. Con
- * `provisional` (las partes por explorar que lo determinan), lo dice: el nivel depende de confirmarlas.
+ * Por qué el área está en su nivel, armado con los datos (sin IA): lo que la frena para subir y lo que la sostiene. Desde
+ * el 11 nov no dice «provisional» (se veía inseguro): lo que falta confirmar va en «Qué falta validar».
  */
 export function porqueDeRespaldo(r: Pick<ResultadoDelTest, "areaNombre" | "nivel" | "nivelNombre" | "dimensiones" | "niveles" | "recomendacion">, provisional: readonly string[] | null = null): string | null {
   if (!r.nivel || !r.nivelNombre) return null;
@@ -1018,9 +1217,8 @@ export function porqueDeRespaldo(r: Pick<ResultadoDelTest, "areaNombre" | "nivel
   const ordenadas = [...frenan].sort((a, b) => (a.id === frena ? -1 : b.id === frena ? 1 : idx(a.nivel!) - idx(b.nivel!))).slice(0, 3);
   const sostienen = medidas.filter((d) => idx(d.nivel!) > idx(nivel)).sort((a, b) => idx(b.nivel!) - idx(a.nivel!)).slice(0, 2);
   const partes: string[] = [];
-  if (provisional?.length)
-    partes.push(`Es un nivel provisional: depende de ${nombresEntreComillas(provisional)}, que todavía ${provisional.length === 1 ? "es una hipótesis" : "son hipótesis"} por confirmar contigo.`);
-  else if (siguiente && ordenadas.length)
+  void provisional;
+  if (siguiente && ordenadas.length)
     partes.push(`No llega a ${nombre(siguiente)} porque ${nombresEntreComillas(ordenadas.map((d) => d.nombre))} ${ordenadas.length === 1 ? "sigue" : "siguen"} en ${ordenadas.length === 1 ? nombre(ordenadas[0].nivel!) : "lo más bajo"}.`);
   if (idx(nivel) > 0 && sostienen.length)
     partes.push(`No está más abajo porque ${nombresEntreComillas(sostienen.map((d) => d.nombre))} ya ${sostienen.length === 1 ? "opera" : "operan"} en ${nombre(sostienen[0].nivel!)}.`);
@@ -1080,13 +1278,16 @@ export function resumenParaLaPagina(
   const g = guardado ?? null;
   const v2 = g?.v === 2;
 
-  // Los equipos de la escala: su nivel, si es provisional y por qué está ahí.
+  // Los equipos de la escala: su nivel (normal, sin «provisional»: Elías, 11 nov) y por qué está ahí. `provisional` se
+  // sigue calculando, solo para decir en «Qué falta validar» qué falta confirmar.
   const areas: AreaDelResumenDeLaPagina[] = resultados.map((r) => {
     const a = g?.areas[r.areaId];
     const firma = firmaDelArea(chequeo, r.areaId, entorno);
-    const vigente = !!a?.porque && !!r.nivel && a.porque.firma === firma;
+    // Un «por qué» guardado que dice «provisional» o «hipótesis» (los del 10 nov) no sale: se veía inseguro (Elías, 11 nov).
+    const sinDuda = !!a?.porque && !/\bprovisional|\bhipotesis\b/.test(paraComparar(a.porque.texto));
+    const vigente = sinDuda && !!r.nivel && a!.porque!.firma === firma;
     const provisional = nivelProvisional(r, o.porExplorar?.[r.areaId] ?? []);
-    const respaldo = porqueDeRespaldo(r, provisional);
+    const respaldo = porqueDeRespaldo(r);
     return {
       areaId: r.areaId,
       nombre: r.areaNombre,
@@ -1095,7 +1296,7 @@ export function resumenParaLaPagina(
       provisional,
       porque: vigente ? a!.porque!.texto : respaldo,
       origenDelPorque: vigente ? (a!.porque!.mano ? "mano" : "agente") : respaldo ? "respaldo" : null,
-      porqueViejo: !!a?.porque && !vigente,
+      porqueViejo: !!a?.porque && !!r.nivel && a.porque.firma !== firma,
       hallazgos: (a?.hallazgos ?? []).map((h) => conCita({ id: h.id, texto: h.texto, dimensionNombre: nombreDeLaParte(h.dimensionId), ...(h.mano ? { mano: true } : {}) }, { citas: h.citas })),
     };
   });
@@ -1118,34 +1319,25 @@ export function resumenParaLaPagina(
     if (fuera(`${d.cifra} ${d.texto} ${d.nota ?? ""}`)) return null;
     const noSale = porQueNoSaleLaCifra(d);
     if (noSale && !o.conCitas) return null;
-    const e = estadoDeLaCifra({ estado: d.estado ?? "declarado", cifra: d.cifra, nota: d.nota ?? null, citas: d.citas });
+    const e = estadoDeLaCifra({ estado: d.estado ?? "declarado", cifra: d.cifra, nota: d.nota ?? null, citas: d.citas, mano: d.mano });
     return conCita(
       { id: d.id, cifra: d.cifra, texto: d.texto, ...e, clave, conNota, dimensionNombre: nombreDeLaParte(d.dimensionId), fecha: noSale ? null : (d.citas[0]?.fecha ?? null), ...(d.mano ? { mano: true } : {}) },
       { citas: [...d.citas], ...(noSale ? { noSale } : {}) },
     );
   };
-  const tarjetaVacia = (areaId: string, id: string, nombre: string): TarjetaDeLaPagina => {
-    const a = areaDe(areaId)!;
-    return {
-      id,
-      nombre,
-      claveDelNombre: null,
-      areaId,
-      areaNombre: a.nombre,
-      nivel: a.nivel,
-      nivelNombre: a.nivelNombre,
-      provisional: a.provisional,
-      conPorque: false,
-      organizacion: vacia(),
-      bien: vacia(),
-      frena: vacia(),
-      retos: vacia(),
-      cifras: [],
-      cifraNueva: null,
-      falta: null,
-      claveDeLaFalta: null,
-    };
-  };
+  const subequipoVacio = (id: string, nombre: string): SubequipoDeLaPagina => ({
+    id,
+    nombre,
+    claveDelNombre: null,
+    organizacion: vacia(),
+    bien: vacia(),
+    frena: vacia(),
+    retos: vacia(),
+    cifras: [],
+    cifraNueva: null,
+    falta: null,
+    claveDeLaFalta: null,
+  });
 
   // Las sesiones que se cuentan: las de los equipos que ve el cliente (y las que no tienen equipo). Un Resumen viejo cuyas
   // sesiones no dicen de qué equipo son no sabe cuáles se exploraron: no marca ninguno como pendiente.
@@ -1157,16 +1349,17 @@ export function resumenParaLaPagina(
       )
     : null;
   const exploradas = new Set((hicimos?.areas ?? []).filter((a) => a.sesiones > 0).map((a) => a.areaId));
+  const sinExplorar = g && conEquipos ? resultados.filter((r) => !exploradas.has(r.areaId)).map((r) => r.areaId) : [];
 
-  // Las tarjetas: una por área operativa (formato 2) o por equipo de la escala (formato 1).
-  let tarjetas: TarjetaDeLaPagina[] = [];
+  // Los subequipos de cada equipo de la escala: las áreas operativas (formato 2) o el equipo entero (formato 1).
+  const subequipos = new Map<string, SubequipoDeLaPagina[]>();
+  const sumar = (areaId: string, s: SubequipoDeLaPagina) => subequipos.set(areaId, [...(subequipos.get(areaId) ?? []), s]);
   if (v2) {
     for (const op of g!.operativas ?? []) {
-      // Un equipo sin sesiones no lleva tarjeta aunque otra reunión lo mencione: va en «Qué falta validar», nunca como mal resultado.
-      if (!deLaPagina.has(op.areaId) || fuera(op.nombre) || (conEquipos && !exploradas.has(op.areaId))) continue;
+      if (!deLaPagina.has(op.areaId) || fuera(op.nombre) || sinExplorar.includes(op.areaId)) continue;
       const k = `op:${op.id}`;
-      tarjetas.push({
-        ...tarjetaVacia(op.areaId, op.id, op.nombre || (areaDe(op.areaId)?.nombre ?? "")),
+      sumar(op.areaId, {
+        ...subequipoVacio(op.id, op.nombre || (areaDe(op.areaId)?.nombre ?? "")),
         claveDelNombre: `${k}:nombre`,
         organizacion: lista(op.organizacion, `${k}:org`),
         bien: lista(op.bien, `${k}:bien`),
@@ -1179,66 +1372,60 @@ export function resumenParaLaPagina(
     }
   } else if (g) {
     for (const r of resultados) {
-      const rojos = g.datosRojos.filter((d) => d.areaId === r.areaId).flatMap((d) => cifra(d, `rojo:${d.id}`, false) ?? []);
-      tarjetas.push({
-        ...tarjetaVacia(r.areaId, `a${r.areaId}`, r.areaNombre),
+      sumar(r.areaId, {
+        ...subequipoVacio(`a${r.areaId}`, r.areaNombre),
         retos: { piezas: (g.areas[r.areaId]?.hallazgos ?? []).filter((h) => !fuera(h.texto)).map((h) => pieza(h, `hallazgo:${r.areaId}:${h.id}`)), nueva: `hallazgo:${r.areaId}:nuevo` },
-        cifras: rojos,
+        cifras: g.datosRojos.filter((d) => d.areaId === r.areaId).flatMap((d) => cifra(d, `rojo:${d.id}`, false) ?? []),
       });
     }
   }
-  // Un equipo con nivel o con sesiones que no quedó en ninguna tarjeta sale igual, con su nivel (sin Resumen, todos).
-  for (const r of resultados) {
-    if (tarjetas.some((t) => t.areaId === r.areaId)) continue;
-    if (g && !r.nivel && conEquipos && !exploradas.has(r.areaId)) continue;
-    if (!g && !r.nivel) continue;
-    tarjetas.push(tarjetaVacia(r.areaId, `a${r.areaId}`, r.areaNombre));
-  }
-  // En el orden de los equipos de la página; el «por qué» va solo en la primera tarjeta de cada equipo.
-  const orden = (id: string) => resultados.findIndex((r) => r.areaId === id);
-  tarjetas = [...tarjetas].sort((a, b) => orden(a.areaId) - orden(b.areaId));
-  const conPorque = new Set<string>();
-  tarjetas = tarjetas.map((t) => {
-    const primera = !conPorque.has(t.areaId);
-    conPorque.add(t.areaId);
-    return { ...t, conPorque: primera && !!areaDe(t.areaId)?.porque };
+  // Una tarjeta por equipo de la escala, en su orden: con subequipos, con nivel, o «Por explorar» (sin Resumen, solo las
+  // que tienen nivel).
+  const tarjetas: TarjetaDeLaPagina[] = resultados.flatMap((r) => {
+    const subs = subequipos.get(r.areaId) ?? [];
+    const porExplorar = sinExplorar.includes(r.areaId);
+    if (!subs.length && !porExplorar && !r.nivel) return [];
+    const a = areaDe(r.areaId)!;
+    return [{ id: `t${r.areaId}`, areaId: r.areaId, nombre: r.areaNombre, nivel: porExplorar ? null : r.nivel, nivelNombre: porExplorar ? null : r.nivelNombre, conPorque: !porExplorar && !!a.porque, porExplorar, subequipos: porExplorar ? [] : subs }];
   });
 
-  // Lo que falta validar: primero lo que calcula Nexus (equipos sin explorar, niveles provisionales), después lo escrito.
+  /* «Qué falta validar» (Elías, 11 nov): tres líneas como mucho, en palabras simples. Primero lo que calcula Nexus (un
+     equipo sin sesiones, lo que falta confirmar de una parte que ubica el nivel), después lo que escribió el agente o una
+     persona. Lo del agente que nombra un equipo sin explorar no se repite (en Centauro, Marketing salía dos veces). */
   const pendientes: PendienteDeLaPagina[] = [];
-  if (g && conEquipos) {
-    for (const r of resultados) {
-      if (!exploradas.has(r.areaId))
-        pendientes.push({
-          id: `x${r.areaId}`,
-          tipo: "no-explorada",
-          texto: `Todavía no conversamos con ${r.areaNombre}: su lugar en la escala queda por medir contigo, no es un mal resultado.`,
-          clave: null,
-          areaNombre: r.areaNombre,
-        });
-    }
+  for (const id of sinExplorar) {
+    const nombre = areaDe(id)!.nombre;
+    pendientes.push({ id: `x${id}`, tipo: "no-explorada", texto: `Conversar con tu equipo de ${nombre}: todavía no tuvimos una sesión con él.`, clave: null, areaNombre: nombre });
   }
   for (const a of areas) {
-    if (!a.provisional) continue;
+    if (!a.provisional || sinExplorar.includes(a.areaId)) continue;
+    const dims = resultados.find((r) => r.areaId === a.areaId)!.dimensiones.filter((d) => a.provisional!.includes(d.nombre));
+    // La línea se edita en su lugar (`confirmar:<parte>`); quitarla la guarda vacía y ya no sale.
+    const dim = dims[0];
+    const escrito = dim ? g?.confirmar?.[dim.id] : undefined;
+    if (escrito === "" || (escrito && fuera(escrito))) continue;
     pendientes.push({
       id: `h${a.areaId}`,
       tipo: "hipotesis",
-      texto: `El nivel de ${a.nombre} (${a.nivelNombre}) es provisional: depende de confirmar ${nombresEntreComillas(a.provisional)}.`,
-      clave: null,
+      texto: escrito ?? `Confirmar cómo trabaja hoy tu equipo en ${nombresEntreComillas(a.provisional)}; con eso terminamos de ubicar ${a.nombre}.`,
+      clave: v2 && dim ? `confirmar:${dim.id}` : null,
       areaNombre: a.nombre,
     });
   }
-  if (v2) {
-    for (const p of g!.pendientes ?? []) {
-      if (fuera(p.texto) || (p.areaId && !deLaPagina.has(p.areaId))) continue;
-      pendientes.push(conCita({ id: p.id, tipo: p.tipo, texto: p.texto, clave: `pendiente:${p.id}`, areaNombre: p.areaId ? (areaDe(p.areaId)?.nombre ?? null) : null, ...(p.mano ? { mano: true } : {}) }, { citas: p.citas }));
-    }
-  } else if (g) {
-    for (const p of g.falta) {
-      if (fuera(p.texto)) continue;
-      pendientes.push({ id: p.id, tipo: "por-confirmar", texto: p.texto, clave: `falta:${p.id}`, areaNombre: null, ...(p.mano ? { mano: true } : {}) });
-    }
-  }
+  const nombresSinExplorar = sinExplorar.map((id) => areaDe(id)!.nombre);
+  const escritos: PendienteDeLaPagina[] = v2
+    ? (g!.pendientes ?? [])
+        .filter((p) => !fuera(p.texto) && !(p.areaId && !deLaPagina.has(p.areaId)) && (p.mano || (!(p.areaId && sinExplorar.includes(p.areaId)) && !nombraA(p.texto, nombresSinExplorar) && !DICE_DUDA.test(paraComparar(p.texto)))))
+        .map((p) => conCita({ id: p.id, tipo: p.tipo, texto: p.texto, clave: `pendiente:${p.id}`, areaNombre: p.areaId ? (areaDe(p.areaId)?.nombre ?? null) : null, ...(p.mano ? { mano: true } : {}) }, { citas: p.citas }))
+    : g
+      ? g.falta.filter((p) => !fuera(p.texto) && (p.mano || (!nombraA(p.texto, nombresSinExplorar) && !DICE_DUDA.test(paraComparar(p.texto))))).map((p) => ({ id: p.id, tipo: "por-confirmar" as const, texto: p.texto, clave: `falta:${p.id}`, areaNombre: null, ...(p.mano ? { mano: true } : {}) }))
+      : [];
+  /* Afuera, tres líneas como mucho (lo de Nexus primero), más lo escrito a mano, que va siempre. Adentro se ve todo, para
+     poder quitar lo que sobra. */
+  for (const p of escritos) pendientes.push(p);
+  const deNexusYDelAgente = pendientes.filter((p) => !p.mano);
+  const visibles = o.conCitas ? pendientes : [...deNexusYDelAgente.slice(0, MAX_LINEAS_POR_VALIDAR), ...pendientes.filter((p) => p.mano)];
+  pendientes.splice(0, pendientes.length, ...pendientes.filter((p) => visibles.includes(p)));
 
   // El negocio y el recorrido: solo el formato 2 los tiene.
   const negocio = v2
@@ -1250,7 +1437,11 @@ export function resumenParaLaPagina(
         .map((e) => conCita({ id: e.id, nombre: e.nombre, quien: e.quien, texto: e.texto, friccion: e.friccion, clave: `etapa:${e.id}`, ...(e.mano ? { mano: true } : {}) }, { citas: [...e.citas] }))
     : null;
 
-  const datosRojos = v2 ? [] : tarjetas.flatMap((t) => t.cifras.map((c) => ({ id: c.id, cifra: c.cifra, texto: c.texto, areaId: t.areaId, areaNombre: t.areaNombre, dimensionNombre: c.dimensionNombre, fecha: c.fecha, ...(o.conCitas ? { citas: c.citas, ...(c.noSale ? { noSale: c.noSale } : {}) } : {}), ...(c.mano ? { mano: true } : {}) })));
+  // La escala cambió desde que se armó: alguna firma de los niveles es otra (solo adentro).
+  const escalaCambio = !!g?.firmas && resultados.some((r) => g.firmas![r.areaId] !== undefined && g.firmas![r.areaId] !== firmaDelArea(chequeo, r.areaId, entorno));
+  const datosRojos = v2
+    ? []
+    : tarjetas.flatMap((t) => t.subequipos.flatMap((s) => s.cifras.map((c) => ({ id: c.id, cifra: c.cifra, texto: c.texto, areaId: t.areaId, areaNombre: t.nombre, dimensionNombre: c.dimensionNombre, fecha: c.fecha, ...(o.conCitas ? { citas: c.citas, ...(c.noSale ? { noSale: c.noSale } : {}) } : {}), ...(c.mano ? { mano: true } : {}) }))));
   return {
     at: g?.at ?? null,
     formato: v2 || !g ? 2 : 1,
@@ -1261,11 +1452,13 @@ export function resumenParaLaPagina(
     tarjetas,
     pendientes,
     pendienteNuevo: v2 ? "pendiente:nuevo" : g ? "falta:nuevo" : null,
-    // Una pregunta que nombra un equipo que el cliente ya no ve (se armó cuando sí lo veía) no sale.
-    entendimos: (g?.entendimos ?? []).filter((p) => !fuera(p.texto)),
+    // «¿Entendimos bien?» ya no sale (Elías, 11 nov).
+    entendimos: [],
+    sinExplorar,
     areas,
     datosRojos,
     falta: v2 ? [] : (g?.falta ?? []).filter((p) => !fuera(p.texto)),
+    ...(o.conCitas ? { escalaCambio, avisos: g?.avisos ?? [] } : {}),
   };
 }
 
@@ -1279,7 +1472,7 @@ export function resumenParaLaPagina(
  */
 const ID = "[\\w-]{1,20}";
 export const CLAVE_DEL_RESUMEN = new RegExp(
-  `^(hicimos|rojo:${ID}(:cifra|:texto)?|hallazgo:\\d{1,4}:${ID}|porque:\\d{1,4}|(entendimos|falta|pendiente):${ID}|negocio:(${TIPOS_DEL_NEGOCIO.join("|")}):${ID}|etapa:${ID}(:nombre|:texto|:friccion)?|op:${ID}(:nombre|:falta|:(org|bien|frena|reto):${ID}|:cifra:${ID}(:cifra|:texto|:nota)?)?)$`,
+  `^(hicimos|rojo:${ID}(:cifra|:texto)?|hallazgo:\\d{1,4}:${ID}|porque:\\d{1,4}|(entendimos|falta|pendiente):${ID}|confirmar:\\d{1,2}\\.\\d{1,2}|negocio:(${TIPOS_DEL_NEGOCIO.join("|")}):${ID}|etapa:${ID}(:nombre|:texto|:friccion)?|op:${ID}(:nombre|:falta|:(org|bien|frena|reto):${ID}|:cifra:${ID}(:cifra|:texto|:nota)?)?)$`,
 );
 
 /** Lo que mide una clave de lo quitado: corta, para que la lectura del Json nunca la rechace. */
@@ -1406,6 +1599,11 @@ export function editarElResumen(g: ResumenGuardado, clave: string, crudo: string
       if (!p) return { ok: false, error: "Esa pregunta ya no está." };
       if (!texto) return { ok: true, resumen: quitar({ ...g, [tipo]: lista.filter((x) => x.id !== a) }, clavesDeQuitado(tipo, p)) };
       return { ok: true, resumen: { ...g, [tipo]: lista.map((x) => (x.id === a ? { ...x, texto, mano: true } : x)) } };
+    }
+    case "confirmar": {
+      // Lo que falta confirmar de una parte por explorar: se cambia, o se quita (queda vacío y la línea ya no sale).
+      const dim = partes.slice(1).join(":");
+      return { ok: true, resumen: { ...g, confirmar: { ...g.confirmar, [dim]: texto }, confirmarMano: [...new Set([...(g.confirmarMano ?? []), dim])] } };
     }
     case "pendiente": {
       const lista = g.pendientes ?? [];
@@ -1628,6 +1826,13 @@ export function juntarConLoEditado(nuevo: ResumenGuardado, antes: ResumenGuardad
       recorrido: recorrido.slice(0, MAX_POR_LISTA),
       operativas,
       pendientes: junto(pendientesViejos, (nuevo.pendientes ?? []).filter((p) => !pareceQuitada("falta", p, quitados))).slice(0, MAX_POR_LISTA),
+      // Lo que falta confirmar que tocó una persona se queda como lo dejó (cambiado, o vacío si lo quitó).
+      ...(antes.confirmarMano?.length
+        ? {
+            confirmar: { ...nuevo.confirmar, ...Object.fromEntries(antes.confirmarMano.map((d) => [d, antes.confirmar?.[d] ?? ""])) },
+            confirmarMano: antes.confirmarMano,
+          }
+        : {}),
       entendimos: junto(antes.entendimos, nuevo.entendimos.filter((p) => !pareceQuitada("entendimos", p, quitados))).slice(0, MAX_POR_LISTA),
     };
   }
@@ -1703,7 +1908,19 @@ export async function escribirElResumen(
       e = { ...e, descartados: [...e.descartados, "el arreglo de las cifras falló: quedaron fuera"] };
     }
   }
-  return { ...e, usos, cortado };
+  if (!cortado && e.etapasPorArreglar.length) {
+    try {
+      const r4 = await pedir(pedidoDeLasEtapas(e.etapasPorArreglar));
+      usos.push(r4.usage);
+      const a = leerLasEtapas(r4, e.etapasPorArreglar, ctx, reglas);
+      e = { ...e, recorrido: conLasEtapas(e.recorrido, a.etapas), descartados: [...e.descartados, ...a.descartados] };
+    } catch {
+      e = { ...e, descartados: [...e.descartados, "el arreglo de las etapas falló: quedaron fuera"] };
+    }
+  }
+  // Las etapas sin el orden interno, y los avisos con el recorrido final.
+  const recorrido = conLasEtapas(e.recorrido, []);
+  return { ...e, recorrido, avisos: avisosDelRecorrido(recorrido, e.operativas, ctx), usos, cortado };
 }
 
 // ── Qué reuniones lee y quién es de la empresa ─────────────────────────────────
@@ -1748,4 +1965,75 @@ export function delClienteDe(personas: readonly { nombre: string; lado: string }
  */
 export function reunionesQueLee<R extends { id: string; areaId: string | null }>(fuentes: readonly R[], conTranscripcion: ReadonlySet<string>, areasQueVe: ReadonlySet<string>): R[] {
   return fuentes.filter((r) => conTranscripcion.has(r.id) && (!r.areaId || areasQueVe.has(r.areaId))).reverse();
+}
+
+// ── La auditoría de veracidad ───────────────────────────────────────────────────
+
+export interface ProblemaDeVeracidad {
+  /** Qué pieza: «Customer Success · cifra «2,8 %»». */
+  donde: string;
+  problema: string;
+}
+
+/**
+ * Relee un Resumen GUARDADO pieza por pieza contra las transcripciones, con las reglas de hoy (11 nov, Elías: «en este
+ * tipo de entregable la veracidad es lo más importante»): que cada cita esté en su reunión y la haya dicho (o confirmado)
+ * la empresa, que los números y las herramientas estén en lo citado, que una cifra sea un solo dato, que su estado sea el
+ * que corresponde, y que no haya lecturas nuestras, conclusiones ni totales colados. No cambia nada: lo usa el simulacro
+ * (`--auditar`) sobre lo que está en producción.
+ */
+export function auditarElResumen(g: ResumenGuardado, reuniones: readonly ReunionParaElResumen[], areas: readonly { id: string; nombre: string }[]): ProblemaDeVeracidad[] {
+  const out: ProblemaDeVeracidad[] = [];
+  const mal = (donde: string, problema: string) => out.push({ donde, problema });
+  const citasValidas = (donde: string, citas: readonly CitaDelResumen[]) => {
+    for (const c of citas) {
+      const r = reuniones.find((x) => x.id === c.reunion);
+      if (!r) {
+        mal(donde, `cita de una reunión que no se leyó (${c.reunion})`);
+        continue;
+      }
+      const v = verificarCita({ turno: c.turno, texto: c.texto }, r.turnos);
+      if (!v) mal(donde, `la cita no está en la reunión («${c.texto.slice(0, 50)}…»)`);
+      else if (!esDelCliente(r, v.hablante) && !confirmacion(r, v.turno, finDeLaCita(r, v))) mal(donde, `la cita la dijo alguien de Smarteam y nadie de la empresa la confirmó («${c.texto.slice(0, 50)}…»)`);
+    }
+  };
+  const pieza = (donde: string, texto: string, citas: readonly CitaDelResumen[], extras = "") => {
+    if (!citas.length) return;
+    citasValidas(donde, citas);
+    const lo = citas.map((c) => c.texto).join(" ");
+    const todo = `${texto} ${extras}`;
+    const sobran = cifrasDeMas(todo, lo);
+    if (sobran.length) mal(donde, `números que no están en lo citado (${sobran.join(", ")})`);
+    const h = herramientasDeMas(todo, lo);
+    if (h.length) mal(donde, `nombra herramientas que no están en lo citado (${h.join(", ")})`);
+    const l = lecturaNuestra(todo, lo);
+    if (l) mal(donde, `una lectura nuestra que no dijeron («${l}»)`);
+    const c = concluyeDeMas(todo, lo);
+    if (c) mal(donde, `una conclusión que la cita no dice («${c}»)`);
+    if (/\bprovisional|\bhipotesis\b/.test(paraComparar(todo))) mal(donde, "dice «provisional» o «hipótesis»");
+  };
+  for (const [tipo, ps] of Object.entries(g.negocio ?? {})) for (const p of ps ?? []) pieza(`Negocio · ${tipo}`, p.texto, p.citas);
+  for (const e of g.recorrido ?? []) pieza(`Recorrido · ${e.nombre}`, `${e.nombre} ${e.texto}`, e.citas, e.friccion ?? "");
+  for (const op of g.operativas ?? []) {
+    for (const [k, xs] of [
+      ["organización", op.organizacion],
+      ["lo que hace bien", op.bien],
+      ["lo que frena", op.frena],
+      ["reto", op.retos],
+    ] as const)
+      for (const p of xs) pieza(`${op.nombre} · ${k}`, p.texto, p.citas);
+    for (const c of op.cifras) {
+      const donde = `${op.nombre} · cifra «${c.cifra}»`;
+      pieza(donde, `${c.cifra} ${c.texto}`, c.citas, c.nota ?? "");
+      const otro = numerosDeOtroDicho(c.cifra, c.texto, c.citas);
+      if (otro.length) mal(donde, `junta números de otro dicho (${otro.join(", ")}): una cifra es un solo dato`);
+      if (TOTAL.test(paraComparar(c.texto)) && cifrasDeMas(c.texto, c.cifra).length) mal(donde, "suma un total que no es la cifra");
+      const e = estadoDeLaCifra({ estado: c.estado, cifra: c.cifra, nota: c.nota, citas: c.citas, mano: c.mano });
+      if (e.estado !== c.estado) mal(donde, `está guardada como «${c.estado}» y con sus citas es «${e.estado}»`);
+      if (c.nota && CITA_EN_LA_NOTA.test(c.nota)) mal(donde, "la nota cita lo dicho o dice quién lo dijo");
+    }
+  }
+  for (const p of g.pendientes ?? []) if (/\bprovisional|\bhipotesis\b/.test(paraComparar(p.texto))) mal(`Pendiente «${p.texto.slice(0, 40)}…»`, "dice «provisional» o «hipótesis»");
+  for (const a of avisosDelRecorrido(g.recorrido ?? [], g.operativas ?? [], { areas, reuniones })) mal("Recorrido", a);
+  return out;
 }

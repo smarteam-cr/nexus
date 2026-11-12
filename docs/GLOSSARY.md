@@ -4,8 +4,9 @@
   "Fireflies" por historia — esa integración se eliminó el 2026-06-04). Tiene
   `participants` (emails), `transcript`, `summary`, `organizerEmail`. ~16k filas.
 - **Resumen de la escala** (`lib/exploraciones/resumen-de-la-escala.ts`, desde el 2026-11-09; resumen ejecutivo desde el
-  10 nov): la primera pestaña de la escala que ve el cliente, en cinco partes (su negocio, qué hicimos, cómo funciona su
-  operación, qué encontramos por **área operativa** y qué falta validar). Cada afirmación sale de una cita de sus reuniones
+  10 nov; segunda vuelta el 11 nov): la primera pestaña de la escala que ve el cliente: arriba las tres cifras de lo que hicimos
+  y después su negocio, cómo funciona su operación, qué encontramos por equipo de la escala (con sus subequipos adentro) y
+  qué falta validar. Cada afirmación sale de una cita de sus reuniones
   verificada contra la transcripción; sin cita no sale. Un **área operativa** es un equipo como la empresa se organiza
   (Soporte, Customer Success), colgado de su equipo de la escala (Servicio). Cada **cifra** dice cómo se sabe: *declarada*
   (la dijo la empresa), *estimada* (la resumimos o calculamos, con su base) o *por confirmar*. Los **datos rojos** son las

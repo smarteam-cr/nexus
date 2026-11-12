@@ -144,7 +144,9 @@ function UbicarConLasReuniones() {
   if (!puedeEditar) return null;
   const ultima = [...exp.estado.propuesta.corridas].reverse().find((c) => c.modo === "posicionar");
   return (
-    <span className="inline-flex items-center gap-2">
+    <span className="inline-flex flex-wrap items-center gap-2">
+      {/* El orden de los dos botones (Elías, 11 nov): ubicar acá, confirmar en el mapa y armar el Resumen en la página. */}
+      <span className="text-xs text-fg-muted">1 Ubicar con las reuniones · 2 Confirmar en el mapa · 3 Armar el Resumen, en la página del cliente</span>
       {ultima && <span className="text-xs text-fg-muted">Ubicada el {diaCorto(ultima.en)}</span>}
       <Button
         size="sm"

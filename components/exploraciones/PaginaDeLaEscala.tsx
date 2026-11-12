@@ -316,7 +316,7 @@ export default function PaginaDeLaEscala() {
       deDonde: (citas, d) => <DeDondeSale citas={citas} noSostiene={d?.noSostiene} />,
     };
     // Las cifras que el cliente no ve (Elías, 9 nov): adentro salen marcadas, con el porqué, para corregirlas o quitarlas.
-    const cifras = res.tarjetas.flatMap((t) => t.cifras);
+    const cifras = res.tarjetas.flatMap((t) => t.subequipos.flatMap((x) => x.cifras));
     const queNoSalen = cifras.filter((d) => d.noSale).length;
     const queSalen = cifras.length - queNoSalen;
     return (
@@ -345,6 +345,19 @@ export default function PaginaDeLaEscala() {
               </Button>
             )}
           </div>
+          {/* La escala cambió desde que se armó (compara la firma de los niveles): el Resumen puede decir algo viejo. */}
+          {res.at && res.escalaCambio && (
+            <Alert variant="warning" title="La escala cambió desde este resumen">
+              Los niveles se movieron después de armarlo. Revisa lo que dice o rehazlo con IA.
+            </Alert>
+          )}
+          {res.avisos && res.avisos.length > 0 && (
+            <ul className="list-disc space-y-0.5 pl-5 text-warn-ink">
+              {res.avisos.map((a) => (
+                <li key={a}>{a}</li>
+              ))}
+            </ul>
+          )}
           {descartados && descartados.length > 0 && (
             <details>
               <summary className="cursor-pointer font-semibold text-fg-secondary">Lo que Nexus escribió y no pasó la verificación ({descartados.length})</summary>

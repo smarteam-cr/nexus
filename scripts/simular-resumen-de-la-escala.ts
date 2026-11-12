@@ -10,6 +10,7 @@
  *   - Con --guardar-crudo <archivo>: deja la respuesta del agente en ese archivo; con --desde <archivo>, la relee de ahí
  *     sin llamar (para revisar la verificación sin volver a gastar).
  *   - Con --pagina <archivo>: lo que vería el cliente, lo que se ve adentro y el Resumen como se guardaría (formato 2).
+ *   - Con --auditar: relee el Resumen GUARDADO pieza por pieza contra las transcripciones (`auditarElResumen`), sin IA.
  *
  *   npx tsx scripts/simular-resumen-de-la-escala.ts --exploracion cmw3wmh7w0sl108ppdf5mujjt --llamar
  */
@@ -48,6 +49,19 @@ async function main() {
   for (const s of le.hicimos.sesiones) console.log(`  ${s.fecha.slice(0, 10)} · ${s.equipo ?? "sin equipo"} · ${s.minutos ?? "?"} min · ${s.quienes?.join(", ") || "-"}`);
   console.log(`  ${loQueHicimos(le.hicimos)?.texto}`);
   console.log(`${NL}── Reuniones que lee: ${le.ctx.reuniones.map((r) => `${r.clave} ${r.fecha.slice(0, 10)} ${r.equipo ?? ""} (${r.turnos.length} turnos; del cliente: ${r.delCliente.join(", ") || "?"})`).join(" · ")}`);
+  // Con --auditar: lo que está GUARDADO, pieza por pieza contra las transcripciones, con las reglas de hoy (no llama a la IA).
+  if (process.argv.includes("--auditar")) {
+    const { auditarElResumen } = await import("@/lib/exploraciones/resumen-de-la-escala");
+    const guardado = l.estado.contenido.resumenDeLaEscala;
+    if (!guardado) console.log(`${NL}── Auditoría: no hay Resumen guardado.`);
+    else {
+      // Con las transcripciones completas: el recorte del medio de una reunión larga no hace pasar por inventada una cita.
+      const completas = await loQueLeeElResumen(l, new Date(), { completas: true });
+      const problemas = auditarElResumen(guardado, completas.ctx.reuniones, l.escala.areas.map((a) => ({ id: a.id, nombre: a.nombre })));
+      console.log(`${NL}── Auditoría de lo guardado (v${guardado.v}, ${guardado.at}): ${problemas.length} problemas`);
+      for (const x of problemas) console.log(`  - ${x.donde}: ${x.problema}`);
+    }
+  }
   if (!process.argv.includes("--llamar")) return;
 
   const modelo = arg("--modelo");
@@ -95,7 +109,8 @@ async function main() {
   for (const [a, x] of Object.entries(escrito.areas)) console.log(`  ${nombreDeArea(a)}: ${x.porque?.texto ?? "(sin)"}`);
   console.log(`${NL}── 5 · Pendientes`);
   for (const p of escrito.pendientes) console.log(`  [${p.tipo}] ${p.texto}${citas(p.citas)}`);
-  console.log(`── ¿Entendimos bien?${NL}${escrito.entendimos.map((p) => `  • ${p.texto}`).join(NL)}`);
+  console.log(`── Qué falta confirmar${NL}${Object.entries(escrito.confirmar).map(([d, t]) => `  • ${d}: ${t}`).join(NL)}`);
+  console.log(`── Avisos${NL}${escrito.avisos.map((a) => `  ⚠ ${a}`).join(NL) || "  (ninguno)"}`);
   console.log(`${NL}── Descartado (${escrito.descartados.length})${NL}${escrito.descartados.map((d) => `  - ${d}`).join(NL)}`);
 
   const guardado = {
@@ -113,6 +128,9 @@ async function main() {
     recorrido: escrito.recorrido,
     operativas: escrito.operativas,
     pendientes: escrito.pendientes,
+    firmas: le.firmas,
+    confirmar: escrito.confirmar,
+    avisos: escrito.avisos,
   };
   const entorno = { edicion: l.fila.edicion, perfilCierre: l.fila.perfilCierre, perfilDespues: l.fila.perfilDespues, escalaVersion: l.escala.version };
   const porExplorar = Object.fromEntries(l.deLasAreas.map((x) => [x.resultado.areaId, x.porExplorar]));
@@ -124,11 +142,12 @@ async function main() {
   if (paginaEn)
     fs.writeFileSync(paginaEn, JSON.stringify({ empresa: l.fila.client.name, afuera, adentro, guardado, areas: l.deLasAreas.map((x) => ({ id: x.resultado.areaId, nombre: x.resultado.areaNombre })) }, null, 1));
   console.log(`${NL}── Lo que ve el cliente: niveles y lo que falta validar`);
-  for (const a of afuera.areas) console.log(`  ${a.nombre}: ${a.nivelNombre ?? "En medición"}${a.provisional ? ` (provisional: ${a.provisional.join(", ")})` : ""} — ${a.porque ?? "(sin)"} [${a.origenDelPorque}]`);
+  for (const a of afuera.areas) console.log(`  ${a.nombre}: ${a.nivelNombre ?? "En medición"} — ${a.porque ?? "(sin)"} [${a.origenDelPorque}]`);
   for (const p of afuera.pendientes) console.log(`  [${p.tipo}] ${p.texto}`);
   console.log(`  Qué hicimos: ${afuera.hicimos?.texto}`);
-  console.log(`  Equipos: ${afuera.hicimos?.areas.map((a) => `${a.nombre} ${a.sesiones ? `${a.sesiones} sesiones` : "por explorar"}`).join(" · ")}`);
-  console.log(`  Cifras que sale al cliente: ${afuera.tarjetas.flatMap((t) => t.cifras.map((c) => `${t.nombre}: ${c.cifra} [${c.estado}]`)).join(" · ") || "ninguna"}`);
+  console.log(`  Sin explorar: ${afuera.sinExplorar.join(", ") || "ninguno"}`);
+  console.log(`  Cifras que salen al cliente: ${afuera.tarjetas.flatMap((t) => t.subequipos.flatMap((x) => x.cifras.map((c) => `${x.nombre}: ${c.cifra} [${c.estado}]`))).join(" · ") || "ninguna"}`);
+  for (const p of adentro.avisos ?? []) console.log(`  ⚠ ${p}`);
 }
 
 main()

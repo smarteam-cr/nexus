@@ -14525,6 +14525,9 @@ los datos rojos.
 
 ## El Resumen de la escala, rehecho como resumen ejecutivo (2026-11-10)
 
+> ⚠ Segunda vuelta el 11 nov (ver «El Resumen de la escala, segunda vuelta: la veracidad primero»): las tarjetas son los
+> equipos de la escala con sus subequipos adentro, sin «provisional», sin «¿Entendimos bien?» y con «Qué hicimos» en tres cifras.
+
 Elías, para la presentación de Marco a Centauro Solutions (jueves 12 nov): el Resumen del 9 nov se leía como una alarma
 (la banda de datos rojos arriba) y como una lista de hallazgos por equipo de la escala. El objetivo nuevo es que la dirección
 del cliente lo lea en 2 o 3 minutos y diga «entendieron cómo funciona mi negocio, cómo están organizadas mis áreas y qué
@@ -14621,3 +14624,68 @@ problemas tenemos que resolver». Es un cambio de presentación: los criterios y
   empresa; un hallazgo quitado en el formato 1 no vuelve como reto al rehacer; dentro de las tarjetas tampoco sale un equipo
   que el cliente dejó de ver; lo escrito a mano no entra en el registro de lo que escribió la IA.
 - Sin SQL: vive en el Json `contenido.resumenDeLaEscala`.
+
+## El Resumen de la escala, segunda vuelta: la veracidad primero (2026-11-11)
+
+Elías lo probó con Centauro en producción (el armado del 10 nov) y encontró cifras que no cuadraban, una lectura nuestra
+como si la hubieran dicho, dos datos fundidos en uno, Marketing dos veces y un recorrido con solo dos etapas de Ventas.
+«En este tipo de entregable la veracidad es lo más importante.» El diseño sigue siendo el de hoy (el rediseño con el
+Sistema 2, «Nexus · interfaz interna», se descartó): cambian el contenido, el prompt y la lógica.
+
+- **Lo que decidió Elías:**
+  1. Las tarjetas son los equipos de la escala (Ventas, Marketing, Servicio) con sus subequipos ADENTRO: Soporte y
+     Customer Success dentro de Servicio. Esto reemplaza la tarjeta por área operativa del 10 nov.
+  2. «Provisional» se quita en todas partes, en el Resumen y en el detalle, porque se ve inseguro. El nivel va normal. La
+     parte de la que depende va como una línea de «Qué falta validar», dicha como lo que falta confirmar: «Confirmar
+     cómo registran por qué ganan o pierden una venta; con eso terminamos de ubicar Ventas» (`confirmar`, la escribe el
+     agente; sin ella, una de respaldo). El cálculo no cambia. Un «por qué» guardado que dice «provisional» o
+     «hipótesis» no sale: va el de los datos.
+  3. «Qué hicimos» son solo las tres cifras (sesiones, tiempo, personas), arriba en la cabecera, como la intro del
+     diagnóstico. Salen las etiquetas de equipos y el párrafo. Las pestañas muestran siempre los equipos que ve el
+     cliente; uno sin sesiones dice «Por explorar» y afuera no se abre, tampoco con su dirección directa (`sinExplorar`).
+  4. «Qué falta validar» va muy sencillo: tres líneas como mucho, sin etiquetas técnicas. Va primero lo que calcula
+     Nexus (un equipo sin sesiones, lo que falta confirmar de una parte) y después lo del agente. Lo del agente que nombra
+     a un equipo sin explorar no se repite. Lo escrito a mano va siempre.
+  5. «¿Entendimos bien?» sale entero: el agente ya no lo escribe y la página no lo muestra.
+  6. «Volver a ubicar con las reuniones» (en la escala) y «Rehacer con IA» (en el Resumen) siguen separados. Adentro, el
+     Resumen avisa «La escala cambió desde este resumen» cuando la firma de los niveles al armarlo (`firmas`) ya no es la
+     de hoy. La escala muestra el orden: «1 Ubicar con las reuniones · 2 Confirmar en el mapa · 3 Armar el Resumen».
+- ⛔ **Lo que vigila el código (veracidad):**
+  - **Una cifra es un solo dato** (`numerosDeOtroDicho`): los números del texto tienen que salir de las citas que traen
+    los números de la cifra grande. El 2,8 % y «25 contra 14» van aparte, cada uno con su estado. «25 de 50», con el 25
+    de un turno y el 50 de otro, vale: es un dato frente a su meta.
+  - **Ninguna lectura nuestra como si la hubieran dicho** (`lecturaNuestra`): «evitable», «innecesario», «recuperable»,
+    «se podría automatizar» solo si lo citado lo dice. El «~200 tickets evitables» de Centauro no pasa.
+  - **Un total colado en una cifra** («400 a 500 por WhatsApp… un total de 1.008») se pide corregido. Y si la cita de una
+    cifra dice tres números o más juntos, la cifra no es «declarada»: va «por confirmar», con «Se dijeron varios números
+    juntos: falta confirmar este dato con tus registros». La cita de Centauro, «400 a 500 porque correo son 13… para
+    llegar a los 1008», está rota en la transcripción; Marco calculó «1800 al mes» y nadie lo confirmó.
+  - **Ningún texto dice «provisional» ni «hipótesis»**, y el arreglo no puede reemplazar un número quitado por una
+    palabra que lo insinúe (salió «la meta es la mitad más»).
+  - **El recorrido de punta a punta:** el prompt pide seguir a un cliente desde el primer contacto hasta el servicio
+    continuo, con una etapa en cada traspaso entre equipos aunque no se trabe nada, cada una con su cita, y solo lo de
+    hoy (un link de pago que quieren tener no es una etapa). Una etapa con su cita verificada que se cayó por algo de
+    forma (dice «tarifa» sin que la cita lo diga, un número de más, es larga) se pide corregida en una llamada chica, sin
+    las transcripciones (`pedidoDeLasEtapas`), y vuelve a su lugar. Si igual queda un equipo con reunión sin ninguna
+    etapa, adentro se avisa (`avisosDelRecorrido`): pedirlo de nuevo costaría otra corrida entera.
+- **La auditoría** (`auditarElResumen`, en el simulacro con `--auditar`, sin IA y con las transcripciones completas)
+  relee un Resumen guardado pieza por pieza con estas reglas. Sobre lo guardado de Centauro el 10 nov encontró 8
+  problemas: los cuatro que vio Elías (el total de 1.008, «evitables», el 2,8 % fundido con «25 contra 14», el recorrido
+  sin Servicio), dos conclusiones nuestras («lo que limita», «crece»), otro dato fundido («200» con «100») y Marketing
+  sin etapa.
+- **Centauro ya tiene cinco sesiones** (se sumaron una de Marketing el 11 nov y una sin equipo el 10 nov): 5 h 24 min y 5
+  personas de la empresa. Con cuatro reuniones con texto, el agente lee unos 100 mil tokens: 212 a 227 s y 0,47 a 0,48
+  USD por armado. MEDIDO
+- **Lo que no queda garantizado:** que cada frase diga solo lo que dice su cita (el código mira la cita, los números, las
+  herramientas y ciertas palabras, no el sentido); que una cita mal transcrita no pase si no trae tres números juntos;
+  que el recorrido tenga siempre todos los equipos (se avisa, no se rehace solo); que con cuatro reuniones largas el
+  agente vea todo: el medio de cada una se recorta para no pasar de unos 320 mil caracteres.
+- **Lo que endureció la revisión del 11 nov:** una lectura nuestra pasa solo si la cita dice la misma palabra («podría» no
+  sostiene «podría evitarse»); «quién lo dijo» es un rol que dice algo («la supervisora identificó»), no cualquier «reportó»;
+  una nota mal escrita se va sola y la cifra queda; los tres números juntos no cuentan un año ni parten un decimal, y una
+  cifra corregida a mano queda con su estado y su nota; la línea de «confirmar» se edita y se quita en su lugar
+  (`confirmar:<parte>`, `confirmarMano`) y «Rehacer con IA» no la pisa; un pendiente escrito a mano sale siempre; afuera
+  van tres líneas como mucho y adentro se ven todas, para poder quitar las de más; lo guardado el 10 nov que dice
+  «provisional» o «hipótesis» no sale; descartar un «por qué» por esa palabra no avisa que los niveles cambiaron; y la
+  grilla de la página ya no desborda en el celular con cuatro pestañas (pasaba también en la página de cada área).
+- Sin SQL: vive en el Json `contenido.resumenDeLaEscala` (`firmas`, `confirmar` y `avisos` (y `confirmarMano`) son opcionales en la lectura).

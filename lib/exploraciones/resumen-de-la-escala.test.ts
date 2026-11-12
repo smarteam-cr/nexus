@@ -16,6 +16,7 @@ import path from "node:path";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
+import { ArribaDeLaEscala } from "@/components/external/test/ArribaDeLaEscala";
 import ResumenDeLaEscalaVista from "@/components/external/test/ResumenDeLaEscalaVista";
 import { ajustarAlto } from "@/components/external/test/TextoEditableDeLaPagina";
 import { parseObject } from "@/lib/ai/section-schema";
@@ -26,6 +27,8 @@ import { firmaDelArea } from "./descripcion-de-la-escala";
 import { CambiosSchema, leerContenido, VALIDADOR_ESTRICTO } from "./esquemas";
 import {
   cifrasDeMas,
+  auditarElResumen,
+  avisosDelRecorrido,
   citaVerificada,
   concluyeDeMas,
   sinLaConclusion,
@@ -41,12 +44,16 @@ import {
   guiaDelEquipo,
   herramientasDeMas,
   juntarConLoEditado,
+  lecturaNuestra,
   leerElArreglo,
   leerElResumen,
   loQueHicimos,
   minutosDeLaReunion,
   NOTA_DE_LO_RESUMIDO,
   NOTA_DE_MEMORIA,
+  NOTA_DE_VARIOS_NUMEROS,
+  numerosDistintos,
+  numerosDeOtroDicho,
   pedidoDelArreglo,
   pedidoDelResumen,
   porqueDeRespaldo,
@@ -252,7 +259,8 @@ describe("1 · ninguna afirmación sin su cita", () => {
     expect(e.areas["1"].porque).toBeNull();
     expect(e.areas["3"].porque).toBeNull();
     expect(e.pendientes.map((p) => p.tipo)).toEqual(["sin-dato"]);
-    expect(e.entendimos.map((p) => p.texto)).toEqual(["Que cada asesor usa su propio celular."]);
+    // «¿Entendimos bien?» ya no se pide ni se lee (Elías, 11 nov).
+    expect(e.entendimos).toEqual([]);
     const descartes = e.descartados.join(" | ");
     for (const motivo of [/1800/, /no sale \(2\)/, /hubspot/, /contradicción sin sus dos citas/, /40/]) expect(descartes).toMatch(motivo);
   });
@@ -301,7 +309,7 @@ describe("1 · ninguna afirmación sin su cita", () => {
     expect(texto).toContain("[236] Emiley Calvo Jiménez: Digamos que 25 25 la mitad.");
     expect(texto).toContain("no es evidencia");
     const reglas = String(p.system);
-    for (const regla of [/palabra por palabra/, /no significa que no lo tengan/, /Una meta/, /períodos, poblaciones o canales/, /riesgo típico de la escala/, /No asumas herramientas/, /provisional/, /OPERATIVA/])
+    for (const regla of [/palabra por palabra/, /no significa que no lo tengan/, /Una meta/, /UNA CIFRA ES UN SOLO DATO/, /riesgo típico de la escala/, /No asumas herramientas/, /Nunca escribas «provisional»/, /CADA traspaso/, /no cuadran entre sí/, /LA VERACIDAD ES LO MÁS IMPORTANTE/])
       expect(reglas).toMatch(regla);
     expect(p.model).toBe("claude-sonnet-4-6");
     expect(guiaDelEquipo({ retos: [{ texto: "CRM lead-driven" }], metas: [{ que: "Bajar el churn", actual: "2,8 %" }], hubspotActual: "Usan un CRM sin nombre" })).toBe(
@@ -440,7 +448,7 @@ describe("2 · el cliente nunca ve las citas", () => {
     expect(json).toContain("14 de 25");
     for (const prohibido of ["Marco Salas", "Emiley", "Fernando", "Luis", "se nos van", "Exacto", "gmeet_servicio", "citas", "si no me equivoco"]) expect(json).not.toContain(prohibido);
     const adentro = resumenParaLaPagina(guardado2(), [VENTAS, SERVICIO], CHEQUEO, ENTORNO, { conCitas: true, porExplorar: POR_EXPLORAR });
-    const cs = adentro.tarjetas.find((t) => t.nombre === "Customer Success")!;
+    const cs = adentro.tarjetas.find((t) => t.areaId === "3")!.subequipos.find((x) => x.nombre === "Customer Success")!;
     expect(cs.cifras[1].citas?.[0].confirmo?.texto).toBe("Ajá. Exacto.");
     expect(adentro.negocio?.[0].lista.piezas[0].citas?.[0].hablante).toBe("Fernando Segura");
     // El formato 1, igual: afuera sin citas.
@@ -467,8 +475,10 @@ describe("2 · el cliente nunca ve las citas", () => {
         ],
       }),
     );
-    for (const parte of ["1 · Qué entendimos de tu negocio", "2 · Qué hicimos", "3 · Cómo funciona tu operación hoy", "4 · Qué encontramos por área", "5 · Qué falta validar", "¿Entendimos bien?"])
+    for (const parte of ["1 · Qué entendimos de tu negocio", "2 · Cómo funciona tu operación hoy", "3 · Qué encontramos por área", "4 · Qué falta validar", "sesiones contigo", "personas de tu equipo"])
       expect(html).toContain(parte);
+    // «¿Entendimos bien?» y «provisional» ya no salen; la sección «Qué hicimos» tampoco (sus cifras van arriba).
+    for (const fuera of ["¿Entendimos bien?", "provisional", "· Qué hicimos"]) expect(html).not.toContain(fuera);
     expect(html).toContain("Qué queda fuera");
     // Lo que no se habló dice que está pendiente, no se completa.
     expect(html).toContain("Lo vemos contigo.");
@@ -481,12 +491,12 @@ describe("2 · el cliente nunca ve las citas", () => {
     expect(html).toContain("Customer Success");
     expect(html).toContain("Lo que ya hace bien");
     expect(html).toContain("Se traba:");
-    // Ventas depende de una hipótesis: provisional.
-    expect(html).toContain("provisional");
-    // Marketing no tuvo sesiones: «por explorar», nunca un mal resultado.
+    // Marketing no tuvo sesiones: su pestaña y su tarjeta dicen «Por explorar», y no se abre.
     expect(html).toContain("Por explorar");
-    expect(html).toContain("Área sin explorar");
-    expect(html).toContain("no es un mal resultado");
+    expect(html).not.toContain('href="/external/escala/t?area=2"');
+    expect(html).toContain("Conversar con tu equipo de Marketing");
+    // Sin etiquetas técnicas en «Qué falta validar».
+    for (const etiqueta of ["Área sin explorar", "Hipótesis por validar", "Lo preguntamos, falta el dato"]) expect(html).not.toContain(etiqueta);
     for (const prohibido of ["Marco Salas", "Solo lo ves tú", "Lo que hoy se te escapa", "rs-rojo-icono"]) expect(html).not.toContain(prohibido);
   });
 });
@@ -540,24 +550,31 @@ describe("3 · el armado", () => {
     expect(nivelProvisional(SERVICIO, ["3.8"])).toBeNull();
     const p = resumenParaLaPagina(guardado2(), [VENTAS, SERVICIO], CHEQUEO, ENTORNO, { conCitas: false, porExplorar: POR_EXPLORAR });
     expect(p.areas[0].provisional).toEqual(["Aprendizaje de Ganadas y Perdidas"]);
-    expect(p.pendientes.find((x) => x.tipo === "hipotesis")?.texto).toBe("El nivel de Ventas (Deficiente) es provisional: depende de confirmar «Aprendizaje de Ganadas y Perdidas».");
-    // El «por qué» de respaldo lo dice, en vez de afirmar que la parte «no existe».
-    expect(porqueDeRespaldo(VENTAS, ["Aprendizaje de Ganadas y Perdidas"])).toBe("Es un nivel provisional: depende de «Aprendizaje de Ganadas y Perdidas», que todavía es una hipótesis por confirmar contigo.");
+    // Nunca «provisional» (Elías, 11 nov): lo que falta confirmar va como una línea de «Qué falta validar».
+    expect(p.pendientes.find((x) => x.tipo === "hipotesis")?.texto).toBe("Confirmar cómo trabaja hoy tu equipo en «Aprendizaje de Ganadas y Perdidas»; con eso terminamos de ubicar Ventas.");
+    expect(JSON.stringify(p)).not.toMatch(/es provisional|provisional:/);
+    // Con lo que escribió el agente para esa parte, sale eso.
+    const conTexto = { ...guardado2(), confirmar: { "1.8": "Confirmar cómo registran por qué ganan o pierden una venta; con eso terminamos de ubicar Ventas." } };
+    expect(resumenParaLaPagina(conTexto, [VENTAS, SERVICIO], CHEQUEO, ENTORNO, { conCitas: false, porExplorar: POR_EXPLORAR }).pendientes.find((x) => x.tipo === "hipotesis")?.texto).toMatch(/^Confirmar cómo registran/);
+    expect(porqueDeRespaldo(VENTAS, ["Aprendizaje de Ganadas y Perdidas"])).toBe("No llega a Inicial porque «Aprendizaje de Ganadas y Perdidas» sigue en Deficiente.");
   });
 
-  it("las tarjetas: una por área operativa, en el orden de los equipos; el «por qué» solo en la primera de su equipo", () => {
-    const p = resumenParaLaPagina(guardado2(), [VENTAS, SERVICIO, MARKETING], CHEQUEO, ENTORNO, { conCitas: false, porExplorar: POR_EXPLORAR });
-    // Ventas tuvo sesión pero el agente no le escribió tarjeta: sale igual, con su nivel. Marketing no tuvo sesión: no.
-    expect(p.tarjetas.map((t) => [t.nombre, t.areaNombre, t.conPorque])).toEqual([
-      ["Ventas", "Ventas", true],
-      ["Soporte", "Servicio", false],
-      ["Customer Success", "Servicio", false],
+  it("las tarjetas: una por equipo de la escala, en su orden, con sus subequipos adentro; el que no tuvo sesiones, «Por explorar»", () => {
+    const p = resumenParaLaPagina(guardado2(), [VENTAS, MARKETING, SERVICIO], CHEQUEO, ENTORNO, { conCitas: false, porExplorar: POR_EXPLORAR });
+    // Ventas tuvo sesión pero el agente no le escribió nada: sale igual, con su nivel. Marketing no tuvo sesión.
+    expect(p.tarjetas.map((t) => [t.nombre, t.porExplorar, t.subequipos.map((x) => x.nombre)])).toEqual([
+      ["Ventas", false, []],
+      ["Marketing", true, []],
+      ["Servicio", false, ["Soporte", "Customer Success"]],
     ]);
-    expect(p.tarjetas[1].falta).toMatch(/Cuántos casos/);
-    expect(p.tarjetas[2].cifras.map((c) => [c.cifra, c.estado])).toEqual([
+    const servicio = p.tarjetas[2];
+    expect(servicio.subequipos[0].falta).toMatch(/Cuántos casos/);
+    expect(servicio.subequipos[1].cifras.map((c) => [c.cifra, c.estado])).toEqual([
       ["2,8 % mensual", "declarado"],
       ["14 de 25", "estimado"],
     ]);
+    expect(p.sinExplorar).toEqual(["2"]);
+    // Tres líneas como mucho: el equipo sin explorar, lo que falta confirmar de Ventas y un pendiente escrito.
     expect(p.pendientes.map((x) => x.tipo)).toEqual(["no-explorada", "hipotesis", "sin-dato"]);
     expect(p.formato).toBe(2);
   });
@@ -585,7 +602,7 @@ describe("3 · el armado", () => {
   it("sin Resumen armado, la página tiene cada equipo con nivel y nada más", () => {
     const vacio = resumenParaLaPagina(null, [VENTAS, SERVICIO], CHEQUEO, ENTORNO, { conCitas: false });
     expect(vacio).toMatchObject({ at: null, hicimos: null, negocio: null, recorrido: null, datosRojos: [], entendimos: [], pendientes: [] });
-    expect(vacio.tarjetas.map((t) => t.nombre)).toEqual(["Ventas"]);
+    expect(vacio.tarjetas.map((t) => [t.nombre, t.subequipos.length])).toEqual([["Ventas", 0]]);
     expect(vacio.areas[0].porque).toBe(porqueDeRespaldo(VENTAS));
   });
 
@@ -595,9 +612,9 @@ describe("3 · el armado", () => {
     expect(p.negocio).toBeNull();
     expect(p.recorrido).toBeNull();
     expect(p.tarjetas.map((t) => t.nombre)).toEqual(["Ventas", "Servicio"]);
-    expect(p.tarjetas[0].retos.piezas.map((x) => [x.texto, x.clave])).toEqual([["Cada asesor llama desde su celular.", "hallazgo:1:h1-1"]]);
+    expect(p.tarjetas[0].subequipos[0].retos.piezas.map((x) => [x.texto, x.clave])).toEqual([["Cada asesor llama desde su celular.", "hallazgo:1:h1-1"]]);
     // «14 de 25» lo resumió Marco: en el formato 1 también sale como estimada.
-    expect(p.tarjetas[1].cifras.map((c) => [c.cifra, c.estado, c.clave])).toEqual([["14 de 25", "estimado", "rojo:r1"]]);
+    expect(p.tarjetas[1].subequipos[0].cifras.map((c) => [c.cifra, c.estado, c.clave])).toEqual([["14 de 25", "estimado", "rojo:r1"]]);
     expect(p.datosRojos.map((d) => d.cifra)).toEqual(["14 de 25"]);
     expect(p.pendientes.map((x) => [x.tipo, x.clave])).toEqual([["por-confirmar", "falta:f1"]]);
     const html = renderToStaticMarkup(createElement(ResumenDeLaEscalaVista, { resumen: p, empresa: "Centauro Solutions", pestanas: [{ id: "resumen", nombre: "Resumen", href: "#" }] }));
@@ -656,7 +673,7 @@ describe("4 · se edita en su lugar y «Rehacer con IA» no pisa lo escrito", ()
     expect(JSON.stringify(afuera)).not.toContain("20 de 25");
     expect(JSON.stringify(afuera)).not.toContain("noSale");
     const adentro = resumenParaLaPagina(r, [VENTAS, SERVICIO], CHEQUEO, ENTORNO, { conCitas: true });
-    const c = adentro.tarjetas.find((t) => t.nombre === "Customer Success")!.cifras[1];
+    const c = adentro.tarjetas.find((t) => t.areaId === "3")!.subequipos[1].cifras[1];
     expect(c).toMatchObject({ cifra: "20 de 25", fecha: null });
     expect(c.noSale).toMatch(/No sale al cliente: «20» no está/);
     const html = renderToStaticMarkup(
@@ -671,10 +688,10 @@ describe("4 · se edita en su lugar y «Rehacer con IA» no pisa lo escrito", ()
     expect(html).toContain("TENIA:1");
     // Una nota con un número que la cita no dice también la saca.
     const conNota = ok(editarElResumen(guardado2(), "op:o2:cifra:c1:nota", "Sobre 900 clientes.", o));
-    expect(resumenParaLaPagina(conNota, [VENTAS, SERVICIO], CHEQUEO, ENTORNO, { conCitas: false }).tarjetas.find((t) => t.nombre === "Customer Success")!.cifras.map((x) => x.cifra)).toEqual(["14 de 25"]);
+    expect(resumenParaLaPagina(conNota, [VENTAS, SERVICIO], CHEQUEO, ENTORNO, { conCitas: false }).tarjetas.find((t) => t.areaId === "3")!.subequipos[1].cifras.map((x) => x.cifra)).toEqual(["14 de 25"]);
     // Corregida con lo que dijo la empresa, vuelve a salir.
     const corregida = ok(editarElResumen(r, "op:o2:cifra:c2:cifra", "14 de 25", o));
-    expect(resumenParaLaPagina(corregida, [VENTAS, SERVICIO], CHEQUEO, ENTORNO, { conCitas: false }).tarjetas.find((t) => t.nombre === "Customer Success")!.cifras).toHaveLength(2);
+    expect(resumenParaLaPagina(corregida, [VENTAS, SERVICIO], CHEQUEO, ENTORNO, { conCitas: false }).tarjetas.find((t) => t.areaId === "3")!.subequipos[1].cifras).toHaveLength(2);
   });
 
   it("al rehacer: lo de la persona se queda en su lugar, lo quitado no vuelve, y lo demás es lo nuevo", () => {
@@ -713,8 +730,8 @@ describe("4 · se edita en su lugar y «Rehacer con IA» no pisa lo escrito", ()
     expect(j.areas["1"].porque?.texto).toBe("Su porqué.");
     expect(j.entendimos.map((p) => p.texto)).toContain("Que Marco lo escribió.");
     const p = resumenParaLaPagina(j, [VENTAS, SERVICIO], CHEQUEO, ENTORNO, { conCitas: false });
-    expect(p.tarjetas.find((t) => t.areaId === "1")?.retos.piezas.map((x) => x.texto)).toEqual(["Cada asesor llama desde su propio celular."]);
-    expect(p.tarjetas.find((t) => t.areaId === "1")?.nombre).toBe("Ventas");
+    expect(p.tarjetas.find((t) => t.areaId === "1")?.subequipos[0].retos.piezas.map((x) => x.texto)).toEqual(["Cada asesor llama desde su propio celular."]);
+    expect(p.tarjetas.find((t) => t.areaId === "1")?.subequipos[0].nombre).toBe("Ventas");
   });
 
   it("formato 1: al rehacer, lo de la persona se queda (también si choca de id o repite la cifra)", () => {
@@ -977,12 +994,15 @@ describe("10 · lo que mostró el simulacro de Centauro (10 nov)", () => {
     expect(textoValido("El presupuesto no alcanza.", 100, o, "no tenemos presupuesto").ok).toBe(false);
   });
 
-  it("un equipo sin sesiones no lleva tarjeta aunque el agente le haya escrito una (Marketing en Centauro)", () => {
+  it("un equipo sin sesiones no lleva contenido aunque el agente le haya escrito algo: sale «Por explorar» (Marketing en Centauro)", () => {
     const g = guardado2();
     g.operativas = [...g.operativas!, { id: "o3", nombre: "Marketing", areaId: "2", organizacion: [{ id: "g1", texto: "No se hizo el diagnóstico.", citas: [CITA_LUIS] }], bien: [], frena: [], retos: [], cifras: [], falta: null }];
     const p = resumenParaLaPagina(g, [VENTAS, SERVICIO, MARKETING], CHEQUEO, ENTORNO, { conCitas: false, porExplorar: POR_EXPLORAR });
-    expect(p.tarjetas.map((t) => t.nombre)).not.toContain("Marketing");
+    expect(p.tarjetas.find((t) => t.nombre === "Marketing")).toMatchObject({ porExplorar: true, subequipos: [], nivel: null });
     expect(p.pendientes[0]).toMatchObject({ tipo: "no-explorada", areaNombre: "Marketing" });
+    // Lo que escribió el agente de Marketing en «Qué falta validar» no se repite (salía dos veces).
+    const dos = { ...g, pendientes: [{ id: "p3", tipo: "sin-dato" as const, texto: "No hubo reunión con el equipo de Marketing.", areaId: null, citas: [] }] };
+    expect(resumenParaLaPagina(dos, [VENTAS, SERVICIO, MARKETING], CHEQUEO, ENTORNO, { conCitas: false }).pendientes.filter((x) => /Marketing/.test(x.texto))).toHaveLength(1);
   });
 });
 
@@ -1021,7 +1041,6 @@ describe("12 · el quinto simulacro de Centauro (10 nov)", () => {
     );
     // La cola que concluye se corta: queda el dato, estimado y por validar.
     expect(e.operativas[0].cifras.map((c) => [c.cifra, c.texto, c.estado])).toEqual([["14 de 25", "De 25 clientes que captas, se van 14.", "estimado"]]);
-    expect(e.entendimos.map((p) => p.texto)).toEqual(["Que cada asesor usa su propio celular."]);
     // Si la conclusión no está en una cola que se pueda cortar, se pide corregida.
     const otra = leerElResumen(
       responde({ areas: [area({ cifras: [{ cifra: "14 de 25", texto: "Tu cartera crece poco: captas 25 y se van 14.", estado: "estimado", nota: null, dimension: null, citas: [C("R2", 170, "eran 25 clientes y se nos van 14")] }] })] }),
@@ -1100,5 +1119,245 @@ describe("15 · lo que encontró la revisión del 10 nov", () => {
 
   it("la guía del agente no lleva las casillas internas (Particularidades)", () => {
     expect(guiaDelEquipo({ particularidades: ["La compra la aprueba la casa matriz"], retos: [{ texto: "CRM lead-driven" }] })).not.toContain("casa matriz");
+  });
+});
+
+describe("16 · la segunda vuelta: lo que vio Elías en lo guardado de Centauro (11 nov)", () => {
+  const CITA_TICKETS = { ...CITA_EMILEY, turno: 229, texto: "en WhatsApp son como de de 400 a 500 porque correo son 13. Entonces le para llegar a los 1008 sí son como 500" };
+
+  it("una cifra es un solo dato: el 2,8 % y «14 de 25» no se funden; «25 de 50» con su meta sí vale", () => {
+    expect(numerosDeOtroDicho("~2,8 % al mes", "Tu deserción ronda el 2,8 %: se van 14 frente a 25 que captas.", [CITA_EMILEY, CITA])).toEqual(["14·", "25·"]);
+    expect(numerosDeOtroDicho("25 de 50", "Hoy haces 25 de las 50 reuniones semanales.", [{ texto: "Digamos que 25 25 la mitad." }, { texto: "son 50 a la semana en grupal." }])).toEqual([]);
+    const e = leerElResumen(
+      responde({ areas: [area({ cifras: [{ cifra: "2,8 % al mes", texto: "Se van 14 clientes frente a 25 que captas.", estado: "declarado", nota: null, dimension: null, citas: [C("R2", 161, "si tenemos algo como un 2,8% si no me equivoco, por ahí."), C("R2", 170, "eran 25 clientes y se nos van 14")] }] })] }),
+      CTX,
+      REGLAS,
+    );
+    expect(e.operativas[0].cifras).toEqual([]);
+    expect(e.porArreglar[0].problemas?.join(" ")).toMatch(/un solo dato/);
+  });
+
+  it("una lectura nuestra («evitables») no se presenta como dicha por ellos", () => {
+    expect(lecturaNuestra("200 tickets evitables al mes", "Unas 200 por ahí.")).toBe("evitables");
+    expect(lecturaNuestra("200 consultas de uso al mes", "Unas 200 por ahí.")).toBeNull();
+    expect(lecturaNuestra("Son casos evitables", "esos casos son evitables con un manual")).toBeNull();
+  });
+
+  it("un total que se cuela en el texto de una cifra se pide corregido («400 a 500… un total de 1.008»)", () => {
+    const e = leerElResumen(
+      responde({ areas: [area({ nombre: "Soporte", cifras: [{ cifra: "400 a 500 al mes", texto: "Llegan entre 400 y 500 por WhatsApp, un total de 1008 al mes.", estado: "declarado", nota: null, dimension: null, citas: [C("R2", 229, "en WhatsApp son como de de 400 a 500 porque correo son 13. Entonces le para llegar a los 1008 sí son como 500")] }] })] }),
+      { ...CTX, reuniones: [R1, { ...R2, turnos: [...R2.turnos, { n: 229, hablante: "Emiley Calvo Jiménez", texto: CITA_TICKETS.texto }] }] },
+      REGLAS,
+    );
+    expect(e.operativas[0].cifras).toEqual([]);
+    expect(e.porArreglar[0].problemas?.join(" ")).toMatch(/total/);
+  });
+
+  it("si un equipo que tuvo reunión no está en ninguna etapa del recorrido, se avisa adentro", () => {
+    const ctx = { areas: [{ id: "1", nombre: "Ventas" }, { id: "3", nombre: "Servicio" }], reuniones: [{ areaId: "1" }, { areaId: "3" }] };
+    const soloVentas = [{ nombre: "Captación", quien: "Ventas" }, { nombre: "Cierre", quien: "Ventas" }];
+    expect(avisosDelRecorrido(soloVentas, [], ctx)).toEqual(["El recorrido no tiene ninguna etapa de Servicio, y hubo una reunión con ese equipo: revísalo o rehaz el Resumen."]);
+    // Se reconoce por un subequipo («Soporte» es de Servicio).
+    expect(avisosDelRecorrido([...soloVentas, { nombre: "Atención", quien: "Soporte" }], [{ nombre: "Soporte", areaId: "3" }], ctx)).toEqual([]);
+  });
+
+  it("la auditoría relee lo guardado y encuentra lo que vio Elías", () => {
+    const g = guardado2();
+    g.operativas = [
+      { ...CS, cifras: [{ id: "c1", cifra: "~2,8 % al mes", texto: "Tu deserción ronda el 2,8 %: se van 14 frente a 25 que captas.", estado: "declarado", nota: null, dimensionId: null, citas: [CITA_EMILEY, CITA] }] },
+      { ...SOPORTE, cifras: [{ id: "c2", cifra: "~200 tickets evitables", texto: "Unas 200 consultas evitables.", estado: "declarado", nota: null, dimensionId: null, citas: [{ ...CITA_EMILEY, turno: 1009, texto: "Unas 200 por ahí." }] }] },
+    ];
+    const reuniones = [{ ...R2, turnos: [...R2.turnos, { n: 1009, hablante: "Emiley Calvo Jiménez", texto: "Esas pueden ser también aproximadamente, ¿qué? Unas 200 por ahí." }] }];
+    const problemas = auditarElResumen(g, reuniones, [{ id: "1", nombre: "Ventas" }, { id: "3", nombre: "Servicio" }]).map((x) => `${x.donde}: ${x.problema}`).join(" | ");
+    expect(problemas).toMatch(/2,8 %.*un solo dato/);
+    expect(problemas).toMatch(/evitables/);
+  });
+
+  it("un «por qué» guardado que dice «provisional» no sale: va el de los datos", () => {
+    const g = guardado2();
+    g.areas["1"] = { hallazgos: [], porque: { texto: "Ventas está en Deficiente. Ese nivel es provisional porque no se exploró.", firma: firmaDelArea(CHEQUEO, "1", ENTORNO) } };
+    const p = resumenParaLaPagina(g, [VENTAS, SERVICIO], CHEQUEO, ENTORNO, { conCitas: false });
+    expect(p.areas[0]).toMatchObject({ porque: porqueDeRespaldo(VENTAS), origenDelPorque: "respaldo" });
+  });
+
+  it("la escala cambió desde el Resumen: adentro se avisa (compara la firma de los niveles); afuera, nada", () => {
+    const g = { ...guardado2(), firmas: { "1": firmaDelArea(CHEQUEO, "1", ENTORNO) } };
+    expect(resumenParaLaPagina(g, [VENTAS], CHEQUEO, ENTORNO, { conCitas: true }).escalaCambio).toBe(false);
+    const otro = { ...CHEQUEO, "1.8": { nivel: "I", fuente: "reunion" } } as unknown as typeof CHEQUEO;
+    expect(resumenParaLaPagina(g, [VENTAS], otro, ENTORNO, { conCitas: true }).escalaCambio).toBe(true);
+    expect(resumenParaLaPagina(g, [VENTAS], otro, ENTORNO, { conCitas: false }).escalaCambio).toBeUndefined();
+  });
+
+  it("«Qué falta validar» tiene tres líneas como mucho, sin repetir el equipo sin explorar; lo escrito a mano va siempre", () => {
+    const g = guardado2();
+    g.pendientes = [
+      { id: "p1", tipo: "sin-dato", texto: "Confirmar cuántos casos recibe Soporte al mes en total.", areaId: "3", citas: [] },
+      { id: "p2", tipo: "hipotesis", texto: "Confirmar si la extranet puede enviar datos al CRM.", areaId: "3", citas: [] },
+      { id: "p3", tipo: "sin-dato", texto: "Lo escribió Marco.", areaId: null, citas: [], mano: true },
+    ];
+    const p = resumenParaLaPagina(g, [VENTAS, SERVICIO, MARKETING], CHEQUEO, ENTORNO, { conCitas: false, porExplorar: POR_EXPLORAR });
+    expect(p.pendientes.map((x) => x.id)).toEqual(["x2", "h1", "p1", "p3"]);
+  });
+
+  it("la pestaña de un equipo sin sesiones dice «Por explorar» y afuera no es un enlace", () => {
+    const html = renderToStaticMarkup(
+      createElement(ArribaDeLaEscala, {
+        actual: "resumen",
+        pestanas: [
+          { id: "resumen", nombre: "Resumen", href: "/r" },
+          { id: "2", nombre: "Marketing", href: "/r?area=2", porExplorar: true },
+        ],
+      }),
+    );
+    expect(html).toContain("Por explorar");
+    expect(html).not.toContain('href="/r?area=2"');
+  });
+
+  it("el agente escribe qué falta confirmar de cada parte por explorar, sin «provisional»", () => {
+    const e = leerElResumen(
+      responde({
+        areas: [area({ retos: [{ texto: "El seguimiento de cada hospedaje se hace a mano, uno por uno.", dimension: null, citas: [C("R2", 300, "yo reviso uno por uno los accesos y las reservas de cada hospedaje")] }] })],
+        confirmar: [
+          { dimension: "1.8", texto: "Confirmar cómo registran por qué ganan o pierden una venta; con eso terminamos de ubicar Ventas." },
+          { dimension: "1.2", texto: "Esta parte no está por explorar." },
+        ],
+        pendientes: [{ tipo: "hipotesis", area: "1", texto: "El nivel de Ventas es provisional.", citas: [] }],
+      }),
+      CTX,
+      REGLAS,
+    );
+    expect(e.confirmar).toEqual({ "1.8": "Confirmar cómo registran por qué ganan o pierden una venta; con eso terminamos de ubicar Ventas." });
+    expect(e.pendientes).toEqual([]);
+  });
+});
+
+describe("17 · el recorrido no pierde etapas por algo de forma, y una cita con varios números no es «declarada»", () => {
+  const LE = { ctx: CTX, personas: REGLAS.personas, firmas: REGLAS.firmas };
+  const usage = { input_tokens: 10, output_tokens: 5 } as never;
+  const resp = (x: unknown) => ({ ...responde(x), usage, stop_reason: "end_turn" as const });
+
+  it("una etapa con su cita que dice «tarifa» sin que la cita lo diga se pide corregida y vuelve a su lugar", async () => {
+    const principal = {
+      areas: [area({ retos: [{ texto: "El seguimiento de cada hospedaje se hace a mano, uno por uno.", dimension: null, citas: [C("R2", 300, "yo reviso uno por uno los accesos y las reservas de cada hospedaje")] }] })],
+      recorrido: [
+        { etapa: "Venta", quien: "Ventas", texto: "Cada asesor fija la tarifa y llama desde su celular.", friccion: null, citas: [C("R1", 369, "Cada asesor tiene su propio celular, cada uno con un número distinto.")] },
+        { etapa: "Acompañamiento", quien: "Customer Success", texto: "Se revisa cada hospedaje en los primeros tres meses.", friccion: null, citas: [C("R2", 300, "en los primeros tres meses yo reviso uno por uno los accesos y las reservas")] },
+      ],
+    };
+    const pedidos: string[] = [];
+    const respuestas = [resp(principal), resp({ etapas: [{ i: 0, etapa: "Venta", texto: "Cada asesor llama desde su propio celular.", friccion: null }] })];
+    const e = await escribirElResumen(LE, async (p) => {
+      pedidos.push(String(p.system).slice(0, 30));
+      return respuestas.shift()!;
+    });
+    expect(pedidos[1]).toMatch(/Corriges etapas/);
+    expect(e.recorrido.map((x) => [x.id, x.nombre])).toEqual([
+      ["s1", "Venta"],
+      ["s2", "Acompañamiento"],
+    ]);
+    expect(e.recorrido[0].texto).toBe("Cada asesor llama desde su propio celular.");
+  });
+
+  it("una cita que dice tres números o más juntos no sostiene una cifra «declarada»: va «por confirmar»", () => {
+    const rota = { ...CITA_EMILEY, turno: 229, texto: "en WhatsApp son como de de 400 a 500 porque correo son 13. Entonces le para llegar a los 1008 sí son como 500" };
+    expect(estadoDeLaCifra({ estado: "declarado", cifra: "~1.008 al mes", nota: null, citas: [rota] })).toEqual({ estado: "pendiente", nota: NOTA_DE_VARIOS_NUMEROS });
+    expect(estadoDeLaCifra({ estado: "declarado", cifra: "180 a 200 al mes", nota: null, citas: [{ ...CITA_EMILEY, texto: "mes a mes entre 180 y 200 leads al mes" }] }).estado).toBe("declarado");
+  });
+});
+
+describe("18 · quién lo dijo no le llega al cliente (11 nov)", () => {
+  it("un texto que cuenta quién dijo algo no pasa; uno que dice lo que pasa, sí", () => {
+    const o = { personas: [] };
+    expect(textoValido("La supervisora identificó que soporte pasó de 1500 tickets a 10000.", 200, o)).toMatchObject({ ok: false });
+    expect(textoValido("El responsable mencionó que no hay tickets.", 200, o)).toMatchObject({ ok: false });
+    expect(textoValido("Soporte pasó de 1500 tickets a 10000 en la bandeja.", 200, o).ok).toBe(true);
+  });
+});
+
+describe("19 · lo que encontró la revisión del 11 nov", () => {
+  const o = { firmaDe: () => "f", areas: new Set(["1", "2", "3"]), en: "2026-11-11T10:00:00.000Z" };
+  const ok = (r: ReturnType<typeof editarElResumen>) => {
+    if (!r.ok) throw new Error(r.error);
+    return r.resumen;
+  };
+
+  it("una lectura nuestra no pasa porque la cita diga «podría»: tiene que decir la misma palabra", () => {
+    expect(lecturaNuestra("Se podrían evitar unos 200 tickets al mes.", "no podría decirte el dato exacto, pero entran 200")).toBe("podrian evitar");
+    expect(lecturaNuestra("200 tickets recuperables", "eso se puede recuperar")).toBe("recuperables");
+    expect(lecturaNuestra("Son casos evitables", "esos son evitables")).toBeNull();
+  });
+
+  it("«quién lo dijo» es un rol que dice algo; una frase con «reportó» sin nadie que hable pasa", () => {
+    const o2 = { personas: [] };
+    expect(textoValido("El cliente reportó la falla y Soporte la atiende por WhatsApp.", 200, o2).ok).toBe(true);
+    expect(textoValido("En una reunión se dijo que son 25 y en otra que son 20.", 200, o2).ok).toBe(true);
+    expect(textoValido("La supervisora identificó que soporte pasó de 1500 tickets a 10000.", 200, o2).ok).toBe(false);
+  });
+
+  it("los tres números juntos no cuentan un año ni parten un decimal, y una cifra corregida a mano queda como la dejó", () => {
+    expect(numerosDistintos("en 2025 captamos 25 clientes y se nos fueron 14")).toBe(2);
+    expect(numerosDistintos("algo como un 2,8% si no me equivoco")).toBe(1);
+    const cita = { ...CITA_EMILEY, texto: "en 2025 captamos 25 clientes y se nos fueron 14" };
+    expect(estadoDeLaCifra({ estado: "declarado", cifra: "14 de 25", nota: null, citas: [cita] }).estado).toBe("declarado");
+    const rota = { ...CITA_EMILEY, texto: "en WhatsApp son como de de 400 a 500 porque correo son 13. Entonces le para llegar a los 1008" };
+    expect(estadoDeLaCifra({ estado: "declarado", cifra: "~1008 al mes", nota: "Lo confirmó el equipo.", citas: [rota], mano: true })).toEqual({ estado: "declarado", nota: "Lo confirmó el equipo." });
+  });
+
+  it("una nota que cuenta quién lo dijo se va sola: la cifra queda", () => {
+    const e = leerElResumen(
+      responde({ areas: [area({ cifras: [{ cifra: "2,8 % al mes", texto: "De tus clientes se van cada mes.", estado: "declarado", nota: "La supervisora lo aporta como aproximado", dimension: null, citas: [C("R2", 161, "si tenemos algo como un 2,8% si no me equivoco, por ahí.")] }], retos: [{ texto: "El seguimiento de cada hospedaje se hace a mano, uno por uno.", dimension: null, citas: [C("R2", 300, "yo reviso uno por uno los accesos y las reservas de cada hospedaje")] }] })] }),
+      CTX,
+      REGLAS,
+    );
+    expect(e.operativas[0].cifras[0]).toMatchObject({ cifra: "2,8 % al mes", nota: NOTA_DE_MEMORIA });
+  });
+
+  it("la línea de «confirmar» se edita y se quita, y «Rehacer con IA» no la pisa", () => {
+    const g = { ...guardado2(), confirmar: { "1.8": "Confirmar cómo registran por qué ganan o pierden una venta; con eso terminamos de ubicar Ventas." } };
+    const pagina = (x: ResumenGuardado) => resumenParaLaPagina(x, [VENTAS, SERVICIO], CHEQUEO, ENTORNO, { conCitas: true, porExplorar: POR_EXPLORAR });
+    expect(pagina(g).pendientes.find((p) => p.tipo === "hipotesis")?.clave).toBe("confirmar:1.8");
+    const cambiada = ok(editarElResumen(g, "confirmar:1.8", "Confirmar dónde anotan las ventas perdidas.", o));
+    expect(pagina(cambiada).pendientes.find((p) => p.tipo === "hipotesis")?.texto).toBe("Confirmar dónde anotan las ventas perdidas.");
+    const quitada = ok(editarElResumen(g, "confirmar:1.8", null, o));
+    expect(pagina(quitada).pendientes.find((p) => p.tipo === "hipotesis")).toBeUndefined();
+    const rehecho = juntarConLoEditado({ ...guardado2(), confirmar: { "1.8": "Otra cosa del agente." } }, quitada);
+    expect(pagina(rehecho).pendientes.find((p) => p.tipo === "hipotesis")).toBeUndefined();
+    expect(leerContenido({ resumenDeLaEscala: quitada }).resumenDeLaEscala).toMatchObject({ confirmar: { "1.8": "" }, confirmarMano: ["1.8"] });
+  });
+
+  it("un pendiente escrito a mano que nombra a un equipo sin sesiones sale igual; lo viejo con «provisional», no", () => {
+    const g = guardado2();
+    g.pendientes = [
+      { id: "p1", tipo: "sin-dato", texto: "Agendar la sesión con Marketing.", areaId: null, citas: [], mano: true },
+      { id: "p2", tipo: "hipotesis", texto: "El nivel de Ventas es provisional hasta confirmar.", areaId: "1", citas: [] },
+    ];
+    const p = resumenParaLaPagina(g, [VENTAS, SERVICIO, MARKETING], CHEQUEO, ENTORNO, { conCitas: false, porExplorar: POR_EXPLORAR });
+    expect(p.pendientes.map((x) => x.id)).toContain("p1");
+    expect(p.pendientes.map((x) => x.id)).not.toContain("p2");
+  });
+
+  it("afuera, tres líneas como mucho (más lo escrito a mano); adentro se ve todo para poder quitarlo", () => {
+    const g = guardado2();
+    g.pendientes = [1, 2, 3].map((i) => ({ id: `p${i}`, tipo: "sin-dato" as const, texto: `Confirmar el dato número ${i}.`, areaId: null, citas: [] }));
+    const afuera = resumenParaLaPagina(g, [VENTAS, SERVICIO, MARKETING], CHEQUEO, ENTORNO, { conCitas: false, porExplorar: POR_EXPLORAR });
+    const adentro = resumenParaLaPagina(g, [VENTAS, SERVICIO, MARKETING], CHEQUEO, ENTORNO, { conCitas: true, porExplorar: POR_EXPLORAR });
+    expect(afuera.pendientes).toHaveLength(3);
+    expect(adentro.pendientes).toHaveLength(5);
+  });
+
+  it("descartar un «por qué» por decir «provisional» no avisa que los niveles cambiaron", () => {
+    const g = guardado2();
+    g.areas["1"] = { hallazgos: [], porque: { texto: "Ese nivel es provisional.", firma: firmaDelArea(CHEQUEO, "1", ENTORNO) } };
+    expect(resumenParaLaPagina(g, [VENTAS], CHEQUEO, ENTORNO, { conCitas: true }).areas[0]).toMatchObject({ origenDelPorque: "respaldo", porqueViejo: false });
+  });
+
+  it("la página pública no abre la pestaña de un equipo sin sesiones, tampoco con ?area=", () => {
+    const pagina = fs.readFileSync(path.join(RAIZ, "app/external/escala/[token]/page.tsx"), "utf8");
+    expect(pagina).toMatch(/area !== PESTANA_DEL_RESUMEN && !sinExplorar\.has\(area\)/);
+  });
+
+  it("la firma de los niveles sobrevive a guardar y volver a leer", () => {
+    const g = { ...guardado2(), firmas: { "1": "firma" }, avisos: ["El recorrido no tiene ninguna etapa de Servicio."] };
+    expect(leerContenido({ resumenDeLaEscala: g }).resumenDeLaEscala).toMatchObject({ firmas: { "1": "firma" }, avisos: g.avisos });
   });
 });

@@ -1053,6 +1053,11 @@ export function leerResumenGuardado(raw: unknown): ResumenGuardado | undefined {
           recorrido: cadaUno(r.recorrido, EtapaSchema, 40),
           operativas: (Array.isArray(r.operativas) ? r.operativas : []).flatMap((x) => leerOperativa(x) ?? []).slice(0, 20),
           pendientes: cadaUno(r.pendientes, PendienteSchema, 40) as NonNullable<ResumenGuardado["pendientes"]>,
+          // Del 11 nov: la firma de los niveles al armarlo, lo que falta confirmar por parte y los avisos internos.
+          ...(esObjeto(r.firmas) ? { firmas: registroValido(r.firmas, ID_AREA, z.string().max(4000)) } : {}),
+          ...(esObjeto(r.confirmar) ? { confirmar: registroValido(r.confirmar, ID_DIMENSION, z.string().max(TOPE_A_MANO)) } : {}),
+          ...(Array.isArray(r.avisos) ? { avisos: cadaUno(r.avisos, z.string().max(600), 20) } : {}),
+          ...(Array.isArray(r.confirmarMano) ? { confirmarMano: cadaUno(r.confirmarMano, ID_DIMENSION, 40) } : {}),
         }
       : {};
   return {
