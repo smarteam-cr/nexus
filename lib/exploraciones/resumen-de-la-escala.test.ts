@@ -1199,7 +1199,7 @@ describe("16 · la segunda vuelta: lo que vio Elías en lo guardado de Centauro 
     expect(p.pendientes.map((x) => x.id)).toEqual(["x2", "h1", "p1", "p3"]);
   });
 
-  it("la pestaña de un equipo sin sesiones dice «Por explorar» y afuera no es un enlace", () => {
+  it("la pestaña de un equipo sin sesiones solo se ve deshabilitada (sin «Por explorar») y afuera no es un enlace", () => {
     const html = renderToStaticMarkup(
       createElement(ArribaDeLaEscala, {
         actual: "resumen",
@@ -1209,7 +1209,8 @@ describe("16 · la segunda vuelta: lo que vio Elías en lo guardado de Centauro 
         ],
       }),
     );
-    expect(html).toContain("Por explorar");
+    expect(html).not.toContain("Por explorar");
+    expect(html).toContain('aria-disabled="true"');
     expect(html).not.toContain('href="/r?area=2"');
   });
 
