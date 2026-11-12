@@ -14689,3 +14689,34 @@ Sistema 2, «Nexus · interfaz interna», se descartó): cambian el contenido, e
   «provisional» o «hipótesis» no sale; descartar un «por qué» por esa palabra no avisa que los niveles cambiaron; y la
   grilla de la página ya no desborda en el celular con cuatro pestañas (pasaba también en la página de cada área).
 - Sin SQL: vive en el Json `contenido.resumenDeLaEscala` (`firmas`, `confirmar` y `avisos` (y `confirmarMano`) son opcionales en la lectura).
+
+## La escala de una empresa en el Sistema 2 (2026-11-12)
+
+Elías aprobó llevar el Resumen y la página de cada área al Sistema 2 («Nexus · interfaz interna», la línea V3), con el
+artefacto «Escala de Centauro · Sistema 2» como medida. Lo aplica `.rd-s2` en `components/external/test/resultado.css`.
+
+- **Solo la escala de una empresa.** `.rd-s2` va en el Resumen (`ResumenDeLaEscalaVista`) y en `ResultadoDelTestVista`
+  cuando trae `deLaEscala`. El resultado del test público y su PDF comparten el componente y no cambian: sin
+  `deLaEscala` no hay `.rd-s2`, ni logo de la empresa, ni título del radar, ni lo que mide cada capa (hay prueba).
+- **Lo que cambia a la vista:** arriba, un bloque con degradado (el único de la página) con la empresa, el título, el
+  nivel o las cifras; los números grandes en letra fina azul tinta; tarjetas de 20 px; el radar en su propia tarjeta con
+  «Las N partes de <área>»; cada capa dice qué mide; los riesgos llevan su parte en un chip gris; los casos, «↗» antes de
+  lo que suben. El dibujo del radar es el de siempre (`RadarDeUnaEmpresa`, que comparten otras pantallas).
+- **Los ajustes de Elías al aprobarlo:**
+  - la pestaña de un equipo sin sesiones se ve más apagada y va siempre al final (`enSuOrden`). Mostrarla o no al
+    compartir ya lo decide «Acceso» › «Qué equipos ve»: desmarcar el equipo lo saca de la página entera (pestaña y
+    tarjeta), así que no hizo falta otra opción. Ahí, un equipo elegido sin sesiones ahora lo dice;
+  - las cuatro listas de un equipo (cómo está organizado, lo que hace bien, lo que le impide rendir más y los retos) van
+    alineadas: cada marca en la misma columna de 20 px y el texto a 28 px. «Lo que le impide rendir más» no lleva fondo;
+  - «Por confirmar» va sin «?» en todos sus chips, y sin «Lo vemos contigo.» al lado;
+  - el título del Resumen es «Qué entendimos del negocio», con los atajos justo debajo (bajan suave hasta su parte; con
+    «reducir movimiento», directo) y después las tres cifras. La parte 1 pasa a «Tu negocio» para no repetirlo;
+  - el logo de la ficha del cliente (`Client.logoUrl`, el bucket público que ya sirven el kickoff y el cronograma)
+    reemplaza al círculo con la inicial, entero y sin deformarse. Solo una dirección https (`logoQueSeSirve`); sin logo,
+    el círculo. `logoScale` no se usa aquí: el logo entra en el alto fijo del chip.
+- **Rehacer con IA desde la consola:** `scripts/simular-resumen-de-la-escala.ts --guardar` llama a la misma función que el
+  botón (`generarElResumenDeLaEscala`). Sin `--apply` dice qué haría y no llama a la IA; con `--apply` y
+  `ALLOW_PROD_WRITE=1` respalda `ExploracionDeVenta`, lo arma, lo guarda y audita lo guardado.
+- **Lo que no queda garantizado:** cómo se ve un logo muy alto o casi cuadrado (se probó con uno ancho); la página
+  interna también lleva el Sistema 2 (es la misma página), pero sin el desplazamiento suave, para no cambiar cómo se
+  mueve el resto de Nexus.

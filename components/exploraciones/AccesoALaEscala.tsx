@@ -11,6 +11,8 @@
  * enlace ya enviado no suma áreas solo); las demás se suman con un clic. Desde el 8 nov un área sin nada usado también
  * se puede elegir: la página la muestra «En medición» (Elías: «también debería poder aparecer»). La elección vive SOLO
  * dentro de «Acceso»: el botón «Qué ve el cliente» que la repetía al lado se quitó el 9 nov (Elías: repetía el CTA).
+ * Un equipo elegido sin sesiones con su equipo (12 nov) lo dice debajo: el cliente ve su pestaña apagada, al final, y su
+ * tarjeta «Por explorar» en el Resumen; desmarcarlo lo saca de la página. Es la opción de mostrarla o no al compartir.
  */
 import { useCallback, useEffect, useState } from "react";
 import { Alert, Modal, useToast } from "@/components/ui";
@@ -28,6 +30,10 @@ function loQueTiene(a: AreaDeLaEscala): string {
   if (a.sugeridas) return `${a.sugeridas} ${a.sugeridas === 1 ? "sugerida" : "sugeridas"} sin usar: sale «En medición»; úsalas en La escala para que tenga nivel`;
   return a.seHablo ? "se habló de ella, pero no tiene nada ubicado: sale «En medición»" : "todavía no se habló de ella: sale «En medición»";
 }
+
+/** Lo que ve el cliente de un equipo elegido sin sesiones, y cómo no mostrarlo. */
+/* El Resumen guardado decide qué equipo sale «Por explorar» (las sesiones de cuando se armó): la nota no promete más que eso. */
+const SIN_SESIONES = "Todavía sin sesiones con su equipo. Si el Resumen se arma o se rehace así, su pestaña sale apagada y al final, y su tarjeta dice «Por explorar». Desmárcalo si no quieres que salga.";
 
 /** Una casilla por área: Nexus marca las que tienen algo; el vendedor decide. */
 function EquiposQueVe() {
@@ -64,6 +70,9 @@ function EquiposQueVe() {
                     {a.seHablo && <span className="ml-1.5 text-[11px] font-normal text-fg-muted">se habló en las reuniones</span>}
                   </span>
                   <span className="block text-xs text-fg-muted">{loQueTiene(a)}</span>
+                  {salen.includes(a.id) && a.sesiones === 0 && (
+                    <span className="mt-0.5 block text-xs text-fg-muted">{SIN_SESIONES}</span>
+                  )}
                 </span>
               </label>
             </li>

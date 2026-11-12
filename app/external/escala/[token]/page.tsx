@@ -44,6 +44,7 @@ export default async function EscalaDelClientePage({ params, searchParams }: { p
         resumen={d.resumen}
         empresa={d.empresa}
         dominio={d.dominio}
+        logo={d.logo}
         fecha={d.fecha}
         pestanas={[{ id: PESTANA_DEL_RESUMEN, nombre: "Resumen", href: base }, ...areas]}
       />
@@ -57,6 +58,7 @@ export default async function EscalaDelClientePage({ params, searchParams }: { p
       agenda=""
       detalles={d.detalles}
       dimensionDelRiesgo={d.dimensionDelRiesgo}
+      logo={d.logo}
       deLaEscala={{ areas, porExplorar: d.porExplorar[r.areaId] ?? [], resumen: { href: base } }}
     />
   );

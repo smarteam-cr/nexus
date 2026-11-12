@@ -152,3 +152,13 @@ export function partesDeLaPagina(lienzo: EscalaDelLienzo, estado: Pick<EstadoDeE
   const areas = areasDeLaPagina(lienzo, estado);
   return lienzo.areas.filter((a) => areas.includes(a.id)).reduce((n, a) => n + a.dimensiones.filter((d) => d.aplica).length, 0);
 }
+
+/** El logo de la ficha, solo si es una dirección https (la del bucket público): cualquier otra cosa no sale. */
+export function logoQueSeSirve(url: string | null | undefined): string | null {
+  if (!url) return null;
+  try {
+    return new URL(url).protocol === "https:" ? url : null;
+  } catch {
+    return null;
+  }
+}

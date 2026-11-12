@@ -16,7 +16,8 @@ import path from "node:path";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { ArribaDeLaEscala } from "@/components/external/test/ArribaDeLaEscala";
+import { ArribaDeLaEscala, enSuOrden } from "@/components/external/test/ArribaDeLaEscala";
+import ResultadoDelTestVista from "@/components/external/test/ResultadoDelTestVista";
 import ResumenDeLaEscalaVista from "@/components/external/test/ResumenDeLaEscalaVista";
 import { ajustarAlto } from "@/components/external/test/TextoEditableDeLaPagina";
 import { parseObject } from "@/lib/ai/section-schema";
@@ -24,6 +25,7 @@ import { nivelProvisional } from "@/lib/external/pagina-del-resumen";
 import type { ResultadoDelTest } from "@/lib/tests-diagnostico/resultado";
 import { aplicarOperaciones, cambioLoConfirmado, contenidoVacio, propuestaVacia, type EstadoDeExploracion, type Validez } from "./contenido";
 import { firmaDelArea } from "./descripcion-de-la-escala";
+import { logoQueSeSirve } from "./escala-para-el-cliente";
 import { CambiosSchema, leerContenido, VALIDADOR_ESTRICTO } from "./esquemas";
 import {
   cifrasDeMas,
@@ -475,13 +477,14 @@ describe("2 · el cliente nunca ve las citas", () => {
         ],
       }),
     );
-    for (const parte of ["1 · Qué entendimos de tu negocio", "2 · Cómo funciona tu operación hoy", "3 · Qué encontramos por área", "4 · Qué falta validar", "sesiones contigo", "personas de tu equipo"])
+    for (const parte of ["1 · Tu negocio", "2 · Cómo funciona tu operación hoy", "3 · Qué encontramos por área", "4 · Qué falta validar", "sesiones contigo", "personas de tu equipo"])
       expect(html).toContain(parte);
     // «¿Entendimos bien?» y «provisional» ya no salen; la sección «Qué hicimos» tampoco (sus cifras van arriba).
     for (const fuera of ["¿Entendimos bien?", "provisional", "· Qué hicimos"]) expect(html).not.toContain(fuera);
     expect(html).toContain("Qué queda fuera");
-    // Lo que no se habló dice que está pendiente, no se completa.
-    expect(html).toContain("Lo vemos contigo.");
+    // Lo que no se habló dice que está por confirmar, no se completa (12 nov: sin «?» y sin «Lo vemos contigo.»).
+    expect(html).toContain("Por confirmar");
+    expect(html).not.toContain("Lo vemos contigo");
     expect(html).toContain("Lo dijiste tú");
     expect(html).toContain("Estimado");
     expect(html).toContain("Ver diagnóstico de Servicio");
@@ -619,7 +622,7 @@ describe("3 · el armado", () => {
     expect(p.pendientes.map((x) => [x.tipo, x.clave])).toEqual([["por-confirmar", "falta:f1"]]);
     const html = renderToStaticMarkup(createElement(ResumenDeLaEscalaVista, { resumen: p, empresa: "Centauro Solutions", pestanas: [{ id: "resumen", nombre: "Resumen", href: "#" }] }));
     expect(html).toContain("14 de 25");
-    expect(html).not.toContain("Qué entendimos de tu negocio");
+    expect(html).not.toContain("· Tu negocio");
     expect(html).not.toContain("Cómo funciona tu operación");
     expect(html).toContain("Qué encontramos por área");
   });
@@ -1360,5 +1363,70 @@ describe("19 · lo que encontró la revisión del 11 nov", () => {
   it("la firma de los niveles sobrevive a guardar y volver a leer", () => {
     const g = { ...guardado2(), firmas: { "1": "firma" }, avisos: ["El recorrido no tiene ninguna etapa de Servicio."] };
     expect(leerContenido({ resumenDeLaEscala: g }).resumenDeLaEscala).toMatchObject({ firmas: { "1": "firma" }, avisos: g.avisos });
+  });
+});
+
+describe("20 · el Sistema 2 de la escala (12 nov)", () => {
+  const pestanas = [
+    { id: "resumen", nombre: "Resumen", href: "/r" },
+    { id: "1", nombre: "Ventas", href: "/r?area=1" },
+    { id: "2", nombre: "Marketing", href: "/r?area=2", porExplorar: true },
+    { id: "3", nombre: "Servicio", href: "/r?area=3" },
+  ];
+  const resumen = () => resumenParaLaPagina(guardado2(), [VENTAS, SERVICIO, MARKETING], CHEQUEO, ENTORNO, { conCitas: false, porExplorar: POR_EXPLORAR });
+
+  it("la pestaña de un equipo sin sesiones va al final, después de las que se abren", () => {
+    expect(enSuOrden(pestanas).map((p) => p.nombre)).toEqual(["Resumen", "Ventas", "Servicio", "Marketing"]);
+    const html = renderToStaticMarkup(createElement(ArribaDeLaEscala, { actual: "resumen", pestanas }));
+    expect(html.indexOf(">Servicio<")).toBeLessThan(html.indexOf(">Marketing<"));
+    expect(html).toContain("rd-btn-por-explorar");
+  });
+
+  it("el título es «Qué entendimos del negocio», los atajos van debajo y antes de las cifras", () => {
+    const html = renderToStaticMarkup(createElement(ResumenDeLaEscalaVista, { resumen: resumen(), empresa: "Centauro Solutions", pestanas }));
+    expect(html).toContain("Qué entendimos del negocio");
+    expect(html).not.toContain("Lo que vimos de tu empresa");
+    const titulo = html.indexOf("Qué entendimos del negocio");
+    const atajos = html.indexOf("rs-ruta");
+    const cifras = html.indexOf("rs-numeros");
+    expect(titulo).toBeLessThan(atajos);
+    expect(atajos).toBeLessThan(cifras);
+    expect(html).toContain('href="#rs-negocio"');
+    expect(html).toContain('class="dr rd-v3 rd-s2"');
+  });
+
+  it("«Por confirmar» va sin el signo de pregunta, en todos sus chips", () => {
+    const html = renderToStaticMarkup(createElement(ResumenDeLaEscalaVista, { resumen: resumen(), empresa: "Centauro Solutions", pestanas }));
+    expect(html).toContain("Por confirmar");
+    expect(html).not.toMatch(/rs-estado-pendiente"><span aria-hidden="true">\?/);
+  });
+
+  it("«Lo que le impide rendir más» lleva su clase, para alinearse con las otras listas", () => {
+    const css = fs.readFileSync(path.join(RAIZ, "components/external/test/resultado.css"), "utf8");
+    expect(css).toMatch(/\.rd-s2 \.rs-bloque-frena \.rs-lista li::before \{ content: "○"/);
+    expect(fs.readFileSync(path.join(RAIZ, "components/external/test/ResumenDeLaEscalaVista.tsx"), "utf8")).toContain('className="rs-bloque rs-bloque-frena"');
+  });
+
+  it("el logo de la ficha sale en lugar de la inicial; sin logo, el círculo", () => {
+    const con = renderToStaticMarkup(createElement(ResumenDeLaEscalaVista, { resumen: resumen(), empresa: "Centauro Solutions", logo: "https://cdn.test/logo.png", pestanas }));
+    expect(con).toContain('src="https://cdn.test/logo.png"');
+    expect(con).not.toContain("rd-empresa-logo");
+    const sin = renderToStaticMarkup(createElement(ResumenDeLaEscalaVista, { resumen: resumen(), empresa: "Centauro Solutions", pestanas }));
+    expect(sin).toContain("rd-empresa-logo");
+    expect(logoQueSeSirve("https://x.supabase.co/storage/v1/object/public/public-assets/logo.png")).toBe("https://x.supabase.co/storage/v1/object/public/public-assets/logo.png");
+    for (const malo of ["http://x.test/logo.png", "javascript:alert(1)", "data:image/png;base64,AAA", "logo.png", "", null]) expect(logoQueSeSirve(malo)).toBeNull();
+  });
+
+  it("la página de un área de la escala lleva el Sistema 2 y el logo; el resultado del test público, no", () => {
+    const escala = renderToStaticMarkup(
+      createElement(ResultadoDelTestVista, { r: VENTAS, empresa: "Centauro Solutions", agenda: "", logo: "https://cdn.test/logo.png", deLaEscala: { areas: pestanas.slice(1), porExplorar: [] } }),
+    );
+    expect(escala).toContain("rd-s2");
+    expect(escala).toContain('src="https://cdn.test/logo.png"');
+    expect(escala).toContain(`Las ${VENTAS.total} partes de Ventas`);
+    const test = renderToStaticMarkup(createElement(ResultadoDelTestVista, { r: VENTAS, empresa: "Centauro Solutions", agenda: "", logo: "https://cdn.test/logo.png" }));
+    expect(test).not.toContain("rd-s2");
+    expect(test).not.toContain("cdn.test");
+    expect(test).not.toContain("partes de Ventas");
   });
 });

@@ -3,9 +3,10 @@
  * rehecha el 10 nov como resumen ejecutivo). Es la primera pestaña, antes de Ventas, Servicio y Marketing, y la página
  * abre en ella. Tema de documento (hex literal de resultado.css: la página no tiene tema) y en tuteo.
  *
- * Se recorre en 2 o 3 minutos (segunda vuelta, 11 nov). Arriba, las tres cifras de lo que hicimos (sesiones, tiempo,
- * personas), como la intro del diagnóstico. Después, cuatro partes:
- *   1 «Qué entendimos de tu negocio»: qué vende, cómo gana, qué abarca y qué queda fuera, qué lo movió y qué busca. Lo
+ * Se recorre en 2 o 3 minutos (segunda vuelta, 11 nov). Arriba, en el bloque con degradado (Sistema 2, 12 nov): la
+ * empresa con su logo, «Qué entendimos del negocio», los atajos a las cuatro partes (bajan suave hasta cada una) y las
+ * tres cifras de lo que hicimos (sesiones, tiempo, personas). Después, cuatro partes:
+ *   1 «Tu negocio»: qué vende, cómo gana, qué abarca y qué queda fuera, qué lo movió y qué busca. Lo
  *     que no pasó la verificación dice «Por confirmar», no se completa;
  *   2 «Cómo funciona tu operación hoy»: el recorrido de un cliente de punta a punta, una etapa por traspaso, horizontal en
  *     escritorio y vertical en el teléfono, con lo que se traba;
@@ -36,7 +37,7 @@ import {
   type TarjetaDeLaPagina,
 } from "@/lib/external/pagina-del-resumen";
 import AnimacionesDelResultado from "./AnimacionesDelResultado";
-import { ArribaDeLaEscala, PESTANA_DEL_RESUMEN, type PestanaDeLaEscala } from "./ArribaDeLaEscala";
+import { ArribaDeLaEscala, EmpresaDeLaEscala, PESTANA_DEL_RESUMEN, type PestanaDeLaEscala } from "./ArribaDeLaEscala";
 import "./diagnostico.css";
 import "./resultado.css";
 
@@ -56,11 +57,12 @@ export interface EdicionDelResumen {
 }
 
 /** La señal de cómo se sabe una cifra: un símbolo y su texto, nunca solo el color. */
-const SIMBOLO_DEL_ESTADO: Record<EstadoDeLaCifra, string> = { declarado: "✓", estimado: "≈", pendiente: "?" };
+/** «Por confirmar» va sin el signo de pregunta (Elías, 12 nov): su texto y su color gris ya lo dicen. */
+const SIMBOLO_DEL_ESTADO: Record<EstadoDeLaCifra, string | null> = { declarado: "✓", estimado: "≈", pendiente: null };
 function Estado({ estado }: { estado: EstadoDeLaCifra }) {
   return (
     <span className={`rs-estado rs-estado-${estado}`}>
-      <span aria-hidden="true">{SIMBOLO_DEL_ESTADO[estado]}</span>
+      {SIMBOLO_DEL_ESTADO[estado] && <span aria-hidden="true">{SIMBOLO_DEL_ESTADO[estado]}</span>}
       {ETIQUETA_DEL_ESTADO[estado]}
     </span>
   );
@@ -70,6 +72,7 @@ export default function ResumenDeLaEscalaVista({
   resumen,
   empresa,
   dominio = null,
+  logo = null,
   fecha = null,
   pestanas,
   edicion = null,
@@ -77,6 +80,8 @@ export default function ResumenDeLaEscalaVista({
   resumen: ResumenDeLaPagina;
   empresa: string | null;
   dominio?: string | null;
+  /** El logo de la ficha del cliente (`logoQueSeSirve`); sin él, el círculo con la inicial. */
+  logo?: string | null;
   fecha?: string | null;
   /** Las pestañas de arriba, con la del Resumen primero. */
   pestanas: readonly PestanaDeLaEscala[];
@@ -185,7 +190,7 @@ export default function ResumenDeLaEscalaVista({
           </div>
         )}
         {con(x.organizacion) && (
-          <div className="rs-bloque">
+          <div className="rs-bloque rs-bloque-organizado">
             <p className="rs-bloque-k">Cómo está organizado</p>
             {piezas(x.organizacion, `Cómo está organizado ${x.nombre}`, { agregar: "+ Agregar" })}
           </div>
@@ -197,7 +202,7 @@ export default function ResumenDeLaEscalaVista({
           </div>
         )}
         {con(x.frena) && (
-          <div className="rs-bloque">
+          <div className="rs-bloque rs-bloque-frena">
             <p className="rs-bloque-k">Lo que le impide rendir más</p>
             {piezas(x.frena, `Lo que frena a ${x.nombre}`, { agregar: "+ Agregar" })}
           </div>
@@ -258,7 +263,7 @@ export default function ResumenDeLaEscalaVista({
   };
 
   return (
-    <div className={`dr rd-v3${edicion ? " rd-editable" : ""}`}>
+    <div className={`dr rd-v3 rd-s2${edicion ? " rd-editable" : ""}`}>
       <AnimacionesDelResultado className="rd rs" quieta={!!edicion}>
         {/* Adentro, el recorrido guiado de la preventa señala las pestañas: la de cada área es la que tiene el radar. */}
         <div data-recorrido={edicion ? "preventa.escala.dimensiones" : undefined}>
@@ -266,20 +271,23 @@ export default function ResumenDeLaEscalaVista({
         </div>
 
         <section className="rs-cabecera">
-          {nombreDeLaEmpresa && (
-            <span className="rd-empresa rd-entra">
-              <span className="rd-empresa-logo" aria-hidden="true">
-                {nombreDeLaEmpresa.trim().charAt(0).toUpperCase()}
-              </span>
-              <span className="rd-empresa-txt">
-                <b>{nombreDeLaEmpresa}</b>
-                {dominio && dominio !== nombreDeLaEmpresa && <small>{dominio}</small>}
-              </span>
-            </span>
-          )}
+          <EmpresaDeLaEscala nombre={nombreDeLaEmpresa} dominio={dominio} logo={logo} />
           <p className="rd-eyebrow rd-entra">Escala de rendimiento · Resumen</p>
           {fecha && <p className="rd-fecha rd-entra">{fechaLarga(fecha)}</p>}
-          <TituloDeLaPagina className="rs-titulo rd-entra">Lo que vimos de tu empresa</TituloDeLaPagina>
+          <TituloDeLaPagina className="rs-titulo rd-entra">Qué entendimos del negocio</TituloDeLaPagina>
+          {/* Los atajos van debajo del título (Elías, 12 nov); bajan suave hasta su parte (resultado.css, `scroll-behavior`). */}
+          {partes.length > 1 && (
+            <ol className="rs-ruta rd-entra" aria-label="Las partes de este resumen">
+              {partes.map((p, i) => (
+                <li key={p.id}>
+                  <a href={`#${p.id}`}>
+                    <span className="rs-ruta-n">{i + 1}</span>
+                    {p.nombre}
+                  </a>
+                </li>
+              ))}
+            </ol>
+          )}
           {h && (
             <div className="rs-numeros rd-entra" aria-label="Qué hicimos">
               <div className="rs-numero">
@@ -303,23 +311,12 @@ export default function ResumenDeLaEscalaVista({
               )}
             </div>
           )}
-          {partes.length > 1 && (
-            <ol className="rs-ruta rd-entra" aria-label="Las partes de este resumen">
-              {partes.map((p, i) => (
-                <li key={p.id}>
-                  <a href={`#${p.id}`}>
-                    <span className="rs-ruta-n">{i + 1}</span>
-                    {p.nombre}
-                  </a>
-                </li>
-              ))}
-            </ol>
-          )}
         </section>
 
         {negocio && (
           <section id="rs-negocio" className="rd-tarjeta" data-revela="">
-            <p className="rd-eyebrow">{numero("rs-negocio")} · Qué entendimos de tu negocio</p>
+            {/* «Tu negocio», no «Qué entendimos de tu negocio»: el título de la página ya lo dice (12 nov). */}
+            <p className="rd-eyebrow">{numero("rs-negocio")} · Tu negocio</p>
             <div className="rs-negocio">
               {negocio.map((p) => (
                 <div key={p.tipo} className="rs-negocio-parte">
@@ -328,7 +325,7 @@ export default function ResumenDeLaEscalaVista({
                     clase: "rs-negocio-lista",
                     vacio: (
                       <p className="rs-pendiente-txt">
-                        <Estado estado="pendiente" /> Lo vemos contigo.
+                        <Estado estado="pendiente" />
                       </p>
                     ),
                   })}

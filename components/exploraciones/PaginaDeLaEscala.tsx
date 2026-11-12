@@ -382,6 +382,7 @@ export default function PaginaDeLaEscala() {
             resumen={res}
             empresa={pagina.empresa}
             dominio={pagina.dominio}
+            logo={pagina.logo}
             fecha={pagina.fecha}
             pestanas={[{ id: PESTANA_DEL_RESUMEN, nombre: "Resumen", href: "#" }, ...pestanasDeLasAreas]}
             edicion={edicionDelResumen}
@@ -532,6 +533,7 @@ export default function PaginaDeLaEscala() {
           agenda=""
           detalles={pagina.detalles}
           dimensionDelRiesgo={pagina.dimensionDelRiesgo}
+          logo={pagina.logo}
           deLaEscala={{
             areas: pestanasDeLasAreas,
             porExplorar: pagina.porExplorar[r.areaId] ?? [],
