@@ -12,13 +12,23 @@
  * Módulo PURO: lo usa el runner y se testea sin base.
  */
 
+import { originalDeLaCopia } from "@/lib/landing/custom-sections";
+
 const CIERRE = "cierre";
 
 export function ordenDelContrato(existentes: readonly string[], canon: readonly string[]): string[] {
   const presentes = new Set(existentes);
-  const canonicas = canon.filter((k) => presentes.has(k) && k !== CIERRE);
   const enCanon = new Set(canon);
-  const resto = existentes.filter((k) => !enCanon.has(k) && k !== CIERRE);
+  /* La COPIA de una sección (2026-11-12, «Duplicar») va justo debajo de su original, como nació: el contrato ordena las
+     canónicas y la copia las acompaña. Una copia cuya original ya no está queda con el resto. */
+  const copiasDe = new Map<string, string[]>();
+  for (const k of existentes) {
+    const original = originalDeLaCopia(k);
+    if (original && enCanon.has(original) && presentes.has(original) && original !== CIERRE) copiasDe.set(original, [...(copiasDe.get(original) ?? []), k]);
+  }
+  const acompanan = new Set([...copiasDe.values()].flat());
+  const canonicas = canon.filter((k) => presentes.has(k) && k !== CIERRE).flatMap((k) => [k, ...(copiasDe.get(k) ?? [])]);
+  const resto = existentes.filter((k) => !enCanon.has(k) && k !== CIERRE && !acompanan.has(k));
   return [...canonicas, ...resto, ...(presentes.has(CIERRE) ? [CIERRE] : [])];
 }
 

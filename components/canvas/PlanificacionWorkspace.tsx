@@ -22,6 +22,8 @@ import LandingView, { type LandingSectionData } from "@/components/landing/Landi
 import type { LandingContext } from "@/components/landing/types";
 import { useCanvasSections } from "./useCanvasSections";
 import { buildPlanificacionConfig, buildPlanificacionSections } from "./planificacion-landing-adapter";
+import AgregarSeccion from "./AgregarSeccion";
+import BorrarSeccionPropia from "./BorrarSeccionPropia";
 import DocumentAssist from "@/components/ai/DocumentAssist";
 import { conservarLoDeFuera, type FilaPropiedad } from "@/lib/planificacion/propiedades";
 import ElegirPlantilla from "./ElegirPlantilla";
@@ -436,9 +438,26 @@ export default function PlanificacionWorkspace({
           const ordered = [heroId, ...contentIds].filter((x): x is string => !!x);
           if (ordered.length) cs.reorderSections(ordered);
         }}
+        onDuplicate={(key) => {
+          const id = idByKey.get(key);
+          if (id) void cs.duplicateSection(id);
+        }}
+        // «✕ Borrar» solo en las secciones de la persona: propias, copias y las del catálogo que agregó (2026-11-12).
+        renderOverlay={(key) => <BorrarSeccionPropia section={cs.sections.find((s) => s.key === key)} onBorrar={cs.removeSection} />}
       />
       )}
     </div>
+    {/* «+ Agregar sección» (2026-11-12): las del catálogo (la IA las escribe al generar) o una propia. */}
+    {!verSelector && (
+      <AgregarSeccion
+        projectId={projectId}
+        canvasId={canvasId}
+        cuantasSecciones={cs.sections.length}
+        seMuestra={(k) => buildPlanificacionConfig([k]).sections.some((d) => d.key === k)}
+        onAgregarDelCatalogo={(k) => cs.addCatalogSection(k)}
+        onAgregarPropia={(nombre, tipo) => cs.addSection(nombre, tipo)}
+      />
+    )}
     </>
   );
 }

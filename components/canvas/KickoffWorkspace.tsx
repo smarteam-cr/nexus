@@ -28,6 +28,7 @@ import type { LandingContext } from "@/components/landing/types";
 import SectionTools from "@/components/business-cases/SectionTools";
 import { KICKOFF_DEF_BY_KEY } from "@/components/landing/configs/kickoff.defs";
 import PublishBar from "./PublishBar";
+import AgregarSeccion from "./AgregarSeccion";
 import DocumentAssist from "@/components/ai/DocumentAssist";
 import { useKickoffData } from "./useKickoffData";
 import { usePublicarOcultasEnPantalla } from "@/components/print/PrintStaging";
@@ -301,8 +302,28 @@ export default function KickoffWorkspace({ projectId, canvasId }: { projectId: s
           const ordered = [bienvenidaId, ...contentIds].filter((x): x is string => !!x);
           if (ordered.length) k.reorderSections(ordered);
         }}
+        onDuplicate={(key) => {
+          const id = idByKey.get(key);
+          if (!id) return;
+          /* La copia de una sección oculta nace oculta: el ojo del kickoff vive en `hiddenKickoffKeys` (por id), así que lo
+             pone el editor apenas el servidor la crea. */
+          const oculta = k.hiddenKeys.has(kickoffHiddenKey(key, id));
+          void k.duplicateSection(id).then((copia) => {
+            if (copia && oculta) k.toggleHidden(kickoffHiddenKey(copia.key, copia.id), true);
+          });
+        }}
       />
       </div>
+      {/* «+ Agregar sección» (2026-11-12): las del catálogo del kickoff (la IA las escribe al generar) o una propia. Lo
+          nuevo queda en «cambios sin subir» hasta «Subir al cliente», como cualquier edición. */}
+      <AgregarSeccion
+        projectId={projectId}
+        canvasId={canvasId}
+        cuantasSecciones={k.sections.length}
+        seMuestra={(key) => buildKickoffConfig([key]).sections.some((d) => d.key === key)}
+        onAgregarDelCatalogo={(key) => k.addCatalogSection(key)}
+        onAgregarPropia={(nombre, tipo) => k.addSection(nombre, tipo)}
+      />
     </div>
   );
 }

@@ -27,6 +27,12 @@ export interface CanvasSectionEntry {
    * Al volver a una plantilla que la tiene, se vuelve a mostrar sola. El ojo de una persona borra la marca.
    */
   ocultaPorLaPlantilla?: boolean;
+  /**
+   * La AGREGÓ una persona desde «+ Agregar sección» (2026-11-12): una sección del catálogo de su tipo que la plantilla del
+   * documento no trae. La plantilla la respeta: al generar, la IA la escribe; al ajustar el documento a su plantilla, no
+   * se oculta ni se borra (lib/canvas/secciones-agregadas.ts).
+   */
+  agregadaPorPersona?: boolean;
 }
 
 /**

@@ -2530,6 +2530,16 @@
   min-width: 28px;
 }
 .stl .stl-codigo-hueco { background: transparent; color: var(--dark-bg); box-shadow: inset 0 0 0 1.5px var(--dark-bg); }
+/* En EDICIÓN la plaquita conserva su contraste al pasar el mouse y al escribir (2026-11-12, Elías: en «Acciones coherentes»
+   el ID quedaba en gris muy claro). El hover genérico de `.stl-editable` (un gris casi transparente) le ganaba al fondo
+   oscuro y dejaba el texto blanco sobre la fila clara. El fondo pasa a la tarjeta oscura de la paleta, un tono más claro
+   que el de siempre: se nota que es editable y se sigue leyendo. Los valores son los de la paleta del motor (marca o
+   interna), así que se ve igual en el editor, la vista del cliente y el PDF. */
+.stl .stl-codigo.stl-editable:hover { background: var(--dark-card); color: var(--dark-text); }
+.stl .stl-codigo.stl-editable:focus { background: var(--dark-bg); color: var(--dark-text); }
+.stl .stl-codigo-hueco.stl-editable:hover,
+.stl .stl-codigo-hueco.stl-editable:focus { background: transparent; color: var(--dark-bg); }
+.stl .stl-codigo:not(.stl-codigo-hueco).stl-editable:empty::before { color: var(--dark-text-2); opacity: 1; }
 .stl .stl-refs { font-size: 12px; color: var(--text-muted); margin-top: 8px; }
 .stl .stl-refs > span:first-child { font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; font-size: 10.5px; }
 .stl .stl-obj-grupos { display: grid; gap: 28px; }
@@ -2612,7 +2622,11 @@
 }
 /* Las ACCIONES (components/landing/sections-ejecucion.tsx): en el diagnóstico desde el 2026-10-02. */
 .stl .stl-acciones td { vertical-align: top; }
-.stl .stl-acciones .stl-codigo { white-space: nowrap; }
+/* La columna ID (2026-11-12, Elías): «AC-01» se partía en dos líneas porque el editor pone `white-space: pre-wrap` EN
+   LÍNEA (components/landing/inline.tsx, también en lectura) y eso le ganaba al `nowrap` de la clase. La columna toma el
+   ancho de su código (`width: 1%` + `nowrap` = lo justo) y el código no se corta. */
+.stl .stl-acciones td:first-child { width: 1%; white-space: nowrap; }
+.stl .stl-acciones .stl-codigo { white-space: nowrap !important; }
 .stl .stl-accion-titulo { font-weight: 700; color: var(--text); }
 .stl .stl-accion-detalle { font-size: 12.5px; color: var(--text-muted); }
 .stl .stl-accion-grupo { display: inline-block; font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 999px; background: var(--blue-soft); color: var(--blue-dark); }

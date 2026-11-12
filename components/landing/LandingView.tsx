@@ -156,6 +156,32 @@ function HideToggle({ hidden, label, onToggle }: { hidden: boolean; label: strin
   );
 }
 
+/** «Duplicar» (2026-11-12): una copia de la sección justo debajo, con su contenido, para cambiarle la información. Mismo
+ *  look que «Colapsar». La regla de qué se duplica vive en el servidor (lib/canvas/secciones-del-documento-server.ts);
+ *  acá solo no se ofrece en la portada, el cierre ni lo que lee el proyecto. */
+function DuplicateBtn({ label, onClick }: { label: string; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={`Duplicar ${label}: una copia justo debajo, con su contenido, para editarla`}
+      aria-label={`Duplicar la sección ${label}`}
+      style={{
+        display: "inline-flex", alignItems: "center", gap: 5, padding: "4px 9px",
+        borderRadius: 999, cursor: "pointer", fontSize: 11, fontWeight: 600, lineHeight: 1,
+        border: "1px solid rgba(0,0,0,0.12)", background: "rgba(255,255,255,0.92)", color: "#6b7280",
+        backdropFilter: "blur(4px)", boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
+      }}
+    >
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} aria-hidden>
+        <rect x="9" y="9" width="12" height="12" rx="2" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M5 15H4a1 1 0 01-1-1V4a1 1 0 011-1h10a1 1 0 011 1v1" />
+      </svg>
+      Duplicar
+    </button>
+  );
+}
+
 /** Caret ▸/▾ de una sección OCULTA: la colapsa a solo el título, o la vuelve a abrir. */
 function CollapseToggle({ collapsed, label, onToggle }: { collapsed: boolean; label: string; onToggle: () => void }) {
   return (
@@ -261,6 +287,7 @@ export default function LandingView({
   onEyebrowChange,
   onToggleHidden,
   onReorder,
+  onDuplicate,
   renderOverlay,
 }: {
   config: LandingConfig;
@@ -280,6 +307,8 @@ export default function LandingView({
   onToggleHidden?: (key: string, hidden: boolean) => void;
   // Modo edición: drag & drop de secciones — recibe las KEYS en el orden nuevo.
   onReorder?: (orderedKeys: string[]) => void;
+  // Modo edición: «Duplicar» en el chrome de cada sección de contenido (no en la portada, el cierre ni las ctx).
+  onDuplicate?: (key: string) => void;
   // Modo edición: controles por sección (IA / limpiar) que el workspace inyecta en
   // la esquina de cada sección. No se usa en el render externo (read).
   renderOverlay?: (key: string) => React.ReactNode;
@@ -463,7 +492,9 @@ export default function LandingView({
        ⚠ El `display:flex` y el `gap` viven en `.stl-overlay` (landing-engine.css), NO acá: un
        estilo inline le gana a la hoja, y ahí el `flex-direction: row-reverse` que pone los
        controles a la izquierda se quedaría sin con qué componerse. Un solo dueño del layout. */
-    const chrome = editable && (renderOverlay || onToggleHidden || dragHandle) && (
+    // Ni la portada, ni el cierre, ni lo que lee el proyecto, ni lo solo interno (su key es lo que lo deja fuera del cliente).
+    const sePuedeDuplicar = !!onDuplicate && !def.pinned && !def.backdrop && !def.ctxDriven && !def.soloInterna;
+    const chrome = editable && (renderOverlay || onToggleHidden || dragHandle || sePuedeDuplicar) && (
       <div className="stl-overlay">
         {hidden && <span className="stl-hidden-badge">{def.soloInterna ? "Solo lo ve el equipo" : "No visible para el cliente"}</span>}
         {/* ⭐ El botón de conversar sobre ESTA sección. Va FUERA del `!collapsed` a propósito: una
@@ -475,6 +506,7 @@ export default function LandingView({
         contexto» — dos nombres para la misma sección en el mismo prompt. */}
     <ChatDeSeccionBtn seccionKey={def.key} label={nombreParaElChat(def, effTitle)} />
     {!collapsed && renderOverlay?.(def.key)}
+        {!collapsed && sePuedeDuplicar && <DuplicateBtn label={effTitle} onClick={() => onDuplicate?.(def.key)} />}
         {!isHero && <CollapseToggle collapsed={collapsed} label={effTitle} onToggle={() => toggleExpanded(def.key)} />}
         {onToggleHidden && !def.noHide && !def.soloInterna && (
           <HideToggle hidden={hidden} label={effTitle} onToggle={() => setHidden(def.key, !hidden)} />

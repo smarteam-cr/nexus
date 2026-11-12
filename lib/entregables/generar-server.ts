@@ -38,6 +38,8 @@ import {
 import { resolvePipeline } from "@/lib/projects/kind";
 import { servicioDelProyecto } from "@/lib/servicios/catalogo";
 import { templateDeLaPlantilla } from "./plantillas";
+import { defsDelTipo } from "@/lib/artefactos/catalogo";
+import { seccionesAgregadas, templateConLasAgregadas } from "@/lib/canvas/secciones-agregadas";
 
 export interface PedidoDeEntregable {
   projectId: string;
@@ -103,6 +105,12 @@ async function plantillaGuardada(projectId: string, slug: string): Promise<strin
   return g?.guardada ? g.plantilla.id : null;
 }
 
+/** Las secciones que una persona agregó al documento de siempre de ese entregable (lib/canvas/secciones-agregadas.ts). */
+async function agregadasDelDocumento(projectId: string, slug: string): Promise<string[]> {
+  const c = await prisma.projectCanvas.findFirst({ where: { projectId, ...canvasOf(slug) }, select: { sections: true } });
+  return c ? seccionesAgregadas(c.sections) : [];
+}
+
 /**
  * La plantilla que le toca al proyecto sin que nadie la pida (M1 del roadmap, 2026-10-24): el kickoff de un SERVICIO
  * QUE AVANZA POR CICLOS es el kickoff del servicio, también el que se generó antes de que el proyecto fuera recurrente (RC
@@ -153,7 +161,16 @@ export async function generarEntregable(pedido: PedidoDeEntregable): Promise<Ent
     (await plantillaPorDefectoDelProyecto(pedido.projectId, pedido.slug).catch(() => null)) ??
     (await plantillaGuardada(pedido.projectId, pedido.slug).catch(() => null));
   const plantilla = resolverPlantilla(pedido.slug, plantillaId);
-  const template = templateDeLaPlantilla(plantilla.id);
+  /* Las secciones del catálogo que una persona agregó a propósito («+ Agregar sección», 2026-11-12) entran al template:
+     la IA las escribe aunque la plantilla no las traiga, y el ajuste a la plantilla no las esconde. */
+  const template = templateConLasAgregadas(
+    templateDeLaPlantilla(plantilla.id),
+    defsDelTipo(pedido.slug) ?? [],
+    await agregadasDelDocumento(pedido.projectId, pedido.slug).catch((e: unknown) => {
+      console.warn("[entregables] no se leyeron las secciones agregadas; se genera con la plantilla sola:", e instanceof Error ? e.message : e);
+      return [] as string[];
+    }),
+  );
   const base = { projectId: pedido.projectId, agentRunId: pedido.agentRunId, plantilla: template, instrucciones: pedido.instrucciones ?? null };
   const fase = FASE[pedido.slug];
   if (fase) pedido.alFase?.(fase);

@@ -47,6 +47,8 @@ export interface SectionWithBlocks {
   previousAgentBriefOverride: string | null;
   /** El CSE ocultó la sección (business case): no se publica al cliente. Default false. */
   hidden?: boolean;
+  /** La agregó una persona desde «+ Agregar sección» (2026-11-12): se puede borrar como una propia. Solo proyectos. */
+  agregadaPorPersona?: boolean;
   order: number;
   layout: unknown;
   blocks: BlockData[];
@@ -803,6 +805,80 @@ export function useCanvasSections(
     [basePath, canvasId, refetch, pushUndo, undoScope],
   );
 
+  /**
+   * «+ Agregar sección» con una del CATÁLOGO del tipo, y «Duplicar» (2026-11-12). No optimistas, por lo mismo que
+   * `addSection`: la fila la arma el servidor (la del catálogo nace en su lugar del canon; la copia, justo debajo de la
+   * original, con su contenido). Deshacer = quitarla, con confirmación; una del catálogo que ya estaba (la había ocultado
+   * la plantilla) se vuelve a ocultar, porque borrarla se llevaría lo que tenía.
+   */
+  const crearEnElServidor = useCallback(
+    async (o: {
+      url: string;
+      body?: unknown;
+      etiqueta: string;
+      fallo: string;
+    }): Promise<{ id: string; key: string } | null> => {
+      pendingWrites.current++;
+      try {
+        const res = await fetch(o.url, { method: "POST", headers: JSON_HEADERS, body: JSON.stringify(o.body ?? {}) });
+        const body = (await res.json().catch(() => ({}))) as { error?: string; section?: { id: string; key: string; titleOverride?: string | null; label?: string } };
+        if (!res.ok || !body.section?.id) {
+          setError(body?.error ?? o.fallo);
+          return null;
+        }
+        setError(null);
+        onContentChangeRef.current?.();
+        const yaEstaba = sectionsRef.current.some((x) => x.id === body.section!.id);
+        refetch();
+        const creada = { id: body.section.id, key: body.section.key };
+        const nombre = (body.section.titleOverride ?? "").trim() || body.section.label || "nueva";
+        pushUndo({
+          scope: undoScope,
+          label: o.etiqueta,
+          undo: async () => {
+            // Ya estaba, oculta por la plantilla: vuelve a eso, sin la marca de agregada (la IA deja de escribirla).
+            if (yaEstaba) return patchSection(creada.id, { hidden: true, deshacerAgregada: true }, "No se pudo deshacer. Vuelve a intentarlo.");
+            const seguir = window.confirm(`¿Quitar la sección «${nombre}»?
+
+Se borra con todo lo que tenga adentro, y eso no se puede deshacer.`);
+            if (!seguir) return true;
+            return removeSectionRef.current(creada.id);
+          },
+        });
+        return creada;
+      } catch {
+        setError(`Error de conexión: ${o.fallo.charAt(0).toLowerCase()}${o.fallo.slice(1)}`);
+        return null;
+      } finally {
+        pendingWrites.current--;
+      }
+    },
+    [refetch, pushUndo, undoScope, patchSection],
+  );
+
+  /** Agrega una sección del catálogo del tipo del documento (`key`). Solo documentos de proyecto. */
+  const addCatalogSection = useCallback(
+    (key: string) =>
+      crearEnElServidor({
+        url: `${basePath}/canvas-sections`,
+        body: { canvasId, seccion: key },
+        etiqueta: "Sección agregada",
+        fallo: "No se pudo agregar la sección. Vuelve a intentarlo.",
+      }),
+    [crearEnElServidor, basePath, canvasId],
+  );
+
+  /** Duplica la sección justo debajo, con su contenido. Solo documentos de proyecto. */
+  const duplicateSection = useCallback(
+    (sectionId: string) =>
+      crearEnElServidor({
+        url: `${basePath}/canvas-sections/${sectionId}/duplicar`,
+        etiqueta: "Sección duplicada",
+        fallo: "No se pudo duplicar la sección. Vuelve a intentarlo.",
+      }),
+    [crearEnElServidor, basePath],
+  );
+
   /* ⛔ SIN deshacer: la fila se va en cascada y no hay de dónde recrearla. Lo que protege es la
      CONFIRMACIÓN antes de llamarlo — el botón «Borrar sección» (SectionTools) y el chat
      (ejecutar-operaciones) la piden. Quien agregue otra puerta tiene que pedirla también. */
@@ -913,6 +989,8 @@ export function useCanvasSections(
     setHidden,
     reorderSections,
     addSection,
+    addCatalogSection,
+    duplicateSection,
     removeSection,
     undoSection,
     acceptAll,

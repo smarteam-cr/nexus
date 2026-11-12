@@ -16,7 +16,7 @@
  * (workspaces) y server components (páginas externas).
  */
 import type { LandingConfig, SectionDef } from "./types";
-import { esCustomKey } from "@/lib/landing/custom-sections";
+import { defDeLaCopia, esCustomKey } from "@/lib/landing/custom-sections";
 
 /** Fila de sección tal como llega del hook (vivo) o del snapshot (externo). */
 export interface LandingSectionRow {
@@ -84,7 +84,10 @@ export function buildLandingConfigFromOrder(shape: LandingShape, orderedKeys: st
     vistas.add(key);
     /* La def de la plantilla; si no está y la sección se creó en runtime, la sintetizada. Una key
        desconocida que NO es `custom:*` sigue ignorándose: es un typo o una sección retirada. */
-    const def = porKey.get(key) ?? (esCustomKey(key) ? shape.sintetizar?.(key) ?? null : null);
+    /* Una COPIA (`custom:copia:<original>:<uuid>`, 2026-11-12) se pinta con la def de su original: antes que
+       `sintetizar`, que no conoce el documento y la pintaría como un HTML vacío. */
+    const def =
+      porKey.get(key) ?? defDeLaCopia(key, (k) => porKey.get(k)) ?? (esCustomKey(key) ? shape.sintetizar?.(key) ?? null : null);
     if (def) content.push(def);
   }
 

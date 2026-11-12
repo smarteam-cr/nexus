@@ -8,6 +8,7 @@ import { prisma } from "@/lib/db/prisma";
 import { touchCanvasContent } from "@/lib/canvas/touch-content";
 import { patchSectionEntry, parseSectionEntries } from "@/lib/business-cases/section-briefs";
 import { esCustomKey } from "@/lib/landing/custom-sections";
+import { sePuedeBorrar } from "@/lib/canvas/secciones-agregadas";
 
 type Params = Promise<{ projectId: string; sectionId: string }>;
 
@@ -66,7 +67,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Params }) {
   const denied = await denyHandoffCanvasEditForCse(section.canvas.name);
   if (denied) return denied;
 
-  let body: { titleOverride?: unknown; eyebrowOverride?: unknown; hidden?: unknown; undo?: unknown };
+  let body: { titleOverride?: unknown; eyebrowOverride?: unknown; hidden?: unknown; undo?: unknown; deshacerAgregada?: unknown };
   try {
     body = await req.json();
   } catch {
@@ -85,7 +86,14 @@ export async function PATCH(req: NextRequest, { params }: { params: Params }) {
   if ("hidden" in body) {
     const hidden = body.hidden === true;
     // El ojo es de una persona: desde ahora la plantilla ya no la vuelve a mostrar sola (`ocultaPorLaPlantilla`).
-    const entries = patchSectionEntry(section.canvas.sections, section.key, { hidden, ocultaPorLaPlantilla: false });
+    /* Salvo el DESHACER de «+ Agregar sección» sobre una que la plantilla tenía oculta (2026-11-12): vuelve exactamente a
+       como estaba — oculta por la plantilla y sin la marca de agregada (si no, la IA la seguía escribiendo). */
+    const deshacer = hidden && body.deshacerAgregada === true;
+    const entries = patchSectionEntry(
+      section.canvas.sections,
+      section.key,
+      deshacer ? { hidden: true, ocultaPorLaPlantilla: true, agregadaPorPersona: false } : { hidden, ocultaPorLaPlantilla: false },
+    );
     await prisma.projectCanvas.update({
       where: { id: section.canvasId },
       data: { sections: entries as unknown as Prisma.InputJsonValue },
@@ -163,8 +171,17 @@ export async function DELETE(_req: NextRequest, { params }: { params: Params }) 
      volvería a crear. */
   const tipoDeLaCopia = esCopia(section.canvas) ? tipoDeArtefacto(section.canvas.tipoArtefacto) : null;
   const deLaPlantillaEnUnaCopia = !!tipoDeLaCopia && !esCustomKey(section.key) && !(tipoDeLaCopia.estructurales as readonly string[]).includes(section.key);
+  /* Una del catálogo que AGREGÓ una persona («+ Agregar sección», 2026-11-12) también se borra: la trajo ella, y la
+     plantilla del documento no la tiene, así que nada la vuelve a crear (su entry, con la marca, se va con ella). La regla
+     entera, pura y probada: `sePuedeBorrar` (lib/canvas/secciones-agregadas.ts). */
+  const sePuede = sePuedeBorrar({
+    key: section.key,
+    sections: section.canvas.sections,
+    enUnaCopia: !!tipoDeLaCopia,
+    estructurales: (tipoDeLaCopia?.estructurales ?? []) as readonly string[],
+  });
 
-  if (!esCustomKey(section.key) && !deLaPlantillaEnUnaCopia) {
+  if (!esCustomKey(section.key) && !sePuede) {
     return NextResponse.json(
       { error: "Solo se pueden borrar las secciones propias. Las de la plantilla se ocultan." },
       { status: 400 },

@@ -24,8 +24,6 @@
  * (rutas API), el cliente (el motor) y el test. La def sintetizada es DATO puro — sin
  * React, sin Prisma.
  */
-import type { BCSectionDef } from "@/components/landing/configs/business-case.defs";
-
 /** Marcador de "esta sección la creó el vendedor". Ver el encabezado: el `:` es lo que
  *  hace imposible la colisión con una key de plantilla. */
 export const CUSTOM_PREFIX = "custom:";
@@ -129,3 +127,67 @@ export function tipoDeCustomKey(key: string): string | null {
  * (el catálogo necesita las constantes de este archivo). La dirección correcta es: la gramática de
  * la key vive acá; qué significa cada tipo, allá.
  */
+
+// ── Las COPIAS de una sección (2026-11-12) ────────────────────────────────────────────────────
+
+/**
+ * El segmento de tipo de una COPIA: `custom:copia:<key de la original>:<uuid>`.
+ *
+ * Elías pidió «Duplicar» en el menú de cada sección del documento (12 nov): una copia justo debajo, con su contenido,
+ * para cambiarle la información. La copia se pinta con el MISMO renderer que la original (la tabla de Acciones sigue
+ * siendo esa tabla), así que la key tiene que decir de qué sección es copia. Va bajo `custom:` a propósito, porque una
+ * copia ES una sección de la persona, y con el prefijo hereda todo lo que ya la protege sin una línea más:
+ *   · regenerar no la escribe (el agente solo escribe las keys de su plantilla) ni la borra (`ajustarALaPlantilla` y sus
+ *     pares miran solo las keys del canon);
+ *   · se puede borrar (el DELETE solo borra `custom:*`), cuenta en el tope de `MAX_CUSTOM_SECTIONS`, viaja al duplicar
+ *     el documento y al enlace.
+ * La original es una key de plantilla (snake_case, sin `:`), así que partir por `:` sigue siendo inequívoco.
+ * ⚠ Quien resuelve la def de una copia es `defDeLaCopia`: `customDef` no conoce el documento y la pintaría como un HTML.
+ */
+export const TIPO_COPIA = "copia";
+
+/** Key nueva para una copia de la sección `original` (una key de plantilla, sin `:`). */
+export function nuevaKeyDeCopia(original: string): string {
+  if (!/^[a-z0-9_]+$/.test(original)) throw new Error(`«${original}» no es una sección de plantilla.`);
+  return `${CUSTOM_PREFIX}${TIPO_COPIA}:${original}:${crypto.randomUUID()}`;
+}
+
+/** La key de la sección de la que es copia, o `null` si la key no es de una copia. */
+export function originalDeLaCopia(key: string): string | null {
+  if (!esCustomKey(key)) return null;
+  const partes = key.split(":");
+  if (partes.length !== 4 || partes[1] !== TIPO_COPIA) return null;
+  return /^[a-z0-9_]+$/.test(partes[2]) ? partes[2] : null;
+}
+
+/**
+ * La def de una copia, a partir de las defs del documento: la de la original con la key de la copia. Nunca fija (las
+ * pinneadas son la portada y el cierre, que no se duplican), así que se puede arrastrar. `null` si no es una copia o si
+ * su original no es de este documento: quien llama la omite, como a toda key sin def.
+ */
+export function defDeLaCopia<D extends object>(key: string, defDe: (key: string) => D | null | undefined): (D & { key: string; pinned?: boolean }) | null {
+  const original = originalDeLaCopia(key);
+  const base = original ? defDe(original) : null;
+  return base ? { ...base, key, pinned: false } : null;
+}
+
+/** Tope del nombre de una sección (el mismo del POST que la crea). */
+export const TOPE_DEL_NOMBRE_DE_SECCION = 60;
+
+/** El nombre de una copia: el de la original con «(copia)», dentro del tope. Se edita como cualquier título. */
+export function nombreDeLaCopia(titulo: string): string {
+  const sufijo = " (copia)";
+  const base = titulo.trim() || "Sección";
+  return `${base.slice(0, TOPE_DEL_NOMBRE_DE_SECCION - sufijo.length).trim()}${sufijo}`;
+}
+
+/**
+ * La key de la copia de una sección: una sección de plantilla se copia como `custom:copia:…`; una creada por una persona
+ * (o una copia) se copia como otra sección propia de su mismo tipo, o como copia de la misma original.
+ */
+export function keyParaDuplicar(key: string): string {
+  const original = originalDeLaCopia(key);
+  if (original) return nuevaKeyDeCopia(original);
+  if (esCustomKey(key)) return nuevaCustomKey(tipoDeCustomKey(key) ?? "html");
+  return nuevaKeyDeCopia(key);
+}

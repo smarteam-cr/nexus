@@ -49,6 +49,7 @@ import {
 import { generateSectionsForTemplate } from "@/lib/business-cases/canvas-agent";
 import type { BcTemplateDef } from "@/components/landing/configs/templates.defs";
 import { bloqueDeInstruccionesDelPedido, entradasSegunLaPlantilla } from "@/lib/entregables/registro";
+import { conLasAgregadas, sinMarcaLasDeLaPlantilla } from "@/lib/canvas/secciones-agregadas";
 import {
   DIAGNOSTICO_TEMPLATE,
   POLITICA_RECTORA_KEY,
@@ -218,20 +219,24 @@ export async function runDiagnosticoGeneration(opts: {
  * borran (la fila y su entrada del Json, así no aparecen en el índice del panel); con algo escrito, se OCULTAN con la
  * marca `ocultaPorLaPlantilla` —nada se pierde—. Al volver a una plantilla que las tiene (de la esencial a la completa),
  * las que ocultó la plantilla se vuelven a mostrar; las que ocultó una persona, no (su ojo borra la marca). Las creadas
- * por una persona (`custom:*`) y las retiradas no se tocan.
+ * por una persona (`custom:*`) y las retiradas no se tocan. Las del canon que una persona AGREGÓ desde «+ Agregar
+ * sección» (2026-11-12, `agregadaPorPersona`) cuentan como de la plantilla: ni se ocultan ni se borran.
  */
 export async function ajustarALaPlantilla(canvasId: string, def: CanvasDefinition, canon: CanvasDefinition = DIAGNOSTICO_CANVAS): Promise<void> {
-  const deLaPlantilla = new Set(def.sections.map((s) => s.key));
-  const queNoTiene = canon.sections.map((s) => s.key).filter((k) => !deLaPlantilla.has(k));
   const c0 = await prisma.projectCanvas.findUnique({ where: { id: canvasId }, select: { sections: true } });
+  const propiasDeLaPlantilla = new Set(def.sections.map((s) => s.key));
+  const deLaPlantilla = conLasAgregadas(propiasDeLaPlantilla, c0?.sections);
+  const queNoTiene = canon.sections.map((s) => s.key).filter((k) => !deLaPlantilla.has(k));
   const hayQueMostrar = parseSectionEntries(c0?.sections).some((e) => deLaPlantilla.has(e.key) && e.ocultaPorLaPlantilla === true);
+  // Una agregada que la plantilla ya trae (de la esencial a la completa) deja de llevar la marca: es de la plantilla.
+  const hayQueDesmarcar = sinMarcaLasDeLaPlantilla(c0?.sections, propiasDeLaPlantilla).cambio;
   const fuera = queNoTiene.length
     ? await prisma.canvasSection.findMany({
         where: { canvasId, key: { in: queNoTiene } },
         select: { id: true, key: true, _count: { select: { blocks: true } } },
       })
     : [];
-  if (!fuera.length && !hayQueMostrar) return; // la completa sobre un documento que nunca fue esencial: nada que ajustar
+  if (!fuera.length && !hayQueMostrar && !hayQueDesmarcar) return; // la completa sobre un documento que nunca fue esencial: nada que ajustar
   const vacias = fuera.filter((s) => s._count.blocks === 0);
   const conAlgo = fuera.filter((s) => s._count.blocks > 0).map((s) => s.key);
   await prisma.$transaction(async (tx) => {
@@ -241,7 +246,8 @@ export async function ajustarALaPlantilla(canvasId: string, def: CanvasDefinitio
     const borradas = new Set(vacias.map((s) => s.key));
     const sinLasBorradas = parseSectionEntries(c?.sections).filter((e) => !borradas.has(e.key));
     // Ocultar lo de afuera con texto y volver a mostrar lo que ocultó otra plantilla: regla pura en lib/entregables/registro.ts.
-    const { entradas } = entradasSegunLaPlantilla(sinLasBorradas, { deLaPlantilla, conTextoFuera: conAlgo });
+    const { entradas: segunLaPlantilla } = entradasSegunLaPlantilla(sinLasBorradas, { deLaPlantilla, conTextoFuera: conAlgo });
+    const { entradas } = sinMarcaLasDeLaPlantilla(segunLaPlantilla, propiasDeLaPlantilla);
     await tx.projectCanvas.update({ where: { id: canvasId }, data: { sections: entradas as unknown as Prisma.InputJsonValue } });
   });
 }

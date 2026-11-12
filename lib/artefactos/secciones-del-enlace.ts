@@ -19,7 +19,7 @@ import { ADOPCION_DEF_BY_KEY } from "@/components/landing/configs/adopcion.defs"
 import { INTEGRACION_DEF_BY_KEY } from "@/components/landing/configs/integracion.defs";
 import { HOJA_DE_RUTA_DEF_BY_KEY } from "@/components/landing/configs/hoja-de-ruta.defs";
 import { ENTREGA_DEF_BY_KEY_CON_ADICIONALES, PLANIFICACION_DEF_BY_KEY_CON_ADICIONALES } from "@/components/landing/configs/plantillas-adicionales.defs";
-import { esCustomKey } from "@/lib/landing/custom-sections";
+import { esCustomKey, originalDeLaCopia } from "@/lib/landing/custom-sections";
 import { admiteCopias, TIPO_HOJA_DE_RUTA, TIPO_REQUERIMIENTO_TECNICO, TIPO_PLAN_DE_ADOPCION, tipoDeArtefacto } from "./tipos";
 
 /** Las defs de cada tipo que se puede compartir por enlace. La exploración no está: es interna. */
@@ -51,11 +51,15 @@ export function seccionesQueSalenPorElEnlace(tipo: string): (key: string) => boo
   if (!defs || !tipoCompartible(tipo)) return () => false;
   const estructurales = new Set<string>(tipoDeArtefacto(tipo)?.estructurales ?? []);
   const internas = new Set(SECCIONES_INTERNAS[tipo] ?? []);
-  return (key) => {
+  const sale = (key: string): boolean => {
+    /* Una COPIA («Duplicar», 2026-11-12) sale si sale su original: la copia de una sección interna sigue siendo interna. */
+    const original = originalDeLaCopia(key);
+    if (original) return sale(original);
     if (internas.has(key)) return false;
     if (esCustomKey(key)) return true;
     const def = defs[key];
     if (!def) return false;
     return !def.ctxDriven || estructurales.has(key);
   };
+  return sale;
 }

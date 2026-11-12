@@ -5,6 +5,7 @@ import { parseSectionEntries, patchSectionEntry } from "@/lib/business-cases/sec
 import { CUSTOM_PREFIX, MAX_CUSTOM_SECTIONS, nuevaCustomKey } from "@/lib/landing/custom-sections";
 import { tipoCreable, TIPO_POR_DEFECTO } from "@/lib/landing/catalogo-de-secciones";
 import { touchCanvasContent } from "@/lib/canvas/touch-content";
+import { agregarDelCatalogo, ErrorDeSeccion } from "@/lib/canvas/secciones-del-documento-server";
 import { z } from "zod";
 import type { Prisma } from "@prisma/client";
 
@@ -37,6 +38,8 @@ export async function GET(
      `useCanvasSections` ya espera. Sin esto el ojo del motor cambia en pantalla, se recarga,
      y la sección vuelve a estar visible: el arreglo se apagaría en el último metro. */
   const ocultaPorKey = new Map(parseSectionEntries(canvas.sections).map((e) => [e.key, e.hidden === true]));
+  // La agregó una persona desde «+ Agregar sección» (2026-11-12): el editor le ofrece «Borrar» como a una propia.
+  const agregadas = new Set(parseSectionEntries(canvas.sections).filter((e) => e.agregadaPorPersona === true).map((e) => e.key));
 
   const rows = await prisma.canvasSection.findMany({
     where: { canvasId },
@@ -64,7 +67,7 @@ export async function GET(
     },
   });
 
-  const sections = rows.map((s) => ({ ...s, hidden: ocultaPorKey.get(s.key) ?? false }));
+  const sections = rows.map((s) => ({ ...s, hidden: ocultaPorKey.get(s.key) ?? false, agregadaPorPersona: agregadas.has(s.key) }));
 
   return NextResponse.json({ sections });
 }
@@ -198,7 +201,11 @@ export async function PUT(
 
 const crearSchema = z.object({
   canvasId: z.string().min(1),
-  label: z.string().trim().min(1).max(60),
+  /* Sin `seccion`, obligatorio (el nombre de la sección propia). Con `seccion`, se ignora: la del catálogo trae el suyo. */
+  label: z.string().trim().min(1).max(60).optional(),
+  /* Una sección del CATÁLOGO del tipo del documento («+ Agregar sección», 2026-11-12): su key. La valida el servidor
+     contra lo que ese documento puede agregar (lib/canvas/secciones-del-documento-server.ts). */
+  seccion: z.string().trim().min(1).max(80).optional(),
   /* QUÉ clase de sección se crea. Opcional: sin él sale un embebido de HTML, que es lo único que
      se podía crear antes del 2026-08-21 y lo que sigue devolviendo el catálogo por defecto. */
   tipo: z.string().trim().optional(),
@@ -240,7 +247,10 @@ export async function POST(
       { status: 400 },
     );
   }
-  const { canvasId, label, tipo } = parsed.data;
+  const { canvasId, label, tipo, seccion } = parsed.data;
+  if (!seccion && !label) {
+    return NextResponse.json({ error: "canvasId y un nombre (1-60 caracteres) requeridos" }, { status: 400 });
+  }
 
   const canvas = await prisma.projectCanvas.findUnique({
     where: { id: canvasId },
@@ -251,6 +261,19 @@ export async function POST(
   }
   const denied = await denyHandoffCanvasEditForCse(canvas.name);
   if (denied) return denied;
+
+  /* Una sección del catálogo: nace marcada como agregada por una persona, así la plantilla la respeta al generar. */
+  if (seccion) {
+    try {
+      const { id } = await agregarDelCatalogo(projectId, canvasId, seccion);
+      const creada = await prisma.canvasSection.findUnique({ where: { id }, include: { blocks: { orderBy: { order: "asc" } } } });
+      return NextResponse.json({ section: { ...creada, hidden: false } }, { status: 201 });
+    } catch (e) {
+      if (e instanceof ErrorDeSeccion) return NextResponse.json({ error: e.message }, { status: e.status });
+      throw e;
+    }
+  }
+  if (!label) return NextResponse.json({ error: "Falta el nombre de la sección." }, { status: 400 });
 
   const [usadas, ultima] = await Promise.all([
     prisma.canvasSection.count({ where: { canvasId, key: { startsWith: CUSTOM_PREFIX } } }),
