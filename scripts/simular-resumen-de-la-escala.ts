@@ -121,7 +121,7 @@ async function main() {
   const t1 = Date.now();
   const escrito = await escribirElResumen(le, async (p) => {
     // Con --desde, las respuestas guardadas en el mismo orden en que se pidieron (el Resumen, y el arreglo si lo hubo).
-    if (desde) return guardados.shift();
+    if (desde) return guardados.shift() ?? { content: [{ type: "text", text: "{}" }], usage: { input_tokens: 0, output_tokens: 0 }, stop_reason: "end_turn" };
     const t = Date.now();
     const r = await getAnthropic().messages.create(modelo ? { ...p, model: modelo } : p);
     crudos.push(r);
