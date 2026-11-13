@@ -14901,7 +14901,6 @@ chat de la sección no pasan por el normalizador: si alguien le pide al chat una
 una persona). Las automatizaciones de Cemaco nombran las etapas viejas («Contacto en base», «Cliente activo») en su texto:
 rehacer solo el ciclo de vida no las corrige.
 
-<<<<<<< HEAD
 ## Cobranza — el estado de cuenta compartido (2026-11-13, pedido 17)
 - **Desde cada cuenta de Cobranza, «Compartir estado de cuenta» crea un enlace para la persona de finanzas del cliente:
   `/external/estado-de-cuenta/<token>`, EN VIVO** (sin foto: cada vez que se abre muestra lo de hoy). Lo crea, copia,
@@ -14931,7 +14930,6 @@ rehacer solo el ciclo de vida no las corrige.
   adivinar. *Si finanzas del cliente lo pide:* mostrar el total de Odoo/Mercury cuando la cuota tenga su factura vinculada.
 - **Fusionar dos fichas:** el enlace de la cuenta absorbida muere con ella (`SE_BORRAN_A_PROPOSITO` en
   lib/clients/fusion-de-empresas.ts); si la absorbida era la única con cuenta, la cuenta se muda entera y el enlace sigue.
-=======
 ## Las metas de gerencia con HubSpot (2026-11-13)
 
 > Pedido de la reunión de gerencia (puntos 24 y 25): seguir lo que pide el programa de partners de HubSpot (mantener el
@@ -14985,4 +14983,3 @@ rehacer solo el ciclo de vida no las corrige.
 - *Qué no garantiza:* la pantalla no se probó con sesión (el navegador del preview no está logueado). El avance del plan
   de partner depende de que la copia de metas de HubSpot corra (cada hora); la del MRR gestionado, de la copia diaria
   de Partner. Ninguna meta avisa sola cuando se acerca el corte.
->>>>>>> refs/heads/worktree-agent-a3157f7af733dc9cd
