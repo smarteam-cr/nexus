@@ -212,7 +212,11 @@ corre migraciones ni seeds (cap. D + RUNBOOK).
 
 ### F. Los tests: cinco familias que se rompen por razones distintas
 
+<<<<<<< HEAD
 **942**<!-- sync:test-files --> archivos `*.test.ts` (unit), todos bajo `lib/` — el project
+=======
+**941**<!-- sync:test-files --> archivos `*.test.ts` (unit), todos bajo `lib/` — el project
+>>>>>>> refs/heads/worktree-agent-a3157f7af733dc9cd
 `unit` de vitest solo incluye `lib/**`, así que un test puesto en otra carpeta NO corre y
 nada avisa. `npm test` es la suite unit. Desde el 2026-08-01 (F4) el project `integration`
 está VIVO: `npm run test:int` corre los `*.int.test.ts` contra la base LOCAL `nexus_test`

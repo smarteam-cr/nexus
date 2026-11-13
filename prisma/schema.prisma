@@ -3973,6 +3973,44 @@ model FotoMargenCuenta {
 // Iniciativa C de docs/roadmap.md; plan en docs/rentabilidad-conectada-plan.md. SQL:
 // scripts/sql/2026-10-18-rentabilidad-conectada.sql (RLS + RESTRICTIVE). Solo dirección (guardCostosAccess).
 
+/// Una meta de gerencia que da plata (2026-11-13): un requisito del programa de partners de HubSpot, un bono de HubSpot
+/// o un bono interno. Nexus mide el avance con lo que ya sabe (`medida`, lib/finanzas/metas-de-gerencia.ts) y lo que
+/// HubSpot no expone (el requisito exacto, el período, el corte) lo carga dirección a mano. SQL:
+/// scripts/sql/2026-11-13-metas-de-gerencia.sql (RLS + RESTRICTIVE). Solo dirección (guardCostosAccess).
+model MetaDeGerencia {
+  id               String    @id @default(cuid())
+  nombre           String
+  /// Cómo mide Nexus el avance: una clave de `MEDIDAS` (lib/finanzas/metas-de-gerencia.ts). Texto: sumar una medida
+  /// no toca la base; una clave que el código no conoce se lee como «a mano».
+  medida           String
+  // nullable porque el requisito exacto a veces todavía no se sabe (HubSpot no lo expone): la pantalla lo pide.
+  objetivoUsd      Decimal?  @db.Decimal(14, 2)
+  // nullable porque una meta de nivel (el MRR de hoy) no acumula sobre un período.
+  desde            DateTime? @db.Date
+  // nullable por lo mismo que `desde`.
+  hasta            DateTime? @db.Date
+  /// El día en que se revisa si se cumplió. nullable porque a veces no se sabe todavía.
+  corteEn          DateTime? @db.Date
+  /// Qué da cumplirla, en palabras («Mantener Elite: unos US$2.000 al mes en comisiones»). nullable: opcional.
+  premio           String?   @db.Text
+  /// A quién le toca el bono, en palabras. No es una relación: es un rótulo. nullable: opcional.
+  paraQuien        String?
+  /// El avance escrito a mano (medida `manual`). nullable porque las demás medidas no lo usan.
+  avanceManualUsd  Decimal?  @db.Decimal(14, 2)
+  /// A qué día corresponde el avance escrito a mano. nullable por lo mismo.
+  avanceManualAl   DateTime? @db.Date
+  /// Lo que falta confirmar, o con quién se acordó. nullable: opcional.
+  nota             String?   @db.Text
+  /// Quitada de la pantalla. La fila no se borra.
+  archivada        Boolean   @default(false)
+  creadaPor        String
+  actualizadaPor   String
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@index([archivada, createdAt])
+}
+
 /// La meta de facturación de un año. APPEND-ONLY: cada vez que dirección la define es una fila; la vigente es la última
 /// de su año. La edita dirección desde la pantalla (lib/finanzas/meta-server.ts): cambiarla no pide código.
 model MetaDeFacturacion {

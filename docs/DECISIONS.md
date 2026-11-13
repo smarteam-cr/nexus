@@ -14901,6 +14901,7 @@ chat de la sección no pasan por el normalizador: si alguien le pide al chat una
 una persona). Las automatizaciones de Cemaco nombran las etapas viejas («Contacto en base», «Cliente activo») en su texto:
 rehacer solo el ciclo de vida no las corrige.
 
+<<<<<<< HEAD
 ## Cobranza — el estado de cuenta compartido (2026-11-13, pedido 17)
 - **Desde cada cuenta de Cobranza, «Compartir estado de cuenta» crea un enlace para la persona de finanzas del cliente:
   `/external/estado-de-cuenta/<token>`, EN VIVO** (sin foto: cada vez que se abre muestra lo de hoy). Lo crea, copia,
@@ -14930,3 +14931,58 @@ rehacer solo el ciclo de vida no las corrige.
   adivinar. *Si finanzas del cliente lo pide:* mostrar el total de Odoo/Mercury cuando la cuota tenga su factura vinculada.
 - **Fusionar dos fichas:** el enlace de la cuenta absorbida muere con ella (`SE_BORRAN_A_PROPOSITO` en
   lib/clients/fusion-de-empresas.ts); si la absorbida era la única con cuenta, la cuenta se muda entera y el enlace sigue.
+=======
+## Las metas de gerencia con HubSpot (2026-11-13)
+
+> Pedido de la reunión de gerencia (puntos 24 y 25): seguir lo que pide el programa de partners de HubSpot (mantener el
+> nivel Elite vale unos US$2.000 al mes en comisiones; el requisito subió 25 % y faltan unos US$7.000), la meta de
+> septiembre a diciembre de US$32.588 en ventas nuevas para el bono del 15 %, y los US$12.000 de ingresos recurrentes
+> que le dan US$500 a Elías González, Alexander Vanegas y Andrés Pinzón. Hoy se revisaban a mano.
+
+- **Dónde: Finanzas › Reportes › «Metas y bonos» (`/finanzas/goals`), solo dirección** (`isCostosRole`, el mismo gate
+  que Caja neta; las rutas viven bajo `/api/cobranza/costos/goals` para que el escaneo de privacidad las vigile). No
+  existe todavía el Centro de comando de dirección: cuando exista, lee de `cargarMetasDeGerencia` y no copia la cuenta.
+- **Una meta dice CÓMO se mide** (`MetaDeGerencia.medida`, la lista cerrada en `lib/finanzas/metas-de-gerencia.ts`) y
+  Nexus lee el avance; dirección carga lo que HubSpot no expone: el objetivo exacto, el período y el corte. Dos formas
+  de medir: de **nivel** (cuánto hay hoy) y **acumulada** (cuánto se juntó dentro del período). Cada tarjeta dice qué
+  mide, de dónde sale y de qué día es el dato. Seis medidas: MRR gestionado (Partner), MRR de negocios del plan de
+  partner (HubSpot), MRR vendido de cuentas nuevas (Partner), MRR de servicios recurrentes (Cobranza), ventas ganadas
+  (pipelines de venta propia) y a mano, con su día. *Por qué texto y no enum:* sumar una medida no toca la base; una
+  clave desconocida se lee como «a mano».
+- **Elite se mide con el MRR gestionado de HubSpot Partner** (`ClientPartnerSnapshot.mrrManaged`, que es
+  `hs_split_managed_mrr`: en una cuenta compartida cuenta solo la parte de Smarteam), sumado en la última copia con la
+  misma regla de la comisión de HubSpot (lo que llegó en los 2 días antes de la última copia). Medido el 2026-11-13:
+  **US$126.119,87** en 50 cuentas gestionadas (sin dividir las compartidas daría 129.680,11). HubSpot dejó de
+  calcular los puntos de nivel el 26-11-2025, así que el requisito nuevo, por lo que se sabe, es de MRR: **por
+  confirmar** (con el portal de partners). El requisito exacto quedó VACÍO a propósito en la carga inicial: nadie lo
+  tiene escrito, y «faltan unos 7.000» daría unos 133.000, que es un cálculo y no el dato. La pantalla dice «Falta
+  cargar el objetivo». Al lado va la comisión que HubSpot proyecta hoy (US$18.405 al mes), que es lo que Elite cuida.
+- **El bono del 15 % se mide con el avance que HubSpot calcula en sus metas «Partner Mutual Action Plan»**
+  (`MetaComercial`, tipos `sourced_deal_mrr` y `assisted_deal_mrr`: negocios traídos por Smarteam y asistidos),
+  sumando los meses que toca el período. Es el número de HubSpot (`hs_kpi_value`), no uno recalculado; se lee por
+  `tramosDelPlanDePartner` (lib/ventas/metas.ts, la única puerta de `MetaComercial`). Medido el 2026-11-13, de
+  septiembre a noviembre: **US$7.970,88** (6.329,38 traídos y 1.641,50 asistidos). La meta propia de HubSpot para esos
+  cuatro meses suma 34.092,16, no 32.588: la diferencia confirma que el 32.588 viene de otro lado (el aviso del bono) y
+  que se carga a mano. **Por confirmar:** qué cuenta HubSpot como «venta nueva» para el bono. Si fuera el MRR vendido
+  de cuentas nuevas, la medida existe (septiembre: US$3.969 en 5 cuentas) y se cambia en «Editar».
+- **«Ingresos recurrentes» = lo que Cobranza tiene para cobrar ESTE MES por los servicios recurrentes activos**
+  (los `Cobro` del mes de los `ServicioContratado` RECURRENTE y ACTIVO, en cualquier estado), en dólares; lo que está en
+  colones se dice aparte, sin convertir. Medido el 2026-11-13: **US$1.114 en noviembre** (6 cobros: continuidad web,
+  conectores y la cuota de 300 de un contrato web de 3.600); el soporte de 320 no tiene cobro y queda afuera, y el CRM
+  de 940 terminó en octubre. Contra 12.000 es el 9 %. *Por qué los cobros y no `montoTotal`:* en un recurrente con
+  duración ese campo es el TOTAL del contrato (3.600 = 12 × 300; 2.820 = 3 × 940) y en uno abierto es el mes; sumarlo
+  daba US$8.819 al mes, un número que no existe. *Por qué no las ventas recurrentes ganadas:* `VentaGanada` no dice qué
+  parte es mensual (la simulación de comisiones lo saca de la propuesta y a veces lo supone). No incluye licencias de
+  HubSpot (eso es el MRR de Partner) ni implementaciones. **Por confirmar con Marco:** con un MRR de 1.114, una meta de
+  12.000 parece más la venta de recurrentes en un período (o el MRR al cierre de 2027) que el nivel de hoy; y falta la
+  fecha de corte. La nota de la meta lo dice en pantalla; si la respuesta es «lo vendido», se cambia la medida a
+  «Avance escrito a mano» o se construye la medida con lo mensual de las propuestas ganadas.
+- **La carga inicial va en el SQL** (`2026-11-13-metas-de-gerencia.sql`, ids fijos y `ON CONFLICT DO NOTHING`): las
+  tres metas aparecen el día del deploy, y correrlo otra vez no pisa lo editado. Se firman `nexus:sql-2026-11-13`.
+- **Se edita en el lugar, firmado** (`actualizadaPor`), y «Quitar la meta» archiva: la fila no se borra. A diferencia
+  de la meta de facturación (append-only), acá lo que cambia es la carga de un dato que HubSpot no da, no una decisión
+  de la empresa que haya que poder reconstruir.
+- *Qué no garantiza:* la pantalla no se probó con sesión (el navegador del preview no está logueado). El avance del plan
+  de partner depende de que la copia de metas de HubSpot corra (cada hora); la del MRR gestionado, de la copia diaria
+  de Partner. Ninguna meta avisa sola cuando se acerca el corte.
+>>>>>>> refs/heads/worktree-agent-a3157f7af733dc9cd
