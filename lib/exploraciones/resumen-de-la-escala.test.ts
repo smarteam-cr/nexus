@@ -1017,6 +1017,26 @@ describe("10 · lo que mostró el simulacro de Centauro (10 nov)", () => {
     const dos = { ...g, pendientes: [{ id: "p3", tipo: "sin-dato" as const, texto: "No hubo reunión con el equipo de Marketing.", areaId: null, citas: [] }] };
     expect(resumenParaLaPagina(dos, [VENTAS, SERVICIO, MARKETING], CHEQUEO, ENTORNO, { conCitas: false }).pendientes.filter((x) => /Marketing/.test(x.texto))).toHaveLength(1);
   });
+
+  it("si NINGUNA sesión tiene equipo no hay equipos «Por explorar»: todos salen con lo suyo (Tecnosagot, 13 nov)", () => {
+    const g = guardado2();
+    g.hicimos = { ...g.hicimos, sesiones: g.hicimos.sesiones.map((x) => ({ ...x, equipo: null, areaId: null })) };
+    const p = resumenParaLaPagina(g, [VENTAS, SERVICIO, MARKETING], CHEQUEO, ENTORNO, { conCitas: false, porExplorar: POR_EXPLORAR });
+    expect(p.sinExplorar).toEqual([]);
+    expect(p.tarjetas.every((t) => !t.porExplorar)).toBe(true);
+    expect(p.pendientes.some((x) => x.tipo === "no-explorada")).toBe(false);
+  });
+
+  it("un equipo cuyo contenido cita una sesión SIN equipo sí se exploró: sale con lo suyo (Televentas en Polaris, 13 nov)", () => {
+    const g = guardado2();
+    const deLaSinEquipo = { ...CITA_LUIS, reunion: "gmeet_sin_equipo", fecha: "2026-11-05T21:30:00.000Z" };
+    g.operativas = [...g.operativas!, { id: "o3", nombre: "Marketing", areaId: "2", organizacion: [], bien: [], frena: [], retos: [{ id: "t9", texto: "No se sabe qué campaña trajo cada venta.", dimensionId: null, citas: [deLaSinEquipo] }], cifras: [], falta: null }];
+    const p = resumenParaLaPagina(g, [VENTAS, SERVICIO, MARKETING], CHEQUEO, ENTORNO, { conCitas: false, porExplorar: POR_EXPLORAR });
+    expect(p.sinExplorar).toEqual([]);
+    expect(p.tarjetas.find((t) => t.nombre === "Marketing")).toMatchObject({ porExplorar: false });
+    expect(p.tarjetas.find((t) => t.nombre === "Marketing")!.subequipos[0].retos.piezas.map((x) => x.texto)).toEqual(["No se sabe qué campaña trajo cada venta."]);
+    expect(p.pendientes.some((x) => x.tipo === "no-explorada")).toBe(false);
+  });
 });
 
 describe("11 · el cuarto simulacro de Centauro (10 nov)", () => {

@@ -1667,8 +1667,10 @@ export function resumenParaLaPagina(
   });
 
   // Las sesiones que se cuentan: las de los equipos que ve el cliente (y las que no tienen equipo). Un Resumen viejo cuyas
-  // sesiones no dicen de qué equipo son no sabe cuáles se exploraron: no marca ninguno como pendiente.
-  const conEquipos = !!g?.hicimos.sesiones.some((x) => x.areaId !== undefined);
+  // sesiones no dicen de qué equipo son no sabe cuáles se exploraron: no marca ninguno como pendiente. Tampoco uno donde
+  // NINGUNA sesión tiene equipo (Tecnosagot, 13 nov: sus tres sesiones sin marcar traían `areaId: null`, contaban como
+  // «con equipos» y Ventas y Marketing salían «Por explorar», con su pestaña apagada, en plena presentación).
+  const conEquipos = !!g?.hicimos.sesiones.some((x) => !!x.areaId);
   const hicimos = g
     ? loQueHicimos(
         { ...g.hicimos, sesiones: g.hicimos.sesiones.filter((x) => !x.areaId || deLaPagina.has(x.areaId)) },
@@ -1676,6 +1678,17 @@ export function resumenParaLaPagina(
       )
     : null;
   const exploradas = new Set((hicimos?.areas ?? []).filter((a) => a.sesiones > 0).map((a) => a.areaId));
+  /* Una sesión SIN equipo de la escala (sin marcar, o de Dirección) también explora el equipo cuyo contenido la cita (Polaris, 13 nov: Televentas tenía cinco
+     hallazgos de las reuniones del 6, 10 y 11 nov y salía «Por explorar», porque solo una de sus nueve sesiones estaba
+     marcada, con Marketing). Que un equipo cite una sesión de OTRO equipo no alcanza: puede ser una mención de pasada
+     («No se hizo el diagnóstico», Marketing en Centauro). La sesión y la cita se reconocen por su fecha, que es la misma. */
+  const sinEquipo = new Set((g?.hicimos.sesiones ?? []).filter((x) => !x.areaId).map((x) => x.fecha));
+  const citaUnaSinEquipo = (ps: readonly { citas?: readonly CitaDelResumen[] }[]) => ps.some((p) => (p.citas ?? []).some((c) => sinEquipo.has(c.fecha)));
+  if (conEquipos && v2) {
+    for (const op of g!.operativas ?? []) if (citaUnaSinEquipo([...op.organizacion, ...op.bien, ...op.frena, ...op.retos, ...op.cifras])) exploradas.add(op.areaId);
+  } else if (conEquipos && g) {
+    for (const r of resultados) if (citaUnaSinEquipo([...(g.areas[r.areaId]?.hallazgos ?? []), ...g.datosRojos.filter((d) => d.areaId === r.areaId)])) exploradas.add(r.areaId);
+  }
   const sinExplorar = g && conEquipos ? resultados.filter((r) => !exploradas.has(r.areaId)).map((r) => r.areaId) : [];
 
   // Los subequipos de cada equipo de la escala: las áreas operativas (formato 2) o el equipo entero (formato 1).

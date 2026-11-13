@@ -14772,6 +14772,10 @@ Sistema 2, «Nexus · interfaz interna», se descartó): cambian el contenido, e
   3. «Qué hicimos» son solo las tres cifras (sesiones, tiempo, personas), arriba en la cabecera, como la intro del
      diagnóstico. Salen las etiquetas de equipos y el párrafo. Las pestañas muestran siempre los equipos que ve el
      cliente; uno sin sesiones dice «Por explorar» y afuera no se abre, tampoco con su dirección directa (`sinExplorar`).
+     *Corrige (13 nov, Polaris):* cuentan como sesiones del equipo también las sesiones sin equipo de la escala (sin
+     marcar, o de Dirección) que su contenido cita. Televentas tenía cinco hallazgos de tres reuniones y salía «Por
+     explorar», porque solo una de las nueve sesiones estaba marcada, con Marketing. Que un equipo cite una sesión
+     marcada con OTRO equipo sigue sin alcanzar: puede ser una mención de pasada (Marketing en Centauro).
   4. «Qué falta validar» va muy sencillo: tres líneas como mucho, sin etiquetas técnicas. Va primero lo que calcula
      Nexus (un equipo sin sesiones, lo que falta confirmar de una parte) y después lo del agente. Lo del agente que nombra
      a un equipo sin explorar no se repite. Lo escrito a mano va siempre.
