@@ -21,13 +21,14 @@
  * y abre `CuadrarCronogramaDialog` cuando el acuerdo nuevo choca con facturas ya emitidas.
  */
 import { useMemo, useState } from "react";
-import { IconCheck } from "@/components/ui";
+import { IconCheck, Selector } from "@/components/ui";
 import { useToast } from "@/components/ui/Toast";
 import { fetchJson, ApiError } from "@/lib/api/fetch-json";
 import DatePickerField from "@/components/ui/DatePickerField";
 // Motor puro (sin Prisma) — suma-vs-total en vivo para avisar descuadres al capturar.
 import { sumaPlanExpandido, type PlanEngineInput } from "@/lib/cobranza/engine";
 import type { CuentaDetailDTO, ServicioDTO } from "@/lib/cobranza";
+import { NOMBRE_DE_LA_RENOVACION, RENOVACIONES, finDelContrato } from "@/lib/cobranza/contratos";
 import type { PlanDeCambios } from "@/lib/cobranza/plan-vs-cobros";
 import CuadrarCronogramaDialog, { aPlataforma, type DecisionElegida } from "./CuadrarCronogramaDialog";
 import {
@@ -100,6 +101,9 @@ export default function ServicioForm({
   );
   const [estado, setEstado] = useState(servicio?.estado ?? "ACTIVO");
   const [descripcion, setDescripcion] = useState(servicio?.descripcion ?? "");
+  /* El contrato recurrente (2026-11-13): su fin y qué pasa al vencer. No mueve cuotas: avisa a Customer Success. */
+  const [contratoFin, setContratoFin] = useState(servicio?.contratoFin ?? "");
+  const [renovacion, setRenovacion] = useState(servicio?.contratoRenovacion ?? "");
 
   const [template, setTemplate] = useState(plan?.template ?? "PAREJO");
   const [numCuotas, setNumCuotas] = useState(plan?.numCuotas != null ? String(plan.numCuotas) : "");
@@ -232,6 +236,9 @@ export default function ServicioForm({
         duracionMeses: duracionMeses.trim() ? Number(duracionMeses) : null,
         projectId: projectId || null,
         descripcion: descripcion.trim() || null,
+        ...(modalidad === "RECURRENTE"
+          ? { contratoFin: contratoFin || null, contratoRenovacion: renovacion || null }
+          : {}),
       };
 
       let servicioId = servicio?.id ?? null;
@@ -429,6 +436,36 @@ export default function ServicioForm({
           <p className="mt-1 text-[10px] text-fg-muted">Leída del cronograma del proyecto — editable.</p>
         )}
       </div>
+
+      {modalidad === "RECURRENTE" && (
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div>
+            <label className={LABEL_CLS}>Fin del contrato</label>
+            <DatePickerField value={contratoFin} onChange={(ymd) => setContratoFin(ymd)} placeholder="Elegir fecha" />
+            <p className="mt-1 text-[10px] text-fg-muted">
+              {contratoFin
+                ? "Customer Success recibe un aviso 30 días antes."
+                : (() => {
+                    const fin = finDelContrato({ fechaInicioFacturacion: fechaInicio || null, duracionMeses: duracionMeses.trim() ? Number(duracionMeses) : null, contratoFin: null });
+                    return fin ? `Sin fecha, vence el ${fin} (inicio + duración).` : "Sin fecha ni duración, el contrato no vence.";
+                  })()}
+            </p>
+          </div>
+          <div>
+            <label className={LABEL_CLS}>Al vencer</label>
+            <Selector
+              etiqueta="Qué pasa al vencer el contrato"
+              placeholder="Nadie lo dijo"
+              valor={renovacion || null}
+              opciones={[
+                { value: "", label: "Nadie lo dijo" },
+                ...RENOVACIONES.map((r) => ({ value: r, label: NOMBRE_DE_LA_RENOVACION[r] })),
+              ]}
+              onElegir={(v) => setRenovacion(v)}
+            />
+          </div>
+        </div>
+      )}
 
       {servicio && (
         <div>

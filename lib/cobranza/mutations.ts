@@ -30,6 +30,7 @@ import { crDateParts } from "@/lib/jobs/time";
 import { huellaDelCronograma as huellaPura } from "./plan-vs-cobros";
 import { decidirReversion } from "./reversion-cobro";
 import { porQueNoSeBorraElServicio } from "./borrar-servicio";
+import { arrancaConProduccion } from "./paso-a-produccion";
 import { TIPO_SERVICIO_LABEL } from "./schema";
 import { decidirNumeroFactura, mensajeNumeroEnOtraCuenta, normalizarNumeroFactura } from "./numero-factura";
 import { resolverSociedad, type DecisionDeSociedad } from "./sociedades";
@@ -209,7 +210,12 @@ export async function createServicio(cuentaId: string, data: z.infer<typeof serv
   let fechaInicio: Date | null = data.fechaInicioFacturacion
     ? dayUTC(data.fechaInicioFacturacion)
     : null;
-  if (!fechaInicio && data.projectId) {
+  if (!fechaInicio && data.projectId && arrancaConProduccion(data.tipoServicio, data.modalidad)) {
+    /* Un conector o un servicio recurrente arranca cuando pasa a producción (2026-11-13, lib/cobranza/paso-a-produccion.ts),
+       no cuando arrancó el cronograma: sin la confirmación queda sin fecha (sin cuotas) hasta que alguien la registre. */
+    const fila = await prisma.cobroDelProyecto.findUnique({ where: { projectId: data.projectId }, select: { produccionDesde: true } });
+    fechaInicio = fila?.produccionDesde ?? null;
+  } else if (!fechaInicio && data.projectId) {
     const tl = await prisma.projectTimeline.findUnique({
       where: { projectId: data.projectId },
       select: { anchorStartDate: true },
@@ -227,12 +233,14 @@ export async function createServicio(cuentaId: string, data: z.infer<typeof serv
       duracionMeses: data.duracionMeses ?? null,
       projectId: data.projectId ?? null,
       descripcion: data.descripcion ?? null,
+      contratoFin: data.contratoFin ? dayUTC(data.contratoFin) : null,
+      contratoRenovacion: data.contratoRenovacion ?? null,
     },
   });
 }
 
 export async function updateServicio(servicioId: string, data: z.infer<typeof servicioPatchSchema>) {
-  const { fechaInicioFacturacion, ...rest } = data;
+  const { fechaInicioFacturacion, contratoFin, ...rest } = data;
   return prisma.servicioContratado.update({
     where: { id: servicioId },
     data: {
@@ -240,6 +248,7 @@ export async function updateServicio(servicioId: string, data: z.infer<typeof se
       ...(fechaInicioFacturacion !== undefined
         ? { fechaInicioFacturacion: fechaInicioFacturacion ? dayUTC(fechaInicioFacturacion) : null }
         : {}),
+      ...(contratoFin !== undefined ? { contratoFin: contratoFin ? dayUTC(contratoFin) : null } : {}),
     },
   });
 }

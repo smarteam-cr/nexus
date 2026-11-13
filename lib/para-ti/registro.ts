@@ -30,6 +30,7 @@ import { COMPROMISOS_SIN_AGENDAR, COMPROMISOS_SIN_AGENDAR_CS } from "./fuentes/c
 import { RECURRENCIA_SUGERIDA } from "./fuentes/recurrencia";
 import { LIMPIEZA_DE_HUBSPOT } from "./fuentes/limpieza";
 import { ACCESO_AL_PORTAL } from "./fuentes/acceso-al-portal";
+import { COBRANZA_A_TU_CARGO, COBRANZA_CONTRATOS, COBRANZA_PRIMERA_CUOTA, COBRANZA_PRODUCCION } from "./fuentes/cobranza";
 import {
   COMENTARIOS_DE_LA_DOCUMENTACION,
   COMENTARIOS_DE_LA_ESCALA,
@@ -60,6 +61,10 @@ export const FUENTES: readonly Fuente[] = [
   RECURRENCIA_SUGERIDA,
   LIMPIEZA_DE_HUBSPOT,
   ACCESO_AL_PORTAL,
+  COBRANZA_A_TU_CARGO,
+  COBRANZA_PRODUCCION,
+  COBRANZA_PRIMERA_CUOTA,
+  COBRANZA_CONTRATOS,
   // Por frente: lo que es tuyo porque lo llevas.
   VIGIA,
   RELACIONES_DE_LA_CARTERA,

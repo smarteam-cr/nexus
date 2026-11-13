@@ -139,6 +139,13 @@ export const SCOPE_COVERAGE: Record<string, Cobertura> = {
       "mira solo (`status === \"completed\"`) y la etapa de cierre la descarta `sugerenciaVigente`.",
   },
   "lib/cobranza/queries.ts": { modo: "criterio", criterio: "facturable" },
+  // El paso a producción (2026-11-13): los de Desarrollo en marcha o en «Recurrente» y los que tienen un servicio de cobro
+  // recurrente o su fila de responsables, entregados o no. Ninguno de los cuatro criterios sirve: un desarrollo ya
+  // entregado no es navegable ni de cartera, y es justo el que pide confirmar la producción.
+  "lib/cobranza/seguimiento-server.ts": {
+    modo: "exento",
+    razon: "Lista un conjunto con nombre propio (pipeline de Desarrollo, servicio de cobro recurrente o fila de CobroDelProyecto), sin el contenedor ni los de prueba; ninguno de los cuatro criterios lo describe.",
+  },
   // C-20: las consultas de /sessions viven en el cargador compartido con /api/sessions/grupo.
   "lib/sessions/cargar-sesiones-categorizadas.ts": { modo: "criterio", criterio: "clasificable" },
   // «Actualizar con IA» de la ficha del cliente: los handoffs y encuestas de sus proyectos vivos.

@@ -224,6 +224,9 @@ export const servicioCreateSchema = z.object({
   duracionMeses: z.number().int().min(1).max(120).nullish(),
   projectId: idDeBase.nullish(),
   descripcion: z.string().max(500).nullish(),
+  // El contrato recurrente (2026-11-13, lib/cobranza/contratos.ts): no mueve cuotas, avisa a Customer Success.
+  contratoFin: isoDate.nullish(),
+  contratoRenovacion: z.enum(["automatica", "manual", "no-renueva"]).nullish(),
 });
 
 export const servicioPatchSchema = z
@@ -237,8 +240,33 @@ export const servicioPatchSchema = z
     projectId: idDeBase.nullable(),
     estado: z.enum(COBRANZA_ESTADOS_SERVICIO),
     descripcion: z.string().max(500).nullable(),
+    contratoFin: isoDate.nullable(),
+    contratoRenovacion: z.enum(["automatica", "manual", "no-renueva"]).nullable(),
   })
   .partial();
+
+// ── Seguimiento (2026-11-13): responsables, descartes, conectores y paso a producción ──
+
+const correo = z.string().trim().toLowerCase().email().max(200);
+
+/** Una venta ganada sin cobro: reasignarla, descartarla con una razón o devolverla a la lista. Una cosa por vez. */
+export const ventaSeguimientoSchema = z.union([
+  z.strictObject({ responsable: correo.nullable() }),
+  z.strictObject({ descartar: z.string().trim().min(5, "Escribe la razón (al menos 5 letras).").max(300) }),
+  z.strictObject({ devolver: z.literal(true) }),
+]);
+
+/** Confirmar (true) o deshacer (false) la desactivación de un conector en mora. */
+export const desactivacionSchema = z.strictObject({ desactivar: z.boolean() });
+
+/** Los responsables de un proyecto. null = el por defecto. */
+export const responsablesProyectoSchema = z
+  .strictObject({ confirma: correo.nullable(), cobra: correo.nullable() })
+  .partial()
+  .refine((v) => v.confirma !== undefined || v.cobra !== undefined, "Nada que guardar.");
+
+/** El paso a producción: el día (no puede ser futuro: se confirma lo que ya pasó), o null para deshacerlo. */
+export const pasoAProduccionSchema = z.strictObject({ desde: isoDate.nullable() });
 
 const cuotaPlanSchema = z.object({
   orden: z.number().int().min(1),

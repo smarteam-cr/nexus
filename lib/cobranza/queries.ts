@@ -233,6 +233,9 @@ export interface ServicioDTO {
   anchorActual: string | null; // anchorStartDate ACTUAL del project (para badge de divergencia)
   estado: string;
   descripcion: string | null;
+  /** El fin escrito del contrato recurrente (AAAA-MM-DD) y su renovación (lib/cobranza/contratos.ts, 2026-11-13). */
+  contratoFin: string | null;
+  contratoRenovacion: string | null;
   planActivo: PlanDTO | null;
   cobros: CobroDTO[];
 }
@@ -610,6 +613,8 @@ export async function getCuentaDetail(cuentaId: string): Promise<CuentaDetailDTO
       anchorActual: isoDay(s.project?.timeline?.anchorStartDate ?? null),
       estado: s.estado,
       descripcion: s.descripcion,
+      contratoFin: isoDay(s.contratoFin),
+      contratoRenovacion: s.contratoRenovacion,
       planActivo: s.planes[0]
         ? {
             id: s.planes[0].id,

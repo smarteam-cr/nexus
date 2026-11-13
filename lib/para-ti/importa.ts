@@ -57,6 +57,8 @@ export const PESO_DE_LA_FUENTE: Record<string, number> = {
   "cs-tus-cuentas": PESOS.riesgo,
   "cs-relaciones-cartera": PESOS.riesgo,
   "cs-relacion-hubspot": PESOS.riesgo - 5,
+  // La primera cuota sin pagar (la regla de los 15 días, 2026-11-13): decide si se pausan las sesiones.
+  "cobranza-primera-cuota": PESOS.riesgo - 5,
   // Cuenta sin siguiente paso (ni tarea con fecha esta semana ni reunión en 8 días; desde el 2026-10-19 una reunión
   // agendada ya es el siguiente paso). Las reuniones con la cuenta y las tareas vencidas salen de la misma medición: en
   // el inicio de Customer Success van en sus bloques (lib/para-ti/foco.ts) y estos pesos casi no se usan.
@@ -79,6 +81,10 @@ export const PESO_DE_LA_FUENTE: Record<string, number> = {
   "etapa-sugerida": PESOS.decision - 5,
   alta: PESOS.decision,
   presentaciones: PESOS.decision - 10,
+  // Un contrato recurrente que vence, o una cuenta que paga y no avanza (2026-11-13).
+  "cobranza-contratos": PESOS.decision - 5,
+  // Sin la confirmación del paso a producción, el cobro no arranca (2026-11-13).
+  "cobranza-produccion": PESOS.decision,
   // Revisar una reunión.
   "reuniones-por-revisar-lo-que-dejaron": PESOS.reunion,
   "reuniones-sin-revisar": PESOS.reunion,
@@ -91,6 +97,7 @@ export const PESO_DE_LA_FUENTE: Record<string, number> = {
   negocios: PESOS.interno + 5,
   "ventas-pedidos": PESOS.interno,
   finanzas: PESOS.interno,
+  "cobranza-a-tu-cargo": PESOS.interno + 5,
   "marketing-revisar": PESOS.interno,
   "sistema-jobs": PESOS.interno,
   // Encuestas y limpieza.

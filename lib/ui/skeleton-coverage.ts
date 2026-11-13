@@ -53,6 +53,7 @@ export const SKELETON_COVERAGE: Record<string, Cobertura> = {
   "cobranza/importar": { modo: "inherits", de: "cobranza" },
   "cobranza/odoo": { modo: "inherits", de: "cobranza" },
   "cobranza/mercury": { modo: "inherits", de: "cobranza" },
+  "cobranza/production": { modo: "inherits", de: "cobranza" },
   // Rediseño de Finanzas (2026-10-03): la puerta redirige según la vista; las pantallas nuevas tienen el suyo.
   finanzas: { modo: "exempt", razon: "redirect puro a la pantalla de entrada de cada vista (lib/finanzas/vista.ts)" },
   "finanzas/pendientes": { modo: "own" },
