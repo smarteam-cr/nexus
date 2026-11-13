@@ -43,6 +43,7 @@ import { materializeCobros, ultimaCuotaCargada } from "@/lib/cobranza/engine";
 import ServicioForm from "./ServicioForm";
 import CronogramaCobros from "./CronogramaCobros";
 import SociedadesQueFacturan from "./SociedadesQueFacturan";
+import CompartirEstadoDeCuenta from "./CompartirEstadoDeCuenta";
 
 interface GenerateResult {
   created: number;
@@ -299,6 +300,10 @@ export default function CuentaDrawer({
           </div>
         ) : (
           <div className="space-y-8">
+            {/* ── El enlace del estado de cuenta para el cliente (pedido 17, 2026-11-13). Arriba y en una línea: es lo que
+                 se le pide a la cuenta cuando su persona de finanzas pregunta cuánto debe. Solo quien edita Cobranza. ── */}
+            {puedeEditar && <CompartirEstadoDeCuenta key={cuenta.id} cuentaId={cuenta.id} tituloCls={SECTION_TITLE_CLS} />}
+
             {/* ── Servicios contratados y sus facturas ──
                  VA PRIMERO desde el 2026-08-04: es lo que se consulta todos los días
                  (qué hay que facturar, cómo va cada cuota). Los datos de la cuenta se

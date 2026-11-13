@@ -2212,6 +2212,26 @@ model AccesoAlDocumento {
   @@index([clientId])
 }
 
+// El enlace con que la persona de finanzas del cliente ve SU estado de cuenta EN VIVO (pedido 17, 2026-11-13):
+// /external/estado-de-cuenta/[token]. Uno por cuenta de Cobranza. Sin contraseña: la URL es el secreto (256 bits),
+// caduca (`venceEn`) y se revoca. Lo que muestra lo decide el chokepoint lib/external/estado-de-cuenta-view.ts.
+// SQL: scripts/sql/2026-11-13-estado-de-cuenta-compartido.sql. Ver DECISIONS «Cobranza — el estado de cuenta compartido».
+model AccesoAlEstadoDeCuenta {
+  id          String           @id @default(cuid())
+  cuentaId    String           @unique
+  cuenta      CuentaFinanciera @relation(fields: [cuentaId], references: [id], onDelete: Cascade)
+  accessToken String           @unique // 64 hex (crypto.randomBytes(32))
+  enabledAt   DateTime         @default(now())
+  venceEn     DateTime // pasada esta fecha el enlace no abre (dice que venció); extender la corre sin cambiar el enlace
+  revokedAt   DateTime? // != null → el enlace no abre nada
+  revocadoPor String? // el correo de quien lo revocó
+  lastUsedAt  DateTime? // la última vez que alguien abrió la página
+  vistas      Int              @default(0)
+  creadoPor   String? // el correo de quien lo creó (auditoría)
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+}
+
 // El catálogo de listas de reproducción de HubSpot Academy que mantiene Smarteam (Q1, 2026-10-27). La sección «Tu ruta
 // en HubSpot Academy» del kickoff sugiere las de los hubs vendidos y los roles que tocan (lib/kickoff/academy.ts); el
 // CSE ajusta. Se edita en Éxito del cliente › HubSpot Academy. Archivar = `activa: false` (un kickoff publicado guarda
@@ -4334,6 +4354,8 @@ model CuentaFinanciera {
   clientesMercury     ClienteMercury[]     @relation("ClientesMercuryDeLaCuenta")
   /// Los contratos que revenden licencias, con su parte de servicio y su costo (2026-10-17).
   licenciasRevendidas LicenciaRevendida[]
+  /// El enlace del estado de cuenta para el cliente (2026-11-13). Uno por cuenta.
+  accesoAlEstadoDeCuenta AccesoAlEstadoDeCuenta?
 
   @@unique([fuente, fuenteIdExterno]) // NULLs no colisionan — las cuentas manuales legacy conviven
   @@index([estadoCuenta])

@@ -198,9 +198,13 @@ export const CON_REGLA_PROPIA: Readonly<Record<string, string>> = {
 
 /**
  * Se borran con la ficha absorbida (o quedan sin cliente) A PROPÓSITO, cada una con su motivo. Clave «modelo.columna».
- * Hoy no hay ninguna: todo lo que apunta a la ficha es memoria de la empresa.
+ * Lo que apunta a la ficha es memoria de la empresa: de ella no se borra nada. De la cuenta de cobro, solo el enlace del
+ * estado de cuenta.
  */
-export const SE_BORRAN_A_PROPOSITO: Readonly<Record<string, string>> = {};
+export const SE_BORRAN_A_PROPOSITO: Readonly<Record<string, string>> = {
+  "accesoAlEstadoDeCuenta.cuentaId":
+    "el enlace del estado de cuenta (2026-11-13) muestra la deuda de ESA cuenta: si la absorbida tenía cuenta propia, su enlace muere con ella (`onDelete: Cascade`) y quien lo tenía ve el 404. No se muda: es uno por cuenta, y la que sigue puede tener el suyo. Si la absorbida es la única con cuenta, la cuenta entera se muda y el enlace sigue abriendo, ahora con el nombre de la que sigue",
+};
 
 /** Punteros sin relación que siguen apuntando al id de la absorbida A PROPÓSITO, cada uno con su motivo. */
 export const SE_QUEDAN_A_PROPOSITO: Readonly<Record<string, string>> = {
