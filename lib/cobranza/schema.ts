@@ -10,6 +10,7 @@ import { FRECUENCIA_PARTNER_MIN, FRECUENCIA_PARTNER_MAX } from "./partners";
 import { MOTIVO_REVERSION_MIN } from "./reversion-cobro";
 import { MOTIVO_SIN_NUMERO_MAX, NUMERO_FACTURA_MAX } from "./numero-factura";
 import { CATEGORIAS_INGRESO_NO_VENTA, REFERENCIA_EXTERNA_MAX } from "./ingresos-no-venta";
+import { GASTO_RUBROS, GASTO_TIPOS } from "@/lib/finanzas/clases-de-gasto";
 
 // ── Espejos client-safe de los enums (mantener en sync con prisma/schema.prisma) ──
 
@@ -546,6 +547,8 @@ export type ComisionPartnerEstadoInput = z.infer<typeof comisionPartnerEstadoSch
 
 export const COSTOS_CATEGORIAS = ["SALARIO", "HERRAMIENTA", "FIJO_OPERACION"] as const;
 export const COSTOS_FRECUENCIAS = ["MENSUAL", "ANUAL"] as const;
+// Las clases de gasto puntual y en qué fue (2026-11-13): viven en un módulo sin zod, que leen también las pantallas.
+export { GASTO_RUBROS, GASTO_TIPOS } from "@/lib/finanzas/clases-de-gasto";
 
 export const CATEGORIA_COSTO_LABEL: Record<string, string> = {
   SALARIO: "Salario",
@@ -576,6 +579,8 @@ const costoBase = z.object({
   factorCargas: factorCargas.nullable().optional(),
   activo: z.boolean().optional(),
   notas: z.string().trim().max(2000).nullable().optional(),
+  // Presupuesto estimado (2026-11-13): en la moneda y la frecuencia del costo. null = sin presupuesto. Solo se compara.
+  presupuesto: monto.nullable().optional(),
   // Baja DEFINITIVA (≠ pausa): la mutación emite un movimiento BAJA con esta fecha
   // y el motor excluye el costo pasada la fecha. null = reactivar. (fase 4.5)
   finalizadoEl: isoDateReal.nullable().optional(),
@@ -638,6 +643,10 @@ const gastoBase = z.object({
   fecha: isoDateReal, // día del gasto (pasado = ejecutado; futuro = planificado)
   tags: gastoTags,
   notas: z.string().trim().max(2000).nullable().optional(),
+  // Las reglas de gasto (2026-11-13, lib/finanzas/reglas-de-gasto.ts). Opcionales: un gasto sin clasificar es «otro».
+  tipo: z.enum(GASTO_TIPOS).nullable().optional(),
+  rubro: z.enum(GASTO_RUBROS).nullable().optional(),
+  avisoPrevio: z.boolean().optional(),
 });
 
 export const gastoCreateSchema = gastoBase;

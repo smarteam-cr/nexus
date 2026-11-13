@@ -40,6 +40,7 @@ export default function TipoDeCambioClient({
   manuales,
   hoyISO,
   puedeActualizar,
+  aviso,
 }: {
   dias: TasaDelDia[];
   traidoEn: string | null;
@@ -48,6 +49,8 @@ export default function TipoDeCambioClient({
   manuales: Array<{ periodo: string; crcPorUsd: number; fuente: string }>;
   hoyISO: string;
   puedeActualizar: boolean;
+  /** El aviso de tipo de cambio de la planilla, sin plata (2026-11-13): va debajo de la tasa de hoy. */
+  aviso?: React.ReactNode;
 }) {
   const router = useRouter();
   const toast = useToast();
@@ -144,6 +147,8 @@ export default function TipoDeCambioClient({
               />
             )}
           </section>
+
+          {aviso}
 
           <Grafico dias={dias} rango={rango} onRango={setRango} hoyISO={hoyISO} referencia={manualHoy?.crcPorUsd ?? null} />
 

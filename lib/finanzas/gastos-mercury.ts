@@ -21,6 +21,7 @@
  *
  * PURO: sin Prisma ni red.
  */
+import { cargoSobrePresupuesto } from "./reglas-de-gasto";
 
 export interface MovimientoMercuryParaGasto {
   id: string;
@@ -49,6 +50,8 @@ export interface RecurrenteDeNexus {
   monto: number;
   moneda: string;
   frecuencia: "MENSUAL" | "ANUAL";
+  /** Presupuesto estimado (2026-11-13), en la moneda y la frecuencia del recurrente. null = no tiene. */
+  presupuesto?: number | null;
 }
 
 export interface GastoDeNexus {
@@ -71,6 +74,11 @@ export interface ComercioRecurrente {
   precio: number;
   enNexus: RecurrenteDeNexus | null;
   estado: EstadoDelComercio;
+  /**
+   * Lo que cobró el último mes completo pasa el presupuesto de su recurrente (2026-11-13, regla de las tarjetas
+   * corporativas: lib/finanzas/reglas-de-gasto.ts). Solo un recurrente mensual con presupuesto.
+   */
+  sobrePresupuesto: boolean;
 }
 
 export interface GastosContraMercury {
@@ -172,7 +180,7 @@ export function gastosContraMercury(entrada: {
   // Los recurrentes: dos de los últimos tres meses, y el mes pasado o este. Solo la tarjeta de herramientas y la
   // suscripción de Mercury: la de débito es de viajes y compras sueltas (un Airbnb dos meses seguidos no es una suscripción).
   const esRecurrente = new Set<string>();
-  const comercios: Array<Omit<ComercioRecurrente, "enNexus" | "estado">> = [];
+  const comercios: Array<Omit<ComercioRecurrente, "enNexus" | "estado" | "sobrePresupuesto">> = [];
   for (const [k, todos] of porComercio) {
     const lista = todos.filter((c) => c.medio !== "DEBITO");
     if (lista.length === 0) continue;
@@ -214,7 +222,7 @@ export function gastosContraMercury(entrada: {
       const ref = enNexus?.monto ?? 0;
       const precio = enNexus?.frecuencia === "ANUAL" ? c.ultimoCargo.monto : c.precio;
       const estado: EstadoDelComercio = !enNexus ? "SIN_REGISTRAR" : Math.abs(precio - ref) > tolerancia(ref) ? "PRECIO_DISTINTO" : "AL_DIA";
-      return { ...c, enNexus, estado };
+      return { ...c, enNexus, estado, sobrePresupuesto: enNexus ? cargoSobrePresupuesto(c.precio, enNexus) : false };
     })
     .sort((a, b) => ORDEN[a.estado] - ORDEN[b.estado] || b.precio - a.precio);
 

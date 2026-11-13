@@ -16,6 +16,7 @@ import { montosPorMoneda, type DiferenciaOdoo, type MontoEnMoneda } from "@/lib/
 import { prisma } from "@/lib/db/prisma";
 import { filasPorQuien, juntarDiferencias } from "./conciliacion";
 import { gastosDelMesPendiente, mesAnterior, periodoDe } from "./gastos";
+import { FACTURAS_DESDE, gastosSinFactura } from "./reglas-de-gasto";
 import { devueltosPara } from "./revision-server";
 import type { DatosDePendientes } from "./pendientes";
 
@@ -44,7 +45,7 @@ function filasYPlata(lineas: readonly DiferenciaOdoo[]): { n: number; montos: Mo
  */
 export async function cargarFuentesDePendientes(todayISO: string, quien: string | null = null) {
   const periodos = [mesAnterior(periodoDe(todayISO)), periodoDe(todayISO)];
-  const [cola, comisiones, odoo, mercury, empOdoo, empMercury, gastosDeLosMeses, cierres, devueltos] = await Promise.all([
+  const [cola, comisiones, odoo, mercury, empOdoo, empMercury, gastosDeLosMeses, cierres, devueltos, sinFactura] = await Promise.all([
     loadColaCobros(todayISO),
     loadComisionesPartner(),
     cargarDiferencias(),
@@ -61,8 +62,13 @@ export async function cargarFuentesDePendientes(todayISO: string, quien: string 
       select: { periodo: true, estado: true, gastosListosPor: true },
     }),
     devueltosPara(quien),
+    /* Los gastos sin factura (2026-11-13): lo que le falta recopilar a quien registra. */
+    prisma.gastoPuntual.findMany({
+      where: { comprobante: null, fecha: { gte: new Date(`${FACTURAS_DESDE}T00:00:00Z`) } },
+      select: { fecha: true, monto: true, moneda: true, comprobante: true },
+    }),
   ]);
-  return { cola, comisiones, odoo, mercury, empOdoo, empMercury, gastosDeLosMeses, cierres, devueltos };
+  return { cola, comisiones, odoo, mercury, empOdoo, empMercury, gastosDeLosMeses, cierres, devueltos, sinFactura };
 }
 
 export type FuentesDePendientes = Awaited<ReturnType<typeof cargarFuentesDePendientes>>;
@@ -74,6 +80,11 @@ export async function medirPendientes(todayISO: string, quien: string | null = n
 /** Las tareas a partir de lo leído. Sin base ni red: lo mismo que mide Pendientes, para quien ya tiene las fuentes. */
 export function medirDesdeFuentes(f: FuentesDePendientes, todayISO: string): DatosDePendientes {
   const { cola, comisiones, odoo, mercury, empOdoo, empMercury, gastosDeLosMeses, cierres, devueltos } = f;
+  /* Con la misma regla que la lista de Gastos del mes: solo lo que ya pasó. */
+  const faltan = gastosSinFactura(
+    f.sinFactura.map((g) => ({ fecha: g.fecha.toISOString().slice(0, 10), comprobante: g.comprobante, monto: Number(g.monto), moneda: g.moneda })),
+    todayISO,
+  );
 
   /* Cobranza: lo mismo que las tarjetas de la cola. */
   const resumen = resumenAntiguedad(cola, todayISO);
@@ -130,5 +141,6 @@ export function medirDesdeFuentes(f: FuentesDePendientes, todayISO: string): Dat
       }, new Map<string, number>()),
     }),
     devueltos,
+    facturasQueFaltan: { n: faltan.length, montos: montosPorMoneda(faltan) },
   };
 }

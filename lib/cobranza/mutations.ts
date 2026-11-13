@@ -1783,7 +1783,16 @@ async function registrarMovimiento(
   });
 }
 
-export async function createCosto(data: z.infer<typeof costoCreateSchema>, usuarioEmail: string) {
+/**
+ * `alCrear` (2026-11-13): algo más que tiene que pasar en la MISMA transacción que el alta, con el id del costo nuevo. Lo
+ * usa «este gasto se repite» (lib/finanzas/gastos-reglas-server.ts) para atar el gasto a su fijo: si una de las dos
+ * escrituras falla, no queda el fijo sin el gasto atado (y un segundo clic no crea otro).
+ */
+export async function createCosto(
+  data: z.infer<typeof costoCreateSchema>,
+  usuarioEmail: string,
+  alCrear?: (tx: Prisma.TransactionClient, costoId: string) => Promise<void>,
+) {
   if (data.teamMemberId) {
     const persona = await prisma.teamMember.findUnique({
       where: { id: data.teamMemberId },
@@ -1805,6 +1814,7 @@ export async function createCosto(data: z.infer<typeof costoCreateSchema>, usuar
         factorCargas: data.factorCargas != null ? round4(data.factorCargas) : null,
         activo: data.activo ?? true,
         notas: data.notas ?? null,
+        presupuesto: data.presupuesto ?? null,
         finalizadoEl: finalizado ? dayUTC(data.finalizadoEl!) : null,
       },
     });
@@ -1818,6 +1828,7 @@ export async function createCosto(data: z.infer<typeof costoCreateSchema>, usuar
       usuarioEmail,
       notas: data.motivoMovimiento ?? null,
     });
+    if (alCrear) await alCrear(tx, costo.id);
     return { id: costo.id };
   });
 }
@@ -1885,6 +1896,7 @@ export async function updateCosto(
         factorCargas: merged.factorCargas != null ? round4(merged.factorCargas) : null,
         ...(data.activo !== undefined ? { activo: data.activo } : {}),
         ...(data.notas !== undefined ? { notas: data.notas } : {}),
+        ...(data.presupuesto !== undefined ? { presupuesto: data.presupuesto } : {}),
         ...(finalizadoNuevoISO !== undefined
           ? { finalizadoEl: finalizadoNuevoISO ? dayUTC(finalizadoNuevoISO) : null }
           : {}),
@@ -2753,6 +2765,9 @@ export async function createGasto(data: z.infer<typeof gastoCreateSchema>, regis
       fecha: dayUTC(data.fecha),
       tags: data.tags,
       notas: data.notas ?? null,
+      tipo: data.tipo ?? null,
+      rubro: data.rubro ?? null,
+      avisoPrevio: data.avisoPrevio ?? false,
       registradoPor,
     },
     select: { id: true },
@@ -2814,6 +2829,9 @@ export async function updateGasto(gastoId: string, data: z.infer<typeof gastoPat
           ...(data.fecha !== undefined ? { fecha: dayUTC(data.fecha) } : {}),
           ...(data.tags !== undefined ? { tags: data.tags } : {}),
           ...(data.notas !== undefined ? { notas: data.notas } : {}),
+          ...(data.tipo !== undefined ? { tipo: data.tipo } : {}),
+          ...(data.rubro !== undefined ? { rubro: data.rubro } : {}),
+          ...(data.avisoPrevio !== undefined ? { avisoPrevio: data.avisoPrevio } : {}),
         },
         select: { id: true },
       }),

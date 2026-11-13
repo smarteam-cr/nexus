@@ -84,6 +84,8 @@ export default function CostoForm({
   const [frecuencia, setFrecuencia] = useState(costo?.frecuencia ?? "MENSUAL");
   const [activo, setActivo] = useState(costo?.activo ?? true);
   const [notas, setNotas] = useState(costo?.notas ?? "");
+  // Presupuesto estimado (2026-11-13): lo que se aprobó gastar. Solo se compara (lib/finanzas/reglas-de-gasto.ts).
+  const [presupuesto, setPresupuesto] = useState(costo?.presupuesto != null ? String(costo.presupuesto) : "");
   const [teamMemberId, setTeamMemberId] = useState(costo?.teamMemberId ?? "");
 
   // Al editar un costo que trae base+factor, se abre en ese modo con sus valores.
@@ -166,7 +168,9 @@ export default function CostoForm({
   const montoAGuardar = esBaseFactor ? montoCalculado : montoValido ? round2(montoNum) : null;
   const montoCambia = costo != null && montoAGuardar != null && montoAGuardar !== costo.monto;
   const vigencia = vigenciaDe(rigeDesde, todayISO);
-  const puedeGuardar = nombre.trim().length > 0 && montoValido && !saving;
+  const presupuestoNum = presupuesto.trim() ? Number(presupuesto) : null;
+  const presupuestoValido = presupuestoNum === null || (Number.isFinite(presupuestoNum) && presupuestoNum > 0);
+  const puedeGuardar = nombre.trim().length > 0 && montoValido && presupuestoValido && !saving;
 
   async function submit() {
     if (!puedeGuardar) return;
@@ -184,6 +188,8 @@ export default function CostoForm({
       factorCargas: esBaseFactor ? factorNum : null,
       activo,
       notas: notas.trim() ? notas.trim() : null,
+      // Un salario no lleva presupuesto: se manda vacío.
+      presupuesto: !esSalario && presupuestoNum !== null ? round2(presupuestoNum) : null,
       // Sin esto la mutación cae en `?? hoyCR()` y todo cambio queda fechado el día
       // en que se tecleó. Es la línea entera del arreglo — el resto es la pantalla.
       fechaEfectiva: rigeDesde,
@@ -465,6 +471,26 @@ export default function CostoForm({
             </p>
           )}
         </div>
+
+        {!esSalario && (
+          <div>
+            <label className={LABEL_CLS}>Presupuesto {frecuencia === "ANUAL" ? "al año" : "al mes"} (opcional)</label>
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              value={presupuesto}
+              onChange={(e) => setPresupuesto(e.target.value)}
+              placeholder="0.00"
+              className={INPUT_CLS}
+            />
+            <p className="text-[11px] text-fg-muted mt-1">
+              {presupuestoValido
+                ? "Lo que se aprobó gastar en esto, en la misma moneda. Cada suscripción lleva uno: Nexus marca cuando el monto o el cobro de la tarjeta lo pasa. No cambia la proyección."
+                : "Escribe un monto mayor que cero, o déjalo vacío."}
+            </p>
+          </div>
+        )}
 
         <label className="flex items-center gap-2 text-xs text-fg-secondary cursor-pointer">
           <input

@@ -44,6 +44,8 @@ export interface DatosDePendientes {
   gastosDelMes?: { periodo: string; etiqueta: string; anotados: number; listos: boolean } | null;
   /** Lo que quien supervisa devolvió, con su comentario. */
   devueltos?: Devuelto[];
+  /** Los gastos que ya pasaron y no tienen factura (2026-11-13, lib/finanzas/reglas-de-gasto.ts). */
+  facturasQueFaltan?: { n: number; montos: MontoEnMoneda[] };
 }
 
 export type Cuando = "hoy" | "semana";
@@ -151,6 +153,17 @@ export function armarPendientes(d: DatosDePendientes): TareaPendiente[] {
           : "Lo que no es recurrente: compras, servicios, viáticos. Antes iba al Excel de egresos.",
       plata: "",
       accion: "Anotar",
+      href: "/finanzas/gastos",
+    });
+  }
+  if (d.facturasQueFaltan && d.facturasQueFaltan.n > 0) {
+    out.push({
+      clave: "facturas",
+      cuando: "semana",
+      titulo: `Conseguir ${plural(d.facturasQueFaltan.n, "factura de un gasto", "facturas de gastos")}`,
+      detalle: "Gastos que ya se hicieron y no tienen su factura. La lista está en Gastos del mes, los más viejos primero.",
+      plata: textoDeMontos(d.facturasQueFaltan.montos),
+      accion: "Ver cuáles",
       href: "/finanzas/gastos",
     });
   }
