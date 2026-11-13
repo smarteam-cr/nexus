@@ -2447,6 +2447,11 @@ export interface ReporteAnualDTO extends ReporteEquilibrio {
    * lo decide la huella (un gasto, una factura o una quincena del mes; cobrar no). `cambio` null = cierre sin huella.
    */
   cierres: Array<{ periodo: string; cerradoEn: string; cambio: boolean | null }>;
+  /**
+   * Los meses marcados con ajustes contables pendientes (2026-11-13, lib/sociedades/ajustes-contables.ts), abiertos o
+   * cerrados, con su nota: su resultado no se lee como pérdida real.
+   */
+  ajustesContables?: Array<{ periodo: string; nota: string | null }>;
   /** La huella de cada mes del año (lib/finanzas/cierre.ts): la que guarda el cierre y contra la que se compara después. */
   huellas: Record<string, HuellaDelMes>;
   /**
@@ -2911,6 +2916,12 @@ export async function loadReporteAnual(
   //
   // La comparación con el Excel de Alex va en paralelo y no puede tumbar el reporte: si falla, devuelve
   // su propio estado de error.
+  /* Los meses con ajustes contables pendientes (2026-11-13): marca de una persona en el cierre, abierto o cerrado. */
+  const filasAjustes = await prisma.cierreMes.findMany({
+    where: { periodo: { in: periodos }, ajustesContablesPendientes: true },
+    select: { periodo: true, ajustesContablesNota: true },
+  });
+
   const [estadoParaAuditar, cobranzaContraExcel] = await Promise.all([
     armarEstadoParaAuditar(anio, hoyISO, reporte, cobradosSinFecha, cobradosTotales, divisor),
     cargarEnLaCalleContraExcel(porCobrarDelAnio, hoyISO),
@@ -2949,6 +2960,7 @@ export async function loadReporteAnual(
       };
     }),
     huellas: Object.fromEntries(periodos.map((p) => [p, huellas.get(p) ?? { gastos: {}, facturas: {} }])),
+    ajustesContables: filasAjustes.map((f) => ({ periodo: f.periodo, nota: f.ajustesContablesNota })),
   };
 }
 

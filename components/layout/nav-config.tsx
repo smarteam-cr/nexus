@@ -415,6 +415,9 @@ export const APP_NAV: readonly NavItemConfig[] = [
         match: ["/finanzas/equilibrio", "/finanzas/tipo-de-cambio"],
       },
       { href: "/finanzas/caja-neta", label: "Caja neta", section: "Reportes", costosOnly: true, vistas: ["SUPERVISA", "DIRECCION"] },
+      // Las sociedades de Smarteam (2026-11-13): lo que se deben entre sí, lo que se movió sin factura y el catálogo de
+      // cuentas de Odoo. De quien supervisa y de dirección, como el punto de equilibrio.
+      { href: "/finanzas/companies", label: "Sociedades", section: "Reportes", costosOnly: true, vistas: ["SUPERVISA", "DIRECCION"] },
       // Proyección, reportes de cobranza y el corte quincenal: se mudaron de las pestañas de Cobranza.
       { href: "/finanzas/reportes", label: "Reportes de cobranza", section: "Reportes", costosOnly: true, vistas: ["SUPERVISA"] },
       // El MODELO de comisiones (2026-10-07): porcentajes, cuándo aplican y sus topes. Solo Super Admin, en sus dos vistas.

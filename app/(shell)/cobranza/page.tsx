@@ -9,13 +9,15 @@ import { requireInternalUser } from "@/lib/auth/supabase";
 import { can } from "@/lib/auth/permissions/engine";
 import { loadCartera, loadAlertas, loadRiesgo, loadColaCobros } from "@/lib/cobranza";
 import { cargarUltimosContactos } from "@/lib/cobranza/quien-debe-server";
+import { cargarSociedadesDeCuentas } from "@/lib/sociedades/server";
+import { claveDelFiltro } from "@/lib/sociedades/sociedades";
 import { crDateParts } from "@/lib/jobs/time";
 import { SHELL_DEFAULT } from "@/lib/ui/page-shell";
 import CobranzaClient from "@/components/cobranza/CobranzaClient";
 
 export const dynamic = "force-dynamic";
 
-export default async function CobranzaPage({ searchParams }: { searchParams: Promise<{ pago?: string; cuenta?: string }> }) {
+export default async function CobranzaPage({ searchParams }: { searchParams: Promise<{ pago?: string; cuenta?: string; sociedad?: string }> }) {
   const ctx = await requireInternalUser().catch(() => null);
   if (!ctx || !(await can(ctx.teamMember, "cobranza", "read"))) redirect("/clients");
   /* ⚠ La API ya exige `cobranza.write` para liberar facturas y deshacer cobros, pero la pantalla
@@ -25,14 +27,16 @@ export default async function CobranzaPage({ searchParams }: { searchParams: Pro
   const puedeEditar = await can(ctx.teamMember, "cobranza", "write");
 
   const todayISO = crDateParts(new Date()).dateKey; // "hoy" = día calendario CR
-  const { pago, cuenta } = await searchParams;
+  const { pago, cuenta, sociedad } = await searchParams;
   /* Rediseño de Finanzas (2026-10-03): Cobranza es la página de trabajo. Proyección, reportes y corte quincenal se leen
      en Finanzas › Reportes de cobranza; las comisiones de aliado, en su propia página. */
-  const [cola, cartera, alertas, riesgo] = await Promise.all([
+  const [cola, cartera, alertas, riesgo, { sociedades, claveDeCuenta }] = await Promise.all([
     loadColaCobros(todayISO),
     loadCartera(todayISO),
     loadAlertas({ estados: ["ABIERTA", "VISTA"] }),
     loadRiesgo(todayISO),
+    /* De qué sociedad de Smarteam es cada cuenta (2026-11-13): el filtro de arriba. */
+    cargarSociedadesDeCuentas(),
   ]);
   /* «Quién nos debe»: la última llamada o correo con cada cuenta que aparece en la cola. */
   const contactos = await cargarUltimosContactos(cola.map((c) => c.cuentaId));
@@ -53,6 +57,9 @@ export default async function CobranzaPage({ searchParams }: { searchParams: Pro
         /* Un pago devuelto por quien supervisa llega con ?cuenta=: abre esa cuenta, donde se corrige. */
         abrirCuenta={cuenta && /^[\w-]{8,40}$/.test(cuenta) ? cuenta : null}
         todayISO={todayISO}
+        sociedades={sociedades}
+        claveDeCuenta={claveDeCuenta}
+        sociedadInicial={claveDelFiltro(sociedad, sociedades)}
       />
     </div>
   );

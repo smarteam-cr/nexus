@@ -56,6 +56,8 @@ export const ODOO_CAMPOS_FACTURA = [
   "amount_total_signed",
   "currency_id",
   "partner_id",
+  /* La compañía que emitió la factura (2026-11-13): de qué sociedad de Smarteam es. Hoy hay una sola. */
+  "company_id",
   "write_date",
 ] as const;
 

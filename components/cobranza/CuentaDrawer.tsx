@@ -43,6 +43,7 @@ import { materializeCobros, ultimaCuotaCargada } from "@/lib/cobranza/engine";
 import ServicioForm from "./ServicioForm";
 import CronogramaCobros from "./CronogramaCobros";
 import SociedadesQueFacturan from "./SociedadesQueFacturan";
+import SociedadQueCobra from "@/components/sociedades/SociedadQueCobra";
 
 interface GenerateResult {
   created: number;
@@ -378,6 +379,9 @@ export default function CuentaDrawer({
                 </div>
               )}
             </section>
+
+            {/* ── La sociedad de Smarteam que cobra (2026-11-13): casi siempre la de su vía; Smart Agro se elige acá. ── */}
+            <SociedadQueCobra key={`soc-${cuenta.id}`} cuentaId={cuenta.id} puedeEditar={puedeEditar} tituloCls={SECTION_TITLE_CLS} />
 
             {/* ── Sociedades que facturan (etapa 12): una empresa puede facturar con varias. Antes de los
                  datos de la cuenta, porque es lo que se mira al marcar facturado. ── */}

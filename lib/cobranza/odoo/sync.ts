@@ -45,6 +45,7 @@ import {
 } from "./espejo";
 import { cambiosDeLaLista, reatribuciones, type PartnerOdoo } from "./emparejado";
 import { copiarBancoSinConciliar, type ResultadoDelBanco } from "./banco-copia";
+import { copiarEntreSociedades, type ResultadoEntreSociedades } from "@/lib/sociedades/copia";
 
 /** El separador del detalle de rechazos. Constante para no pelear con el escapado. */
 const SALTO = String.fromCharCode(10);
@@ -81,6 +82,8 @@ export interface ResultadoSync {
   enCurso?: boolean;
   /** La copia de las líneas del banco sin conciliar (U15). Ausente si la copia de las facturas no llegó hasta ahí. */
   banco?: ResultadoDelBanco;
+  /** Lo que se deben las sociedades de Smarteam y los traslados (2026-11-13). Ausente si la copia no llegó hasta ahí. */
+  entreSociedades?: ResultadoEntreSociedades;
 }
 
 /* ── El candado: una sola copia a la vez ───────────────────────────────────────── */
@@ -232,6 +235,7 @@ async function copiar(opts: OpcionesDeCopia): Promise<ResultadoSync> {
         montoNeto: true,
         montoResidual: true,
         montoMonedaCompania: true,
+        odooCompanyId: true,
         moneda: true,
         paymentState: true,
         state: true,
@@ -275,6 +279,8 @@ async function copiar(opts: OpcionesDeCopia): Promise<ResultadoSync> {
 
     const ahora = new Date();
     const sinCambio: string[] = [];
+    /** Las que solo estrenan su compañía (2026-11-13): una escritura por compañía, no una por factura. */
+    const soloCompania = new Map<number, string[]>();
     const altas: Array<{ odooMoveId: number; numero: string; moneda: string; montoTotal: number }> = [];
     const nuevas: Array<Record<string, unknown>> = [];
 
@@ -300,6 +306,7 @@ async function copiar(opts: OpcionesDeCopia): Promise<ResultadoSync> {
         moneda: f.moneda,
         odooPartnerId: f.odooPartnerId,
         odooPartnerNombre: f.odooPartnerNombre,
+        odooCompanyId: f.odooCompanyId,
         estadoEspejo: "VIGENTE" as const,
         sincronizadoEn: ahora,
       };
@@ -336,6 +343,12 @@ async function copiar(opts: OpcionesDeCopia): Promise<ResultadoSync> {
         previa.montoMonedaCompania === null ? null : Number(previa.montoMonedaCompania),
         f.montoMonedaCompania,
       );
+      /* La compañía (2026-11-13) tampoco va a la bitácora: las facturas de antes la reciben en la copia siguiente. */
+      const companiaNueva = f.odooCompanyId !== null && previa.odooCompanyId !== f.odooCompanyId;
+      if (!deltas.length && !revivio && !evidenciaVieja && companiaNueva && f.odooCompanyId !== null) {
+        soloCompania.set(f.odooCompanyId, [...(soloCompania.get(f.odooCompanyId) ?? []), previa.id]);
+        continue;
+      }
       if (!deltas.length && !revivio && !evidenciaVieja) {
         /* ⚠ NO se escribe una fila por factura sin cambios. Medido en la primera corrida: 347
            escrituras de a una contra Supabase tardan 63 s, y la corrida diaria en régimen es
@@ -405,6 +418,9 @@ async function copiar(opts: OpcionesDeCopia): Promise<ResultadoSync> {
     if (sinCambio.length) {
       await prisma.facturaOdoo.updateMany({ where: { id: { in: sinCambio } }, data: { sincronizadoEn: ahora } });
     }
+    for (const [odooCompanyId, ids] of soloCompania) {
+      await prisma.facturaOdoo.updateMany({ where: { id: { in: ids } }, data: { odooCompanyId, sincronizadoEn: ahora } });
+    }
 
     /* ⛔ NUNCA se borra una fila: se marca. Una factura que Odoo dejó de devolver puede ser
        un borrado real, un cambio de permisos o un filtro que quedó mal — y la que se borró es
@@ -469,6 +485,8 @@ async function copiar(opts: OpcionesDeCopia): Promise<ResultadoSync> {
     /* U15: las líneas del banco sin conciliar, con la misma sesión. ⚠ Nunca lanza: si el banco falla, la copia de las
        facturas igual queda buena (lo vigila INV60). */
     res.banco = await copiarBancoSinConciliar(t, ahora);
+    /* Lo que se deben las sociedades de Smarteam (2026-11-13), con la misma sesión. ⚠ Nunca lanza, como el banco. */
+    res.entreSociedades = await copiarEntreSociedades(t, ahora);
     res.ok = true;
   } catch (e) {
     /* El texto del error se GUARDA. Es la diferencia entre «viene fallando hace tres días

@@ -8,6 +8,7 @@
  *
  * PURO: sin Prisma, sin red, sin reloj (`hoyISO` entra por parámetro).
  */
+import { textoDeLaMarca } from "@/lib/sociedades/ajustes-contables";
 import type { FilaMes, ReporteEquilibrio } from "./equilibrio";
 import { esFaltanteDePlanilla } from "./cierre";
 
@@ -224,10 +225,27 @@ export interface EstadoDeMes {
   detalle: string;
   /** El mes ya terminó y tiene el gasto incompleto: el gráfico lo marca en gris. */
   incompleto: boolean;
+  /**
+   * Tiene ajustes contables pendientes (2026-11-13, lib/sociedades/ajustes-contables.ts): la frase que acompaña su
+   * resultado para que un déficit no se lea como pérdida real. Ausente = sin marca.
+   */
+  ajustesContables?: string;
 }
 
 /** Cómo está un mes, para el chip debajo del gráfico y la lectura del mes. */
 export function estadoDelMes(
+  m: Pick<FilaMes, "periodo" | "futuro" | "estado" | "faltantes">,
+  cierre: { cambio: boolean | null } | undefined,
+  hoyISO: string,
+  ajustes?: { nota: string | null } | null,
+): EstadoDeMes {
+  const e = estadoSinAjustes(m, cierre, hoyISO);
+  if (!ajustes) return e;
+  const frase = textoDeLaMarca(ajustes);
+  return { ...e, detalle: `${e.detalle} ${frase}`, ajustesContables: frase };
+}
+
+function estadoSinAjustes(
   m: Pick<FilaMes, "periodo" | "futuro" | "estado" | "faltantes">,
   cierre: { cambio: boolean | null } | undefined,
   hoyISO: string,

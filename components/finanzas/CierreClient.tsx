@@ -19,6 +19,7 @@ import { fmtFecha } from "@/components/cobranza/format";
 import { etiquetaMes } from "@/lib/finanzas/gastos";
 import type { EstadoEnElAnio, GrupoDeCierre, ItemDeCierre } from "@/lib/finanzas/cierre";
 import type { CierreDelMesDTO } from "@/lib/finanzas/cierre-server";
+import AjustesContablesDelMes from "./AjustesContablesDelMes";
 
 const TILE: Record<EstadoEnElAnio, string> = {
   CERRADO: "border border-success-line bg-success-surface text-success-ink",
@@ -139,6 +140,11 @@ export default function CierreClient({ d }: { d: CierreDelMesDTO }) {
                 {MES_CORTO[i]}
               </span>
               <span className="text-[11px] leading-[14px]">{m.texto}</span>
+              {m.ajustesContables && (
+                <span title="Tiene ajustes contables pendientes: su resultado no es una pérdida real" className="text-[11px] font-semibold leading-[14px] text-warn-ink">
+                  Ajustes pendientes
+                </span>
+              )}
             </Link>
           ))}
         </div>
@@ -297,6 +303,9 @@ export default function CierreClient({ d }: { d: CierreDelMesDTO }) {
             )}
           </section>
           )}
+
+          {/* El resultado operativo contra el contable (2026-11-13): un mes con ajustes pendientes no se lee como pérdida. */}
+          <AjustesContablesDelMes key={d.periodo} periodo={d.periodo} mes={mes} />
 
           <section data-recorrido="que-sigue" aria-label="Qué sigue" className="flex flex-col gap-1.5 rounded-xl border border-info-line bg-info-surface p-4">
             <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-info-ink">Qué sigue</span>
