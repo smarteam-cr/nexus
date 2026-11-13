@@ -20,7 +20,7 @@
  *  - el botón global "Registrar pago" (slot action del PageHeader) y sus
  *    modales (BuscarPagoModal → RegistrarPagoDialog).
  */
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { Button, PageHeader } from "@/components/ui";
 import { useToast } from "@/components/ui/Toast";
 import type {
@@ -40,6 +40,8 @@ import RegistrarPagoDialog from "./RegistrarPagoDialog";
 import RegistrarPagoManualDialog from "./RegistrarPagoManualDialog";
 import QuienNosDebe from "./QuienNosDebe";
 import type { ContactoDeCuenta } from "@/lib/cobranza/quien-debe";
+import FiltroDeSociedad from "@/components/sociedades/FiltroDeSociedad";
+import { contarPorSociedad, filtrarPorSociedad, type SociedadPropiaDTO } from "@/lib/sociedades/sociedades";
 
 type Tab = "debe" | "cobros" | "clientes" | "alertas";
 
@@ -65,6 +67,9 @@ export default function CobranzaClient({
   abrirPago = false,
   abrirCuenta = null,
   todayISO,
+  sociedades = [],
+  claveDeCuenta = {},
+  sociedadInicial = null,
 }: {
   initialCola: ColaCobroRow[];
   initialCartera: CarteraRow[];
@@ -79,6 +84,11 @@ export default function CobranzaClient({
   /** Abrir la cuenta de una vez (un pago devuelto por quien supervisa llega con ?cuenta=). */
   abrirCuenta?: string | null;
   todayISO: string;
+  /** Las sociedades de Smarteam y de cuál es cada cuenta (2026-11-13): el filtro de arriba. */
+  sociedades?: SociedadPropiaDTO[];
+  claveDeCuenta?: Record<string, string>;
+  /** La sociedad con que se abre (`?sociedad=`); null = todas. */
+  sociedadInicial?: string | null;
 }) {
   const toast = useToast();
   /* Quien llega a registrar un pago o a una cuenta viene a trabajar la cola; el resto, a ver quién debe. */
@@ -87,6 +97,14 @@ export default function CobranzaClient({
   const [cartera, setCartera] = useState(initialCartera);
   const [alertas, setAlertas] = useState(initialAlertas);
   const [riesgo, setRiesgo] = useState(initialRiesgo);
+  /* El filtro por sociedad (2026-11-13): filtra lo que se ve, no lo que se carga. Los refrescos traen todo y el filtro
+     se vuelve a aplicar solo. */
+  const [sociedad, setSociedad] = useState<string | null>(sociedadInicial);
+  const claveDe = useCallback((cuentaId: string | null) => (cuentaId ? (claveDeCuenta[cuentaId] ?? null) : null), [claveDeCuenta]);
+  const conteo = useMemo(() => contarPorSociedad(cartera, (r) => claveDe(r.cuentaId)), [cartera, claveDe]);
+  const colaVista = useMemo(() => filtrarPorSociedad(cola, sociedad, (r) => claveDe(r.cuentaId)), [cola, sociedad, claveDe]);
+  const carteraVista = useMemo(() => filtrarPorSociedad(cartera, sociedad, (r) => claveDe(r.cuentaId)), [cartera, sociedad, claveDe]);
+  const alertasVistas = useMemo(() => filtrarPorSociedad(alertas, sociedad, (a) => claveDe(a.cuentaId)), [alertas, sociedad, claveDe]);
 
   // UI compartida entre tabs (drawer + flujo global de registrar pago).
   const [openCuentaId, setOpenCuentaId] = useState<string | null>(abrirCuenta);
@@ -101,7 +119,7 @@ export default function CobranzaClient({
 
   // Badge del tab: solo lo OPERATIVO abierto — el backlog de configuración
   // (CUENTA_SIN_DATOS) no es urgencia del día. La recurrencia que se apaga sí (etapa 14).
-  const abiertas = alertas.filter(
+  const abiertas = alertasVistas.filter(
     (a) => a.estado === "ABIERTA" && (a.tipo !== "CUENTA_SIN_DATOS" || esAlertaDeRecurrencia(a)),
   ).length;
 
@@ -168,6 +186,8 @@ export default function CobranzaClient({
         }
       />
 
+      <FiltroDeSociedad sociedades={sociedades} conteo={conteo} valor={sociedad} onCambio={setSociedad} className="mb-4" />
+
       <div data-recorrido="fin.cobranza.pestanas" className="flex flex-wrap gap-1 border-b border-line mb-6">
         {TABS.map((t) => {
           const active = tab === t.key;
@@ -194,11 +214,11 @@ export default function CobranzaClient({
       </div>
 
       {tab === "debe" && (
-        <QuienNosDebe cola={cola} contactos={initialContactos} todayISO={todayISO} onOpenCuenta={setOpenCuentaId} />
+        <QuienNosDebe cola={colaVista} contactos={initialContactos} todayISO={todayISO} onOpenCuenta={setOpenCuentaId} />
       )}
       {tab === "cobros" && (
         <ColaCobros
-          rows={cola}
+          rows={colaVista}
           setRows={setCola}
           riesgo={riesgo}
           todayISO={todayISO}
@@ -209,14 +229,14 @@ export default function CobranzaClient({
       )}
       {tab === "clientes" && (
         <PanelCartera
-          rows={cartera}
+          rows={carteraVista}
           todayISO={todayISO}
           onOpenCuenta={setOpenCuentaId}
           onRefresh={refreshCartera}
         />
       )}
       {tab === "alertas" && (
-        <AlertasCobranza alertas={alertas} setAlertas={setAlertas} onOpenCuenta={setOpenCuentaId} />
+        <AlertasCobranza alertas={alertasVistas} setAlertas={setAlertas} onOpenCuenta={setOpenCuentaId} />
       )}
       {/* ── Superficies compartidas entre tabs ── */}
       <CuentaDrawer

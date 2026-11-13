@@ -84,6 +84,8 @@ export const SKELETON_COVERAGE: Record<string, Cobertura> = {
   "finanzas/caja-neta": { modo: "own" },
   // Una tarjeta por meta (avance, barra, corte, cómo se mide): no se parece a ninguna otra hoja.
   "finanzas/goals": { modo: "own" },
+  // Las sociedades de Smarteam (2026-11-13): tarjetas de saldos entre sociedades y listas de movimientos.
+  "finanzas/companies": { modo: "own" },
   "finanzas/tipo-de-cambio": { modo: "own" },
   "finanzas/modelo-de-comisiones": { modo: "own" },
   "finanzas/ingresos-variables": { modo: "own" },

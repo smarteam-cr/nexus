@@ -4395,8 +4395,99 @@ model CuentaFinanciera {
   /// El enlace del estado de cuenta para el cliente (2026-11-13). Uno por cuenta.
   accesoAlEstadoDeCuenta AccesoAlEstadoDeCuenta?
 
+  /// La sociedad de SMARTEAM que le cobra a este cliente (2026-11-13). No es la sociedad DEL CLIENTE a la que se factura
+  /// (esa es `Cobro.sociedadFacturadaId`). nullable porque casi todas siguen la regla de su vía (`sociedadDeLaCuenta`,
+  /// lib/sociedades/sociedades.ts): Odoo → CR Smarteam, Mercury → la LLC. Solo se escribe cuando no es la de su vía
+  /// (una cuenta de Smart Agro). SQL: scripts/sql/2026-11-13-sociedades-de-smarteam.sql.
+  sociedadPropiaId String?
+  sociedadPropia   SociedadPropia? @relation(fields: [sociedadPropiaId], references: [id], onDelete: SetNull)
+
   @@unique([fuente, fuenteIdExterno]) // NULLs no colisionan — las cuentas manuales legacy conviven
   @@index([estadoCuenta])
+}
+
+/// Una sociedad de SMARTEAM (2026-11-13): CR Smarteam, Smarteam Consultora LLC, Smart Agro y Flywheel. Dice de qué
+/// sociedad es cada cuenta de cobranza, cada factura de Odoo (por su compañía) y entre cuáles corre lo que se deben.
+/// ⚠ No es la sociedad del CLIENTE a la que se factura (`OdooPartnerVinculo`, lib/cobranza/sociedades.ts).
+/// Las filas nacen en el SQL y se corrigen en la base: el código no lleva ningún nombre ni id de cuenta fijo.
+model SociedadPropia {
+  id           String  @id @default(cuid())
+  /// Estable, para el código y los filtros (`?sociedad=`): «cr-smarteam», «smarteam-llc», «smartagro», «flywheel».
+  clave        String  @unique
+  nombre       String
+  razonSocial  String?
+  cedula       String?
+  pais         String?
+  /// ODOO · MERCURY · NINGUNA: dónde factura hoy (CHECK en el SQL). Decide la sociedad de una cuenta sin la suya.
+  plataforma   String  @default("NINGUNA")
+  /// La compañía de Odoo que lleva sus libros. nullable porque hoy Odoo tiene UNA sola (la 1, CR Smarteam): las otras
+  /// no tienen libros en Odoo, se ven en los de CR Smarteam (sus cuentas por cobrar y sus transferencias).
+  odooCompanyId Int?   @unique
+  /// Cómo se la reconoce en Odoo y en el banco: nombres de cuenta, de contacto y referencias de transferencia
+  /// («flywheel», «smarteam consult», el número de su cuenta del banco). En minúscula y sin tildes.
+  alias        String[] @default([])
+  /// La principal: la de las cuentas sin sociedad y la vía Odoo. Una sola (índice único parcial en el SQL).
+  principal    Boolean @default(false)
+  activa       Boolean @default(true)
+  orden        Int     @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  cuentas          CuentaFinanciera[]
+  movimientosLibro MovimientoEntreSociedades[] @relation("MovimientoDeLosLibros")
+  movimientosContra MovimientoEntreSociedades[] @relation("MovimientoDeLaContraparte")
+}
+
+/// Lo que se mueve entre dos sociedades de Smarteam, y entre las cuentas de una misma (2026-11-13). Sale de los libros
+/// de Odoo (una fila por línea contable) o lo anota una persona (lo que no está en Odoo: Smart Agro con Flywheel).
+/// `monto` con signo, desde la sociedad de los libros: positivo = la contraparte le debe más. CRC y USD no se suman.
+/// NUNCA se borra: la línea que Odoo deja de devolver queda DESAPARECIDA; la anotada que se quita, ANULADA.
+model MovimientoEntreSociedades {
+  id            String   @id @default(cuid())
+  /// ODOO · MANUAL (CHECK en el SQL).
+  origen        String
+  /// La línea contable en Odoo (`account.move.line`). La identidad de lo que viene de Odoo. nullable en lo anotado.
+  odooLineId    Int?     @unique
+  /// La compañía de Odoo de la línea (`company_id`). nullable en lo anotado.
+  odooCompanyId Int?
+  fecha         DateTime @db.Date
+  /// La sociedad en cuyos libros está el movimiento.
+  sociedadId    String
+  sociedad      SociedadPropia  @relation("MovimientoDeLosLibros", fields: [sociedadId], references: [id], onDelete: Restrict)
+  /// La otra sociedad. nullable porque un traslado entre dos cuentas de la MISMA sociedad no tiene contraparte.
+  contraparteId String?
+  contraparte   SociedadPropia? @relation("MovimientoDeLaContraparte", fields: [contraparteId], references: [id], onDelete: SetNull)
+  monto         Decimal  @db.Decimal(14, 2)
+  moneda        String
+  /// FACTURA · TRANSFERENCIA · MOVIMIENTO (CHECK en el SQL).
+  tipo          String
+  /// FACTURA (la respalda una factura o es el pago de una) · CONCILIADA (traslado con sus dos mitades atadas en Odoo) ·
+  /// SIN_RESPALDO (CHECK en el SQL). Lo calcula `respaldoDe` (lib/sociedades/entre-sociedades.ts).
+  respaldo      String
+  /// Lo que dice la línea: «W/T-S50080 SMARTEAM CONSULT».
+  concepto      String?
+  /// El asiento («2026/00412») y la cuenta («110202 Transferencia interna»), para buscarla en Odoo. nullable en lo anotado.
+  asiento       String?
+  cuentaContable String?
+  diario        String?
+  /// El número de la factura que lo respalda, si se conoce.
+  factura       String?
+  /// «Está bien así» (un aporte, un préstamo acordado): quien lo revisó, cuándo y por qué. Saca la fila de la lista
+  /// de lo que no tiene factura, no del saldo. nullable porque casi ninguna lo tiene.
+  aceptadoPor   String?
+  aceptadoEn    DateTime?
+  aceptadoNota  String?  @db.Text
+  /// Quien lo anotó (solo lo MANUAL).
+  anotadoPor    String?
+  /// VIGENTE · DESAPARECIDA · ANULADA (CHECK en el SQL).
+  estado        String   @default("VIGENTE")
+  sincronizadoEn DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([sociedadId, contraparteId, estado])
+  @@index([respaldo, estado])
+  @@index([fecha])
 }
 
 // ─── ServicioContratado ─────────────────────────────────────────────────────────
@@ -5026,6 +5117,13 @@ model CierreMes {
   /// Los pasos del calendario de Finanzas que quien supervisa marcó como hechos (2026-11-13): { clave: { por, en } }.
   /// nullable porque un mes sin ningún paso marcado no tiene nada que guardar. SQL: 2026-11-13-cierre-pasos-del-calendario.
   pasosDelCalendario Json?
+  /// El resultado del mes todavía tiene ajustes contables pendientes (2026-11-13): períodos sin liquidar, IVA por
+  /// rectificar, etiquetas mal puestas en Odoo. Un déficit de este mes no se lee como pérdida real. Lo marca una
+  /// persona (Odoo da señales, no la certeza: lib/sociedades/ajustes-contables.ts). Vale con el mes abierto o cerrado.
+  ajustesContablesPendientes Boolean   @default(false)
+  ajustesContablesNota       String?   @db.Text
+  ajustesContablesPor        String?
+  ajustesContablesEn         DateTime?
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 }
@@ -6499,6 +6597,10 @@ model FacturaOdoo {
   odooPartnerNombre String
   cuentaId          String?
   cuenta            CuentaFinanciera? @relation(fields: [cuentaId], references: [id], onDelete: SetNull)
+
+  /// La compañía de Odoo que emitió la factura (`company_id`, 2026-11-13): de qué sociedad de Smarteam es
+  /// (`SociedadPropia.odooCompanyId`). nullable porque las de antes la reciben en la copia siguiente.
+  odooCompanyId Int?
 
   estadoEspejo   FacturaOdooEstadoEspejo @default(VIGENTE)
   sincronizadoEn DateTime

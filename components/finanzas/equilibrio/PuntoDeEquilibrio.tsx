@@ -131,7 +131,9 @@ export default function PuntoDeEquilibrio({
     // La tasa cargada a mano que comparten los meses sin días del Banco Central (el ₡500 de antes), si es una sola.
     const manuales = [...new Set(r.fx.tasas.filter((t) => !delBccr.has(t.periodo)).map((t) => t.crcPorUsd))];
     const cierrePorMes = new Map(r.cierres.map((c) => [c.periodo, c]));
-    const estados = r.meses.map((m) => estadoDelMes(m, cierrePorMes.get(m.periodo), hoyISO));
+    /* Los meses con ajustes contables pendientes (2026-11-13): su resultado se lee como contable, no como pérdida. */
+    const ajustesPorMes = new Map((r.ajustesContables ?? []).map((a) => [a.periodo, a]));
+    const estados = r.meses.map((m) => estadoDelMes(m, cierrePorMes.get(m.periodo), hoyISO, ajustesPorMes.get(m.periodo)));
     const respuesta = respuestaDelAnio(r, hoyISO);
     return {
       respuesta,

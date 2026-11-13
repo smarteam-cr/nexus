@@ -79,6 +79,8 @@ export interface FacturaEspejada {
   moneda: string;
   odooPartnerId: number;
   odooPartnerNombre: string;
+  /** La compañía de Odoo que la emitió (`company_id`): de qué sociedad de Smarteam es. null si no viene. */
+  odooCompanyId: number | null;
 }
 
 /**
@@ -152,6 +154,7 @@ export function mapearFactura(cruda: Record<string, unknown>): { factura: Factur
       moneda,
       odooPartnerId: partner.id,
       odooPartnerNombre: partner.nombre,
+      odooCompanyId: many2one(cruda.company_id)?.id ?? null,
     },
   };
 }

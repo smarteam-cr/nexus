@@ -167,6 +167,14 @@ describe("el estado de cada mes", () => {
     expect(de("2026-08")).toMatchObject({ clave: "faltaPlanilla", incompleto: true, detalle: "Gasto incompleto: sin la 2ª quincena de planilla." });
     expect(de("2026-02")).toMatchObject({ clave: "faltaGasto", detalle: "Gasto incompleto: sin costos fijos ni tarjetas." });
   });
+  it("con ajustes contables pendientes (2026-11-13): el mismo estado, y la frase de que no es pérdida real", () => {
+    const sin = estadoDelMes(meses.find((m) => m.periodo === "2026-05")!, { cambio: false }, HOY);
+    const con = estadoDelMes(meses.find((m) => m.periodo === "2026-05")!, { cambio: false }, HOY, { nota: "Falta liquidar septiembre." });
+    expect(sin.ajustesContables).toBeUndefined();
+    expect(con.clave).toBe("cerrado");
+    expect(con.ajustesContables).toContain("no es una pérdida real");
+    expect(con.detalle).toContain("Falta liquidar septiembre.");
+  });
 });
 
 describe("¿y si…?", () => {

@@ -95,6 +95,13 @@ describe("espejar una factura", () => {
     expect(r.factura.odooPartnerId).toBe(35);
   });
 
+  it("la compañía que la emitió (2026-11-13): de qué sociedad de Smarteam es; sin ella, null", () => {
+    const con = mapearFactura({ ...CRUDA, company_id: [1, "CR SMARTEAM SOCIEDAD ANONIMA"] });
+    expect("factura" in con && con.factura.odooCompanyId).toBe(1);
+    const sin = mapearFactura(CRUDA);
+    expect("factura" in sin && sin.factura.odooCompanyId).toBeNull();
+  });
+
   it("⚠ rechaza en vez de inventar cuando falta la fecha, el partner o la moneda", () => {
     /* Una factura sin `invoice_date` no cae en ningún mes: espejarla con un default la
        escondería dentro de un total correcto. Que aparezca en la lista de inconsistencias es

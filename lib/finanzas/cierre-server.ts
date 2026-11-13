@@ -43,7 +43,7 @@ import {
 export interface CierreDelMesDTO {
   periodo: string;
   /** La tira del año: cómo está cada mes. */
-  meses: Array<{ periodo: string; estado: EstadoEnElAnio; texto: string }>;
+  meses: Array<{ periodo: string; estado: EstadoEnElAnio; texto: string; /** Marcado con ajustes contables pendientes (2026-11-13). */ ajustesContables: boolean }>;
   items: ItemDeCierre[];
   /** Cuántas líneas que bloquean faltan. */
   faltan: number;
@@ -175,6 +175,7 @@ export async function cargarCierre(periodo: string, hoyISO: string, opciones: { 
   const meses = periodos.map((p) => ({
     periodo: p,
     ...estadoEnElAnio(p, hoyISO, cierreDe.get(p)?.estado === "CERRADO", faltanParaCerrar(itemsDeCierre(datosDe(p), null, nombres))),
+    ajustesContables: !!cierreDe.get(p)?.ajustesContablesPendientes,
   }));
 
   const equipo: PendientesDelEquipo | null = pendientes

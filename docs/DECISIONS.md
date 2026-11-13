@@ -15089,3 +15089,58 @@ rehacer solo el ciclo de vida no las corrige.
 - **Lo que lo revertiría:** si dirección prefiere frenar los gastos fuera de la regla, el corte va en
   `gastoCreateSchema`/`updateGasto`, con las mismas funciones de `reglas-de-gasto.ts`. Si quiere fijar la referencia
   con el cierre de Finanzas, se guarda en `CierreMes` al cerrar y `tasaDeReferencia` la lee de ahí.
+## Las sociedades de Smarteam y lo que se deben (2026-11-13)
+
+**Contexto.** Smarteam factura por más de una sociedad y Elías pidió (frentes 8, 9, 20, 21 y 28): saber de qué sociedad
+es cada cuenta, factura y movimiento, con un filtro; que Smart Agro cobre con el mismo flujo de la principal; marcar el
+mes cuyo déficit es contable y no real; marcar lo que se movió entre cuentas o sociedades sin factura; llevar lo que se
+deben; y leer el catálogo de cuentas nuevo de Odoo sin romperse mientras se termina de fusionar.
+
+**Lo que se midió en Odoo (solo lectura, 2026-11-13).**
+- **Una sola compañía**: la 1, «CR SMARTEAM SOCIEDAD ANONIMA» (cédula 3101813655, CRC). 1.523 asientos, 360 facturas y
+  54 notas de crédito de venta, 170 de proveedor. Smart Agro, Flywheel y la LLC **no tienen libros en Odoo**: se ven en
+  los de CR Smarteam. `company_id` se lee y se guarda igual (`FacturaOdoo.odooCompanyId`): el día que Smart Agro tenga
+  su compañía, sus facturas ya caen en su sociedad por `SociedadPropia.odooCompanyId`.
+- **105 cuentas** en `account.account` (2 deprecadas), no 32: 28 con el código viejo (4, 5, 7 u 8 dígitos) y 5 con el
+  código y el tipo cruzados («410104 Comisiones Comerciales Dolares» es gasto con código de ingreso; «110401 Adelanto a
+  proveedores» es pasivo con código de activo).
+- Lo que cruza entre sociedades, en los libros de CR Smarteam: «110303 Cuenta por cobrar SmartAgro», «110304 Cuentas
+  por Cobrar Flywheel Centroamerica S.A», las facturas con la LLC (una de 15.000 de la LLC, una de 8.387 a la LLC) y
+  transferencias a «SMARTEAM CONSULT» por la cuenta de traslado de la compañía («110202 Transferencia interna»,
+  `transfer_account_id`). De 64 líneas en esa cuenta, 2 estaban conciliadas en Odoo.
+- En la base: 10 cierres (enero a octubre, todos CERRADO). Los nombres: Elías dictó «CR Smarting» y «Smarting Consultora
+  LLC»; Odoo y Mercury dicen «CR SMARTEAM» y «Smarteam Consultora LLC» (EIN 38-4365364). Se usan los de Odoo.
+
+**Decisiones.**
+- **`SociedadPropia`, filas y no código.** Las cuatro nacen en el SQL con sus `alias` («flywheel», «smarteam consult»),
+  que es como se las reconoce en Odoo y en el banco. Ningún id ni código de cuenta va en el código: el catálogo se está
+  fusionando y un id fijo deja de andar el día que se fusione. Se corrigen en la base.
+- **La sociedad de una cuenta sale de su vía** (Odoo → CR Smarteam, Mercury → la LLC) salvo que tenga otra puesta
+  (`CuentaFinanciera.sociedadPropiaId`, que solo se escribe cuando no es la de su vía). Así no hizo falta ningún
+  backfill y Smart Agro usa el mismo flujo: su cuenta va por Odoo y se elige «Smart Agro» en la ficha. ⚠ Mientras Smart
+  Agro no tenga compañía en Odoo, sus facturas salen de la compañía de CR Smarteam; el filtro las muestra en Smart Agro
+  porque mira la cuenta, no la factura.
+- **El filtro es uno** (`filtrarPorSociedad` + `FiltroDeSociedad`): Cobranza lo usa hoy (cola, Quién nos debe,
+  clientes, alertas). Las otras pantallas lo adoptan con `cargarSociedadesDeCuentas()` y el mismo componente. Filtra lo
+  que se ve, no lo que se carga.
+- **Lo que se deben sale de los libros de CR Smarteam**, no de Mercury: las mismas transferencias se verían dos veces.
+  Cada línea de una cuenta que nombra a otra sociedad, de la cuenta de traslado o por cobrar/pagar de un contacto que es
+  una sociedad, es un `MovimientoEntreSociedades` con signo (positivo = la otra le debe más). El saldo es por par y por
+  moneda; CRC y USD no se suman. Lo que no está en Odoo (Smart Agro con Flywheel) se anota a mano. La copia corre al
+  final de cada copia de Odoo, como el banco, y nunca lanza.
+- **«Sin factura»**: entre sociedades, lo que no es una factura ni el pago conciliado de una. Entre cuentas propias, el
+  traslado al que no se le encuentra la otra mitad (conciliado en Odoo, o el mismo monto en colones con signo contrario a
+  5 días o menos). «Está bien así», con el porqué, lo saca de la lista y no del saldo.
+- **Resultado contable: la marca es de una persona.** Odoo no distingue un IVA por rectificar o una etiqueta mal puesta
+  de un asiento correcto. Da indicios (borradores del mes, líneas en las cuentas puente de la compañía, líneas en
+  cuentas con la clase cruzada, traslados sin su otra mitad) que se muestran al lado, pero el mes no se marca solo. La
+  marca vive en `CierreMes` y vale con el mes abierto o cerrado, sin reabrirlo. Se ve en el cierre y en el punto de
+  equilibrio (`estadoDelMes`), donde se lee el resultado.
+- **El catálogo se clasifica por el primer dígito del código**; sin dígito que lo diga, por el tipo. Lo que no encaja se
+  clasifica igual y lleva un aviso (código viejo, clase cruzada, sin clase). Se lee en el momento, en Finanzas ›
+  Sociedades › Catálogo de Odoo.
+
+*Lo que no garantiza:* la pantalla no se probó con sesión. Las líneas de la LLC con la propia CR como contacto se
+atribuyen por el texto del banco: una referencia que no nombra a la LLC queda como traslado propio. La copia del banco
+(`MovimientoBancoOdoo`) no guarda la compañía: hay una sola y cada diario es de una compañía. Equilibrio, caja y metas
+no tienen el filtro: queda el helper para quien las toque.

@@ -554,6 +554,7 @@ export default function MesAMes({
                       <span className={cn("whitespace-nowrap rounded-full border px-1.5 py-px text-[11px]", CHIP[e.clave].cls)}>
                         {CHIP[e.clave].texto}
                       </span>
+                      {e.ajustesContables && <span className="whitespace-nowrap text-[10px] font-semibold text-warn-ink">Ajuste contable</span>}
                     </button>
                   );
                 })}
