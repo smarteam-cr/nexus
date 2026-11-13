@@ -39,11 +39,12 @@ import BuscarPagoModal from "./BuscarPagoModal";
 import RegistrarPagoDialog from "./RegistrarPagoDialog";
 import RegistrarPagoManualDialog from "./RegistrarPagoManualDialog";
 import QuienNosDebe from "./QuienNosDebe";
+import SeguimientoCobranza from "./SeguimientoCobranza";
 import type { ContactoDeCuenta } from "@/lib/cobranza/quien-debe";
 import FiltroDeSociedad from "@/components/sociedades/FiltroDeSociedad";
 import { contarPorSociedad, filtrarPorSociedad, type SociedadPropiaDTO } from "@/lib/sociedades/sociedades";
 
-type Tab = "debe" | "cobros" | "clientes" | "alertas";
+type Tab = "debe" | "cobros" | "clientes" | "alertas" | "seguimiento";
 
 /* «Quién nos debe» va primero (2026-10-16): es lo que Dirección pregunta y lo que Alex usa para analizar. La cola de
    cobros sigue al lado, para el trabajo cuota por cuota. */
@@ -52,6 +53,9 @@ const TABS: Array<{ key: Tab; label: string }> = [
   { key: "cobros", label: "Cobros" },
   { key: "clientes", label: "Clientes" },
   { key: "alertas", label: "Alertas" },
+  /* Lo que se persigue con un responsable y no es una cuota de la cola (2026-11-13): ventas sin cobro, conectores en mora,
+     contratos y el paso a producción. */
+  { key: "seguimiento", label: "Seguimiento" },
 ];
 
 const porFecha = (a: ColaCobroRow, b: ColaCobroRow) =>
@@ -66,6 +70,7 @@ export default function CobranzaClient({
   puedeEditar,
   abrirPago = false,
   abrirCuenta = null,
+  abrirSeguimiento = false,
   todayISO,
   sociedades = [],
   claveDeCuenta = {},
@@ -83,6 +88,8 @@ export default function CobranzaClient({
   abrirPago?: boolean;
   /** Abrir la cuenta de una vez (un pago devuelto por quien supervisa llega con ?cuenta=). */
   abrirCuenta?: string | null;
+  /** Abrir la pestaña «Seguimiento» (llega desde «Para ti» y Pendientes con ?ver=seguimiento). */
+  abrirSeguimiento?: boolean;
   todayISO: string;
   /** Las sociedades de Smarteam y de cuál es cada cuenta (2026-11-13): el filtro de arriba. */
   sociedades?: SociedadPropiaDTO[];
@@ -92,7 +99,7 @@ export default function CobranzaClient({
 }) {
   const toast = useToast();
   /* Quien llega a registrar un pago o a una cuenta viene a trabajar la cola; el resto, a ver quién debe. */
-  const [tab, setTab] = useState<Tab>(abrirPago || abrirCuenta ? "cobros" : "debe");
+  const [tab, setTab] = useState<Tab>(abrirPago || abrirCuenta ? "cobros" : abrirSeguimiento ? "seguimiento" : "debe");
   const [cola, setCola] = useState(initialCola);
   const [cartera, setCartera] = useState(initialCartera);
   const [alertas, setAlertas] = useState(initialAlertas);
@@ -238,6 +245,7 @@ export default function CobranzaClient({
       {tab === "alertas" && (
         <AlertasCobranza alertas={alertasVistas} setAlertas={setAlertas} onOpenCuenta={setOpenCuentaId} />
       )}
+      {tab === "seguimiento" && <SeguimientoCobranza puedeEditar={puedeEditar} onOpenCuenta={setOpenCuentaId} />}
       {/* ── Superficies compartidas entre tabs ── */}
       <CuentaDrawer
         cuentaId={openCuentaId}

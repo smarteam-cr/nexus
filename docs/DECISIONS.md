@@ -15207,3 +15207,59 @@ no tienen el filtro: queda el helper para quien las toque.
 *Lo que no garantiza:* el saldo de las cuentas a mano es tan bueno como su última carga; lo que se movió después no
 está. Los costos de la quincena en curso se cuentan enteros aunque parte ya haya salido antes del saldo (el número queda
 conservador). La pantalla no se probó con sesión (el navegador del preview no está logueado).
+## Cobranza: cada pendiente con su responsable, la regla de los 15 días y el paso a producción (2026-11-13)
+
+Pedido de Elías (puntos 11 a 16 del frente de cobranza). Lo que se decidió y por qué:
+
+- **Un responsable por persona, no por área.** «Ventas ganadas que no están en cobranza» decía que lo resolvía
+  «Cobranza», y una lista sin dueño no se cierra. Cada negocio ganado sin cobro tiene ahora quien lo persigue
+  (`VentaGanada.responsableCobroEmail`): por defecto **María José Zamora**, que asume cobros, pagos y facturación desde el
+  15 de noviembre; se reasigna en Cobranza › Seguimiento. **Vacío en la base = el por defecto**, y el por defecto vive en
+  un solo lugar (`lib/cobranza/responsables.ts`): si mañana cobra otra persona, se cambia una línea y no se reescriben
+  filas. La venta sale de la lista cuando su cobro queda cargado o cuando alguien la descarta con una razón, y el
+  descarte guarda quién y cuándo (`excluidaPor/En`). Se puede devolver a la lista.
+- **«Sin cobro» es la misma regla que la línea de Finanzas** (por monto, con `clasificarVentas`; lo cargado sin facturar
+  también respalda). `lib/ventas/ventas-sin-cobro.ts` repite la cuenta de `armarEstadoParaAuditar` con las mismas
+  funciones puras en vez de llamar al reporte anual, porque el reporte carga la planilla y los salarios, y «Para ti» de
+  quien cobra no tiene por qué leerlos. Si una cambia de regla, cambia la otra.
+- **Las promesas de pago no se tocaron (punto 12).** Ya avisaban: `marcaPromesa` da «incumplida» el día siguiente a la
+  fecha prometida si no hay pago (la fecha misma todavía es vigente, `promesa.test.ts`); esa mañana Finanzas › Pendientes
+  (y «Para ti» de quien lleva «Finanzas: registrar», que por defecto es el rol de María José) dice «Seguir N cobros con la
+  promesa de pago vencida», y el refresco nocturno sube la alerta a PROMESA_INCUMPLIDA. Lo pagado y conciliado se cobra
+  solo cada hora, así que un depósito que entró no avisa.
+- **La regla de los 15 días usa el vencido único de Cobranza**, no una vara nueva: la primera cuota de un servicio,
+  facturada y con el crédito de la cuenta corrido (15 días por defecto, `DEFAULT_CREDITO_DIAS`). Sin factura no cuenta:
+  ahí el atraso es nuestro. Le llega a quien lleva el proyecto del servicio; un servicio sin proyecto es de la cuenta y
+  le llega a quien lleva algún proyecto de ella (la misma regla que el aviso de proyecto pausado). La ficha del proyecto
+  muestra su estado de pago en el panel —al día, cuotas vencidas o la primera sin pagar— **sin montos**: lo lee el CSE.
+  Nexus no pausa nada: dice que hay que hablarlo con el líder.
+- **Un conector en mora nunca se desactiva solo.** Con más de 30 días vencido (el mismo umbral que la cartera llama
+  deuda grave) Nexus propone desactivarlo; una persona con `cobranza.write` confirma, y queda su nombre, la hora y una
+  nota en la bitácora. Una promesa vigente frena la propuesta. Si el cliente paga, propone reactivarlo. Confirmar
+  responde 409 si Nexus ya no lo propone hoy: un clic viejo no corta a un cliente al día. Desactivar es un dato en Nexus;
+  apagarlo de verdad lo hace Desarrollo.
+- **El cobro de un conector o servicio recurrente arranca con el paso a producción, no con el cronograma.** Una tabla
+  por proyecto (`CobroDelProyecto`) dice quién confirma la producción (por defecto **Alejandro Salas**), quién cobra y,
+  cuando pasa, el día, quién y cuándo. Entran los proyectos de Desarrollo en marcha o en «Recurrente» (entregados y
+  vivos) y los que tienen un servicio de cobro recurrente. Uno en «Recurrente» sin confirmación le llega a quien
+  confirma: así salen Construtecho, Ferretería Noelito y Grupo Printer, que no se podían cobrar por Stripe. Un desarrollo
+  «Finalizado» sin servicio recurrente no pide nada: fue un trabajo de una vez (JUDESUR salía en la primera vuelta).
+  Confirmar pone esa fecha de arranque a los servicios de cobro recurrente del proyecto **que todavía no tienen cuotas**;
+  uno con cuotas ya tiene calendario y moverlo abriría «el arranque cambió». Un servicio nuevo de ese tipo ligado a un
+  proyecto toma la fecha de producción, o ninguna si no se confirmó (antes copiaba el arranque del cronograma). La
+  suscripción (la licencia) no entra: arranca con el contrato. Producción confirmada sin servicio ligado le llega a quien
+  cobra para crearlo.
+- **La tabla de producción tiene su propia regla de acceso** (`lib/cobranza/produccion-acceso.ts`): la llenan la CSL y
+  Desarrollo, que no ven Cobranza, y abrirles Cobranza entera les daría la plata de toda la cartera. La ven quien ve
+  Cobranza, la CSL, Super Admin y Desarrollo; los responsables los cambian la CSL, Super Admin o quien edita Cobranza; la
+  producción la confirma la persona de ese proyecto, la CSL o Super Admin. No muestra montos. Vive en `/cobranza/production`.
+- **El contrato recurrente tiene fin y renovación**, pero no mueven cuotas (el motor sigue con `duracionMeses`, el golden
+  no cambia). Sin fin escrito, el fin es inicio + duración; sin duración no vence. A 30 días del fin, o vencido y todavía
+  activo, le llega a quien lleva la cuenta con qué hacer según la renovación. «El cliente no avanza» no es una métrica
+  nueva: es el último contacto de la cartera y `DIAS_SIN_CONTACTO` (21), lo mismo que pinta la cuenta de «Fría».
+- **Todo va a «Para ti» como pendiente, no como aviso guardado**: desaparece solo cuando se resuelve (desde el
+  2026-10-16, los avisos son solo lo que no es un pendiente). Los conectores entran también a Finanzas › Pendientes.
+
+*Lo que no garantiza:* nada se probó con sesión. La tabla de producción incluye los sitios web de Desarrollo en
+«Recurrente» (RCI, IAA, Ride CR): si no llevan cobro por producción, quien confirma los marca igual o la CSL le pone otro
+responsable. El fin del contrato no frena la generación de cuotas de una suscripción.

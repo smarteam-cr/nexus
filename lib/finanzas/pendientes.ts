@@ -46,6 +46,11 @@ export interface DatosDePendientes {
   devueltos?: Devuelto[];
   /** Los gastos que ya pasaron y no tienen factura (2026-11-13, lib/finanzas/reglas-de-gasto.ts). */
   facturasQueFaltan?: { n: number; montos: MontoEnMoneda[] };
+  /**
+   * Conectores que esperan una decisión de una persona (lib/cobranza/conectores-en-mora.ts, 2026-11-13): desactivar los
+   * que pasaron el plazo de mora y reactivar los que ya pagaron. Nunca automático. Ausente = no se midió.
+   */
+  conectores?: { desactivar: string[]; reactivar: string[] };
 }
 
 export type Cuando = "hoy" | "semana";
@@ -102,6 +107,24 @@ export function armarPendientes(d: DatosDePendientes): TareaPendiente[] {
       plata: textoDeMontos(d.promesas.montos),
       accion: "Ver la lista",
       href: "/cobranza",
+    });
+  }
+  const conectores = d.conectores ? d.conectores.desactivar.length + d.conectores.reactivar.length : 0;
+  if (d.conectores && conectores > 0) {
+    const { desactivar, reactivar } = d.conectores;
+    const nombres = (xs: string[]) => `${xs.slice(0, 3).join(", ")}${xs.length > 3 ? " y otros" : ""}`;
+    const partes = [
+      desactivar.length > 0 ? `Pasaron el plazo de mora: ${nombres(desactivar)}. Nexus propone desactivarlos; confírmalo solo si la deuda es real.` : null,
+      reactivar.length > 0 ? `Ya pagaron y siguen desactivados: ${nombres(reactivar)}.` : null,
+    ].filter(Boolean);
+    out.push({
+      clave: "conectores",
+      cuando: "hoy",
+      titulo: `Decidir ${plural(conectores, "conector en mora", "conectores en mora")}`,
+      detalle: partes.join(" "),
+      plata: "",
+      accion: "Decidir",
+      href: "/cobranza?ver=seguimiento",
     });
   }
   if (d.comisionesVencidas > 0) {

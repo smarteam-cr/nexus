@@ -21,6 +21,7 @@ import NotasDeLaCuenta from "@/components/clients/NotasDeLaCuenta";
 import TareasDeLaCuenta from "@/components/tareas/TareasDeLaCuenta";
 import AltaTrabada from "@/components/projects/AltaTrabada";
 import TimelineProposalPendiente from "@/components/projects/TimelineProposalPendiente";
+import EstadoDePagoDelProyecto from "@/components/projects/EstadoDePagoDelProyecto";
 import RielDelCliente, { type ProyectoDelRiel } from "@/components/clients/RielDelCliente";
 import PanelLateral, { usePanelLateral } from "@/components/ui/PanelLateral";
 import DisparoDelVigia from "@/components/cs/DisparoDelVigia";
@@ -665,6 +666,9 @@ function ProjectSection({
             autoria={propuestaViva[activeProject.id] ? propuestaViva[activeProject.id].autoria : (activeProject.timelineProposalAutoria ?? null)}
           />
         )}
+        {/* Cómo va el pago del proyecto (2026-11-13): la regla de los 15 días le dice a Customer Success cuándo hablar
+            con su líder para pausar. Sin montos. Un proyecto sin nada en Cobranza no muestra nada. */}
+        <EstadoDePagoDelProyecto projectId={activeProject.id} variante={lugar === "panel" ? "panel" : "compacto"} />
       </>
     );
   };

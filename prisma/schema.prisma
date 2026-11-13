@@ -774,6 +774,7 @@ model Project {
   timelineEvents             TimelineEvent[] // Éxito del cliente: eventos crudos del cronograma
   csAlerts                   CsAlert[] // Éxito del cliente: alertas del watchdog
   serviciosCobranza          ServicioContratado[] // Cobranza: servicios facturables ligados a este proyecto
+  cobroDelProyecto           CobroDelProyecto? // Cobranza: quién confirma el paso a producción, quién cobra, y el paso mismo (2026-11-13)
   stageGates                 ProjectStageGate[] // Ciclo de vida: validaciones de salida cumplidas
   devEstimates               DevEstimate[] // Desarrollo: estimaciones de esfuerzo del equipo técnico
   preguntasDeTiempo          PreguntaDeTiempo[] // Tiempos: «¿cuánto te tomó?» de sus tareas y documentos (SET NULL)
@@ -4516,6 +4517,19 @@ model ServicioContratado {
   estado                 CobranzaEstadoServicio @default(ACTIVO)
   descripcion            String?
 
+  /// El fin del contrato de un servicio RECURRENTE (2026-11-13). nullable porque casi ningún contrato lo dice: sin él,
+  /// el fin es el inicio + `duracionMeses`, y sin duración el contrato no tiene fin (lib/cobranza/contratos.ts). No mueve
+  /// las cuotas: el motor sigue leyendo `duracionMeses`. Es para avisarle a Customer Success antes de que venza.
+  contratoFin            DateTime?
+  /// Qué pasa al vencer: 'automatica' | 'manual' | 'no-renueva' (CHECK ServicioContratado_contratoRenovacion_check).
+  /// Texto con CHECK y no enum, para no pedir `ALTER TYPE … ADD VALUE`. nullable porque nadie lo dijo todavía.
+  contratoRenovacion     String?
+  /// La desactivación de un CONECTOR en mora la propone Nexus y la confirma una persona (2026-11-13,
+  /// lib/cobranza/conectores-en-mora.ts): nunca es automática. nullable porque casi ningún conector se desactiva;
+  /// volver a activarlo las limpia.
+  desactivacionConfirmadaPor String?
+  desactivacionConfirmadaEn  DateTime?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -4529,6 +4543,32 @@ model ServicioContratado {
 
   @@index([cuentaId, estado])
   @@index([projectId])
+}
+
+// ─── CobroDelProyecto ───────────────────────────────────────────────────────────
+// Por proyecto (2026-11-13): quién confirma su paso a producción, quién cobra, y el paso a producción mismo. El cobro de
+// un conector o de un servicio recurrente arranca cuando una persona confirma que pasó a producción (con la fecha y su
+// nombre), no cuando el cronograma dice que arrancó. La tabla la llena la CSL; sin fila (o con el campo vacío), los
+// responsables son los de siempre (lib/cobranza/responsables.ts). Reglas: lib/cobranza/paso-a-produccion.ts.
+model CobroDelProyecto {
+  id        String  @id @default(cuid())
+  projectId String  @unique
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  /// Correos del equipo. nullable porque vacío = el responsable por defecto.
+  confirmaProduccionEmail String?
+  cobraEmail              String?
+
+  /// El día en que pasó a producción. nullable porque se escribe solo al confirmarlo; los tres van juntos (CHECK
+  /// CobroDelProyecto_produccion_completa).
+  produccionDesde         DateTime?
+  produccionConfirmadaPor String?
+  produccionConfirmadaEn  DateTime?
+
+  /// Quién tocó la fila por última vez.
+  actualizadoPor String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 }
 
 // ─── PlanDePago ─────────────────────────────────────────────────────────────────
@@ -5994,6 +6034,12 @@ model VentaGanada {
   sospechaPrueba Boolean @default(false)
   excluida       Boolean @default(false)
   excluidaMotivo String?
+  /// Quién la descartó y cuándo (2026-11-13). nullable porque la mayoría no se descarta y la de antes no lo dice.
+  excluidaPor    String?
+  excluidaEn     DateTime?
+  /// Quién persigue el cobro mientras la venta no tenga respaldo en cobranza (2026-11-13). Un correo del equipo. nullable
+  /// porque null es el responsable por defecto (lib/cobranza/responsables.ts): así cambiar a quien cobra no reescribe filas.
+  responsableCobroEmail String?
 
   sincronizadoEn DateTime
   createdAt      DateTime @default(now())
