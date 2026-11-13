@@ -15144,3 +15144,66 @@ deben; y leer el catálogo de cuentas nuevo de Odoo sin romperse mientras se ter
 atribuyen por el texto del banco: una referencia que no nombra a la LLC queda como traslado propio. La copia del banco
 (`MovimientoBancoOdoo`) no guarda la compañía: hay una sola y cada diario es de una compañía. Equilibrio, caja y metas
 no tienen el filtro: queda el helper para quien las toque.
+## La caja y los pagos: dónde está la plata, la política de pagos y el permiso de María José (2026-11-13)
+
+> Pedido de Elías (frente «la caja y los pagos», puntos 6, 7, 19 y 26): que Nexus responda lo que Marco hace de cabeza
+> (cuánto habrá al cierre del año, ~150.000), que ordene los pagos si la caja no alcanza, que arme la lista de pagos de
+> cada semana según la política aprobada, y que María José, que asume cobros, pagos y facturación desde el 15 de
+> noviembre, vea el equilibrio, la caja y los pendientes sin ver salarios.
+
+- **Una pantalla nueva, «Dónde está la plata» (`/finanzas/caja`, lib/finanzas/caja/).** Saldo de hoy + lo que falta
+  cobrar + comisiones de aliados por cobrar − lo que sale − lo apartado = lo libre al cierre. Lo que entra y sale sale de
+  las MISMAS funciones que la caja neta (`loadProyeccion`, `proyectarCostos`, `proyectarGastos`) y con sus mismos cortes
+  (quincenas los dos primeros meses), para que una quincena no cuente distinto en las dos pantallas. Lo vencido, lo
+  atrasado sin facturar y las comisiones de aliado cuya fecha pasó NO entran: se muestran aparte, como en la caja neta.
+- **El saldo de Mercury se lee solo; el resto se carga a mano.** Mercury da el saldo por `GET /accounts` con el token de
+  solo lectura (medido el 13 nov: tres cuentas). Se usa el DISPONIBLE (`availableBalance`), no el contable: ese día la
+  cuenta principal tenía US$13.606 contables y US$3.228 disponibles por US$10.000 enviados en camino; contar el contable
+  sería contar dos veces plata que ya salió. Lo copia la copia de Mercury, uno por cuenta y día, y nunca la tumba. Odoo
+  no tiene un saldo legible confiable (los diarios son BAC y las VISA; el saldo contable depende de que todo el extracto
+  esté importado, y el Banco de Costa Rica en colones ni está): BCR colones y la cuenta en dólares nacen como cuentas
+  «a mano» (`CuentaDeBanco` + `SaldoDeCuenta`, uno por día) y un saldo de más de 3 días se marca como viejo.
+- **CRC y USD van separados; «en dólares» es solo la suma para leer.** El tipo de cambio es el de venta del BCCR del
+  último día guardado (`TipoCambioDia`), y la pantalla dice cuál. Sin tipo de cambio no se dice nada en dólares y el
+  faltante se mira por moneda.
+- **Reservas: libres no, en el banco sí.** Una reserva (ej. 28.000 para diciembre) deja de contar como libre desde hoy y
+  sale del banco el día que es para. Por eso hay dos números por corte: lo que habría en el banco y lo libre.
+- **Pagos comprometidos (`PagoComprometido`) son lo que no está en los recurrentes ni en los gastos**: proveedores,
+  impuestos y cargas, artículos. No se duplican con un gasto puntual futuro: el gasto ya está en la caja neta.
+- **La política de pagos (lib/finanzas/caja/politica.ts).** A: servicios profesionales y outsourcing facturan del 1 al 3
+  y se pagan el 7; una factura del 4 en adelante, el 7 del mes siguiente; si el pago depende de un cobro, el primer 7
+  después de que el cliente pague. B: artículos físicos los viernes, corte el miércoles (lunes a miércoles → ese viernes;
+  jueves a domingo → el siguiente), hasta 50 % de adelanto el viernes del pedido y el resto el viernes del corte de la
+  entrega. Lo que espera algo (factura, cliente, entrega) no tiene fecha: se muestra en «Esperando» y la proyección lo
+  pone en su mejor estimación, nunca antes de hoy. Una fecha anotada a mano manda sobre la regla.
+- **Comisionistas: «mes vencido», como hoy.** El día 7 no está confirmado (lo confirma Alex Arrieta): queda detrás de
+  `COMISIONISTAS_EL_DIA_7 = false`, y prenderlo es cambiar esa constante (la regla del 7 ya está escrita y probada).
+  Mes vencido es la regla del módulo de comisiones: el siguiente fin de mes después de que el cliente pague
+  (`quincenaDePagoDeComision`).
+- **Si no alcanza, el orden (lib/finanzas/caja/prioridad.ts):** planilla, impuestos y cargas sociales, proveedores y
+  demás (pagos comprometidos, comisiones de vendedor, gastos, costos fijos) y herramientas al final; dentro de cada
+  nivel, lo que vence antes. El orden es ESTRICTO: si un pago no alcanza, los de después tampoco, aunque uno más chico
+  entrara; pagar una herramienta con la planilla esperando es justo lo que la regla prohíbe. Las comisiones de vendedor
+  quedan en el nivel 3 (no son planilla); si se decide que van con la planilla, es cambiar una línea.
+- **La lista de cada semana** (lunes a domingo, esta y la próxima): pagos comprometidos con su fecha de la política, la
+  planilla de la quincena el 15 y el último día (la mitad del costo mensual de los salarios, sumada), las comisiones de
+  vendedor por día de pago y los gastos anotados con día. Lo atrasado entra en la de hoy. Las herramientas y los costos
+  fijos recurrentes no: no tienen día anotado (la mayoría se cobra solo en una tarjeta).
+- **El permiso de María José es una celda POR PERSONA, `tesoreria` («Caja y pagos»), no un if por email.** Se da en su
+  override de /team, como la planilla de Dinia (lib/auth/salarios-por-persona.ts): es toda la plata de la empresa y no
+  se le da a un rol entero. `read` abre el punto de equilibrio, la caja neta y «Dónde está la plata» (página, GET y
+  menú); `write`, cargar saldos, anotar pagos y reservas y marcar la revisión. No abre la planilla de cada persona, ni
+  las comisiones de vendedor, ni el aguinaldo, ni los costos uno por uno, ni las decisiones del equilibrio, ni
+  «Actualizar» del equilibrio (siguen de Super Admin).
+- **La planilla agregada SÍ está bien para ella.** El equilibrio la muestra por mes y rubro, la caja neta por quincena y
+  la caja como «Planilla» por corte: nunca un monto por persona. Lo mismo que ya ve quien registra en Gastos del mes (el
+  total de la planilla). La lectura de costos de la caja no pide ni el nombre (`guardas.test.ts`). Lo único que el
+  equilibrio puede nombrar son conceptos que faltan en los meses del Excel de Alex, sin monto.
+- **La revisión diaria va en Pendientes, no en el digest.** El digest de cobranza corre el 1 y el 15 (es el corte
+  quincenal), no todos los días, y Pendientes es la pantalla de entrada de quien registra. Quien tiene «Caja y pagos» ve
+  ahí «La caja de hoy» (si ya se revisó, los pagos de la semana, saldos que faltan o están viejos, si alcanza) y en la
+  caja marca «Marcar la caja de hoy como revisada» (`RevisionDeCaja`, una por día).
+
+*Lo que no garantiza:* el saldo de las cuentas a mano es tan bueno como su última carga; lo que se movió después no
+está. Los costos de la quincena en curso se cuentan enteros aunque parte ya haya salido antes del saldo (el número queda
+conservador). La pantalla no se probó con sesión (el navegador del preview no está logueado).

@@ -357,6 +357,11 @@ describe("P3 · estructurales", () => {
       "ReglaComisionVendedor",
       "ComisionVendedor",
       "CuotaComisionVendedor",
+      // La caja y los pagos (2026-11-13): saldos de banco, pagos comprometidos y la revisión diaria.
+      "CuentaDeBanco",
+      "SaldoDeCuenta",
+      "PagoComprometido",
+      "RevisionDeCaja",
     ]) {
       const re = new RegExp(
         `CREATE POLICY deny_all_non_superuser ON "${tabla}"[\\s\\S]*?AS RESTRICTIVE`,
@@ -429,9 +434,24 @@ describe("P2b · comisiones de vendedor y aguinaldo por persona", () => {
         expect(m[2], `${r} ${m[1]}`).toBe(m[1] === "GET" ? "read" : "write");
       }
     }
-    for (const r of ["app/api/cobranza/costos/tarjetas/route.ts", "app/api/cobranza/caja-neta/route.ts", "app/api/cobranza/costos/equilibrio/route.ts"]) {
-      expect(src(r), r).not.toMatch(/porPersona/);
+    expect(src("app/api/cobranza/costos/tarjetas/route.ts")).not.toMatch(/porPersona/);
+    // La caja neta y el equilibrio se abren SOLO con «Caja y pagos» (2026-11-13, María José): planilla sumada, solo leer.
+    for (const r of ["app/api/cobranza/caja-neta/route.ts", "app/api/cobranza/costos/equilibrio/route.ts"]) {
+      const s = src(r);
+      expect([...s.matchAll(/porPersona: \{ section: "(\w+)", action: "(\w+)"/g)].map((m) => `${m[1]}.${m[2]}`), r).toEqual(["tesoreria.read"]);
     }
+  });
+
+  it("con «Caja y pagos» ve la caja y el equilibrio, pero ni la planilla ni los costos (2026-11-13, María José)", async () => {
+    conOverride({ tesoreria: { read: true } });
+    expect(pasa(await guardCostosAccess({ porPersona: { section: "tesoreria", action: "read" } }))).toBe(true);
+    expect(pasa(await guardCostosAccess({ porPersona: { section: "tesoreria", action: "write" } }))).toBe(false);
+    expect(pasa(await guardCostosAccess({ porPersona: { section: "planilla", action: "read" } }))).toBe(false);
+    expect(pasa(await guardCostosAccess())).toBe(false);
+    conOverride({ tesoreria: { write: true } });
+    expect(pasa(await guardCostosAccess({ porPersona: { section: "tesoreria", action: "read" } }))).toBe(true);
+    expect(pasa(await guardCostosAccess({ porPersona: { section: "tesoreria", action: "write" } }))).toBe(true);
+    expect(prismaTouched).toEqual([]);
   });
 
   it("un override en false o de otra sección no abre nada", async () => {
@@ -481,7 +501,7 @@ describe("P4 · las páginas de Finanzas gatean ANTES de cargar datos", () => {
     // ── Rediseño de Finanzas (2026-10-03, docs/finanzas-rediseno-plan.md) ──
     "": "la puerta de Finanzas: solo redirige a la pantalla de entrada de cada vista, no carga datos; gate cobranza.read",
     pendientes:
-      "la entrada de quien registra (ADMIN): cobros por facturar, promesas, conciliación y comisiones de aliados. Ni un costo ni un salario; gate cobranza.read",
+      "la entrada de quien registra (ADMIN): cobros por facturar, promesas, conciliación y comisiones de aliados. Ni un costo ni un salario; gate cobranza.read. El resumen de la caja (2026-11-13) solo se lee con «Caja y pagos» por persona, y trae la planilla sumada",
     conciliacion:
       "lo que no cuadra entre los cobros y las facturas de Odoo y Mercury: INGRESOS, la misma superficie que Cobranza › Odoo; gate cobranza.read",
     reportes:

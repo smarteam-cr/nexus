@@ -406,20 +406,31 @@ export const APP_NAV: readonly NavItemConfig[] = [
       // Los reportes: la síntesis de los dos lados (entra − sale). Son de dirección y de quien supervisa. Desde el
       // 2026-10-18 son tres (más Caja neta, que decide Alex): el Tipo de cambio vive dentro del Punto de equilibrio y
       // Rentabilidad solo en Éxito del cliente.
+      // Dónde está la plata, el equilibrio y la caja neta (2026-11-13): Super Admin, o quien tenga «Caja y pagos» en su
+      // permiso por persona (María José, que registra). Muestran la planilla sumada, nunca la de cada persona.
+      {
+        href: "/finanzas/caja",
+        label: "Dónde está la plata",
+        section: "Reportes",
+        vistas: ["REGISTRA", "SUPERVISA", "DIRECCION"],
+        permiso: { section: "tesoreria", action: "read" },
+        // `exact`: por prefijo se marcaría activa también en /finanzas/caja-neta.
+        exact: true,
+      },
       {
         href: "/finanzas/equilibrio",
         label: "Punto de equilibrio",
         section: "Reportes",
-        costosOnly: true,
-        vistas: ["SUPERVISA", "DIRECCION"],
+        vistas: ["REGISTRA", "SUPERVISA", "DIRECCION"],
+        permiso: { section: "tesoreria", action: "read" },
         match: ["/finanzas/equilibrio", "/finanzas/tipo-de-cambio"],
       },
-      { href: "/finanzas/caja-neta", label: "Caja neta", section: "Reportes", costosOnly: true, vistas: ["SUPERVISA", "DIRECCION"] },
       // Las metas que dan plata (2026-11-13): el programa de partners de HubSpot y los bonos. Lo revisa la gerencia.
       { href: "/finanzas/goals", label: "Metas y bonos", section: "Reportes", costosOnly: true, vistas: ["SUPERVISA", "DIRECCION"] },
       // Las sociedades de Smarteam (2026-11-13): lo que se deben entre sí, lo que se movió sin factura y el catálogo de
       // cuentas de Odoo. De quien supervisa y de dirección, como el punto de equilibrio.
       { href: "/finanzas/companies", label: "Sociedades", section: "Reportes", costosOnly: true, vistas: ["SUPERVISA", "DIRECCION"] },
+      { href: "/finanzas/caja-neta", label: "Caja neta", section: "Reportes", vistas: ["REGISTRA", "SUPERVISA", "DIRECCION"], permiso: { section: "tesoreria", action: "read" } },
       // Proyección, reportes de cobranza y el corte quincenal: se mudaron de las pestañas de Cobranza.
       { href: "/finanzas/reportes", label: "Reportes de cobranza", section: "Reportes", costosOnly: true, vistas: ["SUPERVISA"] },
       // El MODELO de comisiones (2026-10-07): porcentajes, cuándo aplican y sus topes. Solo Super Admin, en sus dos vistas.

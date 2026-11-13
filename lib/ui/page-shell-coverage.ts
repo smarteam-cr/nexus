@@ -62,6 +62,7 @@ export const PAGE_SHELL_COVERAGE: Record<string, ShellDecl> = {
   "finanzas/caja-neta": { shell: "SHELL_DEFAULT" },
   "finanzas/goals": { shell: "SHELL_DEFAULT" },
   "finanzas/companies": { shell: "SHELL_DEFAULT" },
+  "finanzas/caja": { shell: "SHELL_DEFAULT" },
   "finanzas/tipo-de-cambio": { shell: "SHELL_DEFAULT" },
   "finanzas/modelo-de-comisiones": { shell: "SHELL_DEFAULT" },
   "finanzas/equilibrio": { shell: "SHELL_DEFAULT" },

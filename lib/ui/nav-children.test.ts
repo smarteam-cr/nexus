@@ -61,7 +61,7 @@ describe("visibleNavChildren — el filtro costosOnly del Sidebar", () => {
     const visibles = visibleNavChildren(finanzas, { isCostos: false, permissions: conGastos });
     expect(visibles.every((c) => !c.costosOnly)).toBe(true);
     // Las de remuneración (comisiones de vendedor, aguinaldo) piden su permiso por persona: con solo gastos no aparecen.
-    const REMUNERACION = ["planilla", "comisionesVendedor", "aguinaldo"];
+    const REMUNERACION = ["planilla", "comisionesVendedor", "aguinaldo", "tesoreria"];
     expect(visibles.map((c) => c.href)).toEqual(
       (finanzas.children ?? [])
         .filter((c) => !c.costosOnly && !(c.permiso && REMUNERACION.includes(c.permiso.section)))
@@ -86,6 +86,17 @@ describe("visibleNavChildren — el filtro costosOnly del Sidebar", () => {
       },
     }).map((c) => c.href);
     for (const h of REM) expect(conPermiso).toContain(h);
+  });
+
+  it("la caja, el equilibrio y la caja neta: quien registra los ve solo con «Caja y pagos» por persona (2026-11-13)", () => {
+    const REPORTES = ["/finanzas/caja", "/finanzas/equilibrio", "/finanzas/caja-neta"];
+    const sinPermiso = visibleNavChildren(finanzas, { isCostos: false, vista: "REGISTRA", permissions: { v: 1 as const, sections: { gastos: { read: true } } } }).map((c) => c.href);
+    for (const h of REPORTES) expect(sinPermiso).not.toContain(h);
+    const conCaja = visibleNavChildren(finanzas, { isCostos: false, vista: "REGISTRA", permissions: { v: 1 as const, sections: { tesoreria: { read: true } } } }).map((c) => c.href);
+    for (const h of REPORTES) expect(conCaja).toContain(h);
+    // Y la caja no abre la planilla de cada persona ni los reportes de cobranza de dirección.
+    expect(conCaja).not.toContain("/finanzas/costos/planillas/calendario");
+    expect(conCaja).not.toContain("/finanzas/reportes");
   });
 
   it("sin el permiso de gastos no aparecen Gastos del mes, Recurrentes ni Tarjetas", () => {

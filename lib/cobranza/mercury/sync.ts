@@ -15,6 +15,8 @@
  * Sin `server-only`, como la de Odoo: la corre el scheduler y un script.
  */
 import { prisma } from "@/lib/db/prisma";
+import { crDateParts } from "@/lib/jobs/time";
+import { mapearSaldo } from "./saldos";
 import { configDesdeEntorno, crearTransporteHttp } from "./transporte-http";
 import { MercuryError, MOVIMIENTOS_DESDE, explicarFallo, type MercuryFalloClase, type MercuryTransport } from "./transporte";
 import {
@@ -267,6 +269,9 @@ async function copiar(opts: OpcionesDeCopiaMercury): Promise<ResultadoSyncMercur
     /* ── 4. Los movimientos: altas y cambios (un movimiento no desaparece: cambia de estado) ── */
     res.movimientosNuevos = await copiarMovimientos(movimientos, ahora);
 
+    /* ── 5. El saldo de cada cuenta, para «Dónde está la plata» (2026-11-13). Nunca tumba la copia. ── */
+    await copiarSaldos(t, ahora);
+
     res.ok = true;
   } catch (e) {
     res.error = e instanceof MercuryError ? `${explicarFallo(e.clase)} | ${e.message}` : e instanceof Error ? e.message : String(e);
@@ -313,6 +318,36 @@ async function copiarClientes(clientes: readonly ClienteDeMercury[], ahora: Date
     await prisma.clienteMercury.updateMany({ where: { id: { in: idos.map((g) => g.id) } }, data: { estadoEspejo: "DESAPARECIDA" } });
   }
   return nuevos.length;
+}
+
+/**
+ * El saldo disponible de cada cuenta de Mercury, el día de hoy en Costa Rica (2026-11-13, «Dónde está la plata»). La
+ * cuenta se crea la primera vez con su nombre de Mercury; después solo se le pone al día el saldo del día (uno por
+ * cuenta y día: la copia de la tarde corrige la de la mañana).
+ * ⚠ NUNCA lanza: un fallo del saldo (o la tabla sin su SQL) no puede tumbar la copia de las facturas, que alimenta el
+ * cobro de lo pagado. Queda en el log y la pantalla de la caja muestra el último saldo que sí se leyó, con su fecha.
+ */
+async function copiarSaldos(t: MercuryTransport, ahora: Date): Promise<void> {
+  if (!t.cuentas) return;
+  try {
+    const saldos = (await t.cuentas()).map(mapearSaldo).filter((s): s is NonNullable<typeof s> => s !== null);
+    const fecha = new Date(`${crDateParts(ahora).dateKey}T00:00:00Z`);
+    for (const s of saldos) {
+      const cuenta = await prisma.cuentaDeBanco.upsert({
+        where: { mercuryAccountId: s.mercuryAccountId },
+        create: { nombre: s.nombre, moneda: "USD", origen: "MERCURY", mercuryAccountId: s.mercuryAccountId, sociedad: s.sociedad, orden: 10 },
+        update: {},
+        select: { id: true },
+      });
+      await prisma.saldoDeCuenta.upsert({
+        where: { cuentaId_fecha: { cuentaId: cuenta.id, fecha } },
+        create: { cuentaId: cuenta.id, fecha, monto: s.disponible, montoContable: s.contable, origen: "MERCURY", registradoPor: "mercury" },
+        update: { monto: s.disponible, montoContable: s.contable },
+      });
+    }
+  } catch (e) {
+    console.error(`[mercury/saldos] no se pudo copiar el saldo de las cuentas: ${e instanceof Error ? e.message.slice(0, 200) : String(e)}`);
+  }
 }
 
 async function copiarMovimientos(movimientos: readonly MovimientoDeMercury[], ahora: Date): Promise<number> {

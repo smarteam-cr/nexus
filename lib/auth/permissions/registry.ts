@@ -340,6 +340,19 @@ export const PERMISSION_SECTIONS = [
     soloPorPersona: true,
     actions: [{ key: "read", label: "Ver el aguinaldo de cada persona", enforced: true }],
   },
+  /* La caja y los pagos (2026-11-13, María José asume cobros, pagos y facturación desde el 15 de noviembre): el punto de
+     equilibrio, la caja neta y «Dónde está la plata» (saldos de banco, proyección al cierre y pagos de la semana). Ve
+     la planilla SUMADA, nunca persona por persona: eso sigue en la celda `planilla`. Solo por persona, como los
+     salarios: es toda la plata de la empresa. El chequeo vive en lib/auth/salarios-por-persona.ts. */
+  {
+    key: "tesoreria",
+    label: "Caja y pagos (planilla sumada, sin salarios de cada persona)",
+    soloPorPersona: true,
+    actions: [
+      { key: "read", label: "Ver el punto de equilibrio, la caja neta y dónde está la plata", enforced: true },
+      { key: "write", label: "Cargar saldos, anotar pagos y reservas, y marcar la revisión del día", enforced: true },
+    ],
+  },
   /* Tareas internas (docs/tareas-plan.md §11). Lo propio no lleva celda: anotar, sugerir, decidir lo tuyo, revisar tu
      semana y leer una reunión son de todo interno. ⚠ RETIRADA el 2026-10-16 (fase 0.1 de
      docs/nexus-sistema-de-trabajo-plan.md): el líder de un sprint ya no es un permiso sino un dato,

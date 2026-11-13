@@ -388,6 +388,29 @@ CREATE POLICY deny_all_non_superuser ON "GastoFinanciero"
   TO PUBLIC
   USING (false);
 
+-- 7b) La caja y los pagos (2026-11-13, scripts/sql/2026-11-13-caja-y-pagos.sql): los saldos de cada cuenta de banco,
+--     los pagos comprometidos y lo apartado. Pesan lo mismo que la caja neta. Con el salto de la tabla que todavía no
+--     existe: el bootstrap local corre este archivo ANTES de los scripts/sql posteriores al baseline.
+DO $$
+BEGIN
+  IF to_regclass('public."CuentaDeBanco"') IS NOT NULL THEN
+    DROP POLICY IF EXISTS deny_all_non_superuser ON "CuentaDeBanco";
+    CREATE POLICY deny_all_non_superuser ON "CuentaDeBanco" AS RESTRICTIVE FOR ALL TO PUBLIC USING (false);
+  END IF;
+  IF to_regclass('public."SaldoDeCuenta"') IS NOT NULL THEN
+    DROP POLICY IF EXISTS deny_all_non_superuser ON "SaldoDeCuenta";
+    CREATE POLICY deny_all_non_superuser ON "SaldoDeCuenta" AS RESTRICTIVE FOR ALL TO PUBLIC USING (false);
+  END IF;
+  IF to_regclass('public."PagoComprometido"') IS NOT NULL THEN
+    DROP POLICY IF EXISTS deny_all_non_superuser ON "PagoComprometido";
+    CREATE POLICY deny_all_non_superuser ON "PagoComprometido" AS RESTRICTIVE FOR ALL TO PUBLIC USING (false);
+  END IF;
+  IF to_regclass('public."RevisionDeCaja"') IS NOT NULL THEN
+    DROP POLICY IF EXISTS deny_all_non_superuser ON "RevisionDeCaja";
+    CREATE POLICY deny_all_non_superuser ON "RevisionDeCaja" AS RESTRICTIVE FOR ALL TO PUBLIC USING (false);
+  END IF;
+END $$;
+
 -- Las tablas nuevas desde el 2026-10-05 que sus scripts/sql/ ya tapan con la RESTRICTIVE (Tareas, Feedback, «Para ti»,
 -- la cartera, la carga, las reuniones indexadas, los contactos y tickets de HubSpot, las notas, el siguiente paso, los
 -- negocios abiertos, los ciclos de SmartLoop…). Faltaban acá, así que reconstruir el proyecto desde cero las habría

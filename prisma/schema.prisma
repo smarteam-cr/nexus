@@ -4639,6 +4639,8 @@ model Cobro {
   updatedAt         DateTime           @updatedAt
   cobroFacturaOdoos CobroFacturaOdoo[]
   ordenesDelSistema OrdenDelSistema[]
+  /// Pagos a proveedores que esperan a que este cobro entre (escenario A de la política de pagos, 2026-11-13).
+  pagosQueEsperan   PagoComprometido[]
 
   @@unique([servicioId, numCuota])
   @@index([cuentaId, fechaProgramada])
@@ -6963,6 +6965,128 @@ model SyncMercuryCorrida {
 
   @@index([iniciadaEn])
   @@index([ok, iniciadaEn])
+}
+
+// ─── La caja y los pagos (2026-11-13) ──────────────────────────────────────────
+// «Dónde está la plata»: el saldo de cada cuenta de banco, los pagos comprometidos y lo apartado, para proyectar
+// cuánto habrá al cierre del año (lib/finanzas/caja/). SQL: scripts/sql/2026-11-13-caja-y-pagos.sql (⛔ nunca `db push`).
+// ⚠ deny-all RESTRICTIVE: lo lee dirección y quien tenga «Caja y pagos» en su permiso por persona.
+
+/// De dónde sale un saldo: lo escribió una persona o lo leyó la copia de Mercury.
+enum OrigenDeSaldo {
+  MANUAL
+  MERCURY
+}
+
+/// PAGO sale el día que toca; RESERVA es plata apartada desde hoy para algo que viene (ej. diciembre).
+enum TipoDeCompromiso {
+  PAGO
+  RESERVA
+}
+
+/// La categoría decide la regla de la política de pagos y el orden cuando la caja no alcanza.
+enum CategoriaDePago {
+  PLANILLA
+  IMPUESTOS_Y_CARGAS
+  SERVICIOS_PROFESIONALES
+  COMISIONISTA
+  ARTICULO_FISICO
+  HERRAMIENTA
+  OTRO
+}
+
+enum EstadoDeCompromiso {
+  PENDIENTE
+  PAGADO
+  ANULADO
+}
+
+/// Una cuenta de banco de la empresa (Banco de Costa Rica en colones, la de dólares, las de Mercury).
+model CuentaDeBanco {
+  id               String         @id @default(cuid())
+  nombre           String
+  moneda           CobranzaMoneda
+  /// MANUAL: el saldo lo escribe una persona. MERCURY: lo trae la copia de Mercury.
+  origen           OrigenDeSaldo  @default(MANUAL)
+  /// La cuenta en Mercury. nullable porque solo la tienen las de Mercury.
+  mercuryAccountId String?        @unique
+  /// La sociedad dueña de la cuenta, en texto libre. nullable: el modelo de sociedad lo construye otro frente.
+  sociedad         String?
+  activa           Boolean        @default(true)
+  orden            Int            @default(0)
+  saldos           SaldoDeCuenta[]
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+}
+
+/// El saldo de una cuenta un día. Uno por cuenta y día: volver a cargarlo lo corrige.
+model SaldoDeCuenta {
+  id            String        @id @default(cuid())
+  cuentaId      String
+  cuenta        CuentaDeBanco @relation(fields: [cuentaId], references: [id], onDelete: Cascade)
+  fecha         DateTime      @db.Date
+  /// Lo que se puede usar ese día. En Mercury es el disponible (descuenta lo enviado que todavía no se asentó).
+  monto         Decimal       @db.Decimal(14, 2)
+  /// El saldo contable de Mercury. nullable: una persona carga uno solo.
+  montoContable Decimal?      @db.Decimal(14, 2)
+  origen        OrigenDeSaldo
+  registradoPor String
+  nota          String?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  @@unique([cuentaId, fecha])
+  @@index([fecha])
+}
+
+/// Un pago comprometido (proveedor, impuesto, artículo) o una reserva de plata. La fecha de pago sale de la política
+/// (lib/finanzas/caja/politica.ts) salvo que la persona fije una.
+model PagoComprometido {
+  id                String             @id @default(cuid())
+  tipo              TipoDeCompromiso   @default(PAGO)
+  concepto          String
+  /// A quién se le paga. nullable: una reserva no tiene a quién.
+  beneficiario      String?
+  categoria         CategoriaDePago    @default(OTRO)
+  monto             Decimal            @db.Decimal(14, 2)
+  moneda            CobranzaMoneda
+  /// La fecha fija del pago, o para cuándo es la reserva. nullable: en los escenarios A y B la pone la política.
+  fecha             DateTime?          @db.Date
+  /// Escenario A: el día que llegó la factura (del 1 al 3 se paga el 7). Escenario B: el día del pedido (corte el miércoles).
+  /// nullable mientras no llegue.
+  facturaRecibidaEl DateTime?          @db.Date
+  /// Escenario B: cuándo llegó el artículo; el resto se paga el viernes siguiente. nullable mientras no llegue.
+  entregadoEl       DateTime?          @db.Date
+  /// Escenario B: el adelanto, de 0 a 50 %.
+  adelantoPct       Int                @default(0)
+  /// nullable mientras el adelanto no se pague.
+  adelantoPagadoEl  DateTime?          @db.Date
+  /// Escenario A: el cobro del cliente que tiene que entrar antes. nullable: no todo pago depende de un cliente.
+  cobroId           String?
+  cobro             Cobro?             @relation(fields: [cobroId], references: [id], onDelete: SetNull)
+  estado            EstadoDeCompromiso @default(PENDIENTE)
+  /// nullable mientras no se pague.
+  pagadoEl          DateTime?          @db.Date
+  pagadoPor         String?
+  /// La sociedad que paga, en texto libre. nullable: el modelo de sociedad lo construye otro frente.
+  sociedad          String?
+  nota              String?            @db.Text
+  registradoPor     String
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+
+  @@index([estado, tipo])
+  @@index([cobroId])
+}
+
+/// La revisión diaria de la caja: quién la miró y cuándo. Una por día.
+model RevisionDeCaja {
+  id          String   @id @default(cuid())
+  fecha       DateTime @unique @db.Date
+  revisadoPor String
+  revisadoEn  DateTime
+  nota        String?
+  createdAt   DateTime @default(now())
 }
 
 /// Una página de la base de conocimiento del EQUIPO (`/documentacion`), al estilo de Notion:

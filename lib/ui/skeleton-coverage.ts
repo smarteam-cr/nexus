@@ -86,6 +86,8 @@ export const SKELETON_COVERAGE: Record<string, Cobertura> = {
   "finanzas/goals": { modo: "own" },
   // Las sociedades de Smarteam (2026-11-13): tarjetas de saldos entre sociedades y listas de movimientos.
   "finanzas/companies": { modo: "own" },
+  // Cuatro cifras + cuentas + pagos de la semana + tabla de quincenas: la forma de la caja (2026-11-13).
+  "finanzas/caja": { modo: "own" },
   "finanzas/tipo-de-cambio": { modo: "own" },
   "finanzas/modelo-de-comisiones": { modo: "own" },
   "finanzas/ingresos-variables": { modo: "own" },
