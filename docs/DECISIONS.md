@@ -2351,10 +2351,12 @@ cargado y el match por dominio es difuso. `hs_merged_object_ids` es un hecho que
   (editor, externo, PDF), y `selfTitled` —el camino de `EstimacionSection`— haría que la
   sección pinte su propio encabezado y **perdería el título editable** (`titleOverride`), que
   hoy funciona. Se revierte borrando un bloque de CSS.
-- **La vista es EFÍMERA y abre en lista.** En la propuesta publicada el documento está
-  congelado y no hay a dónde escribirla; su valor es explorar el plan en la reunión. Al
-  recargar vuelve a lista, que es como se ve hoy ⇒ **ninguna propuesta ya publicada cambia de
-  aspecto**. Mismo criterio que el check por línea de la Inversión.
+- **La vista es EFÍMERA y abre en el Gantt** (enmienda del 2026-11-12, feedback F-10 de Andrés
+  Pinzón: «la vista por defecto debe ser el diagrama de Gantt»; antes abría en lista para que
+  ninguna propuesta publicada cambiara de aspecto). Vale también para las ya publicadas y para el
+  editor: agregar fases, cambiar nombre, duración o detalle sigue en la lista, a un clic. El PDF y
+  un plan sin semanas legibles siguen en lista. En el documento publicado no hay a dónde escribir
+  la vista; al recargar vuelve al Gantt. Mismo criterio que el check por línea de la Inversión.
 - **Las semanas se LEEN del texto que ya existe** (`lib/landing/plan-weeks.ts`), y el diseño
   salió de mirar los datos antes de escribir el parser: 28 secciones `cronograma`, 4 en
   propuestas publicadas. Lo que hay escrito es `"Semanas 6-10"`, pero también **en dash**
@@ -2888,7 +2890,14 @@ fabricarla.
   decidió no backfillearlo. Un mes vacío no es un mes barato: se declara, no se rellena.
 - **Dos números que conviven en vez de elegirse en silencio.** La reserva de aguinaldo: el
   Excel divide entre 10 ($1.602,77/mes), Nexus entre 12 (`lib/finanzas/aguinaldo.ts`).
-  Ninguno es "el bug" — se muestra el de Nexus y se expone el del Excel con su aviso. Y el
+  Ninguno es "el bug" — se muestra el de Nexus y se expone el del Excel con su aviso.
+  **Quien salió del equipo dentro del período no entra** (2026-11-12, feedback F-20 de Alexander
+  Arrieta: Dinia Marín se arrastraba a la reserva de los gastos): ni en la lista del aguinaldo ni en
+  sus totales —su proporcional se paga en la liquidación— y se nombra aparte debajo de la tabla.
+  «Salió» = ningún salario suyo sigue sin dar de baja y su última baja cae antes del cierre de la
+  ventana (noviembre). Por la FECHA, no por el equipo de hoy: quien cobró su aguinaldo y renunció
+  después sigue en ese año. Un salario pausado o en otra moneda no es una baja. La persona se
+  reconoce por su id y por su nombre sin el cargo (el salario de Jerson no estaba ligado). Y el
   solape entre TARJETA y HERRAMIENTA: el importador ya advertía que cargar tarjetas como
   costo fijo *"duplicaría lo que ya cobran las herramientas"*, pero **el solape no se puede
   medir** (`TarjetaCreditoCosto` está vacía y el Excel no dice qué herramienta se paga con

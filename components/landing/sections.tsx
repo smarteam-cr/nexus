@@ -429,9 +429,10 @@ export const PlanSection: FC<SectionProps<PlanData>> = ({ data, ctx, editable, o
 
   /* La vista es EFÍMERA a propósito: en la propuesta publicada el documento está congelado y
      no hay a dónde escribirla, y su valor es explorar el plan en la reunión. Al recargar
-     vuelve a "lista" — que es como se ve hoy, así que ninguna propuesta ya publicada cambia
-     de aspecto. Mismo criterio que el check por línea de la Inversión. */
-  const [vista, setVista] = useState<"lista" | "gantt">("lista");
+     vuelve al Gantt: desde el 12 nov es la vista por defecto (feedback F-10 de Andrés Pinzón,
+     también en las propuestas ya publicadas). Sin fechas para dibujarlo (`hayGantt`), y en el
+     PDF, sigue la lista. Mismo criterio que el check por línea de la Inversión. */
+  const [vista, setVista] = useState<"lista" | "gantt">("gantt");
 
   /* En el PDF no hay quién apriete el toggle, así que se imprime la LISTA: es la vista con
      todo el contenido (nombre + semanas + detalle) y el Gantt es una forma de mirar esos

@@ -104,6 +104,28 @@ export interface SalarioActivo {
   moneda: string;
 }
 
+/**
+ * Un salario de la configuración de costos, con su estado, para saber QUIÉN YA NO ESTÁ EN EL EQUIPO (F-20). No sirve
+ * para estimar nada: solo dice si la persona sigue (algún salario sin dar de baja, aunque esté pausado o en otra moneda)
+ * o cuándo salió (`finalizadoEl`).
+ */
+export interface SalarioDelEquipo {
+  teamMemberId: string | null;
+  nombre: string;
+  /** "YYYY-MM-DD" de la baja; null = sigue (activo o pausado). */
+  finalizadoEl: string | null;
+}
+
+/**
+ * Las claves de una persona (de una quincena o de un salario), sin la moneda: su id del equipo, si lo tiene, y su nombre
+ * sin el cargo («Jerson Escudero · CSL…» y «Jerson Escudero» son la misma). Las dos, porque su salario puede no estar
+ * ligado a la persona y su quincena sí (Jerson, 2026).
+ */
+export function clavesDePersona(teamMemberId: string | null, nombre: string): string[] {
+  const porNombre = `nombre:${nombre.split(/ · | - /)[0]!.trim().toLowerCase()}`;
+  return teamMemberId ? [teamMemberId, porNombre] : [porNombre];
+}
+
 export interface FaltanteAguinaldo {
   nombre: string;
   moneda: string;
@@ -137,6 +159,12 @@ export interface AguinaldoResultado {
   cierraEn: string;
   /** Salarios activos que NO tienen ni una quincena en el libro. */
   faltantes: FaltanteAguinaldo[];
+  /**
+   * Quienes cobraron quincenas en el período pero ya no están en el equipo (su salario se finalizó o se pausó). NO van en
+   * `personas` ni en los totales (feedback F-20 de Alexander Arrieta, 9 nov: se arrastraban a la reserva de los gastos; su
+   * aguinaldo proporcional se paga en la liquidación). Se nombran aparte para que no desaparezcan sin decirlo.
+   */
+  fueraDelEquipo: AguinaldoPersona[];
 }
 
 /**
@@ -157,6 +185,8 @@ export function calcularAguinaldo(
   hoyISO: string,
   /** Los salarios activos, solo para declarar quién no aparece. Opcional. */
   salariosActivos: SalarioActivo[] = [],
+  /** Todos los salarios con su baja, para sacar a quien salió del equipo DENTRO del período (F-20). Opcional. */
+  salariosDelEquipo: SalarioDelEquipo[] = [],
 ): AguinaldoResultado {
   const periodos = periodosDeAguinaldo(anio);
   const enVentana = new Set(periodos);
@@ -229,6 +259,26 @@ export function calcularAguinaldo(
 
   personas.sort((a, b) => a.nombre.localeCompare(b.nombre) || a.moneda.localeCompare(b.moneda));
 
+  /* Quien SALIÓ del equipo dentro del período sale de la lista y de los totales (F-20): su aguinaldo proporcional se
+     paga en la liquidación y no va en la reserva de diciembre. «Salió» = ningún salario suyo sigue sin dar de baja (un
+     salario pausado o en otra moneda cuenta como que sigue) y su última baja cae antes del cierre de la ventana. Por la
+     fecha, y no por el equipo de hoy: quien cobró su aguinaldo y renunció después sigue en el año que ya cerró. */
+  const cierreDeLaVentana = periodos[periodos.length - 1] ?? `${anio}-11`;
+  const siguen = new Set(salariosDelEquipo.filter((s) => !s.finalizadoEl).flatMap((s) => clavesDePersona(s.teamMemberId, s.nombre)));
+  const bajaDe = new Map<string, string>();
+  for (const s of salariosDelEquipo) {
+    if (!s.finalizadoEl) continue;
+    for (const k of clavesDePersona(s.teamMemberId, s.nombre)) if ((bajaDe.get(k) ?? "") < s.finalizadoEl) bajaDe.set(k, s.finalizadoEl);
+  }
+  const salio = (p: AguinaldoPersona) => {
+    const ks = clavesDePersona(p.teamMemberId, p.nombre);
+    if (ks.some((k) => siguen.has(k))) return false;
+    const baja = ks.map((k) => bajaDe.get(k) ?? "").sort().pop();
+    return !!baja && baja.slice(0, 7) <= cierreDeLaVentana;
+  };
+  const fueraDelEquipo = personas.filter(salio);
+  if (fueraDelEquipo.length) personas.splice(0, personas.length, ...personas.filter((p) => !salio(p)));
+
   const totales: Record<string, number> = {};
   const totalesProyectado: Record<string, number> = {};
   for (const p of personas) {
@@ -268,5 +318,6 @@ export function calcularAguinaldo(
     periodoAbierto,
     cierraEn,
     faltantes,
+    fueraDelEquipo,
   };
 }

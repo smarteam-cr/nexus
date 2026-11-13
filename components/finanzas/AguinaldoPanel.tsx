@@ -50,6 +50,7 @@ export default function AguinaldoPanel({
     periodoAbierto,
     cierraEn,
     faltantes,
+    fueraDelEquipo = [],
   } = initial;
   const hayComisiones = personas.some((p) => p.sumaConComisiones !== p.sumaSalario);
 
@@ -226,6 +227,15 @@ export default function AguinaldoPanel({
             </tbody>
           </table>
         </div>
+      )}
+
+      {/* F-20 (Alexander Arrieta, 9 nov): quien ya no está en el equipo no va en la lista ni en el total —se arrastraba
+          a la reserva de los gastos—, pero se nombra para que no desaparezca sin decirlo. */}
+      {fueraDelEquipo.length > 0 && (
+        <p className="text-[11px] text-fg-muted">
+          Fuera de la lista y del total porque ya no están en el equipo (su aguinaldo proporcional va en la liquidación):{" "}
+          {fueraDelEquipo.map((p) => `${p.nombre} (${fmtMonto(p.aguinaldoSalario, p.moneda as "CRC" | "USD")})`).join(" · ")}.
+        </p>
       )}
 
       {/* ⚠ Quién NO aparece. Antes, una persona con salario activo y sin ninguna

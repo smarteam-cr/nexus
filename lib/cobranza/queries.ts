@@ -2097,10 +2097,11 @@ export async function loadAguinaldo(anio: number, hoyISO: string): Promise<Aguin
     // El monto del costo NO se usa para estimarle un aguinaldo: sin libro no hay
     // nada observado que dividir, y ponerle un número sería fabricarlo.
     prisma.costoRecurrente.findMany({
-      where: { categoria: "SALARIO", activo: true, finalizadoEl: null },
-      select: { teamMemberId: true, nombre: true, moneda: true },
+      where: { categoria: "SALARIO" },
+      select: { teamMemberId: true, nombre: true, moneda: true, activo: true, finalizadoEl: true },
     }),
   ]);
+  const salariosActivos = salarios.filter((s) => s.activo && !s.finalizadoEl);
 
   return calcularAguinaldo(
     filas.map((p) => ({
@@ -2119,11 +2120,13 @@ export async function loadAguinaldo(anio: number, hoyISO: string): Promise<Aguin
     })),
     anio,
     hoyISO,
-    salarios.map((s) => ({
+    salariosActivos.map((s) => ({
       teamMemberId: s.teamMemberId,
       nombre: s.nombre,
       moneda: s.moneda,
     })),
+    // Todos, con su baja: para sacar a quien salió del equipo dentro del período (F-20).
+    salarios.map((s) => ({ teamMemberId: s.teamMemberId, nombre: s.nombre, finalizadoEl: isoDay(s.finalizadoEl) })),
   );
 }
 

@@ -290,6 +290,57 @@ describe("calcularAguinaldo · el total estimado a diciembre", () => {
     expect(p.aguinaldoProyectado).toBe(p.aguinaldoSalario);
   });
 
+  it("P3b · F-20: quien salió del equipo dentro del período sale de la lista y de los totales, y se nombra aparte", () => {
+    // Dinia Marín (oct 2026): cobró quincenas del período, su salario se dio de baja el 9 oct, y se arrastraba a la reserva.
+    const dinia = [
+      q({ sujetoTeamMemberId: "tm-d", sujetoNombre: "Dinia Marín", moneda: "USD", monto: 600, periodo: "2026-09", fechaProgramada: "2026-09-15" }),
+      q({ sujetoTeamMemberId: "tm-d", sujetoNombre: "Dinia Marín", moneda: "USD", monto: 600, periodo: "2026-09", fechaProgramada: "2026-09-30" }),
+    ];
+    const equipo = [
+      { teamMemberId: "tm-1", nombre: "Marco Salas · CEO", finalizadoEl: null },
+      { teamMemberId: "tm-d", nombre: "Dinia Marín - Asistente", finalizadoEl: "2026-10-09" },
+    ];
+    const r = calcularAguinaldo([...q6(), ...dinia], 2026, "2026-11-12", ACTIVO, equipo);
+    expect(r.personas.map((x) => x.nombre)).toEqual(["Marco Salas"]);
+    expect(r.totales.USD).toBeUndefined();
+    expect(r.totalesProyectado.USD).toBeUndefined();
+    expect(r.fueraDelEquipo.map((x) => `${x.nombre}/${x.moneda}`)).toEqual(["Dinia Marín/USD"]);
+    expect(r.fueraDelEquipo[0]!.aguinaldoSalario).toBe(100);
+  });
+
+  it("P3c · quien salió DESPUÉS del período (cobró su aguinaldo) sigue en ese año ya cerrado", () => {
+    const equipo = [{ teamMemberId: "tm-1", nombre: "Marco Salas", finalizadoEl: "2027-02-15" }];
+    const r = calcularAguinaldo(q6(), 2026, "2027-03-01", [], equipo);
+    expect(r.personas.map((x) => x.nombre)).toEqual(["Marco Salas"]);
+    expect(r.fueraDelEquipo).toEqual([]);
+  });
+
+  it("P3d · un salario PAUSADO o en otra moneda no es una baja: no se proyecta, pero sigue en la lista", () => {
+    // Pausado: sin finalizar. No está en los activos (no se proyecta) pero sigue en el equipo.
+    const pausado = calcularAguinaldo(q6(), 2026, "2026-03-01", [], [{ teamMemberId: "tm-1", nombre: "Marco Salas", finalizadoEl: null }]);
+    expect(pausado.personas).toHaveLength(1);
+    expect(pausado.personas[0]!.sigueEnPlanilla).toBe(false);
+    expect(pausado.fueraDelEquipo).toEqual([]);
+    // Cambió de moneda: el salario viejo dado de baja, el nuevo vivo. Lo acumulado en la moneda vieja se queda.
+    const cambio = calcularAguinaldo(q6(), 2026, "2026-06-01", [], [
+      { teamMemberId: "tm-1", nombre: "Marco Salas", finalizadoEl: "2026-04-01" },
+      { teamMemberId: "tm-1", nombre: "Marco Salas", finalizadoEl: null },
+    ]);
+    expect(cambio.personas).toHaveLength(1);
+  });
+
+  it("P3e · sin la lista de salarios no se saca a nadie, y el nombre sin persona ligada se reconoce sin su cargo", () => {
+    expect(calcularAguinaldo(q6(), 2026, "2026-03-01", []).fueraDelEquipo).toEqual([]);
+    const jerson = [q({ sujetoTeamMemberId: null, sujetoNombre: "Jerson Escudero", moneda: "USD", monto: 900, periodo: "2026-07", fechaProgramada: "2026-07-15" })];
+    const r = calcularAguinaldo(jerson, 2026, "2026-11-12", [], [{ teamMemberId: null, nombre: "Jerson Escudero · CSL de Implementación", finalizadoEl: "2026-08-25" }]);
+    expect(r.personas).toEqual([]);
+    expect(r.fueraDelEquipo.map((x) => x.nombre)).toEqual(["Jerson Escudero"]);
+    // Su quincena con persona ligada y su salario sin ella (el caso real): se reconoce igual por el nombre.
+    const ligada = [q({ sujetoTeamMemberId: "tm-j", sujetoNombre: "Jerson Escudero", moneda: "USD", monto: 900, periodo: "2026-07", fechaProgramada: "2026-07-15" })];
+    const r2 = calcularAguinaldo(ligada, 2026, "2026-11-12", [], [{ teamMemberId: null, nombre: "Jerson Escudero · CSL de Implementación", finalizadoEl: "2026-08-25" }]);
+    expect(r2.fueraDelEquipo.map((x) => x.nombre)).toEqual(["Jerson Escudero"]);
+  });
+
   it("P4 · quien ENTRÓ a mitad de año proyecta menos, sin ninguna regla aparte", () => {
     // La fórmula CR ya maneja el año parcial: quien tiene menos quincenas
     // registradas llega a diciembre con menos, y eso es correcto.
