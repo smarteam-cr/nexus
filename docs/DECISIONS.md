@@ -14900,3 +14900,33 @@ data, también el detalle técnico. «Mejorar con IA» y el
 chat de la sección no pasan por el normalizador: si alguien le pide al chat una etapa nueva, la escribe (es un pedido de
 una persona). Las automatizaciones de Cemaco nombran las etapas viejas («Contacto en base», «Cliente activo») en su texto:
 rehacer solo el ciclo de vida no las corrige.
+
+## Cobranza — el estado de cuenta compartido (2026-11-13, pedido 17)
+- **Desde cada cuenta de Cobranza, «Compartir estado de cuenta» crea un enlace para la persona de finanzas del cliente:
+  `/external/estado-de-cuenta/<token>`, EN VIVO** (sin foto: cada vez que se abre muestra lo de hoy). Lo crea, copia,
+  extiende y revoca quien EDITA Cobranza (`guardCobranzaEditor`, también para mirarlo: el enlace saca la deuda de la
+  empresa fuera de Nexus). Tabla `AccesoAlEstadoDeCuenta`, una por cuenta.
+- **Sin contraseña: la URL es el secreto (256 bits), como la propuesta, el documento de la empresa y La escala.** *Por
+  qué:* va a UNA persona (finanzas), que lo guarda y lo abre cada mes; una contraseña aparte es otra cosa que mandar y
+  perder, y la de la propuesta se retiró porque nadie la usaba (0 de 14, «Acceso externo»). *Lo que la reemplaza:*
+  **caduca a los 90 días** (`DIAS_DE_VIGENCIA`) — a diferencia de los otros enlaces, este muestra la deuda de HOY, así que
+  uno olvidado en un buzón la seguiría mostrando para siempre —; «Extender» corre el vencimiento sin cambiar la dirección
+  (finanzas lo tiene guardado), y revocar la cierra para siempre: crear otro da una dirección NUEVA. Vencido, la página
+  dice que venció sin un solo dato de la cuenta; revocado o inválido, el 404 neutro. Se registra quién lo creó, quién lo
+  revocó, la última vista y cuántas veces se abrió (también cuenta cuando lo abre alguien de Smarteam desde la cuenta).
+- **Qué muestra (chokepoint `lib/external/estado-de-cuenta-view.ts`, reglas puras en `lib/cobranza/estado-de-cuenta.ts`):**
+  por moneda, sin sumar ni convertir: Facturado · Pagado · Por pagar · Vencido; y las facturas por pagar (vencidas
+  primero) y las pagadas, con número, concepto (el tipo de servicio, nunca la descripción libre), mes, emitida, vence,
+  monto y estado. *Las reglas son las de la cola:* vencido = facturada con el crédito de la cuenta consumido
+  (`semaforoCobro`); **lo no facturado NO sale** (no es deuda del cliente y su fecha es un plan interno que se mueve);
+  `SIN_DATO` no sale; una cuota pagada cuenta como facturada aunque no tenga fecha de emisión (2 del histórico), para que
+  Facturado = Pagado + Por pagar al centavo.
+- **Lo que NO cruza, nunca:** notas, promesas de pago, alertas, bitácora, quién facturó o confirmó, número de depósito,
+  correo de cobro, cédula, comisiones, márgenes, costos. El chokepoint lee con `select` cerrado y vuelve a comparar cada
+  cuota (la suya y la de su servicio) contra la cuenta del enlace; lo vigila `lib/external/estado-de-cuenta-view.test.ts`.
+- **Los montos son NETOS y la página lo dice** («sin impuestos: tu factura puede incluir el IVA»). *Por qué no el total de
+  la factura:* Nexus guarda los montos sin IVA (lib/cobranza/monto-neto.test.ts) y medido hoy en producción hay **0**
+  vínculos cuota↔factura de Odoo confirmados (`CobroFacturaOdoo`): no hay de dónde sacar el total con impuestos sin
+  adivinar. *Si finanzas del cliente lo pide:* mostrar el total de Odoo/Mercury cuando la cuota tenga su factura vinculada.
+- **Fusionar dos fichas:** el enlace de la cuenta absorbida muere con ella (`SE_BORRAN_A_PROPOSITO` en
+  lib/clients/fusion-de-empresas.ts); si la absorbida era la única con cuenta, la cuenta se muda entera y el enlace sigue.
