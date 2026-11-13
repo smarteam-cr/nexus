@@ -9,6 +9,7 @@
 import { redirect } from "next/navigation";
 import { requireInternalUser } from "@/lib/auth/supabase";
 import { isCostosRole } from "@/lib/auth/cobranza-roles";
+import { puedePorPersona } from "@/lib/auth/salarios-por-persona";
 import { loadReporteAnual } from "@/lib/cobranza";
 import { TIPO_SERVICIO_LABEL } from "@/lib/cobranza/schema";
 import { prisma } from "@/lib/db/prisma";
@@ -23,7 +24,8 @@ export const dynamic = "force-dynamic";
 
 export default async function FinanzasEquilibrioPage() {
   const ctx = await requireInternalUser().catch(() => null);
-  if (!ctx || !isCostosRole(ctx.role)) redirect("/clients");
+  // Super Admin, o quien tenga «Caja y pagos» en su permiso por persona (2026-11-13, María José): la planilla va sumada.
+  if (!ctx || !(isCostosRole(ctx.role) || puedePorPersona(ctx.role, ctx.teamMember, { section: "tesoreria", action: "read" }))) redirect("/clients");
 
   // "Hoy" = día calendario de Costa Rica: decide qué mes es futuro y, con eso, qué
   // meses entran al promedio del equilibrio.

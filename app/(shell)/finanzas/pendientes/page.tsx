@@ -16,6 +16,9 @@ import { armarPendientes, type TareaPendiente } from "@/lib/finanzas/pendientes"
 import { buttonVariants } from "@/components/ui/button-variants";
 import { EmptyState, PageHeader } from "@/components/ui";
 import YaLoCorregi from "@/components/finanzas/YaLoCorregi";
+import LaCajaDeHoy from "@/components/finanzas/caja/LaCajaDeHoy";
+import { puedePorPersona } from "@/lib/auth/salarios-por-persona";
+import { cargarCaja, resumirCaja, type ResumenDeCaja } from "@/lib/finanzas/caja/caja-server";
 import { SHELL_DEFAULT } from "@/lib/ui/page-shell";
 
 export const dynamic = "force-dynamic";
@@ -56,7 +59,14 @@ export default async function PendientesPage() {
   const todayISO = crDateParts(new Date()).dateKey;
   /* Lo devuelto es de quien lo registró; un Super Admin que abre Pendientes ve todo lo devuelto. */
   const quien = ctx.role === "SUPER_ADMIN" ? null : ctx.user.email;
-  const [datos, supervisor] = await Promise.all([medirPendientes(todayISO, quien), nombreDeQuienSupervisa()]);
+  /* La revisión diaria de la caja (2026-11-13): solo para quien tiene «Caja y pagos» en su permiso por persona. Si falla
+     (el SQL de la caja sin correr, por ejemplo), Pendientes sigue sin ese bloque. */
+  const veLaCaja = puedePorPersona(ctx.role, ctx.teamMember, { section: "tesoreria", action: "read" });
+  const [datos, supervisor, caja] = await Promise.all([
+    medirPendientes(todayISO, quien),
+    nombreDeQuienSupervisa(),
+    veLaCaja ? cargarCaja(todayISO).then(resumirCaja).catch((): ResumenDeCaja | null => null) : Promise.resolve(null),
+  ]);
   const tareas = armarPendientes(datos);
   const hoy = tareas.filter((t) => t.cuando === "hoy");
   const semana = tareas.filter((t) => t.cuando === "semana");
@@ -123,6 +133,7 @@ export default async function PendientesPage() {
         </div>
 
         <aside className="flex min-w-0 flex-[1_1_280px] flex-col gap-4">
+          {caja && <LaCajaDeHoy r={caja} />}
           {datos.decisiones > 0 && (
             <section data-recorrido="fin.pendientes.esperan" aria-label={`Esperan a ${supervisor}`} className="space-y-2 rounded-xl border border-line bg-surface-muted p-4">
               <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-fg-muted">Esperan a {supervisor}</span>

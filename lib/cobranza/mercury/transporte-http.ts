@@ -89,5 +89,11 @@ export function crearTransporteHttp(config: ConfigMercury): MercuryTransport {
     clientes: () => todas("/ar/customers", "customers"),
     movimientos: (desde) => todas("/transactions", "transactions", `&start=${encodeURIComponent(desde)}`),
     factura: (id) => pedir(`/ar/invoices/${encodeURIComponent(id)}`),
+    /* Son pocas (tres): una página alcanza. Si algún día pasan de una página, la copia lo nota: `page.nextPage`. */
+    cuentas: async () => {
+      const r = await pedir("/accounts");
+      if (!Array.isArray(r.accounts)) throw new MercuryError("PROTOCOLO", "/accounts no trajo «accounts».");
+      return r.accounts as Record<string, unknown>[];
+    },
   };
 }

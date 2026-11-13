@@ -28,6 +28,12 @@ export interface MercuryTransport {
    * la copia no lo usa, y los transportes de prueba no lo necesitan.
    */
   factura?(mercuryInvoiceId: string): Promise<Record<string, unknown>>;
+  /**
+   * Las cuentas con su saldo (`GET /accounts`), para «Dónde está la plata» (2026-11-13). Medido ese día: tres cuentas
+   * (dos corrientes y una de ahorro) con `currentBalance` y `availableBalance`. Opcional: los transportes de prueba no
+   * lo necesitan, y si falla la copia de facturas sigue igual.
+   */
+  cuentas?(): Promise<Record<string, unknown>[]>;
 }
 
 /**

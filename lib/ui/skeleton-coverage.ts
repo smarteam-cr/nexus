@@ -82,6 +82,8 @@ export const SKELETON_COVERAGE: Record<string, Cobertura> = {
   // hoja de categoría ni la del libro.
   "finanzas/costos/comisiones-vendedor": { modo: "own" },
   "finanzas/caja-neta": { modo: "own" },
+  // Cuatro cifras + cuentas + pagos de la semana + tabla de quincenas: la forma de la caja (2026-11-13).
+  "finanzas/caja": { modo: "own" },
   "finanzas/tipo-de-cambio": { modo: "own" },
   "finanzas/modelo-de-comisiones": { modo: "own" },
   "finanzas/ingresos-variables": { modo: "own" },

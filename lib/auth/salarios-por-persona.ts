@@ -15,6 +15,10 @@
  * 2026-10-07: también la PLANILLA (calendario, historial y salarios), con el mismo mecanismo: Elías, «Dinia no tiene
  * ingreso a Planillas … que ella le corresponde». La caja neta, el resumen de Costos y las tarjetas siguen solo para
  * Super Admin.
+ *
+ * 2026-11-13: la CAJA (`tesoreria`), para María José, que asume cobros y pagos: el punto de equilibrio, la caja neta y
+ * «Dónde está la plata». No abre ningún salario: esas pantallas muestran la planilla sumada. Mismo mecanismo, porque es
+ * toda la plata de la empresa y no se le da a un rol entero.
  */
 import { isCostosRole } from "./cobranza-roles";
 import { parsePermissionMapLoose } from "./permissions/schema";
@@ -22,7 +26,8 @@ import { parsePermissionMapLoose } from "./permissions/schema";
 export type PermisoDeSalario =
   | { section: "planilla"; action: "read" | "write" }
   | { section: "comisionesVendedor"; action: "read" | "write" }
-  | { section: "aguinaldo"; action: "read" };
+  | { section: "aguinaldo"; action: "read" }
+  | { section: "tesoreria"; action: "read" | "write" };
 
 /**
  * ¿Puede? Super Admin siempre; el resto, solo con la celda encendida en SU override. Quien puede editar, puede ver.
