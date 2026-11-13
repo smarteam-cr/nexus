@@ -56,7 +56,8 @@ export default function LaRespuesta({
   viene: LoQueViene | null;
   aliados: CriterioDeAliados;
   onSimular: () => void;
-  onDecidirAliados: () => void;
+  /** Ausente = quien mira no decide (solo dirección): no hay botón. */
+  onDecidirAliados?: () => void;
 }) {
   const usd = (n: number) => fmtMontoLibro(Math.round(n), moneda);
 
@@ -74,9 +75,11 @@ export default function LaRespuesta({
               Los aliados <strong className="font-semibold text-fg">{aliados.cuentan ? "cuentan" : "no cuentan"}</strong> para cubrir el piso
               {aliados.decidido ? ` · lo decidió ${aliados.decidido.por} el ${fmtFecha(aliados.decidido.en)}` : " · sin decidir: es el valor de siempre"}
             </span>
-            <button type="button" onClick={onDecidirAliados} className="font-semibold text-brand hover:text-brand-light">
-              {aliados.decidido ? "Cambiar" : "Decidirlo"}
-            </button>
+            {onDecidirAliados && (
+              <button type="button" onClick={onDecidirAliados} className="font-semibold text-brand hover:text-brand-light">
+                {aliados.decidido ? "Cambiar" : "Decidirlo"}
+              </button>
+            )}
           </div>
         </article>
 

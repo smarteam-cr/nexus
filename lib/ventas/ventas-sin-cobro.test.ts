@@ -1,8 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { deResponsable, ventasSinCobro, type CobroParaRespaldo, type VentaParaRevisar } from "./ventas-sin-cobro";
-import { PIPELINES_VENTA_PROPIA } from "./pipelines";
 
-const PIPE = PIPELINES_VENTA_PROPIA[0];
+const PIPE = "default";
 const HOY = "2026-11-13";
 
 const venta = (id: string, p: Partial<VentaParaRevisar> = {}): VentaParaRevisar => ({
@@ -17,6 +16,7 @@ const venta = (id: string, p: Partial<VentaParaRevisar> = {}): VentaParaRevisar 
   clientId: `c-${id}`,
   clienteNombre: `Cliente ${id}`,
   excluida: false,
+  noGeneraCobro: false,
   responsableCobroEmail: null,
   ...p,
 });
@@ -34,7 +34,7 @@ const cobro = (clientId: string, p: Partial<CobroParaRespaldo> = {}): CobroParaR
 });
 
 const medir = (ventas: VentaParaRevisar[], cobros: CobroParaRespaldo[] = []) =>
-  ventasSinCobro({ anio: 2026, hoyISO: HOY, monedaPresentacion: "USD", tasas: [], pipelinesQueCuentan: [...PIPELINES_VENTA_PROPIA], ventas, cobros });
+  ventasSinCobro({ anio: 2026, hoyISO: HOY, monedaPresentacion: "USD", tasas: [], ventas, cobros });
 
 describe("los negocios ganados sin cobro (punto 11, 2026-11-13)", () => {
   it("una venta sin nada cargado es pendiente de quien cobra por defecto", () => {
@@ -55,8 +55,13 @@ describe("los negocios ganados sin cobro (punto 11, 2026-11-13)", () => {
     expect(v).toMatchObject({ clase: "PARCIAL", descubierto: 3500 });
   });
 
-  it("descartada con una razón, o de un pipeline que no cuenta, no es pendiente", () => {
-    expect(medir([venta("a", { excluida: true }), venta("b", { pipelineId: "otro-pipeline" })])).toEqual([]);
+  it("«no genera cobro», o «no es una venta», no es pendiente", () => {
+    expect(medir([venta("a", { noGeneraCobro: true }), venta("b", { excluida: true })])).toEqual([]);
+  });
+
+  it("⭐ la regla única de lo vendido: una venta de cualquier pipeline pide su cobro (2026-11-13)", () => {
+    const [v] = medir([venta("a", { pipelineId: "pipeline-nuevo-de-customer-success" })]);
+    expect(v).toMatchObject({ id: "a", clase: "SIN_COBRANZA", descubierto: 5000 });
   });
 
   it("solo el año de hoy: una venta del año pasado no entra", () => {

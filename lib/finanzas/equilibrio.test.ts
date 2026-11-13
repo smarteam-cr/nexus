@@ -477,7 +477,7 @@ describe("H2 · pisoVigente — lo que cuesta la operación HOY", () => {
       tasa: null,
     });
     expect(r.base).toBe(2500);
-    expect(r.noConvertidos).toEqual([{ concepto: "Marco", moneda: "CRC", monto: 1_200_000 }]);
+    expect(r.noConvertidos).toEqual([{ concepto: "Marco", moneda: "CRC", monto: 1_200_000, rubro: "PLANILLA" }]);
     expect(r.cuantos).toBe(1);
   });
 

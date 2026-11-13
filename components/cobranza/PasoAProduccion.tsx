@@ -21,6 +21,8 @@ type Fila = FilaDeProduccion & { puedeConfirmar: boolean };
 interface Respuesta {
   filas: Fila[];
   equipo: Array<{ email: string; nombre: string }>;
+  /** A quién se puede poner en cada selector: quien confirma ve esta pantalla; quien cobra ve Cobranza. */
+  elegibles: { confirma: Array<{ email: string; nombre: string }>; cobra: Array<{ email: string; nombre: string }> };
   puedeEditar: boolean;
   esquemaAtrasado: boolean;
 }
@@ -93,12 +95,12 @@ export default function PasoAProduccion({ hoyISO }: { hoyISO: string }) {
     );
   }
 
-  const opciones = datos.equipo.map((p) => ({ value: p.email, label: p.nombre, hint: p.email }));
+  const opcionesDe = (campo: "confirma" | "cobra") => datos.elegibles[campo].map((p) => ({ value: p.email, label: p.nombre, hint: p.email }));
   const nombre = (email: string) => datos.equipo.find((p) => p.email === email)?.nombre ?? email;
   const responsable = (f: Fila, campo: "confirma" | "cobra") => (
     <CeldaSelect
       etiqueta={`${campo === "confirma" ? "Quién confirma la producción de" : "Quién cobra"} «${f.nombre}»`}
-      opciones={opciones}
+      opciones={opcionesDe(campo)}
       seleccion={[f[campo]]}
       puedeEditar={datos.puedeEditar}
       onElegir={async (email) => {

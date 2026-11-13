@@ -19,6 +19,7 @@ import { SHELL_DEFAULT } from "@/lib/ui/page-shell";
 import PuntoDeEquilibrio from "@/components/finanzas/equilibrio/PuntoDeEquilibrio";
 import MetaDelAnio from "@/components/finanzas/MetaDelAnio";
 import { cargarMetaYPorFacturar } from "@/lib/finanzas/meta-server";
+import { sinSalariosPorPersona } from "@/lib/finanzas/equilibrio-sin-salarios";
 
 export const dynamic = "force-dynamic";
 
@@ -26,12 +27,17 @@ export default async function FinanzasEquilibrioPage() {
   const ctx = await requireInternalUser().catch(() => null);
   // Super Admin, o quien tenga «Caja y pagos» en su permiso por persona (2026-11-13, María José): la planilla va sumada.
   if (!ctx || !(isCostosRole(ctx.role) || puedePorPersona(ctx.role, ctx.teamMember, { section: "tesoreria", action: "read" }))) redirect("/clients");
+  /* Dirección decide y actualiza; «Caja y pagos» solo lee (2026-11-13): los botones que no puede usar no se muestran. */
+  const esDireccion = isCostosRole(ctx.role);
+  /* Quien no ve salarios recibe el reporte sin nombres ni montos de costo sueltos (lib/finanzas/equilibrio-sin-salarios.ts). */
+  const veSalarios = puedePorPersona(ctx.role, ctx.teamMember, { section: "planilla", action: "read" });
 
   // "Hoy" = día calendario de Costa Rica: decide qué mes es futuro y, con eso, qué
   // meses entran al promedio del equilibrio.
   const todayISO = crDateParts(new Date()).dateKey;
   const anio = Number(todayISO.slice(0, 4));
-  const [reporte, pagosAHubspot] = await Promise.all([loadReporteAnual(anio, todayISO), pagosGrandesAHubspot(anio)]);
+  const [completo, pagosAHubspot] = await Promise.all([loadReporteAnual(anio, todayISO), pagosGrandesAHubspot(anio)]);
+  const reporte = veSalarios ? completo : sinSalariosPorPersona(completo);
   // La meta del año y de qué está hecha la línea de «por facturar» (iniciativa C de docs/roadmap.md): lee el reporte.
   const meta = await cargarMetaYPorFacturar(todayISO, reporte);
 
@@ -54,9 +60,10 @@ export default async function FinanzasEquilibrioPage() {
         etiquetasDeServicio={TIPO_SERVICIO_LABEL}
         nombres={nombres}
         pagosAHubspot={pagosAHubspot}
+        esDireccion={esDireccion}
       />
       <div className="mt-6">
-        <MetaDelAnio datos={meta} conLinea />
+        <MetaDelAnio datos={meta} conLinea puedeEditar={esDireccion} />
       </div>
     </div>
   );

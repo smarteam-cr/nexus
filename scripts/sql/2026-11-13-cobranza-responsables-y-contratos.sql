@@ -5,7 +5,10 @@
 -- conectores-en-mora.ts, paso-a-produccion.ts y contratos.ts; el porqué en DECISIONS «Cobranza: cada pendiente con su
 -- responsable (2026-11-13)».
 --
---   · "VentaGanada"         + responsableCobroEmail (null = el responsable por defecto), excluidaPor, excluidaEn.
+--   · "VentaGanada"         + responsableCobroEmail (null = el responsable por defecto) y la marca «no genera cobro»
+--                           (noGeneraCobroEn/Por/Motivo): una venta de verdad sin cobro propio. Sale de la lista de
+--                           Seguimiento y SIGUE en el vendido, la cuota, el bono y la comisión. NO es `excluida` («no es
+--                           una venta»), que la sacaría de todo eso (revisión del 2026-11-13).
 --   · "ServicioContratado"  + contratoFin, contratoRenovacion (texto con CHECK), desactivacionConfirmadaPor/En.
 --   · "CobroDelProyecto"    TABLA NUEVA, una fila por proyecto: quién confirma el paso a producción, quién cobra y el
 --                           paso mismo (día, quién y cuándo).
@@ -23,8 +26,9 @@
 BEGIN;
 
 ALTER TABLE "VentaGanada" ADD COLUMN IF NOT EXISTS "responsableCobroEmail" TEXT;
-ALTER TABLE "VentaGanada" ADD COLUMN IF NOT EXISTS "excluidaPor" TEXT;
-ALTER TABLE "VentaGanada" ADD COLUMN IF NOT EXISTS "excluidaEn" TIMESTAMP(3);
+ALTER TABLE "VentaGanada" ADD COLUMN IF NOT EXISTS "noGeneraCobroEn" TIMESTAMP(3);
+ALTER TABLE "VentaGanada" ADD COLUMN IF NOT EXISTS "noGeneraCobroPor" TEXT;
+ALTER TABLE "VentaGanada" ADD COLUMN IF NOT EXISTS "noGeneraCobroMotivo" TEXT;
 
 ALTER TABLE "ServicioContratado" ADD COLUMN IF NOT EXISTS "contratoFin" TIMESTAMP(3);
 ALTER TABLE "ServicioContratado" ADD COLUMN IF NOT EXISTS "contratoRenovacion" TEXT;
@@ -51,6 +55,14 @@ CREATE UNIQUE INDEX IF NOT EXISTS "CobroDelProyecto_projectId_key" ON "CobroDelP
 
 DO $$
 BEGIN
+  -- «No genera cobro» lleva siempre cuándo, quién y por qué, juntos.
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'VentaGanada_no_genera_cobro_completa') THEN
+    ALTER TABLE "VentaGanada" ADD CONSTRAINT "VentaGanada_no_genera_cobro_completa"
+      CHECK (
+        ("noGeneraCobroEn" IS NULL) = ("noGeneraCobroPor" IS NULL)
+        AND ("noGeneraCobroEn" IS NULL) = ("noGeneraCobroMotivo" IS NULL)
+      );
+  END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'ServicioContratado_contratoRenovacion_check') THEN
     ALTER TABLE "ServicioContratado" ADD CONSTRAINT "ServicioContratado_contratoRenovacion_check"
       CHECK ("contratoRenovacion" IS NULL OR "contratoRenovacion" IN ('automatica', 'manual', 'no-renueva'));

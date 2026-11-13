@@ -54,6 +54,7 @@ export default function PuntoDeEquilibrio({
   etiquetasDeServicio,
   nombres,
   pagosAHubspot,
+  esDireccion = false,
 }: {
   initialReporte: ReporteAnualDTO;
   hoyISO: string;
@@ -63,6 +64,11 @@ export default function PuntoDeEquilibrio({
   nombres: Record<string, string>;
   /** Los pagos grandes de Mercury a HubSpot del año: la evidencia de las licencias revendidas (lib/finanzas/licencias-server.ts). */
   pagosAHubspot?: { total: number; pagos: number };
+  /**
+   * Dirección (Super Admin): actualiza las fuentes, decide aliados y licencias y edita los contratos. Quien entra con
+   * «Caja y pagos» solo lee: esos botones no se muestran (sus rutas son de Super Admin).
+   */
+  esDireccion?: boolean;
 }) {
   const toast = useToast();
   const [r, setReporte] = useState(initialReporte);
@@ -202,15 +208,17 @@ export default function PuntoDeEquilibrio({
             >
               Tipo de cambio
             </Link>
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={() => void actualizar()}
-              disabled={actualizando}
-              title="Vuelve a traer ahora las ventas ganadas de HubSpot, las facturas de Odoo y lo de Mercury, que normalmente se copian una vez por día. Los cobros, el gasto y la planilla ya se leen al abrir."
-            >
-              {actualizando ? "Actualizando…" : "Actualizar"}
-            </Button>
+            {esDireccion && (
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => void actualizar()}
+                disabled={actualizando}
+                title="Vuelve a traer ahora las ventas ganadas de HubSpot, las facturas de Odoo y lo de Mercury, que normalmente se copian una vez por día. Los cobros, el gasto y la planilla ya se leen al abrir."
+              >
+                {actualizando ? "Actualizando…" : "Actualizar"}
+              </Button>
+            )}
           </div>
         }
       />
@@ -248,7 +256,7 @@ export default function PuntoDeEquilibrio({
             viene={lectura.viene}
             aliados={aliados}
             onSimular={() => setSimulando(true)}
-            onDecidirAliados={() => setDecidiendo(true)}
+            onDecidirAliados={esDireccion ? () => setDecidiendo(true) : undefined}
           />
           <FiltroDeFechas
             anio={r.anio}
@@ -310,13 +318,20 @@ export default function PuntoDeEquilibrio({
             onVerExcel={() => setViendoExcel(true)}
             onAbrirLinea={setLineaAbierta}
           />
-          <LicenciasRevendidas licencias={r.licencias} pagosAHubspot={pagosAHubspot} anio={r.anio} nombres={nombres} onCambio={() => void recargar()} />
+          <LicenciasRevendidas
+            licencias={r.licencias}
+            pagosAHubspot={pagosAHubspot}
+            anio={r.anio}
+            nombres={nombres}
+            puedeEditar={esDireccion}
+            onCambio={() => void recargar()}
+          />
           <ParaDecidir
             agenda={lectura.agenda}
             moneda={moneda}
             onAbrirLinea={setLineaAbierta}
-            onDecidirAliados={() => setDecidiendo(true)}
-            onDecidirLicencias={() => setDecidiendoLicencias(true)}
+            onDecidirAliados={esDireccion ? () => setDecidiendo(true) : undefined}
+            onDecidirLicencias={esDireccion ? () => setDecidiendoLicencias(true) : undefined}
           />
         </>
       )}
@@ -333,7 +348,7 @@ export default function PuntoDeEquilibrio({
       />
       {simulando && queda.length > 0 && <SimularLoQueQueda open base={queda} piso={piso} moneda={moneda} onClose={() => setSimulando(false)} />}
       <DetalleDeLinea linea={linea} moneda={moneda} onClose={() => setLineaAbierta(null)} />
-      {decidiendo && (
+      {esDireccion && decidiendo && (
         <DecidirAliados
           open
           actual={r.criterios.partnershipCubreElPiso}
@@ -344,7 +359,7 @@ export default function PuntoDeEquilibrio({
           }}
         />
       )}
-      {decidiendoLicencias && (
+      {esDireccion && decidiendoLicencias && (
         <DecidirLicencias
           actual={r.licencias.modo}
           onClose={() => setDecidiendoLicencias(false)}

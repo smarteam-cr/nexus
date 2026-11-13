@@ -5,8 +5,8 @@
  * Lo que espera algo (la factura, que el cliente pague, la entrega) no se paga todavía; se muestra aparte, en
  * «Esperando», en la semana en que se estima que podría salir.
  *
- * Lo que entra a la lista: los pagos comprometidos (con la fecha de la política, politica.ts), la planilla de la
- * quincena (sumada), las comisiones de vendedor y los gastos anotados con día. Las herramientas y los costos fijos
+ * Lo que entra a la lista: los pagos comprometidos (con la fecha de la política, politica.ts), lo de personal de la
+ * quincena (la planilla y las comisiones de vendedor, en una línea: personal.ts) y los gastos anotados con día. Las herramientas y los costos fijos
  * recurrentes no: no tienen día de pago anotado (la mayoría se cobra sola en una tarjeta).
  */
 import { lunesDeLaSemana, sumarDiasISO, type EstadoDelPago } from "./politica";

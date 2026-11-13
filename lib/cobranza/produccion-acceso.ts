@@ -9,6 +9,11 @@
  *  · Ver: quien ve Cobranza, la CSL, Super Admin y Desarrollo.
  *  · Cambiar los responsables: quien edita Cobranza, la CSL y Super Admin.
  *  · Confirmar la producción: la persona que la confirma en ese proyecto, la CSL y Super Admin.
+ *
+ * A quién se puede PONER (revisión del 2026-11-13: el selector ofrecía a todo el equipo, aunque no pudiera abrir la
+ * pantalla, y la persona elegida nunca podía confirmar):
+ *  · «Confirma»: quien puede ver esta pantalla.
+ *  · «Cobra»: quien ve Cobranza, que es donde se carga y se persigue el cobro.
  */
 
 export const ROLES_QUE_VEN_PRODUCCION: readonly string[] = ["CSL", "SUPER_ADMIN", "DEV"];
@@ -26,6 +31,20 @@ export interface QuienMira {
 export const puedeVerProduccion = (q: QuienMira): boolean => q.veCobranza || ROLES_QUE_VEN_PRODUCCION.includes(q.rol);
 
 export const puedeEditarResponsables = (q: QuienMira): boolean => q.editaCobranza || LIDERAN.includes(q.rol);
+
+export type CampoResponsable = "confirma" | "cobra";
+
+/** ¿Se le puede poner a esta persona ese papel en un proyecto? */
+export const puedeSerResponsable = (q: QuienMira, campo: CampoResponsable): boolean =>
+  campo === "confirma" ? puedeVerProduccion(q) : q.veCobranza;
+
+/** De todo el equipo, a quién ofrecer en cada selector. */
+export function elegiblesParaProduccion<P extends QuienMira>(equipo: readonly P[]): Record<CampoResponsable, P[]> {
+  return {
+    confirma: equipo.filter((p) => puedeSerResponsable(p, "confirma")),
+    cobra: equipo.filter((p) => puedeSerResponsable(p, "cobra")),
+  };
+}
 
 /** `confirma`: el correo de quien confirma la producción de ESE proyecto. */
 export const puedeConfirmarProduccion = (q: QuienMira, confirma: string): boolean =>

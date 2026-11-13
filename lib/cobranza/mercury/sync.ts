@@ -17,6 +17,7 @@
 import { prisma } from "@/lib/db/prisma";
 import { crDateParts } from "@/lib/jobs/time";
 import { mapearSaldo } from "./saldos";
+import { sociedadPorTexto } from "@/lib/sociedades/sociedades";
 import { configDesdeEntorno, crearTransporteHttp } from "./transporte-http";
 import { MercuryError, MOVIMIENTOS_DESDE, explicarFallo, type MercuryFalloClase, type MercuryTransport } from "./transporte";
 import {
@@ -332,10 +333,15 @@ async function copiarSaldos(t: MercuryTransport, ahora: Date): Promise<void> {
   try {
     const saldos = (await t.cuentas()).map(mapearSaldo).filter((s): s is NonNullable<typeof s> => s !== null);
     const fecha = new Date(`${crDateParts(ahora).dateKey}T00:00:00Z`);
+    // La sociedad de la lista oficial: la que nombra la razón social de Mercury (por sus alias) o, si ninguna, la que
+    // factura en Mercury. Solo al crear la cuenta: después la corrige una persona.
+    const sociedades = await prisma.sociedadPropia.findMany({ select: { id: true, alias: true, plataforma: true, activa: true } });
+    const sociedadDe = (texto: string | null) =>
+      sociedadPorTexto([texto], sociedades)?.id ?? sociedades.find((x) => x.activa && x.plataforma === "MERCURY")?.id ?? null;
     for (const s of saldos) {
       const cuenta = await prisma.cuentaDeBanco.upsert({
         where: { mercuryAccountId: s.mercuryAccountId },
-        create: { nombre: s.nombre, moneda: "USD", origen: "MERCURY", mercuryAccountId: s.mercuryAccountId, sociedad: s.sociedad, orden: 10 },
+        create: { nombre: s.nombre, moneda: "USD", origen: "MERCURY", mercuryAccountId: s.mercuryAccountId, sociedadId: sociedadDe(s.sociedad), orden: 10 },
         update: {},
         select: { id: true },
       });

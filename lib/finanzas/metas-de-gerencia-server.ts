@@ -15,7 +15,7 @@ import "server-only";
 import { prisma } from "@/lib/db/prisma";
 import { esquemaDesactualizado, modeloDisponible } from "@/lib/db/esquema";
 import { CobranzaError } from "@/lib/cobranza/mutations";
-import { PIPELINES_VENTA_PROPIA } from "@/lib/ventas/pipelines";
+import { VENTA_QUE_CUENTA } from "@/lib/ventas/regla-de-lo-vendido";
 import { tramosDelPlanDePartner } from "@/lib/ventas/metas";
 import {
   DEFINICION_DE_MEDIDA,
@@ -114,7 +114,8 @@ async function serviciosRecurrentes(hoy: string) {
 async function ventasGanadas(desde: string, hasta: string) {
   const [filas, ultima] = await Promise.all([
     prisma.ventaGanada.findMany({
-      where: { estado: "GANADA", excluida: false, pipelineId: { in: [...PIPELINES_VENTA_PROPIA] }, fechaCierre: { gte: aFecha(desde)!, lte: aFecha(hasta)! } },
+      // La regla única de lo vendido: todos los pipelines, como el vendido del punto de equilibrio.
+      where: { ...VENTA_QUE_CUENTA, fechaCierre: { gte: aFecha(desde)!, lte: aFecha(hasta)! } },
       select: { fechaCierre: true, monto: true, moneda: true },
     }),
     prisma.ventaGanada.aggregate({ _max: { sincronizadoEn: true } }),

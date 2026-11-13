@@ -21,8 +21,8 @@
  * - «Por cobrar»: la misma regla que «Lo que no cuadra» y «Emparejar» (`estaPorCobrar`, `netoPorCobrar`).
  * - Así, facturado = cobrado + por cobrar − notas sin aplicar, y la fila dice cuánto hay en notas sin aplicar.
  * - El cliente es la cuenta de Nexus si la factura tiene cuenta; si no, el cliente de Odoo, «sin cuenta en Nexus».
- * - «Ventas cerradas»: los tratos ganados en HubSpot con cierre en el año, de los pipelines que cuentan como venta de
- *   la casa y sin excluir —la regla del punto de equilibrio—, de la empresa de esa cuenta. Sin cuenta en Nexus no hay
+ * - «Ventas cerradas»: los tratos ganados en HubSpot con cierre en el año, de cualquier pipeline y sin excluir —la regla
+ *   única de lo vendido, lib/ventas/regla-de-lo-vendido.ts—, de la empresa de esa cuenta. Sin cuenta en Nexus no hay
  *   empresa con qué cruzarlos. ⚠ Es una guía y no un cuadre: una venta cerrada en diciembre se factura en enero.
  * - Orden: la última factura del año, la más reciente arriba.
  *
@@ -32,7 +32,7 @@
  * Pagada (`Paid`) = cobrado; sin pagar o en proceso = por cobrar. El monto es el de la factura (lo internacional va sin
  * IVA). Mercury no reparte pagos parciales: es todo o nada.
  */
-import { PIPELINES_VENTA_PROPIA } from "@/lib/ventas/pipelines";
+import { cuentaComoVendida } from "@/lib/ventas/regla-de-lo-vendido";
 import { esDocumentoVivo, estaPorCobrar, montosPorMoneda, netoPorCobrar, type MontoEnMoneda } from "./diferencias";
 
 /** Un documento de la copia de Odoo, como lo lee esta vista. */
@@ -192,7 +192,7 @@ export function notasDeReversion(documentos: readonly DocumentoParaHistorial[]):
   return usadas;
 }
 
-/** Suma los tratos que cuentan: ganados, sin excluir, de un pipeline de venta propia. */
+/** Suma los tratos que cuentan (la regla única de lo vendido). */
 function sumarVentas(ventas: readonly VentaParaHistorial[]): VentasDelAnio {
   return {
     tratos: ventas.length,
@@ -202,7 +202,7 @@ function sumarVentas(ventas: readonly VentaParaHistorial[]): VentasDelAnio {
 }
 
 export function ventaCuenta(v: VentaParaHistorial, anio: number): boolean {
-  return v.estado === "GANADA" && !v.excluida && PIPELINES_VENTA_PROPIA.includes(v.pipelineId) && anioDe(v.fechaCierre) === anio;
+  return cuentaComoVendida(v) && anioDe(v.fechaCierre) === anio;
 }
 
 /** Cómo se lee el estado de una factura de Odoo en la lista. */

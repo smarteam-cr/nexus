@@ -18,7 +18,8 @@
  * pasado a dólares con el tipo de cambio de venta del BCCR del último día que haya. Se dice en pantalla y nunca
  * reemplaza a las dos monedas.
  * ⚠ La planilla llega SUMADA (`rubro: "PLANILLA"`), nunca persona por persona: esta proyección la ve quien tiene el
- * permiso de caja, que no es el de salarios.
+ * permiso de caja, que no es el de salarios. Desde el 2026-11-13 ese rubro es «Personal»: la planilla y las comisiones de
+ * vendedor, juntas y en una sola moneda (personal.ts). `COMISIONES_DE_VENDEDOR` queda en el tipo, sin uso en la caja.
  */
 
 export type Moneda = "CRC" | "USD";
@@ -46,7 +47,7 @@ export const RUBROS_SALE: readonly RubroSale[] = [
 export const ETIQUETA_DE_RUBRO: Record<RubroEntra | RubroSale, string> = {
   COBROS: "Cobros a clientes",
   COMISIONES: "Comisiones de aliados",
-  PLANILLA: "Planilla",
+  PLANILLA: "Personal (planilla y comisiones de vendedor)",
   IMPUESTOS_Y_CARGAS: "Impuestos y cargas sociales",
   PAGOS: "Pagos comprometidos",
   COMISIONES_DE_VENDEDOR: "Comisiones de vendedor",

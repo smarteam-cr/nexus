@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { puedeConfirmarProduccion, puedeEditarResponsables, puedeVerProduccion, type QuienMira } from "./produccion-acceso";
+import {
+  elegiblesParaProduccion,
+  puedeConfirmarProduccion,
+  puedeEditarResponsables,
+  puedeSerResponsable,
+  puedeVerProduccion,
+  type QuienMira,
+} from "./produccion-acceso";
 
 const q = (rol: string, p: Partial<QuienMira> = {}): QuienMira => ({ rol, email: `${rol.toLowerCase()}@smarteamcr.com`, veCobranza: false, editaCobranza: false, ...p });
 
@@ -24,5 +31,14 @@ describe("quién ve y toca el paso a producción (2026-11-13)", () => {
     expect(puedeConfirmarProduccion(q("DEV", { email: "bsalas@smarteamcr.com" }), "asalas@smarteamcr.com")).toBe(false);
     expect(puedeConfirmarProduccion(q("ADMIN", { veCobranza: true, editaCobranza: true }), "asalas@smarteamcr.com")).toBe(false);
     expect(puedeConfirmarProduccion(q("CSL"), "asalas@smarteamcr.com")).toBe(true);
+  });
+
+  it("⭐ los selectores ofrecen solo a quien puede: confirma quien ve la pantalla, cobra quien ve Cobranza (revisión del 2026-11-13)", () => {
+    const equipo = [q("DEV"), q("CSE"), q("VENTAS"), q("CSL"), q("ADMIN", { veCobranza: true, editaCobranza: true }), q("MARKETING", { veCobranza: true })];
+    const e = elegiblesParaProduccion(equipo);
+    expect(e.confirma.map((p) => p.rol)).toEqual(["DEV", "CSL", "ADMIN", "MARKETING"]);
+    expect(e.cobra.map((p) => p.rol)).toEqual(["ADMIN", "MARKETING"]);
+    expect(puedeSerResponsable(q("CSE"), "confirma")).toBe(false);
+    expect(puedeSerResponsable(q("DEV"), "cobra")).toBe(false);
   });
 });

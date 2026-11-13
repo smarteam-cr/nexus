@@ -6,6 +6,14 @@ import { ADELANTO_MAXIMO_PCT, CATEGORIAS_DE_PAGO } from "./politica";
 
 const fecha = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "La fecha va como AAAA-MM-DD.");
 const moneda = z.enum(["CRC", "USD"]);
+/** Una sociedad de la lista oficial (`SociedadPropia.id`), o ninguna. Que exista lo comprueba la mutación. */
+const sociedadId = z
+  .string()
+  .trim()
+  .min(1)
+  .max(64)
+  .nullish()
+  .transform((v) => v ?? null);
 const texto = (max: number) => z.string().trim().max(max);
 const textoOpcional = (max: number) =>
   z
@@ -26,13 +34,13 @@ export const saldoSchema = z.object({
 export const cuentaNuevaSchema = z.object({
   nombre: texto(120).min(1, "Ponle nombre a la cuenta."),
   moneda,
-  sociedad: textoOpcional(160),
+  sociedadId,
 });
 
 export const cuentaCambioSchema = z
   .object({
     nombre: texto(120).min(1).optional(),
-    sociedad: textoOpcional(160).optional(),
+    sociedadId: sociedadId.optional(),
     activa: z.boolean().optional(),
   })
   .refine((v) => Object.keys(v).length > 0, "No hay nada que cambiar.");
@@ -49,7 +57,7 @@ const camposDeCompromiso = {
   entregadoEl: fecha.nullish().transform((v) => v ?? null),
   adelantoPct: z.number().int().min(0).max(ADELANTO_MAXIMO_PCT, `El adelanto es de hasta ${ADELANTO_MAXIMO_PCT} %.`).default(0),
   cobroId: z.string().min(1).nullish().transform((v) => v ?? null),
-  sociedad: textoOpcional(160),
+  sociedadId,
   nota: textoOpcional(2000),
 };
 

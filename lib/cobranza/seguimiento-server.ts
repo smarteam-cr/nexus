@@ -14,7 +14,7 @@ import "server-only";
 import { prisma } from "@/lib/db/prisma";
 import { esquemaDesactualizado } from "@/lib/db/esquema";
 import { cargarTasasDelAnio } from "@/lib/finanzas/tipo-cambio-server";
-import { PIPELINES_VENTA_PROPIA } from "@/lib/ventas/pipelines";
+import { VENTA_QUE_CUENTA } from "@/lib/ventas/regla-de-lo-vendido";
 import { ventasSinCobro, type VentaSinCobro } from "@/lib/ventas/ventas-sin-cobro";
 import type { MonedaEq } from "@/lib/finanzas/equilibrio";
 import { nombresDelEquipo } from "@/lib/cuentas/encargado-server";
@@ -57,11 +57,12 @@ export async function cargarVentasSinCobro(hoyISO: string): Promise<VentaSinCobr
   const hasta = dayUTC(`${anio}-12-31`);
   const otroAnio = dayUTC(`${anio + 1}-01-01`);
   const [ventas, cobros, cuentas, tasas] = await Promise.all([
+    // La regla única de lo vendido (todos los pipelines, sin las que no son venta).
     prisma.ventaGanada.findMany({
-      where: { estado: "GANADA", fechaCierre: { gte: desde, lte: hasta } },
+      where: { ...VENTA_QUE_CUENTA, fechaCierre: { gte: desde, lte: hasta } },
       select: {
         id: true, hubspotDealId: true, nombre: true, fechaCierre: true, monto: true, moneda: true, montoConvertidoHubspot: true,
-        pipelineId: true, clientId: true, excluida: true, responsableCobroEmail: true, client: { select: { name: true } },
+        pipelineId: true, clientId: true, excluida: true, noGeneraCobroEn: true, responsableCobroEmail: true, client: { select: { name: true } },
       },
     }),
     // El mismo `where` que `armarEstadoParaAuditar`: lo del año, y las cuotas cargadas de los años que vienen.
@@ -85,7 +86,6 @@ export async function cargarVentasSinCobro(hoyISO: string): Promise<VentaSinCobr
     hoyISO,
     monedaPresentacion: "USD",
     tasas: tasas.tasas,
-    pipelinesQueCuentan: [...PIPELINES_VENTA_PROPIA],
     ventas: ventas.map((v) => ({
       id: v.id,
       hubspotDealId: v.hubspotDealId,
@@ -98,6 +98,7 @@ export async function cargarVentasSinCobro(hoyISO: string): Promise<VentaSinCobr
       clientId: v.clientId,
       clienteNombre: v.client?.name ?? null,
       excluida: v.excluida,
+      noGeneraCobro: v.noGeneraCobroEn !== null,
       responsableCobroEmail: v.responsableCobroEmail,
     })),
     cobros: cobros.flatMap((c) => {
@@ -127,22 +128,25 @@ export interface VentaDescartada {
   en: string | null;
 }
 
-/** Las descartadas del año, con su razón: para poder devolverlas a la lista si fue un error. */
+/**
+ * Las que alguien marcó como «no genera cobro» este año, con su razón: para poder devolverlas a la lista si fue un error.
+ * Solo las que siguen contando como venta: una que además alguien excluyó («no es una venta») no se lista acá.
+ */
 export async function cargarVentasDescartadas(hoyISO: string): Promise<VentaDescartada[]> {
   const anio = Number(hoyISO.slice(0, 4));
   const filas = await prisma.ventaGanada.findMany({
-    where: { estado: "GANADA", excluida: true, fechaCierre: { gte: dayUTC(`${anio}-01-01`), lte: dayUTC(`${anio}-12-31`) } },
-    orderBy: [{ excluidaEn: { sort: "desc", nulls: "last" } }, { fechaCierre: "desc" }],
-    select: { id: true, nombre: true, fechaCierre: true, excluidaMotivo: true, excluidaPor: true, excluidaEn: true, client: { select: { name: true } } },
+    where: { ...VENTA_QUE_CUENTA, noGeneraCobroEn: { not: null }, fechaCierre: { gte: dayUTC(`${anio}-01-01`), lte: dayUTC(`${anio}-12-31`) } },
+    orderBy: [{ noGeneraCobroEn: "desc" }, { fechaCierre: "desc" }],
+    select: { id: true, nombre: true, fechaCierre: true, noGeneraCobroMotivo: true, noGeneraCobroPor: true, noGeneraCobroEn: true, client: { select: { name: true } } },
   });
   return filas.map((f) => ({
     id: f.id,
     nombre: f.nombre,
     clienteNombre: f.client?.name ?? null,
     fechaCierre: isoDay(f.fechaCierre)!,
-    motivo: f.excluidaMotivo,
-    por: f.excluidaPor,
-    en: f.excluidaEn?.toISOString() ?? null,
+    motivo: f.noGeneraCobroMotivo,
+    por: f.noGeneraCobroPor,
+    en: f.noGeneraCobroEn?.toISOString() ?? null,
   }));
 }
 
@@ -156,21 +160,27 @@ export async function asignarResponsableDeVenta(ventaId: string, email: string |
   if (r.count === 0) throw new SeguimientoError("Esa venta no existe.", 404);
 }
 
-/** Descarta una venta de la lista: no genera cobro (continuidad, add-on, renovación…). Con razón, quién y cuándo. */
+/** Lo que escribe «Descartar» en Seguimiento: la marca «no genera cobro». NUNCA `excluida` (lo vigila la prueba). */
+export function datosDeNoGeneraCobro(motivo: string, actorEmail: string, ahora: Date) {
+  return { noGeneraCobroEn: ahora, noGeneraCobroPor: actorEmail.toLowerCase(), noGeneraCobroMotivo: motivo.trim() };
+}
+
+/** Lo que escribe «Devolver a la lista»: borra la marca y nada más. */
+export const DATOS_PARA_DEVOLVER = { noGeneraCobroEn: null, noGeneraCobroPor: null, noGeneraCobroMotivo: null } as const;
+
+/**
+ * Descarta una venta de la lista porque no genera cobro (continuidad, add-on, renovación…). Con razón, quién y cuándo.
+ * ⚠ Es la marca «no genera cobro», no `excluida`: la venta sigue contando en el vendido, la cuota del vendedor, el bono de
+ * las metas y la comisión. Sacarla de ahí es decir que no es una venta, y eso no se decide desde Cobranza.
+ */
 export async function descartarVenta(ventaId: string, motivo: string, actorEmail: string): Promise<void> {
-  const r = await prisma.ventaGanada.updateMany({
-    where: { id: ventaId },
-    data: { excluida: true, excluidaMotivo: motivo.trim(), excluidaPor: actorEmail.toLowerCase(), excluidaEn: new Date() },
-  });
+  const r = await prisma.ventaGanada.updateMany({ where: { id: ventaId }, data: datosDeNoGeneraCobro(motivo, actorEmail, new Date()) });
   if (r.count === 0) throw new SeguimientoError("Esa venta no existe.", 404);
 }
 
 /** Devuelve una venta descartada a la lista (el descarte fue un error). */
 export async function devolverVentaALaLista(ventaId: string): Promise<void> {
-  const r = await prisma.ventaGanada.updateMany({
-    where: { id: ventaId },
-    data: { excluida: false, excluidaMotivo: null, excluidaPor: null, excluidaEn: null },
-  });
+  const r = await prisma.ventaGanada.updateMany({ where: { id: ventaId }, data: { ...DATOS_PARA_DEVOLVER } });
   if (r.count === 0) throw new SeguimientoError("Esa venta no existe.", 404);
 }
 
