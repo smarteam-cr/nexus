@@ -3020,6 +3020,53 @@ fabricarla.
   y manda sobre la bandera. La bandera sigue siendo el valor POR DEFECTO —el que rige mientras nadie
   decidió—, por eso esta línea y el centinela siguen valiendo.
 
+### El panorama del dinero: vendido de todos los pipelines, gasto proyectado y real, piso con colchón (2026-11-13)
+
+> Pedidos de Finanzas (lista del 13-nov, puntos 1, 2, 3, 5, 10, 23 y 27): que lo vendido sume todos los pipelines,
+> también lo que vende Customer Success; ver facturado y cobrado lado a lado con el gasto (~39.831); el gasto del mes
+> proyectado desde el día 1 y confirmado como real por Alex al cerrar; el aguinaldo como gasto fijo mensual; dos
+> líneas en el equilibrio (el mínimo exacto y con colchón, 10-15 %); cada número con su explicación; los pasos del
+> calendario en el cierre; y un filtro de fechas en los gráficos.
+
+- **Vendido = todos los pipelines.** Medido en producción el 2026-11-13: el portal tiene TRES pipelines de negocios
+  (ventas, HubSpot Shared Selling e Insider One, hoy «PIPELINE | RODMANN + SMARTEAM») y los tres ya estaban marcados
+  `esVentaPropia`; no había ningún pipeline afuera. Lo de Customer Success ya entraba: lo vende un CSE o la CSL en
+  esos mismos pipelines (13 tratos y ~US$13.100 en 2026, más 3 sin monto). Lo que cambió es que deja de depender de la
+  lista: el espejo trae los ganados por `hs_is_closed_won` (mismos 111 tratos de 2026 que con la lista de etapas) y el
+  equilibrio no filtra por pipeline, así que un pipeline nuevo de CS entra solo. La reclasificación de un trato que no
+  volvió usa `hs_is_closed_won`/`hs_is_closed` antes que las etapas transcritas (`sigueGanado`,
+  `estadoAlDejarDeVolver`). **No se cuenta dos veces lo recurrente**: la identidad es el trato (`hubspotDealId`), una
+  renovación es un trato nuevo de su año y lo cobrado mes a mes nunca suma a lo vendido. La pantalla dice cuánto
+  vendió cada área (`vendidoPorOrigen`, con la regla de comisiones: CSE/CSL = Customer Success). No hace falta
+  re-sincronizar nada: el espejo ya tenía todo.
+- **El gasto del mes tiene firmeza** (`lib/finanzas/panorama.ts › gastoDelMes`): REAL si Alex cerró el mes (dice quién
+  y cuándo, de `CierreMes.cerradoPor`), REGISTRADO si pasó sin cerrar, PROYECTADO si está en curso o por venir. El
+  proyectado es, **rubro por rubro, el mayor entre el piso de hoy y lo anotado** — nunca la suma: el 15 de noviembre ya
+  hay una quincena anotada y sumarla al piso contaría la planilla dos veces. Sin piso de hoy no se proyecta.
+- **El aguinaldo es la provisión, y el pago no suma otra vez** (`esPagoDeAguinaldo`, aviso `AGUINALDO_PAGADO_FUERA`).
+  La provisión ya se reparte ÷12 en cada mes. Los «18.765 de golpe en noviembre» NO aparecen en el reporte de Nexus
+  medido el 13-nov: ni el Excel de egresos (`EgresoMensual`), ni los recurrentes, ni los gastos del mes, ni
+  `AguinaldoPago` (vacío) traen un pago de aguinaldo, y noviembre suma 22.994 (una quincena, herramientas, fijos y la
+  provisión). El número se parece al aguinaldo del año entero (US$10.351 + ₡4.414.583), así que lo más probable es que
+  se vea en el Excel de Alex o en otra pantalla. La guarda deja fuera del gasto cualquier línea que diga «aguinaldo» y
+  no sea la provisión, para que el día que se cargue el pago no se cuente dos veces.
+- **Dos líneas en el equilibrio**: el mínimo exacto (`pisoVigente.base`, de `costosDelPiso`) y el mínimo con colchón,
+  que elige quien mira (arranca en 15 %, se avisa si sale del 10-15 % acordado, se recuerda en su navegador). La meta
+  de la barra de arriba pasó de un +10 % fijo a ese colchón. `pisoVigente.metas` (10 y 15) no cambió.
+- **«Contra el gasto»**: lo facturado y lo cobrado de cada mes al lado del gasto con su firmeza, con la explicación de
+  las dos tandas (a inicio de mes lo internacional y Mercury; después kölbi y la segunda quincena) y, en el mes en
+  curso, cuánto queda programado sin factura.
+- **Qué mide · De dónde sale**: el texto vive en `lib/finanzas/explicaciones.ts` (un número dice lo mismo en todas las
+  piezas) y el ⓘ es `components/finanzas/QueMide.tsx`. Otra sección lo adopta agregando su grupo; una prueba exige las
+  dos respuestas en cada una.
+- **Filtro de fechas**: año (vuelve a pedir el reporte de ese año) y desde/hasta dentro del año, con atajos. Filtra lo
+  que se mira en «Mes a mes» y «Contra el gasto»; el piso, el margen y la barra de arriba siguen siendo del año.
+- **El calendario en el cierre** (`PASOS_DEL_CALENDARIO`, columna `CierreMes.pasosDelCalendario`, SQL
+  2026-11-13-cierre-pasos-del-calendario): reunión de gerencia el 25 del mes; del 1 al 5 del siguiente, facturar y
+  cerrar el IVA, y Odoo y Mercury al día; el 5, balances y reporte del IVA; el 10, reunión de gerencia. Se marcan a
+  mano (quién y cuándo) y no frenan el cierre: Nexus no los puede medir, y una reunión movida no es un mes mal cerrado.
+  Se pueden marcar con el mes ya cerrado (el 10 del siguiente suele estarlo); no tocan la huella.
+
 ## Documentación pasa a ser una base de conocimiento (2026-09-11)
 
 > El módulo era un manual de solo lectura escrito en el código: para corregir una frase hacía

@@ -4,12 +4,17 @@
  * components/finanzas/equilibrio/DeLaVentaALaCaja.tsx — la pregunta de RevOps: ¿la venta se está convirtiendo en
  * plata? (rediseño del punto de equilibrio, 2026-10-05). Vendido → facturado → cobrado, y dónde se queda la plata entre
  * un paso y el otro. A la derecha, lo facturado por servicio y lo de los aliados.
+ *
+ * 2026-11-13: lo vendido es de todos los pipelines y dice cuánto vendió cada área (también Customer Success); cada
+ * número lleva su ⓘ con qué mide y de dónde sale (lib/finanzas/explicaciones.ts).
  */
 import Link from "next/link";
 import { fmtMontoLibro } from "@/lib/cobranza/montos";
 import type { ReporteEquilibrio } from "@/lib/finanzas/equilibrio";
 import type { Inconsistencia } from "@/lib/finanzas/inconsistencias";
 import { nombreDelMes } from "@/lib/finanzas/lectura-equilibrio";
+import { EXPLICACIONES_EQUILIBRIO as E, type Explicacion } from "@/lib/finanzas/explicaciones";
+import QueMide from "../QueMide";
 
 const pct = (x: number | null) => (x === null ? "—" : `${Math.round(x * 100)} %`);
 
@@ -37,28 +42,34 @@ export default function DeLaVentaALaCaja({
   /* Lo programado de este mes en adelante todavía está a tiempo; lo de meses que ya terminaron, no. */
   const programadoPorVenir = meses.filter((m) => m.periodo >= hoyISO.slice(0, 7)).reduce((s, m) => s + m.pendienteFacturar, 0);
   const mayorServicio = Math.max(1, ...porServicio.map((s) => s.facturado));
+  /* Cuánto vendió cada área (2026-11-13). Un reporte viejo, armado antes del desglose, no lo trae. */
+  const porArea = (ind.vendidoPorOrigen ?? []).filter((o) => o.monto > 0);
 
-  const pasos = [
+  const pasos: Array<{ titulo: string; clave: React.CSSProperties; monto: string; nota: string; explicacion: Explicacion; detalle?: string }> = [
     {
       titulo: "Vendido",
       clave: { borderTop: "2px dashed var(--serie-2)" },
       monto: usd(ind.vendidoTotal),
       nota:
         ind.ventasSinMonto > 0
-          ? `${ind.ventasConMonto} tratos ganados. Otros ${ind.ventasSinMonto} no tienen monto en HubSpot y cuentan como cero.`
-          : `${ind.ventasConMonto} tratos ganados.`,
+          ? `${ind.ventasConMonto} tratos ganados, de todos los pipelines. Otros ${ind.ventasSinMonto} no tienen monto en HubSpot y cuentan como cero.`
+          : `${ind.ventasConMonto} tratos ganados, de todos los pipelines.`,
+      explicacion: E.vendido,
+      detalle: porArea.length > 0 ? porArea.map((o) => `${o.origen} ${usd(o.monto)} (${o.ventas})`).join(" · ") : undefined,
     },
     {
       titulo: "Facturado",
       clave: { borderTop: "2px solid var(--serie-1)" },
       monto: usd(ind.facturadoTotal),
       nota: "Sin IVA. Lo facturado, no lo vendido, es lo que se compara con el piso.",
+      explicacion: E.facturado,
     },
     {
       titulo: "Cobrado",
       clave: { borderTop: "2px solid var(--serie-3)" },
       monto: usd(ind.cobradoTotal),
       nota: `${pct(ind.cobranza.sobreFacturado)} de lo facturado; ${pct(ind.cobranza.sobreExigible)} de lo que ya se podía cobrar.`,
+      explicacion: E.cobrado,
     },
   ];
 
@@ -82,9 +93,11 @@ export default function DeLaVentaALaCaja({
                   <span className="inline-flex items-center gap-1.5 text-xs text-fg-muted">
                     <span aria-hidden className="inline-block w-3.5" style={p.clave} />
                     {p.titulo}
+                    <QueMide explicacion={p.explicacion} titulo={p.titulo} />
                   </span>
                   <span className="text-[22px] font-bold leading-7 text-fg">{p.monto}</span>
                   <span className="text-xs leading-[17px] text-fg-secondary">{p.nota}</span>
+                  {p.detalle && <span className="text-xs leading-[17px] text-fg-muted">Por área: {p.detalle}</span>}
                 </div>
               </div>
             ))}
@@ -95,6 +108,7 @@ export default function DeLaVentaALaCaja({
               <Fuga
                 titulo={`${sinRespaldo.items.length === 1 ? "1 venta ganada" : `${sinRespaldo.items.length} ventas ganadas`} sin respaldo en cobranza.`}
                 detalle="Se vendieron y no tienen plan de cobro, o facturan menos de lo vendido."
+                explicacion={E.sinRespaldo}
                 monto={usd(sinRespaldo.montoEnJuego)}
                 accion={
                   <button type="button" onClick={() => onAbrirLinea("VENTAS_SIN_COBRANZA")} className="text-[13px] font-semibold text-brand hover:text-brand-light">
@@ -111,6 +125,7 @@ export default function DeLaVentaALaCaja({
                     ? `${usd(programadoPorVenir)} son de ${nombreDelMes(hoyISO.slice(0, 7))} en adelante; el resto ya debió facturarse.`
                     : "Ya debió facturarse."
                 }
+                explicacion={E.programadoSinFactura}
                 monto={usd(ind.pendienteFacturarTotal)}
                 accion={
                   <Link href="/cobranza" className="text-[13px] font-semibold text-brand hover:text-brand-light">
@@ -123,6 +138,7 @@ export default function DeLaVentaALaCaja({
               <Fuga
                 titulo="Facturado y sin cobrar."
                 detalle={ind.porCobrarVencidoTotal > 0 ? `${usd(ind.porCobrarVencidoTotal)} ya pasaron su plazo.` : "Nada pasó su plazo todavía."}
+                explicacion={E.facturadoSinCobrar}
                 monto={usd(ind.porCobrarTotal)}
                 accion={
                   <Link href="/cobranza" className="text-[13px] font-semibold text-brand hover:text-brand-light">
@@ -135,7 +151,9 @@ export default function DeLaVentaALaCaja({
         </article>
 
         <article className="flex min-w-0 flex-[1_1_300px] flex-col gap-3 rounded-xl border border-line bg-surface p-5">
-          <span className="text-[15px] font-semibold text-fg">Lo facturado, por servicio</span>
+          <span className="inline-flex items-center gap-1.5 text-[15px] font-semibold text-fg">
+            Lo facturado, por servicio <QueMide explicacion={E.porServicio} titulo="Lo facturado, por servicio" />
+          </span>
           {porServicio.map((s) => (
             <div key={s.tipoServicio} className="flex flex-col gap-1">
               <div className="flex justify-between gap-2 text-[13px]">
@@ -150,6 +168,7 @@ export default function DeLaVentaALaCaja({
             </div>
           ))}
           <span className="mt-auto border-t border-line pt-2.5 text-xs leading-[17px] text-fg-secondary">
+            <QueMide explicacion={E.aliados} titulo="Aliados" className="mr-1" />
             Aliados: {usd(ind.partnershipCobradoTotal)} cobrados en el año.
             {ind.partnershipProyectadoTotal > 0 && ` Hay ${usd(ind.partnershipProyectadoTotal)} más estimados que no cuentan hasta que se confirmen.`}
           </span>
@@ -159,11 +178,24 @@ export default function DeLaVentaALaCaja({
   );
 }
 
-function Fuga({ titulo, detalle, monto, accion }: { titulo: string; detalle: string; monto: string; accion: React.ReactNode }) {
+function Fuga({
+  titulo,
+  detalle,
+  explicacion,
+  monto,
+  accion,
+}: {
+  titulo: string;
+  detalle: string;
+  explicacion: Explicacion;
+  monto: string;
+  accion: React.ReactNode;
+}) {
   return (
     <div className="flex flex-wrap items-baseline gap-x-3.5 gap-y-1 border-t border-line py-2.5">
       <span className="min-w-0 flex-[1_1_320px] text-sm leading-5 text-fg">
-        <strong className="font-semibold">{titulo}</strong> <span className="text-fg-secondary">{detalle}</span>
+        <strong className="font-semibold">{titulo}</strong> <span className="text-fg-secondary">{detalle}</span>{" "}
+        <QueMide explicacion={explicacion} titulo={titulo} />
       </span>
       <span className="text-sm font-semibold tabular-nums text-fg">{monto}</span>
       {accion}

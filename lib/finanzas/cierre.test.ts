@@ -7,6 +7,10 @@ import { beforeEach, describe, it, expect, vi } from "vitest";
 import {
   cambioDespuesDelCierre,
   confirmadoPorPersona,
+  conPasoMarcado,
+  cuandoToca,
+  leerPasosHechos,
+  PASOS_DEL_CALENDARIO,
   esFaltanteDePlanilla,
   estadoEnElAnio,
   faltanParaCerrar,
@@ -104,7 +108,8 @@ describe("qué frena el cierre", () => {
       conciliacion: 112,
     };
     const items = itemsDeCierre(completo, equipo, nombres);
-    expect(items.filter((i) => !i.bloquea).map((i) => i.clave)).toEqual(["facturar", "pagos", "comisiones", "conciliacion"]);
+    // El calendario (2026-11-13) tampoco frena; tiene su propio caso abajo.
+    expect(items.filter((i) => !i.bloquea && i.grupo !== "Calendario").map((i) => i.clave)).toEqual(["facturar", "pagos", "comisiones", "conciliacion"]);
     expect(faltanParaCerrar(items)).toEqual([]);
   });
 });
@@ -328,5 +333,50 @@ describe("D5 · reabrir un mes pide de nuevo el aviso de que los gastos están t
     const arg = db.cierreMes.update.mock.calls[0]![0] as { data: Record<string, unknown> };
     expect(arg.data.estado).toBe("ABIERTO");
     expect(arg.data, "el aviso de antes quedó en pie después de reabrir").toMatchObject({ gastosListosPor: null, gastosListosEn: null });
+  });
+});
+
+describe("los pasos del calendario (2026-11-13)", () => {
+  it("el checklist trae el calendario, con las fechas del mes que se cierra y del siguiente, y no frena el cierre", () => {
+    const items = itemsDeCierre({ ...completo, periodo: "2026-10" }, null, nombres).filter((i) => i.grupo === "Calendario");
+    expect(items.map((i) => i.titulo)).toEqual([
+      "Reunión de gerencia del 25",
+      "Facturar y cerrar el IVA",
+      "Dejar Odoo y Mercury al día",
+      "Sacar los balances y el reporte del IVA",
+      "Reunión de gerencia del 10",
+    ]);
+    expect(items.map((i) => i.paso?.cuando)).toEqual([
+      "el 25 de octubre",
+      "del 1 al 5 de noviembre",
+      "del 1 al 5 de noviembre",
+      "el 5 de noviembre",
+      "el 10 de noviembre",
+    ]);
+    expect(items.every((i) => !i.bloquea)).toBe(true);
+    expect(faltanParaCerrar(itemsDeCierre({ ...completo, periodo: "2026-10", gastosListos: true }, null, nombres))).toEqual([]);
+  });
+
+  it("diciembre pasa a enero del año siguiente", () => {
+    const paso = PASOS_DEL_CALENDARIO.find((p) => p.clave === "balances-iva")!;
+    expect(cuandoToca(paso, "2026-12")).toBe("el 5 de enero");
+  });
+
+  it("un paso marcado dice quién y cuándo", () => {
+    const items = itemsDeCierre({ ...completo, pasosHechos: { "gerencia-10": { por: "Alex", en: "2026-08-10" } } }, null, nombres);
+    const it10 = items.find((i) => i.clave === "calendario:gerencia-10")!;
+    expect(it10.listo).toBe(true);
+    expect(it10.paso).toMatchObject({ hecho: true, por: "Alex", en: "2026-08-10" });
+  });
+
+  it("lo guardado se lee sin confiar en su forma, y marcar o desmarcar devuelve lo que hay que guardar", () => {
+    expect(leerPasosHechos({ "gerencia-10": { por: "a@b.com", en: "2026-11-10T10:00:00Z" }, inventado: { por: "x", en: "y" }, "gerencia-25": "sí" })).toEqual({
+      "gerencia-10": { por: "a@b.com", en: "2026-11-10T10:00:00Z" },
+    });
+    expect(leerPasosHechos(null)).toEqual({});
+    expect(leerPasosHechos([1, 2])).toEqual({});
+    const marcado = conPasoMarcado({}, "balances-iva", true, "a@b.com", "2026-11-05T12:00:00Z");
+    expect(marcado).toEqual({ "balances-iva": { por: "a@b.com", en: "2026-11-05T12:00:00Z" } });
+    expect(conPasoMarcado(marcado, "balances-iva", false, "a@b.com", "x")).toEqual({});
   });
 });

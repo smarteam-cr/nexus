@@ -7,11 +7,17 @@
  * Tres piezas: la barra que compara lo facturado por mes con el piso de hoy (con y sin aliados), el margen a la fecha
  * desarmado en su cuenta —con el porqué de «preliminar» al pasar el mouse—, y lo que viene hasta fin de año.
  * Todos los números salen de lib/finanzas/lectura-equilibrio.ts: acá no se calcula plata.
+ *
+ * 2026-11-13: la meta de la barra es el mínimo con colchón que elige quien mira (arranca en 15 %; antes era un +10 %
+ * fijo), y cada número lleva su ⓘ con qué mide y de dónde sale (lib/finanzas/explicaciones.ts).
  */
 import { cn } from "@/lib/cn";
 import { fmtMontoLibro } from "@/lib/cobranza/montos";
 import { fmtFecha } from "@/components/cobranza/format";
 import { usePanelFlotante } from "@/components/ui";
+import { EXPLICACIONES_EQUILIBRIO as E } from "@/lib/finanzas/explicaciones";
+import { pisoConColchon } from "@/lib/finanzas/panorama";
+import QueMide from "../QueMide";
 import {
   nombreDelMes,
   rangoDeMeses,
@@ -31,6 +37,7 @@ export interface CriterioDeAliados {
 export default function LaRespuesta({
   anio,
   moneda,
+  colchonPct,
   respuesta,
   margen,
   preliminar,
@@ -41,6 +48,8 @@ export default function LaRespuesta({
 }: {
   anio: number;
   moneda: string;
+  /** El colchón que eligió quien mira: la meta de la barra es el piso con este colchón. */
+  colchonPct: number;
   respuesta: RespuestaDelAnio | null;
   margen: DesgloseDelMargen | null;
   preliminar: PorQueEsPreliminar;
@@ -59,7 +68,7 @@ export default function LaRespuesta({
       </div>
       <div className="flex flex-wrap items-stretch gap-3">
         <article className="flex min-w-0 flex-[2_1_560px] flex-col gap-4 rounded-xl border border-line bg-surface p-5">
-          {respuesta ? <Barra respuesta={respuesta} anio={anio} usd={usd} /> : <p className="text-sm text-fg-muted">Todavía no terminó ningún mes de {anio}.</p>}
+          {respuesta ? <Barra respuesta={respuesta} anio={anio} colchonPct={colchonPct} usd={usd} /> : <p className="text-sm text-fg-muted">Todavía no terminó ningún mes de {anio}.</p>}
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-line pt-3 text-xs text-fg-secondary">
             <span>
               Los aliados <strong className="font-semibold text-fg">{aliados.cuentan ? "cuentan" : "no cuentan"}</strong> para cubrir el piso
@@ -75,7 +84,10 @@ export default function LaRespuesta({
           <Margen margen={margen} preliminar={preliminar} usd={usd} />
           {viene && (
             <article className="flex flex-1 flex-col gap-1 rounded-xl border border-line bg-surface p-4">
-              <span className="text-xs text-fg-muted">Lo que viene · {rangoDeMeses(viene.meses)}</span>
+              <span className="inline-flex items-center gap-1 text-xs text-fg-muted">
+                Lo que viene · {rangoDeMeses(viene.meses)}
+                <QueMide explicacion={E.loQueViene} titulo="Lo que viene" />
+              </span>
               <span className="text-[22px] font-bold leading-7 text-fg">{usd(viene.facturadoYProgramado)}</span>
               <span className="text-xs leading-[17px] text-fg-secondary">
                 Facturado y programado, contra un piso de {usd(viene.pisoDelPeriodo)}
@@ -96,15 +108,19 @@ export default function LaRespuesta({
   );
 }
 
-/** La barra: lo facturado por mes (y con los aliados) contra el piso de hoy y su meta del 10 %. */
-function Barra({ respuesta: r, anio, usd }: { respuesta: RespuestaDelAnio; anio: number; usd: (n: number) => string }) {
-  const tope = Math.ceil((Math.max(r.piso, r.meta ?? 0, r.promedioConAliados) * 1.15) / 5000) * 5000;
+/** La barra: lo facturado por mes (y con los aliados) contra el piso de hoy y el mínimo con colchón. */
+function Barra({ respuesta: r, anio, colchonPct, usd }: { respuesta: RespuestaDelAnio; anio: number; colchonPct: number; usd: (n: number) => string }) {
+  const meta = colchonPct > 0 ? pisoConColchon(r.piso, colchonPct) : null;
+  const tope = Math.ceil((Math.max(r.piso, meta ?? 0, r.promedioConAliados) * 1.15) / 5000) * 5000;
   const pct = (v: number) => `${((v / tope) * 100).toFixed(2)}%`;
   const hayAliados = r.promedioConAliados > r.promedioFacturado;
   return (
     <>
       <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1.5">
-        <span className="text-[15px] font-semibold text-fg">Facturado por mes en {anio} contra el piso de hoy</span>
+        <span className="inline-flex items-center gap-1.5 text-[15px] font-semibold text-fg">
+          Facturado por mes en {anio} contra el piso de hoy
+          <QueMide explicacion={E.promedioFacturado} titulo="Facturado por mes" />
+        </span>
         <span className="text-xs text-fg-muted">promedio de {rangoDeMeses(r.meses)} · sin IVA</span>
       </div>
       <div className="relative h-[92px]" aria-hidden>
@@ -120,11 +136,11 @@ function Barra({ respuesta: r, anio, usd }: { respuesta: RespuestaDelAnio; anio:
           />
         )}
         <div className="absolute top-[22px] h-[46px] border-l-2 border-fg" style={{ left: pct(r.piso) }} />
-        {r.meta !== null && (
+        {meta !== null && (
           <>
-            <div className="absolute top-[26px] h-[38px] border-l-2 border-dotted border-fg-muted" style={{ left: pct(r.meta) }} />
-            <span className="absolute top-[70px] -translate-x-1/2 whitespace-nowrap text-xs text-fg-muted" style={{ left: pct(r.meta) }}>
-              +10 % {usd(r.meta)}
+            <div className="absolute top-[26px] h-[38px] border-l-2 border-dotted border-fg-muted" style={{ left: pct(meta) }} />
+            <span className="absolute top-[70px] -translate-x-1/2 whitespace-nowrap text-xs text-fg-muted" style={{ left: pct(meta) }}>
+              Con colchón +{colchonPct} % {usd(meta)}
             </span>
           </>
         )}
@@ -142,8 +158,16 @@ function Barra({ respuesta: r, anio, usd }: { respuesta: RespuestaDelAnio; anio:
         )}
         <span className="inline-flex items-center gap-1.5">
           <span className="h-3 border-l-2 border-fg" />
-          Piso: lo que cuesta operar un mes con los costos de hoy
+          Mínimo exacto (piso): lo que cuesta operar un mes con los costos de hoy
+          <QueMide explicacion={E.piso} titulo="Mínimo exacto (piso)" />
         </span>
+        {meta !== null && (
+          <span className="inline-flex items-center gap-1.5">
+            <span className="h-3 border-l-2 border-dotted border-fg-muted" />
+            Mínimo con colchón del {colchonPct} %
+            <QueMide explicacion={E.pisoColchon} titulo="Mínimo con colchón" />
+          </span>
+        )}
       </div>
       <p className="max-w-[760px] text-sm leading-[21px] text-fg [text-wrap:pretty]">
         {r.faltaSinAliados > 0 ? (
@@ -173,7 +197,10 @@ function Margen({ margen, preliminar, usd }: { margen: DesgloseDelMargen | null;
   return (
     <article className="flex flex-1 flex-col gap-2 rounded-xl border border-line bg-surface p-4">
       <div className="flex items-center justify-between gap-2">
-        <span className="text-xs text-fg-muted">Margen a la fecha{margen ? ` · ${rangoDeMeses(margen.meses)}` : ""}</span>
+        <span className="inline-flex items-center gap-1 text-xs text-fg-muted">
+          Margen a la fecha{margen ? ` · ${rangoDeMeses(margen.meses)}` : ""}
+          <QueMide explicacion={E.margen} titulo="Margen a la fecha" />
+        </span>
         {preliminar.razones.length > 0 && (
           <div ref={rootRef} onMouseEnter={abrir} onMouseLeave={cerrar}>
             <button
@@ -238,7 +265,9 @@ function Margen({ margen, preliminar, usd }: { margen: DesgloseDelMargen | null;
               </div>
             )}
             <div className="flex justify-between gap-3">
-              <dt>Lo que quedó en caja</dt>
+              <dt className="inline-flex items-center gap-1">
+                Lo que quedó en caja <QueMide explicacion={E.caja} titulo="Lo que quedó en caja" />
+              </dt>
               <dd className="tabular-nums">{usd(margen.caja)}</dd>
             </div>
           </dl>

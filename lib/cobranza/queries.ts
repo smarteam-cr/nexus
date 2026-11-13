@@ -119,6 +119,7 @@ import {
 import { calcularAguinaldo, type AguinaldoResultado } from "@/lib/finanzas/aguinaldo";
 import { ingresosNoVentaDelAnio, pendientesDeClasificar } from "./ingresos-no-venta";
 import { facturadoEnOdooSinCuenta, porCobrarEnMercurySinEmparejar } from "@/lib/finanzas/facturado-sin-cuenta";
+import { areaDeQuienVendio } from "@/lib/finanzas/panorama";
 import { CATEGORIAS_SIN_SALARIO } from "@/lib/finanzas/gastos";
 import { cambioDespuesDelCierre, esFaltanteDePlanilla, huellasPorMes, mandaLaTasaConfirmada, type HuellaDelMes, type NumerosDelCierre } from "@/lib/finanzas/cierre";
 import { cargarTasasDelAnio, tasaFirme } from "@/lib/finanzas/tipo-cambio-server";
@@ -2474,7 +2475,7 @@ export interface ReporteAnualDTO extends ReporteEquilibrio {
    * Los meses cerrados (Finanzas › Cierre del mes, 2026-10-03): el día del cierre y si cambió después. Desde 2026-10-06
    * lo decide la huella (un gasto, una factura o una quincena del mes; cobrar no). `cambio` null = cierre sin huella.
    */
-  cierres: Array<{ periodo: string; cerradoEn: string; cambio: boolean | null }>;
+  cierres: Array<{ periodo: string; cerradoEn: string; cerradoPor: string | null; cambio: boolean | null }>;
   /** La huella de cada mes del año (lib/finanzas/cierre.ts): la que guarda el cierre y contra la que se compara después. */
   huellas: Record<string, HuellaDelMes>;
   /**
@@ -2754,17 +2755,17 @@ export async function loadReporteAnual(
       where: { activo: true, finalizadoEl: null },
       select: { nombre: true, categoria: true, monto: true, moneda: true, frecuencia: true },
     }),
-    // Lo vendido, para poder ver el desfase entre vender, facturar y cobrar. Solo los
-    // pipelines que cuentan como venta propia: Shared Selling se declara aparte, en la
-    // lista de inconsistencias, y no se mezcla acá para no dar por decidido lo que no está.
+    // Lo vendido, para poder ver el desfase entre vender, facturar y cobrar. De TODOS los pipelines (2026-11-13, pedido
+    // de Finanzas: «también lo que vende Customer Success»): el espejo trae los ganados de cualquier pipeline
+    // (lib/ventas/sync-ganadas.ts) y cada trato es una fila, así que nada se cuenta dos veces. Con quién lo vendió, para
+    // el desglose por área.
     prisma.ventaGanada.findMany({
       where: {
         estado: "GANADA",
         excluida: false,
-        pipelineId: { in: [...PIPELINES_VENTA_PROPIA] },
         fechaCierre: { gte: desde, lte: hasta },
       },
-      select: { fechaCierre: true, monto: true, moneda: true, montoConvertidoHubspot: true },
+      select: { fechaCierre: true, monto: true, moneda: true, montoConvertidoHubspot: true, vendedor: { select: { roleEnum: true } } },
     }),
     // La plata que entró y no es venta (etapa 10). Solo columnas anteriores a la etapa: el reporte no
     // se cae si el código llega antes que scripts/sql/2026-09-12-10-ingreso-no-venta.sql.
@@ -2775,7 +2776,7 @@ export async function loadReporteAnual(
     // Los meses cerrados, para decir cuáles ya dio por buenos quien supervisa y si cambiaron después.
     prisma.cierreMes.findMany({
       where: { periodo: { in: periodos }, estado: "CERRADO" },
-      select: { periodo: true, cerradoEn: true, numeros: true },
+      select: { periodo: true, cerradoEn: true, cerradoPor: true, numeros: true },
     }),
     // Lo que dirección decidió sobre los aliados (null = sin decidir: manda la constante del código).
     leerDecisionAliados(),
@@ -2929,6 +2930,7 @@ export async function loadReporteAnual(
         periodo: isoDay(v.fechaCierre)!.slice(0, 7),
         monto: v.montoConvertidoHubspot !== null ? num(v.montoConvertidoHubspot)! : num(v.monto)!,
         moneda: (v.montoConvertidoHubspot !== null ? "USD" : (v.moneda as MonedaEq)) as MonedaEq,
+        origen: areaDeQuienVendio(v.vendedor?.roleEnum),
       })),
   });
 
@@ -2972,6 +2974,8 @@ export async function loadReporteAnual(
       return {
         periodo: c.periodo,
         cerradoEn: c.cerradoEn ? crDateParts(c.cerradoEn).dateKey : "",
+        // El email de quien lo cerró: con eso el gasto del mes se lee «real, confirmado por …» (lib/finanzas/panorama.ts).
+        cerradoPor: c.cerradoPor,
         // En moneda original: se sabe en cualquier moneda del reporte.
         cambio: guardados ? cambioDespuesDelCierre(guardados, huellas.get(c.periodo)) : null,
       };

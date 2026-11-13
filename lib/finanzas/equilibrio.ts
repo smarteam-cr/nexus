@@ -302,6 +302,11 @@ export interface VentaDeMes {
   periodo: string;
   monto: number;
   moneda: MonedaEq;
+  /**
+   * Quién la vendió, por área («Ventas», «Customer Success», «Dirección», «Sin dueño en Nexus»). Solo para el desglose
+   * del vendido (`indicadores.vendidoPorOrigen`): no cambia ningún total. Ausente = «Sin dueño en Nexus».
+   */
+  origen?: string;
 }
 
 // ── Tipos de salida ─────────────────────────────────────────────────────────────
@@ -368,7 +373,8 @@ export type CodigoAviso =
   | "COMISIONES_ESTIMADAS"
   | "PARTNERSHIP_NO_CUBRE_EL_PISO"
   | "INGRESOS_NO_VENTA"
-  | "COBRADO_DE_FACTURAS_ANTERIORES";
+  | "COBRADO_DE_FACTURAS_ANTERIORES"
+  | "AGUINALDO_PAGADO_FUERA";
 
 export interface AvisoCalidad {
   codigo: CodigoAviso;
@@ -427,6 +433,11 @@ export interface ReporteEquilibrio {
     vendidoTotal: number;
     /** Cuántos tratos ganados lo componen. */
     ventasConMonto: number;
+    /**
+     * Lo vendido del año por área de quien lo vendió (2026-11-13: «también lo que vende Customer Success»), de mayor a
+     * menor. Suma lo mismo que `vendidoTotal`: es su desglose, no otro número.
+     */
+    vendidoPorOrigen: Array<{ origen: string; monto: number; ventas: number }>;
     /**
      * Cuántos tratos ganados NO traen monto en HubSpot y por lo tanto cuentan como cero.
      * Sin este número, `vendidoTotal` se lee como un total cuando en realidad es un PISO.
@@ -663,6 +674,19 @@ export function brechaDe(
 export function reservaAguinaldoMensual(totalAnual: number, divisor = DIVISOR_AGUINALDO_NEXUS): number {
   if (!Number.isFinite(divisor) || divisor <= 0) return 0;
   return round2(totalAnual / divisor);
+}
+
+/**
+ * ¿Este egreso es el PAGO del aguinaldo? (2026-11-13, pedido de Finanzas 3: la provisión es un gasto fijo mensual.)
+ *
+ * El aguinaldo ya entra al gasto de cada mes como provisión (`RESERVA_AGUINALDO`, lo del año ÷ 12). Si además entrara el
+ * pago de diciembre —una línea del Excel, un gasto del mes, un recurrente que diga «aguinaldo»—, el año lo contaría dos
+ * veces y el mes del pago saltaría de golpe en ~US$19.000. Por eso el motor lo deja fuera del gasto y lo declara
+ * (`AGUINALDO_PAGADO_FUERA`): el pago se ve, pero el gasto es la provisión.
+ */
+export function esPagoDeAguinaldo(e: Pick<EgresoDeMes, "rubro" | "concepto" | "conceptoClave">): boolean {
+  if (e.rubro === "RESERVA_AGUINALDO") return false;
+  return /aguinald/i.test(e.concepto) || /aguinald/i.test(e.conceptoClave);
 }
 
 /** Un costo que está vigente HOY, ya mensualizado (un ANUAL entra dividido /12). */
@@ -1025,9 +1049,15 @@ export function calcularEquilibrio(
     egresos.filter((e) => porMes.has(e.periodo) && !calidadDada.has(e.periodo) && !RUBROS_OCASIONALES.has(e.rubro)),
   );
 
+  /** Los pagos de aguinaldo que quedaron fuera del gasto (`esPagoDeAguinaldo`): se declaran, no se suman. */
+  const pagosDeAguinaldo: Array<{ periodo: string; concepto: string; monto: number; moneda: MonedaEq }> = [];
   for (const e of egresos) {
     const mes = porMes.get(e.periodo);
     if (!mes) continue; // fuera del año pedido
+    if (esPagoDeAguinaldo(e)) {
+      pagosDeAguinaldo.push({ periodo: e.periodo, concepto: e.concepto, monto: e.monto, moneda: e.moneda });
+      continue;
+    }
     const monto = aPresentacion(e.monto, e.moneda, e.periodo, e.concepto, e.fechaISO, e.tasaFija);
     if (monto === null) continue;
 
@@ -1152,11 +1182,16 @@ export function calcularEquilibrio(
   // ignora en silencio a propósito —el llamador ya filtra, y si algo se colara, meterlo
   // en un mes que no le toca sería peor que perderlo.
   const vendidoPorMes = new Map<string, number>(periodos.map((p) => [p, 0]));
+  const porOrigen = new Map<string, { monto: number; ventas: number }>();
   for (const v of opciones.ventas ?? []) {
     if (!vendidoPorMes.has(v.periodo)) continue;
     const monto = aPresentacion(v.monto, v.moneda, v.periodo, "venta ganada");
     if (monto === null) continue;
     vendidoPorMes.set(v.periodo, round2(vendidoPorMes.get(v.periodo)! + monto));
+    const o = porOrigen.get(v.origen ?? "Sin dueño en Nexus") ?? { monto: 0, ventas: 0 };
+    o.monto = round2(o.monto + monto);
+    o.ventas++;
+    porOrigen.set(v.origen ?? "Sin dueño en Nexus", o);
   }
 
   // ── Las 12 filas ──────────────────────────────────────────────────────────────
@@ -1325,6 +1360,15 @@ export function calcularEquilibrio(
       conceptos: [],
     });
   }
+  if (pagosDeAguinaldo.length > 0) {
+    avisos.push({
+      codigo: "AGUINALDO_PAGADO_FUERA",
+      severidad: "BAJA",
+      mensaje: `${pagosDeAguinaldo.length === 1 ? "Un pago" : `${pagosDeAguinaldo.length} pagos`} de aguinaldo no suman al gasto del mes en que se pagaron: el aguinaldo ya está en el gasto de cada mes como provisión (lo del año ÷ ${opciones.divisorAguinaldo ?? DIVISOR_AGUINALDO_NEXUS}). Sumarlos lo contaría dos veces.`,
+      periodos: [...new Set(pagosDeAguinaldo.map((p) => p.periodo))].sort(),
+      conceptos: [...new Set(pagosDeAguinaldo.map((p) => p.concepto))].slice(0, 10),
+    });
+  }
   if (noVentaTotal > 0) {
     avisos.push({
       codigo: "INGRESOS_NO_VENTA",
@@ -1395,6 +1439,7 @@ export function calcularEquilibrio(
       comprometidoPorVenir,
       vendidoTotal: round2([...vendidoPorMes.values()].reduce((n, v) => n + v, 0)),
       ventasConMonto: (opciones.ventas ?? []).length,
+      vendidoPorOrigen: [...porOrigen].map(([origen, o]) => ({ origen, ...o })).sort((a, b) => b.monto - a.monto),
       ventasSinMonto: opciones.ventasSinMonto ?? 0,
       // El navegador lo recalcula con las mismas tres sumas (`indicadoresDe`): mismo número.
       cobranza: lecturaDeCobranza({ cobrado: cobradoTotal, porCobrar: porCobrarTotal, vencido: porCobrarVencidoTotal }),

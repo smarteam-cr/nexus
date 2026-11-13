@@ -5,7 +5,12 @@
  * PURO: son datos, sin Prisma ni red — así el sync los usa y un test los puede verificar
  * sin levantar una conexión.
  *
- * Transcritos de /crm/v3/pipelines/deals el 2026-08-19.
+ * Transcritos de /crm/v3/pipelines/deals el 2026-08-19. Verificados el 2026-11-13: el portal tiene estos tres y ningún
+ * otro (el de Insider One hoy se llama «PIPELINE | RODMANN + SMARTEAM»; mismo id).
+ *
+ * ⚠ Desde el 2026-11-13 el espejo de ventas ganadas (sync-ganadas.ts) y lo vendido del punto de equilibrio NO dependen
+ * de esta lista: traen y cuentan los ganados de todos los pipelines (`hs_is_closed_won`). La lista sigue mandando en lo
+ * que mira negocios ABIERTOS (sync-negocios-abiertos, tratos-abiertos) y en lo que lee `PIPELINES_VENTA_PROPIA`.
  */
 
 /** Un pipeline de tratos, con las dos etapas que cierran. */
@@ -51,6 +56,33 @@ export const ETAPAS_PERDIDAS: readonly string[] = PIPELINES.map((p) => p.etapaPe
 
 /** Los pipelines cuyo ganado cuenta como venta de la casa. */
 export const PIPELINES_VENTA_PROPIA: readonly string[] = PIPELINES.filter((p) => p.esVentaPropia).map((p) => p.id);
+
+/**
+ * ¿El trato sigue ganado? Lo que devuelve HubSpot al preguntarle por un trato que no volvió en la búsqueda de ganados.
+ *
+ * ⭐ Vale para CUALQUIER pipeline (2026-11-13): el espejo de ventas trae los ganados de todos los pipelines por
+ * `hs_is_closed_won`, así que un pipeline que esta tabla no declara (uno nuevo de Customer Success) también puede
+ * llegar acá. Primero manda lo que calcula HubSpot; la etapa transcrita queda de respaldo por si la propiedad no viene.
+ */
+export function sigueGanado(p: Record<string, string | null | undefined> | null | undefined): boolean {
+  if (!p) return false;
+  if (p.hs_is_closed_won != null) return p.hs_is_closed_won === "true";
+  return !!p.dealstage && ETAPAS_GANADAS.includes(p.dealstage);
+}
+
+/**
+ * En qué quedó un trato ganado que dejó de serlo: DESAPARECIDA si HubSpot no lo devuelve, PERDIDA si está en una etapa
+ * cerrada que no es ganada, REABIERTA si volvió a una etapa abierta. Como `sigueGanado`, primero lo que calcula HubSpot
+ * (`hs_is_closed`) y la lista transcrita de respaldo: así un trato perdido de un pipeline no declarado no se lee
+ * «reabierto», que dice lo contrario.
+ */
+export function estadoAlDejarDeVolver(
+  p: Record<string, string | null | undefined> | null | undefined,
+): "DESAPARECIDA" | "PERDIDA" | "REABIERTA" {
+  if (!p) return "DESAPARECIDA";
+  if (p.hs_is_closed != null) return p.hs_is_closed === "true" ? "PERDIDA" : "REABIERTA";
+  return p.dealstage && ETAPAS_PERDIDAS.includes(p.dealstage) ? "PERDIDA" : "REABIERTA";
+}
 
 /** El nombre legible de un pipeline, o su id crudo si no está declarado. */
 export function labelDePipeline(id: string): string {

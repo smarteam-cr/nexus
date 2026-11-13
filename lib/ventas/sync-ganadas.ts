@@ -41,7 +41,7 @@ import { Prisma } from "@prisma/client";
 import { getSystemHubspotClient } from "@/lib/hubspot/client";
 import { leerDuenos } from "@/lib/hubspot/duenos";
 import { huelaAPrueba } from "./clasificar-huecos";
-import { ETAPAS_GANADAS, ETAPAS_PERDIDAS, labelDePipeline } from "./pipelines";
+import { estadoAlDejarDeVolver, labelDePipeline, sigueGanado } from "./pipelines";
 import { PROPIEDAD_COMPARTIDA, PROPIEDAD_TIPO_DE_NEGOCIO, compartidaAlFirmar, tipoDeNegocioDe, type CompartidaAlFirmar, type ValorEnLaHistoria } from "./tipo-de-negocio";
 
 // Se re-exportan para no romper a quien ya las importaba de acá; viven en ./pipelines.
@@ -164,7 +164,13 @@ export async function syncVentasGanadas(opciones: {
           filterGroups: [
             {
               filters: [
-                { propertyName: "dealstage", operator: "IN", values: [...ETAPAS_GANADAS] },
+                // ⭐ Los ganados de CUALQUIER pipeline (2026-11-13, pedido de Finanzas: «Vendido suma todos los
+                // pipelines, también lo que vende Customer Success»). Antes se pedía por la lista de etapas ganadas
+                // transcrita en ./pipelines.ts, y un pipeline nuevo —uno de Customer Success, por ejemplo— no entraba
+                // nunca, sin que nada avisara. `hs_is_closed_won` lo calcula HubSpot con la etapa de cada pipeline.
+                // Medido el 2026-11-13: los dos filtros traen los mismos 111 ganados de 2026 (hoy hay tres pipelines
+                // y los tres estaban en la lista).
+                { propertyName: "hs_is_closed_won", operator: "EQ", value: "true" },
                 {
                   propertyName: "closedate",
                   operator: "BETWEEN",
@@ -512,7 +518,7 @@ export async function syncVentasGanadas(opciones: {
         const r = await hs.apiRequest({
           method: "POST",
           path: "/crm/v3/objects/deals/batch/read",
-          body: { properties: ["dealstage", "dealname"], inputs: lote.map((v) => ({ id: v.hubspotDealId })) },
+          body: { properties: ["dealstage", "dealname", "hs_is_closed_won", "hs_is_closed"], inputs: lote.map((v) => ({ id: v.hubspotDealId })) },
         });
         // ⚠ Un lote que falla NO significa "esos tratos ya no existen". Antes el catch
         // era `{ results: [] }`, así que un 429 o un 502 marcaba las 100 ventas del lote
@@ -529,18 +535,13 @@ export async function syncVentasGanadas(opciones: {
         const vivos = new Map((data.results ?? []).map((x) => [x.id, x.properties]));
         for (const v of lote) {
           const p = vivos.get(v.hubspotDealId);
-          const etapa = p?.dealstage ?? null;
           // ⚠ "No vino en la búsqueda" NO es "cambió de estado". El trato puede seguir
           // ganado y haberse caído del rango por su fecha, o por la consistencia eventual
           // del índice de búsqueda de HubSpot. Preguntarle a HubSpot en qué etapa está y
           // creerle a ESO es la única lectura honesta: si sigue en una etapa ganada, la
           // fila se queda como está. Marcarla REABIERTA decía lo contrario de la verdad.
-          if (etapa && ETAPAS_GANADAS.includes(etapa)) continue;
-          const nuevoEstado = !p
-            ? ("DESAPARECIDA" as const)
-            : etapa && ETAPAS_PERDIDAS.includes(etapa)
-              ? ("PERDIDA" as const)
-              : ("REABIERTA" as const);
+          if (sigueGanado(p)) continue;
+          const nuevoEstado = estadoAlDejarDeVolver(p);
           res.reclasificadas++;
           if (!opciones.dryRun) {
             await prisma.ventaGanada.update({ where: { id: v.id }, data: { estado: nuevoEstado, sincronizadoEn: now } });

@@ -14,6 +14,8 @@ import type { Inconsistencia } from "@/lib/finanzas/inconsistencias";
 import { esFaltanteDePlanilla } from "@/lib/finanzas/cierre";
 import { faltanteLegible, nombreDelMes, rangoDeMeses } from "@/lib/finanzas/lectura-equilibrio";
 import { fmtFecha } from "@/components/cobranza/format";
+import { EXPLICACIONES_EQUILIBRIO as E } from "@/lib/finanzas/explicaciones";
+import QueMide from "../QueMide";
 
 const NOMBRE_DE_MONEDA: Record<string, string> = { USD: "Dólares", CRC: "Colones" };
 const OPACIDAD_DEL_PISO = [1, 0.7, 0.5, 0.35, 0.2];
@@ -69,7 +71,9 @@ export default function Firmeza({
       </div>
       <div className="grid items-start gap-3 [grid-template-columns:repeat(auto-fit,minmax(min(340px,100%),1fr))]">
         <article data-recorrido="fin.equilibrio.cobranza" className="flex flex-col gap-3 overflow-x-auto rounded-xl border border-line bg-surface p-5">
-          <span className="text-[15px] font-semibold text-fg">La cobranza, en cada moneda</span>
+          <span className="inline-flex items-center gap-1.5 text-[15px] font-semibold text-fg">
+            La cobranza, en cada moneda <QueMide explicacion={E.cobranzaPorMoneda} titulo="La cobranza, en cada moneda" />
+          </span>
           <table className="w-full min-w-[320px] border-collapse text-[13px] leading-[19px] tabular-nums">
             <thead>
               <tr className="text-[11px] font-semibold uppercase tracking-[0.08em] text-fg-muted">
@@ -113,7 +117,9 @@ export default function Firmeza({
         {piso && rubros.length > 0 && (
           <article className="flex flex-col gap-3 rounded-xl border border-line bg-surface p-5">
             <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-              <span className="text-[15px] font-semibold text-fg">De qué está hecho el piso</span>
+              <span className="inline-flex items-center gap-1.5 text-[15px] font-semibold text-fg">
+                De qué está hecho el piso <QueMide explicacion={E.piso} titulo="El piso" />
+              </span>
               <span className="text-xs text-fg-muted">por mes, con los {piso.cuantos} costos de hoy</span>
             </div>
             <div aria-hidden className="flex h-3 gap-0.5 overflow-hidden rounded-full">
@@ -128,7 +134,10 @@ export default function Firmeza({
             {rubros.map((r, i) => (
               <div key={r} className="flex items-center gap-2 text-[13px]">
                 <span className="h-2.5 w-2.5 shrink-0 rounded-sm" style={{ background: "var(--fg-secondary)", opacity: OPACIDAD_DEL_PISO[i] ?? 0.2 }} />
-                <span className="flex-1 text-fg first-letter:uppercase">{etiquetaRubro(r)}</span>
+                <span className="flex-1 text-fg first-letter:uppercase">
+                  {r === "RESERVA_AGUINALDO" ? "provisión del aguinaldo" : etiquetaRubro(r)}
+                  {r === "RESERVA_AGUINALDO" && <QueMide explicacion={E.aguinaldo} titulo="Provisión del aguinaldo" className="ml-1" />}
+                </span>
                 <span className="tabular-nums text-fg-secondary">{usd(piso.porRubro[r])}</span>
                 <span className="w-11 text-right tabular-nums text-fg-muted">
                   {((piso.porRubro[r] / piso.base) * 100).toLocaleString("es-CR", { maximumFractionDigits: piso.porRubro[r] / piso.base < 0.01 ? 1 : 0 })} %
