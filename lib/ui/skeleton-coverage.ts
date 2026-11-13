@@ -82,6 +82,8 @@ export const SKELETON_COVERAGE: Record<string, Cobertura> = {
   // hoja de categoría ni la del libro.
   "finanzas/costos/comisiones-vendedor": { modo: "own" },
   "finanzas/caja-neta": { modo: "own" },
+  // Una tarjeta por meta (avance, barra, corte, cómo se mide): no se parece a ninguna otra hoja.
+  "finanzas/goals": { modo: "own" },
   "finanzas/tipo-de-cambio": { modo: "own" },
   "finanzas/modelo-de-comisiones": { modo: "own" },
   "finanzas/ingresos-variables": { modo: "own" },

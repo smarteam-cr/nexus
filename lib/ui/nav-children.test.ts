@@ -102,6 +102,9 @@ describe("visibleNavChildren — el filtro costosOnly del Sidebar", () => {
     expect(hrefs({ isCostos: false })).toContain("/cobranza");
     expect(hrefs({ isCostos: false })).not.toContain("/finanzas/caja-neta");
     expect(hrefs({ isCostos: true })).toContain("/finanzas/caja-neta");
+    // Metas y bonos (2026-11-13): es de dirección, como los demás reportes.
+    expect(hrefs({ isCostos: false })).not.toContain("/finanzas/goals");
+    expect(hrefs({ isCostos: true })).toContain("/finanzas/goals");
   });
 
   it("un ítem sin children devuelve lista vacía (no revienta)", () => {

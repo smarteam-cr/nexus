@@ -13,6 +13,7 @@
  *    misma moneda de la meta. Sirve de control: si se separan mucho, algo no está cargado igual.
  */
 import { prisma } from "@/lib/db/prisma";
+import { TIPOS_DEL_PLAN_DE_PARTNER, type TipoDelPlanDePartner, type TramoDelPlanDePartner } from "@/lib/finanzas/metas-de-gerencia";
 import { metasDelAnio, type MetaDelAnio } from "./metas-reglas";
 
 export interface MetaDePersona extends MetaDelAnio {
@@ -80,4 +81,35 @@ export async function metasPorPersona(anio: number): Promise<MetaDePersona[]> {
       };
     })
     .sort((a, b) => b.monto - a.monto);
+}
+
+/**
+ * Los tramos mensuales de las metas «Partner Mutual Action Plan» de HubSpot que son MRR de negocios (traídos por
+ * Smarteam y asistidos), de los meses que tocan el período. Son metas de la EMPRESA, sin persona: no son cuota de
+ * ventas y `metasPorPersona` no las lee. Las usa Finanzas › Metas y bonos (lib/finanzas/metas-de-gerencia-server.ts).
+ * El avance es el de HubSpot (`hs_kpi_value`), igual que en las metas de ventas: Nexus no lo recalcula.
+ */
+export async function tramosDelPlanDePartner(desdeISO: string, hastaISO: string): Promise<{ tramos: TramoDelPlanDePartner[]; sincronizadoEn: Date | null }> {
+  // Un día de margen hacia cada lado: el mes del tramo lo decide `mes`, y lo filtra `leerPlanDePartner`.
+  const desde = new Date(Date.parse(`${desdeISO.slice(0, 7)}-01T00:00:00Z`) - 86_400_000);
+  const hasta = new Date(Date.parse(`${hastaISO}T00:00:00Z`) + 2 * 86_400_000);
+  const filas = await prisma.metaComercial.findMany({
+    where: { vigente: true, tipo: { in: Object.keys(TIPOS_DEL_PLAN_DE_PARTNER) }, desde: { gte: desde, lt: hasta } },
+    select: { tipo: true, desde: true, monto: true, avance: true, sincronizadoEn: true },
+  });
+  let sincronizadoEn: Date | null = null;
+  const tramos: TramoDelPlanDePartner[] = [];
+  for (const f of filas) {
+    if (!sincronizadoEn || f.sincronizadoEn > sincronizadoEn) sincronizadoEn = f.sincronizadoEn;
+    tramos.push({
+      tipo: f.tipo as TipoDelPlanDePartner,
+      // Igual que `metasPorPersona`: se corre seis horas hacia adelante, para que un tramo guardado como la medianoche de
+      // Costa Rica en UTC (las 18:00 del día anterior) caiga en su mes. Medido el 2026-11-13: llegan a las 00:00 UTC
+      // del día 1, y correrlas seis horas no las cambia de mes.
+      mes: new Date(+f.desde + 6 * 3_600_000).toISOString().slice(0, 7),
+      monto: Number(f.monto),
+      avance: f.avance === null ? null : Number(f.avance),
+    });
+  }
+  return { tramos, sincronizadoEn };
 }
