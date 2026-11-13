@@ -15,6 +15,8 @@ import { montosPorMoneda, type MontoEnMoneda } from "@/lib/cobranza/odoo/diferen
 import { CATEGORIAS_SIN_SALARIO, esCategoriaSinSalario, montoMensual, type CategoriaSinSalario } from "./gastos";
 import { costoParaEgreso, montoDelCostoEn, type MovimientoDeCosto } from "./egresos-nexus";
 import type { MonedaEq } from "./equilibrio";
+import { FACTURAS_DESDE, gastosSinFactura } from "./reglas-de-gasto";
+import { crDateParts } from "@/lib/jobs/time";
 
 export interface GastosDelMesDTO {
   periodo: string;
@@ -28,10 +30,16 @@ export interface GastosDelMesDTO {
   gastosListos: { por: string; en: string } | null;
   /** Si el mes ya está cerrado: ya no se avisa nada. */
   cerrado: boolean;
+  /**
+   * Los gastos de TODOS los meses (desde `FACTURAS_DESDE`) que ya pasaron y no tienen factura, del más viejo al más nuevo
+   * (2026-11-13): lo que le falta recopilar a quien registra.
+   */
+  facturasQueFaltan: GastoPuntualDTO[];
 }
 
 export async function loadGastosDelMes(periodo: string): Promise<GastosDelMesDTO> {
-  const [gastos, costos, movimientos, planilla, tarjetas, cierre] = await Promise.all([
+  const hoyISO = crDateParts(new Date()).dateKey;
+  const [gastos, costos, movimientos, planilla, tarjetas, cierre, sinFactura] = await Promise.all([
     loadGastos({ periodo }),
     loadCostos({ sinSalarios: true }),
     // La historia de los recurrentes, para mostrar el mes con lo que valía ESE mes y no con lo de hoy. ⛔ Filtrada dos
@@ -48,6 +56,7 @@ export async function loadGastosDelMes(periodo: string): Promise<GastosDelMesDTO
       where: { periodo },
       select: { estado: true, gastosListosPor: true, gastosListosEn: true },
     }),
+    loadGastos({ sinFacturaDesde: FACTURAS_DESDE }),
   ]);
   const historia = new Map<string, MovimientoDeCosto[]>();
   for (const m of movimientos) {
@@ -98,6 +107,7 @@ export async function loadGastosDelMes(periodo: string): Promise<GastosDelMesDTO
         ? { por: cierre.gastosListosPor, en: cierre.gastosListosEn.toISOString() }
         : null,
     cerrado: cierre?.estado === "CERRADO",
+    facturasQueFaltan: gastosSinFactura(sinFactura, hoyISO),
   };
 }
 

@@ -22,7 +22,7 @@ const MEDIO: Record<ComercioRecurrente["medio"], string> = {
 /** Cuántas cosas para mirar: lo que abre el número de la pestaña. */
 export function pendientesDeGastos(d: Datos): number {
   return (
-    d.recurrentes.filter((r) => r.estado !== "AL_DIA").length + d.nexusSinCargo.length + d.sueltosSinRegistrar.length + d.gastosSinCargo.length
+    d.recurrentes.filter((r) => r.estado !== "AL_DIA" || r.sobrePresupuesto).length + d.nexusSinCargo.length + d.sueltosSinRegistrar.length + d.gastosSinCargo.length
   );
 }
 
@@ -118,6 +118,15 @@ export default function GastosContraMercury({ datos }: { datos: Datos }) {
                         >
                           {r.estado === "SIN_REGISTRAR" ? "No está en Nexus" : `Cobró ${usd(r.precio)}`}
                         </Link>
+                      )}
+                      {/* La regla de las tarjetas corporativas (2026-11-13): lo que cobró el último mes, contra el presupuesto del fijo. */}
+                      {r.sobrePresupuesto && r.enNexus?.presupuesto != null && (
+                        <span
+                          className="ml-1 whitespace-nowrap rounded border border-danger-line bg-danger-surface px-1.5 py-0.5 text-[10px] font-medium text-danger-ink"
+                          title={`Cobró ${usd(r.precio)} el último mes y su presupuesto es ${usd(r.enNexus.presupuesto)} al mes.`}
+                        >
+                          Pasa el presupuesto
+                        </span>
                       )}
                     </td>
                   </tr>

@@ -5,13 +5,17 @@
  *   mismas reglas y los mismos textos: «Para ti» no cuenta otra cosa.
  * · Personal → lo que quien supervisa te DEVOLVIÓ (`devueltosPara`), con su comentario.
  * · Frente «Finanzas: supervisar» → lo de Finanzas › Supervisión (`medirSupervision`): el trabajo del equipo por
- *   revisar, las decisiones de Conciliación y el cierre del mes anterior.
+ *   revisar, las decisiones de Conciliación y el cierre del mes anterior. Y desde el 2026-11-13, el aviso de tipo de
+ *   cambio de la planilla cuando pasa un tope (`avisoDelTipoDeCambio`, SIN plata: este frente puede tenerlo quien no ve
+ *   salarios).
  */
 import "server-only";
 import { medirPendientes } from "@/lib/finanzas/pendientes-server";
 import { armarPendientes } from "@/lib/finanzas/pendientes";
 import { devueltosPara } from "@/lib/finanzas/revision-server";
 import { medirSupervision } from "@/lib/finanzas/supervision-server";
+import { avisoDelTipoDeCambio } from "@/lib/finanzas/tipo-cambio-planilla-server";
+import { textoDelMovimiento } from "@/lib/finanzas/tipo-cambio-planilla";
 import { tienePermiso } from "../alcance-server";
 import { detalleDeLaRevision, plural } from "../armar";
 import type { Fuente } from "../fuente";
@@ -71,8 +75,23 @@ export const FINANZAS_SUPERVISAR: Fuente = {
   frente: "FINANZAS_SUPERVISAR",
   alDia: "La supervisión y el cierre del mes",
   async medir(_a, c) {
-    const d = await medirSupervision(c.hoyISO);
+    const [d, tc] = await Promise.all([medirSupervision(c.hoyISO), avisoDelTipoDeCambio(c.hoyISO)]);
     const out: Pendiente[] = [];
+    const m = tc.movimiento;
+    if (m && m.nivel !== "normal") {
+      out.push({
+        // La clave cambia con el nivel y el mes de referencia: pasar de vigilar a decidir vuelve a avisar.
+        clave: `finanzas-supervisar:tipo-de-cambio:${m.referencia.periodo}:${m.nivel}`,
+        fuente: "finanzas-supervisar",
+        cuando: m.nivel === "decidir" ? "hoy" : "semana",
+        delAgente: false,
+        titulo: m.nivel === "decidir" ? "Decide qué hacer con la planilla en colones" : "Vigila el tipo de cambio",
+        detalle: textoDelMovimiento(m),
+        meta: "Finanzas › Tipo de cambio",
+        accion: "Ver cuánto mueve",
+        href: "/finanzas/tipo-de-cambio",
+      });
+    }
     const porRevisar = d.revision.pagos.length + d.revision.gastos.length;
     if (porRevisar > 0) {
       out.push({

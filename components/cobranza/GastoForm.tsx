@@ -12,7 +12,19 @@
 import { useMemo, useState } from "react";
 import { fetchJson, ApiError } from "@/lib/api/fetch-json";
 import type { GastoPuntualDTO } from "@/lib/cobranza";
-import { Drawer } from "@/components/ui";
+import { Drawer, Segmentado, Selector } from "@/components/ui";
+import {
+  ETIQUETA_RUBRO,
+  ETIQUETA_TIPO,
+  RUBROS_DE_GASTO,
+  RUBROS_PERMITIDOS,
+  TIPOS_DE_GASTO,
+  avisosDelGasto,
+  rubroDe,
+  tipoDe,
+  type RubroDeGasto,
+  type TipoDeGasto,
+} from "@/lib/finanzas/reglas-de-gasto";
 import { INPUT_CLS, SELECT_CLS, LABEL_CLS } from "./format";
 import TagsInput from "./TagsInput";
 
@@ -41,6 +53,10 @@ export default function GastoForm({
   const [fecha, setFecha] = useState(gasto?.fecha ?? todayISO);
   const [tags, setTags] = useState<string[]>(gasto?.tags ?? []);
   const [notas, setNotas] = useState(gasto?.notas ?? "");
+  // Las reglas de gasto (2026-11-13, lib/finanzas/reglas-de-gasto.ts): qué clase de gasto es, en qué fue y si se avisó.
+  const [tipo, setTipo] = useState<TipoDeGasto>(tipoDe(gasto?.tipo));
+  const [rubro, setRubro] = useState<RubroDeGasto | null>(rubroDe(gasto?.rubro));
+  const [avisoPrevio, setAvisoPrevio] = useState(gasto?.avisoPrevio ?? false);
   const [saving, setSaving] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
 
@@ -55,6 +71,11 @@ export default function GastoForm({
   const montoValido = Number.isFinite(montoNum) && montoNum > 0;
   const puedeGuardar = nombre.trim().length > 0 && montoValido && !!fecha && !saving;
   const esPlanificado = !!fecha && fecha > todayISO;
+  // Lo que la regla diría de este gasto, mientras se llena (la factura se pide aparte, en la lista).
+  const avisosDeLaRegla = avisosDelGasto(
+    { fecha, tipo, rubro, avisoPrevio, comprobante: "-", pasoAFijo: !!gasto?.pasoAFijo },
+    todayISO,
+  );
 
   async function submit() {
     if (!puedeGuardar) return;
@@ -67,6 +88,9 @@ export default function GastoForm({
       fecha,
       tags,
       notas: notas.trim() ? notas.trim() : null,
+      tipo,
+      rubro,
+      avisoPrevio: tipo === "REPRESENTACION" ? avisoPrevio : false,
     };
     try {
       if (gasto) {
@@ -169,6 +193,56 @@ export default function GastoForm({
             </span>
           )}
         </div>
+
+        <div>
+          <label className={LABEL_CLS}>Qué clase de gasto es</label>
+          <Segmentado
+            etiqueta="Qué clase de gasto es"
+            opciones={TIPOS_DE_GASTO.map((t) => ({ clave: t, etiqueta: ETIQUETA_TIPO[t] }))}
+            valor={tipo}
+            onCambio={setTipo}
+            lleno
+          />
+          <p className="text-[11px] text-fg-muted mt-1">
+            {tipo === "REPRESENTACION"
+              ? "Representación: solo combustible, alimentación y equipo, y con aviso previo."
+              : tipo === "TARJETA_CORPORATIVA"
+                ? "Tarjeta corporativa: solo suscripciones y software. Una suscripción se vuelve fijo, con su presupuesto."
+                : "Sin regla de rubro. Igual lleva su factura."}
+          </p>
+        </div>
+
+        <div>
+          <label className={LABEL_CLS}>En qué fue</label>
+          <Selector
+            etiqueta="En qué fue"
+            placeholder="Elige en qué fue"
+            opciones={RUBROS_DE_GASTO.map((r) => ({
+              value: r,
+              label: ETIQUETA_RUBRO[r],
+              ...(tipo !== "OTRO" && !RUBROS_PERMITIDOS[tipo].includes(r) ? { hint: "Fuera de la regla de este tipo" } : {}),
+            }))}
+            valor={rubro}
+            onElegir={(v) => setRubro(rubroDe(v))}
+          />
+        </div>
+
+        {tipo === "REPRESENTACION" && (
+          <label className="flex items-center gap-2 text-xs text-fg-secondary cursor-pointer">
+            <input type="checkbox" checked={avisoPrevio} onChange={(e) => setAvisoPrevio(e.target.checked)} className="accent-current" />
+            Se avisó antes de hacer el gasto
+          </label>
+        )}
+
+        {avisosDeLaRegla.length > 0 && (
+          <ul className="space-y-1 rounded-lg border border-warn-line bg-warn-surface px-3 py-2 text-xs text-warn-ink">
+            {avisosDeLaRegla.map((a) => (
+              <li key={a.clave}>
+                <span className="font-semibold">{a.rotulo}:</span> {a.texto} Se guarda igual y queda marcado.
+              </li>
+            ))}
+          </ul>
+        )}
 
         <div>
           <label className={LABEL_CLS}>Tags</label>

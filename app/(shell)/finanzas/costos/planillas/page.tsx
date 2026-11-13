@@ -20,10 +20,12 @@ import { requireInternalUser } from "@/lib/auth/supabase";
 import { isCostosRole } from "@/lib/auth/cobranza-roles";
 import { puedePorPersona } from "@/lib/auth/salarios-por-persona";
 import { loadCostos } from "@/lib/cobranza";
+import { cargarPlanillaEnDolares } from "@/lib/finanzas/tipo-cambio-planilla-server";
 import { crDateParts } from "@/lib/jobs/time";
 import { SHELL_DEFAULT } from "@/lib/ui/page-shell";
 import { buttonVariants } from "@/components/ui";
 import FinanzasCostosCategoriaClient from "@/components/finanzas/FinanzasCostosCategoriaClient";
+import PlanillaEnDolares from "@/components/finanzas/PlanillaEnDolares";
 
 export const dynamic = "force-dynamic";
 
@@ -35,7 +37,8 @@ export default async function FinanzasCostosPlanillasPage() {
   }
 
   const todayISO = crDateParts(new Date()).dateKey;
-  const costos = await loadCostos();
+  // La planilla en dólares y el aviso de tipo de cambio (2026-11-13): después del gate, porque lee salarios.
+  const [costos, enDolares] = await Promise.all([loadCostos(), cargarPlanillaEnDolares(todayISO)]);
 
   return (
     <div className={SHELL_DEFAULT}>
@@ -70,6 +73,14 @@ export default async function FinanzasCostosPlanillasPage() {
               Comisiones de vendedor
             </Link>
           </div>
+        }
+        arriba={
+          <PlanillaEnDolares
+            movimiento={enDolares.movimiento}
+            umbrales={enDolares.umbrales}
+            planilla={enDolares.planilla}
+            puedeEditarTopes={isCostosRole(ctx.role)}
+          />
         }
         initialCostos={costos.filter((c) => c.categoria === "SALARIO")}
         todayISO={todayISO}

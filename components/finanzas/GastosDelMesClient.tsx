@@ -20,6 +20,15 @@ import { montosPorMoneda, textoDeMontos } from "@/lib/cobranza/odoo/diferencias"
 import { EGRESOS_DESDE_NEXUS, ETIQUETA_CATEGORIA, etiquetaMes, mesAnterior, mesSiguiente } from "@/lib/finanzas/gastos";
 import GastoForm from "@/components/cobranza/GastoForm";
 import { fmtFecha } from "@/components/cobranza/format";
+import {
+  CeldaDeFactura,
+  ClaseDelGasto,
+  FacturaModal,
+  FacturasQueFaltan,
+  MarcasDeRegla,
+  VolverFijoModal,
+  avisosSinFactura,
+} from "@/components/finanzas/ReglasDeGasto";
 
 const BOTON_BLANCO =
   "rounded-lg border border-line bg-surface px-3 py-1.5 text-[13px] font-semibold text-fg-secondary hover:bg-surface-hover disabled:opacity-50";
@@ -48,6 +57,9 @@ export default function GastosDelMesClient({
   const [ocupado, setOcupado] = useState<string | null>(null);
   /** El gasto que se está por borrar: borrar pide confirmación (2026-10-05), antes era un clic. */
   const [porBorrar, setPorBorrar] = useState<GastoPuntualDTO | null>(null);
+  /** La factura que se está anotando, y el gasto que se está volviendo fijo (2026-11-13). */
+  const [porFactura, setPorFactura] = useState<GastoPuntualDTO | null>(null);
+  const [porFijo, setPorFijo] = useState<GastoPuntualDTO | null>(null);
   const periodo = datos.periodo;
   const mesActual = todayISO.slice(0, 7);
   const delExcel = periodo < EGRESOS_DESDE_NEXUS;
@@ -103,7 +115,7 @@ export default function GastosDelMesClient({
     <div className="space-y-5">
       <PageHeader recorrido="finanzas-gastos"
         title="Gastos del mes"
-        description="Todo lo que sale en el mes. Lo recurrente se carga solo; lo puntual se anota acá, con su comprobante. Reemplaza al Excel de egresos."
+        description="Todo lo que sale en el mes. Los fijos se repiten y se proyectan solos; los variables se anotan acá, con su factura. Reemplaza al Excel de egresos."
         action={
           puedeEditar && !delExcel && !datos.cerrado ? (
             <Button data-recorrido="fin.gastos.registrar" variant="primary" onClick={() => setForm({ gasto: null })}>
@@ -142,14 +154,14 @@ export default function GastosDelMesClient({
 
       <section data-recorrido="fin.gastos.totales" aria-label="Lo que sale en el mes" className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <div className="flex flex-col gap-1 rounded-xl border border-line bg-surface p-4">
-          <span className="text-xs text-fg-muted">Recurrentes</span>
+          <span className="text-xs text-fg-muted">Fijos · recurrentes</span>
           <span className="text-[22px] font-bold leading-7 tabular-nums text-fg">{montosRecurrentes.length ? textoDeMontos(montosRecurrentes) : "—"}</span>
-          <span className="text-xs text-success-ink">✓ Se cargan solos · {nRecurrentes === 1 ? "1 costo" : `${nRecurrentes} costos`}</span>
+          <span className="text-xs text-success-ink">✓ Se repiten y se proyectan solos · {nRecurrentes === 1 ? "1 costo" : `${nRecurrentes} costos`}</span>
         </div>
         <div
           className={`flex flex-col gap-1 rounded-xl p-4 ${datos.gastos.length ? "border border-line bg-surface" : "border border-dashed border-line bg-surface-muted"}`}
         >
-          <span className="text-xs text-fg-muted">Gastos puntuales</span>
+          <span className="text-xs text-fg-muted">Variables · gastos puntuales</span>
           <span className={`text-[22px] font-bold leading-7 tabular-nums ${datos.gastos.length ? "text-fg" : "text-fg-muted"}`}>
             {datos.gastos.length ? textoDeMontos(totalPuntuales) : "Sin anotar"}
           </span>
@@ -188,8 +200,8 @@ export default function GastosDelMesClient({
 
       <section data-recorrido="fin.gastos.puntuales" aria-label="Gastos puntuales" className="rounded-xl border border-line bg-surface">
         <div className="flex items-baseline gap-2.5 border-b border-line px-4 py-3.5">
-          <h2 className="text-[15px] font-semibold text-fg">Gastos puntuales de {etiquetaMes(periodo)}</h2>
-          <span className="text-xs text-fg-muted">lo que no se repite todos los meses</span>
+          <h2 className="text-[15px] font-semibold text-fg">Gastos variables de {etiquetaMes(periodo)}</h2>
+          <span className="text-xs text-fg-muted">lo que no se repite todos los meses. Si uno se repite, vuélvelo fijo y se proyecta solo.</span>
         </div>
         {datos.gastos.length === 0 ? (
           <div className="m-4 flex flex-col items-start gap-2 rounded-lg border border-dashed border-line bg-surface-muted p-5">
@@ -207,12 +219,13 @@ export default function GastosDelMesClient({
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[640px] border-collapse text-[13px]">
+            <table className="w-full min-w-[820px] border-collapse text-[13px]">
               <thead>
                 <tr className="text-left text-[11px] uppercase tracking-[0.08em] text-fg-muted">
                   <th className="px-4 py-2 font-semibold">Día</th>
                   <th className="px-4 py-2 font-semibold">Gasto</th>
                   <th className="px-4 py-2 text-right font-semibold">Monto</th>
+                  <th className="px-4 py-2 font-semibold">Factura</th>
                   <th className="px-4 py-2 font-semibold">Lo anotó</th>
                   <th className="px-4 py-2" />
                 </tr>
@@ -223,11 +236,32 @@ export default function GastosDelMesClient({
                     <td className="whitespace-nowrap px-4 py-2.5 text-fg-secondary">{fmtFecha(g.fecha)}</td>
                     <td className="px-4 py-2.5">
                       <span className="font-semibold text-fg">{g.nombre}</span>
+                      <ClaseDelGasto g={g} />
                       {g.notas && <span className="block text-xs text-fg-muted">{g.notas}</span>}
+                      {g.pasoAFijo && (
+                        <span className="block text-xs text-success-ink">✓ Se repite: ya es el fijo «{g.pasoAFijo.nombre}»</span>
+                      )}
+                      <MarcasDeRegla avisos={avisosSinFactura(g, todayISO)} />
                     </td>
                     <td className="whitespace-nowrap px-4 py-2.5 text-right tabular-nums text-fg">{textoDeMontos([{ moneda: g.moneda, monto: g.monto }])}</td>
+                    <td className="px-4 py-2.5">
+                      <CeldaDeFactura g={g} hoyISO={todayISO} puedeEditar={puedeEditar} onAnotar={setPorFactura} />
+                    </td>
                     <td className="px-4 py-2.5 text-fg-muted">{g.registradoPor ? g.registradoPor.split("@")[0] : "—"}</td>
                     <td className="whitespace-nowrap px-4 py-2.5 text-right">
+                      {/* Volverlo fijo no cambia el monto de este mes: se puede aunque esté cerrado. */}
+                      {puedeEditar && !g.pasoAFijo && (
+                        <>
+                          <button
+                            type="button"
+                            className={BOTON_BLANCO}
+                            onClick={() => setPorFijo(g)}
+                            title="Pasa a Recurrentes y se proyecta solo desde el mes que sigue"
+                          >
+                            Se repite
+                          </button>{" "}
+                        </>
+                      )}
                       {puedeEditar && !datos.cerrado && (
                         <>
                           <button type="button" className={BOTON_BLANCO} onClick={() => setForm({ gasto: g })}>
@@ -252,10 +286,12 @@ export default function GastosDelMesClient({
         )}
       </section>
 
+      <FacturasQueFaltan gastos={datos.facturasQueFaltan} hoyISO={todayISO} puedeEditar={puedeEditar} onAnotar={setPorFactura} />
+
       <div className="flex flex-wrap items-start gap-4">
         <section data-recorrido="fin.gastos.recurrentes" aria-label="Recurrentes del mes" className="min-w-0 flex-[1_1_380px] rounded-xl border border-line bg-surface">
           <div className="flex items-baseline gap-2.5 border-b border-line px-4 py-3.5">
-            <h2 className="text-[15px] font-semibold text-fg">Recurrentes de este mes</h2>
+            <h2 className="text-[15px] font-semibold text-fg">Fijos de este mes</h2>
             <Link href="/finanzas/recurrentes" className="ml-auto text-[13px] font-semibold text-brand hover:text-brand-light">
               Ver {nRecurrentes === 1 ? "el costo" : `los ${nRecurrentes}`}
             </Link>
@@ -310,6 +346,31 @@ export default function GastosDelMesClient({
         confirmLabel="Borrar"
         variant="destructive"
       />
+
+      {porFactura && (
+        <FacturaModal
+          gasto={porFactura}
+          onClose={() => setPorFactura(null)}
+          onGuardado={() => {
+            setPorFactura(null);
+            toast.success("Factura anotada.");
+            void cargar(periodo);
+          }}
+        />
+      )}
+
+      {porFijo && (
+        <VolverFijoModal
+          gasto={porFijo}
+          hoyISO={todayISO}
+          onClose={() => setPorFijo(null)}
+          onGuardado={(desde) => {
+            setPorFijo(null);
+            toast.success(`Listo: ya es un fijo y se proyecta solo desde ${etiquetaMes((desde > todayISO ? desde : todayISO).slice(0, 7), true)}.`);
+            void cargar(periodo);
+          }}
+        />
+      )}
 
       {form && (
         <GastoForm

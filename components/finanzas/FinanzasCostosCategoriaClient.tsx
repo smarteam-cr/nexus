@@ -26,6 +26,7 @@ export default function FinanzasCostosCategoriaClient({
   leyenda,
   accion,
   recorrido,
+  arriba,
   initialCostos,
   todayISO,
 }: {
@@ -43,6 +44,8 @@ export default function FinanzasCostosCategoriaClient({
   accion?: React.ReactNode;
   /** El recorrido guiado de la pantalla, si tiene (lib/recorridos/registro.ts). */
   recorrido?: string;
+  /** Lo que va entre el encabezado y la hoja (Planillas: la planilla en dólares y el tipo de cambio, 2026-11-13). */
+  arriba?: React.ReactNode;
   initialCostos: CostoRecurrenteDTO[];
   todayISO: string;
 }) {
@@ -62,6 +65,7 @@ export default function FinanzasCostosCategoriaClient({
   return (
     <div>
       <PageHeader title={titulo} description={descripcion} action={accion} recorrido={recorrido} />
+      {arriba && <div className="mb-6">{arriba}</div>}
       <CostosPanel
         costos={propios}
         gastos={[]}

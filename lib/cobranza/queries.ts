@@ -1506,6 +1506,8 @@ export interface CostoRecurrenteDTO {
   activo: boolean;
   finalizadoEl: string | null; // baja definitiva (≠ pausa); null = vigente
   notas: string | null;
+  /** Presupuesto estimado (2026-11-13), en la moneda y la frecuencia del costo. null = sin presupuesto. */
+  presupuesto: number | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -1535,6 +1537,7 @@ export async function loadCostos(opciones: { sinSalarios?: boolean } = {}): Prom
     activo: c.activo,
     finalizadoEl: isoDay(c.finalizadoEl),
     notas: c.notas,
+    presupuesto: num(c.presupuesto),
     createdAt: iso(c.createdAt)!,
     updatedAt: iso(c.updatedAt)!,
   }));
@@ -1552,14 +1555,29 @@ export interface GastoPuntualDTO {
   notas: string | null;
   /** Quién lo anotó (2026-10-03). null = se anotó antes de que se guardara. */
   registradoPor: string | null;
+  /** Las reglas de gasto (2026-11-13, lib/finanzas/reglas-de-gasto.ts). null = sin clasificar. */
+  tipo: string | null;
+  rubro: string | null;
+  avisoPrevio: boolean;
+  /** La factura (número o enlace), quién la anotó y cuándo. null = falta. */
+  comprobante: string | null;
+  comprobantePor: string | null;
+  comprobanteEn: string | null;
+  /** El fijo en que se volvió («se repite»). ⛔ Solo si ese fijo no es un salario: si no, null. */
+  pasoAFijo: { id: string; nombre: string } | null;
   createdAt: string;
 }
 
 /** Los gastos puntuales; con `periodo` ("YYYY-MM"), solo los de ese mes (rediseño de Finanzas, 2026-10-03). */
-export async function loadGastos(opciones: { periodo?: string } = {}): Promise<GastoPuntualDTO[]> {
+export async function loadGastos(opciones: { periodo?: string; sinFacturaDesde?: string } = {}): Promise<GastoPuntualDTO[]> {
   const rango = opciones.periodo ? rangoDelMes(opciones.periodo) : null;
   const filas = await prisma.gastoPuntual.findMany({
-    where: rango ? { fecha: { gte: rango.desde, lt: rango.hasta } } : undefined,
+    where: {
+      ...(rango ? { fecha: { gte: rango.desde, lt: rango.hasta } } : {}),
+      // Las facturas que faltan (2026-11-13): los gastos sin comprobante desde ese día (lib/finanzas/reglas-de-gasto.ts).
+      ...(opciones.sinFacturaDesde ? { comprobante: null, fecha: { gte: new Date(`${opciones.sinFacturaDesde}T00:00:00Z`) } } : {}),
+    },
+    include: { pasoAFijo: { select: { id: true, nombre: true, categoria: true } } },
     orderBy: [{ fecha: "desc" }, { createdAt: "desc" }],
   });
   return filas.map((g) => ({
@@ -1571,6 +1589,16 @@ export async function loadGastos(opciones: { periodo?: string } = {}): Promise<G
     tags: g.tags,
     notas: g.notas,
     registradoPor: g.registradoPor,
+    tipo: g.tipo,
+    rubro: g.rubro,
+    avisoPrevio: g.avisoPrevio,
+    comprobante: g.comprobante,
+    comprobantePor: g.comprobantePor,
+    comprobanteEn: iso(g.comprobanteEn),
+    pasoAFijo:
+      g.pasoAFijo && (CATEGORIAS_SIN_SALARIO as readonly string[]).includes(g.pasoAFijo.categoria)
+        ? { id: g.pasoAFijo.id, nombre: g.pasoAFijo.nombre }
+        : null,
     createdAt: iso(g.createdAt)!,
   }));
 }

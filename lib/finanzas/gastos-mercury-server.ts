@@ -28,7 +28,7 @@ export async function cargarGastosContraMercury(hoyISO: string): Promise<GastosC
     }),
     prisma.costoRecurrente.findMany({
       where: { categoria: { in: ["HERRAMIENTA", "FIJO_OPERACION"] }, activo: true, finalizadoEl: null },
-      select: { id: true, nombre: true, categoria: true, monto: true, moneda: true, frecuencia: true },
+      select: { id: true, nombre: true, categoria: true, monto: true, moneda: true, frecuencia: true, presupuesto: true },
     }),
     prisma.gastoPuntual.findMany({
       where: { fecha: { gte: new Date(`${EGRESOS_DESDE_NEXUS}-01T00:00:00Z`) } },
@@ -58,6 +58,7 @@ export async function cargarGastosContraMercury(hoyISO: string): Promise<GastosC
       monto: Number(r.monto),
       moneda: r.moneda,
       frecuencia: r.frecuencia === "ANUAL" ? "ANUAL" : "MENSUAL",
+      presupuesto: r.presupuesto === null ? null : Number(r.presupuesto),
     })),
     gastos: gastos.map((g) => ({ id: g.id, nombre: g.nombre, monto: Number(g.monto), moneda: g.moneda, fechaISO: g.fecha.toISOString().slice(0, 10) })),
     hoyISO,

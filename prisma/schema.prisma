@@ -4804,6 +4804,14 @@ model CostoRecurrente {
   // cuánto costó en marzo. La segunda no se puede derivar de la primera.
   egresosMensuales EgresoMensual[] @relation("EgresosDelCosto")
 
+  // Presupuesto estimado (2026-11-13, regla de las tarjetas corporativas: cada suscripción con su presupuesto). En la
+  // moneda y la frecuencia del costo, como `monto`. NO entra a ninguna proyección: solo se compara contra `monto` y
+  // contra lo que cobró la tarjeta (lib/finanzas/reglas-de-gasto.ts). nullable porque se carga de a poco.
+  presupuesto Decimal? @db.Decimal(12, 2)
+
+  // Los gastos puntuales que se volvieron este fijo (2026-11-13, «este gasto se repite»). El gasto queda en su mes.
+  gastosQuePasaronAFijo GastoPuntual[] @relation("GastoQuePasoAFijo")
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -4873,10 +4881,45 @@ model GastoPuntual {
   /// Quién lo anotó (2026-10-03): sin autor no se puede revisar lo que registró el equipo. Los viejos quedan vacíos.
   registradoPor String?
 
+  // ── Las reglas de gasto (2026-11-13, lib/finanzas/reglas-de-gasto.ts) ──
+  /// De representación, con la tarjeta corporativa u otro. null = se anotó antes de la regla (cuenta como «otro»).
+  tipo        GastoTipo?
+  /// En qué fue. Representación acepta combustible, alimentación y equipo; la tarjeta, suscripciones y software.
+  rubro       GastoRubro?
+  /// Representación: se avisó ANTES de gastarlo. Para los otros tipos no se mira.
+  avisoPrevio Boolean     @default(false)
+  /// La factura: su número o el enlace al archivo. null = falta (la recopila quien registra). Se puede anotar con el mes
+  /// cerrado: no cambia ningún monto.
+  comprobante    String?   @db.Text
+  comprobantePor String?
+  comprobanteEn  DateTime?
+
+  /// El fijo en que se volvió este gasto («se repite»). El gasto se queda en su mes; el fijo cuenta desde el mes que
+  /// sigue. nullable + SetNull: borrar el fijo no borra el gasto.
+  pasoAFijoId String?
+  pasoAFijo   CostoRecurrente? @relation("GastoQuePasoAFijo", fields: [pasoAFijoId], references: [id], onDelete: SetNull)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([fecha])
+}
+
+/// Qué clase de gasto puntual es, para sus reglas (2026-11-13).
+enum GastoTipo {
+  REPRESENTACION
+  TARJETA_CORPORATIVA
+  OTRO
+}
+
+/// En qué fue un gasto puntual (2026-11-13). Las reglas de cada tipo dicen cuáles acepta.
+enum GastoRubro {
+  COMBUSTIBLE
+  ALIMENTACION
+  EQUIPO
+  SUSCRIPCION
+  SOFTWARE
+  OTRO
 }
 
 /// La revisión de Alex sobre un registro del equipo (2026-10-03, docs/finanzas-rediseno-plan.md): un PAGO (Cobro en
@@ -5657,6 +5700,20 @@ model TipoCambioDia {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+// Los topes del aviso de tipo de cambio de la planilla (2026-11-13, lib/finanzas/tipo-cambio-planilla.ts). Una sola fila
+// (id = "planilla"); sin fila valen 3 y 5. Los edita SOLO Super Admin. La tasa de referencia NO se guarda: es el promedio
+// de la venta del BCCR del último mes cerrado, y sale de `TipoCambioDia`. Sin deny-all: dos porcentajes no son sensibles.
+model UmbralTipoCambio {
+  id             String   @id @default("planilla")
+  /// Desde qué movimiento, en %, el aviso es amarillo («vigilar»). En las dos direcciones.
+  vigilarPct     Decimal  @db.Decimal(5, 2)
+  /// Desde qué movimiento, en %, el aviso es rojo («decidir»). Mayor que `vigilarPct` (CHECK en la DB).
+  decidirPct     Decimal  @db.Decimal(5, 2)
+  actualizadoPor String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 }
 
 /// En qué estado está una venta ganada respecto de HubSpot. NO es la etapa del trato:

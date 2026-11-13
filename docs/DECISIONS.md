@@ -821,6 +821,10 @@ Decisiones ya tomadas, con el porqué. Si vas a cambiar una, primero entendé po
   **para `CostoRecurrente`** y solo para él. Lo que se pagó de verdad vive en `PagoPlanilla`,
   que es otra entidad y sí lleva estado de pago. La prohibición fiscal y la de FX **no se
   levantaron**.
+  ⚠ **ACOTADO otra vez el 2026-11-13** (ver §"Gastos fijos y variables, las reglas de gasto y el tipo de cambio de
+  la planilla"): «sin alertas» quiere decir sin VENCIMIENTO. Un costo sigue sin vencer y sin entrar por `AlertaCobro`;
+  lo que sí se marca es un fijo que pasa su presupuesto o una suscripción sin presupuesto, porque es una regla que
+  escribió dirección y no una fecha.
 - **Caja neta REUSA el motor de proyección, no lo duplica**: `esqueletoBuckets` (privado del
   engine) arma los buckets (quincenas→meses, clamp adentro) y lo consumen `proyectarIngresos`
   Y `proyectarCostos` → keys idénticas POR CONSTRUCCIÓN y `computeCajaNeta` solo resta.
@@ -14900,3 +14904,59 @@ data, también el detalle técnico. «Mejorar con IA» y el
 chat de la sección no pasan por el normalizador: si alguien le pide al chat una etapa nueva, la escribe (es un pedido de
 una persona). Las automatizaciones de Cemaco nombran las etapas viejas («Contacto en base», «Cliente activo») en su texto:
 rehacer solo el ciclo de vida no las corrige.
+
+## Gastos fijos y variables, las reglas de gasto y el tipo de cambio de la planilla (2026-11-13)
+
+> Lo acordado con Elías: cada gasto dice si es fijo o variable y los fijos se proyectan solos; dos reglas de gasto
+> (representación y tarjetas corporativas) con lo que cae fuera marcado; la factura de cada gasto la recopila María
+> José Zamora; y la planilla en dólares al tipo de cambio del día, con un aviso cuando se mueve.
+
+- **Fijo y variable no es una columna: es la entidad.** `CostoRecurrente` es el gasto FIJO (lo proyectan
+  `egresos-nexus.ts` y `computeCajaNeta`) y `GastoPuntual` es el VARIABLE. Una marca `naturaleza` en cada uno diría lo
+  mismo dos veces (ARCHITECTURE §2, regla 1). Lo que faltaba era verlo y poder cambiarlo: las pantallas dicen «Fijos» y
+  «Variables», y un gasto puntual que se repite tiene «Se repite» → nace un fijo con su nombre, monto y moneda.
+- **El fijo que nace de un gasto cuenta desde el mes que SIGUE al del gasto** (`fijoDesde`, el ALTA con esa fecha), y
+  el gasto se queda en su mes, atado al fijo (`GastoPuntual.pasoAFijoId`). Borrar el gasto para que el fijo lo
+  «reemplace» perdía el mes en que de verdad se pagó (y su revisión); que el fijo contara también ese mes lo contaba dos
+  veces. Un fijo no cuenta antes del día en que se cargó (`montoDelCostoEn` corta por `createdAt`), así que el de un
+  gasto viejo empieza este mes. Se puede con el mes del gasto cerrado: no cambia ningún monto de ese mes. Lo contrario
+  (un fijo que deja de repetirse) ya existe: «Dar de baja».
+- **Las dos reglas MARCAN, no frenan.** Representación: solo combustible, alimentación y equipo, con aviso previo. Tarjeta
+  corporativa: solo suscripciones y software. Un gasto fuera de la regla se guarda igual y queda marcado en rojo
+  (fuera de la regla, sin aviso) o amarillo (falta en qué fue, una suscripción anotada como gasto suelto). Frenar
+  obligaría a anotar mal un gasto que ya se hizo. Las reglas valen desde el 1 de noviembre de 2026
+  (`REGLAS_DE_GASTO_DESDE`): lo de antes se pagó con otras reglas. Clase y rubro son enums (`GastoTipo`, `GastoRubro`);
+  null = se anotó antes y cuenta como «otro».
+- **El presupuesto vive en el FIJO, no en la tarjeta.** «Cada suscripción con su presupuesto» → `CostoRecurrente
+  .presupuesto`, en la moneda y la frecuencia del costo. `TarjetaCredito` no tiene filas en producción (la tarjeta de
+  verdad es la de Mercury) y una suscripción se repite, así que su lugar es un fijo. Se compara contra el monto del fijo
+  y contra lo que cobró Mercury el último mes completo (`cargoSobrePresupuesto`, solo fijos mensuales). No entra a
+  ninguna proyección. Una herramienta sin presupuesto se marca; un fijo de operación, no (no es una suscripción).
+- **Esto acota «sin alertas de costos», no lo levanta.** La prohibición era de vencimiento (un costo no vence): sigue
+  igual, nada de esto entra por `AlertaCobro` ni pinta un semáforo. Comparar contra una regla o un presupuesto escrito
+  por dirección es otra pregunta.
+- **La factura es una columna del gasto, y se anota con el mes cerrado.** `comprobante` (número o enlace) +
+  `comprobantePor`/`comprobanteEn`. La factura llega después del cierre y no cambia ningún monto: por eso su ruta no pasa
+  por `frenarSiElMesEstaCerrado`. Se pide desde octubre de 2026 (`FACTURAS_DESDE`, cuando los gastos pasaron a Nexus) y
+  solo de lo que ya pasó. Quien registra la ve en Gastos del mes («Facturas que faltan», todos los meses, la más vieja
+  primero) y en Pendientes / «Para ti». ⚠ No cubre la factura mensual de cada suscripción (no hay un registro por mes
+  del fijo): queda para cuando haga falta.
+- **La tasa de referencia no se guarda: se deriva.** «Se fija al cerrar cada mes» = el promedio de la venta del BCCR del
+  último mes CERRADO del calendario (`tasaDeReferencia`). Un mes que terminó no cambia de promedio, así que derivarla da
+  el mismo número que guardarla, sin una segunda fuente de verdad que se desalinee si el BCCR corrige un día. El 1 de
+  cada mes pasa a ser la del mes que terminó. No espera al cierre de Finanzas (`CierreMes`): ese cierre lo hace una
+  persona cuando puede, y la referencia se quedaría vieja.
+- **El aviso es en las dos direcciones, con dos topes editables.** (hoy − referencia) ÷ referencia: desde el 3 % amarillo
+  «vigilar», desde el 5 % rojo «decidir» (`UmbralTipoCambio`, una fila; sin fila valen 3 y 5; los edita solo Super
+  Admin). El caso que importa es el colón que se fortalece: la planilla en colones cuesta más dólares, y la pantalla dice
+  cuánto sube al mes. El de hoy es la venta del día o la del anterior más cercano dentro de una semana; sin eso no hay
+  aviso (no se compara contra una tasa vieja).
+- **Dónde se ve y quién.** Planillas (Super Admin y quien tiene «Planilla» en su override): la planilla de un mes en
+  dólares hoy y a la referencia, con la diferencia. Tipo de cambio (cobranza.read) y «Para ti» de quien supervisa
+  Finanzas: el mismo aviso SIN plata. La planilla sale de la configuración de hoy (`CostoRecurrente`, salarios vigentes),
+  la misma de la hoja.
+- **El FX sigue prohibido en la base y en los motores.** Cada salario se queda en su moneda; la conversión es la de
+  presentación (`convertir`, lib/finanzas/equilibrio.ts), y una prueba lo verifica.
+- **Lo que lo revertiría:** si dirección prefiere frenar los gastos fuera de la regla, el corte va en
+  `gastoCreateSchema`/`updateGasto`, con las mismas funciones de `reglas-de-gasto.ts`. Si quiere fijar la referencia
+  con el cierre de Finanzas, se guarda en `CierreMes` al cerrar y `tasaDeReferencia` la lee de ahí.

@@ -18,6 +18,8 @@ import type { CostoRecurrenteDTO } from "@/lib/cobranza";
 import { textoDeMontos } from "@/lib/cobranza/odoo/diferencias";
 import { CATEGORIAS_SIN_SALARIO, ETIQUETA_CATEGORIA, esCategoriaSinSalario, montoMensual } from "@/lib/finanzas/gastos";
 import CostoForm from "@/components/cobranza/CostoForm";
+import { MarcasDeRegla } from "@/components/finanzas/ReglasDeGasto";
+import { avisosDelRecurrente, esSuscripcion } from "@/lib/finanzas/reglas-de-gasto";
 
 const BOTON_BLANCO =
   "rounded-lg border border-line bg-surface px-3 py-1.5 text-xs font-semibold text-fg-secondary hover:bg-surface-hover disabled:opacity-50";
@@ -70,7 +72,7 @@ export default function RecurrentesClient({
     <div className="space-y-5">
       <PageHeader recorrido="finanzas-recurrentes"
         title="Recurrentes"
-        description="Lo que se paga todos los meses: herramientas y fijos de operación. Se cargan solos en Gastos del mes; acá se dan de alta, se cambian y se dan de baja."
+        description="Los gastos FIJOS: lo que se paga todos los meses, herramientas y fijos de operación. Nexus los proyecta solos a los meses que siguen; acá se dan de alta, se cambian y se dan de baja. Cada suscripción lleva su presupuesto."
         action={
           puedeEditar ? (
             <Button data-recorrido="fin.recurrentes.agregar" variant="primary" onClick={() => setForm({ costo: null })}>
@@ -112,6 +114,15 @@ export default function RecurrentesClient({
                           <span className={`font-semibold ${c.activo ? "text-fg" : "text-fg-muted"}`}>{c.nombre}</span>
                           {!c.activo && <span className="ml-2 text-xs text-warn-ink">● En pausa</span>}
                           {c.notas && <span className="block text-xs text-fg-muted">{c.notas}</span>}
+                          {/* El presupuesto (2026-11-13): lo que se aprobó gastar en esto. Se compara con el monto y con lo que cobra la tarjeta (Conciliación). */}
+                          {c.presupuesto !== null ? (
+                            <span className="block text-xs text-fg-muted">
+                              Presupuesto: {textoDeMontos([{ moneda: c.moneda, monto: c.presupuesto }])} {c.frecuencia === "ANUAL" ? "al año" : "al mes"}
+                            </span>
+                          ) : esSuscripcion(c) && c.activo && !c.finalizadoEl && puedeEditar ? (
+                            <span className="block text-xs text-fg-muted">Ponle presupuesto con «Editar».</span>
+                          ) : null}
+                          <MarcasDeRegla avisos={avisosDelRecurrente(c)} />
                         </td>
                         <td className="whitespace-nowrap px-4 py-2.5 text-right tabular-nums text-fg">
                           {textoDeMontos([{ moneda: c.moneda, monto: c.monto }])}
