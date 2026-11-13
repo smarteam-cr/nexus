@@ -20,11 +20,18 @@
  * Lo de Conciliación, los pagos que Odoo o Mercury ya dan por pagados, las cuotas por facturar y las comisiones vencidas
  * se MUESTRAN pero no bloquean: hoy son más de cien filas y el mes no se cerraría nunca.
  *
+ * ── EL CALENDARIO (2026-11-13, pedido de Finanzas 23) ───────────────────────────
+ * El checklist suma los pasos fijos del calendario de Finanzas (`PASOS_DEL_CALENDARIO`): la reunión de gerencia del 25
+ * del mes; del 1 al 5 del mes siguiente, la facturación y el cierre del IVA, y Odoo y Mercury al día; el 5, los balances
+ * y el reporte del IVA; el 10, la reunión de gerencia. Nexus no los puede medir: quien supervisa los marca como hechos
+ * (queda quién y cuándo, en `CierreMes.pasosDelCalendario`). No frenan el cierre: el IVA y los balances son trabajo con
+ * el contador, y una reunión que se movió no es un mes mal cerrado.
+ *
  * PURO: sin Prisma ni red.
  */
 import { EGRESOS_DESDE_NEXUS, etiquetaMes } from "./gastos";
 
-export type GrupoDeCierre = "Costos y gastos" | "Revisión" | "Ingresos" | "Conciliación";
+export type GrupoDeCierre = "Costos y gastos" | "Revisión" | "Ingresos" | "Conciliación" | "Calendario";
 
 export interface ItemDeCierre {
   clave: string;
@@ -38,6 +45,95 @@ export interface ItemDeCierre {
   quien: string;
   accion: string;
   href: string;
+  /** Solo los pasos del calendario: se marcan a mano. Quién y cuándo, si ya se marcó. */
+  paso?: { hecho: boolean; por: string | null; en: string | null; cuando: string };
+}
+
+/** Un paso del calendario de Finanzas. `dia` y `delMesSiguiente` dicen cuándo toca respecto del mes que se cierra. */
+export interface PasoDelCalendario {
+  clave: string;
+  titulo: string;
+  detalle: string;
+  /** El día (o el primero del rango) en que toca. */
+  dia: number;
+  /** El último día del rango, si es un rango («del 1 al 5»). */
+  hastaDia?: number;
+  delMesSiguiente: boolean;
+}
+
+/** El calendario de Finanzas, en el orden en que pasa. */
+export const PASOS_DEL_CALENDARIO: readonly PasoDelCalendario[] = [
+  {
+    clave: "gerencia-25",
+    titulo: "Reunión de gerencia del 25",
+    detalle: "Cómo viene el mes: lo facturado contra el gasto proyectado y lo que falta facturar.",
+    dia: 25,
+    delMesSiguiente: false,
+  },
+  {
+    clave: "facturacion-iva",
+    titulo: "Facturar y cerrar el IVA",
+    detalle: "Las dos tandas de facturación del mes y el cierre del IVA.",
+    dia: 1,
+    hastaDia: 5,
+    delMesSiguiente: true,
+  },
+  {
+    clave: "odoo-mercury",
+    titulo: "Dejar Odoo y Mercury al día",
+    detalle: "Las facturas, los pagos y los movimientos del mes, registrados en los dos.",
+    dia: 1,
+    hastaDia: 5,
+    delMesSiguiente: true,
+  },
+  {
+    clave: "balances-iva",
+    titulo: "Sacar los balances y el reporte del IVA",
+    detalle: "Con el mes facturado y Odoo al día.",
+    dia: 5,
+    delMesSiguiente: true,
+  },
+  {
+    clave: "gerencia-10",
+    titulo: "Reunión de gerencia del 10",
+    detalle: "Los números del mes cerrado: facturado, cobrado y gasto real contra el piso.",
+    dia: 10,
+    delMesSiguiente: true,
+  },
+];
+
+/** Las claves que existen: lo que acepta la ruta para marcar un paso. */
+export const CLAVES_DEL_CALENDARIO = PASOS_DEL_CALENDARIO.map((p) => p.clave) as [string, ...string[]];
+
+/** Lo marcado de un mes, tal como se guarda en `CierreMes.pasosDelCalendario`. */
+export type PasosHechos = Record<string, { por: string; en: string }>;
+
+/** Lee lo guardado sin confiar en su forma: lo que no tenga `por` y `en` de texto no cuenta como hecho. */
+export function leerPasosHechos(json: unknown): PasosHechos {
+  if (!json || typeof json !== "object" || Array.isArray(json)) return {};
+  const out: PasosHechos = {};
+  for (const [k, v] of Object.entries(json as Record<string, unknown>)) {
+    if (!CLAVES_DEL_CALENDARIO.includes(k)) continue;
+    const x = v as { por?: unknown; en?: unknown } | null;
+    if (x && typeof x.por === "string" && typeof x.en === "string") out[k] = { por: x.por, en: x.en };
+  }
+  return out;
+}
+
+/** Marca o desmarca un paso: devuelve lo que hay que guardar. */
+export function conPasoMarcado(actual: PasosHechos, clave: string, hecho: boolean, actor: string, enISO: string): PasosHechos {
+  const siguiente = { ...actual };
+  if (hecho) siguiente[clave] = { por: actor, en: enISO };
+  else delete siguiente[clave];
+  return siguiente;
+}
+
+/** «del 1 al 5 de noviembre», «el 25 de octubre». */
+export function cuandoToca(paso: PasoDelCalendario, periodo: string): string {
+  const [y, m] = periodo.split("-").map(Number) as [number, number];
+  const mes = paso.delMesSiguiente ? (m === 12 ? `${y + 1}-01` : `${y}-${String(m + 1).padStart(2, "0")}`) : periodo;
+  const nombre = etiquetaMes(mes);
+  return paso.hastaDia ? `del ${paso.dia} al ${paso.hastaDia} de ${nombre}` : `el ${paso.dia} de ${nombre}`;
 }
 
 export interface TipoCambioDelMes {
@@ -71,6 +167,8 @@ export interface DatosDelMes {
   /** Pagos y gastos de ese mes por revisar, y devueltos sin corregir. */
   porRevisar: number;
   devueltos: number;
+  /** Los pasos del calendario ya marcados (ausente = ninguno). `por` puede venir ya con el nombre de pila. */
+  pasosHechos?: PasosHechos;
 }
 
 /** Lo que se muestra y no bloquea. Son números de HOY, de todo lo pendiente: no se pueden partir por mes. */
@@ -329,6 +427,23 @@ export function itemsDeCierre(
         href: "/finanzas/conciliacion",
       },
     );
+  }
+  const hechos = d.pasosHechos ?? {};
+  for (const paso of PASOS_DEL_CALENDARIO) {
+    const h = hechos[paso.clave];
+    const cuando = cuandoToca(paso, d.periodo);
+    items.push({
+      clave: `calendario:${paso.clave}`,
+      grupo: "Calendario",
+      titulo: paso.titulo,
+      detalle: `Toca ${cuando}. ${paso.detalle}`,
+      listo: !!h,
+      bloquea: false,
+      quien: nombres.supervisa,
+      accion: "Marcar como hecho",
+      href: "",
+      paso: { hecho: !!h, por: h?.por ?? null, en: h?.en ?? null, cuando },
+    });
   }
   return items;
 }

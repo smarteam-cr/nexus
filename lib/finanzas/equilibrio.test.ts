@@ -37,6 +37,7 @@ import {
   calidadDelMes,
   conceptosRecurrentes,
   convertir,
+  esPagoDeAguinaldo,
   margenDeMesesCompletos,
   metasDe,
   costosDelPiso,
@@ -1247,5 +1248,52 @@ describe("T · el piso de hoy son los recurrentes de Nexus, sin la tarjeta del E
     const aviso = r.calidad.avisos.find((a) => a.codigo === "TARJETA_SOLAPA_HERRAMIENTAS");
     expect(aviso?.mensaje).not.toMatch(/el piso está inflado/);
     expect(aviso?.mensaje).toMatch(/El piso de hoy no suma la tarjeta del Excel/);
+  });
+});
+
+// ── U ───────────────────────────────────────────────────────────────────────────
+
+describe("U · la provisión del aguinaldo es el gasto; el pago no se cuenta otra vez (2026-11-13)", () => {
+  it("U1 un pago de aguinaldo cargado como gasto queda fuera del mes y se declara", () => {
+    const egresos = [
+      ...anioParejo(1000),
+      eg("2026-11", "RESERVA_AGUINALDO", "Reserva de aguinaldo", 1500),
+      eg("2026-11", "FIJO_OPERACION", "Pago de aguinaldos", 18_765),
+    ];
+    const r = calcularEquilibrio(egresos, [], { anio: 2026, hoyISO: HOY });
+    const nov = r.meses.find((m) => m.periodo === "2026-11")!;
+    expect(nov.egresos, "los 18.765 del pago saltaban de golpe en el mes").toBe(2500);
+    const aviso = r.calidad.avisos.find((a) => a.codigo === "AGUINALDO_PAGADO_FUERA");
+    expect(aviso?.periodos).toEqual(["2026-11"]);
+    expect(aviso?.conceptos).toEqual(["Pago de aguinaldos"]);
+  });
+
+  it("U2 la reserva misma nunca es un pago", () => {
+    expect(esPagoDeAguinaldo({ rubro: "RESERVA_AGUINALDO", concepto: "Reserva de aguinaldo", conceptoClave: "reserva-aguinaldo" })).toBe(false);
+    expect(esPagoDeAguinaldo({ rubro: "PLANILLA", concepto: "Aguinaldo 2026", conceptoClave: "x" })).toBe(true);
+    expect(esPagoDeAguinaldo({ rubro: "FIJO_OPERACION", concepto: "Alquiler", conceptoClave: "alquiler" })).toBe(false);
+  });
+});
+
+// ── V ───────────────────────────────────────────────────────────────────────────
+
+describe("V · lo vendido por área suma lo mismo que lo vendido (2026-11-13)", () => {
+  it("V1 el desglose es del mismo total, ordenado de mayor a menor, y sin dueño se dice así", () => {
+    const r = calcularEquilibrio([], [], {
+      anio: 2026,
+      hoyISO: HOY,
+      ventas: [
+        { periodo: "2026-03", monto: 1000, moneda: "USD", origen: "Ventas" },
+        { periodo: "2026-04", monto: 300, moneda: "USD", origen: "Customer Success" },
+        { periodo: "2026-05", monto: 200, moneda: "USD", origen: "Customer Success" },
+        { periodo: "2026-05", monto: 50, moneda: "USD" },
+      ],
+    });
+    expect(r.indicadores.vendidoTotal).toBe(1550);
+    expect(r.indicadores.vendidoPorOrigen).toEqual([
+      { origen: "Ventas", monto: 1000, ventas: 1 },
+      { origen: "Customer Success", monto: 500, ventas: 2 },
+      { origen: "Sin dueño en Nexus", monto: 50, ventas: 1 },
+    ]);
   });
 });

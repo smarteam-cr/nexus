@@ -12,8 +12,13 @@
  * Reemplaza a EquilibrioClient (indicadores que se tocaban en tres pasos, la tabla editable y la lista de
  * inconsistencias al pie): el escenario editable pasó a «¿Y si…?» de lo que queda del año, y la lista, a la agenda y al
  * detalle de cada punto.
+ *
+ * 2026-11-13 (pedidos de Finanzas 2, 3, 5, 10 y 27): el filtro de fechas de los gráficos (año y meses), el colchón del
+ * piso (dos líneas: el mínimo exacto y el mínimo con colchón), el gasto de cada mes con su firmeza (real al cerrar,
+ * proyectado desde el día 1) y «Contra el gasto»: lo facturado y lo cobrado al lado de lo que costó operar.
  */
 import { useMemo, useState } from "react";
+import { gastosDelAnio, mesesDelRango, pisoConColchon, rangoDePreset, rangoValido, type PresetDeRango, type RangoDeMeses } from "@/lib/finanzas/panorama";
 import Link from "next/link";
 import { Alert, Button, EmptyState, PageHeader } from "@/components/ui";
 import { useToast } from "@/components/ui/Toast";
@@ -32,6 +37,9 @@ import {
 import { armarAgenda } from "@/lib/finanzas/agenda-equilibrio";
 import LaRespuesta from "./LaRespuesta";
 import MesAMes from "./MesAMes";
+import ContraElGasto from "./ContraElGasto";
+import FiltroDeFechas from "./FiltroDeFechas";
+import { useColchon } from "./useColchon";
 import DeLaVentaALaCaja from "./DeLaVentaALaCaja";
 import Firmeza from "./Firmeza";
 import ParaDecidir from "./ParaDecidir";
@@ -65,7 +73,31 @@ export default function PuntoDeEquilibrio({
   const [decidiendo, setDecidiendo] = useState(false);
   const [decidiendoLicencias, setDecidiendoLicencias] = useState(false);
   const [viendoExcel, setViendoExcel] = useState(false);
+  const [colchonPct, setColchonPct] = useColchon();
+  const [preset, setPreset] = useState<PresetDeRango | null>("anio");
+  const [rangoAMano, setRangoAMano] = useState<RangoDeMeses | null>(null);
+  const [cargandoAnio, setCargandoAnio] = useState(false);
   const moneda = r.monedaPresentacion;
+  const anioDeHoy = Number(hoyISO.slice(0, 4));
+  /* El año en curso y los dos anteriores: antes de 2026 el gasto no está en Nexus, pero el resto del reporte sí. */
+  const anios = [anioDeHoy, anioDeHoy - 1, anioDeHoy - 2];
+  const rango = rangoValido(preset ? rangoDePreset(preset, r.anio, hoyISO) : (rangoAMano ?? rangoDePreset("anio", r.anio, hoyISO)), r.anio);
+
+  /** Otro año: vuelve a pedir el reporte de ese año y deja los gráficos en el año entero. */
+  const cambiarAnio = async (anio: number) => {
+    if (anio === r.anio) return;
+    setCargandoAnio(true);
+    try {
+      const d = await fetchJson<{ reporte: ReporteAnualDTO }>(`/api/cobranza/costos/equilibrio?anio=${anio}`);
+      setReporte(d.reporte);
+      setPreset("anio");
+      setRangoAMano(null);
+    } catch (e) {
+      toast.error(e instanceof ApiError ? e.message : `No se pudo traer ${anio}.`);
+    } finally {
+      setCargandoAnio(false);
+    }
+  };
 
   /** «Actualizar»: vuelve a traer HubSpot, Odoo y Mercury y recarga el reporte, sin recargar la página. */
   const actualizar = async () => {
@@ -118,6 +150,21 @@ export default function PuntoDeEquilibrio({
   }, [r, hoyISO]);
 
   const { piso } = pisoDe(r);
+  const pisoColchon = pisoConColchon(piso, colchonPct);
+  /* El gasto de cada mes con su firmeza: real si se cerró (con quién), registrado, o proyectado desde el día 1. */
+  const gastos = useMemo(
+    () =>
+      gastosDelAnio(r.meses, {
+        hoyISO,
+        piso: r.pisoVigente,
+        cierres: r.cierres.map((c) => ({ ...c, cerradoPor: c.cerradoPor ? (nombres[c.cerradoPor.toLowerCase()] ?? c.cerradoPor) : null })),
+      }),
+    [r, hoyISO, nombres],
+  );
+  const enRango = mesesDelRango(r.meses, rango);
+  const mesesVistos = enRango.map(({ m }) => m);
+  const estadosVistos = enRango.map(({ i }) => lectura.estados[i]!);
+  const gastosVistos = enRango.map(({ i }) => gastos[i]!);
   const sinDatos = r.indicadores.egresosTotales === 0 && r.indicadores.facturadoTotal === 0;
   const iMes = mesAbierto ? r.meses.findIndex((m) => m.periodo === mesAbierto) : -1;
   const linea = lineaAbierta ? (r.inconsistencias.find((l) => l.codigo === lineaAbierta) ?? null) : null;
@@ -192,6 +239,7 @@ export default function PuntoDeEquilibrio({
           <LaRespuesta
             anio={r.anio}
             moneda={moneda}
+            colchonPct={colchonPct}
             respuesta={lectura.respuesta}
             margen={lectura.margen}
             preliminar={lectura.preliminar}
@@ -200,12 +248,42 @@ export default function PuntoDeEquilibrio({
             onSimular={() => setSimulando(true)}
             onDecidirAliados={() => setDecidiendo(true)}
           />
+          <FiltroDeFechas
+            anio={r.anio}
+            anios={anios}
+            rango={rango}
+            preset={preset}
+            cargando={cargandoAnio}
+            onAnio={(a) => void cambiarAnio(a)}
+            onPreset={(p) => {
+              setPreset(p);
+              setRangoAMano(null);
+            }}
+            onRango={(nuevo) => {
+              setPreset(null);
+              setRangoAMano(nuevo);
+            }}
+          />
           <MesAMes
-            meses={r.meses}
-            estados={lectura.estados}
+            meses={mesesVistos}
+            estados={estadosVistos}
+            gastos={gastosVistos}
             piso={piso}
+            pisoColchon={pisoColchon}
+            colchonPct={colchonPct}
+            onColchon={setColchonPct}
             moneda={moneda}
             etiquetasDeServicio={etiquetasDeServicio}
+            onAbrirMes={setMesAbierto}
+          />
+          <ContraElGasto
+            meses={mesesVistos}
+            gastos={gastosVistos}
+            piso={piso}
+            pisoColchon={pisoColchon}
+            colchonPct={colchonPct}
+            hoyISO={hoyISO}
+            moneda={moneda}
             onAbrirMes={setMesAbierto}
           />
           <DeLaVentaALaCaja

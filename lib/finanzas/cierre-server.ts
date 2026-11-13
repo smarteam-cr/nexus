@@ -23,8 +23,11 @@ import { medirPendientes } from "./pendientes-server";
 import { nombreDeQuienRegistra, nombreDeQuienSupervisa } from "./vista-server";
 import { EGRESOS_DESDE_NEXUS } from "./gastos";
 import {
+  CLAVES_DEL_CALENDARIO,
+  conPasoMarcado,
   confirmadoPorPersona,
   esFaltanteDePlanilla,
+  leerPasosHechos,
   estadoEnElAnio,
   faltanParaCerrar,
   itemsDeCierre,
@@ -146,6 +149,12 @@ export async function cargarCierre(periodo: string, hoyISO: string, opciones: { 
       : null;
   const cierreDe = new Map(cierres.map((c) => [c.periodo, c]));
   const nombres = { registra, supervisa };
+  /* Los pasos del calendario marcados del mes elegido, con el nombre de pila de quien los marcó (2026-11-13). */
+  const pasosDelMes = leerPasosHechos(cierreDe.get(periodo)?.pasosDelCalendario);
+  const firmasDePasos = await nombrePorEmail(Object.values(pasosDelMes).map((h) => h.por));
+  const pasosConNombre = Object.fromEntries(
+    Object.entries(pasosDelMes).map(([k, h]) => [k, { por: firmasDePasos.get(h.por.toLowerCase()) ?? h.por, en: crDateParts(new Date(h.en)).dateKey }]),
+  );
 
   const datosDe = (p: string): DatosDelMes => {
     const t = tasaDe.get(p);
@@ -159,6 +168,7 @@ export async function cargarCierre(periodo: string, hoyISO: string, opciones: { 
       tipoCambio: tipoCambioDe(t),
       porRevisar: porRevisar.get(p) ?? 0,
       devueltos: devueltos.get(p) ?? 0,
+      pasosHechos: p === periodo ? pasosConNombre : {},
     };
   };
 
@@ -248,6 +258,22 @@ export async function cerrarMes(periodo: string, actor: string, hoyISO: string):
     dedupeKey: `finanzas.mes-cerrado:${periodo}:${datos.cerradoEn.toISOString()}`,
   };
   await Promise.all([avisar({ ...aviso, frente: "FINANZAS_REGISTRAR" }), avisar({ ...aviso, frente: "DIRECCION" })]);
+}
+
+/**
+ * Marcar (o desmarcar) un paso del calendario de un mes (2026-11-13). Queda quién y cuándo. Se puede en un mes cerrado:
+ * los pasos no cambian sus números (ni su huella), y el 10 del mes siguiente el mes ya suele estar cerrado.
+ */
+export async function marcarPasoDelCalendario(periodo: string, clave: string, hecho: boolean, actor: string): Promise<void> {
+  if (!MES_RE.test(periodo)) throw new CobranzaError("El mes no es válido.", 400);
+  if (!CLAVES_DEL_CALENDARIO.includes(clave)) throw new CobranzaError("Ese paso no está en el calendario.", 400);
+  const actual = await prisma.cierreMes.findUnique({ where: { periodo }, select: { pasosDelCalendario: true } });
+  const siguiente = conPasoMarcado(leerPasosHechos(actual?.pasosDelCalendario), clave, hecho, actor, new Date().toISOString());
+  await prisma.cierreMes.upsert({
+    where: { periodo },
+    create: { periodo, pasosDelCalendario: siguiente },
+    update: { pasosDelCalendario: siguiente },
+  });
 }
 
 const NOMBRE_DEL_MES = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];

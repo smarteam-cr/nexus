@@ -14,9 +14,11 @@ import { describe, expect, it } from "vitest";
 import {
   ETAPAS_GANADAS,
   ETAPAS_PERDIDAS,
+  estadoAlDejarDeVolver,
   labelDePipeline,
   PIPELINES,
   PIPELINES_VENTA_PROPIA,
+  sigueGanado,
 } from "./pipelines";
 
 describe("los pipelines declarados", () => {
@@ -89,5 +91,25 @@ describe("labelDePipeline", () => {
     // Mostrar el id feo es lo correcto: se puede buscar en HubSpot. Un "desconocido"
     // obliga a ir al código para saber de qué se está hablando.
     expect(labelDePipeline("pipeline-nuevo-123")).toBe("pipeline-nuevo-123");
+  });
+});
+
+describe("un trato que no volvió en la búsqueda de ganados (todos los pipelines, 2026-11-13)", () => {
+  it("manda lo que calcula HubSpot: un pipeline que la tabla no declara también se lee bien", () => {
+    // Un pipeline nuevo de Customer Success: su etapa no está transcrita.
+    expect(sigueGanado({ dealstage: "999-ganado-cs", hs_is_closed_won: "true", hs_is_closed: "true" })).toBe(true);
+    expect(estadoAlDejarDeVolver({ dealstage: "999-perdido-cs", hs_is_closed_won: "false", hs_is_closed: "true" })).toBe("PERDIDA");
+    expect(estadoAlDejarDeVolver({ dealstage: "999-abierta-cs", hs_is_closed_won: "false", hs_is_closed: "false" })).toBe("REABIERTA");
+  });
+
+  it("sin las propiedades calculadas, cae a la etapa transcrita", () => {
+    expect(sigueGanado({ dealstage: ETAPAS_GANADAS[0]! })).toBe(true);
+    expect(estadoAlDejarDeVolver({ dealstage: "1373937255" })).toBe("PERDIDA");
+    expect(estadoAlDejarDeVolver({ dealstage: "appointmentscheduled" })).toBe("REABIERTA");
+  });
+
+  it("si HubSpot no lo devuelve, desapareció (nunca «sigue ganado»)", () => {
+    expect(sigueGanado(undefined)).toBe(false);
+    expect(estadoAlDejarDeVolver(undefined)).toBe("DESAPARECIDA");
   });
 });

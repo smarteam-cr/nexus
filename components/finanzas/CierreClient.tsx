@@ -8,6 +8,9 @@
  * tipo de cambio (el del Banco Central desde 2026-10-05; para confirmar o cambiar, en un mes sin días del BCCR o con
  * días que faltan —decisión de Elías del 2026-10-05—), y los botones de cerrar y reabrir. Cerrar no congela nada:
  * guarda quién, cuándo y los números de ese momento (lib/finanzas/cierre.ts).
+ *
+ * Desde el 2026-11-13 el checklist trae también el calendario de Finanzas (el 25, del 1 al 5, el 5 y el 10): pasos que
+ * Nexus no puede medir y que quien supervisa marca como hechos. No frenan el cierre.
  */
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -27,7 +30,7 @@ const TILE: Record<EstadoEnElAnio, string> = {
   FALTA: "border border-dashed border-line bg-surface-muted text-fg-muted",
   FUTURO: "border border-line bg-surface text-fg-muted",
 };
-const GRUPOS: GrupoDeCierre[] = ["Costos y gastos", "Revisión", "Ingresos", "Conciliación"];
+const GRUPOS: GrupoDeCierre[] = ["Costos y gastos", "Revisión", "Ingresos", "Conciliación", "Calendario"];
 const MES_CORTO = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
 
 function Marca({ item }: { item: ItemDeCierre }) {
@@ -178,13 +181,36 @@ export default function CierreClient({ d }: { d: CierreDelMesDTO }) {
                     <div className="flex min-w-0 flex-1 flex-col gap-0.5">
                       <span className="text-sm font-semibold leading-5 text-fg">{it.titulo}</span>
                       <span className="text-[13px] leading-[19px] text-fg-secondary">{it.detalle}</span>
+                      {it.paso?.hecho && (
+                        <span className="text-xs text-success-ink">
+                          Hecho · lo marcó {it.paso.por ?? "—"} el {fmtFecha(it.paso.en)}
+                        </span>
+                      )}
                       {!it.bloquea && !it.listo && <span className="text-xs text-fg-muted">No frena el cierre.</span>}
                     </div>
                     <span className="shrink-0 rounded-full border border-line bg-surface px-2.5 py-0.5 text-xs text-fg-secondary">{it.quien}</span>
-                    {!it.listo && (
-                      <Link href={it.href} className="shrink-0 pt-px text-[13px] font-semibold text-brand hover:text-brand-light">
-                        {it.accion}
-                      </Link>
+                    {it.paso ? (
+                      <Button
+                        variant={it.paso.hecho ? "ghost" : "secondary"}
+                        size="sm"
+                        disabled={ocupado !== null}
+                        onClick={() =>
+                          void enviar(
+                            it.clave,
+                            "/api/finanzas/cierre",
+                            { accion: "PASO", periodo: d.periodo, paso: it.clave.replace(/^calendario:/, ""), hecho: !it.paso!.hecho },
+                            it.paso!.hecho ? "Se desmarcó el paso." : "Paso marcado como hecho.",
+                          )
+                        }
+                      >
+                        {ocupado === it.clave ? "Guardando…" : it.paso.hecho ? "Desmarcar" : "Marcar como hecho"}
+                      </Button>
+                    ) : (
+                      !it.listo && (
+                        <Link href={it.href} className="shrink-0 pt-px text-[13px] font-semibold text-brand hover:text-brand-light">
+                          {it.accion}
+                        </Link>
+                      )
                     )}
                   </div>
                 ))}

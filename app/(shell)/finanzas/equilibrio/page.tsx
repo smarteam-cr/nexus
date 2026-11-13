@@ -33,10 +33,14 @@ export default async function FinanzasEquilibrioPage() {
   // La meta del año y de qué está hecha la línea de «por facturar» (iniciativa C de docs/roadmap.md): lee el reporte.
   const meta = await cargarMetaYPorFacturar(todayISO, reporte);
 
-  // Quién firmó la decisión de los aliados, por su nombre de pila.
-  const firmante = reporte.decisionAliados?.decididoPor;
-  const miembros = firmante
-    ? await prisma.teamMember.findMany({ where: { email: { equals: firmante, mode: "insensitive" } }, select: { email: true, name: true } })
+  // Quién firmó la decisión de los aliados y quién cerró cada mes (el gasto «real, confirmado por…», 2026-11-13), por
+  // su nombre de pila.
+  const firmas = [reporte.decisionAliados?.decididoPor, ...reporte.cierres.map((c) => c.cerradoPor)].filter((e): e is string => !!e);
+  const miembros = firmas.length
+    ? await prisma.teamMember.findMany({
+        where: { OR: firmas.map((e) => ({ email: { equals: e, mode: "insensitive" as const } })) },
+        select: { email: true, name: true },
+      })
     : [];
   const nombres = Object.fromEntries(miembros.map((m) => [m.email.toLowerCase(), m.name.split(" ")[0] || m.email]));
 
