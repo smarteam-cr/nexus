@@ -23,6 +23,7 @@ import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { metasPorPersona } from "@/lib/ventas/metas";
 import { PIPELINES } from "@/lib/ventas/pipelines";
+import { VENTA_NO_EXCLUIDA, VENTA_QUE_CUENTA } from "@/lib/ventas/regla-de-lo-vendido";
 import { esquemaDesactualizado } from "@/lib/db/esquema";
 import { cargarPropuestasGanadas } from "@/lib/finanzas/lo-vendido-server";
 import { aprobacionesDe, descuentoContraLaPrimera, estadoDeLaAprobacion } from "@/lib/business-cases/descuento";
@@ -148,7 +149,8 @@ export async function cargarSimulacionDeComisiones(alcance: AlcanceDeComisiones,
 
   const desde = new Date(Date.UTC(anio, 0, 1));
   const hasta = new Date(Date.UTC(anio + 1, 0, 1));
-  const delAnio = { excluida: false, fechaCierre: { gte: desde, lt: hasta } } satisfies Prisma.VentaGanadaWhereInput;
+  // La regla única de lo vendido, sin exigir que siga ganada: las que se cayeron también se miran (lib/ventas/regla-de-lo-vendido.ts).
+  const delAnio = { ...VENTA_NO_EXCLUIDA, fechaCierre: { gte: desde, lt: hasta } } satisfies Prisma.VentaGanadaWhereInput;
   // Las ganadas, y las que dejaron de estarlo (perdidas, reabiertas, borradas): pueden haberse caído a tiempo.
   const ids = [...new Set([...metas.map((m) => m.teamMemberId), ...personasCs.map((p) => p.id)])];
   const veElArea = todo || yoLideroCs;
@@ -183,7 +185,7 @@ export async function cargarSimulacionDeComisiones(alcance: AlcanceDeComisiones,
   const clientes = [...new Set(todas.map((v) => v.clientId).filter((c): c is string => !!c))];
   const [primeras, caidas, propuestaDe, encargados] = await Promise.all([
     clientes.length
-      ? prisma.ventaGanada.groupBy({ by: ["clientId"], where: { clientId: { in: clientes }, estado: "GANADA", excluida: false }, _min: { fechaCierre: true } })
+      ? prisma.ventaGanada.groupBy({ by: ["clientId"], where: { clientId: { in: clientes }, ...VENTA_QUE_CUENTA }, _min: { fechaCierre: true } })
       : Promise.resolve([]),
     fechasDeCaida(todas.filter((v) => v.estado !== "GANADA").map((v) => v.id)),
     propuestasPorTrato(anio, new Set(todas.map((v) => v.hubspotDealId))),
@@ -282,7 +284,7 @@ async function fechasDeCaida(ventaIds: string[]): Promise<Map<string, string>> {
 /** Los servicios vendidos en cada trimestre del año, de todos, sin licencias ni lo que dejó de estar ganado. En dólares. */
 async function serviciosPorTrimestre(anio: number): Promise<number[]> {
   const filas = await prisma.ventaGanada.findMany({
-    where: { estado: "GANADA", excluida: false, moneda: "USD", fechaCierre: { gte: new Date(Date.UTC(anio, 0, 1)), lt: new Date(Date.UTC(anio + 1, 0, 1)) } },
+    where: { ...VENTA_QUE_CUENTA, moneda: "USD", fechaCierre: { gte: new Date(Date.UTC(anio, 0, 1)), lt: new Date(Date.UTC(anio + 1, 0, 1)) } },
     select: { nombre: true, monto: true, fechaCierre: true },
   });
   const t = [0, 0, 0, 0];

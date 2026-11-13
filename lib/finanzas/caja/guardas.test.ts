@@ -70,6 +70,16 @@ describe("la planilla sale sumada", () => {
     // Ningún costo de categoría Salario entra a los cortes por su cuenta: solo por la línea de personal.
     expect(src).not.toMatch(/SALARIO:\s*"PLANILLA"/);
   });
+
+  it("la caja neta (ruta y página) junta la planilla para quien no tiene la celda de planilla", () => {
+    for (const rel of ["app/api/cobranza/caja-neta/route.ts", "app/(shell)/finanzas/caja-neta/page.tsx"]) {
+      const src = sinComentarios(fs.readFileSync(path.join(raiz, rel), "utf8"));
+      expect(src, rel).toMatch(/section: "planilla", action: "read"/);
+      expect(src, rel).toMatch(/loadCajaNeta\(todayISO, \{ personalJunto: !veSalarios \}\)/);
+    }
+    const q = sinComentarios(fs.readFileSync(path.join(raiz, "lib/cobranza/queries.ts"), "utf8"));
+    expect(q).toMatch(/opciones\.personalJunto\s*\?\s*costosConPersonalJunto\(/);
+  });
 });
 
 describe("la caja no escribe cobros ni costos", () => {

@@ -21,6 +21,9 @@ const LECTORES = [
   "lib/cobranza/odoo/facturacion-por-cliente.ts",
   "lib/finanzas/metas-de-gerencia-server.ts",
   "lib/finanzas/lo-vendido-server.ts",
+  "lib/ventas/metas.ts",
+  "lib/finanzas/modelo-comisiones/cargar.ts",
+  "lib/para-ti/fuentes/cobranza.ts",
 ];
 
 describe("la regla", () => {
@@ -36,7 +39,9 @@ describe("cada lector de lo vendido usa la regla única", () => {
   for (const rel of LECTORES) {
     it(`${rel}: usa la regla y no filtra por la lista de pipelines`, () => {
       const src = sinComentarios(fs.readFileSync(path.join(raiz, rel), "utf8"));
-      expect(src).toMatch(/from "@\/lib\/ventas\/regla-de-lo-vendido"/);
+      expect(src).toMatch(/from "(@\/lib\/ventas|\.)\/regla-de-lo-vendido"/);
+      // Ningún `where` propio de «no excluida»: la regla entra esparcida (VENTA_QUE_CUENTA o VENTA_NO_EXCLUIDA).
+      expect(src).not.toMatch(/excluida:\s*false/);
       expect(src).not.toMatch(/PIPELINES_VENTA_PROPIA/);
       expect(src).not.toMatch(/pipelinesQueCuentan\s*:/);
     });

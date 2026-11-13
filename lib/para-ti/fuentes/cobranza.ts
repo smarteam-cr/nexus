@@ -21,6 +21,7 @@ import { CONFIRMA_PRODUCCION, RESPONSABLE_DE_COBRO } from "@/lib/cobranza/respon
 import { loQueLeToca } from "@/lib/cobranza/paso-a-produccion";
 import { cuandoVence, queHacerConElFin } from "@/lib/cobranza/contratos";
 import { cargarContratos, cargarTablaDeProduccion, cargarVentasSinCobro, primerasCuotasVencidas } from "@/lib/cobranza/seguimiento-server";
+import { VENTA_QUE_CUENTA } from "@/lib/ventas/regla-de-lo-vendido";
 import { tienePermiso } from "../alcance-server";
 import { plural } from "../armar";
 import type { Fuente } from "../fuente";
@@ -50,7 +51,7 @@ export const COBRANZA_A_TU_CARGO: Fuente = {
     // Quien no es el responsable por defecto solo mira si alguien le asignó algo (una consulta barata).
     if (yo !== RESPONSABLE_DE_COBRO.email) {
       const [ventas, proyectos] = await Promise.all([
-        prisma.ventaGanada.count({ where: { responsableCobroEmail: yo, excluida: false, estado: "GANADA", noGeneraCobroEn: null } }),
+        prisma.ventaGanada.count({ where: { ...VENTA_QUE_CUENTA, responsableCobroEmail: yo, noGeneraCobroEn: null } }),
         prisma.cobroDelProyecto.count({ where: { cobraEmail: yo } }),
       ]).catch((e) => sinEsquemaNada(e, [0, 0]));
       if (ventas === 0 && proyectos === 0) return [];

@@ -7,8 +7,10 @@
  * reporte no le encuentra venta, ¿es que la venta no existe, o es que existe y no se
  * encontraron? Son dos problemas distintos y se arreglan en lugares distintos:
  *
- *   · La venta existe en un pipeline que hoy no cuenta (Shared Selling) → lo decide
- *     dirección: es una definición, no un dato.
+ *   · La venta existe en un pipeline que no cuenta → lo decidía dirección. ⚠ Desde el
+ *     2026-11-13 todo pipeline cuenta (lib/ventas/regla-de-lo-vendido.ts): el reporte pasa
+ *     todas las ventas como propias y `soloFueraDePipeline` sale siempre vacío. Se conserva
+ *     la cuenta por si algún día se vuelve a medir otro criterio; no alimenta ningún aviso.
  *   · La venta existe a nombre de otra empresa del mismo grupo → lo arregla cobranza
  *     ligando las dos empresas.
  *

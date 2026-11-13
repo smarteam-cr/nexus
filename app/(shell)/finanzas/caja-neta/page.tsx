@@ -19,7 +19,9 @@ export default async function FinanzasCajaNetaPage() {
   if (!ctx || !(isCostosRole(ctx.role) || puedePorPersona(ctx.role, ctx.teamMember, { section: "tesoreria", action: "read" }))) redirect("/clients");
 
   const todayISO = crDateParts(new Date()).dateKey;
-  const [cajaNeta, series] = await Promise.all([loadCajaNeta(todayISO), loadSnapshotSeries()]);
+  /* Quien no ve la planilla recibe lo que sale con los salarios juntos en una sola moneda (lib/cobranza/queries.ts). */
+  const veSalarios = puedePorPersona(ctx.role, ctx.teamMember, { section: "planilla", action: "read" });
+  const [cajaNeta, series] = await Promise.all([loadCajaNeta(todayISO, { personalJunto: !veSalarios }), loadSnapshotSeries()]);
 
   return (
     <div className={SHELL_DEFAULT}>

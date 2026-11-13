@@ -89,6 +89,12 @@ export type RubroEgreso =
 export const RUBROS_OCASIONALES: ReadonlySet<RubroEgreso> = new Set<RubroEgreso>(["LICENCIA", "FINANCIERO"]);
 
 /**
+ * Los rubros que son plata de personas (2026-11-13). Lo que nombran —un concepto del Excel como «Salario Marco Pérez»—
+ * no viaja a quien no ve salarios (lib/finanzas/equilibrio-sin-salarios.ts).
+ */
+export const RUBROS_DE_SALARIO: ReadonlySet<RubroEgreso> = new Set<RubroEgreso>(["PLANILLA", "RESERVA_AGUINALDO"]);
+
+/**
  * Qué tan firme es un número.
  *  - MEDIDO      alguien lo pagó y quedó registrado
  *  - PLANIFICADO el Excel lo trae para un mes que todavía no ocurrió
@@ -519,6 +525,13 @@ export interface ReporteEquilibrio {
   cobradoDeAniosAnteriores: Record<string, { cobrado: number; facturas: number }>;
   /** Con qué criterios se armó. Viaja para que la pantalla lo diga en vez de suponerlo. */
   criterios: { partnershipCubreElPiso: boolean };
+  /**
+   * De los `faltantes` de cada mes, los que salen de un rubro de salario (planilla o reserva de aguinaldo), tal cual se
+   * escribieron en `faltantes`. Existe para poder taparlos a quien no ve salarios: un concepto del Excel que falta un
+   * mes puede ser el nombre de una persona (alguien que entró o salió a mitad de año). Opcional: un reporte armado a mano
+   * en una prueba no lo trae.
+   */
+  faltantesDeSalario?: Record<string, string[]>;
 }
 
 // ── Constantes ──────────────────────────────────────────────────────────────────
@@ -1204,6 +1217,8 @@ export function calcularEquilibrio(
   }
 
   // ── Las 12 filas ──────────────────────────────────────────────────────────────
+  const rubrosDeSalarioDelAnio = new Set([...rubrosDelAnio].filter((r) => RUBROS_DE_SALARIO.has(r)));
+  const faltantesDeSalario: Record<string, string[]> = {};
   const meses: FilaMes[] = periodos.map((periodo, idx) => {
     const eg = porMes.get(periodo)!;
     const ing = ingMes.get(periodo)!;
@@ -1214,6 +1229,11 @@ export function calcularEquilibrio(
     const futuro = periodo > periodoHoy;
     const { estado, faltantes } =
       calidadDada.get(periodo) ?? calidadDelMes(periodo, eg.presentes, esperados, rubrosDelAnio, egresosMes > 0);
+    // La misma cuenta, solo con los rubros de salario: da exactamente los textos de `faltantes` que vienen de ellos.
+    if (!calidadDada.has(periodo)) {
+      const deSalario = calidadDelMes(periodo, eg.presentes, esperados, rubrosDeSalarioDelAnio, true).faltantes;
+      if (deSalario.length > 0) faltantesDeSalario[periodo] = deSalario;
+    }
     const { brecha, cubre } = brechaDe(ingresosTotales, egresosMes);
 
     return {
@@ -1495,5 +1515,6 @@ export function calcularEquilibrio(
     porCobrarDeAniosAnteriores: deAniosAnteriores,
     cobradoDeAniosAnteriores,
     criterios: { partnershipCubreElPiso: cubreElPiso },
+    faltantesDeSalario,
   };
 }

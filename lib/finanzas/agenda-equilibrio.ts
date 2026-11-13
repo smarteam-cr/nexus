@@ -20,8 +20,6 @@ export const ROLES: readonly Rol[] = ["CEO", "CFO", "RevOps"];
 
 /** Quién decide cada tipo de punto. Uno que no está en la tabla es del CFO: es quien lleva la reunión. */
 export const ROL_DE_LINEA: Readonly<Record<string, Rol>> = {
-  PIPELINE_SIN_DECIDIR: "CEO",
-  FACTURA_SOLO_FUERA_DE_PIPELINE: "CEO",
   PLANILLA_COSTO_VS_PAGADO: "CFO",
   COMISIONES_VENCIDAS: "CFO",
   TARJETA_SOLAPA_HERRAMIENTAS: "CFO",

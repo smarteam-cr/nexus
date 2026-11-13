@@ -168,7 +168,6 @@ export interface EstadoParaAuditar {
     sinCliente: { cuantas: number; monto: number; items: ItemInconsistencia[] };
     sinMonto: { cuantas: number; items: ItemInconsistencia[] };
     resueltasPorNombre: { cuantas: number; items: ItemInconsistencia[] };
-    fueraDePipeline: { cuantas: number; monto: number; sinMonto: number };
     /**
      * TODAS las ventas sin respaldo en cobranza, no las peores ocho: cada una con su
      * fecha, su monto, cuánto queda descubierto y el enlace al trato en HubSpot. Sin eso
@@ -186,12 +185,6 @@ export interface EstadoParaAuditar {
   serviciosSinCobros: { cuantas: number; monto: number; items: ItemInconsistencia[] };
   /** Clientes con cuenta de cobranza pero sin empresa de HubSpot ligada. */
   cuentasSinEmpresa: { cuantas: number; items: ItemInconsistencia[] };
-  /**
-   * Clientes que facturan en el año y cuya ÚNICA venta ganada está en un pipeline que
-   * no cuenta como venta propia (hoy: Shared Selling). No es un error de dato: es la
-   * evidencia de que ese pipeline sí produce facturación, y por eso lo decide dirección.
-   */
-  facturaSoloFueraDePipeline: { cuantas: number; facturado: number; cobrado: number; items: ItemInconsistencia[] };
   /**
    * Clientes que facturan y cuya venta está registrada a nombre de otra empresa del
    * mismo grupo (la madre, o una hermana). La plata y la venta existen las dos; lo que
@@ -463,25 +456,10 @@ export function detectarInconsistencias(e: EstadoParaAuditar): Inconsistencia[] 
     });
   }
 
-  // ── Venta compartida sin decidir ────────────────────────────────────────────
-  if (e.ventas.fueraDePipeline.cuantas > 0) {
-    out.push({
-      codigo: "PIPELINE_SIN_DECIDIR",
-      severidad: "MEDIA",
-      titulo: "Venta compartida con HubSpot: falta decidir si cuenta",
-      detalle:
-        `Hay ${e.ventas.fueraDePipeline.cuantas} tratos ganados por ${money(e.ventas.fueraDePipeline.monto)} en el ` +
-        "circuito de venta compartida. Hoy NO se cuentan como venta propia, porque son registro de oportunidad y no " +
-        "facturación de la casa. El dato está guardado: si se decide que cuentan, es prender un filtro." +
-        (e.ventas.fueraDePipeline.sinMonto > 0
-          ? ` ⚠ Ese monto es un PISO, no el total: ${e.ventas.fueraDePipeline.sinMonto} de los ${e.ventas.fueraDePipeline.cuantas} tratos no traen monto en HubSpot y cuentan como cero.`
-          : ""),
-      montoEnJuego: e.ventas.fueraDePipeline.monto,
-      queHacer: "Decidir si esos tratos son venta propia. Si lo son, el vendido del año cambia de golpe.",
-      resuelve: "DIRECCION",
-      items: [],
-    });
-  }
+  // «Venta compartida sin decidir» (PIPELINE_SIN_DECIDIR) y «factura solo fuera de pipeline»
+  // (FACTURA_SOLO_FUERA_DE_PIPELINE) se retiraron el 2026-11-13: con la regla única de lo vendido
+  // (lib/ventas/regla-de-lo-vendido.ts) todo trato ganado cuenta, sea del pipeline que sea, y ya no
+  // hay nada que decidir.
 
   // ── Cobros sin fecha de cobro ───────────────────────────────────────────────
   if (e.cobradosSinFecha.cuantas > 0) {
@@ -628,32 +606,6 @@ export function detectarInconsistencias(e: EstadoParaAuditar): Inconsistencia[] 
       queHacer: "Confirmar la moneda de esos conceptos en la hoja de egresos.",
       resuelve: "COBRANZA",
       items: soloTexto(e.monedaInferida),
-    });
-  }
-
-  // ── Factura, pero la venta está en un pipeline que no cuenta ────────────────
-  if (e.facturaSoloFueraDePipeline.cuantas > 0) {
-    const f = e.facturaSoloFueraDePipeline;
-    out.push({
-      codigo: "FACTURA_SOLO_FUERA_DE_PIPELINE",
-      severidad: "ALTA",
-      titulo: "Clientes que facturan y cuya única venta es de Shared Selling",
-      detalle:
-        `${f.cuantas} clientes llegaron por un trato de Shared Selling, no tienen ninguna venta propia, y aun así ` +
-        `Smarteam les facturó ${money(f.facturado)} este año, de los cuales ${money(f.cobrado)} ya entraron al banco. ` +
-        `Hoy el reporte no cuenta esos tratos como venta, así que esa facturación aparece como si hubiera salido de la nada ` +
-        `y engorda el hueco entre lo vendido y lo cobrado. La pregunta no es de dato sino de definición: si el trabajo se ` +
-        `factura y se cobra, ¿la venta cuenta como propia?`,
-      montoEnJuego: f.facturado,
-      // Es la MISMA relación comercial que ya cuenta la línea de los tratos sin decidir,
-      // mirada del lado de la factura en vez del lado de la venta.
-      yaContadoEn: "PIPELINE_SIN_DECIDIR",
-      queHacer:
-        "Decidir si Shared Selling cuenta como venta propia. Si la respuesta es sí, es un solo cambio de bandera " +
-        "(esVentaPropia en lib/ventas/pipelines.ts) y el vendido del año sube de golpe; si es no, esta facturación " +
-        "necesita otra explicación.",
-      resuelve: "DIRECCION",
-      items: f.items,
     });
   }
 

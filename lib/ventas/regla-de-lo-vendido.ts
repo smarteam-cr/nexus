@@ -20,6 +20,12 @@
 /** El `where` de Prisma de una venta que cuenta. Se esparce: `{ ...VENTA_QUE_CUENTA, fechaCierre: … }`. */
 export const VENTA_QUE_CUENTA = { estado: "GANADA", excluida: false } as const;
 
+/**
+ * Las que son venta (no excluidas), ganadas o no: para quien también mira las que se cayeron después de ganarse (las
+ * comisiones: una venta perdida a tiempo descuenta). La mitad «es una venta» de la regla, sin la de «sigue ganada».
+ */
+export const VENTA_NO_EXCLUIDA = { excluida: VENTA_QUE_CUENTA.excluida } as const;
+
 /** La misma regla, para lo que ya está en memoria. */
 export function cuentaComoVendida(v: { estado: string; excluida: boolean }): boolean {
   return v.estado === VENTA_QUE_CUENTA.estado && !v.excluida;

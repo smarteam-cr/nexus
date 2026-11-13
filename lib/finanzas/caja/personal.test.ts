@@ -1,13 +1,15 @@
 /**
- * lib/finanzas/caja/personal.test.ts — a quien ve la caja sin el permiso de salarios nunca le llega el monto de UNA
- * persona (revisión del 2026-11-13).
+ * lib/finanzas/caja/personal.test.ts — a quien ve la caja sin el permiso de salarios ninguna LÍNEA le trae el monto de
+ * UNA persona (revisión del 2026-11-13). Restar dos cortes sí deja ver un movimiento de una persona: es un límite
+ * aceptado, escrito en DECISIONS, no algo que esto garantice.
  *
  * Antes: la planilla iba una línea por moneda (si una sola persona cobra en dólares, la línea en dólares era su salario)
  * y las comisiones de vendedor una línea por día con «(1 persona)». Ahora salarios y comisiones van juntos, una línea por
  * corte y en una moneda, y la caja sigue cuadrando: lo libre en dólares es el mismo.
  */
 import { describe, expect, it } from "vitest";
-import { corteDelDia, juntarPersonal, monedaDelPersonal, type PartidaDePersonal } from "./personal";
+import { proyectarCostos, type CostoProyeccionInput } from "@/lib/cobranza/engine";
+import { corteDelDia, costosConPersonalJunto, juntarPersonal, monedaDelPersonal, type PartidaDePersonal } from "./personal";
 import { proyectarCaja, type EntradaDeProyeccion } from "./proyeccion";
 
 const TC = 500;
@@ -40,8 +42,11 @@ describe("juntarPersonal", () => {
     }
   });
 
-  it("la comisión de un solo vendedor va dentro de la línea de personal de su corte", () => {
+  it("la comisión de un solo vendedor va dentro de la línea de personal de su corte (no en una línea propia)", () => {
     const [primera, segunda] = [...juntarPersonal(partidas, TC)].sort((a, b) => a.corteKey.localeCompare(b.corteKey));
+    // ⚠ LÍMITE ACEPTADO, no una garantía: restar dos quincenas de «Personal» deja ver esta comisión (o un alta o una baja).
+    // Quien ve la caja ve movimientos agregados, y por eso «Caja y pagos» se da solo a quien maneja los pagos, que de
+    // todas formas los paga (DECISIONS «La caja y los pagos»). Lo que se garantiza es que ninguna LÍNEA sea de una persona.
     expect(primera!.monto - segunda!.monto).toBeCloseTo(700 * TC, 2);
     expect(primera!.personas).toBe(5);
   });
@@ -109,5 +114,38 @@ describe("corteDelDia", () => {
     expect(corteDelDia([q1, q2], "2026-11-30")?.key).toBe(q1.key);
     expect(corteDelDia([q1, q2], "2026-12-01")?.key).toBe(q2.key);
     expect(corteDelDia([q1, q2], "2027-01-31")).toBeNull();
+  });
+});
+
+describe("la caja neta con la planilla junta (segunda revisión del 13-nov)", () => {
+  /** Tres salarios en colones, UNO en dólares, y herramientas en las dos monedas. */
+  const costos: CostoProyeccionInput[] = [
+    { costoId: "s-ana", nombre: "Ana", categoria: "SALARIO", monto: 2_000_000, moneda: "CRC", frecuencia: "MENSUAL", activo: true },
+    { costoId: "s-beto", nombre: "Beto", categoria: "SALARIO", monto: 1_800_000, moneda: "CRC", frecuencia: "MENSUAL", activo: true },
+    { costoId: "s-caro", nombre: "Caro", categoria: "SALARIO", monto: 1_600_000, moneda: "CRC", frecuencia: "MENSUAL", activo: true },
+    { costoId: "s-dani", nombre: "Dani", categoria: "SALARIO", monto: 5_000, moneda: "USD", frecuencia: "MENSUAL", activo: true },
+    { costoId: "h-hubspot", nombre: "HubSpot", categoria: "HERRAMIENTA", monto: 900, moneda: "USD", frecuencia: "MENSUAL", activo: true },
+    { costoId: "h-local", nombre: "Hosting", categoria: "HERRAMIENTA", monto: 50_000, moneda: "CRC", frecuencia: "MENSUAL", activo: true },
+  ];
+  const hoy = "2026-11-13";
+  const sinSalario = proyectarCostos(costos.filter((c) => c.categoria !== "SALARIO"), { todayISO: hoy });
+  const salarios = proyectarCostos(costos.filter((c) => c.categoria === "SALARIO"), { todayISO: hoy });
+  const junto = costosConPersonalJunto(sinSalario, salarios, TC);
+  const completo = proyectarCostos(costos, { todayISO: hoy });
+
+  it("⭐ lo que sale en dólares de cada corte es solo lo que no es salario: restar la herramienta ya no da el salario de Dani", () => {
+    for (const b of junto.buckets) {
+      const herramientasUsd = sinSalario.buckets.find((x) => x.key === b.key)!.totales.USD;
+      expect(b.totales.USD, b.key).toBe(herramientasUsd);
+    }
+    // Sin juntar, lo de dólares sí traía el salario adentro (lo que la caja neta mandaba antes).
+    expect(completo.buckets.some((b, i) => b.totales.USD !== sinSalario.buckets[i]!.totales.USD)).toBe(true);
+    expect(junto.totalMensual.USD).toBe(sinSalario.totalMensual.USD);
+  });
+
+  it("y la caja neta sigue cuadrando en dólares, corte por corte y en el mes", () => {
+    const enUsd = (t: { CRC: number; USD: number }) => t.USD + t.CRC / TC;
+    for (const [i, b] of junto.buckets.entries()) expect(enUsd(b.totales)).toBeCloseTo(enUsd(completo.buckets[i]!.totales), 2);
+    expect(enUsd(junto.totalMensual)).toBeCloseTo(enUsd(completo.totalMensual), 2);
   });
 });

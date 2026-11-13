@@ -91,6 +91,7 @@ import {
 } from "./comisiones-partner";
 import { clasificarVentas } from "@/lib/ventas/clasificar-huecos";
 import { VENTA_QUE_CUENTA } from "@/lib/ventas/regla-de-lo-vendido";
+import { costosConPersonalJunto } from "@/lib/finanzas/caja/personal";
 import { auditarRespaldoDeFactura } from "@/lib/ventas/respaldo-de-factura";
 import {
   calcularEquilibrio,
@@ -1666,9 +1667,15 @@ export interface CajaNetaDTO extends CajaNeta {
  * construcción (defaults del engine) → keys de bucket idénticas para
  * computeCajaNeta. Los gastos PASADOS (fecha < hoy) NO viajan a la caja neta —
  * son solo registro/reporting en el tab.
+ *
+ * ⚠ `personalJunto` (segunda revisión del 2026-11-13): para quien entra con «Caja y pagos» y NO ve la planilla. Lo que
+ * sale por quincena va separado en colones y dólares con los salarios adentro, y restándole lo que la caja muestra aparte
+ * quedaba la planilla en dólares de la quincena (el salario de una persona, si cobra sola en dólares). Con la bandera,
+ * los salarios de cada corte van juntos en una sola moneda (`costosConPersonalJunto`, lib/finanzas/caja/personal.ts),
+ * como en «Dónde está la plata». La ruta y la página la prenden para quien no tiene la celda de planilla.
  */
-export async function loadCajaNeta(todayISO: string): Promise<CajaNetaDTO> {
-  const [entra, filasCostos, filasGastos] = await Promise.all([
+export async function loadCajaNeta(todayISO: string, opciones: { personalJunto?: boolean } = {}): Promise<CajaNetaDTO> {
+  const [entra, filasCostos, filasGastos, tc] = await Promise.all([
     loadProyeccion(todayISO),
     prisma.costoRecurrente.findMany({
       where: { activo: true },
@@ -1687,6 +1694,8 @@ export async function loadCajaNeta(todayISO: string): Promise<CajaNetaDTO> {
       where: { fecha: { gte: dayUTC(todayISO) } }, // el pasado no entra al neto
       select: { id: true, nombre: true, monto: true, moneda: true, fecha: true },
     }),
+    // El tipo de cambio de la caja (venta BCCR del último día): solo hace falta para juntar la planilla.
+    opciones.personalJunto ? prisma.tipoCambioDia.findFirst({ orderBy: { fecha: "desc" }, select: { venta: true } }) : Promise.resolve(null),
   ]);
   const costos: CostoProyeccionInput[] = filasCostos.map((c) => ({
     costoId: c.id,
@@ -1705,7 +1714,13 @@ export async function loadCajaNeta(todayISO: string): Promise<CajaNetaDTO> {
     moneda: g.moneda,
     fechaISO: isoDay(g.fecha)!,
   }));
-  const sale = proyectarCostos(costos, { todayISO });
+  const sale = opciones.personalJunto
+    ? costosConPersonalJunto(
+        proyectarCostos(costos.filter((c) => c.categoria !== "SALARIO"), { todayISO }),
+        proyectarCostos(costos.filter((c) => c.categoria === "SALARIO"), { todayISO }),
+        tc ? num(tc.venta) : null,
+      )
+    : proyectarCostos(costos, { todayISO });
   const saleGastos = proyectarGastos(gastos, { todayISO });
   const bucketizados = saleGastos.buckets.reduce((n, b) => n + b.gastos.length, 0);
   return {
@@ -3167,8 +3182,8 @@ async function armarEstadoParaAuditar(
   const facturadoPorCliente = porCliente.facturado;
   const cobradoPorCliente = porCliente.cobrado;
 
-  // Por qué un cliente que factura puede no tener venta: o compró por un pipeline que no
-  // cuenta, o la venta quedó a nombre de la empresa madre. Las dos se arreglan distinto.
+  // Por qué un cliente que factura puede no tener venta: la venta quedó a nombre de otra empresa del
+  // grupo. (Que compró por un pipeline que no cuenta ya no puede pasar: la regla única cuenta todos.)
   const respaldo = auditarRespaldoDeFactura(
     [...facturadoPorCliente.entries()].map(([clientId, facturado]) => ({
       clientId,
@@ -3400,7 +3415,6 @@ async function armarEstadoParaAuditar(
             enlaces: enlacesDeVenta(v.hubspotDealId, v.hubspotCompanyId),
           })),
       },
-      fueraDePipeline: resumen.fueraDePipeline,
       descubiertas,
     },
     comisionesVencidas: comisiones.map((c) => ({
@@ -3452,7 +3466,6 @@ async function armarEstadoParaAuditar(
         enlaces: [{ etiqueta: "Cliente en Nexus", url: `/clients/${c.id}` }],
       })),
     },
-    facturaSoloFueraDePipeline: respaldo.soloFueraDePipeline,
     facturaDeGrupo: respaldo.deGrupo,
     cobradosSinFecha: { cuantas: cobradosSinFecha, total: cobradosTotales },
     periodosSinTasa: [

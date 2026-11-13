@@ -21,6 +21,7 @@
  * producción (la copia del BCCR es diaria y hay tasas a mano desde 2025); queda escrito para que nadie lo descubra con un
  * salario.
  */
+import type { ProyeccionCostos } from "@/lib/cobranza/engine";
 import type { Moneda } from "./proyeccion";
 
 /** Una cosa que se le paga a una persona: medio salario de una quincena, o una comisión. */
@@ -76,6 +77,43 @@ export function juntarPersonal(partidas: readonly PartidaDePersonal[], crcPorUsd
     monto: round2(g.monto),
     personas: g.personas.size,
   }));
+}
+
+/**
+ * La caja neta con la planilla junta (segunda revisión del 13-nov). La caja neta saca, por quincena, lo que sale en
+ * colones y en dólares con los salarios adentro; restándole lo que la caja muestra aparte (herramientas, fijos, gastos)
+ * quedaba la planilla en dólares de esa quincena, que puede ser el salario de una persona. Para quien no ve la planilla,
+ * los salarios de cada corte se juntan con `juntarPersonal` (una moneda, la que más pesa) y se suman a los demás costos
+ * del corte; el gasto mensual (`totalMensual`) también lleva la planilla en esa moneda. Lo que no es salario no se toca.
+ *
+ * `sinSalario` y `salarios` son `proyectarCostos` de los costos sin salario y de los salarios: mismo esqueleto, mismas
+ * claves de corte. Sin tipo de cambio queda por moneda (el mismo límite que la caja).
+ */
+export function costosConPersonalJunto(sinSalario: ProyeccionCostos, salarios: ProyeccionCostos, crcPorUsd: number | null): ProyeccionCostos {
+  const tc = crcPorUsd && crcPorUsd > 0 ? crcPorUsd : null;
+  const partidas: PartidaDePersonal[] = salarios.buckets.flatMap((b) =>
+    b.costos.map((k) => ({ corteKey: b.key, persona: k.costoId, moneda: k.moneda, monto: k.monto })),
+  );
+  const juntos = juntarPersonal(partidas, tc);
+  const buckets = sinSalario.buckets.map((b) => {
+    const personal = juntos
+      .filter((p) => p.corteKey === b.key)
+      .map((p) => ({ costoId: `personal:${b.key}:${p.moneda}`, nombre: "Personal", categoria: "SALARIO" as const, moneda: p.moneda, monto: p.monto }));
+    const costos = [...personal, ...b.costos];
+    const totales = { CRC: 0, USD: 0 };
+    for (const k of costos) totales[k.moneda] = round2(totales[k.moneda] + k.monto);
+    return { ...b, costos, totales };
+  });
+  const totalMensual = { ...sinSalario.totalMensual };
+  const destino = tc && partidas.length > 0 ? monedaDelPersonal(partidas, tc) : null;
+  for (const moneda of ["CRC", "USD"] as const) {
+    const m = salarios.totalMensual[moneda];
+    if (!m) continue;
+    const enDestino = !destino || destino === moneda ? m : destino === "CRC" ? m * tc! : m / tc!;
+    const k = destino ?? moneda;
+    totalMensual[k] = round2(totalMensual[k] + enDestino);
+  }
+  return { buckets, totalMensual };
 }
 
 /** En qué corte cae un día: el que lo contiene; lo de antes del primero, en el primero; lo de después del último, en ninguno. */

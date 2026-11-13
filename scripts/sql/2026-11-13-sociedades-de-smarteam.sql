@@ -150,15 +150,19 @@ ALTER TABLE "MovimientoEntreSociedades" ENABLE ROW LEVEL SECURITY;
 -- ── 4. La sociedad de las cuentas de banco y los pagos de la caja ───────────────────────────────────────────────────
 -- La caja (2026-11-13-caja-y-pagos.sql) guarda la sociedad como FK opcional a esta tabla. Ese archivo corre ANTES que
 -- este por el nombre y pone la FK solo si "SociedadPropia" ya existe; si no existía, la pone este bloque. El mismo
--- bloque en los dos: da igual el orden y se pueden correr dos veces.
+-- bloque en los dos: da igual el orden y se pueden correr dos veces. Se mira la COLUMNA y no solo la tabla: en una base
+-- donde corrió la primera versión del SQL de la caja, la tabla existe con la sociedad en texto y sin "sociedadId" hasta
+-- que ese archivo vuelva a correr.
 DO $$
 BEGIN
-  IF to_regclass('"CuentaDeBanco"') IS NOT NULL
+  IF EXISTS (SELECT 1 FROM information_schema.columns
+             WHERE table_schema = 'public' AND table_name = 'CuentaDeBanco' AND column_name = 'sociedadId')
      AND NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'CuentaDeBanco_sociedadId_fkey') THEN
     ALTER TABLE "CuentaDeBanco" ADD CONSTRAINT "CuentaDeBanco_sociedadId_fkey"
       FOREIGN KEY ("sociedadId") REFERENCES "SociedadPropia"("id") ON DELETE SET NULL ON UPDATE CASCADE;
   END IF;
-  IF to_regclass('"PagoComprometido"') IS NOT NULL
+  IF EXISTS (SELECT 1 FROM information_schema.columns
+             WHERE table_schema = 'public' AND table_name = 'PagoComprometido' AND column_name = 'sociedadId')
      AND NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'PagoComprometido_sociedadId_fkey') THEN
     ALTER TABLE "PagoComprometido" ADD CONSTRAINT "PagoComprometido_sociedadId_fkey"
       FOREIGN KEY ("sociedadId") REFERENCES "SociedadPropia"("id") ON DELETE SET NULL ON UPDATE CASCADE;

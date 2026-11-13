@@ -6,6 +6,8 @@
  * apareciendo después de arreglado hace que nadie vuelva a mirar la lista.
  */
 import { describe, expect, it } from "vitest";
+import fs from "node:fs";
+import path from "node:path";
 import { detectarInconsistencias, identidadDeFila, resumirInconsistencias, type EstadoParaAuditar } from "./inconsistencias";
 
 /** Un estado LIMPIO: todo en cero. Cada caso enciende solo lo que quiere probar. */
@@ -21,13 +23,11 @@ const limpio = (): EstadoParaAuditar => ({
     sinCliente: { cuantas: 0, monto: 0, items: [] },
     sinMonto: { cuantas: 0, items: [] },
     resueltasPorNombre: { cuantas: 0, items: [] },
-    fueraDePipeline: { cuantas: 0, monto: 0, sinMonto: 0 },
     descubiertas: [],
   },
   comisionesVencidas: [],
   serviciosSinCobros: { cuantas: 0, monto: 0, items: [] },
   cuentasSinEmpresa: { cuantas: 0, items: [] },
-  facturaSoloFueraDePipeline: { cuantas: 0, facturado: 0, cobrado: 0, items: [] },
   facturaDeGrupo: { cuantas: 0, facturado: 0, items: [] },
   cobradosSinFecha: { cuantas: 0, total: 101 },
   periodosSinTasa: [],
@@ -215,10 +215,9 @@ describe("cada punto dice quién lo resuelve", () => {
       ...limpio(),
       aguinaldo: { segunNexus: 1306.47, segunExcel: 1602.77 },
       tarjetaYHerramientas: { hay: true, periodos: ["2026-05"] },
-      ventas: { ...limpio().ventas, fueraDePipeline: { cuantas: 31, monto: 211_020, sinMonto: 0 } },
     };
     const r = detectarInconsistencias(e);
-    for (const c of ["AGUINALDO_CRITERIO", "TARJETA_SOLAPA_HERRAMIENTAS", "PIPELINE_SIN_DECIDIR"]) {
+    for (const c of ["AGUINALDO_CRITERIO", "TARJETA_SOLAPA_HERRAMIENTAS"]) {
       expect(r.find((x) => x.codigo === c)!.resuelve).toBe("DIRECCION");
     }
   });
@@ -228,19 +227,15 @@ describe("cada punto dice quién lo resuelve", () => {
     expect(detectarInconsistencias(e).find((x) => x.codigo === "CUENTA_SIN_EMPRESA")!.resuelve).toBe("COBRANZA");
   });
 
-  it("facturar con la venta en un pipeline que no cuenta lo decide DIRECCIÓN, no cobranza", () => {
-    // Nadie cargó mal un dato: la venta está, la factura está, y aun así el reporte no las
-    // junta. Eso no se arregla escribiendo en Nexus, se arregla decidiendo si cuenta.
-    const e: EstadoParaAuditar = {
-      ...limpio(),
-      facturaSoloFueraDePipeline: { cuantas: 13, facturado: 87_031, cobrado: 33_370, items: [{ texto: "Iberorutas" }] },
-    };
-    const x = detectarInconsistencias(e).find((i) => i.codigo === "FACTURA_SOLO_FUERA_DE_PIPELINE")!;
-    expect(x.resuelve).toBe("DIRECCION");
-    expect(x.montoEnJuego).toBe(87_031);
-    // La caja tiene que estar en el texto: es la diferencia entre "una oportunidad
-    // anotada" y "plata que ya entró al banco", y es lo que hace decidible la pregunta.
-    expect(x.detalle).toMatch(/33.370,00/); // el separador de miles del locale es espacio duro
+  it("con la regla única de lo vendido ya no hay pipeline que decidir: esas dos líneas no existen (2026-11-13)", () => {
+    // El fuente sin comentarios: el comentario que explica por qué se fueron puede nombrarlas.
+    const src = fs
+      .readFileSync(path.join(process.cwd(), "lib/finanzas/inconsistencias.ts"), "utf8")
+      .replace(/\/\*[\s\S]*?\*\//g, "")
+      .replace(/^\s*\/\/.*$/gm, "");
+    expect(src).not.toMatch(/PIPELINE_SIN_DECIDIR/);
+    expect(src).not.toMatch(/FACTURA_SOLO_FUERA_DE_PIPELINE/);
+    expect(src).not.toMatch(/pipelines\.ts/);
   });
 
   it("factura la hija y vendió la madre: eso sí lo cierra cobranza ligando las empresas", () => {
@@ -255,17 +250,15 @@ describe("cada punto dice quién lo resuelve", () => {
 
   it("sin casos, ninguna de las dos aparece — la lista solo muestra lo que está pasando", () => {
     const r = detectarInconsistencias(limpio()).map((x) => x.codigo);
-    expect(r).not.toContain("FACTURA_SOLO_FUERA_DE_PIPELINE");
     expect(r).not.toContain("FACTURA_DE_GRUPO");
   });
 
   it("TODOS los puntos tienen título, qué hacer y dueño — ninguno queda mudo", () => {
     const e: EstadoParaAuditar = {
       ...limpio(),
-      facturaSoloFueraDePipeline: { cuantas: 13, facturado: 87_031, cobrado: 33_370, items: [{ texto: "d" }] },
       facturaDeGrupo: { cuantas: 2, facturado: 25_493, items: [{ texto: "e" }] },
       mesesParciales: [{ periodo: "2026-01", faltantes: ["costos fijos"], futuro: false }],
-      ventas: { ...limpio().ventas, sinCobranza: { cuantas: 1, monto: 100 }, sinMonto: { cuantas: 13, items: [{ texto: "x" }] }, resueltasPorNombre: { cuantas: 3, items: [{ texto: "y" }] }, fueraDePipeline: { cuantas: 31, monto: 211_020, sinMonto: 0 }, sinCliente: { cuantas: 7, monto: 28_880, items: [] } },
+      ventas: { ...limpio().ventas, sinCobranza: { cuantas: 1, monto: 100 }, sinMonto: { cuantas: 13, items: [{ texto: "x" }] }, resueltasPorNombre: { cuantas: 3, items: [{ texto: "y" }] }, sinCliente: { cuantas: 7, monto: 28_880, items: [] } },
       comisionesVencidas: [{ partner: "HubSpot", monto: 51_000, fecha: "2026-08-14" }],
       serviciosSinCobros: { cuantas: 2, monto: 6840, items: [{ texto: "a" }] },
       cuentasSinEmpresa: { cuantas: 6, items: [{ texto: "b" }] },
@@ -358,12 +351,12 @@ describe("resumirInconsistencias", () => {
   it("cuenta lo que mueve plata y lo que decide dirección", () => {
     const e: EstadoParaAuditar = {
       ...limpio(),
-      ventas: { ...limpio().ventas, sinCobranza: { cuantas: 16, monto: 61_805 }, fueraDePipeline: { cuantas: 31, monto: 211_020, sinMonto: 0 } },
+      ventas: { ...limpio().ventas, sinCobranza: { cuantas: 16, monto: 61_805 } },
       aguinaldo: { segunNexus: 1306.47, segunExcel: 1602.77 },
     };
     const r = resumirInconsistencias(detectarInconsistencias(e));
-    expect(r.cuantas).toBe(3);
-    expect(r.paraDireccion).toBe(2); // pipeline + aguinaldo
+    expect(r.cuantas).toBe(2);
+    expect(r.paraDireccion).toBe(1); // aguinaldo
     expect(r.porSeveridad.ALTA).toBe(1);
   });
 

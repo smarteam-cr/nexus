@@ -222,7 +222,7 @@ describe("la agenda: cada punto con quien lo decide", () => {
       ["COMISIONES_VENCIDAS", "CFO", 54787],
       ["ALGO_NUEVO", "CFO", null],
     ]);
-    expect(rolDeLinea("PIPELINE_SIN_DECIDIR")).toBe("CEO");
+    expect(rolDeLinea("FACTURA_DE_GRUPO")).toBe("RevOps");
   });
   it("lo que el CFO ya decidió (aguinaldo en doce, tasa del BCCR) no se vuelve a preguntar en la reunión", () => {
     const a = armarAgenda({
@@ -238,9 +238,9 @@ describe("la agenda: cada punto con quien lo decide", () => {
 describe("la planilla del piso contra la que se pagó", () => {
   const base = {
     anio: 2026, hoyISO: HOY, mesesParciales: [], facturadoTotal: 0,
-    ventas: { vendido: 0, sinCobranza: { cuantas: 0, monto: 0 }, parcial: { cuantas: 0, monto: 0 }, sinCliente: { cuantas: 0, monto: 0, items: [] }, sinMonto: { cuantas: 0, items: [] }, resueltasPorNombre: { cuantas: 0, items: [] }, fueraDePipeline: { cuantas: 0, monto: 0, sinMonto: 0 }, descubiertas: [] },
+    ventas: { vendido: 0, sinCobranza: { cuantas: 0, monto: 0 }, parcial: { cuantas: 0, monto: 0 }, sinCliente: { cuantas: 0, monto: 0, items: [] }, sinMonto: { cuantas: 0, items: [] }, resueltasPorNombre: { cuantas: 0, items: [] }, descubiertas: [] },
     comisionesVencidas: [], serviciosSinCobros: { cuantas: 0, monto: 0, items: [] }, cuentasSinEmpresa: { cuantas: 0, items: [] },
-    facturaSoloFueraDePipeline: { cuantas: 0, facturado: 0, cobrado: 0, items: [] }, facturaDeGrupo: { cuantas: 0, facturado: 0, items: [] },
+    facturaDeGrupo: { cuantas: 0, facturado: 0, items: [] },
     cobradosSinFecha: { cuantas: 0, total: 1 }, periodosSinTasa: [], facturadoSinTasa: [], monedaInferida: [], desviosDeCambio: [],
     tarjetaYHerramientas: { hay: false, periodos: [] }, aguinaldo: null, ingresosSinCategoria: { cuantas: 0, monto: 0, items: [] },
   };

@@ -3045,7 +3045,12 @@ fabricarla.
   pipelines fijos de `PIPELINES_VENTA_PROPIA`: una venta de un pipeline nuevo sumaba al vendido y no pedía su cobro
   ni pagaba bono. Ahora todos usan `lib/ventas/regla-de-lo-vendido.ts` (ganada y no excluida, de cualquier pipeline) y
   `clasificarVentas` sin filtro de pipeline; `regla-de-lo-vendido.test.ts` vigila que nadie vuelva a filtrar. La lista
-  de pipelines sigue mandando solo en lo que mira negocios ABIERTOS (pronóstico, «Para ti» de Ventas).
+  de pipelines sigue mandando solo en lo que mira negocios ABIERTOS (pronóstico, «Para ti» de Ventas). En la segunda
+  revisión del 13-nov entraron también la cuota de cada vendedor (`lib/ventas/metas.ts`), las comisiones
+  (`modelo-comisiones/cargar.ts`, con `VENTA_NO_EXCLUIDA` porque mira también las ventas que se cayeron) y el conteo de
+  «Para ti»; la prueba los tiene en su lista y prohíbe un `excluida: false` escrito a mano. Con eso salieron de lo que
+  no cuadra las dos líneas que ya no podían salir: «venta compartida sin decidir» (PIPELINE_SIN_DECIDIR) y «factura y
+  su única venta es de Shared Selling» (FACTURA_SOLO_FUERA_DE_PIPELINE), que además mandaban a editar `pipelines.ts`.
 - **El gasto del mes tiene firmeza** (`lib/finanzas/panorama.ts › gastoDelMes`): REAL si Alex cerró el mes (dice quién
   y cuándo, de `CierreMes.cerradoPor`), REGISTRADO si pasó sin cerrar, PROYECTADO si está en curso o por venir. El
   proyectado es, **rubro por rubro, el mayor entre el piso de hoy y lo anotado** — nunca la suma: el 15 de noviembre ya
@@ -15215,16 +15220,30 @@ no tienen el filtro: queda el helper para quien las toque.
   personal sale del mismo corte y lo libre en dólares no cambia; lo que cambia es que lo de la otra moneda se cuenta en
   la que más pesa (lo dice la pantalla). Las comisiones de vendedor pasan así al primer nivel del orden de pago, con la
   planilla (eran el nivel 3). *Lo que no garantiza:* sin NINGÚN tipo de cambio en la base no se puede convertir y va una
-  línea por moneda. El equilibrio la muestra por mes y rubro y la caja neta por quincena: nunca un monto por persona. Lo mismo que ya ve quien registra en Gastos del mes (el
-  total de la planilla). La lectura de costos de la caja no pide ni el nombre (`guardas.test.ts`). Lo único que el
-  equilibrio puede nombrar son conceptos que faltan en los meses del Excel de Alex, sin monto.
+  línea por moneda. El equilibrio la muestra por mes y rubro y la caja neta por quincena: nunca un monto por persona.
+  **La caja neta, igual** (segunda revisión): sacaba lo que sale por quincena en colones y en dólares con los salarios
+  adentro, y restándole lo que la caja muestra aparte quedaba la planilla en dólares de la quincena. A quien no ve la
+  planilla, la ruta y la página se la mandan con los salarios juntos en una sola moneda (`loadCajaNeta(…, {
+  personalJunto })`, `costosConPersonalJunto` en personal.ts), también en el gasto mensual. Las otras pantallas que abre
+  el permiso (el resumen de Pendientes sale de la caja; el equilibrio va en una sola moneda de presentación, que no se
+  puede abrir por moneda) no separan la planilla por moneda; la huella de cada mes, que sí lo hacía, viaja vacía.
+  **Límite aceptado, no un error:** restar dos quincenas de «Personal» (o la caja contra la caja neta, que no lleva
+  comisiones) deja ver una comisión que cobró una sola persona, un alta o una baja. No se tapa con más código: quien ve
+  la caja ve movimientos agregados de la plata de la empresa, y por eso «Caja y pagos» se da solo, por persona, a quien
+  maneja los pagos, que de todas formas paga esos montos. Lo que sí se garantiza es que ninguna LÍNEA sea de una persona.
+  Lo mismo que ya ve quien registra en Gastos del mes (el
+  total de la planilla). La lectura de costos de la caja no pide ni el nombre (`guardas.test.ts`).
 - **El equilibrio, para quien no ve salarios, viaja sin nombres ni montos sueltos** (revisión del 13-nov). Con un año
   sin tipo de cambio (2020) el reporte listaba cada costo sin convertir con su nombre y su monto: el salario de cada
   persona. A quien no es Super Admin ni tiene la celda `planilla` en su override, la ruta y la página le mandan el
   reporte por `sinSalariosPorPersona` (lib/finanzas/equilibrio-sin-salarios.ts): lo sin convertir va sumado por rubro y
   moneda, lo de planilla y aguinaldo sin convertir no viaja, y los avisos van sin su lista de conceptos. Ningún total
   cambia (lo sin convertir ya estaba fuera). Además la ruta solo acepta los dos años anteriores al de hoy, el de hoy y
-  el que viene (`anioDelReportePermitido`): es lo que ofrece la pantalla.
+  el que viene (`anioDelReportePermitido`): es lo que ofrece la pantalla. **Tampoco los nombres de lo que falta**
+  (segunda revisión): un concepto del Excel de planilla que falta un mes —alguien que entró o salió a mitad de año— se
+  leía «falta salario marco pérez» en los faltantes del mes, el motivo de los meses fuera del cálculo y la línea «gasto
+  incompleto». El motor marca cuáles faltantes son de planilla o aguinaldo (`faltantesDeSalario`, con la misma función
+  que los faltantes) y para quien no ve salarios todo texto que los nombre dice «planilla».
 - **Con «Caja y pagos» el equilibrio abre entero, para leer.** «Actualizar», decidir aliados o licencias, los contratos
   de licencias y cambiar la meta son de dirección: para ella esos botones no se muestran (antes estaban y respondían
   error). Lo que solo lee carga.

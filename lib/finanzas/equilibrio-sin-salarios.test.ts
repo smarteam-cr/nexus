@@ -11,6 +11,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { calcularEquilibrio, costosDelPiso, pisoVigente, type EgresoDeMes } from "./equilibrio";
 import { sinSalariosPorPersona } from "./equilibrio-sin-salarios";
+import type { Inconsistencia } from "./inconsistencias";
 import { anioDelReportePermitido } from "@/lib/cobranza/schema";
 
 const eg = (periodo: string, rubro: EgresoDeMes["rubro"], concepto: string, monto: number): EgresoDeMes => ({
@@ -76,8 +77,68 @@ describe("sinSalariosPorPersona", () => {
     const completo = reporteDe2020();
     const r = sinSalariosPorPersona(completo);
     expect(r.indicadores).toEqual(completo.indicadores);
-    expect(r.meses).toEqual(completo.meses);
+    const sinFaltantes = (ms: typeof r.meses) => ms.map((m) => ({ ...m, faltantes: [] }));
+    expect(sinFaltantes(r.meses)).toEqual(sinFaltantes(completo.meses));
     expect(r.pisoVigente!.base).toBe(completo.pisoVigente.base);
+  });
+});
+
+describe("⭐ quien entra o sale a mitad de año no se nombra en lo que falta (segunda revisión del 13-nov)", () => {
+  /**
+   * 2025, en dólares (convierte: el mes tiene gasto). Ana todo el año; Marco de enero a agosto (salió); Luis desde julio
+   * (entró) pero sin cargar en octubre; la reserva de aguinaldo de Ana sin cargar en mayo. Más HubSpot todos los meses.
+   */
+  function reporteDe2025() {
+    const meses = Array.from({ length: 12 }, (_, i) => `2025-${String(i + 1).padStart(2, "0")}`);
+    const usd = (periodo: string, rubro: EgresoDeMes["rubro"], concepto: string, monto: number): EgresoDeMes => ({
+      ...eg(periodo, rubro, concepto, monto),
+      moneda: "USD",
+    });
+    const egresos: EgresoDeMes[] = meses.flatMap((p, i) => [
+      usd(p, "PLANILLA", "Salario Ana Solís", 2_000),
+      ...(i < 8 ? [usd(p, "PLANILLA", "Salario Marco Pérez", 2_500)] : []),
+      ...(i >= 6 && p !== "2025-10" ? [usd(p, "PLANILLA", "Salario Luis Mora", 1_800)] : []),
+      ...(p !== "2025-05" ? [usd(p, "RESERVA_AGUINALDO", "Aguinaldo Ana Solís", 160)] : []),
+      usd(p, "HERRAMIENTA", "HubSpot", 800),
+    ]);
+    const r = calcularEquilibrio(egresos, [], { anio: 2025, hoyISO: "2026-11-13", monedaPresentacion: "USD" });
+    // Lo que el reporte anual le suma: la línea «gasto incompleto» de lo que no cuadra, armada como la arma el auditor,
+    // y la huella de cada mes.
+    const parciales = r.meses.filter((m) => m.estado === "PARCIAL");
+    const inconsistencias: Inconsistencia[] = [
+      {
+        codigo: "EGRESO_INCOMPLETO",
+        severidad: "ALTA",
+        titulo: `${parciales.length} de 12 meses con el gasto incompleto`,
+        detalle: "Esos meses quedan fuera del promedio.",
+        montoEnJuego: null,
+        queHacer: "Cargar lo que falta en cada mes.",
+        resuelve: "COBRANZA",
+        items: parciales.map((m) => ({ texto: m.periodo, nota: `falta ${m.faltantes.join(", ")}` })),
+      },
+    ];
+    const huellas = { "2025-01": { gastos: { USD: 5_460 }, facturas: {} } };
+    return { ...r, inconsistencias, huellas };
+  }
+
+  it("el reporte completo SÍ los nombra en los faltantes, el motivo y la línea de lo que no cuadra", () => {
+    const r = reporteDe2025();
+    const json = JSON.stringify(r).toLowerCase();
+    expect(json).toContain("marco pérez");
+    expect(json).toContain("luis mora");
+    expect(r.meses.find((m) => m.periodo === "2025-10")!.faltantes.join(" ")).toContain("luis mora");
+  });
+
+  it("para quien no ve salarios, el JSON entero no trae ningún nombre: dice «planilla»", () => {
+    const r = sinSalariosPorPersona(reporteDe2025());
+    const json = JSON.stringify(r).toLowerCase();
+    for (const n of ["marco", "luis", "ana solís", "pérez", "mora", "solís"]) expect(json, n).not.toContain(n);
+    expect(r.meses.find((m) => m.periodo === "2025-10")!.faltantes).toContain("planilla");
+    expect(r.equilibrio.mesesExcluidos.find((x) => x.periodo === "2025-10")?.motivo).toBe("falta planilla");
+    expect(r.inconsistencias[0]!.items.find((i) => i.texto === "2025-10")?.nota).toBe("falta planilla");
+    expect(r.huellas).toEqual({});
+    // Lo que no es de personas sigue diciéndose: el mes sigue incompleto y por qué.
+    expect(r.meses.find((m) => m.periodo === "2025-10")!.estado).toBe("PARCIAL");
   });
 });
 

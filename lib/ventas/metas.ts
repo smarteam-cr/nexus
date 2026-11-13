@@ -15,6 +15,7 @@
 import { prisma } from "@/lib/db/prisma";
 import { TIPOS_DEL_PLAN_DE_PARTNER, type TipoDelPlanDePartner, type TramoDelPlanDePartner } from "@/lib/finanzas/metas-de-gerencia";
 import { metasDelAnio, type MetaDelAnio } from "./metas-reglas";
+import { VENTA_QUE_CUENTA } from "./regla-de-lo-vendido";
 
 export interface MetaDePersona extends MetaDelAnio {
   nombrePersona: string;
@@ -37,7 +38,8 @@ export async function metasPorPersona(anio: number): Promise<MetaDePersona[]> {
       select: { teamMemberId: true, hubspotGoalId: true, nombre: true, tipo: true, desde: true, hasta: true, monto: true, avance: true, moneda: true, sincronizadoEn: true },
     }),
     prisma.ventaGanada.findMany({
-      where: { estado: "GANADA", excluida: false, vendedorId: { not: null }, fechaCierre: { gte: desde, lt: hasta } },
+      // La regla única de lo vendido (lib/ventas/regla-de-lo-vendido.ts): de cualquier pipeline.
+      where: { ...VENTA_QUE_CUENTA, vendedorId: { not: null }, fechaCierre: { gte: desde, lt: hasta } },
       select: { vendedorId: true, monto: true, moneda: true },
     }),
   ]);

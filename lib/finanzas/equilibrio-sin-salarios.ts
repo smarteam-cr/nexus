@@ -3,25 +3,34 @@
  *
  * ── POR QUÉ ─────────────────────────────────────────────────────────────────────
  * El punto de equilibrio lo abre también quien tiene «Caja y pagos» (`tesoreria`, María José), que no es el permiso de
- * la planilla. El reporte ya trae la planilla SUMADA por mes, pero dos listas de diagnóstico viajaban con nombre y
- * monto, costo por costo: lo que no se pudo convertir por falta de tipo de cambio (`pisoVigente.noConvertidos` y
- * `fx.montosNoConvertidos`). En un año sin tasa —2020, por ejemplo— eso era el salario de cada persona con su nombre
- * (revisión del 13 de noviembre). Los avisos de calidad, además, nombran conceptos del libro de egresos (los pagos de
- * aguinaldo, por ejemplo), que pueden ser personas.
+ * la planilla. El reporte ya trae la planilla SUMADA por mes, pero varias piezas viajaban con nombres o montos de una
+ * persona (revisiones del 13 de noviembre):
+ *   · lo que no se pudo convertir por falta de tipo de cambio (`pisoVigente.noConvertidos`, `fx.montosNoConvertidos`),
+ *     costo por costo, con nombre y monto: en un año sin tasa, el salario de cada persona;
+ *   · los conceptos del libro de egresos que FALTAN en un mes (`meses[].faltantes`, el motivo de los meses fuera del
+ *     cálculo, la línea «gasto incompleto» de lo que no cuadra): alguien que entra o sale a mitad de año aparece como
+ *     «salario marco pérez» en los meses en que no está;
+ *   · los avisos de calidad, que nombran conceptos (los pagos de aguinaldo, por ejemplo);
+ *   · la huella de cada mes (lo anotado por moneda original), que nadie lee en la pantalla y de la que se puede restar la
+ *     planilla en una moneda.
  *
  * ── LA REGLA ────────────────────────────────────────────────────────────────────
- * Para quien no ve salarios, lo que viaja al navegador no trae el nombre de ningún costo ni el monto de un salario:
- *   · lo sin convertir va SUMADO por rubro y moneda (y por mes, en el de los egresos), con el nombre del rubro;
- *   · lo de los rubros de salario (planilla y reserva de aguinaldo) sin convertir no viaja: una suma de planilla en una
- *     moneda puede ser de una sola persona. El aviso de los meses sin tipo de cambio sigue diciendo cuáles son;
- *   · los avisos de calidad viajan sin la lista de conceptos.
- * Nada de esto cambia un total: lo sin convertir ya está FUERA de los totales.
+ * Para quien no ve salarios, lo que viaja al navegador no trae el nombre de ningún concepto de planilla o aguinaldo ni
+ * el monto de un salario:
+ *   · lo sin convertir va SUMADO por rubro y moneda (y por mes, en el de los egresos), con el nombre del rubro; lo de
+ *     planilla y aguinaldo sin convertir no viaja (una suma de planilla en una moneda puede ser de una persona);
+ *   · todo texto que nombra un faltante de planilla o aguinaldo lo dice como «planilla» (`faltantesDeSalario`, que arma
+ *     el motor con la misma función que los faltantes, dice cuáles son);
+ *   · los avisos viajan sin su lista de conceptos y la huella viaja vacía.
+ * Nada de esto cambia un total: lo sin convertir ya está FUERA de los totales, y los faltantes son texto.
  */
-import type { ReporteEquilibrio, RubroEgreso } from "./equilibrio";
-import { etiquetaRubro } from "./equilibrio";
+import { RUBROS_DE_SALARIO, etiquetaRubro, type ReporteEquilibrio, type RubroEgreso } from "./equilibrio";
+import type { Inconsistencia } from "./inconsistencias";
 
-/** Los rubros que son plata de personas: su monto sin convertir no viaja a quien no ve salarios. */
-export const RUBROS_DE_SALARIO: ReadonlySet<RubroEgreso> = new Set<RubroEgreso>(["PLANILLA", "RESERVA_AGUINALDO"]);
+export { RUBROS_DE_SALARIO };
+
+/** Cómo se lee un faltante de salario para quien no ve salarios. */
+export const FALTANTE_DE_SALARIO = "planilla";
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 const conMayuscula = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
@@ -37,7 +46,20 @@ function sumarPor<T, K extends string>(filas: readonly T[], clave: (f: T) => K, 
   return out;
 }
 
-export function sinSalariosPorPersona<R extends Pick<ReporteEquilibrio, "pisoVigente" | "fx" | "calidad">>(r: R): R {
+type Base = Pick<ReporteEquilibrio, "pisoVigente" | "fx" | "calidad" | "meses" | "equilibrio" | "faltantesDeSalario">;
+/** Lo que el reporte anual (`ReporteAnualDTO`) suma encima del motor y también se tapa. */
+type Extras = { inconsistencias?: Inconsistencia[]; huellas?: Record<string, unknown> };
+
+export function sinSalariosPorPersona<R extends Base & Extras>(r: R): R {
+  // ── Los textos que nombran un faltante de salario ──
+  // El nombre del rubro entero («planilla», «reserva de aguinaldo») no es de nadie: se deja como está.
+  const genericos = new Set([...RUBROS_DE_SALARIO].map(etiquetaRubro));
+  const deSalario = new Set(Object.values(r.faltantesDeSalario ?? {}).flat().filter((t) => t && !genericos.has(t)));
+  // Los más largos primero: un grupo «a, b y 2 más» se tapa entero antes que uno de sus nombres.
+  const aTapar = [...deSalario].sort((a, b) => b.length - a.length);
+  const taparTexto = (t: string) => aTapar.reduce((s, x) => s.split(x).join(FALTANTE_DE_SALARIO), t);
+  const taparLista = (l: readonly string[]) => [...new Set(l.map((f) => (deSalario.has(f) ? FALTANTE_DE_SALARIO : taparTexto(f))))];
+
   const piso = r.pisoVigente
     ? {
         ...r.pisoVigente,
@@ -59,9 +81,14 @@ export function sinSalariosPorPersona<R extends Pick<ReporteEquilibrio, "pisoVig
     (n) => n.monto,
   );
 
-  return {
+  const out: R = {
     ...r,
     pisoVigente: piso,
+    meses: r.meses.map((m) => ({ ...m, faltantes: taparLista(m.faltantes) })),
+    equilibrio: {
+      ...r.equilibrio,
+      mesesExcluidos: r.equilibrio.mesesExcluidos.map((x) => ({ ...x, motivo: taparTexto(x.motivo) })),
+    },
     fx: {
       ...r.fx,
       montosNoConvertidos: [
@@ -75,6 +102,18 @@ export function sinSalariosPorPersona<R extends Pick<ReporteEquilibrio, "pisoVig
         })),
       ],
     },
-    calidad: { ...r.calidad, avisos: r.calidad.avisos.map((a) => ({ ...a, conceptos: [] })) },
+    calidad: { ...r.calidad, avisos: r.calidad.avisos.map((a) => ({ ...a, mensaje: taparTexto(a.mensaje), conceptos: [] })) },
+    faltantesDeSalario: {},
   };
+  if (r.inconsistencias) {
+    out.inconsistencias = r.inconsistencias.map((i) => ({
+      ...i,
+      titulo: taparTexto(i.titulo),
+      detalle: taparTexto(i.detalle),
+      queHacer: taparTexto(i.queHacer),
+      items: i.items.map((it) => ({ ...it, texto: taparTexto(it.texto), ...(it.nota !== undefined ? { nota: taparTexto(it.nota) } : {}) })),
+    }));
+  }
+  if (r.huellas) out.huellas = {};
+  return out;
 }
