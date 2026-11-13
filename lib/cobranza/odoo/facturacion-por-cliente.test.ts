@@ -122,22 +122,22 @@ describe("facturación por cliente, de la copia de Odoo", () => {
     expect(aditec).toMatchObject({ cuentaId: null, clientesDeOdoo: [], ventas: null, clave: "odoo:90" });
   });
 
-  it("ventas: solo las ganadas, sin excluir, de un pipeline de venta propia y con cierre en el año", () => {
+  it("ventas: las ganadas, sin excluir, de cualquier pipeline (la regla única de lo vendido) y con cierre en el año", () => {
     const ventas = [
       venta({ monto: 5000 }),
       venta({ monto: null }),
       venta({ monto: 999, excluida: true }),
       venta({ monto: 999, estado: "REABIERTA" }),
       venta({ monto: 999, fechaCierre: "2024-12-31" }),
-      venta({ monto: 999, pipelineId: "otro" }),
+      venta({ monto: 1000, pipelineId: "otro" }),
       venta({ monto: 3000000, moneda: "CRC" }),
     ];
     const a = filaDe(facturacionPorCliente([doc({})], CUENTAS, ventas, 2025), "Acme")!;
     expect(a.ventas).toEqual({
-      tratos: 3,
+      tratos: 4,
       sinMonto: 1,
       montos: [
-        { moneda: "USD", monto: 5000 },
+        { moneda: "USD", monto: 6000 },
         { moneda: "CRC", monto: 3000000 },
       ],
     });

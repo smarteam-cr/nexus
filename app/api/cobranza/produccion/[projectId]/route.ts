@@ -9,7 +9,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { cuerpoInvalido } from "@/lib/api/cuerpo-invalido";
 import { pasoAProduccionSchema, responsablesProyectoSchema } from "@/lib/cobranza/schema";
-import { guardProduccion } from "@/lib/cobranza/produccion-acceso-server";
+import { guardProduccion, responsableValido } from "@/lib/cobranza/produccion-acceso-server";
 import { puedeConfirmarProduccion, puedeEditarResponsables } from "@/lib/cobranza/produccion-acceso";
 import { guardarResponsablesDelProyecto, quienConfirmaLaProduccion, registrarPasoAProduccion, SeguimientoError } from "@/lib/cobranza/seguimiento-server";
 import { crDateParts } from "@/lib/jobs/time";
@@ -29,6 +29,13 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   const { projectId } = await params;
   const parsed = responsablesProyectoSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return cuerpoInvalido(parsed.error);
+  // Solo a quien puede hacerlo: quien confirma tiene que poder abrir esta pantalla, y quien cobra, Cobranza.
+  if (!(await responsableValido(parsed.data.confirma, "confirma"))) {
+    return NextResponse.json({ error: "Esa persona no puede abrir el paso a producción: no podría confirmarlo." }, { status: 400 });
+  }
+  if (!(await responsableValido(parsed.data.cobra, "cobra"))) {
+    return NextResponse.json({ error: "Esa persona no ve Cobranza: no podría cargar ni perseguir el cobro." }, { status: 400 });
+  }
   try {
     await guardarResponsablesDelProyecto(projectId, parsed.data, q.email);
     return NextResponse.json({ ok: true });

@@ -90,7 +90,7 @@ import {
   type TotalPorPartner,
 } from "./comisiones-partner";
 import { clasificarVentas } from "@/lib/ventas/clasificar-huecos";
-import { PIPELINES_VENTA_PROPIA } from "@/lib/ventas/pipelines";
+import { VENTA_QUE_CUENTA } from "@/lib/ventas/regla-de-lo-vendido";
 import { auditarRespaldoDeFactura } from "@/lib/ventas/respaldo-de-factura";
 import {
   calcularEquilibrio,
@@ -2770,11 +2770,7 @@ export async function loadReporteAnual(
     // (lib/ventas/sync-ganadas.ts) y cada trato es una fila, así que nada se cuenta dos veces. Con quién lo vendió, para
     // el desglose por área.
     prisma.ventaGanada.findMany({
-      where: {
-        estado: "GANADA",
-        excluida: false,
-        fechaCierre: { gte: desde, lte: hasta },
-      },
+      where: { ...VENTA_QUE_CUENTA, fechaCierre: { gte: desde, lte: hasta } },
       select: { fechaCierre: true, monto: true, moneda: true, montoConvertidoHubspot: true, vendedor: { select: { roleEnum: true } } },
     }),
     // La plata que entró y no es venta (etapa 10). Solo columnas anteriores a la etapa: el reporte no
@@ -3046,7 +3042,7 @@ async function armarEstadoParaAuditar(
         // ellos cada línea obliga a ir a buscar el trato a mano en el portal.
         hubspotDealId: true, hubspotCompanyId: true,
         nombre: true, monto: true, moneda: true, montoConvertidoHubspot: true,
-        pipelineId: true, clientId: true, clienteVia: true, excluida: true, fechaCierre: true,
+        pipelineId: true, clientId: true, clienteVia: true, excluida: true, noGeneraCobroEn: true, fechaCierre: true,
         client: { select: { name: true } },
       },
     }),
@@ -3107,8 +3103,8 @@ async function armarEstadoParaAuditar(
     // Todas las ventas ganadas, de TODOS los años: un cliente que compró en 2023 y sigue
     // facturando en 2026 no es un hueco, y solo se puede saber mirando fuera del año.
     prisma.ventaGanada.findMany({
-      where: { estado: "GANADA", excluida: false },
-      select: { nombre: true, clientId: true, pipelineId: true },
+      where: { ...VENTA_QUE_CUENTA },
+      select: { nombre: true, clientId: true },
     }),
     // El portal del SISTEMA (el CRM de Smarteam). Un hubspotCompanyId/dealId solo tiene
     // sentido dentro de su portal: sin esto no se puede armar un link que no dé 404.
@@ -3183,7 +3179,8 @@ async function armarEstadoParaAuditar(
     ventasTodas.map((v) => ({
       nombre: v.nombre,
       clientId: v.clientId,
-      esVentaPropia: PIPELINES_VENTA_PROPIA.includes(v.pipelineId),
+      // Todas las que llegan acá cuentan como vendidas (la regla única: cualquier pipeline).
+      esVentaPropia: true,
     })),
     (clientId) => {
       const cli = clientesPorId.get(clientId);
@@ -3205,13 +3202,16 @@ async function armarEstadoParaAuditar(
       clientId: v.clientId,
       excluida: v.excluida,
       sospechaPrueba: false,
+      // «No genera cobro» (Cobranza › Seguimiento): sigue en el vendido, no es un hueco. La misma regla que la lista.
+      noGeneraCobro: v.noGeneraCobroEn !== null,
     })),
     [...new Set([...facturadoPorCliente.keys(), ...programadoPorCliente.keys()])].map((clientId) => ({
       clientId,
       facturado: facturadoPorCliente.get(clientId) ?? 0,
       programado: programadoPorCliente.get(clientId) ?? 0,
     })),
-    { anio, pipelinesQueCuentan: [...PIPELINES_VENTA_PROPIA] },
+    // Sin filtro de pipeline: la regla única de lo vendido (lib/ventas/regla-de-lo-vendido.ts).
+    { anio },
   );
 
   // TODAS las descubiertas, no las peores ocho. La lista es la agenda de trabajo: con

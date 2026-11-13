@@ -4,7 +4,8 @@
  *
  * ── QUÉ ES «SIN COBRO» ──────────────────────────────────────────────────────────
  * Lo MISMO que la línea «Ventas ganadas que no están en cobranza» de Finanzas (VENTAS_SIN_COBRANZA,
- * lib/finanzas/inconsistencias.ts): una venta del año, de un pipeline que cuenta, no descartada, con parte de su monto sin
+ * lib/finanzas/inconsistencias.ts): una venta del año que cuenta como vendida (lib/ventas/regla-de-lo-vendido.ts: ganada,
+ * de cualquier pipeline, no excluida), que nadie marcó como «no genera cobro», con parte de su monto sin
  * respaldo (`descubierto > 0`). El respaldo se mide por MONTO con `clasificarVentas`: primero lo facturado del cliente en
  * el año, después las cuotas cargadas que todavía no se facturan. Una venta cuyo cobro ya está cargado en cuotas deja de
  * ser pendiente: está en cobranza, y desde ahí la persigue la cola de siempre.
@@ -15,8 +16,10 @@
  * qué leerlos. Si una de las dos cambia de regla, cambia la otra: la prueba `ventas-sin-cobro.test.ts` fija los bordes.
  *
  * ── HASTA CUÁNDO ────────────────────────────────────────────────────────────────
- * Hasta que el cobro quede cargado (sale sola de la lista) o alguien la descarte con una razón (`excluida` +
- * `excluidaMotivo`, con quién y cuándo).
+ * Hasta que el cobro quede cargado (sale sola de la lista) o alguien diga que no genera cobro, con una razón
+ * (`noGeneraCobroEn` + motivo y quién). ⚠ Eso NO es `excluida` («no es una venta»): descartar desde esta lista no le saca
+ * la venta al vendido, a la cuota del vendedor, al bono de las metas ni a la comisión (DECISIONS «Cobranza: cada pendiente
+ * con su responsable»).
  */
 import { clasificarVentas, type ClaseHueco } from "./clasificar-huecos";
 import { convertir, sumarPorClienteEnPresentacion, tipoIngresoDeCobro, type CobroDeCliente, type MonedaEq, type TasaDeMes } from "@/lib/finanzas/equilibrio";
@@ -36,6 +39,8 @@ export interface VentaParaRevisar {
   clientId: string | null;
   clienteNombre: string | null;
   excluida: boolean;
+  /** Alguien dijo que no genera cobro (Cobranza › Seguimiento). Sigue siendo venta. */
+  noGeneraCobro: boolean;
   responsableCobroEmail: string | null;
 }
 
@@ -76,7 +81,6 @@ export function ventasSinCobro(input: {
   hoyISO: string;
   monedaPresentacion: MonedaEq;
   tasas: readonly TasaDeMes[];
-  pipelinesQueCuentan: readonly string[];
   ventas: readonly VentaParaRevisar[];
   cobros: readonly CobroParaRespaldo[];
 }): VentaSinCobro[] {
@@ -114,13 +118,15 @@ export function ventasSinCobro(input: {
       clientId: v.clientId,
       excluida: v.excluida,
       sospechaPrueba: false,
+      noGeneraCobro: v.noGeneraCobro,
     })),
     [...new Set([...facturado.keys(), ...programado.keys()])].map((clientId) => ({
       clientId,
       facturado: facturado.get(clientId) ?? 0,
       programado: programado.get(clientId) ?? 0,
     })),
-    { anio, pipelinesQueCuentan: input.pipelinesQueCuentan },
+    // Sin filtro de pipeline: la regla única de lo vendido (todos los ganados).
+    { anio },
   );
 
   const porDeal = new Map(delAnio.map((v) => [v.hubspotDealId, v]));

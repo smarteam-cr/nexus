@@ -50,7 +50,7 @@ export const COBRANZA_A_TU_CARGO: Fuente = {
     // Quien no es el responsable por defecto solo mira si alguien le asignó algo (una consulta barata).
     if (yo !== RESPONSABLE_DE_COBRO.email) {
       const [ventas, proyectos] = await Promise.all([
-        prisma.ventaGanada.count({ where: { responsableCobroEmail: yo, excluida: false, estado: "GANADA" } }),
+        prisma.ventaGanada.count({ where: { responsableCobroEmail: yo, excluida: false, estado: "GANADA", noGeneraCobroEn: null } }),
         prisma.cobroDelProyecto.count({ where: { cobraEmail: yo } }),
       ]).catch((e) => sinEsquemaNada(e, [0, 0]));
       if (ventas === 0 && proyectos === 0) return [];

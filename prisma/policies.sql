@@ -413,7 +413,7 @@ END $$;
 
 -- Las tablas nuevas desde el 2026-10-05 que sus scripts/sql/ ya tapan con la RESTRICTIVE (Tareas, Feedback, «Para ti»,
 -- la cartera, la carga, las reuniones indexadas, los contactos y tickets de HubSpot, las notas, el siguiente paso, los
--- negocios abiertos, los ciclos de SmartLoop…). Faltaban acá, así que reconstruir el proyecto desde cero las habría
+-- negocios abiertos, los ciclos de SmartLoop, las metas de gerencia del 2026-11-13…). Faltaban acá, así que reconstruir el proyecto desde cero las habría
 -- dejado sin la policy explícita. Mismo patrón (DROP + CREATE, idempotente), dentro de un bucle que salta la tabla que
 -- todavía no existe: el bootstrap local corre este archivo ANTES de los scripts/sql posteriores al baseline.
 DO $$
@@ -424,7 +424,7 @@ BEGIN
     'CasoDeUso', 'CicloDeProyecto', 'CierreDeSemana', 'ClasificacionDeCuenta', 'ConfigCarga', 'ContactoDeHubspot',
     'CorreccionDeSalud', 'EncuestaDeCuenta', 'EncuestaDeTiempo', 'EspacioDeTareas', 'FeedbackMensaje', 'FeedbackPedido',
     'FeedbackReporte', 'FeedbackTema', 'FotoMargenCuenta', 'FotoMargenMes', 'FuenteDeTareas', 'HechoDeReunion', 'HitoDeDocumento', 'LecturaDeReunion',
-    'MetaComercial', 'MiembroDeEspacio', 'ModuloDePropuesta', 'NegocioAbierto', 'NotaDeLaCuenta', 'ParticipanteDeReunion', 'PlantillaDeTareas', 'PreguntaDeTiempo',
+    'MetaComercial', 'MetaDeGerencia', 'MiembroDeEspacio', 'ModuloDePropuesta', 'NegocioAbierto', 'NotaDeLaCuenta', 'ParticipanteDeReunion', 'PlantillaDeTareas', 'PreguntaDeTiempo',
     'PresentacionDeDocumento', 'ProyectoDeTareas', 'PruebaDeLaEscala', 'RecomendacionDeRecurrencia', 'RespuestaDeCuenta', 'ResultadoDeSemana', 'ReunionIndexada',
     'SiguientePaso', 'Tarea', 'TareaComentario', 'TareaEvento', 'TareaRelacion', 'TareaVinculo', 'TicketDeHubspot',
     'TurnoDeReunion', 'UsoDeNexus', 'VistaDeCartera'

@@ -6,7 +6,10 @@
  * planilla y estructura de costos, así que toma la sensibilidad máxima de lo que mezcla —
  * un ADMIN no lo ve (DECISIONS §El reporte anual de equilibrio), salvo quien tenga «Caja
  * y pagos» en su permiso POR PERSONA (2026-11-13, DECISIONS «La caja y los pagos»): la
- * planilla viaja sumada por mes, nunca por persona.
+ * planilla viaja sumada por mes, nunca por persona. Y a quien no ve salarios (ni Super
+ * Admin ni la celda `planilla` en su override) el reporte le llega sin nombres ni montos
+ * de costo sueltos (lib/finanzas/equilibrio-sin-salarios.ts): en un año sin tipo de
+ * cambio esas listas eran el salario de cada persona.
  *
  * ⚠ Y por eso vive bajo `costos/`: el escaneo estructural de costos-privacy.test.ts
  * barre esta carpeta y exige el guard en cada handler. Colgarlo de otro lado lo
@@ -14,8 +17,10 @@
  */
 import { NextRequest, NextResponse } from "next/server";
 import { guardCostosAccess } from "@/lib/auth/api-guards";
+import { puedePorPersona } from "@/lib/auth/salarios-por-persona";
 import { loadReporteAnual } from "@/lib/cobranza";
-import { reporteEquilibrioQuerySchema } from "@/lib/cobranza/schema";
+import { anioDelReportePermitido, reporteEquilibrioQuerySchema } from "@/lib/cobranza/schema";
+import { sinSalariosPorPersona } from "@/lib/finanzas/equilibrio-sin-salarios";
 import { crDateParts } from "@/lib/jobs/time";
 
 export async function GET(req: NextRequest) {
@@ -37,10 +42,14 @@ export async function GET(req: NextRequest) {
   // entra al promedio del equilibrio: leerlo en UTC correría el corte un día.
   const hoy = crDateParts(new Date());
   const anio = parsed.data.anio ?? Number(hoy.dateKey.slice(0, 4));
+  if (!anioDelReportePermitido(anio, hoy.dateKey)) {
+    return NextResponse.json({ error: "Ese año no se puede pedir: el reporte cubre los dos años anteriores, el de hoy y el que viene." }, { status: 400 });
+  }
 
   const reporte = await loadReporteAnual(anio, hoy.dateKey, {
     ventana: parsed.data.ventana,
     monedaPresentacion: parsed.data.moneda,
   });
-  return NextResponse.json({ reporte });
+  const veSalarios = puedePorPersona(guard.role, guard.teamMember, { section: "planilla", action: "read" });
+  return NextResponse.json({ reporte: veSalarios ? reporte : sinSalariosPorPersona(reporte) });
 }

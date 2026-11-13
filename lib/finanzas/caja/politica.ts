@@ -35,8 +35,12 @@ export const DIA_DE_CORTE = 3;
 export const DIA_DE_PAGO_ESCENARIO_B = 5;
 export const ADELANTO_MAXIMO_PCT = 50;
 
+/**
+ * Las categorías de un pago comprometido. ⚠ Sin «Planilla» (revisión del 2026-11-13): la caja ya resta la planilla con
+ * sus cargas (los salarios de Costos son el costo completo, con cargas sociales), así que anotarla como compromiso la
+ * contaba dos veces. «Impuestos y cargas» es lo que NO está ya en la planilla: IVA, renta, patentes, una multa.
+ */
 export type CategoriaDePago =
-  | "PLANILLA"
   | "IMPUESTOS_Y_CARGAS"
   | "SERVICIOS_PROFESIONALES"
   | "COMISIONISTA"
@@ -45,7 +49,6 @@ export type CategoriaDePago =
   | "OTRO";
 
 export const CATEGORIAS_DE_PAGO = [
-  "PLANILLA",
   "IMPUESTOS_Y_CARGAS",
   "SERVICIOS_PROFESIONALES",
   "COMISIONISTA",
@@ -55,8 +58,7 @@ export const CATEGORIAS_DE_PAGO = [
 ] as const satisfies readonly CategoriaDePago[];
 
 export const ETIQUETA_DE_CATEGORIA: Record<CategoriaDePago, string> = {
-  PLANILLA: "Planilla",
-  IMPUESTOS_Y_CARGAS: "Impuestos y cargas sociales",
+  IMPUESTOS_Y_CARGAS: "Impuestos y cargas (lo que no va en la planilla)",
   SERVICIOS_PROFESIONALES: "Servicios profesionales u outsourcing",
   COMISIONISTA: "Comisionista",
   ARTICULO_FISICO: "Artículo físico",

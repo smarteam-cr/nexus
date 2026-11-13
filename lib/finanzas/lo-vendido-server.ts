@@ -2,8 +2,8 @@
  * lib/finanzas/lo-vendido-server.ts — carga las propuestas ganadas para el lector de lo vendido (2026-10-18). Las reglas
  * viven en lib/finanzas/lo-vendido.ts (puro); acá solo se lee la base.
  *
- * Ganada = el trato de HubSpot de la propuesta (`BusinessCase.hubspotDealId`) está en `VentaGanada` como GANADA, no
- * excluido y de venta propia (la misma regla que el vendido del punto de equilibrio). Si dos propuestas apuntan al
+ * Ganada = el trato de HubSpot de la propuesta (`BusinessCase.hubspotDealId`) está en `VentaGanada` y cuenta como vendido
+ * (la regla única, lib/ventas/regla-de-lo-vendido.ts: ganado, de cualquier pipeline, no excluido). Si dos propuestas apuntan al
  * mismo trato se lee la publicada más reciente: es la que vio el cliente.
  *
  * De cada propuesta se lee la versión ACTIVA (la que el vendedor deja a la vista), no el snapshot publicado: el
@@ -11,7 +11,7 @@
  */
 import { prisma } from "@/lib/db/prisma";
 import { esquemaDesactualizado } from "@/lib/db/esquema";
-import { PIPELINES_VENTA_PROPIA } from "@/lib/ventas/pipelines";
+import { VENTA_QUE_CUENTA } from "@/lib/ventas/regla-de-lo-vendido";
 import { INVERSION_SECTION_KEY } from "@/lib/landing/inversion";
 import { leerLoVendido, type LoVendidoDePropuesta, type PropuestaGanada } from "./lo-vendido";
 
@@ -38,9 +38,7 @@ export async function cargarPropuestasGanadas(opciones?: { anio?: number }): Pro
   const ventas = await prisma.ventaGanada.findMany({
     where: {
       hubspotDealId: { in: deals },
-      estado: "GANADA",
-      excluida: false,
-      pipelineId: { in: [...PIPELINES_VENTA_PROPIA] },
+      ...VENTA_QUE_CUENTA,
       ...(anio ? { fechaCierre: { gte: new Date(`${anio}-01-01`), lte: new Date(`${anio}-12-31`) } } : {}),
     },
     select: { hubspotDealId: true, fechaCierre: true, moneda: true },

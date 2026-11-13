@@ -32,6 +32,12 @@ export interface VentaParaClasificar {
   clientId: string | null;
   excluida: boolean;
   sospechaPrueba: boolean;
+  /**
+   * Alguien dijo en Cobranza › Seguimiento que esta venta no genera cobro (una continuidad, un add-on, una renovación que
+   * se cobra en otro contrato). Sigue siendo venta: cuenta en el vendido. Solo no se le busca respaldo en cobranza ni
+   * consume lo facturado del cliente. Ausente = false. ≠ `excluida`, que dice que no es una venta.
+   */
+  noGeneraCobro?: boolean;
 }
 
 /** Lo que cobranza tiene cargado de un cliente, ya sumado por el llamador. */
@@ -53,7 +59,8 @@ export type ClaseHueco =
   | "SIN_COBRANZA" // el cliente existe y no tiene nada cargado
   | "SIN_CLIENTE" // la venta no resuelve a ningún cliente de Nexus
   | "SIN_CONVERTIR" // no se pudo pasar a la moneda de presentación
-  | "EXCLUIDA"; // prueba o descartada a mano
+  | "NO_GENERA_COBRO" // venta de verdad que no lleva cobro propio (decidido en Cobranza › Seguimiento)
+  | "EXCLUIDA"; // no es una venta: prueba o duplicado
 
 export interface VentaClasificada extends VentaParaClasificar {
   clase: ClaseHueco;
@@ -65,7 +72,7 @@ export interface VentaClasificada extends VentaParaClasificar {
 
 export interface ResumenVentas {
   anio: number;
-  /** Solo las que cuentan: ni excluidas, ni de pipelines fuera de `pipelinesQueCuentan`. */
+  /** Solo las que cuentan: ni excluidas, ni de pipelines fuera de `pipelinesQueCuentan` (sin ella, todos cuentan). */
   vendido: number;
   cuantas: number;
   /** Ventas que el filtro de pipeline dejó afuera, para poder declararlas. */
@@ -95,21 +102,21 @@ const CLASES: ClaseHueco[] = [
   "SIN_COBRANZA",
   "SIN_CLIENTE",
   "SIN_CONVERTIR",
+  "NO_GENERA_COBRO",
   "EXCLUIDA",
 ];
 
 /**
  * Clasifica las ventas de un año y mide el hueco contra lo que cobranza tiene.
  *
- * `pipelinesQueCuentan` decide qué es "venta nuestra". Se pasa por parámetro y no se
- * hardcodea porque es una decisión de negocio abierta: "HubSpot Shared Selling" tiene más
- * plata ganada que el pipeline de ventas propio, pero es registro de oportunidad con
- * HubSpot y no facturación de la casa. Lo que quede afuera se DECLARA, no se esconde.
+ * `pipelinesQueCuentan` es OPCIONAL desde el 2026-11-13: sin ella cuentan los ganados de todos los pipelines, que es la
+ * regla única de lo vendido (lib/ventas/regla-de-lo-vendido.ts) y lo que pasan los llamadores de producción. Queda como
+ * parámetro para medir otro criterio; lo que quede afuera se DECLARA (`fueraDePipeline`), no se esconde.
  */
 export function clasificarVentas(
   ventas: readonly VentaParaClasificar[],
   cobranza: readonly CobranzaDeCliente[],
-  opciones: { anio: number; pipelinesQueCuentan: readonly string[] },
+  opciones: { anio: number; pipelinesQueCuentan?: readonly string[] },
 ): ResumenVentas {
   const facturadoDe = new Map(cobranza.map((c) => [c.clientId, c.facturado]));
   // Lo que ya "consumió" cada cliente: una venta se respalda con la facturación que
@@ -120,7 +127,7 @@ export function clasificarVentas(
   const programadoDe = new Map(cobranza.map((c) => [c.clientId, c.programado ?? 0]));
   const restanteProgramado = new Map(cobranza.map((c) => [c.clientId, c.programado ?? 0]));
 
-  const cuentan = new Set(opciones.pipelinesQueCuentan);
+  const cuentan = opciones.pipelinesQueCuentan ? new Set(opciones.pipelinesQueCuentan) : null;
   const clasificadas: VentaClasificada[] = [];
   const fuera = { cuantas: 0, monto: 0, sinMonto: 0 };
   const excluidas = { cuantas: 0, monto: 0 };
@@ -142,7 +149,7 @@ export function clasificarVentas(
       clasificadas.push({ ...v, clase: "EXCLUIDA", descubierto: 0, enPlan: 0 });
       continue;
     }
-    if (!cuentan.has(v.pipelineId)) {
+    if (cuentan && !cuentan.has(v.pipelineId)) {
       fuera.cuantas++;
       if (v.monto === null) fuera.sinMonto++;
       fuera.monto = round2(fuera.monto + (v.monto ?? 0));
@@ -160,6 +167,12 @@ export function clasificarVentas(
     const g = porMes.get(mes) ?? { vendido: 0, cuantas: 0 };
     porMes.set(mes, { vendido: round2(g.vendido + v.monto), cuantas: g.cuantas + 1 });
 
+    // Venta de verdad sin cobro propio: suma al vendido y no se le busca respaldo. Tampoco consume lo facturado del
+    // cliente: si lo hiciera, otra venta del mismo cliente quedaría descubierta por una plata que nunca iba a cubrirla.
+    if (v.noGeneraCobro) {
+      clasificadas.push({ ...v, clase: "NO_GENERA_COBRO", descubierto: 0, enPlan: 0 });
+      continue;
+    }
     if (!v.clientId) {
       clasificadas.push({ ...v, clase: "SIN_CLIENTE", descubierto: v.monto, enPlan: 0 });
       continue;

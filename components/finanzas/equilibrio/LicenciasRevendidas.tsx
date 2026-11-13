@@ -54,6 +54,7 @@ export default function LicenciasRevendidas({
   pagosAHubspot,
   anio,
   nombres,
+  puedeEditar = true,
   onCambio,
 }: {
   licencias: LicenciasDelReporte;
@@ -61,6 +62,8 @@ export default function LicenciasRevendidas({
   pagosAHubspot?: { total: number; pagos: number };
   anio: number;
   nombres: Record<string, string>;
+  /** false = solo lectura (quien entra con «Caja y pagos»): sin decidir ni editar contratos, que son de dirección. */
+  puedeEditar?: boolean;
   /** Se cargó, editó o decidió algo: el reporte se vuelve a armar. */
   onCambio: () => void;
 }) {
@@ -79,12 +82,16 @@ export default function LicenciasRevendidas({
             {licencias.decision ? `Lo decidió ${firmo}.` : "Nadie lo decidió todavía: rige lo que estaba con kölbi."}
           </span>
         </div>
-        <button type="button" className={BOTON} onClick={() => setDecidiendo(true)}>
-          {licencias.decision ? "Cambiar cómo cuentan" : "Decidir cómo cuentan"}
-        </button>
-        <button type="button" className={BOTON} onClick={() => setEditando("")}>
-          Contratos
-        </button>
+        {puedeEditar && (
+          <>
+            <button type="button" className={BOTON} onClick={() => setDecidiendo(true)}>
+              {licencias.decision ? "Cambiar cómo cuentan" : "Decidir cómo cuentan"}
+            </button>
+            <button type="button" className={BOTON} onClick={() => setEditando("")}>
+              Contratos
+            </button>
+          </>
+        )}
       </div>
 
       {licencias.contratos.length === 0 ? (
@@ -108,7 +115,7 @@ export default function LicenciasRevendidas({
               </span>
               <span className="text-xs text-fg-muted">{c.fuente}</span>
               {/* Los que salen de una propuesta ganada no se editan acá: se corrigen en la Inversión de la propuesta. */}
-              {!c.id.startsWith("propuesta:") && (
+              {puedeEditar && !c.id.startsWith("propuesta:") && (
                 <button type="button" className={cn(BOTON, "ml-auto")} onClick={() => setEditando(c.id)}>
                   Editar
                 </button>

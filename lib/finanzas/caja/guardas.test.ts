@@ -61,6 +61,15 @@ describe("la planilla sale sumada", () => {
     expect(select).not.toMatch(/\bnombre\b/);
     expect(select).not.toMatch(/include:/);
   });
+
+  it("caja-server.ts junta salarios y comisiones en «Personal» y no arma líneas propias que puedan ser de una persona", () => {
+    const src = sinComentarios(fs.readFileSync(path.join(raiz, "lib/finanzas/caja/caja-server.ts"), "utf8"));
+    expect(src).toMatch(/juntarPersonal\(/);
+    expect(src).not.toMatch(/COMISIONES_DE_VENDEDOR/);
+    expect(src).not.toMatch(/\d+ personas?\b/);
+    // Ningún costo de categoría Salario entra a los cortes por su cuenta: solo por la línea de personal.
+    expect(src).not.toMatch(/SALARIO:\s*"PLANILLA"/);
+  });
 });
 
 describe("la caja no escribe cobros ni costos", () => {

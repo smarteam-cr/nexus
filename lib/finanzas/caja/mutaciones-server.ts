@@ -34,21 +34,30 @@ export async function guardarSaldo(input: z.infer<typeof saldoSchema>, quien: st
   });
 }
 
+/** La sociedad tiene que estar en la lista oficial. */
+async function asegurarSociedad(sociedadId: string | null | undefined) {
+  if (!sociedadId) return;
+  const s = await prisma.sociedadPropia.findUnique({ where: { id: sociedadId }, select: { id: true } });
+  if (!s) throw new ErrorDeCaja("Esa sociedad no está en la lista de sociedades.", 400);
+}
+
 export async function crearCuenta(input: z.infer<typeof cuentaNuevaSchema>) {
+  await asegurarSociedad(input.sociedadId);
   const orden = (await prisma.cuentaDeBanco.aggregate({ _max: { orden: true } }))._max.orden ?? 0;
   return prisma.cuentaDeBanco.create({
-    data: { nombre: input.nombre, moneda: input.moneda, sociedad: input.sociedad, origen: "MANUAL", orden: orden + 1 },
+    data: { nombre: input.nombre, moneda: input.moneda, sociedadId: input.sociedadId, origen: "MANUAL", orden: orden + 1 },
   });
 }
 
 export async function cambiarCuenta(id: string, input: z.infer<typeof cuentaCambioSchema>) {
   const existe = await prisma.cuentaDeBanco.findUnique({ where: { id }, select: { id: true } });
   if (!existe) throw new ErrorDeCaja("Esa cuenta no existe.", 404);
+  await asegurarSociedad(input.sociedadId);
   return prisma.cuentaDeBanco.update({
     where: { id },
     data: {
       ...(input.nombre !== undefined ? { nombre: input.nombre } : {}),
-      ...(input.sociedad !== undefined ? { sociedad: input.sociedad } : {}),
+      ...(input.sociedadId !== undefined ? { sociedadId: input.sociedadId } : {}),
       ...(input.activa !== undefined ? { activa: input.activa } : {}),
     },
   });
@@ -67,7 +76,7 @@ function datosDeCompromiso(d: z.infer<typeof compromisoSchema>) {
     entregadoEl: diaONull(d.entregadoEl),
     adelantoPct: d.tipo === "PAGO" && d.categoria === "ARTICULO_FISICO" ? d.adelantoPct : 0,
     cobroId: d.cobroId,
-    sociedad: d.sociedad,
+    sociedadId: d.sociedadId,
     nota: d.nota,
   };
 }

@@ -3039,6 +3039,13 @@ fabricarla.
   renovación es un trato nuevo de su año y lo cobrado mes a mes nunca suma a lo vendido. La pantalla dice cuánto
   vendió cada área (`vendidoPorOrigen`, con la regla de comisiones: CSE/CSL = Customer Success). No hace falta
   re-sincronizar nada: el espejo ya tenía todo.
+- **Una sola regla de lo vendido para todos sus lectores** (revisión del 13-nov). El equilibrio sumaba todos los
+  pipelines y «Ventas ganadas sin cobro» (la lista de Seguimiento y la línea de Finanzas), el bono de las metas de
+  gerencia, lo vendido de las propuestas y la columna de ventas de la facturación de Odoo seguían con los tres
+  pipelines fijos de `PIPELINES_VENTA_PROPIA`: una venta de un pipeline nuevo sumaba al vendido y no pedía su cobro
+  ni pagaba bono. Ahora todos usan `lib/ventas/regla-de-lo-vendido.ts` (ganada y no excluida, de cualquier pipeline) y
+  `clasificarVentas` sin filtro de pipeline; `regla-de-lo-vendido.test.ts` vigila que nadie vuelva a filtrar. La lista
+  de pipelines sigue mandando solo en lo que mira negocios ABIERTOS (pronóstico, «Para ti» de Ventas).
 - **El gasto del mes tiene firmeza** (`lib/finanzas/panorama.ts › gastoDelMes`): REAL si Alex cerró el mes (dice quién
   y cuándo, de `CierreMes.cerradoPor`), REGISTRADO si pasó sin cerrar, PROYECTADO si está en curso o por venir. El
   proyectado es, **rubro por rubro, el mayor entre el piso de hoy y lo anotado** — nunca la suma: el 15 de noviembre ya
@@ -14981,6 +14988,10 @@ rehacer solo el ciclo de vida no las corrige.
   adivinar. *Si finanzas del cliente lo pide:* mostrar el total de Odoo/Mercury cuando la cuota tenga su factura vinculada.
 - **Fusionar dos fichas:** el enlace de la cuenta absorbida muere con ella (`SE_BORRAN_A_PROPOSITO` en
   lib/clients/fusion-de-empresas.ts); si la absorbida era la única con cuenta, la cuenta se muda entera y el enlace sigue.
+- **Lo vigila una prueba** (revisión del 13-nov, `lib/cobranza/estado-de-cuenta-compartir.test.ts`, con una tabla de
+  mentira que entiende los mismos `where`): crear sobre uno que abre devuelve el mismo; sobre uno revocado o vencido da
+  una dirección nueva con las vistas en cero; extender corre el vencimiento con la misma dirección y NO revive uno
+  revocado (409). La tabla `MetaDeGerencia` también quedó en `prisma/policies.sql`, con su candado RESTRICTIVE.
 ## Las metas de gerencia con HubSpot (2026-11-13)
 
 > Pedido de la reunión de gerencia (puntos 24 y 25): seguir lo que pide el programa de partners de HubSpot (mantener el
@@ -15195,10 +15206,34 @@ no tienen el filtro: queda el helper para quien las toque.
   menú); `write`, cargar saldos, anotar pagos y reservas y marcar la revisión. No abre la planilla de cada persona, ni
   las comisiones de vendedor, ni el aguinaldo, ni los costos uno por uno, ni las decisiones del equilibrio, ni
   «Actualizar» del equilibrio (siguen de Super Admin).
-- **La planilla agregada SÍ está bien para ella.** El equilibrio la muestra por mes y rubro, la caja neta por quincena y
-  la caja como «Planilla» por corte: nunca un monto por persona. Lo mismo que ya ve quien registra en Gastos del mes (el
+- **La planilla agregada SÍ está bien para ella, pero agregada de verdad** (revisión del 13-nov). La primera versión de
+  la caja la mostraba una línea por moneda, y las comisiones de vendedor una línea por día con «(1 persona)»: si una
+  sola persona cobra en dólares, la línea en dólares es su salario; si un solo vendedor cobra esa quincena, la línea es
+  su comisión. Ahora salarios y comisiones de vendedor van juntos como **«Personal»**, una línea por corte y en UNA
+  moneda —la que más pesa, con lo de la otra al tipo de cambio del BCCR— (`lib/finanzas/caja/personal.ts`). Se eligió
+  juntar y no esconder el monto: una línea sin monto se despeja restando del total. La caja sigue cuadrando: lo de
+  personal sale del mismo corte y lo libre en dólares no cambia; lo que cambia es que lo de la otra moneda se cuenta en
+  la que más pesa (lo dice la pantalla). Las comisiones de vendedor pasan así al primer nivel del orden de pago, con la
+  planilla (eran el nivel 3). *Lo que no garantiza:* sin NINGÚN tipo de cambio en la base no se puede convertir y va una
+  línea por moneda. El equilibrio la muestra por mes y rubro y la caja neta por quincena: nunca un monto por persona. Lo mismo que ya ve quien registra en Gastos del mes (el
   total de la planilla). La lectura de costos de la caja no pide ni el nombre (`guardas.test.ts`). Lo único que el
   equilibrio puede nombrar son conceptos que faltan en los meses del Excel de Alex, sin monto.
+- **El equilibrio, para quien no ve salarios, viaja sin nombres ni montos sueltos** (revisión del 13-nov). Con un año
+  sin tipo de cambio (2020) el reporte listaba cada costo sin convertir con su nombre y su monto: el salario de cada
+  persona. A quien no es Super Admin ni tiene la celda `planilla` en su override, la ruta y la página le mandan el
+  reporte por `sinSalariosPorPersona` (lib/finanzas/equilibrio-sin-salarios.ts): lo sin convertir va sumado por rubro y
+  moneda, lo de planilla y aguinaldo sin convertir no viaja, y los avisos van sin su lista de conceptos. Ningún total
+  cambia (lo sin convertir ya estaba fuera). Además la ruta solo acepta los dos años anteriores al de hoy, el de hoy y
+  el que viene (`anioDelReportePermitido`): es lo que ofrece la pantalla.
+- **Con «Caja y pagos» el equilibrio abre entero, para leer.** «Actualizar», decidir aliados o licencias, los contratos
+  de licencias y cambiar la meta son de dirección: para ella esos botones no se muestran (antes estaban y respondían
+  error). Lo que solo lee carga.
+- **La planilla no se anota como pago comprometido.** La categoría «Planilla» salió de `CategoriaDePago`: la caja ya
+  resta la planilla con sus cargas desde Costos (el salario de Costos es el costo completo), así que anotarla la
+  contaba dos veces. «Impuestos y cargas» es lo que no va en la planilla (IVA, renta, patentes), y el formulario lo dice.
+- **La sociedad de una cuenta de banco o de un pago es de la lista oficial** (`SociedadPropia`, FK opcional con
+  SetNull), no texto libre. La cuenta de Mercury la toma al nacer de su razón social (por los alias de la sociedad) o, si
+  no la reconoce, de la sociedad que factura en Mercury.
 - **La revisión diaria va en Pendientes, no en el digest.** El digest de cobranza corre el 1 y el 15 (es el corte
   quincenal), no todos los días, y Pendientes es la pantalla de entrada de quien registra. Quien tiene «Caja y pagos» ve
   ahí «La caja de hoy» (si ya se revisó, los pagos de la semana, saldos que faltan o están viejos, si alcanza) y en la
@@ -15217,7 +15252,14 @@ Pedido de Elías (puntos 11 a 16 del frente de cobranza). Lo que se decidió y p
   15 de noviembre; se reasigna en Cobranza › Seguimiento. **Vacío en la base = el por defecto**, y el por defecto vive en
   un solo lugar (`lib/cobranza/responsables.ts`): si mañana cobra otra persona, se cambia una línea y no se reescriben
   filas. La venta sale de la lista cuando su cobro queda cargado o cuando alguien la descarta con una razón, y el
-  descarte guarda quién y cuándo (`excluidaPor/En`). Se puede devolver a la lista.
+  descarte guarda quién y cuándo. Se puede devolver a la lista.
+- **Descartar es «no genera cobro», no «no es una venta»** (revisión del 13-nov). La primera versión descartaba con
+  `VentaGanada.excluida`, la marca de las pruebas y los duplicados, y la venta dejaba de contar en el vendido del
+  equilibrio, la cuota del vendedor, el bono de las metas y la comisión: descartar una continuidad desde Cobranza le
+  bajaba la comisión a quien la vendió. Ahora es una marca aparte (`noGeneraCobroEn/Por/Motivo`, los tres juntos por
+  CHECK): la venta sale de la lista de cobros y de la línea de Finanzas (clase `NO_GENERA_COBRO` de `clasificarVentas`,
+  que tampoco consume lo facturado del cliente) y SIGUE en todo lo demás. `excluida` queda solo para «no es una venta»,
+  y no se decide desde Cobranza.
 - **«Sin cobro» es la misma regla que la línea de Finanzas** (por monto, con `clasificarVentas`; lo cargado sin facturar
   también respalda). `lib/ventas/ventas-sin-cobro.ts` repite la cuenta de `armarEstadoParaAuditar` con las mismas
   funciones puras en vez de llamar al reporte anual, porque el reporte carga la planilla y los salarios, y «Para ti» de
@@ -15253,6 +15295,9 @@ Pedido de Elías (puntos 11 a 16 del frente de cobranza). Lo que se decidió y p
   Desarrollo, que no ven Cobranza, y abrirles Cobranza entera les daría la plata de toda la cartera. La ven quien ve
   Cobranza, la CSL, Super Admin y Desarrollo; los responsables los cambian la CSL, Super Admin o quien edita Cobranza; la
   producción la confirma la persona de ese proyecto, la CSL o Super Admin. No muestra montos. Vive en `/cobranza/production`.
+  **A quién se puede poner** (revisión del 13-nov: el selector ofrecía a todo el equipo y la persona elegida podía no
+  abrir la pantalla): «confirma» solo a quien ve la tabla, «cobra» solo a quien ve Cobranza. La ruta lo rechaza con 400
+  aunque el pedido venga de otro lado.
 - **El contrato recurrente tiene fin y renovación**, pero no mueven cuotas (el motor sigue con `duracionMeses`, el golden
   no cambia). Sin fin escrito, el fin es inicio + duración; sin duración no vence. A 30 días del fin, o vencido y todavía
   activo, le llega a quien lleva la cuenta con qué hacer según la renovación. «El cliente no avanza» no es una métrica

@@ -24,7 +24,7 @@ export interface DatosDelFormulario {
   entregadoEl: string | null;
   adelantoPct: number;
   cobroId: string | null;
-  sociedad: string | null;
+  sociedadId: string | null;
   nota: string | null;
 }
 
@@ -33,6 +33,8 @@ interface Props {
   inicial: CompromisoDTO | null;
   tipoNuevo: "PAGO" | "RESERVA";
   cobros: Array<{ id: string; etiqueta: string }>;
+  /** Las sociedades de la lista oficial. */
+  sociedades: Array<{ id: string; nombre: string }>;
   comisionistasElDia7: boolean;
   onCerrar: () => void;
   onGuardar: (d: DatosDelFormulario) => Promise<void>;
@@ -40,7 +42,7 @@ interface Props {
 
 const vacio = (s: string) => (s.trim() ? s.trim() : null);
 
-export default function FormularioDeCompromiso({ abierto, inicial, tipoNuevo, cobros, comisionistasElDia7, onCerrar, onGuardar }: Props) {
+export default function FormularioDeCompromiso({ abierto, inicial, tipoNuevo, cobros, sociedades, comisionistasElDia7, onCerrar, onGuardar }: Props) {
   const [tipo, setTipo] = useState<"PAGO" | "RESERVA">(inicial?.tipo ?? tipoNuevo);
   const [concepto, setConcepto] = useState(inicial?.concepto ?? "");
   const [beneficiario, setBeneficiario] = useState(inicial?.beneficiario ?? "");
@@ -52,7 +54,7 @@ export default function FormularioDeCompromiso({ abierto, inicial, tipoNuevo, co
   const [entregado, setEntregado] = useState(inicial?.entregadoISO ?? "");
   const [adelanto, setAdelanto] = useState(String(inicial?.adelantoPct ?? 0));
   const [cobroId, setCobroId] = useState<string | null>(inicial?.cobroId ?? null);
-  const [sociedad, setSociedad] = useState(inicial?.sociedad ?? "");
+  const [sociedadId, setSociedadId] = useState<string | null>(inicial?.sociedadId ?? null);
   const [nota, setNota] = useState(inicial?.nota ?? "");
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -80,7 +82,7 @@ export default function FormularioDeCompromiso({ abierto, inicial, tipoNuevo, co
         entregadoEl: escenario === "B" ? entregado || null : null,
         adelantoPct: escenario === "B" ? Math.max(0, Math.min(50, Number(adelanto) || 0)) : 0,
         cobroId: usaCobro ? cobroId : null,
-        sociedad: vacio(sociedad),
+        sociedadId,
         nota: vacio(nota),
       });
     } catch (e) {
@@ -133,7 +135,16 @@ export default function FormularioDeCompromiso({ abierto, inicial, tipoNuevo, co
               <Field label="A quién">
                 <Input value={beneficiario} onChange={(e) => setBeneficiario(e.target.value)} placeholder="Proveedor o persona" />
               </Field>
-              <Field label="Categoría" hint={escenario ? REGLA_DE_ESCENARIO[escenario] : undefined}>
+              <Field
+                label="Categoría"
+                hint={
+                  categoria === "IMPUESTOS_Y_CARGAS"
+                    ? "La planilla y sus cargas sociales ya se restan solas desde Costos: anota aquí solo lo que no va en ella (IVA, renta, patentes)."
+                    : escenario
+                      ? REGLA_DE_ESCENARIO[escenario]
+                      : undefined
+                }
+              >
                 <Selector
                   etiqueta="Categoría"
                   placeholder="Elige la categoría"
@@ -203,8 +214,22 @@ export default function FormularioDeCompromiso({ abierto, inicial, tipoNuevo, co
             </div>
           </Field>
         )}
-        <Field label="Sociedad" hint="La que paga o donde está la plata, si aplica.">
-          <Input value={sociedad} onChange={(e) => setSociedad(e.target.value)} />
+        <Field label="Sociedad" hint="La que paga, si aplica.">
+          <div className="flex items-center gap-2">
+            <Selector
+              etiqueta="Sociedad"
+              placeholder="Sin decir"
+              valor={sociedadId}
+              onElegir={(v) => setSociedadId(v)}
+              opciones={sociedades.map((s) => ({ value: s.id, label: s.nombre }))}
+              className="min-w-0 flex-1"
+            />
+            {sociedadId && (
+              <Button size="xs" variant="secondary" onClick={() => setSociedadId(null)}>
+                Quitar
+              </Button>
+            )}
+          </div>
         </Field>
         <Field label="Nota">
           <Textarea value={nota} onChange={(e) => setNota(e.target.value)} rows={2} />

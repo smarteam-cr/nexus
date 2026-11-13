@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
+import { compromisoSchema } from "./esquemas";
 import {
+  CATEGORIAS_DE_PAGO,
   COMISIONISTAS_EL_DIA_7,
   cuotasDePago,
   dia7DeLaFactura,
@@ -153,5 +155,13 @@ describe("cuotasDePago", () => {
     const [c] = cuotasDePago(base({ categoria: "IMPUESTOS_Y_CARGAS" }), hoy);
     expect(c.estado).toBe("SIN_FECHA");
     expect(c.fechaEstimadaISO).toBe(hoy);
+  });
+});
+
+describe("la planilla no se anota como pago comprometido (revisión del 2026-11-13)", () => {
+  it("no hay categoría «Planilla»: la caja ya la resta con sus cargas, y anotarla la contaba dos veces", () => {
+    expect(CATEGORIAS_DE_PAGO as readonly string[]).not.toContain("PLANILLA");
+    const r = compromisoSchema.safeParse({ tipo: "PAGO", concepto: "Planilla de noviembre", categoria: "PLANILLA", monto: 1000, moneda: "CRC" });
+    expect(r.success).toBe(false);
   });
 });

@@ -491,7 +491,8 @@ export interface ReporteEquilibrio {
   fx: {
     tasas: TasaDeMes[];
     periodosSinTasa: string[];
-    montosNoConvertidos: Array<{ periodo: string; moneda: MonedaEq; monto: number; concepto: string }>;
+    /** Lo que no se pudo convertir. `rubro` = de qué rubro de egreso es (ausente en un ingreso). */
+    montosNoConvertidos: Array<{ periodo: string; moneda: MonedaEq; monto: number; concepto: string; rubro?: RubroEgreso }>;
     convertidos: number;
     /** De `convertidos`, cuántos con la tasa de su día (el resto, con la del mes). */
     convertidosConTasaDelDia: number;
@@ -731,7 +732,7 @@ export interface PisoVigente {
   /** Cuántos costos entraron a la cuenta. */
   cuantos: number;
   /** Lo que no se pudo convertir y por lo tanto NO está sumado. */
-  noConvertidos: Array<{ concepto: string; moneda: MonedaEq; monto: number }>;
+  noConvertidos: Array<{ concepto: string; moneda: MonedaEq; monto: number; rubro: RubroEgreso }>;
   metas: Array<{ colchonPct: number; monto: number; etiqueta: string }>;
 }
 
@@ -771,7 +772,7 @@ export function pisoVigente(
     if (r === null) {
       // Sin tasa no se aproxima. Queda listado y FUERA del piso: un piso inflado por
       // una conversión inventada es peor que uno que declara lo que le falta.
-      noConvertidos.push({ concepto: c.concepto, moneda: c.moneda, monto: c.monto });
+      noConvertidos.push({ concepto: c.concepto, moneda: c.moneda, monto: c.monto, rubro: c.rubro });
       continue;
     }
     porRubro[c.rubro] = round2(porRubro[c.rubro] + r.monto);
@@ -1015,7 +1016,15 @@ export function calcularEquilibrio(
    * Convierte y, si no puede, lo anota y devuelve null (nunca un cero silencioso). Con fecha y tasas diarias, con la tasa
    * de ESE día; si no, con la del mes.
    */
-  const aPresentacion = (monto: number, m: MonedaEq, periodo: string, concepto: string, fechaISO?: string, tasaFija?: number): number | null => {
+  const aPresentacion = (
+    monto: number,
+    m: MonedaEq,
+    periodo: string,
+    concepto: string,
+    fechaISO?: string,
+    tasaFija?: number,
+    rubro?: RubroEgreso,
+  ): number | null => {
     const delDia = m !== moneda && !tasaFija && fechaISO && tasasDiarias ? tasaDelDia(tasasDiarias, fechaISO) : null;
     const tasa = tasaFija
       ? { periodo, crcPorUsd: tasaFija, fuente: `₡${tasaFija} fijo` }
@@ -1024,7 +1033,7 @@ export function calcularEquilibrio(
         : (tasaPorPeriodo.get(periodo) ?? null);
     const r = convertir(monto, m, moneda, tasa);
     if (r === null) {
-      noConvertidos.push({ periodo, moneda: m, monto, concepto });
+      noConvertidos.push({ periodo, moneda: m, monto, concepto, ...(rubro ? { rubro } : {}) });
       periodosSinTasa.add(periodo);
       return null;
     }
@@ -1058,7 +1067,7 @@ export function calcularEquilibrio(
       pagosDeAguinaldo.push({ periodo: e.periodo, concepto: e.concepto, monto: e.monto, moneda: e.moneda });
       continue;
     }
-    const monto = aPresentacion(e.monto, e.moneda, e.periodo, e.concepto, e.fechaISO, e.tasaFija);
+    const monto = aPresentacion(e.monto, e.moneda, e.periodo, e.concepto, e.fechaISO, e.tasaFija, e.rubro);
     if (monto === null) continue;
 
     mes.rubros[e.rubro] = round2(mes.rubros[e.rubro] + monto);

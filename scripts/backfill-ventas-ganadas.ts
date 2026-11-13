@@ -13,7 +13,7 @@
  */
 import "dotenv/config";
 import { resolverApply } from "./lib/guard";
-import { syncVentasGanadas, PIPELINES_VENTA_PROPIA } from "../lib/ventas/sync-ganadas";
+import { syncVentasGanadas } from "../lib/ventas/sync-ganadas";
 import { clasificarVentas } from "../lib/ventas/clasificar-huecos";
 import { prisma } from "../lib/db/prisma";
 
@@ -84,7 +84,8 @@ async function main() {
   const resumen = clasificarVentas(
     paraClasificar,
     [...porCliente.entries()].map(([clientId, facturado]) => ({ clientId, facturado })),
-    { anio, pipelinesQueCuentan: [...PIPELINES_VENTA_PROPIA] },
+    // La regla única de lo vendido: todos los pipelines (lib/ventas/regla-de-lo-vendido.ts).
+    { anio },
   );
 
   console.log(`\n╔══ VENDIDO ${anio} ══╗`);

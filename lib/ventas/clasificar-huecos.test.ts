@@ -208,6 +208,7 @@ describe("D · bordes", () => {
       "CON_COBRANZA",
       "EN_PLAN",
       "EXCLUIDA",
+      "NO_GENERA_COBRO",
       "PARCIAL",
       "SIN_CLIENTE",
       "SIN_COBRANZA",
@@ -269,6 +270,41 @@ describe("E · lo cargado sin facturar respalda la venta", () => {
   it("E5 sin `programado` se comporta como antes", () => {
     const r = clasificarVentas([v("a", 1000, { clientId: "c1" })], [cob("c1", 400)], OPTS);
     expect(r.ventas[0]).toMatchObject({ clase: "PARCIAL", descubierto: 600, enPlan: 0 });
+  });
+});
+
+// ── F ───────────────────────────────────────────────────────────────────────────
+
+describe("F · la regla única y «no genera cobro» (2026-11-13)", () => {
+  it("F1 sin `pipelinesQueCuentan` cuentan los ganados de todos los pipelines (la regla de lo vendido)", () => {
+    const r = clasificarVentas([v("propia", 1000), v("shared", 5000, { pipelineId: OTRO }), v("cs", 300, { pipelineId: "pipeline-nuevo-de-cs" })], [], {
+      anio: 2026,
+    });
+    expect(r.vendido).toBe(6300);
+    expect(r.cuantas).toBe(3);
+    expect(r.fueraDePipeline).toEqual({ cuantas: 0, monto: 0, sinMonto: 0 });
+  });
+
+  it("F2 «no genera cobro» SIGUE en el vendido y no es un hueco; «excluida» sale del vendido", () => {
+    const r = clasificarVentas(
+      [v("continuidad", 4000, { clientId: "c1", noGeneraCobro: true }), v("prueba", 9000, { clientId: "c1", excluida: true })],
+      [],
+      { anio: 2026 },
+    );
+    expect(r.vendido).toBe(4000);
+    expect(r.hueco).toBe(0);
+    expect(r.ventas.find((x) => x.nombre === "continuidad")).toMatchObject({ clase: "NO_GENERA_COBRO", descubierto: 0 });
+    expect(r.porClase.NO_GENERA_COBRO).toEqual({ cuantas: 1, monto: 4000, descubierto: 0 });
+    expect(r.excluidas).toEqual({ cuantas: 1, monto: 9000 });
+  });
+
+  it("F3 una venta sin cobro no se come lo facturado del cliente: la otra venta queda cubierta", () => {
+    const r = clasificarVentas(
+      [v("addon", 5000, { clientId: "c1", noGeneraCobro: true }), v("implementacion", 2000, { clientId: "c1" })],
+      [cob("c1", 2000)],
+      { anio: 2026 },
+    );
+    expect(r.ventas.find((x) => x.nombre === "implementacion")).toMatchObject({ clase: "CON_COBRANZA", descubierto: 0 });
   });
 });
 

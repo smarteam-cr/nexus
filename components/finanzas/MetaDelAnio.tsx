@@ -27,14 +27,23 @@ const diaCorto = (iso: string) => {
   return `${d.getUTCDate()} ${MESES[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
 };
 
-export default function MetaDelAnio({ datos, conLinea = false }: { datos: MetaYPorFacturar; conLinea?: boolean }) {
+export default function MetaDelAnio({
+  datos,
+  conLinea = false,
+  puedeEditar = true,
+}: {
+  datos: MetaYPorFacturar;
+  conLinea?: boolean;
+  /** false = solo lectura: sin «Definir» ni «Cambiar la meta» (la guarda dirección). */
+  puedeEditar?: boolean;
+}) {
   const lectura = datos.meta;
   const enCurso = datos.anios.find((a) => a.enCurso) ?? null;
   const porFacturar = lectura?.enCurso?.porFacturar ?? 0;
   const tope = Math.max(lectura?.meta.montoUsd ?? 0, ...datos.anios.map((a) => a.usd + (a.enCurso ? porFacturar : 0)), 1);
   return (
     <section className="space-y-4 rounded-xl border border-line bg-surface p-4" aria-labelledby="meta-del-anio">
-      <Encabezado datos={datos} />
+      <Encabezado datos={datos} puedeEditar={puedeEditar} />
       <ul className="space-y-2">
         {datos.anios.map((a) => (
           <BarraDelAnio key={a.anio} a={a} tope={tope} porFacturar={a.enCurso ? porFacturar : 0} />
@@ -82,7 +91,7 @@ export default function MetaDelAnio({ datos, conLinea = false }: { datos: MetaYP
   );
 }
 
-function Encabezado({ datos }: { datos: MetaYPorFacturar }) {
+function Encabezado({ datos, puedeEditar }: { datos: MetaYPorFacturar; puedeEditar: boolean }) {
   const router = useRouter();
   const toast = useToast();
   const lectura = datos.meta;
@@ -135,7 +144,7 @@ function Encabezado({ datos }: { datos: MetaYPorFacturar }) {
         {!editando && (
           <div className="flex items-center gap-2">
             {datos.historial.length > 1 && <BotonTexto onClick={() => setVerHistoria((v) => !v)}>{verHistoria ? "Ocultar la historia" : "Ver la historia"}</BotonTexto>}
-            <BotonBlanco onClick={() => setEditando(true)}>{lectura ? "Cambiar la meta" : "Definir la meta"}</BotonBlanco>
+            {puedeEditar && <BotonBlanco onClick={() => setEditando(true)}>{lectura ? "Cambiar la meta" : "Definir la meta"}</BotonBlanco>}
           </div>
         )}
       </div>

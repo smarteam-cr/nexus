@@ -324,7 +324,11 @@ export default function SeguimientoCobranza({ puedeEditar, onOpenCuenta }: { pue
         open={!!descartando}
         onClose={() => setDescartando(null)}
         title="Descartar la venta"
-        description={descartando ? `«${descartando.nombre}» sale de la lista y queda con tu nombre y la razón.` : undefined}
+        description={
+          descartando
+            ? `«${descartando.nombre}» no genera cobro: sale de esta lista y queda con tu nombre y la razón. Sigue contando como venta (en lo vendido, la cuota y la comisión).`
+            : undefined
+        }
         footer={
           <>
             <Button variant="secondary" onClick={() => setDescartando(null)}>Cancelar</Button>

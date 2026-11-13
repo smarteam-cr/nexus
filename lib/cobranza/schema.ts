@@ -1007,6 +1007,16 @@ export const reporteEquilibrioQuerySchema = z.object({
 export type ReporteEquilibrioQuery = z.infer<typeof reporteEquilibrioQuerySchema>;
 
 /**
+ * Los años que se le pueden pedir al reporte de equilibrio (revisión del 2026-11-13): los dos anteriores al de hoy —los
+ * que ofrece la pantalla—, el de hoy y el que viene. Un año viejo no tiene tipo de cambio, y sin tasa el reporte junta
+ * montos sueltos que nadie mira; abrirlo no le sirve a nadie y solo agranda lo que viaja.
+ */
+export function anioDelReportePermitido(anio: number, hoyISO: string): boolean {
+  const hoy = Number(hoyISO.slice(0, 4));
+  return Number.isInteger(anio) && anio >= hoy - 2 && anio <= hoy + 1;
+}
+
+/**
  * El tipo de cambio de un mes. `fuente` es OBLIGATORIA y no un `.optional()` de
  * cortesía: un número de conversión sin procedencia no se puede auditar ni discutir,
  * y este es el único dato del módulo que autoriza a mezclar dos monedas.

@@ -21,7 +21,7 @@ export const NIVEL_DE_PRIORIDAD: Record<RubroSale, 1 | 2 | 3 | 4> = {
 };
 
 export const ETIQUETA_DE_NIVEL: Record<1 | 2 | 3 | 4, string> = {
-  1: "Primero: planilla",
+  1: "Primero: personal (planilla y comisiones)",
   2: "Después: impuestos y cargas sociales",
   3: "Después: proveedores y demás pagos",
   4: "Al final: herramientas",

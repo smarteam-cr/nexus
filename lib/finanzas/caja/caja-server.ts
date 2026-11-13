@@ -2,9 +2,9 @@
  * lib/finanzas/caja/caja-server.ts — lee todo lo que necesita «Dónde está la plata» y lo arma. Server-only.
  *
  * ⚠ PRIVACIDAD: lo consume quien tiene «Caja y pagos» en su permiso por persona (María José), que NO es el de salarios.
- * Los costos recurrentes de categoría Salario se leen con su monto y salen de acá SUMADOS como «Planilla», sin nombre ni
- * monto por persona: el `select` no pide el nombre de ningún costo, y lo vigila guardas.test.ts. Lo mismo las
- * comisiones de vendedor: una línea por día de pago, sin el vendedor.
+ * Los salarios (costos recurrentes de categoría Salario) y las comisiones de vendedor salen de acá JUNTOS como «Personal»,
+ * una línea por corte y en una sola moneda (lib/finanzas/caja/personal.ts): nunca una línea por moneda ni por día que
+ * pueda ser de una sola persona. El `select` no pide el nombre de ningún costo, y lo vigila guardas.test.ts.
  *
  * Lo que entra y sale sale de las MISMAS funciones que la caja neta (`loadProyeccion`, `proyectarCostos`,
  * `proyectarGastos`, con sus cortes): un cobro o un costo no puede contar distinto acá y allá.
@@ -32,6 +32,7 @@ import {
 } from "./proyeccion";
 import { ordenarPagosSiNoAlcanza, type OrdenDePagos } from "./prioridad";
 import { pagosPorSemana, type PagoDeLaSemana, type SemanaDePagos } from "./semana";
+import { corteDelDia, juntarPersonal, type PartidaDePersonal } from "./personal";
 
 /** Un saldo cargado a mano con más días que esto se marca como viejo: lo que pasó después no está en la cuenta. */
 export const DIAS_PARA_SALDO_VIEJO = 3;
@@ -41,6 +42,8 @@ export interface CuentaDeBancoDTO {
   nombre: string;
   moneda: "CRC" | "USD";
   origen: "MANUAL" | "MERCURY";
+  /** La sociedad de la lista oficial: su id y su nombre. */
+  sociedadId: string | null;
   sociedad: string | null;
   saldo: number | null;
   /** Solo Mercury: el saldo contable (incluye lo enviado que todavía no se asentó). */
@@ -68,6 +71,7 @@ export interface CompromisoDTO {
   cobroEtiqueta: string | null;
   estado: "PENDIENTE" | "PAGADO" | "ANULADO";
   pagadoISO: string | null;
+  sociedadId: string | null;
   sociedad: string | null;
   nota: string | null;
   registradoPor: string;
@@ -94,6 +98,8 @@ export interface CajaDTO {
   comisionistasElDia7: boolean;
   /** Los cobros todavía sin cobrar, para atar un pago del escenario A al cliente que tiene que pagar antes. */
   cobrosParaAtar: Array<{ id: string; etiqueta: string }>;
+  /** Las sociedades de la lista oficial (lib/sociedades), para elegir la de una cuenta o un pago. */
+  sociedades: Array<{ id: string; nombre: string }>;
 }
 
 const num = (d: unknown): number => Number(d);
@@ -102,14 +108,16 @@ const round2 = (n: number) => Math.round(n * 100) / 100;
 const diasEntre = (desdeISO: string, hastaISO: string) =>
   Math.round((Date.parse(`${hastaISO}T00:00:00Z`) - Date.parse(`${desdeISO}T00:00:00Z`)) / 86_400_000);
 
-const RUBRO_DE_COSTO: Record<CostoProyeccionInput["categoria"], "PLANILLA" | "HERRAMIENTAS" | "FIJOS"> = {
-  SALARIO: "PLANILLA",
+/** Los recurrentes que no son salario. Los salarios van por «Personal» (personal.ts), junto con las comisiones. */
+const RUBRO_DE_COSTO: Record<Exclude<CostoProyeccionInput["categoria"], "SALARIO">, "HERRAMIENTAS" | "FIJOS"> = {
   HERRAMIENTA: "HERRAMIENTAS",
   FIJO_OPERACION: "FIJOS",
 };
 
+/** El concepto de la línea de personal: no dice cuántas personas hay, ni nombra a ninguna. */
+export const CONCEPTO_DE_PERSONAL = "Personal (planilla y comisiones de vendedor)";
+
 function rubroDeCategoria(c: CategoriaDePago): RubroSale {
-  if (c === "PLANILLA") return "PLANILLA";
   if (c === "IMPUESTOS_Y_CARGAS") return "IMPUESTOS_Y_CARGAS";
   if (c === "HERRAMIENTA") return "HERRAMIENTAS";
   return "PAGOS";
@@ -122,13 +130,14 @@ function fmtCobro(c: { fechaProgramada: Date; monto: unknown; moneda: string; cu
 
 export async function cargarCaja(hoyISO: string): Promise<CajaDTO> {
   const hoy = new Date(`${hoyISO}T00:00:00Z`);
-  const [entra, filasCostos, filasGastos, comisionesAliado, comisionesVendedor, tc, cuentas, compromisos, revisiones, cobrosAbiertos] =
+  const [entra, filasCostos, filasGastos, comisionesAliado, comisionesVendedor, tc, cuentas, compromisos, revisiones, cobrosAbiertos, sociedades] =
     await Promise.all([
       loadProyeccion(hoyISO),
-      /* ⚠ Sin `nombre`: los salarios salen sumados y nunca con el nombre de la persona. */
+      /* ⚠ Sin `nombre`: los salarios salen sumados y nunca con el nombre de la persona. El id de la persona solo sirve
+         para contar a cuántas junta la línea de personal; no viaja. */
       prisma.costoRecurrente.findMany({
         where: { activo: true },
-        select: { id: true, categoria: true, monto: true, moneda: true, frecuencia: true, activo: true, finalizadoEl: true },
+        select: { id: true, categoria: true, monto: true, moneda: true, frecuencia: true, activo: true, finalizadoEl: true, teamMemberId: true },
       }),
       prisma.gastoPuntual.findMany({
         where: { fecha: { gte: hoy } },
@@ -143,12 +152,13 @@ export async function cargarCaja(hoyISO: string): Promise<CajaDTO> {
       prisma.cuentaDeBanco.findMany({
         where: { activa: true },
         orderBy: [{ orden: "asc" }, { nombre: "asc" }],
-        include: { saldos: { orderBy: { fecha: "desc" }, take: 1 } },
+        include: { saldos: { orderBy: { fecha: "desc" }, take: 1 }, sociedad: { select: { nombre: true } } },
       }),
       prisma.pagoComprometido.findMany({
         where: { OR: [{ estado: "PENDIENTE" }, { estado: "PAGADO", pagadoEl: { gte: new Date(hoy.getTime() - 30 * 86_400_000) } }] },
         orderBy: [{ createdAt: "desc" }],
         include: {
+          sociedad: { select: { nombre: true } },
           cobro: { select: { estado: true, fechaProgramada: true, fechaCobro: true, monto: true, moneda: true, cuenta: { select: { client: { select: { name: true } } } } } },
         },
       }),
@@ -159,6 +169,7 @@ export async function cargarCaja(hoyISO: string): Promise<CajaDTO> {
         take: 300,
         select: { id: true, fechaProgramada: true, monto: true, moneda: true, cuenta: { select: { client: { select: { name: true } } } } },
       }),
+      prisma.sociedadPropia.findMany({ where: { activa: true }, orderBy: [{ orden: "asc" }, { nombre: "asc" }], select: { id: true, nombre: true } }),
     ]);
 
   const crcPorUsd = tc ? num(tc.venta) : null;
@@ -176,6 +187,23 @@ export async function cargarCaja(hoyISO: string): Promise<CajaDTO> {
   }));
   const sale = proyectarCostos(costos, { todayISO: hoyISO });
   const costosPorKey = new Map(sale.buckets.map((b) => [b.key, b]));
+
+  // ── Personal: los salarios de cada corte y las comisiones de vendedor del corte en que se pagan, juntos ──
+  const personaDelCosto = new Map(filasCostos.map((c) => [c.id, c.teamMemberId ?? `costo:${c.id}`]));
+  const partidasDePersonal: PartidaDePersonal[] = [];
+  for (const b of sale.buckets) {
+    for (const k of b.costos) {
+      if (k.categoria === "SALARIO") partidasDePersonal.push({ corteKey: b.key, persona: personaDelCosto.get(k.costoId) ?? k.costoId, moneda: k.moneda, monto: k.monto });
+    }
+  }
+  for (const d of comisionesVendedor.devengadas) {
+    if (d.moneda !== "CRC" && d.moneda !== "USD") continue;
+    // Lo atrasado se debe ya: cae en el primer corte. Lo que cae después del último corte no entra (como todo lo fechado).
+    const corte = corteDelDia(entra.buckets, d.fechaPago);
+    if (corte) partidasDePersonal.push({ corteKey: corte.key, persona: d.teamMemberId, moneda: d.moneda, monto: d.monto });
+  }
+  const personal = juntarPersonal(partidasDePersonal, crcPorUsd);
+
   const cortes: EntradaDeProyeccion["cortes"] = entra.buckets.map((b) => ({
     key: b.key,
     etiqueta: b.etiqueta,
@@ -183,7 +211,12 @@ export async function cargarCaja(hoyISO: string): Promise<CajaDTO> {
     desdeISO: b.desdeISO,
     hastaISO: b.hastaISO,
     cobros: b.totales,
-    costos: (costosPorKey.get(b.key)?.costos ?? []).map((k) => ({ rubro: RUBRO_DE_COSTO[k.categoria], moneda: k.moneda, monto: k.monto })),
+    costos: [
+      ...personal.filter((p) => p.corteKey === b.key).map((p) => ({ rubro: "PLANILLA" as const, moneda: p.moneda, monto: p.monto })),
+      ...(costosPorKey.get(b.key)?.costos ?? []).flatMap((k) =>
+        k.categoria === "SALARIO" ? [] : [{ rubro: RUBRO_DE_COSTO[k.categoria], moneda: k.moneda, monto: k.monto }],
+      ),
+    ],
   }));
 
   // ── Lo que tiene día ──
@@ -216,25 +249,8 @@ export async function cargarCaja(hoyISO: string): Promise<CajaDTO> {
     }
   }
 
-  // Comisiones de vendedor por cobrar al vendedor: una línea por día de pago y moneda, sin nombres.
-  const porDia = new Map<string, { fechaISO: string; moneda: "CRC" | "USD"; monto: number; personas: Set<string> }>();
-  for (const d of comisionesVendedor.devengadas) {
-    if (d.moneda !== "CRC" && d.moneda !== "USD") continue;
-    const k = `${d.fechaPago}:${d.moneda}`;
-    const g = porDia.get(k) ?? { fechaISO: d.fechaPago, moneda: d.moneda, monto: 0, personas: new Set<string>() };
-    g.monto = round2(g.monto + d.monto);
-    g.personas.add(d.teamMemberId);
-    porDia.set(k, g);
-  }
-  for (const g of porDia.values()) {
-    const concepto = `Comisiones de vendedor (${g.personas.size === 1 ? "1 persona" : `${g.personas.size} personas`})`;
-    fechados.push({ fechaISO: g.fechaISO, moneda: g.moneda, monto: g.monto, rubro: "COMISIONES_DE_VENDEDOR", concepto });
-    semana.push({
-      clave: `comision-vendedor:${g.fechaISO}:${g.moneda}`, concepto, beneficiario: null, tipo: "Comisiones de vendedor", monto: g.monto, moneda: g.moneda,
-      fechaISO: g.fechaISO, fechaEstimadaISO: g.fechaISO < hoyISO ? hoyISO : g.fechaISO, estado: "PROGRAMADO", atrasado: g.fechaISO < hoyISO,
-      porQue: comisionesVendedor.politicaPago.label, compromisoId: null, parte: null,
-    });
-  }
+  // Las comisiones de vendedor ya van en «Personal», con la planilla del corte en que se pagan (arriba): una línea propia
+  // por día y moneda podía ser la comisión de una sola persona.
 
   // Los pagos comprometidos y las reservas.
   const reservas: EntradaDeProyeccion["reservas"] = [];
@@ -289,24 +305,26 @@ export async function cargarCaja(hoyISO: string): Promise<CajaDTO> {
       cobroEtiqueta: c.cobro ? fmtCobro(c.cobro) : null,
       estado: c.estado,
       pagadoISO: isoDay(c.pagadoEl),
-      sociedad: c.sociedad,
+      sociedadId: c.sociedadId,
+      sociedad: c.sociedad?.nombre ?? null,
       nota: c.nota,
       registradoPor: c.registradoPor,
       proximaCuota,
     });
   }
 
-  // La planilla de cada quincena, en su día (el 15 y el último del mes), sumada.
-  for (const b of sale.buckets) {
+  // Personal de cada quincena, en su día (el 15 y el último del mes): la planilla y las comisiones de esa quincena, juntas.
+  for (const b of entra.buckets) {
     if (b.granularidad !== "quincena") continue;
-    const planilla: TotalesMoneda = { CRC: 0, USD: 0 };
-    for (const k of b.costos) if (k.categoria === "SALARIO") planilla[k.moneda] = round2(planilla[k.moneda] + k.monto);
-    for (const moneda of ["CRC", "USD"] as const) {
-      if (planilla[moneda] === 0) continue;
+    for (const p of personal) {
+      if (p.corteKey !== b.key) continue;
       semana.push({
-        clave: `planilla:${b.key}:${moneda}`, concepto: `Planilla ${b.etiqueta}`, beneficiario: null, tipo: "Planilla", monto: planilla[moneda], moneda,
+        clave: `personal:${b.key}:${p.moneda}`, concepto: `${CONCEPTO_DE_PERSONAL} · ${b.etiqueta}`, beneficiario: null, tipo: "Personal", monto: p.monto, moneda: p.moneda,
         fechaISO: b.hastaISO, fechaEstimadaISO: b.hastaISO < hoyISO ? hoyISO : b.hastaISO, estado: "PROGRAMADO", atrasado: false,
-        porQue: "La mitad del costo mensual de los salarios, el 15 y el último día del mes (estimado de los recurrentes).", compromisoId: null, parte: null,
+        porQue:
+          "La mitad del costo mensual de los salarios (estimado de los recurrentes) más las comisiones de vendedor de la quincena, el 15 y el último día del mes. " +
+          "Va en una sola moneda, con lo de la otra al tipo de cambio: así no se lee el salario ni la comisión de nadie.",
+        compromisoId: null, parte: null,
       });
     }
   }
@@ -321,7 +339,8 @@ export async function cargarCaja(hoyISO: string): Promise<CajaDTO> {
       nombre: c.nombre,
       moneda: c.moneda,
       origen: c.origen,
-      sociedad: c.sociedad,
+      sociedadId: c.sociedadId,
+      sociedad: c.sociedad?.nombre ?? null,
       saldo: s ? num(s.monto) : null,
       saldoContable: s?.montoContable != null ? num(s.montoContable) : null,
       fechaISO,
@@ -378,6 +397,7 @@ export async function cargarCaja(hoyISO: string): Promise<CajaDTO> {
     },
     comisionistasElDia7: COMISIONISTAS_EL_DIA_7,
     cobrosParaAtar: cobrosAbiertos.map((c) => ({ id: c.id, etiqueta: fmtCobro(c) })),
+    sociedades,
   };
 }
 

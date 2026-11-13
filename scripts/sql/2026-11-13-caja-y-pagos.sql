@@ -7,7 +7,8 @@
 -- Decisión completa: docs/DECISIONS.md › «La caja y los pagos».
 --
 -- QUÉ ENTRA. Cuatro enums y cuatro tablas nuevas:
---   CuentaDeBanco     las cuentas (BCR colones, la de dólares, las de Mercury), con la sociedad en texto libre
+--   CuentaDeBanco     las cuentas (BCR colones, la de dólares, las de Mercury), con su sociedad de la lista oficial
+--                     ("SociedadPropia", FK opcional; ver abajo)
 --   SaldoDeCuenta     el saldo de una cuenta un día (a mano, o leído de Mercury por su copia diaria)
 --   PagoComprometido  un pago comprometido o una reserva, con lo que la política necesita para fecharlo
 --   RevisionDeCaja    quién revisó la caja cada día
@@ -28,8 +29,10 @@ BEGIN
     CREATE TYPE "TipoDeCompromiso" AS ENUM ('PAGO', 'RESERVA');
   END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'CategoriaDePago') THEN
+    -- Sin 'PLANILLA' (revisión del 2026-11-13): la caja ya resta la planilla con sus cargas desde Costos; anotarla como
+    -- pago comprometido la contaba dos veces.
     CREATE TYPE "CategoriaDePago" AS ENUM (
-      'PLANILLA', 'IMPUESTOS_Y_CARGAS', 'SERVICIOS_PROFESIONALES', 'COMISIONISTA', 'ARTICULO_FISICO', 'HERRAMIENTA', 'OTRO'
+      'IMPUESTOS_Y_CARGAS', 'SERVICIOS_PROFESIONALES', 'COMISIONISTA', 'ARTICULO_FISICO', 'HERRAMIENTA', 'OTRO'
     );
   END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'EstadoDeCompromiso') THEN
@@ -43,7 +46,7 @@ CREATE TABLE IF NOT EXISTS "CuentaDeBanco" (
   "moneda"           "CobranzaMoneda" NOT NULL,
   "origen"           "OrigenDeSaldo" NOT NULL DEFAULT 'MANUAL',
   "mercuryAccountId" TEXT,
-  "sociedad"         TEXT,
+  "sociedadId"       TEXT,
   "activa"           BOOLEAN NOT NULL DEFAULT true,
   "orden"            INTEGER NOT NULL DEFAULT 0,
   "createdAt"        TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -86,7 +89,7 @@ CREATE TABLE IF NOT EXISTS "PagoComprometido" (
   "estado"            "EstadoDeCompromiso" NOT NULL DEFAULT 'PENDIENTE',
   "pagadoEl"          DATE,
   "pagadoPor"         TEXT,
-  "sociedad"          TEXT,
+  "sociedadId"        TEXT,
   "nota"              TEXT,
   "registradoPor"     TEXT NOT NULL,
   "createdAt"         TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -101,6 +104,11 @@ CREATE TABLE IF NOT EXISTS "PagoComprometido" (
 CREATE INDEX IF NOT EXISTS "PagoComprometido_estado_tipo_idx" ON "PagoComprometido" ("estado", "tipo");
 CREATE INDEX IF NOT EXISTS "PagoComprometido_cobroId_idx" ON "PagoComprometido" ("cobroId");
 
+-- En una base donde ya corrió la primera versión de este archivo (la local, la de pruebas), las tablas existen con la
+-- sociedad en texto: esto les suma la columna nueva. En producción, que nace con ella, no hace nada.
+ALTER TABLE "CuentaDeBanco" ADD COLUMN IF NOT EXISTS "sociedadId" TEXT;
+ALTER TABLE "PagoComprometido" ADD COLUMN IF NOT EXISTS "sociedadId" TEXT;
+
 CREATE TABLE IF NOT EXISTS "RevisionDeCaja" (
   "id"          TEXT NOT NULL,
   "fecha"       DATE NOT NULL,
@@ -111,6 +119,23 @@ CREATE TABLE IF NOT EXISTS "RevisionDeCaja" (
   CONSTRAINT "RevisionDeCaja_pkey" PRIMARY KEY ("id")
 );
 CREATE UNIQUE INDEX IF NOT EXISTS "RevisionDeCaja_fecha_key" ON "RevisionDeCaja" ("fecha");
+
+-- La sociedad, de la lista oficial (revisión del 2026-11-13: antes era texto libre). La tabla "SociedadPropia" nace en
+-- 2026-11-13-sociedades-de-smarteam.sql, que corre DESPUÉS de este por el nombre: si todavía no existe, la FK la pone
+-- ese archivo (tiene el mismo bloque). Así da igual el orden, y los dos se pueden correr dos veces.
+DO $$
+BEGIN
+  IF to_regclass('"SociedadPropia"') IS NOT NULL THEN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'CuentaDeBanco_sociedadId_fkey') THEN
+      ALTER TABLE "CuentaDeBanco" ADD CONSTRAINT "CuentaDeBanco_sociedadId_fkey"
+        FOREIGN KEY ("sociedadId") REFERENCES "SociedadPropia"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'PagoComprometido_sociedadId_fkey') THEN
+      ALTER TABLE "PagoComprometido" ADD CONSTRAINT "PagoComprometido_sociedadId_fkey"
+        FOREIGN KEY ("sociedadId") REFERENCES "SociedadPropia"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+    END IF;
+  END IF;
+END $$;
 
 ALTER TABLE "CuentaDeBanco" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "SaldoDeCuenta" ENABLE ROW LEVEL SECURITY;

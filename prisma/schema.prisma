@@ -4435,6 +4435,9 @@ model SociedadPropia {
   updatedAt    DateTime @updatedAt
 
   cuentas          CuentaFinanciera[]
+  /// Las cuentas de banco y los pagos comprometidos de la caja que son de esta sociedad (2026-11-13).
+  cuentasDeBanco   CuentaDeBanco[]    @relation("CuentasDeBancoDeLaSociedad")
+  pagosComprometidos PagoComprometido[] @relation("PagosDeLaSociedad")
   movimientosLibro MovimientoEntreSociedades[] @relation("MovimientoDeLosLibros")
   movimientosContra MovimientoEntreSociedades[] @relation("MovimientoDeLaContraparte")
 }
@@ -6034,9 +6037,13 @@ model VentaGanada {
   sospechaPrueba Boolean @default(false)
   excluida       Boolean @default(false)
   excluidaMotivo String?
-  /// Quién la descartó y cuándo (2026-11-13). nullable porque la mayoría no se descarta y la de antes no lo dice.
-  excluidaPor    String?
-  excluidaEn     DateTime?
+  /// «No genera cobro» (2026-11-13, Cobranza › Seguimiento): es una venta de verdad —una continuidad, un add-on, una
+  /// renovación que se cobra en otro contrato— que no lleva cobro propio. Sale de la lista de ventas sin cobro y SIGUE en
+  /// el vendido, la cuota del vendedor, el bono de las metas y la comisión. ≠ `excluida`, que dice «no es una venta».
+  /// La marca es `noGeneraCobroEn`; los tres van juntos (CHECK en el SQL). nullable porque casi ninguna venta la lleva.
+  noGeneraCobroEn     DateTime?
+  noGeneraCobroPor    String?
+  noGeneraCobroMotivo String?
   /// Quién persigue el cobro mientras la venta no tenga respaldo en cobranza (2026-11-13). Un correo del equipo. nullable
   /// porque null es el responsable por defecto (lib/cobranza/responsables.ts): así cambiar a quien cobra no reescribe filas.
   responsableCobroEmail String?
@@ -7030,9 +7037,9 @@ enum TipoDeCompromiso {
   RESERVA
 }
 
-/// La categoría decide la regla de la política de pagos y el orden cuando la caja no alcanza.
+/// La categoría decide la regla de la política de pagos y el orden cuando la caja no alcanza. Sin PLANILLA a propósito
+/// (2026-11-13): la caja ya resta la planilla con sus cargas; anotarla como compromiso la contaba dos veces.
 enum CategoriaDePago {
-  PLANILLA
   IMPUESTOS_Y_CARGAS
   SERVICIOS_PROFESIONALES
   COMISIONISTA
@@ -7056,8 +7063,10 @@ model CuentaDeBanco {
   origen           OrigenDeSaldo  @default(MANUAL)
   /// La cuenta en Mercury. nullable porque solo la tienen las de Mercury.
   mercuryAccountId String?        @unique
-  /// La sociedad dueña de la cuenta, en texto libre. nullable: el modelo de sociedad lo construye otro frente.
-  sociedad         String?
+  /// La sociedad dueña de la cuenta, de la lista oficial (lib/sociedades). nullable: una cuenta puede no decirlo; la de
+  /// Mercury la toma de su razón social. SetNull: borrar la sociedad no borra la cuenta.
+  sociedadId       String?
+  sociedad         SociedadPropia? @relation("CuentasDeBancoDeLaSociedad", fields: [sociedadId], references: [id], onDelete: SetNull)
   activa           Boolean        @default(true)
   orden            Int            @default(0)
   saldos           SaldoDeCuenta[]
@@ -7114,8 +7123,10 @@ model PagoComprometido {
   /// nullable mientras no se pague.
   pagadoEl          DateTime?          @db.Date
   pagadoPor         String?
-  /// La sociedad que paga, en texto libre. nullable: el modelo de sociedad lo construye otro frente.
-  sociedad          String?
+  /// La sociedad que paga, de la lista oficial (lib/sociedades). nullable: no todo pago lo dice. SetNull: borrar la
+  /// sociedad no borra el pago.
+  sociedadId        String?
+  sociedad          SociedadPropia?    @relation("PagosDeLaSociedad", fields: [sociedadId], references: [id], onDelete: SetNull)
   nota              String?            @db.Text
   registradoPor     String
   createdAt         DateTime           @default(now())

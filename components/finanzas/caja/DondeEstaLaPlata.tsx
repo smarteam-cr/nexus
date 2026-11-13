@@ -12,7 +12,7 @@
 import { useState } from "react";
 import { fetchJson } from "@/lib/api/fetch-json";
 import { useToast } from "@/components/ui/Toast";
-import { Alert, Button, EmptyState, Field, InfoHint, Input, Modal, PageHeader, Segmentado } from "@/components/ui";
+import { Alert, Button, EmptyState, Field, InfoHint, Input, Modal, PageHeader, Segmentado, Selector } from "@/components/ui";
 import { fmtDiaMes, fmtMonto } from "@/components/cobranza/format";
 import type { CajaDTO, CompromisoDTO, CuentaDeBancoDTO } from "@/lib/finanzas/caja/caja-server";
 import { ETIQUETA_DE_CATEGORIA, ETIQUETA_DE_ESTADO, REGLA_DE_ESCENARIO } from "@/lib/finanzas/caja/politica";
@@ -145,7 +145,7 @@ export default function DondeEstaLaPlata({ initial, puedeEditar }: Props) {
         />
         <Cifra
           titulo={p.llegaAlCierre ? "Libre al cierre del año" : `Libre al ${fmtDiaMes(p.hastaISO)}`}
-          explicacion={`Lo libre hoy, más lo que falta cobrar a los clientes (la misma proyección de la caja neta) y las comisiones de aliados por cobrar, menos la planilla, las herramientas y los costos fijos recurrentes, los gastos anotados, los pagos comprometidos y las comisiones de vendedor, hasta el ${fmtDiaMes(p.hastaISO)}. No cuenta lo vencido ni lo que falta facturar: está abajo, aparte.`}
+          explicacion={`Lo libre hoy, más lo que falta cobrar a los clientes (la misma proyección de la caja neta) y las comisiones de aliados por cobrar, menos lo de personal (la planilla y las comisiones de vendedor, juntas), las herramientas y los costos fijos recurrentes, los gastos anotados y los pagos comprometidos, hasta el ${fmtDiaMes(p.hastaISO)}. No cuenta lo vencido ni lo que falta facturar: está abajo, aparte.`}
           valor={p.alCierre.libreEnUsd !== null ? fmtUsd(p.alCierre.libreEnUsd) : <DosMonedas t={p.alCierre.libre} />}
           detalle={p.alCierre.libreEnUsd !== null ? <DosMonedas t={p.alCierre.libre} className="flex-row gap-2" /> : undefined}
           tono={p.alCierre.libreEnUsd !== null && p.alCierre.libreEnUsd < 0 ? "mal" : "normal"}
@@ -212,7 +212,7 @@ export default function DondeEstaLaPlata({ initial, puedeEditar }: Props) {
         <Seccion
           key={s.desdeISO}
           titulo={s.esLaDeHoy ? `Pagos de esta semana (${fmtDiaMes(s.desdeISO)} al ${fmtDiaMes(s.hastaISO)})` : `La próxima semana (${fmtDiaMes(s.desdeISO)} al ${fmtDiaMes(s.hastaISO)})`}
-          explicacion="Según la política aprobada: servicios profesionales y outsourcing facturan del 1 al 3 y se pagan el 7 si el cliente ya pagó; artículos físicos los viernes, con corte el miércoles y hasta 50 % de adelanto; comisionistas, mes vencido. Más la planilla de la quincena (sumada), las comisiones de vendedor y los gastos anotados con día. Las herramientas y costos fijos no van acá: no tienen día anotado."
+          explicacion="Según la política aprobada: servicios profesionales y outsourcing facturan del 1 al 3 y se pagan el 7 si el cliente ya pagó; artículos físicos los viernes, con corte el miércoles y hasta 50 % de adelanto; comisionistas, mes vencido. Más lo de personal de la quincena (la planilla y las comisiones de vendedor, en una sola línea y una sola moneda, para que no se lea el salario ni la comisión de nadie) y los gastos anotados con día. Las herramientas y costos fijos no van acá: no tienen día anotado."
           accion={<DosMonedas t={s.total} className="items-end text-sm font-semibold" />}
         >
           {s.pagos.length === 0 && s.esperando.length === 0 ? (
@@ -274,7 +274,7 @@ export default function DondeEstaLaPlata({ initial, puedeEditar }: Props) {
       {caja.orden && faltante && (
         <Seccion
           titulo={`La plata no alcanza en ${faltante.etiqueta}: este es el orden de pago`}
-          explicacion="Primero la planilla, después los impuestos y las cargas sociales, después los proveedores y demás pagos, y las herramientas al final; dentro de cada nivel, lo que vence antes. El orden es estricto: si un pago no alcanza, los de después tampoco se pagan, aunque uno más chico entrara. Lo disponible es lo libre de hoy más lo que entra hasta esa quincena."
+          explicacion="Primero lo de personal (planilla y comisiones de vendedor), después los impuestos y las cargas sociales, después los proveedores y demás pagos, y las herramientas al final; dentro de cada nivel, lo que vence antes. El orden es estricto: si un pago no alcanza, los de después tampoco se pagan, aunque uno más chico entrara. Lo disponible es lo libre de hoy más lo que entra hasta esa quincena."
         >
           <p className="text-[13px] text-fg-secondary">
             Disponible hasta {faltante.etiqueta}: {caja.orden.disponibleEnUsd !== null ? fmtUsd(caja.orden.disponibleEnUsd) : <DosMonedas t={caja.orden.disponible} />}. Falta:{" "}
@@ -304,7 +304,7 @@ export default function DondeEstaLaPlata({ initial, puedeEditar }: Props) {
       {/* ── Quincena por quincena ── */}
       <Seccion
         titulo="Quincena por quincena hasta el cierre"
-        explicacion="Los mismos cortes que la caja neta. Entra: cobros a clientes y comisiones de aliados. Sale: planilla, impuestos, pagos comprometidos, comisiones de vendedor, gastos anotados, costos fijos y herramientas (pasa el mouse por la cifra para ver el detalle). Lo libre al final ya descuenta lo apartado. Lo vencido de la quincena anterior y no pagado se cuenta en la primera."
+        explicacion="Los mismos cortes que la caja neta. Entra: cobros a clientes y comisiones de aliados. Sale: personal (planilla y comisiones de vendedor, en una sola moneda), impuestos, pagos comprometidos, gastos anotados, costos fijos y herramientas (pasa el mouse por la cifra para ver el detalle). Lo libre al final ya descuenta lo apartado. Lo vencido de la quincena anterior y no pagado se cuenta en la primera."
       >
         <div className="overflow-x-auto">
           <table className="w-full min-w-[640px] text-[13px]">
@@ -486,9 +486,10 @@ export default function DondeEstaLaPlata({ initial, puedeEditar }: Props) {
       )}
       {cuentaNueva && (
         <CuentaModal
+          sociedades={caja.sociedades}
           onCerrar={() => setCuentaNueva(false)}
-          onGuardar={async (nombre, moneda, sociedad) => {
-            const ok = await enviar(`${API}/cuentas`, "POST", { nombre, moneda, sociedad }, "Cuenta agregada.");
+          onGuardar={async (nombre, moneda, sociedadId) => {
+            const ok = await enviar(`${API}/cuentas`, "POST", { nombre, moneda, sociedadId }, "Cuenta agregada.");
             if (ok) setCuentaNueva(false);
           }}
         />
@@ -499,6 +500,7 @@ export default function DondeEstaLaPlata({ initial, puedeEditar }: Props) {
           inicial={form.inicial}
           tipoNuevo={form.tipo}
           cobros={caja.cobrosParaAtar}
+          sociedades={caja.sociedades}
           comisionistasElDia7={caja.comisionistasElDia7}
           onCerrar={() => setForm(null)}
           onGuardar={guardarCompromiso}
@@ -566,10 +568,18 @@ function SaldoModal({
   );
 }
 
-function CuentaModal({ onCerrar, onGuardar }: { onCerrar: () => void; onGuardar: (nombre: string, moneda: "CRC" | "USD", sociedad: string | null) => Promise<void> }) {
+function CuentaModal({
+  sociedades,
+  onCerrar,
+  onGuardar,
+}: {
+  sociedades: Array<{ id: string; nombre: string }>;
+  onCerrar: () => void;
+  onGuardar: (nombre: string, moneda: "CRC" | "USD", sociedadId: string | null) => Promise<void>;
+}) {
   const [nombre, setNombre] = useState("");
   const [moneda, setMoneda] = useState<"CRC" | "USD">("CRC");
-  const [sociedad, setSociedad] = useState("");
+  const [sociedadId, setSociedadId] = useState<string | null>(null);
   return (
     <Modal
       open
@@ -581,7 +591,7 @@ function CuentaModal({ onCerrar, onGuardar }: { onCerrar: () => void; onGuardar:
           <Button variant="secondary" onClick={onCerrar}>
             Cancelar
           </Button>
-          <Button variant="primary" disabled={!nombre.trim()} onClick={() => void onGuardar(nombre.trim(), moneda, sociedad.trim() || null)}>
+          <Button variant="primary" disabled={!nombre.trim()} onClick={() => void onGuardar(nombre.trim(), moneda, sociedadId)}>
             Agregar
           </Button>
         </div>
@@ -603,7 +613,13 @@ function CuentaModal({ onCerrar, onGuardar }: { onCerrar: () => void; onGuardar:
           />
         </Field>
         <Field label="Sociedad" hint="La dueña de la cuenta, si aplica.">
-          <Input value={sociedad} onChange={(e) => setSociedad(e.target.value)} />
+          <Selector
+            etiqueta="Sociedad"
+            placeholder="Sin decir"
+            valor={sociedadId}
+            onElegir={(v) => setSociedadId(v)}
+            opciones={sociedades.map((s) => ({ value: s.id, label: s.nombre }))}
+          />
         </Field>
       </div>
     </Modal>
