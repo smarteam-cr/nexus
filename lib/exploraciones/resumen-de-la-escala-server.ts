@@ -324,6 +324,7 @@ export async function generarElResumenDeLaEscala(o: { exploracionId: string; ema
       falta: [],
       negocio: escrito.negocio,
       recorrido: escrito.recorrido,
+      tituloDelRecorrido: escrito.tituloDelRecorrido ? { texto: escrito.tituloDelRecorrido } : null,
       operativas: escrito.operativas,
       pendientes: escrito.pendientes,
       // Con la firma de los niveles de hoy: si la escala cambia, la pantalla interna avisa que el Resumen quedó viejo.

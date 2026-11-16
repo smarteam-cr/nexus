@@ -30,9 +30,8 @@
  * El PDF va en hojas horizontales (carta, 1056 × 816): la 1 con la cabecera (y el resumen) y el radar grande, la 2 con
  * las tres piezas y la 3 con las barras (cada una con qué priorizar) y el enlace para agendar. Sin botones, sin
  * calendario, sin puntajes en el radar, sin tarjetas y sin movimiento.
- * La escala de una empresa (`deLaEscala`) lleva el Sistema 2 desde el 12 nov (`.rd-s2`, resultado.css): la cabecera en
- * un bloque con degradado y el logo de la empresa, el radar en su tarjeta con su título, las capas con lo que mide cada
- * una. El resultado del test público y su PDF no lo llevan: se ven como antes.
+ * La escala de una empresa (`deLaEscala`) es otra página desde el 15 nov: la editorial (`AreaDeLaEscala`, `.rd-ed` en
+ * resultado.css; antes, el Sistema 2 del 12 nov). El resultado del test público y su PDF no la llevan: se ven como antes.
  * Las salidas a la portada son enlaces comunes y no `<Link>`: al volver con «Atrás», Next revivía la página en el
  * navegador y la agenda de HubSpot quedaba en blanco; con una carga completa vuelve bien (probado el 28 oct).
  */
@@ -45,7 +44,7 @@ import { resumenDelResultado } from "@/lib/tests-diagnostico/redaccion";
 import type { DimensionDelResultado, ResultadoDelTest } from "@/lib/tests-diagnostico/resultado";
 import RadarDeUnaEmpresa from "@/components/escala/RadarDeUnaEmpresa";
 import AnimacionesDelResultado from "./AnimacionesDelResultado";
-import { ArribaDeLaEscala, EmpresaDeLaEscala, PESTANA_DEL_RESUMEN, type PestanaDeLaEscala } from "./ArribaDeLaEscala";
+import { ArribaDeLaEscala, EmpresaDeLaEscala, PESTANA_DEL_RESUMEN, siguienteArea, type PestanaDeLaEscala } from "./ArribaDeLaEscala";
 import CalendarioDeHubspot from "./CalendarioDeHubspot";
 import DescargarPdfDelResultado from "./DescargarPdfDelResultado";
 import "./diagnostico.css";
@@ -90,7 +89,7 @@ function Tarjeta({ titulo, className = "", children }: { titulo?: string; classN
   );
 }
 
-function PorDondeEmpezar({ rec, porExplorar = false }: { rec: NonNullable<ResultadoDelTest["recomendacion"]>; porExplorar?: boolean }) {
+function PorDondeEmpezar({ rec }: { rec: NonNullable<ResultadoDelTest["recomendacion"]> }) {
   return (
     <Tarjeta className={`rd-empezar${rec.tipo === "trabajar" && rec.costoDeQuedarse ? " con-costo" : ""}`}>
       <div className="rd-empezar-texto">
@@ -101,7 +100,6 @@ function PorDondeEmpezar({ rec, porExplorar = false }: { rec: NonNullable<Result
           </h2>
         )}
         <p className="rd-empezar-razon">{rec.razon}</p>
-        {porExplorar && <p className="rd-nota">{POR_EXPLORAR}</p>}
       </div>
       {rec.tipo === "trabajar" && rec.costoDeQuedarse && (
         <div className="rd-costo">
@@ -113,14 +111,10 @@ function PorDondeEmpezar({ rec, porExplorar = false }: { rec: NonNullable<Result
   );
 }
 
-/**
- * Los riesgos, cada uno con el nombre de la dimensión de la que sale como subtítulo (Elías, 29 oct). En la escala de una
- * empresa (`deLaEscala`) son los riesgos TÍPICOS del nivel, no algo que la empresa contó (10 nov, regla 4: ningún riesgo
- * genérico de la escala presentado como hecho del cliente): el título lo dice.
- */
-function Riesgos({ riesgos, dimensionDelRiesgo, tipicos = false }: { riesgos: readonly string[]; dimensionDelRiesgo: Record<string, string>; tipicos?: boolean }) {
+/** Los riesgos, cada uno con el nombre de la dimensión de la que sale como subtítulo (Elías, 29 oct). */
+function Riesgos({ riesgos, dimensionDelRiesgo }: { riesgos: readonly string[]; dimensionDelRiesgo: Record<string, string> }) {
   return (
-    <Tarjeta titulo={tipicos ? "Lo que suele poner en riesgo a un área en este nivel" : "Lo que hoy pone en riesgo a tu área"}>
+    <Tarjeta titulo="Lo que hoy pone en riesgo a tu área">
       <ul className="rd-riesgos">
         {riesgos.map((x) => (
           <li key={x}>
@@ -180,15 +174,10 @@ function Barras({
   r,
   detalles = null,
   enPdf = false,
-  esEstimado = true,
-  porExplorar = [],
 }: {
   r: ResultadoDelTest;
   detalles?: Record<string, DetalleDeLaDimension> | null;
   enPdf?: boolean;
-  esEstimado?: boolean;
-  /** La escala de una empresa: las partes con un nivel por explorar (su chip lo dice). */
-  porExplorar?: readonly string[];
 }) {
   const frena = r.recomendacion?.tipo === "trabajar" ? r.recomendacion.dimensionId : null;
   return (
@@ -225,9 +214,8 @@ function Barras({
                     </span>
                     <span className="rd-chip" data-no-lo-se={d.noLoSe || undefined}>
                       {d.noLoSe ? "No lo sabías" : (d.nivelNombre ?? "Sin ubicar")}
-                      {porExplorar.includes(d.id) && " · por explorar"}
                     </span>
-                    {det && !enPdf && <VerDetalles d={det} esEstimado={esEstimado} />}
+                    {det && !enPdf && <VerDetalles d={det} esEstimado />}
                     {det && enPdf && <p className="rd-fila-prioridad">{`${textoDeLaPrioridad(det).titulo}: ${textoDeLaPrioridad(det).texto}`}</p>}
                   </div>
                 );
@@ -237,13 +225,8 @@ function Barras({
         })}
       </div>
       {r.preguntadas < r.total && (
-        <p className="rd-nota">
-          {esEstimado
-            ? `Este test mira ${r.preguntadas} de las ${r.total} partes del área; las otras las vemos juntos en la sesión.`
-            : `Medimos ${r.preguntadas} de las ${r.total} partes del área; las otras todavía no.`}
-        </p>
+        <p className="rd-nota">{`Este test mira ${r.preguntadas} de las ${r.total} partes del área; las otras las vemos juntos en la sesión.`}</p>
       )}
-      {porExplorar.length > 0 && <p className="rd-nota">{POR_EXPLORAR}</p>}
     </Tarjeta>
   );
 }
@@ -260,6 +243,8 @@ function TarjetaDeLaDimension({
   porExplorar = false,
   pie = null,
   texto,
+  fija = false,
+  frena = false,
 }: {
   d: DimensionDelResultado;
   det: DetalleDeLaDimension | undefined;
@@ -269,12 +254,30 @@ function TarjetaDeLaDimension({
   pie?: ReactNode;
   /** Solo en la pantalla interna (`edicion.textoDeLaTarjeta`): lo que le pasa al área, editable en su lugar. */
   texto?: ReactNode;
+  /**
+   * La página editorial de un área de la escala (15 nov): la tarjeta va al lado del radar, siempre a la vista. `fija`
+   * dice cuál se ve al abrir (la de lo que más frena); las demás esperan escondidas a que se elija su parte.
+   */
+  fija?: { visible: boolean } | false;
+  /** Solo en la tarjeta fija: la parte es la que más frena al área. */
+  frena?: boolean;
 }) {
   const p = puntajeDeLaDimension(d.nivel, d.puntaje);
   return (
-    <div className="rd-tip" data-tarjeta={d.id} data-nivel={d.preguntada ? (d.nivel ?? undefined) : undefined} role="status" hidden>
+    <div
+      className={fija ? "rd-tip ed-tip" : "rd-tip"}
+      data-tarjeta={d.id}
+      data-nivel={d.preguntada ? (d.nivel ?? undefined) : undefined}
+      role={fija ? undefined : "status"}
+      hidden={fija ? !fija.visible : true}
+      data-inicial={fija && fija.visible ? "" : undefined}
+    >
       <div className="rd-tip-cabeza">
-        <p className="rd-tip-nombre">{d.nombre}</p>
+        <p className="rd-tip-nombre">
+          {/* En la tarjeta fija, el número de la parte: el del radar compacto del teléfono, que solo trae números. */}
+          {fija && <span className="ed-tip-numero">{d.id}</span>}
+          {d.nombre}
+        </p>
         {d.preguntada && d.nivel && (
           <div className="rd-tip-puntaje">
             <span className="rd-tip-num">
@@ -285,6 +288,7 @@ function TarjetaDeLaDimension({
           </div>
         )}
       </div>
+      {fija && frena && <span className="ed-frena-mas">Lo que más frena</span>}
       {!d.preguntada ? (
         <p className="rd-tip-lectura">{esEstimado ? "Esta parte no se preguntó en este test: la vemos juntos en la sesión." : "Esta parte todavía no se midió."}</p>
       ) : (
@@ -312,7 +316,7 @@ function TarjetaDeLaDimension({
  * Las dos capas, con su nivel (o que no se midió). Producción a la izquierda y base a la derecha, como en el radar
  * (Elías, 29 oct: «en la misma posición que en la escala»).
  */
-function Capas({ r, conDescripcion = false }: { r: ResultadoDelTest; conDescripcion?: boolean }) {
+function Capas({ r }: { r: ResultadoDelTest }) {
   const enElOrdenDelRadar = [...r.capas].sort((a, b) => (a.clave === "produccion" ? -1 : 0) - (b.clave === "produccion" ? -1 : 0));
   return (
     <div className="rd-capas">
@@ -323,10 +327,6 @@ function Capas({ r, conDescripcion = false }: { r: ResultadoDelTest; conDescripc
             <span className="rd-punto" aria-hidden="true" />
             {c.nivelNombre ?? (r.dimensiones.some((d) => d.capa === c.clave && d.preguntada) ? "Sin ubicar" : "No se midió")}
           </p>
-          {/* En la escala de una empresa (Sistema 2), qué mide cada capa: la primera letra en mayúscula. */}
-          {conDescripcion && DESCRIPCION_DE_LA_CAPA[c.clave] && (
-            <p className="rd-capa-d">{DESCRIPCION_DE_LA_CAPA[c.clave].charAt(0).toUpperCase() + DESCRIPCION_DE_LA_CAPA[c.clave].slice(1)}</p>
-          )}
         </div>
       ))}
     </div>
@@ -368,6 +368,354 @@ export interface EdicionDeLaPagina {
   ayudaDelRadar?: string;
 }
 
+/** El color de cada nivel en la página editorial (15 nov): el mismo del artefacto aprobado. */
+const NIVEL_EDITORIAL: Record<Letra, string> = { D: "#d23b2f", I: "#e08e0b", F: "#1f9d63", E: "#2448d8", O: "#0f1b4c" };
+const AZUL_EDITORIAL = "#2448d8";
+/** Lo que mide cada capa, en la cabecera de la página editorial. */
+const LO_QUE_MIDE_LA_CAPA: Record<string, string> = {
+  base: "Cómo está montado el área por dentro",
+  produccion: "Qué entrega el área hacia afuera",
+};
+
+/** El nivel de una capa o de un equipo: su punto de color y su nombre, o «En medición» con el punto punteado. */
+function NivelConPunto({ nivel, nombre }: { nivel: Letra | null; nombre: string | null }) {
+  return nivel ? (
+    <span className="ed-con-punto" data-nivel={nivel}>
+      <span className="rd-punto" aria-hidden="true" />
+      {nombre}
+    </span>
+  ) : (
+    <span className="ed-con-punto">
+      <span className="rd-punto" aria-hidden="true" />
+      En medición
+    </span>
+  );
+}
+
+/**
+ * LA PÁGINA DE UN ÁREA de la escala de una empresa, editorial (15 nov; artefacto «Escala de Centauro · Editorial»,
+ * aprobado por Elías con su tabla «La página de un área: lo de hoy y su destino»). Blanco, tinta azul marino, un azul de
+ * acento, Plus Jakarta Sans y divisores finos en lugar de tarjetas con sombra. El orden: las pestañas; la cabecera (la
+ * empresa y el área en la ceja, el nivel como titular, la descripción, cuántas partes y, a la derecha, las dos capas); el
+ * radar con la tarjeta de la parte AL LADO, siempre a la vista (abre en la que más frena); por dónde empezar; lo que lo
+ * mueve; los riesgos típicos del nivel; cómo está cada parte, y al final «Volver al Resumen» y «Ver diagnóstico de» la
+ * siguiente área. El logo de la empresa ya no va (aprobado: solo su nombre) y la fecha pasa al pie. Lo que la pantalla
+ * interna edita (`edicion`) va en los mismos lugares que antes.
+ */
+function AreaDeLaEscala({
+  r,
+  empresa,
+  fecha,
+  detalles,
+  dimensionDelRiesgo,
+  deLaEscala,
+  edicion,
+}: {
+  r: ResultadoDelTest;
+  empresa: string;
+  fecha: string | null;
+  detalles: Record<string, DetalleDeLaDimension> | null;
+  dimensionDelRiesgo: Record<string, string>;
+  deLaEscala: { areas: PestanaDeLaEscala[]; porExplorar?: readonly string[]; resumen?: { href: string } | null };
+  edicion: EdicionDeLaPagina | null;
+}) {
+  const rec = r.recomendacion;
+  const frena = rec?.tipo === "trabajar" ? rec.dimensionId : null;
+  const porExplorar = deLaEscala.porExplorar ?? [];
+  const pestanas: PestanaDeLaEscala[] = [...(deLaEscala.resumen ? [{ id: PESTANA_DEL_RESUMEN, nombre: "Resumen", href: deLaEscala.resumen.href }] : []), ...deLaEscala.areas];
+  const siguiente = siguienteArea(deLaEscala.areas, r.areaId);
+  const medida = (d: DimensionDelResultado) => d.preguntada && !!d.nivel;
+  // La tarjeta abre en la parte que más frena; sin recomendación, en la primera medida.
+  const inicial = frena ?? r.dimensiones.find(medida)?.id ?? r.dimensiones[0]?.id ?? null;
+
+  const radar = (
+    <RadarDeUnaEmpresa
+      area={r.areaNombre}
+      dimensiones={r.dimensiones.map((d) => {
+        // Mientras se arrastra (solo adentro), el nivel que va a quedar.
+        const enVivo = edicion?.nivelesEnVivo?.[d.id];
+        return {
+          clave: d.id,
+          nombre: d.nombre,
+          capa: d.capa,
+          preguntada: d.preguntada || !!enVivo,
+          sinMedir: true,
+          nivel: enVivo ?? d.nivel,
+          noLoSe: enVivo ? false : d.noLoSe,
+          porExplorar: !enVivo && porExplorar.includes(d.id),
+          puntaje: d.puntaje,
+        };
+      })}
+      capas={r.capas.map((c) => ({ clave: c.clave, nombre: c.nombre, descripcion: DESCRIPCION_DE_LA_CAPA[c.clave] ?? null, nivel: c.nivel, puntaje: c.puntaje }))}
+      niveles={r.niveles}
+      resultado={{ nivel: r.nivel, puntaje: r.puntaje }}
+      frena={rec?.tipo === "trabajar" ? { clave: rec.dimensionId, objetivo: rec.objetivo } : null}
+      editorial
+      color={AZUL_EDITORIAL}
+      coloresDelNivel={NIVEL_EDITORIAL}
+    />
+  );
+  // Dentro de la pantalla interna no es el título de la página: esa ya tiene el suyo (un solo h1 por pantalla).
+  const Titular = edicion ? "p" : "h1";
+  const sinMedir = r.dimensiones.some((d) => !d.preguntada);
+  const conHipotesis = r.dimensiones.some((d) => medida(d) && porExplorar.includes(d.id));
+  const ir = (id: string, href: string, clase: string, texto: string) =>
+    edicion ? (
+      <button type="button" className={clase} onClick={() => edicion.alElegirArea(id)}>
+        {texto}
+      </button>
+    ) : (
+      <a className={clase} href={href}>
+        {texto}
+      </a>
+    );
+
+  return (
+    <div className={`dr rd-v3 rd-s2 rd-ed${edicion ? " rd-editable" : ""}`}>
+      <AnimacionesDelResultado className="rd" quieta={!!edicion} tarjetaFija>
+        <ArribaDeLaEscala pestanas={pestanas} actual={r.areaId} alElegir={edicion?.alElegirArea} />
+
+        <section className="ed-hero ed-envoltura">
+          <div className="ed-hero-texto">
+            <p className="ed-ceja">
+              {empresa || "Escala de rendimiento"} <span>/ {r.areaNombre}</span>
+            </p>
+            <Titular className="rd-nivel" data-nivel={r.nivel ?? undefined}>
+              <span className="rd-punto" aria-hidden="true" />
+              {r.nivelNombre ?? "En medición"}.
+            </Titular>
+            {edicion?.descripcion ? <div className="ed-bajada">{edicion.descripcion}</div> : <p className="ed-bajada">{r.sintesis}</p>}
+            {r.preguntadas > 0 && (
+              <p className="ed-medido">
+                {r.preguntadas < r.total ? (
+                  <span>
+                    Medido en {r.preguntadas} de {r.total} partes
+                  </span>
+                ) : (
+                  <span>
+                    <b>Las {r.total} partes</b>, {r.total - porExplorar.length} con lo que nos contaste
+                  </span>
+                )}
+                {porExplorar.length > 0 && <span>{porExplorar.length} por explorar</span>}
+              </p>
+            )}
+          </div>
+          <div className="ed-capas">
+            {r.capas.map((c) => (
+              <div key={c.clave} className="ed-capa">
+                <span className="ed-capa-k">{c.nombre}</span>
+                <b className="ed-capa-v">
+                  <NivelConPunto nivel={c.nivel} nombre={c.nivelNombre} />
+                </b>
+                {LO_QUE_MIDE_LA_CAPA[c.clave] && <small>{LO_QUE_MIDE_LA_CAPA[c.clave]}</small>}
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <section className="ed-parte ed-envoltura ed-radar-seccion" aria-labelledby="ed-t-radar">
+          <div className="ed-radar-cabeza">
+            <div className="ed-titulos">
+              <p className="ed-ceja">
+                Las {r.total} partes de {r.areaNombre}
+              </p>
+              <h2 className="ed-titulo" id="ed-t-radar">
+                Dónde está hoy cada parte.
+              </h2>
+            </div>
+            {/* El interruptor de RadarDeUnaEmpresa (`rde-check`), aquí arriba: su CSS muestra los puntajes sin JS. */}
+            <label className="ed-interruptor">
+              Ver puntajes
+              <input type="checkbox" role="switch" className="rde-check" />
+              <span className="ed-pista" aria-hidden="true" />
+            </label>
+          </div>
+          <div className="ed-radar-zona">
+            <div className="ed-radar">{edicion?.radar ? edicion.radar(radar) : radar}</div>
+            <div className="ed-tarjeta-parte" aria-live="polite">
+              {r.dimensiones.map((d) => (
+                <TarjetaDeLaDimension
+                  key={d.id}
+                  d={d}
+                  det={detalles?.[d.id]}
+                  esEstimado={false}
+                  porExplorar={porExplorar.includes(d.id)}
+                  pie={edicion?.pieDeLaTarjeta?.(d.id)}
+                  texto={d.preguntada && d.nivel ? edicion?.textoDeLaTarjeta?.(d.id, detalles?.[d.id]?.impacto ?? null) : undefined}
+                  fija={{ visible: d.id === inicial }}
+                  frena={d.id === frena}
+                />
+              ))}
+            </div>
+          </div>
+          <p className="ed-leyenda">
+            <span>
+              <i className="ed-raya-verde" aria-hidden="true" />
+              Funcional
+            </span>
+            {conHipotesis && (
+              <span>
+                <i className="ed-aro" aria-hidden="true" />
+                Aro punteado: por explorar. Es lo que creemos por lo conversado; lo confirmamos contigo.
+              </span>
+            )}
+            {sinMedir && (
+              <span>
+                <i className="ed-raya-gris" aria-hidden="true" />
+                Eje punteado y sin vértice: todavía no se midió
+              </span>
+            )}
+            <span>{edicion?.ayudaDelRadar ?? "Pasa el cursor (o toca) una parte para ver qué le pasa hoy a tu área."}</span>
+          </p>
+        </section>
+
+        {rec && (
+          <section className="ed-parte ed-envoltura" aria-labelledby="ed-t-empezar" data-revela="">
+            <p className="ed-ceja">Por dónde empezar</p>
+            <div className={`ed-empezar${rec.tipo === "trabajar" && rec.costoDeQuedarse ? " con-costo" : ""}`}>
+              <div className="ed-empezar-texto">
+                {rec.tipo === "trabajar" ? (
+                  <h2 className="ed-titulo" id="ed-t-empezar">
+                    Llevar {rec.dimensionNombre.toLowerCase()} a {rec.objetivoNombre}.
+                  </h2>
+                ) : (
+                  <h2 className="rd-sr" id="ed-t-empezar">
+                    Por dónde empezar
+                  </h2>
+                )}
+                <p>{rec.razon}</p>
+                {rec.tipo === "trabajar" && porExplorar.includes(rec.dimensionId) && <p className="ed-nota">{POR_EXPLORAR}</p>}
+              </div>
+              {rec.tipo === "trabajar" && rec.costoDeQuedarse && (
+                <div className="ed-costo">
+                  <span>Lo que cuesta quedarse así</span>
+                  <p>{rec.costoDeQuedarse}</p>
+                </div>
+              )}
+            </div>
+          </section>
+        )}
+
+        {r.casos.length > 0 && (
+          <section className="ed-parte ed-envoltura" aria-labelledby="ed-t-casos" data-revela="">
+            <p className="ed-ceja">Lo que lo mueve</p>
+            <h2 className="ed-titulo" id="ed-t-casos">
+              Lo que haríamos contigo.
+            </h2>
+            <ol className="ed-casos">
+              {r.casos.map((c, i) => (
+                <li key={c.id} className="ed-caso">
+                  <span className="ed-num">{String(i + 1).padStart(2, "0")} /</span>
+                  <div>
+                    <h3>{c.titulo}</h3>
+                    <p>{c.promesa}</p>
+                  </div>
+                  {c.razon && <p className="ed-sube">↗ {c.razon}</p>}
+                </li>
+              ))}
+            </ol>
+          </section>
+        )}
+
+        {r.riesgos.length > 0 && (
+          // Son los riesgos TÍPICOS del nivel, no algo que la empresa contó (10 nov, regla 4): el título lo dice.
+          <section className="ed-parte ed-envoltura" aria-labelledby="ed-t-riesgos" data-revela="">
+            <p className="ed-ceja">Lo que suele poner en riesgo a un área en este nivel</p>
+            <h2 className="ed-titulo" id="ed-t-riesgos">
+              Lo que puede estar pasando sin que se note.
+            </h2>
+            <ul className="ed-riesgos">
+              {r.riesgos.map((x) => (
+                <li key={x}>
+                  {dimensionDelRiesgo[x] && <span className="ed-tag">{dimensionDelRiesgo[x]}</span>}
+                  <p>{x}</p>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+
+        {/* Un equipo «En medición» (nada ubicado, 8 nov) no lleva «Cómo está cada parte»: saldría vacía. */}
+        {r.preguntadas > 0 && (
+          <section className="ed-parte ed-envoltura" aria-labelledby="ed-t-partes" data-revela="">
+            <p className="ed-ceja">Cómo está cada parte</p>
+            <h2 className="ed-titulo" id="ed-t-partes">
+              Parte por parte, sobre 100.
+            </h2>
+            <div className="ed-partes">
+              {(["base", "produccion"] as const).map((clave) => {
+                const c = r.capas.find((x) => x.clave === clave);
+                const dims = r.dimensiones.filter((d) => d.capa === clave);
+                if (!c || !dims.length) return null;
+                return (
+                  <div key={clave} className="ed-grupo">
+                    <div className="ed-grupo-cabeza">
+                      <h3>{c.nombre}</h3>
+                      <NivelConPunto nivel={c.nivel} nombre={c.nivelNombre} />
+                    </div>
+                    {dims.map((d) => {
+                      const p = puntajeDeLaDimension(d.nivel, d.puntaje);
+                      const det = detalles?.[d.id];
+                      return (
+                        <div key={d.id} className="rd-fila ed-fila" data-nivel={medida(d) ? (d.nivel ?? undefined) : undefined}>
+                          <span className="ed-fila-nombre">
+                            {d.nombre}
+                            {d.id === frena && <span className="ed-mini ed-mini-frena">Lo que más frena</span>}
+                            {porExplorar.includes(d.id) && <span className="ed-mini ed-mini-explorar">Por explorar</span>}
+                          </span>
+                          <span className="ed-barrita" aria-hidden="true">
+                            {medida(d) && <span className="rd-barra-fill" data-fill={Math.max(3, p)} style={{ width: `${Math.max(3, p)}%` }} />}
+                          </span>
+                          {medida(d) ? (
+                            <span className="ed-pts">
+                              {/* El número que cuenta es solo para la vista; el lector de pantalla lee el puntaje de una vez. */}
+                              <span data-count={p} aria-hidden="true">
+                                {p}
+                              </span>
+                              <span className="rd-sr">{p}</span>
+                            </span>
+                          ) : (
+                            <span className="ed-pts vacio">—</span>
+                          )}
+                          <span className="ed-fila-nivel">
+                            {medida(d) ? (
+                              <span className="ed-con-punto">
+                                <span className="rd-punto" aria-hidden="true" />
+                                {d.noLoSe ? "No lo sabías" : d.nivelNombre}
+                              </span>
+                            ) : (
+                              "Sin medir todavía"
+                            )}
+                          </span>
+                          {medida(d) && det && <VerDetalles d={det} esEstimado={false} />}
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+        )}
+
+        {(deLaEscala.resumen || siguiente) && (
+          <nav className="ed-siguientes ed-envoltura" aria-label="Seguir">
+            {deLaEscala.resumen ? ir(PESTANA_DEL_RESUMEN, deLaEscala.resumen.href, "ed-boton", "← Volver al Resumen") : <span />}
+            {siguiente && ir(siguiente.id, siguiente.href, "ed-boton primario", `Ver diagnóstico de ${siguiente.nombre} →`)}
+          </nav>
+        )}
+        <footer className="ed-pie ed-envoltura">
+          <span className="ed-pie-marca">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={LOGO_DE_COLOR} alt="Smarteam" width={82} height={18} />· Escala de rendimiento
+          </span>
+          <span>{fecha ? `Medido el ${fechaLarga(fecha)}, con lo que conversamos contigo.` : "Medido con lo que conversamos contigo."}</span>
+        </footer>
+      </AnimacionesDelResultado>
+    </div>
+  );
+}
+
 /** La escala de una empresa cuyo enlace sirve, pero que hoy no tiene nada con evidencia que mostrar. */
 export function EscalaSinMedir() {
   return (
@@ -402,7 +750,6 @@ export default function ResultadoDelTestVista({
   detalles = null,
   dimensionDelRiesgo = {},
   deLaEscala = null,
-  logo = null,
   edicion = null,
 }: {
   r: ResultadoDelTest;
@@ -436,17 +783,32 @@ export default function ResultadoDelTestVista({
     /** La pestaña «Resumen» (9 nov), la primera: dónde está la portada. Sin él, no hay pestaña de Resumen. */
     resumen?: { href: string } | null;
   } | null;
-  /** Solo en la escala de una empresa: el logo de la ficha del cliente (`logoQueSeSirve`). Sin él, la inicial. */
+  /**
+   * El logo de la ficha del cliente (`logoQueSeSirve`). Desde la página editorial (15 nov) la página de un área ya no lo
+   * muestra (aprobado: solo el nombre de la empresa, en la ceja); se acepta para no romper a quien lo pasa.
+   */
   logo?: string | null;
   /** La pantalla interna que la edita (ver `EdicionDeLaPagina`). La página pública no lo pasa. */
   edicion?: EdicionDeLaPagina | null;
 }) {
-  const enPdf = modo === "pdf";
   const nombreDeLaEmpresa = empresa || dominio || "";
+  // La escala de una empresa es otra página (la editorial, 15 nov). Nunca va en PDF: lo de abajo es solo el test.
+  if (deLaEscala)
+    return (
+      <AreaDeLaEscala
+        r={r}
+        empresa={nombreDeLaEmpresa}
+        fecha={fecha}
+        detalles={detalles}
+        dimensionDelRiesgo={dimensionDelRiesgo}
+        deLaEscala={deLaEscala}
+        edicion={edicion}
+      />
+    );
+
+  const enPdf = modo === "pdf";
   const rec = r.recomendacion;
-  const esEstimado = !deLaEscala;
-  const porExplorar = deLaEscala?.porExplorar ?? [];
-  const resumen = esEstimado ? resumenDelResultado(r) : r.sintesis;
+  const resumen = resumenDelResultado(r);
   // La industria va en un chip junto al título, no en el resumen (quien hizo el test la da por sentada).
   const sector = industria && industria !== OTRA_INDUSTRIA ? etiquetaDeIndustria(industria) : null;
   const chipDelSector = sector ? <span className="rd-sector">{sector}</span> : null;
@@ -464,10 +826,8 @@ export default function ResultadoDelTestVista({
           nombre: d.nombre,
           capa: d.capa,
           preguntada: d.preguntada || !!enVivo,
-          sinMedir: !esEstimado,
           nivel: enVivo ?? d.nivel,
           noLoSe: enVivo ? false : d.noLoSe,
-          porExplorar: !enVivo && porExplorar.includes(d.id),
           puntaje: d.puntaje,
         };
       })}
@@ -483,7 +843,7 @@ export default function ResultadoDelTestVista({
   const nivelGrande = (
     <TituloDelNivel className="rd-nivel" data-nivel={r.nivel ?? undefined}>
       <span className="rd-punto" aria-hidden="true" />
-      {r.nivelNombre ?? (deLaEscala ? "En medición" : "Sin determinar")}
+      {r.nivelNombre ?? "Sin determinar"}
     </TituloDelNivel>
   );
 
@@ -550,41 +910,33 @@ export default function ResultadoDelTestVista({
   }
 
   return (
-    <div className={`dr rd-v3${deLaEscala ? " rd-s2" : ""}${edicion ? " rd-editable" : ""}`}>
+    <div className={`dr rd-v3${edicion ? " rd-editable" : ""}`}>
       <AnimacionesDelResultado className="rd" quieta={!!edicion}>
-        {deLaEscala ? (
-          <ArribaDeLaEscala
-            pestanas={[...(deLaEscala.resumen ? [{ id: PESTANA_DEL_RESUMEN, nombre: "Resumen", href: deLaEscala.resumen.href }] : []), ...deLaEscala.areas]}
-            actual={r.areaId}
-            alElegir={edicion?.alElegirArea}
-          />
-        ) : (
-          <header className="rd-arriba">
-            <a className="rd-logo" href={otraArea} title="Hacer otro diagnóstico">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={LOGO_DE_COLOR} alt="Smarteam" height={34} />
+        <header className="rd-arriba">
+          <a className="rd-logo" href={otraArea} title="Hacer otro diagnóstico">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={LOGO_DE_COLOR} alt="Smarteam" height={34} />
+          </a>
+          <div className="rd-acciones">
+            <a className="rd-btn rd-btn-ghost" href={otraArea}>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M3 12a9 9 0 1 0 3-6.7" />
+                <path d="M3 4v5h5" />
+              </svg>
+              Hacer otro test
             </a>
-            <div className="rd-acciones">
-              <a className="rd-btn rd-btn-ghost" href={otraArea}>
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <path d="M3 12a9 9 0 1 0 3-6.7" />
-                  <path d="M3 4v5h5" />
-                </svg>
-                Hacer otro test
-              </a>
-              {pdf && <DescargarPdfDelResultado href={pdf} />}
-            </div>
-          </header>
-        )}
+            {pdf && <DescargarPdfDelResultado href={pdf} />}
+          </div>
+        </header>
 
         {aviso && <p className="rd-aviso">{aviso}</p>}
 
         <section className="rd-cabecera">
           <div className="rd-head-arriba">
             <div className="rd-head-texto">
-              <EmpresaDeLaEscala nombre={nombreDeLaEmpresa} dominio={dominio} logo={deLaEscala ? logo : null} />
+              <EmpresaDeLaEscala nombre={nombreDeLaEmpresa} dominio={dominio} />
               <p className="rd-eyebrow rd-entra rd-eyebrow-con-sector">
-                {esEstimado ? "Diagnóstico de rendimiento" : "Escala de rendimiento"} · {r.areaNombre}
+                Diagnóstico de rendimiento · {r.areaNombre}
                 {chipDelSector}
               </p>
               {fecha && <p className="rd-fecha rd-entra">{fechaLarga(fecha)}</p>}
@@ -592,84 +944,64 @@ export default function ResultadoDelTestVista({
               <div className="rd-entra">{nivelGrande}</div>
 
               {edicion?.descripcion ? <div className="rd-resumen rd-entra">{edicion.descripcion}</div> : <p className="rd-resumen rd-entra">{resumen}</p>}
-              {esEstimado ? (
-                <p className="rd-estimado rd-entra">
-                  <span className="rd-pill">Estimado</span>
-                  con lo que respondiste{parcial}
-                </p>
-              ) : (
-                r.preguntadas > 0 &&
-                (r.preguntadas < r.total || porExplorar.length > 0) && (
-                  <p className="rd-estimado rd-entra">
-                    {porExplorar.length > 0 && <span className="rd-pill">{porExplorar.length} por explorar</span>}
-                    {r.preguntadas < r.total ? `Medido en ${r.preguntadas} de ${r.total} partes` : `Las ${r.total} partes, ${r.total - porExplorar.length} con lo que nos contaste`}
-                  </p>
-                )
-              )}
+              <p className="rd-estimado rd-entra">
+                <span className="rd-pill">Estimado</span>
+                con lo que respondiste{parcial}
+              </p>
             </div>
             <div className="rd-entra">
-              <Capas r={r} conDescripcion={!!deLaEscala} />
+              <Capas r={r} />
             </div>
           </div>
           <div className="rd-radar rd-entra">
-            {deLaEscala && (
-              <p className="rd-eyebrow rd-radar-titulo">
-                Las {r.total} partes de {r.areaNombre}
-              </p>
-            )}
             {edicion?.radar ? edicion.radar(radar) : radar}
             <p className="rd-radar-ayuda">{edicion?.ayudaDelRadar ?? "Pasa el cursor (o toca) una parte del radar para ver qué le pasa hoy a tu área en esa parte."}</p>
           </div>
         </section>
 
-        {rec && <PorDondeEmpezar rec={rec} porExplorar={rec.tipo === "trabajar" && porExplorar.includes(rec.dimensionId)} />}
-        {r.riesgos.length > 0 && <Riesgos riesgos={r.riesgos} dimensionDelRiesgo={dimensionDelRiesgo} tipicos={!esEstimado} />}
+        {rec && <PorDondeEmpezar rec={rec} />}
+        {r.riesgos.length > 0 && <Riesgos riesgos={r.riesgos} dimensionDelRiesgo={dimensionDelRiesgo} />}
         {r.casos.length > 0 && <Casos casos={r.casos} />}
-        {/* Un equipo «En medición» (nada ubicado, 8 nov) no lleva la tarjeta: saldría vacía. */}
-        {r.preguntadas > 0 && <Barras r={r} detalles={detalles} esEstimado={esEstimado} porExplorar={porExplorar} />}
+        {r.preguntadas > 0 && <Barras r={r} detalles={detalles} />}
 
-        {esEstimado && (
-          <section className="rd-agenda" data-revela="">
-            <div className="rd-agenda-texto">
-              <p className="rd-eyebrow">El siguiente paso</p>
-              <h2>Revisemos juntos tu resultado, sin costo</h2>
-              <p>Son 30 minutos de trabajo, no una llamada de ventas. Te llevas:</p>
-              <ul className="rd-agenda-vinetas">
-                {vinetasDeLaSesion(r.areaNombre).map((x) => (
-                  <li key={x}>
-                    <span className="rd-agenda-check">
-                      <IconoCheck />
-                    </span>
-                    <span>{x}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-            <div className="rd-agenda-caja">
-              <CalendarioDeHubspot agenda={agenda} />
-            </div>
-          </section>
-        )}
+        <section className="rd-agenda" data-revela="">
+          <div className="rd-agenda-texto">
+            <p className="rd-eyebrow">El siguiente paso</p>
+            <h2>Revisemos juntos tu resultado, sin costo</h2>
+            <p>Son 30 minutos de trabajo, no una llamada de ventas. Te llevas:</p>
+            <ul className="rd-agenda-vinetas">
+              {vinetasDeLaSesion(r.areaNombre).map((x) => (
+                <li key={x}>
+                  <span className="rd-agenda-check">
+                    <IconoCheck />
+                  </span>
+                  <span>{x}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+          <div className="rd-agenda-caja">
+            <CalendarioDeHubspot agenda={agenda} />
+          </div>
+        </section>
         <footer className="rd-pie" data-revela="">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img className="rd-pie-logo" src={LOGO_DE_COLOR} alt="Smarteam" height={30} />
-          {esEstimado && (
-            <div className="rd-pie-botones">
-              <a className="rd-btn rd-btn-primary" href={otraArea}>
-                Diagnosticar otra área
-              </a>
-              <a className="rd-btn rd-btn-ghost" href={ENLACE_DE_OTRA_EMPRESA}>
-                Diagnosticar otra empresa
-              </a>
-            </div>
-          )}
-          <p className="rd-pie-texto">{esEstimado ? "Diagnóstico hecho con la Escala de Rendimiento de Smarteam." : "Medido con la Escala de Rendimiento de Smarteam."}</p>
+          <div className="rd-pie-botones">
+            <a className="rd-btn rd-btn-primary" href={otraArea}>
+              Diagnosticar otra área
+            </a>
+            <a className="rd-btn rd-btn-ghost" href={ENLACE_DE_OTRA_EMPRESA}>
+              Diagnosticar otra empresa
+            </a>
+          </div>
+          <p className="rd-pie-texto">Diagnóstico hecho con la Escala de Rendimiento de Smarteam.</p>
         </footer>
         {/* Las tarjetas del radar: escondidas, una por dimensión. Fuera de las secciones que se mueven, para que su
             posición fija no dependa de una animación. */}
         <div className="rd-tips">
           {r.dimensiones.map((d) => (
-            <TarjetaDeLaDimension key={d.id} d={d} det={detalles?.[d.id]} esEstimado={esEstimado} porExplorar={porExplorar.includes(d.id)} pie={edicion?.pieDeLaTarjeta?.(d.id)}
+            <TarjetaDeLaDimension key={d.id} d={d} det={detalles?.[d.id]} esEstimado pie={edicion?.pieDeLaTarjeta?.(d.id)}
               texto={d.preguntada && d.nivel ? edicion?.textoDeLaTarjeta?.(d.id, detalles?.[d.id]?.impacto ?? null) : undefined}
             />
           ))}

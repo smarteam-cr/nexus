@@ -47,6 +47,7 @@ import {
   estadoDeLaDimension,
   f,
   GRANDE,
+  MEDIANO,
   notaDelNoLoSe,
   PDF,
   puntosSvg,
@@ -130,6 +131,14 @@ export interface PropsDelRadarDeUnaEmpresa {
    * el alto. La página del cliente no lo pasa.
    */
   todasLasAreas?: readonly { dimensiones: readonly DimensionDelRadar[]; frena?: FrenoDelRadar | null }[];
+  /**
+   * La página editorial de un área de la escala (15 nov): UN radar mediano (`MEDIANO`, con los nombres en la punta) en
+   * `.rde-mediano`, para ir al lado de la tarjeta de la parte en cualquier ancho. Sin el interruptor ni la leyenda: los
+   * pone la página (el interruptor con la misma clase `rde-check`, y su CSS muestra los puntajes).
+   */
+  editorial?: boolean;
+  /** El color de cada nivel (vértices, anillo de Funcional, objetivo); sin él, los de siempre. */
+  coloresDelNivel?: Readonly<Record<Letra, string>>;
 }
 
 const redondo = (n: number | null) => (n !== null && Number.isFinite(n) ? Math.round(n) : null);
@@ -145,6 +154,8 @@ export default function RadarDeUnaEmpresa({
   color = C.figura,
   otras = [],
   todasLasAreas,
+  editorial = false,
+  coloresDelNivel,
 }: PropsDelRadarDeUnaEmpresa) {
   const nombreDeNivel = (l: Letra) => niveles.find((n) => n.letra === l)?.nombre ?? l;
   const dims = dimensiones.filter((d) => d.capa === "base" || d.capa === "produccion");
@@ -161,7 +172,19 @@ export default function RadarDeUnaEmpresa({
   const mismaCaja = todasLasAreas
     ?.map((a) => ({ dims: a.dimensiones.filter((d) => d.capa === "base" || d.capa === "produccion"), frena: a.frena ?? null }))
     .filter((a) => a.dims.length);
-  const comun = { area, dims, capas, nombreDeNivel, resultado, frena, figura: color, otras: alineadas, mismaCaja };
+  const comun = {
+    area,
+    dims,
+    capas,
+    nombreDeNivel,
+    resultado,
+    frena,
+    figura: color,
+    otras: alineadas,
+    mismaCaja,
+    cn: coloresDelNivel ?? COLOR_DEL_NIVEL,
+    oscuro: coloresDelNivel ?? COLOR_OSCURO_DEL_NIVEL,
+  };
   const leyenda = (
     <LeyendaDelRadar
       dims={dims}
@@ -184,6 +207,29 @@ export default function RadarDeUnaEmpresa({
   const prod = dims.filter((d) => d.capa === "produccion");
   const base = dims.filter((d) => d.capa === "base");
   const nombreDeCapa = (c: ClaveDeCapa) => capas.find((x) => x.clave === c)?.nombre ?? c;
+  const mitades = (
+    <div className="rde-mitades" aria-hidden="true">
+      <span>{nombreDeCapa("produccion").toUpperCase()}</span>
+      <span>{nombreDeCapa("base").toUpperCase()}</span>
+    </div>
+  );
+
+  // La página editorial: el mediano con los nombres; en angosto (el CSS decide), el compacto con el número de cada parte
+  // en la punta, sin la lista de debajo (aprobado el 15 nov): la tarjeta de la parte, justo debajo, dice cuál es.
+  if (editorial) {
+    return (
+      <div className="rde rde-editorial">
+        <div className="rde-mediano">
+          <SvgDelRadar m={MEDIANO} {...comun} etiqueta={etiqueta} conPuntajes interactivo />
+        </div>
+        <div className="rde-compacto">
+          {mitades}
+          <SvgDelRadar m={COMPACTO} {...comun} etiqueta={`${etiqueta} Cada número es una parte; tócalo para ver cuál es.`} conPuntajes interactivo />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="rde">
       <div className="rde-arriba">
@@ -200,10 +246,7 @@ export default function RadarDeUnaEmpresa({
         {leyenda}
       </div>
       <div className="rde-compacto">
-        <div className="rde-mitades" aria-hidden="true">
-          <span>{nombreDeCapa("produccion").toUpperCase()}</span>
-          <span>{nombreDeCapa("base").toUpperCase()}</span>
-        </div>
+        {mitades}
         <SvgDelRadar m={COMPACTO} {...comun} etiqueta={`${etiqueta} Cada número es una parte; abajo dice cuál es.`} conPuntajes interactivo />
         <div className="rde-lista">
           <ListaDeUnaMitad dims={prod} frena={frena} nombreDeNivel={nombreDeNivel} />
@@ -345,7 +388,12 @@ function SvgDelRadar({
   figura,
   otras,
   mismaCaja,
+  cn,
+  oscuro,
 }: {
+  /** El color de cada nivel y su versión oscura (texto y flecha sobre blanco). */
+  cn: Readonly<Record<Letra, string>>;
+  oscuro: Readonly<Record<Letra, string>>;
   figura: string;
   otras: readonly AreaAlineada[];
   /** Las otras áreas que pueden ser la principal (con lo que las frena): el dibujo usa la caja que abarca a todas. */
@@ -398,7 +446,7 @@ function SvgDelRadar({
           key={`a${a.letra}`}
           points={puntosSvg(a.puntos)}
           fill="none"
-          stroke={a.letra === "F" ? COLOR_DEL_NIVEL.F : enElResultado.has(a.letra) ? C.anillo : C.anilloSinUso}
+          stroke={a.letra === "F" ? cn.F : enElResultado.has(a.letra) ? C.anillo : C.anilloSinUso}
           strokeOpacity={a.letra === "F" ? 0.6 : undefined}
           strokeWidth={m.trazo.anillo}
           strokeDasharray={a.letra === "F" ? m.rayas.funcional : undefined}
@@ -509,7 +557,7 @@ function SvgDelRadar({
           })}
         <Capa cual="sin">
           {vertFrena && (
-            <circle className="rde-iman" cx={f(vertFrena.punto[0])} cy={f(vertFrena.punto[1])} r={m.vertice.halo} fill={COLOR_DEL_NIVEL.D} fillOpacity={0.12} />
+            <circle className="rde-iman" cx={f(vertFrena.punto[0])} cy={f(vertFrena.punto[1])} r={m.vertice.halo} fill={cn.D} fillOpacity={0.12} />
           )}
           {d.vertices.map((v) =>
             v.porExplorar ? (
@@ -521,7 +569,7 @@ function SvgDelRadar({
                 cy={f(v.punto[1])}
                 r={v.frena ? m.vertice.rFrena : m.vertice.r}
                 fill={C.blanco}
-                stroke={v.frena ? COLOR_DEL_NIVEL[v.nivel] : figura}
+                stroke={v.frena ? cn[v.nivel] : figura}
                 strokeWidth={m.objetivo.trazo}
                 strokeDasharray={m.objetivo.raya}
               />
@@ -532,7 +580,7 @@ function SvgDelRadar({
                   cy={f(v.punto[1])}
                   r={m.noLoSe.r}
                   fill={C.blanco}
-                  stroke={COLOR_DEL_NIVEL[v.nivel]}
+                  stroke={cn[v.nivel]}
                   strokeWidth={m.objetivo.trazo}
                   strokeDasharray={m.objetivo.raya}
                 />
@@ -548,7 +596,7 @@ function SvgDelRadar({
                 cx={f(v.punto[0])}
                 cy={f(v.punto[1])}
                 r={v.frena ? m.vertice.rFrena : m.vertice.r}
-                fill={v.frena ? COLOR_DEL_NIVEL[v.nivel] : figura}
+                fill={v.frena ? cn[v.nivel] : figura}
                 stroke={C.blanco}
                 strokeWidth={m.vertice.trazo}
               />
@@ -558,7 +606,7 @@ function SvgDelRadar({
         {conPuntajes && (
           <Capa cual="con">
             {vertFrena && m.conPuntaje.halo && (
-              <circle className="rde-iman" cx={f(vertFrena.punto[0])} cy={f(vertFrena.punto[1])} r={m.conPuntaje.halo} fill={COLOR_DEL_NIVEL.D} fillOpacity={0.12} />
+              <circle className="rde-iman" cx={f(vertFrena.punto[0])} cy={f(vertFrena.punto[1])} r={m.conPuntaje.halo} fill={cn.D} fillOpacity={0.12} />
             )}
             {d.vertices.map((v) => (
               <g key={v.clave} className="rde-vertice" data-d={v.clave}>
@@ -567,7 +615,7 @@ function SvgDelRadar({
                   cy={f(v.punto[1])}
                   r={m.conPuntaje.r}
                   fill={C.blanco}
-                  stroke={v.frena || v.noLoSe ? COLOR_DEL_NIVEL[v.nivel] : figura}
+                  stroke={v.frena || v.noLoSe ? cn[v.nivel] : figura}
                   strokeWidth={v.noLoSe || v.porExplorar ? m.objetivo.trazo : m.conPuntaje.trazo}
                   strokeDasharray={v.noLoSe || v.porExplorar ? m.objetivo.raya : undefined}
                 />
@@ -595,23 +643,23 @@ function SvgDelRadar({
               y1={f(d.objetivo.linea[0][1])}
               x2={f(d.objetivo.linea[1][0])}
               y2={f(d.objetivo.linea[1][1])}
-              stroke={COLOR_OSCURO_DEL_NIVEL[d.objetivo.nivel]}
+              stroke={oscuro[d.objetivo.nivel]}
               strokeWidth={m.flecha.trazo}
               strokeDasharray={m.flecha.raya}
               strokeLinecap="round"
             />
           )}
-          <polygon points={puntosSvg(d.objetivo.punta)} fill={COLOR_OSCURO_DEL_NIVEL[d.objetivo.nivel]} />
+          <polygon points={puntosSvg(d.objetivo.punta)} fill={oscuro[d.objetivo.nivel]} />
           <circle
             cx={f(d.objetivo.punto[0])}
             cy={f(d.objetivo.punto[1])}
             r={m.objetivo.r}
             fill={C.blanco}
-            stroke={COLOR_DEL_NIVEL[d.objetivo.nivel]}
+            stroke={cn[d.objetivo.nivel]}
             strokeWidth={m.objetivo.trazo}
             strokeDasharray={m.objetivo.raya}
           />
-          <circle cx={f(d.objetivo.punto[0])} cy={f(d.objetivo.punto[1])} r={m.objetivo.rPunto} fill={COLOR_DEL_NIVEL[d.objetivo.nivel]} />
+          <circle cx={f(d.objetivo.punto[0])} cy={f(d.objetivo.punto[1])} r={m.objetivo.rPunto} fill={cn[d.objetivo.nivel]} />
         </g>
       )}
       {/* Los nombres de las etapas van encima de la figura: en el teléfono, un vértice arriba los tapaba. */}
@@ -659,7 +707,7 @@ function SvgDelRadar({
       )}
 
       {d.rotulos.map((r) => (
-        <RotuloDeLaDimension key={`r${r.clave}`} r={r} m={m} nombreDeNivel={nombreDeNivel} interactivo={interactivo} />
+        <RotuloDeLaDimension key={`r${r.clave}`} r={r} m={m} nombreDeNivel={nombreDeNivel} interactivo={interactivo} cn={cn} />
       ))}
       {d.numeros.map((n) => (
         <g
@@ -710,7 +758,7 @@ function SvgDelRadar({
               <text x={mi.x} y={f(mi.yNivel)} textAnchor={mi.ancla} fontSize={15} fontWeight={600} fill={C.texto}>
                 {capa?.nivel ? (
                   <>
-                    <tspan fill={COLOR_DEL_NIVEL[capa.nivel]}>●</tspan> {nombreDeNivel(capa.nivel)}
+                    <tspan fill={cn[capa.nivel]}>●</tspan> {nombreDeNivel(capa.nivel)}
                     {conPuntajes && puntaje !== null && (
                       <tspan className="rde-con" fill={C.marca}>
                         {` · ${puntaje}/100`}
@@ -735,7 +783,9 @@ function RotuloDeLaDimension({
   m,
   nombreDeNivel,
   interactivo,
+  cn,
 }: {
+  cn: Readonly<Record<Letra, string>>;
   r: RotuloDelRadar;
   m: MedidasDelRadar;
   nombreDeNivel: (l: Letra) => string;
@@ -758,7 +808,7 @@ function RotuloDeLaDimension({
         {`${r.numero} · `}
         {r.estado.tipo === "nivel" ? (
           <>
-            <tspan fill={COLOR_DEL_NIVEL[r.estado.letra]}>{r.estado.porExplorar ? "○" : "●"}</tspan> <tspan fill={C.texto}>{nombreDeNivel(r.estado.letra)}</tspan>
+            <tspan fill={cn[r.estado.letra]}>{r.estado.porExplorar ? "○" : "●"}</tspan> <tspan fill={C.texto}>{nombreDeNivel(r.estado.letra)}</tspan>
             {r.estado.porExplorar && <tspan fill={C.apagado}> · por explorar</tspan>}
           </>
         ) : r.estado.tipo === "noLoSe" ? (

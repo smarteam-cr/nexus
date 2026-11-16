@@ -138,6 +138,32 @@ export const PDF: MedidasDelRadar = {
   mitad: { xIzquierda: 240, xDerecha: 1190, medio: 415, nombre: 28, renglon: 32, descripcion: 14, conNivel: false },
 };
 
+/**
+ * La página editorial de un área de la escala (15 nov, artefacto «Escala de Centauro · Editorial»): el radar va al lado
+ * de la tarjeta de la parte, en una columna de unos 600 px. Es el grande con los radios a 0,75 y la MISMA letra (la regla
+ * de los rótulos mide la letra del grande): así, en 596 px los nombres quedan en ~13 px y ninguno pisa a otro (la prueba
+ * «ningún rótulo pisa a otro» lo cubre). Sin los nombres de las mitades: las capas van arriba, en la cabecera. Debajo de
+ * 580 px de ancho la página pasa al compacto (radar-de-una-empresa.css › `.rde-editorial`).
+ */
+export const MEDIANO: MedidasDelRadar = {
+  ...GRANDE,
+  caja: [0, 0, 812, 634],
+  cx: 413,
+  cy: 313,
+  rCentro: 63,
+  rEjeDesde: 63,
+  rEjeHasta: 255.75,
+  rGuia: 261.75,
+  rAnillo: 101.25,
+  paso: 34.5,
+  vertice: { r: 6.5, rFrena: 8, halo: 16, trazo: 1.5 },
+  conPuntaje: { r: 15, letra: 13, baja: 4.5, trazo: 2.5, halo: 20 },
+  centro: { area: 22, yArea: -2, sub: 14, ySub: 20 },
+  rotulo: { ...GRANDE.rotulo!, r: 267.75 },
+  numeroEnLaPunta: null,
+  mitad: null,
+};
+
 /** El teléfono: el tablero `Movil`, viewBox de 336 × 330, con el número de cada dimensión en la punta del eje. */
 export const COMPACTO: MedidasDelRadar = {
   caja: [12, 18, 336, 330],

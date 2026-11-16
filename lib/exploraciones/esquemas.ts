@@ -10,7 +10,7 @@
  */
 import { z } from "zod";
 import { CLAVE_DEL_RESUMEN, TIPOS_DE_PENDIENTE, TOPE_A_MANO, TOPE_DE_LA_CIFRA, TOPE_DE_UN_NOMBRE, type AreaOperativa, type ResumenGuardado } from "./resumen-de-la-escala";
-import { ESTADOS_DE_LA_CIFRA, TIPOS_DEL_NEGOCIO, type TipoDelNegocio } from "@/lib/external/pagina-del-resumen";
+import { ESTADOS_DE_LA_CIFRA, ICONOS_DEL_PASO, TIPOS_DEL_NEGOCIO, type TipoDelNegocio } from "@/lib/external/pagina-del-resumen";
 import { CIERRES, DESPUES, type Cierre, type Despues } from "@/lib/escala/documento/tipos";
 import {
   CANALES_DE_CONEXION,
@@ -970,6 +970,9 @@ const EtapaSchema = PiezaSchema.extend({
   nombre: z.string().max(TOPE_DE_UN_NOMBRE),
   quien: z.string().max(TOPE_DE_UN_NOMBRE).nullable(),
   friccion: z.string().max(TOPE_A_MANO).nullable(),
+  // La forma editorial (15 nov): su ícono y si acompaña mientras el cliente opera. Un valor raro se cae solo, no la etapa.
+  icono: z.enum(ICONOS_DEL_PASO).nullable().optional().catch(undefined),
+  continuo: z.boolean().optional().catch(undefined),
 });
 const PendienteSchema = z.object({
   id: IdDelResumen,
@@ -1051,6 +1054,9 @@ export function leerResumenGuardado(raw: unknown): ResumenGuardado | undefined {
       ? {
           negocio,
           recorrido: cadaUno(r.recorrido, EtapaSchema, 40),
+          ...(esObjeto(r.tituloDelRecorrido) && z.object({ texto: z.string().max(TOPE_A_MANO), mano: z.boolean().optional() }).safeParse(r.tituloDelRecorrido).success
+            ? { tituloDelRecorrido: r.tituloDelRecorrido as { texto: string; mano?: boolean } }
+            : {}),
           operativas: (Array.isArray(r.operativas) ? r.operativas : []).flatMap((x) => leerOperativa(x) ?? []).slice(0, 20),
           pendientes: cadaUno(r.pendientes, PendienteSchema, 40) as NonNullable<ResumenGuardado["pendientes"]>,
           // Del 11 nov: la firma de los niveles al armarlo, lo que falta confirmar por parte y los avisos internos.

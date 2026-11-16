@@ -11,6 +11,7 @@ import {
   radioDeLasCunas,
   dibujoDelRadar,
   GRANDE,
+  MEDIANO,
   PDF,
   polarDe,
   radioDeLaEtapa,
@@ -237,6 +238,7 @@ describe("el radar de una empresa: ningún rótulo pisa a otro", () => {
     for (const [cual, m] of [
       ["pantalla", GRANDE],
       ["PDF", PDF],
+      ["página editorial", MEDIANO],
     ] as const) {
       it(`${nombre} (${cual})`, () => {
         const d = dibujar(m, dims, { frena, capas: CAPAS });

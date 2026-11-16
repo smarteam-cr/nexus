@@ -42,6 +42,12 @@ export const TOPE_DE_LA_CIFRA = 28;
 /** Lo que escribe una persona: más holgado. */
 export const TOPE_A_MANO = 600;
 
+/** Las etiquetas del negocio bajo la tesis (forma editorial): qué vende, a quién o dónde, cómo cobra. */
+export const MAX_ETIQUETAS = 3;
+
+/** El título del recorrido (forma editorial): hasta 9 palabras. Lo usan la lectura del agente, la edición y su cuadro. */
+export const TOPE_DEL_TITULO_DEL_RECORRIDO = 90;
+
 /** El nombre de un área operativa o de una etapa del recorrido. */
 export const TOPE_DE_UN_NOMBRE = 48;
 
@@ -131,6 +137,30 @@ export interface CifraDeLaPagina {
   noSale?: string;
 }
 
+/**
+ * El ícono de un paso del recorrido (forma editorial, 15 nov): lo elige el agente de esta lista; sin él, la página lo
+ * deduce del nombre del paso (`iconoDelPaso`).
+ */
+export const ICONOS_DEL_PASO = ["captacion", "contacto", "visita", "demo", "cotizacion", "cierre", "configuracion", "entrega", "tienda", "opera", "filtro", "soporte"] as const;
+export type IconoDelPaso = (typeof ICONOS_DEL_PASO)[number];
+
+/** El ícono de un paso por su nombre, cuando el agente no lo dio (un Resumen de antes del 15 nov, o una etapa a mano). */
+export function iconoDelPaso(nombre: string, continuo = false): IconoDelPaso {
+  const n = nombre.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  if (continuo || /soporte|atencion|reclamo|acompan|retenc|postventa|caso/.test(n)) return "soporte";
+  if (/captac|lead|pauta|campan|anuncio|marketing/.test(n)) return "captacion";
+  if (/visita|levantamiento/.test(n)) return "visita";
+  if (/demo|presentac/.test(n)) return "demo";
+  if (/cotiza|precio|propuesta|calculo/.test(n)) return "cotizacion";
+  if (/cierre|contrato|firma|pago/.test(n)) return "cierre";
+  if (/configur|implement|capacit|instal|puesta|onboard/.test(n)) return "configuracion";
+  if (/entrega|despacho|pedido|orden|envio/.test(n)) return "entrega";
+  if (/tienda|compra/.test(n)) return "tienda";
+  if (/filtro|asigna|califica/.test(n)) return "filtro";
+  if (/contacto|llamada|cita|primer/.test(n)) return "contacto";
+  return "opera";
+}
+
 /** Una etapa del recorrido del cliente: lo que pasa HOY, con la fricción que se vio (si se vio). */
 export interface EtapaDeLaPagina {
   id: string;
@@ -139,16 +169,28 @@ export interface EtapaDeLaPagina {
   quien: string | null;
   texto: string;
   friccion: string | null;
+  /** Su ícono (el del agente o el que deduce la página del nombre). */
+  icono: IconoDelPaso;
+  /** Acompaña mientras el cliente opera (Soporte, Customer Success): va en el bucle de abajo, no en la línea. */
+  continuo: boolean;
   /** `<clave>:nombre`, `<clave>:texto`, `<clave>:friccion`; sola, para quitarla. */
   clave: string;
   citas?: CitaDelResumen[];
   mano?: boolean;
 }
 
-/** Las partes de «Qué entendimos del negocio», en orden. */
-export type TipoDelNegocio = "vende" | "ingresos" | "abarca" | "fuera" | "motivo" | "busca";
-export const TIPOS_DEL_NEGOCIO: readonly TipoDelNegocio[] = ["vende", "ingresos", "abarca", "fuera", "motivo", "busca"];
+/**
+ * Las partes de «Qué entendimos del negocio», en orden. Desde la forma editorial (15 nov) la página muestra arriba la
+ * TESIS (dos frases cortas), las ETIQUETAS (qué vende, a quién, cómo cobra), el ALCANCE (qué abarca y qué queda fuera) y el
+ * TAMAÑO del negocio (una cifra que dijo la empresa: «500 clientes activos»). Vende, ingresos, motivo y busca se siguen
+ * guardando (sostienen la tesis y las etiquetas, y un Resumen anterior las trae), pero ya no salen al cliente.
+ */
+export type TipoDelNegocio = "tesis" | "etiquetas" | "tamano" | "vende" | "ingresos" | "abarca" | "fuera" | "motivo" | "busca";
+export const TIPOS_DEL_NEGOCIO: readonly TipoDelNegocio[] = ["tesis", "etiquetas", "tamano", "vende", "ingresos", "abarca", "fuera", "motivo", "busca"];
 export const TITULO_DEL_NEGOCIO: Record<TipoDelNegocio, string> = {
+  tesis: "La tesis",
+  etiquetas: "Las etiquetas del negocio",
+  tamano: "El tamaño del negocio",
   vende: "Qué vendes y a quién",
   ingresos: "Cómo generas ingresos",
   abarca: "Qué abarca este diagnóstico",
@@ -201,6 +243,16 @@ export interface TarjetaDeLaPagina {
   /** No tuvo sesiones: la tarjeta dice «Por explorar» y su pestaña no se abre. */
   porExplorar: boolean;
   subequipos: SubequipoDeLaPagina[];
+}
+
+/**
+ * «500 clientes activos» → «500» y «clientes activos»; «≈60 casos al mes» → «≈60» y «casos al mes». Sin un número al
+ * principio, todo es el rótulo y no hay cifra en grande.
+ */
+export function partirElTamano(texto: string): { valor: string; rotulo: string } {
+  const m = texto.trim().match(/^((?:más de |menos de |cerca de |unos? |unas |alrededor de |≈|~)?(?:(?:US)?\$|₡|€|L|Q)?\s?\d[\d.,\s\u00a0\u202f]*(?:\s?[–-]\s?\d[\d.,]*)?(?:\s?(?:%|mil(?:lones)?\b|k\b))?)\s*(.*)$/i);
+  if (!m || !m[2]) return { valor: "", rotulo: texto.trim() };
+  return { valor: m[1].trim(), rotulo: m[2].trim() };
 }
 
 /** Los tipos de lo que falta validar (10 nov). `por-confirmar`: una pregunta del formato 1, sin tipo. */
@@ -267,6 +319,15 @@ export interface ResumenDeLaPagina {
   recorrido: EtapaDeLaPagina[] | null;
   /** La clave para agregar una etapa (null: no se agrega). */
   etapaNueva: string | null;
+  /**
+   * El tamaño del negocio en grande (forma editorial, 15 nov): «500» y «clientes activos», con su estado. Sale de la parte
+   * «tamano» del negocio (su clave es la de esa pieza). null: nadie lo dijo.
+   */
+  tamano: { valor: string; rotulo: string; estado: EstadoDeLaCifra; clave: string; citas?: CitaDelResumen[]; noSale?: string } | null;
+  /** El título del recorrido («De la pauta en Meta a la compra en tienda.»): null, el de siempre. */
+  tituloDelRecorrido: string | null;
+  /** La clave para editarlo (null: formato 1). */
+  claveDelTituloDelRecorrido: string | null;
   tarjetas: TarjetaDeLaPagina[];
   /** «Qué falta validar»: tres líneas como mucho, en palabras simples (el tipo solo sirve adentro). */
   pendientes: PendienteDeLaPagina[];

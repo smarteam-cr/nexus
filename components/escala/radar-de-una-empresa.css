@@ -59,6 +59,16 @@
 
 .rde-pdf .rde-leyenda { font-size: 11.5px; }
 
+/* La página editorial de un área (15 nov, `editorial`): el mediano, con los nombres en ~13 px al lado de la tarjeta; con
+   menos de 580 px de radar (el teléfono y las ventanas angostas), los nombres bajarían de 11 px (un
+   rótulo «por explorar» ensancha el dibujo hasta ~950 de caja), así que va el compacto con el número de cada
+   parte en la punta y sin la lista de debajo (la tarjeta, justo debajo, dice cuál es). */
+.rde-editorial .rde-compacto { display: none; }
+@container (max-width: 579px) {
+  .rde-editorial .rde-mediano { display: none; }
+  .rde-editorial .rde-compacto { display: flex; }
+}
+
 /* ── La página: el cursor sobre una dimensión (como la aplicación vieja) ─────────────────────────────────────────────
    components/escala/movimiento-del-radar.ts (la página del resultado y La escala interna) le pone al SVG `data-activa` y a las piezas de esa dimensión (`[data-d]`) la clase
    `is-activa`: su eje se dibuja desde el rótulo hasta su vértice, el vértice apenas crece y su nombre se pinta en azul; lo

@@ -14825,6 +14825,9 @@ Sistema 2, «Nexus · interfaz interna», se descartó): cambian el contenido, e
 
 ## La escala de una empresa en el Sistema 2 (2026-11-12)
 
+*Reemplazado el 15 nov por la forma editorial (ver «La escala de una empresa en forma editorial»): lo que sigue cuenta
+cómo era.*
+
 Elías aprobó llevar el Resumen y la página de cada área al Sistema 2 («Nexus · interfaz interna», la línea V3), con el
 artefacto «Escala de Centauro · Sistema 2» como medida. Lo aplica `.rd-s2` en `components/external/test/resultado.css`.
 
@@ -14899,6 +14902,67 @@ queda va a reparación en vez de tirarse.
 - **Lo que no queda garantizado:** un error de la transcripción se copia fiel («15 lits» por «15 mil» salió como «~15
   contactos»); una cifra cuya cita trae tres números o más sale «por confirmar» con el texto del agente; un turno de un
   solo número depende de la pregunta que respondía, que no queda en lo citado.
+
+## La escala de una empresa en forma editorial: el Resumen y la página de cada área (2026-11-15)
+
+Elías pasó una referencia (una imagen del Resumen de Centauro con otro tratamiento) y aprobó el rediseño en el artefacto
+«Escala de Centauro · Editorial», armado con los datos reales de Centauro, Polaris, Tecnosagot y Cicadex. Reemplaza al
+Sistema 2 del 12 nov en las dos páginas de la escala de una empresa; el resultado del test público y su PDF no cambian.
+
+- **El tratamiento:** blanco, tinta azul marino, un solo azul de acento, divisores finos en vez de tarjetas con sombra,
+  titulares cortos en negrita y UNA cifra grande por bloque. Las partes del Resumen van numeradas («01 / Lo que hicimos»)
+  porque son una secuencia. Hex literal a propósito: es un documento del cliente y no flipea (§1-WEB). El Resumen vive en
+  `components/external/test/resumen-editorial.css` (todo bajo `.re`); la página del área, en `resultado.css`.
+- **El Resumen, de arriba abajo:** la empresa en la ceja, la TESIS (dos frases cortas), las etiquetas del negocio, el
+  alcance y, a la derecha, el tamaño del negocio si la empresa lo dijo; 01 lo que hicimos (sesiones, tiempo SIN «más de»,
+  personas y áreas exploradas); 02 la operación: de 3 a 5 pasos con su ícono hasta el resultado para el cliente (el último,
+  lleno), el bucle de los equipos que acompañan mientras opera y «Dónde se traba hoy», numerado sobre su paso; 03 una fila
+  por subequipo con el nivel de su equipo, quiénes son y qué hacen, lo que ya funciona, dos retos, «Ver diagnóstico de …
+  →» (un botón, como en los otros diseños) y a la derecha su cifra o «Falta un dato»; la banda oscura con lo que falta
+  validar (sin nada, no sale; SIN el botón «Confirmar o corregir» de la referencia, que Elías quitó) y el pie con la fecha.
+- **Funciona con cualquier diagnóstico, no solo con el ejemplo.** Sin tamaño del negocio, la tesis ocupa el ancho. Sin
+  cifra, «Falta un dato». Sin «quiénes son», la fila empieza en qué hacen. Un subequipo cuyo nombre no es el de su equipo
+  dice «Parte de Ventas» (Televentas en Polaris). Un equipo con nivel y sin nada escrito sale con su nivel y su botón. Un
+  equipo sin sesiones sale apagado, sin cifra ni botón, y «Lo que hicimos» dice «Próxima área por explorar». Sin bucle
+  si nadie acompaña después (Polaris). Lo probó el artefacto con las cuatro empresas y lo prueban las pruebas.
+- **Un Resumen de antes del 15 nov se sigue pintando:** sin tesis, el titular es «Así entendimos tu negocio.» y la bajada
+  dice qué vende; sin ícono, la página lo deduce del nombre del paso (`iconoDelPaso`); sin `continuo`, todos los pasos van
+  en la línea. Se ve bien recién cuando se rehace con la IA: los textos de antes son largos para este molde.
+- **Las piezas nuevas sin estructuras nuevas:** la tesis, las etiquetas y el tamaño son tres partes más del negocio
+  (`TIPOS_DEL_NEGOCIO`: «tesis», «etiquetas», «tamano»), así heredan la cita verificada, la edición en su lugar, lo quitado
+  y la lectura del Json. El tamaño se parte en número y rótulo (`partirElTamano`) y su estado sale con la regla de las
+  cifras (`estadoDeLaCifra`). El ícono y `continuo` van en cada etapa; el título del recorrido, en `tituloDelRecorrido`
+  (sin cita propia: sus números y herramientas los tuvo que decir la empresa; se edita con `recorrido:titulo` y
+  «Rehacer con IA» no pisa el de una persona). «Quiénes son» es la primera pieza de la organización cuando hay dos y es
+  corta (hasta 80 caracteres): no hizo falta otra lista.
+- **El prompt del agente** pide la forma editorial: la tesis en dos frases de 3 a 8 palabras sin folleto, tres
+  etiquetas, el tamaño solo si la empresa lo dijo, de 3 a 5 pasos más los continuos con su ícono, la organización en dos
+  piezas (quiénes, qué hacen), una sola de lo que funciona, «frena» vacío (va en los retos), exactamente 2 retos en
+  infinitivo («Descartar a tiempo los leads que no son del producto»: lo que hay que lograr, nunca una herramienta) y
+  una cifra con el número solo y su rótulo. Las reglas de veracidad no cambian.
+- **Lo que bajó de visibilidad (aprobado por Elías en el artefacto):** la ficha con el logo del cliente (en las dos
+  páginas), los atajos del Resumen, el texto largo de cada etapa, «Lo que le impide rendir más» como lista aparte, la
+  tercera pieza de cada lista, la segunda cifra (el molde las pinta todas, el prompt pide una), el «por qué este nivel»
+  del Resumen (lo cuenta la página del área), las partes del negocio que no son la tesis, las etiquetas, el alcance ni el
+  tamaño (se siguen guardando: sostienen la tesis) y, en la página del área, la lista de partes bajo el radar en el
+  celular (las mismas están en «Cómo está cada parte»).
+- **La página de cada área:** el nivel como titular con su punto de color, la síntesis de bajada, la base operativa y la
+  producción a la derecha; el radar con «Ver puntajes» y su tarjeta SIEMPRE a la vista al lado (abre en la parte que más
+  frena y cambia al pasar el cursor o tocar otra); «Por dónde empezar», «Lo que lo mueve», los riesgos y «Cómo está cada
+  parte» como antes; al final, «← Volver al Resumen» y «Ver diagnóstico de [la siguiente área] →», como el cierre del
+  resultado del test.
+- **Lo que corrigió la revisión del 15 nov:** la tesis, las etiquetas y el tamaño se rehacen o se quedan ENTEROS (si una
+  persona tocó una pieza, quedan como las dejó: las tres etiquetas salen de la misma cita y juntarlas pieza por pieza
+  borraba las otras al rehacer), con su tope también a mano (3 etiquetas, 1 tesis, 1 tamaño); el tamaño pasa por la vara
+  de las cifras (un número que su cita no dice no sale al cliente y adentro dice por qué) y, sin número al principio, sale
+  como texto; una etapa que se manda a corregir conserva su ícono y si acompaña, y la del equipo que faltaba va al bucle
+  si es de atención; el título del recorrido no se pierde si todas las etapas se corrigieron; el agente a veces manda la
+  tesis en dos piezas y se juntan; en el teléfono la página del área usa el radar compacto (el mediano dejaba los nombres
+  a 7 px), con la tarjeta de la parte numerada; siempre UNA tarjeta al lado del radar; las pestañas viejas y ~190 reglas
+  del Resumen anterior salieron; el Resumen toma los colores de `.rd-ed`.
+- **Lo que no queda garantizado:** cómo escribe el agente con el prompt nuevo hasta que se rehaga un Resumen real (el
+  simulacro de `scripts/simular-resumen-de-la-escala.ts` lo muestra sin guardar); cuánto de lo que escribe se cae en la
+  verificación con textos tan cortos (los retos en infinitivo son la pieza con más riesgo); el ícono no se elige a mano.
 
 ## La Planificación: el ciclo de vida son las 7 etapas de HubSpot y las automatizaciones van en filas (2026-11-12)
 

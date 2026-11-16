@@ -85,13 +85,75 @@ function tarjetasDeLaPagina(raiz: HTMLElement): Tarjetero {
   };
 }
 
-export default function AnimacionesDelResultado({ className, quieta = false, children }: { className?: string; quieta?: boolean; children: ReactNode }) {
+/**
+ * La tarjeta AL LADO del radar (la página editorial de un área de la escala, 15 nov): siempre hay UNA a la vista, y su
+ * parte marcada en el radar (`is-elegida`). La página trae todas; la de lo que más frena llega sin `hidden` y con
+ * `data-inicial`. Pasar el cursor, tocar o enfocar otra parte la cambia, y salir del radar no la cierra. Una tarjeta cuyo
+ * texto se está editando (`data-fijada`) no se cambia hasta terminar.
+ *
+ * React también toca el `hidden` de las tarjetas cuando vuelve a dibujar (adentro: se mueve un nivel y lo que más frena
+ * pasa a otra parte, o se cambia de área), así que un observador vuelve a dejar una sola: la elegida si sigue en la
+ * página; si no (otra área), la inicial. Y vuelve a marcar su parte en el radar, que puede ser otro dibujo.
+ */
+function tarjetaAlLado(raiz: HTMLElement): { tarjetero: Tarjetero; soltar: () => void } {
+  const todas = () => [...raiz.querySelectorAll<HTMLElement>("[data-tarjeta]")];
+  let elegida: string | null = null;
+  const laElegida = () => (elegida ? (todas().find((x) => x.dataset.tarjeta === elegida) ?? null) : null);
+  const ordenar = () => {
+    const lista = todas();
+    let tip = laElegida();
+    if (!tip) {
+      tip = lista.find((x) => x.hasAttribute("data-inicial")) ?? lista.find((x) => !x.hidden) ?? null;
+      elegida = tip?.dataset.tarjeta ?? null;
+    }
+    for (const x of lista) if (x.hidden !== (x !== tip)) x.hidden = x !== tip;
+    raiz.querySelectorAll(".is-elegida").forEach((el) => {
+      if (!(el instanceof SVGElement) || el.dataset.d !== elegida) el.classList.remove("is-elegida");
+    });
+    if (elegida) raiz.querySelectorAll(`svg.rde-interactivo [data-d="${CSS.escape(elegida)}"]`).forEach((el) => el.classList.add("is-elegida"));
+  };
+  ordenar();
+  // Solo `hidden` y lo que entra o sale: las clases que se ponen acá no lo vuelven a disparar.
+  const observador = new MutationObserver(ordenar);
+  observador.observe(raiz, { subtree: true, childList: true, attributes: true, attributeFilter: ["hidden", "data-inicial"] });
+  return {
+    tarjetero: {
+      mostrar: (t) => {
+        if (t.clave === elegida || laElegida()?.dataset.fijada === "1") return;
+        if (!todas().some((x) => x.dataset.tarjeta === t.clave)) return;
+        elegida = t.clave;
+        ordenar();
+      },
+      ocultar: () => undefined,
+      abierta: laElegida,
+    },
+    soltar: () => observador.disconnect(),
+  };
+}
+
+export default function AnimacionesDelResultado({
+  className,
+  quieta = false,
+  tarjetaFija = false,
+  children,
+}: {
+  className?: string;
+  quieta?: boolean;
+  /** La tarjeta de la parte va al lado del radar, siempre a la vista (`tarjetaAlLado`), y no flotando junto al cursor. */
+  tarjetaFija?: boolean;
+  children: ReactNode;
+}) {
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const raiz = ref.current;
     if (!raiz) return;
-    const soltarElRadar = resaltarElRadar(raiz, tarjetasDeLaPagina(raiz));
+    const alLado = tarjetaFija ? tarjetaAlLado(raiz) : null;
+    const soltarDelRadar = resaltarElRadar(raiz, alLado?.tarjetero ?? tarjetasDeLaPagina(raiz));
+    const soltarElRadar = () => {
+      soltarDelRadar();
+      alLado?.soltar();
+    };
     if (quieta || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return soltarElRadar;
     const soltarElIman = conIman() ? imanDelRadar(raiz) : () => undefined;
 
@@ -155,7 +217,7 @@ export default function AnimacionesDelResultado({ className, quieta = false, chi
       soltarElIman();
       completar();
     };
-  }, [quieta]);
+  }, [quieta, tarjetaFija]);
 
   return (
     quieta ? (

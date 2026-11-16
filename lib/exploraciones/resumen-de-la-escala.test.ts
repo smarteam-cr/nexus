@@ -21,7 +21,7 @@ import ResultadoDelTestVista from "@/components/external/test/ResultadoDelTestVi
 import ResumenDeLaEscalaVista from "@/components/external/test/ResumenDeLaEscalaVista";
 import { ajustarAlto } from "@/components/external/test/TextoEditableDeLaPagina";
 import { parseObject } from "@/lib/ai/section-schema";
-import { nivelProvisional } from "@/lib/external/pagina-del-resumen";
+import { iconoDelPaso, nivelProvisional, partirElTamano } from "@/lib/external/pagina-del-resumen";
 import type { ResultadoDelTest } from "@/lib/tests-diagnostico/resultado";
 import { aplicarOperaciones, cambioLoConfirmado, contenidoVacio, propuestaVacia, type EstadoDeExploracion, type Validez } from "./contenido";
 import { firmaDelArea } from "./descripcion-de-la-escala";
@@ -48,6 +48,7 @@ import {
   juntarConLoEditado,
   lecturaNuestra,
   leerElArreglo,
+  leerLasEtapas,
   leerElResumen,
   loQueHicimos,
   minutosDeLaReunion,
@@ -321,7 +322,7 @@ describe("1 · ninguna afirmación sin su cita", () => {
     expect(texto).toContain("[236] Emiley Calvo Jiménez: Digamos que 25 25 la mitad.");
     expect(texto).toContain("no es evidencia");
     const reglas = String(p.system);
-    for (const regla of [/palabra por palabra/, /no significa que no lo tengan/, /Una meta/, /UNA CIFRA ES UN SOLO DATO/, /riesgo típico de la escala/, /No asumas herramientas/, /Nunca escribas «provisional»/, /CADA traspaso/, /no cuadran entre sí/, /LA VERACIDAD ES LO MÁS IMPORTANTE/])
+    for (const regla of [/palabra por palabra/, /no significa que no lo tengan/, /Una meta/, /UNA CIFRA ES UN SOLO DATO/, /riesgo típico de la escala/, /No asumas herramientas/, /Nunca escribas «provisional»/, /pasa de un equipo a otro, es otro paso/, /«tesis» \(1\)/, /«etiquetas» \(3\)/, /«continuo»: true/, /«retos» \(exactamente 2/, /no cuadran entre sí/, /LA VERACIDAD ES LO MÁS IMPORTANTE/])
       expect(reglas).toMatch(regla);
     expect(p.model).toBe("claude-sonnet-4-6");
     expect(guiaDelEquipo({ retos: [{ texto: "CRM lead-driven" }], metas: [{ que: "Bajar el churn", actual: "2,8 %" }], hubspotActual: "Usan un CRM sin nombre" })).toBe(
@@ -462,7 +463,7 @@ describe("2 · el cliente nunca ve las citas", () => {
     const adentro = resumenParaLaPagina(guardado2(), [VENTAS, SERVICIO], CHEQUEO, ENTORNO, { conCitas: true, porExplorar: POR_EXPLORAR });
     const cs = adentro.tarjetas.find((t) => t.areaId === "3")!.subequipos.find((x) => x.nombre === "Customer Success")!;
     expect(cs.cifras[1].citas?.[0].confirmo?.texto).toBe("Ajá. Exacto.");
-    expect(adentro.negocio?.[0].lista.piezas[0].citas?.[0].hablante).toBe("Fernando Segura");
+    expect(adentro.negocio?.find((p) => p.tipo === "vende")?.lista.piezas[0].citas?.[0].hablante).toBe("Fernando Segura");
     // El formato 1, igual: afuera sin citas.
     const v1 = JSON.stringify(resumenParaLaPagina(guardado(), [VENTAS, SERVICIO], CHEQUEO, ENTORNO, { conCitas: false }));
     for (const prohibido of ["Marco Salas", "Fernando", "se nos van", "citas"]) expect(v1).not.toContain(prohibido);
@@ -487,14 +488,12 @@ describe("2 · el cliente nunca ve las citas", () => {
         ],
       }),
     );
-    for (const parte of ["1 · Tu negocio", "2 · Cómo funciona tu operación hoy", "3 · Qué encontramos por área", "4 · Qué falta validar", "sesiones contigo", "personas de tu equipo"])
+    // La forma editorial (15 nov): las partes numeradas, lo que hicimos con sus cifras y la banda de lo que falta validar.
+    for (const parte of ["/ Lo que hicimos", "/ Tu operación", "/ Equipos y hallazgos", "Tu mirada completa el diagnóstico", "sesiones de exploración", "personas de tu equipo", "áreas exploradas"])
       expect(html).toContain(parte);
-    // «¿Entendimos bien?» y «provisional» ya no salen; la sección «Qué hicimos» tampoco (sus cifras van arriba).
-    for (const fuera of ["¿Entendimos bien?", "provisional", "· Qué hicimos"]) expect(html).not.toContain(fuera);
-    expect(html).toContain("Qué queda fuera");
-    // Lo que no se habló dice que está por confirmar, no se completa (12 nov: sin «?» y sin «Lo vemos contigo.»).
-    expect(html).toContain("Por confirmar");
-    expect(html).not.toContain("Lo vemos contigo");
+    for (const fuera of ["¿Entendimos bien?", "provisional", "más de", "Confirmar o corregir"]) expect(html).not.toContain(fuera);
+    // Lo que queda fuera va en la línea del alcance, debajo de la tesis.
+    expect(html).toContain("re-alcance");
     expect(html).toContain("Lo dijiste tú");
     expect(html).toContain("Estimado");
     expect(html).toContain("Ver diagnóstico de Servicio");
@@ -502,8 +501,8 @@ describe("2 · el cliente nunca ve las citas", () => {
     // Soporte y Customer Success van separadas, las dos de Servicio en la escala.
     expect(html).toContain("Soporte");
     expect(html).toContain("Customer Success");
-    expect(html).toContain("Lo que ya hace bien");
-    expect(html).toContain("Se traba:");
+    expect(html).toContain("re-funciona");
+    expect(html).toContain("Dónde se traba hoy");
     // Marketing no tuvo sesiones: su pestaña y su tarjeta dicen «Por explorar», y no se abre.
     expect(html).toContain("Por explorar");
     expect(html).not.toContain('href="/external/escala/t?area=2"');
@@ -632,9 +631,8 @@ describe("3 · el armado", () => {
     expect(p.pendientes.map((x) => [x.tipo, x.clave])).toEqual([["por-confirmar", "falta:f1"]]);
     const html = renderToStaticMarkup(createElement(ResumenDeLaEscalaVista, { resumen: p, empresa: "Centauro Solutions", pestanas: [{ id: "resumen", nombre: "Resumen", href: "#" }] }));
     expect(html).toContain("14 de 25");
-    expect(html).not.toContain("· Tu negocio");
-    expect(html).not.toContain("Cómo funciona tu operación");
-    expect(html).toContain("Qué encontramos por área");
+    expect(html).not.toContain("/ Tu operación");
+    expect(html).toContain("/ Equipos y hallazgos");
   });
 });
 
@@ -697,7 +695,7 @@ describe("4 · se edita en su lugar y «Rehacer con IA» no pisa lo escrito", ()
         edicion: { alElegir: () => {}, texto: (x) => x.valor, deDonde: (citas, d) => (d?.noSostiene ? `TENIA:${citas.length}` : `SALE:${citas.length}`) },
       }),
     );
-    expect(html).toContain("rs-cifra-fuera");
+    expect(html).toContain("re-cifra-fuera");
     expect(html).toContain("TENIA:1");
     // Una nota con un número que la cita no dice también la saca.
     const conNota = ok(editarElResumen(guardado2(), "op:o2:cifra:c1:nota", "Sobre 900 clientes.", o));
@@ -1409,40 +1407,37 @@ describe("20 · el Sistema 2 de la escala (12 nov)", () => {
     expect(enSuOrden(pestanas).map((p) => p.nombre)).toEqual(["Resumen", "Ventas", "Servicio", "Marketing"]);
     const html = renderToStaticMarkup(createElement(ArribaDeLaEscala, { actual: "resumen", pestanas }));
     expect(html.indexOf(">Servicio<")).toBeLessThan(html.indexOf(">Marketing<"));
-    expect(html).toContain("rd-btn-por-explorar");
+    // Lo que ve el cliente (las pestañas editoriales, 15 nov): apagada, y texto en lugar de enlace.
+    expect(html).toContain('<span class="ed-pestana apagada" aria-disabled="true">Marketing</span>');
+    expect(html).not.toContain('href="/r?area=2"');
   });
 
-  it("el título es «Qué entendimos del negocio», los atajos van debajo y antes de las cifras", () => {
+  it("forma editorial (15 nov): sin tesis guardada, el titular dice qué es la página y la bajada, qué vende; sin atajos", () => {
     const html = renderToStaticMarkup(createElement(ResumenDeLaEscalaVista, { resumen: resumen(), empresa: "Centauro Solutions", pestanas }));
-    expect(html).toContain("Qué entendimos del negocio");
-    expect(html).not.toContain("Lo que vimos de tu empresa");
-    const titulo = html.indexOf("Qué entendimos del negocio");
-    const atajos = html.indexOf("rs-ruta");
-    const cifras = html.indexOf("rs-numeros");
-    expect(titulo).toBeLessThan(atajos);
-    expect(atajos).toBeLessThan(cifras);
-    expect(html).toContain('href="#rs-negocio"');
-    expect(html).toContain('class="dr rd-v3 rd-s2"');
+    expect(html).toContain("Así entendimos tu negocio.");
+    expect(html).toContain("Vendes productos para hospedajes");
+    expect(html).toContain("Centauro Solutions <span>/ Diagnóstico</span>");
+    for (const fuera of ["rs-ruta", "Qué entendimos del negocio", "rd-empresa"]) expect(html).not.toContain(fuera);
+    expect(html).toContain('class="dr rd-v3 rd-s2 rd-ed re"');
+    expect(html).toContain("ed-pestana activa");
   });
 
   it("«Por confirmar» va sin el signo de pregunta, en todos sus chips", () => {
-    const html = renderToStaticMarkup(createElement(ResumenDeLaEscalaVista, { resumen: resumen(), empresa: "Centauro Solutions", pestanas }));
-    expect(html).toContain("Por confirmar");
-    expect(html).not.toMatch(/rs-estado-pendiente"><span aria-hidden="true">\?/);
+    // Una cifra por confirmar de verdad, para que la prueba mire su chip (revisión del 15 nov: sin ella siempre pasaba).
+    const r = resumen();
+    const conPendiente = { ...r, tarjetas: r.tarjetas.map((t) => ({ ...t, subequipos: t.subequipos.map((x) => ({ ...x, cifras: x.cifras.map((c) => ({ ...c, estado: "pendiente" as const })) })) })) };
+    const html = renderToStaticMarkup(createElement(ResumenDeLaEscalaVista, { resumen: conPendiente, empresa: "Centauro Solutions", pestanas }));
+    expect(html).toContain('re-estado re-estado-pendiente">Por confirmar');
+    // Ninguna señal de estado lleva «?» (la forma editorial no pinta el chip vacío del negocio: el estado va con su cifra).
+    expect(html).not.toMatch(/re-estado[^"]*"><span aria-hidden="true">\?/);
+    expect(fs.readFileSync(path.join(RAIZ, "components/external/test/ResumenDeLaEscalaVista.tsx"), "utf8")).toMatch(/pendiente: null/);
   });
 
-  it("«Lo que le impide rendir más» lleva su clase, para alinearse con las otras listas", () => {
-    const css = fs.readFileSync(path.join(RAIZ, "components/external/test/resultado.css"), "utf8");
-    expect(css).toMatch(/\.rd-s2 \.rs-bloque-frena \.rs-lista li::before \{ content: "○"/);
-    expect(fs.readFileSync(path.join(RAIZ, "components/external/test/ResumenDeLaEscalaVista.tsx"), "utf8")).toContain('className="rs-bloque rs-bloque-frena"');
-  });
-
-  it("el logo de la ficha sale en lugar de la inicial; sin logo, el círculo", () => {
-    const con = renderToStaticMarkup(createElement(ResumenDeLaEscalaVista, { resumen: resumen(), empresa: "Centauro Solutions", logo: "https://cdn.test/logo.png", pestanas }));
-    expect(con).toContain('src="https://cdn.test/logo.png"');
-    expect(con).not.toContain("rd-empresa-logo");
-    const sin = renderToStaticMarkup(createElement(ResumenDeLaEscalaVista, { resumen: resumen(), empresa: "Centauro Solutions", pestanas }));
-    expect(sin).toContain("rd-empresa-logo");
+  it("forma editorial: lo que la frena va con los retos, y la ficha con el logo del cliente ya no sale (aprobado el 15 nov)", () => {
+    const html = renderToStaticMarkup(createElement(ResumenDeLaEscalaVista, { resumen: resumen(), empresa: "Centauro Solutions", logo: "https://cdn.test/logo.png", pestanas }));
+    expect(html).not.toContain("Lo que le impide rendir más");
+    expect(html).not.toContain("cdn.test/logo.png");
+    expect(html).toContain("re-retos");
     expect(logoQueSeSirve("https://x.supabase.co/storage/v1/object/public/public-assets/logo.png")).toBe("https://x.supabase.co/storage/v1/object/public/public-assets/logo.png");
     for (const malo of ["http://x.test/logo.png", "javascript:alert(1)", "data:image/png;base64,AAA", "logo.png", "", null]) expect(logoQueSeSirve(malo)).toBeNull();
   });
@@ -1452,7 +1447,8 @@ describe("20 · el Sistema 2 de la escala (12 nov)", () => {
       createElement(ResultadoDelTestVista, { r: VENTAS, empresa: "Centauro Solutions", agenda: "", logo: "https://cdn.test/logo.png", deLaEscala: { areas: pestanas.slice(1), porExplorar: [] } }),
     );
     expect(escala).toContain("rd-s2");
-    expect(escala).toContain('src="https://cdn.test/logo.png"');
+    // La forma editorial (15 nov): la ficha con el logo del cliente ya no sale en la página del área.
+    expect(escala).not.toContain('src="https://cdn.test/logo.png"');
     expect(escala).toContain(`Las ${VENTAS.total} partes de Ventas`);
     const test = renderToStaticMarkup(createElement(ResultadoDelTestVista, { r: VENTAS, empresa: "Centauro Solutions", agenda: "", logo: "https://cdn.test/logo.png" }));
     expect(test).not.toContain("rd-s2");
@@ -1581,5 +1577,257 @@ describe("21 · la verificación justa y lo que se repara (12 nov, Centauro en p
     const ctx = { areas: [{ id: "1", nombre: "Ventas" }, { id: "2", nombre: "Marketing" }], reuniones: [{ areaId: "1" }, { areaId: "2" }] };
     expect(equiposSinEtapa([{ nombre: "Demo y cierre", quien: "Ventas" }], [], ctx)).toEqual(["2"]);
     expect(equiposSinEtapa([{ nombre: "Captación", quien: "Marketing" }, { nombre: "Demo", quien: "Ventas" }], [], ctx)).toEqual([]);
+  });
+});
+
+describe("22 · la forma editorial (15 nov): tesis, etiquetas, tamaño, pasos con ícono y el bucle", () => {
+  const RECORRIDO = [
+    { etapa: "Captación y venta", quien: "Ventas", texto: "Un asesor por marca", friccion: "Las llamadas no quedan registradas.", icono: "captacion", citas: [C("R1", 369, "Cada asesor tiene su propio celular, cada uno con un número distinto.")] },
+    { etapa: "El hospedaje opera", quien: null, texto: "Revisión de los nuevos", friccion: null, icono: "inventado", citas: [C("R2", 300, "en los primeros tres meses yo reviso uno por uno los accesos y las reservas")] },
+    { etapa: "Acompañamiento", quien: "Customer Success", texto: "Revisa uno por uno", friccion: null, icono: "soporte", continuo: true, citas: [C("R2", 300, "yo reviso uno por uno los accesos y las reservas de cada hospedaje")] },
+  ];
+  const RETO = { texto: "Revisar a mano, uno por uno, los accesos de cada hospedaje.", citas: [C("R2", 300, "yo reviso uno por uno los accesos y las reservas de cada hospedaje en la extranet, a mano.")] };
+  const leido = () =>
+    leerElResumen(
+      responde({
+        tituloDelRecorrido: "De la llamada del asesor al hospedaje que opera.",
+        negocio: {
+          tesis: [{ texto: "Productos para hospedajes. Una suscripción mensual por propiedad.", citas: [C("R1", 20, "vendemos productos para hospedajes, hoteles pequeños y medianos, con una suscripción mensual por propiedad")] }],
+          etiquetas: [
+            { texto: "Productos para hospedajes", citas: [C("R1", 20, "vendemos productos para hospedajes, hoteles pequeños y medianos")] },
+            { texto: "Hoteles pequeños y medianos", citas: [C("R1", 20, "vendemos productos para hospedajes, hoteles pequeños y medianos")] },
+            { texto: "Suscripción mensual", citas: [C("R1", 20, "con una suscripción mensual por propiedad")] },
+            { texto: "Una cuarta de más", citas: [C("R1", 20, "con una suscripción mensual por propiedad")] },
+          ],
+          tamano: [{ texto: "500 clientes", citas: [C("R2", 59, "si son 500 clientes y solo uno atendiendo tickets")] }],
+        },
+        recorrido: RECORRIDO,
+        areas: [area({ retos: [RETO] })],
+      }),
+      CTX,
+      REGLAS,
+    );
+
+  it("lee la tesis, tres etiquetas como mucho, el tamaño y el título; el ícono que no está en la lista no se guarda", () => {
+    const e = leido();
+    expect(e.negocio.tesis?.map((p) => p.texto)).toEqual(["Productos para hospedajes. Una suscripción mensual por propiedad."]);
+    expect(e.negocio.etiquetas?.map((p) => p.texto)).toEqual(["Productos para hospedajes", "Hoteles pequeños y medianos", "Suscripción mensual"]);
+    expect(e.negocio.tamano?.[0].texto).toBe("500 clientes");
+    expect(e.tituloDelRecorrido).toBe("De la llamada del asesor al hospedaje que opera.");
+    expect(e.recorrido.map((x) => [x.nombre, x.icono ?? null, !!x.continuo])).toEqual([
+      ["Captación y venta", "captacion", false],
+      ["El hospedaje opera", null, false],
+      ["Acompañamiento", "soporte", true],
+    ]);
+  });
+
+  it("la tesis que llega en dos piezas (una por frase) se junta en una, con las citas de las dos", () => {
+    const e = leerElResumen(
+      responde({
+        negocio: {
+          tesis: [
+            { texto: "Productos para hospedajes.", citas: [C("R1", 20, "vendemos productos para hospedajes, hoteles pequeños y medianos")] },
+            { texto: "Una suscripción mensual por propiedad.", citas: [C("R1", 20, "con una suscripción mensual por propiedad")] },
+          ],
+        },
+        recorrido: RECORRIDO,
+        areas: [area({ retos: [RETO] })],
+      }),
+      CTX,
+      REGLAS,
+    );
+    expect(e.negocio.tesis?.map((p) => [p.texto, p.citas.length])).toEqual([["Productos para hospedajes. Una suscripción mensual por propiedad.", 2]]);
+  });
+
+  it("un título con un número que la empresa no dijo no pasa", () => {
+    const e = leerElResumen(responde({ tituloDelRecorrido: "De 900 anuncios al hospedaje que opera.", recorrido: RECORRIDO, areas: [area({ retos: [RETO] })] }), CTX, REGLAS);
+    expect(e.tituloDelRecorrido).toBeNull();
+  });
+
+  it("la página: el tamaño en grande con su estado, el título, el ícono deducido y el bucle aparte", () => {
+    const e = leido();
+    const base = guardado2();
+    const g: ResumenGuardado = { ...base, negocio: { ...base.negocio, ...e.negocio }, recorrido: e.recorrido.map((x, i) => ({ ...x, id: `e${i}` })), tituloDelRecorrido: { texto: e.tituloDelRecorrido! } };
+    const p = resumenParaLaPagina(g, [VENTAS, SERVICIO], CHEQUEO, ENTORNO, { conCitas: false, porExplorar: POR_EXPLORAR });
+    expect(p.tamano).toMatchObject({ valor: "500", rotulo: "clientes", estado: "declarado" });
+    expect(p.tamano).not.toHaveProperty("citas");
+    expect(p.tituloDelRecorrido).toBe("De la llamada del asesor al hospedaje que opera.");
+    expect(p.recorrido?.map((x) => [x.icono, x.continuo])).toEqual([
+      ["captacion", false],
+      ["opera", false],
+      ["soporte", true],
+    ]);
+    const html = renderToStaticMarkup(
+      createElement(ResumenDeLaEscalaVista, {
+        resumen: p,
+        empresa: "Centauro Solutions",
+        fecha: "2026-11-12T15:00:00.000Z",
+        pestanas: [
+          { id: "resumen", nombre: "Resumen", href: "#" },
+          { id: "3", nombre: "Servicio", href: "#3" },
+        ],
+      }),
+    );
+    expect(html).toContain('<h1 class="re-titular rd-entra">Productos para hospedajes. Una suscripción mensual por propiedad.</h1>');
+    expect(html).toContain('<span class="re-grande">500</span><b>clientes</b>');
+    expect(html).toContain("re-chip-continuo");
+    expect(html).toContain("De la llamada del asesor al hospedaje que opera.");
+    expect(html).toContain("Medido el 12 de noviembre de 2026");
+    // Las etiquetas, separadas; con tesis, «qué vende» ya no sale como texto suelto.
+    expect(html).toContain("re-etiquetas");
+    expect(html).not.toContain("Vendes productos para hospedajes pequeños");
+  });
+
+  it("sin nada que validar no sale la banda; sin tamaño, la tesis ocupa todo el ancho", () => {
+    const p = resumenParaLaPagina(guardado2(), [VENTAS, SERVICIO], CHEQUEO, ENTORNO, { conCitas: false, porExplorar: {} });
+    const html = renderToStaticMarkup(createElement(ResumenDeLaEscalaVista, { resumen: { ...p, pendientes: [] }, empresa: "Centauro Solutions", pestanas: [{ id: "resumen", nombre: "Resumen", href: "#" }] }));
+    expect(html).not.toContain("Tu mirada completa el diagnóstico");
+    expect(html).toContain("re-hero re-hero-sin-cifra");
+  });
+
+  it("«quiénes son» va en negrita y lo que hacen debajo; un texto largo de antes va normal", () => {
+    const g = guardado2();
+    const conQuienes = { ...g, operativas: g.operativas!.map((op) => (op.id === "o2" ? { ...op, organizacion: [{ id: "g9", texto: "Una persona", citas: [] }, ...op.organizacion] } : op)) };
+    const pinta = (x: ResumenGuardado) =>
+      renderToStaticMarkup(createElement(ResumenDeLaEscalaVista, { resumen: resumenParaLaPagina(x, [VENTAS, SERVICIO], CHEQUEO, ENTORNO, { conCitas: false }), empresa: "Centauro Solutions", pestanas: [{ id: "resumen", nombre: "Resumen", href: "#" }] }));
+    expect(pinta(conQuienes)).toContain('<div class="re-quienes">Una persona</div><div class="re-hace">');
+    expect(pinta(g)).not.toContain("re-quienes");
+  });
+
+  it("el título se edita en su lugar y «Rehacer con IA» no lo pisa; vacío, vuelve al de siempre", () => {
+    const o = { firmaDe: () => "f", areas: new Set(["1", "2", "3"]), en: "2026-11-15T10:00:00.000Z" };
+    const r = editarElResumen(guardado2(), "recorrido:titulo", "De la demo al hospedaje que opera.", o);
+    if (!r.ok) throw new Error(r.error);
+    expect(r.resumen.tituloDelRecorrido).toEqual({ texto: "De la demo al hospedaje que opera.", mano: true });
+    const rehecho = juntarConLoEditado({ ...guardado2(), tituloDelRecorrido: { texto: "Otro título del agente." } }, r.resumen);
+    expect(rehecho.tituloDelRecorrido?.texto).toBe("De la demo al hospedaje que opera.");
+    const vacio = editarElResumen(guardado2(), "recorrido:titulo", "", o);
+    if (!vacio.ok) throw new Error(vacio.error);
+    expect(resumenParaLaPagina(vacio.resumen, [VENTAS, SERVICIO], CHEQUEO, ENTORNO, { conCitas: false }).tituloDelRecorrido).toBeNull();
+    expect(editarElResumen(guardado2(), "recorrido:titulo", "x".repeat(91), o).ok).toBe(false);
+    // La tesis y las etiquetas se editan como cualquier parte del negocio.
+    const t = editarElResumen(guardado2(), "negocio:tesis:nuevo", "Un CRM para leads. Una operación de clientes.", o);
+    expect(t.ok && t.resumen.negocio?.tesis?.[0]).toMatchObject({ texto: "Un CRM para leads. Una operación de clientes.", mano: true });
+  });
+
+  it("lo guardado se vuelve a leer con su título, su ícono y su bucle (un ícono que no existe se cae solo)", () => {
+    const base = guardado2();
+    const g = { ...base, tituloDelRecorrido: { texto: "De la demo al hospedaje que opera.", mano: true }, recorrido: [{ ...base.recorrido![0], icono: "demo", continuo: true }, { ...base.recorrido![1], icono: "otro" }] };
+    const leidoDeNuevo = leerContenido({ ...contenidoVacio(), resumenDeLaEscala: JSON.parse(JSON.stringify(g)) }).resumenDeLaEscala!;
+    expect(leidoDeNuevo.tituloDelRecorrido).toEqual({ texto: "De la demo al hospedaje que opera.", mano: true });
+    expect(leidoDeNuevo.recorrido?.map((e) => [e.icono ?? null, !!e.continuo])).toEqual([
+      ["demo", true],
+      [null, false],
+    ]);
+  });
+
+  it("el ícono que no dio el agente sale del nombre del paso, y el tamaño se parte en número y rótulo", () => {
+    expect(iconoDelPaso("Captación de leads")).toBe("captacion");
+    expect(iconoDelPaso("Visita técnica")).toBe("visita");
+    expect(iconoDelPaso("Orden de compra")).toBe("entrega");
+    expect(iconoDelPaso("Lo que sea", true)).toBe("soporte");
+    expect(partirElTamano("500 clientes activos")).toEqual({ valor: "500", rotulo: "clientes activos" });
+    expect(partirElTamano("180–200 leads al mes")).toEqual({ valor: "180–200", rotulo: "leads al mes" });
+    expect(partirElTamano("L 8 500 de ticket promedio")).toEqual({ valor: "L 8 500", rotulo: "de ticket promedio" });
+    expect(partirElTamano("clientes activos")).toEqual({ valor: "", rotulo: "clientes activos" });
+  });
+});
+
+describe("23 · lo que encontró la revisión del 15 nov en la forma editorial", () => {
+  const o = { firmaDe: () => "f", areas: new Set(["1", "2", "3"]), en: "2026-11-15T10:00:00.000Z" };
+  const ok = (r: ReturnType<typeof editarElResumen>) => {
+    if (!r.ok) throw new Error(r.error);
+    return r.resumen;
+  };
+  // Las tres etiquetas de la MISMA cita, como las escribe el agente.
+  const cita = { ...CITA_LUIS, hablante: "Fernando Segura", texto: "vendemos productos para hospedajes, hoteles pequeños y medianos" };
+  const conEtiquetas = (): ResumenGuardado => ({
+    ...guardado2(),
+    negocio: {
+      ...guardado2().negocio,
+      etiquetas: [
+        { id: "e1", texto: "Productos para hospedajes", citas: [cita], origen: "R1:20" },
+        { id: "e2", texto: "Hoteles pequeños", citas: [cita], origen: "R1:20" },
+        { id: "e3", texto: "Suscripción mensual", citas: [cita], origen: "R1:20" },
+      ],
+    },
+  });
+  const nuevas = (): ResumenGuardado => ({
+    ...conEtiquetas(),
+    negocio: { ...conEtiquetas().negocio, etiquetas: conEtiquetas().negocio!.etiquetas!.map((x) => ({ ...x, id: `${x.id}-n`, texto: `${x.texto} (nueva)` })) },
+  });
+
+  it("corregir una etiqueta y rehacer no se lleva las otras dos; quitar una, tampoco", () => {
+    const corregida = ok(editarElResumen(conEtiquetas(), "negocio:etiquetas:e2", "Hoteles pequeños y medianos", o));
+    expect(juntarConLoEditado(nuevas(), corregida).negocio?.etiquetas?.map((x) => x.texto)).toEqual(["Productos para hospedajes", "Hoteles pequeños y medianos", "Suscripción mensual"]);
+    const sinUna = ok(editarElResumen(conEtiquetas(), "negocio:etiquetas:e2", null, o));
+    expect(juntarConLoEditado(nuevas(), sinUna).negocio?.etiquetas?.map((x) => x.texto)).toEqual(["Productos para hospedajes", "Suscripción mensual"]);
+    // Sin tocarlas, rehacer las cambia por las nuevas.
+    expect(juntarConLoEditado(nuevas(), conEtiquetas()).negocio?.etiquetas?.map((x) => x.texto)).toEqual(["Productos para hospedajes (nueva)", "Hoteles pequeños (nueva)", "Suscripción mensual (nueva)"]);
+  });
+
+  it("las etiquetas no pasan de tres ni la tesis de una, tampoco a mano", () => {
+    expect(editarElResumen(conEtiquetas(), "negocio:etiquetas:nuevo", "Una cuarta", o).ok).toBe(false);
+    const conTesis = ok(editarElResumen(guardado2(), "negocio:tesis:nuevo", "Una frase. Otra frase.", o));
+    expect(editarElResumen(conTesis, "negocio:tesis:nuevo", "Otra tesis.", o).ok).toBe(false);
+  });
+
+  it("el tamaño escrito a mano con un número que su cita no dice no sale al cliente; adentro sale con el porqué", () => {
+    const g: ResumenGuardado = { ...guardado2(), negocio: { ...guardado2().negocio, tamano: [{ id: "z1", texto: "900 clientes activos", citas: [], mano: true }] } };
+    expect(resumenParaLaPagina(g, [VENTAS, SERVICIO], CHEQUEO, ENTORNO, { conCitas: false }).tamano).toBeNull();
+    expect(resumenParaLaPagina(g, [VENTAS, SERVICIO], CHEQUEO, ENTORNO, { conCitas: true }).tamano?.noSale).toMatch(/No sale al cliente/);
+  });
+
+  it("un tamaño sin número al principio se sigue viendo y editando, como texto", () => {
+    const c59 = { ...CITA_LUIS, hablante: "Emiley Calvo Jiménez", texto: "si son quinientos clientes y solo uno atendiendo" };
+    const g: ResumenGuardado = { ...guardado2(), negocio: { ...guardado2().negocio, tamano: [{ id: "z1", texto: "Quinientos clientes activos", citas: [c59] }] } };
+    const p = resumenParaLaPagina(g, [VENTAS, SERVICIO], CHEQUEO, ENTORNO, { conCitas: false });
+    expect(p.tamano).toMatchObject({ valor: "", rotulo: "Quinientos clientes activos" });
+    const html = renderToStaticMarkup(createElement(ResumenDeLaEscalaVista, { resumen: p, empresa: "Centauro", pestanas: [{ id: "resumen", nombre: "Resumen", href: "#" }] }));
+    expect(html).toContain("<b>Quinientos clientes activos</b>");
+    expect(html).not.toContain("re-hero-sin-cifra");
+  });
+
+  it("una etapa que se manda a corregir conserva si acompaña y su ícono", () => {
+    const e = leerElResumen(
+      responde({
+        recorrido: [{ etapa: "Soporte continuo", quien: "Soporte", texto: "Atiende 1800 casos al mes por correo y WhatsApp.", friccion: null, icono: "soporte", continuo: true, citas: [C("R2", 300, "en los primeros tres meses yo reviso uno por uno los accesos y las reservas")] }],
+        areas: [area({ retos: [{ texto: "Revisar a mano, uno por uno, los accesos de cada hospedaje.", citas: [C("R2", 300, "yo reviso uno por uno los accesos y las reservas de cada hospedaje en la extranet, a mano.")] }] })],
+        tituloDelRecorrido: "Del primer contacto al hospedaje que opera.",
+      }),
+      CTX,
+      REGLAS,
+    );
+    expect(e.recorrido).toEqual([]);
+    expect(e.etapasPorArreglar[0]).toMatchObject({ icono: "soporte", continuo: true });
+    // El título no se pierde aunque todas las etapas se hayan mandado a corregir.
+    expect(e.tituloDelRecorrido).toBe("Del primer contacto al hospedaje que opera.");
+  });
+
+  it("lo guardado con un «continuo» raro no tumba la etapa", () => {
+    const base = guardado2();
+    const g = { ...base, recorrido: [{ ...base.recorrido![0], continuo: "true", icono: 7 }] };
+    const leidoDeNuevo = leerContenido({ ...contenidoVacio(), resumenDeLaEscala: JSON.parse(JSON.stringify(g)) }).resumenDeLaEscala!;
+    expect(leidoDeNuevo.recorrido?.map((x) => x.nombre)).toEqual([base.recorrido![0].nombre]);
+  });
+});
+
+describe("24 · la segunda pasada de la revisión del 15 nov", () => {
+  it("un equipo que el cliente no ve no sale ni como responsable de un paso", () => {
+    const base = guardado2();
+    const g: ResumenGuardado = { ...base, recorrido: [{ ...base.recorrido![0], quien: "Marketing" }, base.recorrido![1]] };
+    const p = resumenParaLaPagina(g, [VENTAS, SERVICIO], CHEQUEO, ENTORNO, { conCitas: false, areasFuera: ["Marketing"] });
+    expect(p.recorrido?.map((x) => x.quien)).toEqual([base.recorrido![1].quien]);
+  });
+
+  it("un tamaño con un número que no va al principio pasa por la misma vara", () => {
+    const g: ResumenGuardado = { ...guardado2(), negocio: { ...guardado2().negocio, tamano: [{ id: "z1", texto: "Aproximadamente 900 clientes", citas: [], mano: true }] } };
+    expect(resumenParaLaPagina(g, [VENTAS, SERVICIO], CHEQUEO, ENTORNO, { conCitas: false }).tamano).toBeNull();
+  });
+
+  it("la etapa corregida vuelve con su ícono y en el bucle", () => {
+    const de = [{ orden: 0, etapa: "Soporte continuo", quien: "Soporte", texto: "Atiende 1800 casos al mes.", friccion: null, citas: [C("R2", 300, "en los primeros tres meses yo reviso uno por uno los accesos y las reservas")], problema: "números", icono: "soporte", continuo: true }];
+    const r = leerLasEtapas(responde({ etapas: [{ i: 0, etapa: "Revisión de los nuevos", texto: "Revisa uno por uno", friccion: null }] }), de, CTX, REGLAS);
+    expect(r.etapas.map((x) => [x.nombre, x.icono, x.continuo])).toEqual([["Revisión de los nuevos", "soporte", true]]);
   });
 });

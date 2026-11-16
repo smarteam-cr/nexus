@@ -204,7 +204,7 @@ describe("fuente única: la escala no está escrita en el código", () => {
       for (const t of textos) if (fuente.includes(t)) pegados.push(`${rel}: «${t.slice(0, 60)}…»`);
     }
     expect(pegados).toEqual([]);
-  });
+  }, 30_000); // Recorre toda la sección: con la suite entera en paralelo pasaba los 5 s (revisión del 15 nov).
 });
 
 describe("el mapa de herramientas es interno", () => {

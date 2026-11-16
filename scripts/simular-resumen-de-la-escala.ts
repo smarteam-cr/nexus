@@ -140,8 +140,8 @@ async function main() {
 
   console.log(`${NL}── 1 · El negocio`);
   for (const [tipo, ps] of Object.entries(escrito.negocio)) for (const p of ps ?? []) console.log(`  [${tipo}] ${p.texto}${citas(p.citas)}`);
-  console.log(`${NL}── 3 · El recorrido`);
-  for (const e of escrito.recorrido) console.log(`  ${e.nombre} (${e.quien ?? "-"}): ${e.texto}${e.friccion ? `${NL}      ⚠ ${e.friccion}` : ""}${citas(e.citas)}`);
+  console.log(`${NL}── 3 · El recorrido: ${escrito.tituloDelRecorrido ?? "(sin título)"}`);
+  for (const e of escrito.recorrido) console.log(`  ${e.continuo ? "↺ " : ""}${e.nombre} (${e.quien ?? "-"}) [${e.icono ?? "sin ícono"}]: ${e.texto}${e.friccion ? `${NL}      ⚠ ${e.friccion}` : ""}${citas(e.citas)}`);
   for (const op of escrito.operativas) {
     console.log(`${NL}── 4 · ${op.nombre} (${nombreDeArea(op.areaId)})`);
     for (const [k, xs] of [
@@ -175,6 +175,7 @@ async function main() {
     falta: [],
     negocio: escrito.negocio,
     recorrido: escrito.recorrido,
+    tituloDelRecorrido: escrito.tituloDelRecorrido ? { texto: escrito.tituloDelRecorrido } : null,
     operativas: escrito.operativas,
     pendientes: escrito.pendientes,
     firmas: le.firmas,

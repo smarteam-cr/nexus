@@ -14,7 +14,7 @@
 import { useRef, type KeyboardEvent, type PointerEvent, type ReactNode } from "react";
 import type { Letra } from "@/lib/escala/documento/tipos";
 import { esArrastre, letraDelArrastre } from "@/lib/escala/arrastre-del-radar";
-import { COMPACTO, GRANDE, type MedidasDelRadar, type Punto } from "@/lib/escala/radar-de-una-empresa";
+import { COMPACTO, GRANDE, MEDIANO, type MedidasDelRadar, type Punto } from "@/lib/escala/radar-de-una-empresa";
 
 interface Toma {
   clave: string;
@@ -82,7 +82,8 @@ export default function ArrastreDelRadar({
     if (!pieza) return;
     const eje = ejeDe(pieza.svg, pieza.clave);
     if (!eje) return;
-    const m = pieza.svg.closest(".rde-compacto") ? COMPACTO : GRANDE;
+    // El de la página editorial (15 nov) es el mediano.
+    const m = pieza.svg.closest(".rde-compacto") ? COMPACTO : pieza.svg.closest(".rde-mediano") ? MEDIANO : GRANDE;
     toma.current = {
       ...pieza,
       m,

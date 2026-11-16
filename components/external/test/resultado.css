@@ -411,17 +411,9 @@
   .dr [data-revela="oculta"], .dr .rd-fila[data-barra="vacia"] { opacity: 1; transform: none; transition: none; }
 }
 
-
 /* ── La página como artefacto que se edita (La escala interna, 8 nov). Solo con `.rd-editable`: la página pública no
       la lleva. Hex literal, como el resto de la página: aquí no hay tema. ──────────────────────────────────────────── */
 .dr.rd-editable { border-radius: 16px; }
-.dr .rd-btn-oculta { border-style: dashed; opacity: .78; }
-.dr .rd-btn-nota { font-size: 11px; font-weight: 500; opacity: .85; }
-/* Un equipo sin sesiones (11 nov): la pestaña está, y afuera no se abre. Desde el 12 nov, más apagada (sin fondo, la letra
-   tenue y el borde casi invisible) y al final de la fila (ArribaDeLaEscala › enSuOrden). */
-.dr .rd-btn-por-explorar:not(.rd-btn-primary) { border: 1px dashed #e3e9f2; background: transparent; color: #b3bdcc !important; box-shadow: none; cursor: default; }
-.dr .rd-btn-por-explorar:not(.rd-btn-primary):hover { background: transparent; }
-.dr span.rd-btn-por-explorar { display: inline-flex; align-items: center; gap: 6px; }
 .dr.rd-editable .rde-interactivo [data-d] { cursor: grab; }
 /* En pantallas táctiles, deslizar sobre una parte del radar la arrastra (no desplaza la página): solo adentro. */
 .dr.rd-editable .rde-interactivo [data-d] { touch-action: none; }
@@ -447,148 +439,18 @@
 .dr .rd-btn-enlace:hover { text-decoration: underline; }
 .dr .rd-btn-enlace:disabled { opacity: .7; cursor: progress; text-decoration: none; }
 
-/* ── El Resumen de la escala (9 nov; resumen ejecutivo desde el 10 nov, ResumenDeLaEscalaVista): la portada que presenta
-      el vendedor. Hex literal, como el resto de la página. El rojo solo marca lo respaldado por evidencia (los retos y lo
-      que se traba); las cifras van en tinta, con su estado en palabras. ──────────────────────────────────────────────── */
-.dr .rs-cabecera { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; padding: 8px 8px 0; }
-.dr .rs-cabecera > .rd-eyebrow { margin-top: 6px; }
-.dr .rs-titulo { margin: 0; font-family: var(--font-body); font-size: 44px; line-height: 50px; font-weight: 300; letter-spacing: -.025em; color: var(--v3-tinta); }
-.dr .rs-ruta { display: flex; flex-wrap: wrap; gap: 8px; margin: 6px 0 0; padding: 0; list-style: none; }
-.dr .rs-ruta a { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px 6px 6px; border-radius: 999px; background: #ffffff; border: 1px solid var(--v3-borde-fuerte); font-size: 13px; font-weight: 500; color: var(--v3-secundario); text-decoration: none; }
-.dr .rs-ruta a:hover { background: var(--v3-fondo); color: var(--v3-tinta); }
-.dr .rs-ruta-n { display: grid; place-items: center; width: 22px; height: 22px; border-radius: 999px; background: #e6f0ff; color: var(--v3-marca); font-size: 12px; font-weight: 700; }
-.dr .rs-seccion { display: flex; flex-direction: column; gap: 14px; }
-.dr .rs-intro { margin: 0; font-size: 14.5px; line-height: 21px; color: var(--v3-apagado); max-width: 760px; }
-.dr .rs-bloque-k { margin: 0; font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--v3-apagado); }
-.dr .rs-lista { display: grid; gap: 8px; margin: 0; padding: 0 0 0 18px; }
-.dr .rs-lista li { font-size: 15px; line-height: 22px; color: var(--v3-texto); }
-.dr .rs-parte { display: inline-block; margin-left: 6px; border-radius: 999px; padding: 0 8px; background: #eef3fb; font-size: 11px; font-weight: 600; line-height: 18px; color: var(--v3-secundario); vertical-align: 1px; }
-.dr .rs-vacio { margin: 0; font-size: 14px; color: var(--v3-apagado); }
-.dr .rs-agregar { font-size: 14px; }
-.dr .rs-enlace { align-self: flex-start; font: inherit; font-size: 13.5px; font-weight: 600; color: var(--v3-marca); background: none; border: 0; padding: 0; cursor: pointer; text-decoration: none; }
-.dr .rs-enlace:hover { text-decoration: underline; }
-
-/* La señal de cómo se sabe una cifra: símbolo y texto, nunca solo color. */
-.dr .rs-estado { display: inline-flex; align-items: center; gap: 5px; border-radius: 999px; padding: 1px 9px 1px 7px; font-size: 11.5px; font-weight: 600; line-height: 18px; white-space: nowrap; }
-.dr .rs-estado-declarado { background: #e8f1ff; color: #24539e; }
-.dr .rs-estado-estimado { background: #fdf3e3; color: #8a4f0c; }
-.dr .rs-estado-pendiente { background: #eef1f5; color: #4a5770; }
-
-/* 1 · El negocio: seis partes cortas, comparables. */
-.dr .rs-negocio { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 18px 28px; }
-.dr .rs-negocio-parte { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
-.dr .rs-negocio-lista { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
-.dr .rs-negocio-lista li { font-size: 15.5px; line-height: 23px; color: var(--v3-texto); }
-.dr .rs-pendiente-txt { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 0; font-size: 14px; color: var(--v3-apagado); }
-
-/* 2 · Qué hicimos. */
-.dr .rs-numeros { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; }
-.dr .rs-numero { display: flex; flex-direction: column; gap: 2px; padding: 14px 16px; border-radius: 14px; background: var(--v3-fondo); }
-.dr .rs-numero b { font-size: 30px; line-height: 36px; font-weight: 600; letter-spacing: -.015em; color: var(--v3-tinta); }
-.dr .rs-numero b small { font-size: 14px; font-weight: 500; color: var(--v3-apagado); letter-spacing: 0; }
-.dr .rs-numero span { font-size: 13px; color: var(--v3-apagado); }
-.dr .rs-exploradas { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; padding: 0; list-style: none; }
-.dr .rs-exploradas li { display: inline-flex; align-items: center; gap: 8px; padding: 7px 14px 7px 10px; border-radius: 999px; font-size: 13.5px; }
-.dr .rs-exploradas li span:last-child { color: var(--v3-apagado); }
-.dr .rs-explorada { background: #ecf8f2; border: 1px solid #cfeadc; color: var(--v3-tinta); }
-.dr .rs-explorada .rs-explorada-marca { color: #177a4f; font-weight: 700; }
-.dr .rs-por-explorar { background: #ffffff; border: 1px dashed #b9c4d4; color: var(--v3-secundario); }
-.dr .rs-por-explorar .rs-explorada-marca { color: #8a97ab; }
-.dr .rs-parrafo { max-width: 860px; font-size: 16px; line-height: 24px; color: var(--v3-secundario); }
-
-/* 3 · El recorrido: horizontal en escritorio, vertical en el teléfono. */
-.dr .rs-recorrido { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 0; margin: 4px 0 0; padding: 0; list-style: none; }
-.dr .rs-etapa { position: relative; display: flex; flex-direction: column; gap: 6px; padding: 0 22px 0 0; min-width: 0; }
-.dr .rs-etapa::after { content: ""; position: absolute; top: 13px; left: 34px; right: 0; height: 2px; background: #d6dee9; }
-.dr .rs-etapa:last-child::after { display: none; }
-.dr .rs-etapa-n { position: relative; z-index: 1; display: grid; place-items: center; width: 28px; height: 28px; border-radius: 999px; background: #e6f0ff; color: var(--v3-marca); font-size: 13px; font-weight: 700; }
-.dr .rs-etapa-nombre { margin: 4px 0 0; font-size: 15.5px; line-height: 21px; font-weight: 600; color: var(--v3-tinta); }
-.dr .rs-etapa-quien { align-self: flex-start; border-radius: 999px; padding: 0 8px; background: var(--v3-fondo); font-size: 11.5px; font-weight: 600; line-height: 19px; color: var(--v3-secundario); }
-.dr .rs-etapa-texto { font-size: 14px; line-height: 20px; color: var(--v3-secundario); }
-.dr .rs-friccion { margin-top: 2px; padding: 7px 10px; border-radius: 10px; background: #fff6f5; border-left: 3px solid #e2665c; font-size: 13px; line-height: 19px; color: #6b2620; }
-.dr .rs-friccion-k { font-weight: 700; color: #b5342a; }
-.dr .rs-friccion-vacia { background: transparent; border-left-color: #e6ebf2; }
-
-/* 4 · Qué encontramos: una tarjeta por área operativa, comparables. */
-.dr .rs-areas { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 18px; align-items: start; }
-.dr .rs-area { display: flex; flex-direction: column; gap: 16px; padding: 22px 24px; background: #ffffff; border: 1px solid var(--v3-borde); border-radius: 20px; box-shadow: var(--v3-sombra); min-width: 0; }
-.dr .rs-area-cabeza { display: flex; flex-direction: column; gap: 6px; }
-.dr .rs-area-nombre { margin: 0; font-size: 22px; line-height: 28px; font-weight: 600; letter-spacing: -.01em; color: var(--v3-tinta); }
-.dr .rs-nivel-chip { display: inline-flex; align-self: flex-start; align-items: center; gap: 7px; font-size: 12.5px; color: var(--v3-apagado); }
-.dr .rs-nivel-chip b { font-weight: 600; color: #8a4f0c; }
-.dr .rs-magnitud { display: grid; gap: 10px; }
-.dr .rs-cifra { display: flex; flex-direction: column; gap: 4px; padding: 14px 16px; border-radius: 14px; background: var(--v3-fondo); }
-.dr .rs-cifra-n { font-size: 30px; line-height: 36px; font-weight: 600; letter-spacing: -.02em; color: var(--v3-tinta); }
-.dr .rs-cifra-texto { font-size: 14.5px; line-height: 21px; color: var(--v3-texto); }
-.dr .rs-cifra-pie { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin-top: 2px; font-size: 12px; color: var(--v3-apagado); }
-.dr .rs-cifra-nota { font-size: 12.5px; line-height: 18px; color: var(--v3-apagado); }
-.dr .rs-cifra-fuera { opacity: .75; border: 1px dashed #d6a3a0; }
-.dr .rs-sin-cifra { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; padding: 12px 14px; border-radius: 14px; border: 1px dashed #c7d1df; font-size: 14px; line-height: 20px; color: var(--v3-secundario); }
-.dr .rs-sin-cifra-k { font-weight: 600; color: var(--v3-tinta); }
-.dr .rs-bloque { display: flex; flex-direction: column; gap: 6px; }
-.dr .rs-bloque-bien .rs-lista { list-style: none; padding-left: 0; }
-.dr .rs-bloque-bien .rs-lista li { position: relative; padding-left: 22px; }
-.dr .rs-bloque-bien .rs-lista li::before { content: "✓"; position: absolute; left: 2px; top: 0; font-weight: 700; color: #177a4f; }
-.dr .rs-retos { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; counter-reset: reto; }
-.dr .rs-retos li { position: relative; padding-left: 30px; font-size: 15px; line-height: 22px; color: var(--v3-texto); counter-increment: reto; }
-.dr .rs-retos li::before { content: counter(reto); position: absolute; left: 0; top: 1px; display: grid; place-items: center; width: 20px; height: 20px; border-radius: 999px; background: #fdecec; color: #b5342a; font-size: 11.5px; font-weight: 700; }
-.dr .rs-porque { border-top: 1px solid var(--v3-borde); padding-top: 10px; }
-.dr .rs-porque > summary { cursor: pointer; list-style: none; font-size: 13.5px; font-weight: 600; color: var(--v3-secundario); }
-.dr .rs-porque > summary::-webkit-details-marker { display: none; }
-.dr .rs-porque > summary::before { content: "▸"; display: inline-block; margin-right: 6px; transition: transform .15s; }
-.dr .rs-porque[open] > summary::before { transform: rotate(90deg); }
-.dr .rs-porque > summary:focus-visible { outline: 2px solid var(--v3-azul); outline-offset: 3px; border-radius: 6px; }
-.dr .rs-porque-cuerpo { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; font-size: 14.5px; line-height: 21px; color: var(--v3-secundario); }
-.dr .rs-provisional { margin: 0; font-size: 13px; line-height: 19px; color: #8a4f0c; }
-.dr .rs-cta { align-self: flex-start; display: inline-flex; align-items: center; gap: 6px; margin-top: auto; padding: 9px 16px; border-radius: 999px; border: 1px solid #c9d8f0; background: #f3f7fe; font: inherit; font-size: 14px; font-weight: 600; color: var(--v3-marca); cursor: pointer; text-decoration: none; }
-.dr .rs-cta:hover { background: #e6f0ff; }
-
-/* Segunda vuelta (11 nov): las cifras de lo que hicimos van en la cabecera; cada tarjeta es un equipo de la escala con sus
-   subequipos adentro; un equipo sin sesiones va punteado y dice «Por explorar». */
-.dr .rs-cabecera .rs-numeros { width: 100%; max-width: 760px; margin-top: 4px; }
-.dr .rs-cabecera .rs-numero { background: #ffffff; border: 1px solid var(--v3-borde); }
-.dr .rs-area-ancha { grid-column: 1 / -1; }
-.dr .rs-subequipos { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; }
-.dr .rs-subequipo { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
-.dr .rs-subequipos .rs-subequipo { padding: 16px 18px; border-radius: 16px; background: var(--v3-fondo); }
-.dr .rs-subequipos .rs-subequipo .rs-cifra { background: #ffffff; }
-.dr .rs-subequipo-nombre { margin: 0; font-size: 16px; line-height: 22px; font-weight: 600; color: var(--v3-tinta); }
-.dr .rs-area-por-explorar { background: transparent; box-shadow: none; border: 1.5px dashed var(--v3-borde-fuerte); }
-
-/* 5 · Qué falta validar. */
-.dr .rs-pendientes { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
-.dr .rs-pendiente { display: flex; flex-direction: column; gap: 4px; padding: 12px 14px; border-radius: 14px; background: var(--v3-fondo); font-size: 15px; line-height: 22px; color: var(--v3-texto); }
-.dr .rs-pendiente-tipo { align-self: flex-start; border-radius: 999px; padding: 0 9px; background: #ffffff; border: 1px solid var(--v3-borde-fuerte); font-size: 11px; font-weight: 700; letter-spacing: .04em; line-height: 19px; color: var(--v3-secundario); }
-.dr .rs-pendiente-contradiccion .rs-pendiente-tipo { border-color: #f0c9a0; color: #8a4f0c; }
-.dr .rs-entendimos { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; padding-top: 18px; border-top: 1px solid var(--v3-borde); }
-.dr .rs-entendimos h2 { font-size: 22px; line-height: 28px; }
-.dr .rs-entendimos ul { display: grid; gap: 8px; margin: 6px 0 0; padding: 0 0 0 18px; }
-.dr .rs-entendimos li { font-size: 15.5px; line-height: 23px; color: var(--v3-texto); }
-
-/* Solo adentro: una cifra que el cliente no ve (su cita no la sostiene) y de dónde sale cada cosa. */
-.dr .rs-rojo-aviso { margin: 6px 0 0; padding: 6px 10px; border-radius: 10px; background: #fff4e5; color: #8a4b00; font-size: 12.5px; font-weight: 600; line-height: 1.4; }
+/* Solo adentro (la pantalla interna de la escala): de dónde sale cada cosa. Del Resumen anterior (9 a 12 nov) es lo único
+   que queda en uso: el Resumen editorial vive en resumen-editorial.css. */
 .dr .rs-citas { margin-top: 6px; padding: 8px 10px; border-radius: 10px; background: #f6f8fc; border: 1px dashed var(--v3-borde-fuerte); font-size: 12.5px; line-height: 18px; color: var(--v3-secundario); }
 .dr .rs-citas ul { margin: 2px 0 0; padding-left: 16px; display: grid; gap: 4px; }
 .dr .rs-citas li span { color: var(--v3-apagado); }
 .dr .rs-citas-k { font-size: 11.5px; font-weight: 600; color: var(--v3-apagado); }
 
-@media (max-width: 720px) {
-  .dr .rs-titulo { font-size: 32px; line-height: 38px; }
-  .dr .rs-recorrido { grid-auto-flow: row; grid-auto-columns: auto; gap: 18px; }
-  .dr .rs-etapa { padding: 0 0 0 42px; }
-  .dr .rs-etapa-n { position: absolute; left: 0; top: 0; }
-  .dr .rs-etapa-nombre { margin-top: 3px; }
-  .dr .rs-etapa::after { top: 34px; bottom: -14px; left: 13px; right: auto; width: 2px; height: auto; }
-  .dr .rs-areas { grid-template-columns: minmax(0, 1fr); }
-  .dr .rs-area { padding: 18px; }
-  .dr .rs-cifra-n { font-size: 26px; line-height: 32px; }
-}
-
 /* ── El Sistema 2 de la escala de una empresa (12 nov; diseño aprobado por Elías, artefacto «Escala de Centauro · Sistema
-      2»). Solo con `.rd-s2`: el Resumen (ResumenDeLaEscalaVista) y la página de cada área cuando es la escala de una empresa
-      (ResultadoDelTestVista con `deLaEscala`). El resultado del test público y su PDF NO lo llevan. Medida por medida del
-      artefacto: fondo gris azulado, tarjetas blancas de 20 px, degradado solo en el bloque de arriba, números grandes en
-      letra fina azul tinta, rótulos chicos en mayúscula. Hex literal: la página del cliente no tiene tema. ───────────── */
+      2»): fondo gris azulado, tarjetas blancas de 20 px, números grandes en letra fina y rótulos chicos en mayúscula. Solo
+      con `.rd-s2`. Desde el 15 nov las páginas de la escala (el Resumen y cada área) llevan además la línea editorial
+      (`.rd-ed`, más abajo, y resumen-editorial.css), que gana donde chocan. El resultado del test público y su PDF NO lo
+      llevan. Hex literal: la página del cliente no tiene tema. ─────────────────────────────────────────────────────── */
 html:has(.dr.rd-s2:not(.rd-editable)) { scroll-behavior: smooth; }
 @media (prefers-reduced-motion: reduce) { html:has(.dr.rd-s2:not(.rd-editable)) { scroll-behavior: auto; } }
 .dr.rd-s2 { --s2-caja: #f6f9fd; --s2-tinta-marca: #1e4b9e; --s2-info: #eaf2ff; --s2-tenue: #a9b5c7; --s2-punteado: #c9d3e1; }
@@ -612,89 +474,13 @@ html:has(.dr.rd-s2:not(.rd-editable)) { scroll-behavior: smooth; }
 .dr.rd-s2 .rd-empresa-txt small { font-size: 11.5px; line-height: 15px; }
 
 /* Los rótulos chicos: apagados en las tarjetas, azul tinta en el bloque de arriba. */
-.dr.rd-s2 .rd-eyebrow, .dr.rd-s2 .rd-label, .dr.rd-s2 .rs-bloque-k { font-size: 10.5px; line-height: 14px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; color: var(--v3-apagado); }
-.dr.rd-s2 .rs-cabecera .rd-eyebrow, .dr.rd-s2 .rd-head-texto .rd-eyebrow, .dr.rd-s2 .rd-head-texto .rd-label { color: var(--s2-tinta-marca); }
+.dr.rd-s2 .rd-eyebrow, .dr.rd-s2 .rd-label { font-size: 10.5px; line-height: 14px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; color: var(--v3-apagado); }
+.dr.rd-s2 .rd-head-texto .rd-eyebrow, .dr.rd-s2 .rd-head-texto .rd-label { color: var(--s2-tinta-marca); }
 .dr.rd-s2 .rd-fecha { font-size: 12.5px; line-height: 1.4; }
-
-/* El bloque de arriba del Resumen: el único con degradado. */
-.dr.rd-s2 .rs-cabecera { gap: 14px; padding: 28px 32px; border-radius: 24px; background: var(--v3-degradado); }
-.dr.rd-s2 .rs-cabecera > .rd-eyebrow { margin-top: 0; }
-.dr.rd-s2 .rs-cabecera > .rd-fecha { margin-top: -6px; }
-.dr.rd-s2 .rs-titulo { font-size: 34px; line-height: 40px; font-weight: 300; letter-spacing: -.02em; text-wrap: balance; }
-.dr.rd-s2 .rs-ruta { margin: 2px 0 0; }
-.dr.rd-s2 .rs-ruta a { gap: 8px; padding: 5px 12px 5px 5px; border: 0; background: rgba(255, 255, 255, .8); font-size: 12.5px; color: var(--v3-secundario); }
-.dr.rd-s2 .rs-ruta a:hover { background: #ffffff; color: var(--v3-tinta); }
-.dr.rd-s2 .rs-ruta a:focus-visible { outline: 2px solid var(--v3-azul); outline-offset: 2px; }
-.dr.rd-s2 .rs-ruta-n { background: var(--s2-info); color: var(--s2-tinta-marca); font-size: 11.5px; }
-.dr.rd-s2 .rs-cabecera .rs-numeros { display: flex; flex-wrap: wrap; gap: 12px 40px; width: 100%; max-width: none; margin-top: 6px; padding-top: 16px; border-top: 1px solid rgba(28, 47, 85, .08); }
-.dr.rd-s2 .rs-cabecera .rs-numero { gap: 2px; padding: 0; border: 0; border-radius: 0; background: none; }
-.dr.rd-s2 .rs-numero b { font-size: 34px; line-height: 38px; font-weight: 300; letter-spacing: -.02em; color: var(--s2-tinta-marca); font-variant-numeric: tabular-nums; }
-.dr.rd-s2 .rs-numero b small { margin-right: 4px; font-size: 14px; font-weight: 400; }
-.dr.rd-s2 .rs-numero span { font-size: 10.5px; line-height: 14px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; color: var(--v3-apagado); }
 
 /* Las tarjetas. */
 .dr.rd-s2 .rd-tarjeta { gap: 16px; padding: 24px 26px; }
 .dr.rd-s2 .rd-tarjeta h2 { font-size: 24px; line-height: 30px; font-weight: 500; letter-spacing: -.015em; text-wrap: balance; }
-.dr.rd-s2 .rs-intro { margin-top: -8px; font-size: 13.5px; line-height: 21px; }
-.dr.rd-s2 .rs-estado { gap: 5px; padding: 1px 9px; font-size: 11px; }
-.dr.rd-s2 .rs-estado-declarado { background: var(--s2-info); color: var(--s2-tinta-marca); }
-.dr.rd-s2 .rs-estado-estimado { background: #fdf3e3; color: #95580f; }
-.dr.rd-s2 .rs-estado-pendiente { background: #eef2f7; color: #4f5d75; }
-
-/* 1 · Tu negocio: tres columnas. */
-.dr.rd-s2 .rs-negocio { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px 28px; }
-.dr.rd-s2 .rs-negocio-parte { gap: 5px; }
-.dr.rd-s2 .rs-negocio-lista li { font-size: 14.5px; line-height: 22px; }
-
-/* 2 · El recorrido. */
-.dr.rd-s2 .rs-etapa { padding-right: 18px; }
-.dr.rd-s2 .rs-etapa::after { left: 36px; }
-.dr.rd-s2 .rs-etapa-n { background: var(--s2-info); color: var(--s2-tinta-marca); font-size: 12.5px; }
-.dr.rd-s2 .rs-etapa-nombre { font-size: 14.5px; line-height: 20px; }
-.dr.rd-s2 .rs-etapa-quien { background: #eef2f7; font-size: 11px; color: #4f5d75; }
-.dr.rd-s2 .rs-etapa-texto { font-size: 13px; line-height: 19px; }
-.dr.rd-s2 .rs-friccion { padding: 8px 10px; border: 0; border-radius: 12px; background: #fdecec; font-size: 12.5px; line-height: 18px; }
-.dr.rd-s2 .rs-friccion-vacia { background: transparent; border: 1px dashed #e6ebf2; }
-
-/* 3 · Una tarjeta por equipo, con sus subequipos. */
-.dr.rd-s2 .rs-areas { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
-.dr.rd-s2 .rs-area { gap: 16px; padding: 22px 24px; }
-.dr.rd-s2 .rs-area-cabeza { flex-direction: row; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 6px 12px; }
-.dr.rd-s2 .rs-area-nombre { font-size: 20px; line-height: 26px; }
-.dr.rd-s2 .rs-nivel-chip { align-self: auto; font-size: 13px; color: var(--v3-secundario); }
-.dr.rd-s2 .rs-nivel-chip .rd-punto { width: 8px; height: 8px; }
-.dr.rd-s2 .rs-area-por-explorar { border: 1.5px dashed var(--s2-punteado); }
-.dr.rd-s2 .rs-area-por-explorar .rs-vacio { font-size: 14px; color: var(--v3-secundario); }
-.dr.rd-s2 .rs-subequipos { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
-.dr.rd-s2 .rs-subequipos .rs-subequipo { gap: 14px; padding: 16px 18px; border-radius: 14px; background: var(--s2-caja); border: 1px solid var(--v3-borde); }
-.dr.rd-s2 .rs-subequipo-nombre { font-size: 15px; line-height: 20px; }
-.dr.rd-s2 .rs-magnitud { grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; }
-.dr.rd-s2 .rs-cifra { gap: 4px; padding: 14px 16px; background: var(--s2-caja); }
-.dr.rd-s2 .rs-subequipos .rs-subequipo .rs-cifra { background: #ffffff; }
-.dr.rd-s2 .rs-cifra-n { font-size: 28px; line-height: 32px; font-weight: 300; letter-spacing: -.02em; color: var(--s2-tinta-marca); font-variant-numeric: tabular-nums; }
-.dr.rd-s2 .rs-cifra-texto { font-size: 13.5px; line-height: 19px; }
-.dr.rd-s2 .rs-cifra-pie { font-size: 11.5px; }
-.dr.rd-s2 .rs-cifra-nota { font-size: 12px; line-height: 17px; }
-/* Las cuatro listas de un equipo alineadas (Elías, 12 nov): el rótulo al borde y cada marca —el punto, ✓, ○ y el número—
-   en la misma columna de 20 px, con el texto empezando a 28 px. «Lo que le impide rendir más» sin fondo. */
-.dr.rd-s2 .rs-bloque { gap: 6px; }
-.dr.rd-s2 .rs-bloque .rs-lista, .dr.rd-s2 .rs-retos { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
-.dr.rd-s2 .rs-bloque .rs-lista li, .dr.rd-s2 .rs-retos li { position: relative; padding-left: 28px; font-size: 14px; line-height: 21px; color: var(--v3-texto); }
-.dr.rd-s2 .rs-bloque .rs-lista li::before { content: ""; position: absolute; left: 0; top: 0; width: 20px; text-align: center; line-height: 21px; }
-.dr.rd-s2 .rs-bloque-organizado .rs-lista li::before { content: "•"; color: var(--s2-tenue); font-size: 16px; }
-.dr.rd-s2 .rs-bloque-bien .rs-lista li::before { content: "✓"; font-weight: 700; color: #177a4f; }
-.dr.rd-s2 .rs-bloque-frena .rs-lista li::before { content: "○"; font-size: 12px; color: #95580f; }
-.dr.rd-s2 .rs-retos li::before { left: 0; top: .5px; width: 20px; height: 20px; font-size: 11px; }
-.dr.rd-s2 .rs-porque > summary { font-size: 13px; }
-.dr.rd-s2 .rs-porque-cuerpo { font-size: 13.5px; line-height: 20px; }
-.dr.rd-s2 .rs-cta { margin-top: 0; padding: 9px 16px; border-radius: 10px; border: 1px solid var(--v3-borde-fuerte); background: #ffffff; font-size: 13px; color: var(--s2-tinta-marca); }
-.dr.rd-s2 .rs-cta:hover { background: var(--v3-fondo); }
-
-/* 4 · Qué falta validar: líneas simples con su círculo, sin cajas. */
-.dr.rd-s2 .rs-pendientes { gap: 10px; }
-.dr.rd-s2 .rs-pendiente { display: grid; grid-template-columns: 12px minmax(0, 1fr); column-gap: 10px; row-gap: 4px; padding: 0; border-radius: 0; background: none; font-size: 14.5px; line-height: 22px; }
-.dr.rd-s2 .rs-pendiente::before { content: "○"; grid-column: 1; font-size: 12px; color: var(--v3-azul); }
-.dr.rd-s2 .rs-pendiente > * { grid-column: 2; }
 
 /* El pie. */
 .dr.rd-s2 .rd-pie { gap: 6px; margin-top: 0; padding: 8px 0 0; border-top: 0; }
@@ -718,10 +504,8 @@ html:has(.dr.rd-s2:not(.rd-editable)) { scroll-behavior: smooth; }
 .dr.rd-s2 .rd-capa-k { font-size: 10.5px; }
 .dr.rd-s2 .rd-capa-v { gap: 8px; font-size: 17px; line-height: 22px; font-weight: 500; }
 .dr.rd-s2 .rd-capa-v .rd-punto { width: 8px; height: 8px; }
-.dr.rd-s2 .rd-capa-d { font-size: 12px; line-height: 16px; color: var(--v3-apagado); }
 /* El radar en su tarjeta, con su título a la altura de «Ver puntajes». El dibujo es el de siempre. */
 .dr.rd-s2 .rd-cabecera .rd-radar { position: relative; margin: 0; padding: 24px 26px; }
-.dr.rd-s2 .rd-radar-titulo { position: absolute; top: 34px; left: 26px; margin: 0; }
 .dr.rd-s2 .rd-radar-ayuda { font-size: 12.5px; }
 /* Por dónde empezar: lo que cuesta, en el recuadro ámbar al lado. */
 .dr.rd-s2 .rd-empezar.con-costo { grid-template-columns: minmax(0, 1fr) minmax(0, 360px); gap: 18px 32px; }
@@ -767,7 +551,6 @@ html:has(.dr.rd-s2:not(.rd-editable)) { scroll-behavior: smooth; }
   .dr.rd-s2 .rd-head-arriba { grid-template-columns: minmax(0, 1fr); }
   .dr.rd-s2 .rd-capas { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .dr.rd-s2 .rd-empezar.con-costo { grid-template-columns: minmax(0, 1fr); }
-  .dr.rd-s2 .rs-negocio { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 /* El celular: el tablero «Celular» del artefacto. */
 @media screen and (max-width: 720px) {
@@ -776,27 +559,215 @@ html:has(.dr.rd-s2:not(.rd-editable)) { scroll-behavior: smooth; }
   .dr.rd-s2 .rd-acciones { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); width: 100%; gap: 4px; padding: 4px; border-radius: 12px; background: #ffffff; border: 1px solid var(--v3-borde); }
   .dr.rd-s2 .rd-acciones .rd-btn { min-height: 38px; padding: 8px 4px; border: 0; border-radius: 9px; font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .dr.rd-s2 .rd-acciones .rd-btn-ghost { background: transparent; }
-  .dr.rd-s2 .rd-acciones .rd-btn-por-explorar:not(.rd-btn-primary) { border: 0; color: #c3ccd9 !important; }
-  .dr.rd-s2 .rs-cabecera, .dr.rd-s2 .rd-head-arriba { padding: 22px 20px; }
-  .dr.rd-s2 .rs-titulo { font-size: 28px; line-height: 34px; }
-  .dr.rd-s2 .rs-cabecera .rs-numeros { gap: 14px 24px; }
-  .dr.rd-s2 .rs-numero b { font-size: 28px; line-height: 32px; }
+  .dr.rd-s2 .rd-head-arriba { padding: 22px 20px; }
   .dr.rd-s2 .rd-tarjeta { padding: 20px 18px; gap: 12px; }
   .dr.rd-s2 .rd-tarjeta h2 { font-size: 21px; line-height: 27px; }
-  .dr.rd-s2 .rs-negocio, .dr.rd-s2 .rs-areas, .dr.rd-s2 .rs-subequipos { grid-template-columns: minmax(0, 1fr); }
-  .dr.rd-s2 .rs-area { padding: 20px 18px; }
-  .dr.rd-s2 .rs-subequipos .rs-subequipo { padding: 14px; }
   .dr.rd-s2 .rd-nivel { gap: 11px; font-size: 40px; line-height: 44px; }
   .dr.rd-s2 .rd-nivel .rd-punto { width: 11px; height: 11px; }
   .dr.rd-s2 .rd-resumen { font-size: 14.5px; line-height: 22px; }
   .dr.rd-s2 .rd-capa { padding: 12px 14px; }
   .dr.rd-s2 .rd-capa-v { font-size: 15px; }
-  .dr.rd-s2 .rd-capa-d { display: none; }
   .dr.rd-s2 .rd-cabecera .rd-radar { padding: 18px 14px; }
-  /* En el celular, el título en su propia línea: al lado de «Ver puntajes» no cabe un área de nombre largo. */
-  .dr.rd-s2 .rd-radar-titulo { position: static; margin: 0 0 10px; }
   .dr.rd-s2 .rd-fila { grid-template-columns: minmax(0, 1fr) auto auto; gap: 6px 10px; padding: 10px 0; }
 }
+
+/* ── La página de un área de la escala, EDITORIAL (15 nov; artefacto «Escala de Centauro · Editorial», aprobado por Elías
+      con su tabla «La página de un área: lo de hoy y su destino»). Solo con `.rd-ed` (ResultadoDelTestVista ›
+      AreaDeLaEscala; el Resumen, con resumen-editorial.css). El resultado del test público y su PDF no cambian.
+      Blanco, tinta azul marino, UN azul de acento, Plus Jakarta Sans (`--font-jakarta`, app/layout.tsx), divisores finos y
+      nada de tarjetas con sombra. Medida por medida del artefacto. Tema claro fijo con hex literal: la página del cliente
+      no flipea (ARCHITECTURE §1-WEB). El celular va por el ancho de la página (`@container`), como en el artefacto. ──── */
+.dr.rd-ed {
+  --ed-letra: var(--font-jakarta, 'Plus Jakarta Sans'), 'Plus Jakarta Sans', ui-sans-serif, system-ui, 'Segoe UI', sans-serif;
+  --font-display: var(--ed-letra);
+  --font-body: var(--ed-letra);
+  --ed-papel: #ffffff; --ed-panel: #f3f6fc; --ed-panel-borde: #e2e8f5; --ed-linea: #e4e8f1;
+  --ed-tinta: #121d4a; --ed-tinta-2: #3c4770; --ed-apagada: #6b7596; --ed-tenue: #a7b0c8;
+  --ed-azul: #2448d8; --ed-rojo: #d23b2f; --ed-rojo-suave: #fdeeec; --ed-ambar: #a35d0c; --ed-ambar-suave: #fdf3e2;
+  --ed-verde: #18794e; --ed-verde-suave: #e7f5ee;
+  color-scheme: light;
+  background: var(--ed-papel);
+  color: var(--ed-tinta);
+  font: 15px/23px var(--ed-letra);
+}
+.dr.rd-ed .rde, .dr.rd-ed .rde-svg { font-family: var(--ed-letra); }
+/* Los niveles con los colores del artefacto (el punto, la barra y la tarjeta). */
+.dr.rd-ed [data-nivel="D"] { --nc: #d23b2f; }
+.dr.rd-ed [data-nivel="I"] { --nc: #e08e0b; }
+.dr.rd-ed [data-nivel="F"] { --nc: #1f9d63; }
+.dr.rd-ed [data-nivel="E"] { --nc: #2448d8; }
+.dr.rd-ed [data-nivel="O"] { --nc: #0f1b4c; }
+.dr.rd-ed .rd-punto { border-color: var(--ed-tenue); }
+
+.dr.rd-ed .rd { display: block; max-width: 1040px; margin: 0 auto; padding: 0; container-type: inline-size; }
+.dr.rd-ed .ed-envoltura { padding-left: 56px; padding-right: 56px; }
+
+/* Arriba: el logo y las pestañas de texto, la activa en azul y subrayada. */
+.dr.rd-ed .ed-arriba { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 14px 24px; padding-top: 26px; padding-bottom: 18px; border-bottom: 1px solid var(--ed-linea); }
+.dr.rd-ed .ed-logo { display: block; height: 26px; width: auto; }
+.dr.rd-ed .ed-pestanas { display: flex; flex-wrap: wrap; gap: 4px 26px; }
+.dr.rd-ed .ed-pestana { position: relative; display: inline-flex; align-items: baseline; gap: 6px; padding: 6px 0; border: 0; background: none; font: inherit; font-size: 14px; line-height: 20px; font-weight: 500; color: var(--ed-tinta-2); cursor: pointer; text-decoration: none; }
+.dr.rd-ed a.ed-pestana:hover, .dr.rd-ed button.ed-pestana:hover { color: var(--ed-tinta); text-decoration: none; }
+.dr.rd-ed .ed-pestana.activa, .dr.rd-ed a.ed-pestana.activa:hover, .dr.rd-ed button.ed-pestana.activa:hover { color: var(--ed-azul); font-weight: 700; }
+.dr.rd-ed .ed-pestana.activa::after { content: ""; position: absolute; left: 0; right: 0; bottom: -2px; height: 2px; border-radius: 2px; background: var(--ed-azul); }
+/* Un equipo sin sesiones: apagado; afuera no se abre (adentro sí, como siempre). */
+.dr.rd-ed .ed-pestana.apagada:not(.activa) { color: var(--ed-tenue); }
+.dr.rd-ed span.ed-pestana.apagada { cursor: not-allowed; }
+/* Solo adentro: el área que el cliente no ve. */
+.dr.rd-ed .ed-pestana.oculta { text-decoration: underline dashed var(--ed-tenue); text-underline-offset: 6px; }
+.dr.rd-ed .ed-pestana-nota { font-size: 11px; font-weight: 500; color: var(--ed-apagada); }
+.dr.rd-ed .ed-pestana:focus-visible { outline: 2px solid var(--ed-azul); outline-offset: 4px; border-radius: 4px; }
+
+/* Los rótulos y los titulares. */
+.dr.rd-ed .ed-ceja { margin: 0; font-size: 12px; line-height: 16px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--ed-azul); }
+.dr.rd-ed .ed-ceja span { color: var(--ed-tinta); }
+.dr.rd-ed .ed-titulo { margin: 0; font-family: var(--ed-letra); font-size: 30px; line-height: 36px; font-weight: 800; letter-spacing: -.02em; color: var(--ed-tinta); text-wrap: balance; }
+.dr.rd-ed .ed-parte { display: grid; gap: 22px; padding-top: 40px; padding-bottom: 40px; border-top: 1px solid var(--ed-linea); }
+
+/* La cabecera: el nivel como titular, la descripción, cuántas partes y, a la derecha, las dos capas. */
+.dr.rd-ed .ed-hero { display: grid; grid-template-columns: minmax(0, 1fr) 260px; gap: 28px 40px; padding-top: 44px; padding-bottom: 40px; }
+.dr.rd-ed .ed-hero-texto { display: grid; gap: 16px; align-content: start; min-width: 0; }
+.dr.rd-ed .rd-nivel { display: inline-flex; align-items: center; gap: 16px; margin: 2px 0 0; font-family: var(--ed-letra); font-size: 60px; line-height: 64px; font-weight: 800; letter-spacing: -.035em; color: var(--ed-tinta); }
+.dr.rd-ed .rd-nivel .rd-punto { width: 16px; height: 16px; }
+.dr.rd-ed .rd-nivel:not([data-nivel]) .rd-punto { background: transparent; border: 2.5px dashed var(--ed-tenue); }
+.dr.rd-ed .ed-bajada { margin: 0; max-width: 58ch; font-size: 17px; line-height: 26px; color: var(--ed-tinta-2); }
+.dr.rd-ed .ed-medido { margin: 0; display: flex; flex-wrap: wrap; gap: 6px 10px; font-size: 13px; line-height: 19px; color: var(--ed-apagada); }
+.dr.rd-ed .ed-medido b { font-weight: 700; color: var(--ed-tinta-2); }
+.dr.rd-ed .ed-medido span + span::before { content: "·"; margin-right: 10px; color: var(--ed-tenue); }
+.dr.rd-ed .ed-capas { display: grid; align-content: center; padding-left: 36px; border-left: 1px solid var(--ed-linea); min-width: 0; }
+.dr.rd-ed .ed-capa { display: grid; gap: 2px; padding: 14px 0; border-top: 1px solid var(--ed-linea); }
+.dr.rd-ed .ed-capa:first-child { border-top: 0; padding-top: 0; }
+.dr.rd-ed .ed-capa-k { font-size: 11px; line-height: 16px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--ed-apagada); }
+.dr.rd-ed .ed-capa-v { display: inline-flex; align-items: center; font-size: 22px; line-height: 28px; font-weight: 800; letter-spacing: -.015em; color: var(--ed-tinta); }
+.dr.rd-ed .ed-capa small { font-size: 12.5px; line-height: 17px; color: var(--ed-apagada); }
+.dr.rd-ed .ed-con-punto { display: inline-flex; align-items: center; gap: 8px; }
+.dr.rd-ed .ed-capa-v .ed-con-punto { gap: 9px; }
+.dr.rd-ed .ed-con-punto .rd-punto { width: 8px; height: 8px; }
+
+/* El radar: «Ver puntajes» arriba a la derecha y la tarjeta de la parte al lado, siempre a la vista. */
+.dr.rd-ed .ed-radar-cabeza { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 12px; }
+.dr.rd-ed .ed-titulos { display: grid; gap: 10px; }
+.dr.rd-ed .ed-interruptor { position: relative; display: inline-flex; align-items: center; gap: 10px; font-size: 13px; font-weight: 600; color: var(--ed-tinta-2); cursor: pointer; user-select: none; }
+.dr.rd-ed .ed-pista { position: relative; flex: none; width: 34px; height: 20px; border-radius: 999px; background: var(--ed-panel-borde); transition: background .15s; }
+.dr.rd-ed .ed-pista::after { content: ""; position: absolute; top: 3px; left: 3px; width: 14px; height: 14px; border-radius: 999px; background: #ffffff; box-shadow: 0 1px 2px rgba(15, 27, 76, .25); transition: transform .15s; }
+.dr.rd-ed .rde-check:checked + .ed-pista { background: var(--ed-azul); }
+.dr.rd-ed .rde-check:checked + .ed-pista::after { transform: translateX(14px); }
+.dr.rd-ed .rde-check:focus-visible + .ed-pista { outline: 2px solid var(--ed-azul); outline-offset: 2px; }
+/* El interruptor vive fuera del radar: su CSS (radar-de-una-empresa.css) mira `.rde:has(...)`; aquí, la sección. */
+.dr.rd-ed .ed-radar-seccion:has(.rde-check:checked) .rde-con { display: inline; }
+.dr.rd-ed .ed-radar-seccion:has(.rde-check:checked) .rde-sin { display: none; }
+.dr.rd-ed .ed-radar-seccion:not(:has(.rde-check:checked)) .rd-tip-num { display: none; }
+.dr.rd-ed .ed-radar-zona { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 20px 32px; align-items: center; }
+.dr.rd-ed .ed-radar { min-width: 0; }
+.dr.rd-ed .rde-cuna.is-activa, .dr.rd-ed .rde-cuna.is-elegida { fill: rgba(36, 72, 216, .06); }
+.dr.rd-ed .rde-eje-resalte { stroke: var(--ed-azul); }
+.dr.rd-ed .rde-eje-resalte.is-elegida { opacity: 1; stroke-dashoffset: 0; }
+.dr.rd-ed .rde-interactivo .rde-vertice.is-elegida { transform: scale(1.3); }
+.dr.rd-ed .rde-interactivo .rde-rotulo.is-activa .rde-rotulo-nombre, .dr.rd-ed .rde-interactivo .rde-rotulo.is-elegida .rde-rotulo-nombre { fill: var(--ed-azul); font-weight: 700; }
+/* La tarjeta de la parte: en su lugar, no flotando (AnimacionesDelResultado › tarjetaAlLado). */
+.dr.rd-ed .ed-tarjeta-parte { min-width: 0; }
+.dr.rd-ed .ed-tip { position: static; transform: none !important; width: auto; max-height: none !important; opacity: 1; display: grid; gap: 10px; align-content: start; min-height: 220px; padding: 20px 22px; border: 0; border-radius: 16px; background: var(--ed-panel); box-shadow: none; transition: none; }
+.dr.rd-ed .ed-tip[hidden] { display: none; }
+.dr.rd-ed.rd-editable.rd-arrastrando .ed-tip:not([hidden]) { display: grid; }
+.dr.rd-ed .ed-tip .rd-tip-cabeza { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 4px 10px; }
+.dr.rd-ed .ed-tip .rd-tip-nombre { margin: 0; font-size: 17px; line-height: 22px; font-weight: 800; color: var(--ed-tinta); }
+/* El número de la parte: el que lleva su punta en el radar compacto del teléfono. */
+.dr.rd-ed .ed-tip-numero { margin-right: 8px; font-size: 12px; font-weight: 700; letter-spacing: .02em; color: var(--ed-azul); font-variant-numeric: tabular-nums; }
+.dr.rd-ed .ed-tip .rd-tip-puntaje { display: inline-flex; align-items: baseline; gap: 8px; font-size: 13px; white-space: nowrap; }
+.dr.rd-ed .ed-tip .rd-tip-num { font-size: 20px; line-height: 22px; font-weight: 800; color: var(--ed-azul); }
+.dr.rd-ed .ed-tip .rd-tip-num small { font-size: 13px; font-weight: 500; color: var(--ed-apagada); }
+.dr.rd-ed .ed-tip .rd-tip-chip { gap: 6px; padding: 0; border-radius: 0; background: none; font-size: 13px; line-height: 18px; font-weight: 500; color: var(--ed-apagada); }
+.dr.rd-ed .ed-tip .rd-tip-chip::before { width: 7px; height: 7px; background: var(--nc, var(--ed-tenue)); }
+.dr.rd-ed .ed-tip .rd-tip-lectura { margin: 0; font-size: 14px; line-height: 21px; color: var(--ed-tinta-2); }
+.dr.rd-ed .ed-tip .rd-tip-estimado { margin: 0; font-size: 12.5px; line-height: 18px; color: var(--ed-ambar); }
+.dr.rd-ed .ed-frena-mas { justify-self: start; padding: 2px 9px; border-radius: 999px; background: var(--ed-rojo-suave); color: var(--ed-rojo); font-size: 11px; line-height: 16px; font-weight: 700; letter-spacing: .04em; }
+.dr.rd-ed .ed-leyenda { display: flex; flex-wrap: wrap; gap: 8px 20px; margin: 0; font-size: 12.5px; line-height: 18px; color: var(--ed-apagada); }
+.dr.rd-ed .ed-leyenda > span { display: inline-flex; align-items: center; gap: 7px; }
+.dr.rd-ed .ed-raya-verde { flex: none; width: 18px; border-top: 2px dashed #1f9d63; }
+.dr.rd-ed .ed-raya-gris { flex: none; width: 18px; border-top: 1.75px dashed #a9b5c7; }
+.dr.rd-ed .ed-aro { flex: none; width: 12px; height: 12px; border-radius: 999px; border: 1.5px dashed var(--ed-azul); }
+
+/* Por dónde empezar: lo que cuesta quedarse así, en el recuadro ámbar al lado. */
+.dr.rd-ed .ed-empezar { display: grid; grid-template-columns: minmax(0, 1fr); gap: 20px 40px; align-items: start; }
+.dr.rd-ed .ed-empezar.con-costo { grid-template-columns: minmax(0, 1fr) 320px; }
+.dr.rd-ed .ed-empezar-texto { display: grid; gap: 12px; }
+.dr.rd-ed .ed-empezar-texto p { margin: 0; max-width: 56ch; font-size: 15.5px; line-height: 24px; color: var(--ed-tinta-2); }
+.dr.rd-ed .ed-empezar-texto .ed-nota { font-size: 13px; line-height: 19px; color: var(--ed-apagada); }
+.dr.rd-ed .ed-costo { display: grid; gap: 6px; padding: 20px 22px; border-radius: 16px; background: var(--ed-ambar-suave); }
+.dr.rd-ed .ed-costo span { font-size: 11px; line-height: 16px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--ed-ambar); }
+.dr.rd-ed .ed-costo p { margin: 0; font-size: 15px; line-height: 23px; color: #5c3a0a; }
+
+/* Lo que lo mueve: filas numeradas, con lo que sube en verde. */
+.dr.rd-ed .ed-casos { margin: 0; padding: 0; list-style: none; display: grid; }
+.dr.rd-ed .ed-caso { display: grid; grid-template-columns: 40px minmax(0, 1fr) 260px; gap: 8px 24px; padding: 20px 0; border-top: 1px solid var(--ed-linea); }
+.dr.rd-ed .ed-caso:first-child { border-top: 0; padding-top: 0; }
+.dr.rd-ed .ed-num { padding-top: 3px; font-size: 13px; line-height: 19px; font-weight: 700; color: var(--ed-azul); }
+.dr.rd-ed .ed-caso h3 { margin: 0; font-family: var(--ed-letra); font-size: 18px; line-height: 24px; font-weight: 800; letter-spacing: -.01em; color: var(--ed-tinta); }
+.dr.rd-ed .ed-caso div p { margin: 4px 0 0; font-size: 14.5px; line-height: 22px; color: var(--ed-tinta-2); }
+.dr.rd-ed .ed-sube { margin: 0; align-self: start; padding: 10px 12px; border-radius: 12px; background: var(--ed-verde-suave); font-size: 13px; line-height: 19px; font-weight: 600; color: var(--ed-verde); }
+
+/* Los riesgos típicos del nivel: tres columnas, cada uno con su parte. */
+.dr.rd-ed .ed-riesgos { margin: 0; padding: 0; list-style: none; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0 32px; }
+.dr.rd-ed .ed-riesgos li { display: grid; gap: 10px; align-content: start; padding-left: 18px; border-left: 2px solid var(--ed-rojo-suave); }
+.dr.rd-ed .ed-tag { justify-self: start; font-size: 11px; line-height: 16px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--ed-rojo); }
+.dr.rd-ed .ed-riesgos p { margin: 0; font-size: 14px; line-height: 21px; color: var(--ed-tinta-2); }
+
+/* Cómo está cada parte: dos columnas por capa; cada fila con su barra, su puntaje sobre 100, su nivel y «Ver detalles». */
+.dr.rd-ed .ed-partes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px 48px; }
+.dr.rd-ed .ed-grupo { min-width: 0; }
+.dr.rd-ed .ed-grupo-cabeza { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; padding-bottom: 8px; border-bottom: 1.5px solid var(--ed-tinta); }
+.dr.rd-ed .ed-grupo-cabeza h3 { margin: 0; font-family: var(--ed-letra); font-size: 14px; line-height: 20px; font-weight: 800; letter-spacing: 0; color: var(--ed-tinta); }
+.dr.rd-ed .ed-grupo-cabeza .ed-con-punto { gap: 7px; font-size: 12.5px; color: var(--ed-tinta-2); }
+.dr.rd-ed .rd-fila.ed-fila { display: grid; grid-template-columns: minmax(0, 1fr) 90px 44px; grid-template-areas: none; align-items: center; gap: 6px 14px; min-height: 0; padding: 12px 0; border-top: 0; border-bottom: 1px solid var(--ed-linea); }
+.dr.rd-ed .ed-fila-nombre { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; font-size: 14px; line-height: 19px; color: var(--ed-tinta); }
+.dr.rd-ed .ed-mini { border-radius: 999px; padding: 0 7px; font-size: 10.5px; line-height: 17px; font-weight: 700; }
+.dr.rd-ed .ed-mini-explorar { background: var(--ed-ambar-suave); color: var(--ed-ambar); }
+.dr.rd-ed .ed-mini-frena { background: var(--ed-rojo-suave); color: var(--ed-rojo); }
+.dr.rd-ed .ed-barrita { position: relative; display: block; height: 6px; border-radius: 999px; background: var(--ed-panel); overflow: hidden; }
+.dr.rd-ed .ed-barrita .rd-barra-fill { box-shadow: none; }
+.dr.rd-ed .ed-pts { font-size: 15px; line-height: 19px; font-weight: 800; color: var(--ed-azul); text-align: right; font-variant-numeric: tabular-nums; }
+.dr.rd-ed .ed-pts.vacio { font-size: 12px; font-weight: 600; color: var(--ed-tenue); }
+.dr.rd-ed .ed-fila-nivel { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; font-size: 12.5px; line-height: 18px; color: var(--ed-tinta-2); }
+.dr.rd-ed .ed-fila .rd-detalles { grid-column: 1 / -1; margin: 0; }
+.dr.rd-ed .ed-fila .rd-detalles > summary { padding: 0; font-size: 12.5px; font-weight: 700; color: var(--ed-azul); }
+.dr.rd-ed .ed-fila .rd-detalles-cuerpo { gap: 3px; margin: 8px 0 0; padding: 12px 14px; border-radius: 12px; background: var(--ed-panel); font-size: 13.5px; line-height: 20px; color: var(--ed-tinta-2); }
+.dr.rd-ed .ed-fila .rd-detalles-k { font-size: 11px; line-height: 16px; font-weight: 700; letter-spacing: .1em; color: var(--ed-apagada); }
+.dr.rd-ed .ed-fila .rd-detalles-prioridad { color: var(--ed-tinta-2); }
+
+/* Al final: volver al Resumen y la siguiente área (como `.boton` y `.boton.primario` del artefacto), y el pie. */
+.dr.rd-ed .ed-siguientes { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px; padding-top: 32px; padding-bottom: 32px; border-top: 1px solid var(--ed-linea); }
+.dr.rd-ed .ed-boton { display: inline-flex; align-items: center; gap: 8px; padding: 10px 16px; border-radius: 10px; border: 1px solid var(--ed-panel-borde); background: var(--ed-papel); font: inherit; font-size: 13.5px; line-height: 20px; font-weight: 700; color: var(--ed-azul); cursor: pointer; text-decoration: none; }
+.dr.rd-ed .ed-boton:hover { border-color: var(--ed-azul); color: var(--ed-azul); text-decoration: none; }
+.dr.rd-ed .ed-boton.primario { background: var(--ed-azul); border-color: var(--ed-azul); color: #ffffff; }
+.dr.rd-ed .ed-boton.primario:hover { background: #1c3bb8; color: #ffffff; }
+.dr.rd-ed .ed-boton:focus-visible { outline: 2px solid var(--ed-azul); outline-offset: 3px; }
+.dr.rd-ed .ed-pie { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 20px; padding-top: 18px; padding-bottom: 22px; border-top: 1px solid var(--ed-linea); font-size: 12.5px; line-height: 18px; color: var(--ed-apagada); }
+.dr.rd-ed .ed-pie-marca { display: inline-flex; align-items: center; gap: 6px; }
+.dr.rd-ed .ed-pie-marca img { display: block; height: 18px; width: auto; }
+
+/* El celular: el bloque `@container (max-width: 760px)` del artefacto, contra el ancho de la página. */
+@container (max-width: 760px) {
+  .dr.rd-ed .ed-envoltura { padding-left: 20px; padding-right: 20px; }
+  .dr.rd-ed .ed-arriba { padding-top: 18px; }
+  .dr.rd-ed .ed-pestanas { width: 100%; gap: 4px 18px; }
+  .dr.rd-ed .ed-titulo { font-size: 24px; line-height: 29px; }
+  .dr.rd-ed .ed-bajada { font-size: 15.5px; line-height: 23px; }
+  .dr.rd-ed .ed-hero { grid-template-columns: minmax(0, 1fr); padding-top: 28px; }
+  .dr.rd-ed .ed-capas { padding: 18px 0 0; border-left: 0; border-top: 1px solid var(--ed-linea); }
+  .dr.rd-ed .rd-nivel { gap: 12px; font-size: 42px; line-height: 46px; }
+  .dr.rd-ed .rd-nivel .rd-punto { width: 12px; height: 12px; }
+  .dr.rd-ed .ed-parte { padding-top: 30px; padding-bottom: 30px; }
+  .dr.rd-ed .ed-radar-zona, .dr.rd-ed .ed-empezar.con-costo, .dr.rd-ed .ed-partes { grid-template-columns: minmax(0, 1fr); }
+  .dr.rd-ed .ed-tip { min-height: 0; }
+  .dr.rd-ed .ed-caso { grid-template-columns: 28px minmax(0, 1fr); }
+  .dr.rd-ed .ed-sube { grid-column: 2; }
+  .dr.rd-ed .ed-riesgos { grid-template-columns: minmax(0, 1fr); gap: 18px; }
+  .dr.rd-ed .ed-siguientes .ed-boton { width: 100%; justify-content: center; }
+  .dr.rd-ed .ed-pie { justify-content: center; text-align: center; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dr.rd-ed .ed-pista, .dr.rd-ed .ed-pista::after { transition: none; }
+}
 @media print {
-  .dr.rd-s2 .rs-ruta { display: none; }
+  .dr.rd-ed .ed-siguientes { display: none; }
 }
