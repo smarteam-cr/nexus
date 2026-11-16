@@ -14963,6 +14963,32 @@ Sistema 2 del 12 nov en las dos páginas de la escala de una empresa; el resulta
 - **Lo que no queda garantizado:** cómo escribe el agente con el prompt nuevo hasta que se rehaga un Resumen real (el
   simulacro de `scripts/simular-resumen-de-la-escala.ts` lo muestra sin guardar); cuánto de lo que escribe se cae en la
   verificación con textos tan cortos (los retos en infinitivo son la pieza con más riesgo); el ícono no se elige a mano.
+- **Dos revisiones de lo generado con los Resúmenes reales (16 nov).** Con los cuatro Resúmenes rehechos, dos rondas de
+  revisión contra las transcripciones encontraron:
+  - **El prompt traía ejemplos de clientes reales** (Centauro, Polaris) que viajaban en el pedido de las demás empresas y
+    el agente copiaba su molde. Ahora son inventados, de otra industria, y el prompt dice que muestran la forma, no el
+    contenido (una prueba frena que vuelvan).
+  - **Rótulos y frases.** El tuteo es solo para lo que le habla a la empresa (fricción, falta, pendientes, confirmar, por
+    qué); etiquetas, pasos, organización, lo que funciona, retos y el rótulo de una cifra van sin «tu». Los arreglos de
+    piezas piden la forma de su lugar y la corregida vuelve a su índice (la organización es [quiénes, qué hacen]).
+  - **Veracidad.** El título del recorrido cuenta cómo pasa hoy (uno aspiracional se descarta); una cifra de una cita
+    con varios números juntos no sale en grande, va a lo que falta confirmar; la nota de una cifra no dice quién lo
+    dijo; el tamaño que es la cifra de un área se quita; el conteo de personas es el total dicho; la tesis de más de 9
+    palabras por frase se pide corregida; dos cifras con el mismo número son una.
+  - **La verificación descartaba cosas ciertas:** «iPad» se leía como palabra del código, «Meta» la plataforma como una
+    meta, y «B2B», «B2C», «24/7» o «vista 360» como números (ahora pasan si la empresa los dijo).
+  - **Un recorrido con menos de 3 pasos en línea no sale al cliente** (Polaris quedó con 2 y sin Televentas); adentro sale
+    con su aviso.
+  - **La página de cada área:** la síntesis de la IA casi no llegaba (5 de 9 salían con la de respaldo): ahora se escribe
+    al rehacer el Resumen (las que faltan o quedaron viejas), y confirmar una hipótesis con el mismo nivel no la deja
+    vieja (`firmaSigueVigente`). Ni el agente ni el respaldo afirman una hipótesis ni repiten «lo que cuesta quedarse
+    así» (salía tres veces): el agente ya no lo recibe, ni lo visto de una sospecha; un área donde todo es sospecha no se
+    le pide y su texto viejo del agente no sale. Los riesgos van primero de lo que se vio y nunca de una sospecha, y sin
+    nivel no salen (en el test público, el orden de siempre). «Ver detalles» apunta al menos a Funcional, como «Por dónde
+    empezar», y la razón de este se reescribió por mitad y parte.
+  - **Lo que quedó sin arreglar:** los riesgos de Ventas y Marketing son casi los mismos en todas las empresas porque la
+    escala solo tiene riesgos de Datos ahí (es del contenido de la escala, no del código); «Por dónde empezar» puede elegir
+    una hipótesis cuando empata con partes confirmadas; lo que escribe el agente varía bastante de una corrida a otra.
 
 ## La Planificación: el ciclo de vida son las 7 etapas de HubSpot y las automatizaciones van en filas (2026-11-12)
 

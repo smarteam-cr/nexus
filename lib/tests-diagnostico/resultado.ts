@@ -90,11 +90,18 @@ export function nivelesDeLasRespuestas(
   return out;
 }
 
-const RAZON_DEL_AREA: Record<RazonDeLaRecomendacion["capa"], string> = {
-  "unica-con-pendientes": "es la única parte del área con algo por subir",
-  "la-mas-baja": "es la parte del área que está más abajo",
-  "empate-base": "con las dos partes del área parejas, primero va la base: cómo está montado el equipo por dentro",
-  "empate-produccion": "con la base ya en su lugar, lo que sigue es lo que el equipo entrega hacia afuera",
+/** Por qué esa mitad del área, con su nombre (`c`, en minúscula: «base operativa»). */
+const RAZON_DEL_AREA: Record<RazonDeLaRecomendacion["capa"], (c: string) => string> = {
+  "unica-con-pendientes": (c) => `${c} es la única mitad del área con algo por subir`,
+  "la-mas-baja": (c) => `${c} es la mitad del área que está más abajo`,
+  "empate-base": (c) => `las dos mitades están igual de abajo, y se empieza por ${c}, cómo está montado el equipo por dentro`,
+  "empate-produccion": (c) => `con la base en su lugar, lo que sigue es ${c}, lo que el equipo entrega hacia afuera`,
+};
+/** Por qué esa parte dentro de su mitad: la más baja, o la primera de las que empatan abajo (no «la más baja», que sería falso). */
+const RAZON_DE_LA_PARTE: Record<RazonDeLaRecomendacion["dimension"], string> = {
+  "la-mas-baja": ", y ahí es la parte más baja",
+  "empate-por-orden": ", y entre las más bajas de ahí es la que va primero",
+  "empate-sin-orden": ", y entre las más bajas de ahí es la que va primero",
 };
 
 const idx = (l: Letra) => LETRAS.indexOf(l);
@@ -119,8 +126,11 @@ export function resultadoDelTest(o: {
   });
 }
 
-/** El nivel de una dimensión. `riesgo`: dejó ver un riesgo (en la escala de una empresa; el test no lo sabe). */
-export type NivelDeLaDimension = { nivel: Letra; noLoSe: boolean; riesgo?: boolean };
+/**
+ * El nivel de una dimensión. `riesgo`: dejó ver un riesgo; `hipotesis`: es una sospecha, no algo que la empresa dijo (los
+ * dos, en la escala de una empresa; el test no los sabe).
+ */
+export type NivelDeLaDimension = { nivel: Letra; noLoSe: boolean; riesgo?: boolean; hipotesis?: boolean };
 
 /**
  * El resultado de un área con el nivel de cada dimensión, venga de donde venga: las respuestas del test o lo medido en la
@@ -139,6 +149,8 @@ export function resultadoDeLosNiveles(o: {
    * pagas» (10 nov, Centauro); usándolo, no ofrecen migrar a HubSpot (`casosQueNoCalzanConSuCrm`).
    */
   usaHubspot?: boolean | null;
+  /** La escala de una empresa (no el test): los riesgos van primero de lo que se vio. */
+  deUnaEmpresa?: boolean;
 }): ResultadoDelTest | null {
   const { escala, niveles, preguntadas } = o;
   const area = escala.areas.find((a) => a.id === o.areaId);
@@ -190,16 +202,20 @@ export function resultadoDeLosNiveles(o: {
       dimensionNombre: dim?.nombre ?? rec.dimensionId,
       objetivo: rec.objetivo,
       objetivoNombre: nombreDeNivel(escala, rec.objetivo),
-      razon: `Es lo que más frena a ${area.nombre} hoy: ${capaNombre ? `en ${capaNombre.toLowerCase()}, ` : ""}${RAZON_DEL_AREA[rec.razon.capa]}, y dentro de ella es lo que está más abajo.`,
+      razon: `Es lo que más frena a ${area.nombre} hoy: ${RAZON_DEL_AREA[rec.razon.capa](capaNombre ? capaNombre.toLowerCase() : "esa mitad")}${RAZON_DE_LA_PARTE[rec.razon.dimension]}.`,
       costoDeQuedarse: dim?.costoDeQuedarse ?? "",
     };
   } else if (rec?.tipo === "sostener") {
     recomendacion = { tipo: "sostener", razon: `${area.nombre} ya llegó a donde apunta: lo que sigue es sostenerlo y volver a medir.` };
   }
 
-  // Los riesgos activos: los criterios de riesgo de los niveles que cada dimensión preguntada todavía no alcanza.
+  // Los riesgos activos: los criterios de riesgo de los niveles que cada dimensión preguntada todavía no alcanza. En la
+  // escala de una empresa (16 nov): primero las partes donde se VIO un riesgo, después la que más frena, y nunca de una
+  // sospecha (salían los mismos tres en todas las empresas, de partes que eran hipótesis). En el test, el orden de siempre.
+  const peso = (id: string) => (!o.deUnaEmpresa ? 0 : niveles[id]?.riesgo ? 0 : rec?.tipo === "trabajar" && rec.dimensionId === id ? 1 : 2);
+  const enOrden = area.dimensiones.filter((d) => !niveles[d.id]?.hipotesis).sort((x, y) => peso(x.id) - peso(y.id));
   const riesgos: string[] = [];
-  for (const d of area.dimensiones) {
+  for (const d of enOrden) {
     // El de la dimensión, no el dicho: un riesgo a la vista lo topa en Funcional.
     const nivel = dimensiones.find((x) => x.id === d.id)?.nivel;
     if (!nivel) continue;

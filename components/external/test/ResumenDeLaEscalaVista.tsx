@@ -25,6 +25,7 @@ import type { ReactNode } from "react";
 import {
   enHoras,
   ETIQUETA_DEL_ESTADO,
+  partirElTamano,
   MAX_ETIQUETAS,
   TOPE_A_MANO,
   TOPE_DE_LA_CIFRA,
@@ -50,6 +51,9 @@ import "./resumen-editorial.css";
 const LOGO_DE_COLOR = "/logo-smarteam.png";
 /** Un «quiénes son» se pinta en negrita solo si es corto (la forma editorial lo pide de 2 a 6 palabras; el agente a veces lo explica: «Dos personas: quien coordina…»). */
 const LARGO_DE_QUIENES = 80;
+/** Una organización de una sola pieza va en negrita solo si es así de corta: más larga, suele contar qué hacen. */
+const LARGO_DE_UNA_SOLA = 45;
+const PARECE_QUIENES = /\d|\+|^(una?|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez|jefatura|gerencia|coordinaci[oó]n)\b/i;
 
 const fechaLarga = (iso: string) => new Intl.DateTimeFormat("es-CR", { day: "numeric", month: "long", year: "numeric", timeZone: "America/Costa_Rica" }).format(new Date(iso));
 
@@ -216,9 +220,26 @@ export default function ResumenDeLaEscalaVista({
   const nivelDe = (t: TarjetaDeLaPagina) => (t.porExplorar ? null : (t.nivel ?? null));
   let fila = 0;
 
-  const cifra = (c: CifraDeLaPagina) => (
+  /**
+   * Una cifra escrita a mano con su unidad («~50 formularios web/semana», «6,600 conversaciones»): afuera, el número en
+   * grande y la unidad debajo; sin número al principio, en letra de texto. Sin esto la unidad se partía letra por letra
+   * en la columna (Polaris, 16 nov). Adentro se edita la cifra entera, en letra más chica si es larga.
+   */
+  const cifra = (c: CifraDeLaPagina) => {
+    const { valor, rotulo } = partirElTamano(c.cifra);
+    // «14 de 25» es una proporción: con otro número en la unidad, va entera.
+    const unidad = valor && !/\d/.test(rotulo) ? rotulo : "";
+    const larga = !unidad && !/\d/.test(c.cifra.slice(0, 4));
+    return (
     <div key={c.id} className={`re-cifra${c.noSale ? " re-cifra-fuera" : ""}`}>
-      <span className="re-grande">{texto({ clave: `${c.clave}:cifra`, valor: c.cifra, vacio: "+ La cifra", etiqueta: "La cifra", tope: TOPE_DE_LA_CIFRA })}</span>
+      {edicion ? (
+        <span className={`re-grande${c.cifra.length > 10 ? " re-grande-larga" : ""}`}>{texto({ clave: `${c.clave}:cifra`, valor: c.cifra, vacio: "+ La cifra", etiqueta: "La cifra", tope: TOPE_DE_LA_CIFRA })}</span>
+      ) : (
+        <>
+          <span className={`re-grande${larga ? " re-grande-larga" : ""}`}>{unidad ? valor : c.cifra}</span>
+          {unidad && <span className="re-unidad">{unidad}</span>}
+        </>
+      )}
       <b>{texto({ clave: `${c.clave}:texto`, valor: c.texto, vacio: "+ Qué significa", etiqueta: `Qué significa ${c.cifra}`, tope: TOPE_A_MANO, quitar: "Quitar esta cifra" })}</b>
       <Estado
         estado={c.estado}
@@ -231,14 +252,20 @@ export default function ResumenDeLaEscalaVista({
       {c.noSale && <p className="re-aviso-interno">{c.noSale}</p>}
       {deDonde(c.citas, { noSostiene: !!c.noSale })}
     </div>
-  );
+    );
+  };
 
   /** Una fila de «Equipos y hallazgos»: un subequipo con el nivel de su equipo de la escala. */
   const filaDelEquipo = (t: TarjetaDeLaPagina, x: SubequipoDeLaPagina) => {
     fila++;
     const org = x.organizacion.piezas;
     // «Jefatura + 5 asesores» va en negrita; lo que hacen, debajo. Un texto largo (un Resumen anterior) va normal.
-    const quienes = org.length >= 2 && org[0].texto.length <= LARGO_DE_QUIENES ? org[0] : null;
+    // Una sola pieza corta («Jefatura + 5 asesores») también es «quiénes son» (Centauro, 16 nov).
+    // Sola, solo si se lee como quiénes son (un número, un «+» o «Una persona…»): «Responden consultas» es qué hacen.
+    const quienes =
+      (org.length >= 2 && org[0].texto.length <= LARGO_DE_QUIENES) || (org.length === 1 && org[0].texto.length <= LARGO_DE_UNA_SOLA && PARECE_QUIENES.test(org[0].texto))
+        ? org[0]
+        : null;
     const hace = quienes ? org.slice(1) : org;
     const retos = [...x.retos.piezas, ...x.frena.piezas];
     const conCifra = x.cifras.length > 0;

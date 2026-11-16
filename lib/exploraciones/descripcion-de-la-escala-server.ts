@@ -150,8 +150,14 @@ export async function generarDescripcionesDeLaEscala(o: {
   if (o.areaId && !l.deLasAreas.some((x) => x.resultado.areaId === o.areaId)) {
     return { ok: false, status: 409, error: "Ese equipo no sale en la página del cliente." };
   }
+  // Un área donde todo lo medido es una sospecha no se le pide al agente (16 nov): no tiene nada cierto que contar, y la
+  // de respaldo ya dice «Todavía conocemos poco…».
+  const todoSospecha = (x: (typeof l.deLasAreas)[number]) => {
+    const medidas = x.resultado.dimensiones.filter((d) => d.preguntada && d.nivel);
+    return medidas.length > 0 && medidas.every((d) => x.porExplorar.includes(d.id));
+  };
   const aEscribir = l.deLasAreas.filter(
-    (x) => x.resultado.preguntadas > 0 && (!o.areaId || x.resultado.areaId === o.areaId) && !(o.soloFaltantes && x.descripcion.vigente),
+    (x) => x.resultado.preguntadas > 0 && !todoSospecha(x) && (!o.areaId || x.resultado.areaId === o.areaId) && !(o.soloFaltantes && x.descripcion.vigente),
   );
   if (!aEscribir.length) {
     if (o.areaId) return { ok: false, status: 409, error: "Ese equipo todavía no tiene nada ubicado: no hay qué describir." };

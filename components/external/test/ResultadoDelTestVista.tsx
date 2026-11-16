@@ -617,8 +617,9 @@ function AreaDeLaEscala({
           </section>
         )}
 
-        {r.riesgos.length > 0 && (
-          // Son los riesgos TÍPICOS del nivel, no algo que la empresa contó (10 nov, regla 4): el título lo dice.
+        {r.nivel && r.riesgos.length > 0 && (
+          // Son los riesgos TÍPICOS del nivel, no algo que la empresa contó (10 nov, regla 4): el título lo dice. Sin nivel
+          // («En medición») no hay «este nivel» del que hablar (16 nov).
           <section className="ed-parte ed-envoltura" aria-labelledby="ed-t-riesgos" data-revela="">
             <p className="ed-ceja">Lo que suele poner en riesgo a un área en este nivel</p>
             <h2 className="ed-titulo" id="ed-t-riesgos">

@@ -324,16 +324,16 @@ Devuelves SOLO este JSON (P = {"texto":"…","citas":[C]}; C = {"reunion":"R1","
 
 LA REGLA DE TODO: cada afirmación sobre la empresa (su negocio, su organización, sus etapas, sus retos, sus cifras) lleva en «citas» lo que dijo alguien de la EMPRESA que la sostiene: una cita, o dos si la afirmación junta cosas dichas en turnos distintos. Cada cita es el pedazo más corto que la sostenga, de 6 a 25 palabras seguidas de UNA intervención (aunque la pieza sea de tres palabras, su cita no baja de 6), copiado palabra por palabra como está en la transcripción (con sus repeticiones y muletillas, y sus números en cifras o en letras, como aparezcan), con su reunión y su turno. Nunca pegues pedazos con «;», «…» o «...» ni saltes palabras: si necesitas dos pedazos, son dos citas. Dentro de cualquier texto del JSON nunca escribas comillas dobles ("): si lo dicho las trae, usa « ». Todo lo que escribas tiene que estar en tus citas: cada número, cada herramienta y cada detalle; si ninguna cita lo dice, sácalo de la frase. Si lo dijo alguien de Smarteam, solo vale si alguien de la empresa lo confirmó justo después («Exacto», «Sí, correcto»): cita entonces lo que dijo Smarteam. Lo que no puedas citar, no lo escribas. Nada de lecturas nuestras presentadas como dichas por ellos: no califiques lo que contaron («evitable», «innecesario», «se podría automatizar», «recuperable») si ellos no lo dijeron así. La «guia» del equipo de Smarteam te orienta sobre qué buscar; no es evidencia: nada sale de ella sin una cita de la transcripción.
 
-1 NEGOCIO (forma editorial: la dirección lo lee en 60 segundos). «tesis» (1): dos frases cortas con la misma forma, de 3 a 8 palabras cada una, terminadas en punto, que pongan frente a frente cómo está montada hoy la operación y lo que el negocio necesita o de qué vive, con palabras de la empresa (forma: «Un CRM pensado para leads. Una operación que vive de sus clientes.»); dos citas, una por frase. Nada aspiracional ni de folleto («visión compartida», «crecimiento», «transformación»). «etiquetas» (3): de 1 a 5 palabras cada una, sin punto: qué vende, a quién o dónde, y cómo vende o cobra («Software de gestión hotelera», «Hospedajes independientes», «Suscripción mensual»). «tamano» (0 o 1): el tamaño del negocio que dijo la empresa, con el número primero y su unidad («500 clientes activos», «12 tiendas»): clientes, sedes, tiendas, transacciones. Nunca la cifra de un área (leads de marketing, casos de soporte); si nadie lo dijo, vacío. «abarca» y «fuera» (0 o 1 cada una, hasta 15 palabras): qué cubre este diagnóstico (unidad, marcas, países, equipos) y lo que la empresa dijo que queda fuera. «vende» (qué vende y a quién), «ingresos» (cómo gana dinero), «motivo» (qué los movió a buscar ayuda) y «busca» (el resultado que quieren): 0 o 1 frase corta cada una; sostienen la tesis y las etiquetas. Nada corporativo ni genérico. Si una parte no se habló, déjala vacía: no la completes con suposiciones ni con lo que sabes de la industria.
+1 NEGOCIO (forma editorial: la dirección lo lee en 60 segundos). «tesis» (1): dos frases cortas con la misma forma, de 3 a 8 palabras cada una, terminadas en punto, que pongan frente a frente cómo está montada hoy la operación y lo que el negocio necesita o de qué vive, con palabras de la empresa (forma: «Las citas se agendan por teléfono. Las clínicas viven de pacientes que vuelven.»); dos citas, una por frase. Cada frase con sujeto y verbo claros, sin metáforas ni imágenes («clientes que no dejan rastro»). Si la empresa no dijo un contraste, escribe dos hechos de su operación. Nada aspiracional ni de folleto («visión compartida», «crecimiento», «transformación»). «etiquetas» (3): de 1 a 5 palabras cada una, sin verbo conjugado y sin punto: qué vende, a quién o dónde, y cómo vende o cobra («Clínicas veterinarias», «Dueños de mascotas», «Planes de salud por año»). «tamano» (0 o 1): el tamaño del negocio que dijo la empresa, con el número primero y su unidad («120 clínicas», «3.000 pedidos al mes»): clientes, sedes, tiendas, transacciones. Si la empresa respondió solo con un número («500.»), busca otra intervención suya que lo diga con su unidad y cita esa. Nunca la cifra de un área (leads de marketing, casos de soporte); si nadie lo dijo, vacío. «abarca» y «fuera» (0 o 1 cada una, hasta 15 palabras): qué cubre este diagnóstico (unidad, marcas, países, equipos) y lo que la empresa dijo que queda fuera (solo lo que dijo: no lo deduzcas de lo que sí entra). «vende» (qué vende y a quién), «ingresos» (cómo cobra: el modelo, nunca una meta ni un monto), «motivo» (qué los movió a buscar ayuda) y «busca» (el resultado que quieren): 0 o 1 frase corta cada una; sostienen la tesis y las etiquetas. Nada corporativo ni genérico. Si una parte no se habló, déjala vacía: no la completes con suposiciones ni con lo que sabes de la industria.
 
-2 RECORRIDO: sigue a UN cliente desde el primer contacto hasta que opera con lo que compró, como pasa HOY, en 3 a 5 PASOS en línea (la captación, la venta, el cierre, la puesta en marcha o la entrega). Junta en un paso las etapas seguidas del mismo equipo; cuando el cliente pasa de un equipo a otro, es otro paso. El ÚLTIMO paso en línea es el resultado para el cliente («El hospedaje opera», «Pedido entregado», «Compra en tienda»), con «quien» null si ya no lo lleva un equipo. Aparte, con «continuo»: true y al final, el equipo o los equipos que acompañan MIENTRAS el cliente opera (soporte, Customer Success, postventa, reclamos): 0 a 2. Cada equipo que tuvo una reunión aparece por lo menos en un paso. «etapa»: su nombre, de 2 a 4 palabras. «quien»: el equipo o los equipos que lo llevan («Ventas», «Soporte + Customer Success»). «texto»: un detalle de hasta 6 palabras («Meta, Google y la web», «Contrato y PDF a operaciones»). «friccion»: lo que se traba en ese paso o al pasar al siguiente, hasta 18 palabras (null si no se vio). «icono»: uno de captacion, contacto, visita, demo, cotizacion, cierre, configuracion, entrega, tienda, opera, filtro, soporte. Cada paso con su cita. Solo lo que hacen hoy: lo que desean o planean no es un paso; va en «busca». «tituloDelRecorrido»: del primer paso al último, en palabras del negocio, hasta 9 palabras y terminado en punto («De la pauta en Meta a la compra en tienda.»): nada que los pasos no digan.
+2 RECORRIDO: sigue a UN cliente desde el primer contacto hasta que opera con lo que compró, como pasa HOY, en 3 a 5 PASOS en línea (la captación, la venta, el cierre, la puesta en marcha o la entrega). Junta en un paso las etapas seguidas del mismo equipo; cuando el cliente pasa de un equipo a otro, es otro paso. El ÚLTIMO paso en línea es el resultado para el cliente («La mascota en control», «Pedido entregado», «Mueble instalado»), con «quien» null si ya no lo lleva un equipo; es el ÚNICO paso en línea con «quien» null. Aparte, con «continuo»: true y al final, el equipo o los equipos que acompañan MIENTRAS el cliente opera (soporte, Customer Success, postventa, reclamos): 0 a 2. Cada equipo que tuvo una reunión aparece por lo menos en un paso. «etapa»: su nombre, de 2 a 4 palabras. «quien»: el equipo o los equipos de los datos que lo llevan, hasta 3 palabras («Ventas», «Soporte + Customer Success»); si lo lleva alguien que no es un equipo de los datos, su rol («Vendedores», «Bodega»). Nunca dos pasos seguidos con el mismo «quien» y el mismo ícono: son uno. «texto»: un detalle de hasta 6 palabras, sin verbo en segunda persona («Llamada, correo y la web», «Contrato y planos a fábrica»). «friccion»: lo que se traba en ese paso o al pasar al siguiente, hasta 18 palabras (null si no se vio). «icono»: uno de captacion, contacto, visita, demo, cotizacion, cierre, configuracion, entrega, tienda, opera, filtro, soporte. Cada paso con su cita. Solo lo que hacen hoy: lo que desean o planean no es un paso; va en «busca». «tituloDelRecorrido»: «De <el primer paso> a <el último paso>.», en palabras del negocio, hasta 9 palabras («De la llamada al mueble instalado.»): como pasa HOY, nunca cómo debería ser ni lo que falta («con trazabilidad», «sin pérdidas»), y nada que los pasos no digan.
 
 3 AREAS: una entrada por subequipo de cada equipo de la escala con el que hubo reunión. Si un equipo tiene subequipos que trabajan distinto (Soporte y Customer Success dentro de «Servicio»), una entrada por subequipo, cada una con el id de ese equipo en «area»; si no, una sola entrada con el nombre del equipo. Un equipo sin reunión propia (aunque otro lo mencione) no lleva entrada. En cada una:
-- «organizacion» (2): primero QUIÉNES son, por su rol y cuántos, de 2 a 6 palabras («Jefatura + 5 asesores», «Una persona, con apoyo externo»); después QUÉ HACEN, de 6 a 12 palabras. Si no se dijo quiénes son, solo qué hacen. Nunca un nombre.
+- «organizacion» (2): primero QUIÉNES son, por su rol y cuántos, de 2 a 6 palabras («Coordinación + 3 técnicos», «Una persona, con apoyo externo»); después QUÉ HACEN, de 6 a 12 palabras. Si no se dijo quiénes son, solo qué hacen. Cuántos: el total como lo dijeron («somos cuatro» incluye a quien habla); no agregues «por marca», «por país» ni repartos que la cita no diga. Un horario, un turno o la antigüedad del equipo no es ninguna de las dos. Nunca un nombre.
 - «bien» (1): lo que ya hace o ya tiene (procesos, materiales, rutinas, mediciones), aunque sea a mano, de 6 a 12 palabras. Reconócelo siempre que la empresa lo haya dicho.
 - «frena»: vacío. Lo que le impide rendir más va en los retos.
-- «retos» (exactamente 2, el más respaldado primero): lo que hay que mejorar, de 5 a 10 palabras, empezando con un verbo en infinitivo y concreto de ESTA empresa («Descartar a tiempo los leads que no son del producto», «Separar los casos de uso de los de coadministración»). Sale de un problema que la empresa contó, con su cita. Nunca «Implementar…» ni «Automatizar…» sueltos, ni una herramienta, ni lo que Smarteam vende: lo que hay que lograr, no cómo. Nunca un riesgo típico de la escala que la empresa no contó.
-- «cifras» (1, la más reveladora; 0 si no hay): la magnitud de lo que pasa HOY, primero lo que se pierde o se escapa (clientes que se van, casos que esperan, tiempo en retrabajo) antes que un volumen. UNA CIFRA ES UN SOLO DATO: todos los números de «cifra» y de «texto» salen de UNA misma cita; dos datos dichos en momentos distintos (un porcentaje y una comparación) son dos cifras aparte, cada una con su estado. Una cifra mide cuánto pasa (clientes, casos, días, un porcentaje): una definición («consideras activo a quien abrió en los últimos 6 meses») no es una cifra. «cifra» es lo que va en grande: solo el número, hasta 12 caracteres («25», «180–200», «≈60», «2,8 %», «14 de 25»); «texto» es su rótulo, de 2 a 6 palabras y sin verbo («reuniones por semana», «leads al mes», «de tus clientes se van al mes»); el contexto, si hace falta, va en «nota». «estado»: «declarado» si lo dijo la empresa; «estimado» si es un cálculo o un resumen de Smarteam que la empresa confirmó (en «nota», la base y los supuestos); «pendiente» si se mencionó y hay que confirmarlo. «nota» le habla a la empresa («Falta confirmar el período y cómo se calcula»): nunca cita lo dicho ni dice quién lo dijo. Si lo dijeron con dudas («si no me equivoco», «no tengo el dato exacto»), «nota» dice qué falta validar. Escribe la cifra como la dijeron («14 de 25», nunca la resta «11»): no calcules porcentajes, ni sumes, ni redondees. Si los números de una cita no cuadran entre sí (una parte más grande que el total, una suma que no da, una frase cortada), no la uses como cifra: va como pendiente («confirmar el total de…»). Una meta («quieren llegar a 50») no es una cifra de hoy: no la pongas sola; si la usas, que la cifra sea el resultado de hoy frente a la meta («25 de 50 reuniones»). Una comparación entre dos números que resumió Smarteam y la empresa confirmó («captan 25 y se van 14») es una cifra «estimado» valiosa: inclúyela con su base, sin sacar conclusiones. No saques conclusiones que la cifra no dice («tu cartera no crece»). Nunca inventes pérdidas en dinero.
+- «retos» (exactamente 2, el más respaldado primero): lo que hay que mejorar, de 5 a 10 palabras, empezando con un verbo en infinitivo y concreto de ESTA empresa («Confirmar cada cita un día antes», «Separar los reclamos de las consultas de uso»). Sale de un problema que la empresa contó, con su cita. Nunca «Implementar…» ni «Automatizar…» sueltos, ni una herramienta, ni lo que Smarteam vende: lo que hay que lograr, no cómo. Nunca un riesgo típico de la escala que la empresa no contó.
+- «cifras» (1, la más reveladora; 0 si no hay): la magnitud de lo que pasa HOY, primero lo que se pierde o se escapa (clientes que se van, casos que esperan, tiempo en retrabajo) antes que un volumen. UNA CIFRA ES UN SOLO DATO: todos los números de «cifra» y de «texto» salen de UNA misma cita; dos datos dichos en momentos distintos (un porcentaje y una comparación) son dos cifras aparte, cada una con su estado. Una cifra mide cuánto pasa (clientes, casos, días, un porcentaje): una definición («consideras activo a quien abrió en los últimos 6 meses») no es una cifra. «cifra» es lo que va en grande: solo el número, hasta 12 caracteres («40», «120–150», «≈60», «3,5 %», «9 de 30»); «texto» es su rótulo, de 2 a 6 palabras, sin verbo y sin «tu» ni «tus» («reuniones por semana», «pedidos al mes», «clientes que se van al mes»); el período y el contexto, si hacen falta, van en «nota». Si la cita da un rango o una lista de valores, la cifra es el rango como lo dijeron; nunca llames «máximo», «mínimo» ni «promedio» a un valor si no lo dijeron así. «estado»: «declarado» si lo dijo la empresa; «estimado» si es un cálculo o un resumen de Smarteam que la empresa confirmó (en «nota», la base y los supuestos); «pendiente» si se mencionó y hay que confirmarlo. «nota» le habla a la empresa («Falta confirmar el período y cómo se calcula»): nunca cita lo dicho ni dice quién lo dijo («según…», «estimado por…»). Si lo dijeron con dudas («si no me equivoco», «no tengo el dato exacto»), «nota» dice qué falta validar. Escribe la cifra como la dijeron («9 de 30», nunca la resta «21»): no calcules porcentajes, ni sumes, ni redondees. Si los números de una cita no cuadran entre sí (una parte más grande que el total, una suma que no da, una frase cortada), no la pongas en «cifras»: va en PENDIENTES como «Confirmar el total de…». Si la cita da un valor habitual y uno ocasional («en promedio 24 horas, a veces tres días»), la cifra es el habitual y el otro va en «nota»; no califiques el rótulo («habitual», «típico») si no lo dijeron. Una meta («quieren llegar a 50») no es una cifra de hoy: no la pongas sola; si la usas, que la cifra sea el resultado de hoy frente a la meta («25 de 50 reuniones»). Una comparación entre dos números que resumió Smarteam y la empresa confirmó («entran 40 y se van 9») es una cifra «estimado» valiosa: inclúyela con su base, sin sacar conclusiones. No saques conclusiones que la cifra no dice («tu cartera no crece»). Nunca inventes pérdidas en dinero.
 - «falta»: si el área no tiene cifras, qué dato faltaría para medir el impacto (una frase); si no, null.
 
 4 PORQUE (uno por equipo de la escala con nivel): una o dos frases (hasta 50 palabras) de por qué está en su nivel y no uno arriba ni uno abajo, con las partes por su nombre. Usa SOLO los niveles que te damos. Nunca escribas «provisional» ni «hipótesis»: si el nivel lo determina una parte con «porExplorar», di qué mide esa parte y no la presentes como un hecho («no existe»).
@@ -344,7 +344,9 @@ LA REGLA DE TODO: cada afirmación sobre la empresa (su negocio, su organizació
 
 CÓMO DISTINGUIR: que algo no se haya preguntado no significa que no lo tengan: «no tienen X» solo si la empresa lo dijo. Separa lo que hacen hoy (organización, recorrido, retos, cifras), lo que quieren (busca, metas) y lo que propondríamos nosotros (eso no va aquí). No asumas herramientas, integraciones ni compras: una herramienta se nombra solo si la empresa la nombró en sus reuniones.
 
-Cómo escribes: español neutro, en tuteo, hablándole a la empresa («tu equipo», «tus clientes»), nunca voseo. Cada pieza con el largo que se le pide arriba (un pendiente o un «confirmar», de 6 a 16 palabras; un «porque», hasta 50), en presente, sin markdown ni frases hechas: si no cabe, quita palabras, nunca hechos. Nunca el código de una parte («3.6»): su nombre. Nunca escribas el nombre de una persona (ni de la empresa ni de Smarteam): di su rol («quien lleva Customer Success», «la jefatura de ventas»). No nombres a Smarteam, no hables de precios, presupuestos ni de lo que Smarteam vende, no recomiendes herramientas. Habla SOLO de los equipos de los datos.`;
+LOS EJEMPLOS de estas reglas son inventados: muestran la FORMA, no el contenido. No copies su estructura ni sus palabras; cada pieza sale de las reuniones de ESTA empresa.
+
+Cómo escribes: español neutro, nunca voseo. El tuteo («tu equipo», «tus clientes») es para las frases que le hablan a la empresa: la fricción, «falta», los pendientes, «confirmar» y el «porque». Las etiquetas, el tamaño, el paso y su detalle, la organización, lo que funciona, los retos y el rótulo de una cifra son rótulos: sin «tu» ni «tus» y sin verbos en segunda persona («Envía el blog cada mes a…», no «Envías…»). Cada pieza con el largo que se le pide arriba (un pendiente o un «confirmar», de 6 a 16 palabras; un «porque», hasta 50), en presente, sin markdown ni frases hechas: si no cabe, quita palabras, nunca hechos. Nunca el código de una parte («3.6»): su nombre. Nunca escribas el nombre de una persona (ni de la empresa ni de Smarteam): di su rol («quien lleva Customer Success», «la jefatura de ventas»). No nombres a Smarteam, no hables de precios, presupuestos ni de lo que Smarteam vende, no recomiendes herramientas. Habla SOLO de los equipos de los datos.`;
 
 /** El pedido al agente. `aviso`: por qué no sirvió el intento anterior. */
 export function pedidoDelResumen(ctx: ContextoDelResumen, aviso = ""): Anthropic.Messages.MessageCreateParamsNonStreaming {
@@ -429,7 +431,7 @@ export function textoValido(crudo: unknown, tope: number, o: ReglasDelResumen, c
   const duda = t.match(/\bprovisional(es)?\b|\bhipotesis\b/);
   if (duda) return { ok: false, motivo: `dice «${duda[0]}»` };
   // Una palabra del código («porExplorar», «hubspotActual») es de adentro.
-  const interna = texto.match(/\b[a-z]+[A-Z]\w*\b/);
+  const interna = texto.match(/\b[a-z]{2,}[A-Z]\w*\b/);
   if (interna) return { ok: false, motivo: `trae una palabra interna («${interna[0]}»)` };
   // El código de una parte («(3.6)») es de adentro: el cliente lee su nombre.
   if (/\(\s*\d{1,2}\.\d{1,2}\s*\)/.test(texto)) return { ok: false, motivo: "trae el código de una parte de la escala" };
@@ -522,12 +524,35 @@ function unoEnLetras(texto: string, fuente: string): boolean {
   return unos.length > 0 && unos.every((m) => new RegExp(`(^|\\s)(un|una|uno)\\s+${m[1]}(\\s|$)`, "u").test(f));
 }
 
+/** Lo que cuenta cómo debería ser el recorrido, no cómo es (el título del recorrido). Sobre `paraComparar`. */
+const TITULO_ASPIRACIONAL = /\bcon (trazabilidad|visibilidad|control)\b|\bsin (friccion|fricciones|perdidas)\b|\bautomatiz|\bcentraliz/;
+
+/** «Según quien coordina…», «estimado por la coordinadora…»: la nota de una cifra no dice quién lo dijo. Sobre `paraComparar`. */
+const NOTA_CON_QUIEN = /\bsegun (quien|la persona|el equipo|la coordinadora|el coordinador|la jefatura|el jefe|la jefa|la gerencia|el gerente|la gerente|la encargada|el encargado)\b|\bestimad[oa] por\b|\bquien (coordina|lleva|gestiona|dirige)\b/;
+
+/** El primer número de dos cifras, para no repetir la misma con otra forma («~50 formularios web/semana», «≈50 /semana»). */
+const mismoPrimerNumero = (a: string, b: string) => {
+  const x = cantidadesNormales(a);
+  const y = cantidadesNormales(b);
+  // Los mismos números y la misma clase: «40 tickets» y «40 %» son dos cifras; «3 días» y «3 de cada 10», también.
+  return x.length > 0 && x.join("|") === y.join("|") && a.includes("%") === b.includes("%");
+};
+
+/** Las palabras de cada frase de la tesis: el prompt pide de 3 a 8. */
+const MAX_PALABRAS_DE_LA_TESIS = 9;
+const tesisLarga = (t: string) => t.split(/[.!?]+/).some((f) => f.trim().split(/\s+/).length > MAX_PALABRAS_DE_LA_TESIS);
+
+const NO_SON_CANTIDADES = /\bB2B2C\b|\bB2[BC]\b|\b24\s?\/\s?7\b|(?<=\b(?:vista|visión|vision)\s)360\b/gi;
+
 /**
  * Los números de `texto` que no están en `fuente`, con lo que los multiplica: «25 mil» no es «25» ni «25 millones».
  * `tambien` (12 nov): un número chico vale si la empresa lo dijo en los turnos cercanos a la cita («tus dos marcas»); un
  * año, si es de una reunión o la empresa lo dijo como año. Una magnitud, siempre, tiene que estar en la cita misma.
  */
-export function cifrasDeMas(texto: string, fuente: string, tambien: ContextoDeLaCita = {}): string[] {
+export function cifrasDeMas(textoCrudo: string, fuente: string, tambien: ContextoDeLaCita = {}): string[] {
+  // «B2B», «B2C», «24/7» y «vista 360» no son cantidades (16 nov: se perdían etiquetas de Cicadex y lo que queda fuera de Polaris).
+  const dicho = paraComparar(`${fuente} ${tambien.chicos ?? ""}`);
+  const texto = textoCrudo.replace(NO_SON_CANTIDADES, (m) => (dicho.includes(paraComparar(m).replace(/\s+/g, " ")) ? " " : m));
   const hay = new Set(cantidadesNormales(fuente));
   const chicos = tambien.chicos ? new Set(cantidadesNormales(tambien.chicos)) : null;
   const anios = tambien.anios ? new Set((tambien.anios.match(/(?<!\d)(19|20)\d\d(?!\d)/g) ?? []).map((a) => `${a}·`)) : null;
@@ -774,7 +799,7 @@ const TOTAL = /\ben total\b|\bun total\b|\bsumando\b|\bsuman\b/;
 const DICE_DUDA = /\bprovisional|\bhipotesis\b/;
 
 /** Lo que habla de una meta; y lo que dice qué pasa hoy (con eso, la cifra es un resultado frente a la meta). */
-const ES_UNA_META = /\bmeta\b|\bobjetivo\b|\bquieren llegar\b|\bdeberia\b|\btiene que haber\b/;
+const ES_UNA_META = /\b(la|una|su|tu|nuestra|sus|tus|las|nuestras) metas?\b|\bmetas? (de|del|mensual(es)?|semanal(es)?|anual(es)?|final(es)?)\b|\bcomo metas?\b|\bobjetivo\b|\bquieren llegar\b|\bdeberia\b|\btiene que haber\b/;
 const ES_DE_HOY = /\bhoy\b|\bactual|\bhace(s|n)?\b|\blogra|\balcanza|\bse quedan?\b|\bsolo\b|\bmitad\b/;
 
 /** Lo que dijo con dudas: la cifra sale, pero dice qué falta validar. */
@@ -847,6 +872,10 @@ export interface LoQueEscribioElAgente {
 export interface PiezaPorArreglar {
   /** Dónde va: `negocio:<parte>` o `<id del área operativa>:<lista>`. */
   lugar: string;
+  /** Su lugar en la lista que escribió el agente: la corregida vuelve ahí (la organización es [quiénes, qué hacen]). */
+  indice?: number;
+  /** Cuántas piezas traía esa lista: la organización de una sola pieza es «qué hacen», no «quiénes son». */
+  largo?: number;
   texto: string;
   citas: CitaDelResumen[];
   problema: string;
@@ -1032,7 +1061,8 @@ export function leerElResumen(respuesta: Pick<Anthropic.Messages.Message, "conte
   // Lo que no lleva cita propia: sus números los dijo la empresa misma, no un cálculo de Smarteam que confirmó.
   const dichoPorElla = ctx.reuniones.map((r) => r.turnos.filter((t) => esDelCliente(r, t.hablante)).map((t) => t.texto).join("\n")).join("\n");
   const piezasPorArreglar: PiezaPorArreglar[] = [];
-  const arreglarEn = (lugar: string, dimensionId?: string | null) => (x: { texto: string; citas: CitaDelResumen[]; problema: string }) => piezasPorArreglar.push({ lugar, ...x, dimensionId });
+  const arreglarEn = (lugar: string, dimensionId?: string | null, indice?: number, largo?: number) => (x: { texto: string; citas: CitaDelResumen[]; problema: string }) =>
+    piezasPorArreglar.push({ lugar, ...x, dimensionId, ...(indice === undefined ? {} : { indice }), ...(largo === undefined ? {} : { largo }) });
   const deLasAreas = new Set(ctx.areas.map((a) => a.id));
   const nombreDelArea = (id: string) => ctx.areas.find((a) => a.id === id)?.nombre ?? id;
 
@@ -1045,6 +1075,12 @@ export function leerElResumen(respuesta: Pick<Anthropic.Messages.Message, "conte
     for (const v of tipo === "tesis" ? unaTesis(arreglo(objeto(crudo.negocio).tesis)) : arreglo(objeto(crudo.negocio)[tipo])) {
       if (piezas.length >= max) break;
       const p = conSuCita(v, ctx, o, descartados, `«${TITULO_DEL_NEGOCIO[tipo]}»`, TOPE_DEL_TEXTO_DEL_RESUMEN, [], arreglarEn(`negocio:${tipo}`));
+      // La tesis es el titular (16 nov: salían frases de 14 palabras): una frase de más de 9 se pide corregida.
+      if (p && tipo === "tesis" && tesisLarga(p.texto)) {
+        descartados.push(`«${TITULO_DEL_NEGOCIO[tipo]}»: es demasiado largo para el titular`);
+        arreglarEn(`negocio:${tipo}`)({ texto: p.texto, citas: p.citas, problema: "es demasiado largo para el titular" });
+        continue;
+      }
       if (p) piezas.push({ id: `n${++n}`, ...p, origen: origenDeLaCita(p.citas[0]) });
     }
     if (piezas.length) negocio[tipo] = piezas;
@@ -1085,9 +1121,10 @@ export function leerElResumen(respuesta: Pick<Anthropic.Messages.Message, "conte
     const donde = (que: string) => `${que} de ${nombre.texto}`;
     const lista = (crudoDeLista: unknown, prefijo: string, que: string, max: number, campo: string): PiezaDelResumen[] => {
       const out: PiezaDelResumen[] = [];
-      for (const y of arreglo(crudoDeLista)) {
+      const todas = arreglo(crudoDeLista);
+      for (const [i, y] of todas.entries()) {
         if (out.length >= max) break;
-        const p = conSuCita(y, ctx, o, descartados, donde(que), TOPE_DEL_TEXTO_DEL_RESUMEN, [], arreglarEn(`${id}:${campo}`));
+        const p = conSuCita(y, ctx, o, descartados, donde(que), TOPE_DEL_TEXTO_DEL_RESUMEN, [], arreglarEn(`${id}:${campo}`, undefined, i, todas.length));
         if (p) out.push({ id: `${prefijo}${out.length + 1}`, ...p, origen: origenDeLaCita(p.citas[0]) });
       }
       return out;
@@ -1099,6 +1136,7 @@ export function leerElResumen(respuesta: Pick<Anthropic.Messages.Message, "conte
       if (p) retos.push({ id: `t${retos.length + 1}`, ...p, dimensionId: dimensionDelArea(ctx, areaId, objeto(y).dimension), origen: origenDeLaCita(p.citas[0]) });
     }
     const cifras: CifraDelResumen[] = [];
+    let faltaDeLaCifra: string | null = null;
     for (const y of arreglo(x.cifras)) {
       if (cifras.length >= MAX_CIFRAS_POR_AREA) break;
       const c = objeto(y);
@@ -1129,6 +1167,10 @@ export function leerElResumen(respuesta: Pick<Anthropic.Messages.Message, "conte
       const deForma = (r: ReturnType<typeof textoValido>) => !r.ok && (r.motivo.startsWith("es demasiado largo") || r.motivo.startsWith("está en voseo"));
       if (notaRevisada && !notaRevisada.ok && !deForma(notaRevisada)) {
         descartados.push(`${nombre}: la nota ${notaRevisada.motivo}; sale la del código`);
+        crudas.nota = null;
+      } else if (crudas.nota !== null && NOTA_CON_QUIEN.test(paraComparar(crudas.nota))) {
+        // «Según quien coordina precios…» (Tecnosagot, 16 nov): al cliente no se le dice quién lo dijo.
+        descartados.push(`${nombre}: la nota dice quién lo dijo; sale la del código`);
         crudas.nota = null;
       }
       const revisadas = [
@@ -1163,11 +1205,23 @@ export function leerElResumen(respuesta: Pick<Anthropic.Messages.Message, "conte
         porArreglar.push({ operativa: id, ...crudas, estado: c.estado, dimensionId, citas, sobran, problemas });
         continue;
       }
-      if (cifras.some((z) => paraComparar(z.cifra) === paraComparar(crudas.cifra))) continue;
+      if (cifras.some((z) => paraComparar(z.cifra) === paraComparar(crudas.cifra) || mismoPrimerNumero(z.cifra, crudas.cifra))) continue;
       const e = estadoDeLaCifra({ estado: c.estado, cifra: crudas.cifra, nota: crudas.nota, citas });
+      // Una cita con tres números o más juntos no sostiene ninguno (16 nov, Centauro: «1008 tickets al mes» salía en grande
+      // de «para llegar a los 1008 sí son como 500»): no sale como cifra; queda lo que falta confirmar.
+      // También si el agente ya la marcó «pendiente» (con su nota, `estadoDeLaCifra` no la toca).
+      // Un rango («180–200») dice lo mismo que la empresa: queda «por confirmar», como antes. «24/7» no cuenta como dos números.
+      const variosNumeros = citas.some(
+        (z) => cifrasDeMas(crudas.cifra, z.texto).length < cifrasDeMas(crudas.cifra, "").length && numerosDistintos(z.texto.replace(NO_SON_CANTIDADES, " ")) >= 3,
+      );
+      if (!/\d\s?[–-]\s?\d/.test(crudas.cifra) && (e.nota === NOTA_DE_VARIOS_NUMEROS || variosNumeros)) {
+        descartados.push(`${nombre}: la cifra «${crudas.cifra}» sale de una cita con varios números juntos: va a lo que falta confirmar`);
+        faltaDeLaCifra ??= `Confirmar con tus registros: ${crudas.texto}.`;
+        continue;
+      }
       cifras.push({ id: `c${cifras.length + 1}`, cifra: crudas.cifra, texto: crudas.texto, ...e, dimensionId, citas, origen: origenDeLaCita(citas[0]) });
     }
-    const falta = nulo(x.falta) ? null : sinCitaPropia(x.falta, TOPE_DE_UNA_PREGUNTA, o, dichoPorElla, descartados, donde("lo que falta"));
+    const falta = (nulo(x.falta) ? null : sinCitaPropia(x.falta, TOPE_DE_UNA_PREGUNTA, o, dichoPorElla, descartados, donde("lo que falta"))) ?? (cifras.length ? null : faltaDeLaCifra);
     const area: AreaOperativa = {
       id,
       nombre: nombre.texto,
@@ -1232,9 +1286,20 @@ export function leerElResumen(respuesta: Pick<Anthropic.Messages.Message, "conte
     const t = sinCitaPropia(x.texto, TOPE_DE_UNA_PREGUNTA, o, dichoPorElla, descartados, `qué falta confirmar de ${dim}`);
     if (t) confirmar[dim] = t;
   }
+  // El tamaño que sale de la misma cita que la cifra de un área es esa cifra, no el tamaño del negocio (Cicadex, 16 nov).
+  // Con el mismo número: «500 clientes activos y se nos van 14 al mes» trae el tamaño Y la cifra, y los dos quedan.
+  const turnosDeCifras = new Set(operativas.flatMap((a) => a.cifras.flatMap((c) => c.citas.map((x) => `${x.reunion}:${x.turno}:${cantidadesNormales(c.cifra)[0] ?? ""}`))));
+  if (negocio.tamano?.some((p) => p.citas.some((x) => turnosDeCifras.has(`${x.reunion}:${x.turno}:${cantidadesNormales(p.texto)[0] ?? ""}`)))) {
+    descartados.push("«El tamaño del negocio»: es la cifra de un área, no el tamaño del negocio");
+    delete negocio.tamano;
+  }
   const avisos = avisosDelRecorrido(recorrido, operativas, ctx);
   // El título del recorrido no lleva cita propia: sus números y herramientas los tuvo que decir la empresa.
-  const tituloDelRecorrido = nulo(crudo.tituloDelRecorrido) || !(recorrido.length + etapasPorArreglar.length) ? null : sinCitaPropia(crudo.tituloDelRecorrido, TOPE_DEL_TITULO_DEL_RECORRIDO, o, todoLoDicho, descartados, "el título del recorrido");
+  const tituloCrudo = nulo(crudo.tituloDelRecorrido) || !(recorrido.length + etapasPorArreglar.length) ? null : sinCitaPropia(crudo.tituloDelRecorrido, TOPE_DEL_TITULO_DEL_RECORRIDO, o, todoLoDicho, descartados, "el título del recorrido");
+  // Como pasa HOY: «…a la entrega con trazabilidad» (Tecnosagot, 16 nov) contaba lo que falta. Sin título, la página pone el suyo.
+  const aspiracional = tituloCrudo ? paraComparar(tituloCrudo).match(TITULO_ASPIRACIONAL) : null;
+  if (aspiracional) descartados.push(`el título del recorrido cuenta cómo debería ser («${aspiracional[0]}»)`);
+  const tituloDelRecorrido = aspiracional ? null : tituloCrudo;
   return { negocio, recorrido, tituloDelRecorrido, operativas, areas, pendientes, entendimos: [], confirmar, avisos, descartados, porArreglar, etapasPorArreglar, piezasPorArreglar };
 }
 
@@ -1281,7 +1346,7 @@ function etapaVerificada(
 
 const REGLAS_DE_LAS_ETAPAS = `Corriges etapas del recorrido de un cliente para una página que Smarteam le presenta a una empresa. Cada una se descartó por un problema de forma, que te digo en «problema»: dice algo que sus citas no dicen (un precio, una tarifa, un número, una herramienta), o es demasiado larga.
 
-Reescribe «etapa» (hasta 5 palabras), «texto» (una línea: qué pasa ahí hoy, en tuteo) y «friccion» (lo que se traba, o null) usando SOLO lo que dicen sus «citas». Quita lo que las citas no digan; no lo reemplaces por otra palabra que lo insinúe. Si con las citas no se puede decir qué pasa en la etapa, omítela.
+Reescribe «etapa» (hasta 5 palabras), «texto» (qué pasa ahí hoy, hasta 6 palabras, sin «tu» ni «tus») y «friccion» (lo que se traba, o null) usando SOLO lo que dicen sus «citas». Quita lo que las citas no digan; no lo reemplaces por otra palabra que lo insinúe. Si con las citas no se puede decir qué pasa en la etapa, omítela.
 
 Devuelves SOLO este JSON: {"etapas":[{"i":<el número de la etapa>,"etapa":"…","texto":"…","friccion":"… o null"}]}`;
 
@@ -1333,25 +1398,61 @@ export function conLasEtapas(recorrido: readonly (EtapaDelResumen & { orden?: nu
  * como aviso en la pantalla interna: rehacer cuesta otra corrida entera.
  */
 export function avisosDelRecorrido(
-  recorrido: readonly Pick<EtapaDelResumen, "quien" | "nombre">[],
+  recorrido: readonly (Pick<EtapaDelResumen, "quien" | "nombre"> & { continuo?: boolean })[],
   operativas: readonly Pick<AreaOperativa, "nombre" | "areaId">[],
   ctx: { areas: readonly { id: string; nombre: string }[]; reuniones: readonly Pick<ReunionParaElResumen, "areaId">[] },
 ): string[] {
-  return equiposSinEtapa(recorrido, operativas, ctx)
-    .map((id) => `El recorrido no tiene ninguna etapa de ${ctx.areas.find((a) => a.id === id)!.nombre}, y hubo una reunión con ese equipo: revísalo o rehaz el Resumen.`);
+  const enLinea = recorrido.filter((e) => !e.continuo).length;
+  return [
+    ...(enLinea > 0 && enLinea < MIN_PASOS_EN_LINEA
+      ? [`El recorrido quedó con ${enLinea} ${enLinea === 1 ? "paso" : "pasos"}: no sale al cliente hasta tener ${MIN_PASOS_EN_LINEA}. Agrégalos o rehaz el Resumen.`]
+      : []),
+    ...equiposSinEtapa(recorrido, operativas, ctx).map(
+      (id) => `El recorrido no tiene ninguna etapa de ${ctx.areas.find((a) => a.id === id)!.nombre}, y hubo una reunión con ese equipo: revísalo o rehaz el Resumen.`,
+    ),
+  ];
+}
+
+/** Menos pasos en línea que esto no cuentan el recorrido de un cliente: afuera no sale (adentro, con su aviso). */
+export const MIN_PASOS_EN_LINEA = 3;
+
+/**
+ * Los avisos guardados, con el del recorrido corto calculado al abrir: uno guardado antes del 16 nov, o al que alguien le
+ * borró un paso, deja de salir afuera y adentro tiene que decirlo (no esconder sin avisar).
+ */
+function conElAvisoDelRecorrido(guardados: readonly string[], recorrido: readonly { continuo?: boolean }[] | null): string[] {
+  const otros = guardados.filter((a) => !a.startsWith("El recorrido quedó con "));
+  const enLinea = (recorrido ?? []).filter((e) => !e.continuo).length;
+  return enLinea > 0 && enLinea < MIN_PASOS_EN_LINEA
+    ? [`El recorrido quedó con ${enLinea} ${enLinea === 1 ? "paso" : "pasos"}: no sale al cliente hasta tener ${MIN_PASOS_EN_LINEA}. Agrégalos o rehaz el Resumen.`, ...otros]
+    : otros;
 }
 
 // ── El arreglo de las piezas de las listas (12 nov) ─────────────────────────────
 
 const REGLAS_DE_LAS_PIEZAS = `Corriges frases para una página que Smarteam le presenta a una empresa. Cada una se descartó por un problema de forma, que te digo en «problema»: dice algo que sus citas no dicen (un número, una herramienta, una conclusión, una calificación nuestra), o es demasiado larga.
 
-Reescribe «texto» (una frase de 8 a 25 palabras, en tuteo, hablándole a la empresa: «tu equipo», «tus clientes»; nunca voseo) usando SOLO lo que dicen sus «citas». Quita lo que las citas no digan; no lo reemplaces por otra palabra que lo insinúe. Si con las citas no se puede decir nada, omítela.
+Reescribe «texto» con la forma que te doy en «forma», usando SOLO lo que dicen sus «citas». Sin «tu» ni «tus» salvo que «forma» lo pida; nunca voseo. Quita lo que las citas no digan; no lo reemplaces por otra palabra que lo insinúe. Si con las citas no se puede decir nada, omítela.
 
 Devuelves SOLO este JSON: {"piezas":[{"i":<el número de la pieza>,"texto":"…"}]}`;
 
+/** La forma que se le pide a una pieza corregida, según dónde va (la misma del prompt del Resumen). */
+export function formaDelLugar(x: Pick<PiezaPorArreglar, "lugar" | "indice" | "largo">): string {
+  const [donde, campo] = x.lugar.split(":");
+  if (donde === "negocio") {
+    if (campo === "etiquetas") return "de 1 a 5 palabras, sin verbo conjugado, sin «tu» ni «tus» y sin punto";
+    if (campo === "tesis") return "dos frases de 3 a 8 palabras cada una, terminadas en punto, con sujeto y verbo claros y sin metáforas";
+    if (campo === "tamano") return "el número primero y su unidad, de 2 a 5 palabras («120 clínicas»)";
+    return "una frase corta, hasta 15 palabras, sin «tu» ni «tus»";
+  }
+  if (campo === "organizacion" && (x.indice ?? 0) === 0 && (x.largo ?? 2) >= 2) return "quiénes son: su rol y cuántos, de 2 a 6 palabras; sin número si las citas no lo dicen";
+  if (campo === "retos") return "de 5 a 10 palabras, empezando con un verbo en infinitivo, sin «tu» ni «tus»";
+  return "de 6 a 12 palabras, sin «tu» ni «tus» y sin verbos en segunda persona";
+}
+
 /** El pedido del arreglo de las piezas: solo las caídas, con sus citas. Sin las transcripciones. */
 export function pedidoDeLasPiezas(xs: readonly PiezaPorArreglar[]): Anthropic.Messages.MessageCreateParamsNonStreaming {
-  const datos = xs.map((x, i) => ({ i, texto: x.texto, problema: x.problema, citas: x.citas.map((c) => c.texto) }));
+  const datos = xs.map((x, i) => ({ i, texto: x.texto, forma: formaDelLugar(x), problema: x.problema, citas: x.citas.map((c) => c.texto) }));
   return { model: MODELO_DEL_RESUMEN, max_tokens: 2000, system: REGLAS_DE_LAS_PIEZAS, messages: [{ role: "user", content: JSON.stringify(datos, null, 1) }] };
 }
 
@@ -1375,6 +1476,11 @@ export function leerLasPiezas(
     // Las citas ya están verificadas: se vuelven a pasar como el agente las dio (reunión, turno y texto).
     const citas = de.citas.map((c) => ({ reunion: ctx.reuniones.find((r) => r.id === c.reunion)?.clave ?? c.reunion, turno: c.turno, texto: c.texto }));
     const p = conSuCita({ texto: x.texto, citas }, ctx, o, descartados, `pieza corregida (${de.lugar})`);
+    // La tesis corregida se vuelve a medir: si sigue larga, no llega al titular (revisión del 16 nov).
+    if (p && de.lugar === "negocio:tesis" && tesisLarga(p.texto)) {
+      descartados.push(`pieza corregida (${de.lugar}): sigue demasiado larga para el titular`);
+      continue;
+    }
     if (p) piezas.push({ ...de, texto: p.texto, citas: p.citas, ok: true });
   }
   return { piezas, descartados };
@@ -1406,7 +1512,7 @@ export function conLasPiezas<T extends Pick<LoQueEscribioElAgente, "negocio" | "
     } else if (campo === "organizacion" || campo === "bien" || campo === "frena") {
       const xs = a[campo];
       const max = campo === "frena" ? 2 : MAX_PIEZAS_POR_LISTA;
-      if (xs.length < max && !repetida(xs, p.texto)) xs.push({ id: nuevoId(`${campo[0]}x`, xs), ...base });
+      if (xs.length < max && !repetida(xs, p.texto)) xs.splice(Math.min(p.indice ?? xs.length, xs.length), 0, { id: nuevoId(`${campo[0]}x`, xs), ...base });
     }
   }
   return { ...e, negocio, operativas };
@@ -1416,7 +1522,7 @@ export function conLasPiezas<T extends Pick<LoQueEscribioElAgente, "negocio" | "
 
 const REGLAS_DE_LA_ETAPA_QUE_FALTA = `Completas el recorrido de un cliente para una página que Smarteam le presenta a una empresa. Hubo una reunión con un equipo que no aparece en ninguna etapa. Lees esa reunión y el recorrido que ya existe.
 
-Si en esa reunión la empresa contó cómo pasa HOY un cliente (o un prospecto) por ese equipo, devuelve esa etapa: «etapa» (hasta 5 palabras), «quien» (el equipo), «texto» (una línea, en tuteo), «friccion» (lo que se traba, o null), «antesDe» (el nombre exacto de la etapa del recorrido que va justo después, o null si va al final) y «citas» (1 o 2: lo dicho por alguien de la empresa, de 6 a 25 palabras seguidas de UNA intervención, copiado palabra por palabra, con su reunión y su turno; nunca pegues pedazos con «;» o «…»). Todo lo que escribas tiene que estar en tus citas. Si la reunión no describe una etapa del recorrido de un cliente, no la inventes: devuelve una lista vacía.
+Si en esa reunión la empresa contó cómo pasa HOY un cliente (o un prospecto) por ese equipo, devuelve esa etapa: «etapa» (hasta 5 palabras), «quien» (el equipo), «texto» (hasta 6 palabras, sin «tu» ni «tus»), «friccion» (lo que se traba, o null), «antesDe» (el nombre exacto de la etapa del recorrido que va justo después, o null si va al final) y «citas» (1 o 2: lo dicho por alguien de la empresa, de 6 a 25 palabras seguidas de UNA intervención, copiado palabra por palabra, con su reunión y su turno; nunca pegues pedazos con «;» o «…»). Todo lo que escribas tiene que estar en tus citas. Si la reunión no describe una etapa del recorrido de un cliente, no la inventes: devuelve una lista vacía.
 
 Devuelves SOLO este JSON: {"etapas":[{"etapa":"…","quien":"…","texto":"…","friccion":"… o null","antesDe":"… o null","citas":[{"reunion":"R1","turno":12,"texto":"…"}]}]}`;
 
@@ -1461,7 +1567,7 @@ export function conLaEtapaQueFalta(
 
 const REGLAS_DEL_ARREGLO = `Corriges cifras para una página que Smarteam le presenta a una empresa. Cada una se descartó por un problema de forma, que te digo en «problemas»: un texto más largo que su tope, un número que NO está en lo que la empresa dijo (sus «citas»): una resta, una suma, un porcentaje calculado o un número de otra parte; o una conclusión que las citas no dicen (quítala).
 
-Reescribe «cifra» (hasta 28 caracteres, lo que va en grande, con su unidad), «texto» (una línea con su período y su contexto, en tuteo, hablándole a la empresa: «tus clientes», «tu equipo») y «nota» (la base y los supuestos, o null) usando SOLO los números que aparecen en sus citas, tal como aparecen. No restes, no sumes, no calcules porcentajes, no redondees. Lo que quites no lo reemplaces por una palabra que lo insinúe («la mitad», «el doble»): la frase tiene que seguir siendo cierta. Si con esos números no se puede decir la magnitud, omítela.
+Reescribe «cifra» (solo el número, hasta 12 caracteres: «40», «120–150», «3,5 %»), «texto» (su rótulo, de 2 a 6 palabras, sin verbo y sin «tu» ni «tus»: «leads al mes») y «nota» (el período, la base y los supuestos, hablándole a la empresa, o null) usando SOLO los números que aparecen en sus citas, tal como aparecen. No restes, no sumes, no calcules porcentajes, no redondees. Lo que quites no lo reemplaces por una palabra que lo insinúe («la mitad», «el doble»): la frase tiene que seguir siendo cierta. Si con esos números no se puede decir la magnitud, omítela.
 
 Devuelves SOLO este JSON: {"cifras":[{"i":<el número de la cifra>,"cifra":"…","texto":"…","nota":"… o null"}]}`;
 
@@ -1831,7 +1937,10 @@ export function resumenParaLaPagina(
           ),
         )
     : null;
-  const tituloDelRecorrido = v2 && g!.tituloDelRecorrido?.texto && !fuera(g!.tituloDelRecorrido.texto) ? g!.tituloDelRecorrido.texto : null;
+  // Con menos de 3 pasos en línea, el cliente no lo ve (Polaris, 16 nov: 2 pasos y sin su equipo central); adentro sí.
+  const recorridoCorto = !!recorrido && recorrido.length > 0 && recorrido.filter((e) => !e.continuo).length < MIN_PASOS_EN_LINEA;
+  if (recorridoCorto && !o.conCitas) recorrido!.splice(0);
+  const tituloDelRecorrido = v2 && g!.tituloDelRecorrido?.texto && !fuera(g!.tituloDelRecorrido.texto) && !(recorridoCorto && !o.conCitas) ? g!.tituloDelRecorrido.texto : null;
   // El tamaño del negocio en grande (forma editorial): su número, su rótulo y cómo se sabe (la misma regla que una cifra).
   const piezaDelTamano = v2 ? (g!.negocio?.tamano ?? []).find((p) => !fuera(p.texto)) : undefined;
   const tamano = piezaDelTamano
@@ -1871,7 +1980,7 @@ export function resumenParaLaPagina(
     areas,
     datosRojos,
     falta: v2 ? [] : (g?.falta ?? []).filter((p) => !fuera(p.texto)),
-    ...(o.conCitas ? { escalaCambio, avisos: g?.avisos ?? [] } : {}),
+    ...(o.conCitas ? { escalaCambio, avisos: conElAvisoDelRecorrido(g?.avisos ?? [], recorrido) } : {}),
   };
 }
 
@@ -2143,7 +2252,7 @@ function junto<T extends { id: string; mano?: boolean }>(viejos: readonly T[], n
 // Lo que la persona corrigió no vuelve con el valor del agente: la misma pieza es la misma cita de origen.
 const mismoOrigen = (a: { origen?: string; citas: readonly CitaDelResumen[] }, b: { origen?: string; citas: readonly CitaDelResumen[] }) => !!origenDe(a) && origenDe(a) === origenDe(b);
 const mismaCifra = (a: { cifra: string; origen?: string; citas: readonly CitaDelResumen[] }, b: { cifra: string; origen?: string; citas: readonly CitaDelResumen[] }) =>
-  paraComparar(a.cifra) === paraComparar(b.cifra) || mismoOrigen(a, b);
+  paraComparar(a.cifra) === paraComparar(b.cifra) || mismoOrigen(a, b) || mismoPrimerNumero(a.cifra, b.cifra);
 
 /**
  * La tesis, las etiquetas y el tamaño (forma editorial) se rehacen o se quedan ENTEROS: si una persona cambió, agregó o

@@ -3,6 +3,7 @@
  * que ve el cliente (Elías, 8 nov): puntual, sin relleno, la misma en las dos superficies, y la guardada solo mientras los
  * niveles sean los de cuando se escribió.
  */
+import { detallesDelResultado } from "@/lib/tests-diagnostico/detalle-de-la-dimension";
 import { describe, expect, it } from "vitest";
 import { leerArchivoDeLaEscala } from "@/lib/escala/documento/archivos";
 import { parsearEscala } from "@/lib/escala/documento/parsear";
@@ -15,6 +16,7 @@ import {
   descripcionDelArea,
   descripcionValida,
   firmaDelArea,
+  firmaSigueVigente,
   leerLaDescripcion,
   pedidoDeLaDescripcion,
   reglasDeLaDescripcion,
@@ -50,8 +52,48 @@ describe("la descripción de respaldo", () => {
     expect(x.descripcion.origen).toBe("respaldo");
     expect(x.resultado.sintesis).toBe(x.descripcion.texto);
     expect(x.resultado.sintesis).toMatch(new RegExp(`^Tu equipo de ${x.resultado.areaNombre}`));
-    expect(x.resultado.sintesis).toContain("Lo que más lo frena es «");
+    // Lo que más lo frena es una sospecha: se nombra sin afirmarla, y sin repetir lo que cuesta (la página lo dice debajo).
+    expect(x.resultado.sintesis).toContain("Lo que más lo frena parece ser «");
+    expect(x.resultado.sintesis).not.toContain(x.resultado.recomendacion?.tipo === "trabajar" ? x.resultado.recomendacion.costoDeQuedarse.slice(0, 30) : "@@");
     expect(x.resultado.sintesis).not.toMatch(RELLENO);
+    // Confirmada, se afirma.
+    const [y] = resultadosDeLaEscala(escala, lienzo, estado({ ...todas({ nivel: "I" }), [queAplican[0].id]: { nivel: "D" } }));
+    expect(y.resultado.sintesis).toContain("Lo que más lo frena es «");
+    // Todo lo medido es sospecha: no se afirma cómo trabaja.
+    const [z] = resultadosDeLaEscala(escala, lienzo, estado(todas({ nivel: "D", fuente: "hipotesis" })));
+    expect(z.resultado.sintesis).toMatch(/^Todavía conocemos poco de cómo trabaja tu equipo de /);
+  });
+
+  it("lo que escribió el agente de un área donde todo es sospecha no sale; lo escrito a mano, sí", () => {
+    const chequeo = todas({ nivel: "D", fuente: "hipotesis" });
+    const firma = firmaDelArea(chequeoDe(chequeo), area.id, { escalaVersion: escala.version });
+    const conAgente = estado(chequeo, { descripcionesDeLaEscala: { [area.id]: { texto: "Genera 150 leads al mes.", origen: "agente", firma, at: "2026-11-16T00:00:00.000Z", por: null } } });
+    expect(resultadosDeLaEscala(escala, lienzo, conAgente)[0].descripcion.origen).toBe("respaldo");
+    const aMano = estado(chequeo, { descripcionesDeLaEscala: { [area.id]: { texto: "Lo escribió una persona.", origen: "mano", firma, at: "2026-11-16T00:00:00.000Z", por: "x@y.z" } } });
+    expect(resultadosDeLaEscala(escala, lienzo, aMano)[0].descripcion.origen).toBe("mano");
+  });
+
+  it("los riesgos de la escala de una empresa nunca salen de una sospecha, y sin nivel no se piden", () => {
+    const [sospecha] = resultadosDeLaEscala(escala, lienzo, estado(todas({ nivel: "D", fuente: "hipotesis" })));
+    expect(sospecha.resultado.riesgos).toEqual([]);
+    const [vista] = resultadosDeLaEscala(escala, lienzo, estado(todas({ nivel: "D" })));
+    expect(vista.resultado.riesgos.length).toBeGreaterThan(0);
+  });
+
+  it("«Ver detalles» de una parte en Deficiente apunta al menos a Funcional", () => {
+    const [x] = resultadosDeLaEscala(escala, lienzo, estado(todas({ nivel: "D" })));
+    const detalles = detallesDelResultado(escala, x.resultado);
+    for (const d of Object.values(detalles)) if (d.siguiente) expect(d.siguiente.nombre).not.toBe(escala.niveles.find((n) => n.letra === "I")!.nombre);
+  });
+
+  it("confirmar una hipótesis con el mismo nivel no deja vieja la descripción; lo contrario, sí", () => {
+    const antes = firmaDelArea(chequeoDe({ "1.1": { nivel: "I", fuente: "hipotesis" }, "1.2": { nivel: "F" } }), "1");
+    const confirmada = firmaDelArea(chequeoDe({ "1.1": { nivel: "I" }, "1.2": { nivel: "F" } }), "1");
+    const otroNivel = firmaDelArea(chequeoDe({ "1.1": { nivel: "F" }, "1.2": { nivel: "F" } }), "1");
+    expect(firmaSigueVigente(antes, confirmada)).toBe(true);
+    expect(firmaSigueVigente(confirmada, antes)).toBe(false);
+    expect(firmaSigueVigente(antes, otroNivel)).toBe(false);
+    expect(firmaSigueVigente(antes, `${antes.split("|")[0]}|otra-edicion|||`)).toBe(false);
   });
 
   it("en medición: lo que ya se ve y, por su nombre, qué falta para darle un nivel general", () => {
@@ -186,11 +228,12 @@ describe("lo que escribe el agente pasa por las reglas", () => {
     const [x] = resultadosDeLaEscala(escala, lienzo, { areas: [area.id], contenido: { ...contenidoVacio(), chequeo } });
     const a = areaParaLaDescripcion(escala, x.resultado, chequeo, x.porExplorar);
     expect(a.loQueMasFrena).not.toBeNull();
-    expect(a.dimensiones.find((d) => d.porExplorar)?.loQueSeVio).toContain("Nadie anota");
+    // De una sospecha no se cuenta lo visto (16 nov): ni al agente ni como fuente de cifras.
+    expect(a.dimensiones.find((d) => d.porExplorar)?.loQueSeVio).toBeNull();
     const ctx = { empresa: "Centauro", areas: [a], reuniones: "", instrucciones: "" };
     const p = pedidoDeLaDescripcion(ctx);
     expect(String(p.system)).toMatch(/porExplorar/);
-    expect(reglasDeLaDescripcion(ctx, NIVELES).interno).toContain("Nadie anota");
+    expect(reglasDeLaDescripcion(ctx, NIVELES).interno).not.toContain("Nadie anota");
     expect(TOPE_DE_LA_DESCRIPCION).toBeLessThan(400);
   });
 });

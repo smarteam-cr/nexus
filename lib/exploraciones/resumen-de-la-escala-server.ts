@@ -35,6 +35,7 @@ import { DOMINIOS_GENERICOS } from "./agendadas";
 import { AGENTE_DE_LA_EXPLORACION, nombresDelEquipo } from "./agente";
 import type { EstadoDeExploracion } from "./contenido";
 import { contextoDelEquipo, firmaDelArea } from "./descripcion-de-la-escala";
+import { generarDescripcionesDeLaEscala } from "./descripcion-de-la-escala-server";
 import { EQUIPOS, type ClaveDeEquipo } from "./equipos";
 import { areasDeLaPagina, resultadosDeLaEscala, type ResultadoDeUnArea } from "./escala-para-el-cliente";
 import { leerContenido } from "./esquemas";
@@ -337,6 +338,15 @@ export async function generarElResumenDeLaEscala(o: { exploracionId: string; ema
       where: { id: run.id },
       data: { status: "DONE", currentPhase: null, output: JSON.stringify({ resumen: nuevo, descartados: escrito.descartados, uso }) },
     });
+    // La descripción de cada área que falta o quedó vieja (16 nov): solo se escribía al crear el «Acceso», y en 5 de 9
+    // páginas salía la de respaldo. No pisa las vigentes (una escrita a mano que quedó vieja, sí, como el botón de
+    // siempre); si falla, el Resumen ya quedó.
+    // Después de responder, como el «Acceso»: «Rehacer con IA» no espera por ellas (ya tarda unos 3 minutos).
+    void generarDescripcionesDeLaEscala({ exploracionId: o.exploracionId, email: o.email, soloFaltantes: true })
+      .then((d) => {
+        if (!d.ok) console.error("[exploraciones/resumen-de-la-escala] la descripción de las áreas no se escribió:", d.error);
+      })
+      .catch((e) => console.error("[exploraciones/resumen-de-la-escala] la descripción de las áreas falló", e));
     // Sin volver a leer la exploración: los niveles son los de la lectura de arriba (si cambiaron mientras tanto, la
     // pantalla trae la página al día por su cuenta).
     return { ok: true, resumen: comoLoVeElCse(l, guardado), descartados: escrito.descartados, segundos: Math.round((Date.now() - t0) / 1000), uso };

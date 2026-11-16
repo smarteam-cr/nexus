@@ -31,6 +31,8 @@ import type { ContenidoDeExploracion, EstimadoGuardado } from "./contenido";
 
 /** El tope de lo que escribe el agente: dos frases cortas. Lo que pasa de ahí se descarta. */
 export const TOPE_DE_LA_DESCRIPCION = 360;
+/** Las palabras de la descripción: el prompt pide hasta 45. */
+export const MAX_PALABRAS_DE_LA_DESCRIPCION = 52;
 /** El tope de lo que escribe una persona a mano: más holgado, la decide ella. */
 export const TOPE_DE_LA_DESCRIPCION_A_MANO = 700;
 
@@ -87,6 +89,28 @@ export function firmaDelArea(chequeo: Readonly<Record<string, EstimadoGuardado>>
   return `${niveles}|${entorno.edicion ?? ""}|${entorno.perfilCierre ?? ""}|${entorno.perfilDespues ?? ""}|${entorno.escalaVersion ?? ""}`;
 }
 
+/**
+ * ¿Sigue vigente lo escrito con la firma `antes`? Sí si es igual o si lo único que cambió es que una hipótesis se
+ * confirmó con el MISMO nivel (16 nov, Cicadex: 3.4 pasó de «Ih» a «I» y la descripción dejó de salir). Escribir sobre
+ * una hipótesis es más estricto (el agente no la afirma), así que el texto sigue siendo cierto. Al revés no: una parte
+ * confirmada que vuelve a hipótesis la deja vieja. Los niveles son mayúsculas; las marcas (h, r, n), minúsculas.
+ */
+export function firmaSigueVigente(antes: string, hoy: string): boolean {
+  if (antes === hoy) return true;
+  const [nivelesAntes, ...restoAntes] = antes.split("|");
+  const [nivelesHoy, ...restoHoy] = hoy.split("|");
+  if (restoAntes.join("|") !== restoHoy.join("|")) return false;
+  const a = nivelesAntes ? nivelesAntes.split(",") : [];
+  const h = nivelesHoy ? nivelesHoy.split(",") : [];
+  if (a.length !== h.length) return false;
+  return a.every((x, i) => {
+    if (x === h[i]) return true;
+    const [idA, va = ""] = x.split(":");
+    const [idH, vh = ""] = h[i].split(":");
+    return idA === idH && va.includes("h") && !vh.includes("h") && va.replace("h", "") === vh;
+  });
+}
+
 /** Debajo de Funcional: la base que se sostiene en el esfuerzo de cada persona. */
 const esBaja = (l: Letra | null) => l !== null && LETRAS.indexOf(l) < LETRAS.indexOf("F");
 
@@ -97,19 +121,26 @@ const nombresEntreComillas = (xs: readonly string[]) => {
 
 /**
  * La descripción armada con los datos, para cuando no hay una guardada vigente. Cumple las mismas reglas que la del
- * agente: qué significa hoy para el equipo, lo que más lo frena y lo que cuesta quedarse así. Sin conteos de partes, sin
- * «por explorar» ni «lo confirmamos contigo» (el radar ya lo muestra).
+ * agente: qué significa hoy para el equipo y lo que más lo frena. Sin conteos de partes, sin «por explorar» ni «lo
+ * confirmamos contigo» (el radar ya lo muestra). Sin «lo que cuesta quedarse así» (16 nov): la página lo muestra justo
+ * debajo y en la tarjeta del radar, y salía tres veces. `hipotesis`: las partes que son sospecha (no las afirma: «parece
+ * ser»; si todo lo medido lo es, dice que todavía conocemos poco).
  */
-export function descripcionDeRespaldo(r: Pick<ResultadoDelTest, "areaNombre" | "nivel" | "capas" | "recomendacion" | "dimensiones" | "preguntadas">): string {
+export function descripcionDeRespaldo(
+  r: Pick<ResultadoDelTest, "areaNombre" | "nivel" | "capas" | "recomendacion" | "dimensiones" | "preguntadas">,
+  hipotesis: ReadonlySet<string> = new Set(),
+): string {
   const Equipo = `Tu equipo de ${r.areaNombre}`;
   if (r.preguntadas === 0) return `Todavía no conocemos cómo trabaja tu equipo de ${r.areaNombre}. Cuando lo conozcamos, aquí verás cómo está hoy y qué lo frena.`;
+  const medidas = r.dimensiones.filter((d) => d.preguntada && d.nivel);
+  const todoSospecha = medidas.length > 0 && medidas.every((d) => hipotesis.has(d.id));
 
   if (!r.nivel) {
     // En medición: lo que ya se vio, y qué falta para darle un nivel general (por su nombre: un conteo no dice nada).
-    const medidas = r.dimensiones.filter((d) => d.preguntada && d.nivel);
     const bajas = medidas.filter((d) => esBaja(d.nivel)).length;
-    const visto =
-      bajas * 2 >= medidas.length
+    const visto = todoSospecha
+      ? `Todavía conocemos poco de cómo trabaja tu equipo de ${r.areaNombre}.`
+      : bajas * 2 >= medidas.length
         ? `${Equipo} se sostiene más en el esfuerzo de cada persona que en un sistema.`
         : `${Equipo} tiene su base montada.`;
     const faltan = r.dimensiones.filter((d) => !d.preguntada || !d.nivel).map((d) => d.nombre);
@@ -119,8 +150,9 @@ export function descripcionDeRespaldo(r: Pick<ResultadoDelTest, "areaNombre" | "
 
   const base = r.capas.find((c) => c.clave === "base")?.nivel ?? null;
   const prod = r.capas.find((c) => c.clave === "produccion")?.nivel ?? null;
-  const practica =
-    esBaja(base) && esBaja(prod)
+  const practica = todoSospecha
+    ? `Todavía conocemos poco de cómo trabaja tu equipo de ${r.areaNombre}.`
+    : esBaja(base) && esBaja(prod)
       ? `${Equipo} depende más del esfuerzo de cada persona que de un sistema, y eso se nota en lo que entrega hacia afuera.`
       : esBaja(base)
         ? `${Equipo} entrega hacia afuera, pero se sostiene en el esfuerzo de cada persona más que en un sistema.`
@@ -129,9 +161,12 @@ export function descripcionDeRespaldo(r: Pick<ResultadoDelTest, "areaNombre" | "
           : `${Equipo} tiene su base montada y entrega bien hacia afuera: lo que sigue es afinarlo.`;
   const rec = r.recomendacion;
   if (rec?.tipo !== "trabajar") return practica;
-  const costo = rec.costoDeQuedarse?.trim() ? primeraOracion(rec.costoDeQuedarse) : "";
-  return `${practica} Lo que más lo frena es «${rec.dimensionNombre}».${costo ? ` ${costo}` : ""}`;
+  return `${practica} Lo que más lo frena ${hipotesis.has(rec.dimensionId) ? "parece ser" : "es"} «${rec.dimensionNombre}».`;
 }
+
+/** Las partes del área que son una sospecha (`fuente: "hipotesis"`), de lo guardado. */
+const hipotesisDelArea = (chequeo: Readonly<Record<string, EstimadoGuardado>>, areaId: string) =>
+  new Set(Object.entries(chequeo).filter(([id, e]) => id.startsWith(`${areaId}.`) && e.fuente === "hipotesis").map(([id]) => id));
 
 /**
  * El ÚNICO que decide qué texto sale bajo «Resultado general» de un área: la guardada si sigue vigente, o la de respaldo.
@@ -143,9 +178,15 @@ export function descripcionDelArea(
   entorno: EntornoDeLaFirma = {},
 ): DescripcionDelArea {
   const guardada = contenido.descripcionesDeLaEscala?.[r.areaId] ?? null;
-  const vigente = !!guardada && r.preguntadas > 0 && guardada.firma === firmaDelArea(contenido.chequeo, r.areaId, entorno);
+  const hipotesis = hipotesisDelArea(contenido.chequeo, r.areaId);
+  // Lo que escribió el agente sobre un área donde todo lo medido es sospecha no sale (16 nov, Centauro Marketing: contaba
+  // «~150 leads» del porqué de una hipótesis). Lo escrito a mano, sí: es de quien lo escribió.
+  const medidas = r.dimensiones.filter((d) => d.preguntada && d.nivel);
+  const todoSospecha = medidas.length > 0 && medidas.every((d) => hipotesis.has(d.id));
+  const vigente =
+    !!guardada && r.preguntadas > 0 && !(todoSospecha && guardada.origen === "agente") && firmaSigueVigente(guardada.firma, firmaDelArea(contenido.chequeo, r.areaId, entorno));
   if (guardada && vigente) return { texto: guardada.texto, origen: guardada.origen, guardada, vigente };
-  return { texto: descripcionDeRespaldo(r), origen: "respaldo", guardada, vigente: false };
+  return { texto: descripcionDeRespaldo(r, hipotesis), origen: "respaldo", guardada, vigente: false };
 }
 
 // ── El pedido al agente ─────────────────────────────────────────────────────────
@@ -157,7 +198,8 @@ export interface AreaParaLaDescripcion {
   /** Con todas sus partes ubicadas lleva nivel general; si no, la página dice «En medición». */
   nivelGeneral: string | null;
   capas: { nombre: string; nivel: string | null }[];
-  loQueMasFrena: { dimension: string; llevarA: string; costoDeQuedarse: string } | null;
+  /** Sin lo que cuesta quedarse así (16 nov): la página lo muestra justo debajo, y el agente lo parafraseaba igual. */
+  loQueMasFrena: { dimension: string; llevarA: string } | null;
   /**
    * El contexto que el CSE escribió para este equipo en el artefacto interno («agregar contexto», 8 nov): pesa más que lo
    * demás, entra al prompt y nunca sale tal cual. null: no escribió nada.
@@ -218,7 +260,7 @@ export function areaParaLaDescripcion(
     nombre: r.areaNombre,
     nivelGeneral: r.nivelNombre,
     capas: r.capas.map((c) => ({ nombre: c.nombre, nivel: c.nivelNombre })),
-    loQueMasFrena: rec?.tipo === "trabajar" ? { dimension: rec.dimensionNombre, llevarA: rec.objetivoNombre, costoDeQuedarse: rec.costoDeQuedarse } : null,
+    loQueMasFrena: rec?.tipo === "trabajar" ? { dimension: rec.dimensionNombre, llevarA: rec.objetivoNombre } : null,
     contextoDelEquipo: contexto,
     dimensiones: r.dimensiones.map((d) => {
       const nivel = d.preguntada && d.nivel ? d.nivel : null;
@@ -231,7 +273,9 @@ export function areaParaLaDescripcion(
         nivel: nivel ? nombreDeNivel(escala, nivel) : null,
         comoEs: comoEs ? primeraOracion(comoEs) : null,
         porExplorar: porExplorar.includes(d.id),
-        loQueSeVio: nivel && visto ? visto.slice(0, 700) : null,
+        // De una sospecha no se cuenta lo visto (16 nov, Centauro: «~150 leads» salió del porqué de una hipótesis y
+        // contradecía el Resumen): sin texto, tampoco vale para las cifras.
+        loQueSeVio: nivel && visto && !porExplorar.includes(d.id) ? visto.slice(0, 700) : null,
       };
     }),
   };
@@ -246,15 +290,15 @@ Quién lo lee: alguien de negocio de esa empresa, con poco tiempo. Tiene que ent
 
 Qué escribes, por equipo: UNO o DOS frases cortas (hasta 45 palabras en total) que digan:
 1. cómo trabaja hoy ese equipo en la práctica, con lo concreto de ESTA empresa (lo que se vio de ella), no una frase que serviría para cualquiera;
-2. si el equipo tiene «loQueMasFrena», qué es y qué le cuesta hoy, en palabras de negocio.
+2. si el equipo tiene «loQueMasFrena», nómbralo en palabras de negocio, sin contar lo que cuesta: la página lo muestra justo debajo. Usa esa frase para algo concreto que se vio de la empresa.
 Si el equipo no tiene nivel general («nivelGeneral» null), di lo que ya se ve y, en una frase corta, qué falta conocer para darle un nivel general: las partes sin nivel por su nombre si son hasta tres; si son más, «el resto de sus partes».
 
-Cómo escribes: español neutro, en tuteo, hablándole a la empresa: «tu equipo», «tienes», «no sabes» (nunca «no saben», «ellos» ni «la empresa»), nunca voseo. «Lo que más lo frena» (al equipo). Directo, concreto, en presente. Sin markdown, sin adornos, sin frases hechas.
+Cómo escribes: nombra al equipo con mayúscula, como en los datos («tu equipo de Ventas»). Español neutro, en tuteo, hablándole a la empresa: «tu equipo», «tienes», «no sabes» (nunca «no saben», «ellos» ni «la empresa»), nunca voseo. «Lo que más lo frena» (al equipo). Directo, concreto, en presente. Sin markdown, sin adornos, sin frases hechas.
 
 Lo que NO puedes hacer (si lo haces, tu texto se descarta):
 - Nombrar un nivel de la escala ni usar esas palabras en ningún sentido («deficiente», «inicial», «funcional», «eficiente», «óptimo»): el nivel ya se ve en grande.
 - Fórmulas de relleno o de procedencia: nada de «por lo que hemos visto», «hasta ahora», «por lo conversado», «lo confirmamos contigo», «por explorar», «hipótesis», ni contar partes («1 de las 8 partes»). Tampoco hables de reuniones, sesiones, conversaciones o del diagnóstico: habla del equipo, no de cómo lo supimos.
-- Una parte con «porExplorar» es una sospecha, no algo que la empresa dijo: NO afirmes cómo está hoy esa parte («nadie registra por qué se pierde»). Si es «loQueMasFrena», nómbrala y di lo que cuesta en condicional o en general («sin saber por qué se pierde un negocio, cada vendedor se queda con su versión»). Lo concreto de la empresa sácalo de las partes sin «porExplorar».
+- Una parte con «porExplorar» es una sospecha, no algo que la empresa dijo: NO afirmes cómo está hoy esa parte («nadie registra por qué se pierde»). Si es «loQueMasFrena», nómbrala como algo a revisar («lo que más lo frena parece ser…»), sin decir cómo está ni lo que cuesta. Lo concreto de la empresa sácalo de las partes sin «porExplorar».
 - Nombrar personas (ni de la empresa ni de Smarteam), ni nombrar a Smarteam.
 - Escribir cifras que no estén en lo que lees. Una cifra de la empresa que sí está (por ejemplo, cuántos casos reciben) se puede usar si ayuda.
 - Recomendar productos, herramientas o servicios, prometer resultados o hablar de precios. Nombra una herramienta solo si la empresa ya la usa.
@@ -343,6 +387,9 @@ export function descripcionValida(crudo: unknown, o: ReglasDeLaDescripcion): { o
   const texto = crudo.replace(/\s+/g, " ").trim();
   const motivos: string[] = [];
   if (texto.length > TOPE_DE_LA_DESCRIPCION) motivos.push(`es demasiado larga (${texto.length} caracteres; el tope es ${TOPE_DE_LA_DESCRIPCION})`);
+  // El prompt pide hasta 45 palabras; con margen, porque los caracteres solos dejaban pasar 63 (Centauro, 16 nov).
+  const palabras = texto.split(" ").length;
+  if (palabras > MAX_PALABRAS_DE_LA_DESCRIPCION) motivos.push(`es demasiado larga (${palabras} palabras; el tope es ${MAX_PALABRAS_DE_LA_DESCRIPCION})`);
   const t = sinTildes(texto);
   const relleno = t.match(RELLENO);
   if (relleno) motivos.push(`usa una fórmula de relleno o habla de cómo lo supimos («${relleno[0]}»)`);
@@ -440,7 +487,7 @@ export function cualesSeGuardan(o: {
   for (const [a, d] of Object.entries(o.nuevas)) {
     const actual = o.ahora[a] ?? null;
     if ((actual?.at ?? null) !== (o.alEmpezar[a] ?? null)) saltadas.push({ areaId: a, motivos: ["alguien la cambió mientras el agente escribía: se queda la suya"] });
-    else if (o.soloFaltantes && actual && actual.firma === o.firmaDeHoy(a)) continue;
+    else if (o.soloFaltantes && actual && firmaSigueVigente(actual.firma, o.firmaDeHoy(a))) continue;
     else guardar[a] = d;
   }
   return { guardar, saltadas };

@@ -144,6 +144,13 @@
   color: var(--re-apagada);
   max-width: 72ch;
 }
+/* Qué abarca y qué queda fuera, cada uno en su línea (Polaris, 16 nov: iban pegados). */
+.re-alcance > span {
+  display: block;
+}
+.re-alcance > span + span {
+  margin-top: 4px;
+}
 .re-cifra-negocio {
   display: grid;
   gap: 4px;
@@ -577,6 +584,18 @@
 .re-cifra .re-grande {
   font-size: 44px;
   line-height: 48px;
+}
+/* Una cifra sin número al principio, o larga mientras se edita: letra de titular, no de cifra. */
+.re-cifra .re-grande-larga {
+  font-size: 22px;
+  line-height: 28px;
+}
+.re-cifra .re-unidad {
+  font-size: 15px;
+  line-height: 20px;
+  font-weight: 700;
+  color: var(--re-azul);
+  margin-top: -2px;
 }
 .re-cifra b {
   font-size: 14.5px;

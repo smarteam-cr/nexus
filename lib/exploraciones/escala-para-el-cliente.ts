@@ -71,7 +71,7 @@ export function redaccionDeLasPersonas(r: Pick<ResultadoDelTest, "dimensiones">,
 /** El resultado del área, con `sintesis` vacía: la pone `descripcionDelArea`. */
 function resultadoDelArea(escala: Escala, area: AreaDelLienzo, niveles: Record<string, NivelDeLaDimension>, usaHubspot: boolean | null = null): ResultadoDelTest | null {
   // `version` es del test: esta página no la usa. Los casos solo ofrecen reactivar HubSpot si se confirmó que lo usan.
-  const r = resultadoDeLosNiveles({ escala, areaId: area.id, version: "marketing", preguntadas: new Set(Object.keys(niveles)), niveles, orden: area.paraChequeo.orden, usaHubspot });
+  const r = resultadoDeLosNiveles({ escala, areaId: area.id, version: "marketing", preguntadas: new Set(Object.keys(niveles)), niveles, orden: area.paraChequeo.orden, usaHubspot, deUnaEmpresa: true });
   if (!r) return null;
   const aplican = area.dimensiones.filter((d) => d.aplica);
   const dimensiones = r.dimensiones.filter((d) => aplican.some((x) => x.id === d.id));
@@ -133,7 +133,7 @@ export function resultadosDeLaEscala(
     for (const d of area.dimensiones) {
       const e = estado.contenido.chequeo[d.id];
       if (!d.aplica || !e) continue;
-      niveles[d.id] = { nivel: e.nivel, noLoSe: false, riesgo: !!e.riesgo };
+      niveles[d.id] = { nivel: e.nivel, noLoSe: false, riesgo: !!e.riesgo, ...(e.fuente === "hipotesis" ? { hipotesis: true } : {}) };
       // Lo que contestó en el test lo dijo el cliente: no es «lo que creemos por lo conversado».
       if (e.fuente === "hipotesis") porExplorar.push(d.id);
     }

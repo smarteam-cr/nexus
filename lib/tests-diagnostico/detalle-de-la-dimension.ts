@@ -53,12 +53,16 @@ export function detallesDelResultado(
     if (!dim) continue;
     const ia = r.redaccion?.dimensiones?.[d.id];
     const nivel = dim.niveles.find((n) => n.letra === d.nivel);
-    const letraSiguiente: Letra | undefined = LETRAS[LETRAS.indexOf(d.nivel) + 1];
-    const siguiente = letraSiguiente ? dim.niveles.find((n) => n.letra === letraSiguiente) : undefined;
+    // Debajo de la base, el paso que se recomienda es llegar a Funcional (o al primero que exista desde ahí), como «Por
+    // dónde empezar»: recomendar Inicial le proponía un estado malo (16 nov, Centauro 1.8).
+    const desde = Math.max(LETRAS.indexOf(d.nivel) + 1, LETRAS.indexOf("F"));
+    const siguiente = dim.niveles.find((n) => LETRAS.indexOf(n.letra) >= desde && n.letra !== d.nivel);
+    const letraSiguiente: Letra | undefined = siguiente?.letra;
     // Sin IA: debajo de la base, lo que cuesta quedarse así; desde la base, lo que logra el nivel.
     const debajoDeLaBase = LETRAS.indexOf(d.nivel) < LETRAS.indexOf("F");
     const deLaEscala = debajoDeLaBase ? dim.costoDeQuedarse : (nivel?.resultado ?? nivel?.descripcion ?? "");
-    const prioridad = ia?.prioridad || primeraOracion(siguiente?.descripcion ?? "");
+    // La de la IA se escribió para el nivel de al lado: si el paso salta (de Deficiente a Funcional), sale la de la escala.
+    const prioridad = (letraSiguiente === LETRAS[LETRAS.indexOf(d.nivel) + 1] ? ia?.prioridad : null) || primeraOracion(siguiente?.descripcion ?? "");
     out[d.id] = {
       impacto: ia?.impacto || primeraOracion(deLaEscala) || null,
       siguiente: letraSiguiente && prioridad ? { nombre: nombreDeNivel(escala, letraSiguiente), prioridad } : null,
