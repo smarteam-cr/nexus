@@ -13257,7 +13257,7 @@ Elías: ese paso se maneja en la escala que ya está en la cuenta, la misma de l
 
 - **No es un documento nuevo:** el botón «Acceso» de La escala (`AccesoALaEscala.tsx`, en la cuenta y en la preventa; no en la Exploración de un proyecto) crea un enlace y `/external/escala/[token]` pinta `ResultadoDelTestVista` con `deLaEscala`. Sale del mismo cálculo del test (`resultadoDeLosNiveles`), con los niveles de la exploración en vez de las respuestas.
 - ⚠ *Reemplazado el 2026-11-08 (ver «La escala de la preventa, tercera vuelta»): las hipótesis que el vendedor usó salen como «por explorar» y el vendedor elige los equipos.* **Solo lo confirmado con evidencia** (`lib/exploraciones/escala-para-el-cliente.ts`): la regla de `mapa.ts` de que una hipótesis no llega al cliente vale acá. Lo demás sale como «Sin medir». Un área o una capa incompleta no lleva nivel (la revisión lo cazó: con 1 de 8 confirmada en Óptimo, la página decía «Óptimo»), igual que el chequeo por dentro; dice «En medición · Medido en 3 de 8 partes», sin lo que más frena ni qué lo mueve. El «Acceso» dice cuántas partes vería el cliente, y sin ninguna con evidencia no se crea (409). Si la evidencia se va después, el enlace abre un aviso, no un error.
-- **Viva, no una foto:** la página lee lo medido hoy (`lib/external/escala-view.ts`, chokepoint fail-closed en cada render). Es la escala de la cuenta: no hay nada que publicar. Por eso `AccesoALaEscala` no guarda foto, a diferencia de `AccesoAlDocumento`.
+- ⚠ *Reemplazado el 2026-11-16 (ver «La escala que ve el cliente se publica, y todo se edita»): el cliente ve la foto publicada.* **Viva, no una foto:** la página lee lo medido hoy (`lib/external/escala-view.ts`, chokepoint fail-closed en cada render). Es la escala de la cuenta: no hay nada que publicar. Por eso `AccesoALaEscala` no guarda foto, a diferencia de `AccesoAlDocumento`.
 - **Es la única página pública que lee una exploración, y tiene puerta propia:** `lectores.test.ts` prohibía que algo de `external` la leyera. Se le sumó el destino `escala-al-cliente`, cuya única entrada es `escalaParaElCliente` (`lib/exploraciones/escala-para-el-cliente-server.ts`); los documentos del cliente siguen sin poder leerla.
 - **La tabla no repite la empresa:** sale de la exploración, y una fusión de empresas mueve el enlace sin tocarlo. El chokepoint comprueba que el proyecto de la exploración sea de esa empresa.
 - **Solo la preventa y la de la cuenta:** la Exploración de un proyecto no se comparte, y lo hace cumplir el servidor, no solo el botón. La preventa y la cuenta tienen un enlace cada una.
@@ -15421,3 +15421,56 @@ Pedido de Elías (puntos 11 a 16 del frente de cobranza). Lo que se decidió y p
 *Lo que no garantiza:* nada se probó con sesión. La tabla de producción incluye los sitios web de Desarrollo en
 «Recurrente» (RCI, IAA, Ride CR): si no llevan cobro por producción, quien confirma los marca igual o la CSL le pone otro
 responsable. El fin del contrato no frena la generación de cuotas de una suscripción.
+
+
+## La escala que ve el cliente se publica, y todo se edita (2026-11-16)
+
+Elías: «Valida que toda la info de las páginas de resultados, del resumen y del departamento se pueda editar por el usuario
+de Nexus y, o sea, hay que publicarlo actualizado, lógico». La revisión encontró que el cliente veía cada cambio al recargar
+(un nivel arrastrado, un texto a medio corregir), que la mitad de la página de un área no se podía tocar y que lo escrito a
+mano se perdía sin aviso en tres caminos.
+
+- **El cliente ve una foto PUBLICADA, no lo medido hoy** (corrige «Viva, no una foto» del 30 oct). La foto es la página
+  entera que arma la puerta (`escalaParaElCliente`, sin citas) y se guarda junto al enlace (`AccesoALaEscala.publicada`,
+  `publicadaEn`, `publicadaPor`; SQL `2026-11-16-escala-publicada.sql`; formato en `lib/exploraciones/escala-publicada.ts`).
+  `escala-view.ts` sirve esa foto si la puerta dice que la exploración todavía se puede mostrar (`seMuestraAlCliente`):
+  archivarla o pasarla a otra empresa la sigue apagando aunque haya foto. *Por qué en el enlace y no en la exploración:*
+  la foto pesa (la página entera) y el contenido de la exploración se lee y se escribe en cada cambio.
+- **«Publicar» va al lado de «Acceso»** (`PublicarLaEscala.tsx`): dice «Publicado el …: el cliente ve esta versión» o
+  «Hay cambios que el cliente no ve» con el botón. Compara lo de hoy con la foto con las claves en orden (`jsonEnOrden`:
+  Postgres devuelve el JSON con otro orden y daría «cambiado» siempre) y sin la fecha del pie (sin niveles confirmados sale
+  de la última vez que se guardó cualquier cosa, y avisaba cambios que no había).
+- **Nada se publica solo.** Crear el PRIMER acceso publica (crearlo es querer compartirlo); después, solo una persona con
+  «Publicar». *Por qué:* la primera versión volvía a publicar en segundo plano cuando el agente terminaba la descripción, y
+  al renovar un enlace eso publicaba el borrador a medio editar (la revisión del 16 nov lo cazó). La descripción que el
+  agente escribe al crear el acceso le llega al cliente cuando alguien publica; mientras, ve la de respaldo.
+- **Revocar no borra la foto:** un enlace nuevo abre la última versión publicada, y el panel de «Acceso» dice de cuándo
+  es y si hay cambios sin publicar. Para retirar algo que el cliente ya vio hay que publicar la corrección.
+- **Sin equipos también se publica, si había foto:** es la forma de quitarle la página al cliente sin revocar el enlace
+  (queda «Tu escala todavía no está lista»). Sin foto y sin equipos no hay nada que publicar.
+- **Una foto de otro formato no se sirve:** la página dice «Tu escala todavía no está lista» hasta que alguien publique.
+  `FORMATO_DE_LA_FOTO` sube cuando cambia la forma de `EscalaParaElCliente`. *Por qué:* pintar una foto vieja con la vista
+  nueva podía romper la página del cliente sin que nada avisara.
+- **Los enlaces de antes** (Cicadex, Polaris, Tecnosagot y Centauro) reciben su primera foto con
+  `scripts/publicar-escalas-compartidas.ts`, antes y otra vez justo después del deploy (es idempotente: solo toca los
+  enlaces sin foto): lo mismo que veían hasta ese día. Ninguna de las cuatro tenía textos escritos a mano.
+- **Todo texto de la página se edita en su lugar**, por empresa (`contenido.textosDeLaPagina`, operación
+  `textoDeLaPagina`, claves en `lib/external/textos-de-la-pagina.ts`): en el área, los títulos, «Por dónde empezar» (título
+  y razón), lo que cuesta quedarse así, cada caso (título, qué logra, qué sube), cada riesgo, «Ver detalles» y el pie; en el
+  Resumen, la bajada, los títulos, los números y rótulos de «Lo que hicimos», quién hace cada paso, los textos de un equipo
+  sin hallazgos o por explorar, los pendientes que arma la página («Conversar con tu equipo de…») y el pie. Los casos, los
+  riesgos, la próxima área y esos pendientes se pueden **quitar** para el cliente (texto vacío): adentro se ven tachados con
+  «Volver a mostrarlo». Lo que siguen sin editarse a propósito: los niveles (se arrastran en el radar), los nombres de las
+  partes y de los niveles (son de la escala), los íconos de los pasos, las cejas y los botones.
+- **Lo que la escala calcula con los niveles se ata al texto que reemplaza** (`CLAVES.calculado`, con la huella del
+  original; también el pie con su fecha, la bajada, los rótulos de «Lo que hicimos», la próxima área y lo que sube cada
+  caso): si un nivel se mueve y la escala dice otra cosa, lo escrito para lo de antes deja de aplicarse, porque hablaba
+  de otra parte. Lo que no cambia de sentido (un título, un caso por su id) se nombra por su lugar y queda.
+- **Lo escrito a mano ya no se pierde sin aviso:** la descripción de un área escrita a mano sigue saliendo con los niveles
+  movidos (adentro dice «Los niveles cambiaron desde que se escribió»); la corrida en segundo plano del Acceso y del Resumen
+  ya no la reescribe; y «Rehacer con IA» pregunta antes de reemplazarla. El texto de la tarjeta de cada parte sigue atado
+  a su nivel (decisión del 8 nov), y ahora el cambio no le llega al cliente hasta publicar.
+- **Lo que queda pendiente:** por dentro se ven todos los pendientes del Resumen y el cliente ve hasta 3 de los de Nexus
+  (más los escritos a mano), sin marca de cuáles no salen; y lo que dice el documento general de la escala (riesgos, costo,
+  prioridades) sigue cambiando para todas las empresas cuando se publica la escala, ahora recién cuando cada una vuelve a
+  publicar su página.

@@ -157,7 +157,12 @@ export async function generarDescripcionesDeLaEscala(o: {
     return medidas.length > 0 && medidas.every((d) => x.porExplorar.includes(d.id));
   };
   const aEscribir = l.deLasAreas.filter(
-    (x) => x.resultado.preguntadas > 0 && !todoSospecha(x) && (!o.areaId || x.resultado.areaId === o.areaId) && !(o.soloFaltantes && x.descripcion.vigente),
+    (x) =>
+      x.resultado.preguntadas > 0 &&
+      !todoSospecha(x) &&
+      (!o.areaId || x.resultado.areaId === o.areaId) &&
+      // Lo escrito a mano no lo reescribe la corrida en segundo plano, aunque los niveles hayan cambiado (16 nov).
+      !(o.soloFaltantes && (x.descripcion.vigente || x.descripcion.origen === "mano")),
   );
   if (!aEscribir.length) {
     if (o.areaId) return { ok: false, status: 409, error: "Ese equipo todavía no tiene nada ubicado: no hay qué describir." };

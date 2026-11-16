@@ -4,7 +4,8 @@
  * `escalaParaElCliente` es lo único que puede leer de una exploración lo que llega a una página pública
  * (lib/exploraciones/lectores.test.ts lo hace cumplir). Devuelve lo que deja pasar ./escala-para-el-cliente.ts: lo que el
  * vendedor usó (con evidencia, o por explorar si es una hipótesis), de las áreas que eligió, sin citas, porqués, fuentes
- * ni quién la lleva. Sirve lo medido HOY: no hay foto.
+ * ni quién la lleva. Arma lo medido HOY: lo que ve el cliente es la foto que se PUBLICÓ con esto (16 nov,
+ * ./escala-publicada.ts); la página pública solo pregunta acá si todavía se puede mostrar (`seMuestraAlCliente`).
  * null = no se muestra: la exploración está archivada, es la de un proyecto (solo la preventa y la de la cuenta se
  * comparten), o su contenedor hoy es de otra empresa (una fusión o una reasignación pueden dejarlos cruzados: invariante
  * #1). `resultados` vacío = no hay ningún equipo para mostrar (sin elegir y sin nada usado). Un equipo elegido sin nada
@@ -52,6 +53,8 @@ export interface EscalaParaElCliente {
    * citas (`conCitas: false`); en la interna, con ellas, para verificar de dónde sale cada cifra.
    */
   resumen: ResumenDeLaPagina;
+  /** Los textos fijos de la página cambiados para esta empresa (lib/external/textos-de-la-pagina.ts): la vista los pone en su lugar. */
+  textos: Record<string, string>;
 }
 
 /** La página como la ve la pantalla interna: todas las áreas, y cuáles ve el cliente. */
@@ -60,6 +63,42 @@ export interface PaginaParaElCse extends EscalaParaElCliente {
 }
 
 type Areas = (lienzo: EscalaDelLienzo, estado: EstadoDeExploracion) => readonly string[];
+
+/**
+ * La exploración y su empresa, si la página se puede mostrar. null: no hay exploración, empresa o proyecto que cuadre (y,
+ * para la pública: archivada o la de un proyecto). La misma regla para armar la página y para servir la foto publicada.
+ */
+async function contenedorDeLaPagina(exploracionId: string, publica: boolean) {
+  const lectura = await leerExploracion(exploracionId);
+  if (lectura.estado !== "ok") return null;
+  const fila = lectura.fila;
+  if (publica && fila.archivadaEn) return null;
+  if (fila.projectId) {
+    const p = await prisma.project.findUnique({
+      where: { id: fila.projectId },
+      select: { clientId: true, serviceType: true },
+    });
+    if (p?.clientId !== fila.clientId) return null;
+    if (publica && p.serviceType !== SENTINEL_SERVICE_TYPE) return null;
+  }
+  const cliente = await prisma.client.findUnique({
+    where: { id: fila.clientId },
+    select: { name: true, emailDomains: true, logoUrl: true },
+  });
+  if (!cliente) return null;
+  return { fila, cliente };
+}
+
+/**
+ * Si la página de esta exploración todavía se puede mostrar afuera (16 nov): la foto publicada se sirve solo si lo de hoy
+ * lo permite. Archivar la exploración, pasarla a otra empresa o borrar la empresa la apagan aunque haya una foto.
+ */
+export async function seMuestraAlCliente(exploracionId: string): Promise<boolean> {
+  return !!(await contenedorDeLaPagina(exploracionId, true));
+}
+
+/** La página de la foto publicada (./escala-publicada.ts), por esta puerta: la página pública no lee otra cosa de acá. */
+export { paginaDeLaFoto } from "./escala-publicada";
 
 /** El cálculo de la página, uno solo para las dos puertas. null: no hay exploración, empresa o proyecto que cuadre. */
 async function armarLaPagina(
@@ -70,24 +109,9 @@ async function armarLaPagina(
   lienzo: EscalaDelLienzo | null;
   estado: EstadoDeExploracion;
 } | null> {
-  const lectura = await leerExploracion(exploracionId);
-  if (lectura.estado !== "ok") return null;
-  const fila = lectura.fila;
-  if (o.publica && fila.archivadaEn) return null;
-  if (fila.projectId) {
-    const p = await prisma.project.findUnique({
-      where: { id: fila.projectId },
-      select: { clientId: true, serviceType: true },
-    });
-    if (p?.clientId !== fila.clientId) return null;
-    if (o.publica && p.serviceType !== SENTINEL_SERVICE_TYPE) return null;
-  }
-  const cliente = await prisma.client.findUnique({
-    where: { id: fila.clientId },
-    select: { name: true, emailDomains: true, logoUrl: true },
-  });
-  if (!cliente) return null;
-
+  const c = await contenedorDeLaPagina(exploracionId, o.publica);
+  if (!c) return null;
+  const { fila, cliente } = c;
   const estado = estadoDesdeFila(fila);
   const vacio: EscalaParaElCliente = {
     empresa: cliente.name,
@@ -101,6 +125,7 @@ async function armarLaPagina(
     detalles: {},
     dimensionDelRiesgo: {},
     resumen: resumenParaLaPagina(null, [], {}, {}, { conCitas: false }),
+    textos: estado.contenido.textosDeLaPagina ?? {},
   };
   const general = await escalaParaExplorar();
   if (general.estado !== "ok") return { pagina: vacio, lienzo: null, estado };

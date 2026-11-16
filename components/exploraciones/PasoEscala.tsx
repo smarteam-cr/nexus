@@ -66,6 +66,7 @@ import { fraseDelFreno, ordenParaExplorar, partesParaExplorar, resumenDeLoExplor
 import { chequeoDelMapa, cuentaDelArea, fraseDeLaCuenta, loQueLaFrena, type PosicionEnElMapa } from "@/lib/exploraciones/mapa";
 import { diaCorto } from "@/lib/exploraciones/fechas";
 import AccesoALaEscala from "./AccesoALaEscala";
+import PublicarLaEscala from "./PublicarLaEscala";
 import ListaQueSeAnima from "./ListaQueSeAnima";
 import { AL_LUGAR, DEL_LUGAR, useLienzo } from "./contexto";
 import FranjaDeSugerencias, { IconoDeSugerencia } from "./FranjaDeSugerencias";
@@ -855,6 +856,7 @@ export default function PasoEscala({ agente }: { agente?: ReactNode } = {}) {
       {lugar !== "proyecto" && (
         <div className="flex flex-wrap items-center justify-end gap-2">
           {lugar === "preventa" && <UbicarConLasReuniones />}
+          <PublicarLaEscala />
           <AccesoALaEscala />
         </div>
       )}

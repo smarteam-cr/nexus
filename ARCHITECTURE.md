@@ -212,7 +212,7 @@ corre migraciones ni seeds (cap. D + RUNBOOK).
 
 ### F. Los tests: cinco familias que se rompen por razones distintas
 
-**970**<!-- sync:test-files --> archivos `*.test.ts` (unit), todos bajo `lib/` — el project
+**971**<!-- sync:test-files --> archivos `*.test.ts` (unit), todos bajo `lib/` — el project
 `unit` de vitest solo incluye `lib/**`, así que un test puesto en otra carpeta NO corre y
 nada avisa. `npm test` es la suite unit. Desde el 2026-08-01 (F4) el project `integration`
 está VIVO: `npm run test:int` corre los `*.int.test.ts` contra la base LOCAL `nexus_test`
@@ -314,7 +314,7 @@ Espejo del §1-UI para la OTRA familia de pantallas: los DOCUMENTOS que el motor
    **secciones creadas por el usuario** (`custom:*` → `lib/landing/custom-sections.ts`: crear,
    mover, ocultar, renombrar, borrar y sobrevivir al regenerar, sin DDL), y el **assist de documento** ("✨ Mejorar con IA": instrucción → propuesta por sección → revisar en `<AgentProposal>` → aplicar/descartar, con web_search a criterio del modelo — núcleo `lib/ai/assist.ts`, el contrato de secciones sale de las defs; doctrina en DECISIONS §Roles).
 6. **Checklist de superficies antes de dar por terminado un tipo**: editor interno (CSE) · vista externa del cliente (tuteo — se le habla de TÚ, ver GLOSSARY §vocabulario) · PDF si aplica (sin JS interactivo: nada de charts canvas, timers ni loops — SVG estático, ver DECISIONS §Roles/marcador). El CSE debe ver EXACTAMENTE lo que ve el cliente (adaptador compartido, un solo chokepoint de filas→data).
-7. **Publish/snapshot NO está unificado** (4 mecanismos conviven: BC snapshot, kickoff publishedSnapshot, cronograma publishedSnapshot, desarrollo vivo) — unificarlos es un plan futuro propio, anotado acá y en DECISIONS. Mientras tanto, un tipo nuevo que publique copia el patrón `publishedSnapshot` congelado + chokepoint server-side fail-closed (ver kickoff-view.ts).
+7. **Publish/snapshot NO está unificado** (5 mecanismos conviven: BC snapshot, kickoff publishedSnapshot, cronograma publishedSnapshot, la escala de una empresa `AccesoALaEscala.publicada` desde el 16 nov, desarrollo vivo) — unificarlos es un plan futuro propio, anotado acá y en DECISIONS. Mientras tanto, un tipo nuevo que publique copia el patrón `publishedSnapshot` congelado + chokepoint server-side fail-closed (ver kickoff-view.ts).
 
 ---
 

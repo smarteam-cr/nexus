@@ -109,7 +109,8 @@ type Destino =
 const CENSO: Record<string, { destino: Destino; motivo: string }> = {
   "lib/external/escala-view.ts": {
     destino: "escala-al-cliente",
-    motivo: "El chokepoint de /external/escala/[token]: del token a lo que deja pasar la puerta. No toca la exploración.",
+    motivo:
+      "El chokepoint de /external/escala/[token]: del token a la foto publicada (16 nov), si la puerta dice que todavía se muestra (seMuestraAlCliente). La foto la armó escalaParaElCliente al publicar. No toca la exploración.",
   },
   "app/api/sales/exploraciones/[id]/escala/descripcion/route.ts": {
     destino: "ventas",
@@ -533,7 +534,7 @@ const PUERTAS: Record<Exclude<Destino, "ventas">, { permitidas: RegExp; prohibid
     prohibidas: /\bparaLaPropuesta\b|bloqueParaLaPropuesta|exploracionParaElHandoff|internoParaElCse|bloqueParaElHandoff|leerExploracion\b/,
   },
   "escala-al-cliente": {
-    permitidas: /\bescalaParaElCliente\b/,
+    permitidas: /\bescalaParaElCliente\b|\bseMuestraAlCliente\b|\bpaginaDeLaFoto\b/,
     // Solo la puerta: nada más de lib/exploraciones, ni la fila por una relación, ni el contenido, ni el mapa (trae lo que
     // propone el agente), ni la propuesta o el handoff.
     prohibidas: /@\/lib\/exploraciones\/(?!escala-para-el-cliente-server")|\bexploracion\s*:|\binclude\s*:|leerExploracion\b|leerContenido|\.exploracionDeVenta\b|\bexploracionesDeVenta\b|posicionesDelMapa|\bparaLaPropuesta\b|bloqueParaLaPropuesta|exploracionParaElHandoff|internoParaElCse|bloqueParaElHandoff/,

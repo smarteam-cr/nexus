@@ -650,7 +650,8 @@
   color: #ffffff;
   text-wrap: balance;
 }
-.re-cierre > p {
+.re-cierre > p,
+.re-cierre > .re-p {
   margin: 0;
   font-size: 15.5px;
   color: #c9d2f0;

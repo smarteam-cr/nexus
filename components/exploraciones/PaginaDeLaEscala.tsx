@@ -21,16 +21,22 @@
  *   · en el radar, cada dimensión se ARRASTRA por su eje para cambiar su nivel (components/escala/ArrastreDelRadar.tsx;
  *     escribe por `useMarcarNivel`, lo mismo que los cinco niveles del detalle). Tocarla abre su panel, que es para LEER
  *     lo interno (evidencia o hipótesis, qué preguntar, «Llevar a la sesión N», los niveles): ahí no se edita texto.
+ *   · los textos FIJOS de la página (16 nov; Elías: «toda la info… se pueda editar»): los títulos, «Por dónde empezar»,
+ *     lo que cuesta quedarse así, los casos, los riesgos, «Ver detalles», la bajada y lo que hicimos del Resumen, el pie.
+ *     Se editan en su lugar (`TextoFijo`, operación `textoDeLaPagina`) y los casos, los riesgos y lo que arma la página
+ *     se pueden quitar para el cliente (lib/external/textos-de-la-pagina.ts).
+ * Nada de esto lo ve el cliente hasta «Publicar» (16 nov, PublicarLaEscala.tsx, al lado de «Acceso»): el enlace sirve la
+ * foto publicada.
  * Arriba de la página, fuera de ella: la línea del área (si la ve el cliente, cuánto tiene, sumarla o sacarla) y el
  * «Contexto para la descripción», que lee el agente de la descripción y NO ve el cliente (`contextoDeLaEscala`).
  * Todo se guarda en la exploración; la página se vuelve a pedir cuando cambia su versión. Lo que propone el agente y nadie
  * usó NO se dibuja: el cliente no lo ve. Para eso están la franja de sugerencias y la vista «Comparar áreas».
  */
 import { useEffect, useState } from "react";
-import { Alert, Button, Drawer, Field, Skeleton, Textarea, useToast } from "@/components/ui";
+import { Alert, Button, ConfirmDialog, Drawer, Field, Skeleton, Textarea, useToast } from "@/components/ui";
 import ArrastreDelRadar from "@/components/escala/ArrastreDelRadar";
 import { PESTANA_DEL_RESUMEN } from "@/components/external/test/ArribaDeLaEscala";
-import ResultadoDelTestVista, { type EdicionDeLaPagina } from "@/components/external/test/ResultadoDelTestVista";
+import ResultadoDelTestVista, { type EdicionDeLaPagina, type EdicionDeUnTextoFijo } from "@/components/external/test/ResultadoDelTestVista";
 import ResumenDeLaEscalaVista, { type EdicionDelResumen } from "@/components/external/test/ResumenDeLaEscalaVista";
 import TextoEditableDeLaPagina from "@/components/external/test/TextoEditableDeLaPagina";
 import type { Letra } from "@/lib/escala/documento/tipos";
@@ -38,9 +44,11 @@ import { MAX_CONTEXTO_DE_LA_ESCALA, MAX_TEXTO_DEL_RADAR } from "@/lib/exploracio
 import { textoVigenteDelRadar } from "@/lib/exploraciones/escala-para-el-cliente";
 import type { PaginaParaElCse } from "@/lib/exploraciones/escala-para-el-cliente-server";
 import { diaCorto } from "@/lib/exploraciones/fechas";
+import { MAX_TEXTO_DE_LA_PAGINA } from "@/lib/external/textos-de-la-pagina";
 import type { CitaDelResumen } from "@/lib/exploraciones/resumen-de-la-escala";
 import { chequeoDelMapa, cuentaDelArea, fraseDeLaCuenta } from "@/lib/exploraciones/mapa";
 import { AL_LUGAR, DEL_LUGAR, useLienzo } from "./contexto";
+import { avisarQueLaEscalaCambio } from "./escala-al-dia";
 import { DetalleDeDimension, useMarcarNivel } from "./DetalleDeLaDimension";
 
 /** Lo que responde la ruta de la descripción (la sesión que la hizo): de dónde sale la de cada área. */
@@ -64,6 +72,8 @@ function usePagina(id: string, version: number) {
         const data = (await r.json().catch(() => ({}))) as PaginaParaElCse & { error?: string };
         if (!r.ok) throw new Error(data.error ?? "No se pudo armar la página.");
         setEstado({ pagina: data, error: null });
+        // «Publicar» vuelve a mirar si hay algo que el cliente no ve.
+        avisarQueLaEscalaCambio();
       })
       .catch((e: unknown) => {
         if (!ctrl.signal.aborted) setEstado((x) => ({ ...x, error: e instanceof Error ? e.message : "No se pudo armar la página." }));
@@ -220,6 +230,49 @@ function DeDondeSale({ citas, noSostiene = false }: { citas: readonly CitaDelRes
   );
 }
 
+/**
+ * Un texto fijo de la página, editable en su lugar (16 nov). Guardar el de siempre (o vaciarlo) lo devuelve al de
+ * siempre; «Quitar para el cliente» deja la pieza fuera de la página (se ve tachada adentro, con «Volver a mostrarla»).
+ */
+function TextoFijo({ o, guardar }: { o: EdicionDeUnTextoFijo; guardar: (clave: string, texto: string | null) => Promise<boolean> }) {
+  if (o.quitar?.quitada)
+    return (
+      <span className="rd-quitada">
+        <s>{o.original}</s>{" "}
+        <span className="rd-quitada-nota">
+          No lo ve el cliente.{" "}
+          <button type="button" className="rd-btn-enlace" onClick={() => void guardar(o.quitar!.clave, null)}>
+            Volver a mostrarlo
+          </button>
+        </span>
+      </span>
+    );
+  const cambiado = o.valor !== o.original;
+  return (
+    <TextoEditableDeLaPagina
+      valor={o.valor}
+      vacio="+ Escribir"
+      max={MAX_TEXTO_DE_LA_PAGINA}
+      etiqueta={o.etiqueta}
+      quitar={cambiado ? "Volver al texto de siempre" : null}
+      acciones={
+        o.quitar
+          ? () => (
+              <button type="button" className="rd-btn-enlace" onClick={() => void guardar(o.quitar!.clave, "")}>
+                Quitar para el cliente
+              </button>
+            )
+          : undefined
+      }
+      onGuardar={(texto) => {
+        const t = texto?.trim() ?? "";
+        // Vacío o igual al de siempre: vuelve el de siempre (quitar una pieza es el botón, no borrar el texto).
+        return guardar(o.clave, !t || t === o.original.trim() ? null : t);
+      }}
+    />
+  );
+}
+
 /** Lo que responde la ruta del Resumen al armarlo. */
 interface ResumenArmado {
   descartados?: string[];
@@ -235,6 +288,8 @@ export default function PaginaDeLaEscala() {
   const [elegida, setElegida] = useState<string | null>(null);
   const [abierta, setAbierta] = useState<string | null>(null);
   const [rehaciendo, setRehaciendo] = useState(false);
+  /** «Rehacer con IA» sobre una descripción escrita a mano: se pregunta antes de pisarla (16 nov). */
+  const [pisarLaEscrita, setPisarLaEscrita] = useState(false);
   const [armando, setArmando] = useState(false);
   /** Lo que el agente escribió y no pasó la verificación la última vez que se armó (para revisarlo). */
   const [descartados, setDescartados] = useState<string[] | null>(null);
@@ -277,6 +332,14 @@ export default function PaginaDeLaEscala() {
     setAbierta(null);
   };
 
+  /** Guarda un texto fijo de la página (16 nov) y trae la página al día. */
+  const guardarFijo = async (clave: string, texto: string | null) => {
+    const ok = await cambiar([{ op: "textoDeLaPagina", clave, texto }]);
+    if (ok) otraVez();
+    return ok;
+  };
+  const fijo = puedeEditar ? (o: EdicionDeUnTextoFijo) => <TextoFijo o={o} guardar={guardarFijo} /> : undefined;
+
   if (enElResumen) {
     const armar = async () => {
       setArmando(true);
@@ -314,6 +377,7 @@ export default function PaginaDeLaEscala() {
           o.valor
         ),
       deDonde: (citas, d) => <DeDondeSale citas={citas} noSostiene={d?.noSostiene} />,
+      fijo,
     };
     // Las cifras que el cliente no ve (Elías, 9 nov): adentro salen marcadas, con el porqué, para corregirlas o quitarlas.
     const cifras = res.tarjetas.flatMap((t) => t.subequipos.flatMap((x) => x.cifras));
@@ -386,6 +450,7 @@ export default function PaginaDeLaEscala() {
             fecha={pagina.fecha}
             pestanas={[{ id: PESTANA_DEL_RESUMEN, nombre: "Resumen", href: "#" }, ...pestanasDeLasAreas]}
             edicion={edicionDelResumen}
+            textos={pagina.textos}
           />
         </div>
       </div>
@@ -417,10 +482,13 @@ export default function PaginaDeLaEscala() {
     otraVez();
     return true;
   };
-  const rehacer = () => {
+  const rehacerYa = () => {
+    setPisarLaEscrita(false);
     setRehaciendo(true);
     void escribirDescripcion(null, true).finally(() => setRehaciendo(false));
   };
+  // Lo escrito a mano no se pisa sin preguntar (16 nov): antes «Rehacer con IA» lo reemplazaba sin aviso.
+  const rehacer = () => (descripcion?.origen === "mano" ? setPisarLaEscrita(true) : rehacerYa());
 
   const edicion: EdicionDeLaPagina = {
     alElegirArea: elegir,
@@ -510,6 +578,7 @@ export default function PaginaDeLaEscala() {
     ayudaDelRadar: puedeEditar
       ? "Así lo ve el cliente. Arrastra una parte por su eje para cambiar su nivel; en su tarjeta, toca el texto para cambiarlo. Tócala en el radar para ver lo interno."
       : "Así lo ve el cliente. Toca una parte para ver lo interno.",
+    fijo,
   };
 
   return (
@@ -538,11 +607,21 @@ export default function PaginaDeLaEscala() {
             areas: pestanasDeLasAreas,
             porExplorar: pagina.porExplorar[r.areaId] ?? [],
             resumen: { href: "#" },
+            textos: pagina.textos,
           }}
           edicion={edicion}
         />
       </div>
       {abierta && <PanelDeLaDimension key={abierta} id={abierta} onCerrar={() => setAbierta(null)} />}
+      <ConfirmDialog
+        open={pisarLaEscrita}
+        onCancel={() => setPisarLaEscrita(false)}
+        onConfirm={rehacerYa}
+        title="¿Reemplazar la descripción que escribió tu equipo?"
+        description={`Nexus va a escribir una nueva para ${r.areaNombre} y la tuya se pierde.`}
+        confirmLabel="Sí, reemplazarla"
+        variant="destructive"
+      />
     </div>
   );
 }

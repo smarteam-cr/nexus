@@ -37,6 +37,7 @@
  */
 import type { ReactNode } from "react";
 import type { Letra } from "@/lib/escala/documento/tipos";
+import { CLAVES, quitadaDeLaPagina, textoDeLaPagina, type TextosDeLaPagina } from "@/lib/external/textos-de-la-pagina";
 import type { DetalleDeLaDimension } from "@/lib/tests-diagnostico/detalle-de-la-dimension";
 import { etiquetaDeIndustria, OTRA_INDUSTRIA } from "@/lib/tests-diagnostico/direccion-publica";
 import { ENLACE_DE_OTRA_EMPRESA, enlaceDeOtraArea, puntajeDeLaDimension } from "@/lib/tests-diagnostico/pagina-del-resultado";
@@ -156,14 +157,16 @@ function textoDeLaPrioridad(d: DetalleDeLaDimension): { titulo: string; texto: s
 }
 
 /** «Ver detalles» de una barra: qué hacer (no cómo está: eso lo dice la tarjeta del radar). */
-function VerDetalles({ d, esEstimado }: { d: DetalleDeLaDimension; esEstimado: boolean }) {
+function VerDetalles({ d, esEstimado, texto, editable = false }: { d: DetalleDeLaDimension; esEstimado: boolean; texto?: (original: string) => ReactNode; editable?: boolean }) {
   const p = textoDeLaPrioridad(d);
+  // Adentro el texto es un editor (un bloque): no puede ir dentro de un <p>.
+  const Parrafo = editable ? "div" : "p";
   return (
     <details className="rd-detalles">
       <summary>Ver detalles</summary>
       <div className="rd-detalles-cuerpo">
         <p className="rd-detalles-k">{p.titulo}</p>
-        <p className="rd-detalles-prioridad">{p.texto}</p>
+        <Parrafo className="rd-detalles-prioridad">{texto ? texto(p.texto) : p.texto}</Parrafo>
         {esEstimado && <p className="rd-detalles-corroborar">{FALTA_CORROBORAR}</p>}
       </div>
     </details>
@@ -366,6 +369,21 @@ export interface EdicionDeLaPagina {
   pieDeLaTarjeta?: (dimensionId: string) => ReactNode;
   /** La ayuda debajo del radar, con lo que se puede hacer adentro. */
   ayudaDelRadar?: string;
+  /**
+   * Un texto fijo de la página (un título, «Por dónde empezar», un caso, un riesgo, lo que priorizar), editable en su
+   * lugar para esta empresa (16 nov, lib/external/textos-de-la-pagina.ts). `valor`: el que se ve (el cambiado o el
+   * de siempre); `quitar`: la pieza se puede quitar para el cliente (su clave, y si ya está quitada).
+   */
+  fijo?: (o: EdicionDeUnTextoFijo) => ReactNode;
+}
+
+/** Lo que recibe la pantalla interna para editar un texto fijo de la página (el Resumen también lo usa). */
+export interface EdicionDeUnTextoFijo {
+  clave: string;
+  valor: string;
+  original: string;
+  etiqueta: string;
+  quitar?: { clave: string; quitada: boolean };
 }
 
 /** El color de cada nivel en la página editorial (15 nov): el mismo del artefacto aprobado. */
@@ -416,10 +434,25 @@ function AreaDeLaEscala({
   fecha: string | null;
   detalles: Record<string, DetalleDeLaDimension> | null;
   dimensionDelRiesgo: Record<string, string>;
-  deLaEscala: { areas: PestanaDeLaEscala[]; porExplorar?: readonly string[]; resumen?: { href: string } | null };
+  deLaEscala: { areas: PestanaDeLaEscala[]; porExplorar?: readonly string[]; resumen?: { href: string } | null; textos?: TextosDeLaPagina };
   edicion: EdicionDeLaPagina | null;
 }) {
   const rec = r.recomendacion;
+  // Los textos fijos, cambiados para esta empresa (16 nov): afuera el cambiado; adentro, editable en su lugar.
+  const textos = deLaEscala.textos ?? null;
+  const editable = !!edicion?.fijo;
+  const fijo = (clave: string, original: string, etiqueta: string, quitar?: string): ReactNode => {
+    const valor = textoDeLaPagina(textos, clave, original);
+    return edicion?.fijo ? edicion.fijo({ clave, valor, original, etiqueta, quitar: quitar ? { clave: quitar, quitada: quitadaDeLaPagina(textos, quitar) } : undefined }) : valor;
+  };
+  /** Si una pieza que se puede quitar sale: afuera, no si se quitó; adentro sale siempre (marcada). */
+  const sale = (clave: string) => editable || !quitadaDeLaPagina(textos, clave);
+  const area = r.areaId;
+  /** Un párrafo con un texto fijo: adentro es un editor (un bloque), que no puede ir dentro de un <p>. */
+  const P = editable ? "div" : "p";
+  const claseP = editable ? "ed-p" : undefined;
+  const casos = r.casos.filter((c) => sale(CLAVES.caso(area, c.id)));
+  const riesgos = r.riesgos.filter((x) => sale(CLAVES.calculado(area, "riesgo", x)));
   const frena = rec?.tipo === "trabajar" ? rec.dimensionId : null;
   const porExplorar = deLaEscala.porExplorar ?? [];
   const pestanas: PestanaDeLaEscala[] = [...(deLaEscala.resumen ? [{ id: PESTANA_DEL_RESUMEN, nombre: "Resumen", href: deLaEscala.resumen.href }] : []), ...deLaEscala.areas];
@@ -520,7 +553,7 @@ function AreaDeLaEscala({
                 Las {r.total} partes de {r.areaNombre}
               </p>
               <h2 className="ed-titulo" id="ed-t-radar">
-                Dónde está hoy cada parte.
+                {fijo(CLAVES.delArea(area, "titulo.radar"), "Dónde está hoy cada parte.", "Título del radar")}
               </h2>
             </div>
             {/* El interruptor de RadarDeUnaEmpresa (`rde-check`), aquí arriba: su CSS muestra los puntajes sin JS. */}
@@ -576,62 +609,69 @@ function AreaDeLaEscala({
               <div className="ed-empezar-texto">
                 {rec.tipo === "trabajar" ? (
                   <h2 className="ed-titulo" id="ed-t-empezar">
-                    Llevar {rec.dimensionNombre.toLowerCase()} a {rec.objetivoNombre}.
+                    {fijo(
+                      CLAVES.calculado(area, "empezar.titulo", `Llevar ${rec.dimensionNombre.toLowerCase()} a ${rec.objetivoNombre}.`),
+                      `Llevar ${rec.dimensionNombre.toLowerCase()} a ${rec.objetivoNombre}.`,
+                      "Título de «Por dónde empezar»",
+                    )}
                   </h2>
                 ) : (
                   <h2 className="rd-sr" id="ed-t-empezar">
                     Por dónde empezar
                   </h2>
                 )}
-                <p>{rec.razon}</p>
+                <P className={claseP}>{fijo(CLAVES.calculado(area, "empezar.razon", rec.razon), rec.razon, "Por qué empezar por ahí")}</P>
                 {rec.tipo === "trabajar" && porExplorar.includes(rec.dimensionId) && <p className="ed-nota">{POR_EXPLORAR}</p>}
               </div>
               {rec.tipo === "trabajar" && rec.costoDeQuedarse && (
                 <div className="ed-costo">
                   <span>Lo que cuesta quedarse así</span>
-                  <p>{rec.costoDeQuedarse}</p>
+                  <P className={claseP}>{fijo(CLAVES.calculado(area, "costo", rec.costoDeQuedarse), rec.costoDeQuedarse, "Lo que cuesta quedarse así")}</P>
                 </div>
               )}
             </div>
           </section>
         )}
 
-        {r.casos.length > 0 && (
+        {casos.length > 0 && (
           <section className="ed-parte ed-envoltura" aria-labelledby="ed-t-casos" data-revela="">
             <p className="ed-ceja">Lo que lo mueve</p>
             <h2 className="ed-titulo" id="ed-t-casos">
-              Lo que haríamos contigo.
+              {fijo(CLAVES.delArea(area, "titulo.casos"), "Lo que haríamos contigo.", "Título de lo que haríamos")}
             </h2>
             <ol className="ed-casos">
-              {r.casos.map((c, i) => (
-                <li key={c.id} className="ed-caso">
+              {casos.map((c, i) => (
+                <li key={c.id} className={`ed-caso${quitadaDeLaPagina(textos, CLAVES.caso(area, c.id)) ? " ed-quitado" : ""}`}>
                   <span className="ed-num">{String(i + 1).padStart(2, "0")} /</span>
                   <div>
-                    <h3>{c.titulo}</h3>
-                    <p>{c.promesa}</p>
+                    <h3>{fijo(CLAVES.caso(area, c.id, "titulo"), c.titulo, "Título del caso", CLAVES.caso(area, c.id))}</h3>
+                    <P className={claseP}>{fijo(CLAVES.caso(area, c.id, "promesa"), c.promesa, "Qué logra el caso")}</P>
                   </div>
-                  {c.razon && <p className="ed-sube">↗ {c.razon}</p>}
+                  {c.razon && <P className="ed-sube">↗ {fijo(CLAVES.calculado(area, `caso.${c.id}.razon`, c.razon), c.razon, "Qué parte sube")}</P>}
                 </li>
               ))}
             </ol>
           </section>
         )}
 
-        {r.nivel && r.riesgos.length > 0 && (
+        {r.nivel && riesgos.length > 0 && (
           // Son los riesgos TÍPICOS del nivel, no algo que la empresa contó (10 nov, regla 4): el título lo dice. Sin nivel
           // («En medición») no hay «este nivel» del que hablar (16 nov).
           <section className="ed-parte ed-envoltura" aria-labelledby="ed-t-riesgos" data-revela="">
             <p className="ed-ceja">Lo que suele poner en riesgo a un área en este nivel</p>
             <h2 className="ed-titulo" id="ed-t-riesgos">
-              Lo que puede estar pasando sin que se note.
+              {fijo(CLAVES.delArea(area, "titulo.riesgos"), "Lo que puede estar pasando sin que se note.", "Título de los riesgos")}
             </h2>
             <ul className="ed-riesgos">
-              {r.riesgos.map((x) => (
-                <li key={x}>
-                  {dimensionDelRiesgo[x] && <span className="ed-tag">{dimensionDelRiesgo[x]}</span>}
-                  <p>{x}</p>
-                </li>
-              ))}
+              {riesgos.map((x) => {
+                const clave = CLAVES.calculado(area, "riesgo", x);
+                return (
+                  <li key={x} className={quitadaDeLaPagina(textos, clave) ? "ed-quitado" : undefined}>
+                    {dimensionDelRiesgo[x] && <span className="ed-tag">{dimensionDelRiesgo[x]}</span>}
+                    <P className={claseP}>{fijo(clave, x, "Un riesgo", clave)}</P>
+                  </li>
+                );
+              })}
             </ul>
           </section>
         )}
@@ -641,7 +681,7 @@ function AreaDeLaEscala({
           <section className="ed-parte ed-envoltura" aria-labelledby="ed-t-partes" data-revela="">
             <p className="ed-ceja">Cómo está cada parte</p>
             <h2 className="ed-titulo" id="ed-t-partes">
-              Parte por parte, sobre 100.
+              {fijo(CLAVES.delArea(area, "titulo.partes"), "Parte por parte, sobre 100.", "Título de cada parte")}
             </h2>
             <div className="ed-partes">
               {(["base", "produccion"] as const).map((clave) => {
@@ -688,7 +728,14 @@ function AreaDeLaEscala({
                               "Sin medir todavía"
                             )}
                           </span>
-                          {medida(d) && det && <VerDetalles d={det} esEstimado={false} />}
+                          {medida(d) && det && (
+                            <VerDetalles
+                              d={det}
+                              esEstimado={false}
+                              editable={editable}
+                              texto={(original) => fijo(CLAVES.detalle(d.id, original), original, `Qué priorizar en ${d.nombre}`)}
+                            />
+                          )}
                         </div>
                       );
                     })}
@@ -710,7 +757,12 @@ function AreaDeLaEscala({
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={LOGO_DE_COLOR} alt="Smarteam" width={82} height={18} />· Escala de rendimiento
           </span>
-          <span>{fecha ? `Medido el ${fechaLarga(fecha)}, con lo que conversamos contigo.` : "Medido con lo que conversamos contigo."}</span>
+          <span>
+            {(() => {
+              const original = fecha ? `Medido el ${fechaLarga(fecha)}, con lo que conversamos contigo.` : "Medido con lo que conversamos contigo.";
+              return fijo(CLAVES.calculado(area, "pie", original), original, "El pie de la página");
+            })()}
+          </span>
         </footer>
       </AnimacionesDelResultado>
     </div>
@@ -783,6 +835,8 @@ export default function ResultadoDelTestVista({
     porExplorar?: readonly string[];
     /** La pestaña «Resumen» (9 nov), la primera: dónde está la portada. Sin él, no hay pestaña de Resumen. */
     resumen?: { href: string } | null;
+    /** Los textos fijos cambiados para esta empresa (16 nov, lib/external/textos-de-la-pagina.ts). */
+    textos?: TextosDeLaPagina;
   } | null;
   /**
    * El logo de la ficha del cliente (`logoQueSeSirve`). Desde la página editorial (15 nov) la página de un área ya no lo

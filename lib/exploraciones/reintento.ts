@@ -119,6 +119,8 @@ function operacionSegura(op: Operacion, antes: EstadoDeExploracion, ahora: Estad
       return igual(ca.textosDelRadar?.[op.dimensionId], cb.textosDelRadar?.[op.dimensionId]);
     case "contextoDeLaEscala":
       return igual(ca.contextoDeLaEscala?.[op.areaId], cb.contextoDeLaEscala?.[op.areaId]);
+    case "textoDeLaPagina":
+      return igual(ca.textosDeLaPagina?.[op.clave], cb.textosDeLaPagina?.[op.clave]);
     case "medicion":
       return Object.keys(op.medicion).every((k) => igual(ca.medicion[k as keyof typeof ca.medicion], cb.medicion[k as keyof typeof cb.medicion]));
     case "casoDeUso":

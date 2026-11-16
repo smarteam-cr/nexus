@@ -4,7 +4,8 @@
  * AccesoALaEscala — el botón «Acceso» de La escala, en la cuenta y en la preventa (Elías, 30 oct). Con los estilos del
  * acceso de un proyecto (ExternalAccessPanel): verde activo, ámbar revocado, candado si todavía no se generó. Crea el
  * enlace con que la empresa ve su escala, una página como la del resultado del test, y lo revoca.
- * Datos: /api/sales/exploraciones/[id]/acceso. Lo que ve el cliente lo decide lib/exploraciones/escala-para-el-cliente.ts.
+ * Datos: /api/sales/exploraciones/[id]/acceso. Lo que ve el cliente lo decide lib/exploraciones/escala-para-el-cliente.ts,
+ * y le llega con «Publicar» (16 nov, PublicarLaEscala.tsx): crear el acceso publica la primera vez.
  *
  * «Qué equipos ve» (2026-11-08, Centauro Solutions): Nexus detecta de qué equipos se habló (equipos-de-la-escala.ts) y el
  * vendedor elige cuáles salen, con una casilla por área. Sin elegir, salen las en juego con algo usado (como antes: un
@@ -22,6 +23,7 @@ import { areasParaElCliente, type AreaDeLaEscala } from "@/lib/exploraciones/equ
 import { diaYHora } from "@/lib/exploraciones/fechas";
 import { useAreasDeLaEscala } from "./useAreasDeLaEscala";
 import { useLienzo } from "./contexto";
+import { avisarQueLaEscalaCambio, ESCALA_PUBLICADA } from "./escala-al-dia";
 
 /** Lo que se sabe de un área, en una línea: lo que vería el cliente o por qué no se puede elegir. */
 function loQueTiene(a: AreaDeLaEscala): string {
@@ -116,12 +118,21 @@ export default function AccesoALaEscala() {
     // Con cada cambio de lo confirmado cambia lo que vería el cliente.
   }, [pedir, exp.version]);
 
+  // Al publicar, la fecha de lo publicado que dice el panel.
+  useEffect(() => {
+    const otraVez = () => void pedir("GET").then(setAcceso, () => undefined);
+    window.addEventListener(ESCALA_PUBLICADA, otraVez);
+    return () => window.removeEventListener(ESCALA_PUBLICADA, otraVez);
+  }, [pedir]);
+
   const hacer = async (method: "POST" | "DELETE") => {
     setTrabajando(true);
     setError(null);
     setRevocando(false);
     try {
       setAcceso(await pedir(method));
+      // «Publicar» aparece (o se va) con el enlace.
+      avisarQueLaEscalaCambio();
     } catch (e) {
       setError(e instanceof Error ? e.message : "No se pudo hacer el cambio.");
     } finally {
@@ -169,7 +180,11 @@ export default function AccesoALaEscala() {
           {acceso?.enlace && (
             <>
               <input readOnly value={acceso.enlace} aria-label="Enlace para el cliente" onFocus={(e) => e.target.select()} className="w-full rounded-md border border-line bg-surface-muted px-2.5 py-1.5 text-[13px] text-fg-secondary" />
-              <p className="text-xs text-fg-muted">{acceso.ultimaVista ? `Se abrió por última vez el ${diaYHora(acceso.ultimaVista)}.` : "Todavía nadie lo ha abierto."} La página muestra lo medido hoy. La preventa y la cuenta tienen cada una su enlace: revocar este no cierra el otro.</p>
+              <p className="text-xs text-fg-muted">{acceso.ultimaVista ? `Se abrió por última vez el ${diaYHora(acceso.ultimaVista)}.` : "Todavía nadie lo ha abierto."}{" "}
+                {acceso.publicadaEn
+                  ? `El cliente ve lo que se publicó el ${diaYHora(acceso.publicadaEn)}${acceso.sinPublicar ? ": lo que cambiaste después le llega con «Publicar»" : ""}.`
+                  : "El cliente todavía no ve nada: falta publicar."}{" "}
+                La preventa y la cuenta tienen cada una su enlace: revocar este no cierra el otro.</p>
               <div className="flex flex-wrap items-center gap-2">
                 <BotonAzul onClick={() => void copiar(acceso.enlace!)}>Copiar enlace</BotonAzul>
                 <a href={acceso.enlace} target="_blank" rel="noreferrer" className={BOTON_DE_HERRAMIENTA}>

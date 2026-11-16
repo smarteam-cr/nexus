@@ -42,7 +42,9 @@ import {
   type SubequipoDeLaPagina,
   type TarjetaDeLaPagina,
 } from "@/lib/external/pagina-del-resumen";
+import { CLAVES, huella, quitadaDeLaPagina, textoDeLaPagina, type TextosDeLaPagina } from "@/lib/external/textos-de-la-pagina";
 import AnimacionesDelResultado from "./AnimacionesDelResultado";
+import type { EdicionDeUnTextoFijo } from "./ResultadoDelTestVista";
 import { ArribaDeLaEscala, PESTANA_DEL_RESUMEN, type PestanaDeLaEscala } from "./ArribaDeLaEscala";
 import "./diagnostico.css";
 import "./resultado.css";
@@ -65,6 +67,8 @@ export interface EdicionDelResumen {
   texto: (o: { clave: string; valor: string | null; vacio: string; etiqueta: string; tope: number; quitar?: string | null }) => ReactNode;
   /** Debajo de una pieza, solo adentro: de dónde sale. `noSostiene`: la cita ya no dice la cifra. */
   deDonde?: (citas: readonly CitaDelResumen[], o?: { noSostiene?: boolean }) => ReactNode;
+  /** Un texto fijo de la página (la bajada, los títulos, lo que hicimos, el pie), editable para esta empresa (16 nov). */
+  fijo?: (o: EdicionDeUnTextoFijo) => ReactNode;
 }
 
 /** La señal de cómo se sabe una cifra: un símbolo y su texto, nunca solo el color. «Por confirmar» va sin signo. */
@@ -151,6 +155,7 @@ export default function ResumenDeLaEscalaVista({
   fecha = null,
   pestanas,
   edicion = null,
+  textos = null,
 }: {
   resumen: ResumenDeLaPagina;
   empresa: string | null;
@@ -161,6 +166,8 @@ export default function ResumenDeLaEscalaVista({
   /** Las pestañas de arriba, con la del Resumen primero. */
   pestanas: readonly PestanaDeLaEscala[];
   edicion?: EdicionDelResumen | null;
+  /** Los textos fijos cambiados para esta empresa (16 nov, lib/external/textos-de-la-pagina.ts). */
+  textos?: TextosDeLaPagina | null;
 }) {
   const nombreDeLaEmpresa = empresa || dominio || "";
   // Un equipo sin sesiones: su pestaña se ve deshabilitada y afuera no se abre (Elías, 11 nov).
@@ -168,6 +175,21 @@ export default function ResumenDeLaEscalaVista({
   const hrefDe = (id: string) => pestanas.find((p) => p.id === id)?.href ?? "#";
   /** Un texto: editable adentro, plano afuera. */
   const texto = (o: Parameters<EdicionDelResumen["texto"]>[0]) => (edicion ? edicion.texto(o) : o.valor);
+  /** Un texto fijo de la página (16 nov): afuera el cambiado para esta empresa; adentro, editable en su lugar. */
+  /**
+   * `atado`: lo escrito vale solo mientras el de siempre sea el mismo (un número de «Lo que hicimos», quién hace un paso:
+   * al rehacer el Resumen cambian, y lo escrito para el de antes no debe quedar pegado al nuevo).
+   */
+  const claveDe = (nombre: string, original: string, atado: boolean) => CLAVES.delResumen(atado ? `${nombre}.${huella(original)}` : nombre);
+  const fijo = (nombre: string, original: string, etiqueta: string, quitable = false, atado = false): ReactNode => {
+    const clave = claveDe(nombre, original, atado);
+    const valor = textoDeLaPagina(textos, clave, original);
+    return edicion?.fijo ? edicion.fijo({ clave, valor, original, etiqueta, quitar: quitable ? { clave, quitada: quitadaDeLaPagina(textos, clave) } : undefined }) : valor;
+  };
+  /** Si una pieza que se puede quitar sale: afuera, no si se quitó; adentro sale siempre (marcada). */
+  const sale = (nombre: string, original: string, atado = false) => !!edicion?.fijo || !quitadaDeLaPagina(textos, claveDe(nombre, original, atado));
+  /** Un párrafo con un texto fijo: adentro es un editor (un bloque), que no puede ir dentro de un <p>. */
+  const P = edicion?.fijo ? "div" : "p";
   const deDonde = (citas: readonly CitaDelResumen[] | undefined, o?: { noSostiene?: boolean }) => (edicion?.deDonde && citas ? edicion.deDonde(citas, o) : null);
   /** «Ver diagnóstico de Servicio →»: su pestaña (un botón, como en los otros diseños). */
   const alDetalle = (areaId: string, contenido: ReactNode) =>
@@ -218,6 +240,8 @@ export default function ResumenDeLaEscalaVista({
   const conTraba = [...pasos, ...continuos].filter((e) => e.friccion || edicion);
   const numeroDeLaTraba = (e: EtapaDeLaPagina) => (e.friccion ? [...pasos, ...continuos].filter((x) => x.friccion).indexOf(e) + 1 : 0);
   const nivelDe = (t: TarjetaDeLaPagina) => (t.porExplorar ? null : (t.nivel ?? null));
+  // Los pendientes que arma la página («Conversar con tu equipo de…») se pueden quitar; sin ninguno, no hay banda.
+  const pendientes = resumen.pendientes.filter((p) => p.clave || sale(`pendiente.${p.id}`, p.texto, true));
   let fila = 0;
 
   /**
@@ -336,7 +360,7 @@ export default function ResumenDeLaEscalaVista({
           <Nivel letra={nivelDe(t)} nombre={t.nivelNombre} />
         </div>
         <div className="re-equipo-medio">
-          <p className="re-hace">Lo completamos contigo en la próxima sesión.</p>
+          <P className="re-hace">{fijo(`sin-contenido.${t.areaId}`, "Lo completamos contigo en la próxima sesión.", `Lo que dice ${t.nombre} sin hallazgos`)}</P>
           {alDetalle(t.areaId, `Ver diagnóstico de ${t.nombre} →`)}
         </div>
         <div />
@@ -355,7 +379,7 @@ export default function ResumenDeLaEscalaVista({
           <Nivel letra={null} nombre="Por explorar" />
         </div>
         <div className="re-equipo-medio">
-          <p className="re-hace">Lo conversamos en la sesión con tu equipo de {t.nombre}.</p>
+          <P className="re-hace">{fijo(`por-explorar.${t.areaId}`, `Lo conversamos en la sesión con tu equipo de ${t.nombre}.`, `Lo que dice ${t.nombre} por explorar`)}</P>
         </div>
         <div />
       </article>
@@ -383,9 +407,16 @@ export default function ResumenDeLaEscalaVista({
             {edicion && !conTesis && tesis.nueva && (
               <div className="re-agregar">{texto({ clave: tesis.nueva, valor: null, vacio: "+ Escribir la tesis (dos frases cortas)", etiqueta: "La tesis", tope: TOPE_A_MANO })}</div>
             )}
-            <p className="re-bajada rd-entra">
-              {conTesis || !vende.length ? "Así entendimos tu negocio, cómo trabajan tus equipos y qué los frena hoy." : vende.map((p) => p.texto).join(" ")}
-            </p>
+            <P className="re-bajada rd-entra">
+              {/* Atada a su texto: si el Resumen pasa a tener tesis, la bajada de antes (lo que vende) no queda pegada. */}
+              {fijo(
+                "bajada",
+                conTesis || !vende.length ? "Así entendimos tu negocio, cómo trabajan tus equipos y qué los frena hoy." : vende.map((p) => p.texto).join(" "),
+                "La bajada, debajo de la tesis",
+                false,
+                true,
+              )}
+            </P>
             {(etiquetas.piezas.length > 0 || edicion) && (
               <ul className="re-etiquetas rd-entra">
                 {etiquetas.piezas.map((p) => (
@@ -436,33 +467,36 @@ export default function ResumenDeLaEscalaVista({
               01 <span>/ Lo que hicimos</span>
             </p>
             <h2 className="re-titulo" id="re-t1">
-              El diagnóstico, contigo.
+              {fijo("titulo.hicimos", "El diagnóstico, contigo.", "Título de lo que hicimos")}
             </h2>
             <div className="re-hicimos">
               <div>
-                <b>{h.sesiones}</b>
-                <span>{h.sesiones === 1 ? "sesión de exploración" : "sesiones de exploración"}</span>
+                <b>{fijo("hicimos.sesiones", String(h.sesiones), "Cuántas sesiones", false, true)}</b>
+                <span>{fijo("hicimos.sesiones.rotulo", h.sesiones === 1 ? "sesión de exploración" : "sesiones de exploración", "Rótulo de las sesiones", false, true)}</span>
               </div>
               {h.minutos > 0 && (
                 <div>
-                  <b>{enHoras(h.minutos)}</b>
-                  <span>de conversación</span>
+                  <b>{fijo("hicimos.tiempo", enHoras(h.minutos), "Cuánto tiempo de conversación", false, true)}</b>
+                  <span>{fijo("hicimos.tiempo.rotulo", "de conversación", "Rótulo del tiempo")}</span>
                 </div>
               )}
               {h.personas > 0 && (
                 <div>
-                  <b>{h.personas}</b>
-                  <span>{h.personas === 1 ? "persona de tu equipo" : "personas de tu equipo"}</span>
+                  <b>{fijo("hicimos.personas", String(h.personas), "Cuántas personas", false, true)}</b>
+                  <span>{fijo("hicimos.personas.rotulo", h.personas === 1 ? "persona de tu equipo" : "personas de tu equipo", "Rótulo de las personas", false, true)}</span>
                 </div>
               )}
               {exploradas.length > 0 && (
                 <div>
-                  <b className="re-hicimos-texto">{exploradas.join(" · ")}</b>
-                  <span>{exploradas.length === 1 ? "área explorada" : "áreas exploradas"}</span>
+                  <b className="re-hicimos-texto">{fijo("hicimos.areas", exploradas.join(" · "), "Las áreas exploradas", false, true)}</b>
+                  <span>{fijo("hicimos.areas.rotulo", exploradas.length === 1 ? "área explorada" : "áreas exploradas", "Rótulo de las áreas", false, true)}</span>
                 </div>
               )}
             </div>
-            {sinExplorar.length > 0 && <p className="re-proxima">Próxima área por explorar: {sinExplorar.join(", ")}.</p>}
+            {/* Atada a su texto: explorada un área, la frase cambia y lo escrito para la de antes deja de salir. */}
+            {sinExplorar.length > 0 && sale("proxima", `Próxima área por explorar: ${sinExplorar.join(", ")}.`, true) && (
+              <P className="re-proxima">{fijo("proxima", `Próxima área por explorar: ${sinExplorar.join(", ")}.`, "La próxima área por explorar", true, true)}</P>
+            )}
           </section>
         )}
 
@@ -492,7 +526,7 @@ export default function ResumenDeLaEscalaVista({
                           )}
                         </span>
                         <h3>{texto({ clave: `${e.clave}:nombre`, valor: e.nombre, vacio: "+ El paso", etiqueta: "Nombre del paso", tope: TOPE_DE_UN_NOMBRE })}</h3>
-                        {e.quien && <span className="re-quien">{e.quien}</span>}
+                        {e.quien && <span className="re-quien">{fijo(`paso.${e.id}.quien`, e.quien, `Quién hace ${e.nombre}`, false, true)}</span>}
                         {(e.texto || edicion) && <span className="re-detalle">{texto({ clave: `${e.clave}:texto`, valor: e.texto || null, vacio: "+ Un detalle", etiqueta: `El detalle de ${e.nombre}`, tope: TOPE_A_MANO, quitar: "Quitar este paso" })}</span>}
                         {deDonde(e.citas)}
                       </li>
@@ -530,7 +564,7 @@ export default function ResumenDeLaEscalaVista({
               )}
               {conTraba.length > 0 && (
                 <div className="re-trabas">
-                  <h3>Dónde se traba hoy</h3>
+                  <h3>{fijo("titulo.trabas", "Dónde se traba hoy", "Título de dónde se traba")}</h3>
                   <ul>
                     {conTraba.map((e) => {
                       const n = numeroDeLaTraba(e);
@@ -559,7 +593,7 @@ export default function ResumenDeLaEscalaVista({
               {conRecorrido ? "03" : "02"} <span>/ Equipos y hallazgos</span>
             </p>
             <h2 className="re-titulo" id="re-t3">
-              Cómo trabajan. Qué necesitan mejorar.
+              {fijo("titulo.equipos", "Cómo trabajan. Qué necesitan mejorar.", "Título de los equipos")}
             </h2>
             <div className="re-equipos">
               {resumen.tarjetas.flatMap((t) => (t.porExplorar ? [filaPorExplorar(t)] : t.subequipos.length ? t.subequipos.map((x) => filaDelEquipo(t, x)) : [filaSinContenido(t)]))}
@@ -567,17 +601,22 @@ export default function ResumenDeLaEscalaVista({
           </section>
         )}
 
-        {(resumen.pendientes.length > 0 || (edicion && resumen.pendienteNuevo)) && (
+        {(pendientes.length > 0 || (edicion && resumen.pendienteNuevo)) && (
           <section className="re-cierre" data-revela="" aria-labelledby="re-t4">
-            <h2 id="re-t4">Tu mirada completa el diagnóstico.</h2>
-            <p>Antes de avanzar, confirmemos contigo:</p>
+            <h2 id="re-t4">{fijo("titulo.cierre", "Tu mirada completa el diagnóstico.", "Título del cierre")}</h2>
+            <P className="re-p">{fijo("cierre.bajada", "Antes de avanzar, confirmemos contigo:", "La frase del cierre")}</P>
             <ul>
-              {resumen.pendientes.map((p) => (
-                <li key={p.id}>
-                  <span>{p.clave ? texto({ clave: p.clave, valor: p.texto, vacio: "+ Lo que falta", etiqueta: "Lo que falta validar", tope: TOPE_A_MANO, quitar: "Quitar" }) : p.texto}</span>
-                  {deDonde(p.citas)}
-                </li>
-              ))}
+              {pendientes.map((p) => (
+                  <li key={p.id}>
+                    {/* Los que arma la página («Conversar con tu equipo de…») no los guarda el agente: se cambian como texto fijo. */}
+                    <span>
+                      {p.clave
+                        ? texto({ clave: p.clave, valor: p.texto, vacio: "+ Lo que falta", etiqueta: "Lo que falta validar", tope: TOPE_A_MANO, quitar: "Quitar" })
+                        : fijo(`pendiente.${p.id}`, p.texto, "Lo que falta validar", true, true)}
+                    </span>
+                    {deDonde(p.citas)}
+                  </li>
+                ))}
             </ul>
             {edicion && resumen.pendienteNuevo && (
               <div key={`nuevo-${resumen.pendientes.length}`} className="re-agregar">
@@ -590,7 +629,15 @@ export default function ResumenDeLaEscalaVista({
         <footer className="re-pie" data-revela="">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={LOGO_DE_COLOR} alt="Smarteam" height={22} />
-          <span>{fecha ? `Medido el ${fechaLarga(fecha)}, con lo que conversamos contigo.` : "Medido con la Escala de Rendimiento de Smarteam, con lo que conversamos contigo."}</span>
+          <span>
+            {fijo(
+              "pie",
+              fecha ? `Medido el ${fechaLarga(fecha)}, con lo que conversamos contigo.` : "Medido con la Escala de Rendimiento de Smarteam, con lo que conversamos contigo.",
+              "El pie de la página",
+              false,
+              true,
+            )}
+          </span>
         </footer>
       </AnimacionesDelResultado>
     </div>

@@ -7,6 +7,9 @@
  * encontramos, dónde queda cada equipo y la validación) y cada equipo es otra pestaña (`?area=<id>`). `?area=resumen`, o
  * un área que no está, vuelve al Resumen.
  *
+ * Lo que ve es la foto PUBLICADA (16 nov, lib/exploraciones/escala-publicada.ts), con los textos que el equipo cambió
+ * (`textos`, lib/external/textos-de-la-pagina.ts).
+ *
  * Toda la seguridad vive en `escalaParaElToken` (chokepoint fail-closed, re-chequea en CADA render). `force-dynamic` no es
  * decoración: sin él, revocar no surtiría efecto. El `Referrer-Policy: no-referrer` de `/external/*` vive en
  * next.config.ts. `noindex`: la URL circula por correo.
@@ -32,7 +35,7 @@ export default async function EscalaDelClientePage({ params, searchParams }: { p
   const d = await escalaParaElToken(token);
   // Un 404 neutro: no distingue un token inválido de uno revocado.
   if (!d) notFound();
-  if (!d.resultados.length) return <EscalaSinMedir />;
+  if (d === "sin-publicar" || !d.resultados.length) return <EscalaSinMedir />;
   const base = `/external/escala/${token}`;
   // Un equipo sin sesiones dice «Por explorar» y no se abre, tampoco con su dirección directa (Elías, 11 nov).
   const sinExplorar = new Set(d.resumen.sinExplorar);
@@ -47,6 +50,7 @@ export default async function EscalaDelClientePage({ params, searchParams }: { p
         logo={d.logo}
         fecha={d.fecha}
         pestanas={[{ id: PESTANA_DEL_RESUMEN, nombre: "Resumen", href: base }, ...areas]}
+        textos={d.textos}
       />
     );
   return (
@@ -59,7 +63,7 @@ export default async function EscalaDelClientePage({ params, searchParams }: { p
       detalles={d.detalles}
       dimensionDelRiesgo={d.dimensionDelRiesgo}
       logo={d.logo}
-      deLaEscala={{ areas, porExplorar: d.porExplorar[r.areaId] ?? [], resumen: { href: base } }}
+      deLaEscala={{ areas, porExplorar: d.porExplorar[r.areaId] ?? [], resumen: { href: base }, textos: d.textos }}
     />
   );
 }

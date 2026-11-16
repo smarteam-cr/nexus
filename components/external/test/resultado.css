@@ -438,6 +438,10 @@
 .dr .rd-btn-enlace { font: inherit; font-weight: 600; color: var(--v3-marca); background: none; border: 0; padding: 0; cursor: pointer; }
 .dr .rd-btn-enlace:hover { text-decoration: underline; }
 .dr .rd-btn-enlace:disabled { opacity: .7; cursor: progress; text-decoration: none; }
+/* Solo adentro (16 nov): una pieza quitada para el cliente se ve tachada, con cómo volver a mostrarla. */
+.dr .rd-quitada s { color: #8a94a6; }
+.dr .rd-quitada-nota { font-size: 12px; font-weight: 500; color: #8a94a6; }
+.dr .ed-quitado { opacity: .75; }
 
 /* Solo adentro (la pantalla interna de la escala): de dónde sale cada cosa. Del Resumen anterior (9 a 12 nov) es lo único
    que queda en uso: el Resumen editorial vive en resumen-editorial.css. */
@@ -698,11 +702,11 @@ html:has(.dr.rd-s2:not(.rd-editable)) { scroll-behavior: smooth; }
 .dr.rd-ed .ed-empezar { display: grid; grid-template-columns: minmax(0, 1fr); gap: 20px 40px; align-items: start; }
 .dr.rd-ed .ed-empezar.con-costo { grid-template-columns: minmax(0, 1fr) 320px; }
 .dr.rd-ed .ed-empezar-texto { display: grid; gap: 12px; }
-.dr.rd-ed .ed-empezar-texto p { margin: 0; max-width: 56ch; font-size: 15.5px; line-height: 24px; color: var(--ed-tinta-2); }
+.dr.rd-ed .ed-empezar-texto p, .dr.rd-ed .ed-empezar-texto .ed-p { margin: 0; max-width: 56ch; font-size: 15.5px; line-height: 24px; color: var(--ed-tinta-2); }
 .dr.rd-ed .ed-empezar-texto .ed-nota { font-size: 13px; line-height: 19px; color: var(--ed-apagada); }
 .dr.rd-ed .ed-costo { display: grid; gap: 6px; padding: 20px 22px; border-radius: 16px; background: var(--ed-ambar-suave); }
 .dr.rd-ed .ed-costo span { font-size: 11px; line-height: 16px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--ed-ambar); }
-.dr.rd-ed .ed-costo p { margin: 0; font-size: 15px; line-height: 23px; color: #5c3a0a; }
+.dr.rd-ed .ed-costo p, .dr.rd-ed .ed-costo .ed-p { margin: 0; font-size: 15px; line-height: 23px; color: #5c3a0a; }
 
 /* Lo que lo mueve: filas numeradas, con lo que sube en verde. */
 .dr.rd-ed .ed-casos { margin: 0; padding: 0; list-style: none; display: grid; }
@@ -710,14 +714,14 @@ html:has(.dr.rd-s2:not(.rd-editable)) { scroll-behavior: smooth; }
 .dr.rd-ed .ed-caso:first-child { border-top: 0; padding-top: 0; }
 .dr.rd-ed .ed-num { padding-top: 3px; font-size: 13px; line-height: 19px; font-weight: 700; color: var(--ed-azul); }
 .dr.rd-ed .ed-caso h3 { margin: 0; font-family: var(--ed-letra); font-size: 18px; line-height: 24px; font-weight: 800; letter-spacing: -.01em; color: var(--ed-tinta); }
-.dr.rd-ed .ed-caso div p { margin: 4px 0 0; font-size: 14.5px; line-height: 22px; color: var(--ed-tinta-2); }
+.dr.rd-ed .ed-caso div p, .dr.rd-ed .ed-caso div .ed-p { margin: 4px 0 0; font-size: 14.5px; line-height: 22px; color: var(--ed-tinta-2); }
 .dr.rd-ed .ed-sube { margin: 0; align-self: start; padding: 10px 12px; border-radius: 12px; background: var(--ed-verde-suave); font-size: 13px; line-height: 19px; font-weight: 600; color: var(--ed-verde); }
 
 /* Los riesgos típicos del nivel: tres columnas, cada uno con su parte. */
 .dr.rd-ed .ed-riesgos { margin: 0; padding: 0; list-style: none; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0 32px; }
 .dr.rd-ed .ed-riesgos li { display: grid; gap: 10px; align-content: start; padding-left: 18px; border-left: 2px solid var(--ed-rojo-suave); }
 .dr.rd-ed .ed-tag { justify-self: start; font-size: 11px; line-height: 16px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--ed-rojo); }
-.dr.rd-ed .ed-riesgos p { margin: 0; font-size: 14px; line-height: 21px; color: var(--ed-tinta-2); }
+.dr.rd-ed .ed-riesgos p, .dr.rd-ed .ed-riesgos .ed-p { margin: 0; font-size: 14px; line-height: 21px; color: var(--ed-tinta-2); }
 
 /* Cómo está cada parte: dos columnas por capa; cada fila con su barra, su puntaje sobre 100, su nivel y «Ver detalles». */
 .dr.rd-ed .ed-partes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px 48px; }

@@ -14,11 +14,22 @@ vi.mock("@/lib/exploraciones/servidor", async (original) => {
   return { ...real, escalaParaExplorar: async () => ({ estado: "ok" as const, general: parsearEscala(leerArchivoDeLaEscala("escala")), aviso: null }) };
 });
 
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { SENTINEL_SERVICE_TYPE } from "@/lib/projects/kind";
-import { crearAcceso, estadoDelAcceso, revocarAcceso } from "@/lib/exploraciones/acceso-a-la-escala";
-import { paginaParaElCse } from "@/lib/exploraciones/escala-para-el-cliente-server";
-import { escalaParaElToken } from "./escala-view";
+import { crearAcceso, estadoDelAcceso, publicarLaEscala, revocarAcceso } from "@/lib/exploraciones/acceso-a-la-escala";
+import { aplicarOperaciones, type Validez } from "@/lib/exploraciones/contenido";
+import { paginaParaElCse, type EscalaParaElCliente } from "@/lib/exploraciones/escala-para-el-cliente-server";
+import { VALIDADOR_ESTRICTO } from "@/lib/exploraciones/esquemas";
+import { estadoDesdeFila } from "@/lib/exploraciones/servidor";
+import { escalaParaElToken as delToken } from "./escala-view";
+
+/** Lo que abre el enlace, como página (falla si dice «sin publicar»). */
+async function escalaParaElToken(token: string): Promise<EscalaParaElCliente | null> {
+  const d = await delToken(token);
+  if (d === "sin-publicar") throw new Error("el enlace no tiene foto publicada");
+  return d;
+}
 
 const tokenDe = (enlace: string | null) => (enlace ?? "").split("/").pop() ?? "";
 
@@ -56,20 +67,70 @@ describe("el enlace de La escala", () => {
     expect(await revocarAcceso(id)).toMatchObject({ estado: "revocado", enlace: null });
     expect(await escalaParaElToken(token)).toBeNull();
 
+    // ⛔ Revocar y dar un enlace nuevo NO publica lo de hoy (revisión del 16 nov): el nuevo abre la misma foto.
+    await prisma.exploracionDeVenta.update({ where: { id }, data: { contenido: { chequeo: { "1.1": { nivel: "F", fuente: "reunion" } } } } });
     const nuevo = await crearAcceso(id, null);
     expect(nuevo.enlace).not.toBe(creado.enlace);
+    expect(nuevo.publicadaEn).toBe(creado.publicadaEn);
+    expect(nuevo.sinPublicar).toBe(true);
     expect(await escalaParaElToken(token)).toBeNull();
-    expect(await escalaParaElToken(tokenDe(nuevo.enlace))).not.toBeNull();
+    const conElNuevo = await escalaParaElToken(tokenDe(nuevo.enlace));
+    expect(conElNuevo!.resultados[0].dimensiones.find((x) => x.id === "1.1")?.nivel).toBe("I");
   });
 
-  it("⛔ sin ningún equipo para mostrar no se crea; si lo usado se va después, abre vacía", async () => {
+  it("⛔ sin ningún equipo no se crea; si lo usado se va después, el cliente sigue con lo publicado hasta publicar la página vacía", async () => {
     const { id } = await preventa("Empresa B (test)", {});
     await expect(crearAcceso(id, null)).rejects.toMatchObject({ status: 409 });
 
     await prisma.exploracionDeVenta.update({ where: { id }, data: { contenido: { chequeo: { "1.1": { nivel: "I", fuente: "reunion" } } } } });
     const token = tokenDe((await crearAcceso(id, null)).enlace);
     await prisma.exploracionDeVenta.update({ where: { id }, data: { contenido: { chequeo: {} } } });
-    expect(await escalaParaElToken(token)).toMatchObject({ empresa: "Empresa B (test)", resultados: [] });
+    // 16 nov: el enlace sirve la foto publicada, no lo de hoy.
+    expect((await escalaParaElToken(token))!.resultados).toHaveLength(1);
+    // Hay algo que publicar (retirar lo que ve) y se puede: la página queda en «todavía no está lista».
+    expect(await estadoDelAcceso(id)).toMatchObject({ sinPublicar: true, areas: 0 });
+    await publicarLaEscala(id, null);
+    expect((await escalaParaElToken(token))!.resultados).toHaveLength(0);
+    expect(await estadoDelAcceso(id)).toMatchObject({ sinPublicar: false });
+  });
+
+  it("lo que se cambia adentro no le llega al cliente hasta «Publicar» (16 nov)", async () => {
+    const { id } = await preventa("Empresa P (test)", { "1.1": { nivel: "I", fuente: "reunion" } });
+    const creado = await crearAcceso(id, "ana@smarteam.test");
+    expect(creado).toMatchObject({ sinPublicar: false, publicadaPor: "ana@smarteam.test" });
+    expect(creado.publicadaEn).not.toBeNull();
+    const token = tokenDe(creado.enlace);
+
+    // Un texto fijo cambiado y un nivel movido, por las operaciones de siempre.
+    const fila = await prisma.exploracionDeVenta.findUniqueOrThrow({ where: { id } });
+    const validez: Validez = { dimensiones: new Set(["1.1"]), criterios: new Set(), areas: new Set(["1"]), ediciones: new Set(), escalaVersion: "9.0.0" };
+    const r = aplicarOperaciones(estadoDesdeFila(fila), [{ op: "textoDeLaPagina", clave: "fijo.pie", texto: "PIE NUEVO" }], validez, VALIDADOR_ESTRICTO);
+    if (!r.ok) throw new Error(r.error);
+    await prisma.exploracionDeVenta.update({
+      where: { id },
+      data: { contenido: { ...(r.estado.contenido as object), chequeo: { "1.1": { nivel: "F", fuente: "reunion" } } } },
+    });
+
+    const antes = await escalaParaElToken(token);
+    expect(antes!.textos).toEqual({});
+    expect(antes!.resultados[0].dimensiones.find((d) => d.id === "1.1")?.nivel).toBe("I");
+    expect(await estadoDelAcceso(id)).toMatchObject({ sinPublicar: true });
+
+    await publicarLaEscala(id, "luis@smarteam.test");
+    const despues = await escalaParaElToken(token);
+    expect(despues!.textos).toEqual({ "fijo.pie": "PIE NUEVO" });
+    expect(despues!.resultados[0].dimensiones.find((d) => d.id === "1.1")?.nivel).toBe("F");
+    expect(await estadoDelAcceso(id)).toMatchObject({ sinPublicar: false, publicadaPor: "luis@smarteam.test" });
+  });
+
+  it("un enlace sin foto (de antes del 16 nov) dice que no está lista; una foto de otro formato, también", async () => {
+    const { id } = await preventa("Empresa Q (test)", { "1.1": { nivel: "I", fuente: "reunion" } });
+    const token = tokenDe((await crearAcceso(id, null)).enlace);
+    await prisma.accesoALaEscala.update({ where: { exploracionId: id }, data: { publicada: Prisma.DbNull, publicadaEn: null } });
+    expect(await delToken(token)).toBe("sin-publicar");
+    expect(await estadoDelAcceso(id)).toMatchObject({ sinPublicar: true, publicadaEn: null });
+    await prisma.accesoALaEscala.update({ where: { exploracionId: id }, data: { publicada: { formato: 999, pagina: {} } } });
+    expect(await delToken(token)).toBe("sin-publicar");
   });
 
   it("⛔ un enlace de una exploración archivada, de un proyecto, o de un contenedor que hoy es de otra empresa, no abre nada", async () => {

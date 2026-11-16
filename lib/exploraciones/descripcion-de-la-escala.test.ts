@@ -121,12 +121,20 @@ describe("la guardada (del agente o a mano)", () => {
     expect(x.resultado.sintesis).toBe(guardada.texto);
   });
 
-  it("⛔ si un nivel cambió después, deja de salir: puede nombrar otro «lo que más frena»", () => {
-    const guardada = { texto: "Vieja.", origen: "mano" as const, firma, at: "2026-11-08T00:00:00.000Z" };
+  it("⛔ la del agente, si un nivel cambió después, deja de salir: puede nombrar otro «lo que más frena»", () => {
+    const guardada = { texto: "Vieja.", origen: "agente" as const, firma, at: "2026-11-08T00:00:00.000Z" };
     const cambiado = { ...chequeo, [queAplican[3].id]: { nivel: "F" as const } };
     const [x] = resultadosDeLaEscala(escala, lienzo, estado(cambiado, { descripcionesDeLaEscala: { [area.id]: guardada } }));
     expect(x.descripcion).toMatchObject({ origen: "respaldo", vigente: false, guardada });
     expect(x.resultado.sintesis).not.toBe("Vieja.");
+  });
+
+  it("la escrita a mano sigue saliendo con los niveles movidos, y dice que ya no está al día (16 nov)", () => {
+    const guardada = { texto: "La nuestra.", origen: "mano" as const, firma, at: "2026-11-08T00:00:00.000Z" };
+    const cambiado = { ...chequeo, [queAplican[3].id]: { nivel: "F" as const } };
+    const [x] = resultadosDeLaEscala(escala, lienzo, estado(cambiado, { descripcionesDeLaEscala: { [area.id]: guardada } }));
+    expect(x.descripcion).toMatchObject({ origen: "mano", vigente: false, texto: "La nuestra." });
+    expect(x.resultado.sintesis).toBe("La nuestra.");
   });
 
   it("la firma cambia con el nivel, con pasar de hipótesis a evidencia y con un riesgo; no con otra área", () => {
@@ -300,11 +308,14 @@ describe("qué se guarda de lo que escribió el agente", () => {
     expect(r.guardar).toEqual(nuevas);
   });
 
-  it("⛔ en segundo plano (soloFaltantes) no pisa una vigente, ni la escrita a mano; sí una vieja", () => {
+  it("⛔ en segundo plano (soloFaltantes) no pisa una vigente ni una escrita a mano, aunque esté vieja; sí una vieja del agente", () => {
     const vigente = cualesSeGuardan({ nuevas, alEmpezar: { "1": "t1" }, ahora: { "1": d("a mano", "t1", "f", "mano") }, soloFaltantes: true, firmaDeHoy: () => "f" });
     expect(vigente.guardar).toEqual({});
-    const vieja = cualesSeGuardan({ nuevas, alEmpezar: { "1": "t1" }, ahora: { "1": d("a mano", "t1", "vieja", "mano") }, soloFaltantes: true, firmaDeHoy: () => "f" });
-    expect(vieja.guardar).toEqual(nuevas);
+    // 16 nov: la escrita a mano con los niveles movidos ya no se reescribe sola (se perdía sin aviso).
+    const viejaAMano = cualesSeGuardan({ nuevas, alEmpezar: { "1": "t1" }, ahora: { "1": d("a mano", "t1", "vieja", "mano") }, soloFaltantes: true, firmaDeHoy: () => "f" });
+    expect(viejaAMano.guardar).toEqual({});
+    const viejaDelAgente = cualesSeGuardan({ nuevas, alEmpezar: { "1": "t1" }, ahora: { "1": d("del agente", "t1", "vieja") }, soloFaltantes: true, firmaDeHoy: () => "f" });
+    expect(viejaDelAgente.guardar).toEqual(nuevas);
   });
 });
 

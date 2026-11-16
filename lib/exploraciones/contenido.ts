@@ -45,6 +45,7 @@ import { vuelveASugeridos, type Personalizacion, type RevisionDeLosCasos } from 
 import type { OrdenDeLosCasos } from "@/lib/casos-de-uso/orden";
 import type { CapaDelCaso, ConexionDelCaso } from "@/lib/casos-de-uso/capas";
 import type { LecturaDelConsultor } from "@/lib/casos-de-uso/lectura-del-consultor";
+import { CLAVE_DE_LA_PAGINA, MAX_TEXTO_DE_LA_PAGINA, MAX_TEXTOS_DE_LA_PAGINA } from "@/lib/external/textos-de-la-pagina";
 import {
   definicionDe,
   esDeLista,
@@ -322,6 +323,12 @@ export interface ContenidoDeExploracion {
   textosDelRadar?: Record<string, TextoDelRadar>;
   /** El contexto que escribe una persona por área para el agente de la descripción (./descripcion-de-la-escala.ts). NO lo ve el cliente. */
   contextoDeLaEscala?: Record<string, string>;
+  /**
+   * Los textos fijos de la página que ve el cliente, cambiados para esta empresa (2026-11-16, ./textos-de-la-pagina.ts):
+   * títulos, «Por dónde empezar», casos, riesgos, «Ver detalles», la bajada y lo que hicimos del Resumen. Vacío: esa
+   * pieza no sale. Sin entrada: el de siempre.
+   */
+  textosDeLaPagina?: Record<string, string>;
   /**
    * El Resumen de la escala que ve el cliente (2026-11-09, ./resumen-de-la-escala.ts): lo que hicimos, los datos rojos con
    * su cita, los hallazgos, por qué cada equipo está donde está y la validación. Lo arma el agente y se edita en su lugar.
@@ -1109,6 +1116,8 @@ export type Operacion =
   | { op: "contextoDeLaEscala"; areaId: string; texto: string | null }
   /** Un texto del Resumen de la escala, editado en su lugar (`editarElResumen`, ./resumen-de-la-escala.ts). null: se quita o vuelve al de los datos. */
   | { op: "resumenDeLaEscala"; clave: string; texto: string | null }
+  /** Un texto fijo de la página del cliente (lib/external/textos-de-la-pagina.ts). null: vuelve el de siempre; "": no sale. */
+  | { op: "textoDeLaPagina"; clave: string; texto: string | null }
   | { op: "casoDeUso"; useCaseId: string; valor: CasoDeUsoElegido | null }
   /**
    * 2026-11-08 (pedido 4 de Elías): quitar un caso elegido. El que propuso el agente vuelve a los sugeridos con su porqué
@@ -1712,6 +1721,18 @@ function aplicarUna(estado: EstadoDeExploracion, op: Operacion, validez: Validez
       const texto = op.valor?.texto.trim().slice(0, MAX_TEXTO_DEL_RADAR);
       const textosDelRadar = op.valor && texto ? { ...resto, [op.dimensionId]: { texto, nivel: op.valor.nivel } } : resto;
       return { ok: true, estado: { ...estado, contenido: { ...c, textosDelRadar } } };
+    }
+    case "textoDeLaPagina": {
+      if (!CLAVE_DE_LA_PAGINA.test(op.clave)) return { ok: false, error: "Ese texto no es de la página." };
+      const { [op.clave]: _antes, ...resto } = c.textosDeLaPagina ?? {};
+      void _antes;
+      // El texto, sin espacios de más; vacío (no null) quiere decir que esa pieza no sale.
+      const texto = op.texto === null ? null : op.texto.trim().slice(0, MAX_TEXTO_DE_LA_PAGINA);
+      if (texto !== null && Object.keys(resto).length >= MAX_TEXTOS_DE_LA_PAGINA) return { ok: false, error: "Esta página ya tiene demasiados textos cambiados." };
+      const textosDeLaPagina = texto === null ? resto : { ...resto, [op.clave]: texto };
+      const { textosDeLaPagina: _fuera, ...sin } = c;
+      void _fuera;
+      return { ok: true, estado: { ...estado, contenido: Object.keys(textosDeLaPagina).length ? { ...sin, textosDeLaPagina } : sin } };
     }
     case "resumenDeLaEscala": {
       if (!c.resumenDeLaEscala) return { ok: false, error: "Esta escala todavía no tiene Resumen: ármalo primero." };

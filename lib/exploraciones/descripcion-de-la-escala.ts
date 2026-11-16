@@ -170,6 +170,8 @@ const hipotesisDelArea = (chequeo: Readonly<Record<string, EstimadoGuardado>>, a
 
 /**
  * El ÚNICO que decide qué texto sale bajo «Resultado general» de un área: la guardada si sigue vigente, o la de respaldo.
+ * Lo escrito a MANO sale siempre (16 nov; Elías: proteger lo escrito a mano): con los niveles movidos sigue saliendo y
+ * `vigente: false` avisa adentro que los niveles cambiaron desde que se escribió. Antes desaparecía sin aviso.
  * Lo usan la página del cliente (por `resultadosDeLaEscala`) y el artefacto interno.
  */
 export function descripcionDelArea(
@@ -186,6 +188,7 @@ export function descripcionDelArea(
   const vigente =
     !!guardada && r.preguntadas > 0 && !(todoSospecha && guardada.origen === "agente") && firmaSigueVigente(guardada.firma, firmaDelArea(contenido.chequeo, r.areaId, entorno));
   if (guardada && vigente) return { texto: guardada.texto, origen: guardada.origen, guardada, vigente };
+  if (guardada?.origen === "mano" && r.preguntadas > 0) return { texto: guardada.texto, origen: "mano", guardada, vigente: false };
   return { texto: descripcionDeRespaldo(r, hipotesis), origen: "respaldo", guardada, vigente: false };
 }
 
@@ -472,7 +475,8 @@ export async function escribirConUnReintento(
 /**
  * Qué se guarda de lo que escribió el agente, contra lo que hay AHORA en la fila (bloqueada). Un área se salta si su
  * guardada cambió mientras el agente escribía (alguien la escribió a mano: no se pisa sin aviso), o, con `soloFaltantes`
- * (la corrida en segundo plano del «Acceso»), si ya tiene una vigente.
+ * (la corrida en segundo plano del «Acceso» y del Resumen), si ya tiene una vigente o una escrita a mano (16 nov: esa
+ * corrida reescribía las escritas a mano que habían quedado viejas, y se perdían sin aviso).
  */
 export function cualesSeGuardan(o: {
   nuevas: Readonly<Record<string, DescripcionGuardada>>;
@@ -487,7 +491,7 @@ export function cualesSeGuardan(o: {
   for (const [a, d] of Object.entries(o.nuevas)) {
     const actual = o.ahora[a] ?? null;
     if ((actual?.at ?? null) !== (o.alEmpezar[a] ?? null)) saltadas.push({ areaId: a, motivos: ["alguien la cambió mientras el agente escribía: se queda la suya"] });
-    else if (o.soloFaltantes && actual && firmaSigueVigente(actual.firma, o.firmaDeHoy(a))) continue;
+    else if (o.soloFaltantes && actual && (actual.origen === "mano" || firmaSigueVigente(actual.firma, o.firmaDeHoy(a)))) continue;
     else guardar[a] = d;
   }
   return { guardar, saltadas };
