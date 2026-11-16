@@ -106,8 +106,10 @@
 .re-hero-sin-cifra {
   grid-template-columns: minmax(0, 1fr);
 }
+/* Sin nada a la derecha, el titular usa el ancho (16 nov, con la página a 1360): con 24ch quedaba en cuatro renglones
+   y media página vacía. 40ch es lo que ocupa con la cifra al lado. */
 .re-hero-sin-cifra .re-titular {
-  max-width: 24ch;
+  max-width: 40ch;
 }
 .re-hero-texto {
   display: grid;

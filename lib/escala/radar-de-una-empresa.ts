@@ -94,6 +94,12 @@ export interface MedidasDelRadar {
     aire: number;
     letrasPorRenglon: number;
     chip: { ancho: number; alto: number; letra: number; baja: number; texto: number };
+    /**
+     * Solo el nombre de la dimensión (la página editorial de un área, 16 nov, pedido de Elías): sin el renglón de arriba
+     * («1.8 · ○ Deficiente · por explorar»), sin la nota del «No lo sé» y sin el chip «LO QUE MÁS FRENA». El nivel ya lo
+     * dicen el dibujo y la tarjeta de al lado.
+     */
+    soloNombre?: boolean;
   } | null;
   /** El número de cada dimensión en la punta de su eje (el teléfono). */
   numeroEnLaPunta: { r: number; letra: number; baja: number } | null;
@@ -159,7 +165,7 @@ export const MEDIANO: MedidasDelRadar = {
   vertice: { r: 6.5, rFrena: 8, halo: 16, trazo: 1.5 },
   conPuntaje: { r: 15, letra: 13, baja: 4.5, trazo: 2.5, halo: 20 },
   centro: { area: 22, yArea: -2, sub: 14, ySub: 20 },
-  rotulo: { ...GRANDE.rotulo!, r: 267.75 },
+  rotulo: { ...GRANDE.rotulo!, r: 267.75, soloNombre: true },
   numeroEnLaPunta: null,
   mitad: null,
 };
@@ -463,28 +469,32 @@ function rotuloDeLaDimension(m: MedidasDelRadar, d: DimensionDelRadar, grados: n
   const ancla: "start" | "end" = s >= 0 ? "start" : "end";
   const estado = estadoDeLaDimension(d);
   const lineas = renglonesParejos(d.nombre, r.letrasPorRenglon);
-  const conNota = estado.tipo === "noLoSe";
+  const solo = !!r.soloNombre;
+  const conNota = estado.tipo === "noLoSe" && !solo;
   const extra = lineas.length - 1 + (conNota ? 1 : 0);
   // El paso con que se centra o se sube el bloque es el de la pantalla (20,1) también en el PDF: así lo midió el diseño.
   const yNumero = c > 0.5 ? y - 27.6 - 20.1 * extra : c < -0.5 ? y + 14.5 : y - 7.6 - 10.05 * extra;
-  const nombre = lineas.map((texto, j) => ({ texto, y: yNumero + r.aire + r.renglon * j }));
-  const ultima = yNumero + r.aire + r.renglon * (lineas.length - 1);
+  // Sin el renglón del número, el nombre sube a su lugar: arriba el bloque sigue terminando en el radio del rótulo, abajo
+  // el primer renglón queda donde iba el número y a los costados el bloque se vuelve a centrar.
+  const sube = !solo ? 0 : c > 0.5 ? 0 : c < -0.5 ? r.aire - (r.nombre - r.numero) : r.aire / 2;
+  const nombre = lineas.map((texto, j) => ({ texto, y: yNumero + r.aire - sube + r.renglon * j }));
+  const ultima = yNumero + r.aire - sube + r.renglon * (lineas.length - 1);
   const nota = conNota ? { y: ultima + r.renglon * 0.9 } : null;
   const fondo = nota ? nota.y : ultima;
   // El chip de lo que más frena va debajo del rótulo; en uno de arriba, encima del número (debajo colgaría dentro del radar).
   const xChip = ancla === "start" ? x : x - r.chip.ancho;
-  const chip = !frena ? null : c > 0.5 ? { x: xChip, y: yNumero - r.numero - r.chip.baja - r.chip.alto + 4 } : { x: xChip, y: fondo + r.chip.baja };
+  const chip = !frena || solo ? null : c > 0.5 ? { x: xChip, y: yNumero - r.numero - r.chip.baja - r.chip.alto + 4 } : { x: xChip, y: fondo + r.chip.baja };
 
   const numero = d.numero ?? d.clave;
   // El punto de color va entre la clave y el nivel: «1.1 · ● Inicial».
   const textoDelNumero = `${numero} · ${estado.tipo === "nivel" ? "● " : ""}${textoDelEstado(estado, nombreDeNivel)}`;
   const ancho = Math.max(
-    anchoDelTexto(textoDelNumero, r.numero, 0.04) + r.numero,
+    solo ? 0 : anchoDelTexto(textoDelNumero, r.numero, 0.04) + r.numero,
     ...lineas.map((l) => anchoDelTexto(l, r.nombre)),
     conNota ? anchoDelTexto(notaDelNoLoSe(nombreDeNivel), r.nombre - 3.5, 0, true) : 0,
     chip ? r.chip.ancho : 0,
   );
-  const y0 = Math.min(yNumero - r.numero, chip ? chip.y : Infinity);
+  const y0 = Math.min(solo ? nombre[0].y - r.nombre : yNumero - r.numero, chip ? chip.y : Infinity);
   const y1 = Math.max(fondo + r.nombre * 0.28, chip ? chip.y + r.chip.alto : -Infinity);
   return {
     clave: d.clave,

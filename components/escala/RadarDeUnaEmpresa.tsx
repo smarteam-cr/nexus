@@ -804,6 +804,7 @@ function RotuloDeLaDimension({
     >
       {/* En la página, todo el bloque del rótulo recibe el cursor (también el hueco entre sus renglones). */}
       {interactivo && <rect x={f(r.caja.x0)} y={f(r.caja.y0)} width={f(r.caja.x1 - r.caja.x0)} height={f(r.caja.y1 - r.caja.y0)} fill="transparent" />}
+      {!ro.soloNombre && (
       <text x={f(r.x)} y={f(r.yNumero)} textAnchor={r.ancla} fontSize={ro.numero} fontWeight={600} letterSpacing="0.04em" fill={C.apagado}>
         {`${r.numero} · `}
         {r.estado.tipo === "nivel" ? (
@@ -817,6 +818,7 @@ function RotuloDeLaDimension({
           textoDelEstado(r.estado, nombreDeNivel)
         )}
       </text>
+      )}
       {r.nombre.map((l) => (
         <text
           key={l.texto}

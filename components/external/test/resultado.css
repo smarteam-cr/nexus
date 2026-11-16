@@ -675,6 +675,10 @@ html:has(.dr.rd-s2:not(.rd-editable)) { scroll-behavior: smooth; }
 .dr.rd-ed .ed-tip .rd-tip-cabeza { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 4px 10px; }
 .dr.rd-ed .ed-tip .rd-tip-nombre { margin: 0; font-size: 17px; line-height: 22px; font-weight: 800; color: var(--ed-tinta); }
 /* El número de la parte: el que lleva su punta en el radar compacto del teléfono. */
+/* El número de la parte solo con el radar compacto del teléfono, que trae números en vez de nombres (16 nov: con el
+   radar de nombres, sin numeración). El compacto entra con menos de 580 px de radar: la página, menos de ~620. */
+.dr.rd-ed .ed-tip-numero { display: none; }
+@container (max-width: 619px) { .dr.rd-ed .ed-tip-numero { display: inline; } }
 .dr.rd-ed .ed-tip-numero { margin-right: 8px; font-size: 12px; font-weight: 700; letter-spacing: .02em; color: var(--ed-azul); font-variant-numeric: tabular-nums; }
 .dr.rd-ed .ed-tip .rd-tip-puntaje { display: inline-flex; align-items: baseline; gap: 8px; font-size: 13px; white-space: nowrap; }
 .dr.rd-ed .ed-tip .rd-tip-num { font-size: 20px; line-height: 22px; font-weight: 800; color: var(--ed-azul); }
