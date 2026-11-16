@@ -30,7 +30,7 @@
 }
 /* El contenedor de la página: el ancho del documento y el margen de los lados (la banda del cierre lo cruza entero). */
 .dr.rd-ed.re .rd {
-  max-width: 1040px;
+  max-width: 1360px;
   padding: 0 56px;
 }
 /* Las pestañas editoriales (las de la página del área) ya están dentro del margen del Resumen. */

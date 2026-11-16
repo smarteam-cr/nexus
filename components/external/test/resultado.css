@@ -599,7 +599,8 @@ html:has(.dr.rd-s2:not(.rd-editable)) { scroll-behavior: smooth; }
 .dr.rd-ed [data-nivel="O"] { --nc: #0f1b4c; }
 .dr.rd-ed .rd-punto { border-color: var(--ed-tenue); }
 
-.dr.rd-ed .rd { display: block; max-width: 1040px; margin: 0 auto; padding: 0; container-type: inline-size; }
+/* 1360 px (16 nov, pedido de Elías): el diagnóstico de una empresa más ancho; los párrafos conservan su tope en ch. */
+.dr.rd-ed .rd { display: block; max-width: 1360px; margin: 0 auto; padding: 0; container-type: inline-size; }
 .dr.rd-ed .ed-envoltura { padding-left: 56px; padding-right: 56px; }
 
 /* Arriba: el logo y las pestañas de texto, la activa en azul y subrayada. */
@@ -657,7 +658,9 @@ html:has(.dr.rd-s2:not(.rd-editable)) { scroll-behavior: smooth; }
 .dr.rd-ed .ed-radar-seccion:has(.rde-check:checked) .rde-con { display: inline; }
 .dr.rd-ed .ed-radar-seccion:has(.rde-check:checked) .rde-sin { display: none; }
 .dr.rd-ed .ed-radar-seccion:not(:has(.rde-check:checked)) .rd-tip-num { display: none; }
-.dr.rd-ed .ed-radar-zona { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 20px 32px; align-items: center; }
+.dr.rd-ed .ed-radar-zona { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 20px 32px; align-items: center; }
+/* Con la página a 1360 px el radar crecía hasta ~920 px y los nombres pasaban de 20 px: tope de 760 (letras de ~16). */
+.dr.rd-ed .ed-radar-zona .rde-mediano > .rde-svg { max-width: 760px; margin: 0 auto; }
 .dr.rd-ed .ed-radar { min-width: 0; }
 .dr.rd-ed .rde-cuna.is-activa, .dr.rd-ed .rde-cuna.is-elegida { fill: rgba(36, 72, 216, .06); }
 .dr.rd-ed .rde-eje-resalte { stroke: var(--ed-azul); }
