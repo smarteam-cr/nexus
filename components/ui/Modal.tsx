@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { cn } from "@/lib/cn";
+import { apilarCapa, esLaDeArriba } from "@/lib/ui/pila-de-capas";
+import { zClass } from "@/lib/ui/z";
 
 // ── Tamaños ────────────────────────────────────────────────────────────────────
 
@@ -29,8 +31,8 @@ export interface ModalProps {
   footer?: React.ReactNode;
   closeOnBackdrop?: boolean;
   closeOnEscape?: boolean;
-  /** z-index del overlay (clase Tailwind). Subir cuando el modal se abre DESDE otra capa
-   *  alta (ej. un drawer en z-[60]) para que no quede debajo. Default: z-50. */
+  /** z-index del overlay (clase Tailwind). Default: la capa MODAL de lib/ui/z.ts (70), encima de todo cajón
+   *  (51 y 60). Hasta el 2026-11-17 era z-50 y un diálogo abierto desde un cajón quedaba DETRÁS de él. */
   z?: string;
   /** El cuerpo sin relleno ni scroll propio: el contenido maneja su propio layout (una grilla, dos columnas). */
   cuerpoSinRelleno?: boolean;
@@ -52,7 +54,7 @@ export function Modal({
   footer,
   closeOnBackdrop = true,
   closeOnEscape = true,
-  z = "z-50",
+  z = zClass("MODAL"),
   cuerpoSinRelleno = false,
 }: ModalProps) {
   const panelRef = useRef<HTMLDivElement>(null);
@@ -64,15 +66,19 @@ export function Modal({
   // eslint-disable-next-line react-hooks/set-state-in-effect -- mount guard intencional (portal SSR)
   useEffect(() => setMounted(true), []);
 
+  // Se apila mientras está abierta: Escape cierra solo la capa de arriba (un diálogo sobre un cajón, no los dos).
+  const [capa] = useState(() => Symbol("capa"));
+  useEffect(() => (open ? apilarCapa(capa) : undefined), [open, capa]);
+
   // Cierre por tecla Escape
   useEffect(() => {
     if (!open || !closeOnEscape) return;
     function handler(e: KeyboardEvent) {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape" && esLaDeArriba(capa)) onClose();
     }
     document.addEventListener("keydown", handler);
     return () => document.removeEventListener("keydown", handler);
-  }, [open, closeOnEscape, onClose]);
+  }, [open, closeOnEscape, onClose, capa]);
 
   // Lock de scroll del body mientras está abierto
   useEffect(() => {

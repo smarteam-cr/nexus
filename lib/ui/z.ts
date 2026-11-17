@@ -22,7 +22,8 @@
  *
  * ADOPCIÓN: la escala se aplica al crear o arreglar una capa, no de un saque. Las
  * que ya están en el valor correcto (Toast 100, UndoProvider y el prompt de
- * notificaciones 101, Modal 70, Drawer 51) se dejan como están — reescribirlas es
+ * notificaciones 101, Drawer 51; Modal pasó de 50 a 70 el 2026-11-17, porque un diálogo abierto
+ * desde un cajón quedaba detrás de él) se dejan como están — reescribirlas es
  * churn con riesgo y cero beneficio. Lo que NO se acepta es inventar un número
  * nuevo: si tu capa no encaja en ninguna de estas, agregá la entrada acá.
  */

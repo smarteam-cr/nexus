@@ -18,7 +18,7 @@ export interface ConfirmDialogProps {
   variant?: "destructive" | "default";
   /** Si se omite, el diálogo gestiona el estado de carga cuando onConfirm es async. */
   loading?: boolean;
-  /** z-index del overlay (Tailwind). Subir si se abre desde una capa alta (ej. drawer z-[60]). */
+  /** z-index del overlay (Tailwind). Sin él, el de Modal: la capa MODAL, encima de todo cajón. */
   z?: string;
 }
 

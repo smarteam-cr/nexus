@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { cn } from "@/lib/cn";
+import { apilarCapa, esLaDeArriba } from "@/lib/ui/pila-de-capas";
 import { IconButton } from "./IconButton";
 
 // ── Tamaños ────────────────────────────────────────────────────────────────────
@@ -56,14 +57,18 @@ export function Drawer({
   // eslint-disable-next-line react-hooks/set-state-in-effect -- mount guard intencional (portal SSR)
   useEffect(() => setMounted(true), []);
 
+  // Se apila mientras está abierta: Escape cierra solo la capa de arriba (un diálogo sobre un cajón, no los dos).
+  const [capa] = useState(() => Symbol("capa"));
+  useEffect(() => (open ? apilarCapa(capa) : undefined), [open, capa]);
+
   useEffect(() => {
     if (!open || !closeOnEscape) return;
     function handler(e: KeyboardEvent) {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape" && esLaDeArriba(capa)) onClose();
     }
     document.addEventListener("keydown", handler);
     return () => document.removeEventListener("keydown", handler);
-  }, [open, closeOnEscape, onClose]);
+  }, [open, closeOnEscape, onClose, capa]);
 
   useEffect(() => {
     if (!open) return;
