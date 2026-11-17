@@ -11,7 +11,7 @@
 import "server-only";
 import { modeloDisponible } from "@/lib/db/esquema";
 import { prisma } from "@/lib/db/prisma";
-import { MAX_TEXTO_DEL_DOCUMENTO } from "./minuta-de-la-sesion";
+import { MAX_TEXTO_DEL_ARCHIVO as MAX_TEXTO_DEL_DOCUMENTO } from "./minuta-de-la-sesion";
 
 export const SQL_DE_DOCUMENTOS = "scripts/sql/2026-10-01-exploracion-documentos.sql";
 

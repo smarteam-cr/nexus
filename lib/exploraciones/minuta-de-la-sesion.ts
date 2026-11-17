@@ -2,48 +2,58 @@
  * lib/exploraciones/minuta-de-la-sesion.ts — la transcripción o la minuta que se suma a mano a una sesión. PURO.
  *
  * Pedido de Elías (2026-11-17, Ulacit): una reunión de una hora y veinte que no se grabó se pegaba entera y el
- * servidor respondía «Cuerpo inválido», porque el texto pasaba de los 60.000 caracteres que lee el agente. Ahora
- * entra, y se guarda el principio y el final, con una marca donde se quitó el tramo del medio: el arranque trae el
- * contexto y el cierre el siguiente paso, que es lo que se perdía cortando solo por el final.
+ * servidor respondía «Cuerpo inválido», porque el texto pasaba de los 60.000 caracteres que leía el agente. La
+ * primera vuelta la recortaba por el medio; Elías no quiso que se quitara nada. Ahora el agente lee ENTERA cada reunión,
+ * sea de Meet o sumada a mano, hasta unas seis horas de conversación, y lo más largo se rechaza con un mensaje que lo
+ * dice: nunca se corta en silencio.
  */
 import type { SesionPlaneada } from "./guia";
 
-/** Cuánto lee el agente de una reunión (el mismo tope que las de Meet, fuentes.ts › `MAX` al leer). */
-export const MAX_TEXTO_DEL_DOCUMENTO = 60_000;
+/**
+ * Cuánto lee el agente de UNA reunión, entera (fuentes.ts › al leer): unas seis horas de conversación, unos 110.000
+ * tokens. Con el resto del pedido cabe holgado en el contexto del modelo, y una reunión más larga no existe en la práctica.
+ */
+export const MAX_TEXTO_DE_UNA_REUNION = 400_000;
 
 /**
- * Lo más largo que se acepta pegar: va en el cuerpo del pedido y el nginx del VPS corta a 1 MB. Con acentos, saltos de
- * línea escapados en el JSON y algún emoji, 250.000 caracteres quedan holgados (una reunión de 3 horas).
+ * Cuánto lee el agente en UNA corrida, sumando todo lo que le llega (reuniones, HubSpot y notas): lo que no entra queda
+ * «sin leer» para la siguiente, entero. La primera reunión siempre entra.
  */
-export const MAX_TEXTO_PEGADO = 250_000;
-
-/** Cuánto se extrae de un archivo subido (va directo a Storage, sin el corte del nginx): lo largo se recorta por el medio. */
-export const MAX_TEXTO_DEL_ARCHIVO = 1_000_000;
-
-/** Del espacio que se guarda, cuánto va al principio (el resto, al final). */
-const PARTE_DEL_PRINCIPIO = 2 / 3;
-
-export const marcaDelRecorte = (quitados: number) =>
-  `\n\n[… se quitaron ${quitados.toLocaleString("es-CR").replace(/[  ]/g, " ")} caracteres del medio para que el agente pueda leerla …]\n\n`;
+export const TOPE_DE_LA_LECTURA = MAX_TEXTO_DE_UNA_REUNION;
 
 /**
- * El texto que cabe en `max`: igual si ya cabe; si no, el principio y el final con la marca en el medio. Corta en un
- * salto de línea cercano para no partir un turno de la transcripción a la mitad. `quitados`: cuántos se quitaron.
+ * Lo más largo que se acepta PEGAR: va en el cuerpo del pedido y el nginx del VPS corta a 1 MB. 200.000 caracteres (unas
+ * tres horas) con acentos y los saltos de línea escapados en el JSON quedan holgados. Más largo, se sube como archivo
+ * (va directo al almacenamiento, sin ese corte).
  */
-export function recortarParaElAgente(texto: string, max: number = MAX_TEXTO_DEL_DOCUMENTO): { texto: string; quitados: number } {
-  if (texto.length <= max) return { texto, quitados: 0 };
-  // La marca ocupa lugar: se reserva con el número más largo posible.
-  const espacio = max - marcaDelRecorte(texto.length).length;
-  const principio = Math.floor(espacio * PARTE_DEL_PRINCIPIO);
-  const fin = espacio - principio;
-  let corteA = principio;
-  const saltoA = texto.lastIndexOf("\n", principio);
-  if (saltoA > principio * 0.9) corteA = saltoA;
-  let corteB = texto.length - fin;
-  const saltoB = texto.indexOf("\n", corteB);
-  if (saltoB !== -1 && saltoB - corteB < fin * 0.1) corteB = saltoB + 1;
-  const quitados = corteB - corteA;
-  return { texto: texto.slice(0, corteA).trimEnd() + marcaDelRecorte(quitados) + texto.slice(corteB).trimStart(), quitados };
+export const MAX_TEXTO_PEGADO = 200_000;
+
+/** Lo más largo que se acepta en un archivo subido: lo que el agente lee de una reunión. */
+export const MAX_TEXTO_DEL_ARCHIVO = MAX_TEXTO_DE_UNA_REUNION;
+
+const enMiles = (n: number) => (n / 1000).toLocaleString("es-CR");
+
+/** Pegado de más (se dice, no se corta). */
+export const MENSAJE_DE_PEGADO_LARGO = `Es más largo de lo que se puede pegar (${enMiles(MAX_TEXTO_PEGADO)} mil caracteres, unas tres horas): súbelo como archivo, que admite hasta ${enMiles(MAX_TEXTO_DEL_ARCHIVO)} mil, o divídelo en dos.`;
+
+/** Un archivo de más (se dice, no se corta). */
+export const MENSAJE_DE_ARCHIVO_LARGO = `Es más largo de lo que el agente lee de una reunión (${enMiles(MAX_TEXTO_DEL_ARCHIVO)} mil caracteres, unas seis horas): divídelo en dos y súmalos por separado.`;
+
+/**
+ * Lo más que puede llevar el pedido al modelo antes de las notas (hasta 60.000) y de las instrucciones del agente: unos
+ * 130.000 tokens, holgados dentro de su contexto. Pasarlo hacía fallar la lectura igual cada vez que se pedía.
+ */
+export const TOPE_DURO_DEL_PEDIDO = 450_000;
+
+/**
+ * ¿Entra en esta corrida una reunión de `largo` (ya con el tope por reunión aplicado), con `usado` caracteres ya juntados
+ * (HubSpot, tests, otras reuniones) y `reunionesDentro` reuniones ya adentro? La primera entra aunque lo demás ocupe lugar
+ * (si no, una larga podía no leerse nunca), salvo que el pedido no cupiera en el modelo; las siguientes, si caben en el
+ * tope de la corrida. Lo que no entra no se lee ni se marca: queda «sin leer» para la próxima, entero.
+ */
+export function entraEnLaLectura(o: { usado: number; reunionesDentro: number; largo: number }): boolean {
+  if (o.reunionesDentro === 0) return o.usado + o.largo <= TOPE_DURO_DEL_PEDIDO;
+  return o.usado + o.largo <= TOPE_DE_LA_LECTURA;
 }
 
 /**

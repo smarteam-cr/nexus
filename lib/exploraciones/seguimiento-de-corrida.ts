@@ -26,6 +26,12 @@ export interface CorridaEnCurso {
   propuestos: number | null;
   nadaNuevo: boolean;
   error: string | null;
+  /** La reunión de Meet que lee, si se pidió una (2026-11-17). Opcional: un servidor viejo no la manda. */
+  sesionId?: string | null;
+  /** Las reuniones que esperan su turno, en orden (cola-de-lectura.ts). */
+  cola?: string[];
+  /** La cola no pudo seguir (el arranque de la siguiente falló): se avisa una vez y las sesiones se piden de nuevo a mano. */
+  colaError?: string | null;
 }
 
 /** Lo que ven las piezas. Cambia de objeto con cada cambio (lo pide `useSyncExternalStore`). */
@@ -60,6 +66,11 @@ export interface SeguimientoDeCorrida {
 /** Cuántas vueltas como mucho (160 × 3 s = 8 minutos) y cada cuánto se consulta. */
 const VUELTAS = 160;
 const CADA_MS = 3000;
+/** Cuánto se espera a que arranque la siguiente de la cola (unos 30 s): si no arranca, se deja de mirar. */
+const VUELTAS_ESPERANDO_LA_COLA = 10;
+
+/** La corrida terminó y dejó lecturas en cola que el servidor todavía no lanzó. */
+export const hayColaPendiente = (c: CorridaEnCurso) => c.estado !== "RUNNING" && (c.cola?.length ?? 0) > 0;
 
 /** El aviso al terminar bien, según lo que hizo la corrida. */
 export function avisoAlTerminar(c: CorridaEnCurso): string {
@@ -92,6 +103,8 @@ export function crearSeguimiento(deps: {
   let alMontar: Promise<CorridaEnCurso | null> | null = null;
   /** La última corrida cuyo final ya se atendió (recarga y aviso): no se atiende dos veces. */
   let atendida: string | null = null;
+  /** La corrida cuya cola fallida ya se avisó. */
+  let colaAvisada: string | null = null;
 
   const vivo = () => montadas > 0;
   const cambiar = (parcial: Partial<FotoDeLaCorrida>) => {
@@ -108,12 +121,18 @@ export function crearSeguimiento(deps: {
     /* La corrida viva que se venía siguiendo. Si aparece otra viva, otra arrancó detrás (una lectura que no espera a la
        guía en curso, 2026-11-08): se recarga para ver lo que dejó la primera, sin aviso; el aviso es el de la última. */
     let seguida: string | null = foto.corrida?.estado === "RUNNING" ? foto.corrida.id : null;
+    // Cuántas vueltas se esperó a la siguiente de la cola (con un tope: si no llega, se deja de mirar).
+    let esperandoLaCola = 0;
     try {
       for (let i = 0; i < VUELTAS && vivo(); i++) {
         const c = await deps.consultar();
         if (!vivo()) return;
         cambiar({ corrida: c });
-        if (c?.estado === "RUNNING" && seguida && c.id !== seguida) await conexion?.recargar();
+        if (c?.estado === "RUNNING" && seguida && c.id !== seguida) {
+          await conexion?.recargar();
+          // Una corrida nueva (la siguiente de la cola) trae su propio tiempo: la cola entera no cabe en el de una.
+          i = 0;
+        }
         if (c?.estado === "RUNNING") seguida = c.id;
         if (!c || c.estado !== "RUNNING") {
           if (c && c.id !== atendida) {
@@ -125,8 +144,20 @@ export function crearSeguimiento(deps: {
               conexion?.avisos.error(c.error ?? "El agente no pudo terminar.");
             }
           }
+          if (c?.colaError && c.id !== colaAvisada) {
+            colaAvisada = c.id;
+            conexion?.avisos.error(c.colaError);
+          }
+          /* Terminó, pero dejó una cola: la siguiente arranca en un momento. Sin esto, una consulta justo en ese hueco
+             cortaba el seguimiento y la pantalla quedaba muda. */
+          if (c && hayColaPendiente(c) && esperandoLaCola < VUELTAS_ESPERANDO_LA_COLA) {
+            esperandoLaCola++;
+            await esperar(CADA_MS);
+            continue;
+          }
           return;
         }
+        esperandoLaCola = 0;
         await esperar(CADA_MS);
       }
     } finally {
@@ -156,6 +187,8 @@ export function crearSeguimiento(deps: {
       atendida = c.id;
       if (c.estado === "DONE" && c.empezo > vista) await conexion?.recargar();
     }
+    // Abrió justo entre una lectura de la cola y la siguiente: se sigue mirando hasta que arranque.
+    if (c && c.estado !== "RUNNING" && hayColaPendiente(c)) void seguir();
   }
 
   return {

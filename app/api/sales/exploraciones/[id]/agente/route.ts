@@ -7,6 +7,8 @@
  *   corrida. Si ya hay una viva, devuelve esa: dos corridas a la vez se pisarían lo leído.
  *   `instruccion` (con «guia», décima vuelta, «Editar con IA»): la instrucción libre con que se rehace la guía; `null`
  *   la rehace sin la de antes. Sin el campo, la guía conserva la que tenía.
+ *   `sesionIds` (con «leer», 2026-11-17): varias sesiones de Meet en bloque; se leen una por corrida, en orden. Si el
+ *   agente ya trabaja, las pedidas esperan en su cola (`encolada: true`) en vez de rebotar (cola-de-lectura.ts).
  *   Pide `ventas.write` (gasta IA).
  *
  * GET /api/sales/exploraciones/[id]/agente
@@ -23,6 +25,7 @@ import { lanzarCorrida, ultimaCorrida } from "@/lib/exploraciones/agente";
 import { MODOS_DE_LA_CORRIDA, type ModoDeLaCorrida } from "@/lib/exploraciones/contenido";
 import { MAX_INSTRUCCION_DE_LA_GUIA } from "@/lib/exploraciones/guia";
 import { leerExploracion } from "@/lib/exploraciones/servidor";
+import { colaDeLaCorrida, MAX_EN_LA_COLA, partirElPedido } from "@/lib/exploraciones/cola-de-lectura";
 import type { CorridaEnCurso } from "@/lib/exploraciones/seguimiento-de-corrida";
 
 type Ctx = { params: Promise<{ id: string }> };
@@ -31,6 +34,8 @@ const Cuerpo = z.object({
   modo: z.enum(MODOS_DE_LA_CORRIDA),
   // El id de la reunión: hasta 200 (los de una instancia de una serie de Meet llegan a ~190, etapa A).
   sesionId: z.string().min(1).max(200).optional(),
+  /** Con «leer»: varias reuniones de Meet, en bloque (se leen una por corrida, en este orden). */
+  sesionIds: z.array(z.string().min(1).max(200)).min(1).max(MAX_EN_LA_COLA).optional(),
   hubspotId: z.string().regex(/^\d{1,30}$/).optional(),
   /** Con «leer»: ubicar la escala con todo lo que Nexus sabe aunque no haya una reunión nueva (ficha B). */
   posicionar: z.boolean().optional(),
@@ -56,10 +61,12 @@ export async function POST(req: NextRequest, { params }: Ctx) {
   const cuerpo = Cuerpo.safeParse(raw);
   if (!cuerpo.success) return cuerpoInvalido(cuerpo.error);
 
-  const { modo, sesionId, hubspotId, posicionar, regenerar, revisar, instruccion } = cuerpo.data;
+  const { modo, sesionId, sesionIds, hubspotId, posicionar, regenerar, revisar, instruccion } = cuerpo.data;
+  const enBloque = modo === "leer" && sesionIds ? partirElPedido(sesionIds.map((s) => ({ id: s, por: guard.email }))) : null;
   const r = await lanzarCorrida(id, modo, {
     triggeredByEmail: guard.email,
-    sesionId: sesionId ?? null,
+    sesionId: enBloque?.primera.id ?? sesionId ?? null,
+    ...(enBloque?.resto.length ? { cola: enBloque.resto } : {}),
     ...(modo === "leer" && posicionar ? { posicionar: true } : {}),
     ...(modo === "casos" && regenerar ? { regenerar: true } : {}),
     ...(modo === "casos" && revisar ? { revisar: true } : {}),
@@ -68,7 +75,7 @@ export async function POST(req: NextRequest, { params }: Ctx) {
     ...(modo === "leer" && hubspotId ? { releer: { sesiones: [], hubspot: [hubspotId], documentos: [] }, completa: true } : {}),
   });
   if (!r.ok) return NextResponse.json({ error: r.error }, { status: r.status });
-  return NextResponse.json({ runId: r.runId, yaCorria: r.yaCorria }, { status: 202 });
+  return NextResponse.json({ runId: r.runId, yaCorria: r.yaCorria, ...(r.encolada ? { encolada: true } : {}) }, { status: 202 });
 }
 
 type FilaDeLaCorrida = NonNullable<Awaited<ReturnType<typeof ultimaCorrida>>>;
@@ -77,6 +84,14 @@ type FilaDeLaCorrida = NonNullable<Awaited<ReturnType<typeof ultimaCorrida>>>;
 function comoLaVeLaPantalla(r: FilaDeLaCorrida): CorridaEnCurso {
   const filtros = r.filters as { modo?: unknown } | null;
   const modo = (MODOS_DE_LA_CORRIDA as readonly unknown[]).includes(filtros?.modo) ? (filtros?.modo as ModoDeLaCorrida) : null;
+  /* Qué reunión lee y cuáles esperan: cada pestaña dice «Leyendo…» o «En cola» por la suya, no por todas. La cola de una
+     corrida que ya terminó se muestra hasta que arranca la siguiente (que pasa a ser la última corrida): así la pantalla
+     sabe que viene otra y sigue mirando, también en el instante entre que el servidor toma la cola y crea la siguiente.
+     Si no queda nada que lanzar, o el arranque falló, el servidor la deja vacía (con `colaError` si falló). */
+  const leida = colaDeLaCorrida(r.filters);
+  const sesionId = leida.sesionId;
+  const cola = leida.cola.map((x) => x.id);
+  const colaError = typeof (r.filters as { colaError?: unknown } | null)?.colaError === "string" ? (r.filters as { colaError: string }).colaError : null;
 
   // Murió con un reinicio y nadie escribió su final: se informa como lo que es, y los botones vuelven.
   if (r.status === "RUNNING" && estaColgada(r)) {
@@ -91,6 +106,9 @@ function comoLaVeLaPantalla(r: FilaDeLaCorrida): CorridaEnCurso {
       propuestos: null,
       nadaNuevo: false,
       error: MOTIVO_COLGADA,
+      sesionId,
+      cola,
+      colaError,
     };
   }
 
@@ -113,6 +131,9 @@ function comoLaVeLaPantalla(r: FilaDeLaCorrida): CorridaEnCurso {
     propuestos: typeof salida.propuestos === "number" ? salida.propuestos : null,
     nadaNuevo: salida.nadaNuevo === true,
     error: r.status === "ERROR" ? parseRunError(r.output) : null,
+    sesionId,
+    cola,
+    colaError,
   };
 }
 

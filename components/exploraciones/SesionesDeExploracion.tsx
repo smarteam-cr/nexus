@@ -218,6 +218,14 @@ function EncabezadoDeLaSesion({
   };
   const e = exp.estado;
   const leyendo = corriendo && corrida?.modo === "leer";
+  /* La cola de lectura (2026-11-17): cada pestaña dice lo SUYO. Antes, una lectura en curso ponía «Leyendo…» y apagaba el
+     botón en todas; ahora la que se lee dice «Leyendo…», las que esperan «En cola» y las demás se pueden poner a la cola. */
+  const enCola = new Set(corriendo ? (corrida?.cola ?? []) : []);
+  const leyendoEsta = leyendo && !!r && corrida?.sesionId === r.id;
+  const esperaEsta = !!r && enCola.has(r.id);
+  const sePuedeLeer = (p: { reunion: typeof r }) => !!p.reunion && p.reunion.origen === "meet" && !p.reunion.leida && !p.reunion.corta && p.reunion.texto !== "nada";
+  const sinLeer = todas.filter(sePuedeLeer).map((p) => p.reunion!.id);
+  const porPedir = sinLeer.filter((id) => !enCola.has(id) && !(corriendo && corrida?.sesionId === id));
 
   const cambiarReunion = () => {
     if (s) seleccion.buscarReunion({ tipo: "unir", sesionId: s.id });
@@ -399,20 +407,39 @@ function EncabezadoDeLaSesion({
           </Button>
         )}
         {momento === "despues" && r && !r.leida && !r.corta && r.texto !== "nada" && puedeEditar && (
-          <button
-            type="button"
-            disabled={lanzando || corriendo}
-            onClick={() => void lanzar("leer", r.origen === "meet" ? { sesionId: r.id } : {})}
-            className="rounded-lg bg-primary px-3 py-2 text-[13px] font-semibold text-primary-fg hover:bg-primary-hover disabled:opacity-50"
-          >
-            {leyendo ? "Leyendo…" : "Leer con el agente"}
-          </button>
+          <>
+            {porPedir.length > 1 && (
+              <Button
+                variant="secondary"
+                size="sm"
+                disabled={lanzando}
+                onClick={() => void lanzar("leer", { sesionIds: porPedir })}
+                title="Las lee una detrás de otra, cada una entera; puedes seguir trabajando"
+              >
+                {corriendo ? `Poner las ${porPedir.length} sin leer en cola` : `Leer las ${porPedir.length} sin leer`}
+              </Button>
+            )}
+            <button
+              type="button"
+              // Una de Meet se puede poner a la cola mientras el agente lee otra; las demás esperan a que termine.
+              disabled={lanzando || leyendoEsta || esperaEsta || (corriendo && r.origen !== "meet")}
+              onClick={() => void lanzar("leer", r.origen === "meet" ? { sesionId: r.id } : {})}
+              className="rounded-lg bg-primary px-3 py-2 text-[13px] font-semibold text-primary-fg hover:bg-primary-hover disabled:opacity-50"
+            >
+              {leyendoEsta ? "Leyendo…" : esperaEsta ? "En cola" : corriendo && r.origen === "meet" ? "Leer después" : "Leer con el agente"}
+            </button>
+          </>
         )}
       </div>
 
-      {leyendo && (
+      {leyendo && (!corrida?.sesionId || leyendoEsta) && (
         <p className="text-[13px] text-fg-secondary" role="status">
           El agente está leyendo: {corrida?.fase ?? "empezando…"}
+        </p>
+      )}
+      {esperaEsta && (
+        <p className="text-[13px] text-fg-secondary" role="status">
+          En cola: el agente la lee entera apenas termine con la que está leyendo.
         </p>
       )}
       {corrida?.estado === "ERROR" && corrida.modo === "leer" && <Alert variant="danger">{corrida.error}</Alert>}

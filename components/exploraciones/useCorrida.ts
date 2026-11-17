@@ -36,13 +36,14 @@ export function useCorrida() {
   useEffect(() => s.montar(vistaAlMontar.current), [s]);
 
   /**
-   * `sesionId`: para leer una reunión de Meet puntual (la de una pestaña de sesión). `hubspotId`: para resumir una de HubSpot ya leída.
-   * Devuelve si el agente arrancó con este pedido (no si ya corría otro, ni si falló).
+   * `sesionId`: para leer una reunión de Meet puntual (la de una pestaña de sesión). `sesionIds`: varias, en bloque (se
+   * leen una por corrida). `hubspotId`: para resumir una de HubSpot ya leída. Si el agente ya trabaja, una lectura de
+   * Meet espera en su cola (2026-11-17). Devuelve si el agente arrancó con este pedido (no si quedó en cola, ni si falló).
    */
   const lanzar = useCallback(
     async (
       modo: ModoDeLaCorrida,
-      opciones: { sesionId?: string; hubspotId?: string; regenerar?: boolean; revisar?: boolean; instruccion?: string | null } = {},
+      opciones: { sesionId?: string; sesionIds?: string[]; hubspotId?: string; regenerar?: boolean; revisar?: boolean; instruccion?: string | null } = {},
     ): Promise<boolean> => {
       s.ponerLanzando(true);
       try {
@@ -52,6 +53,7 @@ export function useCorrida() {
           body: JSON.stringify({
             modo,
             ...(opciones.sesionId ? { sesionId: opciones.sesionId } : {}),
+            ...(opciones.sesionIds?.length ? { sesionIds: opciones.sesionIds } : {}),
             ...(opciones.hubspotId ? { hubspotId: opciones.hubspotId } : {}),
             ...(opciones.regenerar ? { regenerar: true } : {}),
             ...(opciones.revisar ? { revisar: true } : {}),
@@ -59,12 +61,13 @@ export function useCorrida() {
             ...(opciones.instruccion !== undefined ? { instruccion: opciones.instruccion } : {}),
           }),
         });
-        const data = (await res.json().catch(() => ({}))) as { error?: string; yaCorria?: boolean };
+        const data = (await res.json().catch(() => ({}))) as { error?: string; yaCorria?: boolean; encolada?: boolean };
         if (!res.ok) {
           toast.error(data.error ?? "No se pudo lanzar el agente.");
           return false;
         }
-        if (data.yaCorria) toast.info("El agente ya está trabajando en esta preventa: cuando termine, lánzalo de nuevo si hace falta.");
+        if (data.encolada) toast.info("En cola: el agente la lee apenas termine con lo que está leyendo.");
+        else if (data.yaCorria) toast.info("El agente ya está trabajando en esta preventa: cuando termine, lánzalo de nuevo si hace falta.");
         void s.seguir();
         return !data.yaCorria;
       } catch {

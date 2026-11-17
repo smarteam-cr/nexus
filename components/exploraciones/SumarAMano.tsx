@@ -23,12 +23,12 @@ import { ContextColumnList, ContextRow, CTX_ICONS } from "@/components/clients/c
 import { VACIO_DE_LAS_FUENTES } from "@/components/clients/FuentesManualesColumn";
 import SumarFuente, { type DatosPegados, type DatosSubidos } from "@/components/contexto/SumarFuente";
 import { conEspaciosComunes, diaConAnio, diaCorto } from "@/lib/exploraciones/fechas";
-import { MAX_TEXTO_DEL_DOCUMENTO, MAX_TEXTO_PEGADO, sesionConLaMinuta } from "@/lib/exploraciones/minuta-de-la-sesion";
+import { MAX_TEXTO_PEGADO, sesionConLaMinuta } from "@/lib/exploraciones/minuta-de-la-sesion";
 import { subirDirecto } from "@/lib/storage/subir-directo";
 import { useLienzo } from "./contexto";
 import { useCorrida } from "./useCorrida";
 
-type Respuesta = { id?: string; quitados?: number; corrida?: { yaCorria: boolean } | null };
+type Respuesta = { id?: string; corrida?: { yaCorria: boolean } | null };
 
 /** El error del servidor, con el detalle de un 400 (antes se veía solo «Cuerpo inválido»). */
 function mensajeDelError(r: { error?: string; detalle?: unknown }): string {
@@ -80,14 +80,11 @@ export default function SumarAMano({
       }
     }
     await recargar();
-    const recorte = data.quitados
-      ? ` Era más largo de lo que lee el agente: se guardó el principio y el final (se quitaron ${conEspaciosComunes(data.quitados.toLocaleString("es-CR"))} caracteres del medio).`
-      : "";
     if (data.corrida && !data.corrida.yaCorria) {
-      toast.info(`Listo: el agente lo está leyendo.${recorte}`);
+      toast.info("Listo: el agente lo está leyendo.");
       void seguir();
     } else {
-      toast.info(`Listo. El agente está ocupado: léelo con «Leer la última reunión» cuando termine.${recorte}`);
+      toast.info("Listo. El agente está ocupado: léelo con «Leer la última reunión» cuando termine.");
     }
   }
 
@@ -152,7 +149,6 @@ export default function SumarAMano({
           ocupado={corriendo}
           notaAlPegar="Al menos unas líneas: el agente necesita de dónde sacar."
           deLaSesion={paraSesion ? { titulo: paraSesion.titulo, fecha: paraSesion.fecha } : undefined}
-          leeHasta={MAX_TEXTO_DEL_DOCUMENTO}
           tope={MAX_TEXTO_PEGADO}
         />
       )}

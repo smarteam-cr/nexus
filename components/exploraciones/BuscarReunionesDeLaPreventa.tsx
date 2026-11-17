@@ -18,10 +18,12 @@
  *     agregarla; una de otro cliente se muestra con su motivo y no se puede usar.
  * Una que ya es sesión lo dice («Ya es la sesión N»). Agregar pasa por el servidor
  * (POST /api/sales/exploraciones/[id]/sesiones), que relee el evento en Google y decide de quién es.
+ * Las que ya pasaron se pueden marcar y agregar EN BLOQUE (Elías, 2026-11-17), y de paso pedir que el agente las lea:
+ * entran a su cola de lectura, una por corrida y en orden de fecha (lib/exploraciones/cola-de-lectura.ts).
  */
 import { useEffect, useState } from "react";
 import { Modal, useToast } from "@/components/ui";
-import { BotonBlanco, ROTULO_DEL_SISTEMA } from "@/components/ui/sistema";
+import { BotonAzul, BotonBlanco, ROTULO_DEL_SISTEMA } from "@/components/ui/sistema";
 import { cn } from "@/lib/cn";
 import type { AgendadaDelSelector } from "@/lib/exploraciones/calendario";
 import type { ReunionDeLaEmpresa } from "@/lib/exploraciones/fuentes";
@@ -31,6 +33,7 @@ import { mismaReunion } from "@/lib/exploraciones/lectura";
 import { coincideConLaBusqueda, MIN_BUSQUEDA_CALENDARIO } from "@/lib/sessions/candidatas-internas";
 import { resumirSala, textoDeSala } from "@/lib/sessions/participantes";
 import { useLienzo, type ModoDelSelector } from "./contexto";
+import { useCorrida } from "./useCorrida";
 import { useSesiones } from "./useSesiones";
 
 interface DelCalendario {
@@ -55,6 +58,13 @@ interface RespuestaDeReuniones {
 interface RespuestaDeAgendadas {
   agendadas: AgendadaDelSelector[];
   aviso: string | null;
+}
+
+/** Una reunión pasada marcada para agregar en bloque: qué se manda, su fecha y, si el agente la puede leer, su id de Meet. */
+interface Marcada {
+  cuerpo: Agregar;
+  fecha: string;
+  leer: string | null;
 }
 
 /** Lo que se manda a POST …/sesiones (sin `paraSesionId`, que pone el modo). */
@@ -140,6 +150,10 @@ export default function BuscarReunionesDeLaPreventa({ modo, onCerrar }: { modo: 
 
   const [busqueda, setBusqueda] = useState("");
   const [ocupado, setOcupado] = useState<string | null>(null);
+  const [marcadas, setMarcadas] = useState<Map<string, Marcada>>(new Map());
+  const { lanzar } = useCorrida();
+  // En bloque, solo al AGREGAR (unir es una sesión a una reunión).
+  const enBloque = !unir;
   // Cada respuesta se guarda con la clave que la pidió: una vieja nunca se pinta debajo de una búsqueda nueva.
   const [datos, setDatos] = useState<{ clave: string; r: RespuestaDeReuniones | null; error?: boolean } | null>(null);
   const [agendadas, setAgendadas] = useState<{ r: RespuestaDeAgendadas | null; error?: boolean } | null>(null);
@@ -217,6 +231,7 @@ export default function BuscarReunionesDeLaPreventa({ modo, onCerrar }: { modo: 
   const cerrar = () => {
     onCerrar();
     setBusqueda("");
+    setMarcadas(new Map());
     // La próxima vez se vuelven a pedir (con el esqueleto mientras tanto).
     setAgendadas(null);
   };
@@ -254,6 +269,67 @@ export default function BuscarReunionesDeLaPreventa({ modo, onCerrar }: { modo: 
     </BotonBlanco>
   );
   const yaEsLa = (n: number) => <span className="text-xs text-fg-muted">Ya es la sesión {n}</span>;
+
+  const alternar = (id: string, m: Marcada) =>
+    setMarcadas((antes) => {
+      const nuevas = new Map(antes);
+      if (nuevas.has(id)) nuevas.delete(id);
+      else nuevas.set(id, m);
+      return nuevas;
+    });
+  /** La casilla de una reunión pasada que se puede agregar (va donde las agendadas llevan su ícono). */
+  const casilla = (id: string, m: Marcada, titulo: string) =>
+    enBloque ? (
+      <input
+        type="checkbox"
+        className="h-4 w-4 flex-none accent-[var(--color-brand)]"
+        checked={marcadas.has(id)}
+        disabled={ocupado !== null}
+        onChange={() => alternar(id, m)}
+        aria-label={`Marcar «${titulo || "Sin título"}» para agregarla`}
+      />
+    ) : undefined;
+
+  /**
+   * Agrega las marcadas, de la más vieja a la más nueva (así quedan numeradas en orden), una por una: cada alta se aplica
+   * sobre lo último. Con `yLeer`, las que dejaron transcripción o notas entran a la cola del agente en ese mismo orden.
+   */
+  const agregarMarcadas = async (yLeer: boolean) => {
+    const lista = [...marcadas.values()].sort((a, b) => a.fecha.localeCompare(b.fecha));
+    setOcupado("bloque");
+    let agregadas = 0;
+    const errores: string[] = [];
+    const paraLeer: string[] = [];
+    try {
+      for (const m of lista) {
+        try {
+          const res = await fetch(`/api/sales/exploraciones/${exp.id}/sesiones`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(m.cuerpo),
+          });
+          if (res.ok) {
+            agregadas++;
+            if (m.leer) paraLeer.push(m.leer);
+          } else {
+            const d = (await res.json().catch(() => ({}))) as { error?: string };
+            errores.push(d.error ?? "No se pudo agregar una de las sesiones.");
+          }
+        } catch {
+          errores.push("Se cortó la conexión agregando una de las sesiones.");
+        }
+      }
+      await recargar();
+      if (agregadas) toast.success(agregadas === 1 ? "Se agregó 1 sesión." : `Se agregaron ${agregadas} sesiones.`);
+      if (errores.length) toast.error(`${errores.length === 1 ? "Una no se pudo agregar" : `${errores.length} no se pudieron agregar`}: ${errores[0]}`);
+      if (yLeer && paraLeer.length) await lanzar("leer", { sesionIds: paraLeer });
+      if (!errores.length) cerrar();
+      else setMarcadas(new Map());
+    } finally {
+      setOcupado(null);
+    }
+  };
+  const marcadasParaLeer = [...marcadas.values()].filter((m) => m.leer).length;
 
   const ayuda =
     ver === "agendadas"
@@ -342,6 +418,7 @@ export default function BuscarReunionesDeLaPreventa({ modo, onCerrar }: { modo: 
                 return (
                   <Fila
                     key={s.sessionId}
+                    icono={n === null ? casilla(s.sessionId, { cuerpo: { tipo: "pasada", sessionId: s.sessionId }, fecha: s.date, leer: s.texto === "nada" ? null : s.sessionId }, s.title) : undefined}
                     titulo={s.title}
                     fecha={diaConAnio(s.date)}
                     pildora={
@@ -365,6 +442,7 @@ export default function BuscarReunionesDeLaPreventa({ modo, onCerrar }: { modo: 
               return (
                 <Fila
                   key={`hubspot-${h.id}`}
+                  icono={n === null ? casilla(`hubspot-${h.id}`, { cuerpo: { tipo: "pasada", origen: "hubspot", sessionId: h.id }, fecha: h.inicio, leer: null }, h.titulo) : undefined}
                   titulo={h.titulo}
                   fecha={diaConAnio(h.inicio)}
                   pildora={<Pildora tono="bien">grabada en HubSpot</Pildora>}
@@ -385,6 +463,7 @@ export default function BuscarReunionesDeLaPreventa({ modo, onCerrar }: { modo: 
               return (
                 <Fila
                   key={`documento-${d.id}`}
+                  icono={n === null ? casilla(`documento-${d.id}`, { cuerpo: { tipo: "pasada", origen: "documento", sessionId: d.id }, fecha, leer: null }, d.titulo) : undefined}
                   titulo={d.titulo}
                   fecha={diaConAnio(fecha)}
                   pildora={<Pildora>{d.origen === "archivo" ? "archivo" : "texto pegado"}</Pildora>}
@@ -406,6 +485,7 @@ export default function BuscarReunionesDeLaPreventa({ modo, onCerrar }: { modo: 
               return (
                 <Fila
                   key={s.sessionId}
+                  icono={n === null && !noSePuede ? casilla(s.sessionId, { cuerpo: { tipo: "pasada", sessionId: s.sessionId }, fecha: s.date, leer: s.sinTranscripcion ? null : s.sessionId }, s.title) : undefined}
                   titulo={s.title}
                   fecha={diaConAnio(s.date)}
                   pildora={s.sinDuenio && !noSePuede ? <Pildora>{s.soloEquipo === false ? "sin cliente asignado" : "reunión del equipo"}</Pildora> : undefined}
@@ -428,6 +508,23 @@ export default function BuscarReunionesDeLaPreventa({ modo, onCerrar }: { modo: 
 
         {sinNada && q && <li className="list-none text-xs text-fg-muted">Ninguna reunión coincide con «{q}».</li>}
       </ul>
+      {marcadas.size > 0 && (
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-3 border-t border-line pt-3">
+          <p className="text-xs text-fg-muted">
+            {marcadas.size === 1 ? "1 marcada" : `${marcadas.size} marcadas`} · se agregan en orden de fecha
+          </p>
+          <div className="flex items-center gap-2">
+            <BotonBlanco disabled={ocupado !== null} onClick={() => void agregarMarcadas(false)}>
+              {marcadas.size === 1 ? "Agregar la sesión" : `Agregar las ${marcadas.size}`}
+            </BotonBlanco>
+            {marcadasParaLeer > 0 && (
+              <BotonAzul disabled={ocupado !== null} onClick={() => void agregarMarcadas(true)} title="El agente las lee una detrás de otra, cada una entera">
+                {ocupado === "bloque" ? "Agregando…" : marcadas.size === 1 ? "Agregar y leerla" : `Agregar las ${marcadas.size} y leerlas`}
+              </BotonAzul>
+            )}
+          </div>
+        </div>
+      )}
     </Modal>
   );
 }

@@ -46,7 +46,10 @@ import {
   type ResultadoDeReunion,
 } from "./hubspot";
 import { documentosParaLeer, listarDocumentos } from "./documentos";
-import { MAX_TEXTO_DEL_DOCUMENTO } from "./minuta-de-la-sesion";
+import { entraEnLaLectura, MAX_TEXTO_DE_UNA_REUNION } from "./minuta-de-la-sesion";
+
+/** Cuánto de las notas del vendedor va al agente. */
+const MAX_NOTAS = 60_000;
 import type { ClaveDeEquipo } from "./equipos";
 import {
   claveDeReunion,
@@ -707,8 +710,21 @@ export async function leerFuentes(opts: {
      el material de los documentos: lo dicho entre el equipo no es palabra del cliente. Las demás no cambian de
      etiqueta: con ella se juntan lo que sugirió el agente y la lectura de cada reunión. */
   const internosDeLaSala = conTexto.length ? await dominiosInternos() : new Set<string>();
-  // Al leer, el mismo tope con el que se guarda una minuta larga (principio y final): si divergen, se pierde el cierre.
-  const MAX = opts.modo === "leer" ? MAX_TEXTO_DEL_DOCUMENTO : 12_000;
+  /* Al leer, cada reunión ENTERA hasta unas tres horas (Elías, 2026-11-17: «no me parece adecuado que se quite nada»). Lo
+     que no entra en el tope de la corrida no se lee ni se marca: queda «sin leer» para la próxima, nunca cortado. */
+  const MAX = opts.modo === "leer" ? MAX_TEXTO_DE_UNA_REUNION : 12_000;
+  // El tope cuenta TODO lo que va al modelo: lo que ya se juntó (HubSpot, los tests) también ocupa lugar.
+  let usado = fuentes.reduce((n, f) => n + f.texto.length, 0);
+  /* Qué reunión entra en esta corrida: la regla vive en minuta-de-la-sesion.ts › `entraEnLaLectura`. Al RELEER no hay
+     tope: ahí no hay «próxima», y una que quedara afuera no tendría resumen. */
+  let reuniones = 0;
+  const entra = (largo: number) => {
+    const n = Math.min(largo, MAX);
+    if (!releer && !entraEnLaLectura({ usado, reunionesDentro: reuniones, largo: n })) return false;
+    usado += n;
+    reuniones++;
+    return true;
+  };
   const sesionesUsadas: string[] = [];
   conTexto.forEach((s, i) => {
     const transcripcion = (s.transcript ?? "").trim();
@@ -719,7 +735,11 @@ export async function leerFuentes(opts: {
     const sala = deLaSala === "PUERTAS ADENTRO" ? prefijoDeSala(deLaSala) : "";
     // Lo que alguien recuerda de una reunión agregada a mano no son notas de Gemini: se dice qué es.
     const deQuien = transcripcion ? "" : ` (${queTieneSinTranscripcion(s.summary)})`;
-    const etiqueta = `${sala}Reunión del ${fecha(s.date)}${deQuien}: ${s.title}`;
+    /* Una reunión de más de seis horas es lo único que se lee a medias: el rótulo se lo dice al agente, para que no dé
+       por cerrado lo que no vio. */
+    const aMedias = texto.length > MAX ? " (es más larga de lo que se lee: solo su comienzo)" : "";
+    const etiqueta = `${sala}Reunión del ${fecha(s.date)}${deQuien}${aMedias}: ${s.title}`;
+    if (!entra(texto.length)) return;
     fuentes.push({ id: `S${i + 1}`, etiqueta, texto: texto.slice(0, MAX) });
     sesionesUsadas.push(s.id);
     if (marcar) reunionesLeidas.push({ fuente: `S${i + 1}`, clave: `meet:${s.id}`, etiqueta, id: s.id, origen: "meet", fecha: s.date.toISOString(), titulo: s.title });
@@ -741,6 +761,7 @@ export async function leerFuentes(opts: {
       );
   docs.forEach((d, i) => {
     const etiqueta = `Lo que sumó el vendedor${d.fecha ? ` (sesión del ${fecha(d.fecha)})` : ""}: ${d.titulo}`;
+    if (!entra(d.texto.length)) return;
     fuentes.push({ id: `M${i + 1}`, etiqueta, texto: d.texto.slice(0, MAX) });
     if (marcar) {
       leidas.documentos.push(d.id);
@@ -770,7 +791,8 @@ export async function leerFuentes(opts: {
   };
   const notas = releer ? "" : textoDeLasNotas(opts.notas, opts.sesiones ?? [], preguntaDe);
   const quien = opts.projectId ? "del CSE" : "del vendedor";
-  if (notas) fuentes.push({ id: "N0", etiqueta: `Notas ${quien} (su contexto y su interpretación, no palabras del cliente)`, texto: notas.slice(0, MAX) });
+  // Las notas tienen su propio tope (el de antes del 2026-11-17): son de la persona, no una transcripción.
+  if (notas) fuentes.push({ id: "N0", etiqueta: `Notas ${quien} (su contexto y su interpretación, no palabras del cliente)`, texto: notas.slice(0, MAX_NOTAS) });
 
   /* K11: cada reunión que se lee, con el equipo de su sesión, ligada como la liga la pantalla (las mismas reuniones de la
      exploración y las mismas pestañas). Al releer no se arman las reuniones: el resumen solo va sin equipo. */

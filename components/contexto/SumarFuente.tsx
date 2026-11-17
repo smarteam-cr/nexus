@@ -56,7 +56,6 @@ export default function SumarFuente({
   ocupado = false,
   notaAlPegar = "Lo que no quedó en ninguna reunión: una minuta, un correo, una decisión. Con la fecha, si es de una sesión.",
   deLaSesion,
-  leeHasta,
   tope,
 }: {
   /**
@@ -64,9 +63,7 @@ export default function SumarFuente({
    * 2026-11-17). Sin fecha, se pide.
    */
   deLaSesion?: { titulo: string; fecha: string | null };
-  /** Cuánto lee el agente: pasado eso se avisa que se guarda el principio y el final. */
-  leeHasta?: number;
-  /** Lo más largo que se acepta pegar. */
+  /** Lo más largo que se acepta pegar: pasado eso no se suma (nada se corta) y se dice por qué. */
   tope?: number;
   /** Guarda lo pegado. Devuelve el error para mostrar, o null si salió bien. */
   alPegar: (d: DatosPegados) => Promise<string | null>;
@@ -100,7 +97,7 @@ export default function SumarFuente({
   const listo = modo === "pegar" ? !faltaElTitulo && largo >= minimo && !pasaDelTope : !!archivo;
   // Por qué el botón no se puede usar todavía, dicho (antes quedaba apagado sin explicación).
   const porQueNo =
-    modo !== "pegar" || !largo ? null : faltaElTitulo ? "Escribe de qué es." : largo < minimo ? null : pasaDelTope ? "Es demasiado largo: pega una parte." : null;
+    modo !== "pegar" || !largo ? null : faltaElTitulo ? "Escribe de qué es." : largo < minimo ? null : pasaDelTope ? `Tiene ${conEspacios(largo)} caracteres y lo máximo para pegar es ${conEspacios(tope!)}: súbelo como archivo o divídelo en dos.` : null;
 
   const limpiar = () => {
     setTitulo("");
@@ -183,21 +180,13 @@ export default function SumarFuente({
         </div>
       )}
       {modo === "pegar" ? (
-        <>
-          <Textarea
-            value={texto}
-            onChange={(e) => setTexto(e.target.value)}
-            rows={6}
-            placeholder="Pega aquí la transcripción, el resumen o las notas."
-            aria-label="El texto"
-          />
-          {leeHasta && largo > leeHasta && !pasaDelTope && (
-            <p role="status" className="rounded-lg border border-warn-line bg-warn-surface px-3 py-2 text-xs leading-[18px] text-warn-ink">
-              Tiene {conEspacios(largo)} caracteres y el agente lee hasta {conEspacios(leeHasta)}. Se guarda el principio y el final, y se quita un
-              tramo del medio (unos {conEspacios(largo - leeHasta)} caracteres).
-            </p>
-          )}
-        </>
+        <Textarea
+          value={texto}
+          onChange={(e) => setTexto(e.target.value)}
+          rows={6}
+          placeholder="Pega aquí la transcripción, el resumen o las notas."
+          aria-label="El texto"
+        />
       ) : (
         <input
           ref={input}

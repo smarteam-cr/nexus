@@ -83,6 +83,7 @@ import {
 } from "./contenido";
 import type { EscalaDelLienzo } from "./escala-del-lienzo";
 import { leerContenido, leerPropuesta } from "./esquemas";
+import { aNombreDe, colaDeLaCorrida, heredarDeLaColgada, siguienteDeLaCola, sumarALaCola, type EnCola } from "./cola-de-lectura";
 import { leerFuentes, reunionesDeLaExploracion, reunionesSinLeer, transcripcionesDeLaExploracion, type LoQueSeLeyo, type LoQueSeRelee } from "./fuentes";
 import { agendaRenovada, exploracionesQueLeenLaReunion, hayQueLeerAlPreparar, mismaReunion } from "./lectura";
 import { buildInternalDomainsSet } from "@/lib/sessions/categorize";
@@ -215,12 +216,15 @@ interface LoQueLeyoLaCorrida {
 /** Un fallo con un mensaje que ya está escrito para el vendedor (no hace falta traducirlo). */
 class FalloDeLaExploracion extends Error {}
 
-export type ResultadoDeLanzar = { ok: true; runId: string; yaCorria: boolean } | { ok: false; status: number; error: string };
+/** `encolada`: el agente ya trabajaba y la lectura pedida quedó en su cola (cola-de-lectura.ts). */
+export type ResultadoDeLanzar = { ok: true; runId: string; yaCorria: boolean; encolada?: boolean } | { ok: false; status: number; error: string };
 
 interface OpcionesDeLaCorrida {
   triggeredByEmail: string | null;
   /** Para «leer»: la reunión que hay que leer (la que acaba de llegar). */
   sesionId?: string | null;
+  /** Para «leer» con `sesionId`: las que se leen después, una por corrida, en orden, con quién pidió cada una (cola-de-lectura.ts). */
+  cola?: EnCola[];
   /** Para «leer»: el documento que el vendedor acaba de sumar. */
   documentoId?: string | null;
   /** La lanzó una reunión nueva, no una persona. */
@@ -279,7 +283,7 @@ export async function ultimaCorrida(exploracionId: string, clientId: string, db:
       ...(modo ? { AND: [{ filters: { path: ["modo"], equals: modo } }] } : {}),
     },
     orderBy: { createdAt: "desc" },
-    select: { id: true, status: true, currentPhase: true, createdAt: true, updatedAt: true, output: true, stepLabel: true, filters: true },
+    select: { id: true, status: true, currentPhase: true, createdAt: true, updatedAt: true, output: true, stepLabel: true, filters: true, triggeredByEmail: true },
   });
 }
 
@@ -303,13 +307,32 @@ export async function lanzarCorrida(exploracionId: string, modo: ModoDelAgente, 
        «Preparar» no pueden quedar sin hacer. La guía que queda vieja no se guarda (`armarGuia`). */
     const modoVivo = (ultima?.filters as { modo?: string } | null)?.modo;
     const cede = !!ultima && modoVivo === "guia" && modo !== "guia";
+    // La cola de una corrida que murió con un reinicio no se pierde, ni la reunión que estaba leyendo: pasan a la nueva.
+    let heredada: EnCola[] = [];
+    // Quién pide esta lectura (null: el sistema): la cola recuerda a quién cobrársela.
+    const pedidaPor = opts.automatica ? null : opts.triggeredByEmail;
     if (ultima?.status === "RUNNING" && !cede) {
-      if (!estaColgada(ultima)) return { runId: ultima.id, yaCorria: true };
+      if (!estaColgada(ultima)) {
+        /* Otra lectura pedida mientras el agente trabaja (2026-11-17): en vez de rebotar, espera en la cola de la corrida
+           viva y se lee cuando termine. Solo una reunión de Meet puntual; un documento o un «releer» siguen rebotando. */
+        const pedidas: EnCola[] = modo === "leer" && opts.sesionId && !opts.releer && !opts.documentoId ? [{ id: opts.sesionId, por: pedidaPor }, ...(opts.cola ?? [])] : [];
+        if (!pedidas.length) return { runId: ultima.id, yaCorria: true };
+        const actual = colaDeLaCorrida(ultima.filters);
+        const cola = sumarALaCola(actual, pedidas);
+        if (cola.length > actual.cola.length) {
+          const filtros = (ultima.filters && typeof ultima.filters === "object" ? ultima.filters : {}) as Record<string, unknown>;
+          await tx.agentRun.update({ where: { id: ultima.id }, data: { filters: { ...filtros, cola } as Prisma.InputJsonValue } });
+        }
+        return { runId: ultima.id, yaCorria: true, encolada: cola.length > actual.cola.length || actual.cola.some((x) => x.id === opts.sesionId) };
+      }
+      heredada = heredarDeLaColgada(ultima.filters, ultima.triggeredByEmail ?? null);
       await tx.agentRun.update({
         where: { id: ultima.id },
         data: { status: "ERROR", currentPhase: null, output: JSON.stringify({ error: MOTIVO_COLGADA }) },
       });
     }
+    const sesionDeLaCorrida = modo === "leer" && opts.sesionId && !opts.releer && !opts.documentoId ? opts.sesionId : null;
+    const cola = sumarALaCola({ sesionId: sesionDeLaCorrida, cola: sesionDeLaCorrida ? (opts.cola ?? []) : [] }, heredada.filter((x) => x.id !== sesionDeLaCorrida));
     const run = await tx.agentRun.create({
       data: {
         agentSlug: AGENTE_DE_LA_EXPLORACION,
@@ -319,7 +342,7 @@ export async function lanzarCorrida(exploracionId: string, modo: ModoDelAgente, 
           opts.releer && !opts.completa ? "Preventa: resumir las reuniones ya leídas" : ((delProyecto ? ETIQUETA_DEL_PROYECTO[modo] : null) ?? ETIQUETA[modo]),
         currentPhase: "Empezando…",
         triggeredByEmail: opts.triggeredByEmail,
-        filters: { exploracionId, modo, ...(opts.automatica ? { automatica: true } : {}), ...(opts.releer && !opts.completa ? { soloResumen: true } : {}), ...(modo === "guia" && opts.instruccion !== undefined ? { instruccion: opts.instruccion } : {}), ...(modo === "posicionar" ? { ventaId: opts.ventaId ?? null, ...(opts.proyectoDeContexto ? { proyectoDeContexto: opts.proyectoDeContexto } : {}) } : {}) } as Prisma.InputJsonValue,
+        filters: { exploracionId, modo, ...(sesionDeLaCorrida ? { sesionId: sesionDeLaCorrida } : {}), ...(cola.length ? { cola } : {}), ...(opts.automatica ? { automatica: true } : {}), ...(opts.releer && !opts.completa ? { soloResumen: true } : {}), ...(modo === "guia" && opts.instruccion !== undefined ? { instruccion: opts.instruccion } : {}), ...(modo === "posicionar" ? { ventaId: opts.ventaId ?? null, ...(opts.proyectoDeContexto ? { proyectoDeContexto: opts.proyectoDeContexto } : {}) } : {}) } as Prisma.InputJsonValue,
       },
       select: { id: true },
     });
@@ -327,9 +350,51 @@ export async function lanzarCorrida(exploracionId: string, modo: ModoDelAgente, 
   });
   // En segundo plano: la pantalla sigue la fase. Cualquier falla queda en la corrida.
   if (!r.yaCorria) {
-    void correr(r.runId, exploracionId, modo, opts).catch((e) => console.error("[exploraciones/agente] la corrida falló fuera de su try", e));
+    void correr(r.runId, exploracionId, modo, opts)
+      .catch((e) => console.error("[exploraciones/agente] la corrida falló fuera de su try", e))
+      // Bien o mal, la que espera en la cola arranca: una lectura que falla no deja trabadas a las demás.
+      .finally(() => void seguirLaCola(r.runId, exploracionId).catch((e) => console.error("[exploraciones/agente] la cola de lectura no siguió", e)));
   }
   return { ok: true, ...r };
+}
+
+/**
+ * Al terminar una corrida, la siguiente de su cola (cola-de-lectura.ts). Las que el agente ya leyó entretanto se saltan.
+ * La cola se TOMA con la fila bloqueada, el mismo candado con que `lanzarCorrida` encola: un pedido que llega justo al
+ * terminar o quedó escrito antes y se ve acá, o encuentra la corrida terminada y arranca solo. Si una persona lanzó otra
+ * corrida en el medio, `lanzarCorrida` le pasa esta cola a esa: no se pierde ninguna. Cada una se lanza a nombre de quien
+ * la pidió (null: el sistema, con el presupuesto automático).
+ */
+async function seguirLaCola(runId: string, exploracionId: string) {
+  const tomada = await prisma.$transaction(async (tx) => {
+    await bloquearFila(tx, exploracionId);
+    const run = await tx.agentRun.findUnique({ where: { id: runId }, select: { filters: true } });
+    const c = colaDeLaCorrida(run?.filters);
+    if (!c.cola.length || c.tomada) return [];
+    const filtros = (run?.filters && typeof run.filters === "object" ? run.filters : {}) as Record<string, unknown>;
+    await tx.agentRun.update({ where: { id: runId }, data: { filters: { ...filtros, colaTomada: true } as Prisma.InputJsonValue } });
+    return c.cola;
+  });
+  if (!tomada.length) return;
+  /* Lo que queda escrito en la corrida que terminó: sin nada que lanzar, la cola vacía (la pantalla deja de esperar); si el
+     arranque falla, la cola con su motivo (la pantalla lo dice y las sesiones vuelven a poder pedirse a mano). */
+  const cerrar = async (extra: Record<string, unknown>) => {
+    const run = await prisma.agentRun.findUnique({ where: { id: runId }, select: { filters: true } });
+    const filtros = (run?.filters && typeof run.filters === "object" ? run.filters : {}) as Record<string, unknown>;
+    await prisma.agentRun.update({ where: { id: runId }, data: { filters: { ...filtros, ...extra } as Prisma.InputJsonValue } });
+  };
+  const lectura = await leerExploracion(exploracionId);
+  if (lectura.estado !== "ok" || lectura.fila.archivadaEn) return cerrar({ cola: [] });
+  const leidas = leerPropuesta(lectura.fila.propuesta).leidas;
+  const pedido = siguienteDeLaCola(tomada, new Set([...leidas.sesiones, ...(leidas.soloNotas ?? [])]));
+  if (!pedido) return cerrar({ cola: [] });
+  const r = await lanzarCorrida(exploracionId, "leer", { ...aNombreDe(pedido.primera), sesionId: pedido.primera.id, cola: pedido.resto }).catch(
+    (e: unknown) => ({ ok: false as const, status: 500, error: e instanceof Error ? e.message : "No arrancó." }),
+  );
+  if (!r.ok) {
+    console.error(`[exploraciones/agente] la cola de lectura no siguió ${exploracionId}: ${r.error}`);
+    await cerrar({ cola: [], colaError: `No se pudo seguir con las lecturas en cola: ${r.error} Pide de nuevo las que faltan.` });
+  }
 }
 
 async function fase(runId: string, texto: string) {

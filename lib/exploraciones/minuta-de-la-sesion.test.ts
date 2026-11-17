@@ -1,6 +1,16 @@
 import { describe, expect, it } from "vitest";
-import { DocumentoPegadoSchema } from "./esquemas";
-import { marcaDelRecorte, MAX_TEXTO_DEL_DOCUMENTO, MAX_TEXTO_PEGADO, recortarParaElAgente, sesionConLaMinuta } from "./minuta-de-la-sesion";
+import { DocumentoPegadoSchema, DocumentoSubidoSchema } from "./esquemas";
+import {
+  entraEnLaLectura,
+  MAX_TEXTO_DE_UNA_REUNION,
+  MAX_TEXTO_DEL_ARCHIVO,
+  MAX_TEXTO_PEGADO,
+  MENSAJE_DE_ARCHIVO_LARGO,
+  MENSAJE_DE_PEGADO_LARGO,
+  sesionConLaMinuta,
+  TOPE_DE_LA_LECTURA,
+  TOPE_DURO_DEL_PEDIDO,
+} from "./minuta-de-la-sesion";
 import type { SesionPlaneada } from "./guia";
 
 /** Una transcripción como la de Meet: «0:00:05 | Nombre» y lo que dijo, turno por turno. */
@@ -15,54 +25,54 @@ function transcripcion(turnos: number): string {
   return out.join("\n");
 }
 
-describe("una transcripción larga (Ulacit, 2026-11-17): entra, y se guarda el principio y el final", () => {
-  it("lo que ya cabe no se toca", () => {
-    const t = transcripcion(50);
-    expect(recortarParaElAgente(t)).toEqual({ texto: t, quitados: 0 });
-  });
-
-  it("lo largo queda dentro de lo que lee el agente, con el arranque, el cierre y la marca en el medio", () => {
-    const t = transcripcion(1200); // ~ 1 h 20 de reunión, más de 60.000 caracteres
-    expect(t.length).toBeGreaterThan(MAX_TEXTO_DEL_DOCUMENTO);
-    const r = recortarParaElAgente(t);
-    expect(r.texto.length).toBeLessThanOrEqual(MAX_TEXTO_DEL_DOCUMENTO);
-    expect(r.quitados).toBeGreaterThan(0);
-    expect(r.texto).toContain("Turno 0:");
-    expect(r.texto).toContain("Turno 1199:");
-    expect(r.texto).toMatch(/se quitaron [\d ]+ caracteres del medio/);
-    // Lo que se quitó y lo que quedó suman el original (salvo los espacios que se recortan junto a la marca).
-    expect(r.texto.length - marcaDelRecorte(r.quitados).length + r.quitados).toBeLessThanOrEqual(t.length);
-    expect(r.texto.length - marcaDelRecorte(r.quitados).length + r.quitados).toBeGreaterThan(t.length - 10);
-  });
-
-  it("corta entre turnos, sin partir una línea a la mitad", () => {
-    const r = recortarParaElAgente(transcripcion(1200));
-    const [antes, despues] = r.texto.split(/\n\n\[… se quitaron [\d ]+ caracteres del medio[^\]]*\]\n\n/);
-    expect(antes.split("\n").at(-1)).toMatch(/^(Turno \d+: .*\.|\d+:\d{2}:\d{2} \| \w+)$/);
-    expect(despues.split("\n")[0]).toMatch(/^(Turno \d+: .*\.|\d+:\d{2}:\d{2} \| \w+)$/);
-  });
-
-  it("un archivo de más de lo que se acepta pegar conserva su final real (se recorta sobre el texto entero)", () => {
-    const enorme = transcripcion(6000); // ~ 6 h, más que MAX_TEXTO_PEGADO
-    expect(enorme.length).toBeGreaterThan(MAX_TEXTO_PEGADO);
-    const r = recortarParaElAgente(enorme);
-    expect(r.texto).toContain("Turno 5999:");
-    expect(r.texto.length).toBeLessThanOrEqual(MAX_TEXTO_DEL_DOCUMENTO);
-    expect(DocumentoPegadoSchema.safeParse({ titulo: "x", texto: r.texto }).success).toBe(true);
-  });
-
-  it("sin saltos de línea igual queda dentro del tope", () => {
-    const r = recortarParaElAgente("a".repeat(90_000));
-    expect(r.texto.length).toBeLessThanOrEqual(MAX_TEXTO_DEL_DOCUMENTO);
-    expect(r.quitados).toBeGreaterThan(29_000);
-  });
-
-  it("el esquema ya no rechaza una reunión larga: el «Cuerpo inválido» venía de ahí", () => {
+describe("una transcripción larga (Ulacit, 2026-11-17): entra entera, sin quitarle nada", () => {
+  it("una reunión de una hora y veinte (unos 72.000 caracteres) pasa el esquema tal cual", () => {
     const larga = transcripcion(1200);
-    expect(DocumentoPegadoSchema.safeParse({ titulo: "Cierre Ulacit", texto: larga, fecha: "2026-11-13" }).success).toBe(true);
+    expect(larga.length).toBeGreaterThan(60_000);
+    const r = DocumentoPegadoSchema.safeParse({ titulo: "Cierre Ulacit", texto: larga, fecha: "2026-11-13" });
+    expect(r.success).toBe(true);
+    expect(r.data?.texto).toBe(larga.trim());
+  });
+
+  it("pegado de más se rechaza diciéndolo y mandando a subirlo como archivo, no se corta", () => {
     const r = DocumentoPegadoSchema.safeParse({ titulo: "x", texto: "a".repeat(MAX_TEXTO_PEGADO + 1) });
     expect(r.success).toBe(false);
-    expect(r.error?.issues[0]?.message).toBe("El texto es demasiado largo: pega una parte.");
+    expect(r.error?.issues[0]?.message).toBe(MENSAJE_DE_PEGADO_LARGO);
+    expect(MENSAJE_DE_PEGADO_LARGO).toMatch(/súbelo como archivo/);
+  });
+
+  it("un archivo admite lo que el agente lee de una reunión, y más largo se rechaza diciéndolo", () => {
+    expect(DocumentoSubidoSchema.safeParse({ titulo: "x", texto: "a".repeat(MAX_TEXTO_PEGADO + 1) }).success).toBe(true);
+    const r = DocumentoSubidoSchema.safeParse({ titulo: "x", texto: "a".repeat(MAX_TEXTO_DEL_ARCHIVO + 1) });
+    expect(r.success).toBe(false);
+    expect(r.error?.issues[0]?.message).toBe(MENSAJE_DE_ARCHIVO_LARGO);
+  });
+
+  it("lo que se acepta es lo que el agente lee entero: si divergen, algo se cortaría en silencio", () => {
+    expect(MAX_TEXTO_DEL_ARCHIVO).toBe(MAX_TEXTO_DE_UNA_REUNION);
+    expect(MAX_TEXTO_PEGADO).toBeLessThanOrEqual(MAX_TEXTO_DE_UNA_REUNION);
+    expect(TOPE_DE_LA_LECTURA).toBeGreaterThanOrEqual(MAX_TEXTO_DE_UNA_REUNION);
+  });
+});
+
+describe("qué reunión entra en una corrida (la regla que usa fuentes.ts): lo que no entra queda para la próxima, entero", () => {
+  it("la primera entra aunque sea la más larga, y aunque HubSpot ya ocupe lugar", () => {
+    expect(entraEnLaLectura({ usado: 0, reunionesDentro: 0, largo: MAX_TEXTO_DE_UNA_REUNION })).toBe(true);
+    expect(entraEnLaLectura({ usado: 40_000, reunionesDentro: 0, largo: MAX_TEXTO_DE_UNA_REUNION })).toBe(true);
+  });
+
+  it("…salvo que el pedido no cupiera en el modelo: ahí espera, en vez de fallar igual cada vez", () => {
+    expect(entraEnLaLectura({ usado: TOPE_DURO_DEL_PEDIDO - MAX_TEXTO_DE_UNA_REUNION + 1, reunionesDentro: 0, largo: MAX_TEXTO_DE_UNA_REUNION })).toBe(false);
+  });
+
+  it("detrás de otra, entra solo si cabe en el tope de la corrida", () => {
+    expect(entraEnLaLectura({ usado: TOPE_DE_LA_LECTURA - 10, reunionesDentro: 1, largo: 10 })).toBe(true);
+    expect(entraEnLaLectura({ usado: TOPE_DE_LA_LECTURA - 10, reunionesDentro: 1, largo: 11 })).toBe(false);
+  });
+
+  it("el pedido duro deja lugar a las notas (60.000) y a las instrucciones dentro del contexto del modelo", () => {
+    // ~3,5 caracteres por token en español; el modelo admite 200.000 tokens.
+    expect((TOPE_DURO_DEL_PEDIDO + 60_000) / 3.5).toBeLessThan(160_000);
   });
 });
 
