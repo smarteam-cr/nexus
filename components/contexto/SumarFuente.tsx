@@ -44,6 +44,8 @@ export function tituloConFecha(titulo: string | null, fecha: string | null): str
   return t ? `${t} — ${dia}` : `Sesión del ${dia}`;
 }
 
+const conEspacios = (n: number) => n.toLocaleString("es-CR").replace(/[  ]/g, " ");
+
 export default function SumarFuente({
   alPegar,
   alSubir,
@@ -53,7 +55,19 @@ export default function SumarFuente({
   minimo = 1,
   ocupado = false,
   notaAlPegar = "Lo que no quedó en ninguna reunión: una minuta, un correo, una decisión. Con la fecha, si es de una sesión.",
+  deLaSesion,
+  leeHasta,
+  tope,
 }: {
+  /**
+   * Es la reunión de una sesión que ya existe: su nombre y su fecha se usan en vez de pedirlos otra vez (Elías,
+   * 2026-11-17). Sin fecha, se pide.
+   */
+  deLaSesion?: { titulo: string; fecha: string | null };
+  /** Cuánto lee el agente: pasado eso se avisa que se guarda el principio y el final. */
+  leeHasta?: number;
+  /** Lo más largo que se acepta pegar. */
+  tope?: number;
   /** Guarda lo pegado. Devuelve el error para mostrar, o null si salió bien. */
   alPegar: (d: DatosPegados) => Promise<string | null>;
   /** Sube el archivo. Devuelve el error para mostrar, o null si salió bien. */
@@ -79,10 +93,14 @@ export default function SumarFuente({
   const [error, setError] = useState<string | null>(null);
   const input = useRef<HTMLInputElement>(null);
 
-  const listo =
-    modo === "pegar"
-      ? (!tituloObligatorio || titulo.trim().length > 0) && texto.trim().length >= minimo
-      : !!archivo;
+  const fechaDeLaSesion = deLaSesion?.fecha && /^\d{4}-\d{2}-\d{2}$/.test(deLaSesion.fecha) ? deLaSesion.fecha : null;
+  const largo = texto.trim().length;
+  const pasaDelTope = modo === "pegar" && !!tope && largo > tope;
+  const faltaElTitulo = tituloObligatorio && !deLaSesion && titulo.trim().length === 0;
+  const listo = modo === "pegar" ? !faltaElTitulo && largo >= minimo && !pasaDelTope : !!archivo;
+  // Por qué el botón no se puede usar todavía, dicho (antes quedaba apagado sin explicación).
+  const porQueNo =
+    modo !== "pegar" || !largo ? null : faltaElTitulo ? "Escribe de qué es." : largo < minimo ? null : pasaDelTope ? "Es demasiado largo: pega una parte." : null;
 
   const limpiar = () => {
     setTitulo("");
@@ -97,10 +115,12 @@ export default function SumarFuente({
     setEnviando(true);
     setError(null);
     try {
+      const t = titulo.trim() || deLaSesion?.titulo.trim() || "";
+      const f = fecha || fechaDeLaSesion;
       const e =
         modo === "pegar"
-          ? await alPegar({ titulo: titulo.trim(), fecha: fecha || null, texto: texto.trim() })
-          : await alSubir({ archivo: archivo as File, titulo: titulo.trim() || null, fecha: fecha || null });
+          ? await alPegar({ titulo: t, fecha: f, texto: texto.trim() })
+          : await alSubir({ archivo: archivo as File, titulo: t || null, fecha: f });
       if (e) {
         setError(e);
         return;
@@ -127,30 +147,57 @@ export default function SumarFuente({
         valor={modo}
         onCambio={setModo}
       />
-      <div className="grid gap-3 sm:grid-cols-[1fr_11rem]">
-        <Input
-          value={titulo}
-          onChange={(e) => setTitulo(e.target.value)}
-          placeholder={modo === "pegar" ? "De qué es (por ejemplo, Llamada de Gong con Ana)" : "De qué es (si no, el nombre del archivo)"}
-          aria-label="De qué es"
-          maxLength={120}
-        />
-        <Input
-          type="date"
-          value={fecha}
-          onChange={(e) => setFecha(e.target.value)}
-          aria-label="Fecha de la sesión (si es una sesión)"
-          title="Fecha de la sesión, si es una sesión"
-        />
-      </div>
+      {deLaSesion ? (
+        <div className="flex flex-wrap items-center gap-3">
+          <p className="text-sm text-fg-secondary">
+            Es de la sesión <span className="font-semibold text-fg">«{deLaSesion.titulo}»</span>
+            {fechaDeLaSesion ? ` del ${fechaDeLaFuente(fechaDeLaSesion)}` : ""}.
+          </p>
+          {!fechaDeLaSesion && (
+            <Input
+              type="date"
+              value={fecha}
+              onChange={(e) => setFecha(e.target.value)}
+              aria-label="Fecha de la sesión"
+              title="Fecha de la sesión"
+              className="w-44"
+            />
+          )}
+        </div>
+      ) : (
+        <div className="grid gap-3 sm:grid-cols-[1fr_11rem]">
+          <Input
+            value={titulo}
+            onChange={(e) => setTitulo(e.target.value)}
+            placeholder={modo === "pegar" ? "De qué es (por ejemplo, Llamada de Gong con Ana)" : "De qué es (si no, el nombre del archivo)"}
+            aria-label="De qué es"
+            maxLength={120}
+          />
+          <Input
+            type="date"
+            value={fecha}
+            onChange={(e) => setFecha(e.target.value)}
+            aria-label="Fecha de la sesión (si es una sesión)"
+            title="Fecha de la sesión, si es una sesión"
+          />
+        </div>
+      )}
       {modo === "pegar" ? (
-        <Textarea
-          value={texto}
-          onChange={(e) => setTexto(e.target.value)}
-          rows={6}
-          placeholder="Pega aquí la transcripción, el resumen o las notas."
-          aria-label="El texto"
-        />
+        <>
+          <Textarea
+            value={texto}
+            onChange={(e) => setTexto(e.target.value)}
+            rows={6}
+            placeholder="Pega aquí la transcripción, el resumen o las notas."
+            aria-label="El texto"
+          />
+          {leeHasta && largo > leeHasta && !pasaDelTope && (
+            <p role="status" className="rounded-lg border border-warn-line bg-warn-surface px-3 py-2 text-xs leading-[18px] text-warn-ink">
+              Tiene {conEspacios(largo)} caracteres y el agente lee hasta {conEspacios(leeHasta)}. Se guarda el principio y el final, y se quita un
+              tramo del medio (unos {conEspacios(largo - leeHasta)} caracteres).
+            </p>
+          )}
+        </>
       ) : (
         <input
           ref={input}
@@ -161,7 +208,8 @@ export default function SumarFuente({
           aria-label="El archivo"
         />
       )}
-      {error && <p className="text-xs text-danger-ink">{error}</p>}
+      {error && <p className="whitespace-pre-line text-xs text-danger-ink">{error}</p>}
+      {!error && porQueNo && <p className="text-xs text-warn-ink">{porQueNo}</p>}
       <div className="flex items-center justify-between gap-3">
         <p className="text-2xs text-fg-muted">
           {modo === "subir"

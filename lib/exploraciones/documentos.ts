@@ -11,11 +11,12 @@
 import "server-only";
 import { modeloDisponible } from "@/lib/db/esquema";
 import { prisma } from "@/lib/db/prisma";
+import { MAX_TEXTO_DEL_DOCUMENTO } from "./minuta-de-la-sesion";
 
 export const SQL_DE_DOCUMENTOS = "scripts/sql/2026-10-01-exploracion-documentos.sql";
 
-/** Cuánto texto se guarda de un documento: lo mismo que el agente lee de una transcripción. */
-export const MAX_TEXTO_DEL_DOCUMENTO = 60_000;
+/** Cuánto texto se guarda de un documento: lo mismo que el agente lee de una transcripción (minuta-de-la-sesion.ts). */
+export { MAX_TEXTO_DEL_DOCUMENTO };
 /** Cuántos documentos admite una exploración: más que eso ya no es una exploración. */
 export const MAX_DOCUMENTOS = 30;
 

@@ -55,23 +55,23 @@ const OFFICE_MIME_TYPES = new Set([
 ]);
 
 /**
- * Extrae texto de un buffer según su mimeType. Devuelve el texto (truncado a
- * MAX_EXTRACTED_CHARS) o null si el formato no se soporta o la extracción falla.
+ * Extrae texto de un buffer según su mimeType. Devuelve el texto (truncado a `maxChars`, por defecto
+ * MAX_EXTRACTED_CHARS; la preventa pide más para recortar una transcripción por el medio) o null si el formato no se soporta o la extracción falla.
  */
-export async function extractText(buffer: Buffer, mimeType: string): Promise<string | null> {
+export async function extractText(buffer: Buffer, mimeType: string, maxChars: number = MAX_EXTRACTED_CHARS): Promise<string | null> {
   try {
-    return await conTope(extraerSinTope(buffer, mimeType), EXTRACT_TIMEOUT_MS);
+    return await conTope(extraerSinTope(buffer, mimeType, maxChars), EXTRACT_TIMEOUT_MS);
   } catch {
     return null;
   }
 }
 
-async function extraerSinTope(buffer: Buffer, mimeType: string): Promise<string | null> {
+async function extraerSinTope(buffer: Buffer, mimeType: string, maxChars: number): Promise<string | null> {
   try {
     // Plain text / CSV
     if (mimeType === "text/plain" || mimeType === "text/csv") {
       const text = new TextDecoder().decode(buffer).trim();
-      return text ? text.slice(0, MAX_EXTRACTED_CHARS) : null;
+      return text ? text.slice(0, maxChars) : null;
     }
 
     // PDF — pdf-parse.
@@ -85,7 +85,7 @@ async function extraerSinTope(buffer: Buffer, mimeType: string): Promise<string 
       const result = await pdfParse(buffer, { max: 100 }); // max 100 pages
       const text = result.text?.trim();
       if (!text || text.length < 10) return null; // Probablemente PDF escaneado
-      return text.slice(0, MAX_EXTRACTED_CHARS);
+      return text.slice(0, maxChars);
     }
 
     // DOCX / XLSX / PPTX / ODT / ODS / ODP — officeparser (v7: OfficeParser.parseOffice)
@@ -94,7 +94,7 @@ async function extraerSinTope(buffer: Buffer, mimeType: string): Promise<string 
       const ast = await OfficeParser.parseOffice(buffer);
       const text = ast.toText()?.trim();
       if (!text || text.length < 10) return null;
-      return text.slice(0, MAX_EXTRACTED_CHARS);
+      return text.slice(0, maxChars);
     }
 
     return null;

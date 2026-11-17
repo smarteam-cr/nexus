@@ -14,9 +14,10 @@
  * plegados a un clic.
  *
  * Una reunión que casi no tiene conversación (o una sesión sin reunión, o una que terminó sin transcripción
- * ni notas) no espera una lectura: pregunta qué pasó —se hizo por otro canal, se cortó y hay que
- * reagendarla, o no se hizo— para que no quede como una reunión hecha que nadie analizó. Ahí mismo se
- * suma la minuta (etapa A): lo sumado pasa a ser la reunión de ESA sesión (SumarAMano › `paraSesionId`).
+ * ni notas) no espera una lectura: pregunta qué pasó —se hizo y la transcripción llega ahora, se hizo por
+ * otro canal y, bajo «Otra cosa pasó», se cortó o no se hizo— para que no quede como una reunión hecha que
+ * nadie analizó. La primera abre el formulario: lo sumado pasa a ser la reunión de ESA sesión, con su
+ * nombre y su fecha, y la sesión deja de estar marcada (SumarAMano › `paraSesion`).
  */
 import { useState } from "react";
 import { BotonAzul, BotonBlanco, BotonTexto, IconoDeSugerencia } from "@/components/ui/sistema";
@@ -35,7 +36,7 @@ import {
   objetivosSugeridosDeLaSiguiente,
   type Cumplimiento,
 } from "@/lib/exploraciones/despues-de-la-sesion";
-import { MAX_SESIONES, type PestanaDeSesion, type PreguntaParaMostrar, type ResultadoDeLaSesion } from "@/lib/exploraciones/guia";
+import { MAX_SESIONES, tituloDeLaSesion, type PestanaDeSesion, type PreguntaParaMostrar, type ResultadoDeLaSesion } from "@/lib/exploraciones/guia";
 import { claveDeNotaDeSesion } from "@/lib/exploraciones/notas-de-sesion";
 import ComoTrabajasteEstaSesion from "@/components/analizador-venta/ComoTrabajasteEstaSesion";
 import { useAnalisisDeLaVenta } from "@/components/analizador-venta/useAnalisisDeLaVenta";
@@ -427,11 +428,52 @@ function TusNotas({ pestana, vacio }: { pestana: PestanaDeSesion; vacio?: boolea
 
 // ── Sin transcripción: qué pasó con la sesión ─────────────────────────────────
 
-const OPCIONES: { clave: ResultadoDeLaSesion; titulo: string; ayuda: (siguiente: number) => string }[] = [
-  { clave: "otroCanal", titulo: "Se hizo por otro canal", ayuda: () => "Teléfono o WhatsApp. Escribe lo que pasó en «En vivo» y el agente lo lee como tus notas." },
+/* Elías (2026-11-17, Ulacit): faltaba el caso más común —se hizo y la transcripción llega ahora— y estaba como un
+   enlace al pie. Va primero y abre el formulario: no se guarda como resultado, la sesión pasa a tener su reunión.
+   «Se cortó» y «No se hizo» siguen (lo de la cortada pasa a la próxima sesión), pero bajo «Otra cosa pasó». */
+type Opcion = { clave: ResultadoDeLaSesion; titulo: string; ayuda: (siguiente: number) => string };
+const OTRO_CANAL: Opcion = {
+  clave: "otroCanal",
+  titulo: "Se hizo por otro canal",
+  ayuda: () => "Teléfono o WhatsApp, sin transcripción. Escribe lo que pasó en «En vivo» y el agente lo lee como tus notas.",
+};
+const OTRA_COSA: Opcion[] = [
   { clave: "cortada", titulo: "Se cortó: hay que reagendarla", ayuda: (n) => `Lo que tenía preparado pasa a la sesión ${n}.` },
   { clave: "noSeHizo", titulo: "No se hizo", ayuda: () => "Sale de las sesiones. La reunión sigue en Meet." },
 ];
+
+function TarjetaDeOpcion({
+  titulo,
+  ayuda,
+  elegida,
+  disabled,
+  onClick,
+}: {
+  titulo: string;
+  ayuda: string;
+  elegida: boolean;
+  disabled: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      aria-pressed={elegida}
+      disabled={disabled}
+      onClick={onClick}
+      className={cn(
+        "flex flex-col gap-1 rounded-lg border px-3.5 py-3 text-left transition-colors disabled:opacity-60",
+        elegida ? "border-brand bg-info-surface" : "border-line bg-surface hover:bg-surface-hover",
+      )}
+    >
+      <span className="text-sm font-semibold text-fg">
+        {elegida && "● "}
+        {titulo}
+      </span>
+      <span className={cn("text-[12.5px] leading-[18px]", elegida ? "text-fg-secondary" : "text-fg-muted")}>{ayuda}</span>
+    </button>
+  );
+}
 
 function QuePaso({
   pestana,
@@ -480,6 +522,11 @@ function QuePaso({
     seleccion.ponerMomento(claveSiguiente, "antes");
   };
   const nombres = (s?.pasaron ?? []).map((p) => nombreDelPara(p, escala, marco).toLowerCase());
+  // Abierto si una de sus opciones está elegida: lo marcado no se esconde.
+  const [otraCosa, setOtraCosa] = useState(false);
+  const otraCosaAbierta = otraCosa || resultado === "cortada" || resultado === "noSeHizo";
+  // El nombre que se ve en la pestaña (el suyo, el de su reunión o el del evento): unir la minuta no lo cambia.
+  const nombreDeLaSesion = (tituloDeLaSesion(pestana) ?? `Sesión ${pestana.numero}`).slice(0, 120);
 
   return (
     <>
@@ -497,29 +544,45 @@ function QuePaso({
           <h3 className="text-[15px] font-semibold text-fg">¿Qué pasó con esta sesión?</h3>
           <p className="mt-0.5 text-[12.5px] text-fg-muted">Así no queda como una reunión hecha que nadie analizó.</p>
         </header>
-        <div className="grid gap-3 px-[18px] py-3.5 md:grid-cols-3">
-          {OPCIONES.map((o) => {
-            const elegida = resultado === o.clave;
-            return (
-              <button
-                key={o.clave}
-                type="button"
-                aria-pressed={elegida}
-                disabled={!puedeEditar || guardando}
-                onClick={() => elegir(o.clave)}
-                className={cn(
-                  "flex flex-col gap-1 rounded-lg border px-3.5 py-3 text-left transition-colors disabled:opacity-60",
-                  elegida ? "border-brand bg-info-surface" : "border-line bg-surface hover:bg-surface-hover",
-                )}
-              >
-                <span className="text-sm font-semibold text-fg">
-                  {elegida && "● "}
-                  {o.titulo}
-                </span>
-                <span className={cn("text-[12.5px] leading-[18px]", elegida ? "text-fg-secondary" : "text-fg-muted")}>{o.ayuda(numeroSiguiente)}</span>
-              </button>
-            );
-          })}
+        <div className="grid gap-3 px-[18px] pt-3.5 md:grid-cols-2">
+          <TarjetaDeOpcion
+            titulo="Se hizo; la transcripción la tengo ahora"
+            ayuda="No se grabó o llegó después. Pégala o sube el archivo (o una minuta) y el agente la lee."
+            elegida={!!minutaDe}
+            disabled={!puedeEditar || guardando}
+            onClick={() => void sumarLaMinuta()}
+          />
+          <TarjetaDeOpcion
+            titulo={OTRO_CANAL.titulo}
+            ayuda={OTRO_CANAL.ayuda(numeroSiguiente)}
+            elegida={resultado === OTRO_CANAL.clave}
+            disabled={!puedeEditar || guardando}
+            onClick={() => elegir(OTRO_CANAL.clave)}
+          />
+        </div>
+        <div className="px-[18px] pb-3.5 pt-2">
+          <button
+            type="button"
+            aria-expanded={otraCosaAbierta}
+            className="text-[13px] text-fg-muted hover:text-fg-secondary"
+            onClick={() => setOtraCosa((v) => !v)}
+          >
+            {otraCosaAbierta ? "▾" : "▸"} Otra cosa pasó
+          </button>
+          {otraCosaAbierta && (
+            <div className="mt-2 grid gap-3 md:grid-cols-2">
+              {OTRA_COSA.map((o) => (
+                <TarjetaDeOpcion
+                  key={o.clave}
+                  titulo={o.titulo}
+                  ayuda={o.ayuda(numeroSiguiente)}
+                  elegida={resultado === o.clave}
+                  disabled={!puedeEditar || guardando}
+                  onClick={() => elegir(o.clave)}
+                />
+              ))}
+            </div>
+          )}
         </div>
         {resultado === "cortada" && (
           <div className="mx-[18px] mb-3.5 rounded-lg border border-success-line bg-success-surface px-3.5 py-2.5 text-[13px] leading-[19px] text-success-ink">
@@ -537,22 +600,10 @@ function QuePaso({
             Ya no cuenta como sesión. Si te equivocaste, vuelve a tocar «No se hizo».
           </div>
         )}
-        {minutaDe ? (
+        {minutaDe && (
           <div className="px-[18px] pb-4">
-            <SumarAMano paraSesionId={minutaDe} sinLista abiertoAlInicio />
+            <SumarAMano paraSesion={{ id: minutaDe, titulo: nombreDeLaSesion, fecha: s?.fecha ?? pestana.fecha }} sinLista abiertoAlInicio />
           </div>
-        ) : (
-          <p className="px-[18px] pb-4 text-[13px] text-fg-secondary">
-            ¿Tienes la grabación o una minuta de otro lado?{" "}
-            {puedeEditar ? (
-              <button type="button" className="text-brand hover:underline" disabled={guardando} onClick={() => void sumarLaMinuta()}>
-                Súmala
-              </button>
-            ) : (
-              "Súmala"
-            )}{" "}
-            y pasa a ser la reunión de esta sesión: el agente la lee.
-          </p>
         )}
       </section>
       <TusNotas pestana={pestana} vacio />
@@ -588,7 +639,11 @@ export default function DespuesDeLaSesion({
   const r = pestana.reunion;
   const lectura = r ? (exp.estado.propuesta.lecturas[claveDeLaReunion(r)] ?? null) : null;
   // Sin transcripción ni notas (etapa A) tampoco hay qué leer: se pregunta qué pasó y se suma la minuta.
-  const sinQueLeer = !!pestana.sesion?.resultado || (!!r?.corta && !lectura) || (r?.texto === "nada" && !lectura) || !r;
+  /* Si el agente ya leyó la reunión, se muestra la lectura aunque la sesión esté marcada (otro canal, cortada): la
+     marca dice que no había qué leer, y eso dejó de ser cierto (2026-11-17). Da igual por dónde se unió la reunión
+     (la minuta, «Buscar reuniones» o las sugeridas). «No se hizo» sigue sin lectura: no cuenta como sesión. */
+  const sinQueLeer =
+    pestana.sesion?.resultado === "noSeHizo" || (!lectura && (!!pestana.sesion?.resultado || !!r?.corta || r?.texto === "nada" || !r));
 
   if (sinQueLeer) {
     return (

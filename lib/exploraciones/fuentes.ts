@@ -46,6 +46,7 @@ import {
   type ResultadoDeReunion,
 } from "./hubspot";
 import { documentosParaLeer, listarDocumentos } from "./documentos";
+import { MAX_TEXTO_DEL_DOCUMENTO } from "./minuta-de-la-sesion";
 import type { ClaveDeEquipo } from "./equipos";
 import {
   claveDeReunion,
@@ -706,7 +707,8 @@ export async function leerFuentes(opts: {
      el material de los documentos: lo dicho entre el equipo no es palabra del cliente. Las demás no cambian de
      etiqueta: con ella se juntan lo que sugirió el agente y la lectura de cada reunión. */
   const internosDeLaSala = conTexto.length ? await dominiosInternos() : new Set<string>();
-  const MAX = opts.modo === "leer" ? 60_000 : 12_000;
+  // Al leer, el mismo tope con el que se guarda una minuta larga (principio y final): si divergen, se pierde el cierre.
+  const MAX = opts.modo === "leer" ? MAX_TEXTO_DEL_DOCUMENTO : 12_000;
   const sesionesUsadas: string[] = [];
   conTexto.forEach((s, i) => {
     const transcripcion = (s.transcript ?? "").trim();

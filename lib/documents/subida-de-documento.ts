@@ -54,6 +54,8 @@ export async function confirmarDocumento(
   path: unknown,
   /** El nombre tal como lo tenía el archivo (con tildes y espacios): es solo el título visible. */
   nombreOriginal?: unknown,
+  /** Cuánto texto extraer (por defecto, el tope de extract-text.ts). */
+  maxChars?: number,
 ): Promise<DocumentoConfirmado> {
   if (typeof path !== "string" || !path.startsWith(`${carpeta}/`) || path.includes("..") || path.slice(carpeta.length + 1).includes("/")) {
     return { ok: false, error: "Esa subida no es de este lugar.", status: 400 };
@@ -70,7 +72,7 @@ export async function confirmarDocumento(
     await borrarSubido("documentos", path);
     return { ok: false, error: "No se pudo leer el archivo subido. Vuelve a intentarlo.", status: 502 };
   }
-  const contenido = await extractText(buffer, v.objeto.mimetype);
+  const contenido = await extractText(buffer, v.objeto.mimetype, maxChars);
   // El título visible: el nombre original si vino; si no, el del path (sin el sello de tiempo).
   const original = typeof nombreOriginal === "string" ? nombreOriginal.replace(/\s+/g, " ").trim().slice(0, 200) : "";
   const nombre = original || path.slice(carpeta.length + 1).replace(/^\d+_/, "");

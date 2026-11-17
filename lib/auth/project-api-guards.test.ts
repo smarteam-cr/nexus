@@ -599,7 +599,7 @@ describe("⛔ subir un documento exige un MIME de la allowlist, la extracción t
     expect(await conTope(Promise.resolve("ok"), 20)).toBe("ok");
     const src = lee("lib/documents/extract-text.ts");
     expect(src, "extractText tiene que pasar por conTope").toContain(
-      "conTope(extraerSinTope(buffer, mimeType), EXTRACT_TIMEOUT_MS)",
+      "conTope(extraerSinTope(buffer, mimeType, maxChars), EXTRACT_TIMEOUT_MS)",
     );
   });
 

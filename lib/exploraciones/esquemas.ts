@@ -163,6 +163,7 @@ import {
 import { MAX_COMO_ESTA, MAX_PREGUNTA_DE_LA_TARJETA, MAX_PREGUNTAS_DE_LA_TARJETA, MAX_TARJETAS, type TarjetasDeLaEscala } from "./tarjetas-de-la-escala";
 import { MAX_ASUNTO_DEL_CORREO, MAX_CUERPO_DEL_CORREO, MAX_DESTINATARIOS } from "./correo-de-seguimiento";
 import { TOPE_DE_LA_DESCRIPCION_A_MANO, type DescripcionGuardada } from "./descripcion-de-la-escala";
+import { MAX_TEXTO_PEGADO } from "./minuta-de-la-sesion";
 
 const texto = (max: number) => z.string().trim().max(max);
 const textoLleno = (max: number) => z.string().trim().min(1).max(max);
@@ -893,7 +894,12 @@ const GuiaSchema: z.ZodType<GuiaDeLaSesion> = z.object({
 /** Una sesión o un documento que el vendedor pega a mano (lib/exploraciones/documentos.ts). */
 export const DocumentoPegadoSchema = z.object({
   titulo: textoLleno(120),
-  texto: z.string().trim().min(40, "Pega al menos unas líneas: con tan poco el agente no tiene qué leer.").max(60_000),
+  // Lo largo entra y la ruta lo recorta a lo que lee el agente (minuta-de-la-sesion.ts): una reunión de una hora larga no cabe en 60.000.
+  texto: z
+    .string()
+    .trim()
+    .min(40, "Pega al menos unas líneas: con tan poco el agente no tiene qué leer.")
+    .max(MAX_TEXTO_PEGADO, "El texto es demasiado largo: pega una parte."),
   fecha: z
     .string()
     .regex(/^\d{4}-\d{2}-\d{2}$/)
