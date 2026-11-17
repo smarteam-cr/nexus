@@ -6,7 +6,7 @@
  *   - lib/google/drive-files.ts                       (binarios que viven en Drive)
  *
  * Formatos soportados:
- *   - PDF            → pdf-parse
+ *   - PDF            → pdf-parse v2 (`PDFParse`; la v1 exportaba `default`, ver textoDePdf)
  *   - TXT / CSV      → TextDecoder nativo
  *   - DOCX/XLSX/PPTX → officeparser (una sola dependencia para los 3)
  *   - cualquier otro → null
@@ -18,13 +18,26 @@
 
 export const MAX_EXTRACTED_CHARS = 50_000;
 
+/** Páginas de PDF que se leen cuando quien llama no pide más que MAX_EXTRACTED_CHARS. */
+export const MAX_PDF_PAGES = 100;
+
+/**
+ * Techo de páginas cuando quien llama pide más texto (la preventa: una transcripción de varias horas son
+ * unas 100 a 300 páginas). pdf.js corre en el MISMO hilo que el servidor: un PDF de 20.000 páginas lo
+ * congela más de un minuto, y ni `conTope` lo corta porque su reloj también queda esperando. El techo de
+ * páginas es el tope real.
+ */
+export const MAX_PDF_PAGES_COMPLETO = 1_000;
+
 /** A-17: tope para que un PDF o un Office enorme o malicioso no deje el request colgado. */
 export const EXTRACT_TIMEOUT_MS = 20_000;
 
 /**
  * Devuelve `null` si `promesa` no resolvió dentro de `ms`. No cancela el trabajo (pdf-parse y
  * officeparser no se pueden interrumpir) pero sí destraba al caller: el documento se guarda
- * sin `content`, igual que cuando la extracción falla.
+ * sin `content`, igual que cuando la extracción falla. Solo corta trabajo que suelta el hilo: un
+ * cálculo largo y sincrónico (pdf.js sobre miles de páginas) frena también este reloj — para eso
+ * están los topes de páginas.
  */
 export async function conTope<T>(promesa: Promise<T>, ms: number): Promise<T | null> {
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -74,16 +87,11 @@ async function extraerSinTope(buffer: Buffer, mimeType: string, maxChars: number
       return text ? text.slice(0, maxChars) : null;
     }
 
-    // PDF — pdf-parse.
-    // La librería expone la función como `default` en CJS, pero el .d.ts ESM
-    // generado no lo refleja → cast en el límite de la librería externa
-    // (permitido por ARCHITECTURE.md §9 para APIs externas tipadas como unknown).
+    // PDF — pdf-parse v2. Quien pide más que el tope normal (la preventa, para una transcripción de
+    // varias horas) quiere el PDF entero: esas pasan de las 100 páginas. Entero, pero con techo.
     if (mimeType === "application/pdf") {
-      const pdfParse = (await import("pdf-parse") as unknown as {
-        default: (b: Buffer, o?: { max?: number }) => Promise<{ text?: string }>;
-      }).default;
-      const result = await pdfParse(buffer, { max: 100 }); // max 100 pages
-      const text = result.text?.trim();
+      const paginas = maxChars > MAX_EXTRACTED_CHARS ? MAX_PDF_PAGES_COMPLETO : MAX_PDF_PAGES;
+      const text = (await textoDePdf(buffer, paginas))?.trim();
       if (!text || text.length < 10) return null; // Probablemente PDF escaneado
       return text.slice(0, maxChars);
     }
@@ -98,8 +106,27 @@ async function extraerSinTope(buffer: Buffer, mimeType: string, maxChars: number
     }
 
     return null;
-  } catch {
-    // Extracción falló silenciosamente (corrupto, escaneado, formato raro).
+  } catch (e) {
+    // Falla silenciosa para quien llama (corrupto, formato raro…), pero con rastro en el log: sin él,
+    // una librería rota se ve igual que un PDF escaneado (así pasó inadvertido el cambio a pdf-parse v2).
+    // Solo tipo, tamaño y mensaje: nunca el contenido.
+    console.warn(`[extractText] falló la extracción (${mimeType}, ${buffer.length} bytes): ${e instanceof Error ? `${e.name}: ${e.message}` : String(e)}`);
     return null;
+  }
+}
+
+/**
+ * Texto de las primeras `maxPaginas` páginas del PDF. API v2 de pdf-parse: la v1 exportaba una función
+ * `default` que en la v2 ya no existe — llamarla tiraba TypeError y TODO PDF terminaba «sin texto».
+ * `pageJoiner: ""` = sin los separadores «-- 1 of N --» que la v2 mete por defecto. pdf.js copia el
+ * Buffer que recibe: el de quien llama queda intacto (lo fija una prueba).
+ */
+async function textoDePdf(buffer: Buffer, maxPaginas: number): Promise<string> {
+  const { PDFParse } = await import("pdf-parse");
+  const parser = new PDFParse({ data: buffer });
+  try {
+    return (await parser.getText({ first: maxPaginas, pageJoiner: "" })).text;
+  } finally {
+    await parser.destroy();
   }
 }

@@ -107,7 +107,25 @@ const nextConfig: NextConfig = {
     // se ve afectado: serverExternalPackages solo aplica al server.
     "@sentry/nextjs",
     "@sentry/node",
+    // pdf-parse v2 corre sobre pdf.js, que en Node levanta su "worker" con un import RELATIVO a su
+    // propio archivo (`./pdf.worker.mjs`). Bundleado, ese camino apunta al chunk y no existe → todo
+    // PDF quedaba sin texto. External = se carga desde node_modules, donde el worker está al lado
+    // (y el standalone lo copia: ver outputFileTracingIncludes). `pdfjs-dist` NO va en la lista: solo
+    // lo importa pdf-parse (ya external), y officeparser trae su propia copia, que Turbopack no
+    // puede externalizar (avisa «Package pdfjs-dist can't be external»).
+    "pdf-parse",
   ],
+  // pdf.js carga dos cosas que el trazado del standalone no ve, y sin ellas el contenedor no saca
+  // texto de ningún PDF: su worker (import dinámico, `import(this.workerSrc)`) y `@napi-rs/canvas`
+  // (vía createRequire), que le da `DOMMatrix` — sin él, pdf.js tira «DOMMatrix is not defined» al
+  // cargarse (probado contra el standalone, 2026-11-17). `canvas*` cubre el paquete y su binario de
+  // la plataforma (en Docker, canvas-linux-x64-gnu, que npm ci instala por ser opcional de pdfjs-dist).
+  outputFileTracingIncludes: {
+    "/**": [
+      "./node_modules/pdfjs-dist/legacy/build/pdf.worker.mjs",
+      "./node_modules/@napi-rs/canvas*/**/*",
+    ],
+  },
   // `serverExternalPackages` NO cubre la compilación de instrumentation.ts: al
   // convivir con middleware.ts (edge), Next también arma un bundle EDGE de
   // instrumentation.ts (para el registro conjunto edge+node del hook), y ESE
