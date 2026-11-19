@@ -19,6 +19,7 @@ import CasosDeUsoDeLaCuenta from "@/components/clients/CasosDeUsoDeLaCuenta";
 import PersonasYTickets from "@/components/clients/PersonasYTickets";
 import NotasDeLaCuenta from "@/components/clients/NotasDeLaCuenta";
 import TareasDeLaCuenta from "@/components/tareas/TareasDeLaCuenta";
+import PlanGeneralDeLaCuenta from "@/components/plan-general/PlanGeneralDeLaCuenta";
 import AltaTrabada from "@/components/projects/AltaTrabada";
 import TimelineProposalPendiente from "@/components/projects/TimelineProposalPendiente";
 import EstadoDePagoDelProyecto from "@/components/projects/EstadoDePagoDelProyecto";
@@ -48,6 +49,7 @@ const CASOS_TAB_ID = "__casos__";
 const PERSONAS_TAB_ID = "__personas__";
 const NOTAS_TAB_ID = "__notas__";
 const TAREAS_TAB_ID = "__tareas__";
+const PLAN_TAB_ID = "__plan__";
 /** Las pestañas de La cuenta: no son un proyecto. */
 const esDeLaCuenta = (id: string | null | undefined) =>
   id === STRATEGY_TAB_ID ||
@@ -57,7 +59,8 @@ const esDeLaCuenta = (id: string | null | undefined) =>
   id === CASOS_TAB_ID ||
   id === PERSONAS_TAB_ID ||
   id === NOTAS_TAB_ID ||
-  id === TAREAS_TAB_ID;
+  id === TAREAS_TAB_ID ||
+  id === PLAN_TAB_ID;
 
 interface ProjectSummary {
   id: string;
@@ -173,6 +176,7 @@ export default function WorkspaceClient({
   strategyCanvasId,
   initialCanvases,
   initialCanvasesProjectId,
+  conPlanGeneral = false,
 }: {
   clientId: string;
   projects: ProjectSummary[];
@@ -183,6 +187,8 @@ export default function WorkspaceClient({
   strategyCanvasId: string;
   initialCanvases: SeededCanvas[] | null;
   initialCanvasesProjectId: string | null;
+  /** Algún proyecto tiene loops: el riel muestra «Plan general» (lib/plan-general). */
+  conPlanGeneral?: boolean;
 }) {
   const router = useRouter();
   const syncedRef = useRef(false);
@@ -436,6 +442,7 @@ export default function WorkspaceClient({
           strategyCanvasId={strategyCanvasId}
           initialCanvases={initialCanvases}
           initialCanvasesProjectId={initialCanvasesProjectId}
+          conPlanGeneral={conPlanGeneral}
           hasHubspot={hasHubspot}
           sincronizando={sincronizandoManual}
           onSync={() => void runHubspotSync(true, true)}
@@ -456,6 +463,7 @@ function ProjectSection({
   strategyCanvasId,
   initialCanvases,
   initialCanvasesProjectId,
+  conPlanGeneral,
   hasHubspot,
   sincronizando,
   onSync,
@@ -468,6 +476,7 @@ function ProjectSection({
   strategyCanvasId: string;
   initialCanvases: SeededCanvas[] | null;
   initialCanvasesProjectId: string | null;
+  conPlanGeneral: boolean;
   /** Sin conexión a HubSpot no hay nada que actualizar → el botón ni se pinta. */
   hasHubspot: boolean;
   /**
@@ -581,6 +590,7 @@ function ProjectSection({
   const isPersonas = activeProjectId === PERSONAS_TAB_ID;
   const isNotas = activeProjectId === NOTAS_TAB_ID;
   const isTareas = activeProjectId === TAREAS_TAB_ID;
+  const isPlan = activeProjectId === PLAN_TAB_ID;
   const activeProject = abribles.find((p) => p.id === activeProjectId);
   const activoCerrado = !!activeProject && closedProjects.some((p) => p.id === activeProject.id);
   const otrosProyectos = otrosProyectosDeLaCuenta(projects, activeProject?.id ?? null);
@@ -691,7 +701,9 @@ function ProjectSection({
           onElegirProyecto={selectTab}
           onElegirCuenta={(que) =>
             selectTab(
-              que === "info"
+              que === "plan"
+                ? PLAN_TAB_ID
+                : que === "info"
                 ? STRATEGY_TAB_ID
                 : que === "procesos"
                   ? PROCESOS_TAB_ID
@@ -709,7 +721,9 @@ function ProjectSection({
             )
           }
           cuentaActiva={
-            isStrategy
+            isPlan
+              ? "plan"
+              : isStrategy
               ? "info"
               : isProcesos
                 ? "procesos"
@@ -734,6 +748,7 @@ function ProjectSection({
              caso normal —«acabo de crear el proyecto en HubSpot, tráelo»— no tenía puerta. Los
              frenos que lo hacen seguro (mutex + piso duro) están en el server. */
           traer={{ visible: hasHubspot, sincronizando, onClick: onSync }}
+          conPlanGeneral={conPlanGeneral}
         />
       </aside>
 
@@ -803,6 +818,7 @@ function ProjectSection({
         )}
         {isPersonas && <PersonasYTickets key={PERSONAS_TAB_ID} clientId={clientId} />}
         {isTareas && <TareasDeLaCuenta key={TAREAS_TAB_ID} clientId={clientId} />}
+        {isPlan && <PlanGeneralDeLaCuenta key={PLAN_TAB_ID} clientId={clientId} onAbrirProyecto={selectTab} />}
         {isNotas && <NotasDeLaCuenta key={NOTAS_TAB_ID} clientId={clientId} proyectos={projects.map((p) => ({ id: p.id, nombre: p.name }))} />}
         {isCasos && <CasosDeUsoDeLaCuenta key={CASOS_TAB_ID} clientId={clientId} slotDelPanel={panelVisible ? slotDelPanel : null} />}
         {isSolicitudes && (

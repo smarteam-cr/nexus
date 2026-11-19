@@ -19,6 +19,7 @@ import { guardTimelineEdit } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
 import type { TaskParty, TimelineTaskType } from "@prisma/client";
 import { emitTimelineEventsSafe } from "@/lib/cs/timeline-events";
+import { esTipoDeTrabajo } from "@/lib/plan-general/tipos";
 
 const PARTIES = ["CLIENTE", "SMARTEAM", "AMBOS", "DEV"] as const;
 const TYPES = ["SESSION", "TASK"] as const;
@@ -43,6 +44,8 @@ export async function POST(
     weekIndex?: unknown;
     party?: unknown;
     type?: unknown;
+    semanas?: unknown;
+    tipoDeTrabajo?: unknown;
   } | null;
 
   const phaseId = typeof body?.phaseId === "string" ? body.phaseId : "";
@@ -75,13 +78,18 @@ export async function POST(
     return NextResponse.json({ error: "Fase no encontrada en este proyecto" }, { status: 404 });
   }
   const weekIndex = Math.min(weekIndexRaw, Math.max(phase.durationWeeks - 1, 0));
+  /* El plan general de la cuenta (2026-11-19) crea actividades de varias semanas y con su tipo. Las semanas se recortan
+     a lo que cabe en la fase, igual que el weekIndex; 1 se guarda como null (lo de siempre). */
+  const semanasRaw = typeof body?.semanas === "number" && Number.isInteger(body.semanas) && body.semanas > 1 ? body.semanas : 1;
+  const semanas = Math.min(semanasRaw, Math.max(phase.durationWeeks - weekIndex, 1));
+  const tipoDeTrabajo = esTipoDeTrabajo(body?.tipoDeTrabajo) ? body.tipoDeTrabajo : null;
 
   // order = al final de su semana.
   const order = await prisma.timelineTask.count({ where: { phaseId, weekIndex } });
 
   const created = await prisma.timelineTask.create({
-    data: { phaseId, title, weekIndex, order, party, type, source: "HUMAN", status: "PENDING" },
-    select: { id: true, title: true, weekIndex: true, order: true, party: true, type: true, status: true, source: true },
+    data: { phaseId, title, weekIndex, order, party, type, source: "HUMAN", status: "PENDING", semanas: semanas > 1 ? semanas : null, tipoDeTrabajo },
+    select: { id: true, title: true, weekIndex: true, order: true, party: true, type: true, status: true, source: true, semanas: true, tipoDeTrabajo: true },
   });
 
   // Evento crudo para el watchdog (best-effort).

@@ -15551,3 +15551,59 @@ mano se perdía sin aviso en tres caminos.
   (más los escritos a mano), sin marca de cuáles no salen; y lo que dice el documento general de la escala (riesgos, costo,
   prioridades) sigue cambiando para todas las empresas cuando se publica la escala, ahora recién cuando cada una vuelve a
   publicar su página.
+
+## El plan general de la cuenta: los loops de varios proyectos en un solo gantt (2026-11-19, kölbi)
+
+**Contexto.** kölbi lleva un ciclo SmartLoop de 12 semanas con siete loops: tres de marketing y cuatro de ventas.
+Valentina lo tenía en un Excel y cada semana le pedía a Claude una imagen del gantt para el check-in. Elías decidió
+(19 nov) que viva en Nexus: tres proyectos (SmartLoop Marketing, SmartLoop Ventas e Integración con Infoclic), cada loop
+un grupo del cronograma de su proyecto, y un gantt general de la cuenta que Valentina edita y el cliente ve como un solo
+plan. Nexus sigue pensado para que un proyecto sea un loop; siete proyectos para un cliente eran demasiados, y los
+entregables de kölbi se hacen por área.
+
+- **Un loop es una fase con número** (`TimelinePhase.loopNumero`). Las actividades son sus tareas, con dos columnas
+  nuevas: `semanas` (cuántas dura desde `weekIndex`; null = una) y `tipoDeTrabajo` (diagnóstico, diseño, ejecución,
+  optimización; medición, continuidad y cierre quedan para lo transversal). El detalle largo va en las notas de la tarea,
+  que son internas. SQL `2026-11-19-plan-general-de-la-cuenta.sql`.
+- **El plan general no guarda nada propio** (`lib/plan-general/armar.ts`): se arma leyendo los cronogramas activos de la
+  cuenta, cada fase con número es un grupo, en orden de número, y las semanas van desde 1 contadas desde el arranque más
+  temprano. Editar en el plan es editar la tarea en su proyecto: estado por el PATCH de siempre (fase, tiempos y watchdog
+  incluidos), y semanas, tipo, nombre y detalle por `PATCH .../tasks/[taskId]/campos`, con la misma vara
+  (`guardTimelineEdit`; borrar, `guardTimelineDelete`); la pantalla esconde lo que el rol no puede. Como el autoguardado
+  del Gantt, no deja TimelineChange pero le avisa al vigía; el Gantt del proyecto abierto en otra pestaña nota el cambio
+  de semana por la versión del cronograma (T2). El PUT del Gantt conserva `semanas` y `tipoDeTrabajo` al recrear una
+  tarea (moverla de un loop a otro la recrea); una tarea que existe los conserva siempre.
+  - *Lo «por validar»* (`needsValidation`, una sugerencia de un agente) se ve marcado en el plan y no llega al cliente
+    (la regla única `cruzaAlCliente`); guardarla en el plan es revisarla y le quita la marca.
+  - *Diferencia aceptada:* el plan cuenta las semanas desde 1 (como el plan de Valentina y lo que ve el cliente) y el
+    Gantt del proyecto desde 0 (`S0`). La cabecera del plan dice la fecha de cada semana al pasar el mouse.
+- **Está en el riel arriba de «Proyectos»** (respuesta 4 de Elías), solo si algún proyecto tiene loops.
+- **Se comparte como cualquier artefacto, con su propio «Acceso»** (respuesta 4): `AccesoAlPlanGeneral`, uno por cuenta,
+  URL de 256 bits sin contraseña, revocable, con la foto PUBLICADA adentro, igual que La escala (16 nov). Crear el acceso
+  publica la primera vez; después solo «Publicar». La foto (`lib/plan-general/foto.ts`) no lleva proyectos, ids, el
+  detalle ni lo que está por validar. *Por qué no el acceso de un proyecto:* la decisión «Acceso externo — la dirección
+  nombra el proyecto» (10 sep) sigue en pie para las páginas de un proyecto; esta página es de la cuenta, como la escala
+  y el estado de cuenta, y no nombra ningún proyecto.
+- **El handoff declara los loops** (respuesta 2: «debe ser la B»). Sección nueva `loops`, «Loops que cubre este
+  proyecto», con UNA tabla Loop · Área · Objetivo · Prioridad (`lib/plan-general/loops-del-handoff.ts`). El área, el
+  objetivo y la prioridad viven SOLO ahí; el número y el nombre, en la fase. Cuando el handoff crea un cronograma y
+  declaró loops, las fases son los loops (una por loop, en paralelo desde la semana 0, con la duración del ciclo, sin
+  Semana 0 ni acomodo). Con un cronograma que ya existe no pisa nada: marca con su número las fases que se llaman como
+  un loop, y lo mismo hace «Aplicar» la propuesta del handoff con las fases que crea (`marcarLoopsDelHandoff`). Al
+  agente se le pide la tabla con un bloque en el mensaje solo en un SmartLoop o en una cuenta que ya tiene loops (la
+  integración de kölbi es de Desarrollo y es el loop 01).
+  - ⛔ *Solo un proyecto que trabaja por loops guarda la sección* (`proyectoTrabajaPorLoops`, revisión del 19 nov): la
+    sección está en todos los handoffs y el modelo puede llenarla igual (la fila de ejemplo, un «⚠️ Por validar»). Sin
+    esa puerta, el handoff de un proyecto común reemplazaba su cronograma por una fase falsa. Se guardan solo las tablas
+    con algún loop, la fila de ejemplo no cuenta, y un loop sin número no toma uno de otro proyecto de la cuenta.
+  - ⚠ *El prompt del agente de CS vive en la base:* el seed (`scripts/seed-handoff-agent.ts`) ya pide la sección, pero
+    hasta re-sembrarlo (comparando antes, KNOWN-ERRORS) el agente solo la escribe por el bloque del mensaje. Los de
+    Desarrollo y Web, igual con su seed.
+- **kölbi se cargó al revés** (respuesta 2, «para este caso específico, A»): primero el cronograma con el plan de
+  Valentina y desde ahí los handoffs. `scripts/kolbi-plan-general.ts`, simulacro primero: reemplaza el cronograma de
+  julio de Ventas (8 fases sin tareas, respuesta 3), crea los de Marketing e Infoclic, arranque lunes 2 nov, y escribe la
+  sección de loops en los tres handoffs (Marketing e Infoclic nacen solo con ella, respuesta 5). Los nombres de los
+  proyectos no cambian (respuesta 1: son espejo de HubSpot).
+- **Lo transversal no se carga todavía** (alineación, entrevistas, sprint review…). La puerta queda abierta: un grupo
+  transversal sería una fase con número propio en el proyecto que se decida.
+

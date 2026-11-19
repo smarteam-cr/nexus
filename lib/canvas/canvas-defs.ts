@@ -163,6 +163,11 @@ export const HANDOFF_CANVAS: CanvasDefinition = {
        habíamos hablado», y saber qué ofrecerle después— y por eso es INTERNA: ninguna
        allowlist de documento del cliente la incluye. Ver lib/canvas/fuera-de-alcance.test.ts. */
     { key: "fuera_de_alcance",     label: "Se conversó y no se vendió" },
+    /* LOS LOOPS (2026-11-19, Elías): qué loops cubre este proyecto, con su área, objetivo y prioridad, en UNA tabla.
+       Son los grupos de su cronograma (lib/plan-general/loops-del-handoff.ts): quien lee el handoff de un proyecto
+       sabe qué abarca y qué vive en otro. Vacía en los proyectos que no trabajan por loops. Va después del alcance
+       (lo vendido y su borde) porque los loops son cómo se reparte ese alcance. */
+    { key: "loops",                label: "Loops que cubre este proyecto" },
     { key: "desarrollo",           label: "Integraciones, migraciones y desarrollo" },
     { key: "motivacion_decision",  label: "¿Por qué vendimos? (por qué nos eligieron)" },
     { key: "dolor_principal",      label: "Dolor principal" },

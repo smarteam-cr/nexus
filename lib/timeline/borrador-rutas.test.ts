@@ -38,6 +38,8 @@ const guards = vi.hoisted(() => ({
   guardIaDelCronograma: vi.fn(),
 }));
 vi.mock("@/lib/auth/api-guards", () => guards);
+// El plan general (2026-11-19): marcar los loops después de aplicar es best-effort y lee la base real; acá no aplica.
+vi.mock("@/lib/plan-general/loops-del-handoff-server", () => ({ marcarLoopsDelHandoff: async () => 0 }));
 
 import { POST as aplicarPOST } from "@/app/api/projects/[projectId]/timeline/borrador/aplicar/route";
 import { DELETE as descartarDELETE } from "@/app/api/projects/[projectId]/timeline/proposal/route";

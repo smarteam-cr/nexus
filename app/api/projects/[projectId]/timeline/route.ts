@@ -77,6 +77,7 @@ import { loadProjectSummaryDesdeArbol } from "@/lib/portfolio/load";
 import type { ProjectSummary } from "@/lib/portfolio/summary";
 import { limitesDeLaFila, type LimitesDelCronograma } from "@/lib/timeline/limites";
 import { SELECT_LIMITES, conSemanaCeroDelPipeline } from "@/lib/timeline/limites-servidor";
+import { semanasQueCaben } from "@/lib/plan-general/tipos";
 // Auditoría del deshacer (2026-10-05): la versión de la foto (T2), recrear lo borrado (T1) y el borrado
 // explícito de la persona (T5). Puro, con sus tests en lib/timeline/guardado-del-cronograma.test.ts.
 import {
@@ -367,6 +368,8 @@ async function loadTimeline(projectId: string): Promise<TimelineResponse | { exi
           source: true,
           status: true,
           needsValidation: true,
+          // 2026-11-19 (plan general): solo para el respaldo de deshacer; el PUT no lo escribe en una fase que existe.
+          loopNumero: true,
           actualStart: true, // C-17: para el summary; no viaja al cable (sinFechasReales)
           actualEnd: true,
           tasks: {
@@ -391,6 +394,10 @@ async function loadTimeline(projectId: string): Promise<TimelineResponse | { exi
               actualEnd: true,
               // 2026-11-18: las horas que puso el detalle, para comparar contra las horas vendidas (lib/timeline/limites.ts).
               horasEstimadas: true,
+              // 2026-11-19 (plan general de la cuenta): cuántas semanas dura y su tipo. Solo lectura acá: el PUT no las
+              // manda ni las toca; se editan por .../tasks/[taskId]/campos.
+              semanas: true,
+              tipoDeTrabajo: true,
             },
           },
         },
@@ -757,6 +764,8 @@ export async function PUT(
         type: TimelineTaskType | null;
         startDateOverride: Date | null;
         dueDateOverride: Date | null;
+        semanas: number | null;
+        tipoDeTrabajo: string | null;
         source: TimelinePhaseSource;
         status: TimelineTaskStatus;
         needsValidation: boolean;
@@ -846,7 +855,7 @@ export async function PUT(
               notes: p.notes,
               activityType: p.activityType ?? null,
               source: recreada?.source ?? "HUMAN",
-              ...(recreada ? { status: recreada.status } : {}),
+              ...(recreada ? { status: recreada.status, loopNumero: recreada.loopNumero } : {}),
             },
             select: { id: true },
           });
@@ -954,6 +963,9 @@ export async function PUT(
                 type: t.type ?? null,
                 startDateOverride: t.startDateOverride ? new Date(t.startDateOverride) : null,
                 dueDateOverride: t.dueDateOverride ? new Date(t.dueDateOverride) : null,
+                // El plan general (2026-11-19): recrear (también moverla de fase) conserva cuánto dura y su tipo.
+                semanas: semanasQueCaben(t.semanas, t.weekIndex, p.durationWeeks),
+                tipoDeTrabajo: t.tipoDeTrabajo ?? null,
                 ...r,
               },
               select: { id: true },
@@ -1047,6 +1059,9 @@ export async function PUT(
               type: t.type ?? null,
               startDateOverride: t.startDateOverride ? new Date(t.startDateOverride) : null,
               dueDateOverride: t.dueDateOverride ? new Date(t.dueDateOverride) : null,
+              // El plan general (2026-11-19): una tarea que cruza de fase llega sin id y conserva cuánto dura y su tipo.
+              semanas: semanasQueCaben(t.semanas, t.weekIndex, p.durationWeeks),
+              tipoDeTrabajo: t.tipoDeTrabajo ?? null,
               /**
                * ⛔ QUIÉN LA CREÓ, y hasta hoy siempre decía «una persona».
                *

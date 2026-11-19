@@ -161,6 +161,8 @@ export interface GanttTask {
   /** #4 — override manual de fechas (ISO o null = derivar de la semana). */
   startDateOverride?: string | null;
   dueDateOverride?: string | null;
+  /** 2026-11-19: cuántas semanas dura desde su semana (null = una). Lo edita el plan general de la cuenta. */
+  semanas?: number | null;
 }
 
 export interface GanttPhase {
@@ -2085,6 +2087,14 @@ export default function TimelineGantt({
                                       )}
                                     </div>
                                     {/* Chips informativos (read-only en la fila; se editan en el drawer) */}
+                                    {(t.semanas ?? 1) > 1 && (
+                                      <span
+                                        className="text-[9px] font-bold uppercase tracking-wider rounded px-1.5 py-0.5 flex-shrink-0 border border-line text-fg-muted"
+                                        title={`Dura ${t.semanas} semanas desde esta. Se cambia en el plan general de la cuenta.`}
+                                      >
+                                        {t.semanas} sem
+                                      </span>
+                                    )}
                                     {effType(t.type) === "SESSION" && (
                                       <span
                                         className={`text-[9px] font-bold uppercase tracking-wider rounded px-1.5 py-0.5 flex-shrink-0 border ${TYPE_META.SESSION.cls}`}

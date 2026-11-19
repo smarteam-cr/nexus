@@ -498,6 +498,13 @@
 - **Servicio con ciclo** (`PipelineDef.servicioRecurrente`, `lib/servicios`): un servicio recurrente que además avanza por ciclos, hoy
   solo SmartLoop. Se lleva como cualquier proyecto: lo que cambia es que sus etapas son un ciclo, y Nexus muestra la que trae
   HubSpot en un círculo, sin contar vueltas. Ver DECISIONS «SmartLoop se lleva como cualquier proyecto».
+- **Loop** (`TimelinePhase.loopNumero`, desde el 2026-11-19): un frente de trabajo de un SmartLoop que corre en paralelo
+  durante el ciclo («02 · Campaign Activation»). Es una fase del cronograma de su proyecto, con su número; sus
+  actividades son las tareas de esa fase. Un proyecto puede cubrir uno o varios, y el handoff los declara en «Loops que
+  cubre este proyecto» con su área, objetivo y prioridad. Ver DECISIONS «El plan general de la cuenta».
+- **Plan general** (La cuenta, arriba de «Proyectos»; `lib/plan-general`): los loops de todos los proyectos de una cuenta
+  en un solo gantt, editable. No es una copia: cada actividad es la tarea del cronograma de su proyecto. El cliente lo ve
+  en `/external/plan/[token]`, como un solo plan, desde que alguien lo publica.
 - **Pieza oculta** (`Project.piezasOcultas`): una pieza del riel que el equipo ocultó en ese proyecto; queda en «Ver N
   piezas más», no se borra ni se apaga.
 - **La escala de la empresa** (La cuenta › La escala): dónde está la empresa en cada área de la escala, con la fecha y de

@@ -187,6 +187,8 @@ export interface RespaldoDeTarea {
 export interface RespaldoDeFase {
   status?: EstadoDeTarea;
   source?: Origen;
+  /** El plan general (2026-11-19): el número de loop de la fase, para que deshacer su borrado no la saque del plan. */
+  loopNumero?: number;
 }
 
 const de = <T extends string>(lista: readonly T[], v: unknown): T | undefined =>
@@ -217,7 +219,8 @@ export function leerRespaldoDeTarea(raw: unknown): RespaldoDeTarea | undefined {
 export function leerRespaldoDeFase(raw: unknown): RespaldoDeFase | undefined {
   if (!raw || typeof raw !== "object") return undefined;
   const r = raw as Record<string, unknown>;
-  return { status: de(ESTADOS_DE_TAREA, r.status), source: de(ORIGENES, r.source) };
+  const loop = typeof r.loopNumero === "number" && Number.isInteger(r.loopNumero) && r.loopNumero >= 0 && r.loopNumero < 1000 ? r.loopNumero : undefined;
+  return { status: de(ESTADOS_DE_TAREA, r.status), source: de(ORIGENES, r.source), ...(loop !== undefined ? { loopNumero: loop } : {}) };
 }
 
 /**
@@ -254,8 +257,8 @@ export function datosParaRecrearTarea(
 /** Con qué datos vuelve una fase recreada (una fase borrada cuyo borrado se deshizo). */
 export function datosParaRecrearFase(
   r: RespaldoDeFase | undefined,
-): { status: EstadoDeTarea; source: Origen } {
-  return { status: r?.status ?? "PENDING", source: r?.source ?? "HUMAN" };
+): { status: EstadoDeTarea; source: Origen; loopNumero: number | null } {
+  return { status: r?.status ?? "PENDING", source: r?.source ?? "HUMAN", loopNumero: r?.loopNumero ?? null };
 }
 
 /**
