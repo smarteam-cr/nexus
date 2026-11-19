@@ -44,6 +44,7 @@ import { partesDelPaso } from "@/lib/analizador-venta/analisis";
 import { Casilla } from "./Casilla";
 import { CorreoDeSeguimiento } from "./CorreoDeSeguimiento";
 import { useLienzo } from "./contexto";
+import ReunionesMalLeidas from "./ReunionesMalLeidas";
 import SumarAMano from "./SumarAMano";
 import { diaLargo, EtiquetaDePregunta, nombreDelPara, Rotulo, useEditarLaSesion, useFocoDeLaGuia } from "./piezas-de-la-sesion";
 import { FilaCompacta, ListaCompacta, UsadasHoy } from "./Propuestas";
@@ -671,8 +672,12 @@ export default function DespuesDeLaSesion({
     ...(tachadas.length ? [{ op: "descartar" as const, itemIds: tachadas }] : []),
   ];
 
+  // El Resumen de la escala no pudo leer bien esta reunión (18 nov): se avisa acá, con «Volver a leer».
+  const malLeida = r ? (exp.estado.contenido.resumenDeLaEscala?.malLeidas ?? []).filter((m) => m.reunion === r.id) : [];
+
   return (
     <div className="space-y-5">
+      <ReunionesMalLeidas reuniones={malLeida} sola />
       <QuePasoEnLaReunion pestana={pestana} lectura={lectura} />
       {/* ⛔ El feedback de la sesión (S4, 2026-10-27) va A LA VISTA, junto a «Qué pasó» (Elías, 2026-11-08: la primera vuelta
           lo metió en un plegable y «desapareció»). Lo vigila lib/exploraciones/feedback-a-la-vista.test.ts. */}

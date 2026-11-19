@@ -48,6 +48,7 @@ import { MAX_TEXTO_DE_LA_PAGINA } from "@/lib/external/textos-de-la-pagina";
 import type { CitaDelResumen } from "@/lib/exploraciones/resumen-de-la-escala";
 import { chequeoDelMapa, cuentaDelArea, fraseDeLaCuenta } from "@/lib/exploraciones/mapa";
 import { AL_LUGAR, DEL_LUGAR, useLienzo } from "./contexto";
+import ReunionesMalLeidas from "./ReunionesMalLeidas";
 import { avisarQueLaEscalaCambio } from "./escala-al-dia";
 import { DetalleDeDimension, useMarcarNivel } from "./DetalleDeLaDimension";
 
@@ -378,6 +379,22 @@ export default function PaginaDeLaEscala() {
         ),
       deDonde: (citas, d) => <DeDondeSale citas={citas} noSostiene={d?.noSostiene} />,
       fijo,
+      // Una cifra que dijo Smarteam y la empresa no corrigió (18 nov): «Confirmar» la deja como dicha por la empresa.
+      confirmar:
+        puedeEditar && res.at
+          ? (clave) => (
+              <button
+                type="button"
+                className="re-confirmar"
+                onClick={async () => {
+                  const ok = await cambiar([{ op: "resumenDeLaEscala", clave: `${clave}:confirmar`, texto: "si" }]);
+                  if (ok) otraVez();
+                }}
+              >
+                Confirmar
+              </button>
+            )
+          : undefined,
     };
     // Las cifras que el cliente no ve (Elías, 9 nov): adentro salen marcadas, con el porqué, para corregirlas o quitarlas.
     const cifras = res.tarjetas.flatMap((t) => t.subequipos.flatMap((x) => x.cifras));
@@ -415,6 +432,7 @@ export default function PaginaDeLaEscala() {
               Los niveles se movieron después de armarlo. Revisa lo que dice o rehazlo con IA.
             </Alert>
           )}
+          {res.malLeidas && res.malLeidas.length > 0 && <ReunionesMalLeidas reuniones={res.malLeidas} />}
           {res.avisos && res.avisos.length > 0 && (
             <ul className="list-disc space-y-0.5 pl-5 text-warn-ink">
               {res.avisos.map((a) => (

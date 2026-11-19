@@ -154,6 +154,10 @@ async function main() {
     for (const c of op.cifras) console.log(`  # ${c.cifra} [${c.estado}] ${c.texto}${c.nota ? ` — nota: ${c.nota}` : ""}${citas(c.citas)}`);
     if (op.falta) console.log(`  falta: ${op.falta}`);
   }
+  console.log(`${NL}── 7 · Puntos clave (${escrito.puntos.length})`);
+  for (const [i, p] of escrito.puntos.entries()) console.log(`  ${i + 1}. ${p.titulo} (${p.areaId ? nombreDeArea(p.areaId) : "toda la empresa"}): ${p.texto}${citas(p.citas)}`);
+  console.log(`${NL}── Reuniones que no se pudieron leer bien (${le.malLeidas.length})`);
+  for (const m of le.malLeidas) console.log(`  ${m.fecha.slice(0, 10)} «${m.titulo ?? "sin título"}»: ${m.motivos.join(" y ")} · se leyó el ${m.leido} % · la empresa dijo el ${m.delCliente} %`);
   console.log(`${NL}── Por qué`);
   for (const [a, x] of Object.entries(escrito.areas)) console.log(`  ${nombreDeArea(a)}: ${x.porque?.texto ?? "(sin)"}`);
   console.log(`${NL}── 5 · Pendientes`);
@@ -181,6 +185,8 @@ async function main() {
     firmas: le.firmas,
     confirmar: escrito.confirmar,
     avisos: escrito.avisos,
+    puntos: escrito.puntos,
+    malLeidas: le.malLeidas,
   };
   const entorno = { edicion: l.fila.edicion, perfilCierre: l.fila.perfilCierre, perfilDespues: l.fila.perfilDespues, escalaVersion: l.escala.version };
   const porExplorar = Object.fromEntries(l.deLasAreas.map((x) => [x.resultado.areaId, x.porExplorar]));

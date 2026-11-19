@@ -14760,6 +14760,8 @@ problemas tenemos que resolver». Es un cambio de presentación: los criterios y
   lleva su nota («Lo resumimos en la reunión y lo confirmaste: falta validarlo con tus datos»). Una declarada dicha con dudas
   («si no me equivoco», «no tengo el dato exacto») lleva «Lo dijiste de memoria: falta confirmar el dato exacto y su
   período». Centauro: «25 clientes y se nos van 14» sale estimada; el 2,8 % mensual de Emiley, declarado y por validar.
+  *Corrige (18 nov, Cemaco):* una cifra que dijo Smarteam y la empresa NO corrigió también entra, «por confirmar» (ver «El
+  Resumen de la escala por peso»). Antes se descartaba.
 - ⛔ **Toda afirmación lleva cita**, con la misma vara del 9 nov (`citaVerificada`, `cifrasDeMas`, las confirmaciones), y
   además: una herramienta nombrada (HubSpot, Salesforce, WhatsApp, Excel…) tiene que estar en lo citado (`herramientasDeMas`,
   regla 6: no asumir herramientas, integraciones ni compras); un texto sin cita propia (un «por qué», un pendiente, una
@@ -14861,6 +14863,11 @@ Sistema 2, «Nexus · interfaz interna», se descartó): cambian el contenido, e
      Resumen avisa «La escala cambió desde este resumen» cuando la firma de los niveles al armarlo (`firmas`) ya no es la
      de hoy. La escala muestra el orden: «1 Ubicar con las reuniones · 2 Confirmar en el mapa · 3 Armar el Resumen».
 - ⛔ **Lo que vigila el código (veracidad):**
+  - *Corrige (18 nov, Elías: «Super importante usar todo. Si el vendedor dice una cifra y el cliente no corrige,
+    posiblemente es real»):* lo que dijo Smarteam ya no se tira entero. Una CIFRA dicha por Smarteam que la empresa no
+    corrigió (no dijo que no, no dio otro número, no la puso en duda) entra «por confirmar», y adentro se confirma o se
+    quita con un clic. Una cifra que la empresa corrigió no entra. Todo lo demás (los retos, el negocio, los puntos clave)
+    sigue necesitando una cita de la empresa o una confirmación suya. Ver «El Resumen de la escala por peso».
   - **Una cifra es un solo dato** (`numerosDeOtroDicho`): los números del texto tienen que salir de las citas que traen
     los números de la cifra grande. El 2,8 % y «25 contra 14» van aparte, cada uno con su estado. «25 de 50», con el 25
     de un turno y el 50 de otro, vale: es un dato frente a su meta.
@@ -15014,9 +15021,13 @@ Sistema 2 del 12 nov en las dos páginas de la escala de una empresa; el resulta
   corta (hasta 80 caracteres): no hizo falta otra lista.
 - **El prompt del agente** pide la forma editorial: la tesis en dos frases de 3 a 8 palabras sin folleto, tres
   etiquetas, el tamaño solo si la empresa lo dijo, de 3 a 5 pasos más los continuos con su ícono, la organización en dos
-  piezas (quiénes, qué hacen), una sola de lo que funciona, «frena» vacío (va en los retos), exactamente 2 retos en
-  infinitivo («Descartar a tiempo los leads que no son del producto»: lo que hay que lograr, nunca una herramienta) y
-  una cifra con el número solo y su rótulo. Las reglas de veracidad no cambian.
+  piezas (quiénes, qué hacen), una sola de lo que funciona, «frena» vacío (va en los retos), retos en infinitivo
+  («Descartar a tiempo los leads que no son del producto»: lo que hay que lograr, nunca una herramienta) y una cifra con
+  el número solo y su rótulo. Las reglas de veracidad no cambian.
+  *Corrige (18 nov, Cemaco; ver «El Resumen de la escala por peso»):* la tesis ya no son «dos hechos de la operación»:
+  nombra el PROBLEMA PRINCIPAL, el que más pesó en las reuniones, y su escala o su consecuencia («Las ventas se gestionan
+  por WhatsApp. Los clientes compran a crédito.» describía y no decía qué duele). Y el molde deja de ser igual para todas
+  las áreas: los retos van de 1 a 4 y las cifras de 0 a 2 según cuánto se habló de cada una, en vez de exactamente 2 y 1.
 - **Lo que bajó de visibilidad (aprobado por Elías en el artefacto):** la ficha con el logo del cliente (en las dos
   páginas), los atajos del Resumen, el texto largo de cada etapa, «Lo que le impide rendir más» como lista aparte, la
   tercera pieza de cada lista, la segunda cifra (el molde las pinta todas, el prompt pide una), el «por qué este nivel»
@@ -15551,3 +15562,43 @@ mano se perdía sin aviso en tres caminos.
   (más los escritos a mano), sin marca de cuáles no salen; y lo que dice el documento general de la escala (riesgos, costo,
   prioridades) sigue cambiando para todas las empresas cuando se publica la escala, ahora recién cuando cada una vuelve a
   publicar su página.
+
+## El Resumen de la escala por peso: el titular es el problema principal, 5 puntos clave y lo que dijo Smarteam (2026-11-18)
+
+Marco presentó el diagnóstico de Cemaco · Ecuador y lo rehízo por fuera: el titular («Las ventas se gestionan por WhatsApp.
+Los clientes compran a crédito.») y los retos hablaban de marketing, y lo crítico era crédito y cobro (800 clientes por
+gestor, 6 gestores, la cartera en Excel, la reportería a mano). Medido en la base, sin cambiar nada: crédito y cobro fue el
+31 % del tiempo (160 de 516 minutos, en dos reuniones) y el 37 % del texto, y el Resumen le dio lo mismo que a cada área.
+Elías: «Debe mejorarse cuanto antes».
+
+- **Las causas:** (1) la tesis pedía «dos hechos de la operación», sin peso; (2) el agente no recibía el título ni la
+  duración de cada reunión («R3 · 5 nov»), así que no sabía que una se llamaba «COBRANZA» ni cuánto duró; (3) el tope de
+  320 mil caracteres se repartía en partes iguales aunque todo cupiera, y se cortaba el medio de las reuniones largas (las
+  dos de cobranza perdieron el 23 % y el 31 %); (4) cada área llevaba exactamente 2 retos y 1 cifra; (5) las cifras clave
+  («4.800 clientes», «millón y algo de dólares») las dijo Marco y la regla las tiraba.
+- **El peso va al agente:** cada reunión llega con su título y sus minutos, y antes de las reuniones una tabla con el peso
+  de cada una (minutos y su parte del total, con las que no se pudieron leer). El prompt pide ordenar los temas por peso
+  (tiempo, cuántas reuniones, lo que la empresa dijo urgente) y darle el espacio a lo que pesa.
+- **El titular** (la tesis) nombra el problema principal: la primera frase, qué pasa hoy en el tema que más pesó; la
+  segunda, su escala o su consecuencia, con palabras de la empresa. Siguen las dos frases cortas y sus citas.
+- **El molde por peso:** los retos van de 1 a 4 por subequipo y las cifras de 0 a 2, según cuánto se habló de cada uno.
+- **«5 puntos clave»** (Marco: «que abajo se explique más»): los cinco más críticos de toda la empresa, en orden de peso,
+  cada uno con un título corto, una o dos frases y su cita, debajo del titular. Se editan, se quitan y se agregan en su
+  lugar como el resto (`punto:<id>`); «Rehacer con IA» no pisa lo de una persona. Un Resumen de antes no los trae y se
+  pinta igual (sin la parte). Una foto publicada antes tampoco: no cambia `FORMATO_DE_LA_FOTO`.
+- **El texto se reparte justo:** si todas las reuniones caben, no se corta ninguna; si no, las cortas van enteras y el
+  resto del tope se reparte entre las largas (`repartirElTope`). El tope sube de 320 mil a 400 mil caracteres: las siete
+  reuniones de Cemaco miden unos 360 mil y la de cobranza seguía perdiendo el 10 % (cerca de 0,08 USD más por armado).
+- **«Esta reunión no se pudo leer bien»:** al armar el Resumen, una reunión a la que se le cortó el medio, o donde la
+  empresa dijo menos del 28 % de lo dicho (la del 16 nov de Cemaco: 73 % del texto es de Marco presentando la
+  arquitectura), queda en `malLeidas` con su motivo. Sale en La escala (arriba del Resumen, con «Volver a leer» por
+  reunión) y en su sesión de la exploración. Volver a leerla trae la transcripción de nuevo; si la reunión fue de verdad un
+  monólogo nuestro, el aviso sigue y dice por qué.
+- ⛔ **Lo que dijo Smarteam, por confirmar** (corrige la veracidad del 11 y 12 nov): una cifra dicha por Smarteam entra si
+  en los turnos siguientes la empresa no la corrigió (`sinCorregir`): no dijo que no, no dio otro número, no preguntó.
+  Sale «Por confirmar» con «Salió en la reunión y nadie la corrigió: falta confirmarla con tus datos.», y adentro
+  lleva «Confirmar» (queda «Lo dijiste tú») y «Quitar». Una cifra que la empresa corrigió no entra. Solo las cifras: un
+  reto, una pieza del negocio o un punto clave sigue necesitando una cita de la empresa o su confirmación.
+- **Lo que no queda garantizado:** que el agente pese bien un tema que se habló poco y la empresa dijo urgente (se le pide;
+  no se mide); que «no la corrigió» sea «la aceptó» (puede que nadie la escuchó: por eso sale por confirmar); que volver a
+  leer una reunión mal leída la arregle (si fue un monólogo, no).

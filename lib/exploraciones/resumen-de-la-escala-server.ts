@@ -43,6 +43,7 @@ import { reunionesDeLaExploracion, transcripcionesDeLaExploracion } from "./fuen
 import { leerLoLeido } from "./lo-leido";
 import { bloqueDeInstrucciones } from "./notas-de-sesion";
 import {
+  comoSeLeyo,
   conIdsDeLaCorrida,
   delClienteDe,
   esDeOtraEmpresa,
@@ -50,14 +51,19 @@ import {
   NO_ES_UNA_PERSONA,
   escribirElResumen,
   juntarConLoEditado,
+  largoDeLosTurnos,
+  loQueDijoLaEmpresa,
   minutosDeLaReunion,
+  pesoDeLasSesiones,
   MODELO_DEL_RESUMEN,
   resumenParaLaPagina,
+  repartirElTope,
   reunionesQueLee,
   type AreaParaElResumen,
   type ContextoDelResumen,
   type ResumenDeLaPagina,
   type ResumenGuardado,
+  type ReunionMalLeida,
   type ReunionParaElResumen,
   type SesionHecha,
 } from "./resumen-de-la-escala";
@@ -65,7 +71,9 @@ import { bloquearFila, escalaDeLaExploracion, escalaParaExplorar, estadoDesdeFil
 
 /** Cuántas reuniones lee como mucho (las más recientes de las sesiones) y cuánto texto entre todas. */
 const MAX_REUNIONES = 8;
-const TOPE_DE_TODAS = 320_000;
+// 18 nov: de 320 a 400 mil. Las siete reuniones de Cemaco (unos 360 mil con los nombres de quien habla) no cabían y se cortaba
+// la de cobranza, la más importante. Unos 25 mil tokens más de entrada: cerca de 0,08 USD por armado.
+const TOPE_DE_TODAS = 400_000;
 const TOPE_DE_UNA = 120_000;
 /** Quien dijo menos que esto en una reunión no cuenta como «persona de tu equipo» (un saludo, un «sí»). */
 const PALABRAS_DE_QUIEN_PARTICIPO = 40;
@@ -127,6 +135,8 @@ interface LoQueLee {
   firmas: Record<string, string>;
   /** Los equipos de la escala que el cliente no ve: no se leen sus reuniones ni se habla de ellos. */
   areasFuera: string[];
+  /** Las reuniones que no se pudieron leer bien (18 nov): cortadas, o casi sin la voz de la empresa. */
+  malLeidas: ReunionMalLeida[];
 }
 
 /**
@@ -219,23 +229,39 @@ export async function loQueLeeElResumen(l: Extract<Lectura, { ok: true }>, ahora
     conTranscripcion,
     vistas,
   );
-  // `completas`: sin recortar el medio de ninguna reunión (la auditoría del simulacro relee cada cita en su turno).
-  const tope = o.completas ? Number.MAX_SAFE_INTEGER : Math.min(TOPE_DE_UNA, Math.floor(TOPE_DE_TODAS / Math.max(1, conTurnos.length)));
+  /* El tope se reparte justo (18 nov): si todas caben, ninguna se corta; si no, las cortas van enteras y lo que queda va a
+     las largas (Cemaco: se cortaba el medio de las dos de cobranza aunque todo cabía). `completas`: sin recortar nada (la
+     auditoría del simulacro relee cada cita en su turno). */
+  const enteras = conTurnos.map((r) => conversacionDelAnalisis(r.texto, Number.POSITIVE_INFINITY).turnos);
+  const largos = enteras.map(largoDeLosTurnos);
+  const topes = o.completas ? largos.map(() => Number.MAX_SAFE_INTEGER) : repartirElTope(largos, TOPE_DE_TODAS, TOPE_DE_UNA);
   const fechas = new Map(hechas.map((r) => [r.id, r.fecha]));
+  const titulos = new Map(hechas.map((r) => [r.id, r.titulo || null]));
   const reuniones: ReunionParaElResumen[] = [];
-  for (const r of conTurnos) {
-    const { turnos } = conversacionDelAnalisis(r.texto, tope);
+  const malLeidas: ReunionMalLeida[] = [];
+  for (const [i, r] of conTurnos.entries()) {
+    // Sin recorte, la conversación entera que ya se armó (no se vuelve a procesar la transcripción).
+    const { turnos, omitidos } = topes[i] >= largos[i] ? { turnos: enteras[i], omitidos: null } : conversacionDelAnalisis(r.texto, topes[i]);
     if (!turnos.length) continue;
     const q = quien.get(r.id);
-    reuniones.push({
+    const reunion: ReunionParaElResumen = {
       id: r.id,
       clave: `R${reuniones.length + 1}`,
       fecha: fechas.get(r.id) ?? "",
       equipo: r.equipo ? (EQUIPOS[r.equipo]?.nombre ?? null) : null,
       areaId: r.areaId,
+      titulo: titulos.get(r.id) ?? null,
+      minutos: duracion.get(r.id) ?? null,
+      ...(omitidos ? { recortada: true } : {}),
       turnos,
       delCliente: delClienteDe(q?.personas, deOtraEn(r.id)),
-    });
+      // Solo lo de Smarteam sin corregir vale como cifra por confirmar: no lo de HubSpot ni lo de alguien sin identificar.
+      deSmarteam: (q?.personas ?? []).filter((p) => p.lado === "smarteam").map((p) => p.nombre),
+    };
+    reuniones.push(reunion);
+    // Cuánto de lo dicho es de la empresa, sobre la reunión entera (no sobre lo leído), con la regla de las citas.
+    const mal = comoSeLeyo(reunion, { largo: largos[i], leido: largoDeLosTurnos(turnos), delCliente: loQueDijoLaEmpresa(enteras[i], reunion.delCliente) });
+    if (mal) malLeidas.push(mal);
   }
 
   const delCliente = new Set(sesiones.flatMap((x) => x.quienes ?? []));
@@ -245,16 +271,23 @@ export async function loQueLeeElResumen(l: Extract<Lectura, { ok: true }>, ahora
     (n) => !deLaEmpresa.has(paraComparar(n.split(/\s+/)[0] ?? "")),
   );
 
+  // El peso de cada sesión (18 nov): su título y sus minutos, también las que no tienen texto (pesan: se habló de eso).
+  const peso = pesoDeLasSesiones(
+    hechas.map((r) => ({ id: r.id, origen: r.origen, fecha: r.fecha, titulo: r.titulo || null, minutos: duracion.get(r.id) ?? null, areaId: areaDelEquipo(claveDelEquipo(r)) })),
+    vistas,
+    new Map(reuniones.map((r) => [r.id, r.clave])),
+  );
   const ctx: ContextoDelResumen = {
     empresa: fila.client.name,
     areas: l.deLasAreas.map((x) => areaParaElResumen(escala, x, contextoDelEquipo(fila.contenido ?? {}, x.resultado.areaId))),
     reuniones,
     instrucciones: bloqueDeInstrucciones(estado.contenido.notas, "exploracion"),
     guia: guiaDelEquipo(estado.contenido.casillas as Record<string, unknown>),
+    peso,
   };
   const entorno = entornoDe(fila, escala);
   const firmas = Object.fromEntries(l.deLasAreas.map((x) => [x.resultado.areaId, firmaDelArea(estado.contenido.chequeo, x.resultado.areaId, entorno)]));
-  return { ctx, hicimos: { sesiones, personas: delCliente.size, texto: null }, personas, firmas, areasFuera };
+  return { ctx, hicimos: { sesiones, personas: delCliente.size, texto: null }, personas, firmas, areasFuera, malLeidas };
 }
 
 /** La exploración y lo que sale hoy en su página (para el simulacro). */
@@ -332,6 +365,8 @@ export async function generarElResumenDeLaEscala(o: { exploracionId: string; ema
       firmas: le.firmas,
       confirmar: escrito.confirmar,
       avisos: escrito.avisos,
+      puntos: escrito.puntos,
+      malLeidas: le.malLeidas,
     };
     const guardado = await guardar(o.exploracionId, nuevo);
     await prisma.agentRun.update({
