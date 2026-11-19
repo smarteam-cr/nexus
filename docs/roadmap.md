@@ -1,6 +1,1096 @@
 # Roadmap de Nexus
 
-**Corte:** 2026-10-28
+**Corte:** 2026-11-19
+
+## Línea de tiempo
+
+<!-- La pestaña que abre primero: lo hecho (con fecha) y lo que sigue (en orden, sin fechas). Cómo se
+     regenera: la skill regenerar-roadmap. Lo hecho nuevo entra SOLO acá, con su «tema»; el Resumen lo toma de aquí. -->
+```linea
+{
+ "hoy": "2026-11-19",
+ "produccion": "b340fccb",
+ "temasHechoHasta": "2026-10-29",
+ "iniciativas": [
+  {
+   "id": "preventa",
+   "nombre": "Preventa",
+   "color": "#2563eb",
+   "oscuro": "#7aa7ff"
+  },
+  {
+   "id": "casos",
+   "nombre": "Casos de uso",
+   "color": "#7c3aed",
+   "oscuro": "#b69cff"
+  },
+  {
+   "id": "escala",
+   "nombre": "La escala",
+   "color": "#ea580c",
+   "oscuro": "#ff9a5c"
+  },
+  {
+   "id": "cronograma",
+   "nombre": "Cronograma",
+   "color": "#0d9488",
+   "oscuro": "#3fd1c2"
+  },
+  {
+   "id": "cs",
+   "nombre": "Customer Success",
+   "color": "#db2777",
+   "oscuro": "#ff7ab5"
+  },
+  {
+   "id": "documentos",
+   "nombre": "Documentos",
+   "color": "#a16207",
+   "oscuro": "#e8b84a"
+  },
+  {
+   "id": "reuniones",
+   "nombre": "Reuniones y empresas",
+   "color": "#8b5a2b",
+   "oscuro": "#d2a07a"
+  },
+  {
+   "id": "finanzas",
+   "nombre": "Finanzas",
+   "color": "#15803d",
+   "oscuro": "#5ad38a"
+  },
+  {
+   "id": "cobranza",
+   "nombre": "Cobranza",
+   "color": "#dc2626",
+   "oscuro": "#ff7b7b"
+  },
+  {
+   "id": "nexus",
+   "nombre": "Nexus por dentro",
+   "color": "#64748b",
+   "oscuro": "#a3b1c6"
+  }
+ ],
+ "hecho": [
+  {
+   "fecha": "2026-03-22",
+   "iniciativa": "nexus",
+   "titulo": "Nace Nexus",
+   "que": "La primera versión: cada cliente con su lienzo de trabajo, las reuniones grabadas leídas por la IA y cruzadas con HubSpot.",
+   "paraQuien": "Customer Success",
+   "prod": "si",
+   "commits": [
+    "9fa1ecc7"
+   ]
+  },
+  {
+   "fecha": "2026-04-19",
+   "iniciativa": "reuniones",
+   "titulo": "Google Meet entra como fuente de reuniones",
+   "que": "Nexus empieza a leer las reuniones de Meet. El 4 de junio se apaga Fireflies y Meet queda como la única fuente.",
+   "paraQuien": "Todo el equipo",
+   "prod": "si",
+   "tema": 2
+  },
+  {
+   "fecha": "2026-06-02",
+   "hasta": "2026-06-05",
+   "iniciativa": "nexus",
+   "titulo": "Cada persona entra con su cuenta y los datos quedan cerrados",
+   "que": "Login con Google para todos, acceso por cliente (cada CSE ve sus cuentas) y la base cerrada para que nadie de afuera pueda leer nada.",
+   "paraQuien": "Todo el equipo y los clientes",
+   "prod": "si"
+  },
+  {
+   "fecha": "2026-06-03",
+   "iniciativa": "cronograma",
+   "titulo": "El handoff de Ventas a CS y el cronograma del cliente",
+   "que": "Un agente arma el handoff de Ventas a Customer Success y el cronograma por fases. El cliente ve su kickoff y su cronograma con enlace y contraseña.",
+   "paraQuien": "Customer Success y el cliente",
+   "prod": "si",
+   "tema": 10
+  },
+  {
+   "fecha": "2026-07-10",
+   "hasta": "2026-07-11",
+   "iniciativa": "cobranza",
+   "titulo": "Cobranza: qué debe cada cliente y cuándo paga",
+   "que": "La proyección de ingresos, las promesas de pago, los reportes y la importación de datos. Arranca la conexión con Odoo y Mercury.",
+   "paraQuien": "Finanzas",
+   "prod": "si",
+   "tema": 14
+  },
+  {
+   "fecha": "2026-07-19",
+   "hasta": "2026-07-20",
+   "iniciativa": "nexus",
+   "titulo": "Permisos por sección y pantallas con un mismo vocabulario",
+   "que": "Los permisos se editan por rol y por persona en Equipo; las pantallas comparten botones, menús y estados de carga; «Mejorar con IA» llega a los documentos.",
+   "paraQuien": "Todo el equipo",
+   "prod": "si"
+  },
+  {
+   "fecha": "2026-07-22",
+   "iniciativa": "preventa",
+   "titulo": "La primera preventa",
+   "que": "Ventas trabaja a un prospecto en Nexus antes de que sea cliente (el caso Judesur), con sus reuniones unidas solas.",
+   "paraQuien": "Ventas",
+   "prod": "si",
+   "tema": 7
+  },
+  {
+   "fecha": "2026-08-01",
+   "hasta": "2026-08-02",
+   "iniciativa": "nexus",
+   "titulo": "Una base de pruebas aparte de la de los clientes",
+   "que": "Se programa y se prueba contra una base local con clientes reales copiados. Probar ya no toca la base de producción.",
+   "paraQuien": "Quien construye Nexus",
+   "prod": "si"
+  },
+  {
+   "fecha": "2026-08-17",
+   "iniciativa": "finanzas",
+   "titulo": "El punto de equilibrio anual",
+   "que": "Nexus contesta cuánto hay que facturar para no perder plata, con los costos reconciliados contra el Excel de Alex.",
+   "paraQuien": "Gerencia y Finanzas",
+   "prod": "si",
+   "tema": 14
+  },
+  {
+   "fecha": "2026-09-11",
+   "hasta": "2026-09-12",
+   "iniciativa": "nexus",
+   "titulo": "La documentación de Nexus, como una base de conocimiento",
+   "que": "Páginas que se enlazan, buscador y la sección de Customer Success con roles, competencias y Land and Expand.",
+   "paraQuien": "Todo el equipo",
+   "prod": "si"
+  },
+  {
+   "fecha": "2026-09-12",
+   "iniciativa": "escala",
+   "titulo": "La escala de rendimiento llega a los agentes",
+   "que": "La escala 5.2 entra a los agentes: ubica al cliente desde la propuesta y cierra en la entrega.",
+   "paraQuien": "Ventas y Customer Success",
+   "prod": "si",
+   "tema": 5
+  },
+  {
+   "fecha": "2026-10-01",
+   "iniciativa": "preventa",
+   "titulo": "Las exploraciones de venta",
+   "que": "Un lienzo por prospecto, de la revisión del diagnóstico a la primera propuesta y al handoff, con la escala como mapa.",
+   "paraQuien": "Ventas",
+   "prod": "si",
+   "tema": 7
+  },
+  {
+   "fecha": "2026-10-05",
+   "iniciativa": "finanzas",
+   "titulo": "Cuánto cuesta cada hora del equipo",
+   "que": "El costo por hora de cada persona y las reuniones medidas: la base para saber cuánto cuesta servir cada cuenta.",
+   "paraQuien": "Gerencia",
+   "prod": "si",
+   "tema": 13
+  },
+  {
+   "fecha": "2026-10-09",
+   "iniciativa": "nexus",
+   "titulo": "El módulo de Tareas",
+   "que": "Las tareas de cada persona en un solo lugar: nacen de las reuniones, se deciden en «Por decidir» y se crean también desde un chat.",
+   "paraQuien": "Todo el equipo",
+   "prod": "si",
+   "tema": 9
+  },
+  {
+   "fecha": "2026-10-10",
+   "iniciativa": "reuniones",
+   "titulo": "La memoria de la cuenta",
+   "que": "Cada reunión se lee una vez y deja su minuta, sus tareas propuestas y sus hechos. De ahí leen los agentes, la preventa y los documentos.",
+   "paraQuien": "Todo el equipo",
+   "prod": "si",
+   "tema": 2
+  },
+  {
+   "fecha": "2026-10-16",
+   "iniciativa": "nexus",
+   "titulo": "«Para ti» por equipo y la medición del uso",
+   "que": "Cada persona entra y ve lo que le toca hoy según su equipo. Nexus mide quién entra y qué usa.",
+   "paraQuien": "Todo el equipo",
+   "prod": "si",
+   "tema": 12
+  },
+  {
+   "fecha": "2026-10-20",
+   "iniciativa": "nexus",
+   "titulo": "«Para ti» en tres lugares",
+   "que": "«Preparar» abre el panel de la reunión, «Ya la agendé» cuenta como siguiente paso y las tareas viven solo en Tareas.",
+   "paraQuien": "Todo el equipo",
+   "prod": "si",
+   "tema": 12
+  },
+  {
+   "fecha": "2026-10-21",
+   "iniciativa": "cobranza",
+   "titulo": "Las comisiones de Ventas",
+   "que": "El modelo de comisiones, cerrado con Marco, calcula lo de cada vendedor. Todavía no se pagan desde Nexus.",
+   "paraQuien": "Ventas y Finanzas",
+   "prod": "si",
+   "tema": 14,
+   "preguntas": [
+    37
+   ]
+  },
+  {
+   "fecha": "2026-10-22",
+   "iniciativa": "finanzas",
+   "titulo": "Lo que no cuadra se ordena solo",
+   "que": "Lo que no cuadra entre el banco y lo cobrado se agrupa y se ordena solo, con Deshacer. Mercury cobra sola lo ya pagado.",
+   "paraQuien": "Finanzas",
+   "prod": "si",
+   "tema": 14,
+   "preguntas": [
+    30
+   ]
+  },
+  {
+   "fecha": "2026-10-23",
+   "iniciativa": "cs",
+   "titulo": "Dos plantillas de diagnóstico",
+   "que": "Esencial o completo, con «Antes de generar» y el enfoque de la solución.",
+   "paraQuien": "Customer Success",
+   "prod": "si",
+   "tema": 11
+  },
+  {
+   "fecha": "2026-10-25",
+   "iniciativa": "reuniones",
+   "titulo": "Meet cada 10 minutos y 180 reuniones al día",
+   "que": "Meet se lee cada 10 minutos, las notas de Gemini cuentan y se pusieron al día 180 reuniones atrasadas. HubSpot entra por un solo camino.",
+   "paraQuien": "Todo el equipo",
+   "prod": "si",
+   "tema": 2
+  },
+  {
+   "fecha": "2026-10-25",
+   "iniciativa": "cs",
+   "titulo": "El kickoff de SmartLoop",
+   "que": "El kickoff del servicio recurrente y la exploración antes del diagnóstico.",
+   "paraQuien": "Customer Success",
+   "prod": "si",
+   "tema": 8
+  },
+  {
+   "fecha": "2026-10-26",
+   "iniciativa": "reuniones",
+   "titulo": "Los datos de cada empresa",
+   "que": "Datos y tamaño de mercado, investigación, 1.772 personas y 14 propiedades nuevas en HubSpot. Los documentos de una empresa sin proyecto.",
+   "paraQuien": "Ventas y Customer Success",
+   "prod": "parcial",
+   "prodNota": "La carga inicial y la escritura en HubSpot siguen apagadas.",
+   "tema": 1
+  },
+  {
+   "fecha": "2026-10-26",
+   "hasta": "2026-10-28",
+   "iniciativa": "preventa",
+   "titulo": "El análisis de la venta consultiva",
+   "que": "Cada sesión de preventa trae «Cómo trabajaste esta sesión», con citas verificadas. Lo ve todo el que entra a la preventa y Ventas ya lo usa.",
+   "paraQuien": "Ventas",
+   "prod": "si",
+   "tema": 4
+  },
+  {
+   "fecha": "2026-10-26",
+   "hasta": "2026-10-28",
+   "iniciativa": "escala",
+   "titulo": "El test del diagnóstico, nuevo",
+   "que": "Tres versiones del test, la página de resultados y la unión con la preventa. Los enlaces viejos abren en Nexus y se mide cuántos lo terminan.",
+   "paraQuien": "Ventas y los prospectos",
+   "prod": "si",
+   "tema": 6,
+   "preguntas": [
+    54
+   ]
+  },
+  {
+   "fecha": "2026-10-27",
+   "iniciativa": "escala",
+   "titulo": "La escala 9.0",
+   "que": "Con los 16 cambios de Insider y 52 decisiones provisionales; ninguna empresa cambió de nivel. «Probar la escala» con cualquier empresa.",
+   "paraQuien": "Ventas y Customer Success",
+   "prod": "si",
+   "tema": 5,
+   "preguntas": [
+    18
+   ]
+  },
+  {
+   "fecha": "2026-10-27",
+   "iniciativa": "cs",
+   "titulo": "La Planificación con el Brief",
+   "que": "La Planificación con las siete etapas del Brief de implementación.",
+   "paraQuien": "Customer Success",
+   "prod": "si",
+   "tema": 11
+  },
+  {
+   "fecha": "2026-10-27",
+   "iniciativa": "nexus",
+   "titulo": "Tareas más limpias",
+   "que": "Las 59 tareas vencidas que nadie decidió se limpian y el seguimiento comercial va también a HubSpot. Tu piloto (Nexus lee tus reuniones internas) quedó listo.",
+   "paraQuien": "Todo el equipo",
+   "prod": "apagado",
+   "prodNota": "Tu piloto y la escritura de tareas en HubSpot están apagados.",
+   "tema": 9,
+   "preguntas": [
+    43
+   ]
+  },
+  {
+   "fecha": "2026-10-28",
+   "iniciativa": "escala",
+   "titulo": "Escalas 9.1 y 9.2: dos industrias nuevas y el radar",
+   "que": "Las ediciones «Maquinaria y equipo pesado» y «Telecomunicaciones», el radar de 0 a 100 y una sola escala para la preventa y el cliente, con su historia.",
+   "paraQuien": "Ventas y Customer Success",
+   "prod": "si",
+   "tema": 5,
+   "preguntas": [
+    55,
+    56,
+    57
+   ]
+  },
+  {
+   "fecha": "2026-10-28",
+   "iniciativa": "preventa",
+   "titulo": "Tu position statement de Smarteam",
+   "que": "Sus tres frentes, qué logra cada uno y cuándo cabe. Vive en Marketing › Audiencia y la preventa lo arma para cada prospecto.",
+   "paraQuien": "Ventas y Marketing",
+   "prod": "si",
+   "tema": 7,
+   "preguntas": [
+    45
+   ]
+  },
+  {
+   "fecha": "2026-10-28",
+   "iniciativa": "cs",
+   "titulo": "Las Acciones coherentes",
+   "que": "Tres o cuatro acciones de una línea en el diagnóstico, con el detalle en la Planificación.",
+   "paraQuien": "Customer Success",
+   "prod": "si",
+   "tema": 11,
+   "preguntas": [
+    44
+   ]
+  },
+  {
+   "fecha": "2026-10-28",
+   "iniciativa": "documentos",
+   "titulo": "La idea de los documentos (artefactos)",
+   "que": "Tipos, plantillas y varias copias por cliente. El plan por etapas y un catálogo de 20 tipos sacado de 120 reuniones de 29 cuentas.",
+   "paraQuien": "Customer Success",
+   "prod": "plan",
+   "prodNota": "Es el plan; lo construido está en los hitos que siguen.",
+   "tema": 15
+  },
+  {
+   "fecha": "2026-10-29",
+   "iniciativa": "escala",
+   "titulo": "La página de resultados del test, pulida",
+   "que": "Radar grande, PDF en tres hojas, un resumen con IA que interpreta, «Ver detalles» en cada barra y la agenda de HubSpot incrustada.",
+   "paraQuien": "Los prospectos que hacen el test",
+   "prod": "si",
+   "tema": 6,
+   "preguntas": [
+    66,
+    67,
+    69,
+    71
+   ],
+   "commits": [
+    "94b68b34",
+    "2cf0c899"
+   ]
+  },
+  {
+   "fecha": "2026-10-29",
+   "iniciativa": "nexus",
+   "titulo": "Rescates de copias viejas",
+   "que": "El build usa menos memoria, leer una página pegada ya no abre direcciones internas y se borraron las tarjetas viejas de contexto (2.637 líneas).",
+   "paraQuien": "Quien construye Nexus",
+   "prod": "si",
+   "tema": 3
+  },
+  {
+   "fecha": "2026-10-29",
+   "iniciativa": "preventa",
+   "titulo": "El análisis de la venta, más fino",
+   "que": "Lo que se hizo bien, con su cita; aterrizar y expandir; y lo que falta explorar, enfocado.",
+   "paraQuien": "Ventas",
+   "prod": "si",
+   "tema": 4,
+   "commits": [
+    "203cd97e"
+   ]
+  },
+  {
+   "fecha": "2026-10-30",
+   "hasta": "2026-11-07",
+   "iniciativa": "documentos",
+   "titulo": "Varias copias de un documento",
+   "que": "Cada tipo puede tener varias copias por proyecto, cada una con su enlace. La exploración es una sola, se pliega con su nombre y hay un solo «+ Nuevo artefacto» con todos los tipos.",
+   "paraQuien": "Customer Success",
+   "prod": "si",
+   "tema": 15,
+   "preguntas": [
+    58,
+    59
+   ],
+   "commits": [
+    "ec72ae0a",
+    "cdf0555e",
+    "f8ce9698"
+   ]
+  },
+  {
+   "fecha": "2026-10-30",
+   "iniciativa": "reuniones",
+   "titulo": "El encargado sale de HubSpot",
+   "que": "El propietario del proyecto en HubSpot es el encargado en Nexus, con su foto. «Traer proyectos de HubSpot» relee al instante.",
+   "paraQuien": "Customer Success",
+   "prod": "si",
+   "tema": 3,
+   "commits": [
+    "6117cc7a",
+    "8818370c"
+   ]
+  },
+  {
+   "fecha": "2026-10-30",
+   "iniciativa": "reuniones",
+   "titulo": "El TEC en dos fichas",
+   "que": "AE y TAE comparten dominio y cada una se queda con sus reuniones.",
+   "paraQuien": "Customer Success",
+   "prod": "si",
+   "tema": 2,
+   "preguntas": [
+    48,
+    51,
+    53
+   ],
+   "commits": [
+    "898c1dca"
+   ]
+  },
+  {
+   "fecha": "2026-10-30",
+   "iniciativa": "cs",
+   "titulo": "Éxito del cliente: las cuentas prioritarias",
+   "que": "La estrella de prioridad en todos los listados, el riesgo solo de proyectos en marcha y los motivos que crea el equipo.",
+   "paraQuien": "Customer Success y la CSL",
+   "prod": "si",
+   "tema": 8,
+   "commits": [
+    "73daafd0"
+   ]
+  },
+  {
+   "fecha": "2026-10-30",
+   "iniciativa": "cs",
+   "titulo": "La Planificación lee las reuniones del proyecto",
+   "que": "Dice por qué quedó vacía, trae el Brief y sugiere plantilla (salió del caso SmartAgro).",
+   "paraQuien": "Customer Success",
+   "prod": "si",
+   "tema": 11,
+   "commits": [
+    "b5e9d91d"
+   ]
+  },
+  {
+   "fecha": "2026-10-30",
+   "iniciativa": "escala",
+   "titulo": "La escala para el cliente",
+   "que": "El cliente ve su escala desde Acceso, con el mismo aspecto que la página de resultados del test.",
+   "paraQuien": "Los clientes",
+   "prod": "si",
+   "tema": 5,
+   "commits": [
+    "a8bf11cc"
+   ]
+  },
+  {
+   "fecha": "2026-10-30",
+   "iniciativa": "preventa",
+   "titulo": "Ventas: el Pipeline y los compromisos",
+   "que": "La sección Pipeline, con el reporte de negocios abiertos y los compromisos de cada vendedor.",
+   "paraQuien": "Ventas",
+   "prod": "si",
+   "tema": 7,
+   "commits": [
+    "8a265a36"
+   ]
+  },
+  {
+   "fecha": "2026-10-31",
+   "iniciativa": "cs",
+   "titulo": "SmartLoop se lleva como cualquier proyecto",
+   "que": "Solo etapas, sin administrar ciclos aparte; cada plantilla se valida con lo ya generado.",
+   "paraQuien": "Customer Success",
+   "prod": "si",
+   "tema": 8,
+   "commits": [
+    "4aaebf3d"
+   ]
+  },
+  {
+   "fecha": "2026-10-31",
+   "iniciativa": "escala",
+   "titulo": "El test pregunta según el CRM",
+   "que": "Las preguntas cambian según el CRM que marcó la persona en el formulario.",
+   "paraQuien": "Los prospectos que hacen el test",
+   "prod": "si",
+   "tema": 6,
+   "commits": [
+    "8bda44c5"
+   ]
+  },
+  {
+   "fecha": "2026-11-06",
+   "iniciativa": "preventa",
+   "titulo": "La exploración guiada",
+   "que": "La guía como agenda por bloques, la preparación pide contexto antes de armarla, y cada sesión dice lo que dejó y dónde quedó.",
+   "paraQuien": "Ventas",
+   "prod": "si",
+   "tema": 7,
+   "commits": [
+    "3d02b7d2",
+    "2f7b2c0e"
+   ]
+  },
+  {
+   "fecha": "2026-11-06",
+   "iniciativa": "reuniones",
+   "titulo": "Los proyectos cerrados, en la ficha",
+   "que": "Se ven en la ficha del cliente, en el grupo Cerrados.",
+   "paraQuien": "Customer Success",
+   "prod": "si",
+   "tema": 1,
+   "commits": [
+    "d00a4ac8"
+   ]
+  },
+  {
+   "fecha": "2026-11-07",
+   "iniciativa": "nexus",
+   "titulo": "Uso de Nexus por persona y la North Star",
+   "que": "La pestaña Equipo dice, por persona y por período, los días que entró y cuánto usó la IA. Y nace la North Star de Nexus, con el socio de producto.",
+   "paraQuien": "Tú y gerencia",
+   "prod": "si",
+   "tema": 12,
+   "commits": [
+    "d7ba0561",
+    "9e973043"
+   ]
+  },
+  {
+   "fecha": "2026-11-07",
+   "iniciativa": "casos",
+   "titulo": "Las actividades de cada caso de uso",
+   "que": "38 casos con su biblioteca de acciones y el reparto de horas de cada actividad.",
+   "paraQuien": "Ventas y Customer Success",
+   "prod": "si",
+   "tema": 7,
+   "preguntas": [
+    11
+   ],
+   "commits": [
+    "885cf011"
+   ]
+  },
+  {
+   "fecha": "2026-11-07",
+   "iniciativa": "preventa",
+   "titulo": "La exploración nueva: Nexus propone y el vendedor valida",
+   "que": "El objetivo sugerido de la exploración y de cada sesión, el desafío va a la ficha como propuesta y la sesión pasada en tres bloques. El mismo día, el contexto en tres niveles y la guía con minutos.",
+   "paraQuien": "Ventas",
+   "prod": "si",
+   "tema": 7,
+   "commits": [
+    "04eae2d8",
+    "ca999dab"
+   ]
+  },
+  {
+   "fecha": "2026-11-08",
+   "iniciativa": "preventa",
+   "titulo": "La preparación de la sesión, ocho vueltas en un día",
+   "que": "El objetivo de Smarteam ajustado por empresa, tres objetivos en tarjetas, la guía que se arma al elegir, «Para el demo», preguntas de un clic, «Para profundizar» a la primera y editar la guía con IA.",
+   "paraQuien": "Ventas",
+   "prod": "si",
+   "tema": 7,
+   "commits": [
+    "25fdd505",
+    "dbba1e3f"
+   ]
+  },
+  {
+   "fecha": "2026-11-08",
+   "iniciativa": "preventa",
+   "titulo": "El análisis de la sesión, más certero",
+   "que": "Lo que quedó fuera del objetivo, los números en tabla, qué falta para decidir y los pasos verificados. «El resultado que busca» vuelve a la vista.",
+   "paraQuien": "Ventas",
+   "prod": "si",
+   "tema": 4,
+   "commits": [
+    "9db5bc95"
+   ]
+  },
+  {
+   "fecha": "2026-11-08",
+   "iniciativa": "escala",
+   "titulo": "La escala de la preventa, ocho vueltas en un día",
+   "que": "El radar del diagnóstico, «Ubicar con las reuniones», áreas superpuestas, una tarjeta por área, la escala interna editable en su lugar y un agente que escribe la descripción de cada equipo.",
+   "paraQuien": "Ventas",
+   "prod": "si",
+   "tema": 5,
+   "commits": [
+    "8b422d7f",
+    "45aa56d6",
+    "8ec98e75",
+    "e2699dc7"
+   ]
+  },
+  {
+   "fecha": "2026-11-08",
+   "iniciativa": "casos",
+   "titulo": "Casos de uso para vender",
+   "que": "Armados con la biblioteca de actividades, con precio mínimo y argumento de valor. Nexus sugiere, el vendedor acepta y personaliza; títulos claros y «Mejorar con IA».",
+   "paraQuien": "Ventas",
+   "prod": "si",
+   "tema": 7,
+   "commits": [
+    "19247864",
+    "aa5d9514",
+    "58135a81"
+   ]
+  },
+  {
+   "fecha": "2026-11-08",
+   "iniciativa": "nexus",
+   "titulo": "Selector con buscador y letra más grande",
+   "que": "Un solo selector con buscador en todo Nexus, y los tamaños de letra suben un punto en las pantallas internas.",
+   "paraQuien": "Todo el equipo",
+   "prod": "si",
+   "tema": 12,
+   "commits": [
+    "cdf4e520",
+    "ec145813"
+   ]
+  },
+  {
+   "fecha": "2026-11-08",
+   "hasta": "2026-11-09",
+   "iniciativa": "reuniones",
+   "titulo": "Empresas con varias unidades",
+   "que": "Una empresa se separa en unidades y el título de la reunión decide el proyecto. Cemaco quedó en Costa Rica y Ecuador, y cada unidad se elige en la preventa.",
+   "paraQuien": "Ventas y Customer Success",
+   "prod": "si",
+   "tema": 1,
+   "commits": [
+    "a533f972",
+    "20f8864f"
+   ]
+  },
+  {
+   "fecha": "2026-11-09",
+   "iniciativa": "casos",
+   "titulo": "La casa primero y tu lectura del cliente",
+   "que": "Los casos con nombres de lo que se compra, la casa primero y los casos conectados. Tu lectura del cliente, con el micrófono dentro del cuadro.",
+   "paraQuien": "Ventas",
+   "prod": "si",
+   "tema": 7,
+   "commits": [
+    "86572f27"
+   ]
+  },
+  {
+   "fecha": "2026-11-09",
+   "hasta": "2026-11-12",
+   "iniciativa": "escala",
+   "titulo": "El Resumen de la escala",
+   "que": "Un resumen ejecutivo en cinco partes con los datos verificados: una cifra sin cita no le sale al cliente. Pasa al Sistema 2 y la verificación repara en vez de tirar.",
+   "paraQuien": "Ventas y el cliente",
+   "prod": "si",
+   "tema": 5,
+   "commits": [
+    "05f2a622",
+    "262fb3a5",
+    "12f99cf0",
+    "aa3483a4",
+    "8fecdcc3"
+   ]
+  },
+  {
+   "fecha": "2026-11-12",
+   "iniciativa": "documentos",
+   "titulo": "Archivar, ordenar y sumar secciones",
+   "que": "Se archiva todo menos el Resumen, la lista se ordena arrastrando, y una sección del catálogo se agrega o se duplica.",
+   "paraQuien": "Customer Success",
+   "prod": "si",
+   "tema": 15,
+   "commits": [
+    "856115fe",
+    "b3b2886f"
+   ]
+  },
+  {
+   "fecha": "2026-11-12",
+   "iniciativa": "cs",
+   "titulo": "La Planificación con el ciclo de vida de HubSpot",
+   "que": "El ciclo de vida son las 7 etapas de HubSpot y las automatizaciones van en filas. Copias con foco y el diagnóstico dentro de lo contratado.",
+   "paraQuien": "Customer Success",
+   "prod": "si",
+   "tema": 11,
+   "commits": [
+    "0a655e75",
+    "4ee74b56"
+   ]
+  },
+  {
+   "fecha": "2026-11-12",
+   "iniciativa": "cronograma",
+   "titulo": "La propuesta del cronograma abre en el Gantt",
+   "que": "Salió del feedback del equipo: la propuesta se revisa directo en el Gantt.",
+   "paraQuien": "Customer Success",
+   "prod": "si",
+   "tema": 10,
+   "commits": [
+    "cee8c7a4"
+   ]
+  },
+  {
+   "fecha": "2026-11-13",
+   "iniciativa": "finanzas",
+   "titulo": "Finanzas: 28 pedidos en un día",
+   "que": "El panorama del dinero con todos los pipelines, gasto fijo y variable con sus reglas, el colchón, la caja y los pagos, las sociedades de Smarteam con Odoo y las metas de gerencia (Elite y el bono).",
+   "paraQuien": "Gerencia y Finanzas",
+   "prod": "si",
+   "tema": 14,
+   "commits": [
+    "93a85207",
+    "2882ebbe",
+    "2b874a62",
+    "2b733650",
+    "d60f2160"
+   ]
+  },
+  {
+   "fecha": "2026-11-13",
+   "iniciativa": "cobranza",
+   "titulo": "Cobranza con responsables y estado de cuenta compartido",
+   "que": "Un responsable para cada venta sin cobro, la regla de los 15 días, los conectores en mora, los contratos y el estado de cuenta que el cliente ve en vivo.",
+   "paraQuien": "Finanzas y el cliente",
+   "prod": "si",
+   "tema": 14,
+   "commits": [
+    "1ab6d867",
+    "3caaddfc"
+   ]
+  },
+  {
+   "fecha": "2026-11-15",
+   "hasta": "2026-11-16",
+   "iniciativa": "escala",
+   "titulo": "La escala de una empresa, como un documento",
+   "que": "El Resumen y la página de cada área en forma editorial, con dos revisiones de lo que genera la IA. La escala que ve el cliente se publica y todo se edita.",
+   "paraQuien": "Ventas y el cliente",
+   "prod": "si",
+   "tema": 5,
+   "commits": [
+    "e43e75e7",
+    "77ac3059"
+   ]
+  },
+  {
+   "fecha": "2026-11-17",
+   "iniciativa": "preventa",
+   "titulo": "Ninguna sesión se recorta",
+   "que": "Una transcripción larga entra entera, las sesiones se leen en bloque y se suman con casillas, y la sesión sin grabación se arregla en un paso.",
+   "paraQuien": "Ventas",
+   "prod": "si",
+   "tema": 7,
+   "commits": [
+    "946b3af2",
+    "b44c1915"
+   ]
+  },
+  {
+   "fecha": "2026-11-17",
+   "iniciativa": "nexus",
+   "titulo": "Los PDF dan su texto otra vez",
+   "que": "Los PDF de Documentos vuelven a leerse, las ventanas se abren por encima de los paneles laterales y el acceso remoto al servidor queda limitado.",
+   "paraQuien": "Todo el equipo",
+   "prod": "si",
+   "tema": 3,
+   "commits": [
+    "68499fd1",
+    "25d64c55"
+   ]
+  },
+  {
+   "fecha": "2026-11-18",
+   "iniciativa": "cronograma",
+   "titulo": "El cronograma sale de lo vendido",
+   "que": "Lee las semanas, la fecha y las horas acordadas. El aviso dice qué se pasa, puede juntar fases sin empezar y las tareas salen de las actividades de los casos vendidos.",
+   "paraQuien": "Customer Success",
+   "prod": "si",
+   "tema": 10,
+   "commits": [
+    "b40dfe15"
+   ]
+  },
+  {
+   "fecha": "2026-11-18",
+   "iniciativa": "cronograma",
+   "titulo": "El aviso de «Lo acordado», por semanas",
+   "que": "Sale solo si algo se pasa, cuenta por semanas y cierra igual que el Gantt. Salió del caso Docusign de RC Inmobiliaria.",
+   "paraQuien": "Customer Success",
+   "prod": "si",
+   "tema": 10,
+   "commits": [
+    "b340fccb"
+   ]
+  }
+ ],
+ "sigue": [
+  {
+   "iniciativa": "escala",
+   "titulo": "El Resumen de La escala, con lo que más pesa",
+   "que": "Salió del caso Cemaco: un titular con el problema principal, «5 puntos clave», las cifras «por confirmar», el peso de cada reunión y un aviso cuando una reunión no se pudo leer bien.",
+   "paraQuien": "Ventas y el cliente",
+   "estado": "otra-sesion",
+   "tema": 5
+  },
+  {
+   "iniciativa": "cronograma",
+   "titulo": "Lo que falta de «lo vendido» en el cronograma",
+   "que": "Cuatro cambios: elegir o escribir la venta del proyecto, y que Nexus pregunte lo que falta; «Fue un error mío, solo lo corrijo» al cambiar lo acordado; fases en paralelo en el handoff de Desarrollo; y una línea en el Kickoff que diga «sale del handoff».",
+   "paraQuien": "Customer Success",
+   "estado": "por-hacer",
+   "tema": 10,
+   "preguntas": [
+    31,
+    22
+   ]
+  },
+  {
+   "iniciativa": "escala",
+   "titulo": "La escala para el departamento de TI",
+   "que": "Un primer MVP para medir el área de TI. Hoy la escala no tiene un área de tecnología: en Cemaco, TI quedó dentro de Servicio.",
+   "paraQuien": "Ventas y Customer Success",
+   "estado": "otra-sesion",
+   "tema": 5
+  },
+  {
+   "iniciativa": "nexus",
+   "titulo": "El marco de «ejecución mecánica» para Nexus",
+   "que": "Un diagnóstico de cómo aplicar ese marco a la forma en que construimos Nexus. Se está planeando antes de tocar nada.",
+   "paraQuien": "Tú y quien construye Nexus",
+   "estado": "otra-sesion"
+  },
+  {
+   "iniciativa": "preventa",
+   "titulo": "La preventa al 90–95 %",
+   "que": "Tu prueba con Centauro de lo último de la preparación, la exploración y el análisis, y medir cuánto tarda hoy la guía (tardaba unos 200 segundos).",
+   "paraQuien": "Ventas",
+   "estado": "te-toca",
+   "tema": 7,
+   "preguntas": [
+    14,
+    17,
+    45
+   ]
+  },
+  {
+   "iniciativa": "casos",
+   "titulo": "Los casos de uso al 90–95 %",
+   "que": "Ajustar lo que salga de tu prueba.",
+   "preguntaTexto": "¿El agente de casos de uso lee también lo hablado en las sesiones?",
+   "paraQuien": "Ventas",
+   "estado": "te-toca",
+   "tema": 7
+  },
+  {
+   "iniciativa": "casos",
+   "titulo": "La propuesta con casos de uso",
+   "que": "Definirla contigo en una línea antes de construirla: se arma desde los casos y sus actividades, y sugiere SmartLoop. Va después de la preventa y los casos al 90 %.",
+   "paraQuien": "Ventas",
+   "estado": "espera",
+   "esperaA": "la preventa y los casos al 90 %",
+   "tema": 7,
+   "preguntas": [
+    11
+   ]
+  },
+  {
+   "iniciativa": "escala",
+   "titulo": "Probar la escala con 5 a 8 empresas",
+   "que": "De tres industrias. Falta el umbral de tráfico de Insider, y crear «Telecomunicaciones» en la industria de HubSpot (eso es tuyo).",
+   "paraQuien": "Ventas y Customer Success",
+   "estado": "te-toca",
+   "tema": 5,
+   "preguntas": [
+    18,
+    55,
+    56,
+    57
+   ]
+  },
+  {
+   "iniciativa": "escala",
+   "titulo": "El test: tu revisión y el corte de la aplicación vieja",
+   "que": "Tu revisión de las preguntas y del formulario que usa el test; después se apaga la aplicación vieja.",
+   "paraQuien": "Los prospectos que hacen el test",
+   "estado": "te-toca",
+   "tema": 6,
+   "preguntas": [
+    54,
+    66,
+    67,
+    69,
+    71
+   ]
+  },
+  {
+   "iniciativa": "documentos",
+   "titulo": "El siguiente tipo de documento",
+   "que": "Tus respuestas sobre la copia oficial, cómo se comparte y el nombre en pantalla. Después, el plan de adopción como primer tipo nuevo.",
+   "paraQuien": "Customer Success",
+   "estado": "te-toca",
+   "tema": 15,
+   "preguntas": [
+    58,
+    59,
+    60,
+    61,
+    62,
+    63,
+    64,
+    65
+   ]
+  },
+  {
+   "iniciativa": "cs",
+   "titulo": "Probar la Planificación con el Brief",
+   "que": "Que Caroline la pruebe en «FACO · SmartLoop (prueba)».",
+   "paraQuien": "Customer Success",
+   "estado": "espera",
+   "esperaA": "Caroline",
+   "tema": 11,
+   "preguntas": [
+    32,
+    44
+   ]
+  },
+  {
+   "iniciativa": "cs",
+   "titulo": "El primer ciclo de SmartLoop con cada CSE",
+   "que": "Con RC Inmobiliaria, Honda y kölbi.",
+   "paraQuien": "Customer Success",
+   "estado": "por-hacer",
+   "tema": 8
+  },
+  {
+   "iniciativa": "reuniones",
+   "titulo": "Las empresas que comparten dominio",
+   "que": "Tus respuestas sobre el TEC, Honda y FACO, y Grupo INVE. Después, medir el paso del 72 % al 90 % de reuniones con texto.",
+   "paraQuien": "Customer Success",
+   "estado": "te-toca",
+   "tema": 2,
+   "preguntas": [
+    34,
+    49,
+    48,
+    50,
+    51,
+    52,
+    53
+   ]
+  },
+  {
+   "iniciativa": "nexus",
+   "titulo": "Medir otra vez el uso",
+   "que": "Ver por persona cómo se usa lo nuevo, ahora que está en producción.",
+   "paraQuien": "Tú",
+   "estado": "por-hacer",
+   "tema": 12
+  },
+  {
+   "iniciativa": "nexus",
+   "titulo": "Tareas: prender tu piloto",
+   "que": "Prender el piloto que lee tus reuniones internas y la escritura de tareas en HubSpot, y medirlo. Hoy tiene prioridad baja.",
+   "paraQuien": "Todo el equipo",
+   "estado": "te-toca",
+   "tema": 9,
+   "preguntas": [
+    10,
+    19,
+    43
+   ]
+  },
+  {
+   "iniciativa": "finanzas",
+   "titulo": "La rentabilidad de cada caso de uso",
+   "que": "Prender «¿cuánto te tomó?» con un CSE. La rentabilidad por caso sale de las horas de las actividades.",
+   "paraQuien": "Gerencia",
+   "estado": "por-hacer",
+   "tema": 13
+  },
+  {
+   "iniciativa": "cobranza",
+   "titulo": "Pagar las comisiones desde Nexus",
+   "que": "Y, desde Odoo, el día del pago y el verde de «en proceso de pago»; el depósito de Mercury en su cuenta.",
+   "paraQuien": "Finanzas y Ventas",
+   "estado": "por-hacer",
+   "tema": 14,
+   "preguntas": [
+    37,
+    30
+   ]
+  },
+  {
+   "iniciativa": "reuniones",
+   "titulo": "La carga inicial de los datos de cada empresa",
+   "que": "Cargar los datos y prender la escritura en HubSpot.",
+   "paraQuien": "Ventas y Customer Success",
+   "estado": "espera",
+   "esperaA": "la CSL",
+   "tema": 1,
+   "preguntas": [
+    72
+   ]
+  },
+  {
+   "iniciativa": "nexus",
+   "titulo": "Las configuraciones del servidor y lo que queda de HubSpot",
+   "que": "Lo que está en «Lo que configuras tú» y los pipelines y fichas que HubSpot no aclara.",
+   "paraQuien": "Todo el equipo",
+   "estado": "te-toca",
+   "tema": 3,
+   "preguntas": [
+    1,
+    2,
+    3,
+    4,
+    9
+   ]
+  }
+ ]
+}
+```
 
 ## Resumen
 
@@ -9,7 +1099,7 @@
 <!-- El resumen se arma con este bloque. Cómo se regenera: «Cómo se mantiene este roadmap» y la skill regenerar-roadmap. -->
 ```temas
 {
- "dondeVamos": "La página de resultados del test quedó pulida y en producción: la escala más grande, sin la barra azul, con las animaciones de la aplicación vieja, «Ver detalles» en cada barra y la agenda de HubSpot incrustada. También salieron cuatro rescates de copias viejas: el build usa menos memoria, la lectura de páginas web está protegida, se borraron las tarjetas viejas de contexto y KAIZEN y KJ quedaron en su registro activo de Partner.",
+ "dondeVamos": "Desde el 29 oct entraron unos 300 cambios, todos en producción (b340fccb, 18 nov). Lo grande: la preventa y La escala en diez vueltas cada una, los casos de uso con sus actividades, los documentos con varias copias, 28 pedidos de Finanzas y Cobranza en un día, y el cronograma que sale de lo vendido. La línea de tiempo lo muestra en orden.",
  "temas": [
   {
    "n": 4,
@@ -112,7 +1202,7 @@
      "texto": "La escala única, arreglada: una cuenta medida solo en un proyecto ya se ve medida."
     }
    ],
-   "sigue": "Probar la escala con 5 a 8 empresas de 3 industrias. Falta el umbral de tráfico de Insider.",
+   "sigue": "El Resumen con lo que más pesa (caso Cemaco) y el MVP de TI, en otras sesiones. Después, probar con 5 a 8 empresas de 3 industrias.",
    "teToca": "Crear «Telecomunicaciones» en «Industria (Smarteam)» de HubSpot. Después, las 52 decisiones provisionales de la 9.0.",
    "decisiones": [
     8,
@@ -129,7 +1219,7 @@
    "nombre": "Los tests del diagnóstico de rendimiento",
    "corto": "Tests",
    "estado": "en-curso",
-   "prioridad": 2,
+   "prioridad": 4,
    "resultado": "El test de cada área vive en Nexus y llega a la preventa y a HubSpot.",
    "hecho": [
     {
@@ -202,7 +1292,7 @@
    "nombre": "El servicio recurrente funcionando",
    "corto": "Servicio recurrente",
    "estado": "en-curso",
-   "prioridad": 3,
+   "prioridad": 6,
    "resultado": "Lo que pide el cliente se vuelve su siguiente caso, con su cadencia de entrega y reportes.",
    "hecho": [
     {
@@ -218,7 +1308,7 @@
    "nombre": "El módulo de Tareas",
    "corto": "Tareas",
    "estado": "en-curso",
-   "prioridad": 4,
+   "prioridad": 8,
    "resultado": "Un sistema de tareas sencillo, con sus fuentes claras y unido al calendario.",
    "hecho": [
     {
@@ -248,7 +1338,7 @@
    "nombre": "Que el equipo use Nexus",
    "corto": "Uso de Nexus",
    "estado": "en-curso",
-   "prioridad": 5,
+   "prioridad": 7,
    "resultado": "10 de las 14 personas operativas entran 3 días o más por semana.",
    "hecho": [
     {
@@ -264,7 +1354,7 @@
    "nombre": "Artefactos: tipos, plantillas y varias copias",
    "corto": "Artefactos",
    "estado": "en-curso",
-   "prioridad": 6,
+   "prioridad": 5,
    "resultado": "El CSE dice qué necesita y Nexus arma el artefacto con las secciones que aplican, lleno con lo que sabe del cliente.",
    "hecho": [
     {
@@ -280,7 +1370,7 @@
      "texto": "El plan, de V1 a V8, y el catálogo de 20 artefactos sacado de 120 reuniones de 29 cuentas."
     }
    ],
-   "sigue": "El catálogo de secciones de cada tipo y varias copias de planificación y diagnóstico (V2 y V3).",
+   "sigue": "Tus respuestas sobre la copia oficial, compartir y el nombre; después, el plan de adopción como primer tipo nuevo.",
    "decisiones": [
     58,
     59,
@@ -296,8 +1386,8 @@
    "n": 7,
    "nombre": "Vender por resultados",
    "corto": "Vender por resultados",
-   "estado": "propuesta",
-   "prioridad": 7,
+   "estado": "en-curso",
+   "prioridad": 3,
    "resultado": "El vendedor arma la propuesta con casos de uso y actividades; Nexus calcula el precio mínimo y el precio se pone por valor.",
    "hecho": [
     {
@@ -321,8 +1411,8 @@
      "texto": "La investigación de la preventa también busca vacantes publicadas."
     }
    ],
-   "sigue": "Los clientes similares en la preparación. Después, las actividades contigo, el catálogo y el cotizador.",
-   "teToca": "Escribir «qué logra» y «cuándo cabe» de Acompañamiento en Marketing › Audiencia. Y el ejercicio de las actividades de los casos de uso.",
+   "sigue": "La preventa y los casos de uso al 90–95 % con tu prueba; después, definir contigo la propuesta con casos de uso.",
+   "teToca": "Escribir «qué logra» y «cuándo cabe» de Acompañamiento en Marketing › Audiencia.",
    "decisiones": [
     11,
     12,
@@ -336,8 +1426,8 @@
    "n": 10,
    "nombre": "Entregar: cronograma y tareas",
    "corto": "Entregar",
-   "estado": "propuesta",
-   "prioridad": 8,
+   "estado": "en-curso",
+   "prioridad": 2,
    "resultado": "El cliente ve cómo va su proyecto y cada CSE sabe qué le toca hoy, sin 20 tareas de golpe.",
    "hecho": [
     {
@@ -345,7 +1435,7 @@
      "texto": "Una tarea «por validar» ya no llega al cliente."
     }
    ],
-   "sigue": "Espera a las actividades (Vender por resultados): de ahí salen las tareas desde lo vendido.",
+   "sigue": "Los cuatro cambios que faltan de «lo vendido»: elegir la venta, «Fue un error mío», fases en paralelo en Desarrollo y la línea del Kickoff.",
    "decisiones": [
     4,
     22,
@@ -733,7 +1823,7 @@ Que Nexus amarre los puntos: entrar a un cliente y ver todo lo que Smarteam est�
 
 | Qué | Cómo está |
 |---|---|
-| Producción | Corre `f7b2beb7` desde el 29 oct: la página de resultados del test pulida (sin el contenedor general, letra más grande, el logo de color sin la barra azul, las animaciones de la aplicación vieja, «Ver detalles» por barra y la agenda de HubSpot de msalas2 incrustada), las tarjetas viejas de contexto borradas y Partner pasando solo a un cliente de un registro inactivo al activo (aplicado a KAIZEN KAPITAL y KJ Publicidad). Antes, `0a608cd8` el mismo día: el chequeo de tipos del build baja de 5,5 a 4,4 GB y la lectura de páginas web protegida contra direcciones internas (`lib/net`). Antes, `f75b8bb4`: la página de resultados con el diseño aprobado. |
+| Producción | Corre `b340fccb` (todo `main`) desde el 18 nov: el cronograma que sale de lo vendido y el aviso de «Lo acordado» por semanas. Lo que entró desde el 29 oct está en la pestaña «Línea de tiempo». |
 | Por desplegar | Nada. **Sin aplicar, a propósito:** la carga inicial de los datos de la empresa (espera a la CSL) y las banderas `EMPRESA_HUBSPOT_ESCRITURA` y `EMPRESA_HUBSPOT_COPIA` («Lo que configuras tú»). |
 | En rojo en producción | Por datos de antes, ninguno nuevo (28 oct): 16 reuniones colgadas de proyectos de otro cliente (INV1) y 9 tareas que citan una reunión de otro cliente (INV42), las que ordena el plan de dominio compartido; el pipeline de Secure Title (INV11: 2 proyectos y 6 en una etapa desconocida); «TEC- AE» fusionada en HubSpot (INV13 e INV54: ya solo ella, kölbi quedó bien); una reunión de Meet leída antes de ocurrir (INV16a), y el corte de cartera de hace 96 días (INV32). |
 | Pruebas | 30 para ti (pestaña «Pruebas para personas»; desde el 20 oct solo las que piden tu criterio), 83 que valida el equipo al usarlas, 77 con IA sobre los datos y 48 ya validadas por ti. |
@@ -2221,3 +3311,4 @@ En pocas palabras, para ubicarse. El detalle está en la Documentación de Nexus
 6. **Cada vez que se junta algo:** `/revisar` sobre lo que se junta, tsc en 0, la suite en verde, «Estado hoy» al día y la vista publicada en la misma dirección (`node scripts/roadmap-vista.mjs` y el artefacto).
 7. **El Resumen sale del bloque `temas`** (27 oct, pedido de Elías: entender en un minuto cómo va cada tema y qué necesita de él). Lo de arriba es lo que le toca; después, lo que está en marcha, lo que falta arrancar y, en segundo plano, lo que ya funciona. Se regenera con la skill `regenerar-roadmap` cuando Elías dice «regenera el roadmap» o después de cada deploy, y `scripts/roadmap-vista.mjs` no arma la vista si el bloque no cuadra con «Lo que decides tú».
 8. **Cuando el roadmap cambia mucho, o antes de una tanda grande, se revisa con el workflow `revision-roadmap`** (`.claude/workflows/revision-roadmap.js`): ocho lentes (orden, verdad contra el código, división, criterios de éxito, ingeniería, coherencia, lo que falta y que se lea fácil), un escéptico por lente y una síntesis con la lista de cambios y las preguntas para ti. La primera pasada fue el 24 oct: 230 propuestas, 206 en pie.
+9. **La vista abre en la «Línea de tiempo»** (19 nov, pedido de Elías: «entender bien qué hemos hecho» y ver lo que sigue). Sale del bloque `linea`: lo hecho, con su fecha, sacado del `git log` de `main` y del `sha` de producción, un hito por cambio que se entiende (nunca uno por commit); y lo que sigue, en orden de prioridad y sin fechas. Lo hecho nuevo entra solo ahí, con su `tema`, y el Resumen lo toma de la línea.

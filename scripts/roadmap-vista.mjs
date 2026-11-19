@@ -8,6 +8,7 @@ const raiz = resolve(dirname(new URL(import.meta.url).pathname.replace(/^\/([A-Z
 const md = readFileSync(resolve(raiz, "docs/roadmap.md"), "utf8");
 if (/<\/script/i.test(md)) throw new Error("roadmap.md no puede contener «</script»");
 validarTemas(md);
+validarLinea(md);
 const plantilla = readFileSync(resolve(raiz, "docs/roadmap-vista.html"), "utf8");
 if (!plantilla.includes("@@ROADMAP_MD@@")) throw new Error("Falta el marcador @@ROADMAP_MD@@ en la plantilla");
 
@@ -62,4 +63,66 @@ function validarTemas(texto) {
   }
   for (const n of preguntas.keys()) if (!dueno.has(n)) errores.push(`la pregunta ${n} de «Lo que decides tú» no tiene tema`);
   if (errores.length) throw new Error("El resumen no cuadra:\n- " + errores.join("\n- "));
+}
+
+/**
+ * El bloque «linea» (2026-11-19): la pestaña que abre primero. Arriba lo hecho, con fecha y del más viejo al más nuevo;
+ * abajo lo que sigue, en orden de prioridad y SIN fechas (regla del roadmap: lo futuro no lleva tiempos). Las reglas, en
+ * la skill regenerar-roadmap.
+ */
+function validarLinea(texto) {
+  const t = texto.replace(/\r/g, "");
+  const m = t.match(/```linea\n([\s\S]*?)\n```/);
+  if (!m) throw new Error("Falta el bloque ```linea (la línea de tiempo) en roadmap.md");
+  const d = JSON.parse(m[1]);
+  const errores = [];
+  const ISO = /^\d{4}-\d{2}-\d{2}$/;
+  const PROD = ["si", "parcial", "apagado", "plan"];
+  const ESTADOS = ["otra-sesion", "por-hacer", "te-toca", "espera"];
+  const FECHA_EN_TEXTO = /\b\d{1,2} (de )?(ene|feb|mar|abr|may|jun|jul|ago|sep|oct|nov|dic)\b|\b20\d\d-\d\d|\b\d+ semanas?\b|\bpróxim[ao] (semana|mes)\b/i;
+  const temas = new Set((JSON.parse(t.match(/```temas\n([\s\S]*?)\n```/)[1]).temas ?? []).map((x) => x.n));
+  const dec = t.slice(t.indexOf("## Lo que decides tú"));
+  const fin = dec.indexOf("\n## ", 5);
+  const preguntas = new Set();
+  for (const l of (fin > 0 ? dec.slice(0, fin) : dec).split("\n")) { const x = l.match(/^(\d+)\. /); if (x) preguntas.add(Number(x[1])); }
+  if (!ISO.test(d.hoy ?? "")) errores.push("«hoy» tiene que ser una fecha AAAA-MM-DD");
+  if (!/^[0-9a-f]{7,12}$/.test(d.produccion ?? "")) errores.push("«produccion» tiene que ser el sha corto que corre en producción");
+  const ini = new Set();
+  for (const i of d.iniciativas ?? []) {
+    if (ini.has(i.id)) errores.push(`iniciativa repetida: ${i.id}`);
+    ini.add(i.id);
+    if (!i.nombre || !/^#[0-9a-f]{6}$/i.test(i.color ?? "") || !/^#[0-9a-f]{6}$/i.test(i.oscuro ?? "")) errores.push(`iniciativa ${i.id}: le falta nombre, color u oscuro (#rrggbb)`);
+  }
+  const usadas = new Set();
+  const comun = (x, quien) => {
+    if (!ini.has(x.iniciativa)) errores.push(`${quien}: iniciativa «${x.iniciativa}» no existe`);
+    usadas.add(x.iniciativa);
+    if (!x.titulo || x.titulo.length > 90) errores.push(`${quien}: título vacío o de más de 90 letras`);
+    if (!x.que || x.que.length > 320) errores.push(`${quien}: «que» vacío o de más de 320 letras`);
+    if (!x.paraQuien) errores.push(`${quien}: le falta «paraQuien»`);
+    if (x.tema != null && !temas.has(x.tema)) errores.push(`${quien}: el tema ${x.tema} no está en el bloque temas`);
+    for (const n of x.preguntas ?? []) if (!preguntas.has(n)) errores.push(`${quien}: la pregunta ${n} no está en «Lo que decides tú»`);
+  };
+  let antes = "";
+  for (const h of d.hecho ?? []) {
+    const quien = `hecho «${h.titulo}»`;
+    comun(h, quien);
+    if (!ISO.test(h.fecha ?? "")) errores.push(`${quien}: fecha AAAA-MM-DD`);
+    if (h.hasta && (!ISO.test(h.hasta) || h.hasta < h.fecha)) errores.push(`${quien}: «hasta» inválido`);
+    if (h.fecha < antes) errores.push(`${quien}: fuera de orden (lo hecho va del más viejo al más nuevo)`);
+    if (h.fecha > d.hoy) errores.push(`${quien}: fecha después de hoy`);
+    antes = h.fecha;
+    if (!PROD.includes(h.prod)) errores.push(`${quien}: «prod» vale ${PROD.join(", ")}`);
+    if (h.prod !== "si" && !h.prodNota) errores.push(`${quien}: «prod» ${h.prod} necesita «prodNota»`);
+  }
+  for (const s of d.sigue ?? []) {
+    const quien = `sigue «${s.titulo}»`;
+    comun(s, quien);
+    if (s.fecha || s.hasta) errores.push(`${quien}: lo que sigue no lleva fecha`);
+    if (FECHA_EN_TEXTO.test(`${s.titulo} ${s.que} ${s.esperaA ?? ""}`)) errores.push(`${quien}: menciona una fecha o un plazo; lo que sigue va sin tiempos`);
+    if (!ESTADOS.includes(s.estado)) errores.push(`${quien}: «estado» vale ${ESTADOS.join(", ")}`);
+    if (s.estado === "espera" && !s.esperaA) errores.push(`${quien}: en espera, ¿de qué? (falta «esperaA»)`);
+  }
+  for (const id of ini) if (!usadas.has(id)) errores.push(`la iniciativa ${id} no tiene ningún hito`);
+  if (errores.length) throw new Error("La línea de tiempo no cuadra:\n- " + errores.join("\n- "));
 }
