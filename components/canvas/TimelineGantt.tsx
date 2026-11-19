@@ -92,7 +92,9 @@ import {
   isOverdueByDate,
   projectedEnd,
   displayedEnd,
-  closeDateDiverges,
+  cierreFijadoDiverge,
+  cierreParaMostrar,
+  semanaDeLaFecha,
 } from "@/lib/timeline/weeks";
 import { collectClientBlockers } from "@/lib/timeline/client-blockers";
 import { summarizeParticularidades, attributionSentence } from "@/lib/timeline/particularidades-summary";
@@ -999,18 +1001,17 @@ export default function TimelineGantt({
   const total = useMemo(() => timelineSpan(phases), [phases]); // ancho de calendario (max end) — soporta fases en paralelo
   // Cierre proyectado: `null` sin ancla o sin fases (ver projectedEnd). Deriva de las MISMAS
   // fases que dibujan la grilla, así que la fecha cae exactamente en su borde derecho.
-  const cierre = useMemo(() => projectedEnd(anchor, phases), [anchor, phases]);
+  /* 2026-11-19: se PINTA el último día de la última semana (`cierreParaMostrar`), el mismo que dice el aviso de «Lo
+     acordado». Un cierre fijado a mano igual al día siguiente (el que se pintaba antes) no se toma como distinto: si no,
+     todos los fijados antes de este cambio preguntarían de golpe. */
+  const cierreExclusivo = useMemo(() => projectedEnd(anchor, phases), [anchor, phases]);
+  const cierre = useMemo(() => cierreParaMostrar(cierreExclusivo), [cierreExclusivo]);
   // Tanda K — lo que se PINTA (override si existe) y si hay que preguntar (diverge del vivo).
   const cierreVisible = displayedEnd(closeOverride, cierre);
-  const cierreDiverge = closeDateDiverges(closeOverride, cierre);
+  const cierreDiverge = cierreFijadoDiverge(closeOverride, cierreExclusivo);
   /* La semana del proyecto que contiene la fecha límite (0-based, como la cabecera), o null. Una fecha
      después del plan no se marca: la cabecera termina antes. */
-  const semanaLimite = useMemo(() => {
-    if (!anchor || !fechaLimite) return null;
-    const a = new Date(anchor);
-    const inicio = Date.UTC(a.getUTCFullYear(), a.getUTCMonth(), a.getUTCDate());
-    return Math.floor((Date.parse(`${fechaLimite}T00:00:00.000Z`) - inicio) / (7 * 86_400_000));
-  }, [anchor, fechaLimite]);
+  const semanaLimite = useMemo(() => (fechaLimite ? semanaDeLaFecha(anchor, fechaLimite) : null), [anchor, fechaLimite]);
   // "Hoy" es hora de pared LOCAL del usuario (a diferencia de las fechas derivadas
   // del anchor, que son días de calendario en UTC — ver lib/timeline/weeks.ts).
   // Por eso NO puede calcularse en el servidor: `curInRange` gatea nodos y el

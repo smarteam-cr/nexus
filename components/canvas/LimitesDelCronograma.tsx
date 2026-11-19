@@ -20,10 +20,10 @@ import { ROLE_LABEL } from "@/components/team/roles-ui";
 import {
   MAX_HORAS_VENDIDAS,
   MAX_SEMANAS_VENDIDAS,
-  avisoDeLimites,
-  fechaQueCabe,
+  estadoDeLaFila,
   fmtYmd,
   pasaUnLimiteConfirmado,
+  problemasDeLimites,
   revisarLimites,
   textoDeLoVendido,
   type CampoDeLimite,
@@ -46,7 +46,7 @@ interface Props {
   canEdit: boolean;
   onCambio: (l: LimitesDelCronograma) => void;
   /**
-   * 2026-11-18: «Ajustar el plan a lo vendido». Corre el paso 1 de «Regenerar todo» con el pedido de que el plan entre
+   * 2026-11-18: «Ajustar el plan a lo vendido» (desde el 2026-11-19, «Acortar el plan»). Corre el paso 1 de «Regenerar todo» con el pedido de que el plan entre
    * en lo vendido (puede juntar fases sin empezar): termina en la misma propuesta, que el CSE revisa. Sin esto (sin
    * permiso de IA), el botón no aparece.
    */
@@ -81,10 +81,12 @@ export default function LimitesDelCronograma({ projectId, limites, ancla, fases,
     [limites, ancla, fases],
   );
   if (!limites || !revision) return null;
-  const aviso = avisoDeLimites(revision, limites);
-  const fechaNueva = fechaQueCabe(revision);
+  /* 2026-11-19 (Elías, al ver RC en producción): el aviso aparece SOLO si algo de verdad se pasa, con el problema concreto
+     como título; lo que entra se marca en su fila. Nunca «cabe» y «no cabe» en el mismo recuadro. */
+  const problemas = problemasDeLimites(revision, limites.conSemanaCero);
   // Solo con un límite CONFIRMADO que el plan pasa (decisión de Elías: juntar fases pide una duración confirmada).
-  const puedeAjustar = !!onAjustarALoVendido && pasaUnLimiteConfirmado(revision);
+  const puedeAcortar = !!onAjustarALoVendido && pasaUnLimiteConfirmado(revision);
+  const paraAcortar = problemas.find((x) => x.origen === "confirmado") ?? null;
 
   async function patch(body: Record<string, unknown>): Promise<boolean> {
     setEnviando(true);
@@ -120,12 +122,23 @@ export default function LimitesDelCronograma({ projectId, limites, ancla, fases,
           ? `${v} ${Number(v) === 1 ? "hora" : "horas"}`
           : textoDeLoVendido(Number(v), limites.conSemanaCero);
     const conf = limites.confirmacion[campo];
+    const estado = confirmado !== null ? estadoDeLaFila(revision, campo) : null;
     return (
       <div key={campo} className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
         <span className="font-semibold text-fg-secondary">{NOMBRE[campo]}:</span>
         {confirmado !== null ? (
           <>
             <span className="rounded-md border border-line bg-surface-hover px-2 py-0.5 font-semibold text-fg">{texto(confirmado)}</span>
+            {estado && (
+              <span
+                className={
+                  estado.entra === null ? "text-fg-muted" : estado.entra ? "font-semibold text-success-ink" : "font-semibold text-warn-ink"
+                }
+              >
+                {estado.entra ? "✓ " : ""}
+                {estado.texto}
+              </span>
+            )}
             {conf && <span className="text-fg-muted">confirmada por {quien(conf)}</span>}
             {canEdit && (
               <button
@@ -192,46 +205,50 @@ export default function LimitesDelCronograma({ projectId, limites, ancla, fases,
 
   return (
     <section data-recorrido="cronograma.limites" aria-label="Lo acordado con el cliente" className="space-y-2 rounded-xl border border-line bg-surface px-4 py-3">
-      <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h2 className="text-sm font-semibold text-fg">Lo acordado con el cliente</h2>
-        {aviso && !aviso.seSale && <span className="text-xs text-success-ink">{aviso.titulo}</span>}
-      </div>
+      <h2 className="text-sm font-semibold text-fg">Lo acordado con el cliente</h2>
       <div className="space-y-1.5">
         {fila("duracionVendida")}
         {fila("horasVendidas")}
         {fila("fechaLimite")}
       </div>
-      {aviso?.seSale && (
-        <Alert
-          variant="warning"
-          title={aviso.titulo}
-          action={
-            canEdit && (puedeAjustar || fechaNueva) ? (
-              <div className="flex flex-wrap gap-2">
-                {puedeAjustar && (
-                  <Button size="xs" variant="primary" disabled={ajustando} onClick={onAjustarALoVendido}>
-                    {ajustando ? "Ajustando…" : "Ajustar el plan a lo vendido"}
-                  </Button>
-                )}
-                {fechaNueva && (
-                  /* 2026-11-18: abre con el último día del plan, no con la fecha que ya está (guardarla daba «Ese ya
-                     es el valor confirmado»). */
-                  <Button size="xs" variant="secondary" onClick={() => setEdicion({ campo: "fechaLimite", valorInicial: fechaNueva })}>
-                    Mover la fecha límite al {fmtYmd(fechaNueva)}
-                  </Button>
-                )}
+      {problemas.length > 0 && (
+        <Alert variant="warning" title={problemas[0].titulo}>
+          <div className="space-y-2">
+            {problemas.map((x, k) => (
+              <div key={x.campo}>
+                {k > 0 && <p className="font-semibold">{x.titulo}</p>}
+                <p>{x.contexto}</p>
               </div>
-            ) : undefined
-          }
-        >
-          {aviso.lineas.map((l) => (
-            <p key={l}>{l}</p>
-          ))}
-          <p className="mt-1">
-            {puedeAjustar
-              ? "«Ajustar el plan a lo vendido» le pide a la IA que junte o acorte fases sin empezar: te deja una propuesta que revisas antes de aplicarla. También puedes ajustarlo en el Gantt o, si lo acordaste con el cliente, mover el límite."
-              : "Ajusta el plan en el Gantt (pon en paralelo lo que se puede) o, si lo acordaste con el cliente, mueve el límite."}
-          </p>
+            ))}
+            {canEdit && (puedeAcortar || problemas.some((x) => x.origen === "confirmado")) && (
+              <div className="space-y-1.5 pt-1">
+                {puedeAcortar && paraAcortar && (
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                    <Button size="xs" variant="primary" disabled={ajustando} onClick={onAjustarALoVendido}>
+                      {ajustando ? "Acortando…" : "Acortar el plan"}
+                    </Button>
+                    <span className="text-xs">
+                      {paraAcortar.campo === "fechaLimite"
+                        ? `La IA propone cómo cerrar ${paraAcortar.loAcordado}; lo revisas antes de aplicarlo.`
+                        : `La IA propone cómo entrar en ${paraAcortar.loAcordado}; lo revisas antes de aplicarlo.`}
+                    </span>
+                  </div>
+                )}
+                {problemas
+                  .filter((x) => x.origen === "confirmado")
+                  .map((x) => (
+                    <div key={x.campo} className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                      {/* Abre con lo que haría entrar el plan, nunca con lo que ya está (2026-11-18: guardarlo daba «Ese ya es
+                          el valor confirmado»). */}
+                      <Button size="xs" variant="secondary" onClick={() => setEdicion({ campo: x.campo, valorInicial: String(x.valorQueEntra) })}>
+                        {x.campo === "fechaLimite" ? `Cambiar la fecha ${x.textoDelValor}` : `Cambiar ${x.textoDelValor}`}
+                      </Button>
+                      <span className="text-xs">Solo si ya lo acordaste con el cliente.</span>
+                    </div>
+                  ))}
+              </div>
+            )}
+          </div>
         </Alert>
       )}
       {edicion && (

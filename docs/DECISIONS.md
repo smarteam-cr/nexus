@@ -4791,6 +4791,24 @@ encontró largos y difíciles los textos propuestos.
   fecha que ya está (guardarla daba «Ese ya es el valor confirmado»). Y lo vendido va primero: «Se
   vendieron 4 semanas; el plan dura 8 (4 de más)». Con «el plan dura 8 semanas y se vendieron 4» el CSE
   entendió que la IA decía que se vendieron 8, y cambió el límite a 8.
+- **CORREGIDO 2026-11-19 (Elías, al ver el aviso de RC en producción: «está muy mal, cuesta entenderlo»).**
+  - **La fecha límite se compara por SEMANA, no por días.** El Gantt va por semanas (en RC, de martes a lunes): si la
+    fecha límite cae dentro de la última semana del plan, el plan entra y no hay aviso. RC: límite el viernes 11 dic,
+    última semana del martes 8 al lunes 14 → nada (el 18 nov decía «3 días de más»). Si se pasa, se dice en semanas
+    (`semanasDeMas`). Reemplaza la cuenta por días de la corrección del 18 nov.
+  - **El aviso aparece solo si algo de verdad se pasa** (`problemasDeLimites`), y su título nombra el problema: «El plan
+    termina una semana después de la fecha límite», «El plan dura 2 semanas más de lo vendido», «Las tareas suman 12
+    horas más de las vendidas». Debajo, una línea con fechas y fases («Acordaron terminar el 11 dic. Con el plan de hoy,
+    «Pruebas con cliente» y «Capacitación y entrega» terminan el 21 dic.») y dos botones con su línea: «Acortar el
+    plan» (la IA propone cómo cerrar; lo revisas antes de aplicarlo) y «Cambiar la fecha al 21 dic» (solo si ya lo
+    acordaste con el cliente). Sin el párrafo largo. Lo que entra se marca en su fila de «Lo acordado» con ✓ («✓ el plan
+    dura 4»): nunca «cabe» y «no cabe» en el mismo recuadro. La barra de la propuesta usa el mismo criterio.
+  - **El «Cierre proyectado» del Gantt es el mismo día que dice el aviso**: el último día de la última semana
+    (`cierreParaMostrar`, lib/timeline/weeks.ts), también en la vista del cliente, el chip «Cierre: … → …» de la propuesta,
+    la Entrega («Cierre del plan») y el chat del cronograma. `projectedEnd` no cambia (lo comparan los corrimientos, la
+    cobranza y las propuestas entre sí); un cierre fijado a mano igual al día siguiente, el que se pintaba antes, no se
+    toma como distinto (`cierreFijadoDiverge`). La semana de una fecha la calcula UNA regla (`semanaDeLaFecha`) para el
+    aviso y la marca de la cabecera del Gantt.
 - **Un tercer límite: las horas vendidas** (2026-11-18, Elías: «sí debería poder, pero debe avisar»).
   `ProjectTimeline.horasVendidas` para el proyecto que sale de un contrato de horas (RC: DocuSign ≈ 40
   horas dentro de las 20 horas al mes del Acuerdo Macro). Se compara contra la suma de las horas
@@ -4846,7 +4864,7 @@ encontró largos y difíciles los textos propuestos.
   a mano se queda, como en el chat), y el CSE la acepta o la descarta como cualquier cambio. Sin
   límite confirmado, o si el plan ya cabe, juntar se descarta. Quitar una fase sin juntarla sigue
   prohibido. El texto del prompt cambió: su sha nuevo está en la guarda G9.
-- **«Ajustar el plan a lo vendido»**: el aviso de los límites, cuando el plan se pasa, ofrece correr el
+- **«Ajustar el plan a lo vendido»** (desde el 2026-11-19 el botón dice «Acortar el plan»): el aviso de los límites, cuando el plan se pasa, ofrece correr el
   paso 1 aunque no haya reuniones ni instrucciones elegidas, con el pedido de que el plan entre en lo
   vendido. Termina en la misma propuesta que «Regenerar todo»: nada se aplica solo.
 - **Las tareas salen de las actividades** (Elías: «creo que esto debe inspirarse en las actividades»).

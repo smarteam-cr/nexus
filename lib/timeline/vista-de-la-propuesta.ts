@@ -78,6 +78,7 @@ import {
 import { describeChange } from "./proposal-deltas";
 import { filasDeDetalle } from "./sugerencia-detalle";
 import {
+  cierreParaMostrar,
   computePhaseRanges,
   etiquetaDeSemana,
   fmtDay,
@@ -743,8 +744,9 @@ export function cierreParaElGantt(
   cierreFijado: string | null = null,
 ): CierreEnElGantt | null {
   if (!r.cierreAntes.date || !r.cierreDespues.date) return null;
-  const antes = fmtDay(r.cierreAntes.date);
-  const despues = fmtDay(r.cierreDespues.date);
+  // 2026-11-19: el último día de la última semana, el mismo que el «Cierre proyectado» del Gantt (`cierreParaMostrar`).
+  const antes = fmtDay(cierreParaMostrar(r.cierreAntes).date!);
+  const despues = fmtDay(cierreParaMostrar(r.cierreDespues).date!);
   const tramo = antes === despues ? `${despues} (no cambia)` : `${antes} → ${despues}`;
   const texto = cierreFijado
     ? `Plan calculado: ${antes === despues ? despues : tramo} · el cierre fijado no cambia`

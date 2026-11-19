@@ -65,7 +65,7 @@ import {
   ADVERTENCIAS_DEL_CRONOGRAMA,
   REGLAS_DURAS_DEL_CRONOGRAMA,
 } from "@/lib/timeline/capacidades";
-import { computePhaseRanges, etiquetaDeSemana, projectedEnd } from "@/lib/timeline/weeks";
+import { cierreParaMostrar, computePhaseRanges, etiquetaDeSemana, projectedEnd } from "@/lib/timeline/weeks";
 import { canvasOf } from "@/lib/pieces/canvas-query";
 import { datosDeSeccion, formatoDeSeccion, markdownDeBloques } from "@/lib/landing/formato-de-seccion";
 import { handleDeTarea } from "@/lib/timeline/handle-de-tarea";
@@ -497,9 +497,10 @@ export async function contextoDeCronograma(projectId: string): Promise<ContextoD
     timeline.anchorStartDate ? timeline.anchorStartDate.toISOString() : null,
     timeline.phases,
   );
+  // 2026-11-19: el último día de la última semana, el mismo que el Gantt y el aviso de «Lo acordado».
   const cierre = timeline.closeDateOverride
     ? fmtFecha(timeline.closeDateOverride)
-    : fin.label;
+    : cierreParaMostrar(fin).label;
   /* 2026-10-02 · LO ACORDADO CON EL CLIENTE (lib/timeline/limites.ts): la fecha límite y la duración
      vendida contra el plan de hoy, con la cuenta hecha por el código. El chat no mueve un límite (eso
      lo hace una persona, con el cliente); si lo que le piden deja el plan fuera, lo dice. */

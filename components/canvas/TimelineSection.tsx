@@ -39,6 +39,7 @@ import {
   overduePlannedEnd,
   isOverdueByDate,
   projectedEnd,
+  cierreParaMostrar,
 } from "@/lib/timeline/weeks";
 import { collectClientBlockers } from "@/lib/timeline/client-blockers";
 import { summarizeParticularidades, attributionSentence } from "@/lib/timeline/particularidades-summary";
@@ -345,7 +346,8 @@ export default function TimelineSection({
   // Desde la Tanda J la fórmula tiene UN dueño (`projectedEnd`, lib/timeline/weeks.ts): acá se
   // consume, no se recalcula, para que el cierre que ve el equipo y el que ve el cliente no puedan
   // divergir. El resultado es idéntico al de antes — hay un test de equivalencia que lo afirma.
-  const closingDate = projectedEnd(anchor, sorted).label;
+  // 2026-11-19: el último día de la última semana, el mismo que el Gantt del equipo y el aviso de «Lo acordado».
+  const closingDate = cierreParaMostrar(projectedEnd(anchor, sorted)).label;
 
   const toggleExpand = (key: string) => {
     setExpanded((prev) => {

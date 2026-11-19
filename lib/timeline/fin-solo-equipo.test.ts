@@ -141,7 +141,8 @@ describe("C-16: el Gantt no recalcula sus derivaciones en cada render — y cada
   const MEMOS: Array<[string, RegExp]> = [
     ["rangos", /const ranges = useMemo\(\(\) => computePhaseRanges\(phases\), \[phases\]\);/],
     ["calendario", /const total = useMemo\(\(\) => timelineSpan\(phases\), \[phases\]\);/],
-    ["cierre", /const cierre = useMemo\(\(\) => projectedEnd\(anchor, phases\), \[anchor, phases\]\);/],
+    // 2026-11-19: el cierre se pinta como el ÚLTIMO DÍA (cierreParaMostrar) sobre el exclusivo, cada uno con sus deps.
+    ["cierre", /const cierreExclusivo = useMemo\(\(\) => projectedEnd\(anchor, phases\), \[anchor, phases\]\);\s*const cierre = useMemo\(\(\) => cierreParaMostrar\(cierreExclusivo\), \[cierreExclusivo\]\);/],
     /* «índice de la propuesta» SALIÓ el 2026-09-24 (E1 del borrador del cronograma): el Gantt ya no
        indexa la propuesta —las marcas le llegan calculadas en `marcas` desde `proyectar`—, así que
        no hay nada que memoizar. La guarda de abajo impide que el cálculo vuelva al Gantt.

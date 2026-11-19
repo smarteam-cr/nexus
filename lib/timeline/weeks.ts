@@ -185,6 +185,39 @@ export function projectedEnd(
 }
 
 /**
+ * ⭐ EL CIERRE QUE SE MUESTRA (2026-11-19, Elías: el aviso de «Lo acordado» decía 14 dic y el Gantt 15 dic): el ÚLTIMO
+ * DÍA de la última semana del plan, el día antes de `projectedEnd` (que es exclusivo: arranque + semanas). La cuenta de
+ * `projectedEnd` no cambia (la usan los corrimientos, la cobranza y las propuestas, que comparan dos cierres entre sí):
+ * esto es solo lo que se PINTA. Lo usan el Gantt, la vista del cliente y el aviso de los límites.
+ */
+export function cierreParaMostrar(p: ProjectedEnd): ProjectedEnd {
+  if (!p.date) return p;
+  const date = new Date(diaUTC(p.date) - 86_400_000);
+  return { spanWeeks: p.spanWeeks, date, label: fmtFull(date.toISOString()) };
+}
+
+/**
+ * La semana del proyecto (0-based, como la cabecera del Gantt) que contiene un día «AAAA-MM-DD», o null sin ancla. UNA
+ * regla para el aviso de la fecha límite (lib/timeline/limites.ts) y la marca de la cabecera del Gantt: si divergen, el
+ * Gantt podría marcar el límite dentro del plan mientras el aviso dice que se pasa.
+ */
+export function semanaDeLaFecha(anchor: string | Date | null | undefined, ymd: string): number | null {
+  if (!anchor) return null;
+  const a = new Date(anchor);
+  if (Number.isNaN(a.getTime())) return null;
+  return Math.floor((Date.parse(`${ymd}T00:00:00.000Z`) - diaUTC(a)) / (7 * 86_400_000));
+}
+
+/**
+ * ¿Hay que preguntar por un cierre fijado a mano? (2026-11-19.) Solo si no coincide con el cierre que se pinta (el
+ * último día) NI con el día siguiente, que es el que se pintaba antes de este cambio: si no, todo cierre fijado antes
+ * preguntaría de golpe «El sistema ahora sugiere el cierre el 14 dic — tú tienes fijado el 15 dic».
+ */
+export function cierreFijadoDiverge(overrideIso: string | null | undefined, exclusivo: ProjectedEnd): boolean {
+  return closeDateDiverges(overrideIso, cierreParaMostrar(exclusivo)) && closeDateDiverges(overrideIso, exclusivo);
+}
+
+/**
  * Días de calendario que se movió el cierre (después − antes). Positivo = se alejó.
  * `null` si a alguno de los dos lados le falta fecha: sin fecha no hay corrimiento que
  * afirmar, y un 0 se leería como «no se movió».

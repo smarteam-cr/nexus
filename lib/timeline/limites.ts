@@ -25,11 +25,11 @@
  * dispara ningún aviso: un límite inventado no puede alarmar a nadie.
  *
  * ── LA CUENTA ────────────────────────────────────────────────────────────────
- * CORREGIDO 2026-11-18 (RC · DocuSign): la fecha límite se compara contra el ÚLTIMO DÍA de la última
- * semana (`ultimoDiaDelPlan`), no contra `projectedEnd`, que es el día SIGUIENTE (arranque + ancho de
- * calendario, exclusivo). Un plan de 4 semanas desde el martes 17 nov termina el lunes 14 dic: con el
- * martes 15 el aviso decía «se pasa 4 días» cuando eran 3, y el botón no tenía qué fecha proponer. La
- * fecha límite se compara por día de calendario UTC, como el resto de las fechas que salen del ancla.
+ * ⭐ POR SEMANA (2026-11-19, Elías, al ver el aviso de RC en producción): el Gantt va por semanas (en RC, de martes a
+ * lunes), así que la fecha límite se compara contra la SEMANA del plan que la contiene, no contra un día. Si cae dentro
+ * de la última semana del plan, el plan entra: RC tiene el límite el viernes 11 dic y la última semana va del martes 8
+ * al lunes 14, así que no hay aviso (el 18 nov decía «se pasa 3 días»). Si se pasa, se dice en semanas. El cierre que
+ * se muestra es el ÚLTIMO DÍA de la última semana (`ultimoDiaDelPlan`), el mismo que el «Cierre proyectado» del Gantt.
  *
  * ── LAS HORAS (2026-11-18, Elías: «sí debería poder, pero debe avisar») ──────
  * Un tercer límite para el proyecto que sale de un contrato de horas: `horasVendidas`. Se compara
@@ -37,7 +37,7 @@
  * detalle desde las actividades). Sin tareas con horas no hay cuenta: el aviso lo dice.
  */
 import { PRIMERA_FASE_ES_ARRANQUE } from "./arranque";
-import { addWeeks, computePhaseRanges, fmtFull, plural, projectedEnd, type ProjectedEnd } from "./weeks";
+import { addWeeks, computePhaseRanges, fmtDay, fmtFull, plural, projectedEnd, semanaDeLaFecha, type ProjectedEnd } from "./weeks";
 
 export const MAX_SEMANAS_VENDIDAS = 104;
 export const MAX_HORAS_VENDIDAS = 5000;
@@ -269,9 +269,7 @@ export function semanasDeArranque(fases: readonly FaseConNombre[], conSemanaCero
 }
 
 const DIA_MS = 86_400_000;
-const SEMANA_MS = 7 * DIA_MS;
 const diaUTC = (d: Date) => Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
-const diaDe = (ymd: string) => Date.parse(`${ymd}T00:00:00.000Z`);
 
 /**
  * El ÚLTIMO DÍA de trabajo de un plan (o de una fase) que termina en la semana `fin` (exclusiva) contando desde el
@@ -327,12 +325,15 @@ export interface RevisionDeLimites {
     origen: LimiteVigente<string>["origen"];
     /** «AAAA-MM-DD» del ÚLTIMO DÍA del plan, o null sin fecha de arranque (no se puede comparar). */
     cierre: string | null;
-    /** Días del cierre después de la fecha límite (negativo = antes). null sin arranque. */
-    diasDeMas: number | null;
-    /** Las fases que terminan después de la fecha límite, en orden. */
+    /**
+     * ⭐ Cuántas semanas termina el plan DESPUÉS de la semana que contiene la fecha límite (2026-11-19: por semana, no por
+     * día). 0 o menos = entra. null sin arranque.
+     */
+    semanasDeMas: number | null;
+    /** Las fases cuya última semana va después de la semana de la fecha límite, en orden. */
     fasesQueSePasan: string[];
-    /** Cuántas semanas del plan caben antes de la fecha límite, contando desde el arranque. */
-    semanasQueCaben: number | null;
+    /** El último día de cada una de esas fases («AAAA-MM-DD»), en el mismo orden. */
+    finDeLasQueSePasan: string[];
   };
   /** ¿Algún límite vigente se pasa? */
   seSale: boolean;
@@ -374,45 +375,39 @@ export function revisarLimites(i: {
 
   let fecha: RevisionDeLimites["fecha"] = null;
   if (vigentes.fecha) {
-    const limite = diaDe(vigentes.fecha.valor);
     const rangos = computePhaseRanges(fases);
     const conAncla = !!i.ancla && cierre.date !== null;
-    const ultimo = conAncla ? ultimoDiaDeLaSemana(i.ancla!, cierre.spanWeeks) : null;
+    // La semana del plan (0-based, como la cabecera del Gantt) que contiene la fecha límite.
+    const semanaDelLimite = conAncla ? semanaDeLaFecha(i.ancla!, vigentes.fecha.valor) : null;
+    const seVan = conAncla ? fases.map((_, k) => k).filter((k) => rangos[k].end - 1 > semanaDelLimite!) : [];
     fecha = {
       limite: vigentes.fecha.valor,
       origen: vigentes.fecha.origen,
-      cierre: ultimo !== null ? new Date(ultimo).toISOString().slice(0, 10) : null,
-      diasDeMas: ultimo !== null ? Math.round((ultimo - limite) / DIA_MS) : null,
-      fasesQueSePasan: conAncla
-        ? fases.filter((_, k) => ultimoDiaDeLaSemana(i.ancla!, rangos[k].end) > limite).map((f) => f.name)
-        : [],
-      semanasQueCaben: conAncla ? Math.max(0, Math.floor((limite + DIA_MS - diaUTC(new Date(i.ancla!))) / SEMANA_MS)) : null,
+      cierre: conAncla ? new Date(ultimoDiaDeLaSemana(i.ancla!, cierre.spanWeeks)).toISOString().slice(0, 10) : null,
+      semanasDeMas: semanaDelLimite !== null ? cierre.spanWeeks - 1 - semanaDelLimite : null,
+      fasesQueSePasan: seVan.map((k) => fases[k].name),
+      finDeLasQueSePasan: seVan.map((k) => new Date(ultimoDiaDeLaSemana(i.ancla!, rangos[k].end)).toISOString().slice(0, 10)),
     };
   }
 
   const seSale =
     (duracion !== null && duracion.deMas > 0) ||
-    (fecha !== null && (fecha.diasDeMas ?? 0) > 0) ||
+    (fecha !== null && (fecha.semanasDeMas ?? 0) > 0) ||
     (horas !== null && (horas.deMas ?? 0) > 0);
   return { semanasDeArranque: arranque, semanasDelPlan, cierre, duracion, horas, fecha, seSale };
 }
 
 /**
  * ¿El plan pasa un límite CONFIRMADO? Es la condición para que el revisor de fases pueda JUNTAR fases y para ofrecer
- * «Ajustar el plan a lo vendido» (2026-11-18, decisión de Elías: juntar solo con una duración confirmada). Lo propuesto
- * por la IA y sin confirmar no alcanza.
+ * «Acortar el plan» (2026-11-18, decisión de Elías: juntar solo con una duración confirmada). Lo propuesto por la IA y sin
+ * confirmar no alcanza.
  */
 export function pasaUnLimiteConfirmado(r: RevisionDeLimites): boolean {
   return (
     (r.duracion?.origen === "confirmado" && r.duracion.deMas > 0) ||
-    (r.fecha?.origen === "confirmado" && (r.fecha.diasDeMas ?? 0) > 0) ||
+    (r.fecha?.origen === "confirmado" && (r.fecha.semanasDeMas ?? 0) > 0) ||
     (r.horas?.origen === "confirmado" && (r.horas.deMas ?? 0) > 0)
   );
-}
-
-/** La fecha que propone «Mover la fecha límite»: el último día del plan si se pasa; si no, null (no hay que moverla). */
-export function fechaQueCabe(r: RevisionDeLimites): string | null {
-  return r.fecha && (r.fecha.diasDeMas ?? 0) > 0 ? r.fecha.cierre : null;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -420,11 +415,18 @@ export function fechaQueCabe(r: RevisionDeLimites): string | null {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const fmtYmd = (ymd: string) => fmtFull(`${ymd}T00:00:00.000Z`);
-const nombres = (xs: readonly string[], tope = 3) =>
-  xs.length <= tope
-    ? xs.map((n) => `«${n}»`).join(", ")
-    : `${xs.slice(0, tope).map((n) => `«${n}»`).join(", ")} y ${plural(xs.length - tope, "fase más", "fases más")}`;
+/** «11 dic»: la fecha corta del aviso (sin el año, como se dice). */
+export const fmtYmdCorto = (ymd: string) => fmtDay(new Date(`${ymd}T00:00:00.000Z`));
+const nombres = (xs: readonly string[], tope = 3) => {
+  const n = xs.slice(0, tope).map((x) => `«${x}»`);
+  const resto = xs.length > tope ? [plural(xs.length - tope, "fase más", "fases más")] : [];
+  const todas = [...n, ...resto];
+  return todas.length <= 1 ? todas.join("") : `${todas.slice(0, -1).join(", ")} y ${todas[todas.length - 1]}`;
+};
 const sinConfirmar = (o: "confirmado" | "propuesto") => (o === "propuesto" ? " (lo propuso la IA; falta confirmarlo)" : "");
+const semanasEnPalabras = (n: number) => (n === 1 ? "una semana" : `${n} semanas`);
+const fmtHoras = (h: number) => (Number.isInteger(h) ? String(h) : h.toFixed(1).replace(".", ","));
+const horasEnPalabras = (h: number) => (h === 1 ? "una hora" : `${fmtHoras(h)} horas`);
 
 /** «Lo vendido: 12 semanas sin la Semana 0». */
 export function textoDeLoVendido(semanas: number, conSemanaCero: boolean): string {
@@ -432,8 +434,9 @@ export function textoDeLoVendido(semanas: number, conSemanaCero: boolean): strin
 }
 
 /**
- * La línea de la duración: null si no hay duración vigente. ⭐ LO VENDIDO VA PRIMERO (2026-11-18): con «El plan dura 8
- * semanas y se vendieron 4» el CSE de RC entendió que la IA decía que se vendieron 8, y cambió el límite a 8.
+ * Las líneas de cada límite, para los AGENTES (el chat y el vigía): siempre lo vendido primero (2026-11-18: con «El plan
+ * dura 8 semanas y se vendieron 4» el CSE de RC entendió que se vendieron 8). La pantalla usa `estadoDeLaFila` y
+ * `problemasDeLimites`, no estas.
  */
 export function lineaDeLaDuracion(r: RevisionDeLimites, conSemanaCero: boolean): string | null {
   const d = r.duracion;
@@ -441,12 +444,9 @@ export function lineaDeLaDuracion(r: RevisionDeLimites, conSemanaCero: boolean):
   const sinSemanaCero = conSemanaCero && r.semanasDeArranque > 0 ? " sin la Semana 0" : "";
   const vendidas = `Se ${d.vendidas === 1 ? "vendió" : "vendieron"} ${plural(d.vendidas, "semana", "semanas")}${sinConfirmar(d.origen)}`;
   if (d.deMas > 0) return `${vendidas}; el plan dura ${d.delPlan}${sinSemanaCero} (${d.deMas} de más).`;
-  return `${vendidas}; el plan dura ${d.delPlan}${sinSemanaCero}: cabe${d.deMas < 0 ? ` (${plural(-d.deMas, "semana", "semanas")} de margen)` : ""}.`;
+  return `${vendidas}; el plan dura ${d.delPlan}${sinSemanaCero}: entra en lo vendido.`;
 }
 
-const fmtHoras = (h: number) => (Number.isInteger(h) ? String(h) : h.toFixed(1).replace(".", ","));
-
-/** La línea de las horas: null si no hay horas vendidas vigentes. Lo vendido primero, como la duración. */
 export function lineaDeLasHoras(r: RevisionDeLimites): string | null {
   const h = r.horas;
   if (!h) return null;
@@ -454,61 +454,157 @@ export function lineaDeLasHoras(r: RevisionDeLimites): string | null {
   if (h.delPlan === null || h.deMas === null) return `${vendidas}; las tareas todavía no tienen horas estimadas.`;
   const faltan = h.sinHoras > 0 ? ` ${plural(h.sinHoras, "tarea no tiene", "tareas no tienen")} horas.` : "";
   if (h.deMas > 0) return `${vendidas}; las tareas suman ${fmtHoras(h.delPlan)} (${fmtHoras(h.deMas)} de más).${faltan}`;
-  return `${vendidas}; las tareas suman ${fmtHoras(h.delPlan)}: cabe${h.deMas < 0 ? ` (${fmtHoras(-h.deMas)} de margen)` : ""}.${faltan}`;
+  return `${vendidas}; las tareas suman ${fmtHoras(h.delPlan)}: entra en lo vendido.${faltan}`;
 }
 
-/** La línea de la fecha límite: null si no hay fecha vigente. El plan se cuenta hasta su último día. */
 export function lineaDeLaFecha(r: RevisionDeLimites): string | null {
   const f = r.fecha;
   if (!f) return null;
   const limite = `La fecha límite es el ${fmtYmd(f.limite)}${sinConfirmar(f.origen)}`;
-  if (f.diasDeMas === null) return `${limite}: sin fecha de arranque no se puede saber si el plan llega.`;
-  if (f.diasDeMas > 0) {
-    const cuales = f.fasesQueSePasan.length > 0 ? ` Terminan después: ${nombres(f.fasesQueSePasan)}.` : "";
-    return `${limite}; el plan termina el ${fmtYmd(f.cierre!)} (${plural(f.diasDeMas, "día", "días")} de más).${cuales}`;
+  if (f.semanasDeMas === null) return `${limite}: sin fecha de arranque no se puede saber si el plan llega.`;
+  if (f.semanasDeMas > 0) {
+    return `${limite}; el plan termina el ${fmtYmd(f.cierre!)}, ${semanasEnPalabras(f.semanasDeMas)} después. Terminan después: ${nombres(f.fasesQueSePasan)}.`;
   }
-  return `${limite}; el plan termina el ${fmtYmd(f.cierre!)}: cabe.`;
+  return `${limite}; el plan termina el ${fmtYmd(f.cierre!)}: entra (el Gantt va por semanas).`;
 }
 
-/** El aviso del cronograma: título y líneas, o null si no hay ningún límite vigente. */
+/**
+ * Lo que se marca en la fila de «Lo acordado»: ✓ si el plan entra (`entra: true`), el dato pelado si se pasa (`false`) y,
+ * si no se puede saber (sin fecha de arranque, tareas sin horas), `null`: gris y sin ✓ (revisión del 2026-11-19: decía
+ * «✓ sin fecha de arranque» en verde). null sin ese límite.
+ */
+export function estadoDeLaFila(r: RevisionDeLimites, campo: CampoDeLimite): { entra: boolean | null; texto: string } | null {
+  if (campo === "duracionVendida") {
+    const d = r.duracion;
+    if (!d) return null;
+    return { entra: d.deMas <= 0, texto: `el plan dura ${d.delPlan}` };
+  }
+  if (campo === "horasVendidas") {
+    const h = r.horas;
+    if (!h) return null;
+    if (h.delPlan === null || h.deMas === null) return { entra: null, texto: "las tareas todavía no tienen horas" };
+    return { entra: h.deMas <= 0, texto: `las tareas suman ${fmtHoras(h.delPlan)}` };
+  }
+  const f = r.fecha;
+  if (!f) return null;
+  if (f.semanasDeMas === null || !f.cierre) return { entra: null, texto: "sin fecha de arranque: no se puede saber" };
+  return { entra: f.semanasDeMas <= 0, texto: `el plan termina el ${fmtYmdCorto(f.cierre)}` };
+}
+
+/** Un límite que el plan pasa, para el aviso: el título dice el problema concreto y el contexto, con fechas y fases. */
+export interface ProblemaDeLimite {
+  campo: CampoDeLimite;
+  origen: "confirmado" | "propuesto";
+  titulo: string;
+  contexto: string;
+  /** Lo que diría el límite para que el plan entre (la fecha o el número), y cómo se dice. */
+  valorQueEntra: string | number;
+  textoDelValor: string;
+  /** Lo acordado, dicho corto: «el 11 dic», «las 4 semanas», «las 40 horas» (para «Acortar el plan»). */
+  loAcordado: string;
+}
+
+/**
+ * ⭐ Lo que el plan pasa, en orden: la fecha, la duración y las horas. [] si todo entra (2026-11-19, Elías: el aviso
+ * aparece solo si algo de verdad se pasa, y lo que está bien se marca en su fila, nunca «cabe» y «no cabe» juntos).
+ */
+export function problemasDeLimites(r: RevisionDeLimites, conSemanaCero: boolean): ProblemaDeLimite[] {
+  const out: ProblemaDeLimite[] = [];
+  const f = r.fecha;
+  if (f && f.semanasDeMas !== null && f.semanasDeMas > 0 && f.cierre) {
+    const acuerdo = f.origen === "confirmado" ? `Acordaron terminar el ${fmtYmdCorto(f.limite)}.` : `La IA leyó que hay que terminar el ${fmtYmdCorto(f.limite)} (falta confirmarlo).`;
+    /* Si todas las que se pasan terminan el mismo día, se dice ese día; si no, que terminan después del límite y cuándo
+       termina el plan (revisión del 2026-11-19: decía que todas terminaban el día de la última). */
+    const mismoDia = new Set(f.finDeLasQueSePasan).size === 1;
+    const una = f.fasesQueSePasan.length === 1;
+    const quien =
+      f.fasesQueSePasan.length === 0
+        ? `el plan termina el ${fmtYmdCorto(f.cierre)}`
+        : mismoDia
+          ? `${nombres(f.fasesQueSePasan)} ${una ? "termina" : "terminan"} el ${fmtYmdCorto(f.finDeLasQueSePasan[0])}`
+          : `${nombres(f.fasesQueSePasan)} terminan después del ${fmtYmdCorto(f.limite)}; el plan termina el ${fmtYmdCorto(f.cierre)}`;
+    out.push({
+      campo: "fechaLimite",
+      origen: f.origen,
+      titulo: `El plan termina ${semanasEnPalabras(f.semanasDeMas)} después de la fecha límite`,
+      contexto: `${acuerdo} Con el plan de hoy, ${quien}.`,
+      valorQueEntra: f.cierre,
+      textoDelValor: `al ${fmtYmdCorto(f.cierre)}`,
+      loAcordado: `el ${fmtYmdCorto(f.limite)}`,
+    });
+  }
+  const d = r.duracion;
+  if (d && d.deMas > 0) {
+    const sinSemanaCero = conSemanaCero && r.semanasDeArranque > 0 ? " sin la Semana 0" : "";
+    out.push({
+      campo: "duracionVendida",
+      origen: d.origen,
+      titulo: `El plan dura ${semanasEnPalabras(d.deMas)} más de lo vendido`,
+      contexto: `Se ${d.vendidas === 1 ? "vendió" : "vendieron"} ${plural(d.vendidas, "semana", "semanas")}${sinSemanaCero}${sinConfirmar(d.origen)}; el plan de hoy dura ${d.delPlan}.`,
+      valorQueEntra: d.delPlan,
+      textoDelValor: `a ${plural(d.delPlan, "semana", "semanas")}`,
+      loAcordado: `${d.vendidas === 1 ? "la semana vendida" : `las ${d.vendidas} semanas vendidas`}`,
+    });
+  }
+  const h = r.horas;
+  if (h && h.deMas !== null && h.delPlan !== null && h.deMas > 0) {
+    const faltan = h.sinHoras > 0 ? ` ${plural(h.sinHoras, "tarea no tiene", "tareas no tienen")} horas.` : "";
+    const entra = Math.ceil(h.delPlan);
+    out.push({
+      campo: "horasVendidas",
+      origen: h.origen,
+      titulo: `Las tareas suman ${horasEnPalabras(h.deMas)} más de las vendidas`,
+      contexto: `Se ${h.vendidas === 1 ? "vendió" : "vendieron"} ${plural(h.vendidas, "hora", "horas")}${sinConfirmar(h.origen)}; las tareas del plan de hoy suman ${fmtHoras(h.delPlan)}.${faltan}`,
+      valorQueEntra: entra,
+      textoDelValor: `a ${plural(entra, "hora", "horas")}`,
+      loAcordado: `${h.vendidas === 1 ? "la hora vendida" : `las ${h.vendidas} horas vendidas`}`,
+    });
+  }
+  return out;
+}
+
+/**
+ * El aviso del cronograma. `problemas` es lo que se pasa (vacío = no hay aviso en pantalla); `lineas`, cada límite en
+ * palabras para los agentes. null si no hay ningún límite vigente.
+ */
 export function avisoDeLimites(r: RevisionDeLimites, l: Pick<LimitesDelCronograma, "conSemanaCero" | "propuestos">): {
   seSale: boolean;
   titulo: string;
   lineas: string[];
+  problemas: ProblemaDeLimite[];
 } | null {
   const lineas = [lineaDeLaDuracion(r, l.conSemanaCero), lineaDeLasHoras(r), lineaDeLaFecha(r)].filter((x): x is string => !!x);
   if (lineas.length === 0) return null;
-  if (r.seSale && l.propuestos?.noCabe) lineas.push(`La IA avisó: ${l.propuestos.noCabe}`);
+  const problemas = problemasDeLimites(r, l.conSemanaCero);
+  if (problemas.length > 0 && l.propuestos?.noCabe) lineas.push(`La IA avisó: ${l.propuestos.noCabe}`);
   return {
-    seSale: r.seSale,
-    titulo: r.seSale ? "El cronograma no cabe en lo acordado" : "El cronograma cabe en lo acordado",
+    seSale: problemas.length > 0,
+    titulo: problemas[0]?.titulo ?? "El plan entra en lo acordado",
     lineas,
+    problemas,
   };
 }
 
+/** Un problema, dicho corto para seguir una frase («Con la propuesta, …»). */
+function problemaCorto(p: ProblemaDeLimite): string {
+  const t = p.titulo.charAt(0).toLowerCase() + p.titulo.slice(1);
+  return p.campo === "fechaLimite" ? `${t} (${String(p.textoDelValor).replace(/^al /, "el ")})` : t;
+}
+
 /**
- * Para la barra de la propuesta: el plan de HOY y el de la PROPUESTA contra los límites. null si no hay
- * límites vigentes, o si ni hoy ni con la propuesta se pasa (no hay nada que decir).
+ * Para la barra de la propuesta: el plan de HOY y el de la PROPUESTA contra los límites, con el MISMO criterio que el
+ * aviso (por semana, el problema concreto). null si no hay límites vigentes, o si ni hoy ni con la propuesta se pasa.
  */
 export function avisoDeLaPropuestaContraLimites(antes: RevisionDeLimites, despues: RevisionDeLimites): string | null {
   if (!despues.duracion && !despues.fecha && !despues.horas) return null;
   if (!antes.seSale && !despues.seSale) return null;
-  const partes: string[] = [];
-  if (despues.duracion && despues.duracion.deMas > 0) {
-    partes.push(`dura ${despues.duracion.delPlan} semanas y se vendieron ${despues.duracion.vendidas}`);
-  }
-  if (despues.horas && (despues.horas.deMas ?? 0) > 0) {
-    partes.push(`suma ${fmtHoras(despues.horas.delPlan!)} horas y se vendieron ${despues.horas.vendidas}`);
-  }
-  if (despues.fecha && (despues.fecha.diasDeMas ?? 0) > 0) {
-    partes.push(`cierra el ${fmtYmd(despues.fecha.cierre!)}, ${plural(despues.fecha.diasDeMas!, "día", "días")} después de la fecha límite`);
-  }
-  if (partes.length === 0) return "Con la propuesta, el plan vuelve a caber en lo acordado.";
+  const problemas = problemasDeLimites(despues, false);
+  if (problemas.length === 0) return "Con la propuesta, el plan entra en lo acordado.";
   const empeora =
     (despues.duracion?.deMas ?? 0) > (antes.duracion?.deMas ?? 0) ||
     (despues.horas?.deMas ?? 0) > (antes.horas?.deMas ?? 0) ||
-    (despues.fecha?.diasDeMas ?? 0) > (antes.fecha?.diasDeMas ?? 0);
-  return `⚠ Con la propuesta, el plan ${partes.join(" y ")}${empeora ? "" : " (hoy ya se pasa)"}. Avísale a Ventas o mueve el límite con el cliente.`;
+    (despues.fecha?.semanasDeMas ?? 0) > (antes.fecha?.semanasDeMas ?? 0);
+  return `⚠ Con la propuesta, ${problemas.map(problemaCorto).join(" y ")}${empeora ? "" : " (hoy ya se pasa)"}. Avísale a Ventas o cambia el límite con el cliente.`;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

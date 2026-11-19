@@ -509,11 +509,11 @@ describe("L3 P3c · las filas de fase: sus casillas, sus etiquetas y sus celdas"
 
   it("⭐ la cabecera: el cierre con lo marcado, desplegar o plegar todo, y la casilla del arranque si la propuesta lo mueve", () => {
     /* La edición que la pone en rojo: no pintar la cabecera de la propuesta. */
-    expect(P.html).toContain("Cierre: 13 oct → 10 nov");
+    expect(P.html).toContain("Cierre: 12 oct → 9 nov");
     // Revisión de L1–L7 (#9): con el cierre fijado a mano, el chip no dice que aplicar lo mueve.
     const fijado = pintar(BORRADOR, { cierreFijado: "2026-11-30", desplegar: null });
-    expect(fijado.html).not.toContain("Cierre: 13 oct → 10 nov");
-    expect(fijado.html).toContain("Plan calculado: 13 oct → 10 nov · el cierre fijado no cambia");
+    expect(fijado.html).not.toContain("Cierre: 12 oct → 9 nov");
+    expect(fijado.html).toContain("Plan calculado: 12 oct → 9 nov · el cierre fijado no cambia");
     expect(P.html).toContain(">Desplegar todo<");
     expect(P.html).toContain(">Plegar todo<");
     const conAncla: Borrador = { ...BORRADOR, cambios: [{ tipo: "ancla", clave: "ancla", desde: "2026-05-19", a: "2026-06-02" }, ...BORRADOR.cambios] };

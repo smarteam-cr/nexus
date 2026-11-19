@@ -526,11 +526,12 @@ describe("L3 P3d · lo puro de la barra y del canvas", () => {
   it("⭐ el chip del cierre: el de hoy y el de lo marcado, en días cortos; sin fechas, nada", () => {
     /* La edición que la pone en rojo: el chip con las etiquetas largas, o con el cierre de hoy en los dos lados.
        ⚠ ACTUALIZADA en la revisión de L1–L7 (#9), con esta razón: el chip trae su `texto` (con un cierre fijado a mano
-       dice otra cosa); las fechas son las mismas. */
+       dice otra cosa); las fechas son las mismas. ⚠ ACTUALIZADA 2026-11-19: el chip dice el último día de la última
+       semana (`cierreParaMostrar`), el mismo que el «Cierre proyectado» del Gantt: un día antes que `projectedEnd`. */
     const r = resumir(VIVO, BORRADOR, [], LISTAS);
-    expect(cierreParaElGantt(r)).toEqual({ antes: "13 oct", despues: "10 nov", texto: "Cierre: 13 oct → 10 nov" });
+    expect(cierreParaElGantt(r)).toEqual({ antes: "12 oct", despues: "9 nov", texto: "Cierre: 12 oct → 9 nov" });
     expect(cierreParaElGantt({ ...r, cierreAntes: { ...r.cierreAntes, date: null } })).toBeNull();
-    expect(cierreParaElGantt({ ...r, cierreAntes: r.cierreDespues })?.texto).toBe("Cierre: 10 nov (no cambia)");
+    expect(cierreParaElGantt({ ...r, cierreAntes: r.cierreDespues })?.texto).toBe("Cierre: 9 nov (no cambia)");
   });
 
   it("⭐ revisión de L1–L7 (#9): con el cierre fijado a mano, el chip dice que lo que se mueve es el plan calculado", () => {
@@ -538,10 +539,10 @@ describe("L3 P3d · lo puro de la barra y del canvas", () => {
        fecha fijada, que aplicar no toca: la barra y la confirmación dicen lo contrario). */
     const r = resumir(VIVO, BORRADOR, [], LISTAS);
     const fijado = cierreParaElGantt(r, "2026-11-30");
-    expect(fijado?.texto).toBe("Plan calculado: 13 oct → 10 nov · el cierre fijado no cambia");
+    expect(fijado?.texto).toBe("Plan calculado: 12 oct → 9 nov · el cierre fijado no cambia");
     expect(fijado?.texto).not.toMatch(/^Cierre:/);
     expect(cierreParaElGantt({ ...r, cierreAntes: r.cierreDespues }, "2026-11-30")?.texto).toBe(
-      "Plan calculado: 10 nov · el cierre fijado no cambia",
+      "Plan calculado: 9 nov · el cierre fijado no cambia",
     );
   });
 

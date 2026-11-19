@@ -212,7 +212,7 @@ corre migraciones ni seeds (cap. D + RUNBOOK).
 
 ### F. Los tests: cinco familias que se rompen por razones distintas
 
-**978**<!-- sync:test-files --> archivos `*.test.ts` (unit), todos bajo `lib/` — el project
+**979**<!-- sync:test-files --> archivos `*.test.ts` (unit), todos bajo `lib/` — el project
 `unit` de vitest solo incluye `lib/**`, así que un test puesto en otra carpeta NO corre y
 nada avisa. `npm test` es la suite unit. Desde el 2026-08-01 (F4) el project `integration`
 está VIVO: `npm run test:int` corre los `*.int.test.ts` contra la base LOCAL `nexus_test`
@@ -565,8 +565,8 @@ NO tiene fila en `Agent` ni seed: con fila, `/analyze` podría despacharlo y cor
 permiso. La ruta pide la misma vara que el paso 2 (`guardIaDelCronograma`) y la corrida nace con
 `agentId: null` y el `agentSlug` del medidor. El paso 1 también recibe LO VENDIDO del proyecto
 (`lib/timeline/lo-vendido-server.ts`: las semanas, la fecha y las horas acordadas, y los casos de uso de
-la propuesta con sus actividades), y corre sin material cuando el CSE aprieta «Ajustar el plan a lo
-vendido» en el aviso de los límites. **Juntar fases** (2026-11-18, Elías): con un límite CONFIRMADO
+la propuesta con sus actividades), y corre sin material cuando el CSE aprieta «Acortar el plan» (antes «Ajustar el plan a lo
+vendido») en el aviso de los límites. **Juntar fases** (2026-11-18, Elías): con un límite CONFIRMADO
 que el plan pasa, el revisor puede juntar una fase sin empezar en otra sin empezar (la que se va sale
 como `fase-se-va`; la que la recibe puede alargarse); sin eso, juntar se descarta. Quitar una fase
 sin juntarla sigue prohibido. El armador (`lib/timeline/propuesta-de-estructura.ts`)

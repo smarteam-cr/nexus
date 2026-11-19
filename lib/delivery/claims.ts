@@ -28,7 +28,7 @@
  *    cronograma↔cobranza por la puerta de atrás: un número contractual sacado de una
  *    suposición de cronograma. La única fuente legítima es `ServicioContratado.duracionMeses`.
  */
-import { projectedEnd, displayedEnd, type PhaseSpanLike } from "@/lib/timeline/weeks";
+import { projectedEnd, displayedEnd, cierreParaMostrar, type PhaseSpanLike } from "@/lib/timeline/weeks";
 import { resolvedTaskCounts } from "@/lib/timeline/progress-model";
 
 /** Lo mínimo que hace falta de una fase para afirmar algo sobre ella. */
@@ -163,7 +163,8 @@ export function buildDeliveryClaims(input: ClaimsInput): DeliveryClaims {
   /* La fecha que se afirma es UNA, y se dice de dónde salió: si el CSE la fijó a mano es un
      acuerdo («Fecha de cierre acordada»); si no, es una derivación del plan («Cierre del
      plan»). Mezclarlas haría que el cliente lea como acordado algo que Nexus dedujo. */
-  const mostrado = displayedEnd(input.closeDateOverride, proyectado);
+  // 2026-11-19: el último día de la última semana, el mismo cierre que el Gantt y la vista del cronograma.
+  const mostrado = displayedEnd(input.closeDateOverride, cierreParaMostrar(proyectado));
   const cierre = mostrado.label ? { label: mostrado.label, acordado: mostrado.isOverride } : null;
 
   return {
