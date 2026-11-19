@@ -3,7 +3,7 @@
 /**
  * components/canvas/LimitesDelCronograma.tsx — LO ACORDADO CON EL CLIENTE, arriba del Gantt (2026-10-02).
  *
- * La fecha límite y la duración vendida (sin la Semana 0), quién las confirmó, lo que propuso la IA y,
+ * La fecha límite, la duración vendida (sin la Semana 0) y las horas vendidas (2026-11-18), quién las confirmó, lo que propuso la IA y,
  * si el plan no cabe, el aviso con cuánto se pasa y qué fases quedan después. La regla y los textos
  * viven en lib/timeline/limites.ts; esto solo los muestra y manda los cambios a
  * PATCH /api/projects/[projectId]/timeline/limites.
@@ -18,9 +18,12 @@ import DatePickerField from "@/components/ui/DatePickerField";
 import { useToast } from "@/components/ui/Toast";
 import { ROLE_LABEL } from "@/components/team/roles-ui";
 import {
+  MAX_HORAS_VENDIDAS,
   MAX_SEMANAS_VENDIDAS,
   avisoDeLimites,
+  fechaQueCabe,
   fmtYmd,
+  pasaUnLimiteConfirmado,
   revisarLimites,
   textoDeLoVendido,
   type CampoDeLimite,
@@ -34,12 +37,31 @@ interface Props {
   limites: LimitesDelCronograma | null;
   /** yyyy-mm-dd o "". */
   ancla: string;
-  fases: ReadonlyArray<{ name: string; durationWeeks: number; startWeek?: number | null }>;
+  fases: ReadonlyArray<{
+    name: string;
+    durationWeeks: number;
+    startWeek?: number | null;
+    tasks?: ReadonlyArray<{ horasEstimadas?: number | null; status?: string | null; party?: string | null }>;
+  }>;
   canEdit: boolean;
   onCambio: (l: LimitesDelCronograma) => void;
+  /**
+   * 2026-11-18: «Ajustar el plan a lo vendido». Corre el paso 1 de «Regenerar todo» con el pedido de que el plan entre
+   * en lo vendido (puede juntar fases sin empezar): termina en la misma propuesta, que el CSE revisa. Sin esto (sin
+   * permiso de IA), el botón no aparece.
+   */
+  onAjustarALoVendido?: () => void;
+  ajustando?: boolean;
 }
 
-const NOMBRE: Record<CampoDeLimite, string> = { fechaLimite: "Fecha límite", duracionVendida: "Duración vendida" };
+const NOMBRE: Record<CampoDeLimite, string> = {
+  fechaLimite: "Fecha límite",
+  duracionVendida: "Duración vendida",
+  horasVendidas: "Horas vendidas",
+};
+
+const confirmadoDe = (l: LimitesDelCronograma, campo: CampoDeLimite): string | number | null =>
+  campo === "fechaLimite" ? l.fechaLimite : campo === "horasVendidas" ? l.horasVendidas : l.duracionVendidaSemanas;
 
 function quien(c: ConfirmacionDeLimite | undefined): string | null {
   if (!c) return null;
@@ -49,7 +71,7 @@ function quien(c: ConfirmacionDeLimite | undefined): string | null {
 
 type Edicion = { campo: CampoDeLimite; valorInicial: string };
 
-export default function LimitesDelCronograma({ projectId, limites, ancla, fases, canEdit, onCambio }: Props) {
+export default function LimitesDelCronograma({ projectId, limites, ancla, fases, canEdit, onCambio, onAjustarALoVendido, ajustando }: Props) {
   const toast = useToast();
   const [edicion, setEdicion] = useState<Edicion | null>(null);
   const [enviando, setEnviando] = useState(false);
@@ -60,6 +82,9 @@ export default function LimitesDelCronograma({ projectId, limites, ancla, fases,
   );
   if (!limites || !revision) return null;
   const aviso = avisoDeLimites(revision, limites);
+  const fechaNueva = fechaQueCabe(revision);
+  // Solo con un límite CONFIRMADO que el plan pasa (decisión de Elías: juntar fases pide una duración confirmada).
+  const puedeAjustar = !!onAjustarALoVendido && pasaUnLimiteConfirmado(revision);
 
   async function patch(body: Record<string, unknown>): Promise<boolean> {
     setEnviando(true);
@@ -82,16 +107,18 @@ export default function LimitesDelCronograma({ projectId, limites, ancla, fases,
   }
 
   const confirmarPropuesta = (campo: CampoDeLimite, valor: string | number) =>
-    void patch({ accion: "guardar", campo, valor, desdeLaPropuesta: true }).then((ok) => ok && toast.success(`${NOMBRE[campo]} confirmada.`));
+    void patch({ accion: "guardar", campo, valor, desdeLaPropuesta: true }).then((ok) => ok && toast.success(`${NOMBRE[campo]} ${campo === "horasVendidas" ? "confirmadas" : "confirmada"}.`));
   const descartarPropuesta = (campo: CampoDeLimite) => void patch({ accion: "descartar-propuesta", campo });
 
   const fila = (campo: CampoDeLimite) => {
-    const confirmado = campo === "fechaLimite" ? limites.fechaLimite : limites.duracionVendidaSemanas;
-    const propuesta = (campo === "fechaLimite" ? limites.propuestos?.fechaLimite : limites.propuestos?.duracionVendida) as
-      | PropuestaDeLimite<string | number>
-      | undefined;
+    const confirmado = confirmadoDe(limites, campo);
+    const propuesta = limites.propuestos?.[campo] as PropuestaDeLimite<string | number> | undefined;
     const texto = (v: string | number) =>
-      campo === "fechaLimite" ? fmtYmd(String(v)) : textoDeLoVendido(Number(v), limites.conSemanaCero);
+      campo === "fechaLimite"
+        ? fmtYmd(String(v))
+        : campo === "horasVendidas"
+          ? `${v} ${Number(v) === 1 ? "hora" : "horas"}`
+          : textoDeLoVendido(Number(v), limites.conSemanaCero);
     const conf = limites.confirmacion[campo];
     return (
       <div key={campo} className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
@@ -171,6 +198,7 @@ export default function LimitesDelCronograma({ projectId, limites, ancla, fases,
       </div>
       <div className="space-y-1.5">
         {fila("duracionVendida")}
+        {fila("horasVendidas")}
         {fila("fechaLimite")}
       </div>
       {aviso?.seSale && (
@@ -178,14 +206,21 @@ export default function LimitesDelCronograma({ projectId, limites, ancla, fases,
           variant="warning"
           title={aviso.titulo}
           action={
-            canEdit && revision.fecha && (revision.fecha.diasDeMas ?? 0) > 0 ? (
-              <Button
-                size="xs"
-                variant="secondary"
-                onClick={() => setEdicion({ campo: "fechaLimite", valorInicial: revision.fecha!.limite })}
-              >
-                Mover la fecha límite
-              </Button>
+            canEdit && (puedeAjustar || fechaNueva) ? (
+              <div className="flex flex-wrap gap-2">
+                {puedeAjustar && (
+                  <Button size="xs" variant="primary" disabled={ajustando} onClick={onAjustarALoVendido}>
+                    {ajustando ? "Ajustando…" : "Ajustar el plan a lo vendido"}
+                  </Button>
+                )}
+                {fechaNueva && (
+                  /* 2026-11-18: abre con el último día del plan, no con la fecha que ya está (guardarla daba «Ese ya
+                     es el valor confirmado»). */
+                  <Button size="xs" variant="secondary" onClick={() => setEdicion({ campo: "fechaLimite", valorInicial: fechaNueva })}>
+                    Mover la fecha límite al {fmtYmd(fechaNueva)}
+                  </Button>
+                )}
+              </div>
             ) : undefined
           }
         >
@@ -193,14 +228,16 @@ export default function LimitesDelCronograma({ projectId, limites, ancla, fases,
             <p key={l}>{l}</p>
           ))}
           <p className="mt-1">
-            Ajusta el plan en el Gantt (pon en paralelo lo que se puede) o, si lo acordaste con el cliente, mueve el límite.
+            {puedeAjustar
+              ? "«Ajustar el plan a lo vendido» le pide a la IA que junte o acorte fases sin empezar: te deja una propuesta que revisas antes de aplicarla. También puedes ajustarlo en el Gantt o, si lo acordaste con el cliente, mover el límite."
+              : "Ajusta el plan en el Gantt (pon en paralelo lo que se puede) o, si lo acordaste con el cliente, mueve el límite."}
           </p>
         </Alert>
       )}
       {edicion && (
         <EditarLimite
           edicion={edicion}
-          confirmado={edicion.campo === "fechaLimite" ? limites.fechaLimite : limites.duracionVendidaSemanas}
+          confirmado={confirmadoDe(limites, edicion.campo)}
           conSemanaCero={limites.conSemanaCero}
           enviando={enviando}
           onCerrar={() => setEdicion(null)}
@@ -208,7 +245,7 @@ export default function LimitesDelCronograma({ projectId, limites, ancla, fases,
             const ok = await patch({ accion: "guardar", campo: edicion.campo, ...body });
             if (ok) {
               setEdicion(null);
-              toast.success(body.valor === null ? `${NOMBRE[edicion.campo]}: se quitó.` : `${NOMBRE[edicion.campo]} guardada.`);
+              toast.success(body.valor === null ? `${NOMBRE[edicion.campo]}: se quitó.` : `${NOMBRE[edicion.campo]} ${edicion.campo === "horasVendidas" ? "guardadas" : "guardada"}.`);
             }
           }}
         />
@@ -233,6 +270,8 @@ function EditarLimite({
   onGuardar: (b: { valor: string | number | null; motivo: string | null; acordadoCon: string | null }) => void;
 }) {
   const esFecha = edicion.campo === "fechaLimite";
+  const esHoras = edicion.campo === "horasVendidas";
+  const tope = esHoras ? MAX_HORAS_VENDIDAS : MAX_SEMANAS_VENDIDAS;
   const [valor, setValor] = useState(edicion.valorInicial);
   const [motivo, setMotivo] = useState("");
   const [acordadoCon, setAcordadoCon] = useState("");
@@ -240,7 +279,7 @@ function EditarLimite({
   const titulo = mueve ? `Mover la ${NOMBRE[edicion.campo].toLowerCase()}` : `${NOMBRE[edicion.campo]}`;
   const valorEnviable = (v: string): string | number | null => (v.trim() === "" ? null : esFecha ? v : Number(v));
   const v = valorEnviable(valor);
-  const valido = v === null ? mueve : esFecha ? /^\d{4}-\d{2}-\d{2}$/.test(String(v)) : Number.isInteger(v) && Number(v) >= 1 && Number(v) <= MAX_SEMANAS_VENDIDAS;
+  const valido = v === null ? mueve : esFecha ? /^\d{4}-\d{2}-\d{2}$/.test(String(v)) : Number.isInteger(v) && Number(v) >= 1 && Number(v) <= tope;
   const faltaAcuerdo = mueve && (motivo.trim().length < 3 || acordadoCon.trim().length < 3);
 
   return (
@@ -253,7 +292,9 @@ function EditarLimite({
           ? "Moverlo es un acuerdo con el cliente: queda en el historial del cronograma con quién y por qué."
           : esFecha
             ? "El día en que el cliente necesita todo listo (vence una licencia, un lanzamiento)."
-            : `Las semanas que se vendieron${conSemanaCero ? ", sin contar la Semana 0" : ""}.`
+            : esHoras
+              ? "Las horas vendidas para este proyecto. Si sale de un contrato de horas, las que le tocan a él (no las del contrato entero)."
+              : `Las semanas que se vendieron${conSemanaCero ? ", sin contar la Semana 0" : ""}.`
       }
       footer={
         <>
@@ -287,8 +328,8 @@ function EditarLimite({
             <DatePickerField value={valor} onChange={setValor} placeholder="Elegir fecha" />
           </Field>
         ) : (
-          <Field label={`Semanas vendidas${conSemanaCero ? " (sin la Semana 0)" : ""}`} required>
-            <Input type="number" min={1} max={MAX_SEMANAS_VENDIDAS} value={valor} onChange={(e) => setValor(e.target.value)} />
+          <Field label={esHoras ? "Horas vendidas" : `Semanas vendidas${conSemanaCero ? " (sin la Semana 0)" : ""}`} required>
+            <Input type="number" min={1} max={tope} value={valor} onChange={(e) => setValor(e.target.value)} />
           </Field>
         )}
         {mueve ? (

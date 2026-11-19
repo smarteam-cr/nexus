@@ -42,6 +42,18 @@ export interface ComputedDetailTask {
    * él, el tooltip de la curación dice el de la típica (`motivoDePorValidar`).
    */
   motivoPorValidar?: string | null;
+  /**
+   * Las horas estimadas de la tarea (2026-11-18): las pide el bloque de lo vendido (lib/timeline/lo-vendido.ts) desde las
+   * actividades de los casos vendidos. Sin dato (o fuera de rango), no va: la tarea queda sin horas.
+   */
+  horas?: number;
+}
+
+/** Las horas que devolvió el modelo para una tarea, o undefined: un número de 0,25 a 200, redondeado a 0,25. */
+export function leerHorasDeTarea(v: unknown): number | undefined {
+  const n = typeof v === "string" ? Number(v.replace(",", ".")) : v;
+  if (typeof n !== "number" || !Number.isFinite(n) || n < 0.25 || n > 200) return undefined;
+  return Math.round(n * 4) / 4;
 }
 
 /**
@@ -84,6 +96,7 @@ export function computeDetailTasksForPhase(
               : "SMARTEAM";
     const typeRaw = typeof t.type === "string" ? t.type.toUpperCase() : "";
     const type: "SESSION" | "TASK" = typeRaw === "SESSION" ? "SESSION" : "TASK";
+    const horas = leerHorasDeTarea(t.horas);
     out.push({
       title: sanitizeTaskTitle(titleRaw),
       weekIndex,
@@ -92,6 +105,7 @@ export function computeDetailTasksForPhase(
       needsValidation: t.porValidar === true,
       party,
       type,
+      ...(horas !== undefined ? { horas } : {}),
     });
   }
   return out;

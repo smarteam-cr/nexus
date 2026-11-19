@@ -326,6 +326,9 @@ export interface ContenidoDeTareaNueva {
    * trae `["kickoff"]`). Con «kickoff», aplicar escribe la marca `hito:kickoff`. La huella no lo mira.
    */
   hito?: Hito[];
+  /** 2026-11-18: las horas estimadas que puso el detalle desde las actividades. Aplicar las escribe en
+   *  `TimelineTask.horasEstimadas`. La huella no las mira (no son una edición). */
+  horas?: number;
 }
 /** Una tarea que se crea. No guarda `desde`: sería siempre la huella de su título (se calcula al evaluar). */
 export interface CambioTareaNueva extends DelChat {
@@ -952,6 +955,7 @@ function leerContenidoDeTarea(v: unknown): ContenidoDeTareaNueva | null {
     return null;
   }
   const hito = leerHitos(v.hito);
+  const horas = typeof v.horas === "number" && Number.isFinite(v.horas) && v.horas > 0 && v.horas <= 200 ? v.horas : undefined;
   return {
     title: v.title,
     weekIndex: v.weekIndex,
@@ -962,6 +966,7 @@ function leerContenidoDeTarea(v: unknown): ContenidoDeTareaNueva | null {
     motivoPorValidar,
     fuga,
     ...(hito ? { hito } : {}),
+    ...(horas !== undefined ? { horas } : {}),
   };
 }
 

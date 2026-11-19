@@ -24,7 +24,10 @@
  *     lib/timeline/politica-de-atrasos.ts): este texto no cambió ni un carácter (su sha vive en la
  *     guarda G9 de lib/timeline/propuesta-de-estructura.test.ts).
  *  2. La IA nunca quita fases ni mueve la fecha de arranque del proyecto: lo avisa en
- *     «observaciones» y lo decide una persona.
+ *     «observaciones» y lo decide una persona. ⚠ CORREGIDO 2026-11-18 (Elías, caso RC · DocuSign): con un límite
+ *     CONFIRMADO que el plan pasa (el bloque «LO VENDIDO» lo dice), puede JUNTAR una fase sin empezar en otra sin
+ *     empezar. Quitar sin juntar sigue prohibido. El armador lo vuelve a exigir (`puedeJuntar`). Este texto cambió:
+ *     su sha nuevo vive en la guarda G9, y no se midió en vivo todavía.
  *  3. Un plazo total sin detalle por fase («son 12 semanas») no se reparte: solo se compara el
  *     cierre actual contra el acordado, en «observaciones», y en la dirección correcta: si el plan
  *     dura más, dice por cuántas semanas SE PASA. ⭐ Esa cuenta la hace el SISTEMA, no el modelo
@@ -112,9 +115,10 @@ CUÁNDO PROPONER UN CAMBIO:
 - Un atraso que YA pasó (una fase que tardó más, una semana que se perdió) NO alarga la fase: el plan se mantiene y el atraso queda como desviación. Anótalo en "observaciones".
 - Un plazo TOTAL que no dice qué fases cambian («son 12 semanas», «tiene que estar antes de diciembre», «nos quedan 6 semanas») NO se reparte entre las fases ni mueve ninguna: devuélvelo en "plazoTotal", con "semana" = M, la semana del proyecto en que vence (el «CIERRE ACTUAL» del calendario dice cómo pasarlo a una semana), y "fuente" = de dónde sale (la reunión y su fecha, la nota o las instrucciones del CSE). NO lo compares tú con el cierre ni escribas esa comparación en "observaciones": la escribe el sistema, con la cuenta hecha. Tampoco calcules en "observaciones" cómo queda el cierre con tus cambios: el CSE lo ve en el Gantt. Sin un plazo total en el material, "plazoTotal": null.
 - ${PESO_DE_LAS_FUENTES}
+- LO VENDIDO: si el mensaje trae el bloque «LO VENDIDO DE ESTE PROYECTO», el plan tiene que entrar en lo vendido (semanas, horas, fecha límite). Si se pasa, propone lo que lo hace entrar: poner en paralelo lo que no depende de otra fase ("inicioSemana"), acortar una fase sin empezar o, solo si ese bloque dice «JUNTAR FASES: el plan pasa un límite CONFIRMADO», juntar una fase sin empezar en otra sin empezar ("juntar"). Si el bloque dice que el CSE pidió ajustar el plan a lo vendido, eso es un pedido explícito de las instrucciones del CSE.
 
 PROHIBIDO (si el material lo pide, va a "observaciones"; nunca a "cambios"):
-- QUITAR una fase, aunque parezca que ya no va.
+- QUITAR una fase, aunque parezca que ya no va. Juntarla en otra ("juntar") es lo único permitido, y solo cuando el bloque «LO VENDIDO» lo permite.
 - Mover la FECHA DE ARRANQUE del proyecto.
 - Tocar una fase terminada o suspendida, o la Semana 0 / Kick-off (el calendario dice cuál es; si dice que el proyecto no tiene, su primera fase se revisa como cualquier otra).
 - Cambiar las notas o el tipo de una fase que ya existe.
@@ -137,7 +141,8 @@ FORMATO DE RESPUESTA — SOLO este JSON, sin texto antes ni después y sin markd
 {"cambios":[
   {"tipo":"ajustar","faseId":"<id>","durationWeeks":5,"inicioSemana":7,"name":"<nombre nuevo>","sessionCount":3,"motivo":"<reunión, nota o instrucciones del CSE>"},
   {"tipo":"agregar","despuesDeFaseId":"<id>","name":"<nombre>","durationWeeks":1,"sessionCount":2,"activityType":"CONFIGURACION","motivo":"<reunión, nota o instrucciones del CSE>"},
-  {"tipo":"mover","faseId":"<id>","despuesDeFaseId":"<id>","motivo":"<reunión, nota o instrucciones del CSE>"}
+  {"tipo":"mover","faseId":"<id>","despuesDeFaseId":"<id>","motivo":"<reunión, nota o instrucciones del CSE>"},
+  {"tipo":"juntar","faseId":"<id de la que se va>","enFaseId":"<id de la que la recibe>","durationWeeks":2,"motivo":"<reunión, nota o instrucciones del CSE>"}
 ],"observaciones":["<una oración>"],"plazoTotal":{"semana":9,"fuente":"<reunión y fecha, nota o instrucciones del CSE>"}}
 - En "ajustar" incluye SOLO los campos que cambian, y siempre "motivo".
 - "activityType" de una fase nueva: ${ACTIVITY_TYPES.join(" | ")}, o null.`;

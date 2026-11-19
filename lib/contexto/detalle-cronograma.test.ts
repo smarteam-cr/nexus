@@ -560,7 +560,8 @@ describe("⛔ analyze: PRIORIDAD DEL CANVAS, trazabilidad y frontera del detalle
     const iCambios = detalle.indexOf("export function cambiosDeTareasDelDetalle(");
     expect(iCambios, "no encontré cambiosDeTareasDelDetalle").toBeGreaterThan(iPropuestas);
     const cambios = detalle.slice(iCambios, detalle.indexOf("\n}\n", iCambios));
-    const iFijas = cambios.indexOf("for (const t of tareasFijasDeSemanaCero(i.tags, base)) {");
+    // 2026-11-18: con las opciones de un proyecto sin Semana 0 (Desarrollo y Web: solo accesos y documentación).
+    const iFijas = cambios.indexOf("for (const t of tareasFijasDeSemanaCero(i.tags, base, 0, opcionesDeLasFijas)) {");
     expect(iFijas, "R7 dejó de sumar las fijas").toBeGreaterThan(-1);
     expect(cambios.slice(iFijas, cambios.indexOf("});", iFijas)), "una fija salió marcada como fuga").toContain("fuga: null,");
     expect(cambios, "las fijas dejaron de ir después de las del agente").toContain(

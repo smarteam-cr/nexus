@@ -6,7 +6,7 @@
 import { z } from "zod";
 import { MAX_LARGO_MOTIVO } from "./limites";
 
-const campo = z.enum(["fechaLimite", "duracionVendida"]);
+const campo = z.enum(["fechaLimite", "duracionVendida", "horasVendidas"]);
 
 export const cambioDeLimiteSchema = z.discriminatedUnion("accion", [
   z.object({

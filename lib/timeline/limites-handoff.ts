@@ -13,6 +13,9 @@
  *     copiada tal cual (sin frase, el sistema descarta el valor: lib/timeline/limites.ts).
  *  2. Que el plan quepa; si el trabajo no cabe, NO estirar: armar lo que sí entra y decirlo en
  *     `noCabe`. (Validación del 2026-10-02: 7 de 14 handoffs se pasaron de lo vendido sin decirlo.)
+ *  4. (2026-11-18) Las HORAS vendidas para este proyecto (`horasVendidas` + `citaHoras`): el proyecto que sale de un
+ *     contrato de horas (RC · DocuSign ≈ 40 horas del Acuerdo Macro). Lo dice la propuesta comercial, que el handoff
+ *     ahora lee entera.
  *  3. Solo Customer Success: el `tipo` de cada fase. Con eso el SISTEMA pone los inicios
  *     (lib/timeline/acomodar-en-paralelo.ts) y la regla de paralelo del prompt deja de aplicar.
  */
@@ -21,7 +24,7 @@ import { TIPOS_DE_FASE } from "./acomodar-en-paralelo";
 
 export function bloqueDeLimitesParaElHandoff(i: {
   conSemanaCero: boolean;
-  confirmados: { fechaLimite: string | null; duracionVendidaSemanas: number | null };
+  confirmados: { fechaLimite: string | null; duracionVendidaSemanas: number | null; horasVendidas?: number | null };
 }): string {
   const { conSemanaCero, confirmados } = i;
   const sinSemanaCero = conSemanaCero ? ", SIN contar la Semana 0" : "";
@@ -30,17 +33,19 @@ export function bloqueDeLimitesParaElHandoff(i: {
     ya.push(`duración vendida ${textoDeLoVendido(confirmados.duracionVendidaSemanas, conSemanaCero)}`);
   }
   if (confirmados.fechaLimite) ya.push(`fecha límite ${fmtYmd(confirmados.fechaLimite)}`);
+  if (confirmados.horasVendidas != null) ya.push(`${confirmados.horasVendidas} horas vendidas para este proyecto`);
   const lineas = [
     "=== LÍMITES DEL CRONOGRAMA (regla dura del sistema) ===",
     ...(ya.length > 0
       ? [`Ya confirmados con el cliente: ${ya.join("; ")}. El cronograma tiene que respetarlos.`]
       : []),
     "1. Además de lo que ya devuelves, agrega al JSON de respuesta la clave \"limites\":",
-    '{"duracionVendidaSemanas": <entero o null>, "citaDuracion": "<frase copiada tal cual de las fuentes, o null>", "fechaLimite": "<AAAA-MM-DD o null>", "citaFechaLimite": "<frase copiada tal cual, o null>", "noCabe": "<null, o una oración>"}',
+    '{"duracionVendidaSemanas": <entero o null>, "citaDuracion": "<frase copiada tal cual de las fuentes, o null>", "fechaLimite": "<AAAA-MM-DD o null>", "citaFechaLimite": "<frase copiada tal cual, o null>", "horasVendidas": <entero o null>, "citaHoras": "<frase copiada tal cual, o null>", "noCabe": "<null, o una oración>"}',
     `- "duracionVendidaSemanas": cuánto se VENDIÓ el proyecto, en semanas${sinSemanaCero}. Un plazo en meses se pasa a semanas (3 meses = 13). Solo si una fuente lo dice; si no, null. No lo saques de tus propias fases.`,
     '- "fechaLimite": el día en que el cliente necesita todo listo (vence una licencia o un contrato, un lanzamiento, «a más tardar»). No es la fecha de cierre del trato ni la del kickoff. Solo si una fuente la dice; si no, null. Si la fuente no dice el año, es la próxima vez que llega ese día desde el arranque.',
+    '- "horasVendidas": las horas que se vendieron para ESTE proyecto. Un proyecto que sale de un contrato de horas (una bolsa mensual, un acuerdo de capacidad) tiene las horas que la propuesta o la reunión le asignan a él, no las del contrato entero: «≈ 40 horas para DocuSign» dentro de «20 horas mensuales» son 40. Solo si una fuente lo dice; si no, null.',
     "- Cada cita es una frase COPIADA TAL CUAL de las fuentes, sin parafrasear y sin agregarle formato. Sin cita, el valor va null: el sistema descarta un límite sin cita.",
-    `2. El cronograma tiene que caber: como máximo las semanas vendidas${sinSemanaCero}, y terminando antes de la fecha límite.`,
+    `2. El cronograma tiene que caber: como máximo las semanas vendidas${sinSemanaCero}, las sesiones y las horas vendidas, y terminando antes de la fecha límite.`,
     "- Para que quepa, pon en paralelo lo que el trabajo permite. NO alargues el plan para que entre todo.",
     '- Si aun así el trabajo no cabe, NO estires el cronograma: arma el que sí se puede hacer en el plazo y escribe en "noCabe", en una oración, qué queda afuera y cuántas semanas más harían falta. Sin límites, o si cabe, "noCabe": null.',
   ];

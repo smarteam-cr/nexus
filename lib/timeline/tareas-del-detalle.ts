@@ -239,6 +239,7 @@ function contenidoDelAgente(t: ComputedDetailTask): ContenidoDeTareaNueva {
     fuga: fuga
       ? { campo: fuga.campo, motivo: fuga.motivo, ...(fuga.motivoDeLaNota ? { motivoDeLaNota: fuga.motivoDeLaNota } : {}) }
       : null,
+    ...(typeof t.horas === "number" ? { horas: t.horas } : {}),
   };
 }
 
@@ -431,7 +432,8 @@ export function cambiosDeTareasDelDetalle(i: {
           )
           .map((t) => vistas.get(t.id)!);
 
-    // R7: las fijas de la Semana 0.
+    // R7: las fijas de la Semana 0. Sin Semana 0 (Desarrollo y Web, 2026-11-18): solo accesos y documentación.
+    const opcionesDeLasFijas = { soloAccesosYDocumentacion: i.hitos?.conSemanaCero === false };
     const fijas: ContenidoDeTareaNueva[] = [];
     if (semanaCero && semanaCero.id === f.id) {
       /* Cuenta todo lo que se queda en la fase: lo que tiene avance y, también, lo que el agente no vio
@@ -444,14 +446,14 @@ export function cambiosDeTareasDelDetalle(i: {
       const quedan: TareaDelVivo[] = [];
       for (const r of reemplazables) {
         // Coincide con una fija (o con su gemela) si agregarla deja una fija menos por sembrar.
-        if (tareasFijasDeSemanaCero(i.tags, [...base, r.title]).length < tareasFijasDeSemanaCero(i.tags, base).length) {
+        if (tareasFijasDeSemanaCero(i.tags, [...base, r.title], 0, opcionesDeLasFijas).length < tareasFijasDeSemanaCero(i.tags, base, 0, opcionesDeLasFijas).length) {
           base.push(r.title);
         } else {
           quedan.push(r);
         }
       }
       reemplazables = quedan;
-      for (const t of tareasFijasDeSemanaCero(i.tags, base)) {
+      for (const t of tareasFijasDeSemanaCero(i.tags, base, 0, opcionesDeLasFijas)) {
         // R13 (M3): una fija va en la semana 0; si ya venció, no entra (no es «de la IA»: no se cuenta).
         if (vencida(0)) continue;
         fijas.push({

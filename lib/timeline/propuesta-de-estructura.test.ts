@@ -1535,7 +1535,7 @@ describe("G7b · lo que midió la prueba en vivo del revisor (A3, 2026-09-24)", 
     return P.slice(inicio, P.indexOf('\n- En "ajustar"', inicio));
   };
 
-  it("el ejemplo del formato es JSON válido y PLANO, y el armador lee sus tres cambios", () => {
+  it("el ejemplo del formato es JSON válido y PLANO, y el armador lee sus cuatro cambios", () => {
     /* La edición que la pone en rojo: volver al envoltorio {"estructura":{…}} —el que el modelo
        cerraba con una llave de más— o dejar el ejemplo con un JSON que no parsea. */
     const crudo = JSON.parse(ejemploDelFormato());
@@ -1543,9 +1543,10 @@ describe("G7b · lo que midió la prueba en vivo del revisor (A3, 2026-09-24)", 
        al código), con esta razón: el formato suma `plazoTotal`. Sigue PLANO, sin el envoltorio. */
     expect(Object.keys(crudo)).toEqual(["cambios", "observaciones", "plazoTotal"]);
     const r = construirPropuestaDeEstructura({ fases: FASES, crudo, anchorISO: null });
-    // Los tres traen ids de mentira: se leen y se descartan uno por uno (no se ignoran en bloque).
+    // Los cuatro traen ids de mentira: se leen y se descartan uno por uno (no se ignoran en bloque).
+    // ⚠ ACTUALIZADA 2026-11-18 (decisión de Elías): el formato suma «juntar»; sin `puedeJuntar` también se descarta.
     expect(r.propuesta).toBeNull();
-    expect(r.descartados).toHaveLength(3);
+    expect(r.descartados).toHaveLength(4);
     expect(r.observaciones).toEqual(["<una oración>"]);
     // Y se pide sin texto alrededor: una respuesta con prosa y un bloque ```json fue la que rompió.
     expect(P).toMatch(/SOLO este JSON, sin texto antes ni después/);
@@ -1593,7 +1594,7 @@ describe("G7b · lo que midió la prueba en vivo del revisor (A3, 2026-09-24)", 
     const regla = P.split("\n").find((l) => l.startsWith('- "motivo"')) ?? "";
     expect(regla).toMatch(/la reunión \(su título y su fecha\), la nota \(su título\) o las instrucciones del CSE/);
     const motivosDelEjemplo = [...ejemploDelFormato().matchAll(/"motivo":"([^"]*)"/g)].map((m) => m[1]);
-    expect(motivosDelEjemplo).toEqual(Array(3).fill("<reunión, nota o instrucciones del CSE>"));
+    expect(motivosDelEjemplo).toEqual(Array(4).fill("<reunión, nota o instrucciones del CSE>"));
     const prohibido = P.slice(P.indexOf("PROHIBIDO"), P.indexOf("SEMANAS:"));
     expect(prohibido, "volvió «hacia ni desde»: prohíbe lo que el armador acepta").not.toMatch(/hacia ni desde/);
     expect(prohibido).toMatch(
@@ -1615,9 +1616,11 @@ describe("G7b · lo que midió la prueba en vivo del revisor (A3, 2026-09-24)", 
   });
 });
 
-/** El sha256 de `PROMPT_ESTRUCTURA_CRONOGRAMA` en producción (368c0515, 2026-09-26), con sus constantes interpoladas
+/** ⚠ CAMBIÓ el 2026-11-18 (decisión de Elías, caso RC · DocuSign): el prompt suma LO VENDIDO y el tipo «juntar» (6521
+ *  caracteres; sin medir en vivo todavía). Antes: bed429ea… (368c0515, 2026-09-26, 5717 caracteres).
+ *  El sha256 de `PROMPT_ESTRUCTURA_CRONOGRAMA` en producción (368c0515, 2026-09-26), con sus constantes interpoladas
  *  (5717 caracteres). Calculado dos veces: con el módulo y con `git show 368c0515:` de los cuatro archivos que lo arman. */
-const SHA_DEL_PROMPT_DEL_PASO_1 = "bed429ead87b35d71a8a5513a03cd7f7a40a99e74e6a2432721e48776ec4187b";
+const SHA_DEL_PROMPT_DEL_PASO_1 = "68a8cbacd09f9d0db1bc5c2920b04089d72039b8190590deca7acab9c19a4d37";
 
 describe("G9 · el revisor NO es despachable: sin fila en `Agent`", () => {
   it("ningún script lo nombra (ni seed, ni re-siembra)", () => {
@@ -1666,3 +1669,56 @@ describe("G9 · el revisor NO es despachable: sin fila en `Agent`", () => {
     expect(ruta).not.toMatch(/prisma\.agent\.(findUnique|findFirst|upsert|create)/);
   });
 });
+
+describe("JUNTAR fases (2026-11-18, decisión de Elías: solo con un límite confirmado que el plan pasa)", () => {
+  const juntarCD = { tipo: "juntar", faseId: "d", enFaseId: "c", durationWeeks: 3, motivo: "Instrucciones del CSE: ajustar a lo vendido" };
+
+  it("sin un límite confirmado que el plan pase, juntar se descarta y no hay propuesta", () => {
+    const r = armar([juntarCD]);
+    expect(r.juntadas).toEqual([]);
+    expect(r.propuesta).toBeNull();
+    expect(r.descartados.join(" ")).toContain("no hay un límite confirmado que el plan pase");
+  });
+
+  it("con permiso, junta dos fases sin empezar y alarga la que recibe", () => {
+    const r = armar([juntarCD], { puedeJuntar: true });
+    expect(r.juntadas).toEqual([{ faseId: "d", enFaseId: "c", motivo: "Instrucciones del CSE: ajustar a lo vendido" }]);
+    expect(r.propuesta).not.toBeNull();
+    expect(r.deltas.map((d) => d.key)).toEqual(["mod:c"]);
+  });
+
+  it("una junta sola (sin alargar) también es un cambio: la propuesta no es null", () => {
+    const r = armar([{ ...juntarCD, durationWeeks: undefined }], { puedeJuntar: true });
+    expect(r.juntadas).toHaveLength(1);
+    expect(r.deltas).toEqual([]);
+    expect(r.propuesta).not.toBeNull();
+  });
+
+  it("nunca junta lo empezado, lo terminado, lo suspendido ni la Semana 0 (y lo deja como observación)", () => {
+    for (const [faseId, enFaseId] of [["a", "b"], ["b", "a"], ["e", "d"], ["f", "d"], ["s0", "b"]]) {
+      const r = armar([{ tipo: "juntar", faseId, enFaseId, motivo: "Instrucciones del CSE: ajustar a lo vendido" }], { puedeJuntar: true });
+      expect(r.juntadas, `${faseId} en ${enFaseId}`).toEqual([]);
+    }
+    const r = armar([{ tipo: "juntar", faseId: "a", enFaseId: "b", motivo: "Instrucciones del CSE: ajustar" }], { puedeJuntar: true });
+    expect(r.observaciones.join(" ")).toContain("decide tú si se juntan");
+  });
+
+  it("una fase nueva que iba detrás de la que se va, queda detrás de la que la recibe", () => {
+    const r = armar(
+      [juntarCD, { tipo: "agregar", despuesDeFaseId: "d", name: "Piloto con un equipo", durationWeeks: 1, motivo: "Instrucciones del CSE: piloto" }],
+      { puedeJuntar: true },
+    );
+    expect(r.juntadas).toHaveLength(1);
+    const nombres = r.propuesta!.phases.map((f) => f.name);
+    expect(nombres.indexOf("Piloto con un equipo")).toBe(nombres.indexOf("Capacitación") + 1);
+  });
+
+  it("sin motivo, o una fase que no existe, se descarta; lo pedido sobre la que se va no se propone", () => {
+    expect(armar([{ ...juntarCD, motivo: "" }], { puedeJuntar: true }).juntadas).toEqual([]);
+    expect(armar([{ ...juntarCD, faseId: "zz" }], { puedeJuntar: true }).juntadas).toEqual([]);
+    const r = armar([juntarCD, { tipo: "ajustar", faseId: "d", durationWeeks: 5, motivo: "Instrucciones del CSE: x" }], { puedeJuntar: true });
+    expect(r.juntadas).toHaveLength(1);
+    expect(r.deltas.map((d) => d.key)).toEqual(["mod:c"]);
+  });
+});
+

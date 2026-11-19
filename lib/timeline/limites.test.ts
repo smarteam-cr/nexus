@@ -3,6 +3,10 @@ import {
   avisoDeLaPropuestaContraLimites,
   avisoDeLimites,
   citaEstaEnLasFuentes,
+  fechaQueCabe,
+  horasDelPlan,
+  pasaUnLimiteConfirmado,
+  ultimoDiaDelPlan,
   fusionarPropuestos,
   limitesDeLaFila,
   limitesDeLaSalidaDelHandoff,
@@ -41,25 +45,27 @@ const ACOMODADO_CAV = [
 const CONFIRMADOS_CAV: LimitesDelCronograma = {
   fechaLimite: "2026-12-31",
   duracionVendidaSemanas: 12,
+  horasVendidas: null,
   confirmacion: {},
   propuestos: null,
   conSemanaCero: true,
 };
 
 describe("revisarLimites — el caso real", () => {
-  it("hoy (15 semanas, cierre 4 ene): se pasa 2 semanas de lo vendido y 4 días de la fecha límite", () => {
+  it("hoy (15 semanas, último día el 3 ene): se pasa 2 semanas de lo vendido y 3 días de la fecha límite", () => {
     const r = revisarLimites({ ancla: ANCLA, fases: HOY_CAV, limites: CONFIRMADOS_CAV });
     expect(r.semanasDeArranque).toBe(1);
     expect(r.semanasDelPlan).toBe(14);
     expect(r.duracion).toMatchObject({ vendidas: 12, delPlan: 14, deMas: 2, origen: "confirmado" });
-    expect(r.fecha).toMatchObject({ limite: "2026-12-31", cierre: "2027-01-04", diasDeMas: 4, fasesQueSePasan: ["Go-live y cierre"] });
+    // 2026-11-18: el cierre es el ÚLTIMO DÍA de la última semana (el 3 ene), no el día siguiente (el 4).
+    expect(r.fecha).toMatchObject({ limite: "2026-12-31", cierre: "2027-01-03", diasDeMas: 3, fasesQueSePasan: ["Go-live y cierre"] });
     expect(r.seSale).toBe(true);
   });
 
-  it("acomodado en paralelo (12 semanas, cierre 14 dic): cabe en lo vendido y antes de la fecha límite", () => {
+  it("acomodado en paralelo (12 semanas, último día el 13 dic): cabe en lo vendido y antes de la fecha límite", () => {
     const r = revisarLimites({ ancla: ANCLA, fases: ACOMODADO_CAV, limites: CONFIRMADOS_CAV });
     expect(r.duracion).toMatchObject({ delPlan: 11, deMas: -1 });
-    expect(r.fecha).toMatchObject({ cierre: "2026-12-14", diasDeMas: -17, fasesQueSePasan: [] });
+    expect(r.fecha).toMatchObject({ cierre: "2026-12-13", diasDeMas: -18, fasesQueSePasan: [] });
     expect(r.seSale).toBe(false);
   });
 
@@ -69,8 +75,9 @@ describe("revisarLimites — el caso real", () => {
     expect(a.seSale).toBe(true);
     expect(a.titulo).toBe("El cronograma no cabe en lo acordado");
     expect(a.lineas).toEqual([
-      "El plan dura 14 semanas sin la Semana 0 y se vendieron 12: se pasa 2 semanas.",
-      "El plan cierra el 4 ene 2027 y la fecha límite es el 31 dic 2026: se pasa 4 días. Terminan después: «Go-live y cierre».",
+      // 2026-11-18: lo vendido va PRIMERO (en RC se leyó al revés «el plan dura 8 semanas y se vendieron 4»).
+      "Se vendieron 12 semanas; el plan dura 14 sin la Semana 0 (2 de más).",
+      "La fecha límite es el 31 dic 2026; el plan termina el 3 ene 2027 (3 días de más). Terminan después: «Go-live y cierre».",
     ]);
   });
 
@@ -79,10 +86,117 @@ describe("revisarLimites — el caso real", () => {
     const despues = revisarLimites({ ancla: ANCLA, fases: ACOMODADO_CAV, limites: CONFIRMADOS_CAV });
     expect(avisoDeLaPropuestaContraLimites(antes, despues)).toBe("Con la propuesta, el plan vuelve a caber en lo acordado.");
     expect(avisoDeLaPropuestaContraLimites(despues, antes)).toBe(
-      "⚠ Con la propuesta, el plan dura 14 de las 12 semanas vendidas y cierra el 4 ene 2027, 4 días después de la fecha límite. Avísale a Ventas o mueve el límite con el cliente.",
+      "⚠ Con la propuesta, el plan dura 14 semanas y se vendieron 12 y cierra el 3 ene 2027, 3 días después de la fecha límite. Avísale a Ventas o mueve el límite con el cliente.",
     );
     // Sin nada que decir: los dos caben.
     expect(avisoDeLaPropuestaContraLimites(despues, despues)).toBeNull();
+  });
+});
+
+/* El caso real que lo corrigió: RC Inmobiliaria · DocuSign (2026-11-18). Arranque el martes 17 nov, 5 fases en 4
+   semanas, vendido en 4 semanas con fecha límite el viernes 11 dic. */
+describe("revisarLimites — RC · DocuSign (2026-11-18)", () => {
+  const ANCLA_RC = "2026-11-17T00:00:00.000Z";
+  const FASES_RC = [
+    { name: "Accesos y relevamiento", durationWeeks: 1, startWeek: 0 },
+    { name: "Conector", durationWeeks: 1, startWeek: 0 },
+    { name: "Plantillas", durationWeeks: 2, startWeek: 1 },
+    { name: "Pruebas con cliente", durationWeeks: 1, startWeek: 3 },
+    { name: "Capacitación y entrega", durationWeeks: 1, startWeek: 3 },
+  ];
+  const LIMITES_RC: LimitesDelCronograma = { ...CONFIRMADOS_CAV, fechaLimite: "2026-12-11", duracionVendidaSemanas: 4, conSemanaCero: false };
+
+  it("el plan termina el lunes 14 dic (no el martes 15): 3 días de más, y cabe en las 4 semanas", () => {
+    const r = revisarLimites({ ancla: ANCLA_RC, fases: FASES_RC, limites: LIMITES_RC });
+    expect(ultimoDiaDelPlan(ANCLA_RC, FASES_RC)).toBe("2026-12-14");
+    expect(r.fecha).toMatchObject({ cierre: "2026-12-14", diasDeMas: 3, fasesQueSePasan: ["Pruebas con cliente", "Capacitación y entrega"] });
+    expect(r.duracion).toMatchObject({ vendidas: 4, delPlan: 4, deMas: 0 });
+  });
+
+  it("«Mover la fecha límite» propone el último día del plan, nunca la fecha que ya está", () => {
+    const r = revisarLimites({ ancla: ANCLA_RC, fases: FASES_RC, limites: LIMITES_RC });
+    expect(fechaQueCabe(r)).toBe("2026-12-14");
+    expect(fechaQueCabe(r)).not.toBe(LIMITES_RC.fechaLimite);
+    // Si ya cabe, no hay fecha que proponer.
+    const cabe = revisarLimites({ ancla: ANCLA_RC, fases: FASES_RC, limites: { ...LIMITES_RC, fechaLimite: "2026-12-14" } });
+    expect(cabe.fecha?.diasDeMas).toBe(0);
+    expect(fechaQueCabe(cabe)).toBeNull();
+  });
+
+  it("lo vendido se lee primero: «Se vendieron 4 semanas; el plan dura 8 (4 de más)»", () => {
+    const ocho = [{ name: "A", durationWeeks: 4 }, { name: "B", durationWeeks: 4 }];
+    const r = revisarLimites({ ancla: ANCLA_RC, fases: ocho, limites: { ...LIMITES_RC, fechaLimite: null } });
+    expect(avisoDeLimites(r, LIMITES_RC)!.lineas).toEqual(["Se vendieron 4 semanas; el plan dura 8 (4 de más)."]);
+  });
+
+  it("juntar fases y «Ajustar el plan a lo vendido» piden un límite CONFIRMADO que el plan pase", () => {
+    const ocho = [{ name: "A", durationWeeks: 4 }, { name: "B", durationWeeks: 4 }];
+    const confirmado = revisarLimites({ ancla: ANCLA_RC, fases: ocho, limites: { ...LIMITES_RC, fechaLimite: null } });
+    expect(pasaUnLimiteConfirmado(confirmado)).toBe(true);
+    const propuesto = revisarLimites({
+      ancla: ANCLA_RC,
+      fases: ocho,
+      limites: {
+        ...LIMITES_RC,
+        fechaLimite: null,
+        duracionVendidaSemanas: null,
+        propuestos: { runId: null, en: "", duracionVendida: { valor: 4, cita: "son cuatro semanas en total", citaVerificada: true } },
+      },
+    });
+    expect(propuesto.seSale).toBe(true);
+    expect(pasaUnLimiteConfirmado(propuesto)).toBe(false);
+    const cabe = revisarLimites({ ancla: ANCLA_RC, fases: FASES_RC, limites: { ...LIMITES_RC, fechaLimite: null } });
+    expect(pasaUnLimiteConfirmado(cabe)).toBe(false);
+  });
+});
+
+describe("las horas vendidas (2026-11-18)", () => {
+  const ANCLA_RC = "2026-11-17T00:00:00.000Z";
+  const conHoras = (hs: Array<number | null>, status = "PENDING") => [
+    { name: "Plantillas", durationWeeks: 2, tasks: hs.map((h) => ({ horasEstimadas: h, status })) },
+  ];
+  const LIMITES = { ...CONFIRMADOS_CAV, fechaLimite: null, duracionVendidaSemanas: null, horasVendidas: 40 };
+
+  it("suma las horas de las tareas (sin las suspendidas) y avisa cuánto se pasa", () => {
+    expect(horasDelPlan([...conHoras([20, 25, null]), ...conHoras([10], "SUSPENDED")])).toEqual({ horas: 45, conHoras: 2, sinHoras: 1 });
+    // Lo que hace solo el cliente no gasta las horas vendidas de Smarteam (ni cuenta como «sin horas»).
+    expect(horasDelPlan([{ name: "X", durationWeeks: 1, tasks: [{ horasEstimadas: 3, party: "CLIENTE" }, { horasEstimadas: null, party: "CLIENTE" }] }])).toEqual({ horas: 0, conHoras: 0, sinHoras: 0 });
+    const r = revisarLimites({ ancla: ANCLA_RC, fases: conHoras([20, 25, null]), limites: LIMITES });
+    expect(r.horas).toMatchObject({ vendidas: 40, delPlan: 45, deMas: 5, sinHoras: 1, origen: "confirmado" });
+    expect(r.seSale).toBe(true);
+    expect(avisoDeLimites(r, LIMITES)!.lineas).toEqual(["Se vendieron 40 horas; las tareas suman 45 (5 de más). 1 tarea no tiene horas."]);
+    expect(pasaUnLimiteConfirmado(r)).toBe(true);
+  });
+
+  it("cabe, y sin horas estimadas no hay cuenta (lo dice, no avisa)", () => {
+    const cabe = revisarLimites({ ancla: ANCLA_RC, fases: conHoras([12.5, 10]), limites: LIMITES });
+    expect(avisoDeLimites(cabe, LIMITES)!.lineas).toEqual(["Se vendieron 40 horas; las tareas suman 22,5: cabe (17,5 de margen)."]);
+    const sin = revisarLimites({ ancla: ANCLA_RC, fases: conHoras([null]), limites: LIMITES });
+    expect(sin.seSale).toBe(false);
+    expect(avisoDeLimites(sin, LIMITES)!.lineas).toEqual(["Se vendieron 40 horas; las tareas todavía no tienen horas estimadas."]);
+  });
+
+  it("se confirma y se mueve como los otros dos límites", () => {
+    expect(validarCambioDeLimite(null, { campo: "horasVendidas", valor: 40, motivo: "Acuerdo Macro" })).toEqual({
+      ok: true,
+      reason: "Horas vendidas confirmadas: 40 horas (Acuerdo Macro).",
+    });
+    expect(validarCambioDeLimite(null, { campo: "horasVendidas", valor: 0 }).ok).toBe(false);
+    expect(validarCambioDeLimite(40, { campo: "horasVendidas", valor: 40, motivo: "x", acordadoCon: "y" })).toEqual({
+      ok: false,
+      error: "Ese ya es el valor confirmado.",
+    });
+  });
+
+  it("la IA del handoff las propone con su cita", () => {
+    const p = limitesDeLaSalidaDelHandoff(
+      { limites: { horasVendidas: 40, citaHoras: "La implementación de DocuSign contempla aproximadamente 40 horas de trabajo" } },
+      "Ejecutar DocuSign: La implementación de DocuSign contempla aproximadamente 40 horas de trabajo Smarteam.",
+      "run1",
+      new Date("2026-11-18T10:00:00.000Z"),
+    );
+    expect(p?.horasVendidas).toEqual({ valor: 40, cita: "La implementación de DocuSign contempla aproximadamente 40 horas de trabajo", citaVerificada: true });
+    expect(limitesDeLaFila({ fechaLimite: null, duracionVendidaSemanas: null, horasVendidas: 40, limitesConfirmacion: null, limitesPropuestos: p, conSemanaCero: false }).propuestos?.horasVendidas?.valor).toBe(40);
   });
 });
 
@@ -259,6 +373,7 @@ describe("limitesDeLaFila", () => {
     expect(l).toEqual({
       fechaLimite: "2026-12-31",
       duracionVendidaSemanas: 12,
+      horasVendidas: null,
       confirmacion: { fechaLimite: { por: "apinzon@smarteamcr.com", nombre: null, rol: "VENTAS", en: "2026-10-02T00:00:00.000Z", fuente: null } },
       propuestos: null,
       conSemanaCero: true,

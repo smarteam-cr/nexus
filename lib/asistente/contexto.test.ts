@@ -320,7 +320,7 @@ describe("el contexto del cronograma dice lo que el chat necesita para hablar de
        por lo tanto está protegida— así que proponía borrarla para que el ejecutor la rechazara
        después. Las que crea el propio chat nacen HUMAN: no podía deshacer lo que acababa de hacer. */
     expect(src).toContain(
-      "select: { id: true, title: true, weekIndex: true, status: true, source: true }",
+      "select: { id: true, title: true, weekIndex: true, status: true, source: true, horasEstimadas: true, party: true }",
     );
     /* ⚠ E3 P4: `notes: true` sigue prohibido, ahora en los DOS archivos que arman el texto. */
     expect(

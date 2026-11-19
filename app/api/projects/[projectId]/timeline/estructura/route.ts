@@ -59,7 +59,12 @@ import {
   leerRespuestaDeEstructura,
   MENSAJE_ESTRUCTURA_EN_CURSO,
 } from "@/lib/timeline/propuesta-de-estructura";
-import { borradorBase, pedidoDelCronograma, type Vivo } from "@/lib/timeline/borrador";
+import { borradorBase, claveDeFaseQueSeVa, fotoDeTarea, pedidoDelCronograma, type CambioFaseSeVa, type Vivo } from "@/lib/timeline/borrador";
+import { SELECT_DE_FASES_CON_TAREAS, vivoDeLaBase } from "@/lib/timeline/borrador-del-detalle";
+import { pasaUnLimiteConfirmado, revisarLimites } from "@/lib/timeline/limites";
+import { leerLimitesDelProyecto } from "@/lib/timeline/limites-servidor";
+import { bloqueDeLoVendidoParaLaEstructura } from "@/lib/timeline/lo-vendido";
+import { cargarLoVendido } from "@/lib/timeline/lo-vendido-server";
 
 /** Cierra la corrida sin poder romper la respuesta que el CSE está esperando. */
 async function cerrarCorrida(runId: string, status: "DONE" | "ERROR", output: Record<string, unknown>): Promise<void> {
@@ -75,10 +80,14 @@ const PROPUESTA_PENDIENTE = {
 };
 
 export async function POST(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ projectId: string }> },
 ) {
   const { projectId } = await params;
+  /* 2026-11-18: «Ajustar el plan a lo vendido» (el botón del aviso de los límites) corre el paso 1 aunque no haya material
+     elegido. El cuerpo es opcional: «Regenerar todo» manda el POST vacío, como siempre. */
+  const cuerpo = (await req.json().catch(() => null)) as { ajustarALoVendido?: unknown } | null;
+  const ajustarALoVendido = cuerpo?.ajustarALoVendido === true;
   const guard = await guardTimelineEdit(projectId);
   if (guard instanceof NextResponse) return guard;
 
@@ -104,7 +113,8 @@ export async function POST(
           activityType: true,
           status: true,
           // `source`: el pedido del borrador («regenerar» si ya hay tareas de la IA, si no «primera»).
-          tasks: { select: { status: true, weekIndex: true, source: true } },
+          // `horasEstimadas` y `party` (2026-11-18): las horas del plan contra las horas vendidas (sin las del cliente).
+          tasks: { select: { status: true, weekIndex: true, source: true, horasEstimadas: true, party: true } },
         },
       },
     },
@@ -112,6 +122,10 @@ export async function POST(
   if (!tl || tl.phases.length === 0) {
     return NextResponse.json({ error: "NO_TIMELINE", message: "No hay cronograma para revisar." }, { status: 400 });
   }
+  /* 2026-11-18: la FOTO con tareas de cada fase, leída ANTES del modelo. Si el revisor junta una fase, su `fase-se-va` lleva
+     esta foto como `desde`: lo que el CSE edite mientras la IA piensa choca y queda fuera (revisión del 2026-11-18: leída
+     después del modelo, la edición del CSE entraba en la foto y la fase se borraba igual). */
+  const fotoConTareas = await prisma.timelinePhase.findMany({ where: { timelineId: tl.id }, ...SELECT_DE_FASES_CON_TAREAS });
 
   // RBAC — la MISMA vara que el paso 2 (el gate del detalle) y que «Pedir cambio con IA».
   const iaGate = await guardIaDelCronograma(tl.id);
@@ -127,15 +141,25 @@ export async function POST(
      nada elegido, «Generar cronograma» avisaba «Hay cambios de fases sin revisar… para que la IA
      revise las fases» aunque la IA nunca iba a revisar ninguna. Las «Instrucciones adicionales»
      solas SÍ cuentan (revisión adversarial, 2026-09-24): son la fuente de más peso. */
-  if (!hayQueRevisarLasFases(contexto)) {
+  if (!hayQueRevisarLasFases(contexto) && !ajustarALoVendido) {
     return NextResponse.json({ estado: "sin-material" });
   }
   // Una propuesta pendiente (del handoff o de una revisión anterior) no se pisa: primero se decide.
   if (tl.pendingProposal !== null) return NextResponse.json(PROPUESTA_PENDIENTE, { status: 409 });
 
+  /* ⭐ LO VENDIDO (2026-11-18, caso RC · DocuSign): el paso 1 no recibía los límites, así que el CSE confirmaba 4 semanas
+     y la revisión de fases no lo sabía. Con un límite CONFIRMADO que el plan pasa, el revisor puede JUNTAR fases (el
+     armador lo vuelve a exigir con `puedeJuntar`). La misma revisión que el aviso de arriba del Gantt. */
+  const [loVendido, limites] = await Promise.all([cargarLoVendido(projectId), leerLimitesDelProyecto(projectId)]);
+  const revision = limites
+    ? revisarLimites({ ancla: tl.anchorStartDate?.toISOString() ?? null, fases: tl.phases, limites })
+    : null;
+  const puedeJuntar = !!revision && pasaUnLimiteConfirmado(revision);
+
   const userMessage = renderEstructuraDelCronograma({
     instrucciones: contexto.instrucciones,
     fuentes: contexto.fuentes,
+    loVendido: bloqueDeLoVendidoParaLaEstructura({ loVendido, revision, ajustar: ajustarALoVendido }),
   });
   const quien = await triggeredByEmail();
 
@@ -246,6 +270,7 @@ export async function POST(
     /* ⭐ El plazo total lo compara el SISTEMA (medido en vivo 2026-09-24: el modelo invertía la
        dirección 6 de 6): contra el cierre actual del calendario que leyó, misma foto y mismo reloj. */
     cierreActual: cierreActualDelPlan(foto, ahora)?.semana ?? null,
+    puedeJuntar,
   });
 
   if (!armado.propuesta) {
@@ -285,6 +310,34 @@ export async function POST(
     vivo,
     pedido: pedidoDelCronograma(tl.phases.flatMap((f) => f.tasks)),
   });
+  /* 2026-11-18: cada fase que se JUNTA en otra sale como `fase-se-va`, con la foto de sus tareas (lo que tiene avance o se
+     cargó a mano se queda, y la fase con ello: la regla de siempre de una fase que se va). Las tareas de la que la recibe
+     las arma el paso 2 sobre la estructura nueva. */
+  if (armado.juntadas.length > 0) {
+    const vivas = new Map(vivoDeLaBase(tl.anchorStartDate, fotoConTareas).fases.map((f) => [f.id, f]));
+    for (const j of armado.juntadas) {
+      const f = vivas.get(j.faseId);
+      if (!f || !f.tareas) continue;
+      const destino = tl.phases.find((p) => p.id === j.enFaseId)?.name ?? "otra fase";
+      const seVa: CambioFaseSeVa = {
+        tipo: "fase-se-va",
+        clave: claveDeFaseQueSeVa(f.id),
+        faseId: f.id,
+        desde: {
+          name: f.name,
+          durationWeeks: f.durationWeeks,
+          startWeek: f.startWeek,
+          sessionCount: f.sessionCount,
+          notes: f.notes,
+          activityType: f.activityType,
+          status: f.status ?? "PENDING",
+          tareas: f.tareas.map((t) => ({ id: t.id, foto: fotoDeTarea(t) })),
+        },
+        motivo: `Se junta en «${destino}»: ${j.motivo}`,
+      };
+      borrador.cambios.push(seVa);
+    }
+  }
 
   /* ⛔ Solo si NO había otra propuesta: el handoff pudo escribir la suya mientras el modelo
      pensaba, y un update plano la pisaría sin que nadie la viera. */

@@ -1007,6 +1007,9 @@ model ProjectTimeline {
   // `limitesPropuestos`. Moverlos pide motivo y con quién se acordó (queda en TimelineChange).
   fechaLimite                  DateTime? // el día en que todo tiene que estar listo para el cliente
   duracionVendidaSemanas       Int? // las semanas que se vendieron, SIN contar la Semana 0
+  // Las horas vendidas para ESTE proyecto (2026-11-18): el que sale de un contrato de horas (RC · DocuSign ≈ 40 h
+  // del Acuerdo Macro). Se compara contra la suma de `TimelineTask.horasEstimadas`. nullable: casi ningún proyecto lo tiene.
+  horasVendidas                Int?
   // Quién confirmó cada límite: { fechaLimite?: {por, rol, en, fuente}, duracionVendida?: {...} }.
   limitesConfirmacion          Json?
   // Lo que propuso la IA del handoff y nadie confirmó todavía, con la frase de donde lo sacó:
@@ -1129,6 +1132,9 @@ model TimelineTask {
   actualEnd            DateTime?
   notes                String?              @db.Text
   needsValidation      Boolean              @default(false) // tarea típica inventada por el agente con handoff flaco — el Gantt la grita; NUNCA cruza al cliente
+  /// Las horas estimadas de la tarea (2026-11-18): las pone el detalle desde las actividades de los casos vendidos. nullable
+  /// porque las tareas de antes y las cargadas a mano no las tienen. Su suma se compara contra `ProjectTimeline.horasVendidas`.
+  horasEstimadas       Float?
   // B — dueño de la tarea en el plan de alineación compartido. CLIENTE entrega/hace;
   // SMARTEAM configura; AMBOS trabajo conjunto. Nullable = sin asignar (data pre-B).
   // Cruza al cronograma compartible del cliente (gated por "Subir"); el Kickoff embebido NO lo muestra.

@@ -181,6 +181,8 @@ export async function escribirTareas(
       source: n.porChat || n.retocada ? "MODIFIED" : "AGENT",
       needsValidation: n.tarea.needsValidation === true && !n.porChat,
       ...(n.tarea.hito?.includes("kickoff") ? { originFingerprint: MARCA_DE_KICKOFF } : {}),
+      // 2026-11-18: las horas del detalle (desde las actividades vendidas), para comparar contra las horas vendidas.
+      ...(typeof n.tarea.horas === "number" ? { horasEstimadas: n.tarea.horas } : {}),
     };
   });
   if (data.length > 0) await tx.timelineTask.createMany({ data });

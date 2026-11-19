@@ -195,6 +195,12 @@ export interface InsumosDelDetalle {
    * resueltas y antes del alcance. Sin él, el texto es byte a byte el de siempre (los goldens).
    */
   loQueYaHay?: string;
+  /**
+   * 2026-11-18: LO VENDIDO con sus actividades (`bloqueDeLoVendidoParaElDetalle`, lib/timeline/lo-vendido.ts). Las tareas
+   * salen de ahí, con sus horas, y reemplaza la regla de «2 a 5 por semana» del prompt. Va después de lo que ya hay y
+   * antes del alcance. Sin él (o null), el texto es byte a byte el de siempre.
+   */
+  loVendido?: string | null;
 }
 
 /**
@@ -374,6 +380,7 @@ Detalla el cronograma siguiendo tus instrucciones: asigna un activityType a cada
      válvula (que dice qué dejar quieto) y antes del alcance (que acota a qué fases): así el alcance sigue
      siendo lo último que lee el modelo. Sin él, ni un carácter (los goldens). */
   if (i.loQueYaHay) msg += i.loQueYaHay;
+  if (i.loVendido) msg += i.loVendido;
 
   // Regen por fase: acota la salida a las fases target (las demás van con tasks:[]) — baja el
   // costo/latencia y el riesgo de truncación. La persistencia igual filtra por el alcance guardado.

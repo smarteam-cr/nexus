@@ -643,7 +643,8 @@ describe("G8 · la ruta: sin material no paga, no pisa, y pide la vara del paso 
     );
     // El vivo sale de la MISMA lectura (`tl`), y la lectura trae la fuente de las tareas.
     expect(src.slice(src.indexOf("const vivo: Vivo = {"), iBorrador)).toContain("fases: tl.phases.map(");
-    expect(src).toContain("tasks: { select: { status: true, weekIndex: true, source: true } }");
+    // 2026-11-18: + `horasEstimadas` (las horas del plan contra las horas vendidas).
+    expect(src).toContain("tasks: { select: { status: true, weekIndex: true, source: true, horasEstimadas: true, party: true } }");
     const iEscritura = src.indexOf("prisma.projectTimeline.updateMany(");
     expect(iEscritura).toBeGreaterThan(iBorrador);
     const escritura = src.slice(iEscritura, src.indexOf("});", iEscritura));

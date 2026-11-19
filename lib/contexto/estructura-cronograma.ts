@@ -291,6 +291,12 @@ const PEDIDO_DE_ESTRUCTURA =
 export function renderEstructuraDelCronograma(i: {
   instrucciones: string;
   fuentes: readonly FuenteDeContexto[];
+  /**
+   * 2026-11-18: el bloque de LO VENDIDO (`bloqueDeLoVendidoParaLaEstructura`, lib/timeline/lo-vendido.ts). Va después
+   * de las fuentes y antes de la frontera. Sin él (o null), el texto es byte a byte el de siempre.
+   */
+  loVendido?: string | null;
 }): string {
-  return `${i.instrucciones}${renderFuentes(i.fuentes)}\n\n${REGLA_DE_FRONTERA_DE_ESTRUCTURA}\n\n${PEDIDO_DE_ESTRUCTURA}`;
+  const loVendido = i.loVendido ? `\n\n${i.loVendido}` : "";
+  return `${i.instrucciones}${renderFuentes(i.fuentes)}${loVendido}\n\n${REGLA_DE_FRONTERA_DE_ESTRUCTURA}\n\n${PEDIDO_DE_ESTRUCTURA}`;
 }

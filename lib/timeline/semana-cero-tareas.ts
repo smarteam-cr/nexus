@@ -28,6 +28,14 @@ import { esReimplementacion, tipoDeImplementacion, HUBSPOT_HUB_SLUGS, IMPLEMENTA
  * `PartnerUsageSnapshot`— es de CUENTA, no de proyecto, y está declarado confidencial por términos
  * de partner: usarlo acá metería ese dato en un documento que el cliente abre.
  *
+ * ── CORREGIDO 2026-11-18: EN DESARROLLO (Y WEB) SOLO ACCESOS Y DOCUMENTACIÓN ───────────
+ * Caso RC Inmobiliaria · DocuSign: una integración con tags de hubs (`sales_hub`, `data_hub`) y de
+ * re-implementación recibía las cinco, y le pedía al cliente «usuarios a ingresar al CRM», la ruta de
+ * HubSpot Academy y limpiar la base. Decisión de Elías: en un proyecto sin Semana 0 (Desarrollo y Web,
+ * `soloAccesosYDocumentacion`) van solo el acceso al portal y la documentación de procesos. Lo demás es
+ * de una implementación. El gate de los tags sigue igual (un desarrollo que no toca HubSpot no recibe
+ * ninguna). DECISIONS «El cronograma sale de lo vendido».
+ *
  * ── ⛔ LA RAMA QUE IMPORTA: TRES ESTADOS, NO DOS ────────────────────────────
  * La tarea de base de datos tiene dos caras — «entregá la base a importar» (desde cero) y «revisá
  * y limpiá la existente» (re-implementación)—. Y el tipo puede estar SIN DEFINIR, que no es lo
@@ -78,6 +86,12 @@ export function proyectoInvolucraHubSpot(tags: readonly string[]): boolean {
   );
 }
 
+/** Lo único que va en un proyecto sin Semana 0 (Desarrollo y Web), 2026-11-18. */
+const ACCESOS_Y_DOCUMENTACION: ReadonlySet<string> = new Set([
+  "Entregar documentación de procesos involucrados",
+  "Proporcionar acceso al portal de HubSpot a Smarteam",
+]);
+
 /** Las dos caras del MISMO renglón del plan. */
 const TAREA_BD_DESDE_CERO = { title: "Proporcionar bases de datos a importar", party: "CLIENTE" as const };
 const TAREA_BD_EXISTENTE = { title: "Revisar y limpiar la base de datos existente", party: "AMBOS" as const };
@@ -98,6 +112,8 @@ export function tareasFijasDeSemanaCero(
   tags: readonly string[],
   titulosExistentes: readonly string[],
   ordenDesde = 0,
+  /** 2026-11-18: un proyecto sin Semana 0 (Desarrollo y Web): solo el acceso al portal y la documentación. */
+  opciones: { soloAccesosYDocumentacion?: boolean } = {},
 ): TareaFija[] {
   /* ⛔ El gate va PRIMERO y adentro de la función, no en el llamador: son dos caminos los que la
      invocan (el preview de una fase y el de todas) y un gate por fuera se olvida en uno de los dos
@@ -128,6 +144,7 @@ export function tareasFijasDeSemanaCero(
 
   const yaEstan = new Set(titulosExistentes.map(normalizar));
   return candidatas
+    .filter((t) => !opciones.soloAccesosYDocumentacion || ACCESOS_Y_DOCUMENTACION.has(t.title))
     .filter((t) => !yaEstan.has(normalizar(t.title)) && !(t.gemela && yaEstan.has(normalizar(t.gemela))))
     .map((t, i) => ({
       title: t.title,

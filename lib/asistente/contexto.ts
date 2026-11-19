@@ -454,7 +454,8 @@ export async function contextoDeCronograma(projectId: string): Promise<ContextoD
                al turno en que se la señala: fase-senalada.ts). Ver el techo, arriba. */
             tasks: {
               orderBy: [{ weekIndex: "asc" }, { order: "asc" }],
-              select: { id: true, title: true, weekIndex: true, status: true, source: true },
+              // `horasEstimadas` y `party` (2026-11-18): el aviso de las horas vendidas, el mismo que ve la pantalla.
+              select: { id: true, title: true, weekIndex: true, status: true, source: true, horasEstimadas: true, party: true },
             },
           },
         },

@@ -389,6 +389,8 @@ async function loadTimeline(projectId: string): Promise<TimelineResponse | { exi
               dueDateOverride: true,
               actualStart: true, // C-17: para el summary; no viaja al cable
               actualEnd: true,
+              // 2026-11-18: las horas que puso el detalle, para comparar contra las horas vendidas (lib/timeline/limites.ts).
+              horasEstimadas: true,
             },
           },
         },

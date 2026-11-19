@@ -104,7 +104,7 @@ describe("⛔ lo que el camino viejo hacía y la curación tuvo que aprender", (
     expect(detalle).toContain("const semanaCero = elegirFaseDeSemanaCero(");
     const iR7 = detalle.indexOf("if (semanaCero && semanaCero.id === f.id) {");
     expect(iR7, "R7 dejó de mirar la fase del arranque").toBeGreaterThan(-1);
-    expect(detalle.indexOf("for (const t of tareasFijasDeSemanaCero(i.tags, base)) {", iR7), "R7 dejó de sembrar las fijas").toBeGreaterThan(iR7);
+    expect(detalle.indexOf("for (const t of tareasFijasDeSemanaCero(i.tags, base, 0, opcionesDeLasFijas)) {", iR7), "R7 dejó de sembrar las fijas").toBeGreaterThan(iR7);
     expect(soloCodigo(RUTA_FUSION), "la fusión dejó de pasar los tags (sin ellos no hay fijas)").toContain(
       "tags: sanitizeTags(tl.project?.tags ?? []),",
     );

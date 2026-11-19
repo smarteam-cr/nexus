@@ -92,6 +92,8 @@ export const MAX_CAMBIOS = 12;
 export const MAX_FASES_NUEVAS = 3;
 /** Cuántas observaciones del modelo se muestran, y su largo máximo. */
 export const MAX_OBSERVACIONES = 5;
+/** Cuántas fases puede juntar el revisor en una corrida (2026-11-18). */
+export const MAX_JUNTADAS = 3;
 export const MAX_LARGO_OBSERVACION = 300;
 /** El nombre de una fase lo lee el cliente: corto. */
 export const MAX_LARGO_NOMBRE_DE_FASE = 60;
@@ -129,6 +131,12 @@ export interface ResultadoDeEstructura {
    * pantalla NO puede decir «tus reuniones no piden cambios»: los pidieron y no se pudieron proponer.
    */
   acordadoSinEntrar: number;
+  /**
+   * 2026-11-18 (decisión de Elías): las fases que el revisor JUNTA en otra, ya validadas. La que se va sale como
+   * `fase-se-va` en el borrador (lo arma la ruta, con la foto de sus tareas); la que la recibe va en `propuesta` con su
+   * duración nueva si cambia. Solo con `puedeJuntar`: sin un límite confirmado que el plan pase, juntar se descarta.
+   */
+  juntadas: Array<{ faseId: string; enFaseId: string; motivo: string }>;
 }
 
 interface Ajuste {
@@ -189,6 +197,8 @@ export function construirPropuestaDeEstructura(input: {
   ahora?: number | null;
   conSemanaCero?: boolean;
   cierreActual?: number | null;
+  /** 2026-11-18: ¿el plan pasa un límite CONFIRMADO? Solo así se acepta juntar fases (`pasaUnLimiteConfirmado`). */
+  puedeJuntar?: boolean;
 }): ResultadoDeEstructura {
   const fases = [...input.fases].sort((a, b) => a.order - b.order);
   const porId = new Map(fases.map((f) => [f.id, f]));
@@ -354,6 +364,7 @@ export function construirPropuestaDeEstructura(input: {
   const ajustes = new Map<string, Ajuste>();
   const movidas = new Map<string, { despuesDe: string; motivo: string }>();
   const nuevas: FaseNueva[] = [];
+  const juntadas: ResultadoDeEstructura["juntadas"] = [];
 
   for (const c of cambios) {
     if (!esObjeto(c)) {
@@ -362,6 +373,56 @@ export function construirPropuestaDeEstructura(input: {
     }
     const tipo = texto(c.tipo);
     const motivo = recortar(texto(c.motivo), MAX_LARGO_MOTIVO);
+
+    /* ⭐ JUNTAR (2026-11-18, decisión de Elías). La ÚNICA forma de que una fase salga del plan desde el paso 1, y solo
+       con un límite confirmado que el plan pasa. Las dos fases tienen que estar sin empezar (ni terminada, ni suspendida,
+       ni la Semana 0, ni con una tarea en curso o hecha), y el plan que queda no puede correr lo que ya empezó ni llevar
+       nada al pasado. La que recibe puede alargarse. */
+    if (tipo === "juntar") {
+      const id = texto(c.faseId);
+      const en = texto(c.enFaseId);
+      const f = porId.get(id);
+      const destino = porId.get(en);
+      const donde = `juntar ${f ? nombreDe(id) : `«${id || "(sin id)"}»`}${destino ? ` en ${nombreDe(en)}` : ""}`;
+      if (!input.puedeJuntar) {
+        descartados.push(`${donde}: no hay un límite confirmado que el plan pase.`);
+        continue;
+      }
+      if (!f || !destino || id === en) {
+        descartados.push(`${donde}: falta una de las dos fases (o es la misma).`);
+        continue;
+      }
+      if (!motivo) {
+        descartados.push(`${donde}: sin motivo.`);
+        continue;
+      }
+      const quieta =
+        intocable(f) ?? intocable(destino) ?? (comoVa(f) ? `${nombreDe(id)} ${comoVa(f)}` : null) ?? (comoVa(destino) ? `${nombreDe(en)} ${comoVa(destino)}` : null);
+      if (quieta) {
+        descartados.push(`${donde}: ${quieta}.`);
+        acordadoQueNoEntra(`juntar ${nombreDe(id)} en ${nombreDe(en)}`, quieta, "si se juntan");
+        continue;
+      }
+      const usadas = new Set(juntadas.flatMap((j) => [j.faseId, j.enFaseId]));
+      if (juntadas.length >= MAX_JUNTADAS || usadas.has(id) || usadas.has(en)) {
+        descartados.push(`${donde}: ya hay otra junta con esas fases (o se llegó al tope de ${MAX_JUNTADAS}).`);
+        continue;
+      }
+      const dur = esEnteroEntre(c.durationWeeks, 1, 52) ? c.durationWeeks : destino.durationWeeks;
+      const sim = conCambio(en, { durationWeeks: dur }).filter((s) => s.id !== id);
+      const choque = loQueCorre(sim) ?? loQueCaeDeRebote(sim, en);
+      if (choque) {
+        descartados.push(`${donde}: ${choque}.`);
+        acordadoQueNoEntra(`juntar ${nombreDe(id)} en ${nombreDe(en)}`, choque, "si se juntan");
+        continue;
+      }
+      juntadas.push({ faseId: id, enFaseId: en, motivo });
+      if (dur !== destino.durationWeeks) {
+        const previo = ajustes.get(en);
+        ajustes.set(en, { ...(previo ?? {}), durationWeeks: dur, motivo: previo?.motivo ?? motivo });
+      }
+      continue;
+    }
 
     if (tipo === "ajustar") {
       const id = texto(c.faseId);
@@ -605,7 +666,16 @@ export function construirPropuestaDeEstructura(input: {
       continue;
     }
 
-    descartados.push(`Un cambio de tipo «${tipo || "(sin tipo)"}» no existe: solo ajustar, agregar o mover.`);
+    descartados.push(`Un cambio de tipo «${tipo || "(sin tipo)"}» no existe: solo ajustar, agregar, mover o juntar.`);
+  }
+
+  /* Lo que se pidió sobre una fase que se junta en otra no se propone: la fase sale del plan. */
+  for (const j of juntadas) {
+    if (ajustes.delete(j.faseId)) descartados.push(`ajustar ${nombreDe(j.faseId)}: se junta en ${nombreDe(j.enFaseId)}.`);
+    if (movidas.delete(j.faseId)) descartados.push(`mover ${nombreDe(j.faseId)}: se junta en ${nombreDe(j.enFaseId)}.`);
+    // Una fase nueva que iba detrás de la que se va, va detrás de la que la recibe (si no, quedaría colgada de una fase
+    // que ya no existe: revisión del 2026-11-18).
+    for (const n of nuevas) if (n.despuesDe === j.faseId) n.despuesDe = j.enFaseId;
   }
 
   // ── EL ARMADO: copia EXACTA de lo vigente + solo lo aceptado ──────────────────
@@ -720,11 +790,13 @@ export function construirPropuestaDeEstructura(input: {
   }));
   const deltas = computeProposalDeltas(actuales, propuesta, input.anchorISO);
   return {
-    propuesta: deltas.length > 0 ? propuesta : null,
+    // Una junta sola también es un cambio: la fase que se va la suma la ruta al borrador.
+    propuesta: deltas.length > 0 || juntadas.length > 0 ? propuesta : null,
     deltas,
     descartados,
     observaciones,
     acordadoSinEntrar: observacionesDelArmador.length,
+    juntadas,
   };
 }
 

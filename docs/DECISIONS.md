@@ -4784,6 +4784,19 @@ encontró largos y difíciles los textos propuestos.
 - **Mover un límite confirmado es un acuerdo con el cliente**: pide motivo y con quién se acordó
   (`validarCambioDeLimite`), y deja la razón en `TimelineChange` (la misma que la cartera muestra
   como el porqué).
+- **CORREGIDO 2026-11-18 (RC Inmobiliaria · DocuSign, queja de Alejandro Salas): el aviso se contaba
+  mal y se leía al revés.** El cierre que se compara con la fecha límite es el ÚLTIMO DÍA de la última
+  semana (`ultimoDiaDelPlan`), no el día siguiente: un plan de 4 semanas que arranca el martes 17 nov
+  termina el lunes 14 dic, no el martes 15. «Mover la fecha límite» abre con ese último día, no con la
+  fecha que ya está (guardarla daba «Ese ya es el valor confirmado»). Y lo vendido va primero: «Se
+  vendieron 4 semanas; el plan dura 8 (4 de más)». Con «el plan dura 8 semanas y se vendieron 4» el CSE
+  entendió que la IA decía que se vendieron 8, y cambió el límite a 8.
+- **Un tercer límite: las horas vendidas** (2026-11-18, Elías: «sí debería poder, pero debe avisar»).
+  `ProjectTimeline.horasVendidas` para el proyecto que sale de un contrato de horas (RC: DocuSign ≈ 40
+  horas dentro de las 20 horas al mes del Acuerdo Macro). Se compara contra la suma de las horas
+  estimadas de las tareas (`TimelineTask.horasEstimadas`, que pone el detalle desde las actividades).
+  Pasarse avisa, no bloquea, como los otros dos. La IA del handoff también lo propone, con su cita.
+  SQL aditivo: `scripts/sql/2026-11-18-cronograma-lo-vendido.sql`.
 - **El bloque del handoff va en el MENSAJE, no en el prompt** (`lib/timeline/limites-handoff.ts`):
   vale para los tres agentes de handoff sin re-sembrarlos. Pide la clave `limites`, que el plan quepa
   y que, si no cabe, lo diga en `noCabe` en vez de estirarlo.
@@ -4802,6 +4815,52 @@ encontró largos y difíciles los textos propuestos.
   dice «no piden cambios de tiempos» (`AVISO_SE_PASA_DEL_PLAZO`).
 
 **Pendiente:** el cronograma por resultados (fase 2, solo diseño), conectado a `Project.handoffResultados`.
+
+## El cronograma sale de lo vendido (2026-11-18)
+
+> Caso RC Inmobiliaria · DocuSign (queja de Alejandro Salas). El handoff armó 6 fases en fila (8
+> semanas, 16 sesiones) cuando lo vendido eran 9 sesiones; el CSE confirmó 4 semanas y nada del
+> cronograma lo tomó: ni «Generar cronograma» (no toca duraciones) ni el paso 1 de «Regenerar todo»
+> (no recibía los límites). Lo acortó a mano con el chat. Además, el handoff tomó como «lo vendido»
+> un trato de junio e ignoró el Acuerdo Macro de octubre, que pone DocuSign en ~40 horas dentro de
+> la bolsa mensual: ese desglose solo estaba en el caso de negocio, y el handoff no lo leía. Elías
+> aprobó los cambios 2, 3, 4, 5, 7 y 10 de la lista; el 1 (elegir qué venta es del proyecto) se
+> decide aparte.
+
+- **LO VENDIDO DEL PROYECTO es un solo lugar** (`lib/timeline/lo-vendido.ts`, puro, y
+  `lo-vendido-server.ts`): los límites (semanas, fecha, horas; confirmados o propuestos con cita
+  verificada) y la propuesta del proyecto con sus casos de uso y actividades. Hoy la propuesta sale de
+  lo que existe (el caso de negocio del trato del proyecto, `Project.hubspotDealId`, o el de su servicio
+  recurrente, `servicioPropuestaId`). Los casos salen de su FOTO PUBLICADA (la sección «Casos de uso», lo que el cliente ya
+  vio) y sus actividades de la ficha del catálogo: el cronograma lo lee el cliente, así que nunca lee la preventa
+  (`lib/exploraciones/lectores.test.ts`). Cuando se construya el cambio 1, la elige el CSE y solo cambia
+  `propuestaDelProyecto`. Lo leen el paso 1 y el paso 2 del cronograma.
+- **El handoff lee el caso de negocio** de los tratos que ya lee (los del proyecto y los de la
+  empresa que no son de otro proyecto activo): su texto entero, sin el HTML, como «PROPUESTA
+  COMERCIAL». Si la propuesta le asigna horas a ESTE proyecto dentro de un contrato, eso es lo
+  vendido y lo propone en `limites.horasVendidas` con su cita.
+- **El paso 1 recibe lo vendido, y puede JUNTAR fases** (decisión de Elías). Corrige la regla de
+  «la IA nunca quita fases» (ARCHITECTURE §6) SOLO en este caso: con un límite confirmado que el plan
+  pasa, el revisor puede juntar una fase sin empezar en otra sin empezar (`tipo: "juntar"`). La que se
+  va sale como `fase-se-va` en la propuesta (con sus tareas pendientes de la IA; lo hecho o lo cargado
+  a mano se queda, como en el chat), y el CSE la acepta o la descarta como cualquier cambio. Sin
+  límite confirmado, o si el plan ya cabe, juntar se descarta. Quitar una fase sin juntarla sigue
+  prohibido. El texto del prompt cambió: su sha nuevo está en la guarda G9.
+- **«Ajustar el plan a lo vendido»**: el aviso de los límites, cuando el plan se pasa, ofrece correr el
+  paso 1 aunque no haya reuniones ni instrucciones elegidas, con el pedido de que el plan entre en lo
+  vendido. Termina en la misma propuesta que «Regenerar todo»: nada se aplica solo.
+- **Las tareas salen de las actividades** (Elías: «creo que esto debe inspirarse en las actividades»).
+  El paso 2 recibe las actividades de cada caso de uso vendido, con sus horas con el cliente e
+  internas, y arma las tareas desde ahí, cada una con sus horas (`horasEstimadas`). Reemplaza en el
+  MENSAJE la regla de «2 a 5 tareas por semana» del prompt (el prompt vive en la base y no se re-siembra).
+  Sin casos de uso, con horas vendidas, el tope son esas horas; con solo semanas o una fecha límite no hay bloque y el
+  detalle sigue con sus reglas (revisión del 2026-11-18: sin algo que mida el trabajo, la IA inventaba horas). Las horas
+  de una actividad ×N son el total (se reparten), y lo que hace solo el cliente no lleva horas ni gasta lo vendido.
+- **CORRIGE la decisión del 2026-08-17 sobre las tareas fijas de la Semana 0** (en el encabezado de
+  `lib/timeline/semana-cero-tareas.ts`): en un proyecto sin Semana 0 (Desarrollo, y también Web) solo van el acceso al portal y la
+  documentación de procesos. Los usuarios del CRM, la ruta de HubSpot Academy y la base de datos son de
+  una implementación, aunque el desarrollo traiga tags de hubs (DocuSign traía `sales_hub`, `data_hub` y
+  `reimplementacion`, y pedía «usuarios a ingresar al CRM»).
 
 ## La Planificación es lo que va a quedar configurado en HubSpot (2026-10-02)
 

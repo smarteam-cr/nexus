@@ -37,6 +37,9 @@ import { ERROR_SUPUESTOS_SIN_VALIDAR, mensajeDeSupuestos } from "@/lib/canvas/di
 import { generarResumenDeHandoff } from "@/lib/handoff/resumen";
 import { leerOProponerResultados } from "@/lib/handoff/proponer-resultados";
 import { proponerFichaDesdeHandoff } from "@/lib/clients/ficha-propuesta";
+import { bloqueDeLoVendidoParaElDetalle } from "@/lib/timeline/lo-vendido";
+import { cargarLoVendido } from "@/lib/timeline/lo-vendido-server";
+import { textoDeLaPropuestaParaElHandoff } from "@/lib/business-cases/texto-para-agentes";
 import { guardarVersionDelDocumento } from "@/lib/canvas/versiones";
 import { loadCanvasesConContenido } from "@/lib/pieces/piece-content";
 import { DESARROLLO_CANVAS } from "@/lib/canvas/canvas-defs";
@@ -1172,6 +1175,56 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
         dealContent = `## Deals en HubSpot (${dealBlocks.length} total)\n\n` + dealBlocks.join("\n\n---\n\n");
       }
 
+      /* ⭐ LA PROPUESTA COMERCIAL DE ESTOS TRATOS (2026-11-18, caso RC · DocuSign). El desglose de lo vendido («≈ 40 horas
+         de DocuSign dentro de las 20 horas mensuales del Acuerdo Macro») estaba SOLO en el caso de negocio publicado, y el
+         handoff no lo leía: tomó como alcance un trato de junio que el acuerdo de octubre había absorbido. Entran los casos
+         de negocio PUBLICADOS de los mismos tratos que ya entraron arriba (no los de otro proyecto activo, ni el del
+         hermano mayor: ese es del proyecto principal), del MISMO cliente (invariante 1). El del trato del proyecto va
+         primero; como mucho dos. */
+      if (agent.agentGroup === "handoff") {
+        const tratosQueEntraron = dealsData.filter((d) => {
+          const nombre = d.deal?.properties?.dealname;
+          if (!nombre || esDealDelMayor(d.id) || isForeignProjectDeal(nombre)) return false;
+          /* Un trato de un CICLO ANTERIOR (cerró más de 6 meses antes de que existiera el proyecto) entra arriba como
+             historia, rotulado; su propuesta NO: diría «lo vendido» de otro ciclo (revisión del 2026-11-18). */
+          const cierre = d.deal?.properties?.closedate ? new Date(d.deal.properties.closedate).getTime() : NaN;
+          return !(dealProject && !isNaN(cierre) && esTratoDeOtroCiclo(cierre, (dealProject.hubspotCreatedAt ?? dealProject.createdAt).getTime()));
+        });
+        const nombreDelTrato = new Map(tratosQueEntraron.map((d) => [d.id, d.deal!.properties!.dealname!]));
+        if (nombreDelTrato.size > 0) {
+          try {
+            const propuestas = await prisma.businessCase.findMany({
+              where: { clientId, hubspotDealId: { in: [...nombreDelTrato.keys()] }, status: "PUBLISHED", publishedSnapshot: { not: Prisma.DbNull } },
+              select: { name: true, hubspotDealId: true, publishedSnapshot: true, publishedAt: true },
+              orderBy: { publishedAt: "desc" },
+              take: 6,
+            });
+            const delProyecto = dealProject?.hubspotDealId ?? null;
+            const enOrden = [
+              ...propuestas.filter((p) => p.hubspotDealId === delProyecto),
+              ...propuestas.filter((p) => p.hubspotDealId !== delProyecto),
+            ].slice(0, 2);
+            const textos = enOrden
+              .map((p) =>
+                textoDeLaPropuestaParaElHandoff({
+                  nombre: p.name,
+                  trato: p.hubspotDealId ? (nombreDelTrato.get(p.hubspotDealId) ?? null) : null,
+                  publishedSnapshot: p.publishedSnapshot,
+                }),
+              )
+              .filter(Boolean);
+            if (textos.length > 0) {
+              dealContent +=
+                `\n\n## Propuestas comerciales publicadas de estos tratos (lo que se le presentó al cliente)\n` +
+                `Si una propuesta reparte un contrato de horas entre varios trabajos y le asigna horas a ESTE proyecto, eso es lo vendido de este proyecto (va en "limites.horasVendidas" con su cita).\n\n` +
+                textos.join("\n\n---\n\n");
+            }
+          } catch (e) {
+            console.warn("[analyze handoff] no se pudieron leer las propuestas comerciales:", e instanceof Error ? e.message : e);
+          }
+        }
+      }
+
       // Agregar notas de la empresa al dealContent
       if (companyNotes.length > 0) {
         dealContent += `\n\n## Notas de la empresa en HubSpot (${companyNotes.length})\n` +
@@ -2023,6 +2076,9 @@ Generá el plan de implementación siguiendo tus instrucciones: arquitectura de 
       regenerarFaseIds: sobreDelDetalle?.soloFases ?? null,
       // L5: lo que ya hay en cada fase (estado, hecho, pendiente y lo que notó el paso 1), solo en el paso 2.
       loQueYaHay: sobreDelDetalle?.loQueYaHay ? renderLoQueYaHay(sobreDelDetalle.loQueYaHay) : undefined,
+      /* 2026-11-18 (caso RC · DocuSign): lo vendido y las actividades de sus casos de uso. Las tareas salen de ahí, con
+         sus horas, en vez de la regla genérica del prompt. Sin nada vendido, el mensaje queda como antes. */
+      loVendido: bloqueDeLoVendidoParaElDetalle(await cargarLoVendido(bodyProjectId)),
     });
     sesionesDelDetalle = contexto.sesionesUsadas ?? [];
     huellasDelDetalle = huellasDeFrontera(contexto.materialInterno ?? []);

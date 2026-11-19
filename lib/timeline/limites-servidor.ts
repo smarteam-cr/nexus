@@ -18,6 +18,7 @@ import {
 export const SELECT_LIMITES = {
   fechaLimite: true,
   duracionVendidaSemanas: true,
+  horasVendidas: true,
   limitesConfirmacion: true,
   limitesPropuestos: true,
 } as const;
@@ -42,18 +43,24 @@ export async function leerLimitesDelProyecto(projectId: string): Promise<Limites
  */
 export async function contextoDeLimitesParaElHandoff(projectId: string | null): Promise<{
   conSemanaCero: boolean;
-  confirmados: { fechaLimite: string | null; duracionVendidaSemanas: number | null };
+  confirmados: { fechaLimite: string | null; duracionVendidaSemanas: number | null; horasVendidas: number | null };
 }> {
-  if (!projectId) return { conSemanaCero: true, confirmados: { fechaLimite: null, duracionVendidaSemanas: null } };
+  if (!projectId) {
+    return { conSemanaCero: true, confirmados: { fechaLimite: null, duracionVendidaSemanas: null, horasVendidas: null } };
+  }
   const p = await prisma.project.findUnique({
     where: { id: projectId },
-    select: { hubspotPipelineId: true, timeline: { select: { fechaLimite: true, duracionVendidaSemanas: true } } },
+    select: {
+      hubspotPipelineId: true,
+      timeline: { select: { fechaLimite: true, duracionVendidaSemanas: true, horasVendidas: true } },
+    },
   });
   return {
     conSemanaCero: conSemanaCeroDelPipeline(p?.hubspotPipelineId ?? null),
     confirmados: {
       fechaLimite: ymdDeFecha(p?.timeline?.fechaLimite),
       duracionVendidaSemanas: p?.timeline?.duracionVendidaSemanas ?? null,
+      horasVendidas: p?.timeline?.horasVendidas ?? null,
     },
   };
 }
@@ -72,6 +79,7 @@ export async function guardarLimitesPropuestos(projectId: string, nuevos: Limite
     const fusion = fusionarPropuestos(anterior, nuevos, {
       fechaLimite: ymdDeFecha(tl.fechaLimite),
       duracionVendidaSemanas: tl.duracionVendidaSemanas,
+      horasVendidas: tl.horasVendidas,
     });
     if (JSON.stringify(fusion) === JSON.stringify(anterior)) return;
     await prisma.projectTimeline.update({

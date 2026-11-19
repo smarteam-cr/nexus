@@ -2,7 +2,8 @@
  * /api/projects/[projectId]/timeline/limites — los LÍMITES ACORDADOS del cronograma (2026-10-02).
  *
  *   PATCH { accion: "guardar", campo, valor, motivo?, acordadoCon?, desdeLaPropuesta? }
- *         confirma, mueve o quita la fecha límite o la duración vendida (sin la Semana 0).
+ *         confirma, mueve o quita la fecha límite, la duración vendida (sin la Semana 0) o las horas
+ *         vendidas (2026-11-18).
  *   PATCH { accion: "descartar-propuesta", campo }
  *         descarta lo que propuso la IA para ese límite, sin tocar lo confirmado.
  *   → 200 { limites }   (lo mismo que trae el GET del cronograma)
@@ -70,11 +71,21 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ pr
     return responder(fila);
   }
 
-  const actual = body.campo === "fechaLimite" ? ymdDeFecha(tl.fechaLimite) : tl.duracionVendidaSemanas;
+  const actual =
+    body.campo === "fechaLimite"
+      ? ymdDeFecha(tl.fechaLimite)
+      : body.campo === "horasVendidas"
+        ? tl.horasVendidas
+        : tl.duracionVendidaSemanas;
   const v = validarCambioDeLimite(actual, body);
   if (!v.ok) return NextResponse.json({ error: v.error }, { status: 400 });
 
-  const propuesta = body.campo === "fechaLimite" ? propuestos?.fechaLimite : propuestos?.duracionVendida;
+  const propuesta =
+    body.campo === "fechaLimite"
+      ? propuestos?.fechaLimite
+      : body.campo === "horasVendidas"
+        ? propuestos?.horasVendidas
+        : propuestos?.duracionVendida;
   const fuente =
     body.desdeLaPropuesta && propuesta && propuesta.valor === body.valor
       ? `Lo propuso la IA del handoff: «${propuesta.cita}»`
@@ -93,7 +104,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ pr
   const columna =
     body.campo === "fechaLimite"
       ? { fechaLimite: body.valor === null ? null : new Date(`${String(body.valor)}T00:00:00.000Z`) }
-      : { duracionVendidaSemanas: body.valor === null ? null : Number(body.valor) };
+      : body.campo === "horasVendidas"
+        ? { horasVendidas: body.valor === null ? null : Number(body.valor) }
+        : { duracionVendidaSemanas: body.valor === null ? null : Number(body.valor) };
   // Confirmar o mover un límite resuelve lo que la IA proponía para ese campo.
   const nuevosPropuestos = propuestosSin(propuestos, body.campo);
 
@@ -117,6 +130,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ pr
           limites: {
             fechaLimite: ymdDeFecha(f.fechaLimite),
             duracionVendidaSemanas: f.duracionVendidaSemanas,
+            horasVendidas: f.horasVendidas,
           },
         },
       },

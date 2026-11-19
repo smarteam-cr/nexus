@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
+  <!-- El símbolo de Nexus (el mismo de la barra lateral, components/layout/Sidebar.tsx › BrandIcon) sobre el azul de la marca. -->
+  <rect width="32" height="32" rx="7" fill="#3b82f6"/>
+  <g transform="translate(4 4)" fill="none" stroke="#ffffff" stroke-width="1.6" stroke-linecap="round">
+    <circle cx="12" cy="12" r="2.5"/>
+    <circle cx="19" cy="12" r="1.5"/>
+    <circle cx="15.5" cy="18.1" r="1.5"/>
+    <circle cx="8.5" cy="18.1" r="1.5"/>
+    <circle cx="5" cy="12" r="1.5"/>
+    <circle cx="8.5" cy="5.9" r="1.5"/>
+    <circle cx="15.5" cy="5.9" r="1.5"/>
+    <line x1="14.5" y1="12" x2="17.5" y2="12"/>
+    <line x1="13.25" y1="14.17" x2="14.75" y2="16.76"/>
+    <line x1="10.75" y1="14.17" x2="9.25" y2="16.76"/>
+    <line x1="9.5" y1="12" x2="6.5" y2="12"/>
+    <line x1="10.75" y1="9.83" x2="9.25" y2="7.24"/>
+    <line x1="13.25" y1="9.83" x2="14.75" y2="7.24"/>
+  </g>
+</svg>

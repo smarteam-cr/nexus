@@ -219,6 +219,8 @@ interface TaskDraft {
   type?: "SESSION" | "TASK" | null;
   startDateOverride?: string | null; // #4 — ISO o null (null = derivar de la semana)
   dueDateOverride?: string | null;
+  /** 2026-11-18: las horas que puso el detalle (solo lectura: el PUT no las manda). Las suma el aviso de las horas vendidas. */
+  horasEstimadas?: number | null;
   _key: string;
 }
 
@@ -266,6 +268,7 @@ interface ServerTask {
   type: "SESSION" | "TASK" | null;
   startDateOverride?: string | null; // #4
   dueDateOverride?: string | null;
+  horasEstimadas?: number | null;
 }
 
 interface ServerPhase {
@@ -868,6 +871,8 @@ export default function CronogramaCanvas({
         type: t.type,
         startDateOverride: t.startDateOverride ?? null,
         dueDateOverride: t.dueDateOverride ?? null,
+        // 2026-11-18: sin esto el aviso de las horas vendidas decía siempre «las tareas todavía no tienen horas».
+        horasEstimadas: t.horasEstimadas ?? null,
         _key: t.id,
       })),
       _key: p.id,
@@ -1989,7 +1994,9 @@ export default function CronogramaCanvas({
      nunca traba al CSE: sigue con las tareas. */
   const pedirPropuestaDeDetalle = async (
     modo: "primera" | "regen",
-    opts?: { saltarEstructura?: boolean },
+    /* `ajustarALoVendido` (2026-11-18): el botón del aviso de los límites. El paso 1 corre aunque no haya material
+       elegido, con el pedido de que el plan entre en lo vendido (puede juntar fases sin empezar). */
+    opts?: { saltarEstructura?: boolean; ajustarALoVendido?: boolean },
   ) => {
     await flushDocBrief();
     setOfrecerTareas(false);
@@ -2040,7 +2047,12 @@ export default function CronogramaCanvas({
       let respuesta: RespuestaDeEstructura;
       let estructura: { proposal?: unknown; runId?: unknown; observaciones?: unknown } = {};
       try {
-        const res = await fetch(`/api/projects/${projectId}/timeline/estructura`, { method: "POST" });
+        const res = await fetch(
+          `/api/projects/${projectId}/timeline/estructura`,
+          opts?.ajustarALoVendido
+            ? { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ajustarALoVendido: true }) }
+            : { method: "POST" },
+        );
         const d = await res.json().catch(() => ({}));
         estructura = d ?? {};
         respuesta = {
@@ -4578,6 +4590,14 @@ export default function CronogramaCanvas({
             fases={phases}
             canEdit={canEdit}
             onCambio={setLimites}
+            /* 2026-11-18: la misma vara que «Regenerar todo» (sin permiso de IA, el botón no aparece) y nunca con una
+               propuesta abierta: primero se decide esa. */
+            onAjustarALoVendido={
+              (hasAiDetail ? canRegenerateTimeline : canGenerateTimeline) && !proposal && !propuestaIlegible
+                ? () => void pedirPropuestaDeDetalle(hasAiDetail ? "regen" : "primera", { ajustarALoVendido: true })
+                : undefined
+            }
+            ajustando={armando !== null}
           />
           <TimelineGantt
             /* «Ver la propuesta»: el cronograma como quedaría, SOLO LECTURA y con marcas. Nunca pasa
