@@ -20,7 +20,7 @@ export const INICIO_DEL_TEST = "2026-06-12";
 
 export type EstadoDelTest = "terminado" | "sinTerminar";
 
-const AREA_POR_NOMBRE: Record<string, string> = { ventas: "1", marketing: "2", servicio: "3" };
+const AREA_POR_NOMBRE: Record<string, string> = { ventas: "1", marketing: "2", servicio: "3", ti: "4" };
 
 const sinEtiquetas = (html: string) =>
   html

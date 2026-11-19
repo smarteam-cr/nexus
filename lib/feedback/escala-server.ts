@@ -59,7 +59,7 @@ export interface ReporteEnLaEscala {
  * criterio propio de una edición no existe en la general, y uno reescrito se lee distinto).
  */
 export async function anclarALaEscala(pedida: AnclaPedida): Promise<ReporteEnLaEscala> {
-  const vigente = await leerEscalaVigente();
+  const vigente = await leerEscalaVigente({ conAreasEnPrueba: true });
   if (vigente.estado !== "ok") throw new ErrorDeFeedback("La escala todavía no está publicada en Nexus.", 409);
   const escala = vigente.escala;
   const edicion = pedida.edicion ? edicionPorSlug(escala, pedida.edicion) : null;
@@ -134,7 +134,7 @@ function escalaDe(escala: unknown, escalaAncla: string): EscalaDelReporte {
 export async function detalleDeEscala(f: { escalaAncla: string | null; escala: unknown; cuerpo: string; tipo: string; estado: string }): Promise<DetalleDeEscala | null> {
   if (!f.escalaAncla) return null;
   const e = escalaDe(f.escala, f.escalaAncla);
-  const vigente = await leerEscalaVigente();
+  const vigente = await leerEscalaVigente({ conAreasEnPrueba: true });
   const escala = vigente.estado === "ok" ? vigente.escala : null;
   const edicion = e.edicion && escala ? edicionPorSlug(escala, e.edicion) : null;
   const hoy = escala ? resolverAncla(aplicarEdicion(escala, e.edicion), f.escalaAncla) : null;

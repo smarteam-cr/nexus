@@ -12,11 +12,12 @@ import type { FormEvent } from "react";
 import { PAISES, USOS_DE_CRM, type CampoDelFormulario, type ErroresDelFormulario, type ValoresDelFormulario } from "@/lib/tests-diagnostico/formulario";
 import ComboConBuscador from "./ComboConBuscador";
 
-/** Las tres áreas, en el orden y con las palabras de la aplicación vieja. */
+/** Las áreas, en el orden y con las palabras de la aplicación vieja; TI va al final (9.3.0). */
 export const AREAS_DE_LA_PORTADA: readonly { slug: string; nombre: string; resumen: string }[] = [
   { slug: "marketing", nombre: "Marketing", resumen: "Cómo opera por dentro y qué produce hacia el mercado." },
   { slug: "ventas", nombre: "Ventas", resumen: "Cómo opera por dentro y qué produce en pipeline y cierre." },
   { slug: "servicio", nombre: "Servicio", resumen: "Cómo opera por dentro y qué entrega hacia el cliente." },
+  { slug: "ti", nombre: "TI", resumen: "Cómo opera por dentro y qué entrega al resto de la empresa." },
 ];
 
 const ICONO_DIANA = (

@@ -45,7 +45,7 @@ interface Vista {
   respuestas: Record<string, { opcion: string; matiz?: string }>;
 }
 
-const SLUG_DEL_AREA: Record<string, string> = { "1": "ventas", "2": "marketing", "3": "servicio" };
+const SLUG_DEL_AREA: Record<string, string> = { "1": "ventas", "2": "marketing", "3": "servicio", "4": "ti" };
 const SLUGS = AREAS_DE_LA_PORTADA.map((a) => a.slug);
 
 function leerCookie(nombre: string): string | null {

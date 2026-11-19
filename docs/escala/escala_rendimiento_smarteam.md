@@ -1,7 +1,7 @@
 ---
 documento: Escala de Rendimiento Smarteam — Escalas departamentales
-version: 9.2.0
-fecha: 2026-10-28
+version: 9.3.0
+fecha: 2026-11-19
 estado: En revisión: cambia con el criterio de su responsable y con el feedback que el equipo manda desde Nexus; cada feedback lo decide un super admin
 relacionados: especificacion_calculo_escala.md, manual_operacion_escala.md
 ---
@@ -26,7 +26,7 @@ Cada criterio de la matriz termina con una etiqueta entre corchetes: su identifi
 
 ## Qué es la escala
 
-La Escala de Rendimiento es el instrumento con el que Smarteam diagnostica cómo está operando un departamento de un prospecto o cliente. Ubica a cada departamento —Ventas, Marketing y Servicio— en uno de cinco niveles de madurez, a partir de la evidencia que arroja una exploración. No describe productos ni servicios: describe estados de madurez.
+La Escala de Rendimiento es el instrumento con el que Smarteam diagnostica cómo está operando un departamento de un prospecto o cliente. Ubica a cada departamento —Ventas, Marketing, Servicio y TI— en uno de cinco niveles de madurez, a partir de la evidencia que arroja una exploración. No describe productos ni servicios: describe estados de madurez.
 
 Una forma corta de decir qué es: la escala es el mapa y la brújula de un departamento. El mapa muestra dónde está; la brújula, hacia dónde conviene ir. Y como se vuelve a medir, el mapa también muestra cuánto se avanzó.
 
@@ -40,7 +40,7 @@ Cada departamento se mira a través de ocho dimensiones, agrupadas en dos capas.
 
 ## Las ocho dimensiones
 
-**Base operativa — cómo está montado el departamento por dentro.** La forman cuatro dimensiones, iguales en las tres áreas:
+**Base operativa — cómo está montado el departamento por dentro.** La forman cuatro dimensiones, iguales en las cuatro áreas:
 
 - **Procesos y Rutinas** — si el área se ejecuta por sistema o por personas.
 - **Tecnología y Automatización** — si lo que entra llega solo al sistema y a quien le toca, y cuánto del trabajo repetitivo hace el sistema.
@@ -94,6 +94,8 @@ Cada descripción resume cómo se ve el departamento en ese nivel: cómo está m
 
 **Servicio.** El servicio se improvisa cliente por cliente. No hay un proceso de atención ni un sistema donde queden los casos —cada agente responde con su propio criterio, desde su correo o su teléfono— y los datos están dispersos. La fuga de clientes te toma por sorpresa.
 
+**TI.** TI apaga incendios. Nadie sabe cómo pedirle algo, los sistemas no se hablan y la información pasa de uno a otro a mano, nadie controla quién entra a cada sistema, y los sistemas nuevos se entregan sin que nadie acompañe a quien los usa. Cada proyecto del negocio que necesita tecnología se frena esperando a TI.
+
 ### Inicial
 
 **Ventas.** Tienes algo de estructura, pero la ejecución falla. Hay un CRM en funciones básicas que el equipo percibe como carga administrativa y llena a mano, la calificación sigue en la cabeza del vendedor y los negocios se sostienen sobre relaciones personales. El pipeline todavía no se ve con claridad.
@@ -101,6 +103,8 @@ Cada descripción resume cómo se ve el departamento en ese nivel: cómo está m
 **Marketing.** Tienes logo y colores, pero sin estrategia detrás. Las herramientas se usan a medias y parte de lo que entra se pasa a mano, el contenido sale de forma reactiva y esporádica, y los resultados se miden tarde y a mano, sin que lo aprendido quede escrito. Los leads llegan de forma irregular y no siempre sabes de dónde vienen.
 
 **Servicio.** El conocimiento y la coordinación viven en una sola persona, y eso te deja con un punto único de fallo. Hay un sistema de casos, pero pocos lo usan; cada agente tiene sus propias respuestas guardadas y hay procesos que nadie formalizó. La entrega es frágil.
+
+**TI.** Hay una forma de pedirle cosas a TI, pero lo que sabe hacer vive en una o dos personas. Las conexiones entre sistemas dependen de archivos que alguien sube a mano, cada reporte se le pide a TI, los accesos se dan sin una regla escrita y se prioriza lo que la dirección pide en el momento. La gente usa a medias lo que se le entrega.
 
 ### Funcional
 
@@ -110,6 +114,8 @@ Cada descripción resume cómo se ve el departamento en ese nivel: cómo está m
 
 **Servicio.** Tu entrega es consistente y ya no depende del individuo. Sabes qué tipos de cliente atiendes y qué espera cada uno. Hay un pipeline de servicio configurado, el equipo atiende en el sistema central con la ficha del cliente a la vista, los casos están categorizados y cada cliente nuevo arranca con un proceso definido. Cada caso tiene una prioridad que el equipo respeta, tienes respuestas guardadas para lo repetitivo y detectas a mano los riesgos evidentes antes de que estallen. Todavía no hay alertas automáticas, pero ya no esperas a que el cliente se queje.
 
+**TI.** TI opera como un socio con método. Todo pedido entra por un mismo canal y el negocio ve en qué va; los sistemas principales están conectados sin pasos a mano y TI sabe cómo sacar los datos del sistema central; cada dato principal tiene un sistema que manda y un responsable; los accesos se dan y se quitan con una regla, y hay respaldo de lo crítico. Hacia el negocio hay un catálogo de lo que TI hace, una lista de proyectos en orden que todos conocen, y cada sistema llega con capacitación y se mide cuánto se usa.
+
 ### Eficiente
 
 **Ventas.** Tu proceso dejó de ser etapas y se volvió método con disciplina medida. Mides conversión y velocidad por etapa, las secuencias se adaptan a cómo responde cada prospecto, el CRM se conecta con los otros sistemas que use la empresa, la IA asiste al equipo en su trabajo diario y aparece un pronóstico confiable. Hacia afuera hay puntaje de leads por reglas, cuentas objetivo, seguimiento por varios canales y una revisión trimestral de los negocios ganados y perdidos que cambia el proceso.
@@ -118,6 +124,8 @@ Cada descripción resume cómo se ve el departamento en ese nivel: cómo está m
 
 **Servicio.** El servicio empieza a adelantarse al problema. Tienes SLA, escalación automática y autoservicio, y la IA asiste a tu equipo en su trabajo diario; mides tiempos de resolución y satisfacción, y los datos se unifican con Ventas. Identificas riesgos y oportunidades antes de que el cliente levante la mano, y ningún caso se pierde entre áreas. Donde el cliente vuelve, cada cliente tiene un indicador de salud y cada cliente clave, un responsable dedicado; donde la relación es continua, los que están en riesgo reciben una acción de retención antes de decidir irse.
 
+**TI.** TI cumple los tiempos que promete y rinde cuentas con datos. Las integraciones mueven los datos en minutos desde un mismo lugar, los accesos se dan solos, los datos de todos los sistemas se juntan en un mismo lugar con su calidad medida, y la IA asiste al equipo en su trabajo diario. Los proyectos se eligen por su valor y su costo, el negocio resuelve lo simple en un autoservicio, y donde una herramienta se usa poco, TI se entera y actúa.
+
 ### Óptimo
 
 **Ventas.** La IA hace el trabajo pesado y tu equipo valida donde importa. Si atiendes por WhatsApp o chat, agentes de IA califican ahí los leads y agendan reuniones; la IA analiza las llamadas con los prospectos y propone correcciones al playbook, el pronóstico lo calcula un modelo, y la priorización se alimenta de lo que saben Servicio y Marketing de cada cliente. El vendedor dedica su tiempo a las conversaciones que deciden el negocio, no a la administración.
@@ -125,6 +133,8 @@ Cada descripción resume cómo se ve el departamento en ese nivel: cómo está m
 **Marketing.** La IA produce y ajusta; el equipo dirige. El contenido se genera y se ajusta de forma continua; la IA predice qué va a hacer cada persona, adapta el mensaje a su comportamiento y mueve el presupuesto entre canales dentro de los límites que fija el equipo; y los clientes que Servicio vuelve promotores traen clientes nuevos. El equipo define la estrategia y valida lo que sale.
 
 **Servicio.** Un agente de IA resuelve casos en todos los canales donde atiende el equipo y le pasa a una persona, con todo el contexto, los que no puede resolver. Las rutinas corren solas mientras el equipo supervisa, entrena la IA y gestiona excepciones; cada cliente se atiende sabiendo lo que se le prometió en la venta y recibe detalles pensados para deleitarlo y, donde el cliente vuelve, un modelo de salud anticipa el riesgo antes de que el cliente lo diga. La cartera crece sin que crezca el equipo.
+
+**TI.** La IA hace el trabajo repetitivo y TI dirige. Las fallas conocidas se corrigen solas, un agente de IA atiende los pedidos del negocio, quien decide le pregunta a la IA por sus datos sin armar un reporte, y la ayuda llega dentro de las herramientas en el momento en que hace falta. TI se mide por lo que habilita en el negocio y acompaña su crecimiento sin crecer al mismo ritmo.
 
 ## Cómo avanza un departamento: de la disciplina al sistema
 
@@ -299,12 +309,13 @@ El resultado que persigue el cliente entra por dos lados. Por el nivel objetivo,
 
 | Capa | Cuándo | Orden | Por qué |
 |:--|:--|:--|:--|
-| Base operativa | Marketing, Servicio, y Ventas con equipo | Procesos y Rutinas → Tecnología y Automatización → Datos → Equipo y Gobierno | El proceso dice qué hacer, la tecnología lo ejecuta, los datos salen de usarla y el equipo gobierna con ellos. |
+| Base operativa | Marketing, Servicio, TI, y Ventas con equipo | Procesos y Rutinas → Tecnología y Automatización → Datos → Equipo y Gobierno | El proceso dice qué hacer, la tecnología lo ejecuta, los datos salen de usarla y el equipo gobierna con ellos. |
 | Base operativa | Ventas transaccional | Tecnología y Automatización → Datos → Procesos y Rutinas → Equipo y Gobierno | La venta ocurre en el sistema: si no entra sola, no hay datos para nada más. |
 | Base operativa | Ventas mixta | Tecnología y Automatización → Procesos y Rutinas → Datos → Equipo y Gobierno | El sistema es lo único que sirve a los dos canales; después va el proceso del canal con personas, que es el que genera los datos. |
 | Producción | Ventas | Propuesta y Coherencia → Priorización de Leads → Tracción del Negocio → Aprendizaje de Ganadas y Perdidas | Sin cliente ideal y mensaje común no se puede priorizar; sin prioridad, el seguimiento se dispersa; sin seguimiento, no hay de qué aprender. |
 | Producción | Marketing | Marca y Presencia → Segmentación → Canales y Alcance → Medición y Aprendizaje | Los buyer personas se definen primero, junto con la marca: sin ellos no hay segmentos, sin segmentos no se sabe a quién llegar, y sin canales no hay qué medir. |
 | Producción | Servicio | Consistencia de Atención → Priorización de Clientes → Proactividad → Escalabilidad del Servicio | Los tipos de cliente se definen primero: sin ellos no se sabe qué atención le toca a cada uno, sin eso no se sabe a quién adelantarse, y solo se escala lo que ya se hace bien. |
+| Producción | TI | Servicio al Negocio → Priorización de la Demanda → Adopción de Herramientas → Mejora Continua de TI | El negocio tiene que saber primero qué le puede pedir a TI y cómo: sin eso no hay una demanda que ordenar, sin orden no se sabe qué entregar y acompañar hasta que se use, y solo se aprende de lo que se entregó. |
 
 La producción gana el empate porque es lo que el cliente ve y lo que mueve su resultado. Pero con esta regla nunca queda más de un nivel adelante de la base, porque producir sobre una base más débil es producir a pulso, sostenido por personas y no por sistema. Una base tan rota que impide producir no necesita una excepción: ya es la capa más baja.
 
@@ -380,6 +391,7 @@ Cada evidencia observada se asigna a una sola dimensión —la que responde su p
 - El **uso de lo que produce otra área** —las señales de Servicio en la priorización de Ventas, los promotores de Servicio como canal de Marketing, el contexto de la venta en la atención de Servicio— se asigna, en Óptimo, a la dimensión de producción del área que lo recibe. Hay dos que se usan en Eficiente, porque sin ellos el área no ordena su trabajo: el puntaje de leads de Marketing, para priorizar en Ventas, y la señal de Servicio de los clientes listos para el siguiente producto. No es orquestación: la coordinación entre líderes sigue en Equipo y Gobierno.
 - La **rendición de cuentas contra meta** se asigna a **Equipo y Gobierno**, y con ella el tablero que consulta el líder y el reporte periódico a la dirección. Los **resultados de cada campaña** a la vista, en cambio, son de **Medición y Aprendizaje (2.8)**.
 - La **reunión recurrente** es una sola: se asigna a **Procesos**, que es donde vive la rutina; **Equipo y Gobierno** solo dice que en ella se rinde cuentas.
+- Lo que **TI** habilita en otra área se mide en esa área: que la ficha del cliente traiga lo que compró desde el sistema central, que los casos entren solos o que el CRM tenga los datos del negocio es de la Tecnología o los Datos del área que lo usa (**1.2, 1.3, 2.2, 2.3, 3.2 o 3.3**). En **TI** se mide al departamento que lo hace posible: que sepa cómo sacar los datos del sistema central y cada integración tenga un responsable y un aviso si falla (**4.2**), que cada dato principal tenga un sistema que manda (**4.3**) y quién entra a cada sistema (**4.4**). Si TI no se diagnostica, nada de lo que se mide en las otras áreas cambia.
 
 ---
 
@@ -1567,6 +1579,358 @@ Mide el rendimiento del área de Servicio, que cubre todo lo que pasa después d
 - La IA aplica lo que aprende de los casos a las respuestas guardadas, a la atención de cada tipo de cliente y a los avisos proactivos, y el líder valida cada cambio; en el sistema queda qué cambió y de dónde salió. `[3.8.O3 · comprobable]`
 - Los avisos que decide la IA se miden contra un grupo de control, y en el sistema se ve cuánto agregan; con eso el equipo revisa los límites que le fijó a la IA. `[3.8.O4 · comprobable · requiere 3.7.O3]`
 
+## Área 4 — TI
+
+Mide el rendimiento del departamento de TI como socio del negocio: cómo recibe y entrega lo que le piden las otras áreas, cómo conecta los sistemas y cuida los datos, cómo gobierna los accesos, la seguridad y el gasto en tecnología, y si la gente usa las herramientas que entrega. No mide la tecnología que tiene la empresa, sino al equipo que la administra. Mira cómo opera internamente y qué produce hacia el resto de la empresa.
+
+### Base operativa
+
+#### 4.1 Procesos y Rutinas
+
+¿Cómo le llega a TI un pedido del negocio, desde que alguien lo pide hasta que se entrega?
+
+*Descripción:* Mide si TI recibe, ordena y entrega los pedidos y los proyectos con un proceso, para que lo que se pide no dependa de a quién se le pide.
+
+*Costo de quedarse:* Lo que pide el negocio se pierde entre correos, chats y pasillos, y avanza según quién insiste: los proyectos se atrasan sin que nadie sepa por qué.
+
+**Deficiente.** Nadie sabe cómo pedirle algo a TI: cada pedido llega por donde puede y se atiende si alguien se acuerda.
+
+- Los pedidos a TI llegan por correo, por chat o de palabra, y no quedan registrados en ningún lado. `[4.1.D1 · declarado]`
+- Los proyectos de tecnología arrancan sin un plan: no tienen fechas, responsable ni alcance escrito. `[4.1.D2 · evaluado]`
+
+**Inicial.** Hay una forma de pedirle cosas a TI, pero se sigue a medias, y cada proyecto se maneja distinto según quién lo lleve.
+
+- Hay un correo o una herramienta para pedirle cosas a TI, pero buena parte de los pedidos sigue llegando por fuera. `[4.1.I1 · comprobable]`
+- Cada proyecto se maneja a su manera, según quién lo lleve. `[4.1.I2 · evaluado]`
+- Lo que sabe hacer TI vive en una o dos personas: si faltan, los pedidos se traban. `[4.1.I3 · evaluado]`
+
+**Funcional.** Todo pedido entra por un mismo canal y queda registrado, y cada proyecto tiene alcance, responsable y fechas por escrito.
+
+*Resultado:* Quien le pide algo a TI sabe por dónde pedirlo y en qué va, y cada proyecto de tecnología tiene alguien que responde por él.
+
+- Todos los pedidos a TI entran por un mismo canal —un formulario, un portal o una mesa de ayuda— y quedan registrados con quién lo pidió, qué pidió y en qué estado está. `[4.1.F1 · comprobable]`
+- TI trabaja los pedidos en ese sistema, no por fuera: es su herramienta de trabajo, no algo que se llena después de resolver por otro canal. `[4.1.F2 · evaluado · hábito]`
+- Cada proyecto de tecnología tiene por escrito su alcance, su responsable, sus fechas y quién del negocio lo aprueba. `[4.1.F3 · declarado]`
+- Hay reuniones del equipo de TI con cadencia fija (al menos quincenal) que se sostienen, y en ellas se revisan los pedidos abiertos y los proyectos. `[4.1.F4 · declarado · hábito]`
+- Los cambios a los sistemas que usa el negocio se prueban antes de ponerlos en marcha. `[4.1.F5 · declarado]`
+- Las tareas que TI repite —dar de alta a una persona, restablecer un acceso, preparar un equipo— están documentadas de forma que alguien nuevo las haría igual. `[4.1.F6 · declarado]`
+
+**Eficiente.** Hay tiempos acordados por tipo de pedido, los proyectos siguen un mismo método y el líder vigila con datos que el proceso se cumpla.
+
+*Resultado:* El negocio sabe cuánto tarda cada tipo de pedido, los proyectos avanzan con un método que todos conocen, y el líder ve dónde se atasca el trabajo y lo corrige con datos, no de memoria.
+
+- Hay tiempos de respuesta acordados con el negocio por tipo de pedido o por prioridad. `[4.1.E1 · comprobable]`
+- Los proyectos siguen un mismo método de trabajo —etapas, entregas parciales y aprobaciones— que TI y el negocio conocen. `[4.1.E2 · declarado]`
+- El líder revisa con datos del sistema, no de memoria, que cada pedido y cada proyecto siga las etapas del proceso. `[4.1.E3 · evaluado · hábito]`
+- Los cambios a los sistemas del negocio siguen un calendario conocido y tienen un plan para volver atrás si algo falla. `[4.1.E4 · declarado]`
+
+**Óptimo.** El sistema vigila solo que cada pedido siga el proceso y la IA ejecuta las rutinas repetitivas; el equipo de TI supervisa y resuelve las excepciones.
+
+*Resultado:* TI deja de ejecutar rutinas y pasa a supervisarlas: lo repetitivo corre solo, el sistema señala lo que se sale del proceso y el equipo se ocupa de lo que necesita criterio.
+
+- El sistema detecta, sin que nadie lo revise a mano, cuando un pedido o un proyecto se sale de sus etapas o de los tiempos acordados, y se lo señala al responsable y al líder; el aviso queda registrado. `[4.1.O1 · comprobable · requiere 4.1.E1]`
+- La IA ejecuta las rutinas repetitivas de TI —clasificar los pedidos, restablecer accesos, preparar las altas y las bajas—; el equipo supervisa y resuelve las excepciones, y en el sistema se ve qué hizo la IA y qué revisó una persona. `[4.1.O2 · comprobable · hábito]`
+
+#### 4.2 Tecnología y Automatización
+
+¿Cómo pasa la información de un sistema a otro en tu empresa?
+
+*Descripción:* Mide si los sistemas de la empresa están conectados entre sí, si TI sabe abrirlos a otro sistema cuando el negocio lo necesita y cuánto de su propio trabajo automatiza.
+
+*Costo de quedarse:* Cada sistema es una isla: alguien copia datos a mano de uno a otro, los números no cuadran, y cada proyecto nuevo se frena esperando que alguien saque la información del sistema central.
+
+**Deficiente.** Los sistemas no se hablan: la información pasa de uno a otro copiándola a mano o en archivos.
+
+- La información entre los sistemas de la empresa se pasa a mano: se copia, se exporta a una hoja o se vuelve a escribir. `[4.2.D1 · evaluado]`
+- Nadie en TI sabe si el sistema central —el ERP o un sistema propio— permite sacar o recibir datos de otro sistema. `[4.2.D2 · declarado]`
+
+**Inicial.** Hay algunas conexiones entre sistemas, pero son frágiles: archivos que alguien sube a mano o desarrollos que solo entiende quien los hizo.
+
+- Hay conexiones entre sistemas, pero dependen de archivos que alguien exporta y sube, o de un desarrollo que solo entiende quien lo hizo. `[4.2.I1 · evaluado]`
+- Cuando una conexión falla, TI se entera porque alguien del negocio reclama. `[4.2.I2 · declarado]`
+
+**Funcional.** Los sistemas principales están conectados sin pasos a mano, cada conexión tiene un responsable y TI sabe cómo sacar los datos del sistema central.
+
+*Resultado:* Lo que pasa en un sistema llega solo al otro, y cuando el negocio necesita conectar algo nuevo, TI sabe por dónde hacerlo.
+
+- Los datos que el negocio usa todos los días —clientes, productos, pedidos o facturas— pasan entre el sistema central y las herramientas de las áreas sin que nadie los copie a mano. `[4.2.F1 · comprobable]`
+- TI tiene identificado cómo se sacan y se reciben datos del sistema central —una API, una base de lectura o un servicio de integración— y quién puede habilitarlo. `[4.2.F2 · declarado]`
+- Cada integración tiene un responsable en TI y está documentada: qué datos mueve, en qué dirección y cada cuánto. `[4.2.F3 · declarado]`
+- Si una integración falla, el sistema le avisa a su responsable sin que nadie del negocio tenga que reclamar. `[4.2.F4 · comprobable]`
+
+**Eficiente.** Las integraciones mueven los datos en minutos y se administran desde un mismo lugar, los accesos se dan solos y la IA asiste al equipo en su trabajo diario.
+
+*Resultado:* Los datos están al día en todos los sistemas, sumar una conexión nueva toma días y no meses, y TI dedica menos tiempo a tareas repetitivas.
+
+- Las integraciones principales mueven los datos en el momento o en minutos, no en una carga una vez al día. `[4.2.E1 · comprobable]`
+- Las integraciones se administran desde un mismo lugar —una plataforma de integración o un servicio común—, con el historial de qué se movió y qué falló. `[4.2.E2 · comprobable · requiere 4.2.F3]`
+- Las altas, las bajas y los cambios de acceso de cada persona en los sistemas del negocio se hacen solos, desde un mismo lugar —por ejemplo, con un inicio de sesión único—. `[4.2.E3 · comprobable]`
+- El equipo de TI usa la IA en su trabajo diario —para documentar, revisar código o diagnosticar fallas—, y la IA trabaja con el contexto de los sistemas de la empresa. `[4.2.E4 · evaluado · hábito]`
+- Hay tableros en tiempo real del estado de los sistemas y las integraciones: qué está caído, qué está lento y qué falló. `[4.2.E5 · comprobable]`
+
+**Óptimo.** Los sistemas se conectan reusando servicios que ya existen, y las fallas conocidas se corrigen solas.
+
+*Resultado:* Conectar un sistema nuevo es reusar lo que ya existe, y la mayoría de las fallas se corrige antes de que el negocio las note.
+
+- Los datos del sistema central están disponibles como servicios que cualquier sistema autorizado reusa, sin un desarrollo nuevo para cada conexión. `[4.2.O1 · comprobable · requiere 4.2.E2]`
+- Las fallas conocidas de las integraciones y los sistemas se corrigen solas —con reintentos, reinicios o la IA aplicando la solución documentada—; el equipo revisa lo que pasó, y en el sistema queda qué se corrigió solo. `[4.2.O2 · comprobable]`
+
+#### 4.3 Datos
+
+Cuando dos sistemas dicen cosas distintas de un mismo cliente o producto, ¿cuál vale?
+
+*Descripción:* Mide si TI sabe dónde vive cada dato, quién responde por él y si el negocio puede usarlo para decidir sin pedirle cada reporte a TI.
+
+*Costo de quedarse:* Cada área tiene su versión del mismo cliente y del mismo número, y cada reporte se le pide a TI, que tarda: se decide con datos viejos o no se decide.
+
+**Deficiente.** Nadie sabe cuál es la versión correcta de un dato: el mismo cliente o el mismo número vive distinto en cada sistema.
+
+- El mismo cliente o el mismo producto está en varios sistemas con datos distintos, y nadie sabe cuál es el correcto. `[4.3.D1 · comprobable]`
+- Nadie en la empresa responde por que los datos estén bien: cada área los carga como puede. `[4.3.D2 · evaluado]`
+
+**Inicial.** Se sabe dónde están los datos principales, pero no está escrito, y cada reporte se le pide a TI.
+
+- Se sabe en qué sistema vive cada dato principal, pero no está escrito en ningún lado. `[4.3.I1 · declarado]`
+- Cada reporte que necesita el negocio se le pide a TI, que lo arma a mano cada vez. `[4.3.I2 · declarado]`
+
+**Funcional.** Cada dato principal tiene un sistema que manda y un responsable, y las áreas sacan sus reportes sin pedírselos a TI.
+
+*Resultado:* Todos trabajan con la misma versión de cada dato, y quien decide saca sus números sin esperar a TI.
+
+- Está escrito qué sistema manda para cada dato principal —cliente, producto, precio, pedido y factura—: si dos sistemas no coinciden, se sabe cuál vale. `[4.3.F1 · declarado]`
+- Cada dato principal tiene un responsable en el negocio que decide qué es correcto, y TI sabe quién es. `[4.3.F2 · declarado]`
+- Los datos principales tienen reglas al cargarse —campos obligatorios, formatos y listas definidas— que evitan los errores más comunes. `[4.3.F3 · comprobable]`
+- Las áreas sacan de los sistemas los reportes que usan todos los días, sin pedírselos a TI. `[4.3.F4 · comprobable · hábito]`
+
+**Eficiente.** Los datos de los sistemas se juntan en un mismo lugar, su calidad se mide y cada dato tiene su significado escrito.
+
+*Resultado:* La empresa ve en un mismo lugar lo que pasa en todos sus sistemas, y sabe qué tan confiables son sus datos antes de decidir con ellos.
+
+- Los datos de los sistemas principales se juntan en un mismo lugar —un almacén central de datos o una plataforma de reportes— que se actualiza solo. `[4.3.E1 · comprobable]`
+- Se mide la calidad de los datos principales —si están completos, sin duplicados y al día—, y el responsable de cada uno ve esa medición. `[4.3.E2 · comprobable · requiere 4.3.F2]`
+- Hay un catálogo de los datos —qué significa cada uno, de dónde sale y quién responde por él— al alcance de quien los usa. `[4.3.E3 · declarado · requiere 4.3.F1]`
+
+**Óptimo.** Los errores de datos se corrigen solos, y el negocio le pregunta a la IA por sus datos sin armar un reporte.
+
+*Resultado:* Quien decide pregunta y obtiene la respuesta con datos confiables, sin armar un reporte, y los errores se corrigen antes de llegar a una decisión.
+
+- Los errores de datos se detectan y se corrigen solos —la IA propone y aplica la corrección, y una persona valida las excepciones—, y queda registrado qué se corrigió. `[4.3.O1 · comprobable]`
+- Las personas del negocio le preguntan a la IA por sus datos, en palabras simples, y reciben la respuesta del almacén central de datos, con los permisos de cada una. `[4.3.O2 · comprobable · requiere 4.3.E1]`
+
+#### 4.4 Equipo y Gobierno
+
+¿Quién decide qué sistemas se compran, quién entra a cada uno y cómo se cuida la información?
+
+*Descripción:* Mide si cada persona de TI sabe qué le toca, si TI gobierna los accesos, la seguridad y el gasto en tecnología, y si el líder sigue al equipo con datos.
+
+*Costo de quedarse:* Cualquiera entra a cualquier sistema, nadie sabe cuánto se gasta en tecnología, y un error o un ataque puede dejar a la empresa sin poder vender ni atender.
+
+**Deficiente.** Nadie controla quién entra a los sistemas ni cuánto se gasta en tecnología.
+
+- No se sabe quién tiene acceso a cada sistema: las cuentas se comparten y las de quienes se fueron siguen activas. `[4.4.D1 · comprobable]`
+- Cada área compra sus propias herramientas sin pasar por TI. `[4.4.D2 · declarado]`
+
+**Inicial.** Hay alguien a cargo de TI, pero decide sobre la marcha: sin reglas escritas de acceso, sin saber en detalle en qué se va el presupuesto y con los roles de palabra.
+
+- Los accesos se dan cuando alguien los pide, sin una regla de quién puede ver qué. `[4.4.I1 · declarado]`
+- TI tiene un presupuesto, pero no sabe en detalle en qué se va. `[4.4.I2 · declarado]`
+- Los roles en TI se reparten de palabra: cada uno sabe más o menos qué le toca, pero no está escrito. `[4.4.I3 · evaluado]`
+
+**Funcional.** Cada persona de TI tiene su rol por escrito, los accesos se dan y se quitan con una regla, hay un inventario de lo que se paga y el líder sigue un tablero cada semana.
+
+*Resultado:* La empresa sabe quién entra a cada sistema y cuánto paga por cada uno, y el líder ve cada semana si TI va al día o se está atrasando.
+
+- Cada persona de TI tiene su rol por escrito: de qué se encarga, qué decide sola y qué aprueba el líder. `[4.4.F1 · declarado]`
+- Está escrito qué puede ver y hacer cada rol en cada sistema del negocio, y los accesos se dan según eso. `[4.4.F2 · declarado]`
+- Cuando alguien deja la empresa, sus accesos a todos los sistemas se quitan el mismo día. `[4.4.F3 · comprobable · riesgo · hábito]`
+- Los sistemas del negocio piden un segundo paso para entrar —un código o una aplicación—, además de la contraseña. `[4.4.F4 · comprobable · riesgo]`
+- Los datos de los sistemas críticos tienen respaldo, y en el último año se probó recuperarlos. `[4.4.F5 · declarado · riesgo]`
+- Hay un inventario de los sistemas y las licencias que paga la empresa, con su costo y su responsable. `[4.4.F6 · declarado]`
+- El líder de TI tiene un tablero con 4 a 6 métricas clave —pedidos abiertos, tiempo de respuesta, proyectos atrasados y fallas— y lo consulta al menos una vez por semana. `[4.4.F7 · evaluado · hábito · requiere 4.1.F1]`
+
+**Eficiente.** TI le rinde cuentas al negocio con datos, y los accesos y la seguridad se revisan con una cadencia y un plan.
+
+*Resultado:* La dirección sabe qué le entrega TI y cuánto cuesta, los accesos que sobran se quitan antes de que alguien los use, y si un sistema crítico se cae, todos saben qué hacer.
+
+- Si quien lidera TI no es la dirección general, le presenta cada mes los resultados contra la meta —pedidos, proyectos, disponibilidad de los sistemas y gasto—, con datos del sistema. `[4.4.E1 · declarado · hábito]`
+- Los accesos a los sistemas críticos se revisan al menos cada trimestre, y se quitan los que sobran. `[4.4.E2 · comprobable · hábito · requiere 4.4.F2]`
+- Hay políticas de seguridad escritas —contraseñas, uso de los equipos, manejo de datos personales—, y toda la empresa recibe una capacitación en seguridad al menos una vez al año. `[4.4.E3 · declarado · hábito]`
+- Cuando entra alguien nuevo a TI, hay un plan de inducción con sus pasos y materiales; no se le entrena de memoria. `[4.4.E4 · declarado]`
+- Hay un plan escrito de qué hacer si un sistema crítico se cae o si hay un ataque: quién decide, a quién se avisa y en cuánto tiempo se vuelve a operar. `[4.4.E5 · declarado]`
+
+**Óptimo.** Lo que la IA puede hacer sola en los sistemas está decidido, y TI se mide por lo que habilita en el negocio.
+
+*Resultado:* Lo que la IA puede hacer sola en los sistemas está decidido y alguien responde por ella, y TI se mide por los resultados del negocio que habilita, no solo por los pedidos que cierra.
+
+- Está por escrito qué puede hacer la IA sola en los sistemas de la empresa y con qué datos, y hay responsables de validar lo que hace. `[4.4.O1 · declarado]`
+- TI se mide por los resultados del negocio que habilita —el tiempo para salir con algo nuevo, las horas que ahorra, las ventas que pasan por sus sistemas—, no solo por los pedidos que cierra. `[4.4.O2 · declarado · hábito]`
+- El líder de TI ya no apaga incendios: dedica su tiempo a decidir qué se automatiza, qué se conecta y en qué se invierte. `[4.4.O3 · evaluado · hábito]`
+
+### Producción
+
+#### 4.5 Servicio al Negocio
+
+¿Qué sabe una persona del negocio sobre lo que TI le puede dar y cómo pedirlo?
+
+*Descripción:* Mide si TI le presenta al resto de la empresa qué hace, cómo se le pide y qué se puede esperar, y si quien pide recibe la misma atención lo atienda quien lo atienda.
+
+*Costo de quedarse:* El negocio no sabe qué le puede pedir a TI ni cuánto va a tardar: unos se la saltan y contratan por su cuenta, y otros esperan sin saber qué pasa.
+
+**Deficiente.** TI no le dice al negocio qué hace ni cómo pedirle algo: cada quien lo averigua.
+
+- No hay nada escrito sobre qué servicios da TI ni cómo pedirlos. `[4.5.D1 · declarado]`
+
+**Inicial.** Hay una lista de lo que hace TI, pero no dice cuánto tarda cada cosa, y cada persona de TI responde a su manera.
+
+- Hay una lista de lo que hace TI, pero no dice cuánto tarda cada cosa ni quién la aprueba. `[4.5.I1 · declarado]`
+- Cada persona de TI responde los pedidos a su manera, sin respuestas comunes. `[4.5.I2 · evaluado]`
+
+**Funcional.** El negocio tiene a la vista lo que TI hace y cómo pedirlo, sabe en qué va cada pedido, y cada área tiene una persona de TI de referencia.
+
+*Resultado:* Cualquiera en la empresa sabe qué le puede pedir a TI, cómo y en cuánto tiempo, y ve en qué va lo que pidió sin tener que preguntar.
+
+- Hay un catálogo de los servicios de TI —qué se puede pedir, cómo, qué hace falta y quién lo aprueba— al alcance de toda la empresa. `[4.5.F1 · declarado]`
+- Quien pidió algo ve en qué estado está su pedido sin tener que preguntar. `[4.5.F2 · comprobable · requiere 4.1.F1]`
+- Hay respuestas guardadas para los pedidos frecuentes, al alcance de todo el equipo de TI. `[4.5.F3 · comprobable]`
+- Cada área del negocio tiene una persona de TI de referencia para sus proyectos y sus dudas. `[4.5.F4 · declarado]`
+
+**Eficiente.** TI cumple los tiempos que promete, mide la satisfacción del negocio y abre un autoservicio para lo simple.
+
+*Resultado:* El negocio confía en lo que TI promete porque se cumple, resuelve lo simple sin esperar, y TI sabe qué tan conformes están las áreas con su servicio.
+
+- Se mide la satisfacción de quien pide, al cerrar cada pedido o cada trimestre. `[4.5.E1 · comprobable · hábito]`
+- La mayoría de los pedidos se cierra dentro del tiempo acordado. `[4.5.E2 · comprobable · hábito · requiere 4.1.E1]`
+- Hay un portal de autoservicio donde el negocio resuelve lo simple —restablecer una contraseña, consultar una guía— sin esperar a TI. `[4.5.E3 · comprobable]`
+
+**Óptimo.** Un agente de IA atiende los pedidos del negocio y le pasa a una persona lo que no puede resolver.
+
+*Resultado:* Buena parte de los pedidos se resuelve al momento, sin esperar a una persona, y la atención se siente igual de cuidada con la IA que con el equipo.
+
+- Un agente de IA atiende los pedidos del negocio en los canales donde se pide, resuelve los que puede y le pasa a una persona, con el contexto completo, los que no; el equipo revisa una muestra de sus respuestas y en el sistema se ve qué resolvió la IA. `[4.5.O1 · comprobable · requiere 4.5.F3]`
+
+#### 4.6 Priorización de la Demanda
+
+Cuando el negocio pide más de lo que TI puede hacer, ¿cómo se decide qué va primero?
+
+*Descripción:* Mide si TI decide qué pedido y qué proyecto va primero según su valor para el negocio, y no según quién insiste más.
+
+*Costo de quedarse:* Gana quien insiste más: los proyectos que mueven las ventas esperan detrás de pedidos menores, y la inversión en tecnología se reparte sin saber qué devuelve.
+
+**Deficiente.** Nada decide el orden: se atiende lo que llega primero o a quien más insiste.
+
+- Los pedidos y los proyectos se atienden por orden de llegada o según quién presione. `[4.6.D1 · declarado]`
+
+**Inicial.** Se prioriza a ojo: lo que parece urgente, o lo que pide la dirección en el momento.
+
+- Se intenta atender primero lo urgente, pero cada persona de TI decide a ojo qué es urgente. `[4.6.I1 · evaluado]`
+- La dirección prioriza los proyectos caso por caso, sin una lista común. `[4.6.I2 · declarado]`
+
+**Funcional.** Cada pedido tiene una prioridad con criterios escritos, y hay una lista única de proyectos, en orden, que el negocio conoce.
+
+*Resultado:* Lo urgente se atiende primero y cada área sabe qué proyectos vienen y en qué orden.
+
+- Está escrito qué hace que un pedido sea urgente, alto, normal o bajo, y cada pedido tiene su prioridad. `[4.6.F1 · comprobable]`
+- Hay una lista única de los proyectos de tecnología, en orden, que conocen las áreas del negocio. `[4.6.F2 · declarado]`
+- Cada proyecto dice, antes de aprobarse, qué resultado del negocio busca. `[4.6.F3 · declarado]`
+- TI y las áreas del negocio acuerdan el orden de esa lista al menos una vez por trimestre. `[4.6.F4 · declarado · hábito]`
+
+**Eficiente.** Los proyectos se comparan por su valor y su costo, y se revisa si dieron lo que buscaban.
+
+*Resultado:* La empresa invierte en tecnología donde más devuelve, y sabe qué devolvió cada proyecto.
+
+- Antes de aprobarse, cada proyecto se compara por su valor para el negocio, su costo y su riesgo, con los mismos criterios para todos. `[4.6.E1 · declarado]`
+- Al terminar cada proyecto grande, se revisa si dio el resultado que buscaba. `[4.6.E2 · declarado · hábito · requiere 4.6.F3]`
+- El tiempo de TI está repartido a propósito entre lo que mantiene la operación y lo que la hace crecer, y el líder lo sabe con datos. `[4.6.E3 · evaluado]`
+
+**Óptimo.** La IA estima el valor y el esfuerzo de cada pedido nuevo, y el orden se ajusta cuando cambian las metas del negocio.
+
+*Resultado:* Las decisiones de inversión en tecnología se toman con datos de lo que devolvió cada tipo de proyecto, y el orden se ajusta cuando cambia el negocio.
+
+- La IA estima el valor y el esfuerzo de cada pedido o proyecto nuevo a partir de los anteriores, y propone su lugar en la lista; TI y el negocio deciden. `[4.6.O1 · comprobable]`
+- Los proyectos se revisan contra los resultados del negocio en tableros que ve la dirección, y la lista se reordena cuando cambian las metas. `[4.6.O2 · comprobable · hábito]`
+
+#### 4.7 Adopción de Herramientas
+
+Cuando TI pone en marcha un sistema nuevo, ¿cómo se asegura de que la gente lo use?
+
+*Descripción:* Mide si TI acompaña a las personas hasta que usan los sistemas que entrega, y si se adelanta a lo que van a necesitar en vez de esperar a que lo pidan.
+
+*Costo de quedarse:* La empresa paga sistemas que la gente usa a medias o no usa: vuelven a las hojas de cálculo y al correo, y la inversión no se nota.
+
+**Deficiente.** TI entrega el sistema y se va: nadie acompaña a quien lo tiene que usar.
+
+- Los sistemas nuevos se entregan sin capacitación ni guías. `[4.7.D1 · declarado]`
+- TI no sabe quién usa los sistemas que entrega. `[4.7.D2 · declarado]`
+
+**Inicial.** Hay una capacitación al principio, pero después cada quien se las arregla, y TI se entera tarde de lo que no se usa.
+
+- Hay una capacitación al poner en marcha un sistema, pero quien entra después aprende de un compañero. `[4.7.I1 · declarado]`
+- TI se entera de que un sistema no se usa cuando alguien se queja o cuando hay que renovar la licencia. `[4.7.I2 · evaluado]`
+
+**Funcional.** Cada sistema que se entrega llega con capacitación y guías, quien entra a la empresa aprende los suyos en su primera semana, y TI sabe cuánto se usa cada uno.
+
+*Resultado:* Las personas saben usar las herramientas que tienen, y TI ve cuáles se usan y cuáles no.
+
+- Cada sistema que TI pone en marcha llega con una capacitación para quienes lo van a usar y con guías escritas al alcance de todos. `[4.7.F1 · declarado]`
+- Quien entra a la empresa recibe en su primera semana el acceso y la capacitación en los sistemas de su puesto. `[4.7.F2 · declarado · hábito]`
+- TI mide, al menos una vez por mes, cuántas personas usan cada sistema principal. `[4.7.F3 · comprobable · hábito]`
+- Antes de un cambio grande en un sistema, quienes lo usan reciben el aviso y lo que necesitan saber. `[4.7.F4 · declarado · hábito]`
+
+**Eficiente.** TI actúa donde baja el uso, cada área tiene a alguien que impulsa sus sistemas, y TI propone lo que ya se paga y no se usa.
+
+*Resultado:* Las herramientas se usan a fondo en toda la empresa, y donde una se usa poco, TI se entera y actúa antes de que se pierda la inversión.
+
+- Cuando el uso de un sistema baja en un área, TI lo detecta y la acompaña con una acción concreta: una capacitación, un ajuste o una guía. `[4.7.E1 · comprobable · hábito · requiere 4.7.F3]`
+- Cada área tiene una persona que impulsa el uso de sus herramientas y es el puente con TI. `[4.7.E2 · declarado]`
+- TI le propone al negocio las funciones que la empresa ya paga y no usa. `[4.7.E3 · evaluado · hábito]`
+
+**Óptimo.** La ayuda llega dentro de cada sistema, en el momento, y la IA detecta quién necesita apoyo antes de que lo pida.
+
+*Resultado:* Cada persona recibe la ayuda que necesita mientras trabaja, y la adopción no depende de las capacitaciones.
+
+- La ayuda aparece dentro de las herramientas, en el momento en que la persona la necesita, y se ajusta a lo que está haciendo. `[4.7.O1 · comprobable]`
+- La IA detecta quién se traba en un sistema y le ofrece ayuda antes de que la pida; el equipo revisa lo que la IA propone. `[4.7.O2 · comprobable · requiere 4.7.F3]`
+
+#### 4.8 Mejora Continua de TI
+
+¿Qué pasa en TI después de una falla grave o de un proyecto que salió mal?
+
+*Descripción:* Mide si TI aprende de cada falla y de cada proyecto, y si puede acompañar a una empresa más grande sin crecer al mismo ritmo.
+
+*Costo de quedarse:* Las mismas fallas vuelven una y otra vez, los sistemas viejos se acumulan, y cada vez que la empresa crece hay que sumar gente en TI.
+
+**Deficiente.** Las fallas se apagan y se olvidan: nada queda registrado ni cambia.
+
+- Las fallas se resuelven y no queda registro de qué pasó ni por qué. `[4.8.D1 · declarado]`
+
+**Inicial.** A veces se conversa lo que salió mal, pero lo aprendido no queda escrito, y no hay un plan para los sistemas viejos.
+
+- Después de una falla grave a veces se conversa qué pasó, pero no queda escrito ni cambia nada. `[4.8.I1 · evaluado]`
+- TI sabe qué sistemas están viejos o frágiles, pero no hay un plan para cambiarlos. `[4.8.I2 · declarado]`
+
+**Funcional.** Cada falla grave deja escrita su causa y lo que se cambia, y hay una lista de lo que hay que modernizar.
+
+*Resultado:* Las fallas graves no se repiten por la misma causa, y la empresa sabe qué sistemas tiene que modernizar y por qué.
+
+- Cada falla grave deja escrito qué pasó, por qué y qué se cambia para que no se repita. `[4.8.F1 · declarado · hábito]`
+- Hay una lista de los sistemas viejos o frágiles, con su riesgo y lo que hace falta para modernizarlos. `[4.8.F2 · declarado]`
+- Al cerrar cada proyecto, el equipo escribe qué salió bien y qué cambiaría. `[4.8.F3 · declarado · hábito]`
+
+**Eficiente.** Lo aprendido cambia el proceso, y TI atiende más sin crecer igual gracias al autoservicio y a la automatización.
+
+*Resultado:* TI acompaña a una empresa que crece sin sumar gente en la misma proporción, y lo que aprende se nota en cómo trabaja.
+
+- Al menos una vez por trimestre se revisan los pedidos y las fallas que se repiten, y lo que sale de esa revisión cambia el proceso, las guías o los sistemas; queda escrito qué cambió. `[4.8.E1 · declarado · hábito]`
+- Se mide qué parte de los pedidos se resuelve en el autoservicio o sola, y ese número alcanza la meta que fijó TI. `[4.8.E2 · comprobable · hábito · requiere 4.5.E3]`
+- Cada trimestre se reserva tiempo del equipo para modernizar lo que está en la lista. `[4.8.E3 · declarado · hábito · requiere 4.8.F2]`
+
+**Óptimo.** La IA detecta lo que se repite y propone cómo mejorarlo, y TI acompaña el crecimiento sin sumar gente.
+
+*Resultado:* TI puede acompañar el crecimiento de la empresa sin crecer al mismo ritmo, y la mejora pasa sola, con el equipo validando.
+
+- La IA detecta los pedidos y las fallas que se repiten y propone el cambio —una automatización, una guía o un ajuste—; el líder valida cada cambio, y queda registrado de dónde salió. `[4.8.O1 · comprobable]`
+- Los picos de pedidos los absorben la IA y el autoservicio: el equipo no crece cuando crece la empresa, y el líder ve en los tableros qué parte se resolvió sola. `[4.8.O2 · evaluado]`
+
 ---
 
 # Parte 4 — Referencia
@@ -1580,6 +1944,7 @@ Esta es la referencia que consultan tanto una persona como un sistema que lea lo
 | 1 | Ventas |
 | 2 | Marketing |
 | 3 | Servicio |
+| 4 | TI |
 
 El número del área es el prefijo del ID de cada dimensión: 1.3 es Datos de Ventas, 2.3 es Datos de Marketing. Donde aparece una **x**, se sustituye por el número del área.
 
@@ -1597,7 +1962,7 @@ Esa grafía es exacta: es la que se emite y la que se compara entre diagnóstico
 
 ## Dimensiones de base operativa (x.1 a x.4)
 
-Mismo nombre en las tres áreas.
+Mismo nombre en las cuatro áreas.
 
 | ID | Dimensión |
 |:--|:--|
@@ -1608,14 +1973,14 @@ Mismo nombre en las tres áreas.
 
 ## Dimensiones de producción (x.5 a x.8)
 
-Cada una responde la misma pregunta de fondo en las tres áreas —la que dice «Las ocho dimensiones», en la Parte 1—, con un nombre general que comparten y un nombre propio en cada departamento.
+Cada una responde la misma pregunta de fondo en las cuatro áreas —la que dice «Las ocho dimensiones», en la Parte 1—, con un nombre general que comparten y un nombre propio en cada departamento.
 
-| ID | Nombre general | 1 Ventas | 2 Marketing | 3 Servicio |
-|:--|:--|:--|:--|:--|
-| x.5 | Presentación | Propuesta y Coherencia | Marca y Presencia | Consistencia de Atención |
-| x.6 | Priorización | Priorización de Leads | Segmentación | Priorización de Clientes |
-| x.7 | Alcance | Tracción del Negocio | Canales y Alcance | Proactividad |
-| x.8 | Aprendizaje | Aprendizaje de Ganadas y Perdidas | Medición y Aprendizaje | Escalabilidad del Servicio |
+| ID | Nombre general | 1 Ventas | 2 Marketing | 3 Servicio | 4 TI |
+|:--|:--|:--|:--|:--|:--|
+| x.5 | Presentación | Propuesta y Coherencia | Marca y Presencia | Consistencia de Atención | Servicio al Negocio |
+| x.6 | Priorización | Priorización de Leads | Segmentación | Priorización de Clientes | Priorización de la Demanda |
+| x.7 | Alcance | Tracción del Negocio | Canales y Alcance | Proactividad | Adopción de Herramientas |
+| x.8 | Aprendizaje | Aprendizaje de Ganadas y Perdidas | Medición y Aprendizaje | Escalabilidad del Servicio | Mejora Continua de TI |
 
 Todas las dimensiones, de base operativa y de producción, tienen los cinco niveles. No hay excepciones.
 
@@ -1631,6 +1996,9 @@ Cuando un criterio de riesgo no se cumple, se le muestra al cliente con estos me
 | `2.3.F9`, `1.3.F10`, `3.3.F9` | Las personas aceptaron que les escriban | Puedes estar escribiéndole a personas que no te dieron permiso: tus correos pueden terminar en spam y, si usas WhatsApp, tu número se puede bloquear. |
 | `3.2.F11` | El equipo escribe desde canales verificados y nunca pide claves | Si tu equipo les escribe a tus clientes desde números personales o les pide claves, una estafa que te imita se ve igual que tú: ellos pierden su dinero y tú, su confianza. |
 | `3.1.F8` | Se verifica la identidad antes de atender un cambio | Cualquiera que diga ser tu cliente puede pedir un cambio en su cuenta: un fraude le cuesta su dinero al cliente y a ti, su confianza. |
+| `4.4.F3` | Los accesos de quien se va se quitan el mismo día | Alguien que ya no trabaja contigo puede seguir entrando a tus sistemas y llevarse los datos de tus clientes. |
+| `4.4.F4` | Los sistemas piden un segundo paso para entrar | Una contraseña robada alcanza para entrar a tus sistemas: quien la tenga ve y cambia los datos de tus clientes como si fuera de tu equipo. |
+| `4.4.F5` | Hay respaldo de los sistemas críticos y se probó recuperarlo | Si un sistema crítico se cae o lo atacan, puedes perder los datos de tus clientes y quedarte días sin vender ni atender. |
 
 ## Glosario
 
@@ -1641,6 +2009,7 @@ Términos que aparecen en la escala, la especificación o el manual, o que el eq
 | AEO | Optimización para motores de respuesta: que el contenido aparezca como respuesta en asistentes de IA y en buscadores que contestan preguntas. |
 | Agente | En Servicio, la persona del equipo que atiende los casos. Un agente de IA es un programa que hace un trabajo solo —calificar un lead, responder un caso— y le pasa a una persona lo que no puede resolver. Los agentes de Nexus son los que ayudan al CSE a diagnosticar. |
 | Almacén central de datos | Base donde la empresa junta la información de todas sus herramientas para analizarla en conjunto. En inglés, data warehouse. |
+| API | Puerta que tiene un sistema para que otro le pida o le mande datos sin que una persona los copie. |
 | Arquitectura de CRM | Cómo está armado el CRM por dentro: sus propiedades, pipelines, listas y formularios. |
 | Atribución | Repartir el mérito de un lead o de una venta entre los canales y los contenidos que tocaron a esa persona, para saber cuánto deja cada uno. |
 | Autoservicio | Lo que el cliente resuelve solo, sin hablar con nadie: una respuesta publicada, un portal o una gestión en línea. |
@@ -1663,6 +2032,7 @@ Términos que aparecen en la escala, la especificación o el manual, o que el eq
 | CSE | Quien, en el equipo de éxito del cliente de Smarteam, diagnostica a cada cliente con la escala, acuerda con él su nivel objetivo y lo acompaña en los casos de uso. |
 | CSM | Responsable del éxito de un cliente: la persona que lo acompaña para que logre resultados. |
 | Diagnóstico | Medición que hace el CSE con los agentes de Nexus, criterio por criterio con la regla estricta. Fija la línea base y se repite en cada remedición. |
+| ERP | Sistema central de la operación: inventario, compras, facturación y contabilidad. En muchas empresas es el que manda sobre los datos de productos, precios, pedidos y facturas. |
 | Escalar un caso | Pasarlo a alguien con más autoridad o conocimiento, porque quien lo atiende no puede resolverlo o porque está por vencer su plazo. No es lo mismo que la escalabilidad del servicio, que mide si se pueden atender más clientes sin que el equipo crezca al mismo ritmo. |
 | Etapa del ciclo de vida | Dónde está cada contacto en su relación con la empresa —suscriptor, lead, MQL, SQL, cliente—, guardado en un campo del sistema para que cada área sepa qué le toca. |
 | Ficha del cliente | El registro de cada cliente en el sistema, con lo que se sabe de él: quién es, qué compró o tiene contratado, sus casos y sus conversaciones. Es lo que mira quien lo atiende. |
@@ -1670,7 +2040,9 @@ Términos que aparecen en la escala, la especificación o el manual, o que el eq
 | Grupo de control | Personas parecidas a las que no se les envía el mensaje, para medir cuánto agrega lo que sí se envió. |
 | Hábito | Criterio que describe algo que el equipo repite. Puede estar cumplido, iniciado —la rutina existe pero todavía no tiene historia— o no cumplido. |
 | IA | Inteligencia artificial. En la escala importa quién hace el trabajo: en Eficiente, la IA asiste y una persona lo hace; en Óptimo, la IA lo hace y una persona valida. |
+| Inicio de sesión único | Entrar a todos los sistemas de la empresa con una sola cuenta; al darla de baja, la persona pierde el acceso a todos a la vez. En inglés, SSO. |
 | Indicador de salud | Puntaje de un cliente que anticipa si está en riesgo o tiene potencial de crecer. En inglés, health score. |
+| Integración | Conexión entre dos sistemas que mueve los datos de uno a otro sin que nadie los copie a mano. |
 | Landing page | Página creada para una campaña, con un objetivo concreto como captar datos. |
 | Lead | Persona o empresa que mostró interés y todavía no es cliente. |
 | Lead calificado | Lead que cumple los criterios escritos para que Ventas lo trabaje. Es lo mismo que un SQL. |
@@ -1712,6 +2084,8 @@ Términos que aparecen en la escala, la especificación o el manual, o que el eq
 | Workflow | Flujo automático que se dispara con un evento y ejecuta acciones en el sistema. |
 
 ## Historial de versiones
+
+**9.3.0 (2026-11-19).** Un área nueva: TI. Mide al departamento de TI como socio del negocio, no la tecnología que tiene la empresa, con las mismas ocho dimensiones, los cinco niveles, las reglas y el cálculo de las otras tres: sus dimensiones de base operativa conservan su nombre —Procesos y Rutinas, Tecnología y Automatización, Datos, y Equipo y Gobierno— y miden cómo recibe y entrega los pedidos y los proyectos, cómo conecta los sistemas y si sabe sacar los datos del sistema central, qué sistema manda para cada dato, y los accesos, la seguridad y el gasto en tecnología; y en producción son Servicio al Negocio, Priorización de la Demanda, Adopción de Herramientas y Mejora Continua de TI. Tres criterios de riesgo nuevos: los accesos de quien se va, el segundo paso para entrar y el respaldo que se probó. La regla de asignación suma lo que TI habilita en otra área, que se sigue midiendo en esa área. Las ediciones no escriben TI todavía: en todas se mide con la escala general. No cambia ningún criterio de Ventas, Marketing ni Servicio.
 
 **9.2.0 (2026-10-28).** Una edición nueva, con sus tres áreas enteras: Telecomunicaciones. Es para el operador que le vende a personas, hogares y empresas sus servicios móviles —prepago y pospago, con o sin equipo—, de internet y televisión para el hogar y de conectividad para empresas, parte con un ejecutivo y parte en la web, la app o la recarga, y que atiende después la activación o la instalación, las averías, la facturación, la renovación y la retención; en Ventas sus dimensiones de producción son Planes y ofertas, Calificación y priorización, Seguimiento de la contratación, y Ventas ganadas y perdidas; y en Servicio, Consistencia de Atención, Priorización de Clientes, Proactividad y retención, y Autoservicio. Pide, entre otras cosas, un proceso escrito para la portabilidad, que la venta se dé por concretada solo con la línea activa o el servicio instalado, la cobertura antes de vender un servicio del hogar y el crédito antes del pospago o del equipo en cuotas, que el cliente reciba por escrito el plazo de permanencia y lo que cuesta salir antes, que las campañas no le ofrezcan a un cliente lo que ya tiene y solo le lleguen por los canales que aceptó, el plazo del regulador para cada reclamo, verificar la identidad antes de cambiar la SIM o el titular, una razón para quedarse antes de la baja, el aviso antes del fin del plazo de permanencia y de una suspensión por falta de pago, y que el cliente recargue, vea su consumo, pague su factura y reporte una avería sin esperar a una persona. Avisarle al cliente que su plazo de permanencia termina es de Servicio; ofrecerle renovar con un equipo nuevo o sumar una línea, de Ventas. No cambia ningún criterio de la matriz ni su cálculo.
 
@@ -1809,7 +2183,7 @@ La matriz de la Parte 3 es la escala general, escrita para cualquier empresa. Un
 
 ## Qué cambia una edición y qué no
 
-- **Lo que no cambia.** Las áreas, las dimensiones y sus identificadores; los cinco niveles; las marcas de cada criterio y lo que requiere; las reglas de la Parte 2 y el cálculo de la especificación. Las dimensiones de base operativa conservan su nombre, que es el mismo en las tres áreas.
+- **Lo que no cambia.** Las áreas, las dimensiones y sus identificadores; los cinco niveles; las marcas de cada criterio y lo que requiere; las reglas de la Parte 2 y el cálculo de la especificación. Las dimensiones de base operativa conservan su nombre, que es el mismo en todas las áreas.
 - **Decir lo mismo con otras palabras.** Una edición puede reescribir un criterio de la matriz. El criterio conserva su identificador y sus marcas, y tiene que medir lo mismo y aplicar a los mismos, con los mismos umbrales: si cambia lo que se pide, no es una reescritura.
 - **Criterios propios.** Lo que solo tiene sentido en la industria entra como un criterio propio de la edición. Lleva un identificador del bloque de su edición —del 101 al 199 en la primera, del 201 al 299 en la segunda, y así con cada una—, para que no se cruce con la numeración de la matriz ni con la de otra edición.
 - **Criterios que no aplican.** Una edición puede decir que un criterio de la matriz no aplica a su industria. Sale de la cuenta, igual que uno que no corresponde al perfil de negocio, y si otro criterio lo requería, ese requerido se deja de lado en la edición. Lo que no puede hacer es sacar una dimensión entera.
@@ -1822,7 +2196,7 @@ Una unidad se mide con la escala general o con una sola edición, la de su indus
 
 Una edición puede darle criterios a una dimensión que en la escala general no aplica a un perfil. Pasa en la de ecommerce y retail: en la venta transaccional, la dimensión de personalización de Ventas no aplica en la escala general, y en la edición mide la oferta que la tienda le hace a cada comprador. Y pasa en la de banca, donde esa dimensión mide también a quién se le ofrece cada producto cuando el cliente lo contrata solo.
 
-Una edición se escribe por áreas, y un área que la edición no escribe se mide con la escala general. Las ocho ediciones de hoy —Ecommerce y retail, Banca y servicios financieros, Educación, Inmobiliaria, Turismo, Automotriz, Maquinaria y equipo pesado y Telecomunicaciones— traen las tres áreas enteras.
+Una edición se escribe por áreas, y un área que la edición no escribe se mide con la escala general. Las ocho ediciones de hoy —Ecommerce y retail, Banca y servicios financieros, Educación, Inmobiliaria, Turismo, Automotriz, Maquinaria y equipo pesado y Telecomunicaciones— traen enteras Ventas, Marketing y Servicio; TI, que se sumó en la 9.3.0, todavía no la escribe ninguna, y en todas se mide con la escala general.
 
 ## Cómo se escribe una edición
 

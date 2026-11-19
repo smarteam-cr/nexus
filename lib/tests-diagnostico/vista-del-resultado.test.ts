@@ -13,7 +13,10 @@ import ResultadoDelTestVista from "@/components/external/test/ResultadoDelTestVi
 import type { DetalleDeLaDimension } from "./detalle-de-la-dimension";
 import { HOJA_DEL_PDF } from "./pagina-del-resultado";
 import { resumenSinIa } from "./redaccion";
-import type { ResultadoDelTest } from "./resultado";
+import { resultadoDelTest, type ResultadoDelTest } from "./resultado";
+import { leerArchivoDeLaEscala } from "@/lib/escala/documento/archivos";
+import { parsearEscala } from "@/lib/escala/documento/parsear";
+import { borradorDesdeLaEscala } from "./banco";
 
 const NIVELES = [
   { letra: "D" as const, nombre: "Deficiente" },
@@ -319,6 +322,36 @@ describe("los ajustes del 29 oct", () => {
       const trazos = [...html.matchAll(/<polygon points="[^"]*" fill="none" stroke="(#[0-9a-f]{6})"/g)].map((m) => m[1]);
       expect(trazos.length).toBeGreaterThanOrEqual(5);
       expect(new Set(trazos.filter((x) => !["#dde3ec", "#eef1f6"].includes(x)))).toEqual(new Set(["#22c55e"]));
+    }
+  });
+});
+
+describe("la página de resultado de TI (área 4, escala 9.3.0)", () => {
+  // Un resultado de verdad: el banco web de TI que sale de la escala del repo, con respuestas parejas en Inicial y
+  // Funcional, calculado con el mismo motor que el test público.
+  const escala = parsearEscala(leerArchivoDeLaEscala("escala"));
+  const preguntas = borradorDesdeLaEscala(escala, "4", "web");
+  const respuestas = Object.fromEntries(preguntas.map((p, i) => [p.id, { opcion: p.opciones.find((o) => o.nivel === (i % 2 ? "F" : "I"))!.id }]));
+  const r = resultadoDelTest({ escala, areaId: "4", version: "web", preguntas, respuestas })!;
+
+  it("el cálculo ubica a TI con sus ocho partes y una recomendación", () => {
+    expect(r.areaNombre).toBe("TI");
+    expect(r.dimensiones.map((d) => d.id)).toEqual(["4.1", "4.2", "4.3", "4.4", "4.5", "4.6", "4.7", "4.8"]);
+    expect(r.nivel).toBe("I");
+    expect(r.recomendacion?.tipo).toBe("trabajar");
+    // El catálogo de casos de uso todavía no tiene casos de TI.
+    expect(r.casos).toEqual([]);
+  });
+
+  it("se dibuja en la pantalla y en el PDF con el nombre del área, sus partes y sin «Lo que haríamos contigo»", () => {
+    for (const modo of ["pantalla", "pdf"] as const) {
+      const html = dibujar(modo, false, AGENDA, r);
+      const t = texto(html);
+      expect(t, modo).toContain("TI");
+      for (const nombre of ["Servicio al Negocio", "Priorización de la Demanda", "Adopción de Herramientas", "Mejora Continua de TI"]) {
+        expect(t, `${modo}: ${nombre}`).toContain(nombre);
+      }
+      expect(t, modo).not.toContain("Lo que haríamos contigo");
     }
   });
 });

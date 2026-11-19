@@ -32,10 +32,10 @@ import { ETIQUETA_DE_LA_VERSION, NOMBRE_DEL_AREA, nombreDelTest, SLUG_POR_AREA, 
 import { cambiosDelBanco, EJEMPLO_DEL_GRUPO, ETIQUETA_DEL_GRUPO, sinVarianteDelCampo } from "@/lib/tests-diagnostico/variantes";
 
 type Pestana = "preguntas" | "intentos" | "medicion";
-type AreaDelTest = "1" | "2" | "3";
+type AreaDelTest = "1" | "2" | "3" | "4";
 
 /** Las subpestañas de Preguntas: el nombre del área como lo dice el equipo. */
-const PESTANA_DEL_AREA: Record<AreaDelTest, string> = { "1": "Ventas", "2": "Marketing", "3": "Servicio al cliente" };
+const PESTANA_DEL_AREA: Record<AreaDelTest, string> = { "1": "Ventas", "2": "Marketing", "3": "Servicio al cliente", "4": "TI" };
 /** Primero el test web y después el corto. */
 const VERSIONES_EN_ORDEN: readonly VersionDelTest[] = ["web", "marketing"];
 
@@ -258,7 +258,7 @@ function Preguntas({ datos, editor }: { datos: DatosDeLaPantalla; editor: boolea
               setArea(a);
               setAbierto(null);
             }}
-            items={(["1", "2", "3"] as const).map((a) => ({
+            items={(["1", "2", "3", "4"] as const).map((a) => ({
               key: a,
               label: PESTANA_DEL_AREA[a],
               count: datos.bancos.filter((b) => b.area === a && b.estado !== "aprobado").length || undefined,
@@ -363,8 +363,8 @@ function Intentos({ datos, hubspotEncendido, puedeReintentar }: { datos: DatosDe
             {e.clientId ? <Badge variant="primary">En Nexus</Badge> : <Badge variant="default">Prospecto nuevo</Badge>}
             <span className="ml-auto text-xs text-fg-muted">{e.personas.map((p) => `${p.nombre}${p.puesto ? ` (${p.puesto})` : ""}`).join(" · ")}</span>
           </div>
-          <div className="grid gap-2 sm:grid-cols-3">
-            {(["1", "2", "3"] as const).map((area) => {
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+            {(["1", "2", "3", "4"] as const).map((area) => {
               const i = e.porArea[area];
               if (!i) {
                 return (

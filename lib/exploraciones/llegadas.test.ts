@@ -26,6 +26,10 @@ describe("la nota del test", () => {
     expect(n?.resultado?.fecha).toBe("2026-09-30");
   });
 
+  it("la de TI se reconoce como el área 4 (así la preventa la deja afuera mientras TI esté en prueba)", () => {
+    expect(leerNotaDelTest("<p>⏳ Diagnóstico SIN TERMINAR — TI</p><p>Quién: Ana Pérez, ana@ferreteria.cr</p>")).toMatchObject({ estado: "sinTerminar", areaId: "4" });
+  });
+
   it("una a medias no tiene resultado; el área sale del título", () => {
     expect(leerNotaDelTest(aMedias)).toMatchObject({ estado: "sinTerminar", areaId: "2", contacto: "Luis Mora", dominio: "panaderia.cr", resultado: null });
   });

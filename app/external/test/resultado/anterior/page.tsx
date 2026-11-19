@@ -38,7 +38,7 @@ export default async function ResultadoAnteriorPage({ searchParams }: { searchPa
       </ExternalShell>
     );
   }
-  const vigente = await leerEscalaVigente();
+  const vigente = await leerEscalaVigente({ conAreasEnPrueba: true });
   const r = "escala" in vigente ? resultadoDelTestAnterior(vigente.escala, leidos) : null;
   const agenda = enlaceDeLaAgenda(process.env.TESTS_ENLACE_DE_AGENDA);
   if (!r) {

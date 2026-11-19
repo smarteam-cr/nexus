@@ -9,6 +9,7 @@ import "server-only";
 import { esNotaDeLaFicha } from "@/lib/clients/ficha";
 import { getSystemHubspotClient } from "@/lib/hubspot/client";
 import { PROPIEDADES_DEL_RASTRO, rastroDe, type RastroDelContacto } from "./senales";
+import { esAreaEnPrueba } from "@/lib/escala/areas-en-prueba";
 import { agruparLlegadas, agruparSinEmpresa, esDePrueba, leerNotaDelTest, type LlegadaAgrupada, type LlegadaSinEmpresa, type NotaDeLlegada, type NotaSinEmpresa } from "./llegadas";
 import { leerResultadoDelTest, PROPIEDADES_DEL_TEST, type ResultadoDelTest } from "./test-de-marketing";
 import { reunionQueNoOcurrio } from "./lectura";
@@ -357,12 +358,18 @@ export function textoPlano(html: string): string {
     .trim();
 }
 
+/**
+ * La nota del test de un área que todavía vive solo en La escala (TI, lib/escala/areas-en-prueba.ts): HubSpot la recibe,
+ * pero la preventa, «Llegaron por el test» y los leads del test no la leen hasta la migración del área.
+ */
+const notaDeAreaEnPrueba = (nota: { areaId: string | null } | null) => !!nota?.areaId && esAreaEnPrueba(nota.areaId);
+
 /** La dirección del resultado que trae una nota del test, con quién lo hizo. */
 function enlaceDeLaNota(e: V1): EnlaceDelTest | null {
   const body = e.metadata?.body;
   if (e.engagement?.type !== "NOTE" || typeof body !== "string") return null;
   const nota = leerNotaDelTest(body);
-  if (!nota?.resultado) return null;
+  if (!nota?.resultado || notaDeAreaEnPrueba(nota)) return null;
   return { contacto: nota.contacto ?? "quien hizo el test", url: nota.resultado.url };
 }
 
@@ -374,7 +381,10 @@ function aActividad(e: V1): ActividadDeHubspot | "tapado" | null {
   const get = (k: string) => (typeof m[k] === "string" ? textoPlano(m[k] as string) : "");
   let titulo = "";
   let texto = "";
-  if (tipo === "NOTE") texto = get("body");
+  if (tipo === "NOTE") {
+    if (typeof m.body === "string" && notaDeAreaEnPrueba(leerNotaDelTest(m.body))) return null;
+    texto = get("body");
+  }
   else if (tipo === "CALL") {
     titulo = get("title");
     texto = [get("callSummary"), get("body")].filter(Boolean).join("\n");
@@ -619,7 +629,7 @@ export async function llegadasPorElTest(desde: Date, ahora = new Date()): Promis
 
   const delTest = notas.flatMap((n) => {
     const nota = leerNotaDelTest(n.properties.hs_note_body ?? "");
-    return nota ? [{ id: n.id, ts: enMs(n.properties.hs_timestamp) ?? 0, nota }] : [];
+    return nota && !notaDeAreaEnPrueba(nota) ? [{ id: n.id, ts: enMs(n.properties.hs_timestamp) ?? 0, nota }] : [];
   });
   if (delTest.length === 0) return { llegadas: [], sinEmpresa: 0, sinEmpresaPorDominio: [] };
 

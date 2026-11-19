@@ -13,7 +13,7 @@ import { resultadoDelTest } from "./resultado";
 import { resumenSinIa } from "./redaccion";
 import { urlDelResultado } from "./enlace";
 import { notaDelTestSinTerminar, notaDelTestTerminado } from "./nota";
-import { leerPreguntasDelBanco, NO_LO_SE } from "./tipos";
+import { AREA_POR_SLUG, leerPreguntasDelBanco, NO_LO_SE, nombreDelTest, NOMBRE_DEL_AREA, SLUG_POR_AREA } from "./tipos";
 
 const escala = parsearEscala(MINI_ESCALA);
 const area = escala.areas[0];
@@ -50,6 +50,9 @@ describe("el borrador sale de la escala y se revisa antes de aprobar", () => {
     expect(problemasDelBanco(escala, area.id, "web", conCodigo).join(" ")).toMatch(/muestra un código de la escala \(«1\.2\.F1»\)/);
     expect(codigoDeLaEscala("Lo que pide la dimensión (1.3)")).toBe("(1.3)");
     expect(codigoDeLaEscala("El nivel 2.4.E")).toBe("2.4.E");
+    // TI es el área 4 (9.3.0): sus códigos tampoco se muestran.
+    expect(codigoDeLaEscala("Cumple 4.2.F1 a medias")).toBe("4.2.F1");
+    expect(codigoDeLaEscala("La parte (4.7)")).toBe("(4.7)");
     expect(codigoDeLaEscala("Facturan 2.5 millones al año")).toBeNull();
     expect(codigoDeLaEscala("La versión 1.2.0 del sistema")).toBeNull();
     // Al final de una oración, con su punto, también.
@@ -205,5 +208,16 @@ describe("la dirección del resultado la siguen leyendo la preventa y «Llegaron
       total: 4,
     });
     expect(leerNotaDelTest(html)).toMatchObject({ estado: "sinTerminar", areaId: "3", email: "luis@x.co" });
+  });
+});
+
+describe("las áreas del test", () => {
+  it("TI es el área 4 y su página pública es /external/test/ti", () => {
+    expect(AREA_POR_SLUG.ti).toBe("4");
+    expect(SLUG_POR_AREA["4"]).toBe("ti");
+    expect(NOMBRE_DEL_AREA["4"]).toBe("TI");
+    expect(nombreDelTest("4", "web")).toBe("Test web de TI (8 preguntas)");
+    // Cada slug vuelve a su área, y ninguna se repite.
+    for (const [slug, area] of Object.entries(AREA_POR_SLUG)) expect(SLUG_POR_AREA[area]).toBe(slug);
   });
 });

@@ -15551,3 +15551,56 @@ mano se perdía sin aviso en tres caminos.
   (más los escritos a mano), sin marca de cuáles no salen; y lo que dice el documento general de la escala (riesgos, costo,
   prioridades) sigue cambiando para todas las empresas cuando se publica la escala, ahora recién cuando cada una vuelve a
   publicar su página.
+
+## La escala mide también al departamento de TI: un área más, primero solo en La escala (2026-11-19, escala 9.3.0)
+
+**Contexto.** Elías, 18 nov: «hay que hacer un diagnóstico para el departamento de tecnología (no sobre tecnología).
+Esto es un vacío que tiene la escala». En Cemaco Ecuador se habló 65 minutos con TI (sacar datos del sistema central por
+API, juntar la información, la central telefónica, la inversión) y, sin un área de TI, quedó como una tarjeta chica dentro
+de Servicio. Es un mínimo viable en la sección La escala; la preventa y la escala de cada empresa vienen después.
+
+- **TI es el área 4, con el mismo esqueleto que las otras tres.** Ocho dimensiones en dos capas, los cinco niveles, las
+  reglas y el cálculo: `validarEscala` exige las mismas dimensiones por capa en todas las áreas, y el test, el radar, el
+  chequeo y la página de resultado ya funcionan con ese esqueleto. La base conserva sus nombres (Procesos y Rutinas,
+  Tecnología y Automatización, Datos, Equipo y Gobierno) y la producción se llama Servicio al Negocio, Priorización de la
+  Demanda, Adopción de Herramientas y Mejora Continua de TI. Lo que pidió Elías cae así: cómo atiende al negocio → 4.5;
+  integraciones y datos → 4.2 y 4.3; gobierno y seguridad → 4.4; soporte y proyectos → 4.1 (y su orden, 4.6); adopción
+  → 4.7. *Por qué:* un área con otro número de dimensiones rompía la regla que hace comparables a todas.
+- **Mide al departamento, no al stack.** Ningún criterio pide una herramienta; piden lo que TI frena o habilita en un
+  proyecto de CRM: que sepa sacar los datos del sistema central, que cada integración tenga responsable y aviso si falla,
+  qué sistema manda para cada dato, quién entra a cada sistema, y que la gente use lo que se entrega.
+- **Lo que TI habilita en otra área se sigue midiendo en esa área** (regla de asignación nueva): que la ficha traiga lo
+  que el cliente compró es de Servicio o de Ventas; TI mide que lo haga posible. Medir TI no cambia ningún nivel de las
+  otras tres.
+- **Tres riesgos nuevos**, con su mensaje: los accesos de quien se va (`4.4.F3`), el segundo paso para entrar (`4.4.F4`)
+  y el respaldo probado (`4.4.F5`).
+- **Ninguna edición escribe TI todavía: en todas se mide con la escala general.** Lo dice la Parte 5 («un área que la
+  edición no escribe se mide con la escala general»), y por eso la medición de personalización cuenta solo las áreas que
+  cada edición escribe (`celdasDeLaEdicion`). *En espera:* si TI se escribe por industria y en cuáles.
+- **Es la 9.3.0, una versión menor**, porque suma y no cambia: ningún criterio, pregunta, nivel ni identificador de
+  Ventas, Marketing o Servicio cambió (sus bancos del test salen idénticos a los de la 9.2.0, comprobado). Lo ya medido se
+  lee igual: los niveles, los bancos aprobados y las escalas publicadas de cada empresa no se tocan. Los bancos de las
+  otras tres siguen aprobados con la 9.2.0 y dicen «Escala 9.2.0» en Escala › Tests; generar desde ahí solo crea los de
+  TI (nunca pisa uno existente), y `scripts/tests-preguntas.ts --escala 9.3` los volvería a aprobar con las mismas
+  preguntas.
+- **Hasta su migración, TI vive solo en La escala** (`lib/escala/areas-en-prueba.ts`). La escala publicada se lee SIN
+  TI por defecto (`leerEscalaVigente`): la preventa, la escala de la cuenta, el Resumen, los agentes y la documentación
+  la siguen viendo con tres áreas aunque la versión publicada ya traiga cuatro. La piden entera solo la sección La
+  escala, el test público, el editor y quien publica (`conAreasEnPrueba: true`; un escaneo en
+  `lib/escala/areas-en-prueba.test.ts` congela esa lista). Un test de TI no entra a la preventa por ningún camino: ni el
+  guardado en Nexus ni la nota que deja en HubSpot (la preventa, «Llegaron por el test» y los leads del test de Marketing
+  la ignoran; HubSpot sí la recibe). *Por qué al revés (lo nuevo pide entrar):* hay unos 30 lectores de la escala publicada, y uno
+  olvidado habría metido TI en los prompts de la preventa o en la página del cliente. Migrar es sacar el área de la lista,
+  revisando antes cada lector.
+- **El test de TI es `/external/test/ti`**, el mismo test y la misma página de resultado. Se abre solo cuando su banco
+  está aprobado: hasta entonces la tarjeta de la portada dice «Todavía no está abierto». La portada pasa a dos columnas
+  (cuatro tarjetas). Sin casos de uso de TI en el catálogo, la página de resultado no muestra «Lo que haríamos contigo».
+- **Primero el deploy, después publicar la 9.3.0.** La escala publicada se lee sin deploy: con el código de antes, que no
+  sabe esconder TI, la preventa, su guía, el cuestionario del cliente y sus agentes verían el área 4 hasta el deploy.
+- **Cada cosa se pide una vez también en TI** (revisión del 19 nov): avisar antes de un cambio vive en Adopción (`4.7.F4`)
+  y no en Procesos (`4.1.F5` pide solo probarlo); seguir el pedido es de `4.5.F2` y el autoservicio (`4.5.E3`) pide resolver
+  lo simple; y las licencias sin uso las piden Ventas, Marketing y Servicio (`1.2.F9`, `2.2.F2`, `3.2.F9`), así que
+  `4.4.F6` pide solo el inventario con su costo y su responsable.
+- **Pendiente a propósito:** la propiedad de HubSpot para la dirección del resultado de TI (hoy solo `url_ultimo_diag_sales|marketing|service`:
+  la nota sí llega); casos de uso que muevan TI; y la especificación y el manual, que siguen hablando de tres áreas en su
+  prosa sin que cambie el cálculo.

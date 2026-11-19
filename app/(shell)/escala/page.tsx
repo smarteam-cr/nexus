@@ -16,7 +16,7 @@ export default async function Escala() {
   const ctx = await requireInternalUser().catch(() => null);
   if (!ctx) redirect("/clients");
 
-  const vigente = await leerEscalaVigente();
+  const vigente = await leerEscalaVigente({ conAreasEnPrueba: true });
   if (vigente.estado === "ok") redirect(`/escala/${vigente.escala.areas[0].slug}`);
 
   return (
