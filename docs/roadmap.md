@@ -863,43 +863,61 @@
    "commits": [
     "b340fccb"
    ]
+  },
+  {
+   "fecha": "2026-11-19",
+   "iniciativa": "nexus",
+   "titulo": "El diseño Glassy, con 51 pantallas",
+   "que": "Las vistas que faltaban, rediseñadas en el sistema Glassy: propuestas, pipeline, comisiones, toda la escala, tareas, marketing y administración, con clientes inventados.",
+   "paraQuien": "Tú",
+   "prod": "plan",
+   "prodNota": "Es solo diseño: la app no cambió. Quedan cuatro pantallas con piezas resumidas (punto de equilibrio, renovaciones, plantillas por rol y semana del equipo)."
   }
  ],
  "sigue": [
   {
+   "iniciativa": "cronograma",
+   "titulo": "kölbi: sus tres proyectos en un plan general",
+   "que": "Cada loop de SmartLoop es un grupo en el cronograma de su proyecto, el handoff declara los loops y un plan general de la cuenta, editable, lo ve el cliente. Está construido y probado en la base local. Falta verlo con sesión, el cambio de base antes de subir y cargar kölbi con tu sí.",
+   "paraQuien": "Customer Success y kölbi",
+   "estado": "por-hacer",
+   "tema": 10
+  },
+  {
    "iniciativa": "escala",
    "titulo": "El Resumen de La escala, con lo que más pesa",
-   "que": "Salió del caso Cemaco: un titular con el problema principal, «5 puntos clave», las cifras «por confirmar», el peso de cada reunión y un aviso cuando una reunión no se pudo leer bien.",
+   "que": "Salió del caso Cemaco: un titular con el problema principal, «5 puntos clave», las cifras «por confirmar», el peso de cada reunión y un aviso cuando una reunión no se pudo leer bien. Está listo y sube junto con kölbi.",
    "paraQuien": "Ventas y el cliente",
-   "estado": "otra-sesion",
+   "estado": "por-hacer",
    "tema": 5
+  },
+  {
+   "iniciativa": "escala",
+   "titulo": "La escala para el departamento de TI",
+   "que": "Un primer MVP para medir el área de TI (no la tecnología: el departamento). Están listos el formulario, las pruebas y la página del resultado, y sube junto con kölbi. Antes apruebas sus preguntas. Después pasa a la preventa y a clientes.",
+   "preguntaTexto": "¿Apruebas las preguntas del test para el área de TI?",
+   "paraQuien": "Ventas y Customer Success",
+   "estado": "te-toca",
+   "tema": 5
+  },
+  {
+   "iniciativa": "nexus",
+   "titulo": "Que Nexus aprenda de cada corrección",
+   "que": "Sale del marco de «ejecución mecánica». Ya decidiste: las lecciones para todos las aprueban tú o Alex Vanegas, se empieza por el handoff y el cronograma juntos, y Nexus pregunta lo vendido antes de generar. Falta que apruebes el mensaje que espera en ese chat.",
+   "paraQuien": "Customer Success y quien construye Nexus",
+   "estado": "te-toca"
   },
   {
    "iniciativa": "cronograma",
    "titulo": "Lo que falta de «lo vendido» en el cronograma",
-   "que": "Cuatro cambios: elegir o escribir la venta del proyecto, y que Nexus pregunte lo que falta; «Fue un error mío, solo lo corrijo» al cambiar lo acordado; fases en paralelo en el handoff de Desarrollo; y una línea en el Kickoff que diga «sale del handoff».",
+   "que": "Cuatro cambios por decidir: elegir o escribir la venta del proyecto, y que Nexus pregunte lo que falta; «Fue un error mío, solo lo corrijo» al cambiar lo acordado; fases en paralelo en el handoff de Desarrollo; y una línea en el Kickoff que diga «sale del handoff».",
    "paraQuien": "Customer Success",
-   "estado": "por-hacer",
+   "estado": "te-toca",
    "tema": 10,
    "preguntas": [
     31,
     22
    ]
-  },
-  {
-   "iniciativa": "escala",
-   "titulo": "La escala para el departamento de TI",
-   "que": "Un primer MVP para medir el área de TI. Hoy la escala no tiene un área de tecnología: en Cemaco, TI quedó dentro de Servicio.",
-   "paraQuien": "Ventas y Customer Success",
-   "estado": "otra-sesion",
-   "tema": 5
-  },
-  {
-   "iniciativa": "nexus",
-   "titulo": "El marco de «ejecución mecánica» para Nexus",
-   "que": "Un diagnóstico de cómo aplicar ese marco a la forma en que construimos Nexus. Se está planeando antes de tocar nada.",
-   "paraQuien": "Tú y quien construye Nexus",
-   "estado": "otra-sesion"
   },
   {
    "iniciativa": "preventa",
@@ -1099,7 +1117,7 @@
 <!-- El resumen se arma con este bloque. Cómo se regenera: «Cómo se mantiene este roadmap» y la skill regenerar-roadmap. -->
 ```temas
 {
- "dondeVamos": "Desde el 29 oct entraron unos 300 cambios, todos en producción (b340fccb, 18 nov). Lo grande: la preventa y La escala en diez vueltas cada una, los casos de uso con sus actividades, los documentos con varias copias, 28 pedidos de Finanzas y Cobranza en un día, y el cronograma que sale de lo vendido. La línea de tiempo lo muestra en orden.",
+ "dondeVamos": "Desde el 29 oct entraron unos 300 cambios, todos en producción (b340fccb, 18 nov): la preventa y La escala en diez vueltas cada una, los casos de uso con sus actividades, los documentos con varias copias, 28 pedidos de Finanzas y Cobranza, y el cronograma que sale de lo vendido. Lo próximo: subir juntos kölbi, el Resumen de La escala y el área de TI.",
  "temas": [
   {
    "n": 4,
