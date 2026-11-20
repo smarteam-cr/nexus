@@ -150,6 +150,9 @@ function operacionSegura(op: Operacion, antes: EstadoDeExploracion, ahora: Estad
       return igual(ca.contexto, cb.contexto);
     case "contactoPrevio":
       return igual(ca.contactoPrevio, cb.contactoPrevio);
+    case "perdida":
+      // La cuenta se rehace con lo guardado y se compara por su huella: si las cifras cambiaron, la operación falla sola.
+      return igual(ca.perdida, cb.perdida);
     case "comoLlego":
       // K2: se confirma sobre lo que se veía; si otra persona lo confirmó distinto entretanto, se recarga.
       return igual(ca.comoLlego, cb.comoLlego);

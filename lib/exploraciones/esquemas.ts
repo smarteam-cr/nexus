@@ -13,6 +13,8 @@ import { CLAVE_DEL_RESUMEN, TIPOS_DE_PENDIENTE, TOPE_A_MANO, TOPE_DE_LA_CIFRA, T
 import { ESTADOS_DE_LA_CIFRA, ICONOS_DEL_PASO, TIPOS_DEL_NEGOCIO, type TipoDelNegocio } from "@/lib/external/pagina-del-resumen";
 import { CIERRES, DESPUES, type Cierre, type Despues } from "@/lib/escala/documento/tipos";
 import {
+  CAMPOS_DEL_EMBUDO,
+  CAMPOS_DEL_NEGOCIO,
   CANALES_DE_CONEXION,
   CLASES_DE_OBJECION,
   CLAVES_DE_CASILLA,
@@ -23,6 +25,7 @@ import {
   TOPE_DE_LA_LISTA,
   VALORES_DE_APERTURA,
   type Apertura,
+  type Cifras,
   type ClaveDeCasilla,
   type EstrategiaDeConexion,
   type Radiografia,
@@ -163,6 +166,7 @@ import {
 import { MAX_COMO_ESTA, MAX_PREGUNTA_DE_LA_TARJETA, MAX_PREGUNTAS_DE_LA_TARJETA, MAX_TARJETAS, type TarjetasDeLaEscala } from "./tarjetas-de-la-escala";
 import { MAX_ASUNTO_DEL_CORREO, MAX_CUERPO_DEL_CORREO, MAX_DESTINATARIOS } from "./correo-de-seguimiento";
 import { TOPE_DE_LA_DESCRIPCION_A_MANO, type DescripcionGuardada } from "./descripcion-de-la-escala";
+import { MAX_TEXTO_DE_LA_PERDIDA, type PerdidaValidada } from "./perdida";
 import { MAX_TEXTO_DEL_ARCHIVO, MAX_TEXTO_PEGADO, MENSAJE_DE_ARCHIVO_LARGO, MENSAJE_DE_PEGADO_LARGO } from "./minuta-de-la-sesion";
 
 const texto = (max: number) => z.string().trim().max(max);
@@ -238,6 +242,24 @@ export const AperturaSchema: z.ZodType<Apertura> = z.object({
 
 const ItemDeLista = textoLleno(600);
 
+/** Negocio y Embudo (2026-11-20): un texto por campo, solo los que se saben; al menos uno. Un campo de más no entra. */
+export const CifrasSchema: z.ZodType<Cifras> = z
+  .partialRecord(z.enum([...CAMPOS_DEL_NEGOCIO, ...CAMPOS_DEL_EMBUDO]), textoLleno(200))
+  .refine((v) => Object.keys(v).length > 0);
+
+/** La pérdida validada con el cliente (perdida.ts): nunca llega al cliente. */
+export const PerdidaValidadaSchema: z.ZodType<PerdidaValidada> = z.object({
+  montoAlMes: z.number().finite().nonnegative(),
+  moneda: z.string().max(8).nullable(),
+  base: z.enum(["conversion", "negocios", "leads"]),
+  cuenta: textoLleno(MAX_TEXTO_DE_LA_PERDIDA),
+  texto: textoLleno(MAX_TEXTO_DE_LA_PERDIDA),
+  meta: z.string().trim().max(400),
+  huella: z.string().min(1).max(40),
+  validadaEn: z.string().max(40),
+  por: z.string().max(320).nullable(),
+});
+
 /** El esquema del valor ENTERO de una casilla (lo que se guarda). */
 export function esquemaDelValor(tipo: TipoDeCasilla): z.ZodType<unknown> {
   switch (tipo) {
@@ -261,6 +283,8 @@ export function esquemaDelValor(tipo: TipoDeCasilla): z.ZodType<unknown> {
       return RadiografiaSchema;
     case "conexion":
       return EstrategiaDeConexionSchema;
+    case "cifras":
+      return CifrasSchema;
   }
 }
 
@@ -767,6 +791,8 @@ export const OperacionSchema = z.discriminatedUnion("op", [
       .nullable(),
   }),
   z.object({ op: z.literal("contactoPrevio"), valor: ContactoPrevioSchema.nullable() }),
+  // La pérdida calculada, validada con el cliente: la huella de la cuenta que se vio (el servidor la vuelve a hacer). null: se quita.
+  z.object({ op: z.literal("perdida"), huella: z.string().min(1).max(40).nullable() }),
   z.object({ op: z.literal("descartarAsociacion"), claves: z.array(CLAVE_DE_REUNION).min(1).max(20) }),
   z.object({
     op: z.literal("correo"),
@@ -1195,6 +1221,8 @@ export function leerContenido(raw: unknown): ContenidoDeExploracion {
   }
   const previo = ContactoPrevioSchema.safeParse(raw.contactoPrevio);
   if (previo.success) c.contactoPrevio = previo.data;
+  const perdida = PerdidaValidadaSchema.safeParse(raw.perdida);
+  if (perdida.success) c.perdida = perdida.data;
   if (Array.isArray(raw.asociacionesDescartadas)) {
     c.asociacionesDescartadas = raw.asociacionesDescartadas
       .filter((k): k is string => typeof k === "string" && CLAVE_DE_REUNION.safeParse(k).success)

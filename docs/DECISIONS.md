@@ -15551,3 +15551,49 @@ mano se perdía sin aviso en tres caminos.
   (más los escritos a mano), sin marca de cuáles no salen; y lo que dice el documento general de la escala (riesgos, costo,
   prioridades) sigue cambiando para todas las empresas cuando se publica la escala, ahora recién cuando cada una vuelve a
   publicar su página.
+
+## La preventa vende por resultados: Negocio, Embudo, cuánto pierde, «Lo que falta saber» y las objeciones (2026-11-20)
+
+Ventas pidió poder calcular cuánto pierde el cliente; para eso hay que entender cómo gana dinero y cómo convierte. Elías
+decidió las cuatro dudas el 20 nov. Solo el marco `venta`: el de Customer Success no cambia.
+
+- **Negocio y Embudo son dos tarjetas más del marco** (`CASILLAS_DEL_RESUMEN`, tipo `cifras`: un texto por campo con su
+  número y su unidad, `CAMPOS_DE_LA_TARJETA`). Internas como el presupuesto (`alCliente: false`). Lo que propone el agente
+  SUMA campos a los que ya hay (`contenido.ts`): una sesión trae el ticket y otra los leads. El agente las propone solo
+  con cita del cliente (`exigeCita`) y solo los campos con número.
+- **Completas «con lo mínimo»** (`estado-de-las-tarjetas.ts`): lo que alcanza para la cuenta. Negocio, dos de volumen,
+  ticket y clientes; Embudo, leads y conversión. Lo demás suma pero no frena; con menos, a medias con el motivo.
+- **«Qué pasa si no actúa» completa solo con su cifra**, o con la pérdida validada. Quién dice la cifra (regla del prompt
+  del agente que lee la reunión): vale la del cliente; la del vendedor si el cliente no la corrige; si la corrige, la
+  corregida. Por eso el prompt ya no prohíbe dinero en `consecuencias` (es la única casilla que ve el cliente con esa
+  excepción): la cifra que dijo el cliente llega a la propuesta como antes llegaba lo que escribía el vendedor a mano.
+- **La pérdida la calcula el código, no el modelo** (`perdida.ts`), con la cuenta a la vista. La brecha SIEMPRE sale de
+  una meta del cliente de cuánto a cuánto (conversión, negocios o leads): sin meta no hay cuenta, nunca una mejora
+  supuesta (la misma regla de «sin pista del cliente no hay nivel»). No se cuentan: una meta que baja, una en plata
+  (con moneda, o «de 100 mil a 150 mil» sin decir negocios), ni una tasa que no habla de vender (retención, uso de
+  HubSpot: la revisión vio «US$ 100.000 al mes» salidos de ahí). La cuenta multiplica los mismos valores redondeados que
+  muestra, y el período de cada cifra es el de su primer número («200 al mes, unos 2.400 al año» es al mes).
+- **⛔ La pérdida no llega a nada que vea el cliente** (Elías): vive en `contenido.perdida`, NO es una casilla, y
+  `para-la-propuesta.ts` no la lee (`negocio-y-embudo.test.ts`). Se valida con «Validada con el cliente» (la operación
+  `perdida` manda la huella de la cuenta que se vio y el servidor la rehace: si las cifras cambiaron, no se guarda). La
+  ve el CSE en lo interno (`internoParaElCse`). La sección de «costo de mala calidad» nace cuando se rediseñe la
+  propuesta, desde ahí. Por la misma regla, el agente no propone en «Qué pasa si no actúa» un texto con el mismo monto
+  de la pérdida (la reunión en que se validó la repetiría): ya está guardada aparte. Si Elías decide que una pérdida
+  validada puede ir a la propuesta, es quitar ese filtro (`repiteLaPerdida`, agente-pedido.ts) cuando se rediseñe. Negocio
+  y Embudo tampoco van al correo de seguimiento (`PARA_INTERNO`).
+- **«Lista para proponer» suma solo la cifra de «Qué pasa»** (Elías). Negocio y Embudo no son un punto: son el camino a
+  esa cifra.
+- **En la guía, Negocio y Embudo entran de relleno** (`plan-de-la-guia.ts`, antes de planes): ponerlos entre lo
+  necesario cambiaba los planes ya validados (Larce y otros) y sacaba quién firma de la primera sesión. Lo que la guía
+  no pregunta lo suma «Lo que falta saber». Con la pérdida validada, el plan no vuelve a pedir «Qué pasa si no actúa»;
+  las cifras confirmadas van en «lo que ya está confirmado» del pedido de la guía; y una propuesta nueva de Negocio o
+  Embudo suma la pendiente sin usar de antes (`fusionarPropuestas`), no la borra.
+- **«Lo que falta saber»: lista arriba, bloques abajo** (`lo-que-falta-saber.ts`, Elías). En «En vivo», arriba de los
+  bloques, todo lo que hay que averiguar agrupado por tema (sin tema, por su bloque), con las MISMAS marcas `av:<huella>`
+  de los bloques. Nexus suma las cifras mínimas de Negocio y Embudo que falten y «Validar con el cliente: pierden ~US$ X
+  al mes» cuando hay cuenta sin validar. Los bloques no cambian.
+- **Las objeciones en el análisis de cada reunión** (`leerObjeciones`, `analisis.ts`): cada una con la frase del CLIENTE
+  verificada, su clase (las de la tarjeta «Objeciones», `CLASES_DE_OBJECION`), cómo se manejó y LAER. «Bien manejada»
+  sin una respuesta del vendedor que esté queda «sin manejar». Viaja en el criterio (`objecionesEnElCriterio`), no en
+  el prompt de la base: no se re-siembra. `VERSION_DEL_CRITERIO` = 2026-11-20. Se suma la objeción común «No quiere dar
+  cifras», que se responde con el cálculo hacia atrás desde su meta.

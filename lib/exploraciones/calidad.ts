@@ -13,7 +13,7 @@
 import type { ResultadoDelChequeo } from "@/lib/escala/chequeo";
 import { estaDebajo } from "@/lib/escala/chequeo";
 import { metaEnCifras } from "./casillas";
-import { conAlgoQueSirve } from "./estado-de-las-tarjetas";
+import { conAlgoQueSirve, consecuenciaConCifra } from "./estado-de-las-tarjetas";
 import { esFuenteDeHipotesis, esHipotesisDeNivel, propuestaVigente, type EstadoDeExploracion } from "./contenido";
 import { diaCorto, hoyEnCostaRica } from "./fechas";
 import { avisoDeLasSesiones, type PestanaDeSesion } from "./guia";
@@ -62,7 +62,14 @@ export function listaParaProponer(estado: EstadoDeExploracion, chequeo: Resultad
     { id: "tiempos", titulo: "Para cuándo lo necesita", corto: "Para cuándo", cumplido: conAlgoQueSirve(c.tiempos) },
     { id: "presupuesto", titulo: "El presupuesto o contra qué lo compara", corto: "Presupuesto", cumplido: conAlgoQueSirve(c.presupuesto) },
     { id: "autoridad", titulo: "Quién firma", corto: "Quién firma", cumplido: (c.autoridad ?? []).some((p) => p.rol === "firma") },
-    { id: "consecuencia", titulo: "Qué pasa si no actúa", corto: "Qué pasa si no actúa", cumplido: (c.consecuencias ?? []).length > 0 },
+    /* 2026-11-20 (Elías, vender por resultados): con su CIFRA, dicha por el cliente o la pérdida que calculó Nexus validada
+       con él. Negocio y Embudo no entran a esta lista: son el camino a esa cifra, no un punto más. */
+    {
+      id: "consecuencia",
+      titulo: "Qué pasa si no actúa, con su cifra",
+      corto: "Qué pasa, con cifra",
+      cumplido: consecuenciaConCifra(c.consecuencias) || !!estado.contenido.perdida,
+    },
     { id: "siguientePaso", titulo: "Siguiente paso con fecha", corto: "Siguiente paso con fecha", cumplido: siguientePasoVigente(c.siguientePaso, hoy) },
   ];
 }
@@ -161,7 +168,7 @@ export function queSigueConPaso(
     return { texto: viejo ? `El siguiente paso era del ${diaCorto(viejo)} y ya pasó: agenda el próximo, con fecha.` : "Agenda el siguiente paso, con fecha.", paso: "exploracion" };
   }
   if (falta("autoridad")) return { texto: "Falta saber quién firma.", paso: null };
-  if (falta("consecuencia")) return { texto: "Falta qué pasa si no actúa.", paso: null };
+  if (falta("consecuencia")) return { texto: "Falta qué pasa si no actúa, con su cifra: cuánto les cuesta quedarse como están.", paso: null };
   if (falta("tiempos")) return { texto: "Falta para cuándo lo necesita.", paso: null };
   if (falta("presupuesto")) return { texto: "Falta el presupuesto, o contra qué lo va a comparar.", paso: null };
   return { texto: "Lista para proponer el land: elige los casos de uso y arma la propuesta.", paso: "casos" };

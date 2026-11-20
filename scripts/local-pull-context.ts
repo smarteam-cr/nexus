@@ -202,7 +202,13 @@ async function main() {
       const proyectos = await origen.prisma.project.findMany({
         where: projectId ? { id: projectId, clientId: cliente.id } : { clientId: cliente.id },
       });
-      if (proyectos.length === 0) {
+      /* 2026-11-20: también las reuniones del cliente que no cuelgan de ningún proyecto. Un PROSPECTO no tiene proyecto
+         de Customer Success: sus reuniones de venta solo se encuentran por su dueño (`resolvedClientId`, invariante #1),
+         y sin ellas la preventa local no tiene nada que leer. Con `--project` se trae solo lo de ese proyecto, como antes. */
+      const propias = projectId
+        ? []
+        : await origen.prisma.firefliesSession.findMany({ where: { resolvedClientId: cliente.id }, select: { id: true } });
+      if (proyectos.length === 0 && propias.length === 0) {
         // Con UN cliente pedido a dedo es un error (pediste algo que no se puede traer);
         // en un lote es ruido esperable — se informa y el resto sigue.
         if (clientes.length === 1) {
@@ -217,10 +223,10 @@ async function main() {
         continue;
       }
 
-      const sessionProjects = await origen.prisma.sessionProject.findMany({
+      const sessionProjects = proyectos.length === 0 ? [] : await origen.prisma.sessionProject.findMany({
         where: { projectId: { in: proyectos.map((p) => p.id) } },
       });
-      const sessionIds = [...new Set(sessionProjects.map((sp) => sp.sessionId))];
+      const sessionIds = [...new Set([...sessionProjects.map((sp) => sp.sessionId), ...propias.map((s) => s.id)])];
       const sesiones = sessionIds.length
         ? await origen.prisma.firefliesSession.findMany({ where: { id: { in: sessionIds } } })
         : [];

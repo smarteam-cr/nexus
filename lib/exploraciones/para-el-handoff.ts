@@ -22,6 +22,7 @@ import {
   ETIQUETA_DEL_CANAL,
   ETIQUETA_DEL_MODELO,
   ETIQUETA_DEL_ROL,
+  lineasDeLasCifras,
   type Apertura,
   type ClaveDeCasilla,
   type EstrategiaDeConexion,
@@ -75,6 +76,9 @@ function valorComoTexto(clave: ClaveDeCasilla, v: unknown, nombreDim: (id: strin
       const a = v as Apertura;
       return [`${APERTURA[a.valor]}${a.porQue ? ` — ${a.porQue}` : ""}`];
     }
+    case "negocio":
+    case "embudo":
+      return lineasDeLasCifras(clave, v);
     default:
       return Array.isArray(v) ? (v as string[]) : [String(v)];
   }
@@ -169,9 +173,12 @@ export function bloqueParaElHandoff(o: { estado: EstadoDeExploracion; escala: Es
  */
 export function internoParaElCse(estado: EstadoDeExploracion, escala: EscalaDelLienzo): { etiqueta: string; lineas: string[] }[] {
   const nombreDim = nombreDeDimension(escala);
-  return CASILLAS.filter((def) => !def.alCliente && estado.contenido.casillas[def.clave] !== undefined)
+  const casillas = CASILLAS.filter((def) => !def.alCliente && estado.contenido.casillas[def.clave] !== undefined)
     .map((def) => ({ etiqueta: def.etiqueta, lineas: valorComoTexto(def.clave, estado.contenido.casillas[def.clave], nombreDim) }))
     .filter((x) => x.lineas.length > 0);
+  // La pérdida validada con el cliente (2026-11-20): interna, con su cuenta. Solo la ve el CSE.
+  const p = estado.contenido.perdida;
+  return p ? [...casillas, { etiqueta: "Cuánto pierde, validado con el cliente", lineas: [p.texto, `La cuenta: ${p.cuenta}`] }] : casillas;
 }
 
 function nombreDeDimension(escala: EscalaDelLienzo): (id: string) => string | null {

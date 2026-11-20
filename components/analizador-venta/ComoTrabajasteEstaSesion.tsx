@@ -21,7 +21,9 @@ import { Alert, Button, Field, Textarea, useToast } from "@/components/ui";
 import { BotonTexto } from "@/components/ui/sistema";
 import { cn } from "@/lib/cn";
 import { equipoDeLaDimension, loDeLaSesion, loQueFaltaExplorar, MAX_LETRAS_DE_LA_NOTA, type LoDeLaSesion, type LoQueFaltaExplorar } from "@/lib/analizador-venta/revision";
-import { TEXTO_DEL_HUECO, TEXTO_DEL_VALOR, type Cita, type CifraDicha, type Juicio, type Observacion } from "@/lib/analizador-venta/analisis";
+import { TEXTO_DEL_HUECO, TEXTO_DEL_MANEJO, TEXTO_DEL_VALOR, type Cita, type CifraDicha, type Juicio, type ObjecionDeLaReunion, type Observacion } from "@/lib/analizador-venta/analisis";
+import { ETIQUETA_DE_LA_OBJECION } from "@/lib/exploraciones/casillas";
+import { PASOS_LAER } from "@/lib/exploraciones/objeciones-comunes";
 import type { ReunionDeVentaVista } from "@/lib/analizador-venta/reuniones-de-venta-server";
 import type { PestanaDeSesion } from "@/lib/exploraciones/guia";
 import { useLienzo } from "@/components/exploraciones/contexto";
@@ -178,6 +180,7 @@ function ElAnalisis({ vista, pestana, puedeEditar }: { vista: ReunionDeVentaVist
           )}
 
           <BienYParaMejorar bien={lo.bien} mejorar={lo.recomendaciones} />
+          {lo.objeciones && <LasObjeciones objeciones={lo.objeciones} />}
           {falta && <LoQueFalta lo={lo} falta={falta} delCliente={delCliente} />}
           {/* «El resultado que busca» a la vista siempre, con su lectura y su cita (8 nov, Elías: estaba solo como etiqueta y
               su porqué había bajado a «Ver el análisis completo»). Los números, debajo, si los hay. */}
@@ -413,6 +416,54 @@ function LosNumeros({ lo }: { lo: LoDeLaSesion }) {
           </tbody>
         </table>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Las objeciones del cliente (2026-11-20): cada una con su frase, cómo se manejó (con la respuesta del vendedor, si la
+ * hubo) y cómo manejarla con LAER la próxima vez. Las clases son las de la tarjeta «Objeciones» de la preventa. Un
+ * análisis de antes no las trae: no se muestra. Sin objeciones, una línea.
+ */
+function LasObjeciones({ objeciones }: { objeciones: readonly ObjecionDeLaReunion[] }) {
+  return (
+    <div className="space-y-1.5">
+      <Subtitulo>Las objeciones</Subtitulo>
+      {objeciones.length === 0 ? (
+        <p className="text-[13px] text-fg-muted">No hay objeciones del cliente con su frase en la transcripción: o no las puso, o no se encontró la frase que las respalda.</p>
+      ) : (
+        <ul className="divide-y divide-line">
+          {objeciones.map((o, i) => (
+            <li key={i} className="grid gap-x-4 gap-y-1 py-2.5 sm:grid-cols-[minmax(0,13rem)_minmax(0,1fr)]">
+              <div className="min-w-0 space-y-1">
+                <p className="text-[13px] font-semibold leading-[18px] text-fg">
+                  {o.texto}
+                  <span className="font-normal text-fg-muted"> · {ETIQUETA_DE_LA_OBJECION[o.clase]}</span>
+                </p>
+                <span className={cn("inline-flex rounded-full px-2 py-0.5 text-[11px] font-semibold", TONO[o.manejo === "bien" ? "info" : o.manejo === "en_parte" ? "neutro" : "aviso"])}>
+                  {TEXTO_DEL_MANEJO[o.manejo]}
+                </span>
+              </div>
+              <div className="min-w-0 space-y-1.5">
+                <Citas citas={[o.cita]} />
+                {o.comoSeManejo && <p className="text-[12.5px] leading-[18px] text-fg-secondary">{o.comoSeManejo}</p>}
+                {o.respuesta && <Citas citas={[o.respuesta]} />}
+                <div className="rounded-lg bg-surface-muted px-3 py-2">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-fg-muted">La próxima vez, con LAER</p>
+                  <dl className="mt-1 space-y-0.5 text-[12.5px] leading-[18px]">
+                    {PASOS_LAER.map((p) => (
+                      <div key={p.clave} className="flex gap-2">
+                        <dt className="w-[5.5rem] flex-none font-semibold text-fg">{p.nombre}</dt>
+                        <dd className="min-w-0 text-fg-secondary">{o.laer[p.clave]}</dd>
+                      </div>
+                    ))}
+                  </dl>
+                </div>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }

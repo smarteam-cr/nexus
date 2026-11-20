@@ -30,9 +30,10 @@ export const MAX_PREGUNTAS_EN_EL_CORREO = 4;
 
 /**
  * Lo que se habla en la reunión pero no se le escribe al cliente: el presupuesto y quién decide (lo
- * interno de la exploración, como en la propuesta). Una pregunta que apunta acá no va al correo.
+ * interno de la exploración, como en la propuesta). Una pregunta que apunta acá no va al correo. Negocio y Embudo
+ * (2026-11-20) también: son internas, y el ticket o los leads no se le repiten por escrito.
  */
-const PARA_INTERNO: ReadonlySet<string> = new Set(["presupuesto", "autoridad", "objeciones", "particularidades", "hipotesis", "apertura"]);
+const PARA_INTERNO: ReadonlySet<string> = new Set(["presupuesto", "autoridad", "objeciones", "particularidades", "hipotesis", "apertura", "negocio", "embudo"]);
 
 export function esParaInterno(para: string | undefined | null): boolean {
   return !!para && PARA_INTERNO.has(para);

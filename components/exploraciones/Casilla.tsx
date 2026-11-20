@@ -11,9 +11,11 @@ import { useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Badge, Button, Field, Input, Segmentado, Select, Textarea } from "@/components/ui";
 import {
+  CAMPOS_DE_LA_TARJETA,
   CANALES_DE_CONEXION,
   CLASES_DE_OBJECION,
   definicionDe,
+  esDeCifras,
   ETIQUETA_DEL_CANAL,
   ETIQUETA_DEL_MODELO,
   MODELOS_DE_NEGOCIO,
@@ -24,6 +26,7 @@ import {
   ROLES_EN_LA_DECISION,
   separarOrigen,
   type Apertura,
+  type Cifras,
   type ClaveDeCasilla,
   type EstrategiaDeConexion,
   type Hito,
@@ -38,6 +41,7 @@ import {
 import { cn } from "@/lib/cn";
 import { useLienzo } from "./contexto";
 import { Propuestas } from "./Propuestas";
+import { PerdidaCalculada } from "./PerdidaCalculada";
 import { definicionEnElMarco } from "@/lib/exploraciones/marco";
 
 const APERTURA: { clave: Apertura["valor"]; etiqueta: string }[] = [
@@ -120,6 +124,26 @@ function VistaDeConexion({ e }: { e: EstrategiaDeConexion }) {
         {copiado ? "Copiado" : "Copiar el mensaje"}
       </Button>
     </div>
+  );
+}
+
+/**
+ * Negocio o Embudo (2026-11-20): cada campo con su cifra, y los que faltan a la vista («Sin dato»): así se ve de un
+ * vistazo qué preguntar para poder calcular cuánto pierde.
+ */
+function VistaDeCifras({ clave, valor }: { clave: "negocio" | "embudo"; valor: Cifras }) {
+  return (
+    <dl className="grid gap-x-4 gap-y-1.5 text-sm sm:grid-cols-[minmax(0,11rem)_minmax(0,1fr)]">
+      {CAMPOS_DE_LA_TARJETA[clave].map((c) => {
+        const t = valor[c.clave]?.trim();
+        return (
+          <div key={c.clave} className="contents">
+            <dt className="text-fg-muted">{c.etiqueta}</dt>
+            <dd className={t ? "font-medium text-fg" : "text-fg-muted"}>{t || "Sin dato"}</dd>
+          </div>
+        );
+      })}
+    </dl>
   );
 }
 
@@ -230,6 +254,8 @@ export function Vista({ clave, valor }: { clave: ClaveDeCasilla; valor: unknown 
       return <VistaDeRadiografia r={valor as Radiografia} />;
     case "conexion":
       return <VistaDeConexion e={valor as EstrategiaDeConexion} />;
+    case "cifras":
+      return esDeCifras(clave) ? <VistaDeCifras clave={clave} valor={valor as Cifras} /> : null;
     case "apertura": {
       const a = valor as Apertura;
       return (
@@ -659,6 +685,19 @@ function Editor({ clave, borrador, setBorrador }: { clave: ClaveDeCasilla; borra
         </div>
       );
     }
+    case "cifras": {
+      if (!esDeCifras(clave)) return null;
+      const v = (borrador as Cifras) ?? {};
+      return (
+        <div className="grid gap-3 sm:grid-cols-2">
+          {CAMPOS_DE_LA_TARJETA[clave].map((c) => (
+            <Field key={c.clave} label={c.etiqueta} hint={c.ayuda}>
+              <Input value={v[c.clave] ?? ""} onChange={(e) => setBorrador({ ...v, [c.clave]: e.target.value })} placeholder={c.ejemplo} />
+            </Field>
+          ))}
+        </div>
+      );
+    }
     case "apertura": {
       const a = (borrador as Apertura) ?? null;
       return (
@@ -710,6 +749,14 @@ function limpiar(clave: ClaveDeCasilla, v: unknown): unknown {
     case "conexion": {
       const c = v as EstrategiaDeConexion | undefined;
       return c && c.pitch?.trim() && c.mensaje?.trim() ? sinVacios(c) : undefined;
+    }
+    case "cifras": {
+      const limpias = Object.fromEntries(
+        Object.entries((v as Cifras) ?? {})
+          .map(([k, x]) => [k, typeof x === "string" ? x.trim() : ""])
+          .filter(([, x]) => x),
+      ) as Cifras;
+      return Object.keys(limpias).length ? limpias : undefined;
     }
   }
 }
@@ -840,6 +887,9 @@ export function Casilla({
       ) : (
         <p className="text-sm text-fg-muted">Sin completar.</p>
       )}
+
+      {/* 2026-11-20: cuánto pierde el cliente, calculado con Negocio y Embudo (solo la preventa, solo en «Qué pasa»). */}
+      {clave === "consecuencias" && <PerdidaCalculada />}
 
       {/* K12: con lo usado hoy en esta casilla, para revertirlo (y «No quedan» al usar la última). */}
       <div className="space-y-2">

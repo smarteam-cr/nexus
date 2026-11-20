@@ -170,7 +170,8 @@ describe("qué cubre la guía", () => {
     expect(todo.huecos).toEqual(PRIORIDAD_DE_LAS_TARJETAS.slice(0, 5));
     expect(todo.enfoque).toHaveLength(3);
     const casiLleno = focoDeLaGuia({ metas: [{ que: "x" }], retos: [{ texto: "y" }], consecuencias: ["z"], autoridad: [{ nombre: "A", rol: "firma" }], tiempos: ["t"], implicaciones: ["i"] }, ESCALA, ["1"], {}, {});
-    expect(casiLleno.huecos).toEqual(["planes", "presupuesto"]);
+    // Negocio y Embudo (2026-11-20) entran a la lista de lo que falta, después de quién decide y para cuándo.
+    expect(casiLleno.huecos).toEqual(["negocio", "embudo", "planes", "presupuesto"]);
     expect(casiLleno.enfoque).toHaveLength(4);
   });
 

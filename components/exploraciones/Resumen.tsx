@@ -30,7 +30,9 @@ import {
   CASILLAS_DE_LAS_REUNIONES,
   CASILLAS_DEL_RESUMEN,
   definicionDe,
+  esDeCifras,
   ETIQUETA_DEL_ROL,
+  lineasDeLasCifras,
   type ClaveDeCasilla,
   type Meta,
   type Persona,
@@ -60,6 +62,8 @@ export const LETRA_DEL_MARCO: Record<(typeof CASILLAS_DEL_RESUMEN)[number], { le
   autoridad: { letra: "A", marco: "Authority" },
   consecuencias: { letra: "C", marco: "Consequences" },
   implicaciones: { letra: "I", marco: "Implications" },
+  negocio: { letra: "N", marco: "Negocio: cómo gana dinero" },
+  embudo: { letra: "E", marco: "Embudo: cómo convierte" },
 };
 
 /**
@@ -89,6 +93,8 @@ export function lineasDe(clave: ClaveDeCasilla, valor: unknown): string[] {
       return porEquipo(valor as Reto[], (r) => r.texto);
     case "autoridad":
       return (valor as Persona[]).map((p) => `${p.nombre} · ${ETIQUETA_DEL_ROL[p.rol]}`);
+    case "cifras":
+      return esDeCifras(clave) ? lineasDeLasCifras(clave, valor) : [];
     default:
       return [];
   }
@@ -178,6 +184,8 @@ const BLOQUES: { titulo: string; claves: (typeof CASILLAS_DEL_RESUMEN)[number][]
   { titulo: "El objetivo", claves: ["metas", "planes", "retos", "tiempos"] },
   { titulo: "Quién y con qué", claves: ["presupuesto", "autoridad"] },
   { titulo: "Lo que está en juego", claves: ["consecuencias", "implicaciones"] },
+  // 2026-11-20 (Ventas): con estas cifras Nexus calcula cuánto pierde, y lo propone en «Qué pasa si no actúa».
+  { titulo: "Cómo gana y cómo convierte", claves: ["negocio", "embudo"] },
 ];
 
 /** La última reunión se puso técnica: de qué se habló, la frase y qué conviene hacer. */

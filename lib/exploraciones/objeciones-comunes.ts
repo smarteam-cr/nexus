@@ -64,6 +64,17 @@ const OTRAS: readonly ObjecionComun[] = [
     explorar: "¿Lo intentaron antes? ¿Qué quedó a medias? ¿Qué deja de hacer esa persona mientras tanto?",
     responder: "Compara contra su meta y su plazo: cuánto tardarían solos contra cuánto les cuesta cada mes sin resolverlo.",
   },
+  /* 2026-11-20 (sesión con Ventas): para calcular cuánto pierde hay que preguntarle por su ticket, sus leads y su
+     conversión, y a veces no quiere decirlo. La respuesta es el cálculo hacia atrás desde su meta. */
+  {
+    clase: "cifras",
+    dice: "«¿Para qué quieres saber mi ticket promedio?»",
+    escuchar: "Deja que termine y pregunta qué le preocupa de compartirlo. No insistas todavía.",
+    reconocer: "Es normal cuidar esos números; no los necesitamos exactos.",
+    explorar: "¿Te sirve si lo vemos con rangos? ¿A qué meta de ventas quieren llegar este año?",
+    responder:
+      "Explica el cálculo hacia atrás: si quieres llegar a tal meta y conviertes a tal tasa, necesitas tantos negocios, tantas oportunidades y tantos leads. Sin tus cifras no podemos hacer ese cálculo, y sin él no sabemos qué resolver primero.",
+  },
 ];
 
 /** Las objeciones más comunes: las cuatro de la guía y las otras que aparecen seguido. */

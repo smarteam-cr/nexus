@@ -31,12 +31,12 @@
  * respondido cuenta como preguntado (`pasosRespondidos`), igual que lo marcado hecho en «En vivo».
  */
 import { LETRAS } from "@/lib/escala/documento/tipos";
-import { metaEnCifras, type ClaveDeCasilla, type Meta, type Persona } from "./casillas";
+import { metaEnCifras, type Cifras, type ClaveDeCasilla, type Meta, type Persona } from "./casillas";
 import type { EscalaDelLienzo } from "./escala-del-lienzo";
 import type { ClaveDeMarco } from "./marco";
 import type { ContextoDelPlan, GuiaDeLaSesion, PosicionParaLaGuia, SesionPlaneada } from "./guia";
 import type { EstadoDeExploracion, LecturaDeReunion } from "./contenido";
-import { conAlgoQueSirve } from "./estado-de-las-tarjetas";
+import { conAlgoQueSirve, consecuenciaConCifra, faltaEnElEmbudo, faltaEnElNegocio } from "./estado-de-las-tarjetas";
 import { sesionDeLaLectura } from "./sesion-de-la-lectura";
 import { EQUIPOS, equiposQueNombra, leerTemaDeEquipo, TEMA_DE_SISTEMAS_DE_LA_EMPRESA, temaDeEquipo, type ClaveDeEquipo } from "./equipos";
 import { abreLaPuerta, PREGUNTAS_DE_ABRIR_LA_PUERTA } from "./como-llego";
@@ -72,6 +72,9 @@ const PASO_DE_LA_TARJETA: Partial<Record<ClaveDeCasilla, PasoDeLaPregunta>> = {
   tiempos: "cuando",
   autoridad: "conQue",
   presupuesto: "conQue",
+  // 2026-11-20: las cifras de cómo gana dinero y cómo convierte son las de «cuánto le cuesta».
+  negocio: "impacto",
+  embudo: "impacto",
 };
 
 export interface PreguntaPlaneada {
@@ -108,6 +111,8 @@ export interface EntradaDelPlan {
    * pocas preguntas abiertas para el final (qué le pasa, adónde quiere llegar), después de presentar y de escuchar.
    */
   abrirLaPuerta?: boolean;
+  /** 2026-11-20: hay una pérdida validada con el cliente (perdida.ts): cuenta como la cifra de «qué pasa si no actúa». */
+  perdidaValidada?: boolean;
 }
 
 const vacia = (v: unknown) => v === undefined || v === null || v === "" || (Array.isArray(v) && v.length === 0);
@@ -120,6 +125,10 @@ export function faltaLaTarjeta(clave: ClaveDeCasilla, casillas: Partial<Record<C
   const v = casillas[clave];
   if (clave === "metas") return !((v as Meta[] | undefined) ?? []).some(metaEnCifras);
   if (clave === "autoridad") return !((v as Persona[] | undefined) ?? []).some((p) => p?.rol === "firma");
+  // 2026-11-20: «con lo mínimo» para la cuenta de la pérdida; y «qué pasa si no actúa», con su cifra.
+  if (clave === "negocio") return faltaEnElNegocio(v as Cifras | undefined) !== null;
+  if (clave === "embudo") return faltaEnElEmbudo(v as Cifras | undefined) !== null;
+  if (clave === "consecuencias") return !consecuenciaConCifra(v);
   return vacia(v) || !conAlgoQueSirve(v);
 }
 
@@ -281,6 +290,7 @@ export function contextoDelPlan(o: EntradaDelSaber & { sesionId: string | null; 
     ...(equipo ? { equipo } : {}),
     ...(tecnica ? { tecnica } : {}),
     ...(abrirLaPuerta ? { abrirLaPuerta } : {}),
+    ...(o.estado.contenido.perdida ? { perdidaValidada: true } : {}),
   };
 }
 
@@ -360,7 +370,8 @@ export function planDeLaGuia(o: EntradaDelPlan): PreguntaPlaneada[] {
     .map((d): PreguntaPlaneada => ({ para: d.id, tipo: "dimension", paso: "situacion", motivo: null }));
 
   const tarjeta = (clave: ClaveDeCasilla): PreguntaPlaneada => ({ para: clave, tipo: "tarjeta", paso: PASO_DE_LA_TARJETA[clave] ?? "situacion", motivo: null });
-  const falta = (clave: ClaveDeCasilla) => faltaLaTarjeta(clave, o.casillas);
+  // La pérdida validada con el cliente ya es la cifra de «qué pasa si no actúa» (2026-11-20): no se vuelve a preguntar.
+  const falta = (clave: ClaveDeCasilla) => !(clave === "consecuencias" && o.perdidaValidada) && faltaLaTarjeta(clave, o.casillas);
 
   // Lo que viene de una sesión cortada, si todavía falta.
   const pasaron: PreguntaPlaneada[] = (o.pasaron ?? []).flatMap((para) => {
@@ -407,6 +418,11 @@ export function planDeLaGuia(o: EntradaDelPlan): PreguntaPlaneada[] {
   ];
   const relleno: PreguntaPlaneada[] = cs ? [...sistemas, ...dolores.slice(MAX_DOLORES), ...sinDato] : [
     ...dolores.slice(MAX_DOLORES),
+    /* 2026-11-20 (Ventas): las cifras de cómo gana dinero y cómo convierte, para calcular cuánto pierde. Entran con lugar,
+       primero del relleno; si no entran, «Lo que falta saber» de «En vivo» las suma igual (lo-que-falta-saber.ts): así la
+       prioridad de lo que falta para proponer no cambia. */
+    ...(falta("negocio") ? [tarjeta("negocio")] : []),
+    ...(falta("embudo") ? [tarjeta("embudo")] : []),
     ...(falta("planes") ? [tarjeta("planes")] : []),
     ...(falta("implicaciones") ? [tarjeta("implicaciones")] : []),
     ...sinDato,
