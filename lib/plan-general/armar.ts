@@ -161,7 +161,7 @@ export function unirParaElCliente(cronogramas: readonly CronogramaDelCliente[]):
     ordenadas.forEach((f, i) => {
       const loop = c.loops.get(f.id);
       if (loop == null) return;
-      fases.push({ loop, proyecto: c.proyectoNombre ?? "", fase: { ...f, name: rotuloDelLoop(loop, f.name), startWeek: rangos[i].start + corre } });
+      fases.push({ loop, proyecto: c.proyectoNombre ?? "", fase: { ...f, name: rotuloDelLoop(loop, f.name), startWeek: rangos[i].start + corre, loopNumero: loop } });
     });
   }
   // El mismo orden que la vista del equipo (armarPlanGeneral): por loop y, a igual número, por proyecto.

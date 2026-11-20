@@ -136,6 +136,7 @@ import DatePickerField from "@/components/ui/DatePickerField";
 import { useIrALaCasilla } from "@/components/canvas/useIrALaCasilla";
 import { hayPendienteDeSubir } from "@/lib/timeline/pendiente-de-subir";
 import { useChatDeSeccion } from "@/components/asistente/chat-de-seccion";
+import { colorDeLaSemana, pintaPorTareas, tareasDeLaSemana } from "@/lib/timeline/semanas-del-loop";
 
 // ── Tipos (estado de trabajo del padre — key estable, id solo si está persistida) ──
 
@@ -1003,7 +1004,7 @@ export default function TimelineGantt({
      Fusionarlas de verdad (mover tareas, re-apuntar particularidades, borrar la fase) va por
      scripts/fusionar-fases-cronograma.ts, con dry-run: es una decisión humana. */
   const repetidas = useMemo(
-    () => fasesProbablementeRepetidas(phases.filter((p) => p.id).map((p) => ({ id: p.id!, name: p.name }))),
+    () => fasesProbablementeRepetidas(phases.filter((p) => p.id).map((p) => ({ id: p.id!, name: p.name, loopNumero: p.loopNumero }))),
     [phases],
   );
   const total = useMemo(() => timelineSpan(phases), [phases]); // ancho de calendario (max end) — soporta fases en paralelo
@@ -1572,7 +1573,17 @@ export default function TimelineGantt({
         )}
 
         <span className="ml-auto flex flex-wrap items-center gap-x-4 gap-y-1">
-          {Object.values(ACTIVITY_META).map((m) => (
+          {/* La leyenda de lo que se pinta: los loops con tareas, por sus colores; las demás fases, por tipo. Con de los
+              dos (kölbi con su Semana 0), las dos. */}
+          {[
+            ...(phases.some((ph) => pintaPorTareas(ph.loopNumero, ph.tasks))
+              ? [
+                  { label: "Hecho", seg: "bg-success-ink" },
+                  { label: "En curso o por hacer", seg: "bg-brand" },
+                ]
+              : []),
+            ...(phases.length === 0 || phases.some((ph) => !pintaPorTareas(ph.loopNumero, ph.tasks)) ? Object.values(ACTIVITY_META) : []),
+          ].map((m) => (
             <span key={m.label} className="flex items-center gap-1.5">
               <span className={`w-6 h-1.5 rounded ${m.seg} inline-block`} />
               <span className="text-[10px] font-bold uppercase tracking-wider text-fg-muted">{m.label}</span>
@@ -1928,6 +1939,27 @@ export default function TimelineGantt({
                       const weekOverdue = paraLosAtrasos(weekTasks).some((t) => isOverdueByDate(overduePlannedEnd(anchor, range.start, t.weekIndex, t.semanas), today, t.status));
                       // L3 P3c: una semana que suma la propuesta (una duración que crece, marcada), en verde.
                       const seSuma = !!vistaDeLaFase?.semanasQueSeSuman.includes(relWeek);
+
+                      /* Un LOOP (2026-11-19, Elías: «no se ven las semanas de cada uno»): corre todo el ciclo, así que
+                         la barra llena no dice nada. La fila plegada dibuja sus TAREAS en sus semanas, como el plan de
+                         Valentina: verde si lo de esa semana está hecho, azul si está en curso o por hacer, y vacío si
+                         no hay nada. El nombre, al pasar el mouse. Las fases comunes siguen con su barra de siempre. */
+                      if (pintaPorTareas(p.loopNumero, p.tasks) && !seSuma) {
+                        // La MISMA regla que la vista del cliente (lib/timeline/semanas-del-loop.ts).
+                        const color = colorDeLaSemana(p.tasks, relWeek);
+                        const nombres = tareasDeLaSemana(p.tasks, relWeek).map((t) => t.title || "Sin título");
+                        const arrastra = editable && onUpdatePhase;
+                        return (
+                          <div
+                            key={w}
+                            onPointerDown={arrastra ? (e) => startBarDrag(e, p.key, range.start) : undefined}
+                            className={`h-3 rounded transition-all ${color === "vacia" ? "bg-surface-hover/70" : color === "hecho" ? "bg-success-ink" : "bg-brand"} ${
+                              isCur ? "timeline-now-pulse" : ""
+                            } ${weekOverdue && !isCur ? "ring-1 ring-red-500/80" : ""} ${arrastra ? "cursor-ew-resize touch-none" : ""}`}
+                            title={`S${w}${nombres.length ? ` · ${nombres.join(" · ")}` : ""}${arrastra ? " — arrastra para mover el inicio de la fase" : ""}`}
+                          />
+                        );
+                      }
 
                       return (
                         <div

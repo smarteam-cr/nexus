@@ -99,6 +99,9 @@ export function phaseNamesLikelySameWork(a: string, b: string): boolean {
 export interface FaseParaComparar {
   id: string;
   name: string;
+  /** El número del loop (2026-11-19). Dos loops con número distinto son frentes distintos aunque se llamen parecido
+   *  («Lead Management & Conversion» y «Sales Management & Performance»): no se comparan. */
+  loopNumero?: number | null;
 }
 
 
@@ -117,6 +120,9 @@ export function fasesProbablementeRepetidas(
   const aviso = new Map<string, string>();
   for (let j = 1; j < phases.length; j++) {
     for (let i = 0; i < j; i++) {
+      const a = phases[i].loopNumero;
+      const b = phases[j].loopNumero;
+      if (a != null && b != null && a !== b) continue;
       if (!phaseNamesLikelySameWork(phases[i].name, phases[j].name)) continue;
       if (!aviso.has(phases[j].id)) aviso.set(phases[j].id, phases[i].name);
       if (!aviso.has(phases[i].id)) aviso.set(phases[i].id, phases[j].name);

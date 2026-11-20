@@ -15567,7 +15567,11 @@ entregables de kölbi se hacen por área.
   Un plan, una vista o un documento que muestre un cronograma lo hace con `TimelineGantt` + `TaskDetailDrawer` (el
   equipo) y con `TimelineSection` (el cliente). Si le falta algo, se le agrega al motor para todos.
 - **Un loop es una fase con número** (`TimelinePhase.loopNumero`); el Gantt lo pinta «01» antes del nombre, en el plan y
-  en el cronograma del proyecto. Las actividades son sus tareas. El detalle largo va en las notas de la tarea, que son
+  en el cronograma del proyecto. *La fila plegada de un loop dibuja sus TAREAS en sus semanas* (Elías, 19 nov: «no se
+  ven las semanas de cada uno»): verde si lo de esa semana está hecho, azul si hay algo en curso o por hacer, vacío si no
+  hay nada, y los nombres al pasar el mouse. Un loop sin tareas que corran sigue con la barra de siempre. La regla es UNA
+  (`lib/timeline/semanas-del-loop.ts`) para el Gantt del equipo y la vista del cliente, y la leyenda dice lo que se
+  pinta (con loops y fases comunes, las dos). El aviso «¿repetida?» no compara dos loops con número distinto. Las actividades son sus tareas. El detalle largo va en las notas de la tarea, que son
   internas. El tipo de trabajo lo dice el tipo de actividad de la FASE, como en cualquier cronograma: no hay tipo por
   tarea. SQL `2026-11-19-plan-general-de-la-cuenta.sql`.
 - **Una tarea puede durar varias semanas, en TODOS los cronogramas** (`TimelineTask.semanas`, null = una). Se elige en el

@@ -42,6 +42,7 @@ import {
   cierreParaMostrar,
 } from "@/lib/timeline/weeks";
 import { collectClientBlockers } from "@/lib/timeline/client-blockers";
+import { colorDeLaSemana, pintaPorTareas, tareasDeLaSemana } from "@/lib/timeline/semanas-del-loop";
 import { summarizeParticularidades, attributionSentence } from "@/lib/timeline/particularidades-summary";
 import { clientStatusLine } from "@/lib/timeline/client-status";
 import type { ExternalTimelinePhase, ExternalParticularidad } from "@/lib/external/timeline-view-types";
@@ -84,6 +85,10 @@ const ACTIVITY_META: Record<
 };
 const NEUTRAL_SEG = "#b9cdf0"; // fase sin tipo (neutro de la familia navy de marca)
 const EMPTY_CELL = "#eef3fc"; // semana fuera del rango de la fase (paper-tint)
+/* Un loop del plan general (2026-11-19): sus tareas en sus semanas, como el plan de Valentina. Verde lo hecho, azul
+   lo que está en curso o por hacer. */
+const LOOP_HECHO = "#16a34a";
+const LOOP_EN_CURSO = "#3b82f6";
 
 // Responsable por tarea (showProgress, solo el cronograma compartible) — paleta light del
 // landing, espejo de PARTY_META del Gantt interno. "atrasada" se deriva (isOverdue).
@@ -435,7 +440,17 @@ export default function TimelineSection({
           )}
 
           <span style={{ marginLeft: "auto", display: "flex", flexWrap: "wrap", alignItems: "center", gap: "4px 16px" }}>
-            {Object.values(ACTIVITY_META).map((m) => (
+            {/* Un plan de loops (el plan general de la cuenta) pinta tareas, no tipos de actividad: su leyenda es la de
+                sus colores. Un cronograma de proyecto no trae `loopNumero` y sigue con la de siempre. */}
+            {[
+              ...(phases.some((ph) => pintaPorTareas(ph.loopNumero, ph.tasks ?? []))
+                ? [
+                    { label: "Hecho", seg: LOOP_HECHO },
+                    { label: "En curso o por hacer", seg: LOOP_EN_CURSO },
+                  ]
+                : []),
+              ...(phases.length === 0 || phases.some((ph) => !pintaPorTareas(ph.loopNumero, ph.tasks ?? [])) ? Object.values(ACTIVITY_META) : []),
+            ].map((m) => (
               <span key={m.label} style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
                 <span style={{ width: 24, height: 6, borderRadius: 3, background: m.seg, display: "inline-block" }} />
                 <span style={SUB_LABEL}>{m.label}</span>
@@ -639,6 +654,26 @@ export default function TimelineSection({
                         if (!inRange) return <div key={w} style={{ height: 12, borderRadius: 6, background: EMPTY_CELL }} />;
                         const isPast = curWeek !== null && w < curWeek;
                         const isCur = curWeek === w;
+                        /* Un loop con sus tareas a la vista: cada semana dice qué corre en ella (una tarea de varias
+                           semanas, en todas). Sin tareas (el detalle sin confirmar), la barra de siempre. */
+                        if (pintaPorTareas(p.loopNumero, tasks)) {
+                          // La MISMA regla que el Gantt del equipo (lib/timeline/semanas-del-loop.ts).
+                          const rel = w - range.start;
+                          const color = colorDeLaSemana(tasks, rel);
+                          const nombres = tareasDeLaSemana(tasks, rel).map((t) => t.title);
+                          return (
+                            <div
+                              key={w}
+                              title={nombres.length ? `S${w} · ${nombres.join(" · ")}` : `S${w}`}
+                              style={{
+                                height: 12,
+                                borderRadius: 6,
+                                background: color === "vacia" ? EMPTY_CELL : color === "hecho" ? LOOP_HECHO : LOOP_EN_CURSO,
+                                ...(isCur ? { boxShadow: "0 0 0 2px rgba(11, 88, 211, 0.75)" } : {}),
+                              }}
+                            />
+                          );
+                        }
                         return (
                           <div
                             key={w}

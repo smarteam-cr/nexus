@@ -44,6 +44,9 @@ export interface ExternalTimelinePhase {
   activityType: string | null;
   /** Presente SOLO si el CSE confirmó el detalle (detailConfirmedAt != null). */
   tasks?: ExternalTimelineTask[];
+  /** El número del loop (2026-11-19). SOLO lo pone el plan general de la cuenta (`unirParaElCliente`): con él, la fila
+   *  dibuja sus tareas en sus semanas en vez de la barra llena. El cronograma de un proyecto no lo trae. */
+  loopNumero?: number;
 }
 
 /**

@@ -164,6 +164,10 @@ describe("unirParaElCliente: lo que ve el cliente, con la forma del cronograma c
     expect(equipo.fases.map((f) => f.id)).toEqual(["m", "v"]);
   });
 
+  it("cada fase lleva su número de loop (con él, la fila del cliente dibuja sus tareas en sus semanas)", () => {
+    expect(unido.phases.map((f) => f.loopNumero)).toEqual([1, 4]);
+  });
+
   it("un cronograma sin loops no entra ni corre el arranque", () => {
     const solo = unirParaElCliente([
       { data: cronograma("2026-10-01T00:00:00.000Z", [faseExterna("x", 0)]), loops: new Map() },
