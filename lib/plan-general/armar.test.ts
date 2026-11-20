@@ -1,200 +1,205 @@
+/**
+ * lib/plan-general/armar.test.ts — el plan general sobre el MOTOR de cronogramas (2026-11-19).
+ *
+ * Lo que no puede romperse: el plan junta SOLO las fases-loop, cada una donde arranca en su cronograma más el
+ * corrimiento de su proyecto; las tareas son las mismas filas (weekIndex de su fase, `semanas`); y para el cliente se
+ * une lo que ya filtró el chokepoint del cronograma externo, con el nombre del loop y sin particularidades.
+ */
 import { describe, expect, it } from "vitest";
-import {
-  armarPlanGeneral,
-  semanaActualDelPlan,
-  semanasDeLaTarea,
-  type FaseParaElPlan,
-  type ProyectoParaElPlan,
-  type TareaParaElPlan,
-} from "./armar";
-import { fotoDelPlan, hayCambiosSinPublicar, leerFoto } from "./foto";
-import { semanasQueCaben } from "./tipos";
+import type { ExternalTimelineData, ExternalTimelinePhase } from "@/lib/external/timeline-view-types";
+import { anclaComun, armarPlanGeneral, corrimiento, unirParaElCliente, type FaseParaElPlan, type ProyectoParaElPlan } from "./armar";
+import { fotoDelPlan, hayCambiosSinPublicar, leerFoto, tieneLoops } from "./foto";
 
-const tarea = (id: string, weekIndex: number): TareaParaElPlan => ({
+type TareaDeFase = FaseParaElPlan["tasks"][number];
+const tarea = (id: string, weekIndex: number, extra: Partial<TareaDeFase> = {}): TareaDeFase => ({
   id,
   title: `Tarea ${id}`,
   weekIndex,
-  order: 0,
   semanas: null,
-  tipoDeTrabajo: null,
+  order: 0,
   status: "PENDING",
   notes: null,
+  needsValidation: false,
+  source: "HUMAN",
+  statusSource: null,
+  statusChangedByEmail: null,
+  statusChangedAt: null,
+  party: "SMARTEAM",
+  type: "TASK",
+  startDateOverride: null,
+  dueDateOverride: null,
+  ...extra,
 });
-
-function proyecto(id: string, anclaje: string | null, fases: FaseParaElPlan[]): ProyectoParaElPlan {
-  return { id, name: `Proyecto ${id}`, timeline: { anchorStartDate: anclaje, detailConfirmedAt: "2026-11-02T00:00:00.000Z", phases: fases } };
-}
 
 const fase = (
   id: string,
   loopNumero: number | null,
-  tasks: TareaParaElPlan[],
+  tasks: TareaDeFase[],
   extra: { order?: number; durationWeeks?: number; startWeek?: number | null } = {},
 ): FaseParaElPlan => ({
   id,
-  name: `Loop ${id}`,
+  name: `Fase ${id}`,
   order: extra.order ?? 0,
   durationWeeks: extra.durationWeeks ?? 12,
   startWeek: extra.startWeek === undefined ? 0 : extra.startWeek,
   loopNumero,
+  activityType: null,
+  status: "IN_PROGRESS",
+  needsValidation: false,
+  sessionCount: null,
   tasks,
 });
 
-describe("armarPlanGeneral", () => {
-  it("junta los loops de varios proyectos en orden de número, con semanas desde 1", () => {
-    const plan = armarPlanGeneral([
-      proyecto("ventas", "2026-11-02T00:00:00.000Z", [
-        fase("v4", 4, [{ ...tarea("a", 1), semanas: 1, status: "DONE", tipoDeTrabajo: "diagnostico" }]),
-        fase("v5", 5, [{ ...tarea("b", 4), semanas: 3 }], { order: 1 }),
-      ]),
-      proyecto("infoclic", "2026-11-02T00:00:00.000Z", [
-        fase("c1", 1, [{ ...tarea("c", 0), semanas: 4, status: "IN_PROGRESS", tipoDeTrabajo: "diseno" }]),
-      ]),
-    ]);
-    expect(plan.grupos.map((g) => g.loopNumero)).toEqual([1, 4, 5]);
-    expect(plan.arranque).toBe("2026-11-02T00:00:00.000Z");
-    expect(plan.semanas).toBe(12);
-    const c = plan.grupos[0].filas[0];
-    expect([c.desde, c.hasta, c.estado, c.tipo]).toEqual([1, 4, "IN_PROGRESS", "diseno"]);
-    const b = plan.grupos[2].filas[0];
-    expect([b.desde, b.hasta]).toEqual([5, 7]);
+const proyecto = (id: string, ancla: string | null, fases: FaseParaElPlan[], confirmado = true): ProyectoParaElPlan => ({
+  id,
+  name: `Proyecto ${id}`,
+  timeline: { anchorStartDate: ancla, detailConfirmedAt: confirmado ? "2026-11-02T00:00:00.000Z" : null, phases: fases },
+});
+
+const NOV2 = "2026-11-02T00:00:00.000Z";
+const NOV16 = "2026-11-16T00:00:00.000Z";
+
+describe("armarPlanGeneral: el plan del equipo, con las filas del motor", () => {
+  const plan = armarPlanGeneral([
+    proyecto("ventas", NOV16, [
+      fase("v4", 4, [tarea("a", 1, { status: "DONE" })]),
+      fase("v5", 5, [tarea("b", 4, { semanas: 3, notes: "interno" })], { order: 1 }),
+    ]),
+    proyecto("infoclic", NOV2, [
+      // Una fase común antes del loop: el loop arranca donde termina ella (contigua), no en 0.
+      fase("s0", null, [tarea("x", 0)], { durationWeeks: 1, startWeek: null }),
+      fase("c1", 1, [tarea("c", 0, { semanas: 4, status: "IN_PROGRESS" })], { order: 1, startWeek: null }),
+    ]),
+    proyecto("sin-loops", NOV2, [fase("comun", null, [tarea("z", 0)])]),
+  ]);
+
+  it("solo las fases-loop, en orden de número, sobre el arranque más temprano", () => {
+    expect(plan.fases.map((f) => f.loopNumero)).toEqual([1, 4, 5]);
+    expect(plan.ancla).toBe(NOV2);
+    expect(plan.proyectos.map((p) => p.id)).toEqual(["ventas", "infoclic"]);
   });
 
-  it("deja afuera las fases sin número y las tareas suspendidas; una fase contigua arranca donde terminó la anterior", () => {
-    const plan = armarPlanGeneral([
-      proyecto("p", "2026-11-02T00:00:00.000Z", [
-        fase("s0", null, [tarea("x", 0)], { order: 0, durationWeeks: 1, startWeek: null }),
-        fase("l2", 2, [tarea("y", 0), { ...tarea("z", 1), status: "SUSPENDED" }], { order: 1, durationWeeks: 6, startWeek: null }),
-      ]),
-    ]);
-    expect(plan.grupos).toHaveLength(1);
-    expect(plan.grupos[0].faseDesde).toBe(2);
-    expect(plan.grupos[0].filas.map((f) => [f.tareaId, f.desde])).toEqual([["y", 2]]);
+  it("cada fase arranca donde arranca en SU cronograma, corrida por el arranque de su proyecto", () => {
+    expect(plan.fases.find((f) => f.id === "c1")!.startWeek).toBe(1); // tras la Semana 0 de 1 semana
+    expect(plan.fases.find((f) => f.id === "v4")!.startWeek).toBe(2); // ventas arrancó dos semanas después
   });
 
-  it("corre un proyecto que arrancó después y usa el arranque más temprano", () => {
-    const plan = armarPlanGeneral([
-      proyecto("tarde", "2026-11-16T00:00:00.000Z", [fase("t", 3, [tarea("t1", 0)])]),
-      proyecto("temprano", "2026-11-02T00:00:00.000Z", [fase("e", 2, [tarea("e1", 0)])]),
-    ]);
-    expect(plan.arranque).toBe("2026-11-02T00:00:00.000Z");
-    expect(plan.grupos.find((g) => g.loopNumero === 3)!.filas[0].desde).toBe(3);
-    expect(plan.semanas).toBe(14);
+  it("las tareas son las del cronograma, tal cual: semana de su fase, duración, estado y notas (es el equipo)", () => {
+    const b = plan.fases.find((f) => f.id === "v5")!.tasks[0];
+    expect([b.id, b.weekIndex, b.semanas, b.notes]).toEqual(["b", 4, 3, "interno"]);
+    expect(plan.fases.find((f) => f.id === "v4")!.tasks[0].status).toBe("DONE");
+    expect(plan.fases.find((f) => f.id === "v4")!.proyectoId).toBe("ventas");
   });
 
-  it("para el cliente saca lo que está por validar", () => {
-    const proyectos = [proyecto("p", null, [fase("l", 1, [tarea("a", 0), { ...tarea("b", 1), needsValidation: true }])])];
-    expect(armarPlanGeneral(proyectos).grupos[0].filas).toHaveLength(2);
-    expect(armarPlanGeneral(proyectos, { paraElCliente: true }).grupos[0].filas).toHaveLength(1);
-  });
-
-  it("sin loops no hay plan", () => {
-    const plan = armarPlanGeneral([proyecto("p", "2026-11-02T00:00:00.000Z", [fase("f", null, [tarea("a", 0)])])]);
-    expect(plan).toEqual({ arranque: null, semanas: 0, grupos: [] });
+  it("dice qué proyecto no tiene el detalle confirmado (el cliente no ve sus tareas)", () => {
+    const p = armarPlanGeneral([proyecto("p", null, [fase("l", 1, [tarea("a", 0)])], false)]);
+    expect(p.proyectos[0].detalleConfirmado).toBe(false);
+    expect(p.fases[0].tasks).toHaveLength(1);
+    expect(p.ancla).toBeNull();
   });
 });
 
-describe("semanasDeLaTarea", () => {
-  const grupo = { faseDesde: 1, faseSemanas: 12 };
-  it("pasa de semanas del plan a weekIndex y semanas de la tarea", () => {
-    expect(semanasDeLaTarea(grupo, 5, 12)).toEqual({ weekIndex: 4, semanas: 8 });
-    expect(semanasDeLaTarea({ faseDesde: 3, faseSemanas: 4 }, 3, 3)).toEqual({ weekIndex: 0, semanas: 1 });
-  });
-  it("rechaza lo que se sale de la fase o está al revés", () => {
-    expect(semanasDeLaTarea(grupo, 0, 2)).toBeNull();
-    expect(semanasDeLaTarea(grupo, 11, 13)).toBeNull();
-    expect(semanasDeLaTarea(grupo, 6, 5)).toBeNull();
+describe("corrimiento y arranque común", () => {
+  it("semanas enteras, y sin arranque no se corre", () => {
+    expect(anclaComun([NOV16, null, NOV2])).toBe(NOV2);
+    expect(anclaComun([null, undefined])).toBeNull();
+    expect(corrimiento(NOV2, NOV16)).toBe(2);
+    expect(corrimiento(NOV2, "2026-11-04T00:00:00.000Z")).toBe(0); // un miércoles cuenta en la semana del lunes
+    expect(corrimiento(NOV2, null)).toBe(0);
+    expect(corrimiento(null, NOV16)).toBe(0);
   });
 });
 
-describe("semanaActualDelPlan", () => {
-  it("el 19 nov de 2026 es la semana 3 de un plan que arrancó el lunes 2 nov", () => {
-    expect(semanaActualDelPlan("2026-11-02T00:00:00.000Z", new Date(2026, 10, 19, 15))).toBe(3);
-    expect(semanaActualDelPlan("2026-11-02T00:00:00.000Z", new Date(2026, 10, 2, 8))).toBe(1);
-    expect(semanaActualDelPlan(null, new Date())).toBeNull();
+const faseExterna = (id: string, order: number, extra: Partial<ExternalTimelinePhase> = {}): ExternalTimelinePhase => ({
+  id,
+  name: `Fase ${id}`,
+  order,
+  durationWeeks: 12,
+  startWeek: 0,
+  sessionCount: null,
+  notes: null,
+  activityType: null,
+  tasks: [{ title: `Tarea de ${id}`, weekIndex: 1, status: "PENDING", party: "SMARTEAM", type: "TASK" }],
+  ...extra,
+});
+const cronograma = (ancla: string | null, phases: ExternalTimelinePhase[]): ExternalTimelineData => ({
+  exists: true,
+  anchorStartDate: ancla,
+  phases,
+  particularidades: [{ kind: "ATRASO", party: "CLIENTE", title: "Una desviación", detail: null, weeksImpact: 1, phaseId: null, occurredAt: NOV2 }],
+});
+
+describe("unirParaElCliente: lo que ve el cliente, con la forma del cronograma compartible", () => {
+  const unido = unirParaElCliente([
+    { data: cronograma(NOV16, [faseExterna("v4", 0), faseExterna("comun", 1)]), loops: new Map([["v4", 4]]) },
+    {
+      data: cronograma(NOV2, [faseExterna("s0", 0, { durationWeeks: 1, startWeek: null }), faseExterna("c1", 1, { startWeek: null })]),
+      loops: new Map([["c1", 1]]),
+    },
+  ]);
+
+  it("solo los loops, con su nombre «01 · …», en orden de loop y arranque explícito sobre el común", () => {
+    expect(unido.anchorStartDate).toBe(NOV2);
+    expect(unido.phases.map((f) => [f.name, f.startWeek, f.order])).toEqual([
+      ["01 · Fase c1", 1, 0],
+      ["04 · Fase v4", 2, 1],
+    ]);
+  });
+
+  it("⛔ las tareas pasan como las dejó el chokepoint (sin agregar nada) y las particularidades no cruzan", () => {
+    expect(unido.phases[0].tasks).toEqual([{ title: "Tarea de c1", weekIndex: 1, status: "PENDING", party: "SMARTEAM", type: "TASK" }]);
+    expect(unido.particularidades).toEqual([]);
+    expect(JSON.stringify(unido)).not.toContain("Fase comun");
+  });
+
+  it("dos loops con el mismo número salen en el orden de la vista del equipo (por proyecto), sin importar cómo llegan", () => {
+    const de = (nombre: string, id: string) => ({ proyectoNombre: nombre, data: cronograma(NOV2, [faseExterna(id, 0)]), loops: new Map([[id, 3]]) });
+    const ids = (u: ExternalTimelineData) => u.phases.map((f) => f.id);
+    expect(ids(unirParaElCliente([de("Ventas", "v"), de("Marketing", "m")]))).toEqual(["m", "v"]);
+    expect(ids(unirParaElCliente([de("Marketing", "m"), de("Ventas", "v")]))).toEqual(["m", "v"]);
+    const equipo = armarPlanGeneral([
+      { ...proyecto("v", NOV2, [fase("v", 3, [])]), name: "Ventas" },
+      { ...proyecto("m", NOV2, [fase("m", 3, [])]), name: "Marketing" },
+    ]);
+    expect(equipo.fases.map((f) => f.id)).toEqual(["m", "v"]);
+  });
+
+  it("un cronograma sin loops no entra ni corre el arranque", () => {
+    const solo = unirParaElCliente([
+      { data: cronograma("2026-10-01T00:00:00.000Z", [faseExterna("x", 0)]), loops: new Map() },
+      { data: cronograma(NOV2, [faseExterna("l", 0)]), loops: new Map([["l", 2]]) },
+    ]);
+    expect(solo.anchorStartDate).toBe(NOV2);
+    expect(solo.phases.map((f) => f.startWeek)).toEqual([0]);
   });
 });
 
 describe("la foto del cliente", () => {
-  const plan = armarPlanGeneral([
-    proyecto("p", "2026-11-02T00:00:00.000Z", [
-      fase("l1", 1, [{ ...tarea("a", 0), notes: "interno", tipoDeTrabajo: "ejecucion" }]),
-      fase("vacio", 2, [], { order: 1 }),
-    ]),
-  ]);
-
-  it("no lleva proyectos, ids ni el detalle, y un loop vacío no sale", () => {
-    const foto = fotoDelPlan(plan);
-    const texto = JSON.stringify(foto);
-    expect(texto).not.toContain("interno");
-    expect(texto).not.toContain("Proyecto p");
-    expect(texto).not.toContain('"a"');
-    expect(foto.grupos.map((g) => g.loopNumero)).toEqual([1]);
-  });
+  const hoy = unirParaElCliente([{ data: cronograma(NOV2, [faseExterna("l", 0)]), loops: new Map([["l", 1]]) }]);
 
   it("se lee igual que se guardó, y avisa cambios solo cuando los hay", () => {
-    const foto = fotoDelPlan(plan);
-    const guardada = leerFoto(JSON.parse(JSON.stringify(foto)));
-    expect(guardada).toEqual(foto);
-    expect(hayCambiosSinPublicar(foto, guardada)).toBe(false);
-    expect(hayCambiosSinPublicar({ ...foto, semanas: 13 }, guardada)).toBe(true);
-    expect(hayCambiosSinPublicar(foto, null)).toBe(true);
+    const guardada = leerFoto(JSON.parse(JSON.stringify(fotoDelPlan(hoy))));
+    expect(guardada!.phases).toEqual(hoy.phases);
+    expect(hayCambiosSinPublicar(hoy, guardada)).toBe(false);
+    const otra = { ...hoy, phases: hoy.phases.map((f) => ({ ...f, tasks: f.tasks!.map((t) => ({ ...t, status: "DONE" })) })) };
+    expect(hayCambiosSinPublicar(otra, guardada)).toBe(true);
+    expect(hayCambiosSinPublicar(hoy, null)).toBe(true);
   });
 
-  it("una foto de otro formato o rota no se sirve", () => {
-    expect(leerFoto({ ...fotoDelPlan(plan), formato: 99 })).toBeNull();
-    expect(leerFoto({ formato: 1, semanas: 3, grupos: [{ loopNumero: 1, nombre: "x", filas: [{ titulo: "t", desde: 1, hasta: 1, estado: "SUSPENDED" }] }] })).toBeNull();
+  it("las claves en otro orden (así vuelve un JSONB) no son un cambio", () => {
+    const alReves = (o: unknown): unknown =>
+      Array.isArray(o) ? o.map(alReves) : o && typeof o === "object" ? Object.fromEntries(Object.entries(o).reverse().map(([k, x]) => [k, alReves(x)])) : o;
+    expect(hayCambiosSinPublicar(hoy, alReves(hoy) as typeof hoy)).toBe(false);
+  });
+
+  it("una foto de otro formato (la del gantt propio, formato 1) o rota no se sirve", () => {
+    expect(leerFoto({ formato: 1, semanas: 3, grupos: [] })).toBeNull();
+    expect(leerFoto({ ...fotoDelPlan(hoy), formato: 99 })).toBeNull();
     expect(leerFoto(null)).toBeNull();
   });
-});
 
-describe("semanasQueCaben (el PUT al crear o recrear una tarea, también al moverla de loop)", () => {
-  it("conserva lo que dura, recortado al final de la fase; 1 es null", () => {
-    expect(semanasQueCaben(3, 4, 12)).toBe(3);
-    expect(semanasQueCaben(8, 8, 12)).toBe(4);
-    expect(semanasQueCaben(5, 11, 12)).toBeNull();
-    expect(semanasQueCaben(null, 0, 12)).toBeNull();
-    expect(semanasQueCaben(1, 0, 12)).toBeNull();
-  });
-});
-
-describe("lo por validar", () => {
-  it("el equipo lo ve marcado; el cliente no lo ve", () => {
-    const proyectos = [proyecto("p", null, [fase("l", 1, [{ ...tarea("b", 1), needsValidation: true }])])];
-    expect(armarPlanGeneral(proyectos).grupos[0].filas[0].porValidar).toBe(true);
-    expect(armarPlanGeneral(proyectos, { paraElCliente: true }).grupos[0].filas).toEqual([]);
-  });
-});
-
-describe("el PUT del cronograma lee semanas y tipo con tolerancia", () => {
-  it("los válidos pasan; los raros se ignoran sin trabar el guardado", async () => {
-    const { validateTimelinePayload } = await import("@/lib/timeline/validate");
-    const v = validateTimelinePayload({
-      phases: [
-        {
-          name: "Campaign Activation",
-          order: 0,
-          durationWeeks: 12,
-          tasks: [
-            { title: "Campaña piloto", weekIndex: 4, order: 0, semanas: 2, tipoDeTrabajo: "ejecucion" },
-            { title: "Rara", weekIndex: 0, order: 0, semanas: "dos", tipoDeTrabajo: "volar" },
-          ],
-        },
-      ],
-    });
-    expect(v.valid).toBe(true);
-    const [buena, rara] = v.parsed!.phases[0].tasks!;
-    expect([buena.semanas, buena.tipoDeTrabajo]).toEqual([2, "ejecucion"]);
-    expect([rara.semanas, rara.tipoDeTrabajo]).toEqual([undefined, undefined]);
-  });
-});
-
-describe("la puerta del detalle confirmado", () => {
-  it("⛔ sin el detalle confirmado, el cliente no ve las actividades; el equipo sí, y sabe por qué", () => {
-    const p: ProyectoParaElPlan = { id: "p", name: "P", timeline: { anchorStartDate: null, detailConfirmedAt: null, phases: [fase("l", 1, [tarea("a", 0)])] } };
-    expect(armarPlanGeneral([p], { paraElCliente: true }).grupos[0].filas).toEqual([]);
-    const interno = armarPlanGeneral([p]).grupos[0];
-    expect(interno.filas).toHaveLength(1);
-    expect(interno.detalleConfirmado).toBe(false);
+  it("hay algo que compartir cuando hay loops", () => {
+    expect(tieneLoops(hoy)).toBe(true);
+    expect(tieneLoops({ exists: false, anchorStartDate: null, phases: [] })).toBe(false);
   });
 });

@@ -49,6 +49,9 @@ export interface TareaVersionada {
   type?: string | null;
   startDateOverride?: Fecha;
   dueDateOverride?: Fecha;
+  /** Cuántas semanas dura (2026-11-19). Entra al sello: sin ella, una pestaña vieja devolvía la duración que otra
+   *  pantalla (el plan general de la cuenta) acababa de cambiar, sin un 409. */
+  semanas?: number | null;
 }
 
 export interface FaseVersionada {
@@ -115,6 +118,7 @@ export function versionDelCronograma(c: CronogramaVersionado): string {
       t.type ?? null,
       iso(t.startDateOverride),
       iso(t.dueDateOverride),
+      t.semanas ?? null,
     ]),
   ]);
   const canon = JSON.stringify([iso(c.anchorStartDate), iso(c.closeDateOverride), fases]);

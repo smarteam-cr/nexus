@@ -37,6 +37,8 @@ export interface ActionTask {
   id?: string | null;
   title: string;
   weekIndex: number;
+  /** Cuántas semanas dura (null = una): vence al final de la última. */
+  semanas?: number | null;
   status?: string;
   party?: string | null;
 }
@@ -176,7 +178,7 @@ function contarCompromisosVencidos(
   s.phases.forEach((ph, i) => {
     for (const t of ph.tasks ?? []) {
       if (!t.id || !conTarea.has(t.id)) continue;
-      const fin = overduePlannedEnd(anchor, ranges[i].start, t.weekIndex);
+      const fin = overduePlannedEnd(anchor, ranges[i].start, t.weekIndex, t.semanas);
       // Sin estado explícito se asume PENDING: el predicado solo perdona DONE y SUSPENDED, y
       // una tarea de estado desconocido no puede darse por resuelta.
       if (isOverdueByDate(fin, now, t.status ?? "PENDING")) n++;

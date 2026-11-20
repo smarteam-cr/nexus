@@ -502,9 +502,12 @@
   durante el ciclo («02 · Campaign Activation»). Es una fase del cronograma de su proyecto, con su número; sus
   actividades son las tareas de esa fase. Un proyecto puede cubrir uno o varios, y el handoff los declara en «Loops que
   cubre este proyecto» con su área, objetivo y prioridad. Ver DECISIONS «El plan general de la cuenta».
-- **Plan general** (La cuenta, arriba de «Proyectos»; `lib/plan-general`): los loops de todos los proyectos de una cuenta
-  en un solo gantt, editable. No es una copia: cada actividad es la tarea del cronograma de su proyecto. El cliente lo ve
-  en `/external/plan/[token]`, como un solo plan, desde que alguien lo publica.
+- **Plan general** (La cuenta, arriba de «Proyectos»; `lib/plan-general`): el cronograma de Nexus con los loops de todos
+  los proyectos de una cuenta juntos, editable con el mismo panel de tarea. No es una copia: cada tarea es la del
+  cronograma de su proyecto. El cliente lo ve en `/external/plan/[token]` con la página del cronograma compartible, como
+  un solo plan, desde que alguien lo publica.
+- **Dura** (`TimelineTask.semanas`, desde el 2026-11-19): cuántas semanas corre una tarea desde su semana, en cualquier
+  cronograma. Se elige en el panel de la tarea; la tarea vence al final de la última.
 - **Pieza oculta** (`Project.piezasOcultas`): una pieza del riel que el equipo ocultó en ese proyecto; queda en «Ver N
   piezas más», no se borra ni se apaga.
 - **La escala de la empresa** (La cuenta › La escala): dónde está la empresa en cada área de la escala, con la fecha y de

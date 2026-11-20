@@ -12,11 +12,13 @@
  * renderiza con su propio tema; el criterio de "atrasada" es idéntico (mismo `isOverdueByDate`
  * que el tag rojo del Gantt, por FECHA de fin planeado) para que ambas coincidan.
  */
-import { addWeeks, absoluteWeek, computePhaseRanges, currentWeekIndex, overduePlannedEnd, isOverdueByDate } from "./weeks";
+import { absoluteWeek, computePhaseRanges, currentWeekIndex, overduePlannedEnd, isOverdueByDate, ultimaSemanaDeLaTarea } from "./weeks";
 
 export interface BlockerTaskLike {
   title: string;
   weekIndex: number;
+  /** Cuántas semanas dura (null = una): vence al final de la última. */
+  semanas?: number | null;
   status?: string;
   party?: string | null;
 }
@@ -79,15 +81,18 @@ export function collectClientBlockers<P extends BlockerPhaseLike<BlockerTaskLike
     for (const task of (phase.tasks ?? []) as TaskOf<P>[]) {
       if (task.party !== "CLIENTE") continue;
       const absWeek = absoluteWeek(range.start, task.weekIndex);
-      if (!isOverdueByDate(overduePlannedEnd(anchor, range.start, task.weekIndex), now, task.status ?? "")) continue;
+      const vence = overduePlannedEnd(anchor, range.start, task.weekIndex, task.semanas);
+      if (!vence || !isOverdueByDate(vence, now, task.status ?? "")) continue;
+      // El atraso se cuenta desde su ÚLTIMA semana: una tarea de tres semanas no lleva dos de atraso al empezar.
+      const absUltima = absoluteWeek(range.start, ultimaSemanaDeLaTarea(task.weekIndex, task.semanas));
       out.push({
         task,
         phase,
         phaseName: phase.name,
         absWeek,
-        weeksLate: curWeek - absWeek,
-        // +1 = fin de la semana de la tarea (misma convención que lib/portfolio/summary.ts).
-        dueDateIso: addWeeks(anchor, absWeek + 1).toISOString(),
+        weeksLate: curWeek - absUltima,
+        // Fin de la última semana de la tarea (misma convención que lib/portfolio/summary.ts).
+        dueDateIso: vence.toISOString(),
       });
     }
   });

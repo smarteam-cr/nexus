@@ -1,47 +1,32 @@
 "use client";
 
 /**
- * PlanGeneralDeLaCuenta — «Plan general» en la ficha del cliente (2026-11-19, Elías: arriba de «Proyectos»). Los loops
- * de todos los proyectos de la cuenta en un solo gantt, editable: semanas, estado, tipo, nombre y detalle de cada
- * actividad, y «+ Actividad» en cada loop.
+ * PlanGeneralDeLaCuenta — «Plan general» en la ficha del cliente (2026-11-19, Elías: arriba de «Proyectos»).
  *
- * No guarda nada propio: cada cambio va a la tarea en el cronograma de SU proyecto (mismas rutas y misma vara que el
- * Gantt del proyecto: guardTimelineEdit; borrar, guardTimelineDelete). Lo que se cambia acá se ve en el cronograma del
- * proyecto y al revés. El cliente ve la foto que se publica con «Publicar» (lib/plan-general/acceso.ts).
+ * Es el MISMO cronograma de Nexus (TimelineGantt + TaskDetailDrawer) con las fases-loop de todos los proyectos de la
+ * cuenta juntas, sobre el arranque común (lib/plan-general/armar.ts). No hay un gantt ni un editor propios: Elías, 19
+ * nov: «todos los cronogramas usan el mismo motor».
+ *
+ * No guarda nada propio: cada cambio va a la tarea en el cronograma de SU proyecto, por rutas de una tarea con la misma
+ * vara que el Gantt del proyecto (guardTimelineEdit; borrar, guardTimelineDelete): el estado por el PATCH de la tarea,
+ * lo demás por `.../tasks/[taskId]/campos`, una tarea nueva por `.../tasks`. Lo que se cambia acá se ve en el
+ * cronograma del proyecto y al revés. Las fases (nombre, semanas, arranque) se editan en el cronograma de su proyecto.
+ * El cliente ve la foto que se publica con «Publicar» (lib/plan-general/acceso.ts).
  */
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { Alert, ConfirmDialog, Field, Input, Modal, Segmentado, Selector, Textarea, useToast } from "@/components/ui";
-import { Drawer } from "@/components/ui/Drawer";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Alert, Modal, useToast } from "@/components/ui";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Skeleton, SkeletonPanel } from "@/components/ui/Skeleton";
 import { BOTON_DE_HERRAMIENTA, BotonAzul, BotonBlanco, BotonEnlace } from "@/components/ui/sistema";
+import TimelineGantt, { type GanttPhase, type GanttTask, type GanttTaskStatus } from "@/components/canvas/TimelineGantt";
+import TaskDetailDrawer from "@/components/canvas/TaskDetailDrawer";
 import type { EstadoDelAccesoAlPlan } from "@/lib/plan-general/acceso";
-import {
-  ETIQUETA_DEL_ESTADO,
-  ETIQUETA_DEL_TIPO,
-  rotuloDelLoop,
-  TIPOS_DE_TRABAJO,
-  type EstadoDelPlan,
-  type GrupoDelPlan,
-  type PlanGeneral,
-  type TipoDeTrabajo,
-} from "@/lib/plan-general/tipos";
-import { semanasDeLaTarea } from "@/lib/plan-general/armar";
-import GanttDelPlan from "./GanttDelPlan";
+import type { FaseDelPlan, PlanGeneral, TareaDelPlan } from "@/lib/plan-general/tipos";
 
-interface Borrador {
-  grupo: GrupoDelPlan;
-  /** null = una actividad nueva. */
-  tareaId: string | null;
-  titulo: string;
-  tipo: TipoDeTrabajo | null;
-  desde: number;
-  hasta: number;
-  estado: EstadoDelPlan;
-  detalle: string;
-}
-
-const ESTADOS: readonly EstadoDelPlan[] = ["PENDING", "IN_PROGRESS", "DONE"];
+/** Una tarea en pantalla: la del plan, o una nueva que todavía no se guardó (sin id hasta tener título). */
+type Tarea = Omit<TareaDelPlan, "id"> & { id?: string; key: string };
+type Fase = Omit<FaseDelPlan, "tasks"> & { tasks: Tarea[] };
+type Cambio = Partial<Pick<Tarea, "title" | "notes" | "weekIndex" | "semanas" | "party" | "type" | "startDateOverride" | "dueDateOverride">>;
 
 /** «mié 19 nov, 3:40 p. m.» en hora de Costa Rica. */
 function diaYHora(iso: string): string {
@@ -51,133 +36,325 @@ function diaYHora(iso: string): string {
 async function pedir<T>(url: string, init?: RequestInit): Promise<T> {
   const r = await fetch(url, { cache: "no-store", ...init, headers: { "Content-Type": "application/json", ...(init?.headers ?? {}) } });
   const j = (await r.json().catch(() => null)) as (T & { error?: string }) | null;
-  if (!r.ok || !j) throw new Error(j?.error ?? "No se pudo hacer el cambio. Vuelve a intentarlo.");
+  if (!r.ok || !j) throw new Error(j?.error ?? "No se pudo guardar el cambio. Vuelve a intentarlo.");
   return j;
 }
+
+/** El campo de fecha del panel manda aaaa-mm-dd o null. */
+const fechaParaGuardar = (v: string | null | undefined) => (v ? v.slice(0, 10) : null);
 
 export default function PlanGeneralDeLaCuenta({ clientId, onAbrirProyecto }: { clientId: string; onAbrirProyecto: (projectId: string) => void }) {
   const toast = useToast();
   const [plan, setPlan] = useState<PlanGeneral | null>(null);
+  const [fases, setFases] = useState<Fase[]>([]);
   const [acceso, setAcceso] = useState<EstadoDelAccesoAlPlan | null>(null);
-  const [puede, setPuede] = useState<{ editar: boolean; borrar: boolean }>({ editar: false, borrar: false });
+  const [puede, setPuede] = useState({ editar: false, borrar: false });
   const [error, setError] = useState<string | null>(null);
-  const [borrador, setBorrador] = useState<Borrador | null>(null);
-  const [guardando, setGuardando] = useState(false);
-  const [borrando, setBorrando] = useState(false);
+  const [abierta, setAbierta] = useState<{ phaseKey: string; taskKey: string } | null>(null);
+  const fasesRef = useRef<Fase[]>([]);
+  fasesRef.current = fases;
+  /* Los cambios de texto se guardan con una pausa (tipear un título no es un PATCH por letra), juntos por tarea. */
+  const pendientes = useRef(new Map<string, { cambio: Cambio; timer: ReturnType<typeof setTimeout> }>());
+  const creando = useRef(new Set<string>());
+  /** Las que se borraron mientras se creaban: apenas tienen id, se borran. */
+  const borrarAlCrear = useRef(new Set<string>());
+  /** id → la clave con que nació en pantalla una tarea creada acá: recargar no le cambia la clave (ni cierra su panel). */
+  const clavePorId = useRef(new Map<string, string>());
+  const siguiente = useRef(0);
+
+  /* Lo del servidor, sin perder lo de la pantalla: las claves de las tareas creadas acá, los cambios que esperan su
+     guardado (se ven encima de lo guardado) y las tareas nuevas que todavía no tienen título. */
+  // Solo lee refs: estable de por vida.
+  const aFases = useCallback((p: PlanGeneral): Fase[] => {
+    const nuevas = fasesRef.current.flatMap((f) => f.tasks.filter((t) => !t.id).map((t) => ({ faseId: f.id, t })));
+    return p.fases.map((f) => ({
+      ...f,
+      tasks: [
+        ...f.tasks.map((t) => {
+          const key = clavePorId.current.get(t.id) ?? t.id;
+          return { ...t, key, ...(pendientes.current.get(key)?.cambio ?? {}) };
+        }),
+        ...nuevas.filter((n) => n.faseId === f.id).map((n) => n.t),
+      ],
+    }));
+  }, []);
 
   const cargar = useCallback(async () => {
     try {
-      const j = await pedir<{ plan: PlanGeneral; acceso: EstadoDelAccesoAlPlan; puede: { editar: boolean; borrar: boolean } }>(
+      const r = await pedir<{ plan: PlanGeneral; acceso: EstadoDelAccesoAlPlan; puede: { editar: boolean; borrar: boolean } }>(
         `/api/clients/${clientId}/plan-general`,
       );
-      setPlan(j.plan);
-      setAcceso(j.acceso);
-      setPuede(j.puede);
+      setPlan(r.plan);
+      setFases(aFases(r.plan));
+      setAcceso(r.acceso);
+      setPuede(r.puede);
       setError(null);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "No se pudo leer el plan.");
+      setError(e instanceof Error ? e.message : "No se pudo cargar el plan general.");
     }
-  }, [clientId]);
+  }, [clientId, aFases]);
 
   useEffect(() => {
     void cargar();
   }, [cargar]);
 
-  const grupos = useMemo(
-    () =>
-      (plan?.grupos ?? []).map((g) => ({
-        key: g.faseId,
-        loopNumero: g.loopNumero,
-        nombre: g.nombre,
-        proyecto: g.detalleConfirmado ? g.proyectoNombre : `${g.proyectoNombre} · el cliente no lo ve: falta confirmar el detalle del cronograma`,
-        filas: g.filas.map((f) => ({ key: f.tareaId, titulo: f.titulo, tipo: f.tipo, desde: f.desde, hasta: f.hasta, estado: f.estado, porValidar: f.porValidar })),
-      })),
-    [plan],
-  );
-  const proyectos = useMemo(() => new Set((plan?.grupos ?? []).map((g) => g.proyectoId)).size, [plan]);
-
-  const abrir = (grupoKey: string, filaKey: string) => {
-    const g = plan?.grupos.find((x) => x.faseId === grupoKey);
-    const f = g?.filas.find((x) => x.tareaId === filaKey);
-    if (!g || !f) return;
-    setBorrador({ grupo: g, tareaId: f.tareaId, titulo: f.titulo, tipo: f.tipo, desde: f.desde, hasta: f.hasta, estado: f.estado, detalle: f.detalle ?? "" });
-  };
-  const agregar = (grupoKey: string) => {
-    const g = plan?.grupos.find((x) => x.faseId === grupoKey);
-    if (!g) return;
-    setBorrador({ grupo: g, tareaId: null, titulo: "", tipo: null, desde: g.faseDesde, hasta: g.faseDesde, estado: "PENDING", detalle: "" });
-  };
-
-  const guardar = async () => {
-    if (!borrador || !plan) return;
-    const b = borrador;
-    if (!b.titulo.trim()) return toast.error("La actividad necesita un nombre.");
-    const base = `/api/projects/${b.grupo.proyectoId}/timeline/tasks`;
-    const antesDeGuardar = b.tareaId ? b.grupo.filas.find((f) => f.tareaId === b.tareaId) : null;
-    const cambianLasSemanas = !antesDeGuardar || b.desde !== antesDeGuardar.desde || b.hasta !== antesDeGuardar.hasta;
-    // La MISMA regla que prueba armar.test.ts: de semanas del plan a las de la tarea dentro de su loop. Solo si cambian:
-    // una actividad que ya se salía (el loop se acortó en el Gantt) se puede renombrar o revisar igual.
-    const enLaTarea = cambianLasSemanas ? semanasDeLaTarea(b.grupo, b.desde, b.hasta) : null;
-    if (cambianLasSemanas && !enLaTarea) return toast.error("Esas semanas se salen del loop.");
-    const weekIndex = enLaTarea?.weekIndex ?? 0;
-    const semanas = enLaTarea?.semanas ?? 1;
-    setGuardando(true);
+  /** El estado del enlace (¿hay cambios sin publicar?) después de guardar algo. */
+  /* Cada cambio del enlace (una relectura, «Publicar») lleva un número: una relectura que vuelve tarde no pisa lo que
+     pasó después (si no, «Hay cambios que el cliente no ve» volvía justo después de publicar). */
+  const turnoDelAcceso = useRef(0);
+  const cambiarAcceso = useCallback((a: EstadoDelAccesoAlPlan) => {
+    turnoDelAcceso.current++;
+    setAcceso(a);
+  }, []);
+  const refrescarAcceso = useCallback(async () => {
+    const turno = ++turnoDelAcceso.current;
     try {
-      let tareaId = b.tareaId;
-      const antes = tareaId ? b.grupo.filas.find((f) => f.tareaId === tareaId) : null;
-      if (!tareaId) {
-        const j = await pedir<{ task: { id: string } }>(base, {
-          method: "POST",
-          body: JSON.stringify({ phaseId: b.grupo.faseId, title: b.titulo.trim(), weekIndex, semanas, tipoDeTrabajo: b.tipo }),
-        });
-        tareaId = j.task.id;
-        // Ya existe: si algo de lo que sigue falla, «Guardar» otra vez la edita en vez de crear otra igual.
-        const creada = tareaId;
-        setBorrador((prev) => (prev ? { ...prev, tareaId: creada } : prev));
-        if (b.detalle.trim()) {
-          await pedir(`${base}/${tareaId}/campos`, { method: "PATCH", body: JSON.stringify({ notes: b.detalle }) });
-        }
-      } else {
-        const cambios: Record<string, unknown> = {};
-        if (b.titulo.trim() !== antes?.titulo) cambios.title = b.titulo.trim();
-        if (b.tipo !== (antes?.tipo ?? null)) cambios.tipoDeTrabajo = b.tipo;
-        if ((b.detalle.trim() || null) !== (antes?.detalle ?? null)) cambios.notes = b.detalle;
-        if (enLaTarea && (b.desde !== antes?.desde || b.hasta !== antes?.hasta)) {
-          cambios.weekIndex = weekIndex;
-          cambios.semanas = semanas;
-        }
-        // Guardar una «por validar» es revisarla: aunque no cambie nada, la ruta le quita la marca.
-        if (antes?.porValidar && Object.keys(cambios).length === 0) cambios.title = b.titulo.trim();
-        if (Object.keys(cambios).length > 0) {
-          await pedir(`${base}/${tareaId}/campos`, { method: "PATCH", body: JSON.stringify(cambios) });
+      const r = await pedir<{ acceso: EstadoDelAccesoAlPlan }>(`/api/clients/${clientId}/plan-general`);
+      if (turno === turnoDelAcceso.current) setAcceso(r.acceso);
+    } catch {
+      /* el botón de Publicar se corrige en la próxima carga */
+    }
+  }, [clientId]);
+
+  const buscar = (taskKey: string) => {
+    for (const f of fasesRef.current) {
+      const t = f.tasks.find((x) => x.key === taskKey);
+      if (t) return { fase: f, tarea: t };
+    }
+    return null;
+  };
+
+  const cambiarLocal = (taskKey: string, cambio: Partial<Tarea>) =>
+    setFases((fs) => fs.map((f) => ({ ...f, tasks: f.tasks.map((t) => (t.key === taskKey ? { ...t, ...cambio } : t)) })));
+
+  const fallo = (e: unknown) => {
+    toast.error(e instanceof Error ? e.message : "No se pudo guardar el cambio.");
+    void cargar();
+  };
+
+  /** Una tarea nueva se guarda cuando tiene título: POST con lo que ya tiene, y queda con su id. */
+  const crear = async (taskKey: string) => {
+    const hallada = buscar(taskKey);
+    if (!hallada || hallada.tarea.id || creando.current.has(taskKey) || !hallada.tarea.title.trim()) return;
+    creando.current.add(taskKey);
+    const { fase, tarea } = hallada;
+    const enviado = { title: tarea.title.trim(), weekIndex: tarea.weekIndex, semanas: tarea.semanas, party: tarea.party, type: tarea.type };
+    try {
+      const { task: creada } = await pedir<{ task: { id: string } }>(`/api/projects/${fase.proyectoId}/timeline/tasks`, {
+        method: "POST",
+        body: JSON.stringify({ phaseId: fase.id, ...enviado }),
+      });
+      clavePorId.current.set(creada.id, taskKey);
+      // Se borró mientras se creaba: se borra ya creada (si no, volvía al recargar).
+      if (borrarAlCrear.current.delete(taskKey)) {
+        await pedir(`/api/projects/${fase.proyectoId}/timeline/tasks/${creada.id}/campos`, { method: "DELETE" });
+        return;
+      }
+      cambiarLocal(taskKey, { id: creada.id });
+      /* Lo que la creación no lleva (el detalle, las fechas) y lo que se cambió MIENTRAS se creaba sale en un PATCH
+         aparte. Lo que quedó en espera para esta tarea ya va acá: se descarta para no mandarlo dos veces. */
+      const espera = pendientes.current.get(taskKey);
+      if (espera) clearTimeout(espera.timer);
+      pendientes.current.delete(taskKey);
+      const d = buscar(taskKey)?.tarea;
+      if (d) {
+        const resto: Record<string, unknown> = {};
+        if (d.notes) resto.notes = d.notes;
+        if (d.startDateOverride) resto.startDateOverride = fechaParaGuardar(d.startDateOverride);
+        if (d.dueDateOverride) resto.dueDateOverride = fechaParaGuardar(d.dueDateOverride);
+        if (d.title.trim() && d.title.trim() !== enviado.title) resto.title = d.title.trim();
+        if (d.weekIndex !== enviado.weekIndex) resto.weekIndex = d.weekIndex;
+        if (d.semanas !== enviado.semanas) resto.semanas = d.semanas ?? 1;
+        if (d.party !== enviado.party) resto.party = d.party;
+        if (d.type !== enviado.type) resto.type = d.type;
+        if (Object.keys(resto).length > 0) {
+          await pedir(`/api/projects/${fase.proyectoId}/timeline/tasks/${creada.id}/campos`, { method: "PATCH", body: JSON.stringify(resto) });
         }
       }
-      if (b.estado !== (antes?.estado ?? "PENDING")) {
-        await pedir(`${base}/${tareaId}`, { method: "PATCH", body: JSON.stringify({ status: b.estado }) });
-      }
-      setBorrador(null);
-      toast.success(b.tareaId ? "Actividad guardada." : "Actividad agregada.");
+      void refrescarAcceso();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "No se pudo guardar.");
+      fallo(e);
     } finally {
-      setGuardando(false);
-      void cargar();
+      creando.current.delete(taskKey);
     }
   };
 
-  const borrar = async () => {
-    if (!borrador?.tareaId) return;
+  /** El último envío de cada tarea: la respuesta de uno anterior no pisa lo que mandó el siguiente. */
+  const ultimoEnvio = useRef(new Map<string, number>());
+  const enviar = async (taskKey: string) => {
+    const p = pendientes.current.get(taskKey);
+    pendientes.current.delete(taskKey);
+    const hallada = buscar(taskKey);
+    if (!p || !hallada) return;
+    if (!hallada.tarea.id) return void crear(taskKey);
+    const { cambio } = p;
+    // Un título vacío no se guarda (la tarea necesita uno): queda el que tenía hasta que se escriba otro.
+    if (cambio.title !== undefined && !cambio.title.trim()) delete cambio.title;
+    const cuerpo: Record<string, unknown> = { ...cambio };
+    if ("startDateOverride" in cambio) cuerpo.startDateOverride = fechaParaGuardar(cambio.startDateOverride);
+    if ("dueDateOverride" in cambio) cuerpo.dueDateOverride = fechaParaGuardar(cambio.dueDateOverride);
+    if (Object.keys(cuerpo).length === 0) return;
     try {
-      await pedir(`/api/projects/${borrador.grupo.proyectoId}/timeline/tasks/${borrador.tareaId}/campos`, { method: "DELETE" });
-      setBorrando(false);
-      setBorrador(null);
-      toast.success("Actividad eliminada.");
-      void cargar();
+      const envio = (ultimoEnvio.current.get(taskKey) ?? 0) + 1;
+      ultimoEnvio.current.set(taskKey, envio);
+      const r = await pedir<{ semanas: number | null; weekIndex: number }>(
+        `/api/projects/${hallada.fase.proyectoId}/timeline/tasks/${hallada.tarea.id}/campos`,
+        { method: "PATCH", body: JSON.stringify(cuerpo) },
+      );
+      // El servidor recorta la duración a lo que cabe en la fase: la pantalla muestra lo que quedó guardado. Salvo que
+      // ya haya otro cambio esperando: esta respuesta es vieja y pisaría lo nuevo.
+      if (!pendientes.current.has(taskKey) && ultimoEnvio.current.get(taskKey) === envio)
+        cambiarLocal(taskKey, { semanas: r.semanas, weekIndex: r.weekIndex, needsValidation: false });
+      void refrescarAcceso();
     } catch (e) {
-      setBorrando(false);
-      toast.error(e instanceof Error ? e.message : "No se pudo eliminar.");
+      fallo(e);
     }
   };
+
+  /** Ojo con desmontar con cambios en espera: se mandan igual. */
+  useEffect(() => {
+    const enEspera = pendientes.current;
+    return () => {
+      for (const key of [...enEspera.keys()]) {
+        clearTimeout(enEspera.get(key)!.timer);
+        void enviar(key);
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- solo al desmontar
+  }, []);
+
+  const actualizar = (_phaseKey: string, taskKey: string, cambio: Cambio) => {
+    cambiarLocal(taskKey, cambio);
+    const antes = pendientes.current.get(taskKey);
+    if (antes) clearTimeout(antes.timer);
+    // Texto: con pausa. Semana, duración, responsable, tipo y fechas: casi enseguida (un clic es una decisión).
+    const soloTexto = Object.keys(cambio).every((k) => k === "title" || k === "notes");
+    const timer = setTimeout(() => void enviar(taskKey), soloTexto ? 700 : 150);
+    pendientes.current.set(taskKey, { cambio: { ...(antes?.cambio ?? {}), ...cambio }, timer });
+  };
+
+  const cambiarEstado = async (taskId: string, next: GanttTaskStatus) => {
+    const hallada = fasesRef.current.flatMap((f) => f.tasks.map((t) => ({ f, t }))).find((x) => x.t.id === taskId);
+    if (!hallada) return;
+    /* Optimista, como el cronograma del proyecto: la tarea y, por coherencia, su fase (todas resueltas → hecha; deja de
+       estarlo y estaba hecha → en curso). El servidor hace lo mismo; si falla, se relee. Sin releer todo: un texto que
+       espera su guardado en otra tarea no se pierde de la pantalla. */
+    setFases((fs) =>
+      fs.map((f) => {
+        if (f.id !== hallada.f.id) return f;
+        const tasks = f.tasks.map((t) => (t.id === taskId ? { ...t, status: next } : t));
+        // Las que existen: una tarea nueva sin guardar no cuenta (el servidor tampoco la tiene).
+        const guardadas = tasks.filter((t) => t.id);
+        const resueltas = guardadas.length > 0 && guardadas.every((t) => t.status === "DONE" || t.status === "SUSPENDED");
+        const status = resueltas ? "DONE" : f.status === "DONE" ? "IN_PROGRESS" : f.status;
+        return { ...f, tasks, status };
+      }),
+    );
+    try {
+      await pedir(`/api/projects/${hallada.f.proyectoId}/timeline/tasks/${taskId}`, { method: "PATCH", body: JSON.stringify({ status: next }) });
+      void refrescarAcceso();
+    } catch (e) {
+      fallo(e);
+    }
+  };
+
+  const agregar = (phaseKey: string, weekIndex: number) => {
+    const key = `n:${++siguiente.current}`;
+    setFases((fs) =>
+      fs.map((f) =>
+        f.id === phaseKey
+          ? {
+              ...f,
+              tasks: [
+                ...f.tasks,
+                {
+                  key, title: "", weekIndex, semanas: null, order: f.tasks.length, status: "PENDING", notes: null, needsValidation: false,
+                  source: "HUMAN", statusSource: null, statusChangedByEmail: null, statusChangedAt: null, party: "SMARTEAM", type: "TASK",
+                  startDateOverride: null, dueDateOverride: null,
+                },
+              ],
+            }
+          : f,
+      ),
+    );
+    setAbierta({ phaseKey, taskKey: key });
+  };
+
+  const quitar = async (_phaseKey: string, taskKey: string) => {
+    const hallada = buscar(taskKey);
+    if (!hallada) return;
+    const p = pendientes.current.get(taskKey);
+    if (p) clearTimeout(p.timer);
+    pendientes.current.delete(taskKey);
+    setFases((fs) => fs.map((f) => ({ ...f, tasks: f.tasks.filter((t) => t.key !== taskKey) })));
+    if (!hallada.tarea.id) {
+      if (creando.current.has(taskKey)) borrarAlCrear.current.add(taskKey);
+      return;
+    }
+    try {
+      await pedir(`/api/projects/${hallada.fase.proyectoId}/timeline/tasks/${hallada.tarea.id}/campos`, { method: "DELETE" });
+      void refrescarAcceso();
+    } catch (e) {
+      fallo(e);
+    }
+  };
+
+  const mover = async (taskKey: string, toPhaseKey: string, toWeekIndex: number, toOrder: number) => {
+    const hallada = buscar(taskKey);
+    const destino = fasesRef.current.find((f) => f.id === toPhaseKey);
+    if (!hallada?.tarea.id || !destino) return;
+    if (destino.proyectoId !== hallada.fase.proyectoId) {
+      toast.error("Una tarea no pasa de un proyecto a otro: créala en el loop de destino.");
+      return;
+    }
+    try {
+      await pedir(`/api/projects/${hallada.fase.proyectoId}/timeline/tasks/${hallada.tarea.id}/campos`, {
+        method: "PATCH",
+        body: JSON.stringify({ phaseId: toPhaseKey, weekIndex: toWeekIndex, order: toOrder }),
+      });
+      await cargar();
+    } catch (e) {
+      fallo(e);
+    }
+  };
+
+  const ganttPhases: GanttPhase[] = useMemo(
+    () =>
+      fases.map((f) => ({
+        key: f.id,
+        id: f.id,
+        name: f.name,
+        durationWeeks: f.durationWeeks,
+        startWeek: f.startWeek,
+        sessionCount: f.sessionCount,
+        activityType: f.activityType,
+        status: f.status,
+        needsValidation: f.needsValidation,
+        loopNumero: f.loopNumero,
+        proyecto: f.proyectoNombre,
+        tasks: f.tasks.map(
+          (t): GanttTask => ({
+            key: t.key,
+            id: t.id,
+            title: t.title,
+            weekIndex: t.weekIndex,
+            semanas: t.semanas,
+            status: t.status,
+            notes: t.notes,
+            needsValidation: t.needsValidation,
+            source: t.source,
+            statusSource: t.statusSource ?? undefined,
+            statusChangedByEmail: t.statusChangedByEmail,
+            statusChangedAt: t.statusChangedAt,
+            party: t.party,
+            type: t.type,
+            startDateOverride: t.startDateOverride,
+            dueDateOverride: t.dueDateOverride,
+          }),
+        ),
+      })),
+    [fases],
+  );
 
   if (error && !plan) {
     return (
@@ -196,7 +373,6 @@ export default function PlanGeneralDeLaCuenta({ clientId, onAbrirProyecto }: { c
             {Array.from({ length: 8 }, (_, i) => (
               <div key={i} className="flex items-center gap-3">
                 <Skeleton className="h-4 w-40" />
-                <Skeleton className="h-4 w-56" />
                 <Skeleton className="h-3 flex-1" />
               </div>
             ))}
@@ -206,12 +382,12 @@ export default function PlanGeneralDeLaCuenta({ clientId, onAbrirProyecto }: { c
     );
   }
 
-  // Las semanas del loop, más las que la actividad tiene hoy aunque se salgan (el loop se acortó después).
-  const semanasDelLoop = borrador
-    ? [...new Set([...Array.from({ length: borrador.grupo.faseSemanas }, (_, i) => borrador.grupo.faseDesde + i), borrador.desde, borrador.hasta])].sort(
-        (a, b) => a - b,
-      )
-    : [];
+  const ancla = plan.ancla ? plan.ancla.slice(0, 10) : null;
+  const faseAbierta = abierta ? ganttPhases.find((f) => f.key === abierta.phaseKey) : undefined;
+  const tareaAbierta = faseAbierta?.tasks.find((t) => t.key === abierta?.taskKey) ?? null;
+  const todas = ganttPhases.flatMap((f) => f.tasks.map((t) => ({ phaseKey: f.key, taskKey: t.key })));
+  const lugar = abierta ? todas.findIndex((x) => x.taskKey === abierta.taskKey) : -1;
+  const sinDetalle = plan.proyectos.filter((p) => !p.detalleConfirmado);
 
   return (
     <div className="space-y-6 px-8 pb-10 pt-6">
@@ -219,127 +395,73 @@ export default function PlanGeneralDeLaCuenta({ clientId, onAbrirProyecto }: { c
         <div className="space-y-1">
           <h2 className="text-sm font-semibold text-fg">Plan general</h2>
           <p className="max-w-2xl text-xs text-fg-muted">
-            Los loops de {proyectos === 1 ? "su proyecto" : `sus ${proyectos} proyectos`} en un solo plan. Lo que cambias aquí cambia en el
-            cronograma de cada proyecto, y al revés.{puede.editar ? " Haz clic en una actividad o en su barra para moverla de semana o cambiarle el estado." : ""}
-            {plan.grupos.some((g) => g.filas.some((f) => f.porValidar)) &&
-              " Las marcadas «por validar» las sugirió un agente: el cliente no las ve hasta que alguien las revisa y las guarda."}
+            El cronograma de los loops de {plan.proyectos.length === 1 ? "su proyecto" : `sus ${plan.proyectos.length} proyectos`}, juntos. Cada
+            tarea es la de su proyecto: lo que cambias aquí cambia en su cronograma, y al revés. Las fases se editan en el cronograma de
+            cada proyecto.
           </p>
+          {plan.proyectos.length > 0 && (
+            <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-fg-muted">
+              <span>Proyectos:</span>
+              {plan.proyectos.map((p) => (
+                <BotonEnlace key={p.id} onClick={() => onAbrirProyecto(p.id)}>
+                  {p.nombre}
+                </BotonEnlace>
+              ))}
+            </p>
+          )}
         </div>
-        {acceso && puede.editar && <AccesoAlPlan clientId={clientId} acceso={acceso} onCambio={setAcceso} />}
+        {acceso && puede.editar && <AccesoAlPlan clientId={clientId} acceso={acceso} onCambio={cambiarAcceso} />}
       </div>
 
-      {plan.grupos.length === 0 ? (
+      {sinDetalle.length > 0 && (
+        <Alert variant="warning">
+          El cliente ve los loops de {sinDetalle.map((p) => `«${p.nombre}»`).join(", ")} sin sus tareas: falta confirmar el detalle en el
+          cronograma de ese proyecto (lo mismo que en su cronograma compartible).
+        </Alert>
+      )}
+
+      {ganttPhases.length === 0 ? (
         <EmptyState
           title="Todavía no hay loops"
           description="Un loop es una fase del cronograma de un proyecto marcada con su número. Cuando algún proyecto los tenga, aparecen aquí juntos."
         />
       ) : (
-        <div className="rounded-xl border border-line bg-surface p-4">
-          <GanttDelPlan
-            grupos={grupos}
-            semanas={plan.semanas}
-            arranque={plan.arranque}
-            tema="interno"
-            onElegirFila={puede.editar ? abrir : undefined}
-            onAgregar={puede.editar ? agregar : undefined}
-          />
-        </div>
+        <TimelineGantt
+          anchor={ancla}
+          phases={ganttPhases}
+          readOnly={!puede.editar}
+          canDelete={puede.borrar}
+          onToggleStatus={(id, next) => void cambiarEstado(id, next)}
+          onUpdateTask={actualizar}
+          onAddTask={agregar}
+          onMoveTask={(tk, ph, w, o) => void mover(tk, ph, w, o)}
+          onOpenTask={(pk, tk) => setAbierta({ phaseKey: pk, taskKey: tk })}
+        />
       )}
 
-      <Drawer
-        open={!!borrador}
-        onClose={() => !guardando && setBorrador(null)}
-        title={borrador?.tareaId ? "Editar la actividad" : "Nueva actividad"}
-        description={borrador ? `${rotuloDelLoop(borrador.grupo.loopNumero, borrador.grupo.nombre)} · ${borrador.grupo.proyectoNombre}` : undefined}
-        footer={
-          borrador && (
-            <div className="flex w-full flex-wrap items-center gap-2">
-              <BotonAzul onClick={() => void guardar()} disabled={guardando}>
-                {guardando ? "Guardando…" : "Guardar"}
-              </BotonAzul>
-              <BotonBlanco onClick={() => setBorrador(null)} disabled={guardando}>
-                Cancelar
-              </BotonBlanco>
-              {borrador.tareaId && puede.borrar && (
-                <BotonEnlace onClick={() => setBorrando(true)} className="ml-auto">
-                  Eliminar
-                </BotonEnlace>
-              )}
-            </div>
-          )
-        }
-      >
-        {borrador && (
-          <div className="space-y-4">
-            <Field label="Actividad" required>
-              <Input value={borrador.titulo} onChange={(e) => setBorrador({ ...borrador, titulo: e.target.value })} placeholder="Revisión de campañas y activos" autoFocus />
-            </Field>
-            <Field label="Tipo">
-              <Selector
-                etiqueta="Tipo de la actividad"
-                placeholder="Sin tipo"
-                valor={borrador.tipo ?? ""}
-                opciones={[{ value: "", label: "Sin tipo" }, ...TIPOS_DE_TRABAJO.map((t) => ({ value: t, label: ETIQUETA_DEL_TIPO[t] }))]}
-                onElegir={(v) => setBorrador({ ...borrador, tipo: v ? (v as TipoDeTrabajo) : null })}
-              />
-            </Field>
-            <div className="grid grid-cols-2 gap-3">
-              <Field label="Desde la semana">
-                <Selector
-                  etiqueta="Semana en que empieza"
-                  placeholder="Semana"
-                  valor={String(borrador.desde)}
-                  opciones={semanasDelLoop.map((s) => ({ value: String(s), label: `S${s}` }))}
-                  onElegir={(v) => {
-                    const d = Number(v);
-                    setBorrador({ ...borrador, desde: d, hasta: Math.max(d, borrador.hasta) });
-                  }}
-                />
-              </Field>
-              <Field label="Hasta la semana">
-                <Selector
-                  etiqueta="Semana en que termina"
-                  placeholder="Semana"
-                  valor={String(borrador.hasta)}
-                  opciones={semanasDelLoop.filter((s) => s >= borrador.desde).map((s) => ({ value: String(s), label: `S${s}` }))}
-                  onElegir={(v) => setBorrador({ ...borrador, hasta: Number(v) })}
-                />
-              </Field>
-            </div>
-            <Field label="Estado">
-              <Segmentado
-                etiqueta="Estado de la actividad"
-                opciones={ESTADOS.map((e) => ({ clave: e, etiqueta: ETIQUETA_DEL_ESTADO[e] }))}
-                valor={borrador.estado}
-                onCambio={(e) => setBorrador({ ...borrador, estado: e })}
-              />
-            </Field>
-            <Field label="Detalle" hint="La acción, el entregable y quiénes participan. Es interno: el cliente no lo ve en el plan.">
-              <Textarea rows={5} value={borrador.detalle} onChange={(e) => setBorrador({ ...borrador, detalle: e.target.value })} />
-            </Field>
-            <button
-              type="button"
-              onClick={() => {
-                const id = borrador.grupo.proyectoId;
-                setBorrador(null);
-                onAbrirProyecto(id);
-              }}
-              className="text-xs font-medium text-brand hover:underline"
-            >
-              Abrir el proyecto «{borrador.grupo.proyectoNombre}»
-            </button>
-          </div>
-        )}
-      </Drawer>
-
-      <ConfirmDialog
-        open={borrando}
-        onCancel={() => setBorrando(false)}
-        onConfirm={borrar}
-        title="¿Eliminar la actividad?"
-        description="Sale del plan y del cronograma de su proyecto. Si solo no se va a hacer, mejor márcala en el cronograma del proyecto como suspendida."
-        confirmLabel="Eliminar"
-        variant="destructive"
+      <TaskDetailDrawer
+        open={!!tareaAbierta}
+        task={tareaAbierta}
+        phaseKey={abierta?.phaseKey ?? null}
+        phaseName={faseAbierta ? `${String(faseAbierta.loopNumero).padStart(2, "0")} · ${faseAbierta.name} · ${faseAbierta.proyecto}` : ""}
+        phaseDurationWeeks={faseAbierta?.durationWeeks ?? 1}
+        absolutePhaseStart={faseAbierta?.startWeek ?? 0}
+        anchor={ancla}
+        onClose={() => {
+          // Una tarea nueva que se cierra sin título no queda: el cronograma no guarda tareas en blanco.
+          if (abierta && tareaAbierta && !tareaAbierta.id && !tareaAbierta.title.trim()) void quitar(abierta.phaseKey, abierta.taskKey);
+          setAbierta(null);
+        }}
+        onToggleStatus={(id, next) => void cambiarEstado(id, next)}
+        onUpdateTask={actualizar}
+        onRemoveTask={(pk, tk) => void quitar(pk, tk)}
+        canDelete={puede.borrar}
+        onNavigate={(dir) => {
+          const otra = todas[lugar + dir];
+          if (otra) setAbierta(otra);
+        }}
+        hasPrev={lugar > 0}
+        hasNext={lugar >= 0 && lugar < todas.length - 1}
       />
     </div>
   );
@@ -410,7 +532,7 @@ function AccesoAlPlan({ clientId, acceso, onCambio }: { clientId: string; acceso
           setRevocando(false);
         }}
         title="Acceso del cliente al plan general"
-        description="Una página con el plan como un solo gantt, sin los proyectos de adentro ni el detalle de cada actividad. Quien tenga el enlace la ve."
+        description="La misma página del cronograma compartible, con los loops de todos los proyectos como un solo plan y sin los proyectos de adentro. Quien tenga el enlace la ve."
       >
         <div className="space-y-3">
           {error && <Alert variant="danger">{error}</Alert>}

@@ -861,7 +861,7 @@ export const TEXTO_DEL_DESCARTE = "El cronograma queda como está y la propuesta
  * atrasadas del mensaje (`atrasadas`, mensaje-de-la-propuesta.ts). Sin ancla o sin `hoy` (antes de hidratar), nunca.
  */
 export function semanaVencida(ancla: string | null, inicio: number, semana: number, hoy: Date | null, status = "PENDING"): boolean {
-  return isOverdueByDate(overduePlannedEnd(ancla, inicio, semana), hoy, status);
+  return isOverdueByDate(overduePlannedEnd(ancla, inicio, semana, null), hoy, status); // una semana, no una tarea
 }
 
 const SEMANA_MS = 7 * 86_400_000;

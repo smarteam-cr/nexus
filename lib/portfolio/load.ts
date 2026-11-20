@@ -184,6 +184,7 @@ export async function loadPortfolio(
                   id: true,
                   status: true,
                   weekIndex: true,
+                  semanas: true,
                   actualStart: true,
                   actualEnd: true,
                   needsValidation: true,
@@ -356,7 +357,7 @@ export function summaryDesdeArbol(
       durationWeeks: ph.durationWeeks, startWeek: ph.startWeek,
       actualStart: ph.actualStart, actualEnd: ph.actualEnd,
       tasks: ph.tasks.map((t) => ({
-        id: t.id, status: t.status, weekIndex: t.weekIndex,
+        id: t.id, status: t.status, weekIndex: t.weekIndex, semanas: t.semanas,
         actualStart: t.actualStart, actualEnd: t.actualEnd, needsValidation: t.needsValidation,
       })),
     })),

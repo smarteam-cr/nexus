@@ -3,9 +3,8 @@
 -- SOLO ADITIVO, inocuo para el código viejo (que no lee nada de esto):
 --   "TimelinePhase"."loopNumero"     el número del loop que ES esta fase (01 · Customer 360°…). null = una fase común.
 --                                    Las fases con número son las filas del plan general de la cuenta, en ese orden.
---   "TimelineTask"."semanas"         cuántas semanas dura la tarea desde su `weekIndex`. null = una (lo de siempre).
---   "TimelineTask"."tipoDeTrabajo"   diagnostico | diseno | ejecucion | optimizacion | medicion | continuidad | cierre.
---                                    null = sin tipo (todas las tareas de antes).
+--   "TimelineTask"."semanas"         cuántas semanas dura la tarea desde su `weekIndex`, en TODOS los cronogramas.
+--                                    null = una (lo de siempre).
 --   "AccesoAlPlanGeneral"            el enlace con que el cliente ve el plan general en /external/plan/[token] y la
 --                                    foto PUBLICADA que ve (como AccesoALaEscala). Uno por cuenta; revocable.
 --                                    Con RLS y sin policies (lock-down, ARCHITECTURE §4.5): solo Prisma la lee.
@@ -15,13 +14,12 @@
 -- Volver atrás (borra lo nuevo; con revisión):
 --   DROP TABLE IF EXISTS "AccesoAlPlanGeneral";
 --   ALTER TABLE "TimelinePhase" DROP COLUMN IF EXISTS "loopNumero";
---   ALTER TABLE "TimelineTask" DROP COLUMN IF EXISTS "semanas", DROP COLUMN IF EXISTS "tipoDeTrabajo";
+--   ALTER TABLE "TimelineTask" DROP COLUMN IF EXISTS "semanas";
 --
 -- Correr (PowerShell):  $env:ALLOW_PROD_WRITE="1"; npx prisma db execute --file scripts/sql/2026-11-19-plan-general-de-la-cuenta.sql; Remove-Item Env:ALLOW_PROD_WRITE
 
 ALTER TABLE "TimelinePhase" ADD COLUMN IF NOT EXISTS "loopNumero" INTEGER;
 ALTER TABLE "TimelineTask" ADD COLUMN IF NOT EXISTS "semanas" INTEGER;
-ALTER TABLE "TimelineTask" ADD COLUMN IF NOT EXISTS "tipoDeTrabajo" TEXT;
 
 CREATE TABLE IF NOT EXISTS "AccesoAlPlanGeneral" (
   "id"           TEXT NOT NULL,

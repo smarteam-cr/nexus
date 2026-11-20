@@ -436,7 +436,7 @@ describe("L3 P3c · el Gantt: lo que no se ve sin clics (el teclado, el foco, la
     for (const src of [RAMA_PROPUESTA, FILA]) {
       expect(src).not.toMatch(/SortableRow|SortableContext|useSortable|DroppableWeek/);
     }
-    expect(contiene(RAMA_PROPUESTA, "filaDeLaPropuesta(fila, tasksByKey, plannedEnd)")).toBe(true);
+    expect(contiene(RAMA_PROPUESTA, "filaDeLaPropuesta(fila, tasksByKey, range.start, relWeek)")).toBe(true);
     expect(contiene(RAMA_PROPUESTA, "propuesta.semanasPorKey.get(p.key)"), "el desplegado dejó el orden de la vista").toBe(true);
   });
 

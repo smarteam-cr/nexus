@@ -77,7 +77,7 @@ import { loadProjectSummaryDesdeArbol } from "@/lib/portfolio/load";
 import type { ProjectSummary } from "@/lib/portfolio/summary";
 import { limitesDeLaFila, type LimitesDelCronograma } from "@/lib/timeline/limites";
 import { SELECT_LIMITES, conSemanaCeroDelPipeline } from "@/lib/timeline/limites-servidor";
-import { semanasQueCaben } from "@/lib/plan-general/tipos";
+import { semanasQueCaben } from "@/lib/timeline/weeks";
 // Auditoría del deshacer (2026-10-05): la versión de la foto (T2), recrear lo borrado (T1) y el borrado
 // explícito de la persona (T5). Puro, con sus tests en lib/timeline/guardado-del-cronograma.test.ts.
 import {
@@ -394,10 +394,9 @@ async function loadTimeline(projectId: string): Promise<TimelineResponse | { exi
               actualEnd: true,
               // 2026-11-18: las horas que puso el detalle, para comparar contra las horas vendidas (lib/timeline/limites.ts).
               horasEstimadas: true,
-              // 2026-11-19 (plan general de la cuenta): cuántas semanas dura y su tipo. Solo lectura acá: el PUT no las
+              // 2026-11-19: cuántas semanas dura la tarea (null = una). Se edita en el detalle de la tarea y
               // manda ni las toca; se editan por .../tasks/[taskId]/campos.
               semanas: true,
-              tipoDeTrabajo: true,
             },
           },
         },
@@ -692,6 +691,7 @@ export async function PUT(
               type: true,
               startDateOverride: true,
               dueDateOverride: true,
+              semanas: true,
             },
           },
         },
@@ -765,7 +765,6 @@ export async function PUT(
         startDateOverride: Date | null;
         dueDateOverride: Date | null;
         semanas: number | null;
-        tipoDeTrabajo: string | null;
         source: TimelinePhaseSource;
         status: TimelineTaskStatus;
         needsValidation: boolean;
@@ -963,9 +962,8 @@ export async function PUT(
                 type: t.type ?? null,
                 startDateOverride: t.startDateOverride ? new Date(t.startDateOverride) : null,
                 dueDateOverride: t.dueDateOverride ? new Date(t.dueDateOverride) : null,
-                // El plan general (2026-11-19): recrear (también moverla de fase) conserva cuánto dura y su tipo.
+                // Recrear (también moverla de fase) conserva cuánto dura, recortado a lo que cabe.
                 semanas: semanasQueCaben(t.semanas, t.weekIndex, p.durationWeeks),
-                tipoDeTrabajo: t.tipoDeTrabajo ?? null,
                 ...r,
               },
               select: { id: true },
@@ -991,7 +989,8 @@ export async function PUT(
               (t.party !== undefined && (existingTask.party ?? null) !== (t.party ?? null)) ||
               (t.type !== undefined && (existingTask.type ?? null) !== (t.type ?? null)) ||
               (t.startDateOverride !== undefined && (existingTask.startDateOverride?.toISOString() ?? null) !== isoDate(t.startDateOverride)) ||
-              (t.dueDateOverride !== undefined && (existingTask.dueDateOverride?.toISOString() ?? null) !== isoDate(t.dueDateOverride));
+              (t.dueDateOverride !== undefined && (existingTask.dueDateOverride?.toISOString() ?? null) !== isoDate(t.dueDateOverride)) ||
+              (t.semanas !== undefined && (existingTask.semanas ?? null) !== semanasQueCaben(t.semanas, t.weekIndex, p.durationWeeks));
             if (contentChanged) {
               await tx.timelineTask.update({
                 where: { id: t.id },
@@ -1005,6 +1004,8 @@ export async function PUT(
                   // #4 — override de fechas por tarea (undefined = sin cambio; null = volver a derivada).
                   startDateOverride: t.startDateOverride !== undefined ? (t.startDateOverride ? new Date(t.startDateOverride) : null) : undefined,
                   dueDateOverride: t.dueDateOverride !== undefined ? (t.dueDateOverride ? new Date(t.dueDateOverride) : null) : undefined,
+                  // Cuántas semanas dura (undefined = sin cambio), recortado a lo que cabe en la fase.
+                  semanas: t.semanas !== undefined ? semanasQueCaben(t.semanas, t.weekIndex, p.durationWeeks) : undefined,
                   source: existingTask.source === "AGENT" ? "MODIFIED" : existingTask.source,
                   needsValidation: false, // humano revisó el contenido
                 },
@@ -1019,6 +1020,7 @@ export async function PUT(
                   type: existingTask.type ?? null,
                   startDateOverride: existingTask.startDateOverride?.toISOString() ?? null,
                   dueDateOverride: existingTask.dueDateOverride?.toISOString() ?? null,
+                  semanas: existingTask.semanas ?? null,
                 },
                 {
                   title: t.title,
@@ -1033,10 +1035,11 @@ export async function PUT(
                     t.dueDateOverride !== undefined
                       ? isoDate(t.dueDateOverride)
                       : (existingTask.dueDateOverride?.toISOString() ?? null),
+                  semanas: t.semanas !== undefined ? semanasQueCaben(t.semanas, t.weekIndex, p.durationWeeks) : (existingTask.semanas ?? null),
                 },
               );
               if (d) {
-                const moved = ["weekIndex", "startDateOverride", "dueDateOverride"].some((k) => k in d.after);
+                const moved = ["weekIndex", "startDateOverride", "dueDateOverride", "semanas"].some((k) => k in d.after);
                 draftEvents.push({
                   entityType: "TASK",
                   entityId: t.id,
@@ -1059,9 +1062,8 @@ export async function PUT(
               type: t.type ?? null,
               startDateOverride: t.startDateOverride ? new Date(t.startDateOverride) : null,
               dueDateOverride: t.dueDateOverride ? new Date(t.dueDateOverride) : null,
-              // El plan general (2026-11-19): una tarea que cruza de fase llega sin id y conserva cuánto dura y su tipo.
+              // Una tarea que cruza de fase llega sin id y conserva cuánto dura, recortado a lo que cabe.
               semanas: semanasQueCaben(t.semanas, t.weekIndex, p.durationWeeks),
-              tipoDeTrabajo: t.tipoDeTrabajo ?? null,
               /**
                * ⛔ QUIÉN LA CREÓ, y hasta hoy siempre decía «una persona».
                *

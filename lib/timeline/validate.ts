@@ -7,7 +7,6 @@
  * sea un PUT normal. «Pedir cambio con IA» (POST /timeline/assist) se retiró en
  * E4. Server-side only.
  */
-import { esTipoDeTrabajo } from "@/lib/plan-general/tipos";
 import type { TimelineActivityType } from "@prisma/client";
 import { esInstanteDeProyecto, MENSAJE_FECHA_FUERA_DE_RANGO } from "./fecha-de-arranque";
 import {
@@ -41,11 +40,9 @@ export interface TaskInput {
   /** #4 — override de fechas (ISO). undefined = no tocar; null = derivar de la semana; string = set */
   startDateOverride?: string | null;
   dueDateOverride?: string | null;
-  /** El plan general (2026-11-19): cuántas semanas dura y su tipo de trabajo. El PUT los usa SOLO al crear o recrear
-   *  una tarea (moverla de fase la recrea): una tarea que existe los conserva, se editan por .../tasks/[id]/campos.
-   *  Tolerante: un valor que no se entiende se ignora. */
-  semanas?: number;
-  tipoDeTrabajo?: string;
+  /** Cuántas semanas dura desde su semana (2026-11-19). undefined = no tocar (una pantalla de antes no la manda);
+   *  null o 1 = una semana. Tolerante: un valor que no se entiende se ignora. El servidor la recorta a lo que cabe. */
+  semanas?: number | null;
   /** Auditoría del deshacer (2026-10-05): lo que la pantalla sabe de la fila (estado, origen) por si su
    *  id ya no existe y hay que RECREARLA. Para una fila que existe se ignora: el estado va por PATCH.
    *  Ver lib/timeline/guardado-del-cronograma.ts. */
@@ -312,8 +309,9 @@ export function validateTimelinePayload(raw: unknown): ValidationResult {
           type: tType,
           startDateOverride: tStart,
           dueDateOverride: tDue,
-          ...(typeof tk.semanas === "number" && Number.isInteger(tk.semanas) && tk.semanas > 1 ? { semanas: tk.semanas } : {}),
-          ...(esTipoDeTrabajo(tk.tipoDeTrabajo) ? { tipoDeTrabajo: tk.tipoDeTrabajo } : {}),
+          ...(tk.semanas === null || (typeof tk.semanas === "number" && Number.isInteger(tk.semanas) && tk.semanas >= 1)
+            ? { semanas: tk.semanas === null || tk.semanas === 1 ? null : tk.semanas }
+            : {}),
           // Tolerante: un respaldo que no se entiende se ignora, nunca traba el guardado.
           respaldo: leerRespaldoDeTarea((tk as { respaldo?: unknown }).respaldo),
         });

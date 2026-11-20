@@ -15552,7 +15552,7 @@ mano se perdía sin aviso en tres caminos.
   prioridades) sigue cambiando para todas las empresas cuando se publica la escala, ahora recién cuando cada una vuelve a
   publicar su página.
 
-## El plan general de la cuenta: los loops de varios proyectos en un solo gantt (2026-11-19, kölbi)
+## El plan general de la cuenta: los loops de varios proyectos en el mismo cronograma de Nexus (2026-11-19, kölbi)
 
 **Contexto.** kölbi lleva un ciclo SmartLoop de 12 semanas con siete loops: tres de marketing y cuatro de ventas.
 Valentina lo tenía en un Excel y cada semana le pedía a Claude una imagen del gantt para el check-in. Elías decidió
@@ -15561,27 +15561,42 @@ un grupo del cronograma de su proyecto, y un gantt general de la cuenta que Vale
 plan. Nexus sigue pensado para que un proyecto sea un loop; siete proyectos para un cliente eran demasiados, y los
 entregables de kölbi se hacen por área.
 
-- **Un loop es una fase con número** (`TimelinePhase.loopNumero`). Las actividades son sus tareas, con dos columnas
-  nuevas: `semanas` (cuántas dura desde `weekIndex`; null = una) y `tipoDeTrabajo` (diagnóstico, diseño, ejecución,
-  optimización; medición, continuidad y cierre quedan para lo transversal). El detalle largo va en las notas de la tarea,
-  que son internas. SQL `2026-11-19-plan-general-de-la-cuenta.sql`.
-- **El plan general no guarda nada propio** (`lib/plan-general/armar.ts`): se arma leyendo los cronogramas activos de la
-  cuenta, cada fase con número es un grupo, en orden de número, y las semanas van desde 1 contadas desde el arranque más
-  temprano. Editar en el plan es editar la tarea en su proyecto: estado por el PATCH de siempre (fase, tiempos y watchdog
-  incluidos), y semanas, tipo, nombre y detalle por `PATCH .../tasks/[taskId]/campos`, con la misma vara
-  (`guardTimelineEdit`; borrar, `guardTimelineDelete`); la pantalla esconde lo que el rol no puede. Como el autoguardado
-  del Gantt, no deja TimelineChange pero le avisa al vigía; el Gantt del proyecto abierto en otra pestaña nota el cambio
-  de semana por la versión del cronograma (T2). El PUT del Gantt conserva `semanas` y `tipoDeTrabajo` al recrear una
-  tarea (moverla de un loop a otro la recrea); una tarea que existe los conserva siempre.
-  - *Lo «por validar»* (`needsValidation`, una sugerencia de un agente) se ve marcado en el plan y no llega al cliente
-    (la regla única `cruzaAlCliente`); guardarla en el plan es revisarla y le quita la marca.
-  - *Diferencia aceptada:* el plan cuenta las semanas desde 1 (como el plan de Valentina y lo que ve el cliente) y el
-    Gantt del proyecto desde 0 (`S0`). La cabecera del plan dice la fecha de cada semana al pasar el mouse.
+- ⛔ **Todos los cronogramas usan el MISMO motor** (Elías, 19 nov, al revisar la primera versión: «No entiendo por qué
+  generaste uno distinto. Todo debe ser traducido a fases, tareas, semanas y ser administrables»). La primera versión
+  tenía un gantt propio (`GanttDelPlan`), un editor propio y un «tipo de trabajo» por tarea; se retiraron el mismo día.
+  Un plan, una vista o un documento que muestre un cronograma lo hace con `TimelineGantt` + `TaskDetailDrawer` (el
+  equipo) y con `TimelineSection` (el cliente). Si le falta algo, se le agrega al motor para todos.
+- **Un loop es una fase con número** (`TimelinePhase.loopNumero`); el Gantt lo pinta «01» antes del nombre, en el plan y
+  en el cronograma del proyecto. Las actividades son sus tareas. El detalle largo va en las notas de la tarea, que son
+  internas. El tipo de trabajo lo dice el tipo de actividad de la FASE, como en cualquier cronograma: no hay tipo por
+  tarea. SQL `2026-11-19-plan-general-de-la-cuenta.sql`.
+- **Una tarea puede durar varias semanas, en TODOS los cronogramas** (`TimelineTask.semanas`, null = una). Se elige en el
+  panel de la tarea («Dura»), se guarda recortada a lo que queda de la fase (`semanasQueCaben`, en el PUT, en crear y en
+  `campos`) y mover la tarea de semana la acorta si ya no cabe. Todo fin de tarea sale de `overduePlannedEnd` (ahora con
+  la duración OBLIGATORIA) o de `ultimaSemanaDeLaTarea` (lib/timeline/weeks.ts): el atraso del Gantt, de la cartera, del
+  vigía, de la carga, de los tiempos, del ciclo y de lo que debe el cliente, y la promesa congelada (línea base). Una
+  tarea de tres semanas vence al final de la tercera. `lib/timeline/semanas-de-la-tarea.test.ts` frena a quien vuelva a
+  sumar `weekIndex + 1` a mano. El cierre del proyecto no cambia: lo dan las fases, y una tarea no se sale de la suya.
+  El cliente la ve con «N semanas» al lado (la duración cruza solo si es más de una: una foto vieja y una nueva de lo
+  mismo son iguales).
+- **El plan general es el Gantt de Nexus con las fases-loop de los proyectos de la cuenta** (`lib/plan-general/armar.ts`,
+  `PlanGeneralDeLaCuenta`). No guarda nada propio: cada fase arranca donde arranca en su cronograma más el corrimiento
+  de su proyecto (el arranque común es el más temprano), y las tareas son las mismas filas. El Gantt cuenta desde S0,
+  como el del proyecto. Editar en el plan es editar la tarea en su proyecto, con el mismo panel y la misma vara: el
+  estado por el PATCH de siempre (fase, tiempos y vigía incluidos), una tarea nueva por `POST .../tasks`, y lo demás
+  (título, detalle, semana, duración, responsable, tipo, fechas, moverla a otra fase de SU cronograma) por
+  `PATCH .../tasks/[taskId]/campos` (`guardTimelineEdit`; borrar, `guardTimelineDelete`). Una tarea no pasa de un
+  proyecto a otro. Las fases (nombre, semanas, arranque) se editan en el cronograma de cada proyecto. Como el
+  autoguardado del Gantt, no deja TimelineChange pero le avisa al vigía; el Gantt del proyecto abierto en otra pestaña
+  nota el cambio por la versión del cronograma (T2) y pide recargar.
 - **Está en el riel arriba de «Proyectos»** (respuesta 4 de Elías), solo si algún proyecto tiene loops.
 - **Se comparte como cualquier artefacto, con su propio «Acceso»** (respuesta 4): `AccesoAlPlanGeneral`, uno por cuenta,
   URL de 256 bits sin contraseña, revocable, con la foto PUBLICADA adentro, igual que La escala (16 nov). Crear el acceso
-  publica la primera vez; después solo «Publicar». La foto (`lib/plan-general/foto.ts`) no lleva proyectos, ids, el
-  detalle ni lo que está por validar. *Por qué no el acceso de un proyecto:* la decisión «Acceso externo — la dirección
+  publica la primera vez; después solo «Publicar». El cliente la ve con la MISMA página del cronograma compartible
+  (`TimelineLanding`, titulada «Plan de trabajo»). La foto (`lib/plan-general/foto.ts`, formato 2) se arma con el
+  chokepoint del cronograma externo, proyecto por proyecto (`readClientTimeline`: sin notas de tarea, sin lo suspendido
+  ni lo «por validar», sin tareas si el detalle no está confirmado), y se une (`unirParaElCliente`): solo las fases-loop,
+  con el nombre «01 · …», sin el nombre de los proyectos y sin particularidades (son de cada proyecto). *Por qué no el acceso de un proyecto:* la decisión «Acceso externo — la dirección
   nombra el proyecto» (10 sep) sigue en pie para las páginas de un proyecto; esta página es de la cuenta, como la escala
   y el estado de cuenta, y no nombra ningún proyecto.
 - **El handoff declara los loops** (respuesta 2: «debe ser la B»). Sección nueva `loops`, «Loops que cubre este

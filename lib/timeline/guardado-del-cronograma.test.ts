@@ -155,6 +155,8 @@ describe("T2 · versionDelCronograma — la huella de lo que el PUT escribe", ()
       (c) => ((c.phases[1].tasks[0] as { type: string | null }).type = "SESSION"),
       (c) => ((c.phases[1].tasks[0] as { startDateOverride?: string }).startDateOverride = "2026-10-07"),
       (c) => ((c.phases[1].tasks[0] as { dueDateOverride?: string }).dueDateOverride = "2026-10-09"),
+      // La duración (2026-11-19): la cambia el plan general de la cuenta sin pasar por esta pantalla.
+      (c) => ((c.phases[1].tasks[0] as { semanas?: number | null }).semanas = 3),
       (c) => (c.anchorStartDate = "2026-10-12T00:00:00.000Z"),
       (c) => (c.closeDateOverride = "2026-12-01T00:00:00.000Z"),
       // Una tarea BORRADA, una tarea NUEVA, una fase borrada.

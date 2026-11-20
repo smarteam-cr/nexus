@@ -370,7 +370,7 @@ export async function leerCronogramasDeCartera() {
           startWeek: true,
           activityType: true,
           sessionCount: true,
-          tasks: { select: { id: true, title: true, weekIndex: true, status: true, party: true, type: true, dueDateOverride: true, statusChangedByEmail: true } },
+          tasks: { select: { id: true, title: true, weekIndex: true, semanas: true, status: true, party: true, type: true, dueDateOverride: true, statusChangedByEmail: true } },
         },
       },
     },
@@ -389,7 +389,7 @@ export function aCronogramas(filas: CronogramaDb[]): CronogramaParaCarga[] {
       duracionSemanas: f.durationWeeks,
       semanaInicio: f.startWeek,
       tipo: f.activityType,
-      tareas: f.tasks.map((x) => ({ id: x.id, titulo: x.title, weekIndex: x.weekIndex, estado: x.status, parte: x.party, tipo: x.type, fechaManual: x.dueDateOverride })),
+      tareas: f.tasks.map((x) => ({ id: x.id, titulo: x.title, weekIndex: x.weekIndex, semanas: x.semanas, estado: x.status, parte: x.party, tipo: x.type, fechaManual: x.dueDateOverride })),
     })),
   }));
 }

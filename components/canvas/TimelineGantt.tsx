@@ -89,6 +89,8 @@ import {
   currentWeekIndex,
   absoluteWeek,
   overduePlannedEnd,
+  semanasDeLaTarea,
+  ultimaSemanaDeLaTarea,
   isOverdueByDate,
   projectedEnd,
   displayedEnd,
@@ -161,7 +163,7 @@ export interface GanttTask {
   /** #4 — override manual de fechas (ISO o null = derivar de la semana). */
   startDateOverride?: string | null;
   dueDateOverride?: string | null;
-  /** 2026-11-19: cuántas semanas dura desde su semana (null = una). Lo edita el plan general de la cuenta. */
+  /** 2026-11-19: cuántas semanas dura desde su semana (null = una). Se edita en el detalle de la tarea. */
   semanas?: number | null;
 }
 
@@ -184,6 +186,10 @@ export interface GanttPhase {
   status?: GanttTaskStatus;
   /** El agente del handoff estimó la fase/duración sin dato real en ventas → badge "estimada". */
   needsValidation?: boolean;
+  /** 2026-11-19: el número del loop (SmartLoop), si la fase es uno. Se pinta «01» antes del nombre. */
+  loopNumero?: number | null;
+  /** 2026-11-19: el proyecto de la fase, cuando el Gantt junta varios (el plan general de la cuenta). */
+  proyecto?: string | null;
   tasks: GanttTask[];
 }
 
@@ -195,7 +201,7 @@ interface Props {
   onToggleStatus?: (taskId: string, next: GanttTaskStatus) => void;
   /** Lo que va debajo de la fila de una tarea (hoy: «¿cuánto te tomó?», lib/tiempos). null = nada. */
   debajoDeLaTarea?: (taskId: string) => ReactNode;
-  onUpdateTask?: (phaseKey: string, taskKey: string, patch: { title?: string; notes?: string | null; weekIndex?: number; party?: "CLIENTE" | "SMARTEAM" | "AMBOS" | "DEV" | null; type?: "SESSION" | "TASK" | null }) => void;
+  onUpdateTask?: (phaseKey: string, taskKey: string, patch: { title?: string; notes?: string | null; weekIndex?: number; semanas?: number | null; party?: "CLIENTE" | "SMARTEAM" | "AMBOS" | "DEV" | null; type?: "SESSION" | "TASK" | null }) => void;
   onAddTask?: (phaseKey: string, weekIndex: number) => void;
   // Nota: el borrado de tarea se hace desde el TaskDetailDrawer, no desde la fila del Gantt.
   onSetAnchor?: (isoDate: string) => void; // yyyy-mm-dd — fijar arranque desde el Gantt
@@ -1312,14 +1318,18 @@ export default function TimelineGantt({
   const filaDeLaPropuesta = (
     fila: { key: string; extra: FilaExtra | null },
     tasksByKey: ReadonlyMap<string, GanttTask>,
-    plannedEnd: Date | null,
+    /** null = una fase fuera del calendario: sin fechas, nada sale atrasado. */
+    inicioDeLaFase: number | null,
+    semana: number,
   ) => {
     if (!propuesta) return null;
     const t = fila.extra ? null : tasksByKey.get(fila.key);
     if (!fila.extra && !t) return null;
     const marca = fila.extra ? fila.extra.marca : (propuesta.marcasPorKey.get(fila.key) ?? null);
     const status = fila.extra ? estadoDeLaExtra(fila.extra.status) : t!.status;
-    const overdue = isOverdueByDate(plannedEnd, today, status);
+    // Con SU duración, como el Gantt de siempre: una tarea de tres semanas no sale atrasada al pasar la primera.
+    const overdue =
+      inicioDeLaFase !== null && isOverdueByDate(overduePlannedEnd(anchor, inicioDeLaFase, semana, t?.semanas ?? null), today, status);
     return (
       <FilaDeLaPropuesta
         key={fila.key}
@@ -1399,7 +1409,7 @@ export default function TimelineGantt({
                     Semana {semana + 1}
                   </p>
                   <div className="space-y-1">
-                    {filas.map((x) => filaDeLaPropuesta({ key: x.key, extra: x }, new Map(), null))}
+                    {filas.map((x) => filaDeLaPropuesta({ key: x.key, extra: x }, new Map(), null, semana))}
                   </div>
                 </div>
               ))}
@@ -1615,7 +1625,9 @@ export default function TimelineGantt({
                  el proyecto solo. Medido sobre la cartera (2026-08-11): ordenaría mal
                  13 de los 14 proyectos desordenados — a Almotec le corría el cierre de
                  la S11 a la S17. Se explica el salto en vez de moverlo. */
-              const arrancaAntesQueLaDeArriba = i > 0 && range.start < ranges[i - 1].start;
+              // En un Gantt que junta proyectos (el plan general), el orden es por loop y la de arriba es de otro
+              // proyecto: el aviso (que habla de reordenar) no aplica.
+              const arrancaAntesQueLaDeArriba = i > 0 && !p.proyecto && range.start < ranges[i - 1].start;
               const meta = p.activityType ? ACTIVITY_META[p.activityType] : null;
               const isOpen = expanded.has(p.key);
               /* La marca de la vista «Ver la propuesta»: el fondo del token TAL CUAL (ya está al 15 %
@@ -1634,17 +1646,23 @@ export default function TimelineGantt({
                   tipoLabel: meta?.label ?? null,
                   needsValidation: p.needsValidation,
                   vencidas: paraLosAtrasos(p.tasks).filter((t) =>
-                    isOverdueByDate(overduePlannedEnd(anchor, range.start, t.weekIndex), today, t.status),
+                    isOverdueByDate(overduePlannedEnd(anchor, range.start, t.weekIndex, t.semanas), today, t.status),
                   ).length,
                 },
                 { phaseStart: range.start, durationWeeks: p.durationWeeks, curWeek },
               );
 
               const tasksByWeek = new Map<number, GanttTask[]>();
+              /* Las celdas de la barra miran las tareas que CORREN esa semana: una de tres semanas cuenta en las tres
+                 (hecho, atraso). La lista desplegada la pone una sola vez, en la semana en que arranca. */
+              const corrienEnLaSemana = new Map<number, GanttTask[]>();
               for (const t of p.tasks) {
                 const arr = tasksByWeek.get(t.weekIndex) ?? [];
                 arr.push(t);
                 tasksByWeek.set(t.weekIndex, arr);
+                for (let w = t.weekIndex; w <= ultimaSemanaDeLaTarea(t.weekIndex, t.semanas); w++) {
+                  corrienEnLaSemana.set(w, [...(corrienEnLaSemana.get(w) ?? []), t]);
+                }
               }
               /* L3 P3c: lo que la vista de la propuesta pinta en esta fase (por su clave: el id o `n:…`). Las
                  etiquetas que ya dice una casilla no se repiten como chips. */
@@ -1710,6 +1728,14 @@ export default function TimelineGantt({
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
                           </svg>
                         </button>
+                        {p.loopNumero != null && (
+                          <span
+                            className="flex-shrink-0 rounded px-1 py-0.5 text-[10px] font-bold tabular-nums bg-surface-hover text-fg-secondary border border-line"
+                            title={`Loop ${p.loopNumero}`}
+                          >
+                            {String(p.loopNumero).padStart(2, "0")}
+                          </span>
+                        )}
                         {editable && onUpdatePhase ? (
                           <input
                             value={p.name}
@@ -1767,6 +1793,7 @@ export default function TimelineGantt({
                         )}
                       </div>
                       <div className="ml-[18px] mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1">
+                        {p.proyecto && <span className="text-[10px] font-medium text-fg-muted">{p.proyecto}</span>}
                         {editable && onUpdatePhase ? (
                           <span className="flex items-center gap-1.5 text-[10px] text-fg-muted" onClick={(e) => e.stopPropagation()}>
                             <input
@@ -1893,11 +1920,12 @@ export default function TimelineGantt({
                       if (!inRange) return <div key={w} className="h-3 rounded bg-surface-hover/70" />;
 
                       const relWeek = w - range.start;
-                      const weekTasks = tasksByWeek.get(relWeek) ?? [];
+                      const weekTasks = corrienEnLaSemana.get(relWeek) ?? [];
                       const allDone = weekTasks.length > 0 && weekTasks.every((t) => t.status === "DONE" || t.status === "SUSPENDED");
                       const isPast = curWeek !== null && w < curWeek;
                       const isCur = curWeek === w;
-                      const weekOverdue = paraLosAtrasos(weekTasks).some((t) => isOverdueByDate(overduePlannedEnd(anchor, range.start, relWeek), today, t.status));
+                      // Cada tarea con SU fin: una de tres semanas no marca la primera como vencida.
+                      const weekOverdue = paraLosAtrasos(weekTasks).some((t) => isOverdueByDate(overduePlannedEnd(anchor, range.start, t.weekIndex, t.semanas), today, t.status));
                       // L3 P3c: una semana que suma la propuesta (una duración que crece, marcada), en verde.
                       const seSuma = !!vistaDeLaFase?.semanasQueSeSuman.includes(relWeek);
 
@@ -1950,7 +1978,6 @@ export default function TimelineGantt({
                           if (filas.length === 0) return null;
                           const absW = absoluteWeek(range.start, relWeek);
                           const yaPaso = !!vistaDeLaFase?.semanasQueYaPasaron.includes(relWeek);
-                          const plannedEnd = overduePlannedEnd(anchor, range.start, relWeek);
                           return (
                             <div key={relWeek} data-semana={relWeek}>
                               <p className="text-[10px] font-bold uppercase tracking-wider text-fg-muted border-b border-dashed border-line pb-1 mb-1.5 flex items-center">
@@ -1965,7 +1992,7 @@ export default function TimelineGantt({
                                   {yaPaso && <span className="text-danger-ink"> · ya pasó</span>}
                                 </span>
                               </p>
-                              <div className="space-y-1">{filas.map((fila) => filaDeLaPropuesta(fila, tasksByKey, plannedEnd))}</div>
+                              <div className="space-y-1">{filas.map((fila) => filaDeLaPropuesta(fila, tasksByKey, range.start, relWeek))}</div>
                             </div>
                           );
                         })}
@@ -2005,7 +2032,7 @@ export default function TimelineGantt({
                             <DroppableWeek id={`${p.key}::w${relWeek}`}>
                             <SortableContext items={weekTasks.map((wt) => wt.key)} strategy={verticalListSortingStrategy}>
                               {weekTasks.map((t) => {
-                                const overdue = isOverdueByDate(overduePlannedEnd(anchor, range.start, relWeek), today, t.status);
+                                const overdue = isOverdueByDate(overduePlannedEnd(anchor, range.start, relWeek, t.semanas), today, t.status);
                                 const canToggle = !readOnly && !!onToggleStatus && !!t.id;
                                 return (
                                   <Fragment key={t.key}>
@@ -2087,12 +2114,12 @@ export default function TimelineGantt({
                                       )}
                                     </div>
                                     {/* Chips informativos (read-only en la fila; se editan en el drawer) */}
-                                    {(t.semanas ?? 1) > 1 && (
+                                    {semanasDeLaTarea(t.semanas) > 1 && (
                                       <span
                                         className="text-[9px] font-bold uppercase tracking-wider rounded px-1.5 py-0.5 flex-shrink-0 border border-line text-fg-muted"
-                                        title={`Dura ${t.semanas} semanas desde esta. Se cambia en el plan general de la cuenta.`}
+                                        title={`Corre de la semana ${relWeek + 1} a la ${ultimaSemanaDeLaTarea(relWeek, t.semanas) + 1} de la fase. Se cambia en el detalle de la tarea.`}
                                       >
-                                        {t.semanas} sem
+                                        {semanasDeLaTarea(t.semanas)} semanas
                                       </span>
                                     )}
                                     {effType(t.type) === "SESSION" && (

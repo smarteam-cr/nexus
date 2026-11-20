@@ -149,6 +149,8 @@ const ESTADO_TEXTO: Record<string, string> = {
 // Tipo de tarea: solo se muestra cuando es SESIÓN (las TAREAS no muestran nada).
 // Navy de marca (la menta/teal quedó reservada para identidad Insider).
 const SESSION_META_LIGHT = { label: "Sesión", text: "#051849", bg: "#eef3fc", border: "#dbe4f3" };
+/** Una tarea de varias semanas (2026-11-19): chip neutro con la duración. */
+const DURACION_META_LIGHT = { label: "", text: "#475569", bg: "#f8fafc", border: "#e2e8f0" };
 const PARTY_META_LIGHT: Record<string, { label: string; text: string; bg: string; border: string }> = {
   CLIENTE:  { label: "Cliente",  text: "#b45309", bg: "#fffbeb", border: "#fde68a" }, // ámbar — lo que entrega el cliente
   SMARTEAM: { label: "Smarteam", text: "#07429A", bg: "#CFE2FA", border: "#b9cdf0" }, // royal de marca
@@ -246,7 +248,7 @@ function DetalleDeFase({
               {weekTasks.map((t, ti) => {
                 // Solo los estados que sabemos dibujar; uno desconocido no pinta círculo.
                 const conEstado = showProgress && !!t.status && t.status in ESTADO_TEXTO;
-                const overdue = showProgress && !!t.status && isOverdueByDate(overduePlannedEnd(anchor, rangeStart, relWeek), now, t.status);
+                const overdue = showProgress && !!t.status && isOverdueByDate(overduePlannedEnd(anchor, rangeStart, relWeek, t.semanas), now, t.status);
                 const pMeta = showProgress && t.party ? PARTY_META_LIGHT[t.party] : null;
                 return (
                   /* `flex-start` y no `center`: con el círculo a la izquierda, un título de dos
@@ -259,6 +261,11 @@ function DetalleDeFase({
                       </span>
                     )}
                     <span style={t.status === "DONE" ? { color: "var(--text-muted)" } : undefined}>{t.title}</span>
+                    {(t.semanas ?? 1) > 1 && (
+                      <span style={chipStyle(DURACION_META_LIGHT)} title={`Corre de la semana ${relWeek + 1} a la ${relWeek + t.semanas!} de esta fase`}>
+                        {t.semanas} semanas
+                      </span>
+                    )}
                     {overdue && <span style={chipStyle(OVERDUE_META_LIGHT)}>{OVERDUE_META_LIGHT.label}</span>}
                     {pMeta && <span style={chipStyle(pMeta)}>{pMeta.label}</span>}
                     {showProgress && t.type === "SESSION" && <span style={chipStyle(SESSION_META_LIGHT)}>{SESSION_META_LIGHT.label}</span>}

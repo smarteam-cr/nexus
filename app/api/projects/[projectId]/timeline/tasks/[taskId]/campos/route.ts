@@ -1,28 +1,47 @@
 /**
  * /api/projects/[projectId]/timeline/tasks/[taskId]/campos — editar o borrar UNA tarea sin mandar el cronograma entero
- * (2026-11-19, el plan general de la cuenta). El plan general muestra tareas de varios proyectos y edita cada una en su
- * proyecto: por el PUT bulk tendría que reescribir el árbol de cada cronograma por cada clic.
+ * (2026-11-19). La usa el plan general de la cuenta: muestra el MISMO Gantt y el MISMO panel de tarea con las fases de
+ * varios proyectos, y cada cambio se guarda en la tarea de su proyecto. Con el PUT del cronograma tendría que reescribir
+ * el árbol de cada proyecto por cada clic.
  *
- *   PATCH  { title?, notes?, tipoDeTrabajo?, weekIndex?, semanas? } → guardTimelineEdit (todo interno, incluido el CSE).
- *          La tarea tiene que caber en su fase: weekIndex + semanas ≤ durationWeeks (400 si no). Una tarea de la IA pasa a
- *          MODIFIED, como en el PUT. El estado NO va acá: sigue en el PATCH de la tarea (fase, tiempos y watchdog).
+ *   PATCH  { title?, notes?, weekIndex?, semanas?, party?, type?, startDateOverride?, dueDateOverride?, phaseId?, order? }
+ *          → guardTimelineEdit (la misma guarda del PUT). Lo que no viene no se toca. La tarea tiene que caber en su
+ *          fase: `semanas` se recorta a lo que queda de la fase (`semanasQueCaben`, como el PUT) y un `weekIndex` fuera
+ *          de la fase es 400. `phaseId` la mueve a otra fase del MISMO cronograma (nunca a otro proyecto) y `order` la
+ *          pone en ese lugar de su semana. Una tarea de la IA pasa a MODIFIED y deja de estar «por validar», como en el
+ *          PUT. El estado NO va acá: sigue en el PATCH de la tarea (fase, tiempos y watchdog).
  *   DELETE → guardTimelineDelete (todos menos el CSE: el CSE suspende, no borra).
  *
  * Como el autoguardado del Gantt, no escribe TimelineChange: el historial con motivo vive en «Subir» y en la IA. Sí
- * marca `lastEditedByHuman` y le avisa al vigía de Éxito del cliente (MOVED / EDITED / DELETED), como el PUT. El Gantt del proyecto abierto en otra pestaña lo nota por la versión del cronograma (T2).
+ * marca `lastEditedByHuman` y le avisa al vigía de Éxito del cliente (MOVED / EDITED / DELETED), como el PUT. El Gantt
+ * del proyecto abierto en otra pestaña lo nota por la versión del cronograma (T2) y pide recargar.
  */
 import { NextRequest, NextResponse } from "next/server";
+import type { TaskParty, TimelineTaskType } from "@prisma/client";
 import { guardTimelineDelete, guardTimelineEdit } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
 import { emitTimelineEventsSafe } from "@/lib/cs/timeline-events";
-import { esTipoDeTrabajo } from "@/lib/plan-general/tipos";
+import { semanasQueCaben } from "@/lib/timeline/weeks";
+import { PARTY_VALUES as PARTIES, TASK_TYPE_VALUES as TYPES } from "@/lib/timeline/validate";
+import { esInstanteDeProyecto } from "@/lib/timeline/fecha-de-arranque";
 
 type Ctx = { params: Promise<{ projectId: string; taskId: string }> };
+
+const mal = (error: string) => NextResponse.json({ error }, { status: 400 });
 
 function entero(v: unknown): number | null | undefined {
   if (v === undefined) return undefined;
   if (v === null) return null;
   return typeof v === "number" && Number.isInteger(v) ? v : NaN;
+}
+
+/** undefined = no viene; null = volver a la automática; Date = fijar; false = inválida. La MISMA regla que el PUT
+ *  (validate.ts): una fecha que se entiende y cae en el rango de un proyecto (esInstanteDeProyecto). */
+function fecha(v: unknown): Date | null | undefined | false {
+  if (v === undefined) return undefined;
+  if (v === null || v === "") return null;
+  if (typeof v !== "string" || Number.isNaN(Date.parse(v)) || !esInstanteDeProyecto(v)) return false;
+  return new Date(v);
 }
 
 export async function PATCH(req: NextRequest, { params }: Ctx) {
@@ -35,65 +54,117 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
     raw = (await req.json()) as Record<string, unknown>;
     if (!raw || typeof raw !== "object") throw new Error();
   } catch {
-    return NextResponse.json({ error: "JSON inválido" }, { status: 400 });
+    return mal("JSON inválido");
   }
 
-  const data: { title?: string; notes?: string | null; tipoDeTrabajo?: string | null; weekIndex?: number; semanas?: number | null } = {};
+  const data: {
+    title?: string;
+    notes?: string | null;
+    party?: TaskParty | null;
+    type?: TimelineTaskType | null;
+    startDateOverride?: Date | null;
+    dueDateOverride?: Date | null;
+  } = {};
   if (raw.title !== undefined) {
     const t = typeof raw.title === "string" ? raw.title.trim() : "";
-    if (!t) return NextResponse.json({ error: "La actividad necesita un nombre." }, { status: 400 });
+    if (!t) return mal("La tarea necesita un título.");
     data.title = t;
   }
   if (raw.notes !== undefined) {
-    if (raw.notes !== null && typeof raw.notes !== "string") return NextResponse.json({ error: "notes debe ser texto" }, { status: 400 });
+    if (raw.notes !== null && typeof raw.notes !== "string") return mal("notes debe ser texto");
     data.notes = typeof raw.notes === "string" && raw.notes.trim() ? raw.notes.trim() : null;
   }
-  if (raw.tipoDeTrabajo !== undefined) {
-    if (raw.tipoDeTrabajo !== null && !esTipoDeTrabajo(raw.tipoDeTrabajo)) return NextResponse.json({ error: "Tipo de trabajo desconocido" }, { status: 400 });
-    data.tipoDeTrabajo = raw.tipoDeTrabajo;
+  if (raw.party !== undefined) {
+    if (raw.party !== null && !(PARTIES as readonly unknown[]).includes(raw.party)) return mal("Responsable desconocido");
+    data.party = raw.party as TaskParty | null;
+  }
+  if (raw.type !== undefined) {
+    if (raw.type !== null && !(TYPES as readonly unknown[]).includes(raw.type)) return mal("Tipo desconocido");
+    data.type = raw.type as TimelineTaskType | null;
+  }
+  for (const k of ["startDateOverride", "dueDateOverride"] as const) {
+    const f = fecha(raw[k]);
+    if (f === false) return mal(`${k} debe ser una fecha (aaaa-mm-dd)`);
+    if (f !== undefined) data[k] = f;
   }
   const weekIndex = entero(raw.weekIndex);
   const semanas = entero(raw.semanas);
-  if (Number.isNaN(weekIndex) || (weekIndex != null && weekIndex < 0) || weekIndex === null) {
-    return NextResponse.json({ error: "weekIndex debe ser un entero ≥ 0" }, { status: 400 });
-  }
-  if (Number.isNaN(semanas) || (semanas != null && semanas < 1)) {
-    return NextResponse.json({ error: "semanas debe ser un entero ≥ 1" }, { status: 400 });
-  }
-  if (weekIndex !== undefined) data.weekIndex = weekIndex;
-  if (semanas !== undefined) data.semanas = semanas === 1 ? null : semanas;
-  if (Object.keys(data).length === 0) return NextResponse.json({ error: "Nada que cambiar" }, { status: 400 });
+  const order = entero(raw.order);
+  if (Number.isNaN(weekIndex) || weekIndex === null || (weekIndex != null && weekIndex < 0)) return mal("weekIndex debe ser un entero ≥ 0");
+  if (Number.isNaN(semanas) || (semanas != null && semanas < 1)) return mal("semanas debe ser un entero ≥ 1");
+  if (Number.isNaN(order) || order === null || (order != null && order < 0)) return mal("order debe ser un entero ≥ 0");
+  const phaseIdNuevo = raw.phaseId === undefined ? undefined : typeof raw.phaseId === "string" && raw.phaseId ? raw.phaseId : null;
+  if (phaseIdNuevo === null) return mal("phaseId inválido");
+  const mueve = weekIndex !== undefined || phaseIdNuevo !== undefined || order !== undefined;
+  if (Object.keys(data).length === 0 && semanas === undefined && !mueve) return mal("Nada que cambiar");
 
   // Ownership por traversal: la tarea es de una fase del cronograma de ESTE proyecto.
   const task = await prisma.timelineTask.findFirst({
     where: { id: taskId, phase: { timeline: { projectId } } },
-    select: { id: true, title: true, weekIndex: true, semanas: true, source: true, phase: { select: { durationWeeks: true, timelineId: true } } },
+    select: {
+      id: true,
+      title: true,
+      weekIndex: true,
+      order: true,
+      semanas: true,
+      source: true,
+      phaseId: true,
+      phase: { select: { durationWeeks: true, timelineId: true } },
+    },
   });
   if (!task) return NextResponse.json({ error: "Tarea no encontrada en este proyecto" }, { status: 404 });
 
-  // Solo cuando cambian las semanas: renombrar una tarea que ya se pasaba de su fase (la fase se acortó en el Gantt)
-  // tiene que seguir funcionando.
-  const desde = data.weekIndex ?? task.weekIndex;
-  const dura = data.semanas !== undefined ? (data.semanas ?? 1) : (task.semanas ?? 1);
-  const cambianLasSemanas = data.weekIndex !== undefined || data.semanas !== undefined;
-  if (cambianLasSemanas && desde + dura > Math.max(task.phase.durationWeeks, 1)) {
-    return NextResponse.json(
-      { error: `La actividad se sale de su loop: termina en la semana ${desde + dura} y el loop tiene ${task.phase.durationWeeks}.` },
-      { status: 400 },
-    );
+  // La fase de destino: la misma, u otra del MISMO cronograma (mover entre proyectos no existe).
+  let fase = { id: task.phaseId, durationWeeks: task.phase.durationWeeks };
+  if (phaseIdNuevo !== undefined && phaseIdNuevo !== task.phaseId) {
+    const otra = await prisma.timelinePhase.findFirst({
+      where: { id: phaseIdNuevo, timelineId: task.phase.timelineId },
+      select: { id: true, durationWeeks: true },
+    });
+    if (!otra) return mal("Una tarea solo se mueve a otra fase de su mismo cronograma.");
+    fase = otra;
   }
+  const semanaFinal = weekIndex ?? task.weekIndex;
+  if (mueve && semanaFinal > Math.max(fase.durationWeeks - 1, 0)) {
+    return mal(`La fase tiene ${fase.durationWeeks} ${fase.durationWeeks === 1 ? "semana" : "semanas"}: la tarea no puede arrancar en la ${semanaFinal + 1}.`);
+  }
+  // Cuánto dura: lo pedido o lo que tenía, recortado a lo que queda de la fase (mover no la estira, ni la saca).
+  const semanasFinal =
+    semanas !== undefined || mueve ? semanasQueCaben(semanas !== undefined ? semanas : task.semanas, semanaFinal, fase.durationWeeks) : undefined;
 
   const now = new Date();
-  const [updated] = await prisma.$transaction([
-    prisma.timelineTask.update({
+  const updated = await prisma.$transaction(async (tx) => {
+    const t = await tx.timelineTask.update({
       where: { id: taskId },
       // Editarla es revisarla: deja de estar «por validar» (como en el Gantt) y una tarea de la IA pasa a MODIFIED.
-      data: { ...data, needsValidation: false, ...(task.source === "AGENT" ? { source: "MODIFIED" as const } : {}) },
-      select: { id: true, title: true, notes: true, tipoDeTrabajo: true, weekIndex: true, semanas: true, updatedAt: true },
-    }),
-    prisma.projectTimeline.update({ where: { id: task.phase.timelineId }, data: { lastEditedByHuman: now } }),
-  ]);
-  const movida = data.weekIndex !== undefined && data.weekIndex !== task.weekIndex;
+      data: {
+        ...data,
+        ...(semanasFinal !== undefined ? { semanas: semanasFinal } : {}),
+        ...(mueve ? { phaseId: fase.id, weekIndex: semanaFinal } : {}),
+        needsValidation: false,
+        ...(task.source === "AGENT" ? { source: "MODIFIED" as const } : {}),
+      },
+      select: { id: true, title: true, phaseId: true, weekIndex: true, semanas: true, updatedAt: true },
+    });
+    if (mueve) {
+      // El lugar dentro de su semana: `order` pedido, o al final si cambió de semana o de fase; los demás se corren.
+      const hermanas = await tx.timelineTask.findMany({
+        where: { phaseId: fase.id, weekIndex: semanaFinal, id: { not: taskId } },
+        orderBy: { order: "asc" },
+        select: { id: true },
+      });
+      const mismaSemana = fase.id === task.phaseId && semanaFinal === task.weekIndex;
+      const lugar = Math.min(order ?? (mismaSemana ? task.order : hermanas.length), hermanas.length);
+      const ids = [...hermanas.map((h) => h.id)];
+      ids.splice(lugar, 0, taskId);
+      for (let i = 0; i < ids.length; i++) await tx.timelineTask.update({ where: { id: ids[i] }, data: { order: i } });
+    }
+    await tx.projectTimeline.update({ where: { id: task.phase.timelineId }, data: { lastEditedByHuman: now } });
+    return t;
+  });
+
+  const movida = mueve && (updated.weekIndex !== task.weekIndex || updated.phaseId !== task.phaseId);
+  const cambiaDuracion = semanasFinal !== undefined && semanasFinal !== (task.semanas ?? null);
   await emitTimelineEventsSafe(
     prisma,
     { projectId, clientId: guard.clientId, timelineId: task.phase.timelineId, actorEmail: guard.user.email ?? null, source: "UI_PATCH" },
@@ -102,9 +173,9 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
         entityType: "TASK",
         entityId: task.id,
         label: updated.title,
-        action: movida ? "MOVED" : "EDITED",
-        before: movida ? { weekIndex: task.weekIndex } : {},
-        after: movida ? { weekIndex: updated.weekIndex } : {},
+        action: movida || cambiaDuracion ? "MOVED" : "EDITED",
+        before: movida || cambiaDuracion ? { weekIndex: task.weekIndex, semanas: task.semanas ?? null } : {},
+        after: movida || cambiaDuracion ? { weekIndex: updated.weekIndex, semanas: updated.semanas ?? null } : {},
       },
     ],
   );

@@ -15,6 +15,8 @@ export interface TareaDeLaFase {
   id: string;
   title: string;
   weekIndex: number;
+  /** Cuántas semanas dura (null = una): vence al final de la última. */
+  semanas?: number | null;
   status: string;
   party: string | null;
   /** «Por validar»: el agente la inventó y el CSE no la revisó. Nunca cruza al cliente (`cruzaAlCliente`). */
@@ -113,7 +115,7 @@ export function cronogramaDelCiclo(input: {
     const delCliente = fase.tasks.filter((t) => t.party === "CLIENTE");
     const nuestras = fase.tasks.filter((t) => t.party !== "CLIENTE");
     const dependencias = delCliente.map((t): DependenciaDelCliente => {
-      const vence = overduePlannedEnd(anchor, inicio, t.weekIndex);
+      const vence = overduePlannedEnd(anchor, inicio, t.weekIndex, t.semanas);
       const hecha = resuelta(t.status);
       return { id: t.id, titulo: t.title, vence: vence ? vence.toISOString() : null, hecha, atrasada: !hecha && !!vence && vence < ahora };
     });

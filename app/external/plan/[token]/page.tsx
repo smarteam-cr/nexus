@@ -1,6 +1,6 @@
 /**
  * /external/plan/[token] — EL PLAN GENERAL de una cuenta, para el cliente (2026-11-19, kölbi): los loops de todos sus
- * proyectos como un solo gantt. Mismo modelo que La escala: la URL es el secreto (256 bits), sin contraseña, y lo que se
+ * proyectos como un solo cronograma, pintado con el MISMO render del cronograma compartible. Mismo modelo que La escala: la URL es el secreto (256 bits), sin contraseña, y lo que se
  * ve es la foto PUBLICADA, nunca los cronogramas vivos.
  *
  * Toda la seguridad vive en `planParaElToken` (chokepoint fail-closed, re-chequea en CADA render). `force-dynamic` no es
@@ -9,7 +9,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import ExternalShell from "@/components/external/ExternalShell";
-import PlanGeneralLanding from "@/components/external/PlanGeneralLanding";
+import TimelineLanding from "@/components/external/TimelineLanding";
 import { planParaElToken } from "@/lib/external/plan-view";
 import { getSmarteamLogoUrl } from "@/lib/external/smarteam-logo";
 
@@ -28,7 +28,15 @@ export default async function PlanDelClientePage({ params }: { params: Promise<{
   if (!d) notFound();
   return (
     <ExternalShell smarteamLogoUrl={smarteamLogoUrl}>
-      <PlanGeneralLanding clientName={d.clientName} clientLogoUrl={d.clientLogoUrl} clientLogoScale={d.clientLogoScale} foto={d.foto} />
+      {/* El MISMO render del cronograma compartible de un proyecto: el plan es un cronograma hecho con los loops. */}
+      <TimelineLanding
+        clientName={d.clientName}
+        clientLogoUrl={d.clientLogoUrl}
+        clientLogoScale={d.clientLogoScale}
+        timeline={d.timeline ?? { exists: false, anchorStartDate: null, phases: [] }}
+        titulo="Plan de trabajo"
+        textoVacio="Estamos preparando tu plan de trabajo — pronto lo vas a ver aquí."
+      />
     </ExternalShell>
   );
 }

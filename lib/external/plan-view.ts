@@ -4,13 +4,15 @@
  *
  * Fail-closed, en CADA render (la página es `force-dynamic`):
  *   1. el token tiene la forma de uno (64 hex) y existe un `AccesoAlPlanGeneral` con él, sin revocar;
- *   2. lo que ve es la FOTO PUBLICADA (lib/plan-general/foto.ts), nunca los cronogramas vivos. La foto no lleva
- *      proyectos, ids ni el detalle de las actividades.
- * null = el 404 neutro; «sin-publicar» = el enlace sirve pero no hay foto (o es de otro formato).
+ *   2. lo que ve es la FOTO PUBLICADA (lib/plan-general/foto.ts), nunca los cronogramas vivos. La foto tiene la forma
+ *      del cronograma compartible y se armó con su chokepoint (readClientTimeline): sin proyectos, sin notas de tarea,
+ *      sin lo suspendido ni lo «por validar».
+ * null = el 404 neutro; `timeline: null` = el enlace sirve pero no hay foto (o es de otro formato).
  */
 import "server-only";
 import { prisma } from "@/lib/db/prisma";
-import { leerFoto, type FotoDelPlan } from "@/lib/plan-general/foto";
+import { leerFoto } from "@/lib/plan-general/foto";
+import type { ExternalTimelineData } from "./timeline-view-types";
 
 const TOKEN = /^[0-9a-f]{64}$/;
 
@@ -18,7 +20,7 @@ export interface PlanParaElCliente {
   clientName: string;
   clientLogoUrl: string | null;
   clientLogoScale: number | null;
-  foto: FotoDelPlan | null;
+  timeline: ExternalTimelineData | null;
 }
 
 export async function planParaElToken(token: string): Promise<PlanParaElCliente | null> {
@@ -33,6 +35,6 @@ export async function planParaElToken(token: string): Promise<PlanParaElCliente 
     clientName: acceso.client.name,
     clientLogoUrl: acceso.client.logoUrl ?? null,
     clientLogoScale: acceso.client.logoScale ?? null,
-    foto: leerFoto(acceso.publicado),
+    timeline: leerFoto(acceso.publicado),
   };
 }

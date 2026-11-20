@@ -17,7 +17,7 @@ import type {
   TimelinePhaseSource,
   TimelineTaskStatus,
 } from "@prisma/client";
-import { computePhaseRanges, addWeeks } from "@/lib/timeline/weeks";
+import { computePhaseRanges, addWeeks, ultimaSemanaDeLaTarea } from "@/lib/timeline/weeks";
 import { canvasOfNested } from "@/lib/pieces/canvas-query";
 import { resincronizarFotoDeFase } from "@/lib/timeline/foto-del-plan";
 
@@ -76,6 +76,8 @@ interface PhaseRow {
     id: string;
     title: string;
     weekIndex: number;
+    /** Cuántas semanas dura (null = una): la promesa congela el fin de la última. */
+    semanas?: number | null;
     order: number;
     source: TimelinePhaseSource;
     needsValidation: boolean;
@@ -104,7 +106,7 @@ export function buildTaskSnapshotEntries(
       needsValidation: t.needsValidation,
       status: t.status,
       plannedStart: anchorIso ? addWeeks(anchorIso, absWeek).toISOString() : null,
-      plannedEnd: anchorIso ? addWeeks(anchorIso, absWeek + 1).toISOString() : null,
+      plannedEnd: anchorIso ? addWeeks(anchorIso, phaseStartWeek + ultimaSemanaDeLaTarea(t.weekIndex, t.semanas) + 1).toISOString() : null,
     };
   });
 }
@@ -240,6 +242,7 @@ export async function freezeBaseline(
               id: true,
               title: true,
               weekIndex: true,
+              semanas: true,
               order: true,
               source: true,
               needsValidation: true,
@@ -353,7 +356,7 @@ export async function patchBaselinePhaseTasks(
   const liveTasks = await tx.timelineTask.findMany({
     where: { phaseId },
     orderBy: [{ weekIndex: "asc" }, { order: "asc" }],
-    select: { id: true, title: true, weekIndex: true, order: true, source: true, needsValidation: true, status: true },
+    select: { id: true, title: true, weekIndex: true, semanas: true, order: true, source: true, needsValidation: true, status: true },
   });
 
   /* ⛔ SOLO se re-sincronizan las tareas que YA ESTABAN en la foto. Antes se reemplazaba por
@@ -372,7 +375,7 @@ export async function patchBaselinePhaseTasks(
       const abs = phaseStart + viva.weekIndex;
       return {
         plannedStart: anchorIso ? addWeeks(anchorIso, abs).toISOString() : null,
-        plannedEnd: anchorIso ? addWeeks(anchorIso, abs + 1).toISOString() : null,
+        plannedEnd: anchorIso ? addWeeks(anchorIso, phaseStart + ultimaSemanaDeLaTarea(viva.weekIndex, viva.semanas) + 1).toISOString() : null,
       };
     },
   );

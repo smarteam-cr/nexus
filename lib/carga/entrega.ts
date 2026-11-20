@@ -29,6 +29,8 @@ export interface TareaParaCarga {
   /** Con el título se reconoce si es una tarea clave (lib/tiempos/familias.ts). */
   titulo?: string | null;
   weekIndex: number;
+  /** Cuántas semanas dura (null = una): el fin planeado es el de su última semana. */
+  semanas?: number | null;
   estado: string;
   parte: string | null;
   tipo: string | null;
@@ -142,7 +144,7 @@ export function* tareasConFecha(c: CronogramaParaCarga): Generator<{ tarea: Tare
     for (const tarea of fase.tareas) {
       const manual = tarea.fechaManual ? new Date(tarea.fechaManual) : null;
       const fecha = manual ?? (ancla ? addWeeks(ancla, rangos[i].start + tarea.weekIndex) : null);
-      const finPlaneado = manual ?? overduePlannedEnd(ancla, rangos[i].start, tarea.weekIndex);
+      const finPlaneado = manual ?? overduePlannedEnd(ancla, rangos[i].start, tarea.weekIndex, tarea.semanas);
       yield { tarea, fase, fecha, finPlaneado };
     }
   }

@@ -4,7 +4,7 @@
  * Kölbi lleva un ciclo SmartLoop de 12 semanas con siete loops. Valentina lo tenía en un Excel; desde ahora vive en
  * Nexus como el «Plan general» de la cuenta (lib/plan-general). Este script deja, en cada proyecto:
  *   - el cronograma: un loop = una fase (`loopNumero`, 12 semanas, en paralelo desde la semana 0) y sus actividades
- *     como tareas (semanas, tipo, estado y el detalle en las notas). Arranque: lunes 2 de noviembre de 2026.
+ *     como tareas (semanas, estado y el detalle en las notas). Arranque: lunes 2 de noviembre de 2026.
  *     El cronograma viejo de «Kolbi | Ventas SMARTLOOP» (8 fases de julio, sin tareas ni publicar) se REEMPLAZA
  *     (respuesta 3 de Elías); si alguna fase tuviera tareas, el script no la borra y aborta.
  *   - el handoff: la sección «Loops que cubre este proyecto» con la tabla Loop · Área · Objetivo · Prioridad, y una
@@ -28,7 +28,7 @@ import type { Prisma, TimelineTaskStatus } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { createHandoffCanvas, reconcileHandoffCanvasSections } from "@/lib/canvas/default-canvases";
 import { SECCION_DE_LOOPS, tablaDeLoops, type LoopDeclarado } from "@/lib/plan-general/loops-del-handoff";
-import { rotuloDelLoop, type TipoDeTrabajo } from "@/lib/plan-general/tipos";
+import { rotuloDelLoop } from "@/lib/plan-general/tipos";
 import { imprimirDestino, resolverApply } from "./lib/guard";
 
 const APPLY = resolverApply({
@@ -63,7 +63,6 @@ const LOOPS: Loop[] = [
 
 interface Actividad {
   loop: number;
-  tipo: TipoDeTrabajo;
   titulo: string;
   desde: number;
   hasta: number;
@@ -72,24 +71,24 @@ interface Actividad {
 }
 
 const ACTIVIDADES: Actividad[] = [
-  { loop: 1, tipo: "diagnostico", titulo: "Inventario de fuentes", desde: 2, hasta: 2, estado: "IN_PROGRESS", detalle: "Inventariar fuentes, integraciones, sincronizaciones, campos, duplicados, completitud y consistencia." },
-  { loop: 1, tipo: "diseno", titulo: "Diseño de datos y gobierno", desde: 1, hasta: 4, estado: "IN_PROGRESS", detalle: "Definir campos críticos, reglas de normalización, deduplicación, responsables, integraciones y gobierno." },
-  { loop: 1, tipo: "diagnostico", titulo: "Identificación de duplicados", desde: 2, hasta: 2, estado: "IN_PROGRESS", detalle: "Identificar los registros duplicados." },
-  { loop: 1, tipo: "diagnostico", titulo: "Deduplicación en HubSpot", desde: 3, hasta: 3, estado: "IN_PROGRESS", detalle: "Ejecutar la deduplicación de registros en HubSpot (script)." },
-  { loop: 1, tipo: "ejecucion", titulo: "Integración Infoclic–HubSpot", desde: 4, hasta: 5, estado: "PENDING", detalle: "Ejecutar la integración entre Infoclic y sistemas externos con HubSpot, con pruebas." },
-  { loop: 1, tipo: "optimizacion", titulo: "Optimización de la integración", desde: 5, hasta: 12, estado: "PENDING", detalle: "Ajustes constantes de la integración según lo que salga en las pruebas." },
-  { loop: 2, tipo: "diagnostico", titulo: "Revisión de campañas y activos", desde: 3, hasta: 4, estado: "IN_PROGRESS", detalle: "Revisar campañas, listas, formularios, landing pages, workflows, WhatsApp, permisos y convenciones." },
-  { loop: 2, tipo: "ejecucion", titulo: "Campaña piloto", desde: 5, hasta: 6, estado: "PENDING", detalle: "Elegir audiencia y objetivo; preparar contenido, landing o formulario, workflow, revisión, lanzamiento y seguimiento." },
-  { loop: 3, tipo: "diagnostico", titulo: "Revisión de scoring y journeys", desde: 4, hasta: 12, estado: "PENDING", detalle: "Revisar scoring, ciclo de vida, nurturing, journeys, suscripciones, entregabilidad, tracking y dashboards." },
-  { loop: 3, tipo: "ejecucion", titulo: "Ajuste de scoring y nurturing", desde: 4, hasta: 12, estado: "PENDING", detalle: "Ajustar criterios de scoring, segmentos, journeys y reglas de nutrición; validar con datos y usuarios." },
-  { loop: 4, tipo: "diagnostico", titulo: "Revisión de captura y etapas", desde: 2, hasta: 2, estado: "DONE", detalle: "Revisar captura, asignación, etapas, seguimiento, motivos de pérdida y conversión." },
-  { loop: 4, tipo: "ejecucion", titulo: "Reglas de asignación y SLA", desde: 6, hasta: 12, estado: "PENDING", detalle: "Corregir reglas de asignación, propiedades, notificaciones, SLA y trazabilidad de leads prioritarios." },
-  { loop: 5, tipo: "diagnostico", titulo: "Hipótesis y caso de uso", desde: 4, hasta: 4, estado: "PENDING", detalle: "Definir hipótesis, caso de uso, mensaje y canal." },
-  { loop: 5, tipo: "ejecucion", titulo: "Ejecución del piloto", desde: 5, hasta: 7, estado: "PENDING", detalle: "Ejecutar el piloto y documentar resultados iniciales." },
-  { loop: 6, tipo: "diagnostico", titulo: "Revisión de pipeline y adopción", desde: 2, hasta: 2, estado: "DONE", detalle: "Revisar pipeline, tareas, actividades, reuniones, adopción, rutinas, playbooks y productividad por vendedor." },
-  { loop: 6, tipo: "ejecucion", titulo: "Playbook comercial v1", desde: 4, hasta: 5, estado: "PENDING", detalle: "Definir estándares de actividad, tareas, seguimiento, higiene de pipeline y reuniones de revisión." },
-  { loop: 7, tipo: "diagnostico", titulo: "Revisión de dashboards y KPIs", desde: 5, hasta: 5, estado: "PENDING", detalle: "Revisar dashboards, forecast, pipeline, conversión, velocidad, metas y definiciones." },
-  { loop: 7, tipo: "ejecucion", titulo: "Dashboard v1", desde: 6, hasta: 8, estado: "PENDING", detalle: "Crear un dashboard con pipeline, forecast, conversión, velocidad, citas, oportunidades, actividad y adopción." },
+  { loop: 1, titulo: "Inventario de fuentes", desde: 2, hasta: 2, estado: "IN_PROGRESS", detalle: "Inventariar fuentes, integraciones, sincronizaciones, campos, duplicados, completitud y consistencia." },
+  { loop: 1, titulo: "Diseño de datos y gobierno", desde: 1, hasta: 4, estado: "IN_PROGRESS", detalle: "Definir campos críticos, reglas de normalización, deduplicación, responsables, integraciones y gobierno." },
+  { loop: 1, titulo: "Identificación de duplicados", desde: 2, hasta: 2, estado: "IN_PROGRESS", detalle: "Identificar los registros duplicados." },
+  { loop: 1, titulo: "Deduplicación en HubSpot", desde: 3, hasta: 3, estado: "IN_PROGRESS", detalle: "Ejecutar la deduplicación de registros en HubSpot (script)." },
+  { loop: 1, titulo: "Integración Infoclic–HubSpot", desde: 4, hasta: 5, estado: "PENDING", detalle: "Ejecutar la integración entre Infoclic y sistemas externos con HubSpot, con pruebas." },
+  { loop: 1, titulo: "Optimización de la integración", desde: 5, hasta: 12, estado: "PENDING", detalle: "Ajustes constantes de la integración según lo que salga en las pruebas." },
+  { loop: 2, titulo: "Revisión de campañas y activos", desde: 3, hasta: 4, estado: "IN_PROGRESS", detalle: "Revisar campañas, listas, formularios, landing pages, workflows, WhatsApp, permisos y convenciones." },
+  { loop: 2, titulo: "Campaña piloto", desde: 5, hasta: 6, estado: "PENDING", detalle: "Elegir audiencia y objetivo; preparar contenido, landing o formulario, workflow, revisión, lanzamiento y seguimiento." },
+  { loop: 3, titulo: "Revisión de scoring y journeys", desde: 4, hasta: 12, estado: "PENDING", detalle: "Revisar scoring, ciclo de vida, nurturing, journeys, suscripciones, entregabilidad, tracking y dashboards." },
+  { loop: 3, titulo: "Ajuste de scoring y nurturing", desde: 4, hasta: 12, estado: "PENDING", detalle: "Ajustar criterios de scoring, segmentos, journeys y reglas de nutrición; validar con datos y usuarios." },
+  { loop: 4, titulo: "Revisión de captura y etapas", desde: 2, hasta: 2, estado: "DONE", detalle: "Revisar captura, asignación, etapas, seguimiento, motivos de pérdida y conversión." },
+  { loop: 4, titulo: "Reglas de asignación y SLA", desde: 6, hasta: 12, estado: "PENDING", detalle: "Corregir reglas de asignación, propiedades, notificaciones, SLA y trazabilidad de leads prioritarios." },
+  { loop: 5, titulo: "Hipótesis y caso de uso", desde: 4, hasta: 4, estado: "PENDING", detalle: "Definir hipótesis, caso de uso, mensaje y canal." },
+  { loop: 5, titulo: "Ejecución del piloto", desde: 5, hasta: 7, estado: "PENDING", detalle: "Ejecutar el piloto y documentar resultados iniciales." },
+  { loop: 6, titulo: "Revisión de pipeline y adopción", desde: 2, hasta: 2, estado: "DONE", detalle: "Revisar pipeline, tareas, actividades, reuniones, adopción, rutinas, playbooks y productividad por vendedor." },
+  { loop: 6, titulo: "Playbook comercial v1", desde: 4, hasta: 5, estado: "PENDING", detalle: "Definir estándares de actividad, tareas, seguimiento, higiene de pipeline y reuniones de revisión." },
+  { loop: 7, titulo: "Revisión de dashboards y KPIs", desde: 5, hasta: 5, estado: "PENDING", detalle: "Revisar dashboards, forecast, pipeline, conversión, velocidad, metas y definiciones." },
+  { loop: 7, titulo: "Dashboard v1", desde: 6, hasta: 8, estado: "PENDING", detalle: "Crear un dashboard con pipeline, forecast, conversión, velocidad, citas, oportunidades, actividad y adopción." },
 ];
 
 const SEMANA_MS = 7 * 24 * 60 * 60 * 1000;
@@ -268,7 +267,6 @@ async function main() {
               title: a.titulo,
               weekIndex: a.desde - 1,
               semanas: a.hasta > a.desde ? a.hasta - a.desde + 1 : null,
-              tipoDeTrabajo: a.tipo,
               order: orden++,
               status: a.estado,
               statusSource: "HUMAN",

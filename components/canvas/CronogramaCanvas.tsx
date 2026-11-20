@@ -221,10 +221,8 @@ interface TaskDraft {
   dueDateOverride?: string | null;
   /** 2026-11-18: las horas que puso el detalle (solo lectura: el PUT no las manda). Las suma el aviso de las horas vendidas. */
   horasEstimadas?: number | null;
-  /** 2026-11-19: cuántas semanas dura (null = una) y su tipo de trabajo. Se editan en el plan general de la cuenta;
-   *  acá viajan en el PUT solo para que una tarea que cruza de fase (se recrea) no los pierda. */
+  /** 2026-11-19: cuántas semanas dura (null = una). Se edita en el detalle de la tarea (aquí o en el plan general). */
   semanas?: number | null;
-  tipoDeTrabajo?: string | null;
   _key: string;
 }
 
@@ -276,7 +274,6 @@ interface ServerTask {
   dueDateOverride?: string | null;
   horasEstimadas?: number | null;
   semanas?: number | null;
-  tipoDeTrabajo?: string | null;
 }
 
 interface ServerPhase {
@@ -884,7 +881,6 @@ export default function CronogramaCanvas({
         // 2026-11-18: sin esto el aviso de las horas vendidas decía siempre «las tareas todavía no tienen horas».
         horasEstimadas: t.horasEstimadas ?? null,
         semanas: t.semanas ?? null,
-        tipoDeTrabajo: t.tipoDeTrabajo ?? null,
         _key: t.id,
       })),
       _key: p.id,
@@ -1450,9 +1446,8 @@ export default function CronogramaCanvas({
           type: t.type ?? null,
           startDateOverride: t.startDateOverride ?? null,
           dueDateOverride: t.dueDateOverride ?? null,
-          // El plan general (2026-11-19): el servidor los usa solo si crea o recrea la tarea (moverla de fase).
-          ...(t.semanas && t.semanas > 1 ? { semanas: t.semanas } : {}),
-          ...(t.tipoDeTrabajo ? { tipoDeTrabajo: t.tipoDeTrabajo } : {}),
+          // Cuántas semanas dura (null = una); el servidor la recorta a lo que cabe en la fase.
+          semanas: t.semanas ?? null,
           /* T1 (auditoría del deshacer, 2026-10-05): lo que la pantalla sabe de la fila y el PUT no escribe (el
              estado y su procedencia, el origen). El servidor lo lee SOLO si el id ya no existe (un borrado que la
              persona deshizo después del autoguardado) para recrearla como estaba. */
@@ -3574,6 +3569,7 @@ export default function CronogramaCanvas({
       dueDateOverride: t.dueDateOverride ?? null,
       semanas: t.semanas ?? null,
     })),
+    loopNumero: p.loopNumero ?? null,
   })), [phases]);
 
   /* ── LA VISTA «VER LA PROPUESTA» ─────────────────────────────────────────────

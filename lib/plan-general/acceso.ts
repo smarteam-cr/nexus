@@ -10,8 +10,9 @@ import "server-only";
 import { randomBytes } from "node:crypto";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
-import { fotoDelPlan, hayCambiosSinPublicar, leerFoto, type FotoDelPlan } from "./foto";
-import { leerPlanGeneral } from "./leer";
+import type { ExternalTimelineData } from "@/lib/external/timeline-view-types";
+import { fotoDelPlan, hayCambiosSinPublicar, leerFoto, tieneLoops } from "./foto";
+import { leerPlanParaElCliente } from "./leer";
 
 export interface EstadoDelAccesoAlPlan {
   estado: "sin-generar" | "activo" | "revocado";
@@ -40,8 +41,9 @@ export function enlaceDelPlan(token: string): string {
   return `${base}/external/plan/${token}`;
 }
 
-async function fotoDeHoy(clientId: string): Promise<FotoDelPlan> {
-  return fotoDelPlan(await leerPlanGeneral(clientId, { paraElCliente: true }));
+/** Lo que vería el cliente hoy (el chokepoint del cronograma externo, proyecto por proyecto, unido). */
+async function fotoDeHoy(clientId: string): Promise<ExternalTimelineData> {
+  return leerPlanParaElCliente(clientId);
 }
 
 export async function estadoDelAccesoAlPlan(clientId: string): Promise<EstadoDelAccesoAlPlan> {
@@ -71,14 +73,14 @@ export async function estadoDelAccesoAlPlan(clientId: string): Promise<EstadoDel
  * acceso, y dos personas que lo crean a la vez no publican dos veces). Devuelve si publicó.
  */
 export async function publicarElPlan(clientId: string, porEmail: string | null, o: { siSigue?: null } = {}): Promise<boolean> {
-  const foto = await fotoDeHoy(clientId);
-  if (!foto.grupos.length) {
+  const hoy = await fotoDeHoy(clientId);
+  if (!tieneLoops(hoy)) {
     const antes = await prisma.accesoAlPlanGeneral.findUnique({ where: { clientId }, select: { publicadoEn: true } });
-    if (!antes?.publicadoEn) throw new ErrorDelAccesoAlPlan(409, "Todavía no hay actividades en los loops: no hay nada que mostrarle al cliente.");
+    if (!antes?.publicadoEn) throw new ErrorDelAccesoAlPlan(409, "Esta cuenta ya no tiene loops: no hay nada que mostrarle al cliente.");
   }
   const { count } = await prisma.accesoAlPlanGeneral.updateMany({
     where: { clientId, ...(o.siSigue !== undefined ? { publicadoEn: o.siSigue } : {}) },
-    data: { publicado: foto as unknown as Prisma.InputJsonValue, publicadoEn: new Date(), publicadoPor: porEmail },
+    data: { publicado: fotoDelPlan(hoy) as unknown as Prisma.InputJsonValue, publicadoEn: new Date(), publicadoPor: porEmail },
   });
   if (!count && o.siSigue === undefined) throw new ErrorDelAccesoAlPlan(409, "Primero crea el acceso del cliente: el plan se publica en su enlace.");
   return count > 0;
@@ -86,8 +88,8 @@ export async function publicarElPlan(clientId: string, porEmail: string | null, 
 
 /** Crea el enlace (o devuelve el vivo; uno revocado se renueva con un token nuevo). */
 export async function crearAccesoAlPlan(clientId: string, porEmail: string | null): Promise<EstadoDelAccesoAlPlan> {
-  if (!(await fotoDeHoy(clientId)).grupos.length) {
-    throw new ErrorDelAccesoAlPlan(409, "Todavía no hay actividades en los loops: el plan saldría vacío.");
+  if (!tieneLoops(await fotoDeHoy(clientId))) {
+    throw new ErrorDelAccesoAlPlan(409, "Esta cuenta todavía no tiene loops en sus cronogramas: el plan saldría vacío.");
   }
   const token = randomBytes(32).toString("hex");
   await prisma.accesoAlPlanGeneral.createMany({ data: [{ clientId, accessToken: token, creadoPor: porEmail }], skipDuplicates: true });

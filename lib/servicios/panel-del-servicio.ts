@@ -13,7 +13,7 @@ export interface FaseParaElPanel {
   durationWeeks: number;
   startWeek: number | null;
   status: string;
-  tasks: Array<{ title: string; weekIndex: number; status: string; party: string | null }>;
+  tasks: Array<{ title: string; weekIndex: number; semanas?: number | null; status: string; party: string | null }>;
 }
 
 export interface DeudaDelCliente {
@@ -54,7 +54,7 @@ export function loQueDebeElCliente(
   ordenadas.forEach((f, i) => {
     for (const t of f.tasks) {
       if (t.party !== "CLIENTE" || t.status === "DONE" || t.status === "SUSPENDED") continue;
-      const vence = overduePlannedEnd(anchor, rangos[i].start, t.weekIndex);
+      const vence = overduePlannedEnd(anchor, rangos[i].start, t.weekIndex, t.semanas);
       todas.push({ titulo: t.title, fase: f.name, vence: vence ? vence.toISOString() : null, atrasada: !!vence && vence < ahora });
     }
   });

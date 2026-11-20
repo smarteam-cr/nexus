@@ -1139,11 +1139,9 @@ model TimelineTask {
   /// Las horas estimadas de la tarea (2026-11-18): las pone el detalle desde las actividades de los casos vendidos. nullable
   /// porque las tareas de antes y las cargadas a mano no las tienen. Su suma se compara contra `ProjectTimeline.horasVendidas`.
   horasEstimadas       Float?
-  /// Cuántas semanas dura la tarea desde `weekIndex` (2026-11-19, plan general). nullable porque casi todas duran una.
+  /// Cuántas semanas dura la tarea desde `weekIndex` (2026-11-19). nullable porque casi todas duran una. Todo fin de
+  /// tarea (atraso, promesa, carga) sale de `overduePlannedEnd` / `ultimaSemanaDeLaTarea` (lib/timeline/weeks.ts).
   semanas              Int?
-  /// El tipo de trabajo (lib/plan-general/tipos.ts): diagnostico | diseno | ejecucion | optimizacion | medicion |
-  /// continuidad | cierre. nullable porque las tareas de antes no lo tienen.
-  tipoDeTrabajo        String?
   // B — dueño de la tarea en el plan de alineación compartido. CLIENTE entrega/hace;
   // SMARTEAM configura; AMBOS trabajo conjunto. Nullable = sin asignar (data pre-B).
   // Cruza al cronograma compartible del cliente (gated por "Subir"); el Kickoff embebido NO lo muestra.

@@ -20,6 +20,9 @@
 export interface ExternalTimelineTask {
   title: string;
   weekIndex: number; // 0-indexed relativo a la fase
+  /** Cuántas semanas dura desde `weekIndex` (2026-11-19). Ausente = una: solo se escribe si es más de una, así una
+   *  foto vieja y una nueva de lo mismo son iguales. */
+  semanas?: number;
   /** Estado de avance (PENDING|IN_PROGRESS|DONE) — lo muestra el cronograma compartible (gated por "Subir"). SUSPENDED nunca llega. Opcional: snapshots viejos no lo tienen. */
   status?: string;
   /** Responsable (CLIENTE|SMARTEAM|AMBOS|DEV) — lo muestra el cronograma compartible. null/ausente = sin asignar. */

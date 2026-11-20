@@ -104,6 +104,7 @@ export async function alMarcarTareasHechas(args: {
         id: true,
         title: true,
         weekIndex: true,
+        semanas: true,
         party: true,
         dueDateOverride: true,
         phase: {
@@ -127,7 +128,7 @@ export async function alMarcarTareasHechas(args: {
         const tl = t.phase.timeline;
         const i = tl.phases.findIndex((p) => p.id === t.phase.id);
         const inicio = i >= 0 ? computePhaseRanges(tl.phases)[i].start : 0;
-        const finPlaneado = t.dueDateOverride ?? overduePlannedEnd(isoDia(tl.anchorStartDate), inicio, t.weekIndex);
+        const finPlaneado = t.dueDateOverride ?? overduePlannedEnd(isoDia(tl.anchorStartDate), inicio, t.weekIndex, t.semanas);
         return {
           clave: claveDeTarea(t.id),
           id: t.id,
