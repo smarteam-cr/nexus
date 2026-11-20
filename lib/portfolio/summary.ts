@@ -14,7 +14,7 @@ import type { BaselineSnapshot } from "@/lib/timeline/baseline";
 // Import DIRECTO del motor puro (no de lib/lifecycle/index): el index re-exporta el
 // loader con Prisma y este módulo debe quedar puro (unit-testeable) — ver nota en el index.
 import { stageAtOrAfter, STAGE_LABEL_ES } from "@/lib/lifecycle/stage-engine";
-import { computePhaseRanges, addWeeks, isOverdueByDate, projectedEnd } from "@/lib/timeline/weeks";
+import { computePhaseRanges, addWeeks, isOverdueByDate, projectedEnd, ultimaSemanaDeLaTarea } from "@/lib/timeline/weeks";
 
 export const STALL_DAYS = 14; // "sin avance" por defecto (configurable después)
 /** Días de gracia de la alarma temprana de cronograma sin consensuar. */
@@ -26,6 +26,8 @@ export interface SummaryTask {
   id: string;
   status: string;
   weekIndex: number;
+  /** Cuántas semanas dura (null = una): su fin planeado es el de la última. */
+  semanas?: number | null;
   actualStart: Date | null;
   actualEnd: Date | null;
   needsValidation: boolean;
@@ -182,7 +184,7 @@ function plannedEnds(input: SummaryInput): { phase: Map<string, Date>; task: Map
   ordered.forEach((p, i) => {
     const r = ranges[i];
     phase.set(p.id, addWeeks(anchorIso, r.end));
-    for (const t of p.tasks) task.set(t.id, addWeeks(anchorIso, r.start + t.weekIndex + 1));
+    for (const t of p.tasks) task.set(t.id, addWeeks(anchorIso, r.start + ultimaSemanaDeLaTarea(t.weekIndex, t.semanas) + 1));
   });
   return { phase, task };
 }

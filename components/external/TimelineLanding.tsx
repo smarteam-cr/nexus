@@ -31,6 +31,8 @@ export default function TimelineLanding({
   clientLogoUrl,
   clientLogoScale,
   timeline,
+  titulo = "Cronograma de proyecto",
+  textoVacio = "Estamos preparando el cronograma de tu proyecto — pronto lo vas a ver aquí.",
 }: {
   clientName: string;
   clientLogoUrl: string | null;
@@ -38,6 +40,9 @@ export default function TimelineLanding({
    *  canvas con bloques. Y el fondo es BLANCO, así que siempre va el logo claro. */
   clientLogoScale?: number | null;
   timeline: ExternalTimelineData;
+  /** El titular. El plan general de la cuenta (2026-11-19) usa el mismo render con «Plan de trabajo». */
+  titulo?: string;
+  textoVacio?: string;
 }) {
   const rootRef = useRef<HTMLDivElement>(null);
   useReveal(rootRef, [timeline.phases.length]);
@@ -69,7 +74,7 @@ export default function TimelineLanding({
             className="font-display display-tight reveal"
             style={{ fontSize: "clamp(26px, 3.6vw, 38px)", color: "var(--text)", lineHeight: 1.15, margin: 0 }}
           >
-            Cronograma de proyecto
+            {titulo}
             <span style={{ color: "var(--text-muted)", fontWeight: 400, margin: "0 10px" }}>·</span>
             <span className="display-italic" style={{ color: "var(--brand-blue)" }}>{clientName}</span>
           </h1>
@@ -82,7 +87,7 @@ export default function TimelineLanding({
         <section className="section-light" style={{ padding: "32px 24px 24px" }}>
           <div style={TIMELINE_CONTAINER}>
             <p style={{ color: "var(--text-secondary)", fontSize: 14 }}>
-              Estamos preparando el cronograma de tu proyecto — pronto lo vas a ver aquí.
+              {textoVacio}
             </p>
           </div>
         </section>

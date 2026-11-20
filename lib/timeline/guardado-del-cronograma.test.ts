@@ -155,6 +155,8 @@ describe("T2 · versionDelCronograma — la huella de lo que el PUT escribe", ()
       (c) => ((c.phases[1].tasks[0] as { type: string | null }).type = "SESSION"),
       (c) => ((c.phases[1].tasks[0] as { startDateOverride?: string }).startDateOverride = "2026-10-07"),
       (c) => ((c.phases[1].tasks[0] as { dueDateOverride?: string }).dueDateOverride = "2026-10-09"),
+      // La duración (2026-11-19): la cambia el plan general de la cuenta sin pasar por esta pantalla.
+      (c) => ((c.phases[1].tasks[0] as { semanas?: number | null }).semanas = 3),
       (c) => (c.anchorStartDate = "2026-10-12T00:00:00.000Z"),
       (c) => (c.closeDateOverride = "2026-12-01T00:00:00.000Z"),
       // Una tarea BORRADA, una tarea NUEVA, una fase borrada.
@@ -233,8 +235,10 @@ describe("T1 · una fila con un id que ya no existe se RECREA", () => {
     // Una PENDING no arrastra «quién la marcó».
     expect(datosParaRecrearTarea({ status: "PENDING", statusChangedAt: "2026-10-01", statusChangedByEmail: "x" }, "HUMAN"))
       .toMatchObject({ statusChangedAt: null, statusChangedByEmail: null });
-    expect(datosParaRecrearFase({ status: "IN_PROGRESS", source: "AGENT" })).toEqual({ status: "IN_PROGRESS", source: "AGENT" });
-    expect(datosParaRecrearFase(undefined)).toEqual({ status: "PENDING", source: "HUMAN" });
+    expect(datosParaRecrearFase({ status: "IN_PROGRESS", source: "AGENT" })).toEqual({ status: "IN_PROGRESS", source: "AGENT", loopNumero: null });
+    expect(datosParaRecrearFase(undefined)).toEqual({ status: "PENDING", source: "HUMAN", loopNumero: null });
+    // El plan general (2026-11-19): deshacer el borrado de un loop le devuelve su número.
+    expect(datosParaRecrearFase({ status: "IN_PROGRESS", source: "HUMAN", loopNumero: 2 }).loopNumero).toBe(2);
   });
 
   it("⛔ un respaldo raro NO traba el guardado: se ignora", () => {
@@ -711,7 +715,7 @@ describe("CronogramaCanvas · el deshacer y el autoguardado", () => {
   it("⛔ T1 · la pantalla manda el respaldo de cada fila con id (estado y origen) para poder recrearla", () => {
     const cuerpo = tramo(CANVAS, "const buildPutBody = (", "const validateLocal = ");
     expect(contiene(cuerpo, "respaldo: { status: t.status, source: t.source, statusSource: t.statusSource,")).toBe(true);
-    expect(contiene(cuerpo, "...(p.id ? { respaldo: { status: p.status, source: p.source } } : {}),")).toBe(true);
+    expect(contiene(cuerpo, "...(p.id ? { respaldo: { status: p.status, source: p.source, ...(p.loopNumero != null ? { loopNumero: p.loopNumero } : {}) } } : {}),")).toBe(true);
   });
 
   it("⛔ T5 · «Eliminar tarea» registra el borrado explícito y el autoguardado lo manda", () => {

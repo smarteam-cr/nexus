@@ -14,7 +14,8 @@ import {
   effType,
   nextType,
 } from "./TimelineGantt";
-import { addWeeks, absoluteWeek, fmtDay, overduePlannedEnd, isOverdueByDate } from "@/lib/timeline/weeks";
+import { addWeeks, absoluteWeek, fmtDay, overduePlannedEnd, isOverdueByDate, semanasDeLaTarea, semanasQueCaben, semanasQueQuedan, ultimaSemanaDeLaTarea } from "@/lib/timeline/weeks";
+import { Selector } from "@/components/ui/Selector";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import DatePickerField from "@/components/ui/DatePickerField";
 
@@ -22,6 +23,8 @@ type TaskPatch = {
   title?: string;
   notes?: string | null;
   weekIndex?: number;
+  /** Cuántas semanas dura desde su semana (null = una). */
+  semanas?: number | null;
   party?: "CLIENTE" | "SMARTEAM" | "AMBOS" | "DEV" | null;
   type?: "SESSION" | "TASK" | null;
   startDateOverride?: string | null;
@@ -112,17 +115,21 @@ export default function TaskDetailDrawer({
   const absW = absoluteWeek(absolutePhaseStart, task.weekIndex);
   // Drawer client-only (guard de `document` arriba + se abre por interacción, post-hidratación):
   // `new Date()` acá no reintroduce mismatch de SSR. Criterio de atraso unificado (fecha vs fin planeado).
-  const overdue = isOverdueByDate(overduePlannedEnd(anchor, absolutePhaseStart, task.weekIndex), new Date(), task.status);
+  const overdue = isOverdueByDate(overduePlannedEnd(anchor, absolutePhaseStart, task.weekIndex, task.semanas), new Date(), task.status);
+  // Cuántas semanas dura (null = una) y la última en la que corre. Lo que cabe: hasta el final de la fase.
+  const dura = semanasDeLaTarea(task.semanas);
+  const absUltima = absoluteWeek(absolutePhaseStart, ultimaSemanaDeLaTarea(task.weekIndex, task.semanas));
+  const cabenHasta = semanasQueQuedan(task.weekIndex, phaseDurationWeeks);
   const partyEff = effParty(task.party);
   const typeEff = effType(task.type);
   const dateLabel = anchor
-    ? `${fmtDay(addWeeks(anchor, absW))} – ${fmtDay(addWeeks(anchor, absW + 1))}`
+    ? `${fmtDay(addWeeks(anchor, absW))} – ${fmtDay(addWeeks(anchor, absUltima + 1))}`
     : `Semana ${absW + 1} (sin fecha de arranque)`;
   // #4 — fechas DERIVADAS (yyyy-mm-dd) para precargar los datepickers; el override gana si existe.
   const toYmd = (d: Date) =>
     `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   const derivedStartYmd = anchor ? toYmd(addWeeks(anchor, absW)) : "";
-  const derivedDueYmd = anchor ? toYmd(addWeeks(anchor, absW + 1)) : "";
+  const derivedDueYmd = anchor ? toYmd(addWeeks(anchor, absUltima + 1)) : "";
 
   const propLabel = "text-[10px] font-bold uppercase tracking-wider text-gray-500 mb-1";
 
@@ -147,6 +154,7 @@ export default function TaskDetailDrawer({
             />
             <p className="text-[11px] text-gray-500 mt-1">
               {phaseName} · Semana {task.weekIndex + 1}
+              {dura > 1 ? ` a la ${task.weekIndex + dura}` : ""}
             </p>
           </div>
           <div className="flex items-center gap-1 flex-shrink-0">
@@ -230,13 +238,37 @@ export default function TaskDetailDrawer({
             <div className={propLabel}>Semana</div>
             <select
               value={task.weekIndex}
-              onChange={(e) => onUpdateTask(phaseKey, task.key, { weekIndex: parseInt(e.target.value, 10) })}
+              onChange={(e) => {
+                // Mover la tarea no la estira: si ya no cabe en lo que queda de la fase, se acorta hasta el final.
+                // La misma regla que el guardado (semanasQueCaben): la pantalla y la base no discrepan.
+                const w = parseInt(e.target.value, 10);
+                const recortada = semanasQueCaben(dura, w, phaseDurationWeeks);
+                onUpdateTask(phaseKey, task.key, (recortada ?? 1) !== dura ? { weekIndex: w, semanas: recortada } : { weekIndex: w });
+              }}
               className="bg-gray-800 border border-gray-700 rounded px-2 py-1 text-xs text-gray-200 focus:outline-none focus:border-blue-500"
             >
               {Array.from({ length: phaseDurationWeeks }).map((_, w) => (
                 <option key={w} value={w}>Semana {w + 1}</option>
               ))}
             </select>
+          </div>
+          <div>
+            <div className="text-[10px] font-bold uppercase tracking-wider text-fg-muted mb-1">Dura</div>
+            <Selector
+              etiqueta="Cuántas semanas dura la tarea"
+              placeholder="Semanas"
+              valor={String(dura)}
+              opciones={Array.from({ length: Math.max(cabenHasta, dura) }, (_, i) => i + 1).map((n) => ({
+                value: String(n),
+                label: n === 1 ? "1 semana" : `${n} semanas`,
+                hint: n === 1 ? `Semana ${task.weekIndex + 1}` : `Semanas ${task.weekIndex + 1} a ${task.weekIndex + n}`,
+                ...(n > cabenHasta ? { marca: "se sale de la fase", deshabilitada: true } : {}),
+              }))}
+              onElegir={(v) => {
+                const n = parseInt(v, 10);
+                onUpdateTask(phaseKey, task.key, { semanas: n > 1 ? n : null });
+              }}
+            />
           </div>
           <div className="col-span-2">
             <div className={propLabel}>Fechas — inicio · límite</div>

@@ -74,3 +74,24 @@ describe("fasesProbablementeRepetidas — el aviso sobre las fases QUE YA EXISTE
     expect(fasesProbablementeRepetidas([f("a", "Integraciones")]).size).toBe(0);
   });
 });
+
+describe("fasesProbablementeRepetidas — dos loops con número distinto son frentes distintos (2026-11-19)", () => {
+  it("«Lead Management & Conversion» (04) y «Sales Management & Performance» (07) no se marcan; sin número, sí se comparan", () => {
+    const loops = fasesProbablementeRepetidas([
+      { id: "a", name: "Lead Management & Conversion", loopNumero: 4 },
+      { id: "b", name: "Sales Management & Performance", loopNumero: 7 },
+    ]);
+    expect(loops.size).toBe(0);
+    const comunes = fasesProbablementeRepetidas([
+      { id: "a", name: "Lead Management & Conversion" },
+      { id: "b", name: "Sales Management & Performance" },
+    ]);
+    expect(comunes.size).toBe(2); // sin número, el detector de siempre las marca (comparten «Management»)
+    // El mismo número (dos fases que dicen ser el mismo loop) sí se compara.
+    const mismo = fasesProbablementeRepetidas([
+      { id: "a", name: "Campaign Activation", loopNumero: 2 },
+      { id: "b", name: "Campaign Activation", loopNumero: 2 },
+    ]);
+    expect(mismo.size).toBe(2);
+  });
+});

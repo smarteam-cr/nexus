@@ -34,6 +34,13 @@ export type Cobertura =
   | { modo: "exento"; razon: string };
 
 export const SCOPE_COVERAGE: Record<string, Cobertura> = {
+  // El plan general de la cuenta (2026-11-19): junta las fases con loop de los cronogramas de la cuenta.
+  "lib/plan-general/leer.ts": {
+    modo: "exento",
+    razon:
+      "el plan general (2026-11-19) lee los cronogramas de una cuenta: activos y no de prueba, y solo cuentan las fases " +
+      "con loop, que existen solo en proyectos que alguien cargó. No lista proyectos ni decide cartera o cobro.",
+  },
   // ── Los que usan un criterio ───────────────────────────────────────────────
   "app/(shell)/clients/[id]/layout.tsx": { modo: "criterio", criterio: "navegable" },
   // U8 (2026-10-25): una cuenta con un proyecto activo es una cuenta cuyos correos lee la IA.

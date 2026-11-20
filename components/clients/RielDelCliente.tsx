@@ -29,7 +29,7 @@ import type { EstadoDePieza } from "@/components/canvas/SelectorDePiezas";
 import { Avatar } from "@/components/ui/Avatar";
 import { IconoDeSugerencia, ROTULO_DEL_SISTEMA } from "@/components/ui/sistema";
 
-export type CuentaDelRiel = "info" | "procesos" | "personas" | "notas" | "tareas" | "escala" | "casos" | "solicitudes";
+export type CuentaDelRiel = "plan" | "info" | "procesos" | "personas" | "notas" | "tareas" | "escala" | "casos" | "solicitudes";
 
 export interface ProyectoDelRiel {
   id: string;
@@ -55,6 +55,7 @@ export default function RielDelCliente({
   avisoDeLaFicha,
   slotDePiezas,
   traer,
+  conPlanGeneral = false,
 }: {
   proyectos: ProyectoDelRiel[];
   /** Los que terminaron en HubSpot: van plegados en «Cerrados», después de los activos. */
@@ -71,6 +72,8 @@ export default function RielDelCliente({
   /** Dónde el panel del proyecto pinta sus piezas. */
   slotDePiezas: (el: HTMLDivElement | null) => void;
   traer: { visible: boolean; sincronizando: boolean; onClick: () => void };
+  /** La cuenta tiene loops en sus cronogramas: «Plan general» va arriba de todo (2026-11-19, lib/plan-general). */
+  conPlanGeneral?: boolean;
 }) {
   /* Plegado por default; abierto si el proyecto del riel es uno cerrado (se llegó por enlace o recién se eligió). */
   const [verCerrados, setVerCerrados] = useState(false);
@@ -115,6 +118,13 @@ export default function RielDelCliente({
 
   return (
     <nav aria-label="Proyectos y piezas del cliente" data-recorrido="ficha.riel" className="flex h-full flex-col gap-4">
+      {/* EL PLAN GENERAL (2026-11-19, Elías): los loops de todos los proyectos en un gantt, arriba de los proyectos. Es
+          de la cuenta, no de un proyecto, y se comparte con su propio «Acceso», como cualquier artefacto. */}
+      {conPlanGeneral && (
+        <div className="flex flex-col gap-0.5">
+          <FilaDeCuenta etiqueta="Plan general" activa={cuentaActiva === "plan"} onClick={() => onElegirCuenta("plan")} />
+        </div>
+      )}
       <div className="flex flex-col gap-0.5">
         <p className={cn(ROTULO_DEL_SISTEMA, "px-2.5 pb-1.5 pt-1")}>Proyectos</p>
         {proyectos.length === 0 && (

@@ -11,7 +11,9 @@ import { esAgenteRetirado } from "@/lib/agents/retirados";
 import { classifyHandoffSession, HANDOFF_MIN_SECONDARY_CONFIDENCE, linkFeedsHandoff } from "@/lib/handoff/session-relevance";
 import { esTratoDeOtroCiclo, planHandoffSessionBudget, type HandoffSessionBlock } from "@/lib/handoff/session-budget";
 import { guardarPropuestaDelHandoff, timelineSyncErrorDelHandoff } from "@/lib/timeline/borrador-del-handoff";
-import { fasesDelHandoff, tiposDelHandoff } from "@/lib/timeline/referencias-de-la-propuesta";
+import { fasesDelHandoff, tiposDelHandoff, type FaseDelHandoff } from "@/lib/timeline/referencias-de-la-propuesta";
+import { bloquesDeLoopsQueSeGuardan, fasesDeLosLoops, loopsDeLaSalida, SECCION_DE_LOOPS } from "@/lib/plan-general/loops-del-handoff";
+import { bloqueDeLoopsDelProyecto, marcarLoopsPorNombre, proyectoTrabajaPorLoops } from "@/lib/plan-general/loops-del-handoff-server";
 import { acomodarEnParalelo, leerTipoDeFase } from "@/lib/timeline/acomodar-en-paralelo";
 import { limitesDeLaSalidaDelHandoff } from "@/lib/timeline/limites";
 import { bloqueDeLimitesParaElHandoff } from "@/lib/timeline/limites-handoff";
@@ -2155,6 +2157,18 @@ Generá el plan de implementación siguiendo tus instrucciones: arquitectura de 
     }
   }
 
+  /* LOS LOOPS (2026-11-19, lib/plan-general/loops-del-handoff.ts): un SmartLoop, o un proyecto de una cuenta que ya
+     trabaja por loops, declara en su handoff qué loops cubre, y esos loops son las fases de su cronograma. Es una
+     instrucción, no una fuente: va después de `fuentesParaLasCitas`, como el bloque de los límites. */
+  if (isHandoffAgent && bodyProjectId) {
+    try {
+      const bloque = await bloqueDeLoopsDelProyecto(bodyProjectId);
+      if (bloque) userMessage = `${userMessage}\n\n${bloque}`;
+    } catch (e) {
+      console.error("[analyze handoff] bloque de loops error:", e);
+    }
+  }
+
   // ── 11. Llamar a Claude ───────────────────────────────────────────────────────
   // CARDS_AND_FLOWCHARTS genera varios diagramas grandes (8-15 nodos c/u) + cards;
   // con 16k la salida se trunca (stop_reason=max_tokens) → JSON irrecuperable →
@@ -2610,6 +2624,16 @@ Generá el plan de implementación siguiendo tus instrucciones: arquitectura de 
       key: string;
       blocks: Array<{ type: string; content?: string; data?: unknown }>;
     }>;
+    /* LOS LOOPS (2026-11-19): la sección está en todos los handoffs, pero solo la guarda un proyecto que trabaja por
+       loops, y solo sus tablas con algún loop. En el resto, lo que el modelo haya puesto ahí (un «⚠️ Por validar…», una
+       fila de relleno) se descarta, y por eso tampoco llega a las fases (persistTimelineFromAgentOutput lee esto mismo). */
+    if (agent.agentGroup === "handoff" && bodyProjectId) {
+      const seccion = outputSections.find((x) => x.key === SECCION_DE_LOOPS);
+      if (seccion) {
+        const trabaja = await proyectoTrabajaPorLoops(bodyProjectId).catch(() => ({ si: false }));
+        seccion.blocks = bloquesDeLoopsQueSeGuardan(seccion.blocks ?? [], trabaja.si);
+      }
+    }
 
     for (const section of outputSections) {
       const sectionId = sectionMap.get(section.key);
@@ -3311,7 +3335,19 @@ async function persistTimelineFromAgentOutput(
        `fasesDelHandoff` (lib/timeline/referencias-de-la-propuesta.ts): el mensaje de la propuesta compara contra
        las fases del último handoff, y tiene que leerlas con ESTA misma regla. Sin `timeline.phases`, vacío o sin
        ninguna válida: [] (antes, dos salidas tempranas con el mismo resultado). */
+    /* LOS LOOPS (2026-11-19): si el handoff declaró loops, ESOS son las fases (una por loop, en paralelo desde la
+       semana 0, con la duración del ciclo: la más larga de las fases que armó el agente, o 12). Sin loops, lo de siempre. */
     const validPhases = fasesDelHandoff(analysisJson);
+    const loopsDeLaCorrida = isHandoff ? loopsDeLaSalida(analysisJson) : [];
+    // Solo cuentan si el proyecto trabaja por loops (la sección ya se filtró al guardar los bloques; esto cubre el camino
+    // de cards). Los números que usan otros proyectos de la cuenta no se repiten.
+    const sinLoops = { si: false, numerosDeOtros: [] as number[], propios: new Map<string, number>() };
+    const trabaja = loopsDeLaCorrida.length > 0 ? await proyectoTrabajaPorLoops(bodyProjectId).catch(() => sinLoops) : sinLoops;
+    const loopsDeclarados = trabaja.si ? loopsDeLaCorrida : [];
+    const fasesDeLaCorrida: Array<FaseDelHandoff & { loopNumero?: number }> =
+      loopsDeclarados.length > 0
+        ? fasesDeLosLoops(loopsDeclarados, Math.max(0, ...validPhases.map((f) => f.durationWeeks)) || 12, trabaja.numerosDeOtros, trabaja.propios)
+        : validPhases;
     const proyectoDeLaCorrida = await prisma.project.findUnique({
       where: { id: bodyProjectId },
       select: { hubspotPipelineId: true },
@@ -3323,7 +3359,7 @@ async function persistTimelineFromAgentOutput(
       ? limitesDeLaSalidaDelHandoff(analysisJson, fuentesParaLasCitas, agentRunId, new Date())
       : null;
 
-    if (validPhases.length === 0) {
+    if (fasesDeLaCorrida.length === 0) {
       if (isHandoff) await guardarLimitesPropuestos(bodyProjectId, limitesDelHandoff);
       return { timelineSyncError: null };
     }
@@ -3336,8 +3372,8 @@ async function persistTimelineFromAgentOutput(
     const conSemanaCero = conSemanaCeroDelPipeline(proyectoDeLaCorrida?.hubspotPipelineId ?? null);
     const tipos = tiposDelHandoff(analysisJson).map(leerTipoDeFase);
     const acomodo =
-      isHandoff && conSemanaCero
-        ? acomodarEnParalelo(validPhases.map((p, i) => ({ ...p, tipo: tipos[i] ?? null })))
+      isHandoff && conSemanaCero && loopsDeclarados.length === 0
+        ? acomodarEnParalelo(fasesDeLaCorrida.map((p, i) => ({ ...p, tipo: tipos[i] ?? null })))
         : null;
     if (acomodo && !acomodo.aplicado) console.log(`[analyze] inicios del handoff sin acomodar: ${acomodo.motivo}`);
     const fasesDelPlan = acomodo?.aplicado
@@ -3351,7 +3387,7 @@ async function persistTimelineFromAgentOutput(
           needsValidation: p.needsValidation,
           source: p.source,
         }))
-      : validPhases;
+      : fasesDeLaCorrida;
 
     /* Si YA existe un cronograma NO se pisa (protege ediciones + progreso de tareas): lo que propone
        el agente queda como PROPUESTA (`borrador-v1`, E2b), que el CSE revisa en la barra arriba del
@@ -3371,6 +3407,13 @@ async function persistTimelineFromAgentOutput(
     if (isHandoff) await guardarLimitesPropuestos(bodyProjectId, limitesDelHandoff);
     // El reparto (crear las fases, o el aviso para el CSE) es puro y tiene su tabla en borrador-del-handoff.test.ts.
     const reparto = timelineSyncErrorDelHandoff(delHandoff);
+    // Con un cronograma que ya existe, los loops solo marcan con su número las fases que se llaman como ellos.
+    if (loopsDeclarados.length > 0 && !reparto.crear) {
+      await marcarLoopsPorNombre(
+        bodyProjectId,
+        fasesDeLaCorrida.flatMap((f) => (f.loopNumero != null ? [{ ...loopsDeclarados[f.order], numero: f.loopNumero }] : [])),
+      ).catch((e) => console.warn("[analyze] marcar loops por nombre falló:", e instanceof Error ? e.message : e));
+    }
     if (!reparto.crear) return { timelineSyncError: reparto.timelineSyncError };
 
     /* KICKOFF para quien corresponde: en Customer Success (y pipeline legacy) la 1ra fase debe
@@ -3379,10 +3422,10 @@ async function persistTimelineFromAgentOutput(
        prohíben la Semana 0 explícitamente, y anteponerla acá deshacía en la persistencia lo que
        el prompt pidió en la generación — sin error y sin log. La decisión es una función PURA
        (lib/timeline/semana-cero.ts) para que la tabla entera viva en un test. */
-    const anteponerSemanaCero = debeAnteponerSemanaCero(
-      proyectoDeLaCorrida?.hubspotPipelineId ?? null,
-      fasesDelPlan[0]?.name,
-    );
+    // Un cronograma de loops no lleva Semana 0: todos los loops arrancan juntos en la semana del arranque.
+    const anteponerSemanaCero =
+      loopsDeclarados.length === 0 &&
+      debeAnteponerSemanaCero(proyectoDeLaCorrida?.hubspotPipelineId ?? null, fasesDelPlan[0]?.name);
     const phasesToCreate = !anteponerSemanaCero
       ? fasesDelPlan
       : [

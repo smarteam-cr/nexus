@@ -221,6 +221,8 @@ interface TaskDraft {
   dueDateOverride?: string | null;
   /** 2026-11-18: las horas que puso el detalle (solo lectura: el PUT no las manda). Las suma el aviso de las horas vendidas. */
   horasEstimadas?: number | null;
+  /** 2026-11-19: cuántas semanas dura (null = una). Se edita en el detalle de la tarea (aquí o en el plan general). */
+  semanas?: number | null;
   _key: string;
 }
 
@@ -242,6 +244,8 @@ interface Phase {
   source?: string;
   status?: GanttTaskStatus; // D.2 — avance a nivel fase
   needsValidation?: boolean; // fase estimada por el agente del handoff (badge "estimada")
+  /** 2026-11-19: el número de loop (plan general). Solo viaja en el respaldo: deshacer su borrado lo conserva. */
+  loopNumero?: number | null;
   tasks: TaskDraft[];
   _key: string;
 }
@@ -269,6 +273,7 @@ interface ServerTask {
   startDateOverride?: string | null; // #4
   dueDateOverride?: string | null;
   horasEstimadas?: number | null;
+  semanas?: number | null;
 }
 
 interface ServerPhase {
@@ -285,6 +290,7 @@ interface ServerPhase {
   source: string;
   status: GanttTaskStatus;
   needsValidation: boolean;
+  loopNumero?: number | null;
   tasks: ServerTask[];
 }
 
@@ -856,6 +862,7 @@ export default function CronogramaCanvas({
       source: p.source,
       status: p.status,
       needsValidation: p.needsValidation,
+      loopNumero: p.loopNumero ?? null,
       tasks: (p.tasks ?? []).map((t) => ({
         id: t.id,
         title: t.title,
@@ -873,6 +880,7 @@ export default function CronogramaCanvas({
         dueDateOverride: t.dueDateOverride ?? null,
         // 2026-11-18: sin esto el aviso de las horas vendidas decía siempre «las tareas todavía no tienen horas».
         horasEstimadas: t.horasEstimadas ?? null,
+        semanas: t.semanas ?? null,
         _key: t.id,
       })),
       _key: p.id,
@@ -1438,6 +1446,8 @@ export default function CronogramaCanvas({
           type: t.type ?? null,
           startDateOverride: t.startDateOverride ?? null,
           dueDateOverride: t.dueDateOverride ?? null,
+          // Cuántas semanas dura (null = una); el servidor la recorta a lo que cabe en la fase.
+          semanas: t.semanas ?? null,
           /* T1 (auditoría del deshacer, 2026-10-05): lo que la pantalla sabe de la fila y el PUT no escribe (el
              estado y su procedencia, el origen). El servidor lo lee SOLO si el id ya no existe (un borrado que la
              persona deshizo después del autoguardado) para recrearla como estaba. */
@@ -1458,7 +1468,7 @@ export default function CronogramaCanvas({
       return {
         ...(p.id ? { id: p.id } : {}),
         // T1: igual que la tarea, por si la fase se borró y la persona lo deshizo.
-        ...(p.id ? { respaldo: { status: p.status, source: p.source } } : {}),
+        ...(p.id ? { respaldo: { status: p.status, source: p.source, ...(p.loopNumero != null ? { loopNumero: p.loopNumero } : {}) } } : {}),
         name: p.name.trim(),
         order: i,
         durationWeeks: p.durationWeeks,
@@ -3557,7 +3567,9 @@ export default function CronogramaCanvas({
       type: t.type,
       startDateOverride: t.startDateOverride ?? null,
       dueDateOverride: t.dueDateOverride ?? null,
+      semanas: t.semanas ?? null,
     })),
+    loopNumero: p.loopNumero ?? null,
   })), [phases]);
 
   /* ── LA VISTA «VER LA PROPUESTA» ─────────────────────────────────────────────

@@ -12,7 +12,7 @@ import { computeProjectSummary, type ProjectSummary } from "@/lib/portfolio/summ
 import { toSummaryLifecycle } from "@/lib/portfolio/load";
 import { getProjectLifecycle, type ProjectLifecycle } from "@/lib/lifecycle";
 import type { BaselineSnapshot } from "@/lib/timeline/baseline";
-import { computePhaseRanges, addWeeks, projectedEnd } from "@/lib/timeline/weeks";
+import { computePhaseRanges, addWeeks, projectedEnd, ultimaSemanaDeLaTarea } from "@/lib/timeline/weeks";
 import { bloquesDeLaCuenta, type CorreoLeido } from "./watchdog-cuenta";
 import { TOPE_TRANSCRIPCION_PROYECTO, extractosDelBloque } from "./transcripcion-del-vigia";
 import { whereBelongsToClient } from "@/lib/sessions/project-sources";
@@ -123,6 +123,7 @@ export async function buildWatchdogContext(
                   title: true,
                   status: true,
                   weekIndex: true,
+                  semanas: true,
                   type: true,
                   party: true,
                   actualStart: true,
@@ -163,6 +164,7 @@ export async function buildWatchdogContext(
             id: t.id,
             status: t.status,
             weekIndex: t.weekIndex,
+            semanas: t.semanas,
             actualStart: t.actualStart,
             actualEnd: t.actualEnd,
             needsValidation: t.needsValidation,
@@ -190,7 +192,7 @@ export async function buildWatchdogContext(
     ordered.forEach((ph, i) => {
       for (const t of ph.tasks) {
         if (t.type !== "SESSION" || t.status !== "PENDING") continue;
-        const plannedEnd = addWeeks(anchorIso, ranges[i].start + t.weekIndex + 1);
+        const plannedEnd = addWeeks(anchorIso, ranges[i].start + ultimaSemanaDeLaTarea(t.weekIndex, t.semanas) + 1);
         if (plannedEnd.getTime() < now.getTime()) {
           sessionTasksOverdue.push(
             `- "${t.title}" (fase "${ph.name}", planificada para ${fmtDate(plannedEnd)}, sigue PENDING) taskId=${t.id}`,

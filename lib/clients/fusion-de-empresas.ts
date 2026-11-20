@@ -168,7 +168,7 @@ export const SIN_CHOCAR = [
  * cartera NO es una copia: la confirmó una persona, así que la que sigue toma de la otra lo que no tiene confirmado
  * (`plegarClasificacion`).
  */
-export const UNO_A_UNO = ["hubspotAccount", "clientCsSignals", "clientPartnerSnapshot", "csAccountBrief", "clasificacionDeCuenta", "perfilDeLaEmpresa"] as const;
+export const UNO_A_UNO = ["hubspotAccount", "clientCsSignals", "clientPartnerSnapshot", "csAccountBrief", "clasificacionDeCuenta", "perfilDeLaEmpresa", "accesoAlPlanGeneral"] as const;
 
 /** Lo que cuelga de la cuenta de cobro (por `cuentaId`): se muda a la cuenta de la que sigue cuando las dos tienen. */
 export const DE_LA_CUENTA = [

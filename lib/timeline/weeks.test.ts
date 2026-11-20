@@ -15,6 +15,8 @@
 import { describe, it, test, expect } from "vitest";
 import {
   overduePlannedEnd,
+  semanasDeLaTarea,
+  ultimaSemanaDeLaTarea,
   isOverdueByDate,
   addWeeks,
   computePhaseRanges,
@@ -39,32 +41,41 @@ const ANCHOR = "2026-06-01T00:00:00.000Z";
 
 test("overduePlannedEnd = anchor + (absWeek+1) semanas (convención fin-de-semana)", () => {
   // Fase start 0, weekIndex 0 → absWeek 0 → fin = anchor + 1 semana.
-  expect(overduePlannedEnd(ANCHOR, 0, 0)?.toISOString()).toBe("2026-06-08T00:00:00.000Z");
+  expect(overduePlannedEnd(ANCHOR, 0, 0, null)?.toISOString()).toBe("2026-06-08T00:00:00.000Z");
   // Fase start 2, weekIndex 1 → absWeek 3 → fin = anchor + 4 semanas.
-  expect(overduePlannedEnd(ANCHOR, 2, 1)?.toISOString()).toBe(addWeeks(ANCHOR, 4).toISOString());
+  expect(overduePlannedEnd(ANCHOR, 2, 1, null)?.toISOString()).toBe(addWeeks(ANCHOR, 4).toISOString());
+});
+
+test("una tarea de varias semanas vence al final de la última, no de la primera", () => {
+  // Fase start 2, weekIndex 1, 3 semanas → corre en S3, S4 y S5 → fin = anchor + 6 semanas.
+  expect(overduePlannedEnd(ANCHOR, 2, 1, 3)?.toISOString()).toBe(addWeeks(ANCHOR, 6).toISOString());
+  // null, 1, 0 o un valor raro = una semana (lo de siempre).
+  for (const s of [null, undefined, 1, 0, -2, 1.5]) expect(overduePlannedEnd(ANCHOR, 2, 1, s)?.toISOString()).toBe(addWeeks(ANCHOR, 4).toISOString());
+  expect(ultimaSemanaDeLaTarea(4, 3)).toBe(6);
+  expect(semanasDeLaTarea(null)).toBe(1);
 });
 
 test("overduePlannedEnd sin anchor → null", () => {
-  expect(overduePlannedEnd(null, 0, 0)).toBeNull();
-  expect(overduePlannedEnd(undefined, 3, 2)).toBeNull();
+  expect(overduePlannedEnd(null, 0, 0, null)).toBeNull();
+  expect(overduePlannedEnd(undefined, 3, 2, null)).toBeNull();
 });
 
 test("isOverdueByDate: fin planeado pasó y PENDING → atrasada", () => {
-  const plannedEnd = overduePlannedEnd(ANCHOR, 0, 0); // 8 jun
+  const plannedEnd = overduePlannedEnd(ANCHOR, 0, 0, null); // 8 jun
   const now = new Date("2026-07-01T00:00:00.000Z");
   expect(isOverdueByDate(plannedEnd, now, "PENDING")).toBe(true);
   expect(isOverdueByDate(plannedEnd, now, "IN_PROGRESS")).toBe(true);
 });
 
 test("isOverdueByDate: DONE y SUSPENDED nunca están atrasadas (resueltas)", () => {
-  const plannedEnd = overduePlannedEnd(ANCHOR, 0, 0);
+  const plannedEnd = overduePlannedEnd(ANCHOR, 0, 0, null);
   const now = new Date("2026-07-01T00:00:00.000Z");
   expect(isOverdueByDate(plannedEnd, now, "DONE")).toBe(false);
   expect(isOverdueByDate(plannedEnd, now, "SUSPENDED")).toBe(false);
 });
 
 test("isOverdueByDate: fin planeado en el futuro → no atrasada", () => {
-  const plannedEnd = overduePlannedEnd(ANCHOR, 10, 0); // fin = anchor + 11 semanas
+  const plannedEnd = overduePlannedEnd(ANCHOR, 10, 0, null); // fin = anchor + 11 semanas
   const now = new Date("2026-07-01T00:00:00.000Z");
   expect(isOverdueByDate(plannedEnd, now, "PENDING")).toBe(false);
 });
@@ -72,11 +83,11 @@ test("isOverdueByDate: fin planeado en el futuro → no atrasada", () => {
 test("isOverdueByDate: null (sin anchor / sin montar) → false", () => {
   const now = new Date("2026-07-01T00:00:00.000Z");
   expect(isOverdueByDate(null, now, "PENDING")).toBe(false);
-  expect(isOverdueByDate(overduePlannedEnd(ANCHOR, 0, 0), null, "PENDING")).toBe(false);
+  expect(isOverdueByDate(overduePlannedEnd(ANCHOR, 0, 0, null), null, "PENDING")).toBe(false);
 });
 
 test("isOverdueByDate: borde de día — atrasada al pasar el instante de fin, no antes", () => {
-  const plannedEnd = overduePlannedEnd(ANCHOR, 0, 0)!; // 2026-06-08T00:00:00Z
+  const plannedEnd = overduePlannedEnd(ANCHOR, 0, 0, null)!; // 2026-06-08T00:00:00Z
   // Un instante ANTES del fin planeado → aún no atrasada.
   expect(isOverdueByDate(plannedEnd, new Date("2026-06-07T23:59:59.000Z"), "PENDING")).toBe(false);
   // Justo en el fin planeado (no estrictamente menor) → aún no atrasada.

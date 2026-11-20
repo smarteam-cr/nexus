@@ -108,7 +108,7 @@ export async function loadProjectActions(
             durationWeeks: true,
             // `party` decide qué es una entrega DEL CLIENTE; `source` distingue el detalle
             // generado por el agente de las tareas que puso una persona a mano.
-            tasks: { select: { id: true, title: true, weekIndex: true, status: true, party: true, source: true } },
+            tasks: { select: { id: true, title: true, weekIndex: true, semanas: true, status: true, party: true, source: true } },
           },
         },
       },

@@ -335,6 +335,7 @@ model Client {
   investigaciones          InvestigacionDeEmpresa[]  @relation("InvestigacionesDeLaEmpresa") // R5: lo que Nexus encontró en la web (CASCADE)
   documentosDeLaEmpresa    ProjectCanvas[]           @relation("DocumentosDeLaEmpresa") // R3: los documentos sin proyecto ni propuesta (CASCADE)
   accesosADocumentos       AccesoAlDocumento[] // R3 etapa 3: los enlaces de esos documentos (CASCADE)
+  accesoAlPlanGeneral      AccesoAlPlanGeneral? // el enlace del plan general de la cuenta (2026-11-19, CASCADE)
   personas                 PersonaDeLaEmpresa[]      @relation("PersonasDeLaEmpresa") // R6: una persona del cliente con su rol (CASCADE)
   perfil                   PerfilDeLaEmpresa?        @relation("PerfilDeLaEmpresa") // R13: el perfil de la empresa que usa Nexus (hoy Smarteam)
   clienteIdeal             IcpItem[]                 @relation("ClienteIdealDeLaEmpresa") // R13 (SET NULL)
@@ -1068,6 +1069,9 @@ model TimelinePhase {
   // (comportamiento por defecto). Habilita fases EN PARALELO (dos con el mismo inicio se solapan):
   // típico, una integración/desarrollo que corre en paralelo a la implementación del hub.
   startWeek            Int?
+  // El número del loop que ES esta fase (2026-11-19, plan general de la cuenta): «01 · Customer 360°». null = una
+  // fase común. Las fases con número son los grupos del plan general de la cuenta (lib/plan-general), en ese orden.
+  loopNumero           Int?
   sessionCount         Int? // opcional — algunas fases no son por sesiones
   notes                String?               @db.Text // texto libre opcional (contexto editable)
   activityType         TimelineActivityType? // D.1: tipo de actividad (nullable — fases pre-D.1 quedan sin tipo, render neutro)
@@ -1135,6 +1139,9 @@ model TimelineTask {
   /// Las horas estimadas de la tarea (2026-11-18): las pone el detalle desde las actividades de los casos vendidos. nullable
   /// porque las tareas de antes y las cargadas a mano no las tienen. Su suma se compara contra `ProjectTimeline.horasVendidas`.
   horasEstimadas       Float?
+  /// Cuántas semanas dura la tarea desde `weekIndex` (2026-11-19). nullable porque casi todas duran una. Todo fin de
+  /// tarea (atraso, promesa, carga) sale de `overduePlannedEnd` / `ultimaSemanaDeLaTarea` (lib/timeline/weeks.ts).
+  semanas              Int?
   // B — dueño de la tarea en el plan de alineación compartido. CLIENTE entrega/hace;
   // SMARTEAM configura; AMBOS trabajo conjunto. Nullable = sin asignar (data pre-B).
   // Cruza al cronograma compartible del cliente (gated por "Subir"); el Kickoff embebido NO lo muestra.
@@ -2222,6 +2229,26 @@ model AccesoAlDocumento {
   updatedAt   DateTime      @updatedAt
 
   @@index([clientId])
+}
+
+// El enlace con que el cliente ve el PLAN GENERAL de la cuenta (2026-11-19): los loops de sus proyectos en un solo
+// gantt, en /external/plan/[token]. Uno por cuenta. Sin contraseña: la URL es el secreto (256 bits), se revoca. El
+// cliente ve la foto PUBLICADA (`publicado`), nunca lo vivo: como AccesoALaEscala. Lo arma lib/plan-general.
+// SQL: scripts/sql/2026-11-19-plan-general-de-la-cuenta.sql. Ver DECISIONS «El plan general de la cuenta».
+model AccesoAlPlanGeneral {
+  id           String    @id @default(cuid())
+  clientId     String    @unique
+  client       Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  accessToken  String    @unique // 64 hex (crypto.randomBytes(32))
+  enabledAt    DateTime  @default(now())
+  revokedAt    DateTime? // != null → el enlace no abre nada
+  lastUsedAt   DateTime?
+  creadoPor    String? // el correo de quien lo creó (auditoría)
+  publicado    Json? // la foto que ve el cliente (PlanGeneralPublicado); null = nunca se publicó
+  publicadoEn  DateTime?
+  publicadoPor String? // el correo de quien lo publicó (auditoría)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 }
 
 // El enlace con que la persona de finanzas del cliente ve SU estado de cuenta EN VIVO (pedido 17, 2026-11-13):

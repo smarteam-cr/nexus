@@ -42,6 +42,7 @@ import {
   cierreParaMostrar,
 } from "@/lib/timeline/weeks";
 import { collectClientBlockers } from "@/lib/timeline/client-blockers";
+import { barraDeLaTarea, colorDeLaSemana, estadoDeLaTareaDelLoop, pintaPorTareas, tareasDeLaSemana, TEXTO_DEL_ESTADO_DEL_LOOP } from "@/lib/timeline/semanas-del-loop";
 import { summarizeParticularidades, attributionSentence } from "@/lib/timeline/particularidades-summary";
 import { clientStatusLine } from "@/lib/timeline/client-status";
 import type { ExternalTimelinePhase, ExternalParticularidad } from "@/lib/external/timeline-view-types";
@@ -84,6 +85,10 @@ const ACTIVITY_META: Record<
 };
 const NEUTRAL_SEG = "#b9cdf0"; // fase sin tipo (neutro de la familia navy de marca)
 const EMPTY_CELL = "#eef3fc"; // semana fuera del rango de la fase (paper-tint)
+/* Un loop del plan general (2026-11-19): sus tareas en sus semanas, como el plan de Valentina. Verde lo hecho, azul
+   lo que está en curso o por hacer. */
+const LOOP_HECHO = "#16a34a";
+const LOOP_EN_CURSO = "#3b82f6";
 
 // Responsable por tarea (showProgress, solo el cronograma compartible) — paleta light del
 // landing, espejo de PARTY_META del Gantt interno. "atrasada" se deriva (isOverdue).
@@ -149,6 +154,8 @@ const ESTADO_TEXTO: Record<string, string> = {
 // Tipo de tarea: solo se muestra cuando es SESIÓN (las TAREAS no muestran nada).
 // Navy de marca (la menta/teal quedó reservada para identidad Insider).
 const SESSION_META_LIGHT = { label: "Sesión", text: "#051849", bg: "#eef3fc", border: "#dbe4f3" };
+/** Una tarea de varias semanas (2026-11-19): chip neutro con la duración. */
+const DURACION_META_LIGHT = { label: "", text: "#475569", bg: "#f8fafc", border: "#e2e8f0" };
 const PARTY_META_LIGHT: Record<string, { label: string; text: string; bg: string; border: string }> = {
   CLIENTE:  { label: "Cliente",  text: "#b45309", bg: "#fffbeb", border: "#fde68a" }, // ámbar — lo que entrega el cliente
   SMARTEAM: { label: "Smarteam", text: "#07429A", bg: "#CFE2FA", border: "#b9cdf0" }, // royal de marca
@@ -246,7 +253,7 @@ function DetalleDeFase({
               {weekTasks.map((t, ti) => {
                 // Solo los estados que sabemos dibujar; uno desconocido no pinta círculo.
                 const conEstado = showProgress && !!t.status && t.status in ESTADO_TEXTO;
-                const overdue = showProgress && !!t.status && isOverdueByDate(overduePlannedEnd(anchor, rangeStart, relWeek), now, t.status);
+                const overdue = showProgress && !!t.status && isOverdueByDate(overduePlannedEnd(anchor, rangeStart, relWeek, t.semanas), now, t.status);
                 const pMeta = showProgress && t.party ? PARTY_META_LIGHT[t.party] : null;
                 return (
                   /* `flex-start` y no `center`: con el círculo a la izquierda, un título de dos
@@ -259,6 +266,11 @@ function DetalleDeFase({
                       </span>
                     )}
                     <span style={t.status === "DONE" ? { color: "var(--text-muted)" } : undefined}>{t.title}</span>
+                    {(t.semanas ?? 1) > 1 && (
+                      <span style={chipStyle(DURACION_META_LIGHT)} title={`Corre de la semana ${relWeek + 1} a la ${relWeek + t.semanas!} de esta fase`}>
+                        {t.semanas} semanas
+                      </span>
+                    )}
                     {overdue && <span style={chipStyle(OVERDUE_META_LIGHT)}>{OVERDUE_META_LIGHT.label}</span>}
                     {pMeta && <span style={chipStyle(pMeta)}>{pMeta.label}</span>}
                     {showProgress && t.type === "SESSION" && <span style={chipStyle(SESSION_META_LIGHT)}>{SESSION_META_LIGHT.label}</span>}
@@ -428,7 +440,17 @@ export default function TimelineSection({
           )}
 
           <span style={{ marginLeft: "auto", display: "flex", flexWrap: "wrap", alignItems: "center", gap: "4px 16px" }}>
-            {Object.values(ACTIVITY_META).map((m) => (
+            {/* Un plan de loops (el plan general de la cuenta) pinta tareas, no tipos de actividad: su leyenda es la de
+                sus colores. Un cronograma de proyecto no trae `loopNumero` y sigue con la de siempre. */}
+            {[
+              ...(phases.some((ph) => pintaPorTareas(ph.loopNumero, ph.tasks ?? []))
+                ? [
+                    { label: "Hecho", seg: LOOP_HECHO },
+                    { label: "En curso o por hacer", seg: LOOP_EN_CURSO },
+                  ]
+                : []),
+              ...(phases.length === 0 || phases.some((ph) => !pintaPorTareas(ph.loopNumero, ph.tasks ?? [])) ? Object.values(ACTIVITY_META) : []),
+            ].map((m) => (
               <span key={m.label} style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
                 <span style={{ width: 24, height: 6, borderRadius: 3, background: m.seg, display: "inline-block" }} />
                 <span style={SUB_LABEL}>{m.label}</span>
@@ -632,6 +654,26 @@ export default function TimelineSection({
                         if (!inRange) return <div key={w} style={{ height: 12, borderRadius: 6, background: EMPTY_CELL }} />;
                         const isPast = curWeek !== null && w < curWeek;
                         const isCur = curWeek === w;
+                        /* Un loop con sus tareas a la vista: cada semana dice qué corre en ella (una tarea de varias
+                           semanas, en todas). Sin tareas (el detalle sin confirmar), la barra de siempre. */
+                        if (pintaPorTareas(p.loopNumero, tasks)) {
+                          // La MISMA regla que el Gantt del equipo (lib/timeline/semanas-del-loop.ts).
+                          const rel = w - range.start;
+                          const color = colorDeLaSemana(tasks, rel);
+                          const nombres = tareasDeLaSemana(tasks, rel).map((t) => t.title);
+                          return (
+                            <div
+                              key={w}
+                              title={nombres.length ? `S${w} · ${nombres.join(" · ")}` : `S${w}`}
+                              style={{
+                                height: 12,
+                                borderRadius: 6,
+                                background: color === "vacia" ? EMPTY_CELL : color === "hecho" ? LOOP_HECHO : LOOP_EN_CURSO,
+                                ...(isCur ? { boxShadow: "0 0 0 2px rgba(11, 88, 211, 0.75)" } : {}),
+                              }}
+                            />
+                          );
+                        }
                         return (
                           <div
                             key={w}
@@ -649,7 +691,85 @@ export default function TimelineSection({
                     </div>
 
                     {/* Expandido: notas de fase + acciones por semana (read-only) */}
-                    {isOpen && hasDetail && (
+                    {/* Un loop del plan general (2026-11-19): una fila por tarea con su barra en sus semanas, sobre la
+                        misma grilla, y su estado al lado — la MISMA regla que el Gantt del equipo. */}
+                    {isOpen && pintaPorTareas(p.loopNumero, tasks) && (
+                      <div style={{ marginBottom: 10 }}>
+                        {p.notes?.trim() && (
+                          <p style={{ margin: "0 0 6px 26px", fontSize: 13, color: "var(--text-secondary)", lineHeight: 1.55 }}>{p.notes}</p>
+                        )}
+                        {[...tasks]
+                          .map((t, i) => ({ t, i }))
+                          .sort((a, b) => a.t.weekIndex - b.t.weekIndex || a.i - b.i)
+                          .map(({ t, i }) => {
+                            // La MISMA regla que el Gantt del equipo (lib/timeline/semanas-del-loop.ts).
+                            const { desde, hasta, columnaDelEstado } = barraDeLaTarea(range.start, t, total);
+                            if (t.status === "SUSPENDED") return null; // nunca llega (el chokepoint la saca); por si acaso
+                            const hecha = t.status === "DONE";
+                            const atrasada = showProgress && !!t.status && isOverdueByDate(overduePlannedEnd(anchor, range.start, t.weekIndex, t.semanas), now, t.status);
+                            const estado = showProgress ? estadoDeLaTareaDelLoop(t.status, atrasada) : null;
+                            const pMeta = showProgress && t.party ? PARTY_META_LIGHT[t.party] : null;
+                            const textoDelEstado = estado && (
+                              <span
+                                style={{
+                                  whiteSpace: "nowrap",
+                                  fontSize: 11,
+                                  fontWeight: 700,
+                                  color: estado === "hecho" ? LOOP_HECHO : estado === "en-curso" ? LOOP_EN_CURSO : OVERDUE_META_LIGHT.text,
+                                }}
+                              >
+                                {TEXTO_DEL_ESTADO_DEL_LOOP[estado]}
+                              </span>
+                            );
+                            return (
+                              <div key={i} style={{ ...gridCols, display: "grid", gap: 4, alignItems: "center", padding: "3px 0" }}>
+                                <div style={{ minWidth: 0, paddingLeft: 26, paddingRight: 8, display: "flex", alignItems: "center", gap: 6 }}>
+                                  {showProgress && t.status && t.status in ESTADO_TEXTO && (
+                                    <span style={{ display: "inline-flex", flexShrink: 0 }}>
+                                      <EstadoCirculo status={t.status} size={13} />
+                                      <span style={SR_ONLY}>{ESTADO_TEXTO[t.status] ?? ""}: </span>
+                                    </span>
+                                  )}
+                                  <span
+                                    title={t.title}
+                                    style={{ minWidth: 0, fontSize: 12.5, color: hecha ? "var(--text-muted)" : "var(--text-secondary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: pdf ? "normal" : "nowrap" }}
+                                  >
+                                    {t.title}
+                                  </span>
+                                  {pMeta && <span style={{ ...chipStyle(pMeta), flexShrink: 0 }}>{pMeta.label}</span>}
+                                  {showProgress && t.type === "SESSION" && <span style={{ ...chipStyle(SESSION_META_LIGHT), flexShrink: 0 }}>{SESSION_META_LIGHT.label}</span>}
+                                  {columnaDelEstado === null && textoDelEstado}
+                                </div>
+                                {Array.from({ length: total }).map((_, w) => {
+                                  if (w >= desde && w <= hasta) {
+                                    return (
+                                      <div
+                                        key={w}
+                                        title={`S${w} · ${t.title}`}
+                                        style={{
+                                          height: 10,
+                                          borderRadius: 5,
+                                          background: showProgress && hecha ? LOOP_HECHO : LOOP_EN_CURSO,
+                                          ...(atrasada ? { boxShadow: `0 0 0 1px ${OVERDUE_META_LIGHT.text}` } : {}),
+                                        }}
+                                      />
+                                    );
+                                  }
+                                  if (textoDelEstado && w === columnaDelEstado) {
+                                    return (
+                                      <div key={w} style={{ position: "relative", height: 10 }}>
+                                        <span style={{ position: "absolute", left: 0, top: "50%", transform: "translateY(-50%)" }}>{textoDelEstado}</span>
+                                      </div>
+                                    );
+                                  }
+                                  return <div key={w} style={{ height: 10 }} />;
+                                })}
+                              </div>
+                            );
+                          })}
+                      </div>
+                    )}
+                    {isOpen && hasDetail && !pintaPorTareas(p.loopNumero, tasks) && (
                       <div style={{ marginLeft: 26, marginRight: 8, marginTop: 2, marginBottom: 12, borderLeft: "2px solid var(--border)", paddingLeft: 14, display: "flex", flexDirection: "column", gap: 10 }}>
                         <DetalleDeFase
                           notas={p.notes}

@@ -41,7 +41,7 @@ async function main() {
         select: {
           id: true, name: true, status: true, durationWeeks: true, startWeek: true,
           actualStart: true, actualEnd: true,
-          tasks: { select: { status: true, weekIndex: true } },
+          tasks: { select: { status: true, weekIndex: true, semanas: true } },
         },
       },
     },
@@ -69,7 +69,7 @@ async function main() {
       let vencidas = 0;
       t.phases.forEach((p, i) => {
         for (const tk of p.tasks) {
-          const fin = overduePlannedEnd(anchor?.toISOString() ?? null, ranges[i].start, tk.weekIndex);
+          const fin = overduePlannedEnd(anchor?.toISOString() ?? null, ranges[i].start, tk.weekIndex, tk.semanas);
           if (isOverdueByDate(fin, now, tk.status)) vencidas++;
         }
       });

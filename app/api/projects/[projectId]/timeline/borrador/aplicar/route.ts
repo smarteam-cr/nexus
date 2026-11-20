@@ -28,6 +28,7 @@
  * pero se TOLERA: una pestaña de la versión anterior abierta durante el deploy la sigue mandando.
  * Guarded con guardTimelineEdit (interno/CSE).
  */
+import { marcarLoopsDelHandoff } from "@/lib/plan-general/loops-del-handoff-server";
 import { NextRequest, NextResponse } from "next/server";
 import { guardTimelineEdit, guardIaDelCronograma } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
@@ -184,6 +185,10 @@ export async function POST(
     }
     throw e;
   }
+
+  /* LOS LOOPS (2026-11-19, lib/plan-general): las fases que la propuesta acaba de crear nacen sin número; si el proyecto
+     trabaja por loops, toman el de su loop del handoff (por el nombre). Best-effort: nunca falla la aplicación. */
+  await marcarLoopsDelHandoff(projectId);
 
   const origen = r.borrador.origen;
   const aplicadas = r.plan.marcadas;

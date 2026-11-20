@@ -59,7 +59,7 @@ export async function cargarPanelDelServicio(projectId: string, quienMira: strin
               durationWeeks: true,
               startWeek: true,
               status: true,
-              tasks: { orderBy: [{ weekIndex: "asc" }, { order: "asc" }], select: { title: true, weekIndex: true, status: true, party: true } },
+              tasks: { orderBy: [{ weekIndex: "asc" }, { order: "asc" }], select: { title: true, weekIndex: true, semanas: true, status: true, party: true } },
             },
           },
         },

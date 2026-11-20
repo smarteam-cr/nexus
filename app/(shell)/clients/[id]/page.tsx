@@ -19,6 +19,7 @@ import { ultimoCambioDelHandoff } from "@/lib/handoff/congelado-server";
 import { conteoDeNovedadesDelProyecto } from "@/lib/seguimiento/novedades-server";
 import { hayPropuestaParaRevisar } from "@/lib/timeline/borrador";
 import { leerAutoriaDeLasPropuestas } from "@/lib/timeline/leer-autoria";
+import { cuentaTienePlanGeneral } from "@/lib/plan-general/leer";
 
 /**
  * Los canvases del proyecto inicial, CON su señal de contenido. La señal viaja desde el
@@ -232,6 +233,9 @@ export default async function ClientPage({
           return (await elegirProyectoParaQuienMira(visibleProjects, { email: ctx?.teamMember.email, rol: ctx?.role })).id;
         })();
   const initialCanvases = initialProjectId ? await seedCanvases(initialProjectId) : null;
+  /* «Plan general» va en el riel solo si algún proyecto tiene loops (lib/plan-general). Con el SQL del 2026-11-19 sin
+     aplicar la consulta falla: la ficha abre igual, sin la fila. */
+  const conPlanGeneral = await cuentaTienePlanGeneral(id).catch(() => false);
 
   return (
     <WorkspaceClient
@@ -243,6 +247,7 @@ export default async function ClientPage({
       strategyCanvasId={strategyRef.canvasId}
       initialCanvases={initialCanvases}
       initialCanvasesProjectId={initialProjectId}
+      conPlanGeneral={conPlanGeneral}
     />
   );
 }

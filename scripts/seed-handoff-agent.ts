@@ -31,7 +31,7 @@ const AGENT_ID = "cmmla1g1x00005wijix3qnr7u";
 
 const HANDOFF_SYSTEM_PROMPT = `ROL: Eres un Consultor de Customer Success Senior de Smarteam recibiendo un handoff del equipo de Ventas. Tu tarea es producir DOS outputs en un único JSON:
 
-(1) HANDOFF — 12 secciones laser-focused en lo que CS necesita para arrancar bien el proyecto. Cada sección es un bloque de texto en markdown.
+(1) HANDOFF — 13 secciones laser-focused en lo que CS necesita para arrancar bien el proyecto. Cada sección es un bloque de texto en markdown, salvo "loops", que es una tabla (o va vacía).
 (2) CRONOGRAMA — secuencia de fases con duración en semanas (sin fechas concretas).
 
 FUENTES DE INFORMACIÓN — REGLAS DURAS DE QUÉ USAR:
@@ -99,7 +99,7 @@ CLASIFICACIÓN (TAGS) — campo top-level "tags" (array de slugs, podés devolve
 - COHERENCIA con la sección "desarrollo" y con el cronograma: si marcás "custom_dev" o "insider_one", el cronograma DEBE incluir una fase dedicada "Desarrollo / Integración" (ver regla del timeline).
 
 FORMATO DEL OUTPUT — sections + blocks:
-- Devolvés un array "sections" con 12 objetos, uno por cada sección del canvas Handoff.
+- Devolvés un array "sections" con 13 objetos, uno por cada sección del canvas Handoff.
 - Cada sección tiene un "key" (matchea exacto con la CanvasSection del canvas) y un "blocks" array con UN ÚNICO block tipo "text".
 - El block lleva el contenido en markdown en su field "content".
 
@@ -138,6 +138,12 @@ JSON SCHEMA DE RESPUESTA (exacto, sin markdown wrapping, sin comentarios fuera d
       "key": "fuera_de_alcance",
       "blocks": [
         { "type": "text", "content": "Lo que el cliente PIDIÓ o mencionó en la venta y NO entró al alcance vendido: hubs o módulos que se nombraron sin cotizar, automatizaciones o reportes que se recortaron para poder cerrar, integraciones que quedaron para una fase 2, cantidades de usuarios o de datos que se bajaron. Por CADA uno: qué pidió, quién lo dijo y cuándo (citá sesión/fecha), y si quedó afuera por precio, por plazo o por decisión de alcance. Sirve para DOS cosas: defender el alcance cuando reaparezca como 'esto ya lo habíamos hablado', y saber qué ofrecerle más adelante. Si no hay nada, decilo explícito — que no haya pedidos sueltos también es información." }
+      ]
+    },
+    {
+      "key": "loops",
+      "blocks": [
+        { "type": "table", "data": { "headers": ["Loop", "Área", "Objetivo", "Prioridad"], "rows": [] } }
       ]
     },
     {
@@ -190,7 +196,9 @@ JSON SCHEMA DE RESPUESTA (exacto, sin markdown wrapping, sin comentarios fuera d
   }
 }
 
-IMPORTANTE: el ejemplo de content arriba describe QUÉ debe ir en cada sección — NO copies ese texto literalmente. Generá contenido REAL basado en las fuentes del cliente. Si una sección no tiene evidencia suficiente, el content de su block debe decir "⚠️ Por validar con cliente: [pregunta específica para la primera reunión de CS]". El JSON SIEMPRE debe tener las 12 secciones con sus keys exactos (no podés omitir ninguna), pero pueden ser placeholders cuando falta info. El cronograma SÍ puede venir vacío ("phases": []) si no hay info clara.`;
+LOOPS: la sección "loops" es SOLO para un proyecto que trabaja por loops (los frentes de un SmartLoop): una fila por loop que las fuentes ubican en ESTE proyecto, con su número de dos cifras delante del nombre, el área (Marketing, Ventas o Servicio), su objetivo en una oración y la prioridad (Alta, Media o Baja). Si las fuentes no hablan de loops, deja esa sección con "blocks": []: es la EXCEPCIÓN a la regla del "⚠️ Por validar".
+
+IMPORTANTE: el ejemplo de content arriba describe QUÉ debe ir en cada sección — NO copies ese texto literalmente. Generá contenido REAL basado en las fuentes del cliente. Si una sección no tiene evidencia suficiente, el content de su block debe decir "⚠️ Por validar con cliente: [pregunta específica para la primera reunión de CS]". El JSON SIEMPRE debe tener las 13 secciones con sus keys exactos (no podés omitir ninguna), pero pueden ser placeholders cuando falta info. El cronograma SÍ puede venir vacío ("phases": []) si no hay info clara.`;
 
 async function main() {
   console.log("Sembrando agente Handoff Sales→CS...\n");
@@ -243,7 +251,7 @@ async function main() {
       id: AGENT_ID,
       name: "Handoff Sales→CS",
       description:
-        "Genera el handoff Sales→CS a partir de las transcripciones de ventas y notas del deal. Produce 12 cards laser-focused en lo que CS necesita para arrancar + un cronograma estructurado editable (fases con duración en semanas, sin fechas).",
+        "Genera el handoff Sales→CS a partir de las transcripciones de ventas y notas del deal. Produce 13 cards laser-focused en lo que CS necesita para arrancar + un cronograma estructurado editable (fases con duración en semanas, sin fechas).",
       status: AgentStatus.ACTIVE,
       agentType: AgentType.SECTION,
       outputType: AgentOutputType.CARDS,
@@ -260,7 +268,7 @@ async function main() {
     update: {
       name: "Handoff Sales→CS",
       description:
-        "Genera el handoff Sales→CS a partir de las transcripciones de ventas y notas del deal. Produce 12 cards laser-focused en lo que CS necesita para arrancar + un cronograma estructurado editable (fases con duración en semanas, sin fechas).",
+        "Genera el handoff Sales→CS a partir de las transcripciones de ventas y notas del deal. Produce 13 cards laser-focused en lo que CS necesita para arrancar + un cronograma estructurado editable (fases con duración en semanas, sin fechas).",
       agentGroup: "handoff",
       defaultCanvasSection: "acuerdos_promesas",
       systemPrompt: HANDOFF_SYSTEM_PROMPT,

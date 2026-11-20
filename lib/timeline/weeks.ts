@@ -369,18 +369,49 @@ export function etiquetaDeSemana(
 }
 
 /**
- * Fecha de FIN PLANEADO de una tarea (fin de su semana absoluta) según el anchor.
+ * Cuántas semanas dura una tarea (2026-11-19): `TimelineTask.semanas`, null = una (lo de siempre). Toda cuenta de
+ * fin de tarea pasa por acá, así una tarea de varias semanas no se da por atrasada al terminar su primera semana.
+ */
+export function semanasDeLaTarea(semanas: number | null | undefined): number {
+  return typeof semanas === "number" && Number.isInteger(semanas) && semanas > 1 ? semanas : 1;
+}
+
+/**
+ * Cuántas semanas puede durar una tarea que arranca en `weekIndex` dentro de una fase de `durationWeeks`: lo que pidió,
+ * recortado al final de la fase. 1 se guarda como null (lo de siempre). Toda escritura de `semanas` pasa por acá.
+ */
+export function semanasQueCaben(semanas: number | null | undefined, weekIndex: number, durationWeeks: number): number | null {
+  if (typeof semanas !== "number" || !Number.isInteger(semanas) || semanas <= 1) return null;
+  const n = Math.min(semanas, semanasQueQuedan(weekIndex, durationWeeks));
+  return n > 1 ? n : null;
+}
+
+/** Cuántas semanas le quedan a la fase desde `weekIndex` (al menos una): lo más que puede durar una tarea que arranca ahí. */
+export function semanasQueQuedan(weekIndex: number, durationWeeks: number): number {
+  return Math.max(1, durationWeeks - weekIndex);
+}
+
+/** La última semana (relativa a su fase) en la que corre una tarea. Una tarea de una semana: su propia semana. */
+export function ultimaSemanaDeLaTarea(weekIndex: number, semanas: number | null | undefined): number {
+  return weekIndex + semanasDeLaTarea(semanas) - 1;
+}
+
+/**
+ * Fecha de FIN PLANEADO de una tarea (fin de su ÚLTIMA semana absoluta) según el anchor.
  * Convención "+1 = fin de semana" (misma que summary.ts): una tarea en la semana
- * absoluta `w` se espera terminada al llegar la fecha `anchor + (w+1) semanas`.
+ * absoluta `w` se espera terminada al llegar la fecha `anchor + (w+1) semanas`; una de
+ * `semanas` semanas, al final de la última (`w + semanas`).
  * null si no hay anchor (sin anchor no hay fechas, solo números de semana).
+ * `semanas` es OBLIGATORIO a propósito: quien calcula el fin de una tarea tiene que pasar su duración (null = una).
  */
 export function overduePlannedEnd(
   anchor: string | null | undefined,
   phaseStart: number,
   weekIndex: number,
+  semanas: number | null | undefined,
 ): Date | null {
   if (!anchor) return null;
-  return addWeeks(anchor, absoluteWeek(phaseStart, weekIndex) + 1);
+  return addWeeks(anchor, absoluteWeek(phaseStart, ultimaSemanaDeLaTarea(weekIndex, semanas)) + 1);
 }
 
 /**

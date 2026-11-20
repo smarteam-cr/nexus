@@ -40,6 +40,9 @@ export interface TaskInput {
   /** #4 — override de fechas (ISO). undefined = no tocar; null = derivar de la semana; string = set */
   startDateOverride?: string | null;
   dueDateOverride?: string | null;
+  /** Cuántas semanas dura desde su semana (2026-11-19). undefined = no tocar (una pantalla de antes no la manda);
+   *  null o 1 = una semana. Tolerante: un valor que no se entiende se ignora. El servidor la recorta a lo que cabe. */
+  semanas?: number | null;
   /** Auditoría del deshacer (2026-10-05): lo que la pantalla sabe de la fila (estado, origen) por si su
    *  id ya no existe y hay que RECREARLA. Para una fila que existe se ignora: el estado va por PATCH.
    *  Ver lib/timeline/guardado-del-cronograma.ts. */
@@ -306,6 +309,9 @@ export function validateTimelinePayload(raw: unknown): ValidationResult {
           type: tType,
           startDateOverride: tStart,
           dueDateOverride: tDue,
+          ...(tk.semanas === null || (typeof tk.semanas === "number" && Number.isInteger(tk.semanas) && tk.semanas >= 1)
+            ? { semanas: tk.semanas === null || tk.semanas === 1 ? null : tk.semanas }
+            : {}),
           // Tolerante: un respaldo que no se entiende se ignora, nunca traba el guardado.
           respaldo: leerRespaldoDeTarea((tk as { respaldo?: unknown }).respaldo),
         });
