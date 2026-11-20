@@ -702,8 +702,71 @@
 }
 
 /* El teléfono (y la página angosta). */
+/* Los puntos clave (18 nov): cinco, numerados, en dos columnas; el número en un círculo azul suave. */
+.re-puntos {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 22px 40px;
+  margin: 22px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.re-puntos li {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+}
+.re-puntos li > i {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  background: #e8eefc;
+  color: var(--re-azul);
+  font-style: normal;
+  font-size: 13px;
+  font-weight: 800;
+}
+.re-puntos li > div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+.re-puntos h3 {
+  margin: 0;
+  font-size: 17px;
+  line-height: 23px;
+  font-weight: 800;
+  color: var(--re-tinta);
+}
+.re-punto-texto {
+  font-size: 14.5px;
+  line-height: 22px;
+  color: var(--re-tinta-2);
+}
+.re-punto-area {
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--re-apagada);
+}
+/* «Confirmar» una cifra que dijo Smarteam (solo adentro). */
+.re-confirmar {
+  margin-left: 4px;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-weight: 700;
+  color: var(--re-azul);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
 @container (max-width: 760px) {
   .dr.rd-ed.re .rd { padding: 0 20px; }
+  .re-puntos { grid-template-columns: minmax(0, 1fr); gap: 18px; }
   .re-titular { font-size: 30px; line-height: 35px; }
   .re-titulo { font-size: 24px; line-height: 29px; }
   .re-bajada { font-size: 15.5px; line-height: 23px; }

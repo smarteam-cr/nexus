@@ -934,6 +934,8 @@ const CitaDelResumenSchema = z.object({
   hablante: z.string().max(200),
   texto: z.string().max(2000),
   confirmo: z.object({ hablante: z.string().max(200), texto: z.string().max(2000) }).optional(),
+  // 18 nov: la dijo Smarteam y la empresa no la corrigió (solo en las cifras). Un valor raro se cae solo, no la cita.
+  sinCorregir: z.literal(true).optional().catch(undefined),
 });
 const IdDelResumen = z.string().regex(/^[\w-]{1,20}$/);
 const OrigenDelResumen = z.string().max(200).optional();
@@ -977,6 +979,21 @@ const CifraSchema = PiezaSchema.extend({
   estado: z.enum(ESTADOS_DE_LA_CIFRA as unknown as [string, ...string[]]),
   nota: z.string().max(TOPE_A_MANO).nullable(),
   dimensionId: ID_DIMENSION.nullable(),
+  confirmada: z.boolean().optional().catch(undefined),
+});
+/** Un punto clave (18 nov): su título, lo que explica, su equipo de la escala y sus citas. */
+const PuntoSchema = PiezaSchema.extend({
+  titulo: z.string().max(TOPE_A_MANO),
+  areaId: ID_AREA.nullable(),
+});
+/** Una reunión que el Resumen no pudo leer bien (18 nov). */
+const MalLeidaSchema = z.object({
+  reunion: z.string().max(120),
+  fecha: z.string().max(40),
+  titulo: z.string().max(400).nullable(),
+  motivos: z.array(z.enum(["recortada", "poco-del-cliente"])).min(1).max(2),
+  leido: z.number().min(0).max(100),
+  delCliente: z.number().min(0).max(100),
 });
 const EtapaSchema = PiezaSchema.extend({
   texto: z.string().max(TOPE_A_MANO),
@@ -1077,6 +1094,9 @@ export function leerResumenGuardado(raw: unknown): ResumenGuardado | undefined {
           ...(esObjeto(r.confirmar) ? { confirmar: registroValido(r.confirmar, ID_DIMENSION, z.string().max(TOPE_A_MANO)) } : {}),
           ...(Array.isArray(r.avisos) ? { avisos: cadaUno(r.avisos, z.string().max(600), 20) } : {}),
           ...(Array.isArray(r.confirmarMano) ? { confirmarMano: cadaUno(r.confirmarMano, ID_DIMENSION, 40) } : {}),
+          // Del 18 nov: los puntos clave y las reuniones que no se pudieron leer bien.
+          ...(Array.isArray(r.puntos) ? { puntos: cadaUno(r.puntos, PuntoSchema, 40) } : {}),
+          ...(Array.isArray(r.malLeidas) ? { malLeidas: cadaUno(r.malLeidas, MalLeidaSchema, 40) } : {}),
         }
       : {};
   return {

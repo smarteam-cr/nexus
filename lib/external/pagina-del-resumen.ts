@@ -28,6 +28,11 @@ export interface CitaDelResumen {
    * dijo. En Centauro, «25 clientes y se nos van 14» lo resumió Marco y lo confirmó la empresa.
    */
   confirmo?: { hablante: string; texto: string };
+  /**
+   * Lo dijo alguien de Smarteam y la empresa NO lo corrigió en los turnos siguientes (18 nov, Elías: «si el vendedor dice
+   * una cifra y el cliente no corrige, posiblemente es real»). Solo vale como cita de una cifra, que sale «por confirmar».
+   */
+  sinCorregir?: true;
 }
 
 export interface PreguntaDelResumen {
@@ -41,6 +46,9 @@ export const TOPE_DE_LA_CIFRA = 28;
 
 /** Lo que escribe una persona: más holgado. */
 export const TOPE_A_MANO = 600;
+
+/** El título de un punto clave (18 nov): corto, en negrita. */
+export const TOPE_DEL_TITULO_DEL_PUNTO = 80;
 
 /** Las etiquetas del negocio bajo la tesis (forma editorial): qué vende, a quién o dónde, cómo cobra. */
 export const MAX_ETIQUETAS = 3;
@@ -135,6 +143,8 @@ export interface CifraDeLaPagina {
   mano?: boolean;
   /** Solo adentro: por qué NO sale al cliente (se escribió a mano con un número que su cita no dice, o no tiene cita). */
   noSale?: string;
+  /** Solo adentro: la dijo Smarteam y la empresa no la corrigió (18 nov): lleva «Confirmar» al lado de «Quitar». */
+  porConfirmar?: boolean;
 }
 
 /**
@@ -346,6 +356,48 @@ export interface ResumenDeLaPagina {
   datosRojos: DatoRojoDeLaPagina[];
   /** Formato 1: «¿Falta algo?» (también van en «Qué falta validar»). */
   falta: PreguntaDelResumen[];
+  /**
+   * Los 5 puntos clave (18 nov, Marco: «que abajo se explique más»): los más críticos de toda la empresa, en orden de peso.
+   * Opcional: un Resumen o una foto publicada de antes no los trae, y la página se pinta igual sin la parte.
+   */
+  puntos?: PuntoDeLaPagina[];
+  /** La clave para agregar un punto (null: no se agrega). */
+  puntoNuevo?: string | null;
+  /** Solo adentro: las reuniones que el Resumen no pudo leer bien (cortadas, o casi sin la voz de la empresa). */
+  malLeidas?: ReunionMalLeida[];
+}
+
+/** Un punto clave: un título corto y una o dos frases, con el equipo de la escala del que habla. */
+export interface PuntoDeLaPagina {
+  id: string;
+  titulo: string;
+  texto: string;
+  /** `<clave>:titulo`, `<clave>:texto`; sola, para quitarlo. */
+  clave: string;
+  areaNombre: string | null;
+  citas?: CitaDelResumen[];
+  mano?: boolean;
+}
+
+/** Por qué el Resumen no pudo leer bien una reunión (18 nov). */
+export type MotivoDeMalLeida = "recortada" | "poco-del-cliente";
+export const MOTIVO_DE_MAL_LEIDA: Record<MotivoDeMalLeida, string> = {
+  recortada: "era muy larga y se leyó sin un pedazo del medio",
+  "poco-del-cliente": "casi todo lo dijo Smarteam: la empresa habló poco",
+};
+
+/** Una reunión que el Resumen no pudo leer bien, con lo que hace falta para avisarlo y volver a leerla. */
+export interface ReunionMalLeida {
+  /** El id de la reunión (FirefliesSession). */
+  reunion: string;
+  /** ISO. */
+  fecha: string;
+  titulo: string | null;
+  motivos: MotivoDeMalLeida[];
+  /** Qué parte de su texto se leyó (0 a 100). */
+  leido: number;
+  /** Qué parte de lo dicho es de la empresa (0 a 100). */
+  delCliente: number;
 }
 
 /** Lo mínimo de un nivel por dimensión para decir si el general es provisional. */

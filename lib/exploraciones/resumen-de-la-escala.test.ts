@@ -323,7 +323,7 @@ describe("1 · ninguna afirmación sin su cita", () => {
     expect(texto).toContain("[236] Emiley Calvo Jiménez: Digamos que 25 25 la mitad.");
     expect(texto).toContain("no es evidencia");
     const reglas = String(p.system);
-    for (const regla of [/palabra por palabra/, /no significa que no lo tengan/, /Una meta/, /UNA CIFRA ES UN SOLO DATO/, /riesgo típico de la escala/, /No asumas herramientas/, /Nunca escribas «provisional»/, /pasa de un equipo a otro, es otro paso/, /«tesis» \(1\)/, /«etiquetas» \(3\)/, /«continuo»: true/, /«retos» \(exactamente 2/, /no cuadran entre sí/, /LA VERACIDAD ES LO MÁS IMPORTANTE/])
+    for (const regla of [/palabra por palabra/, /no significa que no lo tengan/, /Una meta/, /UNA CIFRA ES UN SOLO DATO/, /riesgo típico de la escala/, /No asumas herramientas/, /Nunca escribas «provisional»/, /pasa de un equipo a otro, es otro paso/, /«tesis» \(1\)/, /«etiquetas» \(3\)/, /«continuo»: true/, /«retos» \(de 1 a 4 según el PESO/, /no cuadran entre sí/, /LA VERACIDAD ES LO MÁS IMPORTANTE/])
       expect(reglas).toMatch(regla);
     expect(p.model).toBe("claude-sonnet-4-6");
     expect(guiaDelEquipo({ retos: [{ texto: "CRM lead-driven" }], metas: [{ que: "Bajar el churn", actual: "2,8 %" }], hubspotActual: "Usan un CRM sin nombre" })).toBe(

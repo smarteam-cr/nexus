@@ -5,8 +5,9 @@
  * documento (hex literal de resumen-editorial.css: la página no tiene tema, no flipea) y en tuteo.
  *
  * Se lee en un minuto. Blanco, tinta azul marino, un solo azul, titulares cortos en negrita y una cifra grande por bloque:
- *   arriba, la empresa en la ceja, la TESIS (dos frases), las etiquetas del negocio, el alcance y, a la derecha, el tamaño
- *   del negocio si la empresa lo dijo (sin él, la tesis ocupa todo el ancho);
+ *   arriba, la empresa en la ceja, la TESIS (dos frases: el problema principal, 18 nov), las etiquetas del negocio, el
+ *   alcance y, a la derecha, el tamaño del negocio si la empresa lo dijo (sin él, la tesis ocupa todo el ancho);
+ *   «Puntos clave» (18 nov): los 5 más críticos de la empresa, en orden de peso (un Resumen de antes no los trae);
  *   01 «Lo que hicimos»: sesiones, tiempo, personas y las áreas exploradas (y la próxima por explorar, si hay);
  *   02 «Tu operación»: los pasos del cliente con su ícono hasta el resultado (el último, lleno), el bucle de los equipos que
  *      acompañan mientras opera y «Dónde se traba hoy», numerado sobre su paso;
@@ -30,6 +31,7 @@ import {
   TOPE_A_MANO,
   TOPE_DE_LA_CIFRA,
   TOPE_DE_UN_NOMBRE,
+  TOPE_DEL_TITULO_DEL_PUNTO,
   TOPE_DEL_TITULO_DEL_RECORRIDO,
   type CifraDeLaPagina,
   type CitaDelResumen,
@@ -69,6 +71,8 @@ export interface EdicionDelResumen {
   deDonde?: (citas: readonly CitaDelResumen[], o?: { noSostiene?: boolean }) => ReactNode;
   /** Un texto fijo de la página (la bajada, los títulos, lo que hicimos, el pie), editable para esta empresa (16 nov). */
   fijo?: (o: EdicionDeUnTextoFijo) => ReactNode;
+  /** «Confirmar» una cifra que dijo Smarteam y la empresa no corrigió (18 nov). `clave`: la de la cifra. */
+  confirmar?: (clave: string) => ReactNode;
 }
 
 /** La señal de cómo se sabe una cifra: un símbolo y su texto, nunca solo el color. «Por confirmar» va sin signo. */
@@ -273,6 +277,11 @@ export default function ResumenDeLaEscalaVista({
             : c.nota
         }
       />
+      {c.porConfirmar && edicion?.confirmar && (
+        <p className="re-aviso-interno">
+          La dijo Smarteam y la empresa no la corrigió. {edicion.confirmar(c.clave)}
+        </p>
+      )}
       {c.noSale && <p className="re-aviso-interno">{c.noSale}</p>}
       {deDonde(c.citas, { noSostiene: !!c.noSale })}
     </div>
@@ -388,6 +397,16 @@ export default function ResumenDeLaEscalaVista({
 
   const Titular = edicion ? "div" : "h1";
   const conTesis = tesis.piezas.length > 0;
+  // Los 5 puntos clave (18 nov), debajo del titular. Un Resumen o una foto de antes no los trae: la parte no sale.
+  const puntos = resumen.puntos ?? [];
+  const conPuntos = puntos.length > 0 || (!!edicion && !!resumen.puntoNuevo);
+  // Las partes van numeradas en su orden; las que no salen no gastan número.
+  let partesNumeradas = 0;
+  const numero = (va: boolean) => (va ? String(++partesNumeradas).padStart(2, "0") : "");
+  const nPuntos = numero(conPuntos);
+  const nHicimos = numero(!!h);
+  const nRecorrido = numero(conRecorrido && !!recorrido);
+  const nEquipos = numero(resumen.tarjetas.length > 0);
   return (
     <div className={`dr rd-v3 rd-s2 rd-ed re${edicion ? " rd-editable" : ""}`}>
       <AnimacionesDelResultado className="rd rs" quieta={!!edicion}>
@@ -461,10 +480,41 @@ export default function ResumenDeLaEscalaVista({
           )}
         </section>
 
+        {conPuntos && (
+          <section className="re-parte" data-revela="" aria-labelledby="re-t0">
+            <p className="re-ceja">
+              {nPuntos} <span>/ Puntos clave</span>
+            </p>
+            <h2 className="re-titulo" id="re-t0">
+              {fijo("titulo.puntos", "Lo más crítico hoy.", "Título de los puntos clave")}
+            </h2>
+            <ol className="re-puntos">
+              {puntos.map((p, i) => (
+                <li key={p.id}>
+                  <i aria-hidden="true">{i + 1}</i>
+                  <div>
+                    <h3>{texto({ clave: `${p.clave}:titulo`, valor: p.titulo, vacio: "+ El título", etiqueta: "Título del punto clave", tope: TOPE_DEL_TITULO_DEL_PUNTO, quitar: "Quitar este punto" })}</h3>
+                    {(p.texto || edicion) && (
+                      <div className="re-punto-texto">{texto({ clave: `${p.clave}:texto`, valor: p.texto || null, vacio: "+ Qué pasa y qué consecuencia tiene", etiqueta: `Qué explica «${p.titulo}»`, tope: TOPE_A_MANO })}</div>
+                    )}
+                    {p.areaNombre && <span className="re-punto-area">{p.areaNombre}</span>}
+                    {deDonde(p.citas)}
+                  </div>
+                </li>
+              ))}
+            </ol>
+            {edicion && resumen.puntoNuevo && (
+              <div key={`nuevo-${puntos.length}`} className="re-agregar">
+                {texto({ clave: resumen.puntoNuevo, valor: null, vacio: "+ Agregar un punto clave", etiqueta: "Nuevo punto clave (su título)", tope: TOPE_DEL_TITULO_DEL_PUNTO })}
+              </div>
+            )}
+          </section>
+        )}
+
         {h && (
           <section className="re-parte" data-revela="" aria-labelledby="re-t1">
             <p className="re-ceja">
-              01 <span>/ Lo que hicimos</span>
+              {nHicimos} <span>/ Lo que hicimos</span>
             </p>
             <h2 className="re-titulo" id="re-t1">
               {fijo("titulo.hicimos", "El diagnóstico, contigo.", "Título de lo que hicimos")}
@@ -503,7 +553,7 @@ export default function ResumenDeLaEscalaVista({
         {conRecorrido && recorrido && (
           <section className="re-parte" data-revela="" aria-labelledby="re-t2">
             <p className="re-ceja">
-              02 <span>/ Tu operación</span>
+              {nRecorrido} <span>/ Tu operación</span>
             </p>
             <h2 className="re-titulo" id="re-t2">
               {resumen.claveDelTituloDelRecorrido
@@ -590,7 +640,7 @@ export default function ResumenDeLaEscalaVista({
         {resumen.tarjetas.length > 0 && (
           <section className="re-parte" data-revela="" aria-labelledby="re-t3">
             <p className="re-ceja">
-              {conRecorrido ? "03" : "02"} <span>/ Equipos y hallazgos</span>
+              {nEquipos} <span>/ Equipos y hallazgos</span>
             </p>
             <h2 className="re-titulo" id="re-t3">
               {fijo("titulo.equipos", "Cómo trabajan. Qué necesitan mejorar.", "Título de los equipos")}

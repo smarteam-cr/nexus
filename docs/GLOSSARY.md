@@ -10,7 +10,10 @@
   verificada contra la transcripción; sin cita no sale. Un **área operativa** es un equipo como la empresa se organiza
   (Soporte, Customer Success), colgado de su equipo de la escala (Servicio). Cada **cifra** dice cómo se sabe: *declarada*
   (la dijo la empresa), *estimada* (la resumimos o calculamos, con su base) o *por confirmar*. Los **datos rojos** son las
-  cifras del formato del 9 nov, que se siguen leyendo hasta rehacer el Resumen.
+  cifras del formato del 9 nov, que se siguen leyendo hasta rehacer el Resumen. Desde el 18 nov: el **titular** (la tesis)
+  nombra el problema principal, el que más pesó en las reuniones; los **puntos clave** son los cinco más críticos de toda
+  la empresa, en orden de peso; una cifra que dijo Smarteam y la empresa no corrigió sale *por confirmar* y adentro se
+  confirma con un clic; y una **reunión mal leída** (cortada, o casi sin la voz de la empresa) se avisa con «Volver a leer».
 - **Preparar una reunión** (`/para-ti/reunion/[evento]?cliente=…`, `lib/mi-dia`, desde el 2026-10-16): el resumen de una
   cuenta antes de una reunión de hoy, que se abre con «Preparar» desde la agenda de «Para ti»: quién viene (con nombre y
   cargo), la última vez, lo que se dijo antes de lo que dice el título, lo pendiente de los dos lados, el siguiente paso,
