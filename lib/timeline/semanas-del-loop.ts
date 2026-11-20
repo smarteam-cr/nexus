@@ -36,3 +36,35 @@ export function colorDeLaSemana(tareas: readonly TareaDelLoop[], semana: number)
   if (de.length === 0) return "vacia";
   return de.every((t) => t.status === "DONE") ? "hecho" : "en-curso";
 }
+
+/** El estado que se escribe al lado de la barra de una tarea del loop. null = nada (pendiente y a tiempo, o suspendida). */
+export type EstadoDeLaTareaDelLoop = "hecho" | "en-curso-atrasada" | "atrasada" | "en-curso";
+
+export const TEXTO_DEL_ESTADO_DEL_LOOP: Record<EstadoDeLaTareaDelLoop, string> = {
+  hecho: "✓ Hecho",
+  "en-curso-atrasada": "En curso · atrasada",
+  atrasada: "Atrasada",
+  "en-curso": "En curso",
+};
+
+/** Como en la lista por semana: una atrasada que ya se está trabajando no se confunde con una que ni empezó. */
+export function estadoDeLaTareaDelLoop(status: string | null | undefined, atrasada: boolean): EstadoDeLaTareaDelLoop | null {
+  if (status === "SUSPENDED") return null;
+  if (status === "DONE") return "hecho";
+  if (atrasada) return status === "IN_PROGRESS" ? "en-curso-atrasada" : "atrasada";
+  return status === "IN_PROGRESS" ? "en-curso" : null;
+}
+
+/**
+ * Dónde va la barra de una tarea (semanas absolutas, inclusivas) y en qué columna se escribe su estado: la que sigue a
+ * la barra. Si la barra llega a la última columna, null: el estado va junto al título (si no, no se vería).
+ */
+export function barraDeLaTarea(
+  inicioDeLaFase: number,
+  t: TareaDelLoop,
+  columnas: number,
+): { desde: number; hasta: number; columnaDelEstado: number | null } {
+  const desde = inicioDeLaFase + t.weekIndex;
+  const hasta = inicioDeLaFase + ultimaSemanaDeLaTarea(t.weekIndex, t.semanas);
+  return { desde, hasta, columnaDelEstado: hasta + 1 < columnas ? hasta + 1 : null };
+}

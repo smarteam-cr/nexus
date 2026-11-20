@@ -136,7 +136,7 @@ import DatePickerField from "@/components/ui/DatePickerField";
 import { useIrALaCasilla } from "@/components/canvas/useIrALaCasilla";
 import { hayPendienteDeSubir } from "@/lib/timeline/pendiente-de-subir";
 import { useChatDeSeccion } from "@/components/asistente/chat-de-seccion";
-import { colorDeLaSemana, pintaPorTareas, tareasDeLaSemana } from "@/lib/timeline/semanas-del-loop";
+import { barraDeLaTarea, colorDeLaSemana, estadoDeLaTareaDelLoop, pintaPorTareas, tareasDeLaSemana, TEXTO_DEL_ESTADO_DEL_LOOP } from "@/lib/timeline/semanas-del-loop";
 
 // ── Tipos (estado de trabajo del padre — key estable, id solo si está persistida) ──
 
@@ -2033,8 +2033,124 @@ export default function TimelineGantt({
                     );
                   })()}
 
+                  {/* Expandido, en un LOOP (2026-11-19, el plan de Valentina): una fila por tarea, con su barra en sus
+                      semanas sobre la MISMA grilla de la cabecera, y su estado al lado («✓ Hecho», «En curso»,
+                      «Atrasada»). El círculo cambia el estado; el título abre el detalle (semana, duración, todo lo
+                      demás se edita ahí). Las fases comunes siguen con su lista por semana. */}
+                  {isOpen && !propuesta && pintaPorTareas(p.loopNumero, p.tasks) && (
+                    <div className="mb-2">
+                      {[...p.tasks]
+                        .map((t, i) => ({ t, i }))
+                        .sort((a, b) => a.t.weekIndex - b.t.weekIndex || a.i - b.i)
+                        .map(({ t }) => {
+                          // La MISMA regla que la vista del cliente (lib/timeline/semanas-del-loop.ts).
+                          const { desde, hasta, columnaDelEstado } = barraDeLaTarea(range.start, t, total);
+                          const suspendida = t.status === "SUSPENDED";
+                          const hecha = t.status === "DONE";
+                          const atrasada = !suspendida && isOverdueByDate(overduePlannedEnd(anchor, range.start, t.weekIndex, t.semanas), today, t.status);
+                          const estado = estadoDeLaTareaDelLoop(t.status, atrasada);
+                          const canToggle = !readOnly && !!onToggleStatus && !!t.id;
+                          const abre = !readOnly && !!onOpenTask;
+                          const textoDelEstado = estado && (
+                            <span className={`whitespace-nowrap text-[10px] font-semibold ${estado === "hecho" ? "text-success-ink" : estado === "en-curso" ? "text-info-ink" : "text-danger-ink"}`}>
+                              {TEXTO_DEL_ESTADO_DEL_LOOP[estado]}
+                            </span>
+                          );
+                          return (
+                            <Fragment key={t.key}>
+                              <div className="grid gap-1 items-center px-2 py-1 -mx-2 rounded-lg hover:bg-surface-hover/50" style={gridCols}>
+                                <div className="flex items-center gap-2 min-w-0 pl-7">
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      if (canToggle) onToggleStatus!(t.id!, NEXT_STATUS_QUICK[t.status]);
+                                    }}
+                                    disabled={!canToggle}
+                                    title={
+                                      !t.id
+                                        ? "Guarda el cronograma para poder cambiar el estado"
+                                        : canToggle
+                                          ? `Estado: ${STATUS_META[t.status].label} — clic para marcar como ${STATUS_META[NEXT_STATUS_QUICK[t.status]].label}`
+                                          : STATUS_META[t.status].label
+                                    }
+                                    className={`flex-shrink-0 ${canToggle ? "cursor-pointer" : "opacity-50 cursor-default"}`}
+                                  >
+                                    <StatusCircle status={t.status} size={14} />
+                                  </button>
+                                  {abre ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => onOpenTask!(p.key, t.key)}
+                                      className={`min-w-0 truncate text-left text-xs cursor-pointer hover:underline decoration-dotted underline-offset-2 ${suspendida || hecha ? "text-fg-muted" : "text-fg-secondary"} ${suspendida ? "line-through" : ""}`}
+                                      title={t.title}
+                                    >
+                                      {t.title?.trim() ? t.title : <span className="italic text-fg-muted">Sin título</span>}
+                                    </button>
+                                  ) : (
+                                    <span className={`min-w-0 truncate text-xs ${suspendida || hecha ? "text-fg-muted" : "text-fg-secondary"} ${suspendida ? "line-through" : ""}`} title={t.title}>
+                                      {t.title?.trim() ? t.title : <span className="italic text-fg-muted">Sin título</span>}
+                                    </span>
+                                  )}
+                                  {/* Lo que la lista por semana decía en la fila: si es sesión y quién la hace. */}
+                                  {effType(t.type) === "SESSION" && (
+                                    <span className={`text-[9px] font-bold uppercase tracking-wider rounded px-1.5 py-0.5 flex-shrink-0 border ${TYPE_META.SESSION.cls}`}>
+                                      {TYPE_META.SESSION.label}
+                                    </span>
+                                  )}
+                                  <span
+                                    className={`text-[9px] font-bold uppercase tracking-wider rounded px-1.5 py-0.5 flex-shrink-0 border ${PARTY_META[effParty(t.party)].cls}`}
+                                    title="Responsable de la tarea"
+                                  >
+                                    {PARTY_META[effParty(t.party)].label}
+                                  </span>
+                                  {/* Sin columna libre a la derecha de la barra (llega a la última semana): el estado va acá. */}
+                                  {columnaDelEstado === null && textoDelEstado}
+                                </div>
+                                {Array.from({ length: total }).map((_, w) => {
+                                  if (!suspendida && w >= desde && w <= hasta) {
+                                    return (
+                                      <div
+                                        key={w}
+                                        className={`h-2.5 rounded ${hecha ? "bg-success-ink" : "bg-brand"} ${atrasada ? "ring-1 ring-red-500/80" : ""}`}
+                                        title={`S${w} · ${t.title}`}
+                                      />
+                                    );
+                                  }
+                                  // El estado, a la derecha de la barra (en la primera semana libre), como en el plan de Valentina.
+                                  if (textoDelEstado && w === columnaDelEstado) {
+                                    return (
+                                      <div key={w} className="relative h-2.5">
+                                        <span className="absolute left-0 top-1/2 -translate-y-1/2">{textoDelEstado}</span>
+                                      </div>
+                                    );
+                                  }
+                                  return <div key={w} className="h-2.5" />;
+                                })}
+                              </div>
+                              {t.id && debajoDeLaTarea?.(t.id)}
+                            </Fragment>
+                          );
+                        })}
+                      {editable && onAddTask && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            // Nace en la semana de HOY dentro del loop (no en la primera, que ya pasó y saldría atrasada).
+                            const hoy = curWeek === null ? 0 : curWeek - range.start;
+                            onAddTask(p.key, Math.min(Math.max(hoy, 0), Math.max(p.durationWeeks - 1, 0)));
+                          }}
+                          className="ml-7 mt-1 flex items-center gap-1 text-[10px] font-semibold text-fg-muted hover:text-fg-secondary transition-colors"
+                          title="Agregar una tarea a este loop, en la semana de hoy (la semana y la duración se cambian en su detalle)"
+                        >
+                          <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M12 4v16m8-8H4" /></svg>
+                          tarea
+                        </button>
+                      )}
+                    </div>
+                  )}
+
                   {/* Expandido: tareas por semana (edición inline) */}
-                  {isOpen && !propuesta && (
+                  {isOpen && !propuesta && !pintaPorTareas(p.loopNumero, p.tasks) && (
                     <div className="ml-7 mr-2 mb-3 mt-1 border-l-2 border-line pl-4 space-y-3">
                       {Array.from({ length: p.durationWeeks }).map((_, relWeek) => {
                         const weekTasks = tasksByWeek.get(relWeek) ?? [];

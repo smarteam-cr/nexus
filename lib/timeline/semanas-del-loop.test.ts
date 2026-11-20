@@ -25,3 +25,21 @@ describe("la fila de un loop (la MISMA regla para el equipo y el cliente)", () =
     expect(pintaPorTareas(null, tareas)).toBe(false);
   });
 });
+
+describe("el estado y la barra de cada tarea del loop", () => {
+  it("hecho, en curso, atrasada y en curso atrasada; pendiente a tiempo y suspendida, nada", async () => {
+    const { estadoDeLaTareaDelLoop } = await import("./semanas-del-loop");
+    expect(estadoDeLaTareaDelLoop("DONE", true)).toBe("hecho");
+    expect(estadoDeLaTareaDelLoop("IN_PROGRESS", false)).toBe("en-curso");
+    expect(estadoDeLaTareaDelLoop("IN_PROGRESS", true)).toBe("en-curso-atrasada");
+    expect(estadoDeLaTareaDelLoop("PENDING", true)).toBe("atrasada");
+    expect(estadoDeLaTareaDelLoop("PENDING", false)).toBeNull();
+    expect(estadoDeLaTareaDelLoop("SUSPENDED", true)).toBeNull();
+  });
+
+  it("la barra va de su semana a la última; el estado, en la columna siguiente o junto al título si no hay", async () => {
+    const { barraDeLaTarea } = await import("./semanas-del-loop");
+    expect(barraDeLaTarea(2, { weekIndex: 1, semanas: 3 }, 12)).toEqual({ desde: 3, hasta: 5, columnaDelEstado: 6 });
+    expect(barraDeLaTarea(0, { weekIndex: 4, semanas: 8 }, 12)).toEqual({ desde: 4, hasta: 11, columnaDelEstado: null });
+  });
+});

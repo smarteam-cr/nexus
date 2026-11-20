@@ -42,7 +42,7 @@ import {
   cierreParaMostrar,
 } from "@/lib/timeline/weeks";
 import { collectClientBlockers } from "@/lib/timeline/client-blockers";
-import { colorDeLaSemana, pintaPorTareas, tareasDeLaSemana } from "@/lib/timeline/semanas-del-loop";
+import { barraDeLaTarea, colorDeLaSemana, estadoDeLaTareaDelLoop, pintaPorTareas, tareasDeLaSemana, TEXTO_DEL_ESTADO_DEL_LOOP } from "@/lib/timeline/semanas-del-loop";
 import { summarizeParticularidades, attributionSentence } from "@/lib/timeline/particularidades-summary";
 import { clientStatusLine } from "@/lib/timeline/client-status";
 import type { ExternalTimelinePhase, ExternalParticularidad } from "@/lib/external/timeline-view-types";
@@ -691,7 +691,85 @@ export default function TimelineSection({
                     </div>
 
                     {/* Expandido: notas de fase + acciones por semana (read-only) */}
-                    {isOpen && hasDetail && (
+                    {/* Un loop del plan general (2026-11-19): una fila por tarea con su barra en sus semanas, sobre la
+                        misma grilla, y su estado al lado — la MISMA regla que el Gantt del equipo. */}
+                    {isOpen && pintaPorTareas(p.loopNumero, tasks) && (
+                      <div style={{ marginBottom: 10 }}>
+                        {p.notes?.trim() && (
+                          <p style={{ margin: "0 0 6px 26px", fontSize: 13, color: "var(--text-secondary)", lineHeight: 1.55 }}>{p.notes}</p>
+                        )}
+                        {[...tasks]
+                          .map((t, i) => ({ t, i }))
+                          .sort((a, b) => a.t.weekIndex - b.t.weekIndex || a.i - b.i)
+                          .map(({ t, i }) => {
+                            // La MISMA regla que el Gantt del equipo (lib/timeline/semanas-del-loop.ts).
+                            const { desde, hasta, columnaDelEstado } = barraDeLaTarea(range.start, t, total);
+                            if (t.status === "SUSPENDED") return null; // nunca llega (el chokepoint la saca); por si acaso
+                            const hecha = t.status === "DONE";
+                            const atrasada = showProgress && !!t.status && isOverdueByDate(overduePlannedEnd(anchor, range.start, t.weekIndex, t.semanas), now, t.status);
+                            const estado = showProgress ? estadoDeLaTareaDelLoop(t.status, atrasada) : null;
+                            const pMeta = showProgress && t.party ? PARTY_META_LIGHT[t.party] : null;
+                            const textoDelEstado = estado && (
+                              <span
+                                style={{
+                                  whiteSpace: "nowrap",
+                                  fontSize: 11,
+                                  fontWeight: 700,
+                                  color: estado === "hecho" ? LOOP_HECHO : estado === "en-curso" ? LOOP_EN_CURSO : OVERDUE_META_LIGHT.text,
+                                }}
+                              >
+                                {TEXTO_DEL_ESTADO_DEL_LOOP[estado]}
+                              </span>
+                            );
+                            return (
+                              <div key={i} style={{ ...gridCols, display: "grid", gap: 4, alignItems: "center", padding: "3px 0" }}>
+                                <div style={{ minWidth: 0, paddingLeft: 26, paddingRight: 8, display: "flex", alignItems: "center", gap: 6 }}>
+                                  {showProgress && t.status && t.status in ESTADO_TEXTO && (
+                                    <span style={{ display: "inline-flex", flexShrink: 0 }}>
+                                      <EstadoCirculo status={t.status} size={13} />
+                                      <span style={SR_ONLY}>{ESTADO_TEXTO[t.status] ?? ""}: </span>
+                                    </span>
+                                  )}
+                                  <span
+                                    title={t.title}
+                                    style={{ minWidth: 0, fontSize: 12.5, color: hecha ? "var(--text-muted)" : "var(--text-secondary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: pdf ? "normal" : "nowrap" }}
+                                  >
+                                    {t.title}
+                                  </span>
+                                  {pMeta && <span style={{ ...chipStyle(pMeta), flexShrink: 0 }}>{pMeta.label}</span>}
+                                  {showProgress && t.type === "SESSION" && <span style={{ ...chipStyle(SESSION_META_LIGHT), flexShrink: 0 }}>{SESSION_META_LIGHT.label}</span>}
+                                  {columnaDelEstado === null && textoDelEstado}
+                                </div>
+                                {Array.from({ length: total }).map((_, w) => {
+                                  if (w >= desde && w <= hasta) {
+                                    return (
+                                      <div
+                                        key={w}
+                                        title={`S${w} · ${t.title}`}
+                                        style={{
+                                          height: 10,
+                                          borderRadius: 5,
+                                          background: showProgress && hecha ? LOOP_HECHO : LOOP_EN_CURSO,
+                                          ...(atrasada ? { boxShadow: `0 0 0 1px ${OVERDUE_META_LIGHT.text}` } : {}),
+                                        }}
+                                      />
+                                    );
+                                  }
+                                  if (textoDelEstado && w === columnaDelEstado) {
+                                    return (
+                                      <div key={w} style={{ position: "relative", height: 10 }}>
+                                        <span style={{ position: "absolute", left: 0, top: "50%", transform: "translateY(-50%)" }}>{textoDelEstado}</span>
+                                      </div>
+                                    );
+                                  }
+                                  return <div key={w} style={{ height: 10 }} />;
+                                })}
+                              </div>
+                            );
+                          })}
+                      </div>
+                    )}
+                    {isOpen && hasDetail && !pintaPorTareas(p.loopNumero, tasks) && (
                       <div style={{ marginLeft: 26, marginRight: 8, marginTop: 2, marginBottom: 12, borderLeft: "2px solid var(--border)", paddingLeft: 14, display: "flex", flexDirection: "column", gap: 10 }}>
                         <DetalleDeFase
                           notas={p.notes}

@@ -15571,7 +15571,12 @@ entregables de kölbi se hacen por área.
   ven las semanas de cada uno»): verde si lo de esa semana está hecho, azul si hay algo en curso o por hacer, vacío si no
   hay nada, y los nombres al pasar el mouse. Un loop sin tareas que corran sigue con la barra de siempre. La regla es UNA
   (`lib/timeline/semanas-del-loop.ts`) para el Gantt del equipo y la vista del cliente, y la leyenda dice lo que se
-  pinta (con loops y fases comunes, las dos). El aviso «¿repetida?» no compara dos loops con número distinto. Las actividades son sus tareas. El detalle largo va en las notas de la tarea, que son
+  pinta (con loops y fases comunes, las dos). El aviso «¿repetida?» no compara dos loops con número distinto.
+  *Al desplegar un loop* (Elías eligió «una fase por loop», 20 nov, sobre el plan de Valentina): una fila por tarea con
+  su barra en sus semanas y su estado al lado («✓ Hecho», «En curso», «Atrasada», «En curso · atrasada»), con el
+  responsable y «Sesión» en la fila; el título abre el detalle y «+ tarea» nace en la semana de hoy. Lo que la lista
+  por semana tenía en la fila y en un loop pasa al detalle: renombrar en la fila, «N semanas», arrastrar entre semanas
+  y el «+» de cada semana. Las fases comunes siguen con su lista por semana. Las actividades son sus tareas. El detalle largo va en las notas de la tarea, que son
   internas. El tipo de trabajo lo dice el tipo de actividad de la FASE, como en cualquier cronograma: no hay tipo por
   tarea. SQL `2026-11-19-plan-general-de-la-cuenta.sql`.
 - **Una tarea puede durar varias semanas, en TODOS los cronogramas** (`TimelineTask.semanas`, null = una). Se elige en el
