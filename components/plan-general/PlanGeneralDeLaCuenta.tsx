@@ -21,6 +21,7 @@ import { BOTON_DE_HERRAMIENTA, BotonAzul, BotonBlanco, BotonEnlace } from "@/com
 import TimelineGantt, { type GanttPhase, type GanttTask, type GanttTaskStatus } from "@/components/canvas/TimelineGantt";
 import TaskDetailDrawer from "@/components/canvas/TaskDetailDrawer";
 import type { EstadoDelAccesoAlPlan } from "@/lib/plan-general/acceso";
+import { enlaceEnEsteNavegador } from "@/lib/external/enlace-local";
 import type { FaseDelPlan, PlanGeneral, TareaDelPlan } from "@/lib/plan-general/tipos";
 
 /** Una tarea en pantalla: la del plan, o una nueva que todavía no se guardó (sin id hasta tener título). */
@@ -502,6 +503,8 @@ function AccesoAlPlan({ clientId, acceso, onCambio }: { clientId: string; acceso
   };
 
   const punto = acceso.estado === "sin-generar" ? null : PUNTO[acceso.estado];
+  // En local, el enlace del .env (3004) se pasa a la dirección que se está mirando (lib/external/enlace-local.ts).
+  const enlace = acceso.enlace ? enlaceEnEsteNavegador(acceso.enlace, typeof window === "undefined" ? null : window.location.origin) : null;
   return (
     <div className="flex flex-wrap items-center gap-2">
       {acceso.estado === "activo" && (
@@ -536,11 +539,11 @@ function AccesoAlPlan({ clientId, acceso, onCambio }: { clientId: string; acceso
       >
         <div className="space-y-3">
           {error && <Alert variant="danger">{error}</Alert>}
-          {acceso.enlace ? (
+          {enlace ? (
             <>
               <input
                 readOnly
-                value={acceso.enlace}
+                value={enlace}
                 aria-label="Enlace para el cliente"
                 onFocus={(e) => e.target.select()}
                 className="w-full rounded-md border border-line bg-surface-muted px-2.5 py-1.5 text-[13px] text-fg-secondary"
@@ -552,8 +555,8 @@ function AccesoAlPlan({ clientId, acceso, onCambio }: { clientId: string; acceso
                   : "El cliente todavía no ve nada: falta publicar."}
               </p>
               <div className="flex flex-wrap items-center gap-2">
-                <BotonAzul onClick={() => void copiar(acceso.enlace!)}>Copiar enlace</BotonAzul>
-                <a href={acceso.enlace} target="_blank" rel="noreferrer" className={BOTON_DE_HERRAMIENTA}>
+                <BotonAzul onClick={() => void copiar(enlace)}>Copiar enlace</BotonAzul>
+                <a href={enlace} target="_blank" rel="noreferrer" className={BOTON_DE_HERRAMIENTA}>
                   Abrir la página
                 </a>
                 {acceso.sinPublicar && (

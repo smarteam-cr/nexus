@@ -136,7 +136,6 @@ import DatePickerField from "@/components/ui/DatePickerField";
 import { useIrALaCasilla } from "@/components/canvas/useIrALaCasilla";
 import { hayPendienteDeSubir } from "@/lib/timeline/pendiente-de-subir";
 import { useChatDeSeccion } from "@/components/asistente/chat-de-seccion";
-import { barraDeLaTarea, colorDeLaSemana, estadoDeLaTareaDelLoop, pintaPorTareas, tareasDeLaSemana, TEXTO_DEL_ESTADO_DEL_LOOP } from "@/lib/timeline/semanas-del-loop";
 
 // ── Tipos (estado de trabajo del padre — key estable, id solo si está persistida) ──
 
@@ -978,7 +977,24 @@ export default function TimelineGantt({
   propuesta,
   // onRemoveTask removido del Gantt: el borrado de tarea vive en el TaskDetailDrawer.
 }: Props) {
-  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  /* Las fases arrancan DESPLEGADAS (Elías, 20 nov): al abrir un cronograma se ven sus tareas sin tener que abrir fase por
+     fase. Solo la primera vez que llegan fases: lo que la persona pliega después queda plegado, y una fase nueva entra
+     plegada (no se le abre todo de nuevo a quien está trabajando). */
+  /* Qué fases están abiertas, una lista POR VISTA: el cronograma de siempre arranca con todas abiertas y la vista de la
+     propuesta tiene su propia regla (arranca plegada y abre solo lo que cambia: `desplegarAlEntrar`). Con una sola lista,
+     pasar de una vista a la otra le heredaba las fases abiertas a la otra (una propuesta grande se abría entera). */
+  const [abiertasDelCronograma, setAbiertasDelCronograma] = useState<Set<string>>(() => (propuesta ? new Set() : new Set(phases.map((p) => p.key))));
+  const [abiertasDeLaPropuesta, setAbiertasDeLaPropuesta] = useState<Set<string>>(() => new Set());
+  const expanded = propuesta ? abiertasDeLaPropuesta : abiertasDelCronograma;
+  const setExpanded = propuesta ? setAbiertasDeLaPropuesta : setAbiertasDelCronograma;
+  /* Si el Gantt montó sin fases (un cronograma vacío al que se le agrega la primera, o mientras carga), se abren al
+     llegar: ajuste durante el render (el patrón de React para derivar estado de las props), una sola vez. No tiene
+     prueba: las del Gantt lo pintan del lado del servidor, donde no hay un segundo render. */
+  const [desplegoAlEntrar, setDesplegoAlEntrar] = useState(phases.length > 0);
+  if (!desplegoAlEntrar && phases.length > 0 && !propuesta) {
+    setDesplegoAlEntrar(true);
+    setAbiertasDelCronograma((prev) => new Set([...prev, ...phases.map((p) => p.key)]));
+  }
   /* E4 P1: el «IA» de una fase abre el chat con esa fase señalada. El id que viaja es el de la fase
      guardada, o la clave `n:` de una fase nueva de la propuesta; una sin guardar no ofrece «IA». */
   const chat = useChatDeSeccion();
@@ -1573,17 +1589,7 @@ export default function TimelineGantt({
         )}
 
         <span className="ml-auto flex flex-wrap items-center gap-x-4 gap-y-1">
-          {/* La leyenda de lo que se pinta: los loops con tareas, por sus colores; las demás fases, por tipo. Con de los
-              dos (kölbi con su Semana 0), las dos. */}
-          {[
-            ...(phases.some((ph) => pintaPorTareas(ph.loopNumero, ph.tasks))
-              ? [
-                  { label: "Hecho", seg: "bg-success-ink" },
-                  { label: "En curso o por hacer", seg: "bg-brand" },
-                ]
-              : []),
-            ...(phases.length === 0 || phases.some((ph) => !pintaPorTareas(ph.loopNumero, ph.tasks)) ? Object.values(ACTIVITY_META) : []),
-          ].map((m) => (
+          {Object.values(ACTIVITY_META).map((m) => (
             <span key={m.label} className="flex items-center gap-1.5">
               <span className={`w-6 h-1.5 rounded ${m.seg} inline-block`} />
               <span className="text-[10px] font-bold uppercase tracking-wider text-fg-muted">{m.label}</span>
@@ -1940,27 +1946,6 @@ export default function TimelineGantt({
                       // L3 P3c: una semana que suma la propuesta (una duración que crece, marcada), en verde.
                       const seSuma = !!vistaDeLaFase?.semanasQueSeSuman.includes(relWeek);
 
-                      /* Un LOOP (2026-11-19, Elías: «no se ven las semanas de cada uno»): corre todo el ciclo, así que
-                         la barra llena no dice nada. La fila plegada dibuja sus TAREAS en sus semanas, como el plan de
-                         Valentina: verde si lo de esa semana está hecho, azul si está en curso o por hacer, y vacío si
-                         no hay nada. El nombre, al pasar el mouse. Las fases comunes siguen con su barra de siempre. */
-                      if (pintaPorTareas(p.loopNumero, p.tasks) && !seSuma) {
-                        // La MISMA regla que la vista del cliente (lib/timeline/semanas-del-loop.ts).
-                        const color = colorDeLaSemana(p.tasks, relWeek);
-                        const nombres = tareasDeLaSemana(p.tasks, relWeek).map((t) => t.title || "Sin título");
-                        const arrastra = editable && onUpdatePhase;
-                        return (
-                          <div
-                            key={w}
-                            onPointerDown={arrastra ? (e) => startBarDrag(e, p.key, range.start) : undefined}
-                            className={`h-3 rounded transition-all ${color === "vacia" ? "bg-surface-hover/70" : color === "hecho" ? "bg-success-ink" : "bg-brand"} ${
-                              isCur ? "timeline-now-pulse" : ""
-                            } ${weekOverdue && !isCur ? "ring-1 ring-red-500/80" : ""} ${arrastra ? "cursor-ew-resize touch-none" : ""}`}
-                            title={`S${w}${nombres.length ? ` · ${nombres.join(" · ")}` : ""}${arrastra ? " — arrastra para mover el inicio de la fase" : ""}`}
-                          />
-                        );
-                      }
-
                       return (
                         <div
                           key={w}
@@ -2033,124 +2018,8 @@ export default function TimelineGantt({
                     );
                   })()}
 
-                  {/* Expandido, en un LOOP (2026-11-19, el plan de Valentina): una fila por tarea, con su barra en sus
-                      semanas sobre la MISMA grilla de la cabecera, y su estado al lado («✓ Hecho», «En curso»,
-                      «Atrasada»). El círculo cambia el estado; el título abre el detalle (semana, duración, todo lo
-                      demás se edita ahí). Las fases comunes siguen con su lista por semana. */}
-                  {isOpen && !propuesta && pintaPorTareas(p.loopNumero, p.tasks) && (
-                    <div className="mb-2">
-                      {[...p.tasks]
-                        .map((t, i) => ({ t, i }))
-                        .sort((a, b) => a.t.weekIndex - b.t.weekIndex || a.i - b.i)
-                        .map(({ t }) => {
-                          // La MISMA regla que la vista del cliente (lib/timeline/semanas-del-loop.ts).
-                          const { desde, hasta, columnaDelEstado } = barraDeLaTarea(range.start, t, total);
-                          const suspendida = t.status === "SUSPENDED";
-                          const hecha = t.status === "DONE";
-                          const atrasada = !suspendida && isOverdueByDate(overduePlannedEnd(anchor, range.start, t.weekIndex, t.semanas), today, t.status);
-                          const estado = estadoDeLaTareaDelLoop(t.status, atrasada);
-                          const canToggle = !readOnly && !!onToggleStatus && !!t.id;
-                          const abre = !readOnly && !!onOpenTask;
-                          const textoDelEstado = estado && (
-                            <span className={`whitespace-nowrap text-[10px] font-semibold ${estado === "hecho" ? "text-success-ink" : estado === "en-curso" ? "text-info-ink" : "text-danger-ink"}`}>
-                              {TEXTO_DEL_ESTADO_DEL_LOOP[estado]}
-                            </span>
-                          );
-                          return (
-                            <Fragment key={t.key}>
-                              <div className="grid gap-1 items-center px-2 py-1 -mx-2 rounded-lg hover:bg-surface-hover/50" style={gridCols}>
-                                <div className="flex items-center gap-2 min-w-0 pl-7">
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      if (canToggle) onToggleStatus!(t.id!, NEXT_STATUS_QUICK[t.status]);
-                                    }}
-                                    disabled={!canToggle}
-                                    title={
-                                      !t.id
-                                        ? "Guarda el cronograma para poder cambiar el estado"
-                                        : canToggle
-                                          ? `Estado: ${STATUS_META[t.status].label} — clic para marcar como ${STATUS_META[NEXT_STATUS_QUICK[t.status]].label}`
-                                          : STATUS_META[t.status].label
-                                    }
-                                    className={`flex-shrink-0 ${canToggle ? "cursor-pointer" : "opacity-50 cursor-default"}`}
-                                  >
-                                    <StatusCircle status={t.status} size={14} />
-                                  </button>
-                                  {abre ? (
-                                    <button
-                                      type="button"
-                                      onClick={() => onOpenTask!(p.key, t.key)}
-                                      className={`min-w-0 truncate text-left text-xs cursor-pointer hover:underline decoration-dotted underline-offset-2 ${suspendida || hecha ? "text-fg-muted" : "text-fg-secondary"} ${suspendida ? "line-through" : ""}`}
-                                      title={t.title}
-                                    >
-                                      {t.title?.trim() ? t.title : <span className="italic text-fg-muted">Sin título</span>}
-                                    </button>
-                                  ) : (
-                                    <span className={`min-w-0 truncate text-xs ${suspendida || hecha ? "text-fg-muted" : "text-fg-secondary"} ${suspendida ? "line-through" : ""}`} title={t.title}>
-                                      {t.title?.trim() ? t.title : <span className="italic text-fg-muted">Sin título</span>}
-                                    </span>
-                                  )}
-                                  {/* Lo que la lista por semana decía en la fila: si es sesión y quién la hace. */}
-                                  {effType(t.type) === "SESSION" && (
-                                    <span className={`text-[9px] font-bold uppercase tracking-wider rounded px-1.5 py-0.5 flex-shrink-0 border ${TYPE_META.SESSION.cls}`}>
-                                      {TYPE_META.SESSION.label}
-                                    </span>
-                                  )}
-                                  <span
-                                    className={`text-[9px] font-bold uppercase tracking-wider rounded px-1.5 py-0.5 flex-shrink-0 border ${PARTY_META[effParty(t.party)].cls}`}
-                                    title="Responsable de la tarea"
-                                  >
-                                    {PARTY_META[effParty(t.party)].label}
-                                  </span>
-                                  {/* Sin columna libre a la derecha de la barra (llega a la última semana): el estado va acá. */}
-                                  {columnaDelEstado === null && textoDelEstado}
-                                </div>
-                                {Array.from({ length: total }).map((_, w) => {
-                                  if (!suspendida && w >= desde && w <= hasta) {
-                                    return (
-                                      <div
-                                        key={w}
-                                        className={`h-2.5 rounded ${hecha ? "bg-success-ink" : "bg-brand"} ${atrasada ? "ring-1 ring-red-500/80" : ""}`}
-                                        title={`S${w} · ${t.title}`}
-                                      />
-                                    );
-                                  }
-                                  // El estado, a la derecha de la barra (en la primera semana libre), como en el plan de Valentina.
-                                  if (textoDelEstado && w === columnaDelEstado) {
-                                    return (
-                                      <div key={w} className="relative h-2.5">
-                                        <span className="absolute left-0 top-1/2 -translate-y-1/2">{textoDelEstado}</span>
-                                      </div>
-                                    );
-                                  }
-                                  return <div key={w} className="h-2.5" />;
-                                })}
-                              </div>
-                              {t.id && debajoDeLaTarea?.(t.id)}
-                            </Fragment>
-                          );
-                        })}
-                      {editable && onAddTask && (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            // Nace en la semana de HOY dentro del loop (no en la primera, que ya pasó y saldría atrasada).
-                            const hoy = curWeek === null ? 0 : curWeek - range.start;
-                            onAddTask(p.key, Math.min(Math.max(hoy, 0), Math.max(p.durationWeeks - 1, 0)));
-                          }}
-                          className="ml-7 mt-1 flex items-center gap-1 text-[10px] font-semibold text-fg-muted hover:text-fg-secondary transition-colors"
-                          title="Agregar una tarea a este loop, en la semana de hoy (la semana y la duración se cambian en su detalle)"
-                        >
-                          <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M12 4v16m8-8H4" /></svg>
-                          tarea
-                        </button>
-                      )}
-                    </div>
-                  )}
-
                   {/* Expandido: tareas por semana (edición inline) */}
-                  {isOpen && !propuesta && !pintaPorTareas(p.loopNumero, p.tasks) && (
+                  {isOpen && !propuesta && (
                     <div className="ml-7 mr-2 mb-3 mt-1 border-l-2 border-line pl-4 space-y-3">
                       {Array.from({ length: p.durationWeeks }).map((_, relWeek) => {
                         const weekTasks = tasksByWeek.get(relWeek) ?? [];

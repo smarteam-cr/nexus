@@ -390,9 +390,8 @@ describe("L3 P3c · el Gantt: lo que no se ve sin clics (el teclado, el foco, la
   const FILA = tramo(GANTT, "function FilaDeLaPropuesta(", "function CasillaDeLaFase(");
   const CASILLAS = tramo(GANTT, "function CasillaDeLaFase(", "function CasillasDeLaFase(");
   const ESTILO = tramo(GANTT, "export function estiloDeLaFila(", "interface SeguirElFoco");
-  // Sin propuesta hay dos ramas: la de un loop (una fila por tarea, 2026-11-19) y la lista por semana de siempre.
-  const RAMA_PROPUESTA = tramo(GANTT, "{isOpen && propuesta && (() => {", "{isOpen && !propuesta && pintaPorTareas(");
-  const RAMA_DE_SIEMPRE = tramo(GANTT, "{isOpen && !propuesta && !pintaPorTareas(", "{(fueraDespuesDe.get(p.key) ?? []).map(filaDeFaseFuera)}");
+  const RAMA_PROPUESTA = tramo(GANTT, "{isOpen && propuesta && (() => {", "{isOpen && !propuesta && (");
+  const RAMA_DE_SIEMPRE = tramo(GANTT, "{isOpen && !propuesta && (", "{(fueraDespuesDe.get(p.key) ?? []).map(filaDeFaseFuera)}");
 
   it("⭐ cada casilla: data-casilla, data-lugar, scroll-mt-24, su label no despliega la fila y lleva el foco", () => {
     /* La edición que la pone en rojo: sacar el `e.stopPropagation()` del label (marcar una casilla de la fila de

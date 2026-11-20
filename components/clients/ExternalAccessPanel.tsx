@@ -25,6 +25,7 @@
  *   - POST   → link y contraseña nuevos (caso «se filtró el link»).
  *   - DELETE → revoca el acceso.
  */
+import { enlaceEnEsteNavegador } from "@/lib/external/enlace-local";
 import { useState, useEffect, useCallback, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { useToast } from "@/components/ui/Toast";
@@ -433,7 +434,8 @@ function Activo({
   onTogglePublish: (kind: ExternalSurface, publish: boolean) => Promise<void>;
 }) {
   const toast = useToast();
-  const urlBase = state.url ?? "";
+  // En local, el enlace del .env (3004) se pasa a la dirección que se está mirando (lib/external/enlace-local.ts).
+  const urlBase = enlaceEnEsteNavegador(state.url ?? "", typeof window === "undefined" ? null : window.location.origin);
   const partes = PUBLISH_SURFACES.filter((s) => !state.noAplican?.includes(s.key)).map((s) => ({
     s,
     e: state.partes?.[s.key] ?? { publicadaEl: null, motivo: null },

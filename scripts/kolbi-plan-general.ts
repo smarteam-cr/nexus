@@ -14,7 +14,9 @@
  *
  * SIMULA por defecto (solo lee). Con --apply escribe, después de respaldar las tablas que toca.
  * Idempotente: un loop que ya existe (mismo número en el cronograma del proyecto) no se duplica, y sus actividades
- * se reconocen por el nombre. La sección de loops del handoff que ya tiene bloques no se toca.
+ * se reconocen por el nombre (el de hoy o el de la carga del 19 nov). Una que conserva el nombre de esa primera carga se
+ * CORRIGE (título, resumen y semanas; el simulacro muestra el antes y el después), nunca su estado; una que ya tiene otro
+ * nombre no se toca. La sección de loops del handoff que ya tiene bloques no se toca.
  *
  * Uso (PowerShell):
  *   npx tsx scripts/kolbi-plan-general.ts
@@ -64,32 +66,117 @@ const LOOPS: Loop[] = [
 interface Actividad {
   loop: number;
   titulo: string;
+  /** Los nombres con que se cargó antes (19 nov): con ellos se reconoce la tarea para corregirla, no duplicarla. */
+  antes?: string[];
+  /** Semanas del ciclo, desde 1 e inclusivas: las del Excel de Valentina («Plan detallado»), salvo lo que dice abajo. */
   desde: number;
   hasta: number;
   estado: TimelineTaskStatus;
+  /** El resumen de la tarea (sus notas, internas): qué se hace y para qué, a partir de la columna «Acciones». */
   detalle: string;
 }
 
+/* Las semanas salen del Excel («Plan detallado», 20 nov), salvo Marketing Optimization (Elías, 20 nov): la revisión va
+   en las semanas 4 y 5 y el ajuste de la 6 a la 12, así el loop se ve de la 4 a la 12. Los títulos están redactados a
+   partir de «Acciones» y el resumen va en las notas. Entregable y participantes no se cargan todavía (Elías, 20 nov). */
 const ACTIVIDADES: Actividad[] = [
-  { loop: 1, titulo: "Inventario de fuentes", desde: 2, hasta: 2, estado: "IN_PROGRESS", detalle: "Inventariar fuentes, integraciones, sincronizaciones, campos, duplicados, completitud y consistencia." },
-  { loop: 1, titulo: "Diseño de datos y gobierno", desde: 1, hasta: 4, estado: "IN_PROGRESS", detalle: "Definir campos críticos, reglas de normalización, deduplicación, responsables, integraciones y gobierno." },
-  { loop: 1, titulo: "Identificación de duplicados", desde: 2, hasta: 2, estado: "IN_PROGRESS", detalle: "Identificar los registros duplicados." },
-  { loop: 1, titulo: "Deduplicación en HubSpot", desde: 3, hasta: 3, estado: "IN_PROGRESS", detalle: "Ejecutar la deduplicación de registros en HubSpot (script)." },
-  { loop: 1, titulo: "Integración Infoclic–HubSpot", desde: 4, hasta: 5, estado: "PENDING", detalle: "Ejecutar la integración entre Infoclic y sistemas externos con HubSpot, con pruebas." },
-  { loop: 1, titulo: "Optimización de la integración", desde: 5, hasta: 12, estado: "PENDING", detalle: "Ajustes constantes de la integración según lo que salga en las pruebas." },
-  { loop: 2, titulo: "Revisión de campañas y activos", desde: 3, hasta: 4, estado: "IN_PROGRESS", detalle: "Revisar campañas, listas, formularios, landing pages, workflows, WhatsApp, permisos y convenciones." },
-  { loop: 2, titulo: "Campaña piloto", desde: 5, hasta: 6, estado: "PENDING", detalle: "Elegir audiencia y objetivo; preparar contenido, landing o formulario, workflow, revisión, lanzamiento y seguimiento." },
-  { loop: 3, titulo: "Revisión de scoring y journeys", desde: 4, hasta: 12, estado: "PENDING", detalle: "Revisar scoring, ciclo de vida, nurturing, journeys, suscripciones, entregabilidad, tracking y dashboards." },
-  { loop: 3, titulo: "Ajuste de scoring y nurturing", desde: 4, hasta: 12, estado: "PENDING", detalle: "Ajustar criterios de scoring, segmentos, journeys y reglas de nutrición; validar con datos y usuarios." },
-  { loop: 4, titulo: "Revisión de captura y etapas", desde: 2, hasta: 2, estado: "DONE", detalle: "Revisar captura, asignación, etapas, seguimiento, motivos de pérdida y conversión." },
-  { loop: 4, titulo: "Reglas de asignación y SLA", desde: 6, hasta: 12, estado: "PENDING", detalle: "Corregir reglas de asignación, propiedades, notificaciones, SLA y trazabilidad de leads prioritarios." },
-  { loop: 5, titulo: "Hipótesis y caso de uso", desde: 4, hasta: 4, estado: "PENDING", detalle: "Definir hipótesis, caso de uso, mensaje y canal." },
-  { loop: 5, titulo: "Ejecución del piloto", desde: 5, hasta: 7, estado: "PENDING", detalle: "Ejecutar el piloto y documentar resultados iniciales." },
-  { loop: 6, titulo: "Revisión de pipeline y adopción", desde: 2, hasta: 2, estado: "DONE", detalle: "Revisar pipeline, tareas, actividades, reuniones, adopción, rutinas, playbooks y productividad por vendedor." },
-  { loop: 6, titulo: "Playbook comercial v1", desde: 4, hasta: 5, estado: "PENDING", detalle: "Definir estándares de actividad, tareas, seguimiento, higiene de pipeline y reuniones de revisión." },
-  { loop: 7, titulo: "Revisión de dashboards y KPIs", desde: 5, hasta: 5, estado: "PENDING", detalle: "Revisar dashboards, forecast, pipeline, conversión, velocidad, metas y definiciones." },
-  { loop: 7, titulo: "Dashboard v1", desde: 6, hasta: 8, estado: "PENDING", detalle: "Crear un dashboard con pipeline, forecast, conversión, velocidad, citas, oportunidades, actividad y adopción." },
+  {
+    loop: 1, titulo: "Inventariar fuentes y calidad de datos", antes: ["Inventario de fuentes"], desde: 2, hasta: 2, estado: "IN_PROGRESS",
+    detalle: "Levantar qué fuentes alimentan a HubSpot (integraciones, sincronizaciones y campos) y medir la calidad de sus datos: duplicados, completitud y consistencia. Es la base para decidir qué se limpia y qué se integra.",
+  },
+  {
+    loop: 1, titulo: "Diseñar el modelo de datos y su gobierno", antes: ["Diseño de datos y gobierno"], desde: 1, hasta: 4, estado: "IN_PROGRESS",
+    detalle: "Definir los campos críticos, las reglas de normalización y deduplicación, quién es dueño de cada dato y cómo se gobiernan las integraciones, para que la información del cliente se mantenga limpia después de la integración.",
+  },
+  {
+    loop: 1, titulo: "Identificar los registros duplicados", antes: ["Identificación de duplicados"], desde: 2, hasta: 2, estado: "IN_PROGRESS",
+    detalle: "Encontrar los registros duplicados en HubSpot y acordar con qué criterio se decide cuál se conserva.",
+  },
+  {
+    loop: 1, titulo: "Deduplicar los registros en HubSpot", antes: ["Deduplicación en HubSpot"], desde: 3, hasta: 3, estado: "IN_PROGRESS",
+    detalle: "Ejecutar la deduplicación en HubSpot con un script, según el criterio acordado, y dejar registro de lo que se unió.",
+  },
+  {
+    loop: 1, titulo: "Integrar Infoclic y los sistemas externos con HubSpot", antes: ["Integración Infoclic–HubSpot"], desde: 4, hasta: 5, estado: "PENDING",
+    detalle: "Construir la integración entre Infoclic, los sistemas externos y HubSpot, y probarla con datos reales antes de dejarla corriendo.",
+  },
+  {
+    loop: 1, titulo: "Optimizar la integración según las pruebas", antes: ["Optimización de la integración"], desde: 5, hasta: 12, estado: "PENDING",
+    detalle: "Ajustar la integración de forma continua con lo que vayan mostrando las pruebas y el uso: nuevas iteraciones hasta el cierre del ciclo.",
+  },
+  {
+    loop: 2, titulo: "Revisar las campañas y los activos de marketing", antes: ["Revisión de campañas y activos"], desde: 3, hasta: 4, estado: "IN_PROGRESS",
+    detalle: "Revisar campañas, listas, formularios, landing pages, workflows, WhatsApp, permisos y convenciones de nombres, y evaluar qué se usa y qué no.",
+  },
+  {
+    loop: 2, titulo: "Lanzar la campaña piloto", antes: ["Campaña piloto"], desde: 5, hasta: 6, estado: "PENDING",
+    detalle: "Elegir la audiencia y el objetivo, preparar el contenido, la landing o el formulario y el workflow, revisarlo todo, lanzar y dar seguimiento a los resultados.",
+  },
+  {
+    loop: 3, titulo: "Revisar el scoring, el ciclo de vida y los journeys", antes: ["Revisión de scoring y journeys"], desde: 4, hasta: 5, estado: "PENDING",
+    detalle: "Diagnóstico de la madurez de marketing: scoring, ciclo de vida, nurturing, journeys, suscripciones, entregabilidad, tracking y dashboards.",
+  },
+  {
+    loop: 3, titulo: "Ajustar el scoring, los segmentos y el nurturing", antes: ["Ajuste de scoring y nurturing"], desde: 6, hasta: 12, estado: "PENDING",
+    detalle: "Ajustar los criterios de scoring, los segmentos, los journeys y las reglas de nutrición, y validarlos con datos y con los usuarios de marketing y ventas.",
+  },
+  {
+    loop: 4, titulo: "Revisar el flujo de leads hasta la oportunidad", antes: ["Revisión de captura y etapas"], desde: 2, hasta: 2, estado: "DONE",
+    detalle: "Revisar cómo se capturan, asignan y siguen los leads, sus etapas, los motivos de pérdida y la conversión, para encontrar dónde se escapan.",
+  },
+  {
+    loop: 4, titulo: "Corregir la asignación, los SLA y la trazabilidad de los leads", antes: ["Reglas de asignación y SLA"], desde: 6, hasta: 12, estado: "PENDING",
+    detalle: "Corregir las reglas de asignación, las propiedades, las notificaciones y los SLA, y dejar trazables los leads prioritarios, con pruebas documentadas.",
+  },
+  {
+    loop: 5, titulo: "Definir la hipótesis, el caso de uso, el mensaje y el canal", antes: ["Hipótesis y caso de uso"], desde: 4, hasta: 4, estado: "PENDING",
+    detalle: "Acordar qué se va a probar en la prospección con IA: la hipótesis, el caso de uso, el mensaje y el canal.",
+  },
+  {
+    loop: 5, titulo: "Ejecutar el piloto de prospección", antes: ["Ejecución del piloto"], desde: 5, hasta: 7, estado: "PENDING",
+    detalle: "Correr el piloto de prospección y documentar el experimento y sus primeros resultados.",
+  },
+  {
+    loop: 6, titulo: "Revisar el pipeline, la adopción y la productividad comercial", antes: ["Revisión de pipeline y adopción"], desde: 2, hasta: 2, estado: "DONE",
+    detalle: "Revisar el pipeline, las tareas, actividades y reuniones, la adopción, las rutinas, los playbooks y la productividad por vendedor.",
+  },
+  {
+    loop: 6, titulo: "Definir el playbook comercial v1", antes: ["Playbook comercial v1"], desde: 4, hasta: 5, estado: "PENDING",
+    detalle: "Definir los estándares de actividad, tareas, seguimiento, higiene del pipeline y reuniones de revisión, con una rutina semanal para el equipo.",
+  },
+  {
+    loop: 7, titulo: "Revisar los dashboards, el forecast y los KPIs", antes: ["Revisión de dashboards y KPIs"], desde: 5, hasta: 5, estado: "PENDING",
+    detalle: "Revisar los dashboards, el forecast, el pipeline, la conversión, la velocidad, las metas y cómo se define cada indicador.",
+  },
+  {
+    loop: 7, titulo: "Crear el dashboard comercial v1", antes: ["Dashboard v1"], desde: 6, hasta: 8, estado: "PENDING",
+    detalle: "Construir un dashboard con pipeline, forecast, conversión, velocidad, citas, oportunidades, actividad y adopción, con su diccionario de métricas.",
+  },
 ];
+
+/** Las semanas de una actividad, como las guarda el cronograma (weekIndex desde 0; null = una semana). */
+const semanasDeLaActividad = (a: Actividad) => ({ weekIndex: a.desde - 1, semanas: a.hasta > a.desde ? a.hasta - a.desde + 1 : null });
+
+/** La tarea ya cargada que es esta actividad (por su nombre de hoy o por el de antes), o undefined. */
+function tareaDeLaActividad<T extends { title: string }>(tareas: readonly T[], a: Actividad): T | undefined {
+  const nombres = new Set([a.titulo, ...(a.antes ?? [])].map((n) => n.trim().toLowerCase()));
+  return tareas.find((t) => nombres.has(t.title.trim().toLowerCase()));
+}
+
+/**
+ * ¿Se corrige esta tarea ya cargada? SOLO si conserva el nombre de la primera carga (19 nov): así sabemos que nadie la
+ * tocó desde entonces. Una que ya tiene el nombre nuevo (corregida antes, o renombrada por el equipo) no se pisa: ni su
+ * título, ni su resumen, ni sus semanas. El estado nunca se toca.
+ */
+function seCorrige(t: { title: string }, a: Actividad): boolean {
+  const viejo = (a.antes ?? []).map((n) => n.trim().toLowerCase());
+  return viejo.includes(t.title.trim().toLowerCase());
+}
+
+const rango = (weekIndex: number, semanas: number | null) => {
+  const fin = weekIndex + (semanas ?? 1);
+  return fin > weekIndex + 1 ? `S${weekIndex + 1}–S${fin}` : `S${weekIndex + 1}`;
+};
 
 const SEMANA_MS = 7 * 24 * 60 * 60 * 1000;
 const semana = (n: number) => new Date(ARRANQUE.getTime() + (n - 1) * SEMANA_MS); // lunes de la semana n
@@ -137,7 +224,7 @@ async function main() {
               name: true,
               loopNumero: true,
               _count: { select: { tasks: true, casosDeUso: true, particularidades: true } },
-              tasks: { select: { title: true } },
+              tasks: { select: { id: true, title: true, notes: true, weekIndex: true, semanas: true } },
             },
           },
         },
@@ -200,10 +287,25 @@ async function main() {
     for (const l of loops) {
       const existente = tl?.phases.find((f) => f.loopNumero === l.numero);
       const acts = ACTIVIDADES.filter((a) => a.loop === l.numero);
-      const yaEstan = new Set((existente?.tasks ?? []).map((t) => t.title.trim().toLowerCase()));
-      const nuevas = acts.filter((a) => !yaEstan.has(a.titulo.toLowerCase()));
-      console.log(`   ${existente ? "=" : "+"} ${rotuloDelLoop(l.numero, l.nombre)} · ${l.area} · ${l.prioridad}: ${nuevas.length} actividades nuevas${existente ? ` (ya tenía ${existente._count.tasks})` : ""}`);
-      for (const a of nuevas) console.log(`       S${a.desde}${a.hasta > a.desde ? `–S${a.hasta}` : ""}  ${a.estado.padEnd(11)} ${a.titulo}`);
+      const nuevas = acts.filter((a) => !tareaDeLaActividad(existente?.tasks ?? [], a));
+      const corregir = acts.filter((a) => {
+        const t = tareaDeLaActividad(existente?.tasks ?? [], a);
+        return !!t && seCorrige(t, a);
+      });
+      console.log(
+        `   ${existente ? "=" : "+"} ${rotuloDelLoop(l.numero, l.nombre)} · ${l.area} · ${l.prioridad}: ${nuevas.length} actividades nuevas, ${corregir.length} a corregir` +
+          (existente ? ` (ya tenía ${existente._count.tasks})` : ""),
+      );
+      for (const a of nuevas) {
+        console.log(`       + S${a.desde}${a.hasta > a.desde ? `–S${a.hasta}` : ""}  ${a.estado.padEnd(11)} ${a.titulo}`);
+        if (existente?.tasks.length) console.log("         ⚠ el loop ya tiene tareas: si alguna es esta con otro nombre, renómbrala en Nexus antes de aplicar o quedará repetida.");
+      }
+      for (const a of corregir) {
+        const t = tareaDeLaActividad(existente?.tasks ?? [], a)!;
+        const w = semanasDeLaActividad(a);
+        console.log(`       ~ «${t.title}» → «${a.titulo}»`);
+        console.log(`         semanas: ${rango(t.weekIndex, t.semanas ?? null)} → ${rango(w.weekIndex, w.semanas)} · resumen: se reemplaza (hoy: «${(t.notes ?? "").slice(0, 60)}${(t.notes ?? "").length > 60 ? "…" : ""}») · el estado no se toca`);
+      }
     }
 
     const handoff = p.canvases[0];
@@ -256,17 +358,25 @@ async function main() {
               select: { id: true },
             })
           ).id;
-        const yaEstan = new Set((fase?.tasks ?? []).map((t) => t.title.trim().toLowerCase()));
         let orden = 0;
         for (const a of acts) {
-          if (yaEstan.has(a.titulo.toLowerCase())) continue;
+          const ya = tareaDeLaActividad(fase?.tasks ?? [], a);
+          const w = semanasDeLaActividad(a);
+          if (ya) {
+            // Ya cargada y sin tocar desde la primera carga: se corrigen el título, el resumen y las semanas. El estado
+            // NO: lo lleva el equipo desde Nexus. Una que ya tiene otro nombre (corregida, o renombrada a mano) se deja.
+            if (seCorrige(ya, a)) {
+              creadas++;
+              await tx.timelineTask.update({ where: { id: ya.id }, data: { title: a.titulo, notes: a.detalle, ...w } });
+            }
+            continue;
+          }
           creadas++;
           await tx.timelineTask.create({
             data: {
               phaseId: faseId,
               title: a.titulo,
-              weekIndex: a.desde - 1,
-              semanas: a.hasta > a.desde ? a.hasta - a.desde + 1 : null,
+              ...w,
               order: orden++,
               status: a.estado,
               statusSource: "HUMAN",
@@ -284,7 +394,7 @@ async function main() {
         data: {
           timelineId: timeline.id,
           reason:
-            "Plan general de kölbi: los loops de este proyecto y sus actividades, cargados desde el plan de Valentina (19 nov 2026)." +
+            "Plan general de kölbi: los loops de este proyecto y sus actividades, cargados o corregidos desde el plan de Valentina (Excel del 20 nov 2026)." +
             (viejas.length ? ` Se quitaron ${viejas.length} fases de julio sin tareas.` : ""),
           kind: "MANUAL",
           changedByEmail: null,
