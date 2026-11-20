@@ -4382,7 +4382,6 @@ export default function CronogramaCanvas({
         <CronogramaContextSection
           projectId={projectId}
           canEdit={canEdit}
-          generado={hasAiDetail}
           instruccionesActivas={!!briefGuardado}
           onMaterial={setMaterialElegido}
         >

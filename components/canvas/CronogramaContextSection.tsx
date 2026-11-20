@@ -39,18 +39,12 @@ import { hayMaterialParaElPaso1 } from "@/lib/timeline/propuesta-de-estructura";
 export default function CronogramaContextSection({
   projectId,
   canEdit,
-  generado,
   instruccionesActivas,
   children,
   onMaterial,
 }: {
   projectId: string;
   canEdit: boolean;
-  /**
-   * ¿El cronograma ya tiene detalle de IA? Sin detalle arranca ABIERTA (es el momento de curar el
-   * material antes de generar); con detalle, cerrada — el toggle manual manda.
-   */
-  generado: boolean;
   /** Para el resumen de la línea cerrada: si hay instrucciones guardadas. */
   instruccionesActivas: boolean;
   /** La caja de «Instrucciones adicionales», tal cual vive en CronogramaCanvas. */
@@ -62,8 +56,9 @@ export default function CronogramaContextSection({
    */
   onMaterial?: (hay: boolean) => void;
 }) {
-  const [override, setOverride] = useState<boolean | null>(null);
-  const abierto = override ?? !generado;
+  /* Arranca SIEMPRE cerrada (Elías, 19 nov: «que aparezca sin desplegar»); la línea cerrada ya dice cuántas reuniones y
+     notas hay. Antes arrancaba abierta en un cronograma sin detalle de IA. */
+  const [abierto, setAbierto] = useState(false);
 
   const [reuniones, setReunionesState] = useState(0);
   const [notas, setNotasState] = useState(0);
@@ -113,7 +108,7 @@ export default function CronogramaContextSection({
     <div data-recorrido="cronograma.contexto">
     <ContextoAdicional
       abierto={abierto}
-      onAlternar={() => setOverride(!abierto)}
+      onAlternar={() => setAbierto(!abierto)}
       /* Cerrado se sigue leyendo con qué se va a generar: sin abrirlo, sabes si la IA va a leer
          reuniones, notas o instrucciones, y si alguna reunión no le llega entera. */
       resumen={
