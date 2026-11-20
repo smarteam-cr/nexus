@@ -219,6 +219,9 @@ export function conteosQueSeVen<T>(conteos: Record<string, T>, escala: Pick<Esca
  * El orden de dependencias que vale para una capa de un área («Qué se trabaja primero»). En la
  * base de Ventas depende de cómo se cierra la venta: con el cierre elegido vale una fila; sin él,
  * se devuelven las tres (la pantalla las muestra con su «cuándo»).
+ *
+ * El área y el cierre se buscan como palabras enteras en el «cuándo»: desde la 9.3.0 hay un área
+ * «TI», y como pedazo de texto estaba dentro de «Marketing».
  */
 export function ordenDeDependencias(
   dependencias: OrdenDeDependencias[],
@@ -227,9 +230,10 @@ export function ordenDeDependencias(
   cierre: Cierre | null,
 ): OrdenDeDependencias[] {
   const norm = (s: string) => sinTildes(s).toLowerCase();
-  const delArea = dependencias.filter((d) => norm(d.capa) === norm(capaNombre) && norm(d.cuando).includes(norm(areaNombre)));
+  const dice = (texto: string, palabras: string) => ` ${norm(texto).replace(/[^a-z0-9]+/g, " ")} `.includes(` ${norm(palabras).replace(/[^a-z0-9]+/g, " ").trim()} `);
+  const delArea = dependencias.filter((d) => norm(d.capa) === norm(capaNombre) && dice(d.cuando, areaNombre));
   if (delArea.length <= 1 || !cierre) return delArea;
-  const conCierre = delArea.filter((d) => norm(d.cuando).includes(norm(cierre)));
+  const conCierre = delArea.filter((d) => dice(d.cuando, cierre));
   return conCierre.length ? conCierre : delArea;
 }
 

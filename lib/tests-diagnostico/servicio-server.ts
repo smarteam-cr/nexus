@@ -53,7 +53,7 @@ export class ErrorDelTest extends Error {
 
 /** La escala vigente, vista por la edición de esta industria (null = la general). */
 export async function escalaParaLaIndustria(industria: string | null): Promise<{ escala: Escala; edicion: string | null }> {
-  const vigente = await leerEscalaVigente();
+  const vigente = await leerEscalaVigente({ conAreasEnPrueba: true });
   if (!("escala" in vigente)) throw new ErrorDelTest("El test todavía no está abierto.", 503);
   const sugerida = edicionDeLaIndustria(industria);
   const edicion = sugerida && vigente.escala.ediciones.some((e) => e.slug === sugerida) ? sugerida : null;
@@ -176,7 +176,7 @@ export async function loDeLaEscalaParaLaPagina(
   r: ResultadoDelTest,
 ): Promise<{ detalles: Record<string, DetalleDeLaDimension>; dimensionDelRiesgo: Record<string, string> }> {
   try {
-    const vigente = await leerEscalaVigente();
+    const vigente = await leerEscalaVigente({ conAreasEnPrueba: true });
     if (!("escala" in vigente)) return { detalles: {}, dimensionDelRiesgo: {} };
     const escala = aplicarEdicion(vigente.escala, r.edicion);
     return { detalles: detallesDelResultado(escala, r), dimensionDelRiesgo: dimensionDeCadaRiesgo(escala, r) };

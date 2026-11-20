@@ -16,8 +16,13 @@
  */
 import type { CampoDeVariante, EntradaDeVariante } from "./variantes";
 
-/** La versión de la escala contra la que se revisó este archivo. La mueve SOLO la skill `revisar-banco-del-test`. */
-export const ESCALA_DE_LAS_VARIANTES = "9.2.0";
+/**
+ * La versión de la escala contra la que se revisó este archivo. La mueve SOLO la skill `revisar-banco-del-test`.
+ * 9.3.0 (2026-11-19): suma el área TI y no cambia ninguna pregunta ni opción de Ventas, Marketing ni Servicio (sus
+ * borradores salen idénticos a los de la 9.2.0). Las preguntas de TI no nombran el CRM ni una herramienta del cliente:
+ * no llevan variantes.
+ */
+export const ESCALA_DE_LAS_VARIANTES = "9.3.0";
 
 type Cambio = readonly [buscar: string, poner: string];
 

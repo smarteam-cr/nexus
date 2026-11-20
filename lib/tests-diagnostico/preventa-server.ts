@@ -12,6 +12,7 @@
 import "server-only";
 import { prisma } from "@/lib/db/prisma";
 import { esDominioGenerico } from "@/lib/clients/personas-de-la-empresa";
+import { esAreaEnPrueba } from "@/lib/escala/areas-en-prueba";
 import { intentosTerminadosDeLaEmpresa, intentosTerminadosSinEmpresaDeLosDominios } from "./repositorio-server";
 
 /** Los dominios de la empresa que ninguna otra tiene registrados (los genéricos no cuentan). */
@@ -32,5 +33,6 @@ export async function enlacesDelTestEnNexus(clientId: string): Promise<{ contact
       .then((d) => intentosTerminadosSinEmpresaDeLosDominios(d))
       .catch(() => []),
   ]);
-  return [...unidos, ...sueltos].flatMap((i) => (i.url ? [{ contacto: i.nombre, url: i.url }] : []));
+  // El test de un área que todavía vive solo en La escala (TI) no entra a la preventa hasta su migración.
+  return [...unidos, ...sueltos].flatMap((i) => (i.url && !esAreaEnPrueba(i.area) ? [{ contacto: i.nombre, url: i.url }] : []));
 }

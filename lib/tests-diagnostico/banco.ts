@@ -23,7 +23,7 @@ import { conVariantes, problemasDeLasVariantes, textosDeLasVariantes } from "./v
 import { VARIANTES_DE_CRM } from "./variantes-de-crm.datos";
 
 /** Las áreas que mide la escala y tienen test. */
-export const AREAS_DEL_TEST = ["1", "2", "3"] as const;
+export const AREAS_DEL_TEST = ["1", "2", "3", "4"] as const;
 
 /** La escala vista por la edición de un banco (`general` = sin edición). */
 export const escalaDelBanco = (escala: Escala, edicion: string) => aplicarEdicion(escala, edicion === EDICION_GENERAL ? null : edicion);
@@ -125,7 +125,7 @@ export function problemasDelBanco(escala: Escala, areaId: string, version: Versi
  */
 export function codigoDeLaEscala(texto: string): string | null {
   // Después del código puede venir el punto final de la oración; no otro número («1.2.0» es una versión).
-  const m = texto.match(/(?:^|[^\w.])([1-3]\.\d{1,2}\.[DIFEO]\d{0,2}|\([1-3]\.\d{1,2}\))(?!\w|\.\d)/);
+  const m = texto.match(/(?:^|[^\w.])([1-4]\.\d{1,2}\.[DIFEO]\d{0,2}|\([1-4]\.\d{1,2}\))(?!\w|\.\d)/);
   return m ? m[1] : null;
 }
 

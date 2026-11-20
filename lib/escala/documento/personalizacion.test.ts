@@ -133,6 +133,12 @@ describe("las ediciones de la escala del repo", () => {
     expect(nuevas, "estas celdas se leen enteras con la escala general: reescribe al menos un criterio o anótala con su porqué").toEqual([]);
   });
 
+  it("un área que la edición no escribe no cuenta: TI se mide con la escala general en todas", () => {
+    const celdas = escala.ediciones.flatMap((e) => celdasDeLaEdicion(escala, e.slug));
+    expect(celdas.some((c) => c.area === "1")).toBe(true);
+    expect(celdas.filter((c) => c.area === "4")).toEqual([]);
+  });
+
   it("la lista de celdas generales a propósito no se queda vieja", () => {
     const sobran = Object.keys(GENERALES_A_PROPOSITO).filter((k) => !sin.includes(k));
     expect(sobran, "estas celdas ya están personalizadas: sácalas de GENERALES_A_PROPOSITO").toEqual([]);

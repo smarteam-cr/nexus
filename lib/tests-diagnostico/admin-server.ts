@@ -41,7 +41,7 @@ import {
 import { leerPreguntasDelBanco, type PreguntaDelBanco } from "./tipos";
 
 async function escalaVigente(): Promise<Escala | null> {
-  const v = await leerEscalaVigente();
+  const v = await leerEscalaVigente({ conAreasEnPrueba: true });
   return "escala" in v ? v.escala : null;
 }
 

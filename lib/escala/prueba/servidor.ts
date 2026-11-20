@@ -22,6 +22,7 @@ import type { Prisma } from "@prisma/client";
 import { encargadoDe, nombresDelEquipo } from "@/lib/cuentas/encargado-server";
 import { escalaDelBorrador } from "@/lib/escala/datos/servidor";
 import { leerEscalaVigente } from "@/lib/escala/documento/vigente";
+import { sinAreasEnPrueba } from "@/lib/escala/areas-en-prueba";
 import type { Escala, Letra } from "@/lib/escala/documento/tipos";
 import { industriaLegible } from "@/lib/exploraciones/industria";
 import { escalaDeLaExploracion, estadoDesdeFila } from "@/lib/exploraciones/servidor";
@@ -63,7 +64,9 @@ async function lasEscalas(
 ): Promise<{ escala: EscalaParaProbar | null; con: ConQueEscala; versiones: { publicada: string | null; borrador: string | null } }> {
   const [v, b] = await Promise.all([leerEscalaVigente(), puedeVerElBorrador ? escalaDelBorrador() : Promise.resolve(null)]);
   const publicada: EscalaParaProbar | null = v.estado === "ok" ? { escala: v.escala, version: v.escala.version, esBorrador: false, revision: null } : null;
-  const borrador: EscalaParaProbar | null = b ? { escala: b.escala, version: b.version, esBorrador: true, revision: b.revision } : null;
+  // La prueba mide con lo explorado en la preventa, que no ve TI (lib/escala/areas-en-prueba.ts): el borrador tampoco,
+  // o TI aparecería como un cambio del borrador sin nivel.
+  const borrador: EscalaParaProbar | null = b ? { escala: sinAreasEnPrueba(b.escala), version: b.version, esBorrador: true, revision: b.revision } : null;
   const versiones = { publicada: publicada?.version ?? null, borrador: borrador?.version ?? null };
   if (con === "borrador" && puedeVerElBorrador) return { escala: borrador, con: "borrador", versiones };
   return { escala: publicada, con: "publicada", versiones };

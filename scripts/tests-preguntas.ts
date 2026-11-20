@@ -94,7 +94,7 @@ function imprimirPlan(escala: Escala, plan: readonly PlanDelBanco[]) {
 
 async function main() {
   imprimirDestino("tests-preguntas");
-  const vigente = await leerEscalaVigente();
+  const vigente = await leerEscalaVigente({ conAreasEnPrueba: true });
   if (!("escala" in vigente)) throw new Error(vigente.estado === "sin-tablas" ? "Falta el SQL de la escala en esta base." : "No hay escala publicada.");
   const escala = vigente.escala;
   if (vigente.aviso) console.log(`⚠ ${vigente.aviso}`);

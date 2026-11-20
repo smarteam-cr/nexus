@@ -14,6 +14,7 @@ import "server-only";
 import { prisma } from "@/lib/db/prisma";
 import { esquemaDesactualizado, modeloDisponible } from "@/lib/db/esquema";
 import type { DocumentoDeLaEscala } from "./documentos";
+import { sinAreasEnPrueba } from "../areas-en-prueba";
 import { parsearEscala } from "./parsear";
 import { ErrorDeFormato, type Escala } from "./tipos";
 
@@ -48,7 +49,12 @@ function parsearConCache(huella: string, texto: string): Escala | ErrorDeFormato
   return r;
 }
 
-export async function leerEscalaVigente(): Promise<EscalaVigente> {
+/**
+ * La escala publicada. Por defecto, SIN las áreas que todavía viven solo en La escala (TI, desde la 9.3.0:
+ * lib/escala/areas-en-prueba.ts): la preventa, la escala de cada empresa y los agentes la siguen viendo como antes.
+ * La sección La escala, el test público y quien publica la piden entera con `conAreasEnPrueba`.
+ */
+export async function leerEscalaVigente(o: { conAreasEnPrueba?: boolean } = {}): Promise<EscalaVigente> {
   if (!modeloDisponible(prisma.escalaDocumento)) return { estado: "sin-tablas" };
   try {
     const publicadas = await prisma.escalaDocumento.findMany({
@@ -72,7 +78,7 @@ export async function leerEscalaVigente(): Promise<EscalaVigente> {
         aviso ??= `La versión ${p.version} está publicada, pero esta versión de Nexus no la sabe leer (${resultado.message}). Se muestra la anterior hasta el próximo deploy.`;
         continue;
       }
-      return { estado: "ok", escala: resultado, huella: p.huella, publicadaEn: p.publicadaEn, aviso };
+      return { estado: "ok", escala: o.conAreasEnPrueba ? resultado : sinAreasEnPrueba(resultado), huella: p.huella, publicadaEn: p.publicadaEn, aviso };
     }
     return { estado: "sin-publicar" };
   } catch (e) {

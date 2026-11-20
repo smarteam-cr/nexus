@@ -6,7 +6,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { parsearEscala } from "@/lib/escala/documento/parsear";
 import { LETRAS } from "@/lib/escala/documento/tipos";
-import { borradoresDeLaEscala, planDeLosBancos } from "./banco";
+import { borradoresDeLaEscala, escalaDelBanco, planDeLosBancos, problemasDelBanco } from "./banco";
 import { USOS_DE_CRM } from "./formulario";
 import { conIdsPublicos } from "./ids-publicos";
 import { estadoDelBanco } from "./pantalla";
@@ -23,6 +23,17 @@ const AVISO = "Corre la skill revisar-banco-del-test: compara cada pregunta y va
 describe("el banco de la escala del repo", () => {
   it("las variantes se revisaron contra esta versión de la escala", () => {
     expect(ESCALA_DE_LAS_VARIANTES, `La escala pasó a ${escala.version}. ${AVISO}`).toBe(escala.version);
+  });
+
+  it("TI tiene su banco en cada versión y edición: 8 preguntas en la web, las 4 de la base en el corto, sin problemas", () => {
+    const ti = bancos.filter((b) => b.area === "4");
+    expect(ti).toHaveLength(2 * (escala.ediciones.length + 1));
+    for (const b of ti) {
+      expect(b.preguntas.map((p) => p.dimensionId), `${b.version} · ${b.edicion}`).toEqual(
+        b.version === "web" ? ["4.1", "4.2", "4.3", "4.4", "4.5", "4.6", "4.7", "4.8"] : ["4.1", "4.2", "4.3", "4.4"],
+      );
+      expect(problemasDelBanco(escalaDelBanco(escala, b.edicion), "4", b.version, b.preguntas), `${b.version} · ${b.edicion}`).toEqual([]);
+    }
   });
 
   it("ningún grupo lee algo que lo contradiga: toda mención de CRM o herramienta tiene su variante", () => {

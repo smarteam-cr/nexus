@@ -139,6 +139,15 @@ describe("ordenDeDependencias", () => {
     expect(ordenes.size).toBe(CIERRES.length);
   });
 
+  it("el área se busca como palabra entera: TI no toma el orden de Marketing", () => {
+    const filas = [
+      { capa: "Producción", cuando: "Marketing", orden: ["a"], porQue: "" },
+      { capa: "Producción", cuando: "TI", orden: ["b"], porQue: "" },
+    ];
+    expect(ordenDeDependencias(filas, "TI", "Producción", null).map((f) => f.orden[0])).toEqual(["b"]);
+    expect(ordenDeDependencias(filas, "Marketing", "Producción", null).map((f) => f.orden[0])).toEqual(["a"]);
+  });
+
   it("cada capa de cada área tiene su orden, y nombra las cuatro dimensiones de esa capa", () => {
     for (const a of real.areas) {
       for (const capa of real.capas) {

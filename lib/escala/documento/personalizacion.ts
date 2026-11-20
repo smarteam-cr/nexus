@@ -31,11 +31,16 @@ export interface CeldaDeLaEdicion {
   idsGenerales: string[];
 }
 
+/**
+ * Solo las áreas que la edición escribe: un área que no escribe se mide con la escala general (Parte 5, «Cómo se mide
+ * con una edición»), y no tiene nada que personalizar. Pasa con TI desde la 9.3.0: ninguna edición la escribe todavía.
+ */
 export function celdasDeLaEdicion(escala: Escala, slug: string): CeldaDeLaEdicion[] {
   const vista = aplicarEdicion(escala, slug);
   if (!vista.edicion) return [];
+  const escritas = new Set(escala.ediciones.find((e) => e.slug === slug)?.areas.map((a) => a.id) ?? []);
   const out: CeldaDeLaEdicion[] = [];
-  for (const a of vista.areas) {
+  for (const a of vista.areas.filter((x) => escritas.has(x.id))) {
     for (const d of a.dimensiones) {
       for (const n of d.niveles) {
         const propios = n.criterios.filter((c) => c.propio).length;

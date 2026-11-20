@@ -163,7 +163,7 @@ export async function guardarLaImportacion(args: { texto: string; revision: numb
 async function revisar(b: VersionConDatos, edicionesRevisadas: boolean): Promise<{ revision: RevisionDelBorrador; texto: string }> {
   const texto = generarMarkdown(b.datos);
   const [vigente, especificacion, manual, mapa, publicadas] = await Promise.all([
-    leerEscalaVigente(),
+    leerEscalaVigente({ conAreasEnPrueba: true }),
     leerDocumentoPublicado("especificacion"),
     leerDocumentoPublicado("manual"),
     leerMapaDeHerramientasVigente(),

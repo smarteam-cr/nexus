@@ -23,7 +23,7 @@ export type VersionDelTest = (typeof VERSIONES_DEL_TEST)[number];
 
 /**
  * Cómo se llama cada versión. La de 4 preguntas se llama `marketing` en el código y en la dirección (`?v=marketing`)
- * porque nació para las campañas de Marketing, pero existe para las tres áreas: decirle «Test de Marketing» hacía leer
+ * porque nació para las campañas de Marketing, pero existe para todas las áreas: decirle «Test de Marketing» hacía leer
  * un test de Ventas como si fuera de Marketing (Elías, 28 oct). Es el test CORTO.
  */
 export const ETIQUETA_DE_LA_VERSION: Record<VersionDelTest, string> = {
@@ -40,10 +40,13 @@ export function esVersionDelTest(v: unknown): v is VersionDelTest {
   return typeof v === "string" && (VERSIONES_DEL_TEST as readonly string[]).includes(v);
 }
 
-/** El área de la escala de cada página pública (`/external/test/ventas`…). La escala solo mide estas tres. */
-export const AREA_POR_SLUG: Readonly<Record<string, string>> = { ventas: "1", marketing: "2", servicio: "3" };
-export const SLUG_POR_AREA: Readonly<Record<string, string>> = { "1": "ventas", "2": "marketing", "3": "servicio" };
-export const NOMBRE_DEL_AREA: Readonly<Record<string, string>> = { "1": "Ventas", "2": "Marketing", "3": "Servicio" };
+/**
+ * El área de la escala de cada página pública (`/external/test/ventas`…). La escala mide estas cuatro: TI se sumó en la
+ * 9.3.0 (Elías, 2026-11-18: el departamento de TI, no la tecnología). Su test se abre cuando su banco está aprobado.
+ */
+export const AREA_POR_SLUG: Readonly<Record<string, string>> = { ventas: "1", marketing: "2", servicio: "3", ti: "4" };
+export const SLUG_POR_AREA: Readonly<Record<string, string>> = { "1": "ventas", "2": "marketing", "3": "servicio", "4": "ti" };
+export const NOMBRE_DEL_AREA: Readonly<Record<string, string>> = { "1": "Ventas", "2": "Marketing", "3": "Servicio", "4": "TI" };
 
 /** La edición de la escala general en el banco (la columna no es nula: es parte de la llave única). */
 export const EDICION_GENERAL = "general";

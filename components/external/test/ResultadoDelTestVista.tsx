@@ -90,6 +90,9 @@ function Tarjeta({ titulo, className = "", children }: { titulo?: string; classN
   );
 }
 
+/** El nombre de una parte en medio de una oración: en minúscula, salvo las siglas («Mejora Continua de TI» → «mejora continua de TI»). */
+const enMedioDeLaOracion = (nombre: string) => nombre.replace(/\p{L}+/gu, (w) => (w.length > 1 && w === w.toUpperCase() ? w : w.toLowerCase()));
+
 function PorDondeEmpezar({ rec }: { rec: NonNullable<ResultadoDelTest["recomendacion"]> }) {
   return (
     <Tarjeta className={`rd-empezar${rec.tipo === "trabajar" && rec.costoDeQuedarse ? " con-costo" : ""}`}>
@@ -97,7 +100,7 @@ function PorDondeEmpezar({ rec }: { rec: NonNullable<ResultadoDelTest["recomenda
         <p className="rd-eyebrow">Por dónde empezar</p>
         {rec.tipo === "trabajar" && (
           <h2>
-            Llevar {rec.dimensionNombre.toLowerCase()} a {rec.objetivoNombre}
+            Llevar {enMedioDeLaOracion(rec.dimensionNombre)} a {rec.objetivoNombre}
           </h2>
         )}
         <p className="rd-empezar-razon">{rec.razon}</p>
@@ -610,8 +613,8 @@ function AreaDeLaEscala({
                 {rec.tipo === "trabajar" ? (
                   <h2 className="ed-titulo" id="ed-t-empezar">
                     {fijo(
-                      CLAVES.calculado(area, "empezar.titulo", `Llevar ${rec.dimensionNombre.toLowerCase()} a ${rec.objetivoNombre}.`),
-                      `Llevar ${rec.dimensionNombre.toLowerCase()} a ${rec.objetivoNombre}.`,
+                      CLAVES.calculado(area, "empezar.titulo", `Llevar ${enMedioDeLaOracion(rec.dimensionNombre)} a ${rec.objetivoNombre}.`),
+                      `Llevar ${enMedioDeLaOracion(rec.dimensionNombre)} a ${rec.objetivoNombre}.`,
                       "Título de «Por dónde empezar»",
                     )}
                   </h2>

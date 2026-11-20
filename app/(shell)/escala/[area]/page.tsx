@@ -42,7 +42,7 @@ export default async function PaginaDeLaEscala({
   const ctx = await requireInternalUser().catch(() => null);
   if (!ctx) redirect("/clients");
 
-  const [{ area: slug }, sp, vigente] = await Promise.all([params, searchParams, leerEscalaVigente()]);
+  const [{ area: slug }, sp, vigente] = await Promise.all([params, searchParams, leerEscalaVigente({ conAreasEnPrueba: true })]);
   const responsable = esResponsable(ctx.user.email);
   if (vigente.estado !== "ok") {
     return (
