@@ -39,6 +39,8 @@ const MEDIDOS: Record<string, number> = {
   "Tu carga": 52.92,
   // «Tareas» (2026-10-09): estimado contra «Equipo» (43,08), seis letras de la misma pila; con desplegable sobra lugar.
   Tareas: 44.5,
+  // «Trivias» (2026-11-19): estimado contra «Tareas» (44,5), siete letras de la misma pila; sin desplegable.
+  Trivias: 45.5,
   Clientes: 48.71,
   Marketing: 63.16,
   "Éxito del cliente": 97.04,

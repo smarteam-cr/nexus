@@ -423,10 +423,10 @@ BEGIN
   FOREACH t IN ARRAY ARRAY[
     'CasoDeUso', 'CicloDeProyecto', 'CierreDeSemana', 'ClasificacionDeCuenta', 'ConfigCarga', 'ContactoDeHubspot',
     'CorreccionDeSalud', 'EncuestaDeCuenta', 'EncuestaDeTiempo', 'EspacioDeTareas', 'FeedbackMensaje', 'FeedbackPedido',
-    'FeedbackReporte', 'FeedbackTema', 'FotoMargenCuenta', 'FotoMargenMes', 'FuenteDeTareas', 'HechoDeReunion', 'HitoDeDocumento', 'LecturaDeReunion',
-    'MetaComercial', 'MetaDeGerencia', 'MiembroDeEspacio', 'ModuloDePropuesta', 'NegocioAbierto', 'NotaDeLaCuenta', 'ParticipanteDeReunion', 'PlantillaDeTareas', 'PreguntaDeTiempo',
-    'PresentacionDeDocumento', 'ProyectoDeTareas', 'PruebaDeLaEscala', 'RecomendacionDeRecurrencia', 'RespuestaDeCuenta', 'ResultadoDeSemana', 'ReunionIndexada',
-    'SiguientePaso', 'Tarea', 'TareaComentario', 'TareaEvento', 'TareaRelacion', 'TareaVinculo', 'TicketDeHubspot',
+    'FeedbackReporte', 'FeedbackTema', 'FotoMargenCuenta', 'FotoMargenMes', 'FuenteDeTareas', 'HechoDeReunion', 'HitoDeDocumento', 'JugadorDeTrivia', 'LecturaDeReunion',
+    'MetaComercial', 'MetaDeGerencia', 'MiembroDeEspacio', 'ModuloDePropuesta', 'NegocioAbierto', 'NotaDeLaCuenta', 'PartidaDeTrivia', 'ParticipanteDeReunion', 'PlantillaDeTareas', 'PreguntaDeTiempo', 'PreguntaDeTrivia',
+    'PresentacionDeDocumento', 'ProyectoDeTareas', 'PruebaDeLaEscala', 'RecomendacionDeRecurrencia', 'RespuestaDeCuenta', 'RespuestaDeTrivia', 'ResultadoDeSemana', 'ReunionIndexada',
+    'SiguientePaso', 'Tarea', 'TareaComentario', 'TareaEvento', 'TareaRelacion', 'TareaVinculo', 'TicketDeHubspot', 'Trivia',
     'TurnoDeReunion', 'UsoDeNexus', 'VistaDeCartera'
   ]
   LOOP

@@ -1,4 +1,5 @@
 import { getConsultantSession } from "@/lib/auth";
+import { destinoTrasLogin } from "@/lib/auth/destino-tras-login";
 import { redirect } from "next/navigation";
 import ParticleField from "@/components/particle-field";
 
@@ -17,13 +18,15 @@ const ERROR_MESSAGES: Record<string, string> = {
 export default async function HomePage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string }>;
+  searchParams: Promise<{ error?: string; next?: string }>;
 }) {
+  const { error: errorCode, next } = await searchParams;
+  // A dónde iba antes de que el portero lo mandara acá (el QR de una trivia, un enlace pegado): solo rutas de Nexus.
+  const destino = destinoTrasLogin(next);
   const authenticated = await getConsultantSession();
   // La entrada es «Para ti» (2026-10-04): lo que le toca a cada persona, con un clic a cada módulo.
-  if (authenticated) redirect("/para-ti");
+  if (authenticated) redirect(destino ?? "/para-ti");
 
-  const { error: errorCode } = await searchParams;
   const errorMessage = errorCode ? ERROR_MESSAGES[errorCode] : null;
 
   return (
@@ -97,7 +100,7 @@ export default async function HomePage({
 
         {/* Único botón de login: Google OAuth vía Supabase Auth */}
         <a
-          href="/auth/google"
+          href={destino ? `/auth/google?next=${encodeURIComponent(destino)}` : "/auth/google"}
           className="nx-login__google"
           aria-label="Iniciar sesión con Google"
         >

@@ -238,6 +238,8 @@ export const DOC_MENU: Record<string, string> = {
     "Esta base: cómo funciona Nexus y cómo trabajamos. La escribe el equipo y la lee todo el equipo.",
   escala:
     "La Escala de Rendimiento, para recorrerla por área, dimensión y nivel (matriz, escalera o mapa) y comentar donde no se entiende o no calza con un cliente. Se lee, no se edita.",
+  trivias:
+    "Trivias en vivo para el coaching del equipo: se arman con sus preguntas, se lanzan con un código y un QR, el equipo juega desde el teléfono y cada partida queda con sus resultados. Hoy, solo dirección.",
   agents:
     "El catálogo de los agentes de IA y su calibración. Los agentes se disparan desde su documento, no desde acá.",
   team: "El equipo, sus roles y la matriz de permisos. Solo dirección.",
