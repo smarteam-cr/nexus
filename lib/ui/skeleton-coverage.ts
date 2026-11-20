@@ -184,4 +184,10 @@ export const SKELETON_COVERAGE: Record<string, Cobertura> = {
   "[...ruta]": { modo: "exempt", razon: "solo llama a notFound(): el 404 (app/(shell)/not-found.tsx) se pinta sin espera" },
 
   // ── Implementación ──────────────────────────────────────────────────────────
+
+  // ── Trivias (2026-11-19) ────────────────────────────────────────────────────
+  trivia: { modo: "own" },
+  "trivia/new": { modo: "own" },
+  "trivia/[id]": { modo: "own" },
+  "trivia/games/[gameId]": { modo: "own" },
 };

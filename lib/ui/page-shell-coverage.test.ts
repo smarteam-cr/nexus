@@ -104,6 +104,10 @@ describe("D-01: las páginas FUERA de app/(shell) están declaradas, con el moti
     "app/icp/page.tsx": "existente al 2026-09-04 — no se auditó su enlace en D-01",
     "app/print/canvas/[clientId]/[canvasId]/page.tsx": "el render de un canvas para el PDF (puppeteer)",
     "app/print/doc/[type]/[id]/page.tsx": "el render unificado de documentos para el PDF (puppeteer)",
+    // Trivias (2026-11-19): el teléfono del jugador, sin menú. Pide usuario interno en la página (no el permiso de
+    // Trivias: juega cualquiera del equipo). Ver DECISIONS «Trivias».
+    "app/(juego)/trivia/play/page.tsx": "el teléfono del jugador de una trivia: escribe el código de la partida",
+    "app/(juego)/trivia/play/[code]/page.tsx": "el teléfono del jugador de una trivia: la partida en vivo, sin menú",
   };
 
   function paginasFueraDelShell(dir: string, acc: string[] = []): string[] {

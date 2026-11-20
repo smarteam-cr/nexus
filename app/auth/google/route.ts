@@ -10,6 +10,7 @@
  */
 import { NextRequest, NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { COOKIE_TRAS_LOGIN, VIDA_DE_LA_COOKIE_S, destinoTrasLogin } from "@/lib/auth/destino-tras-login";
 
 export async function GET(req: NextRequest) {
   const supabase = await createSupabaseServerClient();
@@ -38,5 +39,21 @@ export async function GET(req: NextRequest) {
     return NextResponse.redirect(new URL("/?error=oauth_init", req.url));
   }
 
-  return NextResponse.redirect(data.url);
+  const res = NextResponse.redirect(data.url);
+  // A dónde volver tras el login (lib/auth/destino-tras-login.ts). Viaja en una cookie corta: Google regresa al
+  // callback con una navegación normal y la cookie (SameSite=Lax) llega con ella.
+  // Un login sin destino borra el de un intento anterior que no terminó (si no, entrar normal caería en esa partida).
+  const destino = destinoTrasLogin(new URL(req.url).searchParams.get("next"));
+  if (destino) {
+    res.cookies.set(COOKIE_TRAS_LOGIN, destino, {
+      httpOnly: true,
+      sameSite: "lax",
+      path: "/",
+      maxAge: VIDA_DE_LA_COOKIE_S,
+      secure: process.env.NODE_ENV === "production",
+    });
+  } else {
+    res.cookies.delete(COOKIE_TRAS_LOGIN);
+  }
+  return res;
 }

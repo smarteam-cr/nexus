@@ -10,6 +10,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { COOKIE_VER_COMO, MENSAJE_SOLO_LECTURA, bloqueaEscritura } from "@/lib/auth/ver-como";
+import { destinoTrasLogin } from "@/lib/auth/destino-tras-login";
 
 // Rutas públicas exactas
 //   - /sw.js → Service Worker de notificaciones (asset público, sin secretos). Debe servirse
@@ -100,7 +101,12 @@ export async function middleware(request: NextRequest) {
 
   if (data.user) return response;
 
-  return NextResponse.redirect(new URL("/", request.url));
+  // Al login, recordando a dónde iba (2026-11-19, el QR de una trivia): tras iniciar sesión vuelve ahí. Solo pantallas
+  // (GET fuera de /api) y solo rutas de esta app (lib/auth/destino-tras-login.ts).
+  const login = new URL("/", request.url);
+  const destino = request.method === "GET" ? destinoTrasLogin(pathname) : null;
+  if (destino) login.searchParams.set("next", destino);
+  return NextResponse.redirect(login);
 }
 
 export const config = {

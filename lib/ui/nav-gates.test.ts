@@ -40,7 +40,7 @@ const visibles = (c: NavContext) =>
 const UNIVERSALES = ["para-ti", "clients", "marketing", "sessions", "knowledge", "documentacion", "escala"];
 
 describe("gates del sidebar congelados (espejo de los booleanos pre-migración)", () => {
-  it("SUPER_ADMIN ve los 17 ítems", () => {
+  it("SUPER_ADMIN ve los 18 ítems", () => {
     const c = ctx(true, {
       clientes: { viewAll: true },
       customerSuccess: { read: true },
@@ -49,6 +49,7 @@ describe("gates del sidebar congelados (espejo de los booleanos pre-migración)"
       auditoria: { read: true },
       agentes: { read: true },
       configuracion: { read: true },
+      trivias: { read: true },
     });
     expect(visibles(c)).toEqual([
       "para-ti",
@@ -64,6 +65,8 @@ describe("gates del sidebar congelados (espejo de los booleanos pre-migración)"
       "knowledge",
       "documentacion",
       "escala",
+      // Trivias (2026-11-19): por defecto solo SUPER_ADMIN (la celda trivias.read).
+      "trivias",
       "agents",
       "team",
       "roles",

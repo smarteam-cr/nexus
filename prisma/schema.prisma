@@ -2454,6 +2454,10 @@ model TeamMember {
   negociosAbiertos        NegocioAbierto[]        @relation("NegociosDelVendedor")
   propuestasDeDatos       PropuestaDeDato[]       @relation("PropuestasDeDatosDelAutor") // R1: lo que propuso de los datos de una empresa
   decisionesDeDatos       PropuestaDeDato[]       @relation("DecisionesDeDatos") // R1: lo que decidió
+  // Trivias (2026-11-19): las que creó, las partidas que condujo y en las que jugó.
+  triviasCreadas          Trivia[]                @relation("TriviasCreadas")
+  partidasDeTrivia        PartidaDeTrivia[]       @relation("PartidasDeTriviaConducidas")
+  jugadasDeTrivia         JugadorDeTrivia[]       @relation("JugadasDeTrivia")
 }
 
 // ─── Aviso ────────────────────────────────────────────────────────────────────
@@ -9322,4 +9326,137 @@ model VisitaDelTest {
   updatedAt DateTime @default(now())
 
   @@id([dia, area, version])
+}
+
+// ─── Trivias (tipo Kahoot, 2026-11-19) ─────────────────────────────────────────
+// SQL: scripts/sql/2026-11-19-trivias.sql (ANTES del deploy). Crear y lanzar pide el permiso `trivias` (por defecto
+// solo SUPER_ADMIN); jugar pide solo ser del equipo. Escribe SOLO lib/trivias/mutations.ts. Ver DECISIONS «Trivias».
+
+/// Una trivia del equipo: un título y sus preguntas. Se juega en vivo tantas veces como se quiera.
+model Trivia {
+  id          String             @id @default(cuid())
+  titulo      String
+  /// Quien la creó: la única persona que la edita y la lanza.
+  creadaPorId String
+  creadaPor   TeamMember         @relation("TriviasCreadas", fields: [creadaPorId], references: [id], onDelete: Cascade)
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+  preguntas   PreguntaDeTrivia[]
+  partidas    PartidaDeTrivia[]
+
+  @@index([creadaPorId, updatedAt])
+}
+
+/// Una pregunta de una trivia, en su orden. Guardar la trivia las reemplaza todas.
+model PreguntaDeTrivia {
+  id        String                 @id @default(cuid())
+  triviaId  String
+  trivia    Trivia                 @relation(fields: [triviaId], references: [id], onDelete: Cascade)
+  orden     Int
+  tipo      TipoDePreguntaDeTrivia
+  texto     String
+  /// De 2 a 4 opciones (verdadero o falso: siempre esas dos).
+  opciones  String[]
+  /// Índices de las opciones correctas (vacío en una encuesta).
+  correctas Int[]
+  /// Tiempo para responder, en segundos.
+  segundos  Int                    @default(20)
+  createdAt DateTime               @default(now())
+
+  @@unique([triviaId, orden])
+}
+
+/// Una partida en vivo de una trivia: su código, cómo se cuentan los puntos, en qué va, y la COPIA de las preguntas con
+/// que se jugó (editar o borrar la trivia después no cambia la historia).
+model PartidaDeTrivia {
+  id                String                  @id @default(cuid())
+  /// Código corto para entrar: 6 letras y números, sin los que se confunden (lib/trivias/reglas.ts).
+  codigo            String                  @unique
+  // nullable porque la partida guarda su copia de las preguntas y sobrevive si se borra la trivia.
+  triviaId          String?
+  trivia            Trivia?                 @relation(fields: [triviaId], references: [id], onDelete: SetNull)
+  /// Quien la lanzó y la conduce (quien creó la trivia).
+  anfitrionId       String
+  anfitrion         TeamMember              @relation("PartidasDeTriviaConducidas", fields: [anfitrionId], references: [id], onDelete: Cascade)
+  /// Copia del título al lanzarla.
+  titulo            String
+  /// Copia de las preguntas al lanzarla (forma: lib/trivias/schema.ts › PreguntasJugadas).
+  preguntas         Json
+  modo              ModoDePuntosDeTrivia
+  estado            EstadoDePartidaDeTrivia @default(ESPERA)
+  /// Índice de la pregunta en curso (0 = la primera). En la sala de espera vale 0 y no se muestra.
+  preguntaActual    Int                     @default(0)
+  // nullable porque solo existe desde que se abre la primera pregunta.
+  preguntaAbiertaAt DateTime?
+  // nullable porque solo existe desde que se abre la primera pregunta. Se adelanta si todos respondieron o si el
+  // anfitrión cierra la pregunta: con el reloj del servidor en esta hora o después, la pregunta está cerrada.
+  preguntaCierraAt  DateTime?
+  // nullable porque solo existe cuando la partida termina.
+  terminadaAt       DateTime?
+  createdAt         DateTime                @default(now())
+  updatedAt         DateTime                @updatedAt
+  jugadores         JugadorDeTrivia[]
+  respuestas        RespuestaDeTrivia[]
+
+  @@index([anfitrionId, createdAt])
+  @@index([triviaId])
+}
+
+/// Quien juega una partida: uno por persona y partida (entrar desde otro dispositivo es la misma participación).
+model JugadorDeTrivia {
+  id           String              @id @default(cuid())
+  partidaId    String
+  partida      PartidaDeTrivia     @relation(fields: [partidaId], references: [id], onDelete: Cascade)
+  teamMemberId String
+  teamMember   TeamMember          @relation("JugadasDeTrivia", fields: [teamMemberId], references: [id], onDelete: Cascade)
+  /// Copia del nombre al entrar (la historia se lee igual aunque la persona cambie de nombre).
+  nombre       String
+  createdAt    DateTime            @default(now())
+  respuestas   RespuestaDeTrivia[]
+
+  @@unique([partidaId, teamMemberId])
+  @@index([teamMemberId])
+}
+
+/// Lo que respondió un jugador en una pregunta de una partida: una sola vez y dentro del tiempo, con el reloj del servidor.
+model RespuestaDeTrivia {
+  id         String          @id @default(cuid())
+  partidaId  String
+  partida    PartidaDeTrivia @relation(fields: [partidaId], references: [id], onDelete: Cascade)
+  jugadorId  String
+  jugador    JugadorDeTrivia @relation(fields: [jugadorId], references: [id], onDelete: Cascade)
+  /// Índice de la pregunta en la copia de la partida.
+  pregunta   Int
+  /// Índice de la opción elegida.
+  opcion     Int
+  // nullable porque una encuesta no tiene respuesta correcta.
+  esCorrecta Boolean?
+  puntos     Int
+  /// Lo que tardó en responder, en milisegundos, desde que se abrió la pregunta.
+  tardoMs    Int
+  createdAt  DateTime        @default(now())
+
+  @@unique([jugadorId, pregunta])
+  @@index([partidaId, pregunta])
+}
+
+enum TipoDePreguntaDeTrivia {
+  OPCION_MULTIPLE
+  VERDADERO_FALSO
+  ENCUESTA
+}
+
+/// PRECISION: solo cuenta acertar (1000). VELOCIDAD: acertar rápido da más (de 1000 a 500).
+enum ModoDePuntosDeTrivia {
+  PRECISION
+  VELOCIDAD
+}
+
+/// ESPERA: sala de espera · PREGUNTA: una pregunta en curso o recién cerrada · POSICIONES: la tabla tras una
+/// pregunta · FINALIZADA: el podio.
+enum EstadoDePartidaDeTrivia {
+  ESPERA
+  PREGUNTA
+  POSICIONES
+  FINALIZADA
 }

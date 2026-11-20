@@ -15631,3 +15631,47 @@ entregables de kölbi se hacen por área.
 - **Lo transversal no se carga todavía** (alineación, entrevistas, sprint review…). La puerta queda abierta: un grupo
   transversal sería una fase con número propio en el proyecto que se decida.
 
+## Trivias (2026-11-19)
+
+Elías pidió un módulo de trivias en vivo (tipo Kahoot) para el coaching del equipo: se arma una trivia, quien la creó
+la lanza y la conduce proyectándola en Meet, y el equipo juega desde el teléfono con su usuario de Nexus. Código en
+`lib/trivias/`, `app/(shell)/trivia/`, `app/(juego)/trivia/play/` y `app/api/trivia/`; SQL en
+`scripts/sql/2026-11-19-trivias.sql`.
+
+- **Quién entra.** Crear, editar, lanzar y ver el historial pide la sección `trivias` de la matriz (por defecto solo
+  SUPER_ADMIN; se abre desde /team). Jugar pide solo ser del equipo (`guardInternalUser`): el enlace y el QR los abre
+  cualquiera con sesión, sin el permiso del módulo. Una trivia la ve y la edita quien la creó; una partida, quien la
+  condujo. `lib/trivias/guardas.test.ts` congela la guarda de cada handler.
+- **El teléfono del jugador vive fuera del shell** (`app/(juego)`, declarado en `FUERA_DEL_SHELL`): el shell carga el
+  menú, el auto-sync de Google y los paneles flotantes, que en un teléfono estorban. La página pide usuario interno.
+- **Volver tras el login.** Hasta acá todo login terminaba en «Para ti». El portero manda al login con `?next=<ruta>`,
+  `/auth/google` lo guarda en una cookie de 10 minutos y `/auth/callback` vuelve ahí (`lib/auth/destino-tras-login.ts`:
+  solo rutas de esta app). Va en cookie porque Supabase acepta como vuelta solo las URL de la lista de su panel. Vale
+  para cualquier enlace de Nexus, no solo para las trivias.
+- **Tiempo real = polling corto**, no Supabase Realtime: las tablas tienen RLS sin policies de lectura (§4.5 de
+  ARCHITECTURE) y en el 3005 la base es local. El anfitrión consulta cada 1 s con la pregunta abierta; el jugador, cada
+  1 s en la sala de espera y en las posiciones (de ahí sale la pregunta siguiente, y en «velocidad» verla tarde cuesta
+  puntos) y cada 1,5 s con la pregunta en pantalla. La fuente de verdad es la fila de la partida. Solo una redirección
+  al login cuenta como sesión vencida: un 500 o un corte de deploy se avisa y se reintenta, sin sacar a nadie.
+- **El reloj es el del servidor.** La pregunta está abierta mientras el reloj del servidor esté entre
+  `preguntaAbiertaAt` y `preguntaCierraAt`. Que respondan todos o el botón «Cerrar la pregunta» solo ADELANTAN el cierre:
+  no hay un estado «cerrada» que mantener en sincronía. La hora de una respuesta se toma con el cuerpo ya leído (un
+  envío lento que termina después de ver la correcta llega tarde) y una hora anterior a la apertura no cuenta. Las
+  pantallas corrigen su reloj con el `ahora` de cada respuesta de la API.
+- **Una respuesta por persona y pregunta**, sostenida por la base (`RespuestaDeTrivia_jugadorId_pregunta_key`), y una
+  participación por persona y partida (`JugadorDeTrivia_partidaId_teamMemberId_key`): abrir la partida en otro
+  dispositivo es la misma participación.
+- **Los puntos** (`lib/trivias/reglas.ts`): «precisión» = 1000 por acierto; «velocidad» = de 1000 (inmediato) a 500
+  (último instante), lineal. En opción múltiple el jugador toca UNA opción y vale si es cualquiera de las correctas. La
+  encuesta no suma. Mientras la pregunta está abierta, nadie recibe las correctas ni ve subir su puntaje.
+- **El podio son los 3 primeros LUGARES que sumaron algo** (con empate entran todos los empatados) y la tabla tras cada
+  pregunta, los 5 primeros lugares (hasta 10 filas). La medalla es la misma regla en el teléfono, la pantalla
+  proyectada y el resultado (`tieneMedalla`, `podioDe`, `tablaDePosiciones`): con 0 puntos no hay medalla. Una partida sin terminar y quieta más de 12 h se muestra «Sin terminar», y «jugada
+  N veces» cuenta solo las que abrieron al menos una pregunta.
+- **La partida guarda una COPIA de las preguntas** (`PartidaDeTrivia.preguntas`): editar o borrar la trivia después no
+  cambia el historial (el patrón del snapshot publicado).
+- **El QR lo dibuja un codificador propio** (`lib/trivias/qr.ts`, modo byte, nivel M, versiones 1 a 10), sin sumar una
+  dependencia que obliga a `npm install` en las dos PCs y en el contenedor. Lo sostiene un golden decodificado por un
+  lector independiente (jsQR) y los vectores de la norma (`qr.test.ts`).
+- **Los colores de las opciones son de la trivia**, no del tema (`lib/trivias/colores.ts`, hex con `style`): no flipean
+  en claro u oscuro, y cada opción lleva su letra para no depender del color. El resto de las pantallas va con tokens.

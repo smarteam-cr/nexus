@@ -15,8 +15,16 @@ import { enmascararCorreo } from "@/lib/auth/enmascarar-correo";
 import { NextRequest, NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { prisma } from "@/lib/db/prisma";
+import { COOKIE_TRAS_LOGIN, destinoTrasLogin } from "@/lib/auth/destino-tras-login";
 
 const ALLOWED_DOMAIN = "@smarteamcr.com";
+
+/** Vuelve a la entrada con el error, y borra el destino guardado: un login fallido no deja una partida «pegada». */
+function alInicioConError(codigo: string, req: NextRequest): NextResponse {
+  const res = NextResponse.redirect(new URL(`/?error=${codigo}`, req.url));
+  res.cookies.delete(COOKIE_TRAS_LOGIN);
+  return res;
+}
 
 export async function GET(req: NextRequest) {
   const url = new URL(req.url);
@@ -24,7 +32,7 @@ export async function GET(req: NextRequest) {
   const origin = url.origin;
 
   if (!code) {
-    return NextResponse.redirect(new URL("/?error=oauth_no_code", req.url));
+    return alInicioConError("oauth_no_code", req);
   }
 
   const supabase = await createSupabaseServerClient();
@@ -33,7 +41,7 @@ export async function GET(req: NextRequest) {
   const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
   if (exchangeError) {
     console.error("[/auth/callback] Exchange failed:", exchangeError);
-    return NextResponse.redirect(new URL("/?error=oauth_exchange", req.url));
+    return alInicioConError("oauth_exchange", req);
   }
 
   // 2. Resolver el user que acaba de autenticarse
@@ -43,7 +51,7 @@ export async function GET(req: NextRequest) {
 
   if (!user || !user.email) {
     await supabase.auth.signOut();
-    return NextResponse.redirect(new URL("/?error=oauth_no_user", req.url));
+    return alInicioConError("oauth_no_user", req);
   }
 
   const email = user.email.toLowerCase();
@@ -53,7 +61,7 @@ export async function GET(req: NextRequest) {
     // A-15: un intento fallido se loguea con el correo ENMASCARADO (dominio + una pista).
     console.warn(`[/auth/callback] Email fuera del dominio: ${enmascararCorreo(email)}`);
     await supabase.auth.signOut();
-    return NextResponse.redirect(new URL("/?error=domain", req.url));
+    return alInicioConError("domain", req);
   }
 
   // 4. Filtro: TeamMember existente (AppUser INTERNAL con ese email)
@@ -70,14 +78,14 @@ export async function GET(req: NextRequest) {
   if (!appUser || appUser.kind !== "INTERNAL") {
     console.warn(`[/auth/callback] No hay AppUser INTERNAL para ${enmascararCorreo(email)}`);
     await supabase.auth.signOut();
-    return NextResponse.redirect(new URL("/?error=not_member", req.url));
+    return alInicioConError("not_member", req);
   }
 
   // 4b. Miembro desactivado → bloquear acceso (mantiene histórico, sin login)
   if (appUser.teamMember?.deactivatedAt) {
     console.warn(`[/auth/callback] Miembro desactivado intentó entrar: ${enmascararCorreo(email)}`);
     await supabase.auth.signOut();
-    return NextResponse.redirect(new URL("/?error=deactivated", req.url));
+    return alInicioConError("deactivated", req);
   }
 
   // 5. Primer login: vincular authUserId al AppUser
@@ -98,8 +106,12 @@ export async function GET(req: NextRequest) {
     console.log(`[/auth/callback] ↻ Re-vinculado authUserId para ${email}`);
   }
 
-  // 6. Bienvenida — a «Para ti» (2026-10-04): lo que le toca a cada persona, de todos los módulos.
+  // 6. Bienvenida — a «Para ti» (2026-10-04): lo que le toca a cada persona, de todos los módulos. O, si venía de
+  // un enlace (el QR de una trivia), de vuelta ahí (2026-11-19, lib/auth/destino-tras-login.ts).
   // Usar APP_URL (URL pública) y no `origin`, que detrás de proxy/Docker puede
   // resolver a localhost. Fallback al origin del request en dev local.
-  return NextResponse.redirect(new URL("/para-ti", process.env.APP_URL || origin));
+  const destino = destinoTrasLogin(req.cookies.get(COOKIE_TRAS_LOGIN)?.value) ?? "/para-ti";
+  const res = NextResponse.redirect(new URL(destino, process.env.APP_URL || origin));
+  res.cookies.delete(COOKIE_TRAS_LOGIN);
+  return res;
 }

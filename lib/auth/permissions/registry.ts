@@ -381,6 +381,17 @@ export const PERMISSION_SECTIONS = [
       { key: "manage", label: "Archivar, restaurar y bloquear páginas", enforced: true },
     ],
   },
+  /* Trivias (2026-11-19): juegos de preguntas en vivo para el coaching del equipo. Por defecto solo SUPER_ADMIN
+     (all-true): ningún rol la trae en DEFAULT_MATRIX y se abre desde /team. JUGAR no pide esta sección: basta ser
+     del equipo (app/api/trivia/play/** pide guardInternalUser). */
+  {
+    key: "trivias",
+    label: "Trivias",
+    actions: [
+      { key: "read", label: "Ver el módulo: las trivias propias y las partidas que condujo", enforced: true },
+      { key: "write", label: "Crear, editar y lanzar trivias", enforced: true },
+    ],
+  },
   {
     key: "equipo",
     label: "Equipo",

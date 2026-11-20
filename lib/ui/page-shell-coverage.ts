@@ -142,4 +142,9 @@ export const PAGE_SHELL_COVERAGE: Record<string, ShellDecl> = {
   team: { custom: "página de equipo con contenedor propio (candidata a SHELL_NARROW)" },
   agents: { custom: "catálogo con contenedor propio (candidata a SHELL_DEFAULT — ola B5)" },
   "[...ruta]": { custom: "solo llama a notFound(); el contenedor del 404 lo pone app/(shell)/not-found.tsx" },
+  // Trivias (2026-11-19): el listado, el editor y la consola del anfitrión (que se proyecta con PantallaCompleta).
+  trivia: { shell: "SHELL_DEFAULT" },
+  "trivia/new": { shell: "SHELL_NARROW" },
+  "trivia/[id]": { shell: "SHELL_NARROW" },
+  "trivia/games/[gameId]": { shell: "SHELL_DEFAULT" },
 };
