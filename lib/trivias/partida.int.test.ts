@@ -11,7 +11,7 @@ vi.mock("server-only", () => ({}));
 import { prisma } from "@/lib/db/prisma";
 import { ErrorDeTrivias } from "./error";
 import { avanzarPartida, crearTrivia, guardarTrivia, lanzarPartida, responder, unirseAPartida } from "./mutations";
-import { estadoParaAnfitrion, estadoParaJugador, listarPartidas, resultadoDePartida } from "./queries";
+import { estadoParaAnfitrion, estadoParaJugador, listarPartidas, listarTrivias, resultadoDePartida } from "./queries";
 import { TriviaInput } from "./schema";
 
 const T0 = new Date("2026-11-19T15:00:00.000Z");
@@ -174,13 +174,37 @@ describe("una partida de trivia de punta a punta", { timeout: 60_000 }, () => {
     const { anfitrion, ana } = await equipo();
     const { id: triviaId } = await crearTrivia(TRIVIA, anfitrion.id);
     const { id: partidaId, codigo } = await lanzarPartida(triviaId, "PRECISION", anfitrion.id);
-    await unirseAPartida(codigo, { teamMemberId: ana.id, nombre: ana.name });
+    // Entrar desde dos dispositivos A LA VEZ: una sola participación.
+    const entradas = await Promise.all([
+      unirseAPartida(codigo, { teamMemberId: ana.id, nombre: ana.name }),
+      unirseAPartida(codigo, { teamMemberId: ana.id, nombre: ana.name }),
+    ]);
+    expect(entradas[0].jugadorId).toBe(entradas[1].jugadorId);
+    expect(await prisma.jugadorDeTrivia.count({ where: { partidaId } })).toBe(1);
     await avanzarPartida(partidaId, anfitrion.id, { accion: "empezar", desde: { estado: "ESPERA", pregunta: 0 } }, T0);
     const resultados = await Promise.allSettled([
       responder(codigo, ana.id, { pregunta: 0, opcion: 0 }, en(2_000)),
       responder(codigo, ana.id, { pregunta: 0, opcion: 1 }, en(2_000)),
     ]);
     expect(resultados.filter((x) => x.status === "fulfilled")).toHaveLength(1);
+    // El otro toque oye lo que pasó de verdad, aunque el primero haya cerrado la pregunta (era el único jugador).
+    const rechazado = resultados.find((x) => x.status === "rejected") as PromiseRejectedResult;
+    expect(rechazado.reason).toBeInstanceOf(ErrorDeTrivias);
+    expect(rechazado.reason).toMatchObject({ status: 409, message: "Ya respondiste esta pregunta." });
     expect(await prisma.respuestaDeTrivia.count({ where: { partidaId } })).toBe(1);
+  });
+
+  it("«jugada N veces» cuenta solo las partidas que empezaron, y una partida quieta medio día sale «Sin terminar»", async () => {
+    const { anfitrion } = await equipo();
+    const { id: triviaId } = await crearTrivia(TRIVIA, anfitrion.id);
+    const lanzadaSinEmpezar = await lanzarPartida(triviaId, "VELOCIDAD", anfitrion.id);
+    expect((await listarTrivias(anfitrion.id))[0]).toMatchObject({ id: triviaId, partidas: 0 });
+    await avanzarPartida(lanzadaSinEmpezar.id, anfitrion.id, { accion: "empezar", desde: { estado: "ESPERA", pregunta: 0 } }, T0);
+    expect((await listarTrivias(anfitrion.id))[0]).toMatchObject({ partidas: 1 });
+
+    const [ahora] = await listarPartidas(anfitrion.id);
+    expect(ahora).toMatchObject({ estado: "PREGUNTA", abandonada: false });
+    const [masTarde] = await listarPartidas(anfitrion.id, { ahora: new Date(Date.now() + 13 * 3_600_000) });
+    expect(masTarde).toMatchObject({ estado: "PREGUNTA", abandonada: true });
   });
 });

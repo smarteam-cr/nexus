@@ -13,6 +13,7 @@ import {
   partidaAbandonada,
   podioDe,
   tablaDePosiciones,
+  tieneMedalla,
   evaluarRespuesta,
   hastaQuePreguntaCuenta,
   normalizarCodigo,
@@ -97,9 +98,11 @@ describe("responder: una vez y dentro del tiempo (reloj del servidor)", () => {
     expect(r).toEqual({ ok: true, esCorrecta: true, tardoMs: 5_000, puntos: 875 });
   });
 
-  it("la doble respuesta queda bloqueada", () => {
+  it("la doble respuesta queda bloqueada, y lo dice así aunque la pregunta ya se haya cerrado", () => {
     const r = evaluarRespuesta({ partida: abierta(), pregunta: multiple, indice: 0, opcion: 0, ahora: en(6_000), yaRespondio: true });
     expect(r).toEqual({ ok: false, rechazo: "ya-respondiste" });
+    const tarde = evaluarRespuesta({ partida: abierta(), pregunta: multiple, indice: 0, opcion: 0, ahora: en(25_000), yaRespondio: true });
+    expect(tarde).toEqual({ ok: false, rechazo: "ya-respondiste" });
   });
 
   it("en el instante del cierre o después ya no se acepta", () => {
@@ -279,6 +282,14 @@ describe("la tabla y la distribución", () => {
     expect(podioDe(tabla).map((p) => p.nombre)).toEqual(["A", "B", "C", "D"]);
     const todosEnCero = tabla.map((p) => ({ ...p, puntos: 0, lugar: 1 }));
     expect(podioDe(todosEnCero)).toEqual([]);
+  });
+
+  it("la medalla: solo los 3 primeros lugares QUE SUMARON (un «segundo» con 0 puntos no la lleva)", () => {
+    expect(tieneMedalla(1, 900)).toBe(true);
+    expect(tieneMedalla(3, 500)).toBe(true);
+    expect(tieneMedalla(2, 0)).toBe(false);
+    expect(tieneMedalla(4, 900)).toBe(false);
+    expect(tieneMedalla(null, 900)).toBe(false);
   });
 
   it("la tabla tras una pregunta: los 5 primeros lugares, sin pasar de 10 filas", () => {

@@ -15586,8 +15586,8 @@ la lanza y la conduce proyectándola en Meet, y el equipo juega desde el teléfo
   (último instante), lineal. En opción múltiple el jugador toca UNA opción y vale si es cualquiera de las correctas. La
   encuesta no suma. Mientras la pregunta está abierta, nadie recibe las correctas ni ve subir su puntaje.
 - **El podio son los 3 primeros LUGARES que sumaron algo** (con empate entran todos los empatados) y la tabla tras cada
-  pregunta, los 5 primeros lugares (hasta 10 filas): el teléfono y la pantalla proyectada usan la misma regla
-  (`podioDe`, `tablaDePosiciones`). Una partida sin terminar y quieta más de 12 h se muestra «Sin terminar», y «jugada
+  pregunta, los 5 primeros lugares (hasta 10 filas). La medalla es la misma regla en el teléfono, la pantalla
+  proyectada y el resultado (`tieneMedalla`, `podioDe`, `tablaDePosiciones`): con 0 puntos no hay medalla. Una partida sin terminar y quieta más de 12 h se muestra «Sin terminar», y «jugada
   N veces» cuenta solo las que abrieron al menos una pregunta.
 - **La partida guarda una COPIA de las preguntas** (`PartidaDeTrivia.preguntas`): editar o borrar la trivia después no
   cambia el historial (el patrón del snapshot publicado).

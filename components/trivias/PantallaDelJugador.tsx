@@ -21,6 +21,7 @@ import { ApiError, fetchJson } from "@/lib/api/fetch-json";
 import { cn } from "@/lib/cn";
 import { COLORES_DEL_PODIO, colorDeOpcion } from "@/lib/trivias/colores";
 import { formatearPuntos } from "@/lib/trivias/formato";
+import { tieneMedalla } from "@/lib/trivias/reglas";
 import type { EstadoParaJugador, PreguntaVisible } from "@/lib/trivias/tipos";
 import { CuentaRegresiva, segundosRestantes } from "./CuentaRegresiva";
 import { useAhora, useEstadoEnVivo } from "./useEstadoEnVivo";
@@ -864,10 +865,8 @@ function Posiciones({
   );
 }
 
-/** Medalla solo para el podio de verdad: los 3 primeros lugares que sumaron algo (la misma regla que el podio proyectado). */
-function enElPodio(lugar: number | null, puntos: number): lugar is number {
-  return lugar !== null && lugar >= 1 && lugar <= 3 && puntos > 0;
-}
+/** Medalla solo para el podio de verdad: la misma regla que la pantalla proyectada (lib/trivias/reglas.ts). */
+const enElPodio = tieneMedalla;
 
 function Lugar({ lugar, jugadores, frase, puntos }: { lugar: number; jugadores: number; frase: string; puntos: number }) {
   const podio = enElPodio(lugar, puntos) ? COLORES_DEL_PODIO[lugar - 1] : null;

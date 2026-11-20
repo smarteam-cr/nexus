@@ -15,6 +15,7 @@ import { COLORES_DEL_PODIO, colorDeOpcion } from "@/lib/trivias/colores";
 import type { ResultadoDePartida as Resultado } from "@/lib/trivias/queries";
 import { ETIQUETA_DEL_MODO, ETIQUETA_DEL_TIPO, EXPLICACION_DEL_MODO, type PreguntaDeTrivia } from "@/lib/trivias/tipos";
 import { formatearCodigo, formatearPuntos } from "@/lib/trivias/formato";
+import { tieneMedalla } from "@/lib/trivias/reglas";
 import { Podio } from "./Podio";
 import { TableroDeOpciones } from "./TableroDeOpciones";
 
@@ -108,8 +109,8 @@ function MarcoDeTabla({ children }: { children: React.ReactNode }) {
   );
 }
 
-function Lugar({ lugar }: { lugar: number }) {
-  const podio = lugar <= 3 ? COLORES_DEL_PODIO[lugar - 1] : null;
+function Lugar({ lugar, puntos }: { lugar: number; puntos: number }) {
+  const podio = tieneMedalla(lugar, puntos) ? COLORES_DEL_PODIO[lugar - 1] : null;
   return (
     <span
       className={cn(
@@ -141,7 +142,7 @@ function Posiciones({ resultado: r, puntuables }: { resultado: Resultado; puntua
             {r.posiciones.map((p) => (
               <tr key={p.jugadorId} className="border-b border-line last:border-0">
                 <td className="px-4 py-3 align-middle">
-                  <Lugar lugar={p.lugar} />
+                  <Lugar lugar={p.lugar} puntos={p.puntos} />
                 </td>
                 <td className="px-4 py-3 align-middle font-medium text-fg">{p.nombre}</td>
                 <td className="px-4 py-3 text-right align-middle tabular-nums text-fg">{formatearPuntos(p.puntos)}</td>

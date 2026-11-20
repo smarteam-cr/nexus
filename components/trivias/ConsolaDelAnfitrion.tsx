@@ -33,6 +33,7 @@ import { COLORES_DEL_PODIO } from "@/lib/trivias/colores";
 import type { AccionDelAnfitrion } from "@/lib/trivias/schema";
 import { ETIQUETA_DEL_TIPO, type EstadoParaAnfitrion, type Posicion } from "@/lib/trivias/tipos";
 import { CodigoQr } from "./CodigoQr";
+import { tieneMedalla } from "@/lib/trivias/reglas";
 import { CuentaRegresiva, segundosRestantes } from "./CuentaRegresiva";
 import { formatearCodigo, formatearPuntos } from "@/lib/trivias/formato";
 import { Podio } from "./Podio";
@@ -311,7 +312,13 @@ function Escenario({
           codigo={codigo}
         />
       )}
-      {estado.partida.estado === "FINALIZADA" && <MomentoDelPodio posiciones={estado.posiciones} />}
+      {estado.partida.estado === "FINALIZADA" && (
+        <MomentoDelPodio
+          posiciones={estado.posiciones}
+          hayJugadores={estado.jugadores.length > 0}
+          empezo={estado.partida.abiertaAt !== null}
+        />
+      )}
     </section>
   );
 }
@@ -476,7 +483,7 @@ function MomentoDePosiciones({
       ) : (
         <ol className="space-y-3">
           {posiciones.map((p) => {
-            const podio = p.lugar <= 3 ? COLORES_DEL_PODIO[p.lugar - 1] : null;
+            const podio = tieneMedalla(p.lugar, p.puntos) ? COLORES_DEL_PODIO[p.lugar - 1] : null;
             return (
               <li
                 key={p.jugadorId}
@@ -506,7 +513,23 @@ function MomentoDePosiciones({
   );
 }
 
-function MomentoDelPodio({ posiciones }: { posiciones: Posicion[] }) {
+function MomentoDelPodio({
+  posiciones,
+  hayJugadores,
+  empezo,
+}: {
+  posiciones: Posicion[];
+  hayJugadores: boolean;
+  /** Se llegó a abrir al menos una pregunta. */
+  empezo: boolean;
+}) {
+  // Sin podio no siempre es «nadie entró»: también una partida de solo encuestas, una en la que todos fallaron, o una
+  // terminada desde la sala de espera.
+  const sinPodio = !hayJugadores
+    ? "Nadie entró a esta partida."
+    : !empezo
+      ? "La partida terminó antes de la primera pregunta."
+      : "Esta vez nadie sumó puntos.";
   return (
     <div className="m-auto flex w-full max-w-5xl flex-col items-center gap-8 md:gap-12">
       <div className="space-y-1 text-center">
@@ -516,7 +539,7 @@ function MomentoDelPodio({ posiciones }: { posiciones: Posicion[] }) {
       {posiciones.length > 0 ? (
         <Podio posiciones={posiciones} tamano="escenario" className="w-full" />
       ) : (
-        <p className="text-xl text-fg-muted">Nadie entró a esta partida.</p>
+        <p className="text-xl text-fg-muted">{sinPodio}</p>
       )}
     </div>
   );

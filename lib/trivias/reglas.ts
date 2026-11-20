@@ -130,8 +130,10 @@ export function evaluarRespuesta(input: {
   if (partida.preguntaAbiertaAt === null || ahora.getTime() < partida.preguntaAbiertaAt.getTime()) {
     return { ok: false, rechazo: "fuera-de-pregunta" };
   }
-  if (!preguntaAbierta(partida, ahora)) return { ok: false, rechazo: "tiempo-agotado" };
+  // «Ya respondiste» antes que el reloj: con dos toques a la vez (o dos dispositivos), el primero puede cerrar la
+  // pregunta por ser el último en responder, y el segundo tiene que oír lo que de verdad pasó.
   if (input.yaRespondio) return { ok: false, rechazo: "ya-respondiste" };
+  if (!preguntaAbierta(partida, ahora)) return { ok: false, rechazo: "tiempo-agotado" };
   if (!Number.isInteger(opcion) || opcion < 0 || opcion >= pregunta.opciones.length) {
     return { ok: false, rechazo: "opcion-invalida" };
   }
@@ -233,9 +235,18 @@ export function calcularPosiciones(
   });
 }
 
-/** El podio: los que quedaron en los 3 primeros LUGARES (con empate, todos los empatados) y sumaron algo. */
+/**
+ * La medalla (oro, plata, bronce): solo los 3 primeros LUGARES que sumaron algo. Una sola regla para el teléfono, la
+ * pantalla proyectada y el resultado: con 0 puntos nadie lleva medalla, aunque esté «segundo» porque los demás también
+ * tienen 0.
+ */
+export function tieneMedalla(lugar: number | null, puntos: number): lugar is number {
+  return lugar !== null && lugar >= 1 && lugar <= TOP_DEL_PODIO && puntos > 0;
+}
+
+/** El podio: los que llevan medalla (con empate, todos los empatados). */
 export function podioDe(posiciones: Posicion[]): Posicion[] {
-  return posiciones.filter((p) => p.lugar <= TOP_DEL_PODIO && p.puntos > 0);
+  return posiciones.filter((p) => tieneMedalla(p.lugar, p.puntos));
 }
 
 /** La tabla tras una pregunta: los 5 primeros lugares (con empate, todos), sin pasar de 10 filas en la pantalla. */

@@ -112,7 +112,7 @@ export interface PartidaEnLista {
 
 export async function listarPartidas(
   teamMemberId: string,
-  opciones: { triviaId?: string; limite?: number } = {},
+  opciones: { triviaId?: string; limite?: number; ahora?: Date } = {},
 ): Promise<PartidaEnLista[]> {
   const partidas = await prisma.partidaDeTrivia.findMany({
     where: { anfitrionId: teamMemberId, ...(opciones.triviaId ? { triviaId: opciones.triviaId } : {}) },
@@ -129,7 +129,7 @@ export async function listarPartidas(
       jugadores: { select: { id: true, nombre: true } },
     },
   });
-  const ahora = new Date();
+  const ahora = opciones.ahora ?? new Date();
   if (partidas.length === 0) return [];
   const sumas = await prisma.respuestaDeTrivia.groupBy({
     by: ["partidaId", "jugadorId"],
