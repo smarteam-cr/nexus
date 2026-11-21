@@ -238,6 +238,60 @@ main { max-width: 1040px; margin: 0 auto; padding-block: 32px 64px;
 .ln-vacio { padding: 10px 12px; font-size: 13.5px; color: var(--fg-muted); }
 .ln-cta { position: fixed; z-index: 20; right: calc(20px + env(safe-area-inset-right, 0px)); bottom: calc(20px + env(safe-area-inset-bottom, 0px)); font: inherit; font-size: 14px; font-weight: 650; color: var(--brand-ink); background: var(--brand); border: 0; border-radius: 999px; padding: 11px 18px; cursor: pointer; box-shadow: 0 6px 20px -6px rgba(0, 0, 0, .45); display: inline-flex; align-items: center; gap: 8px; }
 .ln-cta[hidden] { display: none; }
+/* Los carriles (20 nov, pedido de Elías: «lo más importante es lo que estamos haciendo en ejecución»). Un carril por
+   tema: a la izquierda el tema, a la derecha lo que falta resolver en tarjetas que corren de lado. Lo que viene, igual y
+   más tenue. Lo que ya pasó, en el desplegable de abajo. */
+.cr-wrap { max-width: none; }
+.cr-sec { display: grid; gap: 10px; margin: 8px 0 26px; scroll-margin-top: 12px; }
+.cr-h { margin: 0 !important; font-size: 13px; font-weight: 650; letter-spacing: .07em; text-transform: uppercase; color: var(--fg) !important; }
+.cr-sec.tenue .cr-h { color: var(--fg-muted) !important; }
+.cr-sub { margin: -4px 0 4px; font-size: 13.5px; color: var(--fg-muted); }
+.cr-carril { display: grid; grid-template-columns: 230px minmax(0, 1fr); gap: 14px; align-items: start; padding: 14px 0; border-top: 1px solid var(--line); }
+.cr-cabeza { display: grid; gap: 6px; justify-items: start; min-width: 0; }
+.cr-cabeza-1 { display: flex; align-items: baseline; gap: 8px; }
+.cr-cabeza h3 { margin: 0; font-size: 15.5px; font-weight: 650; color: var(--fg); text-wrap: balance; }
+.cr-prio { flex: none; display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; font-size: 12px; font-weight: 700; color: var(--brand-ink); background: var(--brand); font-variant-numeric: tabular-nums; }
+.cr-sec.tenue .cr-prio { color: var(--fg-2); background: var(--surface-muted); border: 1px solid var(--line); }
+.cr-sig { margin: 0; font-size: 13px; color: var(--fg-muted); display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
+.cr-sig b { color: var(--fg-2); font-weight: 600; }
+.cr-pista { display: flex; align-items: flex-start; gap: 6px; overflow-x: auto; padding: 2px 2px 10px; scroll-snap-type: x proximity; overscroll-behavior-x: contain; }
+.cr-flecha { flex: none; align-self: center; margin-top: -10px; font-size: 15px; color: var(--fg-muted); }
+.cr-card { flex: 0 0 264px; scroll-snap-align: start; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; min-width: 0; }
+.cr-sec.tenue .cr-card { background: var(--bg); border-style: dashed; }
+.cr-card.abierta { flex-basis: 340px; }
+.cr-cab { display: grid; gap: 4px; width: 100%; font: inherit; text-align: left; color: inherit; background: none; border: 0; border-radius: 12px; padding: 11px 13px; cursor: pointer; }
+.cr-cab:disabled { cursor: default; }
+.cr-cab:hover:not(:disabled) { background: var(--surface-muted); }
+.cr-cab:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+.cr-meta { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--fg-muted); }
+.cr-num { font-weight: 700; color: var(--fg-2); font-variant-numeric: tabular-nums; }
+.cr-et { font-weight: 650; color: var(--c, var(--fg-muted)); }
+.cr-et::before { content: ""; display: inline-block; width: 8px; height: 8px; margin-right: 5px; border-radius: 50%; background: var(--c, var(--fg-muted)); vertical-align: 0; }
+.cr-t { font-size: 14.5px; font-weight: 650; color: var(--fg); line-height: 1.35; }
+.cr-d { font-size: 13px; color: var(--fg-muted); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.cr-card.abierta .cr-d { display: none; }
+.cr-chips { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 2px; }
+.cr-chips .chip { font-size: 11.5px; padding: 1px 8px; }
+.cr-det { display: grid; gap: 10px; padding: 0 13px 13px; }
+.cr-det[hidden] { display: none; }
+.cr-que { margin: 0; font-size: 14px; color: var(--fg-2); }
+.cr-det .ln-dl { grid-template-columns: 1fr; gap: 2px; }
+.cr-det .ln-dl dd { margin-bottom: 6px; }
+.cr-h3 { margin: 22px 0 10px; font-size: 12px; font-weight: 650; letter-spacing: .06em; text-transform: uppercase; color: var(--fg-muted); }
+.ln-pasado { margin-top: 10px; border-top: 1px solid var(--line); }
+.ln-pasado > summary { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; padding: 16px 0; cursor: pointer; list-style: none; }
+.ln-pasado > summary::-webkit-details-marker { display: none; }
+.ln-pasado > summary::before { content: "\25B8"; color: var(--fg-muted); font-size: 12px; transition: transform .15s; }
+.ln-pasado[open] > summary::before { transform: rotate(90deg); }
+.ln-pasado > summary:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+.ln-pasado-t { font-size: 13px; font-weight: 650; letter-spacing: .07em; text-transform: uppercase; color: var(--fg); }
+.ln-pasado-n { font-size: 13px; color: var(--fg-muted); }
+.ln-pasado-c { display: grid; gap: 10px; max-width: 900px; padding-bottom: 12px; }
+@media (max-width: 720px) {
+  .cr-carril { grid-template-columns: 1fr; gap: 10px; }
+  .cr-card { flex-basis: 78vw; max-width: 300px; }
+  .cr-card.abierta { flex-basis: 86vw; max-width: 340px; }
+}
 .ln-cta span { display: inline-block; transition: transform .2s; }
 .ln-cta.arriba span { transform: rotate(180deg); }
 @media (prefers-reduced-motion: no-preference) { .ln-hoy .ln-p::after { animation: ln-late 2.4s ease-out infinite; } }
@@ -648,23 +702,34 @@ main { max-width: 1040px; margin: 0 auto; padding-block: 32px 64px;
       var a = h.fecha.split('-'), b = h.hasta.split('-');
       return a[1] === b[1] ? Number(a[2]) + '–' + Number(b[2]) + ' ' + MES[Number(a[1]) - 1] : fecha(h.fecha) + ' – ' + fecha(h.hasta);
     }
+    function listaDePreguntas(nums, texto) {
+      var ul = nodo('ul', 'ln-pq');
+      if (texto) { var l0 = nodo('li'); l0.textContent = texto; ul.appendChild(l0); }
+      nums.forEach(function (n) { var l = nodo('li'); l.innerHTML = '<b>' + n + '.</b> ' + marked.parseInline(pq[n]); ul.appendChild(l); });
+      return ul;
+    }
     var PROD = { si: 'Sí, en producción', parcial: 'En producción, con una parte apagada', apagado: 'En producción, pero apagado', plan: 'Es un plan, no código' };
     var ESTADO = { 'otra-sesion': ['En otra sesión', 's-info'], 'por-hacer': ['Por hacer', 's-idle'], 'te-toca': ['Te toca a ti', 's-warn'], 'espera': ['Espera', 's-idle'] };
-    var items = [], nId = 0;
-    function item(h, futuro, numero) {
+    var EST_TEMA = { 'en-curso': ['En ejecución', 's-info'], 'propuesta': ['Por arrancar', 's-idle'], 'funciona': ['Funciona', 's-ok'], 'terminado': ['Terminado', 's-ok'] };
+    var bloqueTemas = {};
+    try { bloqueTemas = JSON.parse(paneles.resumen.querySelector('code.language-temas').textContent); } catch (e) {}
+    var temas = bloqueTemas.temas || [];
+    var nId = 0;
+
+    // ── Lo que ya pasó: la línea vertical con lo hecho, en un desplegable (20 nov, pedido de Elías). ──
+    var items = [];
+    function item(h) {
       var i = ini[h.iniciativa] || { nombre: h.iniciativa };
       var li = nodo('li', 'ln-fila ln-item'); li.setAttribute('data-ini', h.iniciativa);
       li.style.setProperty('--c', 'var(--ini-' + h.iniciativa + ')');
-      li.appendChild(nodo('div', 'ln-f', futuro ? String(numero) : rango(h)));
+      li.appendChild(nodo('div', 'ln-f', rango(h)));
       var p = nodo('div', 'ln-p'); p.setAttribute('aria-hidden', 'true'); li.appendChild(p);
       var caja = nodo('div', 'ln-caja'), cab = nodo('button', 'ln-cab'), id = 'ln-det-' + (++nId);
       cab.type = 'button'; cab.setAttribute('aria-expanded', 'false'); cab.setAttribute('aria-controls', id);
       var meta = nodo('span', 'ln-meta'); meta.appendChild(nodo('span', 'ln-ini', i.nombre));
       var abiertas = (h.preguntas || []).filter(function (n) { return pq[n]; });
-      var nPreg = abiertas.length + (h.preguntaTexto ? 1 : 0);
-      if (futuro) { var e = ESTADO[h.estado] || ['', 's-idle']; meta.appendChild(nodo('span', 'chip ' + e[1], h.estado === 'espera' && h.esperaA ? 'Espera a ' + h.esperaA : e[0])); }
-      else if (h.prod !== 'si') meta.appendChild(nodo('span', 'chip ' + (h.prod === 'plan' ? 's-idle' : 's-warn'), h.prod === 'plan' ? 'Plan' : h.prod === 'apagado' ? 'Apagado' : 'Una parte apagada'));
-      if (nPreg) meta.appendChild(nodo('span', 'chip s-warn', nPreg === 1 ? '1 pregunta para ti' : nPreg + ' preguntas para ti'));
+      if (h.prod !== 'si') meta.appendChild(nodo('span', 'chip ' + (h.prod === 'plan' ? 's-idle' : 's-warn'), h.prod === 'plan' ? 'Plan' : h.prod === 'apagado' ? 'Apagado' : 'Una parte apagada'));
+      if (abiertas.length) meta.appendChild(nodo('span', 'chip s-warn', abiertas.length === 1 ? '1 pregunta para ti' : abiertas.length + ' preguntas para ti'));
       cab.appendChild(meta); cab.appendChild(nodo('span', 'ln-t', h.titulo)); cab.appendChild(nodo('span', 'ln-d', h.que));
       caja.appendChild(cab);
       var det = nodo('div', 'ln-det'); det.id = id; det.hidden = true;
@@ -672,14 +737,8 @@ main { max-width: 1040px; margin: 0 auto; padding-block: 32px 64px;
       var dl = nodo('dl', 'ln-dl');
       function fila(k, v) { dl.appendChild(nodo('dt', null, k)); var dd = nodo('dd'); if (typeof v === 'string') dd.textContent = v; else dd.appendChild(v); dl.appendChild(dd); }
       fila('Para quién', h.paraQuien);
-      if (futuro) fila('Cómo está', h.estado === 'espera' && h.esperaA ? 'Espera a ' + h.esperaA + '.' : (ESTADO[h.estado] || [''])[0] + '.');
-      else fila('En producción', (PROD[h.prod] || '') + (h.prodNota ? '. ' + h.prodNota : '.'));
-      if (nPreg) {
-        var ul = nodo('ul', 'ln-pq');
-        if (h.preguntaTexto) { var l0 = nodo('li'); l0.textContent = h.preguntaTexto; ul.appendChild(l0); }
-        abiertas.forEach(function (n) { var l = nodo('li'); l.innerHTML = '<b>' + n + '.</b> ' + marked.parseInline(pq[n]); ul.appendChild(l); });
-        fila(nPreg === 1 ? 'Pregunta para ti' : 'Preguntas para ti', ul);
-      }
+      fila('En producción', (PROD[h.prod] || '') + (h.prodNota ? '. ' + h.prodNota : '.'));
+      if (abiertas.length) fila(abiertas.length === 1 ? 'Pregunta para ti' : 'Preguntas para ti', listaDePreguntas(abiertas));
       if (h.commits && h.commits.length) {
         var sh = nodo('div', 'ln-shas'); h.commits.forEach(function (c) { sh.appendChild(nodo('code', 'sha', c)); });
         fila('Cambios', sh);
@@ -690,55 +749,181 @@ main { max-width: 1040px; margin: 0 auto; padding-block: 32px 64px;
       li._abrir = abrir; items.push(li);
       return li;
     }
-    var raiz = nodo('div', 'ln-wrap');
-    // Arriba: dónde vamos, qué corre en producción y los filtros.
+
+    // ── En ejecución y lo que viene: un carril horizontal por tema, con lo que falta resolver de izquierda a derecha. ──
+    // Las tarjetas son los pasos de «sigue» de la línea con ese tema (en su orden de prioridad); si no hay ninguno, el
+    // «sigue» del tema. Después, lo que te toca y las preguntas abiertas del tema que ninguna tarjeta nombra.
+    linea.sigue.forEach(function (s, i) { s._n = i + 1; });
+    function tarjeta(o) {
+      var card = nodo('article', 'cr-card');
+      if (o.color) card.style.setProperty('--c', 'var(--ini-' + o.color + ')');
+      var cab = nodo('button', 'cr-cab'), id = 'cr-det-' + (++nId);
+      cab.type = 'button'; cab.setAttribute('aria-expanded', 'false'); cab.setAttribute('aria-controls', id);
+      var meta = nodo('span', 'cr-meta');
+      if (o.numero) meta.appendChild(nodo('span', 'cr-num', '#' + o.numero));
+      if (o.etiqueta) meta.appendChild(nodo('span', 'cr-et', o.etiqueta));
+      if (meta.childNodes.length) cab.appendChild(meta);
+      cab.appendChild(nodo('span', 'cr-t', o.titulo));
+      if (o.texto) cab.appendChild(nodo('span', 'cr-d', o.texto));
+      var chips = nodo('span', 'cr-chips');
+      if (o.chip) chips.appendChild(nodo('span', 'chip ' + o.chip[1], o.chip[0]));
+      var abiertas = (o.preguntas || []).filter(function (n) { return pq[n]; });
+      var nPreg = abiertas.length + (o.preguntaTexto ? 1 : 0);
+      if (nPreg && !o.soloPreguntas) chips.appendChild(nodo('span', 'chip s-warn', nPreg === 1 ? '1 pregunta' : nPreg + ' preguntas'));
+      if (chips.childNodes.length) cab.appendChild(chips);
+      card.appendChild(cab);
+      var det = nodo('div', 'cr-det'); det.id = id; det.hidden = true;
+      if (o.texto && !o.soloPreguntas) det.appendChild(nodo('p', 'cr-que', o.texto));
+      var dl = nodo('dl', 'ln-dl');
+      function fila(k, v) { dl.appendChild(nodo('dt', null, k)); var dd = nodo('dd'); if (typeof v === 'string') dd.textContent = v; else dd.appendChild(v); dl.appendChild(dd); }
+      if (o.paraQuien) fila('Para quién', o.paraQuien);
+      if (o.como) fila('Cómo está', o.como);
+      if (nPreg) fila(nPreg === 1 ? 'Pregunta para ti' : 'Preguntas para ti', listaDePreguntas(abiertas, o.preguntaTexto));
+      if (dl.childNodes.length) det.appendChild(dl);
+      if (det.childNodes.length) {
+        card.appendChild(det);
+        cab.addEventListener('click', function () {
+          var si = det.hidden; det.hidden = !si; card.classList.toggle('abierta', si); cab.setAttribute('aria-expanded', String(si));
+        });
+      } else { cab.disabled = true; cab.removeAttribute('aria-expanded'); cab.removeAttribute('aria-controls'); }
+      return card;
+    }
+    function deSigue(s) {
+      var e = ESTADO[s.estado] || ['', 's-idle'];
+      var como = s.estado === 'espera' && s.esperaA ? 'Espera a ' + s.esperaA : e[0];
+      return tarjeta({ color: s.iniciativa, numero: s._n, etiqueta: (ini[s.iniciativa] || {}).nombre, chip: [como, e[1]], titulo: s.titulo, texto: s.que,
+        paraQuien: s.paraQuien, como: como + '.', preguntas: s.preguntas, preguntaTexto: s.preguntaTexto });
+    }
+    function carril(t, pasos) {
+      // t: el tema (o null para lo que no tiene tema); pasos: los de la línea que le tocan.
+      var c = nodo('div', 'cr-carril');
+      var cab = nodo('div', 'cr-cabeza');
+      var arriba = nodo('div', 'cr-cabeza-1');
+      if (t && t.prioridad && (t.estado === 'en-curso' || t.estado === 'propuesta')) arriba.appendChild(nodo('span', 'cr-prio', String(t.prioridad)));
+      arriba.appendChild(nodo('h3', null, t ? t.nombre : 'Fuera de los temas'));
+      cab.appendChild(arriba);
+      if (t) { var e = EST_TEMA[t.estado] || ['', 's-idle']; cab.appendChild(nodo('span', 'chip ' + e[1], e[0])); }
+      if (t && t.sigue && pasos.length) { var sg = nodo('p', 'cr-sig'); sg.appendChild(nodo('b', null, 'Lo siguiente: ')); sg.appendChild(document.createTextNode(t.sigue)); cab.appendChild(sg); }
+      else if (t && t.resultado) cab.appendChild(nodo('p', 'cr-sig', t.resultado));
+      c.appendChild(cab);
+      var pista = nodo('div', 'cr-pista'); pista.setAttribute('role', 'list');
+      pista.setAttribute('aria-label', 'Lo que falta resolver' + (t ? ' en ' + t.nombre : ''));
+      var tarjetas = [], nombradas = {};
+      pasos.forEach(function (s) { tarjetas.push(deSigue(s)); (s.preguntas || []).forEach(function (n) { nombradas[n] = true; }); });
+      if (!pasos.length && t && t.sigue) tarjetas.push(tarjeta({ etiqueta: 'Lo siguiente', titulo: t.sigue }));
+      if (t && t.teToca) tarjetas.push(tarjeta({ etiqueta: 'Lo que te toca', chip: ['Te toca a ti', 's-warn'], titulo: t.teToca }));
+      var sueltas = t ? (t.decisiones || []).filter(function (n) { return pq[n] && !nombradas[n]; }) : [];
+      if (sueltas.length) tarjetas.push(tarjeta({ etiqueta: 'Por decidir', titulo: sueltas.length === 1 ? '1 pregunta para ti' : sueltas.length + ' preguntas para ti',
+        texto: 'Tócala para ver ' + (sueltas.length === 1 ? 'la pregunta.' : 'las preguntas.'), chip: ['Te toca a ti', 's-warn'], preguntas: sueltas, soloPreguntas: true }));
+      if (!tarjetas.length) tarjetas.push(tarjeta({ titulo: 'Nada pendiente en este tema.' }));
+      tarjetas.forEach(function (k, i) {
+        if (i) { var fl = nodo('span', 'cr-flecha', '→'); fl.setAttribute('aria-hidden', 'true'); pista.appendChild(fl); }
+        k.setAttribute('role', 'listitem'); pista.appendChild(k);
+      });
+      c.appendChild(pista);
+      return c;
+    }
+    function seccion(titulo, sub, cls) {
+      var s = nodo('section', 'cr-sec' + (cls ? ' ' + cls : ''));
+      s.appendChild(nodo('h2', 'cr-h', titulo));
+      if (sub) s.appendChild(nodo('p', 'cr-sub', sub));
+      return s;
+    }
+    var porPrio = function (a, b) { return (a.prioridad || 99) - (b.prioridad || 99); };
+    var colocados = {};
+    function pasosDe(t) { var p = linea.sigue.filter(function (s) { return s.tema === t.n; }); p.forEach(function (s) { colocados[s._n] = true; }); return p; }
+
+    var raiz = nodo('div', 'ln-wrap cr-wrap');
     var top = nodo('div', 'ln-top');
-    var datos = paneles.resumen.querySelector('code.language-temas'), donde = '';
-    try { donde = JSON.parse(datos.textContent).dondeVamos || ''; } catch (e) {}
-    if (donde) top.appendChild(nodo('p', 'ln-donde', donde));
+    if (bloqueTemas.dondeVamos) top.appendChild(nodo('p', 'ln-donde', bloqueTemas.dondeVamos));
     var est = nodo('div', 'ln-estado');
     var b1 = nodo('span'); b1.innerHTML = 'Hoy es <b>' + fecha(linea.hoy) + '</b>'; est.appendChild(b1);
     var b2 = nodo('span'); b2.appendChild(document.createTextNode('Producción corre ')); b2.appendChild(nodo('code', 'sha', linea.produccion)); est.appendChild(b2);
-    est.appendChild(nodo('span', null, linea.hecho.length + ' hitos hechos · ' + linea.sigue.length + ' que siguen'));
+    var enCurso = temas.filter(function (t) { return t.estado === 'en-curso'; }).sort(porPrio);
+    var propuesta = temas.filter(function (t) { return t.estado === 'propuesta'; }).sort(porPrio);
+    est.appendChild(nodo('span', null, enCurso.length + ' temas en ejecución · ' + propuesta.length + ' por arrancar'));
     top.appendChild(est);
-    var acc = nodo('div', 'ln-acciones');
-    var irHoy = nodo('button', 'ln-btn prim', 'Ir a hoy'); irHoy.type = 'button'; acc.appendChild(irHoy);
-    var todo = nodo('button', 'ln-btn', 'Abrir todo'); todo.type = 'button'; acc.appendChild(todo);
-    top.appendChild(acc);
-    var fil = nodo('div', 'ln-filtros'); fil.setAttribute('role', 'group'); fil.setAttribute('aria-label', 'Ver una iniciativa');
-    top.appendChild(fil);
     raiz.appendChild(top);
-    // Lo hecho, agrupado por mes.
-    var hecho = nodo('ol', 'ln'), mesActual = '', mesLi = null, porMes = {};
+
+    var ejec = seccion('En ejecución', 'Un carril por tema, en orden de prioridad. De izquierda a derecha, lo que falta resolver. Toca una tarjeta para ver el detalle.');
+    ejec.id = 'hoy';
+    enCurso.forEach(function (t) { ejec.appendChild(carril(t, pasosDe(t))); });
+    raiz.appendChild(ejec);
+    if (propuesta.length) {
+      var viene = seccion('Lo que viene', 'Temas que todavía no arrancan, sin fechas: cada uno se hace cuando lo pones a correr.', 'tenue');
+      propuesta.forEach(function (t) { viene.appendChild(carril(t, pasosDe(t))); });
+      raiz.appendChild(viene);
+    }
+    // Lo pendiente de la línea que cae en un tema que ya funciona, o en ninguno: es trabajo por hacer, no se esconde.
+    var resto = linea.sigue.filter(function (s) { return !colocados[s._n]; });
+    if (resto.length) {
+      var tamb = seccion('También pendiente', 'Lo que falta en temas que ya funcionan.', 'tenue');
+      var claves = [];
+      resto.forEach(function (s) { var k = s.tema == null ? 'x' : s.tema; if (claves.indexOf(k) < 0) claves.push(k); });
+      claves.forEach(function (k) {
+        var t = k === 'x' ? null : temas.filter(function (x) { return x.n === k; })[0] || null;
+        tamb.appendChild(carril(t, resto.filter(function (s) { return (s.tema == null ? 'x' : s.tema) === k; })));
+      });
+      raiz.appendChild(tamb);
+    }
+
+    // El desplegable de lo que ya pasó, cerrado por defecto (abierto o cerrado se recuerda en este navegador).
+    var pasado = nodo('details', 'ln-pasado');
+    var sm = nodo('summary');
+    sm.appendChild(nodo('span', 'ln-pasado-t', 'Lo que ya pasó'));
+    var primero = linea.hecho[0], ultimo = linea.hecho[linea.hecho.length - 1];
+    sm.appendChild(nodo('span', 'ln-pasado-n', linea.hecho.length + ' hitos' + (primero ? ', del ' + fecha(primero.fecha) + ' ' + primero.fecha.slice(0, 4) + ' al ' + fecha(ultimo.hasta || ultimo.fecha) : '') + ', y los temas que ya funcionan'));
+    pasado.appendChild(sm);
+    var cuerpo = nodo('div', 'ln-pasado-c');
+    var acc = nodo('div', 'ln-acciones');
+    var todo = nodo('button', 'ln-btn', 'Abrir todo'); todo.type = 'button'; acc.appendChild(todo);
+    cuerpo.appendChild(acc);
+    var fil = nodo('div', 'ln-filtros'); fil.setAttribute('role', 'group'); fil.setAttribute('aria-label', 'Ver una iniciativa');
+    cuerpo.appendChild(fil);
+    var hecho = nodo('ol', 'ln'), mesActual = '', porMes = {};
     linea.hecho.forEach(function (h) {
       var m = h.fecha.slice(0, 7);
       if (m !== mesActual) {
-        mesActual = m; mesLi = nodo('li', 'ln-fila ln-mes'); mesLi.setAttribute('data-mes', m);
+        mesActual = m; var mesLi = nodo('li', 'ln-fila ln-mes'); mesLi.setAttribute('data-mes', m);
         mesLi.appendChild(nodo('div')); var pp = nodo('div', 'ln-p'); pp.setAttribute('aria-hidden', 'true'); mesLi.appendChild(pp);
         var h3 = nodo('h3', null, MES_LARGO[Number(m.slice(5)) - 1] + ' ' + m.slice(0, 4)); h3.appendChild(nodo('span')); mesLi.appendChild(h3);
         hecho.appendChild(mesLi); porMes[m] = mesLi;
       }
-      var li = item(h, false); li.setAttribute('data-mes', m); hecho.appendChild(li);
+      var li = item(h); li.setAttribute('data-mes', m); hecho.appendChild(li);
     });
-    raiz.appendChild(hecho);
-    // Hoy: donde se juntan los dos tramos.
-    var hoy = nodo('div', 'ln-fila ln-hoy'); hoy.id = 'hoy';
-    hoy.appendChild(nodo('div', 'ln-f', 'Hoy')); var ph = nodo('div', 'ln-p'); ph.setAttribute('aria-hidden', 'true'); hoy.appendChild(ph);
+    cuerpo.appendChild(hecho);
+    var hoyM = nodo('div', 'ln-fila ln-hoy');
+    hoyM.appendChild(nodo('div', 'ln-f', 'Hoy')); var ph = nodo('div', 'ln-p'); ph.setAttribute('aria-hidden', 'true'); hoyM.appendChild(ph);
     var hc = nodo('div', 'ln-hoy-caja');
     hc.appendChild(nodo('strong', null, fecha(linea.hoy)));
     var pp1 = nodo('p'); pp1.appendChild(document.createTextNode('Producción corre ')); pp1.appendChild(nodo('code', 'sha', linea.produccion));
-    pp1.appendChild(document.createTextNode(': todo lo de arriba está en producción, salvo lo marcado como apagado o plan.')); hc.appendChild(pp1);
-    hc.appendChild(nodo('p', null, 'Abajo, lo que sigue: en orden de prioridad y sin fechas. Cada cosa se hace cuando la pones a correr.'));
-    hoy.appendChild(hc); raiz.appendChild(hoy);
-    // Lo que sigue, numerado por prioridad.
-    var sigue = nodo('ol', 'ln futuro');
-    linea.sigue.forEach(function (s, i) { sigue.appendChild(item(s, true, i + 1)); });
-    raiz.appendChild(sigue);
+    pp1.appendChild(document.createTextNode(': todo lo de arriba está en producción, salvo lo marcado como apagado o plan. Lo que sigue está en «En ejecución».')); hc.appendChild(pp1);
+    hoyM.appendChild(hc); cuerpo.appendChild(hoyM);
+    var ya = temas.filter(function (t) { return t.estado === 'funciona' || t.estado === 'terminado'; });
+    if (ya.length) {
+      cuerpo.appendChild(nodo('h3', 'cr-h3', 'Los temas que ya funcionan'));
+      var lista = nodo('div', 'rs-lista');
+      ya.forEach(function (t) {
+        var f = nodo('div', 'rs-fila');
+        f.appendChild(nodo('div', 'rs-nom', t.nombre));
+        var falta = nodo('div', 'rs-falta');
+        if (t.sigue) { falta.appendChild(nodo('i', null, 'Falta: ')); falta.appendChild(document.createTextNode(t.sigue)); } else falta.textContent = 'Nada pendiente.';
+        f.appendChild(falta);
+        var e = EST_TEMA[t.estado] || ['', 's-ok'];
+        var der = nodo('div', 'rs-der'); der.appendChild(nodo('span', 'chip ' + e[1], e[0])); f.appendChild(der);
+        lista.appendChild(f);
+      });
+      cuerpo.appendChild(lista);
+    }
+    pasado.appendChild(cuerpo);
+    try { pasado.open = localStorage.getItem('roadmap-pasado') === '1'; } catch (e) {}
+    pasado.addEventListener('toggle', function () { try { localStorage.setItem('roadmap-pasado', pasado.open ? '1' : '0'); } catch (e) {} lineaRevisar(); });
+    raiz.appendChild(pasado);
     paneles.linea.appendChild(raiz);
 
-    // El filtro: una iniciativa a la vez; otro clic vuelve a todas. Se recuerda en este navegador.
+    // El filtro de lo que ya pasó: una iniciativa a la vez; otro clic vuelve a todas. Se recuerda en este navegador.
     var cuenta = {}; items.forEach(function (li) { var k = li.getAttribute('data-ini'); cuenta[k] = (cuenta[k] || 0) + 1; });
-    var botones = [];
+    var botones = [], actualFiltro = '';
     function boton(id, nombre, n) {
       var b = nodo('button', 'ln-fil'); b.type = 'button'; b.setAttribute('aria-pressed', 'false');
       if (id) { b.style.setProperty('--c', 'var(--ini-' + id + ')'); b.appendChild(nodo('i')); }
@@ -746,7 +931,6 @@ main { max-width: 1040px; margin: 0 auto; padding-block: 32px 64px;
       b.addEventListener('click', function () { filtrar(actualFiltro === id || !id ? '' : id, true); });
       botones.push({ id: id, b: b }); fil.appendChild(b);
     }
-    var actualFiltro = '';
     boton('', 'Todas', items.length);
     linea.iniciativas.forEach(function (i) { if (cuenta[i.id]) boton(i.id, i.nombre, cuenta[i.id]); });
     function filtrar(id, guardar) {
@@ -757,8 +941,6 @@ main { max-width: 1040px; margin: 0 auto; padding-block: 32px 64px;
         var n = hecho.querySelectorAll('.ln-item[data-mes="' + m + '"]:not([hidden])').length;
         porMes[m].hidden = n === 0; porMes[m].querySelector('h3 span').textContent = n === 1 ? '1 hito' : n + ' hitos';
       });
-      var vacio = sigue.querySelector('.ln-vacio'); if (vacio) vacio.remove();
-      if (!sigue.querySelector('.ln-item:not([hidden])')) { var v = nodo('li', 'ln-fila ln-vacio'); v.appendChild(nodo('div')); v.appendChild(nodo('div')); v.appendChild(nodo('div', null, 'Nada pendiente en esta iniciativa.')); sigue.appendChild(v); }
       if (guardar) { try { localStorage.setItem('roadmap-filtro', id); } catch (e) {} }
     }
     var guardado = ''; try { guardado = localStorage.getItem('roadmap-filtro') || ''; } catch (e) {}
@@ -769,21 +951,20 @@ main { max-width: 1040px; margin: 0 auto; padding-block: 32px 64px;
       todo.textContent = abrir ? 'Cerrar todo' : 'Abrir todo';
     });
 
-    // «Ir a hoy»: el botón fijo aparece en la línea cuando «Hoy» no está a la vista, con la flecha hacia donde está.
+    // «Ir a hoy» lleva a «En ejecución»: el botón fijo aparece cuando esa sección no está a la vista.
     var cta = document.getElementById('ir-hoy');
     var suave = !(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
     function irAHoy() {
       if (paneles.linea.hidden) elegir('linea', true);
-      hoy.scrollIntoView({ block: 'center', behavior: suave ? 'smooth' : 'auto' });
+      ejec.scrollIntoView({ block: 'start', behavior: suave ? 'smooth' : 'auto' });
     }
-    irHoy.addEventListener('click', irAHoy); cta.addEventListener('click', irAHoy);
+    cta.addEventListener('click', irAHoy);
     var pend = false;
     function revisar() {
       pend = false;
       if (paneles.linea.hidden) { cta.hidden = true; return; }
-      var r = hoy.getBoundingClientRect(), alto = window.innerHeight || document.documentElement.clientHeight;
-      var visible = r.bottom > 0 && r.top < alto;
-      cta.hidden = visible;
+      var r = ejec.getBoundingClientRect(), alto = window.innerHeight || document.documentElement.clientHeight;
+      cta.hidden = r.bottom > 0 && r.top < alto;
       cta.classList.toggle('arriba', r.bottom <= 0);
     }
     function pedir() { if (!pend) { pend = true; requestAnimationFrame(revisar); } }
