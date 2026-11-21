@@ -303,6 +303,59 @@ main { max-width: 1040px; margin: 0 auto; padding-block: 32px 64px;
   .fl-paso { width: 150px; }
   .fl-dec { width: 180px; }
 }
+/* El resumen ejecutivo (21 nov): «Hoy» con 3 o 4 líneas, y una fila por iniciativa en cuatro partes (dónde estamos,
+   lo hecho, lo que sigue, lo que te toca). Una fila con ramas se abre en su flujo. Todo lo demás, en el anexo plegado. */
+.ej { display: grid; gap: 18px; margin: 18px 0 8px; }
+.ej-hoy { display: grid; gap: 10px; padding: 16px 18px; background: var(--brand-bg); border: 1px solid var(--brand-line); border-radius: 14px; scroll-margin-top: calc(env(safe-area-inset-top, 0px) + 8px); }
+.ej-hoy-1 { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; }
+.ej-hoy-et { font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--brand-ink-2); }
+.ej-hoy-f { margin: 0; font-size: 22px; font-weight: 700; color: var(--fg); }
+.ej-hoy-sha { font-size: 13px; color: var(--fg-muted); }
+.ej-arriba { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; }
+.ej-arriba li { font-size: 14.5px; color: var(--fg-2); max-width: 90ch; }
+.ej-arriba b { color: var(--fg); font-weight: 650; }
+.ej-lista { display: grid; }
+.ej-fila { padding: 16px 0 18px; border-top: 1px solid var(--line); display: grid; gap: 12px; }
+.ej-fila:last-child { border-bottom: 1px solid var(--line); }
+.ej-cab { display: grid; gap: 4px; width: 100%; font: inherit; text-align: left; color: inherit; background: none; border: 0; padding: 0; border-radius: 8px; }
+button.ej-cab { cursor: pointer; }
+button.ej-cab:focus-visible, .ej-ver:focus-visible { outline: 2px solid var(--brand); outline-offset: 3px; }
+.ej-nom { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
+.ej-dot { width: 11px; height: 11px; border-radius: 50%; background: var(--c, var(--fg-muted)); flex: none; }
+.ej-nom-t { font-size: 18px; font-weight: 700; color: var(--fg); }
+button.ej-cab .ej-nom-t::after { content: "\25B8"; display: inline-block; margin-left: 8px; font-size: 12px; color: var(--fg-muted); transition: transform .15s; vertical-align: 2px; }
+.ej-fila.abierta button.ej-cab .ej-nom-t::after { transform: rotate(90deg); }
+.ej-donde { font-size: 14.5px; color: var(--fg-2); padding-left: 21px; }
+.ej-cuerpo { display: grid; grid-template-columns: 1.25fr 1fr .95fr; gap: 14px 24px; padding-left: 21px; }
+.ej-col { min-width: 0; display: grid; align-content: start; gap: 6px; }
+.ej-col h4 { margin: 0; font-size: 11.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--fg-muted); }
+.ej-col ul, .ej-col ol { margin: 0; padding-left: 18px; display: grid; gap: 5px; }
+.ej-col li { font-size: 14px; color: var(--fg-2); margin: 0; }
+.ej-col.sigue li { color: var(--fg); }
+.ej-toca { margin: 0; font-size: 14px; color: var(--warn-ink); font-weight: 600; }
+.ej-col ul.ej-pq { list-style: none; padding: 0; }
+.ej-pq li { font-size: 13px; padding: 5px 8px; background: var(--warn-bg); border: 1px solid var(--warn-line); border-radius: 8px; color: var(--fg); cursor: help; }
+.ej-pq b { color: var(--warn-ink); font-variant-numeric: tabular-nums; }
+.ej-mas, .ej-nada { margin: 0; font-size: 12.5px; color: var(--fg-muted); }
+.ej-ver { justify-self: start; margin-top: 4px; font: inherit; font-size: 13px; font-weight: 650; color: var(--brand-ink-2); background: none; border: 1px solid var(--brand-line); border-radius: 999px; padding: 4px 12px; cursor: pointer; }
+.ej-flujo { padding-left: 21px; min-width: 0; }
+/* El flujo es más ancho que la pantalla: se desplaza dentro de su caja, sin ensanchar la fila ni la página. */
+.ej, .ej-lista, .ej-fila { grid-template-columns: minmax(0, 1fr); min-width: 0; }
+.ej-flujo[hidden] { display: none; }
+.fl-meta { font-size: 13.5px; font-weight: 650; color: var(--fg); }
+.anexo { margin-top: 26px; border-top: 2px solid var(--line); }
+.anexo > summary { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; padding: 16px 0; cursor: pointer; list-style: none; }
+.anexo > summary::-webkit-details-marker { display: none; }
+.anexo > summary::before { content: "\25B8"; color: var(--fg-muted); font-size: 12px; transition: transform .15s; }
+.anexo[open] > summary::before { transform: rotate(90deg); }
+.anexo > summary:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+.anexo-t { font-size: 13px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; color: var(--fg); }
+.anexo-n { font-size: 13px; color: var(--fg-muted); }
+.anexo .tabs { margin-top: 0; }
+@media (max-width: 760px) {
+  .ej-cuerpo { grid-template-columns: 1fr; padding-left: 0; }
+  .ej-donde, .ej-flujo { padding-left: 0; }
+}
 .ln-cta span { display: inline-block; transition: transform .2s; }
 .ln-cta.arriba span { transform: rotate(180deg); }
 @media (prefers-reduced-motion: no-preference) { .ln-hoy .ln-p::after { animation: ln-late 2.4s ease-out infinite; } }
@@ -319,8 +372,12 @@ main { max-width: 1040px; margin: 0 auto; padding-block: 32px 64px;
 
 <main>
   <div class="head"><h1>Roadmap de Nexus</h1><span class="meta" id="meta"></span></div>
-  <nav class="tabs" id="tabs" role="tablist"></nav>
-  <article id="doc"></article>
+  <section class="ej" id="ejecutivo" aria-label="Resumen ejecutivo"></section>
+  <details class="anexo" id="anexo">
+    <summary><span class="anexo-t">Anexo: el detalle</span><span class="anexo-n">La línea de tiempo cambio a cambio, las tarjetas, las preguntas, las pruebas y lo que configuras tú.</span></summary>
+    <nav class="tabs" id="tabs" role="tablist"></nav>
+    <article id="doc"></article>
+  </details>
 </main>
 <button class="tema-btn" id="tema-btn" type="button">Modo oscuro</button>
 <script>
@@ -450,7 +507,9 @@ main { max-width: 1040px; margin: 0 auto; padding-block: 32px 64px;
   });
 
   // Siete pestañas: el resumen, lo que falta, las pruebas para personas, las pruebas con IA, lo que le pides al equipo, lo hecho y cómo funciona Nexus. Cada «##» va a la suya.
+  // El resumen ejecutivo no es una pestaña: se pinta arriba, fuera del anexo; su sección del .md va a un panel oculto.
   var PESTANAS = [
+    { id: 'ejecutivo', nombre: 'Resumen ejecutivo', h2: /^\s*Resumen ejecutivo$/i, oculta: true },
     { id: 'linea', nombre: 'Línea de tiempo', h2: /^\s*Línea de tiempo$/i },
     { id: 'resumen', nombre: 'Resumen', h2: /^\s*Resumen$/i },
     { id: 'roadmap', nombre: 'Roadmap' },
@@ -527,6 +586,7 @@ main { max-width: 1040px; margin: 0 auto; padding-block: 32px 64px;
     lineaRevisar();
   }
   PESTANAS.forEach(function (p) {
+    if (p.oculta) return;
     var b = document.createElement('button');
     b.id = 'tab-' + p.id; b.type = 'button'; b.setAttribute('role', 'tab');
     b.textContent = p.nombre;
@@ -794,9 +854,13 @@ main { max-width: 1040px; margin: 0 auto; padding-block: 32px 64px;
       une.style.gridRow = '1 / span ' + n; une.style.gridColumn = String(3 + largo);
       une.appendChild(nodo('span', 'fl-pto'));
       var ut = nodo('span', 'fl-une-t'); ut.appendChild(nodo('span', 'fl-est', 'Se une en'));
-      var ir = nodo('button', 'fl-ir', s.seUneEn); ir.type = 'button';
-      ir.addEventListener('click', function () { var d = hilo[s.seUneEn]; if (d) { d._abrir(true); d.scrollIntoView({ block: 'center', behavior: suave ? 'smooth' : 'auto' }); } });
-      ut.appendChild(ir); une.appendChild(ut);
+      // Si «se une en» nombra un punto del hilo, lleva a él; si no (el ejecutivo), es solo el nombre de la meta.
+      if (hilo[s.seUneEn]) {
+        var ir = nodo('button', 'fl-ir', s.seUneEn); ir.type = 'button';
+        ir.addEventListener('click', function () { var d = hilo[s.seUneEn]; if (d) { d._abrir(true); d.scrollIntoView({ block: 'center', behavior: suave ? 'smooth' : 'auto' }); } });
+        ut.appendChild(ir);
+      } else ut.appendChild(nodo('span', 'fl-meta', s.seUneEn));
+      une.appendChild(ut);
       lienzo.appendChild(une);
       var svg = document.createElementNS(SVG, 'svg'); svg.setAttribute('class', 'fl-svg'); svg.setAttribute('aria-hidden', 'true');
       lienzo.insertBefore(svg, lienzo.firstChild);
@@ -938,7 +1002,7 @@ main { max-width: 1040px; margin: 0 auto; padding-block: 32px 64px;
     raiz.appendChild(pasado);
 
     // Hoy: donde lo hecho se junta con lo que sigue.
-    var hoy = nodo('div', 'ln-fila ln-hoy'); hoy.id = 'hoy';
+    var hoy = nodo('div', 'ln-fila ln-hoy'); hoy.id = 'hoy-linea';
     hoy.appendChild(nodo('div', 'ln-f', 'Hoy')); var ph = nodo('div', 'ln-p'); ph.setAttribute('aria-hidden', 'true'); hoy.appendChild(ph);
     var hc = nodo('div', 'ln-hoy-caja');
     hc.appendChild(nodo('strong', null, fecha(linea.hoy)));
@@ -982,19 +1046,94 @@ main { max-width: 1040px; margin: 0 auto; padding-block: 32px 64px;
       todo.textContent = abrir ? 'Cerrar todo' : 'Abrir todo';
     });
 
-    // «Ir a hoy»: el botón fijo aparece cuando «Hoy» no está a la vista, con la flecha hacia donde está.
+    // ── El resumen ejecutivo (21 nov, pedido de Elías: «muy ejecutivo… agrupar mucho los cambios relacionados»). Arriba,
+    //    qué corre, qué está en curso y qué te espera; después, una fila por iniciativa con dónde estamos, lo hecho, lo
+    //    que sigue y lo que te toca. Una iniciativa con ramas se abre en su flujo. ──
+    var ejEl = document.getElementById('ejecutivo');
+    (function pintarEjecutivo() {
+      var code = paneles.ejecutivo && paneles.ejecutivo.querySelector('code.language-ejecutivo');
+      if (!code || !ejEl) return;
+      var ej; try { ej = JSON.parse(code.textContent); } catch (e) { return; }
+      var EST = { 'en-curso': ['En curso', 's-info'], 'te-espera': ['Te espera', 's-warn'], 'funciona': ['Funciona', 's-ok'], 'propuesta': ['Por arrancar', 's-idle'] };
+      var meta = document.getElementById('meta'); if (meta && ej.corte) meta.textContent = 'Al ' + fecha(ej.corte) + ' ' + ej.corte.slice(0, 4);
+      var hoyEj = nodo('div', 'ej-hoy'); hoyEj.id = 'hoy';
+      var t1 = nodo('div', 'ej-hoy-1');
+      t1.appendChild(nodo('span', 'ej-hoy-et', 'Hoy'));
+      t1.appendChild(nodo('h2', 'ej-hoy-f', fecha(ej.corte)));
+      var sp = nodo('span', 'ej-hoy-sha'); sp.appendChild(document.createTextNode('Producción corre ')); sp.appendChild(nodo('code', 'sha', ej.produccion)); t1.appendChild(sp);
+      hoyEj.appendChild(t1);
+      var ul = nodo('ul', 'ej-arriba');
+      (ej.arriba || []).forEach(function (l) {
+        var li = nodo('li'); var m = l.match(/^([^:]{2,40}):\s*(.*)$/);
+        if (m) { li.appendChild(nodo('b', null, m[1] + ': ')); li.appendChild(document.createTextNode(m[2])); } else li.textContent = l;
+        ul.appendChild(li);
+      });
+      hoyEj.appendChild(ul);
+      ejEl.appendChild(hoyEj);
+
+      var lista = nodo('div', 'ej-lista');
+      ej.iniciativas.forEach(function (i) {
+        var fila = nodo('article', 'ej-fila');
+        fila.style.setProperty('--c', 'var(--ini-' + i.color + ')');
+        var conRamas = i.ramas && i.ramas.length;
+        var cab = nodo(conRamas ? 'button' : 'div', 'ej-cab');
+        var h = nodo('span', 'ej-nom'); h.appendChild(nodo('span', 'ej-dot')); h.appendChild(nodo('span', 'ej-nom-t', i.nombre));
+        var e = EST[i.estado] || ['', 's-idle']; h.appendChild(nodo('span', 'chip ' + e[1], e[0]));
+        cab.appendChild(h);
+        cab.appendChild(nodo('span', 'ej-donde', i.donde));
+        fila.appendChild(cab);
+        var cuerpo = nodo('div', 'ej-cuerpo');
+        function col(titulo, cls) { var c = nodo('div', 'ej-col ' + cls); c.appendChild(nodo('h4', null, titulo)); cuerpo.appendChild(c); return c; }
+        var c1 = col('Lo hecho', 'hecho'), u1 = nodo('ul');
+        (i.hecho || []).forEach(function (x) { u1.appendChild(nodo('li', null, x)); }); c1.appendChild(u1);
+        var c2 = col('Lo que sigue', 'sigue'), u2 = nodo('ol');
+        (i.sigue || []).forEach(function (x) { u2.appendChild(nodo('li', null, x)); }); c2.appendChild(u2);
+        var c3 = col('Lo que te toca', 'toca');
+        var abiertas = (i.preguntas || []).filter(function (n) { return pq[n]; });
+        if (i.teToca) c3.appendChild(nodo('p', 'ej-toca', i.teToca));
+        if (abiertas.length) {
+          var up = nodo('ul', 'ej-pq');
+          abiertas.slice(0, 3).forEach(function (n) {
+            var corto = (pq[n].match(/^\*\*(.+?)\*\*/) || [null, pq[n]])[1].replace(/[:.]\s*$/, '');
+            var li = nodo('li'); li.title = textoPlano(pq[n]);
+            li.appendChild(nodo('b', null, n + ' · ')); li.appendChild(document.createTextNode(textoPlano(corto)));
+            up.appendChild(li);
+          });
+          c3.appendChild(up);
+          if (abiertas.length > 3) c3.appendChild(nodo('p', 'ej-mas', 'Y ' + (abiertas.length - 3) + ' más, en el anexo › Roadmap › «Lo que decides tú».'));
+        }
+        if (!i.teToca && !abiertas.length) c3.appendChild(nodo('p', 'ej-nada', 'Nada por ahora.'));
+        fila.appendChild(cuerpo);
+        if (conRamas) {
+          var fl = flujo({ titulo: i.nombre, ramas: i.ramas, seUneEn: i.seUneEn });
+          var caja = nodo('div', 'ej-flujo'); caja.id = 'ej-flujo-' + i.id; caja.hidden = true; caja.appendChild(fl.el);
+          fila.appendChild(caja);
+          var ver = nodo('button', 'ej-ver', 'Ver sus ramas'); ver.type = 'button';
+          c2.appendChild(ver);
+          cab.type = 'button'; cab.setAttribute('aria-expanded', 'false'); cab.setAttribute('aria-controls', caja.id);
+          var abrir = function () {
+            var si = caja.hidden; caja.hidden = !si; fila.classList.toggle('abierta', si);
+            cab.setAttribute('aria-expanded', String(si)); ver.textContent = si ? 'Cerrar sus ramas' : 'Ver sus ramas';
+            if (si) requestAnimationFrame(fl.dibujar);
+          };
+          cab.addEventListener('click', abrir); ver.addEventListener('click', abrir);
+        }
+        lista.appendChild(fila);
+      });
+      ejEl.appendChild(lista);
+    })();
+
+    // «Ir a hoy» lleva arriba, al «Hoy» del resumen ejecutivo; el botón fijo aparece cuando «Hoy» no está a la vista.
     var cta = document.getElementById('ir-hoy');
-    // «Hoy» queda arriba, pegado al borde superior, y de ahí para abajo lo que sigue (20 nov, pedido de Elías).
+    var objetivo = document.getElementById('hoy') || hoy;
     function irAHoy(alAbrir) {
-      if (paneles.linea.hidden) elegir('linea', true);
-      hoy.scrollIntoView({ block: 'start', behavior: suave && alAbrir !== true ? 'smooth' : 'auto' });
+      objetivo.scrollIntoView({ block: 'start', behavior: suave && alAbrir !== true ? 'smooth' : 'auto' });
     }
     cta.addEventListener('click', irAHoy);
     var pend = false;
     function revisar() {
       pend = false;
-      if (paneles.linea.hidden) { cta.hidden = true; return; }
-      var r = hoy.getBoundingClientRect(), alto = window.innerHeight || document.documentElement.clientHeight;
+      var r = objetivo.getBoundingClientRect(), alto = window.innerHeight || document.documentElement.clientHeight;
       cta.hidden = r.bottom > 0 && r.top < alto;
       cta.classList.toggle('arriba', r.bottom <= 0);
     }
@@ -1004,11 +1143,14 @@ main { max-width: 1040px; margin: 0 auto; padding-block: 32px 64px;
     lineaIrAHoy = irAHoy;
   }
 
+  // Al abrir: el resumen ejecutivo arriba y el anexo cerrado. Con la dirección de una pestaña (#roadmap, #validar…), el
+  // anexo se abre en esa pestaña.
+  var anexo = document.getElementById('anexo');
   var inicial = (location.hash || '').slice(1);
-  var pestana = PESTANAS.some(function (p) { return p.id === inicial; }) ? inicial : 'linea';
-  elegir(pestana, false);
-  // Al abrir en la línea de tiempo, la vista arranca en «Hoy»: arriba, y de hoy para abajo.
-  if (pestana === 'linea' && lineaIrAHoy) requestAnimationFrame(function () { lineaIrAHoy(true); lineaRevisar(); });
+  var pedida = PESTANAS.filter(function (p) { return p.id === inicial && !p.oculta; })[0];
+  elegir(pedida ? pedida.id : 'linea', false);
+  if (pedida && anexo) { anexo.open = true; requestAnimationFrame(function () { anexo.scrollIntoView({ block: 'start' }); }); }
+  if (anexo) anexo.addEventListener('toggle', function () { lineaRevisar(); });
   lineaRevisar();
 })();
 </script>

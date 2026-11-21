@@ -2,6 +2,632 @@
 
 **Corte:** 2026-11-20
 
+## Resumen ejecutivo
+
+<!-- Lo primero que ve Elías (21 nov): una fila por iniciativa, con dónde estamos, lo hecho en 2 o 3 frases, hasta 3 cosas
+     que siguen y lo que le toca. Al abrir una iniciativa, sus ramas. Todo lo demás del roadmap es el anexo plegado.
+     Cómo se regenera: la skill regenerar-roadmap. -->
+```ejecutivo
+{
+ "corte": "2026-11-21",
+ "produccion": "fe01946c",
+ "arriba": [
+  "En producción desde el 21 nov: el titular del Resumen ya no se pierde al rehacerlo, los 5 Resúmenes de La escala están rehechos y publicados, y lo que el equipo cuenta de un cliente ya cambia sus entregables.",
+  "En curso: el chat de Nexus dentro de la preventa y el nuevo orden del Resumen, con lo que hicimos arriba y el problema después.",
+  "Te espera: tu prueba de la preventa con Centauro, el banco de preguntas de TI, cómo se unen las dos lógicas de casos de uso y los cuatro cambios de lo vendido en el cronograma."
+ ],
+ "iniciativas": [
+  {
+   "id": "preventa",
+   "nombre": "Preventa",
+   "color": "preventa",
+   "estado": "en-curso",
+   "donde": "La exploración guiada funciona en producción; falta tu prueba con Centauro para cerrarla.",
+   "hecho": [
+    "La preventa explora por equipo del cliente: Nexus propone el objetivo de cada sesión, arma la guía con lo que falta saber y analiza cómo se trabajó cada sesión, con citas.",
+    "Ya pide las cifras del negocio y del embudo, calcula cuánto pierde el cliente y deja las objeciones en el análisis.",
+    "Ninguna sesión se recorta: una transcripción larga entra entera y la sesión sin grabación se arregla en un paso."
+   ],
+   "sigue": [
+    "El chat de Nexus dentro de la preventa: pregunta, propone y responde sobre la cuenta.",
+    "Tu prueba con Centauro y medir cuánto tarda hoy la guía.",
+    "Probar Negocio, Embudo y la pérdida con una preventa real."
+   ],
+   "teToca": "Tu prueba de la preventa con Centauro.",
+   "preguntas": [
+    14,
+    17,
+    45
+   ],
+   "ramas": [
+    {
+     "titulo": "Cerrar la exploración",
+     "pasos": [
+      {
+       "texto": "Objetivo, guía y análisis de cada sesión",
+       "estado": "hecho"
+      },
+      {
+       "texto": "Tu prueba con Centauro",
+       "estado": "te-toca"
+      },
+      {
+       "texto": "Medir cuánto tarda hoy la guía",
+       "estado": "por-hacer"
+      }
+     ]
+    },
+    {
+     "titulo": "Las cifras del cliente",
+     "pasos": [
+      {
+       "texto": "Negocio, Embudo y cuánto pierde el cliente",
+       "estado": "hecho"
+      },
+      {
+       "texto": "Probarlo con una preventa real",
+       "estado": "por-hacer"
+      }
+     ]
+    },
+    {
+     "titulo": "El chat de Nexus",
+     "pasos": [
+      {
+       "texto": "Pregunta, propone y responde sobre la cuenta",
+       "estado": "en-curso"
+      }
+     ]
+    },
+    {
+     "titulo": "Lo que decides tú",
+     "pasos": [
+      {
+       "texto": "¿Dejamos «Por la web o un anuncio» como vía de llegada?",
+       "estado": "te-toca",
+       "pregunta": 45
+      },
+      {
+       "texto": "Pedirle a Andrés su banco de preguntas",
+       "estado": "te-toca",
+       "pregunta": 14
+      }
+     ]
+    }
+   ],
+   "seUneEn": "La propuesta con casos de uso"
+  },
+  {
+   "id": "escala",
+   "nombre": "La escala y el diagnóstico",
+   "color": "escala",
+   "estado": "en-curso",
+   "donde": "La escala corre con el área de TI y sus 5 Resúmenes rehechos y publicados; falta probarla con empresas de tres industrias.",
+   "hecho": [
+    "La escala ubica a cada empresa por equipo e industria, con un radar, un Resumen que el cliente ve y su historia en el tiempo.",
+    "El test del diagnóstico vive en Nexus, con su página de resultados en dinero y la escalera de niveles arriba.",
+    "El Resumen pone arriba el problema que más pesa, y su titular ya no se pierde al rehacerlo."
+   ],
+   "sigue": [
+    "El nuevo orden del Resumen: lo que hicimos arriba y el problema después.",
+    "Probar la escala con 5 a 8 empresas de tres industrias.",
+    "Tu revisión del test y el corte de la aplicación vieja."
+   ],
+   "teToca": "Aprobar el banco de preguntas de TI en Escala › Tests y crear «Telecomunicaciones» en HubSpot.",
+   "preguntas": [
+    18,
+    54,
+    55,
+    56,
+    57,
+    66,
+    67,
+    69,
+    71
+   ],
+   "ramas": [
+    {
+     "titulo": "El Resumen",
+     "pasos": [
+      {
+       "texto": "Titular con el problema que más pesa y 5 puntos clave",
+       "estado": "hecho"
+      },
+      {
+       "texto": "Los 5 Resúmenes, rehechos y publicados",
+       "estado": "hecho"
+      },
+      {
+       "texto": "Lo que hicimos arriba, el problema después",
+       "estado": "en-curso"
+      }
+     ]
+    },
+    {
+     "titulo": "El área de TI",
+     "pasos": [
+      {
+       "texto": "TI entra a La escala con su propio test",
+       "estado": "hecho"
+      },
+      {
+       "texto": "Aprobar su banco de preguntas",
+       "estado": "te-toca"
+      }
+     ]
+    },
+    {
+     "titulo": "Probar con empresas",
+     "pasos": [
+      {
+       "texto": "El umbral de tráfico de Insider",
+       "estado": "te-toca",
+       "pregunta": 18
+      },
+      {
+       "texto": "¿kölbi, Claro y CONTINEX pasan a Telecomunicaciones?",
+       "estado": "te-toca",
+       "pregunta": 56
+      },
+      {
+       "texto": "Probar con 5 a 8 empresas de tres industrias",
+       "estado": "por-hacer"
+      }
+     ]
+    },
+    {
+     "titulo": "El test público",
+     "pasos": [
+      {
+       "texto": "¿Qué formulario usa el test?",
+       "estado": "te-toca",
+       "pregunta": 54
+      },
+      {
+       "texto": "¿«No lo sé» cuenta como Deficiente?",
+       "estado": "te-toca",
+       "pregunta": 67
+      },
+      {
+       "texto": "Apagar la aplicación vieja",
+       "estado": "por-hacer"
+      }
+     ]
+    }
+   ],
+   "seUneEn": "La escala probada con 5 a 8 empresas"
+  },
+  {
+   "id": "casos",
+   "nombre": "Casos de uso",
+   "color": "casos",
+   "estado": "te-espera",
+   "donde": "Los casos tienen sus actividades y la preventa los arma con precio mínimo; falta unir las dos lógicas que los eligen.",
+   "hecho": [
+    "Cada caso de uso tiene sus actividades, con el reparto de horas, sacadas de una biblioteca de acciones.",
+    "En la preventa, Nexus sugiere los casos con su porqué y el vendedor los acepta y personaliza, con precio mínimo y argumento de valor."
+   ],
+   "sigue": [
+    "Decidir cómo se unen las dos lógicas: la de la preventa y la de los niveles.",
+    "Ajustar los casos con lo que salga de tu prueba.",
+    "La propuesta con casos de uso, que sugiere SmartLoop."
+   ],
+   "teToca": "Decidir cómo se unen las dos lógicas de casos de uso.",
+   "preguntas": [
+    11
+   ],
+   "ramas": [
+    {
+     "titulo": "Elegir los casos",
+     "pasos": [
+      {
+       "texto": "La preventa los cruza con lo que dijo el cliente",
+       "estado": "hecho"
+      },
+      {
+       "texto": "El resto de Nexus los elige por niveles",
+       "estado": "hecho"
+      },
+      {
+       "texto": "Decidir cómo se unen",
+       "estado": "te-toca"
+      }
+     ]
+    },
+    {
+     "titulo": "Lo que se cobra",
+     "pasos": [
+      {
+       "texto": "Precio mínimo desde las horas de las actividades",
+       "estado": "hecho"
+      },
+      {
+       "texto": "¿Las tareas de gestión se cobran o solo se miden?",
+       "estado": "te-toca",
+       "pregunta": 11
+      }
+     ]
+    },
+    {
+     "titulo": "La propuesta",
+     "pasos": [
+      {
+       "texto": "Definirla contigo en una línea",
+       "estado": "espera"
+      },
+      {
+       "texto": "Que se arme desde los casos y sugiera SmartLoop",
+       "estado": "por-hacer"
+      }
+     ]
+    }
+   ],
+   "seUneEn": "La propuesta con casos de uso"
+  },
+  {
+   "id": "cronograma",
+   "nombre": "Cronograma y entrega",
+   "color": "cronograma",
+   "estado": "en-curso",
+   "donde": "El cronograma sale de lo vendido y kölbi ya tiene su plan general; faltan los loops del handoff y cuatro decisiones tuyas.",
+   "hecho": [
+    "El cronograma lee lo vendido (semanas, fecha y horas), avisa claro cuando algo se pasa y saca las tareas de las actividades.",
+    "Una cuenta con varios proyectos tiene un plan general con sus loops y un enlace para el cliente; kölbi ya está cargado.",
+    "El Gantt se lee mejor: las semanas sin tareas van en una línea y el contexto arranca plegado."
+   ],
+   "sigue": [
+    "La sección de loops del handoff.",
+    "Los cuatro cambios de lo vendido: elegir la venta, «Fue un error mío», fases en paralelo y la línea del Kickoff."
+   ],
+   "teToca": "Decidir los cuatro cambios de lo vendido.",
+   "preguntas": [
+    22,
+    31
+   ],
+   "ramas": [
+    {
+     "titulo": "Lo vendido",
+     "pasos": [
+      {
+       "texto": "Semanas, fecha y horas acordadas",
+       "estado": "hecho"
+      },
+      {
+       "texto": "Elegir o escribir la venta, y que Nexus pregunte lo que falta",
+       "estado": "te-toca"
+      },
+      {
+       "texto": "«Fue un error mío, solo lo corrijo»",
+       "estado": "te-toca"
+      }
+     ]
+    },
+    {
+     "titulo": "El handoff",
+     "pasos": [
+      {
+       "texto": "Volver a cargar su sección de loops",
+       "estado": "por-hacer"
+      },
+      {
+       "texto": "Fases en paralelo en Desarrollo",
+       "estado": "te-toca"
+      },
+      {
+       "texto": "Una línea en el Kickoff: «sale del handoff»",
+       "estado": "te-toca"
+      }
+     ]
+    },
+    {
+     "titulo": "El plan general",
+     "pasos": [
+      {
+       "texto": "kölbi: tres proyectos y siete loops",
+       "estado": "hecho"
+      }
+     ]
+    },
+    {
+     "titulo": "Lo que ve el cliente",
+     "pasos": [
+      {
+       "texto": "¿Marcarla hecha a mano le quita «por validar»?",
+       "estado": "te-toca",
+       "pregunta": 31
+      },
+      {
+       "texto": "¿Revocamos el acceso de Wherex?",
+       "estado": "te-toca",
+       "pregunta": 22
+      }
+     ]
+    }
+   ],
+   "seUneEn": "Cada proyecto nuevo nace con su plan desde lo vendido"
+  },
+  {
+   "id": "cs",
+   "nombre": "Customer Success",
+   "color": "cs",
+   "estado": "en-curso",
+   "donde": "Diagnóstico, Planificación y SmartLoop funcionan; falta el primer ciclo real con cada CSE.",
+   "hecho": [
+    "El diagnóstico tiene dos plantillas y la Planificación sigue el Brief y el ciclo de vida de HubSpot.",
+    "SmartLoop se lleva como cualquier proyecto, y Éxito del cliente marca las cuentas prioritarias.",
+    "Los documentos admiten varias copias por tipo, se archivan, se ordenan y suman secciones del catálogo."
+   ],
+   "sigue": [
+    "El primer ciclo de SmartLoop con RC Inmobiliaria, Honda y kölbi.",
+    "Que Caroline pruebe la Planificación con el Brief.",
+    "El plan de adopción como primer tipo nuevo de documento."
+   ],
+   "teToca": "Tus respuestas sobre la copia oficial de un documento, cómo se comparte y su nombre en pantalla.",
+   "preguntas": [
+    32,
+    44,
+    58,
+    59,
+    60,
+    61,
+    62,
+    63,
+    64,
+    65
+   ],
+   "ramas": [
+    {
+     "titulo": "SmartLoop",
+     "pasos": [
+      {
+       "texto": "Se lleva como cualquier proyecto",
+       "estado": "hecho"
+      },
+      {
+       "texto": "Primer ciclo con RC Inmobiliaria, Honda y kölbi",
+       "estado": "por-hacer"
+      }
+     ]
+    },
+    {
+     "titulo": "La Planificación",
+     "pasos": [
+      {
+       "texto": "El Brief y el ciclo de vida de HubSpot",
+       "estado": "hecho"
+      },
+      {
+       "texto": "Que Caroline la pruebe",
+       "estado": "espera"
+      },
+      {
+       "texto": "¿Qué plantilla recomendamos?",
+       "estado": "te-toca",
+       "pregunta": 44
+      }
+     ]
+    },
+    {
+     "titulo": "Los documentos",
+     "pasos": [
+      {
+       "texto": "Varias copias, archivar y ordenar",
+       "estado": "hecho"
+      },
+      {
+       "texto": "¿Cuál es la copia oficial?",
+       "estado": "te-toca",
+       "pregunta": 58
+      },
+      {
+       "texto": "¿«Artefactos» o «documentos»?",
+       "estado": "te-toca",
+       "pregunta": 62
+      },
+      {
+       "texto": "El plan de adopción como tipo nuevo",
+       "estado": "por-hacer"
+      }
+     ]
+    }
+   ],
+   "seUneEn": "El primer ciclo cerrado con cada CSE"
+  },
+  {
+   "id": "contexto",
+   "nombre": "Contexto y chat de Nexus",
+   "color": "reuniones",
+   "estado": "en-curso",
+   "donde": "Lo que el equipo cuenta de un cliente ya cambia sus entregables, y el chat de Nexus está llegando a la preventa.",
+   "hecho": [
+    "Cada reunión se lee una vez y queda como memoria de la cuenta; Meet entra cada 10 minutos y las empresas con varias unidades se separan.",
+    "Lo que el equipo cuenta de un cliente cambia sus entregables: Nexus avisa el impacto con 10 segundos para deshacer y marca lo que el cliente aceptó.",
+    "Las novedades de cada reunión llegan por documento, con quién lo dijo y lo del cliente primero."
+   ],
+   "sigue": [
+    "El chat de Nexus en la preventa: pregunta, propone y responde sobre la cuenta.",
+    "El botón «Agregar contexto»: un solo lugar, con dictado, para lo que sabe el equipo.",
+    "Tus respuestas sobre las empresas que comparten dominio."
+   ],
+   "teToca": "Decidir Honda y FACO (la urgente) y las demás empresas que comparten dominio.",
+   "preguntas": [
+    34,
+    48,
+    49,
+    50,
+    51,
+    52,
+    53,
+    72
+   ],
+   "ramas": [
+    {
+     "titulo": "Contexto que cambia entregables",
+     "pasos": [
+      {
+       "texto": "Aviso de impacto con 10 segundos para deshacer",
+       "estado": "hecho"
+      },
+      {
+       "texto": "Lo que el cliente aceptó, marcado",
+       "estado": "hecho"
+      },
+      {
+       "texto": "El botón «Agregar contexto», con dictado",
+       "estado": "por-hacer"
+      }
+     ]
+    },
+    {
+     "titulo": "El chat de Nexus",
+     "pasos": [
+      {
+       "texto": "Pregunta, propone y responde en la preventa",
+       "estado": "en-curso"
+      }
+     ]
+    },
+    {
+     "titulo": "Empresas que comparten dominio",
+     "pasos": [
+      {
+       "texto": "¿Honda y FACO son una cuenta o dos?",
+       "estado": "te-toca",
+       "pregunta": 49
+      },
+      {
+       "texto": "¿FUNDATEC es un tercer proyecto del TEC?",
+       "estado": "te-toca",
+       "pregunta": 48
+      },
+      {
+       "texto": "¿AnalisaLab pasa a Grupo Inve?",
+       "estado": "te-toca",
+       "pregunta": 50
+      },
+      {
+       "texto": "Reubicar las reuniones según decidas",
+       "estado": "por-hacer"
+      }
+     ]
+    }
+   ],
+   "seUneEn": "Un solo contexto por cuenta, que leen todos los agentes"
+  },
+  {
+   "id": "finanzas",
+   "nombre": "Finanzas y cobranza",
+   "color": "finanzas",
+   "estado": "funciona",
+   "donde": "Funciona en producción; lo que queda son mejoras, como pagar las comisiones desde Nexus.",
+   "hecho": [
+    "Lo pagado en Odoo y Mercury se cobra solo, y lo que no cuadra se ordena solo, con Deshacer.",
+    "Finanzas tiene el panorama del dinero, la caja, los gastos, las sociedades de Smarteam y las metas de gerencia.",
+    "Cobranza comparte el estado de cuenta con el cliente, y las comisiones de Ventas siguen el modelo cerrado con Marco."
+   ],
+   "sigue": [
+    "Pagar las comisiones desde Nexus.",
+    "Desde Odoo, el día del pago y el verde de «en proceso de pago».",
+    "La rentabilidad de cada caso de uso, con «¿cuánto te tomó?»."
+   ],
+   "preguntas": [
+    30,
+    37
+   ]
+  },
+  {
+   "id": "nexus",
+   "nombre": "Nexus por dentro",
+   "color": "nexus",
+   "estado": "en-curso",
+   "donde": "El equipo tiene su panel de uso y Trivias; ahora Nexus tiene que aprender de cada corrección.",
+   "hecho": [
+    "Cada persona entra a «Para ti» con lo que le toca hoy, y Tareas junta lo que sale de las reuniones.",
+    "Uso de Nexus dice por persona cuánto entra y cuánto usa la IA, y las Trivias juegan en vivo con el equipo.",
+    "Glassy, el sistema de diseño nuevo, ya tiene 51 pantallas diseñadas; la app todavía no cambió."
+   ],
+   "sigue": [
+    "Que Nexus aprenda de cada corrección, empezando por el handoff y el cronograma.",
+    "Medir otra vez el uso y subir las trivias de ejemplo.",
+    "Tus configuraciones del servidor y lo que queda de HubSpot."
+   ],
+   "teToca": "Aprobar el mensaje que espera en el chat de «ejecución mecánica».",
+   "preguntas": [
+    1,
+    2,
+    3,
+    4,
+    9,
+    10,
+    19,
+    43
+   ],
+   "ramas": [
+    {
+     "titulo": "Aprender de cada corrección",
+     "pasos": [
+      {
+       "texto": "Decidiste quién aprueba y por dónde se empieza",
+       "estado": "hecho"
+      },
+      {
+       "texto": "Aprobar el mensaje que espera",
+       "estado": "te-toca"
+      },
+      {
+       "texto": "Empezar por el handoff y el cronograma",
+       "estado": "por-hacer"
+      }
+     ]
+    },
+    {
+     "titulo": "El uso",
+     "pasos": [
+      {
+       "texto": "Subir las trivias de ejemplo",
+       "estado": "por-hacer"
+      },
+      {
+       "texto": "Medir otra vez el uso",
+       "estado": "por-hacer"
+      }
+     ]
+    },
+    {
+     "titulo": "Tareas",
+     "pasos": [
+      {
+       "texto": "¿«Por decidir» con 5 o 6 sugerencias?",
+       "estado": "te-toca",
+       "pregunta": 43
+      },
+      {
+       "texto": "Prender tu piloto",
+       "estado": "te-toca"
+      }
+     ]
+    },
+    {
+     "titulo": "El servidor",
+     "pasos": [
+      {
+       "texto": "El pipeline de Secure Title que Nexus no conoce",
+       "estado": "te-toca",
+       "pregunta": 1
+      },
+      {
+       "texto": "Las configuraciones del servidor",
+       "estado": "te-toca"
+      }
+     ]
+    }
+   ],
+   "seUneEn": "Que 10 de 14 personas del equipo entren 3 días o más por semana"
+  }
+ ]
+}
+```
+
 ## Línea de tiempo
 
 <!-- La pestaña que abre primero: lo hecho (con fecha) y lo que sigue (en orden, sin fechas). Cómo se
