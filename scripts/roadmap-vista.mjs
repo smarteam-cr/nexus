@@ -9,6 +9,7 @@ const md = readFileSync(resolve(raiz, "docs/roadmap.md"), "utf8");
 if (/<\/script/i.test(md)) throw new Error("roadmap.md no puede contener «</script»");
 validarTemas(md);
 validarLinea(md);
+validarEjecutivo(md);
 const plantilla = readFileSync(resolve(raiz, "docs/roadmap-vista.html"), "utf8");
 if (!plantilla.includes("@@ROADMAP_MD@@")) throw new Error("Falta el marcador @@ROADMAP_MD@@ en la plantilla");
 
@@ -142,4 +143,71 @@ function validarLinea(texto) {
   }
   for (const id of ini) if (!usadas.has(id)) errores.push(`la iniciativa ${id} no tiene ningún hito`);
   if (errores.length) throw new Error("La línea de tiempo no cuadra:\n- " + errores.join("\n- "));
+}
+
+/**
+ * El bloque «ejecutivo» (2026-11-21): lo primero que ve Elías. Una fila por iniciativa, corta a propósito («debería ser
+ * muy ejecutivo… agrupar mucho los cambios relacionados, no cambio por cambio»): hasta 3 frases de lo hecho y hasta 3
+ * cosas que siguen, sin fechas. Una iniciativa en curso trae sus ramas. Las reglas, en la skill regenerar-roadmap.
+ */
+function validarEjecutivo(texto) {
+  const t = texto.replace(/\r/g, "");
+  const m = t.match(/```ejecutivo\n([\s\S]*?)\n```/);
+  if (!m) throw new Error("Falta el bloque ```ejecutivo (el resumen ejecutivo) en roadmap.md");
+  const d = JSON.parse(m[1]);
+  const errores = [];
+  const ESTADOS = ["en-curso", "te-espera", "funciona", "propuesta"];
+  const PASOS = ["hecho", "en-curso", "te-toca", "espera", "por-hacer"];
+  const FECHA = /\b\d{1,2} (de )?(ene|feb|mar|abr|may|jun|jul|ago|sep|oct|nov|dic)\b|\b20\d\d-\d\d|\b\d+ semanas?\b|\bpróxim[ao] (semana|mes)\b/i;
+  const linea = JSON.parse(t.match(/```linea\n([\s\S]*?)\n```/)[1]);
+  const colores = new Set((linea.iniciativas ?? []).map((i) => i.id));
+  const dec = t.slice(t.indexOf("## Lo que decides tú"));
+  const fin = dec.indexOf("\n## ", 5);
+  const preguntas = new Set();
+  for (const l of (fin > 0 ? dec.slice(0, fin) : dec).split("\n")) { const x = l.match(/^(\d+)\. /); if (x) preguntas.add(Number(x[1])); }
+  // Una frase: termina en punto y no trae otra adentro («… algo. Otra cosa …»).
+  const unaFrase = (s) => !/[.!?]\s+[«(]?[A-ZÁÉÍÓÚÑ¿¡]/.test(s.trim().replace(/[.!?]$/, ""));
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(d.corte ?? "")) errores.push("«corte» tiene que ser una fecha AAAA-MM-DD");
+  if (!/^[0-9a-f]{7,12}$/.test(d.produccion ?? "")) errores.push("«produccion» tiene que ser el sha corto de producción");
+  if (!Array.isArray(d.arriba) || d.arriba.length < 1 || d.arriba.length > 4) errores.push("«arriba» lleva de 1 a 4 líneas");
+  for (const l of d.arriba ?? []) if (l.length > 260) errores.push(`«arriba»: una línea pasa de 260 letras (${l.length})`);
+  const ini = d.iniciativas ?? [];
+  if (ini.length < 4 || ini.length > 10) errores.push(`«iniciativas»: son ${ini.length}; el ejecutivo lleva de 4 a 10`);
+  const ids = new Set();
+  for (const i of ini) {
+    const quien = `iniciativa «${i.nombre ?? i.id}»`;
+    if (!i.id || ids.has(i.id)) errores.push(`${quien}: id vacío o repetido`);
+    ids.add(i.id);
+    if (!colores.has(i.color)) errores.push(`${quien}: «color» tiene que ser una iniciativa del bloque linea (${[...colores].join(", ")})`);
+    if (!ESTADOS.includes(i.estado)) errores.push(`${quien}: «estado» vale ${ESTADOS.join(", ")}`);
+    if (!i.donde || i.donde.length > 170 || !unaFrase(i.donde)) errores.push(`${quien}: «donde» es una sola frase de hasta 170 letras`);
+    if (!Array.isArray(i.hecho) || !i.hecho.length || i.hecho.length > 3) errores.push(`${quien}: «hecho» lleva de 1 a 3 frases`);
+    for (const h of i.hecho ?? []) {
+      if (h.length > 220) errores.push(`${quien}: una frase de «hecho» pasa de 220 letras (${h.length})`);
+      if (!unaFrase(h)) errores.push(`${quien}: «${h.slice(0, 50)}…» trae más de una frase; cada línea de «hecho» es una frase`);
+    }
+    if (!Array.isArray(i.sigue) || !i.sigue.length || i.sigue.length > 3) errores.push(`${quien}: «sigue» lleva de 1 a 3 cosas`);
+    for (const s of i.sigue ?? []) {
+      if (s.length > 160) errores.push(`${quien}: una línea de «sigue» pasa de 160 letras (${s.length})`);
+      if (FECHA.test(s)) errores.push(`${quien}: «${s}» menciona una fecha o un plazo; lo que sigue va sin tiempos`);
+    }
+    if (i.teToca && i.teToca.length > 200) errores.push(`${quien}: «teToca» pasa de 200 letras`);
+    for (const n of i.preguntas ?? []) if (!preguntas.has(n)) errores.push(`${quien}: la pregunta ${n} no está en «Lo que decides tú»`);
+    if (i.estado === "en-curso" && !i.ramas) errores.push(`${quien}: en curso sin «ramas»`);
+    if (i.ramas != null) {
+      if (!Array.isArray(i.ramas) || i.ramas.length < 2 || i.ramas.length > 5) errores.push(`${quien}: «ramas» lleva de 2 a 5 ramas`);
+      for (const r of Array.isArray(i.ramas) ? i.ramas : []) {
+        if (!r.titulo || r.titulo.length > 60) errores.push(`${quien}: una rama sin título o de más de 60 letras`);
+        if (!Array.isArray(r.pasos) || !r.pasos.length || r.pasos.length > 5) errores.push(`${quien} › ${r.titulo}: de 1 a 5 pasos`);
+        for (const p of r.pasos ?? []) {
+          if (!p.texto || p.texto.length > 90) errores.push(`${quien} › ${r.titulo}: un paso sin texto o de más de 90 letras`);
+          if (!PASOS.includes(p.estado)) errores.push(`${quien} › ${r.titulo}: estado «${p.estado}» (vale ${PASOS.join(", ")})`);
+          if (p.pregunta != null && !preguntas.has(p.pregunta)) errores.push(`${quien} › ${r.titulo}: la pregunta ${p.pregunta} no está en «Lo que decides tú»`);
+          if (FECHA.test(p.texto ?? "")) errores.push(`${quien} › ${r.titulo}: «${p.texto}» menciona una fecha o un plazo`);
+        }
+      }
+      if (!i.seUneEn || i.seUneEn.length > 90) errores.push(`${quien}: con ramas, «seUneEn» (dónde se unen) es obligatorio y de hasta 90 letras`);
+    }
+  }
+  if (errores.length) throw new Error("El resumen ejecutivo no cuadra:\n- " + errores.join("\n- "));
 }

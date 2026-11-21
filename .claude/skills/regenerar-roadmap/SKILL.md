@@ -5,7 +5,7 @@ description: Regenera el roadmap de Nexus (docs/roadmap.md y su vista publicada)
 
 # Regenerar el roadmap
 
-El roadmap es el insumo central entre Elías y las sesiones: guarda cada respuesta suya, lo que se desplegó, las pruebas y lo que le toca. Elías lo lee en la vista publicada, que abre en la **Línea de tiempo** (19 nov, su pedido: «entender bien qué hemos hecho» y ver lo que sigue). Es una línea vertical: arriba lo hecho, con fecha; la marca «Hoy»; abajo lo que sigue, en orden de prioridad y sin fechas. Sale del bloque ` ```linea ` (JSON) al principio de `docs/roadmap.md`. La segunda pestaña, el **Resumen** (cómo va cada tema y qué necesita de él), sale del bloque ` ```temas `. El resto del archivo es el detalle.
+El roadmap es el insumo central entre Elías y las sesiones: guarda cada respuesta suya, lo que se desplegó, las pruebas y lo que le toca. Elías lo lee en la vista publicada, que abre en el **Resumen ejecutivo** (21 nov, su pedido: «debería ser muy ejecutivo… agrupar mucho los cambios relacionados, no cambio por cambio»). Arriba, «Hoy» con 3 o 4 líneas (qué corre en producción, qué está en curso y qué le espera a él); después, una fila por iniciativa con dónde estamos, lo hecho, lo que sigue y lo que le toca, y al abrir una iniciativa, su flujo por ramas. Sale del bloque ` ```ejecutivo ` (JSON) al principio de `docs/roadmap.md`. Todo lo demás es el **anexo**, plegado al abrir: la **Línea de tiempo** cambio a cambio (bloque ` ```linea `), el **Resumen** por tema (bloque ` ```temas `) y el detalle del archivo.
 
 Lo edita solo la sesión que junta las ramas en `main` (`docs/roadmap.md` › «Cómo se mantiene este roadmap»).
 
@@ -53,3 +53,13 @@ Un tema por tarjeta del detalle (`n` es su número en «Las tarjetas en detalle�
 - Una idea por línea: `sigue` hasta 220 letras, `teToca` hasta 200. El validador corta lo más largo.
 - `sigue` es lo próximo concreto, con quién lo hace si no es una sesión («espera a la CSL»).
 - `teToca` solo cuando la siguiente acción es de Elías, dicha como acción («Aprobar las preguntas en Escala › Tests»). Una pregunta sin responder no va ahí: la vista ya la cuenta.
+
+## Las reglas del bloque `ejecutivo`
+
+Es lo primero que lee Elías: si algo se puede decir más corto, se dice más corto. Se reescribe entero en cada regeneración (no se acumula: lo que se acumula es la línea).
+
+- **Arriba:** `corte` (AAAA-MM-DD), `produccion` (el `sha` corto) y `arriba`: de 1 a 4 líneas que empiezan con «En producción…:», «En curso:» y «Te espera:».
+- **Una iniciativa por fila, de 4 a 10** (hoy 8): `id`, `nombre`, `color` (el `id` de una iniciativa del bloque `linea`), `estado` (`en-curso`, `te-espera`, `funciona` o `propuesta`), `donde` (una frase), `hecho` (de 1 a 3 frases que agrupan todo lo de la iniciativa, sin fechas cambio por cambio), `sigue` (de 1 a 3, sin fechas), `teToca` (opcional, dicho como acción) y `preguntas` (números de «Lo que decides tú»; la vista muestra solo las abiertas).
+- **Las ramas:** una iniciativa `en-curso` trae `ramas` (de 2 a 5, cada una con 1 a 5 pasos: `texto`, `estado` entre `hecho`, `en-curso`, `te-toca`, `espera` y `por-hacer`, y `pregunta` si es una decisión de Elías) y `seUneEn`: la meta donde se unen las ramas.
+- **Sale del roadmap, no se inventa:** lo hecho, de la línea y del detalle; el estado, del `sha` de producción y de las sesiones en curso.
+- El validador (`scripts/roadmap-vista.mjs`) rechaza más de 3 frases en lo hecho o más de 3 cosas en lo que sigue, una fecha en lo que sigue, una pregunta que no existe y una iniciativa en curso sin ramas.
