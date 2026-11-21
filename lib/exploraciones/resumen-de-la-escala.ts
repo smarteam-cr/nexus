@@ -70,6 +70,7 @@ import {
   faltaDeLaPerdida,
 } from "@/lib/external/pagina-del-resumen";
 import type { LaPerdidaEnLaEscala, PerdidaDeLaEscala } from "./perdida-de-la-escala";
+import { bloqueDeLasNotas, esNotaDelEquipo } from "./notas-del-equipo";
 export { enHoras, MAX_ETIQUETAS, TOPE_A_MANO, TOPE_DE_LA_CIFRA, TOPE_DE_UN_NOMBRE, TOPE_DEL_TITULO_DEL_PUNTO, TOPE_DEL_TITULO_DEL_RECORRIDO };
 export type { AreaDelResumenDeLaPagina, CitaDelResumen, DatoRojoDeLaPagina, EstadoDeLaCifra, LoQueHicimos, PreguntaDelResumen, ResumenDeLaPagina, ReunionMalLeida, TipoDelNegocio };
 
@@ -311,6 +312,11 @@ export interface ReunionParaElResumen {
    * Centauro). Vacío: no se sabe, y NADIE cuenta como de la empresa (revisión del 9 nov).
    */
   delCliente: string[];
+  /**
+   * 21 nov: no es una reunión, es una NOTA DEL EQUIPO («Lo que sabes del cliente», notas-del-equipo.ts): quién la escribió
+   * y cuándo. Pesa más que una reunión, y su cita sale adentro como «lo dijo <persona> del equipo».
+   */
+  delEquipo?: { por: string | null; en: string; nombre: string };
 }
 
 export interface AreaParaElResumen {
@@ -379,6 +385,8 @@ Devuelves SOLO este JSON (P = {"texto":"…","citas":[C]}; C = {"reunion":"R1","
  "puntos":[{"titulo":"…","texto":"…","area":"<id del equipo o null>","citas":[C]}]}
 
 LA REGLA DE TODO: cada afirmación sobre la empresa (su negocio, su organización, sus etapas, sus retos, sus cifras) lleva en «citas» lo que dijo alguien de la EMPRESA que la sostiene: una cita, o dos si la afirmación junta cosas dichas en turnos distintos. Cada cita es el pedazo más corto que la sostenga, de 6 a 25 palabras seguidas de UNA intervención (aunque la pieza sea de tres palabras, su cita no baja de 6), copiado palabra por palabra como está en la transcripción (con sus repeticiones y muletillas, y sus números en cifras o en letras, como aparezcan), con su reunión y su turno. Nunca pegues pedazos con «;», «…» o «...» ni saltes palabras: si necesitas dos pedazos, son dos citas. Dentro de cualquier texto del JSON nunca escribas comillas dobles ("): si lo dicho las trae, usa « ». Todo lo que escribas tiene que estar en tus citas: cada número, cada herramienta y cada detalle; si ninguna cita lo dice, sácalo de la frase. Si lo dijo alguien de Smarteam, solo vale si alguien de la empresa lo confirmó justo después («Exacto», «Sí, correcto»): cita entonces lo que dijo Smarteam. La única excepción son las CIFRAS (ver 3): una que dijo Smarteam y la empresa no corrigió entra «pendiente». Lo que no puedas citar, no lo escribas. Nada de lecturas nuestras presentadas como dichas por ellos: no califiques lo que contaron («evitable», «innecesario», «se podría automatizar», «recuperable») si ellos no lo dijeron así. La «guia» del equipo de Smarteam te orienta sobre qué buscar; no es evidencia: nada sale de ella sin una cita de la transcripción.
+
+LAS NOTAS DEL EQUIPO (N1, N2…, si te las damos): son lo que una persona del equipo de Smarteam CONFIRMÓ sobre la empresa y escribió en Nexus. Valen como evidencia y PESAN MÁS que las reuniones: si una nota y una reunión dicen cosas distintas (una cifra, quién decide, un problema que ya no aplica), escribe lo de la nota. Se citan como una reunión, con "reunion":"N1", su turno y lo escrito palabra por palabra. Las mismas reglas de siempre: solo lo que la nota dice, sin calcular ni concluir, y nunca el nombre de quien la escribió. No escribas que lo dijo el equipo: la página lo rotula sola. Una nota que es una tarea interna («llamar el lunes») o una opinión sin hecho no se usa.
 
 0 EL PESO DE CADA TEMA (antes de escribir nada): te damos cada sesión con su título y sus minutos. Con eso y con lo que se dijo, decide cuáles son los TEMAS de la empresa (un área, un proceso, un problema) y ordénalos por peso: cuánto tiempo y cuántas reuniones se le dedicaron, y cuánto lo señaló la empresa como urgente o crítico. El espacio del Resumen va según ese orden: el titular, los puntos clave y la mayor parte de los retos y las cifras son del tema que más pesó. Un tema del que se habló de pasada no puede ocupar el titular. El título de una reunión solo te orienta: nunca lo copies ni lo cites.
 
@@ -482,7 +490,9 @@ export function comoSeLeyo(
 
 /** El pedido al agente. `aviso`: por qué no sirvió el intento anterior. */
 export function pedidoDelResumen(ctx: ContextoDelResumen, aviso = ""): Anthropic.Messages.MessageCreateParamsNonStreaming {
-  const reuniones = ctx.reuniones.map(
+  // Las notas del equipo van aparte y antes de las reuniones, con su peso (21 nov, notas-del-equipo.ts).
+  const notas = ctx.reuniones.filter(esNotaDelEquipo);
+  const reuniones = ctx.reuniones.filter((r) => !esNotaDelEquipo(r)).map(
     (r) =>
       `### ${r.clave} · ${r.fecha.slice(0, 10)}${r.titulo ? ` · «${r.titulo}»` : ""}${r.minutos ? ` · ${r.minutos} min` : ""}${r.equipo ? ` · con ${r.equipo}` : ""}${r.recortada ? " · (se omitió un pedazo del medio por largo)" : ""}\n${r.turnos.map((t) => `[${t.n}] ${t.hablante}: ${t.texto}`).join("\n")}`,
   );
@@ -493,6 +503,7 @@ export function pedidoDelResumen(ctx: ContextoDelResumen, aviso = ""): Anthropic
     ctx.guia ? `La guía del equipo de Smarteam (orienta; no es evidencia):\n${ctx.guia}` : "",
     ctx.deciden ? `Quiénes dirigen o deciden en la empresa (sus dolores pesan más; nunca escribas sus nombres):\n${ctx.deciden}` : "",
     ctx.perdida ?? "",
+    bloqueDeLasNotas(notas),
     `Las reuniones de diagnóstico (cada línea es un turno: [número] quien habla: lo que dijo):\n\n${reuniones.join("\n\n")}`,
     ctx.noNombrar?.length ? `Nombres que NUNCA van en lo que escribes (di su rol): ${ctx.noNombrar.join(", ")}.` : "",
     ctx.instrucciones,
@@ -929,6 +940,8 @@ export function citaVerificada(v: unknown, reuniones: readonly ReunionParaElResu
   const c = verificarCita({ turno: x.turno, texto: x.texto }, r.turnos);
   if (!c) return null;
   const base = { reunion: r.id, fecha: r.fecha, turno: c.turno, hablante: c.hablante, texto: c.texto };
+  // Una nota del equipo (21 nov): vale como lo dicho por la empresa, y adentro dice quién del equipo la escribió.
+  if (r.delEquipo) return { ...base, delEquipo: { nombre: r.delEquipo.nombre, en: r.delEquipo.en } };
   if (esDelCliente(r, c.hablante)) return base;
   const fin = finDeLaCita(r, c);
   const confirmo = confirmacion(r, c.turno, fin);

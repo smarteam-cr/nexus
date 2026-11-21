@@ -6179,6 +6179,12 @@ retos, copiados casi palabra por palabra de la investigación de su industria en
   D0), su sitio (W0) e internet (W1, W2) no alcanzan. Vale para los niveles y para metas, planes, retos,
   tiempos, presupuesto, consecuencias e implicaciones; «Quién decide» no, porque los contactos de HubSpot son un
   hecho y el papel ya exigía que la fuente lo diga.
+- *Enmienda (21 nov, Elías: «lo que dice el usuario de Nexus debe ser lo que manda»; pregunta 79 del roadmap):* lo que
+  CONFIRMA una persona del equipo también es pista, y pesa más que lo leído en una reunión. Una nota de «Lo que sabes del
+  cliente» (`sabido:<id>`) se guarda con quién y cuándo (`contenido.autoresDeLasNotas`) y entra como fuente del equipo,
+  rotulada «lo dijo <persona>». Llega también a lo que ve el cliente (rotulada solo adentro): el vendedor decide antes
+  de publicar. La ficha de HubSpot, el sitio e internet siguen sin alcanzar. Ver «El contexto del equipo cambia el
+  entregable» (21 nov), con la escalera de peso.
 - **Sin esa base, la dimensión queda sin nivel** y la guía la pregunta en la reunión. Sin nada del cliente, el
   agente tampoco propone qué explorar a fondo. Supera lo del 2026-10-01 («las hipótesis son el mapa»): siguen
   siendo el mapa, pero solo las que tienen una pista.
@@ -14923,6 +14929,8 @@ Sistema 2, «Nexus · interfaz interna», se descartó): cambian el contenido, e
     corrigió (no dijo que no, no dio otro número, no la puso en duda) entra «por confirmar», y adentro se confirma o se
     quita con un clic. Una cifra que la empresa corrigió no entra. Todo lo demás (los retos, el negocio, los puntos clave)
     sigue necesitando una cita de la empresa o una confirmación suya. Ver «El Resumen de la escala por peso».
+    *Corrige (21 nov):* o una cita de una nota del equipo, que pesa más que la reunión y adentro se rotula «lo dijo
+    <persona>» (ver la enmienda en «El Resumen de la escala por peso»).
   - **Una cifra es un solo dato** (`numerosDeOtroDicho`): los números del texto tienen que salir de las citas que traen
     los números de la cifra grande. El 2,8 % y «25 contra 14» van aparte, cada uno con su estado. «25 de 50», con el 25
     de un turno y el 50 de otro, vale: es un dato frente a su meta.
@@ -15785,6 +15793,12 @@ Elías: «Debe mejorarse cuanto antes».
   Sale «Por confirmar» con «Salió en la reunión y nadie la corrigió: falta confirmarla con tus datos.», y adentro
   lleva «Confirmar» (queda «Lo dijiste tú») y «Quitar». Una cifra que la empresa corrigió no entra. Solo las cifras: un
   reto, una pieza del negocio o un punto clave sigue necesitando una cita de la empresa o su confirmación.
+- ⛔ *Enmienda (21 nov, Elías): «una cifra sin cita no sale al cliente» admite una cita más, la NOTA DEL EQUIPO.* Lo que
+  una persona del equipo escribió en «Lo que sabes del cliente» llega al agente como una fuente propia (`N1`, `N2`…, con
+  quién y cuándo: `notasComoFuentes`), y pesa MÁS que una reunión: si se contradicen, gana la nota. Una cifra o un hecho
+  con una cita verificada de una nota sale al cliente como cualquier otro, y adentro su cita dice «lo dijo <persona> del
+  equipo» (`CitaDelResumen.delEquipo`). Sin rótulo afuera: el vendedor lo ve antes de publicar y decide. Las reglas de
+  forma (números, herramientas, conclusiones, voseo) valen igual; lo que la nota no dice no sale.
 - **Lo que no queda garantizado:** que el agente pese bien un tema que se habló poco y la empresa dijo urgente (se le pide;
   no se mide); que «no la corrigió» sea «la aceptó» (puede que nadie la escuchó: por eso sale por confirmar); que volver a
   leer una reunión mal leída la arregle (si fue un monólogo, no).
@@ -15946,3 +15960,65 @@ vender por resultados. Cambia el Resumen, la página de cada área y el resultad
   real (el simulacro lo muestra sin guardar); que una cifra en dinero escrita sin moneda («1,5 millones») se reconozca
   como costo (la moneda es la señal); los colores de la escalera (rojo a verde) no son los del punto de nivel del resto de
   la página (Funcional es verde ahí).
+
+## El contexto del equipo cambia el entregable: el agente de impacto, la cuenta regresiva y lo que aceptó el cliente (2026-11-21)
+
+Elías, 20 y 21 nov: lo que confirma una persona del equipo manda, con quién y cuándo; los 8 lugares de notas conviven y se
+migran a un botón único «Agregar contexto»; y Nexus se vuelve un asistente que pregunta y aclara, apoyado en Claude («la
+idea es aprovechar a Claude, no pisarlo»). Este es el mínimo viable: UN lugar de entrada y UN entregable. Sin chat nuevo.
+
+- **La escalera de peso** (`lib/impacto/escalera.ts`, `ESCALERA_DE_PESO`): **aceptado por el cliente > presentado y no
+  corregido > confirmado por el equipo > dicho por el cliente en una reunión > deducido por Nexus.** Lo de más arriba
+  manda; lo nuevo de más abajo no lo pisa en silencio: se avisa. La leen el agente de impacto y el Resumen de La escala, y
+  la leerá cada entregable que se enchufe (kickoff, handoff, entrega, sesiones de consenso) y la puerta «hablar con Nexus».
+- **El contexto entra por donde ya entraba:** «Lo que sabes del cliente» de la Preparación de la preventa (`sabido:<id>`,
+  K6). No hay lugar nuevo. Desde hoy cada nota guarda quién la escribió y cuándo (`contenido.autoresDeLasNotas`, sin SQL;
+  lo pone el servidor con la operación `nota`, y guardar el mismo texto no cambia el autor).
+- **El agente de impacto** (`lib/impacto/impacto.ts`, `impacto-server.ts`; La escala en
+  `lib/exploraciones/impacto-en-la-escala*.ts`): al guardar una nota, la pantalla pregunta
+  `POST /api/sales/exploraciones/[id]/impacto`. Una llamada a Haiku 4.5 con la nota, quién la escribió, las piezas de la
+  página como la ve el cliente (titular, puntos clave, el reto de cada equipo, lo que lo causa, sus cifras, lo que falta
+  validar), si está publicada, presentada y qué aceptó el cliente. Responde si cambia, con una frase de por qué y qué
+  partes toca. Medida como las demás: `AgentRun` (`modo: impacto-del-contexto`) y el gasto de IA (`origen: impacto:escala`,
+  al agente de la exploración). *El código decide antes y después:* sin Resumen armado no llama (no hay nada que rehacer);
+  una nota de menos de cuatro palabras no cambia nada; un «sí» sin por qué es un no; las partes son solo las de la página;
+  «contradice lo aceptado» vale solo si el cliente aceptó algo, y la fecha la pone el registro. Si la IA falla, no hay
+  aviso: la nota ya quedó y el Resumen se rehace a mano. Ante la duda, el prompt dice que no cambia.
+- **La cuenta regresiva** (`lib/impacto/cuenta-regresiva.ts` + `components/impacto/AvisoDeImpacto.tsx`, genéricos): «Esto
+  cambia la página de La escala: <por qué>. La regenero como borrador en 10 s · Cancelar». Al llegar a 0 corre el mismo
+  «Rehacer con IA» del Resumen (`generarElResumenDeLaEscala`), que respeta lo escrito a mano. **Nunca publica:** queda
+  «Hay cambios que el cliente no ve» hasta que alguien aprieta «Publicar». Cancelar no toca nada (la nota se queda) y deja
+  «Regenerar ahora». Si la nota contradice lo aceptado, el aviso empieza con «Esto contradice lo que el cliente aceptó el
+  <fecha>».
+- **El peso de la nota en el Resumen** (enmienda a «sin pista del cliente no hay nivel ni marco» del 7 oct y a «una cifra
+  sin cita no sale al cliente», corregidas en su lugar): cada nota llega al agente como una fuente `N1`, `N2`… con la forma
+  de una reunión (`notasComoFuentes`, lib/exploraciones/notas-del-equipo.ts): cada renglón es un turno «dicho» por quien la
+  escribió. *Por qué con la forma de una reunión:* así su cita se verifica con la misma regla de siempre (palabra por
+  palabra, números, herramientas, conclusiones), sin un verificador más (ya había cuatro o cinco). Va aparte y antes de las
+  reuniones, y el prompt dice que pesa más: si chocan, gana la nota. Su cita lleva `delEquipo` y adentro dice «lo dijo
+  <persona> del equipo»; afuera no hay rótulo: el vendedor la ve antes de publicar. No cuenta como sesión (ni en «Qué
+  hicimos», ni en el peso, ni en el recorrido, ni en `sourceSessionIds`), y sin ninguna reunión con texto el Resumen sigue
+  sin armarse.
+- **Presentado y aceptado, en el «Acceso»** (`RespuestaDelCliente.tsx`, `HitoDeLaEscala`, SQL
+  `2026-11-21-hitos-de-la-escala.sql`): con algo publicado, «¿Cuándo se la presentaste?» (hoy o antes) y la respuesta del
+  cliente: aceptó, aceptó con cambios (con nota) o pidió ajustes (con nota). Append-only con quién y cuándo, como
+  `PresentacionDeDocumento`; el estado sale de plegar las filas (`plegarHitos`). Cada hito guarda las piezas de la foto
+  publicada en ese momento (`loQueSeVio`), porque la foto se pisa al republicar. Una presentación nueva espera su
+  respuesta; pedir ajustes no es aceptar, y lo último aceptado sigue siendo lo de más peso hasta que acepte la versión
+  nueva. Lo aceptado lo leen el agente de impacto y el handoff (`exploracionParaElHandoff`, arriba del chequeo: ya lo vio
+  el cliente). *Por qué una tabla nueva:* `PresentacionDeDocumento` es de los documentos de un proyecto y responde solo
+  Customer Success (la preventa no tiene proyecto); `HitoDeDocumento` cuelga de un `ProjectCanvas`; `publishedSnapshot` y
+  `AccesoALaEscala.publicada` son una sola foto que se pisa. Solo `hitos-de-la-escala-server.ts` escribe la tabla, sin
+  update ni delete (lo vigila `notas-del-equipo.test.ts`).
+- **Lo que endureció la revisión del 21 nov:** lo aceptado es lo que se vio en SU presentación, no lo publicado al anotar
+  la respuesta (entre presentar y responder se pudo republicar una versión que el cliente nunca vio); al handoff no va la
+  nota que el vendedor escribe a mano con la respuesta (puede traer algo interno, y el handoff escribe para el cliente);
+  el día de la aceptación es el de Costa Rica; la fecha de presentación tiene que existir (nada de 31 de febrero); si
+  leer los hitos falla, el handoff sale igual con el chequeo; «Rehacer con IA» corre uno a la vez por escala (la cuenta y
+  el botón pueden pedirlo juntos: el segundo recibe 409 con «Nexus ya está rehaciendo…»; una corrida de más de 10 minutos
+  se da por caída); y quitar una nota apaga su cuenta regresiva.
+- **Lo que no queda garantizado:** que Haiku acierte cuándo una nota cambia la página (se le pide ante la duda que no; no
+  se midió con notas reales); que la regeneración (unos 3 minutos) termine si la persona cierra la pestaña a la mitad (la
+  ruta sigue en el servidor, pero el aviso de «listo» se pierde); que el agente del Resumen le dé a la nota el peso que se
+  le pide (se le dice; el código verifica la cita, no el peso); que lo dicho en una nota sea cierto: lo firma quien la
+  escribió, y por eso adentro se ve su nombre.

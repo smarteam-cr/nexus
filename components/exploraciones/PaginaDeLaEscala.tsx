@@ -222,7 +222,7 @@ function DeDondeSale({ citas, noSostiene = false }: { citas: readonly CitaDelRes
       <ul>
         {citas.map((c) => (
           <li key={`${c.reunion}-${c.turno}`}>
-            «{c.texto}» <span>— {c.hablante}, {diaCorto(c.fecha)}</span>
+            «{c.texto}» <span>{c.delEquipo ? `— lo dijo ${c.delEquipo.nombre} del equipo, ${diaCorto(c.delEquipo.en)}` : `— ${c.hablante}, ${diaCorto(c.fecha)}`}</span>
             {c.confirmo && <span> · lo confirmó {c.confirmo.hablante}: «{c.confirmo.texto}»</span>}
           </li>
         ))}

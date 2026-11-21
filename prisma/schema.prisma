@@ -2069,6 +2069,8 @@ model ExploracionDeVenta {
   investigacionesDeLaEmpresa InvestigacionDeEmpresa[] @relation("InvestigacionesDeLaPreventa")
   /// El enlace con que la empresa ve esta escala (AccesoALaEscala).
   accesoALaEscala            AccesoALaEscala?
+  /// Cuándo se presentó la escala y qué respondió el cliente (HitoDeLaEscala, 21 nov).
+  hitosDeLaEscala            HitoDeLaEscala[]
 
   @@index([clientId])
   @@index([projectId])
@@ -2096,6 +2098,30 @@ model AccesoALaEscala {
   publicadaPor  String? // el correo de quien la publicó (auditoría)
   createdAt     DateTime           @default(now())
   updatedAt     DateTime           @updatedAt
+}
+
+// Cuándo se le PRESENTÓ la escala a la empresa y qué RESPONDIÓ (Elías, 21 nov). Append-only: cada fila es un hecho con
+// quién y cuándo, y el estado sale de leerlas en orden (lib/impacto/respuesta-del-cliente.ts › `plegarHitos`). Guarda
+// las piezas de la foto publicada de ese momento (`loQueSeVio`): la foto de AccesoALaEscala se pisa con cada «Publicar»,
+// y lo aceptado es el contexto de más peso para el agente de impacto y el handoff. SQL: scripts/sql/2026-11-21-hitos-de-la-escala.sql.
+model HitoDeLaEscala {
+  id            String             @id @default(cuid())
+  exploracionId String
+  exploracion   ExploracionDeVenta @relation(fields: [exploracionId], references: [id], onDelete: Cascade)
+  /// presentada · acepto · acepto-con-cambios · pidio-ajustes (String validado con Zod: TIPOS_DE_HITO)
+  tipo          String
+  /// AAAA-MM-DD, el día en Costa Rica: el de la presentación (solo en «presentada»)
+  fecha         String?
+  /// Lo que dijo el cliente: obligatoria en «acepto-con-cambios» y «pidio-ajustes»
+  nota          String?            @db.Text
+  /// Las piezas principales de la foto publicada al anotarlo (titular, puntos clave, retos), en texto
+  loQueSeVio    String?            @db.Text
+  /// De cuándo es la foto que se vio
+  publicadaEn   DateTime?
+  porEmail      String? // quién lo anotó
+  createdAt     DateTime           @default(now())
+
+  @@index([exploracionId, createdAt])
 }
 
 // Una sesión o un documento que el vendedor suma a mano a su exploración (pegó el texto o subió un

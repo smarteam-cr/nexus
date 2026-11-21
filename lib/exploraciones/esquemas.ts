@@ -962,6 +962,8 @@ const CitaDelResumenSchema = z.object({
   confirmo: z.object({ hablante: z.string().max(200), texto: z.string().max(2000) }).optional(),
   // 18 nov: la dijo Smarteam y la empresa no la corrigió (solo en las cifras). Un valor raro se cae solo, no la cita.
   sinCorregir: z.literal(true).optional().catch(undefined),
+  // 21 nov: la cita es de una nota del equipo (quién y cuándo). Un valor raro se cae solo, no la cita.
+  delEquipo: z.object({ nombre: z.string().max(200), en: z.string().max(40) }).optional().catch(undefined),
 });
 const IdDelResumen = z.string().regex(/^[\w-]{1,20}$/);
 const OrigenDelResumen = z.string().max(200).optional();
@@ -1243,6 +1245,10 @@ export function leerContenido(raw: unknown): ContenidoDeExploracion {
   if (previo.success) c.contactoPrevio = previo.data;
   const perdida = PerdidaValidadaSchema.safeParse(raw.perdida);
   if (perdida.success) c.perdida = perdida.data;
+  // 21 nov: quién escribió cada nota del equipo. Solo de las notas que siguen (una quitada no deja su autor).
+  const autores = registroValido(raw.autoresDeLasNotas, z.string().max(MAX_CLAVE_DE_NOTA), z.object({ por: z.string().max(320).nullable(), en: z.string().max(40) }));
+  const deNotasVivas = Object.fromEntries(Object.entries(autores).filter(([k]) => k in c.notas));
+  if (Object.keys(deNotasVivas).length) c.autoresDeLasNotas = deNotasVivas;
   if (Array.isArray(raw.asociacionesDescartadas)) {
     c.asociacionesDescartadas = raw.asociacionesDescartadas
       .filter((k): k is string => typeof k === "string" && CLAVE_DE_REUNION.safeParse(k).success)

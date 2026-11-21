@@ -24,6 +24,7 @@ import { diaYHora } from "@/lib/exploraciones/fechas";
 import { useAreasDeLaEscala } from "./useAreasDeLaEscala";
 import { useLienzo } from "./contexto";
 import { avisarQueLaEscalaCambio, ESCALA_PUBLICADA } from "./escala-al-dia";
+import RespuestaDelCliente from "./RespuestaDelCliente";
 
 /** Lo que se sabe de un área, en una línea: lo que vería el cliente o por qué no se puede elegir. */
 function loQueTiene(a: AreaDeLaEscala): string {
@@ -203,6 +204,8 @@ export default function AccesoALaEscala() {
               )}
             </>
           )}
+          {/* 21 nov: cuándo se presentó y qué respondió el cliente. Se presenta lo publicado: sin foto no hay nada que anotar. */}
+          {acceso?.publicadaEn && !noAbre && <RespuestaDelCliente exploracionId={exp.id} puedeEditar={puedeEditar} />}
           {acceso && !acceso.enlace && puedeEditar && (
             <div className="flex items-center gap-2">
               {estado === "revocado" && <p className="text-xs text-fg-muted">El enlace anterior ya no abre. El nuevo será otro.</p>}
