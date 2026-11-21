@@ -32,6 +32,7 @@ import {
 } from "@/lib/lo-propuesto/ciclo";
 import type { ClaveDeTipo, EstadoDeLoPropuesto } from "@/lib/lo-propuesto/tipos";
 import { destinoPorClave, type SalidaDelDestino } from "./destinos";
+import type { QuienLoDijo } from "./quien-lo-dijo";
 import { estaVencido } from "./hechos/estado";
 
 // ── Lo que entra ────────────────────────────────────────────────────────────────────
@@ -163,6 +164,8 @@ export interface HechoDeLaReunionEnTarjeta {
   tema: string | null;
   frase: string;
   cita: string;
+  /** Quién dijo la cita: si no fue el cliente, su novedad va rotulada (lib/seguimiento/quien-lo-dijo.ts). */
+  quienLoDijo: QuienLoDijo;
   /** El estado general guardado: pendiente · usado · desestimado. */
   estado: string;
   /** ISO. */
@@ -295,6 +298,8 @@ export function comoQuedoElDestino(salida: SalidaDelDestino | null, estado: stri
         return "Llegó al avance del cronograma";
       case "etapa":
         return "Llegó a la encuesta de la etapa";
+      case "preventa":
+        return "Lo lee la preventa";
       default:
         return "En su lugar";
     }
@@ -424,7 +429,7 @@ export function armarTarjeta(e: EntradaDeLaTarjeta, opts: { hoyISO: string; quie
     const pide = destinos.some((d) => d.decidible);
     if (pide) huella.push(`hecho:${h.id}:${destinos.filter((d) => d.decidible).map((d) => d.clave).sort().join(",")}`);
     const estado: EstadoDeLoPropuesto = h.estado === "usado" ? "usado" : h.estado === "desestimado" ? "desestimado" : vencido ? "vencido" : "pendiente";
-    return { id: h.id, tipo: h.tipo, tema: h.tema, frase: h.frase, cita: h.cita, createdAt: h.createdAt, projectId: h.projectId, proyecto: h.proyecto, estado, destinos, pideDecision: pide };
+    return { id: h.id, tipo: h.tipo, tema: h.tema, frase: h.frase, cita: h.cita, quienLoDijo: h.quienLoDijo, createdAt: h.createdAt, projectId: h.projectId, proyecto: h.proyecto, estado, destinos, pideDecision: pide };
   });
   const hechosVisibles = hechos.slice(0, TOPES_DE_LA_TARJETA.hechos);
 

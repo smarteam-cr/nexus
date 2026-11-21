@@ -21,7 +21,11 @@
  * de un documento) fija la sección con la novedad adentro (`novedad`). Sus líneas van DENTRO del bloque, antes de la
  * línea en blanco, así `mensajeSinAlcance` las saca al pintar; la marca `[NOVEDAD …]` dice qué hechos se usan cuando el
  * acuerdo de ese turno se aplica (`novedadesPorAplicar`). Sin novedad, la línea de una sección no cambia ni un byte.
+ * Si la cita no es del cliente, una línea más le dice al modelo que no la escriba como algo que el cliente quiere
+ * (lib/seguimiento/quien-lo-dijo.ts, 2026-11-20).
  */
+
+import { avisoParaElChat, type QuienLoDijo } from "@/lib/seguimiento/quien-lo-dijo";
 
 export interface SeccionReferida {
   key: string;
@@ -58,6 +62,8 @@ export interface NovedadReferida {
   reunion: string;
   /** AAAA-MM-DD. */
   fecha: string;
+  /** Quién dijo la cita (2026-11-20). Sin el dato, como si no se supiera: el chat no la escribe como del cliente. */
+  quienLoDijo?: QuienLoDijo;
 }
 
 /** Etapa 6: la marca de una novedad dentro del bloque de alcance. */
@@ -77,6 +83,7 @@ function lineasDeLaNovedad(n: NovedadReferida): string {
     `${MARCA_DE_NOVEDAD} ${n.pieza} ${ids.join(",")}]\n` +
     `Una reunión con el cliente («${enUnaLinea(n.reunion, 120)}», ${enUnaLinea(n.fecha, 10)}) dejó esto para esta sección: «${enUnaLinea(n.frase, 300)}». ` +
     `Lo que se dijo: «${enUnaLinea(n.cita, 400)}».\n` +
+    avisoParaElChat(n.quienLoDijo ?? "sin_comprobar") +
     "Propón cómo cambia la sección con esto; si no aplica, dilo. No copies la cita tal cual, no digas de dónde salió y no " +
     "pongas precios ni montos de lo que cobra Smarteam.\n"
   );

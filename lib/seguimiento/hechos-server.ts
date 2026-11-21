@@ -37,6 +37,7 @@ import { loadHandoffContext } from "@/lib/canvas/load-canvas-context";
 import { responsableDeLaPreventaViva } from "@/lib/lecturas/personas";
 import { duenoDeLaReunion, duenosDeLasReuniones } from "@/lib/sessions/reuniones-para-seguimiento";
 import { whereBelongsToClient, whereVinculadaAlProyecto } from "@/lib/sessions/project-sources";
+import { DESTINOS } from "./destinos";
 import { claveDeRepeticion, rutear, salidaDe, type HechoRuteado } from "./enrutador";
 import {
   decidirDestino,
@@ -184,6 +185,8 @@ export function leidaSinLaTranscripcion(corridas: readonly CorridaDeHechos[], cl
 
 /** La nota con que se desestiman los hechos de las notas cuando la reunión se vuelve a leer con la transcripción. */
 const NOTA_RELEIDA_CON_LA_TRANSCRIPCION = "Se volvió a leer con la transcripción";
+/** Los destinos delegados que no tienen nada que retirar en su módulo: se cierran junto con el hecho. */
+const DELEGADOS_SIN_MODULO: ReadonlySet<string> = new Set(DESTINOS.filter((d) => d.salida === "preventa").map((d) => d.clave));
 
 /** Una corrida RUNNING de más de 15 minutos se cayó a mitad: cuenta como un intento fallido. */
 const colgada = (c: CorridaDeHechos, ahora: Date) => c.status === "RUNNING" && +ahora - +c.createdAt > MINUTOS_CORRIDA_COLGADA * 60_000;
@@ -354,16 +357,29 @@ async function leer(sessionId: string, opts: OpcionesDeLosHechos): Promise<Resul
     // prospecto, y en la duda los hechos de la cuenta no proponen ahí.
     const preventaViva =
       client.kind === "PROSPECTO" ? await responsableDeLaPreventaViva(clientId).then((r) => r !== undefined, () => true) : false;
+    // La preventa que lee esta reunión (con su lectura propia): lo de la cuenta va delegado a ella. Si no se puede saber,
+    // ninguna: el hecho queda en la tarjeta, como antes.
+    //    La regla toma la fecha de la reunión con su hora, la misma que usa `leerReunionNueva`.
+    const preventasQueLaLeen = preventaViva
+      ? await import("@/lib/exploraciones/agente")
+          .then((m) => m.preventasQueLeenLaReunion({ sesionId: sessionId, clientId }))
+          .catch((e): string[] => {
+            console.error(`[hechos] no se pudo saber si la preventa lee la reunión ${sessionId} (sus hechos quedan en la tarjeta):`, e instanceof Error ? e.message : e);
+            return [];
+          })
+      : [];
     const ruteo = rutear(hechos, {
       kind: client.kind,
       puertasAdentro: reunion.puertasAdentro,
       preventaViva,
+      laPreventaLaLee: preventasQueLaLeen.length > 0,
       proyectosVinculados: new Set(proyectos.map((p) => p.id)),
       proyectosQueAlimentanElAvance: new Set(proyectos.filter((p) => p.alimentaElAvance).map((p) => p.id)),
       hechosAbiertosPorHuella,
     });
 
-    // 8. Las filas, de una vez. El riesgo nace delegado en el vigía (lo juzga él). Los ids se arman acá para saber cuál
+    // 8. Las filas, de una vez. El riesgo nace delegado en el vigía (lo juzga él), y lo de un prospecto, en la preventa
+    //    que lee la reunión. Los ids se arman acá para saber cuál
     //    es cuál al aplicar cada destino (el orden de un INSERT … RETURNING no está garantizado).
     //    Antes de escribir, el dueño se vuelve a mirar: si la reunión cambió de dueño mientras el modelo leía, no se
     //    escribe nada (ni la ficha ni la alerta del cliente anterior) y el reintento la lee para el dueño nuevo.
@@ -379,7 +395,9 @@ async function leer(sessionId: string, opts: OpcionesDeLosHechos): Promise<Resul
     if (releerConLaTranscripcion) {
       const deLasNotas = await prisma.hechoDeReunion.findMany({ where: { sessionId, clientId, estado: "pendiente" }, select: SELECT_PARA_RETIRAR });
       for (const h of deLasNotas) {
-        const c = desestimarPorCambioDeDueno(h, DECIDE_EL_SISTEMA, ahora, NOTA_RELEIDA_CON_LA_TRANSCRIPCION);
+        // Lo delegado en la preventa también se cierra: la preventa no lo consume (lee la reunión por su lado), y si no,
+        // el mismo hecho quedaba dos veces en la tarjeta, una de las notas y otra de la transcripción.
+        const c = desestimarPorCambioDeDueno(h, DECIDE_EL_SISTEMA, ahora, NOTA_RELEIDA_CON_LA_TRANSCRIPCION, DELEGADOS_SIN_MODULO);
         if (c) await escribirCambio(h.id, c, h.updatedAt);
       }
     }
@@ -388,7 +406,12 @@ async function leer(sessionId: string, opts: OpcionesDeLosHechos): Promise<Resul
     if (creados.length) {
       await prisma.hechoDeReunion.createMany({
         data: ruteo.porHecho.map((r, i) => {
-          const destinos = r.destinos.map((d) => (salidaDe(d.clave) === "vigia" ? { ...d, estado: "delegado" as const, ref: { tipo: "vigia" as const } } : d));
+          const destinos = r.destinos.map((d) => {
+            const salida = salidaDe(d.clave);
+            if (salida === "vigia") return { ...d, estado: "delegado" as const, ref: { tipo: "vigia" as const } };
+            if (salida === "preventa") return { ...d, estado: "delegado" as const, ref: { tipo: "preventa" as const, exploracionIds: preventasQueLaLeen } };
+            return d;
+          });
           return {
             id: creados[i],
             sessionId,

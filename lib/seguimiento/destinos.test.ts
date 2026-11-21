@@ -58,9 +58,9 @@ describe("el registro de destinos", () => {
     }
   });
 
-  it("⛔ un resultado va a diagnóstico › objetivos y kickoff › métricas, nunca a la ficha", () => {
+  it("⛔ un resultado va a diagnóstico › objetivos y kickoff › métricas (en un prospecto, a su preventa), nunca a la ficha", () => {
     const deResultado = DESTINOS.filter((d) => d.tipos.includes("resultado")).map((d) => d.clave).sort();
-    expect(deResultado).toEqual(["diagnosis.objetivos", "kickoff.metricas_exito"]);
+    expect(deResultado).toEqual(["diagnosis.objetivos", "kickoff.metricas_exito", "preventa"]);
     // La ficha no lo puede proponer: sale de los resultados de cada proyecto.
     expect(CAMPOS_DE_LA_FICHA.find((c) => c.clave === "resultadosQuePersigue")?.deLosResultados).toBe(true);
   });
@@ -87,9 +87,11 @@ describe("el registro de destinos", () => {
     }
   });
 
-  it("en un prospecto solo la ficha y Procesos (sin avance, etapa, alertas ni novedades de proyecto)", () => {
+  it("en un prospecto solo la ficha, Procesos y su preventa (sin avance, etapa, alertas ni novedades de proyecto)", () => {
     const deProspecto = DESTINOS.filter((d) => destinoParaElKind(d, "PROSPECTO")).map((d) => d.clave).sort();
-    expect(deProspecto).toEqual(["ficha", "ficha.stakeholders", "procesos"]);
+    expect(deProspecto).toEqual(["ficha", "ficha.stakeholders", "preventa", "procesos"]);
+    // La preventa, solo del prospecto y solo si lee la reunión: un cliente no la tiene como destino.
+    expect(destinoPorClave("preventa")).toMatchObject({ kinds: ["PROSPECTO"], soloSiLaPreventaLaLee: true, salida: "preventa" });
   });
 
   it("la queja levanta alerta solo si la dijo el cliente (si no, va al vigía); Integraciones avisa que publica en vivo", () => {
@@ -136,6 +138,7 @@ describe("el registro de destinos", () => {
       "vigia.queja ← queja (vigia)",
       "cronograma.avance ← senal_cronograma (avance)",
       "etapa.encuesta ← senal_etapa (etapa)",
+      "preventa ← cuenta/persona/resultado/acuerdo/riesgo/queja (preventa)",
     ]);
   });
 });

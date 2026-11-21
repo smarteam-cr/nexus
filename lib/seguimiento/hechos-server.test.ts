@@ -34,8 +34,11 @@ vi.mock("@/lib/sessions/project-sources", () => ({
 const texto = vi.hoisted(() => ({ textoParaHechos: vi.fn() }));
 vi.mock("./hechos/texto-de-la-reunion", () => texto);
 vi.mock("@/lib/canvas/load-canvas-context", () => ({ loadHandoffContext: vi.fn(async () => "Se vendió Sales Hub.") }));
-const personas = vi.hoisted(() => ({ responsableDeLaPreventaViva: vi.fn(async () => undefined) }));
+const personas = vi.hoisted(() => ({ responsableDeLaPreventaViva: vi.fn(async (): Promise<string | null | undefined> => undefined) }));
 vi.mock("@/lib/lecturas/personas", () => personas);
+// La preventa que lee la reunión (el destino «preventa»): por defecto, ninguna. Sin el mock, el agente entero se carga.
+const preventa = vi.hoisted(() => ({ preventasQueLeenLaReunion: vi.fn(async (): Promise<string[]> => []) }));
+vi.mock("@/lib/exploraciones/agente", () => preventa);
 const destinos = vi.hoisted(() => ({
   proponerFichaDesdeHechos: vi.fn(async () => ({ status: "ok", cambiados: 1, campos: ["herramientasActuales"] })),
   levantarQuejaDeLaLectura: vi.fn(async () => ({ estado: "creada", alertaId: "alerta-1" })),
@@ -210,6 +213,25 @@ describe("la lectura de hechos", () => {
     personas.responsableDeLaPreventaViva.mockRejectedValueOnce(new Error("la base se cortó"));
     await leerHechosDeLaReunion("s1", { ahora: AHORA });
     expect(destinos.proponerFichaDesdeHechos).not.toHaveBeenCalled();
+  });
+
+  it("en un prospecto cuya preventa lee la reunión, lo de la cuenta nace delegado en la preventa (y no va a la ficha)", async () => {
+    db.client.findUnique.mockResolvedValue({ id: "c1", name: "Acme", industry: "Turismo", kind: "PROSPECTO" });
+    personas.responsableDeLaPreventaViva.mockResolvedValueOnce("vende@smarteamcr.com");
+    preventa.preventasQueLeenLaReunion.mockResolvedValueOnce(["exp-1"]);
+    await leerHechosDeLaReunion("s1", { ahora: AHORA });
+    const cuenta = escritos().find((f) => f.tipo === "cuenta")!;
+    expect(cuenta.destinos).toEqual([{ clave: "preventa", estado: "delegado", ref: { tipo: "preventa", exploracionIds: ["exp-1"] } }]);
+    // Sin fecha: la regla toma la de la reunión, con su hora (no las 6:00 de ese día).
+    expect(preventa.preventasQueLeenLaReunion).toHaveBeenCalledWith({ sesionId: "s1", clientId: "c1" });
+    expect(destinos.proponerFichaDesdeHechos).not.toHaveBeenCalled();
+  });
+
+  it("en un prospecto cuya preventa NO lee la reunión, lo de la cuenta queda en la tarjeta, como antes", async () => {
+    db.client.findUnique.mockResolvedValue({ id: "c1", name: "Acme", industry: "Turismo", kind: "PROSPECTO" });
+    personas.responsableDeLaPreventaViva.mockResolvedValueOnce("vende@smarteamcr.com");
+    await leerHechosDeLaReunion("s1", { ahora: AHORA });
+    expect(escritos().find((f) => f.tipo === "cuenta")!.destinos).toEqual([]);
   });
 
   it("una queja con un hablante dudoso (un solo nombre que es de alguien del equipo) no levanta alerta: va al vigía", async () => {

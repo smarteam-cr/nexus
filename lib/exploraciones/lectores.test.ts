@@ -151,6 +151,7 @@ const CENSO: Record<string, { destino: Destino; motivo: string }> = {
   "lib/analizador-venta/reuniones-de-venta-server.ts": { destino: "analizador-de-venta", motivo: "2026-10-27: qué reuniones son la sesión de una exploración abierta de la preventa (solo sus ids), para que el job analice solo esas." },
   "lib/analizador-venta/alcance.ts": { destino: "equipos-del-cliente", motivo: "Qué se esperaba explorar en una sesión: el área o los temas del equipo del cliente (EQUIPOS)." },
   "lib/analizador-venta/para-la-guia.ts": { destino: "ventas", motivo: "2026-11-08: el nombre del rol en la decisión (ETIQUETA_DEL_ROL), para escribir los huecos de decisión que el análisis le deja a la guía de la siguiente sesión. Interno." },
+  "lib/seguimiento/hechos-server.ts": { destino: "disparo", motivo: "2026-11-20: qué preventas leen la reunión (solo sus ids, `preventasQueLeenLaReunion`), para dejar delegado en ellas lo que la reunión dejó de un prospecto. No lee ninguna exploración ni escribe en ella." },
   "lib/analizador-venta/analisis.ts": { destino: "ventas", motivo: "2026-11-20: las clases de objeción (CLASES_DE_OBJECION), las mismas de la tarjeta «Objeciones», para el punto de objeciones del análisis. Interno: no lee ninguna exploración." },
   "lib/analizador-venta/criterio.ts": { destino: "ventas", motivo: "2026-11-20: las clases de objeción, LAER y las objeciones comunes del manual, para contarle al analizador cómo juzgar las objeciones. Interno: no lee ninguna exploración." },
   "lib/analizador-venta/revision.ts": { destino: "equipos-del-cliente", motivo: "De qué equipo es cada dimensión que faltó explorar (los temas de EQUIPOS), para agruparlas en «Cómo trabajaste esta sesión»." },
@@ -485,7 +486,7 @@ const PUERTAS: Record<Exclude<Destino, "ventas">, { permitidas: RegExp; prohibid
     prohibidas: /exploracionParaLaPropuesta|bloqueParaElHandoff|exploracionParaElHandoff|internoParaElCse|leerContenido|leerExploracion\b|\.exploracionDeVenta\b/,
   },
   disparo: {
-    permitidas: /leerReunionNueva/,
+    permitidas: /leerReunionNueva|preventasQueLeenLaReunion/,
     prohibidas: /exploracionParaElHandoff|bloqueParaLaPropuesta|\.exploracionDeVenta\b/,
   },
   "sugerencias-del-documento": {

@@ -23,6 +23,7 @@ import { useChatDeSeccion } from "@/components/asistente/chat-de-seccion";
 import { useMe } from "@/hooks/useMe";
 import { documentoConContexto } from "@/lib/contexto/documento";
 import { novedadesEnPalabras, type NovedadDeLaPieza, type NovedadesDeLaPieza } from "@/lib/seguimiento/novedades";
+import { rotuloDeQuienLoDijo } from "@/lib/seguimiento/quien-lo-dijo";
 
 const MESES = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
 
@@ -122,7 +123,7 @@ export default function NovedadesDelDocumento({
     chat.abrirCon({
       key: s.seccion,
       label,
-      novedad: { pieza, hechoIds: [n.hechoId, ...n.mismos], frase: n.frase, cita: n.cita, reunion: n.reunion.titulo, fecha: n.reunion.fecha },
+      novedad: { pieza, hechoIds: [n.hechoId, ...n.mismos], frase: n.frase, cita: n.cita, reunion: n.reunion.titulo, fecha: n.reunion.fecha, quienLoDijo: n.quienLoDijo },
     });
   }
 
@@ -151,6 +152,8 @@ export default function NovedadesDelDocumento({
                 encima={n.secciones.map((s) => seccionDelRotulo(s.rotulo)).join(" · ")}
                 origen={
                   <span className="min-w-0 truncate">
+                    {/* Primero, para que un título largo no lo corte con «…»: es lo que más importa de la línea. */}
+                    {rotuloDeQuienLoDijo(n.quienLoDijo) && <span className="font-medium text-warn-ink">{rotuloDeQuienLoDijo(n.quienLoDijo)} · </span>}
                     De «{n.reunion.titulo}» · {diaCorto(n.reunion.fecha)}
                     {n.mismos.length ? ` · se dijo en ${n.mismos.length + 1} reuniones` : ""}
                   </span>

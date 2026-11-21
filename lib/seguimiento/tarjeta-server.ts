@@ -32,6 +32,7 @@ import { campoDeFicha, camposDeLaReunion, decisionesDeLaReunion, leerFicha, type
 import { urlDeSolicitudes } from "@/lib/sessions/solicitudes-fuera-de-alcance";
 import { reunionParaLaTarjeta } from "@/lib/sessions/reuniones-para-seguimiento";
 import { diaCR } from "@/lib/lo-propuesto/ciclo";
+import { quienLoDijo } from "./quien-lo-dijo";
 import { PROPUESTAS_WHERE } from "@/lib/tareas/donde";
 import { contextoDeTareas, tareasDisponible } from "@/lib/tareas/servidor";
 import { clientesQueVesParaTareas } from "@/lib/tareas/clientes";
@@ -174,6 +175,7 @@ export async function cargarTarjeta(sessionId: string, user: AppUserWithTeamMemb
     tema: h.tema,
     frase: h.frase,
     cita: h.cita,
+    quienLoDijo: quienLoDijo(h),
     estado: h.estado,
     createdAt: (typeof h.createdAt === "string" ? new Date(h.createdAt) : h.createdAt).toISOString(),
     projectId: h.projectId,
