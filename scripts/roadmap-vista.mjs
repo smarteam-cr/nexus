@@ -79,6 +79,7 @@ function validarLinea(texto) {
   const ISO = /^\d{4}-\d{2}-\d{2}$/;
   const PROD = ["si", "parcial", "apagado", "plan"];
   const ESTADOS = ["otra-sesion", "por-hacer", "te-toca", "espera"];
+  const PASOS = ["hecho", "en-curso", "te-toca", "espera", "por-hacer"];
   const FECHA_EN_TEXTO = /\b\d{1,2} (de )?(ene|feb|mar|abr|may|jun|jul|ago|sep|oct|nov|dic)\b|\b20\d\d-\d\d|\b\d+ semanas?\b|\bpróxim[ao] (semana|mes)\b/i;
   const temas = new Set((JSON.parse(t.match(/```temas\n([\s\S]*?)\n```/)[1]).temas ?? []).map((x) => x.n));
   const dec = t.slice(t.indexOf("## Lo que decides tú"));
@@ -122,6 +123,22 @@ function validarLinea(texto) {
     if (FECHA_EN_TEXTO.test(`${s.titulo} ${s.que} ${s.esperaA ?? ""}`)) errores.push(`${quien}: menciona una fecha o un plazo; lo que sigue va sin tiempos`);
     if (!ESTADOS.includes(s.estado)) errores.push(`${quien}: «estado» vale ${ESTADOS.join(", ")}`);
     if (s.estado === "espera" && !s.esperaA) errores.push(`${quien}: en espera, ¿de qué? (falta «esperaA»)`);
+    // Las ramas (20 nov): al abrir el punto, el hilo se divide en ramas paralelas y se une en el siguiente punto.
+    if (s.ramas != null) {
+      if (!Array.isArray(s.ramas) || s.ramas.length < 2) errores.push(`${quien}: «ramas» necesita al menos dos ramas`);
+      for (const r of Array.isArray(s.ramas) ? s.ramas : []) {
+        if (!r.titulo || r.titulo.length > 60) errores.push(`${quien}: una rama sin título o de más de 60 letras`);
+        if (!Array.isArray(r.pasos) || !r.pasos.length) errores.push(`${quien}: la rama «${r.titulo}» no tiene pasos`);
+        for (const p of r.pasos ?? []) {
+          if (!p.texto || p.texto.length > 120) errores.push(`${quien} › ${r.titulo}: un paso sin texto o de más de 120 letras`);
+          if (!PASOS.includes(p.estado)) errores.push(`${quien} › ${r.titulo}: estado «${p.estado}» (vale ${PASOS.join(", ")})`);
+          if (p.pregunta != null && !preguntas.has(p.pregunta)) errores.push(`${quien} › ${r.titulo}: la pregunta ${p.pregunta} no está en «Lo que decides tú»`);
+          if (FECHA_EN_TEXTO.test(p.texto ?? "")) errores.push(`${quien} › ${r.titulo}: «${p.texto}» menciona una fecha o un plazo`);
+        }
+      }
+      if (!s.seUneEn) errores.push(`${quien}: con ramas, falta «seUneEn» (el punto del hilo donde se unen)`);
+      else if (s.seUneEn === s.titulo || !(d.sigue ?? []).some((x) => x.titulo === s.seUneEn)) errores.push(`${quien}: «seUneEn» no nombra otro punto de «sigue»`);
+    } else if (s.seUneEn) errores.push(`${quien}: «seUneEn» sin ramas`);
   }
   for (const id of ini) if (!usadas.has(id)) errores.push(`la iniciativa ${id} no tiene ningún hito`);
   if (errores.length) throw new Error("La línea de tiempo no cuadra:\n- " + errores.join("\n- "));

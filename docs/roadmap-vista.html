@@ -238,59 +238,60 @@ main { max-width: 1040px; margin: 0 auto; padding-block: 32px 64px;
 .ln-vacio { padding: 10px 12px; font-size: 13.5px; color: var(--fg-muted); }
 .ln-cta { position: fixed; z-index: 20; right: calc(20px + env(safe-area-inset-right, 0px)); bottom: calc(20px + env(safe-area-inset-bottom, 0px)); font: inherit; font-size: 14px; font-weight: 650; color: var(--brand-ink); background: var(--brand); border: 0; border-radius: 999px; padding: 11px 18px; cursor: pointer; box-shadow: 0 6px 20px -6px rgba(0, 0, 0, .45); display: inline-flex; align-items: center; gap: 8px; }
 .ln-cta[hidden] { display: none; }
-/* Los carriles (20 nov, pedido de Elías: «lo más importante es lo que estamos haciendo en ejecución»). Un carril por
-   tema: a la izquierda el tema, a la derecha lo que falta resolver en tarjetas que corren de lado. Lo que viene, igual y
-   más tenue. Lo que ya pasó, en el desplegable de abajo. */
-.cr-wrap { max-width: none; }
-.cr-sec { display: grid; gap: 10px; margin: 8px 0 26px; scroll-margin-top: 12px; }
-.cr-h { margin: 0 !important; font-size: 13px; font-weight: 650; letter-spacing: .07em; text-transform: uppercase; color: var(--fg) !important; }
-.cr-sec.tenue .cr-h { color: var(--fg-muted) !important; }
-.cr-sub { margin: -4px 0 4px; font-size: 13.5px; color: var(--fg-muted); }
-.cr-carril { display: grid; grid-template-columns: 230px minmax(0, 1fr); gap: 14px; align-items: start; padding: 14px 0; border-top: 1px solid var(--line); }
-.cr-cabeza { display: grid; gap: 6px; justify-items: start; min-width: 0; }
-.cr-cabeza-1 { display: flex; align-items: baseline; gap: 8px; }
-.cr-cabeza h3 { margin: 0; font-size: 15.5px; font-weight: 650; color: var(--fg); text-wrap: balance; }
-.cr-prio { flex: none; display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; font-size: 12px; font-weight: 700; color: var(--brand-ink); background: var(--brand); font-variant-numeric: tabular-nums; }
-.cr-sec.tenue .cr-prio { color: var(--fg-2); background: var(--surface-muted); border: 1px solid var(--line); }
-.cr-sig { margin: 0; font-size: 13px; color: var(--fg-muted); display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
-.cr-sig b { color: var(--fg-2); font-weight: 600; }
-.cr-pista { display: flex; align-items: flex-start; gap: 6px; overflow-x: auto; padding: 2px 2px 10px; scroll-snap-type: x proximity; overscroll-behavior-x: contain; }
-.cr-flecha { flex: none; align-self: center; margin-top: -10px; font-size: 15px; color: var(--fg-muted); }
-.cr-card { flex: 0 0 264px; scroll-snap-align: start; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; min-width: 0; }
-.cr-sec.tenue .cr-card { background: var(--bg); border-style: dashed; }
-.cr-card.abierta { flex-basis: 340px; }
-.cr-cab { display: grid; gap: 4px; width: 100%; font: inherit; text-align: left; color: inherit; background: none; border: 0; border-radius: 12px; padding: 11px 13px; cursor: pointer; }
-.cr-cab:disabled { cursor: default; }
-.cr-cab:hover:not(:disabled) { background: var(--surface-muted); }
-.cr-cab:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
-.cr-meta { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--fg-muted); }
-.cr-num { font-weight: 700; color: var(--fg-2); font-variant-numeric: tabular-nums; }
-.cr-et { font-weight: 650; color: var(--c, var(--fg-muted)); }
-.cr-et::before { content: ""; display: inline-block; width: 8px; height: 8px; margin-right: 5px; border-radius: 50%; background: var(--c, var(--fg-muted)); vertical-align: 0; }
-.cr-t { font-size: 14.5px; font-weight: 650; color: var(--fg); line-height: 1.35; }
-.cr-d { font-size: 13px; color: var(--fg-muted); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
-.cr-card.abierta .cr-d { display: none; }
-.cr-chips { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 2px; }
-.cr-chips .chip { font-size: 11.5px; padding: 1px 8px; }
-.cr-det { display: grid; gap: 10px; padding: 0 13px 13px; }
-.cr-det[hidden] { display: none; }
-.cr-que { margin: 0; font-size: 14px; color: var(--fg-2); }
-.cr-det .ln-dl { grid-template-columns: 1fr; gap: 2px; }
-.cr-det .ln-dl dd { margin-bottom: 6px; }
-.cr-h3 { margin: 22px 0 10px; font-size: 12px; font-weight: 650; letter-spacing: .06em; text-transform: uppercase; color: var(--fg-muted); }
-.ln-pasado { margin-top: 10px; border-top: 1px solid var(--line); }
-.ln-pasado > summary { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; padding: 16px 0; cursor: pointer; list-style: none; }
+/* El flujo de un punto (20 nov, pedido de Elías: «el hilo puede subdividirse»). Al abrir un punto del hilo, sale un
+   flujo de izquierda a derecha: se divide en ramas, cada rama con sus pasos, y las ramas se unen en el siguiente punto.
+   Los nodos son HTML en una grilla; las líneas, un SVG que se dibuja encima con sus posiciones. */
+.fl { overflow-x: auto; overflow-y: hidden; overscroll-behavior-x: contain; margin: 2px -4px 0; padding: 4px 4px 2px; }
+.fl-cab { margin: 0 0 2px; font-size: 13px; color: var(--fg-muted); }
+.fl-cab b { color: var(--fg); font-weight: 650; }
+.fl-lienzo { position: relative; display: grid; grid-auto-rows: minmax(64px, auto); column-gap: 34px; row-gap: 12px; align-items: center; width: max-content; padding: 6px 2px 10px; }
+.fl-svg { position: absolute; inset: 0; pointer-events: none; overflow: visible; }
+.fl-l { fill: none; stroke: var(--c, var(--fg-muted)); stroke-width: 2; }
+.fl-l.falta { stroke-dasharray: 5 5; opacity: .7; }
+.fl-ori, .fl-une { display: flex; align-items: center; gap: 10px; align-self: center; position: relative; z-index: 1; }
+.fl-ori { flex-direction: column; gap: 6px; }
+.fl-pto { width: 14px; height: 14px; border-radius: 50%; background: var(--c, var(--brand)); box-shadow: 0 0 0 4px var(--bg); flex: none; }
+.fl-une .fl-pto { background: var(--bg); border: 2.5px solid var(--c, var(--brand)); }
+.fl-ori-t { font-size: 11.5px; font-weight: 600; color: var(--fg-muted); white-space: nowrap; }
+.fl-une-t { display: grid; gap: 2px; max-width: 190px; }
+.fl-ir { font: inherit; font-size: 13.5px; font-weight: 650; text-align: left; color: var(--fg); background: none; border: 0; padding: 0; cursor: pointer; text-decoration: underline; text-decoration-color: var(--line); text-underline-offset: 3px; }
+.fl-ir:hover { text-decoration-color: currentColor; }
+.fl-rama { position: relative; z-index: 1; font-size: 13px; font-weight: 700; color: var(--fg); background: var(--surface); border: 1.5px solid var(--c, var(--line)); border-radius: 999px; padding: 5px 12px; white-space: nowrap; }
+.fl-paso { position: relative; z-index: 1; display: grid; gap: 2px; width: 172px; padding: 8px 10px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); font-size: 13px; line-height: 1.35; }
+.fl-t { color: var(--fg); }
+.fl-est { font-size: 10.5px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--fg-muted); }
+.fl-hecho { background: var(--ok-bg); border-color: var(--ok-line); }
+.fl-hecho .fl-est { color: var(--ok-ink); }
+.fl-hecho .fl-t { color: var(--fg-2); }
+.fl-en-curso { background: var(--info-bg); border-color: var(--info-line); }
+.fl-en-curso .fl-est { color: var(--info-ink); }
+.fl-te-toca { background: var(--warn-bg); border-color: var(--warn-line); }
+.fl-te-toca .fl-est { color: var(--warn-ink); }
+.fl-espera, .fl-por-hacer { background: var(--bg); border-style: dashed; }
+.fl-dec { grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 10px; width: 210px; background: none; border: 0; padding: 0; cursor: help; }
+.fl-rombo { display: grid; place-items: center; width: 34px; height: 34px; transform: rotate(45deg); background: var(--warn-bg); border: 1.5px solid var(--warn-ink); border-radius: 5px; box-shadow: 0 0 0 4px var(--bg); }
+.fl-rombo span { transform: rotate(-45deg); font-size: 12px; font-weight: 700; color: var(--warn-ink); font-variant-numeric: tabular-nums; }
+.fl-dec .fl-est { color: var(--warn-ink); }
+.fl-dec.ya .fl-rombo { background: var(--ok-bg); border-color: var(--ok-ink); }
+.fl-dec.ya .fl-rombo span, .fl-dec.ya .fl-est { color: var(--ok-ink); }
+.fl-tx { display: grid; gap: 2px; }
+.fl-nota { margin: 0; font-size: 12px; color: var(--fg-muted); }
+.fl-chip { color: var(--fg-2); background: var(--surface); border-color: var(--c, var(--line)); }
+.ln-h3 { margin: 22px 0 10px; font-size: 12px; font-weight: 650; letter-spacing: .06em; text-transform: uppercase; color: var(--fg-muted); }
+.ln-pasado { margin: 6px 0 4px; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.ln-pasado > summary { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; padding: 14px 0; cursor: pointer; list-style: none; }
 .ln-pasado > summary::-webkit-details-marker { display: none; }
 .ln-pasado > summary::before { content: "\25B8"; color: var(--fg-muted); font-size: 12px; transition: transform .15s; }
 .ln-pasado[open] > summary::before { transform: rotate(90deg); }
 .ln-pasado > summary:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
 .ln-pasado-t { font-size: 13px; font-weight: 650; letter-spacing: .07em; text-transform: uppercase; color: var(--fg); }
 .ln-pasado-n { font-size: 13px; color: var(--fg-muted); }
-.ln-pasado-c { display: grid; gap: 10px; max-width: 900px; padding-bottom: 12px; }
-@media (max-width: 720px) {
-  .cr-carril { grid-template-columns: 1fr; gap: 10px; }
-  .cr-card { flex-basis: 78vw; max-width: 300px; }
-  .cr-card.abierta { flex-basis: 86vw; max-width: 340px; }
+.ln-pasado-c { display: grid; gap: 10px; padding-bottom: 14px; }
+.ln-item.abierto .ln-caja { box-shadow: 0 1px 0 var(--line); }
+@media (max-width: 560px) {
+  .fl-lienzo { column-gap: 26px; }
+  .fl-paso { width: 150px; }
+  .fl-dec { width: 180px; }
 }
 .ln-cta span { display: inline-block; transition: transform .2s; }
 .ln-cta.arriba span { transform: rotate(180deg); }
@@ -688,15 +689,20 @@ main { max-width: 1040px; margin: 0 auto; padding-block: 32px 64px;
   function pintarLinea() {
     if (!linea) return;
     function nodo(tag, cls, txt) { var x = document.createElement(tag); if (cls) x.className = cls; if (txt != null) x.textContent = txt; return x; }
+    var SVG = 'http://www.w3.org/2000/svg';
     // Los colores de cada iniciativa, como tokens: claro en :root y oscuro en los dos bloques del tema.
     var claro = [], oscuro = [], ini = {};
     linea.iniciativas.forEach(function (i) { ini[i.id] = i; claro.push('--ini-' + i.id + ':' + i.color); oscuro.push('--ini-' + i.id + ':' + i.oscuro); });
     var st = document.createElement('style');
     st.textContent = ':root{' + claro.join(';') + '}@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){' + oscuro.join(';') + '}}:root[data-theme="dark"]{' + oscuro.join(';') + '}';
     document.head.appendChild(st);
-    // Las preguntas abiertas de «Lo que decides tú», por número (las respondidas llevan ✓ y no se muestran).
-    var pq = {}, sec = md.slice(md.indexOf('## Lo que decides tú')); var fin = sec.indexOf('\n## ', 5); if (fin > 0) sec = sec.slice(0, fin);
-    sec.replace(/\r/g, '').split('\n').forEach(function (l) { var x = l.match(/^(\d+)\. (?!✓)(.*)$/); if (x) pq[x[1]] = x[2]; });
+    // Las preguntas de «Lo que decides tú», por número: las abiertas con su texto; las respondidas llevan ✓.
+    var pq = {}, respondida = {}, sec = md.slice(md.indexOf('## Lo que decides tú')); var fin = sec.indexOf('\n## ', 5); if (fin > 0) sec = sec.slice(0, fin);
+    sec.replace(/\r/g, '').split('\n').forEach(function (l) {
+      var x = l.match(/^(\d+)\. (✓\s*)?(.*)$/); if (!x) return;
+      if (x[2]) respondida[x[1]] = true; else pq[x[1]] = x[3];
+    });
+    function textoPlano(mdTexto) { var t = document.createElement('div'); t.innerHTML = marked.parseInline(mdTexto); return t.textContent; }
     function rango(h) {
       if (!h.hasta) return fecha(h.fecha);
       var a = h.fecha.split('-'), b = h.hasta.split('-');
@@ -710,164 +716,158 @@ main { max-width: 1040px; margin: 0 auto; padding-block: 32px 64px;
     }
     var PROD = { si: 'Sí, en producción', parcial: 'En producción, con una parte apagada', apagado: 'En producción, pero apagado', plan: 'Es un plan, no código' };
     var ESTADO = { 'otra-sesion': ['En otra sesión', 's-info'], 'por-hacer': ['Por hacer', 's-idle'], 'te-toca': ['Te toca a ti', 's-warn'], 'espera': ['Espera', 's-idle'] };
-    var EST_TEMA = { 'en-curso': ['En ejecución', 's-info'], 'propuesta': ['Por arrancar', 's-idle'], 'funciona': ['Funciona', 's-ok'], 'terminado': ['Terminado', 's-ok'] };
+    var PASO = { 'hecho': 'Hecho', 'en-curso': 'En curso', 'te-toca': 'Te toca', 'espera': 'Espera', 'por-hacer': 'Por hacer' };
+    var EST_TEMA = { 'en-curso': ['En curso', 's-info'], 'propuesta': ['Por arrancar', 's-idle'], 'funciona': ['Funciona', 's-ok'], 'terminado': ['Terminado', 's-ok'] };
     var bloqueTemas = {};
     try { bloqueTemas = JSON.parse(paneles.resumen.querySelector('code.language-temas').textContent); } catch (e) {}
     var temas = bloqueTemas.temas || [];
-    var nId = 0;
+    var nId = 0, items = [], hilo = {}, flujos = [];
 
-    // ── Lo que ya pasó: la línea vertical con lo hecho, en un desplegable (20 nov, pedido de Elías). ──
-    var items = [];
-    function item(h) {
+    // ── El flujo de un punto: el hilo se divide en ramas paralelas, cada una con sus pasos de izquierda a derecha, y
+    //    las ramas se unen en el siguiente punto del hilo (20 nov, pedido de Elías: «el hilo puede subdividirse»).
+    //    Los nodos son HTML (el texto se parte solo); las líneas, un SVG encima que se dibuja con sus posiciones. ──
+    function flujo(s) {
+      var caja = nodo('div', 'fl');
+      caja.setAttribute('role', 'group'); caja.setAttribute('aria-label', 'Las ramas de «' + s.titulo + '»');
+      var lienzo = nodo('div', 'fl-lienzo');
+      var n = s.ramas.length, largo = 0;
+      s.ramas.forEach(function (r) { largo = Math.max(largo, r.pasos.length); });
+      lienzo.style.gridTemplateColumns = 'auto auto repeat(' + largo + ', auto) auto';
+      var ori = nodo('div', 'fl-ori');
+      ori.style.gridRow = '1 / span ' + n; ori.style.gridColumn = '1';
+      ori.appendChild(nodo('span', 'fl-pto'));
+      lienzo.appendChild(ori);
+      var cabFl = nodo('p', 'fl-cab');
+      cabFl.appendChild(document.createTextNode('Se divide en ' + n + ' ramas, que se unen en '));
+      cabFl.appendChild(nodo('b', null, '«' + s.seUneEn + '»'));
+      cabFl.appendChild(document.createTextNode('.'));
+      caja.appendChild(cabFl);
+      var filas = [];
+      s.ramas.forEach(function (r, i) {
+        var fila = [];
+        var t = nodo('div', 'fl-rama', r.titulo); t.style.gridRow = String(i + 1); t.style.gridColumn = '2';
+        lienzo.appendChild(t); fila.push({ el: t, estado: 'hecho' });
+        r.pasos.forEach(function (p, j) {
+          var el;
+          if (p.pregunta != null) {
+            var ya = respondida[p.pregunta];
+            el = nodo('div', 'fl-paso fl-dec' + (ya ? ' ya' : ''));
+            var rombo = nodo('span', 'fl-rombo'); rombo.appendChild(nodo('span', null, ya ? '✓' : String(p.pregunta))); el.appendChild(rombo);
+            var tx = nodo('span', 'fl-tx'); tx.appendChild(nodo('span', 'fl-est', ya ? 'Decidida · ' + p.pregunta : 'Decides tú · pregunta ' + p.pregunta)); tx.appendChild(nodo('span', 'fl-t', p.texto));
+            el.appendChild(tx);
+            if (pq[p.pregunta]) el.title = textoPlano(pq[p.pregunta]);
+          } else {
+            el = nodo('div', 'fl-paso fl-' + p.estado);
+            el.appendChild(nodo('span', 'fl-est', PASO[p.estado] || p.estado));
+            el.appendChild(nodo('span', 'fl-t', p.texto));
+          }
+          el.style.gridRow = String(i + 1); el.style.gridColumn = String(3 + j);
+          lienzo.appendChild(el); fila.push({ el: el, estado: p.pregunta != null && respondida[p.pregunta] ? 'hecho' : p.estado });
+        });
+        filas.push(fila);
+      });
+      var une = nodo('div', 'fl-une');
+      une.style.gridRow = '1 / span ' + n; une.style.gridColumn = String(3 + largo);
+      une.appendChild(nodo('span', 'fl-pto'));
+      var ut = nodo('span', 'fl-une-t'); ut.appendChild(nodo('span', 'fl-est', 'Se une en'));
+      var ir = nodo('button', 'fl-ir', s.seUneEn); ir.type = 'button';
+      ir.addEventListener('click', function () { var d = hilo[s.seUneEn]; if (d) { d._abrir(true); d.scrollIntoView({ block: 'center', behavior: suave ? 'smooth' : 'auto' }); } });
+      ut.appendChild(ir); une.appendChild(ut);
+      lienzo.appendChild(une);
+      var svg = document.createElementNS(SVG, 'svg'); svg.setAttribute('class', 'fl-svg'); svg.setAttribute('aria-hidden', 'true');
+      lienzo.insertBefore(svg, lienzo.firstChild);
+      caja.appendChild(lienzo);
+      caja.appendChild(nodo('p', 'fl-nota', 'Línea llena: ya pasó. Punteada: falta. Los rombos son decisiones tuyas; pasa el mouse por uno para leer la pregunta entera.'));
+
+      function dibujar() {
+        if (!caja.offsetParent) return;
+        var base = lienzo.getBoundingClientRect();
+        svg.setAttribute('width', lienzo.scrollWidth); svg.setAttribute('height', lienzo.scrollHeight);
+        svg.setAttribute('viewBox', '0 0 ' + lienzo.scrollWidth + ' ' + lienzo.scrollHeight);
+        while (svg.firstChild) svg.removeChild(svg.firstChild);
+        function caj(el) { var r = el.getBoundingClientRect(); return { l: r.left - base.left, r: r.right - base.left, y: r.top - base.top + r.height / 2 }; }
+        function anc(el) { var p = el.querySelector('.fl-pto, .fl-rombo'); return p ? caj(p) : caj(el); }
+        function linea(a, b, hecho) {
+          var x1 = a.r, y1 = a.y, x2 = b.l, y2 = b.y, dx = Math.max(24, (x2 - x1) / 2);
+          var p = document.createElementNS(SVG, 'path');
+          p.setAttribute('d', 'M' + x1 + ' ' + y1 + ' C' + (x1 + dx) + ' ' + y1 + ' ' + (x2 - dx) + ' ' + y2 + ' ' + x2 + ' ' + y2);
+          p.setAttribute('class', 'fl-l' + (hecho ? '' : ' falta'));
+          svg.appendChild(p);
+        }
+        var o = anc(ori), u = anc(une);
+        filas.forEach(function (fila) {
+          var todoHecho = true;
+          fila.forEach(function (x, k) {
+            var b = k === 0 ? caj(x.el) : caj(x.el);
+            if (fila[k].estado !== 'hecho') todoHecho = false;
+            if (k === 0) linea(o, b, true);
+            else linea(caj(fila[k - 1].el), b, x.estado === 'hecho' && todoHecho);
+          });
+          linea(caj(fila[fila.length - 1].el), u, false);
+        });
+      }
+      flujos.push(dibujar);
+      if (window.ResizeObserver) new ResizeObserver(function () { dibujar(); }).observe(lienzo);
+      return { el: caja, dibujar: dibujar };
+    }
+
+    // ── Una fila del hilo: lo hecho (con fecha) o un punto de lo que sigue (con su número de prioridad). ──
+    function item(h, futuro, numero) {
       var i = ini[h.iniciativa] || { nombre: h.iniciativa };
       var li = nodo('li', 'ln-fila ln-item'); li.setAttribute('data-ini', h.iniciativa);
       li.style.setProperty('--c', 'var(--ini-' + h.iniciativa + ')');
-      li.appendChild(nodo('div', 'ln-f', rango(h)));
+      li.appendChild(nodo('div', 'ln-f', futuro ? String(numero) : rango(h)));
       var p = nodo('div', 'ln-p'); p.setAttribute('aria-hidden', 'true'); li.appendChild(p);
       var caja = nodo('div', 'ln-caja'), cab = nodo('button', 'ln-cab'), id = 'ln-det-' + (++nId);
       cab.type = 'button'; cab.setAttribute('aria-expanded', 'false'); cab.setAttribute('aria-controls', id);
       var meta = nodo('span', 'ln-meta'); meta.appendChild(nodo('span', 'ln-ini', i.nombre));
       var abiertas = (h.preguntas || []).filter(function (n) { return pq[n]; });
-      if (h.prod !== 'si') meta.appendChild(nodo('span', 'chip ' + (h.prod === 'plan' ? 's-idle' : 's-warn'), h.prod === 'plan' ? 'Plan' : h.prod === 'apagado' ? 'Apagado' : 'Una parte apagada'));
-      if (abiertas.length) meta.appendChild(nodo('span', 'chip s-warn', abiertas.length === 1 ? '1 pregunta para ti' : abiertas.length + ' preguntas para ti'));
+      var nPreg = abiertas.length + (h.preguntaTexto ? 1 : 0);
+      if (futuro) {
+        var e = ESTADO[h.estado] || ['', 's-idle'];
+        meta.appendChild(nodo('span', 'chip ' + e[1], h.estado === 'espera' && h.esperaA ? 'Espera a ' + h.esperaA : e[0]));
+        if (h.ramas) meta.appendChild(nodo('span', 'chip fl-chip', 'Se divide en ' + h.ramas.length));
+      } else if (h.prod !== 'si') meta.appendChild(nodo('span', 'chip ' + (h.prod === 'plan' ? 's-idle' : 's-warn'), h.prod === 'plan' ? 'Plan' : h.prod === 'apagado' ? 'Apagado' : 'Una parte apagada'));
+      if (nPreg) meta.appendChild(nodo('span', 'chip s-warn', nPreg === 1 ? '1 pregunta para ti' : nPreg + ' preguntas para ti'));
       cab.appendChild(meta); cab.appendChild(nodo('span', 'ln-t', h.titulo)); cab.appendChild(nodo('span', 'ln-d', h.que));
       caja.appendChild(cab);
       var det = nodo('div', 'ln-det'); det.id = id; det.hidden = true;
       det.appendChild(nodo('p', 'ln-que', h.que));
+      var fl = futuro && h.ramas ? flujo(h) : null;
+      if (fl) det.appendChild(fl.el);
       var dl = nodo('dl', 'ln-dl');
       function fila(k, v) { dl.appendChild(nodo('dt', null, k)); var dd = nodo('dd'); if (typeof v === 'string') dd.textContent = v; else dd.appendChild(v); dl.appendChild(dd); }
       fila('Para quién', h.paraQuien);
-      fila('En producción', (PROD[h.prod] || '') + (h.prodNota ? '. ' + h.prodNota : '.'));
-      if (abiertas.length) fila(abiertas.length === 1 ? 'Pregunta para ti' : 'Preguntas para ti', listaDePreguntas(abiertas));
+      if (futuro) fila('Cómo está', h.estado === 'espera' && h.esperaA ? 'Espera a ' + h.esperaA + '.' : (ESTADO[h.estado] || [''])[0] + '.');
+      else fila('En producción', (PROD[h.prod] || '') + (h.prodNota ? '. ' + h.prodNota : '.'));
+      if (nPreg && !fl) fila(nPreg === 1 ? 'Pregunta para ti' : 'Preguntas para ti', listaDePreguntas(abiertas, h.preguntaTexto));
       if (h.commits && h.commits.length) {
         var sh = nodo('div', 'ln-shas'); h.commits.forEach(function (c) { sh.appendChild(nodo('code', 'sha', c)); });
         fila('Cambios', sh);
       }
       det.appendChild(dl); caja.appendChild(det); li.appendChild(caja);
-      function abrir(si) { li.classList.toggle('abierto', si); det.hidden = !si; cab.setAttribute('aria-expanded', String(si)); }
+      function abrir(si) {
+        li.classList.toggle('abierto', si); det.hidden = !si; cab.setAttribute('aria-expanded', String(si));
+        if (si && fl) requestAnimationFrame(fl.dibujar);
+      }
       cab.addEventListener('click', function () { abrir(det.hidden); });
-      li._abrir = abrir; items.push(li);
+      li._abrir = abrir;
+      if (futuro) hilo[h.titulo] = li; else items.push(li);
       return li;
     }
 
-    // ── En ejecución y lo que viene: un carril horizontal por tema, con lo que falta resolver de izquierda a derecha. ──
-    // Las tarjetas son los pasos de «sigue» de la línea con ese tema (en su orden de prioridad); si no hay ninguno, el
-    // «sigue» del tema. Después, lo que te toca y las preguntas abiertas del tema que ninguna tarjeta nombra.
-    linea.sigue.forEach(function (s, i) { s._n = i + 1; });
-    function tarjeta(o) {
-      var card = nodo('article', 'cr-card');
-      if (o.color) card.style.setProperty('--c', 'var(--ini-' + o.color + ')');
-      var cab = nodo('button', 'cr-cab'), id = 'cr-det-' + (++nId);
-      cab.type = 'button'; cab.setAttribute('aria-expanded', 'false'); cab.setAttribute('aria-controls', id);
-      var meta = nodo('span', 'cr-meta');
-      if (o.numero) meta.appendChild(nodo('span', 'cr-num', '#' + o.numero));
-      if (o.etiqueta) meta.appendChild(nodo('span', 'cr-et', o.etiqueta));
-      if (meta.childNodes.length) cab.appendChild(meta);
-      cab.appendChild(nodo('span', 'cr-t', o.titulo));
-      if (o.texto) cab.appendChild(nodo('span', 'cr-d', o.texto));
-      var chips = nodo('span', 'cr-chips');
-      if (o.chip) chips.appendChild(nodo('span', 'chip ' + o.chip[1], o.chip[0]));
-      var abiertas = (o.preguntas || []).filter(function (n) { return pq[n]; });
-      var nPreg = abiertas.length + (o.preguntaTexto ? 1 : 0);
-      if (nPreg && !o.soloPreguntas) chips.appendChild(nodo('span', 'chip s-warn', nPreg === 1 ? '1 pregunta' : nPreg + ' preguntas'));
-      if (chips.childNodes.length) cab.appendChild(chips);
-      card.appendChild(cab);
-      var det = nodo('div', 'cr-det'); det.id = id; det.hidden = true;
-      if (o.texto && !o.soloPreguntas) det.appendChild(nodo('p', 'cr-que', o.texto));
-      var dl = nodo('dl', 'ln-dl');
-      function fila(k, v) { dl.appendChild(nodo('dt', null, k)); var dd = nodo('dd'); if (typeof v === 'string') dd.textContent = v; else dd.appendChild(v); dl.appendChild(dd); }
-      if (o.paraQuien) fila('Para quién', o.paraQuien);
-      if (o.como) fila('Cómo está', o.como);
-      if (nPreg) fila(nPreg === 1 ? 'Pregunta para ti' : 'Preguntas para ti', listaDePreguntas(abiertas, o.preguntaTexto));
-      if (dl.childNodes.length) det.appendChild(dl);
-      if (det.childNodes.length) {
-        card.appendChild(det);
-        cab.addEventListener('click', function () {
-          var si = det.hidden; det.hidden = !si; card.classList.toggle('abierta', si); cab.setAttribute('aria-expanded', String(si));
-        });
-      } else { cab.disabled = true; cab.removeAttribute('aria-expanded'); cab.removeAttribute('aria-controls'); }
-      return card;
-    }
-    function deSigue(s) {
-      var e = ESTADO[s.estado] || ['', 's-idle'];
-      var como = s.estado === 'espera' && s.esperaA ? 'Espera a ' + s.esperaA : e[0];
-      return tarjeta({ color: s.iniciativa, numero: s._n, etiqueta: (ini[s.iniciativa] || {}).nombre, chip: [como, e[1]], titulo: s.titulo, texto: s.que,
-        paraQuien: s.paraQuien, como: como + '.', preguntas: s.preguntas, preguntaTexto: s.preguntaTexto });
-    }
-    function carril(t, pasos) {
-      // t: el tema (o null para lo que no tiene tema); pasos: los de la línea que le tocan.
-      var c = nodo('div', 'cr-carril');
-      var cab = nodo('div', 'cr-cabeza');
-      var arriba = nodo('div', 'cr-cabeza-1');
-      if (t && t.prioridad && (t.estado === 'en-curso' || t.estado === 'propuesta')) arriba.appendChild(nodo('span', 'cr-prio', String(t.prioridad)));
-      arriba.appendChild(nodo('h3', null, t ? t.nombre : 'Fuera de los temas'));
-      cab.appendChild(arriba);
-      if (t) { var e = EST_TEMA[t.estado] || ['', 's-idle']; cab.appendChild(nodo('span', 'chip ' + e[1], e[0])); }
-      if (t && t.sigue && pasos.length) { var sg = nodo('p', 'cr-sig'); sg.appendChild(nodo('b', null, 'Lo siguiente: ')); sg.appendChild(document.createTextNode(t.sigue)); cab.appendChild(sg); }
-      else if (t && t.resultado) cab.appendChild(nodo('p', 'cr-sig', t.resultado));
-      c.appendChild(cab);
-      var pista = nodo('div', 'cr-pista'); pista.setAttribute('role', 'list');
-      pista.setAttribute('aria-label', 'Lo que falta resolver' + (t ? ' en ' + t.nombre : ''));
-      var tarjetas = [], nombradas = {};
-      pasos.forEach(function (s) { tarjetas.push(deSigue(s)); (s.preguntas || []).forEach(function (n) { nombradas[n] = true; }); });
-      if (!pasos.length && t && t.sigue) tarjetas.push(tarjeta({ etiqueta: 'Lo siguiente', titulo: t.sigue }));
-      if (t && t.teToca) tarjetas.push(tarjeta({ etiqueta: 'Lo que te toca', chip: ['Te toca a ti', 's-warn'], titulo: t.teToca }));
-      var sueltas = t ? (t.decisiones || []).filter(function (n) { return pq[n] && !nombradas[n]; }) : [];
-      if (sueltas.length) tarjetas.push(tarjeta({ etiqueta: 'Por decidir', titulo: sueltas.length === 1 ? '1 pregunta para ti' : sueltas.length + ' preguntas para ti',
-        texto: 'Tócala para ver ' + (sueltas.length === 1 ? 'la pregunta.' : 'las preguntas.'), chip: ['Te toca a ti', 's-warn'], preguntas: sueltas, soloPreguntas: true }));
-      if (!tarjetas.length) tarjetas.push(tarjeta({ titulo: 'Nada pendiente en este tema.' }));
-      tarjetas.forEach(function (k, i) {
-        if (i) { var fl = nodo('span', 'cr-flecha', '→'); fl.setAttribute('aria-hidden', 'true'); pista.appendChild(fl); }
-        k.setAttribute('role', 'listitem'); pista.appendChild(k);
-      });
-      c.appendChild(pista);
-      return c;
-    }
-    function seccion(titulo, sub, cls) {
-      var s = nodo('section', 'cr-sec' + (cls ? ' ' + cls : ''));
-      s.appendChild(nodo('h2', 'cr-h', titulo));
-      if (sub) s.appendChild(nodo('p', 'cr-sub', sub));
-      return s;
-    }
-    var porPrio = function (a, b) { return (a.prioridad || 99) - (b.prioridad || 99); };
-    var colocados = {};
-    function pasosDe(t) { var p = linea.sigue.filter(function (s) { return s.tema === t.n; }); p.forEach(function (s) { colocados[s._n] = true; }); return p; }
-
-    var raiz = nodo('div', 'ln-wrap cr-wrap');
+    var suave = !(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+    var raiz = nodo('div', 'ln-wrap');
     var top = nodo('div', 'ln-top');
     if (bloqueTemas.dondeVamos) top.appendChild(nodo('p', 'ln-donde', bloqueTemas.dondeVamos));
     var est = nodo('div', 'ln-estado');
     var b1 = nodo('span'); b1.innerHTML = 'Hoy es <b>' + fecha(linea.hoy) + '</b>'; est.appendChild(b1);
     var b2 = nodo('span'); b2.appendChild(document.createTextNode('Producción corre ')); b2.appendChild(nodo('code', 'sha', linea.produccion)); est.appendChild(b2);
-    var enCurso = temas.filter(function (t) { return t.estado === 'en-curso'; }).sort(porPrio);
-    var propuesta = temas.filter(function (t) { return t.estado === 'propuesta'; }).sort(porPrio);
-    est.appendChild(nodo('span', null, enCurso.length + ' temas en ejecución · ' + propuesta.length + ' por arrancar'));
+    est.appendChild(nodo('span', null, linea.sigue.length + ' puntos por delante en el hilo'));
     top.appendChild(est);
     raiz.appendChild(top);
 
-    var ejec = seccion('En ejecución', 'Un carril por tema, en orden de prioridad. De izquierda a derecha, lo que falta resolver. Toca una tarjeta para ver el detalle.');
-    ejec.id = 'hoy';
-    enCurso.forEach(function (t) { ejec.appendChild(carril(t, pasosDe(t))); });
-    raiz.appendChild(ejec);
-    if (propuesta.length) {
-      var viene = seccion('Lo que viene', 'Temas que todavía no arrancan, sin fechas: cada uno se hace cuando lo pones a correr.', 'tenue');
-      propuesta.forEach(function (t) { viene.appendChild(carril(t, pasosDe(t))); });
-      raiz.appendChild(viene);
-    }
-    // Lo pendiente de la línea que cae en un tema que ya funciona, o en ninguno: es trabajo por hacer, no se esconde.
-    var resto = linea.sigue.filter(function (s) { return !colocados[s._n]; });
-    if (resto.length) {
-      var tamb = seccion('También pendiente', 'Lo que falta en temas que ya funcionan.', 'tenue');
-      var claves = [];
-      resto.forEach(function (s) { var k = s.tema == null ? 'x' : s.tema; if (claves.indexOf(k) < 0) claves.push(k); });
-      claves.forEach(function (k) {
-        var t = k === 'x' ? null : temas.filter(function (x) { return x.n === k; })[0] || null;
-        tamb.appendChild(carril(t, resto.filter(function (s) { return (s.tema == null ? 'x' : s.tema) === k; })));
-      });
-      raiz.appendChild(tamb);
-    }
-
-    // El desplegable de lo que ya pasó, cerrado por defecto (abierto o cerrado se recuerda en este navegador).
+    // Lo que ya pasó, en un desplegable cerrado por defecto: la parte de arriba del hilo.
     var pasado = nodo('details', 'ln-pasado');
     var sm = nodo('summary');
     sm.appendChild(nodo('span', 'ln-pasado-t', 'Lo que ya pasó'));
@@ -889,19 +889,12 @@ main { max-width: 1040px; margin: 0 auto; padding-block: 32px 64px;
         var h3 = nodo('h3', null, MES_LARGO[Number(m.slice(5)) - 1] + ' ' + m.slice(0, 4)); h3.appendChild(nodo('span')); mesLi.appendChild(h3);
         hecho.appendChild(mesLi); porMes[m] = mesLi;
       }
-      var li = item(h); li.setAttribute('data-mes', m); hecho.appendChild(li);
+      var li = item(h, false); li.setAttribute('data-mes', m); hecho.appendChild(li);
     });
     cuerpo.appendChild(hecho);
-    var hoyM = nodo('div', 'ln-fila ln-hoy');
-    hoyM.appendChild(nodo('div', 'ln-f', 'Hoy')); var ph = nodo('div', 'ln-p'); ph.setAttribute('aria-hidden', 'true'); hoyM.appendChild(ph);
-    var hc = nodo('div', 'ln-hoy-caja');
-    hc.appendChild(nodo('strong', null, fecha(linea.hoy)));
-    var pp1 = nodo('p'); pp1.appendChild(document.createTextNode('Producción corre ')); pp1.appendChild(nodo('code', 'sha', linea.produccion));
-    pp1.appendChild(document.createTextNode(': todo lo de arriba está en producción, salvo lo marcado como apagado o plan. Lo que sigue está en «En ejecución».')); hc.appendChild(pp1);
-    hoyM.appendChild(hc); cuerpo.appendChild(hoyM);
     var ya = temas.filter(function (t) { return t.estado === 'funciona' || t.estado === 'terminado'; });
     if (ya.length) {
-      cuerpo.appendChild(nodo('h3', 'cr-h3', 'Los temas que ya funcionan'));
+      cuerpo.appendChild(nodo('h3', 'ln-h3', 'Los temas que ya funcionan'));
       var lista = nodo('div', 'rs-lista');
       ya.forEach(function (t) {
         var f = nodo('div', 'rs-fila');
@@ -919,7 +912,21 @@ main { max-width: 1040px; margin: 0 auto; padding-block: 32px 64px;
     try { pasado.open = localStorage.getItem('roadmap-pasado') === '1'; } catch (e) {}
     pasado.addEventListener('toggle', function () { try { localStorage.setItem('roadmap-pasado', pasado.open ? '1' : '0'); } catch (e) {} lineaRevisar(); });
     raiz.appendChild(pasado);
+
+    // Hoy: donde lo hecho se junta con lo que sigue.
+    var hoy = nodo('div', 'ln-fila ln-hoy'); hoy.id = 'hoy';
+    hoy.appendChild(nodo('div', 'ln-f', 'Hoy')); var ph = nodo('div', 'ln-p'); ph.setAttribute('aria-hidden', 'true'); hoy.appendChild(ph);
+    var hc = nodo('div', 'ln-hoy-caja');
+    hc.appendChild(nodo('strong', null, fecha(linea.hoy)));
+    var pp1 = nodo('p'); pp1.appendChild(document.createTextNode('Producción corre ')); pp1.appendChild(nodo('code', 'sha', linea.produccion));
+    pp1.appendChild(document.createTextNode(': lo que ya pasó está en el desplegable de arriba.')); hc.appendChild(pp1);
+    hc.appendChild(nodo('p', null, 'Abajo, el hilo de lo que sigue, en orden de prioridad y sin fechas. Toca un punto para abrirlo; los que dicen «Se divide» se abren en sus ramas.'));
+    hoy.appendChild(hc); raiz.appendChild(hoy);
+    var sigue = nodo('ol', 'ln futuro');
+    linea.sigue.forEach(function (s, i) { sigue.appendChild(item(s, true, i + 1)); });
+    raiz.appendChild(sigue);
     paneles.linea.appendChild(raiz);
+    window.addEventListener('resize', function () { flujos.forEach(function (f) { f(); }); });
 
     // El filtro de lo que ya pasó: una iniciativa a la vez; otro clic vuelve a todas. Se recuerda en este navegador.
     var cuenta = {}; items.forEach(function (li) { var k = li.getAttribute('data-ini'); cuenta[k] = (cuenta[k] || 0) + 1; });
@@ -951,19 +958,18 @@ main { max-width: 1040px; margin: 0 auto; padding-block: 32px 64px;
       todo.textContent = abrir ? 'Cerrar todo' : 'Abrir todo';
     });
 
-    // «Ir a hoy» lleva a «En ejecución»: el botón fijo aparece cuando esa sección no está a la vista.
+    // «Ir a hoy»: el botón fijo aparece cuando «Hoy» no está a la vista, con la flecha hacia donde está.
     var cta = document.getElementById('ir-hoy');
-    var suave = !(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
     function irAHoy() {
       if (paneles.linea.hidden) elegir('linea', true);
-      ejec.scrollIntoView({ block: 'start', behavior: suave ? 'smooth' : 'auto' });
+      hoy.scrollIntoView({ block: 'start', behavior: suave ? 'smooth' : 'auto' });
     }
     cta.addEventListener('click', irAHoy);
     var pend = false;
     function revisar() {
       pend = false;
       if (paneles.linea.hidden) { cta.hidden = true; return; }
-      var r = ejec.getBoundingClientRect(), alto = window.innerHeight || document.documentElement.clientHeight;
+      var r = hoy.getBoundingClientRect(), alto = window.innerHeight || document.documentElement.clientHeight;
       cta.hidden = r.bottom > 0 && r.top < alto;
       cta.classList.toggle('arriba', r.bottom <= 0);
     }

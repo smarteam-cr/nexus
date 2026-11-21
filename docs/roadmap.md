@@ -1018,7 +1018,89 @@
     51,
     52,
     53
-   ]
+   ],
+   "ramas": [
+    {
+     "titulo": "El TEC (AE y TAE)",
+     "pasos": [
+      {
+       "texto": "AE y TAE en dos fichas, cada una con sus reuniones",
+       "estado": "hecho"
+      },
+      {
+       "texto": "¿FUNDATEC es un tercer proyecto aparte?",
+       "estado": "te-toca",
+       "pregunta": 48
+      },
+      {
+       "texto": "¿Una ficha y unos procesos para la institución, o uno por escuela?",
+       "estado": "te-toca",
+       "pregunta": 51
+      },
+      {
+       "texto": "¿«TEC- AE» se fusiona en «TEC»?",
+       "estado": "te-toca",
+       "pregunta": 53
+      },
+      {
+       "texto": "Repartir las 3 reuniones que hoy no tienen proyecto",
+       "estado": "por-hacer"
+      }
+     ]
+    },
+    {
+     "titulo": "Honda y FACO",
+     "pasos": [
+      {
+       "texto": "¿Una cuenta con proyectos aparte, o dos cuentas? Es la urgente",
+       "estado": "te-toca",
+       "pregunta": 49
+      },
+      {
+       "texto": "¿facocr.com es solo de Honda? ¿Y hubspot.com es un aliado?",
+       "estado": "te-toca",
+       "pregunta": 34
+      },
+      {
+       "texto": "Registrar el dominio y reubicar las 15 reuniones colgadas de Honda",
+       "estado": "por-hacer"
+      }
+     ]
+    },
+    {
+     "titulo": "Grupo INVE y AnalisaLab",
+     "pasos": [
+      {
+       "texto": "Sus 23 reuniones con el cliente ya están en Grupo Inve",
+       "estado": "hecho"
+      },
+      {
+       "texto": "¿La integración con SAP pasa a Grupo Inve y se fusiona la ficha?",
+       "estado": "te-toca",
+       "pregunta": 50
+      },
+      {
+       "texto": "Fusionar la ficha de AnalisaLab si dices que sí",
+       "estado": "por-hacer"
+      }
+     ]
+    },
+    {
+     "titulo": "Otros pares",
+     "pasos": [
+      {
+       "texto": "¿Oceánica y Petroil, Real Shipping y Logistics Plus, Secure Title y Seguro Global son una sola cuenta?",
+       "estado": "te-toca",
+       "pregunta": 52
+      },
+      {
+       "texto": "Separar los proyectos de los que sí lo sean",
+       "estado": "por-hacer"
+      }
+     ]
+    }
+   ],
+   "seUneEn": "Medir otra vez el uso"
   },
   {
    "iniciativa": "nexus",
