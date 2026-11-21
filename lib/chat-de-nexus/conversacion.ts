@@ -341,6 +341,6 @@ export function leerElTurno(respuesta: Pick<Anthropic.Messages.Message, "content
 /** Por qué no se puede seguir, en palabras para la persona; null si se puede. */
 export function porQueNoSigue(turnosDeLaConversacion: number, turnosDeHoy: number): string | null {
   if (turnosDeHoy >= TOPES.turnosPorDia) return `Hoy ya conversaste ${TOPES.turnosPorDia} veces con Nexus, el tope del día. Mañana sigues; mientras tanto, «Agregar algo que sabes» guarda tu nota sin IA.`;
-  if (turnosDeLaConversacion >= TOPES.turnosPorConversacion) return "Esta conversación llegó a su tope. Empieza otra con «Empezar otra conversación».";
+  if (turnosDeLaConversacion >= TOPES.turnosPorConversacion) return "Esta conversación llegó a su tope. Empieza otra con «Nueva conversación».";
   return null;
 }

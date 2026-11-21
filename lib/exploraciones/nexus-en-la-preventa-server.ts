@@ -17,7 +17,8 @@
  */
 import "server-only";
 import { prisma } from "@/lib/db/prisma";
-import { correrUnaVuelta, ultimoTurnoListo, type VueltaDeNexus } from "@/lib/chat-de-nexus/conversacion-server";
+import { anotarLaVuelta, cerrarLaConversacion, conversacionGuardada, correrUnaVuelta, guardarLosEstados, ultimoTurnoListo, type VueltaDeNexus } from "@/lib/chat-de-nexus/conversacion-server";
+import { sinLasReuniones, type ConversacionGuardada } from "@/lib/chat-de-nexus/guardada";
 import type { ContextoParaNexus, MensajeDeLaConversacion } from "@/lib/chat-de-nexus/conversacion";
 import { armarLasFuentes, type FuenteDeLaCuenta, type LoQueQuedoAfuera } from "@/lib/chat-de-nexus/respuesta";
 import { diaEnCostaRica } from "@/lib/impacto/respuesta-del-cliente";
@@ -141,7 +142,7 @@ export async function vueltaEnLaPreventa(
     conversacion,
     valorValido,
     leerLaCuenta: async () => fuentesDeLaCuenta(p.fila, p.estado, await puedeVerLaCuenta(p.fila.clientId).catch(() => false)),
-    donde: { agentSlug: AGENTE_DE_LA_EXPLORACION, superficie: "preventa", clientId: p.fila.clientId, projectId: null, email, nombre, filtros: { exploracion: exploracionId } },
+    donde: { agentSlug: AGENTE_DE_LA_EXPLORACION, superficie: "preventa", clientId: p.fila.clientId, projectId: null, email, nombre, filtros: filtrosDe(exploracionId) },
   });
 }
 
@@ -171,5 +172,42 @@ export async function alGuardarLaNota(exploracionId: string, conversacion: strin
     listo && suya
       ? await escribirHechosDeUnaNota({ exploracionId, clientId: p.fila.clientId, notaClave: clave, texto, dichoPorEmail: autor.por, crudos: listo.turno.hechos, agentRunId: listo.agentRunId })
       : ({ estado: "sin-conversacion" } as const);
+  // La vuelta que dejó el «listo» recuerda su nota y lo que dijo la revisión: al volver, el cajón lo muestra igual.
+  if (listo && suya) await anotarLaVuelta(listo.agentRunId, { notaClave: clave, guardado: { hechos, impacto } });
   return { ok: true, hechos, impacto };
+}
+
+/** Los filtros de una conversación en esta preventa: con ellos, una conversación nunca cruza de preventa. */
+const filtrosDe = (exploracionId: string) => ({ exploracion: exploracionId });
+
+type Hecho = { ok: true } | { ok: false; status: number; error: string };
+
+/**
+ * La última conversación de quien mira en ESTA preventa (lib/chat-de-nexus/guardada.ts), para que el cajón la muestre al
+ * volver. Solo la suya y solo de esta preventa: el cliente sale de la fila, no del navegador. null si no hay.
+ * `puedeVerLaCuenta`: como al preguntar (`vueltaEnLaPreventa`), las respuestas que leyeron las reuniones de la cuenta
+ * vuelven solo si quien mira HOY tiene acceso a la empresa; si no, en su lugar va un aviso (`sinLasReuniones`).
+ */
+export async function conversacionEnLaPreventa(exploracionId: string, email: string, puedeVerLaCuenta: (clientId: string) => Promise<boolean>): Promise<ConversacionGuardada | null> {
+  const p = await laPreventa(exploracionId);
+  if (!p.ok) return null;
+  const c = await conversacionGuardada(email, p.fila.clientId, filtrosDe(exploracionId));
+  if (!c) return null;
+  return (await puedeVerLaCuenta(p.fila.clientId).catch(() => false)) ? c : sinLasReuniones(c);
+}
+
+/** Lo que la persona hizo con los cambios de su conversación («Aplicar», «No», «Aplicar todo»). */
+export async function estadosEnLaPreventa(exploracionId: string, conversacion: string, email: string, estados: Record<string, unknown>): Promise<Hecho> {
+  const p = await laPreventa(exploracionId);
+  if (!p.ok) return p;
+  const ok = await guardarLosEstados(email, p.fila.clientId, conversacion, filtrosDe(exploracionId), estados);
+  return ok ? { ok: true } : { ok: false, status: 404, error: "Esa conversación no terminó en cambios tuyos en esta preventa." };
+}
+
+/** «Nueva conversación»: la de ahora queda cerrada para quien la tuvo, y al volver el cajón arranca vacío. */
+export async function cerrarEnLaPreventa(exploracionId: string, conversacion: string, email: string): Promise<Hecho> {
+  const p = await laPreventa(exploracionId);
+  if (!p.ok) return p;
+  await cerrarLaConversacion(email, p.fila.clientId, conversacion, filtrosDe(exploracionId));
+  return { ok: true };
 }

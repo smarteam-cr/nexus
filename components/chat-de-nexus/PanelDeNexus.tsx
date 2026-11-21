@@ -9,14 +9,15 @@
  * responde con sus citas (lib/chat-de-nexus/respuesta.ts) y la conversación sigue. Lo que el lugar hace con lo contado
  * (guardar la nota, «Aplicar», la cuenta regresiva) lo pinta `children`, y el lugar decide cuándo está `terminado`. La
  * conversación también la guarda el lugar (`conversacion`, `alCambiar`): cerrar el cajón y volver a abrirlo no pierde lo
- * hablado ni lo propuesto. Si Nexus no pudo leer lo que contaste, el texto vuelve al cuadro y no se guarda nada. Hoy lo usa la preventa
+ * hablado ni lo propuesto, y al volver a la página el lugar la trae del servidor (lib/chat-de-nexus/guardada.ts). Si Nexus no pudo leer lo que contaste, el texto vuelve al cuadro y no se guarda nada. Hoy lo usa la preventa
  * (components/exploraciones/HablarConNexus.tsx); mañana, la ficha del cliente y cada documento, con su propia ruta.
  */
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Alert, BotonDeDictado, Textarea } from "@/components/ui";
 import { BotonAzul, BotonEnlace } from "@/components/ui/sistema";
 import { cn } from "@/lib/cn";
-import { notaDeLaConversacion, TOPES, type MensajeDeLaConversacion, type ResultadoDelTurno } from "@/lib/chat-de-nexus/conversacion";
+import { notaDeLaConversacion, TOPES, type ResultadoDelTurno } from "@/lib/chat-de-nexus/conversacion";
+import type { MensajeGuardado } from "@/lib/chat-de-nexus/guardada";
 import type { CitaDeLaRespuesta, RespuestaDeNexus } from "@/lib/chat-de-nexus/respuesta";
 
 export type TurnoListo = Extract<ResultadoDelTurno, { tipo: "listo" }>;
@@ -27,8 +28,8 @@ export function idDeConversacion(): string {
   return c?.randomUUID ? c.randomUUID() : `c-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
-/** Un mensaje como se ve: el de Nexus que respondió una pregunta lleva sus citas. */
-export type MensajeEnPantalla = MensajeDeLaConversacion & { respuesta?: RespuestaDeNexus };
+/** Un mensaje como se ve: el de Nexus que respondió una pregunta lleva sus citas. Es el mismo que se guarda. */
+export type MensajeEnPantalla = MensajeGuardado;
 
 /** La conversación que guarda el lugar: su id (viaja en cada vuelta) y los mensajes. */
 export interface ConversacionEnPantalla {
@@ -83,7 +84,7 @@ export interface PanelDeNexusProps {
   /** La conversación, que guarda el lugar. */
   conversacion: ConversacionEnPantalla;
   alCambiar: (c: ConversacionEnPantalla) => void;
-  /** Empezar otra conversación: el lugar olvida lo de la anterior (y arma una nueva). */
+  /** «Nueva conversación»: el lugar olvida lo de la anterior (y arma una nueva). */
   alReiniciar: () => void;
   disabled?: boolean;
 }
@@ -202,7 +203,7 @@ export default function PanelDeNexus({ urlDelTurno, placeholder, alQuedarListo, 
       {(terminado || mensajes.length > 0) && (
         <div>
           <BotonEnlace onClick={reiniciar} disabled={pensando}>
-            Empezar otra conversación
+            Nueva conversación
           </BotonEnlace>
         </div>
       )}

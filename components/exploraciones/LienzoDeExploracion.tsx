@@ -342,7 +342,8 @@ export default function LienzoDeExploracion({
           setExp(confirmada.current);
         }
         if (!res.ok) {
-          toast.error(data.error ?? "No se pudo guardar.");
+          opciones.alFallar?.(data.error ?? "No se pudo guardar.");
+          if (!opciones.sinAvisoDeError) toast.error(data.error ?? "No se pudo guardar.");
           // Sin la fila en la respuesta, se pide la de ahora: el rechazo pudo venir de algo que cambió.
           if (!data.exploracion) void recargar();
           return false;
@@ -352,7 +353,8 @@ export default function LienzoDeExploracion({
         return true;
       } catch {
         setExp(confirmada.current);
-        toast.error("No se pudo guardar. Revisa tu conexión.");
+        opciones.alFallar?.("No se pudo guardar: revisa tu conexión.");
+        if (!opciones.sinAvisoDeError) toast.error("No se pudo guardar. Revisa tu conexión.");
         return false;
       } finally {
         setGuardando(false);
@@ -372,7 +374,12 @@ export default function LienzoDeExploracion({
         return r.ok ? { ...actual, estado: r.estado } : actual;
       });
       const deLaEpoca = epoca.current;
-      const p = cola.current.then(() => (deLaEpoca === epoca.current ? enviar(ops, opciones) : false));
+      const p = cola.current.then(() => {
+        if (deLaEpoca === epoca.current) return enviar(ops, opciones);
+        // Un cambio de antes en la fila chocó con otra persona: este no sale (se armó sobre lo que ya no está).
+        opciones?.alFallar?.("Otro cambio chocó con lo que guardó otra persona: revisa la tarjeta y vuelve a intentarlo.");
+        return false;
+      });
       cola.current = p.catch(() => undefined);
       return p;
     },
@@ -544,6 +551,7 @@ export default function LienzoDeExploracion({
     veTendenciaDelEquipo,
     guardando,
     cambiar,
+    loGuardado: () => confirmada.current,
     usar,
     deshacer,
     queHace: (it) => queHaceUsar(it, exp.estado, escala, nombreDeNivel, marco),

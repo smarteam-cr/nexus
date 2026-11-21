@@ -27,6 +27,13 @@ export interface OpcionesDeCambio {
   refrescar?: boolean;
   /** Aviso al terminar bien. */
   exito?: string;
+  /**
+   * Por qué no se guardó, en palabras para la persona (el error del servidor, o que otro cambio chocó antes). Lo usa
+   * «Aplicar todo» de «Hablar con Nexus» para decir cuáles no pudo aplicar y por qué.
+   */
+  alFallar?: (motivo: string) => void;
+  /** Sin el aviso de error: el que llama lo dice a su manera, con `alFallar`. */
+  sinAvisoDeError?: boolean;
 }
 
 export interface Lienzo {
@@ -89,6 +96,11 @@ export interface Lienzo {
   veTendenciaDelEquipo?: boolean;
   guardando: boolean;
   cambiar: (ops: Operacion[], opciones?: OpcionesDeCambio) => Promise<boolean>;
+  /**
+   * Lo último que confirmó el servidor (no lo que se ve mientras un cambio va en camino). Cuando `cambiar` vuelve, ya trae
+   * ese cambio: «Aplicar todo» mira acá, cambio por cambio, si el siguiente ya está.
+   */
+  loGuardado: () => ExploracionParaLaPantalla;
   /**
    * K12 (2026-10-28): usar sugerencias —una, o un lote con «Pasar las N al mapa»—. Al terminar muestra «Usaste: … ·
    * Deshacer», y Ctrl+Z (fuera de un campo de texto) deshace la última usada en esta página. Es el ÚNICO camino del

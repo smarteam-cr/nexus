@@ -9,7 +9,7 @@
  *
  * Va en la Preparación de la preventa y en la página de inicio de la exploración de un proyecto.
  */
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button, Textarea } from "@/components/ui";
 import AvisoDeImpacto from "@/components/impacto/AvisoDeImpacto";
 import { CORRIENDO_LA_ESCALA, useRehacerLaEscala } from "./rehacer-la-escala";
@@ -17,6 +17,7 @@ import { cn } from "@/lib/cn";
 import { diaConAnio } from "@/lib/exploraciones/fechas";
 import { MAX_NOTA_DE_SESION } from "@/lib/exploraciones/notas-de-sesion";
 import { claveNuevaDeLoQueSabes, cuandoSeAgrego, LARGO_ENTERO, loQueSabeElEquipo, MAX_LO_QUE_SABES } from "@/lib/exploraciones/lo-que-sabes";
+import { EVENTO_HECHOS_DE_LAS_NOTAS, type HechoDeUnaNota, type HechosDeLasNotas } from "@/lib/exploraciones/hechos-de-las-notas";
 import { useLienzo } from "./contexto";
 import { BotonBlanco, BotonTexto } from "./FranjaDeSugerencias";
 
@@ -65,9 +66,63 @@ function Editor({ inicial, onGuardar, onCancelar }: { inicial: string; onGuardar
 /** Quién la escribió, corto: la parte del correo antes de la arroba (el correo entero va en el título). */
 const quienCorto = (correo: string) => correo.split("@")[0] ?? correo;
 
+/** Los hechos que dejó una nota (21 nov): qué, quién lo dijo y cuándo. Internos, como la nota. */
+function HechosDeLaNota({ hechos }: { hechos: HechoDeUnaNota[] }) {
+  return (
+    <div className="mt-2 border-t border-line pt-2">
+      <p className="text-2xs font-semibold text-fg-secondary">{hechos.length === 1 ? "El hecho que dejó esta nota" : `Los ${hechos.length} hechos que dejó esta nota`}</p>
+      <ul className="mt-1 space-y-1">
+        {hechos.map((h) => (
+          <li key={h.id} className="text-xs text-fg">
+            <span className="text-fg-muted">{h.rotulo}: </span>
+            {h.frase}
+            <span className="block text-2xs text-fg-muted">
+              Lo dijo {h.dichoPor} el {diaConAnio(Date.parse(h.en))}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+/**
+ * Los hechos de las notas de esta preventa (…/hechos-de-las-notas): se piden al abrir, cuando cambia la lista de notas y
+ * cuando «Hablar con Nexus» termina de revisar una. Solo en la preventa: ahí se guardan las notas que dejan hechos.
+ */
+function useHechosDeLasNotas(exploracionId: string, activo: boolean, claves: string): HechosDeLasNotas {
+  const [hechos, setHechos] = useState<HechosDeLasNotas>({});
+  const [vuelta, setVuelta] = useState(0);
+  useEffect(() => {
+    if (!activo) return;
+    const alAviso = (e: Event) => {
+      if ((e as CustomEvent<string>).detail === exploracionId) setVuelta((v) => v + 1);
+    };
+    window.addEventListener(EVENTO_HECHOS_DE_LAS_NOTAS, alAviso);
+    return () => window.removeEventListener(EVENTO_HECHOS_DE_LAS_NOTAS, alAviso);
+  }, [activo, exploracionId]);
+  useEffect(() => {
+    if (!activo || !claves) return;
+    let vigente = true;
+    void fetch(`/api/sales/exploraciones/${exploracionId}/hechos-de-las-notas`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j: { hechos?: HechosDeLasNotas } | null) => {
+        if (vigente && j?.hechos) setHechos(j.hechos);
+      })
+      .catch(() => {
+        // Sin los hechos, las notas se ven igual.
+      });
+    return () => {
+      vigente = false;
+    };
+  }, [activo, exploracionId, claves, vuelta]);
+  return hechos;
+}
+
 export default function LoQueSabes() {
-  const { exp, puedeEditar, cambiar } = useLienzo();
+  const { exp, puedeEditar, cambiar, lugar } = useLienzo();
   const lista = loQueSabeElEquipo(exp.estado.contenido.notas);
+  const hechos = useHechosDeLasNotas(exp.id, lugar === "preventa", lista.map((n) => n.clave).join("|"));
   const autores = exp.estado.contenido.autoresDeLasNotas ?? {};
   const [editando, setEditando] = useState<string | null>(null);
   const nueva = editando !== null && !lista.some((x) => x.clave === editando);
@@ -145,6 +200,7 @@ export default function LoQueSabes() {
                           {autor?.por ? ` por ${quienCorto(autor.por)}` : ""}
                         </p>
                       )}
+                      {hechos[clave]?.length ? <HechosDeLaNota hechos={hechos[clave]} /> : null}
                     </div>
                     {puedeEditar && (
                       <div className="flex flex-shrink-0 items-center gap-1">

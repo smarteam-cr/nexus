@@ -135,7 +135,7 @@ describe("la respuesta del modelo", () => {
 describe("los topes", () => {
   it("por conversación y por día", () => {
     expect(porQueNoSigue(0, 0)).toBeNull();
-    expect(porQueNoSigue(TOPES.turnosPorConversacion, 0)).toContain("Empezar otra conversación");
+    expect(porQueNoSigue(TOPES.turnosPorConversacion, 0)).toContain("Nueva conversación");
     expect(porQueNoSigue(0, TOPES.turnosPorDia)).toContain("tope del día");
   });
 });

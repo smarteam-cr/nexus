@@ -27,7 +27,7 @@ import {
   type Reto,
 } from "./casillas";
 import { definicionEnElMarco, MARCO_DE_VENTA } from "./marco";
-import type { DestinoDisponible } from "@/lib/chat-de-nexus/conversacion";
+import type { CambioPropuesto, DestinoDisponible } from "@/lib/chat-de-nexus/conversacion";
 
 /** Las tarjetas a las que Nexus puede proponer un cambio desde la conversación. */
 export const CASILLAS_PARA_NEXUS = [...CASILLAS_DEL_RESUMEN, ...CASILLAS_DE_LAS_REUNIONES] as const satisfies readonly ClaveDeCasilla[];
@@ -155,4 +155,134 @@ export function comoSeVeElCambio(
   const lista = Array.isArray(actual) ? actual : [];
   const k = claveDeItemDeLista(destino, valor);
   return { donde: rotuloDe(destino), reemplaza: [], queda, suma: true, yaEsta: lista.some((x) => claveDeItemDeLista(destino, x) === k) };
+}
+
+// ── «Aplicar todo» (Elías, 21 nov) ──────────────────────────────────────────────
+
+/** Lo que la persona ya hizo con un cambio en la pantalla (lo que no está, sigue propuesto). */
+export type EstadoDelCambioEnPantalla = "propuesto" | "aplicando" | "aplicado" | "descartado";
+
+export interface PlanDeAplicarTodo {
+  /** Los que «Aplicar todo» va a mandar, en el orden de la conversación. */
+  pendientes: CambioPropuesto[];
+  /** Los que ya están en su tarjeta (no se mandan: «Ya está»). */
+  yaEstan: number;
+  /** De los pendientes, cuántos REEMPLAZAN algo que ya tiene la tarjeta (un texto, o una cifra con otro valor). */
+  reemplazos: number;
+  /**
+   * Los que pisarían lo que deja otro del mismo lote (dos textos para la misma tarjeta, dos valores para la misma cifra):
+   * no se mandan. Quedan propuestos para aplicarlos uno por uno, donde se ve tachado lo que reemplazan.
+   */
+  aMano: CambioPropuesto[];
+}
+
+/** Lo que un cambio deja si se aplica, por lugar: el texto entero, o cada cifra que trae. Vacío si suma a una lista. */
+function loQuePisa(destino: CasillaParaNexus, valor: unknown): [string, string][] {
+  const tipo = TIPO_DE_CASILLA[destino];
+  if (tipo === "texto") return [[destino, txt(valor)]];
+  if (tipo === "cifras") return Object.entries(obj(valor)).map(([k, v]) => [`${destino}.${k}`, txt(v)]);
+  return [];
+}
+
+/**
+ * Qué haría «Aplicar todo» sobre lo de ahora: los cambios que siguen propuestos (ni aplicados, ni descartados, ni
+ * aplicándose), van a una tarjeta de la preventa y todavía no están en ella. Con la misma regla que el «Aplicar» uno
+ * por uno (`comoSeVeElCambio`). Dos que dejan valores DISTINTOS en el mismo lugar (el texto, o una cifra) no van
+ * juntos: el segundo queda `aMano` (si no, el primero se perdería sin que nadie lo viera tachado). El mismo valor dos
+ * veces sí va: el segundo termina «Ya está».
+ */
+export function planDeAplicarTodo(
+  contenido: Pick<ContenidoDeExploracion, "casillas">,
+  cambios: readonly CambioPropuesto[],
+  estados: Readonly<Record<string, EstadoDelCambioEnPantalla>>,
+): PlanDeAplicarTodo {
+  const plan: PlanDeAplicarTodo = { pendientes: [], yaEstan: 0, reemplazos: 0, aMano: [] };
+  /** Lo que ya deja un cambio del lote, por lugar: otro con OTRO valor para el mismo lugar lo pisaría. */
+  const tocado = new Map<string, string>();
+  for (const c of cambios) {
+    if ((estados[c.id] ?? "propuesto") !== "propuesto" || !esCasillaParaNexus(c.destino)) continue;
+    const se = comoSeVeElCambio(contenido, c.destino, c.valor);
+    if (!se) continue;
+    if (se.yaEsta) {
+      plan.yaEstan++;
+      continue;
+    }
+    const pisa = loQuePisa(c.destino, c.valor);
+    if (pisa.some(([k, v]) => tocado.has(k) && tocado.get(k) !== v)) {
+      plan.aMano.push(c);
+      continue;
+    }
+    pisa.forEach(([k, v]) => tocado.set(k, v));
+    plan.pendientes.push(c);
+    if (se.reemplaza.length) plan.reemplazos++;
+  }
+  return plan;
+}
+
+/** El aviso antes de aplicar, si alguno reemplaza lo que hay. null si ninguno reemplaza. */
+export function avisoDeReemplazos(n: number): string | null {
+  if (n <= 0) return null;
+  return n === 1
+    ? "Uno de los cambios reemplaza lo que ya tiene su tarjeta (un texto, o una cifra con otro valor). Lo de antes se pierde."
+    : `${n} de los cambios reemplazan lo que ya tienen sus tarjetas (un texto, o una cifra con otro valor). Lo de antes se pierde.`;
+}
+
+export interface ResultadoDeAplicarTodo {
+  aplicados: number;
+  yaEstaban: number;
+  /** Los que no se pudieron aplicar: a qué tarjeta iban y por qué. */
+  fallidos: { donde: string; motivo: string }[];
+  /** Los que quedaron para aplicar uno por uno: tocan lo mismo que otro del lote. */
+  aMano: number;
+}
+
+/**
+ * «Aplicar todo», en fila: cada cambio con `aplicar` (en la pantalla, la operación `sumarACasilla` por el `cambiar` del
+ * lienzo, con su reintento ante un 409), y antes de cada uno vuelve a mirar lo último guardado (`contenidoDeAhora`): el
+ * que quedó repetido por uno anterior cuenta como «Ya está» y no se manda. Si uno falla, los demás siguen.
+ */
+export async function aplicarTodo(o: {
+  cambios: readonly CambioPropuesto[];
+  estados: Readonly<Record<string, EstadoDelCambioEnPantalla>>;
+  contenidoDeAhora: () => Pick<ContenidoDeExploracion, "casillas">;
+  aplicar: (clave: CasillaParaNexus, valor: unknown) => Promise<{ ok: true } | { ok: false; motivo: string }>;
+  ponerEstado: (id: string, e: EstadoDelCambioEnPantalla) => void;
+}): Promise<ResultadoDeAplicarTodo> {
+  const plan = planDeAplicarTodo(o.contenidoDeAhora(), o.cambios, o.estados);
+  const r: ResultadoDeAplicarTodo = { aplicados: 0, yaEstaban: plan.yaEstan, fallidos: [], aMano: plan.aMano.length };
+  for (const c of plan.pendientes) {
+    if (!esCasillaParaNexus(c.destino)) continue;
+    const se = comoSeVeElCambio(o.contenidoDeAhora(), c.destino, c.valor);
+    if (!se) continue;
+    if (se.yaEsta) {
+      r.yaEstaban++;
+      continue;
+    }
+    o.ponerEstado(c.id, "aplicando");
+    const hecho = await o.aplicar(c.destino, c.valor);
+    if (hecho.ok) {
+      r.aplicados++;
+      o.ponerEstado(c.id, "aplicado");
+    } else {
+      o.ponerEstado(c.id, "propuesto");
+      r.fallidos.push({ donde: se.donde, motivo: hecho.motivo });
+    }
+  }
+  return r;
+}
+
+/** Cómo terminó «Aplicar todo», en una frase: cuántos aplicó, cuántos ya estaban, cuántos no pudo y cuántos quedan. */
+export function resumenDeAplicarTodo(r: ResultadoDeAplicarTodo): string {
+  const partes = [
+    r.aplicados ? (r.aplicados === 1 ? "Se aplicó un cambio" : `Se aplicaron ${r.aplicados} cambios`) : "No se aplicó ningún cambio",
+    r.yaEstaban ? (r.yaEstaban === 1 ? "uno ya estaba en su tarjeta" : `${r.yaEstaban} ya estaban en sus tarjetas`) : "",
+    r.fallidos.length ? (r.fallidos.length === 1 ? "uno no se pudo aplicar" : `${r.fallidos.length} no se pudieron aplicar`) : "",
+  ].filter(Boolean);
+  const frase = partes.length > 1 ? `${partes.slice(0, -1).join(", ")} y ${partes[partes.length - 1]}` : partes[0];
+  const aMano = r.aMano
+    ? r.aMano === 1
+      ? " Uno quedó para que lo apliques tú: cambia lo mismo que otro."
+      : ` ${r.aMano} quedaron para que los apliques tú: cambian lo mismo que otros.`
+    : "";
+  return `${frase}.${aMano}`;
 }
