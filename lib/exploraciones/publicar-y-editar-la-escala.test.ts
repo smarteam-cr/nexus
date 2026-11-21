@@ -79,6 +79,14 @@ describe("la foto publicada", () => {
     // La fecha del pie no cuenta: sin niveles sale de la última vez que se guardó cualquier cosa.
     expect(mismaPagina(hoy, { ...deLaBase, fecha: "2026-11-17T09:00:00.000Z" })).toBe(true);
   });
+
+  it("el vistazo de cada nivel (21 nov) no cuenta: una foto de antes no avisa cambios; un nivel con otro nombre sí", () => {
+    const r = (niveles: unknown) => ({ areaId: "1", niveles }) as unknown as ResultadoDelTest;
+    const antes = pagina({ resultados: [r([{ letra: "D", nombre: "Deficiente" }])] });
+    const hoy = pagina({ resultados: [r([{ letra: "D", nombre: "Deficiente", vistazo: "Nadie sabe en qué va cada venta." }])] });
+    expect(mismaPagina(antes, hoy)).toBe(true);
+    expect(mismaPagina(antes, pagina({ resultados: [r([{ letra: "D", nombre: "Muy bajo" }])] }))).toBe(false);
+  });
 });
 
 describe("la operación textoDeLaPagina", () => {

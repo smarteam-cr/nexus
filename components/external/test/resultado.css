@@ -783,21 +783,53 @@ html:has(.dr.rd-s2:not(.rd-editable)) { scroll-behavior: smooth; }
   .dr.rd-ed .ed-siguientes { display: none; }
 }
 
-/* La escalera de los niveles (20 nov, EscaleraDeNiveles.tsx): arriba de la página de cada área y el radar justo debajo,
-   en la escala de una empresa, en el test público y en su PDF. SVG estático; en el teléfono la letra crece (el dibujo
-   escala con el ancho y los nombres bajaban de 9 px). */
+/* La escalera de los niveles (20 nov, EscaleraDeNiveles.tsx; desde el 21 nov, la curva de la aplicación vieja): arriba
+   de la página de cada área y el radar justo debajo, en la escala de una empresa, en el test público y en su PDF. SVG
+   estático; en el teléfono la letra crece (el dibujo escala con el ancho y los nombres bajaban de 9 px). */
 .dr .esc { margin: 0; }
 .dr .esc-svg { display: block; width: 100%; height: auto; max-width: 860px; margin: 0 auto; }
 .dr .rd-escalera { background: #ffffff; border: 1px solid var(--v3-borde); border-radius: 20px; box-shadow: var(--v3-sombra); padding: 12px 24px 8px; min-width: 0; }
 .dr.rd-ed .ed-escalera .esc { margin-top: 8px; }
 @media (max-width: 600px) {
-  .dr .esc-svg .esc-nombre { font-size: 28px; }
+  .dr .esc-svg .esc-nombre { font-size: 26px; } /* LETRA_DEL_NOMBRE_EN_EL_TELEFONO (lib/escala/escalera.ts) */
   .dr .esc-svg .esc-num { font-size: 30px; }
   .dr .esc-svg .esc-chip { font-size: 21px; }
   .dr .rd-escalera { padding: 8px 10px 4px; }
 }
 .dr.rd-pdf .rd-escalera { flex: none; display: flex; justify-content: center; border: 0; box-shadow: none; padding: 0; background: none; }
 .dr.rd-pdf .rd-escalera .esc-svg { width: auto; height: 128px; }
+/* En la hoja el dibujo tiene alto fijo y se achica: la letra crece para no bajar de unos 8 px (LETRA_DEL_NOMBRE_EN_EL_PDF). */
+.dr.rd-pdf .esc-svg .esc-nombre { font-size: 26px; }
+.dr.rd-pdf .esc-svg .esc-num { font-size: 29px; }
+.dr.rd-pdf .esc-svg .esc-chip { font-size: 21px; }
+/* Lo vivo (MovimientoDeLaEscalera.tsx, `.esc-viva` solo con JS): el círculo bajo el cursor crece, como en la vieja
+   (`.curva-marker.is-hover .ring`). El corrimiento hacia el cursor lo escribe el JS en cada nivel. */
+.dr .esc-svg.esc-viva .esc-nivel { cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.dr .esc-svg .esc-aro { transform-box: fill-box; transform-origin: center; transition: transform .18s ease, stroke-width .18s ease, filter .18s ease; }
+.dr .esc-svg .esc-nivel.is-hover .esc-aro { transform: scale(1.12); filter: drop-shadow(0 2px 7px rgba(15, 23, 42, .22)); }
+.dr .esc-svg .esc-nivel.is-hover .esc-circulo { stroke-width: 4.5; }
+.dr .esc-svg .esc-nivel.is-hover:not(.esc-hoy):not(.esc-meta) .esc-circulo { stroke: #7a86a8; }
+.dr .esc-svg .esc-nivel:focus { outline: none; }
+.dr .esc-svg .esc-nivel:focus-visible .esc-circulo { stroke: #2448d8; stroke-width: 4.5; }
+@media (prefers-reduced-motion: reduce) {
+  .dr .esc-svg .esc-aro { transition: none; }
+  .dr .esc-svg .esc-nivel, .dr .esc-svg .esc-nivel.is-hover .esc-aro { transform: none !important; }
+}
+/* La tarjeta de cada nivel va en <body> (un antepasado con transform correría el fixed): fuera de `.dr`, con su propia
+   letra (la copia el JS de la escalera) y hex literal. */
+.esc-tip { position: fixed; top: 0; left: 0; z-index: 60; width: min(320px, calc(100vw - 24px)); padding: 14px 16px; background: #ffffff; color: #0f1b4c; border: 1px solid #e2e8f5; border-radius: 14px; box-shadow: 0 14px 36px rgba(15, 27, 76, .16); pointer-events: none; animation: esc-tip-entra .16s ease both; }
+@keyframes esc-tip-entra { from { opacity: 0; } to { opacity: 1; } }
+.esc-tip-cabeza { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+.esc-tip-num { flex: none; display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; color: #ffffff; font-size: 14px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.esc-tip-nombre { font-size: 16px; font-weight: 700; color: #0f1b4c; }
+.esc-tip-texto { margin: 0; font-size: 13px; line-height: 1.55; color: #3c4770; }
+.esc-tip-marca { margin: 8px 0 0; font-size: 12px; font-weight: 700; color: #2448d8; }
+@media (prefers-reduced-motion: reduce) { .esc-tip { animation: none; } }
+@media print {
+  .esc-tip { display: none !important; }
+  .dr .esc-svg .esc-nivel { transform: none !important; }
+  .dr .esc-svg .esc-nivel.is-hover .esc-aro { transform: none; filter: none; }
+}
 
 /* Lo que más le cuesta al área (20 nov): el reto principal o lo que cuesta de titular, lo que lo causa y, sin costo, «por
    validar». Sale de la tarjeta del área en el Resumen. */

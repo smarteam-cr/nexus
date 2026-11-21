@@ -49,8 +49,11 @@ export interface ResultadoDelTest {
   puntaje: number | null;
   capas: { clave: ClaveDeCapa; nombre: string; nivel: Letra | null; nivelNombre: string | null; puntaje: number | null }[];
   dimensiones: DimensionDelResultado[];
-  /** Los cinco niveles, en orden, para dibujar la curva. */
-  niveles: { letra: Letra; nombre: string }[];
+  /**
+   * Los cinco niveles, en orden, para dibujar la curva. `vistazo`: cómo se ve el área entera en ese nivel (la tarjeta de
+   * cada nivel en la escalera, 21 nov); los resultados guardados antes no lo traen (`nivelesConVistazo` lo completa).
+   */
+  niveles: { letra: Letra; nombre: string; vistazo?: string }[];
   recomendacion:
     | { tipo: "trabajar"; dimensionId: string; dimensionNombre: string; objetivo: Letra; objetivoNombre: string; razon: string; costoDeQuedarse: string }
     | { tipo: "sostener"; razon: string }
@@ -69,6 +72,31 @@ export interface ResultadoDelTest {
   redaccion?: RedaccionDelResultado | null;
   preguntadas: number;
   total: number;
+}
+
+/**
+ * Los cinco niveles de la escala con el vistazo del área en cada uno (si la escala lo trae): la tarjeta de cada nivel en
+ * la escalera (21 nov). Es la única fuente del vistazo: el cálculo lo guarda con el resultado y `completarVistazos` lo
+ * completa al mostrar lo que se guardó antes (el resultado del test, la foto publicada de una escala).
+ */
+export function nivelesConVistazo(escala: Escala, areaId: string): ResultadoDelTest["niveles"] {
+  const area = escala.areas.find((a) => a.id === areaId);
+  return escala.niveles.map((n) => {
+    const vistazo = area?.panoramica[n.letra]?.trim();
+    return { letra: n.letra, nombre: n.nombre, ...(vistazo ? { vistazo } : {}) };
+  });
+}
+
+/**
+ * Los niveles de un resultado guardado con el vistazo que les falte, sacado de la escala de hoy (`nivelesConVistazo` del
+ * área del resultado). Nunca pisa uno que ya trae ni cambia los nombres: solo completa.
+ */
+export function completarVistazos(niveles: ResultadoDelTest["niveles"], deLaEscala: ResultadoDelTest["niveles"]): ResultadoDelTest["niveles"] {
+  return niveles.map((n) => {
+    if (n.vistazo) return n;
+    const vistazo = deLaEscala.find((v) => v.letra === n.letra)?.vistazo;
+    return vistazo ? { ...n, vistazo } : n;
+  });
 }
 
 /** Las letras elegidas por dimensión. «No lo sé» = el nivel más bajo. Una opción que no existe no cuenta. */
@@ -260,7 +288,7 @@ export function resultadoDeLosNiveles(o: {
     puntaje: a.puntaje,
     capas,
     dimensiones,
-    niveles: escala.niveles.map((n) => ({ letra: n.letra, nombre: n.nombre })),
+    niveles: nivelesConVistazo(escala, area.id),
     recomendacion,
     riesgos: riesgos.slice(0, 3),
     casos,
