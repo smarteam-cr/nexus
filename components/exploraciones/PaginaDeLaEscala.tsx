@@ -43,13 +43,15 @@ import type { Letra } from "@/lib/escala/documento/tipos";
 import { MAX_CONTEXTO_DE_LA_ESCALA, MAX_TEXTO_DEL_RADAR } from "@/lib/exploraciones/contenido";
 import { textoVigenteDelRadar } from "@/lib/exploraciones/escala-para-el-cliente";
 import type { PaginaParaElCse } from "@/lib/exploraciones/escala-para-el-cliente-server";
-import { diaCorto } from "@/lib/exploraciones/fechas";
+import { diaCorto, diaYHora } from "@/lib/exploraciones/fechas";
+import { firmaParaVolver } from "@/lib/exploraciones/resumen-anterior";
 import { MAX_TEXTO_DE_LA_PAGINA } from "@/lib/external/textos-de-la-pagina";
 import type { CitaDelResumen } from "@/lib/exploraciones/resumen-de-la-escala";
 import { chequeoDelMapa, cuentaDelArea, fraseDeLaCuenta } from "@/lib/exploraciones/mapa";
 import { AL_LUGAR, DEL_LUGAR, useLienzo } from "./contexto";
 import ReunionesMalLeidas from "./ReunionesMalLeidas";
 import { avisarQueLaEscalaCambio } from "./escala-al-dia";
+import { useSeRehaceLaEscala } from "./rehacer-la-escala";
 import { DetalleDeDimension, useMarcarNivel } from "./DetalleDeLaDimension";
 
 /** Lo que responde la ruta de la descripción (la sesión que la hizo): de dónde sale la de cada área. */
@@ -312,7 +314,7 @@ interface ResumenArmado {
 }
 
 export default function PaginaDeLaEscala() {
-  const { exp, cambiar, puedeEditar, recargar, nombreDeNivel } = useLienzo();
+  const { exp, cambiar, puedeEditar, recargar, nombreDeNivel, guardando } = useLienzo();
   const toast = useToast();
   const { pagina, error, otraVez } = usePagina(exp.id, exp.version);
   const descripciones = useDescripciones(exp.id, exp.version);
@@ -322,6 +324,11 @@ export default function PaginaDeLaEscala() {
   /** «Rehacer con IA» sobre una descripción escrita a mano: se pregunta antes de pisarla (16 nov). */
   const [pisarLaEscrita, setPisarLaEscrita] = useState(false);
   const [armando, setArmando] = useState(false);
+  /** «Volver a la versión anterior» del Resumen (21 nov): la pregunta abierta y el pedido en curso. */
+  const [volverAbierto, setVolverAbierto] = useState(false);
+  const [volviendo, setVolviendo] = useState(false);
+  // La cuenta regresiva del agente de impacto de esta pestaña: mientras rehace, no se vuelve (el servidor también frena).
+  const seRehace = useSeRehaceLaEscala(exp.id);
   /** Lo que el agente escribió y no pasó la verificación la última vez que se armó (para revisarlo). */
   const [descartados, setDescartados] = useState<string[] | null>(null);
   /* El nivel que va a quedar mientras se arrastra, y después de soltar hasta que llega la página nueva: se guarda con la
@@ -386,6 +393,29 @@ export default function PaginaDeLaEscala() {
       await recargar();
       toast.success(`Listo en ${data.segundos ?? 0} s.${data.descartados?.length ? ` ${data.descartados.length} cosas no pasaron la verificación.` : ""}`);
       otraVez();
+    };
+    /* Vuelve al Resumen de antes de rehacerlo (21 nov, lib/exploraciones/resumen-anterior.ts). Manda la firma de lo que ve:
+       si otra persona o Nexus lo cambió entretanto, 409 y se carga lo último. Lo publicado no cambia. */
+    const anterior = exp.estado.contenido.resumenAnterior;
+    const volver = async () => {
+      setVolverAbierto(false);
+      setVolviendo(true);
+      const resp = await fetch(`/api/sales/exploraciones/${exp.id}/escala/resumen`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ volver: "anterior", firma: firmaParaVolver(exp.estado.contenido) }),
+      }).catch(() => null);
+      const data = ((await resp?.json().catch(() => ({}))) ?? {}) as { error?: string };
+      // El Resumen se guarda por su propia ruta: el lienzo y la página se ponen al día pase lo que pase.
+      await recargar();
+      otraVez();
+      setVolviendo(false);
+      if (!resp?.ok) {
+        toast.error(data.error ?? "No se pudo volver a la versión anterior.");
+        return;
+      }
+      setDescartados(null);
+      toast.success("Volviste a la versión anterior. El cliente no la ve hasta que publiques; el mismo botón la deshace.");
     };
     const res = pagina.resumen;
     const edicionDelResumen: EdicionDelResumen = {
@@ -452,9 +482,24 @@ export default function PaginaDeLaEscala() {
                   : " Ninguna cifra sale al cliente: sus citas no las sostienen. Están marcadas abajo.")}
             </p>
             {puedeEditar && (
-              <Button size="sm" variant={res.at ? "secondary" : "primary"} loading={armando} onClick={() => void armar()}>
-                {armando ? "Nexus está leyendo las reuniones…" : res.at ? "Rehacer con IA" : "Armar el Resumen con IA"}
-              </Button>
+              <div className="flex flex-wrap items-center gap-2">
+                {anterior && res.at && (
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    loading={volviendo}
+                    // Con un texto guardándose, la firma sería de lo de antes y el servidor diría que otra persona lo cambió.
+                    disabled={armando || seRehace || guardando}
+                    title={armando || seRehace ? "Nexus está rehaciendo el Resumen: espera a que termine." : undefined}
+                    onClick={() => setVolverAbierto(true)}
+                  >
+                    Volver a la versión anterior
+                  </Button>
+                )}
+                <Button size="sm" variant={res.at ? "secondary" : "primary"} loading={armando} disabled={volviendo} onClick={() => void armar()}>
+                  {armando ? "Nexus está leyendo las reuniones…" : res.at ? "Rehacer con IA" : "Armar el Resumen con IA"}
+                </Button>
+              </div>
             )}
           </div>
           {/* La escala cambió desde que se armó (compara la firma de los niveles): el Resumen puede decir algo viejo. */}
@@ -490,6 +535,15 @@ export default function PaginaDeLaEscala() {
             </button>
           </Alert>
         )}
+        <ConfirmDialog
+          open={volverAbierto && !!anterior && !guardando}
+          onCancel={() => setVolverAbierto(false)}
+          onConfirm={() => void volver()}
+          title="¿Volver a la versión anterior del Resumen?"
+          description={anterior ? `Vuelve el Resumen de antes del ${diaYHora(anterior.en)} (las descripciones de los equipos no cambian); el de ahora queda guardado y el cliente no ve nada hasta «Publicar».` : ""}
+          confirmLabel="Sí, volver"
+          variant="default"
+        />
         <div className="overflow-hidden rounded-xl border border-line">
           <ResumenDeLaEscalaVista
             resumen={res}

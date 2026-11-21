@@ -16045,6 +16045,19 @@ idea es aprovechar a Claude, no pisarlo»). Este es el mínimo viable: UN lugar 
   «Hay cambios que el cliente no ve» hasta que alguien aprieta «Publicar». Cancelar no toca nada (la nota se queda) y deja
   «Regenerar ahora». Si la nota contradice lo aceptado, el aviso empieza con «Esto contradice lo que el cliente aceptó el
   <fecha>».
+- **«Volver a la versión anterior»** (Elías, 21 nov; `lib/exploraciones/resumen-anterior.ts`): rehacer el Resumen, por el
+  botón o por la cuenta regresiva, guarda antes el que había, tal como estaba y con lo escrito a mano, en
+  `contenido.resumenAnterior`, con quién y cuándo lo rehízo. Lo hace `guardar` de `generarElResumenDeLaEscala`, con la
+  fila bloqueada. Una sola versión atrás. Al lado de «Rehacer con IA» sale el botón si hay una guardada; pide confirmación
+  y deja el Resumen como estaba. El que reemplaza pasa a ser la anterior, así que el mismo botón lo deshace.
+  `PATCH …/escala/resumen` (`volverAlResumenAnterior`) pide la misma guardia que rehacer y respeta su candado: mientras
+  hay una corrida, 409. En la pantalla, además, el botón se apaga mientras rehace esta pestaña. Nunca toca lo publicado:
+  el cliente ve lo mismo hasta «Publicar». *Por qué una firma y no la versión:* el Resumen no sube la versión (gana el
+  último), así que la versión no ve si otra persona lo editó o lo rehízo. La pantalla manda la firma (`firmaParaVolver`)
+  del Resumen y la anterior que ve. Si en el servidor ya son otras, 409 y se carga lo último. *Por qué sin SQL:* es un
+  Json más del contenido, que ya guarda el Resumen. `AgentRun.output` no sirve para volver: no tiene lo que se editó a mano
+  después. *Lo que no vuelve:* las descripciones de los equipos que reescribió esa corrida quedan como están (lo dice el
+  diálogo). Con un texto guardándose, el botón espera: si no, la firma sería de lo de antes.
 - **El peso de la nota en el Resumen** (enmienda a «sin pista del cliente no hay nivel ni marco» del 7 oct y a «una cifra
   sin cita no sale al cliente», corregidas en su lugar): cada nota llega al agente como una fuente `N1`, `N2`… con la forma
   de una reunión (`notasComoFuentes`, lib/exploraciones/notas-del-equipo.ts): cada renglón es un turno «dicho» por quien la

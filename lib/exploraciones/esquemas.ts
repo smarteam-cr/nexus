@@ -9,6 +9,7 @@
  *   - el validador estricto que el servidor le pasa a `aplicarOperaciones`.
  */
 import { z } from "zod";
+import { MOTIVOS_DE_LA_ANTERIOR, type ResumenAnterior } from "./resumen-anterior";
 import { CLAVE_DEL_RESUMEN, TIPOS_DE_PENDIENTE, TOPE_A_MANO, TOPE_DE_LA_CIFRA, TOPE_DE_UN_NOMBRE, type AreaOperativa, type ResumenGuardado } from "./resumen-de-la-escala";
 import { ESTADOS_DE_LA_CIFRA, ICONOS_DEL_PASO, TIPOS_DEL_NEGOCIO, type TipoDelNegocio } from "@/lib/external/pagina-del-resumen";
 import { CIERRES, DESPUES, type Cierre, type Despues } from "@/lib/escala/documento/tipos";
@@ -1084,6 +1085,17 @@ function cadaUno<T>(raw: unknown, s: z.ZodType<T>, max: number): T[] {
   }).slice(0, max);
 }
 
+/** La versión anterior del Resumen (./resumen-anterior.ts): sin un Resumen que se lea, no hay anterior. */
+export function leerResumenAnterior(raw: unknown): ResumenAnterior | undefined {
+  if (!esObjeto(raw)) return undefined;
+  const datos = z.object({ en: FECHA_ISO, por: z.string().max(320).nullable(), motivo: z.enum(MOTIVOS_DE_LA_ANTERIOR) }).safeParse(raw);
+  const resumen = leerResumenGuardado(raw.resumen);
+  return datos.success && resumen ? { resumen, ...datos.data } : undefined;
+}
+
+/** «Volver a la versión anterior» del Resumen (PATCH …/escala/resumen): la firma de lo que ve la pantalla. */
+export const VolverAlResumenAnteriorSchema = z.object({ volver: z.literal("anterior"), firma: z.string().regex(/^[0-9a-z]{1,16}$/) }).strict();
+
 /** El Resumen guardado, pieza por pieza. undefined: no hay, o le falta lo de base. */
 export function leerResumenGuardado(raw: unknown): ResumenGuardado | undefined {
   const base = BaseDelResumen.safeParse(raw);
@@ -1222,6 +1234,8 @@ export function leerContenido(raw: unknown): ContenidoDeExploracion {
   if (Object.keys(textosDeLaPagina).length) c.textosDeLaPagina = textosDeLaPagina;
   const resumen = leerResumenGuardado(raw.resumenDeLaEscala);
   if (resumen) c.resumenDeLaEscala = resumen;
+  const anterior = leerResumenAnterior(raw.resumenAnterior);
+  if (anterior) c.resumenAnterior = anterior;
   c.reunionesElegidas = listaDeTextos(raw.reunionesElegidas, MAX_REUNIONES_ELEGIDAS).filter((id) => id.length <= MAX_ID_DE_REUNION);
   c.fuera = Array.isArray(raw.fuera)
     ? raw.fuera.filter((k): k is string => typeof k === "string" && CLAVE_DE_REUNION.safeParse(k).success).slice(-MAX_FUERA)

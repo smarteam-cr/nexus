@@ -42,6 +42,7 @@ import type { TarjetasDeLaEscala } from "./tarjetas-de-la-escala";
 import { firmaDelArea, TOPE_DE_LA_DESCRIPCION_A_MANO, type DescripcionGuardada } from "./descripcion-de-la-escala";
 import type { ClaveDeEquipo } from "./equipos";
 import { editarElResumen, type ResumenGuardado } from "./resumen-de-la-escala";
+import type { ResumenAnterior } from "./resumen-anterior";
 import type { ActividadDelCaso, CasosAnteriores, LugarEnElPlan, ParaVentas, ValorDeVenta } from "@/lib/casos-de-uso/armado";
 import { vuelveASugeridos, type Personalizacion, type RevisionDeLosCasos } from "@/lib/casos-de-uso/personalizar";
 import type { OrdenDeLosCasos } from "@/lib/casos-de-uso/orden";
@@ -351,6 +352,11 @@ export interface ContenidoDeExploracion {
    * No sube la versión (como la descripción): un texto a la vez, gana el último.
    */
   resumenDeLaEscala?: ResumenGuardado;
+  /**
+   * El Resumen que se reemplazó al rehacerlo o al volver (21 nov, ./resumen-anterior.ts): tal como estaba, con lo escrito
+   * a mano. Una sola versión atrás. No sube la versión y no lo ve el cliente.
+   */
+  resumenAnterior?: ResumenAnterior;
 }
 
 /** El texto de la tarjeta de una dimensión que escribió una persona, y el nivel para el que lo escribió. */
@@ -2088,9 +2094,9 @@ export function aplicarOperaciones(
 /** ¿Lo que cambió es lo confirmado (sube la versión) o solo lo pendiente? */
 export function cambioLoConfirmado(antes: EstadoDeExploracion, despues: EstadoDeExploracion): boolean {
   // Las lápidas (y los títulos de los casos descartados) son de lo propuesto: no suben la versión. Tampoco el registro de las usadas.
-  // Ni la descripción de la escala que ve el cliente: un texto por área, gana el último (2026-11-08). Ni su Resumen (9 nov).
+  // Ni la descripción de la escala que ve el cliente: un texto por área, gana el último (2026-11-08). Ni su Resumen (9 nov), ni el anterior (21 nov).
   const sinLapidas = (c: ContenidoDeExploracion) =>
-    exacto({ ...c, descartadas: [], casosDescartados: [], asociacionesDescartadas: undefined, usadas: undefined, descripcionesDeLaEscala: undefined, resumenDeLaEscala: undefined });
+    exacto({ ...c, descartadas: [], casosDescartados: [], asociacionesDescartadas: undefined, usadas: undefined, descripcionesDeLaEscala: undefined, resumenDeLaEscala: undefined, resumenAnterior: undefined });
   return (
     sinLapidas(antes.contenido) !== sinLapidas(despues.contenido) ||
     exacto(antes.areas) !== exacto(despues.areas) ||
