@@ -492,8 +492,10 @@ describe("2 · el cliente nunca ve las citas", () => {
       }),
     );
     // La forma editorial (15 nov): las partes numeradas, lo que hicimos con sus cifras y la banda de lo que falta validar.
-    for (const parte of ["/ Lo que hicimos", "/ Tu operación", "/ Equipos y hallazgos", "Tu mirada completa el diagnóstico", "sesiones de exploración", "personas de tu equipo", "áreas exploradas"])
+    // Lo que hicimos es la portada desde el 21 nov (Elías): el H1 con sus números, sin ceja numerada.
+    for (const parte of ["/ Tu operación", "/ Equipos y hallazgos", "Tu mirada completa el diagnóstico", "sesiones de exploración", "personas de tu equipo", "áreas exploradas"])
       expect(html).toContain(parte);
+    expect(html).toMatch(/<h1 class="re-titular rd-entra">\d+ sesiones y [^<]+ de conversación con \d+ personas de tu equipo\.<\/h1>/);
     for (const fuera of ["¿Entendimos bien?", "provisional", "más de", "Confirmar o corregir"]) expect(html).not.toContain(fuera);
     // Lo que queda fuera va en la línea del alcance, debajo de la tesis.
     expect(html).toContain("re-alcance");
@@ -1415,9 +1417,10 @@ describe("20 · el Sistema 2 de la escala (12 nov)", () => {
     expect(html).not.toContain('href="/r?area=2"');
   });
 
-  it("forma editorial (15 nov): sin tesis guardada, el titular dice qué es la página y la bajada, qué vende; sin atajos", () => {
+  it("forma editorial (15 nov): sin tesis guardada, lo que vende va en «Tu negocio»; sin atajos", () => {
     const html = renderToStaticMarkup(createElement(ResumenDeLaEscalaVista, { resumen: resumen(), empresa: "Centauro Solutions", pestanas }));
-    expect(html).toContain("Así entendimos tu negocio.");
+    // Desde el 21 nov el H1 es lo que hicimos y lo que vende baja a «Tu negocio» (antes: titular «Así entendimos tu negocio.»).
+    expect(html).toContain("01 <span>/ Tu negocio</span>");
     expect(html).toContain("Vendes productos para hospedajes");
     expect(html).toContain("Centauro Solutions <span>/ Diagnóstico</span>");
     for (const fuera of ["rs-ruta", "Qué entendimos del negocio", "rd-empresa"]) expect(html).not.toContain(fuera);
@@ -1675,7 +1678,12 @@ describe("22 · la forma editorial (15 nov): tesis, etiquetas, tamaño, pasos co
         ],
       }),
     );
-    expect(html).toContain('<h1 class="re-titular rd-entra">Productos para hospedajes. Una suscripción mensual por propiedad.</h1>');
+    // Desde el 21 nov (Elías: «En el H1 no debería estar el problema») la tesis es «El problema principal», debajo de lo
+    // que hicimos, que pasó a ser el H1.
+    expect(html).toContain('<h2 class="re-tesis" id="re-t-problema">Productos para hospedajes. Una suscripción mensual por propiedad.</h2>');
+    expect(html).toContain("01 <span>/ El problema principal</span>");
+    expect(html).not.toMatch(/<h1[^>]*>Productos para hospedajes/);
+    expect(html.indexOf("re-hicimos")).toBeLessThan(html.indexOf("re-tesis"));
     expect(html).toContain('<span class="re-grande">500</span><b>clientes</b>');
     expect(html).toContain("re-chip-continuo");
     expect(html).toContain("De la llamada del asesor al hospedaje que opera.");
@@ -1689,7 +1697,7 @@ describe("22 · la forma editorial (15 nov): tesis, etiquetas, tamaño, pasos co
     const p = resumenParaLaPagina(guardado2(), [VENTAS, SERVICIO], CHEQUEO, ENTORNO, { conCitas: false, porExplorar: {} });
     const html = renderToStaticMarkup(createElement(ResumenDeLaEscalaVista, { resumen: { ...p, pendientes: [] }, empresa: "Centauro Solutions", pestanas: [{ id: "resumen", nombre: "Resumen", href: "#" }] }));
     expect(html).not.toContain("Tu mirada completa el diagnóstico");
-    expect(html).toContain("re-hero re-hero-sin-cifra");
+    expect(html).toContain("re-problema re-problema-sin-cifra");
   });
 
   it("«quiénes son» va en negrita y lo que hacen debajo; un texto largo de antes va normal", () => {
@@ -1792,7 +1800,7 @@ describe("23 · lo que encontró la revisión del 15 nov en la forma editorial",
     expect(p.tamano).toMatchObject({ valor: "", rotulo: "Quinientos clientes activos" });
     const html = renderToStaticMarkup(createElement(ResumenDeLaEscalaVista, { resumen: p, empresa: "Centauro", pestanas: [{ id: "resumen", nombre: "Resumen", href: "#" }] }));
     expect(html).toContain("<b>Quinientos clientes activos</b>");
-    expect(html).not.toContain("re-hero-sin-cifra");
+    expect(html).not.toContain("re-problema-sin-cifra");
   });
 
   it("una etapa que se manda a corregir conserva si acompaña y su ícono", () => {

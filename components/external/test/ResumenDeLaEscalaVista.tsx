@@ -5,13 +5,15 @@
  * documento (hex literal de resumen-editorial.css: la página no tiene tema, no flipea) y en tuteo.
  *
  * Se lee en un minuto. Blanco, tinta azul marino, un solo azul, titulares cortos en negrita y una cifra grande por bloque:
- *   arriba, la empresa en la ceja, la TESIS (dos frases: el problema principal, 18 nov), las etiquetas del negocio, el
- *   alcance y, a la derecha, el tamaño del negocio si la empresa lo dijo (sin él, la tesis ocupa todo el ancho);
- *   «Puntos clave» (18 nov): los 5 más críticos de la empresa, en orden de peso (un Resumen de antes no los trae);
- *   01 «Lo que hicimos»: sesiones, tiempo, personas y las áreas exploradas (y la próxima por explorar, si hay);
- *   02 «Tu operación»: los pasos del cliente con su ícono hasta el resultado (el último, lleno), el bucle de los equipos que
+ *   arriba, LO QUE HICIMOS (21 nov, Elías: «En el H1 no debería estar el problema»): la empresa en la ceja, el titular
+ *   con sus números («13 sesiones y 8 h de conversación con 3 personas de tu equipo.», `tituloDeLoQueHicimos`), la
+ *   bajada, las cifras de sesiones, tiempo, personas y áreas exploradas, la próxima por explorar y el alcance;
+ *   01 «El problema principal»: la TESIS (dos frases, 18 nov; hasta el 21 nov era el H1), las etiquetas del negocio y, a la
+ *      derecha, el tamaño del negocio si la empresa lo dijo (sin él, la tesis ocupa todo el ancho);
+ *   02 «Puntos clave» (18 nov): los 5 más críticos de la empresa, en orden de peso (un Resumen de antes no los trae);
+ *   03 «Tu operación»: los pasos del cliente con su ícono hasta el resultado (el último, lleno), el bucle de los equipos que
  *      acompañan mientras opera y «Dónde se traba hoy», numerado sobre su paso;
- *   03 «Equipos y hallazgos»: una fila por subequipo (Televentas dice «Parte de Ventas») con el nivel de su equipo: quiénes
+ *   04 «Equipos y hallazgos»: una fila por subequipo (Televentas dice «Parte de Ventas») con el nivel de su equipo: quiénes
  *      son y qué hacen, lo que ya funciona, dos retos y «Ver diagnóstico de …»; a la derecha su cifra grande con su estado,
  *      o «Falta un dato». Un equipo sin sesiones sale apagado, sin cifra ni botón;
  *   la banda oscura con lo que falta validar (sin nada que validar, no sale) y el pie con la fecha.
@@ -46,6 +48,7 @@ import {
   conclusionDelSubequipo,
   etiquetaDeLaCifra,
   sinCosto,
+  tituloDeLoQueHicimos,
 } from "@/lib/external/pagina-del-resumen";
 import { CLAVES, huella, quitadaDeLaPagina, textoDeLaPagina, type TextosDeLaPagina } from "@/lib/external/textos-de-la-pagina";
 import AnimacionesDelResultado from "./AnimacionesDelResultado";
@@ -188,10 +191,11 @@ export default function ResumenDeLaEscalaVista({
    * al rehacer el Resumen cambian, y lo escrito para el de antes no debe quedar pegado al nuevo).
    */
   const claveDe = (nombre: string, original: string, atado: boolean) => CLAVES.delResumen(atado ? `${nombre}.${huella(original)}` : nombre);
-  const fijo = (nombre: string, original: string, etiqueta: string, quitable = false, atado = false): ReactNode => {
+  /** `mostrado`: el texto de siempre que se ve, cuando no es el mismo al que se ata la clave (el titular de lo que hicimos). */
+  const fijo = (nombre: string, original: string, etiqueta: string, quitable = false, atado = false, mostrado = original): ReactNode => {
     const clave = claveDe(nombre, original, atado);
-    const valor = textoDeLaPagina(textos, clave, original);
-    return edicion?.fijo ? edicion.fijo({ clave, valor, original, etiqueta, quitar: quitable ? { clave, quitada: quitadaDeLaPagina(textos, clave) } : undefined }) : valor;
+    const valor = textoDeLaPagina(textos, clave, mostrado);
+    return edicion?.fijo ? edicion.fijo({ clave, valor, original: mostrado, etiqueta, quitar: quitable ? { clave, quitada: quitadaDeLaPagina(textos, clave) } : undefined }) : valor;
   };
   /** Si una pieza que se puede quitar sale: afuera, no si se quitó; adentro sale siempre (marcada). */
   const sale = (nombre: string, original: string, atado = false) => !!edicion?.fijo || !quitadaDeLaPagina(textos, claveDe(nombre, original, atado));
@@ -532,15 +536,32 @@ export default function ResumenDeLaEscalaVista({
   };
 
   const Titular = edicion ? "div" : "h1";
+  const Tesis = edicion ? "div" : "h2";
   const conTesis = tesis.piezas.length > 0;
-  // Los 5 puntos clave (18 nov), debajo del titular. Un Resumen o una foto de antes no los trae: la parte no sale.
+  // El H1 es lo que hicimos (21 nov, Elías), con los mismos números que las cifras de abajo, también si una persona los
+  // cambió. Sin sesiones (o sin Resumen), el de siempre.
+  const escrito = (nombre: string, original: string) => textoDeLaPagina(textos, claveDe(nombre, original, true), original);
+  const tituloHicimos = h
+    ? tituloDeLoQueHicimos(h, {
+        sesiones: escrito("hicimos.sesiones", String(h.sesiones)),
+        tiempo: h.minutos > 0 ? escrito("hicimos.tiempo", enHoras(h.minutos)) : undefined,
+        personas: h.personas > 0 ? escrito("hicimos.personas", String(h.personas)) : undefined,
+      })
+    : null;
+  // El titular escrito a mano se ata a los números del sistema, no a los escritos: corregir una cifra no lo suelta;
+  // rehacer el Resumen con otras sesiones, sí.
+  const tituloDelSistema = h ? tituloDeLoQueHicimos(h) : null;
+  // «El problema principal» (21 nov): la tesis, que hasta hoy era el H1, con las etiquetas del negocio y su tamaño. Un
+  // Resumen de antes sin tesis trae aquí lo que vende, bajo «Tu negocio» (adentro y afuera, el mismo nombre).
+  const conProblema = conTesis || vende.length > 0 || etiquetas.piezas.length > 0 || !!tamano || (!!edicion && (!!tesis.nueva || !!etiquetas.nueva));
+  // Los 5 puntos clave (18 nov), debajo del problema principal. Un Resumen o una foto de antes no los trae: la parte no sale.
   const puntos = resumen.puntos ?? [];
   const conPuntos = puntos.length > 0 || (!!edicion && !!resumen.puntoNuevo);
-  // Las partes van numeradas en su orden; las que no salen no gastan número.
+  // Las partes van numeradas en su orden; las que no salen no gastan número. Lo que hicimos es la portada: no lleva número.
   let partesNumeradas = 0;
   const numero = (va: boolean) => (va ? String(++partesNumeradas).padStart(2, "0") : "");
+  const nProblema = numero(conProblema);
   const nPuntos = numero(conPuntos);
-  const nHicimos = numero(!!h);
   const nRecorrido = numero(conRecorrido && !!recorrido);
   const nEquipos = numero(resumen.tarjetas.length > 0);
   return (
@@ -551,70 +572,116 @@ export default function ResumenDeLaEscalaVista({
           <ArribaDeLaEscala pestanas={pestanas} actual={PESTANA_DEL_RESUMEN} alElegir={edicion?.alElegir} editorial />
         </div>
 
-        <section className={`re-hero${tamano ? "" : " re-hero-sin-cifra"}`}>
+        {/* Arriba, lo que hicimos (21 nov, Elías: «En el H1 no debería estar el problema»): el titular con sus números, la
+            bajada, las cifras, la próxima área y el alcance del diagnóstico. */}
+        <section className="re-hero">
           <div className="re-hero-texto">
             <p className="re-ceja rd-entra">
               {nombreDeLaEmpresa} <span>/ Diagnóstico</span>
             </p>
             <Titular className="re-titular rd-entra">
-              {conTesis ? pieza(tesis.piezas[0], "La tesis", TOPE_A_MANO) : "Así entendimos tu negocio."}
+              {/* Atado a sus números: al rehacer el Resumen cambian, y lo escrito para los de antes no queda pegado. */}
+              {tituloHicimos && tituloDelSistema ? fijo("titular.hicimos", tituloDelSistema, "El titular: lo que hicimos", false, true, tituloHicimos) : "Así entendimos tu negocio."}
             </Titular>
-            {edicion && !conTesis && tesis.nueva && (
-              <div className="re-agregar">{texto({ clave: tesis.nueva, valor: null, vacio: "+ Escribir la tesis (dos frases cortas)", etiqueta: "La tesis", tope: TOPE_A_MANO })}</div>
-            )}
             <P className="re-bajada rd-entra">
-              {/* Atada a su texto: si el Resumen pasa a tener tesis, la bajada de antes (lo que vende) no queda pegada. */}
-              {fijo(
-                "bajada",
-                conTesis || !vende.length ? "Así entendimos tu negocio, cómo trabajan tus equipos y qué los frena hoy." : vende.map((p) => p.texto).join(" "),
-                "La bajada, debajo de la tesis",
-                false,
-                true,
-              )}
+              {fijo("bajada", "Así entendimos tu negocio, cómo trabajan tus equipos y qué los frena hoy.", "La bajada, debajo del titular", false, true)}
             </P>
-            {(etiquetas.piezas.length > 0 || edicion) && (
-              <ul className="re-etiquetas rd-entra">
-                {etiquetas.piezas.map((p) => (
-                  <li key={p.id}>{pieza(p, "Una etiqueta del negocio")}</li>
-                ))}
-                {edicion && etiquetas.nueva && etiquetas.piezas.length < MAX_ETIQUETAS && (
-                  <li key={`nueva-${etiquetas.piezas.length}`}>{texto({ clave: etiquetas.nueva, valor: null, vacio: "+ Etiqueta", etiqueta: "Una etiqueta del negocio", tope: TOPE_DE_UN_NOMBRE })}</li>
-                )}
-              </ul>
-            )}
-            {(alcance.length > 0 || edicion) && (
-              <div className="re-alcance rd-entra">
-                {alcance.map(({ p, k }) => (
-                  <span key={p.id}>
-                    {/* «La división de desarrollo a medida» sola no dice que queda fuera: se lo antepone si el texto no lo dice. */}
-                    {k === "Qué queda fuera" && !/\bfuera\b/i.test(p.texto) && "Queda fuera: "}
-                    {pieza(p, k)}{" "}
-                  </span>
-                ))}
-                {edicion && !parte("abarca").piezas.length && parte("abarca").nueva && texto({ clave: parte("abarca").nueva!, valor: null, vacio: "+ Qué abarca", etiqueta: "Qué abarca este diagnóstico", tope: TOPE_A_MANO })}
-                {edicion && !parte("fuera").piezas.length && parte("fuera").nueva && <> {texto({ clave: parte("fuera").nueva!, valor: null, vacio: "+ Qué queda fuera", etiqueta: "Qué queda fuera", tope: TOPE_A_MANO })}</>}
-              </div>
-            )}
           </div>
-          {tamano ? (
-            <div className={`re-cifra-negocio rd-entra${tamano.noSale ? " re-cifra-fuera" : ""}`}>
-              {/* Sin un número al principio («Quinientos clientes»), sale como texto, sin la cifra en grande. */}
-              {tamano.valor && <span className="re-grande">{tamano.valor}</span>}
-              {/* Adentro se edita la frase entera («500 clientes activos»); afuera, el número en grande y su rótulo. */}
-              <b>{edicion ? texto({ clave: tamano.clave, valor: [tamano.valor, tamano.rotulo].filter(Boolean).join(" "), vacio: "+ El tamaño del negocio", etiqueta: "El tamaño del negocio (número y unidad)", tope: TOPE_A_MANO, quitar: "Quitar" }) : tamano.rotulo}</b>
-              {tamano.valor && <Estado estado={tamano.estado} />}
-              {tamano.noSale && <p className="re-aviso-interno">{tamano.noSale}</p>}
-              {deDonde(tamano.citas, { noSostiene: !!tamano.noSale })}
-            </div>
-          ) : (
-            edicion &&
-            parte("tamano").nueva && (
-              <div className="re-agregar re-cifra-negocio">
-                {texto({ clave: parte("tamano").nueva!, valor: null, vacio: "+ El tamaño del negocio («500 clientes activos»)", etiqueta: "El tamaño del negocio", tope: TOPE_A_MANO })}
+          {h && (
+            <div className="re-hicimos rd-entra">
+              <div>
+                <b>{fijo("hicimos.sesiones", String(h.sesiones), "Cuántas sesiones", false, true)}</b>
+                <span>{fijo("hicimos.sesiones.rotulo", h.sesiones === 1 ? "sesión de exploración" : "sesiones de exploración", "Rótulo de las sesiones", false, true)}</span>
               </div>
-            )
+              {h.minutos > 0 && (
+                <div>
+                  <b>{fijo("hicimos.tiempo", enHoras(h.minutos), "Cuánto tiempo de conversación", false, true)}</b>
+                  <span>{fijo("hicimos.tiempo.rotulo", "de conversación", "Rótulo del tiempo")}</span>
+                </div>
+              )}
+              {h.personas > 0 && (
+                <div>
+                  <b>{fijo("hicimos.personas", String(h.personas), "Cuántas personas", false, true)}</b>
+                  <span>{fijo("hicimos.personas.rotulo", h.personas === 1 ? "persona de tu equipo" : "personas de tu equipo", "Rótulo de las personas", false, true)}</span>
+                </div>
+              )}
+              {exploradas.length > 0 && (
+                <div>
+                  <b className="re-hicimos-texto">{fijo("hicimos.areas", exploradas.join(" · "), "Las áreas exploradas", false, true)}</b>
+                  <span>{fijo("hicimos.areas.rotulo", exploradas.length === 1 ? "área explorada" : "áreas exploradas", "Rótulo de las áreas", false, true)}</span>
+                </div>
+              )}
+            </div>
+          )}
+          {/* Atada a su texto: explorada un área, la frase cambia y lo escrito para la de antes deja de salir. */}
+          {h && sinExplorar.length > 0 && sale("proxima", `Próxima área por explorar: ${sinExplorar.join(", ")}.`, true) && (
+            <P className="re-proxima">{fijo("proxima", `Próxima área por explorar: ${sinExplorar.join(", ")}.`, "La próxima área por explorar", true, true)}</P>
+          )}
+          {(alcance.length > 0 || edicion) && (
+            <div className="re-alcance rd-entra">
+              {alcance.map(({ p, k }) => (
+                <span key={p.id}>
+                  {/* «La división de desarrollo a medida» sola no dice que queda fuera: se lo antepone si el texto no lo dice. */}
+                  {k === "Qué queda fuera" && !/\bfuera\b/i.test(p.texto) && "Queda fuera: "}
+                  {pieza(p, k)}{" "}
+                </span>
+              ))}
+              {edicion && !parte("abarca").piezas.length && parte("abarca").nueva && texto({ clave: parte("abarca").nueva!, valor: null, vacio: "+ Qué abarca", etiqueta: "Qué abarca este diagnóstico", tope: TOPE_A_MANO })}
+              {edicion && !parte("fuera").piezas.length && parte("fuera").nueva && <> {texto({ clave: parte("fuera").nueva!, valor: null, vacio: "+ Qué queda fuera", etiqueta: "Qué queda fuera", tope: TOPE_A_MANO })}</>}
+            </div>
           )}
         </section>
+
+        {conProblema && (
+          <section className="re-parte" data-revela="" aria-labelledby={conTesis ? "re-t-problema" : undefined}>
+            <p className="re-ceja">
+              {nProblema} <span>/ {conTesis ? "El problema principal" : "Tu negocio"}</span>
+            </p>
+            <div className={`re-problema${tamano ? "" : " re-problema-sin-cifra"}`}>
+              <div className="re-hero-texto">
+                {conTesis ? (
+                  <Tesis className="re-tesis" id="re-t-problema">
+                    {pieza(tesis.piezas[0], "El problema principal (la tesis)", TOPE_A_MANO)}
+                  </Tesis>
+                ) : null}
+                {edicion && !conTesis && tesis.nueva && (
+                  <div className="re-agregar">{texto({ clave: tesis.nueva, valor: null, vacio: "+ Escribir el problema principal (dos frases cortas)", etiqueta: "El problema principal (la tesis)", tope: TOPE_A_MANO })}</div>
+                )}
+                {/* Un Resumen de antes del 15 nov no tiene tesis: lo que vende va aquí. Atada a su texto: si pasa a tener
+                    tesis, deja de salir. */}
+                {!conTesis && vende.length > 0 && <P className="re-bajada">{fijo("bajada", vende.map((p) => p.texto).join(" "), "Lo que vende, debajo de tu negocio", false, true)}</P>}
+                {(etiquetas.piezas.length > 0 || edicion) && (
+                  <ul className="re-etiquetas">
+                    {etiquetas.piezas.map((p) => (
+                      <li key={p.id}>{pieza(p, "Una etiqueta del negocio")}</li>
+                    ))}
+                    {edicion && etiquetas.nueva && etiquetas.piezas.length < MAX_ETIQUETAS && (
+                      <li key={`nueva-${etiquetas.piezas.length}`}>{texto({ clave: etiquetas.nueva, valor: null, vacio: "+ Etiqueta", etiqueta: "Una etiqueta del negocio", tope: TOPE_DE_UN_NOMBRE })}</li>
+                    )}
+                  </ul>
+                )}
+              </div>
+              {tamano ? (
+                <div className={`re-cifra-negocio${tamano.noSale ? " re-cifra-fuera" : ""}`}>
+                  {/* Sin un número al principio («Quinientos clientes»), sale como texto, sin la cifra en grande. */}
+                  {tamano.valor && <span className="re-grande">{tamano.valor}</span>}
+                  {/* Adentro se edita la frase entera («500 clientes activos»); afuera, el número en grande y su rótulo. */}
+                  <b>{edicion ? texto({ clave: tamano.clave, valor: [tamano.valor, tamano.rotulo].filter(Boolean).join(" "), vacio: "+ El tamaño del negocio", etiqueta: "El tamaño del negocio (número y unidad)", tope: TOPE_A_MANO, quitar: "Quitar" }) : tamano.rotulo}</b>
+                  {tamano.valor && <Estado estado={tamano.estado} />}
+                  {tamano.noSale && <p className="re-aviso-interno">{tamano.noSale}</p>}
+                  {deDonde(tamano.citas, { noSostiene: !!tamano.noSale })}
+                </div>
+              ) : (
+                edicion &&
+                parte("tamano").nueva && (
+                  <div className="re-agregar re-cifra-negocio">
+                    {texto({ clave: parte("tamano").nueva!, valor: null, vacio: "+ El tamaño del negocio («500 clientes activos»)", etiqueta: "El tamaño del negocio", tope: TOPE_A_MANO })}
+                  </div>
+                )
+              )}
+            </div>
+          </section>
+        )}
 
         {conPuntos && (
           <section className="re-parte" data-revela="" aria-labelledby="re-t0">
@@ -643,45 +710,6 @@ export default function ResumenDeLaEscalaVista({
               <div key={`nuevo-${puntos.length}`} className="re-agregar">
                 {texto({ clave: resumen.puntoNuevo, valor: null, vacio: "+ Agregar un punto clave", etiqueta: "Nuevo punto clave (su título)", tope: TOPE_DEL_TITULO_DEL_PUNTO })}
               </div>
-            )}
-          </section>
-        )}
-
-        {h && (
-          <section className="re-parte" data-revela="" aria-labelledby="re-t1">
-            <p className="re-ceja">
-              {nHicimos} <span>/ Lo que hicimos</span>
-            </p>
-            <h2 className="re-titulo" id="re-t1">
-              {fijo("titulo.hicimos", "El diagnóstico, contigo.", "Título de lo que hicimos")}
-            </h2>
-            <div className="re-hicimos">
-              <div>
-                <b>{fijo("hicimos.sesiones", String(h.sesiones), "Cuántas sesiones", false, true)}</b>
-                <span>{fijo("hicimos.sesiones.rotulo", h.sesiones === 1 ? "sesión de exploración" : "sesiones de exploración", "Rótulo de las sesiones", false, true)}</span>
-              </div>
-              {h.minutos > 0 && (
-                <div>
-                  <b>{fijo("hicimos.tiempo", enHoras(h.minutos), "Cuánto tiempo de conversación", false, true)}</b>
-                  <span>{fijo("hicimos.tiempo.rotulo", "de conversación", "Rótulo del tiempo")}</span>
-                </div>
-              )}
-              {h.personas > 0 && (
-                <div>
-                  <b>{fijo("hicimos.personas", String(h.personas), "Cuántas personas", false, true)}</b>
-                  <span>{fijo("hicimos.personas.rotulo", h.personas === 1 ? "persona de tu equipo" : "personas de tu equipo", "Rótulo de las personas", false, true)}</span>
-                </div>
-              )}
-              {exploradas.length > 0 && (
-                <div>
-                  <b className="re-hicimos-texto">{fijo("hicimos.areas", exploradas.join(" · "), "Las áreas exploradas", false, true)}</b>
-                  <span>{fijo("hicimos.areas.rotulo", exploradas.length === 1 ? "área explorada" : "áreas exploradas", "Rótulo de las áreas", false, true)}</span>
-                </div>
-              )}
-            </div>
-            {/* Atada a su texto: explorada un área, la frase cambia y lo escrito para la de antes deja de salir. */}
-            {sinExplorar.length > 0 && sale("proxima", `Próxima área por explorar: ${sinExplorar.join(", ")}.`, true) && (
-              <P className="re-proxima">{fijo("proxima", `Próxima área por explorar: ${sinExplorar.join(", ")}.`, "La próxima área por explorar", true, true)}</P>
             )}
           </section>
         )}
