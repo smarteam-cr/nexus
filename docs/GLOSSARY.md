@@ -1211,3 +1211,12 @@
 - **Lectura de los números** (Rentabilidad › Lectura de los números, `lib/rentabilidad/lectura`): Nexus detecta lo que no
   progresa (la solvencia, el margen de una cuenta, las horas sin facturar, la meta) y propone qué hacer y cuánto invertir.
   Una persona la usa o la desestima; solo lo usado vale. Corre a mano o una vez por mes.
+
+- **Escalera de peso** (`lib/impacto/escalera.ts`, 21 nov): qué manda cuando dos cosas que sabe Nexus no cuadran. De más a
+  menos: aceptado por el cliente, presentado y no corregido, confirmado por el equipo, dicho por el cliente en una
+  reunión, deducido por Nexus. Lo nuevo de más abajo no pisa en silencio: se avisa.
+- **Agente de impacto** (`lib/impacto/impacto.ts`, 21 nov): al guardar una nota del equipo, decide con Haiku si cambia un
+  entregable (hoy, la página de La escala) y por qué. Si cambia, la pantalla cuenta 10 s y rehace el entregable como
+  borrador; nunca publica. «Cancelar» lo apaga sin tocar la nota.
+- **Presentado y aceptado** (`HitoDeLaEscala`, en el «Acceso» de La escala, 21 nov): cuándo se le presentó la escala al
+  cliente y qué respondió (aceptó, aceptó con cambios o pidió ajustes), con quién y cuándo. Lo aceptado es lo de más peso.

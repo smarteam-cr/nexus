@@ -17,7 +17,9 @@ import { modeloDisponible } from "@/lib/db/esquema";
 import { prisma } from "@/lib/db/prisma";
 import { SENTINEL_SERVICE_TYPE } from "@/lib/projects/kind";
 import { proyectoClasificableWhere } from "@/lib/projects/scope";
+import { bloqueDeLoAceptado } from "@/lib/impacto/respuesta-del-cliente";
 import { bloqueParaElHandoff } from "./para-el-handoff";
+import { estadoConElCliente } from "./hitos-de-la-escala-server";
 import { exploracionParaLaPropuesta } from "./servidor";
 import { DE_LA_PREVENTA } from "./marco";
 
@@ -77,7 +79,16 @@ export async function exploracionParaElHandoff(projectId: string): Promise<{ exp
   if (!exploracionId) return null;
   const datos = await exploracionParaLaPropuesta(exploracionId);
   if (!datos) return null;
-  return { exploracionId, bloque: bloqueParaElHandoff(datos) };
+  /* Lo que el cliente ACEPTÓ de su escala (21 nov, lib/impacto/escalera.ts) va aparte y arriba del chequeo: es el contexto
+     de más peso. Ya lo vio el cliente (es la foto publicada), así que puede llegar a lo que el handoff escribe para él. */
+  // Si leer los hitos falla, el handoff sigue con el chequeo de siempre: lo aceptado suma, no es condición.
+  const aceptado = await estadoConElCliente(exploracionId)
+    .then((e) => bloqueDeLoAceptado(e, "su escala en la preventa", { conNota: false }))
+    .catch((e: unknown) => {
+      console.error("[exploraciones/handoff] no se pudo leer lo que aceptó el cliente", e);
+      return "";
+    });
+  return { exploracionId, bloque: [aceptado, bloqueParaElHandoff(datos)].filter(Boolean).join("\n\n") };
 }
 
 /**

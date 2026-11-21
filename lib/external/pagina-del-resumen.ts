@@ -33,6 +33,11 @@ export interface CitaDelResumen {
    * una cifra y el cliente no corrige, posiblemente es real»). Solo vale como cita de una cifra, que sale «por confirmar».
    */
   sinCorregir?: true;
+  /**
+   * 21 nov: la cita es de una NOTA DEL EQUIPO («Lo que sabes del cliente»), no de una reunión: quién la escribió y cuándo.
+   * Pesa más que una reunión. Solo adentro: la página pública no lleva citas.
+   */
+  delEquipo?: { nombre: string; en: string };
 }
 
 export interface PreguntaDelResumen {

@@ -43,6 +43,7 @@ import { reunionesDeLaExploracion, transcripcionesDeLaExploracion } from "./fuen
 import { leerLoLeido } from "./lo-leido";
 import { perdidaDeLaEscala, perdidaParaElAgente } from "./perdida-de-la-escala";
 import { bloqueDeInstrucciones } from "./notas-de-sesion";
+import { notasComoFuentes, reunionesDeVerdad } from "./notas-del-equipo";
 import {
   comoSeLeyo,
   conIdsDeLaCorrida,
@@ -78,6 +79,8 @@ const MAX_REUNIONES = 8;
 // la de cobranza, la más importante. Unos 25 mil tokens más de entrada: cerca de 0,08 USD por armado.
 const TOPE_DE_TODAS = 400_000;
 const TOPE_DE_UNA = 120_000;
+/** Una corrida del Resumen tarda unos 3 a 4 minutos: con más de esto en RUNNING, se cayó y no frena otra. */
+const MINUTOS_DE_UNA_CORRIDA = 10;
 /** Quien dijo menos que esto en una reunión no cuenta como «persona de tu equipo» (un saludo, un «sí»). */
 const PALABRAS_DE_QUIEN_PARTICIPO = 40;
 
@@ -267,6 +270,15 @@ export async function loQueLeeElResumen(l: Extract<Lectura, { ok: true }>, ahora
     if (mal) malLeidas.push(mal);
   }
 
+  /* Lo que sabe el equipo (21 nov, notas-del-equipo.ts): cada nota de «Lo que sabes del cliente» como una fuente N1, N2…,
+     después de las reuniones (así R1, R2… no cambian), con quién la escribió. Pesa más que una reunión. */
+  const autores = estado.contenido.autoresDeLasNotas;
+  const correos = [...new Set(Object.values(autores ?? {}).flatMap((a) => (a.por ? [a.por.toLowerCase()] : [])))];
+  const nombres = correos.length
+    ? new Map((await prisma.teamMember.findMany({ where: { email: { in: correos, mode: "insensitive" } }, select: { email: true, name: true } })).map((m) => [m.email.toLowerCase(), m.name.trim()]))
+    : new Map<string, string>();
+  reuniones.push(...notasComoFuentes(estado.contenido.notas, autores, (c) => nombres.get(c) || null));
+
   const delCliente = new Set(sesiones.flatMap((x) => x.quienes ?? []));
   // Ningún nombre puede salir; salvo el de la empresa («Centauro» no es una persona aunque sea el nombre de la sala).
   const deLaEmpresa = new Set(paraComparar(fila.client.name).split(/\s+/));
@@ -325,7 +337,22 @@ export async function generarElResumenDeLaEscala(o: { exploracionId: string; ema
   if (!l.deLasAreas.length) return { ok: false, status: 409, error: "Todavía no hay equipos en la página del cliente: elige cuáles ve en «Acceso»." };
 
   const le = await loQueLeeElResumen(l);
-  if (!le.ctx.reuniones.length) return { ok: false, status: 409, error: "Ninguna sesión de esta preventa tiene transcripción todavía: el Resumen sale de lo que se habló en ellas." };
+  // Las notas del equipo pesan, pero el Resumen sale de lo que se habló: sin ninguna reunión con texto no se arma.
+  if (!reunionesDeVerdad(le.ctx.reuniones).length) return { ok: false, status: 409, error: "Ninguna sesión de esta preventa tiene transcripción todavía: el Resumen sale de lo que se habló en ellas." };
+
+  /* Uno a la vez (revisión del 21 nov): la cuenta regresiva de una nota y el botón pueden pedirlo juntos. Dos corridas se
+     pagan dos veces, y la que termina última pisa a la otra (podía dejar fuera la nota más nueva). Una corrida que lleva
+     más de MINUTOS_DE_UNA_CORRIDA se da por caída. */
+  const enCurso = await prisma.agentRun.findFirst({
+    where: {
+      agentSlug: AGENTE_DE_LA_EXPLORACION,
+      status: "RUNNING",
+      createdAt: { gte: new Date(Date.now() - MINUTOS_DE_UNA_CORRIDA * 60_000) },
+      AND: [{ filters: { path: ["modo"], equals: "resumen-de-la-escala" } }, { filters: { path: ["exploracion"], equals: o.exploracionId } }],
+    },
+    select: { id: true },
+  });
+  if (enCurso) return { ok: false, status: 409, error: "Nexus ya está rehaciendo el Resumen de esta escala. Cuando termine, vuelve a rehacerlo para sumar lo último." };
 
   // Trazabilidad (ARCHITECTURE §6 regla 5). Sin `exploracionId` en los filtros a propósito: no es una corrida del lienzo.
   const run = await prisma.agentRun.create({
@@ -337,7 +364,7 @@ export async function generarElResumenDeLaEscala(o: { exploracionId: string; ema
       stepLabel: "La escala: el Resumen para el cliente",
       currentPhase: "Leyendo las reuniones…",
       triggeredByEmail: o.email,
-      sourceSessionIds: le.ctx.reuniones.map((r) => r.id),
+      sourceSessionIds: reunionesDeVerdad(le.ctx.reuniones).map((r) => r.id),
       filters: { exploracion: o.exploracionId, modo: "resumen-de-la-escala", areas: le.ctx.areas.map((a) => a.id) } as Prisma.InputJsonValue,
     },
     select: { id: true },

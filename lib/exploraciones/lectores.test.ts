@@ -121,6 +121,16 @@ const CENSO: Record<string, { destino: Destino; motivo: string }> = {
     destino: "ventas",
     motivo: "El «Acceso» de La escala, en la cuenta y en la preventa: crear y revocar el enlace. Pantalla interna, con la guardia de la exploración.",
   },
+  "app/api/sales/exploraciones/[id]/acceso/respuesta/route.ts": {
+    destino: "ventas",
+    motivo:
+      "Cuándo se presentó La escala y qué respondió el cliente (21 nov, HitoDeLaEscala): anotarlo y verlo. Pantalla interna, con la guardia de la exploración; lo aceptado llega al handoff solo por exploracionParaElHandoff.",
+  },
+  "app/api/sales/exploraciones/[id]/impacto/route.ts": {
+    destino: "ventas",
+    motivo:
+      "El agente de impacto (21 nov): ¿la nota del equipo cambia la página de La escala? Lee la nota y la página sin citas (escalaParaElCliente); no escribe nada. Pantalla interna, con la guardia de la exploración.",
+  },
   "app/api/sales/exploraciones/[id]/escala/resumen/route.ts": {
     destino: "ventas",
     motivo:

@@ -9,8 +9,10 @@
  *
  * Va en la Preparación de la preventa y en la página de inicio de la exploración de un proyecto.
  */
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { Button, Textarea } from "@/components/ui";
+import AvisoDeImpacto from "@/components/impacto/AvisoDeImpacto";
+import { avisarQueLaEscalaCambio } from "./escala-al-dia";
 import { cn } from "@/lib/cn";
 import { diaConAnio } from "@/lib/exploraciones/fechas";
 import { MAX_NOTA_DE_SESION } from "@/lib/exploraciones/notas-de-sesion";
@@ -60,15 +62,49 @@ function Editor({ inicial, onGuardar, onCancelar }: { inicial: string; onGuardar
   );
 }
 
+/** Quién la escribió, corto: la parte del correo antes de la arroba (el correo entero va en el título). */
+const quienCorto = (correo: string) => correo.split("@")[0] ?? correo;
+
 export default function LoQueSabes() {
-  const { exp, puedeEditar, cambiar } = useLienzo();
+  const { exp, puedeEditar, cambiar, recargar } = useLienzo();
   const lista = loQueSabeElEquipo(exp.estado.contenido.notas);
+  const autores = exp.estado.contenido.autoresDeLasNotas ?? {};
   const [editando, setEditando] = useState<string | null>(null);
   const nueva = editando !== null && !lista.some((x) => x.clave === editando);
+  // 21 nov: después de guardar, ¿la nota cambia la página de La escala? (lib/impacto/impacto.ts)
+  const [revisando, setRevisando] = useState(false);
+  const [impacto, setImpacto] = useState<{ clave: string; aviso: string } | null>(null);
+
+  const revisarImpacto = async (clave: string) => {
+    setRevisando(true);
+    try {
+      const r = await fetch(`/api/sales/exploraciones/${exp.id}/impacto`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ clave }) });
+      const j = (await r.json().catch(() => null)) as { cambia?: boolean; aviso?: string } | null;
+      if (r.ok && j?.cambia && j.aviso) setImpacto({ clave, aviso: j.aviso });
+    } catch {
+      // Sin aviso no se rompe nada: la nota ya quedó y el Resumen se puede rehacer a mano.
+    } finally {
+      setRevisando(false);
+    }
+  };
+
+  const regenerar = useCallback(async () => {
+    const r = await fetch(`/api/sales/exploraciones/${exp.id}/escala/resumen`, { method: "POST" });
+    const j = (await r.json().catch(() => ({}))) as { error?: string };
+    if (!r.ok) throw new Error(j.error ?? "No se pudo rehacer la página de La escala.");
+    // El Resumen se guarda por su propia ruta: el lienzo se pone al día y «Publicar» vuelve a mirar.
+    await recargar();
+    avisarQueLaEscalaCambio();
+    return "Listo: la página de La escala tiene cambios que el cliente todavía no ve. Revísalos en «La escala» y publica cuando quieras.";
+  }, [exp.id, recargar]);
 
   const guardar = async (clave: string, texto: string) => {
     const ok = await cambiar([{ op: "nota", paso: clave, texto }]);
-    if (ok) setEditando(null);
+    if (ok) {
+      setEditando(null);
+      setImpacto(null);
+      void revisarImpacto(clave);
+    }
     return ok;
   };
 
@@ -88,10 +124,21 @@ export default function LoQueSabes() {
         )}
       </div>
       {nueva && editando && <Editor inicial="" onGuardar={(t) => guardar(editando, t)} onCancelar={() => setEditando(null)} />}
+      {revisando && <p className="text-2xs text-fg-muted">Nexus revisa si esto cambia la página de La escala…</p>}
+      {impacto && (
+        <AvisoDeImpacto
+          key={impacto.clave + impacto.aviso}
+          aviso={impacto.aviso}
+          regenerar={regenerar}
+          corriendo="Nexus está rehaciendo la página de La escala con tu nota (unos 3 minutos). Lo escrito a mano se queda y nada se publica."
+          onCerrar={() => setImpacto(null)}
+        />
+      )}
       {lista.length > 0 && (
         <ul className="flex flex-col gap-2">
           {lista.map(({ clave, texto }) => {
-            const cuando = cuandoSeAgrego(clave);
+            const autor = autores[clave];
+            const cuando = autor ? Date.parse(autor.en) : cuandoSeAgrego(clave);
             return (
               <li key={clave} className="rounded-lg border border-line bg-surface-muted px-3 py-2.5">
                 {editando === clave ? (
@@ -100,12 +147,24 @@ export default function LoQueSabes() {
                   <div className="flex items-start gap-2">
                     <div className="min-w-0 flex-1">
                       <p className="whitespace-pre-wrap text-[13px] leading-[19px] text-fg">{texto}</p>
-                      {cuando && <p className="mt-0.5 text-2xs text-fg-muted">Agregado el {diaConAnio(cuando)}</p>}
+                      {cuando && (
+                        <p className="mt-0.5 text-2xs text-fg-muted" title={autor?.por ?? undefined}>
+                          {autor ? "Guardado" : "Agregado"} el {diaConAnio(cuando)}
+                          {autor?.por ? ` por ${quienCorto(autor.por)}` : ""}
+                        </p>
+                      )}
                     </div>
                     {puedeEditar && (
                       <div className="flex flex-shrink-0 items-center gap-1">
                         <BotonTexto onClick={() => setEditando(clave)}>Editar</BotonTexto>
-                        <BotonTexto onClick={() => void cambiar([{ op: "nota", paso: clave, texto: "" }])} title="Quitarlo de la exploración">
+                        <BotonTexto
+                          onClick={() => {
+                            // Quitar la nota apaga su cuenta regresiva: no se rehace la página por algo que ya no está.
+                            if (impacto?.clave === clave) setImpacto(null);
+                            void cambiar([{ op: "nota", paso: clave, texto: "" }]);
+                          }}
+                          title="Quitarlo de la exploración"
+                        >
                           Quitar
                         </BotonTexto>
                       </div>

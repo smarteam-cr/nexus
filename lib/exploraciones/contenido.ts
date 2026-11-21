@@ -23,6 +23,7 @@ import { MAX_SESIONES, type GuiaDeLaSesion, type SesionPlaneada } from "./guia";
 import { aplicarCambioDeLaGuia, hayAjustes, type CambioDeLaGuia } from "./ajustes-de-la-guia";
 import type { ComoLlego } from "./como-llego";
 import { calcularLaPerdida, type PerdidaValidada } from "./perdida";
+import { esClaveDeLoQueSabes } from "./lo-que-sabes";
 import type { ContactoPrevio, ContextoDeLaExploracion, ContextoPropuesto, TarjetasDeLoQueSabemos } from "./contexto-de-la-exploracion";
 import type { Cumplimiento } from "./despues-de-la-sesion";
 import {
@@ -301,6 +302,13 @@ export interface ContenidoDeExploracion {
    * que ve el cliente, sí, solo por perdida-de-la-escala.ts (20 nov). Opcional: las exploraciones de antes no lo tienen.
    */
   perdida?: PerdidaValidada;
+  /**
+   * 21 nov (Elías: «lo que dice el usuario de Nexus debe ser lo que manda»): quién escribió cada nota de «Lo que sabes del
+   * cliente» (`sabido:<id>`) y cuándo la guardó por última vez. Con eso la nota entra al Resumen de La escala como fuente
+   * del equipo, de más peso que una reunión, rotulada «lo dijo <persona>» (notas-del-equipo.ts). Opcional: una nota de
+   * antes no lo tiene (cuenta como del equipo, sin nombre).
+   */
+  autoresDeLasNotas?: Record<string, AutorDeLaNota>;
   /**
    * K5 (2026-10-27, asociar.ts): las reuniones (`meet:<id>`) que alguien dijo que NO son una sesión de la exploración
    * cuando Nexus lo preguntó. No se vuelven a sugerir ni se asocian solas. Es una lápida: no sube la versión.
@@ -1305,6 +1313,12 @@ function aplicarAlDestino(
 // ── Usar y deshacer (K12) ─────────────────────────────────────────────────────
 
 /** Quién cambia y cuándo: queda en cada sugerencia usada. */
+/** Quién escribió una nota del equipo y cuándo (ISO). `por`: su correo (null: un script). */
+export interface AutorDeLaNota {
+  por: string | null;
+  en: string;
+}
+
 export interface QuienCambia {
   por: string | null;
   en: string;
@@ -1649,7 +1663,12 @@ function aplicarUna(estado: EstadoDeExploracion, op: Operacion, validez: Validez
       const notas = { ...c.notas };
       if (op.texto.trim()) notas[op.paso] = op.texto;
       else delete notas[op.paso];
-      return { ok: true, estado: { ...estado, contenido: { ...c, notas } } };
+      // Lo que sabe el equipo queda con quién y cuándo (21 nov): pesa más que una reunión en el Resumen de La escala.
+      if (!esClaveDeLoQueSabes(op.paso)) return { ok: true, estado: { ...estado, contenido: { ...c, notas } } };
+      const autoresDeLasNotas = { ...(c.autoresDeLasNotas ?? {}) };
+      if (!op.texto.trim()) delete autoresDeLasNotas[op.paso];
+      else if ((c.notas[op.paso] ?? "").trim() !== op.texto.trim()) autoresDeLasNotas[op.paso] = { por: quien.por, en: quien.en };
+      return { ok: true, estado: { ...estado, contenido: { ...c, notas, autoresDeLasNotas } } };
     }
     case "sesiones":
       return { ok: true, estado: { ...estado, contenido: { ...c, sesiones: op.sesiones.slice(0, MAX_SESIONES) } } };
