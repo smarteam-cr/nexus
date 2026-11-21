@@ -13,6 +13,9 @@
  * una vez más. Se guarda en `contenido.resumenDeLaEscala` sin pisar lo editado a mano (`juntarConLoEditado`) y sin subir
  * la versión. Trazabilidad: `AgentRun` + el medidor de gasto (`conContextoDeIA`).
  *
+ * Al rehacerlo, el que había queda como versión anterior (21 nov, ./resumen-anterior.ts): «Volver a la versión anterior»
+ * (`volverAlResumenAnterior`, PATCH de la misma ruta) lo pone otra vez.
+ *
  * Quién lo llama: solo `POST /api/sales/exploraciones/[id]/escala/resumen` («Armar el Resumen» / «Rehacer con IA»). No se
  * arma solo al crear el «Acceso» (revisión del 9 nov): lo que lee la dirección del cliente lo mira antes una persona.
  */
@@ -40,6 +43,7 @@ import { EQUIPOS, type ClaveDeEquipo } from "./equipos";
 import { areasDeLaPagina, resultadosDeLaEscala, type ResultadoDeUnArea } from "./escala-para-el-cliente";
 import { leerContenido } from "./esquemas";
 import { reunionesDeLaExploracion, transcripcionesDeLaExploracion } from "./fuentes";
+import { conElResumenNuevo, volverALaAnterior } from "./resumen-anterior";
 import { leerLoLeido } from "./lo-leido";
 import { perdidaDeLaEscala, perdidaParaElAgente } from "./perdida-de-la-escala";
 import { bloqueDeInstrucciones } from "./notas-de-sesion";
@@ -327,6 +331,20 @@ function comoLoVeElCse(l: Extract<Lectura, { ok: true }>, guardado: ResumenGuard
   });
 }
 
+/** ¿Hay una corrida del Resumen de esta exploración trabajando? (la de hace más de MINUTOS_DE_UNA_CORRIDA, se cayó) */
+async function corridaEnCurso(db: Pick<Prisma.TransactionClient, "agentRun">, exploracionId: string): Promise<boolean> {
+  const r = await db.agentRun.findFirst({
+    where: {
+      agentSlug: AGENTE_DE_LA_EXPLORACION,
+      status: "RUNNING",
+      createdAt: { gte: new Date(Date.now() - MINUTOS_DE_UNA_CORRIDA * 60_000) },
+      AND: [{ filters: { path: ["modo"], equals: "resumen-de-la-escala" } }, { filters: { path: ["exploracion"], equals: exploracionId } }],
+    },
+    select: { id: true },
+  });
+  return !!r;
+}
+
 /** Arma (o rehace) el Resumen y lo guarda. */
 export async function generarElResumenDeLaEscala(o: { exploracionId: string; email: string | null }): Promise<ResultadoDelResumen> {
   const t0 = Date.now();
@@ -343,16 +361,7 @@ export async function generarElResumenDeLaEscala(o: { exploracionId: string; ema
   /* Uno a la vez (revisión del 21 nov): la cuenta regresiva de una nota y el botón pueden pedirlo juntos. Dos corridas se
      pagan dos veces, y la que termina última pisa a la otra (podía dejar fuera la nota más nueva). Una corrida que lleva
      más de MINUTOS_DE_UNA_CORRIDA se da por caída. */
-  const enCurso = await prisma.agentRun.findFirst({
-    where: {
-      agentSlug: AGENTE_DE_LA_EXPLORACION,
-      status: "RUNNING",
-      createdAt: { gte: new Date(Date.now() - MINUTOS_DE_UNA_CORRIDA * 60_000) },
-      AND: [{ filters: { path: ["modo"], equals: "resumen-de-la-escala" } }, { filters: { path: ["exploracion"], equals: o.exploracionId } }],
-    },
-    select: { id: true },
-  });
-  if (enCurso) return { ok: false, status: 409, error: "Nexus ya está rehaciendo el Resumen de esta escala. Cuando termine, vuelve a rehacerlo para sumar lo último." };
+  if (await corridaEnCurso(prisma, o.exploracionId)) return { ok: false, status: 409, error: "Nexus ya está rehaciendo el Resumen de esta escala. Cuando termine, vuelve a rehacerlo para sumar lo último." };
 
   // Trazabilidad (ARCHITECTURE §6 regla 5). Sin `exploracionId` en los filtros a propósito: no es una corrida del lienzo.
   const run = await prisma.agentRun.create({
@@ -404,7 +413,7 @@ export async function generarElResumenDeLaEscala(o: { exploracionId: string; ema
       puntos: escrito.puntos,
       malLeidas: le.malLeidas,
     };
-    const guardado = await guardar(o.exploracionId, nuevo, le.ctx.reuniones);
+    const guardado = await guardar(o.exploracionId, nuevo, le.ctx.reuniones, o.email);
     await prisma.agentRun.update({
       where: { id: run.id },
       data: { status: "DONE", currentPhase: null, output: JSON.stringify({ resumen: nuevo, descartados: escrito.descartados, uso }) },
@@ -431,20 +440,52 @@ export async function generarElResumenDeLaEscala(o: { exploracionId: string; ema
 
 /**
  * Guarda con la fila bloqueada y releída: lo nuevo junto con lo que una persona escribió (también lo que escribió mientras
- * el agente trabajaba) y sin lo que quitó. Conserva las claves del Json que esta versión no conoce.
+ * el agente trabajaba) y sin lo que quitó. El que había queda como versión anterior, tal como estaba (21 nov,
+ * ./resumen-anterior.ts). Conserva las claves del Json que esta versión no conoce.
  */
-async function guardar(exploracionId: string, nuevo: ResumenGuardado, reuniones: readonly ReunionParaElResumen[]): Promise<ResumenGuardado | null> {
+async function guardar(exploracionId: string, nuevo: ResumenGuardado, reuniones: readonly ReunionParaElResumen[], email: string | null): Promise<ResumenGuardado | null> {
   return prisma.$transaction(async (tx) => {
     await bloquearFila(tx, exploracionId);
     const f = await tx.exploracionDeVenta.findUnique({ where: { id: exploracionId }, select: { contenido: true, archivadaEn: true } });
     if (!f || f.archivadaEn) return null;
     const c = leerContenido(f.contenido);
     const resumenDeLaEscala = juntarConLoEditado(nuevo, c.resumenDeLaEscala, reuniones);
-    const crudo = f.contenido && typeof f.contenido === "object" && !Array.isArray(f.contenido) ? (f.contenido as Record<string, unknown>) : {};
     await tx.exploracionDeVenta.update({
       where: { id: exploracionId },
-      data: { contenido: { ...crudo, ...c, resumenDeLaEscala } as unknown as Prisma.InputJsonValue },
+      data: { contenido: conLoDesconocido(f.contenido, conElResumenNuevo(c, resumenDeLaEscala, { por: email, en: new Date().toISOString() })) },
     });
     return resumenDeLaEscala;
+  });
+}
+
+/** El contenido leído, sin perder las claves del Json que esta versión no conoce. */
+function conLoDesconocido(raw: unknown, c: ReturnType<typeof leerContenido>): Prisma.InputJsonValue {
+  const crudo = raw && typeof raw === "object" && !Array.isArray(raw) ? (raw as Record<string, unknown>) : {};
+  return { ...crudo, ...c } as unknown as Prisma.InputJsonValue;
+}
+
+export type ResultadoDeVolverAlResumen = { ok: true } | { ok: false; status: number; error: string };
+
+/**
+ * «Volver a la versión anterior» del Resumen (21 nov): con la fila bloqueada, pone la anterior y deja la de ahora como
+ * anterior (se deshace con el mismo botón). `firma`: la que vio la pantalla (`firmaParaVolver`); si cambió, 409. No
+ * mientras se rehace (el mismo candado que «Rehacer con IA»). Solo escribe el contenido de la exploración: lo publicado
+ * no se toca y el cliente ve lo mismo hasta «Publicar».
+ */
+export async function volverAlResumenAnterior(o: { exploracionId: string; email: string | null; firma: string }): Promise<ResultadoDeVolverAlResumen> {
+  return prisma.$transaction(async (tx) => {
+    await bloquearFila(tx, o.exploracionId);
+    const f = await tx.exploracionDeVenta.findUnique({ where: { id: o.exploracionId }, select: { contenido: true, archivadaEn: true } });
+    if (!f) return { ok: false, status: 404, error: "Esa exploración no existe." };
+    if (f.archivadaEn) return { ok: false, status: 409, error: "La exploración está archivada: ya no se puede cambiar." };
+    // Dentro del bloqueo: una corrida que termina después guarda ESTE como su anterior.
+    if (await corridaEnCurso(tx, o.exploracionId)) return { ok: false, status: 409, error: "Nexus está rehaciendo el Resumen. Cuando termine, puedes volver a la versión anterior." };
+    const r = volverALaAnterior(leerContenido(f.contenido), o.firma, { por: o.email, en: new Date().toISOString() });
+    if (!r.ok)
+      return r.motivo === "sin-anterior"
+        ? { ok: false, status: 409, error: "Este Resumen no tiene una versión anterior guardada." }
+        : { ok: false, status: 409, error: "El Resumen cambió mientras lo mirabas (otra persona, o Nexus al rehacerlo). Se cargó lo último: revísalo y vuelve a intentarlo." };
+    await tx.exploracionDeVenta.update({ where: { id: o.exploracionId }, data: { contenido: conLoDesconocido(f.contenido, r.contenido) } });
+    return { ok: true };
   });
 }
