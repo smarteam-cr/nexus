@@ -1,6 +1,6 @@
 # Roadmap de Nexus
 
-**Corte:** 2026-11-19
+**Corte:** 2026-11-20
 
 ## Línea de tiempo
 
@@ -8,8 +8,8 @@
      regenera: la skill regenerar-roadmap. Lo hecho nuevo entra SOLO acá, con su «tema»; el Resumen lo toma de aquí. -->
 ```linea
 {
- "hoy": "2026-11-19",
- "produccion": "b340fccb",
+ "hoy": "2026-11-20",
+ "produccion": "70b6c3b5",
  "temasHechoHasta": "2026-10-29",
  "iniciativas": [
   {
@@ -872,29 +872,133 @@
    "paraQuien": "Tú",
    "prod": "plan",
    "prodNota": "Es solo diseño: la app no cambió. Quedan cuatro pantallas con piezas resumidas (punto de equilibrio, renovaciones, plantillas por rol y semana del equipo)."
+  },
+  {
+   "fecha": "2026-11-20",
+   "iniciativa": "cronograma",
+   "titulo": "kölbi: sus tres proyectos en un plan general",
+   "que": "Los loops se ven como cualquier fase, una tarea puede durar varias semanas y la cuenta tiene un Plan general con los siete loops y un enlace para el cliente. Ya cargado en los tres proyectos de kölbi.",
+   "paraQuien": "Customer Success",
+   "prod": "si",
+   "tema": 10,
+   "commits": [
+    "70b6c3b5"
+   ]
+  },
+  {
+   "fecha": "2026-11-20",
+   "iniciativa": "cronograma",
+   "titulo": "Las semanas sin tareas, en una sola línea",
+   "que": "«Semanas 6 a 12 · sin tareas», con su «+ tarea» para elegir la semana. Vale para todos los cronogramas.",
+   "paraQuien": "Customer Success",
+   "prod": "si",
+   "tema": 10,
+   "commits": [
+    "70b6c3b5"
+   ]
+  },
+  {
+   "fecha": "2026-11-20",
+   "iniciativa": "cronograma",
+   "titulo": "El Contexto adicional del cronograma arranca plegado",
+   "que": "En cada proyecto, para que el Gantt se vea primero.",
+   "paraQuien": "Customer Success",
+   "prod": "si",
+   "tema": 10,
+   "commits": [
+    "70b6c3b5"
+   ]
+  },
+  {
+   "fecha": "2026-11-20",
+   "iniciativa": "escala",
+   "titulo": "El Resumen de La escala, con lo que más pesa",
+   "que": "El titular nombra el problema del que más se habló, con 5 puntos clave. Una cifra que dijo Smarteam y la empresa no corrigió entra «Por confirmar».",
+   "paraQuien": "Ventas y Customer Success",
+   "prod": "si",
+   "tema": 5,
+   "commits": [
+    "70b6c3b5"
+   ]
+  },
+  {
+   "fecha": "2026-11-20",
+   "iniciativa": "escala",
+   "titulo": "La página de resultados, en dinero y con la escalera",
+   "que": "Cada departamento abre con cuánto cuesta o con el dolor de quien decide, y «Por validar» si no hay cifra. La escalera de 5 niveles va arriba del radar, también en el test público.",
+   "paraQuien": "Ventas",
+   "prod": "si",
+   "tema": 5,
+   "commits": [
+    "70b6c3b5"
+   ]
+  },
+  {
+   "fecha": "2026-11-20",
+   "iniciativa": "escala",
+   "titulo": "La escala para el departamento de TI",
+   "que": "El área de TI entra a La escala con su propio banco de preguntas.",
+   "paraQuien": "Ventas y Customer Success",
+   "prod": "si",
+   "tema": 5,
+   "commits": [
+    "70b6c3b5"
+   ]
+  },
+  {
+   "fecha": "2026-11-20",
+   "iniciativa": "preventa",
+   "titulo": "Negocio y Embudo en la arquitectura de la venta",
+   "que": "Dos tarjetas nuevas, «Qué pasa» solo completa con cifra, Nexus calcula cuánto pierde el cliente, «Lo que falta saber» arriba de la agenda y las objeciones con LAER en el análisis.",
+   "paraQuien": "Ventas",
+   "prod": "si",
+   "tema": 7,
+   "commits": [
+    "70b6c3b5"
+   ]
+  },
+  {
+   "fecha": "2026-11-20",
+   "iniciativa": "nexus",
+   "titulo": "Trivias en vivo para el equipo",
+   "que": "Juegos estilo Kahoot que arma y conduce un super admin; el equipo entra por QR desde el teléfono.",
+   "paraQuien": "Todo el equipo",
+   "prod": "si",
+   "tema": 12,
+   "commits": [
+    "70b6c3b5"
+   ]
   }
  ],
  "sigue": [
   {
-   "iniciativa": "cronograma",
-   "titulo": "kölbi: sus tres proyectos en un plan general",
-   "que": "Cada loop de SmartLoop es un grupo en el cronograma de su proyecto, el handoff declara los loops y un plan general de la cuenta, editable, lo ve el cliente. Está construido y probado en la base local. Falta verlo con sesión, el cambio de base antes de subir y cargar kölbi con tu sí.",
-   "paraQuien": "Customer Success y kölbi",
+   "iniciativa": "reuniones",
+   "titulo": "Que las novedades de los documentos sí se revisen",
+   "que": "No proponer a un documento vacío, una fila por reunión, primero lo que dijo el cliente, por documento en «Para ti» y su meta en «Uso de Nexus». Y lo dicho por Smarteam, rotulado como tal.",
+   "paraQuien": "Customer Success",
    "estado": "por-hacer",
-   "tema": 10
+   "tema": 2,
+   "preguntas": [
+    82
+   ]
+  },
+  {
+   "iniciativa": "reuniones",
+   "titulo": "El botón «Agregar contexto»",
+   "que": "Lo que el equipo sabe entra por un solo lugar, con dictado, confirmado y con quién lo dijo; Nexus lo lleva adonde sirve. Los 8 lugares de hoy se migran de a uno.",
+   "paraQuien": "Todo el equipo",
+   "estado": "por-hacer",
+   "tema": 2,
+   "preguntas": [
+    79,
+    80,
+    81
+   ]
   },
   {
    "iniciativa": "escala",
-   "titulo": "El Resumen de La escala, con lo que más pesa",
-   "que": "Salió del caso Cemaco: un titular con el problema principal, «5 puntos clave», las cifras «por confirmar», el peso de cada reunión y un aviso cuando una reunión no se pudo leer bien. Está listo y sube junto con kölbi.",
-   "paraQuien": "Ventas y el cliente",
-   "estado": "por-hacer",
-   "tema": 5
-  },
-  {
-   "iniciativa": "escala",
-   "titulo": "La escala para el departamento de TI",
-   "que": "Un primer MVP para medir el área de TI (no la tecnología: el departamento). Están listos el formulario, las pruebas y la página del resultado, y sube junto con kölbi. Antes apruebas sus preguntas. Después pasa a la preventa y a clientes.",
+   "titulo": "TI: aprobar su banco de preguntas",
+   "que": "El área de TI ya está en producción; falta que apruebes sus preguntas en Escala › Tests.",
    "preguntaTexto": "¿Apruebas las preguntas del test para el área de TI?",
    "paraQuien": "Ventas y Customer Success",
    "estado": "te-toca",
@@ -1105,6 +1209,38 @@
     4,
     9
    ]
+  },
+  {
+   "iniciativa": "escala",
+   "titulo": "Rehacer los Resúmenes y volver a publicar las escalas",
+   "que": "Los títulos en dinero aparecen con «Rehacer con IA» (unos 0,55 USD cada uno); las escalas publicadas avisan «Hay cambios que el cliente no ve».",
+   "paraQuien": "Ventas y Customer Success",
+   "estado": "por-hacer",
+   "tema": 5
+  },
+  {
+   "iniciativa": "casos",
+   "titulo": "Una sola lógica para los casos de uso",
+   "que": "Hoy la preventa los cruza con lo que dijo el cliente y el resto de Nexus los elige por niveles, con un porqué mecánico. Decidir cómo unirlas.",
+   "paraQuien": "Ventas y Customer Success",
+   "estado": "te-toca",
+   "tema": 7
+  },
+  {
+   "iniciativa": "cronograma",
+   "titulo": "La sección de loops del handoff",
+   "que": "Volver a cargar el prompt del handoff con su sección de loops, después de comparar que nadie lo editó a mano.",
+   "paraQuien": "Customer Success",
+   "estado": "por-hacer",
+   "tema": 10
+  },
+  {
+   "iniciativa": "nexus",
+   "titulo": "Las trivias de ejemplo en producción",
+   "que": "Implementación de HubSpot, Good Strategy / Bad Strategy y Cómo funciona Nexus.",
+   "paraQuien": "Todo el equipo",
+   "estado": "por-hacer",
+   "tema": 12
   }
  ]
 }
@@ -1117,7 +1253,7 @@
 <!-- El resumen se arma con este bloque. Cómo se regenera: «Cómo se mantiene este roadmap» y la skill regenerar-roadmap. -->
 ```temas
 {
- "dondeVamos": "Desde el 29 oct entraron unos 300 cambios, todos en producción (b340fccb, 18 nov): la preventa y La escala en diez vueltas cada una, los casos de uso con sus actividades, los documentos con varias copias, 28 pedidos de Finanzas y Cobranza, y el cronograma que sale de lo vendido. Lo próximo: subir juntos kölbi, el Resumen de La escala y el área de TI.",
+ "dondeVamos": "Desde el 29 oct entraron unos 320 cambios, todos en producción (70b6c3b5, 20 nov). Hoy subieron kölbi con su plan general, la página de resultados en dinero, Negocio y Embudo en la preventa, el área de TI y Trivias. Lo próximo: que las novedades de los documentos sí se revisen y, después, el botón «Agregar contexto».",
  "temas": [
   {
    "n": 4,
@@ -1220,7 +1356,7 @@
      "texto": "La escala única, arreglada: una cuenta medida solo en un proyecto ya se ve medida."
     }
    ],
-   "sigue": "El Resumen con lo que más pesa (caso Cemaco) y el MVP de TI, en otras sesiones. Después, probar con 5 a 8 empresas de 3 industrias.",
+   "sigue": "Rehacer los Resúmenes con IA y volver a publicar las escalas. Después, probar con 5 a 8 empresas de 3 industrias.",
    "teToca": "Crear «Telecomunicaciones» en «Industria (Smarteam)» de HubSpot. Después, las 52 decisiones provisionales de la 9.0.",
    "decisiones": [
     8,
@@ -1229,7 +1365,8 @@
     47,
     55,
     56,
-    57
+    57,
+    77
    ]
   },
   {
@@ -1318,7 +1455,7 @@
      "texto": "El kickoff de SmartLoop y la exploración antes del diagnóstico."
     }
    ],
-   "sigue": "El primer ciclo con cada CSE: RC Inmobiliaria, Honda y kölbi.",
+   "sigue": "El primer ciclo con cada CSE: RC Inmobiliaria, Honda y kölbi (kölbi ya tiene su plan general cargado).",
    "decisiones": []
   },
   {
@@ -1364,7 +1501,7 @@
      "texto": "Primera medición: 0 de 14, y el 7,4 % de lo que propone Nexus se decide a tiempo."
     }
    ],
-   "sigue": "Medir otra vez ahora que lo nuevo está en producción.",
+   "sigue": "Subir las trivias de ejemplo y jugar una con el equipo. Medir otra vez el uso ahora que lo nuevo está en producción.",
    "decisiones": []
   },
   {
@@ -1429,7 +1566,7 @@
      "texto": "La investigación de la preventa también busca vacantes publicadas."
     }
    ],
-   "sigue": "La preventa y los casos de uso al 90–95 % con tu prueba; después, definir contigo la propuesta con casos de uso.",
+   "sigue": "Probar Negocio, Embudo y la pérdida con una preventa real; decidir cómo unir las dos lógicas de casos de uso. Después, la propuesta con casos de uso.",
    "teToca": "Escribir «qué logra» y «cuándo cabe» de Acompañamiento en Marketing › Audiencia.",
    "decisiones": [
     11,
@@ -1437,7 +1574,11 @@
     13,
     14,
     17,
-    45
+    45,
+    73,
+    74,
+    75,
+    76
    ]
   },
   {
@@ -1453,11 +1594,12 @@
      "texto": "Una tarea «por validar» ya no llega al cliente."
     }
    ],
-   "sigue": "Los cuatro cambios que faltan de «lo vendido»: elegir la venta, «Fue un error mío», fases en paralelo en Desarrollo y la línea del Kickoff.",
+   "sigue": "La sección de loops del handoff. Después, lo que falta de «lo vendido»: elegir la venta, «Fue un error mío», fases en paralelo en Desarrollo y la línea del Kickoff.",
    "decisiones": [
     4,
     22,
-    31
+    31,
+    78
    ]
   },
   {
@@ -1569,7 +1711,7 @@
      "texto": "El plan de las empresas que comparten dominio: la pared es el proyecto y el nombre de la reunión pesa más."
     }
    ],
-   "sigue": "Tus respuestas al plan de dominio compartido (TEC, Honda y FACO, Grupo INVE). Medir el paso del 72 % al 90 % de reuniones con texto, y las sin empresa en cero.",
+   "sigue": "Que las novedades de los documentos sí se revisen y, después, el botón «Agregar contexto». Tus respuestas al plan de dominio compartido (TEC, Honda y FACO, Grupo INVE).",
    "decisiones": [
     21,
     34,
@@ -1578,7 +1720,11 @@
     50,
     51,
     52,
-    53
+    53,
+    79,
+    80,
+    81,
+    82
    ]
   },
   {
@@ -1841,7 +1987,7 @@ Que Nexus amarre los puntos: entrar a un cliente y ver todo lo que Smarteam est�
 
 | Qué | Cómo está |
 |---|---|
-| Producción | Corre `b340fccb` (todo `main`) desde el 18 nov: el cronograma que sale de lo vendido y el aviso de «Lo acordado» por semanas. Lo que entró desde el 29 oct está en la pestaña «Línea de tiempo». |
+| Producción | Corre `70b6c3b5` (todo `main`) desde el 20 nov: kölbi con su plan general (ya cargado), la página de resultados en dinero con la escalera, Negocio y Embudo en la preventa, el área de TI y Trivias. Lo que entró desde el 29 oct está en la pestaña «Línea de tiempo». |
 | Por desplegar | Nada. **Sin aplicar, a propósito:** la carga inicial de los datos de la empresa (espera a la CSL) y las banderas `EMPRESA_HUBSPOT_ESCRITURA` y `EMPRESA_HUBSPOT_COPIA` («Lo que configuras tú»). |
 | En rojo en producción | Por datos de antes, ninguno nuevo (28 oct): 16 reuniones colgadas de proyectos de otro cliente (INV1) y 9 tareas que citan una reunión de otro cliente (INV42), las que ordena el plan de dominio compartido; el pipeline de Secure Title (INV11: 2 proyectos y 6 en una etapa desconocida); «TEC- AE» fusionada en HubSpot (INV13 e INV54: ya solo ella, kölbi quedó bien); una reunión de Meet leída antes de ocurrir (INV16a), y el corte de cartera de hace 96 días (INV32). |
 | Pruebas | 30 para ti (pestaña «Pruebas para personas»; desde el 20 oct solo las que piden tu criterio), 83 que valida el equipo al usarlas, 77 con IA sobre los datos y 48 ya validadas por ti. |
@@ -1936,6 +2082,16 @@ Sin esto, algo sigue mal o no se puede validar:
 70. ✓ **Resultado del test · el PDF:** ¿una hoja por bloque o se queda en 2 o 3? **Ya no aplica (29 oct):** era del diseño en láminas, que se descartó; el aprobado saca el PDF en 3 hojas horizontales.
 71. **Resultado del test · el puntaje en el PDF:** en la página, el puntaje general sobre 100 aparece solo al tocar «Ver puntajes». El PDF no tiene ese botón, así que hoy sale sin el número, solo con el nivel (por ejemplo, «Deficiente»). ¿Se muestra el puntaje en el PDF? Te propongo que sí: el PDF es lo que el prospecto guarda o le pasa a su jefe.
 72. **La ficha del cliente, solo con lo confirmado:** hoy la ficha le pasa a la IA también lo propuesto sin revisar, y no descarta lo que vino de una reunión que después resultó ser de otro cliente. Una copia vieja (7 oct) lo resolvía, pero ya no aplica sobre el código de hoy. ¿Vale una tarea chica para que la ficha parta solo de lo confirmado y suelte lo de reuniones que ya no son del cliente?
+73. ✓ **Preventa · cuándo quedan completas Negocio y Embudo.** **Tu respuesta (20 nov):** con lo mínimo para calcular la pérdida (ticket y volumen, o leads y conversión).
+74. ✓ **Preventa · «Lista para proponer».** **Tu respuesta (20 nov):** solo suma que «Qué pasa si no actúa» traiga cifra; Negocio y Embudo no entran.
+75. ✓ **La pérdida del cliente · adónde llega.** **Tu respuesta (20 nov):** nada llega a la propuesta («esa parte la vamos a rediseñar después y ahí se va a crear la sección de costo de mala calidad»); sí sale en la página del resultado, solo si está validada con el cliente.
+76. ✓ **La agenda de la sesión en vivo.** **Tu respuesta (20 nov):** lista arriba, «Lo que falta saber» por tema, y los bloques debajo.
+77. ✓ **La escalera de la página de cada departamento.** **Tu respuesta (20 nov):** arriba, con el radar debajo; en la escala del diagnóstico y en el test público; la meta es «Funcional, casi siempre, o sino el siguiente. Igual el vendedor debe poder editarlo».
+78. ✓ **Las semanas sin tareas del cronograma.** **Tu respuesta (20 nov):** juntarlas en una línea, con su «+ tarea».
+79. ✓ **Contexto · una nota del equipo.** **Tu respuesta (20 nov):** puede confirmar («lo que dice el usuario de Nexus debe ser lo que manda»), registrando quién, qué día y a qué hora; también llega a lo que ve el cliente, rotulada.
+80. ✓ **Contexto · los 8 lugares de notas.** **Tu respuesta (20 nov):** conviven y se migran de a uno.
+81. ✓ **Contexto · el dictado.** **Tu respuesta (20 nov):** el del navegador.
+82. ✓ **Contexto · antes del paso 2.** **Tu respuesta (20 nov):** arreglar primero el repartidor (lo que dice Smarteam, rotulado; la preventa como destino) y aplicar toda la propuesta para que las novedades se revisen.
 
 ## Propuesta por aprobar: vender y entregar por casos de uso
 
