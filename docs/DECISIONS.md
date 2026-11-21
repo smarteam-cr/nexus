@@ -15946,3 +15946,28 @@ vender por resultados. Cambia el Resumen, la página de cada área y el resultad
   real (el simulacro lo muestra sin guardar); que una cifra en dinero escrita sin moneda («1,5 millones») se reconozca
   como costo (la moneda es la señal); los colores de la escalera (rojo a verde) no son los del punto de nivel del resto de
   la página (Funcional es verde ahí).
+
+## Rehacer el Resumen no deja la página sin titular (2026-11-21)
+
+Al rehacer con la IA el Resumen de cinco preventas en producción, Tecnosagot y Polaris quedaron con `negocio.tesis` vacía:
+en una la tesis nombraba a una persona, en la otra seguía larga después de corregirla, y la verificación la descartó. Al
+publicar, el cliente se quedaba sin titular. Elías: «Arregla lo de que al hacer un resumen no se pierda el titular».
+
+- **Lo obligatorio se queda** (`PIEZAS_OBLIGATORIAS`, hoy la tesis): si la corrida nueva no la pudo escribir,
+  `juntarConLoEditado` deja la de antes con sus citas, y adentro avisa «la nueva no pasó la verificación y quedó la de
+  antes» (el aviso se va cuando una persona la escribe a mano). Vuelve solo si sus citas se encuentran otra vez en las
+  reuniones que leyó esta corrida: una reunión que pasó a otra empresa o se limpió no sostiene el titular (si no, la página
+  queda sin titular y «Publicar» se bloquea). La que quitó una persona no vuelve: eso es suyo.
+- **Sin titular no se publica** (`faltaParaPublicar`): un Resumen armado del formato 2 sin tesis bloquea «Publicar» con el
+  motivo (el botón se apaga y la ruta responde 409). Al crear el primer acceso no se publica y el enlace dice «Tu escala
+  todavía no está lista». Sin Resumen, o uno del 9 nov, la página tiene su titular de siempre y se publica. Un Resumen de
+  antes del 15 nov que nunca tuvo tesis tampoco se publica hasta escribirla o rehacerlo.
+- **La reparación:** «nombra a una persona» pasa a ser de forma (se pide corregida, con su rol, y se vuelve a verificar);
+  una tesis corregida que sigue larga se pide acortada UNA vez más (una llamada chica, sin las transcripciones), con el
+  tope de palabras dicho en el pedido. Las etapas del recorrido también cambian un nombre por su rol.
+  `scripts/publicar-escalas-compartidas.ts` dice cuál no publica y por qué, también en el simulacro.
+- **Lo que no queda garantizado:** que la segunda reparación la deje corta (si no, queda la de antes); que la tesis de
+  antes siga diciendo lo más importante si las reuniones nuevas cambiaron el tema principal (adentro se avisa); que una
+  reunión larga a la que se le recortó el medio no tumbe una tesis de antes cuya cita estaba ahí (entonces se bloquea
+  «Publicar», el lado seguro); el bloqueo de «Publicar» se prueba leyendo el código, no con la base. Las escalas que hoy
+  ya tienen un Resumen sin titular quedan con «Publicar» bloqueado hasta escribirlo o rehacerlo. Sin SQL.

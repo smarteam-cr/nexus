@@ -377,7 +377,7 @@ export async function generarElResumenDeLaEscala(o: { exploracionId: string; ema
       puntos: escrito.puntos,
       malLeidas: le.malLeidas,
     };
-    const guardado = await guardar(o.exploracionId, nuevo);
+    const guardado = await guardar(o.exploracionId, nuevo, le.ctx.reuniones);
     await prisma.agentRun.update({
       where: { id: run.id },
       data: { status: "DONE", currentPhase: null, output: JSON.stringify({ resumen: nuevo, descartados: escrito.descartados, uso }) },
@@ -406,13 +406,13 @@ export async function generarElResumenDeLaEscala(o: { exploracionId: string; ema
  * Guarda con la fila bloqueada y releída: lo nuevo junto con lo que una persona escribió (también lo que escribió mientras
  * el agente trabajaba) y sin lo que quitó. Conserva las claves del Json que esta versión no conoce.
  */
-async function guardar(exploracionId: string, nuevo: ResumenGuardado): Promise<ResumenGuardado | null> {
+async function guardar(exploracionId: string, nuevo: ResumenGuardado, reuniones: readonly ReunionParaElResumen[]): Promise<ResumenGuardado | null> {
   return prisma.$transaction(async (tx) => {
     await bloquearFila(tx, exploracionId);
     const f = await tx.exploracionDeVenta.findUnique({ where: { id: exploracionId }, select: { contenido: true, archivadaEn: true } });
     if (!f || f.archivadaEn) return null;
     const c = leerContenido(f.contenido);
-    const resumenDeLaEscala = juntarConLoEditado(nuevo, c.resumenDeLaEscala);
+    const resumenDeLaEscala = juntarConLoEditado(nuevo, c.resumenDeLaEscala, reuniones);
     const crudo = f.contenido && typeof f.contenido === "object" && !Array.isArray(f.contenido) ? (f.contenido as Record<string, unknown>) : {};
     await tx.exploracionDeVenta.update({
       where: { id: exploracionId },

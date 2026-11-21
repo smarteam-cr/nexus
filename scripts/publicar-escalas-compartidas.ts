@@ -21,6 +21,7 @@ import { resolverApply } from "./lib/guard";
 import { prisma } from "@/lib/db/prisma";
 import { publicarLaEscala } from "@/lib/exploraciones/acceso-a-la-escala";
 import { escalaParaElCliente } from "@/lib/exploraciones/escala-para-el-cliente-server";
+import { faltaParaPublicar } from "@/lib/external/pagina-del-resumen";
 
 const APPLY = resolverApply({ tablas: ["AccesoALaEscala"] });
 const QUIEN = "publicación inicial";
@@ -40,6 +41,12 @@ async function main() {
       continue;
     }
     const visto = a.lastUsedAt ? `abierto por última vez ${a.lastUsedAt.toISOString().slice(0, 10)}` : "nunca abierto";
+    // Una página sin titular no se publica (21 nov): se dice cuál y por qué, en el simulacro también.
+    const falta = faltaParaPublicar(pagina.resumen);
+    if (falta) {
+      console.log(`  · ${nombre}: NO se publica: ${falta}`);
+      continue;
+    }
     console.log(`  · ${nombre}: ${pagina.resultados.length} equipo(s), ${visto}.`);
     if (!APPLY) continue;
     // Solo si sigue sin foto: si alguien publicó mientras corría, manda lo suyo.

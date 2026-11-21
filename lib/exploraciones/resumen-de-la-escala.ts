@@ -68,6 +68,7 @@ import {
   type TipoDelNegocio,
   esCosto,
   faltaDeLaPerdida,
+  PIEZAS_OBLIGATORIAS,
 } from "@/lib/external/pagina-del-resumen";
 import type { LaPerdidaEnLaEscala, PerdidaDeLaEscala } from "./perdida-de-la-escala";
 export { enHoras, MAX_ETIQUETAS, TOPE_A_MANO, TOPE_DE_LA_CIFRA, TOPE_DE_UN_NOMBRE, TOPE_DEL_TITULO_DEL_PUNTO, TOPE_DEL_TITULO_DEL_RECORRIDO };
@@ -1595,7 +1596,9 @@ export function leerElResumen(respuesta: Pick<Anthropic.Messages.Message, "conte
 }
 
 /** Lo que se puede corregir sin volver a leer las reuniones: largo, lo prohibido que la cita no dice, números, herramientas. */
-const ES_DE_FORMA = /demasiado largo|habla de «|numeros|números|herramientas|lectura nuestra|conclusi|voseo/;
+// «nombra a una persona» también es de forma (21 nov, Tecnosagot: la tesis decía «Diego» y el titular se perdía): se pide
+// corregida con su rol, y la corregida se vuelve a verificar con la misma vara.
+const ES_DE_FORMA = /demasiado largo|habla de «|numeros|números|herramientas|lectura nuestra|conclusi|voseo|nombra a una persona/;
 
 /**
  * Una etapa del recorrido, con su cita: el nombre, la fricción y el texto pasan las reglas y lo que dicen está en lo citado.
@@ -1635,7 +1638,7 @@ function etapaVerificada(
   };
 }
 
-const REGLAS_DE_LAS_ETAPAS = `Corriges etapas del recorrido de un cliente para una página que Smarteam le presenta a una empresa. Cada una se descartó por un problema de forma, que te digo en «problema»: dice algo que sus citas no dicen (un precio, una tarifa, un número, una herramienta), o es demasiado larga.
+const REGLAS_DE_LAS_ETAPAS = `Corriges etapas del recorrido de un cliente para una página que Smarteam le presenta a una empresa. Cada una se descartó por un problema de forma, que te digo en «problema»: dice algo que sus citas no dicen (un precio, una tarifa, un número, una herramienta), es demasiado larga o nombra a una persona (cámbiala por su rol: «la gerencia», «quien lleva cobranza»; nunca un nombre).
 
 Reescribe «etapa» (hasta 5 palabras), «texto» (qué pasa ahí hoy, hasta 6 palabras, sin «tu» ni «tus») y «friccion» (lo que se traba, o null) usando SOLO lo que dicen sus «citas». Quita lo que las citas no digan; no lo reemplaces por otra palabra que lo insinúe. Si con las citas no se puede decir qué pasa en la etapa, omítela.
 
@@ -1723,7 +1726,7 @@ function conElAvisoDelRecorrido(guardados: readonly string[], recorrido: readonl
 
 const REGLAS_DE_LAS_PIEZAS = `Corriges frases para una página que Smarteam le presenta a una empresa. Cada una se descartó por un problema de forma, que te digo en «problema»: dice algo que sus citas no dicen (un número, una herramienta, una conclusión, una calificación nuestra), o es demasiado larga.
 
-Reescribe «texto» con la forma que te doy en «forma», usando SOLO lo que dicen sus «citas». Sin «tu» ni «tus» salvo que «forma» lo pida; nunca voseo. Quita lo que las citas no digan; no lo reemplaces por otra palabra que lo insinúe. Si con las citas no se puede decir nada, omítela.
+Reescribe «texto» con la forma que te doy en «forma», usando SOLO lo que dicen sus «citas». Si nombra a una persona, cámbiala por su rol («la gerencia», «quien lleva cobranza»); nunca un nombre. Sin «tu» ni «tus» salvo que «forma» lo pida; nunca voseo. Quita lo que las citas no digan; no lo reemplaces por otra palabra que lo insinúe. Si con las citas no se puede decir nada, omítela.
 
 Devuelves SOLO este JSON: {"piezas":[{"i":<el número de la pieza>,"texto":"…"}]}`;
 
@@ -1733,7 +1736,7 @@ export function formaDelLugar(x: Pick<PiezaPorArreglar, "lugar" | "indice" | "la
   if (donde === "puntos") return "una o dos frases, de 12 a 35 palabras, que le hablan a la empresa; solo lo que dicen las citas, sin consecuencias que no dijo";
   if (donde === "negocio") {
     if (campo === "etiquetas") return "de 1 a 5 palabras, sin verbo conjugado, sin «tu» ni «tus» y sin punto";
-    if (campo === "tesis") return "dos frases de 3 a 8 palabras cada una, terminadas en punto, con sujeto y verbo claros y sin metáforas";
+    if (campo === "tesis") return `dos frases de 3 a ${MAX_PALABRAS_DE_LA_TESIS - 1} palabras cada una (cuéntalas: ninguna pasa de ${MAX_PALABRAS_DE_LA_TESIS - 1}), terminadas en punto, con sujeto y verbo claros y sin metáforas; si no cabe, quita palabras, nunca un hecho`;
     if (campo === "tamano") return "el número primero y su unidad, de 2 a 5 palabras («120 clínicas»)";
     return "una frase corta, hasta 15 palabras, sin «tu» ni «tus»";
   }
@@ -1755,10 +1758,12 @@ export function leerLasPiezas(
   xs: readonly PiezaPorArreglar[],
   ctx: ContextoDelResumen,
   o: Reglas,
-): { piezas: (PiezaPorArreglar & { ok: true })[]; descartados: string[] } {
+): { piezas: (PiezaPorArreglar & { ok: true })[]; descartados: string[]; aCortar: PiezaPorArreglar[] } {
   const crudo = o.parse(respuesta.content.map((b) => (b.type === "text" ? b.text : "")).join(""));
   const piezas: (PiezaPorArreglar & { ok: true })[] = [];
   const descartados: string[] = [];
+  /** La tesis corregida que sigue larga: se pide acortada una vez más (21 nov, Polaris), con lo que trajo. */
+  const aCortar: PiezaPorArreglar[] = [];
   const usados = new Set<number>();
   for (const v of arreglo(crudo.piezas)) {
     const x = objeto(v);
@@ -1772,11 +1777,12 @@ export function leerLasPiezas(
     // La tesis corregida se vuelve a medir: si sigue larga, no llega al titular (revisión del 16 nov).
     if (p && de.lugar === "negocio:tesis" && tesisLarga(p.texto)) {
       descartados.push(`pieza corregida (${de.lugar}): sigue demasiado larga para el titular`);
+      aCortar.push({ ...de, texto: p.texto, citas: p.citas, problema: `sigue demasiado larga: una frase pasa de ${MAX_PALABRAS_DE_LA_TESIS - 1} palabras; acórtala` });
       continue;
     }
     if (p) piezas.push({ ...de, texto: p.texto, citas: p.citas, ok: true });
   }
-  return { piezas, descartados };
+  return { piezas, descartados, aCortar };
 }
 
 /** Pone cada pieza corregida en su lugar (el negocio o la lista de su área), sin pasar los topes ni repetir. */
@@ -2053,6 +2059,13 @@ export function loQueEncontroElResumen(g: ResumenGuardado | null | undefined, ar
     .filter(Boolean)
     .join("\n")
     .slice(0, 1500);
+}
+
+/** El aviso de que quedó una pieza de antes (`juntarConLoEditado`): con qué empieza, para quitarlo cuando ya no es cierto. */
+const avisoDeLaDeAntes = (tipo: TipoDelNegocio) => `${TITULO_DEL_NEGOCIO[tipo]}: la nueva no pasó la verificación`;
+/** Los avisos guardados, sin el de una pieza de antes que una persona ya escribió a mano. */
+function sinAvisosResueltos(g: ResumenGuardado | null | undefined): string[] {
+  return (g?.avisos ?? []).filter((a) => !PIEZAS_OBLIGATORIAS.some((t) => a.startsWith(avisoDeLaDeAntes(t)) && (g?.negocio?.[t] ?? []).some((p) => p.mano)));
 }
 
 /** Lo que pide la página de un Resumen, además de lo guardado. */
@@ -2375,7 +2388,7 @@ export function resumenParaLaPagina(
     /* Solo si hay: una página publicada antes del 18 nov no tiene estas claves, y con ellas vacías «Publicar» diría «Hay
        cambios que el cliente no ve» en todas las escalas sin que nada cambiara. Agregar un punto es solo de adentro. */
     ...(puntos.length ? { puntos } : {}),
-    ...(o.conCitas ? { puntoNuevo: v2 ? "punto:nuevo" : null, escalaCambio, avisos: conElAvisoDelRecorrido(g?.avisos ?? [], recorrido), malLeidas: g?.malLeidas ?? [] } : {}),
+    ...(o.conCitas ? { puntoNuevo: v2 ? "punto:nuevo" : null, escalaCambio, avisos: conElAvisoDelRecorrido(sinAvisosResueltos(g), recorrido), malLeidas: g?.malLeidas ?? [] } : {}),
   };
 }
 
@@ -2683,6 +2696,15 @@ const PARTES_ENTERAS: readonly TipoDelNegocio[] = ["tesis", "etiquetas", "tamano
 const laTocoUnaPersona = (g: ResumenGuardado, tipo: TipoDelNegocio) =>
   (g.negocio?.[tipo] ?? []).some((p) => p.mano) || (g.quitados ?? []).some((k) => k.startsWith(`negocio:${tipo}|`));
 
+/** Una pieza guardada cuyas citas se vuelven a encontrar, con la misma vara, en las reuniones que leyó esta corrida. */
+function sigueEnLasReuniones(p: PiezaDelResumen, reuniones: readonly ReunionParaElResumen[]): boolean {
+  if (!p.citas.length) return !!p.mano;
+  return p.citas.every((c) => {
+    const r = reuniones.find((x) => x.id === c.reunion);
+    return !!r && !!citaVerificada({ reunion: r.clave, turno: c.turno, texto: c.texto }, reuniones);
+  });
+}
+
 /** Las piezas de una parte (`donde`) que una persona no quitó. */
 const sinQuitadas = <T extends PiezaDelResumen>(xs: readonly T[], quitados: readonly string[], donde: string) => xs.filter((x) => !pareceQuitada("pieza", x, quitados, donde));
 
@@ -2716,7 +2738,15 @@ function loDelFormato1(antes: ResumenGuardado, nuevo: ResumenGuardado): AreaOper
  * «Rehacer con IA» sobre lo que hay: lo nuevo del agente, más lo que una persona escribió o cambió (`mano`), que no se
  * pisa; lo que quitó, no vuelve. Un Resumen del formato 1 que se rehace pasa al 2 con lo de la persona adentro.
  */
-export function juntarConLoEditado(nuevo: ResumenGuardado, antes: ResumenGuardado | null | undefined): ResumenGuardado {
+export function juntarConLoEditado(
+  nuevo: ResumenGuardado,
+  antes: ResumenGuardado | null | undefined,
+  /**
+   * Las reuniones que leyó esta corrida: una pieza obligatoria de antes vuelve solo si sus citas siguen en ellas (una
+   * reunión que pasó a otra empresa o se limpió por traer el texto de otra no puede sostener el titular). Sin ellas, vuelve.
+   */
+  reuniones?: readonly ReunionParaElResumen[],
+): ResumenGuardado {
   if (!antes) return nuevo;
   const quitados = antes.quitados ?? [];
   const conQuitados = antes.quitados?.length ? { quitados: antes.quitados } : {};
@@ -2770,11 +2800,20 @@ export function juntarConLoEditado(nuevo: ResumenGuardado, antes: ResumenGuardad
       recorrido = i >= 0 ? recorrido.map((x, j) => (j === i ? e : x)) : [...recorrido.slice(0, k), e, ...recorrido.slice(k)];
     }
     const negocio: Partial<Record<TipoDelNegocio, PiezaDelResumen[]>> = {};
+    const seQuedaronDeAntes: TipoDelNegocio[] = [];
     for (const tipo of TIPOS_DEL_NEGOCIO) {
       const ps = PARTES_ENTERAS.includes(tipo) && laTocoUnaPersona(antes, tipo)
         ? [...(antes.negocio?.[tipo] ?? [])]
         : junto(antes.negocio?.[tipo] ?? [], sinQuitadas(nuevo.negocio?.[tipo] ?? [], quitados, `negocio:${tipo}`), mismoOrigen);
-      const conTope = ps.slice(0, PARTES_ENTERAS.includes(tipo) ? maxDelNegocio(tipo) : MAX_POR_LISTA);
+      let conTope = ps.slice(0, PARTES_ENTERAS.includes(tipo) ? maxDelNegocio(tipo) : MAX_POR_LISTA);
+      /* Una pieza obligatoria (el titular) que la corrida nueva no pudo escribir —la verificación la descartó: nombraba a
+         una persona, era larga— se queda como estaba, con sus citas (21 nov: Tecnosagot y Polaris quedaron sin titular y
+         el cliente lo habría visto al publicar). Si la quitó una persona, no vuelve: eso es suyo. */
+      const deAntes = (antes.negocio?.[tipo] ?? []).filter((p) => !reuniones || sigueEnLasReuniones(p, reuniones));
+      if (!conTope.length && PIEZAS_OBLIGATORIAS.includes(tipo) && deAntes.length && !laTocoUnaPersona(antes, tipo)) {
+        conTope = deAntes.slice(0, maxDelNegocio(tipo));
+        seQuedaronDeAntes.push(tipo);
+      }
       if (conTope.length) negocio[tipo] = conTope;
     }
     const pendientesViejos = antes.v === 2 ? (antes.pendientes ?? []) : antes.falta.filter((p) => p.mano).map((p) => ({ id: p.id, tipo: "sin-dato" as const, texto: p.texto, areaId: null, citas: [], mano: true }));
@@ -2787,6 +2826,10 @@ export function juntarConLoEditado(nuevo: ResumenGuardado, antes: ResumenGuardad
       recorrido: recorrido.slice(0, MAX_POR_LISTA),
       // El título que escribió (o vació) una persona se queda.
       ...(antes.tituloDelRecorrido?.mano ? { tituloDelRecorrido: antes.tituloDelRecorrido } : {}),
+      // Adentro se avisa que el titular es el de antes: el nuevo no pasó la verificación.
+      ...(seQuedaronDeAntes.length
+        ? { avisos: [...(nuevo.avisos ?? []), ...seQuedaronDeAntes.map((t) => `${avisoDeLaDeAntes(t)} y quedó la de antes. Revísala o escríbela de nuevo.`)] }
+        : {}),
       operativas,
       pendientes: junto(pendientesViejos, (nuevo.pendientes ?? []).filter((p) => !pareceQuitada("falta", p, quitados))).slice(0, MAX_POR_LISTA),
       // Lo que falta confirmar que tocó una persona se queda como lo dejó (cambiado, o vacío si lo quitó).
@@ -2890,6 +2933,17 @@ export async function escribirElResumen(
       usos.push(r5.usage);
       const a = leerLasPiezas(r5, e.piezasPorArreglar, ctx, reglas);
       e = { ...e, ...conLasPiezas(e, a.piezas), descartados: [...e.descartados, ...a.descartados] };
+      // El titular que volvió todavía largo se pide acortado UNA vez más (una llamada chica, sin las transcripciones).
+      if (a.aCortar.length) {
+        try {
+          const r5b = await pedir(pedidoDeLasPiezas(a.aCortar));
+          usos.push(r5b.usage);
+          const b = leerLasPiezas(r5b, a.aCortar, ctx, reglas);
+          e = { ...e, ...conLasPiezas(e, b.piezas), descartados: [...e.descartados, ...b.descartados] };
+        } catch {
+          e = { ...e, descartados: [...e.descartados, "acortar el titular falló: queda el de antes, si había"] };
+        }
+      }
     } catch {
       e = { ...e, descartados: [...e.descartados, "el arreglo de las piezas falló: quedaron fuera"] };
     }

@@ -82,8 +82,9 @@ export default function PublicarLaEscala() {
         {cuando ? `Hay cambios que el cliente no ve: tiene la versión del ${cuando}.` : "El cliente todavía no ve nada: falta publicar."}
       </span>
       {estado.areas === 0 && <span className="text-xs text-fg-muted">Sin equipos elegidos: publicar le quita la página al cliente.</span>}
+      {estado.noSePublica && <span className="text-xs font-semibold text-warn-ink">{estado.noSePublica}</span>}
       {puedeEditar ? (
-        <BotonAzul disabled={publicando} onClick={() => void publicar()}>
+        <BotonAzul disabled={publicando || !!estado.noSePublica} onClick={() => void publicar()}>
           {publicando ? "Publicando…" : "Publicar"}
         </BotonAzul>
       ) : (

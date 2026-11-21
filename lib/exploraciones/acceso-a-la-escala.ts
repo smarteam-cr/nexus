@@ -15,6 +15,7 @@ import { randomBytes } from "node:crypto";
 import { prisma } from "@/lib/db/prisma";
 import type { Prisma } from "@prisma/client";
 import { escalaParaElCliente, type EscalaParaElCliente } from "./escala-para-el-cliente-server";
+import { faltaParaPublicar } from "@/lib/external/pagina-del-resumen";
 import { fotoDe, mismaPagina, paginaDeLaFoto } from "./escala-publicada";
 
 export interface EstadoDelAcceso {
@@ -35,6 +36,8 @@ export interface EstadoDelAcceso {
   publicadaPor: string | null;
   /** Si lo de hoy es distinto de lo publicado: hay cambios que el cliente todavía no ve. */
   sinPublicar: boolean;
+  /** Por qué no se puede publicar lo de hoy (21 nov: una página sin titular), o null. «Publicar» se bloquea con el motivo. */
+  noSePublica: string | null;
 }
 
 export class ErrorDelAcceso extends Error {
@@ -86,6 +89,7 @@ export async function estadoDelAcceso(exploracionId: string): Promise<EstadoDelA
     // Sin foto, hay algo que publicar solo si hay equipos; con foto, cualquier diferencia (también quitar todos los
     // equipos: publicarlo deja la página en «todavía no está lista»).
     sinPublicar: !!pagina && (foto ? !mismaPagina(pagina, foto) : pagina.resultados.length > 0),
+    noSePublica: pagina?.resultados.length ? faltaParaPublicar(pagina.resumen) : null,
   };
 }
 
@@ -101,6 +105,13 @@ export async function publicarLaEscala(exploracionId: string, porEmail: string |
   if (!pagina.resultados.length) {
     const antes = await prisma.accesoALaEscala.findUnique({ where: { exploracionId }, select: { publicadaEn: true } });
     if (!antes?.publicadaEn) throw new ErrorDelAcceso(409, "Todavía no hay nada que mostrarle al cliente: elige al menos un equipo en «Acceso».");
+  }
+  /* Una página sin titular no se publica (21 nov): el cliente vería el Resumen roto. Al crear el primer acceso (`siSigue`
+     null) no se publica y listo: el enlace abre en «Tu escala todavía no está lista» hasta que alguien publique. */
+  const falta = pagina.resultados.length ? faltaParaPublicar(pagina.resumen) : null;
+  if (falta) {
+    if (o.siSigue === null) return false;
+    throw new ErrorDelAcceso(409, falta);
   }
   const { count } = await prisma.accesoALaEscala.updateMany({
     where: { exploracionId, ...(o.siSigue !== undefined ? { publicadaEn: o.siSigue } : {}) },
