@@ -1,6 +1,14 @@
 <title>Roadmap de Nexus</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <!-- Vista de docs/roadmap.md. El contenido se edita en roadmap.md y se arma con: node scripts/roadmap-vista.mjs -->
+<script>
+  // Elías, 21 nov: «quiero ver mi roadmap blanco». Abre en claro siempre; el botón de arriba pasa a oscuro y se recuerda.
+  (function () {
+    var t = 'light';
+    try { t = localStorage.getItem('roadmap-tema') === 'dark' ? 'dark' : 'light'; } catch (e) {}
+    document.documentElement.setAttribute('data-theme', t);
+  })();
+</script>
 <style>
 /* Una columna: para qué, una tarjeta por iniciativa con su camino en orden, y lo que falta probar. */
 :root {
@@ -238,6 +246,8 @@ main { max-width: 1040px; margin: 0 auto; padding-block: 32px 64px;
 .ln-vacio { padding: 10px 12px; font-size: 13.5px; color: var(--fg-muted); }
 .ln-cta { position: fixed; z-index: 20; right: calc(20px + env(safe-area-inset-right, 0px)); bottom: calc(20px + env(safe-area-inset-bottom, 0px)); font: inherit; font-size: 14px; font-weight: 650; color: var(--brand-ink); background: var(--brand); border: 0; border-radius: 999px; padding: 11px 18px; cursor: pointer; box-shadow: 0 6px 20px -6px rgba(0, 0, 0, .45); display: inline-flex; align-items: center; gap: 8px; }
 .ln-cta[hidden] { display: none; }
+.tema-btn { position: fixed; z-index: 20; top: calc(12px + env(safe-area-inset-top, 0px)); right: calc(16px + env(safe-area-inset-right, 0px)); font: inherit; font-size: 13px; font-weight: 600; color: var(--fg-2); background: var(--surface); border: 1px solid var(--line); border-radius: 999px; padding: 6px 12px; cursor: pointer; }
+.tema-btn:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
 /* El flujo de un punto (20 nov, pedido de Elías: «el hilo puede subdividirse»). Al abrir un punto del hilo, sale un
    flujo de izquierda a derecha: se divide en ramas, cada rama con sus pasos, y las ramas se unen en el siguiente punto.
    Los nodos son HTML en una grilla; las líneas, un SVG que se dibuja encima con sus posiciones. */
@@ -312,6 +322,20 @@ main { max-width: 1040px; margin: 0 auto; padding-block: 32px 64px;
   <nav class="tabs" id="tabs" role="tablist"></nav>
   <article id="doc"></article>
 </main>
+<button class="tema-btn" id="tema-btn" type="button">Modo oscuro</button>
+<script>
+  (function () {
+    var b = document.getElementById('tema-btn');
+    function pintar() { b.textContent = document.documentElement.getAttribute('data-theme') === 'dark' ? 'Modo claro' : 'Modo oscuro'; }
+    pintar();
+    b.addEventListener('click', function () {
+      var t = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+      document.documentElement.setAttribute('data-theme', t);
+      try { localStorage.setItem('roadmap-tema', t); } catch (e) {}
+      pintar();
+    });
+  })();
+</script>
 <button class="ln-cta" id="ir-hoy" type="button" hidden><span aria-hidden="true">↓</span>Ir a hoy</button>
 
 <script type="text/plain" id="md">@@ROADMAP_MD@@</script>
