@@ -52,9 +52,20 @@ export function jsonEnOrden(x: unknown): string {
 }
 
 /**
+ * Lo que la comparación no mira de cada resultado: el vistazo de cada nivel (la tarjeta de la escalera, 21 nov) es texto
+ * de la escala, no de la empresa, y la página del enlace lo completa con la escala de hoy. Contarlo marcaba «cambios» en
+ * todas las fotos publicadas antes de que existiera.
+ */
+const sinVistazos = (p: EscalaParaElCliente): EscalaParaElCliente => ({
+  ...p,
+  resultados: p.resultados.map((r) => ({ ...r, niveles: r.niveles.map(({ letra, nombre }) => ({ letra, nombre })) })),
+});
+
+/**
  * Si lo de hoy es lo que ya está publicado. La fecha del pie no cuenta: sin niveles confirmados sale de la última vez que
- * se guardó cualquier cosa de la exploración (un contexto que el cliente no ve), y avisaba cambios que no había.
+ * se guardó cualquier cosa de la exploración (un contexto que el cliente no ve), y avisaba cambios que no había. El vistazo
+ * de cada nivel tampoco (`sinVistazos`).
  */
 export function mismaPagina(a: EscalaParaElCliente, b: EscalaParaElCliente): boolean {
-  return jsonEnOrden({ ...a, fecha: null }) === jsonEnOrden({ ...b, fecha: null });
+  return jsonEnOrden({ ...sinVistazos(a), fecha: null }) === jsonEnOrden({ ...sinVistazos(b), fecha: null });
 }

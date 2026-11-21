@@ -20,6 +20,7 @@ import { PESTANA_DEL_RESUMEN } from "@/components/external/test/ArribaDeLaEscala
 import ResultadoDelTestVista, { EscalaSinMedir } from "@/components/external/test/ResultadoDelTestVista";
 import ResumenDeLaEscalaVista from "@/components/external/test/ResumenDeLaEscalaVista";
 import { escalaParaElToken } from "@/lib/external/escala-view";
+import { nivelesConElVistazoDeHoy } from "@/lib/tests-diagnostico/servicio-server";
 
 export const dynamic = "force-dynamic";
 
@@ -53,9 +54,11 @@ export default async function EscalaDelClientePage({ params, searchParams }: { p
         textos={d.textos}
       />
     );
+  // La tarjeta de cada nivel de la escalera (21 nov): una foto publicada antes no trae su vistazo; sale de la escala de hoy.
+  const niveles = await nivelesConElVistazoDeHoy(r);
   return (
     <ResultadoDelTestVista
-      r={r}
+      r={{ ...r, niveles }}
       empresa={d.empresa}
       dominio={d.dominio}
       fecha={d.fecha}

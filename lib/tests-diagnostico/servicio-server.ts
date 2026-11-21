@@ -23,7 +23,7 @@ import { leerEscalaVigente } from "@/lib/escala/documento/vigente";
 import type { Escala } from "@/lib/escala/documento/tipos";
 import { edicionDeLaIndustria } from "@/lib/clients/datos-de-la-empresa";
 import { esDominioGenerico } from "@/lib/clients/personas-de-la-empresa";
-import { resultadoDelTest, type ResultadoDelTest } from "./resultado";
+import { completarVistazos, nivelesConVistazo, resultadoDelTest, type ResultadoDelTest } from "./resultado";
 import { detallesDelResultado, dimensionDeCadaRiesgo, type DetalleDeLaDimension } from "./detalle-de-la-dimension";
 import { etiquetaDeIndustria } from "./direccion-publica";
 import { redactarElResultado } from "./redaccion-server";
@@ -168,19 +168,37 @@ export async function resultadoPublico(token: string): Promise<{ intento: Intent
 }
 
 /**
+ * Los niveles de un resultado guardado con el vistazo que les falte (`completarVistazos`), de la escala vigente vista por
+ * la edición del resultado. La escala de una empresa lo usa con su foto publicada: las de antes del 21 nov no lo traen. Si
+ * algo falla, los niveles tal cual (la tarjeta sale con el nombre y nada más).
+ */
+export async function nivelesConElVistazoDeHoy(r: ResultadoDelTest): Promise<ResultadoDelTest["niveles"]> {
+  if (r.niveles.every((n) => n.vistazo)) return r.niveles;
+  try {
+    const vigente = await leerEscalaVigente({ conAreasEnPrueba: true });
+    if (!("escala" in vigente)) return r.niveles;
+    return completarVistazos(r.niveles, nivelesConVistazo(aplicarEdicion(vigente.escala, r.edicion), r.areaId));
+  } catch {
+    return r.niveles;
+  }
+}
+
+/**
  * Lo que la página saca de la escala (./detalle-de-la-dimension.ts): lo que se dice de cada dimensión (la tarjeta del
  * radar y «Ver detalles» de su barra) y de qué dimensión es cada riesgo, con la escala vigente vista por la edición del
  * resultado. Es un extra: sin escala publicada, o si algo falla, la página sale sin eso y nunca se rompe.
  */
 export async function loDeLaEscalaParaLaPagina(
   r: ResultadoDelTest,
-): Promise<{ detalles: Record<string, DetalleDeLaDimension>; dimensionDelRiesgo: Record<string, string> }> {
+): Promise<{ detalles: Record<string, DetalleDeLaDimension>; dimensionDelRiesgo: Record<string, string>; niveles: ResultadoDelTest["niveles"] }> {
   try {
     const vigente = await leerEscalaVigente({ conAreasEnPrueba: true });
-    if (!("escala" in vigente)) return { detalles: {}, dimensionDelRiesgo: {} };
+    if (!("escala" in vigente)) return { detalles: {}, dimensionDelRiesgo: {}, niveles: r.niveles };
     const escala = aplicarEdicion(vigente.escala, r.edicion);
-    return { detalles: detallesDelResultado(escala, r), dimensionDelRiesgo: dimensionDeCadaRiesgo(escala, r) };
+    // Los niveles con su vistazo (la tarjeta de cada uno en la escalera, 21 nov): los resultados guardados antes no lo traen.
+    const niveles = completarVistazos(r.niveles, nivelesConVistazo(escala, r.areaId));
+    return { detalles: detallesDelResultado(escala, r), dimensionDelRiesgo: dimensionDeCadaRiesgo(escala, r), niveles };
   } catch {
-    return { detalles: {}, dimensionDelRiesgo: {} };
+    return { detalles: {}, dimensionDelRiesgo: {}, niveles: r.niveles };
   }
 }

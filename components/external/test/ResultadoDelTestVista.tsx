@@ -992,7 +992,7 @@ export default function ResultadoDelTestVista({
   );
   // La escalera (20 nov): el test no tiene a nadie que elija la meta: la de siempre.
   // Sin nivel («Sin determinar») no hay nada que marcar: no sale.
-  const escalera = r.nivel ? <EscaleraDeNiveles area={r.areaNombre} niveles={r.niveles} hoy={r.nivel} meta={metaPorDefecto(r.nivel)} idSvg="esc-test" /> : null;
+  const escalera = r.nivel ? <EscaleraDeNiveles area={r.areaNombre} niveles={r.niveles} hoy={r.nivel} meta={metaPorDefecto(r.nivel)} idSvg="esc-test" interactiva={!enPdf} /> : null;
   // Dentro de la pantalla interna no es el título de la página: esa ya tiene el suyo (un solo h1 por pantalla).
   const TituloDelNivel = edicion ? "p" : "h1";
   const nivelGrande = (

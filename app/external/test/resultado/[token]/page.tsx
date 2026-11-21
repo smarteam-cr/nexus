@@ -29,10 +29,10 @@ export default async function ResultadoPage({ params }: { params: Promise<{ toke
   if (!res) notFound();
   const agenda = enlaceDeLaAgenda(process.env.TESTS_ENLACE_DE_AGENDA);
   const { intento: i, resultado: r } = res;
-  const { detalles, dimensionDelRiesgo } = await loDeLaEscalaParaLaPagina(r);
+  const { detalles, dimensionDelRiesgo, niveles } = await loDeLaEscalaParaLaPagina(r);
   return (
     <ResultadoDelTestVista
-      r={r}
+      r={{ ...r, niveles }}
       empresa={i.empresa}
       dominio={i.dominio}
       fecha={i.terminadoAt}
