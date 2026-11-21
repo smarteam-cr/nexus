@@ -59,6 +59,8 @@ export async function hechosFueraDeSuCliente(db: PrismaClient): Promise<{ vivos:
       client: { select: { kind: true } },
       project: { select: { clientId: true } },
       session: { select: { title: true, resolvedClientId: true, manualClientId: true } },
+      // 21 nov: un hecho de una nota del equipo es del cliente de su preventa («Hablar con Nexus»).
+      exploracion: { select: { clientId: true } },
     },
   });
   const vivos = hechos.filter((h) => h.estado === "pendiente");
@@ -68,6 +70,7 @@ export async function hechosFueraDeSuCliente(db: PrismaClient): Promise<{ vivos:
     const dueno = h.session ? (h.session.resolvedClientId ?? h.session.manualClientId ?? null) : null;
     const de = (motivo: MotivoFueraDeSuCliente, porque: string) => fuera.push({ id: h.id, sessionId: h.sessionId, motivo, linea: `«${corto(h.frase)}» (${h.id}): ${porque}` });
     if (h.session && dueno !== h.clientId) de("otro_cliente", `de «${titulo}», que es de otro cliente`);
+    else if (h.exploracion && h.exploracion.clientId !== h.clientId) de("otro_cliente", "de una nota de la preventa de otro cliente");
     else if (h.client?.kind === "INTERNO") de("interno", "de una empresa de Smarteam");
     else if (h.client?.kind === "ALIADO") de("aliado", "de una empresa aliada");
     else if (h.projectId && h.project && h.project.clientId !== h.clientId) de("proyecto_de_otro_cliente", "de un proyecto de otro cliente");

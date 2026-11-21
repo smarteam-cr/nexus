@@ -14,6 +14,7 @@
  * portal» dicen la intención entera sin pisar nada confirmado: esas siempre se reintentan.
  */
 import type { DestinoDePropuesta, EstadoDeExploracion, Operacion } from "./contenido";
+import { esDeLista, TIPO_DE_CASILLA } from "./casillas";
 
 /** JSON con las claves ordenadas: el mismo valor guardado en otro orden (jsonb) cuenta como igual. */
 function canonico(v: unknown): string {
@@ -72,6 +73,18 @@ function operacionSegura(op: Operacion, antes: EstadoDeExploracion, ahora: Estad
   switch (op.op) {
     case "casilla":
       return destinoIgual({ tipo: "casilla", clave: op.clave }, antes, ahora);
+    case "sumarACasilla":
+      // «Aplicar» de «Hablar con Nexus». Una lista suma un ítem sobre lo de ahora (sin repetirlo): se reintenta. Unas cifras
+      // pisan sus campos: solo si ESOS campos no cambiaron entretanto (la corrección de otra persona no se pierde). Un
+      // texto se reemplaza entero: solo si no cambió.
+      if (TIPO_DE_CASILLA[op.clave] === "cifras") {
+        const a = (ca.casillas[op.clave] ?? {}) as Record<string, unknown>;
+        const b = (cb.casillas[op.clave] ?? {}) as Record<string, unknown>;
+        const campos = op.valor && typeof op.valor === "object" ? Object.keys(op.valor as object) : [];
+        return campos.every((k) => igual(a[k], b[k]));
+      }
+      // Las demás que no son de lista (texto, radiografía, apertura…) se reemplazan enteras: solo si no cambiaron.
+      return esDeLista(TIPO_DE_CASILLA[op.clave]) || destinoIgual({ tipo: "casilla", clave: op.clave }, antes, ahora);
     case "nivel":
       return destinoIgual({ tipo: "nivel", dimensionId: op.dimensionId }, antes, ahora);
     case "falta":

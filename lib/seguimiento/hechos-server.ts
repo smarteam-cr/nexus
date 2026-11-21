@@ -64,6 +64,7 @@ import {
   hechosPrendidos,
 } from "./hechos/reglas";
 import { leerSalidaDeHechos, prepararParaVerificar } from "./hechos/salida";
+import { destinosDeUnaNota, hechosVerificadosDeUnaNota, type HechoCrudoDeLaNota } from "./hechos/de-una-nota";
 import { textoParaHechos } from "./hechos/texto-de-la-reunion";
 import type { TipoDeHecho } from "./hechos/tipos";
 
@@ -640,6 +641,80 @@ async function aplicarRuteo(o: {
     }
   }
   return resumen;
+}
+
+/* ── Los hechos de una nota del equipo («Hablar con Nexus», 21 nov) ─────────────────── */
+
+export type ResultadoDeLosHechosDeLaNota =
+  | { estado: "escritos"; escritos: number; descartados: number }
+  /** Ya tenía hechos (la misma nota guardada otra vez): no se duplican. */
+  | { estado: "ya-estaban"; escritos: number }
+  | { estado: "apagados" }
+  | { estado: "sin-hechos"; descartados: number };
+
+/**
+ * Los hechos que dejó una nota de «Lo que sabes del cliente», como los de una reunión: el modelo los propuso en la
+ * conversación (lib/chat-de-nexus/conversacion.ts) y acá se verifican con las mismas reglas que los de una reunión
+ * (`leerSalidaDeHechos`: la cita tiene que estar en la nota guardada, palabra por palabra, con su largo, sin voseo ni gente
+ * de Smarteam, sin repetir y con su tope). Diferencias con una reunión, a propósito:
+ *   · los dijo el equipo, no el cliente: `quien = smarteam`, `citaFuente = texto` y `dichoPorEmail`; en la escalera
+ *     (lib/impacto/escalera.ts) son «confirmado por el equipo». Hoy ninguna pantalla ni agente los lee (DECISIONS);
+ *   · su destino es la preventa donde se contó (`exploracionId`): nacen delegados en ella, que ya tiene la nota;
+ *   · no se rutean a la ficha ni levantan alertas: una nota no es palabra del cliente.
+ * El dueño es el cliente de la preventa (`clientId`, lo pasa quien llama desde la fila de la exploración). Con la bandera
+ * apagada o sin el SQL no escribe nada. NUNCA lanza.
+ */
+export async function escribirHechosDeUnaNota(o: {
+  exploracionId: string;
+  clientId: string;
+  notaClave: string;
+  /** El texto de la nota como quedó guardado (contra esto se verifican las citas). */
+  texto: string;
+  dichoPorEmail: string;
+  /** Los hechos como los propuso el modelo, sin verificar. */
+  crudos: readonly HechoCrudoDeLaNota[];
+  agentRunId: string | null;
+  ahora?: Date;
+}): Promise<ResultadoDeLosHechosDeLaNota> {
+  try {
+    if (!(await hechosActivos())) return { estado: "apagados" };
+    const ya = await prisma.hechoDeReunion.count({ where: { exploracionId: o.exploracionId, notaClave: o.notaClave } });
+    if (ya > 0) return { estado: "ya-estaban", escritos: ya };
+    const equipo = (await prisma.teamMember.findMany({ select: { name: true } })).map((t) => t.name).filter((n): n is string => !!n?.trim());
+    const salida = hechosVerificadosDeUnaNota(o.texto, o.crudos, equipo);
+    if (!salida.hechos.length) return { estado: "sin-hechos", descartados: salida.descartados.length };
+    const ahora = o.ahora ?? new Date();
+    const destinos = destinosDeUnaNota(o.exploracionId);
+    await prisma.hechoDeReunion.createMany({
+      data: salida.hechos.map((h) => ({
+        id: randomUUID(),
+        sessionId: null,
+        lecturaId: null,
+        exploracionId: o.exploracionId,
+        notaClave: o.notaClave,
+        dichoPorEmail: o.dichoPorEmail,
+        agentRunId: o.agentRunId,
+        clientId: o.clientId,
+        projectId: null,
+        tipo: h.tipo,
+        tema: h.tema ?? null,
+        frase: h.frase,
+        cita: h.cita,
+        citaFuente: "texto",
+        quien: "smarteam",
+        gravedad: h.gravedad ?? null,
+        huella: h.huella,
+        mismoQueId: null,
+        destinos: destinos as unknown as Prisma.InputJsonValue,
+        estado: estadoGeneral(destinos),
+        fechaDeLaReunion: ahora,
+      })),
+    });
+    return { estado: "escritos", escritos: salida.hechos.length, descartados: salida.descartados.length };
+  } catch (e) {
+    if (!esquemaDesactualizado(e)) console.error("[hechos] no se pudieron escribir los hechos de la nota", o.notaClave, e instanceof Error ? e.message : e);
+    return { estado: "apagados" };
+  }
 }
 
 /* ── El reintento (lo corre el job de la lectura) ─────────────────────────────────── */

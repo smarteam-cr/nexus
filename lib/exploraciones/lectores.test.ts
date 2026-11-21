@@ -126,6 +126,20 @@ const CENSO: Record<string, { destino: Destino; motivo: string }> = {
     motivo:
       "Cuándo se presentó La escala y qué respondió el cliente (21 nov, HitoDeLaEscala): anotarlo y verlo. Pantalla interna, con la guardia de la exploración; lo aceptado llega al handoff solo por exploracionParaElHandoff.",
   },
+  "app/api/sales/exploraciones/[id]/nexus/route.ts": {
+    destino: "ventas",
+    motivo:
+      "«Hablar con Nexus» (21 nov): una vuelta de la conversación en la preventa. Lee las notas del equipo, lo aceptado, la página de La escala sin citas y lo que tiene cada tarjeta; no escribe nada de la exploración. Pantalla interna, con la guardia de la exploración.",
+  },
+  "app/api/sales/exploraciones/[id]/nexus/guardado/route.ts": {
+    destino: "ventas",
+    motivo:
+      "«Hablar con Nexus» (21 nov): después de guardar la nota, deja sus hechos (internos, con la preventa de destino) y corre el agente de impacto. Lee la nota guardada; no escribe la exploración. Pantalla interna, con la guardia de la exploración.",
+  },
+  "lib/invariantes/hechos.ts": {
+    destino: "invariante-de-la-empresa",
+    motivo: "INV45 (21 nov): un hecho de una nota del equipo es del cliente de su preventa. Solo el clientId de la exploración.",
+  },
   "app/api/sales/exploraciones/[id]/impacto/route.ts": {
     destino: "ventas",
     motivo:

@@ -9,10 +9,10 @@
  *
  * Va en la Preparación de la preventa y en la página de inicio de la exploración de un proyecto.
  */
-import { useCallback, useState } from "react";
+import { useState } from "react";
 import { Button, Textarea } from "@/components/ui";
 import AvisoDeImpacto from "@/components/impacto/AvisoDeImpacto";
-import { avisarQueLaEscalaCambio } from "./escala-al-dia";
+import { CORRIENDO_LA_ESCALA, useRehacerLaEscala } from "./rehacer-la-escala";
 import { cn } from "@/lib/cn";
 import { diaConAnio } from "@/lib/exploraciones/fechas";
 import { MAX_NOTA_DE_SESION } from "@/lib/exploraciones/notas-de-sesion";
@@ -66,7 +66,7 @@ function Editor({ inicial, onGuardar, onCancelar }: { inicial: string; onGuardar
 const quienCorto = (correo: string) => correo.split("@")[0] ?? correo;
 
 export default function LoQueSabes() {
-  const { exp, puedeEditar, cambiar, recargar } = useLienzo();
+  const { exp, puedeEditar, cambiar } = useLienzo();
   const lista = loQueSabeElEquipo(exp.estado.contenido.notas);
   const autores = exp.estado.contenido.autoresDeLasNotas ?? {};
   const [editando, setEditando] = useState<string | null>(null);
@@ -88,15 +88,7 @@ export default function LoQueSabes() {
     }
   };
 
-  const regenerar = useCallback(async () => {
-    const r = await fetch(`/api/sales/exploraciones/${exp.id}/escala/resumen`, { method: "POST" });
-    const j = (await r.json().catch(() => ({}))) as { error?: string };
-    if (!r.ok) throw new Error(j.error ?? "No se pudo rehacer la página de La escala.");
-    // El Resumen se guarda por su propia ruta: el lienzo se pone al día y «Publicar» vuelve a mirar.
-    await recargar();
-    avisarQueLaEscalaCambio();
-    return "Listo: la página de La escala tiene cambios que el cliente todavía no ve. Revísalos en «La escala» y publica cuando quieras.";
-  }, [exp.id, recargar]);
+  const regenerar = useRehacerLaEscala();
 
   const guardar = async (clave: string, texto: string) => {
     const ok = await cambiar([{ op: "nota", paso: clave, texto }]);
@@ -130,7 +122,7 @@ export default function LoQueSabes() {
           key={impacto.clave + impacto.aviso}
           aviso={impacto.aviso}
           regenerar={regenerar}
-          corriendo="Nexus está rehaciendo la página de La escala con tu nota (unos 3 minutos). Lo escrito a mano se queda y nada se publica."
+          corriendo={CORRIENDO_LA_ESCALA}
           onCerrar={() => setImpacto(null)}
         />
       )}
