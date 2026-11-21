@@ -5,6 +5,7 @@
 import { describe, expect, it } from "vitest";
 import { AvanzarInput, PreguntasJugadas, ResponderInput, TriviaInput, leerPreguntasJugadas } from "./schema";
 import { revisarTrivia } from "./validar";
+import { PREGUNTAS_DE_EJEMPLO, TITULO_DE_EJEMPLO, triviaDeEjemplo } from "@/scripts/lib/trivia-de-ejemplo";
 
 const multiple = {
   tipo: "OPCION_MULTIPLE",
@@ -125,5 +126,16 @@ describe("el editor (sin Zod) y la ruta (con Zod) llegan al mismo veredicto", ()
       const mensajeDeLaRuta = ruta.error.issues[0]?.message ?? "";
       if (mensajeDeLaRuta.startsWith("Pregunta ") || editor.pregunta === null) expect(editor.mensaje).toBe(mensajeDeLaRuta);
     }
+  });
+});
+
+describe("la trivia de ejemplo (scripts/seed-trivia-ejemplo.ts)", () => {
+  it("pasa el schema de la pantalla: 10 preguntas, una sola correcta cada una, de los dos tipos", () => {
+    const t = TriviaInput.parse(triviaDeEjemplo());
+    expect(t.titulo).toBe(TITULO_DE_EJEMPLO);
+    expect(t.preguntas).toHaveLength(10);
+    for (const p of t.preguntas) expect(p.correctas, p.texto).toHaveLength(1);
+    expect(new Set(t.preguntas.map((p) => p.tipo))).toEqual(new Set(["OPCION_MULTIPLE", "VERDADERO_FALSO"]));
+    expect(new Set(PREGUNTAS_DE_EJEMPLO.map((p) => p.tema)).size).toBe(10);
   });
 });
