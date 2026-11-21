@@ -15775,6 +15775,8 @@ Elías: «Debe mejorarse cuanto antes».
   (tiempo, cuántas reuniones, lo que la empresa dijo urgente) y darle el espacio a lo que pesa.
 - **El titular** (la tesis) nombra el problema principal: la primera frase, qué pasa hoy en el tema que más pesó; la
   segunda, su escala o su consecuencia, con palabras de la empresa. Siguen las dos frases cortas y sus citas.
+  *Enmienda (21 nov, Elías): la tesis ya no es el H1 de la portada; va en «01 El problema principal», debajo de lo que
+  hicimos. Ver «La portada del Resumen abre con lo que hicimos».*
 - **El molde por peso:** los retos van de 1 a 4 por subequipo y las cifras de 0 a 2, según cuánto se habló de cada uno.
 - **«5 puntos clave»** (Marco: «que abajo se explique más»): los cinco más críticos de toda la empresa, en orden de peso,
   cada uno con un título corto, una o dos frases y su cita, debajo del titular. Se editan, se quitan y se agregan en su
@@ -15985,6 +15987,32 @@ publicar, el cliente se quedaba sin titular. Elías: «Arregla lo de que al hace
   reunión larga a la que se le recortó el medio no tumbe una tesis de antes cuya cita estaba ahí (entonces se bloquea
   «Publicar», el lado seguro); el bloqueo de «Publicar» se prueba leyendo el código, no con la base. Las escalas que hoy
   ya tienen un Resumen sin titular quedan con «Publicar» bloqueado hasta escribirlo o rehacerlo. Sin SQL.
+- *Desde el 21 nov la tesis ya no es el titular de la portada* (ver la sección siguiente): la regla sigue igual, ahora para
+  «El problema principal», y el motivo de «Publicar» lo dice con ese nombre.
+
+## La portada del Resumen abre con lo que hicimos (2026-11-21)
+
+Elías, al ver la portada: «En el H1 no debería estar el problema. Ahí debería estar las sesiones de exploración, cuántas
+horas de conversaciones, con cuántas personas se ha hablado, la sección de lo que hicimos. Después debería explicar el
+problema principal, y ese debería ser lo que hoy es el H1.»
+
+- **Arriba, lo que hicimos:** la empresa en la ceja, el H1 con sus números («13 sesiones y 8 h de conversación con 3
+  personas de tu equipo.», `tituloDeLoQueHicimos` en lib/external/pagina-del-resumen.ts), la bajada, las cifras de
+  sesiones, tiempo, personas y áreas exploradas, la próxima área por explorar y el alcance («Qué abarca» y «Qué queda
+  fuera»: dicen qué cubrió el diagnóstico). Los números salen de las sesiones, nunca de la IA, y son los mismos que las
+  cifras de abajo, también si una persona las cambió (el singular sale del número que se ve). El H1 se puede reescribir
+  para esta empresa (`titular.hicimos`, atado a los números que trae el SISTEMA: corregir una cifra no suelta lo escrito;
+  rehacer el Resumen con otras sesiones, sí). Sin sesiones dice «Así entendimos tu negocio.», como antes. «Lo que
+  hicimos» ya no lleva número ni título propio: su título fijo «El diagnóstico, contigo.» deja de salir (lo reemplaza el
+  H1; medido el 21 nov en producción, ninguna empresa lo había cambiado, ni la bajada ni las cifras).
+- **01 El problema principal:** la tesis, en un `h2` con más peso que el título de una parte y menos que el H1, con las
+  etiquetas del negocio y, a la derecha, su tamaño. Un Resumen de antes sin tesis dice «Tu negocio» (adentro y afuera) y
+  trae lo que vende, sin repetir «Así entendimos tu negocio.» (ya lo dice la bajada de arriba).
+  Lo demás sigue en su orden: 02 Puntos clave, 03 Tu operación, 04 Equipos y hallazgos, el cierre y el pie.
+- **Sin tesis no se publica**, igual que antes, aunque ya no sea el H1.
+- La portada no tiene PDF. La foto publicada guarda los datos, no el dibujo (`escala-publicada.ts`): al desplegar, las
+  escalas ya publicadas se ven con el orden nuevo sin republicar, y este cambio no hace aparecer «Hay cambios que el
+  cliente no ve» (no cambia ningún dato ni `FORMATO_DE_LA_FOTO`).
 
 ## El contexto del equipo cambia el entregable: el agente de impacto, la cuenta regresiva y lo que aceptó el cliente (2026-11-21)
 

@@ -96,20 +96,40 @@
   color: var(--re-ambar);
 }
 
-/* Arriba: la tesis a la izquierda, el tamaño del negocio a la derecha. */
+/* Arriba, lo que hicimos (21 nov): el titular con sus números, la bajada y las cifras, una debajo de la otra. */
 .re-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 28px;
+  padding: 44px 0 40px;
+}
+/* El titular usa el ancho (16 nov, con la página a 1360): con 24ch quedaba en cuatro renglones y media página vacía. */
+.re-hero .re-titular {
+  max-width: 40ch;
+}
+.re-hero .re-proxima,
+.re-hero .re-alcance {
+  margin-top: -12px;
+}
+/* El problema principal (la tesis, hasta el 21 nov el H1): a la izquierda, el tamaño del negocio a la derecha. Con más
+   peso que el título de una parte y menos que el titular. */
+.re-problema {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 250px;
   gap: 28px 40px;
-  padding: 44px 0 40px;
 }
-.re-hero-sin-cifra {
+.re-problema-sin-cifra {
   grid-template-columns: minmax(0, 1fr);
 }
-/* Sin nada a la derecha, el titular usa el ancho (16 nov, con la página a 1360): con 24ch quedaba en cuatro renglones
-   y media página vacía. 40ch es lo que ocupa con la cifra al lado. */
-.re-hero-sin-cifra .re-titular {
+.re-tesis {
+  margin: 0;
   max-width: 40ch;
+  font-size: 34px;
+  line-height: 40px;
+  font-weight: 800;
+  letter-spacing: -0.022em;
+  color: var(--re-tinta);
+  text-wrap: balance;
 }
 .re-hero-texto {
   display: grid;
@@ -825,7 +845,9 @@
   .re-titular { font-size: 30px; line-height: 35px; }
   .re-titulo { font-size: 24px; line-height: 29px; }
   .re-bajada { font-size: 15.5px; line-height: 23px; }
-  .re-hero { grid-template-columns: minmax(0, 1fr); padding-top: 28px; }
+  .re-hero { padding-top: 28px; gap: 22px; }
+  .re-problema { grid-template-columns: minmax(0, 1fr); gap: 22px; }
+  .re-tesis { font-size: 26px; line-height: 31px; }
   .re-cifra-negocio { padding: 18px 0 0; border-left: 0; border-top: 1px solid var(--re-linea); }
   .re-grande { font-size: 52px; line-height: 54px; }
   .re-parte { padding: 30px 0; }

@@ -106,7 +106,7 @@ describe("2 · una página sin titular no se publica", () => {
   const pagina = (g: ResumenGuardado | null) => resumenParaLaPagina(g, [], {}, {}, { conCitas: false });
 
   it("un Resumen armado sin tesis lo dice; con tesis, sin Resumen o uno del 9 nov, se publica", () => {
-    expect(faltaParaPublicar(pagina(guardado(false)))).toMatch(/no tiene titular/);
+    expect(faltaParaPublicar(pagina(guardado(false)))).toMatch(/no tiene el problema principal/);
     expect(faltaParaPublicar(pagina(guardado()))).toBeNull();
     expect(faltaParaPublicar(pagina(null))).toBeNull();
     expect(faltaParaPublicar({ at: "2026-11-09T00:00:00.000Z", formato: 1, negocio: null })).toBeNull();

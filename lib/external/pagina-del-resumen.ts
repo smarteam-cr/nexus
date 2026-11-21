@@ -73,6 +73,31 @@ export function enHoras(min: number): string {
   return r ? `${h} h ${r} min` : `${h} h`;
 }
 
+/**
+ * El titular de la portada (21 nov, Elías: «En el H1 no debería estar el problema. Ahí debería estar las sesiones de
+ * exploración, cuántas horas de conversaciones, con cuántas personas se ha hablado»): «13 sesiones y 8 h de conversación
+ * con 3 personas de tu equipo.». Los números salen de lo que hicimos (nunca de la IA); `escritos` son los que una persona
+ * cambió en las cifras de abajo, para que el titular no diga otro número que ellas. Sin sesiones, null: la portada dice
+ * lo de siempre.
+ */
+export function tituloDeLoQueHicimos(
+  h: { sesiones: number; minutos: number; personas: number },
+  escritos: { sesiones?: string; tiempo?: string; personas?: string } = {},
+): string | null {
+  if (h.sesiones <= 0) return null;
+  // El singular sale del número que se ve: si una persona escribió «2», dice «2 sesiones» aunque el sistema contara 1.
+  const cuantos = (escrito: string | undefined, n: number) => {
+    const x = Number((escrito ?? "").trim().replace(",", "."));
+    return escrito !== undefined && escrito.trim() !== "" && Number.isFinite(x) ? x : n;
+  };
+  const s = cuantos(escritos.sesiones, h.sesiones);
+  const p = cuantos(escritos.personas, h.personas);
+  const sesiones = `${escritos.sesiones ?? h.sesiones} ${s === 1 ? "sesión" : "sesiones"}`;
+  const tiempo = h.minutos > 0 ? ` y ${escritos.tiempo ?? enHoras(h.minutos)} de conversación` : "";
+  const personas = h.personas > 0 ? ` con ${escritos.personas ?? h.personas} ${p === 1 ? "persona" : "personas"} de tu equipo` : "";
+  return `${sesiones}${tiempo}${personas}.`;
+}
+
 /** Un equipo de la escala en «Qué hicimos»: con qué sesiones se exploró, o si quedó pendiente. */
 export interface AreaExplorada {
   areaId: string;
@@ -487,13 +512,14 @@ export const PIEZAS_OBLIGATORIAS: readonly TipoDelNegocio[] = ["tesis"];
 
 /**
  * Por qué esta página del Resumen no se puede publicar, o null si se puede. Solo un Resumen ARMADO del formato 2 (desde el
- * 10 nov) lleva titular: sin Resumen, o uno del 9 nov, la página tiene su titular de siempre.
+ * 10 nov) lleva tesis: sin Resumen, o uno del 9 nov, la página tiene su texto de siempre. Desde el 21 nov la tesis ya no
+ * es el H1 de la portada (lo es lo que hicimos) sino «El problema principal», y sigue siendo obligatoria.
  */
 export function faltaParaPublicar(r: Pick<ResumenDeLaPagina, "at" | "formato" | "negocio">): string | null {
   if (!r.at || r.formato !== 2) return null;
   const vacia = PIEZAS_OBLIGATORIAS.find((tipo) => !(r.negocio ?? []).find((p) => p.tipo === tipo)?.lista.piezas.length);
   if (!vacia) return null;
-  return "El Resumen no tiene titular: escríbelo arriba del Resumen antes de publicar (si lo armó la IA, también puedes rehacerlo).";
+  return "El Resumen no tiene el problema principal: escríbelo en «El problema principal» antes de publicar (si lo armó la IA, también puedes rehacerlo).";
 }
 
 /** Lo mínimo de un nivel por dimensión para decir si el general es provisional. */

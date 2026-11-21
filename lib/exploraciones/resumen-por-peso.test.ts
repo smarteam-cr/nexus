@@ -369,17 +369,19 @@ describe("guardar, editar, rehacer y pintar", () => {
     expect(leerResumenGuardado(JSON.parse(JSON.stringify(viejo)))?.puntos).toBeUndefined();
   });
 
-  it("la vista pinta «Puntos clave» numerados antes de «Lo que hicimos»; sin puntos (una foto de antes), no", () => {
+  it("la vista pinta «Puntos clave» numerados debajo de lo que hicimos (la portada, 21 nov); sin puntos (una foto de antes), no", () => {
     const pestanas = [{ id: "resumen", nombre: "Resumen", href: "#" }];
     const html = renderToStaticMarkup(createElement(ResumenDeLaEscalaVista, { resumen: pagina(guardado(), false), empresa: "Empresa de prueba", pestanas }));
     expect(html).toContain("01 <span>/ Puntos clave</span>");
-    expect(html).toContain("02 <span>/ Lo que hicimos</span>");
+    // Desde el 21 nov lo que hicimos es el H1 de la portada, arriba de los puntos, y ya no lleva número.
+    expect(html).not.toContain("/ Lo que hicimos");
+    expect(html.indexOf("<h1")).toBeLessThan(html.indexOf("Puntos clave"));
     expect(html).toContain("La cartera se asigna a mano");
     const deAntes = pagina(guardado(), false);
     delete deAntes.puntos;
     const sin = renderToStaticMarkup(createElement(ResumenDeLaEscalaVista, { resumen: deAntes, empresa: "Empresa de prueba", pestanas }));
     expect(sin).not.toContain("Puntos clave");
-    expect(sin).toContain("01 <span>/ Lo que hicimos</span>");
+    expect(sin).toContain("01 <span>/ Equipos y hallazgos</span>");
   });
 });
 
