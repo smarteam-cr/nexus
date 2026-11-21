@@ -63,7 +63,14 @@ export default async function EscalaDelClientePage({ params, searchParams }: { p
       detalles={d.detalles}
       dimensionDelRiesgo={d.dimensionDelRiesgo}
       logo={d.logo}
-      deLaEscala={{ areas, porExplorar: d.porExplorar[r.areaId] ?? [], resumen: { href: base }, textos: d.textos }}
+      deLaEscala={{
+        areas,
+        porExplorar: d.porExplorar[r.areaId] ?? [],
+        resumen: { href: base },
+        textos: d.textos,
+        // Lo que más le cuesta al área (20 nov): su tarjeta del Resumen publicado.
+        tarjeta: d.resumen.tarjetas.find((t) => t.areaId === r.areaId) ?? null,
+      }}
     />
   );
 }

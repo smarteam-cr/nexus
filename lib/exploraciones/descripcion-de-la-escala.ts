@@ -208,6 +208,12 @@ export interface AreaParaLaDescripcion {
    * demás, entra al prompt y nunca sale tal cual. null: no escribió nada.
    */
   contextoDelEquipo: string | null;
+  /**
+   * Lo que el Resumen encontró de este equipo en las TRANSCRIPCIONES de sus reuniones, con cita verificada (20 nov,
+   * `loQueEncontroElResumen`): el reto principal, lo que lo causa y lo que ya funciona. Las minutas son un resumen de un
+   * resumen; esto es lo dicho. Sin Resumen armado, no viene.
+   */
+  delResumen?: string | null;
   dimensiones: {
     nombre: string;
     capa: string;
@@ -255,6 +261,7 @@ export function areaParaLaDescripcion(
   chequeo: Readonly<Record<string, EstimadoGuardado>>,
   porExplorar: readonly string[],
   contexto: string | null = null,
+  delResumen: string | null = null,
 ): AreaParaLaDescripcion {
   const area = escala.areas.find((a) => a.id === r.areaId);
   const rec = r.recomendacion;
@@ -265,6 +272,7 @@ export function areaParaLaDescripcion(
     capas: r.capas.map((c) => ({ nombre: c.nombre, nivel: c.nivelNombre })),
     loQueMasFrena: rec?.tipo === "trabajar" ? { dimension: rec.dimensionNombre, llevarA: rec.objetivoNombre } : null,
     contextoDelEquipo: contexto,
+    ...(delResumen ? { delResumen } : {}),
     dimensiones: r.dimensiones.map((d) => {
       const nivel = d.preguntada && d.nivel ? d.nivel : null;
       const comoEs = nivel ? area?.dimensiones.find((x) => x.id === d.id)?.niveles.find((n) => n.letra === nivel)?.descripcion : null;
@@ -309,6 +317,8 @@ Lo que NO puedes hacer (si lo haces, tu texto se descarta):
 
 «contextoDelEquipo», si viene, lo escribió el equipo de Smarteam que atiende a la empresa: pesa más que lo demás para elegir qué contar y cómo. No lo copies ni lo cites, y no digas que es lo que alguien de Smarteam piensa.
 
+«delResumen», si viene, es lo que la empresa dijo en sus reuniones sobre este equipo (su reto principal, lo que lo causa, lo que ya funciona), verificado con lo dicho: úsalo para que la descripción hable de lo que de verdad le pasa a ESTA empresa. No lo copies palabra por palabra.
+
 Devuelves SOLO este JSON: {"descripciones": [{"area": "<id del equipo>", "texto": "..."}]}, una entrada por cada equipo de los datos.`;
 
 /** El pedido al agente: una sola llamada con todas las áreas de la página. `aviso`: por qué se descartó el intento anterior. */
@@ -332,7 +342,7 @@ export function pedidoDeLaDescripcion(ctx: ContextoDeLaDescripcion, aviso = ""):
 const sinEncabezados = (minutas: string) => minutas.replace(/^- .*?\(\d[^)]*\): /gm, "");
 
 /** Lo que se sabe de cada parte y el contexto del CSE: lo que la empresa hace, dicho por ella o visto por el equipo. */
-const deSusPartes = (ctx: ContextoDeLaDescripcion) => ctx.areas.flatMap((a) => [a.contextoDelEquipo ?? "", ...a.dimensiones.map((d) => d.loQueSeVio ?? "")]).join("\n");
+const deSusPartes = (ctx: ContextoDeLaDescripcion) => ctx.areas.flatMap((a) => [a.contextoDelEquipo ?? "", a.delResumen ?? "", ...a.dimensiones.map((d) => d.loQueSeVio ?? "")]).join("\n");
 
 const sinTildes = (x: string) => x.toLocaleLowerCase("es").normalize("NFD").replace(/[̀-ͯ]/g, "");
 

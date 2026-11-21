@@ -37,6 +37,7 @@
  */
 import type { ReactNode } from "react";
 import type { Letra } from "@/lib/escala/documento/tipos";
+import { conclusionDelSubequipo, etiquetaDeLaCifra, sinCosto, type TarjetaDeLaPagina } from "@/lib/external/pagina-del-resumen";
 import { CLAVES, quitadaDeLaPagina, textoDeLaPagina, type TextosDeLaPagina } from "@/lib/external/textos-de-la-pagina";
 import type { DetalleDeLaDimension } from "@/lib/tests-diagnostico/detalle-de-la-dimension";
 import { etiquetaDeIndustria, OTRA_INDUSTRIA } from "@/lib/tests-diagnostico/direccion-publica";
@@ -44,9 +45,11 @@ import { ENLACE_DE_OTRA_EMPRESA, enlaceDeOtraArea, puntajeDeLaDimension } from "
 import { resumenDelResultado } from "@/lib/tests-diagnostico/redaccion";
 import type { DimensionDelResultado, ResultadoDelTest } from "@/lib/tests-diagnostico/resultado";
 import RadarDeUnaEmpresa from "@/components/escala/RadarDeUnaEmpresa";
+import { metaDeLaEscalera, metaPorDefecto, metasPosibles } from "@/lib/escala/escalera";
 import AnimacionesDelResultado from "./AnimacionesDelResultado";
 import { ArribaDeLaEscala, EmpresaDeLaEscala, PESTANA_DEL_RESUMEN, siguienteArea, type PestanaDeLaEscala } from "./ArribaDeLaEscala";
 import CalendarioDeHubspot from "./CalendarioDeHubspot";
+import EscaleraDeNiveles from "./EscaleraDeNiveles";
 import DescargarPdfDelResultado from "./DescargarPdfDelResultado";
 import "./diagnostico.css";
 import "./resultado.css";
@@ -378,6 +381,11 @@ export interface EdicionDeLaPagina {
    * de siempre); `quitar`: la pieza se puede quitar para el cliente (su clave, y si ya está quitada).
    */
   fijo?: (o: EdicionDeUnTextoFijo) => ReactNode;
+  /**
+   * A dónde lo llevamos, en la escalera (20 nov): quien presenta elige el nivel antes de presentar. Se guarda como los
+   * textos fijos (`clave`, con la letra), y vale solo si está por encima de hoy (lib/escala/escalera.ts).
+   */
+  meta?: (o: { clave: string; actual: Letra; deSiempre: Letra | null; opciones: { letra: Letra; nombre: string }[] }) => ReactNode;
 }
 
 /** Lo que recibe la pantalla interna para editar un texto fijo de la página (el Resumen también lo usa). */
@@ -437,7 +445,7 @@ function AreaDeLaEscala({
   fecha: string | null;
   detalles: Record<string, DetalleDeLaDimension> | null;
   dimensionDelRiesgo: Record<string, string>;
-  deLaEscala: { areas: PestanaDeLaEscala[]; porExplorar?: readonly string[]; resumen?: { href: string } | null; textos?: TextosDeLaPagina };
+  deLaEscala: { areas: PestanaDeLaEscala[]; porExplorar?: readonly string[]; resumen?: { href: string } | null; textos?: TextosDeLaPagina; tarjeta?: TarjetaDeLaPagina | null };
   edicion: EdicionDeLaPagina | null;
 }) {
   const rec = r.recomendacion;
@@ -463,6 +471,18 @@ function AreaDeLaEscala({
   const medida = (d: DimensionDelResultado) => d.preguntada && !!d.nivel;
   // La tarjeta abre en la parte que más frena; sin recomendación, en la primera medida.
   const inicial = frena ?? r.dimensiones.find(medida)?.id ?? r.dimensiones[0]?.id ?? null;
+  // La escalera (20 nov): hoy, y a dónde lo llevamos (la que eligió quien presenta, si está por encima de hoy).
+  const claveDeLaMeta = CLAVES.delArea(area, "meta");
+  const meta = metaDeLaEscalera(r.nivel, textos?.[claveDeLaMeta]);
+  /* Lo que más le cuesta (20 nov): la tarjeta de esta área en el Resumen, subequipo por subequipo (Soporte y Customer
+     Success dentro de Servicio). Solo los del molde del 20 nov (`costo` definido): una foto de antes no la trae. Afuera, la
+     pérdida de la preventa que alguien quitó no sale. */
+  const tarjeta = deLaEscala.tarjeta && !deLaEscala.tarjeta.porExplorar ? deLaEscala.tarjeta : null;
+  // Una pérdida quitada no sale ni adentro: esta sección muestra lo que verá el cliente (se edita en el Resumen).
+  const conclusiones = (tarjeta?.subequipos ?? [])
+    .filter((x) => x.costo !== undefined)
+    .map((x) => ({ id: x.id, nombre: x.nombre, falta: x.falta, c: conclusionDelSubequipo(x, !!x.costo?.dePerdida && quitadaDeLaPagina(textos, CLAVES.delResumen(x.costo.dePerdida.nombreFijo))) }))
+    .filter((x) => x.c.costo || x.c.reto || x.c.causas.length);
 
   const radar = (
     <RadarDeUnaEmpresa
@@ -549,6 +569,27 @@ function AreaDeLaEscala({
           </div>
         </section>
 
+        {r.nivel && (
+        <section className="ed-parte ed-envoltura ed-escalera" aria-labelledby="ed-t-escalera">
+          <p className="ed-ceja">La escala de rendimiento</p>
+          <h2 className="ed-titulo" id="ed-t-escalera">
+            {fijo(CLAVES.delArea(area, "titulo.escalera"), meta ? "Dónde está hoy y a dónde lo llevamos." : "Dónde está hoy: en el nivel más alto.", "Título de la escalera")}
+          </h2>
+          <EscaleraDeNiveles
+            area={r.areaNombre}
+            niveles={r.niveles}
+            hoy={r.nivel}
+            meta={meta}
+            idSvg={`esc-${area}`}
+            pie={
+              edicion?.meta && meta
+                ? edicion.meta({ clave: claveDeLaMeta, actual: meta, deSiempre: metaPorDefecto(r.nivel), opciones: r.niveles.filter((n) => metasPosibles(r.nivel).includes(n.letra)) })
+                : null
+            }
+          />
+        </section>
+        )}
+
         <section className="ed-parte ed-envoltura ed-radar-seccion" aria-labelledby="ed-t-radar">
           <div className="ed-radar-cabeza">
             <div className="ed-titulos">
@@ -604,6 +645,54 @@ function AreaDeLaEscala({
             <span>{edicion?.ayudaDelRadar ?? "Pasa el cursor (o toca) una parte para ver qué le pasa hoy a tu área."}</span>
           </p>
         </section>
+
+        {conclusiones.length > 0 && (
+          <section className="ed-parte ed-envoltura ed-cuesta" aria-labelledby="ed-t-cuesta" data-revela="">
+            <p className="ed-ceja" id="ed-t-cuesta">
+              {fijo(CLAVES.delArea(area, "ceja.cuesta"), `Lo que más le cuesta a ${r.areaNombre}`, "Ceja de lo que más le cuesta")}
+            </p>
+            <div className="ed-cuesta-lista">
+              {conclusiones.map(({ id, nombre, falta, c }) => (
+                <article key={id} className="ed-cuesta-uno">
+                  {conclusiones.length > 1 && <p className="ed-cuesta-sub">{nombre}</p>}
+                  <h2 className="ed-titulo">
+                    {c.costo ? (
+                      <>
+                        <span className="ed-cuesta-monto">{c.costo.cifra}</span>{" "}
+                        {c.costo.dePerdida ? textoDeLaPagina(textos, CLAVES.delResumen(c.costo.dePerdida.nombreFijo), c.costo.texto) : c.costo.texto}
+                      </>
+                    ) : (
+                      (c.reto?.texto ?? `Lo que frena a ${nombre}`)
+                    )}
+                  </h2>
+                  {c.costo && (
+                    <p className="ed-cuesta-estado">
+                      {etiquetaDeLaCifra(c.costo)}
+                      {c.costo.nota ? ` · ${c.costo.nota}` : ""}
+                    </p>
+                  )}
+                  {c.costo && c.reto && <p className="ed-cuesta-reto">{c.reto.texto}</p>}
+                  {c.causas.length > 0 && (
+                    <>
+                      <p className="ed-mini-rotulo">Lo que lo causa</p>
+                      <ul className="ed-cuesta-causas">
+                        {c.causas.map((p) => (
+                          <li key={p.id}>{p.texto}</li>
+                        ))}
+                      </ul>
+                    </>
+                  )}
+                  {!c.costo && (
+                    <p className="ed-cuesta-validar">
+                      <b>Cuánto cuesta: por validar.</b> {falta ?? sinCosto(nombre)}
+                    </p>
+                  )}
+                </article>
+              ))}
+            </div>
+            {edicion && <p className="ed-nota">Sale del Resumen: se corrige allá, en su lugar, y cambia aquí también.</p>}
+          </section>
+        )}
 
         {rec && (
           <section className="ed-parte ed-envoltura" aria-labelledby="ed-t-empezar" data-revela="">
@@ -840,6 +929,11 @@ export default function ResultadoDelTestVista({
     resumen?: { href: string } | null;
     /** Los textos fijos cambiados para esta empresa (16 nov, lib/external/textos-de-la-pagina.ts). */
     textos?: TextosDeLaPagina;
+    /**
+     * La tarjeta de esta área en el Resumen (20 nov): su reto principal, lo que lo causa y cuánto cuesta, de lo que se
+     * conversó en las reuniones (el Resumen las lee por el chokepoint de sesiones). Sin ella, la sección no sale.
+     */
+    tarjeta?: TarjetaDeLaPagina | null;
   } | null;
   /**
    * El logo de la ficha del cliente (`logoQueSeSirve`). Desde la página editorial (15 nov) la página de un área ya no lo
@@ -896,6 +990,9 @@ export default function ResultadoDelTestVista({
       formato={modo}
     />
   );
+  // La escalera (20 nov): el test no tiene a nadie que elija la meta: la de siempre.
+  // Sin nivel («Sin determinar») no hay nada que marcar: no sale.
+  const escalera = r.nivel ? <EscaleraDeNiveles area={r.areaNombre} niveles={r.niveles} hoy={r.nivel} meta={metaPorDefecto(r.nivel)} idSvg="esc-test" /> : null;
   // Dentro de la pantalla interna no es el título de la página: esa ya tiene el suyo (un solo h1 por pantalla).
   const TituloDelNivel = edicion ? "p" : "h1";
   const nivelGrande = (
@@ -923,6 +1020,7 @@ export default function ResultadoDelTestVista({
           </div>
           <Capas r={r} />
         </section>
+        {escalera && <div className="rd-escalera">{escalera}</div>}
         <div className="rd-radar">{radar}</div>
       </>,
       <>
@@ -1011,6 +1109,8 @@ export default function ResultadoDelTestVista({
               <Capas r={r} />
             </div>
           </div>
+          {/* La escalera de los niveles (20 nov): arriba, y el radar justo debajo. */}
+          {escalera && <div className="rd-escalera rd-entra">{escalera}</div>}
           <div className="rd-radar rd-entra">
             {edicion?.radar ? edicion.radar(radar) : radar}
             <p className="rd-radar-ayuda">{edicion?.ayudaDelRadar ?? "Pasa el cursor (o toca) una parte del radar para ver qué le pasa hoy a tu área en esa parte."}</p>

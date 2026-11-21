@@ -14,8 +14,10 @@
  *   · leads — la meta es una cantidad de leads: (meta − hoy) × conversión × ticket.
  * El ticket es el de Negocio o, si falta, el volumen entre las ventas del mismo período (dicho en la cuenta).
  *
- * ⛔ Nada de esto llega a la propuesta ni a nada que vea el cliente (Elías, 20 nov): la sección de «costo de mala calidad»
- * nace cuando se rediseñe la propuesta. Por eso la pérdida no es una casilla: vive aparte (`contenido.perdida`) y
+ * ⛔ Nada de esto llega a la propuesta, al correo de seguimiento ni al handoff (Elías, 20 nov: «nada llega a la propuesta;
+ * esa parte se rediseña después»). La excepción es la PÁGINA DEL RESULTADO (Elías: «el resumen debe tomar … la pérdida
+ * validada y su cálculo»): la validada, solo por ./perdida-de-la-escala.ts, como el costo de la fila de Ventas.
+ * En la propuesta, la sección de «costo de mala calidad» nace cuando se rediseñe. Por eso la pérdida no es una casilla: vive aparte (`contenido.perdida`) y
  * `para-la-propuesta.ts` no la lee (lo vigila negocio-y-embudo.test.ts).
  */
 import type { Cifras, Meta } from "./casillas";
@@ -294,7 +296,7 @@ export function loQueFaltaParaLaCuenta(c: CasillasParaLaPerdida): string | null 
 
 // ── La pérdida validada (lo que se guarda) ───────────────────────────────────
 
-/** La pérdida que quien lleva la preventa validó con el cliente, con la cuenta que la explica. Nunca llega al cliente. */
+/** La pérdida que quien lleva la preventa validó con el cliente, con la cuenta que la explica. A la propuesta no llega; a la escala, por perdida-de-la-escala.ts. */
 export interface PerdidaValidada {
   montoAlMes: number;
   moneda: string | null;

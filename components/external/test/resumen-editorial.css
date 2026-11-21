@@ -632,6 +632,61 @@
   color: var(--re-apagada);
 }
 
+/* La fila en dinero (20 nov): el reto principal o lo que cuesta de titular, lo que lo causa debajo y, sin costo, «Por
+   validar» a la derecha. Lo que cuesta en el azul de las cifras; nunca en rojo (el rojo es de lo que se traba). */
+.re-equipo-dinero .re-titular-fila {
+  margin: 0;
+  font-size: 22px;
+  line-height: 28px;
+  font-weight: 800;
+  letter-spacing: -0.015em;
+  color: var(--re-tinta);
+  text-wrap: balance;
+}
+.re-costo {
+  display: grid;
+  gap: 6px;
+}
+.re-costo-monto {
+  color: var(--re-azul);
+  white-space: nowrap;
+}
+.re-reto-principal {
+  font-size: 15.5px;
+  line-height: 22px;
+  font-weight: 700;
+  color: var(--re-tinta-2);
+}
+.re-equipo-dinero .re-quienes {
+  margin-top: 6px;
+}
+.re-quitado {
+  opacity: 0.5;
+  text-decoration: line-through;
+}
+.re-por-validar {
+  display: grid;
+  gap: 4px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  border: 1.5px dashed var(--re-panel-borde);
+}
+.re-por-validar .re-rotulo {
+  margin: 0;
+  color: var(--re-apagada);
+}
+.re-por-validar b {
+  font-size: 22px;
+  line-height: 28px;
+  font-weight: 800;
+  color: var(--re-tinta);
+}
+.re-por-validar span {
+  font-size: 13px;
+  line-height: 19px;
+  color: var(--re-apagada);
+}
+
 /* El cierre: lo que falta validar, en la banda oscura a todo el ancho. */
 .re-cierre {
   display: grid;

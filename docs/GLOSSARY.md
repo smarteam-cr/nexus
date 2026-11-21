@@ -3,6 +3,10 @@
 - **Sesión** (`FirefliesSession`): una reunión de Google Meet (el modelo conserva el nombre
   "Fireflies" por historia — esa integración se eliminó el 2026-06-04). Tiene
   `participants` (emails), `transcript`, `summary`, `organizerEmail`. ~16k filas.
+- **Escalera** (`lib/escala/escalera.ts`, 20 nov): la curva de los cinco niveles arriba de la página de cada área (y del
+  resultado del test), con «Hoy» y la **meta** (a dónde lo llevamos: Funcional, o el siguiente desde Funcional; la elige
+  quien presenta). **Reto principal**: el titular de cada departamento en el Resumen, con **lo que lo causa** debajo y
+  **cuánto cuesta** (la cifra en dinero, o «por validar»).
 - **Resumen de la escala** (`lib/exploraciones/resumen-de-la-escala.ts`, desde el 2026-11-09; resumen ejecutivo desde el
   10 nov; segunda vuelta el 11 nov): la primera pestaña de la escala que ve el cliente: arriba las tres cifras de lo que hicimos
   y después su negocio, cómo funciona su operación, qué encontramos por equipo de la escala (con sus subequipos adentro) y

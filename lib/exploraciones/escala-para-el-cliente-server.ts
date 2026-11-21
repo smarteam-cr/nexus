@@ -24,6 +24,7 @@ import { detallesDelResultado, dimensionDeCadaRiesgo, type DetalleDeLaDimension 
 import type { ResultadoDelTest } from "@/lib/tests-diagnostico/resultado";
 import { SENTINEL_SERVICE_TYPE } from "@/lib/projects/kind";
 import { areasDeLaPagina, logoQueSeSirve, partesDeLaPagina, resultadosDeLaEscala } from "./escala-para-el-cliente";
+import { perdidaDeLaEscala } from "./perdida-de-la-escala";
 import { resumenParaLaPagina, type ResumenDeLaPagina } from "./resumen-de-la-escala";
 import type { EstadoDeExploracion } from "./contenido";
 import type { EscalaDelLienzo } from "./escala-del-lienzo";
@@ -154,6 +155,8 @@ async function armarLaPagina(
         conCitas: !o.publica,
         areasFuera: lienzo.areas.filter((a) => !alCliente.has(a.id)).map((a) => a.nombre),
         porExplorar: Object.fromEntries(deLasAreas.map((x) => [x.resultado.areaId, x.porExplorar])),
+        // La pérdida que la empresa validó en la preventa (20 nov): el costo de la primera fila de Ventas.
+        perdida: perdidaDeLaEscala(fila.contenido),
       }),
     },
   };

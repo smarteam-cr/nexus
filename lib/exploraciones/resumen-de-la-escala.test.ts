@@ -1436,11 +1436,11 @@ describe("20 · el Sistema 2 de la escala (12 nov)", () => {
     expect(fs.readFileSync(path.join(RAIZ, "components/external/test/ResumenDeLaEscalaVista.tsx"), "utf8")).toMatch(/pendiente: null/);
   });
 
-  it("forma editorial: lo que la frena va con los retos, y la ficha con el logo del cliente ya no sale (aprobado el 15 nov)", () => {
+  it("forma editorial: lo que la frena va de titular de la fila (20 nov: es el reto principal), y la ficha con el logo del cliente ya no sale (aprobado el 15 nov)", () => {
     const html = renderToStaticMarkup(createElement(ResumenDeLaEscalaVista, { resumen: resumen(), empresa: "Centauro Solutions", logo: "https://cdn.test/logo.png", pestanas }));
     expect(html).not.toContain("Lo que le impide rendir más");
     expect(html).not.toContain("cdn.test/logo.png");
-    expect(html).toContain("re-retos");
+    expect(html).toContain('<h4 class="re-titular-fila">El seguimiento se hace a mano, uno por uno.</h4>');
     expect(logoQueSeSirve("https://x.supabase.co/storage/v1/object/public/public-assets/logo.png")).toBe("https://x.supabase.co/storage/v1/object/public/public-assets/logo.png");
     for (const malo of ["http://x.test/logo.png", "javascript:alert(1)", "data:image/png;base64,AAA", "logo.png", "", null]) expect(logoQueSeSirve(malo)).toBeNull();
   });

@@ -15799,8 +15799,11 @@ decidió las cuatro dudas el 20 nov. Solo el marco `venta`: el de Customer Succe
   (con moneda, o «de 100 mil a 150 mil» sin decir negocios), ni una tasa que no habla de vender (retención, uso de
   HubSpot: la revisión vio «US$ 100.000 al mes» salidos de ahí). La cuenta multiplica los mismos valores redondeados que
   muestra, y el período de cada cifra es el de su primer número («200 al mes, unos 2.400 al año» es al mes).
-- **⛔ La pérdida no llega a nada que vea el cliente** (Elías): vive en `contenido.perdida`, NO es una casilla, y
-  `para-la-propuesta.ts` no la lee (`negocio-y-embudo.test.ts`). Se valida con «Validada con el cliente» (la operación
+- **⛔ La pérdida no llega a la propuesta, al correo de seguimiento ni al handoff** (Elías: «nada llega a la propuesta;
+  esa parte se rediseña después»): vive en `contenido.perdida`, NO es una casilla, y `para-la-propuesta.ts` no la lee
+  (`negocio-y-embudo.test.ts`). *Corrige (20 nov, «Resultados en dinero»):* la PÁGINA DEL RESULTADO sí la muestra (Elías:
+  «el resumen debe tomar … la pérdida validada y su cálculo»): solo la validada con el cliente, solo por
+  `perdida-de-la-escala.ts`, como el costo de la fila de Ventas; una sin validar va «por validar», sin el monto. Se valida con «Validada con el cliente» (la operación
   `perdida` manda la huella de la cuenta que se vio y el servidor la rehace: si las cifras cambiaron, no se guarda). La
   ve el CSE en lo interno (`internoParaElCse`). La sección de «costo de mala calidad» nace cuando se rediseñe la
   propuesta, desde ahí. Por la misma regla, el agente no propone en «Qué pasa si no actúa» un texto con el mismo monto
@@ -15823,3 +15826,61 @@ decidió las cuatro dudas el 20 nov. Solo el marco `venta`: el de Customer Succe
   sin una respuesta del vendedor que esté queda «sin manejar». Viaja en el criterio (`objecionesEnElCriterio`), no en
   el prompt de la base: no se re-siembra. `VERSION_DEL_CRITERIO` = 2026-11-20. Se suma la objeción común «No quiere dar
   cifras», que se responde con el cálculo hacia atrás desde su meta.
+
+## Resultados en dinero: cada departamento con su reto, lo que lo causa y cuánto cuesta, y la escalera arriba (2026-11-20)
+
+Elías presentó diagnósticos reales con Ventas: las conclusiones describían cómo opera el cliente («las ventas se gestionan
+por WhatsApp») en vez de decir cuánto le cuesta («están perdiendo US$1.5M al mes en cuentas incobrables»). El rumbo es
+vender por resultados. Cambia el Resumen, la página de cada área y el resultado del test público.
+
+- **Cada departamento: el reto principal → lo que lo causa → cuánto cuesta.** En el Resumen, la fila de cada subequipo
+  lleva de titular lo que cuesta en dinero si se sabe (la primera cifra con moneda que dice lo que se PIERDE, `esCosto`:
+  sale de sus cifras y va arriba con su estado; una inversión o lo vendido se queda entre las cifras: en el simulacro de
+  Cemaco la única en dinero era la inversión de marketing del mes) y debajo el reto principal; si no hay dinero, el titular es el reto principal. Debajo, «Lo que lo
+  causa» (los retos) y cómo trabaja hoy. A la derecha, sin costo, «Cuánto cuesta · Por validar» con lo que falta saber
+  (`falta`, que desde hoy dice qué falta para saber cuánto cuesta) o, sin eso, «Lo medimos contigo: falta el dato de cuánto le cuesta esto a <equipo>» (`sinCosto`): nunca un monto inventado.
+  La regla la decide `conclusionDelSubequipo` (lib/external/pagina-del-resumen.ts), la misma para las dos páginas.
+- **El reto principal es la pieza `frena`** (antes vacía desde el 15 nov): UNA, de 4 a 10 palabras, sin números (la cifra
+  va en «cifras»), con su cita, como cualquier pieza. *Por qué esa y no una nueva:* ya tenía edición en su lugar, lo
+  quitado, «Rehacer con IA», la reparación y la lectura del Json. Un Resumen de antes sin reto principal usa su primer
+  reto de titular (y uno del 10 al 14 nov, su «lo que la frena»). Se rehace con la IA para que salga con dinero.
+- **Las cifras, con la regla de siempre:** la del cliente vale; la que dijo Smarteam y nadie corrigió entra por confirmar;
+  la corregida, la corregida (18 nov). El prompt pide que la primera cifra sea lo que cuesta, con su moneda, y sigue
+  prohibiendo inventar o calcular dinero.
+- **Los títulos con información real:** el titular (la tesis) lleva el dinero si la empresa lo dijo; si no, el dolor que
+  más repitieron quienes dirigen o deciden, nunca cómo operan. Quiénes deciden salen de la casilla «Quién decide» (quien
+  aprueba y quien decide, `quienesDecidenDe`): interna, solo orienta al agente, y sus nombres van a los que no salen. Los
+  puntos clave, igual. Todo con su cita, verificado como antes.
+- **La pérdida validada en la preventa** (`contenido.perdida`, de la sección de arriba) entra por UNA función,
+  `perdidaDeLaEscala`. La VALIDADA con el cliente va de costo en la primera fila de Ventas, con ✓ «Lo validaste con
+  nosotros» (no «≈ Estimado») y la cuenta como nota («Con tus cifras: …»); si esa fila ya tiene un costo dicho en las
+  reuniones, va primera entre sus cifras. Una cuenta que nadie validó va como «Por validar», con de qué meta sale y SIN el
+  monto (`faltaDeLaPerdida`), y no pisa lo que falta que escribió el Resumen. Quien presenta la puede quitar o cambiarle el
+  rótulo (un texto fijo atado a la huella de su cuenta). Al agente le llega para orientarse, sin escribir su número (lo
+  pone la página). Lo confirmó la coordinación el 20 nov: la regla de la preventa es de la propuesta, no de esta página.
+- **La página de cada área lleva «Lo que más le cuesta a <área>»** debajo del radar y antes de «Por dónde empezar»: lo
+  mismo que su fila del Resumen (que lee las transcripciones por el chokepoint de sesiones), sin editarse ahí: se corrige
+  en el Resumen. *Lo que leía antes cada texto:* la descripción, las minutas (no las transcripciones); «Por dónde empezar»,
+  lo que cuesta quedarse así y los riesgos son textos de la escala, de nadie en particular. Ahora la descripción también
+  recibe lo que el Resumen verificó de ese equipo (`loQueEncontroElResumen`, sin cifras), sin otra llamada a la IA.
+- **La escalera de los cinco niveles vuelve arriba** (lib/escala/escalera.ts, `EscaleraDeNiveles`): la curva de la
+  aplicación vieja, ahora en S, de 1 Deficiente (rojo) a 5 Óptimo (verde), con el área sombreada, «Hoy» en el nivel del
+  área y «Meta» con aro punteado. La meta: Funcional; desde Funcional, el siguiente; en Óptimo, ninguna. Quien presenta la
+  elige debajo de la escalera (texto fijo `area.<id>.meta`, publicado como los demás); vale solo si está por encima de hoy.
+  Va arriba y el radar justo debajo, sin esconder nada, en las DOS páginas: la escala de una empresa y el resultado del
+  test público (también en la hoja 1 de su PDF). El cambio del test es a propósito: su prueba lo dice.
+- **Una foto publicada antes de hoy se pinta como antes** en el Resumen (sin `costo`: las cifras a la derecha); la
+  escalera sí aparece, porque sale de los niveles de la foto. Sin SQL.
+- **Lo que endureció la revisión del 20 nov:** un grupo o un cargo en «Quién decide» («Equipo de ventas», «Gerencia») no
+  entra a los nombres que no salen (si no, se caía toda frase con «equipo» o «gerencia»); lo que cuesta es dinero que se
+  PIERDE (`esCosto`: «costo por lead», «cuentas por cobrar» o un trimestre «Q3» no lo son) y solo una cifra que su cita
+  sostiene, también adentro; la pérdida va al área 1 por su número (en Educación se llama «Admisiones»); una validada
+  cuya cuenta ya no es la de las cifras de hoy va «por validar», sin monto; quitarle a la fila de Ventas lo que falta no
+  lo vuelve a poner la cuenta sin validar; la pérdida quitada tampoco sale adentro en la página del área (esa sección
+  muestra lo que verá el cliente); sin nivel («En medición») no hay escalera; lo del Resumen que nombra un equipo que el
+  cliente no ve no le llega a la descripción. *Lo que se dejó así:* tras el deploy, cada escala publicada dirá «Hay
+  cambios que el cliente no ve», porque es cierto: al republicar, las filas pasan a reto principal y cuánto cuesta.
+- **Lo que no queda garantizado:** cómo escribe el agente el reto principal y los títulos hasta que se rehaga un Resumen
+  real (el simulacro lo muestra sin guardar); que una cifra en dinero escrita sin moneda («1,5 millones») se reconozca
+  como costo (la moneda es la señal); los colores de la escalera (rojo a verde) no son los del punto de nivel del resto de
+  la página (Funcional es verde ahí).
