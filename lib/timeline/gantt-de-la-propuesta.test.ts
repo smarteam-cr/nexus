@@ -503,7 +503,8 @@ describe("L3 P3c · las filas de fase: sus casillas, sus etiquetas y sus celdas"
     /* La edición que la pone en rojo: volver al `<svg>` suelto (Tab no lo alcanza, el lector no sabe si está abierta). */
     expect(cuenta(P.html, 'aria-expanded="true"')).toBe(P.phases.length);
     const sin = pintar(BORRADOR, { sinPropuesta: true, desplegar: null });
-    expect(cuenta(sin.html, 'aria-expanded="false"')).toBe(sin.phases.length);
+    // Sin propuesta, el cronograma arranca con TODAS las fases desplegadas (Elías, 20 nov); la propuesta, plegada.
+    expect(cuenta(sin.html, 'aria-expanded="true"')).toBe(sin.phases.length);
     expect(sin.html).toContain(`aria-label="Desplegar «${P.phases[0].name}»"`);
   });
 

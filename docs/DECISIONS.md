@@ -15578,16 +15578,17 @@ entregables de kölbi se hacen por área.
   Un plan, una vista o un documento que muestre un cronograma lo hace con `TimelineGantt` + `TaskDetailDrawer` (el
   equipo) y con `TimelineSection` (el cliente). Si le falta algo, se le agrega al motor para todos.
 - **Un loop es una fase con número** (`TimelinePhase.loopNumero`); el Gantt lo pinta «01» antes del nombre, en el plan y
-  en el cronograma del proyecto. *La fila plegada de un loop dibuja sus TAREAS en sus semanas* (Elías, 19 nov: «no se
-  ven las semanas de cada uno»): verde si lo de esa semana está hecho, azul si hay algo en curso o por hacer, vacío si no
-  hay nada, y los nombres al pasar el mouse. Un loop sin tareas que corran sigue con la barra de siempre. La regla es UNA
-  (`lib/timeline/semanas-del-loop.ts`) para el Gantt del equipo y la vista del cliente, y la leyenda dice lo que se
-  pinta (con loops y fases comunes, las dos). El aviso «¿repetida?» no compara dos loops con número distinto.
-  *Al desplegar un loop* (Elías eligió «una fase por loop», 20 nov, sobre el plan de Valentina): una fila por tarea con
-  su barra en sus semanas y su estado al lado («✓ Hecho», «En curso», «Atrasada», «En curso · atrasada»), con el
-  responsable y «Sesión» en la fila; el título abre el detalle y «+ tarea» nace en la semana de hoy. Lo que la lista
-  por semana tenía en la fila y en un loop pasa al detalle: renombrar en la fila, «N semanas», arrastrar entre semanas
-  y el «+» de cada semana. Las fases comunes siguen con su lista por semana. Las actividades son sus tareas. El detalle largo va en las notas de la tarea, que son
+  en el cronograma del proyecto. *Fuera de eso, un loop se ve como CUALQUIER fase* (Elías, 20 nov): el color de su tipo de
+  actividad y, al desplegarlo, la lista por semana con sus chips de siempre («En curso», «Atrasada»). Hubo un dibujo
+  propio de los loops (las tareas en sus semanas, verde y azul, una fila por tarea) que imitaba el plan de Valentina y se
+  retiró el mismo día: rompía el estándar del motor. Si algún día hace falta ver una barra por tarea, entra al motor
+  para todos los cronogramas. El aviso «¿repetida?» no compara dos loops con número distinto.
+- **Todo cronograma arranca con sus fases DESPLEGADAS** (Elías, 20 nov, revisando kölbi), en el Gantt del equipo: se
+  ven las tareas sin abrir fase por fase. La vista de la propuesta guarda su propia lista de fases abiertas y su regla
+  (arranca plegada y abre lo que cambia). La página del cliente no cambió: sigue arrancando plegada.
+- **En local, el enlace del cliente usa la dirección que se está mirando** (`lib/external/enlace-local.ts`): el `.env`
+  dice 3004 y en el 3005 «Ver como el cliente» abría la instancia de producción, sin los datos locales. Solo se
+  reescribe un enlace de `localhost` visto desde `localhost`; en producción queda igual. Las actividades son sus tareas. El detalle largo va en las notas de la tarea, que son
   internas. El tipo de trabajo lo dice el tipo de actividad de la FASE, como en cualquier cronograma: no hay tipo por
   tarea. SQL `2026-11-19-plan-general-de-la-cuenta.sql`.
 - **Una tarea puede durar varias semanas, en TODOS los cronogramas** (`TimelineTask.semanas`, null = una). Se elige en el
