@@ -118,7 +118,9 @@ export function versionDelCronograma(c: CronogramaVersionado): string {
       t.type ?? null,
       iso(t.startDateOverride),
       iso(t.dueDateOverride),
-      t.semanas ?? null,
+      // Solo una tarea de varias semanas suma a la huella: así la de un cronograma sin tareas largas es la misma que
+      // antes del deploy del 20 nov, y quien lo tenía abierto no pierde su siguiente cambio (revisión del conjunto).
+      ...((t.semanas ?? 1) > 1 ? [t.semanas] : []),
     ]),
   ]);
   const canon = JSON.stringify([iso(c.anchorStartDate), iso(c.closeDateOverride), fases]);

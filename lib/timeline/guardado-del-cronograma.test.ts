@@ -135,6 +135,17 @@ describe("T2 · versionDelCronograma — la huella de lo que el PUT escribe", ()
     expect(versionDelCronograma(b)).toBe(versionDelCronograma(a));
   });
 
+  it("⛔ sin tareas de varias semanas, la huella es la de antes del 20 nov (un Gantt abierto durante el deploy no pierde su cambio)", () => {
+    /* La edición que la pone en rojo: sumar `semanas` a la huella de toda tarea. Cambiaría la huella de todos los
+       cronogramas y quien lo tenía abierto al desplegar vería «Lo último que cambiaste no se guardó». El valor es el
+       que daba el código de producción (b340fccb) con este mismo árbol. */
+    const huellaDeAntes = "x6u29q378k-1ozmsh3moww";
+    expect(versionDelCronograma(arbol())).toBe(huellaDeAntes);
+    const conUna = arbol();
+    (conUna.phases[1].tasks[0] as { semanas?: number | null }).semanas = 1;
+    expect(versionDelCronograma(conUna)).toBe(huellaDeAntes);
+  });
+
   it("cambia con cualquier campo que el PUT escribe (y con mover una tarea de fase)", () => {
     /* La edición que la pone en rojo: dejar afuera de la huella un campo que el PUT escribe — una foto vieja
        que solo difiere en ese campo pasaría y pisaría. */
