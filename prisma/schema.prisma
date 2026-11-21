@@ -2071,6 +2071,8 @@ model ExploracionDeVenta {
   accesoALaEscala            AccesoALaEscala?
   /// Cuándo se presentó la escala y qué respondió el cliente (HitoDeLaEscala, 21 nov).
   hitosDeLaEscala            HitoDeLaEscala[]
+  /// Los hechos que dejaron las notas del equipo («Hablar con Nexus», 21 nov).
+  hechosDeLasNotas           HechoDeReunion[]           @relation("HechosDeLaNota")
 
   @@index([clientId])
   @@index([projectId])
@@ -8496,7 +8498,8 @@ model LecturaDeReunion {
 // del cliente de su reunión.
 model HechoDeReunion {
   id               String            @id @default(cuid())
-  // nullable porque un hecho puede salir de un texto sumado a mano, sin reunión: entonces lo ata `lecturaId` (CHECK)
+  // nullable porque un hecho puede salir de un texto sumado a mano, sin reunión (lo ata `lecturaId`), o de una nota del
+  // equipo (lo ata `notaClave`, con su preventa): CHECK, scripts/sql/2026-11-21-hechos-de-una-nota.sql
   sessionId        String?
   session          FirefliesSession? @relation("HechosDeLaReunion", fields: [sessionId], references: [id], onDelete: Cascade)
   // nullable: la fila de la cola (LecturaDeReunion); se puede rehacer o borrar sin perder lo aprendido
@@ -8505,6 +8508,13 @@ model HechoDeReunion {
   // nullable: la corrida «seguimiento-hechos» que lo escribió; borrarla no borra el hecho
   agentRunId       String?
   agentRun         AgentRun?         @relation("HechosDelAgente", fields: [agentRunId], references: [id], onDelete: SetNull)
+  // nullable: solo en un hecho que sale de una nota del equipo («Hablar con Nexus», 21 nov); la preventa donde se guardó
+  exploracionId    String?
+  exploracion      ExploracionDeVenta? @relation("HechosDeLaNota", fields: [exploracionId], references: [id], onDelete: Cascade)
+  /// La nota de «Lo que sabes del cliente» de la que sale (`sabido:<id>`). Con ella, `exploracionId` y `dichoPorEmail` (CHECK).
+  notaClave        String?
+  /// Quién del equipo lo dijo: el hecho lleva «lo dijo <persona>» en vez de la cita del cliente.
+  dichoPorEmail    String?
   /// El dueño de la reunión al leerla (`resolvedClientId`, el manual solo si no hay). INV45 lo vigila.
   clientId         String
   client           Client            @relation("HechosDelCliente", fields: [clientId], references: [id], onDelete: Cascade)
@@ -8554,6 +8564,7 @@ model HechoDeReunion {
   @@index([clientId, huella])
   @@index([mismoQueId])
   @@index([reemplazaAId])
+  @@index([exploracionId, notaClave])
 }
 
 /// Una reunión recurrente que Nexus lee cada semana (desde 1C). Sin filas, nada se lee solo.

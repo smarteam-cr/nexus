@@ -1220,3 +1220,7 @@
   borrador; nunca publica. «Cancelar» lo apaga sin tocar la nota.
 - **Presentado y aceptado** (`HitoDeLaEscala`, en el «Acceso» de La escala, 21 nov): cuándo se le presentó la escala al
   cliente y qué respondió (aceptó, aceptó con cambios o pidió ajustes), con quién y cuándo. Lo aceptado es lo de más peso.
+- **Hablar con Nexus** (botón de la preventa, 21 nov): un cajón donde alguien del equipo le cuenta a Nexus lo que sabe del
+  cliente, escrito o dictado. Nexus pregunta lo que falta (como mucho dos veces), guarda la nota en «Lo que sabes del
+  cliente» con su nombre, deja los hechos para la preventa, avisa si cambia La escala y propone cambios a las tarjetas,
+  cada uno con «Aplicar» y «No». También responde preguntas sobre la cuenta, con citas de sus reuniones y notas.

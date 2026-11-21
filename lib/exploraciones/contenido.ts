@@ -832,8 +832,8 @@ export interface EstadoDeExploracion {
   archivada: boolean;
 }
 
-/** El texto con que se compara un ítem de lista contra los que ya están confirmados. */
-function claveDeItemDeLista(clave: ClaveDeCasilla, item: unknown): string {
+/** El texto con que se compara un ítem de lista contra los que ya están confirmados (lo usa también «Hablar con Nexus»). */
+export function claveDeItemDeLista(clave: ClaveDeCasilla, item: unknown): string {
   switch (TIPO_DE_CASILLA[clave]) {
     case "metas":
       return normalizarTexto((item as Meta).que ?? "");
@@ -1091,6 +1091,12 @@ export const VALIDADOR_LIBRE: Validador = {
 /** Las operaciones que manda la pantalla. Su esquema estricto vive en esquemas.ts. */
 export type Operacion =
   | { op: "casilla"; clave: ClaveDeCasilla; valor?: unknown }
+  /**
+   * «Aplicar» de «Hablar con Nexus» (21 nov, lib/exploraciones/nexus-en-la-preventa.ts): lo propuesto para una casilla,
+   * con la regla del «Usar» de una sugerencia (`aplicarAlDestino`): una lista suma un ítem (sin repetirlo ni pasar su
+   * tope), unas cifras suman sus campos y un texto se reemplaza.
+   */
+  | { op: "sumarACasilla"; clave: ClaveDeCasilla; valor: unknown }
   | { op: "nivel"; dimensionId: string; estimado: EstimadoGuardado | null }
   | { op: "falta"; criterioId: string; estado: EstadoDeCriterio | null }
   | { op: "aExplorar"; dimensionId: string; valor: AExplorar | null }
@@ -1610,6 +1616,8 @@ function aplicarUna(estado: EstadoDeExploracion, op: Operacion, validez: Validez
       if (v === null) return { ok: false, error: "El valor no tiene la forma de esa casilla." };
       return { ok: true, estado: { ...estado, contenido: conCasilla(c, op.clave, v as ValoresDeCasillas[ClaveDeCasilla]) } };
     }
+    case "sumarACasilla":
+      return aplicarAlDestino(estado, { tipo: "casilla", clave: op.clave }, op.valor, validez, validador);
     case "nivel": {
       if (op.estimado) return aplicarAlDestino(estado, { tipo: "nivel", dimensionId: op.dimensionId }, op.estimado, validez, validador);
       const chequeo = { ...c.chequeo };

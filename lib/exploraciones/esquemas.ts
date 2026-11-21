@@ -710,6 +710,7 @@ export const ComoLlegoSchema: z.ZodType<ComoLlego> = z
 
 export const OperacionSchema = z.discriminatedUnion("op", [
   z.object({ op: z.literal("casilla"), clave: z.enum(CLAVES_DE_CASILLA), valor: z.unknown() }),
+  z.object({ op: z.literal("sumarACasilla"), clave: z.enum(CLAVES_DE_CASILLA), valor: z.unknown() }),
   z.object({ op: z.literal("nivel"), dimensionId: ID_DIMENSION, estimado: EstimadoSchema.nullable() }),
   z.object({ op: z.literal("falta"), criterioId: ID_CRITERIO, estado: EstadoDeCriterioSchema.nullable() }),
   z.object({ op: z.literal("aExplorar"), dimensionId: ID_DIMENSION, valor: AExplorarSchema.nullable() }),

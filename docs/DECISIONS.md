@@ -7709,7 +7709,9 @@ escribió entero sin el sondeo y quedó apagado: hasta que Elías lo corra y dec
 
 - **Un hecho es una frase con su cita literal verificada**, de quién es (la cuenta o un proyecto vinculado), su tipo y su
   estado (`HechoDeReunion`). Lo escribe la lectura de cada reunión; el código decide a dónde va. *Por qué:* el modelo
-  clasifica y el código rutea (el eje del DESTINO, arriba).
+  clasifica y el código rutea (el eje del DESTINO, arriba). Desde el 2026-11-21 también lo deja una **nota del equipo**
+  contada en «Hablar con Nexus», con las mismas reglas de verificación, `quien = smarteam`, quién lo dijo
+  (`dichoPorEmail`) y la preventa de destino (ver «Hablar con Nexus en la preventa», al final).
 - **Los tipos, con la prueba de admisión** (quién actúa · dónde aterriza · qué pasa si nadie lo hace):
   - `cuenta` (una herramienta, la estructura, un reto): el CSE confirma · propuesta a la ficha · la ficha no se entera.
   - `persona`: el CSE · la ficha, si es de la cuenta, o el kickoff › equipo, si es del proyecto · los documentos quedan
@@ -16047,3 +16049,83 @@ idea es aprovechar a Claude, no pisarlo»). Este es el mínimo viable: UN lugar 
   ruta sigue en el servidor, pero el aviso de «listo» se pierde); que el agente del Resumen le dé a la nota el peso que se
   le pide (se le dice; el código verifica la cita, no el peso); que lo dicho en una nota sea cierto: lo firma quien la
   escribió, y por eso adentro se ve su nombre.
+
+## Hablar con Nexus en la preventa: preguntar, responder, decir adónde va y dejar hechos (2026-11-21)
+
+Elías, 21 nov: la siguiente pieza después del agente de impacto, para simplificar cómo el equipo le da contexto a Nexus.
+Vive adentro de Nexus (un cajón que habla con Claude por `lib/anthropic.ts`), primero en la preventa, y propone: la nota
+se guarda siempre y los cambios a las tarjetas se aplican con un clic. Convive con «Agregar algo que sabes», que no se
+quita. El mismo día, Elías sumó que también RESPONDA preguntas sobre la cuenta.
+
+- **Dónde está:** el botón «Hablar con Nexus» arriba de la barra de piezas de la preventa (todas las piezas). No en la
+  escala de la cuenta ni en la exploración de un proyecto (`lugar !== "preventa"` no lo pinta; las rutas responden 400).
+- **Las cuatro acciones, escritas para reusarse** (lib/exploraciones/nexus-en-la-preventa-server.ts; el núcleo,
+  `lib/chat-de-nexus/`): (1) leer el contexto de la cuenta, en dos lecturas: para conversar, las notas del equipo, lo que
+  aceptó el cliente, la página de La escala como la ve el cliente y lo que tiene hoy cada tarjeta (corto: va en cada
+  vuelta); para RESPONDER una pregunta, eso mismo más las reuniones de la cuenta con su transcripción (abajo); (2) guardar lo que dijo una persona: la operación `nota` de
+  siempre, desde la pantalla, con quién y cuándo; (3) proponer un cambio a una tarjeta; (4) disparar el agente de
+  impacto con su cuenta de 10 s. Otro lugar (la ficha del cliente, un documento) pone su contexto y sus destinos
+  (`ContextoParaNexus`) y su validación (`valorValido`); un conector «afuera» llamaría las mismas rutas.
+- **El código decide, no el modelo:** como mucho dos rondas de preguntas y dos preguntas por ronda, sin voseo; después,
+  el pedido dice «YA NO PREGUNTES» y una pregunta de más se toma como «listo, sin cambios» (la nota se guarda igual).
+  Cada cambio va a una tarjeta de la lista (las del Resumen con Negocio y Embudo, más objeciones y particularidades:
+  `CASILLAS_PARA_NEXUS`), con un valor que pasa el esquema de la tarjeta (`VALIDADOR_ESTRICTO.valorDelDestino`, el mismo
+  del «Usar») y una cita que la persona dijo, palabra por palabra (una respuesta corta, «200 al mes», vale entera). Sin
+  cita no hay cambio. Lo que no pasa se descarta y se cuenta.
+- **Responder una pregunta sobre la cuenta** (lib/chat-de-nexus/respuesta.ts; Elías, 21 nov: «¿qué dijo Centauro de la
+  cobranza?», «¿quién decide?»). La vuelta de la conversación decide si la persona cuenta algo o pregunta
+  (`tipo: "consulta"`), y una SEGUNDA llamada responde. Sin RAG ni embeddings: lee entero lo de esa cuenta y nada más:
+  las notas del equipo, las tarjetas, lo aceptado y las reuniones con transcripción, por el chokepoint
+  (`reunionesDeLaCuenta`, lib/exploraciones/fuentes.ts: los ids salen de `getClientSessions` de SU empresa; invariante
+  1). Si no caben (280.000 caracteres, unos 75.000 tokens), van primero las más recientes, enteras, y la respuesta dice
+  cuántas quedaron afuera (y si hay más viejas que pasan de las 60 que se buscan). No entran las que se sacaron de la
+  exploración («Fuera»). **Las reuniones solo si quien pregunta tiene acceso a la empresa** (`guardAccessToClient`, en
+  la ruta): una preventa puede ser de una empresa que ya es cliente (una venta cruzada) y el permiso de preventa no da
+  acceso a sus reuniones; sin acceso, responde con lo de la preventa y lo dice (lo encontró la segunda revisión del 21
+  nov). Cada turno de una reunión va con su lado («cliente» o «Smarteam», por el nombre de quien habla contra el equipo,
+  `hablanteDelEquipo`); en una de puertas adentro todos son Smarteam. El código verifica cada cita palabra por palabra
+  con el verificador del análisis de la venta (`verificarCita`: el modelo copia sin los «eh»; buscar el pedazo exacto
+  tiraba citas ciertas, como en Camosa), muestra el texto de la transcripción y dice de quién es por el turno; una
+  respuesta sin ninguna cita que se sostenga se muestra «tómalo con cuidado»; sin respuesta en las fuentes, «No lo sé»;
+  una respuesta que se cortó o no se entiende dice «no pude», nunca «no lo sé». Lo preguntado no va a la nota y la respuesta
+  no cuenta como ronda de preguntas. Las fuentes van con caché de prompt (la segunda pregunta en cinco minutos las relee
+  a una décima). Medido aparte (`modo: chat-de-nexus-respuesta`, origen `chat:preventa:respuesta`) y con su tope: 20
+  preguntas por persona en el día.
+- **La nota son las palabras de la persona**, sus mensajes uno por renglón (`notaDeLaConversacion`), nunca un resumen
+  del modelo: lleva «lo dijo <persona>» y tiene que ser cierto.
+- **«Aplicar» es la regla del «Usar»** (operación nueva `sumarACasilla`, contenido.ts → `aplicarAlDestino`): una lista
+  suma un ítem sin repetirlo ni pasar su tope, unas cifras suman sus campos, un texto se reemplaza (el panel muestra lo
+  que reemplaza, y en Negocio y Embudo la cifra que pisa). Lo que ya está en la tarjeta dice «Ya está» en vez de
+  «Aplicar». Pasa por el PATCH de siempre, así que lo que la preventa manda a la ficha sale igual. Con un 409 se
+  reintenta una lista (suma sin repetir); unas cifras, solo si esos campos no cambiaron entretanto; un texto, solo si no
+  cambió (reintento.ts: la corrección de otra persona no se pisa).
+- **La nota deja hechos como una reunión** (lib/seguimiento/hechos/de-una-nota.ts; los escribe `escribirHechosDeUnaNota`,
+  el único escritor): el modelo los propone en la misma vuelta (una sola llamada) y se verifican con `leerSalidaDeHechos`
+  contra la nota GUARDADA. Salen del último «listo» que dejó el servidor en el `AgentRun` de la conversación, no de lo
+  que mande el navegador, y solo si la nota la guardó quien llama. Distinto de una reunión, a propósito: `quien =
+  smarteam`, `citaFuente = texto`, `dichoPorEmail`, y destino la preventa donde se contó, delegado en ella (no va a la
+  ficha ni levanta alertas: una nota no es palabra del cliente). Quedan atados a la corrida de la que salieron
+  (`agentRunId`). La misma nota guardada dos veces no los duplica. **Hoy ninguna pantalla ni agente los lee** (como los
+  de una reunión que delegan en la preventa): son la base para migrar los 8 lugares de notas a «Agregar contexto», y el
+  panel lo dice («Todavía ninguna pantalla los muestra»). Con
+  `SEGUIMIENTO_HECHOS` apagada (la base local, por defecto) no se escriben. SQL `2026-11-21-hechos-de-una-nota.sql`:
+  `exploracionId`, `notaClave` y `dichoPorEmail`, y el CHECK de dónde sale un hecho suma la nota (más permisivo que el
+  de antes); otro CHECK exige su preventa y su autor. INV45 suma: un hecho de nota es del cliente de su preventa.
+- **Medido y con tope:** cada vuelta es un `AgentRun` (`modo: chat-de-nexus`, la conversación en `filters`) y gasto de
+  IA con origen `chat:preventa`, al agente de la exploración. Sonnet 4.6. Topes en `TOPES`: 6 vueltas por conversación y
+  60 por persona en el día de Costa Rica (el corte de `inicioDelDiaCr`, el del presupuesto de IA); pasado el tope, 429 con
+  qué hacer. Se cuentan y después se crea la corrida, sin bloqueo: dos pedidos juntos pueden pasarse por uno, y el id de
+  la conversación lo pone el navegador; el tope del día acota el gasto.
+- **Si la IA falla** al leer lo que contaste, NO se guarda nada (podía ser una pregunta): el texto vuelve al cuadro con
+  «Nexus no pudo leerlo esta vez». Si falla la revisión de La escala, el panel dice «No pude revisar si esto cambia La
+  escala», nunca «no cambia».
+- **«Ya está en la tarjeta»** se decide con la misma regla que el guardado (`claveDeItemDeLista`: una meta con el mismo
+  «qué» es la misma meta), así el panel no dice «Aplicado» sin haber cambiado nada.
+- **Cerrar el cajón** no pierde la conversación, lo propuesto ni lo aplicado (viven en el componente de la preventa, no
+  en el cajón); con la cuenta regresiva a la vista, la cancela, y al volver a abrir no arranca otra.
+- **Lo que no queda garantizado:** que Sonnet pregunte bien y no de más, distinga bien contar de preguntar y elija la
+  tarjeta correcta (no se midió con conversaciones reales; por eso cada cambio espera el clic); que el lado de cada turno
+  sea el correcto cuando Meet muestra un solo nombre (queda «no se sabe») o un nombre del equipo que no calza con el
+  registrado (en una reunión con el cliente puede salir como «del cliente»); que lo que quedó afuera por el tope no tenga
+  la respuesta (la respuesta lo avisa); los hechos de una nota que se edita o se borra no se rehacen ni se retiran; y los
+  mensajes de la conversación no se guardan: cerrar el cajón los pierde (la nota y lo propuesto quedan).

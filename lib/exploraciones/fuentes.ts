@@ -26,6 +26,9 @@ import { getClientSessions } from "@/lib/sessions/project-sources";
 import { memoriaDeLaCuenta } from "@/lib/memoria";
 import { buildInternalDomainsSet } from "@/lib/sessions/categorize";
 import { esReunionDePuertasAdentro } from "@/lib/sessions/candidatas-internas";
+import { comprimirConversacion } from "@/lib/sessions/conversacion";
+import { hablanteDelEquipo } from "@/lib/seguimiento/hechos/salida";
+import type { ReunionDeLaCuenta } from "@/lib/chat-de-nexus/respuesta";
 import { etiquetaDeSala, prefijoDeSala } from "@/lib/sessions/etiqueta-de-sala";
 import { queTieneSinTranscripcion } from "@/lib/sessions/reunion-a-mano";
 import { salesPresenceEmails } from "@/lib/handoff/sales-presence";
@@ -1119,4 +1122,55 @@ export async function transcripcionesDeLaExploracion(
     reuniones: leidas.map((r) => ({ fuente: r.fuente, etiqueta: r.etiqueta, ...(equipos[r.fuente] ? { equipo: equipos[r.fuente] } : {}) })),
     sesiones: leidas.map((r) => r.id),
   };
+}
+
+/**
+ * Las reuniones de la CUENTA con su transcripción entera, la más nueva primero («Hablar con Nexus» responde preguntas,
+ * 21 nov). Por el chokepoint (invariante #1): los ids salen de `getClientSessions` de esta empresa (solo las que ya
+ * ocurrieron) y recién ahí se lee el texto. Cada turno lleva de qué lado es, por el nombre de quien habla contra el equipo
+ * de Smarteam (`hablanteDelEquipo`: el nombre y el apellido de alguien del equipo es Smarteam; dos palabras que no calzan,
+ * el cliente; un solo nombre, no se sabe). En una de puertas adentro todos son de Smarteam: lo dicho ahí no es palabra del
+ * cliente, aunque un nombre no calce con el del equipo. Las que se sacaron de la exploración («Fuera», `fuera`) no van.
+ * Sin tope de caracteres: el tope lo pone quien arma las fuentes (lib/chat-de-nexus/respuesta.ts › `armarLasFuentes`).
+ * `yMas`: hay reuniones todavía más viejas que no se buscaron (pasan de `cuantas`).
+ */
+export async function reunionesDeLaCuenta(
+  clientId: string,
+  o: { fuera?: readonly string[]; cuantas?: number } = {},
+): Promise<{ reuniones: ReunionDeLaCuenta[]; yMas: boolean }> {
+  const cuantas = o.cuantas ?? 60;
+  const fuera = new Set(o.fuera ?? []);
+  const encontradas = await getClientSessions(clientId, { take: cuantas + 1 });
+  const yMas = encontradas.length > cuantas;
+  const sesiones = encontradas.slice(0, cuantas).filter((x) => !fuera.has(`meet:${x.id}`));
+  if (!sesiones.length) return { reuniones: [], yMas };
+  const [filas, internos, equipo] = await Promise.all([
+    prisma.firefliesSession.findMany({
+      // Ids que el chokepoint ya filtró por dueño y por fecha.
+      where: { id: { in: sesiones.map((s) => s.id) } },
+      select: { id: true, title: true, date: true, transcript: true },
+    }),
+    dominiosInternos(),
+    prisma.teamMember.findMany({ select: { name: true } }).then((t) => t.map((x) => x.name).filter((n): n is string => !!n?.trim())),
+  ]);
+  const porId = new Map(filas.map((f) => [f.id, f]));
+  const out: ReunionDeLaCuenta[] = [];
+  for (const s of sesiones) {
+    const f = porId.get(s.id);
+    const transcripcion = (f?.transcript ?? "").trim();
+    if (!f || !transcripcion) continue;
+    const { turnos } = comprimirConversacion(transcripcion, Number.MAX_SAFE_INTEGER);
+    if (!turnos.length) continue;
+    const puertasAdentro = esReunionDePuertasAdentro({ participants: s.participants }, internos);
+    out.push({
+      titulo: f.title,
+      fecha: hoyEnCostaRica(f.date),
+      puertasAdentro,
+      turnos: turnos.map((t) => {
+        const delEquipo = puertasAdentro ? true : hablanteDelEquipo(t.hablante, equipo);
+        return { hablante: t.hablante, deQuien: delEquipo === true ? "smarteam" : delEquipo === false ? "cliente" : null, texto: t.texto };
+      }),
+    });
+  }
+  return { reuniones: out, yMas };
 }

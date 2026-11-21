@@ -98,6 +98,7 @@ import Resumen, { lineasDe } from "./Resumen";
 import RevisarSugerencias from "./RevisarSugerencias";
 import { MirarHubspot } from "./MirarHubspot";
 import RielDePiezas, { Sesiones, type FilaDelRiel } from "./RielDePiezas";
+import HablarConNexus from "./HablarConNexus";
 import { EVENTO_DEL_RECORRIDO, type AccionDelRecorrido } from "@/lib/recorridos/tipos";
 
 /** Qué es cada pieza, en una línea, debajo de su nombre. Exploración y lo de la cuenta llevan su propio encabezado. */
@@ -825,6 +826,8 @@ export default function LienzoDeExploracion({
       <MirarHubspot />
       <div ref={raiz} className="flex-1 bg-surface-muted lg:grid lg:grid-cols-[14.5rem_minmax(0,1fr)] xl:grid-cols-[14.5rem_minmax(0,1fr)_18.75rem]">
         <aside className="border-b border-line bg-surface px-3 py-4 lg:sticky lg:top-0 lg:h-[calc(100vh-3.5rem)] lg:self-start lg:overflow-y-auto lg:border-b-0 lg:border-r lg:py-4">
+          {/* «Hablar con Nexus» (21 nov): a la vista en todas las piezas de la preventa. */}
+          <HablarConNexus />
           <RielDePiezas
             paso={paso}
             onElegir={setPaso}
