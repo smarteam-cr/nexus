@@ -229,7 +229,7 @@ main { max-width: 1040px; margin: 0 auto; padding-block: 32px 64px;
 .ln-pq li { padding: 8px 10px; background: var(--warn-bg); border: 1px solid var(--warn-line); border-radius: 8px; color: var(--fg); font-size: 13.5px; }
 .ln-pq li b { color: var(--warn-ink); font-variant-numeric: tabular-nums; margin-right: 4px; }
 .ln-shas { display: flex; flex-wrap: wrap; gap: 4px; }
-.ln-hoy { padding: 14px 0; }
+.ln-hoy { padding: 14px 0; scroll-margin-top: calc(env(safe-area-inset-top, 0px) - 8px); }
 .ln-hoy .ln-f { padding-top: 16px; font-size: 13px; font-weight: 700; color: var(--brand-ink-2); letter-spacing: .04em; text-transform: uppercase; }
 .ln-hoy .ln-p::after { content: ""; display: block; width: 18px; height: 18px; margin: 16px auto 0; border-radius: 50%; background: var(--brand); box-shadow: 0 0 0 4px var(--bg), 0 0 0 7px var(--brand-soft); }
 .ln-hoy-caja { background: var(--brand-bg); border: 1px solid var(--brand-line); border-radius: 12px; padding: 12px 16px; display: grid; gap: 4px; }
@@ -960,9 +960,10 @@ main { max-width: 1040px; margin: 0 auto; padding-block: 32px 64px;
 
     // «Ir a hoy»: el botón fijo aparece cuando «Hoy» no está a la vista, con la flecha hacia donde está.
     var cta = document.getElementById('ir-hoy');
-    function irAHoy() {
+    // «Hoy» queda arriba, pegado al borde superior, y de ahí para abajo lo que sigue (20 nov, pedido de Elías).
+    function irAHoy(alAbrir) {
       if (paneles.linea.hidden) elegir('linea', true);
-      hoy.scrollIntoView({ block: 'start', behavior: suave ? 'smooth' : 'auto' });
+      hoy.scrollIntoView({ block: 'start', behavior: suave && alAbrir !== true ? 'smooth' : 'auto' });
     }
     cta.addEventListener('click', irAHoy);
     var pend = false;
@@ -980,8 +981,10 @@ main { max-width: 1040px; margin: 0 auto; padding-block: 32px 64px;
   }
 
   var inicial = (location.hash || '').slice(1);
-  if (inicial === 'hoy' && lineaIrAHoy) { elegir('linea', false); setTimeout(lineaIrAHoy, 0); }
-  else elegir(PESTANAS.some(function (p) { return p.id === inicial; }) ? inicial : 'linea', false);
+  var pestana = PESTANAS.some(function (p) { return p.id === inicial; }) ? inicial : 'linea';
+  elegir(pestana, false);
+  // Al abrir en la línea de tiempo, la vista arranca en «Hoy»: arriba, y de hoy para abajo.
+  if (pestana === 'linea' && lineaIrAHoy) requestAnimationFrame(function () { lineaIrAHoy(true); lineaRevisar(); });
   lineaRevisar();
 })();
 </script>
