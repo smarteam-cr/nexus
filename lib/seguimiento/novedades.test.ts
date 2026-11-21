@@ -1,15 +1,18 @@
 /**
  * lib/seguimiento/novedades.test.ts — las novedades se CALCULAN (DECISIONS «Hechos, enrutador y novedades»): solo en
- * documentos con contenido, sin vencidos, una por huella, como mucho 5 por documento, y lo decidido no vuelve.
+ * documentos con contenido, sin vencidos, una por huella, una fila por reunión (como mucho 5 por documento), lo que dijo
+ * el cliente primero, y lo decidido no vuelve.
  */
 import { describe, expect, it } from "vitest";
 import {
-  TOPE_DE_NOVEDADES_POR_PIEZA,
+  TOPE_DE_REUNIONES_POR_PIEZA,
+  agruparPorReunion,
   conteoDeNovedades,
   novedadesEnPalabras,
   novedadesPorPieza,
   pideDecisionDeNovedad,
   reunionesConProcesoHoy,
+  sinNovedadesADocumentosVacios,
   type HechoParaNovedades,
 } from "./novedades";
 
@@ -69,15 +72,43 @@ describe("novedadesPorPieza", () => {
     expect(novedadesPorPieza([hecho()], ["kickoff"], AHORA)).toEqual({});
   });
 
-  it("⛔ como mucho 5 por documento, las más recientes primero", () => {
-    const hechos = Array.from({ length: TOPE_DE_NOVEDADES_POR_PIEZA + 3 }, (_, i) =>
-      hecho({ id: `h${i}`, huella: `huella-${i}`, fechaDeLaReunion: new Date(+AHORA - (i + 1) * DIA), createdAt: new Date(+AHORA - (i + 1) * DIA) }),
+  it("⛔ como mucho 5 reuniones por documento, las más recientes primero a igual peso", () => {
+    const hechos = Array.from({ length: TOPE_DE_REUNIONES_POR_PIEZA + 3 }, (_, i) =>
+      hecho({ id: `h${i}`, sessionId: `s${i}`, huella: `huella-${i}`, fechaDeLaReunion: new Date(+AHORA - (i + 1) * DIA), createdAt: new Date(+AHORA - (i + 1) * DIA) }),
     );
     const r = novedadesPorPieza(hechos, ["planning"], AHORA);
-    expect(r.planning.items).toHaveLength(TOPE_DE_NOVEDADES_POR_PIEZA);
+    expect(r.planning.grupos).toHaveLength(TOPE_DE_REUNIONES_POR_PIEZA);
     expect(r.planning.mas).toBe(3);
     expect(r.planning.items.map((n) => n.hechoId)).toEqual(["h0", "h1", "h2", "h3", "h4"]);
-    expect(conteoDeNovedades(r)).toEqual({ planning: TOPE_DE_NOVEDADES_POR_PIEZA });
+    expect(conteoDeNovedades(r)).toEqual({ planning: TOPE_DE_REUNIONES_POR_PIEZA });
+  });
+
+  it("⛔ una fila por reunión: lo que una reunión le deja al documento va junto, y cuenta cada novedad", () => {
+    const hechos = Array.from({ length: 7 }, (_, i) => hecho({ id: `h${i}`, huella: `huella-${i}` }));
+    const r = novedadesPorPieza(hechos, ["planning"], AHORA);
+    expect(r.planning.grupos).toHaveLength(1);
+    expect(r.planning.grupos[0]).toMatchObject({ clave: "s1", reunion: { id: "s1", titulo: "Seguimiento semanal" } });
+    expect(r.planning.grupos[0].items).toHaveLength(7);
+    expect(r.planning.mas).toBe(0);
+    expect(conteoDeNovedades(r)).toEqual({ planning: 7 });
+  });
+
+  it("⛔ primero lo que dijo el cliente (acuerdos, después resultados), al final lo que dijo Smarteam", () => {
+    const resultado = { tipo: "resultado", destinos: [{ clave: "kickoff.metricas_exito", estado: "pendiente" }] };
+    const hechos = [
+      hecho({ id: "smt", sessionId: "s-a", huella: "a", quien: "smarteam", citaFuente: "transcripcion", fechaDeLaReunion: new Date(+AHORA - DIA), createdAt: new Date(+AHORA - DIA) }),
+      hecho({ id: "res", sessionId: "s-b", huella: "b", quien: "cliente", citaFuente: "transcripcion", ...resultado, fechaDeLaReunion: new Date(+AHORA - 2 * DIA) }),
+      hecho({ id: "acu", sessionId: "s-c", huella: "c", quien: "cliente", citaFuente: "transcripcion", fechaDeLaReunion: new Date(+AHORA - 3 * DIA) }),
+      hecho({ id: "sin", sessionId: "s-d", huella: "d", quien: null, fechaDeLaReunion: new Date(+AHORA - DIA) }),
+    ];
+    const r = novedadesPorPieza(hechos, ["planning", "kickoff"], AHORA);
+    expect(r.planning.items.map((n) => n.hechoId)).toEqual(["acu", "sin", "smt"]);
+    expect(r.kickoff.items.map((n) => n.hechoId)).toEqual(["res"]);
+    // Dentro de una reunión, igual: el acuerdo del cliente arriba de lo que dijo Smarteam.
+    const misma = novedadesPorPieza(hechos.map((h) => ({ ...h, sessionId: "s-misma" })), ["planning"], AHORA);
+    expect(misma.planning.grupos).toHaveLength(1);
+    expect(misma.planning.grupos[0].items.map((n) => n.hechoId)).toEqual(["acu", "sin", "smt"]);
+    expect(agruparPorReunion([])).toEqual([]);
   });
 
   it("el mismo hecho dicho en dos reuniones (la misma huella) es una novedad, con la reunión más reciente", () => {
@@ -165,5 +196,24 @@ describe("reunionesConProcesoHoy (Procesos: «Volver a mapear»)", () => {
     expect(reunionesConProcesoHoy([proceso({ citaFuente: "notas" })], null, AHORA)).toBe(0);
     expect(reunionesConProcesoHoy([proceso({ citaFuente: "texto" })], null, AHORA)).toBe(0);
     expect(reunionesConProcesoHoy([proceso({ citaFuente: "transcripcion" })], null, AHORA)).toBe(1);
+  });
+});
+
+describe("sinNovedadesADocumentosVacios (las novedades viejas a documentos sin contenido, 2026-11-20)", () => {
+  it("quita solo los destinos de novedad pendientes de un documento sin contenido", () => {
+    const destinos = [
+      { clave: "planning.pipelines", estado: "pendiente" },
+      { clave: "kickoff.alcance", estado: "pendiente" },
+      { clave: "diagnosis.alcance_acordado", estado: "usado" },
+      { clave: "ficha", estado: "delegado" },
+    ];
+    const r = sinNovedadesADocumentosVacios(destinos, new Set(["kickoff"]));
+    expect(r?.quitadas).toEqual(["planning.pipelines"]);
+    expect(r?.destinos.map((d) => d.clave)).toEqual(["kickoff.alcance", "diagnosis.alcance_acordado", "ficha"]);
+  });
+
+  it("sin nada que quitar, null", () => {
+    expect(sinNovedadesADocumentosVacios([{ clave: "planning.pipelines", estado: "pendiente" }], new Set(["planning"]))).toBeNull();
+    expect(sinNovedadesADocumentosVacios([{ clave: "planning.pipelines", estado: "desestimado" }], new Set())).toBeNull();
   });
 });

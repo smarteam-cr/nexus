@@ -7849,6 +7849,30 @@ escribió entero sin el sondeo y quedó apagado: hasta que Elías lo corra y dec
   decía a dónde había ido. Delegado y no pendiente porque la preventa ya propone sus tarjetas desde esa misma reunión:
   proponerle otra vez lo mismo sería repetir la lectura. Cuando una nota del equipo deje hechos (paso 2 de «Agregar
   contexto»), ese hecho sí tendrá que llegar a la tarjeta, porque la preventa no lee las notas: este destino es la puerta.
+- **Las novedades, para que alguien las revise (2026-11-20, Elías: «Sí, toda»).** Medido ese día: 1.161 novedades
+  pendientes de documentos en 57 proyectos y 20 decisiones de 3 personas en un mes. Cinco cambios, antes del botón
+  «Agregar contexto»:
+  1. **A un documento sin contenido no se le propone nada** (el enrutador, con `piezasConContenidoDelProyecto`, el mismo
+     criterio que el riel). Cuando se genere, lee la memoria del proyecto, con la minuta de esa reunión; el hecho queda en
+     la tarjeta y en la memoria interna. *Por qué:* la mitad de las novedades iba a Planificación y Diagnóstico de
+     proyectos que no los tenían, nunca se mostraban y vencían; el día que alguien generara el documento aparecían todas.
+     Las de antes las quita `scripts/novedades-a-documentos-vacios.ts` (dry-run; el 20 nov, 550 hechos), con la escritura
+     en `hechos-server.ts › quitarNovedadesADocumentosVacios`: solo los destinos, sin cambiar el estado del hecho.
+  2. **Una fila por reunión y documento** (`grupos`, `agruparPorReunion`): lo que una reunión le deja a un documento se
+     ve junto, y la fila suma «Listo, todas» y «Ninguna aplica». Cada novedad sigue a la vista adentro con sus tres
+     acciones de siempre («Cambiar con el chat», «Listo», «No aplica»), quién lo dijo y su cita: nada se esconde. El chat
+     sigue llevando UNA novedad por vez, a su sección. *Por qué no todas juntas al chat:* la revisión del 20 nov midió
+     que seis novedades con sus citas pasan el tope de 4.000 caracteres del mensaje, que una reunión deja cosas para
+     secciones distintas (el chat recibe solo una) y que al aplicar quedaban todas usadas aunque el chat descartara
+     algunas. El tope pasa de 5 novedades a 5 reuniones por documento.
+  3. **Primero lo que dijo el cliente** (`pesoDeLaNovedad`): sus acuerdos, después sus resultados; lo sin comprobar en el
+     medio y lo que dijo Smarteam al final; a igual peso, lo más reciente.
+  4. **En «Para ti», por documento** (`lib/para-ti/fuentes/novedades-de-documentos.ts`): «Planificación de FACO: 2
+     reuniones con novedades», con el enlace al documento, solo de los documentos que puedes decidir. Cuenta lo mismo que
+     la franja. «Lo que dejaron tus reuniones» sigue contándolas por reunión: no se sacó nada.
+  5. **Una meta en «Uso de Nexus»** (`lib/uso/meta-de-las-novedades.ts`): que venza menos de la mitad. Se mide sobre lo
+     que nació hace 30 a 60 días, porque una novedad vence a los 30 y en la ventana de los últimos 30 casi nada llega a
+     vencer.
 
 ## Los documentos leen la memoria y solo las reuniones elegidas (2026-10-09)
 

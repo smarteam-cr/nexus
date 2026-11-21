@@ -39,6 +39,9 @@ vi.mock("@/lib/lecturas/personas", () => personas);
 // La preventa que lee la reunión (el destino «preventa»): por defecto, ninguna. Sin el mock, el agente entero se carga.
 const preventa = vi.hoisted(() => ({ preventasQueLeenLaReunion: vi.fn(async (): Promise<string[]> => []) }));
 vi.mock("@/lib/exploraciones/agente", () => preventa);
+// Los documentos con contenido de cada proyecto vinculado: por defecto, todos (a uno vacío no se le propone nada).
+const contenido = vi.hoisted(() => ({ piezasConContenidoDelProyecto: vi.fn<(projectId: string) => Promise<string[]>>(async () => ["kickoff", "diagnosis", "planning", "tech-requirements"]) }));
+vi.mock("./novedades-server", () => contenido);
 const destinos = vi.hoisted(() => ({
   proponerFichaDesdeHechos: vi.fn(async () => ({ status: "ok", cambiados: 1, campos: ["herramientasActuales"] })),
   levantarQuejaDeLaLectura: vi.fn(async () => ({ estado: "creada", alertaId: "alerta-1" })),
@@ -64,7 +67,7 @@ vi.mock("@/lib/projects/etapa-desde-reunion-server", () => ({
 
 import { armarTextoDeLaReunion } from "./hechos/texto";
 import { HERRAMIENTA_DE_HECHOS, SIN_GRAVEDAD, SIN_TEMA } from "./hechos/pedido";
-import { alCambiarDeDueno, estadoDeLasCorridas, leerHechosDeLaReunion, leidaSinLaTranscripcion, olvidarHechosMirado, reintentarHechos } from "./hechos-server";
+import { alCambiarDeDueno, estadoDeLasCorridas, leerHechosDeLaReunion, leidaSinLaTranscripcion, olvidarHechosMirado, quitarNovedadesADocumentosVacios, reintentarHechos } from "./hechos-server";
 
 const AHORA = new Date("2026-10-10T15:00:00Z");
 const TRANSCRIPT = [
@@ -213,6 +216,19 @@ describe("la lectura de hechos", () => {
     personas.responsableDeLaPreventaViva.mockRejectedValueOnce(new Error("la base se cortó"));
     await leerHechosDeLaReunion("s1", { ahora: AHORA });
     expect(destinos.proponerFichaDesdeHechos).not.toHaveBeenCalled();
+  });
+
+  it("⛔ a un documento sin contenido no se le propone una novedad: el acuerdo queda en la tarjeta y la memoria", async () => {
+    contenido.piezasConContenidoDelProyecto.mockResolvedValue(["kickoff"]);
+    await leerHechosDeLaReunion("s1", { ahora: AHORA });
+    expect(escritos().find((f) => f.tipo === "acuerdo")!.destinos).toEqual([]);
+    contenido.piezasConContenidoDelProyecto.mockResolvedValue(["kickoff", "diagnosis", "planning", "tech-requirements"]);
+  });
+
+  it("si no se puede saber qué documentos tienen contenido, se propone como antes", async () => {
+    contenido.piezasConContenidoDelProyecto.mockRejectedValueOnce(new Error("la base se cortó"));
+    await leerHechosDeLaReunion("s1", { ahora: AHORA });
+    expect(escritos().find((f) => f.tipo === "acuerdo")!.destinos.map((d) => d.clave)).toEqual(["planning.pipelines"]);
   });
 
   it("en un prospecto cuya preventa lee la reunión, lo de la cuenta nace delegado en la preventa (y no va a la ficha)", async () => {
@@ -397,5 +413,41 @@ describe("las corridas, el reintento y el cambio de dueño", () => {
     const { data } = db.hechoDeReunion.updateMany.mock.calls[0][0];
     expect(data).toMatchObject({ estado: "pendiente", decididoPorEmail: null });
     expect((data.destinos as { estado: string }[]).map((d) => d.estado)).toEqual(["desestimado", "delegado"]);
+  });
+});
+
+describe("la limpieza de las novedades a documentos sin contenido (2026-11-20)", () => {
+  const T = new Date("2026-11-01T12:00:00.000Z");
+  const filas = [
+    { id: "a", projectId: "p1", updatedAt: T, destinos: [{ clave: "planning.pipelines", estado: "pendiente" }, { clave: "kickoff.alcance", estado: "desestimado" }] },
+    { id: "b", projectId: "p1", updatedAt: T, destinos: [{ clave: "kickoff.alcance", estado: "pendiente" }] },
+    { id: "c", projectId: "p2", updatedAt: T, destinos: [{ clave: "planning.pipelines", estado: "pendiente" }] },
+  ];
+  const porProyecto: Record<string, string[]> = { p1: ["kickoff"], p2: ["planning"] };
+
+  it("sin apply solo cuenta: no escribe nada", async () => {
+    db.hechoDeReunion.findMany.mockResolvedValue(filas);
+    contenido.piezasConContenidoDelProyecto.mockImplementation(async (p: string) => porProyecto[p] ?? []);
+    db.hechoDeReunion.updateMany.mockClear();
+    const r = await quitarNovedadesADocumentosVacios({ apply: false });
+    expect(r).toMatchObject({ hechos: 3, proyectos: 2, conNovedadesAVacios: 1, porPieza: { planning: 1 }, escritas: 0, saltadas: 0 });
+    expect(db.hechoDeReunion.updateMany).not.toHaveBeenCalled();
+  });
+
+  it("⛔ con apply escribe SOLO los destinos (el hecho sigue pendiente), con la marca de la fila; lo cambiado por otro se salta", async () => {
+    db.hechoDeReunion.findMany.mockResolvedValue(filas);
+    contenido.piezasConContenidoDelProyecto.mockImplementation(async (p: string) => porProyecto[p] ?? []);
+    db.hechoDeReunion.updateMany.mockClear();
+    db.hechoDeReunion.updateMany.mockResolvedValueOnce({ count: 1 });
+    const r = await quitarNovedadesADocumentosVacios({ apply: true });
+    expect(db.hechoDeReunion.updateMany).toHaveBeenCalledTimes(1);
+    const [arg] = db.hechoDeReunion.updateMany.mock.calls[0] as [{ where: unknown; data: Record<string, unknown> }];
+    expect(arg.where).toEqual({ id: "a", updatedAt: T });
+    expect(Object.keys(arg.data)).toEqual(["destinos"]);
+    expect(arg.data.destinos).toEqual([expect.objectContaining({ clave: "kickoff.alcance", estado: "desestimado" })]);
+    expect(r).toMatchObject({ escritas: 1, saltadas: 0 });
+    db.hechoDeReunion.updateMany.mockResolvedValueOnce({ count: 0 });
+    expect(await quitarNovedadesADocumentosVacios({ apply: true })).toMatchObject({ escritas: 0, saltadas: 1 });
+    contenido.piezasConContenidoDelProyecto.mockImplementation(async () => ["kickoff", "diagnosis", "planning", "tech-requirements"]);
   });
 });

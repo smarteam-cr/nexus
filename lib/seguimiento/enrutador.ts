@@ -8,6 +8,8 @@
  *   · en un prospecto no hay avance, etapa, alertas ni novedades de proyecto, y si tiene una preventa viva, la ficha la
  *     propone solo la preventa (los hechos de la cuenta no proponen ahí); si esa preventa lee la reunión, lo de la
  *     cuenta, la gente, lo que busca, lo acordado y lo que frena va delegado a ella (2026-11-20);
+ *   · a un documento sin contenido no se le propone una novedad: cuando se genere, lee la memoria del proyecto
+ *     (2026-11-20). Si ese era su único destino, el hecho queda en la tarjeta de la reunión y en la memoria interna;
  *   · un hecho de un proyecto que no está vinculado a la reunión pasa a la cuenta (y si su tipo no tiene destino de
  *     cuenta, queda solo en la tarjeta de la reunión);
  *   · un hecho repetido (misma huella que uno todavía pendiente del mismo cliente y el mismo ámbito) se marca
@@ -35,6 +37,13 @@ export interface ContextoDelRuteo {
    * reunión dejó de la cuenta va delegado a ella. Sin el dato, false (el hecho queda en la tarjeta, como antes).
    */
   laPreventaLaLee?: boolean;
+  /**
+   * Por proyecto vinculado, los documentos que YA tienen contenido (lib/seguimiento/novedades-server.ts ›
+   * `piezasConContenidoDelProyecto`, el mismo criterio que el riel). A un documento vacío no se le propone una novedad
+   * (2026-11-20): cuando se genere, lee la memoria del proyecto, con la minuta de esa reunión. Sin el dato (el sondeo, o
+   * si no se pudo saber), como antes: la pantalla igual muestra novedades solo de documentos con contenido.
+   */
+  piezasConContenido?: ReadonlyMap<string, ReadonlySet<string>>;
   /** Los proyectos vinculados a la reunión (incluidos, del mismo cliente). */
   proyectosVinculados: ReadonlySet<string>;
   /** De esos, los que cumplen `linkFeedsAvance` (los únicos que reciben avance). */
@@ -92,6 +101,7 @@ function recibe(d: DestinoDeHecho, h: HechoVerificado, ctx: ContextoDelRuteo): b
   if (d.soloSiNoLoDijoElCliente && loDijoElCliente(h)) return false;
   if (d.salida === "ficha" && ctx.kind === "PROSPECTO" && ctx.preventaViva) return false;
   if (d.soloSiLaPreventaLaLee && !ctx.laPreventaLaLee) return false;
+  if (d.salida === "novedad" && ctx.piezasConContenido && h.projectId && !(d.pieza && ctx.piezasConContenido.get(h.projectId)?.has(d.pieza))) return false;
   if (d.salida === "avance" && (!h.projectId || !ctx.proyectosQueAlimentanElAvance.has(h.projectId))) return false;
   return true;
 }

@@ -484,6 +484,16 @@ export async function itemsDeLoPropuesto(o: OpcionesDeConteo): Promise<Map<Clave
   return porTipo;
 }
 
+/**
+ * Solo las novedades y los avisos de Procesos (el lector de los hechos): para la meta de las novedades de «Uso de
+ * Nexus» (lib/uso/meta-de-las-novedades.ts), que mira otra ventana y no necesita leer todo lo demás otra vez.
+ */
+export async function itemsDeLosHechos(o: OpcionesDeConteo): Promise<Map<ClaveDeTipo, ItemParaContar[]>> {
+  const ahora = o.ahora ?? new Date();
+  const parte = await hechos({ desde: o.desde, hasta: o.hasta, ahora, db: o.db ?? prismaDeLaApp }, diaCR(ahora));
+  return new Map(Object.entries(parte) as [ClaveDeTipo, ItemParaContar[]][]);
+}
+
 /** Cuenta los items ya leídos, por tipo (todos los tipos, aunque salgan en cero). PURO. */
 export function contarItems(porTipo: ReadonlyMap<ClaveDeTipo, readonly ItemParaContar[]>, ventana: Ventana): ConteoDeTipo[] {
   return TIPOS_DE_LO_PROPUESTO.map((tipo) => {

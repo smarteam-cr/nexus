@@ -368,11 +368,22 @@ async function leer(sessionId: string, opts: OpcionesDeLosHechos): Promise<Resul
             return [];
           })
       : [];
+    // Los documentos con contenido de cada proyecto vinculado: a uno vacío no se le propone nada. Si no se puede saber,
+    // sin el dato (se proponen como antes; la pantalla igual las muestra solo donde hay contenido).
+    const piezasConContenido = proyectos.length
+      ? await import("./novedades-server")
+          .then(async (m) => new Map(await Promise.all(proyectos.map(async (p) => [p.id, new Set(await m.piezasConContenidoDelProyecto(p.id))] as const))))
+          .catch((e): undefined => {
+            console.error(`[hechos] no se pudo saber qué documentos tienen contenido (reunión ${sessionId}; se proponen a todos):`, e instanceof Error ? e.message : e);
+            return undefined;
+          })
+      : new Map<string, Set<string>>();
     const ruteo = rutear(hechos, {
       kind: client.kind,
       puertasAdentro: reunion.puertasAdentro,
       preventaViva,
       laPreventaLaLee: preventasQueLaLeen.length > 0,
+      piezasConContenido,
       proyectosVinculados: new Set(proyectos.map((p) => p.id)),
       proyectosQueAlimentanElAvance: new Set(proyectos.filter((p) => p.alimentaElAvance).map((p) => p.id)),
       hechosAbiertosPorHuella,
@@ -1015,4 +1026,57 @@ export async function hechosParaLaMemoria(clientId: string, projectId: string | 
     }
     return out;
   }, []);
+}
+
+/* ── Limpieza: las novedades viejas a documentos sin contenido (2026-11-20) ─────────────────────────────────── */
+
+export interface ResultadoDeLaLimpieza {
+  hechos: number;
+  proyectos: number;
+  /** Hechos con al menos una novedad a un documento sin contenido. */
+  conNovedadesAVacios: number;
+  /** Por documento, cuántas novedades se quitan (o se quitarían). */
+  porPieza: Record<string, number>;
+  escritas: number;
+  /** Otro escritor cambió la fila mientras tanto: se salta. */
+  saltadas: number;
+}
+
+/**
+ * Les quita a los hechos pendientes los destinos de novedad a documentos que no tienen contenido
+ * (`sinNovedadesADocumentosVacios`): desde el 2026-11-20 el enrutador ya no los propone, y los de antes aparecerían todos
+ * juntos el día que se genere el documento. Sin `apply`, solo cuenta. Lo corre scripts/novedades-a-documentos-vacios.ts.
+ * Escribe con la marca de la fila (`updatedAt`) y solo los destinos: el estado del hecho no cambia, y lo usado,
+ * desestimado o delegado no se toca.
+ */
+export async function quitarNovedadesADocumentosVacios(o: { apply: boolean }): Promise<ResultadoDeLaLimpieza> {
+  const { piezasConContenidoDelProyecto } = await import("./novedades-server");
+  const { sinNovedadesADocumentosVacios } = await import("./novedades");
+  const hechos = await prisma.hechoDeReunion.findMany({
+    where: { estado: "pendiente", projectId: { not: null } },
+    select: { id: true, projectId: true, destinos: true, updatedAt: true },
+  });
+  const proyectos = [...new Set(hechos.map((h) => h.projectId!))];
+  const contenido = new Map<string, Set<string>>();
+  for (const p of proyectos) contenido.set(p, new Set(await piezasConContenidoDelProyecto(p)));
+  const r: ResultadoDeLaLimpieza = { hechos: hechos.length, proyectos: proyectos.length, conNovedadesAVacios: 0, porPieza: {}, escritas: 0, saltadas: 0 };
+  for (const h of hechos) {
+    const sin = sinNovedadesADocumentosVacios(h.destinos, contenido.get(h.projectId!) ?? new Set());
+    if (!sin) continue;
+    r.conNovedadesAVacios++;
+    for (const clave of sin.quitadas) {
+      const pieza = clave.split(".")[0];
+      r.porPieza[pieza] = (r.porPieza[pieza] ?? 0) + 1;
+    }
+    if (!o.apply) continue;
+    const w = await prisma.hechoDeReunion.updateMany({
+      where: { id: h.id, updatedAt: h.updatedAt },
+      // Solo los destinos: el hecho sigue pendiente (vivo en la tarjeta y en la memoria interna, que lee el documento
+      // cuando se genere), aunque sus otros destinos ya estén decididos.
+      data: { destinos: sin.destinos as unknown as Prisma.InputJsonValue },
+    });
+    if (w.count) r.escritas++;
+    else r.saltadas++;
+  }
+  return r;
 }
