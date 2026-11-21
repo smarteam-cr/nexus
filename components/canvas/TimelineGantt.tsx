@@ -133,6 +133,8 @@ import type { FuentesDeLaPropuesta } from "@/lib/timeline/referencias-de-la-prop
 import { useHydrated } from "@/lib/hooks/useHydrated";
 import AnchorDatePicker from "@/components/canvas/AnchorDatePicker";
 import DatePickerField from "@/components/ui/DatePickerField";
+import { Menu } from "@/components/ui/Menu";
+import { rotuloDeSemanasSinTareas, semanasConTareas, tramosDeLaLista } from "@/lib/timeline/semanas-de-la-lista";
 import { useIrALaCasilla } from "@/components/canvas/useIrALaCasilla";
 import { hayPendienteDeSubir } from "@/lib/timeline/pendiente-de-subir";
 import { useChatDeSeccion } from "@/components/asistente/chat-de-seccion";
@@ -496,6 +498,79 @@ function DroppableWeek({ id, children }: { id: string; children: ReactNode }) {
     <div ref={setNodeRef} className={`space-y-1 rounded-lg ${isOver ? "ring-1 ring-blue-500/40 bg-blue-500/5" : ""}`}>
       {children}
     </div>
+  );
+}
+
+/**
+ * Las semanas SIN tareas que van seguidas, en UNA línea («Semanas 6 a 12 · sin tareas», lib/timeline/semanas-de-la-lista.ts).
+ * Una tarea arrastrada acá cae en la primera de esas semanas. Su «+ tarea» deja elegir la semana cuando son varias.
+ */
+function SemanasSinTareas({
+  faseKey,
+  desde,
+  hasta,
+  rangeStart,
+  anchor,
+  onAddTask,
+}: {
+  faseKey: string;
+  desde: number;
+  hasta: number;
+  rangeStart: number;
+  anchor: string | null;
+  onAddTask?: (phaseKey: string, weekIndex: number) => void;
+}) {
+  const absDesde = absoluteWeek(rangeStart, desde);
+  const absHasta = absoluteWeek(rangeStart, hasta);
+  const semanas = Array.from({ length: hasta - desde + 1 }, (_, i) => desde + i);
+  const claseDelBoton = "flex items-center gap-1 text-[10px] font-semibold text-fg-muted hover:text-fg-secondary normal-case tracking-normal transition-colors";
+  const contenidoDelBoton = (
+    <>
+      <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M12 4v16m8-8H4" /></svg>
+      tarea
+    </>
+  );
+  return (
+    <DroppableWeek id={`${faseKey}::w${desde}`}>
+      <div data-semanas-sin-tareas={`${desde}-${hasta}`} className="text-[10px] font-bold uppercase tracking-wider text-fg-muted flex items-center py-0.5">
+        <span>
+          {rotuloDeSemanasSinTareas(desde, hasta)}
+          <span className="font-semibold ml-2">
+            S{absDesde}
+            {hasta > desde && `–S${absHasta}`}
+            {anchor && ` · ${fmtDay(addWeeks(anchor, absDesde))} – ${fmtDay(addWeeks(anchor, absHasta + 1))}`}
+          </span>
+        </span>
+        {onAddTask && (hasta === desde ? (
+          <button
+            onClick={(e) => { e.stopPropagation(); onAddTask(faseKey, desde); }}
+            className={`ml-auto ${claseDelBoton}`}
+            title="Agregar tarea en esta semana"
+          >
+            {contenidoDelBoton}
+          </button>
+        ) : (
+          <div className="ml-auto" onClick={(e) => e.stopPropagation()}>
+            <Menu
+              trigger={contenidoDelBoton}
+              triggerClassName={claseDelBoton}
+              triggerTitle="Agregar tarea: elige la semana"
+              aria-label="Agregar tarea: elige la semana"
+              align="end"
+              header={<span className="text-[11px] text-fg-muted">¿En qué semana?</span>}
+              items={semanas.map((w) => {
+                const abs = absoluteWeek(rangeStart, w);
+                return {
+                  key: String(w),
+                  label: `Semana ${w + 1} · S${abs}${anchor ? ` · ${fmtDay(addWeeks(anchor, abs))} – ${fmtDay(addWeeks(anchor, abs + 1))}` : ""}`,
+                  onSelect: () => onAddTask(faseKey, w),
+                };
+              })}
+            />
+          </div>
+        ))}
+      </div>
+    </DroppableWeek>
   );
 }
 
@@ -2021,9 +2096,27 @@ export default function TimelineGantt({
                   {/* Expandido: tareas por semana (edición inline) */}
                   {isOpen && !propuesta && (
                     <div className="ml-7 mr-2 mb-3 mt-1 border-l-2 border-line pl-4 space-y-3">
-                      {Array.from({ length: p.durationWeeks }).map((_, relWeek) => {
+                      {(() => {
+                        const solas = semanasConTareas(p.tasks, dragTasks ? phases.find((f) => f.key === p.key)?.tasks : null);
+                        return tramosDeLaLista(p.durationWeeks, (w) => solas.has(w));
+                      })().map((tramo) => {
+                        /* Las semanas vacías seguidas van en UNA línea (Elías, 20 nov); sin edición no se muestran. */
+                        if (tramo.tipo === "sin-tareas") {
+                          if (!editable) return null;
+                          return (
+                            <SemanasSinTareas
+                              key={`vacias-${tramo.desde}`}
+                              faseKey={p.key}
+                              desde={tramo.desde}
+                              hasta={tramo.hasta}
+                              rangeStart={range.start}
+                              anchor={anchor}
+                              onAddTask={onAddTask}
+                            />
+                          );
+                        }
+                        const relWeek = tramo.semana;
                         const weekTasks = tasksByWeek.get(relWeek) ?? [];
-                        if (weekTasks.length === 0 && !editable) return null;
                         const absW = absoluteWeek(range.start, relWeek);
                         return (
                           <div key={relWeek}>
@@ -2160,9 +2253,6 @@ export default function TimelineGantt({
                                   </Fragment>
                                 );
                               })}
-                              {weekTasks.length === 0 && editable && (
-                                <p className="text-[11px] text-fg-muted px-2.5">Sin tareas esta semana.</p>
-                              )}
                             </SortableContext>
                             </DroppableWeek>
                           </div>

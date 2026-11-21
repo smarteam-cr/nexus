@@ -15586,6 +15586,13 @@ entregables de kölbi se hacen por área.
 - **Todo cronograma arranca con sus fases DESPLEGADAS** (Elías, 20 nov, revisando kölbi), en el Gantt del equipo: se
   ven las tareas sin abrir fase por fase. La vista de la propuesta guarda su propia lista de fases abiertas y su regla
   (arranca plegada y abre lo que cambia). La página del cliente no cambió: sigue arrancando plegada.
+- **Las semanas sin tareas que van seguidas se juntan en UNA línea** (Elías, 20 nov: un loop de 12 semanas mostraba
+  diez renglones de «Sin tareas esta semana»). «Semanas 6 a 12 · sin tareas», con su «+ tarea», que deja elegir la
+  semana; una tarea arrastrada ahí cae en la primera. Mientras dura el arrastre, la semana de donde sale la tarea no se
+  junta con sus vecinas (si no, la lista sube bajo el puntero y la tarea sigue cayendo); al soltar se rearma. Vale para toda fase de todo cronograma, en el Gantt del equipo
+  (`lib/timeline/semanas-de-la-lista.ts`); la barra de arriba no cambia, y las vistas de solo lectura, de la propuesta
+  y del cliente ya no mostraban las semanas vacías. «Sin tareas» es lo que lista la semana: una tarea de varias
+  semanas aparece solo en la primera, así que las que solo recorre cuentan como vacías.
 - **En local, el enlace del cliente usa la dirección que se está mirando** (`lib/external/enlace-local.ts`): el `.env`
   dice 3004 y en el 3005 «Ver como el cliente» abría la instancia de producción, sin los datos locales. Solo se
   reescribe un enlace de `localhost` visto desde `localhost`; en producción queda igual. Las actividades son sus tareas. El detalle largo va en las notas de la tarea, que son
