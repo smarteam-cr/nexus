@@ -56,6 +56,7 @@ const SELECT_HECHO = {
   projectId: true,
   sessionId: true,
   citaFuente: true,
+  quien: true,
   // Solo el título de la reunión, para decir de dónde sale: nunca su contenido.
   session: { select: { title: true } },
 } as const;
@@ -74,6 +75,7 @@ type FilaDeHecho = {
   projectId: string | null;
   sessionId: string | null;
   citaFuente: string;
+  quien: string | null;
   session: { title: string | null } | null;
 };
 
@@ -92,6 +94,7 @@ const aHecho = (f: FilaDeHecho): HechoParaNovedades => ({
   sessionId: f.sessionId,
   reunionTitulo: f.session?.title ?? null,
   citaFuente: f.citaFuente,
+  quien: f.quien,
 });
 
 /**
@@ -297,7 +300,7 @@ export async function hechosDeLaReunion(sessionId: string, clientId: string): Pr
       where: { sessionId, clientId, estado: { not: "desestimado" }, tipo: { notIn: ["senal_cronograma", "senal_etapa"] } },
       orderBy: { createdAt: "asc" },
       take: 40,
-      select: { ...SELECT_HECHO, quien: true },
+      select: SELECT_HECHO,
     });
     return filas.map((f) => ({ ...aHecho(f), quien: f.quien }));
   }, []);

@@ -9,8 +9,13 @@
  *   · solo los destinos de salida «novedad» que siguen pendientes; un destino desestimado, usado o delegado no vuelve;
  *   · solo en piezas que ya tienen contenido: a un documento vacío no se le propone un cambio, se lo genera;
  *   · un hecho de más de 30 días sin usar está vencido y no se muestra (se calcula, no hace falta un job);
- *   · el mismo hecho dicho en dos reuniones (la misma huella) es UNA novedad, con la reunión más reciente;
- *   · como mucho 5 por documento, las más recientes primero (las demás esperan, y vencen solas).
+ *   · el mismo hecho dicho en dos reuniones (la misma huella) es UNA novedad, con la reunión más reciente (o la más
+ *     reciente en que lo dijo el cliente, si alguna: 2026-11-20);
+ *   · primero lo que dijo el cliente (y entre eso, los acuerdos, después los resultados), al final lo que dijo Smarteam;
+ *     a igual peso, la más reciente (2026-11-20);
+ *   · UNA fila por reunión y documento (`grupos`): lo que una reunión le deja a un documento se revisa junto, con el
+ *     chat o de una vez; como mucho 5 reuniones por documento, las de lo más importante primero (las demás esperan, y
+ *     vencen solas). `items` son las novedades de esas reuniones, en el mismo orden (lo cuentan el riel y «Qué sigue»).
  *
  * Lo usan la franja de arriba del documento y el riel (components/clients/ProjectCanvasPanel.tsx), el «Qué sigue» del
  * proyecto, la tarjeta «Lo que dejó esta reunión» y el aviso «Volver a mapear» de Procesos. Lo carga
@@ -18,9 +23,10 @@
  */
 import { destinoPorClave } from "./destinos";
 import { estaVencido, leerDestinos } from "./hechos/estado";
+import { quienLoDijo, type QuienLoDijo } from "./quien-lo-dijo";
 
-/** Como mucho, cuántas novedades se muestran por documento. */
-export const TOPE_DE_NOVEDADES_POR_PIEZA = 5;
+/** Como mucho, cuántas reuniones (filas) se muestran por documento. */
+export const TOPE_DE_REUNIONES_POR_PIEZA = 5;
 
 /** Lo que hace falta saber de un hecho para calcular sus novedades. */
 export interface HechoParaNovedades {
@@ -42,6 +48,8 @@ export interface HechoParaNovedades {
   reunionTitulo: string | null;
   /** De qué parte salió la cita: transcripcion · notas · texto (`HechoDeReunion.citaFuente`). */
   citaFuente?: string;
+  /** `HechoDeReunion.quien`: cliente · smarteam, solo si lo comprobó el turno de la transcripción; null = no se sabe. */
+  quien?: string | null;
 }
 
 /** Una sección de un documento a la que va la novedad. */
@@ -65,6 +73,8 @@ export interface NovedadDeLaPieza {
   tema: string | null;
   frase: string;
   cita: string;
+  /** Quién dijo la cita (2026-11-20): si no fue el cliente, la novedad va rotulada (lib/seguimiento/quien-lo-dijo.ts). */
+  quienLoDijo: QuienLoDijo;
   reunion: { id: string | null; titulo: string; /** AAAA-MM-DD. */ fecha: string };
   /** La pieza se lee en vivo desde afuera (Integraciones): aplicar es publicar. */
   publicaEnVivo: boolean;
@@ -72,10 +82,44 @@ export interface NovedadDeLaPieza {
   propuestaEn: string;
 }
 
-export interface NovedadesDeLaPieza {
+/** Lo que UNA reunión le deja a un documento: una fila (2026-11-20). */
+export interface GrupoDeNovedades {
+  /** La reunión (o, sin reunión, el hecho: un texto sumado a mano). */
+  clave: string;
+  reunion: NovedadDeLaPieza["reunion"];
+  /** Sus novedades, lo más importante primero. */
   items: NovedadDeLaPieza[];
-  /** Cuántas más hay, fuera del tope (las más viejas). */
+}
+
+export interface NovedadesDeLaPieza {
+  /** Las novedades de las reuniones a la vista (las de `grupos`, en el mismo orden). */
+  items: NovedadDeLaPieza[];
+  /** Una fila por reunión, lo más importante primero, con el tope. */
+  grupos: GrupoDeNovedades[];
+  /** Cuántas reuniones más hay, fuera del tope. */
   mas: number;
+}
+
+/** El peso de una novedad: primero lo que dijo el cliente, y entre eso los acuerdos y después los resultados. */
+export function pesoDeLaNovedad(n: Pick<NovedadDeLaPieza, "quienLoDijo" | "tipo">): number {
+  const quien = n.quienLoDijo === "cliente" ? 0 : n.quienLoDijo === "sin_comprobar" ? 1 : 2;
+  const tipo = n.tipo === "acuerdo" ? 0 : n.tipo === "resultado" ? 1 : 2;
+  return quien * 3 + tipo;
+}
+
+/** Lo más importante primero; a igual peso, la reunión más reciente. */
+function antes(a: NovedadDeLaPieza, b: NovedadDeLaPieza): number {
+  return pesoDeLaNovedad(a) - pesoDeLaNovedad(b) || b.reunion.fecha.localeCompare(a.reunion.fecha) || b.propuestaEn.localeCompare(a.propuestaEn) || a.hechoId.localeCompare(b.hechoId);
+}
+
+/** Una fila por reunión: cada grupo con sus novedades ordenadas, y los grupos por su novedad más importante. */
+export function agruparPorReunion(novedades: readonly NovedadDeLaPieza[]): GrupoDeNovedades[] {
+  const porReunion = new Map<string, NovedadDeLaPieza[]>();
+  for (const n of [...novedades].sort(antes)) {
+    const clave = n.reunion.id ?? `hecho:${n.hechoId}`;
+    porReunion.set(clave, [...(porReunion.get(clave) ?? []), n]);
+  }
+  return [...porReunion].map(([clave, items]) => ({ clave, reunion: items[0].reunion, items }));
 }
 
 const iso = (d: Date | string): string => (typeof d === "string" ? d : d.toISOString());
@@ -122,7 +166,11 @@ export function novedadesPorPieza(
   for (const [pieza, porHuella] of grupos) {
     const novedades: NovedadDeLaPieza[] = [];
     for (const grupo of porHuella.values()) {
-      const orden = [...grupo].sort((a, b) => ms(b.h.fechaDeLaReunion) - ms(a.h.fechaDeLaReunion) || ms(b.h.createdAt) - ms(a.h.createdAt) || a.h.id.localeCompare(b.h.id));
+      // La de la reunión más reciente; pero si alguna del grupo la dijo el cliente, la más reciente de esas: lo mismo
+      // pedido por el cliente y repetido después por Smarteam sigue siendo un pedido del cliente (2026-11-20).
+      const porFecha = [...grupo].sort((a, b) => ms(b.h.fechaDeLaReunion) - ms(a.h.fechaDeLaReunion) || ms(b.h.createdAt) - ms(a.h.createdAt) || a.h.id.localeCompare(b.h.id));
+      const delCliente = porFecha.find((x) => quienLoDijo(x.h) === "cliente");
+      const orden = delCliente ? [delCliente, ...porFecha.filter((x) => x !== delCliente)] : porFecha;
       const { h } = orden[0];
       const secciones = new Map<string, SeccionDeLaNovedad>();
       for (const x of orden) for (const s of x.secciones) if (!secciones.has(s.clave)) secciones.set(s.clave, s);
@@ -135,15 +183,36 @@ export function novedadesPorPieza(
         tema: h.tema,
         frase: h.frase,
         cita: h.cita,
+        quienLoDijo: quienLoDijo(h),
         reunion: { id: h.sessionId, titulo: h.reunionTitulo?.trim() || "una reunión", fecha: iso(h.fechaDeLaReunion).slice(0, 10) },
         publicaEnVivo: [...secciones.values()].some((s) => destinoPorClave(s.clave)?.publicaEnVivo === true),
         propuestaEn: iso(h.createdAt),
       });
     }
-    novedades.sort((a, b) => b.reunion.fecha.localeCompare(a.reunion.fecha) || b.propuestaEn.localeCompare(a.propuestaEn) || a.hechoId.localeCompare(b.hechoId));
-    out[pieza] = { items: novedades.slice(0, TOPE_DE_NOVEDADES_POR_PIEZA), mas: Math.max(0, novedades.length - TOPE_DE_NOVEDADES_POR_PIEZA) };
+    const todos = agruparPorReunion(novedades);
+    const grupos = todos.slice(0, TOPE_DE_REUNIONES_POR_PIEZA);
+    out[pieza] = { items: grupos.flatMap((g) => g.items), grupos, mas: Math.max(0, todos.length - TOPE_DE_REUNIONES_POR_PIEZA) };
   }
   return out;
+}
+
+/**
+ * Lo que un hecho viejo le proponía a documentos SIN contenido, fuera (2026-11-20; scripts/novedades-a-documentos-vacios.ts).
+ * Desde ese día el enrutador no le propone a un documento vacío; los hechos de antes quedaron con esos destinos
+ * pendientes, que la pantalla no muestra y que aparecerían todos juntos el día que alguien genere el documento (que ya
+ * leyó la memoria, con la minuta de esas reuniones). Devuelve los destinos sin esos, o null si no hay nada que quitar.
+ * Solo los pendientes: lo usado, desestimado o delegado se queda como está.
+ */
+export function sinNovedadesADocumentosVacios(destinos: unknown, conContenido: ReadonlySet<string>): { destinos: ReturnType<typeof leerDestinos>; quitadas: string[] } | null {
+  const todos = leerDestinos(destinos);
+  const quitadas: string[] = [];
+  const quedan = todos.filter((d) => {
+    const reg = destinoPorClave(d.clave);
+    const fuera = d.estado === "pendiente" && reg?.salida === "novedad" && !!reg.pieza && !conContenido.has(reg.pieza);
+    if (fuera) quitadas.push(d.clave);
+    return !fuera;
+  });
+  return quitadas.length ? { destinos: quedan, quitadas } : null;
 }
 
 /** El número del riel y del «Qué sigue»: las novedades a la vista de cada documento (con el tope). */

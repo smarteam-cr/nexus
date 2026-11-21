@@ -471,6 +471,9 @@ la cola.
 
 ### El sondeo de hechos y la bandera `SEGUIMIENTO_HECHOS` (memoria de la cuenta, etapas 5 y 6)
 
+> **Estado (2026-11-20):** prendida en producción desde el 2026-10-19, sin el sondeo (~US$ 0,036 por reunión, ~US$ 12 al
+> mes; ver DECISIONS «Hechos, enrutador y novedades»).
+
 > **Estado (2026-10-10): el sondeo (etapa 5) ya está en el código y nadie lo corrió todavía. La etapa 6 entera (la
 > lectura de hechos, el enrutador, el detector de la queja, INV45 y las novedades en pantalla) está en el código,
 > APAGADA, con su SQL sin aplicar.**

@@ -30,7 +30,7 @@ vi.mock("./fuentes", async (original) => {
 import { prisma } from "@/lib/db/prisma";
 import { leerArchivoDeLaEscala } from "@/lib/escala/documento/archivos";
 import { parsearEscala } from "@/lib/escala/documento/parsear";
-import { AGENTE_DE_LA_EXPLORACION, lanzarCorrida, leerReunionNueva } from "./agente";
+import { AGENTE_DE_LA_EXPLORACION, lanzarCorrida, leerReunionNueva, preventasQueLeenLaReunion } from "./agente";
 import { leerPropuesta } from "./esquemas";
 import { aplicarCambios } from "./servidor";
 
@@ -108,6 +108,26 @@ describe("la reunión que llega se lee sola", () => {
     const otro = await prisma.client.create({ data: { name: "Sin exploración", kind: "PROSPECTO" }, select: { id: true } });
     expect(await leerReunionNueva({ sesionId: "ses-9", fecha: new Date(), clientId: otro.id })).toBe("no-corresponde");
     expect(await prisma.agentRun.count({ where: { agentSlug: AGENTE_DE_LA_EXPLORACION } })).toBe(0);
+  });
+});
+
+describe("qué preventas leen una reunión (el destino «preventa» de los hechos, 2026-11-20)", () => {
+  it("la misma regla que la lectura sola, sin lanzar nada, y una reunión ya leída sigue contando", async () => {
+    const { clientId, id } = await sembrar(24);
+    // Sin la fila de la reunión, la fecha es la de ahora: de después del alta, dentro de las dos semanas.
+    expect(await preventasQueLeenLaReunion({ sesionId: "ses-1", clientId })).toEqual([id]);
+    expect(await prisma.agentRun.count({ where: { clientId, agentSlug: AGENTE_DE_LA_EXPLORACION } })).toBe(0);
+    // Ya leída: la lectura sola no la vuelve a leer, pero sus hechos siguen siendo de esa preventa.
+    await prisma.exploracionDeVenta.update({ where: { id }, data: { propuesta: { leidas: { sesiones: ["ses-1"], hubspot: [], documentos: [] } } } });
+    expect(await leerReunionNueva({ sesionId: "ses-1", fecha: new Date(), clientId })).toBe("no-corresponde");
+    expect(await preventasQueLeenLaReunion({ sesionId: "ses-1", clientId })).toEqual([id]);
+  });
+
+  it("sin preventa viva, o archivada, ninguna", async () => {
+    const otro = await prisma.client.create({ data: { name: "Sin exploración", kind: "PROSPECTO" }, select: { id: true } });
+    expect(await preventasQueLeenLaReunion({ sesionId: "ses-9", clientId: otro.id })).toEqual([]);
+    const { clientId } = await sembrar(24, { archivada: true });
+    expect(await preventasQueLeenLaReunion({ sesionId: "ses-9", clientId })).toEqual([]);
   });
 });
 

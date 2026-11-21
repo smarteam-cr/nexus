@@ -7677,6 +7677,13 @@ todo no conviene: las reglas cuestan US$0 y son exactas, y el vigía solo se pag
 
 ## Hechos, enrutador y novedades (2026-10-09)
 
+> **Estado (2026-11-20): PRENDIDO en producción desde el 2026-10-19** (la primera llamada de `seguimiento-hechos` en
+> `LlmCall`, 14:05), con Sonnet 4.6 y la caché compartida con la lectura, sin que el sondeo de la etapa 5 haya corrido.
+> Al 20 nov: 363 llamadas (US$ 12,53, ~US$ 0,036 por reunión) y 3.004 hechos de 330 reuniones; ~20 usados y ~70
+> desestimados, el resto pendiente. Medido con `scripts/volumen-para-los-hechos.ts` (producción en solo lectura) y
+> `scripts/medir-hechos-en-local.ts` (21 reuniones reales en la base local: US$ 0,037 por reunión). Lo que sigue de este
+> bloque es el estado del 2026-10-10 y se conserva como historia.
+>
 > **Estado (2026-10-10): la etapa 5 está en el código y sin correr** (`scripts/sondeo-de-hechos.ts` y los módulos puros
 > de `lib/seguimiento/hechos`: los tipos, el pedido, la verificación de las citas y el texto de la reunión, que lee
 > `lib/sessions/reunion-para-hechos.ts` por el chokepoint). **El núcleo de la etapa 6 está en el código y APAGADO**: la
@@ -7815,9 +7822,57 @@ escribió entero sin el sondeo y quedó apagado: hasta que Elías lo corra y dec
   `backups/<fecha>-sondeo-de-hechos/`. Con eso Elías decide la variante (aparte con caché, aparte sin caché o en la misma
   llamada) y el modelo (Sonnet 4.6 o Haiku 4.5). Hasta entonces la lectura de hechos se despliega apagada: sin la
   variable no corre, y se prende con `SEGUIMIENTO_HECHOS=1` en el `.env` del servidor (cambiarla pide recrear el
-  contenedor: `bash scripts/deploy.sh`).
+  contenedor: `bash scripts/deploy.sh`). ⚠ **Enmendado el 2026-11-20:** se prendió en producción el 2026-10-19 sin el
+  sondeo, con el valor por defecto (aparte con caché, Sonnet 4.6); la medición del 20 nov (arriba, en el estado) hace
+  las veces del sondeo para el costo.
 - **SQL:** la tabla `HechoDeReunion`, con RLS y RESTRICTIVE, después del SQL de Tareas (tiene una FK a
   `LecturaDeReunion`).
+- **A un documento del cliente, una novedad llega con quién la dijo (2026-11-20, Elías: «Arreglar primero»).** Si la
+  cita no la dijo el cliente (su turno comprobado en la transcripción), la novedad va rotulada «Lo dijo Smarteam» (o «No
+  se comprobó quién lo dijo», de las notas de Gemini) en la franja del documento y en «Lo que dejó esta reunión», y el
+  chat del documento recibe que no la escriba como algo que el cliente quiere, pidió o aceptó
+  (`lib/seguimiento/quien-lo-dijo.ts`). *Por qué:* de 48 hechos que iban a documentos del cliente en 21 reuniones reales,
+  28 tenían solo una cita de Smarteam (22 de 37 acuerdos); en las presentaciones de diagnóstico (Cemaco, Grupo Inve) el
+  diagnóstico de Smarteam volvía al kickoff y al diagnóstico como «el cliente quiere…». Se rotula en vez de cortar: es el
+  mismo criterio que Elías decidió para las notas del equipo («lo dijo <persona>») y un acuerdo que propone Smarteam y el
+  cliente acepta en silencio sigue sirviendo. Sale de lo que ya se guarda (`quien`, que solo vale comprobado, y
+  `citaFuente`): sin SQL. El mismo hecho dicho en dos reuniones se muestra con la cita del cliente si alguna lo es (un
+  pedido del cliente que después repitió Smarteam sigue siendo del cliente). Al desplegarlo, de 643 hechos con novedad
+  pendiente en producción (20 nov), 238 son del cliente, 206 de Smarteam y 199 sin comprobar (de las notas de Gemini o
+  sin turno comprobado): dos de cada tres van a salir rotulados.
+- **La preventa es destino de los hechos de un prospecto (2026-11-20).** Lo de la cuenta, la gente, lo que busca, lo
+  acordado y lo que frena (cuenta, persona, resultado, acuerdo, riesgo, queja) va a la preventa cuando una preventa del
+  prospecto lee esa reunión (`preventasQueLeenLaReunion`, la misma regla que `leerReunionNueva`, contando la ya leída), y
+  nace DELEGADO en ella (`ref: { tipo: "preventa", exploracionIds }`). Lo de cómo trabajan hoy sigue yendo a Procesos.
+  *Por qué:* en producción, 186 de 259 hechos de prospectos quedaban sin destino, y 183 de esos eran de prospectos con
+  preventa: la preventa lee la reunión entera con su lectura propia, así que no se perdía el contenido, pero el hecho no
+  decía a dónde había ido. Delegado y no pendiente porque la preventa ya propone sus tarjetas desde esa misma reunión:
+  proponerle otra vez lo mismo sería repetir la lectura. Cuando una nota del equipo deje hechos (paso 2 de «Agregar
+  contexto»), ese hecho sí tendrá que llegar a la tarjeta, porque la preventa no lee las notas: este destino es la puerta.
+- **Las novedades, para que alguien las revise (2026-11-20, Elías: «Sí, toda»).** Medido ese día: 1.161 novedades
+  pendientes de documentos en 57 proyectos y 20 decisiones de 3 personas en un mes. Cinco cambios, antes del botón
+  «Agregar contexto»:
+  1. **A un documento sin contenido no se le propone nada** (el enrutador, con `piezasConContenidoDelProyecto`, el mismo
+     criterio que el riel). Cuando se genere, lee la memoria del proyecto, con la minuta de esa reunión; el hecho queda en
+     la tarjeta y en la memoria interna. *Por qué:* la mitad de las novedades iba a Planificación y Diagnóstico de
+     proyectos que no los tenían, nunca se mostraban y vencían; el día que alguien generara el documento aparecían todas.
+     Las de antes las quita `scripts/novedades-a-documentos-vacios.ts` (dry-run; el 20 nov, 550 hechos), con la escritura
+     en `hechos-server.ts › quitarNovedadesADocumentosVacios`: solo los destinos, sin cambiar el estado del hecho.
+  2. **Una fila por reunión y documento** (`grupos`, `agruparPorReunion`): lo que una reunión le deja a un documento se
+     ve junto, y la fila suma «Listo, todas» y «Ninguna aplica». Cada novedad sigue a la vista adentro con sus tres
+     acciones de siempre («Cambiar con el chat», «Listo», «No aplica»), quién lo dijo y su cita: nada se esconde. El chat
+     sigue llevando UNA novedad por vez, a su sección. *Por qué no todas juntas al chat:* la revisión del 20 nov midió
+     que seis novedades con sus citas pasan el tope de 4.000 caracteres del mensaje, que una reunión deja cosas para
+     secciones distintas (el chat recibe solo una) y que al aplicar quedaban todas usadas aunque el chat descartara
+     algunas. El tope pasa de 5 novedades a 5 reuniones por documento.
+  3. **Primero lo que dijo el cliente** (`pesoDeLaNovedad`): sus acuerdos, después sus resultados; lo sin comprobar en el
+     medio y lo que dijo Smarteam al final; a igual peso, lo más reciente.
+  4. **En «Para ti», por documento** (`lib/para-ti/fuentes/novedades-de-documentos.ts`): «Planificación de FACO: 2
+     reuniones con novedades», con el enlace al documento, solo de los documentos que puedes decidir. Cuenta lo mismo que
+     la franja. «Lo que dejaron tus reuniones» sigue contándolas por reunión: no se sacó nada.
+  5. **Una meta en «Uso de Nexus»** (`lib/uso/meta-de-las-novedades.ts`): que venza menos de la mitad. Se mide sobre lo
+     que nació hace 30 a 60 días, porque una novedad vence a los 30 y en la ventana de los últimos 30 casi nada llega a
+     vencer.
 
 ## Los documentos leen la memoria y solo las reuniones elegidas (2026-10-09)
 

@@ -37,6 +37,7 @@ import { loadHandoffContext } from "@/lib/canvas/load-canvas-context";
 import { responsableDeLaPreventaViva } from "@/lib/lecturas/personas";
 import { duenoDeLaReunion, duenosDeLasReuniones } from "@/lib/sessions/reuniones-para-seguimiento";
 import { whereBelongsToClient, whereVinculadaAlProyecto } from "@/lib/sessions/project-sources";
+import { DESTINOS } from "./destinos";
 import { claveDeRepeticion, rutear, salidaDe, type HechoRuteado } from "./enrutador";
 import {
   decidirDestino,
@@ -184,6 +185,8 @@ export function leidaSinLaTranscripcion(corridas: readonly CorridaDeHechos[], cl
 
 /** La nota con que se desestiman los hechos de las notas cuando la reunión se vuelve a leer con la transcripción. */
 const NOTA_RELEIDA_CON_LA_TRANSCRIPCION = "Se volvió a leer con la transcripción";
+/** Los destinos delegados que no tienen nada que retirar en su módulo: se cierran junto con el hecho. */
+const DELEGADOS_SIN_MODULO: ReadonlySet<string> = new Set(DESTINOS.filter((d) => d.salida === "preventa").map((d) => d.clave));
 
 /** Una corrida RUNNING de más de 15 minutos se cayó a mitad: cuenta como un intento fallido. */
 const colgada = (c: CorridaDeHechos, ahora: Date) => c.status === "RUNNING" && +ahora - +c.createdAt > MINUTOS_CORRIDA_COLGADA * 60_000;
@@ -354,16 +357,40 @@ async function leer(sessionId: string, opts: OpcionesDeLosHechos): Promise<Resul
     // prospecto, y en la duda los hechos de la cuenta no proponen ahí.
     const preventaViva =
       client.kind === "PROSPECTO" ? await responsableDeLaPreventaViva(clientId).then((r) => r !== undefined, () => true) : false;
+    // La preventa que lee esta reunión (con su lectura propia): lo de la cuenta va delegado a ella. Si no se puede saber,
+    // ninguna: el hecho queda en la tarjeta, como antes.
+    //    La regla toma la fecha de la reunión con su hora, la misma que usa `leerReunionNueva`.
+    const preventasQueLaLeen = preventaViva
+      ? await import("@/lib/exploraciones/agente")
+          .then((m) => m.preventasQueLeenLaReunion({ sesionId: sessionId, clientId }))
+          .catch((e): string[] => {
+            console.error(`[hechos] no se pudo saber si la preventa lee la reunión ${sessionId} (sus hechos quedan en la tarjeta):`, e instanceof Error ? e.message : e);
+            return [];
+          })
+      : [];
+    // Los documentos con contenido de cada proyecto vinculado: a uno vacío no se le propone nada. Si no se puede saber,
+    // sin el dato (se proponen como antes; la pantalla igual las muestra solo donde hay contenido).
+    const piezasConContenido = proyectos.length
+      ? await import("./novedades-server")
+          .then(async (m) => new Map(await Promise.all(proyectos.map(async (p) => [p.id, new Set(await m.piezasConContenidoDelProyecto(p.id))] as const))))
+          .catch((e): undefined => {
+            console.error(`[hechos] no se pudo saber qué documentos tienen contenido (reunión ${sessionId}; se proponen a todos):`, e instanceof Error ? e.message : e);
+            return undefined;
+          })
+      : new Map<string, Set<string>>();
     const ruteo = rutear(hechos, {
       kind: client.kind,
       puertasAdentro: reunion.puertasAdentro,
       preventaViva,
+      laPreventaLaLee: preventasQueLaLeen.length > 0,
+      piezasConContenido,
       proyectosVinculados: new Set(proyectos.map((p) => p.id)),
       proyectosQueAlimentanElAvance: new Set(proyectos.filter((p) => p.alimentaElAvance).map((p) => p.id)),
       hechosAbiertosPorHuella,
     });
 
-    // 8. Las filas, de una vez. El riesgo nace delegado en el vigía (lo juzga él). Los ids se arman acá para saber cuál
+    // 8. Las filas, de una vez. El riesgo nace delegado en el vigía (lo juzga él), y lo de un prospecto, en la preventa
+    //    que lee la reunión. Los ids se arman acá para saber cuál
     //    es cuál al aplicar cada destino (el orden de un INSERT … RETURNING no está garantizado).
     //    Antes de escribir, el dueño se vuelve a mirar: si la reunión cambió de dueño mientras el modelo leía, no se
     //    escribe nada (ni la ficha ni la alerta del cliente anterior) y el reintento la lee para el dueño nuevo.
@@ -379,7 +406,9 @@ async function leer(sessionId: string, opts: OpcionesDeLosHechos): Promise<Resul
     if (releerConLaTranscripcion) {
       const deLasNotas = await prisma.hechoDeReunion.findMany({ where: { sessionId, clientId, estado: "pendiente" }, select: SELECT_PARA_RETIRAR });
       for (const h of deLasNotas) {
-        const c = desestimarPorCambioDeDueno(h, DECIDE_EL_SISTEMA, ahora, NOTA_RELEIDA_CON_LA_TRANSCRIPCION);
+        // Lo delegado en la preventa también se cierra: la preventa no lo consume (lee la reunión por su lado), y si no,
+        // el mismo hecho quedaba dos veces en la tarjeta, una de las notas y otra de la transcripción.
+        const c = desestimarPorCambioDeDueno(h, DECIDE_EL_SISTEMA, ahora, NOTA_RELEIDA_CON_LA_TRANSCRIPCION, DELEGADOS_SIN_MODULO);
         if (c) await escribirCambio(h.id, c, h.updatedAt);
       }
     }
@@ -388,7 +417,12 @@ async function leer(sessionId: string, opts: OpcionesDeLosHechos): Promise<Resul
     if (creados.length) {
       await prisma.hechoDeReunion.createMany({
         data: ruteo.porHecho.map((r, i) => {
-          const destinos = r.destinos.map((d) => (salidaDe(d.clave) === "vigia" ? { ...d, estado: "delegado" as const, ref: { tipo: "vigia" as const } } : d));
+          const destinos = r.destinos.map((d) => {
+            const salida = salidaDe(d.clave);
+            if (salida === "vigia") return { ...d, estado: "delegado" as const, ref: { tipo: "vigia" as const } };
+            if (salida === "preventa") return { ...d, estado: "delegado" as const, ref: { tipo: "preventa" as const, exploracionIds: preventasQueLaLeen } };
+            return d;
+          });
           return {
             id: creados[i],
             sessionId,
@@ -992,4 +1026,57 @@ export async function hechosParaLaMemoria(clientId: string, projectId: string | 
     }
     return out;
   }, []);
+}
+
+/* ── Limpieza: las novedades viejas a documentos sin contenido (2026-11-20) ─────────────────────────────────── */
+
+export interface ResultadoDeLaLimpieza {
+  hechos: number;
+  proyectos: number;
+  /** Hechos con al menos una novedad a un documento sin contenido. */
+  conNovedadesAVacios: number;
+  /** Por documento, cuántas novedades se quitan (o se quitarían). */
+  porPieza: Record<string, number>;
+  escritas: number;
+  /** Otro escritor cambió la fila mientras tanto: se salta. */
+  saltadas: number;
+}
+
+/**
+ * Les quita a los hechos pendientes los destinos de novedad a documentos que no tienen contenido
+ * (`sinNovedadesADocumentosVacios`): desde el 2026-11-20 el enrutador ya no los propone, y los de antes aparecerían todos
+ * juntos el día que se genere el documento. Sin `apply`, solo cuenta. Lo corre scripts/novedades-a-documentos-vacios.ts.
+ * Escribe con la marca de la fila (`updatedAt`) y solo los destinos: el estado del hecho no cambia, y lo usado,
+ * desestimado o delegado no se toca.
+ */
+export async function quitarNovedadesADocumentosVacios(o: { apply: boolean }): Promise<ResultadoDeLaLimpieza> {
+  const { piezasConContenidoDelProyecto } = await import("./novedades-server");
+  const { sinNovedadesADocumentosVacios } = await import("./novedades");
+  const hechos = await prisma.hechoDeReunion.findMany({
+    where: { estado: "pendiente", projectId: { not: null } },
+    select: { id: true, projectId: true, destinos: true, updatedAt: true },
+  });
+  const proyectos = [...new Set(hechos.map((h) => h.projectId!))];
+  const contenido = new Map<string, Set<string>>();
+  for (const p of proyectos) contenido.set(p, new Set(await piezasConContenidoDelProyecto(p)));
+  const r: ResultadoDeLaLimpieza = { hechos: hechos.length, proyectos: proyectos.length, conNovedadesAVacios: 0, porPieza: {}, escritas: 0, saltadas: 0 };
+  for (const h of hechos) {
+    const sin = sinNovedadesADocumentosVacios(h.destinos, contenido.get(h.projectId!) ?? new Set());
+    if (!sin) continue;
+    r.conNovedadesAVacios++;
+    for (const clave of sin.quitadas) {
+      const pieza = clave.split(".")[0];
+      r.porPieza[pieza] = (r.porPieza[pieza] ?? 0) + 1;
+    }
+    if (!o.apply) continue;
+    const w = await prisma.hechoDeReunion.updateMany({
+      where: { id: h.id, updatedAt: h.updatedAt },
+      // Solo los destinos: el hecho sigue pendiente (vivo en la tarjeta y en la memoria interna, que lee el documento
+      // cuando se genere), aunque sus otros destinos ya estén decididos.
+      data: { destinos: sin.destinos as unknown as Prisma.InputJsonValue },
+    });
+    if (w.count) r.escritas++;
+    else r.saltadas++;
+  }
+  return r;
 }

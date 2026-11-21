@@ -2,9 +2,10 @@
  * lib/seguimiento/hechos/reglas.ts — las reglas de ENCENDIDO de la lectura de hechos (memoria de la cuenta, etapa 6).
  * PURO: lo usan el servidor (lib/seguimiento/hechos-server.ts), la cola de la lectura (lib/lecturas) y las pruebas.
  *
- * La lectura de hechos se despliega APAGADA: la variante y el modelo los decide el sondeo de la etapa 5
- * (scripts/sondeo-de-hechos.ts), que todavía no corrió. Sin la variable `SEGUIMIENTO_HECHOS`, o con cualquier valor que
- * no sea «1», nada de la etapa 6 corre: ni la llamada de hechos, ni el enrutador, ni la cobertura de las reuniones con
+ * Apagada por defecto en el código, y PRENDIDA en producción desde el 2026-10-19 (`SEGUIMIENTO_HECHOS=1` en el `.env`
+ * del servidor), con el valor por defecto: aparte de la lectura, con su caché, y Sonnet 4.6. El sondeo de la etapa 5
+ * (scripts/sondeo-de-hechos.ts) no corrió; el costo se midió el 2026-11-20 (~US$ 0,036 por reunión, ver DECISIONS). Sin
+ * la variable, o con cualquier valor que no sea «1», nada de la etapa 6 corre: ni la llamada de hechos, ni el enrutador, ni la cobertura de las reuniones con
  * solo notas. La lectura de cada reunión (etapa 2) sigue igual que antes, con su avance, su ficha y su etapa de siempre.
  * Ver docs/DECISIONS.md «Hechos, enrutador y novedades» y docs/RUNBOOK.md.
  */

@@ -31,7 +31,9 @@ export type RefDelDestino =
   | { tipo: "vigia" }
   | { tipo: "etapa"; projectId: string; stageId: string | null }
   | { tipo: "avance"; projectId: string }
-  | { tipo: "procesos"; agentRunId: string | null };
+  | { tipo: "procesos"; agentRunId: string | null }
+  /** Las preventas (`ExploracionDeVenta`) que leen la reunión con su lectura propia. */
+  | { tipo: "preventa"; exploracionIds: string[] };
 
 /** Un destino de un hecho, como se guarda en `HechoDeReunion.destinos`. La clave es la del registro (lib/seguimiento/destinos.ts). */
 export interface DestinoDelHecho {
@@ -63,6 +65,8 @@ function leerRef(v: unknown): RefDelDestino | null {
       return typeof o.projectId === "string" ? { tipo: "avance", projectId: o.projectId } : null;
     case "procesos":
       return { tipo: "procesos", agentRunId: texto(o.agentRunId) };
+    case "preventa":
+      return { tipo: "preventa", exploracionIds: Array.isArray(o.exploracionIds) ? o.exploracionIds.filter((c): c is string => typeof c === "string") : [] };
     default:
       return null;
   }

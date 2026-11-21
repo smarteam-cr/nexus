@@ -24,7 +24,7 @@ import {
 } from "@/lib/uso/lectura-server";
 import { esPeriodo, type Periodo } from "@/lib/uso/periodo";
 import { usoDeLoPropuesto, type ResumenDeUso } from "@/lib/lo-propuesto/uso-server";
-import { itemsDeLoPropuesto } from "@/lib/lo-propuesto/registro-server";
+import { itemsDeLoPropuesto, itemsDeLosHechos } from "@/lib/lo-propuesto/registro-server";
 import { NOMBRE_DEL_MODULO, type ModuloDeLoPropuesto } from "@/lib/lo-propuesto/tipos";
 import { datosDeIa } from "@/lib/uso/ia-server";
 import { decisionesPorEquipo } from "@/lib/uso/agrupar";
@@ -32,7 +32,8 @@ import { concluir } from "@/lib/uso/conclusiones";
 import UsoDelEquipo from "@/components/uso/UsoDelEquipo";
 import PestanasDeUso from "@/components/uso/PestanasDeUso";
 import { ConclusionesDeUso, IaPorCliente, ProcesosDeIa } from "@/components/uso/IaDeNexus";
-import { Tabla } from "@/components/uso/piezas";
+import { Cifra, Tabla } from "@/components/uso/piezas";
+import { TANDA_DE_LA_META, metaDeLasNovedades } from "@/lib/uso/meta-de-las-novedades";
 import { DIAS_POSIBLES, VISTAS_DE_USO, type DiasDeIa, type VistaDeUso } from "@/lib/uso/vistas";
 
 export const dynamic = "force-dynamic";
@@ -110,8 +111,13 @@ const MODULOS: readonly ModuloDeLoPropuesto[] = ["reuniones", "clientes", "exito
 async function ParaQueSeUsa({ ahora }: { ahora: Date }) {
   const desde = new Date(ahora.getTime() - DIAS_DE_LO_PROPUESTO * DIA_MS);
   const ventana = { desde, hasta: ahora };
-  const [items, quien] = await Promise.all([itemsDeLoPropuesto({ ...ventana, ahora }), quienEsQuien()]);
-  const r = await usoDeLoPropuesto({ ...ventana, ahora, conPersonas: true, items });
+  // La meta de las novedades se mide sobre una tanda ya cerrada (lib/uso/meta-de-las-novedades.ts): en la ventana de 30
+  // días casi nada llega a vencer. De esa tanda se leen solo los hechos, no todo lo propuesto otra vez.
+  const tanda = { desde: new Date(ahora.getTime() - TANDA_DE_LA_META.desdeDias * DIA_MS), hasta: new Date(ahora.getTime() - TANDA_DE_LA_META.hastaDias * DIA_MS) };
+  const [items, quien, deLaTanda] = await Promise.all([itemsDeLoPropuesto({ ...ventana, ahora }), quienEsQuien(), itemsDeLosHechos({ ...tanda, ahora })]);
+  const [r, enLaTanda] = await Promise.all([usoDeLoPropuesto({ ...ventana, ahora, conPersonas: true, items }), usoDeLoPropuesto({ ...tanda, ahora, items: deLaTanda })]);
+  const novedadesDeLaTanda = enLaTanda.porTipo.find((t) => t.tipo === "novedad");
+  const meta = metaDeLasNovedades(novedadesDeLaTanda ?? { usados: 0, desestimados: 0, vencidos: 0 });
   if (r.total.nacieron === 0 && r.total.deAntes === 0) {
     return <EmptyState title="Nada propuesto en 30 días" description="Cuando Nexus proponga algo (una minuta, una tarea, un campo de la ficha) se cuenta acá." />;
   }
@@ -122,6 +128,12 @@ async function ParaQueSeUsa({ ahora }: { ahora: Date }) {
       <p className="text-[13px] text-fg-secondary">
         Lo que Nexus propuso en los últimos {DIAS_DE_LO_PROPUESTO} días y cómo está hoy. <span className="text-fg-muted">Vence lo que nadie decidió en su plazo.</span>
       </p>
+      <Cifra
+        titulo={`Meta: novedades de los documentos (las que nacieron hace ${TANDA_DE_LA_META.hastaDias} a ${TANDA_DE_LA_META.desdeDias} días)`}
+        valor={meta.valor}
+        pie={meta.texto}
+        tono={meta.estado === "no-cumple" ? "warn" : undefined}
+      />
       <Tabla
         titulo="Por módulo"
         columnas={["Propuesto", "Usado", "Desestimado", "Venció", "Pendiente"]}

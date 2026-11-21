@@ -87,6 +87,8 @@ export const PESO_DE_LA_FUENTE: Record<string, number> = {
   "cobranza-produccion": PESOS.decision,
   // Revisar una reunión.
   "reuniones-por-revisar-lo-que-dejaron": PESOS.reunion,
+  // Las novedades de un documento (2026-11-20): lo que una reunión cambia en él, por documento.
+  "novedades-de-documentos": PESOS.reunion,
   "reuniones-sin-revisar": PESOS.reunion,
   "pedidos-fuera-de-alcance": PESOS.reunion,
   // Land and Expand: después de una entrega, seguir con un servicio recurrente (SmartLoop, etapa 6).

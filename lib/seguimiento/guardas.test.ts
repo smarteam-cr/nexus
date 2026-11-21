@@ -128,6 +128,7 @@ describe("⛔ «Lo que dejó esta reunión» habla en tuteo", () => {
     ...fuentes("lib/seguimiento", /\.ts$/).filter((r) => !r.endsWith(".test.ts")),
     ...fuentes("lib/lo-propuesto", /\.ts$/).filter((r) => !r.endsWith(".test.ts")),
     "lib/para-ti/fuentes/reuniones.ts",
+    "lib/para-ti/fuentes/novedades-de-documentos.ts",
     "app/api/sessions/[id]/lo-que-dejo/route.ts",
     "app/api/sessions/[id]/minute/route.ts",
   ];

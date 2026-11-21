@@ -24,6 +24,7 @@ import { BotonAzul, BotonBlanco, BotonTexto, BotonUsar, FilaSugerida, FranjaDeSu
 import { cn } from "@/lib/cn";
 import type { EstadoDeLoPropuesto } from "@/lib/lo-propuesto/tipos";
 import { loQuePideDecisionEnPalabras, type Tarjeta } from "@/lib/seguimiento/tarjeta";
+import { rotuloDeQuienLoDijo } from "@/lib/seguimiento/quien-lo-dijo";
 
 const MESES = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
 
@@ -469,7 +470,12 @@ export default function LoQueDejoLaReunion({ inicial, sinCompromisos = false }: 
                 <FilaSugerida
                   key={h.id}
                   encima={`${novedades.map((d) => d.rotulo).join(" · ")}${h.proyecto ? ` · ${h.proyecto}` : ""}`}
-                  origen={<span className="line-clamp-2">{dondeFue || "Una novedad para el documento: ábrelo y cámbialo con el chat, o márcala como lista."}</span>}
+                  origen={
+                    <span className="line-clamp-2">
+                      {rotuloDeQuienLoDijo(h.quienLoDijo) && <span className="font-medium text-warn-ink">{rotuloDeQuienLoDijo(h.quienLoDijo)} · </span>}
+                      {dondeFue || "Una novedad para el documento: ábrelo y cámbialo con el chat, o márcala como lista."}
+                    </span>
+                  }
                   debajo={<Cita texto={h.cita} />}
                   acciones={
                     <>

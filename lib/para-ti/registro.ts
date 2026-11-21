@@ -18,6 +18,7 @@ import { PREVENTAS } from "./fuentes/preventa";
 import { NEGOCIOS } from "./fuentes/negocios";
 import { ETAPA_SUGERIDA } from "./fuentes/etapa";
 import { LO_QUE_DEJARON_TUS_REUNIONES } from "./fuentes/reuniones";
+import { NOVEDADES_DE_TUS_DOCUMENTOS } from "./fuentes/novedades-de-documentos";
 import { TIEMPOS_SIN_ANOTAR } from "./fuentes/tiempos";
 import { TAREAS } from "./fuentes/tareas";
 import { FINANZAS_DEVUELTO, FINANZAS_REGISTRAR, FINANZAS_SUPERVISAR } from "./fuentes/finanzas";
@@ -45,6 +46,7 @@ export const FUENTES: readonly Fuente[] = [
   ETAPA_SUGERIDA,
   REUNIONES_SIN_REVISAR,
   LO_QUE_DEJARON_TUS_REUNIONES,
+  NOVEDADES_DE_TUS_DOCUMENTOS,
   ALTA_A_MEDIO_HACER,
   PEDIDOS_FUERA_DE_ALCANCE,
   PRESENTACIONES,

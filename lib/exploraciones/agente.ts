@@ -1961,16 +1961,38 @@ async function guardar(
  * `LecturaDeReunion`, como un destino del registro.
  */
 export async function leerReunionNueva(o: { sesionId: string; fecha: Date; clientId: string }): Promise<"lanzada" | "ya-corre" | "no-corresponde"> {
-  if (!modeloDisponible(prisma.exploracionDeVenta)) return "no-corresponde";
+  const ids = (await exploracionesQueLaLeen(o)).ids;
+  let primera: "lanzada" | "ya-corre" | "no-corresponde" | null = null;
+  for (const id of ids) {
+    const r = await lanzarCorrida(id, "leer", { triggeredByEmail: null, sesionId: o.sesionId, automatica: true });
+    const resultado = !r.ok ? "no-corresponde" : r.yaCorria ? "ya-corre" : "lanzada";
+    primera ??= resultado;
+  }
+  return primera ?? "no-corresponde";
+}
+
+/**
+ * Las preventas de la empresa que leen esta reunión (o ya la leyeron): el destino «preventa» de los hechos
+ * (lib/seguimiento/destinos.ts). La misma regla que `leerReunionNueva`, sin lanzar nada y contando como suya una reunión
+ * que ya leyó (los hechos se pueden releer con la transcripción). Solo las de la preventa, no las de un proyecto. La
+ * fecha es la de la reunión, con su hora (la regla mira si es de después del alta de la preventa).
+ */
+export async function preventasQueLeenLaReunion(o: { sesionId: string; clientId: string }): Promise<string[]> {
+  return (await exploracionesQueLaLeen(o, { yaLeidaCuenta: true })).preventas;
+}
+
+/** `fecha`: la que manda el post-proceso; sin ella, la de la fila de la reunión. */
+async function exploracionesQueLaLeen(o: { sesionId: string; fecha?: Date; clientId: string }, opts: { yaLeidaCuenta?: boolean } = {}): Promise<{ ids: string[]; preventas: string[] }> {
+  if (!modeloDisponible(prisma.exploracionDeVenta)) return { ids: [], preventas: [] };
   // A propósito las dos clases de fila: la preventa (DE_LA_PREVENTA) y la exploración de cada proyecto del cliente.
   const filas = await prisma.exploracionDeVenta.findMany({
     where: { clientId: o.clientId, archivadaEn: null, OR: [DE_LA_PREVENTA, { projectId: { not: null } }] },
     select: { id: true, projectId: true, createdAt: true, contenido: true, propuesta: true, client: { select: { kind: true } } },
   });
-  if (!filas.length) return "no-corresponde";
+  if (!filas.length) return { ids: [], preventas: [] };
   const ahora = new Date();
   const [sesion, categorias] = await Promise.all([
-    prisma.firefliesSession.findUnique({ where: { id: o.sesionId }, select: { googleEventId: true, participants: true, organizerEmail: true } }),
+    prisma.firefliesSession.findUnique({ where: { id: o.sesionId }, select: { googleEventId: true, participants: true, organizerEmail: true, date: true } }),
     prisma.sessionCategory.findMany({ select: { domains: true, kind: true } }).catch(() => []),
   ]);
   const exps = await Promise.all(
@@ -1983,7 +2005,7 @@ export async function leerReunionNueva(o: { sesionId: string; fecha: Date; clien
         creadaEn: f.createdAt,
         sesiones: contenido.sesiones,
         fuera: contenido.fuera,
-        leidas: leerPropuesta(f.propuesta).leidas.sesiones,
+        leidas: leerPropuesta(f.propuesta).leidas.sesiones.filter((id) => !opts.yaLeidaCuenta || id !== o.sesionId),
         // seVendeTodavia solo importa en la preventa (cuesta una consulta): en un proyecto no se mira.
         seVende: f.projectId ? true : await seVendeTodavia({ clientId: o.clientId, createdAt: f.createdAt, client: f.client }, ahora),
       };
@@ -1995,16 +2017,10 @@ export async function leerReunionNueva(o: { sesionId: string; fecha: Date; clien
       id: o.sesionId,
       // Sin la fila (no debería pasar: la manda el post-proceso), sin evento ni sala conocidos.
       eventoId: sesion?.googleEventId ?? null,
-      fecha: o.fecha,
+      fecha: o.fecha ?? sesion?.date ?? ahora,
       participants: sesion ? [...sesion.participants, ...(sesion.organizerEmail ? [sesion.organizerEmail] : [])] : [],
     },
     { ahora, internos: buildInternalDomainsSet(categorias) },
   );
-  let primera: "lanzada" | "ya-corre" | "no-corresponde" | null = null;
-  for (const id of ids) {
-    const r = await lanzarCorrida(id, "leer", { triggeredByEmail: null, sesionId: o.sesionId, automatica: true });
-    const resultado = !r.ok ? "no-corresponde" : r.yaCorria ? "ya-corre" : "lanzada";
-    primera ??= resultado;
-  }
-  return primera ?? "no-corresponde";
+  return { ids, preventas: ids.filter((id) => exps.some((e) => e.id === id && !e.delProyecto)) };
 }

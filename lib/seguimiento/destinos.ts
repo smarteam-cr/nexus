@@ -32,8 +32,11 @@ export type KindConDestinos = (typeof KINDS_CON_DESTINOS)[number];
  *   · avance   — el borrador de avance del cronograma de ese proyecto.
  *   · etapa    — la sugerencia de etapa de la encuesta (nada se escribe en HubSpot).
  *   · novedad  — una novedad en la sección de un documento que ya tiene contenido. Se calcula, no se guarda.
+ *   · preventa — lo de un prospecto cuya preventa lee esta reunión (2026-11-20): nace delegado en ella. La preventa
+ *                conserva su lectura propia (la reunión entera, para su lienzo: lib/exploraciones/agente.ts ›
+ *                `leerReunionNueva`), así que el hecho no le propone nada aparte: queda dicho a dónde fue.
  */
-export type SalidaDelDestino = "ficha" | "alerta" | "vigia" | "procesos" | "avance" | "etapa" | "novedad";
+export type SalidaDelDestino = "ficha" | "alerta" | "vigia" | "procesos" | "avance" | "etapa" | "novedad" | "preventa";
 
 /** De quién tiene que ser el hecho: de la cuenta, de un proyecto vinculado, o cualquiera de los dos. */
 export type AmbitoDelDestino = "cuenta" | "proyecto" | "cualquiera";
@@ -42,7 +45,7 @@ export interface DestinoDeHecho {
   /** Estable: se guarda en `HechoDeReunion.destinos[].clave`. «pieza.seccion» en los documentos. */
   clave: string;
   /** Qué módulo lo recibe (para leer la tabla y el reporte del sondeo). */
-  modulo: "ficha" | "cs" | "procesos" | "cronograma" | "etapa" | "kickoff" | "planificacion" | "integraciones" | "diagnostico";
+  modulo: "ficha" | "cs" | "procesos" | "cronograma" | "etapa" | "kickoff" | "planificacion" | "integraciones" | "diagnostico" | "preventa";
   tipos: readonly TipoDeHecho[];
   /** Solo en un acuerdo: los temas que le sirven. Sin temas, cualquiera. */
   temas?: readonly TemaDeAcuerdo[];
@@ -61,12 +64,15 @@ export interface DestinoDeHecho {
   soloSiLoDijoElCliente?: boolean;
   /** Lo contrario: solo si NO se comprobó que la dijo el cliente (la queja va como evidencia al vigía, que la juzga). */
   soloSiNoLoDijoElCliente?: boolean;
+  /** Solo si una preventa del prospecto lee esta reunión (`ContextoDelRuteo.laPreventaLaLee`). */
+  soloSiLaPreventaLaLee?: boolean;
   /** Cómo se lee en la tarjeta de la reunión, en la novedad y en el reporte del sondeo. */
   rotulo: string;
 }
 
 const CLIENTE: readonly KindConDestinos[] = ["CLIENTE"];
 const AMBOS: readonly KindConDestinos[] = ["CLIENTE", "PROSPECTO"];
+const PROSPECTO: readonly KindConDestinos[] = ["PROSPECTO"];
 
 export const DESTINOS: readonly DestinoDeHecho[] = [
   // ── La ficha (la cuenta) ──
@@ -106,6 +112,19 @@ export const DESTINOS: readonly DestinoDeHecho[] = [
   // ── Las señales: cada una dispara lo suyo, solo cuando hay algo que decir ──
   { clave: "cronograma.avance", modulo: "cronograma", tipos: ["senal_cronograma"], ambito: "proyecto", kinds: CLIENTE, salida: "avance", rotulo: "Avance del cronograma" },
   { clave: "etapa.encuesta", modulo: "etapa", tipos: ["senal_etapa"], ambito: "proyecto", kinds: CLIENTE, salida: "etapa", rotulo: "Encuesta de la etapa" },
+
+  // ── La preventa de un prospecto (2026-11-20): lo que la reunión dejó de la cuenta, la gente, lo que busca, lo que
+  //    se acordó y lo que frena. Solo si su preventa lee esta reunión; si no, esos hechos quedan en la tarjeta. ──
+  {
+    clave: "preventa",
+    modulo: "preventa",
+    tipos: ["cuenta", "persona", "resultado", "acuerdo", "riesgo", "queja"],
+    ambito: "cualquiera",
+    kinds: PROSPECTO,
+    salida: "preventa",
+    soloSiLaPreventaLaLee: true,
+    rotulo: "Preventa",
+  },
 ];
 
 /**
