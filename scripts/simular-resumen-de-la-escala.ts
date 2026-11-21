@@ -47,6 +47,7 @@ async function main() {
 
   const { leerParaElResumen, loQueLeeElResumen } = await import("@/lib/exploraciones/resumen-de-la-escala-server");
   const { escribirElResumen, loQueHicimos, resumenParaLaPagina } = await import("@/lib/exploraciones/resumen-de-la-escala");
+  const { perdidaDeLaEscala } = await import("@/lib/exploraciones/perdida-de-la-escala");
   const { getAnthropic } = await import("@/lib/anthropic");
   const { costoDeLlamada } = await import("@/lib/ai/precios");
 
@@ -191,12 +192,13 @@ async function main() {
   const entorno = { edicion: l.fila.edicion, perfilCierre: l.fila.perfilCierre, perfilDespues: l.fila.perfilDespues, escalaVersion: l.escala.version };
   const porExplorar = Object.fromEntries(l.deLasAreas.map((x) => [x.resultado.areaId, x.porExplorar]));
   const resultados = l.deLasAreas.map((x) => x.resultado);
-  const adentro = resumenParaLaPagina(guardado, resultados, l.estado.contenido.chequeo, entorno, { conCitas: true, porExplorar });
-  const afuera = resumenParaLaPagina(guardado, resultados, l.estado.contenido.chequeo, entorno, { conCitas: false, porExplorar });
+  const perdida = perdidaDeLaEscala(l.fila.contenido);
+  const adentro = resumenParaLaPagina(guardado, resultados, l.estado.contenido.chequeo, entorno, { conCitas: true, porExplorar, perdida });
+  const afuera = resumenParaLaPagina(guardado, resultados, l.estado.contenido.chequeo, entorno, { conCitas: false, porExplorar, perdida });
   // Con --pagina <archivo>: lo que vería el cliente y lo que se ve adentro, para pintarlo; y el guardado, para cargarlo.
   const paginaEn = arg("--pagina");
   if (paginaEn)
-    fs.writeFileSync(paginaEn, JSON.stringify({ empresa: l.fila.client.name, afuera, adentro, guardado, areas: l.deLasAreas.map((x) => ({ id: x.resultado.areaId, nombre: x.resultado.areaNombre })) }, null, 1));
+    fs.writeFileSync(paginaEn, JSON.stringify({ empresa: l.fila.client.name, afuera, adentro, guardado, areas: l.deLasAreas.map((x) => ({ id: x.resultado.areaId, nombre: x.resultado.areaNombre })), resultados }, null, 1));
   console.log(`${NL}── Lo que ve el cliente: niveles y lo que falta validar`);
   for (const a of afuera.areas) console.log(`  ${a.nombre}: ${a.nivelNombre ?? "En medición"} — ${a.porque ?? "(sin)"} [${a.origenDelPorque}]`);
   for (const p of afuera.pendientes) console.log(`  [${p.tipo}] ${p.texto}`);

@@ -3,6 +3,10 @@
  * ResultadoDelTestVista.tsx), en la pantalla y en el PDF: que no se pierda ningún texto ni dato, que «Ver puntajes»
  * arranque apagado y quede dentro del radar (el CSS lo resuelve con `:has`), y que el PDF salga en sus tres hojas, sin
  * interruptor, sin puntajes en el radar y con el tamaño de hoja que imprime el motor.
+ *
+ * 20 nov (cambio A PROPÓSITO, pedido de Elías al presentar con Ventas): arriba del radar vuelve la ESCALERA de los cinco
+ * niveles (lib/escala/escalera.ts), con dónde está hoy y a dónde lo llevamos, también en el PDF. Lo de antes no se pierde:
+ * las pruebas de abajo siguen pidiendo cada texto y el radar.
  */
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -220,6 +224,25 @@ describe("la página de resultado, como se dibuja", () => {
     const hoja = css.match(/\.dr \.rd-hoja \{ width: (\d+)px; height: (\d+)px;/);
     expect(hoja).not.toBeNull();
     expect({ ancho: Number(hoja![1]), alto: Number(hoja![2]) }).toEqual(HOJA_DEL_PDF);
+  });
+});
+
+describe("la escalera de los niveles (20 nov)", () => {
+  it("va arriba y el radar justo debajo, con hoy y la meta (Funcional desde Deficiente), en la pantalla y en el PDF", () => {
+    for (const modo of ["pantalla", "pdf"] as const) {
+      const html = dibujar(modo);
+      const escalera = html.indexOf('class="esc-svg"');
+      expect(escalera, `sin escalera en ${modo}`).toBeGreaterThan(-1);
+      expect(html.search(/class="rde[ "]/), `el radar va debajo de la escalera en ${modo}`).toBeGreaterThan(escalera);
+      expect(html).toContain('class="esc-nivel esc-hoy" data-nivel="D"');
+      expect(html).toContain('class="esc-nivel esc-meta" data-nivel="F"');
+      expect(html).toContain('aria-label="Los cinco niveles de la escala: Ventas está hoy en Deficiente y la meta es llevarla a Funcional."');
+      // Estática: nada que dependa de JS.
+      expect(html.slice(escalera, html.indexOf("</svg>", escalera))).not.toMatch(/on[A-Z]|<script/);
+    }
+    // En el PDF va en la primera hoja, con la cabecera y el radar.
+    const pdf = dibujar("pdf");
+    expect(pdf.indexOf('class="esc-svg"')).toBeLessThan(pdf.indexOf('<span class="rd-hoja-numero">1</span>'));
   });
 });
 

@@ -66,7 +66,10 @@ import {
   type SubequipoDeLaPagina,
   type TarjetaDeLaPagina,
   type TipoDelNegocio,
+  esCosto,
+  faltaDeLaPerdida,
 } from "@/lib/external/pagina-del-resumen";
+import type { LaPerdidaEnLaEscala, PerdidaDeLaEscala } from "./perdida-de-la-escala";
 export { enHoras, MAX_ETIQUETAS, TOPE_A_MANO, TOPE_DE_LA_CIFRA, TOPE_DE_UN_NOMBRE, TOPE_DEL_TITULO_DEL_PUNTO, TOPE_DEL_TITULO_DEL_RECORRIDO };
 export type { AreaDelResumenDeLaPagina, CitaDelResumen, DatoRojoDeLaPagina, EstadoDeLaCifra, LoQueHicimos, PreguntaDelResumen, ResumenDeLaPagina, ReunionMalLeida, TipoDelNegocio };
 
@@ -338,6 +341,13 @@ export interface ContextoDelResumen {
    * agente ordene los temas por cuánto se habló de cada uno (en Cemaco, crédito y cobro fue el 31 % del tiempo).
    */
   peso?: PesoDeLaSesion[];
+  /**
+   * Quiénes dirigen o deciden en la empresa (20 nov, la casilla «Quién decide», `quienesDecidenDe`): sin dinero dicho, el
+   * titular y el reto principal salen de lo que MÁS repitieron ellos. Orienta; sus nombres nunca salen (`noNombrar`).
+   */
+  deciden?: string;
+  /** La pérdida que la empresa validó en la preventa (`perdidaParaElAgente`): orienta qué pesa; su número lo pone la página. */
+  perdida?: string;
 }
 
 /** Una sesión con su peso, para el agente. */
@@ -372,17 +382,17 @@ LA REGLA DE TODO: cada afirmación sobre la empresa (su negocio, su organizació
 
 0 EL PESO DE CADA TEMA (antes de escribir nada): te damos cada sesión con su título y sus minutos. Con eso y con lo que se dijo, decide cuáles son los TEMAS de la empresa (un área, un proceso, un problema) y ordénalos por peso: cuánto tiempo y cuántas reuniones se le dedicaron, y cuánto lo señaló la empresa como urgente o crítico. El espacio del Resumen va según ese orden: el titular, los puntos clave y la mayor parte de los retos y las cifras son del tema que más pesó. Un tema del que se habló de pasada no puede ocupar el titular. El título de una reunión solo te orienta: nunca lo copies ni lo cites.
 
-1 NEGOCIO (forma editorial: la dirección lo lee en 60 segundos). «tesis» (1): el TITULAR. Nombra el PROBLEMA PRINCIPAL de la empresa: el del tema que más pesó. Dos frases cortas, de 3 a 8 palabras cada una, terminadas en punto: la primera, qué pasa hoy en ese tema (qué se hace a mano, dónde se pierde, qué no se ve); la segunda, su escala o su consecuencia, con un número o un hecho de la empresa (forma: «Las citas se confirman a mano. Cada recepción llama a 200 pacientes.»); dos citas, una por frase. NUNCA dos hechos neutros de la operación («Las ventas son por teléfono. Los clientes pagan a plazos.» describe y no dice qué duele). Cada frase con sujeto y verbo claros, sin metáforas ni imágenes («clientes que no dejan rastro»). Nada aspiracional ni de folleto («visión compartida», «crecimiento», «transformación»). «etiquetas» (3): de 1 a 5 palabras cada una, sin verbo conjugado y sin punto: qué vende, a quién o dónde, y cómo vende o cobra («Clínicas veterinarias», «Dueños de mascotas», «Planes de salud por año»). «tamano» (0 o 1): el tamaño del negocio que dijo la empresa, con el número primero y su unidad («120 clínicas», «3.000 pedidos al mes»): clientes, sedes, tiendas, transacciones. Si la empresa respondió solo con un número («500.»), busca otra intervención suya que lo diga con su unidad y cita esa. Nunca la cifra de un área (leads de marketing, casos de soporte); si nadie lo dijo, vacío. «abarca» y «fuera» (0 o 1 cada una, hasta 15 palabras): qué cubre este diagnóstico (unidad, marcas, países, equipos) y lo que la empresa dijo que queda fuera (solo lo que dijo: no lo deduzcas de lo que sí entra). «vende» (qué vende y a quién), «ingresos» (cómo cobra: el modelo, nunca una meta ni un monto), «motivo» (qué los movió a buscar ayuda) y «busca» (el resultado que quieren): 0 o 1 frase corta cada una; sostienen la tesis y las etiquetas. Nada corporativo ni genérico. Si una parte no se habló, déjala vacía: no la completes con suposiciones ni con lo que sabes de la industria.
+1 NEGOCIO (forma editorial: la dirección lo lee en 60 segundos). «tesis» (1): el TITULAR. Nombra el PROBLEMA PRINCIPAL de la empresa: el del tema que más pesó. Dos frases cortas, de 3 a 8 palabras cada una, terminadas en punto: la primera, qué pasa hoy en ese tema (qué se hace a mano, dónde se pierde, qué no se ve); la segunda, su escala o su consecuencia, con un número o un hecho de la empresa (forma: «Las citas se confirman a mano. Cada recepción llama a 200 pacientes.»); dos citas, una por frase. LO QUE MÁS PESA ES EL DINERO: si la empresa dijo cuánto le cuesta ese problema (lo que pierde, no cobra o deja de vender), esa cifra va en el titular tal como la dijo, con su moneda y su cita (forma: «Se pierden US$ 40 mil al mes. La cartera vencida no se cobra.»). Sin dinero dicho, el titular sale del dolor que MÁS repitieron quienes dirigen o deciden (te damos quiénes son), dicho como lo que no pueden hacer o lo que les cuesta (forma: «La gerencia no ve qué vende cada asesor.»). NUNCA un titular que solo describe cómo operan («Las ventas se gestionan por WhatsApp.»): eso no le dice a la dirección qué le duele. NUNCA dos hechos neutros de la operación («Las ventas son por teléfono. Los clientes pagan a plazos.» describe y no dice qué duele). Cada frase con sujeto y verbo claros, sin metáforas ni imágenes («clientes que no dejan rastro»). Nada aspiracional ni de folleto («visión compartida», «crecimiento», «transformación»). «etiquetas» (3): de 1 a 5 palabras cada una, sin verbo conjugado y sin punto: qué vende, a quién o dónde, y cómo vende o cobra («Clínicas veterinarias», «Dueños de mascotas», «Planes de salud por año»). «tamano» (0 o 1): el tamaño del negocio que dijo la empresa, con el número primero y su unidad («120 clínicas», «3.000 pedidos al mes»): clientes, sedes, tiendas, transacciones. Si la empresa respondió solo con un número («500.»), busca otra intervención suya que lo diga con su unidad y cita esa. Nunca la cifra de un área (leads de marketing, casos de soporte); si nadie lo dijo, vacío. «abarca» y «fuera» (0 o 1 cada una, hasta 15 palabras): qué cubre este diagnóstico (unidad, marcas, países, equipos) y lo que la empresa dijo que queda fuera (solo lo que dijo: no lo deduzcas de lo que sí entra). «vende» (qué vende y a quién), «ingresos» (cómo cobra: el modelo, nunca una meta ni un monto), «motivo» (qué los movió a buscar ayuda) y «busca» (el resultado que quieren): 0 o 1 frase corta cada una; sostienen la tesis y las etiquetas. Nada corporativo ni genérico. Si una parte no se habló, déjala vacía: no la completes con suposiciones ni con lo que sabes de la industria.
 
 2 RECORRIDO: sigue a UN cliente desde el primer contacto hasta que opera con lo que compró, como pasa HOY, en 3 a 5 PASOS en línea (la captación, la venta, el cierre, la puesta en marcha o la entrega). Junta en un paso las etapas seguidas del mismo equipo; cuando el cliente pasa de un equipo a otro, es otro paso. El ÚLTIMO paso en línea es el resultado para el cliente («La mascota en control», «Pedido entregado», «Mueble instalado»), con «quien» null si ya no lo lleva un equipo; es el ÚNICO paso en línea con «quien» null. Aparte, con «continuo»: true y al final, el equipo o los equipos que acompañan MIENTRAS el cliente opera (soporte, Customer Success, postventa, reclamos): 0 a 2. Cada equipo que tuvo una reunión aparece por lo menos en un paso. «etapa»: su nombre, de 2 a 4 palabras. «quien»: el equipo o los equipos de los datos que lo llevan, hasta 3 palabras («Ventas», «Soporte + Customer Success»); si lo lleva alguien que no es un equipo de los datos, su rol («Vendedores», «Bodega»). Nunca dos pasos seguidos con el mismo «quien» y el mismo ícono: son uno. «texto»: un detalle de hasta 6 palabras, sin verbo en segunda persona («Llamada, correo y la web», «Contrato y planos a fábrica»). «friccion»: lo que se traba en ese paso o al pasar al siguiente, hasta 18 palabras (null si no se vio). «icono»: uno de captacion, contacto, visita, demo, cotizacion, cierre, configuracion, entrega, tienda, opera, filtro, soporte. Cada paso con su cita. Solo lo que hacen hoy: lo que desean o planean no es un paso; va en «busca». «tituloDelRecorrido»: «De <el primer paso> a <el último paso>.», en palabras del negocio, hasta 9 palabras («De la llamada al mueble instalado.»): como pasa HOY, nunca cómo debería ser ni lo que falta («con trazabilidad», «sin pérdidas»), y nada que los pasos no digan.
 
 3 AREAS: una entrada por subequipo de cada equipo de la escala con el que hubo reunión, en orden de peso (el que más se habló primero). Si un equipo tiene subequipos que trabajan distinto (Soporte y Customer Success dentro de «Servicio»), una entrada por subequipo, cada una con el id de ese equipo en «area»; si no, una sola entrada con el nombre del equipo. Un equipo sin reunión propia (aunque otro lo mencione) no lleva entrada. En cada una:
 - «organizacion» (2): primero QUIÉNES son, por su rol y cuántos, de 2 a 6 palabras («Coordinación + 3 técnicos», «Una persona, con apoyo externo»); después QUÉ HACEN, de 6 a 12 palabras. Si no se dijo quiénes son, solo qué hacen. Cuántos: el total como lo dijeron («somos cuatro» incluye a quien habla); no agregues «por marca», «por país» ni repartos que la cita no diga. Un horario, un turno o la antigüedad del equipo no es ninguna de las dos. Nunca un nombre.
 - «bien» (1): lo que ya hace o ya tiene (procesos, materiales, rutinas, mediciones), aunque sea a mano, de 6 a 12 palabras. Reconócelo siempre que la empresa lo haya dicho.
-- «frena»: vacío. Lo que le impide rendir más va en los retos.
-- «retos» (de 1 a 4 según el PESO del subequipo: el tema que más pesó lleva 3 o 4, uno del que se habló poco lleva 1; el más respaldado primero): lo que hay que mejorar, de 5 a 10 palabras, empezando con un verbo en infinitivo y concreto de ESTA empresa («Confirmar cada cita un día antes», «Separar los reclamos de las consultas de uso»). Sale de un problema que la empresa contó, con su cita. Nunca «Implementar…» ni «Automatizar…» sueltos, ni una herramienta, ni lo que Smarteam vende: lo que hay que lograr, no cómo. Nunca un riesgo típico de la escala que la empresa no contó.
-- «cifras» (de 0 a 2 según el PESO del subequipo; la más reveladora primero): la magnitud de lo que pasa HOY, primero lo que se pierde o se escapa (clientes que se van, casos que esperan, tiempo en retrabajo) antes que un volumen. UNA CIFRA ES UN SOLO DATO: todos los números de «cifra» y de «texto» salen de UNA misma cita; dos datos dichos en momentos distintos (un porcentaje y una comparación) son dos cifras aparte, cada una con su estado. Una cifra mide cuánto pasa (clientes, casos, días, un porcentaje): una definición («consideras activo a quien abrió en los últimos 6 meses») no es una cifra. «cifra» es lo que va en grande: solo el número, hasta 12 caracteres («40», «120–150», «≈60», «3,5 %», «9 de 30»); «texto» es su rótulo, de 2 a 6 palabras, sin verbo y sin «tu» ni «tus» («reuniones por semana», «pedidos al mes», «clientes que se van al mes»); el período y el contexto, si hacen falta, van en «nota». Si la cita da un rango o una lista de valores, la cifra es el rango como lo dijeron; nunca llames «máximo», «mínimo» ni «promedio» a un valor si no lo dijeron así. «estado»: «declarado» si lo dijo la empresa; «estimado» si es un cálculo o un resumen de Smarteam que la empresa confirmó (en «nota», la base y los supuestos); «pendiente» si se mencionó y hay que confirmarlo. USA TODO: una cifra que dijo alguien de Smarteam y la empresa NO corrigió en los turnos siguientes (no dijo que no, no dio otro número, no la puso en duda) también va, con «estado» «pendiente» y su cita de lo que dijo Smarteam; si la empresa la corrigió, no la pongas (o pon la corregida, con la cita de la empresa). «nota» le habla a la empresa («Falta confirmar el período y cómo se calcula»): nunca cita lo dicho ni dice quién lo dijo («según…», «estimado por…»). Si lo dijeron con dudas («si no me equivoco», «no tengo el dato exacto»), «nota» dice qué falta validar. Escribe la cifra como la dijeron («9 de 30», nunca la resta «21»): no calcules porcentajes, ni sumes, ni redondees. Si los números de una cita no cuadran entre sí (una parte más grande que el total, una suma que no da, una frase cortada), no la pongas en «cifras»: va en PENDIENTES como «Confirmar el total de…». Si la cita da un valor habitual y uno ocasional («en promedio 24 horas, a veces tres días»), la cifra es el habitual y el otro va en «nota»; no califiques el rótulo («habitual», «típico») si no lo dijeron. Una meta («quieren llegar a 50») no es una cifra de hoy: no la pongas sola; si la usas, que la cifra sea el resultado de hoy frente a la meta («25 de 50 reuniones»). Una comparación entre dos números que resumió Smarteam y la empresa confirmó («entran 40 y se van 9») es una cifra «estimado» valiosa: inclúyela con su base, sin sacar conclusiones. No saques conclusiones que la cifra no dice («tu cartera no crece»). Nunca inventes pérdidas en dinero.
-- «falta»: si el área no tiene cifras, qué dato faltaría para medir el impacto (una frase); si no, null.
+- «frena» (1): EL RETO PRINCIPAL del subequipo, el título de su fila, de 4 a 10 palabras, sin «tu» y SIN NÚMEROS (la cifra en dinero va en «cifras» y la página la pone arriba de este título): lo más importante que se conversó sobre cómo vende y cuánto dinero gana o pierde ese equipo; si no se habló de dinero, el dolor que más repitieron quienes dirigen o deciden. Es lo que duele, no cómo operan: «Cuentas a crédito que no se cobran a tiempo», «La gerencia no puede medir a ventas por resultados»; nunca «Gestión de ventas por WhatsApp» ni una herramienta. Con su cita.
+- «retos» (de 1 a 4 según el PESO del subequipo: el tema que más pesó lleva 3 o 4, uno del que se habló poco lleva 1; el más respaldado primero): LOS PROBLEMAS QUE CAUSAN el reto principal, dichos como lo que hay que mejorar, de 5 a 10 palabras, empezando con un verbo en infinitivo y concreto de ESTA empresa («Confirmar cada cita un día antes», «Separar los reclamos de las consultas de uso»). Sale de un problema que la empresa contó, con su cita. Nunca «Implementar…» ni «Automatizar…» sueltos, ni una herramienta, ni lo que Smarteam vende: lo que hay que lograr, no cómo. Nunca un riesgo típico de la escala que la empresa no contó.
+- «cifras» (de 0 a 2 según el PESO del subequipo; la más reveladora primero): la magnitud de lo que pasa HOY, primero lo que se pierde o se escapa (clientes que se van, casos que esperan, tiempo en retrabajo) antes que un volumen. LA PRIMERA, si se dijo, es CUÁNTO CUESTA EN DINERO: lo que se pierde, no se cobra o se deja de vender, con su moneda en «cifra» como la dijeron («US$ 40 mil», «₡ 12 M») y en «texto» qué es («al mes en cuentas que no se cobran»); la página la pone de titular de la fila. Vale la regla de siempre: la que dijo la empresa; la que dijo Smarteam si nadie la corrigió («pendiente»); si la corrigieron, la corregida. UNA CIFRA ES UN SOLO DATO: todos los números de «cifra» y de «texto» salen de UNA misma cita; dos datos dichos en momentos distintos (un porcentaje y una comparación) son dos cifras aparte, cada una con su estado. Una cifra mide cuánto pasa (clientes, casos, días, un porcentaje): una definición («consideras activo a quien abrió en los últimos 6 meses») no es una cifra. «cifra» es lo que va en grande: solo el número, hasta 12 caracteres («40», «120–150», «≈60», «3,5 %», «9 de 30»); «texto» es su rótulo, de 2 a 6 palabras, sin verbo y sin «tu» ni «tus» («reuniones por semana», «pedidos al mes», «clientes que se van al mes»); el período y el contexto, si hacen falta, van en «nota». Si la cita da un rango o una lista de valores, la cifra es el rango como lo dijeron; nunca llames «máximo», «mínimo» ni «promedio» a un valor si no lo dijeron así. «estado»: «declarado» si lo dijo la empresa; «estimado» si es un cálculo o un resumen de Smarteam que la empresa confirmó (en «nota», la base y los supuestos); «pendiente» si se mencionó y hay que confirmarlo. USA TODO: una cifra que dijo alguien de Smarteam y la empresa NO corrigió en los turnos siguientes (no dijo que no, no dio otro número, no la puso en duda) también va, con «estado» «pendiente» y su cita de lo que dijo Smarteam; si la empresa la corrigió, no la pongas (o pon la corregida, con la cita de la empresa). «nota» le habla a la empresa («Falta confirmar el período y cómo se calcula»): nunca cita lo dicho ni dice quién lo dijo («según…», «estimado por…»). Si lo dijeron con dudas («si no me equivoco», «no tengo el dato exacto»), «nota» dice qué falta validar. Escribe la cifra como la dijeron («9 de 30», nunca la resta «21»): no calcules porcentajes, ni sumes, ni redondees. Si los números de una cita no cuadran entre sí (una parte más grande que el total, una suma que no da, una frase cortada), no la pongas en «cifras»: va en PENDIENTES como «Confirmar el total de…». Si la cita da un valor habitual y uno ocasional («en promedio 24 horas, a veces tres días»), la cifra es el habitual y el otro va en «nota»; no califiques el rótulo («habitual», «típico») si no lo dijeron. Una meta («quieren llegar a 50») no es una cifra de hoy: no la pongas sola; si la usas, que la cifra sea el resultado de hoy frente a la meta («25 de 50 reuniones»). Una comparación entre dos números que resumió Smarteam y la empresa confirmó («entran 40 y se van 9») es una cifra «estimado» valiosa: inclúyela con su base, sin sacar conclusiones. No saques conclusiones que la cifra no dice («tu cartera no crece»). Nunca inventes pérdidas en dinero.
+- «falta»: si ninguna cifra es en dinero, qué falta para saber CUÁNTO LE CUESTA esto a la empresa, en una frase que le habla («Falta medir cuánto deja de cobrar la cartera vencida al mes»): la página lo pone como «por validar»; nunca un monto que nadie dijo. Con una cifra en dinero, null.
 
 4 PORQUE (uno por equipo de la escala con nivel): una o dos frases (hasta 50 palabras) de por qué está en su nivel y no uno arriba ni uno abajo, con las partes por su nombre. Usa SOLO los niveles que te damos. Nunca escribas «provisional» ni «hipótesis»: si el nivel lo determina una parte con «porExplorar», di qué mide esa parte y no la presentes como un hecho («no existe»).
 
@@ -390,7 +400,7 @@ LA REGLA DE TODO: cada afirmación sobre la empresa (su negocio, su organizació
 
 6 PENDIENTES (0 a 2, solo lo que podría cambiar el diagnóstico): una línea cada uno, en palabras simples, dicha como lo que hay que hacer («Confirmar cuántos casos recibe Soporte al mes en total»). «sin-dato»: se preguntó y no hubo dato; «hipotesis»: algo que creemos y falta validar; «contradiccion»: dos cosas dichas que no cuadran (con las dos citas). Un equipo con el que no se conversó NO va aquí (se agrega solo) y nunca se presenta como de bajo rendimiento; lo de «confirmar» tampoco se repite aquí. Nunca cuentes cómo se armó una cifra ni qué se dijo en qué momento de la reunión («se construyó combinando…», «se dijo con dudas»): di solo qué hay que confirmar.
 
-7 PUNTOS CLAVE (7 candidatos en orden de peso; la página se queda con los 5 primeros que pasen la verificación): lo MÁS CRÍTICO de toda la empresa (el primero, del tema que más pesó). Explican más que el titular: no lo repitas palabra por palabra. «titulo»: de 3 a 8 palabras, qué está crítico hoy, sin «tu» («La cartera se asigna a mano»); «texto»: una o dos frases, de 12 a 35 palabras, qué pasa y dónde, con lo que la empresa dijo; una consecuencia SOLO si la empresa la dijo (nunca «puede dañar…», «genera fricciones»: eso es una lectura nuestra); «area»: el id del equipo de la escala del que habla, o null. Cada uno con su cita de la EMPRESA, copiada palabra por palabra (es lo que más se cae); ninguno es una recomendación, una herramienta ni lo que Smarteam vende.
+7 PUNTOS CLAVE (7 candidatos en orden de peso; la página se queda con los 5 primeros que pasen la verificación): lo MÁS CRÍTICO de toda la empresa (el primero, del tema que más pesó). Explican más que el titular: no lo repitas palabra por palabra. «titulo»: de 3 a 8 palabras, qué está crítico hoy, sin «tu», con lo que le cuesta a la empresa si lo dijo («US$ 40 mil al mes sin cobrar», «La cartera se asigna a mano»); nunca cómo operan sin decir qué duele; «texto»: una o dos frases, de 12 a 35 palabras, qué pasa y dónde, con lo que la empresa dijo; una consecuencia SOLO si la empresa la dijo (nunca «puede dañar…», «genera fricciones»: eso es una lectura nuestra); «area»: el id del equipo de la escala del que habla, o null. Cada uno con su cita de la EMPRESA, copiada palabra por palabra (es lo que más se cae); ninguno es una recomendación, una herramienta ni lo que Smarteam vende.
 
 CÓMO DISTINGUIR: que algo no se haya preguntado no significa que no lo tengan: «no tienen X» solo si la empresa lo dijo. Separa lo que hacen hoy (organización, recorrido, retos, cifras), lo que quieren (busca, metas) y lo que propondríamos nosotros (eso no va aquí). No asumas herramientas, integraciones ni compras: una herramienta se nombra solo si la empresa la nombró en sus reuniones.
 
@@ -481,6 +491,8 @@ export function pedidoDelResumen(ctx: ContextoDelResumen, aviso = ""): Anthropic
     `Sus equipos de la escala, con lo que ya se ubicó:\n${JSON.stringify(ctx.areas, null, 1)}`,
     ctx.peso?.length ? `El peso de cada sesión (para ordenar los temas, regla 0):\n${bloqueDelPeso(ctx.peso)}` : "",
     ctx.guia ? `La guía del equipo de Smarteam (orienta; no es evidencia):\n${ctx.guia}` : "",
+    ctx.deciden ? `Quiénes dirigen o deciden en la empresa (sus dolores pesan más; nunca escribas sus nombres):\n${ctx.deciden}` : "",
+    ctx.perdida ?? "",
     `Las reuniones de diagnóstico (cada línea es un turno: [número] quien habla: lo que dijo):\n\n${reuniones.join("\n\n")}`,
     ctx.noNombrar?.length ? `Nombres que NUNCA van en lo que escribes (di su rol): ${ctx.noNombrar.join(", ")}.` : "",
     ctx.instrucciones,
@@ -512,6 +524,40 @@ export function guiaDelEquipo(casillas: Readonly<Record<string, unknown>>): stri
     .filter(([, xs]) => xs.length)
     .map(([t, xs]) => `${t}:\n${xs.map((x) => `- ${x.slice(0, 300)}`).join("\n")}`)
     .join("\n");
+}
+
+/**
+ * Quiénes dirigen o deciden (20 nov), de la casilla «Quién decide» (`autoridad`): quien aprueba y quien decide, con su
+ * cargo. Es interna (no va a la propuesta): acá solo le dice al agente de quién pesan más los dolores. Sus nombres van a la
+ * lista de los que no salen (`nombresDeQuienesDeciden`).
+ */
+/**
+ * Un grupo o un cargo anotado en «Quién decide» («Equipo de ventas», «Gerencia», el ejemplo de la casilla): no es una
+ * persona. Si entrara a los nombres que no salen, el Resumen descartaría toda frase con «equipo» o «gerencia» (revisión del
+ * 20 nov).
+ */
+const NO_ES_UN_NOMBRE = /^(el|la|los|las|un|una|equipo|equipos|gerencia|gerente|direcci[oó]n|director|directora|junta|comit[eé]|[aá]rea|departamento|jefatura|jefe|jefa|socios?|due[nñ]os?|todos|area|staff|consejo|ventas|marketing|servicio|finanzas|operaciones|compras)\b/i;
+const esUnaPersona = (p: Record<string, unknown>) => {
+  const n = cadena(p.nombre);
+  return n.length >= 3 && !NO_ES_UN_NOMBRE.test(n);
+};
+const decideOAprueba = (p: Record<string, unknown>) => cadena(p.rol) === "firma" || cadena(p.rol) === "decide";
+
+export function quienesDecidenDe(casillas: Readonly<Record<string, unknown>>): string {
+  return arreglo(casillas.autoridad)
+    .map(objeto)
+    .filter((p) => decideOAprueba(p) && esUnaPersona(p))
+    .slice(0, 6)
+    .map((p) => `- ${cadena(p.nombre).slice(0, 60)}${cadena(p.cargo) ? ` (${cadena(p.cargo).slice(0, 60)})` : ""}: ${cadena(p.rol) === "firma" ? "aprueba" : "decide"}`)
+    .join("\n");
+}
+
+/** Los nombres de quienes deciden: no pueden salir en lo que escribe el agente, aunque no hayan hablado en las reuniones. */
+export function nombresDeQuienesDeciden(casillas: Readonly<Record<string, unknown>>): string[] {
+  return arreglo(casillas.autoridad)
+    .map(objeto)
+    .filter(esUnaPersona)
+    .map((p) => cadena(p.nombre));
 }
 
 // ── Leer y verificar ────────────────────────────────────────────────────────────
@@ -1450,7 +1496,8 @@ export function leerElResumen(respuesta: Pick<Anthropic.Messages.Message, "conte
       areaId,
       organizacion: lista(x.organizacion, "g", "la organización", MAX_PIEZAS_POR_LISTA, "organizacion"),
       bien: lista(x.bien, "b", "lo que ya hace bien", MAX_PIEZAS_POR_LISTA, "bien"),
-      frena: lista(x.frena, "f", "lo que la frena", 2, "frena"),
+      // El reto principal (20 nov): una pieza, el título de la fila. Un Resumen de antes trae aquí «lo que la frena».
+      frena: lista(x.frena, "f", "el reto principal", 1, "frena"),
       retos,
       cifras,
       falta,
@@ -1692,6 +1739,7 @@ export function formaDelLugar(x: Pick<PiezaPorArreglar, "lugar" | "indice" | "la
   }
   if (campo === "organizacion" && (x.indice ?? 0) === 0 && (x.largo ?? 2) >= 2) return "quiénes son: su rol y cuántos, de 2 a 6 palabras; sin número si las citas no lo dicen";
   if (campo === "retos") return "de 5 a 10 palabras, empezando con un verbo en infinitivo, sin «tu» ni «tus»";
+  if (campo === "frena") return "el reto principal como título, de 4 a 10 palabras, sin números, sin «tu» ni «tus»: lo que le duele a la empresa, no cómo opera";
   return "de 6 a 12 palabras, sin «tu» ni «tus» y sin verbos en segunda persona";
 }
 
@@ -1984,6 +2032,29 @@ export function porQueNoSaleLaCifra(d: { cifra: string; texto: string; nota?: st
   return `No sale al cliente: ${enLista(sobran)} ${sobran.length === 1 ? "no está" : "no están"} en lo que dijo la empresa. Corrígela con lo que dice la cita o quítala.`;
 }
 
+/**
+ * Lo que el Resumen encontró de un equipo, para el agente de la descripción de su página (20 nov): el reto principal, lo que
+ * lo causa y lo que ya funciona, de cada subequipo. Todo lo que pasó la verificación contra las transcripciones (o lo que
+ * escribió una persona). Sin cifras: la descripción no lleva montos. "" sin Resumen del formato 2.
+ */
+export function loQueEncontroElResumen(g: ResumenGuardado | null | undefined, areaId: string, areasFuera: readonly string[] = []): string {
+  if (g?.v !== 2) return "";
+  const sale = (t: string) => !nombraA(t, areasFuera);
+  return (g.operativas ?? [])
+    .filter((op) => op.areaId === areaId && sale(op.nombre))
+    .map((op) => {
+      const lineas = [
+        ...op.frena.map((p) => `El reto principal: ${p.texto}`),
+        ...op.retos.map((p) => `Lo que lo causa: ${p.texto}`),
+        ...op.bien.map((p) => `Lo que ya funciona: ${p.texto}`),
+      ].filter(sale);
+      return lineas.length ? `${op.nombre}:\n${lineas.map((l) => `- ${l}`).join("\n")}` : "";
+    })
+    .filter(Boolean)
+    .join("\n")
+    .slice(0, 1500);
+}
+
 /** Lo que pide la página de un Resumen, además de lo guardado. */
 export interface OpcionesDeLaPagina {
   /** Solo la pantalla interna (Marco verifica de dónde sale cada cosa); la página del cliente nunca las lleva. */
@@ -1992,6 +2063,37 @@ export interface OpcionesDeLaPagina {
   areasFuera?: readonly string[];
   /** Las partes por explorar de cada equipo (`ResultadoDeUnArea.porExplorar`): con ellas se sabe si un nivel es provisional. */
   porExplorar?: Readonly<Record<string, readonly string[]>>;
+  /**
+   * La pérdida de la preventa (20 nov, `perdidaDeLaEscala`): la VALIDADA con el cliente va de COSTO en la primera fila de
+   * Ventas (la calcula Nexus con las cifras de la empresa: no pasa por las citas, no es del agente); una cuenta sin validar
+   * va como «por validar», sin el monto.
+   */
+  perdida?: LaPerdidaEnLaEscala | null;
+}
+
+/**
+ * El equipo de la escala al que va la pérdida validada: sale de cómo vende (leads, conversión, cierres), es de Ventas. Por su
+ * número, como el resto de Nexus (`EQUIPOS`): en la edición de Educación el área 1 se llama «Admisiones».
+ */
+const AREA_DE_VENTAS = "1";
+
+/**
+ * La pérdida validada como una cifra de la página: la validó la empresa, así que va con ✓ («Lo validaste con nosotros»,
+ * `etiquetaDeLaCifra`), nunca como «≈ Estimado»; su cuenta a la vista es la nota.
+ */
+export function cifraDeLaPerdida(p: PerdidaDeLaEscala): CifraDeLaPagina {
+  return {
+    id: "perdida",
+    cifra: p.cifra,
+    texto: p.rotulo,
+    estado: "declarado",
+    nota: `Con tus cifras: ${p.cuenta}.`,
+    clave: "perdida",
+    conNota: false,
+    dimensionNombre: null,
+    fecha: p.validadaEn,
+    dePerdida: { nombreFijo: `perdida.${p.huella}`, cuenta: p.cuenta },
+  };
 }
 
 /**
@@ -2108,6 +2210,10 @@ export function resumenParaLaPagina(
     for (const op of g!.operativas ?? []) {
       if (!deLaPagina.has(op.areaId) || fuera(op.nombre) || sinExplorar.includes(op.areaId)) continue;
       const k = `op:${op.id}`;
+      // CUÁNTO CUESTA (20 nov): la primera cifra de dinero que se pierde sale de las cifras y va de titular de la fila.
+      const suyas = op.cifras.flatMap((c) => cifra(c, `${k}:cifra:${c.id}`, true) ?? []);
+      // Solo una que su cita sostiene: adentro no puede ir de titular un monto que el cliente no verá.
+      const iCosto = suyas.findIndex((c) => esCosto(c) && !c.noSale);
       sumar(op.areaId, {
         ...subequipoVacio(op.id, op.nombre || (areaDe(op.areaId)?.nombre ?? "")),
         claveDelNombre: `${k}:nombre`,
@@ -2115,10 +2221,23 @@ export function resumenParaLaPagina(
         bien: lista(op.bien, `${k}:bien`),
         frena: lista(op.frena, `${k}:frena`),
         retos: lista(op.retos, `${k}:reto`),
-        cifras: op.cifras.flatMap((c) => cifra(c, `${k}:cifra:${c.id}`, true) ?? []),
+        cifras: iCosto >= 0 ? suyas.filter((_, i) => i !== iCosto) : suyas,
+        costo: iCosto >= 0 ? suyas[iCosto] : null,
         falta: op.falta && !fuera(op.falta) ? op.falta : null,
         claveDeLaFalta: `${k}:falta`,
       });
+    }
+    /* La pérdida que la empresa validó en la preventa (20 nov): en la primera fila de Ventas. Si esa fila ya tiene un costo
+       dicho en las reuniones, la pérdida va primera entre sus cifras: las dos son de la empresa y ninguna tapa a la otra. */
+    const ventas = o.perdida ? resultados.find((r) => r.areaId === AREA_DE_VENTAS && !sinExplorar.includes(r.areaId)) : undefined;
+    const primera = ventas ? subequipos.get(ventas.areaId)?.[0] : undefined;
+    if (o.perdida?.validada && primera) {
+      const p = cifraDeLaPerdida(o.perdida.validada);
+      if (primera.costo) primera.cifras = [p, ...primera.cifras];
+      else primera.costo = p;
+    } else if (o.perdida?.porValidar && primera && !primera.costo && !primera.falta && !g!.operativas?.find((x) => x.id === primera.id)?.faltaMano) {
+      // Una cuenta que nadie validó con el cliente: «por validar», con de qué meta sale y sin el monto.
+      primera.falta = faltaDeLaPerdida(o.perdida.porValidar);
     }
   } else if (g) {
     for (const r of resultados) {

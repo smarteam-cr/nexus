@@ -145,6 +145,37 @@ export interface CifraDeLaPagina {
   noSale?: string;
   /** Solo adentro: la dijo Smarteam y la empresa no la corrigió (18 nov): lleva «Confirmar» al lado de «Quitar». */
   porConfirmar?: boolean;
+  /**
+   * La pérdida que la empresa validó en la preventa (20 nov, lib/exploraciones/perdida-de-la-escala.ts): la calcula Nexus
+   * con sus cifras, no la escribe el agente. No se edita como una cifra del Resumen: se quita (o se cambia su rótulo) con el
+   * texto fijo del Resumen `nombreFijo` (`CLAVES.delResumen`), atado a la huella de su cuenta. `cuenta`: la cuenta a la vista, que es su nota.
+   */
+  dePerdida?: { nombreFijo: string; cuenta: string };
+}
+
+/** La etiqueta del estado de una cifra: la pérdida de la preventa la validó la empresa (20 nov), no la dijo en una reunión. */
+export const ETIQUETA_DE_LA_PERDIDA = "Lo validaste con nosotros";
+export function etiquetaDeLaCifra(c: Pick<CifraDeLaPagina, "estado" | "dePerdida">): string {
+  return c.dePerdida ? ETIQUETA_DE_LA_PERDIDA : ETIQUETA_DEL_ESTADO[c.estado];
+}
+
+/**
+ * ¿La cifra es de DINERO? (20 nov, Elías: «están perdiendo US$1.5M al mes en cuentas incobrables», no «las ventas se
+ * gestionan por WhatsApp»): una moneda en la cifra o en su rótulo. La primera de un subequipo es su COSTO: va de titular.
+ */
+const DINERO = /(?:US\$|\$|₡|€|\bUSD\b|\bCRC\b|\bGTQ\b|\bEUR\b|\bQ\s?\d[\d.,]{2,}|\bd[oó]lar(?:es)?\b|\bcolones\b|\bquetzal(?:es)?\b|\beuros?\b|\blempiras?\b|\bpesos\b)/i;
+export function esDinero(c: Pick<CifraDeLaPagina, "cifra" | "texto">): boolean {
+  return DINERO.test(`${c.cifra} ${c.texto}`);
+}
+
+/** Lo que dice que el dinero se PIERDE (no se cobra, se deja de vender, se va), no que se invierte o se vende. */
+const LO_QUE_SE_PIERDE = /pierd|p[eé]rdida|no se cobra|sin cobrar|incobr|vencid|\bmora\b|dej(a|an|amos) de (vender|cobrar|ganar|facturar|entrar)|no (entra|entran|llega|llegan|se vende|se venden)|se (va|van|escapa|escapan)\b|fuga|retrabajo|devoluci|castigad|multa/i;
+/**
+ * ¿La cifra es LO QUE CUESTA? Dinero que se pierde (Cemaco, simulacro del 20 nov: la única cifra en dinero era la inversión
+ * de marketing del mes, y no es lo que le cuesta el problema). Solo esa va de titular; otra en dinero queda entre las cifras.
+ */
+export function esCosto(c: Pick<CifraDeLaPagina, "cifra" | "texto">): boolean {
+  return esDinero(c) && LO_QUE_SE_PIERDE.test(c.texto);
 }
 
 /**
@@ -231,9 +262,51 @@ export interface SubequipoDeLaPagina {
   cifras: CifraDeLaPagina[];
   /** La clave para agregar una cifra a mano (null: no se agrega). */
   cifraNueva: string | null;
-  /** Sin cifra: qué dato falta para medirlo. */
+  /** Sin cifra: qué dato falta para medirlo. Desde el 20 nov, sin COSTO: qué falta para saber cuánto le cuesta. */
   falta: string | null;
   claveDeLaFalta: string | null;
+  /**
+   * CUÁNTO CUESTA (20 nov): la primera cifra en dinero del subequipo (sale de `cifras` para ir de titular) o, en Ventas, la
+   * pérdida que la empresa validó en la preventa. null: no hay cifra en dinero, y la página dice «por validar» con `falta`.
+   * `undefined`: una foto publicada antes del 20 nov, que se pinta como antes (las cifras a la derecha).
+   */
+  costo?: CifraDeLaPagina | null;
+}
+
+/** Sin cifra en dinero ni lo que falta para saberla (20 nov): el «por validar» dice que se mide con la empresa, nunca un monto. */
+export const sinCosto = (equipo: string) => `Lo medimos contigo: falta el dato de cuánto le cuesta esto a ${equipo}.`;
+
+/** Lo que dice «Cuánto cuesta · Por validar» con una cuenta de la pérdida que nadie validó: de qué meta sale, nunca el monto. */
+export function faltaDeLaPerdida(p: { meta: string }): string {
+  return `Falta validar contigo cuánto pierden al mes por no llegar a «${p.meta}»: la cuenta sale de tus cifras.`;
+}
+
+/** La conclusión de un subequipo, como la presentan el Resumen y la página de su área (20 nov). */
+export interface ConclusionDelSubequipo {
+  /** Lo que cuesta en dinero (null: no se sabe, y la página dice «Por validar»). */
+  costo: CifraDeLaPagina | null;
+  /** El titular de la fila cuando no hay costo, o la línea debajo del costo: el reto principal (o, si no hay, el primer reto). */
+  reto: PiezaDeLaPagina | null;
+  /** Los problemas que lo causan: los retos (sin el que hizo de titular) y lo que frena de un Resumen de antes. */
+  causas: PiezaDeLaPagina[];
+}
+
+/**
+ * EL RETO PRINCIPAL → LO QUE LO CAUSA → CUÁNTO CUESTA (20 nov, Elías tras presentar con Ventas: las conclusiones
+ * describían cómo opera el cliente en vez de decir cuánto le cuesta). El titular es lo que cuesta si hay una cifra en dinero;
+ * si no, el reto principal (la pieza `frena` desde el 20 nov); en un Resumen de antes, que no lo trae, el primer reto. Nunca
+ * un monto inventado: sin costo, la página dice «Por validar» con lo que falta saber. `perdidaQuitada`: quien presenta quitó
+ * la pérdida de la preventa para el cliente (afuera no sale).
+ */
+export function conclusionDelSubequipo(x: Pick<SubequipoDeLaPagina, "costo" | "frena" | "retos">, perdidaQuitada = false): ConclusionDelSubequipo {
+  const costo = x.costo && !(x.costo.dePerdida && perdidaQuitada) ? x.costo : null;
+  const [principal, ...frenaDeAntes] = x.frena.piezas;
+  const retoDeTitular = !principal ? (x.retos.piezas[0] ?? null) : null;
+  return {
+    costo,
+    reto: principal ?? retoDeTitular,
+    causas: [...(retoDeTitular ? x.retos.piezas.slice(1) : x.retos.piezas), ...frenaDeAntes],
+  };
 }
 
 /**

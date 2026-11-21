@@ -43,6 +43,9 @@ import {
   type ResumenDeLaPagina,
   type SubequipoDeLaPagina,
   type TarjetaDeLaPagina,
+  conclusionDelSubequipo,
+  etiquetaDeLaCifra,
+  sinCosto,
 } from "@/lib/external/pagina-del-resumen";
 import { CLAVES, huella, quitadaDeLaPagina, textoDeLaPagina, type TextosDeLaPagina } from "@/lib/external/textos-de-la-pagina";
 import AnimacionesDelResultado from "./AnimacionesDelResultado";
@@ -77,11 +80,11 @@ export interface EdicionDelResumen {
 
 /** La señal de cómo se sabe una cifra: un símbolo y su texto, nunca solo el color. «Por confirmar» va sin signo. */
 const SIMBOLO_DEL_ESTADO: Record<EstadoDeLaCifra, string | null> = { declarado: "✓", estimado: "≈", pendiente: null };
-function Estado({ estado, nota }: { estado: EstadoDeLaCifra; nota?: ReactNode }) {
+function Estado({ estado, nota, etiqueta }: { estado: EstadoDeLaCifra; nota?: ReactNode; etiqueta?: string }) {
   return (
     <span className={`re-estado re-estado-${estado}`}>
       {SIMBOLO_DEL_ESTADO[estado] && <span aria-hidden="true">{SIMBOLO_DEL_ESTADO[estado]} </span>}
-      {ETIQUETA_DEL_ESTADO[estado]}
+      {etiqueta ?? ETIQUETA_DEL_ESTADO[estado]}
       {nota ? <> · {nota}</> : null}
     </span>
   );
@@ -254,6 +257,19 @@ export default function ResumenDeLaEscalaVista({
    * en la columna (Polaris, 16 nov). Adentro se edita la cifra entera, en letra más chica si es larga.
    */
   const cifra = (c: CifraDeLaPagina) => {
+    // La pérdida de la preventa (cuando la fila ya tenía un costo dicho en las reuniones): no se edita como una cifra del
+    // Resumen; se quita o se le cambia el rótulo con su texto fijo.
+    if (c.dePerdida) {
+      const quitada = quitadaDeLaPagina(textos, CLAVES.delResumen(c.dePerdida.nombreFijo));
+      if (quitada && !edicion) return null;
+      return (
+        <div key={c.id} className={`re-cifra${quitada ? " re-quitado" : ""}`}>
+          <span className="re-grande">{c.cifra}</span>
+          <b>{fijo(c.dePerdida.nombreFijo, c.texto, "Qué es la pérdida que validó la empresa", true)}</b>
+          <Estado estado={c.estado} etiqueta={etiquetaDeLaCifra(c)} nota={c.nota} />
+        </div>
+      );
+    }
     const { valor, rotulo } = partirElTamano(c.cifra);
     // «14 de 25» es una proporción: con otro número en la unidad, va entera.
     const unidad = valor && !/\d/.test(rotulo) ? rotulo : "";
@@ -300,6 +316,9 @@ export default function ResumenDeLaEscalaVista({
         ? org[0]
         : null;
     const hace = quienes ? org.slice(1) : org;
+    // Desde el 20 nov una fila es: el reto principal → lo que lo causa → cuánto cuesta. Una foto publicada antes no trae
+    // `costo` y se pinta como antes.
+    if (x.costo !== undefined) return filaEnDinero(t, x, quienes, hace);
     const retos = [...x.retos.piezas, ...x.frena.piezas];
     const conCifra = x.cifras.length > 0;
     return (
@@ -352,6 +371,123 @@ export default function ResumenDeLaEscalaVista({
               <b>Falta un dato</b>
               {x.claveDeLaFalta ? texto({ clave: x.claveDeLaFalta, valor: x.falta, vacio: "+ Qué dato falta", etiqueta: "Qué dato falta", tope: TOPE_A_MANO, quitar: x.falta ? "Quitar" : null }) : x.falta}
             </p>
+          )}
+        </div>
+      </article>
+    );
+  };
+
+  /**
+   * La fila en dinero (20 nov, Elías: «están perdiendo US$1.5M al mes en cuentas incobrables», no «las ventas se gestionan
+   * por WhatsApp»). Arriba, el titular: lo que cuesta en dinero si se sabe, con su estado; si no, el reto principal. Debajo,
+   * el reto principal (si el titular fue el costo), «Lo que lo causa» (los retos) y cómo trabaja hoy. A la derecha, sin
+   * costo, «Cuánto cuesta · Por validar» con lo que falta saber; y las otras cifras, como siempre.
+   */
+  const filaEnDinero = (t: TarjetaDeLaPagina, x: SubequipoDeLaPagina, quienes: PiezaDeLaPagina | null, hace: PiezaDeLaPagina[]) => {
+    // Afuera, la pérdida que quien presenta quitó no sale; adentro sale tachada, para volver a mostrarla.
+    const quitada = !!x.costo?.dePerdida && quitadaDeLaPagina(textos, CLAVES.delResumen(x.costo.dePerdida.nombreFijo));
+    const { costo, reto: tituloReto, causas } = conclusionDelSubequipo(x, quitada && !edicion);
+    return (
+      <article key={`${t.id}-${x.id}`} className="re-equipo re-equipo-dinero">
+        <div className="re-equipo-nombre">
+          <span className="re-num">{String(fila).padStart(2, "0")} /</span>
+          <h3>{x.claveDelNombre ? texto({ clave: x.claveDelNombre, valor: x.nombre, vacio: "+ Nombre del equipo", etiqueta: "Nombre del equipo", tope: TOPE_DE_UN_NOMBRE, quitar: "Quitar este equipo" }) : x.nombre}</h3>
+          {x.nombre !== t.nombre && <span className="re-parte-de">Parte de {t.nombre}</span>}
+          <Nivel letra={nivelDe(t)} nombre={t.nivelNombre} />
+        </div>
+        <div className="re-equipo-medio">
+          {costo && (
+            <div className={`re-costo${costo.noSale ? " re-cifra-fuera" : ""}${quitada ? " re-quitado" : ""}`}>
+              <h4 className="re-titular-fila">
+                {costo.dePerdida ? (
+                  <>
+                    <span className="re-costo-monto">{costo.cifra}</span> {fijo(costo.dePerdida.nombreFijo, costo.texto, "Qué es la pérdida que validó la empresa", true)}
+                  </>
+                ) : (
+                  <>
+                    <span className="re-costo-monto">{texto({ clave: `${costo.clave}:cifra`, valor: costo.cifra, vacio: "+ Cuánto cuesta", etiqueta: "Cuánto cuesta", tope: TOPE_DE_LA_CIFRA })}</span>{" "}
+                    {texto({ clave: `${costo.clave}:texto`, valor: costo.texto, vacio: "+ Qué es", etiqueta: `Qué es ${costo.cifra}`, tope: TOPE_A_MANO, quitar: "Quitar esta cifra" })}
+                  </>
+                )}
+              </h4>
+              <Estado
+                estado={costo.estado}
+                etiqueta={etiquetaDeLaCifra(costo)}
+                nota={
+                  costo.dePerdida
+                    ? costo.nota
+                    : costo.conNota && (costo.nota || edicion)
+                      ? texto({ clave: `${costo.clave}:nota`, valor: costo.nota, vacio: "+ Su base o lo que falta validar", etiqueta: "La base de la cifra", tope: TOPE_A_MANO, quitar: costo.nota ? "Quitar la nota" : null })
+                      : costo.nota
+                }
+              />
+              {costo.dePerdida && edicion && <p className="re-aviso-interno">La validó la empresa en la preventa: la cuenta sale de sus cifras de Negocio y Embudo.</p>}
+              {costo.porConfirmar && edicion?.confirmar && (
+                <p className="re-aviso-interno">
+                  La dijo Smarteam y la empresa no la corrigió. {edicion.confirmar(costo.clave)}
+                </p>
+              )}
+              {costo.noSale && <p className="re-aviso-interno">{costo.noSale}</p>}
+              {deDonde(costo.citas, { noSostiene: !!costo.noSale })}
+            </div>
+          )}
+          {tituloReto ? (
+            costo ? (
+              <div className="re-reto-principal">{pieza(tituloReto, `El reto principal de ${x.nombre}`)}</div>
+            ) : (
+              <h4 className="re-titular-fila">{pieza(tituloReto, `El reto principal de ${x.nombre}`)}</h4>
+            )
+          ) : null}
+          {/* Un Resumen de antes no trae reto principal (el primer reto hace de titular): adentro se puede escribir. */}
+          {edicion && !x.frena.piezas.length && x.frena.nueva && (
+            <div className="re-agregar">{texto({ clave: x.frena.nueva, valor: null, vacio: "+ Escribir el reto principal", etiqueta: `El reto principal de ${x.nombre}`, tope: TOPE_A_MANO })}</div>
+          )}
+          {(causas.length > 0 || edicion) && (
+            <>
+              <p className="re-rotulo">{fijo("rotulo.causas", "Lo que lo causa", "Rótulo de lo que causa el reto")}</p>
+              <ul className="re-retos">
+                {causas.map((p) => (
+                  <li key={p.id}>
+                    <span>{pieza(p, `Lo que causa el reto de ${x.nombre}`)}</span>
+                  </li>
+                ))}
+              </ul>
+              {agregar(x.retos, `Lo que causa el reto de ${x.nombre}`, "+ Agregar lo que lo causa")}
+            </>
+          )}
+          {quienes && <div className="re-quienes">{pieza(quienes, `Quiénes son en ${x.nombre}`)}</div>}
+          {hace.map((p) => (
+            <div key={p.id} className="re-hace">
+              {pieza(p, `Qué hace ${x.nombre}`)}
+            </div>
+          ))}
+          {agregar(x.organizacion, `Cómo está organizado ${x.nombre}`, "+ Quiénes son o qué hacen")}
+          {x.bien.piezas.map((p) => (
+            <div key={p.id} className="re-funciona">
+              <span>{pieza(p, `Lo que ya funciona en ${x.nombre}`)}</span>
+            </div>
+          ))}
+          {agregar(x.bien, `Lo que ya funciona en ${x.nombre}`, "+ Lo que ya funciona")}
+          {alDetalle(t.areaId, `Ver diagnóstico de ${t.nombre} →`)}
+        </div>
+        {/* Con el costo de titular y sin otras cifras, afuera no queda una columna vacía con su raya. */}
+        <div className={!costo || x.cifras.length || edicion ? `re-equipo-cifra${!costo || x.cifras.length ? "" : " re-sin-cifra"}` : undefined}>
+          {!costo && (
+            <div className="re-por-validar">
+              <p className="re-rotulo">{fijo("rotulo.cuesta", "Cuánto cuesta", "Rótulo de cuánto cuesta")}</p>
+              <b>{fijo("por-validar", "Por validar", "Lo que dice un costo que falta")}</b>
+              {x.claveDeLaFalta && edicion ? (
+                <span>{texto({ clave: x.claveDeLaFalta, valor: x.falta, vacio: "+ Qué falta para saber cuánto cuesta", etiqueta: "Qué falta para saber cuánto cuesta", tope: TOPE_A_MANO, quitar: x.falta ? "Quitar" : null })}</span>
+              ) : (
+                <span>{x.falta ?? sinCosto(x.nombre)}</span>
+              )}
+            </div>
+          )}
+          {x.cifras.map(cifra)}
+          {edicion && x.cifraNueva && (
+            <div key={`cifra-${x.cifras.length}`} className="re-agregar">
+              {texto({ clave: x.cifraNueva, valor: null, vacio: "+ Agregar una cifra (con su moneda, si es lo que cuesta)", etiqueta: "Nueva cifra", tope: TOPE_DE_LA_CIFRA })}
+            </div>
           )}
         </div>
       </article>

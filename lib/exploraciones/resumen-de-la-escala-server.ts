@@ -41,6 +41,7 @@ import { areasDeLaPagina, resultadosDeLaEscala, type ResultadoDeUnArea } from ".
 import { leerContenido } from "./esquemas";
 import { reunionesDeLaExploracion, transcripcionesDeLaExploracion } from "./fuentes";
 import { leerLoLeido } from "./lo-leido";
+import { perdidaDeLaEscala, perdidaParaElAgente } from "./perdida-de-la-escala";
 import { bloqueDeInstrucciones } from "./notas-de-sesion";
 import {
   comoSeLeyo,
@@ -54,7 +55,9 @@ import {
   largoDeLosTurnos,
   loQueDijoLaEmpresa,
   minutosDeLaReunion,
+  nombresDeQuienesDeciden,
   pesoDeLasSesiones,
+  quienesDecidenDe,
   MODELO_DEL_RESUMEN,
   resumenParaLaPagina,
   repartirElTope,
@@ -267,7 +270,9 @@ export async function loQueLeeElResumen(l: Extract<Lectura, { ok: true }>, ahora
   const delCliente = new Set(sesiones.flatMap((x) => x.quienes ?? []));
   // Ningún nombre puede salir; salvo el de la empresa («Centauro» no es una persona aunque sea el nombre de la sala).
   const deLaEmpresa = new Set(paraComparar(fila.client.name).split(/\s+/));
-  const personas = [...new Set([...equipo, ...[...quien.values()].flatMap((q) => q.personas.map((p) => p.nombre))])].filter(
+  // También quienes deciden (la casilla «Quién decide»): el agente los conoce por nombre y no pueden salir aunque no hablaran.
+  const casillas = estado.contenido.casillas as Record<string, unknown>;
+  const personas = [...new Set([...equipo, ...[...quien.values()].flatMap((q) => q.personas.map((p) => p.nombre)), ...nombresDeQuienesDeciden(casillas)])].filter(
     (n) => !deLaEmpresa.has(paraComparar(n.split(/\s+/)[0] ?? "")),
   );
 
@@ -282,8 +287,11 @@ export async function loQueLeeElResumen(l: Extract<Lectura, { ok: true }>, ahora
     areas: l.deLasAreas.map((x) => areaParaElResumen(escala, x, contextoDelEquipo(fila.contenido ?? {}, x.resultado.areaId))),
     reuniones,
     instrucciones: bloqueDeInstrucciones(estado.contenido.notas, "exploracion"),
-    guia: guiaDelEquipo(estado.contenido.casillas as Record<string, unknown>),
+    guia: guiaDelEquipo(casillas),
     peso,
+    // 20 nov (vender por resultados): de quién pesan más los dolores y la pérdida que la empresa validó en la preventa.
+    deciden: quienesDecidenDe(casillas),
+    perdida: perdidaParaElAgente(perdidaDeLaEscala(fila.contenido)),
   };
   const entorno = entornoDe(fila, escala);
   const firmas = Object.fromEntries(l.deLasAreas.map((x) => [x.resultado.areaId, firmaDelArea(estado.contenido.chequeo, x.resultado.areaId, entorno)]));
@@ -303,6 +311,7 @@ function comoLoVeElCse(l: Extract<Lectura, { ok: true }>, guardado: ResumenGuard
     conCitas: true,
     areasFuera,
     porExplorar: Object.fromEntries(l.deLasAreas.map((x) => [x.resultado.areaId, x.porExplorar])),
+    perdida: perdidaDeLaEscala(l.fila.contenido),
   });
 }
 

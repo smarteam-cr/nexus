@@ -297,8 +297,8 @@ export interface ContenidoDeExploracion {
   contactoPrevio?: ContactoPrevio;
   /**
    * 2026-11-20 (perdida.ts): cuánto pierde el cliente por no llegar a su meta, validado con él, con la cuenta que lo
-   * explica. NO es una casilla a propósito: ningún lector de lo que ve el cliente lo toca (Elías: se usa cuando se
-   * rediseñe la propuesta). Opcional: las exploraciones de antes no lo tienen.
+   * explica. NO es una casilla a propósito: la propuesta no la lee (Elías: se usa cuando se rediseñe la propuesta); la escala
+   * que ve el cliente, sí, solo por perdida-de-la-escala.ts (20 nov). Opcional: las exploraciones de antes no lo tienen.
    */
   perdida?: PerdidaValidada;
   /**

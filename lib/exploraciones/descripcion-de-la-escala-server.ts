@@ -30,6 +30,7 @@ import { aplicarEdicion } from "@/lib/escala/documento/edicion";
 import type { Escala } from "@/lib/escala/documento/tipos";
 import { SENTINEL_SERVICE_TYPE } from "@/lib/projects/kind";
 import { AGENTE_DE_LA_EXPLORACION, nombresDelEquipo } from "./agente";
+import { loQueEncontroElResumen } from "./resumen-de-la-escala";
 import {
   areaParaLaDescripcion,
   contextoDelEquipo,
@@ -105,11 +106,24 @@ const entornoDe = (f: Pick<FilaDeExploracion, "edicion" | "perfilCierre" | "perf
  * Lo que lee el agente para las áreas `aEscribir`, las reglas con que se valida lo que devuelve y la firma de cada área.
  * Exportado para el simulacro (scripts/simular-descripcion-de-la-escala.ts), que no guarda nada.
  */
-export async function loQueLeeElAgente(fila: FilaDeExploracion, escala: Escala, aEscribir: readonly ResultadoDeUnArea[]) {
+export async function loQueLeeElAgente(fila: FilaDeExploracion, escala: Escala, aEscribir: readonly ResultadoDeUnArea[], visibles: readonly ResultadoDeUnArea[] = aEscribir) {
   const estado = estadoDesdeFila(fila);
+  // Los equipos que el cliente no ve: lo del Resumen que los nombra no le llega al agente (revisión del 20 nov).
+  const vistas = new Set(visibles.map((x) => x.resultado.areaId));
+  const areasFuera = escala.areas.filter((a) => !vistas.has(a.id)).map((a) => a.nombre);
   const ctx: ContextoDeLaDescripcion = {
     empresa: fila.client.name,
-    areas: aEscribir.map((x) => areaParaLaDescripcion(escala, x.resultado, estado.contenido.chequeo, x.porExplorar, contextoDelEquipo(fila.contenido ?? {}, x.resultado.areaId))),
+    // Lo que el Resumen leyó de las transcripciones (20 nov): las minutas solas no traían lo que dijo la empresa.
+    areas: aEscribir.map((x) =>
+      areaParaLaDescripcion(
+        escala,
+        x.resultado,
+        estado.contenido.chequeo,
+        x.porExplorar,
+        contextoDelEquipo(fila.contenido ?? {}, x.resultado.areaId),
+        loQueEncontroElResumen(estado.contenido.resumenDeLaEscala, x.resultado.areaId, areasFuera),
+      ),
+    ),
     reuniones: await minutasRecientes(fila, estado),
     instrucciones: bloqueDeInstrucciones(estado.contenido.notas, "exploracion"),
   };
@@ -170,7 +184,7 @@ export async function generarDescripcionesDeLaEscala(o: {
   }
   const alEmpezar = Object.fromEntries(aEscribir.map((x) => [x.resultado.areaId, x.descripcion.guardada?.at ?? null]));
 
-  const { ctx, reglas, firmas } = await loQueLeeElAgente(fila, escala, aEscribir);
+  const { ctx, reglas, firmas } = await loQueLeeElAgente(fila, escala, aEscribir, l.deLasAreas);
 
   // Trazabilidad (ARCHITECTURE §6 regla 5). Sin `exploracionId` en los filtros a propósito: no es una corrida del lienzo.
   const run = await prisma.agentRun.create({

@@ -782,3 +782,38 @@ html:has(.dr.rd-s2:not(.rd-editable)) { scroll-behavior: smooth; }
 @media print {
   .dr.rd-ed .ed-siguientes { display: none; }
 }
+
+/* La escalera de los niveles (20 nov, EscaleraDeNiveles.tsx): arriba de la página de cada área y el radar justo debajo,
+   en la escala de una empresa, en el test público y en su PDF. SVG estático; en el teléfono la letra crece (el dibujo
+   escala con el ancho y los nombres bajaban de 9 px). */
+.dr .esc { margin: 0; }
+.dr .esc-svg { display: block; width: 100%; height: auto; max-width: 860px; margin: 0 auto; }
+.dr .rd-escalera { background: #ffffff; border: 1px solid var(--v3-borde); border-radius: 20px; box-shadow: var(--v3-sombra); padding: 12px 24px 8px; min-width: 0; }
+.dr.rd-ed .ed-escalera .esc { margin-top: 8px; }
+@media (max-width: 600px) {
+  .dr .esc-svg .esc-nombre { font-size: 28px; }
+  .dr .esc-svg .esc-num { font-size: 30px; }
+  .dr .esc-svg .esc-chip { font-size: 21px; }
+  .dr .rd-escalera { padding: 8px 10px 4px; }
+}
+.dr.rd-pdf .rd-escalera { flex: none; display: flex; justify-content: center; border: 0; box-shadow: none; padding: 0; background: none; }
+.dr.rd-pdf .rd-escalera .esc-svg { width: auto; height: 128px; }
+
+/* Lo que más le cuesta al área (20 nov): el reto principal o lo que cuesta de titular, lo que lo causa y, sin costo, «por
+   validar». Sale de la tarjeta del área en el Resumen. */
+.dr.rd-ed .ed-cuesta-lista { display: grid; gap: 28px; margin-top: 6px; }
+.dr.rd-ed .ed-cuesta-uno { display: grid; gap: 8px; max-width: 780px; }
+.dr.rd-ed .ed-cuesta-sub { margin: 0; font-size: 12px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--ed-apagada); }
+.dr.rd-ed .ed-cuesta-monto { color: var(--ed-azul); white-space: nowrap; }
+.dr.rd-ed .ed-cuesta-estado { margin: 0; font-size: 13px; line-height: 19px; color: var(--ed-apagada); }
+.dr.rd-ed .ed-cuesta-reto { margin: 0; font-size: 16px; line-height: 24px; font-weight: 700; color: var(--ed-tinta-2); }
+.dr.rd-ed .ed-mini-rotulo { margin: 6px 0 0; font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--ed-tinta); }
+.dr.rd-ed .ed-cuesta-causas { margin: 0; padding-left: 18px; display: grid; gap: 4px; font-size: 15px; line-height: 22px; color: var(--ed-tinta); }
+.dr.rd-ed .ed-cuesta-validar { margin: 4px 0 0; padding: 12px 14px; border: 1.5px dashed var(--ed-panel-borde); border-radius: 12px; font-size: 14px; line-height: 20px; color: var(--ed-tinta-2); }
+
+/* Adentro (PaginaDeLaEscala): elegir a dónde lo llevamos, debajo de la escalera. */
+.dr .esc-elegir { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px; margin-top: 6px; font-size: 13px; color: #3c4770; }
+.dr .esc-elegir small { flex-basis: 100%; text-align: center; font-size: 12px; color: #6b7596; }
+.dr .esc-opcion { padding: 5px 12px; border-radius: 999px; border: 1px solid #e2e8f5; background: #ffffff; font: inherit; font-weight: 700; color: #2448d8; cursor: pointer; }
+.dr .esc-opcion.activa { background: #0f1b4c; border-color: #0f1b4c; color: #ffffff; }
+.dr .esc-opcion:focus-visible { outline: 2px solid #2448d8; outline-offset: 2px; }
