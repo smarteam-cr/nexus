@@ -136,6 +136,16 @@ const CENSO: Record<string, { destino: Destino; motivo: string }> = {
     motivo:
       "«Hablar con Nexus» (21 nov): después de guardar la nota, deja sus hechos (internos, con la preventa de destino) y corre el agente de impacto. Lee la nota guardada; no escribe la exploración. Pantalla interna, con la guardia de la exploración.",
   },
+  "app/api/sales/exploraciones/[id]/nexus/conversacion/route.ts": {
+    destino: "ventas",
+    motivo:
+      "«Hablar con Nexus» guardada (21 nov): la última conversación de quien mira en esta preventa, reconstruida de sus corridas (nunca la de otra persona ni de otra preventa), y qué hizo con los cambios. Lee la fila solo por su cliente; no escribe la exploración. Pantalla interna, con la guardia de la exploración.",
+  },
+  "app/api/sales/exploraciones/[id]/hechos-de-las-notas/route.ts": {
+    destino: "ventas",
+    motivo:
+      "Los hechos de cada nota de «Lo que sabes del cliente» (21 nov), debajo de su nota: solo los de esta preventa y su cliente (hechosDeLasNotas). Internos, como las notas. Pantalla interna, con la guardia de la exploración.",
+  },
   "lib/invariantes/hechos.ts": {
     destino: "invariante-de-la-empresa",
     motivo: "INV45 (21 nov): un hecho de una nota del equipo es del cliente de su preventa. Solo el clientId de la exploración.",

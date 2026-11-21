@@ -16127,15 +16127,26 @@ quita. El mismo día, Elías sumó que también RESPONDA preguntas sobre la cuen
   «Aplicar». Pasa por el PATCH de siempre, así que lo que la preventa manda a la ficha sale igual. Con un 409 se
   reintenta una lista (suma sin repetir); unas cifras, solo si esos campos no cambiaron entretanto; un texto, solo si no
   cambió (reintento.ts: la corrección de otra persona no se pisa).
+- **«Aplicar todo»** (Elías, 21 nov; aparece con dos o más cambios pendientes): manda, uno tras otro, los que siguen
+  propuestos y no están en su tarjeta, cada uno con la misma operación y el mismo reintento del «Aplicar» (por el
+  `cambiar` del lienzo), y antes de cada uno vuelve a mirar lo último guardado (`loGuardado`): el que quedó repetido
+  cuenta como «Ya está». Si alguno reemplaza algo (un texto, o una cifra con otro valor), primero avisa cuántos y pide
+  «Aplicar los N». Al final dice cuántos aplicó, cuántos ya estaban y cuáles no pudo, con su tarjeta y el motivo (el
+  error del servidor, por `alFallar`). Lo puro (`planDeAplicarTodo`, `resumenDeAplicarTodo`) vive en
+  lib/exploraciones/nexus-en-la-preventa.ts. No es una operación nueva ni un pedido atómico, a propósito: si uno choca,
+  los demás siguen y el resumen dice cuál quedó.
 - **La nota deja hechos como una reunión** (lib/seguimiento/hechos/de-una-nota.ts; los escribe `escribirHechosDeUnaNota`,
   el único escritor): el modelo los propone en la misma vuelta (una sola llamada) y se verifican con `leerSalidaDeHechos`
   contra la nota GUARDADA. Salen del último «listo» que dejó el servidor en el `AgentRun` de la conversación, no de lo
   que mande el navegador, y solo si la nota la guardó quien llama. Distinto de una reunión, a propósito: `quien =
   smarteam`, `citaFuente = texto`, `dichoPorEmail`, y destino la preventa donde se contó, delegado en ella (no va a la
   ficha ni levanta alertas: una nota no es palabra del cliente). Quedan atados a la corrida de la que salieron
-  (`agentRunId`). La misma nota guardada dos veces no los duplica. **Hoy ninguna pantalla ni agente los lee** (como los
-  de una reunión que delegan en la preventa): son la base para migrar los 8 lugares de notas a «Agregar contexto», y el
-  panel lo dice («Todavía ninguna pantalla los muestra»). Con
+  (`agentRunId`). La misma nota guardada dos veces no los duplica. **Se ven debajo de su nota** en «Lo que sabes del
+  cliente» (Elías, 21 nov): qué (el tipo y la frase), quién lo dijo y cuándo. Los lee UN lector, acotado a la preventa
+  y a su cliente (`hechosDeLasNotas`, lib/exploraciones/hechos-de-las-notas-server.ts: pide `exploracionId` y el
+  `clientId` de la fila, y solo las notas que siguen en «Lo que sabes»; una nota quitada no muestra hechos sueltos), por
+  `GET …/hechos-de-las-notas` con la guardia de lectura. Ningún agente los lee todavía: son la base para migrar los 8
+  lugares de notas a «Agregar contexto». Con
   `SEGUIMIENTO_HECHOS` apagada (la base local, por defecto) no se escriben. SQL `2026-11-21-hechos-de-una-nota.sql`:
   `exploracionId`, `notaClave` y `dichoPorEmail`, y el CHECK de dónde sale un hecho suma la nota (más permisivo que el
   de antes); otro CHECK exige su preventa y su autor. INV45 suma: un hecho de nota es del cliente de su preventa.
@@ -16151,9 +16162,23 @@ quita. El mismo día, Elías sumó que también RESPONDA preguntas sobre la cuen
   «qué» es la misma meta), así el panel no dice «Aplicado» sin haber cambiado nada.
 - **Cerrar el cajón** no pierde la conversación, lo propuesto ni lo aplicado (viven en el componente de la preventa, no
   en el cajón); con la cuenta regresiva a la vista, la cancela, y al volver a abrir no arranca otra.
+- **La conversación se guarda** (Elías, 21 nov: «que no se pierda al salir de la página»), sin SQL: cada vuelta ya es un
+  `AgentRun`, y su `output` lleva ahora los mensajes de esa vuelta, la respuesta con sus citas si fue una pregunta y,
+  después, lo que pasó en la pantalla: la nota guardada y lo que dijo su revisión (lo anota `alGuardarLaNota`), qué
+  cambios se aplicaron o se descartaron (`PATCH …/nexus/conversacion`) y `cerrada` con «Nueva conversación». Las
+  anotaciones van en UNA sentencia que mezcla el JSON (`anotarLaVuelta`), así la revisión y un «Aplicar» que llegan a la
+  vez no se pisan. Al volver a la preventa, el cajón pide `GET …/nexus/conversacion` y `reconstruirLaConversacion`
+  (lib/chat-de-nexus/guardada.ts) arma la última: los mensajes de la última vuelta terminada, con sus citas devueltas a
+  cada respuesta; lo que no se pudo leer o la pregunta frenada por el tope no aparece (en la pantalla volvió al cuadro).
+  **Cada persona ve solo la suya y cada preventa la suya**: la lectura filtra por el correo de la sesión
+  (`triggeredByEmail`), por el cliente de la fila y por la exploración en `filters`; nada de eso sale del navegador.
+  Leerla no crea corridas: los topes siguen igual. La cuenta regresiva de una conversación de antes no vuelve a correr
+  (dice qué avisó y manda a mirar La escala). Una corrida de antes de esto no trae mensajes: esa no vuelve.
 - **Lo que no queda garantizado:** que Sonnet pregunte bien y no de más, distinga bien contar de preguntar y elija la
   tarjeta correcta (no se midió con conversaciones reales; por eso cada cambio espera el clic); que el lado de cada turno
   sea el correcto cuando Meet muestra un solo nombre (queda «no se sabe») o un nombre del equipo que no calza con el
   registrado (en una reunión con el cliente puede salir como «del cliente»); que lo que quedó afuera por el tope no tenga
-  la respuesta (la respuesta lo avisa); los hechos de una nota que se edita o se borra no se rehacen ni se retiran; y los
-  mensajes de la conversación no se guardan: cerrar el cajón los pierde (la nota y lo propuesto quedan).
+  la respuesta (la respuesta lo avisa); los hechos de una nota que se edita o se borra no se rehacen ni se retiran (los
+  de una nota editada siguen mostrándose bajo ella aunque digan otra cosa); si la página se cierra entre guardar la nota
+  y su revisión, la conversación vuelve sin saber si la nota quedó (lo dice y manda a mirar «Lo que sabes»); y un
+  «Aplicar» cuya anotación no llegó al servidor vuelve como propuesto (la tarjeta sí cambió, y el panel dice «Ya está»).

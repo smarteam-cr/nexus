@@ -7,23 +7,38 @@
  * la cuenta. Cuando Nexus entiende lo que contó, acá pasa lo de la preventa, en este orden:
  *   1. la nota se guarda SIEMPRE en «Lo que sabes del cliente», con las palabras de la persona, su nombre y la hora
  *      (la operación `nota` de siempre: el servidor pone quién y cuándo);
- *   2. el servidor deja sus hechos (destino: esta preventa) y pregunta al agente de impacto si cambia la página de La
- *      escala: si cambia, la cuenta regresiva de 10 s (components/impacto/AvisoDeImpacto.tsx), y el aviso dice si
- *      contradice lo que aceptó el cliente;
- *   3. cada cambio a una tarjeta de la arquitectura de la venta, con «Aplicar» y «No». Nada se aplica sin el clic.
+ *   2. el servidor deja sus hechos (destino: esta preventa; se ven debajo de la nota) y pregunta al agente de impacto si
+ *      cambia la página de La escala: si cambia, la cuenta regresiva de 10 s (components/impacto/AvisoDeImpacto.tsx), y
+ *      el aviso dice si contradice lo que aceptó el cliente;
+ *   3. cada cambio a una tarjeta de la arquitectura de la venta, con «Aplicar» y «No», y «Aplicar todo» para los que
+ *      quedan (avisa antes cuántos reemplazan algo). Nada se aplica sin un clic.
  * Lo propuesto, lo aplicado y el aviso viven acá y no en el cajón: cerrarlo y volver a abrirlo no los pierde. Cerrarlo
  * con la cuenta regresiva a la vista la CANCELA, y al volver no arranca otra.
+ * GUARDADA (21 nov): al volver a la preventa, el cajón trae la última conversación de quien mira en esta preventa
+ * (…/nexus/conversacion, lib/chat-de-nexus/guardada.ts), con lo propuesto y lo que se hizo con cada cambio. La cuenta
+ * regresiva de una conversación de antes no vuelve a correr. «Nueva conversación» la cierra.
  * Convive con «Agregar algo que sabes» (components/exploraciones/LoQueSabes.tsx): es otra puerta a las mismas notas.
  */
-import { useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Alert, Button, Drawer } from "@/components/ui";
-import { BotonBlanco, BotonTexto } from "@/components/ui/sistema";
+import { BotonAzul, BotonBlanco, BotonTexto } from "@/components/ui/sistema";
 import PanelDeNexus, { conversacionNueva, type ConversacionEnPantalla, type TurnoListo } from "@/components/chat-de-nexus/PanelDeNexus";
 import AvisoDeImpacto from "@/components/impacto/AvisoDeImpacto";
 import { diaConAnio } from "@/lib/exploraciones/fechas";
+import { EVENTO_HECHOS_DE_LAS_NOTAS } from "@/lib/exploraciones/hechos-de-las-notas";
 import { claveNuevaDeLoQueSabes, MAX_LO_QUE_SABES, loQueSabeElEquipo } from "@/lib/exploraciones/lo-que-sabes";
-import { comoSeVeElCambio, esCasillaParaNexus } from "@/lib/exploraciones/nexus-en-la-preventa";
-import type { CambioPropuesto } from "@/lib/chat-de-nexus/conversacion";
+import {
+  aplicarTodo,
+  avisoDeReemplazos,
+  comoSeVeElCambio,
+  esCasillaParaNexus,
+  planDeAplicarTodo,
+  resumenDeAplicarTodo,
+  type EstadoDelCambioEnPantalla,
+  type ResultadoDeAplicarTodo,
+} from "@/lib/exploraciones/nexus-en-la-preventa";
+import { notaDeLaConversacion, type CambioPropuesto } from "@/lib/chat-de-nexus/conversacion";
+import type { ConversacionGuardada } from "@/lib/chat-de-nexus/guardada";
 import { useLienzo } from "./contexto";
 import { CORRIENDO_LA_ESCALA, useRehacerLaEscala } from "./rehacer-la-escala";
 
@@ -35,18 +50,52 @@ interface Guardado {
   fallo?: true;
 }
 
-type EstadoDelCambio = "propuesto" | "aplicando" | "aplicado" | "descartado";
-/** El aviso de La escala: a la vista, cerrado por la persona, o cancelado al cerrar el cajón. */
-type EstadoDelAviso = "abierto" | "cerrado" | "cancelado-al-cerrar";
+type EstadoDelCambio = EstadoDelCambioEnPantalla;
+/**
+ * El aviso de La escala: a la vista, cerrado por la persona, cancelado al cerrar el cajón, o de una conversación de antes
+ * (al volver a la página: la cuenta regresiva no se repite).
+ */
+type EstadoDelAviso = "abierto" | "cerrado" | "cancelado-al-cerrar" | "de-antes";
 
 interface Listo {
-  clave: string;
+  /** La nota guardada; null si la conversación volvió del servidor sin saber si se guardó. */
+  clave: string | null;
   conversacion: string;
   cambios: CambioPropuesto[];
+  /** Lo que contó la persona, tal cual: con esto se busca (o se vuelve a guardar) una nota que no se sabe si quedó. */
+  nota: string;
 }
 
-function QuedoGuardada({ clave }: { clave: string }) {
-  const { exp } = useLienzo();
+const urlDeLaConversacion = (id: string) => `/api/sales/exploraciones/${id}/nexus/conversacion`;
+
+/** Anota en el servidor lo que pasó con la conversación. Si no llega, se pierde solo eso: la tarjeta ya cambió. */
+function anotar(exploracionId: string, cuerpo: { conversacion: string; estados: Record<string, "aplicado" | "descartado"> } | { conversacion: string; cerrar: true }) {
+  void fetch(urlDeLaConversacion(exploracionId), { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(cuerpo) }).catch(() => {});
+}
+
+/**
+ * La nota de una conversación que volvió del servidor sin su clave (la página se cerró antes de guardarla, o la revisión
+ * no llegó): si ya está en «Lo que sabes» con las mismas palabras, es esa; si no, no quedó y se puede guardar ahora.
+ */
+function claveDeLaNota(notas: Record<string, string>, listo: Listo): string | null {
+  if (listo.clave) return listo.clave;
+  const t = listo.nota.trim();
+  return t ? (loQueSabeElEquipo(notas).find((n) => n.texto.trim() === t)?.clave ?? null) : null;
+}
+
+function QuedoGuardada({ clave, onGuardar }: { clave: string | null; onGuardar: () => void }) {
+  const { exp, puedeEditar } = useLienzo();
+  if (!clave)
+    return (
+      <Alert variant="warning">
+        <span className="block">La nota de esta conversación no quedó guardada en «Lo que sabes del cliente» (saliste de la página antes de que terminara).</span>
+        {puedeEditar && (
+          <span className="mt-2 block">
+            <BotonBlanco onClick={onGuardar}>Guardar la nota</BotonBlanco>
+          </span>
+        )}
+      </Alert>
+    );
   const autor = exp.estado.contenido.autoresDeLasNotas?.[clave];
   const cuando = autor
     ? ` el ${diaConAnio(Date.parse(autor.en))}, a las ${new Date(autor.en).toLocaleTimeString("es-CR", { hour: "numeric", minute: "2-digit" })}${autor.por ? `, por ${autor.por.split("@")[0]}` : ""}`
@@ -61,7 +110,7 @@ function QuedoGuardada({ clave }: { clave: string }) {
   );
 }
 
-function Cambio({ cambio, estado, onAplicar, onNo }: { cambio: CambioPropuesto; estado: EstadoDelCambio; onAplicar: () => void; onNo: () => void }) {
+function Cambio({ cambio, estado, ocupado, onAplicar, onNo }: { cambio: CambioPropuesto; estado: EstadoDelCambio; ocupado: boolean; onAplicar: () => void; onNo: () => void }) {
   const { exp, puedeEditar } = useLienzo();
   const se = comoSeVeElCambio(exp.estado.contenido, cambio.destino, cambio.valor);
   if (!se) return null;
@@ -92,10 +141,10 @@ function Cambio({ cambio, estado, onAplicar, onNo }: { cambio: CambioPropuesto; 
         ) : (
           puedeEditar && (
             <>
-              <BotonBlanco disabled={estado === "aplicando"} onClick={onAplicar}>
+              <BotonBlanco disabled={ocupado || estado === "aplicando"} onClick={onAplicar}>
                 {estado === "aplicando" ? "Aplicando…" : "Aplicar"}
               </BotonBlanco>
-              <BotonTexto disabled={estado === "aplicando"} onClick={onNo}>
+              <BotonTexto disabled={ocupado || estado === "aplicando"} onClick={onNo}>
                 No
               </BotonTexto>
             </>
@@ -110,9 +159,99 @@ function TextoDeLosHechos({ g }: { g: Guardado["hechos"] }) {
   if (g.estado !== "escritos" && g.estado !== "ya-estaban") return null;
   return (
     <p className="text-xs text-fg-secondary">
-      Quedan {g.escritos === 1 ? "un hecho" : `${g.escritos} hechos`} de la cuenta anotados con tu nombre, como los de una reunión. Todavía ninguna pantalla los
-      muestra.
+      Quedan {g.escritos === 1 ? "un hecho" : `${g.escritos} hechos`} de la cuenta anotados con tu nombre, como los de una reunión. Los ves debajo de la nota, en
+      «Lo que sabes del cliente».
     </p>
+  );
+}
+
+/** «Aplicar todo»: los cambios que siguen propuestos, uno tras otro, con la misma regla del «Aplicar» de cada uno. */
+function AplicarTodo({
+  cambios,
+  estados,
+  ponerEstado,
+  ocupado,
+  setOcupado,
+}: {
+  cambios: CambioPropuesto[];
+  estados: Record<string, EstadoDelCambio>;
+  ponerEstado: (id: string, e: EstadoDelCambio) => void;
+  ocupado: boolean;
+  setOcupado: (v: boolean) => void;
+}) {
+  const { exp, puedeEditar, cambiar, loGuardado } = useLienzo();
+  const [confirmando, setConfirmando] = useState(false);
+  const [resultado, setResultado] = useState<ResultadoDeAplicarTodo | null>(null);
+  const plan = planDeAplicarTodo(exp.estado.contenido, cambios, estados);
+  const aviso = avisoDeReemplazos(plan.reemplazos);
+
+  const alAplicarTodo = async () => {
+    setConfirmando(false);
+    setResultado(null);
+    setOcupado(true);
+    try {
+      const r = await aplicarTodo({
+        cambios,
+        estados,
+        // Sobre lo último guardado: el cambio de antes pudo dejar este repetido («Ya está»).
+        contenidoDeAhora: () => loGuardado().estado.contenido,
+        // La misma operación del «Aplicar»; el lienzo la reintenta sola si chocó con algo que no toca (reintento.ts).
+        aplicar: async (clave, valor) => {
+          let motivo = "";
+          const ok = await cambiar([{ op: "sumarACasilla", clave, valor }], {
+            sinAvisoDeError: true,
+            alFallar: (m) => {
+              motivo = m;
+            },
+          });
+          return ok ? { ok: true } : { ok: false, motivo: motivo || "No se pudo guardar." };
+        },
+        ponerEstado,
+      });
+      setResultado(r);
+    } catch {
+      setResultado({ aplicados: 0, yaEstaban: 0, fallidos: [{ donde: "Aplicar todo", motivo: "Algo falló a la mitad: revisa cada tarjeta." }], aMano: 0 });
+    } finally {
+      setOcupado(false);
+    }
+  };
+
+  const conBoton = puedeEditar && plan.pendientes.length >= 2;
+  if (!conBoton && !resultado) return null;
+  return (
+    <div className="flex flex-col gap-2">
+      {conBoton && !confirmando && (
+        <div className="flex flex-wrap items-center gap-2">
+          <BotonAzul disabled={ocupado} onClick={() => (aviso ? setConfirmando(true) : void alAplicarTodo())}>
+            {ocupado ? "Aplicando…" : `Aplicar todo (${plan.pendientes.length})`}
+          </BotonAzul>
+          {aviso && <span className="text-2xs text-warn-ink">{plan.reemplazos === 1 ? "Uno reemplaza lo que hay" : `${plan.reemplazos} reemplazan lo que hay`}</span>}
+        </div>
+      )}
+      {confirmando && aviso && (
+        <div className="flex flex-col gap-2 rounded-lg border border-line bg-surface px-3 py-2.5">
+          <p className="text-[13px] text-fg">{aviso}</p>
+          <div className="flex items-center gap-2">
+            <BotonAzul onClick={() => void alAplicarTodo()}>Aplicar los {plan.pendientes.length}</BotonAzul>
+            <BotonTexto onClick={() => setConfirmando(false)}>Cancelar</BotonTexto>
+          </div>
+        </div>
+      )}
+      {resultado && (
+        <div role="status" className="flex flex-col gap-1 rounded-lg border border-line bg-surface px-3 py-2.5">
+          <p className="text-[13px] text-fg">{resumenDeAplicarTodo(resultado)}</p>
+          {resultado.fallidos.length > 0 && (
+            <ul className="space-y-0.5">
+              {resultado.fallidos.map((f, i) => (
+                <li key={i} className="text-xs text-danger-ink">
+                  {f.donde}: {f.motivo}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -124,6 +263,7 @@ function LoQueQuedo({
   ponerEstado,
   aviso,
   ponerAviso,
+  guardarLaNota,
 }: {
   listo: Listo;
   guardado: Guardado | null;
@@ -132,10 +272,15 @@ function LoQueQuedo({
   ponerEstado: (id: string, e: EstadoDelCambio) => void;
   aviso: EstadoDelAviso;
   ponerAviso: (a: EstadoDelAviso) => void;
+  /** Guardar ahora la nota de una conversación que volvió sin ella. */
+  guardarLaNota: () => void;
 }) {
-  const { cambiar } = useLienzo();
+  const { cambiar, exp } = useLienzo();
+  const clave = claveDeLaNota(exp.estado.contenido.notas, listo);
   const regenerar = useRehacerLaEscala();
   const [error, setError] = useState<string | null>(null);
+  // Mientras corre «Aplicar todo», los «Aplicar» de cada uno esperan: no se mandan dos veces.
+  const [ocupado, setOcupado] = useState(false);
   const cambios = listo.cambios.filter((c) => esCasillaParaNexus(c.destino));
 
   const aplicar = async (c: CambioPropuesto) => {
@@ -148,7 +293,7 @@ function LoQueQuedo({
   };
 
   let escala: ReactNode = null;
-  if (!errorAlGuardar) {
+  if (!errorAlGuardar && clave) {
     if (!guardado) escala = <p className="text-2xs text-fg-muted">Nexus revisa si esto cambia la página de La escala…</p>;
     else if (guardado.fallo)
       escala = <Alert variant="warning">No pude revisar si esto cambia la página de La escala (ni si contradice lo que aceptó el cliente). Revísala tú en «La escala».</Alert>;
@@ -159,7 +304,13 @@ function LoQueQuedo({
         </p>
       );
     else if (aviso === "abierto")
-      escala = <AvisoDeImpacto key={listo.clave} aviso={guardado.impacto.aviso} regenerar={regenerar} corriendo={CORRIENDO_LA_ESCALA} onCerrar={() => ponerAviso("cerrado")} />;
+      escala = <AvisoDeImpacto key={clave} aviso={guardado.impacto.aviso} regenerar={regenerar} corriendo={CORRIENDO_LA_ESCALA} onCerrar={() => ponerAviso("cerrado")} />;
+    else if (aviso === "de-antes")
+      escala = (
+        <p className="text-xs text-fg-muted">
+          Cuando guardaste esta nota, Nexus avisó que cambia la página de La escala: {guardado.impacto.aviso} Mira cómo quedó en «La escala».
+        </p>
+      );
     else if (aviso === "cancelado-al-cerrar")
       escala = (
         <p className="text-xs text-fg-muted">
@@ -172,16 +323,24 @@ function LoQueQuedo({
   return (
     <section aria-label="Adónde va lo que contaste" className="flex flex-col gap-3 rounded-xl border border-line bg-surface-muted p-4">
       <h3 className="text-sm font-semibold text-fg">Adónde va lo que contaste</h3>
-      {errorAlGuardar ? <Alert variant="danger">{errorAlGuardar}</Alert> : <QuedoGuardada clave={listo.clave} />}
+      {errorAlGuardar ? <Alert variant="danger">{errorAlGuardar}</Alert> : <QuedoGuardada clave={clave} onGuardar={guardarLaNota} />}
       {guardado && <TextoDeLosHechos g={guardado.hechos} />}
       {escala}
 
       {cambios.length > 0 ? (
         <>
           <p className="text-xs text-fg-secondary">{cambios.length === 1 ? "Un cambio para la arquitectura de la venta:" : `${cambios.length} cambios para la arquitectura de la venta:`}</p>
+          <AplicarTodo cambios={cambios} estados={estados} ponerEstado={ponerEstado} ocupado={ocupado} setOcupado={setOcupado} />
           <ul className="flex flex-col gap-2">
             {cambios.map((c) => (
-              <Cambio key={c.id} cambio={c} estado={estados[c.id] ?? "propuesto"} onAplicar={() => void aplicar(c)} onNo={() => ponerEstado(c.id, "descartado")} />
+              <Cambio
+                key={c.id}
+                cambio={c}
+                estado={estados[c.id] ?? "propuesto"}
+                ocupado={ocupado}
+                onAplicar={() => void aplicar(c)}
+                onNo={() => ponerEstado(c.id, "descartado")}
+              />
             ))}
           </ul>
         </>
@@ -205,8 +364,42 @@ export default function HablarConNexus() {
   const [conversacion, setConversacion] = useState<ConversacionEnPantalla>(conversacionNueva);
   // La nota de la conversación que se ve: una revisión que vuelve tarde (ya se empezó otra) no la pisa.
   const viva = useRef<string | null>(null);
+  // Si la persona ya empezó a escribir, la conversación guardada que llega tarde no la pisa.
+  const tocada = useRef(false);
+  const activo = lugar === "preventa" && puedeEditar;
+
+  // Al volver a la preventa: la última conversación de quien mira, con lo propuesto y lo que hizo con cada cambio.
+  useEffect(() => {
+    if (!activo) return;
+    let vigente = true;
+    void (async () => {
+      try {
+        const r = await fetch(urlDeLaConversacion(exp.id));
+        const j = (await r.json().catch(() => null)) as { conversacion?: ConversacionGuardada | null } | null;
+        const c = r.ok ? j?.conversacion : null;
+        if (!vigente || !c || tocada.current) return;
+        setConversacion({ id: c.id, mensajes: c.mensajes });
+        if (c.listo) {
+          viva.current = c.listo.notaClave;
+          setListo({ clave: c.listo.notaClave, conversacion: c.id, cambios: c.listo.cambios, nota: notaDeLaConversacion(c.mensajes) });
+          setEstados(c.listo.estados);
+          setGuardado(
+            // Sin la revisión guardada no se sabe si cambiaba La escala: se dice así, nunca «no cambia».
+            c.listo.guardado ? (c.listo.guardado as Guardado) : { hechos: { estado: "apagados" }, impacto: { cambia: false, aviso: "" }, fallo: true },
+          );
+          setAviso("de-antes");
+        }
+      } catch {
+        // Sin la conversación de antes, el cajón arranca vacío: nada se pierde de la preventa.
+      }
+    })();
+    return () => {
+      vigente = false;
+    };
+  }, [activo, exp.id]);
+
   // Primero en la preventa: ni en la escala de la cuenta ni en la exploración de un proyecto.
-  if (lugar !== "preventa" || !puedeEditar) return null;
+  if (!activo) return null;
   const llena = loQueSabeElEquipo(exp.estado.contenido.notas).length >= MAX_LO_QUE_SABES;
 
   const revisar = async (conversacion: string, clave: string) => {
@@ -219,6 +412,8 @@ export default function HablarConNexus() {
       });
       const j = (await r.json().catch(() => null)) as (Guardado & { error?: string }) | null;
       if (viva.current === clave) setGuardado(r.ok && j?.impacto ? j : sinRevision);
+      // Los hechos que dejó se ven debajo de la nota: «Lo que sabes del cliente» los vuelve a pedir.
+      window.dispatchEvent(new CustomEvent(EVENTO_HECHOS_DE_LAS_NOTAS, { detail: exp.id }));
     } catch {
       // La nota ya quedó: sin la revisión, La escala se puede rehacer a mano.
       if (viva.current === clave) setGuardado(sinRevision);
@@ -228,7 +423,7 @@ export default function HablarConNexus() {
   const alQuedarListo = async ({ conversacion, nota, turno }: { conversacion: string; nota: string; turno: TurnoListo }) => {
     const clave = claveNuevaDeLoQueSabes();
     viva.current = clave;
-    setListo({ clave, conversacion, cambios: turno.cambios });
+    setListo({ clave, conversacion, cambios: turno.cambios, nota });
     setGuardado(null);
     setErrorAlGuardar(null);
     setEstados({});
@@ -242,7 +437,16 @@ export default function HablarConNexus() {
     void revisar(conversacion, clave);
   };
 
+  const ponerEstado = (id: string, e: EstadoDelCambio) => {
+    setEstados((x) => ({ ...x, [id]: e }));
+    // Lo que se aplicó o se descartó queda en la conversación guardada; «aplicando» es solo de la pantalla.
+    if (listo && (e === "aplicado" || e === "descartado")) anotar(exp.id, { conversacion: listo.conversacion, estados: { [id]: e } });
+  };
+
   const olvidar = () => {
+    // La de ahora queda cerrada: al volver, el cajón arranca vacío.
+    if (conversacion.mensajes.length || listo) anotar(exp.id, { conversacion: conversacion.id, cerrar: true });
+    tocada.current = true;
     viva.current = null;
     setConversacion(conversacionNueva());
     setListo(null);
@@ -280,19 +484,25 @@ export default function HablarConNexus() {
             alQuedarListo={alQuedarListo}
             terminado={listo !== null}
             conversacion={conversacion}
-            alCambiar={setConversacion}
+            alCambiar={(c) => {
+              tocada.current = true;
+              setConversacion(c);
+            }}
             alReiniciar={olvidar}
           >
             {listo && (
               <LoQueQuedo
-                key={listo.clave}
+                key={listo.clave ?? listo.conversacion}
                 listo={listo}
                 guardado={guardado}
                 errorAlGuardar={errorAlGuardar}
                 estados={estados}
-                ponerEstado={(id, e) => setEstados((x) => ({ ...x, [id]: e }))}
+                ponerEstado={ponerEstado}
                 aviso={aviso}
                 ponerAviso={setAviso}
+                guardarLaNota={() =>
+                  void alQuedarListo({ conversacion: listo.conversacion, nota: listo.nota, turno: { tipo: "listo", cambios: listo.cambios, hechos: [], descartados: 0 } })
+                }
               />
             )}
           </PanelDeNexus>

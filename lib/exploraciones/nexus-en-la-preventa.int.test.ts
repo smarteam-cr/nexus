@@ -43,7 +43,9 @@ import { olvidarHechosMirado } from "@/lib/seguimiento/hechos-server";
 import { MODO_DEL_CHAT } from "@/lib/chat-de-nexus/conversacion-server";
 import { TOPES } from "@/lib/chat-de-nexus/conversacion";
 import { PREGUNTAS_POR_DIA } from "@/lib/chat-de-nexus/respuesta";
-import { alGuardarLaNota, vueltaEnLaPreventa } from "./nexus-en-la-preventa-server";
+import { alGuardarLaNota, cerrarEnLaPreventa, conversacionEnLaPreventa, estadosEnLaPreventa, vueltaEnLaPreventa } from "./nexus-en-la-preventa-server";
+import { hechosDeLasNotas } from "./hechos-de-las-notas-server";
+import { RESPUESTA_SIN_ACCESO } from "@/lib/chat-de-nexus/guardada";
 
 const EMAIL = "liz@smarteam.test";
 const CON_ACCESO = async () => true;
@@ -219,3 +221,118 @@ describe("la base y la invariante", () => {
     expect(fuera.map((f) => f.motivo)).toEqual(["otro_cliente"]);
   });
 });
+
+describe("la conversación guardada no cruza de persona ni de preventa", () => {
+  const PREGUNTA = { tipo: "pregunta", preguntas: ["¿De qué mes es esa cifra?"] };
+
+  it("vuelve con sus mensajes para quien la tuvo, en su preventa, y para nadie más", async () => {
+    const { id } = await sembrar();
+    const otra = await sembrar2();
+    siguiente = PREGUNTA;
+    const v = await vueltaEnLaPreventa(id, CONVERSACION, [{ de: "persona", texto: NOTA }], EMAIL, CON_ACCESO);
+    expect(v.ok).toBe(true);
+    const c = await conversacionEnLaPreventa(id, EMAIL, CON_ACCESO);
+    expect(c).toMatchObject({ id: CONVERSACION, mensajes: [{ de: "persona", texto: NOTA }, { de: "nexus", texto: "¿De qué mes es esa cifra?" }], listo: null });
+    // Otra persona en la misma preventa, y la misma persona en otra preventa: nada.
+    expect(await conversacionEnLaPreventa(id, "marco@smarteam.test", CON_ACCESO)).toBeNull();
+    expect(await conversacionEnLaPreventa(otra, EMAIL, CON_ACCESO)).toBeNull();
+    // Leerla no gasta los topes.
+    expect(await prisma.agentRun.count({ where: { triggeredByEmail: EMAIL } })).toBe(1);
+  });
+
+  it("otra preventa del MISMO cliente no la ve, ni puede anotar en ella ni cerrarla", async () => {
+    // Una sola preventa viva por empresa (índice único): la otra del mismo cliente es la que vino después de archivar.
+    const { id, clientId } = await sembrar();
+    const v = await vueltaEnLaPreventa(id, CONVERSACION, [{ de: "persona", texto: NOTA }], EMAIL, CON_ACCESO);
+    if (!v.ok || v.turno.tipo !== "listo") throw new Error("esperaba listo");
+    await prisma.exploracionDeVenta.update({ where: { id }, data: { archivadaEn: new Date() } });
+    const hermana = (await prisma.exploracionDeVenta.create({ data: { clientId, creadaPor: EMAIL }, select: { id: true } })).id;
+    expect(await conversacionEnLaPreventa(hermana, EMAIL, CON_ACCESO)).toBeNull();
+    expect((await estadosEnLaPreventa(hermana, CONVERSACION, EMAIL, { [v.turno.cambios[0].id]: "descartado" })).ok).toBe(false);
+    await cerrarEnLaPreventa(hermana, CONVERSACION, EMAIL);
+    // De vuelta en la suya, sigue abierta y sin lo que se intentó desde la otra.
+    await prisma.exploracionDeVenta.update({ where: { id: hermana }, data: { archivadaEn: new Date() } });
+    await prisma.exploracionDeVenta.update({ where: { id }, data: { archivadaEn: null } });
+    const c = await conversacionEnLaPreventa(id, EMAIL, CON_ACCESO);
+    expect(c?.listo?.estados).toEqual({});
+    expect(c?.id).toBe(CONVERSACION);
+  });
+
+  it("sin acceso HOY a la cuenta, la respuesta que leyó sus reuniones vuelve como aviso, sin sus citas", async () => {
+    const { id, clientId } = await sembrar();
+    await prisma.firefliesSession.create({
+      data: { id: "ses-guardada", title: "Diagnóstico", date: new Date("2026-11-10T15:00:00Z"), participants: ["ana@centauro.test"], resolvedClientId: clientId, transcript: "Ana Mora: La cobranza la hacemos a mano con un Excel." },
+    });
+    siguiente = { tipo: "consulta", pregunta: "¿Cómo cobran?" };
+    const v = await vueltaEnLaPreventa(id, CONVERSACION, [{ de: "persona", texto: "¿Cómo cobran?" }], EMAIL, CON_ACCESO);
+    expect(v.ok && v.turno.tipo).toBe("respuesta");
+    const con = await conversacionEnLaPreventa(id, EMAIL, CON_ACCESO);
+    expect(JSON.stringify(con)).toContain("la hacemos a mano");
+    const sin = await conversacionEnLaPreventa(id, EMAIL, async () => false);
+    expect(sin?.mensajes.map((m) => m.texto)).toEqual(["¿Cómo cobran?", RESPUESTA_SIN_ACCESO]);
+    expect(JSON.stringify(sin)).not.toContain("a mano");
+  });
+
+  it("el «listo» vuelve con su nota, lo aplicado y lo descartado; «Nueva conversación» la cierra", async () => {
+    const { id } = await sembrar();
+    const v = await vueltaEnLaPreventa(id, CONVERSACION, [{ de: "persona", texto: NOTA }], EMAIL, CON_ACCESO);
+    if (!v.ok || v.turno.tipo !== "listo") throw new Error("esperaba listo");
+    const idDelCambio = v.turno.cambios[0].id;
+    await guardarLaNota(id);
+    await alGuardarLaNota(id, CONVERSACION, CLAVE, EMAIL);
+    // Otra persona no puede anotar en la conversación de Liz.
+    expect((await estadosEnLaPreventa(id, CONVERSACION, "marco@smarteam.test", { [idDelCambio]: "descartado" })).ok).toBe(false);
+    expect((await estadosEnLaPreventa(id, CONVERSACION, EMAIL, { [idDelCambio]: "aplicado", "inventado:1": "aplicado" })).ok).toBe(true);
+    const c = await conversacionEnLaPreventa(id, EMAIL, CON_ACCESO);
+    expect(c?.listo).toMatchObject({ notaClave: CLAVE, estados: { [idDelCambio]: "aplicado" }, guardado: { hechos: { estado: "escritos" } } });
+    expect(c?.listo?.cambios.map((x) => x.id)).toEqual([idDelCambio]);
+    // Lo que mandó Marco no quedó.
+    expect(c?.listo?.estados).toEqual({ [idDelCambio]: "aplicado" });
+
+    await cerrarEnLaPreventa(id, CONVERSACION, EMAIL);
+    expect(await conversacionEnLaPreventa(id, EMAIL, CON_ACCESO)).toBeNull();
+    // Los hechos siguen saliendo del «listo» del servidor: anotar no rompió la vuelta.
+    expect(await prisma.hechoDeReunion.count({ where: { exploracionId: id } })).toBe(1);
+  });
+});
+
+describe("los hechos de las notas, debajo de cada nota", () => {
+  const fila = (clientId: string, exploracionId: string, frase: string) => ({
+    clientId,
+    exploracionId,
+    notaClave: CLAVE,
+    dichoPorEmail: EMAIL,
+    tipo: "cuenta",
+    frase,
+    cita: "pierden unos 40 mil dólares",
+    citaFuente: "texto",
+    huella: `cuenta|${frase}`,
+    fechaDeLaReunion: new Date("2026-11-21T15:00:00Z"),
+  });
+
+  it("solo los de esta preventa y su cliente, con quién lo dijo", async () => {
+    const { id, clientId } = await sembrar();
+    await guardarLaNota(id);
+    const otra = await sembrar2();
+    const otroCliente = await prisma.client.create({ data: { name: "Otra empresa", kind: "PROSPECTO" }, select: { id: true } });
+    await prisma.hechoDeReunion.createMany({
+      data: [fila(clientId, id, "La empresa pierde plata"), fila(clientId, otra, "De otra preventa"), fila(otroCliente.id, id, "Con otro cliente")],
+    });
+    const hechos = await hechosDeLasNotas(id);
+    expect(Object.keys(hechos)).toEqual([CLAVE]);
+    expect(hechos[CLAVE].map((h) => [h.frase, h.dichoPor])).toEqual([["La empresa pierde plata", "Liz Flores"]]);
+  });
+
+  it("una nota quitada no muestra sus hechos", async () => {
+    const { id, clientId } = await sembrar();
+    await prisma.hechoDeReunion.create({ data: fila(clientId, id, "La empresa pierde plata") });
+    expect(await hechosDeLasNotas(id)).toEqual({});
+  });
+});
+
+/** Otra preventa, de otra empresa, para la misma persona. */
+async function sembrar2(): Promise<string> {
+  const c = await prisma.client.create({ data: { name: "Otra preventa", kind: "PROSPECTO" }, select: { id: true } });
+  const e = await prisma.exploracionDeVenta.create({ data: { clientId: c.id, creadaPor: EMAIL }, select: { id: true } });
+  return e.id;
+}
