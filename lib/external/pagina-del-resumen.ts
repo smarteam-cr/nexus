@@ -473,6 +473,24 @@ export interface ReunionMalLeida {
   delCliente: number;
 }
 
+/**
+ * Las piezas OBLIGATORIAS de un Resumen armado (21 nov, Elías: «que al hacer un resumen no se pierda el titular»): sin
+ * ellas la página del cliente queda rota. Hoy, el titular (la tesis). Al rehacer con la IA, una obligatoria que la
+ * verificación descartó se queda como estaba (`juntarConLoEditado`); y una página sin ella no se publica.
+ */
+export const PIEZAS_OBLIGATORIAS: readonly TipoDelNegocio[] = ["tesis"];
+
+/**
+ * Por qué esta página del Resumen no se puede publicar, o null si se puede. Solo un Resumen ARMADO del formato 2 (desde el
+ * 10 nov) lleva titular: sin Resumen, o uno del 9 nov, la página tiene su titular de siempre.
+ */
+export function faltaParaPublicar(r: Pick<ResumenDeLaPagina, "at" | "formato" | "negocio">): string | null {
+  if (!r.at || r.formato !== 2) return null;
+  const vacia = PIEZAS_OBLIGATORIAS.find((tipo) => !(r.negocio ?? []).find((p) => p.tipo === tipo)?.lista.piezas.length);
+  if (!vacia) return null;
+  return "El Resumen no tiene titular: escríbelo arriba del Resumen antes de publicar (si lo armó la IA, también puedes rehacerlo).";
+}
+
 /** Lo mínimo de un nivel por dimensión para decir si el general es provisional. */
 interface DimensionConNivel {
   id: string;
