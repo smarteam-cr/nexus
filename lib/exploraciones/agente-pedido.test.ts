@@ -326,7 +326,7 @@ describe("las objeciones y las particularidades (pedido de Elías, 2026-10-01)",
   it("la herramienta pide las objeciones con su clase, y el pedido nombra las clases", () => {
     const tool = herramienta(ctx());
     const props = (tool.input_schema as { properties: Record<string, { items?: { properties?: Record<string, { enum?: string[] }> } }> }).properties;
-    expect(props.objeciones.items?.properties?.clase.enum).toEqual(["precio", "herramienta", "momento", "propuesta", "confianza", "decisor", "interno", "otra"]);
+    expect(props.objeciones.items?.properties?.clase.enum).toEqual(["precio", "herramienta", "momento", "propuesta", "confianza", "decisor", "interno", "cifras", "otra"]);
     expect(String(pedidoDeLaExploracion(ctx()).system)).toMatch(/Las clases de objeción: precio/);
   });
 });
@@ -1079,5 +1079,51 @@ describe("⭐ sin una pista del cliente, no hay nivel ni reto (Automóvil Club, 
     const texto = JSON.stringify(pedidoDeLaExploracion(ctx({ modo: "preparar" })));
     expect(texto).toContain("NO alcanzan para un nivel");
     expect(texto).toContain("no es un reto suyo");
+  });
+});
+
+describe("Negocio, Embudo y la pérdida al leer una reunión (2026-11-20)", () => {
+  const DICHO = "Ana: vendemos unos 120 mil dólares al mes y el ticket promedio anda en 2.500 dólares. Cada mes que no llegamos se nos van unos 15 mil dólares, sí.";
+  const fuentes = [...FUENTES, { id: "S2", etiqueta: "Reunión del 2 oct", texto: DICHO }];
+
+  it("Negocio entra con sus cifras citadas, solo los campos con número", () => {
+    const r = leerLaRespuesta(
+      respuesta({
+        negocio: { ticket: "US$ 2.500 por venta", volumen: "US$ 120.000 al mes", pago: "no lo dijo", fuentes: [{ id: "S2", cita: "el ticket promedio anda en 2.500 dólares" }] },
+        embudo: { leads: "200 al mes", fuentes: [{ id: "S2", cita: "esto no se dijo en ninguna reunión" }] },
+      }),
+      ctx({ fuentes }),
+      "run_1",
+      AHORA,
+    );
+    const negocio = r.items.find((i) => i.destino.tipo === "casilla" && i.destino.clave === "negocio");
+    expect(negocio?.valor).toEqual({ ticket: "US$ 2.500 por venta", volumen: "US$ 120.000 al mes" });
+    // Sin una cita que esté, el embudo no entra.
+    expect(r.items.some((i) => i.destino.tipo === "casilla" && i.destino.clave === "embudo")).toBe(false);
+    expect(String(pedidoDeLaExploracion(ctx({ fuentes })).system)).toMatch(/vale la que dice el cliente; vale la que dice el vendedor de Smarteam si el cliente no la corrige/);
+  });
+
+  it("⛔ la pérdida que calculó Nexus no vuelve por la reunión a «Qué pasa si no actúa»", () => {
+    const contenido = {
+      ...contenidoVacio(),
+      casillas: {
+        negocio: { ticket: "US$ 2.500 por venta" },
+        embudo: { leads: "200 al mes", conversion: "4 %" },
+        metas: [{ que: "Subir la conversión de leads", actual: "4 %", objetivo: "7 %" }],
+      },
+    };
+    const r = leerLaRespuesta(
+      respuesta({
+        textos: [
+          { casilla: "consecuencias", texto: "Pierden unos US$ 15.000 al mes por no llegar a la meta", fuentes: [{ id: "S2", cita: "se nos van unos 15 mil dólares" }] },
+          { casilla: "consecuencias", texto: "Pierden unos 10 negocios al mes sin seguimiento", fuentes: [{ id: "S2", cita: "vendemos unos 120 mil dólares al mes" }] },
+        ],
+      }),
+      ctx({ fuentes, contenido }),
+      "run_1",
+      AHORA,
+    );
+    const textos = r.items.filter((i) => i.destino.tipo === "casilla" && i.destino.clave === "consecuencias").map((i) => i.valor);
+    expect(textos).toEqual(["Pierden unos 10 negocios al mes sin seguimiento"]);
   });
 });

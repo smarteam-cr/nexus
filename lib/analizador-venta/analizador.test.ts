@@ -28,8 +28,9 @@ describe("S1 · el criterio escrito", () => {
       expect(e.seHizo.length).toBeGreaterThan(0);
       expect(e.seSalto.length).toBeGreaterThan(0);
     }
-    // Los diez del plan, más el dolor, la base para un caso de uso y lo que salió bien (29 oct), y el resultado que busca (6 nov).
-    expect(PUNTOS_DEL_ANALISIS).toHaveLength(14);
+    // Los diez del plan, más el dolor, la base para un caso de uso y lo que salió bien (29 oct), el resultado que busca (6 nov)
+    // y las objeciones (20 nov).
+    expect(PUNTOS_DEL_ANALISIS).toHaveLength(15);
   });
   it("con o sin position statement (K3)", () => {
     expect(criterioComoTexto({ positionStatement: null })).toContain(SIN_POSICIONAMIENTO);
@@ -164,7 +165,7 @@ describe("S3 · sin cita no hay juicio", () => {
     expect(descartados).toBe(2);
   });
   it("la herramienta pide cada punto juzgado y sus citas", () => {
-    expect(HERRAMIENTA_DEL_ANALISIS.input_schema.required).toEqual(["resumen", "enfoque", "juicios", "bien", "recomendaciones", "fuera_del_objetivo", "numeros", "decision", "pasos", "demo"]);
+    expect(HERRAMIENTA_DEL_ANALISIS.input_schema.required).toEqual(["resumen", "enfoque", "juicios", "bien", "recomendaciones", "fuera_del_objetivo", "numeros", "decision", "pasos", "demo", "objeciones"]);
   });
 });
 

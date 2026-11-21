@@ -38,7 +38,13 @@
  *     dos versiones del mismo paso queda la más nueva; reemplazan la lectura del siguiente paso;
  *   · «Para mejorar» trae qué decir la próxima vez (`decir`);
  *   · las preguntas por funciones de la herramienta, para el demo (`demo`), con quién preguntó (el de la transcripción).
+ *
+ * El 20 nov (Elías, tras la sesión con Ventas): las objeciones (`objeciones`). Cada una con la frase del CLIENTE (su cita,
+ * verificada y de alguien del cliente), su clase —las mismas de la tarjeta «Objeciones» de la preventa
+ * (`CLASES_DE_OBJECION`)—, cómo se manejó y cómo manejarla con LAER. Si se dice que el vendedor la manejó, su respuesta
+ * también se cita; sin una respuesta que esté, la objeción queda como «sin manejar».
  */
+import { CLASES_DE_OBJECION, type ClaseDeObjecion } from "@/lib/exploraciones/casillas";
 import { ETAPAS, type EtapaDelProceso } from "./criterio";
 
 /** Los puntos que juzga el modelo (el 3, quién habló, y las recomendaciones van aparte). */
@@ -233,6 +239,34 @@ export interface EnfoqueDeLaSesion {
   lectura: string;
 }
 
+/** Cómo se manejó una objeción en la reunión. */
+export const MANEJOS_DE_LA_OBJECION = ["bien", "en_parte", "no"] as const;
+export type ManejoDeLaObjecion = (typeof MANEJOS_DE_LA_OBJECION)[number];
+export const TEXTO_DEL_MANEJO: Record<ManejoDeLaObjecion, string> = { bien: "Bien manejada", en_parte: "A medias", no: "Sin manejar" };
+
+/** Los cuatro pasos de LAER para una objeción (lib/exploraciones/objeciones-comunes.ts). */
+export interface LaerDeLaObjecion {
+  escuchar: string;
+  reconocer: string;
+  explorar: string;
+  responder: string;
+}
+
+/** Una objeción del cliente en la reunión (2026-11-20): lo que dijo, cómo se manejó y cómo manejarla con LAER. */
+export interface ObjecionDeLaReunion {
+  /** La objeción en una frase, en tercera persona. */
+  texto: string;
+  clase: ClaseDeObjecion;
+  /** La frase del cliente (verificada, y de alguien del cliente). */
+  cita: Cita;
+  manejo: ManejoDeLaObjecion;
+  /** Cómo se manejó, en una frase. */
+  comoSeManejo: string;
+  /** La respuesta del vendedor, si la hubo y está en la transcripción. */
+  respuesta: Cita | null;
+  laer: LaerDeLaObjecion;
+}
+
 export interface ResultadoDelAnalisis {
   resumen: string;
   juicios: Juicio[];
@@ -250,6 +284,8 @@ export interface ResultadoDelAnalisis {
   decision?: Decision[];
   pasos?: PasoAcordado[];
   demo?: PreguntaDelDemo[];
+  /** Desde el 2026-11-20; los análisis de antes no las traen (ausentes, no vacías). */
+  objeciones?: ObjecionDeLaReunion[];
 }
 
 /* ── La herramienta que llena el modelo ─────────────────────────────────────────── */
@@ -401,6 +437,38 @@ export const HERRAMIENTA_DEL_ANALISIS = {
           required: ["tema", "que", "citas"],
         },
       },
+      objeciones: {
+        type: "array",
+        description:
+          "Las objeciones del CLIENTE en esta reunión: lo que dijo que lo frena para avanzar o comprar (el precio, que ya tiene herramienta, que no es el momento, que no quiere dar cifras…). Una por objeción, hasta cinco, con la cita de la frase del cliente. Si no hubo, vacío.",
+        items: {
+          type: "object",
+          properties: {
+            texto: { type: "string", description: "La objeción en una frase, en tercera persona." },
+            clase: { type: "string", enum: [...CLASES_DE_OBJECION] },
+            citas: { ...CITAS, description: "La frase del CLIENTE con la objeción, copiada tal cual de su turno." },
+            manejo: {
+              type: "string",
+              enum: [...MANEJOS_DE_LA_OBJECION],
+              description: "bien: se escuchó, se exploró y se respondió con lo que dijo el cliente; en_parte: se respondió sin explorar, o se exploró sin responder; no: se pasó de largo o se discutió.",
+            },
+            como_se_manejo: { type: "string", description: "Cómo se manejó en esta reunión, en una frase en tuteo (hasta 30 palabras)." },
+            respuesta: { ...CITAS, description: "La respuesta del vendedor, copiada tal cual de su turno, si la hubo. Vacío si no respondió." },
+            laer: {
+              type: "object",
+              description: "Cómo manejarla la próxima vez con LAER, para ESTA objeción y este cliente, en tuteo, una frase por paso.",
+              properties: {
+                escuchar: { type: "string" },
+                reconocer: { type: "string", description: "La frase para decirle." },
+                explorar: { type: "string", description: "La pregunta para llegar a lo que hay detrás." },
+                responder: { type: "string", description: "La respuesta, con su meta y lo que le cuesta no llegar." },
+              },
+              required: ["escuchar", "reconocer", "explorar", "responder"],
+            },
+          },
+          required: ["texto", "clase", "citas", "manejo", "como_se_manejo", "laer"],
+        },
+      },
       demo: {
         type: "array",
         description:
@@ -412,7 +480,7 @@ export const HERRAMIENTA_DEL_ANALISIS = {
         },
       },
     },
-    required: ["resumen", "enfoque", "juicios", "bien", "recomendaciones", "fuera_del_objetivo", "numeros", "decision", "pasos", "demo"],
+    required: ["resumen", "enfoque", "juicios", "bien", "recomendaciones", "fuera_del_objetivo", "numeros", "decision", "pasos", "demo", "objeciones"],
   },
 } as const;
 
@@ -955,6 +1023,40 @@ function leerDemo(v: unknown, turnos: readonly TurnoNumerado[], habia: LoQueHabi
   return { demo: demo.slice(0, 5), caidas };
 }
 
+/**
+ * Las objeciones (2026-11-20): solo con la frase del CLIENTE que está en la transcripción y una clase de las de la tarjeta
+ * «Objeciones». Si se dice que se manejó, la respuesta del vendedor tiene que estar: sin ella, «bien» o «a medias» no se
+ * sostienen y queda «sin manejar». Sin los cuatro pasos de LAER, no va. Dos con la misma frase, una.
+ */
+export function leerObjeciones(v: unknown, turnos: readonly TurnoNumerado[], habia: LoQueHabia): { objeciones: ObjecionDeLaReunion[]; caidas: number } {
+  let caidas = 0;
+  const objeciones: ObjecionDeLaReunion[] = [];
+  for (const r of arreglo(v)) {
+    const x = objeto(r);
+    const t = texto(x.texto, 300);
+    const clase = (CLASES_DE_OBJECION as readonly string[]).includes(x.clase as string) ? (x.clase as ClaseDeObjecion) : null;
+    const cita = verificar(x.citas, turnos).find((c) => delCliente(c, habia));
+    const l = objeto(x.laer);
+    const laer: LaerDeLaObjecion = { escuchar: texto(l.escuchar, 300), reconocer: texto(l.reconocer, 300), explorar: texto(l.explorar, 300), responder: texto(l.responder, 400) };
+    if (!t || !clase || !cita || !laer.escuchar || !laer.reconocer || !laer.explorar || !laer.responder) {
+      caidas++;
+      continue;
+    }
+    // Dos objeciones en la misma frase («es caro y ya tenemos Pipedrive») son dos; la misma, dos veces, una.
+    if (objeciones.some((o) => o.cita.turno === cita.turno && o.clase === clase)) continue;
+    /* La respuesta es del vendedor: otro turno y otra persona que la del cliente, y si se sabe quién es del cliente, nadie
+       de ellos. Sin eso, la misma frase del cliente podía pasar por la respuesta. */
+    const respuesta =
+      verificar(x.respuesta, turnos).find(
+        (c) => c.turno !== cita.turno && paraComparar(c.hablante) !== paraComparar(cita.hablante) && (!habia.delCliente?.length || !delCliente(c, habia)),
+      ) ?? null;
+    const dicho = (MANEJOS_DE_LA_OBJECION as readonly string[]).includes(x.manejo as string) ? (x.manejo as ManejoDeLaObjecion) : "no";
+    const manejo: ManejoDeLaObjecion = dicho !== "no" && !respuesta ? "no" : dicho;
+    objeciones.push({ texto: t, clase, cita, manejo, comoSeManejo: texto(x.como_se_manejo, 300), respuesta, laer });
+  }
+  return { objeciones: objeciones.slice(0, 5), caidas };
+}
+
 /** Lo que salió fuera del objetivo: solo con una cita del CLIENTE (es su dolor, no lo que dijo el vendedor). */
 function leerFueraDelObjetivo(v: unknown, turnos: readonly TurnoNumerado[], habia: LoQueHabia): { lista: Observacion[]; sinCita: number } {
   const leidas = leerObservaciones(v, turnos);
@@ -1042,7 +1144,8 @@ export function leerElAnalisis(
   const decision = leerDecision(o.decision, turnos, habia);
   const pasos = leerPasos(o.pasos, turnos);
   const demo = leerDemo(o.demo, turnos, habia);
-  descartados += fuera.sinCita + numeros.caidas + pasos.caidos + demo.caidas;
+  const objeciones = leerObjeciones(o.objeciones, turnos, habia);
+  descartados += fuera.sinCita + numeros.caidas + pasos.caidos + demo.caidas + objeciones.caidas;
   // El siguiente paso se dice con los pasos verificados (lo último que se acordó), no con la lectura libre del modelo: en
   // Centauro decía «el martes con Fernando» cuando quedó el miércoles a las 2 con Catalina.
   if (pasos.pasos.length) {
@@ -1069,6 +1172,7 @@ export function leerElAnalisis(
       decision,
       pasos: pasos.pasos,
       demo: demo.demo,
+      objeciones: objeciones.objeciones,
     },
     descartados,
   };
@@ -1125,7 +1229,7 @@ export function leerResultadoGuardado(v: unknown): ResultadoDelAnalisis | null {
   const enfoque = o.enfoque && typeof o.enfoque === "object" && Array.isArray(o.enfoque.areas) ? o.enfoque : null;
   // Lo del 8 nov, solo si está (un análisis de antes no lo tiene: la pantalla no lo muestra, no lo da por vacío).
   const desde8nov = Object.fromEntries(
-    (["fueraDelObjetivo", "numeros", "decision", "pasos", "demo"] as const).filter((k) => Array.isArray(o[k])).map((k) => [k, o[k]]),
-  ) as Pick<ResultadoDelAnalisis, "fueraDelObjetivo" | "numeros" | "decision" | "pasos" | "demo">;
+    (["fueraDelObjetivo", "numeros", "decision", "pasos", "demo", "objeciones"] as const).filter((k) => Array.isArray(o[k])).map((k) => [k, o[k]]),
+  ) as Pick<ResultadoDelAnalisis, "fueraDelObjetivo" | "numeros" | "decision" | "pasos" | "demo" | "objeciones">;
   return { resumen: o.resumen, juicios: o.juicios, bien: Array.isArray(o.bien) ? o.bien : [], recomendaciones: o.recomendaciones, enfoque, ...desde8nov };
 }

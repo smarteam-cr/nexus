@@ -64,13 +64,16 @@ const PREGUNTAS_DE_LA_VENTA = {
   autoridad: "Además de ti, ¿quién tiene que estar de acuerdo para avanzar? ¿Quién da el visto bueno final?",
   consecuencias: "Si esto sigue igual seis meses más, ¿qué pasa? ¿Cuánto les cuesta?",
   implicaciones: "Si lo logran, ¿qué cambia para el negocio, y para ti?",
+  // 2026-11-20 (Ventas): para calcular cuánto pierden hay que entender cómo ganan dinero y cómo convierten.
+  negocio: "Cuéntame cómo entra el dinero: ¿cuánto venden en un mes y cuánto deja, en promedio, cada venta?",
+  embudo: "De los interesados que les llegan en un mes, ¿cuántos terminan comprando?",
 } as const satisfies Record<(typeof CASILLAS_DEL_RESUMEN)[number], string>;
 
 export const MARCO_DE_VENTA: Marco = {
   clave: "venta",
   nombre: "Arquitectura de la venta",
   tarjetas: CASILLAS_DEL_RESUMEN,
-  prioridad: ["metas", "retos", "consecuencias", "autoridad", "tiempos", "implicaciones", "planes", "presupuesto"],
+  prioridad: ["metas", "retos", "consecuencias", "autoridad", "tiempos", "negocio", "embudo", "implicaciones", "planes", "presupuesto"],
   letras: {
     metas: { letra: "G", marco: "Goals" },
     planes: { letra: "P", marco: "Plans" },
@@ -80,6 +83,9 @@ export const MARCO_DE_VENTA: Marco = {
     autoridad: { letra: "A", marco: "Authority" },
     consecuencias: { letra: "C", marco: "Consequences" },
     implicaciones: { letra: "I", marco: "Implications" },
+    // Las dos de Smarteam (2026-11-20): no son del marco de HubSpot, llevan su letra en español.
+    negocio: { letra: "N", marco: "Negocio: cómo gana dinero" },
+    embudo: { letra: "E", marco: "Embudo: cómo convierte" },
   },
   preguntaDeBase: PREGUNTAS_DE_LA_VENTA,
   textos: {},

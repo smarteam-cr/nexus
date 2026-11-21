@@ -12,7 +12,7 @@
  */
 import type Anthropic from "@anthropic-ai/sdk";
 import { formasDeVoseo } from "@/lib/ui/voseo-formas";
-import { type ClaveDeCasilla, type Objecion as ObjecionDicha } from "./casillas";
+import { esDeCifras, lineasDeLasCifras, type ClaveDeCasilla, type Objecion as ObjecionDicha } from "./casillas";
 import { definicionEnElMarco, esTarjeta, MARCO_DE_VENTA, type ClaveDeMarco, type Marco } from "./marco";
 import { esFuenteDeHipotesis, type EstadoDeExploracion, type ItemPropuesto } from "./contenido";
 import type { EscalaDelLienzo } from "./escala-del-lienzo";
@@ -1447,6 +1447,11 @@ function lineaDelResumen(clave: ClaveDeCasilla, v: unknown, marco: Marco = MARCO
   if (v === undefined || v === null || v === "" || (Array.isArray(v) && v.length === 0)) return null;
   const etiqueta = definicionEnElMarco(clave, marco).etiqueta;
   if (typeof v === "string") return `${etiqueta}: ${v}`;
+  // Negocio y Embudo (2026-11-20): las cifras que ya se saben, para no volver a preguntarlas.
+  if (esDeCifras(clave)) {
+    const lineas = lineasDeLasCifras(clave, v);
+    return lineas.length ? `${etiqueta}: ${lineas.join("; ")}` : null;
+  }
   if (Array.isArray(v)) {
     const partes = v.map((x) =>
       typeof x === "string" ? x : esObjeto(x) ? String(x.que ?? x.texto ?? (x.nombre ? `${x.nombre}${x.rol ? ` (${x.rol})` : ""}` : "")) : "",

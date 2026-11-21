@@ -786,6 +786,8 @@ export interface ContextoDelPlan {
   tecnica?: boolean;
   /** K2 (2026-10-27, como-llego.ts): la primera sesión de un prospecto en frío o referido; abre la puerta, sin diagnóstico. */
   abrirLaPuerta?: boolean;
+  /** 2026-11-20: hay una pérdida validada con el cliente: «qué pasa si no actúa» ya tiene su cifra. */
+  perdidaValidada?: boolean;
 }
 
 /**

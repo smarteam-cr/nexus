@@ -22,6 +22,7 @@ import { aFecha, hoyEnCostaRica } from "./fechas";
 import { MAX_SESIONES, type GuiaDeLaSesion, type SesionPlaneada } from "./guia";
 import { aplicarCambioDeLaGuia, hayAjustes, type CambioDeLaGuia } from "./ajustes-de-la-guia";
 import type { ComoLlego } from "./como-llego";
+import { calcularLaPerdida, type PerdidaValidada } from "./perdida";
 import type { ContactoPrevio, ContextoDeLaExploracion, ContextoPropuesto, TarjetasDeLoQueSabemos } from "./contexto-de-la-exploracion";
 import type { Cumplimiento } from "./despues-de-la-sesion";
 import {
@@ -51,6 +52,7 @@ import {
   esDeLista,
   TIPO_DE_CASILLA,
   TOPE_DE_LA_LISTA,
+  type Cifras,
   type ClaveDeCasilla,
   type Meta,
   type Objecion,
@@ -293,6 +295,12 @@ export interface ContenidoDeExploracion {
   respuestasParaLaGuia?: RespuestaParaLaGuia[];
   /** Punto 3, solo la preventa: si hubo contacto antes de la primera sesión y el mensaje que se redactó si no. */
   contactoPrevio?: ContactoPrevio;
+  /**
+   * 2026-11-20 (perdida.ts): cuánto pierde el cliente por no llegar a su meta, validado con él, con la cuenta que lo
+   * explica. NO es una casilla a propósito: ningún lector de lo que ve el cliente lo toca (Elías: se usa cuando se
+   * rediseñe la propuesta). Opcional: las exploraciones de antes no lo tienen.
+   */
+  perdida?: PerdidaValidada;
   /**
    * K5 (2026-10-27, asociar.ts): las reuniones (`meet:<id>`) que alguien dijo que NO son una sesión de la exploración
    * cuando Nexus lo preguntó. No se vuelven a sugerir ni se asocian solas. Es una lápida: no sube la versión.
@@ -845,6 +853,11 @@ export function yaEstaConfirmado(estado: EstadoDeExploracion, destino: DestinoDe
         const k = claveDeItemDeLista(destino.clave, valor);
         return (actual as unknown[]).some((x) => claveDeItemDeLista(destino.clave, x) === k);
       }
+      // Cifras: ya está si cada campo propuesto dice lo mismo que el confirmado.
+      if (TIPO_DE_CASILLA[destino.clave] === "cifras" && valor && typeof valor === "object") {
+        const a = actual as Record<string, unknown>;
+        return Object.entries(valor as Record<string, unknown>).every(([k, x]) => normalizarTexto(String(a[k] ?? "")) === normalizarTexto(String(x ?? "")));
+      }
       return canonico(actual) === canonico(valor);
     }
     case "nivel": {
@@ -909,7 +922,7 @@ export function esFuenteDelCliente(id: string): boolean {
  * Las casillas del marco que solo pueden salir de lo que dijo o hizo el cliente (Elías, 2026-10-07).
  * «Quién decide» no está: los contactos de HubSpot son un hecho, y el papel ya exige que la fuente lo diga.
  */
-export const CASILLAS_QUE_DICE_EL_CLIENTE = ["metas", "planes", "retos", "tiempos", "presupuesto", "consecuencias", "implicaciones", "obstaculos"] as const satisfies readonly ClaveDeCasilla[];
+export const CASILLAS_QUE_DICE_EL_CLIENTE = ["metas", "planes", "retos", "tiempos", "presupuesto", "consecuencias", "implicaciones", "obstaculos", "negocio", "embudo"] as const satisfies readonly ClaveDeCasilla[];
 
 /**
  * ¿A esta propuesta le falta fundamento del cliente? Un nivel o una casilla del marco que solo cita la
@@ -960,7 +973,8 @@ export function fusionarPropuestas(estado: EstadoDeExploracion, nuevos: ItemProp
   const base = estado.propuesta;
   const lapidas = new Set(estado.contenido.descartadas);
   let items = [...estado.propuesta.items];
-  for (const n of nuevos) {
+  for (const nuevo of nuevos) {
+    let n = nuevo;
     if (tapadoPorLapida(estado, n, lapidas) || yaEstaConfirmado(estado, n.destino, n.valor)) continue;
     const peso = pesoDelNivel(n);
     /* Una hipótesis no compite con lo que ya dijo el cliente: si el nivel confirmado tiene evidencia,
@@ -986,6 +1000,15 @@ export function fusionarPropuestas(estado: EstadoDeExploracion, nuevos: ItemProp
     }
     if (!destinoDeLista(n.destino)) {
       const clave = claveDelDestino(n.destino);
+      /* Negocio y Embudo (2026-11-20): lo pendiente sin usar se SUMA a lo nuevo, campo por campo (gana lo nuevo). La
+         sesión 1 trae el ticket y la 2 el volumen: la propuesta del ticket no puede desaparecer sin que nadie la vea. */
+      if (n.destino.tipo === "casilla" && TIPO_DE_CASILLA[n.destino.clave] === "cifras") {
+        const previas = items.filter((x) => claveDelDestino(x.destino) === clave && !lapidas.has(x.id));
+        if (previas.length) {
+          const valor = Object.assign({}, ...previas.map((p) => p.valor as Cifras), n.valor as Cifras) as Cifras;
+          n = { ...n, valor, id: idDelItem(n.destino, valor), fuentes: previas.reduce((f, p) => unirFuentes(f, p.fuentes), n.fuentes) };
+        }
+      }
       items = items.filter((x) => claveDelDestino(x.destino) !== clave);
     }
     items.push(n);
@@ -1087,6 +1110,11 @@ export type Operacion =
   /** Confirmar (o borrar) el contexto de la exploración. Quién y cuándo los pone quien aplica (el servidor). */
   | { op: "contexto"; valor: { objetivo: string; sabemos?: string; tarjetas?: TarjetasDeLoQueSabemos } | null }
   | { op: "contactoPrevio"; valor: ContactoPrevio | null }
+  /**
+   * Validar con el cliente la pérdida que calculó Nexus (perdida.ts): llega la huella de la cuenta que se vio; quien aplica
+   * la vuelve a hacer con lo guardado y, si es la misma, la guarda con quién y cuándo. null: se quita la validada.
+   */
+  | { op: "perdida"; huella: string | null }
   /**
    * Cambiar la guía de una sesión (2026-10-18, ajustes-de-la-guia.ts): sumar, cambiar, quitar o devolver una pregunta.
    * Si la sesión todavía no existe (la próxima sin planear), se crea con ese id, como al escribir su objetivo.
@@ -1203,6 +1231,12 @@ function aplicarAlDestino(
           ok: true,
           estado: { ...estado, contenido: conCasilla(c, destino.clave, [...actual, v] as ValoresDeCasillas[ClaveDeCasilla]) },
         };
+      }
+      /* Negocio y Embudo (2026-11-20): lo propuesto SUMA sus campos a los que ya hay. Una sesión trae el ticket, otra los
+         leads: usar la segunda no puede borrar lo de la primera. */
+      if (TIPO_DE_CASILLA[destino.clave] === "cifras") {
+        const actual = (c.casillas[destino.clave] as Cifras | undefined) ?? {};
+        return { ok: true, estado: { ...estado, contenido: conCasilla(c, destino.clave, { ...actual, ...(v as Cifras) } as ValoresDeCasillas[ClaveDeCasilla]) } };
       }
       return { ok: true, estado: { ...estado, contenido: conCasilla(c, destino.clave, v as ValoresDeCasillas[ClaveDeCasilla]) } };
     }
@@ -1860,6 +1894,14 @@ function aplicarUna(estado: EstadoDeExploracion, op: Operacion, validez: Validez
       const { contactoPrevio: _antes, ...resto } = estado.contenido;
       void _antes;
       return { ok: true, estado: { ...estado, contenido: op.valor ? { ...resto, contactoPrevio: op.valor } : resto } };
+    }
+    case "perdida": {
+      const { perdida: _antes, ...resto } = estado.contenido;
+      void _antes;
+      if (op.huella === null) return { ok: true, estado: { ...estado, contenido: resto } };
+      const calculo = calcularLaPerdida(estado.contenido.casillas);
+      if (!calculo || calculo.huella !== op.huella) return { ok: false, error: "Las cifras cambiaron desde que viste la cuenta: recarga y vuelve a validarla." };
+      return { ok: true, estado: { ...estado, contenido: { ...resto, perdida: { ...calculo, validadaEn: quien.en, por: quien.por } } } };
     }
     case "comoLlego": {
       const { comoLlego: _antes, ...resto } = estado.contenido;

@@ -104,6 +104,12 @@ export function queHaceUsar(
     case "casilla": {
       const etiqueta = (marco ? definicionEnElMarco(d.clave, marco) : definicionDe(d.clave)).etiqueta;
       if (esDeLista(TIPO_DE_CASILLA[d.clave])) return { texto: `Sumar a «${etiqueta}»` };
+      // Negocio y Embudo: lo propuesto suma sus cifras; solo reemplaza un campo que ya tenía otra (contenido.ts).
+      if (TIPO_DE_CASILLA[d.clave] === "cifras") {
+        const antes = (c.casillas[d.clave] ?? {}) as Record<string, string | undefined>;
+        const pisa = Object.entries(item.valor as Record<string, string>).some(([k, x]) => antes[k] !== undefined && antes[k] !== x);
+        return pisa ? { texto: `Sumar a «${etiqueta}» (cambia una cifra que ya estaba)`, pisa: true } : { texto: `Sumar a «${etiqueta}»` };
+      }
       return c.casillas[d.clave] !== undefined ? { texto: `Reemplazar lo que dice «${etiqueta}»`, pisa: true } : { texto: `Escribirlo en «${etiqueta}»` };
     }
     case "casoDeUso": {

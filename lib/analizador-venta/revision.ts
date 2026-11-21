@@ -24,6 +24,7 @@ import {
   type EnfoqueDeLaSesion,
   type FilaDeNumeros,
   type Juicio,
+  type ObjecionDeLaReunion,
   type Observacion,
   type PreguntaDelDemo,
   type PuntoJuzgado,
@@ -64,6 +65,8 @@ export interface LoDeLaSesion {
   numeros: FilaDeNumeros[];
   decision: Decision[] | null;
   demo: PreguntaDelDemo[];
+  /** Las objeciones del cliente (2026-11-20). null en los análisis de antes: no se sabe, no «no hubo». */
+  objeciones: ObjecionDeLaReunion[] | null;
 }
 
 /** El nombre de la dimensión sin el área, y el área: la del juicio o, en los de antes del 29 oct, la del paréntesis. */
@@ -100,6 +103,7 @@ export function loDeLaSesion(r: ResultadoDelAnalisis): LoDeLaSesion {
     numeros: r.numeros ?? [],
     decision: r.decision?.length ? r.decision : null,
     demo: r.demo ?? [],
+    objeciones: r.objeciones ?? null,
   };
 }
 

@@ -27,6 +27,7 @@ import { avanceDeLaEstrategia, escalaConEvidencia } from "@/lib/exploraciones/av
 import { conteoDeLasSesiones } from "@/lib/exploraciones/inicio";
 import { definicionEnElMarco } from "@/lib/exploraciones/marco";
 import { estadoDeLaTarjeta } from "@/lib/exploraciones/estado-de-las-tarjetas";
+import { perdidaDeLaExploracion } from "@/lib/exploraciones/perdida";
 import { resumenPorEquipo } from "@/lib/exploraciones/por-equipo";
 import { yaPreguntadoEnLaExploracion } from "@/lib/exploraciones/plan-de-la-guia";
 import { useLienzo, type PasoDelLienzoUI } from "./contexto";
@@ -67,9 +68,12 @@ function Bloque({ titulo, accion, children }: { titulo: string; accion?: React.R
 function Arquitectura() {
   const { exp, marco, pendientesPara, abrirCasilla } = useLienzo();
   const { paras } = useLoQueSePreguntaEnLaProxima();
+  // La pérdida que calculó Nexus (2026-11-20): validada, completa «Qué pasa si no actúa»; por validar, la sugiere.
+  const { validada, porValidar } = perdidaDeLaExploracion(exp.estado.contenido.casillas, exp.estado.contenido.perdida);
+  const perdida = validada ? "validada" : porValidar ? "porValidar" : null;
   const estados = marco.tarjetas.map((clave) => {
     const propuestas = pendientesPara((d) => d.tipo === "casilla" && d.clave === clave).length;
-    return { clave, propuestas, ...estadoDeLaTarjeta(clave, exp.estado.contenido.casillas[clave], propuestas) };
+    return { clave, propuestas, ...estadoDeLaTarjeta(clave, exp.estado.contenido.casillas[clave], propuestas, perdida) };
   });
   const completas = estados.filter((e) => e.estado === "completa").length;
   const aMedias = estados.filter((e) => e.estado === "aMedias").length;
@@ -86,7 +90,10 @@ function Arquitectura() {
       <div data-recorrido="preventa.panel.marco" className={cn("grid gap-1.5", marco.tarjetas.length === 3 ? "grid-cols-3" : "grid-cols-4")}>
         {estados.map(({ clave, estado, motivo, nuevo, propuestas }) => {
           const etiqueta = definicionEnElMarco(clave, marco).etiqueta;
-          const sugeridas = `${propuestas} ${propuestas === 1 ? "sugerida" : "sugeridas"} por el agente`;
+          const sugeridas =
+            propuestas === 0 && clave === "consecuencias" && perdida === "porValidar"
+              ? "Nexus calculó cuánto pierden: valídalo con el cliente"
+              : `${propuestas} ${propuestas === 1 ? "sugerida" : "sugeridas"} por el agente`;
           const que =
             estado === "completa"
               ? "confirmado"

@@ -17,6 +17,11 @@
  * abrir el plegable de un bloque se piden solo las de ese bloque (en «En vivo», las de todos los que falten, en una
  * llamada) y quedan guardadas en la guía (`usePreguntasParaProfundizar`). Quien no puede editar ve las de lo que hay que
  * averiguar (`paraProfundizar`), como en las guías de antes.
+ *
+ * «Lista arriba, bloques abajo» (2026-11-20, Elías tras la sesión con Ventas): en «En vivo», arriba de los bloques va
+ * «Lo que falta saber», todo lo que hay que averiguar agrupado por tema, para saber de un vistazo qué falta sin importar
+ * el orden en que salgan los temas (lib/exploraciones/lo-que-falta-saber.ts). Se marca ahí mismo con las mismas marcas
+ * que los bloques. Los bloques, con sus minutos y sus preguntas, siguen debajo igual que antes.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Spinner } from "@/components/ui";
@@ -37,12 +42,15 @@ import { duracionDeLaSesion } from "@/lib/exploraciones/contexto-de-la-exploraci
 import { diaCorto } from "@/lib/exploraciones/fechas";
 import type { MomentoDeLaSesion } from "./contexto";
 import { useLienzo } from "./contexto";
-import { Rotulo, useEditarLaSesion } from "./piezas-de-la-sesion";
+import { nombreDelPara, Rotulo, useEditarLaSesion } from "./piezas-de-la-sesion";
+import { cosasDeNexus, cuantasFaltan, loQueFaltaSaber, type CosaQueFalta } from "@/lib/exploraciones/lo-que-falta-saber";
+import { BotonEnlace } from "@/components/ui/sistema";
+import { MARCAR_COMO_VALIDADA } from "./PerdidaCalculada";
 
 const sinComillas = (t: string) => t.replace(/^«|»$/g, "");
 
 /** Una cosa por averiguar, compacta: su casilla y lo que hay que saber (las preguntas ya están arriba, en el bloque). */
-function Cosa({ c, marcada, alMarcar, puede }: { c: CosaPorAveriguar; marcada: boolean; alMarcar: () => void; puede: boolean }) {
+function Cosa({ c, marcada, alMarcar, puede, extra }: { c: CosaPorAveriguar; marcada: boolean; alMarcar: () => void; puede: boolean; extra?: React.ReactNode }) {
   return (
     <li className="flex items-start gap-2 py-0.5">
       <input
@@ -56,8 +64,65 @@ function Cosa({ c, marcada, alMarcar, puede }: { c: CosaPorAveriguar; marcada: b
       <p className={cn("min-w-0 flex-1 text-[12.5px] leading-[18px]", marcada ? "text-fg-muted" : "text-fg-secondary")}>
         {c.que}
         {c.sabido && <span className="ml-2 rounded-full bg-surface-muted px-2 py-0.5 text-[11px] font-medium text-fg-muted">Ya se sabía · {c.sabido}</span>}
+        {extra}
       </p>
     </li>
+  );
+}
+
+/**
+ * «Lo que falta saber» (2026-11-20): lo de la agenda por tema, más lo que sumó Nexus para la cuenta de la pérdida. Cada
+ * cosa se marca con la misma marca que en su bloque. La de la pérdida trae, además, «Lo validó»: guarda la cuenta.
+ */
+function LoQueFaltaSaber({ agenda, hechas, alMarcar, puede }: { agenda: Agenda; hechas: readonly string[] | undefined; alMarcar: (c: CosaQueFalta) => void; puede: boolean }) {
+  const { exp, escala, marco, cambiar, guardando } = useLienzo();
+  const extras = cosasDeNexus({
+    marco: marco.clave,
+    casillas: exp.estado.contenido.casillas,
+    perdida: exp.estado.contenido.perdida,
+    agenda,
+    pregunta: (para) => marco.preguntaDeBase[para],
+  });
+  const temas = loQueFaltaSaber(agenda, hechas, extras);
+  if (!temas.length) return null;
+  const faltan = cuantasFaltan(temas);
+  return (
+    <div data-recorrido="preventa.sesion.falta-saber" className="space-y-2.5 border-b border-line px-[18px] py-3.5">
+      <div className="flex flex-wrap items-baseline gap-2">
+        <h4 className="text-sm font-semibold text-fg">Lo que falta saber</h4>
+        <span className="text-[12.5px] text-fg-muted">{faltan === 0 ? "ya se sabe todo" : `${faltan} ${faltan === 1 ? "cosa" : "cosas"} por averiguar`} · márcalas en el orden en que salgan</span>
+      </div>
+      <div className="grid gap-x-6 gap-y-2.5 md:grid-cols-2">
+        {temas.map((t) => (
+          <section key={t.clave} className="min-w-0">
+            <p className={cn("text-[11.5px] font-semibold uppercase tracking-wide", t.pendientes ? "text-fg-secondary" : "text-fg-muted")}>
+              {t.para ? nombreDelPara(t.para, escala, marco) : t.titulo}
+              {t.pendientes === 0 && <span className="ml-1.5 font-normal normal-case tracking-normal">· listo</span>}
+            </p>
+            <ul className="mt-0.5">
+              {t.cosas.map((c) => (
+                <Cosa
+                  key={c.id}
+                  c={c}
+                  marcada={estaAveriguada(c, hechas)}
+                  alMarcar={() => alMarcar(c)}
+                  puede={puede}
+                  extra={
+                    c.deNexus === "perdida" && puede && c.huella ? (
+                      <BotonEnlace className="ml-1" disabled={guardando} onClick={() => void cambiar([{ op: "perdida", huella: c.huella ?? null }])}>
+                        {MARCAR_COMO_VALIDADA}
+                      </BotonEnlace>
+                    ) : c.deNexus ? (
+                      <span className="ml-2 rounded-full bg-info-surface px-2 py-0.5 text-[11px] font-medium text-brand">Para calcular cuánto pierden</span>
+                    ) : null
+                  }
+                />
+              ))}
+            </ul>
+          </section>
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -192,6 +257,7 @@ export function AgendaDeLaGuia({
           <span className="font-semibold">Todavía no sabes qué resultado busca.</span> Vuelve a «{APERTURA_DEL_RESULTADO}»
         </p>
       )}
+      {conCasillas && <LoQueFaltaSaber agenda={agenda} hechas={hechas} alMarcar={marcar} puede={editable && !guardando} />}
       <ol>
         {bloques.map((b, i) => {
           /* Las de la guía, las recién pedidas o, sin permiso para pedirlas (o si falló el pedido), las de lo que hay que

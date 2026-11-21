@@ -32,6 +32,7 @@ import {
   ETIQUETA_DEL_CANAL,
   ETIQUETA_DEL_MODELO,
   ETIQUETA_DEL_ROL,
+  lineasDeLasCifras,
   type EstrategiaDeConexion,
   type Radiografia,
   type Apertura,
@@ -120,6 +121,9 @@ export function describirPropuesta(item: ItemPropuesto, escala: EscalaDelLienzo,
           const a = v as Apertura;
           return `${APERTURA[a.valor]}${a.porQue ? `: ${a.porQue}` : ""}`;
         }
+        case "negocio":
+        case "embudo":
+          return lineasDeLasCifras(d.clave, v).join(" · ");
         default:
           return String(v);
       }

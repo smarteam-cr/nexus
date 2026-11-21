@@ -14,9 +14,11 @@
  *     del plan y, desde el 29 oct (Elías, con Camosa), lo que salió bien y los dos de aterrizar y expandir;
  *   · cómo se le cuenta al agente, con el position statement de Smarteam si existe (K3) o «sin posicionamiento escrito».
  */
+import { CLASES_DE_OBJECION, ETIQUETA_DE_LA_OBJECION } from "@/lib/exploraciones/casillas";
+import { OBJECIONES_COMUNES, PASOS_LAER, QUE_ES_CADA_PASO } from "@/lib/exploraciones/objeciones-comunes";
 
 /** Sube cuando cambia el criterio: cada análisis guarda con cuál se hizo. */
-export const VERSION_DEL_CRITERIO = "2026-11-08";
+export const VERSION_DEL_CRITERIO = "2026-11-20";
 
 export const ETAPAS = ["identificar", "investigar", "conectar", "explorar", "asesorar"] as const;
 export type EtapaDelProceso = (typeof ETAPAS)[number];
@@ -93,6 +95,8 @@ export const PUNTOS_DEL_ANALISIS = [
   { id: "recomendaciones", titulo: "Para mejorar: dos o tres, cada una con su cita" },
   // 2026-11-06 (roleplay de Ventas: nunca se preguntó por el objetivo del cliente). Viaja en el criterio, no en el prompt de la base.
   { id: "resultado", titulo: "¿Se averiguó el resultado que busca?" },
+  // 2026-11-20 (sesión con Ventas): cada objeción con su cita, cómo se manejó y cómo manejarla con LAER. Viaja en el criterio.
+  { id: "objeciones", titulo: "Las objeciones del cliente: cómo se manejó cada una y cómo manejarla con LAER" },
 ] as const;
 export type PuntoDelAnalisis = (typeof PUNTOS_DEL_ANALISIS)[number]["id"];
 
@@ -102,6 +106,23 @@ export type PuntoDelAnalisis = (typeof PUNTOS_DEL_ANALISIS)[number]["id"];
  */
 export const RESULTADO_EN_EL_CRITERIO =
   "UN JUICIO MÁS — resultado (si | en_parte | no): ¿se averiguó el resultado que busca el cliente: de dónde a dónde, con qué número y para cuándo? «si» si el cliente lo dijo con cifra o fecha; «en_parte» si lo dijo vago; «no» si nadie lo preguntó ni lo dijo (por ausencia, sin cita). Con «si» o «en_parte», cita el turno donde el cliente lo dice.";
+
+/**
+ * El punto «objeciones» (2026-11-20). Como el del resultado, va en el criterio (que arma el código y viaja en el mensaje):
+ * el prompt guardado en la base no se re-siembra. Las clases son las de la tarjeta «Objeciones» de la preventa, y LAER y
+ * las objeciones comunes son las del manual (lib/exploraciones/objeciones-comunes.ts): no se escriben dos veces.
+ */
+export function objecionesEnElCriterio(): string {
+  const clases = CLASES_DE_OBJECION.map((c) => `${c} (${ETIQUETA_DE_LA_OBJECION[c]})`).join(", ");
+  const pasos = PASOS_LAER.map((p) => `${p.nombre.toUpperCase()}: ${QUE_ES_CADA_PASO[p.clave].que}`).join("\n   ");
+  const comunes = OBJECIONES_COMUNES.map((o) => `- ${o.clase} ${o.dice}: ${o.responder}`).join("\n");
+  return `UNA PARTE MÁS — objeciones: cada objeción del CLIENTE en la reunión (lo que dijo que lo frena para avanzar o comprar), con la cita de SU frase, su clase, cómo se manejó (bien | en_parte | no, con la cita de la respuesta del vendedor si la hubo) y cómo manejarla la próxima vez con LAER, adaptado a este cliente. Si no hubo objeciones, vacío: no las inventes.
+   Las clases: ${clases}.
+   LAER:
+   ${pasos}
+   Las objeciones comunes y cómo se responden:
+${comunes}`;
+}
 
 /** Lo que se le dice al agente cuando Smarteam todavía no escribió su position statement (K3). */
 export const SIN_POSICIONAMIENTO = "Sin posicionamiento escrito: Smarteam todavía no escribió su position statement. No juzgues este punto.";
@@ -116,5 +137,5 @@ export function criterioComoTexto(o: { positionStatement: string | null; propues
     ? `EL POSICIONAMIENTO DE SMARTEAM (position statement):\n${o.positionStatement.trim()}`
     : `EL POSICIONAMIENTO DE SMARTEAM: ${SIN_POSICIONAMIENTO}`;
   const valor = o.propuestaDeValor?.trim() ? `\nLA PROPUESTA DE VALOR DE SMARTEAM:\n${o.propuestaDeValor.trim()}` : "";
-  return `EL PROCESO CONSULTIVO DE SMARTEAM (criterio ${VERSION_DEL_CRITERIO}):\n${etapas}\n\n${RESULTADO_EN_EL_CRITERIO}\n\n${posicionamiento}${valor}`;
+  return `EL PROCESO CONSULTIVO DE SMARTEAM (criterio ${VERSION_DEL_CRITERIO}):\n${etapas}\n\n${RESULTADO_EN_EL_CRITERIO}\n\n${objecionesEnElCriterio()}\n\n${posicionamiento}${valor}`;
 }

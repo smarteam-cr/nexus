@@ -38,18 +38,22 @@ import { juntaDosIdeas, primeraIdea, REGLAS_DE_LAS_ACTIVIDADES, REGLAS_DEL_TITUL
 import { CAPAS_DEL_CASO, esCapa, REGLAS_DE_LA_CASA, TIPOS_DE_CONEXION, validarConexionesDelAgente } from "@/lib/casos-de-uso/capas";
 import { CIERRES, DESPUES, type Cierre, type Despues, type Letra } from "@/lib/escala/documento/tipos";
 import {
+  CAMPOS_DE_LA_TARJETA,
   CANALES_DE_CONEXION,
   CASILLAS,
   CASILLAS_VIGENTES,
   CLASES_DE_OBJECION,
   conSuOrigen,
+  esDeCifras,
   ETIQUETA_DE_LA_OBJECION,
   ETIQUETA_DEL_ROL,
+  lineasDeLasCifras,
   ROLES_EN_LA_DECISION,
   TIPO_DE_CASILLA,
   VALORES_DE_APERTURA,
   type ClaveDeCasilla,
 } from "./casillas";
+import { calcularLaPerdida, numeroDe, redondearMonto, traeCifra } from "./perdida";
 import {
   ETIQUETA_DE_LA_FUENTE,
   ETIQUETA_DEL_MOTIVO,
@@ -303,6 +307,23 @@ function propiedadDeReuniones(ctx: Pick<ContextoDelPedido, "reuniones" | "planea
   };
 }
 
+/**
+ * La forma de Negocio o de Embudo en la herramienta: un texto por campo, con su número y su unidad como se dijo, y la
+ * regla de quién dice la cifra (vale la del cliente; la del vendedor si el cliente no la corrige; si la corrige, la corregida).
+ */
+const ESQUEMA_DE_LAS_CIFRAS = (clave: "negocio" | "embudo", fuentes: unknown) => ({
+  type: "object",
+  description:
+    clave === "negocio"
+      ? "Solo si se dijo alguna cifra de cómo entra el dinero al cliente. Cada campo, con su número y su unidad tal como se dijo («US$ 2.500 por venta», «unos 120 mil dólares al mes»). Sin número, el campo no va."
+      : "Solo si se dijo alguna cifra de cómo convierte el cliente. Cada campo, con su número y su unidad tal como se dijo («200 al mes», «8 %», «45 días»). Sin número, el campo no va.",
+  properties: {
+    ...Object.fromEntries(CAMPOS_DE_LA_TARJETA[clave].map((c) => [c.clave, { type: "string", description: `${c.ayuda} P. ej. «${c.ejemplo}».` }])),
+    fuentes,
+  },
+  required: ["fuentes"],
+});
+
 export function herramienta(ctx: ContextoDelPedido): Anthropic.Messages.Tool {
   const cs = ctx.marco === "cs";
   const ids = ctx.fuentes.map((f) => f.id);
@@ -394,6 +415,9 @@ export function herramienta(ctx: ContextoDelPedido): Anthropic.Messages.Tool {
         required: ["texto", "clase", "fuentes"],
       },
     },
+    // 2026-11-20 (Ventas): las cifras de cómo gana dinero y cómo convierte, para calcular cuánto pierde (perdida.ts).
+    negocio: ESQUEMA_DE_LAS_CIFRAS("negocio", fuentes),
+    embudo: ESQUEMA_DE_LAS_CIFRAS("embudo", fuentes),
     apertura: {
       type: "object",
       description: "Solo si hay evidencia clara de si quiere acompañamiento para crecer o solo una implementación.",
@@ -514,7 +538,7 @@ export function herramienta(ctx: ContextoDelPedido): Anthropic.Messages.Tool {
     };
   }
   // En un proyecto el cliente ya compró: nada de quién firma, objeciones, apertura ni alerta técnica de la venta.
-  if (cs) for (const k of ["personas", "objeciones", "apertura", "estrategiaDeConexion", "conversacionTecnica"]) delete properties[k];
+  if (cs) for (const k of ["personas", "objeciones", "apertura", "estrategiaDeConexion", "conversacionTecnica", "negocio", "embudo"]) delete properties[k];
   return {
     name: NOMBRE_DE_LA_HERRAMIENTA,
     description: "Propone qué va en cada casilla del lienzo. Llámala una sola vez. Lo que no tenga respaldo en las fuentes, no lo propongas.",
@@ -550,7 +574,7 @@ function confirmadoComoTexto(ctx: ContextoDelPedido): string {
   for (const def of CASILLAS) {
     const v = c.casillas[def.clave];
     if (v === undefined) continue;
-    lineas.push(`- ${def.etiqueta}: ${typeof v === "string" ? v : JSON.stringify(v)}`);
+    lineas.push(`- ${def.etiqueta}: ${typeof v === "string" ? v : esDeCifras(def.clave) ? lineasDeLasCifras(def.clave, v).join("; ") : JSON.stringify(v)}`);
   }
   const niveles = Object.entries(c.chequeo).map(([id, e]) => `${id}=${e.nivel} (${ETIQUETA_DE_LA_FUENTE[e.fuente].toLowerCase()})`);
   if (niveles.length) lineas.push(`- Niveles ya estimados: ${niveles.join(", ")}`);
@@ -605,7 +629,7 @@ function sistema(ctx: ContextoDelPedido): string {
 - areas: las que deberían estar en juego y no están (la del test, lo que menciona, lo que paga sin usar).
 - niveles: tu HIPÓTESIS de dónde está una dimensión, SOLO si hay una pista de lo que el cliente dijo o hizo: el test (T), su actividad en HubSpot (H), una reunión (S, M) o las notas del vendedor (N0). Con su porQue en lenguaje llano («Creemos que está en Inicial porque las notas dicen que cada vendedor lleva su Excel»). El test es una pista, no la verdad: lo contestó el prospecto con la escala anterior; crúzalo con lo demás. La ficha de la empresa (E0), su sitio (W0) y lo que encontraste en internet (W1, W2) NO alcanzan para un nivel: sin una pista del cliente, la dimensión queda sin nivel y se pregunta en la reunión. Mejor pocas hipótesis con fundamento que un mapa lleno.
 - aExplorar: las dimensiones donde hay indicios de lo que el cliente dijo o hizo (debajo de Funcional según el test o lo que dijo), que tocan una meta o que dejan ver un riesgo. Máximo 4 por área. La razón, en una frase llana. Sin nada del cliente, no propongas ninguna.
-- metas, planes, retos, tiempos, presupuesto, consecuencias e implicaciones: SOLO con lo que el cliente dijo o hizo (T, H, S, M, N0). Lo que encontraste en internet sobre su industria (W2) no es un reto suyo: no lo propongas acá (la guía de la reunión lo convierte en preguntas).
+- metas, planes, retos, tiempos, presupuesto, consecuencias, implicaciones, negocio y embudo: SOLO con lo que el cliente dijo o hizo (T, H, S, M, N0). Lo que encontraste en internet sobre su industria (W2) no es un reto suyo: no lo propongas acá (la guía de la reunión lo convierte en preguntas). Las cifras de su negocio que leíste en internet tampoco van en negocio ni en embudo.
 - personas: quién es quién, si las fuentes lo dicen. El papel en la decisión no se deduce del cargo.
 - detonante («Por qué ahora»): en una o dos frases, qué hizo o qué le pasa que vuelve oportuno hablar ahora. Con lo que dicen las fuentes: el diagnóstico que llenó (cuándo, qué área, qué salió), su último formulario, sus visitas, un hito reciente de la empresa.
 - hipotesisDeValor: dos o tres ideas, cada una en UNA línea de 20 palabras como mucho: el dolor probable y cómo lo resolvemos. Sin «Creemos que» ni «porque»: ya están en la sección de hipótesis. Cada idea con la fuente de donde sale (una nota del vendedor N0, la investigación de la empresa W1, la de su industria W2, el diagnóstico, HubSpot): la pantalla dice de dónde sale cada una. Son para confirmar en la reunión: nunca las afirmes como hechos.
@@ -613,6 +637,8 @@ ${ctx.proxima ? "- Ya tiene una reunión agendada: no propongas estrategia de co
       : `ESTA CORRIDA: LEER LA REUNIÓN que acaba de pasar. Lo que más sirve, con la frase del cliente:
 - niveles: el nivel de cada dimensión que la conversación deja ver, por mejor ajuste contra las descripciones, con la frase del cliente y su porQue en lenguaje llano.
 - metas (en cifras si las dijo), planes, retos (con su dimensión), consecuencias de no actuar, implicaciones de lograrlo, presupuesto.
+- consecuencias: lo que le cuesta quedarse como está, CON SU CIFRA si se dijo (negocios, clientes, horas o dinero que se pierden, y en qué período). Quién dice la cifra: vale la que dice el cliente; vale la que dice el vendedor de Smarteam si el cliente no la corrige; si el cliente la corrige, vale la corregida. En la cita va la frase de donde sale la cifra que vale.
+- negocio (cómo entra el dinero: volumen de ventas, ticket promedio, cantidad de clientes o de ventas, contado o crédito, cartera) y embudo (cómo convierte: leads que llegan, cuántos pasan a oportunidad, tasa de conversión de lead a venta, ciclo de venta): cada campo con su número y su unidad tal como se dijo, con la misma regla de quién dice la cifra. Sin número, el campo no va. No hagas cuentas: Nexus las hace.
 - tiempos: los plazos del CLIENTE (para cuándo necesita el resultado, cuándo decide, cuándo renueva). La próxima reunión no va acá: es el siguientePaso.
 - personas: quién aprueba, quién decide, quién influye y a quién más le afecta.
 - portal: lo que se vio del portal, si se miró.
@@ -639,7 +665,7 @@ Reglas estrictas:
 - El equipo de Smarteam (consultores, vendedores) no es parte del cliente: nunca va en personas.
 - Textos cortos, en español neutro, en tercera persona sobre el cliente. Nunca escribas los identificadores de la escala dentro de un texto: van en sus campos.
 - Si una lista no tiene nada que proponer, mándala vacía. Es la respuesta correcta muchas veces.
-- Estas casillas las ve el CLIENTE en la propuesta: ${CASILLAS.filter((c) => c.alCliente).map((c) => c.clave).join(", ")}. En ellas nunca pongas montos de dinero, presupuesto, opiniones sobre personas ni nada interno de Smarteam (lo marcado INTERNO en A0 tampoco): el dinero va solo en presupuesto; las personas, en autoridad.
+- Estas casillas las ve el CLIENTE en la propuesta: ${CASILLAS.filter((c) => c.alCliente).map((c) => c.clave).join(", ")}. En ellas nunca pongas montos de dinero, presupuesto, opiniones sobre personas ni nada interno de Smarteam (lo marcado INTERNO en A0 tampoco): el dinero va solo en presupuesto, negocio y embudo; las personas, en autoridad. La única excepción es consecuencias: ahí sí va la cifra de lo que le cuesta quedarse como está, aunque sea dinero, porque la dijo o la aceptó el cliente.
 
 Las casillas: ${CASILLAS_VIGENTES.filter((c) => !c.soloDelProyecto).map((c) => `${c.clave} («${c.etiqueta}»: ${c.ayuda})`).join("; ")}.
 Las clases de objeción: ${CLASES_DE_OBJECION.map((c) => `${c} (${ETIQUETA_DE_LA_OBJECION[c]})`).join(", ")}.
@@ -850,6 +876,14 @@ export function leerLaRespuesta(respuesta: Anthropic.Messages.Message, ctx: Cont
   const items: ItemPropuesto[] = [];
   let descartadas = 0;
   const deOtraArea = dimensionDeOtroEquipo(ctx);
+  // Los montos de la pérdida (la calculada y la validada), sin separadores, para reconocerlos en un texto.
+  const montosDeLaPerdida = [calcularLaPerdida(ctx.contenido.casillas)?.montoAlMes, ctx.contenido.perdida?.montoAlMes]
+    .filter((m): m is number => typeof m === "number" && m >= 1000)
+    .map((m) => String(redondearMonto(m)));
+  const repiteLaPerdida = (t: string) => {
+    const cifras = (t.match(/\d[\d.,]*\s*(?:millones|mill[oó]n|mil\b|k\b)?/gi) ?? []).map((x) => String(redondearMonto(numeroDe(x) ?? 0)));
+    return montosDeLaPerdida.some((m) => cifras.includes(m));
+  };
 
   /** Las fuentes válidas, con la cita solo si aparece en su fuente. */
   const citar = (x: unknown): FuenteCitada[] =>
@@ -904,6 +938,12 @@ export function leerLaRespuesta(respuesta: Anthropic.Messages.Message, ctx: Cont
       deUnTexto.set(clave, junto);
       continue;
     }
+    /* ⛔ La pérdida que calculó Nexus no llega a «Qué pasa si no actúa» por la reunión en que se validó (2026-11-20, Elías:
+       nada de la pérdida llega a lo que ve el cliente). Si el texto trae el mismo monto, ya está guardada aparte. */
+    if (clave === "consecuencias" && texto && repiteLaPerdida(texto)) {
+      descartadas++;
+      continue;
+    }
     // Cada hipótesis de valor dice de dónde sale (Elías, 2026-10-06): se lo agrega el código, desde las fuentes que declaró.
     const fuentes = citar(t.fuentes);
     agregar({ tipo: "casilla", clave }, clave === "hipotesisDeValor" && texto ? conSuOrigen(texto, fuentes.map((f) => f.id)) : texto, fuentes);
@@ -939,6 +979,17 @@ export function leerLaRespuesta(respuesta: Anthropic.Messages.Message, ctx: Cont
   // Una objeción es lo que DIJO el cliente: sin su frase literal no entra.
   for (const o of deLaVenta ? [] : lista(input.objeciones)) {
     agregar({ tipo: "casilla", clave: "objeciones" }, { texto: str(o.texto), clase: str(o.clase), respuesta: str(o.respuesta) }, citar(o.fuentes), { exigeCita: true });
+  }
+  // Negocio y Embudo: solo los campos con su número (la regla de la cifra la aplica el modelo; acá, que traiga dígitos).
+  for (const clave of deLaVenta ? [] : (["negocio", "embudo"] as const)) {
+    const x = input[clave];
+    if (!esObjeto(x)) continue;
+    const valor: Record<string, string> = {};
+    for (const c of CAMPOS_DE_LA_TARJETA[clave]) {
+      const t = str(x[c.clave]);
+      if (t && traeCifra(t)) valor[c.clave] = t.slice(0, 200);
+    }
+    if (Object.keys(valor).length) agregar({ tipo: "casilla", clave }, valor, citar(x.fuentes), { exigeCita: true });
   }
   for (const p of deLaVenta ? [] : lista(input.personas)) {
     if (esDelEquipoDeSmarteam({ nombre: str(p.nombre), cargo: str(p.cargo) }, ctx.equipo ?? [])) {

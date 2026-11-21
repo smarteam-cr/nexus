@@ -15,8 +15,14 @@
  *   · `sugerida` — vacía, con algo que propuso el agente.
  *   · `falta` — vacía.
  * `nuevo`: lo que propuso el agente para una tarjeta que ya tiene algo (una sesión trajo más): un punto en el panel.
+ *
+ * 2026-11-20 (Ventas, vender por resultados): Negocio y Embudo quedan completas «con lo mínimo» —las cifras que alcanzan
+ * para calcular la pérdida: dos de volumen, ticket y clientes; los leads y la conversión—; lo demás suma pero no frena.
+ * «Qué pasa si no actúa» queda completa solo con una CIFRA (o con la pérdida validada con el cliente); sin ella, a medias
+ * con «falta la cifra». Con la pérdida calculada y la tarjeta vacía, está sugerida (la propone Nexus).
  */
-import { metaEnCifras, type ClaveDeCasilla, type Meta, type Persona } from "./casillas";
+import { esDeCifras, metaEnCifras, type ClaveDeCasilla, type Cifras, type Meta, type Persona } from "./casillas";
+import { numeroDe, tasaDe, traeCifra } from "./perdida";
 
 export type EstadoDeLaTarjeta = "completa" | "aMedias" | "sugerida" | "falta";
 
@@ -67,10 +73,40 @@ export interface EstadoDeUnaTarjeta {
   nuevo: boolean;
 }
 
-export function estadoDeLaTarjeta(clave: ClaveDeCasilla, valor: unknown, propuestas: number): EstadoDeUnaTarjeta {
-  const textos = textosDe(valor);
-  if (!textos.length) return { estado: propuestas > 0 ? "sugerida" : "falta", nuevo: false };
+/** La pérdida de la exploración, para «Qué pasa si no actúa»: validada con el cliente, calculada y por validar, o nada. */
+export type PerdidaParaLaTarjeta = "validada" | "porValidar" | null;
+
+/** Lo mínimo de Negocio para la cuenta: dos de volumen, ticket y clientes con su número. null si alcanza; si no, lo que falta. */
+export function faltaEnElNegocio(v: Cifras | undefined): string | null {
+  const con = (["volumen", "ticket", "clientes"] as const).filter((k) => numeroDe(v?.[k]) !== null);
+  if (con.length >= 2) return null;
+  if (con.includes("ticket")) return "falta el volumen o la cantidad de ventas";
+  if (con.length === 1) return "falta el ticket promedio";
+  return "faltan el ticket promedio y el volumen";
+}
+
+/** Lo mínimo del Embudo para la cuenta: los leads que llegan y la tasa de conversión. null si alcanza. */
+export function faltaEnElEmbudo(v: Cifras | undefined): string | null {
+  const leads = numeroDe(v?.leads) !== null;
+  const conversion = tasaDe(v?.conversion) !== null;
+  if (leads && conversion) return null;
+  if (leads) return "falta la tasa de conversión";
+  if (conversion) return "faltan los leads que llegan";
+  return "faltan los leads y la tasa de conversión";
+}
+
+export function estadoDeLaTarjeta(clave: ClaveDeCasilla, valor: unknown, propuestas: number, perdida: PerdidaParaLaTarjeta = null): EstadoDeUnaTarjeta {
   const nuevo = propuestas > 0;
+  if (esDeCifras(clave)) {
+    const v = valor && typeof valor === "object" && !Array.isArray(valor) ? (valor as Cifras) : undefined;
+    const llenos = Object.values(v ?? {}).filter((t) => typeof t === "string" && t.trim());
+    if (!llenos.length) return { estado: propuestas > 0 ? "sugerida" : "falta", nuevo: false };
+    const falta = clave === "negocio" ? faltaEnElNegocio(v) : faltaEnElEmbudo(v);
+    return falta ? { estado: "aMedias", motivo: falta, nuevo } : { estado: "completa", nuevo };
+  }
+  const textos = textosDe(valor);
+  if (clave === "consecuencias" && perdida === "validada") return { estado: "completa", nuevo };
+  if (!textos.length) return { estado: propuestas > 0 || (clave === "consecuencias" && perdida === "porValidar") ? "sugerida" : "falta", nuevo: false };
   if (clave === "metas" && Array.isArray(valor) && !(valor as Meta[]).some(metaEnCifras)) {
     return { estado: "aMedias", motivo: "ninguna meta tiene cifra", nuevo };
   }
@@ -78,5 +114,13 @@ export function estadoDeLaTarjeta(clave: ClaveDeCasilla, valor: unknown, propues
     return { estado: "aMedias", motivo: "nadie aprueba todavía", nuevo };
   }
   if (!textos.some((t) => !diceQueNoSeSabe(t))) return { estado: "aMedias", motivo: "lo que dice es que no se sabe", nuevo };
+  if (clave === "consecuencias" && !consecuenciaConCifra(valor)) {
+    return { estado: "aMedias", motivo: "falta la cifra", nuevo: nuevo || perdida === "porValidar" };
+  }
   return { estado: "completa", nuevo };
+}
+
+/** ¿Alguna consecuencia trae su cifra? («Pierden unos 10 negocios al mes»). Lo que dice que no se sabe no cuenta. */
+export function consecuenciaConCifra(valor: unknown): boolean {
+  return textosDe(valor).some((t) => traeCifra(t) && !diceQueNoSeSabe(t));
 }

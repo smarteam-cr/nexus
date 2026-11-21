@@ -82,7 +82,7 @@ export interface SiguientePaso {
  * Una objeción del cliente: lo que dijo que lo frena, con sus palabras, de qué clase es y cómo se
  * respondió, si se respondió. Las cuatro primeras clases son las típicas de la guía (guia.ts).
  */
-export const CLASES_DE_OBJECION = ["precio", "herramienta", "momento", "propuesta", "confianza", "decisor", "interno", "otra"] as const;
+export const CLASES_DE_OBJECION = ["precio", "herramienta", "momento", "propuesta", "confianza", "decisor", "interno", "cifras", "otra"] as const;
 export type ClaseDeObjecion = (typeof CLASES_DE_OBJECION)[number];
 export const ETIQUETA_DE_LA_OBJECION: Record<ClaseDeObjecion, string> = {
   precio: "Precio",
@@ -92,6 +92,8 @@ export const ETIQUETA_DE_LA_OBJECION: Record<ClaseDeObjecion, string> = {
   confianza: "Desconfianza",
   decisor: "Lo tiene que consultar",
   interno: "Lo harían ellos mismos",
+  // 2026-11-20 (Ventas): «¿para qué quieres saber mi ticket promedio?». Sin sus cifras no hay cálculo de la pérdida.
+  cifras: "No quiere dar cifras",
   otra: "Otra",
 };
 export interface Objecion {
@@ -159,6 +161,44 @@ export interface EstrategiaDeConexion {
   cta?: string;
 }
 
+/**
+ * Las cifras de cómo gana dinero el cliente (Negocio) y de cómo convierte (Embudo), 2026-11-20 (Ventas): con ellas Nexus
+ * calcula cuánto pierde por no llegar a su meta (perdida.ts). Cada campo es un texto con su número y su unidad, como lo
+ * dijo el cliente («US$ 2.500 por venta», «200 al mes», «8 %»): el cálculo lo lee, y quien lo ve lo entiende igual.
+ */
+export const CAMPOS_DEL_NEGOCIO = ["volumen", "ticket", "clientes", "pago", "cartera"] as const;
+export const CAMPOS_DEL_EMBUDO = ["leads", "oportunidades", "conversion", "ciclo"] as const;
+export type CampoDelNegocio = (typeof CAMPOS_DEL_NEGOCIO)[number];
+export type CampoDelEmbudo = (typeof CAMPOS_DEL_EMBUDO)[number];
+export type CampoDeCifra = CampoDelNegocio | CampoDelEmbudo;
+export const CAMPOS_DE_CIFRA: readonly CampoDeCifra[] = [...CAMPOS_DEL_NEGOCIO, ...CAMPOS_DEL_EMBUDO];
+/** El valor de una tarjeta de cifras: un texto por campo, solo los que se saben. */
+export type Cifras = Partial<Record<CampoDeCifra, string>>;
+
+export interface DefinicionDeCampo {
+  clave: CampoDeCifra;
+  etiqueta: string;
+  ayuda: string;
+  ejemplo: string;
+}
+
+/** Los campos de cada tarjeta de cifras, en el orden en que se muestran. */
+export const CAMPOS_DE_LA_TARJETA: Record<"negocio" | "embudo", readonly DefinicionDeCampo[]> = {
+  negocio: [
+    { clave: "volumen", etiqueta: "Volumen de ventas", ayuda: "Cuánto venden en un período: al mes o al año.", ejemplo: "US$ 120.000 al mes" },
+    { clave: "ticket", etiqueta: "Ticket promedio", ayuda: "Cuánto deja en promedio cada venta.", ejemplo: "US$ 2.500 por venta" },
+    { clave: "clientes", etiqueta: "Cantidad de clientes", ayuda: "Cuántos clientes tienen, o cuántas ventas cierran en un período.", ejemplo: "48 ventas al mes" },
+    { clave: "pago", etiqueta: "Contado o crédito", ayuda: "Cómo les pagan: de contado o a crédito, y a cuántos días.", ejemplo: "70 % a crédito, a 60 días" },
+    { clave: "cartera", etiqueta: "Cartera", ayuda: "Cuánto les deben hoy y cuánto está vencido.", ejemplo: "US$ 300.000 por cobrar, 20 % vencido" },
+  ],
+  embudo: [
+    { clave: "leads", etiqueta: "Leads que llegan", ayuda: "Cuántos interesados nuevos llegan en un período.", ejemplo: "200 al mes" },
+    { clave: "oportunidades", etiqueta: "Pasan a oportunidad", ayuda: "Cuántos de esos leads se vuelven una oportunidad de venta real.", ejemplo: "60 al mes" },
+    { clave: "conversion", etiqueta: "Tasa de conversión", ayuda: "De cada 100 leads, cuántos terminan comprando.", ejemplo: "8 %" },
+    { clave: "ciclo", etiqueta: "Ciclo de venta", ayuda: "Cuánto tarda un negocio desde que llega el lead hasta que cierra.", ejemplo: "45 días" },
+  ],
+};
+
 export const VALORES_DE_APERTURA = ["si", "no", "no_se"] as const;
 export interface Apertura {
   valor: (typeof VALORES_DE_APERTURA)[number];
@@ -178,7 +218,9 @@ export type TipoDeCasilla =
   | "siguientePaso"
   | "apertura"
   | "radiografia"
-  | "conexion";
+  | "conexion"
+  /** Negocio y Embudo (2026-11-20): un texto por campo (`CAMPOS_DE_LA_TARJETA`). Lo propuesto se SUMA campo por campo. */
+  | "cifras";
 
 /**
  * Dónde vive la casilla en el lienzo: en PREPARACIÓN (con quién se habla y cómo conectar, antes de la
@@ -237,6 +279,8 @@ export const CLAVES_DE_CASILLA = [
   "hipotesisDeValor",
   "estrategiaDeConexion",
   "obstaculos",
+  "negocio",
+  "embudo",
 ] as const;
 export type ClaveDeCasilla = (typeof CLAVES_DE_CASILLA)[number];
 
@@ -320,10 +364,13 @@ export const CASILLAS: readonly DefinicionDeCasilla[] = [
   },
   {
     clave: "consecuencias",
-    explicacion: "Lo que le cuesta al negocio quedarse como está: clientes que se pierden, horas, dinero. Mejor con su número: es lo que hace urgente la decisión.",
+    /* 2026-11-20 (Ventas): queda completa solo CON SU CIFRA (estado-de-las-tarjetas.ts). Vale la cifra que dice el
+       cliente, o la que dice el vendedor si el cliente no la corrige; si la corrige, la corregida. */
+    explicacion:
+      "Lo que le cuesta al negocio quedarse como está: clientes que se pierden, horas, dinero. Con su número: es lo que hace urgente la decisión. Vale la cifra que dice el cliente, o la que dice el vendedor si el cliente no la corrige; si la corrige, la corregida.",
     ejemplo: "Pierden unos 10 negocios al mes porque nadie les da seguimiento a tiempo.",
     etiqueta: "Qué pasa si no actúa",
-    ayuda: "Lo que le cuesta quedarse como está, mejor con su número.",
+    ayuda: "Lo que le cuesta quedarse como está, con su número.",
     paso: "resumen",
     tipo: "lista",
     alCliente: true,
@@ -503,9 +550,39 @@ export const CASILLAS: readonly DefinicionDeCasilla[] = [
     alHandoff: "normal",
     soloDelProyecto: true,
   },
+  /* 2026-11-20 (Ventas): para calcular cuánto pierde el cliente hay que entender cómo gana dinero y cómo convierte. Son
+     INTERNAS, como el presupuesto: ni las cifras ni la pérdida que sale de ellas llegan a la propuesta (Elías). Van al final:
+     lo interno que lee la memoria de la cuenta tiene tope, y quién decide y las objeciones van antes. */
+  {
+    clave: "negocio",
+    explicacion:
+      "Cómo entra el dinero: cuánto venden, cuánto deja cada venta, cuántos clientes tienen, si les pagan de contado o a crédito y cuánta cartera tienen. Con el ticket y el volumen (o la cantidad de clientes) Nexus ya puede calcular cuánto pierden. Es interno: nunca entra a la propuesta.",
+    ejemplo: "Venden unos US$ 120.000 al mes, con un ticket de US$ 2.500; 70 % a crédito a 60 días.",
+    etiqueta: "Negocio",
+    ayuda: "Cómo entra el dinero: volumen de ventas, ticket promedio, clientes, contado o crédito y cartera.",
+    paso: "resumen",
+    tipo: "cifras",
+    alCliente: false,
+    alHandoff: "interno",
+  },
+  {
+    clave: "embudo",
+    explicacion:
+      "Cómo convierte: cuántos leads llegan, cuántos pasan a oportunidad, cuántos terminan comprando y cuánto tarda un negocio en cerrar. Con los leads y la tasa de conversión Nexus ya puede calcular cuánto pierden. Es interno: nunca entra a la propuesta.",
+    ejemplo: "Les llegan 200 leads al mes, 60 pasan a oportunidad y compra el 8 %; un negocio tarda unos 45 días.",
+    etiqueta: "Embudo",
+    ayuda: "Cómo convierte: leads que llegan, cuántos pasan a oportunidad, la tasa de conversión y el ciclo de venta.",
+    paso: "resumen",
+    tipo: "cifras",
+    alCliente: false,
+    alHandoff: "interno",
+  },
 ];
 
-/** Las casillas del resumen, en el orden del marco: metas, planes, retos y tiempos; presupuesto y quién decide; consecuencias e implicaciones. */
+/**
+ * Las casillas del resumen, en el orden del marco: metas, planes, retos y tiempos; presupuesto y quién decide;
+ * consecuencias e implicaciones; y, desde el 2026-11-20, cómo gana dinero y cómo convierte (negocio y embudo).
+ */
 export const CASILLAS_DEL_RESUMEN = [
   "metas",
   "planes",
@@ -515,6 +592,8 @@ export const CASILLAS_DEL_RESUMEN = [
   "autoridad",
   "consecuencias",
   "implicaciones",
+  "negocio",
+  "embudo",
 ] as const satisfies readonly ClaveDeCasilla[];
 
 /** Las del resumen que van debajo de las tarjetas del marco: lo que sale de cada reunión. */
@@ -558,6 +637,8 @@ export const TIPO_DE_CASILLA = {
   hipotesisDeValor: "lista",
   estrategiaDeConexion: "conexion",
   obstaculos: "retos",
+  negocio: "cifras",
+  embudo: "cifras",
 } as const satisfies Record<ClaveDeCasilla, TipoDeCasilla>;
 
 /** El valor guardado de cada tipo de casilla. */
@@ -572,6 +653,7 @@ export interface ValorPorTipo {
   apertura: Apertura;
   radiografia: Radiografia;
   conexion: EstrategiaDeConexion;
+  cifras: Cifras;
 }
 
 /** El valor de cada casilla, con su forma. */
@@ -594,6 +676,20 @@ export const TOPE_DE_LA_LISTA: Record<"lista" | "metas" | "retos" | "autoridad" 
   autoridad: 30,
   objeciones: 30,
 };
+
+/** Los campos de una tarjeta de cifras con algo escrito, como «Etiqueta: valor», en el orden de la tarjeta. */
+export function lineasDeLasCifras(clave: "negocio" | "embudo", valor: unknown): string[] {
+  const v = (valor && typeof valor === "object" && !Array.isArray(valor) ? valor : {}) as Record<string, unknown>;
+  return CAMPOS_DE_LA_TARJETA[clave].flatMap((c) => {
+    const t = typeof v[c.clave] === "string" ? (v[c.clave] as string).trim() : "";
+    return t ? [`${c.etiqueta}: ${t}`] : [];
+  });
+}
+
+/** ¿La casilla es de cifras? (negocio o embudo) */
+export function esDeCifras(clave: string): clave is "negocio" | "embudo" {
+  return clave === "negocio" || clave === "embudo";
+}
 
 /** ¿La meta está en cifras? Su objetivo trae un número. */
 export function metaEnCifras(m: Pick<Meta, "objetivo">): boolean {
