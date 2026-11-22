@@ -261,28 +261,13 @@ describe("guardas: el where es UNO, el detalle no es IDOR, y el output crudo no 
     expect(codigo, "el guard de tipo del slug desapareció").toContain('typeof slug !== "string"');
   });
 
-  it("el estado del detalle es POR CORRIDA, no global", () => {
-    /* Con un booleano y un string únicos: el error de A quedaba pegado sobre el documento de B,
-       y el `finally` de un fetch apagaba el spinner de otro que seguía en vuelo — el panel
-       quedaba en blanco. La edición que la pone en rojo: volver a `useState<boolean>`. */
-    const modal = sinComentarios(leer("components/clients/HistorialHandoffModal.tsx"));
-    expect(modal, "el cargando volvió a ser global").toContain("useState<Set<string>>");
-    expect(modal, "el error volvió a ser global").toContain("useState<Map<string, string>>");
-    expect(modal, "el error mostrado no se deriva de la corrida elegida").toContain(
-      "errores.get(seleccion)",
-    );
-    expect(modal, "el spinner no se deriva de la corrida elegida").toContain(
-      "cargando.has(seleccion)",
-    );
-  });
-
-  it("el aviso de lista truncada compara contra el TOPE, no por igualdad", () => {
-    /* Con `total === limite` mentía en las dos direcciones: callaba el corte con 25 corridas y
-       lo anunciaba con 20 exactas (donde no se cortó nada). */
-    const modal = sinComentarios(leer("components/clients/HistorialHandoffModal.tsx"));
-    expect(modal, "el aviso de truncado volvió a comparar por igualdad").not.toContain(
-      "lista.total === lista.limite",
-    );
-    expect(modal).toContain("lista.total > lista.limite");
+  it("⛔ las corridas viejas del handoff entran al historial de versiones SOLO PARA LEER (21 nov)", () => {
+    /* El visor de corridas (HistorialHandoffModal) se reemplazó por el historial de versiones. La decisión de Elías del
+       2026-08-08 sigue: una corrida no se restaura. La edición que la pone en rojo: dejar de marcarlas `soloLectura`, o
+       que el popup ofrezca «Usar esta versión» en una fila solo para leer. */
+    const servidor = sinComentarios(leer("lib/canvas/historial-del-documento-server.ts"));
+    expect(servidor, "las corridas dejaron de marcarse solo para leer").toContain("soloLectura.add(id)");
+    const popup = sinComentarios(leer("components/versiones/HistorialDeVersiones.tsx"));
+    expect(popup, "el popup dejó de frenar «Usar esta versión» en una fila solo para leer").toContain("v.soloLectura || !v.id");
   });
 });

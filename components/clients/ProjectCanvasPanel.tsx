@@ -40,7 +40,8 @@ import { documentoConContexto } from "@/lib/contexto/documento";
 import { ProveedorDelResumen, type AvisoDePieza, type ContextoDelResumen } from "./contexto-del-resumen";
 import type { PiezaParaQueSigue, QueSigueDelProyecto } from "@/lib/clients/que-sigue-del-proyecto";
 import { BOTON_DE_HERRAMIENTA, BOTON_DE_HERRAMIENTA_ACTIVO, BotonAzul, BotonBlanco, BotonEnlace, QueSigue } from "@/components/ui/sistema";
-import VersionesDelDocumento from "@/components/canvas/VersionesDelDocumento";
+import HistorialDelDocumento from "@/components/canvas/HistorialDelDocumento";
+import HistorialDelCronograma from "@/components/canvas/HistorialDelCronograma";
 import { CANVAS_PRIMARY_AGENT } from "@/lib/agents/canvas-agents";
 import { rotuloVigente } from "@/lib/canvas/canvas-defs";
 import { plantillaDelDocumento } from "@/lib/entregables/registro";
@@ -1103,12 +1104,14 @@ export default function ProjectCanvasPanel({
           {/* CTA por-canvas: ejecuta el agente primario del canvas, anclado junto al
               nombre (reemplaza el pop-up). Handoff/Cronograma tienen su propio CTA. */}
           {!ctaEnElPanel && botonDelAgente}
-          {/* Las fotos que se toman antes de cada regeneración (lib/canvas/versiones.ts): en todo
+          {/* El historial de versiones (21 nov, lib/canvas/historial-del-documento-server.ts): en todo
               documento que la IA reescribe, incluido Desarrollo (su CTA viene por portal). */}
           {activeCanvas && activeCanvasId && activeSlug !== "exploration" && (CANVAS_PRIMARY_AGENT[activeSlug ?? ""] || activeSlug === "tech-requirements" || activeSlug === "handoff" || copiaDelMotor) && (
-            <VersionesDelDocumento
+            <HistorialDelDocumento
+              base={`/api/projects/${projectId}`}
               projectId={projectId}
               canvasId={activeCanvasId}
+              documento={nombreDelArtefacto(activeCanvas)}
               onCambio={() => {
                 setAgentNonce((n) => n + 1);
                 bumpGpsRefresh();
@@ -1116,6 +1119,8 @@ export default function ProjectCanvasPanel({
               }}
             />
           )}
+          {/* El historial del cronograma (21 nov): sus fotos de siempre, por ahora solo para mirar. */}
+          {activeSlug === "timeline" && <HistorialDelCronograma projectId={projectId} />}
           {/* CTAs de los canvas que se los inyectan por portal (Cronograma y Desarrollo) —
               A LA PAR DEL NOMBRE, en el mismo lugar que el CanvasAgentButton de los demás. */}
           {(activeSlug === "timeline" || activeSlug === "tech-requirements") && (

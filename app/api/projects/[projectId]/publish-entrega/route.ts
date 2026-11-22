@@ -33,6 +33,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { guardAccessToProject, guardPublicacionDeProyecto } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
+import { guardarVersionPublicada } from "@/lib/canvas/versiones";
 import { canvasOfNested } from "@/lib/pieces/canvas-query";
 import { publishSurface } from "@/lib/projects/publish-surfaces";
 import { ENTREGA_DEF_BY_KEY } from "@/components/landing/configs/entrega.defs";
@@ -141,6 +142,8 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ pr
     }),
     prisma.project.update({ where: { id: projectId }, data: { entregaPublishedAt: now } }),
   ]);
+  // El historial de versiones (21 nov): lo que se le acaba de compartir al cliente. Nunca lanza.
+  await guardarVersionPublicada(canvas.id, guard.user.email ?? null);
 
   // Tiempos (2026-10-05): la primera vez que se publica, «¿cuánto tiempo le dedicaste?» (nunca lanza).
   const preguntaDeTiempo = await alPublicarDocumento({

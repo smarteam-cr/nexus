@@ -21,6 +21,7 @@
  */
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
+import { guardarVersionPublicada } from "@/lib/canvas/versiones";
 import { canvasOfNested } from "@/lib/pieces/canvas-query";
 import { publishSurface } from "@/lib/projects/publish-surfaces";
 import { ultimaVersionPresentada } from "@/lib/external/diagnostico-view";
@@ -56,8 +57,8 @@ export async function estadoDePublicacion(origen: string, projectId: string, doc
   });
 }
 
-export async function publicarDocumento(projectId: string, doc: DocumentoPublicable) {
-  return doc === "diagnostico" ? publicarDiagnosticoPresentado(projectId) : publicarPlanificacion(projectId);
+export async function publicarDocumento(projectId: string, doc: DocumentoPublicable, porEmail: string | null = null) {
+  return doc === "diagnostico" ? publicarDiagnosticoPresentado(projectId) : publicarPlanificacion(projectId, porEmail);
 }
 
 /** El diagnóstico se comparte en su versión PRESENTADA: sin presentar, no hay qué compartir. */
@@ -111,7 +112,7 @@ export function seccionesParaLaFoto<S extends { key: string; blocks: Array<{ dat
     }));
 }
 
-async function publicarPlanificacion(projectId: string) {
+async function publicarPlanificacion(projectId: string, porEmail: string | null) {
   const canvas = await prisma.projectCanvas.findFirst({
     where: canvasOfNested("planning", { projectId }),
     select: {
@@ -158,6 +159,8 @@ async function publicarPlanificacion(projectId: string) {
     }),
     prisma.project.update({ where: { id: projectId }, data: { planificacionPublishedAt: now } }),
   ]);
+  // El historial de versiones (21 nov): lo que se le acaba de compartir al cliente. Nunca lanza.
+  await guardarVersionPublicada(canvas.id, porEmail);
   return NextResponse.json({ published: true, publishedAt: now.toISOString() });
 }
 

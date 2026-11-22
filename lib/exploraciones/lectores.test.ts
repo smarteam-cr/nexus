@@ -160,6 +160,16 @@ const CENSO: Record<string, { destino: Destino; motivo: string }> = {
     motivo:
       "El Resumen de la escala que ve el cliente (2026-11-09): «Armar el Resumen» / «Rehacer con IA». Pantalla interna, con la guardia de la exploración; al cliente le llega solo por escalaParaElCliente, sin las citas.",
   },
+  "app/api/sales/exploraciones/[id]/escala/resumen/versiones/route.ts": {
+    destino: "ventas",
+    motivo:
+      "El historial de versiones del Resumen de La escala (21 nov, lib/exploraciones/versiones-del-resumen-server.ts): la lista, con cuál es la actual y cuál ve el cliente. Pantalla interna, con la guardia de la exploración; lo único que escribe es pasar al historial, una vez, la versión anterior del botón de la mañana del 21 nov.",
+  },
+  "app/api/sales/exploraciones/[id]/escala/resumen/versiones/[versionId]/route.ts": {
+    destino: "ventas",
+    motivo:
+      "Una versión del Resumen de La escala (21 nov): la vista previa (`paginaDeLaVersion`, la página interna armada con esa versión) y «Usar esta versión», que cambia el Resumen y nunca lo publicado. Pantalla interna, con la guardia de la exploración (leer para ver, escribir para usar).",
+  },
   "app/api/sales/exploraciones/[id]/pagina-de-la-escala/route.ts": {
     destino: "ventas",
     motivo: "La escala interna editable (8 nov): la página del cliente, por el mismo cálculo (`paginaParaElCse`), para editarla. Pantalla interna, con la guardia de la exploración.",

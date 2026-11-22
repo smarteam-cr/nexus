@@ -23,6 +23,7 @@ import { useToast } from "@/components/ui/Toast";
 import { Button } from "@/components/ui/Button";
 import { QueSigue } from "@/components/ui/sistema";
 import CanvasDropdown from "@/components/business-cases/CanvasDropdown";
+import HistorialDelDocumento from "@/components/canvas/HistorialDelDocumento";
 import SectionTools from "@/components/business-cases/SectionTools";
 import DocumentAssist from "@/components/ai/DocumentAssist";
 import DownloadPdfButton from "@/components/business-cases/DownloadPdfButton";
@@ -645,6 +646,19 @@ export default function BusinessCaseWorkspace({
                 </button>
               )}
               {hasCanvas && !isTemplate && <DownloadPdfButton bcId={bcId} canvasId={canvasId} />}
+              {/* El historial de versiones de esta «Propuesta N» (21 nov): cuál es la actual, cuál ve el cliente, y volver a otra. */}
+              {hasCanvas && !isTemplate && (
+                <HistorialDelDocumento
+                  base={`/api/business-cases/${bcId}`}
+                  canvasId={canvasId}
+                  documento={versions.find((v) => v.canvasId === canvasId)?.name ?? "Propuesta"}
+                  verboDePublicar="alguien la suba"
+                  onCambio={() => {
+                    setDirty(true);
+                    void hook.refetch();
+                  }}
+                />
+              )}
               {puedeEditar && ultima > 0 && (
                 <button type="button" onClick={() => void generate()} disabled={generating} className={BOTON_BLANCO}>
                   Generar otra

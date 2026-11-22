@@ -10,6 +10,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { guardSalesAccess } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
+import { guardarVersionPublicada } from "@/lib/canvas/versiones";
 import { ensureAccess } from "@/lib/business-cases";
 import { buildBcAccessUrl } from "@/lib/business-cases/access-url";
 import { hiddenKeysFrom } from "@/lib/business-cases/section-briefs";
@@ -177,6 +178,8 @@ export async function POST(
     },
   });
 
+  // El historial de versiones (21 nov): la propuesta que se acaba de publicar. Nunca lanza.
+  await guardarVersionPublicada(canvas.id, guard.user.email ?? null);
   const access = await ensureAccess(id, guard.user.email ?? null);
   const base = process.env.APP_URL || new URL(req.url).origin;
   return NextResponse.json({

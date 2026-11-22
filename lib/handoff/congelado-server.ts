@@ -102,6 +102,7 @@ export async function congelarHandoff(
       origen: ORIGEN_DE_LA_FOTO[opts.via],
       creadaPor: opts.porEmail,
       protegida: true,
+      tipo: "congelado",
     });
     if (!foto.id) return { ok: false, motivo: foto.motivo === "vacío" ? "sin-contenido" : "sin-foto" };
     const fotoId = foto.id;

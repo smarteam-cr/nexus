@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { guardAccessToProject } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
 import { leerSecciones, restaurarVersion, traerSeccionDeVersion } from "@/lib/canvas/versiones";
-import { documentoDelProyecto, permisoParaUsarVersion } from "@/lib/canvas/versiones-acceso";
+import { documentoDelProyecto, permisoParaUsarVersion, seRehaceElDocumento } from "@/lib/canvas/versiones-acceso";
 import { documentoAprobado, MENSAJE_APROBADO } from "@/lib/canvas/estado-del-documento-servidor";
 
 /**
@@ -20,7 +20,7 @@ async function cargar(projectId: string, versionId: string) {
     where: { id: versionId },
     select: { id: true, canvasId: true, origen: true, creadaPor: true, createdAt: true, secciones: true },
   });
-  if (!v) return null;
+  if (!v?.canvasId) return null;
   const canvas = await documentoDelProyecto(projectId, v.canvasId);
   return canvas ? { v, canvas } : null;
 }
@@ -48,6 +48,9 @@ export async function POST(req: NextRequest, { params }: Params) {
   if (denegado) return denegado;
   // Un documento aprobado por el cliente está cerrado: ni traer ni restaurar hasta reabrirlo.
   if (await documentoAprobado(r.canvas.id)) return NextResponse.json({ error: MENSAJE_APROBADO }, { status: 409 });
+  // Con Nexus reescribiéndolo, lo que se elija ahora lo pisaría la corrida al terminar (historial de versiones, 21 nov).
+  if (await seRehaceElDocumento({ id: r.canvas.id, projectId, slug: r.canvas.slug }))
+    return NextResponse.json({ error: "Nexus está reescribiendo este documento. Cuando termine, vuelve a elegir la versión." }, { status: 409 });
 
   const actor = guard.user?.email ?? null;
   const res =

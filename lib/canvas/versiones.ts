@@ -23,6 +23,8 @@ import { createHash } from "node:crypto";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { modeloDisponible } from "@/lib/db/esquema";
+import { guardarVersion } from "@/lib/versiones/guardar-server";
+import type { TipoDeVersion } from "@/lib/versiones/historial";
 
 export interface BloqueDeVersion {
   blockType: string;
@@ -45,8 +47,7 @@ export interface SeccionDeVersion {
   blocks: BloqueDeVersion[];
 }
 
-/** Cuántas fotos se guardan por documento: las más viejas se van. */
-export const VERSIONES_POR_DOCUMENTO = 30;
+export { VERSIONES_POR_DOCUMENTO } from "@/lib/versiones/guardar-server";
 
 export async function fotoDelDocumento(canvasId: string): Promise<SeccionDeVersion[]> {
   const secciones = await prisma.canvasSection.findMany({
@@ -82,15 +83,17 @@ export function tieneContenido(secciones: readonly SeccionDeVersion[]): boolean 
 /**
  * Toma la foto del documento. No lanza nunca. No guarda nada si el documento está vacío (no hay nada
  * que perder) ni si es idéntico a la última foto (regenerar dos veces seguidas sin tocar nada no llena
- * la lista de copias iguales).
+ * la lista de copias iguales). Las reglas comunes viven en lib/versiones/guardar-server.ts (21 nov).
  *
+ * `tipo` (21 nov, historial de versiones): cómo nació. Sin él es una foto de lo que había ANTES de que algo lo
+ * reemplace, y el tipo sale de compararla con la última («Editado» si alguien la cambió a mano después).
  * `protegida` (2026-10-02): la foto de lo que se PRESENTÓ o APROBÓ. Si es igual a la última, en vez de
  * saltarla se protege esa misma (y se devuelve su id): lo que importa es que quede, no que sea nueva.
  * Las protegidas no cuentan para el tope de 30.
  */
 export async function guardarVersionDelDocumento(
   canvasId: string,
-  opts: { origen: string; creadaPor?: string | null; protegida?: boolean },
+  opts: { origen: string; creadaPor?: string | null; protegida?: boolean; tipo?: TipoDeVersion; publicada?: boolean },
 ): Promise<{ guardada: boolean; id?: string; motivo?: string }> {
   try {
     if (!modeloDisponible(prisma.versionDeDocumento)) return { guardada: false, motivo: "falta la tabla" };
@@ -100,44 +103,36 @@ export async function guardarVersionDelDocumento(
     ]);
     if (!canvas) return { guardada: false, motivo: "el documento no existe" };
     if (!tieneContenido(secciones)) return { guardada: false, motivo: "vacío" };
-    const huella = huellaDe(secciones);
-    const ultima = await prisma.versionDeDocumento.findFirst({
-      where: { canvasId },
-      orderBy: { createdAt: "desc" },
-      select: { id: true, huella: true },
-    });
-    if (ultima?.huella === huella) {
-      if (!opts.protegida) return { guardada: false, motivo: "igual a la última" };
-      await prisma.versionDeDocumento.update({ where: { id: ultima.id }, data: { protegida: true, origen: opts.origen } });
-      return { guardada: true, id: ultima.id, motivo: "protegida la última, que era igual" };
-    }
-
-    const v = await prisma.versionDeDocumento.create({
-      data: {
-        canvasId,
-        pieza: canvas.slug,
-        origen: opts.origen,
+    return await guardarVersion(
+      { canvasId },
+      {
+        tipo: opts.tipo ?? "antes",
+        nota: opts.origen,
         creadaPor: opts.creadaPor ?? null,
-        huella,
-        secciones: secciones as unknown as Prisma.InputJsonValue,
-        ...(opts.protegida ? { protegida: true } : {}),
+        huella: huellaDe(secciones),
+        secciones,
+        pieza: canvas.slug,
+        protegida: opts.protegida,
+        publicada: opts.publicada,
       },
-      select: { id: true },
-    });
-    // Tope por documento: se borran las más viejas. Una foto es el documento entero. Las protegidas
-    // (lo que vio o aprobó el cliente) no se borran nunca ni ocupan lugar en el tope.
-    const sobrantes = await prisma.versionDeDocumento.findMany({
-      where: { canvasId, protegida: false },
-      orderBy: { createdAt: "desc" },
-      skip: VERSIONES_POR_DOCUMENTO,
-      select: { id: true },
-    });
-    if (sobrantes.length) await prisma.versionDeDocumento.deleteMany({ where: { id: { in: sobrantes.map((s) => s.id) } } });
-    return { guardada: true, id: v.id };
+    );
   } catch (e) {
     console.error(`[versiones] no se pudo guardar la foto de ${canvasId} (${opts.origen}):`, e instanceof Error ? e.message : e);
     return { guardada: false, motivo: "error" };
   }
+}
+
+/**
+ * «Rehecho con IA» (21 nov): la versión que acaba de escribir una corrida. Se llama al TERMINAR de escribir; la de
+ * antes ya la guardó `guardarVersionDelDocumento` antes de empezar. No lanza.
+ */
+export async function guardarVersionDeLaIA(canvasId: string, creadaPor: string | null, nota = "Después de rehacerlo con IA") {
+  return guardarVersionDelDocumento(canvasId, { origen: nota, creadaPor, tipo: "ia" });
+}
+
+/** «Publicado» (21 nov): lo que se acaba de subir al cliente. Protegida: no se borra. No lanza. */
+export async function guardarVersionPublicada(canvasId: string, creadaPor: string | null) {
+  return guardarVersionDelDocumento(canvasId, { origen: "Al publicar", creadaPor, tipo: "publicado", publicada: true, protegida: true });
 }
 
 export function leerSecciones(bruto: unknown): SeccionDeVersion[] {
@@ -234,7 +229,14 @@ export async function restaurarVersion(opts: { canvasId: string; versionId: stri
   const sobrantes = actuales.filter((a) => !keysDeLaFoto.has(a.key)).map((a) => a.id);
   if (sobrantes.length) await prisma.canvasBlock.deleteMany({ where: { sectionId: { in: sobrantes } } });
   await tocarDocumento(opts.canvasId);
+  // La que queda es la actual: «Vuelta a una anterior» (21 nov, historial de versiones).
+  await guardarVersionDelDocumento(opts.canvasId, { origen: `Volvió la del ${fechaCorta(v.createdAt)}.`, creadaPor: opts.actor, tipo: "restaurado" });
   return { ok: true, sectionIds: ids };
+}
+
+/** «20 nov, 16:10», en la hora de Costa Rica. */
+export function fechaCorta(d: Date): string {
+  return d.toLocaleString("es-CR", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", hour12: false, timeZone: "America/Costa_Rica" });
 }
 
 /** Marca «cambios sin subir» en los documentos publicables, igual que cualquier edición. */

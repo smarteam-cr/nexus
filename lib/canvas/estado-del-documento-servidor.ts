@@ -160,7 +160,7 @@ export async function presentarDocumento(canvasId: string, por: string | null): 
     if (p?.foto?.huella === huellaDe(foto)) return devolver(canvasId);
     version += 1;
   }
-  const v = await guardarVersionDelDocumento(canvasId, { origen: `Presentado al cliente (v${version})`, creadaPor: por, protegida: true });
+  const v = await guardarVersionDelDocumento(canvasId, { origen: `Presentado al cliente (v${version})`, creadaPor: por, protegida: true, tipo: "presentado" });
   if (!v.id) return { ok: false, status: 500, error: "No se pudo guardar la foto de lo que se presenta. Vuelve a intentarlo." };
   const fotoId = v.id;
 

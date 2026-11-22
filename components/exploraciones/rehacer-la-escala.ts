@@ -5,8 +5,8 @@
  * Resumen de La escala (POST …/escala/resumen, que respeta lo escrito a mano y nunca publica), después recarga el lienzo
  * y avisa a «Publicar» que hay cambios. Lo comparten «Lo que sabes del cliente» y «Hablar con Nexus».
  *
- * Mientras corre, `useSeRehaceLaEscala` da true en esta pestaña (21 nov): «Volver a la versión anterior» del Resumen no se
- * puede usar mientras tanto. Lo que corre en otra pestaña o lo pide otra persona lo frena el servidor (409).
+ * Mientras corre, `useSeRehaceLaEscala` da true en esta pestaña (21 nov): «Usar esta versión» del historial del Resumen no
+ * se puede usar mientras tanto. Lo que corre en otra pestaña o lo pide otra persona lo frena el servidor (409).
  */
 import { useCallback, useSyncExternalStore } from "react";
 import { avisarQueLaEscalaCambio } from "./escala-al-dia";

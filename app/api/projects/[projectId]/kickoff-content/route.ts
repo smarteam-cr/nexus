@@ -75,7 +75,7 @@ export async function POST(_req: NextRequest, { params }: { params: Params }) {
   const guard = await guardAccessToProject(projectId);
   if (guard instanceof NextResponse) return guard;
 
-  const snapshotAt = await freezeKickoffSnapshot(projectId);
+  const snapshotAt = await freezeKickoffSnapshot(projectId, guard.user.email ?? null);
   if (!snapshotAt) {
     return NextResponse.json({ error: "El proyecto no tiene canvas de Kickoff." }, { status: 404 });
   }

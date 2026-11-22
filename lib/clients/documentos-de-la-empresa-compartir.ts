@@ -15,6 +15,7 @@ import "server-only";
 import { randomBytes } from "node:crypto";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
+import { guardarVersionPublicada } from "@/lib/canvas/versiones";
 import { DIAGNOSTICO_CANVAS, diagnosticoSectionSequence, type CanvasDefinition } from "@/lib/canvas/canvas-defs";
 import { reconcileOnDemandCanvasSections } from "@/lib/canvas/default-canvases";
 import { conPlantillaAnotada, plantillaDe, seccionesDeLaPlantilla } from "@/lib/entregables/registro";
@@ -141,6 +142,8 @@ export async function compartirDocumentoDeLaEmpresa(clientId: string, canvasId: 
       });
     }
   });
+  // El historial de versiones (21 nov): lo que se le acaba de compartir a la empresa. Nunca lanza.
+  await guardarVersionPublicada(canvasId, porEmail);
   return estadoDeLoCompartido(canvasId);
 }
 

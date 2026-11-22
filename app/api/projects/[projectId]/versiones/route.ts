@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { guardAccessToProject } from "@/lib/auth/api-guards";
-import { prisma } from "@/lib/db/prisma";
-import { modeloDisponible } from "@/lib/db/esquema";
 import { documentoDelProyecto } from "@/lib/canvas/versiones-acceso";
+import { historialDelCanvas } from "@/lib/canvas/historial-del-documento-server";
 
 /**
- * GET /api/projects/[projectId]/versiones?canvasId= — las versiones anteriores de un documento
- * (lib/canvas/versiones.ts), las más nuevas primero. Sin el contenido: eso lo trae el detalle.
+ * GET /api/projects/[projectId]/versiones?canvasId= — el historial de versiones de un documento (21 nov,
+ * lib/canvas/historial-del-documento-server.ts): las versiones, la más nueva primero, con cuál es la actual y cuál ve
+ * el cliente, y el documento como está hoy (`actual`, para marcar lo distinto en la vista previa). El contenido de cada
+ * versión lo trae el detalle.
  */
 export async function GET(req: NextRequest, { params }: { params: Promise<{ projectId: string }> }) {
   const { projectId } = await params;
@@ -16,12 +17,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ proj
   const canvasId = req.nextUrl.searchParams.get("canvasId") ?? "";
   const canvas = canvasId ? await documentoDelProyecto(projectId, canvasId) : null;
   if (!canvas) return NextResponse.json({ error: "Documento no encontrado" }, { status: 404 });
-  if (!modeloDisponible(prisma.versionDeDocumento)) return NextResponse.json({ versiones: [] });
-
-  const versiones = await prisma.versionDeDocumento.findMany({
-    where: { canvasId },
-    orderBy: { createdAt: "desc" },
-    select: { id: true, origen: true, creadaPor: true, createdAt: true },
-  });
-  return NextResponse.json({ versiones });
+  const h = await historialDelCanvas(canvas.id);
+  if (!h) return NextResponse.json({ error: "Documento no encontrado" }, { status: 404 });
+  return NextResponse.json(h);
 }

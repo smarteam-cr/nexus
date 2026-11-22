@@ -13,8 +13,8 @@
  * una vez más. Se guarda en `contenido.resumenDeLaEscala` sin pisar lo editado a mano (`juntarConLoEditado`) y sin subir
  * la versión. Trazabilidad: `AgentRun` + el medidor de gasto (`conContextoDeIA`).
  *
- * Al rehacerlo, el que había queda como versión anterior (21 nov, ./resumen-anterior.ts): «Volver a la versión anterior»
- * (`volverAlResumenAnterior`, PATCH de la misma ruta) lo pone otra vez.
+ * Al rehacerlo, el de antes y el nuevo quedan en el historial de versiones (21 nov, ./versiones-del-resumen-server.ts):
+ * «Usar esta versión» pone cualquiera otra vez.
  *
  * Quién lo llama: solo `POST /api/sales/exploraciones/[id]/escala/resumen` («Armar el Resumen» / «Rehacer con IA»). No se
  * arma solo al crear el «Acceso» (revisión del 9 nov): lo que lee la dirección del cliente lo mira antes una persona.
@@ -43,7 +43,7 @@ import { EQUIPOS, type ClaveDeEquipo } from "./equipos";
 import { areasDeLaPagina, resultadosDeLaEscala, type ResultadoDeUnArea } from "./escala-para-el-cliente";
 import { leerContenido } from "./esquemas";
 import { reunionesDeLaExploracion, transcripcionesDeLaExploracion } from "./fuentes";
-import { conElResumenNuevo, volverALaAnterior } from "./resumen-anterior";
+import { guardarAlRehacer } from "./versiones-del-resumen-server";
 import { leerLoLeido } from "./lo-leido";
 import { perdidaDeLaEscala, perdidaParaElAgente } from "./perdida-de-la-escala";
 import { bloqueDeInstrucciones } from "./notas-de-sesion";
@@ -413,7 +413,9 @@ export async function generarElResumenDeLaEscala(o: { exploracionId: string; ema
       puntos: escrito.puntos,
       malLeidas: le.malLeidas,
     };
-    const guardado = await guardar(o.exploracionId, nuevo, le.ctx.reuniones, o.email);
+    const { guardado, antes } = await guardar(o.exploracionId, nuevo, le.ctx.reuniones);
+    // El historial de versiones (21 nov): el de antes y el nuevo, después de soltar la fila. Nunca lanza.
+    if (guardado) await guardarAlRehacer(o.exploracionId, { antes, nuevo: guardado, email: o.email });
     await prisma.agentRun.update({
       where: { id: run.id },
       data: { status: "DONE", currentPhase: null, output: JSON.stringify({ resumen: nuevo, descartados: escrito.descartados, uso }) },
@@ -440,21 +442,25 @@ export async function generarElResumenDeLaEscala(o: { exploracionId: string; ema
 
 /**
  * Guarda con la fila bloqueada y releída: lo nuevo junto con lo que una persona escribió (también lo que escribió mientras
- * el agente trabajaba) y sin lo que quitó. El que había queda como versión anterior, tal como estaba (21 nov,
- * ./resumen-anterior.ts). Conserva las claves del Json que esta versión no conoce.
+ * el agente trabajaba) y sin lo que quitó. Devuelve también el que había, tal como estaba, para el historial de versiones
+ * (21 nov). Conserva las claves del Json que esta versión no conoce.
  */
-async function guardar(exploracionId: string, nuevo: ResumenGuardado, reuniones: readonly ReunionParaElResumen[], email: string | null): Promise<ResumenGuardado | null> {
+async function guardar(
+  exploracionId: string,
+  nuevo: ResumenGuardado,
+  reuniones: readonly ReunionParaElResumen[],
+): Promise<{ guardado: ResumenGuardado | null; antes?: ResumenGuardado }> {
   return prisma.$transaction(async (tx) => {
     await bloquearFila(tx, exploracionId);
     const f = await tx.exploracionDeVenta.findUnique({ where: { id: exploracionId }, select: { contenido: true, archivadaEn: true } });
-    if (!f || f.archivadaEn) return null;
+    if (!f || f.archivadaEn) return { guardado: null };
     const c = leerContenido(f.contenido);
     const resumenDeLaEscala = juntarConLoEditado(nuevo, c.resumenDeLaEscala, reuniones);
     await tx.exploracionDeVenta.update({
       where: { id: exploracionId },
-      data: { contenido: conLoDesconocido(f.contenido, conElResumenNuevo(c, resumenDeLaEscala, { por: email, en: new Date().toISOString() })) },
+      data: { contenido: conLoDesconocido(f.contenido, { ...c, resumenDeLaEscala }) },
     });
-    return resumenDeLaEscala;
+    return { guardado: resumenDeLaEscala, antes: c.resumenDeLaEscala };
   });
 }
 
@@ -464,28 +470,7 @@ function conLoDesconocido(raw: unknown, c: ReturnType<typeof leerContenido>): Pr
   return { ...crudo, ...c } as unknown as Prisma.InputJsonValue;
 }
 
-export type ResultadoDeVolverAlResumen = { ok: true } | { ok: false; status: number; error: string };
-
-/**
- * «Volver a la versión anterior» del Resumen (21 nov): con la fila bloqueada, pone la anterior y deja la de ahora como
- * anterior (se deshace con el mismo botón). `firma`: la que vio la pantalla (`firmaParaVolver`); si cambió, 409. No
- * mientras se rehace (el mismo candado que «Rehacer con IA»). Solo escribe el contenido de la exploración: lo publicado
- * no se toca y el cliente ve lo mismo hasta «Publicar».
- */
-export async function volverAlResumenAnterior(o: { exploracionId: string; email: string | null; firma: string }): Promise<ResultadoDeVolverAlResumen> {
-  return prisma.$transaction(async (tx) => {
-    await bloquearFila(tx, o.exploracionId);
-    const f = await tx.exploracionDeVenta.findUnique({ where: { id: o.exploracionId }, select: { contenido: true, archivadaEn: true } });
-    if (!f) return { ok: false, status: 404, error: "Esa exploración no existe." };
-    if (f.archivadaEn) return { ok: false, status: 409, error: "La exploración está archivada: ya no se puede cambiar." };
-    // Dentro del bloqueo: una corrida que termina después guarda ESTE como su anterior.
-    if (await corridaEnCurso(tx, o.exploracionId)) return { ok: false, status: 409, error: "Nexus está rehaciendo el Resumen. Cuando termine, puedes volver a la versión anterior." };
-    const r = volverALaAnterior(leerContenido(f.contenido), o.firma, { por: o.email, en: new Date().toISOString() });
-    if (!r.ok)
-      return r.motivo === "sin-anterior"
-        ? { ok: false, status: 409, error: "Este Resumen no tiene una versión anterior guardada." }
-        : { ok: false, status: 409, error: "El Resumen cambió mientras lo mirabas (otra persona, o Nexus al rehacerlo). Se cargó lo último: revísalo y vuelve a intentarlo." };
-    await tx.exploracionDeVenta.update({ where: { id: o.exploracionId }, data: { contenido: conLoDesconocido(f.contenido, r.contenido) } });
-    return { ok: true };
-  });
+/** El candado de «Rehacer con IA», para «Usar esta versión» del historial (21 nov): mientras hay una corrida, no se cambia. */
+export async function seRehaceElResumen(db: Pick<Prisma.TransactionClient, "agentRun">, exploracionId: string): Promise<boolean> {
+  return corridaEnCurso(db, exploracionId);
 }

@@ -16056,7 +16056,9 @@ idea es aprovechar a Claude, no pisarlo»). Este es el mínimo viable: UN lugar 
   «Hay cambios que el cliente no ve» hasta que alguien aprieta «Publicar». Cancelar no toca nada (la nota se queda) y deja
   «Regenerar ahora». Si la nota contradice lo aceptado, el aviso empieza con «Esto contradice lo que el cliente aceptó el
   <fecha>».
-- **«Volver a la versión anterior»** (Elías, 21 nov; `lib/exploraciones/resumen-anterior.ts`): rehacer el Resumen, por el
+- ⚠ **Reemplazado el mismo día por el historial de versiones** (sección «Historial de versiones», al final): lo de abajo
+  es cómo funcionó unas horas. `contenido.resumenAnterior` ya no se escribe; la que quedó entra al historial al abrirlo.
+  **«Volver a la versión anterior»** (Elías, 21 nov; `lib/exploraciones/resumen-anterior.ts`): rehacer el Resumen, por el
   botón o por la cuenta regresiva, guarda antes el que había, tal como estaba y con lo escrito a mano, en
   `contenido.resumenAnterior`, con quién y cuándo lo rehízo. Lo hace `guardar` de `generarElResumenDeLaEscala`, con la
   fila bloqueada. Una sola versión atrás. Al lado de «Rehacer con IA» sale el botón si hay una guardada; pide confirmación
@@ -16227,3 +16229,66 @@ quita. El mismo día, Elías sumó que también RESPONDA preguntas sobre la cuen
   de una nota editada siguen mostrándose bajo ella aunque digan otra cosa); si la página se cierra entre guardar la nota
   y su revisión, la conversación vuelve sin saber si la nota quedó (lo dice y manda a mirar «Lo que sabes»); y un
   «Aplicar» cuya anotación no llegó al servidor vuelve como propuesto (la tarjeta sí cambió, y el panel dice «Ya está»).
+
+## Historial de versiones: el mismo para todo documento (2026-11-21)
+
+Elías, al ver «Volver a la versión anterior» del Resumen de La escala: «debería funcionar mejor y de forma más
+estandarizada para todos los artefactos, como un historial de versiones, que se entienda cuál es la actual, puede ser en un
+pop-up, poder ver como un preview y seleccionarla». Diseño: https://claude.ai/artifact/JJaPSprnzCnu9otYFJBp8i. Decidido
+con él el mismo día: lo escrito a mano NO se guarda con cada cambio, 30 por documento, el popup reemplaza «Versiones
+anteriores» y el historial de corridas del handoff, y se hace en los cuatro documentos (Resumen de La escala, canvases,
+propuesta comercial y cronograma).
+
+- **Una versión es un estado del documento con quién, cuándo y cómo nació** (`tipo`, lib/versiones/historial.ts): «Rehecho
+  con IA» se guarda DESPUÉS de cada corrida que reescribe el documento; «Publicado», al publicar o subir; «Vuelta a una
+  anterior», al usar una del historial; «Presentado» y «Congelado» como hasta ahora. Lo escrito a mano no se guarda con
+  cada cambio: queda como «Editado» cuando algo está por reemplazarlo (rehacer, usar otra, publicar) y el documento ya no
+  es igual a la última versión guardada. Dos iguales seguidas no se repiten (la huella). *Por qué no cada edición:* el
+  autoguardado escribe a cada tecla; serían cientos de versiones que dicen lo mismo.
+- **La actual es el documento vivo.** Si es igual a la última guardada, esa fila lleva «Actual»; si no, arriba va una
+  fila «Actual · con cambios sin guardar como versión». **«Lo que ve el cliente» es la última versión con `publicada`**,
+  y solo mientras el documento siga publicado.
+- **«Usar esta versión» nunca publica.** Guarda la actual (si no estaba), pone la elegida como borrador y deja una
+  versión «Vuelta a una anterior». Queda «Hay cambios que el cliente no ve» hasta que una persona publique. Pide lo mismo
+  que regenerar ese documento, y no corre mientras Nexus lo está rehaciendo.
+- **30 por documento; las publicadas, presentadas y congeladas no se borran ni ocupan lugar** (`protegida`).
+- **Una sola tabla:** la que ya guardaba las fotos de los canvases (`VersionDeDocumento`), ensanchada con
+  `exploracionId` (un solo dueño, CHECK en el SQL), `contenido`, `tipo` y `publicada`
+  (scripts/sql/2026-11-21-historial-de-versiones.sql). *Por qué no una por documento:* el tope, la protección y la
+  huella ya existían, y el popup lee una sola forma. El cronograma no guarda ahí: su historial ya existía.
+- **Un solo popup** (`components/versiones/HistorialDeVersiones.tsx`): la lista por día con cómo nació, quién y cuándo, las
+  marcas «Actual» y «Lo que ve el cliente», la vista previa de la elegida (con lo distinto a la actual marcado donde el
+  documento lo permite) y «Usar esta versión» con su confirmación. Cada documento le da cómo listar, cómo verla y cómo
+  usarla. En un canvas sigue «Traer solo esta sección».
+- **Resumen de La escala:** reemplaza `contenido.resumenAnterior`. La que existía entra al historial la primera vez que se
+  abre (con su fecha); desde ahí ya no se escribe. Rehacer guarda el de antes y el nuevo; «Publicar» guarda el Resumen
+  publicado. La vista previa es la misma página del Resumen, armada con esa versión. La huella se toma del Resumen como
+  queda al leerlo de la base (`leerResumenGuardado`): uno recién escrito y el mismo leído después dan la misma.
+- **Canvases** (handoff, kickoff, diagnóstico, planificación, requerimiento técnico, entrega, copias y documentos de la
+  empresa; `lib/canvas/historial-del-documento-server.ts`): la versión de la IA se guarda donde termina cada corrida
+  (`generarEntregable`, el atajo de los runners y el camino de bloques de /analyze, el requerimiento técnico automático y
+  las copias); la publicada, en cada «Subir» o «Compartir». Qué ve el cliente sale de cómo se comparte cada uno: una foto
+  al publicar (kickoff, planificación, entrega, documentos de la empresa), la última PRESENTADA (diagnóstico) o el
+  documento vivo (requerimiento técnico: ahí el popup avisa que el cliente ve el cambio en cuanto se usa una versión).
+  Presentar o congelar lo mismo que ya estaba le pone esa etiqueta a esa versión. Las corridas del handoff de antes de
+  la primera versión guardada, y las que fallaron, entran «Solo para leer» (la decisión del 2026-08-08 sigue: una
+  corrida no se restaura; la que falló muestra su motivo). Mientras Nexus reescribe el documento, usar una versión o
+  traer una sección responde 409 (`seRehaceElDocumento`): la corrida pisaría lo elegido.
+- **Propuesta comercial:** cada «Propuesta N» es un canvas con su historial; «Lo que ve el cliente» va en la última
+  publicada de cualquiera de ellas. Rutas `/api/business-cases/[id]/versiones`, con la guardia de la propuesta.
+- **Cronograma, por ahora solo para mirar** (`lib/timeline/historial-del-cronograma-server.ts`): las versiones son las
+  fotos que ya guardaba cada cambio con motivo (`TimelineChange`: lo de la IA o del chat es «Rehecho con IA», el «Subir»
+  es «Publicado», lo demás «Editado», con su motivo) y cada plan aprobado (`TimelineBaseline`, «Congelado»: se congela
+  también al «Aprobar el plan», sin publicar, así que NO es lo que ve el cliente). «Lo que ve el cliente» es la versión
+  más nueva igual a `publishedSnapshot`, la foto que lee la vista del cliente. El autoguardado no deja versión. Se
+  comparan por su forma (arranque, fases con semanas y sesiones, tareas por semana), sin el avance. *Por qué sin «Usar
+  esta versión»:* volver a otro cronograma tiene que pasar por la propuesta de la barra del Gantt para no pisar el avance
+  ni lo editado a mano, y armar esa propuesta desde una foto es un paso propio. Queda pendiente.
+- **Lo que no queda garantizado:** la vista previa de un canvas muestra el texto de cada sección, no la página tal como la
+  ve el cliente; un «Editado» dice la hora en que se guardó (cuando algo lo iba a reemplazar), no la hora de la última
+  tecla, y no sabe quién escribió; un documento publicado ANTES de esto no muestra «Lo que ve el cliente» hasta que se
+  vuelva a publicar (no había versión marcada), salvo el diagnóstico y el requerimiento técnico, que se deducen; la
+  vista previa del Resumen no marca qué parte cambió, solo la del canvas y la del cronograma; la versión «Publicado» se
+  guarda leyendo el documento justo DESPUÉS de publicar, así que una edición en ese instante quedaría marcada como lo que
+  ve el cliente sin serlo; el freno de «Usar esta versión» mira la corrida del agente de la pieza y la de una copia, no
+  otras que escriban en el mismo documento; un «Subir» del cronograma con un motivo propio sale como «Editado».

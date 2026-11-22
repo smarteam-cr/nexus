@@ -353,6 +353,7 @@ export interface ContenidoDeExploracion {
    */
   resumenDeLaEscala?: ResumenGuardado;
   /**
+   * DEPRECATED (21 nov, la misma tarde): ya no se escribe; lo reemplazó el historial de versiones, que la toma al abrirse.
    * El Resumen que se reemplazó al rehacerlo o al volver (21 nov, ./resumen-anterior.ts): tal como estaba, con lo escrito
    * a mano. Una sola versión atrás. No sube la versión y no lo ve el cliente.
    */

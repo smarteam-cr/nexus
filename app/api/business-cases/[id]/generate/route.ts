@@ -15,6 +15,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { guardSalesAccess } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
+import { guardarVersionDeLaIA } from "@/lib/canvas/versiones";
 import { createBusinessCaseCanvas } from "@/lib/canvas/default-canvases";
 import { generateCanvasSections } from "@/lib/business-cases/canvas-agent";
 import { loadBcFeeding } from "@/lib/business-cases/feeding";
@@ -672,6 +673,8 @@ export async function POST(
   void (async () => {
     try {
       const hecho = await trabajo();
+      // El historial de versiones (21 nov): la propuesta recién escrita por la IA. Nunca lanza.
+      await guardarVersionDeLaIA(hecho.canvasId, guard.user.email ?? null);
       await prisma.agentRun.update({
         where: { id: run.id },
         data: { status: "DONE", output: JSON.stringify(hecho) },

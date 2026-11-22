@@ -13,6 +13,8 @@ import { prisma } from "@/lib/db/prisma";
 import { denyHandoffCanvasEditForCse, guardPermission } from "@/lib/auth/api-guards";
 import { pieceForCanvas } from "@/lib/pieces/registry";
 import { tipoDeArtefacto } from "@/lib/artefactos/tipos";
+import { AGENT_GROUP_TO_CANVAS } from "@/lib/canvas/canvas-defs";
+import { cortePorLatido } from "@/lib/agents/run-colgada";
 
 export async function documentoDelProyecto(projectId: string, canvasId: string) {
   const canvas = await prisma.projectCanvas.findUnique({
@@ -38,4 +40,27 @@ export async function permisoParaUsarVersion(
     }
   }
   return null;
+}
+
+/**
+ * ¿Nexus está reescribiendo este documento ahora? (historial de versiones, 21 nov) «Usar esta versión» y «Traer solo esta
+ * sección» no corren encima de una corrida viva: la corrida, al terminar, escribiría sobre lo elegido y se perdería sin
+ * aviso. Cuenta la corrida del agente de la pieza (por su grupo) y la de una copia (lleva el id del canvas en
+ * `sectionLabel`), solo si dio señales hace poco (una colgada no frena).
+ */
+export async function seRehaceElDocumento(canvas: { id: string; projectId: string | null; slug: string | null }): Promise<boolean> {
+  if (!canvas.projectId) return false;
+  const grupos = Object.entries(AGENT_GROUP_TO_CANVAS)
+    .filter(([, slug]) => slug === canvas.slug)
+    .map(([g]) => g);
+  const viva = await prisma.agentRun.findFirst({
+    where: {
+      projectId: canvas.projectId,
+      status: { in: ["PENDING", "RUNNING"] },
+      updatedAt: { gte: cortePorLatido() },
+      OR: [{ sectionLabel: canvas.id }, ...(grupos.length ? [{ agent: { agentGroup: { in: grupos } } }] : [])],
+    },
+    select: { id: true },
+  });
+  return !!viva;
 }

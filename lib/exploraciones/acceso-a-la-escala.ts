@@ -17,6 +17,7 @@ import type { Prisma } from "@prisma/client";
 import { escalaParaElCliente, type EscalaParaElCliente } from "./escala-para-el-cliente-server";
 import { faltaParaPublicar } from "@/lib/external/pagina-del-resumen";
 import { fotoDe, mismaPagina, paginaDeLaFoto } from "./escala-publicada";
+import { guardarAlPublicar } from "./versiones-del-resumen-server";
 
 export interface EstadoDelAcceso {
   estado: "sin-generar" | "activo" | "revocado";
@@ -118,6 +119,8 @@ export async function publicarLaEscala(exploracionId: string, porEmail: string |
     data: { publicada: fotoDe(pagina) as unknown as Prisma.InputJsonValue, publicadaEn: new Date(), publicadaPor: porEmail },
   });
   if (!count && o.siSigue === undefined) throw new ErrorDelAcceso(409, "Primero crea el acceso del cliente: la página se publica en su enlace.");
+  // El historial de versiones del Resumen (21 nov): lo publicado queda como «Lo que ve el cliente». Nunca lanza.
+  if (count > 0) await guardarAlPublicar(exploracionId, porEmail);
   return count > 0;
 }
 
