@@ -4,7 +4,7 @@
  * Seis pestañas: Equipo (por persona y por equipo, en el mes, trimestre, semestre o año: los días que entró y la IA que
  * disparó), Para qué se usa (lo que propone Nexus y qué pasó con eso, por módulo, tipo y equipo), IA por cliente (cuánta
  * IA se gastó por empresa y qué se usó de lo que propuso ahí), Procesos de IA (por proceso: costo, corridas, fallos y qué
- * se usa), Conclusiones (una lectura con reglas) y Reuniones sin grabar. Solo SUPER_ADMIN: el detalle por persona es
+ * se usa; con «Hablar con Nexus» debajo, 22 nov), Conclusiones (una lectura con reglas) y Reuniones sin grabar. Solo SUPER_ADMIN: el detalle por persona es
  * dato sensible. En orden alfabético, sin ranking.
  */
 import { redirect } from "next/navigation";
@@ -32,6 +32,8 @@ import { concluir } from "@/lib/uso/conclusiones";
 import UsoDelEquipo from "@/components/uso/UsoDelEquipo";
 import PestanasDeUso from "@/components/uso/PestanasDeUso";
 import { ConclusionesDeUso, IaPorCliente, ProcesosDeIa } from "@/components/uso/IaDeNexus";
+import HablarConNexusEnUso from "@/components/uso/HablarConNexusEnUso";
+import { usoDeHablarConNexus } from "@/lib/uso/hablar-con-nexus-server";
 import { Cifra, Tabla } from "@/components/uso/piezas";
 import { TANDA_DE_LA_META, metaDeLasNovedades } from "@/lib/uso/meta-de-las-novedades";
 import { DIAS_POSIBLES, VISTAS_DE_USO, type DiasDeIa, type VistaDeUso } from "@/lib/uso/vistas";
@@ -71,7 +73,12 @@ export default async function UsoDeNexusPage({ searchParams }: { searchParams: P
       {vista === "equipo" && <UsoDelEquipo datos={await usoPorPeriodo(periodo, ahora)} />}
       {vista === "propuesto" && <ParaQueSeUsa ahora={ahora} />}
       {vista === "clientes" && <IaPorCliente datos={await datosDeIa(dias, ahora)} />}
-      {vista === "procesos" && <ProcesosDeIa datos={await datosDeIa(dias, ahora)} />}
+      {vista === "procesos" && (
+        <div className="space-y-8">
+          <ProcesosDeIa datos={await datosDeIa(dias, ahora)} />
+          <HablarConNexusEnUso datos={await usoDeHablarConNexus(dias, ahora).catch(() => null)} />
+        </div>
+      )}
       {vista === "conclusiones" && <Conclusiones ahora={ahora} dias={dias} />}
       {vista === "reuniones" && <ReunionesSinGrabar datos={sinGrabar} />}
     </div>

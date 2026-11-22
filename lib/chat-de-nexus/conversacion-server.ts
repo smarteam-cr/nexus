@@ -22,6 +22,8 @@ import type { Prisma } from "@prisma/client";
 import { getAnthropic } from "@/lib/anthropic";
 import { conContextoDeIA } from "@/lib/ai/contexto-de-corrida";
 import { inicioDelDiaCr } from "@/lib/ai/presupuesto";
+import { avisoDelTope, mensajeDelTope } from "@/lib/ai/tope-de-nexus";
+import { topeDeNexusHoy } from "@/lib/ai/tope-de-nexus-server";
 import { prisma } from "@/lib/db/prisma";
 import {
   comoSeLee,
@@ -31,6 +33,7 @@ import {
   pedidoDelTurno,
   porQueNoSigue,
   puedePreguntar,
+  RESPUESTA_A_LA_CORTESIA,
   TOPES,
   type ContextoParaNexus,
   type MensajeDeLaConversacion,
@@ -43,6 +46,9 @@ import { leerLaRespuesta, pedidoDeLaRespuesta, PREGUNTAS_POR_DIA, type FuenteDeL
 export const MODO_DEL_CHAT = "chat-de-nexus";
 /** El modo de la corrida que responde una pregunta sobre la cuenta. */
 export const MODO_DE_LA_RESPUESTA = "chat-de-nexus-respuesta";
+/** En `filters.boton` de una vuelta: de qué botón salió. */
+export const BOTON_ERA_UNA_PREGUNTA = "era-una-pregunta";
+export const BOTON_GUARDARLO_COMO_NOTA = "guardarlo-como-nota";
 
 export interface DondeConversa {
   /** El agente al que se le carga el gasto (el del módulo del lugar). */
@@ -56,7 +62,8 @@ export interface DondeConversa {
   filtros: Record<string, string>;
 }
 
-export type VueltaDeNexus = { ok: true; turno: ResultadoDelTurno; quedan: number } | { ok: false; status: number; error: string };
+/** `aviso`: desde el 80 % del tope del mes de Nexus conversando (lib/ai/tope-de-nexus.ts). */
+export type VueltaDeNexus = { ok: true; turno: ResultadoDelTurno; quedan: number; aviso?: string } | { ok: false; status: number; error: string };
 
 const conModo = (modo: string) => ({ filters: { path: ["modo"], equals: modo } }) satisfies Prisma.AgentRunWhereInput;
 const conversacionEn = (conversacion: string) => ({ filters: { path: ["conversacion"], equals: conversacion } }) satisfies Prisma.AgentRunWhereInput;
@@ -139,11 +146,18 @@ export async function correrUnaVuelta(o: {
   const lectura = comoSeLee(mensajes, { contar: o.contar, preguntar: o.preguntar });
   const loUltimo = mensajes[mensajes.length - 1]?.texto.trim().slice(0, TOPES.largoDelMensaje) ?? "";
   const vueltas = await vueltasHastaAhora(donde.email, conversacion);
+  // Un «gracias» o un «ok» solos: Nexus contesta corto, sin la IA, sin corrida y sin proponer guardar nada (22 nov).
+  if (lectura === "cortesia") return { ok: true, turno: { tipo: "cortesia", texto: RESPUESTA_A_LA_CORTESIA }, quedan: Math.max(0, TOPES.turnosPorConversacion - vueltas.deLaConversacion) };
   const tope = porQueNoSigue(vueltas.deLaConversacion, vueltas.deHoy);
   if (tope) return { ok: false, status: 429, error: tope };
   // Una pregunta segura con el tope del día ya cumplido no deja corrida: si la dejara, al volver la conversación la
   // mostraría como pregunta sin responder y lo que iba a guardarse no volvería («¿Era una pregunta?»).
   if (lectura === "pregunta" && vueltas.preguntasDeHoy >= PREGUNTAS_POR_DIA) return { ok: false, status: 429, error: topeDePreguntas() };
+  // El tope del mes de Nexus conversando (US$ 100, 22 nov): al llegar, no llama a la IA; desde el 80 %, avisa.
+  const mes = await topeDeNexusHoy();
+  if (mes.estado === "agotado") return { ok: false, status: 429, error: mensajeDelTope(mes) };
+  const aviso = avisoDelTope(mes);
+  const conAviso = aviso ? { aviso } : {};
   /** Las vueltas que le quedan a la conversación después de esta. */
   const quedan = Math.max(0, TOPES.turnosPorConversacion - vueltas.deLaConversacion - 1);
 
@@ -155,7 +169,8 @@ export async function correrUnaVuelta(o: {
       status: "RUNNING",
       stepLabel: "Hablar con Nexus",
       triggeredByEmail: donde.email,
-      filters: { modo: MODO_DEL_CHAT, superficie: donde.superficie, conversacion, ...donde.filtros } as Prisma.InputJsonValue,
+      // `boton`: la vuelta salió de «¿Era una pregunta?» o de «Guardarlo como nota» (el conteo de «Uso de Nexus», 22 nov).
+      filters: { modo: MODO_DEL_CHAT, superficie: donde.superficie, conversacion, ...donde.filtros, ...(o.preguntar ? { boton: BOTON_ERA_UNA_PREGUNTA } : o.contar ? { boton: BOTON_GUARDARLO_COMO_NOTA } : {}) } as Prisma.InputJsonValue,
       // Los mensajes de esta vuelta: de acá se reconstruye la conversación al volver (./guardada.ts).
       output: JSON.stringify({ mensajes }),
     },
@@ -185,7 +200,7 @@ export async function correrUnaVuelta(o: {
     await prisma.agentRun
       .update({ where: { id: run.id }, data: { status: "ERROR", output: JSON.stringify({ error: e instanceof Error ? e.message : String(e), mensajes }) } })
       .catch(() => {});
-    return { ok: true, turno: NO_SE_PUDO_LEER, quedan };
+    return { ok: true, turno: NO_SE_PUDO_LEER, quedan, ...conAviso };
   }
 
   if (turno.tipo === "consulta") {
@@ -206,9 +221,9 @@ export async function correrUnaVuelta(o: {
     }
     // La respuesta con sus citas queda en la vuelta: al volver, la conversación la muestra igual.
     await anotarLaVuelta(run.id, { respuesta });
-    return { ok: true, turno: { tipo: "respuesta", respuesta }, quedan };
+    return { ok: true, turno: { tipo: "respuesta", respuesta }, quedan, ...conAviso };
   }
-  return { ok: true, turno, quedan };
+  return { ok: true, turno, quedan, ...conAviso };
 }
 
 /**

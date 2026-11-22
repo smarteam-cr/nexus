@@ -20,7 +20,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Alert, BotonDeDictado, Textarea } from "@/components/ui";
 import { BotonAzul, BotonEnlace } from "@/components/ui/sistema";
 import { cn } from "@/lib/cn";
-import { notaDeLaConversacion, paraContarComoNota, paraPreguntar, TOPES, type ResultadoDelTurno } from "@/lib/chat-de-nexus/conversacion";
+import { notaDeLaConversacion, paraContarComoNota, paraPreguntar, paraSeguirDespuesDeGuardar, TOPES, type ResultadoDelTurno } from "@/lib/chat-de-nexus/conversacion";
 import type { MensajeGuardado } from "@/lib/chat-de-nexus/guardada";
 import type { CitaDeLaRespuesta, RespuestaDeNexus } from "@/lib/chat-de-nexus/respuesta";
 import TextoConFormato from "./TextoConFormato";
@@ -98,6 +98,12 @@ export interface PanelDeNexusProps {
   sePuedePreguntar?: boolean;
   /** «¿Era una pregunta? Respóndela»: el lugar olvida lo que iba a guardarse (vuelve a no estar `terminado`). */
   alVolverAConversar?: () => void;
+  /**
+   * Ya se guardó y no queda nada a medias (22 nov): debajo de lo que pinta el lugar vuelve el cuadro de escribir. Al mandar,
+   * el lugar olvida lo guardado (vuelve a no estar `terminado`) y lo que la persona contó queda marcado como guardado: lo
+   * próximo arma una nota nueva, sin repetir la anterior. Sin esto, la conversación termina en «Nueva conversación».
+   */
+  alSeguir?: () => void;
   disabled?: boolean;
 }
 
@@ -112,6 +118,7 @@ export default function PanelDeNexus({
   alReiniciar,
   sePuedePreguntar = false,
   alVolverAConversar,
+  alSeguir,
   disabled,
 }: PanelDeNexusProps) {
   const { id: conversacion, mensajes } = c;
@@ -119,6 +126,8 @@ export default function PanelDeNexus({
   const [texto, setTexto] = useState("");
   const [pensando, setPensando] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Desde el 80 % del tope del mes de Nexus conversando, el servidor lo avisa en cada vuelta (lib/ai/tope-de-nexus.ts).
+  const [avisoDelMes, setAvisoDelMes] = useState<string | null>(null);
   // La persona eligió «Guardarlo como nota»: debajo de lo que iba a guardarse no vuelve «¿Era una pregunta?» (sin ida y
   // vuelta entre los dos botones).
   const [contadoAMano, setContadoAMano] = useState(false);
@@ -138,11 +147,11 @@ export default function PanelDeNexus({
   /**
    * Una vuelta: `t` va al final de `base`. `modo`: «contar», lo último se cuenta aunque tenga forma de pregunta («Guardarlo
    * como nota»); «preguntar», se responde («¿Era una pregunta?»). Si falla, la conversación vuelve a como estaba y, en un
-   * envío normal, lo escrito vuelve al cuadro.
+   * envío normal, lo escrito vuelve al cuadro. `antes`: a qué vuelve si falla (al seguir después de guardar, con lo
+   * guardado ya marcado: el lugar ya lo olvidó).
    */
-  const mandar = async (t: string, base: MensajeEnPantalla[], modo: "normal" | "contar" | "preguntar") => {
+  const mandar = async (t: string, base: MensajeEnPantalla[], modo: "normal" | "contar" | "preguntar", antes: MensajeEnPantalla[] = mensajes) => {
     if (!t || pensando) return;
-    const antes = mensajes;
     const conLaPersona: MensajeEnPantalla[] = [...base, { de: "persona", texto: t }];
     setMensajes(conLaPersona);
     if (modo === "normal") setTexto("");
@@ -155,11 +164,16 @@ export default function PanelDeNexus({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ conversacion, mensajes: paraMandar, ...(modo === "contar" ? { contar: true } : modo === "preguntar" ? { preguntar: true } : {}) }),
       });
-      const j = (await r.json().catch(() => null)) as { turno?: ResultadoDelTurno; error?: string } | null;
+      const j = (await r.json().catch(() => null)) as { turno?: ResultadoDelTurno; error?: string; aviso?: string } | null;
       if (!r.ok || !j?.turno) throw new Error(j?.error ?? "Nexus no pudo responder. Inténtalo de nuevo.");
+      setAvisoDelMes(j.aviso ?? null);
       const turno = j.turno;
       if (turno.tipo === "pregunta") {
         setMensajes([...conLaPersona, { de: "nexus", texto: turno.preguntas.join("\n") }]);
+      } else if (turno.tipo === "cortesia") {
+        // Un «gracias» o un «ok»: ni va a la nota ni se ofrece guardarlo.
+        const conLaCortesia = conLaPersona.map((m, i) => (i === conLaPersona.length - 1 ? { ...m, es: "cortesia" as const } : m));
+        setMensajes([...conLaCortesia, { de: "nexus", es: "cortesia", texto: turno.texto }]);
       } else if (turno.tipo === "respuesta") {
         // «¿Era una pregunta?»: recién con la respuesta en la mano el lugar olvida lo que iba a guardarse. Si fallaba
         // antes, lo propuesto seguía a la vista con su «Guardar».
@@ -183,7 +197,16 @@ export default function PanelDeNexus({
     }
   };
 
-  const enviar = () => mandar(texto.trim(), mensajes, "normal");
+  const enviar = () => {
+    const t = texto.trim();
+    if (!terminado) return mandar(t, mensajes, "normal");
+    if (!alSeguir || !t || pensando) return;
+    // Seguir después de guardar: lo guardado queda marcado y el lugar lo olvida.
+    const base = paraSeguirDespuesDeGuardar(mensajes);
+    setMensajes(base);
+    alSeguir();
+    return mandar(t, base, "normal", base);
+  };
 
   /** «Guardarlo como nota»: lo que la persona escribió se cuenta, y la respuesta sale de la conversación. */
   const contarComoNota = (i: number) => {
@@ -207,6 +230,21 @@ export default function PanelDeNexus({
     setContadoAMano(false);
     alReiniciar();
   };
+
+  // Después de guardar, el cuadro vuelve debajo de lo guardado, sin robar el foco a «Aplicar».
+  const cuadro = (
+    <CuadroDeEscribir
+      texto={texto}
+      setTexto={setTexto}
+      enviar={() => void enviar()}
+      dictado={dictado}
+      setError={setError}
+      conMensajes={mensajes.length > 0}
+      placeholder={placeholder}
+      apagado={!!disabled || pensando}
+      autoFocus={!terminado}
+    />
+  );
 
   return (
     <div className="flex flex-col gap-4">
@@ -247,43 +285,19 @@ export default function PanelDeNexus({
 
       {pensando && <p className="text-2xs text-fg-muted" aria-live="polite">Nexus está leyendo…</p>}
       {error && <Alert variant="danger">{error}</Alert>}
+      {avisoDelMes && !error && <p className="text-2xs text-fg-muted">{avisoDelMes}</p>}
 
       {terminado ? (
         // Mientras Nexus responde «¿Era una pregunta?», lo que pinta el lugar («Guardar», «No guardar», «Aplicar») espera:
         // la respuesta que llega después no puede deshacer lo que se apretó entretanto.
-        <fieldset disabled={pensando} className="m-0 min-w-0 border-0 p-0">
-          {children}
-        </fieldset>
+        <>
+          <fieldset disabled={pensando} className="m-0 min-w-0 border-0 p-0">
+            {children}
+          </fieldset>
+          {alSeguir && cuadro}
+        </>
       ) : (
-        <div className="flex flex-col gap-2">
-          <div className="relative">
-            <Textarea
-              className="pr-11"
-              value={texto}
-              onChange={(e) => setTexto(e.target.value.slice(0, TOPES.largoDelMensaje))}
-              onKeyDown={(e) => {
-                // Enter envía, como el botón; Shift+Enter baja de renglón. Mientras se compone un acento, no envía. En el
-                // celular (puntero táctil) Enter baja de renglón: ahí no hay Shift y se envía con el botón.
-                if (e.key !== "Enter" || e.shiftKey || e.nativeEvent.isComposing || esTactil()) return;
-                e.preventDefault();
-                void enviar();
-              }}
-              rows={mensajes.length ? 3 : 5}
-              maxLength={TOPES.largoDelMensaje}
-              autoFocus
-              disabled={disabled || pensando}
-              aria-label={mensajes.length ? "Tu mensaje" : "Lo que le cuentas o le preguntas a Nexus"}
-              placeholder={mensajes.length ? "Tu respuesta, u otra pregunta…" : placeholder}
-            />
-            <BotonDeDictado variante="icono" className="absolute bottom-2 right-2" onTexto={dictado} onError={setError} disabled={disabled || pensando} />
-          </div>
-          <div className="flex items-center justify-between gap-2">
-            <p className="text-2xs text-fg-muted">Si cuentas algo, te muestro qué cambia y lo guardas tú. Enter envía; Shift+Enter, otro renglón.</p>
-            <BotonAzul disabled={disabled || pensando || !texto.trim()} onClick={() => void enviar()}>
-              Enviar
-            </BotonAzul>
-          </div>
-        </div>
+        cuadro
       )}
       {(terminado || mensajes.length > 0) && (
         <div>
@@ -292,6 +306,61 @@ export default function PanelDeNexus({
           </BotonEnlace>
         </div>
       )}
+    </div>
+  );
+}
+
+/** El cuadro de escribir o dictar, con su «Enviar». */
+function CuadroDeEscribir({
+  texto,
+  setTexto,
+  enviar,
+  dictado,
+  setError,
+  conMensajes,
+  placeholder,
+  apagado,
+  autoFocus,
+}: {
+  texto: string;
+  setTexto: (t: string) => void;
+  enviar: () => void;
+  dictado: (frase: string) => void;
+  setError: (e: string) => void;
+  conMensajes: boolean;
+  placeholder: string;
+  apagado: boolean;
+  autoFocus: boolean;
+}) {
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="relative">
+        <Textarea
+          className="pr-11"
+          value={texto}
+          onChange={(e) => setTexto(e.target.value.slice(0, TOPES.largoDelMensaje))}
+          onKeyDown={(e) => {
+            // Enter envía, como el botón; Shift+Enter baja de renglón. Mientras se compone un acento, no envía. En el
+            // celular (puntero táctil) Enter baja de renglón: ahí no hay Shift y se envía con el botón.
+            if (e.key !== "Enter" || e.shiftKey || e.nativeEvent.isComposing || esTactil()) return;
+            e.preventDefault();
+            enviar();
+          }}
+          rows={conMensajes ? 3 : 5}
+          maxLength={TOPES.largoDelMensaje}
+          autoFocus={autoFocus}
+          disabled={apagado}
+          aria-label={conMensajes ? "Tu mensaje" : "Lo que le cuentas o le preguntas a Nexus"}
+          placeholder={conMensajes ? "Tu respuesta, u otra pregunta…" : placeholder}
+        />
+        <BotonDeDictado variante="icono" className="absolute bottom-2 right-2" onTexto={dictado} onError={setError} disabled={apagado} />
+      </div>
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-2xs text-fg-muted">Si cuentas algo, te muestro qué cambia y lo guardas tú. Enter envía; Shift+Enter, otro renglón.</p>
+        <BotonAzul disabled={apagado || !texto.trim()} onClick={enviar}>
+          Enviar
+        </BotonAzul>
+      </div>
     </div>
   );
 }

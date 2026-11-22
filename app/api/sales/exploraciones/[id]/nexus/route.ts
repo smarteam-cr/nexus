@@ -12,7 +12,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { cuerpoInvalido } from "@/lib/api/cuerpo-invalido";
-import { mensajesValidos, TOPES } from "@/lib/chat-de-nexus/conversacion";
+import { MARCAS_DEL_MENSAJE, mensajesValidos, TOPES } from "@/lib/chat-de-nexus/conversacion";
 import { guardAccessToClient } from "@/lib/auth/api-guards";
 import { guardDeLaExploracion } from "@/lib/exploraciones/guardia";
 import { vueltaEnLaPreventa } from "@/lib/exploraciones/nexus-en-la-preventa-server";
@@ -22,9 +22,11 @@ type Ctx = { params: Promise<{ id: string }> };
 const CuerpoSchema = z.object({
   conversacion: z.string().regex(/^[a-z0-9-]{8,64}$/i),
   mensajes: z
-    .array(z.object({ de: z.enum(["persona", "nexus"]), texto: z.string().max(TOPES.largoDelMensaje), es: z.enum(["consulta", "respuesta"]).optional() }))
+    .array(z.object({ de: z.enum(["persona", "nexus"]), texto: z.string().max(TOPES.largoDelMensaje), es: z.enum(MARCAS_DEL_MENSAJE).optional() }))
     .min(1)
-    .max(TOPES.mensajes),
+    // Con los «gracias» y los «Guardado» (que no son vueltas) una conversación pasa de `TOPES.mensajes`: se aceptan más y
+    // `mensajesValidos` se queda con los últimos (22 nov). Antes de esto, la conversación se trababa en «Cuerpo inválido».
+    .max(TOPES.mensajes * 4),
   /** «Guardarlo como nota»: lo último se cuenta aunque tenga forma de pregunta. */
   contar: z.boolean().optional(),
   /** «Era una pregunta»: lo último se responde, sin pasar por el modelo que clasifica. */
@@ -44,5 +46,5 @@ export async function POST(req: NextRequest, { params }: Ctx) {
   const puedeVerLaCuenta = async (clientId: string) => !((await guardAccessToClient(clientId)) instanceof NextResponse);
   const r = await vueltaEnLaPreventa(id, cuerpo.data.conversacion, mensajes, guard.email, puedeVerLaCuenta, { contar: cuerpo.data.contar, preguntar: cuerpo.data.preguntar });
   if (!r.ok) return NextResponse.json({ error: r.error }, { status: r.status });
-  return NextResponse.json({ turno: r.turno, quedan: r.quedan });
+  return NextResponse.json({ turno: r.turno, quedan: r.quedan, ...(r.aviso ? { aviso: r.aviso } : {}) });
 }

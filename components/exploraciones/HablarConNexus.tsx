@@ -21,6 +21,9 @@
  * (…/nexus/conversacion, lib/chat-de-nexus/guardada.ts), con lo propuesto y lo que se hizo con cada cambio; lo que no se
  * guardó vuelve con su «Guardar». La cuenta regresiva de una conversación de antes no vuelve a correr. «Nueva
  * conversación» (y «No guardar») la cierra.
+ * SEGUIR (22 nov, etapa 0 del plan maestro): con la nota guardada y revisada, sin un «Aplicar» pendiente ni la cuenta
+ * regresiva a la vista, el cuadro de escribir vuelve debajo (`alSeguir`): lo ya guardado queda marcado y no se repite en la
+ * nota siguiente. Un «gracias» o un «ok» no se ofrece guardar (lib/chat-de-nexus/conversacion.ts › `esCortesia`).
  * Convive con «Agregar algo que sabes» (components/exploraciones/LoQueSabes.tsx): es otra puerta a las mismas notas.
  */
 import { useEffect, useRef, useState, type ReactNode } from "react";
@@ -28,6 +31,7 @@ import { Alert, Button, Drawer } from "@/components/ui";
 import { BotonAzul, BotonBlanco, BotonTexto } from "@/components/ui/sistema";
 import PanelDeNexus, { conversacionNueva, type ConversacionEnPantalla, type TurnoListo } from "@/components/chat-de-nexus/PanelDeNexus";
 import AvisoDeImpacto from "@/components/impacto/AvisoDeImpacto";
+import { OMITIDO_POR_EL_TOPE } from "@/lib/ai/tope-de-nexus";
 import { diaConAnio } from "@/lib/exploraciones/fechas";
 import { EVENTO_HECHOS_DE_LAS_NOTAS } from "@/lib/exploraciones/hechos-de-las-notas";
 import { claveNuevaDeLoQueSabes, MAX_LO_QUE_SABES, loQueSabeElEquipo } from "@/lib/exploraciones/lo-que-sabes";
@@ -48,7 +52,7 @@ import { CORRIENDO_LA_ESCALA, useRehacerLaEscala } from "./rehacer-la-escala";
 
 /** Lo que responde …/nexus/guardado (los tipos del servidor, sin importarlo). */
 interface Guardado {
-  hechos: { estado: "escritos"; escritos: number } | { estado: "ya-estaban"; escritos: number } | { estado: "apagados" | "sin-hechos" | "sin-conversacion" };
+  hechos: { estado: "escritos"; escritos: number } | { estado: "ya-estaban"; escritos: number } | { estado: "apagados" | "sin-hechos" | "sin-conversacion" | "la-nota-cambio" };
   impacto: { cambia: boolean; aviso: string; omitido?: string };
   /** La revisión no volvió (la red, el servidor o el agente): no se sabe si cambia La escala. */
   fallo?: true;
@@ -357,7 +361,11 @@ function LoQueQuedo({
     else if (!guardado.impacto.cambia)
       escala = (
         <p className="text-xs text-fg-muted">
-          {guardado.impacto.omitido === "sin-entregable" ? "La escala todavía no tiene su Resumen armado: no hay página que rehacer." : "No cambia la página de La escala."}
+          {guardado.impacto.omitido === "sin-entregable"
+            ? "La escala todavía no tiene su Resumen armado: no hay página que rehacer."
+            : guardado.impacto.omitido === OMITIDO_POR_EL_TOPE
+              ? "Nexus llegó al tope del mes para conversar y no revisó si esto cambia la página de La escala. Revísala tú en «La escala»."
+              : "No cambia la página de La escala."}
         </p>
       );
     else if (aviso === "abierto")
@@ -538,6 +546,14 @@ export default function HablarConNexus() {
     setAviso("abierto");
   };
 
+  // Seguir conversando después de guardar (22 nov): con la nota guardada y revisada, sin un «Aplicar» pendiente ni la
+  // cuenta regresiva de La escala a la vista (mandar algo nuevo los borraría de la pantalla).
+  const sePuedeSeguir =
+    !!listo?.clave &&
+    !!guardado &&
+    !listo.cambios.some((c) => esCasillaParaNexus(c.destino) && (estados[c.id] ?? "propuesto") !== "aplicado" && estados[c.id] !== "descartado") &&
+    !(guardado.impacto.cambia && !guardado.fallo && aviso === "abierto");
+
   const cerrar = () => {
     setAbierto(false);
     // Cerrar con la cuenta regresiva a la vista la cancela (se desmonta), y al volver no arranca otra. Mientras la
@@ -574,6 +590,7 @@ export default function HablarConNexus() {
             alReiniciar={olvidar}
             sePuedePreguntar={!!listo && !listo.clave && !listo.contado && !guardando && !claveDeLaNota(exp.estado.contenido.notas, listo)}
             alVolverAConversar={volverAConversar}
+            alSeguir={sePuedeSeguir ? volverAConversar : undefined}
           >
             {listo && (
               <LoQueQuedo

@@ -10,6 +10,8 @@ import "server-only";
 import type { Prisma } from "@prisma/client";
 import { getAnthropic } from "@/lib/anthropic";
 import { conContextoDeIA } from "@/lib/ai/contexto-de-corrida";
+import { OMITIDO_POR_EL_TOPE } from "@/lib/ai/tope-de-nexus";
+import { topeDeNexusHoy } from "@/lib/ai/tope-de-nexus-server";
 import { prisma } from "@/lib/db/prisma";
 import { antesDeLlamar, leerElImpacto, pedidoDelImpacto, SIN_IMPACTO, type EntregableParaElImpacto, type ImpactoDeLaNota, type NotaDelEquipo } from "./impacto";
 
@@ -28,6 +30,8 @@ export interface DondeCorre {
 export async function evaluarElImpacto(nota: NotaDelEquipo, entregable: EntregableParaElImpacto, d: DondeCorre): Promise<ImpactoDeLaNota & { omitido?: string }> {
   const omitido = antesDeLlamar(nota, entregable);
   if (omitido) return { ...SIN_IMPACTO, omitido };
+  // Cuenta en el tope del mes de Nexus conversando (lib/ai/tope-de-nexus.ts): al llegar, no llama a la IA.
+  if ((await topeDeNexusHoy()).estado === "agotado") return { ...SIN_IMPACTO, omitido: OMITIDO_POR_EL_TOPE };
   const run = await prisma.agentRun.create({
     data: {
       agentSlug: d.agentSlug,

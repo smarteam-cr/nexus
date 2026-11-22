@@ -16422,3 +16422,22 @@ todavía: cada etapa arranca cuando él lo dice.
   silencio; lo interno nunca llega a un documento que ve el cliente, y el corte lo hace el código.
 - **Estado del 22 nov:** los SQL del 21 nov (hechos de una nota, historial de versiones) corrieron y «Hablar con Nexus»
   y el historial están en producción (3deb62b0); las dos notas «resumelos» de Cemaco · Ecuador se borraron.
+- **Etapa 0, construida el 22 nov (sin SQL):**
+  - **Quitar una nota se lleva sus hechos; editarla se lleva solo los que ya no dice.** Un hecho de una nota editada se
+    queda si su cita sigue escrita en el texto nuevo (la misma comprobación con que nació), y se borra si no. No se
+    inventan hechos nuevos al editar: eso pide la IA, y la nota editada a mano no pasa por ella (`retirarHechosDeNotasCambiadas`,
+    lib/seguimiento/hechos-server.ts, llamado al guardar la preventa). Si la nota se edita mientras Nexus la revisa
+    después de guardarla, sus hechos no se escriben, o se retiran si cambió en el medio (`alGuardarLaNota`). *Por qué borrar y no marcar:* un hecho de una nota
+    es interno y delegado en la preventa; no hay a quién avisarle, y dejarlo mentía debajo de la nota.
+  - **Un «gracias», un «ok» o un «listo» solos** los contesta Nexus sin la IA, sin corrida y sin ofrecer guardar
+    (`esCortesia`). Si contestan una pregunta de Nexus («¿Es al mes?» → «ok»), cuentan: ahí «ok» es un sí.
+  - **Después de guardar se sigue conversando** en la misma conversación: lo guardado queda marcado («guardado») y no
+    vuelve a la nota siguiente ni respalda sus cambios, y la nota nueva arranca con sus dos rondas de preguntas. Solo cuando
+    no queda un «Aplicar» pendiente ni la cuenta regresiva de La escala: mandar algo nuevo los borraría de la pantalla. La
+    ruta acepta más de 14 mensajes y se queda con los últimos (los «gracias» y los «Guardado» no son vueltas).
+  - **El tope de US$ 100** suma `LlmCall.costUsd` del mes de Costa Rica con origen `chat:` (contar y preguntar) o
+    `impacto:` (el aviso de La escala). Al llegar, ni la conversación ni el impacto llaman a la IA; desde US$ 80, cada
+    vuelta lo dice debajo. Si no se puede leer el gasto, no frena (la regla del presupuesto de la IA). Mejorar documentos y
+    lo que vuelve a la memoria sumarán su origen cuando existan (lib/ai/tope-de-nexus.ts).
+  - **El conteo en «Uso de Nexus»** (pestaña Procesos de IA) sale de las corridas que ya existían; «¿Era una pregunta?» y
+    «Guardarlo como nota» se marcan en la corrida desde este día, así que antes cuentan cero.
