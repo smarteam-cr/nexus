@@ -40,12 +40,6 @@ const NOTAS_EN_EL_CONTEXTO = 8;
 const LARGO_DE_CADA_NOTA = 400;
 const LARGO_DE_LA_PAGINA = 2_000;
 
-/** El nombre de quien conversa (TeamMember), o la parte del correo antes de la arroba. */
-async function nombreDe(email: string): Promise<string> {
-  const m = await prisma.teamMember.findFirst({ where: { email: { equals: email, mode: "insensitive" } }, select: { name: true } });
-  return m?.name?.trim() || email.split("@")[0];
-}
-
 /** La acción 1: lo que Nexus lee para conversar en esta preventa. */
 export async function contextoParaNexus(fila: FilaDeExploracion, estado: EstadoDeExploracion): Promise<ContextoParaNexus> {
   const [cliente, escala] = await Promise.all([estadoConElCliente(fila.id), laEscalaComoEntregable(fila.id)]);
@@ -132,17 +126,19 @@ export async function vueltaEnLaPreventa(
   mensajes: MensajeDeLaConversacion[],
   email: string,
   puedeVerLaCuenta: (clientId: string) => Promise<boolean>,
+  o: { contar?: boolean } = {},
 ): Promise<VueltaDeNexus> {
   const p = await laPreventa(exploracionId);
   if (!p.ok) return p;
-  const [contexto, nombre] = await Promise.all([contextoParaNexus(p.fila, p.estado), nombreDe(email)]);
+  const contexto = await contextoParaNexus(p.fila, p.estado);
   return correrUnaVuelta({
     contexto,
     mensajes,
     conversacion,
+    contar: o.contar,
     valorValido,
     leerLaCuenta: async () => fuentesDeLaCuenta(p.fila, p.estado, await puedeVerLaCuenta(p.fila.clientId).catch(() => false)),
-    donde: { agentSlug: AGENTE_DE_LA_EXPLORACION, superficie: "preventa", clientId: p.fila.clientId, projectId: null, email, nombre, filtros: filtrosDe(exploracionId) },
+    donde: { agentSlug: AGENTE_DE_LA_EXPLORACION, superficie: "preventa", clientId: p.fila.clientId, projectId: null, email, filtros: filtrosDe(exploracionId) },
   });
 }
 

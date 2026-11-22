@@ -16114,8 +16114,25 @@ quita. El mismo día, Elías sumó que también RESPONDA preguntas sobre la cuen
   del «Usar») y una cita que la persona dijo, palabra por palabra (una respuesta corta, «200 al mes», vale entera). Sin
   cita no hay cambio. Lo que no pasa se descarta y se cuenta.
 - **Responder una pregunta sobre la cuenta** (lib/chat-de-nexus/respuesta.ts; Elías, 21 nov: «¿qué dijo Centauro de la
-  cobranza?», «¿quién decide?»). La vuelta de la conversación decide si la persona cuenta algo o pregunta
-  (`tipo: "consulta"`), y una SEGUNDA llamada responde. Sin RAG ni embeddings: lee entero lo de esa cuenta y nada más:
+  cobranza?», «¿quién decide?»). **Si es una pregunta lo decide el CÓDIGO, no el modelo** (`pareceUnaPregunta`; Elías,
+  21 nov, en Cemaco · Ecuador: «Es importante esto de que crédito cobro contacta a los clientes…» salió como pregunta, el
+  modelo la reescribió como «¿Qué dijo Elías sobre crédito y cobro…?» porque el pedido decía «Te cuenta Elías», nadie la
+  encontró en las reuniones y no se guardó nada). Lo principal es AGREGAR contexto: ante la duda, es contar. Es pregunta
+  solo si abre con «¿» o cierra con «?» (una coletilla como «¿no?» o «¿verdad?» no cuenta), si arranca con una palabra
+  de pregunta CON tilde (qué, quién, cuánto, cuál, dónde, por qué, cómo, cuándo…) o si le pide algo a Nexus («dime»,
+  «resume», «quiero saber», «averigua», «revisa lo que»). Sin tilde no cuenta, a propósito: «Que cada gestor tiene
+  muchas cuentas» o «Quien decide es el gerente» cuentan algo, y el dictado abre muchas frases con «Que…» (lo encontró
+  la revisión del 21 nov con 16 frases). Tampoco «busca», «explica», «lista» ni «hay algo de» solos («Busca crecer en
+  Guatemala»). Si no es pregunta, el pedido lo dice y una «consulta» del modelo se toma como «listo» sin cambios: la nota
+  se guarda igual. Con forma de pregunta, el modelo todavía puede ver que contesta algo que Nexus le preguntó; pero si
+  lleva su signo y no contesta a Nexus (`esPreguntaSinDuda`), se responde aunque el modelo diga «listo»: una pregunta
+  de verdad no se guarda como nota. Lo que se responde son las PALABRAS de la persona, nunca una reescritura del modelo,
+  y el pedido de la vuelta ya no lleva el nombre de quien escribe («te escribe alguien del equipo»; quién y cuándo los
+  pone el servidor en la nota). Debajo de la ÚLTIMA respuesta va «¿Era algo que querías contar? Guardarlo como nota»:
+  saca el par pregunta-respuesta y vuelve a mandar lo escrito con `contar` (se cuenta aunque tenga forma de pregunta; es
+  una vuelta más y cuenta en los topes). Solo la última: una del medio, movida al final, se leería como la respuesta a lo
+  que Nexus preguntó después. Con forma de pregunta (`consulta`), una SEGUNDA llamada responde. Sin RAG ni embeddings:
+  lee entero lo de esa cuenta y nada más:
   las notas del equipo, las tarjetas, lo aceptado y las reuniones con transcripción, por el chokepoint
   (`reunionesDeLaCuenta`, lib/exploraciones/fuentes.ts: los ids salen de `getClientSessions` de SU empresa; invariante
   1). Si no caben (280.000 caracteres, unos 75.000 tokens), van primero las más recientes, enteras, y la respuesta dice
@@ -16187,8 +16204,12 @@ quita. El mismo día, Elías sumó que también RESPONDA preguntas sobre la cuen
   (`triggeredByEmail`), por el cliente de la fila y por la exploración en `filters`; nada de eso sale del navegador.
   Leerla no crea corridas: los topes siguen igual. La cuenta regresiva de una conversación de antes no vuelve a correr
   (dice qué avisó y manda a mirar La escala). Una corrida de antes de esto no trae mensajes: esa no vuelve.
-- **Lo que no queda garantizado:** que Sonnet pregunte bien y no de más, distinga bien contar de preguntar y elija la
-  tarjeta correcta (no se midió con conversaciones reales; por eso cada cambio espera el clic); que el lado de cada turno
+- **Lo que no queda garantizado:** que Sonnet pregunte bien y no de más y elija la tarjeta correcta (no se midió con
+  conversaciones reales; por eso cada cambio espera el clic); que la regla de la forma acierte siempre: una pregunta sin
+  signo ni tilde («que dijeron de la cobranza», dictada) se toma como algo que se cuenta y va a la nota, sin un botón
+  para volverla pregunta (se quita en «Lo que sabes» y se vuelve a preguntar con «¿»); y una exclamación con tilde
+  («¡Qué caos tienen en cobranza!») llega como posible pregunta y la decide el modelo (para eso está «Guardarlo como
+  nota»); que el lado de cada turno
   sea el correcto cuando Meet muestra un solo nombre (queda «no se sabe») o un nombre del equipo que no calza con el
   registrado (en una reunión con el cliente puede salir como «del cliente»); que lo que quedó afuera por el tope no tenga
   la respuesta (la respuesta lo avisa); los hechos de una nota que se edita o se borra no se rehacen ni se retiran (los

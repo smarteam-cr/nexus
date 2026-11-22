@@ -134,6 +134,77 @@ export function loQueConto(m: readonly MensajeDeLaConversacion[]): string[] {
   return m.filter((x) => x.de === "persona" && x.es !== "consulta").map((x) => x.texto.trim()).filter(Boolean);
 }
 
+/**
+ * Las palabras con que arranca una pregunta: SOLO con tilde. Sin tilde («que», «quien», «donde», «cuanto», «como»,
+ * «cuando») abren muchísimas oraciones que cuentan algo, y el dictado empieza muchas con «Que…» («Que cada gestor tiene
+ * muchas cuentas», «Quien decide es el gerente»). Una pregunta sin tilde y sin signo se toma como algo que se cuenta.
+ */
+const ARRANQUE_DE_PREGUNTA = /^(qué|quién(es)?|cuánt[oa]s?|cuál(es)?|dónde|adónde|por qué|para qué|cómo|cuándo|a quién|de qué|en qué|con quién)(?=[\s,.:;!]|$)/;
+/**
+ * Lo que le pide algo a Nexus en vez de contarlo. Solo pedidos que no pueden ser una oración sobre el cliente: «busca»,
+ * «explica», «lista» o «hay algo de» quedan fuera («Busca crecer en Guatemala», «Hay algo de resistencia en ventas»).
+ */
+const PIDE_ALGO =
+  /^(dime|dígame|cuéntame|resume|resúmeme|recuérdame|muéstrame|enumera|búscame|averigua|busca (lo que|qué|si|dónde|cuándo|quién)|revisa (lo que|qué|si)|quiero saber|necesito saber|me gustaría saber|me (dices|dirías|cuentas|puedes decir|puedes contar|podrías decir|podrías contar)|puedes (decirme|contarme|buscar)|podrías (decirme|contarme|buscar)|sabes (si|qué|cuándo|quién|cómo|cuánto|dónde))(?=[\s,.:;!]|$)/;
+/** Las coletillas que no vuelven pregunta lo que se cuenta: «Es importante, ¿no?». */
+const COLETILLA = /,?\s*¿\s*(no|verdad|cierto|sí|ok|eh|viste)\s*\?\s*$/;
+/** Lo que se dice antes de preguntar y no cuenta: «Oye, Nexus, …», «Y …», «Bueno, …». */
+const SALUDO = /^((y|oye|nexus|hola|bueno|ok|okay|a ver|una pregunta|pregunta)[,:\s]+)+/;
+
+/** ¿Lleva el signo de una pregunta de verdad? Abre con «¿» o cierra con «?», sin contar las coletillas. */
+function conSignoDePregunta(t: string): boolean {
+  const sin = t.replace(COLETILLA, "").trim();
+  return /^¿/.test(sin) || /\?\s*$/.test(sin);
+}
+
+/**
+ * ¿Lo que escribió la persona es claramente una PREGUNTA sobre la cuenta? Lo decide el código, no el modelo (Elías, 21 nov:
+ * «Es importante esto de que crédito cobro contacta a los clientes…» salió como pregunta y no se guardó). Es pregunta si
+ * abre con «¿» o cierra con «?» (una coletilla como «¿no?» no cuenta), si arranca con una palabra de pregunta CON tilde
+ * (qué, quién, cuánto, cuál, dónde, por qué, cómo, cuándo…) o si pide algo («dime», «resume», «quiero saber»,
+ * «averigua»). Todo lo demás es algo que cuenta: ante la duda, contar.
+ */
+export function pareceUnaPregunta(texto: string): boolean {
+  const t = texto.trim().toLowerCase();
+  if (!t) return false;
+  if (conSignoDePregunta(t)) return true;
+  const inicio = t.replace(/^[\s"«“'(¡-]+/, "").replace(SALUDO, "");
+  return ARRANQUE_DE_PREGUNTA.test(inicio) || PIDE_ALGO.test(inicio);
+}
+
+/**
+ * ¿Es una pregunta SIN DUDA? Lleva su signo y no contesta una pregunta que Nexus le acaba de hacer. Con esta, si el modelo
+ * igual dice «listo» (o pregunta de vuelta), se responde: la pregunta no se guarda como nota.
+ */
+export function esPreguntaSinDuda(m: readonly MensajeDeLaConversacion[], contar = false): boolean {
+  const ultimo = m[m.length - 1];
+  const antes = m[m.length - 2];
+  if (contar || !ultimo || ultimo.de !== "persona") return false;
+  const contesta = !!antes && antes.de === "nexus" && antes.es !== "respuesta";
+  return !contesta && conSignoDePregunta(ultimo.texto.trim().toLowerCase());
+}
+
+/** El último mensaje de la persona, si es una pregunta (lo que se responde, con sus palabras); null si cuenta algo. */
+export function laPreguntaDeLaPersona(m: readonly MensajeDeLaConversacion[], contar = false): string | null {
+  const ultimo = m[m.length - 1];
+  if (contar || !ultimo || ultimo.de !== "persona") return null;
+  return pareceUnaPregunta(ultimo.texto) ? ultimo.texto.trim() : null;
+}
+
+/**
+ * «¿Era algo que querías contar? Guardarlo como nota», debajo de la ÚLTIMA respuesta (`i`): lo que se manda en su lugar. Sale el
+ * par (lo que la persona escribió, marcado como consulta, y la respuesta de Nexus) y lo que escribió vuelve al final como
+ * algo que cuenta. null si `i` no es una respuesta a una consulta de la persona.
+ */
+export function paraContarComoNota<M extends MensajeDeLaConversacion>(m: readonly M[], i: number): { base: M[]; texto: string } | null {
+  // Solo la última: una del medio, movida al final, se leería como la respuesta a lo que Nexus preguntó después.
+  if (i !== m.length - 1) return null;
+  const respuesta = m[i];
+  const consulta = m[i - 1];
+  if (!respuesta || !consulta || respuesta.de !== "nexus" || respuesta.es !== "respuesta" || consulta.de !== "persona" || !consulta.texto.trim()) return null;
+  return { base: m.filter((_, k) => k !== i && k !== i - 1), texto: consulta.texto.trim() };
+}
+
 /** ¿Puede preguntar en esta vuelta? Solo si le quedan rondas. */
 export function puedePreguntar(m: readonly MensajeDeLaConversacion[]): boolean {
   return rondasDePreguntas(m) < TOPES.rondasDePreguntas;
@@ -156,7 +227,8 @@ CÓMO CONVERSAS
 - Si lo que contó es claro, no preguntas: respondes «listo» con los cambios.
 - Si falta algo que cambia adónde va o qué valor tiene (de qué período es una cifra, quién lo dijo, si es un hecho o una idea, a qué equipo del cliente toca), haces UNA o DOS preguntas cortas, en una sola vuelta. Nada de interrogatorios ni de preguntas por cortesía.
 - Cuando el pedido dice «YA NO PREGUNTES», respondes «listo» con lo que tengas.
-- Si la persona te PREGUNTA algo sobre la cuenta («¿qué dijo de la cobranza?», «¿quién decide?») en vez de contarte algo nuevo, no lo respondes tú: devuelves {"tipo":"consulta","pregunta":"<la pregunta completa, que se entienda sola>"}. Otra parte de Nexus la responde leyendo todo lo de la cuenta.
+- Casi siempre te CUENTAN algo, aunque empiece por «Es importante…», «Ojo con…» o «Esto de que…»: eso es contar, y va a la nota. Ante la duda, es contar.
+- Solo cuando el pedido dice que lo último tiene forma de pregunta, y de verdad pregunta algo sobre la cuenta («¿qué dijo de la cobranza?», «¿quién decide?»), no lo respondes tú: devuelves {"tipo":"consulta"}. Otra parte de Nexus la responde, con las palabras de la persona, leyendo todo lo de la cuenta.
 
 ADÓNDE VA CADA COSA
 - Solo a los destinos de la lista, con la forma que dice cada uno. Si nada calza, no propones cambios: la nota se guarda igual en «Lo que sabes del cliente».
@@ -173,7 +245,7 @@ ${escaleraParaElAgente()}
 
 RESPONDE SOLO UN OBJETO JSON, sin texto alrededor, con una de estas tres formas:
 {"tipo":"pregunta","preguntas":["…"]}
-{"tipo":"consulta","pregunta":"…"}
+{"tipo":"consulta"}
 {"tipo":"listo","cambios":[{"destino":"<clave>","valor":<según su forma>,"porque":"<una frase>","cita":"<palabras exactas>"}],"hechos":[{"tipo":"cuenta","frase":"…","cita":"…"}]}`;
 
 function bloqueDeLosDestinos(destinos: readonly DestinoDisponible[]): string {
@@ -191,15 +263,22 @@ function bloqueDeLaConversacion(m: readonly MensajeDeLaConversacion[]): string {
   return m.map((x) => `${quien(x)}: ${x.texto}`).join("\n\n");
 }
 
-/** El pedido de una vuelta. `quien`: el nombre de la persona que cuenta. */
-export function pedidoDelTurno(ctx: ContextoParaNexus, m: readonly MensajeDeLaConversacion[], quien: string): Anthropic.Messages.MessageCreateParamsNonStreaming {
+/**
+ * El pedido de una vuelta. `esPregunta`: lo que decidió el código (`laPreguntaDeLaPersona`). Sin el nombre de quien escribe,
+ * a propósito: con él, el modelo armaba preguntas sobre esa persona («¿qué dijo Elías…?»). Quién y cuándo los pone el
+ * servidor en la nota.
+ */
+export function pedidoDelTurno(ctx: ContextoParaNexus, m: readonly MensajeDeLaConversacion[], esPregunta: boolean): Anthropic.Messages.MessageCreateParamsNonStreaming {
   const pregunta = puedePreguntar(m);
   const texto = [
-    `Estás en ${ctx.donde}. La empresa: ${ctx.empresa}. Te cuenta ${quien}, del equipo de Smarteam.`,
+    `Estás en ${ctx.donde}. La empresa: ${ctx.empresa}. Te escribe alguien del equipo de Smarteam.`,
     ctx.contexto.trim() ? `=== LO QUE YA SE SABE (interno) ===\n${ctx.contexto.trim()}` : "",
     `=== LOS DESTINOS ===\n${bloqueDeLosDestinos(ctx.destinos)}`,
     `=== LA CONVERSACIÓN ===\n${bloqueDeLaConversacion(m)}`,
     pregunta ? "" : "YA NO PREGUNTES: responde «listo» con lo que tengas.",
+    esPregunta
+      ? "LO ÚLTIMO QUE ESCRIBIÓ TIENE FORMA DE PREGUNTA: si pregunta algo de la cuenta, devuelve {\"tipo\":\"consulta\"}; si te responde algo que le preguntaste, sigue como siempre."
+      : "LO ÚLTIMO QUE ESCRIBIÓ NO ES UNA PREGUNTA: te está contando algo. No devuelvas «consulta».",
   ]
     .filter(Boolean)
     .join("\n\n");
@@ -222,6 +301,17 @@ export interface OpcionesDeLaLectura {
   loQueDijo: readonly string[];
   /** Si todavía puede preguntar: si no, una pregunta se toma como «listo, sin cambios». */
   puedePreguntar: boolean;
+  /**
+   * La pregunta de la persona, con sus palabras, si el código decidió que lo último ES una pregunta
+   * (`laPreguntaDeLaPersona`); null o sin dar si cuenta algo. Sin ella, una «consulta» del modelo se toma como «listo, sin
+   * cambios»: la nota se guarda igual. Con ella, lo que se responde son esas palabras, nunca una reescritura del modelo.
+   */
+  laPregunta?: string | null;
+  /**
+   * La pregunta lleva su signo y no contesta a Nexus (`esPreguntaSinDuda`): aunque el modelo diga «listo» o pregunte de
+   * vuelta, se responde. Así una pregunta de verdad nunca se guarda como nota.
+   */
+  sinDuda?: boolean;
 }
 
 const objeto = (v: unknown): Record<string, unknown> => (v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : {});
@@ -286,9 +376,11 @@ export function leerElTurno(respuesta: Pick<Anthropic.Messages.Message, "content
   const crudo = primerObjeto(texto);
   if (!crudo) return NO_SE_PUDO_LEER;
 
+  if (o.sinDuda && o.laPregunta) return { tipo: "consulta", pregunta: o.laPregunta.slice(0, TOPES.largoDelMensaje) };
+
   if (crudo.tipo === "consulta") {
-    const pregunta = cadena(crudo.pregunta, 600);
-    return pregunta ? { tipo: "consulta", pregunta } : NO_SE_PUDO_LEER;
+    // Lo decide el código: sin forma de pregunta, la persona contó algo y su nota se guarda.
+    return o.laPregunta ? { tipo: "consulta", pregunta: o.laPregunta.slice(0, TOPES.largoDelMensaje) } : LISTO_SIN_CAMBIOS;
   }
 
   if (crudo.tipo === "pregunta") {

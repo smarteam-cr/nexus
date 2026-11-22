@@ -16,7 +16,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Alert, BotonDeDictado, Textarea } from "@/components/ui";
 import { BotonAzul, BotonEnlace } from "@/components/ui/sistema";
 import { cn } from "@/lib/cn";
-import { notaDeLaConversacion, TOPES, type ResultadoDelTurno } from "@/lib/chat-de-nexus/conversacion";
+import { notaDeLaConversacion, paraContarComoNota, TOPES, type ResultadoDelTurno } from "@/lib/chat-de-nexus/conversacion";
 import type { MensajeGuardado } from "@/lib/chat-de-nexus/guardada";
 import type { CitaDeLaRespuesta, RespuestaDeNexus } from "@/lib/chat-de-nexus/respuesta";
 
@@ -108,17 +108,25 @@ export default function PanelDeNexus({ urlDelTurno, placeholder, alQuedarListo, 
     setTexto(nuevo);
   };
 
-  const enviar = async () => {
-    const t = texto.trim();
+  /**
+   * Una vuelta: `t` va al final de `base`. `contar`: lo último se cuenta aunque tenga forma de pregunta («Guardarlo como
+   * nota»). Si falla, la conversación vuelve a como estaba y, en un envío normal, lo escrito vuelve al cuadro.
+   */
+  const mandar = async (t: string, base: MensajeEnPantalla[], contar: boolean) => {
     if (!t || pensando) return;
-    const conLaPersona: MensajeEnPantalla[] = [...mensajes, { de: "persona", texto: t }];
+    const antes = mensajes;
+    const conLaPersona: MensajeEnPantalla[] = [...base, { de: "persona", texto: t }];
     setMensajes(conLaPersona);
-    setTexto("");
+    if (!contar) setTexto("");
     setPensando(true);
     setError(null);
     try {
       const paraMandar = conLaPersona.map(({ de, texto: x, es }) => ({ de, texto: x, ...(es ? { es } : {}) }));
-      const r = await fetch(urlDelTurno, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ conversacion, mensajes: paraMandar }) });
+      const r = await fetch(urlDelTurno, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ conversacion, mensajes: paraMandar, ...(contar ? { contar: true } : {}) }),
+      });
       const j = (await r.json().catch(() => null)) as { turno?: ResultadoDelTurno; error?: string } | null;
       if (!r.ok || !j?.turno) throw new Error(j?.error ?? "Nexus no pudo responder. Inténtalo de nuevo.");
       const turno = j.turno;
@@ -134,13 +142,21 @@ export default function PanelDeNexus({ urlDelTurno, placeholder, alQuedarListo, 
         await alQuedarListo({ conversacion, nota: notaDeLaConversacion(conLaPersona), turno });
       }
     } catch (e) {
-      // Lo que escribió no se pierde: vuelve al cuadro.
-      setMensajes(mensajes);
-      setTexto(t);
+      // Lo que escribió no se pierde: vuelve al cuadro (o, al contarlo como nota, la respuesta vuelve a su lugar).
+      setMensajes(antes);
+      if (!contar) setTexto(t);
       setError(e instanceof Error ? e.message : "Nexus no pudo responder.");
     } finally {
       setPensando(false);
     }
+  };
+
+  const enviar = () => mandar(texto.trim(), mensajes, false);
+
+  /** «Guardarlo como nota»: lo que la persona escribió se cuenta, y la respuesta sale de la conversación. */
+  const contarComoNota = (i: number) => {
+    const c = paraContarComoNota(mensajes, i);
+    if (c) void mandar(c.texto, c.base, true);
   };
 
   const reiniciar = () => {
@@ -163,6 +179,14 @@ export default function PanelDeNexus({ urlDelTurno, placeholder, alQuedarListo, 
             >
               {m.de === "nexus" && <span className="mb-0.5 block text-2xs font-semibold text-brand">Nexus</span>}
               {m.respuesta ? <LaRespuesta r={m.respuesta} /> : m.texto}
+              {!terminado && paraContarComoNota(mensajes, i) && (
+                <p className="mt-2 flex flex-wrap items-center gap-x-1.5 border-t border-line pt-1.5 text-2xs text-fg-muted">
+                  ¿Era algo que querías contar?
+                  <BotonEnlace className="py-0 text-2xs" disabled={disabled || pensando} onClick={() => contarComoNota(i)}>
+                    Guardarlo como nota
+                  </BotonEnlace>
+                </p>
+              )}
             </li>
           ))}
         </ol>

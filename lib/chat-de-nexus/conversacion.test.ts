@@ -12,6 +12,10 @@ import {
   mensajesValidos,
   NO_SE_PUDO_LEER,
   notaDeLaConversacion,
+  esPreguntaSinDuda,
+  laPreguntaDeLaPersona,
+  pareceUnaPregunta,
+  paraContarComoNota,
   pedidoDelTurno,
   porQueNoSigue,
   primerObjeto,
@@ -50,8 +54,8 @@ describe("la conversación", () => {
     expect(puedePreguntar(una)).toBe(true);
     expect(puedePreguntar(dos)).toBe(false);
     const ctx: ContextoParaNexus = { donde: "la preventa", empresa: "Centauro", contexto: "", destinos: [] };
-    expect(String(pedidoDelTurno(ctx, una, "Liz").messages[0].content)).not.toContain("YA NO PREGUNTES");
-    expect(String(pedidoDelTurno(ctx, dos, "Liz").messages[0].content)).toContain("YA NO PREGUNTES");
+    expect(String(pedidoDelTurno(ctx, una, false).messages[0].content)).not.toContain("YA NO PREGUNTES");
+    expect(String(pedidoDelTurno(ctx, dos, false).messages[0].content)).toContain("YA NO PREGUNTES");
   });
 
   it("la nota son las palabras de la persona, tal cual, sin lo que dijo Nexus", () => {
@@ -90,9 +94,15 @@ describe("la respuesta del modelo", () => {
     expect(leerElTurno(respuesta("no entendí"), opciones())).toEqual(NO_SE_PUDO_LEER);
   });
 
-  it("una pregunta sobre la cuenta es una consulta: la responde otra llamada", () => {
-    expect(leerElTurno(respuesta('{"tipo":"consulta","pregunta":"¿Qué dijo Centauro de la cobranza?"}'), opciones())).toEqual({ tipo: "consulta", pregunta: "¿Qué dijo Centauro de la cobranza?" });
-    expect(leerElTurno(respuesta('{"tipo":"consulta","pregunta":""}'), opciones())).toEqual(NO_SE_PUDO_LEER);
+  it("una pregunta sobre la cuenta es una consulta, con las palabras de la persona y no las del modelo", () => {
+    const laPregunta = "¿Qué dijo Centauro de la cobranza?";
+    expect(leerElTurno(respuesta('{"tipo":"consulta","pregunta":"¿Qué dijo Elías de la cobranza?"}'), opciones({ laPregunta }))).toEqual({ tipo: "consulta", pregunta: laPregunta });
+    expect(leerElTurno(respuesta('{"tipo":"consulta"}'), opciones({ laPregunta }))).toEqual({ tipo: "consulta", pregunta: laPregunta });
+  });
+
+  it("si lo que escribió NO es una pregunta, una «consulta» del modelo se toma como «listo»: la nota se guarda", () => {
+    expect(leerElTurno(respuesta('{"tipo":"consulta","pregunta":"¿Qué dijo Elías sobre crédito y cobro?"}'), opciones())).toEqual(LISTO_SIN_CAMBIOS);
+    expect(leerElTurno(respuesta('{"tipo":"consulta"}'), opciones({ laPregunta: null }))).toEqual(LISTO_SIN_CAMBIOS);
   });
 
   it("un cambio pasa solo con destino conocido, valor válido y una cita que la persona dijo", () => {
@@ -137,5 +147,103 @@ describe("los topes", () => {
     expect(porQueNoSigue(0, 0)).toBeNull();
     expect(porQueNoSigue(TOPES.turnosPorConversacion, 0)).toContain("Nueva conversación");
     expect(porQueNoSigue(0, TOPES.turnosPorDia)).toContain("tope del día");
+  });
+});
+
+describe("si es una pregunta lo decide el código (Elías, 21 nov)", () => {
+  const ctx: ContextoParaNexus = { donde: "la preventa", empresa: "Cemaco", contexto: "", destinos: [] };
+  const ELIAS = "Es importante esto de que crédito cobro contacta a los clientes sin aprovechar para venderle más y que cada gestor tiene muchas cuentas";
+
+  it("lo que contó Elías en Cemaco no es una pregunta: va a la nota", () => {
+    expect(pareceUnaPregunta(ELIAS)).toBe(false);
+    expect(laPreguntaDeLaPersona([persona(ELIAS)])).toBeNull();
+  });
+
+  it("contar, aunque arranque como reacción, con una palabra de pregunta SIN tilde o con un verbo que también pide", () => {
+    for (const t of [
+      "Ojo con el gerente: no quiere migrar dos veces",
+      "Como te dije, pierden unos 40 mil al mes",
+      "Como es costumbre, el cierre es en diciembre",
+      "Cuando hablamos con Ana dijo que el ERP cambia en enero",
+      "Esto de que cobran a mano es lo que más les duele",
+      "El presupuesto es de 15 mil para este año.",
+      "Marco habló con el gerente por WhatsApp",
+      // Las que encontró la revisión del 21 nov: el dictado abre muchas con «Que…».
+      "Que cada gestor tiene muchas cuentas",
+      "Y que además cobran a mano",
+      "Quien decide es el gerente general",
+      "Donde más les duele es la cobranza",
+      "Cuanto antes arranquen, mejor",
+      "Para que sepas, el ERP cambia en enero",
+      "Hay algo de resistencia en ventas",
+      "Busca crecer en Guatemala el año que viene",
+      "Lista de precios: 15 mil",
+      "Explica que el proceso es manual",
+      "Es importante, ¿no?",
+      "Cobran a mano (¿o con Excel?) y nadie lo actualiza",
+      // Una pregunta sin tilde ni signo se toma como contar, a propósito: ante la duda, contar.
+      "que dijeron de la cobranza",
+    ])
+      expect(pareceUnaPregunta(t), t).toBe(false);
+  });
+
+  it("preguntar: con signo, con palabra de pregunta (con o sin tilde) o pidiendo algo", () => {
+    for (const t of [
+      "¿Qué dijeron de la cobranza?",
+      "qué dijeron de la cobranza",
+      "Quién decide la compra",
+      "Quiero saber qué dijeron de la cobranza",
+      "Necesito saber quién decide la compra",
+      "Revisa lo que dijeron de ecommerce",
+      "Averigua si tienen HubSpot",
+      "Oye Nexus qué dijo Ana del ERP",
+      "Oye, Nexus, ¿quién firma?",
+      "Cuánto pierden al mes",
+      "cuándo arrancan",
+      "Por qué no quieren migrar",
+      "Dime quién decide",
+      "Resume lo que dijeron de ecommerce",
+      "Y qué pasó con el presupuesto",
+      "sabes si ya tienen HubSpot",
+      "El presupuesto de 15 mil, ¿es anual?",
+    ])
+      expect(pareceUnaPregunta(t), t).toBe(true);
+  });
+
+  it("la pregunta es la última de la persona; con «contar», nunca", () => {
+    expect(laPreguntaDeLaPersona([persona("Pierden 40 mil"), nexus("¿Al mes?"), persona("¿Qué dijo Ana del ERP?")])).toBe("¿Qué dijo Ana del ERP?");
+    expect(laPreguntaDeLaPersona([persona("¿Qué dijo Ana del ERP?")], true)).toBeNull();
+    expect(laPreguntaDeLaPersona([persona("¿Algo?"), nexus("Sí")])).toBeNull();
+  });
+
+  it("el pedido no lleva el nombre de quien escribe y dice si lo último es pregunta", () => {
+    const pedido = String(pedidoDelTurno(ctx, [persona(ELIAS)], false).messages[0].content);
+    expect(pedido).toContain("Te escribe alguien del equipo de Smarteam.");
+    expect(pedido).toContain("NO ES UNA PREGUNTA");
+    expect(String(pedidoDelTurno(ctx, [persona("¿Quién decide?")], true).messages[0].content)).toContain("TIENE FORMA DE PREGUNTA");
+  });
+
+  it("«Guardarlo como nota»: sale el par pregunta-respuesta y lo escrito vuelve al final como algo que cuenta", () => {
+    const m: MensajeDeLaConversacion[] = [
+      persona("Pierden 40 mil"),
+      nexus("¿Al mes?"),
+      { de: "persona", texto: ELIAS, es: "consulta" },
+      { de: "nexus", texto: "No lo sé.", es: "respuesta" },
+    ];
+    expect(paraContarComoNota(m, 3)).toEqual({ base: m.slice(0, 2), texto: ELIAS });
+    expect(paraContarComoNota(m, 1)).toBeNull();
+    expect(paraContarComoNota(m, 9)).toBeNull();
+    // Solo la última respuesta: una del medio, movida al final, se leería como respuesta a lo que Nexus preguntó después.
+    expect(paraContarComoNota([...m, persona("Es del área de TI"), nexus("¿De qué equipo?")], 3)).toBeNull();
+  });
+
+  it("una pregunta con su signo, que no contesta a Nexus, se responde aunque el modelo diga «listo»", () => {
+    const laPregunta = "¿Quién decide la compra?";
+    expect(esPreguntaSinDuda([persona(laPregunta)])).toBe(true);
+    expect(leerElTurno(respuesta('{"tipo":"listo","cambios":[],"hechos":[]}'), opciones({ laPregunta, sinDuda: true }))).toEqual({ tipo: "consulta", pregunta: laPregunta });
+    // Si contesta lo que Nexus preguntó, o no lleva signo, lo decide el modelo.
+    expect(esPreguntaSinDuda([persona("Pierden 40 mil"), nexus("¿De qué mes?"), persona("¿Enero, creo?")])).toBe(false);
+    expect(esPreguntaSinDuda([persona("Quién decide la compra")])).toBe(false);
+    expect(esPreguntaSinDuda([persona(laPregunta)], true)).toBe(false);
   });
 });
