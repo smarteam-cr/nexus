@@ -139,8 +139,36 @@ const REGLAS = `Eres Nexus, el asistente interno de Smarteam (una agencia de Hub
 - Lo que aceptó el cliente pesa más que todo; después, lo que confirmó el equipo; después, lo que se dijo en una reunión.
 - Cada afirmación va respaldada por una cita: las palabras EXACTAS de la fuente, copiadas tal cual (sin el nombre de quien habla), con la clave de la fuente (R1, N2, T, A).
 
-RESPONDE SOLO UN OBJETO JSON, sin texto alrededor:
-{"sabe":true,"respuesta":"…","citas":[{"fuente":"R2","cita":"palabras exactas"}]}`;
+Respondes SIEMPRE con la herramienta «responder»: "sabe", "respuesta" (el texto, con su Markdown) y "citas".`;
+
+/**
+ * La respuesta sale por una herramienta obligatoria, no como JSON escrito en el texto. Con el JSON en texto, una respuesta
+ * en Markdown (varios renglones, comillas del cliente) a veces no se podía leer: el 21 nov, en Cemaco · Ecuador, la misma
+ * pregunta salió «No pude leer la respuesta» y al repetirla salió bien. La herramienta la arma la API, siempre legible.
+ */
+export const HERRAMIENTA_DE_LA_RESPUESTA = {
+  name: "responder",
+  description: "La respuesta a la pregunta, con las citas que la respaldan.",
+  input_schema: {
+    type: "object" as const,
+    properties: {
+      sabe: { type: "boolean", description: "false si la respuesta no está en las fuentes." },
+      respuesta: { type: "string", description: "Lo que le respondes, en Markdown simple." },
+      citas: {
+        type: "array",
+        items: {
+          type: "object",
+          properties: {
+            fuente: { type: "string", description: "La clave de la fuente: R1, N2, T, A." },
+            cita: { type: "string", description: "Las palabras EXACTAS de la fuente." },
+          },
+          required: ["fuente", "cita"],
+        },
+      },
+    },
+    required: ["sabe", "respuesta", "citas"],
+  },
+} satisfies Anthropic.Messages.Tool;
 
 /**
  * El pedido de una respuesta. Las fuentes van en su propio bloque con caché de prompt: la segunda pregunta de la misma
@@ -170,6 +198,8 @@ export function pedidoDeLaRespuesta(o: {
     model: MODELO_DEL_CHAT,
     max_tokens: MAX_TOKENS_DE_LA_RESPUESTA,
     system: REGLAS,
+    tools: [HERRAMIENTA_DE_LA_RESPUESTA],
+    tool_choice: { type: "tool", name: HERRAMIENTA_DE_LA_RESPUESTA.name },
     messages: [
       {
         role: "user",
@@ -232,8 +262,11 @@ export function leerLaRespuesta(
   if (respuesta.stop_reason === "max_tokens") {
     return { sabe: false, texto: "La respuesta salió más larga de lo que entra: pregúntame algo más acotado.", citas: [], sinRespaldo: false, afuera, noSePudo: true };
   }
+  // Lo de la herramienta; si no vino (una respuesta de antes, o el modelo la saltó), el JSON del texto.
+  const herramienta = respuesta.content.find((b) => b.type === "tool_use" && b.name === HERRAMIENTA_DE_LA_RESPUESTA.name);
+  const deLaHerramienta = herramienta && herramienta.type === "tool_use" && herramienta.input && typeof herramienta.input === "object" ? (herramienta.input as Record<string, unknown>) : null;
   const texto = respuesta.content.map((b) => (b.type === "text" ? b.text : "")).join("");
-  const crudo = primerObjeto(texto);
+  const crudo = deLaHerramienta ?? primerObjeto(texto);
   const respondio = cadena(crudo?.respuesta, 4_000);
   if (!crudo || !respondio) return { sabe: false, texto: "No pude leer la respuesta. Vuelve a preguntarme.", citas: [], sinRespaldo: false, afuera, noSePudo: true };
   if (crudo.sabe === false) return { sabe: false, texto: respondio || NO_LO_SE, citas: [], sinRespaldo: false, afuera };
