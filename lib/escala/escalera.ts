@@ -4,53 +4,29 @@
  * escala de una empresa y en el resultado del test público (y en su PDF: SVG estático, sin JS), y lo mueve
  * components/external/test/MovimientoDeLaEscalera.tsx en la pantalla.
  *
- * Es la curva de la aplicación vieja (dev.smarteamcr.com/diagnostico-rendimiento, `components/curva.js` y `anim.js`), traída
- * el 21 nov porque la primera versión de Nexus (una S con el área sombreada por columnas) «estaba súper mal»: los rótulos
- * chocaban con el área, el degradado se veía en bloques y sobraba espacio arriba. De la vieja vienen:
- *   · los cinco puntos (crece despacio y después se dispara: una exponencial) y la curva que pasa por ellos, con los
- *     mismos controles (`CONTROLES`). La vieja, al mover los puntos, la rehacía con otra cuenta (`curvaSuave`) y la
- *     curva cambiaba de forma; acá los controles viajan con su punto y la forma se queda;
- *   · el área de abajo que se desvanece hacia el piso, sin bordes que corten los nombres.
- * De Nexus se quedan los colores por nivel y las dos marcas:
- *   · dónde está el área HOY (su nivel general, del cálculo);
- *   · A DÓNDE LA LLEVAMOS (`metaDeLaEscalera`): Funcional casi siempre; si ya está en Funcional o más arriba, el nivel
- *     siguiente. Quien presenta lo puede cambiar (un texto de la página, `CLAVES.delArea(area, "meta")`): vale solo si está
- *     por encima de hoy; si los niveles suben y lo deja igual o abajo, vuelve la de siempre.
- * El alto del lienzo se ajusta a lo que hay que dibujar (`caja`): con la meta en Óptimo, su etiqueta sube por encima del
- * último punto; sin ella, no queda una franja vacía arriba.
+ * Es IDÉNTICA a la curva de la página de resultados de la aplicación vieja (dev.smarteamcr.com/diagnostico-rendimiento,
+ * `components/curva.js`, `lib/niveles.js` y `css/resultado.css`). Elías, 21 nov, al verla en producción: «se le debe quitar la
+ * meta, así como esa línea punteada. Debe ser exactamente igual, incluso los colores y todo». De la vieja viene todo:
+ *   · el lienzo (820 × 380), los cinco puntos (crece despacio y después se dispara: una exponencial) y la curva que pasa por
+ *     ellos con los mismos controles (`CONTROLES`). La vieja, al mover los puntos, la rehacía con otra cuenta (`curvaSuave`) y
+ *     la curva cambiaba de forma; acá los controles viajan con su punto y la forma se queda;
+ *   · la línea gris que se vuelve azul en el último tramo y el área azul que se desvanece hacia el piso;
+ *   · los colores de cada nivel (`COLOR_DE_LA_ESCALERA`, los de `NIVELES_META`) y cómo se marca un nivel: el ACTIVO, con su
+ *     color, un círculo más grande y su nombre en negrita; el resto, en gris;
+ *   · qué niveles se marcan: donde está cada una de las dos capas del área (base operativa y producción), y la tarjeta dice
+ *     «Aquí está tu Base operativa y tu Producción.» (`resultado.js › wireEscala`).
+ * Lo único distinto: si el área no tiene el nivel de sus capas, se marca el del área. La meta ya no se dibuja (estuvo del
+ * 20 al 21 nov: el aro punteado, «Meta» y el tramo punteado hasta ella).
  * Las pruebas: escalera.test.ts.
  */
 import { LETRAS, type Letra } from "./documento/tipos";
 
-const FUNCIONAL: Letra = "F";
-const idx = (l: Letra) => LETRAS.indexOf(l);
-const esLetra = (v: unknown): v is Letra => typeof v === "string" && (LETRAS as readonly string[]).includes(v);
-
-/** La meta de siempre: Funcional; desde Funcional, el nivel siguiente; en Óptimo no hay a dónde subir. */
-export function metaPorDefecto(nivel: Letra | null): Letra | null {
-  if (!nivel) return null;
-  if (idx(nivel) < idx(FUNCIONAL)) return FUNCIONAL;
-  return LETRAS[idx(nivel) + 1] ?? null;
-}
-
-/**
- * A dónde lo llevamos: la que eligió quien presenta (`elegida`, el texto guardado: una letra), si está por encima de hoy;
- * si no, la de siempre. Sin nivel («En medición») no hay meta: no se sabe desde dónde.
- */
-export function metaDeLaEscalera(nivel: Letra | null, elegida?: string | null): Letra | null {
-  if (!nivel) return null;
-  const e = elegida?.trim().toUpperCase();
-  if (esLetra(e) && idx(e) > idx(nivel)) return e;
-  return metaPorDefecto(nivel);
-}
-
-/** Los niveles a los que se puede llevar un área (para elegir la meta): los de arriba de hoy. */
-export function metasPosibles(nivel: Letra | null): Letra[] {
-  return nivel ? LETRAS.filter((l) => idx(l) > idx(nivel)) : [];
-}
-
-/** El color de cada nivel en la escalera, de rojo a verde (la paleta de la aplicación vieja, un poco más oscura para leerse en blanco). */
-export const COLOR_DE_LA_ESCALERA: Readonly<Record<Letra, string>> = { D: "#dc4a3d", I: "#ea7a2a", F: "#d99a06", E: "#3b82f6", O: "#17a884" };
+/** El color de cada nivel (la vieja, `lib/niveles.js › NIVELES_META`). */
+export const COLOR_DE_LA_ESCALERA: Readonly<Record<Letra, string>> = { D: "#F87171", I: "#FB923C", F: "#FBBF24", E: "#60A5FA", O: "#42E4B3" };
+/** El gris de los niveles que no están marcados y del principio de la línea (la vieja, `GRIS`). */
+export const GRIS_DE_LA_ESCALERA = "#6B7AA0";
+/** El azul al que llega la línea y del área (la vieja, `GRAD_END`). */
+export const AZUL_DE_LA_ESCALERA = "#0B58D3";
 
 // ── El dibujo ─────────────────────────────────────────────────────────────────
 
@@ -59,12 +35,8 @@ export interface Punto {
   y: number;
 }
 
-/** El ancho del lienzo (el alto depende de lo que se marca: `caja`), desde `IZQUIERDA_DEL_LIENZO`. */
-export const ANCHO_DE_LA_ESCALERA = 836;
-/** Un poco a la izquierda del cero: «Deficiente», centrado en el primer punto, no se corta con la letra del teléfono. */
-export const IZQUIERDA_DEL_LIENZO = -8;
-/** La letra de los nombres en el teléfono (resultado.css, `max-width: 600px`): con más, «Deficiente» pisa «Inicial». */
-export const LETRA_DEL_NOMBRE_EN_EL_TELEFONO = 26;
+/** El lienzo de la vieja (`viewBox="0 0 820 380"`). */
+export const LIENZO = { x: 0, y: 0, ancho: 820, alto: 380 } as const;
 /** Los cinco puntos de la aplicación vieja, de Deficiente a Óptimo. */
 export const PUNTOS_DE_LA_ESCALERA: readonly Punto[] = [
   { x: 80, y: 305 },
@@ -75,21 +47,15 @@ export const PUNTOS_DE_LA_ESCALERA: readonly Punto[] = [
 ];
 /** Donde termina el área de abajo (se desvanece hasta ahí). */
 export const BASE_DEL_AREA = 330;
-
-/** El radio de cada círculo, y el del aro punteado de la meta (por fuera del suyo). */
-export const RADIO = { nivel: 24, hoy: 30, meta: 28, aroDeLaMeta: 8 } as const;
-/** La etiqueta «Hoy»/«Meta», arriba del círculo: su tamaño y lo que la separa del círculo (o del aro). */
-export const ETIQUETA = { ancho: 92, alto: 32, separacion: 12 } as const;
-/** El nombre del nivel, debajo del círculo: cuánto baja su línea de base desde el borde del círculo. */
-export const NOMBRE_BAJO_EL_CIRCULO = 34;
-/** Lo que se deja libre alrededor: el imán corre los puntos hasta 10 y el círculo bajo el cursor crece. */
-const MARGEN = 18;
-/** Sin movimiento (el PDF): casi nada, así el dibujo, de alto fijo en la hoja, sale más grande. */
-const MARGEN_QUIETA = 4;
+/** El radio del círculo de cada nivel: el marcado, más grande. */
+export const RADIO = { nivel: 26, activo: 32 } as const;
+/** Cuánto bajan, desde el centro del círculo, la línea de base del número y la del nombre. */
+export const BAJO_EL_PUNTO = { numero: 8, nombre: 60 } as const;
+/** La letra de los nombres en el teléfono (resultado.css, `max-width: 600px`; la vieja, 14 en el lienzo, ahí no se lee). */
+export const LETRA_DEL_NOMBRE_EN_EL_TELEFONO = 24;
 /** La letra de los nombres en el PDF (resultado.css, `.rd-pdf`): la hoja fija el alto y el dibujo se achica. */
-export const LETRA_DEL_NOMBRE_EN_EL_PDF = 26;
+export const LETRA_DEL_NOMBRE_EN_EL_PDF = 24;
 
-const fmt = (n: number) => Number(n.toFixed(1));
 const f = (n: number) => n.toFixed(1);
 
 /**
@@ -120,25 +86,40 @@ export interface TrazosDeLaEscalera {
   curva: string;
   /** El área bajo la curva, cerrada contra la base. */
   area: string;
-  /** El tramo de la curva entre hoy y la meta (null sin meta): lo que vamos a recorrer. */
-  tramo: string | null;
+}
+
+/** Los trazos para unos puntos: los de siempre, o los corridos por el imán. */
+export function trazosDeLaEscalera(pts: readonly Punto[]): TrazosDeLaEscalera {
+  const ini = pts[0];
+  const fin = pts[pts.length - 1];
+  const curva = `M ${f(ini.x)} ${f(ini.y)} ${tramosDeLaCurva(pts).join(" ")}`;
+  return { curva, area: `${curva} L ${f(fin.x)} ${BASE_DEL_AREA} L ${f(ini.x)} ${BASE_DEL_AREA} Z` };
+}
+
+/** Un nivel marcado y quién está ahí («tu Base operativa»). */
+export interface NivelMarcado {
+  letra: Letra;
+  quienes: string[];
 }
 
 /**
- * Los trazos para unos puntos (los de siempre, o los corridos por el imán) y las posiciones de hoy y de la meta (0 a 4).
- * El tramo es exactamente la misma curva entre los dos: los mismos pedazos, no otra cuenta.
+ * Qué niveles se marcan: donde está cada capa del área (la vieja: `activos: [base, producción]`), con «tu {capa}». Si
+ * ninguna capa tiene nivel, el del área («{área} hoy»); sin ninguno, nada.
  */
-export function trazosDeLaEscalera(pts: readonly Punto[], iHoy: number | null, iMeta: number | null): TrazosDeLaEscalera {
-  const tramos = tramosDeLaCurva(pts);
-  const ini = pts[0];
-  const fin = pts[pts.length - 1];
-  const curva = `M ${f(ini.x)} ${f(ini.y)} ${tramos.join(" ")}`;
-  const conTramo = iHoy !== null && iMeta !== null && iMeta > iHoy && iMeta < pts.length;
-  return {
-    curva,
-    area: `${curva} L ${f(fin.x)} ${BASE_DEL_AREA} L ${f(ini.x)} ${BASE_DEL_AREA} Z`,
-    tramo: conTramo ? `M ${f(pts[iHoy].x)} ${f(pts[iHoy].y)} ${tramos.slice(iHoy, iMeta).join(" ")}` : null,
-  };
+export function nivelesMarcados(
+  area: string,
+  capas: readonly { nombre: string; nivel: Letra | null }[],
+  nivelDelArea: Letra | null,
+): NivelMarcado[] {
+  const out: NivelMarcado[] = [];
+  for (const c of capas) {
+    if (!c.nivel) continue;
+    const ya = out.find((m) => m.letra === c.nivel);
+    if (ya) ya.quienes.push(`tu ${c.nombre}`);
+    else out.push({ letra: c.nivel, quienes: [`tu ${c.nombre}`] });
+  }
+  if (!out.length && nivelDelArea) out.push({ letra: nivelDelArea, quienes: [`${area} hoy`] });
+  return out.sort((a, b) => LETRAS.indexOf(a.letra) - LETRAS.indexOf(b.letra));
 }
 
 export interface MarcaDeLaEscalera {
@@ -147,40 +128,26 @@ export interface MarcaDeLaEscalera {
   nombre: string;
   x: number;
   y: number;
+  /** El color del nivel (el de la tarjeta, y el del círculo si está marcado). */
   color: string;
-  /** El nivel de hoy, la meta, o ninguno. */
-  es: "hoy" | "meta" | null;
+  /** Marcado: con su color; si no, en gris. */
+  activo: boolean;
+  /** Quién está en este nivel (vacío si no está marcado). */
+  quienes: string[];
   /** El radio del círculo. */
   r: number;
-  /** La etiqueta «Hoy»/«Meta» (null en los demás): su esquina de arriba a la izquierda. */
-  etiqueta: Punto | null;
-  /** La línea de base del nombre del nivel. */
-  yNombre: number;
 }
 
 export interface DibujoDeLaEscalera extends TrazosDeLaEscalera {
   marcas: MarcaDeLaEscalera[];
-  /** El lienzo (viewBox): arranca arriba de lo más alto que se dibuja y termina debajo del nombre más bajo. */
-  caja: { x: number; y: number; ancho: number; alto: number };
-  /** Las paradas del degradado de la curva: el color de cada nivel justo en su punto (en 0 a 1 del primero al último). */
-  paradas: { offset: number; color: string }[];
 }
 
-/** La geometría de la escalera para un nivel de hoy y una meta. Los nombres, los de la escala (`niveles`, en orden). */
-export function dibujoDeLaEscalera(
-  niveles: readonly { letra: Letra; nombre: string }[],
-  hoy: Letra | null,
-  meta: Letra | null,
-  { quieta = false }: { quieta?: boolean } = {},
-): DibujoDeLaEscalera {
-  const margen = quieta ? MARGEN_QUIETA : MARGEN;
-  const pts = PUNTOS_DE_LA_ESCALERA;
-  const metaValida = !!hoy && !!meta && idx(meta) > idx(hoy) ? meta : null;
+/** La geometría de la escalera. Los nombres, los de la escala (`niveles`, en orden). */
+export function dibujoDeLaEscalera(niveles: readonly { letra: Letra; nombre: string }[], marcados: readonly NivelMarcado[]): DibujoDeLaEscalera {
   const marcas: MarcaDeLaEscalera[] = LETRAS.map((letra, i) => {
-    const p = pts[i];
-    const es = letra === hoy ? "hoy" : letra === metaValida ? "meta" : null;
-    const r = es === "hoy" ? RADIO.hoy : es === "meta" ? RADIO.meta : RADIO.nivel;
-    const exterior = r + (es === "meta" ? RADIO.aroDeLaMeta : 0);
+    const p = PUNTOS_DE_LA_ESCALERA[i];
+    const quienes = marcados.find((m) => m.letra === letra)?.quienes ?? [];
+    const activo = quienes.length > 0;
     return {
       letra,
       numero: i + 1,
@@ -188,35 +155,22 @@ export function dibujoDeLaEscalera(
       x: p.x,
       y: p.y,
       color: COLOR_DE_LA_ESCALERA[letra],
-      es,
-      r,
-      etiqueta: es ? { x: p.x - ETIQUETA.ancho / 2, y: p.y - exterior - ETIQUETA.separacion - ETIQUETA.alto } : null,
-      yNombre: p.y + r + NOMBRE_BAJO_EL_CIRCULO,
+      activo,
+      quienes,
+      r: activo ? RADIO.activo : RADIO.nivel,
     };
   });
-  const arriba = Math.min(...marcas.map((m) => (m.etiqueta ? m.etiqueta.y : m.y - m.r)));
-  // El nombre más bajo: su línea de base más lo que cuelga la letra (en el teléfono la letra crece, resultado.css).
-  const abajo = Math.max(BASE_DEL_AREA, ...marcas.map((m) => m.yNombre + 10));
-  const y = Math.floor(arriba - margen);
-  const x0 = pts[0].x;
-  const ancho = pts[pts.length - 1].x - x0;
-  return {
-    ...trazosDeLaEscalera(pts, hoy ? idx(hoy) : null, metaValida ? idx(metaValida) : null),
-    marcas,
-    caja: { x: IZQUIERDA_DEL_LIENZO, y, ancho: ANCHO_DE_LA_ESCALERA, alto: Math.ceil(abajo + margen) - y },
-    paradas: marcas.map((m) => ({ offset: fmt((m.x - x0) / ancho), color: m.color })),
-  };
+  return { ...trazosDeLaEscalera(PUNTOS_DE_LA_ESCALERA), marcas };
 }
 
-/** Lo que lee un lector de pantalla: dónde está hoy y a dónde va. */
-export function lecturaDeLaEscalera(area: string, hoy: { nombre: string } | null, meta: { nombre: string } | null): string {
-  if (!hoy) return `Los cinco niveles de la escala: ${area} todavía está en medición.`;
-  return `Los cinco niveles de la escala: ${area} está hoy en ${hoy.nombre}${meta ? ` y la meta es llevarla a ${meta.nombre}` : ", el nivel más alto"}.`;
+/** Lo que lee un lector de pantalla: dónde está cada capa. */
+export function lecturaDeLaEscalera(area: string, marcas: readonly MarcaDeLaEscalera[]): string {
+  const activas = marcas.filter((m) => m.activo);
+  if (!activas.length) return `Los cinco niveles de la escala: ${area} todavía está en medición.`;
+  return `Los cinco niveles de la escala, de ${marcas[0].nombre} a ${marcas[marcas.length - 1].nombre}: ${activas.map((m) => `${m.quienes.join(" y ")} en ${m.nombre}`).join("; ")}.`;
 }
 
-/** Lo que dice la tarjeta de un nivel debajo de su descripción: si es donde está hoy, o a donde lo llevamos. */
-export function marcaDelNivel(area: string, es: "hoy" | "meta" | null): string | null {
-  if (es === "hoy") return `Aquí está ${area} hoy.`;
-  if (es === "meta") return "Aquí lo llevamos: es la meta.";
-  return null;
+/** Lo que dice la tarjeta de un nivel debajo de su descripción (la vieja: «Aquí está tu Base operativa y tu Producción.»). */
+export function marcaDelNivel(quienes: readonly string[]): string | null {
+  return quienes.length ? `Aquí está ${quienes.join(" y ")}.` : null;
 }

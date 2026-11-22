@@ -15943,12 +15943,23 @@ vender por resultados. Cambia el Resumen, la página de cada área y el resultad
   en el Resumen. *Lo que leía antes cada texto:* la descripción, las minutas (no las transcripciones); «Por dónde empezar»,
   lo que cuesta quedarse así y los riesgos son textos de la escala, de nadie en particular. Ahora la descripción también
   recibe lo que el Resumen verificó de ese equipo (`loQueEncontroElResumen`, sin cifras), sin otra llamada a la IA.
-- **La escalera de los cinco niveles vuelve arriba** (lib/escala/escalera.ts, `EscaleraDeNiveles`): la curva de la
-  aplicación vieja, ahora en S, de 1 Deficiente (rojo) a 5 Óptimo (verde), con el área sombreada, «Hoy» en el nivel del
-  área y «Meta» con aro punteado. La meta: Funcional; desde Funcional, el siguiente; en Óptimo, ninguna. Quien presenta la
-  elige debajo de la escalera (texto fijo `area.<id>.meta`, publicado como los demás); vale solo si está por encima de hoy.
-  Va arriba y el radar justo debajo, sin esconder nada, en las DOS páginas: la escala de una empresa y el resultado del
-  test público (también en la hoja 1 de su PDF). El cambio del test es a propósito: su prueba lo dice.
+- **La escalera de los cinco niveles vuelve arriba** (lib/escala/escalera.ts, `EscaleraDeNiveles`). Va arriba y el radar
+  justo debajo, sin esconder nada, en las DOS páginas: la escala de una empresa y el resultado del test público (también
+  en la hoja 1 de su PDF). El cambio del test es a propósito: su prueba lo dice.
+  **Sin meta, idéntica a la app vieja (Elías, 21 nov)** — reemplaza lo del 20 nov (la pregunta 77 del roadmap: «Hoy»,
+  «Meta» con aro punteado y el tramo punteado entre los dos, la meta Funcional o la siguiente, y quien presenta la elegía
+  debajo de la escalera). Al verla en producción: «se le debe quitar la meta, así como esa línea punteada. Debe ser
+  exactamente igual, incluso los colores y todo». Es la curva de la página de resultados de la vieja (`curva.js`,
+  `niveles.js`, `resultado.css`): el lienzo, el trazo, la línea gris que se vuelve azul, el área azul que se desvanece,
+  los colores de cada nivel, la letra y los tamaños; se marcan los niveles de las DOS capas (base operativa y
+  producción) con su color y un círculo más grande, el resto en gris; el imán al cursor y la tarjeta por nivel («Aquí está
+  tu Base operativa y tu Producción.»). Lo único distinto: sin el nivel de las capas se marca el del área, y en el
+  teléfono y el PDF la letra de los nombres crece (en el lienzo de la vieja bajaba de 6 px). El selector de la meta de la
+  preventa se quitó; una meta ya elegida (texto `area.<id>.meta`) queda guardada y nadie la lee. El título de la sección
+  pasó a «Dónde está hoy en la escala.». *Lo que cuesta, aceptado por pedir los colores exactos:* marcados en Funcional
+  (amarillo) u Óptimo (verde claro), el número blanco sobre el círculo y el nombre de ese color sobre blanco se leen poco
+  (la versión del 20 nov los oscurecía para eso). Y la letra del dibujo es la que pide la vieja (Space Grotesk e Inter),
+  que ninguna de las dos aplicaciones carga: sale la sans del sistema, igual que en la vieja.
 - **Una foto publicada antes de hoy se pinta como antes** en el Resumen (sin `costo`: las cifras a la derecha); la
   escalera sí aparece, porque sale de los niveles de la foto. Sin SQL.
 - **Lo que endureció la revisión del 20 nov:** un grupo o un cargo en «Quién decide» («Equipo de ventas», «Gerencia») no
@@ -15962,8 +15973,8 @@ vender por resultados. Cambia el Resumen, la página de cada área y el resultad
   cambios que el cliente no ve», porque es cierto: al republicar, las filas pasan a reto principal y cuánto cuesta.
 - **Lo que no queda garantizado:** cómo escribe el agente el reto principal y los títulos hasta que se rehaga un Resumen
   real (el simulacro lo muestra sin guardar); que una cifra en dinero escrita sin moneda («1,5 millones») se reconozca
-  como costo (la moneda es la señal); los colores de la escalera (rojo a verde) no son los del punto de nivel del resto de
-  la página (Funcional es verde ahí).
+  como costo (la moneda es la señal); los colores de la escalera (los de la vieja) no son los del punto de nivel del resto
+  de la página (Funcional es verde ahí).
 
 ## Rehacer el Resumen no deja la página sin titular (2026-11-21)
 

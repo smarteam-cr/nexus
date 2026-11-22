@@ -45,7 +45,7 @@ import { ENLACE_DE_OTRA_EMPRESA, enlaceDeOtraArea, puntajeDeLaDimension } from "
 import { resumenDelResultado } from "@/lib/tests-diagnostico/redaccion";
 import type { DimensionDelResultado, ResultadoDelTest } from "@/lib/tests-diagnostico/resultado";
 import RadarDeUnaEmpresa from "@/components/escala/RadarDeUnaEmpresa";
-import { metaDeLaEscalera, metaPorDefecto, metasPosibles } from "@/lib/escala/escalera";
+import { nivelesMarcados } from "@/lib/escala/escalera";
 import AnimacionesDelResultado from "./AnimacionesDelResultado";
 import { ArribaDeLaEscala, EmpresaDeLaEscala, PESTANA_DEL_RESUMEN, siguienteArea, type PestanaDeLaEscala } from "./ArribaDeLaEscala";
 import CalendarioDeHubspot from "./CalendarioDeHubspot";
@@ -381,11 +381,6 @@ export interface EdicionDeLaPagina {
    * de siempre); `quitar`: la pieza se puede quitar para el cliente (su clave, y si ya está quitada).
    */
   fijo?: (o: EdicionDeUnTextoFijo) => ReactNode;
-  /**
-   * A dónde lo llevamos, en la escalera (20 nov): quien presenta elige el nivel antes de presentar. Se guarda como los
-   * textos fijos (`clave`, con la letra), y vale solo si está por encima de hoy (lib/escala/escalera.ts).
-   */
-  meta?: (o: { clave: string; actual: Letra; deSiempre: Letra | null; opciones: { letra: Letra; nombre: string }[] }) => ReactNode;
 }
 
 /** Lo que recibe la pantalla interna para editar un texto fijo de la página (el Resumen también lo usa). */
@@ -471,9 +466,6 @@ function AreaDeLaEscala({
   const medida = (d: DimensionDelResultado) => d.preguntada && !!d.nivel;
   // La tarjeta abre en la parte que más frena; sin recomendación, en la primera medida.
   const inicial = frena ?? r.dimensiones.find(medida)?.id ?? r.dimensiones[0]?.id ?? null;
-  // La escalera (20 nov): hoy, y a dónde lo llevamos (la que eligió quien presenta, si está por encima de hoy).
-  const claveDeLaMeta = CLAVES.delArea(area, "meta");
-  const meta = metaDeLaEscalera(r.nivel, textos?.[claveDeLaMeta]);
   /* Lo que más le cuesta (20 nov): la tarjeta de esta área en el Resumen, subequipo por subequipo (Soporte y Customer
      Success dentro de Servicio). Solo los del molde del 20 nov (`costo` definido): una foto de antes no la trae. Afuera, la
      pérdida de la preventa que alguien quitó no sale. */
@@ -573,20 +565,9 @@ function AreaDeLaEscala({
         <section className="ed-parte ed-envoltura ed-escalera" aria-labelledby="ed-t-escalera">
           <p className="ed-ceja">La escala de rendimiento</p>
           <h2 className="ed-titulo" id="ed-t-escalera">
-            {fijo(CLAVES.delArea(area, "titulo.escalera"), meta ? "Dónde está hoy y a dónde lo llevamos." : "Dónde está hoy: en el nivel más alto.", "Título de la escalera")}
+            {fijo(CLAVES.delArea(area, "titulo.escalera"), "Dónde está hoy en la escala.", "Título de la escalera")}
           </h2>
-          <EscaleraDeNiveles
-            area={r.areaNombre}
-            niveles={r.niveles}
-            hoy={r.nivel}
-            meta={meta}
-            idSvg={`esc-${area}`}
-            pie={
-              edicion?.meta && meta
-                ? edicion.meta({ clave: claveDeLaMeta, actual: meta, deSiempre: metaPorDefecto(r.nivel), opciones: r.niveles.filter((n) => metasPosibles(r.nivel).includes(n.letra)) })
-                : null
-            }
-          />
+          <EscaleraDeNiveles area={r.areaNombre} niveles={r.niveles} marcados={nivelesMarcados(r.areaNombre, r.capas, r.nivel)} idSvg={`esc-${area}`} />
         </section>
         )}
 
@@ -990,9 +971,9 @@ export default function ResultadoDelTestVista({
       formato={modo}
     />
   );
-  // La escalera (20 nov): el test no tiene a nadie que elija la meta: la de siempre.
+  // La escalera (20 nov; desde el 21 nov, sin meta e idéntica a la vieja): marca donde está cada capa.
   // Sin nivel («Sin determinar») no hay nada que marcar: no sale.
-  const escalera = r.nivel ? <EscaleraDeNiveles area={r.areaNombre} niveles={r.niveles} hoy={r.nivel} meta={metaPorDefecto(r.nivel)} idSvg="esc-test" interactiva={!enPdf} /> : null;
+  const escalera = r.nivel ? <EscaleraDeNiveles area={r.areaNombre} niveles={r.niveles} marcados={nivelesMarcados(r.areaNombre, r.capas, r.nivel)} idSvg="esc-test" interactiva={!enPdf} /> : null;
   // Dentro de la pantalla interna no es el título de la página: esa ya tiene el suyo (un solo h1 por pantalla).
   const TituloDelNivel = edicion ? "p" : "h1";
   const nivelGrande = (

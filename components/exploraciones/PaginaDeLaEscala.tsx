@@ -274,36 +274,6 @@ function TextoFijo({ o, guardar }: { o: EdicionDeUnTextoFijo; guardar: (clave: s
   );
 }
 
-/**
- * A dónde lo llevamos, en la escalera (20 nov): quien presenta elige el nivel antes de presentar. Se guarda como un texto
- * fijo de la página (la letra) y le llega al cliente al publicar. Elegir la de siempre la devuelve a la de siempre.
- */
-function MetaDeLaEscalera({
-  o,
-  guardar,
-}: {
-  o: Parameters<NonNullable<EdicionDeLaPagina["meta"]>>[0];
-  guardar: (clave: string, texto: string | null) => Promise<boolean>;
-}) {
-  return (
-    <div className="esc-elegir" role="group" aria-label="A dónde lo llevamos">
-      <span>A dónde lo llevamos:</span>
-      {o.opciones.map((n) => (
-        <button
-          key={n.letra}
-          type="button"
-          className={`esc-opcion${n.letra === o.actual ? " activa" : ""}`}
-          aria-pressed={n.letra === o.actual}
-          onClick={() => n.letra !== o.actual && void guardar(o.clave, n.letra === o.deSiempre ? null : n.letra)}
-        >
-          {n.nombre}
-        </button>
-      ))}
-      <small>Solo lo ves tú: el cliente ve la meta en la escalera al publicar.</small>
-    </div>
-  );
-}
-
 /** Lo que responde la ruta del Resumen al armarlo. */
 interface ResumenArmado {
   descartados?: string[];
@@ -624,7 +594,6 @@ export default function PaginaDeLaEscala() {
         </div>
       );
     },
-    meta: puedeEditar ? (o) => <MetaDeLaEscalera o={o} guardar={guardarFijo} /> : undefined,
     ayudaDelRadar: puedeEditar
       ? "Así lo ve el cliente. Arrastra una parte por su eje para cambiar su nivel; en su tarjeta, toca el texto para cambiarlo. Tócala en el radar para ver lo interno."
       : "Así lo ve el cliente. Toca una parte para ver lo interno.",
