@@ -49,19 +49,21 @@ function SortableItem({
   style,
   elemento = "div",
   className,
+  claseDelHandle,
   children,
 }: {
   id: string;
   style?: CSSProperties;
   elemento?: ElementoDelItem;
   className?: string;
+  claseDelHandle?: string;
   children: (handle: ReactNode) => ReactNode;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
   const handle = (
     <button
       type="button"
-      className="stl-drag-item"
+      className={claseDelHandle ?? "stl-drag-item"}
       title="Arrastra para reordenar"
       aria-label="Reordenar"
       {...attributes}
@@ -104,6 +106,7 @@ export function SortableItems<T>({
   itemStyle,
   elemento = "div",
   itemClassName,
+  claseDelHandle,
   children,
 }: {
   items: T[];
@@ -119,6 +122,11 @@ export function SortableItems<T>({
   elemento?: ElementoDelItem;
   /** La clase del envoltorio (`tr`/`li`), en edición y en lectura. */
   itemClassName?: string;
+  /**
+   * La clase del ⠿ fuera de un documento (22 nov, la lista de una casilla de la preventa): `.stl-drag-item` solo tiene
+   * estilo dentro de `.stl`. Sin ella, la del documento.
+   */
+  claseDelHandle?: string;
   /** Render de UN ítem; colocá `handle` dentro del elemento raíz (junto al ×). */
   children: (item: T, index: number, handle: ReactNode) => ReactNode;
 }) {
@@ -176,7 +184,7 @@ export function SortableItems<T>({
       <SortableContext items={ids} strategy={rectSortingStrategy}>
         {container(
           items.map((it, i) => (
-            <SortableItem key={ids[i]} id={ids[i]} style={itemStyle} elemento={elemento} className={itemClassName}>
+            <SortableItem key={ids[i]} id={ids[i]} style={itemStyle} elemento={elemento} className={itemClassName} claseDelHandle={claseDelHandle}>
               {(handle) => children(it, i, handle)}
             </SortableItem>
           )),

@@ -9,12 +9,15 @@
  *   · `proponerElContexto` (2026-11-07, los tres niveles): desde ese borrador, UNA llamada por exploración propone el
  *     objetivo, el desafío y el resultado del negocio (para la ficha de la empresa) y lo de la compra (sugerencias del
  *     Resumen). `validarEnLaFicha` lleva a la ficha lo que la persona validó, como propuesta.
+ *   · `sugerirElResultadoConLasMetas` (22 nov, noche): el resultado del negocio desde las metas principales (las 4 primeras,
+ *     en el orden de la persona), con Haiku y medido; queda como sugerencia en `propuesta.contextoPropuesto.resultado`.
  *   · `redactarMensajePrevio` (solo preventa): un correo corto o el guion de una llamada de 2 a 3 minutos para cuando no
  *     hubo contacto antes de la primera sesión. Nos presentamos, mencionamos clientes de referencia de su industria (solo
  *     la lista de Audiencia) y explicamos cómo será la reunión. Lo revisa y lo manda una persona: Nexus no envía nada.
  */
 import type Anthropic from "@anthropic-ai/sdk";
 import { getAnthropic } from "@/lib/anthropic";
+import { humanizeAgentError } from "@/lib/agents/anthropic-error";
 import { conContextoDeIA } from "@/lib/ai/contexto-de-corrida";
 import { comunicacionesDeLaCuenta } from "@/lib/comunicaciones/lectura-server";
 import { contextoDeSmarteam } from "@/lib/smarteam/contexto";
@@ -47,6 +50,8 @@ import { leerPropuesta } from "./esquemas";
 import { leerFicha, valorVigente } from "@/lib/clients/ficha";
 import { proponerALaFichaSinIA } from "@/lib/clients/ficha-propuesta";
 import { ORIGEN_DE_LA_PREVENTA } from "./a-la-ficha";
+import { parseObject } from "@/lib/ai/section-schema";
+import { leerElResultado, mensajeDelResultado, metasPrincipales, MODELO_DEL_RESULTADO, REGLAS_DEL_RESULTADO } from "./resultado-desde-las-metas";
 
 /** El campo de la ficha donde vive el desafío principal de la empresa: «Dolor principal» (2026-11-07). */
 export const CAMPO_DEL_DESAFIO = "dolorPrincipal" as const;
@@ -79,6 +84,9 @@ export async function borradorDelContexto(exploracionId: string): Promise<{ sabe
   }
   const delEquipo = loQueSabeElEquipo(estado.contenido.notas);
   if (delEquipo.length) piezas.push({ de: "Lo que agregó el equipo", texto: delEquipo.map((x) => `- ${x.texto.slice(0, 400)}`).join("\n") });
+  // 22 nov: las metas principales que ya confirmó el equipo (las 4 primeras, en su orden): de ahí sale el resultado del negocio.
+  const metas = metasPrincipales(estado.contenido.casillas.metas);
+  if (metas.length) piezas.push({ de: "Las metas confirmadas", texto: metas.map((m) => `- ${m}`).join("\n") });
 
   // Lo que dejaron las sesiones ya leídas de esta exploración (solo las suyas: `lecturasDeLaExploracion`).
   const automaticas = !fila.projectId && fila.client.kind === "PROSPECTO";
@@ -336,4 +344,83 @@ export async function proponerElContexto(
     await tx.exploracionDeVenta.update({ where: { id: exploracionId }, data: { propuesta: propuesta as unknown as object } });
   });
   return { ok: true, propuesto, compra };
+}
+
+/**
+ * El resultado del negocio sugerido con las METAS PRINCIPALES (Elías, 22 nov, noche): las 4 primeras, en el orden que dejó
+ * la persona. Lo pide la persona desde la tarjeta vacía («Sugerirlo con las metas»); nunca corre solo ni va solo a la
+ * ficha. Lee solo esa exploración (sus metas y el nombre de su empresa). Si la exploración todavía no pidió su propuesta
+ * del contexto, la pide entera (las metas ya son una de sus fuentes). Si no, una llamada a Haiku, medida, y el texto queda
+ * en `propuesta.contextoPropuesto.resultado` para Usar, Editar o Descartar.
+ */
+export async function sugerirElResultadoConLasMetas(
+  exploracionId: string,
+  email: string | null,
+): Promise<{ ok: true; resultado: string | null } | { ok: false; status: number; error: string }> {
+  const lectura = await leerExploracion(exploracionId);
+  if (lectura.estado !== "ok") return { ok: false, status: 404, error: "La exploración ya no existe." };
+  const fila = lectura.fila;
+  if (fila.archivadaEn) return { ok: false, status: 409, error: "La exploración está archivada." };
+  const estado = estadoDesdeFila(fila);
+  const metas = metasPrincipales(estado.contenido.casillas.metas);
+  if (!metas.length) return { ok: false, status: 409, error: "Todavía no hay metas confirmadas: se confirman en el Resumen." };
+  if ((await empresaEnLaFicha(fila.clientId).catch(() => null))?.resultado) {
+    return { ok: false, status: 409, error: "La ficha de la empresa ya tiene el resultado del negocio." };
+  }
+  /* Si la exploración todavía no pidió su propuesta del contexto (el objetivo y el desafío), se pide primero: sin ella no
+     hay dónde dejar la sugerencia. Su resultado NO se usa tal cual: lo reemplaza el de las metas, que sí pasa por la
+     comprobación de cifras (revisión del 22 nov). */
+  if (faltaPedirLaPropuesta(estado.propuesta.contextoPropuesto)) {
+    const p = await proponerElContexto(exploracionId, email);
+    if (!p.ok) return p;
+  }
+  const run = await prisma.agentRun.create({
+    data: {
+      agentSlug: AGENTE_DE_LO_QUE_SABEMOS,
+      clientId: fila.clientId,
+      projectId: fila.projectId,
+      status: "RUNNING",
+      stepLabel: "Exploración: el resultado del negocio con las metas",
+      currentPhase: "Leyendo las metas…",
+      triggeredByEmail: email,
+      filters: { exploracion: exploracionId, modo: "resultado-con-las-metas" },
+    },
+    select: { id: true },
+  });
+  const ia = { agentSlug: AGENTE_DE_LO_QUE_SABEMOS, agentRunId: run.id, clientId: fila.clientId, projectId: fila.projectId, triggeredByEmail: email, origen: "exploraciones/contexto:resultado-con-las-metas" };
+  let leido: ReturnType<typeof leerElResultado>;
+  try {
+    const r = await conContextoDeIA(ia, () =>
+      getAnthropic().messages.create({
+        model: MODELO_DEL_RESULTADO,
+        max_tokens: 400,
+        system: REGLAS_DEL_RESULTADO,
+        messages: [{ role: "user", content: mensajeDelResultado(fila.client.name, metas) }],
+      }),
+    );
+    leido = leerElResultado(parseObject(r.content.flatMap((b) => (b.type === "text" ? [b.text] : [])).join("\n")), metas);
+  } catch (e) {
+    // El motivo real (la IA caída, el tope del mes) y no uno genérico.
+    const mensaje = humanizeAgentError(e);
+    await prisma.agentRun.update({ where: { id: run.id }, data: { status: "ERROR", currentPhase: null, output: JSON.stringify({ error: mensaje }) } }).catch(() => {});
+    return { ok: false, status: 502, error: mensaje };
+  }
+  await prisma.agentRun
+    .update({ where: { id: run.id }, data: { status: "DONE", currentPhase: null, output: JSON.stringify(leido) } })
+    .catch(() => {});
+  if (!leido.ok) {
+    console.warn(`[exploraciones/contexto] el resultado con las metas no se sugiere: ${leido.motivo}`);
+    return { ok: false, status: 422, error: "Nexus no pudo escribirlo sin inventar nada. Escríbelo tú, o vuelve a pedirlo." };
+  }
+  const texto = leido.texto;
+  await prisma.$transaction(async (tx) => {
+    await bloquearFila(tx, exploracionId);
+    const f = await tx.exploracionDeVenta.findUnique({ where: { id: exploracionId }, select: { propuesta: true } });
+    if (!f) return;
+    const p = leerPropuesta(f.propuesta);
+    if (!p.contextoPropuesto) return;
+    const propuesta = { ...p, contextoPropuesto: { ...p.contextoPropuesto, resultado: texto } };
+    await tx.exploracionDeVenta.update({ where: { id: exploracionId }, data: { propuesta: propuesta as unknown as object } });
+  });
+  return { ok: true, resultado: texto };
 }

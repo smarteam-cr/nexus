@@ -43,7 +43,6 @@ import { firmaDelArea, TOPE_DE_LA_DESCRIPCION_A_MANO, type DescripcionGuardada }
 import type { ClaveDeEquipo } from "./equipos";
 import { editarElResumen, type ResumenGuardado } from "./resumen-de-la-escala";
 import type { ResumenAnterior } from "./resumen-anterior";
-import type { ClaveDelResumen, TarjetaCompacta } from "./tarjetas-compactas";
 import type { ActividadDelCaso, CasosAnteriores, LugarEnElPlan, ParaVentas, ValorDeVenta } from "@/lib/casos-de-uso/armado";
 import { vuelveASugeridos, type Personalizacion, type RevisionDeLosCasos } from "@/lib/casos-de-uso/personalizar";
 import type { OrdenDeLosCasos } from "@/lib/casos-de-uso/orden";
@@ -359,13 +358,6 @@ export interface ContenidoDeExploracion {
    * a mano. Una sola versión atrás. No sube la versión y no lo ve el cliente.
    */
   resumenAnterior?: ResumenAnterior;
-  /**
-   * La versión COMPACTA de cada tarjeta del Resumen (22 nov, ./tarjetas-compactas.ts): solo para mostrar, con la huella de
-   * las líneas de las que salió. La escribe el agente (Haiku) después de un cambio de esa casilla; si la casilla cambió y
-   * la huella ya no coincide, la tarjeta vuelve a lo de siempre recortado. No sube la versión y nunca reemplaza lo
-   * guardado. Opcional: las exploraciones de antes no la tienen.
-   */
-  tarjetasCompactas?: Partial<Record<ClaveDelResumen, TarjetaCompacta>>;
   /**
    * El día (AAAA-MM-DD, Costa Rica) en que entró cada particularidad, por su texto normalizado (`claveDeItemDeLista`). Lo
    * pone `aplicarOperaciones` a la que es nueva respecto de lo de antes (22 nov). Las de antes no lo tienen: se muestran
@@ -2136,9 +2128,8 @@ export function conFechasDeLasParticularidades(antes: EstadoDeExploracion, despu
 export function cambioLoConfirmado(antes: EstadoDeExploracion, despues: EstadoDeExploracion): boolean {
   // Las lápidas (y los títulos de los casos descartados) son de lo propuesto: no suben la versión. Tampoco el registro de las usadas.
   // Ni la descripción de la escala que ve el cliente: un texto por área, gana el último (2026-11-08). Ni su Resumen (9 nov), ni el anterior (21 nov).
-  // Ni las tarjetas compactas del Resumen (22 nov): son de pantalla, las escribe el agente.
   const sinLapidas = (c: ContenidoDeExploracion) =>
-    exacto({ ...c, descartadas: [], casosDescartados: [], asociacionesDescartadas: undefined, usadas: undefined, descripcionesDeLaEscala: undefined, resumenDeLaEscala: undefined, resumenAnterior: undefined, tarjetasCompactas: undefined });
+    exacto({ ...c, descartadas: [], casosDescartados: [], asociacionesDescartadas: undefined, usadas: undefined, descripcionesDeLaEscala: undefined, resumenDeLaEscala: undefined, resumenAnterior: undefined });
   return (
     sinLapidas(antes.contenido) !== sinLapidas(despues.contenido) ||
     exacto(antes.areas) !== exacto(despues.areas) ||

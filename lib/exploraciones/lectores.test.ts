@@ -112,6 +112,11 @@ const CENSO: Record<string, { destino: Destino; motivo: string }> = {
     motivo:
       "El chokepoint de /external/escala/[token]: del token a la foto publicada (16 nov), si la puerta dice que todavía se muestra (seMuestraAlCliente). La foto la armó escalaParaElCliente al publicar. No toca la exploración.",
   },
+  "app/api/sales/exploraciones/[id]/list-order/route.ts": {
+    destino: "ventas",
+    motivo:
+      "22 nov (noche): «la IA propone, tú ordenas». Lee lo guardado de UNA casilla de la exploración (metas, planes, retos…) y el nombre de su empresa para sugerir qué juntar y qué subir; no guarda nada. Pantalla interna, con la guardia de la exploración.",
+  },
   "app/api/sales/exploraciones/[id]/escala/descripcion/route.ts": {
     destino: "ventas",
     motivo:
