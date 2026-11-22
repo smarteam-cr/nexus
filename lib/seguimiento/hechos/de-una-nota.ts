@@ -11,6 +11,7 @@ import { DESTINOS } from "../destinos";
 import type { DestinoDelHecho } from "./estado";
 import { HERRAMIENTA_DE_HECHOS } from "./pedido";
 import { leerSalidaDeHechos, prepararParaVerificar, type SalidaDeHechos } from "./salida";
+import { citaEstaEnLasFuentes, normalizarParaCita } from "@/lib/timeline/limites";
 
 export interface HechoCrudoDeLaNota {
   tipo: string;
@@ -37,4 +38,35 @@ export function hechosVerificadosDeUnaNota(texto: string, crudos: readonly Hecho
 /** Sus destinos: la preventa donde se contó, delegados en ella (ya tiene la nota). */
 export function destinosDeUnaNota(exploracionId: string): DestinoDelHecho[] {
   return DESTINOS.filter((d) => d.salida === "preventa").map((d) => ({ clave: d.clave, estado: "delegado" as const, ref: { tipo: "preventa" as const, exploracionIds: [exploracionId] } }));
+}
+
+/* ── Cuando la nota cambia (etapa 0 del plan maestro, 22 nov) ──────────────────────── */
+
+/**
+ * Las notas de «Lo que sabes del cliente» que cambiaron: las que se quitaron y las que se editaron. Una nota nueva no
+ * cuenta (sus hechos los escribe quien la guarda). Solo claves `sabido:`; las demás notas de la preventa no tienen hechos.
+ */
+export function notasQueCambiaron(antes: Readonly<Record<string, string>>, despues: Readonly<Record<string, string>>): string[] {
+  return Object.keys(antes).filter((k) => k.startsWith("sabido:") && (antes[k] ?? "").trim() && (despues[k] ?? "").trim() !== antes[k].trim());
+}
+
+/** Un hecho de una nota, con lo que hace falta para saber si sigue. */
+export interface HechoDeUnaNotaGuardado {
+  id: string;
+  notaClave: string | null;
+  cita: string;
+}
+
+/**
+ * Los hechos que se van: los de una nota que se quitó, y los de una nota editada cuya cita ya no está en el texto nuevo
+ * (la misma comprobación con que nacieron: palabra por palabra, sin tildes ni comillas). Los que siguen escritos se
+ * quedan. No inventa hechos nuevos: eso lo hace Nexus al guardar otra vez desde la conversación.
+ */
+export function hechosQueSeVan(hechos: readonly HechoDeUnaNotaGuardado[], despues: Readonly<Record<string, string>>): string[] {
+  return hechos
+    .filter((h) => {
+      const texto = h.notaClave ? (despues[h.notaClave] ?? "").trim() : "";
+      return !texto || !citaEstaEnLasFuentes(h.cita, normalizarParaCita(texto));
+    })
+    .map((h) => h.id);
 }

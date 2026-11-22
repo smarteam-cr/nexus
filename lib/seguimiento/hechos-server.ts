@@ -64,7 +64,7 @@ import {
   hechosPrendidos,
 } from "./hechos/reglas";
 import { leerSalidaDeHechos, prepararParaVerificar } from "./hechos/salida";
-import { destinosDeUnaNota, hechosVerificadosDeUnaNota, type HechoCrudoDeLaNota } from "./hechos/de-una-nota";
+import { destinosDeUnaNota, hechosQueSeVan, hechosVerificadosDeUnaNota, notasQueCambiaron, type HechoCrudoDeLaNota } from "./hechos/de-una-nota";
 import { textoParaHechos } from "./hechos/texto-de-la-reunion";
 import type { TipoDeHecho } from "./hechos/tipos";
 
@@ -714,6 +714,35 @@ export async function escribirHechosDeUnaNota(o: {
   } catch (e) {
     if (!esquemaDesactualizado(e)) console.error("[hechos] no se pudieron escribir los hechos de la nota", o.notaClave, e instanceof Error ? e.message : e);
     return { estado: "apagados" };
+  }
+}
+
+/**
+ * Al quitar o editar una nota de «Lo que sabes del cliente» (etapa 0 del plan maestro, 22 nov): se van los hechos de la
+ * nota quitada y, de una editada, los que ya no están escritos en ella (`hechosQueSeVan`). Antes se quedaban: debajo de
+ * una nota editada se veían hechos que decían otra cosa, y los de una nota quitada seguían en la tabla. Acotado a la
+ * preventa y a su cliente (los pone quien llama, desde la fila). Sin notas cambiadas no consulta nada. NUNCA lanza.
+ */
+export async function retirarHechosDeNotasCambiadas(o: {
+  exploracionId: string;
+  clientId: string;
+  antes: Readonly<Record<string, string>>;
+  despues: Readonly<Record<string, string>>;
+}): Promise<{ retirados: number }> {
+  const claves = notasQueCambiaron(o.antes, o.despues);
+  if (!claves.length) return { retirados: 0 };
+  try {
+    const hechos = await prisma.hechoDeReunion.findMany({
+      where: { exploracionId: o.exploracionId, clientId: o.clientId, notaClave: { in: claves } },
+      select: { id: true, notaClave: true, cita: true },
+    });
+    const ids = hechosQueSeVan(hechos, o.despues);
+    if (!ids.length) return { retirados: 0 };
+    const r = await prisma.hechoDeReunion.deleteMany({ where: { id: { in: ids }, exploracionId: o.exploracionId, clientId: o.clientId } });
+    return { retirados: r.count };
+  } catch (e) {
+    if (!esquemaDesactualizado(e)) console.error("[hechos] no se pudieron retirar los hechos de las notas", claves, e instanceof Error ? e.message : e);
+    return { retirados: 0 };
   }
 }
 

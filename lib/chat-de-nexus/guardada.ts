@@ -11,7 +11,7 @@
  * Con eso `reconstruirLaConversacion` arma lo que el cajón muestra al volver: los mensajes (cada respuesta con sus citas),
  * lo propuesto y lo aplicado. Las corridas de antes de esto no traen `mensajes`: esas no se reconstruyen.
  */
-import { TOPES, type CambioPropuesto, type MensajeDeLaConversacion, type ResultadoDelTurno } from "./conversacion";
+import { esMarcaDelMensaje, TOPES, type CambioPropuesto, type MensajeDeLaConversacion, type ResultadoDelTurno } from "./conversacion";
 import type { RespuestaDeNexus } from "./respuesta";
 
 /** Un mensaje como se ve: el de Nexus que respondió una pregunta lleva sus citas. */
@@ -84,7 +84,7 @@ function mensajesDe(s: SalidaDeLaVuelta): MensajeDeLaConversacion[] | null {
   const m = s.mensajes
     .map((x) => objeto(x))
     .filter((x): x is Record<string, unknown> => !!x && (x.de === "persona" || x.de === "nexus") && typeof x.texto === "string" && !!x.texto)
-    .map((x): MensajeDeLaConversacion => ({ de: x.de as MensajeDeLaConversacion["de"], texto: x.texto as string, ...(x.es === "consulta" || x.es === "respuesta" ? { es: x.es as "consulta" | "respuesta" } : {}) }));
+    .map((x): MensajeDeLaConversacion => ({ de: x.de as MensajeDeLaConversacion["de"], texto: x.texto as string, ...(esMarcaDelMensaje(x.es) ? { es: x.es } : {}) }));
   return m.length ? m : null;
 }
 

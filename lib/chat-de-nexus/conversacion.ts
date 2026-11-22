@@ -49,9 +49,17 @@ export interface MensajeDeLaConversacion {
   /**
    * Qué fue: de la persona, «consulta» si preguntó algo de la cuenta (no va a la nota); de Nexus, «respuesta» si le
    * respondió (no cuenta como una ronda de preguntas). Sin marca: algo que cuenta la persona, o una pregunta de Nexus.
+   * Desde el 22 nov (etapa 0 del plan maestro): «cortesia», un «gracias» o un «ok» de la persona y lo que Nexus le
+   * contesta (ninguno va a la nota ni es una ronda de preguntas); «guardado», lo que la persona ya guardó como nota en
+   * esta conversación: sigue a la vista, pero no vuelve a la nota siguiente ni respalda sus cambios.
    */
-  es?: "consulta" | "respuesta";
+  es?: MarcaDelMensaje;
 }
+
+/** Las marcas de un mensaje (`MensajeDeLaConversacion.es`). Las valida la ruta y las lee la conversación guardada. */
+export const MARCAS_DEL_MENSAJE = ["consulta", "respuesta", "cortesia", "guardado"] as const;
+export type MarcaDelMensaje = (typeof MARCAS_DEL_MENSAJE)[number];
+export const esMarcaDelMensaje = (v: unknown): v is MarcaDelMensaje => typeof v === "string" && (MARCAS_DEL_MENSAJE as readonly string[]).includes(v);
 
 /** Un lugar al que puede ir lo que contó la persona (en la preventa, una tarjeta de la arquitectura de la venta). */
 export interface DestinoDisponible {
@@ -104,6 +112,8 @@ export type ResultadoDelTurno =
   /** La persona preguntó algo de la cuenta: lo responde la acción «leer el contexto de la cuenta» (./respuesta.ts). */
   | { tipo: "consulta"; pregunta: string }
   | { tipo: "respuesta"; respuesta: RespuestaDeNexus }
+  /** Un «gracias» o un «ok» (`esCortesia`): Nexus contesta corto, sin llamar a la IA y sin proponer guardar nada. */
+  | { tipo: "cortesia"; texto: string }
   /** `sinLeer`: la IA no respondió o no se entendió. La nota se guarda igual, y la pantalla lo dice. */
   | { tipo: "listo"; cambios: CambioPropuesto[]; hechos: HechoPropuesto[]; descartados: number; sinLeer?: true };
 
@@ -124,15 +134,64 @@ export function mensajesValidos(m: readonly MensajeDeLaConversacion[]): MensajeD
   return limpios;
 }
 
-/** Cuántas veces ya preguntó Nexus en esta conversación (sus respuestas a una consulta no cuentan). */
+/**
+ * Cuántas veces ya preguntó Nexus por lo que se está contando (sus respuestas y lo que contesta a un «gracias» no
+ * cuentan). Después de guardar, la nota nueva arranca con sus dos rondas: solo cuenta desde el último «Guardado».
+ */
 export function rondasDePreguntas(m: readonly MensajeDeLaConversacion[]): number {
-  return m.filter((x) => x.de === "nexus" && x.es !== "respuesta").length;
+  let desde = 0;
+  m.forEach((x, i) => {
+    if (x.de === "nexus" && x.es === "cortesia" && x.texto === YA_QUEDO_GUARDADO) desde = i + 1;
+  });
+  return m.slice(desde).filter((x) => x.de === "nexus" && !x.es).length;
 }
 
-/** Lo que contó la persona, sin sus consultas: lo que va a la nota y contra lo que se verifican las citas. */
+/**
+ * Lo que contó la persona y todavía no guardó: lo que va a la nota y contra lo que se verifican las citas. Sin sus
+ * consultas, sus «gracias» ni lo que ya guardó (cualquier mensaje suyo con marca).
+ */
 export function loQueConto(m: readonly MensajeDeLaConversacion[]): string[] {
-  return m.filter((x) => x.de === "persona" && x.es !== "consulta").map((x) => x.texto.trim()).filter(Boolean);
+  return m.filter((x) => x.de === "persona" && !x.es).map((x) => x.texto.trim()).filter(Boolean);
 }
+
+/**
+ * Un «gracias», un «ok» o un «listo» solos (Elías, 21 nov: un «gracias» proponía guardarse como nota). Solo si TODO el
+ * mensaje es eso: palabras de cortesía, «Nexus», signos y emojis. «Ok, pierden 40 mil al mes» cuenta algo y no es esto.
+ */
+const PALABRAS_DE_CORTESIA = new Set(
+  "gracias muchas mil muchisimas ok okay oki okey vale listo perfecto perfecta genial excelente super buenisimo buenisima bueno bien dale acuerdo entendido entendida entiendo claro chevere".split(" "),
+);
+/** Las que acompañan a una de cortesía pero solas no lo son («de», «muy», «Nexus»). */
+const ACOMPANAN_A_LA_CORTESIA = new Set(["nexus", "muy", "de", "y", "te", "por", "eso", "todo", "esta", "va"]);
+export function esCortesia(texto: string): boolean {
+  const t = sinTildes(texto.trim().toLowerCase());
+  if (!t || t.length > 60) return false;
+  const palabras = t
+    .replace(/[\p{Extended_Pictographic}\p{Emoji_Modifier}\p{Join_Control}\p{Variation_Selector}]/gu, " ")
+    .replace(/[¡!¿?.,;:…()"«»“”'-]/g, " ")
+    .split(/\s+/)
+    .filter(Boolean);
+  // Solo un emoji («👍»): cortesía.
+  if (!palabras.length) return /\p{Extended_Pictographic}/u.test(t);
+  return palabras.every((p) => PALABRAS_DE_CORTESIA.has(p) || ACOMPANAN_A_LA_CORTESIA.has(p)) && palabras.some((p) => PALABRAS_DE_CORTESIA.has(p));
+}
+
+/** Lo que Nexus le contesta a un «gracias» o un «ok». */
+export const RESPUESTA_A_LA_CORTESIA = "Con gusto. Si sabes algo más del cliente, cuéntamelo, o pregúntame lo que necesites.";
+
+/**
+ * Seguir conversando después de guardar (etapa 0 del plan maestro, 22 nov): lo que la persona contó queda marcado como
+ * «guardado» (a la vista, fuera de la nota siguiente) y Nexus deja dicho que lo guardó. Así lo próximo que cuente arma
+ * una nota nueva con sus palabras nuevas, sin repetir la anterior.
+ */
+export function paraSeguirDespuesDeGuardar<M extends MensajeDeLaConversacion>(m: readonly M[]): M[] {
+  const marcados = m.map((x) => (x.de === "persona" && !x.es ? { ...x, es: "guardado" as const } : x));
+  const ultimo = m[m.length - 1];
+  if (ultimo?.de === "nexus" && ultimo.es === "cortesia" && ultimo.texto === YA_QUEDO_GUARDADO) return marcados;
+  return [...marcados, { de: "nexus", es: "cortesia", texto: YA_QUEDO_GUARDADO } as M];
+}
+/** Lo que Nexus deja en la conversación cuando la persona sigue después de guardar. */
+export const YA_QUEDO_GUARDADO = "Guardado. ¿Algo más?";
 
 /**
  * Lo que le pide algo a Nexus, comparado SIN tildes («resumelos» y «resúmelos» son lo mismo). Solo pedidos que no pueden
@@ -213,7 +272,7 @@ export function empiezaContando(texto: string): boolean {
  * como nota» debajo de una respuesta, «¿Era una pregunta?» debajo de lo que iba a guardarse). `contar` y `preguntar`: lo
  * que eligió la persona con esos botones.
  */
-export type ComoSeLee = "pregunta" | "contar" | "duda";
+export type ComoSeLee = "pregunta" | "contar" | "duda" | "cortesia";
 export function comoSeLee(m: readonly MensajeDeLaConversacion[], o: { contar?: boolean; preguntar?: boolean } = {}): ComoSeLee {
   if (o.contar) return "contar";
   if (o.preguntar) return "pregunta";
@@ -222,7 +281,9 @@ export function comoSeLee(m: readonly MensajeDeLaConversacion[], o: { contar?: b
   if (!ultimo || ultimo.de !== "persona") return "contar";
   // Contesta lo que Nexus le preguntó («¿De qué período?» → «¿Mensual, creo?»): eso es contar. Si en vez de contestar
   // preguntó otra cosa, la salida es «¿Era una pregunta?».
-  if (antes && antes.de === "nexus" && antes.es !== "respuesta") return "contar";
+  if (antes && antes.de === "nexus" && !antes.es) return "contar";
+  // Un «gracias» o un «ok» solos no se cuentan ni se responden: Nexus contesta corto (22 nov).
+  if (esCortesia(ultimo.texto)) return "cortesia";
   if (empiezaContando(ultimo.texto)) return conSignoDePregunta(ultimo.texto.trim().toLowerCase()) ? "duda" : "contar";
   if (pareceUnaPregunta(ultimo.texto)) return "pregunta";
   return "duda";
@@ -235,7 +296,7 @@ export function comoSeLee(m: readonly MensajeDeLaConversacion[], o: { contar?: b
  */
 export function paraPreguntar<M extends MensajeDeLaConversacion>(m: readonly M[]): { base: M[]; texto: string } | null {
   const ultimo = m[m.length - 1];
-  if (!ultimo || ultimo.de !== "persona" || ultimo.es === "consulta" || !ultimo.texto.trim()) return null;
+  if (!ultimo || ultimo.de !== "persona" || ultimo.es || !ultimo.texto.trim()) return null;
   return { base: m.slice(0, -1), texto: ultimo.texto.trim() };
 }
 
@@ -307,7 +368,19 @@ function bloqueDeLosDestinos(destinos: readonly DestinoDisponible[]): string {
 
 function bloqueDeLaConversacion(m: readonly MensajeDeLaConversacion[]): string {
   const quien = (x: MensajeDeLaConversacion) =>
-    x.de === "persona" ? (x.es === "consulta" ? "PERSONA (preguntó)" : "PERSONA") : x.es === "respuesta" ? "NEXUS (respondió)" : "NEXUS";
+    x.de === "persona"
+      ? x.es === "consulta"
+        ? "PERSONA (preguntó)"
+        : x.es === "guardado"
+          ? "PERSONA (ya guardado como nota: no lo propongas de nuevo)"
+          : x.es === "cortesia"
+            ? "PERSONA (agradeció)"
+            : "PERSONA"
+      : x.es === "respuesta"
+        ? "NEXUS (respondió)"
+        : x.es === "cortesia"
+          ? "NEXUS (contestó)"
+          : "NEXUS";
   return m.map((x) => `${quien(x)}: ${x.texto}`).join("\n\n");
 }
 
@@ -316,7 +389,7 @@ function bloqueDeLaConversacion(m: readonly MensajeDeLaConversacion[]): string {
  * nombre de quien escribe, a propósito: con él, el modelo armaba preguntas sobre esa persona («¿qué dijo Elías…?»).
  * Quién y cuándo los pone el servidor en la nota.
  */
-export function pedidoDelTurno(ctx: ContextoParaNexus, m: readonly MensajeDeLaConversacion[], lectura: Exclude<ComoSeLee, "pregunta">): Anthropic.Messages.MessageCreateParamsNonStreaming {
+export function pedidoDelTurno(ctx: ContextoParaNexus, m: readonly MensajeDeLaConversacion[], lectura: Exclude<ComoSeLee, "pregunta" | "cortesia">): Anthropic.Messages.MessageCreateParamsNonStreaming {
   const pregunta = puedePreguntar(m);
   const texto = [
     `Estás en ${ctx.donde}. La empresa: ${ctx.empresa}. Te escribe alguien del equipo de Smarteam.`,

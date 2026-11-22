@@ -51,6 +51,10 @@ import { PREGUNTAS_POR_DIA } from "@/lib/chat-de-nexus/respuesta";
 import { alGuardarLaNota, cerrarEnLaPreventa, conversacionEnLaPreventa, estadosEnLaPreventa, vueltaEnLaPreventa } from "./nexus-en-la-preventa-server";
 import { hechosDeLasNotas } from "./hechos-de-las-notas-server";
 import { RESPUESTA_SIN_ACCESO } from "@/lib/chat-de-nexus/guardada";
+import { leerArchivoDeLaEscala } from "@/lib/escala/documento/archivos";
+import { parsearEscala } from "@/lib/escala/documento/parsear";
+import { aplicarCambios } from "./servidor";
+import { _olvidarElGastoDeNexus } from "@/lib/ai/tope-de-nexus-server";
 
 const EMAIL = "liz@smarteam.test";
 const CON_ACCESO = async () => true;
@@ -68,6 +72,7 @@ afterAll(() => {
   else process.env.SEGUIMIENTO_HECHOS = antes;
 });
 beforeEach(() => {
+  _olvidarElGastoDeNexus();
   siguiente = LISTO;
   fallaLaRespuesta = false;
   pedidos.length = 0;
@@ -133,6 +138,35 @@ describe("una conversación en la preventa", () => {
     expect(otraVez.ok && otraVez.hechos).toEqual({ estado: "ya-estaban", escritos: 1 });
     expect(await prisma.hechoDeReunion.count({ where: { exploracionId: id } })).toBe(1);
     expect((await hechosFueraDeSuCliente(prisma)).fuera).toEqual([]);
+  });
+
+  it("un «gracias» no llama a la IA, no deja corrida ni propone guardar (22 nov)", async () => {
+    const { id } = await sembrar();
+    const v = await vueltaEnLaPreventa(id, CONVERSACION, [{ de: "persona", texto: "¡Gracias, Nexus!" }], EMAIL, CON_ACCESO);
+    if (!v.ok) throw new Error(v.error);
+    expect(v.turno.tipo).toBe("cortesia");
+    expect(pedidos).toHaveLength(0);
+    expect(await prisma.agentRun.count({ where: { triggeredByEmail: EMAIL } })).toBe(0);
+  });
+
+  it("el tope del mes de Nexus conversando: avisa desde US$ 80 y frena en US$ 100, sin contar otras IA (22 nov)", async () => {
+    const { id } = await sembrar();
+    await prisma.llmCall.createMany({
+      data: [
+        { model: "claude-sonnet-4-6", costUsd: 60, origen: "chat:preventa" },
+        { model: "claude-haiku-4-5", costUsd: 25, origen: "impacto:escala" },
+        { model: "claude-sonnet-4-6", costUsd: 500, origen: "tareas/chat" },
+      ],
+    });
+    const conAviso = await vueltaEnLaPreventa(id, CONVERSACION, [{ de: "persona", texto: NOTA }], EMAIL, CON_ACCESO);
+    expect(conAviso).toMatchObject({ ok: true, aviso: "Este mes Nexus lleva US$ 85 de los US$ 100 que tiene para conversar." });
+
+    await prisma.llmCall.create({ data: { model: "claude-sonnet-4-6", costUsd: 15, origen: "chat:preventa:respuesta" } });
+    _olvidarElGastoDeNexus();
+    const pedidosAntes = pedidos.length;
+    const frenada = await vueltaEnLaPreventa(id, "conv-de-prueba-2", [{ de: "persona", texto: NOTA }], EMAIL, CON_ACCESO);
+    expect(frenada).toMatchObject({ ok: false, status: 429 });
+    expect(pedidos.length).toBe(pedidosAntes);
   });
 
   it("una nota de otra persona no deja hechos a nombre de quien llama", async () => {
@@ -333,6 +367,69 @@ describe("los hechos de las notas, debajo de cada nota", () => {
     const { id, clientId } = await sembrar();
     await prisma.hechoDeReunion.create({ data: fila(clientId, id, "La empresa pierde plata") });
     expect(await hechosDeLasNotas(id)).toEqual({});
+  });
+});
+
+describe("quitar o editar una nota se lleva los hechos que ya no dice (22 nov)", () => {
+  const general = parsearEscala(leerArchivoDeLaEscala("escala"));
+  const hecho = (clientId: string, exploracionId: string, frase: string, cita: string) => ({
+    clientId,
+    exploracionId,
+    notaClave: CLAVE,
+    dichoPorEmail: EMAIL,
+    tipo: "cuenta",
+    frase,
+    cita,
+    citaFuente: "texto",
+    huella: `cuenta|${frase}`,
+    fechaDeLaReunion: new Date("2026-11-21T15:00:00Z"),
+  });
+
+  async function conDosHechos() {
+    const s = await sembrar();
+    await guardarLaNota(s.id);
+    await prisma.hechoDeReunion.createMany({
+      data: [
+        hecho(s.clientId, s.id, "La empresa pierde plata por su cartera", "pierden unos 40 mil dólares al mes"),
+        hecho(s.clientId, s.id, "Lo confirmó el gerente", "El gerente nos confirmó"),
+      ],
+    });
+    return s;
+  }
+
+  it("al quitar la nota se van todos sus hechos", async () => {
+    const { id } = await conDosHechos();
+    const r = await aplicarCambios(id, 0, [{ op: "nota", paso: CLAVE, texto: "" }], general, { quienPide: EMAIL });
+    expect(r.estado).toBe("ok");
+    expect(await prisma.hechoDeReunion.count({ where: { exploracionId: id } })).toBe(0);
+  });
+
+  it("al editarla se queda el hecho que sigue escrito y se va el que no", async () => {
+    const { id } = await conDosHechos();
+    const r = await aplicarCambios(id, 0, [{ op: "nota", paso: CLAVE, texto: "Pierden unos 40 mil dólares al mes, según la contadora." }], general, { quienPide: EMAIL });
+    expect(r.estado).toBe("ok");
+    const quedan = await prisma.hechoDeReunion.findMany({ where: { exploracionId: id }, select: { frase: true } });
+    expect(quedan.map((h) => h.frase)).toEqual(["La empresa pierde plata por su cartera"]);
+  });
+
+  it("no toca los hechos de una reunión del mismo cliente", async () => {
+    const { id, clientId } = await conDosHechos();
+    const sesion = await prisma.firefliesSession.create({ data: { id: "s-de-prueba-1", title: "Reunión con Centauro", date: new Date("2026-11-20T15:00:00Z"), resolvedClientId: clientId }, select: { id: true } });
+    await prisma.hechoDeReunion.create({
+      data: { clientId, sessionId: sesion.id, tipo: "cuenta", frase: "De la reunión", cita: "pierden unos 40 mil dólares al mes", citaFuente: "transcripcion", huella: "cuenta|reunion", fechaDeLaReunion: new Date("2026-11-20T15:00:00Z") },
+    });
+    await aplicarCambios(id, 0, [{ op: "nota", paso: CLAVE, texto: "" }], general, { quienPide: EMAIL });
+    expect(await prisma.hechoDeReunion.count({ where: { clientId } })).toBe(1);
+    expect(await prisma.hechoDeReunion.count({ where: { sessionId: sesion.id } })).toBe(1);
+  });
+
+  it("no toca los hechos de otra preventa con la misma clave de nota", async () => {
+    const { id } = await conDosHechos();
+    const otra = await sembrar2();
+    const deOtra = await prisma.exploracionDeVenta.findUniqueOrThrow({ where: { id: otra }, select: { clientId: true } });
+    await prisma.hechoDeReunion.create({ data: hecho(deOtra.clientId, otra, "De otra preventa", "pierden unos 40 mil dólares al mes") });
+    await aplicarCambios(id, 0, [{ op: "nota", paso: CLAVE, texto: "" }], general, { quienPide: EMAIL });
+    expect(await prisma.hechoDeReunion.count({ where: { exploracionId: otra } })).toBe(1);
   });
 });
 

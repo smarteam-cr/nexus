@@ -267,7 +267,7 @@ export async function aplicarCambios(
   /** `db`: el cliente de un script (scripts/migrar-reuniones-de-los-documentos.ts, pool de 2). Sin él, el de la app. */
   o: { eventosDeConfianza?: boolean; quienPide?: string | null; db?: Pick<typeof prisma, "$transaction"> } = {},
 ): Promise<ResultadoDeCambios> {
-  return (o.db ?? prisma).$transaction(async (tx) => {
+  const r = await (o.db ?? prisma).$transaction(async (tx) => {
     await bloquearFila(tx, id);
     const fila = await tx.exploracionDeVenta.findUnique({ where: { id }, select: SELECT_FILA });
     if (!fila) return { estado: "no-existe" } as const;
@@ -300,6 +300,15 @@ export async function aplicarCambios(
     });
     return { estado: "ok", fila: actualizada, confirmado, responsableAntes: antes.responsableEmail, antes } as const;
   });
+  // Una nota de «Lo que sabes del cliente» quitada o editada se lleva los hechos que ya no dice (22 nov). Después de
+  // guardar y sin lanzar: si falla, la nota queda guardada igual y la pantalla ya no muestra hechos de una nota quitada.
+  // Un script (`o.db`) no edita esas notas.
+  if (r.estado === "ok" && !o.db) {
+    const despues = estadoDesdeFila(r.fila).contenido.notas;
+    const { retirarHechosDeNotasCambiadas } = await import("@/lib/seguimiento/hechos-server");
+    await retirarHechosDeNotasCambiadas({ exploracionId: id, clientId: r.fila.clientId, antes: r.antes.contenido.notas, despues });
+  }
+  return r;
 }
 
 /**

@@ -23,7 +23,7 @@ import type { ContextoParaNexus, MensajeDeLaConversacion } from "@/lib/chat-de-n
 import { armarLasFuentes, type FuenteDeLaCuenta, type LoQueQuedoAfuera } from "@/lib/chat-de-nexus/respuesta";
 import { diaEnCostaRica } from "@/lib/impacto/respuesta-del-cliente";
 import { bloqueDeLoAceptado } from "@/lib/impacto/respuesta-del-cliente";
-import { escribirHechosDeUnaNota, type ResultadoDeLosHechosDeLaNota } from "@/lib/seguimiento/hechos-server";
+import { escribirHechosDeUnaNota, retirarHechosDeNotasCambiadas, type ResultadoDeLosHechosDeLaNota } from "@/lib/seguimiento/hechos-server";
 import { AGENTE_DE_LA_EXPLORACION } from "./agente";
 import type { EstadoDeExploracion } from "./contenido";
 import { VALIDADOR_ESTRICTO } from "./esquemas";
@@ -144,7 +144,8 @@ export async function vueltaEnLaPreventa(
 }
 
 export type GuardadoEnLaPreventa =
-  | { ok: true; hechos: ResultadoDeLosHechosDeLaNota | { estado: "sin-conversacion" }; impacto: ImpactoEnLaEscala }
+  /** «la-nota-cambio»: la editaron o la quitaron mientras se revisaba; sus hechos no se escriben. */
+  | { ok: true; hechos: ResultadoDeLosHechosDeLaNota | { estado: "sin-conversacion" | "la-nota-cambio" }; impacto: ImpactoEnLaEscala }
   | { ok: false; status: number; error: string };
 
 /**
@@ -165,10 +166,21 @@ export async function alGuardarLaNota(exploracionId: string, conversacion: strin
     impactoDeLaNotaEnLaEscala(exploracionId, clave, email),
   ]);
   const suya = autor.por.toLowerCase() === email.toLowerCase();
-  const hechos =
-    listo && suya
-      ? await escribirHechosDeUnaNota({ exploracionId, clientId: p.fila.clientId, notaClave: clave, texto, dichoPorEmail: autor.por, crudos: listo.turno.hechos, agentRunId: listo.agentRunId })
-      : ({ estado: "sin-conversacion" } as const);
+  // Mientras corría el impacto, la nota se pudo editar o quitar en «Lo que sabes del cliente» (22 nov): sus hechos
+  // saldrían del texto viejo. Se relee antes de escribir y otra vez después (por si cambió en el medio): lo que la nota
+  // ya no dice se retira como al editarla.
+  const textoDeAhora = async () => {
+    const a = await laPreventa(exploracionId);
+    return a.ok ? (a.estado.contenido.notas[clave] ?? "").trim() : "";
+  };
+  let hechos: Extract<GuardadoEnLaPreventa, { ok: true }>["hechos"];
+  if (!listo || !suya) hechos = { estado: "sin-conversacion" };
+  else if ((await textoDeAhora()) !== texto) hechos = { estado: "la-nota-cambio" };
+  else {
+    hechos = await escribirHechosDeUnaNota({ exploracionId, clientId: p.fila.clientId, notaClave: clave, texto, dichoPorEmail: autor.por, crudos: listo.turno.hechos, agentRunId: listo.agentRunId });
+    const despues = await textoDeAhora();
+    if (despues !== texto) await retirarHechosDeNotasCambiadas({ exploracionId, clientId: p.fila.clientId, antes: { [clave]: texto }, despues: despues ? { [clave]: despues } : {} });
+  }
   // La vuelta que dejó el «listo» recuerda su nota y lo que dijo la revisión: al volver, el cajón lo muestra igual.
   if (listo && suya) await anotarLaVuelta(listo.agentRunId, { notaClave: clave, guardado: { hechos, impacto } });
   return { ok: true, hechos, impacto };
