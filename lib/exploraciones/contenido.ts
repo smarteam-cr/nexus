@@ -43,6 +43,7 @@ import { firmaDelArea, TOPE_DE_LA_DESCRIPCION_A_MANO, type DescripcionGuardada }
 import type { ClaveDeEquipo } from "./equipos";
 import { editarElResumen, type ResumenGuardado } from "./resumen-de-la-escala";
 import type { ResumenAnterior } from "./resumen-anterior";
+import type { ClaveDelResumen, TarjetaCompacta } from "./tarjetas-compactas";
 import type { ActividadDelCaso, CasosAnteriores, LugarEnElPlan, ParaVentas, ValorDeVenta } from "@/lib/casos-de-uso/armado";
 import { vuelveASugeridos, type Personalizacion, type RevisionDeLosCasos } from "@/lib/casos-de-uso/personalizar";
 import type { OrdenDeLosCasos } from "@/lib/casos-de-uso/orden";
@@ -358,6 +359,19 @@ export interface ContenidoDeExploracion {
    * a mano. Una sola versión atrás. No sube la versión y no lo ve el cliente.
    */
   resumenAnterior?: ResumenAnterior;
+  /**
+   * La versión COMPACTA de cada tarjeta del Resumen (22 nov, ./tarjetas-compactas.ts): solo para mostrar, con la huella de
+   * las líneas de las que salió. La escribe el agente (Haiku) después de un cambio de esa casilla; si la casilla cambió y
+   * la huella ya no coincide, la tarjeta vuelve a lo de siempre recortado. No sube la versión y nunca reemplaza lo
+   * guardado. Opcional: las exploraciones de antes no la tienen.
+   */
+  tarjetasCompactas?: Partial<Record<ClaveDelResumen, TarjetaCompacta>>;
+  /**
+   * El día (AAAA-MM-DD, Costa Rica) en que entró cada particularidad, por su texto normalizado (`claveDeItemDeLista`). Lo
+   * pone `aplicarOperaciones` a la que es nueva respecto de lo de antes (22 nov). Las de antes no lo tienen: se muestran
+   * sin fecha, en el orden en que entraron.
+   */
+  fechasDeLasParticularidades?: Record<string, string>;
 }
 
 /** El texto de la tarjeta de una dimensión que escribió una persona, y el nivel para el que lo escribió. */
@@ -2089,15 +2103,42 @@ export function aplicarOperaciones(
     if (!r.ok) return r;
     actual = r.estado;
   }
-  return { ok: true, estado: actual };
+  return { ok: true, estado: conFechasDeLasParticularidades(estado, actual, quien.en) };
+}
+
+/**
+ * Le pone el día a cada particularidad NUEVA respecto de `antes` (22 nov) y olvida el de las que ya no están. Las que ya
+ * estaban sin fecha siguen sin fecha: no se sabe cuándo entraron, y ponerles la de hoy sería mentir.
+ */
+export function conFechasDeLasParticularidades(antes: EstadoDeExploracion, despues: EstadoDeExploracion, en: string): EstadoDeExploracion {
+  const previas = antes.contenido.casillas.particularidades ?? [];
+  const ahora = despues.contenido.casillas.particularidades ?? [];
+  const fechas = despues.contenido.fechasDeLasParticularidades ?? {};
+  if (previas === ahora && !Object.keys(fechas).length) return despues;
+  const k = (t: string) => claveDeItemDeLista("particularidades", t);
+  const yaEstaban = new Set(previas.map(k));
+  const dia = hoyEnCostaRica(aFecha(en));
+  const nuevas: Record<string, string> = {};
+  for (const t of ahora) {
+    const clave = k(t);
+    if (fechas[clave]) nuevas[clave] = fechas[clave];
+    else if (!yaEstaban.has(clave)) nuevas[clave] = dia;
+  }
+  const igual = Object.keys(nuevas).length === Object.keys(fechas).length && Object.entries(nuevas).every(([x, v]) => fechas[x] === v);
+  if (igual) return despues;
+  const contenido = { ...despues.contenido };
+  if (Object.keys(nuevas).length) contenido.fechasDeLasParticularidades = nuevas;
+  else delete contenido.fechasDeLasParticularidades;
+  return { ...despues, contenido };
 }
 
 /** ¿Lo que cambió es lo confirmado (sube la versión) o solo lo pendiente? */
 export function cambioLoConfirmado(antes: EstadoDeExploracion, despues: EstadoDeExploracion): boolean {
   // Las lápidas (y los títulos de los casos descartados) son de lo propuesto: no suben la versión. Tampoco el registro de las usadas.
   // Ni la descripción de la escala que ve el cliente: un texto por área, gana el último (2026-11-08). Ni su Resumen (9 nov), ni el anterior (21 nov).
+  // Ni las tarjetas compactas del Resumen (22 nov): son de pantalla, las escribe el agente.
   const sinLapidas = (c: ContenidoDeExploracion) =>
-    exacto({ ...c, descartadas: [], casosDescartados: [], asociacionesDescartadas: undefined, usadas: undefined, descripcionesDeLaEscala: undefined, resumenDeLaEscala: undefined, resumenAnterior: undefined });
+    exacto({ ...c, descartadas: [], casosDescartados: [], asociacionesDescartadas: undefined, usadas: undefined, descripcionesDeLaEscala: undefined, resumenDeLaEscala: undefined, resumenAnterior: undefined, tarjetasCompactas: undefined });
   return (
     sinLapidas(antes.contenido) !== sinLapidas(despues.contenido) ||
     exacto(antes.areas) !== exacto(despues.areas) ||

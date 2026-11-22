@@ -11,7 +11,8 @@
  * Mirar pide `preventa.read` en una preventa y el acceso al proyecto en la exploración de un proyecto;
  * cambiar, `preventa.write` o la celda de generar la exploración (lib/exploraciones/guardia.ts). En un
  * proyecto, lo que se confirma de la estrategia va como sugerencia a Información del cliente; en la preventa, lo que
- * se confirma en las casillas que tienen campo en la ficha (lib/exploraciones/a-la-ficha.ts).
+ * se confirma en las casillas que tienen campo en la ficha (lib/exploraciones/a-la-ficha.ts). Si cambió una tarjeta del
+ * Resumen, su versión compacta se arma en segundo plano (lib/exploraciones/tarjetas-compactas-server.ts).
  */
 import { anotarVersionDelCambio } from "@/lib/exploraciones/versiones-de-la-escala";
 import { NextRequest, NextResponse } from "next/server";
@@ -34,6 +35,8 @@ import { loNuevoParaLaFicha, ORIGEN_DE_LA_PREVENTA, propuestaParaLaFicha } from 
 import { errorDelResponsable } from "@/lib/exploraciones/responsable";
 import { avisar } from "@/lib/para-ti/avisos-server";
 import { olvidarMedicion } from "@/lib/para-ti/medir-server";
+import { tarjetasQueCambiaron } from "@/lib/exploraciones/tarjetas-compactas";
+import { compactarTarjetasDelResumen } from "@/lib/exploraciones/tarjetas-compactas-server";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -88,6 +91,12 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
     case "ok": {
       // Ficha B (2026-10-17): un nivel confirmado deja la versión del día de la escala de la empresa (nunca frena).
       if (r.confirmado) anotarVersionDelCambio(id, guard.email);
+      /* 22 nov (tarjetas-compactas.ts): si cambió una tarjeta del Resumen, el agente arma su versión compacta en segundo
+         plano. Solo la que cambió; nunca al abrir la página. */
+      if (r.confirmado) {
+        const cambiaron = tarjetasQueCambiaron(r.antes.contenido.casillas, estadoDesdeFila(r.fila).contenido.casillas);
+        if (cambiaron.length) void compactarTarjetasDelResumen({ exploracionId: id, email: guard.email, solo: cambiaron });
+      }
       /* Lo que se confirma va como sugerencia a Información del cliente: ahí lo leen los agentes, y al confirmarla se
          escribe en la empresa de HubSpot.
          · En la exploración de un PROYECTO (desde el 2026-10-07), la estrategia (retos, resultados que persigue y

@@ -7049,7 +7049,8 @@ producción, medidos el 9-oct con consultas de solo lectura.
   con sus fuentes y sus instrucciones; Casos de uso, solo sus instrucciones; La escala, con la explicación de que no
   tiene agente; Exploración, en su página de inicio (las sesiones, las fuentes manuales y las instrucciones, sin el
   bloque); Resumen y Propuesta, nada. *Por qué:* mostrar reuniones donde nadie las lee le hace creer al vendedor que esa
-  pieza las usa.
+  pieza las usa. *Desde el 22 nov* las fuentes manuales viven solo en Preparación, y el inicio de Exploración muestra las
+  instrucciones en una línea, solo si hay texto (ver «La exploración son sus sesiones» › la página de inicio).
 - **Sin SQL.** Su deploy arrastra los SQL pendientes del árbol: los dice `npm run check:esquema`.
 
 ## La exploración son sus sesiones (2026-10-09)
@@ -7081,6 +7082,12 @@ proyecto, marcadas SUPERSEDED en su lugar.
   fuentes manuales; las instrucciones, y «Lo que la IA ya sabe», que se muestra desde la etapa 3 (los conteos de la memoria,
   en tarjetas; «Ver la memoria del proyecto» espera a que exista una página a la que llevar). No tiene lista general de
   reuniones.
+  *Cambió el 22 nov (Elías: «el inicio muestra demasiado»; docs/resumen-liviano-plan.md):* las **fuentes manuales** salieron
+  del inicio y viven solo en Preparación › «Contexto adicional» (la misma lista y el mismo formulario); la preventa que se
+  abre «Con una transcripción» llega ahí (`?pieza=preparacion&sumar=1`), con el bloque desplegado y el formulario abierto.
+  La caja de **instrucciones** se fue: si hay texto escrito, queda una línea «Nexus sigue tus instrucciones: «…»» con
+  «Editar» (vaciarlas las quita); sin texto no aparece nada y lo nuevo se le cuenta a «Hablar con Nexus». La IA las sigue
+  leyendo igual (`claveDeInstrucciones("exploracion")`).
 - **En un prospecto, cada reunión con la empresa entra sola como sesión**, salvo las de puertas adentro y las instancias
   de una serie, y con el corte de siempre (`cuentaEnLaPreventa`). Las automáticas se CALCULAN al leer, sin escribirse:
   son las candidatas que no están en `contenido.fuera` ni en una sesión, y pasan a ser una `SesionPlaneada` cuando
@@ -13796,7 +13803,9 @@ preguntas.
   cuentan como evidencia.
 - **Dónde quedó (punto 16).** El inicio de la Exploración abre con el objetivo de la exploración, la última sesión que
   pasó, cuánto se averiguó de sus agendas, su desafío principal y los temas por retomar (`dondeQuedo`). Cualquiera que
-  pueda abrir la exploración lo ve: es para continuarla si quien la llevaba no puede.
+  pueda abrir la exploración lo ve: es para continuarla si quien la llevaba no puede. *SUPERSEDED el 22 nov (Elías: «el
+  inicio muestra demasiado»):* el bloque salió del inicio. En qué sesión va lo dice el Resumen (`EstadoDeLaExploracion`) y
+  lo que queda, cada sesión («Lo que queda»). `dondeQuedo` sigue en lib con sus pruebas, sin pantalla.
 - **Segunda tanda (6 nov, Elías tras probar en el 3005): el resultado que busca el cliente es el eje.** En un roleplay,
   Ventas nunca preguntó por el objetivo del cliente; la gente compra la solución a un problema o el camino a una meta.
   (`lib/exploraciones/resultado.ts`)
@@ -14021,6 +14030,34 @@ exploración pesa y se nota** en la guía. Lo que sigue es el estado después de
     la transcripción o sin texto), o «Preparar la sesión N» con la próxima. Lleva a esa sesión, al «después» o al «antes».
   - Los hallazgos generales: los que escribió la última guía (`propuesta.hallazgos`, de 2 a 5, con todo lo que se sabe) o,
     mientras no hay, el resumen de cada sesión leída, de la más nueva a la más vieja (`hallazgosParaMostrar`).
+    *SUPERSEDED el 22 nov (Elías: «el Resumen muestra demasiado»):* el bloque salió del Resumen; el resumen de cada sesión
+    ya está en «Lo que aprendimos» de esa sesión. `propuesta.hallazgos` se sigue guardando y la guía lo sigue leyendo.
+- **El Resumen liviano** (22 nov, Elías; docs/resumen-liviano-plan.md, `lib/exploraciones/tarjetas-compactas.ts`). Todo
+  se sigue guardando igual; cambia lo que se ve:
+  - **Cada tarjeta del marco se ve en su versión compacta.** La arma Haiku con cuatro reglas de Elías: fusionar los puntos
+    que repiten la misma idea, meter la línea base dentro de su objetivo, agrupar por equipo o flujo, y quitar relleno sin
+    perder métricas, canales ni restricciones (como mucho 8 puntos, `puntosMaximos` por tarjeta en el pedido, y tope duro
+    de 12). Es SOLO para mostrar: vive en `contenido.tarjetasCompactas[clave]` con la huella de las líneas de las que
+    salió, no sube la versión, no mueve `updatedAt` (no es actividad: el script dejaría todas las preventas «tocadas hoy»
+    y volverían a entrar a las ventanas que miran la actividad) y nunca reemplaza lo guardado. Al tocar la tarjeta se abre la casilla con todo, como antes.
+  - **Cuándo se arma:** después de un cambio confirmado de esa tarjeta (el PATCH de la preventa, en segundo plano), solo
+    la que cambió (lo que llega mientras corre se suma a la cola con sus claves, no rehace las demás). Nunca al abrir la
+    página. Una tarjeta de hasta 2 líneas cortas no se manda: se ve tal cual. Las que ya
+    existían se compactan con `scripts/compactar-tarjetas-del-resumen.ts` (simulacro por default).
+  - **Sin versión compacta, o de una huella vieja:** lo de siempre, recortado a 4 líneas con «+N más». Nunca vacío ni en
+    espera.
+  - **Las cifras se comprueban** (`motivosParaDescartar`): toda cifra de la compacta tiene que estar en el original y toda
+    cifra del original tiene que seguir en la compacta; un rango no puede quedar al revés («de 2 % a 5 %» → «de 5 % a
+    2 %»); un decimal no se confunde con un entero («2,5» no es «25»); tampoco puede ser más larga. No ve la unidad, un
+    número en palabras ni un número repetido que se pierde en un contexto si sigue en otro («3 vendedores», «3 meses»). La que no pasa se pide una vez más con
+    el motivo; si tampoco, no se guarda. *Por qué:* una cifra inventada en el Resumen llega a la propuesta en la cabeza
+    del vendedor.
+  - **El contexto** es SOLO lo confirmado de esa exploración y el nombre de su empresa (invariante 1). Medido con el
+    `agentSlug` de la exploración y `origen: exploraciones/agente:tarjetas-compactas`, con su `AgentRun`.
+  - **Particularidades:** se siguen generando y guardando todas. A la vista, las 5 más recientes, cada una con el día en
+    que entró, y «Ver todas (N)» abre la lista completa. El día se registra desde el 22 nov
+    (`contenido.fechasDeLasParticularidades`, lo pone `aplicarOperaciones` a la que es nueva); las de antes no tienen
+    fecha y van sin ella, en el orden en que entraron. Cambiar el texto de una cuenta como una nueva.
 - **La guía la arma el vendedor, con el objetivo de la sesión aceptado** (cuarta vuelta, 2026-11-08; `pedirLaGuia` en
   `agente.ts`, `objetivoAceptado`). *Cambió el mismo día:* en la tercera vuelta la guía se armaba sola al terminar de
   leer cada sesión; Elías la frenó: «el objetivo de la sesión lo decide el vendedor, y es obligatorio». Ahora:

@@ -100,6 +100,14 @@ export const PREVENTA: Recorrido = {
       accion: pieza("preparacion"),
     },
     {
+      // 22 nov: las fuentes manuales salieron del inicio de Exploración y viven acá.
+      ancla: "preventa.contexto",
+      titulo: "Fuentes manuales",
+      texto: "En «Contexto adicional»: lo que no quedó en Meet, como la transcripción de una llamada, una minuta o un documento. El agente lo lee como una sesión más.",
+      lado: "bottom-start",
+      accion: pieza("preparacion"),
+    },
+    {
       ancla: "preventa.preparacion.resumen",
       titulo: "Lo que escribió la IA, arriba",
       texto: "Por qué ahora, su CRM, la radiografía de la empresa y su industria. Cada sugerencia dice de dónde salió: «Usar» la confirma y «Descartar» la quita.",
@@ -133,13 +141,6 @@ export const PREVENTA: Recorrido = {
       titulo: "Agregar una sesión",
       texto: "Una agendada (Nexus espera su transcripción y la lee sola), una que ya pasó o una sin reunión, para preparar la guía antes de agendarla.",
       lado: "bottom-end",
-      accion: inicio,
-    },
-    {
-      ancla: "preventa.inicio.fuentes",
-      titulo: "Fuentes manuales e instrucciones",
-      texto: "Lo que no quedó en Meet, como una minuta o un documento, y lo que la IA tiene que tener en cuenta al leer las sesiones.",
-      lado: "top",
       accion: inicio,
     },
     {

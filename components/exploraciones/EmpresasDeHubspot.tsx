@@ -131,7 +131,8 @@ export default function EmpresasDeHubspot({ puedeEditar }: { puedeEditar: boolea
         setError(data.error ?? "No se pudo abrir la preventa.");
         return;
       }
-      router.push(empezar === "transcripcion" ? `/sales/exploraciones/${data.id}?pieza=exploracion&sumar=1` : `/sales/exploraciones/${data.id}`);
+      // «Con una transcripción»: a Preparación › Contexto adicional › Fuentes manuales, con el formulario abierto (22 nov).
+      router.push(empezar === "transcripcion" ? `/sales/exploraciones/${data.id}?pieza=preparacion&sumar=1` : `/sales/exploraciones/${data.id}`);
     } catch {
       setError("No se pudo abrir la preventa. Revisa tu conexión.");
     } finally {
