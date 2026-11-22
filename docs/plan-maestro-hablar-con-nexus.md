@@ -5,16 +5,17 @@
 > el cliente («cambia el título», «agrega esta parte, que es crítica»); que «Mejorar con IA» sea Nexus abierto donde
 > hiciste clic; y que lo que cambias en algo que ve el cliente vuelva a lo que se sabe de la empresa.
 >
-> **Estado: solo plan.** No se construyó nada. Se armó leyendo el código de `main` del 22 nov (318af67a). Cada etapa espera
-> tu visto bueno antes de construirse. Las preguntas que cambian el plan están al final (son 5).
+> **Estado: solo plan, con tus 5 respuestas del 22 nov ya incorporadas** (sección 6; en DECISIONS, «Hablar con Nexus,
+> el plan maestro»). No se construyó nada. Se armó leyendo el código de `main` del 22 nov (318af67a). Ninguna etapa
+> arranca hasta que lo digas.
 
 ## En una frase
 
 Hoy hay **seis formas distintas de hablarle a la IA** en Nexus, cada una con su motor, su memoria y sus reglas, y lo que
 le cuentas a «Hablar con Nexus» **no llega** a los documentos del cliente. El plan las junta en **una sola puerta,
-«Nexus»**, que sabe dónde estás y hace tres cosas, cada una con su clic y su deshacer: **guardar en lo que sabe de la
-empresa**, **mejorar el documento donde estás** y **proponer qué de lo que cambiaste vale como conocimiento de la
-empresa**. Se construye en 7 etapas; las 3 primeras ya sirven solas y caben en la prioridad de ahora (exploraciones,
+«Nexus»**, que sabe dónde estás y hace tres cosas, cada una con su deshacer: **guardar en lo que sabe de la empresa**
+(con tu clic), **mejorar el documento donde estás** (con tu clic) y **llevar a lo que sabe de la empresa los datos que
+cambias en lo que ve el cliente** (solo, con aviso y «Deshacer»). Se construye en 7 etapas; las 3 primeras ya sirven solas y caben en la prioridad de ahora (exploraciones,
 La escala y casos de uso).
 
 ---
@@ -133,10 +134,10 @@ edita: queda fuera de este plan (ver 3.12).
 
 | # | Qué quedó a medias | Dónde entra |
 |---|---|---|
-| 1 | Si «Hablar con Nexus» y el historial de versiones ya están en producción depende de dos SQL del 21 nov (hechos de una nota, historial de versiones). **Por confirmar** | Etapa 0 |
+| 1 | ✓ **Hecho (22 nov):** los dos SQL del 21 nov (hechos de una nota, historial de versiones) se aplicaron, y «Hablar con Nexus» y el historial están en producción (3deb62b0) | — |
 | 2 | Los hechos de una nota que editas o quitas no se rehacen ni se retiran: bajo una nota editada se ven hechos que dicen otra cosa | Etapa 0 |
 | 3 | Un «gracias» u «ok» propone guardar; después de guardar, la conversación termina | Etapa 0 |
-| 4 | En Cemaco · Ecuador quedó una nota que dice «resumelos». Se quita con tu visto bueno | Etapa 0 |
+| 4 | ✓ **Hecho (22 nov):** las dos notas «resumelos» de Cemaco · Ecuador se borraron | — |
 | 5 | Los hechos de las notas no los lee ningún agente | Etapa 1 |
 | 6 | Lo que cuentas a Nexus no llega a la memoria de la cuenta ni a casos de uso | Etapa 1 |
 | 7 | El agente de impacto solo mira La escala | Etapa 5 |
@@ -167,9 +168,11 @@ documento, Nexus pregunta a cuál te refieres; no adivina.
 
 **Hoy:** nada se guarda sin un clic (21 nov) y nada se publica solo (16 nov). Bien.
 
-**Propuesta:** se mantiene para los tres verbos. Guardar en la memoria: tu clic en «Guardar». Mejorar el documento: tu
-clic en «Aplicar» por sección. Lo que vuelve a la memoria desde un documento: preseleccionado, con un clic (ver pregunta
-3). **Publicar sigue siendo siempre una persona.** Lo que confirma una persona queda con su nombre, día y hora (tu
+**Decidido (22 nov):** guardar en la memoria desde la conversación, tu clic en «Guardar» (como hoy). Mejorar el
+documento, tu clic en «Aplicar» por sección. **Lo que vuelve a la memoria desde lo que ve el cliente se guarda solo**,
+con un aviso y «Deshacer»: es la única excepción a «nada se guarda sin tu clic» del 21 nov, y vale solo al aplicar un
+cambio de Nexus o al publicar o presentar ese documento (el cambio ya lo hizo una persona sobre algo que va al cliente,
+y eso es lo más cierto que hay). **Publicar sigue siendo siempre una persona.** Lo que confirma una persona queda con su nombre, día y hora (tu
 respuesta del 20 nov: lo que dice el usuario de Nexus manda).
 
 ### 3.3 Cómo se deshace
@@ -177,6 +180,7 @@ respuesta del 20 nov: lo que dice el usuario de Nexus manda).
 | Qué se hizo | Cómo se deshace |
 |---|---|
 | Un cambio a un documento hecho por Nexus | «Deshacer» al lado del aviso, y en el historial queda una versión «Cambiado con Nexus» con el antes |
+| Un dato que se guardó solo desde lo que ve el cliente | «Deshacer» en el aviso; después, «Quitar» en la lista como cualquier otro |
 | Algo guardado en la memoria | «Quitar» en la lista de lo que sabe Nexus: se van la nota y sus hechos (hoy los hechos se quedan: se arregla en la etapa 0) |
 | Un dato que dejó de ser cierto | «Ya no es así»: queda reemplazado por el nuevo, no borrado, con quién y cuándo (la tabla de hechos ya tiene «este reemplaza a aquel») |
 | Un cambio a una tarjeta de la preventa | Hoy no tiene deshacer. Se suma «Deshacer» al aplicar desde Nexus (etapa 2) |
@@ -198,7 +202,7 @@ un proyecto en curso, no comparte lo contado. La memoria de la cuenta toma solo 
 
 **Propuesta:** lo que sabe Nexus es **de la empresa**, y cada cosa recuerda dónde se contó (en qué preventa o proyecto).
 Lo leen todas sus preventas y proyectos. Las unidades separadas (Cemaco · Costa Rica y Cemaco · Ecuador son dos empresas
-en Nexus) no comparten: cada una tiene lo suyo. Ver pregunta 2.
+en Nexus) no comparten: cada una tiene lo suyo. **Decidido (22 nov): es de la empresa y no va a HubSpot.**
 
 ### 3.6 Nunca mezclar clientes (invariante 1)
 
@@ -220,7 +224,7 @@ en Nexus) no comparten: cada una tiene lo suyo. Ver pregunta 2.
 | Mejorar un documento | La celda «regenerar» de la sección de ese documento (la que ya pide «Mejorar con IA») |
 | Publicar | Igual que hoy; Nexus nunca publica |
 
-### 3.8 El gasto de IA (tope de US$ 300 al mes)
+### 3.8 El gasto de IA (tope de US$ 300 al mes; US$ 100 para Nexus conversando)
 
 Estimado con los precios de hoy (Sonnet 4.6 para conversar y mejorar; Haiku para decisiones cortas):
 
@@ -231,8 +235,10 @@ Estimado con los precios de hoy (Sonnet 4.6 para conversar y mejorar; Haiku para
 | Mejorar un documento (propuesta por sección) | US$ 0,10 – 0,20 (más si busca en la web) |
 | ¿Cambia algo de lo que se sabe? / ¿cambia este documento? (Haiku) | menos de US$ 0,01 |
 
-**Propuesta:** un tope propio para todo lo que hace Nexus conversando (ver pregunta 5), además de los topes por persona
-que ya existen (60 vueltas y 20 preguntas al día). Cada etapa queda medida con su propio rótulo de gasto, así el panel de
+**Decidido (22 nov):** un tope de **US$ 100 al mes** para todo lo que hace Nexus conversando (contar, preguntar,
+mejorar documentos, el impacto y lo que vuelve a la memoria), con aviso al llegar al 80 % (US$ 80), además de los topes
+por persona que ya existen (60 vueltas y 20 preguntas al día). Al llegar al tope, Nexus dice que no puede seguir este mes
+y lo ya guardado sigue igual; nada se rehace a medias. Cada etapa queda medida con su propio rótulo de gasto, así el panel de
 gasto dice cuánto cuesta cada verbo. Ahorros que ya están: caché de lo que se repite, Haiku para decidir, y no rehacer un
 documento entero cuando basta proponer cambios en una sección.
 
@@ -255,7 +261,7 @@ Por verbo, con lo que ya mide «Uso de Nexus»:
 | Lo que Nexus propone guardar y se guarda | Más de la mitad se guarda |
 | «¿Era una pregunta?» y «Guardarlo como nota» | Menos de 1 de cada 10 vueltas (Nexus entendió bien) |
 | Cambios a documentos propuestos y aplicados | Más de la mitad se aplica sin editar |
-| Lo que vuelve a la memoria desde un documento | Se acepta casi siempre (por eso «casi fijo») |
+| Lo que se guarda solo desde un documento | Menos de 1 de cada 10 se deshace o se quita en la semana |
 | Documentos que salen con algo que contó el equipo | Sube semana a semana |
 | Costo por cambio aceptado | Baja |
 
@@ -264,14 +270,14 @@ Por verbo, con lo que ya mide «Uso de Nexus»:
 Hoy en la preventa: «Nexus» (arriba), «Hablar con Nexus» (riel) y «Agregar algo que sabes» (Preparación). El 21 nov
 dijiste que no a juntar «Hablar con Nexus» con «Agregar algo que sabes»; hoy te confunden. Propuesta: **una sola puerta
 «Nexus»**, en el mismo lugar en toda la app, y «Lo que sabes del cliente» queda como la lista de lo guardado, con su
-botón «+» que abre Nexus para contar. Ver pregunta 1.
+botón «+» que abre Nexus para contar. **Decidido (22 nov): una sola puerta.**
 
 ### 3.12 Otros vacíos que salieron al leer el código
 
 - **La página del resultado del test** (la que ve el lead al terminar) se escribe sola y no se edita. Si quieres
   mejorarla con Nexus, es otro tipo de documento: lo dejo fuera hasta que lo pidas.
 - **Lo que cuentas a Nexus y HubSpot.** Las notas del chat de la cuenta van a HubSpot; las de «Lo que sabes» no. Hay que
-  decidir una (pregunta 2).
+  decidir una. **Decidido (22 nov): lo que se le cuenta a Nexus no va a HubSpot.**
 - **Dos personas a la vez.** Si una mejora el documento y otra lo edita a mano, «Aplicar» tiene que chocar (como hoy el
   cronograma y las tarjetas, con 409) y no pisar.
 - **Una conversación larga.** Hoy son 6 vueltas por conversación. Para mejorar un documento con varias idas y vueltas
@@ -298,13 +304,14 @@ botón «+» que abre Nexus para contar. Ver pregunta 1.
 |---|---|---|---|---|
 | **Guardar en lo que sabe de la empresa** | «Ojo: crédito y cobro contacta a 4.800 clientes al mes» | Pregunta lo que falta (como mucho dos rondas), muestra la nota con tus palabras, lo que entendió (los hechos), si choca con algo, y qué documentos cambiaría | «Guardar» | «Quitar» o «Ya no es así» |
 | **Mejorar el documento donde estás** | «Cambia el título a algo sobre la cobranza»; «agrega una parte sobre el WhatsApp, que es crítica» | Propone el cambio por sección, con el antes y el después, usando lo que sabe de la empresa | «Aplicar» por sección o «Aplicar todo» | «Deshacer» y la versión «Cambiado con Nexus» del historial |
-| **Proponer cambios a lo que se sabe** | Corregiste «4 de cada 10 cotizaciones» a «2 de cada 10» en la página de La escala | Al aplicar un cambio o al publicar, detecta qué de lo que cambiaste es un dato de la empresa y lo propone, ya marcado | Un clic en «Guardar en lo que sabe Nexus» (ver pregunta 3) | Igual que guardar |
+| **Llevar a lo que se sabe lo que cambias en lo que ve el cliente** | Corregiste «4 de cada 10 cotizaciones» a «2 de cada 10» en la página de La escala | Al aplicar un cambio de Nexus, o al publicar o presentar, detecta qué de lo que cambiaste es un dato de la empresa y **lo guarda solo** | Ninguna: avisa «Guardé en lo que sabe Nexus: …» | «Deshacer» en el aviso, o «Quitar» después |
 | **Responder** | «¿Qué dijo Andrés de la API?» | Responde leyendo lo de esa empresa, con citas verificadas | No guarda nada | — |
 
 ### 4.3 El ciclo completo
 
 1. Cuentas algo o cambias algo que verá el cliente.
-2. Nexus lo guarda en lo que sabe de la empresa (con tu clic), con su peso y quién lo dijo.
+2. Nexus lo guarda en lo que sabe de la empresa, con su peso y quién lo dijo: con tu clic si lo contaste; solo, con
+   aviso y «Deshacer», si lo cambiaste en algo que ve el cliente.
 3. El agente de impacto mira qué documentos de esa empresa cambia (La escala, los casos de uso, después el kickoff, el
    handoff y la propuesta) y, por cada uno, **propone los cambios por sección** con su cuenta regresiva o rehace el
    borrador si es corto. Nunca publica.
@@ -354,20 +361,21 @@ Etapa 1  Lo que sabe Nexus llega a todos ─┬─> Etapa 2  Una puerta en la pr
                                                                                                                               Etapa 7  Lecciones de Smarteam (aparte)
 ```
 
-### Etapa 0 · Cerrar lo que quedó a medias (≈ 1 sesión)
+### Etapa 0 · Cerrar lo que quedó a medias (≈ ½ sesión)
 
-- **Qué se construye:**
-  - Confirmar qué está en producción y correr los dos SQL del 21 nov si faltan (con tu confirmación para el deploy).
+- **Ya hecho (22 nov):** los dos SQL del 21 nov se aplicaron y «Hablar con Nexus» y el historial de versiones están en
+  producción (3deb62b0); las dos notas «resumelos» de Cemaco · Ecuador se borraron.
+- **Qué falta construir:**
   - Quitar o editar una nota retira sus hechos o los rehace.
   - Un «gracias», «ok» o «listo» no propone guardar; después de guardar puedes seguir conversando.
-  - Quitar la nota «resumelos» de Cemaco · Ecuador (te aviso antes).
+  - El tope de US$ 100 al mes para Nexus conversando, con su aviso al 80 % (hoy solo existen los topes por persona).
   - Un conteo en «Uso de Nexus» de «Hablar con Nexus»: vueltas, guardadas, «¿Era una pregunta?», cambios aplicados y
     gasto.
 - **Qué toca:** el chat de la preventa y su guardado de hechos (lib/chat-de-nexus, lib/seguimiento/hechos-server.ts), «Uso
   de Nexus».
 - **Cómo se prueba:** pruebas unitarias de lo que no se guarda; una prueba de integración de quitar una nota y que se
   vayan sus hechos; la invariante de hechos en verde.
-- **Qué decides:** el deploy y la nota de Cemaco.
+- **Qué decides:** el deploy.
 - **Depende de:** nada.
 
 ### Etapa 1 · Lo que sabe Nexus llega a todos los documentos y a casos de uso (≈ 1,5 sesiones)
@@ -392,7 +400,7 @@ Es el cimiento y lo que más vale: hoy lo que cuentas no sale de la preventa.
   sí; lo confirmo contigo al ver Cemaco).
 - **Depende de:** etapa 0 (los hechos limpios).
 
-### Etapa 2 · Una sola puerta en la preventa (≈ 1,5 sesiones)
+### Etapa 2 · Una sola puerta en la preventa (≈ 1,5 sesiones; decidida el 22 nov)
 
 - **Qué se construye:**
   - En la preventa, el botón «Nexus» de arriba abre el cajón de «Hablar con Nexus» (que suma lo que hacía el de la
@@ -407,8 +415,8 @@ Es el cimiento y lo que más vale: hoy lo que cuentas no sale de la preventa.
   preventa, «Lo que sabes» (components/exploraciones/LoQueSabes.tsx), las operaciones del chat de la cuenta.
 - **Cómo se prueba:** las pruebas de conversación de hoy siguen en verde; una prueba de cada salida de una
   contradicción; tu prueba en el 3004 con Cemaco · Ecuador.
-- **Qué decides:** la pregunta 1 (una puerta) antes de construir; el diseño del cajón y de la lista en Claude Design
-  con el sistema «Nexus · interfaz interna».
+- **Qué decides:** el diseño del cajón y de la lista en Claude Design con el sistema «Nexus · interfaz interna» (que
+  sea una sola puerta ya lo decidiste el 22 nov).
 - **Depende de:** etapa 1.
 
 ### Etapa 3 · Mejorar La escala y los casos de uso desde Nexus (≈ 2 sesiones)
@@ -428,17 +436,22 @@ Tu ejemplo: «cambia el título», «agrega esta parte, que es crítica».
 - **Cómo se prueba:** que un cambio de Nexus deje su versión y se pueda deshacer; que no publique; que no meta lo
   interno aunque se lo pidas; que choque si otra persona editó lo mismo; tu prueba con Cemaco · Ecuador: cambiar el
   titular y agregar una pieza.
-- **Qué decides:** la pregunta 4 (qué documento va primero).
+- **Qué decides:** nada antes de construir: el 22 nov decidiste primero La escala (el Resumen y cada área) y después
+  casos de uso, en esta misma etapa. Al final, tu prueba.
 - **Depende de:** etapa 2 (el cajón con el lugar).
 
 ### Etapa 4 · Lo que cambias en lo que ve el cliente vuelve a lo que se sabe (≈ 1,5 sesiones)
 
-Tu punto 4, «casi fijo».
+Tu punto 4, «casi fijo». Decidido el 22 nov: **se guarda solo**, con aviso y «Deshacer».
 
 - **Qué se construye:**
   - Al aplicar un cambio de Nexus, y al **publicar** o **presentar**, una llamada corta (Haiku) compara el antes y el
-    después (salen del historial de versiones) con lo que sabe Nexus y propone: «Cambiaste “4 de cada 10” por “2 de
-    cada 10”. ¿Lo guardo en lo que sabe Nexus de Cemaco?». Viene marcado; un clic lo guarda.
+    después (salen del historial de versiones) con lo que sabe Nexus y **guarda** lo que es un dato de la empresa. Avisa:
+    «Guardé en lo que sabe Nexus de Cemaco: “2 de cada 10 cotizaciones”, antes “4 de cada 10” · Deshacer».
+  - Si lo nuevo choca con algo que **aceptó el cliente**, no lo reemplaza solo: lo guarda al lado, con la duda a la vista
+    («Esto contradice lo que el cliente aceptó el 12 nov»), y la persona decide. Lo de menos peso (dicho en una reunión,
+    deducido por Nexus) sí queda reemplazado, con quién y cuándo.
+  - Lo que se guarda así es «se puede usar con el cliente» (salió de algo que ve el cliente).
   - Lo que se guarda así entra como «confirmado por el equipo». Cuando el documento se presenta, sube a «presentado»; si
     el cliente lo acepta, a «aceptado por el cliente».
   - Solo documentos que ve el cliente y solo datos de la empresa (cifras, retos, metas, nombres de sistemas, fechas). Un
@@ -447,8 +460,9 @@ Tu punto 4, «casi fijo».
 - **Qué toca:** el agente de impacto (lib/impacto), el historial (lib/versiones), «Publicar» y «¿Cuándo se la
   presentaste?» de La escala.
 - **Cómo se prueba:** pruebas de qué cambios son datos y cuáles redacción (con 20 cambios reales de Cemaco y Centauro
-  armados a mano); que lo presentado suba de peso; el costo por publicación medido.
-- **Qué decides:** la pregunta 3 (cuánto de «casi fijo»).
+  armados a mano), porque al guardarse solo un error ensucia la memoria; que «Deshacer» deje la memoria como estaba; que
+  nunca pise lo aceptado por el cliente; que lo presentado suba de peso; el costo por publicación medido.
+- **Qué decides:** nada antes de construir (lo decidiste el 22 nov). Al final, tu prueba.
 - **Depende de:** etapa 3.
 
 ### Etapa 5 · Nexus en la ficha y en los documentos del proyecto; el impacto en todos (≈ 3 sesiones, en partes)
@@ -490,35 +504,32 @@ Tu punto 4, «casi fijo».
 
 | Etapa | Qué ves al terminar | Sesiones | SQL | Prioridad de ahora |
 |---|---|---|---|---|
-| 0 | Lo del 21 nov en producción y sin cabos sueltos | 1 | Los del 21 nov, si faltan | Exploraciones |
+| 0 | Sin cabos sueltos del 21 nov, con el tope de US$ 100 | ½ | No (los del 21 nov ya corrieron) | Exploraciones |
 | 1 | Lo que cuentas llega a casos de uso y a los documentos | 1,5 | No | Casos de uso |
 | 2 | Una puerta «Nexus» en la preventa y la lista de lo que sabe | 1,5 | No | Exploraciones |
 | 3 | «Cambia el título» en La escala y casos de uso | 2 | No | La escala, casos de uso |
-| 4 | Lo que corriges vuelve a lo que se sabe | 1,5 | No (por confirmar) | La escala |
+| 4 | Lo que corriges en lo que ve el cliente se guarda solo en lo que se sabe | 1,5 | No (por confirmar) | La escala |
 | 5 | Nexus en la ficha y en el proyecto; impacto en todos | 3 | Sí | Artefactos |
 | 6 | Propuestas | 1 | No | Propuestas |
 | 7 | Lecciones de Smarteam | aparte | Por ver | — |
 
 ---
 
-## 6. Preguntas para ti (las que cambian el plan)
+## 6. Tus decisiones (22 nov)
 
-1. **¿Una sola puerta «Nexus»?** El botón de arriba a la derecha se vuelve el único; «Hablar con Nexus» deja el riel, y
-   «Lo que sabes del cliente» queda como la lista de lo guardado con un «+» que abre Nexus. El 21 nov dijiste que no a
-   juntarlas, pero hoy te confunden. *Recomendación: sí, una puerta.* Cambia la etapa 2.
-2. **¿Lo que sabe Nexus es de la empresa o de cada preventa? ¿Y va también a HubSpot?** *Recomendación: de la empresa
-   (cada cosa recuerda en qué preventa o proyecto se contó), y no a HubSpot por ahora: lleva lo interno (presupuesto,
-   quién decide) y HubSpot no sabe cortarlo.* Cambia las etapas 1 y 5.
-3. **«Casi fijo»: cuando cambias algo que ve el cliente, ¿lo que es un dato de la empresa se guarda solo (con aviso y
-   «Deshacer») o se propone ya marcado y tú das un clic?** *Recomendación: propuesto ya marcado, un clic, y solo al
-   aplicar un cambio de Nexus o al publicar o presentar (no a cada tecla).* Mantiene «nada se guarda sin tu clic» del
-   21 nov. Cambia la etapa 4.
-4. **¿Qué documento se mejora primero con Nexus: La escala (Resumen y página de cada área) o casos de uso?**
-   *Recomendación: La escala, que es tu ejemplo y hoy no tiene ni «Mejorar con IA»; casos de uso en la misma etapa,
-   justo después.* Cambia el orden de la etapa 3.
-5. **¿Cuánto de los US$ 300 al mes le das a Nexus conversando (contar, preguntar, mejorar y el impacto)?**
-   *Recomendación: US$ 60 al mes, con aviso al llegar al 80 % y los topes por persona de hoy; se revisa con el uso real
-   después de la etapa 3.* Cambia los topes de todas las etapas.
+Respondiste las 5 preguntas. Están en DECISIONS («Hablar con Nexus, el plan maestro»).
+
+| # | Pregunta | Lo que decidiste | Dónde cambia el plan |
+|---|---|---|---|
+| 1 | ¿Una sola puerta «Nexus»? | **Sí.** El botón de arriba a la derecha es el único; «Lo que sabes del cliente» queda como la lista de lo guardado | Etapa 2 |
+| 2 | ¿De la empresa o de cada preventa? ¿Va a HubSpot? | **De la empresa**, y cada cosa recuerda dónde se contó. **No va a HubSpot** | Etapas 1 y 5 |
+| 3 | «Casi fijo» | **Se guarda solo**, con aviso y «Deshacer», cuando cambias un dato de la empresa en algo que ve el cliente (al aplicar un cambio de Nexus, al publicar o al presentar). En la conversación sigue «Guardar» | Etapa 4; vacíos 3.2 y 3.3 |
+| 4 | ¿Qué se mejora primero? | **La escala** (Resumen y cada área) y **después casos de uso**, en la misma etapa | Etapa 3 |
+| 5 | ¿Cuánto del gasto? | **US$ 100 al mes** para Nexus conversando, con aviso al 80 % y los topes por persona de hoy | Etapa 0 y todas |
+
+Lo que cambia por la decisión 3, para que no sorprenda: un error al decidir si algo es un dato de la empresa ya no lo
+frena tu clic, así que la prueba de la etapa 4 es más dura (20 cambios reales clasificados a mano antes de encenderlo) y
+la medición mira cuánto se deshace en la semana. Si se deshace más de 1 de cada 10, se vuelve a conversar.
 
 ---
 
@@ -529,4 +540,8 @@ Tu punto 4, «casi fijo».
 - **Encaja con:** «El botón «Agregar contexto»» (por hacer; entra en las etapas 2 y 5) y «Que Nexus aprenda de cada
   corrección» (etapa 7).
 - **Pruebas:** ninguna todavía; cada etapa trae las suyas.
-- **Espera:** tus respuestas a las 5 preguntas; con ellas se arranca la etapa 0.
+- **Decidido el 22 nov:** una sola puerta; lo que se sabe es de la empresa y no va a HubSpot; lo que cambias en lo que
+  ve el cliente se guarda solo con «Deshacer»; primero La escala y después casos de uso; US$ 100 al mes para Nexus
+  conversando.
+- **Ya hecho:** los SQL del 21 nov en producción (3deb62b0) y las notas «resumelos» de Cemaco · Ecuador borradas.
+- **Espera:** que Elías diga cuándo arranca la etapa 0.
