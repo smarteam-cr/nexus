@@ -1,7 +1,7 @@
 /**
- * lib/exploraciones/tarjetas-compactas.test.ts — el Resumen liviano (22 nov): la versión compacta de cada tarjeta nunca
- * inventa ni pierde una cifra, se muestra solo si es de las líneas de hoy, y las particularidades se ven las más nuevas
- * primero, con su fecha.
+ * lib/exploraciones/tarjetas-compactas.test.ts — el Resumen liviano (22 nov): la versión compacta de cada tarjeta tiene
+ * como mucho 4 puntos de una línea, nunca inventa ni da vuelta una cifra (soltar las que no importan sí se puede), se
+ * muestra solo si es de las líneas de hoy y de las reglas de hoy, y las particularidades se ven las más nuevas primero.
  */
 import { describe, expect, it } from "vitest";
 import {
@@ -50,10 +50,10 @@ describe("cifrasDe: las cifras de un texto, sin separadores", () => {
   });
 });
 
-describe("motivosParaDescartar: la compacta tiene que traer TODAS las cifras del original y ninguna más", () => {
+describe("motivosParaDescartar: como mucho 4 puntos de una línea, y ninguna cifra inventada ni al revés", () => {
   it("una buena compacta pasa: fusiona, subordina y conserva las cifras", () => {
     const compacta = [
-      "Ventas: subir la tasa de cierre de 18 % a 25 % para junio 2027, con el pipeline de cada vendedor a la vista",
+      "Ventas: cierre de 18 % a 25 % para junio 2027 y el pipeline de cada vendedor a la vista",
       "Servicio: tickets de WhatsApp respondidos en menos de 4 horas",
     ];
     expect(motivosParaDescartar(METAS_REALES, compacta)).toEqual([]);
@@ -64,9 +64,18 @@ describe("motivosParaDescartar: la compacta tiene que traer TODAS las cifras del
     expect(m.join(" ")).toContain("no están en el original: 10");
   });
 
-  it("si pierde una cifra, no sirve", () => {
+  it("soltar una cifra que no importa SÍ se puede (22 nov): al tocar la tarjeta se ven todas", () => {
     const m = motivosParaDescartar(RETOS_REALES, ["Conversión de lead a oportunidad: 3 %", "Leads de formulario y WhatsApp fuera del CRM", "Vendedores en Excel; sin presupuesto antes de enero 2027"]);
-    expect(m.join(" ")).toContain("perdió cifras del original: 12");
+    expect(m).toEqual([]);
+    expect(cifrasQueNoCuadran(RETOS_REALES, ["Vendedores en Excel"]).perdidas).toContain("12");
+  });
+
+  it("más de 4 puntos, o un punto de más de una línea, no sirve", () => {
+    const veintidos = Array.from({ length: 22 }, (_, i) => `Reto número ${i + 1} de la operación comercial y de servicio`);
+    expect(motivosParaDescartar(veintidos, ["Uno", "Dos", "Tres", "Cuatro", "Cinco"]).join(" ")).toContain("tope es 4");
+    expect(motivosParaDescartar(veintidos, ["Uno", "Dos", "Tres", "Cuatro"])).toEqual([]);
+    const larga = "Ventas: " + "palabra ".repeat(30);
+    expect(motivosParaDescartar(veintidos, [larga]).join(" ")).toContain("de una línea");
   });
 
   it("si es más larga que el original o tiene más líneas, no sirve", () => {
@@ -91,7 +100,7 @@ describe("motivosParaDescartar: la compacta tiene que traer TODAS las cifras del
   });
 
   it("un decimal no se confunde con un entero: 2,5 % no es 25 %", () => {
-    expect(motivosParaDescartar(["Churn de 2,5 % mensual hoy", "Otra cosa más"], ["Churn de 25 % mensual"]).join(" ")).toMatch(/no están en el original: 25.*perdió cifras del original: 2\.5/);
+    expect(motivosParaDescartar(["Churn de 2,5 % mensual hoy", "Otra cosa más"], ["Churn de 25 % mensual"]).join(" ")).toContain("no están en el original: 25");
     expect([...cifrasDe("2,5 y 2.5")]).toEqual(["2.5"]);
   });
 });
@@ -110,6 +119,16 @@ describe("loQueMuestraLaTarjeta: la compacta solo si es de las líneas de hoy", 
     expect(m.compacta).toBe(false);
     expect(m.lineas).toEqual(otras.slice(0, LINEAS_A_LA_VISTA));
     expect(m.ocultas).toBe(otras.length - LINEAS_A_LA_VISTA);
+  });
+
+  it("una compacta de las reglas de antes (8 puntos) no se muestra: vuelve lo de siempre hasta que se rearme", () => {
+    // La huella de antes no llevaba la versión de las reglas: era el FNV de las líneas solas.
+    const t = lineas.map((l) => l.trim()).join("\n");
+    let h = 0x811c9dc5;
+    for (let i = 0; i < t.length; i++) h = Math.imul(h ^ t.charCodeAt(i), 0x01000193) >>> 0;
+    const vieja = { ...compacta, huella: h.toString(16).padStart(8, "0") };
+    expect(loQueMuestraLaTarjeta(lineas, vieja).compacta).toBe(false);
+    expect(tarjetasPorCompactar({ retos: lineas.map((texto) => ({ texto })) }, { retos: vieja }).pedir.map((x) => x.clave)).toEqual(["retos"]);
   });
 
   it("sin compacta guardada, lo de siempre recortado", () => {
@@ -132,10 +151,10 @@ describe("tarjetasPorCompactar: qué se le pide al agente", () => {
     expect(quitar).toEqual(["retos"]);
   });
 
-  it("pideCompactar: una o dos líneas cortas se ven tal cual", () => {
-    expect(pideCompactar(["Uno", "Dos"])).toBe(false);
-    expect(pideCompactar(["Uno", "Dos", "Tres"])).toBe(true);
-    expect(pideCompactar(["x".repeat(300)])).toBe(true);
+  it("pideCompactar: hasta 4 puntos de una línea se ven tal cual", () => {
+    expect(pideCompactar(["Uno", "Dos", "Tres", "Cuatro"])).toBe(false);
+    expect(pideCompactar(["Uno", "Dos", "Tres", "Cuatro", "Cinco"])).toBe(true);
+    expect(pideCompactar(["palabra ".repeat(30)])).toBe(true);
   });
 
   it("tarjetasQueCambiaron mira las líneas, no el orden de las claves del objeto", () => {
@@ -172,12 +191,12 @@ describe("compactarConUnReintento: solo lo que pasa la comprobación se puede gu
       [original],
       async (p) => {
         pedidos.push(p.messages[0].content);
-        return respuesta([{ clave: "retos", lineas: pedidos.length === 1 ? ["Todo junto sin cifras"] : buena }]);
+        return respuesta([{ clave: "retos", lineas: pedidos.length === 1 ? ["Uno con 7 %", "Dos", "Tres", "Cuatro", "Cinco"] : buena }]);
       },
       parseObject,
     );
     expect(r.validas.retos).toEqual(buena);
-    expect(pedidos[1]).toContain("perdió cifras");
+    expect(pedidos[1]).toMatch(/tope es 4.*no están en el original: 7/);
   });
 
   it("una tarjeta que no vino en la respuesta tampoco se guarda", async () => {
