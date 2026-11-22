@@ -20,6 +20,8 @@ const LISTO = {
   hechos: [{ tipo: "cuenta", frase: "La empresa pierde plata por su cartera vencida", cita: "pierden unos 40 mil dólares al mes en cartera vencida" }],
 };
 let siguiente: unknown = LISTO;
+/** La llamada que responde una pregunta falla (la IA no contesta). */
+let fallaLaRespuesta = false;
 const pedidos: string[] = [];
 vi.mock("@/lib/anthropic", () => ({
   getAnthropic: () => ({
@@ -28,6 +30,7 @@ vi.mock("@/lib/anthropic", () => ({
         const todo = JSON.stringify(p.messages);
         pedidos.push(todo);
         const esRespuesta = p.system.includes("te pregunta algo sobre UNA cuenta");
+        if (esRespuesta && fallaLaRespuesta) throw new Error("la IA no respondió");
         const salida = esRespuesta
           ? { sabe: true, respuesta: "La cobranza la hacen a mano, con un Excel.", citas: [{ fuente: "R1", cita: "la cobranza la hacemos a mano con un Excel" }] }
           : siguiente;
@@ -64,6 +67,7 @@ afterAll(() => {
 });
 beforeEach(() => {
   siguiente = LISTO;
+  fallaLaRespuesta = false;
   pedidos.length = 0;
 });
 
@@ -337,10 +341,10 @@ async function sembrar2(): Promise<string> {
   return e.id;
 }
 
-describe("lo que se cuenta va a la nota, aunque el modelo lo lea como pregunta (Cemaco, 21 nov)", () => {
+describe("lo seguro lo decide el código, lo dudoso el modelo, y nada se guarda solo (Cemaco, 21 nov)", () => {
   const ELIAS = "Es importante esto de que crédito cobro contacta a los clientes sin aprovechar para venderle más y que cada gestor tiene muchas cuentas";
 
-  it("la frase de Elías queda como «listo» y su nota se guarda; no se lee ninguna reunión ni va su nombre", async () => {
+  it("la frase de Elías queda como «listo» aunque el modelo diga consulta; no se lee ninguna reunión ni va su nombre", async () => {
     const { id } = await sembrar();
     // Lo que devolvió el modelo en producción: una pregunta inventada sobre quien escribe.
     siguiente = { tipo: "consulta", pregunta: "¿Qué dijo Elías sobre crédito y cobro que no estuviera ya en lo que se sabe?" };
@@ -352,7 +356,9 @@ describe("lo que se cuenta va a la nota, aunque el modelo lo lea como pregunta (
     expect(pedidos[0]).toContain("NO ES UNA PREGUNTA");
     expect(pedidos[0]).not.toContain("Liz Flores");
     expect(await prisma.agentRun.count({ where: { triggeredByEmail: EMAIL, filters: { path: ["modo"], equals: "chat-de-nexus-respuesta" } } })).toBe(0);
-    // La pantalla guarda la nota con sus palabras, y la revisión la anota en la conversación.
+    // Hasta el «Guardar», la conversación vuelve con lo que iba a guardarse y sin nota.
+    expect((await conversacionEnLaPreventa(id, EMAIL, CON_ACCESO))?.listo).toMatchObject({ notaClave: null, hechos: [] });
+    // Con «Guardar», la pantalla guarda la nota con sus palabras, y la revisión la anota en la conversación.
     await prisma.exploracionDeVenta.update({
       where: { id },
       data: { contenido: { notas: { [CLAVE]: ELIAS }, autoresDeLasNotas: { [CLAVE]: { por: EMAIL, en: "2026-11-21T15:00:00.000Z" } } } },
@@ -388,5 +394,84 @@ describe("lo que se cuenta va a la nota, aunque el modelo lo lea como pregunta (
     const c = await conversacionEnLaPreventa(id, EMAIL, CON_ACCESO);
     expect(c?.mensajes).toEqual([{ de: "persona", texto: TEXTO }]);
     expect(c?.listo).not.toBeNull();
+  });
+
+  const RESPONDIO = [
+    { de: "persona" as const, texto: "¿Cuales son los principales dolores de este cliente?", es: "consulta" as const },
+    { de: "nexus" as const, texto: "1. **Sin vista 360 del cliente**. 2. **Campañas sin segmentar**.", es: "respuesta" as const },
+  ];
+
+  it("«resumelos» después de una respuesta se responde, sin pasar por el modelo que clasifica y sobre lo ya respondido", async () => {
+    const { id } = await sembrar();
+    // Si llegara al modelo que clasifica, este «listo» lo guardaría como nota: no debe llegar.
+    siguiente = LISTO;
+    const v = await vueltaEnLaPreventa(id, CONVERSACION, [...RESPONDIO, { de: "persona", texto: "resumelos" }], EMAIL, CON_ACCESO);
+    if (!v.ok) throw new Error(v.error);
+    expect(v.turno.tipo).toBe("respuesta");
+    expect(pedidos).toHaveLength(1);
+    expect(pedidos[0]).toContain("=== LA PREGUNTA ===\\nresumelos");
+    expect(pedidos[0]).toContain("Sin vista 360 del cliente");
+    // La conversación guardada la muestra como pregunta respondida, no como algo para guardar.
+    const c = await conversacionEnLaPreventa(id, EMAIL, CON_ACCESO);
+    expect(c?.listo).toBeNull();
+    expect(c?.mensajes.at(-2)).toMatchObject({ de: "persona", texto: "resumelos", es: "consulta" });
+  });
+
+  it("lo dudoso lo decide el modelo: si dice consulta, se responde con las palabras de la persona", async () => {
+    const { id } = await sembrar();
+    siguiente = { tipo: "consulta", pregunta: "¿Cuál es el segundo dolor de Cemaco?" };
+    const v = await vueltaEnLaPreventa(id, CONVERSACION, [...RESPONDIO, { de: "persona", texto: "y el segundo" }], EMAIL, CON_ACCESO);
+    if (!v.ok || v.turno.tipo !== "respuesta") throw new Error("esperaba una respuesta");
+    expect(pedidos).toHaveLength(2);
+    expect(pedidos[0]).toContain("PUEDE SER ALGO QUE CUENTA O UN PEDIDO");
+    expect(pedidos[1]).toContain("=== LA PREGUNTA ===\\ny el segundo");
+    expect(pedidos[1]).not.toContain("¿Cuál es el segundo dolor");
+  });
+
+  it("«¿Era una pregunta? Respóndela»: con `preguntar`, se responde sin clasificar, y lo que iba a guardarse no vuelve", async () => {
+    const { id } = await sembrar();
+    const v1 = await vueltaEnLaPreventa(id, CONVERSACION, [{ de: "persona", texto: NOTA }], EMAIL, CON_ACCESO);
+    if (!v1.ok || v1.turno.tipo !== "listo") throw new Error("esperaba listo");
+    expect((await conversacionEnLaPreventa(id, EMAIL, CON_ACCESO))?.listo).toMatchObject({ notaClave: null, hechos: ["La empresa pierde plata por su cartera vencida"] });
+    pedidos.length = 0;
+    const v = await vueltaEnLaPreventa(id, CONVERSACION, [{ de: "persona", texto: NOTA }], EMAIL, CON_ACCESO, { preguntar: true });
+    if (!v.ok) throw new Error(v.error);
+    expect(v.turno.tipo).toBe("respuesta");
+    expect(pedidos).toHaveLength(1);
+    const c = await conversacionEnLaPreventa(id, EMAIL, CON_ACCESO);
+    expect(c?.listo).toBeNull();
+    expect(c?.mensajes.map((m) => m.de)).toEqual(["persona", "nexus"]);
+  });
+
+  it("«¿Era una pregunta?» con el tope de preguntas del día cumplido no deja corrida: lo que iba a guardarse vuelve igual", async () => {
+    const { id, clientId } = await sembrar();
+    const v1 = await vueltaEnLaPreventa(id, CONVERSACION, [{ de: "persona", texto: NOTA }], EMAIL, CON_ACCESO);
+    if (!v1.ok || v1.turno.tipo !== "listo") throw new Error("esperaba listo");
+    await prisma.agentRun.createMany({
+      data: Array.from({ length: PREGUNTAS_POR_DIA }, () => ({ agentSlug: "x", clientId, status: "DONE" as const, triggeredByEmail: EMAIL, filters: { modo: "chat-de-nexus-respuesta", conversacion: "otra" } })),
+    });
+    pedidos.length = 0;
+    const v = await vueltaEnLaPreventa(id, CONVERSACION, [{ de: "persona", texto: NOTA }], EMAIL, CON_ACCESO, { preguntar: true });
+    expect(v).toMatchObject({ ok: false, status: 429 });
+    expect(pedidos).toHaveLength(0);
+    expect((await conversacionEnLaPreventa(id, EMAIL, CON_ACCESO))?.listo).toMatchObject({ notaClave: null });
+  });
+
+  it("«¿Era una pregunta?» cuando la IA no responde: error, y lo que iba a guardarse vuelve igual al recargar", async () => {
+    const { id } = await sembrar();
+    const v1 = await vueltaEnLaPreventa(id, CONVERSACION, [{ de: "persona", texto: NOTA }], EMAIL, CON_ACCESO);
+    if (!v1.ok || v1.turno.tipo !== "listo") throw new Error("esperaba listo");
+    fallaLaRespuesta = true;
+    const v = await vueltaEnLaPreventa(id, CONVERSACION, [{ de: "persona", texto: NOTA }], EMAIL, CON_ACCESO, { preguntar: true });
+    expect(v).toMatchObject({ ok: false, status: 502 });
+    const c = await conversacionEnLaPreventa(id, EMAIL, CON_ACCESO);
+    expect(c?.listo).toMatchObject({ notaClave: null, cambios: [{ destino: "negocio" }] });
+  });
+
+  it("después de «Guardarlo como nota», al volver, lo que iba a guardarse dice que se eligió contar", async () => {
+    const { id } = await sembrar();
+    const v = await vueltaEnLaPreventa(id, CONVERSACION, [{ de: "persona", texto: NOTA }], EMAIL, CON_ACCESO, { contar: true });
+    if (!v.ok || v.turno.tipo !== "listo") throw new Error("esperaba listo");
+    expect((await conversacionEnLaPreventa(id, EMAIL, CON_ACCESO))?.listo).toMatchObject({ contado: true });
   });
 });

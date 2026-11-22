@@ -126,7 +126,7 @@ export async function vueltaEnLaPreventa(
   mensajes: MensajeDeLaConversacion[],
   email: string,
   puedeVerLaCuenta: (clientId: string) => Promise<boolean>,
-  o: { contar?: boolean } = {},
+  o: { contar?: boolean; preguntar?: boolean } = {},
 ): Promise<VueltaDeNexus> {
   const p = await laPreventa(exploracionId);
   if (!p.ok) return p;
@@ -136,6 +136,7 @@ export async function vueltaEnLaPreventa(
     mensajes,
     conversacion,
     contar: o.contar,
+    preguntar: o.preguntar,
     valorValido,
     leerLaCuenta: async () => fuentesDeLaCuenta(p.fila, p.estado, await puedeVerLaCuenta(p.fila.clientId).catch(() => false)),
     donde: { agentSlug: AGENTE_DE_LA_EXPLORACION, superficie: "preventa", clientId: p.fila.clientId, projectId: null, email, filtros: filtrosDe(exploracionId) },

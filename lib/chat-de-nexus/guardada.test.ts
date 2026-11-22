@@ -42,7 +42,7 @@ describe("la conversación al volver", () => {
     const listo: SalidaDeLaVuelta = {
       tipo: "listo",
       cambios: [CAMBIO],
-      hechos: [],
+      hechos: [{ tipo: "cuenta", frase: "Pierden US$ 40.000 al mes en cartera vencida.", cita: "Pierden 40 mil" }, { tipo: "x", frase: "  ", cita: "" }],
       descartados: 0,
       mensajes: historia,
       notaClave: "sabido:a1",
@@ -50,10 +50,11 @@ describe("la conversación al volver", () => {
       guardado: { hechos: { estado: "escritos", escritos: 1 }, impacto: { cambia: false, aviso: "" } },
     };
     const c = reconstruirLaConversacion("c1", [consulta, listo], 2)!;
-    expect(c.listo).toEqual({ notaClave: "sabido:a1", cambios: [CAMBIO], estados: { [CAMBIO.id]: "aplicado" }, guardado: listo.guardado });
+    expect(c.listo).toEqual({ notaClave: "sabido:a1", hechos: ["Pierden US$ 40.000 al mes en cartera vencida."], contado: false, cambios: [CAMBIO], estados: { [CAMBIO.id]: "aplicado" }, guardado: listo.guardado });
     // El «listo» no suma un mensaje de Nexus: lo que sigue es «Adónde va».
     expect(c.mensajes).toHaveLength(3);
-    // Sin la nota anotada (la revisión no llegó): no se afirma que quedó guardada.
+    // Sin la nota anotada (la persona no apretó «Guardar», o la revisión no llegó): no se afirma que quedó guardada, y
+    // vuelve lo que Nexus entendió para poder guardarla.
     expect(reconstruirLaConversacion("c1", [{ ...listo, notaClave: undefined, guardado: undefined }], 1)!.listo).toMatchObject({ notaClave: null, guardado: null });
   });
 

@@ -36,6 +36,8 @@ export interface AnotacionesDeLaVuelta {
   guardado?: RevisionGuardada;
   estados?: Record<string, EstadoGuardadoDelCambio>;
   cerrada?: true;
+  /** El «listo» salió de «Guardarlo como nota»: la persona ya eligió contarlo. */
+  contado?: true;
 }
 
 /** El `output` de una vuelta: el turno como lo leyó el servidor, con sus anotaciones. */
@@ -47,9 +49,15 @@ export interface ConversacionGuardada {
   mensajes: MensajeGuardado[];
   /** Las vueltas que le quedan (el tope por conversación sigue contando las corridas). */
   quedan: number;
-  /** Si terminó en un «listo»: la nota (null si no se sabe si quedó guardada), lo propuesto y lo que se hizo con eso. */
+  /**
+   * Si terminó en un «listo»: la nota (null si todavía no se guardó: la persona no apretó «Guardar»), lo que Nexus entendió
+   * (las frases de los hechos, sin verificar: se verifican al guardar), lo propuesto y lo que se hizo con eso.
+   */
   listo: {
     notaClave: string | null;
+    hechos: string[];
+    /** Salió de «Guardarlo como nota»: debajo no vuelve «¿Era una pregunta?». */
+    contado: boolean;
     cambios: CambioPropuesto[];
     estados: Record<string, EstadoGuardadoDelCambio>;
     guardado: RevisionGuardada | null;
@@ -85,6 +93,16 @@ function loQueContesto(s: SalidaDeLaVuelta): MensajeGuardado | null {
   if (s.tipo === "pregunta") return Array.isArray(s.preguntas) && s.preguntas.length ? { de: "nexus", texto: s.preguntas.join("\n") } : null;
   if (s.tipo === "consulta" && s.respuesta && typeof s.respuesta.texto === "string") return { de: "nexus", es: "respuesta", texto: s.respuesta.texto, respuesta: s.respuesta };
   return null;
+}
+
+/** Las frases de los hechos que propuso un «listo» (lo que Nexus entendió), leídas sin confiar en ellas. */
+export function frasesDeLosHechos(hechos: unknown): string[] {
+  if (!Array.isArray(hechos)) return [];
+  return hechos
+    .map((h) => objeto(h)?.frase)
+    .filter((f): f is string => typeof f === "string" && !!f.trim())
+    .map((f) => f.trim().slice(0, 600))
+    .slice(0, TOPES.hechos);
 }
 
 /**
@@ -128,6 +146,8 @@ export function reconstruirLaConversacion(id: string, vueltas: readonly SalidaDe
     quedan,
     listo: {
       notaClave: typeof ultima.notaClave === "string" && ultima.notaClave ? ultima.notaClave : null,
+      hechos: frasesDeLosHechos(ultima.hechos),
+      contado: ultima.contado === true,
       cambios: Array.isArray(ultima.cambios) ? ultima.cambios : [],
       estados,
       guardado: g && impacto && objeto(g.hechos) ? (g as unknown as RevisionGuardada) : null,
