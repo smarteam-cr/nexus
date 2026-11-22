@@ -31,10 +31,12 @@ vi.mock("@/lib/anthropic", () => ({
         pedidos.push(todo);
         const esRespuesta = p.system.includes("te pregunta algo sobre UNA cuenta");
         if (esRespuesta && fallaLaRespuesta) throw new Error("la IA no respondió");
-        const salida = esRespuesta
-          ? { sabe: true, respuesta: "La cobranza la hacen a mano, con un Excel.", citas: [{ fuente: "R1", cita: "la cobranza la hacemos a mano con un Excel" }] }
-          : siguiente;
-        return { content: [{ type: "text", text: JSON.stringify(salida) }], usage: { input_tokens: 1, output_tokens: 1 } };
+        if (esRespuesta) {
+          // La respuesta sale por la herramienta obligatoria «responder», como en producción.
+          const input = { sabe: true, respuesta: "La cobranza la hacen a mano, con un Excel.", citas: [{ fuente: "R1", cita: "la cobranza la hacemos a mano con un Excel" }] };
+          return { content: [{ type: "tool_use", id: "t1", name: "responder", input }], stop_reason: "tool_use", usage: { input_tokens: 1, output_tokens: 1 } };
+        }
+        return { content: [{ type: "text", text: JSON.stringify(siguiente) }], usage: { input_tokens: 1, output_tokens: 1 } };
       },
     },
   }),

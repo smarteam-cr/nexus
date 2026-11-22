@@ -85,6 +85,22 @@ describe("la respuesta", () => {
     expect(cortada).toMatchObject({ sabe: false, noSePudo: true });
   });
 
+  it("la respuesta sale por la herramienta obligatoria: un Markdown de varios renglones se lee igual", () => {
+    const p = pedidoDeLaRespuesta({ empresa: "Centauro", fuentes, afuera, conversacion: [{ de: "persona", texto: "¿Cómo cobran?" }], pregunta: "¿Cómo cobran?" });
+    expect(p.tool_choice).toEqual({ type: "tool", name: "responder" });
+    const markdown = 'Los dolores son:\n\n- **Cobranza a mano:** con un "Excel" que nadie actualiza.\n- **Sin ERP** hasta enero.';
+    const conHerramienta = {
+      content: [{ type: "tool_use", id: "t1", name: "responder", input: { sabe: true, respuesta: markdown, citas: [{ fuente: "R1", cita: "la cobranza la hacemos a mano con un Excel" }] } }],
+      stop_reason: "tool_use",
+    } as unknown as Parameters<typeof leerLaRespuesta>[0];
+    const r = leerLaRespuesta(conHerramienta, fuentes, afuera);
+    expect(r).toMatchObject({ sabe: true, texto: markdown, sinRespaldo: false });
+    expect(r.noSePudo).toBeUndefined();
+    // Por qué: el mismo Markdown escrito como JSON en el texto, con los saltos de renglón sin escapar, no se lee.
+    const enTexto = leerLaRespuesta({ content: [{ type: "text", text: `{"sabe":true,"respuesta":"${markdown}","citas":[]}`, citations: null }] }, fuentes, afuera);
+    expect(enTexto.noSePudo).toBe(true);
+  });
+
   it("una cita copiada sin los «eh» o con otras mayúsculas igual se sostiene, con el texto de la transcripción", () => {
     const r = leerLaRespuesta(respuesta({ sabe: true, respuesta: "Cobran a mano.", citas: [{ fuente: "R1", cita: "la cobranza, eh, la hacemos a mano con un excel" }] }), fuentes, afuera);
     expect(r.citas).toHaveLength(1);
