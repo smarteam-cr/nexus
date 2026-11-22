@@ -77,8 +77,9 @@ export default function PanelDelDocumento({
     }
     fetch(`/api/projects/${projectId}/versiones?canvasId=${encodeURIComponent(canvasId)}`)
       .then((r) => (r.ok ? r.json() : null))
-      .then((d: { versiones?: unknown[] } | null) => {
-        if (vivo && Array.isArray(d?.versiones)) setVersiones(d.versiones.length);
+      // Solo las guardadas: no la actual sin guardar ni las corridas viejas del handoff (historial de versiones, 21 nov).
+      .then((d: { versiones?: Array<{ id: string | null; soloLectura?: boolean }> } | null) => {
+        if (vivo && Array.isArray(d?.versiones)) setVersiones(d.versiones.filter((v) => v.id && !v.soloLectura).length);
       })
       .catch(() => {});
     return () => {

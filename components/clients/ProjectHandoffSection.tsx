@@ -30,7 +30,7 @@ import { useContextoDelResumen } from "./contexto-del-resumen";
 import TagsStrip from "@/components/tags/TagsStrip";
 import { SENTINEL_SERVICE_TYPE, type ProjectPipelineKey } from "@/lib/projects/kind";
 import { HandoffSectionSkeleton } from "./skeletons";
-import HistorialHandoffModal from "./HistorialHandoffModal";
+import { HistorialDelDocumentoPopup } from "@/components/canvas/HistorialDelDocumento";
 import { debeVerHistorial } from "@/lib/agents/historial-corridas";
 import {
   readHandoffStatusCache,
@@ -935,10 +935,10 @@ export default function ProjectHandoffSection({
             </BotonBlanco>
           )}
           <span className="flex-1" />
-          {/* Regenerar BORRA los bloques de la corrida anterior, así que lo que el agente había
-              escrito antes sobrevive solo dentro del run — y no había forma de abrirlo. */}
-          {puedeVerHistorial && (
-            <BotonTexto onClick={() => setShowHistorial(true)} title="Corridas anteriores del agente de handoff (solo lectura)">
+          {/* El historial de versiones (21 nov): las versiones del handoff y, para leer, las corridas de Nexus de antes
+              de que se guardaran versiones (reemplaza al historial de corridas). */}
+          {(puedeVerHistorial || generated) && status.canvasId && (
+            <BotonTexto onClick={() => setShowHistorial(true)} title="Las versiones del handoff: cuál es la actual, y volver a otra">
               Ver historial
             </BotonTexto>
           )}
@@ -1089,8 +1089,16 @@ export default function ProjectHandoffSection({
       )}
     </section>
 
-      {showHistorial && (
-        <HistorialHandoffModal projectId={projectId} onClose={() => setShowHistorial(false)} />
+      {status?.canvasId && (
+        <HistorialDelDocumentoPopup
+          open={showHistorial}
+          onClose={() => setShowHistorial(false)}
+          base={`/api/projects/${projectId}`}
+          projectId={projectId}
+          canvasId={status.canvasId}
+          documento="Handoff"
+          onCambio={() => void fetchStatus()}
+        />
       )}
 
       {/* 3b · «Congelar»: se confirma, porque desde ahí la IA ya no lo regenera. */}

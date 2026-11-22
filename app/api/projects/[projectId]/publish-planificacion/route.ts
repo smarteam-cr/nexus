@@ -28,7 +28,7 @@ export async function POST(_req: NextRequest, { params }: Params) {
   const guard = await guardPublicacionDeProyecto(projectId);
   if (guard instanceof NextResponse) return guard;
   const antes = await prisma.project.findUnique({ where: { id: projectId }, select: { planificacionPublishedAt: true } });
-  const res = await publicarDocumento(projectId, "planificacion");
+  const res = await publicarDocumento(projectId, "planificacion", guard.user.email ?? null);
   if (!res.ok) return res;
   // Tiempos (2026-10-05): la primera vez que se publica, «¿cuánto tiempo le dedicaste?» (nunca lanza).
   const preguntaDeTiempo = await alPublicarDocumento({

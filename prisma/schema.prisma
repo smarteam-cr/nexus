@@ -1500,10 +1500,27 @@ model CanvasSection {
 // Escala —el punto de partida que lee la Entrega— sin forma de volver. Cada foto guarda TODAS las
 // secciones con sus bloques tal como estaban, para consultarla, traer una sección al documento
 // actual o restaurarla entera. RLS encendida en su SQL (2026-09-28-versiones-de-documento.sql).
+//
+// 2026-11-21 — EL HISTORIAL DE VERSIONES de todo documento (lib/versiones, DECISIONS «Historial de versiones»): además de
+// un canvas, una fila puede ser del Resumen de La escala (`exploracionId`). Exactamente uno de los dos: CHECK
+// VersionDeDocumento_un_solo_dueno en el SQL (Prisma no lo modela). El cronograma no guarda aquí (su historial es
+// TimelineChange y TimelineBaseline). SQL:
+// scripts/sql/2026-11-21-historial-de-versiones.sql (⛔ nunca `db push`).
 model VersionDeDocumento {
-  id        String            @id @default(cuid())
-  canvasId  String
-  canvas    ProjectCanvas     @relation(fields: [canvasId], references: [id], onDelete: Cascade)
+  id            String              @id @default(cuid())
+  // nullable porque la fila puede ser de un Resumen de La escala (2026-11-21); el CHECK exige uno de los dos
+  canvasId      String?
+  canvas        ProjectCanvas?      @relation(fields: [canvasId], references: [id], onDelete: Cascade)
+  // nullable: solo en las versiones del Resumen de La escala
+  exploracionId String?
+  exploracion   ExploracionDeVenta? @relation(fields: [exploracionId], references: [id], onDelete: Cascade)
+  /// La foto de lo que no es un canvas (el Resumen). En un canvas, null: la foto va en `secciones`.
+  contenido     Json?
+  /// Cómo nació: ia · edicion · publicado · restaurado · presentado · congelado · guardada (lib/versiones/historial.ts).
+  /// null en las filas de antes del 21 nov: se deduce de `origen`.
+  tipo          String?
+  /// Lo que se le publicó al cliente: la última con true es «Lo que ve el cliente».
+  publicada     Boolean             @default(false)
   pieza     String? // slug de la pieza (null en canvases custom)
   /// Por qué se tomó: «Antes de regenerar», «Antes de restaurar», «Respaldo inicial».
   origen    String
@@ -1519,6 +1536,7 @@ model VersionDeDocumento {
   hitos     HitoDeDocumento[]
 
   @@index([canvasId, createdAt])
+  @@index([exploracionId, createdAt])
 }
 
 /// Un HITO del estado de un documento (2026-10-02): se presentó, lo aprobó el cliente, se reabrió.
@@ -2064,6 +2082,8 @@ model ExploracionDeVenta {
   vinculosDeTareas           TareaVinculo[]           @relation("VinculosDeTareasDeLaPreventa") // Tareas internas (CASCADE)
   /// Las fotos de la escala que salieron de esta exploración (VersionDeLaEscala).
   versionesDeLaEscala        VersionDeLaEscala[]
+  /// El historial de versiones del Resumen de La escala (2026-11-21, lib/versiones).
+  versionesDelResumen        VersionDeDocumento[]
   pruebasDeLaEscala          PruebaDeLaEscala[]
   /// R5: las investigaciones que se mudaron de esta preventa a su empresa.
   investigacionesDeLaEmpresa InvestigacionDeEmpresa[] @relation("InvestigacionesDeLaPreventa")

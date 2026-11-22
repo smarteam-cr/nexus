@@ -92,7 +92,7 @@ export async function POST(req: NextRequest, { params }: { params: Params }) {
     try {
       const r = await conContextoDeIA(
         { agentSlug, agentRunId: toma.id, clientId: guard.clientId, projectId, triggeredByEmail: quien, origen: "artefactos/generar" },
-        () => generarCopia({ projectId, canvasId, agentRunId: toma.id, instrucciones: parsed.data.instrucciones ?? null, alFase: setPhase }),
+        () => generarCopia({ projectId, canvasId, agentRunId: toma.id, instrucciones: parsed.data.instrucciones ?? null, alFase: setPhase, porEmail: quien }),
       );
       await prisma.agentRun.update({ where: { id: toma.id }, data: { status: "DONE", output: JSON.stringify({ sectionCount: r.sectionCount }) } }).catch(() => {});
     } catch (err) {

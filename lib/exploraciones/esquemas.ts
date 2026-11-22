@@ -1093,8 +1093,11 @@ export function leerResumenAnterior(raw: unknown): ResumenAnterior | undefined {
   return datos.success && resumen ? { resumen, ...datos.data } : undefined;
 }
 
-/** «Volver a la versión anterior» del Resumen (PATCH …/escala/resumen): la firma de lo que ve la pantalla. */
-export const VolverAlResumenAnteriorSchema = z.object({ volver: z.literal("anterior"), firma: z.string().regex(/^[0-9a-z]{1,16}$/) }).strict();
+/**
+ * «Usar esta versión» del historial del Resumen (POST …/escala/resumen/versiones/[versionId], 21 nov): `firma`, la huella
+ * del Resumen que ve la pantalla; si en el servidor ya es otra, 409. null: la pantalla no tenía Resumen.
+ */
+export const UsarVersionDelResumenSchema = z.object({ firma: z.string().regex(/^[0-9a-z]{1,16}$/).nullable() }).strict();
 
 /** El Resumen guardado, pieza por pieza. undefined: no hay, o le falta lo de base. */
 export function leerResumenGuardado(raw: unknown): ResumenGuardado | undefined {

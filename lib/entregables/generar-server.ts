@@ -40,6 +40,7 @@ import { servicioDelProyecto } from "@/lib/servicios/catalogo";
 import { templateDeLaPlantilla } from "./plantillas";
 import { defsDelTipo } from "@/lib/artefactos/catalogo";
 import { seccionesAgregadas, templateConLasAgregadas } from "@/lib/canvas/secciones-agregadas";
+import { guardarVersionDeLaIA } from "@/lib/canvas/versiones";
 
 export interface PedidoDeEntregable {
   projectId: string;
@@ -197,6 +198,8 @@ export async function generarEntregable(pedido: PedidoDeEntregable): Promise<Ent
       throw new ErrorDelEntregable(400, `«${pedido.slug}» no se genera desde acá.`);
   }
 
+  // El historial de versiones (21 nov): lo que acaba de escribir la IA. Nunca lanza.
+  await guardarVersionDeLaIA(r.canvasId, pedido.porEmail ?? null);
   // La plantilla que se usó queda en el documento. Best-effort: el documento ya está escrito.
   await anotarPlantilla(r.canvasId, plantilla, pedido.porEmail ?? null).catch((e) =>
     console.warn("[entregables] la plantilla no quedó anotada:", e instanceof Error ? e.message : e),

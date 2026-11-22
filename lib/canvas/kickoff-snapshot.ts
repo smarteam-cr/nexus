@@ -18,13 +18,14 @@
  */
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
+import { guardarVersionPublicada } from "@/lib/canvas/versiones";
 import { readClientProcesos } from "@/lib/canvas/read-procesos";
 import { canvasOf } from "@/lib/pieces/canvas-query";
 import { readClientTimeline } from "@/lib/external/timeline-view";
 import { cronogramaParaLaFila } from "@/lib/kickoff/datos-de-la-portada";
 
 /** Devuelve la fecha del snapshot, o null si el proyecto no tiene canvas de Kickoff. */
-export async function freezeKickoffSnapshot(projectId: string): Promise<Date | null> {
+export async function freezeKickoffSnapshot(projectId: string, porEmail: string | null = null): Promise<Date | null> {
   const [project, canvas] = await Promise.all([
     prisma.project.findUnique({ where: { id: projectId }, select: { clientId: true } }),
     prisma.projectCanvas.findFirst({ where: { projectId, ...canvasOf("kickoff") }, select: { id: true } }),
@@ -62,5 +63,7 @@ export async function freezeKickoffSnapshot(projectId: string): Promise<Date | n
       publishedSnapshotAt: snapshotAt,
     },
   });
+  // El historial de versiones (21 nov): lo que se le acaba de subir al cliente. Nunca lanza.
+  await guardarVersionPublicada(canvas.id, porEmail);
   return snapshotAt;
 }

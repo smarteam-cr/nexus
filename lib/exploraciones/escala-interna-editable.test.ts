@@ -291,10 +291,21 @@ describe("⛔ la página pública no edita, y la interna no se lee sin guardia",
       .flatMap((d) => archivosDe(d))
       .filter((f) => f !== "lib/exploraciones/escala-para-el-cliente-server.ts")
       .filter((f) => /\bpaginaParaElCse\s*\(/.test(fs.readFileSync(path.join(RAIZ, f), "utf8")));
-    expect(usan).toEqual(["app/api/sales/exploraciones/[id]/pagina-de-la-escala/route.ts"]);
-    const ruta = fs.readFileSync(path.join(RAIZ, usan[0]), "utf8");
-    const guardia = ruta.search(/await guardDeLaExploracion\(id, "read"\);\s*if \(guard instanceof NextResponse\) return guard;/);
-    expect(guardia).toBeGreaterThan(-1);
-    expect(guardia).toBeLessThan(ruta.indexOf("await paginaParaElCse("));
+    // La vista previa de una versión del Resumen (21 nov) la arma con otra versión: la llama por `paginaDeLaVersion`.
+    expect(usan).toEqual(["app/api/sales/exploraciones/[id]/pagina-de-la-escala/route.ts", "lib/exploraciones/versiones-del-resumen-server.ts"]);
+    const conGuardia = (archivo: string, llamada: string) => {
+      const ruta = fs.readFileSync(path.join(RAIZ, archivo), "utf8");
+      const guardia = ruta.search(/await guardDeLaExploracion\(id, "read"\);\s*if \(guard instanceof NextResponse\) return guard;/);
+      expect(guardia, archivo).toBeGreaterThan(-1);
+      expect(guardia, archivo).toBeLessThan(ruta.indexOf(llamada));
+    };
+    conGuardia(usan[0], "await paginaParaElCse(");
+    // Y `paginaDeLaVersion` solo la llama su ruta, después de la misma guardia.
+    const usanLaVersion = ["app", "lib", "components"]
+      .flatMap((d) => archivosDe(d))
+      .filter((f) => f !== "lib/exploraciones/versiones-del-resumen-server.ts")
+      .filter((f) => /\bpaginaDeLaVersion\s*\(/.test(fs.readFileSync(path.join(RAIZ, f), "utf8")));
+    expect(usanLaVersion).toEqual(["app/api/sales/exploraciones/[id]/escala/resumen/versiones/[versionId]/route.ts"]);
+    conGuardia(usanLaVersion[0], "await paginaDeLaVersion(");
   });
 });

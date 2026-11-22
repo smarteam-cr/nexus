@@ -27,7 +27,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { generateSectionsForTemplate } from "@/lib/business-cases/canvas-agent";
 import { bloqueDeInstruccionesDeDoc, docBriefFrom } from "@/lib/business-cases/section-briefs";
-import { guardarVersionDelDocumento } from "@/lib/canvas/versiones";
+import { guardarVersionDelDocumento, guardarVersionDeLaIA } from "@/lib/canvas/versiones";
 import { loadCanvasContext, loadHandoffContext, loadTimelineContext } from "@/lib/canvas/load-canvas-context";
 import { loadCuestionarioContext } from "@/lib/cuestionario/contexto";
 import { reunionesDeUnaCopiaSinElegidas } from "@/lib/contexto/sugerencias-del-documento-server";
@@ -116,6 +116,8 @@ export async function generarCopia(o: {
   /** Lo que pidió quien genera, para esta corrida. */
   instrucciones?: string | null;
   alFase?: (fase: string) => void;
+  /** Quién la pidió: va en el historial de versiones. */
+  porEmail?: string | null;
 }): Promise<{ sectionCount: number }> {
   const { canvas, tipo } = await copiaParaGenerar(o.projectId, o.canvasId);
   const { plantilla } = plantillaGuardadaDelTipo(tipo.id, canvas.sections);
@@ -317,5 +319,7 @@ export async function generarCopia(o: {
     // Qué reuniones leyó esta corrida: entran solas y nadie las eligió. Best-effort: el documento ya está escrito.
     if (o.agentRunId) await prisma.agentRun.update({ where: { id: o.agentRunId }, data: { sourceSessionIds: material?.sesionesUsadas ?? [] } }).catch(() => {});
   }
+  // El historial de versiones (21 nov): lo que acaba de escribir la IA. Nunca lanza.
+  await guardarVersionDeLaIA(o.canvasId, o.porEmail ?? null);
   return { sectionCount };
 }

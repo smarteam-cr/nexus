@@ -42,7 +42,7 @@ import { proponerFichaDesdeHandoff } from "@/lib/clients/ficha-propuesta";
 import { bloqueDeLoVendidoParaElDetalle } from "@/lib/timeline/lo-vendido";
 import { cargarLoVendido } from "@/lib/timeline/lo-vendido-server";
 import { textoDeLaPropuestaParaElHandoff } from "@/lib/business-cases/texto-para-agentes";
-import { guardarVersionDelDocumento } from "@/lib/canvas/versiones";
+import { guardarVersionDelDocumento, guardarVersionDeLaIA } from "@/lib/canvas/versiones";
 import { loadCanvasesConContenido } from "@/lib/pieces/piece-content";
 import { DESARROLLO_CANVAS } from "@/lib/canvas/canvas-defs";
 import { runExploracionGeneration } from "@/lib/canvas/exploracion-generate";
@@ -683,6 +683,8 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
   // output cuántas secciones se escribieron —única señal contable de estos runners, que
   // persisten CanvasBlocks, no cards— para que el resumen del toast diga la verdad.
   const finishRunnerShortCircuit = async (r: { canvasId: string; sectionCount: number; salidaEnLaCorrida?: unknown }) => {
+    // El historial de versiones (21 nov): lo que acaba de escribir la IA. Nunca lanza.
+    await guardarVersionDeLaIA(r.canvasId, await triggeredByEmail().catch(() => null));
     // El kickoff deja en la corrida su salida entera (la lee el visor del historial): esa no se pisa con el conteo.
     if (existingRunId && r.salidaEnLaCorrida === undefined) {
       await prisma.agentRun
@@ -2705,6 +2707,8 @@ Generá el plan de implementación siguiendo tus instrucciones: arquitectura de 
       where: { agentRunId: run.id },
       orderBy: { order: "asc" },
     });
+    // El historial de versiones (21 nov): lo que acaba de escribir la IA. Nunca lanza.
+    await guardarVersionDeLaIA(targetCanvasId, await triggeredByEmail().catch(() => null));
 
     return NextResponse.json({
       blocks: savedBlocks,
@@ -3321,7 +3325,10 @@ async function persistTimelineFromAgentOutput(
               canvasId: desarrolloCanvasId,
               // Trazabilidad: sin esto los bloques quedaban sin decir qué corrida los escribió.
               agentRunId,
-            }).catch((e) => console.warn("[analyze] auto-desarrollo falló:", e instanceof Error ? e.message : e));
+            })
+              // El historial de versiones (21 nov): lo que escribió la IA sola, sin una persona detrás.
+              .then((r) => guardarVersionDeLaIA(r.canvasId, null))
+              .catch((e) => console.warn("[analyze] auto-desarrollo falló:", e instanceof Error ? e.message : e));
           }
         }
       } catch (e) {

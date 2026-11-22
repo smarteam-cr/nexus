@@ -56,7 +56,7 @@ export async function POST(
   // DELIBERADA, no lo que haya en vivo. Espejo de publish-timeline. Best-effort: si
   // falla, el backfill perezoso de kickoff-view lo cubre.
   try {
-    await freezeKickoffSnapshot(projectId);
+    await freezeKickoffSnapshot(projectId, guard.user.email ?? null);
   } catch (e) {
     console.error(
       "[publish-kickoff] no se pudo congelar el snapshot (se publica igual):",

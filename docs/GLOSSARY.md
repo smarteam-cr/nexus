@@ -19,8 +19,14 @@
   portada es lo que hicimos, con sus números, y la tesis va debajo, en «El problema principal»); los **puntos clave** son los cinco más críticos de toda
   la empresa, en orden de peso; una cifra que dijo Smarteam y la empresa no corrigió sale *por confirmar* y adentro se
   confirma con un clic; y una **reunión mal leída** (cortada, o casi sin la voz de la empresa) se avisa con «Volver a leer».
-  Desde el 21 nov, la **versión anterior** es el Resumen que había antes de rehacerlo, con lo escrito a mano; «Volver a la
-  versión anterior» la trae de vuelta (y el mismo botón lo deshace) sin tocar lo que el cliente ve hasta «Publicar».
+  Sus versiones se ven en el **Historial de versiones** (21 nov), como las de cualquier documento.
+- **Historial de versiones** (21 nov, `lib/versiones`, `components/versiones/HistorialDeVersiones.tsx`): el popup de
+  todo documento (Resumen de La escala, handoff, kickoff, diagnóstico, planificación, entrega, copias, propuesta
+  comercial y cronograma) con sus **versiones**: cómo nació cada una («Rehecho con IA», «Editado», «Publicado», «Vuelta
+  a una anterior», «Presentado», «Congelado»), quién y cuándo. **Actual** es el documento como está; **Lo que ve el
+  cliente**, la última publicada mientras siga compartido. «Usar esta versión» la vuelve la actual como borrador y nunca
+  publica. Lo escrito a mano se guarda como versión cuando algo lo va a reemplazar. En el cronograma, por ahora solo se
+  miran. Reemplazó a «Volver a la versión anterior» del Resumen y a «Versiones anteriores» de los canvases.
 - **Preparar una reunión** (`/para-ti/reunion/[evento]?cliente=…`, `lib/mi-dia`, desde el 2026-10-16): el resumen de una
   cuenta antes de una reunión de hoy, que se abre con «Preparar» desde la agenda de «Para ti»: quién viene (con nombre y
   cargo), la última vez, lo que se dijo antes de lo que dice el título, lo pendiente de los dos lados, el siguiente paso,

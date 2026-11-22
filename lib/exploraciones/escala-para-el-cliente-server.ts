@@ -25,7 +25,7 @@ import type { ResultadoDelTest } from "@/lib/tests-diagnostico/resultado";
 import { SENTINEL_SERVICE_TYPE } from "@/lib/projects/kind";
 import { areasDeLaPagina, logoQueSeSirve, partesDeLaPagina, resultadosDeLaEscala } from "./escala-para-el-cliente";
 import { perdidaDeLaEscala } from "./perdida-de-la-escala";
-import { resumenParaLaPagina, type ResumenDeLaPagina } from "./resumen-de-la-escala";
+import { resumenParaLaPagina, type ResumenDeLaPagina, type ResumenGuardado } from "./resumen-de-la-escala";
 import type { EstadoDeExploracion } from "./contenido";
 import type { EscalaDelLienzo } from "./escala-del-lienzo";
 import { escalaDeLaExploracion, escalaParaExplorar, estadoDesdeFila, leerExploracion } from "./servidor";
@@ -104,7 +104,7 @@ export { paginaDeLaFoto } from "./escala-publicada";
 /** El cálculo de la página, uno solo para las dos puertas. null: no hay exploración, empresa o proyecto que cuadre. */
 async function armarLaPagina(
   exploracionId: string,
-  o: { publica: boolean; areas?: Areas },
+  o: { publica: boolean; areas?: Areas; resumen?: ResumenGuardado | null },
 ): Promise<{
   pagina: EscalaParaElCliente;
   lienzo: EscalaDelLienzo | null;
@@ -113,7 +113,10 @@ async function armarLaPagina(
   const c = await contenedorDeLaPagina(exploracionId, o.publica);
   if (!c) return null;
   const { fila, cliente } = c;
-  const estado = estadoDesdeFila(fila);
+  const deLaFila = estadoDesdeFila(fila);
+  // `o.resumen`: la vista previa de una versión del historial (21 nov), armada con la misma página.
+  const estado: EstadoDeExploracion =
+    o.resumen !== undefined ? { ...deLaFila, contenido: { ...deLaFila.contenido, resumenDeLaEscala: o.resumen ?? undefined } } : deLaFila;
   const vacio: EscalaParaElCliente = {
     empresa: cliente.name,
     dominio: cliente.emailDomains[0] ?? null,
@@ -166,11 +169,15 @@ export async function escalaParaElCliente(exploracionId: string): Promise<Escala
   return (await armarLaPagina(exploracionId, { publica: true }))?.pagina ?? null;
 }
 
-/** La misma página para la pantalla interna: todas las áreas de la escala, y cuáles ve el cliente. Sin guardia propia. */
-export async function paginaParaElCse(exploracionId: string): Promise<PaginaParaElCse | null> {
+/**
+ * La misma página para la pantalla interna: todas las áreas de la escala, y cuáles ve el cliente. Sin guardia propia.
+ * `resumen`: otro Resumen en lugar del de hoy (la vista previa de una versión del historial, 21 nov).
+ */
+export async function paginaParaElCse(exploracionId: string, o: { resumen?: ResumenGuardado | null } = {}): Promise<PaginaParaElCse | null> {
   const r = await armarLaPagina(exploracionId, {
     publica: false,
     areas: (lienzo) => lienzo.areas.map((a) => a.id),
+    ...(o.resumen !== undefined ? { resumen: o.resumen } : {}),
   });
   if (!r) return null;
   return {
